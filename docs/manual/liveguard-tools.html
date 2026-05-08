@@ -50,7 +50,7 @@
 
         <h2 id="tool-index">Tool Index</h2>
 
-        <img src="assets/diagrams/liveguard-deployment-guards.svg" alt="LiveGuard tools grouped by trigger window into 3 swimlanes: After Execution (amber, PostSlice hook) holds drift_report, regression_guard, runbook, and deploy_journal. Before Deploy (red, PreDeploy hook) holds secret_scan, env_diff, dep_watch, and liveguard_run; blocks deploy on high-severity findings. On Schedule (purple, cron/watcher) holds health_trend, hotspot, incident_capture, and alert_triage. Each tool tile shows what it catches and how it's invoked." class="diagram-img diagram-img-md my-4" />
+        <figure class="manual-figure" id="fig-17-1"><img src="assets/diagrams/liveguard-deployment-guards.svg" alt="LiveGuard tools grouped by trigger window into 3 swimlanes: After Execution (amber, PostSlice hook) holds drift_report, regression_guard, runbook, and deploy_journal. Before Deploy (red, PreDeploy hook) holds secret_scan, env_diff, dep_watch, and liveguard_run; blocks deploy on high-severity findings. On Schedule (purple, cron/watcher) holds health_trend, hotspot, incident_capture, and alert_triage. Each tool tile shows what it catches and how it's invoked." class="diagram-img diagram-img-md my-4" /><figcaption class="manual-figcaption"><!--fignum--><span class="manual-fignum">Figure 17-1.</span><!--/fignum--> <!--cap:auto-->LiveGuard tools grouped by trigger window into 3 swimlanes<!--/cap--></figcaption></figure>
         <p>All 14 LiveGuard tools are available as MCP tools and via REST API. Full reference per tool below.</p>
 
         <div class="overflow-x-auto mb-8">

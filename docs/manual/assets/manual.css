@@ -329,6 +329,37 @@ button.sidebar-act-toggle.expanded .sidebar-act-chevron { transform: rotate(90de
 .diagram-img-md { max-width: 750px; }
 .diagram-img-lg { max-width: 800px; }
 
+/* ─── Figures (auto-wrapped diagrams + hand-authored figure blocks) ─── */
+/* Apress-style centred figure with a one-line italic caption underneath. */
+.manual-figure {
+  margin: 1.5rem auto 2rem;
+  text-align: center;
+}
+.manual-figure .diagram-img {
+  margin: 0 auto;       /* let the figure own the outer spacing */
+  display: block;
+}
+.manual-figcaption {
+  font-size: 0.78rem;
+  color: #94a3b8;       /* slate-400 */
+  margin-top: 0.6rem;
+  font-style: italic;
+  text-align: center;
+  line-height: 1.5;
+  max-width: 800px;
+  margin-left: auto;
+  margin-right: auto;
+}
+.manual-fignum {
+  font-style: normal;       /* the number is upright; only the caption is italic */
+  font-weight: 700;
+  color: #f59e0b;           /* forge-400 — picks up the brand */
+  margin-right: 0.15rem;
+  font-family: 'JetBrains Mono', ui-monospace, monospace;
+  font-size: 0.74rem;
+  letter-spacing: 0.02em;
+}
+
 /* Compact cmd-block (less bottom margin) */
 .cmd-block-compact { margin-bottom: 0.5rem; }
 

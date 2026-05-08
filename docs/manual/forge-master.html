@@ -87,7 +87,7 @@
         <h2 id="intent-classifier">Three-Stage Intent Classifier</h2>
         <p>Every prompt is classified into a <strong>lane</strong> before tools are dispatched. The classifier runs three stages in order, falling through only when the prior stage didn't match confidently. This keeps the common case free (keyword) and the edge case smart (router LLM).</p>
 
-        <img src="assets/diagrams/forge-master-intent-flow.svg" alt="Three-stage intent classifier flow: user prompt enters keyword scoring (stage 1, $0), falls through to embedding cache (stage 1.5, $0, cosine ≥ 0.85) on no keyword hit, falls through to grok-3-mini router LLM (stage 2, ~$0.0002) on cache miss. All three stages produce a lane classification with via field tagging which stage answered. Successful router-LLM classifications are written through to the cache." class="diagram-img diagram-img-md my-4" />
+        <figure class="manual-figure"><img src="assets/diagrams/forge-master-intent-flow.svg" alt="Three-stage intent classifier flow: user prompt enters keyword scoring (stage 1, $0), falls through to embedding cache (stage 1.5, $0, cosine ≥ 0.85) on no keyword hit, falls through to grok-3-mini router LLM (stage 2, ~$0.0002) on cache miss. All three stages produce a lane classification with via field tagging which stage answered. Successful router-LLM classifications are written through to the cache." class="diagram-img diagram-img-md my-4" /><figcaption class="manual-figcaption"><!--cap:auto-->Three-stage intent classifier flow<!--/cap--></figcaption></figure>
 
         <div class="grid md:grid-cols-3 gap-4 my-6">
           <div class="p-4 bg-slate-900 border border-amber-700/30 rounded-lg">

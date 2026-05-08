@@ -43,7 +43,7 @@
 
         <p>When the Crucible intake scanner detects Spec Kit artifacts in your project, it offers to auto-import them rather than run the full interactive interview. The import flow maps four source files into Crucible's required schema in a single pass:</p>
 
-        <img src="assets/diagrams/speckit-import-field-mapping.svg" alt="Spec Kit Interop field-mapping diagram: four source files (spec.md, plan.md, tasks.md, constitution.md) feed into the SpecKit Import Field Mapper, which maps each field to its corresponding Crucible Smelt field. PROJECT-PRINCIPLES applies as a policy overlay. Missing required fields block the import with SPECKIT_IMPORT_MISSING_FIELD error." class="diagram-img diagram-img-md my-4" />
+        <figure class="manual-figure"><img src="assets/diagrams/speckit-import-field-mapping.svg" alt="Spec Kit Interop field-mapping diagram: four source files (spec.md, plan.md, tasks.md, constitution.md) feed into the SpecKit Import Field Mapper, which maps each field to its corresponding Crucible Smelt field. PROJECT-PRINCIPLES applies as a policy overlay. Missing required fields block the import with SPECKIT_IMPORT_MISSING_FIELD error." class="diagram-img diagram-img-md my-4" /><figcaption class="manual-figcaption"><!--cap:auto-->Spec Kit Interop field-mapping diagram<!--/cap--></figcaption></figure>
 
         <p>The diagram above shows the full mapping surface. Source fields on the left feed into the field mapper (centre), which outputs a populated Crucible smelt (right). <code>PROJECT-PRINCIPLES.md</code>, if present, is applied as a policy overlay — tech-stack constraints and forbidden patterns are enforced pre-smelt so they don't need to be re-entered during hardening.</p>
 

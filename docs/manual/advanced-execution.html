@@ -87,7 +87,7 @@
         <strong>Forge Intelligence (v2.32)</strong> — Escalation chains auto-tune from history. After 5+ recorded slices, <code>loadEscalationChain()</code> reorders models by success rate × cost efficiency. The best-performing, cheapest model moves to position 1 automatically. No configuration needed — just run plans and the forge learns.
       </div>
 
-      <img src="assets/diagrams/escalation-chain.svg" alt="Escalation chain: grok-4 fails, escalates to claude-opus-4.6 which fails, escalates to gpt-5.2-codex which passes" class="diagram-img diagram-img-sm" />
+      <figure class="manual-figure" id="fig-14-1"><img src="assets/diagrams/escalation-chain.svg" alt="Escalation chain: grok-4 fails, escalates to claude-opus-4.6 which fails, escalates to gpt-5.2-codex which passes" class="diagram-img diagram-img-sm" /><figcaption class="manual-figcaption"><!--fignum--><span class="manual-fignum">Figure 14-1.</span><!--/fignum--> <!--cap:auto-->Escalation chain<!--/cap--></figcaption></figure>
 
       <h2 id="quorum">Quorum Mode</h2>
       <p>Multi-model consensus for complex slices. Multiple models analyze the same problem independently, then a reviewer synthesizes the best approach.</p>
@@ -98,7 +98,7 @@
         Not to be confused with <a href="forge-master.html#quorum-advisory">Forge-Master's <code>dispatchQuorum</code></a>, which is HTTP-only and does require per-model API keys. That surface only powers the chat reasoning lane &mdash; not <code>run-plan</code>.
       </div>
 
-      <img src="assets/diagrams/quorum-flow.svg" alt="Quorum flow: dispatch to 3 models, independent analysis, reviewer synthesizes, then execute" class="diagram-img diagram-img-md" />
+      <figure class="manual-figure" id="fig-14-2"><img src="assets/diagrams/quorum-flow.svg" alt="Quorum flow: dispatch to 3 models, independent analysis, reviewer synthesizes, then execute" class="diagram-img diagram-img-md" /><figcaption class="manual-figcaption"><!--fignum--><span class="manual-fignum">Figure 14-2.</span><!--/fignum--> <!--cap:auto-->Quorum flow<!--/cap--></figcaption></figure>
       <div class="cmd-block">
         <div class="cmd-block-header"><span>Terminal</span><button class="cmd-copy-btn">Copy</button></div>
         <pre><code># Force quorum on all slices
@@ -208,7 +208,7 @@ pforge run-plan docs/plans/Phase-7.md --quorum=auto</code></pre>
 
       <p><code>forge_estimate_quorum</code> projects the cost of a plan under <strong>all four quorum modes</strong> in one round-trip — no need to call <code>--estimate</code> four separate times. It returns per-mode totals plus a per-slice breakdown showing which slices cleared the threshold.</p>
 
-      <img src="assets/diagrams/quorum-estimate-tool-flow.svg" alt="forge_estimate_quorum flow: tool call with planPath, parsePlan + scoreSliceComplexity, four parallel mode estimations (false/auto/power/speed), comparison JSON output with per-mode totals and per-slice breakdown" class="diagram-img diagram-img-md my-4" />
+      <figure class="manual-figure" id="fig-14-3"><img src="assets/diagrams/quorum-estimate-tool-flow.svg" alt="forge_estimate_quorum flow: tool call with planPath, parsePlan + scoreSliceComplexity, four parallel mode estimations (false/auto/power/speed), comparison JSON output with per-mode totals and per-slice breakdown" class="diagram-img diagram-img-md my-4" /><figcaption class="manual-figcaption"><!--fignum--><span class="manual-fignum">Figure 14-3.</span><!--/fignum--> <!--cap:auto-->forge_estimate_quorum flow<!--/cap--></figcaption></figure>
 
       <h4 class="text-base font-semibold text-slate-200 mt-6 mb-2">Calling the tool</h4>
 
@@ -284,7 +284,7 @@ pforge run-plan docs/plans/Phase-7.md --estimate --quorum-compare</code></pre>
 
       <p>What makes a slice "complex enough to need quorum"? The orchestrator's <code>scoreSliceComplexity()</code> function (see <a href="https://github.com/srnichols/plan-forge/blob/master/pforge-mcp/orchestrator.mjs" rel="noopener"><code>orchestrator.mjs</code></a>) reads seven weighted signals from the parsed slice and produces an integer 1–10. Modes then compare that score against their threshold to decide whether to fan out.</p>
 
-      <img src="assets/diagrams/quorum-complexity-rubric.svg" alt="Quorum complexity scoring rubric: seven signals (scope files, dependencies, security keywords, database keywords, gate lines, task count, historical failure rate) with their weights, fed through scoreSliceComplexity to produce a 1-10 score, then routed by threshold gate (power=5, auto=6, speed=7) to either fan-out or single-model run" class="diagram-img diagram-img-md my-4" />
+      <figure class="manual-figure" id="fig-14-4"><img src="assets/diagrams/quorum-complexity-rubric.svg" alt="Quorum complexity scoring rubric: seven signals (scope files, dependencies, security keywords, database keywords, gate lines, task count, historical failure rate) with their weights, fed through scoreSliceComplexity to produce a 1-10 score, then routed by threshold gate (power=5, auto=6, speed=7) to either fan-out or single-model run" class="diagram-img diagram-img-md my-4" /><figcaption class="manual-figcaption"><!--fignum--><span class="manual-fignum">Figure 14-4.</span><!--/fignum--> <!--cap:auto-->Quorum complexity scoring rubric<!--/cap--></figcaption></figure>
 
       <h4 class="text-base font-semibold text-slate-200 mt-6 mb-2">The seven signals</h4>
 

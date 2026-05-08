@@ -134,7 +134,7 @@ pforge audit-loop --env=staging</code></pre>
         <h2 id="discovery-harness">Discovery Harness Implementation</h2>
         <p>The discovery harness is the engine that turns a running dev server into a stream of structured findings. It uses a 4-pass build sequence — crawl, wrap, execute, auto-smelt — to close the loop between bug discovery and bug resolution with no human triage required.</p>
 
-        <img src="assets/diagrams/discovery-harness-four-pass.svg" alt="Discovery Harness 4-pass build sequence: Pass 1 (Harness) crawls routes with Node + Playwright, Pass 2 (Wrapper) transforms JSON into Crucible smelts, Pass 3 (Execute) runs slices with Tempering, Pass 4 (Auto-smelt) converts failures into new smelts" class="diagram-img diagram-img-md my-4" />
+        <figure class="manual-figure"><img src="assets/diagrams/discovery-harness-four-pass.svg" alt="Discovery Harness 4-pass build sequence: Pass 1 (Harness) crawls routes with Node + Playwright, Pass 2 (Wrapper) transforms JSON into Crucible smelts, Pass 3 (Execute) runs slices with Tempering, Pass 4 (Auto-smelt) converts failures into new smelts" class="diagram-img diagram-img-md my-4" /><figcaption class="manual-figcaption"><!--cap:auto-->Discovery Harness 4-pass build sequence<!--/cap--></figcaption></figure>
 
         <h3>Pass 1 — Harness (Node + Playwright)</h3>
         <p>A headless Playwright browser crawls every route exposed by the dev server. For each page the harness records HTTP status, document title, <code>h1</code> text, word count, placeholder markers (e.g. <code>Coming soon</code>, <code>TODO</code>), broken links, and client-shell detection for hydrated SPAs. Results are written as structured JSON to <code>.forge/audits/</code>.</p>
@@ -156,7 +156,7 @@ pforge audit-loop --env=staging</code></pre>
         <h2 id="three-lane-triage">Three-Lane Triage Funnel</h2>
         <p>Every finding from the discovery harness gets sorted into one of three lanes by the wrapper before reaching Crucible. Lane assignment determines whether a human ever sees the finding, what shape the resulting plan slice takes, and how the loop closes. The funnel is the difference between an audit that produces 100 PRs nobody reads and an audit that produces 5 PRs that ship.</p>
 
-        <img src="assets/diagrams/triage-three-lane-funnel.svg" alt="Three-Lane Triage Funnel: discovery findings sorted into Bug Lane (auto-smelt to bug-registry), Spec Lane (escalate to human spec author), and Classifier Lane (refine the classifier itself when uncertain)" class="diagram-img diagram-img-md my-4" />
+        <figure class="manual-figure"><img src="assets/diagrams/triage-three-lane-funnel.svg" alt="Three-Lane Triage Funnel: discovery findings sorted into Bug Lane (auto-smelt to bug-registry), Spec Lane (escalate to human spec author), and Classifier Lane (refine the classifier itself when uncertain)" class="diagram-img diagram-img-md my-4" /><figcaption class="manual-figcaption"><!--cap:auto-->Three-Lane Triage Funnel<!--/cap--></figcaption></figure>
 
         <h3 id="bug-lane">Bug Lane — Auto-smelt to Bug Registry</h3>
         <p>Findings with high confidence and a clear remediation pattern (broken links, non-200 status codes, placeholder markers, hydration failures) drop into the bug lane. The wrapper packages them as Crucible smelts with severity attached, then the auto-smelt pass converts them into entries in the <a href="bug-registry.html">bug registry</a>. No human triage required — the loop closes automatically.</p>

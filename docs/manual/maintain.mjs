@@ -13,7 +13,9 @@
  *   2. Every internal href="...html" link points to an existing file
  *   3. Each chapter has the standard shell (lang="en", #manual-sidebar,
  *      .chapter-content, manual.js include)
- *   4. Re-generates the A–Z body of book-index.html from CHAPTERS + SEARCH_SECTIONS
+ *   4. Substitutes <!--c:KEY-->VALUE<!--/c--> tokens against MANUAL_COUNTS
+ *      so chapter prose stays in sync with a single source of truth.
+ *   5. Re-generates the A–Z body of book-index.html from CHAPTERS + SEARCH_SECTIONS
  */
 
 import fs from "node:fs";
@@ -47,10 +49,14 @@ const manualJsSrc = fs.readFileSync(MANUAL_JS, "utf8");
 // inside the closure can be captured.
 let CHAPTERS = [];
 let SEARCH_SECTIONS = [];
+let MANUAL_COUNTS = {};
 try {
   // Inject an export hook INSIDE the IIFE (right before the final '})();' so
-  // CHAPTERS / SEARCH_SECTIONS are still in scope) so we can capture them.
-  const exportLine = '\n  globalThis.__PFORGE_CHAPTERS = CHAPTERS;\n  globalThis.__PFORGE_SECTIONS = SEARCH_SECTIONS;\n';
+  // CHAPTERS / SEARCH_SECTIONS / MANUAL_COUNTS are still in scope) so we can capture them.
+  const exportLine =
+    '\n  globalThis.__PFORGE_CHAPTERS = CHAPTERS;' +
+    '\n  globalThis.__PFORGE_SECTIONS = SEARCH_SECTIONS;' +
+    '\n  globalThis.__PFORGE_COUNTS = (typeof MANUAL_COUNTS !== "undefined") ? MANUAL_COUNTS : {};\n';
   const iifeCloseRe = /\}\)\(\);\s*$/;
   if (!iifeCloseRe.test(manualJsSrc)) {
     throw new Error("Could not locate IIFE close '})();' at end of manual.js");
@@ -74,11 +80,12 @@ try {
   vm.runInContext(patched, ctx, { filename: "manual.js" });
   CHAPTERS = ctx.__PFORGE_CHAPTERS || [];
   SEARCH_SECTIONS = ctx.__PFORGE_SECTIONS || [];
+  MANUAL_COUNTS = ctx.__PFORGE_COUNTS || {};
 } catch (err) {
   console.error("   ✗ Failed to evaluate manual.js:", err.message);
   process.exit(1);
 }
-log(`   ✓ Parsed ${CHAPTERS.length} chapters, ${SEARCH_SECTIONS.length} indexed sections`);
+log(`   ✓ Parsed ${CHAPTERS.length} chapters, ${SEARCH_SECTIONS.length} indexed sections, ${Object.keys(MANUAL_COUNTS).length} count keys`);
 
 // ─── Step 2: Scan HTML files ───
 log("\n2. Scanning docs/manual/*.html…");
@@ -165,9 +172,228 @@ for (const file of allHtml) {
 }
 log(`   ${shellIssues === 0 ? "✓ All chapters have the standard shell" : "✗ " + shellIssues + " shell issues"}`);
 
-// ─── Step 6: Regenerate book-index.html ───
+// ─── Step 6: Substitute count tokens (single source of truth) ───
+//
+// Token format in HTML chapter files:
+//   <!--c:KEY-->VALUE<!--/c-->
+// where KEY is a property name in MANUAL_COUNTS (assets/manual.js).
+// Example:
+//   The MCP server ships <!--c:tools-->74<!--/c--> tools today.
+//
+// In audit mode (--audit) drift is flagged but no files are written. In normal
+// mode the VALUE between the tokens is rewritten in-place to MANUAL_COUNTS[KEY].
+log("\n6. Substituting count tokens (<!--c:KEY-->...<!--/c-->)…");
+const COUNT_TOKEN_RE = /<!--c:([a-zA-Z][a-zA-Z0-9_]*)-->([^<]*)<!--\/c-->/g;
+let countTokensSeen = 0;
+let countTokensRewritten = 0;
+let countFilesTouched = 0;
+let unknownKeys = 0;
+for (const file of allHtml) {
+  const filePath = path.join(MANUAL_DIR, file);
+  let content = fs.readFileSync(filePath, "utf8");
+  let fileChanged = false;
+  const replaced = content.replace(COUNT_TOKEN_RE, (match, key, oldValue) => {
+    countTokensSeen++;
+    if (!(key in MANUAL_COUNTS)) {
+      issues.push({ severity: "MEDIUM", type: "COUNT", file, msg: `Unknown count key '<!--c:${key}-->' — add it to MANUAL_COUNTS in assets/manual.js or fix the typo` });
+      unknownKeys++;
+      return match;
+    }
+    const newValue = String(MANUAL_COUNTS[key]);
+    if (oldValue === newValue) return match;
+    countTokensRewritten++;
+    fileChanged = true;
+    if (auditOnly) {
+      issues.push({ severity: "LOW", type: "COUNT", file, msg: `Drift in <!--c:${key}-->: file has '${oldValue}', source-of-truth says '${newValue}' (run without --audit to fix)` });
+    }
+    return `<!--c:${key}-->${newValue}<!--/c-->`;
+  });
+  if (fileChanged && !auditOnly) {
+    fs.writeFileSync(filePath, replaced, "utf8");
+    countFilesTouched++;
+  }
+}
+if (auditOnly) {
+  log(`   Inspected ${countTokensSeen} token(s) across ${allHtml.length} files — ${countTokensRewritten} drift, ${unknownKeys} unknown key(s)`);
+} else {
+  log(`   ${countTokensSeen === 0 ? "✓ No count tokens yet" : "✓ " + countTokensSeen + " token(s) processed"}` +
+      (countTokensRewritten > 0 ? ` — ${countTokensRewritten} rewritten across ${countFilesTouched} file(s)` : "") +
+      (unknownKeys > 0 ? ` — ${unknownKeys} unknown key(s) (see issues)` : ""));
+}
+
+// ─── Step 6b: Wrap bare diagram images in <figure> with derived caption ───
+//
+// Apress-style numbered figure plumbing lands in Phase 2. For now we just give
+// every diagram a visible one-line caption derived from the alt text title clause
+// (everything before the first colon or sentence-stop).
+//
+// Figures already wrapped manually are left alone. Auto-derived captions carry a
+// <!--cap:auto-->...<!--/cap--> marker so future re-runs can refresh them when
+// the alt text changes.
+log("\n6b. Wrapping bare diagram images in <figure>+<figcaption>…");
+const DIAGRAM_IMG_RE = /<img\b([^>]*\bclass="[^"]*\bdiagram-img\b[^"]*"[^>]*?)\/?>/gi;
+const FIGURE_BLOCK_RE = /<figure\b([^>]*)>([\s\S]*?)<\/figure>/gi;
+const ALT_ATTR_RE = /\balt="([^"]*)"/i;
+const AUTO_CAP_RE = /<figcaption\b([^>]*)>\s*<!--cap:auto-->[\s\S]*?<!--\/cap-->\s*<\/figcaption>/i;
+let figuresWrapped = 0;
+let captionsRefreshed = 0;
+let figureFilesTouched = 0;
+function deriveCaption(alt) {
+  if (!alt) return null;
+  // Cut at first colon or sentence-stop (period followed by whitespace/end)
+  const colonIdx = alt.indexOf(":");
+  const periodMatch = alt.match(/\.(\s|$)/);
+  const periodIdx = periodMatch ? periodMatch.index : -1;
+  let cut = -1;
+  if (colonIdx !== -1 && periodIdx !== -1) cut = Math.min(colonIdx, periodIdx);
+  else if (colonIdx !== -1) cut = colonIdx;
+  else if (periodIdx !== -1) cut = periodIdx;
+  let title = cut === -1 ? alt : alt.slice(0, cut);
+  title = title.trim();
+  // Tail-trim to keep things tight; ellipsize if still long
+  if (title.length > 90) title = title.slice(0, 87).trimEnd() + "…";
+  if (title.length < 5) return null;
+  return title;
+}
+function escapeHtml(s) {
+  return String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+}
+for (const file of allHtml) {
+  if (file === "index.html") continue;
+  const filePath = path.join(MANUAL_DIR, file);
+  let content = fs.readFileSync(filePath, "utf8");
+  const before = content;
+
+  // Pass A: refresh existing auto-captions inside <figure> blocks containing a diagram-img
+  content = content.replace(FIGURE_BLOCK_RE, (whole, figAttrs, inner) => {
+    const imgMatch = /<img\b([^>]*\bclass="[^"]*\bdiagram-img\b[^"]*"[^>]*?)\/?>/i.exec(inner);
+    if (!imgMatch) return whole;
+    const altMatch = ALT_ATTR_RE.exec(imgMatch[1]);
+    if (!altMatch) return whole;
+    const caption = deriveCaption(altMatch[1]);
+    if (!caption) return whole;
+    if (!AUTO_CAP_RE.test(inner)) return whole; // hand-authored caption — never touch
+    const newInner = inner.replace(AUTO_CAP_RE, (_, capAttrs) => {
+      const re = new RegExp(`<!--cap:auto-->([\\s\\S]*?)<!--\\/cap-->`);
+      const existing = re.exec(_); // _ is the matched figcaption
+      const oldText = existing ? existing[1] : "";
+      if (oldText === escapeHtml(caption)) return _; // no change
+      captionsRefreshed++;
+      return `<figcaption${capAttrs}><!--cap:auto-->${escapeHtml(caption)}<!--/cap--></figcaption>`;
+    });
+    return `<figure${figAttrs}>${newInner}</figure>`;
+  });
+
+  // Pass B: wrap bare diagram-img tags that aren't already inside a <figure>
+  const figureRanges = [];
+  {
+    let m;
+    const reScan = /<figure\b[\s\S]*?<\/figure>/gi;
+    while ((m = reScan.exec(content)) !== null) figureRanges.push([m.index, m.index + m[0].length]);
+  }
+  const inFigure = (pos) => figureRanges.some(([s, e]) => pos >= s && pos < e);
+
+  let out = "";
+  let lastEnd = 0;
+  let m;
+  // Reset the lastIndex; we share DIAGRAM_IMG_RE across iterations of the outer file loop.
+  DIAGRAM_IMG_RE.lastIndex = 0;
+  while ((m = DIAGRAM_IMG_RE.exec(content)) !== null) {
+    if (inFigure(m.index)) continue;
+    const altMatch = ALT_ATTR_RE.exec(m[1]);
+    if (!altMatch) continue;
+    const caption = deriveCaption(altMatch[1]);
+    if (!caption) continue;
+    const figureBlock = `<figure class="manual-figure">${m[0]}<figcaption class="manual-figcaption"><!--cap:auto-->${escapeHtml(caption)}<!--/cap--></figcaption></figure>`;
+    out += content.slice(lastEnd, m.index) + figureBlock;
+    lastEnd = m.index + m[0].length;
+    figuresWrapped++;
+  }
+  out += content.slice(lastEnd);
+  content = out;
+
+  if (content !== before) {
+    if (!auditOnly) fs.writeFileSync(filePath, content, "utf8");
+    figureFilesTouched++;
+    if (auditOnly) {
+      issues.push({ severity: "LOW", type: "FIG", file, msg: `Diagram caption updates pending (run without --audit to apply)` });
+    }
+  }
+}
+log(`   ${(figuresWrapped + captionsRefreshed) === 0 ? "✓ All diagrams already captioned" : "✓ " + figuresWrapped + " new wrap(s), " + captionsRefreshed + " refresh(es) across " + figureFilesTouched + " file(s)"}` + (auditOnly ? " (audit-only — no writes)" : ""));
+
+// ─── Step 6c: Number figures (Apress-style) and collect for List of Figures ───
+//
+// Each <figure class="manual-figure"> in a numbered chapter (chapter.num !== "")
+// gets a "Figure {chapter.num}-{counter}." prefix injected at the start of its
+// figcaption, plus a stable id="fig-{chapter.num}-{counter}" attribute on the
+// <figure> tag. Idempotent via the <!--fignum-->...<!--/fignum--> marker:
+// re-runs strip the existing prefix and re-emit from the current counter.
+//
+// Figures in unnumbered chapters (sub-chapters, deep dives, front matter) are
+// left un-numbered — they're still wrapped and captioned, just not enrolled in
+// the Figure x-y scheme.
+log("\n6c. Numbering figures and collecting List of Figures…");
+const FIG_BLOCK_RE = /<figure\b([^>]*\bclass="[^"]*\bmanual-figure\b[^"]*")([^>]*?)>([\s\S]*?)<\/figure>/gi;
+const FIGCAP_RE = /<figcaption\b([^>]*)>([\s\S]*?)<\/figcaption>/i;
+const FIGNUM_PREFIX_RE = /^\s*<!--fignum-->[\s\S]*?<!--\/fignum-->\s*/i;
+const fileToChapter = new Map(CHAPTERS.map((c) => [c.file, c]));
+const figureRegistry = []; // { number, chapterNum, chapterTitle, file, anchor, caption }
+let figuresNumbered = 0;
+let figureFilesNumbered = 0;
+for (const file of allHtml) {
+  if (file === "index.html") continue;
+  const chapter = fileToChapter.get(file);
+  if (!chapter || !chapter.num) continue; // only number figures in numbered chapters
+  const filePath = path.join(MANUAL_DIR, file);
+  const fileBefore = fs.readFileSync(filePath, "utf8");
+  let counter = 0;
+  const updated = fileBefore.replace(FIG_BLOCK_RE, (whole, classAttrs, otherAttrs, inner) => {
+    const capMatch = FIGCAP_RE.exec(inner);
+    if (!capMatch) return whole; // no caption to prefix; skip
+    counter++;
+    const figNum = `${chapter.num}-${counter}`;
+    const figId = `fig-${figNum}`;
+    // Re-emit the figcaption with a fresh fignum prefix
+    const oldCapInner = capMatch[2];
+    const cleanedCapInner = oldCapInner.replace(FIGNUM_PREFIX_RE, "");
+    const newCapInner = `<!--fignum--><span class="manual-fignum">Figure ${figNum}.</span><!--/fignum--> ${cleanedCapInner}`;
+    const newInner = inner.replace(FIGCAP_RE, `<figcaption${capMatch[1]}>${newCapInner}</figcaption>`);
+    // Ensure stable id attribute (idempotent: replace if present, else inject)
+    let newOtherAttrs;
+    if (/\bid="[^"]*"/i.test(otherAttrs)) {
+      newOtherAttrs = otherAttrs.replace(/\bid="[^"]*"/i, `id="${figId}"`);
+    } else {
+      newOtherAttrs = otherAttrs + ` id="${figId}"`;
+    }
+    // Capture caption text for the registry — strip our markers + any HTML tags
+    const captionText = cleanedCapInner
+      .replace(/<!--[\s\S]*?-->/g, "")
+      .replace(/<[^>]+>/g, "")
+      .replace(/&mdash;/g, "—").replace(/&ndash;/g, "–").replace(/&amp;/g, "&")
+      .replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&quot;/g, '"').replace(/&thinsp;/g, " ")
+      .trim();
+    figureRegistry.push({
+      number: figNum,
+      chapterNum: chapter.num,
+      chapterTitle: chapter.title,
+      file,
+      anchor: figId,
+      caption: captionText,
+    });
+    return `<figure${classAttrs}${newOtherAttrs}>${newInner}</figure>`;
+  });
+  if (updated !== fileBefore) {
+    if (!auditOnly) fs.writeFileSync(filePath, updated, "utf8");
+    figureFilesNumbered++;
+  }
+  figuresNumbered += counter;
+}
+log(`   ✓ ${figuresNumbered} figure(s) numbered across ${figureFilesNumbered} file(s)`);
+
+// ─── Step 7: Regenerate book-index.html ───
 if (!auditOnly) {
-  log("\n6. Regenerating book-index.html…");
+  log("\n7. Regenerating book-index.html…");
   if (!fs.existsSync(BOOK_INDEX)) {
     log("   ⚠ book-index.html not found — skipping regeneration");
   } else {
@@ -233,8 +459,45 @@ if (!auditOnly) {
     fs.writeFileSync(BOOK_INDEX, html, "utf8");
     log(`   ✓ Regenerated book-index.html (${unique.length} entries across ${letters.length} letters)`);
   }
+
+  // ─── Step 8: Regenerate list-of-figures.html ───
+  const LOF_PATH = path.join(MANUAL_DIR, "list-of-figures.html");
+  if (fs.existsSync(LOF_PATH)) {
+    log("\n8. Regenerating list-of-figures.html…");
+    // Group by chapter (preserve CHAPTERS order)
+    const chapterOrder = CHAPTERS.filter((c) => c.num).map((c) => c.file);
+    const byChapter = new Map();
+    for (const fig of figureRegistry) {
+      if (!byChapter.has(fig.file)) byChapter.set(fig.file, []);
+      byChapter.get(fig.file).push(fig);
+    }
+    let lofBody = "";
+    let renderedChapters = 0;
+    for (const file of chapterOrder) {
+      const figs = byChapter.get(file);
+      if (!figs || figs.length === 0) continue;
+      const chapter = fileToChapter.get(file);
+      const escapedTitle = escapeHtml(chapter.title);
+      const partLabel = (chapter.act === "I" || chapter.act === "II" || chapter.act === "III" || chapter.act === "IV")
+        ? `Chapter ${chapter.num}` : chapter.act === "Appendix" ? `Appendix ${chapter.num}` : chapter.act === "Quickstart" ? `Quickstart ${chapter.num}` : chapter.num;
+      lofBody += `        <h3 class="!mt-8 !mb-3 text-amber-400">${partLabel} &mdash; <a href="${escapeHtml(file)}" class="hover:underline">${escapedTitle}</a></h3>\n`;
+      lofBody += `        <div class="space-y-1">\n`;
+      for (const fig of figs) {
+        lofBody += `          <div class="flex items-baseline gap-3 py-1 border-b border-slate-800/40">\n`;
+        lofBody += `            <div class="font-mono text-xs text-amber-500 min-w-[5rem]">Figure ${fig.number}</div>\n`;
+        lofBody += `            <div class="text-sm flex-1"><a href="${escapeHtml(file)}#${escapeHtml(fig.anchor)}" class="text-slate-200 hover:text-amber-400 hover:underline">${escapeHtml(fig.caption)}</a></div>\n`;
+        lofBody += `          </div>\n`;
+      }
+      lofBody += `        </div>\n`;
+      renderedChapters++;
+    }
+    let lofHtml = fs.readFileSync(LOF_PATH, "utf8");
+    lofHtml = replaceById(lofHtml, "list-of-figures-body", lofBody);
+    fs.writeFileSync(LOF_PATH, lofHtml, "utf8");
+    log(`   ✓ Regenerated list-of-figures.html (${figureRegistry.length} figures across ${renderedChapters} chapters)`);
+  }
 } else {
-  log("\n6. Skipping regeneration (--audit mode)");
+  log("\n7. Skipping regeneration (--audit mode)");
 }
 
 // ─── Report ───
@@ -258,6 +521,7 @@ console.log("  Fix:");
 console.log("    NAV   → Add the page to CHAPTERS in assets/manual.js");
 console.log("    LINK  → Fix or remove the broken href");
 console.log("    SHELL → Use an existing chapter as a shell template");
+console.log("    COUNT → Add the key to MANUAL_COUNTS in assets/manual.js, or run without --audit to rewrite drift");
 process.exit(bySev.HIGH.length > 0 ? 1 : 0);
 
 // ─── Helpers ───

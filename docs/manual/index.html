@@ -13,6 +13,7 @@
   <meta name="twitter:card" content="summary" />
   <meta name="twitter:title" content="Plan Forge Manual — The Forge Guide" />
   <meta name="twitter:description" content="The complete Plan Forge user manual. Quickstart + 24 chapters + 14 appendices across four Parts (Smelt, Forge, Guard, Learn). Learn to run the AI-Native SDLC Forge Shop end-to-end." />
+  <!-- NB: the social card description above is plain meta text, not subject to count-token substitution -->
   <link rel="canonical" href="https://planforge.software/manual/" />
   <link rel="icon" type="image/svg+xml" href="../assets/plan-forge-logo.svg" />
   <script src="https://cdn.tailwindcss.com"></script>
@@ -91,7 +92,7 @@
           <h1 class="text-4xl sm:text-5xl font-extrabold text-white mb-4 leading-tight">Plan Forge Manual</h1>
           <p class="text-lg text-slate-400 mb-6 leading-relaxed">From apprentice to master smith. The complete tour of the four-station AI-Native SDLC Forge Shop.</p>
           <img src="../assets/brand/forge-shop-panorama.webp" alt="Panorama of the Plan Forge Forge Shop — crucible, anvil, watchtower, and golden brain in one workshop." class="w-full max-w-xl mx-auto rounded-2xl border border-slate-700/30 shadow-2xl shadow-amber-500/10 mb-6" />
-          <p class="text-sm text-slate-500">Quickstart · 24 chapters · 14 appendices · Smelt · Forge · Guard · Learn</p>
+          <p class="text-sm text-slate-500">Quickstart · <!--c:chapters-->24<!--/c--> chapters · <!--c:appendices-->14<!--/c--> appendices · Smelt · Forge · Guard · Learn</p>
           <div class="mt-4">
             <a href="quickstart-install.html" class="inline-flex items-center gap-2 px-5 py-2.5 bg-amber-500/10 border border-amber-500/30 rounded-lg text-amber-400 text-sm font-semibold hover:bg-amber-500/20 transition-colors">
               ⚡ New? Start the 30-minute Quickstart →
@@ -104,6 +105,9 @@
       <div class="max-w-5xl mx-auto px-6 py-16">
         <!-- Meta-bar: edition badge + content counts + changelog link -->
         <div id="meta-bar" class="meta-bar"></div>
+
+        <!-- Front-matter pointer — surfaces the conventions page without nagging -->
+        <p class="text-xs text-slate-500 mb-10 -mt-4">🧭 First time? Read <a href="conventions.html" class="text-amber-400 hover:underline">Conventions Used in This Manual</a> first (5 min) — covers callouts, status pills, code blocks, and how the chapter numbering works.</p>
 
         <!-- Quickstart -->
         <div class="mb-14">
@@ -235,12 +239,12 @@
             <a href="instructions-agents-reference.html" class="group block p-5 bg-slate-900/50 border border-slate-800/60 rounded-xl hover:border-forge-400/30 transition-all">
               <div class="text-xs font-semibold text-slate-500 mb-1">Sub-chapter</div>
               <div class="text-sm font-bold text-slate-100 group-hover:text-forge-400 transition-colors">Instructions &amp; Agents — Reference</div>
-              <p class="text-xs text-slate-500 mt-2">Full catalog: 21+ instruction files, 19 agents, 13 skills, 7 hooks.</p>
+              <p class="text-xs text-slate-500 mt-2">Full catalog: <!--c:instructions-->18<!--/c--> instruction files, <!--c:agents-->19<!--/c--> agents, <!--c:skills-->13<!--/c--> skills, <!--c:hooks-->7<!--/c--> hooks.</p>
             </a>
             <a href="mcp-server.html" class="group block p-5 bg-slate-900/50 border border-slate-800/60 rounded-xl hover:border-forge-400/30 transition-all">
               <div class="text-xs font-semibold text-slate-500 mb-1">Chapter 11</div>
               <div class="text-sm font-bold text-slate-100 group-hover:text-forge-400 transition-colors">MCP Server &amp; Tools</div>
-              <p class="text-xs text-slate-500 mt-2">69 tools, REST API, WebSocket, telemetry.</p>
+              <p class="text-xs text-slate-500 mt-2"><!--c:tools-->74<!--/c--> tools, REST API, WebSocket, telemetry.</p>
             </a>
             <a href="mcp-server-quickstart.html" class="group block p-5 bg-slate-900/50 border border-slate-800/60 rounded-xl hover:border-forge-400/30 transition-all">
               <div class="text-xs font-semibold text-slate-500 mb-1">Sub-chapter</div>

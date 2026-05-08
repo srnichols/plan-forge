@@ -7,6 +7,7 @@
   // ─── Chapter registry ───
   const CHAPTERS = [
     { id: "index",               file: "index.html",               num: "",   title: "Manual Home",              act: "" },
+    { id: "conventions",         file: "conventions.html",         num: "",   title: "Conventions Used in This Manual", act: "Front Matter" },
     // ─── Quickstart (Zero to shipped in 30 min) ───
     { id: "quickstart-install",      file: "quickstart-install.html",      num: "Q1", title: "Install",                act: "Quickstart" },
     { id: "quickstart-first-plan",   file: "quickstart-first-plan.html",   num: "Q2", title: "Your First Plan",         act: "Quickstart" },
@@ -70,6 +71,7 @@
     { id: "project-history",                  file: "project-history.html",                  num: "",  title: "Project History",                   act: "Appendix" },
     { id: "about-author",         file: "about-author.html",        num: "",   title: "About the Author",          act: "Appendix" },
     { id: "book-index",           file: "book-index.html",          num: "O",  title: "Book Index (A\u2013Z)",     act: "Appendix" },
+    { id: "list-of-figures",      file: "list-of-figures.html",     num: "P",  title: "List of Figures",            act: "Appendix" },
   ];
 
   // ─── Chapter status registry ───
@@ -89,6 +91,38 @@
   // ─── Edition ───
   // Single source of truth for the manual edition badge shown in the meta-bar.
   const EDITION = "2.92.0-dev";
+
+  // ─── Manual counts (single source of truth) ───
+  //
+  // Authors: do NOT hand-write these numbers in chapter HTML. Use a token instead:
+  //
+  //     <!--c:tools-->74<!--/c-->
+  //
+  // The value between the tokens is rewritten at build time by `maintain.mjs`
+  // from the table below. Run `node docs/manual/maintain.mjs` after editing.
+  // Tokens that reference an unknown key are flagged as a MEDIUM audit issue.
+  //
+  // When you change a number here:
+  //   1. Update the comment on the line so the source-of-truth is documented.
+  //   2. Run `node docs/manual/maintain.mjs` to propagate.
+  //   3. Commit both this file and any chapter files the substitution touched.
+  //
+  const MANUAL_COUNTS = {
+    // Pipeline / surface ────────────────────────────────────────────────
+    tools:        74,  // pforge-mcp/tools.json (canonical: array length)
+    instructions: 18,  // presets/dotnet|typescript/.github/instructions/
+    agents:       19,  // 6 stack-specific + 7 cross-stack + 6 pipeline (per copilot-instructions.md)
+    skills:       13,  // standard skills set (per copilot-instructions.md)
+    hooks:         7,  // SessionStart, PreToolUse, PostToolUse, Stop, PreDeploy, PostSlice, PreAgentHandoff
+    prompts:       7,  // step0-step6 pipeline prompts
+    presets:       9,  // presets/* excluding the "shared" base
+    // Manual structure ──────────────────────────────────────────────────
+    chapters:     24,  // numbered chapters 1-24 (excludes Quickstart Q1-Q3 and Appendices)
+    appendices:   14,  // lettered appendices A-N (+ Appendix O Book Index)
+    parts:         4,  // Smelt, Forge, Guard, Learn
+    // Manual assets ─────────────────────────────────────────────────────
+    htmlFiles:    58,  // total .html files in docs/manual/
+  };
 
   // Detect current page
   const currentFile = location.pathname.split("/").pop() || "index.html";

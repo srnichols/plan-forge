@@ -1,0 +1,169 @@
+<!DOCTYPE html>
+<html lang="en" class="scroll-smooth">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Conventions Used in This Manual — Plan Forge Manual</title>
+  <meta name="description" content="The conventions, callouts, status pills, code-block style, and chapter-numbering scheme used throughout the Plan Forge Manual. Read this once, then read anything." />
+  <link rel="icon" type="image/svg+xml" href="../assets/plan-forge-logo.svg" />
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>tailwind.config={theme:{extend:{colors:{forge:{400:'#f59e0b',500:'#d97706'}}}}}</script>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;600;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="../assets/shared.css" />
+  <link rel="stylesheet" href="assets/manual.css" />
+  <style>
+    /* Local styles for the conventions page only — small inline pills + legend rows */
+    .pill-demo {
+      display: inline-flex; align-items: center;
+      font-size: 0.625rem; font-weight: 700; letter-spacing: 0.04em;
+      padding: 0 6px; border-radius: 4px; line-height: 1.6;
+    }
+    .pill-demo--new     { background: rgba(245,158,11,.12); color: #f59e0b; border: 1px solid rgba(245,158,11,.25); }
+    .pill-demo--updated { background: rgba(99,102,241,.12); color: #818cf8; border: 1px solid rgba(99,102,241,.25); }
+    .pill-demo--beta    { background: rgba(16,185,129,.12); color: #34d399; border: 1px solid rgba(16,185,129,.25); }
+    .legend-row { display: grid; grid-template-columns: 9rem 1fr; gap: 1rem; padding: 0.5rem 0; border-bottom: 1px solid rgba(51,65,85,0.3); }
+    .legend-row:last-child { border-bottom: none; }
+    .legend-row > div:first-child { font-weight: 600; color: #e2e8f0; }
+  </style>
+</head>
+<body class="bg-slate-950 text-slate-300 min-h-screen">
+
+  <button id="mobile-sidebar-btn" class="mobile-sidebar-btn fixed top-4 left-4 z-[101] lg:hidden p-2 bg-slate-900 border border-slate-700 rounded-lg text-slate-400 hover:text-slate-100 transition-colors" aria-label="Open navigation">
+    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"/></svg>
+  </button>
+  <div id="sidebar-overlay" class="sidebar-overlay"></div>
+
+  <div class="manual-layout">
+    <aside id="manual-sidebar" class="manual-sidebar"><nav id="sidebar-nav"></nav></aside>
+
+    <main>
+      <div class="chapter-content">
+
+        <div class="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">Front Matter</div>
+        <h1>Conventions Used in This Manual</h1>
+        <p class="text-lg text-slate-400 mb-8">Read this once, then read anything. Five minutes to learn the visual vocabulary the rest of the manual leans on.</p>
+
+        <!-- ─── How the book is organised ─── -->
+        <h2 id="organisation">How the manual is organised</h2>
+        <p>The manual ships as a <strong>Quickstart</strong> + <strong><!--c:parts-->4<!--/c--> Parts</strong> + <strong><!--c:appendices-->14<!--/c--> Appendices</strong>. The chapter numbering scheme tells you which kind of page you're on at a glance.</p>
+
+        <table>
+          <thead>
+            <tr>
+              <th style="width: 8rem">Number</th>
+              <th>Means</th>
+              <th>Example</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr><td><code>Q1 Q2 Q3</code></td><td>Quickstart steps. The 30-minute zero-to-shipped path.</td><td>Q2 · Your First Plan</td></tr>
+            <tr><td><code>1 2 … 24</code></td><td>Numbered chapters across <!--c:parts-->4<!--/c--> Parts (Smelt → Forge → Guard → Learn).</td><td>Chapter 5 · Crucible</td></tr>
+            <tr><td><em>(unnumbered)</em></td><td>Sub-chapters and deep dives that hang off a numbered chapter.</td><td>Dashboard — LiveGuard</td></tr>
+            <tr><td><code>A B … N</code></td><td>Lettered appendices &mdash; reference material, runbooks, enterprise track.</td><td>Appendix K · Enterprise Reference Architecture</td></tr>
+            <tr><td><code>O</code></td><td>The Book Index &mdash; A&ndash;Z search across the whole manual.</td><td>Appendix O · Book Index</td></tr>
+          </tbody>
+        </table>
+
+        <div class="callout callout-info">
+          <strong>Skim path:</strong> read every chapter's H1 + first paragraph + final summary box and you'll have a working mental model of Plan Forge in roughly an hour. Drill into a chapter when you actually need to do the thing.
+        </div>
+
+        <!-- ─── Status pills ─── -->
+        <h2 id="status-pills">Status pills</h2>
+        <p>Pills next to a chapter title in the sidebar or on the cover signal recent change. They're tied to the version that introduced or last reworked the chapter.</p>
+
+        <div class="cmd-block" style="background: rgba(15,23,42,0.6); padding: 1.25rem; border-radius: 0.5rem;">
+          <div class="space-y-2 text-sm">
+            <div><span class="pill-demo pill-demo--new">NEW v2.78</span> &nbsp; This chapter is new in the version shown. Worth a fresh read even if you know Plan Forge.</div>
+            <div><span class="pill-demo pill-demo--updated">UPDATED v2.75</span> &nbsp; This chapter exists already but had material rewrites. The change-log inside the chapter (when present) calls out what moved.</div>
+            <div><span class="pill-demo pill-demo--beta">BETA</span> &nbsp; The feature is shipping but still under active iteration. Expect APIs and flags to drift between point releases.</div>
+          </div>
+        </div>
+
+        <!-- ─── Callouts ─── -->
+        <h2 id="callouts">Callouts</h2>
+        <p>Three flavors of inline aside, each colored for instant recognition. They never carry information that isn't <em>also</em> in the surrounding prose &mdash; safe to skip on a first pass, useful on a second.</p>
+
+        <div class="callout callout-info">
+          <strong>Info</strong> &mdash; context, background, or "see also" pointers. Skippable on a fast read; helpful when you want the why.
+        </div>
+
+        <div class="callout callout-tip">
+          <strong>Tip</strong> &mdash; a working shortcut, defaults that almost always do the right thing, or a habit that pays off long-term.
+        </div>
+
+        <div class="callout callout-warning">
+          <strong>Warning</strong> &mdash; a foot-gun, a known pitfall, or a non-obvious failure mode. Read these. They're rare; they exist for a reason.
+        </div>
+
+        <!-- ─── Code blocks ─── -->
+        <h2 id="code-blocks">Code blocks</h2>
+        <p>Code, terminal, and config samples come in a labelled block. The header tells you <em>what</em> the snippet is &mdash; a terminal command, a config file path, a JSON payload &mdash; and there's a <strong>Copy</strong> button on the right when the snippet is meant to be run as-is.</p>
+
+        <div class="cmd-block">
+          <div class="cmd-block-header"><span>Terminal</span><button class="cmd-copy-btn">Copy</button></div>
+          <pre><code>node docs/manual/maintain.mjs --audit</code></pre>
+        </div>
+
+        <div class="cmd-block">
+          <div class="cmd-block-header"><span>.forge.json</span><button class="cmd-copy-btn">Copy</button></div>
+          <pre><code>{
+  "presets": ["dotnet"],
+  "execution": { "quorum": "auto" }
+}</code></pre>
+        </div>
+
+        <p>Inside body prose, <code>monospace</code> means a literal name &mdash; a file path, an env var, a tool ID, an <code>argv</code> flag. Italics mean a placeholder you fill in.</p>
+
+        <!-- ─── Diagrams ─── -->
+        <h2 id="diagrams">Diagrams and figures</h2>
+        <p>Inline SVGs and rasters live under <code>docs/manual/assets/diagrams/</code>. Each one carries an <code>alt</code> attribute that describes the diagram in prose &mdash; readers using a screen reader (or readers who'd rather skim) get the full meaning without seeing the picture.</p>
+        <p>Diagrams come in three sizes (<code>diagram-img-sm</code> &mdash; 700&thinsp;px, <code>-md</code> &mdash; 750&thinsp;px, <code>-lg</code> &mdash; 800&thinsp;px), all centered in the body column. Every diagram is wrapped in a <code>&lt;figure&gt;</code> with a one-line italic caption underneath, derived automatically from the alt text title clause. To override an auto-caption with hand-authored prose, edit the <code>&lt;figcaption&gt;</code> directly and remove the <code>&lt;!--cap:auto--&gt;</code> marker &mdash; subsequent <code>maintain.mjs</code> runs will leave it alone.</p>
+
+        <!-- ─── Live numbers (counts) ─── -->
+        <h2 id="live-numbers">Live numbers</h2>
+        <p>Some sentences refer to a count that changes between releases &mdash; "Plan Forge ships <!--c:tools-->74<!--/c--> MCP tools", "<!--c:instructions-->18<!--/c--> instruction files", "<!--c:agents-->19<!--/c--> agents". Those numbers are <em>tokenized</em> in the page source and rewritten at build time from a single source of truth in <code>docs/manual/assets/manual.js</code>. You'll see the up-to-date number rendered, but if you View Source you'll see the token markers wrapping it.</p>
+
+        <div class="callout callout-info">
+          <strong>For contributors:</strong> use <code>&lt;!--c:KEY--&gt;NUMBER&lt;!--/c--&gt;</code> instead of typing a literal number in chapter prose. Run <code>node docs/manual/maintain.mjs</code> after editing &mdash; it sweeps every chapter, fixes drift, and warns on unknown keys.
+        </div>
+
+        <!-- ─── Navigation ─── -->
+        <h2 id="navigation">Navigating the manual</h2>
+        <table>
+          <thead><tr><th style="width: 14rem">Where</th><th>What it gives you</th></tr></thead>
+          <tbody>
+            <tr><td>Left sidebar</td><td>Always-visible chapter list grouped by Part. Collapses on narrow screens to a hamburger.</td></tr>
+            <tr><td>Sidebar search</td><td>Type to filter chapters and indexed sections. Matches both titles and the curated section index.</td></tr>
+            <tr><td>Prev / Next links</td><td>At the bottom of every chapter, in reading order. Skips deep-dive sub-chapters unless you're inside one.</td></tr>
+            <tr><td>Back-to-top button</td><td>Appears on long pages once you scroll past the first screen.</td></tr>
+            <tr><td><a href="book-index.html">Appendix O &mdash; Book Index</a></td><td>A&ndash;Z list of every concept, tool, and named section. Letter jump-bar at the top.</td></tr>
+            <tr><td><a href="list-of-figures.html">Appendix P &mdash; List of Figures</a></td><td>Every numbered figure in the manual, in chapter order. Click to jump to the diagram in context.</td></tr>
+            <tr><td><a href="glossary.html">Appendix A &mdash; Glossary</a></td><td>Definitions of every Plan Forge term. Read first if a chapter uses words you don't recognise.</td></tr>
+          </tbody>
+        </table>
+
+        <!-- ─── Audience tags ─── -->
+        <h2 id="audience">Reader paths</h2>
+        <p>The cover offers four "where to next?" tiles &mdash; new to Plan Forge, on the GitHub stack, extending it, on a different stack. Pick the path that matches what you're doing today and the manual stays roughly half its apparent size.</p>
+
+        <!-- ─── Edition + errata ─── -->
+        <h2 id="edition">Edition &amp; errata</h2>
+        <p>Every page footer (and the meta-bar at the top of the cover) shows the manual <strong>edition</strong> &mdash; pinned to the Plan Forge version it was published with. The full release history lives in <a href="https://github.com/srnichols/plan-forge/blob/master/CHANGELOG.md" rel="noopener">CHANGELOG.md on GitHub</a>.</p>
+        <p>Spotted something that's wrong, stale, or missing? File an issue on <a href="https://github.com/srnichols/plan-forge/issues" rel="noopener">github.com/srnichols/plan-forge</a> with the chapter title and section heading. Manual fixes are tagged <code>docs:</code> in the changelog.</p>
+
+        <div class="callout callout-tip">
+          <strong>You're done.</strong> Head back to the <a href="index.html">Manual Home</a> or jump straight into the <a href="quickstart-install.html">Quickstart</a>.
+        </div>
+
+        <div id="chapter-prev-next" class="chapter-nav"></div>
+
+      </div>
+    </main>
+  </div>
+
+  <script src="assets/manual.js"></script>
+</body>
+</html>

@@ -50,7 +50,7 @@
         <!-- ─── Overview ─── -->
         <h2 id="overview">The Three Tiers</h2>
 
-        <img src="assets/diagrams/memory-three-tier-capture.svg" alt="Three-tier memory capture flow: forge_memory_capture call fans out to L1 (hub WebSocket broadcast, instant, ephemeral), L2 (.forge/memory/ files, sync, persistent, gitignored), and L3 (OpenBrain pgvector via async push, cross-project, cross-tool, semantic search). All three readable independently from the read path." class="diagram-img diagram-img-md my-4" />
+        <figure class="manual-figure" id="fig-24-1"><img src="assets/diagrams/memory-three-tier-capture.svg" alt="Three-tier memory capture flow: forge_memory_capture call fans out to L1 (hub WebSocket broadcast, instant, ephemeral), L2 (.forge/memory/ files, sync, persistent, gitignored), and L3 (OpenBrain pgvector via async push, cross-project, cross-tool, semantic search). All three readable independently from the read path." class="diagram-img diagram-img-md my-4" /><figcaption class="manual-figcaption"><!--fignum--><span class="manual-fignum">Figure 24-1.</span><!--/fignum--> <!--cap:auto-->Three-tier memory capture flow<!--/cap--></figcaption></figure>
         <p>Plan Forge separates <em>volatile working memory</em> from <em>durable project memory</em> from <em>cross-project semantic memory</em>. Every <code>captureMemory</code> call writes to all three in a single best-effort pass — no tier blocks the others, no failure aborts the calling tool.</p>
 
         <table class="w-full text-sm border border-slate-700/40 rounded-lg overflow-hidden mb-6">
@@ -73,7 +73,7 @@
         <h2 id="unified-memory-across-agents">Unified Memory Across Agents</h2>
         <p>OpenBrain isn't just a per-session scratch pad — it's a <strong>shared memory layer</strong> that compounds across every AI agent, every IDE, and every session. When Claude captures a gotcha in Slice 2, Copilot reads it in Slice 5 without any manual handoff. When Cursor records a naming convention, Claude's next run already knows it.</p>
 
-        <img src="assets/diagrams/openbrain-cross-agent-compounding.svg" alt="OpenBrain cross-agent compounding: Claude, Cursor, and Copilot each write decisions via capture_thought and read prior context via search_thoughts. Knowledge compounds — each slice raises the quality floor for every future agent." class="diagram-img diagram-img-md my-4" />
+        <figure class="manual-figure" id="fig-24-2"><img src="assets/diagrams/openbrain-cross-agent-compounding.svg" alt="OpenBrain cross-agent compounding: Claude, Cursor, and Copilot each write decisions via capture_thought and read prior context via search_thoughts. Knowledge compounds — each slice raises the quality floor for every future agent." class="diagram-img diagram-img-md my-4" /><figcaption class="manual-figcaption"><!--fignum--><span class="manual-fignum">Figure 24-2.</span><!--/fignum--> <!--cap:auto-->OpenBrain cross-agent compounding<!--/cap--></figcaption></figure>
 
         <h3 class="text-base font-semibold text-slate-200 mt-6 mb-3">How it works — 4 steps</h3>
         <ol>

@@ -974,6 +974,19 @@ const DIRECT_API_ONLY = {
     envKey: "OPENAI_API_KEY",
     label: "OpenAI DALL-E",
   },
+  // Models prefixed with "azure/" are routed to the operator's Azure AI Foundry
+  // endpoint. The deployment name is the portion after "azure/" — e.g.,
+  // "azure/eastus-prod-gpt-4o". Base URL is composed from AZURE_OPENAI_ENDPOINT
+  // at detection time. Auth uses the AOAI "api-key" header convention, not Bearer.
+  "microsoft-foundry": {
+    pattern: /^azure\//,
+    // baseUrl is dynamic — resolved from AZURE_OPENAI_ENDPOINT at detection time
+    endpointKey: "AZURE_OPENAI_ENDPOINT",
+    envKey: "AZURE_OPENAI_API_KEY",
+    // Azure OpenAI uses "api-key" header, NOT "Authorization: Bearer <key>"
+    apiKeyHeader: "api-key",
+    label: "Microsoft Azure AI Foundry",
+  },
 };
 
 /**
@@ -1095,6 +1108,20 @@ export function isApiOnlyModel(model) {
 }
 
 /**
+ * Compose the base URL for a Microsoft Azure AI Foundry provider.
+ * Reads AZURE_OPENAI_ENDPOINT (env or .forge/secrets.json), strips the trailing
+ * slash, and appends the stable /openai/v1 route per Azure AI Foundry §11.1.
+ * Returns null when the endpoint env var is not configured.
+ * @param {string} endpointKey - Environment variable name for the endpoint URL
+ * @returns {string|null}
+ */
+function resolveFoundryBaseUrl(endpointKey) {
+  const endpoint = process.env[endpointKey] || loadSecretFromForge(endpointKey);
+  if (!endpoint) return null;
+  return endpoint.replace(/\/$/, "") + "/openai/v1";
+}
+
+/**
  * Detect which API provider (if any) handles a given model name.
  * Lookup order: environment variable → .forge/secrets.json → null
  *
@@ -1112,8 +1139,20 @@ function detectApiProvider(model) {
     if (provider.pattern.test(model)) {
       // 1. Environment variable (preferred — never on disk)
       const apiKey = process.env[provider.envKey] || loadSecretFromForge(provider.envKey);
-      if (apiKey) return { name, baseUrl: provider.baseUrl, apiKey, label: provider.label };
-      return null; // Model matches but no API key configured
+      if (!apiKey) return null; // Model matches but no API key configured
+      // Endpoint-based providers (e.g., microsoft-foundry) compose baseUrl at
+      // detection time from a separate endpoint env var rather than a fixed URL.
+      const baseUrl = provider.endpointKey
+        ? resolveFoundryBaseUrl(provider.endpointKey)
+        : provider.baseUrl;
+      if (!baseUrl) return null; // Endpoint env var not configured
+      return {
+        name,
+        baseUrl,
+        apiKey,
+        label: provider.label,
+        ...(provider.apiKeyHeader && { apiKeyHeader: provider.apiKeyHeader }),
+      };
     }
   }
   return null;
@@ -1204,15 +1243,21 @@ async function callApiWorker(prompt, model, provider, options = {}) {
   // Role-aware wrapping is opt-in per call site; null role = legacy behaviour.
   const messages = buildApiMessages(prompt, role);
 
+  // Azure AI Foundry uses "api-key" header; all other providers use "Authorization: Bearer".
+  // Strip the routing prefix (e.g., "azure/") to get the bare deployment name for the body.
+  const authHeaders = provider.apiKeyHeader
+    ? { [provider.apiKeyHeader]: provider.apiKey, "Content-Type": "application/json" }
+    : { Authorization: `Bearer ${provider.apiKey}`, "Content-Type": "application/json" };
+  const resolvedModel = provider.name === "microsoft-foundry"
+    ? model.replace(/^azure\//, "")
+    : model;
+
   try {
     const response = await fetch(`${provider.baseUrl}/chat/completions`, {
       method: "POST",
-      headers: {
-        Authorization: `Bearer ${provider.apiKey}`,
-        "Content-Type": "application/json",
-      },
+      headers: authHeaders,
       body: JSON.stringify({
-        model,
+        model: resolvedModel,
         messages,
       }),
       signal: controller.signal,

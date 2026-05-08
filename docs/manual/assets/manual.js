@@ -112,12 +112,23 @@
     const theme = getTheme();
     const frag = document.createDocumentFragment();
 
-    // Logo / title link
+    // Logo / title link with inline collapse toggle
+    const titleRow = document.createElement("div");
+    titleRow.className = "flex items-center justify-between border-b border-slate-800/50";
     const titleLink = document.createElement("a");
     titleLink.href = "index.html";
-    titleLink.className = "block px-5 py-4 text-sm font-bold text-slate-100 hover:text-amber-400 transition-colors border-b border-slate-800/50";
+    titleLink.className = "block px-5 py-4 text-sm font-bold text-slate-100 hover:text-amber-400 transition-colors flex-1";
     titleLink.innerHTML = "⚒ Plan Forge Manual";
-    frag.appendChild(titleLink);
+    titleRow.appendChild(titleLink);
+    const sidebarCloseBtn = document.createElement("button");
+    sidebarCloseBtn.id = "sidebar-close-btn";
+    sidebarCloseBtn.type = "button";
+    sidebarCloseBtn.className = "sidebar-close-btn p-2 mr-2 rounded text-slate-400 hover:text-slate-100 hover:bg-slate-800/60 transition-colors";
+    sidebarCloseBtn.setAttribute("aria-label", "Close navigation");
+    sidebarCloseBtn.title = "Close navigation";
+    sidebarCloseBtn.innerHTML = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6h16M4 12h16M4 18h16"/></svg>';
+    titleRow.appendChild(sidebarCloseBtn);
+    frag.appendChild(titleRow);
 
     // Sidebar controls (Collapse All / Expand All / Theme toggle)
     const controls = document.createElement("div");
@@ -295,6 +306,7 @@
   // ─── Sidebar toggle (mobile slide-out + desktop collapse) ───
   function initMobileSidebar() {
     const btn = document.getElementById("mobile-sidebar-btn");
+    const innerBtn = document.getElementById("sidebar-close-btn");
     const sidebar = document.getElementById("manual-sidebar");
     const overlay = document.getElementById("sidebar-overlay");
     if (!btn || !sidebar) return;
@@ -313,6 +325,9 @@
         : !sidebar.classList.contains("open");
       btn.setAttribute("aria-label", isCollapsed ? "Open navigation" : "Close navigation");
       btn.setAttribute("aria-expanded", String(!isCollapsed));
+      if (innerBtn) {
+        innerBtn.setAttribute("aria-expanded", String(!isCollapsed));
+      }
     };
     updateAria();
 
@@ -331,6 +346,7 @@
       updateAria();
     };
     btn.addEventListener("click", toggle);
+    if (innerBtn) innerBtn.addEventListener("click", toggle);
     if (overlay) overlay.addEventListener("click", () => {
       sidebar.classList.remove("open");
       overlay.classList.remove("open");

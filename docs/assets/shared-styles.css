@@ -1,0 +1,215 @@
+/* Plan Forge — Shared Styles
+ *
+ * Canonical design-token sheet consumed by: docs site pages (manual, blog,
+ * capabilities, architecture hub, landing pages).
+ *
+ * BOUNDARY: Dashboard tokens live in pforge-mcp/dashboard/ and are NOT
+ * imported here. This file covers only the public-facing docs layer.
+ * Tailwind CDN handles utility classes; this file adds tokens + components
+ * that Tailwind utilities cannot express via inline classes alone.
+ *
+ * Light-mode pattern: add the `light` class to <html>. JS toggle lives in
+ * docs/assets/shared-theme.js. Dark is the default; no media-query default.
+ */
+
+/* ── Design tokens — dark (default) ──────────────────────────────── */
+:root {
+  /* Brand palette */
+  --pf-amber:        #f59e0b;   /* amber-500 — primary accent */
+  --pf-amber-dim:    rgba(245, 158, 11, 0.15);
+  --pf-amber-dark:   #d97706;   /* amber-600 */
+  --pf-blue:         #3b82f6;   /* blue-500 */
+  --pf-blue-dim:     rgba(59, 130, 246, 0.15);
+  --pf-cyan:         #06b6d4;   /* cyan-500 */
+  --pf-cyan-dim:     rgba(6, 182, 212, 0.15);
+  --pf-purple:       #a855f7;   /* purple-500 */
+  --pf-purple-dim:   rgba(168, 85, 247, 0.15);
+  --pf-green:        #34d399;   /* emerald-400 */
+
+  /* Background / surface / border */
+  --pf-bg:           #020617;   /* slate-950 */
+  --pf-surface:      #0f172a;   /* slate-900 */
+  --pf-surface-2:    #1e293b;   /* slate-800 */
+  --pf-border:       #1e293b;   /* slate-800 */
+  --pf-border-muted: rgba(51, 65, 85, 0.5);
+
+  /* Text */
+  --pf-text:         #e2e8f0;   /* slate-200 */
+  --pf-text-muted:   #94a3b8;   /* slate-400 */
+  --pf-text-dim:     #64748b;   /* slate-500 */
+
+  /* Shape */
+  --pf-radius:       0.75rem;
+  --pf-radius-sm:    0.375rem;
+  --pf-radius-lg:    1rem;
+}
+
+/* ── Design tokens — light mode swap ─────────────────────────────── */
+html.light {
+  --pf-bg:           #f8fafc;   /* slate-50 */
+  --pf-surface:      #ffffff;
+  --pf-surface-2:    #f1f5f9;   /* slate-100 */
+  --pf-border:       #e2e8f0;   /* slate-200 */
+  --pf-border-muted: rgba(203, 213, 225, 0.7);
+
+  --pf-text:         #0f172a;   /* slate-900 */
+  --pf-text-muted:   #475569;   /* slate-600 */
+  --pf-text-dim:     #94a3b8;   /* slate-400 */
+
+  /* Amber shifts to a darker tint for contrast on white */
+  --pf-amber:        #d97706;   /* amber-600 */
+  --pf-amber-dim:    rgba(217, 119, 6, 0.12);
+  --pf-amber-dark:   #b45309;   /* amber-700 */
+}
+
+/* ── Base ─────────────────────────────────────────────────────────── */
+body {
+  background: var(--pf-bg);
+  color: var(--pf-text);
+  font-family: 'Inter', sans-serif;
+}
+
+code, pre {
+  font-family: 'JetBrains Mono', 'Fira Code', monospace;
+}
+
+/* ── Hero backgrounds ─────────────────────────────────────────────── */
+.hero-bg {
+  background:
+    radial-gradient(ellipse at 50% -10%, rgba(245, 158, 11, 0.18) 0%, transparent 65%),
+    radial-gradient(ellipse at 85% 40%, rgba(239, 68, 68, 0.08) 0%, transparent 55%),
+    radial-gradient(ellipse at 15% 60%, rgba(245, 158, 11, 0.06) 0%, transparent 50%),
+    var(--pf-bg);
+}
+
+.page-header-bg {
+  background:
+    radial-gradient(ellipse at 50% 100%, rgba(245, 158, 11, 0.10) 0%, transparent 70%),
+    var(--pf-bg);
+}
+
+/* ── Grid overlay ─────────────────────────────────────────────────── */
+.grid-overlay {
+  background-image:
+    linear-gradient(rgba(148, 163, 184, 0.04) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(148, 163, 184, 0.04) 1px, transparent 1px);
+  background-size: 60px 60px;
+}
+
+/* ── Glow effects ─────────────────────────────────────────────────── */
+.forge-glow {
+  box-shadow: 0 0 30px rgba(245, 158, 11, 0.35), 0 0 60px rgba(245, 158, 11, 0.12);
+}
+
+.blue-glow {
+  box-shadow: 0 0 30px var(--pf-blue-dim), 0 0 60px var(--pf-blue-dim);
+}
+
+/* ── Animation ────────────────────────────────────────────────────── */
+@keyframes pulse-soft {
+  0%, 100% { opacity: 0.7; transform: scale(1); }
+  50%       { opacity: 1;   transform: scale(1.02); }
+}
+.pulse-soft { animation: pulse-soft 4s ease-in-out infinite; }
+
+/* ── Scroll reveal ────────────────────────────────────────────────── */
+.reveal {
+  opacity: 0;
+  transform: translateY(24px);
+  transition:
+    opacity   0.7s cubic-bezier(0.16, 1, 0.3, 1),
+    transform 0.7s cubic-bezier(0.16, 1, 0.3, 1);
+}
+.reveal.visible {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+/* ── Navigation helpers ───────────────────────────────────────────── */
+nav a.nav-active { color: var(--pf-amber) !important; }
+
+/* Dropdown: click-toggle, no CSS hover-to-open (avoids stuck-menu race). */
+.nav-dropdown { display: none; }
+.nav-dropdown-trigger.nav-dropdown-open > .nav-dropdown { display: block; }
+.nav-dropdown-trigger .nav-dropdown { padding-top: 0.5rem; margin-top: 0; }
+
+/* ── Code / copy button ───────────────────────────────────────────── */
+.copy-btn.copied { color: var(--pf-green) !important; }
+
+/* ── FAQ accordion ────────────────────────────────────────────────── */
+details summary                    { list-style: none; }
+details summary::-webkit-details-marker { display: none; }
+
+/* ── Surface cards ────────────────────────────────────────────────── */
+.pf-card {
+  background: var(--pf-surface);
+  border: 1px solid var(--pf-border);
+  border-radius: var(--pf-radius);
+}
+
+.pf-card-hover {
+  transition: border-color 0.15s, box-shadow 0.15s;
+}
+.pf-card-hover:hover {
+  border-color: var(--pf-amber-dim);
+  box-shadow: 0 4px 24px rgba(245, 158, 11, 0.08);
+}
+
+/* ── Callout boxes ────────────────────────────────────────────────── */
+.callout {
+  padding: 1rem 1.25rem;
+  border-radius: var(--pf-radius-sm);
+  margin-bottom: 1.5rem;
+  font-size: 0.88rem;
+  line-height: 1.6;
+  border-left: 3px solid;
+}
+.callout-tip {
+  background: rgba(52, 211, 153, 0.06);
+  border-left-color: var(--pf-green);
+  color: #86efac;
+}
+.callout-warning {
+  background: var(--pf-amber-dim);
+  border-left-color: var(--pf-amber);
+  color: #fbbf24;
+}
+.callout-info {
+  background: var(--pf-blue-dim);
+  border-left-color: var(--pf-blue);
+  color: #93c5fd;
+}
+
+/* Light-mode callout overrides */
+html.light .callout-tip {
+  background: rgba(16, 185, 129, 0.08);
+  border-left-color: #059669;
+  color: #065f46;
+}
+html.light .callout-warning {
+  background: rgba(245, 158, 11, 0.1);
+  border-left-color: var(--pf-amber);
+  color: #92400e;
+}
+html.light .callout-info {
+  background: rgba(59, 130, 246, 0.08);
+  border-left-color: #2563eb;
+  color: #1e40af;
+}
+
+/* ── Mobile readability ───────────────────────────────────────────── */
+/* Brighten muted text on small screens for glare resistance. */
+@media (max-width: 767px) {
+  .text-slate-400 { color: #cbd5e1 !important; }
+  .text-slate-500 { color: #94a3b8 !important; }
+  .text-slate-600 { color: #94a3b8 !important; }
+  td, th          { color: #e2e8f0; }
+  code            { color: #e2e8f0; }
+}
+
+/* ── Reduced motion ───────────────────────────────────────────────── */
+@media (prefers-reduced-motion: reduce) {
+  .reveal          { transition: none; }
+  .pulse-soft      { animation: none; }
+  .pf-card-hover   { transition: none; }
+}

@@ -465,6 +465,8 @@ async function _emitAgentSpan(data) {
         "pforge.plan.name": data?.planName ?? data?.plan ?? "",
         "pforge.slice.number": String(sliceId),
         "pforge.run.id": data?.runId ?? "",
+        "pforge.actor.source": data?.source ?? "",
+        "pforge.action.security_risk": data?.security_risk ?? "",
       },
     });
 
@@ -648,6 +650,8 @@ export function createTelemetryHandler(trace, runDir) {
             sliceId: data?.sliceId,
             title: data?.title,
             parallel: data?.parallel || false,
+            "pforge.actor.source": data?.source ?? null,
+            "pforge.action.security_risk": data?.security_risk ?? null,
           });
           // Fire-and-forget OTel agent (slice) span emission.
           _emitAgentSpan({ ...data, runId: trace.traceId }).catch(() => {});

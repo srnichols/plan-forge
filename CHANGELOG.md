@@ -9,6 +9,10 @@ Format follows [Keep a Changelog](https://keepachangelog.com/).
 
 ---
 
+## [2.92.1] — 2026-05-08 — Hotfix: Foundry quota preflight
+
+> **One-liner**: Hotfix release adding opt-in AOAI quota preflight for plans running on the `microsoft-foundry` provider. Reads deployment TPM capacity via the Azure Cognitive Services control-plane API, compares against slice token estimates, and emits warnings (or optionally blocks execution) before a slice runs. Fail-open invariant: control-plane outages NEVER block execution. Closes the last open `docs/research/enterprise-fleet-readiness.md` §14 Priority-D item.
+
 ### Phase-FOUNDRY-QUOTA-PREFLIGHT — Azure AI Foundry deployment quota preflight
 
 > **One-liner**: Adds a quota preflight step to `forge_run_plan` for Microsoft Foundry / BYO Azure OpenAI deployments — fetches TPM capacity from the Azure Cognitive Services control-plane REST API, caches results for 5 minutes, compares the slice token estimate against available headroom (safe ≥ 30 %, warning 10–30 %, critical < 10 %), and logs a structured `[foundry-quota]` annotation on every slice. Fail-open: any quota fetch error produces `status: "unknown"` and never blocks execution. Block mode (`PFORGE_FOUNDRY_QUOTA_PREFLIGHT=block`) halts execution on `critical` status.

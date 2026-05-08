@@ -7,6 +7,34 @@ Format follows [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
+### Phase-FOUNDRY-PROVIDER — Microsoft Azure AI Foundry / BYO Azure OpenAI provider (2026-05-07)
+
+> **One-liner**: Adds `microsoft-foundry` as a first-class Plan Forge provider, enabling enterprises to route plan execution through their own Azure OpenAI Service or Azure AI Foundry endpoint. Two auth paths (API key and Entra/Managed Identity with `@azure/identity` optional dep), government-cloud auto-detection, deployment-name → model-key normalization via `.forge/foundry-deployments.json`, AOAI deployment-type cost uplift (Data Zone/Regional 1.1×), and a new `power-gov` quorum preset for Azure Government catalog models. Three new docs cover the BYO setup guide, Foundry Toolbox MCP integration, and App Insights OTel sink.
+
+#### Added
+- `pforge-mcp/secrets.mjs` — `KNOWN_SECRETS` now includes six Azure entries: `AZURE_OPENAI_API_KEY`, `AZURE_OPENAI_ENDPOINT`, `AZURE_OPENAI_DEPLOYMENT`, `AZURE_OPENAI_API_VERSION`, `AZURE_TENANT_ID`, `AZURE_CLIENT_ID`. All are automatically masked by `redactSecrets`.
+- `pforge-mcp/orchestrator.mjs` — `microsoft-foundry` provider in the `API_PROVIDERS` dispatch table. Matches models with the `azure/` prefix; composes base URL from `AZURE_OPENAI_ENDPOINT` using the stable `/openai/v1` route; uses `api-key` header convention (not `Authorization: Bearer`) per AOAI spec.
+- `pforge-mcp/orchestrator.mjs` — `resolveAzureEntraToken()` async helper for Entra/Managed Identity auth. Dynamically imports `@azure/identity` (optional dep); returns `null` with a structured error on the call-worker path when the package is absent. Activated by `AZURE_AUTH_MODE=entra|managed-identity`.
+- `pforge-mcp/orchestrator.mjs` — `getFoundryAuthScope(endpoint?)` exported helper. Returns `https://cognitiveservices.azure.us/.default` when the endpoint ends in `.azure.us` (Azure Government), otherwise `https://cognitiveservices.azure.com/.default`. Used by `resolveAzureEntraToken`; logged once at startup.
+- `pforge-mcp/orchestrator.mjs` — `detectApiProvider()` exported for testability.
+- `pforge-mcp/orchestrator.mjs` — `QUORUM_PRESETS["power-gov"]` preset: models `gpt-5.1`, `gpt-4.1`, `gpt-4.1-mini`, `o3-mini`, `gpt-4o`; threshold 5; 5-minute dry-run timeout. Targets the reduced Azure Government model catalog per §11.8 friction point #6.
+- `pforge-mcp/package.json` — `@azure/identity ^4.4.0` in `optionalDependencies`. Not required for the default API-key path.
+- `pforge-mcp/cost-service.mjs` — `resolveFoundryModel(deployment)` helper. Reads `.forge/foundry-deployments.json` (operator-editable mapping `{ "deployment-name": "canonical-model-key" }`); falls back to the literal deployment name when the mapping is absent or the deployment is not listed.
+- `pforge-mcp/cost-service.mjs` — `priceSlice()` detects `tokens.provider === 'microsoft-foundry'` or `worker === 'api-microsoft-foundry'`, resolves the deployment name to a canonical `MODEL_PRICING` key before `getPricing()`, and applies the AOAI deployment-type multiplier (`AZURE_OPENAI_DEPLOYMENT_TYPE` env var; `data-zone`/`regional` = 1.1×, `global`/`provisioned` = 1.0×).
+- `pforge-mcp/cost-service.mjs` — `MODEL_PRICING` entries for `gpt-5.1`, `gpt-4.1`, `gpt-4.1-mini` (new), `o3-mini`, `gpt-4o` now carry `aoai_deployment_type_multiplier: { global, data-zone, regional, provisioned }`. New entry `gpt-4.1-mini` at `$0.40/$1.60` per Mtok.
+- `pforge-mcp/tests/foundry-provider.test.mjs` — 16 test cases covering all ten acceptance criteria: `KNOWN_SECRETS` entries, provider activation, `api-key` header shape, Entra flag, missing-`@azure/identity` contract, `priceSlice` normalization, literal fallback, AOAI multiplier (data-zone 1.1× vs global), `power-gov` preset shape, and government cloud scope detection.
+- `docs/integrations/byo-azure-openai.md` — Canonical BYO config guide: env vars, deployment-mapping file, API-key vs Entra paths, Azure Government notes, `power-gov` preset, AOAI deployment-type uplift, known friction points.
+- `docs/integrations/foundry-toolbox-mcp.md` — `.vscode/mcp.json` walkthrough for Foundry Toolbox MCP server (Bearer token and Custom Keys auth). Notes per-call approval friction (§11.8 #4) and `"approval": "never"` opt-out.
+- `docs/observability/foundry-app-insights.md` — Config guide for routing Plan Forge OTel telemetry to App Insights via OTLP/HTTP or the Azure Monitor OpenTelemetry Distro. Includes KQL queries, multi-agent OTel convention alignment note, and PII warning for content capture.
+
+#### Notes
+- `costForLeg()` is byte-identical to pre-execution (v2.83.0 Forbidden Action #1 protected).
+- `priceSlice()` positional signature is unchanged; Foundry handling is additive and only activates when `provider === 'microsoft-foundry'` or `worker === 'api-microsoft-foundry'`.
+- Existing quorum presets (`auto`, `power`, `speed`, `false`) are unchanged. `power-gov` is additive.
+- No release in this phase.
+
+---
+
 ### Phase-OTEL-AUDIT-EXPORT Slice 12 — Observability documentation (2026-05-07)
 
 > **One-liner**: Adds `docs/observability/` with the published `gen_ai.*` + `pforge.*` OTel span schema (`otel-schema.md`), the audit log event specification and `pforge audit export` CLI reference (`audit-log-spec.md`), and three sample dashboards (Grafana JSON v8+, Datadog JSON v3, Splunk SPL queries) for operators connecting Plan Forge telemetry to their observability stack.

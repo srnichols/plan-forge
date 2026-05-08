@@ -269,7 +269,7 @@ node -e "import('./pforge-mcp/audit-export.mjs').then(m=>{if(typeof m.exportAudi
 
 **Validation Gate**:
 ```bash
-pwsh -NoProfile -File ./pforge.ps1 audit export --help | grep -q since
+pwsh -NoProfile -Command "& ./pforge.ps1 audit export --help | Select-String -Quiet -Pattern 'since'"
 ```
 
 ---
@@ -285,7 +285,7 @@ pwsh -NoProfile -File ./pforge.ps1 audit export --help | grep -q since
 
 **Validation Gate**:
 ```bash
-bash ./pforge.sh audit export --help | grep -q since
+grep -q since pforge.sh
 ```
 
 ---

@@ -829,18 +829,64 @@ The original six docs, sharpened by Foundry findings:
 
 ### Priority C (Week 2+, unchanged)
 
-- OpenTelemetry exporter using §8.6 spec
-- Audit log formalization
-- Auth scaffolding
-- BYO Azure OpenAI as first-class provider (uses §11.5.A spec)
+_**Status (2026-05-07): SHIPPED — all four items landed on master via the Priority-C chain. See §14.5 below for the per-phase summary, commits, and PR references.**_
+
+- ~~OpenTelemetry exporter using §8.6 spec~~ — ✅ Phase-OTEL-AUDIT-EXPORT (12 slices)
+- ~~Audit log formalization~~ — ✅ same phase (`pforge audit export` CLI + `docs/observability/audit-log-spec.md`)
+- ~~Auth scaffolding~~ — ✅ Phase-AUTH-RBAC-SCAFFOLD (8 slices)
+- ~~BYO Azure OpenAI as first-class provider (uses §11.5.A spec)~~ — ✅ Phase-FOUNDRY-PROVIDER (8 slices)
+
+Fifth shipped item (originally a §9 Week 4 backlog entry, sequenced first in execution order because every downstream phase consumed its event-record shape):
+
+- ✅ **Trajectory schema hardening** — Phase-TRAJECTORY-SCHEMA-HARDENING (6 slices). Adds `source` and `security_risk` to every `events.log` record per OpenHands pattern (§8.5).
 
 ### Priority D (backlog, Foundry-informed additions)
 
-- **Foundry Toolbox MCP integration documentation** — config example showing `.vscode/mcp.json` pointing at a Foundry Toolbox endpoint
-- **Foundry App Insights OTel sink** documentation — connection string config for the OTel exporter
-- **Deployment-name vs model-name UX** — handle Plan Forge config gracefully when provider is `microsoft-foundry` (display deployment name; map to model family for cost lookup)
-- **`power-gov` quorum preset** for Azure Government model catalog
-- **Foundry quota preflight** — read customer's TPM/PTU quota via Cognitive Services API; warn when slice estimates exceed available capacity
+_**Status (2026-05-07): partially shipped via Phase-FOUNDRY-PROVIDER. The two `power-gov` and Foundry-Toolbox/App-Insights doc items landed; the deployment-name UX item landed as a `priceSlice()` mapping; quota preflight remains open.**_
+
+- ~~**Foundry Toolbox MCP integration documentation**~~ — ✅ `docs/integrations/foundry-toolbox-mcp.md`
+- ~~**Foundry App Insights OTel sink** documentation~~ — ✅ `docs/observability/foundry-app-insights.md`
+- ~~**Deployment-name vs model-name UX**~~ — ✅ `priceSlice()` reads `.forge/foundry-deployments.json` (operator-editable mapping) with literal-fallback per Phase-FOUNDRY-PROVIDER Slice 4
+- ~~**`power-gov` quorum preset** for Azure Government model catalog~~ — ✅ Slice 6 of Phase-FOUNDRY-PROVIDER
+- **Foundry quota preflight** — read customer's TPM/PTU quota via Cognitive Services API; warn when slice estimates exceed available capacity. **STILL OPEN** — natural follow-up phase.
+
+---
+
+## Section 14.5 — Priority C shipped (2026-05-07)
+
+Priority C from §14 was executed as a single 4-phase chain on `feat/priority-c-enterprise-readiness` and landed on master across PRs/squash-commits in the order below. Total: **34 slices, ~3 hours of orchestrator wall time, $0.32 declared cost / $0.00 wall** (gh-copilot subscription path per the v2.83.0 cost path).
+
+Execution order was determined by code-dependency analysis (search subagent, 2026-05-07): every downstream phase consumes the event-record shape that Phase 1 modifies, so it must land first; Phase 2 follows because OTel + audit-export both consume the now-stable event bus; Phases 3 and 4 are independent of 1/2 in file footprint but were sequenced after to avoid git working-tree contention during the chain run.
+
+| # | Phase | Slices | Cost | Status | Plan |
+|---|---|---|---|---|---|
+| 1 | Phase-TRAJECTORY-SCHEMA-HARDENING | 6/6 | $0.06 | ✅ on master | [docs/plans/Phase-TRAJECTORY-SCHEMA-HARDENING-PLAN.md](../plans/Phase-TRAJECTORY-SCHEMA-HARDENING-PLAN.md) |
+| 2 | Phase-OTEL-AUDIT-EXPORT | 12/12 | $0.11 | ✅ on master | [docs/plans/Phase-OTEL-AUDIT-EXPORT-PLAN.md](../plans/Phase-OTEL-AUDIT-EXPORT-PLAN.md) |
+| 3 | Phase-FOUNDRY-PROVIDER | 8/8 | $0.08 | ✅ on master | [docs/plans/Phase-FOUNDRY-PROVIDER-PLAN.md](../plans/Phase-FOUNDRY-PROVIDER-PLAN.md) |
+| 4 | Phase-AUTH-RBAC-SCAFFOLD | 8/8 | $0.07 | ✅ on master (slices 1-7 direct, slice 8 via PR #169) | [docs/plans/Phase-AUTH-RBAC-SCAFFOLD-PLAN.md](../plans/Phase-AUTH-RBAC-SCAFFOLD-PLAN.md) |
+
+**What each phase shipped:**
+
+- **Phase 1** — Adds `source` (orchestrator/worker/user/hook/environment) and `security_risk` (none/low/medium/high/critical) fields to every `events.log` record at `pforge-mcp/orchestrator.mjs:292`. Backwards-compatible read path (legacy events parse as `null`). Tagged `bridge-edit-blocked` events with `security_risk: high` automatically. Per OpenHands pattern (§8.5).
+- **Phase 2** — Wires OpenTelemetry `gen_ai.*` semantic conventions per §8.6 spec: chat / tool / agent / workflow / gate spans, plus `gen_ai.client.operation.duration` and `gen_ai.client.token.usage` histograms. OTel SDK loaded as optional dep, gated on `OTEL_EXPORTER_OTLP_ENDPOINT` (no-op when unset). Adds `pforge audit export --since/--until/--type/--run --format json|csv` CLI to `pforge.ps1` and `pforge.sh`. New docs under `docs/observability/`: `otel-schema.md`, `audit-log-spec.md`, plus Grafana / Datadog / Splunk sample dashboards. Phase-1's `source`/`security_risk` map to `pforge.actor.source` / `pforge.action.security_risk` span attributes.
+- **Phase 3** — Adds `microsoft-foundry` as a first-class LLM provider per §11.5.A spec. Six new `KNOWN_SECRETS` entries (`AZURE_OPENAI_API_KEY`, `AZURE_OPENAI_ENDPOINT`, `AZURE_OPENAI_DEPLOYMENT`, `AZURE_OPENAI_API_VERSION`, `AZURE_TENANT_ID`, `AZURE_CLIENT_ID`). Two auth modes (api-key default, Entra opt-in via `@azure/identity` optional dep). Deployment-name → model-name mapping in `priceSlice()` via `.forge/foundry-deployments.json` with literal fallback. AOAI deployment-type uplift (`global` 1.0× / `data-zone` + `regional` 1.1×). Government cloud detection on `.azure.us` endpoints. New `power-gov` quorum preset (gpt-5.1, gpt-4.1, gpt-4.1-mini, o3-mini, gpt-4o; threshold 5). Three new docs: `byo-azure-openai.md`, `foundry-toolbox-mcp.md`, `foundry-app-insights.md`. `costForLeg()` byte-identical (v2.83.0 invariant preserved).
+- **Phase 4** — Pluggable auth model under `pforge-mcp/auth/`: `index.mjs` (provider dispatch), `providers/bearer.mjs` (extracted from current `bridge.approvalSecret` flow, behavior-preserving), `providers/sso-stub.mjs` (interface scaffold), `rbac.mjs` (`resolveRoles` / `expandScopes` / `hasScope` with `:` hierarchy + `*` wildcard), `middleware.mjs` (`withAuth(handler, requiredScopes)`). Wired into `bridge.mjs` edit-approval and `server.mjs` MCP tool dispatch. **Open-by-default invariant**: when `.forge/rbac.json` is absent, behavior is byte-identical to today (zero solo-operator regression). 37 tests in `auth-rbac.test.mjs`. Full vitest suite (4503 tests) re-verified at Slice 7. Three security docs under `docs/security/`: `auth-model.md`, `sso-extension-point.md`, `rbac-config.md`.
+
+**Cost-path scope clarification** (matches §12.6 framing):
+
+- **Subscription CLI workers** (`gh-copilot`, `claude-cli`, `codex-cli`): Phase 3's AOAI multiplier and Foundry deployment-name mapping do not touch this path. `costForLeg()` at `pforge-mcp/cost-service.mjs:309-318` is byte-identical to pre-execution.
+- **Direct vendor API keys** (Anthropic / OpenAI / xAI): unchanged.
+- **Azure OpenAI in customer tenant**: now first-class via `microsoft-foundry` provider with deployment-name mapping and the AOAI deployment-type uplift previously deferred from Phase-COST-TOKEN-COVERAGE per §11.5.A.
+
+**Operational lessons learned (recorded for the next chain run):**
+
+- `pforge run-plan` defaults to background spawn — chain scripts MUST pass `--foreground`. Without it, every phase races in parallel against the same git working tree. Documented in `/memories/repo/pforge-run-plan-foreground.md`.
+- Plan validation gates calling `node` or `pwsh` MUST NOT be wrapped in `bash -c "..."` on Windows. WSL bash resolves first via `where bash` and has no `node` / `pwsh` on PATH. Documented in `/memories/repo/plan-gate-command-rules.md` (anti-pattern #1).
+- Plan validation gates piping pwsh-output into `grep` MUST NOT use cmd.exe-dispatched pwsh. Use `pwsh -NoProfile -Command "... | Select-String -Quiet"` instead.
+
+**Chain runner**: [scripts/run-priority-c-chain.ps1](../../scripts/run-priority-c-chain.ps1) — reusable for future chained-phase work. Supports `-StartFrom <N>` and `-ResumeFromSlice <N>` for incremental resume.
+
+**Remaining Priority D work**: Foundry quota preflight (read customer TPM/PTU via Cognitive Services API; warn when slice estimates exceed capacity). Natural follow-up phase, not blocking.
 
 ---
 
@@ -857,3 +903,4 @@ The original six docs, sharpened by Foundry findings:
 
   **Net result**: Priority A (cost fix + ACI hardening) and Priority B (Week 1 docs) from §14 are now both complete on master. Priority C (OTel exporter, audit log formalization, auth scaffolding, BYO Azure OpenAI) and Priority D (Foundry-informed backlog) are unstarted and remain the natural next chapter of work.
 - **2026-05-06 (Phase-MANUAL-DISCOVERY-LOOP and Phase-MANUAL-INTEGRATIONS plans drafted)** — Two follow-up plans authored in parallel sessions and now committed to master at [docs/plans/Phase-MANUAL-DISCOVERY-LOOP-PLAN.md](../plans/Phase-MANUAL-DISCOVERY-LOOP-PLAN.md) and [docs/plans/Phase-MANUAL-INTEGRATIONS-PLAN.md](../plans/Phase-MANUAL-INTEGRATIONS-PLAN.md). Neither has been executed yet. Both extend the manual coverage further.
+- **2026-05-07 (Priority C shipped)** — All four §14 Priority-C items plus the §9 Week-4 trajectory-schema item shipped via the Priority-C chain (4 phases, 34 slices, ~3 hours wall time, $0.32 declared / $0.00 wall on gh-copilot subscription). See §14.5 above for per-phase narrative, commits, and operational lessons. Net result: §14 Priority C is complete; §14 Priority D is partially complete (4 of 5 items landed via Phase-FOUNDRY-PROVIDER; only Foundry quota preflight remains open).

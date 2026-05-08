@@ -109,6 +109,12 @@ function Show-Help {
     Write-Host "  graph stats                  Print node count by type from graph snapshot"
     Write-Host "  graph query [type]           Query the knowledge graph (phase, file, recent-changes, neighbors)"
     Write-Host "  patterns list [--since <iso>] List recurring patterns detected across plan runs"
+    Write-Host "  audit export      Export audit events from .forge/runs/ as JSONL or CSV"
+    Write-Host "    --since <ISO>   Only events on or after this timestamp"
+    Write-Host "    --until <ISO>   Only events on or before this timestamp"
+    Write-Host "    --type <name>   Filter by event type (repeatable)"
+    Write-Host "    --run <id>      Scope to a single run ID"
+    Write-Host "    --format <fmt>  Output format: json (default) or csv"
     Write-Host "  audit-loop        Run audit drain loop — discover bugs from the running system"
     Write-Host "    --auto          Respect config mode (off/auto/always); without this, always runs one drain"
     Write-Host "    --max=N         Override maximum rounds (default: 5)"
@@ -5853,6 +5859,91 @@ function Invoke-PlanFromSarif {
     node $scriptPath @Arguments
 }
 
+# ─── Command: audit export (Phase-OTEL-AUDIT-EXPORT Slice 9) ──────
+function Invoke-AuditExport {
+    $since  = $null
+    $until  = $null
+    $types  = @()
+    $runId  = $null
+    $format = "json"
+
+    for ($i = 0; $i -lt $Arguments.Count; $i++) {
+        switch -Regex ($Arguments[$i]) {
+            '^(--help|-h)$' {
+                Write-Host "Usage: pforge audit export [options]"
+                Write-Host ""
+                Write-Host "Export audit events from .forge/runs/ as JSONL or CSV."
+                Write-Host "Reads events.log files written by the orchestrator — streaming,"
+                Write-Host "never loads all events into memory."
+                Write-Host ""
+                Write-Host "Options:"
+                Write-Host "  --since <ISO>     Only events on or after this timestamp (inclusive)."
+                Write-Host "  --until <ISO>     Only events on or before this timestamp (inclusive)."
+                Write-Host "  --type <name>     Filter by event type (repeatable, e.g. --type slice-start --type gate-pass)."
+                Write-Host "  --run <id>        Scope to a single run directory ID."
+                Write-Host "  --format <fmt>    Output format: json (default, JSONL) or csv."
+                Write-Host "  --help, -h        Show this help and exit."
+                Write-Host ""
+                Write-Host "Examples:"
+                Write-Host "  pforge audit export                                  # All events as JSONL"
+                Write-Host "  pforge audit export --since 2026-05-01               # Events from May onwards"
+                Write-Host "  pforge audit export --format csv > audit.csv         # CSV to file"
+                Write-Host "  pforge audit export --type gate-pass --type gate-fail"
+                Write-Host "  pforge audit export --run 20260507T120000Z           # Single run"
+                Write-Host ""
+                Write-Host "See docs/CLI-GUIDE.md for the full audit export reference."
+                return
+            }
+            '^--since=(.+)$'  { $since = $Matches[1] }
+            '^--since$'       { if (($i + 1) -lt $Arguments.Count) { $since = $Arguments[$i + 1]; $i++ } }
+            '^--until=(.+)$'  { $until = $Matches[1] }
+            '^--until$'       { if (($i + 1) -lt $Arguments.Count) { $until = $Arguments[$i + 1]; $i++ } }
+            '^--type=(.+)$'   { $types += $Matches[1] }
+            '^--type$'        { if (($i + 1) -lt $Arguments.Count) { $types += $Arguments[$i + 1]; $i++ } }
+            '^--run=(.+)$'    { $runId = $Matches[1] }
+            '^--run$'         { if (($i + 1) -lt $Arguments.Count) { $runId = $Arguments[$i + 1]; $i++ } }
+            '^--format=(.+)$' { $format = $Matches[1] }
+            '^--format$'      { if (($i + 1) -lt $Arguments.Count) { $format = $Arguments[$i + 1]; $i++ } }
+        }
+    }
+
+    if ($format -ne "json" -and $format -ne "csv") {
+        Write-Host "ERROR: --format must be 'json' or 'csv', got '$format'" -ForegroundColor Red
+        exit 1
+    }
+
+    # Build the node invocation arguments
+    $nodeArgs = @(
+        "--input-type=module"
+        "-e"
+    )
+
+    $typeArrayJs = "[]"
+    if ($types.Count -gt 0) {
+        $escaped = ($types | ForEach-Object { "`"$_`"" }) -join ","
+        $typeArrayJs = "[$escaped]"
+    }
+
+    $sinceJs = if ($since) { "`"$since`"" } else { "undefined" }
+    $untilJs = if ($until) { "`"$until`"" } else { "undefined" }
+    $runJs   = if ($runId) { "`"$runId`"" } else { "undefined" }
+
+    $script = @"
+import { exportAudit } from "./pforge-mcp/audit-export.mjs";
+for await (const line of exportAudit({
+  cwd: process.cwd(),
+  since: $sinceJs,
+  until: $untilJs,
+  type: $typeArrayJs,
+  run: $runJs,
+  format: "$format"
+})) { console.log(line); }
+"@
+
+    $nodeArgs += $script
+    & node @nodeArgs
+}
+
 # ─── Command: audit-loop (Phase-39 Slice 7) ───────────────────────
 function Invoke-AuditLoop {
     $autoMode = $false
@@ -6181,6 +6272,24 @@ switch ($Command) {
     'forge-master' { Invoke-ForgeMaster }
     'hammer-fm'    { Invoke-HammerFm }
     'audit-loop'   { Invoke-AuditLoop }
+    'audit'        {
+        $sub = if ($Arguments.Count -gt 0) { $Arguments[0] } else { "" }
+        switch ($sub) {
+            'export' {
+                $script:Arguments = @($Arguments | Select-Object -Skip 1)
+                Invoke-AuditExport
+            }
+            default {
+                Write-Host "Usage: pforge audit <subcommand>" -ForegroundColor Yellow
+                Write-Host ""
+                Write-Host "Subcommands:"
+                Write-Host "  export    Export audit events from .forge/runs/ as JSONL or CSV"
+                Write-Host ""
+                Write-Host "See also: pforge audit-loop"
+                exit 1
+            }
+        }
+    }
     'fm-session'   { Invoke-FmSession }
     'fm-recall'    { Invoke-FmRecall }
     'timeline'     { Invoke-Timeline }

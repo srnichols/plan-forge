@@ -7,9 +7,21 @@
   display: grid;
   grid-template-columns: 260px 1fr;
   min-height: 100vh;
+  transition: grid-template-columns 0.25s ease;
 }
 @media (max-width: 1023px) {
   .manual-layout { grid-template-columns: 1fr; }
+}
+
+/* ─ Desktop sidebar collapse (toggleable) ─ */
+@media (min-width: 1024px) {
+  body.sidebar-collapsed .manual-layout { grid-template-columns: 0 1fr; }
+  body.sidebar-collapsed .manual-sidebar {
+    transform: translateX(-100%);
+    overflow: hidden;
+    transition: transform 0.25s ease;
+  }
+  .manual-sidebar { transition: transform 0.25s ease; }
 }
 
 /* ─── Sidebar ─── */
@@ -383,7 +395,17 @@ button.sidebar-act-toggle.expanded .sidebar-act-chevron { transform: rotate(90de
 }
 @media (min-width: 1024px) {
   .sidebar-overlay { display: none !important; }
-  .mobile-sidebar-btn { display: none !important; }
+  /* Desktop: keep the toggle button visible so users can collapse the sidebar */
+  .mobile-sidebar-btn { display: inline-flex !important; align-items: center; justify-content: center; }
+  /* When sidebar is open on desktop, slide the button to the right of it so it doesn't overlap the nav links */
+  body:not(.sidebar-collapsed) .mobile-sidebar-btn {
+    left: 272px;
+    transition: left 0.25s ease;
+  }
+  body.sidebar-collapsed .mobile-sidebar-btn {
+    left: 1rem;
+    transition: left 0.25s ease;
+  }
 }
 
 /* ─── Search ─── */

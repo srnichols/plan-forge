@@ -292,27 +292,64 @@
     });
   }
 
-  // ─── Mobile sidebar ───
+  // ─── Sidebar toggle (mobile slide-out + desktop collapse) ───
   function initMobileSidebar() {
     const btn = document.getElementById("mobile-sidebar-btn");
     const sidebar = document.getElementById("manual-sidebar");
     const overlay = document.getElementById("sidebar-overlay");
     if (!btn || !sidebar) return;
 
+    const desktopMQ = window.matchMedia("(min-width: 1024px)");
+    const STORAGE_KEY = "pforgeManualSidebarCollapsed";
+
+    // Restore desktop collapse preference
+    if (desktopMQ.matches && localStorage.getItem(STORAGE_KEY) === "1") {
+      document.body.classList.add("sidebar-collapsed");
+    }
+
+    const updateAria = () => {
+      const isCollapsed = desktopMQ.matches
+        ? document.body.classList.contains("sidebar-collapsed")
+        : !sidebar.classList.contains("open");
+      btn.setAttribute("aria-label", isCollapsed ? "Open navigation" : "Close navigation");
+      btn.setAttribute("aria-expanded", String(!isCollapsed));
+    };
+    updateAria();
+
     const toggle = () => {
-      sidebar.classList.toggle("open");
-      if (overlay) overlay.classList.toggle("open");
+      if (desktopMQ.matches) {
+        // Desktop: collapse/expand via body class, persist to localStorage
+        document.body.classList.toggle("sidebar-collapsed");
+        const collapsed = document.body.classList.contains("sidebar-collapsed");
+        if (collapsed) localStorage.setItem(STORAGE_KEY, "1");
+        else localStorage.removeItem(STORAGE_KEY);
+      } else {
+        // Mobile: slide-out sidebar over content
+        sidebar.classList.toggle("open");
+        if (overlay) overlay.classList.toggle("open");
+      }
+      updateAria();
     };
     btn.addEventListener("click", toggle);
-    if (overlay) overlay.addEventListener("click", toggle);
+    if (overlay) overlay.addEventListener("click", () => {
+      sidebar.classList.remove("open");
+      overlay.classList.remove("open");
+      updateAria();
+    });
 
-    // Close on link click (mobile)
+    // Close on link click (mobile only)
     sidebar.querySelectorAll("a").forEach((a) => {
       a.addEventListener("click", () => {
-        sidebar.classList.remove("open");
-        if (overlay) overlay.classList.remove("open");
+        if (!desktopMQ.matches) {
+          sidebar.classList.remove("open");
+          if (overlay) overlay.classList.remove("open");
+          updateAria();
+        }
       });
     });
+
+    // Re-evaluate aria on viewport change so screen-reader state stays accurate
+    desktopMQ.addEventListener("change", updateAria);
   }
 
   // ─── Client-side search ───

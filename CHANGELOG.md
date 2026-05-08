@@ -7,6 +7,30 @@ Format follows [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
+### Phase-AUTH-RBAC-SCAFFOLD — Auth model + SSO extension point + RBAC scaffold (2026-05-07)
+
+> **One-liner**: Introduces a pluggable authentication model for Plan Forge MCP — a provider-dispatch `authenticate()` entry point, a bearer-token provider (behavior-preserving refactor of the existing `approvalSecret` flow), an SSO provider interface stub ready for `Phase-ENTRA-SSO`, a config-driven RBAC resolver (`resolveRoles` / `expandScopes` / `hasScope` with `:` hierarchy and `*` wildcard), `withAuth` middleware that gates tool dispatch and bridge edits, and three security docs. Fully backward-compatible: absent `.forge/rbac.json` → open-by-default, identical to pre-RBAC behavior.
+
+#### Added
+- `pforge-mcp/auth/index.mjs` — provider-dispatch `authenticate(req, opts)` entry point. Supports `bearer` (default), `sso`, and `none` providers. Returns a normalized `AuthResult` (`{ ok, token, provider, error? }`).
+- `pforge-mcp/auth/providers/bearer.mjs` — extracted bearer-token provider. Accepts tokens via `Authorization: Bearer <token>` header or `PFORGE_AUTH_TOKEN` env var. Permissive mode (any non-empty token) when no secret is configured; strict mode (exact match) when `opts.token` is set. Behavior-preserving refactor of the pre-phase `approvalSecret` check.
+- `pforge-mcp/auth/providers/sso-stub.mjs` — SSO provider interface stub. Returns `ok: false` with a clear "not yet implemented" message. Replaced by a real provider in `Phase-ENTRA-SSO`. Defines the two-function contract (`authenticate`, `healthCheck`) that all SSO providers must implement.
+- `pforge-mcp/auth/rbac.mjs` — config-driven RBAC resolver. Exports `resolveRoles(principal, config)` (transitive role expansion with cycle guard), `hasScope(roles, scope, config)` (exact, prefix-wildcard `:*`, and global-wildcard `*` matching). Reads `.forge/rbac.json`; absent config → all scope checks pass (open-by-default invariant).
+- `pforge-mcp/auth/middleware.mjs` — `withAuth(handler, opts)` factory. Wraps any `(req, res)` handler with authentication (step 1) and optional RBAC scope check (step 2). On failure writes a structured JSON error (`401` / `403` / `500`) and short-circuits the handler. On success enriches `req.auth` with the `AuthResult`.
+- `.forge/rbac.example.json` — annotated example RBAC config with `admin`, `developer`, `reader`, `ci` roles and example token assignments. Copy to `.forge/rbac.json` to activate.
+- `pforge-mcp/tests/auth-rbac.test.mjs` — 12 test cases covering all acceptance criteria: absent-config backward compat, bearer valid/invalid, SSO stub interface shape, `resolveRoles` literal + inherited, `hasScope` hierarchy and wildcard, `withAuth` rejection on missing scope, auth-denial event emission, read-only open default.
+- `docs/security/auth-model.md` — canonical statement of the Plan Forge authentication model: current bearer state, pluggable provider architecture, identity shape, middleware usage, security boundaries, read-only tool defaults, and how to add a new provider.
+- `docs/security/sso-extension-point.md` — SSO provider contract: interface definition, current stub, step-by-step implementation guide, per-request lifecycle, error handling, response shapes, auth-decision event format, constraints, and planned future providers.
+- `docs/security/rbac-config.md` — `.forge/rbac.json` schema reference: field descriptions, scope syntax (exact / prefix-wildcard / global-wildcard), built-in scope catalogue, common patterns (admin, developer, viewer, CI/CD), role inheritance examples, and recovery instructions.
+
+#### Notes
+- `bridge.approvalSecret` config key and `PFORGE_APPROVAL_SECRET` env var are unchanged — the bearer provider reads them identically to the pre-phase implementation.
+- When `.forge/rbac.json` is absent, `withAuth` skips all scope checks and the system behaves byte-identically to the pre-RBAC state. No existing solo-operator workflow is affected.
+- `costForLeg()` and `priceSlice()` in `cost-service.mjs` are untouched.
+- No release in this phase.
+
+---
+
 ### Phase-FOUNDRY-PROVIDER — Microsoft Azure AI Foundry / BYO Azure OpenAI provider (2026-05-07)
 
 > **One-liner**: Adds `microsoft-foundry` as a first-class Plan Forge provider, enabling enterprises to route plan execution through their own Azure OpenAI Service or Azure AI Foundry endpoint. Two auth paths (API key and Entra/Managed Identity with `@azure/identity` optional dep), government-cloud auto-detection, deployment-name → model-key normalization via `.forge/foundry-deployments.json`, AOAI deployment-type cost uplift (Data Zone/Regional 1.1×), and a new `power-gov` quorum preset for Azure Government catalog models. Three new docs cover the BYO setup guide, Foundry Toolbox MCP integration, and App Insights OTel sink.

@@ -50,6 +50,7 @@ param(
     [string]$Quorum = 'auto',
     [ValidateRange(1,4)]
     [int]$StartFrom = 1,
+    [int]$ResumeFromSlice = 0,
     [switch]$DryRun,
     [switch]$Force
 )
@@ -219,12 +220,18 @@ foreach ($p in $plans) {
 
     # Same manual-import bypass as the estimate phase.
     # CRITICAL: --foreground is REQUIRED. Without it, `pforge run-plan` spawns the
-    # orchestrator as a background process and exits 0 immediately — every phase
+    # orchestrator as a background process and exits 0 immediately - every phase
     # races in parallel against the same git working tree. See
     # /memories/repo/pforge-run-plan-foreground.md.
-    $reason = "enterprise-fleet-readiness.md §14 Priority C — research-derived plan ($($p.Name))"
+    $reason = "enterprise-fleet-readiness.md §14 Priority C - research-derived plan ($($p.Name))"
+    $extraArgs = @()
+    if ($ResumeFromSlice -gt 0 -and $p.Number -eq $StartFrom) {
+        $extraArgs += @('--resume-from', $ResumeFromSlice.ToString())
+        Write-Host ("  -> resuming from slice {0}" -f $ResumeFromSlice) -ForegroundColor Yellow
+    }
     & ./pforge.ps1 run-plan $p.Path --foreground --quorum=$Quorum `
-        --manual-import --manual-import-source human --manual-import-reason $reason
+        --manual-import --manual-import-source human --manual-import-reason $reason `
+        @extraArgs
     $exit = $LASTEXITCODE
     $duration = (New-TimeSpan -Start $sliceStart -End (Get-Date)).TotalMinutes
 

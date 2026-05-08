@@ -7,6 +7,12 @@ Format follows [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
+---
+
+## [2.92.0] — 2026-05-08 — Docs UX lift (BCDR patterns adopted)
+
+> **One-liner**: Documentation-only minor that adopts three reusable UX patterns from the BCDR-Digital-Twin sibling repo — a book-style manual spine, scroll-snap briefing decks, and an architecture hub — plus a shared design-token layer and site-wide navigation include. 14 slices executed via gh-copilot subscription path in 27.8 minutes; $0.14 declared / $0.00 wall. Zero `pforge-mcp/` or `pforge-master/` code touched.
+
 ### Phase-DOCS-UX-LIFT — BCDR UX patterns adopted for the docs site
 
 > **One-liner**: Adopts three reusable UX patterns from the BCDR-Digital-Twin sibling repo — a book-style manual spine, scroll-snap briefing decks, and an architecture hub — plus a shared design-token layer and site-wide navigation include. Documentation-only phase; no `pforge-mcp/` or `pforge-master/` code changes.

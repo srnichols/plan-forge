@@ -1,0 +1,190 @@
+{
+  "__pforge_note__": "Datadog dashboard JSON v3 — import via Datadog UI → Dashboards → New Dashboard → Import dashboard → paste this JSON. Requires Datadog Agent configured with OTLP receiver (datadog.yaml: otlp_config.receiver.protocols.grpc.endpoint). Metrics names use dots (Datadog flattens OTel underscores to dots).",
+  "title": "Plan Forge Overview",
+  "description": "LLM call rates, token usage, latency, gate outcomes, and bridge edit security events for Plan Forge orchestrator runs.",
+  "widgets": [
+    {
+      "id": 1,
+      "definition": {
+        "type": "query_value",
+        "title": "LLM Calls (24h)",
+        "requests": [
+          {
+            "q": "sum:gen_ai.client.operation.duration.count{*}.as_count()",
+            "aggregator": "sum"
+          }
+        ],
+        "autoscale": true,
+        "precision": 0
+      },
+      "layout": { "x": 0, "y": 0, "width": 2, "height": 2 }
+    },
+    {
+      "id": 2,
+      "definition": {
+        "type": "query_value",
+        "title": "Total Tokens (24h)",
+        "requests": [
+          {
+            "q": "sum:gen_ai.client.token.usage.sum{*}.as_count()",
+            "aggregator": "sum"
+          }
+        ],
+        "autoscale": true,
+        "precision": 0
+      },
+      "layout": { "x": 2, "y": 0, "width": 2, "height": 2 }
+    },
+    {
+      "id": 3,
+      "definition": {
+        "type": "query_value",
+        "title": "P95 LLM Latency",
+        "requests": [
+          {
+            "q": "p95:gen_ai.client.operation.duration{*}",
+            "aggregator": "percentile"
+          }
+        ],
+        "autoscale": true,
+        "precision": 2,
+        "custom_unit": "s"
+      },
+      "layout": { "x": 4, "y": 0, "width": 2, "height": 2 }
+    },
+    {
+      "id": 4,
+      "definition": {
+        "type": "query_value",
+        "title": "Gate Failures (24h)",
+        "requests": [
+          {
+            "q": "sum:pforge.gate.total{gate_result:fail}.as_count()",
+            "aggregator": "sum",
+            "conditional_formats": [
+              { "comparator": ">", "value": 0, "palette": "red_on_white" }
+            ]
+          }
+        ],
+        "autoscale": true,
+        "precision": 0
+      },
+      "layout": { "x": 6, "y": 0, "width": 2, "height": 2 }
+    },
+    {
+      "id": 5,
+      "definition": {
+        "type": "query_value",
+        "title": "Bridge Blocks (24h)",
+        "requests": [
+          {
+            "q": "sum:pforge.bridge.edit.total{result:blocked}.as_count()",
+            "aggregator": "sum",
+            "conditional_formats": [
+              { "comparator": ">", "value": 0, "palette": "yellow_on_white" }
+            ]
+          }
+        ],
+        "autoscale": true,
+        "precision": 0
+      },
+      "layout": { "x": 8, "y": 0, "width": 2, "height": 2 }
+    },
+    {
+      "id": 6,
+      "definition": {
+        "type": "timeseries",
+        "title": "LLM Call Rate by Model",
+        "requests": [
+          {
+            "q": "sum:gen_ai.client.operation.duration.count{*} by {gen_ai_request_model}.as_rate()",
+            "display_type": "line",
+            "style": { "palette": "dog_classic", "line_type": "solid", "line_width": "normal" }
+          }
+        ],
+        "yaxis": { "label": "calls/s", "scale": "linear" }
+      },
+      "layout": { "x": 0, "y": 2, "width": 6, "height": 3 }
+    },
+    {
+      "id": 7,
+      "definition": {
+        "type": "timeseries",
+        "title": "Token Usage by Type",
+        "requests": [
+          {
+            "q": "sum:gen_ai.client.token.usage.sum{*} by {gen_ai_token_type}.as_rate()",
+            "display_type": "area",
+            "style": { "palette": "cool", "line_type": "solid", "line_width": "thin" }
+          }
+        ],
+        "yaxis": { "label": "tokens/s", "scale": "linear" }
+      },
+      "layout": { "x": 6, "y": 2, "width": 6, "height": 3 }
+    },
+    {
+      "id": 8,
+      "definition": {
+        "type": "distribution",
+        "title": "LLM Latency Distribution",
+        "requests": [
+          {
+            "q": "gen_ai.client.operation.duration{*}",
+            "style": { "palette": "purple" }
+          }
+        ],
+        "xaxis": { "scale": "linear", "label": "seconds" }
+      },
+      "layout": { "x": 0, "y": 5, "width": 6, "height": 3 }
+    },
+    {
+      "id": 9,
+      "definition": {
+        "type": "timeseries",
+        "title": "Gate Outcomes Over Time",
+        "requests": [
+          {
+            "q": "sum:pforge.gate.total{gate_result:pass}.as_count()",
+            "display_type": "bars",
+            "style": { "palette": "green" },
+            "metadata": [{ "expression": "sum:pforge.gate.total{gate_result:pass}.as_count()", "alias_name": "pass" }]
+          },
+          {
+            "q": "sum:pforge.gate.total{gate_result:fail}.as_count()",
+            "display_type": "bars",
+            "style": { "palette": "warm" },
+            "metadata": [{ "expression": "sum:pforge.gate.total{gate_result:fail}.as_count()", "alias_name": "fail" }]
+          }
+        ]
+      },
+      "layout": { "x": 6, "y": 5, "width": 6, "height": 3 }
+    },
+    {
+      "id": 10,
+      "definition": {
+        "type": "event_stream",
+        "title": "Bridge Edit Security Events",
+        "query": "sources:pforge pforge.action.security_risk:(high OR critical)",
+        "event_size": "s",
+        "tags_execution": "and"
+      },
+      "layout": { "x": 0, "y": 8, "width": 12, "height": 3 }
+    }
+  ],
+  "template_variables": [
+    {
+      "name": "plan",
+      "prefix": "pforge_plan_name",
+      "default": "*",
+      "available_values": []
+    },
+    {
+      "name": "model",
+      "prefix": "gen_ai_request_model",
+      "default": "*",
+      "available_values": []
+    }
+  ],
+  "layout_type": "ordered",
+  "reflow_type": "auto"
+}

@@ -1,0 +1,176 @@
+{
+  "__pforge_note__": "Grafana dashboard model v8+ — import via Grafana UI → Dashboards → Import → Upload JSON file. Requires a configured Prometheus or OTLP-compatible data source named 'pforge-metrics' pointing to your collector's Prometheus endpoint.",
+  "id": null,
+  "uid": "pforge-overview-v1",
+  "title": "Plan Forge — Overview",
+  "tags": ["plan-forge", "ai-agent", "observability"],
+  "timezone": "browser",
+  "schemaVersion": 38,
+  "version": 1,
+  "refresh": "30s",
+  "time": { "from": "now-24h", "to": "now" },
+  "timepicker": {},
+  "templating": {
+    "list": [
+      {
+        "name": "plan",
+        "label": "Plan",
+        "type": "query",
+        "datasource": { "type": "prometheus", "uid": "${DS_PFORGE_METRICS}" },
+        "definition": "label_values(gen_ai_client_operation_duration_bucket, pforge_plan_name)",
+        "query": "label_values(gen_ai_client_operation_duration_bucket, pforge_plan_name)",
+        "multi": true,
+        "includeAll": true,
+        "current": {}
+      },
+      {
+        "name": "model",
+        "label": "Model",
+        "type": "query",
+        "datasource": { "type": "prometheus", "uid": "${DS_PFORGE_METRICS}" },
+        "definition": "label_values(gen_ai_client_operation_duration_bucket, gen_ai_request_model)",
+        "query": "label_values(gen_ai_client_operation_duration_bucket, gen_ai_request_model)",
+        "multi": true,
+        "includeAll": true,
+        "current": {}
+      }
+    ]
+  },
+  "__inputs": [
+    {
+      "name": "DS_PFORGE_METRICS",
+      "label": "pforge-metrics",
+      "description": "Prometheus-compatible endpoint from your OTLP collector",
+      "type": "datasource",
+      "pluginId": "prometheus",
+      "pluginName": "Prometheus"
+    }
+  ],
+  "panels": [
+    {
+      "id": 1,
+      "type": "stat",
+      "title": "Total LLM Calls (24h)",
+      "gridPos": { "x": 0, "y": 0, "w": 4, "h": 4 },
+      "datasource": { "type": "prometheus", "uid": "${DS_PFORGE_METRICS}" },
+      "targets": [
+        {
+          "expr": "sum(increase(gen_ai_client_operation_duration_count[24h]))",
+          "legendFormat": "calls"
+        }
+      ],
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "colorMode": "value", "graphMode": "none" }
+    },
+    {
+      "id": 2,
+      "type": "stat",
+      "title": "Total Tokens (24h)",
+      "gridPos": { "x": 4, "y": 0, "w": 4, "h": 4 },
+      "datasource": { "type": "prometheus", "uid": "${DS_PFORGE_METRICS}" },
+      "targets": [
+        {
+          "expr": "sum(increase(gen_ai_client_token_usage_sum[24h]))",
+          "legendFormat": "tokens"
+        }
+      ],
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "colorMode": "value", "graphMode": "none", "unit": "short" }
+    },
+    {
+      "id": 3,
+      "type": "stat",
+      "title": "P95 LLM Latency",
+      "gridPos": { "x": 8, "y": 0, "w": 4, "h": 4 },
+      "datasource": { "type": "prometheus", "uid": "${DS_PFORGE_METRICS}" },
+      "targets": [
+        {
+          "expr": "histogram_quantile(0.95, sum by (le) (rate(gen_ai_client_operation_duration_bucket[5m])))",
+          "legendFormat": "p95"
+        }
+      ],
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "colorMode": "background", "graphMode": "none", "unit": "s" }
+    },
+    {
+      "id": 4,
+      "type": "stat",
+      "title": "Gate Failures (24h)",
+      "gridPos": { "x": 12, "y": 0, "w": 4, "h": 4 },
+      "datasource": { "type": "prometheus", "uid": "${DS_PFORGE_METRICS}" },
+      "targets": [
+        {
+          "expr": "sum(increase(pforge_gate_total{gate_result=\"fail\"}[24h]))",
+          "legendFormat": "failures"
+        }
+      ],
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "colorMode": "background", "graphMode": "none", "thresholds": { "steps": [{ "color": "green", "value": null }, { "color": "red", "value": 1 }] } }
+    },
+    {
+      "id": 5,
+      "type": "stat",
+      "title": "Bridge Blocks (24h)",
+      "gridPos": { "x": 16, "y": 0, "w": 4, "h": 4 },
+      "datasource": { "type": "prometheus", "uid": "${DS_PFORGE_METRICS}" },
+      "targets": [
+        {
+          "expr": "sum(increase(pforge_bridge_edit_total{result=\"blocked\"}[24h]))",
+          "legendFormat": "blocks"
+        }
+      ],
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "colorMode": "background", "graphMode": "none", "thresholds": { "steps": [{ "color": "green", "value": null }, { "color": "orange", "value": 1 }] } }
+    },
+    {
+      "id": 6,
+      "type": "timeseries",
+      "title": "LLM Call Rate",
+      "gridPos": { "x": 0, "y": 4, "w": 12, "h": 8 },
+      "datasource": { "type": "prometheus", "uid": "${DS_PFORGE_METRICS}" },
+      "targets": [
+        {
+          "expr": "sum by (gen_ai_request_model) (rate(gen_ai_client_operation_duration_count[5m]))",
+          "legendFormat": "{{gen_ai_request_model}}"
+        }
+      ],
+      "fieldConfig": { "defaults": { "unit": "reqps" } }
+    },
+    {
+      "id": 7,
+      "type": "timeseries",
+      "title": "Token Usage Rate",
+      "gridPos": { "x": 12, "y": 4, "w": 12, "h": 8 },
+      "datasource": { "type": "prometheus", "uid": "${DS_PFORGE_METRICS}" },
+      "targets": [
+        {
+          "expr": "sum by (gen_ai_token_type) (rate(gen_ai_client_token_usage_sum[5m]))",
+          "legendFormat": "{{gen_ai_token_type}}"
+        }
+      ],
+      "fieldConfig": { "defaults": { "unit": "short", "custom": { "lineWidth": 2 } } }
+    },
+    {
+      "id": 8,
+      "type": "heatmap",
+      "title": "LLM Latency Heatmap",
+      "gridPos": { "x": 0, "y": 12, "w": 24, "h": 8 },
+      "datasource": { "type": "prometheus", "uid": "${DS_PFORGE_METRICS}" },
+      "targets": [
+        {
+          "expr": "sum(rate(gen_ai_client_operation_duration_bucket[5m])) by (le)",
+          "legendFormat": "{{le}}",
+          "format": "heatmap"
+        }
+      ]
+    },
+    {
+      "id": 9,
+      "type": "table",
+      "title": "Recent Gate Failures",
+      "gridPos": { "x": 0, "y": 20, "w": 24, "h": 6 },
+      "datasource": { "type": "prometheus", "uid": "${DS_PFORGE_METRICS}" },
+      "targets": [
+        {
+          "expr": "topk(20, sum by (pforge_plan_name, pforge_slice_number, pforge_gate_name) (increase(pforge_gate_total{gate_result=\"fail\"}[24h])))",
+          "legendFormat": "{{pforge_plan_name}} / slice-{{pforge_slice_number}} / {{pforge_gate_name}}"
+        }
+      ]
+    }
+  ]
+}

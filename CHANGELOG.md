@@ -7,6 +7,25 @@ Format follows [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
+### Phase-OTEL-AUDIT-EXPORT Slice 12 — Observability documentation (2026-05-07)
+
+> **One-liner**: Adds `docs/observability/` with the published `gen_ai.*` + `pforge.*` OTel span schema (`otel-schema.md`), the audit log event specification and `pforge audit export` CLI reference (`audit-log-spec.md`), and three sample dashboards (Grafana JSON v8+, Datadog JSON v3, Splunk SPL queries) for operators connecting Plan Forge telemetry to their observability stack.
+
+#### Added
+- `docs/observability/otel-schema.md` — Published OTel schema for Plan Forge. Documents all five span types (`gen_ai.chat`, `execute_tool`, `invoke_agent`, `invoke_workflow`, `pforge.gate`), all attributes per span including `gen_ai.*` semantic conventions and `pforge.*` vendor-namespace attributes, two histogram metrics (`gen_ai.client.operation.duration`, `gen_ai.client.token.usage`), opt-in content capture event, resource attributes, span parent-child hierarchy, activation env vars, and `.forge.json` configuration keys.
+- `docs/observability/audit-log-spec.md` — Audit log event specification and `pforge audit export` CLI reference. Documents the `[ISO] event-type: {json}` line format, all event types (run lifecycle, slice lifecycle, gate events, tool events, bridge/edit-guard events), common `source` and `security_risk` fields, run directory layout, all CLI options (`--since`, `--until`, `--type`, `--run`, `--format`, `--output`), JSONL and CSV output formats with field mapping, and compliance/retention guidance.
+- `docs/observability/sample-dashboards/grafana-pforge-overview.json` — Importable Grafana dashboard model (schema version 38). Includes stat panels for LLM call count, total tokens, P95 latency, gate failures, and bridge blocks; timeseries panels for call rate by model and token usage by type; a latency heatmap; and a gate failure table. Uses `${DS_PFORGE_METRICS}` datasource variable for Prometheus-compatible OTLP endpoint.
+- `docs/observability/sample-dashboards/datadog-pforge-overview.json` — Importable Datadog dashboard JSON (v3 layout). Mirrors the Grafana panel set: five summary query-value widgets, call rate and token timeseries, a latency distribution, gate outcome timeseries, and a bridge-edit security event stream.
+- `docs/observability/sample-dashboards/splunk-pforge-queries.spl` — Splunk SPL query library. Five sections: LLM call overview, cost analysis, gate outcomes, security/audit events (from `pforge audit export` JSONL ingest), and plan/slice performance. Ingest notes cover both OTel-via-collector and batch-via-HEC options.
+
+#### Notes
+- Documentation only — no code changes in this slice.
+- `pforge.cost.usd` attribute name documented as the canonical vendor-namespace cost attribute per §8.6 spec note ("no `gen_ai.cost` attribute exists in the spec").
+- Content capture (`pforge.telemetry.captureContent`) defaults to `false` throughout all documentation to match implementation. PII risk is explicitly called out.
+- Grafana and Datadog dashboards use template variables for `plan` and `model` to enable per-plan and per-model drill-down.
+
+---
+
 ### Phase-TRAJECTORY-SCHEMA-HARDENING — Explicit `source` and `security_risk` on events (2026-05-07)
 
 > **One-liner**: Purely additive schema hardening that stamps two new fields — `source` and `security_risk` — onto every event record written by `appendEvent()` in `orchestrator.mjs`. Backward-compatible: `parseEventLine()` returns `null` for both fields when reading legacy `events.log` lines that predate this change. Downstream consumers (`forge_search`, `forge_timeline`, hub replay) are untouched — they read `data` opaquely and surface the new fields automatically. See `docs/research/enterprise-fleet-readiness.md` §8.5 (OpenHands pattern) and `docs/plans/Phase-TRAJECTORY-SCHEMA-HARDENING-PLAN.md` for the executed plan.

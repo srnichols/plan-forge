@@ -1,0 +1,169 @@
+| SPL queries for Plan Forge observability — Splunk Enterprise or Splunk Cloud
+| Source: OTLP → Splunk HEC (HTTP Event Collector) or pforge audit export --format json | Splunk HEC ingest
+| Index: replace "pforge_otel" with your actual index name throughout.
+| All queries assume span events are indexed with sourcetype=pforge_otel_traces
+| and audit log events with sourcetype=pforge_audit_export.
+
+@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+@ Section 1: LLM call overview
+@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+
+| LLM call volume and latency over time (last 24h)
+index=pforge_otel sourcetype=pforge_otel_traces "attributes.gen_ai.operation.name"=chat
+| eval latency_s = duration / 1e9
+| timechart span=1h count AS calls avg(latency_s) AS avg_latency_s p95(latency_s) AS p95_latency_s
+| rename calls AS "LLM Calls", avg_latency_s AS "Avg Latency (s)", p95_latency_s AS "P95 Latency (s)"
+
+---
+
+| LLM call volume by model
+index=pforge_otel sourcetype=pforge_otel_traces "attributes.gen_ai.operation.name"=chat
+| stats count AS calls sum("attributes.gen_ai.usage.input_tokens") AS total_input_tokens sum("attributes.gen_ai.usage.output_tokens") AS total_output_tokens sum("attributes.pforge.cost.usd") AS total_cost_usd by "attributes.gen_ai.request.model"
+| sort -calls
+| rename "attributes.gen_ai.request.model" AS model
+
+---
+
+| Token usage breakdown by type (input vs output vs cache_read vs reasoning)
+index=pforge_otel sourcetype=pforge_otel_traces "attributes.gen_ai.operation.name"=chat
+| eval input = 'attributes.gen_ai.usage.input_tokens'
+| eval output = 'attributes.gen_ai.usage.output_tokens'
+| eval cache_read = 'attributes.gen_ai.usage.cache_read.input_tokens'
+| eval reasoning = 'attributes.gen_ai.usage.reasoning.output_tokens'
+| stats sum(input) AS total_input sum(output) AS total_output sum(cache_read) AS total_cache_read sum(reasoning) AS total_reasoning
+
+@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+@ Section 2: Cost analysis
+@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+
+| Cost per plan (last 7 days)
+index=pforge_otel sourcetype=pforge_otel_traces "attributes.gen_ai.operation.name"=chat
+| stats sum("attributes.pforge.cost.usd") AS cost_usd count AS calls by "attributes.pforge.plan.name"
+| sort -cost_usd
+| eval cost_per_call = round(cost_usd / calls, 4)
+| rename "attributes.pforge.plan.name" AS plan
+
+---
+
+| Cost per run (drill-down view)
+index=pforge_otel sourcetype=pforge_otel_traces "attributes.gen_ai.operation.name"=chat
+| stats sum("attributes.pforge.cost.usd") AS cost_usd count AS calls by "attributes.pforge.run.id" "attributes.pforge.plan.name"
+| sort -cost_usd
+| rename "attributes.pforge.run.id" AS run_id "attributes.pforge.plan.name" AS plan
+
+---
+
+| Daily cost trend
+index=pforge_otel sourcetype=pforge_otel_traces "attributes.gen_ai.operation.name"=chat
+| timechart span=1d sum("attributes.pforge.cost.usd") AS daily_cost_usd
+| eval daily_cost_usd = round(daily_cost_usd, 4)
+
+@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+@ Section 3: Gate outcomes
+@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+
+| Gate pass/fail/blocked summary
+index=pforge_otel sourcetype=pforge_otel_traces name="pforge.gate*"
+| stats count by "attributes.pforge.gate.result" "attributes.pforge.gate.name"
+| sort -count
+| rename "attributes.pforge.gate.result" AS result "attributes.pforge.gate.name" AS gate_name
+
+---
+
+| Gate failure rate over time
+index=pforge_otel sourcetype=pforge_otel_traces name="pforge.gate*"
+| eval is_fail = if('attributes.pforge.gate.result'="fail", 1, 0)
+| timechart span=1h sum(is_fail) AS gate_failures count AS total_gates
+| eval failure_rate_pct = round(gate_failures / total_gates * 100, 1)
+
+---
+
+| Most-failed gates (top 10)
+index=pforge_otel sourcetype=pforge_otel_traces name="pforge.gate*" "attributes.pforge.gate.result"=fail
+| stats count AS failures by "attributes.pforge.gate.name" "attributes.pforge.plan.name"
+| sort -failures
+| head 10
+| rename "attributes.pforge.gate.name" AS gate "attributes.pforge.plan.name" AS plan
+
+@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+@ Section 4: Security and audit events (from pforge audit export JSONL)
+@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+
+| Bridge edit blocks — all high-risk actions
+index=pforge_audit sourcetype=pforge_audit_export event_type=bridge-edit-blocked
+| table _time run_id plan slice_id source security_risk
+| sort -_time
+
+---
+
+| Security events by risk level (last 30 days)
+index=pforge_audit sourcetype=pforge_audit_export security_risk IN (low, medium, high, critical)
+| stats count by event_type security_risk
+| sort security_risk -count
+
+---
+
+| Audit trail for a specific run (replace RUN_ID with actual run UUID)
+index=pforge_audit sourcetype=pforge_audit_export run_id=RUN_ID
+| table _time event_type slice_id source security_risk gate_result cost_usd model
+| sort _time
+
+---
+
+| Slice failures with context
+index=pforge_audit sourcetype=pforge_audit_export event_type=slice-failed
+| stats count AS failures by plan
+| sort -failures
+
+---
+
+| Bridge approvals vs blocks ratio
+index=pforge_audit sourcetype=pforge_audit_export event_type IN (bridge-edit-blocked, bridge-edit-approved)
+| chart count by event_type
+
+@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+@ Section 5: Plan and slice performance
+@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+
+| Plan run duration and cost (invoke_workflow spans)
+index=pforge_otel sourcetype=pforge_otel_traces "attributes.gen_ai.operation.name"=invoke_workflow
+| eval duration_min = round(duration / 1e9 / 60, 1)
+| table _time "attributes.gen_ai.workflow.name" "attributes.pforge.run.id" "attributes.pforge.quorum.mode" duration_min
+| sort -_time
+| rename "attributes.gen_ai.workflow.name" AS plan "attributes.pforge.run.id" AS run_id "attributes.pforge.quorum.mode" AS quorum_mode
+
+---
+
+| Slice execution time distribution
+index=pforge_otel sourcetype=pforge_otel_traces "attributes.gen_ai.operation.name"=invoke_agent
+| eval duration_s = round(duration / 1e9, 1)
+| stats avg(duration_s) AS avg_s p50(duration_s) AS p50_s p95(duration_s) AS p95_s max(duration_s) AS max_s by "attributes.gen_ai.agent.name"
+| sort p95_s desc
+| rename "attributes.gen_ai.agent.name" AS slice
+
+---
+
+| Tool call frequency
+index=pforge_otel sourcetype=pforge_otel_traces "attributes.gen_ai.operation.name"=execute_tool
+| stats count AS calls by "attributes.gen_ai.tool.name"
+| sort -calls
+| rename "attributes.gen_ai.tool.name" AS tool
+
+@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+@ Ingest notes
+@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+
+| Option A: OTel → Splunk HEC via OTLP collector
+|   - Configure OTEL_EXPORTER_OTLP_ENDPOINT to point to your collector
+|   - Collector exports to Splunk HEC (splunk/splunk-otel-collector image)
+|   - Spans land in index=pforge_otel with sourcetype=pforge_otel_traces
+|
+| Option B: pforge audit export → Splunk HEC
+|   - Run: pforge audit export --since 2026-05-01 --format json | \
+|           curl -s -X POST https://splunk:8088/services/collector/event \
+|                -H "Authorization: Splunk HEC_TOKEN" \
+|                --data-binary @-
+|   - Events land in index=pforge_audit with sourcetype=pforge_audit_export
+|
+| Recommended: use both. OTel gives real-time span/metric data.
+| Audit export gives periodic batch compliance evidence.

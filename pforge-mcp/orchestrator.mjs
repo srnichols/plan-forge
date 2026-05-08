@@ -44,6 +44,8 @@ import {
   loadAuditConfig as _loadAuditConfig,
   shouldAutoDrain as _shouldAutoDrain,
 } from "./tempering/auto-activate.mjs";
+// Phase-FOUNDRY-QUOTA-PREFLIGHT Slice 3 — quota pre-flight for Foundry deployments
+import { getDeploymentQuota, compareSliceEstimate } from "./foundry-quota.mjs";
 // Phase GITHUB-B Slice 3 — Copilot Coding Agent dispatch routing
 import { inspectGithubStack as _inspectGithubStackDefault } from "./github-introspect.mjs";
 import {
@@ -349,6 +351,7 @@ class OrchestratorEventBus extends EventEmitter {
       "skill-started", "skill-step-started", "skill-step-completed", "skill-completed",
       "slice-model-routed", "self-repair-missed",
       "tool-call", "bridge-edit-blocked", "bridge-edit-approved",
+      "pforge.foundry.quota",
     ];
     for (const evt of events) {
       this.on(evt, (data) => this.handler.handle({ type: evt, data, timestamp: new Date().toISOString() }));
@@ -8284,6 +8287,47 @@ async function executeSlice(slice, options) {
     injectedAutoSkills = [];
   }
   const autoSkillContextBlock = buildAutoSkillContext(injectedAutoSkills);
+
+  // Phase-FOUNDRY-QUOTA-PREFLIGHT Slice 3 — emit pforge.foundry.quota warning before
+  // dispatching to worker when PFORGE_FOUNDRY_QUOTA_PREFLIGHT=1 and an Azure Foundry
+  // deployment model (azure/* prefix) is configured. Fail-open: quota errors never
+  // block execution; they only emit an advisory event to events.log.
+  if (process.env.PFORGE_FOUNDRY_QUOTA_PREFLIGHT === "1") {
+    const _fqRawModel = finalModel || "";
+    if (_fqRawModel.startsWith("azure/")) {
+      const _fqSubscriptionId = process.env.AZURE_SUBSCRIPTION_ID;
+      const _fqResourceGroup  = process.env.AZURE_RESOURCE_GROUP;
+      const _fqAccountName    = process.env.AZURE_OPENAI_ACCOUNT_NAME || process.env.AZURE_OPENAI_RESOURCE_NAME || "";
+      const _fqDeploymentName = _fqRawModel.replace(/^azure\//, "") || process.env.AZURE_OPENAI_DEPLOYMENT || "default";
+      let _fqQuota = null;
+      try {
+        _fqQuota = await getDeploymentQuota({
+          subscriptionId: _fqSubscriptionId,
+          resourceGroup: _fqResourceGroup,
+          accountName: _fqAccountName,
+          deploymentName: _fqDeploymentName,
+        });
+      } catch {
+        _fqQuota = { ok: false, reason: "preflight_fetch_error" };
+      }
+      const _fqAssessment = compareSliceEstimate(_fqQuota, { tokens_in: 0, tokens_out: 0 });
+      if (_fqAssessment.status === "warning" || _fqAssessment.status === "critical") {
+        const _fqEventData = {
+          sliceId: slice.number,
+          title: slice.title,
+          deploymentName: _fqDeploymentName,
+          status: _fqAssessment.status,
+          headroomPct: _fqAssessment.headroomPct,
+          message: _fqAssessment.message,
+        };
+        appendEvent("pforge.foundry.quota", _fqEventData, runDir);
+        if (eventBus) {
+          eventBus.emit("pforge.foundry.quota", _fqEventData);
+        }
+        console.warn(`[pforge] foundry-quota preflight: ${_fqAssessment.message}`);
+      }
+    }
+  }
 
   while (attempt <= maxRetries) {
     const attemptStartTime = Date.now();

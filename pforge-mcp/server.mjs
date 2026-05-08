@@ -126,6 +126,8 @@ import { loadMetrics } from "./github-metrics.mjs";
 import { search as forgeSearch } from "./search/core.mjs";
 // Phase FORGE-SHOP-05 Slice 05.1 — Unified timeline
 import { timeline as forgeTimeline } from "./timeline/core.mjs";
+// Phase-AUTH-RBAC-SCAFFOLD Slice 5 — auth middleware wired into MCP tool dispatch
+import { withAuth } from "./auth/middleware.mjs";
 import express from "express";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -1985,8 +1987,76 @@ function _wrapWithToolSpan(handler) {
   };
 }
 
+// ─── Auth gate for MCP tool dispatch ─────────────────────────────────
+// Read-only tools that are open by default (Decision #9 — operators can
+// restrict these further by adding explicit scope entries in rbac.json).
+const _READ_ONLY_TOOLS = new Set([
+  "forge_capabilities", "forge_status", "forge_search", "forge_timeline",
+  "forge_watch_live", "forge_home_snapshot", "forge_cost_report",
+  "forge_plan_status", "forge_diff",
+]);
+
+let _rbacConfigCache; // undefined = not yet loaded; null = absent
+
+function _getRbacConfig() {
+  if (_rbacConfigCache !== undefined) return _rbacConfigCache;
+  try {
+    const rbacPath = resolve(PROJECT_DIR, ".forge", "rbac.json");
+    _rbacConfigCache = existsSync(rbacPath)
+      ? JSON.parse(readFileSync(rbacPath, "utf8"))
+      : null;
+  } catch {
+    _rbacConfigCache = null;
+  }
+  return _rbacConfigCache;
+}
+
+/**
+ * Auth gate for MCP tool calls using the withAuth middleware.
+ * Returns null when the call is allowed, or an MCP error response when denied.
+ * When .forge/rbac.json is absent → always null (open-by-default, Decision #1).
+ *
+ * @param {string} toolName
+ * @param {object} request - MCP CallTool request object
+ * @returns {Promise<null|{content: Array, isError: boolean}>}
+ */
+async function _mcpAuthGate(toolName, request) {
+  const rbac = _getRbacConfig();
+  if (!rbac) return null; // open-by-default: no rbac.json → no enforcement
+
+  const isReadOnly = _READ_ONLY_TOOLS.has(toolName);
+  const headers = request?._meta?.headers ?? {};
+  const fakeReq = { headers };
+
+  let denied = null;
+  const fakeRes = {
+    headersSent: false,
+    writeHead(status) { denied = status; },
+    end() { if (denied == null) denied = 403; },
+  };
+
+  const opts = isReadOnly
+    ? { provider: "none" }                    // read-only: no auth required
+    : { rbac, scope: "forge:run" };           // write/exec: require forge:run scope
+
+  await withAuth(() => {}, opts)(fakeReq, fakeRes);
+
+  if (denied) {
+    const error = denied === 401 ? "unauthenticated" : "forbidden";
+    return {
+      content: [{ type: "text", text: JSON.stringify({ ok: false, error }) }],
+      isError: true,
+    };
+  }
+  return null;
+}
+
 server.setRequestHandler(CallToolRequestSchema, _wrapWithToolSpan(async (request) => {
   const { name, arguments: args } = request.params;
+
+  // ─── Auth gate — open-by-default when .forge/rbac.json is absent ───
+  const authDenied = await _mcpAuthGate(name, request);
+  if (authDenied) return authDenied;
 
   // ─── Async orchestrator tools ───
   if (name === "forge_run_plan") {

@@ -1,0 +1,162 @@
+<!DOCTYPE html>
+<html lang="en" class="scroll-smooth">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Architecture Center — Plan Forge</title>
+  <meta name="description" content="Central index of all Plan Forge architecture references: system design, memory tiers, enterprise deployment patterns, and integration blueprints." />
+  <meta property="og:title" content="Architecture Center — Plan Forge" />
+  <meta property="og:description" content="All Plan Forge architecture references in one place — unified system design, three-tier memory architecture, and enterprise reference patterns." />
+  <meta property="og:type" content="website" />
+  <meta property="og:url" content="https://planforge.software/architecture/" />
+  <link rel="canonical" href="https://planforge.software/architecture/" />
+  <link rel="icon" type="image/svg+xml" href="../assets/plan-forge-logo.svg" />
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>tailwind.config={theme:{extend:{colors:{forge:{400:'#f59e0b',500:'#d97706'}}}}}</script>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;600;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="../assets/shared.css" />
+  <style>
+    body { font-family: 'Inter', sans-serif; }
+    .arch-card {
+      display: flex;
+      flex-direction: column;
+      background: rgba(15,23,42,0.7);
+      border: 1px solid rgba(100,116,139,0.25);
+      border-radius: 0.75rem;
+      padding: 1.5rem;
+      transition: border-color 0.2s, box-shadow 0.2s;
+      text-decoration: none;
+      color: inherit;
+    }
+    .arch-card:hover {
+      border-color: rgba(245,158,11,0.4);
+      box-shadow: 0 0 0 1px rgba(245,158,11,0.15), 0 4px 24px rgba(245,158,11,0.06);
+    }
+    .arch-card__badge {
+      display: inline-flex;
+      align-items: center;
+      font-size: 0.625rem;
+      font-weight: 700;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      padding: 0.15rem 0.45rem;
+      border-radius: 0.3rem;
+      margin-bottom: 0.85rem;
+      width: fit-content;
+    }
+    .badge--reference  { background: rgba(245,158,11,.12); color: #f59e0b; border: 1px solid rgba(245,158,11,.25); }
+    .badge--memory     { background: rgba(99,102,241,.12);  color: #818cf8; border: 1px solid rgba(99,102,241,.25); }
+    .badge--enterprise { background: rgba(16,185,129,.12);  color: #34d399; border: 1px solid rgba(16,185,129,.25); }
+    .badge--manual     { background: rgba(56,189,248,.12);  color: #38bdf8; border: 1px solid rgba(56,189,248,.25); }
+    .arch-card__title {
+      font-size: 1.05rem;
+      font-weight: 700;
+      color: #f1f5f9;
+      margin-bottom: 0.4rem;
+    }
+    .arch-card__desc {
+      font-size: 0.875rem;
+      color: #94a3b8;
+      line-height: 1.6;
+      flex: 1;
+    }
+    .arch-card__link {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.3rem;
+      font-size: 0.78rem;
+      font-weight: 600;
+      color: #f59e0b;
+      margin-top: 1rem;
+      font-family: 'JetBrains Mono', monospace;
+    }
+    .section-heading {
+      font-size: 0.7rem;
+      font-weight: 700;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: #475569;
+      padding-bottom: 0.6rem;
+      border-bottom: 1px solid rgba(100,116,139,0.18);
+      margin-bottom: 1.25rem;
+    }
+  </style>
+</head>
+<body class="bg-slate-950 text-slate-300 min-h-screen">
+
+  <div class="max-w-5xl mx-auto px-4 sm:px-6 py-12">
+
+    <!-- Header -->
+    <div class="mb-12">
+      <div class="flex items-center gap-2 mb-4">
+        <a href="../" class="text-slate-500 hover:text-slate-300 text-sm transition-colors">Plan Forge</a>
+        <span class="text-slate-700">/</span>
+        <span class="text-slate-400 text-sm">Architecture</span>
+      </div>
+      <h1 class="text-3xl sm:text-4xl font-extrabold text-slate-100 tracking-tight mb-3">Architecture Center</h1>
+      <p class="text-lg text-slate-400 max-w-2xl">
+        All Plan Forge architecture references in one place — from the unified system design to three-tier memory architecture and enterprise deployment blueprints.
+      </p>
+    </div>
+
+    <!-- Section: System Architecture -->
+    <div class="mb-10">
+      <div class="section-heading">System Architecture</div>
+      <div class="grid grid-cols-1 sm:grid-cols-2 gap-5">
+
+        <!-- UNIFIED-SYSTEM-ARCHITECTURE -->
+        <a href="../UNIFIED-SYSTEM-ARCHITECTURE.md" class="arch-card">
+          <span class="arch-card__badge badge--reference">Reference</span>
+          <div class="arch-card__title">Unified System Architecture</div>
+          <p class="arch-card__desc">Architecture reference for integrating Plan Forge, OpenBrain, and OpenClaw into a single automated development system — closed-loop from feature request to review with full memory continuity.</p>
+          <span class="arch-card__link">UNIFIED-SYSTEM-ARCHITECTURE.md →</span>
+        </a>
+
+        <!-- Enterprise Reference Architecture (manual) -->
+        <a href="../manual/enterprise-reference-architecture.html" class="arch-card">
+          <span class="arch-card__badge badge--enterprise">Enterprise · Appendix K</span>
+          <div class="arch-card__title">Enterprise Reference Architecture</div>
+          <p class="arch-card__desc">One canonical architecture for a 5-team / 1000-developer fleet, plus the Microsoft Foundry composition variant for Azure-tenant deployments. Includes three isolation patterns, capacity planning, and failure modes.</p>
+          <span class="arch-card__link">manual/enterprise-reference-architecture.html →</span>
+        </a>
+
+      </div>
+    </div>
+
+    <!-- Section: Memory Architecture -->
+    <div class="mb-10">
+      <div class="section-heading">Memory Architecture</div>
+      <div class="grid grid-cols-1 sm:grid-cols-2 gap-5">
+
+        <!-- MEMORY-ARCHITECTURE -->
+        <a href="../MEMORY-ARCHITECTURE.md" class="arch-card">
+          <span class="arch-card__badge badge--memory">Design Reference</span>
+          <div class="arch-card__title">Memory Architecture</div>
+          <p class="arch-card__desc">Three tiers of memory organised by substrate — L1 in-process hub, L2 structured files, L3 OpenBrain semantic store — with write paths, lifetime guarantees, and guidance for MCP tool authors.</p>
+          <span class="arch-card__link">MEMORY-ARCHITECTURE.md →</span>
+        </a>
+
+        <!-- memory-architecture.html (manual ch24) -->
+        <a href="../manual/memory-architecture.html" class="arch-card">
+          <span class="arch-card__badge badge--manual">Chapter 24 · Act IV</span>
+          <div class="arch-card__title">Memory Architecture (Manual)</div>
+          <p class="arch-card__desc">Three tiers, one capture path. How Plan Forge remembers what it learned — across slices, across sessions, across plans. Covers dual-write capture, watcher integration, drain queue, and migration tooling.</p>
+          <span class="arch-card__link">manual/memory-architecture.html →</span>
+        </a>
+
+      </div>
+    </div>
+
+    <!-- Footer -->
+    <div class="mt-16 pt-8 border-t border-slate-800 flex flex-wrap items-center justify-between gap-4 text-xs text-slate-600">
+      <span>Plan Forge · Architecture Center</span>
+      <a href="../manual/" class="text-slate-500 hover:text-slate-300 transition-colors">← Back to Manual</a>
+    </div>
+
+  </div>
+
+  <script src="../manual/assets/sidebar.js" defer></script>
+</body>
+</html>

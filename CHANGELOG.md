@@ -7,6 +7,12 @@ Format follows [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
+---
+
+## [2.91.0] — 2026-05-07 — Priority-C Enterprise Readiness Chain
+
+> **One-liner**: Ships all four `docs/research/enterprise-fleet-readiness.md` §14 Priority-C items as a single coordinated 4-phase, 34-slice chain — trajectory schema hardening (`source` + `security_risk` on every event per OpenHands pattern), OpenTelemetry `gen_ai.*` spans + `pforge audit export` CLI, BYO Microsoft Foundry / Azure OpenAI provider with `power-gov` quorum preset, and pluggable auth model + RBAC scaffold + 3 security docs. All four phases backwards-compatible (open-by-default for RBAC, opt-in via env var for OTel, additive event fields for trajectory). Subscription-CLI cost path (`gh-copilot`, `claude-cli`, `codex-cli`) byte-identical via the v2.83.0 `costForLeg()` invariant. ~3 hours of orchestrator wall time, $0.32 declared cost / $0.00 wall on gh-copilot subscription.
+
 ### Phase-AUTH-RBAC-SCAFFOLD — Auth model + SSO extension point + RBAC scaffold (2026-05-07)
 
 > **One-liner**: Introduces a pluggable authentication model for Plan Forge MCP — a provider-dispatch `authenticate()` entry point, a bearer-token provider (behavior-preserving refactor of the existing `approvalSecret` flow), an SSO provider interface stub ready for `Phase-ENTRA-SSO`, a config-driven RBAC resolver (`resolveRoles` / `expandScopes` / `hasScope` with `:` hierarchy and `*` wildcard), `withAuth` middleware that gates tool dispatch and bridge edits, and three security docs. Fully backward-compatible: absent `.forge/rbac.json` → open-by-default, identical to pre-RBAC behavior.

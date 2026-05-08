@@ -9,6 +9,25 @@ Format follows [Keep a Changelog](https://keepachangelog.com/).
 
 ---
 
+### Phase-FOUNDRY-QUOTA-PREFLIGHT — Azure AI Foundry deployment quota preflight
+
+> **One-liner**: Adds a quota preflight step to `forge_run_plan` for Microsoft Foundry / BYO Azure OpenAI deployments — fetches TPM capacity from the Azure Cognitive Services control-plane REST API, caches results for 5 minutes, compares the slice token estimate against available headroom (safe ≥ 30 %, warning 10–30 %, critical < 10 %), and logs a structured `[foundry-quota]` annotation on every slice. Fail-open: any quota fetch error produces `status: "unknown"` and never blocks execution. Block mode (`PFORGE_FOUNDRY_QUOTA_PREFLIGHT=block`) halts execution on `critical` status.
+
+#### Added
+- `pforge-mcp/foundry-quota.mjs` — Core quota module. Exports `getDeploymentQuota()` (async REST call to `management.azure.com` Cognitive Services control-plane), `quotaCacheGet` / `quotaCacheSet` (5-minute in-process TTL cache keyed by `sub/rg/account/deployment`), and `compareSliceEstimate()` (synchronous comparator returning `{ status, headroomPct, message }`).
+- `pforge-mcp/tests/foundry-quota.test.mjs` — 20 unit tests covering: TTL cache behaviour (get/set/expire/overwrite), missing-param validation, credential/token error paths, all HTTP error codes (401, 403, 429, 503, generic), success path with field parsing, cache-hit skip, network failure / timeout fail-open, and all four `compareSliceEstimate` threshold bands including negative headroom.
+- `docs/integrations/foundry-quota-preflight.md` — Operator guide: activation (`PFORGE_FOUNDRY_QUOTA_PREFLIGHT=warn|block`), threshold reference, required Azure RBAC role (**Cognitive Services Usages Reader**), cache behaviour, quota response shape, `az role assignment create` example, and troubleshooting table.
+
+#### Notes
+- **Fail-open guarantee**: `timeout`, `rate_limited`, `forbidden`, `network_error`, and all other error reasons return `status: "unknown"` and never block execution regardless of mode.
+- **Required RBAC role**: `Cognitive Services Usages Reader` (built-in) on the AOAI account or resource group — read-only `Microsoft.CognitiveServices/*/read`, no data-plane permissions.
+- Token scope: `https://management.azure.com/.default` (commercial) or `https://management.azure.us/.default` (Azure Government — detected via endpoint suffix `.azure.us`).
+- PTU (provisioned throughput) deployments do not report `tpmCapacity` on this endpoint; those slices receive `status: "unknown"` and proceed normally.
+- `costForLeg()` and `priceSlice()` in `cost-service.mjs` are untouched.
+- No release in this phase.
+
+---
+
 ## [2.92.0] — 2026-05-08 — Docs UX lift (BCDR patterns adopted)
 
 > **One-liner**: Documentation-only minor that adopts three reusable UX patterns from the BCDR-Digital-Twin sibling repo — a book-style manual spine, scroll-snap briefing decks, and an architecture hub — plus a shared design-token layer and site-wide navigation include. 14 slices executed via gh-copilot subscription path in 27.8 minutes; $0.14 declared / $0.00 wall. Zero `pforge-mcp/` or `pforge-master/` code touched.

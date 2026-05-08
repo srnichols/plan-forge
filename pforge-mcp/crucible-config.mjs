@@ -11,6 +11,7 @@
  *   - autoApproveAgent: boolean  (auto-finalize agent smelts)
  *   - sourceWeights: { memory, principles, plans }  (sum ~= 100)
  *   - staleDefaultsHours: 1..168  (warning threshold)
+ *   - quorumPreset: "speed" | "power" | "power-gov" | "false"  (Phase-FOUNDRY-PROVIDER)
  */
 
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
@@ -22,9 +23,13 @@ export const DEFAULT_CRUCIBLE_CONFIG = Object.freeze({
   autoApproveAgent: false,
   sourceWeights: { memory: 34, principles: 33, plans: 33 },
   staleDefaultsHours: 24,
+  quorumPreset: "speed",
 });
 
 const VALID_LANES = new Set(["tweak", "feature", "full"]);
+
+/** All quorum presets accepted by the Crucible dashboard config (Phase-FOUNDRY-PROVIDER Slice 6). */
+export const VALID_QUORUM_PRESETS = new Set(["speed", "power", "power-gov", "false"]);
 
 export function configPath(projectDir) {
   return resolve(projectDir, ".forge", "crucible", "config.json");
@@ -73,6 +78,9 @@ export function sanitize(input) {
   }
   if (typeof input.autoApproveAgent === "boolean") {
     out.autoApproveAgent = input.autoApproveAgent;
+  }
+  if (typeof input.quorumPreset === "string" && VALID_QUORUM_PRESETS.has(input.quorumPreset)) {
+    out.quorumPreset = input.quorumPreset;
   }
   if (Number.isFinite(input.staleDefaultsHours)) {
     out.staleDefaultsHours = Math.max(1, Math.min(168, Math.trunc(input.staleDefaultsHours)));

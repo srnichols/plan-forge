@@ -1,0 +1,268 @@
+/* Plan Forge — Briefing-Deck Template Styles
+ *
+ * Usage: <link rel="stylesheet" href="/assets/briefing-deck.css">
+ * Consumed by: docs/walkthroughs/*.html, docs/demos/*.html deck files
+ *
+ * Token names follow the Plan Forge palette (--pf-*).
+ * No password overlay, no hero blur-orbs, no BCDR palette colors.
+ */
+
+/* ── Design tokens ─────────────────────────────────────────────────── */
+:root {
+  --pf-bg:           #020617;   /* slate-950 */
+  --pf-surface:      #0f172a;   /* slate-900 */
+  --pf-border:       #1e293b;   /* slate-800 */
+  --pf-text:         #e2e8f0;   /* slate-200 */
+  --pf-text-muted:   #94a3b8;   /* slate-400 */
+  --pf-amber:        #f59e0b;   /* amber-500 — primary accent */
+  --pf-amber-dim:    rgba(245, 158, 11, 0.15);
+  --pf-blue:         #3b82f6;   /* blue-500 */
+  --pf-blue-dim:     rgba(59, 130, 246, 0.15);
+  --pf-radius:       0.75rem;
+  --pf-slide-num-size: 0.75rem;
+}
+
+/* ── Deck container: full-viewport scroll-snap ─────────────────────── */
+.deck {
+  height: 100vh;
+  overflow-y: scroll;
+  scroll-snap-type: y mandatory;
+  scroll-behavior: smooth;
+  background: var(--pf-bg);
+  color: var(--pf-text);
+  font-family: 'Inter', sans-serif;
+
+  /* Prevent rubber-band bleed on Safari showing content between snaps */
+  overscroll-behavior-y: contain;
+}
+
+/* ── Individual slides ─────────────────────────────────────────────── */
+.slide {
+  height: 100vh;
+  min-height: 100vh;
+  scroll-snap-align: start;
+  scroll-snap-stop: always;   /* Safari: force stop at every slide */
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  padding: 4rem 2rem;
+  position: relative;
+  box-sizing: border-box;
+  border-bottom: 1px solid var(--pf-border);
+}
+
+.slide:last-child {
+  border-bottom: none;
+}
+
+/* Constrain content width on wide displays */
+.slide-inner {
+  width: 100%;
+  max-width: 56rem;
+  margin: 0 auto;
+}
+
+/* ── Slide-number badge ─────────────────────────────────────────────── */
+.slide-num {
+  position: absolute;
+  top: 1rem;
+  right: 1.25rem;
+  font-size: var(--pf-slide-num-size);
+  font-variant-numeric: tabular-nums;
+  color: var(--pf-text-muted);
+  letter-spacing: 0.05em;
+  user-select: none;
+  pointer-events: none;
+}
+
+/* ── Dot navigation (fixed right edge) ─────────────────────────────── */
+.dot-nav {
+  position: fixed;
+  right: 1.25rem;
+  top: 50%;
+  transform: translateY(-50%);
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  z-index: 50;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.dot-nav li {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.dot-nav button {
+  width: 0.625rem;
+  height: 0.625rem;
+  border-radius: 9999px;
+  border: none;
+  background: var(--pf-text-muted);
+  opacity: 0.4;
+  cursor: pointer;
+  padding: 0;
+  transition: opacity 0.2s ease, background 0.2s ease, transform 0.2s ease;
+}
+
+.dot-nav button:hover {
+  opacity: 0.75;
+  transform: scale(1.25);
+}
+
+/* Active/current slide dot */
+.dot-nav button.active,
+.dot-nav .active button {
+  background: var(--pf-amber);
+  opacity: 1;
+  transform: scale(1.35);
+}
+
+/* ── Slide title & body typography ─────────────────────────────────── */
+.slide-title {
+  font-size: clamp(1.5rem, 4vw, 2.5rem);
+  font-weight: 700;
+  color: var(--pf-text);
+  line-height: 1.15;
+  margin-bottom: 1.25rem;
+}
+
+.slide-subtitle {
+  font-size: clamp(1rem, 2vw, 1.25rem);
+  color: var(--pf-text-muted);
+  margin-bottom: 2rem;
+  line-height: 1.5;
+}
+
+.slide-body {
+  font-size: 1rem;
+  color: var(--pf-text-muted);
+  line-height: 1.75;
+}
+
+/* Amber accent on key terms */
+.slide-accent {
+  color: var(--pf-amber);
+}
+
+/* ── Slide variants ─────────────────────────────────────────────────── */
+
+/* Hero / cover slide */
+.slide--cover {
+  background:
+    radial-gradient(ellipse at 50% -10%, rgba(245, 158, 11, 0.18) 0%, transparent 65%),
+    var(--pf-bg);
+  text-align: center;
+}
+
+.slide--cover .slide-title {
+  font-size: clamp(2rem, 6vw, 3.5rem);
+}
+
+/* Section-divider slide */
+.slide--divider {
+  background: var(--pf-surface);
+  text-align: center;
+}
+
+.slide--divider .slide-title {
+  color: var(--pf-amber);
+}
+
+/* Content slide with a surface card */
+.slide--card .slide-inner {
+  background: var(--pf-surface);
+  border: 1px solid var(--pf-border);
+  border-radius: var(--pf-radius);
+  padding: 2.5rem;
+}
+
+/* ── Code blocks inside slides ─────────────────────────────────────── */
+.slide pre {
+  background: #0d1117;
+  border: 1px solid var(--pf-border);
+  border-radius: 0.5rem;
+  padding: 1.25rem 1.5rem;
+  font-family: 'JetBrains Mono', 'Fira Code', monospace;
+  font-size: 0.875rem;
+  color: #e2e8f0;
+  overflow-x: auto;
+  margin: 1.25rem 0;
+}
+
+.slide code {
+  font-family: 'JetBrains Mono', 'Fira Code', monospace;
+  font-size: 0.875em;
+  background: rgba(148, 163, 184, 0.08);
+  border-radius: 0.25rem;
+  padding: 0.125em 0.375em;
+}
+
+/* ── Progress bar (top of viewport) ────────────────────────────────── */
+.deck-progress {
+  position: fixed;
+  top: 0;
+  left: 0;
+  height: 2px;
+  background: var(--pf-amber);
+  transition: width 0.25s ease;
+  z-index: 60;
+  pointer-events: none;
+}
+
+/* ── Keyboard-hint footer (fades out after first interaction) ─────── */
+.deck-hint {
+  position: fixed;
+  bottom: 1.25rem;
+  left: 50%;
+  transform: translateX(-50%);
+  font-size: 0.75rem;
+  color: var(--pf-text-muted);
+  opacity: 0.6;
+  pointer-events: none;
+  transition: opacity 0.5s ease;
+  white-space: nowrap;
+  z-index: 50;
+}
+
+.deck-hint.hidden {
+  opacity: 0;
+}
+
+/* ── Responsive adjustments ─────────────────────────────────────────── */
+@media (max-width: 767px) {
+  .slide {
+    padding: 3rem 1.25rem;
+  }
+
+  /* Push dot-nav off-screen on very small viewports; dot-nav visible via
+     a menu-toggle approach is out of scope for this slice — fall back to
+     hiding it and relying on swipe (implemented in briefing-deck.js). */
+  .dot-nav {
+    right: 0.5rem;
+  }
+
+  .dot-nav button {
+    width: 0.5rem;
+    height: 0.5rem;
+  }
+
+  .slide-num {
+    font-size: 0.6875rem;
+  }
+
+  .slide--card .slide-inner {
+    padding: 1.5rem 1.25rem;
+  }
+}
+
+/* Hide dot-nav entirely on portrait phones where the 10 dots crowd the edge */
+@media (max-width: 480px) {
+  .dot-nav {
+    display: none;
+  }
+}

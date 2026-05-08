@@ -286,6 +286,9 @@ export function pruneRunHistory(cwd, maxRunHistory = 50) {
 // Singleton tracer promise — resolved once per process lifetime.
 let _otelTracerPromise = null;
 
+// Singleton meter promise — resolved once per process lifetime.
+let _otelMeterPromise = null;
+
 /**
  * Lazily initialize the OTel tracer when OTEL_EXPORTER_OTLP_ENDPOINT is set.
  * All OTel packages are loaded via dynamic import (optional deps).
@@ -309,6 +312,81 @@ async function _getOtelTracer() {
   })();
 
   return _otelTracerPromise;
+}
+
+/**
+ * Lazily initialize the OTel meter when OTEL_EXPORTER_OTLP_ENDPOINT is set.
+ * All OTel packages are loaded via dynamic import (optional deps).
+ * Returns null if the endpoint is unset or if packages are unavailable.
+ * @returns {Promise<object|null>}
+ */
+async function _getOtelMeter() {
+  if (!process.env.OTEL_EXPORTER_OTLP_ENDPOINT) return null;
+  if (_otelMeterPromise !== null) return _otelMeterPromise;
+
+  _otelMeterPromise = (async () => {
+    try {
+      const { initOtel } = await import("./otel-init.mjs");
+      await initOtel();
+      const { metrics } = await import("@opentelemetry/api");
+      return metrics.getMeter("pforge-mcp", "2.4.0");
+    } catch {
+      // Optional packages not installed — graceful no-op.
+      return null;
+    }
+  })();
+
+  return _otelMeterPromise;
+}
+
+/**
+ * Record gen_ai.client.operation.duration and gen_ai.client.token.usage histograms.
+ * Fires and forgets — caller should not await (never throws).
+ *
+ * Histogram names follow the OpenTelemetry GenAI semantic conventions:
+ *   gen_ai.client.operation.duration — unit: s
+ *   gen_ai.client.token.usage        — unit: {token}, split by gen_ai.token.type
+ *
+ * @param {object} data - Same payload as _emitChatSpan.
+ */
+async function _recordChatMetrics(data) {
+  try {
+    const meter = await _getOtelMeter();
+    if (!meter) return;
+
+    const model = data?.model ?? "unknown";
+    const provider = data?.provider ?? _inferProvider(model);
+    const baseAttrs = {
+      "gen_ai.operation.name": "chat",
+      "gen_ai.system": provider,
+      "gen_ai.request.model": data?.requestModel ?? model,
+      "gen_ai.response.model": data?.responseModel ?? model,
+    };
+
+    // gen_ai.client.operation.duration — seconds
+    const durationMs = data?.durationMs ?? data?.duration ?? 0;
+    const durationHist = meter.createHistogram("gen_ai.client.operation.duration", {
+      description: "GenAI operation duration",
+      unit: "s",
+    });
+    durationHist.record(durationMs / 1000, baseAttrs);
+
+    // gen_ai.client.token.usage — one recording per token type
+    const tokenHist = meter.createHistogram("gen_ai.client.token.usage", {
+      description: "GenAI token usage",
+      unit: "{token}",
+    });
+    const tokensIn = data?.tokens?.tokens_in ?? data?.tokensIn ?? 0;
+    const tokensOut = data?.tokens?.tokens_out ?? data?.tokensOut ?? 0;
+    if (tokensIn > 0) {
+      tokenHist.record(tokensIn, { ...baseAttrs, "gen_ai.token.type": "input" });
+    }
+    if (tokensOut > 0) {
+      tokenHist.record(tokensOut, { ...baseAttrs, "gen_ai.token.type": "output" });
+    }
+  } catch {
+    // Never surface OTel errors to the orchestrator.
+  }
 }
 
 /**
@@ -356,6 +434,9 @@ async function _emitChatSpan(data) {
     });
 
     span.end();
+
+    // Record GenAI metrics — operation duration + token usage histograms.
+    await _recordChatMetrics(data);
   } catch {
     // Never surface OTel errors to the orchestrator.
   }

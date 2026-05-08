@@ -1108,14 +1108,29 @@ export function isApiOnlyModel(model) {
 }
 
 /**
+ * Return the Azure Cognitive Services token scope for the configured endpoint.
+ * Detects Azure Government cloud by `.azure.us` domain suffix.
+ * Phase-FOUNDRY-PROVIDER: exported for testability.
+ * @param {string} [endpoint] — AZURE_OPENAI_ENDPOINT value; defaults to env var
+ * @returns {string}
+ */
+export function getFoundryAuthScope(endpoint) {
+  const ep = endpoint || process.env.AZURE_OPENAI_ENDPOINT || "";
+  return ep.includes(".azure.us")
+    ? "https://cognitiveservices.azure.us/.default"
+    : "https://cognitiveservices.azure.com/.default";
+}
+
+/**
  * Resolve an Azure Entra (Managed Identity / Service Principal) Bearer token
  * for Azure OpenAI. Activated when AZURE_AUTH_MODE is "entra" or "managed-identity".
  *
  * Requires the optional @azure/identity package. Falls back gracefully when
  * the package is not installed — returns null rather than throwing.
  *
- * Scope used: https://cognitiveservices.azure.com/.default (Azure Cognitive Services,
- * which covers Azure OpenAI Service endpoints).
+ * Scope: https://cognitiveservices.azure.com/.default (standard) or
+ *        https://cognitiveservices.azure.us/.default (Azure Government, detected
+ *        when AZURE_OPENAI_ENDPOINT ends with .azure.us).
  *
  * @returns {Promise<string|null>} Bearer token string, or null if unavailable.
  */
@@ -1123,9 +1138,8 @@ async function resolveAzureEntraToken() {
   try {
     const { DefaultAzureCredential } = await import("@azure/identity");
     const credential = new DefaultAzureCredential();
-    const tokenResponse = await credential.getToken(
-      "https://cognitiveservices.azure.com/.default"
-    );
+    const scope = getFoundryAuthScope();
+    const tokenResponse = await credential.getToken(scope);
     return tokenResponse?.token || null;
   } catch {
     return null;
@@ -1190,6 +1204,7 @@ function detectApiProvider(model) {
   }
   return null;
 }
+export { detectApiProvider };
 
 /**
  * Load an API key from .forge/secrets.json (fallback when env var is not set).
@@ -8888,6 +8903,21 @@ const QUORUM_PRESETS = {
       "cli-codex": ["gpt-5.4-mini"],
       "vs-code-copilot-chat": ["claude-sonnet-4.6", "gpt-5.4-mini"],
       "vs-code-agents-enterprise": ["claude-sonnet-4.6", "gpt-5.4-mini", "grok-4-1-fast-reasoning"],
+    },
+    fallbacks: {},
+  },
+  // Phase-FOUNDRY-PROVIDER: Azure Government catalog preset.
+  // Azure Gov has a reduced model catalog; GPT-5.x and GPT-4.x families
+  // are available but latest Anthropic / xAI models are not.
+  // Threshold 5 (same as power) — Gov workloads tend toward enterprise
+  // complexity. Operators can override via .forge.json quorum.models.
+  "power-gov": {
+    models: ["gpt-5.1", "gpt-4.1", "gpt-4.1-mini", "o3-mini", "gpt-4o"],
+    reviewerModel: "gpt-4.1",
+    dryRunTimeout: 300_000, // 5 min — reasoning models need more time
+    threshold: 5,
+    availableIn: {
+      "microsoft-foundry": ["gpt-5.1", "gpt-4.1", "gpt-4.1-mini", "o3-mini", "gpt-4o"],
     },
     fallbacks: {},
   },

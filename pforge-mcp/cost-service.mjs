@@ -94,6 +94,7 @@ export const MODEL_PRICING = {
     _source: "https://developers.openai.com/api/docs/pricing (2026-05-06)" },
   "gpt-5.1":                { input: 1.25 / 1_000_000, output: 10 / 1_000_000,
     cache_read_multiplier: 0.10,
+    aoai_deployment_type_multiplier: { global: 1.0, "data-zone": 1.1, regional: 1.1, provisioned: 1.0 },
     _source: "https://developers.openai.com/api/docs/pricing (2026-05-06)" },
   "gpt-5":                  { input: 1.25 / 1_000_000, output: 10 / 1_000_000,
     cache_read_multiplier: 0.10,
@@ -106,12 +107,21 @@ export const MODEL_PRICING = {
     _source: "https://developers.openai.com/api/docs/pricing (2026-05-06)" },
 
   // ─── OpenAI GPT 4.x family ────────────────────────────────────────
-  // Cache: 0.25× read for GPT-4.1; 0.50× for GPT-4o.
+  // Cache: 0.25× read for GPT-4.1/4.1-mini; 0.50× for GPT-4o/4o-mini.
+  // aoai_deployment_type_multiplier: AOAI uplift for Data Zone / Regional
+  // deployments (1.1×); Global and Provisioned remain 1.0× (no uplift).
+  // Source: https://learn.microsoft.com/azure/ai-services/openai/concepts/pricing-versions
   "gpt-4.1":                { input: 2 / 1_000_000,    output: 8 / 1_000_000,
     cache_read_multiplier: 0.25,
+    aoai_deployment_type_multiplier: { global: 1.0, "data-zone": 1.1, regional: 1.1, provisioned: 1.0 },
+    _source: "https://developers.openai.com/api/docs/pricing (2026-05-06)" },
+  "gpt-4.1-mini":           { input: 0.40 / 1_000_000, output: 1.60 / 1_000_000,
+    cache_read_multiplier: 0.25,
+    aoai_deployment_type_multiplier: { global: 1.0, "data-zone": 1.1, regional: 1.1, provisioned: 1.0 },
     _source: "https://developers.openai.com/api/docs/pricing (2026-05-06)" },
   "gpt-4o":                 { input: 2.5 / 1_000_000,  output: 10 / 1_000_000,
     cache_read_multiplier: 0.50,
+    aoai_deployment_type_multiplier: { global: 1.0, "data-zone": 1.1, regional: 1.1, provisioned: 1.0 },
     _source: "https://developers.openai.com/api/docs/pricing (2026-05-06)" },
   "gpt-4o-mini":            { input: 0.15 / 1_000_000, output: 0.60 / 1_000_000,
     cache_read_multiplier: 0.50,
@@ -132,6 +142,7 @@ export const MODEL_PRICING = {
     _source: "https://developers.openai.com/api/docs/pricing (2026-05-06)" },
   "o3-mini":                { input: 1.10 / 1_000_000, output: 4.40 / 1_000_000,
     cache_read_multiplier: 0.50,
+    aoai_deployment_type_multiplier: { global: 1.0, "data-zone": 1.1, regional: 1.1, provisioned: 1.0 },
     _source: "https://developers.openai.com/api/docs/pricing (2026-05-06)" },
   "o4-mini":                { input: 1.10 / 1_000_000, output: 4.40 / 1_000_000,
     cache_read_multiplier: 0.25,
@@ -229,6 +240,41 @@ export function getPricing(model) {
 // ─── Provider Awareness ───────────────────────────────────────────────
 // Subscription CLI providers bill by premium-request count, not per-token.
 export const SUBSCRIPTION_PROVIDERS = new Set(["gh-copilot", "claude-cli", "codex-cli"]);
+
+// ─── Microsoft Foundry: deployment-name → model-key resolution ────────
+// Reads `.forge/foundry-deployments.json` (operator-editable) once per cwd;
+// falls back to the raw deployment name when the map is absent or the
+// deployment is not listed.  Shape: `{ "my-deployment": "gpt-5.4-mini" }`.
+let _foundryDeploymentMap = null;
+let _foundryMapCwd = null;
+
+function loadFoundryDeployments() {
+  const cwd = process.cwd();
+  if (_foundryDeploymentMap !== null && _foundryMapCwd === cwd) {
+    return _foundryDeploymentMap;
+  }
+  const mapPath = resolve(cwd, ".forge", "foundry-deployments.json");
+  try {
+    _foundryDeploymentMap = existsSync(mapPath)
+      ? JSON.parse(readFileSync(mapPath, "utf-8"))
+      : {};
+  } catch {
+    _foundryDeploymentMap = {};
+  }
+  _foundryMapCwd = cwd;
+  return _foundryDeploymentMap;
+}
+
+/**
+ * Resolve a Microsoft Foundry deployment name to a canonical MODEL_PRICING key.
+ * Reads `.forge/foundry-deployments.json`; falls back to the deployment name itself.
+ * @param {string} deployment
+ * @returns {string}
+ */
+function resolveFoundryModel(deployment) {
+  const map = loadFoundryDeployments();
+  return (deployment && map[deployment]) || deployment || "unknown";
+}
 
 const CLI_PER_REQUEST_USD = 0.01;
 
@@ -389,7 +435,9 @@ function resolveTierMultipliers(pricing, serviceTier) {
  *   reasoning_tokens?: number,
  *   service_tier?: 'standard'|'flex'|'priority'|'default'|null,
  *   cost_in_usd_ticks?: number,
- *   vendor?: 'anthropic'|'openai'|'xai'|'azure-openai'|'unknown',
+ *   vendor?: 'anthropic'|'openai'|'xai'|'azure-openai'|'microsoft-foundry'|'unknown',
+ *   provider?: string,
+ *   deployment?: string,
  * }} tokens
  * @param {string} [worker] - Worker type: "gh-copilot", "claude", "codex", "api-xai", etc.
  * @returns {{
@@ -398,7 +446,16 @@ function resolveTierMultipliers(pricing, serviceTier) {
  * }}
  */
 export function priceSlice(tokens, worker) {
-  const model = tokens?.model || "unknown";
+  // ─── Microsoft Foundry: deployment-name → canonical model-key ────────
+  // Detect: explicit provider field OR worker produced by the foundry dispatch.
+  // Resolve the deployment field via .forge/foundry-deployments.json before
+  // the getPricing() lookup. Falls back to deployment name as a literal key.
+  const _rawModel = tokens?.model || "unknown";
+  const isFoundry = (tokens?.provider === "microsoft-foundry") ||
+                    (worker === "api-microsoft-foundry");
+  const model = isFoundry
+    ? resolveFoundryModel(tokens?.deployment || _rawModel)
+    : _rawModel;
   const tokensIn = typeof tokens?.tokens_in === "number" ? tokens.tokens_in : 0;
   const tokensOut = typeof tokens?.tokens_out === "number" ? tokens.tokens_out : 0;
   const breakdown = emptyBreakdown();
@@ -515,9 +572,20 @@ export function priceSlice(tokens, worker) {
   // { tokens_in, tokens_out, model } see identical cost as before. New
   // optional fields are ignored on this path so cache + reasoning are not
   // applied without a positive vendor identification (avoids surprise costs).
-  const cost = (tokensIn * pricing.input) + (tokensOut * pricing.output);
-  breakdown.input_uncached = roundUsd(tokensIn * pricing.input);
-  breakdown.output_total = roundUsd(tokensOut * pricing.output);
+  // Phase-FOUNDRY-PROVIDER Slice 5: when isFoundry, apply AOAI deployment-type
+  // multiplier (data-zone / regional = 1.1×; global / provisioned = 1.0×).
+  const baseCost = (tokensIn * pricing.input) + (tokensOut * pricing.output);
+  let foundryMultiplier = 1.0;
+  if (isFoundry && pricing.aoai_deployment_type_multiplier) {
+    const deploymentType = process.env.AZURE_OPENAI_DEPLOYMENT_TYPE || "global";
+    foundryMultiplier = pricing.aoai_deployment_type_multiplier[deploymentType] ?? 1.0;
+  }
+  const cost = baseCost * foundryMultiplier;
+  breakdown.input_uncached = roundUsd(tokensIn * pricing.input * foundryMultiplier);
+  breakdown.output_total = roundUsd(tokensOut * pricing.output * foundryMultiplier);
+  if (isFoundry && foundryMultiplier !== 1.0) {
+    breakdown.tier_adjustment = roundUsd(cost - baseCost);
+  }
   return {
     cost_usd: roundUsd(cost),
     model,

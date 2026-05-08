@@ -1,0 +1,359 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Quickstart Walkthrough — Plan Forge | Your First Feature in 30 Minutes</title>
+  <meta name="description" content="Run the full Plan Forge pipeline in 30 minutes. Specify → Harden → Execute → Review → Ship a health endpoint, step by step." />
+  <meta property="og:title" content="Plan Forge Quickstart — Your First Feature in 30 Minutes" />
+  <meta property="og:description" content="Specify → Harden → Execute → Review → Ship. Run the complete AI pipeline on a health endpoint." />
+  <meta property="og:type" content="website" />
+  <meta property="og:url" content="https://planforge.software/walkthroughs/quickstart-deck.html" />
+  <meta property="og:image" content="https://planforge.software/assets/brand/og-card-v2.webp" />
+  <meta name="twitter:card" content="summary_large_image" />
+  <link rel="canonical" href="https://planforge.software/walkthroughs/quickstart-deck.html" />
+  <link rel="icon" type="image/svg+xml" href="../assets/plan-forge-logo.svg" />
+  <link rel="stylesheet" href="../assets/briefing-deck.css" />
+  <style>
+    /* Local overrides — keep minimal */
+    body { margin: 0; }
+
+    .slide-steps { list-style: none; padding: 0; margin: 1.5rem 0 0; }
+    .slide-steps li {
+      display: flex; align-items: flex-start; gap: 0.75rem;
+      padding: 0.6rem 0; border-bottom: 1px solid var(--pf-border);
+      font-size: 0.9375rem; color: var(--pf-text);
+    }
+    .slide-steps li:last-child { border-bottom: none; }
+    .step-num {
+      flex-shrink: 0;
+      width: 1.75rem; height: 1.75rem;
+      border-radius: 50%;
+      background: var(--pf-amber-dim);
+      border: 1px solid var(--pf-amber);
+      color: var(--pf-amber);
+      font-size: 0.75rem; font-weight: 700;
+      display: flex; align-items: center; justify-content: center;
+    }
+    .check-list { list-style: none; padding: 0; margin: 1.5rem 0 0; }
+    .check-list li {
+      padding: 0.5rem 0; font-size: 0.9375rem; color: var(--pf-text);
+      border-bottom: 1px solid var(--pf-border);
+    }
+    .check-list li:last-child { border-bottom: none; }
+    .check-list li::before {
+      content: '✅ ';
+    }
+    .mode-grid {
+      display: grid; grid-template-columns: 1fr; gap: 1rem; margin-top: 1.5rem;
+    }
+    .mode-card {
+      background: var(--pf-surface);
+      border: 1px solid var(--pf-border);
+      border-radius: var(--pf-radius);
+      padding: 1.25rem 1.5rem;
+    }
+    .mode-card h3 {
+      font-size: 0.875rem; font-weight: 700; text-transform: uppercase;
+      letter-spacing: 0.05em; color: var(--pf-amber); margin: 0 0 0.5rem;
+    }
+    .mode-card p { margin: 0; font-size: 0.9rem; color: var(--pf-text-muted); }
+    .tag {
+      display: inline-block; padding: 0.2em 0.6em;
+      background: var(--pf-blue-dim); border: 1px solid var(--pf-blue);
+      border-radius: 0.375rem; font-size: 0.75rem; color: var(--pf-blue);
+      font-weight: 600; letter-spacing: 0.04em;
+    }
+    .tag--amber {
+      background: var(--pf-amber-dim); border-color: var(--pf-amber);
+      color: var(--pf-amber);
+    }
+    .next-grid {
+      display: grid; grid-template-columns: repeat(auto-fill, minmax(14rem, 1fr));
+      gap: 0.875rem; margin-top: 1.5rem;
+    }
+    .next-card {
+      background: var(--pf-surface); border: 1px solid var(--pf-border);
+      border-radius: var(--pf-radius); padding: 1rem 1.25rem;
+    }
+    .next-card h3 {
+      font-size: 0.8125rem; font-weight: 700; color: var(--pf-amber);
+      text-transform: uppercase; letter-spacing: 0.05em; margin: 0 0 0.4rem;
+    }
+    .next-card p { margin: 0; font-size: 0.85rem; color: var(--pf-text-muted); }
+    @media (max-width: 640px) {
+      .mode-grid { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+
+<!-- Deck: scroll-snap container; briefing-deck.js auto-injects dot-nav, progress bar, hint -->
+<div class="deck" role="main">
+
+  <!-- ── Slide 1: Cover ──────────────────────────────────────────────── -->
+  <section class="slide slide--cover" id="slide-cover" aria-label="Cover">
+    <div class="slide-inner" style="text-align:center;">
+      <p class="slide-body" style="margin-bottom:1rem;">
+        <a href="../index.html" style="color:var(--pf-amber);text-decoration:none;font-size:0.875rem;letter-spacing:0.06em;text-transform:uppercase;font-weight:600;">← Plan Forge</a>
+      </p>
+      <h1 class="slide-title">Your First Feature<br>with <span class="slide-accent">Plan Forge</span></h1>
+      <p class="slide-subtitle">
+        Run the full pipeline in ~30 minutes.<br>
+        Build a <code>GET /health</code> endpoint — tiny feature, complete pipeline.
+      </p>
+      <div style="display:flex;gap:1rem;justify-content:center;flex-wrap:wrap;margin-top:2rem;">
+        <span class="tag--amber tag">~30 min</span>
+        <span class="tag">VS Code + Copilot</span>
+        <span class="tag">Full pipeline</span>
+      </div>
+    </div>
+  </section>
+
+  <!-- ── Slide 2: What You'll Learn ──────────────────────────────────── -->
+  <section class="slide slide--card" id="slide-learn" aria-label="What You'll Learn">
+    <div class="slide-inner">
+      <h2 class="slide-title">What You'll Learn</h2>
+      <p class="slide-subtitle">By the end, you'll have run every step of the pipeline.</p>
+      <ul class="check-list">
+        <li>Specified a feature with Step 0</li>
+        <li>Created and hardened a plan (Steps 1–2)</li>
+        <li>Executed the plan slice-by-slice (Steps 3–4)</li>
+        <li>Run an independent review (Step 5)</li>
+        <li>Shipped the feature (Step 6)</li>
+      </ul>
+      <p class="slide-body" style="margin-top:1.5rem;">
+        This walkthrough uses the <span class="slide-accent">Prompt Template</span> approach —
+        attach <code>.prompt.md</code> files in Copilot Chat. It's the most educational path.
+        After finishing, try the <span class="slide-accent">Pipeline Agents</span> (handoff buttons)
+        for a smoother experience.
+      </p>
+    </div>
+  </section>
+
+  <!-- ── Slide 3: Before You Start ───────────────────────────────────── -->
+  <section class="slide slide--card" id="slide-prereqs" aria-label="Before You Start">
+    <div class="slide-inner">
+      <h2 class="slide-title">Before You Start</h2>
+      <p class="slide-subtitle">Install the VS Code plugin, then validate your setup.</p>
+      <ol class="slide-steps">
+        <li>
+          <span class="step-num">1</span>
+          <span>
+            Install the VS Code extension (v1.113+):
+            <a href="vscode://chat-plugin/install?source=srnichols/plan-forge" class="slide-accent" style="display:inline-block;margin-top:0.25rem;">Install in VS Code</a>
+            &nbsp;·&nbsp;
+            <a href="vscode-insiders://chat-plugin/install?source=srnichols/plan-forge" class="slide-accent">Insiders build</a>
+          </span>
+        </li>
+        <li>
+          <span class="step-num">2</span>
+          <span>Validate setup:</span>
+        </li>
+      </ol>
+      <pre>.\validate-setup.ps1
+# or
+.\pforge.ps1 smith    # environment + health
+.\pforge.ps1 check    # guardrail files</pre>
+      <p class="slide-body">
+        All checks should pass. If not, re-run
+        <code>.\setup.ps1 -Preset &lt;your-stack&gt;</code>.<br>
+        Using Claude, Cursor, or Codex?
+        Add <code>-Agent claude</code> (or <code>cursor</code>, <code>codex</code>) to generate native files.
+      </p>
+    </div>
+  </section>
+
+  <!-- ── Slide 4: Step 0 — Specify ───────────────────────────────────── -->
+  <section class="slide slide--card" id="slide-step0" aria-label="Step 0: Specify the Feature">
+    <div class="slide-inner">
+      <p style="margin:0 0 0.75rem;"><span class="tag--amber tag">Step 0</span></p>
+      <h2 class="slide-title">Specify the Feature</h2>
+      <p class="slide-subtitle">Attach the prompt, answer the interview, get a hardened spec.</p>
+      <ol class="slide-steps">
+        <li><span class="step-num">1</span><span>Open Copilot Chat: <code>Ctrl+Shift+I</code> (Win) / <code>Cmd+Shift+I</code> (Mac)</span></li>
+        <li><span class="step-num">2</span><span>Select <strong>Agent Mode</strong></span></li>
+        <li><span class="step-num">3</span><span>📎 Attach <code>.github/prompts/step0-specify-feature.prompt.md</code></span></li>
+        <li><span class="step-num">4</span><span>Replace <code>&lt;FEATURE-NAME&gt;</code> with <code>health-endpoint</code> and send</span></li>
+        <li><span class="step-num">5</span><span>When asked "existing doc?" → say <strong>no</strong>. Answer the interview prompts.</span></li>
+      </ol>
+      <p class="slide-body" style="margin-top:1rem;">
+        The agent compiles your answers into a spec and creates
+        <code>docs/plans/Phase-1-HEALTH-ENDPOINT-PLAN.md</code>.<br>
+        When it says <strong>"Specification complete"</strong> — move to Session 1 Steps 1–2.
+      </p>
+    </div>
+  </section>
+
+  <!-- ── Slide 5: Steps 1–2 — Pre-flight & Harden ────────────────────── -->
+  <section class="slide slide--card" id="slide-steps12" aria-label="Steps 1–2: Pre-flight and Harden">
+    <div class="slide-inner">
+      <p style="margin:0 0 0.75rem;"><span class="tag--amber tag">Steps 1–2</span></p>
+      <h2 class="slide-title">Pre-flight &amp; Harden</h2>
+      <p class="slide-subtitle">Same session. Verify prerequisites, then lock the plan.</p>
+      <ol class="slide-steps">
+        <li>
+          <span class="step-num">1</span>
+          <span>📎 Attach <code>step1-preflight-check.prompt.md</code> → replace plan name → send.<br>
+          <small style="color:var(--pf-text-muted);">Checks git state, guardrail files, and roadmap.</small></span>
+        </li>
+        <li>
+          <span class="step-num">2</span>
+          <span>📎 Attach <code>step2-harden-plan.prompt.md</code> → replace plan name → send.<br>
+          <small style="color:var(--pf-text-muted);">Adds Scope Contract, Execution Slices, Validation Gates, Definition of Done.</small></span>
+        </li>
+      </ol>
+      <p class="slide-body" style="margin-top:1rem;">
+        The agent adds the 4 mandatory blocks to your plan.<br>
+        When it says <strong>"Plan hardened"</strong> — Session 1 is complete. Start a new chat session.
+      </p>
+    </div>
+  </section>
+
+  <!-- ── Slide 6: Steps 3–4 — Execute & Sweep ──────────────────────────── -->
+  <section class="slide" id="slide-steps34" aria-label="Steps 3–4: Execute and Sweep">
+    <div class="slide-inner">
+      <p style="margin:0 0 0.75rem;"><span class="tag--amber tag">Steps 3–4</span></p>
+      <h2 class="slide-title">Execute &amp; Sweep</h2>
+      <p class="slide-subtitle">Three modes — pick the one that fits your workflow.</p>
+      <div class="mode-grid">
+        <div class="mode-card">
+          <h3>⚡ Automatic <span style="font-size:0.7rem;color:var(--pf-text-muted);font-weight:400;text-transform:none;">(recommended)</span></h3>
+          <p>Orchestrator runs all slices, validates gates, tracks tokens, and reports results.</p>
+          <pre style="margin:.75rem 0 0;font-size:.8rem;">pforge run-plan docs/plans/Phase-1-HEALTH-ENDPOINT-PLAN.md</pre>
+          <p style="margin-top:.5rem;">Monitor live at <code>localhost:3100/dashboard</code></p>
+        </div>
+        <div class="mode-card">
+          <h3>🤝 Assisted</h3>
+          <p>You code each slice in VS Code; orchestrator validates gates automatically.</p>
+          <pre style="margin:.75rem 0 0;font-size:.8rem;">pforge run-plan --assisted docs/plans/Phase-1-HEALTH-ENDPOINT-PLAN.md</pre>
+        </div>
+        <div class="mode-card">
+          <h3>🖐 Manual</h3>
+          <p>New chat session → Agent Mode → attach <code>step3-execute-slice.prompt.md</code> → replace plan name → send.</p>
+          <p style="margin-top:.5rem;font-size:.85rem;">Agent executes Slice 1, then Slice 2, then runs a Completeness Sweep (TODO/FIXME scan).</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ── Slide 7: Step 5 — Review ──────────────────────────────────────── -->
+  <section class="slide slide--card" id="slide-step5" aria-label="Step 5: Independent Review">
+    <div class="slide-inner">
+      <p style="margin:0 0 0.75rem;"><span class="tag--amber tag">Step 5</span></p>
+      <h2 class="slide-title">Independent Review</h2>
+      <p class="slide-subtitle">Fresh session. The reviewer never saw the builder's context.</p>
+      <ol class="slide-steps">
+        <li><span class="step-num">1</span><span>Start a <strong>new chat session</strong> — click <code>+</code></span></li>
+        <li><span class="step-num">2</span><span>Select <strong>Agent Mode</strong> (or Ask Mode for read-only)</span></li>
+        <li><span class="step-num">3</span><span>📎 Attach <code>step5-review-gate.prompt.md</code> → replace plan name → send</span></li>
+      </ol>
+      <p class="slide-body" style="margin-top:1.25rem;">The agent checks:</p>
+      <ul class="check-list">
+        <li>No forbidden files touched</li>
+        <li>Code follows architecture patterns</li>
+        <li>Tests included</li>
+        <li>No scope creep</li>
+      </ul>
+      <p class="slide-body" style="margin-top:1rem;">
+        For a health endpoint, this should be a clean <span class="slide-accent">PASS</span>.
+      </p>
+    </div>
+  </section>
+
+  <!-- ── Slide 8: Step 6 — Ship ─────────────────────────────────────────── -->
+  <section class="slide slide--card" id="slide-step6" aria-label="Step 6: Ship">
+    <div class="slide-inner">
+      <p style="margin:0 0 0.75rem;"><span class="tag--amber tag">Step 6</span></p>
+      <h2 class="slide-title">Ship It</h2>
+      <p class="slide-subtitle">New session (or continue). Commit, update docs, capture lessons.</p>
+      <ol class="slide-steps">
+        <li><span class="step-num">1</span><span>Start a new chat session (or continue if context allows)</span></li>
+        <li><span class="step-num">2</span><span>📎 Attach <code>step6-ship.prompt.md</code> → replace plan name → send</span></li>
+      </ol>
+      <p class="slide-body" style="margin-top:1.25rem;">The agent will:</p>
+      <ul class="check-list">
+        <li>Commit: <code>feat(health): add GET /health endpoint</code></li>
+        <li>Update <code>DEPLOYMENT-ROADMAP.md</code> → Phase 1 ✅ Complete</li>
+        <li>Capture a brief postmortem</li>
+        <li>Ask whether to push — say <strong>yes</strong> or <strong>skip</strong></li>
+      </ul>
+      <p class="slide-body" style="margin-top:1.25rem;font-size:1.1rem;">
+        🎉 <span class="slide-accent">Congratulations — you've run the full Plan Forge pipeline!</span>
+      </p>
+    </div>
+  </section>
+
+  <!-- ── Slide 9: What Just Happened? ──────────────────────────────────── -->
+  <section class="slide slide--card" id="slide-recap" aria-label="What Just Happened">
+    <div class="slide-inner">
+      <h2 class="slide-title">What Just Happened?</h2>
+      <p class="slide-subtitle">Four isolated sessions, each with a single responsibility.</p>
+      <pre>Session 1 (Specify &amp; Plan)
+  → You described what you wanted
+  → The AI structured it into a hardened plan
+
+Session 2 (Execute)
+  → The AI built it slice-by-slice
+  → Validation gates at every boundary
+
+Session 3 (Review)
+  → Fresh AI session — no builder bias
+  → Checked for mistakes and drift
+
+Session 4 (Ship)
+  → Committed, updated docs, captured lessons</pre>
+      <p class="slide-body" style="margin-top:1.5rem;">
+        Each session was isolated — the reviewer carried no bias from the builder,
+        and every step loaded guardrails automatically from
+        <code>.github/instructions/</code>.
+      </p>
+    </div>
+  </section>
+
+  <!-- ── Slide 10: Next Steps ───────────────────────────────────────────── -->
+  <section class="slide slide--divider" id="slide-next" aria-label="Next Steps">
+    <div class="slide-inner">
+      <h2 class="slide-title">What's Next?</h2>
+      <p class="slide-subtitle">You've learned the pipeline. Now push it further.</p>
+      <div class="next-grid">
+        <div class="next-card">
+          <h3>Real Feature</h3>
+          <p>Run something that takes 2+ hours — same pipeline, real scope.</p>
+        </div>
+        <div class="next-card">
+          <h3>Project Profile</h3>
+          <p>Attach <code>project-profile.prompt.md</code> to customize guardrails for your stack.</p>
+        </div>
+        <div class="next-card">
+          <h3>Project Principles</h3>
+          <p>Attach <code>project-principles.prompt.md</code> to declare non-negotiable rules.</p>
+        </div>
+        <div class="next-card">
+          <h3>Pipeline Agents</h3>
+          <p>Select the Specifier agent, click handoff buttons. Same pipeline, fewer copy-paste steps.</p>
+        </div>
+        <div class="next-card">
+          <h3>MCP Tools</h3>
+          <p>Run <code>cd mcp &amp;&amp; npm install</code> to expose 67 forge operations in Claude Code, Cursor, and Copilot.</p>
+        </div>
+        <div class="next-card">
+          <h3>Extensions</h3>
+          <p>Run <code>pforge ext search</code> to discover compliance, multi-tenancy, and memory guardrails.</p>
+        </div>
+      </div>
+      <p style="margin-top:2rem;font-size:0.875rem;color:var(--pf-text-muted);">
+        <a href="../QUICKSTART-WALKTHROUGH.md" class="slide-accent">Read the full walkthrough</a>
+        &nbsp;·&nbsp;
+        <a href="../manual/your-first-plan.html" class="slide-accent">Manual: Your First Plan</a>
+        &nbsp;·&nbsp;
+        <a href="../index.html" class="slide-accent">Back to Plan Forge</a>
+      </p>
+    </div>
+  </section>
+
+</div><!-- /.deck -->
+
+<script src="../assets/briefing-deck.js" defer></script>
+</body>
+</html>

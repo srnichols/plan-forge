@@ -120,6 +120,7 @@ function Show-Help {
     Write-Host "    --max=N         Override maximum rounds (default: 5)"
     Write-Host "    --dry-run       Show what would happen without triage side effects"
     Write-Host "    --env=ENV       Set environment (dev, staging; production is forbidden)"
+    Write-Host "  crucible <sub>    Manage Crucible smelts (import, status) — use 'pforge crucible --help' for details"
     Write-Host "  github <sub>      Inspect the GitHub-native AI surface (status | doctor | metrics)"
     Write-Host "  help              Show this help message"
     Write-Host ""
@@ -5714,6 +5715,22 @@ import("$moduleUrl").then(m => {
     }
 }
 
+# ─── Command: crucible ─────────────────────────────────────────────────
+function Invoke-Crucible {
+    $importerPath = Join-Path $RepoRoot "pforge-mcp/crucible-import.mjs"
+    if (-not (Test-Path $importerPath)) {
+        Write-Host "ERROR: crucible-import.mjs not found at $importerPath" -ForegroundColor Red
+        exit 1
+    }
+    # No sub or --help → print crucible help and exit 0
+    if ($Arguments.Count -eq 0 -or ($Arguments.Count -eq 1 -and ($Arguments[0] -eq '--help' -or $Arguments[0] -eq '-h'))) {
+        node $importerPath --help
+        exit 0
+    }
+    node $importerPath @Arguments
+    exit $LASTEXITCODE
+}
+
 # ─── Command Router ────────────────────────────────────────────────────
 function Invoke-ForgeMaster {
     $sub = if ($Arguments.Count -gt 0) { $Arguments[0] } else { "" }
@@ -6297,6 +6314,7 @@ switch ($Command) {
     'graph'        { Invoke-Graph }
     'digest'       { Invoke-Digest }
     'plan-from-sarif' { Invoke-PlanFromSarif }
+    'crucible'        { Invoke-Crucible }
     'github'       { Invoke-Github }
     'help'         { Show-Help }
     ''             { Show-Help }

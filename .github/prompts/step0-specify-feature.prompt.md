@@ -48,6 +48,8 @@ Before asking any questions, scan the project for Spec Kit artifacts:
 > 4. **Start fresh** → Ignore Spec Kit files and run the full interview
 >
 > Which would you like?"
+>
+> **CLI shortcut**: `pforge crucible import --from=spec-kit` runs all four import steps non-interactively and emits a ready-to-run Phase Plan with Crucible frontmatter already applied.
 
 **If the user chooses to import:**
 

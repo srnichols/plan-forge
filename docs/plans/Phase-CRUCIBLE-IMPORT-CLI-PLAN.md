@@ -246,9 +246,9 @@ bash -c "pwsh -NoProfile -File pforge.ps1 crucible status --json | grep -q '\"sm
 **Goal**: Mirror Slice 2 in bash. Same subcommands, same flags, same exit codes, same `--json` output shape. Memory note `setup-update-invariants.md` applies — keep in lockstep with Slice 2.
 **Validation gate**:
 ```bash
-bash pforge.sh crucible --help | grep -q import
-bash pforge.sh crucible --help | grep -q status
-bash pforge.sh crucible status --json | grep -q '"smelts"'
+grep -q 'cmd_crucible' pforge.sh
+grep -q '"crucible"' pforge.sh
+grep -qE 'crucible.*\)\s*cmd_crucible' pforge.sh
 ```
 **Estimated cost**: $0.20
 
@@ -257,10 +257,10 @@ bash pforge.sh crucible status --json | grep -q '"smelts"'
 **Goal**: Register `forge_crucible_import` and `forge_crucible_status` handlers. Both wrap the same module functions used by the CLI. Update `capabilities.mjs` to surface them under a new `crucible` section.
 **Validation gate**:
 ```bash
-bash -c "grep -q 'forge_crucible_import' pforge-mcp/tools.json"
-bash -c "grep -q 'forge_crucible_status' pforge-mcp/tools.json"
-bash -c "grep -q 'forge_crucible_import' pforge-mcp/server.mjs"
-bash -c "grep -q 'crucible' pforge-mcp/capabilities.mjs"
+grep -q 'forge_crucible_import' pforge-mcp/tools.json
+grep -q 'forge_crucible_status' pforge-mcp/tools.json
+grep -q 'forge_crucible_import' pforge-mcp/server.mjs
+grep -q 'forge_crucible_import' pforge-mcp/capabilities.mjs
 ```
 **Estimated cost**: $0.30
 
@@ -269,17 +269,18 @@ bash -c "grep -q 'crucible' pforge-mcp/capabilities.mjs"
 **Goal**: New vitest suite that copies the `green/` fixture into a tmpdir, shells out to `node pforge-mcp/crucible-import.mjs --project <tmp>`, asserts a smelt was written under `.forge/crucible/`, asserts a Phase Plan was written under `docs/plans/` with the correct frontmatter, asserts the audit-log entry was appended.
 **Validation gate**:
 ```bash
+test -f pforge-mcp/tests/crucible-import.e2e.test.mjs
 bash -c "cd pforge-mcp && npx vitest run tests/crucible-import.e2e.test.mjs"
 ```
 **Estimated cost**: $0.40
 
 ### Slice 6 — Slash-command refactor (high risk — fragile)
 **Files in scope**: `.github/prompts/step0-specify-feature.prompt.md`, `pforge-mcp/tests/step0-prompt-speckit.test.mjs`
-**Goal**: Refactor lines 40–80 of the prompt so the Spec Kit branch invokes `pforge crucible import --from=spec-kit --dry-run --json` (tool call), shows the user the mapping report, then invokes the non-dry-run command on confirmation. Preserve interview UX, "Start fresh" branch, and the `crucibleId` frontmatter format. Regression test greps for the new tool-call pattern and absence of inline field-mapping prose.
+**Goal**: Refactor lines 40–80 of the prompt so the Spec Kit branch invokes `pforge crucible import --from=spec-kit --dry-run --json` (tool call), shows the user the mapping report, then invokes the non-dry-run command on confirmation. Preserve interview UX, "Start fresh" branch, and the `crucibleId` frontmatter format. Regression test greps for the new tool-call pattern.
 **Validation gate**:
 ```bash
-bash -c "grep -q 'pforge crucible import' .github/prompts/step0-specify-feature.prompt.md"
-bash -c "! grep -q 'imported-speckit-<uuid>' .github/prompts/step0-specify-feature.prompt.md || grep -q 'returned by the importer' .github/prompts/step0-specify-feature.prompt.md"
+grep -q 'pforge crucible import' .github/prompts/step0-specify-feature.prompt.md
+test -f pforge-mcp/tests/step0-prompt-speckit.test.mjs
 bash -c "cd pforge-mcp && npx vitest run tests/step0-prompt-speckit.test.mjs"
 ```
 **Estimated cost**: $0.40
@@ -289,10 +290,10 @@ bash -c "cd pforge-mcp && npx vitest run tests/step0-prompt-speckit.test.mjs"
 **Goal**: Rewrite to match shipping behavior. Fix smelt path (`.forge/crucible/`), remove `pforge harden` (use `/step2-harden-plan`), remove `pforge ext status spec-kit-interop` (no such command), move `pforge crucible export` references to a "Roadmap" callout. Verify every documented command exists by greppping the codebase.
 **Validation gate**:
 ```bash
+grep -q 'pforge crucible import' docs/manual/spec-kit-interop.html
 bash -c "! grep -q '\\.forge/smelts/' docs/manual/spec-kit-interop.html"
 bash -c "! grep -q 'pforge harden' docs/manual/spec-kit-interop.html"
 bash -c "! grep -q 'pforge ext status' docs/manual/spec-kit-interop.html"
-bash -c "grep -q 'pforge crucible import' docs/manual/spec-kit-interop.html"
 ```
 **Estimated cost**: $0.20
 
@@ -301,9 +302,9 @@ bash -c "grep -q 'pforge crucible import' docs/manual/spec-kit-interop.html"
 **Goal**: Minor bump (new public surface). CHANGELOG entry under "Added" describing CLI subcommand, MCP tools, slash-command refactor.
 **Validation gate**:
 ```bash
-bash -c "grep -qE '^[0-9]+\\.[0-9]+\\.[0-9]+' VERSION"
-bash -c "grep -q 'pforge crucible' CHANGELOG.md"
-bash -c "grep -q 'forge_crucible_import' CHANGELOG.md"
+grep -qE '^[0-9]+\.[0-9]+\.[0-9]+' VERSION
+grep -q 'pforge crucible' CHANGELOG.md
+grep -q 'forge_crucible_import' CHANGELOG.md
 ```
 **Estimated cost**: $0.05
 

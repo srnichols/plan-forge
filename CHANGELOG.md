@@ -9,6 +9,39 @@ Format follows [Keep a Changelog](https://keepachangelog.com/).
 
 ---
 
+## [2.93.0] — 2026-05-13 — Spec Kit Importer: CLI + MCP tool
+
+> **One-liner**: Ships `pforge crucible import --from=spec-kit` CLI subcommand and two MCP tools (`forge_crucible_import`, `forge_crucible_status`) backed by a deterministic importer module (`crucible-import.mjs`) — closing the gap between the documented Spec Kit interop flow and what actually shipped. Cursor, Claude Code, Codex, and CI users now have a scriptable, non-Copilot-Chat path to import Spec Kit specs into Plan Forge plans. The `/step0-specify-feature` Spec Kit branch is refactored to call the importer instead of doing probabilistic field-mapping inside the prompt. Documentation rewritten to match shipping behavior.
+
+### Phase-CRUCIBLE-IMPORT-CLI — Spec Kit Importer: CLI + MCP tool
+
+> **One-liner**: Introduces a deterministic Spec Kit importer module (`pforge-mcp/crucible-import.mjs`) consumed by a new `pforge crucible` CLI subcommand (PowerShell + bash), two new MCP tools (`forge_crucible_import`, `forge_crucible_status`), and a refactored `/step0-specify-feature` Spec Kit branch that now calls the importer instead of mapping fields inside the prompt. Closes the documented-but-unshipped gap for Cursor / Claude Code / Codex users and CI pipelines. Existing Copilot Chat flow preserved and determinism-hardened.
+
+#### Added
+- `pforge-mcp/crucible-import.mjs` — Deterministic Spec Kit importer. Exports `importSpeckit({ projectRoot, dir?, dryRun?, syncPrinciples? })` returning `{ ok, smeltId, planPath, mappedFields, missingFields, warnings }`. Parses all four Spec Kit source files (`spec.md`, `plan.md`, `tasks.md`, `constitution.md`) using `remark` + `remark-frontmatter` — no LLM calls. On success writes a smelt to `.forge/crucible/smelt-<uuid>.json`, a Phase Plan to `docs/plans/Phase-<NAME>-PLAN.md` (name slugified from `spec.md` title, `--name` overrides), and an audit entry to `.forge/crucible/manual-imports.jsonl`. `dryRun: true` returns the same shape without writing anything. `syncPrinciples: true` writes `constitution.md` content to `docs/plans/PROJECT-PRINCIPLES.md`; errors with `PROJECT_PRINCIPLES_EXISTS` if the file already exists.
+- `pforge-mcp/tests/crucible-import.test.mjs` — Vitest unit suite (≥ 90% line coverage of `crucible-import.mjs`). Covers all four parsers, all error codes (`SPECKIT_IMPORT_MISSING_FIELD`, `SPECKIT_IMPORT_MISSING_REQUIRED`, `SPECKIT_IMPORT_DIR_NOT_FOUND`, `SPECKIT_IMPORT_AMBIGUOUS_DIR`, `PROJECT_PRINCIPLES_EXISTS`), dry-run, `syncPrinciples`, and the happy-path round-trip.
+- `pforge-mcp/tests/crucible-import.e2e.test.mjs` — End-to-end Vitest suite: copies the `green/` fixture to a tmpdir, shells out to `crucible-import.mjs`, asserts smelt written under `.forge/crucible/`, Phase Plan written under `docs/plans/` with correct `crucibleId: imported-speckit-<uuid>` / `source: speckit` frontmatter, and audit-log entry appended.
+- `pforge-mcp/tests/fixtures/speckit/{green,partial,invalid}/` — Pinned Spec Kit test fixtures captured from a real `github/spec-kit` run (SHA recorded in `README.md`). `green/`: all four files present and complete. `partial/`: `tasks.md` absent. `invalid/`: `spec.md` missing required `title` field.
+- `pforge-mcp/tests/fixtures/speckit/README.md` — Fixture provenance: Spec Kit version SHA, the command used to capture `green/`, and regeneration instructions.
+- `pforge-mcp/tests/step0-prompt-speckit.test.mjs` — Regression test greps the refactored prompt for the new `pforge crucible import --from=spec-kit --dry-run --json` tool-call pattern and asserts the absence of inline field-mapping prose.
+- MCP tool **`forge_crucible_import`** — Registered in `pforge-mcp/tools.json` and `pforge-mcp/server.mjs`. Input: `{ source: "spec-kit", dir?: string, dryRun?: boolean, syncPrinciples?: boolean }`. Output: `importSpeckit` return shape. Returns `{ ok: false, error: "PROJECT_PRINCIPLES_EXISTS" }` when `syncPrinciples: true` and the file already exists.
+- MCP tool **`forge_crucible_status`** — Registered identically. Input: `{ smeltId?: string }`. Output: `{ smelts: [{id, source, status, created}] }` (list all) or single smelt detail object (when `smeltId` provided). Exit 1 when `smeltId` is not found.
+- Both new tools listed in `pforge-mcp/capabilities.mjs` under a new `crucible` capability section — `forge_capabilities` reports them.
+- `pforge crucible import --from=spec-kit [--dir <path>] [--dry-run] [--sync-principles] [--json]` — New subcommand in `pforge.ps1` (via `Invoke-Crucible` function) and `pforge.sh` (via `cmd_crucible`). Routes to `node pforge-mcp/crucible-import.mjs`. `--json` emits structured JSON to stdout, no banner, no ANSI.
+- `pforge crucible status [<smelt-id>] [--json]` — Lists all smelts in `.forge/crucible/` as a table or, with a smelt ID, prints full smelt detail. Exit 0 always for list; exit 1 when a specific smelt ID is not found.
+- `pforge crucible --help` — Prints subcommand list and exits 0. `pforge crucible` with no subcommand also prints help.
+
+#### Changed
+- `.github/prompts/step0-specify-feature.prompt.md` — Spec Kit branch refactored (minimal swap). The prompt now invokes `pforge crucible import --from=spec-kit --dry-run --json` via a tool call to validate the mapping, presents the mapping report to the user, then invokes `pforge crucible import --from=spec-kit` to commit. Field-mapping prose removed; probabilistic mapper replaced with a deterministic tool call. "Start fresh" / "Skip Spec Kit" branches and the existing interview UX are unchanged. Degrades gracefully when no shell tool is available (instructs user to run the CLI manually).
+- `docs/manual/spec-kit-interop.html` — Full rewrite to match shipping behavior: smelt path corrected from `.forge/smelts/` to `.forge/crucible/`, `pforge harden` references replaced with `/step2-harden-plan`, `pforge ext status spec-kit-interop` (non-existent command) removed, `pforge crucible export --to=spec-kit` moved to a "Roadmap" callout with link to Phase CRUCIBLE-EXPORT-CLI.
+
+#### Notes
+- **Open decisions resolved**: Markdown parser → `remark` + `remark-frontmatter` (robustness over zero-dep). Export → deferred to Phase CRUCIBLE-EXPORT-CLI. Plan filename → slugified `spec.md` title with `--name` override. Slash-command scope → minimal swap. `--sync-principles` on existing file → error (merge in follow-up). Fixtures → real `github/spec-kit` run. MCP tool name → `forge_crucible_import` (shorter; `source: "spec-kit"` carries the discriminator).
+- **Backward-compatible**: `pforge crucible` is a new dispatch case; no existing subcommand modified. `pforge run-plan --manual-import --manual-import-source speckit` flow unchanged. `crucible-enforce.mjs` untouched.
+- **Fail-safe for `--sync-principles`**: Returns `{ ok: false, error: "PROJECT_PRINCIPLES_EXISTS" }` — never silently overwrites an existing constitution.
+
+---
+
 ## [2.92.1] — 2026-05-08 — Hotfix: Foundry quota preflight
 
 > **One-liner**: Hotfix release adding opt-in AOAI quota preflight for plans running on the `microsoft-foundry` provider. Reads deployment TPM capacity via the Azure Cognitive Services control-plane API, compares against slice token estimates, and emits warnings (or optionally blocks execution) before a slice runs. Fail-open invariant: control-plane outages NEVER block execution. Closes the last open `docs/research/enterprise-fleet-readiness.md` §14 Priority-D item.

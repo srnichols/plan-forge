@@ -9,6 +9,27 @@ Format follows [Keep a Changelog](https://keepachangelog.com/).
 
 ---
 
+## [2.93.1] — 2026-05-13 — Hotfix: WSL bash dispatch + hardener prompt rule
+
+> **One-liner**: Fixes a Windows-specific gate dispatch bug where `runGate()` routed literal `bash -c "..."` gates through WSL bash (no Windows PATH) instead of Git Bash, causing `pwsh`/`node`/`npx` calls inside the wrap to fail with `command not found`. Also adds a Step 2 hardener prompt rule that prevents the bad pattern from being authored in the first place. Empirically observed twice on this codebase — Phase GITHUB-B (May 5) and Phase CRUCIBLE-IMPORT-CLI Slice 2 (May 13).
+
+#### Fixed
+- **`pforge-mcp/orchestrator.mjs`** — `runGate()` Windows path now treats `cmdName === "bash"` as a third trigger for `resolveBashPath()` dispatch (alongside `UNIX_TOOLS.includes(cmdName)` and `hasShellChain`). When the gate already starts with `bash -c "..."`, the redundant outer `bash` token is stripped and only the body is passed to `execFileSync(bashPath, ["-c", body], ...)` — no double-wrapping, no quoting collisions. Resolves [#172](https://github.com/srnichols/plan-forge/issues/172).
+- **`.github/prompts/step2-harden-plan.prompt.md`** — New Gate Portability Rules table row: "Don't wrap allowlisted tools in `bash -c`". Documents the WSL-bash-PATH trap with the bad/good examples, references the empirical incidents, and notes that v2.93.1's runGate fix routes literal `bash -c` gates correctly even if the bad pattern slips through. Resolves [#171](https://github.com/srnichols/plan-forge/issues/171).
+
+#### Added
+- **`pforge-mcp/tests/orchestrator-gate-dispatch.test.mjs`** — Three new test cases covering the issue #172 fix:
+  - `“on Windows, literal \`bash -c "..."\` gates route through resolveBashPath() (Git Bash)”`
+  - `“on Windows, \`bash -c\` with single-quoted body strips the outer quotes too”`
+  - `“on Windows, \`bash -c\` falls back to wrapping the whole command if regex doesn't match”`
+
+#### Notes
+- **Empirical signature**: `gateError: "/bin/bash: line 1: <tool>: command not found"` and `failedCommand` starts with `bash -c "..."`. Memory note `/memories/repo/plan-gate-command-rules.md` lines 52–73 documents the prior incident.
+- **No user-facing API change** — plans that previously failed with this signature now succeed without modification.
+- **Backward-compatible** — the new dispatch path only fires for `bash` as the first token; all other gates take the existing dispatch path unchanged.
+
+---
+
 ## [2.93.0] — 2026-05-13 — Spec Kit Importer: CLI + MCP tool
 
 > **One-liner**: Ships `pforge crucible import --from=spec-kit` CLI subcommand and two MCP tools (`forge_crucible_import`, `forge_crucible_status`) backed by a deterministic importer module (`crucible-import.mjs`) — closing the gap between the documented Spec Kit interop flow and what actually shipped. Cursor, Claude Code, Codex, and CI users now have a scriptable, non-Copilot-Chat path to import Spec Kit specs into Plan Forge plans. The `/step0-specify-feature` Spec Kit branch is refactored to call the importer instead of doing probabilistic field-mapping inside the prompt. Documentation rewritten to match shipping behavior.

@@ -3160,7 +3160,13 @@ export function runGate(command, cwd, opts = {}) {
     // Strip any path prefix and .exe/.cmd extension to get the bare tool name.
     const cmdName = cmdBase.split("/").pop().split("\\").pop().replace(/\.(exe|cmd|bat)$/i, "");
     const hasShellChain = /(^|[^&|])(\s;\s|\s&&\s|\s\|\|\s)/.test(command);
-    if (UNIX_TOOLS.includes(cmdName) || hasShellChain) {
+    // Issue #172 — also route literal `bash -c "..."` gates through resolveBashPath().
+    // Without this, `where bash` lookup picks WSL bash on modern Windows (which has
+    // no Windows PATH), and `pwsh`/`node`/`npx` calls inside the wrapped command fail
+    // with `command not found`. Empirically observed twice (Phase GITHUB-B,
+    // Phase CRUCIBLE-IMPORT-CLI). See memory note plan-gate-command-rules.md L52-73.
+    const isBashWrapped = cmdName === "bash";
+    if (UNIX_TOOLS.includes(cmdName) || hasShellChain || isBashWrapped) {
       const bashPath = resolveBashPath();
       if (bashPath === null) {
         return {
@@ -3171,8 +3177,22 @@ export function runGate(command, cwd, opts = {}) {
           exitCode: -1,
         };
       }
+      // When the gate already starts with `bash -c "..."`, strip the redundant
+      // `bash` token and pass only the body to execFileSync (which spawns
+      // bashPath itself). Otherwise we'd double-wrap and confuse quoting.
+      let bashArgs = ["-c", command];
+      if (isBashWrapped) {
+        const m = command.match(/^bash(?:\.exe)?\s+-c\s+(.+)$/i);
+        if (m) {
+          let body = m[1].trim();
+          if ((body.startsWith('"') && body.endsWith('"')) || (body.startsWith("'") && body.endsWith("'"))) {
+            body = body.slice(1, -1);
+          }
+          bashArgs = ["-c", body];
+        }
+      }
       try {
-        const output = execFileSync(bashPath, ["-c", command], {
+        const output = execFileSync(bashPath, bashArgs, {
           cwd,
           encoding: "utf-8",
           timeout: gateTimeout,

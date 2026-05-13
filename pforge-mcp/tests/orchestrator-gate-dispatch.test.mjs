@@ -124,6 +124,54 @@ describe("runGate -- platform dispatch", () => {
     expect(dispatchCall).toBeTruthy();
     expect(dispatchCall[0]).toBe(bashPath);
   });
+
+  // Issue #172 — `bash -c "..."` gates must route through resolveBashPath()
+  // (Git Bash) instead of `where bash` lookup (which picks WSL bash on
+  // modern Windows and silently breaks node/pwsh/npx calls inside the wrap).
+  it("on Windows, literal `bash -c \"...\"` gates route through resolveBashPath() (Git Bash)", () => {
+    stubPlatform("win32");
+    const bashPath = "C:\\Program Files\\Git\\bin\\bash.exe";
+    mockExistsSync.mockImplementation((p) => p === bashPath);
+    mockExecFileSync.mockReturnValue("v22.1.0\n");
+
+    const result = runGate('bash -c "node --version"', "C:\\project");
+
+    expect(result.success).toBe(true);
+    const dispatchCall = mockExecFileSync.mock.calls.find((c) => c[1] && c[1][0] === "-c");
+    expect(dispatchCall).toBeTruthy();
+    expect(dispatchCall[0]).toBe(bashPath);
+    // The redundant `bash` token is stripped — only the inner body is passed,
+    // not double-wrapped as `bash -c "bash -c '...'"`.
+    expect(dispatchCall[1]).toEqual(["-c", "node --version"]);
+    expect(mockExecSync).not.toHaveBeenCalled();
+  });
+
+  it("on Windows, `bash -c` with single-quoted body strips the outer quotes too", () => {
+    stubPlatform("win32");
+    const bashPath = "C:\\Program Files\\Git\\bin\\bash.exe";
+    mockExistsSync.mockImplementation((p) => p === bashPath);
+    mockExecFileSync.mockReturnValue("");
+
+    const result = runGate("bash -c 'pwsh -NoProfile -Command Get-Date'", "C:\\project");
+
+    expect(result.success).toBe(true);
+    const dispatchCall = mockExecFileSync.mock.calls.find((c) => c[1] && c[1][0] === "-c");
+    expect(dispatchCall[1]).toEqual(["-c", "pwsh -NoProfile -Command Get-Date"]);
+  });
+
+  it("on Windows, `bash -c` falls back to wrapping the whole command if regex doesn't match", () => {
+    stubPlatform("win32");
+    const bashPath = "C:\\Program Files\\Git\\bin\\bash.exe";
+    mockExistsSync.mockImplementation((p) => p === bashPath);
+    mockExecFileSync.mockReturnValue("");
+
+    // No -c flag — pass the whole command through, don't strip
+    const result = runGate("bash some-script.sh", "C:\\project");
+
+    expect(result.success).toBe(true);
+    const dispatchCall = mockExecFileSync.mock.calls.find((c) => c[1] && c[1][0] === "-c");
+    expect(dispatchCall[1]).toEqual(["-c", "bash some-script.sh"]);
+  });
 });
 
 describe("resolveBashPath -- caching and env override", () => {

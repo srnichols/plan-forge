@@ -146,8 +146,8 @@ pforge crucible import --from=spec-kit --dry-run</code></pre>
         <ol>
           <li><strong>Generate Spec Kit artifacts</strong> — run <code>/speckit.specify</code>, <code>/speckit.plan</code>, <code>/speckit.tasks</code>, and <code>/speckit.constitution</code> in your Spec Kit–enabled IDE. This produces <code>spec.md</code>, <code>plan.md</code>, <code>tasks.md</code>, and <code>constitution.md</code>.</li>
           <li><strong>Run the import</strong> — from the Plan Forge project root: <code>pforge crucible import --from=spec-kit</code>. Confirm the field mapping report looks correct.</li>
-          <li><strong>Review the generated smelt</strong> — the Crucible smelt is written to <code>.forge/smelts/</code>. Open it in the dashboard or inspect it with <code>pforge crucible status</code>. Adjust any field overrides before hardening.</li>
-          <li><strong>Harden the plan</strong> — run Step 2 (Plan Hardener) against the smelt: <code>pforge harden</code> or use the <code>/step2-harden-plan</code> prompt in Copilot Chat. This produces the execution-ready plan file with validation gates.</li>
+          <li><strong>Review the generated smelt</strong> — the Crucible smelt is written to your project's smelt directory. Open it in the dashboard or inspect it with <code>pforge crucible status</code>. Adjust any field overrides before hardening.</li>
+          <li><strong>Harden the plan</strong> — run Step 2 (Plan Hardener) against the smelt using the <code>/step2-harden-plan</code> prompt in Copilot Chat, or invoke <code>forge_crucible_harden</code> from any MCP client. This produces the execution-ready plan file with validation gates.</li>
           <li><strong>Execute</strong> — <code>pforge run-plan docs/plans/my-feature-PLAN.md</code>. Spec Kit provenance in the smelt metadata activates LiveGuard drift checks against <code>spec.md</code> criteria throughout the run.</li>
         </ol>
 
@@ -201,7 +201,7 @@ pforge crucible import --from=spec-kit --dry-run</code></pre>
           </tbody>
         </table>
 
-        <p>Extensions that produce non-standard artifact shapes are written to <code>.forge/smelts/unresolved/</code> for manual review — no extension output is silently dropped.</p>
+        <p>Extensions that produce non-standard artifact shapes are queued in the smelt's unresolved section for manual review — no extension output is silently dropped.</p>
 
         <h3>Bidirectional handoff: Plan Forge → Spec Kit</h3>
 
@@ -230,8 +230,7 @@ pforge crucible export --to=spec-kit docs/plans/my-feature-PLAN.md
 
         <p>Plan Forge's Spec Kit interop is registered as a first-class community extension. You can inspect its schema, version history, and compatibility notes via:</p>
 
-        <pre><code>pforge ext info spec-kit-interop
-pforge ext status spec-kit-interop</code></pre>
+        <pre><code>pforge ext info spec-kit-interop</code></pre>
 
         <p>For the full Plan Forge extension surface (browsing, installing, and authoring community extensions), see <a href="extensions.html" class="text-amber-400 hover:underline">Chapter 12: Extensions</a>.</p>
 

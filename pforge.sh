@@ -5503,6 +5503,17 @@ try {
     node "${args[@]}"
 }
 
+# ─── Command: crucible (Phase CRUCIBLE-IMPORT-CLI Slice 3) ────────────────
+# Dispatch for the "crucible" command — delegates to crucible-import.mjs.
+cmd_crucible() {
+    local script_path="$REPO_ROOT/pforge-mcp/crucible-import.mjs"
+    if [[ ! -f "$script_path" ]]; then
+        echo "ERROR: crucible-import script not found at $script_path" >&2
+        exit 1
+    fi
+    node "$script_path" "$@"
+}
+
 COMMAND="${1:-help}"
 shift 2>/dev/null || true
 
@@ -5569,6 +5580,7 @@ case "$COMMAND" in
     digest)       cmd_digest "$@" ;;
     plan-from-sarif) cmd_plan_from_sarif "$@" ;;
     github)       cmd_github "$@" ;;
+    crucible)     cmd_crucible "$@" ;;
     help|--help)  show_help ;;
     *)
         echo "ERROR: Unknown command '$COMMAND'" >&2

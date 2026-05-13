@@ -1913,6 +1913,120 @@
     }
   },
   {
+    "name": "forge_crucible_import",
+    "description": "Import a Spec Kit project into a Plan Forge Crucible smelt — deterministic, LLM-free field mapping. Returns a smelt id, generated plan path, mapped fields, and any missing-field warnings. USE FOR: importing Spec Kit specs into Plan Forge from Cursor/Claude Code/Codex (no Copilot Chat required), CI pipelines, or any non-Copilot agent. Supports dry-run mode for validation without writing files.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "source": {
+          "type": "string",
+          "enum": ["spec-kit"],
+          "description": "Spec format to import from. Currently only 'spec-kit' is supported."
+        },
+        "dir": {
+          "type": "string",
+          "description": "Directory containing Spec Kit artifacts (spec.md, plan.md, tasks.md, constitution.md). Defaults to auto-detected Spec Kit paths under the project root."
+        },
+        "dryRun": {
+          "type": "boolean",
+          "description": "When true, performs mapping and validation but writes nothing to disk. Returns the same shape as a real import."
+        },
+        "syncPrinciples": {
+          "type": "boolean",
+          "description": "When true, writes constitution.md content (transformed) to docs/plans/PROJECT-PRINCIPLES.md. Returns PROJECT_PRINCIPLES_EXISTS error if the file already exists."
+        },
+        "path": {
+          "type": "string",
+          "description": "Project directory (default: current)"
+        }
+      },
+      "required": ["source"]
+    },
+    "intent": ["crucible", "import", "spec-kit"],
+    "aliases": ["crucible-import", "speckit-import"],
+    "cost": "low",
+    "maxConcurrent": 5,
+    "addedIn": "2.93.0",
+    "prerequisites": [],
+    "produces": [
+      ".forge/crucible/smelt-<uuid>.json",
+      "docs/plans/Phase-<NAME>-PLAN.md",
+      ".forge/crucible/manual-imports.jsonl"
+    ],
+    "consumes": ["spec.md", "plan.md", "tasks.md", "constitution.md"],
+    "sideEffects": [
+      "writes smelt record",
+      "writes Phase Plan",
+      "appends audit log entry"
+    ],
+    "errors": {
+      "SPECKIT_IMPORT_MISSING_FIELD": {
+        "message": "required Spec Kit field missing — see missingFields[]",
+        "recovery": "Populate the missing fields in the source Spec Kit artifacts and retry"
+      },
+      "PROJECT_PRINCIPLES_EXISTS": {
+        "message": "docs/plans/PROJECT-PRINCIPLES.md already exists — syncPrinciples refused",
+        "recovery": "Remove or rename the existing file, or omit syncPrinciples"
+      },
+      "SPECKIT_DIR_NOT_FOUND": {
+        "message": "no Spec Kit artifacts found in the specified directory",
+        "recovery": "Verify dir points to a directory containing spec.md, plan.md, tasks.md, or constitution.md"
+      }
+    },
+    "example": {
+      "input": { "source": "spec-kit" },
+      "output": {
+        "ok": true,
+        "smeltId": "imported-speckit-<uuid>",
+        "planPath": "docs/plans/Phase-MY-FEATURE-PLAN.md",
+        "smeltPath": ".forge/crucible/smelt-<uuid>.json",
+        "mappedFields": [],
+        "missingFields": [],
+        "warnings": [],
+        "dryRun": false
+      }
+    }
+  },
+  {
+    "name": "forge_crucible_status",
+    "description": "List Crucible smelts by source and status, or inspect a single smelt. Omit smeltId to list all smelts under .forge/crucible/ (id, source, status, created). Supply smeltId for full smelt detail. USE FOR: auditing imported smelts, checking import results, browsing the smelt archive.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "smeltId": {
+          "type": "string",
+          "description": "Smelt id for single-smelt detail view. Omit to list all smelts."
+        },
+        "path": {
+          "type": "string",
+          "description": "Project directory (default: current)"
+        }
+      }
+    },
+    "intent": ["crucible", "status", "list-smelts"],
+    "aliases": ["crucible-status", "smelt-status"],
+    "cost": "low",
+    "maxConcurrent": 10,
+    "addedIn": "2.93.0",
+    "prerequisites": [],
+    "produces": [],
+    "consumes": [".forge/crucible/"],
+    "sideEffects": [],
+    "errors": {
+      "SMELT_NOT_FOUND": {
+        "message": "smelt not found: <smeltId>",
+        "recovery": "Omit smeltId to list all smelts and verify the id"
+      }
+    },
+    "example": {
+      "input": {},
+      "output": {
+        "ok": true,
+        "smelts": [{ "id": "imported-speckit-<uuid>", "source": "speckit", "status": "imported", "created": "2026-05-13T12:00:00Z" }]
+      }
+    }
+  },
+  {
     "name": "forge_tempering_scan",
     "description": "Tempering (read-only) — scan an existing coverage report (lcov.info / coverage-final.json / cobertura.xml / jacoco.xml / go cover.out / tarpaulin JSON) and report per-layer coverage vs. configured minima. On first run, seeds .forge/tempering/config.json with enterprise defaults. Does NOT execute any tests. USE FOR: diagnosing coverage gaps, pre-deploy readiness checks, dashboard feeds. Writes .forge/tempering/scan-<ts>.json.",
     "inputSchema": {

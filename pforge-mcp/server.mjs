@@ -95,6 +95,7 @@ import {
   CruciblePlanExistsError,
   CrucibleAskMismatchError,
 } from "./crucible-server.mjs";
+import { importSpeckit, listSmelts, getSmelt } from "./crucible-import.mjs";
 import { loadCrucibleConfig, saveCrucibleConfig } from "./crucible-config.mjs";
 import { readManualImports } from "./crucible-enforce.mjs";
 // Phase TEMPER-01 Slice 01.1 — Tempering foundation (read-only scan)
@@ -1042,6 +1043,32 @@ const TOOLS = [
         path: { type: "string", description: "Project directory (default: current)" },
       },
       required: ["id"],
+    },
+  },
+  {
+    name: "forge_crucible_import",
+    description: "Import a Spec Kit project into a Plan Forge Crucible smelt — deterministic, LLM-free field mapping. Returns a smelt id, generated plan path, mapped fields, and any missing-field warnings. USE FOR: importing Spec Kit specs into Plan Forge from Cursor/Claude Code/Codex (no Copilot Chat required), CI pipelines, or any non-Copilot agent. Supports dry-run mode for validation without writing files.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        source: { type: "string", enum: ["spec-kit"], description: "Spec format to import from. Currently only 'spec-kit' is supported." },
+        dir: { type: "string", description: "Directory containing Spec Kit artifacts (spec.md, plan.md, tasks.md, constitution.md). Defaults to auto-detected Spec Kit paths under the project root." },
+        dryRun: { type: "boolean", description: "When true, performs mapping and validation but writes nothing to disk. Returns the same shape as a real import." },
+        syncPrinciples: { type: "boolean", description: "When true, writes constitution.md content (transformed) to docs/plans/PROJECT-PRINCIPLES.md. Returns PROJECT_PRINCIPLES_EXISTS error if the file already exists." },
+        path: { type: "string", description: "Project directory (default: current)" },
+      },
+      required: ["source"],
+    },
+  },
+  {
+    name: "forge_crucible_status",
+    description: "List Crucible smelts by source and status, or inspect a single smelt. Omit smeltId to list all smelts under .forge/crucible/ (id, source, status, created). Supply smeltId for full smelt detail. USE FOR: auditing imported smelts, checking import results, browsing the smelt archive.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        smeltId: { type: "string", description: "Smelt id for single-smelt detail view. Omit to list all smelts." },
+        path: { type: "string", description: "Project directory (default: current)" },
+      },
     },
   },
   {
@@ -2772,6 +2799,38 @@ server.setRequestHandler(CallToolRequestSchema, _wrapWithToolSpan(async (request
       return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
     } catch (err) {
       return { content: [{ type: "text", text: `Crucible abandon error: ${err.message}` }], isError: true };
+    }
+  }
+
+  if (name === "forge_crucible_import") {
+    try {
+      const cwd = args.path ? findProjectRoot(resolve(args.path)) : findProjectRoot(PROJECT_DIR);
+      const result = importSpeckit({
+        projectRoot: cwd,
+        dir: args.dir || null,
+        dryRun: args.dryRun === true,
+        syncPrinciples: args.syncPrinciples === true,
+      });
+      return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
+    } catch (err) {
+      return { content: [{ type: "text", text: `Crucible import error: ${err.message}` }], isError: true };
+    }
+  }
+
+  if (name === "forge_crucible_status") {
+    try {
+      const cwd = args.path ? findProjectRoot(resolve(args.path)) : findProjectRoot(PROJECT_DIR);
+      if (args.smeltId) {
+        const smelt = getSmelt(cwd, args.smeltId);
+        if (!smelt) {
+          return { content: [{ type: "text", text: JSON.stringify({ ok: false, error: "SMELT_NOT_FOUND", smeltId: args.smeltId }) }] };
+        }
+        return { content: [{ type: "text", text: JSON.stringify({ ok: true, smelt }, null, 2) }] };
+      }
+      const smelts = listSmelts(cwd);
+      return { content: [{ type: "text", text: JSON.stringify({ ok: true, smelts }, null, 2) }] };
+    } catch (err) {
+      return { content: [{ type: "text", text: `Crucible status error: ${err.message}` }], isError: true };
     }
   }
 
@@ -7268,6 +7327,8 @@ export function createExpressApp() {
     "forge_crucible_finalize",
     "forge_crucible_list",
     "forge_crucible_abandon",
+    "forge_crucible_import",
+    "forge_crucible_status",
   ]);
   app.post("/api/tool/:name", async (req, res) => {
     try {

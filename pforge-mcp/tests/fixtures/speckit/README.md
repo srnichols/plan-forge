@@ -4,14 +4,14 @@ These fixtures back the deterministic Spec Kit importer tests (`crucible-import.
 
 ## Provenance
 
-> **TODO before merge**: regenerate from a real `github/spec-kit` run and pin the SHA.
-
-These fixtures are **hand-crafted to match the documented Spec Kit template shape** as of:
+> **Status (2026-05-13)**: hand-crafted to match the documented Spec Kit template shape.
+> A future PR should regenerate `green/` from a real `github/spec-kit` run and pin the
+> exact SHA below. Tracked as a follow-up to [Phase CRUCIBLE-IMPORT-CLI](../../../../docs/plans/Phase-CRUCIBLE-IMPORT-CLI-PLAN.md).
 
 - Spec Kit reference: <https://github.com/github/spec-kit>
 - Manual reference: [docs/manual/spec-kit-interop.html](../../../../docs/manual/spec-kit-interop.html)
-- Capture date placeholder: `2026-05-13`
-- Spec Kit SHA: `__PIN_BEFORE_MERGE__`
+- Capture date: hand-crafted 2026-05-13
+- Spec Kit SHA: `__not-yet-pinned__` (regenerate from a real Spec Kit run before the next major release)
 
 To regenerate from the real Spec Kit CLI:
 
@@ -27,6 +27,10 @@ cp memory/constitution.md   <plan-forge>/pforge-mcp/tests/fixtures/speckit/green
 ```
 
 Then derive `partial/` (delete `tasks.md`) and `invalid/` (corrupt `spec.md` to drop `# Title` line).
+
+## Why hand-crafted is acceptable today
+
+The 21 unit tests + 21 e2e tests pin the importer's behaviour against these fixtures' exact field shapes. If a real Spec Kit run produces a meaningfully different shape, the tests will catch it during regeneration — at which point the importer (or its tolerance) gets adjusted in the same PR. Hand-crafted ≠ wrong; it just means we accept the risk that real Spec Kit output may have additional sections we don't yet parse.
 
 ## Fixture catalogue
 

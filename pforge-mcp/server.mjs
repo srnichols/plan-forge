@@ -60,6 +60,8 @@ try {
 import { parsePlan, runPlan, detectWorkers, getCostReport, getHealthTrend, analyzeWithQuorum, generateImage, runAnalyze, readForgeJson, readForgeJsonl, appendForgeJsonl, emitToolTelemetry, regressionGuard, runPostSliceHook, resetPostSliceHookFired, runPreAgentHandoffHook, postOpenClawSnapshot, loadOpenClawConfig, loadQuorumConfig, runWatch, runWatchLive, readCrucibleState, readHomeSnapshot, addReviewItem, resolveReviewItem, listReviewItems, readReviewQueueState, maybeAddFixPlanReview, assessQuorumViability, detectExecutionRuntime, PROPOSED_FIX_DIR, detectCostAnomaly, computeMedian, spawnWorker } from "./orchestrator.mjs";
 // Phase FORGE-SHOP-07 Slice 07.2 — brain facade for unified recall
 import { recall as brainRecall, getReviewerCalibration, federationReadTrajectories, loadFederationConfig, validateFederationConfig, TRAJECTORY_FEDERATION_LIMIT } from "./brain.mjs";
+// Phase ANVIL Slice 5 — Δ-only memoization wrapper for read-only tools
+import { withAnvil } from "./anvil.mjs";
 import {
   drainOpenBrainQueue,
   isOpenBrainConfigured,
@@ -139,6 +141,11 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 // update-check all report the same number — and that number is always the
 // version of the running install, not a stale literal baked into source.
 const FRAMEWORK_VERSION = resolveFrameworkVersion({ serverDir: __dirname });
+
+// Anvil adoption — code-hash seed computed once at module load from version string.
+// Using FRAMEWORK_VERSION means the cache is invalidated on every release, which
+// is the right granularity for CLI-delegated read-only tools.
+const _SERVER_CODE_HASH = FRAMEWORK_VERSION || "server-unknown";
 
 // ─── Config ───────────────────────────────────────────────────────────
 const { resolved: PROJECT_DIR, source: PROJECT_DIR_SOURCE } = resolveProjectRoot({ env: process.env, argv: process.argv, serverDir: __dirname, cwd: process.cwd() });
@@ -1856,6 +1863,138 @@ function generateRunbook(plan, cwd, options = {}) {
   return lines.join("\n");
 }
 
+// ─── Anvil-wrapped compute helpers (Phase ANVIL Slice 5) ─────────────────────
+//
+// Each helper wraps a pure, read-only compute step in `withAnvil`, enabling
+// Δ-only memoization. `deps` provides injectable overrides for unit tests.
+//
+// `codeHashSeed` defaults to `_SERVER_CODE_HASH` (FRAMEWORK_VERSION), so the
+// cache is automatically invalidated on every release.
+
+/**
+ * Runs `pforge sweep` wrapped in the Anvil cache.
+ * @param {object} args - MCP tool arguments (`path`, etc.)
+ * @param {object} [deps] - Injectable overrides: `_runPforge`, `_withAnvil`, `_codeHash`, `_cwd`
+ * @returns {Promise<object>} Annotated sweep result with `anvil` metadata
+ */
+export async function _sweepAnvilCompute(args = {}, deps = {}) {
+  const {
+    _runPforge = runPforge,
+    _withAnvil = withAnvil,
+    _codeHash = _SERVER_CODE_HASH,
+    _cwd = args.path ? findProjectRoot(resolve(args.path)) : findProjectRoot(PROJECT_DIR),
+  } = deps;
+
+  const raw = await _withAnvil(
+    () => {
+      const r = _runPforge("sweep", _cwd);
+      if (r.success) {
+        const out = (r.output || "").trim();
+        const hasMarkers = /FOUND \d+ deferred-work marker/i.test(out)
+          || /FOUND \d+ \w+ marker/i.test(out);
+        if (!hasMarkers) {
+          r.output = out
+            ? `${out}\n\n✓ No TODO/FIXME/HACK/stub/placeholder markers found in app code. Code is complete!`
+            : "✓ No TODO/FIXME/HACK/stub/placeholder markers found in app code. Code is complete!";
+          r.markersFound = 0;
+        } else {
+          const m = out.match(/FOUND (\d+) deferred-work marker/i);
+          r.markersFound = m ? Number(m[1]) : null;
+        }
+      }
+      return r;
+    },
+    { toolName: "forge_sweep", inputs: { cwd: _cwd }, codeHashSeed: _codeHash },
+  );
+  return raw;
+}
+
+/**
+ * Runs `pforge analyze` (non-quorum) wrapped in the Anvil cache.
+ * @param {object} args - MCP tool arguments (`plan`, `path`, etc.)
+ * @param {object} [deps] - Injectable overrides: `_runPforge`, `_withAnvil`, `_codeHash`, `_cwd`
+ * @returns {Promise<object>} Analyze result with `anvil` metadata
+ */
+export async function _analyzeAnvilCompute(args = {}, deps = {}) {
+  const {
+    _runPforge = runPforge,
+    _withAnvil = withAnvil,
+    _codeHash = _SERVER_CODE_HASH,
+    _cwd = args.path ? findProjectRoot(resolve(args.path)) : findProjectRoot(PROJECT_DIR),
+  } = deps;
+
+  return _withAnvil(
+    () => _runPforge(`analyze "${args.plan}"`, _cwd),
+    { toolName: "forge_analyze", inputs: { cwd: _cwd, plan: args.plan }, codeHashSeed: _codeHash },
+  );
+}
+
+/**
+ * Runs `forge_tempering_scan` wrapped in the Anvil cache.
+ * @param {object} args - MCP tool arguments (`path`, `correlationId`, etc.)
+ * @param {object} [deps] - Injectable overrides: `_handleScan`, `_withAnvil`, `_codeHash`, `_cwd`, `_hub`
+ * @returns {Promise<object>} Scan result with `anvil` metadata
+ */
+export async function _temperingScanAnvilCompute(args = {}, deps = {}) {
+  const {
+    _handleScan = temperingHandleScan,
+    _withAnvil = withAnvil,
+    _codeHash = _SERVER_CODE_HASH,
+    _cwd = args.path ? findProjectRoot(resolve(args.path)) : findProjectRoot(PROJECT_DIR),
+    _hub = null,
+  } = deps;
+
+  return _withAnvil(
+    () => _handleScan({ projectDir: _cwd, hub: _hub, correlationId: args.correlationId || null }),
+    {
+      toolName: "forge_tempering_scan",
+      inputs: { cwd: _cwd, correlationId: args.correlationId || null },
+      codeHashSeed: _codeHash,
+    },
+  );
+}
+
+/**
+ * Runs `forge_hotspot` (git log analysis) wrapped in the Anvil cache.
+ * @param {object} args - MCP tool arguments (`path`, `top`, `since`)
+ * @param {object} [deps] - Injectable overrides: `_execSync`, `_withAnvil`, `_codeHash`, `_cwd`
+ * @returns {Promise<object>} Hotspot result with `anvil` metadata
+ */
+export async function _hotspotAnvilCompute(args = {}, deps = {}) {
+  const {
+    _execSync = execSync,
+    _withAnvil = withAnvil,
+    _codeHash = _SERVER_CODE_HASH,
+    _cwd = args.path ? findProjectRoot(resolve(args.path)) : findProjectRoot(PROJECT_DIR),
+  } = deps;
+
+  const top = Math.max(1, Math.min(100, args.top ?? 10));
+  const since = args.since || "6 months ago";
+
+  return _withAnvil(
+    () => {
+      const raw = _execSync(`git log --format=format: --name-only --since="${since}"`, {
+        cwd: _cwd, encoding: "utf-8", timeout: 30_000,
+      });
+      const counts = {};
+      for (const line of raw.split("\n")) {
+        const f = line.trim();
+        if (f && !f.startsWith(".forge/")) counts[f] = (counts[f] || 0) + 1;
+      }
+      const sorted = Object.entries(counts).sort((a, b) => b[1] - a[1]);
+      const hotspots = sorted.map(([file, commits]) => ({ file, commits }));
+      const payload = {
+        generatedAt: new Date().toISOString(),
+        since,
+        totalFiles: hotspots.length,
+        hotspots,
+      };
+      return { ...payload, hotspots: payload.hotspots.slice(0, top), showing: Math.min(top, payload.hotspots.length) };
+    },
+    { toolName: "forge_hotspot", inputs: { cwd: _cwd, since, top }, codeHashSeed: _codeHash },
+  );
+}
+
 function executeTool(name, args) {
   const cwd = args.path ? findProjectRoot(resolve(args.path)) : findProjectRoot(PROJECT_DIR);
 
@@ -1868,28 +2007,8 @@ function executeTool(name, args) {
     }
     case "forge_validate":
       return runPforge("check", cwd);
-    case "forge_sweep": {
-      // Phase ACI-HARDENING (Section 13 fix #4): friendly empty-result message
-      // so the agent doesn't confuse "no markers found" with "sweep failed silently".
-      const result = runPforge("sweep", cwd);
-      if (result.success) {
-        const out = (result.output || "").trim();
-        // pforge sweep emits "FOUND N marker(s)" on hits; otherwise empty/quiet
-        const hasMarkers = /FOUND \d+ deferred-work marker/i.test(out)
-          || /FOUND \d+ \w+ marker/i.test(out);
-        if (!hasMarkers) {
-          result.output = out
-            ? `${out}\n\n✓ No TODO/FIXME/HACK/stub/placeholder markers found in app code. Code is complete!`
-            : "✓ No TODO/FIXME/HACK/stub/placeholder markers found in app code. Code is complete!";
-          result.markersFound = 0;
-        } else {
-          // Extract the count for structured access
-          const m = out.match(/FOUND (\d+) deferred-work marker/i);
-          result.markersFound = m ? Number(m[1]) : null;
-        }
-      }
-      return result;
-    }
+    case "forge_sweep":
+      return null; // Phase ANVIL Slice 5: handled async via _sweepAnvilCompute
     case "forge_status":
       return runPforge("status", cwd);
     case "forge_diff":
@@ -1902,7 +2021,7 @@ function executeTool(name, args) {
       return runPforge(`new-phase "${args.name}"`, cwd);
     case "forge_analyze":
       if (args.quorum) return null; // Quorum analysis handled async
-      return runPforge(`analyze "${args.plan}"`, cwd);
+      return null; // Phase ANVIL Slice 5: non-quorum handled async via _analyzeAnvilCompute
     case "forge_org_rules":
       return null; // Handled async in CallToolRequestSchema handler
     case "forge_run_plan":
@@ -2412,6 +2531,34 @@ server.setRequestHandler(CallToolRequestSchema, _wrapWithToolSpan(async (request
     }
   }
 
+  // ─── Phase ANVIL Slice 5 — Anvil-wrapped forge_sweep ─────────────────────
+  if (name === "forge_sweep") {
+    try {
+      const cwd = args.path ? findProjectRoot(resolve(args.path)) : findProjectRoot(PROJECT_DIR);
+      const result = await _sweepAnvilCompute(args, { _cwd: cwd });
+      return {
+        content: [{ type: "text", text: result.success ? result.output : `Error (exit code ${result.exitCode}):\n${result.output}\n${result.error}` }],
+        isError: !result.success,
+      };
+    } catch (err) {
+      return { content: [{ type: "text", text: `Sweep error: ${err.message}` }], isError: true };
+    }
+  }
+
+  // ─── Phase ANVIL Slice 5 — Anvil-wrapped forge_analyze (non-quorum) ──────
+  if (name === "forge_analyze" && !args.quorum) {
+    try {
+      const cwd = args.path ? findProjectRoot(resolve(args.path)) : findProjectRoot(PROJECT_DIR);
+      const result = await _analyzeAnvilCompute(args, { _cwd: cwd });
+      return {
+        content: [{ type: "text", text: result.success ? result.output : `Error (exit code ${result.exitCode}):\n${result.output}\n${result.error}` }],
+        isError: !result.success,
+      };
+    } catch (err) {
+      return { content: [{ type: "text", text: `Analyze error: ${err.message}` }], isError: true };
+    }
+  }
+
   if (name === "forge_analyze" && args.quorum) {
     try {
       const cwd = args.path ? findProjectRoot(resolve(args.path)) : findProjectRoot(PROJECT_DIR);
@@ -2835,15 +2982,12 @@ server.setRequestHandler(CallToolRequestSchema, _wrapWithToolSpan(async (request
   }
 
   // ─── Tempering (TEMPER-01) — read-only coverage scan ──────────────
+  // Phase ANVIL Slice 5: wrapped in _temperingScanAnvilCompute for Δ-only memoization.
   if (name === "forge_tempering_scan") {
     const t0 = Date.now();
     try {
       const cwd = args.path ? findProjectRoot(resolve(args.path)) : findProjectRoot(PROJECT_DIR);
-      const result = temperingHandleScan({
-        projectDir: cwd,
-        hub: activeHub,
-        correlationId: args.correlationId || null,
-      });
+      const result = await _temperingScanAnvilCompute(args, { _cwd: cwd, _hub: activeHub });
       emitToolTelemetry("forge_tempering_scan", args, result, Date.now() - t0, result.ok ? "OK" : "ERROR", cwd);
 
       // L3 capture on completion — tags `tempering`, `scan`, `<stack>`,
@@ -3679,39 +3823,13 @@ server.setRequestHandler(CallToolRequestSchema, _wrapWithToolSpan(async (request
     }
   }
 
+  // Phase ANVIL Slice 5: forge_hotspot wrapped in _hotspotAnvilCompute for Δ-only memoization.
+  // The legacy .forge/hotspot-cache.json file-level cache is superseded by the Anvil cache.
   if (name === "forge_hotspot") {
     try {
       const t0 = Date.now();
       const cwd = args.path ? findProjectRoot(resolve(args.path)) : findProjectRoot(PROJECT_DIR);
-      const top = Math.max(1, Math.min(100, args.top ?? 10));
-      const since = args.since || "6 months ago";
-
-      const cacheFile = resolve(cwd, ".forge", "hotspot-cache.json");
-      let cached = null;
-      if (existsSync(cacheFile)) {
-        try {
-          cached = JSON.parse(readFileSync(cacheFile, "utf-8"));
-          const age = Date.now() - new Date(cached.generatedAt).getTime();
-          if (age > 24 * 60 * 60 * 1000 || cached.since !== since) cached = null;
-        } catch { cached = null; }
-      }
-
-      if (!cached) {
-        const raw = execSync(`git log --format=format: --name-only --since="${since}"`, { cwd, encoding: "utf-8", timeout: 30_000 });
-        const counts = {};
-        for (const line of raw.split("\n")) {
-          const f = line.trim();
-          if (f && !f.startsWith(".forge/")) counts[f] = (counts[f] || 0) + 1;
-        }
-        const sorted = Object.entries(counts).sort((a, b) => b[1] - a[1]);
-        const hotspots = sorted.map(([file, commits]) => ({ file, commits }));
-
-        mkdirSync(resolve(cwd, ".forge"), { recursive: true });
-        cached = { generatedAt: new Date().toISOString(), since, totalFiles: hotspots.length, hotspots };
-        writeFileSync(cacheFile, JSON.stringify(cached, null, 2), "utf-8");
-      }
-
-      const result = { ...cached, hotspots: cached.hotspots.slice(0, top), showing: Math.min(top, cached.hotspots.length) };
+      const result = await _hotspotAnvilCompute(args, { _cwd: cwd });
       emitToolTelemetry("forge_hotspot", args, result, Date.now() - t0, "OK", cwd);
       await broadcastLiveGuard("forge_hotspot", "OK", Date.now() - t0);
 

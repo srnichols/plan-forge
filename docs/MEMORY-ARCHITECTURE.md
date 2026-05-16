@@ -452,3 +452,34 @@ Three concrete items drop out of this architecture:
 - [`docs/plans/Phase-HALLMARK-CONTRACT-PLAN.md`](plans/Phase-HALLMARK-CONTRACT-PLAN.md) — Hallmark design rationale.
 - [`docs/plans/Phase-ANVIL-PLAN.md`](plans/Phase-ANVIL-PLAN.md) — Anvil design rationale.
 - [`docs/plans/Phase-LATTICE-PLAN.md`](plans/Phase-LATTICE-PLAN.md) — Lattice design rationale.
+
+---
+
+## QA & Validation
+
+The v2.95.0 memory subsystem (Hallmark, Anvil, Lattice, Slag-Heap DLQ, capability negotiation) is covered by two validation surfaces:
+
+### Operator smoke script
+
+Run after any checkout to verify the 15 new MCP tools are registered and the gitignore template is correct:
+
+```bash
+# Bash / macOS / Linux / WSL
+bash scripts/memory-qa-smoke.sh
+
+# PowerShell (Windows / cross-platform pwsh)
+pwsh scripts/memory-qa-smoke.ps1
+```
+
+Both scripts exit 0 on success, non-zero (= number of failed checks) on failure. Each failing check prints `[FAIL] <check-name> - <reason>`. Checks that require an optional dependency (MCP server, OpenBrain) print `[SKIP] <name> - <reason>` and do not count as failures when the dependency is absent.
+
+### End-to-end testbed scenario
+
+The scenario `memory-upgrade-e2e` exercises the full memory stack in a single in-process run:
+
+```bash
+# Discover and run via the testbed surface
+pforge mcp-call forge_testbed_happypath '{"scenario":"memory-upgrade-e2e"}'
+```
+
+The scenario spins up a mock-OpenBrain, runs a 3-slice fixture plan, indexes the fixture project via Lattice, and verifies Anvil hits, Hallmark records, and DLQ behaviour. Its summary JSON exposes `{ anvilHits, anvilMisses, latticeChunks, hallmarkRecords, dlqCount }`. Source: [`pforge-mcp/testbed/scenarios/memory-upgrade-e2e.mjs`](../pforge-mcp/testbed/scenarios/memory-upgrade-e2e.mjs).

@@ -19,7 +19,7 @@ import {
   readdirSync, rmSync, statSync,
 } from "node:fs";
 import { resolve, join } from "node:path";
-import { createHash } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import { execSync } from "node:child_process";
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
@@ -408,4 +408,132 @@ export function anvilRebuild(opts = {}, deps = {}) {
   }
 
   return { invalidated, changedFiles };
+}
+
+// ─── DLQ Helpers ─────────────────────────────────────────────────────────────
+
+/**
+ * Resolve the DLQ directory path.
+ * @param {{ cwd?: string }} deps
+ * @returns {string}
+ */
+function dlqDir(deps = {}) {
+  return join(anvilRoot(deps), "dlq");
+}
+
+/**
+ * Resolve the path for a specific DLQ entry.
+ * @param {string} id
+ * @param {{ cwd?: string }} deps
+ * @returns {string}
+ */
+function dlqEntryPath(id, deps = {}) {
+  return join(dlqDir(deps), `${id}.json`);
+}
+
+// ─── DLQ Public API ──────────────────────────────────────────────────────────
+
+/**
+ * Append a failure record to the Dead Letter Queue.
+ *
+ * The caller supplies whatever fields are known (`toolName`, `inputs`,
+ * `error`). The function assigns a UUID `id` and a `failedAt` ISO timestamp.
+ *
+ * @param {{ toolName?: string, inputs?: *, error?: string, [key: string]: * }} [entry]
+ * @param {{ cwd?: string }} [deps]
+ * @returns {{ id: string }}
+ */
+export function anvilDlqAppend(entry = {}, deps = {}) {
+  const id = randomUUID();
+  const dir = dlqDir(deps);
+  mkdirSync(dir, { recursive: true });
+  const record = {
+    ...entry,
+    id,
+    toolName: entry.toolName ?? null,
+    inputs: entry.inputs ?? null,
+    error: entry.error ?? null,
+    failedAt: new Date().toISOString(),
+  };
+  writeFileSync(dlqEntryPath(id, deps), JSON.stringify(record, null, 2), "utf-8");
+  return { id };
+}
+
+/**
+ * List DLQ entries, optionally filtered by tool name and/or capped by limit.
+ *
+ * Returns all matching entries ordered by `failedAt` ascending (oldest first).
+ * `total` reflects the count of matching entries before `limit` is applied.
+ *
+ * @param {{ tool?: string, limit?: number }} [opts]
+ * @param {{ cwd?: string }} [deps]
+ * @returns {{ items: Array<{ id: string, toolName: string|null, failedAt: string, [key: string]: * }>, total: number }}
+ */
+export function anvilDlqList(opts = {}, deps = {}) {
+  const { tool, limit } = opts;
+  const dir = dlqDir(deps);
+  if (!existsSync(dir)) return { items: [], total: 0 };
+
+  const items = [];
+  for (const file of readdirSync(dir)) {
+    if (!file.endsWith(".json")) continue;
+    try {
+      const rec = JSON.parse(readFileSync(join(dir, file), "utf-8"));
+      if (tool != null && rec.toolName !== tool) continue;
+      items.push(rec);
+    } catch {
+      // skip unreadable entries
+    }
+  }
+
+  items.sort((a, b) => {
+    const ta = a.failedAt ? new Date(a.failedAt).getTime() : 0;
+    const tb = b.failedAt ? new Date(b.failedAt).getTime() : 0;
+    return ta - tb;
+  });
+
+  const total = items.length;
+  return { items: limit != null ? items.slice(0, limit) : items, total };
+}
+
+/**
+ * Remove DLQ entries — by specific `id`, by `tool`, or all entries when no
+ * filter is provided.
+ *
+ * Unlike `anvilClear`, a full drain (no opts) is intentional and permitted.
+ *
+ * @param {{ id?: string, tool?: string }} [opts]
+ * @param {{ cwd?: string }} [deps]
+ * @returns {{ drained: number }}
+ */
+export function anvilDlqDrain(opts = {}, deps = {}) {
+  const { id, tool } = opts;
+  const dir = dlqDir(deps);
+  if (!existsSync(dir)) return { drained: 0 };
+
+  if (id != null) {
+    const p = dlqEntryPath(id, deps);
+    if (existsSync(p)) {
+      rmSync(p, { force: true });
+      return { drained: 1 };
+    }
+    return { drained: 0 };
+  }
+
+  let drained = 0;
+  for (const file of readdirSync(dir)) {
+    if (!file.endsWith(".json")) continue;
+    const filePath = join(dir, file);
+    try {
+      if (tool != null) {
+        const rec = JSON.parse(readFileSync(filePath, "utf-8"));
+        if (rec.toolName !== tool) continue;
+      }
+      rmSync(filePath, { force: true });
+      drained++;
+    } catch {
+      // skip unreadable entries
+    }
+  }
+  return { drained };
 }

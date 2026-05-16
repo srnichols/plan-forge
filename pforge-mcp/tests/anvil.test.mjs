@@ -13,7 +13,7 @@ import { resolve, join } from "node:path";
 import { tmpdir } from "node:os";
 import { randomUUID } from "node:crypto";
 
-import { withAnvil, anvilStat, anvilClear, anvilRebuild } from "../anvil.mjs";
+import { withAnvil, anvilStat, anvilClear, anvilRebuild, anvilDlqAppend, anvilDlqList, anvilDlqDrain } from "../anvil.mjs";
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -389,5 +389,166 @@ describe("anvilRebuild", () => {
     const result = await withAnvil(fn, opts, { cwd: tmpDir });
     expect(fn).toHaveBeenCalledTimes(2);
     expect(result.anvil.hit).toBe(false);
+  });
+});
+
+// ─── anvilDlqAppend ──────────────────────────────────────────────────────────
+
+describe("anvilDlqAppend", () => {
+  let tmpDir;
+  beforeEach(() => { tmpDir = makeTempDir(); });
+  afterEach(() => cleanup(tmpDir));
+
+  it("returns an object with a UUID id", () => {
+    const { id } = anvilDlqAppend({ toolName: "forge_analyze", error: "timeout" }, { cwd: tmpDir });
+    expect(typeof id).toBe("string");
+    // UUID v4 format
+    expect(id).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i);
+  });
+
+  it("writes a JSON file under .forge/anvil/dlq/<id>.json", () => {
+    const { id } = anvilDlqAppend({ toolName: "forge_sweep", error: "boom" }, { cwd: tmpDir });
+    const p = join(tmpDir, ".forge", "anvil", "dlq", `${id}.json`);
+    expect(existsSync(p)).toBe(true);
+    const raw = JSON.parse(readFileSync(p, "utf-8"));
+    expect(raw.id).toBe(id);
+    expect(raw.toolName).toBe("forge_sweep");
+    expect(raw.error).toBe("boom");
+    expect(typeof raw.failedAt).toBe("string");
+  });
+
+  it("preserves arbitrary caller-provided fields", () => {
+    const { id } = anvilDlqAppend({ toolName: "t", inputs: { x: 1 }, custom: "meta" }, { cwd: tmpDir });
+    const p = join(tmpDir, ".forge", "anvil", "dlq", `${id}.json`);
+    const raw = JSON.parse(readFileSync(p, "utf-8"));
+    expect(raw.inputs).toEqual({ x: 1 });
+    expect(raw.custom).toBe("meta");
+  });
+
+  it("assigns null defaults for toolName, inputs, error when omitted", () => {
+    const { id } = anvilDlqAppend({}, { cwd: tmpDir });
+    const p = join(tmpDir, ".forge", "anvil", "dlq", `${id}.json`);
+    const raw = JSON.parse(readFileSync(p, "utf-8"));
+    expect(raw.toolName).toBeNull();
+    expect(raw.inputs).toBeNull();
+    expect(raw.error).toBeNull();
+  });
+
+  it("each call generates a unique id", () => {
+    const id1 = anvilDlqAppend({ toolName: "t" }, { cwd: tmpDir }).id;
+    const id2 = anvilDlqAppend({ toolName: "t" }, { cwd: tmpDir }).id;
+    expect(id1).not.toBe(id2);
+  });
+});
+
+// ─── anvilDlqList ────────────────────────────────────────────────────────────
+
+describe("anvilDlqList", () => {
+  let tmpDir;
+  beforeEach(() => { tmpDir = makeTempDir(); });
+  afterEach(() => cleanup(tmpDir));
+
+  it("returns empty items and total=0 when dlq directory does not exist", () => {
+    const result = anvilDlqList({}, { cwd: tmpDir });
+    expect(result.items).toEqual([]);
+    expect(result.total).toBe(0);
+  });
+
+  it("lists all entries when no filter is supplied", () => {
+    anvilDlqAppend({ toolName: "forge_analyze", error: "e1" }, { cwd: tmpDir });
+    anvilDlqAppend({ toolName: "forge_sweep", error: "e2" }, { cwd: tmpDir });
+    anvilDlqAppend({ toolName: "forge_analyze", error: "e3" }, { cwd: tmpDir });
+
+    const { items, total } = anvilDlqList({}, { cwd: tmpDir });
+    expect(total).toBe(3);
+    expect(items).toHaveLength(3);
+  });
+
+  it("filters by tool name", () => {
+    anvilDlqAppend({ toolName: "forge_analyze", error: "a" }, { cwd: tmpDir });
+    anvilDlqAppend({ toolName: "forge_sweep", error: "b" }, { cwd: tmpDir });
+    anvilDlqAppend({ toolName: "forge_analyze", error: "c" }, { cwd: tmpDir });
+
+    const { items, total } = anvilDlqList({ tool: "forge_analyze" }, { cwd: tmpDir });
+    expect(total).toBe(2);
+    expect(items.every(i => i.toolName === "forge_analyze")).toBe(true);
+  });
+
+  it("respects limit option without changing total", () => {
+    for (let i = 0; i < 5; i++) {
+      anvilDlqAppend({ toolName: "forge_hotspot", error: `err${i}` }, { cwd: tmpDir });
+    }
+    const { items, total } = anvilDlqList({ limit: 2 }, { cwd: tmpDir });
+    expect(total).toBe(5);
+    expect(items).toHaveLength(2);
+  });
+
+  it("each returned item includes id and failedAt", () => {
+    anvilDlqAppend({ toolName: "forge_analyze", error: "oops" }, { cwd: tmpDir });
+    const { items } = anvilDlqList({}, { cwd: tmpDir });
+    expect(typeof items[0].id).toBe("string");
+    expect(typeof items[0].failedAt).toBe("string");
+  });
+});
+
+// ─── anvilDlqDrain ───────────────────────────────────────────────────────────
+
+describe("anvilDlqDrain", () => {
+  let tmpDir;
+  beforeEach(() => { tmpDir = makeTempDir(); });
+  afterEach(() => cleanup(tmpDir));
+
+  it("returns { drained: 0 } when dlq directory does not exist", () => {
+    expect(anvilDlqDrain({}, { cwd: tmpDir })).toEqual({ drained: 0 });
+  });
+
+  it("drains all entries when no filter is supplied", () => {
+    anvilDlqAppend({ toolName: "forge_analyze" }, { cwd: tmpDir });
+    anvilDlqAppend({ toolName: "forge_sweep" }, { cwd: tmpDir });
+    anvilDlqAppend({ toolName: "forge_hotspot" }, { cwd: tmpDir });
+
+    const result = anvilDlqDrain({}, { cwd: tmpDir });
+    expect(result.drained).toBe(3);
+    expect(anvilDlqList({}, { cwd: tmpDir }).total).toBe(0);
+  });
+
+  it("drains only the specified id", () => {
+    const { id: id1 } = anvilDlqAppend({ toolName: "forge_analyze" }, { cwd: tmpDir });
+    anvilDlqAppend({ toolName: "forge_sweep" }, { cwd: tmpDir });
+
+    const result = anvilDlqDrain({ id: id1 }, { cwd: tmpDir });
+    expect(result.drained).toBe(1);
+
+    const { total } = anvilDlqList({}, { cwd: tmpDir });
+    expect(total).toBe(1);
+  });
+
+  it("returns { drained: 0 } when id does not exist", () => {
+    anvilDlqAppend({ toolName: "forge_analyze" }, { cwd: tmpDir });
+    const result = anvilDlqDrain({ id: "00000000-0000-4000-8000-000000000000" }, { cwd: tmpDir });
+    expect(result.drained).toBe(0);
+  });
+
+  it("drains only entries matching the tool filter", () => {
+    anvilDlqAppend({ toolName: "forge_analyze" }, { cwd: tmpDir });
+    anvilDlqAppend({ toolName: "forge_analyze" }, { cwd: tmpDir });
+    anvilDlqAppend({ toolName: "forge_sweep" }, { cwd: tmpDir });
+
+    const result = anvilDlqDrain({ tool: "forge_analyze" }, { cwd: tmpDir });
+    expect(result.drained).toBe(2);
+
+    const { items } = anvilDlqList({}, { cwd: tmpDir });
+    expect(items).toHaveLength(1);
+    expect(items[0].toolName).toBe("forge_sweep");
+  });
+
+  it("id filter takes precedence over tool filter", () => {
+    const { id } = anvilDlqAppend({ toolName: "forge_analyze" }, { cwd: tmpDir });
+    anvilDlqAppend({ toolName: "forge_analyze" }, { cwd: tmpDir });
+
+    // id is provided; tool is ignored
+    const result = anvilDlqDrain({ id, tool: "forge_analyze" }, { cwd: tmpDir });
+    expect(result.drained).toBe(1);
+    expect(anvilDlqList({}, { cwd: tmpDir }).total).toBe(1);
   });
 });

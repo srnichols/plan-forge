@@ -7,6 +7,11 @@ Format follows [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
+#### Added — hallmark provenance contract (`pforge-sdk`)
+- **`pforge-sdk/src/hallmark.mjs`** — New sub-path export (`pforge-sdk/hallmark`) providing a lightweight, dependency-free provenance contract: `HALLMARK_SCHEMA_VERSION` constant (`"hallmark/v1"`), `validateProvenance(record)` (pure validator, no throws), `buildProvenance(options)` (fills `schemaVersion` + `capturedAt` automatically), and `mergeProvenance(existingMetadata, provenance)` (non-mutating attach under the `"provenance"` key).
+- **`pforge-sdk/schemas/hallmark-provenance.v1.json`** — JSON Schema defining the `hallmark/v1` envelope: required fields `schemaVersion`, `toolName`, `capturedAt`; optional `sourceFile`, `byteRange`, `contentHash`, `codeHash`, `toolVersion`; `additionalProperties: false`.
+- **`pforge-sdk/README.md`** — Added "Hallmark provenance" section documenting the API, schema field table, and usage examples.
+
 ---
 
 ## [2.93.3] — 2026-05-16 — Docs hotfix: manual drift audit (P1 batch + residuals)

@@ -66,9 +66,9 @@ foreach ($plan in $plans) {
     Write-Host "----------------------------------------------------------------"
 
     if ($DryRun) {
-        & .\pforge.ps1 run-plan --estimate $plan.Path 2>&1 | Tee-Object -FilePath $log
+        & .\pforge.ps1 run-plan $plan.Path --estimate 2>&1 | Tee-Object -FilePath $log
     } else {
-        & .\pforge.ps1 run-plan --foreground $plan.Path 2>&1 | Tee-Object -FilePath $log
+        & .\pforge.ps1 run-plan $plan.Path --foreground 2>&1 | Tee-Object -FilePath $log
     }
     $exit = $LASTEXITCODE
     $sw.Stop()

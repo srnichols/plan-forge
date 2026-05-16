@@ -5,6 +5,19 @@ Format follows [Keep a Changelog](https://keepachangelog.com/).
 
 ---
 
+## [2.96.4] — 2026-05-17 — Telemetry-Honesty Patch (Issue #190)
+
+> **One-liner**: `tokens.apiDurationMs` now reports `null` (not `0`) for CLI workers that don't surface a measurable API duration. Stops downstream consumers from interpreting "field absent" as "API call took zero milliseconds".
+
+#### Fixed — Issue #190: `tokens.apiDurationMs` reports 0 (not null) for gh-copilot CLI workers
+- `pforge-mcp/orchestrator.mjs` `extractTokens` previously initialized `apiDurationMs = 0` and used `event.usage.totalApiDurationMs || 0` — so any worker that omits `totalApiDurationMs` (e.g. every gh-copilot CLI run) produced `apiDurationMs: 0` on every slice. The dashboard, `forge_cost_report` slowness rollup, and third-party JSON consumers all misread this as "API call took 0 ms" — a measurably false signal.
+- `extractTokens` now initializes `apiDurationMs = null` and `sessionDurationMs = null`, and only assigns from the event when the upstream field is explicitly `!= null`. The contract is now: **null** = "not reported by this worker", **number** = actual measured duration (including a legitimate `0`).
+- The wall-clock sessionDurationMs fallback (orchestrator.mjs ~L2691) was already null-tolerant via `!tokens.sessionDurationMs`, so no consumer regression.
+- The API-direct worker path (orchestrator.mjs ~L1379) and dry-run synthesizer (~L4605) still emit `apiDurationMs: 0` — those represent real "no measurement made yet" placeholders and are tracked separately; #190 is scoped to the CLI-extraction default.
+- 13 new tests in `tests/telemetry-issue-190.test.mjs` cover: empty events, missing usage block, gh-copilot-shaped event (sessionDurationMs present, totalApiDurationMs absent), explicit null/undefined inputs, **legitimate** zero preservation, positive-path regression (still returns 45000 for the existing fixture), null sessionDurationMs path, last-write-wins, no-clobber on later partial event, shape contract, and value-type contract.
+
+---
+
 ## [2.96.3] — 2026-05-17 — Background-Run Diagnostics + Analyze Score Recovery (Issues #188, #189)
 
 > **One-liner**: Closes two more bugs surfaced by the v2.96.2 verification rerun: background-mode runs now leave a diagnostic stdout/stderr trail when they crash, and the auto-analyze rollup recovers the consistency score even when `pforge analyze` exits 1 as a below-threshold warning.

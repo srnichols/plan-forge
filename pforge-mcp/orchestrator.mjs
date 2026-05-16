@@ -2930,13 +2930,22 @@ export function deriveVendorFromModel(model) {
 
 /**
  * Extract token usage from JSONL events.
+ *
+ * v2.96.4 fix for Bug #190: apiDurationMs is now initialized to `null` (was
+ * `0`) and only set when the upstream `result.usage.totalApiDurationMs` field
+ * is actually present. Previously, gh-copilot CLI workers (which do not
+ * surface totalApiDurationMs at all) produced `apiDurationMs: 0` on every
+ * slice, which downstream consumers misinterpret as "API call took 0 ms".
+ * The contract is now: `null` means "not reported by this worker"; any
+ * non-null value is the actual measured duration. sessionDurationMs follows
+ * the same convention as a precaution against future event-stream regressions.
  */
 export function extractTokens(events) {
   let outputTokens = 0;
   let model = null;
   let premiumRequests = 0;
-  let apiDurationMs = 0;
-  let sessionDurationMs = 0;
+  let apiDurationMs = null;
+  let sessionDurationMs = null;
   let codeChanges = null;
 
   for (const event of events) {
@@ -2953,8 +2962,12 @@ export function extractTokens(events) {
     if (event.type === "result") {
       if (event.usage) {
         premiumRequests = event.usage.premiumRequests || 0;
-        apiDurationMs = event.usage.totalApiDurationMs || 0;
-        sessionDurationMs = event.usage.sessionDurationMs || 0;
+        if (event.usage.totalApiDurationMs != null) {
+          apiDurationMs = event.usage.totalApiDurationMs;
+        }
+        if (event.usage.sessionDurationMs != null) {
+          sessionDurationMs = event.usage.sessionDurationMs;
+        }
         codeChanges = event.usage.codeChanges || null;
       }
       // result event also has model sometimes

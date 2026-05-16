@@ -5,6 +5,25 @@ Format follows [Keep a Changelog](https://keepachangelog.com/).
 
 ---
 
+## [2.96.0] — 2026-05-16 — Cost-Service Token Coverage (Phase-COST-TOKEN-COVERAGE)
+
+> **One-liner**: Fixes Plan Forge cost accounting for cache_read, Anthropic cache writes, reasoning-token coverage, and OpenAI service tiers while preserving the separate Subscription CLI workers premium-request path.
+
+#### Fixed — vendor-aware token accounting in `pforge-mcp/cost-service.mjs`
+- `priceSlice()` now distinguishes Anthropic vs. OpenAI/xAI cache semantics, bills `cache_read` with per-model multipliers, preserves `reasoning_tokens` as informational-only, and records a `cost_breakdown` payload for downstream reports.
+- `MODEL_PRICING` refreshed with corrected base rates, added missing GPT-5 / Opus / Grok entries, and now carries cache and service-tier multipliers with `_source` provenance.
+- xAI responses now honor `cost_in_usd_ticks` as the authoritative billed amount when present.
+
+#### Fixed — provider token extraction
+- `pforge-master/src/providers/anthropic-tools.mjs`, `openai-tools.mjs`, and `xai-tools.mjs` now extract cache, reasoning, and `service_tier` metadata needed for accurate direct-API billing.
+- `pforge-mcp/orchestrator.mjs` keeps CLI-derived token extraction on the legacy `vendor: 'unknown'` path so Subscription CLI workers remain unchanged.
+
+#### Tests
+- Added coverage for cache_read, cache creation, reasoning-token, xAI authoritative-ticks, and service-tier math plus parseResponse extraction regressions for Anthropic / OpenAI / xAI.
+- Full `pforge-mcp` vitest suite re-run after the Phase-COST-TOKEN-COVERAGE changes.
+
+---
+
 ## [2.95.1] — 2026-05-16 — Hotfix: scoreSliceComplexity recalibration
 
 > **One-liner**: Recalibrates the `scoreSliceComplexity` scoring formula so that medium-complexity slices (3 files in scope, 3 gate lines, 4–6 tasks) now score at or above the default quorum threshold of 5, making quorum auto-mode actually trigger on real-world plans. Addresses the v2.61.0 research finding that threshold 5 selected zero slices across all plans in the repo. No behavior change for simple or maximally-complex slices — both boundary tests still hold.

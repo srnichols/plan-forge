@@ -99,14 +99,12 @@ export function parseResponse(data) {
   const usage = data.usage || {};
   // Chat Completions API uses prompt_tokens/completion_tokens; Responses API
   // uses input_tokens/output_tokens. Read whichever is present.
-  const tokensIn = usage.prompt_tokens || usage.input_tokens || 0;
-  const tokensOut = usage.completion_tokens || usage.output_tokens || 0;
+  const tokensIn = usage.prompt_tokens ?? usage.input_tokens ?? 0;
+  const tokensOut = usage.completion_tokens ?? usage.output_tokens ?? 0;
   // Phase-COST-TOKEN-COVERAGE Slice 6: cache + reasoning + tier extraction
-  const promptDetails = usage.prompt_tokens_details || usage.input_tokens_details || {};
-  const completionDetails = usage.completion_tokens_details || usage.output_tokens_details || {};
-  const cacheReadTokens = promptDetails.cached_tokens || 0;
-  const reasoningTokens = completionDetails.reasoning_tokens || 0;
-  const serviceTier = data.service_tier || null;
+  const cacheReadTokens = usage.prompt_tokens_details?.cached_tokens ?? usage.input_tokens_details?.cached_tokens ?? 0;
+  const reasoningTokens = usage.completion_tokens_details?.reasoning_tokens ?? usage.output_tokens_details?.reasoning_tokens ?? 0;
+  const serviceTier = data.service_tier ?? null;
 
   const choice = data.choices?.[0];
   if (!choice) {

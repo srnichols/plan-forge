@@ -905,3 +905,18 @@ Execution order was determined by code-dependency analysis (search subagent, 202
 - **2026-05-06 (Phase-MANUAL-DISCOVERY-LOOP and Phase-MANUAL-INTEGRATIONS plans drafted)** — Two follow-up plans authored in parallel sessions and now committed to master at [docs/plans/Phase-MANUAL-DISCOVERY-LOOP-PLAN.md](../plans/Phase-MANUAL-DISCOVERY-LOOP-PLAN.md) and [docs/plans/Phase-MANUAL-INTEGRATIONS-PLAN.md](../plans/Phase-MANUAL-INTEGRATIONS-PLAN.md). Neither has been executed yet. Both extend the manual coverage further.
 - **2026-05-07 (Priority C shipped)** — All four §14 Priority-C items plus the §9 Week-4 trajectory-schema item shipped via the Priority-C chain (4 phases, 34 slices, ~3 hours wall time, $0.32 declared / $0.00 wall on gh-copilot subscription). See §14.5 above for per-phase narrative, commits, and operational lessons. Net result: §14 Priority C is complete; §14 Priority D is partially complete (4 of 5 items landed via Phase-FOUNDRY-PROVIDER; only Foundry quota preflight remains open).
 - **2026-05-08 (Priority D fully complete)** — The last open Priority-D item shipped via Phase-FOUNDRY-QUOTA-PREFLIGHT (5 slices, 35.6 min, `$0.05` declared / `$0.00` wall). Adds opt-in AOAI quota preflight via `PFORGE_FOUNDRY_QUOTA_PREFLIGHT=1` env var; reads Cognitive Services control-plane API; compares against slice token estimate; emits warning at slice-start when headroom < 30%; fail-open invariant (control-plane outages never block execution). 34 tests, costForLeg byte-identical, priceSlice signature unchanged. Audit ran clean per the post-DOCS-UX-LIFT discipline (verified each MUST against actual artifacts, not just gate output). **Net result: every §14 line item across Priority A, B, C, and D is shipped.**
+
+### 12.6 Status: FIXED in Phase-COST-TOKEN-COVERAGE (commit d59b907, 2026-05-16)
+
+Defect resolved. Audit re-run: priceSlice() now correctly accounts for all four token classes.
+See docs/plans/Phase-COST-TOKEN-COVERAGE-PLAN.md for the executed plan.
+Hardening also surfaced and corrected stale base rates (Opus 3× overestimate, GPT-5.4 2× overestimate);
+combined effect: cost reports for Anthropic-Opus + OpenAI-with-caching workloads now match vendor invoices within ~5%.
+
+**Scope clarification by cost path:**
+- Subscription CLI workers (gh-copilot, claude-cli, codex-cli): unchanged. These bill via the
+  v2.83.0 premium-request path; this fix does not touch that code path.
+- Direct vendor API keys (Anthropic, OpenAI, xAI): full benefit from both the missing token
+  classes and the stale-base-rate corrections.
+- Azure OpenAI: cache + reasoning + service_tier fields apply; AOAI deployment-type uplift
+  (+10% for Data Zone / Regional) deferred to the BYO-Azure-OpenAI phase per §11.5.A.

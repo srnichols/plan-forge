@@ -51,19 +51,37 @@ function _computeFoundryQuota({ estimatedTokensIn, estimatedTokensOut, provider,
 }
 
 // ─── Pricing Table ────────────────────────────────────────────────────
-// Per-token costs in USD. Updated 2026-05-06 (Phase-COST-TOKEN-COVERAGE).
-// Source: published vendor API pricing pages, retrieval date in _source.
-// Rates are per 1 token. Multipliers default to 1.0 in getPricing() if absent.
-//
-// IMPORTANT — Vendor convention asymmetry:
-//   - Anthropic input_tokens EXCLUDES cache_read_input_tokens + cache_creation_*
-//     (bill all three independently per priceSlice() math).
-//   - OpenAI / xAI prompt_tokens INCLUDES cached_tokens
-//     (subtract cached_tokens before billing the uncached portion).
-// See Phase-COST-TOKEN-COVERAGE-PLAN.md Forbidden Actions #4 and #5.
-//
-// _retiredAfter: ISO date marking xAI's May 15, 2026 model retirements
-// (informational only; entries kept for historical cost-history.json compatibility).
+/**
+ * Per-token costs in USD.
+ *
+ * Entry shape:
+ *   {
+ *     input: number,
+ *     output: number,
+ *     cache_read_multiplier?: number,
+ *     cache_write_5m_multiplier?: number,
+ *     cache_write_1h_multiplier?: number,
+ *     flex_input_multiplier?: number,
+ *     flex_output_multiplier?: number,
+ *     priority_input_multiplier?: number,
+ *     priority_output_multiplier?: number,
+ *     _retiredAfter?: string,
+ *     _source?: string,
+ *   }
+ *
+ * Rates are stored per 1 token. getPricing() spreads default multiplier values
+ * so callers never receive an undefined multiplier.
+ *
+ * IMPORTANT — Vendor convention asymmetry:
+ *   - Anthropic input_tokens EXCLUDES cache_read_input_tokens + cache_creation_*
+ *     (bill all three independently per priceSlice() math).
+ *   - OpenAI / xAI prompt_tokens INCLUDES cached_tokens
+ *     (subtract cached_tokens before billing the uncached portion).
+ * See Phase-COST-TOKEN-COVERAGE-PLAN.md Forbidden Actions #4 and #5.
+ *
+ * _retiredAfter marks xAI's May 15, 2026 model retirements and is informational
+ * only; entries are retained for historical cost-history.json compatibility.
+ */
 export const MODEL_PRICING = {
   // ─── Anthropic Claude ──────────────────────────────────────────────
   // Cache: read 0.10×, 5m write 1.25×, 1h write 2.0× (uniform across all tiers).
@@ -71,7 +89,16 @@ export const MODEL_PRICING = {
   // Source: https://platform.claude.com/docs/en/docs/build-with-claude/prompt-caching
   "claude-opus-4.7":        { input: 5 / 1_000_000,    output: 25 / 1_000_000,
     cache_read_multiplier: 0.10, cache_write_5m_multiplier: 1.25, cache_write_1h_multiplier: 2.0,
-    _source: "https://platform.claude.com/docs/en/docs/build-with-claude/prompt-caching (2026-05-06)" },
+    _source: "https://www.anthropic.com/pricing (2026-05-06)" },
+  "claude-opus-4.7-1m-internal": { input: 5 / 1_000_000, output: 25 / 1_000_000,
+    cache_read_multiplier: 0.10, cache_write_5m_multiplier: 1.25, cache_write_1h_multiplier: 2.0,
+    _source: "https://www.anthropic.com/pricing (2026-05-06)" },
+  "claude-opus-4.7-high":   { input: 5 / 1_000_000,    output: 25 / 1_000_000,
+    cache_read_multiplier: 0.10, cache_write_5m_multiplier: 1.25, cache_write_1h_multiplier: 2.0,
+    _source: "https://www.anthropic.com/pricing (2026-05-06)" },
+  "claude-opus-4.7-xhigh":  { input: 5 / 1_000_000,    output: 25 / 1_000_000,
+    cache_read_multiplier: 0.10, cache_write_5m_multiplier: 1.25, cache_write_1h_multiplier: 2.0,
+    _source: "https://www.anthropic.com/pricing (2026-05-06)" },
   "claude-opus-4.6":        { input: 5 / 1_000_000,    output: 25 / 1_000_000,
     cache_read_multiplier: 0.10, cache_write_5m_multiplier: 1.25, cache_write_1h_multiplier: 2.0,
     _source: "https://platform.claude.com/docs/en/docs/build-with-claude/prompt-caching (2026-05-06)" },
@@ -160,7 +187,7 @@ export const MODEL_PRICING = {
     _source: "https://developers.openai.com/api/docs/pricing (2026-05-06)" },
 
   // ─── OpenAI o-series (reasoning models) ───────────────────────────
-  // Cache: 0.50× read for o1 / o1-mini / o3-mini; 0.25× for o3 / o4-mini.
+  // Cache: 0.50× read for o1 / o1-mini, 0.25× for o3 / o3-mini, and 0.275× for o4-mini.
   // reasoning_tokens are billed at output rate AND already counted in output_tokens
   // — DO NOT add reasoning_tokens separately to billable output (Forbidden Action #3).
   "o1":                     { input: 15 / 1_000_000,   output: 60 / 1_000_000,
@@ -173,15 +200,16 @@ export const MODEL_PRICING = {
     cache_read_multiplier: 0.25,
     _source: "https://developers.openai.com/api/docs/pricing (2026-05-06)" },
   "o3-mini":                { input: 1.10 / 1_000_000, output: 4.40 / 1_000_000,
-    cache_read_multiplier: 0.50,
+    cache_read_multiplier: 0.25,
     aoai_deployment_type_multiplier: { global: 1.0, "data-zone": 1.1, regional: 1.1, provisioned: 1.0 },
     _source: "https://developers.openai.com/api/docs/pricing (2026-05-06)" },
   "o4-mini":                { input: 1.10 / 1_000_000, output: 4.40 / 1_000_000,
-    cache_read_multiplier: 0.25,
+    cache_read_multiplier: 0.275,
     _source: "https://developers.openai.com/api/docs/pricing (2026-05-06)" },
 
   // ─── Google Gemini ────────────────────────────────────────────────
-  "gemini-3-pro-preview":   { input: 1.25 / 1_000_000, output: 5 / 1_000_000 },
+  "gemini-3-pro-preview":   { input: 1.25 / 1_000_000, output: 5 / 1_000_000,
+    _source: "https://ai.google.dev/gemini-api/docs/pricing (2026-05-06)" },
 
   // ─── xAI Grok ─────────────────────────────────────────────────────
   // Cache: ~0.25× approximation. Authoritative cost comes from response
@@ -203,7 +231,16 @@ export const MODEL_PRICING = {
     _source: "https://docs.x.ai/developers/models (2026-05-06)" },
   "grok-4.20-multi-agent-0309":        { input: 1.25 / 1_000_000, output: 2.50 / 1_000_000,
     cache_read_multiplier: 0.25,
-    _source: "https://docs.x.ai/developers/models (2026-05-06)" },
+    _source: "https://docs.x.ai/developers/advanced-api-usage/prompt-caching (2026-05-06)" },
+  "grok-4-fast-reasoning":             { input: 0.20 / 1_000_000, output: 0.50 / 1_000_000,
+    cache_read_multiplier: 0.25, _retiredAfter: "2026-05-15",
+    _source: "https://docs.x.ai/developers/migration/may-15-retirement (2026-05-06)" },
+  "grok-4-fast-non-reasoning":         { input: 0.20 / 1_000_000, output: 0.50 / 1_000_000,
+    cache_read_multiplier: 0.25, _retiredAfter: "2026-05-15",
+    _source: "https://docs.x.ai/developers/migration/may-15-retirement (2026-05-06)" },
+  "grok-code-fast-1":                  { input: 0.20 / 1_000_000, output: 1.50 / 1_000_000,
+    cache_read_multiplier: 0.25, _retiredAfter: "2026-05-15",
+    _source: "https://docs.x.ai/developers/migration/may-15-retirement (2026-05-06)" },
   "grok-4-1-fast-reasoning":           { input: 0.20 / 1_000_000, output: 0.50 / 1_000_000,
     cache_read_multiplier: 0.25, _retiredAfter: "2026-05-15",
     _source: "https://docs.x.ai/developers/migration/may-15-retirement (2026-05-06)" },
@@ -217,15 +254,18 @@ export const MODEL_PRICING = {
     cache_read_multiplier: 0.25, _retiredAfter: "2026-05-15",
     _source: "https://docs.x.ai/developers/migration/may-15-retirement (2026-05-06)" },
   "grok-3":                            { input: 3 / 1_000_000,    output: 15 / 1_000_000,
-    _retiredAfter: "2026-05-15",
+    cache_read_multiplier: 0.25, _retiredAfter: "2026-05-15",
     _source: "https://docs.x.ai/developers/migration/may-15-retirement (2026-05-06)" },
-  "grok-3-mini":                       { input: 0.30 / 1_000_000, output: 0.50 / 1_000_000 },
+  "grok-3-mini":                       { input: 0.30 / 1_000_000, output: 0.50 / 1_000_000,
+    cache_read_multiplier: 0.25,
+    _source: "https://docs.x.ai/developers/advanced-api-usage/prompt-caching (2026-05-06)" },
 
   // ─── Fallback ─────────────────────────────────────────────────────
   // Conservative default: kept at $3/$15 (Sonnet-class) so unknown models
   // don't dramatically under-estimate cost. No cache multipliers applied
   // (defaults to 1.0 — no benefit assumed for unrecognised models).
-  default:                  { input: 3 / 1_000_000,    output: 15 / 1_000_000 },
+  default:                  { input: 3 / 1_000_000,    output: 15 / 1_000_000,
+    _source: "https://www.anthropic.com/pricing (2026-05-06)" },
 };
 
 /**
@@ -438,6 +478,12 @@ function resolveTierMultipliers(pricing, serviceTier) {
   }
 }
 
+function debugCostLog(message) {
+  if (process.env.PFORGE_LOG_LEVEL === "debug") {
+    console.error(`[cost-service] ${message}`);
+  }
+}
+
 /**
  * Calculate cost for a single slice from its token data.
  *
@@ -544,6 +590,7 @@ export function priceSlice(tokens, worker) {
     // when split is unavailable, 5m rate is the conservative-correct default.
     if (cacheCombined > 0 && cache5m === 0 && cache1h === 0) {
       cache5m = cacheCombined;
+      debugCostLog(`Anthropic cache_creation_input_tokens lacked 5m/1h split for ${model}; defaulted ${cacheCombined} tokens to 5m pricing.`);
     }
 
     breakdown.input_uncached = roundUsd(tokensIn * pricing.input);

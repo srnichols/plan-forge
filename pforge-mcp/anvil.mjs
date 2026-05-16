@@ -321,7 +321,7 @@ export function anvilClear(opts = {}, deps = {}) {
       const filePath = join(toolPath, file);
       try {
         const fst = statSync(filePath);
-        if (nowMs - fst.mtimeMs >= olderThanMs) {
+        if (Math.max(0, nowMs - fst.mtimeMs) >= olderThanMs) {
           rmSync(filePath, { force: true });
           deleted++;
         }

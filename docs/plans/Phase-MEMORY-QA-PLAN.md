@@ -194,7 +194,7 @@
 
 **Validation Gate**:
 ```bash
-cd pforge-mcp && npx vitest run tests/integration/memory-upgrade/helpers/helpers.test.mjs --reporter=dot 2>&1 | tail -3 | grep -q 'passed'
+cd pforge-mcp && npx vitest run tests/integration/memory-upgrade/helpers/helpers.test.mjs --reporter=dot > /dev/null 2>&1 && echo ok
 ```
 
 ---
@@ -212,7 +212,7 @@ cd pforge-mcp && npx vitest run tests/integration/memory-upgrade/helpers/helpers
 
 **Validation Gate**:
 ```bash
-cd pforge-mcp && npx vitest run tests/integration/memory-upgrade/0[123]-*.test.mjs --reporter=dot 2>&1 | tail -3 | grep -q 'passed'
+cd pforge-mcp && npx vitest run tests/integration/memory-upgrade/0[123]-*.test.mjs --reporter=dot > /dev/null 2>&1 && echo ok
 ```
 
 ---
@@ -229,7 +229,7 @@ cd pforge-mcp && npx vitest run tests/integration/memory-upgrade/0[123]-*.test.m
 
 **Validation Gate**:
 ```bash
-cd pforge-mcp && npx vitest run tests/integration/memory-upgrade/04-*.test.mjs --reporter=dot 2>&1 | tail -3 | grep -q 'passed'
+cd pforge-mcp && npx vitest run tests/integration/memory-upgrade/04-*.test.mjs --reporter=dot > /dev/null 2>&1 && echo ok
 ```
 
 ---
@@ -246,7 +246,7 @@ cd pforge-mcp && npx vitest run tests/integration/memory-upgrade/04-*.test.mjs -
 
 **Validation Gate**:
 ```bash
-cd pforge-mcp && npx vitest run tests/integration/memory-upgrade/0[56]-*.test.mjs --reporter=dot 2>&1 | tail -3 | grep -q 'passed'
+cd pforge-mcp && npx vitest run tests/integration/memory-upgrade/0[56]-*.test.mjs --reporter=dot > /dev/null 2>&1 && echo ok
 ```
 
 ---
@@ -264,7 +264,7 @@ cd pforge-mcp && npx vitest run tests/integration/memory-upgrade/0[56]-*.test.mj
 
 **Validation Gate**:
 ```bash
-cd pforge-mcp && npx vitest run tests/integration/memory-upgrade/0[789]-*.test.mjs --reporter=dot 2>&1 | tail -3 | grep -q 'passed'
+cd pforge-mcp && npx vitest run tests/integration/memory-upgrade/0[789]-*.test.mjs --reporter=dot > /dev/null 2>&1 && echo ok
 ```
 
 ---
@@ -282,7 +282,7 @@ cd pforge-mcp && npx vitest run tests/integration/memory-upgrade/0[789]-*.test.m
 
 **Validation Gate**:
 ```bash
-cd pforge-mcp && npx vitest run tests/integration/memory-upgrade/10-*.test.mjs --reporter=dot 2>&1 | tail -3 | grep -q 'passed'
+cd pforge-mcp && npx vitest run tests/integration/memory-upgrade/10-*.test.mjs --reporter=dot > /dev/null 2>&1 && echo ok
 ```
 
 ---

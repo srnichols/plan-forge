@@ -175,7 +175,7 @@
 
 **Validation Gate**:
 ```bash
-cd pforge-mcp && npx vitest run tests/anvil.test.mjs --reporter=dot 2>&1 | tail -3 | grep -q 'passed'
+cd pforge-mcp && npx vitest run tests/anvil.test.mjs --reporter=dot > /dev/null 2>&1 && echo ok
 ```
 
 ---
@@ -211,7 +211,7 @@ cd pforge-mcp && node -e "import('./anvil.mjs').then(m=>['anvilDlqAppend','anvil
 
 **Validation Gate**:
 ```bash
-cd pforge-mcp && npx vitest run tests/brain-hallmark.test.mjs tests/brain-capability-negotiation.test.mjs --reporter=dot 2>&1 | tail -3 | grep -q 'passed'
+cd pforge-mcp && npx vitest run tests/brain-hallmark.test.mjs tests/brain-capability-negotiation.test.mjs --reporter=dot > /dev/null 2>&1 && echo ok
 ```
 
 ---
@@ -229,7 +229,7 @@ cd pforge-mcp && npx vitest run tests/brain-hallmark.test.mjs tests/brain-capabi
 
 **Validation Gate**:
 ```bash
-cd pforge-mcp && npx vitest run tests/brain-dlq.test.mjs --reporter=dot 2>&1 | tail -3 | grep -q 'passed'
+cd pforge-mcp && npx vitest run tests/brain-dlq.test.mjs --reporter=dot > /dev/null 2>&1 && echo ok
 ```
 
 ---
@@ -246,7 +246,7 @@ cd pforge-mcp && npx vitest run tests/brain-dlq.test.mjs --reporter=dot 2>&1 | t
 
 **Validation Gate**:
 ```bash
-cd pforge-mcp && npx vitest run tests/anvil-adoption.test.mjs --reporter=dot 2>&1 | tail -3 | grep -q 'passed'
+cd pforge-mcp && npx vitest run tests/anvil-adoption.test.mjs --reporter=dot > /dev/null 2>&1 && echo ok
 ```
 
 ---
@@ -268,7 +268,7 @@ cd pforge-mcp && npx vitest run tests/anvil-adoption.test.mjs --reporter=dot 2>&
 
 **Validation Gate**:
 ```bash
-cd pforge-mcp && npx vitest run tests/pipelines.test.mjs --reporter=dot 2>&1 | tail -3 | grep -q 'passed' && grep -q 'anvil' ../pforge.ps1 && grep -q 'anvil' ../pforge.sh && echo ok
+cd pforge-mcp && npx vitest run tests/pipelines.test.mjs --reporter=dot > /dev/null 2>&1 && echo ok && grep -q 'anvil' ../pforge.ps1 && grep -q 'anvil' ../pforge.sh && echo ok
 ```
 
 ---

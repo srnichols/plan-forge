@@ -182,7 +182,7 @@
 
 **Validation Gate**:
 ```bash
-cd pforge-sdk && npx vitest run tests/chunker.test.mjs --reporter=dot 2>&1 | tail -3 | grep -q 'passed'
+cd pforge-sdk && npx vitest run tests/chunker.test.mjs --reporter=dot > /dev/null 2>&1 && echo ok
 ```
 
 ---
@@ -200,7 +200,7 @@ cd pforge-sdk && npx vitest run tests/chunker.test.mjs --reporter=dot 2>&1 | tai
 
 **Validation Gate**:
 ```bash
-cd pforge-sdk && npx vitest run tests/chunker-pureJs.test.mjs --reporter=dot 2>&1 | tail -3 | grep -q 'passed'
+cd pforge-sdk && npx vitest run tests/chunker-pureJs.test.mjs --reporter=dot > /dev/null 2>&1 && echo ok
 ```
 
 ---
@@ -217,7 +217,7 @@ cd pforge-sdk && npx vitest run tests/chunker-pureJs.test.mjs --reporter=dot 2>&
 
 **Validation Gate**:
 ```bash
-cd pforge-mcp && npx vitest run tests/lattice-chunker-treesitter.test.mjs --reporter=dot 2>&1 | tail -3 | grep -Eq 'passed|skipped'
+cd pforge-mcp && npx vitest run tests/lattice-chunker-treesitter.test.mjs --reporter=dot > /dev/null 2>&1 && echo ok
 ```
 
 ---
@@ -234,7 +234,7 @@ cd pforge-mcp && npx vitest run tests/lattice-chunker-treesitter.test.mjs --repo
 
 **Validation Gate**:
 ```bash
-cd pforge-mcp && npx vitest run tests/lattice-index.test.mjs --reporter=dot 2>&1 | tail -3 | grep -q 'passed'
+cd pforge-mcp && npx vitest run tests/lattice-index.test.mjs --reporter=dot > /dev/null 2>&1 && echo ok
 ```
 
 ---
@@ -252,7 +252,7 @@ cd pforge-mcp && npx vitest run tests/lattice-index.test.mjs --reporter=dot 2>&1
 
 **Validation Gate**:
 ```bash
-cd pforge-mcp && npx vitest run tests/lattice-query.test.mjs tests/lattice-callers-callees.test.mjs --reporter=dot 2>&1 | tail -3 | grep -q 'passed'
+cd pforge-mcp && npx vitest run tests/lattice-query.test.mjs tests/lattice-callers-callees.test.mjs --reporter=dot > /dev/null 2>&1 && echo ok
 ```
 
 ---
@@ -269,7 +269,7 @@ cd pforge-mcp && npx vitest run tests/lattice-query.test.mjs tests/lattice-calle
 
 **Validation Gate**:
 ```bash
-cd pforge-mcp && npx vitest run tests/lattice-blast.test.mjs --reporter=dot 2>&1 | tail -3 | grep -q 'passed'
+cd pforge-mcp && npx vitest run tests/lattice-blast.test.mjs --reporter=dot > /dev/null 2>&1 && echo ok
 ```
 
 ---
@@ -290,7 +290,7 @@ cd pforge-mcp && npx vitest run tests/lattice-blast.test.mjs --reporter=dot 2>&1
 
 **Validation Gate**:
 ```bash
-cd pforge-mcp && npx vitest run tests/lattice-mcp-handlers.test.mjs --reporter=dot 2>&1 | tail -3 | grep -q 'passed' && grep -q 'lattice' ../pforge.ps1 && grep -q 'lattice' ../pforge.sh && echo ok
+cd pforge-mcp && npx vitest run tests/lattice-mcp-handlers.test.mjs --reporter=dot > /dev/null 2>&1 && echo ok && grep -q 'lattice' ../pforge.ps1 && grep -q 'lattice' ../pforge.sh && echo ok
 ```
 
 ---
@@ -309,7 +309,7 @@ cd pforge-mcp && npx vitest run tests/lattice-mcp-handlers.test.mjs --reporter=d
 
 **Validation Gate**:
 ```bash
-cd pforge-mcp && npx vitest run tests/hotspot-lattice-augment.test.mjs tests/regression-guard-blast.test.mjs --reporter=dot 2>&1 | tail -3 | grep -q 'passed'
+cd pforge-mcp && npx vitest run tests/hotspot-lattice-augment.test.mjs tests/regression-guard-blast.test.mjs --reporter=dot > /dev/null 2>&1 && echo ok
 ```
 
 ---
@@ -329,7 +329,7 @@ cd pforge-mcp && npx vitest run tests/hotspot-lattice-augment.test.mjs tests/reg
 
 **Validation Gate**:
 ```bash
-cd pforge-mcp && npx vitest run tests/dashboard-anvil-lattice.test.mjs --reporter=dot 2>&1 | tail -3 | grep -q 'passed'
+cd pforge-mcp && npx vitest run tests/dashboard-anvil-lattice.test.mjs --reporter=dot > /dev/null 2>&1 && echo ok
 ```
 
 ---

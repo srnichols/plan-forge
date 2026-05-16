@@ -5,6 +5,35 @@ Format follows [Keep a Changelog](https://keepachangelog.com/).
 
 ---
 
+## [2.99.0] — 2026-05-16 — forge_sync_memories (Roadmap C3)
+
+> **One-liner**: New `forge_sync_memories` MCP tool + `pforge sync-memories` CLI generates `.github/copilot-memory-hints.md` from forge decisions — trajectory notes, auto-skills, and brain L2 entries — so Copilot Memory auto-discovers project context without requiring OpenBrain configuration.
+
+#### Added — Roadmap C3: `forge_sync_memories`
+- `pforge-mcp/sync-memories.mjs` — core module with soft-sync pipeline:
+  - `collectTrajectories(projectRoot, opts)` — reads all `.forge/trajectories/<plan>/<slice>.md` files, sorted newest-first with `since`/`limit` filters.
+  - `collectAutoSkills(projectRoot, opts)` — reads `.forge/skills-auto/*.md` records, sorted by `reuseCount` DESC.
+  - `collectBrainDecisions(projectRoot, opts)` — walks `.forge/brain/**/*.json`, extracts `content` / `value.content` / `value` string fields.
+  - `renderMemoryHints(data)` — builds structured Markdown with sections: Architecture Decisions, Conventions & Patterns, Lessons Learned. Empty-state message when no data.
+  - `syncMemories(opts)` — entry point; supports `--dry-run`, `--force`, `--limit`, `--since`, `--output`.
+  - `parseAutoSkillFrontmatter(text)` — self-contained frontmatter parser (no dependency on `memory.mjs`).
+  - Error class: `SyncMemoriesError`.
+- 27 tests in `pforge-mcp/tests/sync-memories.test.mjs` — all passing.
+- `forge_sync_memories` MCP tool wired into `server.mjs` (tool definition, handler, `MCP_ONLY_TOOLS` entry).
+- `pforge sync-memories` CLI command wired into `pforge.ps1` and `pforge.sh` with full flag parsing and help text.
+
+**Key behaviours:**
+- Reads all three forge decision stores locally — no OpenBrain API calls required (soft-sync approach).
+- Outputs to `.github/copilot-memory-hints.md` by default; Copilot Memory auto-discovers this path.
+- Skips write when content is unchanged (SHA-256 comparison); `--force` bypasses.
+- `--dry-run` returns `dryRunContent` without writing.
+- `--limit N` caps entries per section (default: 10).
+- `--since <iso>` filters all sources by modification/creation date.
+- `--output <path>` overrides the output path (relative to project root).
+- Returns `{ ok, outputPath, hintsCount, sections: { trajectories, autoSkills, decisions }, changed, message }`.
+
+---
+
 ## [2.98.0] — 2026-05-19 — Phase GITHUB-E: pforge sync-spaces
 
 > **One-liner**: New `pforge sync-spaces` command pushes the active plan, all instruction files, the tool catalog, and the project profile into a GitHub Copilot Space, enabling Copilot to answer questions about your project's current state directly from the Space knowledge base.

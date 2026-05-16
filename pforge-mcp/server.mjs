@@ -137,6 +137,8 @@ import { withAuth } from "./auth/middleware.mjs";
 import { latticeIndex, latticeStat, latticeQuery, latticeCallers, latticeBlast } from "./lattice.mjs";
 // Roadmap C2 — forge_export_plan: convert loose plans to hardened Plan Forge format
 import { exportPlan, exportPlanFromFile } from "./export-plan.mjs";
+// Roadmap C3 — forge_sync_memories: generate .github/copilot-memory-hints.md from forge decisions
+import { syncMemories } from "./sync-memories.mjs";
 import express from "express";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -1696,6 +1698,23 @@ const TOOLS = [
         path: { type: "string", description: "Project directory (default: current)" },
       },
       required: ["input"],
+    },
+  },
+  {
+    // Roadmap C3 — forge_sync_memories
+    name: "forge_sync_memories",
+    description: "Generate .github/copilot-memory-hints.md from forge decisions (trajectory notes, auto-skills, brain L2 entries). Copilot Memory auto-discovers this file as a project knowledge source. Soft-sync approach — no API calls required. USE FOR: populate Copilot Memory with project decisions, regenerate memory hints after plan runs, export trajectory notes, sync brain decisions to Copilot. DO NOT USE FOR: uploading to Copilot Spaces (use forge_sync_spaces), reading individual trajectories.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        dryRun:  { type: "boolean", description: "Return rendered Markdown without writing the file (default: false)" },
+        force:   { type: "boolean", description: "Re-write even if content is unchanged (default: false)" },
+        limit:   { type: "number",  description: "Max entries per section — trajectories, auto-skills, decisions (default: 10)" },
+        since:   { type: "string",  description: "ISO 8601 date/datetime string: only include hints newer than this" },
+        output:  { type: "string",  description: "Override output path (default: .github/copilot-memory-hints.md, relative to project root)" },
+        path:    { type: "string",  description: "Project directory (default: current)" },
+      },
+      required: [],
     },
   },
   {
@@ -5611,6 +5630,27 @@ server.setRequestHandler(CallToolRequestSchema, _wrapWithToolSpan(async (request
     }
   }
 
+  // ─── forge_sync_memories — generate .github/copilot-memory-hints.md (Roadmap C3) ────────
+  if (name === "forge_sync_memories") {
+    const t0 = Date.now();
+    try {
+      const cwd = args.path ? resolve(args.path) : findProjectRoot(PROJECT_DIR);
+      const result = syncMemories({
+        projectRoot: cwd,
+        dryRun:  args.dryRun  ?? false,
+        force:   args.force   ?? false,
+        limit:   args.limit   ?? 10,
+        since:   args.since,
+        output:  args.output,
+      });
+      emitToolTelemetry("forge_sync_memories", args, result, Date.now() - t0, result.ok ? "OK" : "ERROR", cwd);
+      return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
+    } catch (err) {
+      emitToolTelemetry("forge_sync_memories", args, { error: err.message }, Date.now() - t0, "ERROR", findProjectRoot(PROJECT_DIR));
+      return { content: [{ type: "text", text: `Tool error: ${err.message}` }], isError: true };
+    }
+  }
+
 
   if (name === "forge_testbed_happypath") {
     const t0 = Date.now();
@@ -7872,6 +7912,8 @@ export function createExpressApp() {
     "forge_crucible_status",
     // Roadmap C2 — forge_export_plan is MCP-native (no CLI shell equivalent).
     "forge_export_plan",
+    // Roadmap C3 — forge_sync_memories is MCP-native (CLI also available via pforge sync-memories).
+    "forge_sync_memories",
   ]);
   app.post("/api/tool/:name", async (req, res) => {
     try {

@@ -16,6 +16,8 @@ import { resolve, basename, dirname } from "node:path";
 import { randomUUID } from "node:crypto";
 import { tmpdir } from "node:os";
 import { startSpan, endSpan, addEvent, Severity } from "./telemetry.mjs";
+// Phase-ANVIL Slice 4 — DLQ fallback for L3 boundary writes
+import { anvilDlqAppend as _anvilDlqAppend } from "./anvil.mjs";
 
 // ─── Key Validation ──────────────────────────────────────────────────────────
 
@@ -1202,4 +1204,40 @@ export function describeKey(key) {
   }
 
   return { layout: parsed, examples };
+}
+
+// ─── Phase-ANVIL Slice 4: L3 Boundary with DLQ Fallback ─────────────────────
+
+/**
+ * Wrap an L3 write with Slag-heap DLQ fallback.
+ *
+ * Attempts `writeFn()`. On throw, the record is appended to the Anvil DLQ
+ * via `deps.dlqAppend` (or `anvilDlqAppend` by default), then the original
+ * error is re-thrown so the caller still sees the failure.
+ *
+ * Both outcomes are guaranteed:
+ *   1. The error propagates back to the caller.
+ *   2. The record lands on the DLQ for later re-drive.
+ * DLQ append failure is non-fatal — it never swallows the original error.
+ *
+ * @param {Function} writeFn — async or sync function that performs the L3 write
+ * @param {object} [record] — DLQ record fields (toolName, inputs, key, etc.)
+ * @param {{ dlqAppend?: Function, cwd?: string }} [deps]
+ * @returns {Promise<*>} — resolves with writeFn result on success, or throws on failure
+ */
+export async function withL3Boundary(writeFn, record = {}, deps = {}) {
+  try {
+    return await writeFn();
+  } catch (err) {
+    const dlqAppend = typeof deps.dlqAppend === "function" ? deps.dlqAppend : _anvilDlqAppend;
+    try {
+      dlqAppend(
+        { ...record, error: err?.message || String(err) },
+        { cwd: deps.cwd }
+      );
+    } catch {
+      // DLQ append failure is non-fatal — never swallow the original error
+    }
+    throw err;
+  }
 }

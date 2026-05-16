@@ -30,6 +30,8 @@ import { isOpenBrainConfigured, buildMemorySearchBlock, buildMemoryCaptureBlock,
 import { enforceCrucibleId, CrucibleEnforcementError } from "./crucible-enforce.mjs";
 // Phase FORGE-SHOP-07 Slice 07.2 — brain facade for unified recall
 import { recall as brainRecall, loadReviewerConfig, invokeReviewer } from "./brain.mjs";
+// Phase-ANVIL Slice 4 — DLQ boot-time drain
+import { anvilDlqDrain as _anvilDlqDrain } from "./anvil.mjs";
 // Phase TEMPER-01 Slice 01.1 — re-export tempering state reader so the
 // watcher-snapshot contract mirrors readCrucibleState exactly.
 import {
@@ -3924,7 +3926,25 @@ export async function runPlan(planPath, options = {}) {
     _inspectGithubStack = _inspectGithubStackDefault,
     _dispatchSlice = _dispatchSliceDefault,
     _pollPullRequest = _pollPullRequestDefault,
+    // Phase-ANVIL Slice 4: injectable DLQ drain for testing
+    _anvilDlqDrain: anvilDlqDrain = _anvilDlqDrain,
   } = options;
+
+  // Phase-ANVIL Slice 4 — DLQ boot-time drain (5-second budget, best-effort).
+  // Runs before any slice work so stale L3-deferred records can be recovered.
+  // Does NOT block the run: errors are silently swallowed.
+  try {
+    const DRAIN_BUDGET_MS = 5000;
+    const drainResult = await Promise.race([
+      Promise.resolve(anvilDlqDrain({}, { cwd })),
+      new Promise((resolve) => setTimeout(() => resolve({ drained: 0, timedOut: true }), DRAIN_BUDGET_MS)),
+    ]);
+    if (drainResult && typeof drainResult.drained === "number" && drainResult.drained > 0) {
+      console.info(`[orchestrator] DLQ boot drain: removed ${drainResult.drained} stale record(s).`);
+    }
+  } catch {
+    // Boot-time drain is best-effort — never block the plan run
+  }
 
   // Mutual exclusion: --resume-from and --only-slices cannot both be active
   if (resumeFrom !== null && onlySlices !== null && onlySlices.length > 0) {

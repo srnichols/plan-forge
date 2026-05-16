@@ -502,12 +502,59 @@ export function anvilDlqList(opts = {}, deps = {}) {
  *
  * Unlike `anvilClear`, a full drain (no opts) is intentional and permitted.
  *
+ * **Callback form** (Phase-ANVIL Slice 4):
+ * When the first argument is an async function, the drain iterates every
+ * DLQ record oldest-first and calls `callback(record)`. A record is deleted
+ * only when the callback returns `{ ok: true }`. Records whose callback
+ * returns `{ ok: false }` (or throws) remain on the heap.
+ *
+ * The callback form returns a Promise of `{ drained: number, remaining: number }`.
+ *
+ * **Opts form** (backward-compatible, synchronous):
+ * When the first argument is an opts object `{ id?, tool? }`, the function
+ * behaves as before and returns `{ drained: number }` synchronously.
+ *
+ * @overload
+ * @param {(rec: object) => Promise<{ ok: boolean }>} callback
+ * @param {{ cwd?: string }} [deps]
+ * @returns {Promise<{ drained: number, remaining: number }>}
+ *
+ * @overload
  * @param {{ id?: string, tool?: string }} [opts]
  * @param {{ cwd?: string }} [deps]
  * @returns {{ drained: number }}
  */
-export function anvilDlqDrain(opts = {}, deps = {}) {
-  const { id, tool } = opts;
+export function anvilDlqDrain(callbackOrOpts = {}, deps = {}) {
+  // ── Callback-based async drain ──────────────────────────────────────────────
+  if (typeof callbackOrOpts === "function") {
+    const callback = callbackOrOpts;
+    const dir = dlqDir(deps);
+    if (!existsSync(dir)) return Promise.resolve({ drained: 0, remaining: 0 });
+
+    return (async () => {
+      const { items } = anvilDlqList({}, deps);
+      let drained = 0;
+      let remaining = 0;
+      for (const rec of items) {
+        let result;
+        try {
+          result = await callback(rec);
+        } catch {
+          result = { ok: false };
+        }
+        if (result && result.ok === true) {
+          try { rmSync(dlqEntryPath(rec.id, deps), { force: true }); } catch { /* skip */ }
+          drained++;
+        } else {
+          remaining++;
+        }
+      }
+      return { drained, remaining };
+    })();
+  }
+
+  // ── Legacy opts-based synchronous drain ─────────────────────────────────────
+  const { id, tool } = callbackOrOpts;
   const dir = dlqDir(deps);
   if (!existsSync(dir)) return { drained: 0 };
 

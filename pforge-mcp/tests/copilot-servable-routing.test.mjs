@@ -15,6 +15,7 @@ import { describe, it, expect, afterEach, beforeEach } from "vitest";
 import {
   probeQuorumModelAvailability,
   setGhCopilotProbe,
+  setSecretsLoader,
   detectClientHost,
   describeBillingSurface,
 } from "../orchestrator.mjs";
@@ -29,10 +30,12 @@ describe("#103: Copilot-servable model routing in probeQuorumModelAvailability",
     savedXaiKey = process.env.XAI_API_KEY;
     delete process.env.OPENAI_API_KEY;
     delete process.env.XAI_API_KEY;
+    setSecretsLoader(() => null); // Suppress .forge/secrets.json fallback in CI / dev envs
   });
 
   afterEach(() => {
     setGhCopilotProbe(null);
+    setSecretsLoader(null);
     if (savedOpenAiKey !== undefined) process.env.OPENAI_API_KEY = savedOpenAiKey;
     else delete process.env.OPENAI_API_KEY;
     if (savedXaiKey !== undefined) process.env.XAI_API_KEY = savedXaiKey;

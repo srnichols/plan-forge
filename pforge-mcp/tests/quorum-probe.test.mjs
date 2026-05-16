@@ -4,6 +4,7 @@ import {
   probeQuorumModelAvailability,
   filterQuorumModels,
   setGhCopilotProbe,
+  setSecretsLoader,
 } from "../orchestrator.mjs";
 
 // ─── resolveRequiredCli ─────────────────────────────────────────────────
@@ -44,11 +45,16 @@ describe("probeQuorumModelAvailability", () => {
 
   it("grok model unavailable when XAI_API_KEY is not set", () => {
     delete process.env.XAI_API_KEY;
-    const result = probeQuorumModelAvailability("grok-3-mini");
-    expect(result.available).toBe(false);
-    expect(result.via).toBe("api");
-    expect(result.reason).toMatch(/XAI_API_KEY/);
-    expect(result.install).toMatch(/XAI_API_KEY/);
+    setSecretsLoader(() => null); // Suppress .forge/secrets.json fallback
+    try {
+      const result = probeQuorumModelAvailability("grok-3-mini");
+      expect(result.available).toBe(false);
+      expect(result.via).toBe("api");
+      expect(result.reason).toMatch(/XAI_API_KEY/);
+      expect(result.install).toMatch(/XAI_API_KEY/);
+    } finally {
+      setSecretsLoader(null);
+    }
   });
 
   // #103/#104: gpt-* prefers gh-copilot CLI by default. Direct API only

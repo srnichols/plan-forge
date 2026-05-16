@@ -1,6 +1,7 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import { mkdirSync, rmSync, writeFileSync, existsSync, readFileSync, readdirSync } from "node:fs";
 import { resolve, join } from "node:path";
+import { fileURLToPath } from "node:url";
 import { tmpdir } from "node:os";
 import { randomUUID } from "node:crypto";
 
@@ -419,7 +420,9 @@ describe("testbed-happypath — integration dry-run", () => {
 // ─── CLI Parity ──────────────────────────────────────────────────────
 
 describe("testbed-happypath — CLI parity", () => {
-  const repoRoot = resolve(process.cwd(), "..");
+  // Resolve repo root relative to this test file rather than process.cwd() so
+  // the test works regardless of the invoker's working directory.
+  const repoRoot = resolve(fileURLToPath(import.meta.url), "..", "..", "..");
 
   it("mcpToCli maps forge_testbed_happypath to testbed-happypath", async () => {
     const { mcpToCli } = await import("../../scripts/audit-cli-parity.mjs");

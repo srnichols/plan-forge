@@ -5,7 +5,7 @@ Format follows [Keep a Changelog](https://keepachangelog.com/).
 
 ---
 
-## [Unreleased]
+## [Unreleased] — Phase Anvil (2.95.0-dev)
 
 #### Added — hallmark provenance contract (`pforge-sdk`)
 - **`pforge-sdk/src/hallmark.mjs`** — New sub-path export (`pforge-sdk/hallmark`) providing a lightweight, dependency-free provenance contract: `HALLMARK_SCHEMA_VERSION` constant (`"hallmark/v1"`), `validateProvenance(record)` (pure validator, no throws), `buildProvenance(options)` (fills `schemaVersion` + `capturedAt` automatically), and `mergeProvenance(existingMetadata, provenance)` (non-mutating attach under the `"provenance"` key).

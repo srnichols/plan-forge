@@ -931,6 +931,257 @@ export function forget(key, opts = {}, deps = {}) {
   return { ok: true, removed: allRemoved };
 }
 
+// ─── Phase-ANVIL Slice 3: Hallmark Writer ────────────────────────────────────
+
+const HALLMARK_ID_PATTERN = /^[a-zA-Z0-9][a-zA-Z0-9._-]*$/;
+
+/**
+ * Typed error for invalid hallmark IDs.
+ */
+export class HallmarkError extends Error {
+  constructor(id, reason) {
+    super(`Invalid hallmark id "${id}": ${reason}`);
+    this.name = "HallmarkError";
+    this.id = id;
+    this.reason = reason;
+  }
+}
+
+/**
+ * Validate a hallmark ID. Rejects path traversal and non-alphanumeric patterns.
+ * @param {string} id
+ * @throws {HallmarkError}
+ */
+export function validateHallmarkId(id) {
+  if (!id || typeof id !== "string") {
+    throw new HallmarkError(String(id), "id must be a non-empty string");
+  }
+  if (id.includes("..")) {
+    throw new HallmarkError(id, "path traversal ('..') is forbidden");
+  }
+  if (!HALLMARK_ID_PATTERN.test(id)) {
+    throw new HallmarkError(id, "id must start with alphanumeric and contain only [a-zA-Z0-9._-]");
+  }
+}
+
+/**
+ * Write a hallmark record to `.forge/hallmarks/<id>.json`. Idempotent — last
+ * write wins. The hallmark records a slice milestone, achievement, or marker.
+ *
+ * @param {string} id — stable identifier for the hallmark
+ * @param {any} payload — arbitrary JSON-serialisable value
+ * @param {{ source?: string, tags?: string[] }} [opts]
+ * @param {{ cwd?: string, now?: () => string }} [deps]
+ * @returns {{ ok: boolean, ref?: string, error?: string }}
+ */
+export function writeHallmark(id, payload, opts = {}, deps = {}) {
+  validateHallmarkId(id);
+  if (payload === undefined) {
+    throw new HallmarkError(id, "payload must not be undefined");
+  }
+  const cwd = deps.cwd || process.cwd();
+  const hallmarksDir = resolve(cwd, ".forge", "hallmarks");
+  try {
+    mkdirSync(hallmarksDir, { recursive: true });
+    const filePath = resolve(hallmarksDir, `${id}.json`);
+    if (!filePath.startsWith(hallmarksDir)) {
+      throw new HallmarkError(id, "path confinement violation");
+    }
+    const record = {
+      id,
+      payload,
+      writtenAt: typeof deps.now === "function" ? deps.now() : new Date().toISOString(),
+    };
+    if (opts.source) record.source = opts.source;
+    if (opts.tags) record.tags = opts.tags;
+    const tmpPath = filePath + ".tmp." + randomUUID().slice(0, 8);
+    writeFileSync(tmpPath, JSON.stringify(record, null, 2));
+    renameSync(tmpPath, filePath);
+    return { ok: true, ref: filePath };
+  } catch (err) {
+    if (err instanceof HallmarkError) throw err;
+    return { ok: false, error: err.message };
+  }
+}
+
+/**
+ * Read a hallmark by ID from `.forge/hallmarks/<id>.json`.
+ * Returns the stored record, or `null` if absent.
+ *
+ * @param {string} id
+ * @param {{ cwd?: string }} [deps]
+ * @returns {{ id, payload, writtenAt, source?, tags? } | null}
+ */
+export function readHallmark(id, deps = {}) {
+  validateHallmarkId(id);
+  const cwd = deps.cwd || process.cwd();
+  const hallmarksDir = resolve(cwd, ".forge", "hallmarks");
+  const filePath = resolve(hallmarksDir, `${id}.json`);
+  if (!filePath.startsWith(hallmarksDir)) return null;
+  if (!existsSync(filePath)) return null;
+  try {
+    return JSON.parse(readFileSync(filePath, "utf-8"));
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * List all hallmarks in `.forge/hallmarks/`, sorted by `writtenAt` ascending.
+ * Returns an empty array when the directory is absent or unreadable.
+ *
+ * @param {{ sort?: boolean }} [opts] — set `sort: false` to skip chronological sort
+ * @param {{ cwd?: string }} [deps]
+ * @returns {Array<{ id, payload, writtenAt, source?, tags? }>}
+ */
+export function listHallmarks(opts = {}, deps = {}) {
+  const cwd = deps.cwd || process.cwd();
+  const hallmarksDir = resolve(cwd, ".forge", "hallmarks");
+  if (!existsSync(hallmarksDir)) return [];
+  try {
+    const entries = readdirSync(hallmarksDir, { withFileTypes: true });
+    const hallmarks = [];
+    for (const entry of entries) {
+      if (!entry.isFile() || !entry.name.endsWith(".json")) continue;
+      const filePath = resolve(hallmarksDir, entry.name);
+      if (!filePath.startsWith(hallmarksDir)) continue;
+      try {
+        const record = JSON.parse(readFileSync(filePath, "utf-8"));
+        hallmarks.push(record);
+      } catch { /* skip malformed files */ }
+    }
+    if (opts.sort !== false) {
+      hallmarks.sort((a, b) => (a.writtenAt || "").localeCompare(b.writtenAt || ""));
+    }
+    return hallmarks;
+  } catch {
+    return [];
+  }
+}
+
+// ─── Phase-ANVIL Slice 3: Capability-Negotiating L3 Client ───────────────────
+
+/**
+ * L3 capability identifiers. Each key maps to a feature the L3 backend may
+ * or may not support depending on the injected deps.
+ */
+export const L3_CAPABILITY = Object.freeze({
+  SEARCH: "search",
+  WRITE: "write",
+  DELETE: "delete",
+  TAGS: "tags",
+  TTL: "ttl",
+});
+
+/**
+ * Negotiate which L3 capabilities are available given the current deps.
+ *
+ * Resolution rules:
+ * - `SEARCH`: `deps.searchMemory` is a function
+ * - `WRITE`, `DELETE`, `TAGS`, `TTL`: `deps.appendForgeJsonl` is a function
+ *   (write capability implies tagging, TTL, and delete support via the queue)
+ *
+ * @param {object} [deps]
+ * @returns {{ has: (cap: string) => boolean, list: () => string[], canSearch: boolean, canWrite: boolean, canDelete: boolean, canTags: boolean, canTTL: boolean }}
+ */
+export function negotiateL3Capabilities(deps = {}) {
+  const capabilities = new Set();
+  if (typeof deps.searchMemory === "function") capabilities.add(L3_CAPABILITY.SEARCH);
+  if (typeof deps.appendForgeJsonl === "function") {
+    capabilities.add(L3_CAPABILITY.WRITE);
+    capabilities.add(L3_CAPABILITY.DELETE);
+    capabilities.add(L3_CAPABILITY.TAGS);
+    capabilities.add(L3_CAPABILITY.TTL);
+  }
+  return {
+    has: (cap) => capabilities.has(cap),
+    list: () => [...capabilities],
+    canSearch: capabilities.has(L3_CAPABILITY.SEARCH),
+    canWrite: capabilities.has(L3_CAPABILITY.WRITE),
+    canDelete: capabilities.has(L3_CAPABILITY.DELETE),
+    canTags: capabilities.has(L3_CAPABILITY.TAGS),
+    canTTL: capabilities.has(L3_CAPABILITY.TTL),
+  };
+}
+
+/**
+ * Create a capability-aware L3 client. The client probes `deps` at creation
+ * time and routes each operation only when the required capability is present.
+ * All operations are safe no-ops when the capability is absent.
+ *
+ * @param {object} [deps] — DI bundle: { searchMemory?, appendForgeJsonl?, cwd? }
+ * @returns {{
+ *   capabilities: ReturnType<typeof negotiateL3Capabilities>,
+ *   recall: (key: string) => Promise<any|null>,
+ *   remember: (key: string, value: any, opts?: object) => { ok: boolean, queued?: boolean, skipped?: boolean, reason?: string },
+ *   forget: (key: string) => { ok: boolean, queued?: boolean, skipped?: boolean, reason?: string },
+ * }}
+ */
+export function createL3Client(deps = {}) {
+  const caps = negotiateL3Capabilities(deps);
+
+  return {
+    capabilities: caps,
+
+    async recall(key) {
+      if (!caps.canSearch) return null;
+      try {
+        return await deps.searchMemory(key);
+      } catch {
+        return null;
+      }
+    },
+
+    remember(key, value, opts = {}) {
+      if (!caps.canWrite) {
+        return { ok: false, skipped: true, reason: "write capability unavailable" };
+      }
+      const record = {
+        content: typeof value === "string" ? value : JSON.stringify(value),
+        type: opts.type || "decision",
+        source: opts.source || "brain.l3",
+        key,
+        _status: "pending",
+        _attempts: 0,
+        _enqueuedAt: new Date().toISOString(),
+        _nextAttemptAt: new Date().toISOString(),
+        _v: 1,
+      };
+      if (caps.canTags && opts.tags) record.tags = opts.tags;
+      if (caps.canTTL && opts.ttlMs) record.expiresAt = new Date(Date.now() + opts.ttlMs).toISOString();
+      try {
+        deps.appendForgeJsonl("openbrain-queue.jsonl", record, deps.cwd);
+        return { ok: true, queued: true };
+      } catch (err) {
+        return { ok: false, error: err.message };
+      }
+    },
+
+    forget(key) {
+      if (!caps.canDelete) {
+        return { ok: false, skipped: true, reason: "delete capability unavailable" };
+      }
+      const record = {
+        _action: "delete",
+        key,
+        _status: "pending",
+        _attempts: 0,
+        _enqueuedAt: new Date().toISOString(),
+        _nextAttemptAt: new Date().toISOString(),
+        _v: 1,
+      };
+      try {
+        deps.appendForgeJsonl("openbrain-queue.jsonl", record, deps.cwd);
+        return { ok: true, queued: true };
+      } catch (err) {
+        return { ok: false, error: err.message };
+      }
+    },
+  };
+}
+
+// ─── Public API ──────────────────────────────────────────────────────────────
+
 /**
  * Introspection helper — describe what a key resolves to.
  *

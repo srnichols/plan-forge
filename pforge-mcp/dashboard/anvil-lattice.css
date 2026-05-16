@@ -1,0 +1,153 @@
+/**
+ * Plan Forge — Anvil & Lattice tab styles (Phase-LATTICE Slice 9).
+ *
+ * Consumed by both the dashboard tab (index.html) and the standalone
+ * anvil-lattice.html reference page. Uses CSS custom properties that
+ * match the dashboard design tokens so it degrades gracefully in isolation.
+ */
+
+/* ─── Card ───────────────────────────────────────────────────────────────── */
+
+.al-card {
+  background: var(--bg-2, #1f2937);
+  border: 1px solid var(--line, #2b3648);
+  border-radius: var(--radius-sm, 6px);
+  padding: 1rem;
+  margin-bottom: 1rem;
+}
+
+.al-card__title {
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: var(--fg-1, #cbd5e1);
+  margin: 0 0 0.75rem;
+}
+
+.al-card__subtitle {
+  font-size: 0.75rem;
+  color: var(--fg-2, #94a3b8);
+  margin: 0.75rem 0 0.5rem;
+  font-weight: 500;
+}
+
+.al-card__empty {
+  font-size: 0.75rem;
+  color: var(--fg-3, #64748b);
+  margin: 0;
+}
+
+.al-card__empty--inline {
+  color: var(--fg-3, #64748b);
+  text-align: center;
+  padding: 0.5rem;
+}
+
+.al-card__meta {
+  display: flex;
+  gap: 0.25rem;
+  flex-wrap: wrap;
+  align-items: center;
+  font-size: 0.75rem;
+  color: var(--fg-2, #94a3b8);
+  margin-top: 0.5rem;
+}
+
+.al-meta__sep { color: var(--fg-3, #64748b); }
+
+/* ─── Stats grid ─────────────────────────────────────────────────────────── */
+
+.al-card__stats {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(100px, 1fr));
+  gap: 0.75rem;
+  margin-bottom: 0.75rem;
+}
+
+.al-stat {
+  background: var(--bg-1, #111827);
+  border-radius: var(--radius-sm, 6px);
+  padding: 0.5rem 0.75rem;
+}
+
+.al-stat__label {
+  display: block;
+  font-size: 0.6875rem;
+  color: var(--fg-3, #64748b);
+  margin-bottom: 0.25rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.al-stat__value {
+  display: block;
+  font-size: 1.125rem;
+  font-weight: 700;
+  color: var(--fg-0, #f1f5f9);
+  font-variant-numeric: tabular-nums;
+}
+
+.al-stat__value--warn { color: var(--warning, #f59e0b); }
+
+/* ─── Tool stats table ───────────────────────────────────────────────────── */
+
+.al-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.75rem;
+}
+
+.al-table__th {
+  text-align: left;
+  color: var(--fg-3, #64748b);
+  font-weight: 500;
+  padding: 0.25rem 0.5rem;
+  border-bottom: 1px solid var(--line, #2b3648);
+}
+
+.al-table__th--num,
+.al-table__cell--num { text-align: right; }
+
+.al-table__row:hover { background: var(--bg-3, #374151); }
+
+.al-table__cell {
+  padding: 0.25rem 0.5rem;
+  color: var(--fg-1, #cbd5e1);
+  border-bottom: 1px solid var(--line, #2b3648);
+}
+
+/* ─── Language distribution bars ─────────────────────────────────────────── */
+
+.al-lang-bars {
+  display: flex;
+  flex-direction: column;
+  gap: 0.375rem;
+}
+
+.al-lang-bar {
+  display: grid;
+  grid-template-columns: 3.5rem 1fr 3rem;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.6875rem;
+}
+
+.al-lang-bar__label { color: var(--fg-2, #94a3b8); }
+
+.al-lang-bar__track {
+  height: 6px;
+  background: var(--bg-1, #111827);
+  border-radius: 9999px;
+  overflow: hidden;
+}
+
+.al-lang-bar__fill {
+  height: 100%;
+  background: var(--accent, #60a5fa);
+  border-radius: 9999px;
+  min-width: 2px;
+}
+
+.al-lang-bar__count {
+  color: var(--fg-3, #64748b);
+  text-align: right;
+}

@@ -1,0 +1,96 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Anvil &amp; Lattice — Plan Forge</title>
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><text y='28' font-size='28'>🔨</text></svg>">
+  <link rel="stylesheet" href="anvil-lattice.css">
+  <style>
+    /* Minimal design-token fallbacks for standalone rendering */
+    :root {
+      --bg-0: #0b1220;
+      --bg-1: #111827;
+      --bg-2: #1f2937;
+      --bg-3: #374151;
+      --line: #2b3648;
+      --fg-0: #f1f5f9;
+      --fg-1: #cbd5e1;
+      --fg-2: #94a3b8;
+      --fg-3: #64748b;
+      --accent: #60a5fa;
+      --warning: #f59e0b;
+      --radius-sm: 6px;
+    }
+    *, *::before, *::after { box-sizing: border-box; }
+    body {
+      margin: 0;
+      padding: 1.5rem;
+      background: var(--bg-0);
+      color: var(--fg-0);
+      font-family: ui-sans-serif, system-ui, -apple-system, sans-serif;
+      font-size: 14px;
+      line-height: 1.5;
+    }
+    .al-page-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 1.25rem;
+    }
+    .al-page-title {
+      font-size: 1.125rem;
+      font-weight: 700;
+      color: var(--accent, #60a5fa);
+      margin: 0;
+    }
+    .al-page-subtitle {
+      font-size: 0.75rem;
+      color: var(--fg-3, #64748b);
+      margin: 0.25rem 0 0;
+    }
+    .al-refresh-btn {
+      font-size: 0.75rem;
+      padding: 0.25rem 0.75rem;
+      background: var(--bg-3, #374151);
+      color: var(--fg-1, #cbd5e1);
+      border: 1px solid var(--line, #2b3648);
+      border-radius: var(--radius-sm, 6px);
+      cursor: pointer;
+    }
+    .al-refresh-btn:hover { background: var(--bg-2, #1f2937); }
+    .al-error {
+      color: #f87171;
+      font-size: 0.75rem;
+      margin-bottom: 0.75rem;
+    }
+    .al-panels {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(340px, 1fr));
+      gap: 1rem;
+    }
+  </style>
+</head>
+<body>
+  <div class="al-page-header">
+    <div>
+      <h1 class="al-page-title">🔨 Anvil &amp; Lattice</h1>
+      <p class="al-page-subtitle">Memoization cache stats and code-graph index summary.</p>
+    </div>
+    <button class="al-refresh-btn" onclick="window.loadAnvilLattice?.()">Refresh</button>
+  </div>
+
+  <div id="al-error" class="al-error hidden" role="alert"></div>
+
+  <div class="al-panels">
+    <div id="al-anvil-card" data-card="anvil"></div>
+    <div id="al-lattice-card" data-card="lattice"></div>
+  </div>
+
+  <script src="anvil-lattice.mjs" type="module"></script>
+  <script>
+    // Auto-load on page ready. The module is deferred, so we wait for load.
+    window.addEventListener('load', () => window.loadAnvilLattice?.());
+  </script>
+</body>
+</html>

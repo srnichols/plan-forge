@@ -4,7 +4,7 @@
 >
 > **Full version**: [planforge.software/manual/how-it-works.html](https://planforge.software/manual/how-it-works.html)
 >
-> **Last Updated**: 2026-04-10
+> **Last Updated**: 2026-05-16
 
 ---
 
@@ -30,8 +30,14 @@ Together they form a closed-loop system: describe a feature from any device → 
 │  Plan Forge (methodology + guardrails)                          │
 │    └── 7-step pipeline, instruction files, validation gates      │
 │                                                                  │
+│  Memory subsystem (v2.95.0)                                     │
+│    ├── Anvil  ─── Δ-only write-through cache (L2 write path)    │
+│    ├── Lattice ── Structural code index (callers, blast radius)  │
+│    └── Hallmark ─ Provenance envelope on every L3 write          │
+│                                                                  │
 │  OpenBrain (memory + context)                                   │
 │    └── Semantic search over prior decisions, cross-session       │
+│        Supports Hallmark provenance (v0.7.0+)                   │
 └─────────────────────────────────────────────────────────────────┘
 ```
 
@@ -39,7 +45,7 @@ Together they form a closed-loop system: describe a feature from any device → 
 
 | Integration | How |
 |-------------|-----|
-| Plan Forge → OpenBrain | Skills run `search_thoughts` before acting, `capture_thought` after completing |
+| Plan Forge → OpenBrain | Skills run `search_thoughts` before acting, `capture_thought` after completing — wrapped in Hallmark envelope |
 | Plan Forge → OpenClaw | Orchestrator sends webhook notifications on slice completion/failure |
 | Plan Forge Audit Loop | `forge_tempering_drain` iterates scan → triage → fix; findings route to bug registry or Crucible |
 | OpenBrain → Copilot Memory | `forge_sync_memories` generates hints Copilot Memory auto-discovers |
@@ -51,7 +57,19 @@ Together they form a closed-loop system: describe a feature from any device → 
 |-------|-------|-------------|---------|
 | **Copilot Memory** | Repo | 28 days (auto-expire) | Auto-discovered conventions |
 | **Plan Forge** | Per-run | Permanent (`.forge/runs/`) | Slice results, gate outcomes, cost |
-| **OpenBrain** | Cross-project | Permanent (pgvector) | Architecture decisions, lessons learned |
+| **Anvil cache** | Per-repo | Until source changes | Δ-only content hashes (`.forge/anvil/`) |
+| **Lattice index** | Per-repo | Until rebuild | Code structure — callers, blast radius (`.forge/lattice/`) |
+| **OpenBrain** | Cross-project | Permanent (pgvector) | Architecture decisions, lessons learned — provenance-stamped (v0.7.0+) |
+
+### Memory subsystem integration (v2.95.0)
+
+| Integration | How |
+|-------------|-----|
+| Plan Forge → Anvil | Every `captureMemory()` call routes through Anvil for Δ-dedup before writing L2 |
+| Plan Forge → Lattice | Code-emitting tools notify Lattice; `forge_run_plan` queries `forge_lattice_blast` per slice |
+| Plan Forge → Hallmark | Every L3 write via `captureMemory()` is wrapped in a Hallmark provenance envelope |
+| Hallmark → OpenBrain | Capability negotiation via `/health` before first write; graceful fallback to bare thoughts |
+| Anvil DLQ → Slag-Heap | Rejected L3 writes land in `.forge/anvil/dlq/` for replay via `forge_anvil_dlq_drain` |
 
 ## Configuration
 

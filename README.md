@@ -19,7 +19,7 @@
 **[Website](https://planforge.software/)** · **[Shop Tour](https://planforge.software/shop-tour.html)** · **[Manual](https://planforge.software/manual/)** · **[Documentation](https://planforge.software/docs.html)** · **[FAQ](https://planforge.software/faq.html)** · **[Extensions](https://planforge.software/extensions.html)** · **[Spec Kit Interop](https://planforge.software/speckit-interop.html)**
 
 ```
-69 MCP Tools · 45+ CLI Commands · 14 Agents · 15 Skills · 9 Presets · 7 Adapters · 3285 Tests · v2.80.0
+84 MCP Tools · 45+ CLI Commands · 14 Agents · 15 Skills · 9 Presets · 7 Adapters · 3285 Tests · v2.95.0
 ```
 
 ---
@@ -33,7 +33,7 @@ Plan Forge is one shop with four stations. Each one handles a distinct part of t
 | 🪨 **Smelt** | *Smelt the idea* | Rough idea → Crucible interview → tempered plan with scope contract and validation gates. | [Crucible](docs/manual/crucible.html) · [Tempering design notes](docs/plans/tempering-design-notes.md) |
 | 🔨 **Forge** | *Forge the code* | Hardened plan → DAG-scheduled execution → quorum consensus → shipped code. The classic 7-step pipeline. | [Your First Plan](docs/manual/your-first-plan.html) · [AI Plan Hardening Runbook](docs/plans/AI-Plan-Hardening-Runbook.md) |
 | 🛡️ **Guard** | *Guard the build* | Shipped code → drift scoring, secret scan, dep watch, regression guard, incident capture, remote alerts. | [What is LiveGuard?](docs/manual/what-is-liveguard.html) · [LiveGuard Tools](docs/manual/liveguard-tools.html) |
-| 🧠 **Learn** | *Learn from every run* | Findings → OpenBrain memory → Health DNA → self-tuned escalation, cost, and quorum thresholds. | [Memory Architecture](docs/manual/memory-architecture.html) · [Bug Registry + Testbed](docs/capabilities.md) |
+| 🧠 **Learn** | *Learn from every run* | Findings → **Hallmark provenance**-stamped OpenBrain memory → **capability-negotiated OpenBrain writes** → Health DNA → self-tuned escalation, cost, and quorum thresholds. **Anvil** deduplicates high-frequency writes; **Lattice** indexes code structure for blast-radius scoring. | [Memory Architecture](docs/manual/memory-architecture.html) · [Bug Registry + Testbed](docs/capabilities.md) |
 
 And the **control room** that ties them together: the [live dashboard](docs/manual/dashboard.html) at `localhost:3100/dashboard` with 25 tabs, session replay, WebSocket event hub, cost reports, OTLP traces, and a remote bridge for Telegram / Slack / Discord / OpenClaw.
 
@@ -53,7 +53,7 @@ And the **control room** that ties them together: the [live dashboard](docs/manu
 
 ## Verified Results
 
-**Verified**: 38+ phases self-built, 3285 self-tests, 69 MCP tools, zero manual rollbacks. See [docs/capabilities.md](docs/capabilities.md).
+**Verified**: 38+ phases self-built, 3285 self-tests, 84 MCP tools, zero manual rollbacks. See [docs/capabilities.md](docs/capabilities.md).
 
 ### A/B Test Results (April 2026)
 
@@ -132,9 +132,9 @@ GitHub Copilot (primary) · Claude Code · Cursor · Codex CLI · Gemini CLI · 
 
 ### MCP Server (69 Tools)
 
-`pforge-mcp/server.mjs` exposes core, LiveGuard, Watcher, Crucible, Tempering, Bug Registry, Testbed, and Forge-Master operations. Live dashboard at `localhost:3100/dashboard`. REST API for external integrations.
+`pforge-mcp/server.mjs` exposes core, LiveGuard, Watcher, Crucible, Tempering, Bug Registry, Testbed, Forge-Master, Hallmark, Anvil, and Lattice operations. Live dashboard at `localhost:3100/dashboard`. REST API for external integrations.
 
-Key tools: `forge_run_plan` · `forge_liveguard_run` · `forge_analyze` · `forge_master_ask` · `forge_capabilities` · `forge_smith` · `forge_cost_report`
+Key tools: `forge_run_plan` · `forge_liveguard_run` · `forge_analyze` · `forge_master_ask` · `forge_capabilities` · `forge_smith` · `forge_cost_report` · `forge_hallmark_show` · `forge_anvil_stat` · `forge_lattice_query`
 
 ### Optional Capabilities
 
@@ -144,7 +144,7 @@ Key tools: `forge_run_plan` · `forge_liveguard_run` · `forge_analyze` · `forg
 | **Audit Loop** | `pforge audit-loop` or `.forge.json#audit` | Closed-loop drain: content-audit scanner → triage → fix. Default off; opt-in via `audit.mode: "auto"` or `"always"`. |
 | **Auto-escalation** | Built-in | Model fails → auto-promotes. Chain reorders by success rate. |
 | **Cost tracking** | Built-in | Per-slice tokens, 23-model pricing, `--estimate` with historical calibration. |
-| **OpenBrain memory** | Configure MCP endpoint | 13 tools auto-capture findings. 4 prompts search before acting. |
+| **OpenBrain memory** | Configure MCP endpoint | 28 tools auto-capture findings with **Hallmark provenance** stamps via **capability-negotiated OpenBrain writes**. **Anvil** deduplicates Δ-identical writes. 4 prompts search before acting. |
 | **Extensions** | `pforge ext add <name>` | HIPAA, SaaS multi-tenancy, etc. |
 | **CI validation** | `srnichols/plan-forge-validate@v1` | GitHub Action for plan quality gates. |
 | **Notifications** | Configure in `.forge.json` | Slack, Discord, Telegram, webhooks via bridge. |

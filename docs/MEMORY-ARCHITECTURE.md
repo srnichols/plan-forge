@@ -4,6 +4,8 @@
 > **Since**: v2.35  
 > **Audience**: contributors adding new MCP tools, skills, or storage surfaces
 
+> **v2.95.0 Memory Upgrade** — This document reflects the v2.95.0 release, which introduced three major additions to the memory subsystem: **Hallmark provenance envelopes** (every L3 write is now tagged with source, hash, and capability negotiation result), **Anvil Δ-only memoization** (a write-through cache layer between tools and L1/L2), and the **Lattice code index** (a parallel structural index for call-graph and cross-reference queries). See the plan files for design rationale: [Phase-HALLMARK-CONTRACT](plans/Phase-HALLMARK-CONTRACT-PLAN.md) · [Phase-ANVIL](plans/Phase-ANVIL-PLAN.md) · [Phase-LATTICE](plans/Phase-LATTICE-PLAN.md) · [Phase-PROVENANCE](plans/Phase-PROVENANCE-PLAN.md). The Hallmark schema is defined in [`pforge-sdk/schemas/hallmark-provenance.v1.json`](../pforge-sdk/schemas/hallmark-provenance.v1.json).
+
 ---
 
 ## TL;DR
@@ -15,6 +17,15 @@ Plan Forge has **three tiers of memory**, organised by substrate, not by feature
 | **L1** | Hub (volatile) | process RAM (`activeHub.history`) | server process | event replay | free |
 | **L2** | Structured (left brain) | files on disk (`.forge/`, `.github/`, `docs/plans/`) | repo | exact lookup | free |
 | **L3** | Semantic (right brain) | OpenBrain (Postgres + pgvector) | cross-project, forever | fuzzy / associative | network + embed |
+
+**v2.95.0 additions** layered on top of this hierarchy:
+
+| Component | Where it sits | What it does |
+|-----------|--------------|-------------|
+| **Anvil** | Between tools and L1/L2 | Δ-only write-through cache — skips identical writes, merges delta |
+| **Lattice** | Parallel to L2/L3 | Structural code index — callers, callees, blast radius, cross-references |
+| **Hallmark** | Envelope on every L3 write | Provenance stamp — source file, content hash, capability negotiation result |
+| **Slag-Heap DLQ** | Below L3 | Dead-letter queue for failed or rejected L3 writes |
 
 Every MCP tool **must** write to L2. Tools whose output has cross-project or cross-time value **should** also write to L3. L1 is emitted automatically by any tool that publishes to the hub.
 
@@ -83,6 +94,9 @@ That split is clean: files vs embeddings. But once you trace the data path of a 
 | `.forge/secret-scan-cache.json` | secret scan | JSON | Scan cache |
 | `.forge/incidents/*.json` | incident capture | JSON per incident | Incident ledger |
 | `.forge/openbrain-queue.jsonl` | `captureMemory()` | JSONL | **Bridge** — flush buffer for L3 when OpenBrain is unreachable |
+| `.forge/anvil/` | Anvil cache | JSON per hash | **Δ-only cache** — content-addressed write-through cache |
+| `.forge/anvil/dlq/` | Slag-Heap DLQ | JSON per entry | **Dead-letter queue** — rejected or failed L3 writes |
+| `.forge/lattice/` | Lattice indexer | JSON per symbol | **Code index** — callers, callees, blast radius, cross-refs |
 | `.github/instructions/*.md` | repo | markdown | Agent guardrails |
 | `.github/agents/*.md` | repo | markdown | Agent personas |
 | `.github/hooks/**` | repo | scripts + JSON | Lifecycle hooks |
@@ -171,48 +185,204 @@ When `captureMemory()` is called but OpenBrain is unreachable, thoughts are writ
 
 ## The dual-write pattern
 
-Every MCP tool should follow this shape:
+Every MCP tool should follow this shape (v2.95.0: Anvil sits in the write path):
 
 ```
-┌──────────────────────────────────────────┐
-│  Tool executes                           │
-│    │                                     │
-│    ├─► L1 event (if publishes to hub)    │
-│    │                                     │
-│    ├─► L2 file write  (always)           │
-│    │                                     │
-│    └─► L3 thought capture                │
-│        (when OpenBrain configured AND    │
-│         output has semantic value)       │
-└──────────────────────────────────────────┘
+┌─────────────────────────────────────────────────────┐
+│  Tool executes                                      │
+│    │                                                │
+│    ├─► L1 event (if publishes to hub)               │
+│    │                                                │
+│    ├─► Anvil cache (Δ-only) ──► L2 file write       │
+│    │   (skips if content unchanged)  (always)       │
+│    │                                                │
+│    ├─► Lattice index update                         │
+│    │   (if tool emits code symbols)                 │
+│    │                                                │
+│    └─► Hallmark envelope ──► L3 thought capture     │
+│        (provenance stamp)   (OpenBrain configured + │
+│                              semantic value)        │
+└─────────────────────────────────────────────────────┘
 ```
 
 And when reading before acting:
 
 ```
-┌──────────────────────────────────────────┐
-│  Tool prepares                           │
-│    │                                     │
-│    ├─◄ L2 recent state                   │
-│    │   (last N entries, exact lookups)   │
-│    │                                     │
-│    └─◄ L3 semantic search                │
-│        (prior art, cross-project)        │
-└──────────────────────────────────────────┘
+┌────────────────────────────────────────────────────┐
+│  Tool prepares                                     │
+│    │                                               │
+│    ├─◄ Anvil cache hit (Δ check, avoids L2 read)   │
+│    │   → falls through to L2 on cache miss         │
+│    │                                               │
+│    ├─◄ Lattice query (callers, blast, cross-ref)   │
+│    │   (if tool needs structural code context)     │
+│    │                                               │
+│    └─◄ L3 semantic search                          │
+│        (prior art, cross-project)                  │
+└────────────────────────────────────────────────────┘
 ```
+
+---
+
+## Hallmark Provenance Envelope
+
+Every L3 write in v2.95.0 is wrapped in a **Hallmark provenance envelope** before it reaches OpenBrain. The envelope adds:
+
+| Field | Value | Purpose |
+|-------|-------|---------|
+| `source_file` | path of the originating file or tool | traceability back to L2 |
+| `source_file_hash` | SHA-256 of the source content at capture time | detect stale thoughts when source changes |
+| `code_hash` | SHA-256 of the primary code symbol (if applicable) | detect drift for code-indexed thoughts |
+| `capability_negotiated` | `true` / `false` | whether OpenBrain advertised provenance support |
+| `schema_version` | `"hallmark-provenance.v1"` | forward compatibility |
+
+**Schema**: [`pforge-sdk/schemas/hallmark-provenance.v1.json`](../pforge-sdk/schemas/hallmark-provenance.v1.json)
+
+Thoughts without a Hallmark envelope are still accepted by OpenBrain (backward compat) but are flagged as `legacy` in the database. Use `forge_hallmark_verify` to audit coverage.
+
+**New tools**: `forge_hallmark_show` · `forge_hallmark_verify`
+
+---
+
+## Anvil Δ-only Memoization
+
+Anvil is a **write-through cache** that sits between MCP tools and the L1/L2 storage surfaces. Its core job: skip writes when content hasn't changed.
+
+### Problem it solves
+
+Many tool chains call `captureMemory()` on every invocation, even when the output is identical to the previous run (e.g., `forge_health_trend` on a quiet codebase). Before Anvil, every call produced a new JSONL line, a new hub event, and a new OpenBrain HTTP round-trip. On a busy codebase this generates thousands of near-identical records per day.
+
+### How it works
+
+```
+Tool output ──► Anvil ──► hash(output)
+                   │
+                   ├── hit?  → skip write, return cached result
+                   │
+                   └── miss? → write L2 + L1 + (optionally) L3, store hash
+```
+
+Anvil uses a **content-addressed hash** (SHA-256 of the serialized output). The cache is stored at `.forge/anvil/` (gitignored). The DLQ for failed writes lives at `.forge/anvil/dlq/`.
+
+### Cache semantics
+
+- **Write-through**: a cache miss always writes to L2/L3 (Anvil never holds the only copy).
+- **Δ-only**: only the hash is stored, not the full content — cache hits are cheap.
+- **No eviction TTL**: entries age out when the source file hash changes (Hallmark integration).
+- **DLQ**: writes that fail (e.g., OpenBrain unreachable) land in `.forge/anvil/dlq/` for replay.
+
+**New tools**: `forge_anvil_stat` · `forge_anvil_clear` · `forge_anvil_rebuild` · `forge_anvil_get` · `forge_anvil_invalidate` · `forge_anvil_warm` · `forge_anvil_dlq_list` · `forge_anvil_dlq_drain`
+
+**Gitignore entries (in `templates/.gitignore`)**: `.forge/anvil/` · `.forge/anvil/dlq/`
+
+---
+
+## Lattice Code Index
+
+Lattice is a **parallel structural index** alongside L2 and L3. Where L3 answers "have we seen this problem before?", Lattice answers "what calls this function?" and "what would break if I change this symbol?".
+
+### What Lattice indexes
+
+| Index type | Example query | Use case |
+|------------|--------------|---------|
+| **Callers** | "who calls `captureMemory`?" | Impact analysis before refactor |
+| **Callees** | "what does `forge_run_plan` call?" | Dependency tracing |
+| **Blast radius** | "if I change `ProviderRegistry`, what breaks?" | Pre-slice risk scoring |
+| **Cross-references** | "where is `HallmarkEnvelope` referenced?" | Documentation cross-linking |
+| **Symbol stat** | "how many callers does `buildRunSummaryThought` have?" | Complexity metric |
+
+### Storage
+
+Lattice data lives at `.forge/lattice/` — a set of JSON files (one per indexed symbol or module). Like Anvil, it is gitignored and rebuilt on demand.
+
+### Integration with plans
+
+The plan runner calls `forge_lattice_blast` before each slice to compute a blast-radius score for the files in the slice's Scope Contract. A high blast score (> 0.7) triggers an automatic warning in the slice gate output.
+
+**New tools**: `forge_lattice_index` · `forge_lattice_query` · `forge_lattice_callers` · `forge_lattice_blast` · `forge_lattice_stat`
+
+**Gitignore entry**: `.forge/lattice/`
+
+---
+
+## Capability Negotiation with OpenBrain
+
+Before writing a provenance-stamped thought, Plan Forge checks whether the connected OpenBrain instance supports the Hallmark envelope schema. This is **capability negotiation**.
+
+### Flow
+
+```mermaid
+sequenceDiagram
+    participant PF as Plan Forge (captureMemory)
+    participant OB as OpenBrain (/health)
+    participant L2 as L2 (openbrain-queue.jsonl)
+    participant L3 as OpenBrain (thoughts table)
+
+    PF->>OB: GET /health
+    OB-->>PF: { status: "ok", capabilities: { provenance: true } }
+
+    alt provenance supported
+        PF->>PF: wrap thought in HallmarkEnvelope
+        PF->>L3: POST /thoughts (with provenance fields)
+        L3-->>PF: { id: "...", accepted: true }
+    else provenance not supported (legacy OpenBrain)
+        PF->>PF: omit HallmarkEnvelope (legacy mode)
+        PF->>L3: POST /thoughts (bare thought)
+        L3-->>PF: { id: "...", accepted: true }
+    else OpenBrain unreachable
+        PF->>L2: append to openbrain-queue.jsonl
+        note over L2: flushed when OB is reachable again
+    end
+```
+
+### Rules
+
+1. **Capability check is cached** for the server process lifetime. Plan Forge does not ping `/health` on every write.
+2. **Fallback is always L2**. If OpenBrain is unreachable or returns an error, the thought is queued in `.forge/openbrain-queue.jsonl`.
+3. **Legacy mode is transparent**. A bare thought (no Hallmark envelope) is accepted by both old and new OpenBrain. Tools do not need to know which mode is active.
+4. **Capability flag in config**: if `openbrain.disableProvenance: true` in `.forge.json`, Plan Forge skips capability negotiation and always writes bare thoughts.
+
+---
+
+## Slag-Heap DLQ
+
+The **Slag-Heap** is the dead-letter queue (DLQ) for failed or rejected L3 writes. It is separate from the `openbrain-queue.jsonl` (which handles network-unreachable writes) — the Slag-Heap catches writes that OpenBrain explicitly rejects (e.g., schema validation failures, quota exceeded, provenance hash mismatch).
+
+### Storage
+
+`.forge/anvil/dlq/` — one JSON file per failed write. Each file contains:
+
+| Field | Content |
+|-------|---------|
+| `thought` | the original thought payload |
+| `envelope` | the Hallmark envelope (if present) |
+| `error` | the rejection reason from OpenBrain |
+| `timestamp` | ISO-8601 capture time |
+| `retryCount` | number of replay attempts |
+
+### Replay
+
+`forge_anvil_dlq_drain` replays DLQ entries against OpenBrain. Entries that fail after 3 retries are archived to `.forge/anvil/dlq/archived/` and removed from the active queue.
+
+### Monitoring
+
+`forge_anvil_dlq_list` returns the current DLQ depth and the most recent error reasons. A non-zero DLQ depth appears as a warning in `pforge smith` output.
 
 ---
 
 ## Tool audit — where we are today
 
-As of v2.62, dual-write coverage across 67 MCP tools:
+As of v2.95.0, dual-write coverage across 84 MCP tools:
 
 | Bucket | Count | Status |
 |--------|-------|--------|
 | L2-only | 26 | default; fine for transient state |
 | L2 + L3 | 10 | LiveGuard tools + `forge_run_plan` |
+| L2 + L3 + Hallmark | 10 | all L3 writers now stamp provenance |
 | L1 + L2 | many | any tool emitting hub events |
 | L1 + L2 + L3 | subset of the 10 above | full stack |
+| **Anvil-managed** | all L2 writers | Δ-only cache in write path |
+| **Lattice-indexed** | code-emitting tools | structural index on every symbol write |
 
 ### Candidates for L3 promotion
 
@@ -237,9 +407,12 @@ Left-only today, would benefit from right-brain writes:
 2. **L3 is the ceiling.** Opt-in, gracefully degrades to L2-only when OpenBrain is absent. No tool ever hard-requires OpenBrain.
 3. **L1 is ephemeral.** Never rely on L1 for correctness — it's replay-buffer-grade, not storage-grade.
 4. **Queue before cross-tier writes.** L3 writes go through `captureMemory()` which hits `openbrain-queue.jsonl` first (L2) — so L3 failure never blocks a tool.
-5. **Read pattern mirrors write pattern.** Recent-state? L2. Associative? L3. Live feed? L1.
-6. **One schema per surface.** L2 files have documented shapes. L1 events are in `EVENTS.md`. L3 thought metadata is keyed by `{ project, phase, tool, tags }`.
-7. **New tool checklist.** Before merging a new MCP tool, confirm: (a) its L2 artifact is defined; (b) its L1 event is in `EVENTS.md` if it publishes; (c) its L3 value is explicitly declared — even if the answer is "none".
+5. **Read pattern mirrors write pattern.** Recent-state? L2 (via Anvil cache). Associative? L3. Structural? Lattice. Live feed? L1.
+6. **One schema per surface.** L2 files have documented shapes. L1 events are in `EVENTS.md`. L3 thought metadata is keyed by `{ project, phase, tool, tags }`. Hallmark envelope schema is in `hallmark-provenance.v1.json`.
+7. **New tool checklist.** Before merging a new MCP tool, confirm: (a) its L2 artifact is defined; (b) its L1 event is in `EVENTS.md` if it publishes; (c) its L3 value is explicitly declared — even if the answer is "none"; (d) if it writes L3, confirm it uses `captureMemory()` so Hallmark stamping is automatic; (e) if it emits code symbols, confirm it notifies the Lattice indexer.
+8. **Anvil is automatic.** Tools do not call Anvil directly — `captureMemory()` routes through Anvil. If you call the file system directly (bypassing `captureMemory()`), Anvil cannot deduplicate your writes.
+9. **Lattice is advisory.** Blast-radius scores from Lattice inform slice gates but never block a run. A missing Lattice index means the score is skipped, not that the run fails.
+10. **Capability negotiation is cached.** Check OpenBrain's `/health` once per server process start. Don't check on every write — it adds latency for every `captureMemory()` call.
 
 ---
 
@@ -261,9 +434,10 @@ It's not a literal equivalence — it's just that the same pressures (fast/small
 
 Three concrete items drop out of this architecture:
 
-1. **v2.35.1 (patch)** — wire `forge_watch` + `forge_watch_live` through `captureMemory()`. The only cross-project observer currently has no semantic memory.
-2. **v2.36 (minor)** — retrofit the medium-value L3 candidates (`forge_diagnose`, `forge_sweep`, `forge_run_skill`). Add an `l3Writes` field to each tool's declaration in `tools.json` so coverage is auditable.
-3. **v2.40+ (design)** — consider an L4: a shared OpenBrain tenant across an organisation, so lessons from project A surface to project B without any local OpenBrain. This is a deployment pattern, not new code.
+1. **v2.95.0 (released)** — Hallmark provenance, Anvil Δ-only memoization, Lattice code index, Slag-Heap DLQ, and capability negotiation with OpenBrain. 15 new MCP tools. See the Phase plans for full details.
+2. **v2.96 (planned)** — Wire `forge_watch` / `forge_watch_live` through `captureMemory()`. The only cross-project observer currently has no semantic memory. Lattice blast scoring for watcher anomalies.
+3. **v2.97+ (design)** — Retrofit the medium-value L3 candidates (`forge_diagnose`, `forge_sweep`, `forge_run_skill`). Add an `l3Writes` field to each tool's declaration in `tools.json` so coverage is auditable.
+4. **v3.0+ (design)** — Consider an L4: a shared OpenBrain tenant across an organisation, so lessons from project A surface to project B without any local OpenBrain. This is a deployment pattern, not new code.
 
 ---
 
@@ -273,4 +447,8 @@ Three concrete items drop out of this architecture:
 - [`pforge-mcp/server.mjs`](../pforge-mcp/server.mjs) — tool handlers. `captureMemory()` helper at top of file.
 - [`pforge-mcp/EVENTS.md`](../pforge-mcp/EVENTS.md) — L1 event schemas.
 - [`pforge-mcp/tools.json`](../pforge-mcp/tools.json) — tool manifest.
+- [`pforge-sdk/schemas/hallmark-provenance.v1.json`](../pforge-sdk/schemas/hallmark-provenance.v1.json) — Hallmark envelope schema.
 - [`docs/UNIFIED-SYSTEM-ARCHITECTURE.md`](UNIFIED-SYSTEM-ARCHITECTURE.md) — broader system context.
+- [`docs/plans/Phase-HALLMARK-CONTRACT-PLAN.md`](plans/Phase-HALLMARK-CONTRACT-PLAN.md) — Hallmark design rationale.
+- [`docs/plans/Phase-ANVIL-PLAN.md`](plans/Phase-ANVIL-PLAN.md) — Anvil design rationale.
+- [`docs/plans/Phase-LATTICE-PLAN.md`](plans/Phase-LATTICE-PLAN.md) — Lattice design rationale.

@@ -958,6 +958,269 @@ Without `--auto`, runs a manual one-shot drain (ignores `.forge.json#audit` conf
 
 ---
 
+## Memory Subsystem Commands (v2.95.0)
+
+Anvil, Hallmark, and Lattice operations. Requires MCP server running (`node pforge-mcp/server.mjs`).
+
+### `pforge anvil stat`
+
+Show Anvil cache statistics — hit rate, entry count, DLQ depth, and cache age.
+
+```powershell
+.\pforge.ps1 anvil stat
+```
+
+```bash
+./pforge.sh anvil stat
+```
+
+**Output:**
+```
+Anvil Cache Statistics:
+  Entries:    1,247
+  Hit rate:   83.4%  (last 24h)
+  Cache size: 2.1 MB
+  DLQ depth:  0
+  Oldest entry: 2026-05-10T14:22:00Z
+```
+
+---
+
+### `pforge anvil clear`
+
+Clear the Anvil cache. Forces all subsequent writes to go to L2/L3 (no deduplication until cache is rebuilt).
+
+```powershell
+.\pforge.ps1 anvil clear
+.\pforge.ps1 anvil clear --force   # Skip confirmation
+```
+
+```bash
+./pforge.sh anvil clear
+./pforge.sh anvil clear --force
+```
+
+---
+
+### `pforge anvil rebuild`
+
+Rebuild the Anvil cache from current L2 state. Use after a major refactor or when the cache is stale.
+
+```powershell
+.\pforge.ps1 anvil rebuild
+.\pforge.ps1 anvil rebuild --dry-run   # Preview what would be indexed
+```
+
+```bash
+./pforge.sh anvil rebuild
+./pforge.sh anvil rebuild --dry-run
+```
+
+---
+
+### `pforge anvil dlq list`
+
+List all entries in the Slag-Heap DLQ — failed or rejected L3 writes awaiting replay.
+
+```powershell
+.\pforge.ps1 anvil dlq list
+.\pforge.ps1 anvil dlq list --max 20
+```
+
+```bash
+./pforge.sh anvil dlq list
+./pforge.sh anvil dlq list --max 20
+```
+
+**Output:**
+```
+Slag-Heap DLQ (3 entries):
+  [2026-05-15T10:14:22Z]  forge_drift_report  →  quota_exceeded (retries: 1)
+  [2026-05-15T11:02:45Z]  forge_incident_capture  →  schema_mismatch (retries: 0)
+  [2026-05-16T03:17:09Z]  forge_run_plan  →  connection_timeout (retries: 2)
+```
+
+---
+
+### `pforge anvil dlq drain`
+
+Replay all DLQ entries against OpenBrain. Entries that fail after 3 retries are archived.
+
+```powershell
+.\pforge.ps1 anvil dlq drain
+.\pforge.ps1 anvil dlq drain --dry-run   # Preview without replaying
+```
+
+```bash
+./pforge.sh anvil dlq drain
+./pforge.sh anvil dlq drain --dry-run
+```
+
+---
+
+### `pforge hallmark show`
+
+Show the Hallmark provenance envelope for a specific thought by ID, or list recent Hallmark-stamped thoughts.
+
+```powershell
+.\pforge.ps1 hallmark show --id <thought-id>
+.\pforge.ps1 hallmark show --last 10
+```
+
+```bash
+./pforge.sh hallmark show --id <thought-id>
+./pforge.sh hallmark show --last 10
+```
+
+**Output (single thought):**
+```
+Hallmark Provenance Envelope
+  Thought ID:           abc-123
+  Source file:          pforge-mcp/server.mjs
+  Source file hash:     sha256:4a7c9f2...
+  Code hash:            sha256:b1e3d80...
+  Capability negotiated: true
+  Schema version:       hallmark-provenance.v1
+  Captured at:          2026-05-16T04:10:00Z
+```
+
+---
+
+### `pforge hallmark verify`
+
+Audit Hallmark provenance coverage — checks what percentage of recent L3 writes have valid provenance envelopes, and flags legacy (non-stamped) thoughts.
+
+```powershell
+.\pforge.ps1 hallmark verify
+.\pforge.ps1 hallmark verify --since "7 days ago"
+```
+
+```bash
+./pforge.sh hallmark verify
+./pforge.sh hallmark verify --since "7 days ago"
+```
+
+**Output:**
+```
+Hallmark Coverage Audit (last 7 days):
+  Total L3 writes:    342
+  Hallmark-stamped:   338  (98.8%)
+  Legacy (no stamp):    4   ← review these
+  DLQ entries:          2
+```
+
+---
+
+### `pforge lattice index`
+
+Build or update the Lattice structural code index for the current project.
+
+```powershell
+.\pforge.ps1 lattice index
+.\pforge.ps1 lattice index --path src/services   # Scope to a subdirectory
+.\pforge.ps1 lattice index --force               # Full rebuild (ignores incremental)
+```
+
+```bash
+./pforge.sh lattice index
+./pforge.sh lattice index --path src/services
+./pforge.sh lattice index --force
+```
+
+---
+
+### `pforge lattice query <symbol>`
+
+Query the Lattice index for a symbol — returns callers, callees, and cross-references.
+
+```powershell
+.\pforge.ps1 lattice query captureMemory
+.\pforge.ps1 lattice query forge_run_plan --depth 2
+```
+
+```bash
+./pforge.sh lattice query captureMemory
+./pforge.sh lattice query forge_run_plan --depth 2
+```
+
+**Output:**
+```
+Lattice Query: captureMemory
+  Callers (12):
+    forge_run_plan       (server.mjs:1042)
+    forge_drift_report   (server.mjs:2187)
+    ...
+  Callees (3):
+    buildRunSummaryThought
+    openbrain-queue flush
+    hallmarkEnvelope.wrap
+```
+
+---
+
+### `pforge lattice callers <symbol>`
+
+List all callers of a symbol — shorthand for `pforge lattice query --callers-only`.
+
+```powershell
+.\pforge.ps1 lattice callers buildRunSummaryThought
+```
+
+```bash
+./pforge.sh lattice callers buildRunSummaryThought
+```
+
+---
+
+### `pforge lattice blast <file-or-symbol>`
+
+Compute blast radius — what would be affected if this file or symbol changed? Returns a risk score (0.0–1.0) and an affected-file list.
+
+```powershell
+.\pforge.ps1 lattice blast pforge-mcp/memory.mjs
+.\pforge.ps1 lattice blast captureMemory --format json
+```
+
+```bash
+./pforge.sh lattice blast pforge-mcp/memory.mjs
+./pforge.sh lattice blast captureMemory
+```
+
+**Output:**
+```
+Blast Radius: pforge-mcp/memory.mjs
+  Risk score:  0.81  (HIGH)
+  Affected files (23):
+    pforge-mcp/server.mjs
+    pforge-mcp/orchestrator.mjs
+    ...
+```
+
+---
+
+### `pforge lattice stat`
+
+Show Lattice index statistics — symbol count, last indexed, coverage percentage.
+
+```powershell
+.\pforge.ps1 lattice stat
+```
+
+```bash
+./pforge.sh lattice stat
+```
+
+**Output:**
+```
+Lattice Index Statistics:
+  Symbols indexed:  4,821
+  Files indexed:      127
+  Last indexed:     2026-05-16T03:45:00Z
+  Coverage:         94.3%
+```
+
+---
+
 ## CLI vs Manual Workflow
 
 | Task | CLI | Manual |

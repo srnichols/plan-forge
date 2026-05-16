@@ -374,12 +374,33 @@ Plan Forge works with three distinct memory systems. Understanding the differenc
 | **Plan Forge Session Bridge** | Structured `/memories/repo/current-phase.md` + `lessons-learned.md` | Repository | You (via pipeline prompts) | Carrying Session 1 → 2 → 3 state through the hardening pipeline |
 | **OpenBrain** | Semantic vector memory via MCP `search_thoughts` / `capture_thought` | Global (workspace-agnostic) | OpenBrain MCP server | Auto-injecting relevant prior decisions before each slice begins |
 
+**v2.95.0 memory subsystem additions** — new MCP tools available in Copilot Chat:
+
+| Tool | Purpose |
+|------|---------|
+| `forge_hallmark_show` | Show Hallmark provenance envelope for a thought |
+| `forge_hallmark_verify` | Audit provenance coverage across recent L3 writes |
+| `forge_anvil_stat` | Anvil cache statistics — hit rate, entry count, DLQ depth |
+| `forge_anvil_clear` | Clear the Anvil Δ-only cache |
+| `forge_anvil_rebuild` | Rebuild the cache from current L2 state |
+| `forge_anvil_get` | Get a cached entry by content hash |
+| `forge_anvil_invalidate` | Invalidate a specific cache entry |
+| `forge_anvil_warm` | Pre-warm cache for a file or directory |
+| `forge_anvil_dlq_list` | List Slag-Heap DLQ entries (failed L3 writes) |
+| `forge_anvil_dlq_drain` | Replay DLQ entries against OpenBrain |
+| `forge_lattice_index` | Build/update the structural code index |
+| `forge_lattice_query` | Query callers, callees, cross-references for a symbol |
+| `forge_lattice_callers` | List all callers of a symbol |
+| `forge_lattice_blast` | Compute blast radius for a file or symbol |
+| `forge_lattice_stat` | Lattice index statistics — symbols, coverage, last indexed |
+
 **When to use each:**
 - Use **Copilot Memory** for free-form notes that don't fit the pipeline structure.
 - Use the **Plan Forge Session Bridge** files to hand off structured phase state between sessions — the pipeline prompts tell you exactly what to write.
 - Use **OpenBrain** when you want the agent to automatically surface relevant past decisions without any manual prompt — it hooks into `forge_run_plan` automatically.
-
-All three layers are complementary. A typical phase uses all three: Copilot Memory for quick notes, the session bridge files for structured handoffs, and OpenBrain for long-term pattern recall.
+- Use **`forge_anvil_stat`** when you suspect duplicate writes or want to check DLQ health.
+- Use **`forge_lattice_blast`** before a large refactor to understand impact before the first slice runs.
+- Use **`forge_hallmark_verify`** to confirm provenance coverage after connecting a new OpenBrain instance.
 
 ### Memory Scopes
 

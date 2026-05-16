@@ -5,6 +5,27 @@ Format follows [Keep a Changelog](https://keepachangelog.com/).
 
 ---
 
+## [2.95.1] — 2026-05-16 — Hotfix: scoreSliceComplexity recalibration
+
+> **One-liner**: Recalibrates the `scoreSliceComplexity` scoring formula so that medium-complexity slices (3 files in scope, 3 gate lines, 4–6 tasks) now score at or above the default quorum threshold of 5, making quorum auto-mode actually trigger on real-world plans. Addresses the v2.61.0 research finding that threshold 5 selected zero slices across all plans in the repo. No behavior change for simple or maximally-complex slices — both boundary tests still hold.
+
+#### Fixed
+- **`pforge-mcp/orchestrator.mjs` `scoreSliceComplexity`** — Recalibrated normalization denominators for all six continuous signals so that a medium-complexity slice (the kind that should attract quorum review) reaches the threshold:
+  - `scopeCount / 5 → / 3` — 3 files in scope saturates the signal (was 5)
+  - `depCount / 4 → / 3` — 3 cross-module dependencies saturates the signal (was 4)
+  - `securityHits / 3 → / 2` — 2 security-keyword hits saturates the signal (was 3)
+  - `dbHits / 3 → / 2` — 2 database-keyword hits saturates the signal (was 3)
+  - `gateLines / 5 → / 3` — 3-line validation gate saturates the signal (was 5)
+  - `taskCount / 10 → / 6` — 6 tasks saturates the signal (was 10)
+- **`pforge-mcp/tests/analyzer.test.mjs`** — Updated test description to reflect the new saturation point: "caps scopeWeight at 1 for 3+ files" (was "5+ files"). All 5272 tests pass.
+
+#### Notes
+- Before this fix, a representative real-plan slice (3 files, 1 dep, 3 gate lines, 4 tasks, no security/DB keywords) scored **3** — below the `power` preset threshold of 5. After recalibration it scores **5**, putting it exactly at the threshold. More complex slices score 6–9 as intended.
+- The `cost-service-real-plans.test.mjs` invariant test auto-adapts: it recomputes expected quorum count using the same recalibrated `scoreSliceComplexity`, so no hardcoded expected values needed updating.
+- Closes the backlog item from the v2.61.0 research report: "threshold 5 selects zero slices on real plans".
+
+---
+
 ## [2.95.0] — 2026-05-16 — Phase Lattice: code-graph indexing, Anvil caching, hallmark provenance
 
 > **One-liner**: Introduces the Lattice code-graph engine (semantic chunk index + BFS call-graph traversal), the Anvil memoization cache (content-hash-keyed, with DLQ recovery), and the Hallmark provenance SDK — five new CLI commands (`pforge lattice`, `pforge anvil`), ten new MCP tools, and a new `pforge-sdk/hallmark` sub-path export.

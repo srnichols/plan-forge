@@ -1037,6 +1037,7 @@ let _ghCopilotProbe = () => {
   }
 };
 let _ghCopilotCache = null;
+let _secretsLoader = null;
 
 /**
  * Inject a gh-copilot availability probe for testing. Pass `null` to restore
@@ -1222,6 +1223,7 @@ export { detectApiProvider };
  * @returns {string|null}
  */
 function loadSecretFromForge(key) {
+  if (_secretsLoader) return _secretsLoader(key);
   try {
     const secretsPath = resolve(process.cwd(), ".forge", "secrets.json");
     if (existsSync(secretsPath)) {
@@ -1231,6 +1233,12 @@ function loadSecretFromForge(key) {
   } catch { /* ignore parse errors */ }
   return null;
 }
+
+/**
+ * Override the secrets loader — for testing only.
+ * Pass null to restore the default file-based loader.
+ */
+export function setSecretsLoader(fn) { _secretsLoader = fn || null; }
 
 /**
  * Build the chat-completions `messages` array for an API worker call based
@@ -11253,12 +11261,12 @@ export function loadQuorumConfig(cwd, presetOverride = null) {
  * Score a slice's technical complexity on a 1-10 scale.
  *
  * Weighted signals:
- *   - File count in scope (20%)
- *   - Cross-module dependencies (20%)
- *   - Security-sensitive keywords (15%)
- *   - Database/migration keywords (15%)
- *   - Acceptance criteria / gate length (10%)
- *   - Task count (10%)
+ *   - File count in scope (20%) — saturates at 3 files
+ *   - Cross-module dependencies (20%) — saturates at 3 deps
+ *   - Security-sensitive keywords (15%) — saturates at 2 hits
+ *   - Database/migration keywords (15%) — saturates at 2 hits
+ *   - Acceptance criteria / gate length (10%) — saturates at 3 lines
+ *   - Task count (10%) — saturates at 6 tasks
  *   - Historical failure rate (10%)
  *
  * @param {object} slice - Parsed slice from plan
@@ -11268,32 +11276,40 @@ export function loadQuorumConfig(cwd, presetOverride = null) {
 export function scoreSliceComplexity(slice, cwd) {
   const signals = {};
 
-  // 1. File count in scope (0-1 normalized: 0 files=0, 5+=1)
+  // 1. File count in scope (0-1 normalized: 0 files=0, 3+=1)
+  // Recalibrated v2.95.1: denominator 5→3 so typical multi-file slices
+  // (2-3 files) now score proportionally rather than staying near-zero.
   const scopeCount = (slice.scope && slice.scope.length) || 0;
-  signals.scopeWeight = Math.min(scopeCount / 5, 1);
+  signals.scopeWeight = Math.min(scopeCount / 3, 1);
 
-  // 2. Cross-module dependencies (0-1: 0 deps=0, 4+=1)
+  // 2. Cross-module dependencies (0-1: 0 deps=0, 3+=1)
+  // Recalibrated v2.95.1: denominator 4→3.
   const depCount = (slice.depends && slice.depends.length) || 0;
-  signals.dependencyWeight = Math.min(depCount / 4, 1);
+  signals.dependencyWeight = Math.min(depCount / 3, 1);
 
   // 3. Security-sensitive keywords in tasks + title
+  // Recalibrated v2.95.1: denominator 3→2 (2 hits = max weight).
   const allText = [slice.title || "", ...(slice.tasks || []), slice.validationGate || ""].join(" ");
   const securityHits = (allText.match(SECURITY_KEYWORDS) || []).length;
-  signals.securityWeight = Math.min(securityHits / 3, 1);
+  signals.securityWeight = Math.min(securityHits / 2, 1);
 
   // 4. Database/migration keywords
+  // Recalibrated v2.95.1: denominator 3→2.
   const dbHits = (allText.match(DATABASE_KEYWORDS) || []).length;
-  signals.databaseWeight = Math.min(dbHits / 3, 1);
+  signals.databaseWeight = Math.min(dbHits / 2, 1);
 
   // 5. Validation gate length (lines of gate commands)
+  // Recalibrated v2.95.1: denominator 5→3 (3-line gate = max weight).
   const gateLines = slice.validationGate
     ? slice.validationGate.split("\n").filter((l) => l.trim().length > 0).length
     : 0;
-  signals.gateWeight = Math.min(gateLines / 5, 1);
+  signals.gateWeight = Math.min(gateLines / 3, 1);
 
-  // 6. Task count (0-1: 1 task=0.1, 10+=1)
+  // 6. Task count (0-1: 6+ tasks=1)
+  // Recalibrated v2.95.1: denominator 10→6 so medium-complexity slices
+  // (4-6 tasks) score proportionally rather than staying below 0.5.
   const taskCount = (slice.tasks && slice.tasks.length) || 0;
-  signals.taskWeight = Math.min(taskCount / 10, 1);
+  signals.taskWeight = Math.min(taskCount / 6, 1);
 
   // 7. Historical failure rate (0-1: scan past runs for similar slice titles)
   signals.historicalWeight = getHistoricalFailureRate(slice, cwd);

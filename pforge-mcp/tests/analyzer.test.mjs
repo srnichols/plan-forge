@@ -92,7 +92,7 @@ describe("scoreSliceComplexity", () => {
     expect(signals.databaseWeight).toBeGreaterThan(0);
   });
 
-  it("caps scopeWeight at 1 for 5+ files", () => {
+  it("caps scopeWeight at 1 for 3+ files", () => {
     const slice = {
       title: "T", tasks: [], scope: ["a","b","c","d","e","f","g"], depends: [], validationGate: null,
     };

@@ -65,10 +65,11 @@ foreach ($plan in $plans) {
     Write-Host "        log:  $log"
     Write-Host "----------------------------------------------------------------"
 
+    $importReason = "Hand-authored hardened plan from CocoIndex-inspired memory upgrade design session (May 2026)"
     if ($DryRun) {
-        & .\pforge.ps1 run-plan $plan.Path --estimate 2>&1 | Tee-Object -FilePath $log
+        & .\pforge.ps1 run-plan $plan.Path --estimate --manual-import --manual-import-source human --manual-import-reason $importReason 2>&1 | Tee-Object -FilePath $log
     } else {
-        & .\pforge.ps1 run-plan $plan.Path --foreground 2>&1 | Tee-Object -FilePath $log
+        & .\pforge.ps1 run-plan $plan.Path --foreground --manual-import --manual-import-source human --manual-import-reason $importReason 2>&1 | Tee-Object -FilePath $log
     }
     $exit = $LASTEXITCODE
     $sw.Stop()

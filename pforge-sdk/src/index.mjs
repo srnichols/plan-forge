@@ -4,3 +4,4 @@
 
 export * from './tools.mjs';
 export * from './hallmark.mjs';
+export * from './chunker.mjs';

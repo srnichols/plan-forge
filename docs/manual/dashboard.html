@@ -159,7 +159,7 @@ node pforge-mcp/server.mjs --dashboard-only</code></pre>
           </div>
         </div>
 
-        <p>Each button calls the corresponding REST endpoint (<code>/api/smith</code>, <code>/api/sweep</code>, etc.) and displays results inline.</p>
+        <p>Each button calls a forge MCP tool through the generic <code>/api/tool/:name</code> dispatcher (e.g. <code>POST /api/tool/forge_smith</code>, <code>POST /api/tool/forge_sweep</code>) and displays results inline.</p>
 
         <img src="../assets/dashboard/actions.png" alt="Dashboard Actions tab showing one-click buttons for Smith, Sweep, Analyze, Status, Validate, and Extensions" class="rounded-xl border border-slate-700/40 mb-6" loading="lazy" />
 

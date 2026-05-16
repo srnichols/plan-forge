@@ -67,9 +67,9 @@
         <div class="callout callout-info">
           <strong>analyze vs diagnose — which do I use?</strong><br />
           <code>pforge analyze</code> scores a plan's quality (traceability, coverage, gates — 0 to 100).<br />
-          <code>pforge diagnose</code> investigates a bug in code (root cause, fix recommendations).<br />
+          <code>forge_diagnose</code> (MCP tool) investigates a bug in code (root cause, fix recommendations).<br />
           One tells you if your blueprint is solid. The other finds out why the bridge collapsed.<br />
-          Use <strong>analyze</strong> after hardening a plan. Use <strong>diagnose</strong> when a slice fails.
+          Use <strong>analyze</strong> after hardening a plan. Use <strong>forge_diagnose</strong> from Copilot Chat when a slice fails.
         </div>
 
         <!-- ─── I'm trying to... use-case index ─── -->
@@ -99,7 +99,7 @@
             <tr><td>Co-pilot mode (you code, gates check)</td><td><code>pforge run-plan &lt;plan&gt; --assisted</code></td><td>You want to write the code yourself</td></tr>
 
             <tr><td colspan="3" class="bg-slate-900/40 text-xs font-bold text-slate-500 uppercase tracking-wider">Troubleshooting</td></tr>
-            <tr><td>Investigate a failing slice</td><td><a href="#diagnose"><code>pforge diagnose &lt;file&gt;</code></a></td><td>Slice failed and you don't know why</td></tr>
+            <tr><td>Investigate a failing slice</td><td><code>forge_diagnose({ file: "…" })</code> <span class="text-xs text-slate-500">(MCP tool)</span></td><td>Slice failed and you don't know why</td></tr>
             <tr><td>Run closed-loop drain</td><td><a href="#audit-loop"><code>pforge audit-loop</code></a></td><td>Mass content audit (opt-in feature)</td></tr>
             <tr><td>See chronological event history</td><td><a href="#timeline"><code>pforge timeline</code></a></td><td>Forensic / "what happened on Tuesday?"</td></tr>
 
@@ -374,26 +374,28 @@ DRIFT DETECTED — 1 forbidden file(s) touched.</code></pre>
           <p class="text-sm text-slate-500">Exit codes: 0 = pass (≥60), 1 = fail (&lt;60). Also available as: <code>forge_analyze</code> MCP tool.</p>
         </div>
 
-        <!-- ─── diagnose ─── -->
+        <!-- ─── forge_diagnose (MCP tool, no CLI wrapper) ─── -->
         <div class="cmd-ref" id="diagnose">
-          <div class="cmd-ref-title">pforge diagnose &lt;file&gt;</div>
-          <div class="cmd-ref-desc">Multi-model bug investigation — dispatches file analysis to multiple AI models independently, then synthesizes root cause analysis with fix recommendations.</div>
+          <div class="cmd-ref-title">forge_diagnose <span class="text-xs text-amber-400">(MCP tool — no CLI wrapper)</span></div>
+          <div class="cmd-ref-desc">Multi-model bug investigation — dispatches file analysis to multiple AI models independently, then synthesizes root cause analysis with fix recommendations. <strong>Invoke from Copilot Chat or any MCP client</strong>; there is no <code>pforge diagnose</code> CLI command.</div>
 
           <table>
-            <thead><tr><th>Flag</th><th>Type</th><th>Description</th></tr></thead>
+            <thead><tr><th>Parameter</th><th>Type</th><th>Description</th></tr></thead>
             <tbody>
-              <tr><td><code>--models</code></td><td>string</td><td>Comma-separated model override</td></tr>
+              <tr><td><code>file</code> <span class="text-xs text-amber-400">(required)</span></td><td>string</td><td>Path to the source file to investigate (e.g., <code>src/services/billing.ts</code>)</td></tr>
+              <tr><td><code>models</code></td><td>string</td><td>Comma-separated model override (default: quorum config models)</td></tr>
+              <tr><td><code>path</code></td><td>string</td><td>Project directory (default: current)</td></tr>
             </tbody>
           </table>
 
           <div class="cmd-block">
-            <div class="cmd-block-header"><span>Investigate a bug</span><button class="cmd-copy-btn">Copy</button></div>
-            <pre><code>.\pforge.ps1 diagnose src/services/billing.ts
-.\pforge.ps1 diagnose src/auth/token-validator.ts --models grok-3-mini,grok-4</code></pre>
+            <div class="cmd-block-header"><span>Invoke from Copilot Chat</span><button class="cmd-copy-btn">Copy</button></div>
+            <pre><code>forge_diagnose({ file: "src/services/billing.ts" })
+forge_diagnose({ file: "src/auth/token-validator.ts", models: "grok-3-mini,grok-4" })</code></pre>
           </div>
 
-          <p class="text-sm text-slate-400 mt-2">Each model analyzes independently for: root cause, failure modes, reproduction steps, impact assessment, fix recommendations, regression risk.</p>
-          <p class="text-sm text-slate-500">Output saved to: <code>.forge/analysis/diagnose-*</code>. Also available as: <code>forge_diagnose</code> MCP tool.</p>
+          <p class="text-sm text-slate-400 mt-2">Each model analyzes independently for: root cause, failure modes, reproduction steps, impact assessment, fix recommendations, regression risk. Results are returned inline to the calling agent (no on-disk persistence by default).</p>
+          <p class="text-sm text-slate-500">Reference: <code>pforge-mcp/tools.json</code> &raquo; <code>forge_diagnose</code>. Adjacent CLI command: <code>pforge analyze</code> for plan quality (different surface).</p>
         </div>
 
         <!-- ─── run-plan ─── -->

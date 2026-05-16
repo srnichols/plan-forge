@@ -109,19 +109,19 @@
   //
   const MANUAL_COUNTS = {
     // Pipeline / surface ────────────────────────────────────────────────
-    tools:        74,  // pforge-mcp/tools.json (canonical: array length)
+    tools:        77,  // pforge-mcp/tools.json (canonical: array length) — verify with: grep -c '"name": "forge_' pforge-mcp/tools.json
     instructions: 18,  // presets/dotnet|typescript/.github/instructions/
     agents:       19,  // 6 stack-specific + 7 cross-stack + 6 pipeline (per copilot-instructions.md)
-    skills:       13,  // standard skills set (per copilot-instructions.md)
-    hooks:         7,  // SessionStart, PreToolUse, PostToolUse, Stop, PreDeploy, PostSlice, PreAgentHandoff
-    prompts:       7,  // step0-step6 pipeline prompts
+    skills:       11,  // dotnet preset (typescript = 10) — varies by preset
+    hooks:         5,  // PreDeploy.md, PreCommit.mjs, PreAgentHandoff.md, PostSlice.md (+ plan-forge.json config) — Plan Forge lifecycle hooks (NOT Claude Code hook names)
+    prompts:       8,  // project-profile + step0-step6 pipeline prompts
     presets:       9,  // presets/* excluding the "shared" base
     // Manual structure ──────────────────────────────────────────────────
     chapters:     24,  // numbered chapters 1-24 (excludes Quickstart Q1-Q3 and Appendices)
     appendices:   14,  // lettered appendices A-N (+ Appendix O Book Index)
     parts:         4,  // Smelt, Forge, Guard, Learn
     // Manual assets ─────────────────────────────────────────────────────
-    htmlFiles:    58,  // total .html files in docs/manual/
+    htmlFiles:    60,  // total .html files in docs/manual/
   };
 
   // Detect current page

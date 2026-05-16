@@ -124,7 +124,7 @@
 
         <!-- ─── Live numbers (counts) ─── -->
         <h2 id="live-numbers">Live numbers</h2>
-        <p>Some sentences refer to a count that changes between releases &mdash; "Plan Forge ships <!--c:tools-->74<!--/c--> MCP tools", "<!--c:instructions-->18<!--/c--> instruction files", "<!--c:agents-->19<!--/c--> agents". Those numbers are <em>tokenized</em> in the page source and rewritten at build time from a single source of truth in <code>docs/manual/assets/manual.js</code>. You'll see the up-to-date number rendered, but if you View Source you'll see the token markers wrapping it.</p>
+        <p>Some sentences refer to a count that changes between releases &mdash; "Plan Forge ships <!--c:tools-->77<!--/c--> MCP tools", "<!--c:instructions-->18<!--/c--> instruction files", "<!--c:agents-->19<!--/c--> agents". Those numbers are <em>tokenized</em> in the page source and rewritten at build time from a single source of truth in <code>docs/manual/assets/manual.js</code>. You'll see the up-to-date number rendered, but if you View Source you'll see the token markers wrapping it.</p>
 
         <div class="callout callout-info">
           <strong>For contributors:</strong> use <code>&lt;!--c:KEY--&gt;NUMBER&lt;!--/c--&gt;</code> instead of typing a literal number in chapter prose. Run <code>node docs/manual/maintain.mjs</code> after editing &mdash; it sweeps every chapter, fixes drift, and warns on unknown keys.

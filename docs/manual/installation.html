@@ -47,7 +47,7 @@
         </table>
 
         <div class="callout callout-info">
-          <strong>Node.js is optional</strong> unless you want the MCP server (dashboard, <!--c:tools-->74<!--/c--> tools, REST API). The core pipeline (prompts, instructions, agents) works without it.
+          <strong>Node.js is optional</strong> unless you want the MCP server (dashboard, <!--c:tools-->77<!--/c--> tools, REST API). The core pipeline (prompts, instructions, agents) works without it.
         </div>
 
         <!-- ─── Option A ─── -->
@@ -100,7 +100,7 @@ cd my-project-plans</code></pre>
 
         <!-- ─── Choosing Your Preset ─── -->
         <h2 id="presets">Choosing Your Preset</h2>
-        <p>Nine presets, each tailored to a tech stack. Each installs ~<!--c:instructions-->18<!--/c--> instruction files, <!--c:agents-->19<!--/c--> agents, <!--c:skills-->13<!--/c--> skills, and <!--c:prompts-->7<!--/c--> pipeline prompts.</p>
+        <p>Nine presets, each tailored to a tech stack. Each installs ~<!--c:instructions-->18<!--/c--> instruction files, <!--c:agents-->19<!--/c--> agents, <!--c:skills-->11<!--/c--> skills, and <!--c:prompts-->8<!--/c--> pipeline prompts.</p>
 
         <div class="grid grid-cols-3 sm:grid-cols-3 gap-3 mb-8">
           <div class="rounded-lg border border-slate-800/60 bg-slate-900/40 p-3 text-center">
@@ -161,11 +161,11 @@ cd my-project-plans</code></pre>
         <div class="cmd-block">
           <div class="cmd-block-header"><span>Files created (dotnet preset example)</span></div>
           <pre><code>.github/
-├── instructions/     21 files  (architecture, security, testing, database, ...)
-├── agents/           19 files  (6 stack + 8 shared + 5 pipeline)
-├── prompts/          12 files  (7 pipeline + 5 scaffolding)
-├── skills/           12 dirs   (8 stack + 4 shared)
-├── hooks/             4 files  (SessionStart, PreToolUse, PostToolUse, Stop)
+├── instructions/     ~26 files  (architecture, security, testing, database, ... — 18 preset + 8 shared)
+├── agents/            8 files  (7 stack-specific + 1 shared)
+├── prompts/         ~23 files  (15 preset + 8 shared pipeline: project-profile + step0–step6)
+├── skills/           11 dirs   (varies by preset: dotnet 11, typescript 10)
+├── hooks/             5 items  (PreDeploy.md, PreCommit.mjs, PreAgentHandoff.md, PostSlice.md, plan-forge.json)
 └── copilot-instructions.md     (master config)
 
 .forge.json                     (project configuration)
@@ -174,6 +174,10 @@ docs/plans/
 ├── DEPLOYMENT-ROADMAP.md       (phase tracker)
 └── AI-Plan-Hardening-Runbook.md (methodology reference)
 pforge.ps1 / pforge.sh          (CLI scripts)</code></pre>
+        </div>
+
+        <div class="callout callout-info">
+          <strong>Note on hook names.</strong> Plan Forge ships lifecycle hooks named <code>PreDeploy</code>, <code>PreCommit</code>, <code>PreAgentHandoff</code>, and <code>PostSlice</code> (plus the <code>plan-forge.json</code> hook config). These are <em>not</em> the same as Claude Code's hook names (<code>SessionStart</code>, <code>PreToolUse</code>, etc.) — if you're coming from Claude Code, the trigger semantics differ. See <a href="../../.github/hooks/plan-forge.json"><code>.github/hooks/plan-forge.json</code></a> for the live configuration.
         </div>
 
         <!-- ─── Verify with Smith ─── -->

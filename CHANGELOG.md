@@ -9,6 +9,36 @@ Format follows [Keep a Changelog](https://keepachangelog.com/).
 
 ---
 
+## [2.93.2] — 2026-05-16 — Docs hotfix: manual drift audit
+
+> **One-liner**: Removes documentation drift discovered during a top-down audit of `docs/manual/*.html`. Triggered by the same class of defect that bit `spec-kit-interop.html` in v2.93.0 Slice 7 — features claimed in the manual that never shipped in code. Fixes 9 critical/high drift sites + bulk-corrects stale counts in 9 files via the `<!--c:KEY-->` token system. No code surface changes; documentation only.
+
+#### Fixed
+- **`docs/manual/cli-reference.html`** — Removed `pforge diagnose` as a fake CLI command. The `#diagnose` section, the analyze-vs-diagnose callout, and the "I'm Trying To…" use-case table now point users at the real `forge_diagnose` MCP tool. The CLI command does not exist in `pforge.ps1` or `pforge.sh`.
+- **`docs/manual/quick-reference.html`** — Same `pforge diagnose` row swapped for `forge_diagnose({ file })` MCP-tool reference.
+- **`docs/manual/troubleshooting.html`** — Diagnostic-tools table row updated to reference `forge_diagnose({ file })` as MCP tool, not a fake CLI command.
+- **`docs/manual/mcp-server-quickstart.html`** — Three example payloads corrected against `tools.json`: `forge_diagnose({ symptom })` → `forge_diagnose({ file })`, `forge_analyze({})` → `forge_analyze({ plan })` (required field), `forge_estimate_quorum({ plan })` → `forge_estimate_quorum({ planPath })`. The workflow `ol` was updated to match.
+- **`docs/manual/mcp-server-reference.html`** — Crucible tools section expanded from 6 → 8 entries; adds the v2.93.0 additions `forge_crucible_import` and `forge_crucible_status`. Hardcoded "69 / 74 MCP tools" counts switched to the `<!--c:tools-->` token (now 77).
+- **`docs/manual/mcp-server.html`** — Hardcoded "69 MCP tools" replaced with `<!--c:tools-->` token (now 77) in two places.
+- **`docs/manual/dashboard.html`** — Removed claim that buttons hit `/api/smith`, `/api/sweep`, etc. Those endpoints don't exist. Updated to document the real dispatcher (`POST /api/tool/:name`).
+- **`docs/manual/installation.html`** — Replaced fake Claude-Code hook names (`SessionStart, PreToolUse, PostToolUse, Stop`) in the "files created" tree with Plan Forge's actual hooks (`PreDeploy`, `PreCommit`, `PreAgentHandoff`, `PostSlice`, `plan-forge.json`). Updated per-directory counts to match the dotnet preset. Added a callout explaining the distinction from Claude Code hook semantics.
+- **`docs/manual/glossary.html`** — "Lifecycle Hook" definition rewritten to list Plan Forge's actual hook names; notes the distinction from Claude Code.
+- **`docs/manual/github-stack-alignment.html`** — `.github/hooks/` row corrected — no longer claims Plan Forge ships `SessionStart, PreToolUse, PostToolUse, Stop` (those are Claude Code's, not Plan Forge's).
+- **`docs/manual/assets/manual.js`** (`MANUAL_COUNTS` source of truth) — `tools` 74→77, `prompts` 7→8, `skills` 13→11 (dotnet preset; ts=10), `hooks` 7→5 (real Plan Forge hooks, not Claude Code names), `htmlFiles` 58→60. Comments updated. Token propagation via `node docs/manual/maintain.mjs` rewrote 14 occurrences across 9 files.
+
+#### Audit method
+- Authoritative reference: 44 real `pforge` subcommands (from `pforge help`), 77 real MCP tools (from `pforge-mcp/tools.json`), 96 `/api/*` routes (from grep of `server.mjs`), 4 real lifecycle hooks (from `.github/hooks/` + `templates/.github/hooks/`).
+- Cross-referenced every `pforge <subcmd>`, `forge_<tool>`, `.forge/<path>`, and `/api/<route>` mention in P0 manual pages (cli-reference, mcp-server-*, quickstart-*, writing-plans, installation) plus 3 P1 pages (crucible, dashboard, extensions).
+- 22 P1 pages remain unaudited (`forge-master`, `liveguard-*`, `multi-agent`, `dashboard-settings`, `bug-registry`, etc.) — tracked for follow-up.
+- Medium/low residual drift (e.g. "30+ endpoints" understating the actual 96, internal "33 tabs" inconsistency in `dashboard.html`, narrative hook claim in `project-history.html`) deferred to a tracking issue.
+
+#### Notes
+- All maintenance-script checks pass (`node docs/manual/maintain.mjs` — 60 chapters, 217 indexed sections, 4993 internal links verified).
+- Test suite unchanged (31/31 pass for `orchestrator-gate-dispatch` + `crucible-import`).
+- No CLI, MCP tool, or schema changes.
+
+---
+
 ## [2.93.1] — 2026-05-13 — Hotfix: WSL bash dispatch + hardener prompt rule
 
 > **One-liner**: Fixes a Windows-specific gate dispatch bug where `runGate()` routed literal `bash -c "..."` gates through WSL bash (no Windows PATH) instead of Git Bash, causing `pwsh`/`node`/`npx` calls inside the wrap to fail with `command not found`. Also adds a Step 2 hardener prompt rule that prevents the bad pattern from being authored in the first place. Empirically observed twice on this codebase — Phase GITHUB-B (May 5) and Phase CRUCIBLE-IMPORT-CLI Slice 2 (May 13).

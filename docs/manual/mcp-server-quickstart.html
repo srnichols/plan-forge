@@ -116,24 +116,24 @@ forge_run_plan({ plan: "docs/plans/Phase-1.md", resumeFrom: 3 })</code></pre>
       </div>
 
       <h3 id="tool-diagnose">forge_diagnose — Bug Investigation</h3>
-      <p>Multi-model bug investigation: provide a symptom or error message and receive root-cause analysis plus fix recommendations.</p>
+      <p>Multi-model bug investigation: provide a source file (and optionally models) and receive root-cause analysis plus fix recommendations.</p>
       <div class="cmd-block">
         <div class="cmd-block-header"><span>Copilot Chat</span><button class="cmd-copy-btn">Copy</button></div>
-        <pre><code>forge_diagnose({ symptom: "TypeError: Cannot read properties of undefined at line 42" })</code></pre>
+        <pre><code>forge_diagnose({ file: "src/services/billing.ts" })</code></pre>
       </div>
 
       <h3 id="tool-analyze">forge_analyze — Consistency Scoring</h3>
-      <p>Cross-artifact consistency scoring (0–100 across 4 dimensions). Checks that your plans, code, tests, and docs are in sync. Run before shipping.</p>
+      <p>Cross-artifact consistency scoring (0–100 across 4 dimensions). Checks that your plans, code, tests, and docs are in sync. Run before shipping. <code>plan</code> is required and can point at a plan markdown or a source file.</p>
       <div class="cmd-block">
         <div class="cmd-block-header"><span>Copilot Chat</span><button class="cmd-copy-btn">Copy</button></div>
-        <pre><code>forge_analyze({})</code></pre>
+        <pre><code>forge_analyze({ plan: "docs/plans/Phase-1-AUTH-PLAN.md" })</code></pre>
       </div>
 
       <h3 id="tool-estimate">forge_estimate_quorum — Cost Preview</h3>
       <p>Project the cost of a plan under all four quorum modes before executing. <strong>Always call this instead of hand-computing costs.</strong></p>
       <div class="cmd-block">
         <div class="cmd-block-header"><span>Copilot Chat</span><button class="cmd-copy-btn">Copy</button></div>
-        <pre><code>forge_estimate_quorum({ plan: "docs/plans/Phase-1.md" })</code></pre>
+        <pre><code>forge_estimate_quorum({ planPath: "docs/plans/Phase-1.md" })</code></pre>
       </div>
 
       <!-- ─── Typical Workflow ─── -->
@@ -141,14 +141,14 @@ forge_run_plan({ plan: "docs/plans/Phase-1.md", resumeFrom: 3 })</code></pre>
       <ol class="space-y-2 text-sm">
         <li><strong>1. Discover</strong> — <code>forge_capabilities({})</code> to see the live API surface</li>
         <li><strong>2. Check setup</strong> — <code>forge_smith({})</code> to confirm everything is green</li>
-        <li><strong>3. Estimate</strong> — <code>forge_estimate_quorum({ plan: "..." })</code> before any execution</li>
-        <li><strong>4. Run</strong> — <code>forge_run_plan({ plan: "..." })</code> to execute your plan</li>
+        <li><strong>3. Estimate</strong> — <code>forge_estimate_quorum({ planPath: "…" })</code> before any execution</li>
+        <li><strong>4. Run</strong> — <code>forge_run_plan({ plan: "…" })</code> to execute your plan</li>
         <li><strong>5. Monitor</strong> — <code>forge_plan_status({})</code> to track progress</li>
-        <li><strong>6. Review</strong> — <code>forge_analyze({})</code> to confirm artifact consistency</li>
+        <li><strong>6. Review</strong> — <code>forge_analyze({ plan: "…" })</code> to confirm artifact consistency</li>
       </ol>
 
       <div class="callout callout-info mt-6">
-        <strong>Need the full tool list?</strong> See <a href="mcp-server-reference.html">MCP Server — Full Reference</a> for all <!--c:tools-->74<!--/c--> tools across 8 categories, REST API endpoints, WebSocket events, telemetry, cost tracking, SDK, and API key configuration.
+        <strong>Need the full tool list?</strong> See <a href="mcp-server-reference.html">MCP Server — Full Reference</a> for all <!--c:tools-->77<!--/c--> tools across 8 categories, REST API endpoints, WebSocket events, telemetry, cost tracking, SDK, and API key configuration.
       </div>
 
       <p class="text-sm text-slate-500 mt-8">📄 Full reference: <a href="../capabilities.html">capabilities</a>, <a href="https://github.com/srnichols/plan-forge/blob/master/pforge-mcp/EVENTS.md" rel="noopener">EVENTS.md on GitHub</a>, <a href="https://github.com/srnichols/plan-forge/blob/master/pforge-mcp/tools.json" rel="noopener">tools.json on GitHub</a></p>

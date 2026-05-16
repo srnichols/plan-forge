@@ -140,9 +140,9 @@
           <tr><td><strong>Orchestrator</strong></td><td>Execution engine. Parses plans, schedules slices, spawns workers, validates gates.</td></tr>
           <tr><td><strong>Hub</strong></td><td>WebSocket event server. Broadcasts slice events to connected clients in real-time.</td></tr>
           <tr><td><strong>Dashboard</strong></td><td>Web UI at <code>localhost:3100/dashboard</code>. 25 tabs for monitoring, cost, replay, skills, config, watcher, and LiveGuard.</td></tr>
-          <tr><td><strong>Lifecycle Hook</strong></td><td>Automatic actions: SessionStart, PreToolUse, PostToolUse, Stop.</td></tr>
+          <tr><td><strong>Lifecycle Hook</strong></td><td>Automatic actions tied to Plan Forge's pipeline: <code>PreDeploy</code>, <code>PreCommit</code>, <code>PreAgentHandoff</code>, <code>PostSlice</code> (configured via <code>.github/hooks/plan-forge.json</code>). Distinct from Claude Code's own hook names.</td></tr>
           <tr><td><strong>OpenBrain</strong></td><td>Optional companion MCP server for persistent semantic memory across sessions.</td></tr>
-          <tr><td><strong>MCP</strong></td><td>Model Context Protocol. A standard for AI agents to call functions. Plan Forge's MCP server exposes <!--c:tools-->74<!--/c--> tools (core + LiveGuard + Watcher + Crucible + Tempering + Bug Registry + Testbed + Forge-Master).</td></tr>
+          <tr><td><strong>MCP</strong></td><td>Model Context Protocol. A standard for AI agents to call functions. Plan Forge's MCP server exposes <!--c:tools-->77<!--/c--> tools (core + LiveGuard + Watcher + Crucible + Tempering + Bug Registry + Testbed + Forge-Master).</td></tr>
           <tr><td><strong>Bridge</strong></td><td>Notification dispatcher that forwards WebSocket hub events to external platforms (Slack, Discord, Telegram, generic webhooks).</td></tr>
         </tbody>
       </table>

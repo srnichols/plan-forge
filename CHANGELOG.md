@@ -5,12 +5,40 @@ Format follows [Keep a Changelog](https://keepachangelog.com/).
 
 ---
 
-## [Unreleased] — Phase Anvil (2.95.0-dev)
+## [2.95.0] — 2026-05-16 — Phase Lattice: code-graph indexing, Anvil caching, hallmark provenance
 
-#### Added — hallmark provenance contract (`pforge-sdk`)
+> **One-liner**: Introduces the Lattice code-graph engine (semantic chunk index + BFS call-graph traversal), the Anvil memoization cache (content-hash-keyed, with DLQ recovery), and the Hallmark provenance SDK — five new CLI commands (`pforge lattice`, `pforge anvil`), ten new MCP tools, and a new `pforge-sdk/hallmark` sub-path export.
+
+#### Added — Lattice code-graph engine (`pforge lattice`)
+- **`pforge-mcp/lattice/`** — New module implementing the Lattice code-graph indexer. Produces `.forge/lattice/chunks.jsonl` (semantic code chunks) and `.forge/lattice/edges.jsonl` (call-graph edges) for any git repository. Supports a pure-JS chunker with optional tree-sitter upgrade for precise boundary detection.
+- **`pforge lattice index [--since <sha>]`** — Build or update the Lattice chunk index. `--since` enables incremental re-indexing from a git SHA (Anvil hit-rate optimization).
+- **`pforge lattice stat`** — Show index statistics: chunk count, edge count, language breakdown, Anvil hit rate, index size.
+- **`pforge lattice query [--query <q>] [--language <l>] [--kind <k>] [--limit <n>]`** — Full-text search over the chunk index; returns bounded 80-char snippets.
+- **`pforge lattice callers <name> [--limit <n>]`** — Find all callers of a named symbol using the edge graph.
+- **`pforge lattice blast <name> [--direction <callees|callers|both>] [--depth <n>]`** — BFS call-graph traversal up to depth 5; returns `truncated: true` when the frontier is capped.
+- **MCP tools** — `forge_lattice_index`, `forge_lattice_stat`, `forge_lattice_query`, `forge_lattice_callers`, `forge_lattice_blast` (five new tools, all `addedIn: "2.95.0"`).
+
+#### Added — Anvil memoization cache (`pforge anvil`)
+- **`pforge-mcp/anvil/`** — Content-hash-keyed memoization layer that prevents re-indexing unchanged files across `lattice index` runs. Stores cached results in `.forge/anvil/cache.jsonl`; failed entries land in a dead-letter queue (`.forge/anvil/dlq.jsonl`) for inspection and retry.
+- **`pforge anvil stat`** — Show cache statistics: total entries, DLQ size, hit/miss ratio.
+- **`pforge anvil clear [--file <path>]`** — Evict one file or the entire cache.
+- **`pforge anvil rebuild --since <sha>`** — Evict all cache entries for files changed since a git SHA, then trigger a fresh index.
+- **`pforge anvil dlq list [--limit <n>]`** — List dead-letter-queue entries.
+- **`pforge anvil dlq drain [--limit <n>]`** — Retry DLQ entries and remove those that succeed.
+- **MCP tools** — `forge_anvil_stat`, `forge_anvil_clear`, `forge_anvil_rebuild`, `forge_anvil_dlq_list`, `forge_anvil_dlq_drain` (five new tools, all `addedIn: "2.95.0"`).
+
+#### Added — Hallmark provenance contract (`pforge-sdk`)
 - **`pforge-sdk/src/hallmark.mjs`** — New sub-path export (`pforge-sdk/hallmark`) providing a lightweight, dependency-free provenance contract: `HALLMARK_SCHEMA_VERSION` constant (`"hallmark/v1"`), `validateProvenance(record)` (pure validator, no throws), `buildProvenance(options)` (fills `schemaVersion` + `capturedAt` automatically), and `mergeProvenance(existingMetadata, provenance)` (non-mutating attach under the `"provenance"` key).
 - **`pforge-sdk/schemas/hallmark-provenance.v1.json`** — JSON Schema defining the `hallmark/v1` envelope: required fields `schemaVersion`, `toolName`, `capturedAt`; optional `sourceFile`, `byteRange`, `contentHash`, `codeHash`, `toolVersion`; `additionalProperties: false`.
 - **`pforge-sdk/README.md`** — Added "Hallmark provenance" section documenting the API, schema field table, and usage examples.
+- **MCP tools** — `forge_hallmark_show` (read provenance for a file), `forge_hallmark_verify` (drift detection — compare stored provenance against current file hash). Both `addedIn: "2.95.0"`.
+
+#### Added — Pipelines introspection
+- **`forge_pipelines_list`** — New MCP tool that returns the ordered list of active pipeline capture stages. Useful for agents confirming which capture stages are enabled before a run. `addedIn: "2.95.0"`.
+
+#### Notes
+- Test suite: all passing (orchestrator-gate-dispatch + crucible-import + lattice-chunker pure-JS path). Tree-sitter tests are skipped on platforms without the grammar binary — the pure-JS fallback is the default and fully supported.
+- `forge_capabilities` now reports `version: "2.95.0"` with all new tools listed.
 
 ---
 

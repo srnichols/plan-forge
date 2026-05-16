@@ -1,12 +1,12 @@
 # Plan Forge — Capabilities Reference
 
-> **Tools**: 68 MCP (21 core + 14 LiveGuard + 2 Watcher + 6 Crucible + 6 Tempering + 4 Bug Registry + 3 Testbed + 3 Review + 3 Notify/Home/Delegate + additional doctor/memory/search/timeline/org/github) | **CLI**: 46+ commands | **Presets**: 9 | **Agents**: 20 | **Skills**: 14
+> **Tools**: 89 MCP (21 core + 14 LiveGuard + 2 Watcher + 6 Crucible + 6 Tempering + 4 Bug Registry + 3 Testbed + 3 Review + 3 Notify/Home/Delegate + 5 Lattice + 5 Anvil + 2 Hallmark + 1 Pipelines + additional doctor/memory/search/timeline/org/github) | **CLI**: 48+ commands | **Presets**: 9 | **Agents**: 20 | **Skills**: 14
 >
 > Machine-readable version: call `forge_capabilities` MCP tool, `GET https://planforge.software/.well-known/plan-forge.json`, or read `pforge-mcp/tools.json` (auto-generated on every MCP server start).
 
 ---
 
-## MCP Tools (67)
+## MCP Tools (89)
 
 | Tool | Intent | Cost | Description |
 |------|--------|------|-------------|

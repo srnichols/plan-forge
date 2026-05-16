@@ -3514,11 +3514,28 @@ cmd_run_plan() {
             echo "Starting full auto execution (background): $plan_path"
         fi
         echo ""
-        node "${node_args[@]}" &
+        # Issue #188 (v2.96.3): redirect stdout+stderr to log files and detach
+        # the child so a silent crash leaves a diagnostic trail. Previously
+        # the child inherited the shell's stdio handles and could die
+        # silently with no captured output the moment the parent exited.
+        local orch_logs_dir=".forge/orchestrator-logs"
+        mkdir -p "$orch_logs_dir" 2>/dev/null || true
+        local stamp
+        stamp="$(date -u +%Y%m%d-%H%M%S)"
+        local stdout_log="$orch_logs_dir/orch-$stamp.stdout.log"
+        local stderr_log="$orch_logs_dir/orch-$stamp.stderr.log"
+        nohup node "${node_args[@]}" >"$stdout_log" 2>"$stderr_log" </dev/null &
         local bg_pid=$!
+        disown "$bg_pid" 2>/dev/null || true
+        # Record PID to .forge/last-orch.pid so chain runners and external
+        # tooling can attach without scraping echo output.
+        mkdir -p ".forge" 2>/dev/null || true
+        printf "%s" "$bg_pid" > ".forge/last-orch.pid" 2>/dev/null || true
         echo "Orchestrator running in background  PID: $bg_pid"
         echo "Monitor : pforge status"
         echo "Logs    : .forge/runs/ (latest sub-directory)"
+        echo "Stdout  : $stdout_log"
+        echo "Stderr  : $stderr_log"
         echo "Stop    : kill $bg_pid"
     fi
 }

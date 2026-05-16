@@ -5,6 +5,24 @@ Format follows [Keep a Changelog](https://keepachangelog.com/).
 
 ---
 
+## [2.96.3] — 2026-05-17 — Background-Run Diagnostics + Analyze Score Recovery (Issues #188, #189)
+
+> **One-liner**: Closes two more bugs surfaced by the v2.96.2 verification rerun: background-mode runs now leave a diagnostic stdout/stderr trail when they crash, and the auto-analyze rollup recovers the consistency score even when `pforge analyze` exits 1 as a below-threshold warning.
+
+#### Fixed — Issue #188: `pforge run-plan` background mode — orchestrator dies silently with no captured stderr
+- `pforge.ps1` background branch (around line 4205) and `pforge.sh` background branch (around line 3520) previously spawned the orchestrator via `Start-Process -NoNewWindow` (PS) / `node ... &` (bash) with **no stdout/stderr redirection**. The child inherited the parent shell's console handles; when the wrapper exited 0 immediately after spawning, the child's next write to stdout could EPIPE and crash node with zero captured output.
+- Both wrappers now redirect stdout and stderr to timestamped log files under `.forge/orchestrator-logs/orch-<UTC>.{stdout,stderr}.log` and (on Windows) use `-WindowStyle Hidden` to fully detach the child from the parent console. On bash, `nohup ... </dev/null & disown` provides the same isolation.
+- New `Stdout` and `Stderr` lines in the banner tell the operator where to look when a background run goes silent.
+- `pforge.sh` also now writes `.forge/last-orch.pid` (it was previously PowerShell-only), so `pforge status` and chain runners can attach on Linux/macOS.
+
+#### Fixed — Issue #189: `runAutoAnalyze` discards score when `pforge analyze` exits 1 as a below-threshold warning
+- `pforge-mcp/orchestrator.mjs` `runAutoAnalyze` previously caught any non-zero exit from `pforge analyze` and returned `{ ran: true, score: null, error: "Command failed: ..." }` — even though the analyze CLI prints the full `Consistency Score: NN/100` to stdout before exiting 1 as a below-threshold *warning signal*.
+- The catch block now inspects `err.stdout` and recovers the score when parseable. The summary now records `{ ran: true, score: <NN>, output, exitCode: 1, warning: "analyze exited 1 (score NN below threshold)" }`, which keeps `forge_drift_report` and `forge_health_trend` rollups accurate.
+- The `analyze.output` field is also preserved on the error path so genuine crashes (timeout, missing wrapper) still produce a diagnostic trail.
+- Extracted the regex into exported `parseAnalyzeScore(output)` — 13 new tests in `tests/auto-analyze-issue-189.test.mjs` cover real testbed stdout (55/100), happy path (75/100), perfect score (100/100), alternate `Score: NN` format, multi-score outputs (headline wins), case-insensitivity, zero score, plus null/undefined/empty/non-string inputs and the three return-shape contracts (success/warning/error).
+
+---
+
 ## [2.96.2] — 2026-05-17 — Testbed-Rerun Polish (Issues #186–#187)
 
 > **One-liner**: Closes two more bugs surfaced by the v2.96.1 verification rerun: per-slice telemetry fields (`vendor`, `sessionDurationMs`, `codeChanges`) now populate even when the CLI worker omits them, and the background-run banner points at the real `pforge status` command.

@@ -4201,17 +4201,34 @@ function Invoke-RunPlan {
             Write-Host "Starting full auto execution (background): $planPath" -ForegroundColor Cyan
         }
         Write-Host ""
-        $proc = Start-Process -FilePath 'node' -ArgumentList $nodeArgs -PassThru -NoNewWindow
+        # Issue #188 (v2.96.3): Always redirect stdout+stderr to files so a
+        # silent crash of the orchestrator leaves a diagnostic trail. Prior
+        # to this fix, Start-Process -NoNewWindow inherited the parent
+        # console's stdio handles; when the wrapper exited 0 immediately
+        # after spawning, the child's next write to stdout could EPIPE and
+        # crash node with zero captured output and zero events past
+        # slice-started.
+        $pidDir = Join-Path (Get-Location) '.forge'
+        if (-not (Test-Path $pidDir)) { New-Item -ItemType Directory -Path $pidDir -Force | Out-Null }
+        $orchLogsDir = Join-Path $pidDir 'orchestrator-logs'
+        if (-not (Test-Path $orchLogsDir)) { New-Item -ItemType Directory -Path $orchLogsDir -Force | Out-Null }
+        $stamp = (Get-Date -Format 'yyyyMMdd-HHmmss')
+        $stdoutLog = Join-Path $orchLogsDir "orch-$stamp.stdout.log"
+        $stderrLog = Join-Path $orchLogsDir "orch-$stamp.stderr.log"
+        $proc = Start-Process -FilePath 'node' -ArgumentList $nodeArgs -PassThru `
+            -WindowStyle Hidden `
+            -RedirectStandardOutput $stdoutLog `
+            -RedirectStandardError  $stderrLog
         # Record PID to .forge/last-orch.pid so chain runners and external tooling
         # can attach without scraping Write-Host output (which bypasses stdout).
         try {
-            $pidDir = Join-Path (Get-Location) '.forge'
-            if (-not (Test-Path $pidDir)) { New-Item -ItemType Directory -Path $pidDir -Force | Out-Null }
             Set-Content -Path (Join-Path $pidDir 'last-orch.pid') -Value $proc.Id -NoNewline -Encoding ASCII
         } catch {}
         Write-Host "Orchestrator running in background  PID: $($proc.Id)" -ForegroundColor Green
         Write-Host "Monitor : pforge status" -ForegroundColor DarkGray
         Write-Host "Logs    : .forge/runs/ (latest sub-directory)" -ForegroundColor DarkGray
+        Write-Host "Stdout  : $stdoutLog" -ForegroundColor DarkGray
+        Write-Host "Stderr  : $stderrLog" -ForegroundColor DarkGray
         Write-Host "Stop    : Stop-Process -Id $($proc.Id)" -ForegroundColor DarkGray
     }
 }

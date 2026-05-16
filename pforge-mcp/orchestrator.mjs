@@ -12234,8 +12234,31 @@ export async function runAnalyze({ mode = "file", path: targetPath = ".", rules 
 }
 
 /**
+ * Parse the consistency score from `pforge analyze` stdout.
+ * Exported for testing — see tests/auto-analyze-issue-189.test.mjs.
+ *
+ * Looks for either "Consistency Score: NN/100", "NN/100", or "Score: NN".
+ * Returns null when no recognizable score line is present.
+ */
+export function parseAnalyzeScore(output) {
+  if (typeof output !== "string" || output.length === 0) return null;
+  const match = output.match(/(\d+)\s*\/\s*100|Score:\s*(\d+)/i);
+  if (!match) return null;
+  const n = parseInt(match[1] || match[2], 10);
+  return Number.isFinite(n) ? n : null;
+}
+
+/**
  * Run auto-analyze after all slices pass.
  * Calls pforge analyze and captures consistency score.
+ *
+ * Bug #189: `pforge analyze` exits non-zero (1) as a *warning signal* when the
+ * consistency score falls below the configured threshold (default 60).
+ * Previously the catch block discarded `err.stdout` and reported
+ * `{ score: null, error: "Command failed" }`, hiding the actual score from
+ * the run summary. Now we always parse the score from stdout regardless of
+ * exit code, and only surface `error` when the score genuinely cannot be
+ * recovered (timeout, missing wrapper, parser crash).
  */
 function runAutoAnalyze(cwd, planPath) {
   const IS_WINDOWS = process.platform === "win32";
@@ -12244,11 +12267,34 @@ function runAutoAnalyze(cwd, planPath) {
     : `bash pforge.sh analyze "${planPath}"`;
   try {
     const output = execSync(pforge, { cwd, encoding: "utf-8", timeout: 30_000, env: { ...process.env, NO_COLOR: "1" } });
-    const scoreMatch = output.match(/(\d+)\s*\/\s*100|Score:\s*(\d+)/i);
-    const score = scoreMatch ? parseInt(scoreMatch[1] || scoreMatch[2], 10) : null;
+    const score = parseAnalyzeScore(output);
     return { ran: true, score, output: output.trim() };
   } catch (err) {
-    return { ran: true, score: null, error: (err.stderr || err.message || "").trim() };
+    // execSync attaches stdout/stderr on the thrown error even when exit != 0.
+    // Try to recover a score from stdout first — analyze exits 1 as a warning
+    // when score < threshold but the score itself is still printed.
+    const stdout = (err.stdout || "").toString();
+    const stderr = (err.stderr || "").toString();
+    const score = parseAnalyzeScore(stdout);
+    if (score !== null) {
+      // Below-threshold warning — keep the score, surface the full output, and
+      // record exitCode for callers that want to gate on it.
+      return {
+        ran: true,
+        score,
+        output: stdout.trim(),
+        exitCode: err.status ?? null,
+        warning: `analyze exited ${err.status ?? "non-zero"} (score ${score} below threshold)`,
+      };
+    }
+    // Genuine failure (timeout / parse crash / missing wrapper) — preserve
+    // both stdout and stderr so the diagnostic trail isn't lost.
+    return {
+      ran: true,
+      score: null,
+      error: (stderr || err.message || "").trim(),
+      stdout: stdout.trim() || undefined,
+    };
   }
 }
 

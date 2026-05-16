@@ -1,0 +1,51 @@
+{
+  "_comment": "Expected shape for hallmark provenance records captured from the tiny-project fixture. Used by 01-hallmark-roundtrip.test.mjs and 08-hallmark-show-source.test.mjs.",
+  "minimalValid": {
+    "schemaVersion": "hallmark/v1",
+    "toolName": "forge_analyze",
+    "capturedAt": "2026-05-16T00:00:00Z"
+  },
+  "withSourceAndRange": {
+    "schemaVersion": "hallmark/v1",
+    "toolName": "forge_analyze",
+    "capturedAt": "2026-05-16T00:00:00Z",
+    "sourceFile": "src/alpha.mjs",
+    "byteRange": [120, 180],
+    "contentHash": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+  },
+  "tamperedFields": {
+    "_comment": "Tamper any of these to trigger validateProvenance failure",
+    "missingToolName": {
+      "schemaVersion": "hallmark/v1",
+      "capturedAt": "2026-05-16T00:00:00Z"
+    },
+    "badCapturedAt": {
+      "schemaVersion": "hallmark/v1",
+      "toolName": "forge_analyze",
+      "capturedAt": "not-a-date"
+    },
+    "badSchemaVersion": {
+      "schemaVersion": "hallmark/v0",
+      "toolName": "forge_analyze",
+      "capturedAt": "2026-05-16T00:00:00Z"
+    },
+    "badByteRange": {
+      "schemaVersion": "hallmark/v1",
+      "toolName": "forge_analyze",
+      "capturedAt": "2026-05-16T00:00:00Z",
+      "byteRange": [180, 120]
+    },
+    "badContentHash": {
+      "schemaVersion": "hallmark/v1",
+      "toolName": "forge_analyze",
+      "capturedAt": "2026-05-16T00:00:00Z",
+      "contentHash": "not-a-valid-hash"
+    }
+  },
+  "sourceRoundtrip": {
+    "_comment": "Used by 04-source-roundtrip.test.mjs: capture a memory at this source+byteRange, then query by hash",
+    "sourceFile": "src/alpha.mjs",
+    "byteRange": [0, 30],
+    "toolName": "forge_analyze"
+  }
+}

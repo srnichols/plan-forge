@@ -1,0 +1,74 @@
+{
+  "_comment": "Expected callers for key functions in the tiny-project fixture. These describe the known edges: which chunk (callerName in callerFile) calls which callee (calleeName). Used by 07-lattice-callers-accuracy.test.mjs.",
+  "frobnicate": {
+    "calleeName": "frobnicate",
+    "callerChunks": [
+      {
+        "callerName": "wumble",
+        "callerFile": "src/zeta.mjs",
+        "calleeName": "frobnicate"
+      }
+    ],
+    "total": 1
+  },
+  "combulate": {
+    "calleeName": "combulate",
+    "callerChunks": [
+      {
+        "callerName": "frobnicate",
+        "callerFile": "src/alpha.mjs",
+        "calleeName": "combulate"
+      }
+    ],
+    "total": 1
+  },
+  "flibbert": {
+    "calleeName": "flibbert",
+    "callerChunks": [
+      {
+        "callerName": "combulate",
+        "callerFile": "src/beta.mjs",
+        "calleeName": "flibbert"
+      }
+    ],
+    "total": 1
+  },
+  "quibblate": {
+    "calleeName": "quibblate",
+    "callerChunks": [
+      {
+        "callerName": "flibbert",
+        "callerFile": "src/gamma.mjs",
+        "calleeName": "quibblate"
+      }
+    ],
+    "total": 1
+  },
+  "snargle": {
+    "calleeName": "snargle",
+    "callerChunks": [
+      {
+        "callerName": "quibblate",
+        "callerFile": "src/delta.mjs",
+        "calleeName": "snargle"
+      }
+    ],
+    "total": 1
+  },
+  "wumble": {
+    "calleeName": "wumble",
+    "callerChunks": [],
+    "total": 0
+  },
+  "parse_record": {
+    "calleeName": "parse_record",
+    "callerChunks": [
+      {
+        "callerName": "make_fixture",
+        "callerFile": "utils/helpers.py",
+        "calleeName": "parse_record"
+      }
+    ],
+    "total": 1
+  }
+}

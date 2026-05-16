@@ -89,6 +89,11 @@ COMMANDS:
   graph stats                  Print node count by type from graph snapshot
   graph query [type]           Query the knowledge graph (phase, file, recent-changes, neighbors)
   patterns list [--since <iso>] List recurring patterns detected across plan runs
+  lattice index [--since <sha>] Build or update the Lattice code-graph index
+  lattice stat               Show Lattice index statistics
+  lattice query [--query <q>] [--language <l>] [--kind <k>] [--limit <n>] Search the Lattice chunk index
+  lattice callers <name> [--limit <n>] Find all callers of a symbol
+  lattice blast <name|--id <id>> [--direction <callees|callers|both>] [--depth <n>] BFS call-graph traversal
   audit export      Export audit events from .forge/runs/ as JSONL or CSV
     --since <ISO>   Only events on or after this timestamp
     --until <ISO>   Only events on or before this timestamp
@@ -5080,6 +5085,154 @@ cmd_patterns() {
     node "$script_path" "$@"
 }
 
+# ─── Command: lattice ────────────────────────────────────────────
+cmd_lattice() {
+    local sub="${1:-}"
+    local port=3100
+
+    _lattice_mcp_tool() {
+        local tool_name="$1"
+        local body="${2:-{}}"
+        local response
+        response=$(curl -sf -X POST "http://localhost:$port/api/tool/$tool_name" \
+            -H "Content-Type: application/json" \
+            -d "$body" 2>/dev/null) || {
+            echo "ERROR: MCP server not running on port $port. Start with: node pforge-mcp/server.mjs" >&2
+            exit 1
+        }
+        echo "$response"
+    }
+
+    case "$sub" in
+        index)
+            local since=""
+            shift
+            while [[ $# -gt 0 ]]; do
+                case "$1" in
+                    --since) since="$2"; shift 2 ;;
+                    *) shift ;;
+                esac
+            done
+            local body="{}"
+            [[ -n "$since" ]] && body="{\"since\":\"$since\"}"
+            local result; result=$(_lattice_mcp_tool "forge_lattice_index" "$body")
+            echo ""
+            echo "🕸 Lattice Index"
+            echo "   Files indexed: $(echo "$result" | node -e "process.stdin.resume();let d='';process.stdin.on('data',c=>d+=c);process.stdin.on('end',()=>{try{const r=JSON.parse(d);console.log(r.filesIndexed??0)}catch{console.log(0)}})")"
+            echo "$result" | node -e "process.stdin.resume();let d='';process.stdin.on('data',c=>d+=c);process.stdin.on('end',()=>{try{const r=JSON.parse(d);console.log('   Chunks:       ',r.chunks??0,'\n   Edges:        ',r.edges??0,'\n   Anvil hits:   ',r.anvilHits??0,'\n   Anvil misses: ',r.anvilMisses??0)}catch{}})"
+            echo ""
+            ;;
+        stat)
+            local result; result=$(_lattice_mcp_tool "forge_lattice_stat" "{}")
+            echo "$result" | node -e "
+process.stdin.resume();let d='';process.stdin.on('data',c=>d+=c);process.stdin.on('end',()=>{
+try{const r=JSON.parse(d);
+console.log('\n🕸 Lattice Stat');
+console.log('   Chunks:        ',r.chunks??0);
+console.log('   Edges:         ',r.edges??0);
+console.log('   Index bytes:   ',r.indexBytes??0);
+console.log('   Anvil hit rate:',r.anvilHitRate??0);
+console.log('   Last indexed:  ',r.lastIndexedAt??'never');
+console.log('   Chunker:       ',(r.chunkerImpl??'?')+' v'+(r.chunkerVersion??'?'));
+if(r.languages){console.log('   Languages:');Object.entries(r.languages).forEach(([k,v])=>console.log('    ',k,v))}
+console.log('')}catch(e){console.error('parse error',e.message)}
+})"
+            ;;
+        query)
+            local query="" language="" kind="" limit=""
+            shift
+            while [[ $# -gt 0 ]]; do
+                case "$1" in
+                    --query)    query="$2";    shift 2 ;;
+                    --language) language="$2"; shift 2 ;;
+                    --kind)     kind="$2";     shift 2 ;;
+                    --limit)    limit="$2";    shift 2 ;;
+                    *) shift ;;
+                esac
+            done
+            local body="{\"query\":\"$query\""
+            [[ -n "$language" ]] && body+=",\"language\":\"$language\""
+            [[ -n "$kind" ]]     && body+=",\"kind\":\"$kind\""
+            [[ -n "$limit" ]]    && body+=",\"limit\":$limit"
+            body+="}"
+            local result; result=$(_lattice_mcp_tool "forge_lattice_query" "$body")
+            echo "$result" | node -e "
+process.stdin.resume();let d='';process.stdin.on('data',c=>d+=c);process.stdin.on('end',()=>{
+try{const r=JSON.parse(d);
+console.log(r.message??'');
+(r.chunks??[]).forEach(c=>console.log('  ['+c.id+']',c.name.padEnd(30),c.filePath,'('+c.kind+')'));
+}catch(e){console.error(d)}
+})"
+            ;;
+        callers)
+            local name="${2:-}"
+            local limit=""
+            shift 2 || shift
+            while [[ $# -gt 0 ]]; do
+                case "$1" in
+                    --limit) limit="$2"; shift 2 ;;
+                    *) shift ;;
+                esac
+            done
+            if [[ -z "$name" ]]; then
+                echo "Usage: pforge lattice callers <symbol-name> [--limit <n>]" >&2
+                exit 1
+            fi
+            local body="{\"name\":\"$name\""
+            [[ -n "$limit" ]] && body+=",\"limit\":$limit"
+            body+="}"
+            local result; result=$(_lattice_mcp_tool "forge_lattice_callers" "$body")
+            echo "$result" | node -e "
+process.stdin.resume();let d='';process.stdin.on('data',c=>d+=c);process.stdin.on('end',()=>{
+try{const r=JSON.parse(d);
+console.log(r.message??'');
+(r.chunks??[]).forEach(c=>console.log('  ['+c.id+']',c.name.padEnd(30),c.filePath));
+}catch(e){console.error(d)}
+})"
+            ;;
+        blast)
+            local name="" chunk_id="" direction="both" depth="" limit=""
+            shift
+            while [[ $# -gt 0 ]]; do
+                case "$1" in
+                    --id)        chunk_id="$2";   shift 2 ;;
+                    --direction) direction="$2";  shift 2 ;;
+                    --depth)     depth="$2";      shift 2 ;;
+                    --limit)     limit="$2";      shift 2 ;;
+                    --*)         shift ;;
+                    *)           name="$1";       shift ;;
+                esac
+            done
+            local body="{\"direction\":\"$direction\""
+            [[ -n "$chunk_id" ]] && body+=",\"chunkId\":\"$chunk_id\""
+            [[ -n "$name" ]]     && body+=",\"name\":\"$name\""
+            [[ -n "$depth" ]]    && body+=",\"depth\":$depth"
+            [[ -n "$limit" ]]    && body+=",\"limit\":$limit"
+            body+="}"
+            local result; result=$(_lattice_mcp_tool "forge_lattice_blast" "$body")
+            echo "$result" | node -e "
+process.stdin.resume();let d='';process.stdin.on('data',c=>d+=c);process.stdin.on('end',()=>{
+try{const r=JSON.parse(d);
+console.log(r.message??'');
+(r.nodes??[]).forEach(n=>console.log('  [d='+n.distance+']','['+n.id+']',n.name.padEnd(30),n.filePath));
+if((r.unresolvedNames??[]).length)console.log('  Unresolved:',r.unresolvedNames.join(', '));
+}catch(e){console.error(d)}
+})"
+            ;;
+        *)
+            echo "Usage: pforge lattice <index|stat|query|callers|blast>"
+            echo ""
+            echo "Subcommands:"
+            echo "  index [--since <sha>]           Build or update the code-graph index"
+            echo "  stat                            Show index statistics"
+            echo "  query [--query <q>] [--language <l>] [--kind <k>] [--limit <n>]"
+            echo "  callers <name> [--limit <n>]    Find callers of a symbol"
+            echo "  blast [<name>|--id <id>] [--direction callees|callers|both] [--depth <n>]"
+            exit 1
+            ;;
+    esac
+}
+
 # ─── Command: anvil ──────────────────────────────────────────────
 cmd_anvil() {
     local sub="${1:-}"
@@ -5782,6 +5935,7 @@ case "$COMMAND" in
     fm-recall)    cmd_fm_recall "$@" ;;
     timeline)     cmd_timeline "$@" ;;
     patterns)     cmd_patterns "$@" ;;
+    lattice)      cmd_lattice "$@" ;;
     graph)        cmd_graph "$@" ;;
     digest)       cmd_digest "$@" ;;
     plan-from-sarif) cmd_plan_from_sarif "$@" ;;

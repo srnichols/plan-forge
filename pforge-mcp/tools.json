@@ -5983,5 +5983,120 @@
       "input": {},
       "output": { "pipelines": [{ "id": "orchestrator-memory", "label": "Orchestrator → Memory", "artifactExists": false, "lastWriteAt": null }], "anvil": { "entries": 0, "totalBytes": 0, "perTool": {} } }
     }
+  },
+  {
+    "name": "forge_lattice_index",
+    "description": "Build or update the Lattice code-graph index — walks tracked source files, chunks them, and persists JSONL to .forge/lattice/. USE FOR: initial index build, re-indexing after large changes, warming the Anvil cache for fast re-runs. DO NOT USE FOR: reading index data (use forge_lattice_query, forge_lattice_callers, or forge_lattice_blast).",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "paths": { "type": "array", "items": { "type": "string" }, "description": "Paths to index relative to project root (default: ['.'])" },
+        "since": { "type": "string", "description": "Only re-index files changed since this git revision (e.g. HEAD~1)" },
+        "path": { "type": "string", "description": "Project directory (default: current)" }
+      }
+    },
+    "intent": ["lattice", "index", "code-graph", "chunk"],
+    "aliases": ["lattice-index", "code-index"],
+    "cost": "medium",
+    "addedIn": "3.0.0",
+    "errors": {
+      "ERR_LATTICE_PATH_OUTSIDE_REPO": {
+        "message": "Path is outside the workspace root",
+        "recovery": "Use relative paths or paths within the repo"
+      }
+    },
+    "example": {
+      "input": { "paths": ["."] },
+      "output": { "filesIndexed": 42, "chunks": 180, "edges": 95, "anvilHits": 0, "anvilMisses": 42 }
+    }
+  },
+  {
+    "name": "forge_lattice_stat",
+    "description": "Return a bounded summary of the Lattice index — chunk count, edge count, language distribution, Anvil hit rate, and index byte size. Read-only. USE FOR: confirming index health before querying, dashboards. DO NOT USE FOR: full index reads.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "path": { "type": "string", "description": "Project directory (default: current)" }
+      }
+    },
+    "intent": ["lattice", "stat", "code-graph", "index-health"],
+    "aliases": ["lattice-stat"],
+    "cost": "low",
+    "addedIn": "3.0.0",
+    "errors": {},
+    "example": {
+      "input": {},
+      "output": { "chunks": 0, "edges": 0, "languages": {}, "lastIndexedAt": null, "chunkerImpl": null, "chunkerVersion": null, "anvilHitRate": 0, "indexBytes": 0 }
+    }
+  },
+  {
+    "name": "forge_lattice_query",
+    "description": "Search the Lattice chunk index by name, language, kind, or file path. Filters are ANDed. USE FOR: finding function/class declarations, locating code by language or file path. DO NOT USE FOR: call-graph traversal (use forge_lattice_blast).",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "query": { "type": "string", "description": "Substring match against chunk name or filePath" },
+        "language": { "type": "string", "description": "Exact language filter (e.g. js, ts, py)" },
+        "kind": { "type": "string", "description": "Exact kind filter (e.g. function, class, file)" },
+        "filePath": { "type": "string", "description": "Substring match against chunk filePath" },
+        "limit": { "type": "number", "description": "Max results (default: 25)" },
+        "path": { "type": "string", "description": "Project directory (default: current)" }
+      }
+    },
+    "intent": ["lattice", "query", "search", "code-graph"],
+    "aliases": ["lattice-query", "code-search"],
+    "cost": "low",
+    "addedIn": "3.0.0",
+    "errors": {},
+    "example": {
+      "input": { "query": "handleAuth", "limit": 10 },
+      "output": { "chunks": [], "total": 0, "truncated": false, "message": "No chunks matched query \"handleAuth\". Broaden your query or run latticeIndex first." }
+    }
+  },
+  {
+    "name": "forge_lattice_callers",
+    "description": "Find all chunks that reference (call) a given symbol name. USE FOR: impact analysis — who depends on this function? DO NOT USE FOR: deep call-graph traversal (use forge_lattice_blast).",
+    "inputSchema": {
+      "type": "object",
+      "required": ["name"],
+      "properties": {
+        "name": { "type": "string", "description": "Symbol name to find callers of" },
+        "limit": { "type": "number", "description": "Max results (default: 25)" },
+        "path": { "type": "string", "description": "Project directory (default: current)" }
+      }
+    },
+    "intent": ["lattice", "callers", "code-graph", "impact-analysis"],
+    "aliases": ["lattice-callers", "who-calls"],
+    "cost": "low",
+    "addedIn": "3.0.0",
+    "errors": {},
+    "example": {
+      "input": { "name": "handleAuth" },
+      "output": { "chunks": [], "total": 0, "truncated": false, "message": "No callers found for \"handleAuth\". Ensure the index is up to date." }
+    }
+  },
+  {
+    "name": "forge_lattice_blast",
+    "description": "BFS traversal of the Lattice call graph — expands callees, callers, or both from a seed chunk up to a given depth. USE FOR: deep impact analysis, understanding call chains, finding all transitive dependencies. DO NOT USE FOR: simple symbol lookup (use forge_lattice_query).",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "chunkId": { "type": "string", "description": "Seed chunk id (exact 16-char hex)" },
+        "name": { "type": "string", "description": "Seed chunk name (all matching chunks are enqueued)" },
+        "direction": { "type": "string", "enum": ["callees", "callers", "both"], "description": "Traversal direction (default: both)" },
+        "depth": { "type": "number", "description": "Max BFS hops (default: 3)" },
+        "limit": { "type": "number", "description": "Max nodes returned (default: 50)" },
+        "path": { "type": "string", "description": "Project directory (default: current)" }
+      }
+    },
+    "intent": ["lattice", "blast", "code-graph", "bfs", "call-chain"],
+    "aliases": ["lattice-blast", "call-graph"],
+    "cost": "low",
+    "addedIn": "3.0.0",
+    "errors": {},
+    "example": {
+      "input": { "name": "handleAuth", "direction": "callees", "depth": 2 },
+      "output": { "nodes": [], "edges": [], "unresolvedNames": [], "total": 0, "truncated": false, "message": "No chunk found for \"handleAuth\"." }
+    }
   }
 ]

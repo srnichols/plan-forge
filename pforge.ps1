@@ -109,6 +109,11 @@ function Show-Help {
     Write-Host "  graph stats                  Print node count by type from graph snapshot"
     Write-Host "  graph query [type]           Query the knowledge graph (phase, file, recent-changes, neighbors)"
     Write-Host "  patterns list [--since <iso>] List recurring patterns detected across plan runs"
+    Write-Host "  lattice index [--since <sha>] Build or update the Lattice code-graph index"
+    Write-Host "  lattice stat               Show Lattice index statistics"
+    Write-Host "  lattice query [--query <q>] [--language <l>] [--kind <k>] [--limit <n>] Search the Lattice chunk index"
+    Write-Host "  lattice callers <name> [--limit <n>] Find all callers of a symbol"
+    Write-Host "  lattice blast <name|--id <id>> [--direction <callees|callers|both>] [--depth <n>] BFS call-graph traversal"
     Write-Host "  audit export      Export audit events from .forge/runs/ as JSONL or CSV"
     Write-Host "    --since <ISO>   Only events on or after this timestamp"
     Write-Host "    --until <ISO>   Only events on or before this timestamp"
@@ -5789,6 +5794,145 @@ function Invoke-Patterns {
     node $scriptPath @Arguments
 }
 
+# ─── Command: lattice ───────────────────────────────────────────────
+function Invoke-Lattice {
+    $sub = if ($Arguments.Count -gt 0) { $Arguments[0] } else { "" }
+    $port = 3100
+
+    function Invoke-LatticeRest($toolName, $bodyHash) {
+        $body = $bodyHash | ConvertTo-Json -Compress
+        try {
+            $response = Invoke-RestMethod -Uri "http://localhost:$port/api/tool/$toolName" -Method POST -Body $body -ContentType "application/json" -ErrorAction Stop
+            return $response
+        } catch {
+            Write-Host "ERROR: MCP server not running on port $port. Start with: node pforge-mcp/server.mjs" -ForegroundColor Red
+            exit 1
+        }
+    }
+
+    switch ($sub) {
+        'index' {
+            $since = $null
+            for ($i = 1; $i -lt $Arguments.Count; $i++) {
+                switch ($Arguments[$i]) {
+                    '--since' { if (($i+1) -lt $Arguments.Count) { $since = $Arguments[$i+1]; $i++ } }
+                }
+            }
+            $body = @{}
+            if ($since) { $body.since = $since }
+            $result = Invoke-LatticeRest "forge_lattice_index" $body
+            Write-Host ""
+            Write-Host "`u{1F578} Lattice Index" -ForegroundColor Cyan
+            Write-Host "   Files indexed: $($result.filesIndexed)" -ForegroundColor White
+            Write-Host "   Chunks:        $($result.chunks)" -ForegroundColor White
+            Write-Host "   Edges:         $($result.edges)" -ForegroundColor White
+            Write-Host "   Anvil hits:    $($result.anvilHits)" -ForegroundColor White
+            Write-Host "   Anvil misses:  $($result.anvilMisses)" -ForegroundColor White
+            Write-Host ""
+        }
+        'stat' {
+            $result = Invoke-LatticeRest "forge_lattice_stat" @{}
+            Write-Host ""
+            Write-Host "`u{1F578} Lattice Stat" -ForegroundColor Cyan
+            Write-Host "   Chunks:         $($result.chunks)" -ForegroundColor White
+            Write-Host "   Edges:          $($result.edges)" -ForegroundColor White
+            Write-Host "   Index bytes:    $($result.indexBytes)" -ForegroundColor White
+            Write-Host "   Anvil hit rate: $($result.anvilHitRate)" -ForegroundColor White
+            Write-Host "   Last indexed:   $($result.lastIndexedAt)" -ForegroundColor White
+            Write-Host "   Chunker:        $($result.chunkerImpl) v$($result.chunkerVersion)" -ForegroundColor White
+            if ($result.languages -and ($result.languages | Get-Member -MemberType NoteProperty)) {
+                Write-Host "   Languages:" -ForegroundColor White
+                $result.languages.PSObject.Properties | ForEach-Object {
+                    Write-Host ("     {0,-10} {1}" -f $_.Name, $_.Value)
+                }
+            }
+            Write-Host ""
+        }
+        'query' {
+            $query = ""; $language = $null; $kind = $null; $limit = $null
+            for ($i = 1; $i -lt $Arguments.Count; $i++) {
+                switch ($Arguments[$i]) {
+                    '--query'    { if (($i+1) -lt $Arguments.Count) { $query    = $Arguments[$i+1]; $i++ } }
+                    '--language' { if (($i+1) -lt $Arguments.Count) { $language = $Arguments[$i+1]; $i++ } }
+                    '--kind'     { if (($i+1) -lt $Arguments.Count) { $kind     = $Arguments[$i+1]; $i++ } }
+                    '--limit'    { if (($i+1) -lt $Arguments.Count) { $limit    = [int]$Arguments[$i+1]; $i++ } }
+                }
+            }
+            $body = @{ query = $query }
+            if ($language) { $body.language = $language }
+            if ($kind)     { $body.kind     = $kind }
+            if ($null -ne $limit) { $body.limit = $limit }
+            $result = Invoke-LatticeRest "forge_lattice_query" $body
+            Write-Host $result.message -ForegroundColor Cyan
+            if ($result.chunks -and $result.chunks.Count -gt 0) {
+                $result.chunks | ForEach-Object {
+                    Write-Host ("  [{0}] {1,-30} {2} ({3})" -f $_.id, $_.name, $_.filePath, $_.kind)
+                }
+            }
+        }
+        'callers' {
+            $name = if ($Arguments.Count -gt 1) { $Arguments[1] } else { "" }
+            $limit = $null
+            for ($i = 2; $i -lt $Arguments.Count; $i++) {
+                switch ($Arguments[$i]) {
+                    '--limit' { if (($i+1) -lt $Arguments.Count) { $limit = [int]$Arguments[$i+1]; $i++ } }
+                }
+            }
+            if (-not $name) {
+                Write-Host "Usage: pforge lattice callers <symbol-name> [--limit <n>]" -ForegroundColor Yellow
+                exit 1
+            }
+            $body = @{ name = $name }
+            if ($null -ne $limit) { $body.limit = $limit }
+            $result = Invoke-LatticeRest "forge_lattice_callers" $body
+            Write-Host $result.message -ForegroundColor Cyan
+            if ($result.chunks -and $result.chunks.Count -gt 0) {
+                $result.chunks | ForEach-Object {
+                    Write-Host ("  [{0}] {1,-30} {2}" -f $_.id, $_.name, $_.filePath)
+                }
+            }
+        }
+        'blast' {
+            $name = $null; $chunkId = $null; $direction = "both"; $depth = $null; $limit = $null
+            for ($i = 1; $i -lt $Arguments.Count; $i++) {
+                switch ($Arguments[$i]) {
+                    '--id'        { if (($i+1) -lt $Arguments.Count) { $chunkId   = $Arguments[$i+1]; $i++ } }
+                    '--direction' { if (($i+1) -lt $Arguments.Count) { $direction = $Arguments[$i+1]; $i++ } }
+                    '--depth'     { if (($i+1) -lt $Arguments.Count) { $depth     = [int]$Arguments[$i+1]; $i++ } }
+                    '--limit'     { if (($i+1) -lt $Arguments.Count) { $limit     = [int]$Arguments[$i+1]; $i++ } }
+                    default       { if (-not $Arguments[$i].StartsWith('--')) { $name = $Arguments[$i] } }
+                }
+            }
+            $body = @{ direction = $direction }
+            if ($chunkId) { $body.chunkId = $chunkId }
+            if ($name)    { $body.name    = $name }
+            if ($null -ne $depth) { $body.depth = $depth }
+            if ($null -ne $limit) { $body.limit = $limit }
+            $result = Invoke-LatticeRest "forge_lattice_blast" $body
+            Write-Host $result.message -ForegroundColor Cyan
+            if ($result.nodes -and $result.nodes.Count -gt 0) {
+                $result.nodes | ForEach-Object {
+                    Write-Host ("  [d=$($_.distance)] [{0}] {1,-30} {2}" -f $_.id, $_.name, $_.filePath)
+                }
+            }
+            if ($result.unresolvedNames -and $result.unresolvedNames.Count -gt 0) {
+                Write-Host "  Unresolved: $($result.unresolvedNames -join ', ')" -ForegroundColor DarkGray
+            }
+        }
+        default {
+            Write-Host "Usage: pforge lattice <index|stat|query|callers|blast>" -ForegroundColor Yellow
+            Write-Host ""
+            Write-Host "Subcommands:"
+            Write-Host "  index [--since <sha>]           Build or update the code-graph index"
+            Write-Host "  stat                            Show index statistics"
+            Write-Host "  query [--query <q>] [--language <l>] [--kind <k>] [--limit <n>]"
+            Write-Host "  callers <name> [--limit <n>]    Find callers of a symbol"
+            Write-Host "  blast [<name>|--id <chunk-id>] [--direction callees|callers|both] [--depth <n>]"
+            exit 1
+        }
+    }
+}
+
 # ─── Command: anvil ────────────────────────────────────────────────
 function Invoke-Anvil {
     $sub = if ($Arguments.Count -gt 0) { $Arguments[0] } else { "" }
@@ -6489,6 +6633,7 @@ switch ($Command) {
     'fm-recall'    { Invoke-FmRecall }
     'timeline'     { Invoke-Timeline }
     'patterns'     { Invoke-Patterns }
+    'lattice'      { Invoke-Lattice }
     'graph'        { Invoke-Graph }
     'digest'       { Invoke-Digest }
     'plan-from-sarif' { Invoke-PlanFromSarif }

@@ -133,6 +133,8 @@ import { search as forgeSearch } from "./search/core.mjs";
 import { timeline as forgeTimeline } from "./timeline/core.mjs";
 // Phase-AUTH-RBAC-SCAFFOLD Slice 5 — auth middleware wired into MCP tool dispatch
 import { withAuth } from "./auth/middleware.mjs";
+// Phase LATTICE Slice 7 — Lattice code-graph MCP handlers
+import { latticeIndex, latticeStat, latticeQuery, latticeCallers, latticeBlast } from "./lattice.mjs";
 import express from "express";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -1738,6 +1740,72 @@ const TOOLS = [
       },
     },
   },
+  // Phase LATTICE Slice 7 — Lattice code-graph tools
+  {
+    name: "forge_lattice_index",
+    description: "Build or update the Lattice code-graph index — walks tracked source files, chunks them, and persists JSONL to .forge/lattice/. USE FOR: initial index build, re-indexing after large changes, warming the Anvil cache for fast re-runs. DO NOT USE FOR: reading index data (use forge_lattice_query, forge_lattice_callers, or forge_lattice_blast).",
+    inputSchema: {
+      type: "object",
+      properties: {
+        paths: { type: "array", items: { type: "string" }, description: "Paths to index relative to project root (default: ['.'])" },
+        since: { type: "string", description: "Only re-index files changed since this git revision (e.g. HEAD~1)" },
+        path: { type: "string", description: "Project directory (default: current)" },
+      },
+    },
+  },
+  {
+    name: "forge_lattice_stat",
+    description: "Return a bounded summary of the Lattice index — chunk count, edge count, language distribution, Anvil hit rate, and index byte size. Read-only. USE FOR: confirming index health before querying, dashboards. DO NOT USE FOR: full index reads.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        path: { type: "string", description: "Project directory (default: current)" },
+      },
+    },
+  },
+  {
+    name: "forge_lattice_query",
+    description: "Search the Lattice chunk index by name, language, kind, or file path. Filters are ANDed. USE FOR: finding function/class declarations, locating code by language or file path. DO NOT USE FOR: call-graph traversal (use forge_lattice_blast).",
+    inputSchema: {
+      type: "object",
+      properties: {
+        query: { type: "string", description: "Substring match against chunk name or filePath" },
+        language: { type: "string", description: "Exact language filter (e.g. js, ts, py)" },
+        kind: { type: "string", description: "Exact kind filter (e.g. function, class, file)" },
+        filePath: { type: "string", description: "Substring match against chunk filePath" },
+        limit: { type: "number", description: "Max results (default: 25)" },
+        path: { type: "string", description: "Project directory (default: current)" },
+      },
+    },
+  },
+  {
+    name: "forge_lattice_callers",
+    description: "Find all chunks that reference (call) a given symbol name. USE FOR: impact analysis — who depends on this function? DO NOT USE FOR: deep call-graph traversal (use forge_lattice_blast).",
+    inputSchema: {
+      type: "object",
+      required: ["name"],
+      properties: {
+        name: { type: "string", description: "Symbol name to find callers of" },
+        limit: { type: "number", description: "Max results (default: 25)" },
+        path: { type: "string", description: "Project directory (default: current)" },
+      },
+    },
+  },
+  {
+    name: "forge_lattice_blast",
+    description: "BFS traversal of the Lattice call graph — expands callees, callers, or both from a seed chunk up to a given depth. USE FOR: deep impact analysis, understanding call chains, finding all transitive dependencies. DO NOT USE FOR: simple symbol lookup (use forge_lattice_query).",
+    inputSchema: {
+      type: "object",
+      properties: {
+        chunkId: { type: "string", description: "Seed chunk id (exact 16-char hex)" },
+        name: { type: "string", description: "Seed chunk name (all matching chunks are enqueued)" },
+        direction: { type: "string", enum: ["callees", "callers", "both"], description: "Traversal direction (default: both)" },
+        depth: { type: "number", description: "Max BFS hops (default: 3)" },
+        limit: { type: "number", description: "Max nodes returned (default: 50)" },
+        path: { type: "string", description: "Project directory (default: current)" },
+      },
+    },
+  },
 ];
 
 function planNameToRunbookName(planPath) {
@@ -2060,6 +2128,12 @@ function executeTool(name, args) {
     case "forge_hallmark_show":
     case "forge_hallmark_verify":
     case "forge_pipelines_list":
+      return null; // Handled async in CallToolRequestSchema handler
+    case "forge_lattice_index":
+    case "forge_lattice_stat":
+    case "forge_lattice_query":
+    case "forge_lattice_callers":
+    case "forge_lattice_blast":
       return null; // Handled async in CallToolRequestSchema handler
     default:
       return { success: false, error: `Unknown tool: ${name}` };
@@ -6026,6 +6100,92 @@ server.setRequestHandler(CallToolRequestSchema, _wrapWithToolSpan(async (request
     }
   }
 
+  // ─── Phase LATTICE Slice 7 — Lattice code-graph tools ───
+  if (name === "forge_lattice_index") {
+    const t0 = Date.now();
+    try {
+      const cwd = args.path ? findProjectRoot(resolve(args.path)) : findProjectRoot(PROJECT_DIR);
+      const paths = Array.isArray(args.paths) ? args.paths : ['.'];
+      const since = typeof args.since === "string" && args.since ? args.since : undefined;
+      const result = await latticeIndex({ paths, since, deps: { cwd } });
+      emitToolTelemetry("forge_lattice_index", args, result, Date.now() - t0, "OK", cwd);
+      return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
+    } catch (err) {
+      emitToolTelemetry("forge_lattice_index", args, { error: err.message }, Date.now() - t0, "ERROR", findProjectRoot(PROJECT_DIR));
+      return { content: [{ type: "text", text: `forge_lattice_index error: ${err.message}` }], isError: true };
+    }
+  }
+
+  if (name === "forge_lattice_stat") {
+    const t0 = Date.now();
+    try {
+      const cwd = args.path ? findProjectRoot(resolve(args.path)) : findProjectRoot(PROJECT_DIR);
+      const result = latticeStat({ deps: { cwd } });
+      emitToolTelemetry("forge_lattice_stat", args, { chunks: result.chunks, edges: result.edges }, Date.now() - t0, "OK", cwd);
+      return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
+    } catch (err) {
+      emitToolTelemetry("forge_lattice_stat", args, { error: err.message }, Date.now() - t0, "ERROR", findProjectRoot(PROJECT_DIR));
+      return { content: [{ type: "text", text: `forge_lattice_stat error: ${err.message}` }], isError: true };
+    }
+  }
+
+  if (name === "forge_lattice_query") {
+    const t0 = Date.now();
+    try {
+      const cwd = args.path ? findProjectRoot(resolve(args.path)) : findProjectRoot(PROJECT_DIR);
+      const result = latticeQuery({
+        query: args.query || '',
+        language: args.language,
+        kind: args.kind,
+        filePath: args.filePath,
+        limit: args.limit != null ? Number(args.limit) : 25,
+        deps: { cwd },
+      });
+      emitToolTelemetry("forge_lattice_query", args, { total: result.total }, Date.now() - t0, "OK", cwd);
+      return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
+    } catch (err) {
+      emitToolTelemetry("forge_lattice_query", args, { error: err.message }, Date.now() - t0, "ERROR", findProjectRoot(PROJECT_DIR));
+      return { content: [{ type: "text", text: `forge_lattice_query error: ${err.message}` }], isError: true };
+    }
+  }
+
+  if (name === "forge_lattice_callers") {
+    const t0 = Date.now();
+    try {
+      const cwd = args.path ? findProjectRoot(resolve(args.path)) : findProjectRoot(PROJECT_DIR);
+      const result = latticeCallers({
+        name: args.name,
+        limit: args.limit != null ? Number(args.limit) : 25,
+        deps: { cwd },
+      });
+      emitToolTelemetry("forge_lattice_callers", args, { total: result.total }, Date.now() - t0, "OK", cwd);
+      return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
+    } catch (err) {
+      emitToolTelemetry("forge_lattice_callers", args, { error: err.message }, Date.now() - t0, "ERROR", findProjectRoot(PROJECT_DIR));
+      return { content: [{ type: "text", text: `forge_lattice_callers error: ${err.message}` }], isError: true };
+    }
+  }
+
+  if (name === "forge_lattice_blast") {
+    const t0 = Date.now();
+    try {
+      const cwd = args.path ? findProjectRoot(resolve(args.path)) : findProjectRoot(PROJECT_DIR);
+      const result = latticeBlast({
+        chunkId: args.chunkId,
+        name: args.name,
+        direction: args.direction || 'both',
+        depth: args.depth != null ? Number(args.depth) : 3,
+        limit: args.limit != null ? Number(args.limit) : 50,
+        deps: { cwd },
+      });
+      emitToolTelemetry("forge_lattice_blast", args, { total: result.total }, Date.now() - t0, "OK", cwd);
+      return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
+    } catch (err) {
+      emitToolTelemetry("forge_lattice_blast", args, { error: err.message }, Date.now() - t0, "ERROR", findProjectRoot(PROJECT_DIR));
+      return { content: [{ type: "text", text: `forge_lattice_blast error: ${err.message}` }], isError: true };
+    }
+  }
+
   // ─── Sync pforge tools ───
   const result = executeTool(name, args || {});
 
@@ -7633,6 +7793,12 @@ export function createExpressApp() {
     "forge_hallmark_show",
     "forge_hallmark_verify",
     "forge_pipelines_list",
+    // Phase LATTICE Slice 7 — Lattice code-graph tools are MCP-native.
+    "forge_lattice_index",
+    "forge_lattice_stat",
+    "forge_lattice_query",
+    "forge_lattice_callers",
+    "forge_lattice_blast",
     // Issue #134 — Crucible tools are MCP-native (handled by switch-case
     // in CallToolRequestSchema). Without these in the allowlist,
     // POST /api/tool/forge_crucible_* falls through to runPforge() which

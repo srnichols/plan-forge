@@ -5615,8 +5615,30 @@ server.setRequestHandler(CallToolRequestSchema, _wrapWithToolSpan(async (request
         }
       }
 
-      const summary = { passed, failed, total: happyPathIds.length, results };
-      const status = failed === 0 && happyPathIds.length > 0 ? "OK" : "FAIL";
+      // ── Module-based in-process scenarios (Phase-MEMORY-QA-PLAN Slice 6) ──
+      let moduleScenarios = [];
+      try {
+        const { REGISTERED_SCENARIOS } = await import("./testbed/scenarios/index.mjs");
+        moduleScenarios = Array.isArray(REGISTERED_SCENARIOS)
+          ? REGISTERED_SCENARIOS.filter(s => s.kind === "happy-path")
+          : [];
+      } catch { /* scenarios/index.mjs not yet present — silent skip */ }
+
+      for (const modScenario of moduleScenarios) {
+        try {
+          const res = await modScenario.run({ hub: activeHub, projectRoot: cwd });
+          results.push({ scenarioId: modScenario.scenarioId, ...res });
+          if (res.ok && res.status === "passed") passed++;
+          else failed++;
+        } catch (runErr) {
+          results.push({ scenarioId: modScenario.scenarioId, status: "error", error: runErr.message });
+          failed++;
+        }
+      }
+
+      const total = happyPathIds.length + moduleScenarios.length;
+      const summary = { passed, failed, total, results };
+      const status = failed === 0 && total > 0 ? "OK" : "FAIL";
       emitToolTelemetry("forge_testbed_happypath", args, summary, Date.now() - t0, status, cwd);
       return { content: [{ type: "text", text: JSON.stringify(summary, null, 2) }], isError: failed > 0 };
     } catch (err) {

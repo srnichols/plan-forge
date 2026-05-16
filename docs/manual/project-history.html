@@ -70,7 +70,7 @@
 
       <h2 id="v2-14-copilot">v2.14 — Copilot Platform Integration (March 2026)</h2>
 
-      <p><strong>What shipped</strong>: Native VS Code experience — skills, agents, lifecycle hooks (<code>SessionStart</code>, <code>PreToolUse</code>, <code>PostToolUse</code>, <code>Stop</code>), and instruction auto-loading via <code>applyTo</code> frontmatter. See <a href="multi-agent.html#copilot">Multi-Agent → Copilot</a>.</p>
+      <p><strong>What shipped</strong>: Native VS Code experience — skills, agents, Plan Forge lifecycle hooks (<code>PreDeploy</code>, <code>PreCommit</code>, <code>PreAgentHandoff</code>, <code>PostSlice</code>, configured via <code>.github/hooks/plan-forge.json</code>), and instruction auto-loading via <code>applyTo</code> frontmatter. (These are <em>not</em> Claude Code's <code>SessionStart</code> / <code>PreToolUse</code> / <code>PostToolUse</code> / <code>Stop</code> hooks — the trigger semantics differ; see <a href="installation.html">Installation</a> for the mapping.) See <a href="multi-agent.html#copilot">Multi-Agent → Copilot</a>.</p>
 
       <p><strong>Inflection point</strong>: Auto-loading turned guardrail adoption from optional ("whoever remembered") to default ("it just works"). The <code>applyTo</code> pattern moved compliance from roughly 20% to 100%. See <a href="lessons-learned.html#auto-loading-beats-manual">Lessons Learned → Lesson 2</a>.</p>
 

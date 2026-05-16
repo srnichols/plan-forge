@@ -36,7 +36,7 @@
 
       <h2 id="what-agent-factory-means">What "Agent Factory" means in Plan Forge</h2>
 
-      <p>Plan Forge ships <strong class="text-slate-200">20 agent personas</strong> out of the box. Each is a Markdown file under <code>.github/agents/</code> with a YAML frontmatter description and a body that defines the persona's expertise, tone, and lane. Agents are invoked from chat (agent picker dropdown) or referenced from a plan slice (<code>agent: security-reviewer</code>). They cannot edit files — they audit and report.</p>
+      <p>Plan Forge ships <strong class="text-slate-200"><!--c:agents-->19<!--/c--> agent personas</strong> out of the box (6 stack-specific + 7 cross-stack + 5 pipeline + 1 audit-classifier). Each is a Markdown file under <code>.github/agents/</code> with a YAML frontmatter description and a body that defines the persona's expertise, tone, and lane. Agents are invoked from chat (agent picker dropdown) or referenced from a plan slice (<code>agent: security-reviewer</code>). They cannot edit files — they audit and report.</p>
 
       <p>The "Agent Factory" is the configuration plus convention layer that makes those 20 personas productive against a customer's specific stack on Day 1, instead of generic-but-vague.</p>
 
@@ -134,19 +134,20 @@
         </tbody>
       </table>
 
-      <h3 id="pipeline-agents">Pipeline agents (6) — these have handoff buttons</h3>
+      <h3 id="pipeline-agents">Pipeline agents (5) — these have handoff buttons</h3>
 
       <table>
         <thead><tr><th>Agent</th><th>Stage</th></tr></thead>
         <tbody>
-          <tr><td><code>specifier</code></td><td>Step 0: define what & why</td></tr>
-          <tr><td><code>preflight</code></td><td>Step 1: verify prerequisites</td></tr>
+          <tr><td><code>specifier</code></td><td>Step 0: define what &amp; why</td></tr>
           <tr><td><code>plan-hardener</code></td><td>Step 2: harden plan into execution contract</td></tr>
           <tr><td><code>executor</code></td><td>Step 3: execute slices with validation gates</td></tr>
           <tr><td><code>reviewer-gate</code></td><td>Step 5: independent review and drift detection</td></tr>
           <tr><td><code>shipper</code></td><td>Step 6: commit, deploy, close</td></tr>
         </tbody>
       </table>
+
+      <p class="text-sm text-slate-400 mt-2">Step&nbsp;1 (preflight) ships as a <em>prompt</em>, not an agent — see <code>.github/prompts/step1-preflight-check.prompt.md</code>. It runs inline rather than as a separate persona.</p>
 
       <h3 id="audit-classifier">Audit / classifier (1)</h3>
 
@@ -202,7 +203,7 @@
 
       <h3 id="instructions-files"><code>.github/instructions/*.instructions.md</code></h3>
 
-      <p>Plan Forge ships ~16 of these. Each has an <code>applyTo</code> glob that controls when it auto-loads:</p>
+      <p>Plan Forge ships <!--c:instructions-->18<!--/c--> of these per preset (the dotnet/typescript/python/etc. preset directories under <code>presets/</code>, each with its own <code>.github/instructions/</code>). Each has an <code>applyTo</code> glob that controls when it auto-loads:</p>
 
       <table>
         <thead><tr><th>File</th><th>Loads on</th></tr></thead>

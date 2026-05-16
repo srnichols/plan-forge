@@ -9,6 +9,43 @@ Format follows [Keep a Changelog](https://keepachangelog.com/).
 
 ---
 
+## [2.93.3] — 2026-05-16 — Docs hotfix: manual drift audit (P1 batch + residuals)
+
+> **One-liner**: Second batch of the manual drift audit started in v2.93.2. Resolves all 22 P1 pages flagged in [#174](https://github.com/srnichols/plan-forge/issues/174) (21 findings across 11 pages) plus the 5 residual items deferred from v2.93.2. Same defect class as v2.93.0 Slice 7: features documented in the manual that never shipped in code. Documentation only — no CLI, MCP tool, or schema changes.
+
+#### Fixed — fake API endpoints / tool names
+- **`docs/manual/forge-master.html`** — Removed two fabricated HTTP endpoints (`POST /api/forge-master/ask`, `POST /api/forge-master/stream`) and replaced them with the real 9-endpoint surface verified against `pforge-master/src/http-routes.mjs`: `POST /api/forge-master/chat`, `GET /api/forge-master/chat/:sessionId/stream` (SSE), `POST /api/forge-master/chat/:sessionId/approve`, `GET /api/forge-master/session/:sessionId`, `GET /api/forge-master/sessions`, `GET /api/forge-master/prompts`, `GET /api/forge-master/capabilities`, `GET /api/forge-master/cache-stats`, `GET / PUT /api/forge-master/prefs` (was incorrectly documented as `GET / POST`). Hardcoded "69 MCP tools" replaced with `<!--c:tools-->` token (now 77). Streaming-chat callout corrected to describe the two-step `POST /chat` → SSE subscribe flow.
+- **`docs/manual/mcp-server-reference.html`** — Forge-Master endpoint table rewritten with the same 9 real routes (previously listed the same 2 fake `ask`/`stream` endpoints).
+- **`docs/manual/dashboard-forge-master.html`** — Streaming-chat reference corrected to `POST /api/forge-master/chat` + `GET /api/forge-master/chat/:sessionId/stream`.
+- **`docs/manual/health-dna.html`** — Removed two fabrications: the non-existent `forge_health_trim` MCP tool (no such entry in `tools.json`) and the non-existent `health.weights` config key (no reference in `pforge-mcp/*.mjs`). Replaced with: "the file rotates on size" (trim) and a description of the actual default weights baked into `forge_health_trend` (drift 0.30, incident-rate 0.25, test-pass 0.20, model-success 0.15, cost 0.10). Figure 23-1 alt text corrected `.forge/health-dna.json` → `.forge/health-dna.jsonl`.
+- **`docs/manual/bug-registry.html`** — Status machine corrected to match the real `BUG_STATUSES` enum (`["open", "in-fix", "fixed", "wont-fix", "duplicate"]` in `pforge-mcp/tempering/bug-registry.mjs`). Removed the fabricated `validating` intermediate state — `forge_bug_validate_fix` transitions directly to `fixed` on pass (failure stays `in-fix` with attempt appended to `validationAttempts[]`). Reclassified `noise` from "terminal status" to "triage classification" (it lives in `bug.triage`, not `bug.status`). SVG diagram regen tracked for a follow-up.
+
+#### Fixed — fake CLI subcommand syntax
+- **`docs/manual/liveguard-tools.html`** — Replaced fake `pforge incident capture` / `pforge incident list` subcommands with the real CLI: `pforge incident "<description>" [--severity ...] [--files ...] [--resolved-at ISO]` (single command, no subcommands; see `pforge.ps1` L4318 / `pforge.sh` L3596). Replaced fake `pforge runbook list/get/add` with the real single command: `pforge runbook <plan-file>`. Pointed users to `pforge triage` for listing ranked open incidents. Meta description and intro corrected from "11 tools" → "14 tools" (matches the v2.30.0 callout and table). Incidents storage path corrected from `.forge/incidents/` directory → `.forge/incidents.jsonl` file (the canonical write target per `server.mjs:1297`, `capabilities.mjs:920`, `orchestrator.mjs:9072`, and the `pforge.sh:3620` manual-steps printout).
+- **`docs/manual/liveguard-runbooks.html`** — Replaced fake `pforge incident list` with `pforge triage`.
+
+#### Fixed — internal count contradictions
+- **`docs/manual/liveguard-dashboard.html`** — Resolved a 5-vs-7 LiveGuard tab contradiction. The chapter prose, v2.30.0 callout, and ASCII tab-strip mock-up now all show 7 tabs (Health, Incidents, Triage, Security, Env, Watcher, Bug Registry) — matching Figure 7-1 in `dashboard.html` and the real tab structure. Incidents-tab path corrected from `.forge/incidents/` → `.forge/incidents.jsonl`.
+- **`docs/manual/dashboard.html`** — LiveGuard tabs callout corrected from "5 amber-accented tabs" → "7 amber-accented tabs" with full tab list, aligning with Figure 7-1.
+- **`docs/manual/agent-factory-recipe.html`** — "20 agent personas" → `<!--c:agents-->19<!--/c-->` token with the verified breakdown (6 stack-specific + 7 cross-stack + 5 pipeline + 1 audit-classifier). Pipeline-agents section count corrected `(6)` → `(5)` and the `preflight` row was removed — step 1 ships as a prompt (`step1-preflight-check.prompt.md`), not as an agent file. Instruction-files claim `~16` → `<!--c:instructions-->18<!--/c-->` token with provenance note.
+- **`docs/manual/remote-bridge.html`** — Resolved a 4-vs-6 channels contradiction. Intro prose now matches Figure 20-1: 6 channels supported out of the box (Telegram, Slack, Discord, Microsoft Teams, PagerDuty, OpenClaw). Meta description updated to match.
+- **`docs/manual/multi-agent.html`** — "MCP tools ✓ 18" matrix cells (which contradicted the canonical 77-tool count) reduced to a plain checkmark, since the matrix is comparing adapter completeness, not enumerating tools.
+- **`docs/manual/mcp-server.html`** — "30+ endpoints" → "~100 endpoints" (real count is 96 `/api/*` routes in `server.mjs`).
+- **`docs/manual/project-history.html`** — Phase 1 narrative no longer claims Plan Forge shipped Claude Code’s `SessionStart`/`PreToolUse`/`PostToolUse`/`Stop` hooks. Rewritten to name the real Plan Forge lifecycle hooks (`PreDeploy`, `PreCommit`, `PreAgentHandoff`, `PostSlice` + `plan-forge.json` config) with a contrast note explaining the Claude Code mapping.
+- **`docs/manual/installation.html`** — Files-created tree corrected: agents line was "8 files (7 stack-specific + 1 shared)" → "19 files (6 stack-specific + 7 cross-stack + 5 pipeline + 1 audit-classifier)".
+
+#### Audit method
+- Verified every flagged route, tool name, CLI subcommand, and config key against authoritative sources (`pforge-master/src/http-routes.mjs`, `pforge-mcp/tools.json`, `pforge-mcp/tempering/bug-registry.mjs`, `pforge.ps1` / `pforge.sh`, `pforge-mcp/server.mjs`, `pforge-mcp/capabilities.mjs`, `extensions/` directory listing) before editing the manual.
+- Used the existing `<!--c:KEY-->VALUE<!--/c-->` token system (`docs/manual/assets/manual.js`) for any number that has a canonical source-of-truth, rather than hardcoding values that drift.
+- Documentation maintenance script (`node docs/manual/maintain.mjs`) — 60 chapters, 217 indexed sections, 5903 internal links verified.
+
+#### Notes
+- No CLI, MCP tool, schema, or behavior change — documentation-only release.
+- Test suite unchanged (31/31 pass for `orchestrator-gate-dispatch` + `crucible-import`).
+- Closes [#174](https://github.com/srnichols/plan-forge/issues/174).
+
+---
+
 ## [2.93.2] — 2026-05-16 — Docs hotfix: manual drift audit
 
 > **One-liner**: Removes documentation drift discovered during a top-down audit of `docs/manual/*.html`. Triggered by the same class of defect that bit `spec-kit-interop.html` in v2.93.0 Slice 7 — features claimed in the manual that never shipped in code. Fixes 9 critical/high drift sites + bulk-corrects stale counts in 9 files via the `<!--c:KEY-->` token system. No code surface changes; documentation only.

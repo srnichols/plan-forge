@@ -137,7 +137,7 @@
         <h3 id="runbook-mttr">Incident MTTR Exceeded — Time-to-Resolve Beyond Threshold</h3>
         <p class="text-sm text-slate-400 mb-2"><strong>Source</strong>: <code class="text-forge-400">forge_alert_triage</code> (via MTTR calculation) | <strong>Typical severity</strong>: High</p>
         <ol class="mt-2 space-y-2 text-sm text-slate-300 list-decimal list-inside mb-6">
-          <li><strong>Review</strong>: Run <code class="text-forge-400">pforge incident list</code> to see open incidents and their MTTR.</li>
+          <li><strong>Review</strong>: Run <code class="text-forge-400">pforge triage</code> to see ranked open incidents and drift violations with their MTTR.</li>
           <li><strong>Escalate</strong>: If the incident has been open beyond the SLA for its severity level (see severity matrix above), escalate to the next tier defined in <code>onCall.escalation</code>.</li>
           <li><strong>Root cause</strong>: Is the incident blocked on external factors? If so, document the blocker in the incident description.</li>
           <li><strong>Close</strong>: Once resolved, update the incident status. MTTR is automatically calculated from capture time to close time.</li>

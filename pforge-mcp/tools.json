@@ -563,7 +563,7 @@
   },
   {
     "name": "forge_run_plan",
-    "description": "Execute a hardened plan — spawn CLI workers for each slice, validate at every boundary, track tokens. Supports Full Auto (gh copilot CLI) and Assisted (human + automated gates) modes. Use --estimate for cost prediction without executing. To bypass the crucibleId gate, pass manualImport:true (MCP) or --manual-import (CLI).",
+    "description": "Execute a hardened plan — spawn CLI workers for each slice, validate at every boundary, track tokens. Supports Full Auto (gh copilot CLI) and Assisted (human + automated gates) modes. Use --estimate for cost prediction without executing.",
     "inputSchema": {
       "type": "object",
       "properties": {
@@ -1920,7 +1920,9 @@
       "properties": {
         "source": {
           "type": "string",
-          "enum": ["spec-kit"],
+          "enum": [
+            "spec-kit"
+          ],
           "description": "Spec format to import from. Currently only 'spec-kit' is supported."
         },
         "dir": {
@@ -1940,10 +1942,19 @@
           "description": "Project directory (default: current)"
         }
       },
-      "required": ["source"]
+      "required": [
+        "source"
+      ]
     },
-    "intent": ["crucible", "import", "spec-kit"],
-    "aliases": ["crucible-import", "speckit-import"],
+    "intent": [
+      "crucible",
+      "import",
+      "spec-kit"
+    ],
+    "aliases": [
+      "crucible-import",
+      "speckit-import"
+    ],
     "cost": "low",
     "maxConcurrent": 5,
     "addedIn": "2.93.0",
@@ -1953,7 +1964,12 @@
       "docs/plans/Phase-<NAME>-PLAN.md",
       ".forge/crucible/manual-imports.jsonl"
     ],
-    "consumes": ["spec.md", "plan.md", "tasks.md", "constitution.md"],
+    "consumes": [
+      "spec.md",
+      "plan.md",
+      "tasks.md",
+      "constitution.md"
+    ],
     "sideEffects": [
       "writes smelt record",
       "writes Phase Plan",
@@ -1974,7 +1990,9 @@
       }
     },
     "example": {
-      "input": { "source": "spec-kit" },
+      "input": {
+        "source": "spec-kit"
+      },
       "output": {
         "ok": true,
         "smeltId": "imported-speckit-<uuid>",
@@ -2003,14 +2021,23 @@
         }
       }
     },
-    "intent": ["crucible", "status", "list-smelts"],
-    "aliases": ["crucible-status", "smelt-status"],
+    "intent": [
+      "crucible",
+      "status",
+      "list-smelts"
+    ],
+    "aliases": [
+      "crucible-status",
+      "smelt-status"
+    ],
     "cost": "low",
     "maxConcurrent": 10,
     "addedIn": "2.93.0",
     "prerequisites": [],
     "produces": [],
-    "consumes": [".forge/crucible/"],
+    "consumes": [
+      ".forge/crucible/"
+    ],
     "sideEffects": [],
     "errors": {
       "SMELT_NOT_FOUND": {
@@ -2022,7 +2049,14 @@
       "input": {},
       "output": {
         "ok": true,
-        "smelts": [{ "id": "imported-speckit-<uuid>", "source": "speckit", "status": "imported", "created": "2026-05-13T12:00:00Z" }]
+        "smelts": [
+          {
+            "id": "imported-speckit-<uuid>",
+            "source": "speckit",
+            "status": "imported",
+            "created": "2026-05-13T12:00:00Z"
+          }
+        ]
       }
     }
   },

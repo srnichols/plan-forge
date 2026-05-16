@@ -268,10 +268,15 @@
       <table>
         <thead><tr><th>Method</th><th>Endpoint</th><th>Description</th></tr></thead>
         <tbody>
-          <tr><td>POST</td><td><code>/api/forge-master/ask</code></td><td>One-shot reasoning. Returns lane classification + reply.</td></tr>
-          <tr><td>POST</td><td><code>/api/forge-master/stream</code></td><td>Streaming variant (SSE). Emits <code>quorum-estimate</code> event before model dispatch when advisory mode triggers.</td></tr>
-          <tr><td>GET</td><td><code>/api/forge-master/cache-stats</code></td><td>Embedding cache liveliness: <code>{size, hitRate, maxSize}</code></td></tr>
-          <tr><td>GET / POST</td><td><code>/api/forge-master/prefs</code></td><td>Read / write per-project Forge-Master preferences (<code>quorumAdvisory</code>, <code>embeddingFallback</code>, etc.)</td></tr>
+          <tr><td>POST</td><td><code>/api/forge-master/chat</code></td><td>Start a chat session (or continue an existing one with <code>sessionId</code>). Returns <code>{ sessionId, ... }</code>.</td></tr>
+          <tr><td>GET</td><td><code>/api/forge-master/chat/:sessionId/stream</code></td><td>Server-Sent Events stream for the session. Emits <code>classification</code>, <code>quorum-estimate</code> (if advisory triggers), <code>tool-call</code>, <code>tool-result</code>, <code>delta</code>, <code>done</code>.</td></tr>
+          <tr><td>POST</td><td><code>/api/forge-master/chat/:sessionId/approve</code></td><td>Resolve a pending approval mid-stream (quorum-estimate cancel, gated tool calls).</td></tr>
+          <tr><td>GET</td><td><code>/api/forge-master/session/:sessionId</code></td><td>Last ~10 turns for the session (transcript replay).</td></tr>
+          <tr><td>GET</td><td><code>/api/forge-master/sessions</code></td><td>Recent sessions list.</td></tr>
+          <tr><td>GET</td><td><code>/api/forge-master/prompts</code></td><td>Prompt catalog used by Studio.</td></tr>
+          <tr><td>GET</td><td><code>/api/forge-master/capabilities</code></td><td>Server capabilities snapshot (models, tier, advisory mode).</td></tr>
+          <tr><td>GET</td><td><code>/api/forge-master/cache-stats</code></td><td>Embedding cache liveliness: <code>{size, hitRate, maxSize}</code>.</td></tr>
+          <tr><td>GET / PUT</td><td><code>/api/forge-master/prefs</code></td><td>Read / write per-project Forge-Master preferences (<code>quorumAdvisory</code>, <code>embeddingFallback</code>, etc.). Writes to <code>.forge/fm-prefs.json</code>.</td></tr>
         </tbody>
       </table>
 

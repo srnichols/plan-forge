@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Chapter 20: The Remote Bridge — Plan Forge Manual</title>
-  <meta name="description" content="Forward hub events to Telegram, Slack, Discord, and OpenClaw. Approval flows from your phone. Webhook routing with rate limits." />
+  <meta name="description" content="Forward hub events to Telegram, Slack, Discord, Microsoft Teams, PagerDuty, and OpenClaw. Approval flows from your phone. Webhook routing with rate limits." />
   <link rel="icon" type="image/svg+xml" href="../assets/plan-forge-logo.svg" />
   <script src="https://cdn.tailwindcss.com"></script>
   <script>tailwind.config={theme:{extend:{colors:{forge:{400:'#f59e0b',500:'#d97706'}}}}}</script>
@@ -34,7 +34,7 @@
         <p class="text-lg text-slate-400 mb-8">Forward hub events off-box. Approve slices from your phone. One config, four channels.</p>
 
         <div class="callout callout-tip">
-          <strong>Shipped in Phase FORGE-SHOP-03</strong> (commits <code>551b850</code>, <code>5b5a8e7</code>). Four channels supported out of the box: <strong>Telegram</strong>, <strong>Slack</strong>, <strong>Discord</strong>, and <strong>OpenClaw</strong>. Generic webhook routing, per-channel rate limits, and a live config watcher on the dashboard's Notifications subtab.
+          <strong>Shipped in Phase FORGE-SHOP-03</strong> (commits <code>551b850</code>, <code>5b5a8e7</code>; extended in later phases). Six channels supported out of the box: <strong>Telegram</strong>, <strong>Slack</strong>, <strong>Discord</strong>, <strong>Microsoft Teams</strong>, <strong>PagerDuty</strong>, and <strong>OpenClaw</strong> (Slack / Teams / PagerDuty / Email also ship as installable <code>notify-*</code> extensions under <code>extensions/</code>). Generic webhook routing, per-channel rate limits, and a live config watcher on the dashboard's Notifications subtab.
         </div>
 
         <h2 id="why">Why a Remote Bridge?</h2>

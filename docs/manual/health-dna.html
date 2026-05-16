@@ -53,7 +53,7 @@
 
         <h2 id="signals">The Five Signals</h2>
 
-        <figure class="manual-figure" id="fig-23-1"><img src="assets/diagrams/liveguard-composite-health.svg" alt="Health DNA composite scoring: five signals (drift, incident rate, test pass rate, model success rate, cost per slice) feed into forge_health_trend which computes a weighted composite score 0-100. 7-day rolling delta detects decay; sustained drops trigger alerts and auto-incidents. Score persists to .forge/health-dna.json and renders on the LiveGuard Health tab as a gauge with trend arrow." class="diagram-img diagram-img-md my-4" /><figcaption class="manual-figcaption"><!--fignum--><span class="manual-fignum">Figure 23-1.</span><!--/fignum--> <!--cap:auto-->Health DNA composite scoring<!--/cap--></figcaption></figure>
+        <figure class="manual-figure" id="fig-23-1"><img src="assets/diagrams/liveguard-composite-health.svg" alt="Health DNA composite scoring: five signals (drift, incident rate, test pass rate, model success rate, cost per slice) feed into forge_health_trend which computes a weighted composite score 0-100. 7-day rolling delta detects decay; sustained drops trigger alerts and auto-incidents. Score persists to .forge/health-dna.jsonl and renders on the LiveGuard Health tab as a gauge with trend arrow." class="diagram-img diagram-img-md my-4" /><figcaption class="manual-figcaption"><!--fignum--><span class="manual-fignum">Figure 23-1.</span><!--/fignum--> <!--cap:auto-->Health DNA composite scoring<!--/cap--></figcaption></figure>
         <table>
           <thead><tr><th>Signal</th><th>Source</th><th>What it catches</th></tr></thead>
           <tbody>
@@ -82,7 +82,7 @@
 }</code></pre>
         </div>
 
-        <p><code>composite</code> is a weighted blend (weights configurable via <code>.forge.json → health.weights</code>). <code>delta7d</code> and <code>delta30d</code> compare against historical records — a small negative delta is noise, a sustained negative delta is decay.</p>
+        <p><code>composite</code> is a weighted blend computed inside <code>forge_health_trend</code> (current default weights: drift 0.30, incident-rate 0.25, test-pass 0.20, model-success 0.15, cost 0.10 — see <code>pforge-mcp/server.mjs</code>). <code>delta7d</code> and <code>delta30d</code> compare against historical records — a small negative delta is noise, a sustained negative delta is decay.</p>
 
         <h2 id="decay">Decay Detection</h2>
         <p>The watcher can alert on Health DNA thresholds:</p>
@@ -96,7 +96,7 @@
         <p>The LiveGuard dashboard's Health tab renders the composite score as a sparkline, with per-signal sub-lines toggleable. The Forge Intelligence page cross-references Health DNA with the OpenBrain memory corpus — "your drift score dropped the day you added the new caching layer" is exactly the kind of conclusion the Learn station exists to surface.</p>
 
         <div class="callout callout-info">
-          <strong>Why JSONL, not JSON?</strong> Health DNA is append-only by design — every run writes one line. Trimming happens on explicit request (<code>forge_health_trim</code>), not automatically. That way a rolled-back slice doesn't also roll back the memory of how sick the project was before the rollback.
+          <strong>Why JSONL, not JSON?</strong> Health DNA is append-only by design — every run writes one line. The file rotates on size (rather than via a built-in trim tool). That way a rolled-back slice doesn't also roll back the memory of how sick the project was before the rollback.
         </div>
 
         <div id="chapter-prev-next" class="chapter-nav"></div>

@@ -40,7 +40,7 @@
         <p>The reasoning orchestrator's home. See <a href="forge-master.html">the Forge-Master chapter</a> for the deep dive. Three panels:</p>
         <ul>
           <li><strong>Prompt gallery</strong> — pre-built prompts grouped by intent (operational, troubleshoot, advisory). Click to populate the chat box; edit before sending.</li>
-          <li><strong>Streaming chat</strong> — sends to <code>/api/forge-master/stream</code>. Shows live <code>classification</code> badge with the <code>via</code> field (<code>keyword</code> / <code>embedding-cache</code> / <code>router-llm</code>), <code>quorum-estimate</code> cost preview if advisory mode triggers (with cancel button), live <code>tool-call</code> trace, and the streaming reply token-by-token.</li>
+          <li><strong>Streaming chat</strong> — <code>POST /api/forge-master/chat</code> to start, then subscribes to <code>GET /api/forge-master/chat/:sessionId/stream</code>. Shows live <code>classification</code> badge with the <code>via</code> field (<code>keyword</code> / <code>embedding-cache</code> / <code>router-llm</code>), <code>quorum-estimate</code> cost preview if advisory mode triggers (with cancel button), live <code>tool-call</code> trace, and the streaming reply token-by-token.</li>
           <li><strong>Embedding cache tile</strong> — pulls from <code>GET /api/forge-master/cache-stats</code>. Shows <code>{size, hitRate, maxSize: 500}</code>. When cold, displays a hint that hits start once you've used Forge-Master a few times.</li>
         </ul>
 

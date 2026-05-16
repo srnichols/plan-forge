@@ -45,7 +45,7 @@
 
         <h2 id="lifecycle">The Status Lifecycle</h2>
 
-        <img src="assets/diagrams/bug-registry-status-machine.svg" alt="Bug registry status machine: bugs start in 'open' (just registered, amber). Forward progression: open -> in-fix (work in progress) -> validating (forge_bug_validate_fix runs the gate) -> fixed (terminal green). If the gate fails, validating loops back to in-fix. From 'open' there are three side classifications to dashed gray terminal states: won't-fix, duplicate (links to original), and noise (false positive). Backward transitions from any terminal state are forbidden (red dashed line crossed out). Fingerprint dedupes on register; re-registering an existing fingerprint does not open a new bug ID." class="diagram-img diagram-img-md my-4" />
+        <img src="assets/diagrams/bug-registry-status-machine.svg" alt="Bug registry status machine: bugs start in 'open' (just registered, amber). Forward progression: open -> in-fix (work in progress) -> fixed (terminal green) after forge_bug_validate_fix re-runs the originating scanner and the gate passes. If the validation gate fails, the bug stays in-fix with an entry appended to bug.validationAttempts[]. From 'open' there are two side classifications to dashed gray terminal states: wont-fix and duplicate (links to original). Backward transitions from any terminal state are forbidden (red dashed line crossed out). Fingerprint dedupes on register; re-registering an existing fingerprint does not open a new bug ID." class="diagram-img diagram-img-md my-4" />
         <p>Every bug moves through an explicit state machine:</p>
 
         <div class="cmd-block mb-4">
@@ -63,7 +63,7 @@ open → noise       (classifier ruled it a false positive)</code></pre>
         <ul>
           <li><code>real-bug</code> — evidence is consistent across scanners; record is persisted and captured to L3 memory.</li>
           <li><code>flaky</code> — evidence shows inconsistency; ignored unless confirmed across multiple runs.</li>
-          <li><code>noise</code> — known false-positive pattern; discarded.</li>
+          <li><code>noise</code> — a triage <em>classification</em> applied by the audit classifier (e.g. "known false-positive pattern"). It is <em>not</em> a bug status. Bugs flagged as noise are typically resolved as <code>wont-fix</code> with the classification recorded in <code>bug.triage</code>.</li>
         </ul>
         <p>Only <code>real-bug</code> outcomes write to <code>.forge/bugs/</code> and fire <code>tempering-bug-registered</code>.</p>
 

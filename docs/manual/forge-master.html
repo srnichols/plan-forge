@@ -36,7 +36,7 @@
         </div>
 
         <h2 id="why">Why a Reasoning Orchestrator?</h2>
-        <p>Plan Forge has 69 MCP tools. Most of the time you know which one you need. But sometimes you don't — sometimes the question is open-ended:</p>
+        <p>Plan Forge has <!--c:tools-->77<!--/c--> MCP tools. Most of the time you know which one you need. But sometimes you don't — sometimes the question is open-ended:</p>
 
         <ul>
           <li><em>"Why did Phase-27 Slice 4 fail?"</em> &rarr; needs <code>forge_watch_live</code> + <code>brain_recall</code> + <code>forge_bug_list</code></li>
@@ -148,7 +148,7 @@
         </div>
 
         <h3>Cost preview before dispatch</h3>
-        <p>Before any model is called, the <code>/api/forge-master/stream</code> endpoint emits a <code>quorum-estimate</code> SSE event with the projected cost. Studio displays this and lets you cancel before spending. Programmatic clients should listen for the event:</p>
+        <p>Before any model is called, the <code>GET /api/forge-master/chat/:sessionId/stream</code> endpoint emits a <code>quorum-estimate</code> SSE event with the projected cost. Studio displays this and lets you cancel before spending. Programmatic clients should listen for the event:</p>
 
         <pre><code>data: {"type":"quorum-estimate","models":3,"estimatedUSD":0.0142,"models":[
   {"name":"claude-opus-4.7","estUSD":0.0061},
@@ -169,10 +169,15 @@
           <thead><tr><th>Method</th><th>Endpoint / tool</th><th>Description</th></tr></thead>
           <tbody>
             <tr><td>MCP tool</td><td><code>forge_master_ask</code></td><td>One-shot reasoning. Accepts <code>{ message, sessionId? }</code>; returns lane, via, toolCalls[], reply, costUSD.</td></tr>
-            <tr><td>POST</td><td><code>/api/forge-master/ask</code></td><td>Same as the MCP tool, over HTTP. Returns <code>200</code> with the full result.</td></tr>
-            <tr><td>POST</td><td><code>/api/forge-master/stream</code></td><td>Streaming variant (Server-Sent Events). Emits <code>classification</code>, <code>quorum-estimate</code> (if advisory triggers), <code>tool-call</code>, <code>tool-result</code>, <code>delta</code> (token chunks), <code>done</code>.</td></tr>
+            <tr><td>POST</td><td><code>/api/forge-master/chat</code></td><td>Start a chat session (or continue an existing one with <code>sessionId</code>). Returns <code>{ sessionId, ... }</code>. Pair with the SSE stream below to receive incremental tokens.</td></tr>
+            <tr><td>GET</td><td><code>/api/forge-master/chat/:sessionId/stream</code></td><td>Server-Sent Events stream for the session. Emits <code>classification</code>, <code>quorum-estimate</code> (if advisory triggers), <code>tool-call</code>, <code>tool-result</code>, <code>delta</code> (token chunks), <code>done</code>.</td></tr>
+            <tr><td>POST</td><td><code>/api/forge-master/chat/:sessionId/approve</code></td><td>Resolve a pending approval prompt mid-stream (used by quorum-estimate cancel, gated tool calls).</td></tr>
+            <tr><td>GET</td><td><code>/api/forge-master/session/:sessionId</code></td><td>Last ~10 turns for the session — for transcript replay.</td></tr>
+            <tr><td>GET</td><td><code>/api/forge-master/sessions</code></td><td>Recent sessions list.</td></tr>
+            <tr><td>GET</td><td><code>/api/forge-master/prompts</code></td><td>Prompt catalog used by the Studio sidebar.</td></tr>
+            <tr><td>GET</td><td><code>/api/forge-master/capabilities</code></td><td>Server capabilities snapshot (models, tier, advisory mode).</td></tr>
             <tr><td>GET</td><td><code>/api/forge-master/cache-stats</code></td><td>Embedding cache liveliness: <code>{ size, hitRate, maxSize: 500 }</code>. Use as a health probe.</td></tr>
-            <tr><td>GET / POST</td><td><code>/api/forge-master/prefs</code></td><td>Read / write per-project Forge-Master preferences. Schema: <code>{ tier, autoEscalate, quorumAdvisory, embeddingFallback }</code>.</td></tr>
+            <tr><td>GET / PUT</td><td><code>/api/forge-master/prefs</code></td><td>Read / write per-project Forge-Master preferences. Schema: <code>{ tier, autoEscalate, quorumAdvisory, embeddingFallback }</code>. <code>GET</code> returns current values; <code>PUT</code> writes to <code>.forge/fm-prefs.json</code>.</td></tr>
           </tbody>
         </table>
 
@@ -232,7 +237,7 @@
 
         <ul>
           <li><strong>Prompt gallery</strong> — pre-built prompts grouped by intent (operational, troubleshoot, advisory). Click to populate the chat box; edit before sending.</li>
-          <li><strong>Streaming chat</strong> — sends to <code>/api/forge-master/stream</code>. Shows live classification badge, tool-call trace as each tool fires, and the streaming reply token-by-token.</li>
+          <li><strong>Streaming chat</strong> — <code>POST /api/forge-master/chat</code> to start, then subscribes to <code>GET /api/forge-master/chat/:sessionId/stream</code>. Shows live classification badge, tool-call trace as each tool fires, and the streaming reply token-by-token.</li>
           <li><strong>Embedding cache tile</strong> — shows current size, hit rate, and the LRU capacity (500). When the cache is cold, the tile shows a hint that hits will start once you've used Forge-Master a few times.</li>
         </ul>
 

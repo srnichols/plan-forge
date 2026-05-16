@@ -63,7 +63,7 @@ function makeHappyPathScenario(id, overrides = {}) {
 // ─── Scenario Fixture Validation ──────────────────────────────────────
 
 describe("testbed-happypath — scenario fixtures", () => {
-  const repoRoot = resolve(process.cwd(), "..");
+  const repoRoot = resolve(fileURLToPath(import.meta.url), "..", "..", "..");
   const scenarioDir = resolve(repoRoot, "docs", "plans", "testbed-scenarios");
 
   const expectedIds = [

@@ -2403,6 +2403,7 @@ export function spawnWorker(prompt, options = {}) {
     role = null,       // bug #78/#80: call-site role (e.g. "quorum-dry-run",
                        // "reviewer", "analysis") — drives API-path prompt
                        // shaping and telemetry.
+    eventBus = null,   // Issue #162: probe-result event logging
   } = options;
 
   // Routing decision (fixed in meta-bug #103):
@@ -2466,8 +2467,41 @@ export function spawnWorker(prompt, options = {}) {
     return callApiWorker(prompt, model, apiProvider, { timeout, role });
   }
 
-  return new Promise((workerResolve, workerReject) => {
-    const workers = worker ? [{ name: worker }] : detectWorkers().filter((w) => w.available && w.type !== "api");
+  return new Promise(async (workerResolve, workerReject) => {
+    // Issue #162: run the probe and emit a probe-result event for every attempt
+    // so events.log captures whether each slice triggered a fresh probe.
+    const runProbe = () => {
+      const probeResults = worker
+        ? [{ name: worker }]
+        : detectWorkers().filter((w) => w.available && w.type !== "api");
+      if (!worker) {
+        for (const w of detectWorkers()) {
+          if (w.type !== "api") {
+            eventBus?.emit("probe-result", {
+              worker: w.name,
+              available: w.available,
+              reason: w.reason || null,
+              version: w.version || null,
+            });
+          }
+        }
+      }
+      return probeResults;
+    };
+
+    let workers = runProbe();
+
+    // Issue #162: retry with backoff before giving up — handles transient
+    // race conditions where the previous slice's worker subprocess hadn't
+    // fully released handles (e.g. token-cache write lock).
+    if (workers.length === 0 && !worker) {
+      for (const delay of [1_000, 3_000, 5_000]) {
+        await new Promise((r) => setTimeout(r, delay));
+        workers = runProbe();
+        if (workers.length > 0) break;
+      }
+    }
+
     if (workers.length === 0) {
       workerReject(new Error("No CLI workers available. Install gh copilot, claude, or codex CLI."));
       return;
@@ -7581,7 +7615,9 @@ export function autoCommitSliceIfDirty({
     } else {
       execSync("git add -A", { cwd, encoding: "utf-8", timeout: 10_000 });
     }
-    execSync(`git commit -m "${commitMessage}"`, { cwd, encoding: "utf-8", timeout: 15_000 });
+    // Issue #162: use execFileSync with array args so the shell never sees the
+    // commit message — prevents breakage when slice titles contain ", ', `, $().
+    execFileSync("git", ["commit", "-m", commitMessage], { cwd, encoding: "utf-8", timeout: 15_000 });
     const sha = execSync("git rev-parse HEAD", { cwd, encoding: "utf-8", timeout: 5_000 }).trim();
     const evt = { sliceNumber: slice.number, sha, message: commitMessage };
     if (foreignFiles.length > 0) evt.foreignFiles = foreignFiles;
@@ -8502,7 +8538,7 @@ async function executeSlice(slice, options) {
       }
     } else {
       try {
-        workerResult = await spawnWorker(sliceInstructions, { model: currentModel, cwd, runPlanActive: true, timeout: resolveWorkerTimeoutMs({ sliceOverride: slice.workerTimeoutMs }) });
+        workerResult = await spawnWorker(sliceInstructions, { model: currentModel, cwd, runPlanActive: true, timeout: resolveWorkerTimeoutMs({ sliceOverride: slice.workerTimeoutMs }), eventBus });
       } catch (err) {
         return {
           status: "failed",

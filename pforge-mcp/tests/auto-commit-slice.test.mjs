@@ -14,6 +14,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 
 vi.mock("node:child_process", () => ({
   execSync: vi.fn(),
+  execFileSync: vi.fn(),
   spawn: vi.fn(() => ({
     on: vi.fn(),
     stdout: { on: vi.fn() },
@@ -22,7 +23,7 @@ vi.mock("node:child_process", () => ({
   })),
 }));
 
-import { execSync } from "node:child_process";
+import { execSync, execFileSync } from "node:child_process";
 import { autoCommitSliceIfDirty, parseGitPorcelain, snapshotPreSliceState } from "../orchestrator.mjs";
 
 const FAKE_SHA = "abc1234def5678";
@@ -75,7 +76,6 @@ describe("autoCommitSliceIfDirty — Bug #123 auto-commit determinism", () => {
     execSync
       .mockReturnValueOnce(" M file.ts\n") // git status --porcelain → dirty
       .mockReturnValueOnce(undefined)       // git add -A
-      .mockReturnValueOnce(undefined)       // git commit -m "..."
       .mockReturnValueOnce(FAKE_SHA + "\n");// git rev-parse HEAD
 
     const slice = { number: 3, title: "Bug #123 auto-commit determinism" };
@@ -85,12 +85,17 @@ describe("autoCommitSliceIfDirty — Bug #123 auto-commit determinism", () => {
     expect(result.sha).toBe(FAKE_SHA);
     // Title begins with "Bug" → conventionalType should be "fix"
     expect(result.message).toBe("fix(slice-3): auto-commit determinism");
+    // Issue #162: commit must go through execFileSync (not execSync) so shell
+    // never sees the raw title string — prevents breakage on ", ', `, $()
+    expect(execFileSync).toHaveBeenCalledWith(
+      "git", ["commit", "-m", "fix(slice-3): auto-commit determinism"],
+      expect.any(Object),
+    );
   });
 
   it("(C2) uses 'feat' for titles that don't start with Bug/Fix", () => {
     execSync
       .mockReturnValueOnce("?? new-file.ts\n")
-      .mockReturnValueOnce(undefined)
       .mockReturnValueOnce(undefined)
       .mockReturnValueOnce(FAKE_SHA + "\n");
 
@@ -105,7 +110,6 @@ describe("autoCommitSliceIfDirty — Bug #123 auto-commit determinism", () => {
     execSync
       .mockReturnValueOnce(" M thing.ts\n")
       .mockReturnValueOnce(undefined)
-      .mockReturnValueOnce(undefined)
       .mockReturnValueOnce(FAKE_SHA + "\n");
 
     const slice = { number: 7, title: "Fix null reference in orchestrator" };
@@ -118,7 +122,6 @@ describe("autoCommitSliceIfDirty — Bug #123 auto-commit determinism", () => {
   it("(C4) emits slice-auto-committed event on successful commit", () => {
     execSync
       .mockReturnValueOnce(" M x.ts\n")
-      .mockReturnValueOnce(undefined)
       .mockReturnValueOnce(undefined)
       .mockReturnValueOnce(FAKE_SHA + "\n");
 
@@ -135,8 +138,8 @@ describe("autoCommitSliceIfDirty — Bug #123 auto-commit determinism", () => {
   it("(C5) emits slice-dirty-tree-warning on git commit failure", () => {
     execSync
       .mockReturnValueOnce(" M x.ts\n")
-      .mockReturnValueOnce(undefined) // git add -A succeeds
-      .mockImplementationOnce(() => { throw new Error("nothing to commit"); }); // git commit fails
+      .mockReturnValueOnce(undefined); // git add -A succeeds
+    execFileSync.mockImplementationOnce(() => { throw new Error("nothing to commit"); }); // git commit fails
 
     const eventBus = { emit: vi.fn() };
     const slice = { number: 3, title: "feat: something" };
@@ -195,7 +198,6 @@ describe("autoCommitSliceIfDirty — Issue #151 pre-slice snapshot", () => {
     execSync
       .mockReturnValueOnce("?? foreign.md\n M scratch.ts\n?? worker-new.ts\n") // git status --porcelain
       .mockReturnValueOnce(undefined)                                            // git add -- "worker-new.ts"
-      .mockReturnValueOnce(undefined)                                            // git commit
       .mockReturnValueOnce(FAKE_SHA + "\n");                                     // git rev-parse HEAD
 
     const eventBus = { emit: vi.fn() };
@@ -227,7 +229,6 @@ describe("autoCommitSliceIfDirty — Issue #151 pre-slice snapshot", () => {
 
     execSync
       .mockReturnValueOnce("MM file.ts\n")
-      .mockReturnValueOnce(undefined)
       .mockReturnValueOnce(undefined)
       .mockReturnValueOnce(FAKE_SHA + "\n");
 
@@ -270,7 +271,6 @@ describe("autoCommitSliceIfDirty — Issue #151 pre-slice snapshot", () => {
     execSync
       .mockReturnValueOnce(" M legacy.ts\n")
       .mockReturnValueOnce(undefined) // git add -A
-      .mockReturnValueOnce(undefined) // git commit
       .mockReturnValueOnce(FAKE_SHA + "\n");
 
     const slice = { number: 1, title: "feat: legacy" };
@@ -288,7 +288,6 @@ describe("autoCommitSliceIfDirty — Issue #151 pre-slice snapshot", () => {
       .mockReturnValueOnce(lines.join("\n") + "\n")
       .mockReturnValueOnce(undefined) // git add batch 1
       .mockReturnValueOnce(undefined) // git add batch 2
-      .mockReturnValueOnce(undefined) // commit
       .mockReturnValueOnce(FAKE_SHA + "\n");
 
     const slice = { number: 9, title: "big slice" };
@@ -296,5 +295,69 @@ describe("autoCommitSliceIfDirty — Issue #151 pre-slice snapshot", () => {
 
     const addCalls = execSync.mock.calls.filter((c) => /git add -- /.test(c[0]));
     expect(addCalls.length).toBe(2);
+  });
+});
+
+// ─── Issue #162: auto-commit uses execFileSync — shell-safe for all title chars ─
+
+describe("autoCommitSliceIfDirty — Issue #162 shell-safe commit", () => {
+  beforeEach(() => { vi.clearAllMocks(); });
+  afterEach(() => { vi.restoreAllMocks(); });
+
+  const TITLES_WITH_SPECIAL_CHARS = [
+    ["double-quote", 'Add "Discovery Harness" section'],
+    ["single-quote", "Fix worker's probe timeout"],
+    ["backtick",     "Add `forge_run_plan` handler"],
+    ["shell-subst",  "Expand $(cat version.txt) output"],
+  ];
+
+  for (const [label, title] of TITLES_WITH_SPECIAL_CHARS) {
+    it(`(162-${label}) commits cleanly when title contains ${label} characters`, () => {
+      execSync
+        .mockReturnValueOnce(" M file.ts\n")
+        .mockReturnValueOnce(undefined)
+        .mockReturnValueOnce(FAKE_SHA + "\n");
+
+      const slice = { number: 4, title };
+      const result = autoCommitSliceIfDirty({ slice, cwd: "/fake/cwd", mode: "auto" });
+
+      expect(result.committed).toBe(true);
+      expect(result.sha).toBe(FAKE_SHA);
+
+      // Commit MUST use execFileSync with array args — never execSync with a
+      // shell-interpolated string — so the shell never sees the raw title.
+      expect(execFileSync).toHaveBeenCalledWith(
+        "git",
+        ["commit", "-m", expect.stringContaining("(slice-4):")],
+        expect.any(Object),
+      );
+
+      // The raw title characters must NOT appear in any execSync call
+      // (which would indicate a shell-interpolated command string).
+      const execSyncMessages = execSync.mock.calls.map((c) => c[0]);
+      for (const call of execSyncMessages) {
+        expect(call).not.toContain(title);
+      }
+    });
+  }
+
+  it("(162-execFileSync-args) passes exact title string as a single array element", () => {
+    execSync
+      .mockReturnValueOnce(" M x.ts\n")
+      .mockReturnValueOnce(undefined)
+      .mockReturnValueOnce(FAKE_SHA + "\n");
+
+    const title = 'Add "Quorum Quality Examples" sub-section';
+    const slice = { number: 6, title };
+    autoCommitSliceIfDirty({ slice, cwd: "/fake/cwd", mode: "auto" });
+
+    const [cmd, args] = execFileSync.mock.calls[0];
+    expect(cmd).toBe("git");
+    expect(args[0]).toBe("commit");
+    expect(args[1]).toBe("-m");
+    // The message should include the title (potentially truncated) as one string,
+    // with no shell-breaking quotes injected around it.
+    expect(args[2]).toContain("Quorum Quality Examples");
+    expect(args.length).toBe(3);
   });
 });

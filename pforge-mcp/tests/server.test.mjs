@@ -1850,15 +1850,16 @@ describe("dashboard tab structure", () => {
     expect(forgeRow?.[0] || "").not.toContain('data-tab="config"');
   });
 
-  it("total tab count is 34 (18 core + 5 LG + 1 Forge-Master + 9 Settings + 1 GitHub — Phase-30 decomposition + Phase GITHUB-D)", () => {
+  it("total tab count is 35 (18 core + 5 LG + 1 Forge-Master + 9 Settings + 1 GitHub + 1 Anvil-Lattice — Phase-30 decomposition + Phase GITHUB-D + Phase-LATTICE)", () => {
     const tabMatches = dashboardHtml.match(/data-tab="[^"]+"/g) || [];
-    expect(tabMatches.length).toBe(34);
+    expect(tabMatches.length).toBe(35);
   });
 
   it("Cross-group tab migration (Slice 7): Extensions→Settings, Bug Registry→LiveGuard, Watcher→LiveGuard", () => {
-    // Forge row had 15 buttons; Phase GITHUB-D added github-metrics tile → 16
+    // Forge row had 15 buttons; Phase GITHUB-D added github-metrics tile → 16;
+    // Phase-LATTICE Slice 9 added anvil-lattice tile → 17.
     const forgeRow = dashboardHtml.match(/id="subtabs-forge"[\s\S]*?<\/div>/);
-    expect((forgeRow?.[0].match(/data-tab="/g) || []).length).toBe(16);
+    expect((forgeRow?.[0].match(/data-tab="/g) || []).length).toBe(17);
 
     // Extensions moved to Settings row (9 native + 1 migrated = 10 total)
     const settingsRow = dashboardHtml.match(/id="subtabs-settings"[\s\S]*?<\/div>/);

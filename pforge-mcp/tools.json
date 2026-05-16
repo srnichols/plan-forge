@@ -563,7 +563,7 @@
   },
   {
     "name": "forge_run_plan",
-    "description": "Execute a hardened plan — spawn CLI workers for each slice, validate at every boundary, track tokens. Supports Full Auto (gh copilot CLI) and Assisted (human + automated gates) modes. Use --estimate for cost prediction without executing.",
+    "description": "Execute a hardened plan — spawn CLI workers for each slice, validate at every boundary, track tokens. Supports Full Auto (gh copilot CLI) and Assisted (human + automated gates) modes. Use --estimate for cost prediction without executing. Pass manualImport:true for hand-authored plans not registered with Crucible (bypasses crucibleId enforcement).",
     "inputSchema": {
       "type": "object",
       "properties": {

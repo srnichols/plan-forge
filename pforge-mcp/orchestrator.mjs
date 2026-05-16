@@ -418,8 +418,11 @@ export function appendEvent(type, data, logDir) {
 export function parsePlan(planPath, cwd = process.cwd()) {
   const fullPath = resolve(planPath);
   // C4: Validate path is within project to prevent traversal
+  // Normalize to lowercase for comparison on Windows where drive letters are case-insensitive
   const projectRoot = resolve(cwd);
-  if (!fullPath.startsWith(projectRoot)) {
+  const normalizedFull = fullPath.toLowerCase();
+  const normalizedRoot = projectRoot.toLowerCase();
+  if (!normalizedFull.startsWith(normalizedRoot)) {
     throw new Error(`Plan path must be within project directory: ${planPath}`);
   }
   const content = readFileSync(fullPath, "utf-8");

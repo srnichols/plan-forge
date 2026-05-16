@@ -1,10 +1,11 @@
 /**
  * hallmark.test.mjs — Conformance tests for the Hallmark provenance contract.
  *
- * Run with: node --test pforge-sdk/tests/hallmark.test.mjs
+ * Run with: npx vitest run pforge-sdk/tests/hallmark.test.mjs
+ * (Also compatible with: node --test pforge-sdk/tests/hallmark.test.mjs)
  */
 
-import { test } from 'node:test';
+import { test } from 'vitest';
 import assert from 'node:assert/strict';
 import {
   HALLMARK_SCHEMA_VERSION,

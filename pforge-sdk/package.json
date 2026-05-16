@@ -7,7 +7,8 @@
   "exports": {
     ".": "./src/index.mjs",
     "./tools": "./src/tools.mjs",
-    "./client": "./src/client.mjs"
+    "./client": "./src/client.mjs",
+    "./hallmark": "./src/hallmark.mjs"
   },
   "scripts": {
     "test": "node --test src/*.test.mjs 2>/dev/null || echo 'No tests yet'"

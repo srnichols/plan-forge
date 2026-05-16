@@ -1,6 +1,6 @@
 # Implementation Plan: Rate Limit Login Endpoint
 
-## Scope
+## Summary
 
 Add a token-bucket rate limiter middleware in front of `POST /api/login`.
 

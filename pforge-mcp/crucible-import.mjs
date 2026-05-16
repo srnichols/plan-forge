@@ -350,28 +350,35 @@ function pickFirst(dir, names) {
 
 /**
  * Parse spec.md. Recognises:
- *   - First `# heading`            → title
- *   - `## Goals` bullet list       → goals[]
- *   - `## Acceptance Criteria` list (informational only — passed through to plan)
- *   - `## Out of Scope` list       (informational)
+ *   - First `# heading`            → title (strips "Feature Specification: " prefix if present)
+ *   - `## Goals` bullet list       → goals[] (alias: `## Requirements`)
+ *   - `## Acceptance Criteria` list → acceptance[] (alias: `## Success Criteria`)
+ *   - `## Out of Scope` list       → outOfScope[] (alias: `## Assumptions`)
  *   - `## User Scenarios` list     (informational)
+ *
+ * Aliases support both the hand-crafted Plan Forge convention and the actual
+ * heading names emitted by the real github/spec-kit CLI templates.
  */
 export function parseSpec(content) {
   const title = extractFirstH1(content);
-  const goals = extractBulletsUnderHeading(content, "Goals");
-  const acceptance = extractBulletsUnderHeading(content, "Acceptance Criteria");
-  const outOfScope = extractBulletsUnderHeading(content, "Out of Scope");
+  const goals = extractBulletsWithAliases(content, ["Goals", "Requirements"]);
+  const acceptance = extractBulletsWithAliases(content, ["Acceptance Criteria", "Success Criteria"]);
+  const outOfScope = extractBulletsWithAliases(content, ["Out of Scope", "Assumptions"]);
   return { title, goals, acceptance, outOfScope };
 }
 
 /**
  * Parse plan.md. Recognises:
- *   - `## Scope`              → scope (raw paragraph text)
+ *   - `## Scope`              → scope (raw paragraph text; alias: `## Summary`)
  *   - `## Slices` numbered list → slices[]
  *   - `## Forbidden Actions` list → forbiddenActions[]
+ *
+ * The `## Summary` alias supports the heading name used by the real
+ * github/spec-kit `plan-template.md`.
  */
 export function parsePlan(content) {
-  const scope = extractParagraphUnderHeading(content, "Scope");
+  const scope = extractParagraphUnderHeading(content, "Scope") ??
+                extractParagraphUnderHeading(content, "Summary");
   const sliceLines = extractBulletsUnderHeading(content, "Slices");
   const slices = sliceLines.map((line, i) => {
     // Handle "**Title** — body" pattern
@@ -433,13 +440,16 @@ function normaliseTaskStatus(raw) {
 
 /**
  * Parse constitution.md. Recognises three optional sections:
- *   ## Rules        → rules[]
+ *   ## Rules        → rules[] (alias: `## Core Principles`)
  *   ## Commitments  → commitments[]
  *   ## Boundaries   → boundaries[]
+ *
+ * The `## Core Principles` alias supports the heading name used by the real
+ * github/spec-kit `constitution-template.md`.
  */
 export function parseConstitution(content) {
   return {
-    rules: extractBulletsUnderHeading(content, "Rules"),
+    rules: extractBulletsWithAliases(content, ["Rules", "Core Principles"]),
     commitments: extractBulletsUnderHeading(content, "Commitments"),
     boundaries: extractBulletsUnderHeading(content, "Boundaries"),
   };
@@ -451,9 +461,24 @@ function extractFirstH1(content) {
   const lines = content.split(/\r?\n/);
   for (const line of lines) {
     const m = line.match(/^#\s+(.+?)\s*$/);
-    if (m) return m[1].trim();
+    if (m) {
+      // Strip the "Feature Specification: " prefix emitted by the real spec-kit CLI
+      return m[1].trim().replace(/^Feature Specification:\s+/i, "");
+    }
   }
   return null;
+}
+
+/**
+ * Try each alias heading in order; return the first non-empty bullet list found.
+ * Falls back to [] when none of the aliases match.
+ */
+function extractBulletsWithAliases(content, aliases) {
+  for (const alias of aliases) {
+    const items = extractBulletsUnderHeading(content, alias);
+    if (items.length > 0) return items;
+  }
+  return [];
 }
 
 /**

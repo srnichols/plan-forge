@@ -1,8 +1,24 @@
 # Implementation Plan: Rate Limit Login Endpoint
 
-## Scope
+**Branch**: `001-rate-limit-login` | **Date**: 2026-05-16 | **Spec**: specs/demo-feature/spec.md
+
+## Summary
 
 Add a token-bucket rate limiter middleware in front of `POST /api/login`. Limiter state lives in Redis. Audit logs go to the existing `audit.log.security` channel.
+
+## Technical Context
+
+**Language/Version**: TypeScript (Node.js 20)
+
+**Primary Dependencies**: Express, ioredis
+
+**Storage**: Redis (existing dependency)
+
+**Testing**: vitest (existing)
+
+**Target Platform**: Linux server
+
+**Project Type**: web-service
 
 ## Slices
 
@@ -18,9 +34,3 @@ Add a token-bucket rate limiter middleware in front of `POST /api/login`. Limite
 - Do not add a new database table — Redis only.
 - Do not change the login response contract for successful logins.
 - Do not bypass the rate limit for any IP, including internal ones (use a separate health-check endpoint instead).
-
-## Tech Choices
-
-- Language: TypeScript (existing stack)
-- Cache: Redis (existing dependency)
-- Test runner: vitest (existing)

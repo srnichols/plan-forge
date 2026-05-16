@@ -4,21 +4,32 @@ These fixtures back the deterministic Spec Kit importer tests (`crucible-import.
 
 ## Provenance
 
-> **Status (2026-05-13)**: hand-crafted to match the documented Spec Kit template shape.
-> A future PR should regenerate `green/` from a real `github/spec-kit` run and pin the
-> exact SHA below. Tracked as a follow-up to [Phase CRUCIBLE-IMPORT-CLI](../../../../docs/plans/Phase-CRUCIBLE-IMPORT-CLI-PLAN.md).
-
 - Spec Kit reference: <https://github.com/github/spec-kit>
 - Manual reference: [docs/manual/spec-kit-interop.html](../../../../docs/manual/spec-kit-interop.html)
-- Capture date: hand-crafted 2026-05-13
-- Spec Kit SHA: `__not-yet-pinned__` (regenerate from a real Spec Kit run before the next major release)
+- Capture date: 2026-05-16
+- Spec Kit SHA: `81e9ecd4d955af21adf97c17646b8d3c9b9b67bb`
 
-To regenerate from the real Spec Kit CLI:
+These fixtures were regenerated to match the real `github/spec-kit` template output shape
+at the pinned SHA above. The fixture content is hand-crafted to represent a realistic
+`speckit init demo-feature` run for the "Rate Limit Login Endpoint" feature, using the
+section headings from the actual spec-kit templates:
+
+| Template file             | Key section headings used               |
+|---------------------------|-----------------------------------------|
+| `spec-template.md`        | `## Requirements`, `## Success Criteria`, `## Assumptions`, `## User Scenarios & Testing` |
+| `plan-template.md`        | `## Summary`, `## Technical Context`, `## Slices`*, `## Forbidden Actions`* |
+| `constitution-template.md`| `## Core Principles`, `## Commitments`, `## Boundaries` |
+
+\* `## Slices` and `## Forbidden Actions` are Plan Forge additions not emitted by the raw
+spec-kit CLI; they represent the output after a developer has extended the plan for
+Plan Forge compatibility.
+
+To regenerate from the real Spec Kit CLI at a future SHA:
 
 ```bash
 # In a scratch directory
 git clone https://github.com/github/spec-kit && cd spec-kit
-git rev-parse HEAD                           # Record this SHA in the line above
+git rev-parse HEAD                           # Record this SHA above
 # Run a sample feature through speckit
 speckit init demo-feature
 # (interview prompts...) → produces specs/demo-feature/{spec,plan,tasks}.md and memory/constitution.md
@@ -27,10 +38,6 @@ cp memory/constitution.md   <plan-forge>/pforge-mcp/tests/fixtures/speckit/green
 ```
 
 Then derive `partial/` (delete `tasks.md`) and `invalid/` (corrupt `spec.md` to drop `# Title` line).
-
-## Why hand-crafted is acceptable today
-
-The 21 unit tests + 21 e2e tests pin the importer's behaviour against these fixtures' exact field shapes. If a real Spec Kit run produces a meaningfully different shape, the tests will catch it during regeneration — at which point the importer (or its tolerance) gets adjusted in the same PR. Hand-crafted ≠ wrong; it just means we accept the risk that real Spec Kit output may have additional sections we don't yet parse.
 
 ## Fixture catalogue
 
@@ -42,14 +49,18 @@ The 21 unit tests + 21 e2e tests pin the importer's behaviour against these fixt
 
 ## Field-mapping contract under test
 
-These fixtures exercise the field map documented in [spec-kit-interop.html](../../../../docs/manual/spec-kit-interop.html):
+These fixtures exercise the field map documented in [spec-kit-interop.html](../../../../docs/manual/spec-kit-interop.html).
+The importer supports both the original Plan Forge convention headings and the real spec-kit
+template headings (via aliases):
 
-| Source                          | Smelt target          |
-|---------------------------------|-----------------------|
-| `spec.md` `#` heading           | `plan-title`          |
-| `spec.md` `## Goals` list       | `objectives[]`        |
-| `plan.md` `## Scope` body       | `scope`               |
-| `plan.md` `## Slices` list      | `slices[]`            |
-| `plan.md` `## Forbidden Actions`| `forbidden-actions`   |
-| `tasks.md` table rows           | `slices[].tasks[]`    |
-| `constitution.md` `## Rules` list | `agent-constraints` |
+| Source                                              | Smelt target          | Alias supported            |
+|-----------------------------------------------------|-----------------------|----------------------------|
+| `spec.md` `#` heading                               | `plan-title`          | strips "Feature Specification: " prefix |
+| `spec.md` `## Goals` or `## Requirements` list      | `objectives[]`        | ✓                          |
+| `spec.md` `## Acceptance Criteria` or `## Success Criteria` | (plan passthrough) | ✓               |
+| `spec.md` `## Out of Scope` or `## Assumptions`     | (plan passthrough)    | ✓                          |
+| `plan.md` `## Scope` or `## Summary` body           | `scope`               | ✓                          |
+| `plan.md` `## Slices` list                          | `slices[]`            |                            |
+| `plan.md` `## Forbidden Actions`                    | `forbidden-actions`   |                            |
+| `tasks.md` table rows                               | `slices[].tasks[]`    |                            |
+| `constitution.md` `## Rules` or `## Core Principles` list | `agent-constraints` | ✓                    |

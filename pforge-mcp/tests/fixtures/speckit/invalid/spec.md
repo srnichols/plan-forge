@@ -2,6 +2,6 @@
 
 This file should fail import because no `# Title` line is present anywhere.
 
-## Goals
+## Requirements
 
-- This goal list is unreachable because the parser bails on the missing title.
+- This requirement list is unreachable because the parser bails on the missing title.

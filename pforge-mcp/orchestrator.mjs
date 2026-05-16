@@ -2663,9 +2663,13 @@ export function spawnWorker(prompt, options = {}) {
         tokens.model = spec?.defaultModel || null;
       }
 
-      // Issue #63: When CLI exits 0 with non-trivial output but reports 0 premium requests,
-      // default to 1 — at least one request was made to produce the output.
-      if (tokens.premiumRequests === 0 && !timedOut && code === 0 && stdout.length > 200) {
+      // Issue #63 + Issue #180: When the CLI exits 0 and we have ANY evidence
+      // a request was made (long stdout, parsed token counts from stderr, or a
+      // recognizable "Tokens" stat line), default premiumRequests to 1. Before
+      // #180 this only fired on `stdout.length > 200`, but gh-copilot writes
+      // most of its output to STDERR — leaving slices with short stdout
+      // showing cost_usd === 0 even though stderr clearly reported tokens.
+      if (shouldDefaultPremiumRequestsToOne({ tokens, stdout, stderr, code, timedOut })) {
         tokens.premiumRequests = 1;
       }
 
@@ -2929,6 +2933,27 @@ export function extractTokens(events) {
     // (no surprise cache/reasoning charges without a positive vendor ID).
     vendor: "unknown",
   };
+}
+
+/**
+ * Issue #63 + Issue #180 — heuristic: should we default tokens.premiumRequests
+ * to 1 when the CLI exited successfully but reported zero premium requests?
+ *
+ * gh-copilot streams most output to STDERR; using stdout length alone misses
+ * the common case where stdout is short but stderr clearly reported a Tokens
+ * stat line (the symptom of #180: cost_usd === 0 despite ↑22.1k • ↓689).
+ *
+ * @param {{ tokens: object, stdout: string, stderr: string, code: number, timedOut: boolean }} ctx
+ * @returns {boolean}
+ */
+export function shouldDefaultPremiumRequestsToOne({ tokens, stdout, stderr, code, timedOut }) {
+  if (!tokens || tokens.premiumRequests > 0) return false;
+  if (timedOut) return false;
+  if (code !== 0) return false;
+  const stdoutLen = (stdout || "").length;
+  const hasTokenEvidence = (tokens.tokens_out || 0) > 0 || (tokens.tokens_in || 0) > 0;
+  const hasTokensHeader = /Tokens\s+[↑⬆^]/.test(stderr || "");
+  return stdoutLen > 200 || hasTokenEvidence || hasTokensHeader;
 }
 
 /**
@@ -4295,6 +4320,14 @@ export async function runPlan(planPath, options = {}) {
     model: effectiveModel || "auto",
     modelRouting,
     mode,
+    // Issue #182: surface the quorum *mode* separately from the worker `mode`
+    // (auto/assisted). Before this fix, summary.mode was "auto" both for
+    // single-model auto runs and for --quorum=power runs, making cost
+    // attribution and historical filtering impossible.
+    quorumMode: quorum === false ? "false"
+              : quorumPreset // "power" | "speed"
+              || (quorum === true ? "all" : "auto"),
+    quorumPreset: quorumPreset || null,
     sliceCount: plan.slices.length,
     executionOrder: plan.dag.order,
   };
@@ -7397,6 +7430,46 @@ export function snapshotPreSliceState({ cwd = process.cwd() } = {}) {
 }
 
 /**
+ * Issue #178 — stash any pre-slice working-tree changes before the worker
+ * runs, so a buggy worker (or a destructive teardown) can't trample operator
+ * WIP. Pair with `popSliceSnapshot` at slice end.
+ *
+ * @param {{ cwd?: string, sliceNumber: string|number, _execSync?: Function }} params
+ * @returns {{ pushed: boolean, stashRef: string|null, reason?: string }}
+ */
+export function pushSliceSnapshot({ cwd = process.cwd(), sliceNumber, _execSync = execSync } = {}) {
+  const stashRef = `pforge-slice-${sliceNumber}-snapshot`;
+  try {
+    const status = _execSync("git status --porcelain", { cwd, encoding: "utf-8", timeout: 5_000 }).toString().trim();
+    if (!status) return { pushed: false, stashRef: null, reason: "clean-tree" };
+    _execSync(`git stash push -m "${stashRef}"`, { cwd, encoding: "utf-8", timeout: 10_000 });
+    return { pushed: true, stashRef };
+  } catch (err) {
+    return { pushed: false, stashRef: null, reason: (err?.message || "git-failed").slice(0, 200) };
+  }
+}
+
+/**
+ * Issue #178 — restore the snapshot stashed by `pushSliceSnapshot`. Always
+ * called at slice end (success OR failure) so operator WIP is never silently
+ * captured in `git stash list`. Conflicts surface as a non-fatal warning;
+ * the operator can recover via `git stash list` + `git stash apply`.
+ *
+ * @param {{ cwd?: string, sliceNumber: string|number, _execSync?: Function }} params
+ * @returns {{ restored: boolean, conflict?: boolean, error?: string }}
+ */
+export function popSliceSnapshot({ cwd = process.cwd(), sliceNumber: _sliceNumber, _execSync = execSync } = {}) {
+  try {
+    _execSync(`git stash pop`, { cwd, encoding: "utf-8", timeout: 15_000, stdio: "pipe" });
+    return { restored: true };
+  } catch (err) {
+    const stderr = (err?.stderr?.toString?.() || err?.message || "").toString().trim();
+    const conflict = /conflict|merge|CONFLICT/i.test(stderr);
+    return { restored: false, conflict, error: stderr.slice(0, 500) || "git stash pop failed" };
+  }
+}
+
+/**
  * Shell-quote a single path for use after `git add --`. Wraps in double
  * quotes and escapes embedded quotes/backslashes. Safe on POSIX and Windows
  * because git accepts forward-slash quoted paths on both.
@@ -8293,15 +8366,11 @@ async function executeSlice(slice, options) {
     }).trim();
   } catch { /* not a git repo — leave null, retry logic falls back to default */ }
 
-  // Fix 8: Snapshot working tree before slice (for safe rollback on failure)
-  let snapshotStash = false;
-  try {
-    const status = execSync("git status --porcelain", { cwd, encoding: "utf-8", timeout: 5000 }).trim();
-    if (status) {
-      execSync(`git stash push -m "pforge-slice-${slice.number}-snapshot"`, { cwd, encoding: "utf-8", timeout: 10000 });
-      snapshotStash = true;
-    }
-  } catch { /* not a git repo or git not available — skip snapshot */ }
+  // Fix 8 + Issue #178: Snapshot working tree before slice. Always restored
+  // at slice end via popSliceSnapshot — pre-fix, the stash was pushed but
+  // never popped, silently capturing operator WIP into `git stash list`.
+  const snapshot = pushSliceSnapshot({ cwd, sliceNumber: slice.number });
+  const snapshotStash = snapshot.pushed;
 
   // ─── Teardown Safety Guard: capture git baseline ────────────────────
   let teardownBaseline = null;
@@ -9018,6 +9087,28 @@ async function executeSlice(slice, options) {
         status: sliceResult.status,
       }, cwd);
     } catch { /* non-fatal */ }
+  }
+
+  // Issue #178: restore the pre-slice working-tree snapshot. Before this fix
+  // we `git stash push`-ed any uncommitted operator work at slice start
+  // but never popped it — so operator edits silently vanished into
+  // `git stash list` after each run. Always pop, even on failure, so
+  // the operator can decide what to do with their WIP.
+  if (snapshotStash) {
+    const restore = popSliceSnapshot({ cwd, sliceNumber: slice.number });
+    sliceResult.snapshotRestored = restore.restored;
+    if (!restore.restored) {
+      sliceResult.snapshotRestoreError = restore.error;
+      if (eventBus) {
+        eventBus.emit("snapshot-restore-failed", {
+          sliceNumber: slice.number,
+          stashRef: `pforge-slice-${slice.number}-snapshot`,
+          conflict: !!restore.conflict,
+          error: restore.error,
+          recovery: "Run `git stash list` and `git stash apply stash@{0}` to recover your WIP.",
+        });
+      }
+    }
   }
 
   return sliceResult;
@@ -12073,6 +12164,11 @@ function buildSummary(plan, results, runMeta, extras = {}) {
     startTime: runMeta.startTime,
     endTime: new Date().toISOString(),
     mode: runMeta.mode,
+    // Issue #182: persist quorum mode separately so cost reports and run
+    // history can distinguish "auto" (single model) from "power"/"speed"
+    // (quorum presets). `mode` continues to mean "auto" vs "assisted".
+    quorumMode: runMeta.quorumMode ?? null,
+    quorumPreset: runMeta.quorumPreset ?? null,
     model: runMeta.model,
     sliceCount: plan.slices.length,
     results: { passed, failed, skipped, total: results.length },

@@ -194,6 +194,45 @@ describe("detectStack", () => {
   it("returns 'unknown' when no marker file found", () => {
     expect(detectStack(dir)).toBe("unknown");
   });
+
+  // ─── Issue #183 — modern .NET solution layouts ────────────────────
+
+  it("(#183) detects dotnet from .slnx (VS 17.10+ XML solution format)", () => {
+    writeFileSync(resolve(dir, "App.slnx"), "<Solution/>", "utf-8");
+    expect(detectStack(dir)).toBe("dotnet");
+  });
+
+  it("(#183) detects dotnet from .vbproj", () => {
+    writeFileSync(resolve(dir, "App.vbproj"), "<Project/>", "utf-8");
+    expect(detectStack(dir)).toBe("dotnet");
+  });
+
+  it("(#183) detects dotnet when .csproj lives under src/ (one level deep)", () => {
+    mkdirSync(resolve(dir, "src"), { recursive: true });
+    writeFileSync(resolve(dir, "src", "App.csproj"), "<Project/>", "utf-8");
+    expect(detectStack(dir)).toBe("dotnet");
+  });
+
+  it("(#183) detects dotnet when .csproj lives under src/ProjectName/ (two levels deep)", () => {
+    mkdirSync(resolve(dir, "src", "TimeTracker"), { recursive: true });
+    writeFileSync(resolve(dir, "src", "TimeTracker", "TimeTracker.csproj"), "<Project/>", "utf-8");
+    expect(detectStack(dir)).toBe("dotnet");
+  });
+
+  it("(#183) detects dotnet from a .slnx at root plus .csproj under src/Project/", () => {
+    writeFileSync(resolve(dir, "TimeTracker.slnx"), "<Solution/>", "utf-8");
+    mkdirSync(resolve(dir, "src", "TimeTracker"), { recursive: true });
+    writeFileSync(resolve(dir, "src", "TimeTracker", "TimeTracker.csproj"), "<Project/>", "utf-8");
+    expect(detectStack(dir)).toBe("dotnet");
+  });
+
+  it("(#183) skips node_modules/.git/bin/obj when scanning subdirectories", () => {
+    // Place a .csproj inside node_modules to confirm we don't false-positive
+    mkdirSync(resolve(dir, "node_modules", "foo"), { recursive: true });
+    writeFileSync(resolve(dir, "node_modules", "foo", "fake.csproj"), "<Project/>", "utf-8");
+    writeFileSync(resolve(dir, "package.json"), "{}", "utf-8");
+    expect(detectStack(dir)).toBe("typescript");
+  });
 });
 
 // ─── Coverage report location ────────────────────────────────────────

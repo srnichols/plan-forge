@@ -5,6 +5,46 @@ Format follows [Keep a Changelog](https://keepachangelog.com/).
 
 ---
 
+## [2.96.1] — 2026-05-17 — Testbed Bug Sweep (Issues #177–#183)
+
+> **One-liner**: Closes seven framework bugs surfaced by the aggressive Phase-4 testbed exercise: critical operator-WIP data loss, cost-rollup zeroing, .slnx stack detection, planPath flag parsing, summary.quorumMode separation, BOM regression test, and stale-wrapper warning. All fixes are TDD-backed; no behavior change outside the bug surfaces.
+
+#### Fixed — Issue #178 (CRITICAL): orchestrator stash never popped — operator WIP silently lost
+- `pforge-mcp/orchestrator.mjs` `executeSlice` was calling `git stash push` on operator's uncommitted work before each slice but **never** calling `git stash pop`. Operator edits silently accumulated in `git stash list` after every run.
+- Extracted the stash logic into testable `pushSliceSnapshot()` and `popSliceSnapshot()` helpers. Pop now runs in both success and failure paths, with conflicts surfaced as a non-fatal `snapshot-restore-failed` event plus a `snapshotRestoreError` field on the slice result.
+- Recovery for any user hit by the pre-fix bug: `git stash list` and `git stash apply stash@{0}`.
+
+#### Fixed — Issue #180: cost rollup zero despite successful CLI run
+- `parseStderrStats` was correctly extracting `Tokens ↑ 22.1k • ↓ 689` from gh-copilot stderr, but the `premiumRequests` fallback at the end of `spawnWorker` only fired when `stdout.length > 200`. Since gh-copilot writes most output to **stderr**, slices with short stdout reported `cost_usd: 0` even when stderr clearly showed token activity.
+- Extracted heuristic into exported `shouldDefaultPremiumRequestsToOne({ tokens, stdout, stderr, code, timedOut })`. Now bumps premiumRequests to 1 when stdout is long, when token counts were parsed from stderr, OR when stderr contains a recognizable `Tokens` header (Unicode `↑↓•` or ASCII `^v*` fallback).
+- 10 new tests in `tests/cost-rollup-issue-180.test.mjs` pin the regex against real testbed stderr and exercise the helper across 8 paths.
+
+#### Fixed — Issue #181: `pforge run-plan --quorum=power plan.md` crashed
+- `pforge.ps1 Invoke-RunPlan` unconditionally took `$Arguments[0]` as the plan path. With flags before the plan, the flag was treated as the plan path and `Test-Path` failed.
+- Now scans all args for the first non-flag token, skipping value-consuming flags (`--model`, `--worker`, `--resume-from`, `--quorum-threshold`, `--manual-import-source`, `--manual-import-reason`, `--only-slices`). Flag order is now arbitrary.
+
+#### Fixed — Issue #182: `summary.mode` conflated worker mode and quorum mode
+- `summary.json` reported `mode: "auto"` both for single-model auto runs and for `--quorum=power` runs, breaking cost attribution and historical filtering.
+- Added `quorumMode` (`"auto" | "power" | "speed" | "all" | "false"`) and `quorumPreset` fields to `summary.json`, populated from `runMeta`. `mode` continues to mean `"auto" | "assisted"` (worker execution mode).
+
+#### Fixed — Issue #183: stack detector missed `.slnx` and `src/Project/Project.csproj` layouts
+- `tempering.mjs detectStack` only scanned the root directory for `.csproj | .sln | .fsproj`, missing modern .NET solutions that keep projects under `src/Project/`. Also missed `.slnx` (VS 17.10+ XML format) and `.vbproj`.
+- Now scans root + one and two levels deep, with `node_modules / .git / bin / obj / .*` excluded. Accepts `.slnx`, `.sln`, `.csproj`, `.fsproj`, `.vbproj` as dotnet markers.
+- 6 new tests cover .slnx detection, recursive scanning, and node_modules exclusion.
+
+#### Fixed — Issue #179: BOM regression guard
+- Added `tests/wrapper-bom-issue-179.test.mjs` that asserts `pforge.ps1` and `validate-setup.ps1` start with the UTF-8 BOM (`EF BB BF`). Without BOM, PowerShell 5.1 falls back to Windows-1252 and Unicode glyphs (`✓ ╔ ↑ ↓ •`) render as garbage.
+
+#### Fixed — Issue #177: stale-wrapper warning on `pforge update`
+- The v2.95.0+ wrapper already syncs `pforge.ps1` / `pforge.sh` / `VERSION` in the update loop, but PowerShell continues executing the OLD in-memory wrapper code for the rest of the session.
+- `Invoke-Update` now tracks whether the running wrapper was self-replaced and prints a clear warning telling the operator to open a new terminal before running additional commands. The bash side already had this warning at `pforge.sh:1721`.
+
+#### Tests
+- New test files: `tests/slice-snapshot.test.mjs` (10 tests), `tests/cost-rollup-issue-180.test.mjs` (18 tests), `tests/wrapper-bom-issue-179.test.mjs` (2 tests).
+- Extended: `tests/tempering-foundation.test.mjs` (+6 tests for .slnx + recursion).
+
+---
+
 ## [2.96.0] — 2026-05-16 — Cost-Service Token Coverage (Phase-COST-TOKEN-COVERAGE)
 
 > **One-liner**: Fixes Plan Forge cost accounting for cache_read, Anthropic cache writes, reasoning-token coverage, and OpenAI service tiers while preserving the separate Subscription CLI workers premium-request path.

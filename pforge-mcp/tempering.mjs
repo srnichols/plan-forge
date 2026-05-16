@@ -244,8 +244,35 @@ export function detectStack(projectDir) {
   const dirEntries = (() => {
     try { return readdirSync(projectDir); } catch { return []; }
   })();
-  if (dirEntries.some((f) => f.endsWith(".csproj") || f.endsWith(".sln") || f.endsWith(".fsproj"))) {
+  // Issue #183: include .slnx (XML solution format from VS 17.10+) and also
+  // scan src/ + tests/ one level deep, since modern .NET solutions
+  // routinely keep .csproj files under src/Project/Project.csproj rather
+  // than at the repo root.
+  const isDotnetMarker = (f) =>
+    f.endsWith(".csproj") || f.endsWith(".sln") || f.endsWith(".slnx") || f.endsWith(".fsproj") || f.endsWith(".vbproj");
+  if (dirEntries.some(isDotnetMarker)) {
     return "dotnet";
+  }
+  // One-level-deep scan: <root>/<subdir>/*.csproj (typical for src/, tests/, ProjectA/).
+  for (const sub of dirEntries) {
+    try {
+      const subPath = resolve(projectDir, sub);
+      const stat = statSync(subPath);
+      if (!stat.isDirectory()) continue;
+      if (sub.startsWith(".") || sub === "node_modules" || sub === "bin" || sub === "obj") continue;
+      const subEntries = readdirSync(subPath);
+      if (subEntries.some(isDotnetMarker)) return "dotnet";
+      // Two-levels deep is common too: <root>/src/<ProjectName>/Project.csproj
+      for (const subSub of subEntries) {
+        try {
+          const subSubPath = resolve(subPath, subSub);
+          if (!statSync(subSubPath).isDirectory()) continue;
+          if (subSub.startsWith(".") || subSub === "node_modules" || subSub === "bin" || subSub === "obj") continue;
+          const inner = readdirSync(subSubPath);
+          if (inner.some(isDotnetMarker)) return "dotnet";
+        } catch { /* not a directory or unreadable */ }
+      }
+    } catch { /* not a directory or unreadable */ }
   }
   if (has("package.json") || has("tsconfig.json")) return "typescript";
   if (has("pyproject.toml") || has("setup.py") || has("setup.cfg") || has("requirements.txt")) {

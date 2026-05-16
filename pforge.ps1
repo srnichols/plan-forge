@@ -1725,7 +1725,6 @@ function Invoke-Update {
         }
     }
 
-    # ─── Core framework files (CLI + MCP server runtime) ─────────
     # ─── Core CLI files (root level) ────────────────────────────
     foreach ($cliFile in @("pforge.ps1", "pforge.sh", "VERSION")) {
         $srcFile = Join-Path $sourcePath $cliFile
@@ -1856,7 +1855,12 @@ function Invoke-Update {
     }
 
     # ─── Apply ────────────────────────────────────────────────────
+    # Issue #177: track whether the running wrapper script (pforge.ps1) is
+    # itself among the updates. If yes, the in-memory copy of this script
+    # is now stale — warn the operator to re-invoke any subsequent command.
+    $wrapperSelfUpdated = $false
     foreach ($u in $updates) {
+        if ($u.Name -in @("pforge.ps1", "pforge.sh")) { $wrapperSelfUpdated = $true }
         Copy-Item -Path $u.Src -Destination $u.Dst -Force
         Write-Host "  ✅ Updated $($u.Name)" -ForegroundColor Green
     }
@@ -1910,6 +1914,16 @@ Files in this directory (except this README) are gitignored — they are runtime
     Write-Host ""
     Write-Host "Update complete: v$currentVersion → v$sourceVersion" -ForegroundColor Green
     Write-Host "Run 'pforge check' to validate the updated setup." -ForegroundColor DarkGray
+
+    # Issue #177: when the wrapper itself was updated, the running PowerShell
+    # session is still executing the OLD code. Subsequent commands will use
+    # the NEW wrapper, but anything the operator does in this session won't.
+    if ($wrapperSelfUpdated) {
+        Write-Host ""
+        Write-Host "⚠  The pforge CLI wrapper was updated in place." -ForegroundColor Yellow
+        Write-Host "   This session is still running the OLD wrapper code." -ForegroundColor Yellow
+        Write-Host "   Open a NEW terminal before running additional pforge commands." -ForegroundColor Yellow
+    }
 
     # v2.53.1 — invalidate version caches so smith/dashboard pick up fresh state.
     # Prevents stale "update available" banners after a successful heal.
@@ -4048,7 +4062,35 @@ function Invoke-RunPlan {
         exit 1
     }
 
-    $planPath = $Arguments[0]
+    # Issue #181: scan all args for the first non-flag token instead of always
+    # using $Arguments[0]. Previously `pforge run-plan --quorum=power plan.md`
+    # treated "--quorum=power" as the plan path and crashed.
+    # Flags that consume the NEXT arg as their value — skip past them when
+    # hunting for the plan path.
+    $valueConsumingFlags = @(
+        '--model', '--worker', '--resume-from', '--quorum-threshold',
+        '--manual-import-source', '--manual-import-reason', '--only-slices'
+    )
+    $planPath = $null
+    $i = 0
+    while ($i -lt $Arguments.Count) {
+        $arg = $Arguments[$i]
+        if ($valueConsumingFlags -contains $arg) {
+            $i += 2  # skip flag + its value
+            continue
+        }
+        if ($arg.StartsWith('--')) {
+            $i += 1  # bare boolean flag
+            continue
+        }
+        $planPath = $arg
+        break
+    }
+    if (-not $planPath) {
+        Write-Host "ERROR: Missing plan path (saw only flags)" -ForegroundColor Red
+        Write-Host "Usage: pforge run-plan <plan-file> [--estimate] [--assisted] [--model <name>] [--worker <name>] ..." -ForegroundColor Yellow
+        exit 1
+    }
     $fullPlanPath = Join-Path $RepoRoot $planPath
     if (-not (Test-Path $fullPlanPath)) {
         Write-Host "ERROR: Plan file not found: $planPath" -ForegroundColor Red
@@ -4073,7 +4115,7 @@ function Invoke-RunPlan {
     $worker = $null
     $noTempering = $Arguments -contains '--no-tempering'
 
-    for ($i = 1; $i -lt $Arguments.Count; $i++) {
+    for ($i = 0; $i -lt $Arguments.Count; $i++) {
         if ($Arguments[$i] -eq '--model' -and ($i + 1) -lt $Arguments.Count) {
             $model = $Arguments[$i + 1]
         }

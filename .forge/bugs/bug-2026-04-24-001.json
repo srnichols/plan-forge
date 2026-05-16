@@ -1,0 +1,33 @@
+{
+  "bugId": "bug-2026-04-24-001",
+  "fingerprint": "6c6ef476588373d3518ebeb32594e5e4bab1ba2a",
+  "scanner": "unit",
+  "severity": "high",
+  "status": "wont-fix",
+  "classification": "unknown",
+  "classifierMeta": {
+    "classification": "unknown",
+    "reason": "LLM unavailable (no callModel)",
+    "confidence": 0,
+    "source": "llm"
+  },
+  "evidence": {
+    "testName": "unit-failure",
+    "assertionMessage": "spawn npx ENOENT",
+    "stackTrace": null
+  },
+  "affectedFiles": [],
+  "reproSteps": [],
+  "correlationId": "drain-30b8bfae-2173-46d5-8ee1-a0a790e50628-round-1",
+  "sliceRef": null,
+  "discoveredAt": "2026-04-24T14:59:46.836Z",
+  "updatedAt": "2026-05-16T14:46:42.140Z",
+  "statusHistory": [
+    {
+      "from": "wont-fix",
+      "to": "wont-fix",
+      "note": "Infra-class failure (spawn npx ENOENT) from a 2026-04-24 tempering drain run when the LLM classifier was offline (confidence 0, classification 'unknown'). Not a product bug — npx was missing from the PATH for that subprocess. Subsequent vitest sweeps (5272/5272 pass on 2026-05-16) confirm no underlying defect. Closing as wont-fix per infra-classification policy.",
+      "at": "2026-05-16T14:46:42.140Z"
+    }
+  ]
+}

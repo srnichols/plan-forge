@@ -1,0 +1,33 @@
+{
+  "bugId": "bug-2026-04-24-002",
+  "fingerprint": "f4c6c9821642ec5370b3e607bc9221db1e87d9c6",
+  "scanner": "integration",
+  "severity": "high",
+  "status": "wont-fix",
+  "classification": "unknown",
+  "classifierMeta": {
+    "classification": "unknown",
+    "reason": "LLM unavailable (no callModel)",
+    "confidence": 0,
+    "source": "llm"
+  },
+  "evidence": {
+    "testName": "integration-failure",
+    "assertionMessage": "spawn npx ENOENT",
+    "stackTrace": null
+  },
+  "affectedFiles": [],
+  "reproSteps": [],
+  "correlationId": "drain-30b8bfae-2173-46d5-8ee1-a0a790e50628-round-1",
+  "sliceRef": null,
+  "discoveredAt": "2026-04-24T14:59:46.837Z",
+  "updatedAt": "2026-05-16T14:46:45.529Z",
+  "statusHistory": [
+    {
+      "from": "wont-fix",
+      "to": "wont-fix",
+      "note": "Infra-class failure (spawn npx ENOENT) from the same 2026-04-24 tempering drain as bug-2026-04-24-001. LLM classifier was unavailable so it was written as 'unknown' (confidence 0) instead of being filtered as infra. Subsequent integration sweeps pass clean. Closing as wont-fix.",
+      "at": "2026-05-16T14:46:45.529Z"
+    }
+  ]
+}

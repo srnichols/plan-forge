@@ -18,41 +18,18 @@
  */
 
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
-import { tmpdir } from "node:os";
+import { mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 
 import { loadQuorumConfig, runPlan } from "../orchestrator.mjs";
+import { withSandboxRepo } from "./helpers/sandbox-repo.mjs";
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
-function makeTmpDir() {
-  return mkdtempSync(join(tmpdir(), "pforge-quorum-prec-"));
-}
-
 /**
- * Windows-safe rmSync: retries on EPERM (#149 Bucket follow-up).
- * The orchestrator may briefly hold open file handles in a child process
- * that hasn't fully released them when afterEach fires; on Windows this
- * surfaces as `EPERM, Permission denied` even with `force: true`. Linux
- * doesn't reproduce because of more permissive mandatory-locking semantics.
+ * Write a minimal single-slice plan file so the zero-slice guard is not triggered.
+ * Used for tests that prefer to write a custom plan rather than using sandbox.writePlan().
  */
-function safeRmSync(path) {
-  for (let attempt = 0; attempt < 5; attempt++) {
-    try {
-      rmSync(path, { recursive: true, force: true });
-      return;
-    } catch (err) {
-      if (err.code !== "EPERM" && err.code !== "EBUSY") throw err;
-      // Brief sync sleep to give the OS a moment to release handles.
-      const start = Date.now();
-      while (Date.now() - start < 50) { /* spin */ }
-    }
-  }
-  // Best effort — don't fail the test cleanup; CI will eventually GC the temp dir.
-}
-
-/** Write a minimal single-slice plan file so the zero-slice guard is not triggered. */
 function writePlan(dir, name = "plan.md") {
   writeFileSync(
     join(dir, name),
@@ -77,12 +54,15 @@ describe("Bug #122 — quorum-config precedence respects .forge.json", () => {
   // default 5000ms vitest timeout is too tight; bump to 60s for this suite.
   vi.setConfig({ testTimeout: 60_000 });
 
-  let tmpDir;
+  let sandbox;
   let errSpy;
   let savedEnv;
 
   beforeEach(() => {
-    tmpDir = makeTmpDir();
+    // Issue #176: use withSandboxRepo() so the tmpDir has its own .git repo.
+    // This prevents worker subprocesses from escaping to the operator's repo
+    // via git super-project detection (walking up the fs tree to find .git).
+    sandbox = withSandboxRepo("quorum-prec-");
     errSpy = vi.spyOn(console, "error").mockImplementation(() => {});
     savedEnv = { ...process.env };
   });
@@ -90,21 +70,21 @@ describe("Bug #122 — quorum-config precedence respects .forge.json", () => {
   afterEach(() => {
     vi.restoreAllMocks();
     process.env = { ...savedEnv };
-    if (tmpDir) safeRmSync(tmpDir);
+    if (sandbox) sandbox.cleanup();
   });
 
   // ── (a) .forge.json enabled:false + quorum:"auto" → enabled=false ──────────
 
   it("(a) .forge.json quorum.enabled:false + quorum:auto → enabled=false, probe not called", async () => {
     writeFileSync(
-      join(tmpDir, ".forge.json"),
+      join(sandbox.dir, ".forge.json"),
       JSON.stringify({ quorum: { enabled: false } }),
       "utf-8",
     );
-    const planPath = writePlan(tmpDir);
+    const planPath = writePlan(sandbox.dir);
 
     const result = await runPlan(planPath, {
-      cwd: tmpDir,
+      cwd: sandbox.dir,
       quorum: "auto",
       manualImport: true,
       manualImportSource: "human",
@@ -131,15 +111,15 @@ describe("Bug #122 — quorum-config precedence respects .forge.json", () => {
   // probe-stub injection point in runPlan (#149 follow-up).
   const itb = process.platform === "win32" ? it.skip : it;
   itb("(b) absent .forge.json + quorum:auto → enabled=true, source=default", async () => {
-    // No .forge.json in tmpDir
+    // No .forge.json in sandbox.dir
     // Set a fake API key so the availability probe finds ≥1 model and does not throw
     process.env.OPENAI_API_KEY = "sk-fake-for-test";
     delete process.env.XAI_API_KEY;
 
-    const planPath = writePlan(tmpDir);
+    const planPath = writePlan(sandbox.dir);
 
     const result = await runPlan(planPath, {
-      cwd: tmpDir,
+      cwd: sandbox.dir,
       quorum: "auto",
       manualImport: true,
       noTempering: true,
@@ -164,16 +144,16 @@ describe("Bug #122 — quorum-config precedence respects .forge.json", () => {
   const itc = process.platform === "win32" ? it.skip : it;
   itc("(c) quorum:true overrides .forge.json enabled:false → enabled=true, source=cli", async () => {
     writeFileSync(
-      join(tmpDir, ".forge.json"),
+      join(sandbox.dir, ".forge.json"),
       JSON.stringify({ quorum: { enabled: false } }),
       "utf-8",
     );
     process.env.OPENAI_API_KEY = "sk-fake-for-test";
 
-    const planPath = writePlan(tmpDir);
+    const planPath = writePlan(sandbox.dir);
 
     const result = await runPlan(planPath, {
-      cwd: tmpDir,
+      cwd: sandbox.dir,
       quorum: true,
       manualImport: true,
       noTempering: true,
@@ -196,16 +176,16 @@ describe("Bug #122 — quorum-config precedence respects .forge.json", () => {
   const itd = process.platform === "win32" ? it.skip : it;
   itd("(d) quorum:true + quorumPreset:power overrides .forge.json enabled:false → enabled=true, source=cli", async () => {
     writeFileSync(
-      join(tmpDir, ".forge.json"),
+      join(sandbox.dir, ".forge.json"),
       JSON.stringify({ quorum: { enabled: false } }),
       "utf-8",
     );
     process.env.OPENAI_API_KEY = "sk-fake-for-test";
 
-    const planPath = writePlan(tmpDir);
+    const planPath = writePlan(sandbox.dir);
 
     const result = await runPlan(planPath, {
-      cwd: tmpDir,
+      cwd: sandbox.dir,
       quorum: true,
       quorumPreset: "power",
       manualImport: true,
@@ -225,14 +205,14 @@ describe("Bug #122 — quorum-config precedence respects .forge.json", () => {
 
   it("(e) quorum:false → quorumConfig=null, no [quorum] enabled= log line", async () => {
     writeFileSync(
-      join(tmpDir, ".forge.json"),
+      join(sandbox.dir, ".forge.json"),
       JSON.stringify({ quorum: { enabled: true } }),
       "utf-8",
     );
-    const planPath = writePlan(tmpDir);
+    const planPath = writePlan(sandbox.dir);
 
     const result = await runPlan(planPath, {
-      cwd: tmpDir,
+      cwd: sandbox.dir,
       quorum: false,
       manualImport: true,
       noTempering: true,
@@ -255,16 +235,16 @@ describe("Bug #122 — quorum-config precedence respects .forge.json", () => {
   const itf = process.platform === "win32" ? it.skip : it;
   itf("(f) source=config when .forge.json explicitly sets quorum.enabled:true + quorum:auto", async () => {
     writeFileSync(
-      join(tmpDir, ".forge.json"),
+      join(sandbox.dir, ".forge.json"),
       JSON.stringify({ quorum: { enabled: true } }),
       "utf-8",
     );
     process.env.OPENAI_API_KEY = "sk-fake-for-test";
 
-    const planPath = writePlan(tmpDir);
+    const planPath = writePlan(sandbox.dir);
 
     const result = await runPlan(planPath, {
-      cwd: tmpDir,
+      cwd: sandbox.dir,
       quorum: "auto",
       manualImport: true,
       noTempering: true,
@@ -287,9 +267,9 @@ describe("Bug #122 — quorum-config precedence respects .forge.json", () => {
   // worker is handed full shell access in cwd — see commit 53e2877 for the
   // historical incident this guard prevents.
   it("(g) Issue #176 — dryRunWorker:true synthesizes pass without spawning worker", async () => {
-    const planPath = writePlan(tmpDir);
+    const planPath = writePlan(sandbox.dir);
     const result = await runPlan(planPath, {
-      cwd: tmpDir,
+      cwd: sandbox.dir,
       quorum: false, // skip probe entirely to keep the test fast and pure
       manualImport: true,
       noTempering: true,
@@ -314,45 +294,45 @@ describe("Bug #122 — quorum-config precedence respects .forge.json", () => {
 // ─── loadQuorumConfig direct tests ────────────────────────────────────────────
 
 describe("loadQuorumConfig — reads quorum.enabled from .forge.json", () => {
-  let tmpDir;
+  let sandbox;
 
   beforeEach(() => {
-    tmpDir = makeTmpDir();
+    sandbox = withSandboxRepo("quorum-cfg-");
   });
 
   afterEach(() => {
-    if (tmpDir) safeRmSync(tmpDir);
+    if (sandbox) sandbox.cleanup();
   });
 
   it("returns enabled:false when .forge.json has quorum.enabled:false", () => {
     writeFileSync(
-      join(tmpDir, ".forge.json"),
+      join(sandbox.dir, ".forge.json"),
       JSON.stringify({ quorum: { enabled: false } }),
       "utf-8",
     );
-    const cfg = loadQuorumConfig(tmpDir);
+    const cfg = loadQuorumConfig(sandbox.dir);
     expect(cfg.enabled).toBe(false);
   });
 
   it("returns enabled:true when .forge.json has quorum.enabled:true", () => {
     writeFileSync(
-      join(tmpDir, ".forge.json"),
+      join(sandbox.dir, ".forge.json"),
       JSON.stringify({ quorum: { enabled: true } }),
       "utf-8",
     );
-    const cfg = loadQuorumConfig(tmpDir);
+    const cfg = loadQuorumConfig(sandbox.dir);
     expect(cfg.enabled).toBe(true);
   });
 
   it("returns enabled:false (defaults) when .forge.json has no quorum.enabled key", () => {
-    writeFileSync(join(tmpDir, ".forge.json"), JSON.stringify({}), "utf-8");
-    const cfg = loadQuorumConfig(tmpDir);
+    writeFileSync(join(sandbox.dir, ".forge.json"), JSON.stringify({}), "utf-8");
+    const cfg = loadQuorumConfig(sandbox.dir);
     // Default is false — runPlan will upgrade this to true for the "auto" legacy-default case
     expect(cfg.enabled).toBe(false);
   });
 
   it("returns enabled:false (defaults) when .forge.json is absent", () => {
-    const cfg = loadQuorumConfig(tmpDir);
+    const cfg = loadQuorumConfig(sandbox.dir);
     expect(cfg.enabled).toBe(false);
   });
 });

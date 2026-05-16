@@ -2400,6 +2400,22 @@ export function detectRuntimes() {
  * @param {string} prompt - The slice instructions
  * @param {object} options - { model, cwd, timeout }
  * @returns {Promise<{ output, jsonlEvents, exitCode, tokens }>}
+ *
+ * ## cwd isolation (Issue #176)
+ * The `cwd` option sets the working directory for the spawned worker subprocess.
+ * If `cwd` is omitted it defaults to `process.cwd()` — the operator's real repo.
+ * Always pass an explicit `cwd` pointing to an isolated directory.
+ *
+ * IMPORTANT: the directory must contain its own `.git` repo (or be totally
+ * outside any git tree). If `cwd` is a plain tmpdir without a git repo, CLI
+ * workers (gh-copilot, claude) walk the filesystem tree upward to find `.git`
+ * and will operate on the nearest ancestor — typically the operator's repo.
+ * Two historical incidents resulted in the worker committing and pushing to
+ * `origin/master` from within a test (see commit 2741d27 and the workaround
+ * in quorum-config-precedence.test.mjs).
+ *
+ * Test helpers: use `withSandboxRepo()` from `tests/helpers/sandbox-repo.mjs`
+ * to get a properly isolated tmpdir with `git init` + initial commit.
  */
 export function spawnWorker(prompt, options = {}) {
   const {

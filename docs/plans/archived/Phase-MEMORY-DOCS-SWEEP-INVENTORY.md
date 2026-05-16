@@ -195,3 +195,12 @@ Files that matched the grep audit but are **not** in the original Scope Contract
 5. **50 files matched the audit grep but are out of scope** — blog posts, plan files, preset templates, research docs, demo scripts. These are historical or downstream consumers and should not be edited in this phase.
 
 6. **`CHANGELOG.md` already has a v2.95.0 entry** with Hallmark/Anvil/Lattice mentions from Phase-LATTICE. Needs verification only, not editing.
+
+---
+
+## Archive Closure
+
+> **Archived**: 2026-05-16 — Phase-MEMORY-DOCS-SWEEP complete
+> **Archived by**: Phase-MEMORY-DOCS-SWEEP Slice 5 (Inventory archive + final fence check)
+
+This inventory file has been moved from `docs/plans/` to `docs/plans/archived/` as part of the standard Plan Forge phase-close procedure. The plan produced **docs-only** commits throughout Slices 1–4; no `.mjs`, `.ts`, `.js`, `.py`, or `.sql` files were modified during this phase. Downstream consumers (Phase-MEMORY-QA-PLAN) may reference this file as the authoritative record of what was updated and why.

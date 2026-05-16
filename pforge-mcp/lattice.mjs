@@ -10,7 +10,8 @@
  *   latticeCallers({ name, limit, deps })                           — who calls a name?
  *   latticeCallees({ chunkId, name, limit, deps })                  — what does a chunk call?
  *
- * Later slices add: latticeBlast.
+ * Public API (Slice 6):
+ *   latticeBlast({ chunkId, name, direction, depth, limit, deps }) — BFS over call graph
  *
  * Scope: pforge-mcp/lattice.mjs
  */
@@ -523,6 +524,186 @@ export function latticeCallers({ name, limit = 25, deps = {} } = {}) {
     : `Found ${total} caller${total !== 1 ? 's' : ''} of "${name}"${truncated ? `; returning first ${limit}` : ''}.`;
 
   return { chunks: results, total, truncated, message };
+}
+
+// ─── latticeBlast ─────────────────────────────────────────────────────────────
+
+/**
+ * BFS traversal of the call graph starting from a seed chunk.
+ *
+ * Traverses outgoing callee edges, incoming caller edges, or both, up to
+ * `depth` hops from the seed.  Callee names that do not resolve to a known
+ * chunk are captured in `unresolvedNames` but are not enqueued for further
+ * traversal (they have no outgoing/incoming edges of their own).
+ *
+ * @param {{
+ *   chunkId?:   string,   exact seed chunk id (takes priority over name)
+ *   name?:      string,   seed chunk name (all matching chunks are enqueued)
+ *   direction?: 'callees' | 'callers' | 'both'   default: 'both'
+ *   depth?:     number,   BFS hop limit (default 3)
+ *   limit?:     number,   max nodes returned (default 50)
+ *   deps?:      object
+ * }} [opts]
+ * @returns {{
+ *   nodes:           Array<object & { distance: number }>,
+ *   edges:           Array<{ from: string, to: string }>,
+ *   unresolvedNames: string[],
+ *   total:           number,
+ *   truncated:       boolean,
+ *   message:         string,
+ * }}
+ */
+export function latticeBlast({
+  chunkId,
+  name,
+  direction = 'both',
+  depth = 3,
+  limit = 50,
+  deps = {},
+} = {}) {
+  if (!chunkId && !name) {
+    return {
+      nodes: [],
+      edges: [],
+      unresolvedNames: [],
+      total: 0,
+      truncated: false,
+      message: '"chunkId" or "name" is required.',
+    };
+  }
+
+  const allChunks = readAllChunks(deps);
+  const allEdges = readAllEdges(deps);
+
+  // Build lookup maps for efficient traversal
+  const chunkById = new Map(allChunks.map((c) => [c.id, c]));
+  const chunksByName = new Map();
+  for (const c of allChunks) {
+    if (c.name) {
+      if (!chunksByName.has(c.name)) chunksByName.set(c.name, []);
+      chunksByName.get(c.name).push(c);
+    }
+  }
+
+  // callee direction: chunkId → Set<calleeName>
+  const outEdges = new Map(); // callerChunkId → [calleeName]
+  // caller direction: calleeName → [callerChunkId]
+  const inEdges = new Map();  // calleeName → [callerChunkId]
+  for (const e of allEdges) {
+    if (!outEdges.has(e.callerChunkId)) outEdges.set(e.callerChunkId, []);
+    outEdges.get(e.callerChunkId).push(e.calleeName);
+    if (!inEdges.has(e.calleeName)) inEdges.set(e.calleeName, []);
+    inEdges.get(e.calleeName).push(e.callerChunkId);
+  }
+
+  // Resolve seed chunk(s)
+  let seedIds;
+  if (chunkId) {
+    seedIds = chunkById.has(chunkId) ? [chunkId] : [];
+  } else {
+    seedIds = (chunksByName.get(name) ?? []).map((c) => c.id);
+  }
+
+  const desc = chunkId ? `chunk "${chunkId}"` : `"${name}"`;
+
+  if (seedIds.length === 0) {
+    return {
+      nodes: [],
+      edges: [],
+      unresolvedNames: [],
+      total: 0,
+      truncated: false,
+      message: `No chunk found for ${desc}.`,
+    };
+  }
+
+  // BFS
+  const visited = new Map();    // chunkId → distance
+  const traversedEdges = [];    // { from: chunkId, to: chunkId }
+  const unresolvedNames = new Set();
+  const queue = [];             // { id: string, dist: number }
+
+  for (const id of seedIds) {
+    if (!visited.has(id)) {
+      visited.set(id, 0);
+      queue.push({ id, dist: 0 });
+    }
+  }
+
+  let head = 0;
+  while (head < queue.length) {
+    const { id: curId, dist } = queue[head++];
+    if (dist >= depth) continue;
+
+    // Expand callees (outgoing)
+    if (direction === 'callees' || direction === 'both') {
+      for (const calleeName of outEdges.get(curId) ?? []) {
+        const calleeChunks = chunksByName.get(calleeName) ?? [];
+        if (calleeChunks.length === 0) {
+          unresolvedNames.add(calleeName);
+        } else {
+          for (const cc of calleeChunks) {
+            traversedEdges.push({ from: curId, to: cc.id });
+            if (!visited.has(cc.id)) {
+              visited.set(cc.id, dist + 1);
+              queue.push({ id: cc.id, dist: dist + 1 });
+            }
+          }
+        }
+      }
+    }
+
+    // Expand callers (incoming)
+    if (direction === 'callers' || direction === 'both') {
+      const curChunk = chunkById.get(curId);
+      if (curChunk?.name) {
+        for (const callerChunkId of inEdges.get(curChunk.name) ?? []) {
+          traversedEdges.push({ from: callerChunkId, to: curId });
+          if (!visited.has(callerChunkId)) {
+            visited.set(callerChunkId, dist + 1);
+            queue.push({ id: callerChunkId, dist: dist + 1 });
+          }
+        }
+      }
+    }
+  }
+
+  // Build ordered node list (BFS order, distance annotated)
+  const allNodes = [];
+  for (const [id, distance] of visited) {
+    const chunk = chunkById.get(id);
+    if (chunk) allNodes.push({ ...chunk, distance });
+  }
+  // Sort by distance then id for determinism
+  allNodes.sort((a, b) => a.distance - b.distance || a.id.localeCompare(b.id));
+
+  const total = allNodes.length;
+  const truncated = total > limit;
+  const nodes = allNodes.slice(0, limit);
+
+  // Deduplicate traversed edges
+  const edgeKey = (e) => `${e.from}→${e.to}`;
+  const seenEdges = new Set();
+  const uniqueEdges = traversedEdges.filter((e) => {
+    const k = edgeKey(e);
+    if (seenEdges.has(k)) return false;
+    seenEdges.add(k);
+    return true;
+  });
+
+  const dirLabel = direction === 'callees' ? 'callee' : direction === 'callers' ? 'caller' : 'call-graph';
+  const message = total === 0
+    ? `No ${dirLabel} neighbors found for ${desc} within depth ${depth}.`
+    : `Traversed ${total} node${total !== 1 ? 's' : ''} from ${desc} (direction: ${direction}, depth: ${depth})${truncated ? `; returning first ${limit}` : ''}.`;
+
+  return {
+    nodes,
+    edges: uniqueEdges,
+    unresolvedNames: [...unresolvedNames],
+    total,
+    truncated,
+    message,
+  };
 }
 
 // ─── latticeCallees ───────────────────────────────────────────────────────────

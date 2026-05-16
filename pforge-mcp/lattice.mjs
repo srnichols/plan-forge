@@ -5,9 +5,14 @@
  *   latticeIndex({ paths, since, deps })  — walk → chunk → persist JSONL
  *   latticeStat({ deps })                 — summary counts + meta
  *
- * Later slices add: latticeQuery, latticeCallers, latticeCallees, latticeBlast.
+ * Public API (Slice 5):
+ *   latticeQuery({ query, language, kind, filePath, limit, deps })  — search chunks
+ *   latticeCallers({ name, limit, deps })                           — who calls a name?
+ *   latticeCallees({ chunkId, name, limit, deps })                  — what does a chunk call?
  *
- * Scope: pforge-mcp/lattice.mjs (Slice 4 of Phase-LATTICE)
+ * Later slices add: latticeBlast.
+ *
+ * Scope: pforge-mcp/lattice.mjs
  */
 
 import { createHash } from 'node:crypto';
@@ -396,4 +401,200 @@ export function latticeStat({ deps = {} } = {}) {
     anvilHitRate,
     indexBytes,
   };
+}
+
+// ─── Internal read helpers (Slice 5) ─────────────────────────────────────────
+
+function readAllChunks(deps = {}) {
+  const p = join(latticeDir(deps), CHUNKS_FILE);
+  if (!existsSync(p)) return [];
+  return readFileSync(p, 'utf8')
+    .split('\n')
+    .filter(Boolean)
+    .map((line) => { try { return JSON.parse(line); } catch { return null; } })
+    .filter(Boolean);
+}
+
+function readAllEdges(deps = {}) {
+  const p = join(latticeDir(deps), EDGES_FILE);
+  if (!existsSync(p)) return [];
+  return readFileSync(p, 'utf8')
+    .split('\n')
+    .filter(Boolean)
+    .map((line) => { try { return JSON.parse(line); } catch { return null; } })
+    .filter(Boolean);
+}
+
+// ─── latticeQuery ─────────────────────────────────────────────────────────────
+
+/**
+ * Search the chunk index for records matching the given criteria.
+ *
+ * All filters are ANDed. An empty/omitted `query` matches all chunks.
+ *
+ * @param {{
+ *   query?:    string,            substring match against chunk.name OR chunk.filePath
+ *   language?: string,            exact match against chunk.language
+ *   kind?:     string,            exact match against chunk.kind
+ *   filePath?: string,            substring match against chunk.filePath
+ *   limit?:    number,            max results returned (default 25)
+ *   deps?:     object
+ * }} [opts]
+ * @returns {{
+ *   chunks:    object[],
+ *   total:     number,
+ *   truncated: boolean,
+ *   message:   string,
+ * }}
+ */
+export function latticeQuery({
+  query = '',
+  language,
+  kind,
+  filePath: filePathFilter,
+  limit = 25,
+  deps = {},
+} = {}) {
+  const allChunks = readAllChunks(deps);
+  const q = query.toLowerCase();
+
+  const filtered = allChunks.filter((c) => {
+    if (q && !c.name?.toLowerCase().includes(q) && !c.filePath?.toLowerCase().includes(q)) return false;
+    if (language !== undefined && c.language !== language) return false;
+    if (kind !== undefined && c.kind !== kind) return false;
+    if (filePathFilter && !c.filePath?.toLowerCase().includes(filePathFilter.toLowerCase())) return false;
+    return true;
+  });
+
+  const total = filtered.length;
+  const truncated = total > limit;
+  const results = filtered.slice(0, limit);
+
+  const filters = [
+    query ? `query "${query}"` : null,
+    language ? `language "${language}"` : null,
+    kind ? `kind "${kind}"` : null,
+    filePathFilter ? `filePath "${filePathFilter}"` : null,
+  ].filter(Boolean).join(', ');
+
+  const message = total === 0
+    ? `No chunks matched${filters ? ` ${filters}` : ''}. Broaden your query or run latticeIndex first.`
+    : `Found ${total} chunk${total !== 1 ? 's' : ''}${filters ? ` matching ${filters}` : ''}${truncated ? `; returning first ${limit}` : ''}.`;
+
+  return { chunks: results, total, truncated, message };
+}
+
+// ─── latticeCallers ───────────────────────────────────────────────────────────
+
+/**
+ * Find all chunks that reference (call) the given symbol name.
+ *
+ * @param {{
+ *   name:   string,   the callee symbol name to search for
+ *   limit?: number,   max results (default 25)
+ *   deps?:  object
+ * }} opts
+ * @returns {{
+ *   chunks:    object[],
+ *   total:     number,
+ *   truncated: boolean,
+ *   message:   string,
+ * }}
+ */
+export function latticeCallers({ name, limit = 25, deps = {} } = {}) {
+  if (!name) {
+    return { chunks: [], total: 0, truncated: false, message: '"name" is required.' };
+  }
+
+  const edges = readAllEdges(deps);
+  const callerIds = new Set(
+    edges.filter((e) => e.calleeName === name).map((e) => e.callerChunkId),
+  );
+
+  const allChunks = readAllChunks(deps);
+  const callers = allChunks.filter((c) => callerIds.has(c.id));
+
+  const total = callers.length;
+  const truncated = total > limit;
+  const results = callers.slice(0, limit);
+
+  const message = total === 0
+    ? `No callers found for "${name}". Ensure the index is up to date.`
+    : `Found ${total} caller${total !== 1 ? 's' : ''} of "${name}"${truncated ? `; returning first ${limit}` : ''}.`;
+
+  return { chunks: results, total, truncated, message };
+}
+
+// ─── latticeCallees ───────────────────────────────────────────────────────────
+
+/**
+ * Find all symbols called by a given chunk (identified by chunkId or name).
+ *
+ * Callee names are resolved to chunk records where possible. Names that do
+ * not match any known chunk are returned in `unresolvedNames`.
+ *
+ * @param {{
+ *   chunkId?: string,  exact chunk id (takes priority over name)
+ *   name?:    string,  chunk.name to look up the source chunk
+ *   limit?:   number,  max resolved chunks returned (default 25)
+ *   deps?:    object
+ * }} [opts]
+ * @returns {{
+ *   chunks:          object[],   resolved callee chunks
+ *   unresolvedNames: string[],   callee names with no matching chunk
+ *   total:           number,     resolved + unresolved count
+ *   truncated:       boolean,
+ *   message:         string,
+ * }}
+ */
+export function latticeCallees({ chunkId, name, limit = 25, deps = {} } = {}) {
+  if (!chunkId && !name) {
+    return { chunks: [], unresolvedNames: [], total: 0, truncated: false, message: '"chunkId" or "name" is required.' };
+  }
+
+  const allChunks = readAllChunks(deps);
+  const edges = readAllEdges(deps);
+
+  // Resolve source chunk id(s)
+  let sourceIds;
+  if (chunkId) {
+    sourceIds = new Set([chunkId]);
+  } else {
+    sourceIds = new Set(allChunks.filter((c) => c.name === name).map((c) => c.id));
+  }
+
+  const desc = chunkId ? `chunk "${chunkId}"` : `"${name}"`;
+
+  if (sourceIds.size === 0) {
+    return { chunks: [], unresolvedNames: [], total: 0, truncated: false, message: `No chunk found for ${desc}.` };
+  }
+
+  // Unique callee names from outgoing edges
+  const calleeNames = [
+    ...new Set(edges.filter((e) => sourceIds.has(e.callerChunkId)).map((e) => e.calleeName)),
+  ];
+
+  // Build a name → first-chunk map for resolution
+  const chunksByName = new Map();
+  for (const c of allChunks) {
+    if (c.name && !chunksByName.has(c.name)) chunksByName.set(c.name, c);
+  }
+
+  const resolvedChunks = [];
+  const unresolvedNames = [];
+  for (const cn of calleeNames) {
+    const resolved = chunksByName.get(cn);
+    if (resolved) resolvedChunks.push(resolved);
+    else unresolvedNames.push(cn);
+  }
+
+  const total = resolvedChunks.length + unresolvedNames.length;
+  const truncated = resolvedChunks.length > limit;
+  const resultChunks = resolvedChunks.slice(0, limit);
+
+  const message = total === 0
+    ? `No callees found for ${desc}.`
+    : `Found ${total} callee${total !== 1 ? 's' : ''} for ${desc} (${resolvedChunks.length} resolved, ${unresolvedNames.length} unresolved)${truncated ? `; returning first ${limit} resolved` : ''}.`;
+
+  return { chunks: resultChunks, unresolvedNames, total, truncated, message };
 }

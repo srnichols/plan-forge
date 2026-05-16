@@ -95,7 +95,7 @@ The work is **strictly opt-in and additive**:
 - [ ] **MUST**: Section 3 ("Dispatching to Copilot Coding Agent") of `docs/manual/plan-forge-on-the-github-stack.html` is fleshed out: pre-requisites, command syntax, what gets created, how trajectories capture issue/PR mapping, screenshot of the dashboard's github block.
 - [ ] **MUST**: Section 4 ("GHAS-driven remediation") is fleshed out: SARIF download → `pforge plan-from-sarif` → Hardener → run-plan → PreDeploy LiveGuard hook chain. Include a worked example with a 3-finding fixture.
 - [ ] **MUST**: The "Coming next" callouts for Sections 3 and 4 are removed from the chapter; the Sections 5–8 callouts remain.
-- [ ] **MUST**: CHANGELOG entry under [Unreleased] → moved to a new `[2.86.0]` heading on Slice 10. VERSION bumped.
+- [ ] **MUST**: CHANGELOG entry under [Unreleased] → moved to a new `[2.96.0]` heading on Slice 10. VERSION bumped.
 
 ### Edge Cases
 
@@ -166,7 +166,7 @@ The work is **strictly opt-in and additive**:
 - `pforge-mcp/worker-capabilities.json` — register the new worker
 - `pforge.ps1` + `pforge.sh` — add `plan-from-sarif` subcommand
 - `docs/manual/plan-forge-on-the-github-stack.html` — replace Section 3 + 4 callouts with full content
-- `pforge-mcp/package.json` + `VERSION` — bump to `2.86.0`
+- `pforge-mcp/package.json` + `VERSION` — bump to `2.96.0`
 - `CHANGELOG.md` — add entry
 
 ### Forbidden Actions
@@ -268,10 +268,10 @@ npx --prefix pforge-mcp vitest run
 
 ### Slice 10 — Chapter Sections 3 + 4, VERSION bump, CHANGELOG
 **Files in scope**: `docs/manual/plan-forge-on-the-github-stack.html`, `VERSION`, `pforge-mcp/package.json`, `CHANGELOG.md`
-**Goal**: Replace the Section 3 + 4 "Coming next" callouts with full content (worked examples, screenshots if available). Bump VERSION 2.85.0 → 2.86.0. CHANGELOG entry.
+**Goal**: Replace the Section 3 + 4 "Coming next" callouts with full content (worked examples, screenshots if available). Bump VERSION 2.95.0 → 2.96.0. CHANGELOG entry.
 **Validation gate**:
 ```bash
-node -e "const fs=require('fs'); const html=fs.readFileSync('docs/manual/plan-forge-on-the-github-stack.html','utf8'); const cl=fs.readFileSync('CHANGELOG.md','utf8'); const v=fs.readFileSync('VERSION','utf8').trim(); const checks={section3:/pforge run-plan --worker copilot-coding-agent/.test(html), section4:/pforge plan-from-sarif/.test(html), version:v==='2.86.0', changelog:/Copilot Coding Agent dispatch/i.test(cl)}; const failed=Object.entries(checks).filter(([_,v])=>!v); if(failed.length){console.error('failed:',failed.map(([k])=>k).join(','));process.exit(1)} console.log('ok')"
+node -e "const fs=require('fs'); const html=fs.readFileSync('docs/manual/plan-forge-on-the-github-stack.html','utf8'); const cl=fs.readFileSync('CHANGELOG.md','utf8'); const v=fs.readFileSync('VERSION','utf8').trim(); const checks={section3:/pforge run-plan --worker copilot-coding-agent/.test(html), section4:/pforge plan-from-sarif/.test(html), version:v==='2.96.0', changelog:/Copilot Coding Agent dispatch/i.test(cl)}; const failed=Object.entries(checks).filter(([_,v])=>!v); if(failed.length){console.error('failed:',failed.map(([k])=>k).join(','));process.exit(1)} console.log('ok')"
 ```
 **Estimated cost**: $0.40
 

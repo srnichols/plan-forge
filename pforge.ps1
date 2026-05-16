@@ -126,6 +126,7 @@ function Show-Help {
     Write-Host "    --dry-run       Show what would happen without triage side effects"
     Write-Host "    --env=ENV       Set environment (dev, staging; production is forbidden)"
     Write-Host "  crucible <sub>    Manage Crucible smelts (import, status) — use 'pforge crucible --help' for details"
+    Write-Host "  sync-spaces       Push active plan, instructions, and tool catalog to a GitHub Copilot Space"
     Write-Host "  github <sub>      Inspect the GitHub-native AI surface (status | doctor | metrics)"
     Write-Host "  help              Show this help message"
     Write-Host ""
@@ -6468,6 +6469,94 @@ function Invoke-AuditLoop {
     }
 }
 
+# ─── Command: sync-spaces ─────────────────────────────────────────────
+function Invoke-SyncSpaces {
+    # pforge sync-spaces — Push plan, instructions, and tool catalog to a GitHub Copilot Space.
+    # Flags: --space <owner/name>, --org <slug>, --dry-run, --force, --no-instructions
+    $spaceRef       = $null
+    $orgSlug        = $null
+    $dryRun         = $false
+    $force          = $false
+    $noInstructions = $false
+
+    $i = 0
+    while ($i -lt $Arguments.Count) {
+        switch -Regex ($Arguments[$i]) {
+            '^--space$'          { if (($i + 1) -lt $Arguments.Count) { $spaceRef = $Arguments[$i + 1]; $i++ } }
+            '^--space=(.+)$'     { $spaceRef = $Matches[1] }
+            '^--org$'            { if (($i + 1) -lt $Arguments.Count) { $orgSlug = $Arguments[$i + 1]; $i++ } }
+            '^--org=(.+)$'       { $orgSlug = $Matches[1] }
+            '^--dry-run$'        { $dryRun = $true }
+            '^--force$'          { $force = $true }
+            '^--no-instructions$'{ $noInstructions = $true }
+            '^(-h|--help)$'      {
+                Write-Host ""
+                Write-Host "pforge sync-spaces — Push Plan Forge artifacts to a GitHub Copilot Space" -ForegroundColor Cyan
+                Write-Host ""
+                Write-Host "USAGE:" -ForegroundColor Yellow
+                Write-Host "  pforge sync-spaces [flags]"
+                Write-Host ""
+                Write-Host "FLAGS:" -ForegroundColor Yellow
+                Write-Host "  --space <owner/name>  Target Copilot Space (overrides .forge.json)"
+                Write-Host "  --org <slug>          Broadcast to all org Spaces tagged 'plan-forge-sync'"
+                Write-Host "  --dry-run             Show what would be uploaded without calling the API"
+                Write-Host "  --force               Re-upload all files even if SHA is unchanged"
+                Write-Host "  --no-instructions     Skip .github/instructions files"
+                Write-Host ""
+                Write-Host "PAYLOAD:" -ForegroundColor Yellow
+                Write-Host "  plan-forge/active-plan.md           Active plan from .forge/active-plan"
+                Write-Host "  plan-forge/instructions/<name>.md   All .github/instructions/*.instructions.md"
+                Write-Host "  plan-forge/project-profile.md       project-profile.instructions.md"
+                Write-Host "  plan-forge/tool-catalog.md          MCP tool catalog from tools.json"
+                Write-Host ""
+                Write-Host "CONFIG:" -ForegroundColor Yellow
+                Write-Host "  .forge.json → github.spacesTarget   Default 'owner/name' when --space is omitted"
+                Write-Host ""
+                Write-Host "EXAMPLES:" -ForegroundColor Yellow
+                Write-Host "  pforge sync-spaces --space acme-org/plan-forge-hub"
+                Write-Host "  pforge sync-spaces --org acme-org --dry-run"
+                Write-Host "  pforge sync-spaces --force"
+                Write-Host ""
+                return
+            }
+        }
+        $i++
+    }
+
+    $moduleFile = Join-Path $RepoRoot "pforge-mcp\spaces-sync.mjs"
+    if (-not (Test-Path $moduleFile)) {
+        Write-Host "ERROR: spaces-sync.mjs not found at $moduleFile" -ForegroundColor Red
+        exit 1
+    }
+
+    $opts = @{
+        projectRoot    = $RepoRoot
+        dryRun         = $dryRun
+        force          = $force
+        noInstructions = $noInstructions
+    }
+    if ($spaceRef)  { $opts.spaceRef = $spaceRef }
+    if ($orgSlug)   { $opts.org = $orgSlug }
+
+    $optsJson = $opts | ConvertTo-Json -Compress
+
+    Write-Host ""
+    if ($dryRun) {
+        Write-Host "`u{1F4CB} Dry Run — pforge sync-spaces" -ForegroundColor Yellow
+    } else {
+        Write-Host "`u{1F680} Syncing to Copilot Space..." -ForegroundColor Cyan
+    }
+
+    $nodeResult = & node $moduleFile $optsJson 2>&1
+    $exitCode   = $LASTEXITCODE
+
+    $nodeResult | ForEach-Object { Write-Host $_ }
+
+    if ($exitCode -ne 0) {
+        exit $exitCode
+    }
+}
+
 # ─── Command: github ───────────────────────────────────────────────────
 function Invoke-Github {
     # Subcommands: status | doctor | metrics | --help
@@ -6696,6 +6785,7 @@ switch ($Command) {
     'graph'        { Invoke-Graph }
     'digest'       { Invoke-Digest }
     'plan-from-sarif' { Invoke-PlanFromSarif }
+    'sync-spaces'     { Invoke-SyncSpaces }
     'crucible'        { Invoke-Crucible }
     'github'       { Invoke-Github }
     'anvil'        { Invoke-Anvil }

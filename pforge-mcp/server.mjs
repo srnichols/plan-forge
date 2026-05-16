@@ -135,6 +135,8 @@ import { timeline as forgeTimeline } from "./timeline/core.mjs";
 import { withAuth } from "./auth/middleware.mjs";
 // Phase LATTICE Slice 7 — Lattice code-graph MCP handlers
 import { latticeIndex, latticeStat, latticeQuery, latticeCallers, latticeBlast } from "./lattice.mjs";
+// Roadmap C2 — forge_export_plan: convert loose plans to hardened Plan Forge format
+import { exportPlan, exportPlanFromFile } from "./export-plan.mjs";
 import express from "express";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -1678,6 +1680,22 @@ const TOOLS = [
         path: { type: "string", description: "Project directory (default: current)" },
       },
       required: [],
+    },
+  },
+  {
+    // Roadmap C2 — forge_export_plan
+    name: "forge_export_plan",
+    description: "Convert a loose Copilot cloud agent session plan (numbered or bulleted steps) into a hardened Plan Forge Phase-X-PLAN.md. Parses steps, extracts file paths, generates per-slice validation gates, and outputs a complete plan with scope contract, forbidden actions template, and acceptance criteria.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        input: { type: "string", description: "Markdown text of the loose plan to convert" },
+        phaseName: { type: "string", description: "Override the derived phase slug (UPPERCASE-SLUG, e.g. AUTH-RBAC). Default: derived from title." },
+        outputPath: { type: "string", description: "If set, write the plan to this file path (absolute or relative to cwd)" },
+        sourceNote: { type: "string", description: "Attribution note in the plan header. Default: 'Exported from loose plan via forge_export_plan'" },
+        path: { type: "string", description: "Project directory (default: current)" },
+      },
+      required: ["input"],
     },
   },
   {
@@ -5574,7 +5592,26 @@ server.setRequestHandler(CallToolRequestSchema, _wrapWithToolSpan(async (request
     }
   }
 
-  // ─── forge_testbed_happypath — run all happy-path scenarios (TESTBED-02 Slice 01) ───
+  // ─── forge_export_plan — convert loose plan to hardened Plan Forge format (Roadmap C2) ───
+  if (name === "forge_export_plan") {
+    const t0 = Date.now();
+    try {
+      const cwd = args.path ? resolve(args.path) : findProjectRoot(PROJECT_DIR);
+      const result = exportPlan(args.input, {
+        phaseName: args.phaseName,
+        outputPath: args.outputPath,
+        sourceNote: args.sourceNote,
+        cwd,
+      });
+      emitToolTelemetry("forge_export_plan", args, result, Date.now() - t0, result.ok ? "OK" : "ERROR", cwd);
+      return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
+    } catch (err) {
+      emitToolTelemetry("forge_export_plan", args, { error: err.message }, Date.now() - t0, "ERROR", findProjectRoot(PROJECT_DIR));
+      return { content: [{ type: "text", text: `Tool error: ${err.message}` }], isError: true };
+    }
+  }
+
+
   if (name === "forge_testbed_happypath") {
     const t0 = Date.now();
     try {
@@ -7833,6 +7870,8 @@ export function createExpressApp() {
     "forge_crucible_abandon",
     "forge_crucible_import",
     "forge_crucible_status",
+    // Roadmap C2 — forge_export_plan is MCP-native (no CLI shell equivalent).
+    "forge_export_plan",
   ]);
   app.post("/api/tool/:name", async (req, res) => {
     try {

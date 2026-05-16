@@ -3959,6 +3959,14 @@ export async function runPlan(planPath, options = {}) {
     noTempering = false,    // Phase-33.1: disable post-slice tempering for this run
     allowRetrograde = false, // Meta-bug #129: allow plan whose target version already exists on origin
     worker = null,           // Phase GITHUB-B Slice 3: e.g. "copilot-coding-agent"
+    // Issue #176 — dryRunWorker: skip the real worker spawn (executeSlice) and
+    // synthesize a passing slice result. Tests that exercise runPlan setup
+    // (quorum probe, config loading, escalation chain) without needing real
+    // worker side-effects must opt in. Default false preserves prod behavior.
+    // Without this guard, tests that call runPlan() with a real worker (e.g.
+    // gh-copilot) hand the worker full shell access in the operator's cwd —
+    // the worker can edit any source file and even `git push` to origin.
+    dryRunWorker = false,
     // Injectable dependencies for testing (copilot-coding-agent dispatch path)
     _inspectGithubStack = _inspectGithubStackDefault,
     _dispatchSlice = _dispatchSliceDefault,
@@ -4461,6 +4469,33 @@ export async function runPlan(planPath, options = {}) {
         // can distinguish worker-owned paths from operator-owned paths that
         // were already dirty when the slice began.
         const preSliceState = snapshotPreSliceState({ cwd });
+        // Issue #176 — dryRunWorker short-circuits the executeSlice spawn so
+        // tests that exercise runPlan setup (probe, config, escalation chain)
+        // don't hand a real worker (gh-copilot, claude CLI) shell access in
+        // the operator's cwd. Synthesizes a passing slice result with the
+        // same shape executeSlice would have returned.
+        if (dryRunWorker) {
+          return {
+            sliceId: slice.id ?? String(slice.number),
+            number: slice.number,
+            title: slice.title,
+            status: "passed",
+            duration: 0,
+            exitCode: 0,
+            gateStatus: "passed",
+            gateOutput: "dry-run-worker",
+            gateError: null,
+            failedCommand: null,
+            tokens: { tokens_in: 0, tokens_out: 0, model: "dry-run", premiumRequests: 0, apiDurationMs: 0, sessionDurationMs: 0, codeChanges: null, vendor: "dry-run" },
+            worker: "dry-run",
+            model: "dry-run",
+            host: "dry-run",
+            billingSurface: "dry-run-worker (no spawn)",
+            attempts: 1,
+            cost_usd: 0,
+            autoCommit: { committed: false, reason: "dry-run-worker" },
+          };
+        }
         const result = await executeSlice(slice, {
           cwd, model: effectiveModel, modelRouting, mode, runDir, maxRetries,
           memoryEnabled, projectName, planName: basename(planPath, ".md"),

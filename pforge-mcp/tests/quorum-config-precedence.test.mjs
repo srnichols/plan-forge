@@ -109,6 +109,7 @@ describe("Bug #122 — quorum-config precedence respects .forge.json", () => {
       manualImport: true,
       manualImportSource: "human",
       noTempering: true,
+      dryRunWorker: true,
     });
 
     // Run must complete (no "no available models" throw)
@@ -142,6 +143,7 @@ describe("Bug #122 — quorum-config precedence respects .forge.json", () => {
       quorum: "auto",
       manualImport: true,
       noTempering: true,
+      dryRunWorker: true,
     });
 
     expect(result.status).not.toBe("error");
@@ -175,6 +177,7 @@ describe("Bug #122 — quorum-config precedence respects .forge.json", () => {
       quorum: true,
       manualImport: true,
       noTempering: true,
+      dryRunWorker: true,
     });
 
     expect(result.status).not.toBe("error");
@@ -207,6 +210,7 @@ describe("Bug #122 — quorum-config precedence respects .forge.json", () => {
       quorumPreset: "power",
       manualImport: true,
       noTempering: true,
+      dryRunWorker: true,
     });
 
     expect(result.status).not.toBe("error");
@@ -232,6 +236,7 @@ describe("Bug #122 — quorum-config precedence respects .forge.json", () => {
       quorum: false,
       manualImport: true,
       noTempering: true,
+      dryRunWorker: true,
     });
 
     expect(result.status).not.toBe("error");
@@ -263,6 +268,7 @@ describe("Bug #122 — quorum-config precedence respects .forge.json", () => {
       quorum: "auto",
       manualImport: true,
       noTempering: true,
+      dryRunWorker: true,
     });
 
     expect(result.status).not.toBe("error");
@@ -271,6 +277,37 @@ describe("Bug #122 — quorum-config precedence respects .forge.json", () => {
     expect(line).toBeTruthy();
     expect(line).toContain("enabled=true");
     expect(line).toContain("source=config");
+  });
+
+  // ── Issue #176 — dryRunWorker safety guard ───────────────────────────────
+
+  // Regression guard: prove runPlan({dryRunWorker:true}) skips spawnWorker so
+  // tests in this suite (and any other) cannot accidentally spawn gh-copilot
+  // and let it commit/push to the operator's repo. Without dryRunWorker, the
+  // worker is handed full shell access in cwd — see commit 53e2877 for the
+  // historical incident this guard prevents.
+  it("(g) Issue #176 — dryRunWorker:true synthesizes pass without spawning worker", async () => {
+    const planPath = writePlan(tmpDir);
+    const result = await runPlan(planPath, {
+      cwd: tmpDir,
+      quorum: false, // skip probe entirely to keep the test fast and pure
+      manualImport: true,
+      noTempering: true,
+      dryRunWorker: true,
+    });
+
+    expect(result.status).not.toBe("error");
+    expect(Array.isArray(result.sliceResults)).toBe(true);
+    expect(result.sliceResults.length).toBe(1);
+
+    const sr = result.sliceResults[0];
+    expect(sr.status).toBe("passed");
+    expect(sr.worker).toBe("dry-run");
+    expect(sr.model).toBe("dry-run");
+    expect(sr.gateOutput).toBe("dry-run-worker");
+    expect(sr.cost_usd).toBe(0);
+    expect(sr.autoCommit?.reason).toBe("dry-run-worker");
+    expect(sr.autoCommit?.committed).toBe(false);
   });
 });
 

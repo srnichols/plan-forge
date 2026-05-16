@@ -5080,6 +5080,212 @@ cmd_patterns() {
     node "$script_path" "$@"
 }
 
+# ─── Command: anvil ──────────────────────────────────────────────
+cmd_anvil() {
+    local sub="${1:-}"
+    local port=3100
+
+    _anvil_mcp_tool() {
+        local tool_name="$1"
+        local body="${2:-{}}"
+        local response
+        response=$(curl -sf -X POST "http://localhost:${port}/api/tool/${tool_name}" \
+            -H "Content-Type: application/json" \
+            -d "$body") || {
+            echo "ERROR: MCP server not running on port ${port}. Start with: node pforge-mcp/server.mjs" >&2
+            exit 1
+        }
+        echo "$response"
+    }
+
+    case "$sub" in
+        stat)
+            _anvil_mcp_tool "forge_anvil_stat" '{}' | node -e "
+              const d = JSON.parse(require('fs').readFileSync('/dev/stdin','utf8'));
+              console.log('');
+              console.log('\u{1F527} Anvil Cache Stat');
+              console.log('   Entries:     ' + d.entries);
+              console.log('   Total bytes: ' + d.totalBytes);
+              if (d.perTool && Object.keys(d.perTool).length > 0) {
+                console.log('   Per-tool:');
+                for (const [k,v] of Object.entries(d.perTool)) {
+                  console.log('     ' + k.padEnd(30) + ' hits=' + String(v.hits).padStart(4) + '  misses=' + String(v.misses).padStart(4) + '  cached=' + String(v.count).padStart(4));
+                }
+              }
+              console.log('');
+            "
+            ;;
+        clear)
+            local tool_filter=""
+            local older_than_ms=""
+            shift
+            while [[ $# -gt 0 ]]; do
+                case "$1" in
+                    --tool)        tool_filter="$2";  shift 2 ;;
+                    --olderThanMs) older_than_ms="$2"; shift 2 ;;
+                    *) shift ;;
+                esac
+            done
+            local body="{}"
+            if [[ -n "$tool_filter" && -n "$older_than_ms" ]]; then
+                body="{\"tool\":\"$tool_filter\",\"olderThanMs\":$older_than_ms}"
+            elif [[ -n "$tool_filter" ]]; then
+                body="{\"tool\":\"$tool_filter\"}"
+            elif [[ -n "$older_than_ms" ]]; then
+                body="{\"olderThanMs\":$older_than_ms}"
+            fi
+            _anvil_mcp_tool "forge_anvil_clear" "$body" | node -e "
+              const d = JSON.parse(require('fs').readFileSync('/dev/stdin','utf8'));
+              console.log('Deleted ' + d.deleted + ' cache entry(ies).');
+            "
+            ;;
+        rebuild)
+            local since=""
+            shift
+            while [[ $# -gt 0 ]]; do
+                case "$1" in
+                    --since) since="$2"; shift 2 ;;
+                    *) shift ;;
+                esac
+            done
+            if [[ -z "$since" ]]; then
+                echo "Usage: pforge anvil rebuild --since <git-sha>" >&2
+                exit 1
+            fi
+            _anvil_mcp_tool "forge_anvil_rebuild" "{\"since\":\"$since\"}" | node -e "
+              const d = JSON.parse(require('fs').readFileSync('/dev/stdin','utf8'));
+              console.log('Invalidated ' + d.invalidated + ' cache entry(ies).');
+              if (d.changedFiles && d.changedFiles.length > 0) {
+                console.log('Changed files:');
+                d.changedFiles.forEach(f => console.log('  - ' + f));
+              }
+            "
+            ;;
+        dlq)
+            local dlq_sub="${2:-}"
+            case "$dlq_sub" in
+                list)
+                    local limit=""
+                    shift 2
+                    while [[ $# -gt 0 ]]; do
+                        case "$1" in
+                            --limit) limit="$2"; shift 2 ;;
+                            *) shift ;;
+                        esac
+                    done
+                    local body="{}"
+                    [[ -n "$limit" ]] && body="{\"limit\":$limit}"
+                    _anvil_mcp_tool "forge_anvil_dlq_list" "$body" | node -e "
+                      const d = JSON.parse(require('fs').readFileSync('/dev/stdin','utf8'));
+                      console.log('DLQ total: ' + d.total);
+                      if (d.items && d.items.length > 0) {
+                        d.items.forEach(r => console.log('  [' + r.id + '] ' + r.toolName + ' @ ' + r.failedAt));
+                      } else {
+                        console.log('  (no entries)');
+                      }
+                    "
+                    ;;
+                drain)
+                    local id_filter=""
+                    local tool_filter2=""
+                    shift 2
+                    while [[ $# -gt 0 ]]; do
+                        case "$1" in
+                            --id)   id_filter="$2";   shift 2 ;;
+                            --tool) tool_filter2="$2"; shift 2 ;;
+                            *) shift ;;
+                        esac
+                    done
+                    local body="{}"
+                    if [[ -n "$id_filter" && -n "$tool_filter2" ]]; then
+                        body="{\"id\":\"$id_filter\",\"tool\":\"$tool_filter2\"}"
+                    elif [[ -n "$id_filter" ]]; then
+                        body="{\"id\":\"$id_filter\"}"
+                    elif [[ -n "$tool_filter2" ]]; then
+                        body="{\"tool\":\"$tool_filter2\"}"
+                    fi
+                    _anvil_mcp_tool "forge_anvil_dlq_drain" "$body" | node -e "
+                      const d = JSON.parse(require('fs').readFileSync('/dev/stdin','utf8'));
+                      console.log('Drained ' + d.drained + ' DLQ record(s).');
+                    "
+                    ;;
+                *)
+                    echo "Usage: pforge anvil dlq <list|drain>" >&2
+                    exit 1
+                    ;;
+            esac
+            ;;
+        *)
+            echo "Usage: pforge anvil <stat|clear|rebuild|dlq>"
+            echo ""
+            echo "Subcommands:"
+            echo "  stat                              Show cache statistics"
+            echo "  clear [--tool <n>] [--olderThanMs <ms>]  Delete cache entries"
+            echo "  rebuild --since <sha>             Invalidate stale entries"
+            echo "  dlq list [--limit <n>]            List DLQ records"
+            echo "  dlq drain [--id <id>] [--tool <n>]  Drain DLQ records"
+            exit 1
+            ;;
+    esac
+}
+
+# ─── Command: hallmark ───────────────────────────────────────────
+cmd_hallmark() {
+    local sub="${1:-}"
+    local id="${2:-}"
+    local port=3100
+
+    _hallmark_mcp_tool() {
+        local tool_name="$1"
+        local body="${2:-{}}"
+        local response
+        response=$(curl -sf -X POST "http://localhost:${port}/api/tool/${tool_name}" \
+            -H "Content-Type: application/json" \
+            -d "$body") || {
+            echo "ERROR: MCP server not running on port ${port}. Start with: node pforge-mcp/server.mjs" >&2
+            exit 1
+        }
+        echo "$response"
+    }
+
+    case "$sub" in
+        show)
+            local body="{}"
+            [[ -n "$id" ]] && body="{\"id\":\"$id\"}"
+            _hallmark_mcp_tool "forge_hallmark_show" "$body" | node -e "
+              const d = JSON.parse(require('fs').readFileSync('/dev/stdin','utf8'));
+              if (d.error) { console.error('ERROR: ' + d.message); process.exit(1); }
+              console.log(JSON.stringify(d, null, 2));
+            "
+            ;;
+        verify)
+            if [[ -z "$id" ]]; then
+                echo "Usage: pforge hallmark verify <id>" >&2
+                exit 1
+            fi
+            _hallmark_mcp_tool "forge_hallmark_verify" "{\"id\":\"$id\"}" | node -e "
+              const d = JSON.parse(require('fs').readFileSync('/dev/stdin','utf8'));
+              if (!d.ok) { console.error('ERROR: ' + d.message); process.exit(1); }
+              const color = d.drift ? '\x1b[33m' : '\x1b[32m';
+              console.log(color + '[' + d.id + '] ' + d.message + '\x1b[0m');
+              if (d.driftDetail) {
+                console.log('  Stored:  ' + d.driftDetail.storedHash);
+                console.log('  Current: ' + d.driftDetail.currentHash);
+              }
+            "
+            ;;
+        *)
+            echo "Usage: pforge hallmark <show|verify> [id]"
+            echo ""
+            echo "Subcommands:"
+            echo "  show [<id>]    Show a hallmark (omit id to list all)"
+            echo "  verify <id>    Verify a hallmark and report drift"
+            exit 1
+            ;;
+    esac
+}
+}
+
 # ─── Command: graph ────────────────────────────────────────────────
 cmd_graph() {
     local script_path="$REPO_ROOT/scripts/graph.mjs"
@@ -5581,6 +5787,8 @@ case "$COMMAND" in
     plan-from-sarif) cmd_plan_from_sarif "$@" ;;
     github)       cmd_github "$@" ;;
     crucible)     cmd_crucible "$@" ;;
+    anvil)        cmd_anvil "$@" ;;
+    hallmark)     cmd_hallmark "$@" ;;
     help|--help)  show_help ;;
     *)
         echo "ERROR: Unknown command '$COMMAND'" >&2

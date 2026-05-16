@@ -5789,6 +5789,184 @@ function Invoke-Patterns {
     node $scriptPath @Arguments
 }
 
+# ─── Command: anvil ────────────────────────────────────────────────
+function Invoke-Anvil {
+    $sub = if ($Arguments.Count -gt 0) { $Arguments[0] } else { "" }
+    $port = 3100
+
+    function Invoke-McpToolRest($toolName, $bodyHash) {
+        $body = $bodyHash | ConvertTo-Json -Compress
+        try {
+            $response = Invoke-RestMethod -Uri "http://localhost:$port/api/tool/$toolName" -Method POST -Body $body -ContentType "application/json" -ErrorAction Stop
+            return $response
+        } catch {
+            Write-Host "ERROR: MCP server not running on port $port. Start with: node pforge-mcp/server.mjs" -ForegroundColor Red
+            exit 1
+        }
+    }
+
+    switch ($sub) {
+        'stat' {
+            $result = Invoke-McpToolRest "forge_anvil_stat" @{}
+            Write-Host ""
+            Write-Host "`u{1F527} Anvil Cache Stat" -ForegroundColor Cyan
+            Write-Host "   Entries:     $($result.entries)" -ForegroundColor White
+            Write-Host "   Total bytes: $($result.totalBytes)" -ForegroundColor White
+            if ($result.perTool -and ($result.perTool | Get-Member -MemberType NoteProperty)) {
+                Write-Host "   Per-tool:" -ForegroundColor White
+                $result.perTool.PSObject.Properties | ForEach-Object {
+                    $t = $_.Value
+                    Write-Host ("     {0,-30} hits={1,4}  misses={2,4}  cached={3,4}" -f $_.Name, $t.hits, $t.misses, $t.count)
+                }
+            }
+            Write-Host ""
+        }
+        'clear' {
+            $toolFilter = $null
+            $olderThanMs = $null
+            for ($i = 1; $i -lt $Arguments.Count; $i++) {
+                switch ($Arguments[$i]) {
+                    '--tool'       { if (($i+1) -lt $Arguments.Count) { $toolFilter = $Arguments[$i+1]; $i++ } }
+                    '--olderThanMs' { if (($i+1) -lt $Arguments.Count) { $olderThanMs = [int64]$Arguments[$i+1]; $i++ } }
+                }
+            }
+            $body = @{}
+            if ($toolFilter) { $body.tool = $toolFilter }
+            if ($null -ne $olderThanMs) { $body.olderThanMs = $olderThanMs }
+            $result = Invoke-McpToolRest "forge_anvil_clear" $body
+            Write-Host "Deleted $($result.deleted) cache entry(ies)." -ForegroundColor Green
+        }
+        'rebuild' {
+            $since = $null
+            for ($i = 1; $i -lt $Arguments.Count; $i++) {
+                switch ($Arguments[$i]) {
+                    '--since' { if (($i+1) -lt $Arguments.Count) { $since = $Arguments[$i+1]; $i++ } }
+                }
+            }
+            if (-not $since) {
+                Write-Host "Usage: pforge anvil rebuild --since <git-sha>" -ForegroundColor Yellow
+                exit 1
+            }
+            $result = Invoke-McpToolRest "forge_anvil_rebuild" @{ since = $since }
+            Write-Host "Invalidated $($result.invalidated) cache entry(ies)." -ForegroundColor Green
+            if ($result.changedFiles -and $result.changedFiles.Count -gt 0) {
+                Write-Host "Changed files:" -ForegroundColor White
+                $result.changedFiles | ForEach-Object { Write-Host "  - $_" }
+            }
+        }
+        'dlq' {
+            $dlqSub = if ($Arguments.Count -gt 1) { $Arguments[1] } else { "" }
+            switch ($dlqSub) {
+                'list' {
+                    $limit = $null
+                    for ($i = 2; $i -lt $Arguments.Count; $i++) {
+                        switch ($Arguments[$i]) {
+                            '--limit' { if (($i+1) -lt $Arguments.Count) { $limit = [int]$Arguments[$i+1]; $i++ } }
+                        }
+                    }
+                    $body = @{}
+                    if ($null -ne $limit) { $body.limit = $limit }
+                    $result = Invoke-McpToolRest "forge_anvil_dlq_list" $body
+                    Write-Host "DLQ total: $($result.total)" -ForegroundColor Cyan
+                    if ($result.items -and $result.items.Count -gt 0) {
+                        $result.items | ForEach-Object {
+                            Write-Host "  [$($_.id)] $($_.toolName) @ $($_.failedAt)"
+                        }
+                    } else {
+                        Write-Host "  (no entries)" -ForegroundColor DarkGray
+                    }
+                }
+                'drain' {
+                    $idFilter = $null
+                    $toolFilter = $null
+                    for ($i = 2; $i -lt $Arguments.Count; $i++) {
+                        switch ($Arguments[$i]) {
+                            '--id'   { if (($i+1) -lt $Arguments.Count) { $idFilter   = $Arguments[$i+1]; $i++ } }
+                            '--tool' { if (($i+1) -lt $Arguments.Count) { $toolFilter = $Arguments[$i+1]; $i++ } }
+                        }
+                    }
+                    $body = @{}
+                    if ($idFilter)   { $body.id   = $idFilter }
+                    if ($toolFilter) { $body.tool = $toolFilter }
+                    $result = Invoke-McpToolRest "forge_anvil_dlq_drain" $body
+                    Write-Host "Drained $($result.drained) DLQ record(s)." -ForegroundColor Green
+                }
+                default {
+                    Write-Host "Usage: pforge anvil dlq <list|drain>" -ForegroundColor Yellow
+                    exit 1
+                }
+            }
+        }
+        default {
+            Write-Host "Usage: pforge anvil <stat|clear|rebuild|dlq>" -ForegroundColor Yellow
+            Write-Host ""
+            Write-Host "Subcommands:"
+            Write-Host "  stat                         Show cache statistics"
+            Write-Host "  clear [--tool <n>] [--olderThanMs <ms>]  Delete cache entries"
+            Write-Host "  rebuild --since <sha>        Invalidate stale entries"
+            Write-Host "  dlq list [--limit <n>]       List DLQ records"
+            Write-Host "  dlq drain [--id <id>] [--tool <n>]  Drain DLQ records"
+            exit 1
+        }
+    }
+}
+
+# ─── Command: hallmark ─────────────────────────────────────────────
+function Invoke-Hallmark {
+    $sub = if ($Arguments.Count -gt 0) { $Arguments[0] } else { "" }
+    $id  = if ($Arguments.Count -gt 1) { $Arguments[1] } else { "" }
+    $port = 3100
+
+    function Invoke-McpToolRest2($toolName, $bodyHash) {
+        $body = $bodyHash | ConvertTo-Json -Compress
+        try {
+            $response = Invoke-RestMethod -Uri "http://localhost:$port/api/tool/$toolName" -Method POST -Body $body -ContentType "application/json" -ErrorAction Stop
+            return $response
+        } catch {
+            Write-Host "ERROR: MCP server not running on port $port. Start with: node pforge-mcp/server.mjs" -ForegroundColor Red
+            exit 1
+        }
+    }
+
+    switch ($sub) {
+        'show' {
+            $body = if ($id) { @{ id = $id } } else { @{} }
+            $result = Invoke-McpToolRest2 "forge_hallmark_show" $body
+            if ($result.error) {
+                Write-Host "ERROR: $($result.message)" -ForegroundColor Red
+                exit 1
+            }
+            Write-Host ($result | ConvertTo-Json -Depth 10)
+        }
+        'verify' {
+            if (-not $id) {
+                Write-Host "Usage: pforge hallmark verify <id>" -ForegroundColor Yellow
+                exit 1
+            }
+            $result = Invoke-McpToolRest2 "forge_hallmark_verify" @{ id = $id }
+            if ($result.ok) {
+                $color = if ($result.drift) { 'Yellow' } else { 'Green' }
+                Write-Host "[$($result.id)] $($result.message)" -ForegroundColor $color
+                if ($result.driftDetail) {
+                    Write-Host "  Stored: $($result.driftDetail.storedHash)" -ForegroundColor DarkGray
+                    Write-Host "  Current: $($result.driftDetail.currentHash)" -ForegroundColor DarkGray
+                }
+            } else {
+                Write-Host "ERROR: $($result.message)" -ForegroundColor Red
+                exit 1
+            }
+        }
+        default {
+            Write-Host "Usage: pforge hallmark <show|verify> [id]" -ForegroundColor Yellow
+            Write-Host ""
+            Write-Host "Subcommands:"
+            Write-Host "  show [<id>]    Show a hallmark (omit id to list all)"
+            Write-Host "  verify <id>    Verify a hallmark and report drift"
+            exit 1
+        }
+    }
+}
+
 # ─── Command: fm-session ───────────────────────────────────────────
 function Invoke-FmSession {
     $sub = if ($Arguments.Count -gt 0) { $Arguments[0] } else { "" }
@@ -6316,6 +6494,8 @@ switch ($Command) {
     'plan-from-sarif' { Invoke-PlanFromSarif }
     'crucible'        { Invoke-Crucible }
     'github'       { Invoke-Github }
+    'anvil'        { Invoke-Anvil }
+    'hallmark'     { Invoke-Hallmark }
     'help'         { Show-Help }
     ''             { Show-Help }
     '--help'       { Show-Help }

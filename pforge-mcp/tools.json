@@ -5787,5 +5787,201 @@
         }
       }
     }
+  },
+  {
+    "name": "forge_anvil_stat",
+    "description": "Return a read-only summary of the Anvil memoization cache: total entry count, total bytes, oldest mtime, and per-tool hit/miss/count counters. USE FOR: diagnosing cache effectiveness; dashboards; monitoring anvil growth.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "path": {
+          "type": "string",
+          "description": "Project directory (default: current)"
+        }
+      }
+    },
+    "intent": ["anvil", "cache", "stat", "memoization"],
+    "aliases": ["anvil-stat", "cache-stat"],
+    "cost": "low",
+    "maxConcurrent": 10,
+    "addedIn": "2.95.0",
+    "example": {
+      "input": {},
+      "output": { "entries": 12, "totalBytes": 40960, "oldestMtime": 1716000000000, "perTool": {} }
+    }
+  },
+  {
+    "name": "forge_anvil_clear",
+    "description": "Bounded deletion of Anvil cache entries. Requires at least one filter: tool (deletes all entries for that tool) or olderThanMs (deletes entries older than N milliseconds). Calling with no filters returns ERR_ANVIL_NO_FILTER.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "tool": {
+          "type": "string",
+          "description": "Delete all entries for this tool name"
+        },
+        "olderThanMs": {
+          "type": "number",
+          "description": "Delete entries whose mtime is older than this many milliseconds"
+        },
+        "path": {
+          "type": "string",
+          "description": "Project directory (default: current)"
+        }
+      }
+    },
+    "intent": ["anvil", "cache", "clear", "invalidate"],
+    "addedIn": "2.95.0",
+    "example": {
+      "input": { "tool": "forge_sweep" },
+      "output": { "deleted": 3 }
+    }
+  },
+  {
+    "name": "forge_anvil_rebuild",
+    "description": "Selectively invalidate Anvil cache entries whose codeHashSeed references a file changed since a given git commit. Does not re-run tools — next caller gets a clean miss.",
+    "inputSchema": {
+      "type": "object",
+      "required": ["since"],
+      "properties": {
+        "since": {
+          "type": "string",
+          "description": "Git SHA — invalidate entries for files changed between this commit and HEAD"
+        },
+        "path": {
+          "type": "string",
+          "description": "Project directory (default: current)"
+        }
+      }
+    },
+    "intent": ["anvil", "cache", "rebuild", "invalidate", "git"],
+    "addedIn": "2.95.0",
+    "example": {
+      "input": { "since": "abc1234" },
+      "output": { "invalidated": 2, "changedFiles": ["pforge-mcp/orchestrator.mjs"] }
+    }
+  },
+  {
+    "name": "forge_anvil_dlq_list",
+    "description": "List records in the Anvil Dead Letter Queue — tool invocations that failed to complete and were deferred. Optionally filter by tool name or cap by limit.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "tool": {
+          "type": "string",
+          "description": "Only list DLQ entries for this tool name"
+        },
+        "limit": {
+          "type": "number",
+          "description": "Maximum number of entries to return (default: all)"
+        },
+        "path": {
+          "type": "string",
+          "description": "Project directory (default: current)"
+        }
+      }
+    },
+    "intent": ["anvil", "dlq", "dead-letter-queue", "failures"],
+    "addedIn": "2.95.0",
+    "example": {
+      "input": { "limit": 10 },
+      "output": { "items": [], "total": 0 }
+    }
+  },
+  {
+    "name": "forge_anvil_dlq_drain",
+    "description": "Drain (remove) records from the Anvil Dead Letter Queue. Optionally filter by id or tool. Without filters, drains all DLQ records.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Remove the specific DLQ record with this UUID"
+        },
+        "tool": {
+          "type": "string",
+          "description": "Remove all DLQ records for this tool name"
+        },
+        "path": {
+          "type": "string",
+          "description": "Project directory (default: current)"
+        }
+      }
+    },
+    "intent": ["anvil", "dlq", "drain", "retry", "failures"],
+    "addedIn": "2.95.0",
+    "example": {
+      "input": {},
+      "output": { "drained": 1 }
+    }
+  },
+  {
+    "name": "forge_hallmark_show",
+    "description": "Show a hallmark milestone record by id. Returns the full record (id, payload, writtenAt, source, tags). When id is omitted, lists all hallmarks. USE FOR: inspecting slice completion markers; auditing provenance envelopes.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Hallmark id (alphanumeric, dash, dot, underscore). Omit to list all."
+        },
+        "path": {
+          "type": "string",
+          "description": "Project directory (default: current)"
+        }
+      }
+    },
+    "intent": ["hallmark", "show", "provenance", "milestone"],
+    "aliases": ["hallmark-show"],
+    "addedIn": "2.95.0",
+    "example": {
+      "input": { "id": "slice-3" },
+      "output": { "id": "slice-3", "payload": { "status": "done" }, "writtenAt": "2026-05-16T00:00:00.000Z" }
+    }
+  },
+  {
+    "name": "forge_hallmark_verify",
+    "description": "Verify a hallmark by id. Re-hashes the cited source file (if any) and reports drift. Returns ok:true when the hallmark is present and consistent.",
+    "inputSchema": {
+      "type": "object",
+      "required": ["id"],
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Hallmark id to verify"
+        },
+        "path": {
+          "type": "string",
+          "description": "Project directory (default: current)"
+        }
+      }
+    },
+    "intent": ["hallmark", "verify", "drift", "provenance"],
+    "aliases": ["hallmark-verify"],
+    "addedIn": "2.95.0",
+    "example": {
+      "input": { "id": "slice-3" },
+      "output": { "ok": true, "id": "slice-3", "drift": false, "message": "Hallmark present; no source file to verify." }
+    }
+  },
+  {
+    "name": "forge_pipelines_list",
+    "description": "List the four standing capture pipelines (orchestrator→memory, watcher→drift, hub→sessionReplay, crucible→thoughts) with last-write timestamps and Anvil hit rates.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "path": {
+          "type": "string",
+          "description": "Project directory (default: current)"
+        }
+      }
+    },
+    "intent": ["pipelines", "list", "capture", "memory"],
+    "aliases": ["pipelines-list"],
+    "addedIn": "2.95.0",
+    "example": {
+      "input": {},
+      "output": { "pipelines": [{ "id": "orchestrator-memory", "label": "Orchestrator → Memory", "artifactExists": false, "lastWriteAt": null }], "anvil": { "entries": 0, "totalBytes": 0, "perTool": {} } }
+    }
   }
 ]

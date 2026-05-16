@@ -59,9 +59,11 @@ try {
 
 import { parsePlan, runPlan, detectWorkers, getCostReport, getHealthTrend, analyzeWithQuorum, generateImage, runAnalyze, readForgeJson, readForgeJsonl, appendForgeJsonl, emitToolTelemetry, regressionGuard, runPostSliceHook, resetPostSliceHookFired, runPreAgentHandoffHook, postOpenClawSnapshot, loadOpenClawConfig, loadQuorumConfig, runWatch, runWatchLive, readCrucibleState, readHomeSnapshot, addReviewItem, resolveReviewItem, listReviewItems, readReviewQueueState, maybeAddFixPlanReview, assessQuorumViability, detectExecutionRuntime, PROPOSED_FIX_DIR, detectCostAnomaly, computeMedian, spawnWorker } from "./orchestrator.mjs";
 // Phase FORGE-SHOP-07 Slice 07.2 — brain facade for unified recall
-import { recall as brainRecall, getReviewerCalibration, federationReadTrajectories, loadFederationConfig, validateFederationConfig, TRAJECTORY_FEDERATION_LIMIT } from "./brain.mjs";
+import { recall as brainRecall, getReviewerCalibration, federationReadTrajectories, loadFederationConfig, validateFederationConfig, TRAJECTORY_FEDERATION_LIMIT, readHallmark, listHallmarks, validateHallmarkId, HallmarkError } from "./brain.mjs";
 // Phase ANVIL Slice 5 — Δ-only memoization wrapper for read-only tools
-import { withAnvil } from "./anvil.mjs";
+import { withAnvil, anvilStat, anvilClear, anvilRebuild, anvilDlqList, anvilDlqDrain } from "./anvil.mjs";
+// Phase ANVIL Slice 6 — Pipelines registry
+import { pipelinesList, pipelinesStats } from "./pipelines.mjs";
 import {
   drainOpenBrainQueue,
   isOpenBrainConfigured,
@@ -2050,6 +2052,14 @@ function executeTool(name, args) {
     case "forge_graph_query":
     case "forge_patterns_list":
     case "forge_github_metrics":
+    case "forge_anvil_stat":
+    case "forge_anvil_clear":
+    case "forge_anvil_rebuild":
+    case "forge_anvil_dlq_list":
+    case "forge_anvil_dlq_drain":
+    case "forge_hallmark_show":
+    case "forge_hallmark_verify":
+    case "forge_pipelines_list":
       return null; // Handled async in CallToolRequestSchema handler
     default:
       return { success: false, error: `Unknown tool: ${name}` };
@@ -5837,6 +5847,185 @@ server.setRequestHandler(CallToolRequestSchema, _wrapWithToolSpan(async (request
     }
   }
 
+  // ─── forge_anvil_stat — Anvil cache summary (Phase-ANVIL Slice 6) ───
+  if (name === "forge_anvil_stat") {
+    const t0 = Date.now();
+    try {
+      const cwd = args.path ? findProjectRoot(resolve(args.path)) : findProjectRoot(PROJECT_DIR);
+      const result = anvilStat({ cwd });
+      emitToolTelemetry("forge_anvil_stat", args, result, Date.now() - t0, "OK", cwd);
+      return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
+    } catch (err) {
+      emitToolTelemetry("forge_anvil_stat", args, { error: err.message }, Date.now() - t0, "ERROR", findProjectRoot(PROJECT_DIR));
+      return { content: [{ type: "text", text: `forge_anvil_stat error: ${err.message}` }], isError: true };
+    }
+  }
+
+  // ─── forge_anvil_clear — bounded cache deletion (Phase-ANVIL Slice 6) ───
+  if (name === "forge_anvil_clear") {
+    const t0 = Date.now();
+    try {
+      const cwd = args.path ? findProjectRoot(resolve(args.path)) : findProjectRoot(PROJECT_DIR);
+      const opts = {};
+      if (args.tool != null) opts.tool = String(args.tool);
+      if (args.olderThanMs != null) opts.olderThanMs = Number(args.olderThanMs);
+      const result = anvilClear(opts, { cwd });
+      emitToolTelemetry("forge_anvil_clear", args, result, Date.now() - t0, "OK", cwd);
+      return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
+    } catch (err) {
+      const errPayload = { error: err.message, code: err.code || undefined };
+      emitToolTelemetry("forge_anvil_clear", args, errPayload, Date.now() - t0, "ERROR", findProjectRoot(PROJECT_DIR));
+      return { content: [{ type: "text", text: JSON.stringify(errPayload, null, 2) }], isError: true };
+    }
+  }
+
+  // ─── forge_anvil_rebuild — selective cache invalidation (Phase-ANVIL Slice 6) ───
+  if (name === "forge_anvil_rebuild") {
+    const t0 = Date.now();
+    try {
+      const cwd = args.path ? findProjectRoot(resolve(args.path)) : findProjectRoot(PROJECT_DIR);
+      if (!args.since) {
+        const errPayload = { error: "ERR_NO_SINCE", message: "'since' parameter (git SHA) is required" };
+        return { content: [{ type: "text", text: JSON.stringify(errPayload, null, 2) }], isError: true };
+      }
+      const result = anvilRebuild({ since: String(args.since) }, { cwd });
+      emitToolTelemetry("forge_anvil_rebuild", args, result, Date.now() - t0, "OK", cwd);
+      return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
+    } catch (err) {
+      emitToolTelemetry("forge_anvil_rebuild", args, { error: err.message }, Date.now() - t0, "ERROR", findProjectRoot(PROJECT_DIR));
+      return { content: [{ type: "text", text: `forge_anvil_rebuild error: ${err.message}` }], isError: true };
+    }
+  }
+
+  // ─── forge_anvil_dlq_list — DLQ enumeration (Phase-ANVIL Slice 6) ───
+  if (name === "forge_anvil_dlq_list") {
+    const t0 = Date.now();
+    try {
+      const cwd = args.path ? findProjectRoot(resolve(args.path)) : findProjectRoot(PROJECT_DIR);
+      const opts = {};
+      if (args.tool != null) opts.tool = String(args.tool);
+      if (args.limit != null) opts.limit = Number(args.limit);
+      const result = anvilDlqList(opts, { cwd });
+      emitToolTelemetry("forge_anvil_dlq_list", args, { total: result.total }, Date.now() - t0, "OK", cwd);
+      return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
+    } catch (err) {
+      emitToolTelemetry("forge_anvil_dlq_list", args, { error: err.message }, Date.now() - t0, "ERROR", findProjectRoot(PROJECT_DIR));
+      return { content: [{ type: "text", text: `forge_anvil_dlq_list error: ${err.message}` }], isError: true };
+    }
+  }
+
+  // ─── forge_anvil_dlq_drain — DLQ drain (Phase-ANVIL Slice 6) ───
+  if (name === "forge_anvil_dlq_drain") {
+    const t0 = Date.now();
+    try {
+      const cwd = args.path ? findProjectRoot(resolve(args.path)) : findProjectRoot(PROJECT_DIR);
+      const opts = {};
+      if (args.id != null) opts.id = String(args.id);
+      if (args.tool != null) opts.tool = String(args.tool);
+      const result = anvilDlqDrain(opts, { cwd });
+      emitToolTelemetry("forge_anvil_dlq_drain", args, result, Date.now() - t0, "OK", cwd);
+      return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
+    } catch (err) {
+      emitToolTelemetry("forge_anvil_dlq_drain", args, { error: err.message }, Date.now() - t0, "ERROR", findProjectRoot(PROJECT_DIR));
+      return { content: [{ type: "text", text: `forge_anvil_dlq_drain error: ${err.message}` }], isError: true };
+    }
+  }
+
+  // ─── forge_hallmark_show — hallmark read (Phase-ANVIL Slice 6) ───
+  if (name === "forge_hallmark_show") {
+    const t0 = Date.now();
+    try {
+      const cwd = args.path ? findProjectRoot(resolve(args.path)) : findProjectRoot(PROJECT_DIR);
+      if (args.id) {
+        const record = readHallmark(String(args.id), { cwd });
+        if (!record) {
+          const notFound = { ok: false, error: "ERR_NOT_FOUND", id: args.id, message: `Hallmark '${args.id}' not found` };
+          emitToolTelemetry("forge_hallmark_show", args, notFound, Date.now() - t0, "ERROR", cwd);
+          return { content: [{ type: "text", text: JSON.stringify(notFound, null, 2) }], isError: true };
+        }
+        emitToolTelemetry("forge_hallmark_show", args, { ok: true, id: args.id }, Date.now() - t0, "OK", cwd);
+        return { content: [{ type: "text", text: JSON.stringify(record, null, 2) }] };
+      } else {
+        // No id — list all
+        const list = listHallmarks({}, { cwd });
+        emitToolTelemetry("forge_hallmark_show", args, { ok: true, count: list.length }, Date.now() - t0, "OK", cwd);
+        return { content: [{ type: "text", text: JSON.stringify({ hallmarks: list, count: list.length }, null, 2) }] };
+      }
+    } catch (err) {
+      const isHallmarkErr = err instanceof HallmarkError;
+      const errPayload = { ok: false, error: isHallmarkErr ? "ERR_INVALID_ID" : "ERR_UNEXPECTED", message: err.message };
+      emitToolTelemetry("forge_hallmark_show", args, errPayload, Date.now() - t0, "ERROR", findProjectRoot(PROJECT_DIR));
+      return { content: [{ type: "text", text: JSON.stringify(errPayload, null, 2) }], isError: true };
+    }
+  }
+
+  // ─── forge_hallmark_verify — hallmark drift check (Phase-ANVIL Slice 6) ───
+  if (name === "forge_hallmark_verify") {
+    const t0 = Date.now();
+    try {
+      const cwd = args.path ? findProjectRoot(resolve(args.path)) : findProjectRoot(PROJECT_DIR);
+      if (!args.id) {
+        return { content: [{ type: "text", text: JSON.stringify({ ok: false, error: "ERR_NO_ID", message: "'id' is required" }, null, 2) }], isError: true };
+      }
+      const record = readHallmark(String(args.id), { cwd });
+      if (!record) {
+        const notFound = { ok: false, error: "ERR_NOT_FOUND", id: args.id, drift: null, message: `Hallmark '${args.id}' not found` };
+        emitToolTelemetry("forge_hallmark_verify", args, notFound, Date.now() - t0, "ERROR", cwd);
+        return { content: [{ type: "text", text: JSON.stringify(notFound, null, 2) }], isError: true };
+      }
+      // If the hallmark has a source field pointing to an existing file, re-hash and report drift
+      let drift = false;
+      let driftDetail = null;
+      if (record.source && typeof record.source === "string") {
+        const sourcePath = resolve(cwd, record.source);
+        if (existsSync(sourcePath)) {
+          try {
+            const { createHash } = await import("node:crypto");
+            const { readFileSync: rfs } = await import("node:fs");
+            const currentHash = createHash("sha256").update(rfs(sourcePath)).digest("hex");
+            if (record.sourceHash && record.sourceHash !== currentHash) {
+              drift = true;
+              driftDetail = { storedHash: record.sourceHash, currentHash };
+            }
+          } catch { /* hash failure is non-fatal */ }
+        }
+      }
+      const result = {
+        ok: true,
+        id: record.id,
+        drift,
+        message: drift
+          ? `Source file has changed since hallmark was written.`
+          : record.source
+            ? `Hallmark present; source file hash matches.`
+            : `Hallmark present; no source file to verify.`,
+        writtenAt: record.writtenAt,
+        ...(driftDetail ? { driftDetail } : {}),
+      };
+      emitToolTelemetry("forge_hallmark_verify", args, { ok: true, id: record.id, drift }, Date.now() - t0, "OK", cwd);
+      return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
+    } catch (err) {
+      const isHallmarkErr = err instanceof HallmarkError;
+      const errPayload = { ok: false, error: isHallmarkErr ? "ERR_INVALID_ID" : "ERR_UNEXPECTED", message: err.message };
+      emitToolTelemetry("forge_hallmark_verify", args, errPayload, Date.now() - t0, "ERROR", findProjectRoot(PROJECT_DIR));
+      return { content: [{ type: "text", text: JSON.stringify(errPayload, null, 2) }], isError: true };
+    }
+  }
+
+  // ─── forge_pipelines_list — capture pipeline enumeration (Phase-ANVIL Slice 6) ───
+  if (name === "forge_pipelines_list") {
+    const t0 = Date.now();
+    try {
+      const cwd = args.path ? findProjectRoot(resolve(args.path)) : findProjectRoot(PROJECT_DIR);
+      const result = pipelinesStats({ cwd });
+      emitToolTelemetry("forge_pipelines_list", args, { count: result.pipelines.length }, Date.now() - t0, "OK", cwd);
+      return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
+    } catch (err) {
+      emitToolTelemetry("forge_pipelines_list", args, { error: err.message }, Date.now() - t0, "ERROR", findProjectRoot(PROJECT_DIR));
+      return { content: [{ type: "text", text: `forge_pipelines_list error: ${err.message}` }], isError: true };
+    }
+  }
+
   // ─── Sync pforge tools ───
   const result = executeTool(name, args || {});
 
@@ -7435,6 +7624,15 @@ export function createExpressApp() {
     "forge_patterns_list",
     // Phase GITHUB-D — GitHub metrics is MCP-native.
     "forge_github_metrics",
+    // Phase-ANVIL Slice 6 — Anvil + Hallmark + Pipelines tools are MCP-native.
+    "forge_anvil_stat",
+    "forge_anvil_clear",
+    "forge_anvil_rebuild",
+    "forge_anvil_dlq_list",
+    "forge_anvil_dlq_drain",
+    "forge_hallmark_show",
+    "forge_hallmark_verify",
+    "forge_pipelines_list",
     // Issue #134 — Crucible tools are MCP-native (handled by switch-case
     // in CallToolRequestSchema). Without these in the allowlist,
     // POST /api/tool/forge_crucible_* falls through to runPforge() which

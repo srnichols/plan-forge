@@ -2593,6 +2593,12 @@ export function spawnWorker(prompt, options = {}) {
       windowsHide: true,
     });
 
+    // #186 v2.96.2: wall-clock anchor for sessionDurationMs fallback when the
+    // CLI worker's `result` event omits usage.sessionDurationMs (gh-copilot
+    // currently does). Captured immediately AFTER spawn() so we measure the
+    // child's lifetime rather than including our own setup overhead.
+    const _spawnStartMs = Date.now();
+
     // Track child for cleanup on parent exit
     if (!global.__pforgeChildren) global.__pforgeChildren = new Set();
     global.__pforgeChildren.add(child);
@@ -2671,6 +2677,19 @@ export function spawnWorker(prompt, options = {}) {
       // showing cost_usd === 0 even though stderr clearly reported tokens.
       if (shouldDefaultPremiumRequestsToOne({ tokens, stdout, stderr, code, timedOut })) {
         tokens.premiumRequests = 1;
+      }
+
+      // #186 v2.96.2: populate observability fields when the worker telemetry
+      // didn't surface them. None of these affect the priceSlice() cost path
+      // for CLI workers — that branch is selected purely by `worker` (line
+      // ~541 of cost-service.mjs) and short-circuits before vendor is read,
+      // so the v2.83.0 Forbidden Action #1 invariant is preserved.
+      if ((!tokens.vendor || tokens.vendor === "unknown") && tokens.model) {
+        const inferred = deriveVendorFromModel(tokens.model);
+        if (inferred) tokens.vendor = inferred;
+      }
+      if (!tokens.sessionDurationMs || tokens.sessionDurationMs === 0) {
+        tokens.sessionDurationMs = Date.now() - _spawnStartMs;
       }
 
       // Issue #28 guard: detect silent-failure where worker printed help text and exited 0.
@@ -2880,6 +2899,33 @@ function parseJSONL(output) {
     }
   }
   return events;
+}
+
+/**
+ * #186 v2.96.2 — derive vendor from model name prefix when worker telemetry
+ * doesn't surface it. Used for observability fields only (vendor-aware billing
+ * paths in priceSlice() short-circuit on `worker` for CLI workers, so this
+ * cannot change cost calculations — see cost-service.mjs line ~541).
+ *
+ * Recognized prefixes:
+ *   claude-*  → anthropic   (claude-opus-4.7, claude-sonnet-4.6, etc.)
+ *   gpt-*     → openai      (gpt-5.3-codex, gpt-4o, etc.)
+ *   o1-* o3-* → openai      (reasoning model lines)
+ *   grok-*    → xai         (grok-4.20-0309-reasoning, grok-3, etc.)
+ *   gemini-*  → google
+ *
+ * @param {string|null|undefined} model
+ * @returns {string|null} vendor key, or null when model is null/empty/unrecognized
+ */
+export function deriveVendorFromModel(model) {
+  if (!model || typeof model !== "string") return null;
+  const lower = model.toLowerCase();
+  if (lower.startsWith("claude-")) return "anthropic";
+  if (lower.startsWith("gpt-")) return "openai";
+  if (/^o[1-9](-|$)/.test(lower)) return "openai"; // o1, o3, o4 reasoning models
+  if (lower.startsWith("grok-")) return "xai";
+  if (lower.startsWith("gemini-")) return "google";
+  return null;
 }
 
 /**
@@ -4561,6 +4607,14 @@ export async function runPlan(planPath, options = {}) {
         });
         if (result.status === "passed") {
           result.autoCommit = autoCommitSliceIfDirty({ slice, cwd, mode, eventBus, startSha, preSliceState });
+          // #186 v2.96.2: bubble auto-commit codeChanges back into tokens when
+          // the worker's JSONL events didn't surface result.usage.codeChanges.
+          // gh-copilot currently doesn't emit this field, so without the
+          // fallback every slice records codeChanges=null and downstream
+          // dashboards (forge_drift_report, forge_health_trend) plot zeros.
+          if (result.tokens && !result.tokens.codeChanges && result.autoCommit?.codeChanges) {
+            result.tokens.codeChanges = result.autoCommit.codeChanges;
+          }
         } else if (result.status === "failed") {
           // Issue #132 \u2014 the gate said no, but the worker may have written
           // perfectly correct files (typical when the gate script itself is
@@ -7410,6 +7464,40 @@ export function parseGitPorcelain(porcelain) {
 }
 
 /**
+ * #186 v2.96.2 — parse a `git show --shortstat` line into a structured
+ * codeChanges object. Format examples:
+ *
+ *   " 3 files changed, 47 insertions(+), 12 deletions(-)"
+ *   " 1 file changed, 5 insertions(+)"
+ *   " 1 file changed, 2 deletions(-)"
+ *
+ * Returns null when no recognizable summary line is present (binary-only
+ * commits, empty trees, parser errors) so callers always know to fall through.
+ *
+ * @param {string|null|undefined} shortstat
+ * @returns {{ filesChanged: number, linesAdded: number, linesRemoved: number }|null}
+ */
+export function parseShortstat(shortstat) {
+  if (!shortstat || typeof shortstat !== "string") return null;
+  // Take the LAST line that looks like a summary — git show may emit blank
+  // lines or other diagnostics first.
+  const lines = shortstat.split(/\r?\n/).map((l) => l.trim()).filter(Boolean);
+  let summary = null;
+  for (const line of lines) {
+    if (/\d+\s+files?\s+changed/.test(line)) { summary = line; break; }
+  }
+  if (!summary) return null;
+  const filesMatch = summary.match(/(\d+)\s+files?\s+changed/);
+  const addMatch = summary.match(/(\d+)\s+insertions?\(\+\)/);
+  const delMatch = summary.match(/(\d+)\s+deletions?\(-\)/);
+  return {
+    filesChanged: filesMatch ? parseInt(filesMatch[1], 10) : 0,
+    linesAdded: addMatch ? parseInt(addMatch[1], 10) : 0,
+    linesRemoved: delMatch ? parseInt(delMatch[1], 10) : 0,
+  };
+}
+
+/**
  * Capture the working-tree state at slice start so {@link autoCommitSliceIfDirty}
  * can later distinguish worker-owned paths from operator-owned paths that
  * were already dirty when the slice began. Issue #151.
@@ -7751,11 +7839,26 @@ export function autoCommitSliceIfDirty({
     // commit message — prevents breakage when slice titles contain ", ', `, $().
     execFileSync("git", ["commit", "-m", commitMessage], { cwd, encoding: "utf-8", timeout: 15_000 });
     const sha = execSync("git rev-parse HEAD", { cwd, encoding: "utf-8", timeout: 5_000 }).trim();
+
+    // #186 v2.96.2: capture commit stats so the orchestrator can populate
+    // tokens.codeChanges (used by forge_drift_report + forge_health_trend).
+    // Best-effort: any error leaves codeChanges null so we never block the
+    // commit-success path on a stat parse.
+    let codeChanges = null;
+    try {
+      const shortstat = execSync(`git show --shortstat --format= ${sha}`, {
+        cwd, encoding: "utf-8", timeout: 5_000,
+      });
+      codeChanges = parseShortstat(shortstat);
+    } catch { /* ignore — codeChanges stays null */ }
+
     const evt = { sliceNumber: slice.number, sha, message: commitMessage };
     if (foreignFiles.length > 0) evt.foreignFiles = foreignFiles;
+    if (codeChanges) evt.codeChanges = codeChanges;
     eventBus?.emit("slice-auto-committed", evt);
     const out = { committed: true, sha, message: commitMessage };
     if (foreignFiles.length > 0) out.foreignFiles = foreignFiles;
+    if (codeChanges) out.codeChanges = codeChanges;
     return out;
   } catch (err) {
     eventBus?.emit("slice-dirty-tree-warning", { sliceNumber: slice?.number, error: err.message });

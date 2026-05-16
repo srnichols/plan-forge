@@ -4210,7 +4210,7 @@ function Invoke-RunPlan {
             Set-Content -Path (Join-Path $pidDir 'last-orch.pid') -Value $proc.Id -NoNewline -Encoding ASCII
         } catch {}
         Write-Host "Orchestrator running in background  PID: $($proc.Id)" -ForegroundColor Green
-        Write-Host "Monitor : pforge plan-status" -ForegroundColor DarkGray
+        Write-Host "Monitor : pforge status" -ForegroundColor DarkGray
         Write-Host "Logs    : .forge/runs/ (latest sub-directory)" -ForegroundColor DarkGray
         Write-Host "Stop    : Stop-Process -Id $($proc.Id)" -ForegroundColor DarkGray
     }

@@ -5,6 +5,25 @@ Format follows [Keep a Changelog](https://keepachangelog.com/).
 
 ---
 
+## [2.96.2] — 2026-05-17 — Testbed-Rerun Polish (Issues #186–#187)
+
+> **One-liner**: Closes two more bugs surfaced by the v2.96.1 verification rerun: per-slice telemetry fields (`vendor`, `sessionDurationMs`, `codeChanges`) now populate even when the CLI worker omits them, and the background-run banner points at the real `pforge status` command.
+
+#### Fixed — Issue #186: worker token telemetry — `vendor=unknown`, `apiDurationMs=0`, `sessionDurationMs=0`, `codeChanges=null` on every slice
+- `pforge-mcp/orchestrator.mjs`:
+  - New exported helper `deriveVendorFromModel(model)` — maps `claude-*` → `anthropic`, `gpt-* / o1-* / o3-* / o4-*` → `openai`, `grok-*` → `xai`, `gemini-*` → `google`. Applied at the end of `spawnWorker` only when `tokens.vendor` is missing or `"unknown"`. Safe wrt v2.83.0 Forbidden Action #1: `priceSlice()` selects the subscription-CLI branch on `worker` and short-circuits before reading vendor, so cost math is unchanged for CLI workers.
+  - `spawnWorker` now anchors `_spawnStartMs = Date.now()` immediately after `spawn()` and uses it as a fallback for `tokens.sessionDurationMs` when the JSONL `result` event omits `usage.sessionDurationMs` (gh-copilot currently does).
+  - `autoCommitSliceIfDirty` now calls `git show --shortstat --format= <sha>` after a successful commit and attaches `codeChanges: { filesChanged, linesAdded, linesRemoved }` to both the `slice-auto-committed` event and the return value. Errors leave `codeChanges` null — never blocks the commit path.
+  - New exported helper `parseShortstat(shortstat)` parses git's summary line (handles singular/plural, insertions-only, deletions-only, leading blank lines, multi-line output with diagnostics).
+  - `executeSliceWithRetries` bubbles `result.autoCommit.codeChanges` into `result.tokens.codeChanges` when the worker telemetry didn't surface it. Downstream consumers (`forge_drift_report`, `forge_health_trend`) now see real numbers instead of nulls.
+- 17 new tests in `tests/telemetry-issue-186.test.mjs` cover `deriveVendorFromModel` (7 cases) and `parseShortstat` (8 cases) plus edge cases.
+- `apiDurationMs` remains 0 by design — gh-copilot does not expose API-call wall-clock separately from session wall-clock; documented in the source comment.
+
+#### Fixed — Issue #187: `pforge plan-status` referenced in run-plan banner but command does not exist
+- `pforge.ps1` and `pforge.sh` background-run banner now prints `Monitor : pforge status` (the actual command). Previously the user got `ERROR: Unknown command 'plan-status'` if they followed the printed instruction.
+
+---
+
 ## [2.96.1] — 2026-05-17 — Testbed Bug Sweep (Issues #177–#183)
 
 > **One-liner**: Closes seven framework bugs surfaced by the aggressive Phase-4 testbed exercise: critical operator-WIP data loss, cost-rollup zeroing, .slnx stack detection, planPath flag parsing, summary.quorumMode separation, BOM regression test, and stale-wrapper warning. All fixes are TDD-backed; no behavior change outside the bug surfaces.

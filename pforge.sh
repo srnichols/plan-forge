@@ -3517,7 +3517,7 @@ cmd_run_plan() {
         node "${node_args[@]}" &
         local bg_pid=$!
         echo "Orchestrator running in background  PID: $bg_pid"
-        echo "Monitor : pforge plan-status"
+        echo "Monitor : pforge status"
         echo "Logs    : .forge/runs/ (latest sub-directory)"
         echo "Stop    : kill $bg_pid"
     fi

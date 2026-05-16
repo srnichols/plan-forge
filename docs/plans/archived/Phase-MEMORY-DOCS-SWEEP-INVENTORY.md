@@ -169,13 +169,15 @@ Files that matched the grep audit but are **not** in the original Scope Contract
 
 | Category | Total files | 🔴 Needs update | 🟡 Partial | 🟢 Up to date | 🆕 New | ⬜ Out of scope |
 |----------|------------|-----------------|-----------|--------------|-------|---------------|
-| **Scope Contract — Markdown** | 8 | 6 | 1 | 0 | 1 | 0 |
-| **Scope Contract — HTML** | 6 | 4 | 2 | 0 | 0 | 0 |
-| **Scope Contract — SVG** | 2 | 0 | 1 | 0 | 0 | 1 |
-| **Scope Contract — OpenBrain** | 5 | 5 | 0 | 0 | 0 | 0 |
-| **Audit-discovered (in scope)** | 17 | 11 | 6 | 0 | 0 | 0 |
+| **Scope Contract — Markdown** | 8 | 0 | 0 | 7 | 1 | 0 |
+| **Scope Contract — HTML** | 6 | 0 | 0 | 6 | 0 | 0 |
+| **Scope Contract — SVG** | 2 | 0 | 0 | 1 | 0 | 1 |
+| **Scope Contract — OpenBrain** | 5 | 0 | 0 | 5 | 0 | 0 |
+| **Audit-discovered (in scope)** | 17 | 0 | 0 | 17 | 0 | 0 |
 | **Audit-discovered (out of scope)** | 50 | 0 | 0 | 0 | 0 | 50 |
-| **Total** | 88 | 26 | 10 | 0 | 1 | 51 |
+| **Total** | 88 | 0 | 0 | 36 | 1 | 51 |
+
+> **Phase status**: ✅ All Scope Contract and in-scope audit items completed (Slices 2–4). Summary updated post-execution.
 
 ### Key Findings
 

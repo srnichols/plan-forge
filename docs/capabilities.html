@@ -340,6 +340,26 @@
         </div>
       </div>
 
+      <!-- Lattice + Hallmark tools preview -->
+      <div class="mt-6 rounded-xl border border-indigo-700/30 bg-indigo-950/10 p-5">
+        <div class="flex items-center gap-2 mb-3">
+          <span class="text-indigo-400">🕸️</span>
+          <span class="text-sm font-semibold text-indigo-400">Lattice &amp; Hallmark — Code Intelligence (7 tools — v2.95+)</span>
+          <span class="px-2 py-0.5 text-xs rounded-full bg-indigo-900/40 text-indigo-300 border border-indigo-700/30">code-graph · provenance</span>
+        </div>
+        <p class="text-xs text-slate-500 mb-3">The <strong class="text-indigo-300">Lattice</strong> code-graph engine builds a semantic chunk index and BFS call-graph over any git repository. The <strong class="text-indigo-300">Hallmark</strong> provenance SDK attaches a lightweight <code class="text-indigo-300">hallmark/v1</code> envelope to any artifact so drift detection can verify source integrity across sessions.</p>
+        <div class="grid gap-2 md:grid-cols-2">
+          <div class="bg-slate-800/40 rounded-lg p-3"><code class="text-indigo-400 text-xs">forge_lattice_index</code><p class="text-xs text-slate-500 mt-1">Build or update the Lattice chunk index; <code>--since</code> enables incremental re-indexing from a git SHA</p></div>
+          <div class="bg-slate-800/40 rounded-lg p-3"><code class="text-indigo-400 text-xs">forge_lattice_stat</code><p class="text-xs text-slate-500 mt-1">Index statistics: chunk count, edge count, language breakdown, Anvil hit rate, index size</p></div>
+          <div class="bg-slate-800/40 rounded-lg p-3"><code class="text-indigo-400 text-xs">forge_lattice_query</code><p class="text-xs text-slate-500 mt-1">Full-text search over the chunk index; returns bounded 80-char snippets</p></div>
+          <div class="bg-slate-800/40 rounded-lg p-3"><code class="text-indigo-400 text-xs">forge_lattice_callers</code><p class="text-xs text-slate-500 mt-1">Find all callers of a named symbol using the edge graph</p></div>
+          <div class="bg-slate-800/40 rounded-lg p-3"><code class="text-indigo-400 text-xs">forge_lattice_blast</code><p class="text-xs text-slate-500 mt-1">BFS call-graph traversal up to depth 5; returns <code>truncated: true</code> when frontier is capped</p></div>
+          <div class="bg-slate-800/40 rounded-lg p-3"><code class="text-indigo-400 text-xs">forge_hallmark_show</code><p class="text-xs text-slate-500 mt-1">Read <code>hallmark/v1</code> provenance record for a file — schema version, tool name, captured timestamp, content hash</p></div>
+          <div class="bg-slate-800/40 rounded-lg p-3"><code class="text-indigo-400 text-xs">forge_hallmark_verify</code><p class="text-xs text-slate-500 mt-1">Drift detection — compare stored Hallmark provenance against current file hash; flags modifications since capture</p></div>
+        </div>
+        <p class="text-xs text-slate-500 mt-3">Lattice and Hallmark ship in v2.95.0. Anvil memoization cache (<code class="text-indigo-300">pforge anvil</code>) prevents re-indexing unchanged files and is available as 5 additional MCP tools. See <code class="text-indigo-300">pforge lattice --help</code> and <code class="text-indigo-300">pforge-sdk/hallmark</code> for full documentation.</p>
+      </div>
+
       <!-- Forge-Master tools preview -->
       <div id="forge-master" class="mt-6 rounded-xl border border-amber-700/30 bg-amber-950/10 p-5 scroll-mt-24">
         <div class="flex items-center gap-2 mb-3">

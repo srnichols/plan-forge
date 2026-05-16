@@ -2,6 +2,7 @@
      Usage: <svg class="icon"><use href="/assets/station-icons.svg#smelt"/></svg>
      All icons are 24×24 viewBox, stroke-linecap=round, stroke-linejoin=round. -->
 <svg xmlns="http://www.w3.org/2000/svg" style="display:none" aria-hidden="true">
+  <title>Plan Forge Station Icons</title>
   <defs>
     <!-- Smelt: crucible bowl with drip -->
     <symbol id="smelt" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">

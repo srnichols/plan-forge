@@ -5,6 +5,66 @@ Format follows [Keep a Changelog](https://keepachangelog.com/).
 
 ---
 
+## [3.3.4] — 2026-05-17 — Forge-Master Shim Graceful Degradation (Issue #200)
+
+> **One-liner**: `forge_master_ask` no longer throws `Cannot find module ".../pforge-master/src/index.mjs"` when `pforge-mcp` is deployed in isolation (without the optional `pforge-master` package). The shim now degrades gracefully with a useful guidance message.
+
+### Context — what went wrong
+
+Field report from `E:\GitHub\Rummag` (a consumer repo with only
+`pforge-mcp` installed): every call to `mcp_plan-forge_forge_master_ask`
+returned a hard `ERR_MODULE_NOT_FOUND` because
+`pforge-mcp/forge-master/index.mjs` blindly re-exported from
+`../../pforge-master/src/index.mjs`, which only exists in the
+Plan-Forge dev repo.
+
+### Root cause
+
+The Phase-29 shim at `pforge-mcp/forge-master/index.mjs` used a static
+`export * from "../../pforge-master/src/index.mjs"` import. When
+`pforge-mcp` ships standalone (the common case for consumer projects),
+the static import fails at module load and every `forge_master_ask`
+call throws.
+
+### Fixed
+
+- **`pforge-mcp/forge-master/index.mjs`** — replaced static `export *`
+  with an existence-guarded dynamic `import()` of `pforge-master`.
+  When the package is absent, exports stub `runTurn` and `loadPrefs`
+  implementations that:
+    - `runTurn` → returns a well-shaped reply directing the caller to
+      individual forge tools (`forge_plan_status`, `brain_recall`,
+      `forge_analyze`, `forge_cost_report`) plus
+      `error: "pforge-master not installed"`.
+    - `loadPrefs` → reads `.forge/fm-prefs.json` directly with the same
+      validation rules as `pforge-master/src/http-routes.mjs` so prefs
+      keep working without the package.
+- **`pforge-mcp/tests/forge-master-shim-fallback.test.mjs`** — 11 new
+  tests covering (1) shape contract: `runTurn` + `loadPrefs` are always
+  callable, (2) re-export passthrough when `pforge-master` is present,
+  (3) `loadPrefs` defaults from empty dir, (4) `runTurn` stub returns
+  the documented fallback object with proper `sessionId`, `tokens*`,
+  `toolCalls`, `error` fields.
+
+### Closed issues
+
+- **#200** — `forge_master_ask` broken when `pforge-master` package
+  is absent. Fixed by graceful shim fallback.
+
+### Lessons logged (memory)
+
+- Static `export * from` across optional-package boundaries is a
+  load-time landmine; always guard with `existsSync` + dynamic
+  `import()` for re-exports that may be absent in consumer
+  deployments.
+
+### Files
+
+- `pforge-mcp/forge-master/index.mjs`
+- `pforge-mcp/tests/forge-master-shim-fallback.test.mjs`
+
+---
+
 ## [3.3.3] — 2026-05-17 — Background-Mode Console Handle Hotfix (Issue #197)
 
 > **One-liner**: `pforge run-plan --background` (the default on Windows) now spawns through a hidden `pwsh` host so the `gh copilot` CLI worker keeps a usable console handle and stops silently dying right after `slice-started`.

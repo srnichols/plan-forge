@@ -1072,6 +1072,12 @@ let _ghCopilotProbe = () => {
 let _ghCopilotCache = null;
 let _secretsLoader = null;
 
+// Cache for CLI worker probes (excludes API-provider checks, which are env-var-dependent).
+// 60-second TTL — workers don't change during a single pforge run; re-probing on every
+// model in assessQuorumViability multiplied detectWorkers() latency into minutes of I/O.
+let _cliWorkersCache = null;
+let _cliWorkersCacheExpiry = 0;
+
 /**
  * Inject a gh-copilot availability probe for testing. Pass `null` to restore
  * the default real-filesystem probe.
@@ -1079,6 +1085,8 @@ let _secretsLoader = null;
  */
 export function setGhCopilotProbe(probe) {
   _ghCopilotCache = null;
+  _cliWorkersCache = null;
+  _cliWorkersCacheExpiry = 0;
   _ghCopilotProbe = probe || (() => {
     try {
       const workers = loadWorkerCapabilities();
@@ -1915,13 +1923,25 @@ function attemptProbe(name, spec, probe, result) {
  * @returns {{ name: string, available: boolean, capable: boolean, version: string|null, reason: string|null, type: "cli"|"api", installHint?: string|null }[]}
  */
 export function detectWorkers(_projectDir) {
-  const matrix = loadWorkerCapabilities();
-  const results = [];
-  for (const [name, spec] of Object.entries(matrix.workers || {})) {
-    results.push(probeWorker(name, spec));
+  // CLI probe results are cached for 60 s — probeWorker spawns child processes
+  // (execSync, 10 s timeout each), so repeated calls inside assessQuorumViability
+  // (one per model per preset) would otherwise block for minutes.
+  const now = Date.now();
+  let cliWorkers;
+  if (_cliWorkersCache && now < _cliWorkersCacheExpiry) {
+    cliWorkers = _cliWorkersCache;
+  } else {
+    const matrix = loadWorkerCapabilities();
+    cliWorkers = [];
+    for (const [name, spec] of Object.entries(matrix.workers || {})) {
+      cliWorkers.push(probeWorker(name, spec));
+    }
+    _cliWorkersCache = cliWorkers;
+    _cliWorkersCacheExpiry = now + 60_000;
   }
 
-  // Detect API providers (check env var + .forge/secrets.json fallback)
+  // API providers are NOT cached — env vars can change between calls (e.g. in tests).
+  const results = [...cliWorkers];
   for (const [name, provider] of Object.entries(API_PROVIDERS)) {
     const apiKey = process.env[provider.envKey] || loadSecretFromForge(provider.envKey);
     results.push({

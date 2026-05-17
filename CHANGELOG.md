@@ -5,6 +5,23 @@ Format follows [Keep a Changelog](https://keepachangelog.com/).
 
 ---
 
+## [3.1.2] — 2026-05-18 — Cloud Agent Validation Stack (B4)
+
+> **One-liner**: Adds `cloudAgentValidation` to `.forge.json` — declare which GitHub scanning tools (CodeQL, secret scanning, dependency review, Copilot code review) are active. `forge_github_status` surfaces the full validation stack in one call.
+
+#### Added — B4: Validation Tools Complement
+
+- **`cloudAgentValidation` key in `.forge.json`** — optional object declaring which GitHub scanning tools are active for the project. All four keys (`codeql`, `secretScanning`, `dependencyReview`, `copilotCodeReview`) accept `true` / `false`; omit any key for undecided.
+- **`forge_github_status` / `pforge smith`** — new `cloud-agent-validation` check in `inspectGithubStack()` reads the config and shows `enabled: ...` / `disabled: ...` detail; returns `na` when the key is absent (field is optional, no fix required).
+- **`docs/COPILOT-VSCODE-GUIDE.md`** — "Declaring your validation stack in `.forge.json`" subsection added to the "How Plan Forge Gates Complement CodeQL and Secret Scanning" section, with example and explanatory notes. Comparison table expanded to include the Dependency Review layer.
+
+#### Tests
+
+- `pforge-mcp/tests/github-introspect-cloud-validation.test.mjs` — 9 tests (NEW): unconfigured (no file, no key), all-enabled, mixed enabled/disabled, empty-object, structural assertions (no-fail guarantee, default check list, label/id presence).
+- `pforge-mcp/tests/github-introspect.test.mjs` — updated count assertion (9 → 10 default, 11 → 12 with `extra: true`).
+
+---
+
 ## [3.1.1] — 2026-05-17 — Quorum Cost Aggregation Fix (Issue #194)
 
 > **One-liner**: `priceRun` was only counting executor-leg spend; quorum reviewer cost (up to 15× the executor cost on `power` runs) was silently dropped. Fixes dashboard under-reporting on all quorum-mode runs.

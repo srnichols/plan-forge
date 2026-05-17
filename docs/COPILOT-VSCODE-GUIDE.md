@@ -818,8 +818,26 @@ Copilot cloud agent already integrates with GitHub's code scanning (CodeQL, secr
 | **Copilot code review** | PR opened | Style, correctness, suggestions |
 | **CodeQL** | PR/push CI | Security vulnerabilities, data flow issues |
 | **Secret scanning** | Commit time | Leaked credentials |
+| **Dependency review** | PR opened | Known-vulnerable package versions |
 
 Use `pforge run-plan --assisted` if you want the orchestrator to prompt the cloud agent per slice and validate gates automatically. The cloud agent picks up the MCP `forge_run_plan` tool from `.vscode/mcp.json`.
+
+#### Declaring your validation stack in `.forge.json`
+
+Add `cloudAgentValidation` to your `.forge.json` to declare which GitHub scanning tools are active. Plan Forge surfaces this in `forge_github_status` so you and your team have a single view of the full validation stack:
+
+```json
+{
+  "cloudAgentValidation": {
+    "codeql": true,
+    "secretScanning": true,
+    "dependencyReview": false,
+    "copilotCodeReview": true
+  }
+}
+```
+
+All four keys are optional — omit any you haven't decided on yet. Setting a key to `false` explicitly records that you've evaluated the tool and opted out. Run `forge_github_status` (or `pforge smith`) to see the current validation stack at a glance.
 
 ### Quick Setup
 

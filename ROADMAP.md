@@ -7,7 +7,9 @@
 
 ## Current Release
 
-**v3.1.0** (2026-05-17) — Chat Customizations Editor (D5). Adds a Settings → Copilot tab to the dashboard for previewing and syncing `.github/copilot-instructions.md` without leaving the browser. Three new REST endpoints (`GET /api/copilot-instructions`, `POST /api/copilot-instructions/preview`, `POST /api/copilot-instructions/sync`). 12 new tests.
+**v3.1.2** (2026-05-18) — Cloud Agent Validation Stack (B4). Adds `cloudAgentValidation` to `.forge.json` — declare which GitHub scanning tools (CodeQL, secret scanning, dependency review, Copilot code review) are active. `forge_github_status` surfaces the full validation stack in one call via a new `cloud-agent-validation` check.
+
+Previous: **v3.1.0** (2026-05-17) — Chat Customizations Editor (D5). Adds a Settings → Copilot tab to the dashboard for previewing and syncing `.github/copilot-instructions.md` without leaving the browser. Three new REST endpoints (`GET /api/copilot-instructions`, `POST /api/copilot-instructions/preview`, `POST /api/copilot-instructions/sync`). 12 new tests.
 
 Previous: **v3.0.0** (2026-05-17) — Copilot Instructions Sync (`forge_sync_instructions`). Completes the Copilot integration trilogy: generates `.github/copilot-instructions.md` from forge project context (project profile, project principles, extra instruction files, `.forge.json` config). GitHub Copilot reads this file automatically, giving every conversation project-specific guidance without manual setup. New `pforge sync-instructions` CLI. 30 tests.
 
@@ -194,9 +196,9 @@ v2.49.0 FORGE-SHOP-02 review queue (`forge_review_add/list/resolve`, Review tab,
 
 ### LiveGuard Complements
 
-#### B4. Validation Tools Complement Guide
+#### B4. Validation Tools Complement Guide ✅ Shipped — v3.1.2
 
-Document how Plan Forge gates complement cloud agent validation (CodeQL, secret scanning, Copilot code review). Add comparison table to COPILOT-VSCODE-GUIDE.md. Optional `.forge.json` `cloudAgentValidation` key. *(Related content already lives in [faq.html](docs/faq.html) and [index.html](docs/index.html) — formal guide-page table is incremental polish.)*
+Document how Plan Forge gates complement cloud agent validation (CodeQL, secret scanning, Copilot code review). Adds `cloudAgentValidation` to `.forge.json` and a `cloud-agent-validation` check to `forge_github_status`. Comparison table expanded in COPILOT-VSCODE-GUIDE.md.
 
 ### v2.14 Phase C — Strategic Investments
 
@@ -250,10 +252,10 @@ Coordinate multiple orchestrators across developers.
 ## Backlog
 
 ### Phase-31 candidates
-- Advisory-to-enforcement calibration — graduate Phase-25/26 subsystems (reviewer-agent, auto-fix, cost-anomaly, competitive) from advisory to blocking/auto-apply once field data justifies thresholds
-- Orchestrator timeout-retry cleanup — meta-bug [#88](https://github.com/srnichols/plan-forge/issues/88)
-- Plan-gate parser hardening for bare bash blocks — meta-bug [#89](https://github.com/srnichols/plan-forge/issues/89)
-- `scoreSliceComplexity` recalibration — threshold 5 selects zero slices on real plans (v2.61.0 research report)
+- ~~Advisory-to-enforcement calibration~~ — shipped v2.65.0
+- ~~Orchestrator timeout-retry cleanup~~ — meta-bug [#88](https://github.com/srnichols/plan-forge/issues/88) closed
+- ~~Plan-gate parser hardening for bare bash blocks~~ — meta-bug [#89](https://github.com/srnichols/plan-forge/issues/89) closed; `runtime.planParser.implicitGates` shipped
+- ~~`scoreSliceComplexity` recalibration~~ — threshold recalibrated 6→3 in v2.65.0
 
 ### Community & Docs
 - `specify init` detection — auto-detect Spec Kit project and layer Plan Forge guardrails *(waits on user demand)*

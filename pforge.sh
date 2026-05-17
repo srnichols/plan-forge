@@ -5988,6 +5988,40 @@ d.activities.forEach(a=>{
 });"
             fi
             ;;
+        dashboard)
+            local limit=50
+            while [[ $# -gt 0 ]]; do
+                case "$1" in
+                    --limit) limit="$2"; shift 2 ;;
+                    *) shift ;;
+                esac
+            done
+            local url="http://localhost:3100/api/team-dashboard?limit=${limit}"
+            local result
+            result=$(curl -sf "$url") || { echo "Error connecting to forge server (is it running? pforge smith)"; exit 1; }
+            echo "$result" | node -e "
+const d=JSON.parse(require('fs').readFileSync('/dev/stdin','utf8'));
+if(!d.ok){console.error('Error:',d.error);process.exit(1);}
+const s=d.summary||{};
+const risk=d.conflict_risk||{};
+const riskLabel=risk.level==='high'?'🔴':risk.level==='medium'?'🟡':risk.level==='low'?'🟢':'⚪';
+console.log('');
+console.log('👥 Team Dashboard');
+console.log('  Runs today:    ',s.total_runs_today??0);
+console.log('  Active (24 h): ',s.active_operators??0);
+console.log('  Cost today:   \$'+Number(s.total_cost_usd||0).toFixed(2));
+console.log('  Success rate:  ',s.success_rate!=null?s.success_rate+'%':'—');
+console.log('');
+console.log(riskLabel+' Risk ['+risk.level+']: '+risk.message);
+console.log('');
+console.log('Developers:');
+(d.operators||[]).forEach(op=>{
+  const name=(op.operator||'unknown').split('<')[0].trim();
+  const rate=op.runs_total>0?Math.round(op.runs_completed/op.runs_total*100)+'%':'—';
+  const cost=op.total_cost_usd>0?'\$'+Number(op.total_cost_usd).toFixed(2):'—';
+  console.log(' ',name,'runs:'+op.runs_total+'(today:'+op.runs_today+')','success:'+rate,'cost:'+cost);
+});"
+            ;;
         *)
             echo "Usage: pforge team activity [--limit N] [--since ISO]"
             ;;

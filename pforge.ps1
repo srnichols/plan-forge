@@ -146,6 +146,7 @@ function Show-Help {
     Write-Host "  sync-instructions Generate .github/copilot-instructions.md from forge project context (profile, principles, config)"
     Write-Host "  github <sub>      Inspect the GitHub-native AI surface (status | doctor | metrics)"
     Write-Host "  team activity     Show recent shared Plan Forge runs from .forge/team-activity.jsonl"
+    Write-Host "  team dashboard    Show multi-developer coordination stats and conflict-risk summary"
     Write-Host "  help              Show this help message"
     Write-Host ""
     Write-Host "OPTIONS:" -ForegroundColor Yellow
@@ -6791,8 +6792,48 @@ function Invoke-Team {
             Write-Host "Error: $_"
             exit 1
         }
+    } elseif ($sub -eq 'dashboard') {
+        $limit = 50
+        for ($i = 0; $i -lt $rest.Count; $i++) {
+            if ($rest[$i] -eq '--limit' -and $i + 1 -lt $rest.Count) { $limit = [int]$rest[$i + 1]; $i++; continue }
+        }
+        $url = "http://localhost:3100/api/team-dashboard?limit=$limit"
+        try {
+            $d = Invoke-RestMethod -Uri $url -Method GET
+            if (-not $d.ok) { Write-Host "Error: $($d.error)"; exit 1 }
+
+            $s = $d.summary
+            $risk = $d.conflict_risk
+            $riskColor = switch ($risk.level) {
+                'high'   { 'Red' }
+                'medium' { 'Yellow' }
+                'low'    { 'Green' }
+                default  { 'Gray' }
+            }
+
+            Write-Host ""
+            Write-Host "👥 Team Dashboard" -ForegroundColor Cyan
+            Write-Host "  Runs today:      $($s.total_runs_today)"
+            Write-Host "  Active (24 h):   $($s.active_operators)"
+            Write-Host "  Cost today:      `$$($s.total_cost_usd.ToString('0.00'))"
+            Write-Host "  Success rate:    $(if ($null -ne $s.success_rate) { "$($s.success_rate)%" } else { '—' })"
+            Write-Host ""
+            Write-Host "Risk: [$($risk.level.ToUpper())] $($risk.message)" -ForegroundColor $riskColor
+            Write-Host ""
+            Write-Host "Developers:" -ForegroundColor Yellow
+            $d.operators | ForEach-Object {
+                $name = ($_.operator -split '<')[0].Trim()
+                $rate = if ($_.runs_total -gt 0) { "$([Math]::Round($_.runs_completed / $_.runs_total * 100))%" } else { '—' }
+                $cost = if ($_.total_cost_usd -gt 0) { "`$$($_.total_cost_usd.ToString('0.00'))" } else { '—' }
+                Write-Host "  $name  runs:$($_.runs_total)(today:$($_.runs_today))  success:$rate  cost:$cost"
+            }
+        } catch {
+            Write-Host "Error: $_  (is the forge server running? pforge smith)"
+            exit 1
+        }
     } else {
         Write-Host "Usage: pforge team activity [--limit N] [--since ISO]"
+        Write-Host "       pforge team dashboard [--limit N]"
     }
 }
 

@@ -128,6 +128,7 @@ import { inspectGithubStack } from "./github-introspect.mjs";
 // Phase GITHUB-D Slice 5 — Copilot Metrics REST endpoint
 import { loadMetrics } from "./github-metrics.mjs";
 import { loadActivity } from "./team-activity.mjs";
+import { buildTeamDashboard } from "./dashboard/team-dashboard.mjs";
 // D6 — Agentic code review delegation
 import { delegateReview, ReviewDelegateNoPrError, ReviewDelegateAuthError } from "./github-review-delegate.mjs";
 // Phase FORGE-SHOP-04 Slice 04.1 — Global search
@@ -725,6 +726,18 @@ const TOOLS = [
           description: "Custom review criteria checklist items. Defaults to standard Plan Forge security, testing, and architecture checks.",
         },
         path: { type: "string", description: "Project root to detect git branch and PR (default: current)" },
+      },
+    },
+  },
+  {
+    name: "forge_team_dashboard",
+    description: "Show the multi-developer plan coordination dashboard — aggregates team-activity.jsonl by operator and returns per-developer stats (runs, success rate, cost) plus a conflict-risk assessment for teams where multiple developers are active concurrently. USE FOR: team coordination view, who is running what plan, concurrent developer risk. DO NOT USE FOR: individual run details (use forge_plan_status), raw activity feed (use forge_team_activity), cost breakdown (use forge_cost_report).",
+    inputSchema: {
+      type: "object",
+      properties: {
+        limit: { type: "number", description: "Max activity entries to aggregate (default 50, max 200)" },
+        since: { type: "string", description: "ISO date string — only aggregate entries after this date" },
+        path: { type: "string", description: "Project root (default: current)" },
       },
     },
   },
@@ -5993,6 +6006,19 @@ server.setRequestHandler(CallToolRequestSchema, _wrapWithToolSpan(async (request
     }
   }
 
+  if (name === "forge_team_dashboard") {
+    const t0 = Date.now();
+    try {
+      const cwd = args.path ? resolve(args.path) : findProjectRoot(PROJECT_DIR);
+      const limit = Math.min(args.limit ?? 50, 200);
+      const result = buildTeamDashboard({ storeDir: join(cwd, ".forge"), limit, since: args.since });
+      emitToolTelemetry("forge_team_dashboard", args, result, Date.now() - t0, "OK", cwd);
+      return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
+    } catch (err) {
+      return { content: [{ type: "text", text: JSON.stringify({ ok: false, error: err.message }) }] };
+    }
+  }
+
   if (name === "forge_team_activity") {
     const t0 = Date.now();
     try {
@@ -7252,6 +7278,18 @@ export function createExpressApp() {
     }
   });
 
+  app.get("/api/team-dashboard", (req, res) => {
+    try {
+      const limit = Math.min(parseInt(req.query.limit ?? "50", 10), 200);
+      const since = req.query.since || undefined;
+      const cwd = findProjectRoot(PROJECT_DIR);
+      const result = buildTeamDashboard({ storeDir: join(cwd, ".forge"), limit, since });
+      res.json(result);
+    } catch (err) {
+      res.status(500).json({ ok: false, error: err.message });
+    }
+  });
+
   app.get("/api/github-readiness", (req, res) => {
     try {
       const cwd = req.query.cwd ? resolve(req.query.cwd) : findProjectRoot(PROJECT_DIR);
@@ -8007,6 +8045,8 @@ export function createExpressApp() {
     // Phase GITHUB-D — GitHub metrics is MCP-native.
     "forge_github_metrics",
     // Phase-TEAM-ACTIVITY — Team activity feed is MCP-native.
+    // Phase-TEAM-DASHBOARD — Team coordination dashboard is MCP-native.
+    "forge_team_dashboard",
     "forge_team_activity",
     // D6 — Agentic code review delegation is MCP-native.
     "forge_delegate_review",
@@ -9213,4 +9253,5 @@ if (isDirectRun) {
     process.exit(1);
   });
 }
+
 

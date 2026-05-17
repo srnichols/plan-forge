@@ -100,6 +100,18 @@
     }
   },
   {
+    "name": "forge_team_dashboard",
+    "description": "Show the multi-developer plan coordination dashboard — aggregates team-activity.jsonl by operator and returns per-developer stats (runs, success rate, cost) plus a conflict-risk assessment for teams where multiple developers are active concurrently. USE FOR: team coordination view, who is running what plan, concurrent developer risk. DO NOT USE FOR: individual run details (use forge_plan_status), raw activity feed (use forge_team_activity), cost breakdown (use forge_cost_report).",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "limit": { "type": "number", "description": "Max activity entries to aggregate (default 50, max 200)" },
+        "since": { "type": "string", "description": "ISO date string — only aggregate entries after this date" },
+        "path": { "type": "string", "description": "Project root (default: current)" }
+      }
+    }
+  },
+  {
     "name": "forge_team_activity",
     "description": "Read recent Plan Forge run summaries from the team activity feed (.forge/team-activity.jsonl). Shows who ran what plan, when, and at what cost — across all developers sharing the same repo. USE FOR: see recent team plan runs, check what plans are in flight, review team plan cost. DO NOT USE FOR: individual slice details (use forge_plan_status), cost breakdown (use forge_cost_report).",
     "inputSchema": {
@@ -6183,3 +6195,5 @@
     }
   }
 ]
+
+

@@ -7167,3 +7167,119 @@ window.loadCopilotInstrStatus = loadCopilotInstrStatus;
 window.copilotInstrPreview    = copilotInstrPreview;
 window.copilotInstrSync       = copilotInstrSync;
 window.copilotInstrCopyPreview = copilotInstrCopyPreview;
+
+// ─── Team Dashboard Tab (Phase-TEAM-DASHBOARD, v3.4.0) ──────────────────────
+
+function _tdRelTime(ts) {
+  const diff = Date.now() - new Date(ts).getTime();
+  if (diff < 60000) return "just now";
+  if (diff < 3600000) return Math.floor(diff / 60000) + "m ago";
+  if (diff < 86400000) return Math.floor(diff / 3600000) + "h ago";
+  return Math.floor(diff / 86400000) + "d ago";
+}
+
+async function loadTeamDashboard() {
+  const errEl = document.getElementById("td-error");
+  const emptyEl = document.getElementById("td-empty");
+  const summaryEl = document.getElementById("td-summary");
+  const riskEl = document.getElementById("td-risk");
+  const opsEl = document.getElementById("td-operators");
+
+  if (errEl) errEl.classList.add("hidden");
+  if (emptyEl) emptyEl.classList.add("hidden");
+
+  try {
+    const data = await fetch(`${API_BASE}/api/team-dashboard?limit=50`).then((r) => r.json());
+
+    if (!data.ok) throw new Error(data.error || "Unknown error");
+
+    if (!data.operators || data.operators.length === 0) {
+      if (summaryEl) summaryEl.innerHTML = "";
+      if (riskEl) riskEl.innerHTML = "";
+      if (opsEl) opsEl.innerHTML = "";
+      if (emptyEl) emptyEl.classList.remove("hidden");
+      return;
+    }
+
+    // Summary cards
+    const s = data.summary || {};
+    if (summaryEl) {
+      summaryEl.innerHTML = `
+        <div class="grid grid-cols-2 sm:grid-cols-4 gap-3">
+          <div class="bg-gray-800 rounded p-3">
+            <p class="text-xs text-slate-500">Runs Today</p>
+            <p class="text-2xl font-bold text-blue-400">${s.total_runs_today ?? 0}</p>
+          </div>
+          <div class="bg-gray-800 rounded p-3">
+            <p class="text-xs text-slate-500">Active (24 h)</p>
+            <p class="text-2xl font-bold text-blue-400">${s.active_operators ?? 0}</p>
+          </div>
+          <div class="bg-gray-800 rounded p-3">
+            <p class="text-xs text-slate-500">Cost Today</p>
+            <p class="text-2xl font-bold text-amber-400">$${(s.total_cost_usd ?? 0).toFixed(2)}</p>
+          </div>
+          <div class="bg-gray-800 rounded p-3">
+            <p class="text-xs text-slate-500">Success Rate</p>
+            <p class="text-2xl font-bold text-green-400">${s.success_rate != null ? s.success_rate + "%" : "—"}</p>
+          </div>
+        </div>`;
+    }
+
+    // Conflict risk banner
+    const risk = data.conflict_risk || {};
+    const riskColors = { high: "text-red-400 bg-red-900/20 border-red-700", medium: "text-amber-400 bg-amber-900/20 border-amber-700", low: "text-green-400 bg-green-900/20 border-green-700", none: "text-slate-500 bg-gray-800 border-gray-700" };
+    const riskColor = riskColors[risk.level] || riskColors.none;
+    if (riskEl) {
+      riskEl.innerHTML = `
+        <div class="flex items-start gap-3 p-3 rounded border ${riskColor}">
+          <span class="text-xs font-semibold uppercase tracking-wider mt-0.5">${risk.level || "none"}</span>
+          <p class="text-xs">${risk.message || ""}</p>
+        </div>`;
+    }
+
+    // Operators table
+    if (opsEl) {
+      const rows = (data.operators || []).map((op) => {
+        const name = (op.operator || "unknown").split("<")[0].trim() || op.operator;
+        const ago = op.last_active ? _tdRelTime(op.last_active) : "—";
+        const successRate = op.runs_total > 0 ? Math.round((op.runs_completed / op.runs_total) * 100) : null;
+        const rateClass = successRate == null ? "text-slate-600" : successRate >= 80 ? "text-green-400" : successRate >= 60 ? "text-amber-400" : "text-red-400";
+        const plans = (op.recent_plans || []).slice(0, 2).map(
+          (p) => `<code class="text-xs text-slate-400 bg-gray-900 px-1 rounded">${p}</code>`
+        ).join(" ");
+        return `<tr class="border-b border-slate-700 hover:bg-gray-800/50">
+          <td class="py-2 pr-4 text-sm text-slate-200 font-medium whitespace-nowrap">${name}</td>
+          <td class="py-2 pr-4 text-xs text-slate-400 whitespace-nowrap">${ago}</td>
+          <td class="py-2 pr-4 text-xs text-slate-400">${op.runs_today} / ${op.runs_total}</td>
+          <td class="py-2 pr-4 text-xs ${rateClass}">${successRate != null ? successRate + "%" : "—"}</td>
+          <td class="py-2 pr-4 text-xs text-amber-400">${op.total_cost_usd > 0 ? "$" + op.total_cost_usd.toFixed(2) : "—"}</td>
+          <td class="py-2 text-xs text-slate-500">${plans}</td>
+        </tr>`;
+      }).join("");
+
+      opsEl.innerHTML = `
+        <div class="overflow-x-auto">
+          <table class="w-full text-left">
+            <thead>
+              <tr class="text-xs text-slate-500 border-b border-slate-700">
+                <th class="pb-2 pr-4">Developer</th>
+                <th class="pb-2 pr-4">Last Active</th>
+                <th class="pb-2 pr-4">Runs (today / total)</th>
+                <th class="pb-2 pr-4">Success</th>
+                <th class="pb-2 pr-4">Cost</th>
+                <th class="pb-2">Recent Plans</th>
+              </tr>
+            </thead>
+            <tbody>${rows}</tbody>
+          </table>
+        </div>`;
+    }
+  } catch (err) {
+    if (errEl) {
+      errEl.textContent = `Error loading team dashboard: ${err.message}`;
+      errEl.classList.remove("hidden");
+    }
+  }
+}
+
+window.loadTeamDashboard = loadTeamDashboard;

@@ -7,9 +7,9 @@
 
 ## Current Release
 
-**v3.3.3** (2026-05-17) — Background Mode Console Fix (Issue #197). Fixes silent death of `pforge run-plan` background mode on Windows. `Start-Process node -WindowStyle Hidden` gave the process tree no attached console; `gh copilot` CLI requires a console to survive startup. Fix: background mode now wraps `node` in a hidden `pwsh` host that allocates its own console. Adds `writeSilentExitRecord` orchestrator guard that writes a `slice-failed` event when the process exits mid-slice (instead of silent clean exit). 38 new tests.
+**v3.4.0** (2026-05-18) — Team Dashboard (Phase-TEAM-DASHBOARD). New "Team" tab in the dashboard aggregates `.forge/team-activity.jsonl` per operator into per-developer coordination cards (last active, today's runs, success rate, cost, recent plans) and a conflict-risk banner (none/low/medium/high) based on concurrent developer activity in the last 8 h. Exposed as `GET /api/team-dashboard`, `forge_team_dashboard` MCP tool, and `pforge team dashboard` CLI. 12 new tests.
 
-Previous: **v3.3.2** (2026-05-17) — Release-invariant CI guard + 18-release backfill.
+Previous: **v3.3.4** (2026-05-17) — Forge-Master Shim Graceful Degradation (Issue #200). `forge_master_ask` no longer throws when `pforge-master` is not installed.
 
 Previous: **v3.3.0** (2026-05-17) — Agentic Code Review Delegation (D6). `pforge review-delegate` and `forge_review_delegate` MCP tool. Dispatches a structured review task to the Copilot cloud agent, posts inline PR comments, and files a LiveGuard incident for blocking findings.
 
@@ -35,7 +35,7 @@ Previous: **v2.90.10** (2026-05-05) — Forge-Master Cross-Session Recall (Phase
 
 Previous: **v2.90.10** (2026-05-05) — Forge-Master Conversation Memory (Phase-38.1). Adds file-based JSONL session persistence to the Forge-Master reasoning engine. `runTurn` loads prior conversation turns before classification and persists each turn to disk. Per-tab session IDs flow from the dashboard (`sessionStorage` UUID) through `x-pforge-session-id` HTTP header to `deps.sessionId` in `runTurn`. Sessions auto-rotate at 200 turns. New CLI: `pforge fm-session list|purge`.
 
-**In flight (next)**: Phase-39 complete (v2.80.0). Next phase TBD — candidates: **Phase-COST-TOKEN-COVERAGE** (cache_read / cache_write / reasoning_tokens / service_tier accounting — fixes 30–80% cost underestimate on Anthropic + OpenAI workloads, plan drafted at [docs/plans/Phase-COST-TOKEN-COVERAGE-PLAN.md](docs/plans/Phase-COST-TOKEN-COVERAGE-PLAN.md)), gate-template hardening (eliminate Slice 5 false-negatives), embedding fallback hardening (first-class WASM model), Forge-Master unified timeline, GitHub PR creation for classifier-lane audit findings (deferred from v2.80), enterprise hardening track (OTel exporter, BYO Azure OpenAI first-class, auth/RBAC scaffolding — research at [docs/research/enterprise-fleet-readiness.md](docs/research/enterprise-fleet-readiness.md)).
+**In flight (next)**: Phase-TEAM-DASHBOARD ✅ complete (v3.4.0). Next phase TBD — candidates: gate-template hardening (eliminate Slice 5 false-negatives), embedding fallback hardening (first-class WASM model), GitHub PR creation for classifier-lane audit findings, enterprise hardening track (OTel exporter, BYO Azure OpenAI first-class, auth/RBAC scaffolding).
 
 See [CHANGELOG.md](CHANGELOG.md) for full release notes.
 

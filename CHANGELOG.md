@@ -5,6 +5,34 @@ Format follows [Keep a Changelog](https://keepachangelog.com/).
 
 ---
 
+## [3.4.0] — 2026-05-18 — Team Dashboard (Phase-TEAM-DASHBOARD)
+
+> **One-liner**: New "Team" tab in the dashboard aggregates `.forge/team-activity.jsonl` per operator and surfaces a conflict-risk assessment for teams where multiple developers are concurrently running plan runs. Also exposed as `GET /api/team-dashboard`, `forge_team_dashboard` MCP tool, and `pforge team dashboard` CLI.
+
+### What's new
+
+- **Dashboard tab — Team** (`dashboard/index.html` + `dashboard/app.js`): Per-operator cards showing last-active time, today's run count, lifetime runs, success rate, cost, and recent plan names. Conflict-risk banner (none / low / medium / high) based on how many developers have been active in the last 8 h.
+- **`buildTeamDashboard({ storeDir, limit, since })`** (`dashboard/team-dashboard.mjs`): Server-side aggregator. Reads from `team-activity.jsonl`, groups by operator, computes summary stats, and returns `{ ok, operators, conflict_risk, summary, message }`.
+- **`GET /api/team-dashboard`**: REST endpoint returning the full dashboard payload (bounded to 200 entries, defaults to 50).
+- **`forge_team_dashboard`** MCP tool: Same payload as the REST endpoint, registered in `tools.json` and the capabilities allowlist.
+- **CLI**: `pforge team dashboard [--limit N]` (PowerShell + bash) prints a formatted coordination summary with risk badge and per-operator rows.
+- **Tests** (`tests/team-dashboard.test.mjs`): 12 tests covering `aggregateTeamActivity`, `detectConflictRisk`, and `buildTeamDashboard` including empty activity, multi-operator aggregation, success-rate edge cases, and conflict-risk thresholds.
+
+### Files changed
+
+| File | Change |
+|------|--------|
+| `pforge-mcp/dashboard/team-dashboard.mjs` | **new** — server-side aggregation module |
+| `pforge-mcp/tests/team-dashboard.test.mjs` | **new** — 12 unit tests |
+| `pforge-mcp/server.mjs` | import, MCP handler, REST endpoint, capabilities list |
+| `pforge-mcp/tools.json` | `forge_team_dashboard` entry |
+| `pforge-mcp/dashboard/app.js` | tab loader map + `loadTeamDashboard()` |
+| `pforge-mcp/dashboard/index.html` | "Team" tab button + tab content panel |
+| `pforge.ps1` | `pforge team dashboard` subcommand |
+| `pforge.sh` | `pforge team dashboard` subcommand |
+
+---
+
 ## [3.3.4] — 2026-05-17 — Forge-Master Shim Graceful Degradation (Issue #200)
 
 > **One-liner**: `forge_master_ask` no longer throws `Cannot find module ".../pforge-master/src/index.mjs"` when `pforge-mcp` is deployed in isolation (without the optional `pforge-master` package). The shim now degrades gracefully with a useful guidance message.

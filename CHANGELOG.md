@@ -5,6 +5,84 @@ Format follows [Keep a Changelog](https://keepachangelog.com/).
 
 ---
 
+## [3.3.2] — 2026-05-17 — Release-Invariant CI Guard + 18-Release Backfill
+
+> **One-liner**: closes the bug class that made every release between v2.94.0 and v3.3.1 invisible to `pforge self-update` — adds a CI guard that fails when `VERSION` lands on `master` without a matching tag + GitHub Release.
+
+### Context — what went wrong
+
+Field report from a consumer running `pforge self-update`:
+> `Already on the latest version (v2.98.0)`
+
+But `master` was already at `v3.3.1`. Investigation found that `git tag`
+and `gh release create` (steps 4–6 of [docs/RELEASE-CHECKLIST.md](docs/RELEASE-CHECKLIST.md))
+had been skipped for **18 consecutive releases** (v2.95.0 → v3.3.1). The
+[`Release Guard`](.github/workflows/release-guard.yml) workflow only
+fires on tag push, so it could not catch the inverse: a `VERSION` bump
+landing on `master` with no tag behind it. Consumers were stranded.
+
+This is the second time we've shipped this bug class — v2.76.0–v2.80.1
+in April 2026 was the first (meta-bug #100, fixed by adding tag-drift
+warnings to `update-from-github.mjs`). The drift warning alerts on the
+update path but does not block the release path. The new CI guard does.
+
+### Added
+
+- **[`.github/workflows/release-invariant.yml`](.github/workflows/release-invariant.yml)** — new
+  workflow that asserts the inverse invariant of `release-guard.yml`:
+  when `VERSION` on `master` is a clean release number (no `-dev` or
+  pre-release suffix), both the matching `vX.Y.Z` git tag AND a published
+  GitHub Release MUST exist. Three trigger modes:
+  - **`push` to `master`** (only when `VERSION` changes) — advisory warning
+    annotation; allows the human ~24h to complete steps 4–6 of the checklist.
+  - **`schedule` (daily at 07:00 UTC)** — hard failure if invariant
+    still violated. Surfaces stranded-consumer bug within one day.
+  - **`workflow_dispatch`** — hard failure; on-demand verification.
+
+- **[`scripts/backfill-missing-releases.ps1`](scripts/backfill-missing-releases.ps1)** — idempotent
+  PowerShell helper that walks a hard-coded `{version, sha}` plan,
+  extracts release notes from the matching `CHANGELOG.md` section, and
+  creates the missing `git tag` + `gh release` atomically. Skips
+  entries that already exist. Supports `-DryRun` and `-Only vX.Y.Z`.
+
+### Fixed (backfill)
+
+The following 18 historical releases were created at the SHAs where
+`VERSION` was clean. Tag-creation date reflects the recovery
+(2026-05-17), not the original ship date:
+
+| Version | SHA | Title |
+|---------|-----|-------|
+| v2.95.0 | `e6eb6685` | Phase Lattice |
+| v2.96.0 | `fe7a2e70` | Cost-Service Token Coverage |
+| v2.96.1 | `9211c937` | Testbed Bug Sweep |
+| v2.96.2 | `d6405c10` | Testbed-Rerun Polish |
+| v2.96.3 | `b284b6da` | Background-Run Diagnostics |
+| v2.96.4 | `c22386a5` | Telemetry-Honesty Patch |
+| v2.98.0 | `657f5649` | Phase GITHUB-E: pforge sync-spaces |
+| v2.99.0 | `277d8ed1` | forge_sync_memories (Roadmap C3) |
+| v2.99.1 | `67a54dbe` | DEP0190 Spawn Hardening |
+| v3.0.0  | `97aa9871` | Copilot Instructions Sync |
+| v3.0.1  | `53cc1cfb` | Telemetry-Honesty Hotfix |
+| v3.1.0  | `4a469e31` | Chat Customizations Editor (D5) |
+| v3.1.1  | `c68230b7` | Quorum Cost Aggregation Fix (#194) |
+| v3.1.2  | `a7a5ef05` | Cloud Agent Validation Stack (B4) |
+| v3.2.0  | `6c15162f` | Team Activity Phase |
+| v3.2.1  | `3cbcc4c6` | Encoding-Honesty Hotfix (#196) |
+| v3.3.0  | `54b77d8 ` | (Phase commit) |
+| v3.3.1  | `5e58b3a ` | AutoCommit Race Hotfix (#195) |
+
+### Migration
+
+- **Consumers**: `pforge self-update` will now jump correctly from
+  whatever version they were stranded on (commonly v2.93.3 or v2.98.0)
+  to v3.3.2. No manual action required.
+- **Maintainers**: continue following [docs/RELEASE-CHECKLIST.md](docs/RELEASE-CHECKLIST.md).
+  The new workflow will warn on `push` and hard-fail on `schedule` if
+  steps 4–6 are skipped.
+
+---
+
 ## [3.3.1] — 2026-05-17 — AutoCommit Race Hotfix (Issue #195)
 
 ### Fixed

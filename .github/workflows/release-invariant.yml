@@ -1,0 +1,104 @@
+name: Release Invariant
+
+# Prevents the other half of the release-bug class that `release-guard.yml`
+# does NOT cover: VERSION-bump commits that land on master WITHOUT a
+# matching git tag AND GitHub Release.
+#
+# Background: v2.94.0 → v3.2.1 (16 releases) were committed to master but
+# never tagged or released. `pforge self-update` consumers were stranded
+# because the GitHub Releases API never saw them. Backfilled 2026-05-17.
+#
+# Invariant: if `cat VERSION` on master is a CLEAN release number (no
+# `-dev` suffix), then both:
+#   1. git tag `vX.Y.Z` must exist on origin
+#   2. `gh release view vX.Y.Z` must succeed
+#
+# Modes:
+#   - push to master: advisory check (issues warning annotations)
+#   - scheduled daily: HARD failure if invariant violated for >24h
+#   - workflow_dispatch: HARD failure (manual debug)
+
+on:
+  push:
+    branches: [master]
+    paths: [VERSION]
+  schedule:
+    - cron: '0 7 * * *'  # 07:00 UTC daily
+  workflow_dispatch:
+
+jobs:
+  verify-release-invariant:
+    name: VERSION at HEAD has matching tag + release
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # need tag history
+
+      - name: Check release invariant
+        id: check
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          EVENT_NAME: ${{ github.event_name }}
+        run: |
+          set -euo pipefail
+
+          if [ ! -f VERSION ]; then
+            echo "::error::VERSION file missing"
+            exit 1
+          fi
+          VERSION_FILE="$(tr -d '[:space:]' < VERSION)"
+          echo "VERSION on master: $VERSION_FILE"
+
+          # Skip if VERSION is a -dev build (mid-development, expected)
+          if echo "$VERSION_FILE" | grep -qE -- '-dev$'; then
+            echo "✅ VERSION is '$VERSION_FILE' (dev build) — invariant N/A"
+            exit 0
+          fi
+
+          # Skip if VERSION is any other pre-release form (alpha, beta, rc)
+          if echo "$VERSION_FILE" | grep -qE -- '-'; then
+            echo "✅ VERSION is '$VERSION_FILE' (pre-release) — invariant N/A"
+            exit 0
+          fi
+
+          TAG="v${VERSION_FILE}"
+          MISSING=()
+
+          # 1. Tag exists on origin?
+          if git rev-parse "refs/tags/${TAG}" >/dev/null 2>&1; then
+            echo "✅ Tag ${TAG} exists locally"
+          elif git ls-remote --tags origin "refs/tags/${TAG}" | grep -q "${TAG}"; then
+            echo "✅ Tag ${TAG} exists on origin"
+          else
+            MISSING+=("tag")
+            echo "❌ Tag ${TAG} does NOT exist on origin"
+          fi
+
+          # 2. GitHub Release exists?
+          if gh release view "${TAG}" --repo "${GITHUB_REPOSITORY}" >/dev/null 2>&1; then
+            echo "✅ Release ${TAG} exists on GitHub"
+          else
+            MISSING+=("release")
+            echo "❌ GitHub Release ${TAG} does NOT exist"
+          fi
+
+          if [ ${#MISSING[@]} -eq 0 ]; then
+            echo "✅ Release invariant holds for ${TAG}"
+            exit 0
+          fi
+
+          # Push event: advisory only (the tag/release usually follow shortly)
+          if [ "${EVENT_NAME}" = "push" ]; then
+            echo "::warning title=Release invariant pending::VERSION bumped to ${VERSION_FILE} but missing: ${MISSING[*]}. Complete steps 4–6 of docs/RELEASE-CHECKLIST.md (git tag + gh release create) before the next VERSION bump. The scheduled job will hard-fail if still missing in 24h."
+            exit 0
+          fi
+
+          # Scheduled or manual: hard failure
+          echo "::error title=Release invariant violated::VERSION on master is ${VERSION_FILE} but ${MISSING[*]} missing for ${TAG}."
+          echo "::error::This is the bug that stranded pforge self-update consumers for v2.94.0→v3.2.1."
+          echo "::error::Fix: run scripts/backfill-missing-releases.ps1 OR complete steps 4–6 of docs/RELEASE-CHECKLIST.md."
+          exit 1

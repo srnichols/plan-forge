@@ -51,6 +51,7 @@ const CHECK_ORDER = [
   "github-remote",
   "gh-cli",
   "copilot-coding-agent-assignable",
+  "cloud-agent-validation",
 ];
 
 /**
@@ -75,6 +76,7 @@ export function inspectGithubStack(projectRoot, opts = {}) {
   checks.push(checkGithubRemote(root));
   checks.push(checkGhCli());
   checks.push(checkCopilotCodingAgentAssignable(root, opts));
+  checks.push(checkCloudAgentValidation(root));
 
   if (opts.extra) {
     checks.push(checkCopilotInstructionsDepth(root));
@@ -438,6 +440,52 @@ function checkInstructionsApplyTo(root) {
 }
 
 // ─── helpers ────────────────────────────────────────────────────────────────
+
+/**
+ * Read the optional `cloudAgentValidation` block from `.forge.json`.
+ * Returns null if the file is absent, unreadable, or the key is missing.
+ *
+ * @param {string} root
+ * @returns {Record<string,boolean>|null}
+ */
+function readCloudAgentValidationConfig(root) {
+  try {
+    const cfgPath = join(root, ".forge.json");
+    if (!existsSync(cfgPath)) return null;
+    const raw = JSON.parse(readFileSync(cfgPath, "utf-8"));
+    const val = raw?.cloudAgentValidation;
+    if (!val || typeof val !== "object" || Array.isArray(val)) return null;
+    return val;
+  } catch {
+    return null;
+  }
+}
+
+/** @returns {CheckResult} */
+function checkCloudAgentValidation(root) {
+  const cfg = readCloudAgentValidationConfig(root);
+  if (!cfg) {
+    return {
+      id: "cloud-agent-validation",
+      label: "cloudAgentValidation (.forge.json)",
+      status: "na",
+      detail:
+        "not configured — add cloudAgentValidation to .forge.json to declare your GitHub scanning stack",
+    };
+  }
+  const KNOWN_TOOLS = ["codeql", "secretScanning", "dependencyReview", "copilotCodeReview"];
+  const enabled = KNOWN_TOOLS.filter((k) => cfg[k] === true);
+  const disabled = KNOWN_TOOLS.filter((k) => cfg[k] === false);
+  const parts = [];
+  if (enabled.length > 0) parts.push(`enabled: ${enabled.join(", ")}`);
+  if (disabled.length > 0) parts.push(`disabled: ${disabled.join(", ")}`);
+  return {
+    id: "cloud-agent-validation",
+    label: "cloudAgentValidation (.forge.json)",
+    status: "pass",
+    detail: parts.length > 0 ? parts.join(" | ") : "configured (no standard tools declared)",
+  };
+}
 
 function isDir(p) {
   try {

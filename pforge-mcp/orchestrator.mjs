@@ -1343,6 +1343,10 @@ async function callApiWorker(prompt, model, provider, options = {}) {
     : model;
 
   try {
+    // Issue #193 (v3.0.1) Defect D: measure actual API duration instead of
+    // hardcoding 0. Single-request API path — sessionDurationMs and
+    // apiDurationMs collapse to the same value (one round trip).
+    const _apiStartMs = Date.now();
     const response = await fetch(`${provider.baseUrl}/chat/completions`, {
       method: "POST",
       headers: authHeaders,
@@ -1361,6 +1365,7 @@ async function callApiWorker(prompt, model, provider, options = {}) {
     }
 
     const data = await response.json();
+    const _apiDurationMs = Date.now() - _apiStartMs;
     const choice = data.choices?.[0];
     const usage = data.usage || {};
     const completionDetails = usage.completion_tokens_details || {};
@@ -1376,8 +1381,9 @@ async function callApiWorker(prompt, model, provider, options = {}) {
         tokens_out: usage.completion_tokens || 0,
         model: data.model || model,
         premiumRequests: 0,
-        apiDurationMs: 0,
-        sessionDurationMs: 0,
+        // Issue #193 Defect D: real measurement (was hardcoded 0).
+        apiDurationMs: _apiDurationMs,
+        sessionDurationMs: _apiDurationMs,
         codeChanges: null,
         reasoning_tokens: completionDetails.reasoning_tokens || 0,
       },
@@ -2305,7 +2311,12 @@ export function formatQuorumSummary(rows, host, hostPreference) {
     const via = r.via === "api"
       ? `direct-api${r.provider ? ` (${r.provider})` : ""}`
       : `${r.worker || "cli"}`;
-    const billing = r.billing || r.reason || "unavailable";
+    // Issue #193 (v3.0.1) Defect B: when the row is available but has no
+    // billing string, fall back to "available (billing unspecified)" instead
+    // of the literal "unavailable" — otherwise the line reads `✓ … unavailable`
+    // which is self-contradictory and misleads humans + agents.
+    const billing = r.billing
+      || (r.available ? "available (billing unspecified)" : (r.reason || "unavailable"));
     lines.push(`  ${mark} ${r.model.padEnd(28)} via ${via.padEnd(22)} ${billing}`);
     if (r.billingWarning) lines.push(`      ↳ ${r.billingWarning}`);
   }
@@ -4162,8 +4173,13 @@ export async function runPlan(planPath, options = {}) {
     effectiveModel = null;
     modelSource = "default";
   }
+  // Issue #193 (v3.0.1) Defect A: rename log from `resolved=` → `configured=`.
+  // The previous wording implied the model would actually be used by the
+  // worker, but CLI shims (notably gh-copilot) ignore the configured model
+  // and pick their own default. The new wording reports what the framework
+  // PREFERS, not what will actually run; CLI workers add their own log later.
   // eslint-disable-next-line no-console
-  console.error(`[model] resolved=${effectiveModel} source=${modelSource}`);
+  console.error(`[model] configured=${effectiveModel} source=${modelSource} (CLI workers may select their own model)`);
 
   // Zero-slice guard: loud-fail before any dispatch (Bug #124)
   if (plan.slices.length === 0) {
@@ -4611,7 +4627,7 @@ export async function runPlan(planPath, options = {}) {
             gateOutput: "dry-run-worker",
             gateError: null,
             failedCommand: null,
-            tokens: { tokens_in: 0, tokens_out: 0, model: "dry-run", premiumRequests: 0, apiDurationMs: 0, sessionDurationMs: 0, codeChanges: null, vendor: "dry-run" },
+            tokens: { tokens_in: 0, tokens_out: 0, model: "dry-run", premiumRequests: 0, apiDurationMs: null, sessionDurationMs: null, codeChanges: null, vendor: "dry-run" },
             worker: "dry-run",
             model: "dry-run",
             host: "dry-run",
@@ -12332,6 +12348,10 @@ function buildSummary(plan, results, runMeta, extras = {}) {
 
   const summary = {
     plan: runMeta.plan,
+    // Issue #193 (v3.0.1) Defect C: expose `phase` (plan basename without .md)
+    // as a top-level field so dashboards and aggregators don't have to re-parse
+    // the absolute `plan` path. Example: "Phase-2-PROJECTS-CRUD-PLAN".
+    phase: basename(runMeta.plan, ".md"),
     startTime: runMeta.startTime,
     endTime: new Date().toISOString(),
     mode: runMeta.mode,

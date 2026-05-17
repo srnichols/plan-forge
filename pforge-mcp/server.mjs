@@ -127,6 +127,7 @@ import { checkForUpdate, detectCorruptInstall, resolveFrameworkVersion } from ".
 import { inspectGithubStack } from "./github-introspect.mjs";
 // Phase GITHUB-D Slice 5 — Copilot Metrics REST endpoint
 import { loadMetrics } from "./github-metrics.mjs";
+import { loadActivity } from "./team-activity.mjs";
 // Phase FORGE-SHOP-04 Slice 04.1 — Global search
 import { search as forgeSearch } from "./search/core.mjs";
 // Phase FORGE-SHOP-05 Slice 05.1 — Unified timeline
@@ -707,6 +708,18 @@ const TOOLS = [
         repo: { type: "string", description: "Repository slug owner/repo (auto-detected from git remote when omitted)" },
         period: { type: "string", description: "Lookback window: 7d, 30d, or 90d (default: 30d)" },
         path: { type: "string", description: "Project directory (default: current)" },
+      },
+    },
+  },
+  {
+    name: "forge_team_activity",
+    description: "Read recent Plan Forge run summaries from the team activity feed (.forge/team-activity.jsonl). Shows who ran what plan, when, and at what cost — across all developers sharing the same repo. USE FOR: see recent team plan runs, check what plans are in flight, review team plan cost. DO NOT USE FOR: individual slice details (use forge_plan_status), cost breakdown (use forge_cost_report).",
+    inputSchema: {
+      type: "object",
+      properties: {
+        limit: { type: "number", description: "Max entries to return (default 20, max 100)" },
+        since: { type: "string", description: "ISO date string to filter entries after this date" },
+        path: { type: "string", description: "Project root (default: current)" },
       },
     },
   },
@@ -2177,6 +2190,7 @@ function executeTool(name, args) {
     case "forge_graph_query":
     case "forge_patterns_list":
     case "forge_github_metrics":
+    case "forge_team_activity":
     case "forge_anvil_stat":
     case "forge_anvil_clear":
     case "forge_anvil_rebuild":
@@ -5945,6 +5959,27 @@ server.setRequestHandler(CallToolRequestSchema, _wrapWithToolSpan(async (request
     }
   }
 
+  if (name === "forge_team_activity") {
+    const t0 = Date.now();
+    try {
+      const cwd = args.path ? resolve(args.path) : findProjectRoot(PROJECT_DIR);
+      const limit = Math.min(args.limit ?? 20, 100);
+      const activities = loadActivity({ storeDir: join(cwd, ".forge"), limit, since: args.since });
+      const result = {
+        ok: true,
+        count: activities.length,
+        activities,
+        message: activities.length > 0
+          ? `${activities.length} recent team activity entries`
+          : "No team activity recorded yet. Team activity is recorded after each plan run.",
+      };
+      emitToolTelemetry("forge_team_activity", args, result, Date.now() - t0, "OK", cwd);
+      return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
+    } catch (err) {
+      return { content: [{ type: "text", text: JSON.stringify({ ok: false, error: err.message }) }] };
+    }
+  }
+
   // ─── forge_github_metrics — live GitHub repository metrics (Phase GITHUB-D) ───
   if (name === "forge_github_metrics") {
     const t0 = Date.now();
@@ -7171,6 +7206,18 @@ export function createExpressApp() {
   // Query params:
   //   cwd       — project root to inspect (defaults to PROJECT_DIR)
   //   gh-token  — "true" to enable the network-backed assignable probe (opt-in)
+  app.get("/api/team-activity", (req, res) => {
+    try {
+      const limit = Math.min(parseInt(req.query.limit ?? "20", 10), 100);
+      const since = req.query.since || undefined;
+      const cwd = findProjectRoot(PROJECT_DIR);
+      const activities = loadActivity({ storeDir: join(cwd, ".forge"), limit, since });
+      res.json({ ok: true, count: activities.length, activities });
+    } catch (err) {
+      res.status(500).json({ ok: false, error: err.message });
+    }
+  });
+
   app.get("/api/github-readiness", (req, res) => {
     try {
       const cwd = req.query.cwd ? resolve(req.query.cwd) : findProjectRoot(PROJECT_DIR);
@@ -7925,6 +7972,8 @@ export function createExpressApp() {
     "forge_patterns_list",
     // Phase GITHUB-D — GitHub metrics is MCP-native.
     "forge_github_metrics",
+    // Phase-TEAM-ACTIVITY — Team activity feed is MCP-native.
+    "forge_team_activity",
     // Phase-ANVIL Slice 6 — Anvil + Hallmark + Pipelines tools are MCP-native.
     "forge_anvil_stat",
     "forge_anvil_clear",

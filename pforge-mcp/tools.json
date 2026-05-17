@@ -82,6 +82,27 @@
     }
   },
   {
+    "name": "forge_team_activity",
+    "description": "Read recent Plan Forge run summaries from the team activity feed (.forge/team-activity.jsonl). Shows who ran what plan, when, and at what cost — across all developers sharing the same repo. USE FOR: see recent team plan runs, check what plans are in flight, review team plan cost. DO NOT USE FOR: individual slice details (use forge_plan_status), cost breakdown (use forge_cost_report).",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "limit": {
+          "type": "number",
+          "description": "Max entries to return (default 20, max 100)"
+        },
+        "since": {
+          "type": "string",
+          "description": "ISO date string to filter entries after this date"
+        },
+        "path": {
+          "type": "string",
+          "description": "Project root (default: current)"
+        }
+      }
+    }
+  },
+  {
     "name": "forge_validate",
     "description": "Validate Plan Forge setup — check that all required files exist, file counts match preset expectations, and no unresolved placeholders remain.",
     "inputSchema": {

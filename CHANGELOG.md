@@ -5,6 +5,24 @@ Format follows [Keep a Changelog](https://keepachangelog.com/).
 
 ---
 
+## [3.2.0] — 2026-05-17
+
+### Phase-TEAM-ACTIVITY — Team Activity Feed (v3.2.0)
+
+First increment of v3.1 Team Mode. When multiple developers (or CI agents) run Plan Forge against the same repository, each completed or aborted run appends a summary to `.forge/team-activity.jsonl`. This shared file (check into version control or mount as a shared volume) provides cross-developer visibility into who ran what plan, when, and at what cost.
+
+**New:**
+- `pforge-mcp/team-activity.mjs` — core module (`recordActivity`, `loadActivity`, `getOperator`)
+- `forge_team_activity` MCP tool — query recent team activity from IDE chat
+- `GET /api/team-activity` REST endpoint — dashboard and `pforge` CLI consume this
+- `pforge-mcp/dashboard/team-activity.mjs` — dashboard panel (available via REST)
+- `pforge team activity [--limit N] [--since ISO]` — CLI command on both PowerShell and bash
+
+**Changed:**
+- `orchestrator.mjs` — records activity after every `run-completed` / `run-aborted` event
+
+---
+
 ## [3.1.2] — 2026-05-18 — Cloud Agent Validation Stack (B4)
 
 > **One-liner**: Adds `cloudAgentValidation` to `.forge.json` — declare which GitHub scanning tools (CodeQL, secret scanning, dependency review, Copilot code review) are active. `forge_github_status` surfaces the full validation stack in one call.

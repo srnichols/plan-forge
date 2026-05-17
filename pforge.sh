@@ -106,6 +106,7 @@ COMMANDS:
     --dry-run       Show what would happen without triage side effects
     --env=ENV       Set environment (dev, staging; production is forbidden)
   github <sub>      Inspect the GitHub-native AI surface (status | doctor | metrics)
+  team activity     Show recent shared Plan Forge runs from .forge/team-activity.jsonl
   sync-spaces       Push active plan, instructions, and tool catalog to a GitHub Copilot Space
   sync-memories     Generate .github/copilot-memory-hints.md from forge decisions (trajectory notes, auto-skills, brain)
   sync-instructions Generate .github/copilot-instructions.md from forge project context (profile, principles, config)
@@ -5457,7 +5458,6 @@ cmd_hallmark() {
             ;;
     esac
 }
-}
 
 # ─── Command: graph ────────────────────────────────────────────────
 cmd_graph() {
@@ -5958,6 +5958,42 @@ EOF
     node "$module_file" "$opts_json"
 }
 
+cmd_team() {
+    local sub="${1:-}"
+    shift 2>/dev/null || true
+    case "$sub" in
+        activity)
+            local limit=20 since=""
+            while [[ $# -gt 0 ]]; do
+                case "$1" in
+                    --limit) limit="$2"; shift 2 ;;
+                    --since) since="$2"; shift 2 ;;
+                    *) shift ;;
+                esac
+            done
+            local url="http://localhost:3100/api/team-activity?limit=${limit}"
+            [[ -n "$since" ]] && url+="&since=${since}"
+            local result
+            result=$(curl -sf "$url") || { echo "Error connecting to forge server (is it running?)"; exit 1; }
+            local count
+            count=$(echo "$result" | node -e "const d=JSON.parse(require('fs').readFileSync('/dev/stdin','utf8')); process.stdout.write(String(d.count))")
+            if [[ "$count" -eq 0 ]]; then
+                echo "No team activity recorded yet."
+            else
+                echo "$result" | node -e "
+const d=JSON.parse(require('fs').readFileSync('/dev/stdin','utf8'));
+d.activities.forEach(a=>{
+  const s=a.status==='completed'?'✅':a.status==='aborted'?'⚠️':'❌';
+  console.log(s, a.timestamp, a.plan, '--', a.operator, '$'+Number(a.cost_usd||0).toFixed(2));
+});"
+            fi
+            ;;
+        *)
+            echo "Usage: pforge team activity [--limit N] [--since ISO]"
+            ;;
+    esac
+}
+
 # ─── Command: github ───────────────────────────────────────────────────
 cmd_github() {
     local sub="${1:-}"
@@ -6211,6 +6247,7 @@ case "$COMMAND" in
     sync-memories) cmd_sync_memories "$@" ;;
     sync-instructions) cmd_sync_instructions "$@" ;;
     github)       cmd_github "$@" ;;
+    team)         cmd_team "$@" ;;
     crucible)     cmd_crucible "$@" ;;
     anvil)        cmd_anvil "$@" ;;
     hallmark)     cmd_hallmark "$@" ;;

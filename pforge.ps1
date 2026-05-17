@@ -130,6 +130,7 @@ function Show-Help {
     Write-Host "  sync-memories     Generate .github/copilot-memory-hints.md from forge decisions (trajectory notes, auto-skills, brain)"
     Write-Host "  sync-instructions Generate .github/copilot-instructions.md from forge project context (profile, principles, config)"
     Write-Host "  github <sub>      Inspect the GitHub-native AI surface (status | doctor | metrics)"
+    Write-Host "  team activity     Show recent shared Plan Forge runs from .forge/team-activity.jsonl"
     Write-Host "  help              Show this help message"
     Write-Host ""
     Write-Host "OPTIONS:" -ForegroundColor Yellow
@@ -6741,6 +6742,39 @@ function Invoke-SyncSpaces {
     }
 }
 
+function Invoke-Team {
+    $sub = if ($Arguments -and $Arguments.Count -gt 0) { $Arguments[0] } else { '' }
+    [string[]]$rest = if ($Arguments -and $Arguments.Count -gt 1) { @($Arguments[1..($Arguments.Count - 1)]) } else { @() }
+
+    if ($sub -eq 'activity') {
+        $limit = 20
+        $since = $null
+        for ($i = 0; $i -lt $rest.Count; $i++) {
+            if ($rest[$i] -eq '--limit' -and $i + 1 -lt $rest.Count) { $limit = [int]$rest[$i + 1]; $i++; continue }
+            if ($rest[$i] -eq '--since' -and $i + 1 -lt $rest.Count) { $since = $rest[$i + 1]; $i++; continue }
+        }
+        $url = "http://localhost:3100/api/team-activity?limit=$limit"
+        if ($since) { $url += "&since=$since" }
+        try {
+            $result = Invoke-RestMethod -Uri $url -Method GET
+            if ($result.activities.Count -eq 0) {
+                Write-Host "No team activity recorded yet."
+            } else {
+                $result.activities | ForEach-Object {
+                    $status = if ($_.status -eq 'completed') { '✅' } elseif ($_.status -eq 'aborted') { '⚠️' } else { '❌' }
+                    $cost = if ($null -ne $_.cost_usd) { '$' + ([double]$_.cost_usd).ToString('0.00') } else { '—' }
+                    Write-Host "$status $($_.timestamp) $($_.plan) — $($_.operator) $cost"
+                }
+            }
+        } catch {
+            Write-Host "Error: $_"
+            exit 1
+        }
+    } else {
+        Write-Host "Usage: pforge team activity [--limit N] [--since ISO]"
+    }
+}
+
 # ─── Command: github ───────────────────────────────────────────────────
 function Invoke-Github {
     # Subcommands: status | doctor | metrics | --help
@@ -6974,6 +7008,7 @@ switch ($Command) {
     'sync-instructions' { Invoke-SyncInstructions }
     'crucible'        { Invoke-Crucible }
     'github'       { Invoke-Github }
+    'team'         { Invoke-Team }
     'anvil'        { Invoke-Anvil }
     'hallmark'     { Invoke-Hallmark }
     'help'         { Show-Help }

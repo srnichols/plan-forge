@@ -5,6 +5,36 @@ Format follows [Keep a Changelog](https://keepachangelog.com/).
 
 ---
 
+## [3.0.1] — 2026-05-17 — Telemetry-Honesty Hotfix (Issue #193)
+
+> **One-liner**: Four small but compounding UX / observability honesty defects surfaced by the v3.0.0 testbed sweep — misleading `[model] resolved=` log, self-contradictory `✓ … unavailable` quorum rows, missing `phase` field in `summary.json`, and lingering hardcoded `apiDurationMs: 0` in the API-direct and dry-run paths. All four fixed in a single hotfix release.
+
+#### Fixed — Bug #193
+
+**A — `[model]` log honesty** (`pforge-mcp/orchestrator.mjs` ~L4167)
+Renamed `[model] resolved=` → `[model] configured=` and appended `(CLI workers may select their own model)`. CLI shims like `gh-copilot` ignore the configured model and pick their own default; the previous wording implied otherwise.
+
+**B — Quorum summary contradictions** (`pforge-mcp/orchestrator.mjs` ~L2308, `formatQuorumSummary`)
+When a row is `available: true` but has no `billing` string, the fallback no longer emits the literal `"unavailable"`. Available-without-billing rows now render as `"available (billing unspecified)"`. Unavailable rows still fall back to `r.reason || "unavailable"`.
+
+**C — `summary.json` `phase` field** (`pforge-mcp/orchestrator.mjs` ~L12333, `buildSummary`)
+Added top-level `phase: basename(runMeta.plan, ".md")` (e.g., `"Phase-2-PROJECTS-CRUD-PLAN"`) so dashboards / aggregators don't have to re-parse the absolute `plan` path.
+
+**D — Duration-field honesty** (`pforge-mcp/orchestrator.mjs` ~L1379, ~L4614)
+- `callApiWorker` (API-direct): now measures actual round-trip with `Date.now()` and reports the real value in both `apiDurationMs` and `sessionDurationMs` (single request = single call = same value). Was hardcoded `0`.
+- Dry-run worker synth: `apiDurationMs: null, sessionDurationMs: null` (was `0`). Matches the v2.96.4 contract: `null` = not measured, number = real value (including legitimate `0`).
+
+#### Tests
+- `pforge-mcp/tests/telemetry-honesty-issue-193.test.mjs` (15 tests, NEW) — covers all four defects with unit tests on `formatQuorumSummary`, source-grep assertions for the log + dry-run + API-direct measurement plumbing, and a `basename` smoke test for the new `phase` field.
+
+#### Full sweep
+- 5411 passed | 39 skipped | EXITCODE=0 (was 5396 on v3.0.0).
+
+#### Discovery
+- v3.0.0 testbed Phase-2 background run (2026-05-17T02:36 UTC); all four observed in a single `summary.json` + stderr capture.
+
+---
+
 ## [3.0.0] — 2026-05-17 — Copilot Instructions Sync (forge_sync_instructions)
 
 > **One-liner**: Completes the Copilot integration trilogy by generating `.github/copilot-instructions.md` from forge project context — project profile, project principles, extra instruction files, and `.forge.json` config. GitHub Copilot reads this file automatically, giving every conversation project-specific guidance without manual setup.

@@ -6098,5 +6098,49 @@
       "input": { "name": "handleAuth", "direction": "callees", "depth": 2 },
       "output": { "nodes": [], "edges": [], "unresolvedNames": [], "total": 0, "truncated": false, "message": "No chunk found for \"handleAuth\"." }
     }
+  },
+  {
+    "name": "forge_sync_instructions",
+    "description": "Generate .github/copilot-instructions.md from forge project context (project profile, project principles, .forge.json config). GitHub Copilot reads this file automatically. Completes the Copilot integration trilogy: sync-memories → sync-instructions. USE FOR: populate Copilot with project-specific instructions, regenerate instructions after adding project profile or principles, export project context to Copilot. DO NOT USE FOR: uploading to Copilot Spaces (use forge_sync_spaces), reading memory hints (use forge_sync_memories).",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "dryRun":       { "type": "boolean", "description": "Return rendered Markdown without writing the file (default: false)" },
+        "force":        { "type": "boolean", "description": "Re-write even if content is unchanged (default: false)" },
+        "noPrinciples": { "type": "boolean", "description": "Skip the Project Principles section (default: false)" },
+        "noProfile":    { "type": "boolean", "description": "Skip the Project Profile section (default: false)" },
+        "noExtras":     { "type": "boolean", "description": "Skip extra .github/instructions/*.instructions.md files (default: false)" },
+        "output":       { "type": "string",  "description": "Override output path (default: .github/copilot-instructions.md, relative to project root)" },
+        "path":         { "type": "string",  "description": "Project directory (default: current)" }
+      },
+      "required": []
+    },
+    "intent": ["sync", "copilot", "instructions", "generate", "project-context"],
+    "aliases": ["sync-instructions", "copilot-instructions"],
+    "cost": "low",
+    "addedIn": "3.0.0",
+    "produces": [".github/copilot-instructions.md"],
+    "consumes": [
+      ".github/instructions/project-profile.instructions.md",
+      "docs/plans/PROJECT-PRINCIPLES.md",
+      ".forge.json",
+      ".github/instructions/*.instructions.md"
+    ],
+    "sideEffects": ["Writes .github/copilot-instructions.md (skipped when content unchanged, unless --force)"],
+    "errors": {
+      "SYNC_INSTRUCTIONS_ERROR": { "message": "Failed to write output file", "recovery": "Check file permissions on .github/" }
+    },
+    "example": {
+      "input": {},
+      "output": {
+        "ok": true,
+        "outputPath": ".github/copilot-instructions.md",
+        "sectionsCount": 3,
+        "sections": { "profile": true, "principles": true, "forgeConfig": true, "extraCount": 0 },
+        "changed": true,
+        "dryRunMode": false,
+        "message": "Wrote 3 section(s) to .github/copilot-instructions.md."
+      }
+    }
   }
 ]

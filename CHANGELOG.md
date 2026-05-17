@@ -5,6 +5,46 @@ Format follows [Keep a Changelog](https://keepachangelog.com/).
 
 ---
 
+## [3.3.1] — 2026-05-17 — AutoCommit Race Hotfix (Issue #195)
+
+### Fixed
+
+When the VS Code Copilot extension auto-commits worker edits in parallel
+with the orchestrator (race window observed at ~22s in Phase-3 testbed
+runs), the orchestrator's own `git commit` only ever saw `.forge/`
+housekeeping artifacts. The result was a "ghost-pass" slice:
+
+- `slice-N.json` on disk had `autoCommit: {}` and `tokens.codeChanges: null`
+- The commit message claimed feature work (`feat(slice-N): InvoicesController …`)
+  even though zero source files were committed
+- The external commit (`2c8a796` style) was silently absorbed — never
+  recorded anywhere the dashboards or reviewers could see it
+
+### Changes
+
+- **`captureAbsorbedCommits()`** — new helper enumerates commits between
+  `startSha..HEAD` as `{ sha, author, subject, diffstat }`
+- **`autoCommitSliceIfDirty()`**
+  - Records `absorbedCommits[]` and `raceDetected: boolean` on the result
+  - When all worker-owned paths are in `.forge/` AND a race is detected,
+    relabels the commit to `chore(slice-N): housekeeping (source absorbed
+    by <sha>)` so log readers don't see false feature claims
+  - Same enrichment on the clean-tree branch (worker-committed path)
+- **Slice loop callback**
+  - Falls back to the first absorbed commit's diffstat when our own
+    commit was housekeeping-only — `tokens.codeChanges` is never null
+    on a passing slice that actually shipped code
+  - Re-writes `slice-N.json` AFTER `autoCommitSliceIfDirty` runs so the
+    on-disk record matches the `slice-completed` event (root cause of
+    the `autoCommit: {}` symptom)
+
+### Tests
+
+- `pforge-mcp/tests/autocommit-race-issue-195.test.mjs` — 11 tests
+  covering helper, four race scenarios, and three source invariants
+
+---
+
 ## [3.3.0] — 2026-05-17
 
 ### D6 — Agentic Code Review Delegation

@@ -4653,6 +4653,26 @@ export async function runPlan(planPath, options = {}) {
           if (result.tokens && !result.tokens.codeChanges && result.autoCommit?.codeChanges) {
             result.tokens.codeChanges = result.autoCommit.codeChanges;
           }
+          // Issue #195: when the orchestrator's own commit was housekeeping
+          // only, the real product diffstat lives on the absorbed (external)
+          // commit. Fall back so tokens.codeChanges reflects actual work.
+          if (result.tokens && !result.tokens.codeChanges
+              && result.autoCommit?.absorbedCommits?.length) {
+            const firstWithStat = result.autoCommit.absorbedCommits.find((c) => c.diffstat);
+            if (firstWithStat) result.tokens.codeChanges = firstWithStat.diffstat;
+          }
+          // Issue #195: re-persist slice-N.json so the on-disk record matches
+          // the slice-completed event. Without this, autoCommit, raceDetected,
+          // absorbedCommits, and the bubbled codeChanges are only visible in
+          // events.log — every consumer reading slice-N.json (dashboards,
+          // reviewers, postmortems) sees `autoCommit: {}` and
+          // `codeChanges: null` even on slices that committed real work.
+          try {
+            writeFileSync(
+              resolve(runDir, `slice-${slice.number}.json`),
+              JSON.stringify(result, null, 2),
+            );
+          } catch { /* non-fatal */ }
         } else if (result.status === "failed") {
           // Issue #132 \u2014 the gate said no, but the worker may have written
           // perfectly correct files (typical when the gate script itself is
@@ -7559,6 +7579,44 @@ export function parseShortstat(shortstat) {
 }
 
 /**
+ * Issue #195 — enumerate commits that landed between two SHAs during a
+ * slice window. Used by {@link autoCommitSliceIfDirty} to record external
+ * commits (e.g. the VS Code Copilot extension's auto-commit) that would
+ * otherwise be silently absorbed into the orchestrator's housekeeping
+ * commit, producing a misleading "feat(slice-N): …" message on a tree
+ * containing only `.forge/` artifacts.
+ *
+ * Returns an array of `{ sha, author, subject, diffstat }`, oldest first.
+ * Returns `[]` on any git failure — callers treat absence as
+ * "no race detected", which is the safe default.
+ */
+export function captureAbsorbedCommits({ cwd = process.cwd(), fromSha, toSha = "HEAD" } = {}) {
+  if (!fromSha) return [];
+  let log;
+  try {
+    log = execSync(
+      `git log --reverse --format=%H%x09%an%x09%s ${fromSha}..${toSha}`,
+      { cwd, encoding: "utf-8", timeout: 5_000 },
+    );
+  } catch {
+    return [];
+  }
+  const commits = [];
+  const lines = (log || "").split(/\r?\n/).filter(Boolean);
+  for (const line of lines) {
+    const [sha, author, ...rest] = line.split("\t");
+    if (!sha) continue;
+    let diffstat = null;
+    try {
+      const shortstat = execSync(`git show --shortstat --format= ${sha}`, { cwd, encoding: "utf-8", timeout: 5_000 });
+      diffstat = parseShortstat(shortstat);
+    } catch { /* ignore */ }
+    commits.push({ sha, author: author || "unknown", subject: rest.join("\t") || "", diffstat });
+  }
+  return commits;
+}
+
+/**
  * Capture the working-tree state at slice start so {@link autoCommitSliceIfDirty}
  * can later distinguish worker-owned paths from operator-owned paths that
  * were already dirty when the slice began. Issue #151.
@@ -7831,8 +7889,22 @@ export function autoCommitSliceIfDirty({
       try {
         const currentSha = execSync("git rev-parse HEAD", { cwd, encoding: "utf-8", timeout: 5_000 }).trim();
         if (currentSha && currentSha !== startSha) {
-          eventBus?.emit("slice-auto-committed", { sliceNumber: slice.number, sha: currentSha, message: "(worker-committed)", source: "worker" });
-          return { committed: true, sha: currentSha, message: "(worker-committed)", source: "worker" };
+          // Issue #195: capture absorbed commits + diffstat so codeChanges
+          // is populated even when the worker self-committed.
+          const absorbedCommits = captureAbsorbedCommits({ cwd, fromSha: startSha, toSha: currentSha });
+          let codeChanges = null;
+          try {
+            const shortstat = execSync(`git show --shortstat --format= ${currentSha}`, { cwd, encoding: "utf-8", timeout: 5_000 });
+            codeChanges = parseShortstat(shortstat);
+          } catch { /* ignore */ }
+          const evt = { sliceNumber: slice.number, sha: currentSha, message: "(worker-committed)", source: "worker" };
+          if (absorbedCommits.length > 0) evt.absorbedCommits = absorbedCommits;
+          if (codeChanges) evt.codeChanges = codeChanges;
+          eventBus?.emit("slice-auto-committed", evt);
+          const out = { committed: true, sha: currentSha, message: "(worker-committed)", source: "worker", raceDetected: absorbedCommits.length > 1 };
+          if (absorbedCommits.length > 0) out.absorbedCommits = absorbedCommits;
+          if (codeChanges) out.codeChanges = codeChanges;
+          return out;
         }
       } catch { /* fall through */ }
     }
@@ -7876,12 +7948,32 @@ export function autoCommitSliceIfDirty({
     workerPaths = null; // signal: legacy `git add -A` path
   }
 
+  // Issue #195: detect commits absorbed during the slice window (e.g. the
+  // VS Code Copilot extension auto-committing the worker's real edits).
+  // Capture BEFORE we add our own commit so HEAD still points at the last
+  // absorbed commit.
+  const absorbedCommits = startSha
+    ? captureAbsorbedCommits({ cwd, fromSha: startSha, toSha: "HEAD" })
+    : [];
+  const raceDetected = absorbedCommits.length > 0;
+
+  // Housekeeping detection: when every worker-owned path is inside `.forge/`,
+  // the orchestrator's own commit carries no product deliverables. Combined
+  // with raceDetected, relabel so log readers don't see "feat(slice-N): …"
+  // on a commit that only touched housekeeping artifacts.
+  const allHousekeeping = workerPaths && workerPaths.length > 0
+    && workerPaths.every((p) => p.replace(/\\/g, "/").startsWith(".forge/"));
+
   // Infer conventional commit type from title
   const conventionalType = /^(bug\s*#?\d+|fix)/i.test(slice.title) ? "fix" : "feat";
 
   // Strip only "Bug #N: " prefix (not "Fix"), truncate to 72 chars
   const subject = slice.title.replace(/^bug\s*#?\d+[:\s]*/i, "").slice(0, 72).trim() || slice.title.slice(0, 72);
-  const commitMessage = `${conventionalType}(slice-${slice.number}): ${subject}`;
+  let commitMessage = `${conventionalType}(slice-${slice.number}): ${subject}`;
+  if (allHousekeeping && raceDetected) {
+    const absorbedRef = absorbedCommits.map((c) => c.sha.slice(0, 7)).join(", ");
+    commitMessage = `chore(slice-${slice.number}): housekeeping (source absorbed by ${absorbedRef})`;
+  }
 
   try {
     if (workerPaths) {
@@ -7916,10 +8008,15 @@ export function autoCommitSliceIfDirty({
     const evt = { sliceNumber: slice.number, sha, message: commitMessage };
     if (foreignFiles.length > 0) evt.foreignFiles = foreignFiles;
     if (codeChanges) evt.codeChanges = codeChanges;
+    if (absorbedCommits.length > 0) evt.absorbedCommits = absorbedCommits;
+    if (raceDetected) evt.raceDetected = true;
     eventBus?.emit("slice-auto-committed", evt);
     const out = { committed: true, sha, message: commitMessage };
     if (foreignFiles.length > 0) out.foreignFiles = foreignFiles;
     if (codeChanges) out.codeChanges = codeChanges;
+    if (absorbedCommits.length > 0) out.absorbedCommits = absorbedCommits;
+    if (raceDetected) out.raceDetected = true;
+    if (allHousekeeping) out.housekeepingOnly = true;
     return out;
   } catch (err) {
     eventBus?.emit("slice-dirty-tree-warning", { sliceNumber: slice?.number, error: err.message });

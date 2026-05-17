@@ -1,50 +1,50 @@
 {
-  "$schema": "https://json-schema.org/draft-07/schema",
-  "$id": "hallmark-provenance.v1",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://plan-forge.dev/schemas/hallmark-provenance.v1.json",
   "title": "HallmarkProvenance",
-  "description": "Provenance record attached to AI-generated artifacts by Plan Forge tools.",
+  "description": "Provenance envelope attached to AI-generated artifacts by Plan Forge tools. Every field beyond the three required ones is optional; additionalProperties is false to prevent silent schema drift.",
   "type": "object",
   "required": ["schemaVersion", "toolName", "capturedAt"],
   "properties": {
     "schemaVersion": {
-      "type": "string",
-      "description": "Version of this schema (must equal HALLMARK_SCHEMA_VERSION constant)."
+      "const": "hallmark/v1",
+      "description": "Schema version identifier — always the string literal 'hallmark/v1'. Consumers that encounter an unknown version must reject the envelope."
     },
     "toolName": {
       "type": "string",
       "minLength": 1,
-      "description": "Identifier of the forge tool or agent that produced the artifact."
+      "description": "Identifier of the Plan Forge tool or agent that produced the artifact (e.g. 'forge_sweep')."
     },
     "capturedAt": {
       "type": "string",
-      "format": "date-time",
-      "description": "ISO 8601 UTC timestamp when provenance was captured."
+      "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(?:\\.\\d+)?Z$",
+      "description": "ISO 8601 UTC timestamp when provenance was captured — Z suffix required, no timezone offsets."
     },
-    "sessionId": {
+    "sourceFile": {
       "type": "string",
-      "description": "Copilot session ID (optional)."
+      "description": "Relative path of the source file the artifact was derived from."
     },
-    "planRef": {
-      "type": "string",
-      "description": "Relative path to the plan file (optional)."
-    },
-    "sliceRef": {
-      "type": "string",
-      "description": "Slice identifier within the plan (optional)."
-    },
-    "agentId": {
-      "type": "string",
-      "description": "Agent or worker identifier (optional)."
-    },
-    "model": {
-      "type": "string",
-      "description": "LLM model ID used to produce the artifact (optional)."
-    },
-    "tags": {
+    "byteRange": {
       "type": "array",
-      "items": { "type": "string" },
-      "description": "Arbitrary classification tags (optional)."
+      "items": { "type": "integer", "minimum": 0 },
+      "minItems": 2,
+      "maxItems": 2,
+      "description": "[startInclusive, endExclusive] byte offsets into sourceFile — start must be <= end."
+    },
+    "contentHash": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$",
+      "description": "sha256:<64 lowercase hex chars> hash of the content slice identified by byteRange."
+    },
+    "codeHash": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$",
+      "description": "sha256:<64 lowercase hex chars> hash of the tool code that produced the artifact — used by forge_hallmark_verify for drift detection."
+    },
+    "toolVersion": {
+      "type": "string",
+      "description": "Semantic version string of the tool at capture time (e.g. '2.95.0')."
     }
   },
-  "additionalProperties": true
+  "additionalProperties": false
 }

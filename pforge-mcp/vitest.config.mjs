@@ -21,7 +21,7 @@ export default defineConfig({
   test: {
     environment: "node",
     root: configDir,
-    include: ["tests/**/*.test.mjs"],
+    include: ["tests/**/*.test.mjs", "../pforge-sdk/tests/**/*.test.mjs"],
     exclude: ["**/.forge/**", "**/node_modules/**"],
   },
 });

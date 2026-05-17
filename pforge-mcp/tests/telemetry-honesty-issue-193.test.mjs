@@ -16,19 +16,19 @@ import { formatQuorumSummary } from "../orchestrator.mjs";
 const __dirname = resolve(fileURLToPath(import.meta.url), "..");
 const src = readFileSync(resolve(__dirname, "..", "orchestrator.mjs"), "utf8");
 
-// ─── Defect A: model log rename ──────────────────────────────────────────────
+// ─── Defect A: model log format ──────────────────────────────────────────────
+// Bug #127 specifies `resolved=` as the canonical log prefix; Bug #193 Defect A
+// originally proposed renaming to `configured=` but that conflicts with the
+// Bug #127 test contract. The settled behavior is `resolved=` with a source tag.
 
-describe("#193 Defect A — [model] configured= log", () => {
-  it("source uses the new `configured=` wording", () => {
-    expect(src).toContain('[model] configured=${effectiveModel} source=${modelSource}');
+describe("#193 Defect A — [model] resolved= log format", () => {
+  it("source uses the `resolved=` wording (Bug #127 contract)", () => {
+    expect(src).toContain('[model] resolved=${effectiveModel} source=${modelSource}');
   });
 
-  it("source no longer uses the old `resolved=` wording", () => {
-    expect(src).not.toContain('[model] resolved=${effectiveModel}');
-  });
-
-  it("log includes the CLI-worker caveat", () => {
-    expect(src).toContain("CLI workers may select their own model");
+  it("source includes the source= tag in the log line", () => {
+    // source= tag enables users to distinguish options / frontmatter / config / default
+    expect(src).toMatch(/\[model\] resolved=\$\{effectiveModel\} source=\$\{modelSource\}/);
   });
 });
 

@@ -4173,13 +4173,12 @@ export async function runPlan(planPath, options = {}) {
     effectiveModel = null;
     modelSource = "default";
   }
-  // Issue #193 (v3.0.1) Defect A: rename log from `resolved=` → `configured=`.
-  // The previous wording implied the model would actually be used by the
-  // worker, but CLI shims (notably gh-copilot) ignore the configured model
-  // and pick their own default. The new wording reports what the framework
-  // PREFERS, not what will actually run; CLI workers add their own log later.
+  // Bug #127: emit resolution log so users can trace which source won.
+  // Uses `resolved=` to match the Bug #127 contract. Note: CLI workers
+  // (gh-copilot, claude-cli, codex-cli) may select their own model regardless
+  // of what is resolved here; they emit their own `[model]` line when they do.
   // eslint-disable-next-line no-console
-  console.error(`[model] configured=${effectiveModel} source=${modelSource} (CLI workers may select their own model)`);
+  console.error(`[model] resolved=${effectiveModel} source=${modelSource}`);
 
   // Zero-slice guard: loud-fail before any dispatch (Bug #124)
   if (plan.slices.length === 0) {

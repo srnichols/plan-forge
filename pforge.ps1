@@ -4220,24 +4220,31 @@ function Invoke-RunPlan {
             Write-Host "Starting full auto execution (background): $planPath" -ForegroundColor Cyan
         }
         Write-Host ""
-        # Issue #188 (v2.96.3): Always redirect stdout+stderr to files so a
-        # silent crash of the orchestrator leaves a diagnostic trail. Prior
-        # to this fix, Start-Process -NoNewWindow inherited the parent
-        # console's stdio handles; when the wrapper exited 0 immediately
-        # after spawning, the child's next write to stdout could EPIPE and
-        # crash node with zero captured output and zero events past
-        # slice-started.
+        # Issue #197 (v3.3.3): spawn a hidden pwsh host instead of node directly.
+        # Start-Process node -WindowStyle Hidden loses the console handle on Windows;
+        # gh copilot CLI then silently dies on startup because it requires an attached
+        # console (TTY). A hidden pwsh process allocates its own console, which node
+        # and gh copilot inherit, so the worker survives and events flow normally.
+        # Output (stdout + stderr merged via *>&1) is captured by Tee-Object.
+        # Prior approach (Issue #188 / v2.96.3): separate -RedirectStandardOutput /
+        # -RedirectStandardError on a bare node process — that fixed EPIPE crashes
+        # but did not restore the console handle that gh copilot requires.
         $pidDir = Join-Path (Get-Location) '.forge'
         if (-not (Test-Path $pidDir)) { New-Item -ItemType Directory -Path $pidDir -Force | Out-Null }
         $orchLogsDir = Join-Path $pidDir 'orchestrator-logs'
         if (-not (Test-Path $orchLogsDir)) { New-Item -ItemType Directory -Path $orchLogsDir -Force | Out-Null }
         $stamp = (Get-Date -Format 'yyyyMMdd-HHmmss')
-        $stdoutLog = Join-Path $orchLogsDir "orch-$stamp.stdout.log"
-        $stderrLog = Join-Path $orchLogsDir "orch-$stamp.stderr.log"
-        $proc = Start-Process -FilePath 'node' -ArgumentList $nodeArgs -PassThru `
-            -WindowStyle Hidden `
-            -RedirectStandardOutput $stdoutLog `
-            -RedirectStandardError  $stderrLog
+        $orchLog = Join-Path $orchLogsDir "orch-$stamp.log"  # combined stdout+stderr
+
+        # Build a PowerShell command string that runs node with the same args in
+        # foreground mode inside the hidden pwsh host. Single-quote each arg so
+        # paths with spaces are handled correctly.
+        $quotedNodeArgs = ($nodeArgs | ForEach-Object { "'" + ($_ -replace "'", "''") + "'" }) -join ' '
+        $orchLogPs     = "'" + ($orchLog -replace "'", "''") + "'"
+        $innerCmd      = "& node $quotedNodeArgs *>&1 | Tee-Object -FilePath $orchLogPs"
+
+        $proc = Start-Process -FilePath 'pwsh' -PassThru -WindowStyle Hidden `
+            -ArgumentList '-NoProfile', '-NoLogo', '-NonInteractive', '-Command', $innerCmd
         # Record PID to .forge/last-orch.pid so chain runners and external tooling
         # can attach without scraping Write-Host output (which bypasses stdout).
         try {
@@ -4246,8 +4253,7 @@ function Invoke-RunPlan {
         Write-Host "Orchestrator running in background  PID: $($proc.Id)" -ForegroundColor Green
         Write-Host "Monitor : pforge status" -ForegroundColor DarkGray
         Write-Host "Logs    : .forge/runs/ (latest sub-directory)" -ForegroundColor DarkGray
-        Write-Host "Stdout  : $stdoutLog" -ForegroundColor DarkGray
-        Write-Host "Stderr  : $stderrLog" -ForegroundColor DarkGray
+        Write-Host "Log     : $orchLog" -ForegroundColor DarkGray
         Write-Host "Stop    : Stop-Process -Id $($proc.Id)" -ForegroundColor DarkGray
     }
 }

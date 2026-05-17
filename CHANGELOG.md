@@ -5,6 +5,73 @@ Format follows [Keep a Changelog](https://keepachangelog.com/).
 
 ---
 
+## [3.3.3] — 2026-05-17 — Background-Mode Console Handle Hotfix (Issue #197)
+
+> **One-liner**: `pforge run-plan --background` (the default on Windows) now spawns through a hidden `pwsh` host so the `gh copilot` CLI worker keeps a usable console handle and stops silently dying right after `slice-started`.
+
+### Context — what went wrong
+
+Field report from running `Phase-71-IMAGE-UPLOAD-HARDENING-PLAN.md` in
+default background mode on Windows: the orchestrator process emitted
+`run-started` + `slice-started` events, then exited cleanly with **zero**
+captured stderr, stdout, or `slice-failed` event. Worker died, dirty
+tree left on an orphan `feature/<plan>-slice-<n>-<slug>` branch.
+
+Reproduced twice (PIDs 63112, 46088). After patching `pforge.ps1` to
+capture stderr+stdout via `-RedirectStandardError` /
+`-RedirectStandardOutput` (the v2.96.3 Issue #188 fix), the captured
+streams contained only:
+
+- stdout: `[hh:mm:ss] ▶ Run started: 7 slices, mode=auto` and
+  `[hh:mm:ss] ⏳ Slice N: <name> — executing...`
+- stderr: `[model] resolved=claude-opus-4.6 source=config` plus a single
+  `(node:NNN) [DEP0190] DeprecationWarning`
+
+The same plan executed Slice 1 successfully in `--foreground` mode, so
+the plan, model, gates, and orchestrator logic were all healthy. The
+root cause is that `Start-Process node -WindowStyle Hidden` on Windows
+gives the spawned `node` process **no attached console**, and the
+`gh copilot` CLI worker requires an attached console (TTY-like) to
+survive startup. The worker exits silently → orchestrator's await-worker
+promise resolves to nothing → Node exits clean because there are no
+remaining handles → never emits `slice-failed`.
+
+### Fixed
+
+- **`pforge.ps1` `Invoke-RunPlan` background branch**: replaced
+  `Start-Process -FilePath node -WindowStyle Hidden -RedirectStandard*`
+  with `Start-Process -FilePath pwsh -WindowStyle Hidden -Command
+  "& node $args *>&1 | Tee-Object $log"`. The hidden `pwsh` host
+  allocates its own console, which `node` and the spawned `gh copilot`
+  CLI worker inherit. Stdout + stderr are merged via `*>&1` and tee'd
+  to a single `.forge/orchestrator-logs/orch-<stamp>.log` file (the
+  combined log replaces the prior split `.stdout.log` / `.stderr.log`
+  pair). Status banner updated to reflect the single log path.
+
+### Lessons logged (memory)
+
+- Windows `Start-Process -WindowStyle Hidden` without `-NoNewWindow` on
+  a non-console executable detaches the child from any console
+  entirely. CLI workers that need a TTY (gh copilot, possibly future
+  cloud-agent CLIs) must be wrapped in a console-bearing host.
+- The earlier Issue #188 (v2.96.3) fix solved the EPIPE class but did
+  not restore the console; both fixes need to coexist conceptually but
+  the new spawn pattern subsumes the old one (Tee-Object keeps the
+  diagnostic trail).
+- Silent worker death is invisible in `events.log`. Future hardening:
+  wrap worker await in `try/finally` that always emits a
+  `slice-failed` event with `reason: worker-exited-without-output`.
+
+### Closed issues
+
+- `#197` — Background mode (`--background`) dies silently after
+  `slice-started` event (severity: high, class: orchestrator-defect).
+- `#198` — `execution_subagent` hallucinates vitest failure counts on
+  long-running suites (severity: low, advisory; mitigations recorded
+  in `/memories/repo/execution-subagent-vitest-false-fail.md`).
+
+---
+
 ## [3.3.2] — 2026-05-17 — Release-Invariant CI Guard + 18-Release Backfill
 
 > **One-liner**: closes the bug class that made every release between v2.94.0 and v3.3.1 invisible to `pforge self-update` — adds a CI guard that fails when `VERSION` lands on `master` without a matching tag + GitHub Release.

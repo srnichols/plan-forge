@@ -403,6 +403,38 @@ export function appendEvent(type, data, logDir) {
   return stamped;
 }
 
+/**
+ * Issue #197 — Write a slice-failed record when the process exits while a
+ * slice is still in-progress (silent-death guard). Exported for tests.
+ *
+ * Returns `true` if a record was written, `false` when sliceId is falsy
+ * (no slice was active, nothing to write).
+ *
+ * @param {string|null} sliceId  - Active slice ID, or null if none.
+ * @param {string}      title    - Slice title (may be "").
+ * @param {string|null} runDir   - Run directory for events.log; null = skip.
+ * @returns {boolean}
+ */
+export function writeSilentExitRecord(sliceId, title, runDir) {
+  if (!sliceId) return false;
+  appendEvent(
+    "slice-failed",
+    {
+      sliceId,
+      title: title || "",
+      status: "error",
+      error:
+        "orchestrator-silent-exit: process exited while slice was in-progress. " +
+        "Possible cause: gh copilot CLI requires an attached console on Windows " +
+        "and the background launcher did not allocate one (Issue #197). " +
+        "Re-run with --foreground to diagnose.",
+      reason: "worker-exited-without-output",
+    },
+    runDir,
+  );
+  return true;
+}
+
 // ─── Plan Parser ──────────────────────────────────────────────────────
 
 /**
@@ -2671,6 +2703,15 @@ export function spawnWorker(prompt, options = {}) {
       // Clean up temp prompt file
       try { unlinkSync(promptFile); } catch { /* ignore */ }
 
+      // Issue #197: if the worker produced zero output (both stdout and stderr empty)
+      // and exited non-zero, it most likely failed to start due to a missing console
+      // (TTY). Annotate stderr so the diagnostic log and detectSilentWorkerFailure
+      // callers receive a human-readable reason rather than an empty string.
+      if (!stdout && !stderr && code !== 0 && !timedOut) {
+        stderr = `[pforge] worker '${chosen.name}' exited ${code} with no stdout or stderr — ` +
+          `likely failed to start (console/TTY required). Run with --foreground for debugging.`;
+      }
+
       const jsonlEvents = parseJSONL(stdout);
       let tokens = extractTokens(jsonlEvents);
 
@@ -4395,6 +4436,32 @@ export async function runPlan(planPath, options = {}) {
     },
   };
   const eventBus = new OrchestratorEventBus(combinedHandler);
+
+  // Issue #197 — Silent-death guard.
+  // When Node is launched in background mode on Windows without an attached
+  // console (Start-Process -FilePath 'node' -WindowStyle Hidden), the gh
+  // copilot CLI worker needs a console to initialize its progress reporter.
+  // Without one, it exits immediately with no output, the worker promise
+  // resolves with an empty result, and the orchestrator's event loop drains
+  // cleanly — leaving the run log with slice-started but no slice-failed.
+  //
+  // This guard registers a synchronous `process.on('exit')` listener that
+  // writes a slice-failed event whenever the process exits while a slice is
+  // still in-progress, making the silent death detectable and retriable.
+  let _guardSliceId = null;
+  let _guardSliceTitle = null;
+  const _silentDeathGuard = () => {
+    writeSilentExitRecord(_guardSliceId, _guardSliceTitle, runDir);
+  };
+  process.once("exit", _silentDeathGuard);
+  eventBus.on("slice-started", (d) => {
+    _guardSliceId = d.sliceId ?? null;
+    _guardSliceTitle = d.title || "";
+  });
+  eventBus.on("slice-completed", () => { _guardSliceId = null; _guardSliceTitle = null; });
+  eventBus.on("slice-failed",    () => { _guardSliceId = null; _guardSliceTitle = null; });
+  eventBus.on("run-completed",   () => { _guardSliceId = null; process.off("exit", _silentDeathGuard); });
+  eventBus.on("run-aborted",     () => { _guardSliceId = null; process.off("exit", _silentDeathGuard); });
 
   // Write run.json metadata
   const runMeta = {

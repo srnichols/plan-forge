@@ -355,6 +355,7 @@ class OrchestratorEventBus extends EventEmitter {
       "slice-model-routed", "self-repair-missed",
       "tool-call", "bridge-edit-blocked", "bridge-edit-approved",
       "pforge.foundry.quota",
+      "snapshot-janitor",
     ];
     for (const evt of events) {
       this.on(evt, (data) => this.handler.handle({ type: evt, data, timestamp: new Date().toISOString() }));
@@ -4619,6 +4620,20 @@ export async function runPlan(planPath, options = {}) {
 
   eventBus.emit("run-started", { ...runMeta, quorum: quorumConfig ? { enabled: quorumConfig.enabled, auto: quorumConfig.auto, threshold: quorumConfig.threshold } : null });
 
+  // Issue #201 — janitor pass: drop any pforge-slice-N-snapshot stashes older
+  // than 7 days. Prevents accumulation of orphaned snapshots from conflicted
+  // pops in prior runs (testbed observed 60+ orphans). Best-effort.
+  try {
+    const cleanup = cleanupStaleSnapshots({ cwd });
+    if (cleanup.dropped.length > 0) {
+      eventBus.emit("snapshot-janitor", {
+        scanned: cleanup.scanned,
+        dropped: cleanup.dropped.length,
+        errors: cleanup.errors.length,
+      });
+    }
+  } catch { /* best-effort — never break run start */ }
+
   // GX.2 (v2.36): L3 → L1 preload. Emit a `memory-preload` event right after
   // run-started carrying the deterministic search-hints derived from the plan.
   // The dashboard, watchers, and the first worker pick this up via hub history
@@ -7744,23 +7759,128 @@ export function pushSliceSnapshot({ cwd = process.cwd(), sliceNumber, _execSync 
 }
 
 /**
- * Issue #178 — restore the snapshot stashed by `pushSliceSnapshot`. Always
- * called at slice end (success OR failure) so operator WIP is never silently
- * captured in `git stash list`. Conflicts surface as a non-fatal warning;
- * the operator can recover via `git stash list` + `git stash apply`.
+ * Issue #178 / #201 — restore the snapshot stashed by `pushSliceSnapshot`.
+ * Always called at slice end (success OR failure) so operator WIP is never
+ * silently captured in `git stash list`.
+ *
+ * Strategy (Issue #201):
+ *   1. Look up the stash ref BY MESSAGE (`pforge-slice-N-snapshot`), not by
+ *      blind `git stash pop` of the top of the stack — the top may be an
+ *      unrelated operator stash if anything stashed during the slice run.
+ *   2. Use `git stash apply <ref>` (non-destructive). If it succeeds, drop
+ *      the stash explicitly. If it fails with conflict OR "would be
+ *      overwritten" (the dirty-tree case caused by orchestrator runtime
+ *      writes between push and pop), leave the stash in place and return a
+ *      structured error so the operator can recover via
+ *      `git stash list` + `git stash show -p <ref>`.
+ *
+ * Conflict trigger (Issue #201): the orchestrator self-modifies runtime
+ * files between push and pop (`.forge/watch-history.jsonl`,
+ * `liveguard-broadcast.log`, `server-ports.json`, `model-performance.json`,
+ * `quorum-history.jsonl`). Old behavior: blind `pop` failed with "would be
+ * overwritten by merge", but git actually leaves the stash intact in that
+ * case — the snapshot then accumulates in `git stash list` forever.
  *
  * @param {{ cwd?: string, sliceNumber: string|number, _execSync?: Function }} params
- * @returns {{ restored: boolean, conflict?: boolean, error?: string }}
+ * @returns {{ restored: boolean, conflict?: boolean, dirtyTree?: boolean, error?: string, stashRef?: string }}
  */
-export function popSliceSnapshot({ cwd = process.cwd(), sliceNumber: _sliceNumber, _execSync = execSync } = {}) {
+export function popSliceSnapshot({ cwd = process.cwd(), sliceNumber, _execSync = execSync } = {}) {
+  const message = `pforge-slice-${sliceNumber}-snapshot`;
+  // Step 1: find the stash ref by message (more reliable than top-of-stack).
+  let stashRef = null;
   try {
-    _execSync(`git stash pop`, { cwd, encoding: "utf-8", timeout: 15_000, stdio: "pipe" });
-    return { restored: true };
+    const list = _execSync("git stash list", { cwd, encoding: "utf-8", timeout: 5_000 }).toString();
+    for (const line of list.split(/\r?\n/)) {
+      // Match e.g. "stash@{2}: On master: pforge-slice-3-snapshot"
+      const m = line.match(/^(stash@\{\d+\}):\s*[^:]*:\s*(.+)$/);
+      if (m && m[2].trim() === message) { stashRef = m[1]; break; }
+    }
+  } catch (err) {
+    return { restored: false, error: `git stash list failed: ${(err?.message || "").slice(0, 200)}` };
+  }
+  if (!stashRef) {
+    // Nothing to restore (push reported `clean-tree`, or someone else dropped it).
+    return { restored: false, error: "snapshot stash not found in git stash list" };
+  }
+  // Step 2: apply (non-destructive). On success, drop. On failure, leave intact.
+  try {
+    _execSync(`git stash apply ${stashRef}`, { cwd, encoding: "utf-8", timeout: 15_000, stdio: "pipe" });
   } catch (err) {
     const stderr = (err?.stderr?.toString?.() || err?.message || "").toString().trim();
-    const conflict = /conflict|merge|CONFLICT/i.test(stderr);
-    return { restored: false, conflict, error: stderr.slice(0, 500) || "git stash pop failed" };
+    const conflict = /conflict|CONFLICT/i.test(stderr);
+    const dirtyTree = /would be overwritten/i.test(stderr);
+    return {
+      restored: false,
+      conflict,
+      dirtyTree,
+      stashRef,
+      error: (stderr.slice(0, 400) || "git stash apply failed") +
+        ` — recover with: git stash show -p ${stashRef} ; git stash apply ${stashRef}`,
+    };
   }
+  // Step 3: drop only after successful apply.
+  try {
+    _execSync(`git stash drop ${stashRef}`, { cwd, encoding: "utf-8", timeout: 10_000, stdio: "pipe" });
+  } catch {
+    // Apply succeeded but drop failed — non-fatal, operator can clean up.
+  }
+  return { restored: true, stashRef };
+}
+
+/**
+ * Issue #201 — janitor pass that drops `pforge-slice-N-snapshot` stashes
+ * older than a threshold (default 7 days). Prevents long-term accumulation
+ * of orphaned snapshots from conflicted pops in prior runs.
+ *
+ * Called at run-start from `runPlan` (best-effort, errors swallowed).
+ *
+ * @param {{ cwd?: string, maxAgeDays?: number, _execSync?: Function, _now?: () => Date }} params
+ * @returns {{ scanned: number, dropped: string[], errors: string[] }}
+ */
+export function cleanupStaleSnapshots({
+  cwd = process.cwd(),
+  maxAgeDays = 7,
+  _execSync = execSync,
+  _now = () => new Date(),
+} = {}) {
+  const result = { scanned: 0, dropped: [], errors: [] };
+  let list;
+  try {
+    // `%gd %ct %s` → stash ref, committer Unix timestamp, subject.
+    list = _execSync(
+      'git stash list --format="%gd|%ct|%s"',
+      { cwd, encoding: "utf-8", timeout: 5_000 },
+    ).toString();
+  } catch (err) {
+    result.errors.push(`git stash list failed: ${(err?.message || "").slice(0, 200)}`);
+    return result;
+  }
+  const cutoffSec = Math.floor(_now().getTime() / 1000) - maxAgeDays * 24 * 60 * 60;
+  // Iterate oldest→newest by collecting first, then dropping in reverse order
+  // so refs remain valid (dropping stash@{0} shifts the others down).
+  const toDrop = [];
+  for (const line of list.split(/\r?\n/)) {
+    if (!line.trim()) continue;
+    const parts = line.split("|");
+    if (parts.length < 3) continue;
+    const [ref, tsStr, subject] = parts;
+    result.scanned++;
+    const ts = parseInt(tsStr, 10);
+    if (!Number.isFinite(ts) || ts >= cutoffSec) continue;
+    // Only target our own snapshot stashes — leave operator stashes alone.
+    if (!/pforge-slice-\d+-snapshot/.test(subject)) continue;
+    toDrop.push(ref);
+  }
+  // Drop in reverse so earlier refs stay stable (stash@{N} indexes shift down).
+  for (const ref of toDrop.reverse()) {
+    try {
+      _execSync(`git stash drop ${ref}`, { cwd, encoding: "utf-8", timeout: 5_000, stdio: "pipe" });
+      result.dropped.push(ref);
+    } catch (err) {
+      result.errors.push(`drop ${ref}: ${(err?.message || "").slice(0, 100)}`);
+    }
+  }
+  return result;
 }
 
 /**

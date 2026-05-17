@@ -228,7 +228,7 @@ Classify MCP tools by risk level (auto-approvable vs require confirmation). Depe
 | D3 | Merge conflict resolution | API callable from MCP |
 | D4 | Session tracing for audit | Trace format documented |
 | D5 | Chat Customizations editor | ✅ Shipped — v3.1.0 |
-| D6 | Agentic code review delegation | Native review API matures |
+| D6 | Agentic code review delegation | ✅ Shipped — v3.3.0 |
 | D7 | Plan mode metrics | GitHub metrics API exposes data |
 
 ---

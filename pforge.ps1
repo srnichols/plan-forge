@@ -6804,6 +6804,7 @@ function Invoke-Github {
         Write-Host "  status            Print a checklist of GitHub-native primitives Plan-Forge integrates with"
         Write-Host "  doctor            Same as status, plus one-line fix hints for warn/fail rows"
         Write-Host "  metrics           Manage GitHub Copilot usage metrics (pull | --help)"
+        Write-Host "  review delegate   Delegate the current branch's PR review to the Copilot Coding Agent"
         Write-Host ""
         Write-Host "OPTIONS:" -ForegroundColor Yellow
         Write-Host "  --project <dir>   Project root to inspect (default: current directory)"
@@ -6817,6 +6818,75 @@ function Invoke-Github {
         Write-Host "  pforge github metrics pull --org myorg"
         Write-Host ""
         return
+    }
+
+    if ($sub -eq 'review') {
+        $reviewSub = if ($rest.Count -gt 0) { $rest[0] } else { '' }
+        [string[]]$reviewRest = if ($rest.Count -gt 1) { @($rest[1..($rest.Count - 1)]) } else { @() }
+
+        if ($reviewSub -ne 'delegate') {
+            Write-Host "pforge github review — Agentic code review delegation" -ForegroundColor Cyan
+            Write-Host ""
+            Write-Host "SUBCOMMANDS:" -ForegroundColor Yellow
+            Write-Host "  delegate          Delegate current branch's PR review to the Copilot Coding Agent"
+            Write-Host ""
+            Write-Host "EXAMPLES:" -ForegroundColor Yellow
+            Write-Host "  pforge github review delegate"
+            Write-Host ""
+            return
+        }
+
+        # ── review delegate ───────────────────────────────────────────────
+        $criteriaJson = 'null'
+        $i = 0
+        $criteriaList = @()
+        while ($i -lt $reviewRest.Count) {
+            if ($reviewRest[$i] -eq '--criteria' -and $i + 1 -lt $reviewRest.Count) {
+                $criteriaList += $reviewRest[$i + 1]
+                $i += 2
+            } else {
+                $i++
+            }
+        }
+        if ($criteriaList.Count -gt 0) {
+            $criteriaJson = ($criteriaList | ConvertTo-Json -Compress)
+        }
+
+        $delegateInline = @"
+import { delegateReview, ReviewDelegateNoPrError, ReviewDelegateAuthError } from './pforge-mcp/github-review-delegate.mjs';
+const criteria = $criteriaJson;
+try {
+  const result = delegateReview({ criteria: criteria || undefined });
+  console.log(JSON.stringify(result));
+} catch (e) {
+  const code = e instanceof ReviewDelegateNoPrError ? 'NO_PR' : e instanceof ReviewDelegateAuthError ? 'AUTH_ERROR' : 'ERROR';
+  process.stderr.write(JSON.stringify({ ok: false, error: e.message, code }) + '\n');
+  process.exit(1);
+}
+"@
+        Push-Location $RepoRoot
+        try {
+            $rawOut = & node --input-type=module -e $delegateInline 2>&1
+        } finally {
+            Pop-Location
+        }
+        $nodeExit = $LASTEXITCODE
+
+        $lastLine = ($rawOut | Where-Object { $_ }) | Select-Object -Last 1
+        try { $parsed = $lastLine | ConvertFrom-Json } catch { $parsed = $null }
+
+        if ($parsed -and $parsed.ok) {
+            Write-Host "✅ $($parsed.message)" -ForegroundColor Green
+        } elseif ($parsed -and -not $parsed.ok) {
+            $emoji = if ($parsed.code -eq 'NO_PR') { '⚠️' } else { '❌' }
+            Write-Host "$emoji $($parsed.error)" -ForegroundColor Red
+            exit 1
+        } else {
+            Write-Host "ERROR: Unexpected output from delegateReview" -ForegroundColor Red
+            $rawOut | ForEach-Object { Write-Host $_ }
+            exit 1
+        }
+        exit $nodeExit
     }
 
     if ($sub -eq 'metrics') {

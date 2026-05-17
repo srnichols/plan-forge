@@ -82,6 +82,24 @@
     }
   },
   {
+    "name": "forge_delegate_review",
+    "description": "Delegate code review for the current branch's PR to the Copilot Coding Agent. Finds the open PR, creates a GitHub issue assigned to @copilot with structured review criteria, and returns the issue URL. The agent reviews the diff and posts findings. USE FOR: trigger AI code review, delegate PR review to Copilot, agentic review. DO NOT USE FOR: viewing review status (check the created issue), creating PRs (use gh pr create).",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "criteria": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Custom review criteria checklist items. Defaults to standard Plan Forge security, testing, and architecture checks."
+        },
+        "path": {
+          "type": "string",
+          "description": "Project root to detect git branch and PR (default: current)"
+        }
+      }
+    }
+  },
+  {
     "name": "forge_team_activity",
     "description": "Read recent Plan Forge run summaries from the team activity feed (.forge/team-activity.jsonl). Shows who ran what plan, when, and at what cost — across all developers sharing the same repo. USE FOR: see recent team plan runs, check what plans are in flight, review team plan cost. DO NOT USE FOR: individual slice details (use forge_plan_status), cost breakdown (use forge_cost_report).",
     "inputSchema": {

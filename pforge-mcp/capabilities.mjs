@@ -199,6 +199,23 @@ export const TOOL_METADATA = {
     errors: {},
     example: { input: {}, output: { runs: 5, total_cost_usd: 1.23, by_model: {}, forge_model_stats: { "claude-sonnet-4.6": { total_slices: 10, passed: 9, failed: 1, success_rate: 0.9, avg_cost_usd: 0.05 } } } },
   },
+  forge_delegate_review: {
+    intent: ["review", "delegate", "code-review", "pr"],
+    aliases: ["delegate-review", "review-delegate"],
+    cost: "low",
+    maxConcurrent: 5,
+    addedIn: "3.3.0",
+    prerequisites: ["gh authenticated", "open PR for current branch"],
+    produces: ["GitHub issue assigned to @copilot"],
+    consumes: [],
+    sideEffects: ["Creates a GitHub issue"],
+    errors: {
+      NO_PR: "No open PR found for the current branch",
+      AUTH_ERROR: "gh permission denied — run gh auth login",
+    },
+    agentGuidance: "Call after plan execution when you want the Copilot Coding Agent to review the changes. Requires an open PR on the current branch. Returns the review issue URL.",
+    example: { input: {}, output: { ok: true, delegationType: "issue", reviewUrl: "https://github.com/org/repo/issues/42", message: "Review delegated to Copilot Coding Agent. Issue: https://github.com/org/repo/issues/42" } },
+  },
   forge_team_activity: {
     intent: ["read", "team", "activity"],
     aliases: ["team-activity", "activity-feed"],

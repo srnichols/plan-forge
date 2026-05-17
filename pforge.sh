@@ -6008,6 +6008,7 @@ SUBCOMMANDS:
   status            Print a checklist of GitHub-native primitives Plan-Forge integrates with
   doctor            Same as status, plus one-line fix hints for warn/fail rows
   metrics           Manage GitHub Copilot usage metrics (pull | --help)
+  review delegate   Delegate the current branch's PR review to the Copilot Coding Agent
 
 OPTIONS:
   --project <dir>   Project root to inspect (default: current directory)
@@ -6132,7 +6133,81 @@ try {
         exit $node_exit
     fi
 
-    if [[ "$sub" != "status" && "$sub" != "doctor" ]]; then
+    if [[ "$sub" == "review" ]]; then
+        local review_sub="${1:-}"
+        shift 2>/dev/null || true
+
+        if [[ "$review_sub" != "delegate" ]]; then
+            cat <<'EOF'
+
+pforge github review — Agentic code review delegation
+
+SUBCOMMANDS:
+  delegate          Delegate current branch's PR review to the Copilot Coding Agent
+
+EXAMPLES:
+  pforge github review delegate
+
+EOF
+            return 0
+        fi
+
+        # ── review delegate ───────────────────────────────────────────────
+        local criteria_json="null"
+        local criteria_list=()
+        while [[ $# -gt 0 ]]; do
+            case "$1" in
+                --criteria) criteria_list+=("$2"); shift 2 ;;
+                *) shift ;;
+            esac
+        done
+        if [[ ${#criteria_list[@]} -gt 0 ]]; then
+            criteria_json=$(printf '%s\n' "${criteria_list[@]}" | node -e "
+const lines=[];process.stdin.on('data',d=>lines.push(d.toString()));
+process.stdin.on('end',()=>console.log(JSON.stringify(lines.join('').split('\n').filter(Boolean))));")
+        fi
+
+        local delegate_inline
+        delegate_inline=$(cat <<JSEOF
+import { delegateReview, ReviewDelegateNoPrError, ReviewDelegateAuthError } from './pforge-mcp/github-review-delegate.mjs';
+const criteria = $criteria_json;
+try {
+  const result = delegateReview({ criteria: criteria || undefined });
+  console.log(JSON.stringify(result));
+} catch (e) {
+  const code = e instanceof ReviewDelegateNoPrError ? 'NO_PR' : e instanceof ReviewDelegateAuthError ? 'AUTH_ERROR' : 'ERROR';
+  process.stderr.write(JSON.stringify({ ok: false, error: e.message, code }) + '\n');
+  process.exit(1);
+}
+JSEOF
+)
+        local raw_out node_exit
+        pushd "$REPO_ROOT" >/dev/null || true
+        raw_out=$(node --input-type=module -e "$delegate_inline" 2>&1)
+        node_exit=$?
+        popd >/dev/null || true
+
+        local last_line
+        last_line=$(printf '%s\n' "$raw_out" | grep -v '^$' | tail -1)
+
+        echo "$last_line" | node -e "
+try {
+  const d = JSON.parse(require('fs').readFileSync('/dev/stdin','utf8').trim());
+  if (d.ok) {
+    console.log('\u2705 ' + d.message);
+  } else {
+    const emoji = d.code === 'NO_PR' ? '\u26a0\ufe0f' : '\u274c';
+    process.stderr.write(emoji + ' ' + (d.error || 'unknown error') + '\n');
+    process.exit(1);
+  }
+} catch (err) {
+  process.stderr.write('ERROR: Unexpected output from delegateReview\n');
+  process.exit(1);
+}"
+        exit $node_exit
+    fi
+
+
         echo "ERROR: unknown subcommand 'pforge github $sub'. Try 'pforge github --help'." >&2
         exit 1
     fi

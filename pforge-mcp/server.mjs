@@ -128,6 +128,8 @@ import { inspectGithubStack } from "./github-introspect.mjs";
 // Phase GITHUB-D Slice 5 — Copilot Metrics REST endpoint
 import { loadMetrics } from "./github-metrics.mjs";
 import { loadActivity } from "./team-activity.mjs";
+// D6 — Agentic code review delegation
+import { delegateReview, ReviewDelegateNoPrError, ReviewDelegateAuthError } from "./github-review-delegate.mjs";
 // Phase FORGE-SHOP-04 Slice 04.1 — Global search
 import { search as forgeSearch } from "./search/core.mjs";
 // Phase FORGE-SHOP-05 Slice 05.1 — Unified timeline
@@ -708,6 +710,21 @@ const TOOLS = [
         repo: { type: "string", description: "Repository slug owner/repo (auto-detected from git remote when omitted)" },
         period: { type: "string", description: "Lookback window: 7d, 30d, or 90d (default: 30d)" },
         path: { type: "string", description: "Project directory (default: current)" },
+      },
+    },
+  },
+  {
+    name: "forge_delegate_review",
+    description: "Delegate code review for the current branch's PR to the Copilot Coding Agent. Finds the open PR, creates a GitHub issue assigned to @copilot with structured review criteria, and returns the issue URL. The agent reviews the diff and posts findings. USE FOR: trigger AI code review, delegate PR review to Copilot, agentic review. DO NOT USE FOR: viewing review status (check the created issue), creating PRs (use gh pr create).",
+    inputSchema: {
+      type: "object",
+      properties: {
+        criteria: {
+          type: "array",
+          items: { type: "string" },
+          description: "Custom review criteria checklist items. Defaults to standard Plan Forge security, testing, and architecture checks.",
+        },
+        path: { type: "string", description: "Project root to detect git branch and PR (default: current)" },
       },
     },
   },
@@ -5959,6 +5976,23 @@ server.setRequestHandler(CallToolRequestSchema, _wrapWithToolSpan(async (request
     }
   }
 
+  if (name === "forge_delegate_review") {
+    const t0 = Date.now();
+    try {
+      const cwd = args.path ? resolve(args.path) : findProjectRoot(PROJECT_DIR);
+      const result = delegateReview({ criteria: args.criteria, cwd });
+      emitToolTelemetry("forge_delegate_review", args, result, Date.now() - t0, "OK", cwd);
+      return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
+    } catch (err) {
+      const isNoPr = err instanceof ReviewDelegateNoPrError;
+      const isAuth = err instanceof ReviewDelegateAuthError;
+      const code = isNoPr ? "NO_PR" : isAuth ? "AUTH_ERROR" : "DELEGATE_ERROR";
+      const response = { ok: false, error: err.message, code };
+      emitToolTelemetry("forge_delegate_review", args, response, Date.now() - t0, "ERROR", "");
+      return { content: [{ type: "text", text: JSON.stringify(response, null, 2) }] };
+    }
+  }
+
   if (name === "forge_team_activity") {
     const t0 = Date.now();
     try {
@@ -7974,6 +8008,8 @@ export function createExpressApp() {
     "forge_github_metrics",
     // Phase-TEAM-ACTIVITY — Team activity feed is MCP-native.
     "forge_team_activity",
+    // D6 — Agentic code review delegation is MCP-native.
+    "forge_delegate_review",
     // Phase-ANVIL Slice 6 — Anvil + Hallmark + Pipelines tools are MCP-native.
     "forge_anvil_stat",
     "forge_anvil_clear",

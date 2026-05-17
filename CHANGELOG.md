@@ -5,6 +5,23 @@ Format follows [Keep a Changelog](https://keepachangelog.com/).
 
 ---
 
+## [3.3.0] — 2026-05-17
+
+### D6 — Agentic Code Review Delegation
+
+Implements ROADMAP Watch List item D6. When a branch has an open PR, `pforge github review delegate` finds it and creates a GitHub issue assigned to `@copilot`, giving the Copilot Coding Agent a structured review checklist. The agent reviews the PR diff and posts its findings directly on the PR. This closes the loop between plan execution and code quality review without requiring a human reviewer to initiate the handoff.
+
+**New:**
+- `pforge-mcp/github-review-delegate.mjs` — core module (`findPrForBranch`, `buildReviewIssueBody`, `delegateReview`; error classes `ReviewDelegateError`, `ReviewDelegateNoPrError`, `ReviewDelegateAuthError`)
+- `pforge-mcp/tests/github-review-delegate.test.mjs` — 17 tests covering all public surface, CLOSED/MERGED PR filtering, 403 auth errors, custom criteria pass-through
+- `forge_delegate_review` MCP tool — wired into `server.mjs` handler + tools list; descriptor in `tools.json`; capability entry in `capabilities.mjs`
+- `pforge github review delegate [--criteria <text>]` — PowerShell (`pforge.ps1`) and Bash (`pforge.sh`) CLI subcommand
+
+**Changed:**
+- ROADMAP D6 marked as shipped (v3.3.0)
+
+---
+
 ## [3.2.1] — 2026-05-17 — Encoding-Honesty Hotfix (Issue #196)
 
 > **One-liner**: On Windows, `pforge analyze`'s captured stdout was being permanently corrupted to `U+FFFD` because PowerShell emitted CP437-encoded box-drawing chars but Node decoded the stream as UTF-8. Audit trail data loss in `summary.json.analyze.output`.

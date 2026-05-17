@@ -2664,6 +2664,79 @@
     }
   },
   {
+    "name": "forge_classifier_issue",
+    "description": "File a GitHub issue proposing a classifier rule update when a tempering finding routes to the 'classifier' lane (infra noise). Deduplicates by finding class + reason hash — repeated occurrences comment on the existing issue instead of creating a duplicate. USE FOR: closing the audit loop when routeFinding returns lane='classifier', tracking recurring noise patterns in GitHub. DO NOT USE FOR: product bugs (use forge_bug_register), spec gaps (submit to Crucible), self-repair defects (use forge_meta_bug_file).",
+    "inputSchema": {
+      "type": "object",
+      "required": ["payload"],
+      "properties": {
+        "payload": {
+          "type": "object",
+          "description": "Classifier-lane payload from forge_triage_route: { findingClass, route, currentClassification, reason, rule, proposedAction, evidence }",
+          "properties": {
+            "findingClass": { "type": "string" },
+            "route": { "type": "string" },
+            "currentClassification": { "type": "string" },
+            "reason": { "type": "string" },
+            "rule": { "type": "string" },
+            "proposedAction": { "type": "string" },
+            "evidence": { "type": "object" }
+          },
+          "required": ["findingClass"]
+        },
+        "path": { "type": "string", "description": "Project directory (default: current)" }
+      }
+    },
+    "intent": ["tempering", "triage", "classifier", "github", "issue"],
+    "aliases": ["classifier-issue", "file-classifier-issue"],
+    "cost": "low",
+    "maxConcurrent": 5,
+    "addedIn": "3.5.0",
+    "prerequisites": ["gh CLI authenticated OR GITHUB_TOKEN"],
+    "produces": ["GitHub issue (or comment on existing issue)"],
+    "consumes": [".forge.json"],
+    "sideEffects": ["creates or comments on GitHub issue with label classifier-noise"],
+    "writesFiles": false,
+    "network": true,
+    "risk": "low",
+    "errors": {
+      "NO_TOKEN": {
+        "message": "No GitHub token available",
+        "recovery": "Set GITHUB_TOKEN env var, add to .forge/secrets.json, or authenticate with gh CLI"
+      },
+      "NO_REPO": {
+        "message": "Could not resolve target repository",
+        "recovery": "Set bugRegistry.githubRepo in .forge.json (e.g. 'owner/repo')"
+      },
+      "CREATE_FAILED": {
+        "message": "GitHub issue creation failed",
+        "recovery": "Check token permissions and repository access"
+      },
+      "MISSING_PAYLOAD": {
+        "message": "payload object is required",
+        "recovery": "Pass the classifier-lane payload from forge_triage_route"
+      }
+    },
+    "example": {
+      "input": {
+        "payload": {
+          "findingClass": "missing-alt-text",
+          "route": "/about",
+          "currentClassification": "infra",
+          "reason": "All images on /about are decorative; alt is intentionally empty",
+          "proposedAction": "Add rule: skip alt-text check for role=presentation images"
+        }
+      },
+      "output": {
+        "ok": true,
+        "issueNumber": 53,
+        "url": "https://github.com/owner/repo/issues/53",
+        "deduped": false,
+        "message": "Classifier-noise issue #53 created."
+      }
+    }
+  },
+  {
     "name": "forge_bug_register",
     "description": "Register a bug discovered by a tempering scanner. Classifies real-bug vs infra and writes .forge/bugs/<bugId>.json for real bugs. Infra-classified failures are not written to disk — they are only tracked in the run record.",
     "inputSchema": {

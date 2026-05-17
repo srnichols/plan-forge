@@ -5,6 +5,28 @@ Format follows [Keep a Changelog](https://keepachangelog.com/).
 
 ---
 
+## [3.5.0] — 2026-05-17 — Classifier-Lane GitHub Issue Creation (Phase CLASSIFIER-ISSUE)
+
+> **One-liner**: Closes the tempering audit loop for classifier-lane findings — when `routeFinding` returns `lane: "classifier"` (infra noise), `forge_classifier_issue` creates a GitHub issue proposing a classifier rule update instead of silently discarding the finding. Hash-based deduplication prevents spam: repeated occurrences comment on the existing issue.
+
+### What's new
+
+- **`forge_classifier_issue`** MCP tool: Takes a classifier-lane payload from `forge_triage_route` and files a GitHub issue labelled `classifier-noise` + `plan-forge-internal`. Deduplicates within 7 days by `sha256(findingClass:reason)[0:12]` — repeated patterns add a comment rather than a new issue.
+- **`pforge-mcp/tempering/classifier-issue.mjs`** (new): Pure module with `fileClassifierIssue`, `buildClassifierIssueBody`, `computeClassifierIssueHash`, and `CLASSIFIER_ISSUE_LABELS`. Token resolution mirrors `bug-adapters/github.mjs` (env → `.forge/secrets.json` → `gh auth token`). gh CLI first, REST API fallback.
+- **`pforge-mcp/tools.json`**: `forge_classifier_issue` entry with full schema, examples, and error catalog.
+- **Tests** (`tests/classifier-issue.test.mjs`): 22 tests covering `buildClassifierIssueBody`, `computeClassifierIssueHash`, `CLASSIFIER_ISSUE_LABELS`, and `fileClassifierIssue` (no-token, no-repo, gh CLI success, REST fallback, dedup/comment, missing payload).
+
+### Files changed
+
+| File | Change |
+|------|--------|
+| `pforge-mcp/tempering/classifier-issue.mjs` | **new** — classifier issue filer module |
+| `pforge-mcp/tests/classifier-issue.test.mjs` | **new** — 22 unit tests |
+| `pforge-mcp/server.mjs` | import, TOOL_METADATA entry, handler, capabilities allowlist |
+| `pforge-mcp/tools.json` | `forge_classifier_issue` entry |
+
+---
+
 ## [3.4.1] — 2026-05-17 — Snapshot Pop Hotfix (Issue #201)
 
 > **One-liner**: stops `popSliceSnapshot` from silently orphaning operator WIP into `git stash list` when the orchestrator's own runtime writes dirty the tree between snapshot push and pop. Adds a startup janitor that drops accumulated orphans from prior runs.

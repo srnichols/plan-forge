@@ -120,6 +120,7 @@ import { dispatch as dispatchBugAdapter } from "./tempering/bug-adapters/contrac
 // Phase-39 Slice 4 — Audit loop MCP tools
 import { runTemperingDrain } from "./tempering/drain.mjs";
 import { routeFinding } from "./tempering/triage.mjs";
+import { fileClassifierIssue } from "./tempering/classifier-issue.mjs";
 // Phase-39 Slice 7 — audit-loop activation surface
 import { loadAuditConfig, saveAuditConfig, shouldAutoDrain } from "./tempering/auto-activate.mjs";
 import { checkForUpdate, detectCorruptInstall, resolveFrameworkVersion } from "./update-check.mjs";
@@ -1238,6 +1239,32 @@ const TOOLS = [
             source: { type: "string" },
           },
         },
+      },
+    },
+  },
+  // Phase CLASSIFIER-ISSUE — GitHub issue creation for classifier-lane findings
+  {
+    name: "forge_classifier_issue",
+    description: "File a GitHub issue proposing a classifier rule update when a tempering finding routes to the 'classifier' lane (infra noise). Deduplicates by finding class + reason hash — repeated occurrences comment on the existing issue instead of creating a duplicate. USE FOR: closing the audit loop when routeFinding returns lane='classifier', tracking recurring noise patterns in GitHub. DO NOT USE FOR: product bugs (use forge_bug_register), spec gaps (submit to Crucible), self-repair defects (use forge_meta_bug_file).",
+    inputSchema: {
+      type: "object",
+      required: ["payload"],
+      properties: {
+        payload: {
+          type: "object",
+          description: "Classifier-lane payload from forge_triage_route (lane must be 'classifier'): { findingClass, route, currentClassification, reason, rule, proposedAction, evidence }",
+          properties: {
+            findingClass: { type: "string" },
+            route: { type: "string" },
+            currentClassification: { type: "string" },
+            reason: { type: "string" },
+            rule: { type: "string" },
+            proposedAction: { type: "string" },
+            evidence: { type: "object" },
+          },
+          required: ["findingClass"],
+        },
+        path: { type: "string", description: "Project directory (default: current)" },
       },
     },
   },
@@ -3333,6 +3360,27 @@ server.setRequestHandler(CallToolRequestSchema, _wrapWithToolSpan(async (request
       return { content: [{ type: "text", text: JSON.stringify({ ok: true, ...result }, null, 2) }] };
     } catch (err) {
       return { content: [{ type: "text", text: `Triage route error: ${err.message}` }], isError: true };
+    }
+  }
+
+  // ─── Classifier-lane GitHub issue filer (Phase CLASSIFIER-ISSUE) ──
+  if (name === "forge_classifier_issue") {
+    const t0 = Date.now();
+    try {
+      const cwd = args.path ? findProjectRoot(resolve(args.path)) : findProjectRoot(PROJECT_DIR);
+      if (!args.payload || typeof args.payload !== "object") {
+        const result = { ok: false, error: "MISSING_PAYLOAD", message: "payload object is required" };
+        emitToolTelemetry("forge_classifier_issue", args, result, Date.now() - t0, "ERROR", cwd);
+        return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }], isError: true };
+      }
+      let config = {};
+      try { config = JSON.parse(readFileSync(resolve(cwd, ".forge.json"), "utf-8")); } catch { /* proceed without config */ }
+      const result = await fileClassifierIssue(args.payload, config, { execSync, cwd, fetch: globalThis.fetch });
+      emitToolTelemetry("forge_classifier_issue", args, result, Date.now() - t0, result.ok ? "OK" : "ERROR", cwd);
+      return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
+    } catch (err) {
+      emitToolTelemetry("forge_classifier_issue", args, { error: err.message }, Date.now() - t0, "ERROR", findProjectRoot(PROJECT_DIR));
+      return { content: [{ type: "text", text: `Classifier issue error: ${err.message}` }], isError: true };
     }
   }
 
@@ -8048,6 +8096,8 @@ export function createExpressApp() {
     // Phase-TEAM-DASHBOARD — Team coordination dashboard is MCP-native.
     "forge_team_dashboard",
     "forge_team_activity",
+    // Phase CLASSIFIER-ISSUE — Classifier-lane GitHub issue filer is MCP-native.
+    "forge_classifier_issue",
     // D6 — Agentic code review delegation is MCP-native.
     "forge_delegate_review",
     // Phase-ANVIL Slice 6 — Anvil + Hallmark + Pipelines tools are MCP-native.

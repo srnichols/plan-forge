@@ -5,6 +5,19 @@ Format follows [Keep a Changelog](https://keepachangelog.com/).
 
 ---
 
+## [3.5.1] — 2026-05-17 — Lattice Query Relevance Scoring
+
+> **One-liner**: `forge_lattice_query` now ranks results by relevance — camelCase-aware token overlap scores chunk name (2×) and file path (1×) so searching for "user" returns `getUserById` above less-relevant matches. New exported helpers `scoreChunk` and `tokenizeForSearch` available for downstream consumers.
+
+### What's new
+
+- **`tokenizeForSearch(text)`** (exported from `lattice.mjs`): Splits identifiers into lowercase tokens using camelCase and PascalCase boundary detection, acronym splitting, and whitespace/punctuation normalization. Returns a frequency Map.
+- **`scoreChunk(queryText, chunk)`** (exported from `lattice.mjs`): Scores a single chunk against a query using token overlap. Name match weighted 2×, file path match 1×. Returns a normalized score in `[0, 1]`.
+- **Ranked `latticeQuery` results**: When a `query` parameter is provided, matched chunks are now sorted by descending relevance score. Each chunk gains a `score` field. Filter logic is unchanged — backward compatible.
+- **18 new tests** in `tests/lattice-query.test.mjs` covering `tokenizeForSearch`, `scoreChunk`, and score-ordered ranking.
+
+---
+
 ## [3.5.0] — 2026-05-17 — Classifier-Lane GitHub Issue Creation (Phase CLASSIFIER-ISSUE)
 
 > **One-liner**: Closes the tempering audit loop for classifier-lane findings — when `routeFinding` returns `lane: "classifier"` (infra noise), `forge_classifier_issue` creates a GitHub issue proposing a classifier rule update instead of silently discarding the finding. Hash-based deduplication prevents spam: repeated occurrences comment on the existing issue.

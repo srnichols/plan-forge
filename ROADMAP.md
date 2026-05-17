@@ -7,7 +7,9 @@
 
 ## Current Release
 
-**v3.5.0** (2026-05-17) — Classifier-Lane GitHub Issue Creation (Phase CLASSIFIER-ISSUE). New `forge_classifier_issue` MCP tool closes the tempering audit loop: when `routeFinding` returns `lane: "classifier"` (infra noise), the tool creates a GitHub issue labelled `classifier-noise` proposing a classifier rule update. Hash-based deduplication prevents spam — repeated patterns add a comment on the existing issue instead of creating a duplicate.
+**v3.5.1** (2026-05-17) — Lattice Query Relevance Scoring. `forge_lattice_query` now ranks results by camelCase-aware token overlap — name tokens weighted 2×, file path 1×. Searching for "user" returns `getUserById` before less-relevant matches. New exported helpers `scoreChunk` and `tokenizeForSearch` for downstream consumers. 18 new tests.
+
+Previous: **v3.5.0** (2026-05-17) — Classifier-Lane GitHub Issue Creation (Phase CLASSIFIER-ISSUE). New `forge_classifier_issue` MCP tool closes the tempering audit loop: when `routeFinding` returns `lane: "classifier"` (infra noise), the tool creates a GitHub issue labelled `classifier-noise` proposing a classifier rule update. Hash-based deduplication prevents spam — repeated patterns add a comment on the existing issue instead of creating a duplicate.
 
 Previous: **v3.4.1** (2026-05-17) — Snapshot Pop Hotfix (Issue #201). `popSliceSnapshot` now uses `git stash apply` + explicit drop instead of blind `git stash pop`. Startup janitor drops orphaned `pforge-slice-N-snapshot` stashes older than 7 days.
 

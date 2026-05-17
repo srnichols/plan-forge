@@ -426,15 +426,70 @@ function readAllEdges(deps = {}) {
     .filter(Boolean);
 }
 
+// ─── Scoring helpers ──────────────────────────────────────────────────────────
+
+/**
+ * Tokenize text for relevance scoring.
+ * Splits on whitespace/punctuation AND camelCase/PascalCase boundaries so that
+ * a query for "user" matches chunks named "getUserById" or "UserService".
+ *
+ * @param {string} text
+ * @returns {Map<string, number>} token → count (lowercase)
+ */
+export function tokenizeForSearch(text) {
+  if (!text || typeof text !== 'string') return new Map();
+  const split = text
+    .replace(/([a-z])([A-Z])/g, '$1 $2')
+    .replace(/([A-Z]+)([A-Z][a-z])/g, '$1 $2');
+  const tokens = split.toLowerCase().match(/[a-z0-9]+/g) ?? [];
+  const out = new Map();
+  for (const t of tokens) out.set(t, (out.get(t) || 0) + 1);
+  return out;
+}
+
+/**
+ * Compute a relevance score for a chunk against a query string.
+ *
+ * Score = (nameOverlap × 2 + pathOverlap) / 3, where overlap is
+ * |query_tokens ∩ field_tokens| / |query_tokens|.
+ *
+ * Returns a value in [0, 1].  Returns 0 when query is empty.
+ *
+ * @param {string} queryText
+ * @param {{ name?: string, filePath?: string }} chunk
+ * @returns {number}
+ */
+export function scoreChunk(queryText, chunk) {
+  if (!queryText || typeof queryText !== 'string') return 0;
+  const qTokens = tokenizeForSearch(queryText);
+  if (qTokens.size === 0) return 0;
+
+  const nameTokens = tokenizeForSearch(chunk.name ?? '');
+  const pathTokens = tokenizeForSearch(chunk.filePath ?? '');
+
+  let nameHits = 0;
+  let pathHits = 0;
+  for (const q of qTokens.keys()) {
+    if (nameTokens.has(q)) nameHits++;
+    if (pathTokens.has(q)) pathHits++;
+  }
+
+  const qSize = qTokens.size;
+  return (nameHits / qSize * 2 + pathHits / qSize) / 3;
+}
+
 // ─── latticeQuery ─────────────────────────────────────────────────────────────
 
 /**
  * Search the chunk index for records matching the given criteria.
  *
  * All filters are ANDed. An empty/omitted `query` matches all chunks.
+ * When a query is provided, results are ranked by relevance (name-token overlap
+ * weighted 2× over filePath-token overlap, both camelCase-aware).  Each
+ * returned chunk gains a `score` field (0–1, three decimal places).
  *
  * @param {{
- *   query?:    string,            substring match against chunk.name OR chunk.filePath
+ *   query?:    string,            token + substring match against chunk.name / filePath
  *   language?: string,            exact match against chunk.language
  *   kind?:     string,            exact match against chunk.kind
  *   filePath?: string,            substring match against chunk.filePath
@@ -467,9 +522,18 @@ export function latticeQuery({
     return true;
   });
 
-  const total = filtered.length;
+  let ranked;
+  if (q) {
+    ranked = filtered
+      .map((c) => ({ ...c, score: Math.round(scoreChunk(query, c) * 1000) / 1000 }))
+      .sort((a, b) => b.score - a.score);
+  } else {
+    ranked = filtered;
+  }
+
+  const total = ranked.length;
   const truncated = total > limit;
-  const results = filtered.slice(0, limit);
+  const results = ranked.slice(0, limit);
 
   const filters = [
     query ? `query "${query}"` : null,

@@ -11,7 +11,7 @@ import { resolve, join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { randomUUID } from 'node:crypto';
 
-import { latticeQuery } from '../lattice.mjs';
+import { latticeQuery, scoreChunk, tokenizeForSearch } from '../lattice.mjs';
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -285,5 +285,141 @@ describe('latticeQuery — message field', () => {
     seedIndex(tmpDir, [makeChunk({ name: 'alpha' })]);
     const result = latticeQuery({ query: 'omega', deps: { cwd: tmpDir } });
     expect(result.message).toContain('omega');
+  });
+});
+
+// ─── tokenizeForSearch ────────────────────────────────────────────────────────
+
+describe('tokenizeForSearch', () => {
+  it('returns empty map for empty input', () => {
+    expect(tokenizeForSearch('').size).toBe(0);
+    expect(tokenizeForSearch(null).size).toBe(0);
+  });
+
+  it('splits camelCase identifiers into component words', () => {
+    const tokens = tokenizeForSearch('getUserById');
+    expect(tokens.has('get')).toBe(true);
+    expect(tokens.has('user')).toBe(true);
+    expect(tokens.has('by')).toBe(true);
+    expect(tokens.has('id')).toBe(true);
+  });
+
+  it('splits PascalCase identifiers', () => {
+    const tokens = tokenizeForSearch('UserService');
+    expect(tokens.has('user')).toBe(true);
+    expect(tokens.has('service')).toBe(true);
+  });
+
+  it('splits acronym-prefixed names like XMLParser', () => {
+    const tokens = tokenizeForSearch('XMLParser');
+    expect(tokens.has('xml')).toBe(true);
+    expect(tokens.has('parser')).toBe(true);
+  });
+
+  it('splits file paths on slashes and dots', () => {
+    const tokens = tokenizeForSearch('src/auth/login.js');
+    expect(tokens.has('src')).toBe(true);
+    expect(tokens.has('auth')).toBe(true);
+    expect(tokens.has('login')).toBe(true);
+    expect(tokens.has('js')).toBe(true);
+  });
+
+  it('is case-insensitive (all lowercase output)', () => {
+    const tokens = tokenizeForSearch('GetUserByID');
+    for (const k of tokens.keys()) expect(k).toBe(k.toLowerCase());
+  });
+});
+
+// ─── scoreChunk ───────────────────────────────────────────────────────────────
+
+describe('scoreChunk', () => {
+  it('returns 0 for empty query', () => {
+    expect(scoreChunk('', { name: 'getUserById', filePath: 'auth.js' })).toBe(0);
+    expect(scoreChunk(null, { name: 'getUserById' })).toBe(0);
+  });
+
+  it('returns 0 when no query tokens match the chunk', () => {
+    const score = scoreChunk('unrelated', { name: 'deletePost', filePath: 'posts.js' });
+    expect(score).toBe(0);
+  });
+
+  it('returns >0 when chunk name contains a query token', () => {
+    const score = scoreChunk('user', { name: 'getUserById', filePath: 'user.js' });
+    expect(score).toBeGreaterThan(0);
+  });
+
+  it('returns higher score for exact name match than partial path match', () => {
+    const nameMatch = scoreChunk('auth', { name: 'getUserAuth', filePath: 'src/middleware.js' });
+    const pathOnly = scoreChunk('auth', { name: 'buildRequest', filePath: 'src/auth/config.js' });
+    expect(nameMatch).toBeGreaterThan(pathOnly);
+  });
+
+  it('returns value in [0, 1]', () => {
+    const score = scoreChunk('user', { name: 'user', filePath: 'user.js' });
+    expect(score).toBeGreaterThanOrEqual(0);
+    expect(score).toBeLessThanOrEqual(1);
+  });
+
+  it('handles chunks without name or filePath gracefully', () => {
+    expect(() => scoreChunk('user', {})).not.toThrow();
+    expect(scoreChunk('user', {})).toBe(0);
+  });
+});
+
+// ─── latticeQuery — scoring and ranking ──────────────────────────────────────
+
+describe('latticeQuery — scoring and ranking', () => {
+  it('adds a score field to each chunk when query is provided', () => {
+    seedIndex(tmpDir, [makeChunk({ name: 'getUserById' })]);
+    const result = latticeQuery({ query: 'user', deps: { cwd: tmpDir } });
+    expect(result.chunks[0]).toHaveProperty('score');
+    expect(typeof result.chunks[0].score).toBe('number');
+  });
+
+  it('ranks more-relevant chunks before less-relevant chunks', () => {
+    const chunks = [
+      makeChunk({ id: '0000000000000001', name: 'unrelated',   filePath: 'src/users/profile.js' }),
+      makeChunk({ id: '0000000000000002', name: 'getUserById', filePath: 'src/other.js' }),
+    ];
+    seedIndex(tmpDir, chunks);
+
+    const result = latticeQuery({ query: 'user', deps: { cwd: tmpDir } });
+    expect(result.chunks).toHaveLength(2);
+    // The chunk with "user" in its name should rank first
+    expect(result.chunks[0].name).toBe('getUserById');
+  });
+
+  it('does not add score field when no query is provided', () => {
+    seedIndex(tmpDir, [makeChunk({ name: 'alpha' })]);
+    const result = latticeQuery({ deps: { cwd: tmpDir } });
+    expect(result.chunks[0]).not.toHaveProperty('score');
+  });
+
+  it('returns chunks sorted by score descending', () => {
+    const chunks = [
+      makeChunk({ id: '0000000000000001', name: 'logEvent',       filePath: 'logger.js' }),
+      makeChunk({ id: '0000000000000002', name: 'getUserAuth',    filePath: 'auth.js' }),
+      makeChunk({ id: '0000000000000003', name: 'authenticate',   filePath: 'auth.js' }),
+    ];
+    seedIndex(tmpDir, chunks);
+
+    const result = latticeQuery({ query: 'auth', deps: { cwd: tmpDir } });
+    // authenticate and getUserAuth should rank above logEvent
+    const scores = result.chunks.map((c) => c.score);
+    for (let i = 1; i < scores.length; i++) {
+      expect(scores[i - 1]).toBeGreaterThanOrEqual(scores[i]);
+    }
+  });
+
+  it('preserves existing filter behavior alongside scoring', () => {
+    const chunks = [
+      makeChunk({ id: '0000000000000001', name: 'getUser', language: 'js' }),
+      makeChunk({ id: '0000000000000002', name: 'getUser', language: 'py' }),
+    ];
+    seedIndex(tmpDir, chunks);
+
+    const result = latticeQuery({ query: 'user', language: 'js', deps: { cwd: tmpDir } });
+    expect(result.total).toBe(1);
+    expect(result.chunks[0].language).toBe('js');
   });
 });

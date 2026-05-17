@@ -37,6 +37,7 @@ $plan = @(
     @{ Version = 'v3.2.1';  Sha = '3cbcc4c6c5' }
     @{ Version = 'v3.3.0';  Sha = '54b77d8' }
     @{ Version = 'v3.3.1';  Sha = '5e58b3a' }
+    @{ Version = 'v3.4.0';  Sha = '5c8c8bd' }
 )
 
 function Extract-ChangelogSection {

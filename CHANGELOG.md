@@ -5,6 +5,43 @@ Format follows [Keep a Changelog](https://keepachangelog.com/).
 
 ---
 
+## [3.4.1] — 2026-05-17 — Snapshot Pop Hotfix (Issue #201)
+
+> **One-liner**: stops `popSliceSnapshot` from silently orphaning operator WIP into `git stash list` when the orchestrator's own runtime writes dirty the tree between snapshot push and pop. Adds a startup janitor that drops accumulated orphans from prior runs.
+
+### Context
+
+A Phase-6 WEB-UI testbed sweep on v3.3.4 reported `snapshotRestored: false` on 4 of 7 slices with errors like:
+
+```
+error: Your local changes to the following files would be overwritten by merge:
+    .forge/crucible/manual-imports.jsonl
+Please commit your changes or stash them before you merge.
+Aborting
+```
+
+The slices still passed their primary work, but every operator-WIP stash captured by `pushSliceSnapshot` was orphaned into `git stash list` instead of restored. The testbed had accumulated **60+ stale `pforge-slice-N-snapshot` stashes** from prior runs as a result.
+
+### Root cause
+
+`popSliceSnapshot` did a blind `git stash pop`. Between push and pop the orchestrator self-writes runtime artifacts (`.forge/watch-history.jsonl`, `liveguard-broadcast.log`, `server-ports.json`, `model-performance.json`, `quorum-history.jsonl`, `manual-imports.jsonl`). When the stashed snapshot also touched any of those, git refused the pop with "would be overwritten by merge" — but **the stash stayed in `git stash list`** instead of being dropped. Silent accumulation followed.
+
+### Fixed
+
+- **[`popSliceSnapshot`](pforge-mcp/orchestrator.mjs)** — switched from blind `git stash pop` to a three-step apply-then-drop:
+  1. Resolve the stash ref **by message** (`pforge-slice-N-snapshot`), not by top-of-stack — the top may be an unrelated operator stash.
+  2. `git stash apply <ref>` (non-destructive). On success, explicitly `git stash drop`. On failure, leave the stash intact and return `{ restored: false, conflict, dirtyTree, error, stashRef }` with an operator-actionable recovery hint.
+  3. The `snapshot-restore-failed` event now carries `conflict`, `stashRef`, and a `recovery` field pointing the operator at `git stash list` + `git stash apply stash@{0}`.
+- **[`cleanupStaleSnapshots`](pforge-mcp/orchestrator.mjs)** — new janitor pass called at `runPlan` start. Walks `git stash list --format="%gd|%ct|%s"`, drops any `pforge-slice-N-snapshot` older than 7 days (configurable), and **only** targets our own snapshots — operator stashes are never touched. Emits `snapshot-janitor` event when anything is dropped.
+- **[`tests/slice-snapshot.test.mjs`](pforge-mcp/tests/slice-snapshot.test.mjs)** — 18 tests covering: ref lookup by message, dirty-tree conflict path (the #201 trigger), generic conflict path, missing-stash path, apply-then-drop atomicity, janitor cutoff math, janitor scope (never drops non-snapshot stashes), and the run-start integration call site.
+
+### Migration
+
+- **Operators**: no action needed. Existing orphaned stashes from prior runs will be auto-dropped by the janitor on the next `pforge run-plan` invocation (only those older than 7 days; recent ones are preserved as a recovery safety net).
+- **Recovery from a failed restore**: the new error message and `snapshot-restore-failed` event tell you exactly which stash ref to recover from. `git stash show -p <ref>` to inspect, `git stash apply <ref>` to recover.
+
+---
+
 ## [3.4.0] — 2026-05-18 — Team Dashboard (Phase-TEAM-DASHBOARD)
 
 > **One-liner**: New "Team" tab in the dashboard aggregates `.forge/team-activity.jsonl` per operator and surfaces a conflict-risk assessment for teams where multiple developers are concurrently running plan runs. Also exposed as `GET /api/team-dashboard`, `forge_team_dashboard` MCP tool, and `pforge team dashboard` CLI.

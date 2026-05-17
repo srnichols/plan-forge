@@ -40,16 +40,32 @@ describe("Issue #178 — pushSliceSnapshot", () => {
     expect(result.reason).toBe("clean-tree");
   });
 
-  it("calls `git stash push -m <ref>` and returns pushed:true when dirty", () => {
+  it("#202 — calls `git stash push -u -m <ref>` and returns pushed:true when dirty", () => {
     execSync
       .mockReturnValueOnce(" M file.ts\n")  // git status --porcelain
-      .mockReturnValueOnce("");                // git stash push
+      .mockReturnValueOnce("");                // git stash push -u
 
     const result = pushSliceSnapshot({ cwd: "/fake/cwd", sliceNumber: 4 });
     expect(result.pushed).toBe(true);
     expect(result.stashRef).toBe("pforge-slice-4-snapshot");
     expect(execSync).toHaveBeenCalledTimes(2);
-    expect(execSync.mock.calls[1][0]).toContain(`git stash push -m "pforge-slice-4-snapshot"`);
+    // #202: must include -u so untracked-only working trees still get stashed.
+    expect(execSync.mock.calls[1][0]).toBe(`git stash push -u -m "pforge-slice-4-snapshot"`);
+  });
+
+  it("#202 — captures untracked-only working tree (passes -u to git stash)", () => {
+    // `git status --porcelain` shows untracked files with `??`. Without `-u`,
+    // `git stash push` would no-op and the caller would never know — pop
+    // would later report "snapshot stash not found".
+    execSync
+      .mockReturnValueOnce("?? new-file.ts\n?? .forge/runtime.log\n")  // untracked-only
+      .mockReturnValueOnce("");
+
+    const result = pushSliceSnapshot({ cwd: "/fake/cwd", sliceNumber: 6 });
+    expect(result.pushed).toBe(true);
+    expect(result.stashRef).toBe("pforge-slice-6-snapshot");
+    // Critical assertion: the -u flag must be present.
+    expect(execSync.mock.calls[1][0]).toMatch(/^git stash push -u\b/);
   });
 
   it("returns pushed:false on git failure (not-a-repo)", () => {

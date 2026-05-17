@@ -7739,9 +7739,16 @@ export function snapshotPreSliceState({ cwd = process.cwd() } = {}) {
 }
 
 /**
- * Issue #178 — stash any pre-slice working-tree changes before the worker
- * runs, so a buggy worker (or a destructive teardown) can't trample operator
- * WIP. Pair with `popSliceSnapshot` at slice end.
+ * Issue #178 / #202 — stash any pre-slice working-tree changes before the
+ * worker runs, so a buggy worker (or a destructive teardown) can't trample
+ * operator WIP. Pair with `popSliceSnapshot` at slice end.
+ *
+ * #202: `git stash push` without `-u` silently SKIPS untracked files even
+ * when `git status --porcelain` shows them as dirty. That caused
+ * `pushSliceSnapshot` to return `pushed:true` when no stash was actually
+ * created (untracked-only working trees), surfacing at pop time as a
+ * misleading "snapshot stash not found" error. Add `-u` so untracked
+ * files are protected too and push/pop status is honest.
  *
  * @param {{ cwd?: string, sliceNumber: string|number, _execSync?: Function }} params
  * @returns {{ pushed: boolean, stashRef: string|null, reason?: string }}
@@ -7751,7 +7758,9 @@ export function pushSliceSnapshot({ cwd = process.cwd(), sliceNumber, _execSync 
   try {
     const status = _execSync("git status --porcelain", { cwd, encoding: "utf-8", timeout: 5_000 }).toString().trim();
     if (!status) return { pushed: false, stashRef: null, reason: "clean-tree" };
-    _execSync(`git stash push -m "${stashRef}"`, { cwd, encoding: "utf-8", timeout: 10_000 });
+    // #202: `-u` (--include-untracked) — without it, an untracked-only tree
+    // is silently skipped and the caller is misled into thinking we stashed.
+    _execSync(`git stash push -u -m "${stashRef}"`, { cwd, encoding: "utf-8", timeout: 10_000 });
     return { pushed: true, stashRef };
   } catch (err) {
     return { pushed: false, stashRef: null, reason: (err?.message || "git-failed").slice(0, 200) };

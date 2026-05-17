@@ -25,6 +25,21 @@ param(
 
 $ErrorActionPreference = 'Stop'
 
+# ─── Issue #196: force UTF-8 console output so box-drawing chars (╔═╗║),
+# ─── checkmarks (✓⚠✅⚠️), and other Unicode survive when stdout is captured
+# ─── by execSync/spawn (e.g., orchestrator.mjs::runAutoAnalyze). Without
+# ─── this, PowerShell encodes Write-Host output via the OEM codepage
+# ─── (CP437/CP850), Node decodes it as UTF-8, and multi-byte sequences
+# ─── collapse to U+FFFD — permanent data loss in summary.analyze.output.
+try {
+    [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
+    $OutputEncoding = [System.Text.Encoding]::UTF8
+} catch {
+    # Some constrained PS hosts (PSReadLine restricted mode) reject this.
+    # Failing silently is correct — the analyzer still works, just with
+    # mangled glyphs on Windows when captured. Same as pre-#196 behavior.
+}
+
 # ─── Find repo root ───────────────────────────────────────────────────
 function Find-RepoRoot {
     $dir = Get-Location

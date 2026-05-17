@@ -12323,8 +12323,13 @@ export function parseAnalyzeScore(output) {
  */
 function runAutoAnalyze(cwd, planPath) {
   const IS_WINDOWS = process.platform === "win32";
+  // Issue #196: force PowerShell's host output encoding to UTF-8 BEFORE
+  // invoking pforge.ps1, so box-drawing chars (╔═╗║) + ✓/⚠ glyphs survive
+  // the execSync capture instead of collapsing to U+FFFD. Defense-in-depth
+  // alongside the same fix in pforge.ps1 itself — protects callers that
+  // checked out a pre-#196 wrapper script.
   const pforge = IS_WINDOWS
-    ? `powershell.exe -NoProfile -ExecutionPolicy Bypass -File pforge.ps1 analyze "${planPath}"`
+    ? `powershell.exe -NoProfile -ExecutionPolicy Bypass -Command "[Console]::OutputEncoding=[System.Text.Encoding]::UTF8; & .\\pforge.ps1 analyze \\"${planPath}\\""`
     : `bash pforge.sh analyze "${planPath}"`;
   try {
     const output = execSync(pforge, { cwd, encoding: "utf-8", timeout: 30_000, env: { ...process.env, NO_COLOR: "1" } });

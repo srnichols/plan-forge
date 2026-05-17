@@ -5,6 +5,26 @@ Format follows [Keep a Changelog](https://keepachangelog.com/).
 
 ---
 
+## [3.2.1] — 2026-05-17 — Encoding-Honesty Hotfix (Issue #196)
+
+> **One-liner**: On Windows, `pforge analyze`'s captured stdout was being permanently corrupted to `U+FFFD` because PowerShell emitted CP437-encoded box-drawing chars but Node decoded the stream as UTF-8. Audit trail data loss in `summary.json.analyze.output`.
+
+#### Fixed — Bug #196
+
+**`pforge.ps1` — startup encoding directive**
+- New top-of-script `try { [Console]::OutputEncoding = [System.Text.Encoding]::UTF8; $OutputEncoding = [System.Text.Encoding]::UTF8 } catch { ... }` block, before any `Write-Host`. Guarantees that all subsequent script output is UTF-8 bytes regardless of the parent console's active codepage.
+- Wrapped in `try/catch` so constrained PowerShell hosts (PSReadLine restricted mode) don't crash — they degrade to pre-fix behavior.
+
+**`pforge-mcp/orchestrator.mjs` — `runAutoAnalyze` defense-in-depth**
+- Windows spawn changed from `powershell.exe -File pforge.ps1 analyze "<plan>"` to `powershell.exe -Command "[Console]::OutputEncoding=[System.Text.Encoding]::UTF8; & .\pforge.ps1 analyze \"<plan>\""`. Protects callers that have an older `pforge.ps1` checkout (no script-side encoding fix).
+- Linux branch (`bash pforge.sh analyze`) unchanged — Linux Node child stdio defaults to UTF-8 already.
+
+#### Verification
+- 11 new tests in `pforge-mcp/tests/cli-capture-encoding-issue-196.test.mjs` lock both invariants (`pforge.ps1` early UTF-8 directive present; `runAutoAnalyze` wraps in encoding setter; round-trip proof that valid UTF-8 byte stream preserves `╔═╗║✓⚠`).
+- Live smoke test on Windows testbed: captured analyze output for Phase-3 plan, `contains U+FFFD: false`, `╔ ═ ╗ ✓` all preserved (was `��� ?` pre-fix).
+
+---
+
 ## [3.2.0] — 2026-05-17
 
 ### Phase-TEAM-ACTIVITY — Team Activity Feed (v3.2.0)

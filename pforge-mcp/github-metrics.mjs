@@ -76,10 +76,15 @@ export function pullMetrics({ org, since, until, ghCmd = "gh", env } = {}) {
 
   const url = `/orgs/${encodeURIComponent(org)}/copilot/metrics?${params.join("&")}`;
 
-  const result = spawnSync(ghCmd, ["api", url], {
+  // Bug #192 (v2.99.1): avoid DEP0190 — on Windows route through cmd.exe
+  // instead of shell:true + array args.
+  const isWin    = process.platform === "win32";
+  const spawnBin = isWin ? "cmd" : ghCmd;
+  const spawnArg = isWin ? ["/d", "/s", "/c", ghCmd, "api", url] : ["api", url];
+  const result = spawnSync(spawnBin, spawnArg, {
     encoding: "utf-8",
     env: env ?? process.env,
-    shell: process.platform === "win32",
+    windowsHide: isWin,
   });
 
   if (result.error) {

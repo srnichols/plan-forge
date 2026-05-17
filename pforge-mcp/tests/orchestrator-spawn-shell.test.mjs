@@ -1,14 +1,11 @@
 /**
- * Bug #82 — Windows: spawn claude ENOENT — missing shell:true on Windows.
+ * Bug #82 — Windows: spawn claude ENOENT — original fix was `shell:true` on
+ * Windows. Bug #192 (v2.99.1) replaced that with cmd.exe routing to avoid
+ * Node's DEP0190 deprecation. This file now asserts the *replacement* pattern
+ * still resolves .cmd shims on Windows.
  *
- * On Windows, npm-global CLIs (claude, codex) are installed as .cmd shims.
- * Node.js spawn() does not resolve .cmd extensions without shell:true.
- * The fix adds `shell: process.platform === "win32"` to the spawn options
- * in spawnWorker().
- *
- * These tests verify the source code contains the correct guard by parsing
- * the spawn call-site AST-free (regex on source). We cannot vi.spyOn(spawn)
- * because Node marks child_process.spawn as non-configurable.
+ * Source-code inspection is used because Node marks child_process.spawn as
+ * non-configurable and the real spawn call-site requires worker detection.
  */
 
 import { describe, it, expect } from "vitest";
@@ -19,41 +16,33 @@ import { fileURLToPath } from "url";
 const __dirname = resolve(fileURLToPath(import.meta.url), "..");
 const src = readFileSync(resolve(__dirname, "..", "orchestrator.mjs"), "utf8");
 
-describe("spawnWorker — bug #82 shell option on Windows", () => {
-  it("source code contains shell: process.platform === \"win32\" in spawn options", () => {
-    expect(src).toContain('shell: process.platform === "win32"');
+// The new spawn call uses the local names _spawnBin / _spawnArg created by the
+// Bug #192 prelude. Extract THAT block (not the old `spawn(cmd, args, …)`).
+const spawnBlock = src.match(/spawn\(_spawnBin, _spawnArg, \{[\s\S]*?\}\);/)?.[0] ?? "";
+
+describe("spawnWorker — Bug #82 .cmd shim resolution (post Bug #192)", () => {
+  it("Bug #192 cmd-routing prelude is present", () => {
+    expect(src).toContain('_isWin    = process.platform === "win32"');
+    expect(src).toContain('_spawnBin = _isWin ? "cmd" : cmd');
+    expect(src).toContain('_spawnArg = _isWin ? ["/d", "/s", "/c", cmd, ...args] : args');
   });
 
-  it("the shell guard appears inside the spawn() call, not elsewhere", () => {
-    // Find the spawn call block and verify shell option is within it
-    const spawnBlock = src.match(/const child = spawn\(cmd, args, \{[\s\S]*?\}\);/);
-    expect(spawnBlock).not.toBeNull();
-    expect(spawnBlock[0]).toContain('shell: process.platform === "win32"');
+  it("worker spawn no longer uses the deprecated shell:true pattern", () => {
+    expect(spawnBlock).not.toBe("");
+    expect(spawnBlock).not.toMatch(/\bshell\s*:/);
+    expect(src).not.toContain('shell: process.platform === "win32"');
   });
 
-  it("spawn options include stdio pipes", () => {
-    const spawnBlock = src.match(/const child = spawn\(cmd, args, \{[\s\S]*?\}\);/);
-    expect(spawnBlock).not.toBeNull();
-    expect(spawnBlock[0]).toContain("stdio:");
+  it("worker spawn still pipes stdio", () => {
+    expect(spawnBlock).toContain("stdio:");
   });
 
-  it("spawn options include cwd", () => {
-    const spawnBlock = src.match(/const child = spawn\(cmd, args, \{[\s\S]*?\}\);/);
-    expect(spawnBlock).not.toBeNull();
-    expect(spawnBlock[0]).toContain("cwd");
+  it("worker spawn still sets cwd", () => {
+    expect(spawnBlock).toContain("cwd");
   });
 
-  it("no other spawn(cmd, args, ...) calls exist without the shell guard", () => {
-    // Split into lines and find spawn call-sites, then verify each block has shell:
-    const lines = src.split(/\r?\n/);
-    const spawnLineIdxs = lines
-      .map((l, i) => (l.includes("spawn(cmd, args,") ? i : -1))
-      .filter((i) => i >= 0);
-    expect(spawnLineIdxs.length).toBeGreaterThan(0);
-    for (const idx of spawnLineIdxs) {
-      // Check the next 20 lines for shell: (window widened for env-block additions)
-      const block = lines.slice(idx, idx + 20).join("\n");
-      expect(block).toContain("shell:");
-    }
+  it("only one spawn(_spawnBin, _spawnArg, …) call-site exists in orchestrator.mjs", () => {
+    const all = src.match(/spawn\(_spawnBin, _spawnArg,/g) ?? [];
+    expect(all.length).toBe(1);
   });
 });

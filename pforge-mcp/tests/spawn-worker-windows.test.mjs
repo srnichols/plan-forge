@@ -21,8 +21,9 @@ import { fileURLToPath } from "url";
 const __dirname = resolve(fileURLToPath(import.meta.url), "..");
 const src = readFileSync(resolve(__dirname, "..", "orchestrator.mjs"), "utf8");
 
-// Extract the spawn(cmd, args, { ... }) block once for all assertions.
-const spawnBlock = src.match(/const child = spawn\(cmd, args, \{[\s\S]*?\}\);/)?.[0] ?? "";
+// Bug #192 (v2.99.1): the spawn call now uses _spawnBin / _spawnArg locals
+// (Windows routes through cmd.exe instead of shell:true). Extract THAT block.
+const spawnBlock = src.match(/spawn\(_spawnBin, _spawnArg, \{[\s\S]*?\}\);/)?.[0] ?? "";
 
 describe("spawnWorker — Bug #121 windowsHide + git editor prevention", () => {
   it("(a) spawn options include windowsHide: true", () => {
@@ -49,9 +50,10 @@ describe("spawnWorker — Bug #121 windowsHide + git editor prevention", () => {
     expect(spawnBlock).toContain('GIT_SEQUENCE_EDITOR: "true"');
   });
 
-  it("existing options (shell, stdio, cwd) are still present", () => {
-    expect(spawnBlock).toContain('shell: process.platform === "win32"');
+  it("existing options (stdio, cwd) are still present and no shell:true (Bug #192)", () => {
     expect(spawnBlock).toContain("stdio:");
     expect(spawnBlock).toContain("cwd");
+    // Bug #192: shell option removed in favor of cmd.exe routing on Windows.
+    expect(spawnBlock).not.toMatch(/\bshell\s*:/);
   });
 });

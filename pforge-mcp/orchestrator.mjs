@@ -2575,7 +2575,17 @@ export function spawnWorker(prompt, options = {}) {
       return;
     }
 
-    const child = spawn(cmd, args, {
+    // Bug #192 (v2.99.1): on Windows, route through cmd.exe explicitly instead
+    // of using `shell: true` with array args. The legacy `shell:true + array
+    // args` pattern triggers Node's DEP0190 deprecation (will throw in a future
+    // major) because Node concatenates the args into a shell command line
+    // without escaping. Routing through cmd /d /s /c <bin> resolves .cmd shims
+    // the same way (original Bug #82 fix intent) without DEP0190 and without
+    // the unsafe arg-concat behavior.
+    const _isWin    = process.platform === "win32";
+    const _spawnBin = _isWin ? "cmd" : cmd;
+    const _spawnArg = _isWin ? ["/d", "/s", "/c", cmd, ...args] : args;
+    const child = spawn(_spawnBin, _spawnArg, {
       cwd,
       env: {
         ...process.env,
@@ -2588,7 +2598,6 @@ export function spawnWorker(prompt, options = {}) {
         ...(runPlanActive ? { PFORGE_RUN_PLAN_ACTIVE: "1" } : {}),
       },
       stdio: ["pipe", "pipe", "pipe"],
-      shell: process.platform === "win32",
       // Bug #121: suppress the console flash on Windows when spawning CLI workers.
       windowsHide: true,
     });

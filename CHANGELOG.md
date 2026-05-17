@@ -5,6 +5,36 @@ Format follows [Keep a Changelog](https://keepachangelog.com/).
 
 ---
 
+## [2.99.1] — 2026-05-17 — DEP0190 Spawn Hardening (Issue #192)
+
+> **One-liner**: Eliminates Node's DEP0190 DeprecationWarning emitted on every `pforge run-plan` invocation on Windows by replacing the legacy `shell:true + array args` pattern with explicit `cmd.exe` routing at all three spawn sites. The deprecated pattern is an OWASP-relevant argument-injection surface and will throw in a future Node major.
+
+#### Fixed — Bug #192: DEP0190 spawn deprecation
+- `pforge-mcp/orchestrator.mjs` (~L2591) — primary CLI worker spawn (every slice). On Windows, now routes through `cmd /d /s /c <bin>` with no `shell:true`.
+- `pforge-mcp/spaces-sync.mjs` (~L81) — `ghApi` helper for sync-spaces.
+- `pforge-mcp/github-metrics.mjs` (~L82) — `pullMetrics` for Copilot usage metrics.
+
+#### Fix pattern (already used in `workers/copilot-coding-agent.mjs:58`)
+
+```js
+const isWin    = process.platform === "win32";
+const spawnBin = isWin ? "cmd" : bin;
+const spawnArg = isWin ? ["/d", "/s", "/c", bin, ...args] : args;
+spawn(spawnBin, spawnArg, { ..., windowsHide: isWin });   // no `shell:true`
+```
+
+Resolves `.cmd` shims (original Bug #82 intent) without `shell:true` + array-args concat.
+
+#### Tests
+- `pforge-mcp/tests/spawn-dep0190-issue-192.test.mjs` (9 tests, NEW) — asserts no `shell: process.platform === "win32"` remains at any of the 3 sites and the cmd-routing pattern is in place.
+- `pforge-mcp/tests/orchestrator-spawn-shell.test.mjs` (5 tests, REWRITTEN) — now asserts the post-#192 `_spawnBin` / `_spawnArg` pattern instead of the deprecated `shell:true` pattern.
+- `pforge-mcp/tests/spawn-worker-windows.test.mjs` — updated extractor and shell-option assertion to match the new spawn block.
+
+#### Discovery
+- Found via v2.99.0 testbed Phase-2 background run; stderr contained `(node:64652) [DEP0190] DeprecationWarning: Passing args to a child process with shell option true can lead to security vulnerabilities…`
+
+---
+
 ## [2.99.0] — 2026-05-16 — forge_sync_memories (Roadmap C3)
 
 > **One-liner**: New `forge_sync_memories` MCP tool + `pforge sync-memories` CLI generates `.github/copilot-memory-hints.md` from forge decisions — trajectory notes, auto-skills, and brain L2 entries — so Copilot Memory auto-discovers project context without requiring OpenBrain configuration.

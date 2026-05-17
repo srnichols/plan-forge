@@ -38,7 +38,7 @@ remaining handles → never emits `slice-failed`.
 
 ### Fixed
 
-- **`pforge.ps1` `Invoke-RunPlan` background branch**: replaced
+- **`pforge.ps1` `Invoke-RunPlan` background branch** (option A): replaced
   `Start-Process -FilePath node -WindowStyle Hidden -RedirectStandard*`
   with `Start-Process -FilePath pwsh -WindowStyle Hidden -Command
   "& node $args *>&1 | Tee-Object $log"`. The hidden `pwsh` host
@@ -47,6 +47,22 @@ remaining handles → never emits `slice-failed`.
   to a single `.forge/orchestrator-logs/orch-<stamp>.log` file (the
   combined log replaces the prior split `.stdout.log` / `.stderr.log`
   pair). Status banner updated to reflect the single log path.
+
+- **`orchestrator.mjs` silent-death guard** (option B): added exported
+  `writeSilentExitRecord(sliceId, title, runDir)` helper that writes a
+  `slice-failed` event with `reason: "worker-exited-without-output"` to
+  `events.log`. A `process.once("exit", _silentDeathGuard)` listener
+  registered in `runPlan()` (deregistered on `run-completed` /
+  `run-aborted`) calls the helper if a slice is still active when the
+  process exits. This guarantees `events.log` always contains a terminal
+  event, even when the pwsh fix alone is insufficient (e.g., future
+  CLI workers with TTY requirements). `writeSilentExitRecord` uses
+  `writeFileSync` so it is safe to call from a synchronous exit handler.
+
+- **`orchestrator.mjs` `spawnWorker` TTY-failure annotation** (option C):
+  when the worker subprocess exits non-zero with no stdout and no stderr,
+  an annotated diagnostic message is injected into the stderr stream
+  referencing Issue #197 and the `--foreground` re-run hint.
 
 ### Lessons logged (memory)
 
@@ -58,9 +74,9 @@ remaining handles → never emits `slice-failed`.
   not restore the console; both fixes need to coexist conceptually but
   the new spawn pattern subsumes the old one (Tee-Object keeps the
   diagnostic trail).
-- Silent worker death is invisible in `events.log`. Future hardening:
-  wrap worker await in `try/finally` that always emits a
-  `slice-failed` event with `reason: worker-exited-without-output`.
+- Defense-in-depth: the pwsh fix prevents the console-missing failure;
+  the orchestrator guard ensures a `slice-failed` event is always written
+  even if a future CLI tool exits silently for a different reason.
 
 ### Closed issues
 

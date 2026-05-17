@@ -684,6 +684,7 @@ export function priceRun(sliceResults) {
   const byModel = {};
   const bySlice = [];
   let totalCost = 0;
+  let totalReviewerCost = 0;
   let totalIn = 0;
   let totalOut = 0;
 
@@ -694,9 +695,28 @@ export function priceRun(sliceResults) {
     totalIn += cost.tokens_in;
     totalOut += cost.tokens_out;
 
+    // Issue #194 (v3.0.2): aggregate quorum reviewer cost + dry-run tokens.
+    // `sr.quorum` is shaped by orchestrator.runPlan at slice persistence:
+    //   { score, models[], reviewerFallback, reviewerCost, dryRunTokens }
+    // Each reviewer leg consumes ~equal token volume, so we apportion
+    // dryRunTokens and reviewerCost evenly across `models`. `reviewerCost`
+    // joins `total_cost_usd` so the dashboard stops under-reporting the
+    // actual spend by an order of magnitude on quorum-power runs.
+    const reviewerCost = Number(sr.quorum?.reviewerCost) || 0;
+    const reviewerModels = Array.isArray(sr.quorum?.models) ? sr.quorum.models : [];
+    const reviewerTokensIn = Number(sr.quorum?.dryRunTokens?.tokens_in) || 0;
+    const reviewerTokensOut = Number(sr.quorum?.dryRunTokens?.tokens_out) || 0;
+    totalReviewerCost += reviewerCost;
+    totalIn += reviewerTokensIn;
+    totalOut += reviewerTokensOut;
+
     bySlice.push({
       slice: sr.number || sr.sliceId,
       ...cost,
+      // `cost_usd` stays executor-only for backward compat (existing dashboard
+      // code aggregates it). Reviewer cost is exposed as a sibling field.
+      reviewer_cost_usd: Math.round(reviewerCost * 1_000_000) / 1_000_000,
+      reviewer_models: reviewerModels,
     });
 
     if (!byModel[cost.model]) {
@@ -706,15 +726,41 @@ export function priceRun(sliceResults) {
     byModel[cost.model].tokens_out += cost.tokens_out;
     byModel[cost.model].cost_usd += cost.cost_usd;
     byModel[cost.model].slices += 1;
+
+    // Apportion reviewer telemetry evenly across reviewer models.
+    // Skip when all reviewer signals are zero (no reviewer actually ran).
+    if (reviewerModels.length > 0 && (reviewerCost > 0 || reviewerTokensIn > 0 || reviewerTokensOut > 0)) {
+      const share = 1 / reviewerModels.length;
+      const sharedIn = reviewerTokensIn * share;
+      const sharedOut = reviewerTokensOut * share;
+      const sharedCost = reviewerCost * share;
+      for (const rm of reviewerModels) {
+        if (!byModel[rm]) {
+          byModel[rm] = { tokens_in: 0, tokens_out: 0, cost_usd: 0, slices: 0, role: "reviewer" };
+        } else if (!byModel[rm].role) {
+          // Same model appears as both executor and reviewer — mark mixed
+          // so dashboards render an honest tag.
+          byModel[rm].role = byModel[rm].cost_usd > 0 ? "mixed" : "reviewer";
+        }
+        byModel[rm].tokens_in += sharedIn;
+        byModel[rm].tokens_out += sharedOut;
+        byModel[rm].cost_usd += sharedCost;
+        byModel[rm].slices += 1;
+      }
+    }
   }
 
   // Round model totals
   for (const m of Object.values(byModel)) {
     m.cost_usd = Math.round(m.cost_usd * 1_000_000) / 1_000_000;
+    m.tokens_in = Math.round(m.tokens_in);
+    m.tokens_out = Math.round(m.tokens_out);
   }
 
   return {
-    total_cost_usd: Math.round(totalCost * 100) / 100,
+    total_cost_usd: Math.round((totalCost + totalReviewerCost) * 100) / 100,
+    total_executor_cost_usd: Math.round(totalCost * 100) / 100,
+    total_reviewer_cost_usd: Math.round(totalReviewerCost * 100) / 100,
     total_tokens_in: totalIn,
     total_tokens_out: totalOut,
     by_model: byModel,

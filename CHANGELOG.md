@@ -5,6 +5,30 @@ Format follows [Keep a Changelog](https://keepachangelog.com/).
 
 ---
 
+## [3.1.1] — 2026-05-17 — Quorum Cost Aggregation Fix (Issue #194)
+
+> **One-liner**: `priceRun` was only counting executor-leg spend; quorum reviewer cost (up to 15× the executor cost on `power` runs) was silently dropped. Fixes dashboard under-reporting on all quorum-mode runs.
+
+#### Fixed — Bug #194
+
+**`pforge-mcp/cost-service.mjs` — `priceRun`**
+
+- `total_cost_usd` now includes reviewer spend: `sum(executor) + sum(reviewerCost)`.
+- New top-level fields `total_executor_cost_usd` / `total_reviewer_cost_usd` for transparency.
+- `by_model` includes reviewer models with apportioned cost and token counts.
+- `by_slice[i]` gains `reviewer_cost_usd` + `reviewer_models` sibling fields.
+- Models that appear as both executor and reviewer get `role: "mixed"`.
+
+#### Tests
+
+- `pforge-mcp/tests/cost-aggregation-issue-194.test.mjs` — 16 tests (NEW): no-quorum baseline, single-slice quorum, multi-slice quorum, multi-model reviewer, same-model mixed role, zero-cost quorum, by_model aggregation, total fields.
+
+#### Full sweep
+
+- 426 targeted tests passed | EXITCODE=0.
+
+---
+
 ## [3.1.0] — 2026-05-17 — Chat Customizations Editor (D5)
 
 > **One-liner**: Adds a **Settings → Copilot** tab to the dashboard — a Chat Customizations editor that lets you preview and sync `.github/copilot-instructions.md` without leaving the browser. Completes Roadmap Watch List item D5.

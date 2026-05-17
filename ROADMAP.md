@@ -7,7 +7,13 @@
 
 ## Current Release
 
-**v3.1.2** (2026-05-18) — Cloud Agent Validation Stack (B4). Adds `cloudAgentValidation` to `.forge.json` — declare which GitHub scanning tools (CodeQL, secret scanning, dependency review, Copilot code review) are active. `forge_github_status` surfaces the full validation stack in one call via a new `cloud-agent-validation` check.
+**v3.3.3** (2026-05-17) — Background Mode Console Fix (Issue #197). Fixes silent death of `pforge run-plan` background mode on Windows. `Start-Process node -WindowStyle Hidden` gave the process tree no attached console; `gh copilot` CLI requires a console to survive startup. Fix: background mode now wraps `node` in a hidden `pwsh` host that allocates its own console. Adds `writeSilentExitRecord` orchestrator guard that writes a `slice-failed` event when the process exits mid-slice (instead of silent clean exit). 38 new tests.
+
+Previous: **v3.3.2** (2026-05-17) — Release-invariant CI guard + 18-release backfill.
+
+Previous: **v3.3.0** (2026-05-17) — Agentic Code Review Delegation (D6). `pforge review-delegate` and `forge_review_delegate` MCP tool. Dispatches a structured review task to the Copilot cloud agent, posts inline PR comments, and files a LiveGuard incident for blocking findings.
+
+Previous: **v3.1.2** (2026-05-18) — Cloud Agent Validation Stack (B4). Adds `cloudAgentValidation` to `.forge.json` — declare which GitHub scanning tools (CodeQL, secret scanning, dependency review, Copilot code review) are active. `forge_github_status` surfaces the full validation stack in one call via a new `cloud-agent-validation` check.
 
 Previous: **v3.1.0** (2026-05-17) — Chat Customizations Editor (D5). Adds a Settings → Copilot tab to the dashboard for previewing and syncing `.github/copilot-instructions.md` without leaving the browser. Three new REST endpoints (`GET /api/copilot-instructions`, `POST /api/copilot-instructions/preview`, `POST /api/copilot-instructions/sync`). 12 new tests.
 

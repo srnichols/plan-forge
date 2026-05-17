@@ -5,6 +5,32 @@ Format follows [Keep a Changelog](https://keepachangelog.com/).
 
 ---
 
+## [3.1.0] — 2026-05-17 — Chat Customizations Editor (D5)
+
+> **One-liner**: Adds a **Settings → Copilot** tab to the dashboard — a Chat Customizations editor that lets you preview and sync `.github/copilot-instructions.md` without leaving the browser. Completes Roadmap Watch List item D5.
+
+#### Added — Settings → Copilot tab (dashboard)
+- New `settings-copilot` sub-tab under the Settings group in the Plan Forge dashboard.
+- **Status card**: shows whether `.github/copilot-instructions.md` exists, its section count, and last-modified date.
+- **Sync options**: checkbox toggles for `--no-principles`, `--no-profile`, `--no-extras`, and `--force overwrite`.
+- **Preview** button — dry-runs `forge_sync_instructions` and renders the would-be output in a scrollable code block (copyable via "Copy" button).
+- **Sync Now** button — writes the file and refreshes the status card; shows a friendly message when the file is already up to date.
+- **Refresh** button — re-fetches file status without reloading the page.
+
+#### Added — REST endpoints (`server.mjs`)
+- `GET /api/copilot-instructions` — returns `{ ok, exists, filePath, content, lastModified, byteSize, sectionCount }`.
+- `POST /api/copilot-instructions/preview` — body `{ noPrinciples, noProfile, noExtras }` → dry-run result with `dryRunContent`.
+- `POST /api/copilot-instructions/sync` — body `{ noPrinciples, noProfile, noExtras, force }` → writes file, returns sync result.
+
+#### Tests
+- `pforge-mcp/tests/copilot-instructions-api.test.mjs` — 12 tests covering status (absent/present/sectionCount), preview (dry-run, all three flags), and sync (write, unchanged, force, noPrinciples, sectionsCount).
+- `tests/server.test.mjs` — updated tab-count assertions to reflect new Copilot tab (35 → 36 total, 10 → 11 Settings sub-tabs).
+
+#### Full sweep
+- 5628 passed | 35 skipped | EXITCODE=0.
+
+---
+
 ## [3.0.1] — 2026-05-17 — Telemetry-Honesty Hotfix (Issue #193)
 
 > **One-liner**: Four small but compounding UX / observability honesty defects surfaced by the v3.0.0 testbed sweep — misleading `[model] resolved=` log, self-contradictory `✓ … unavailable` quorum rows, missing `phase` field in `summary.json`, and lingering hardcoded `apiDurationMs: 0` in the API-direct and dry-run paths. All four fixed in a single hotfix release.

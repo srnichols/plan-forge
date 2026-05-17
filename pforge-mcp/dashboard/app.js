@@ -4097,6 +4097,7 @@ const tabLoadHooks = {
   'settings-bridge': () => { loadBridgeStatus(); renderNotificationsSubtab(); },
   'settings-crucible': () => { loadCrucibleConfigUI(); },
   'settings-brain': () => { loadBrainSubtab(); },
+  'settings-copilot': () => { loadCopilotInstrStatus(); },
 };
 
 // ─── Theme Toggle ─────────────────────────────────────────────
@@ -7050,3 +7051,119 @@ async function loadGithubMetrics() {
   }
 }
 
+
+// ─── D5 — Chat Customizations Editor (Settings > Copilot, v3.1.0) ──────────
+
+async function loadCopilotInstrStatus() {
+  const badge   = document.getElementById('copilot-instr-exists-badge');
+  const sections = document.getElementById('copilot-instr-sections');
+  const modified = document.getElementById('copilot-instr-modified');
+  const pathEl   = document.getElementById('copilot-instr-path');
+  try {
+    const r = await fetch(`${API_BASE}/api/copilot-instructions`);
+    const d = await r.json();
+    if (d.exists) {
+      badge.textContent = '✓ File exists';
+      badge.className = 'text-xs font-semibold px-2 py-0.5 rounded-full bg-green-900/60 text-green-300';
+      sections.textContent = `${d.sectionCount} section${d.sectionCount === 1 ? '' : 's'}`;
+      modified.textContent = d.lastModified
+        ? `Updated ${new Date(d.lastModified).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}`
+        : '';
+    } else {
+      badge.textContent = '✗ File not found';
+      badge.className = 'text-xs font-semibold px-2 py-0.5 rounded-full bg-gray-700 text-gray-400';
+      sections.textContent = 'Run "Sync Now" to generate';
+      modified.textContent = '';
+    }
+    pathEl.textContent = d.filePath || '';
+
+    // Show current file content if it exists
+    if (d.content) {
+      const wrap  = document.getElementById('copilot-instr-preview-wrap');
+      const pre   = document.getElementById('copilot-instr-preview');
+      const label = document.getElementById('copilot-instr-preview-label');
+      label.textContent = 'Current file';
+      pre.textContent = d.content;
+      wrap.classList.remove('hidden');
+    }
+  } catch (e) {
+    if (badge) { badge.textContent = 'Error loading status'; badge.className = 'text-xs font-semibold px-2 py-0.5 rounded-full bg-red-900/60 text-red-300'; }
+  }
+}
+
+function _copilotInstrOpts() {
+  return {
+    noPrinciples: document.getElementById('opt-no-principles')?.checked ?? false,
+    noProfile:    document.getElementById('opt-no-profile')?.checked ?? false,
+    noExtras:     document.getElementById('opt-no-extras')?.checked ?? false,
+    force:        document.getElementById('opt-force')?.checked ?? false,
+  };
+}
+
+function _copilotInstrShowMsg(text, ok) {
+  const el = document.getElementById('copilot-instr-msg');
+  if (!el) return;
+  el.textContent = text;
+  el.className = ok
+    ? 'mb-4 text-sm rounded-lg px-4 py-3 border bg-green-900/30 border-green-700/50 text-green-300'
+    : 'mb-4 text-sm rounded-lg px-4 py-3 border bg-red-900/30 border-red-700/50 text-red-300';
+  el.classList.remove('hidden');
+}
+
+async function copilotInstrPreview() {
+  const opts = _copilotInstrOpts();
+  try {
+    const r = await fetch(`${API_BASE}/api/copilot-instructions/preview`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(opts),
+    });
+    const d = await r.json();
+    if (!d.ok) { _copilotInstrShowMsg(d.error || 'Preview failed', false); return; }
+    const wrap  = document.getElementById('copilot-instr-preview-wrap');
+    const pre   = document.getElementById('copilot-instr-preview');
+    const label = document.getElementById('copilot-instr-preview-label');
+    label.textContent = `Preview (${d.sectionsCount} section${d.sectionsCount === 1 ? '' : 's'})`;
+    pre.textContent = d.dryRunContent ?? '';
+    wrap.classList.remove('hidden');
+    _copilotInstrShowMsg(`Preview ready — ${d.sectionsCount} section${d.sectionsCount === 1 ? '' : 's'}`, true);
+  } catch (e) {
+    _copilotInstrShowMsg(`Preview error: ${e.message}`, false);
+  }
+}
+
+async function copilotInstrSync() {
+  const opts = _copilotInstrOpts();
+  try {
+    const r = await fetch(`${API_BASE}/api/copilot-instructions/sync`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(opts),
+    });
+    const d = await r.json();
+    if (!d.ok) { _copilotInstrShowMsg(d.error || 'Sync failed', false); return; }
+    if (!d.changed && !opts.force) {
+      _copilotInstrShowMsg('File is already up to date — no changes written. Use "Force overwrite" to re-sync anyway.', true);
+    } else {
+      _copilotInstrShowMsg(`Synced! ${d.sectionsCount} section${d.sectionsCount === 1 ? '' : 's'} written to .github/copilot-instructions.md`, true);
+    }
+    loadCopilotInstrStatus();
+  } catch (e) {
+    _copilotInstrShowMsg(`Sync error: ${e.message}`, false);
+  }
+}
+
+function copilotInstrCopyPreview() {
+  const pre = document.getElementById('copilot-instr-preview');
+  if (!pre?.textContent) return;
+  navigator.clipboard?.writeText(pre.textContent).then(() => {
+    _copilotInstrShowMsg('Copied to clipboard!', true);
+  }).catch(() => {
+    _copilotInstrShowMsg('Copy failed — select text manually.', false);
+  });
+}
+
+window.loadCopilotInstrStatus = loadCopilotInstrStatus;
+window.copilotInstrPreview    = copilotInstrPreview;
+window.copilotInstrSync       = copilotInstrSync;
+window.copilotInstrCopyPreview = copilotInstrCopyPreview;

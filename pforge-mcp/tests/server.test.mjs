@@ -1850,9 +1850,9 @@ describe("dashboard tab structure", () => {
     expect(forgeRow?.[0] || "").not.toContain('data-tab="config"');
   });
 
-  it("total tab count is 35 (18 core + 5 LG + 1 Forge-Master + 9 Settings + 1 GitHub + 1 Anvil-Lattice — Phase-30 decomposition + Phase GITHUB-D + Phase-LATTICE)", () => {
+  it("total tab count is 36 (18 core + 5 LG + 1 Forge-Master + 10 Settings + 1 GitHub + 1 Anvil-Lattice — Phase-30 decomposition + Phase GITHUB-D + Phase-LATTICE + D5 Copilot)", () => {
     const tabMatches = dashboardHtml.match(/data-tab="[^"]+"/g) || [];
-    expect(tabMatches.length).toBe(35);
+    expect(tabMatches.length).toBe(36);
   });
 
   it("Cross-group tab migration (Slice 7): Extensions→Settings, Bug Registry→LiveGuard, Watcher→LiveGuard", () => {
@@ -1861,10 +1861,10 @@ describe("dashboard tab structure", () => {
     const forgeRow = dashboardHtml.match(/id="subtabs-forge"[\s\S]*?<\/div>/);
     expect((forgeRow?.[0].match(/data-tab="/g) || []).length).toBe(17);
 
-    // Extensions moved to Settings row (9 native + 1 migrated = 10 total)
+    // Extensions moved to Settings row (9 native + 1 migrated + 1 Copilot = 11 total)
     const settingsRow = dashboardHtml.match(/id="subtabs-settings"[\s\S]*?<\/div>/);
     expect(settingsRow?.[0] || "").toContain('data-tab="extensions"');
-    expect((settingsRow?.[0].match(/data-tab="/g) || []).length).toBe(10);
+    expect((settingsRow?.[0].match(/data-tab="/g) || []).length).toBe(11);
 
     // Bug Registry + Watcher moved to LiveGuard row (5 native + 2 migrated = 7 total)
     const liveguardRow = dashboardHtml.match(/id="subtabs-liveguard"[\s\S]*?<\/div>/);

@@ -7,7 +7,9 @@
 
 ## Current Release
 
-**v3.0.0** (2026-05-17) — Copilot Instructions Sync (`forge_sync_instructions`). Completes the Copilot integration trilogy: generates `.github/copilot-instructions.md` from forge project context (project profile, project principles, extra instruction files, `.forge.json` config). GitHub Copilot reads this file automatically, giving every conversation project-specific guidance without manual setup. New `pforge sync-instructions` CLI. 30 tests.
+**v3.1.0** (2026-05-17) — Chat Customizations Editor (D5). Adds a Settings → Copilot tab to the dashboard for previewing and syncing `.github/copilot-instructions.md` without leaving the browser. Three new REST endpoints (`GET /api/copilot-instructions`, `POST /api/copilot-instructions/preview`, `POST /api/copilot-instructions/sync`). 12 new tests.
+
+Previous: **v3.0.0** (2026-05-17) — Copilot Instructions Sync (`forge_sync_instructions`). Completes the Copilot integration trilogy: generates `.github/copilot-instructions.md` from forge project context (project profile, project principles, extra instruction files, `.forge.json` config). GitHub Copilot reads this file automatically, giving every conversation project-specific guidance without manual setup. New `pforge sync-instructions` CLI. 30 tests.
 
 Previous: **v2.99.1** (2026-05-17) — DEP0190 Spawn Hardening (Issue #192). Eliminates Node's DEP0190 DeprecationWarning on Windows by replacing `shell:true + array args` with explicit `cmd.exe` routing at all 3 spawn sites.
 
@@ -223,7 +225,7 @@ Classify MCP tools by risk level (auto-approvable vs require confirmation). Depe
 | D2 | Jira integration | Jira API documented |
 | D3 | Merge conflict resolution | API callable from MCP |
 | D4 | Session tracing for audit | Trace format documented |
-| D5 | Chat Customizations editor | Add when convenient |
+| D5 | Chat Customizations editor | ✅ Shipped — v3.1.0 |
 | D6 | Agentic code review delegation | Native review API matures |
 | D7 | Plan mode metrics | GitHub metrics API exposes data |
 

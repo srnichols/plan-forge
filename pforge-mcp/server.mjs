@@ -8861,6 +8861,61 @@ export function createExpressApp() {
     } catch (err) { res.status(500).json({ error: err.message }); }
   });
 
+  // D5 — Chat Customizations editor: /api/copilot-instructions (v3.1.0)
+  // GET  — returns current file status + content
+  // POST /preview — dry-run: returns rendered Markdown without writing
+  // POST /sync    — writes .github/copilot-instructions.md
+  app.get("/api/copilot-instructions", (_req, res) => {
+    try {
+      const root = findProjectRoot(PROJECT_DIR);
+      const filePath = join(root, ".github", "copilot-instructions.md");
+      const exists = existsSync(filePath);
+      let content = null, lastModified = null, byteSize = 0;
+      if (exists) {
+        try {
+          content = readFileSync(filePath, "utf-8");
+          const st = statSync(filePath);
+          lastModified = st.mtimeMs;
+          byteSize = st.size;
+        } catch { /* non-fatal */ }
+      }
+      // Count sections (lines starting with "##")
+      const sectionCount = content ? (content.match(/^##\s/gm) || []).length : 0;
+      res.json({ ok: true, exists, filePath, content, lastModified, byteSize, sectionCount });
+    } catch (err) { res.status(500).json({ ok: false, error: err.message }); }
+  });
+
+  app.post("/api/copilot-instructions/preview", (req, res) => {
+    try {
+      const root = findProjectRoot(PROJECT_DIR);
+      const { noPrinciples = false, noProfile = false, noExtras = false } = req.body || {};
+      const result = syncInstructions({
+        projectRoot: root,
+        dryRun: true,
+        noPrinciples: Boolean(noPrinciples),
+        noProfile:    Boolean(noProfile),
+        noExtras:     Boolean(noExtras),
+      });
+      res.json(result);
+    } catch (err) { res.status(500).json({ ok: false, error: err.message }); }
+  });
+
+  app.post("/api/copilot-instructions/sync", (req, res) => {
+    try {
+      const root = findProjectRoot(PROJECT_DIR);
+      const { noPrinciples = false, noProfile = false, noExtras = false, force = false } = req.body || {};
+      const result = syncInstructions({
+        projectRoot: root,
+        dryRun:       false,
+        force:        Boolean(force),
+        noPrinciples: Boolean(noPrinciples),
+        noProfile:    Boolean(noProfile),
+        noExtras:     Boolean(noExtras),
+      });
+      res.json(result);
+    } catch (err) { res.status(500).json({ ok: false, error: err.message }); }
+  });
+
   // Phase-29 — Forge-Master Studio API routes (async, registered on demand)
   import("./forge-master-routes.mjs").then(({ registerForgeMasterRoutes }) => {
     registerForgeMasterRoutes(app, invokeForgeTool);

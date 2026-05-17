@@ -19,7 +19,12 @@ vi.mock("node:child_process", () => ({
 }));
 
 import { execSync } from "node:child_process";
-import { pushSliceSnapshot, popSliceSnapshot, cleanupStaleSnapshots } from "../orchestrator.mjs";
+import {
+  pushSliceSnapshot,
+  popSliceSnapshot,
+  cleanupStaleSnapshots,
+  attachSliceSnapshotRestore,
+} from "../orchestrator.mjs";
 
 describe("Issue #178 — pushSliceSnapshot", () => {
   beforeEach(() => vi.clearAllMocks());
@@ -187,6 +192,61 @@ describe("Issue #178 / #201 — popSliceSnapshot (apply-then-drop)", () => {
   it("never throws even when `git stash list` itself fails", () => {
     execSync.mockImplementationOnce(() => { throw new Error("git: command not found"); });
     expect(() => popSliceSnapshot({ cwd: "/fake/cwd", sliceNumber: 1 })).not.toThrow();
+  });
+});
+
+describe("Issue #203 — attachSliceSnapshotRestore", () => {
+  beforeEach(() => vi.clearAllMocks());
+  afterEach(() => vi.restoreAllMocks());
+
+  it("adds snapshotStashed:false when no snapshot was pushed", () => {
+    const result = attachSliceSnapshotRestore({
+      sliceResult: { status: "passed" },
+      snapshotStash: false,
+      sliceNumber: 1,
+      _popSliceSnapshot: vi.fn(),
+    });
+
+    expect(result.status).toBe("passed");
+    expect(result.snapshotStashed).toBe(false);
+    expect(result.snapshotRestored).toBeUndefined();
+  });
+
+  it("restores snapshot and stamps success fields when snapshot exists", () => {
+    const pop = vi.fn(() => ({ restored: true, stashRef: "stash@{0}" }));
+    const result = attachSliceSnapshotRestore({
+      sliceResult: { status: "passed" },
+      snapshotStash: true,
+      sliceNumber: 2,
+      _popSliceSnapshot: pop,
+    });
+
+    expect(pop).toHaveBeenCalledTimes(1);
+    expect(result.snapshotStashed).toBe(true);
+    expect(result.snapshotRestored).toBe(true);
+    expect(result.snapshotRestoreError).toBeUndefined();
+  });
+
+  it("stamps restore error and emits advisory event when restore fails", () => {
+    const pop = vi.fn(() => ({ restored: false, conflict: true, error: "conflict" }));
+    const eventBus = { emit: vi.fn() };
+
+    const result = attachSliceSnapshotRestore({
+      sliceResult: { status: "failed" },
+      snapshotStash: true,
+      sliceNumber: 3,
+      eventBus,
+      _popSliceSnapshot: pop,
+    });
+
+    expect(result.snapshotStashed).toBe(true);
+    expect(result.snapshotRestored).toBe(false);
+    expect(result.snapshotRestoreError).toBe("conflict");
+    expect(eventBus.emit).toHaveBeenCalledWith("snapshot-restore-failed", expect.objectContaining({
+      sliceNumber: 3,
+      conflict: true,
+      error: "conflict",
+    }));
   });
 });
 

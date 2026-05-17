@@ -7837,6 +7837,60 @@ export function popSliceSnapshot({ cwd = process.cwd(), sliceNumber, _execSync =
 }
 
 /**
+ * Attach snapshot restore metadata to a slice result and restore the snapshot
+ * exactly once when `snapshotStash` is true.
+ *
+ * This centralizes snapshot finalize behavior so every executeSlice return path
+ * (success, failure, early-return) reports consistent snapshot fields.
+ *
+ * @param {{
+ *   sliceResult: Record<string, any>,
+ *   snapshotStash: boolean,
+ *   cwd?: string,
+ *   sliceNumber: string|number,
+ *   eventBus?: { emit?: Function }|null,
+ *   _popSliceSnapshot?: Function,
+ * }} params
+ * @returns {Record<string, any>}
+ */
+export function attachSliceSnapshotRestore({
+  sliceResult,
+  snapshotStash,
+  cwd = process.cwd(),
+  sliceNumber,
+  eventBus = null,
+  _popSliceSnapshot = popSliceSnapshot,
+} = {}) {
+  const base = { ...(sliceResult || {}) };
+
+  if (!snapshotStash) {
+    return { ...base, snapshotStashed: false };
+  }
+
+  const restore = _popSliceSnapshot({ cwd, sliceNumber });
+  const withSnapshot = {
+    ...base,
+    snapshotStashed: true,
+    snapshotRestored: !!restore?.restored,
+  };
+
+  if (!restore?.restored) {
+    withSnapshot.snapshotRestoreError = restore?.error || "snapshot restore failed";
+    if (eventBus) {
+      eventBus.emit("snapshot-restore-failed", {
+        sliceNumber,
+        stashRef: `pforge-slice-${sliceNumber}-snapshot`,
+        conflict: !!restore?.conflict,
+        error: withSnapshot.snapshotRestoreError,
+        recovery: "Run `git stash list` and `git stash apply stash@{0}` to recover your WIP.",
+      });
+    }
+  }
+
+  return withSnapshot;
+}
+
+/**
  * Issue #201 — janitor pass that drops `pforge-slice-N-snapshot` stashes
  * older than a threshold (default 7 days). Prevents long-term accumulation
  * of orphaned snapshots from conflicted pops in prior runs.
@@ -8848,6 +8902,13 @@ async function executeSlice(slice, options) {
   // never popped, silently capturing operator WIP into `git stash list`.
   const snapshot = pushSliceSnapshot({ cwd, sliceNumber: slice.number });
   const snapshotStash = snapshot.pushed;
+  const finalizeSliceResult = (result) => attachSliceSnapshotRestore({
+    sliceResult: result,
+    snapshotStash,
+    cwd,
+    sliceNumber: slice.number,
+    eventBus,
+  });
 
   // ─── Teardown Safety Guard: capture git baseline ────────────────────
   let teardownBaseline = null;
@@ -9134,23 +9195,23 @@ async function executeSlice(slice, options) {
             : "",
         };
       } catch (err) {
-        return {
+        return finalizeSliceResult({
           status: "failed",
           duration: Date.now() - startTime,
           error: err.message,
           attempts: attempt + 1,
-        };
+        });
       }
     } else {
       try {
         workerResult = await spawnWorker(sliceInstructions, { model: currentModel, cwd, runPlanActive: true, timeout: resolveWorkerTimeoutMs({ sliceOverride: slice.workerTimeoutMs }), eventBus });
       } catch (err) {
-        return {
+        return finalizeSliceResult({
           status: "failed",
           duration: Date.now() - startTime,
           error: err.message,
           attempts: attempt + 1,
-        };
+        });
       }
     }
 
@@ -9296,12 +9357,12 @@ async function executeSlice(slice, options) {
       }
 
       if (teardownGuardConfig.blockOnBranchLoss) {
-        return {
+        return finalizeSliceResult({
           ok: false,
           sliceNumber: slice.number,
           reason: "teardown-branch-loss",
           incident,
-        };
+        });
       }
     }
   }
@@ -9566,29 +9627,7 @@ async function executeSlice(slice, options) {
     } catch { /* non-fatal */ }
   }
 
-  // Issue #178: restore the pre-slice working-tree snapshot. Before this fix
-  // we `git stash push`-ed any uncommitted operator work at slice start
-  // but never popped it — so operator edits silently vanished into
-  // `git stash list` after each run. Always pop, even on failure, so
-  // the operator can decide what to do with their WIP.
-  if (snapshotStash) {
-    const restore = popSliceSnapshot({ cwd, sliceNumber: slice.number });
-    sliceResult.snapshotRestored = restore.restored;
-    if (!restore.restored) {
-      sliceResult.snapshotRestoreError = restore.error;
-      if (eventBus) {
-        eventBus.emit("snapshot-restore-failed", {
-          sliceNumber: slice.number,
-          stashRef: `pforge-slice-${slice.number}-snapshot`,
-          conflict: !!restore.conflict,
-          error: restore.error,
-          recovery: "Run `git stash list` and `git stash apply stash@{0}` to recover your WIP.",
-        });
-      }
-    }
-  }
-
-  return sliceResult;
+  return finalizeSliceResult(sliceResult);
 }
 
 function buildSlicePrompt(slice) {

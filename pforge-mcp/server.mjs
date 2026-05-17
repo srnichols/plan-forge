@@ -139,6 +139,8 @@ import { latticeIndex, latticeStat, latticeQuery, latticeCallers, latticeBlast }
 import { exportPlan, exportPlanFromFile } from "./export-plan.mjs";
 // Roadmap C3 — forge_sync_memories: generate .github/copilot-memory-hints.md from forge decisions
 import { syncMemories } from "./sync-memories.mjs";
+// v3.0.0 — forge_sync_instructions: generate .github/copilot-instructions.md from forge project context
+import { syncInstructions } from "./sync-instructions.mjs";
 import express from "express";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -1713,6 +1715,24 @@ const TOOLS = [
         since:   { type: "string",  description: "ISO 8601 date/datetime string: only include hints newer than this" },
         output:  { type: "string",  description: "Override output path (default: .github/copilot-memory-hints.md, relative to project root)" },
         path:    { type: "string",  description: "Project directory (default: current)" },
+      },
+      required: [],
+    },
+  },
+  {
+    // v3.0.0 — forge_sync_instructions
+    name: "forge_sync_instructions",
+    description: "Generate .github/copilot-instructions.md from forge project context (project profile, project principles, .forge.json config). GitHub Copilot reads this file automatically. Completes the Copilot integration trilogy: sync-memories → sync-instructions. USE FOR: populate Copilot with project-specific instructions, regenerate instructions after adding project profile or principles, export project context to Copilot. DO NOT USE FOR: uploading to Copilot Spaces (use forge_sync_spaces), reading memory hints (use forge_sync_memories).",
+    inputSchema: {
+      type: "object",
+      properties: {
+        dryRun:        { type: "boolean", description: "Return rendered Markdown without writing the file (default: false)" },
+        force:         { type: "boolean", description: "Re-write even if content is unchanged (default: false)" },
+        noPrinciples:  { type: "boolean", description: "Skip the Project Principles section (default: false)" },
+        noProfile:     { type: "boolean", description: "Skip the Project Profile section (default: false)" },
+        noExtras:      { type: "boolean", description: "Skip extra .github/instructions/*.instructions.md files (default: false)" },
+        output:        { type: "string",  description: "Override output path (default: .github/copilot-instructions.md, relative to project root)" },
+        path:          { type: "string",  description: "Project directory (default: current)" },
       },
       required: [],
     },
@@ -5651,6 +5671,28 @@ server.setRequestHandler(CallToolRequestSchema, _wrapWithToolSpan(async (request
     }
   }
 
+  // ─── forge_sync_instructions — generate .github/copilot-instructions.md (v3.0.0) ──────
+  if (name === "forge_sync_instructions") {
+    const t0 = Date.now();
+    try {
+      const cwd = args.path ? resolve(args.path) : findProjectRoot(PROJECT_DIR);
+      const result = syncInstructions({
+        projectRoot:   cwd,
+        dryRun:        args.dryRun        ?? false,
+        force:         args.force         ?? false,
+        noPrinciples:  args.noPrinciples  ?? false,
+        noProfile:     args.noProfile     ?? false,
+        noExtras:      args.noExtras      ?? false,
+        output:        args.output,
+      });
+      emitToolTelemetry("forge_sync_instructions", args, result, Date.now() - t0, result.ok ? "OK" : "ERROR", cwd);
+      return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
+    } catch (err) {
+      emitToolTelemetry("forge_sync_instructions", args, { error: err.message }, Date.now() - t0, "ERROR", findProjectRoot(PROJECT_DIR));
+      return { content: [{ type: "text", text: `Tool error: ${err.message}` }], isError: true };
+    }
+  }
+
 
   if (name === "forge_testbed_happypath") {
     const t0 = Date.now();
@@ -7914,6 +7956,8 @@ export function createExpressApp() {
     "forge_export_plan",
     // Roadmap C3 — forge_sync_memories is MCP-native (CLI also available via pforge sync-memories).
     "forge_sync_memories",
+    // v3.0.0 — forge_sync_instructions is MCP-native (CLI also available via pforge sync-instructions).
+    "forge_sync_instructions",
   ]);
   app.post("/api/tool/:name", async (req, res) => {
     try {

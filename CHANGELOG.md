@@ -5,6 +5,33 @@ Format follows [Keep a Changelog](https://keepachangelog.com/).
 
 ---
 
+## [3.0.0] — 2026-05-17 — Copilot Instructions Sync (forge_sync_instructions)
+
+> **One-liner**: Completes the Copilot integration trilogy by generating `.github/copilot-instructions.md` from forge project context — project profile, project principles, extra instruction files, and `.forge.json` config. GitHub Copilot reads this file automatically, giving every conversation project-specific guidance without manual setup.
+
+#### Added — `forge_sync_instructions` MCP tool
+- `pforge-mcp/sync-instructions.mjs` — core module with the following exports:
+  - `syncInstructions(opts)` — entry point; supports `dryRun`, `force`, `noPrinciples`, `noProfile`, `noExtras`, `output`
+  - `collectProjectProfile(root)` — reads `.github/instructions/project-profile.instructions.md`, strips YAML frontmatter
+  - `collectProjectPrinciples(root)` — reads `docs/plans/PROJECT-PRINCIPLES.md` (primary) or `.github/instructions/project-principles.instructions.md` (fallback)
+  - `collectForgeConfig(root)` — extracts model routing, quorum mode, parallelism, and philosophy from `.forge.json`
+  - `collectInstructionFiles(root, opts)` — reads project-specific `.instructions.md` files, excludes generic baseline files
+  - `renderInstructions(data)` — builds structured Markdown with up to 4+ sections
+  - `stripFrontmatter(text)` — strips YAML frontmatter from Markdown
+  - `sha256(text)` — SHA-256 digest for change detection
+  - `SyncInstructionsError` — typed error class
+- `forge_sync_instructions` MCP tool wired into `server.mjs` (tool definition, handler, `MCP_ONLY_TOOLS`)
+- `pforge sync-instructions` CLI in `pforge.ps1` and `pforge.sh`
+  - Flags: `--dry-run`, `--force`, `--no-principles`, `--no-profile`, `--no-extras`, `--output <path>`
+- `pforge-mcp/tests/sync-instructions.test.mjs` — 30 tests
+
+#### Added — Copilot integration trilogy complete
+- v2.98.0: `pforge sync-spaces` → Copilot Spaces
+- v2.99.x: `forge_sync_memories` → `.github/copilot-memory-hints.md`
+- v3.0.0: `forge_sync_instructions` → `.github/copilot-instructions.md`
+
+---
+
 ## [2.99.1] — 2026-05-17 — DEP0190 Spawn Hardening (Issue #192)
 
 > **One-liner**: Eliminates Node's DEP0190 DeprecationWarning emitted on every `pforge run-plan` invocation on Windows by replacing the legacy `shell:true + array args` pattern with explicit `cmd.exe` routing at all three spawn sites. The deprecated pattern is an OWASP-relevant argument-injection surface and will throw in a future Node major.
@@ -271,6 +298,7 @@ Resolves `.cmd` shims (original Bug #82 intent) without `shell:true` + array-arg
 #### Notes
 - Test suite: all passing (orchestrator-gate-dispatch + crucible-import + lattice-chunker pure-JS path). Tree-sitter tests are skipped on platforms without the grammar binary — the pure-JS fallback is the default and fully supported.
 - `forge_capabilities` now reports `version: "2.95.0"` with all new tools listed.
+- QA: end-to-end memory-upgrade test suite added (see `scripts/memory-qa-smoke.*`).
 
 ---
 

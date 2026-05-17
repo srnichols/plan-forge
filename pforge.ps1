@@ -128,6 +128,7 @@ function Show-Help {
     Write-Host "  crucible <sub>    Manage Crucible smelts (import, status) — use 'pforge crucible --help' for details"
     Write-Host "  sync-spaces       Push active plan, instructions, and tool catalog to a GitHub Copilot Space"
     Write-Host "  sync-memories     Generate .github/copilot-memory-hints.md from forge decisions (trajectory notes, auto-skills, brain)"
+    Write-Host "  sync-instructions Generate .github/copilot-instructions.md from forge project context (profile, principles, config)"
     Write-Host "  github <sub>      Inspect the GitHub-native AI surface (status | doctor | metrics)"
     Write-Host "  help              Show this help message"
     Write-Host ""
@@ -6559,6 +6560,99 @@ function Invoke-SyncMemories {
     }
 }
 
+# ─── Command: sync-instructions ───────────────────────────────────────────────
+function Invoke-SyncInstructions {
+    # pforge sync-instructions — Generate .github/copilot-instructions.md from forge project context.
+    # Flags: --dry-run, --force, --no-principles, --no-profile, --no-extras, --output <path>
+    $dryRun       = $false
+    $force        = $false
+    $noPrinciples = $false
+    $noProfile    = $false
+    $noExtras     = $false
+    $output       = $null
+
+    $i = 0
+    while ($i -lt $Arguments.Count) {
+        switch -Regex ($Arguments[$i]) {
+            '^--dry-run$'        { $dryRun = $true }
+            '^--force$'          { $force = $true }
+            '^--no-principles$'  { $noPrinciples = $true }
+            '^--no-profile$'     { $noProfile = $true }
+            '^--no-extras$'      { $noExtras = $true }
+            '^--output$'         { if (($i + 1) -lt $Arguments.Count) { $output = $Arguments[$i + 1]; $i++ } }
+            '^--output=(.+)$'    { $output = $Matches[1] }
+            '^(-h|--help)$'      {
+                Write-Host ""
+                Write-Host "pforge sync-instructions — Generate .github/copilot-instructions.md from forge project context" -ForegroundColor Cyan
+                Write-Host ""
+                Write-Host "USAGE:" -ForegroundColor Yellow
+                Write-Host "  pforge sync-instructions [flags]"
+                Write-Host ""
+                Write-Host "FLAGS:" -ForegroundColor Yellow
+                Write-Host "  --dry-run           Show rendered instructions without writing the file"
+                Write-Host "  --force             Re-write even if content is unchanged"
+                Write-Host "  --no-principles     Skip the Project Principles section"
+                Write-Host "  --no-profile        Skip the Project Profile section"
+                Write-Host "  --no-extras         Skip extra .github/instructions/*.instructions.md files"
+                Write-Host "  --output <path>     Override output path (default: .github/copilot-instructions.md)"
+                Write-Host ""
+                Write-Host "SOURCES:" -ForegroundColor Yellow
+                Write-Host "  .github/instructions/project-profile.instructions.md   Project profile"
+                Write-Host "  docs/plans/PROJECT-PRINCIPLES.md                       Project principles (primary)"
+                Write-Host "  .github/instructions/project-principles.instructions.md  Principles fallback"
+                Write-Host "  .github/instructions/*.instructions.md                 Extra project instructions"
+                Write-Host "  .forge.json                                            Forge configuration"
+                Write-Host ""
+                Write-Host "OUTPUT:" -ForegroundColor Yellow
+                Write-Host "  .github/copilot-instructions.md   GitHub Copilot reads this automatically"
+                Write-Host ""
+                Write-Host "EXAMPLES:" -ForegroundColor Yellow
+                Write-Host "  pforge sync-instructions"
+                Write-Host "  pforge sync-instructions --dry-run"
+                Write-Host "  pforge sync-instructions --force --no-extras"
+                Write-Host "  pforge sync-instructions --output docs/instructions-preview.md"
+                Write-Host ""
+                return
+            }
+        }
+        $i++
+    }
+
+    $moduleFile = Join-Path $RepoRoot "pforge-mcp\sync-instructions.mjs"
+    if (-not (Test-Path $moduleFile)) {
+        Write-Host "ERROR: sync-instructions.mjs not found at $moduleFile" -ForegroundColor Red
+        exit 1
+    }
+
+    $opts = @{
+        projectRoot   = $RepoRoot
+        dryRun        = $dryRun
+        force         = $force
+        noPrinciples  = $noPrinciples
+        noProfile     = $noProfile
+        noExtras      = $noExtras
+    }
+    if ($null -ne $output) { $opts.output = $output }
+
+    $optsJson = $opts | ConvertTo-Json -Compress
+
+    Write-Host ""
+    if ($dryRun) {
+        Write-Host "`u{1F4CB} Dry Run — pforge sync-instructions" -ForegroundColor Yellow
+    } else {
+        Write-Host "`u{1F4DD} Syncing forge project context to Copilot Instructions..." -ForegroundColor Cyan
+    }
+
+    $nodeResult = & node $moduleFile $optsJson 2>&1
+    $exitCode   = $LASTEXITCODE
+
+    $nodeResult | ForEach-Object { Write-Host $_ }
+
+    if ($exitCode -ne 0) {
+        exit $exitCode
+    }
+}
+
 # ─── Command: sync-spaces ─────────────────────────────────────────────
 function Invoke-SyncSpaces {
     # pforge sync-spaces — Push plan, instructions, and tool catalog to a GitHub Copilot Space.
@@ -6877,6 +6971,7 @@ switch ($Command) {
     'plan-from-sarif' { Invoke-PlanFromSarif }
     'sync-spaces'     { Invoke-SyncSpaces }
     'sync-memories'   { Invoke-SyncMemories }
+    'sync-instructions' { Invoke-SyncInstructions }
     'crucible'        { Invoke-Crucible }
     'github'       { Invoke-Github }
     'anvil'        { Invoke-Anvil }

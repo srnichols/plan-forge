@@ -1837,6 +1837,40 @@ export const TOOL_METADATA = {
       output: { nodes: [], edges: [], unresolvedNames: [], total: 0, truncated: false, message: "No chunk found for \"handleAuth\"." },
     },
   },
+  forge_sync_instructions: {
+    intent: ["sync", "copilot", "instructions", "generate", "project-context"],
+    aliases: ["sync-instructions", "copilot-instructions"],
+    cost: "low",
+    maxConcurrent: 5,
+    addedIn: "3.0.0",
+    prerequisites: [],
+    produces: [".github/copilot-instructions.md"],
+    consumes: [
+      ".github/instructions/project-profile.instructions.md",
+      "docs/plans/PROJECT-PRINCIPLES.md",
+      ".forge.json",
+      ".github/instructions/*.instructions.md",
+    ],
+    sideEffects: ["Writes .github/copilot-instructions.md (skipped when content unchanged, unless --force)"],
+    writesFiles: true,
+    network: false,
+    risk: "low",
+    errors: {
+      SYNC_INSTRUCTIONS_ERROR: { message: "Failed to write output file", recovery: "Check file permissions on .github/" },
+    },
+    example: {
+      input: {},
+      output: {
+        ok: true,
+        outputPath: ".github/copilot-instructions.md",
+        sectionsCount: 3,
+        sections: { profile: true, principles: true, forgeConfig: true, extraCount: 0 },
+        changed: true,
+        dryRunMode: false,
+        message: "Wrote 3 section(s) to .github/copilot-instructions.md.",
+      },
+    },
+  },
 };
 
 export const WORKFLOWS = {

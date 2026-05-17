@@ -7,9 +7,9 @@
 
 ## Current Release
 
-**v2.90.10** (2026-05-05) — Audit Loop Promotion (Phase-39). Promotes the recursive audit-loop to a first-class Tempering subsystem. Content-audit scanner probes live routes and emits structured findings; `runTemperingDrain` iterates scan → triage → fix until convergence. Two new MCP tools (`forge_tempering_drain`, `forge_triage_route`), `pforge audit-loop` CLI, classifier-reviewer agent, `/audit-loop` skill, and dashboard toggle. Activation follows quorum-style `off / auto / always` pattern via `.forge.json#audit` — default `"off"`, explicit opt-in required.
+**v3.0.0** (2026-05-17) — Copilot Instructions Sync (`forge_sync_instructions`). Completes the Copilot integration trilogy: generates `.github/copilot-instructions.md` from forge project context (project profile, project principles, extra instruction files, `.forge.json` config). GitHub Copilot reads this file automatically, giving every conversation project-specific guidance without manual setup. New `pforge sync-instructions` CLI. 30 tests.
 
-Previous: **v2.90.10** (2026-05-05) — Forge-Master Embedding Intent Fallback (Phase-38.8). Adds a "stage 1.5" cosine-similarity cache between keyword scoring and the router-model API call. When a prompt closely matches a previously-classified prompt (cosine ≥ 0.85), the cached classification is inherited — zero API cost, works fully offline once warm. Uses `all-MiniLM-L6-v2` via `@xenova/transformers` (optional) with deterministic hash bag-of-words fallback. New `embeddingFallback` pref. Dashboard cache stats tile. Probe harness reports `viaCounts`.
+Previous: **v2.99.1** (2026-05-17) — DEP0190 Spawn Hardening (Issue #192). Eliminates Node's DEP0190 DeprecationWarning on Windows by replacing `shell:true + array args` with explicit `cmd.exe` routing at all 3 spawn sites.
 
 Previous: **v2.90.10** (2026-05-05) — Forge-Master Quorum Advisory Mode (Phase-38.7). Multi-model quorum dispatch for high-stakes advisory questions. When `quorumAdvisory` pref is enabled, Forge-Master fans out to 2–3 models in parallel, emits a `quorum-estimate` SSE event with per-model cost before dispatch, and returns all replies with a dissent summary. Hard-blocked on operational/troubleshoot/build lanes. Dashboard adds segmented control and multi-model reply cards.
 
@@ -202,13 +202,14 @@ Document how Plan Forge gates complement cloud agent validation (CodeQL, secret 
 
 `@plan-forge/copilot-sdk` npm package exposing guardrails as Copilot SDK tools. `forge.harden()`, `forge.validateSlice()`, `forge.sweep()`, `forge.analyze()`, `forge.smith()`. System prompt transforms, OTEL passthrough, permission framework. Depends on SDK API stabilization.
 
-#### C2. Cloud Agent Plan Export (`forge_export_plan`)
+#### C2. Cloud Agent Plan Export (`forge_export_plan`) ✅ Shipped — v2.97.0
 
 Convert Copilot cloud agent session plans into hardened Plan Forge format. Parses loose plans → adds scope isolation, validation gates, forbidden actions → outputs `Phase-X-PLAN.md`.
 
-#### C3. `forge_sync_memories`
+#### C3. `forge_sync_memories` ✅ Shipped — v2.99.0 / `forge_sync_instructions` ✅ Shipped — v3.0.0
 
-Generate `.github/copilot-memory-hints.md` from OpenBrain/forge decisions. Soft-sync approach (Copilot Memory auto-discovers hints). Hard-sync via write API when available.
+`forge_sync_memories`: Generate `.github/copilot-memory-hints.md` from OpenBrain/forge decisions. Soft-sync approach (Copilot Memory auto-discovers hints).
+`forge_sync_instructions`: Generate `.github/copilot-instructions.md` from forge project context (profile, principles, config). GitHub Copilot reads this file automatically.
 
 #### C4. Fine-Grained Tool Approval
 

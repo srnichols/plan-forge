@@ -108,6 +108,7 @@ COMMANDS:
   github <sub>      Inspect the GitHub-native AI surface (status | doctor | metrics)
   sync-spaces       Push active plan, instructions, and tool catalog to a GitHub Copilot Space
   sync-memories     Generate .github/copilot-memory-hints.md from forge decisions (trajectory notes, auto-skills, brain)
+  sync-instructions Generate .github/copilot-instructions.md from forge project context (profile, principles, config)
   version-bump <v>  Update VERSION, package.json, docs/README/ROADMAP version badges to v<version>
   migrate-memory    Merge legacy *-history.json ledgers into canonical .jsonl siblings (idempotent)
   drain-memory      Drain pending OpenBrain queue records to the configured OpenBrain server
@@ -5791,6 +5792,92 @@ EOF
     node "$module_file" "$opts_json"
 }
 
+# ─── Command: sync-instructions ───────────────────────────────────────────────
+cmd_sync_instructions() {
+    local dry_run=false
+    local force=false
+    local no_principles=false
+    local no_profile=false
+    local no_extras=false
+    local output=""
+
+    while [ $# -gt 0 ]; do
+        case "$1" in
+            --help|-h)
+                cat <<'EOF'
+Usage: pforge sync-instructions [flags]
+
+Generate .github/copilot-instructions.md from forge project context so GitHub
+Copilot receives project-specific custom instructions in every conversation.
+
+FLAGS:
+  --dry-run           Show rendered instructions without writing the file
+  --force             Re-write even if content is unchanged
+  --no-principles     Skip the Project Principles section
+  --no-profile        Skip the Project Profile section
+  --no-extras         Skip extra .github/instructions/*.instructions.md files
+  --output <path>     Override output path (default: .github/copilot-instructions.md)
+
+SOURCES:
+  .github/instructions/project-profile.instructions.md   Project profile
+  docs/plans/PROJECT-PRINCIPLES.md                       Project principles (primary)
+  .github/instructions/project-principles.instructions.md  Principles fallback
+  .github/instructions/*.instructions.md                 Extra project instructions
+  .forge.json                                            Forge configuration
+
+OUTPUT:
+  .github/copilot-instructions.md   GitHub Copilot reads this automatically
+
+EXAMPLES:
+  pforge sync-instructions
+  pforge sync-instructions --dry-run
+  pforge sync-instructions --force --no-extras
+  pforge sync-instructions --output docs/instructions-preview.md
+EOF
+                return 0
+                ;;
+            --dry-run)        dry_run=true; shift ;;
+            --force)          force=true; shift ;;
+            --no-principles)  no_principles=true; shift ;;
+            --no-profile)     no_profile=true; shift ;;
+            --no-extras)      no_extras=true; shift ;;
+            --output=*)       output="${1#--output=}"; shift ;;
+            --output)         output="$2"; shift 2 ;;
+            *)                shift ;;
+        esac
+    done
+
+    local module_file="$REPO_ROOT/pforge-mcp/sync-instructions.mjs"
+    if [ ! -f "$module_file" ]; then
+        echo "ERROR: sync-instructions.mjs not found at $module_file" >&2
+        exit 1
+    fi
+
+    # Build JSON opts string
+    local opts_json
+    opts_json=$(node -e "
+      const opts = {
+        projectRoot: $(node -e "process.stdout.write(JSON.stringify('$REPO_ROOT'))"),
+        dryRun: $dry_run,
+        force: $force,
+        noPrinciples: $no_principles,
+        noProfile: $no_profile,
+        noExtras: $no_extras
+      };
+      if ('$output') opts.output = '$output';
+      process.stdout.write(JSON.stringify(opts));
+    ")
+
+    echo ""
+    if [ "$dry_run" = true ]; then
+        echo "📋 Dry Run — pforge sync-instructions"
+    else
+        echo "📝 Syncing forge project context to Copilot Instructions..."
+    fi
+
+    node "$module_file" "$opts_json"
+}
+
 # ─── Command: sync-spaces ─────────────────────────────────────────────
 cmd_sync_spaces() {
     local space_ref=""
@@ -6122,6 +6209,7 @@ case "$COMMAND" in
     plan-from-sarif) cmd_plan_from_sarif "$@" ;;
     sync-spaces)  cmd_sync_spaces "$@" ;;
     sync-memories) cmd_sync_memories "$@" ;;
+    sync-instructions) cmd_sync_instructions "$@" ;;
     github)       cmd_github "$@" ;;
     crucible)     cmd_crucible "$@" ;;
     anvil)        cmd_anvil "$@" ;;

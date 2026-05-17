@@ -1080,6 +1080,17 @@ let _cliWorkersCache = null;
 let _cliWorkersCacheExpiry = 0;
 
 /**
+ * Reset the cached CLI-worker probe results. Intended for tests that mutate
+ * `execSync` mocks between cases — without this reset, the 60-second TTL on
+ * `_cliWorkersCache` leaks the first test's probe outcomes into subsequent
+ * tests, defeating per-test mock setup (issue #157 / #159 regression suite).
+ */
+export function resetCliWorkersCache() {
+  _cliWorkersCache = null;
+  _cliWorkersCacheExpiry = 0;
+}
+
+/**
  * Inject a gh-copilot availability probe for testing. Pass `null` to restore
  * the default real-filesystem probe.
  * @param {(() => boolean) | null} probe

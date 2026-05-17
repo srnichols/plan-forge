@@ -30,7 +30,7 @@ vi.mock("node:child_process", () => ({
 }));
 
 import { execSync } from "node:child_process";
-import { classifyProbeFailure, detectWorkers } from "../orchestrator.mjs";
+import { classifyProbeFailure, detectWorkers, resetCliWorkersCache } from "../orchestrator.mjs";
 
 // ─── classifyProbeFailure unit tests (issue #159) ────────────────────────────
 
@@ -169,8 +169,8 @@ function mockProbes(ghCopilotPlan = {}) {
 }
 
 describe("detectWorkers — issue #157 honours probe.fallback for gh-copilot", () => {
-  beforeEach(() => { vi.clearAllMocks(); });
-  afterEach(() => { vi.restoreAllMocks(); });
+  beforeEach(() => { vi.clearAllMocks(); resetCliWorkersCache(); });
+  afterEach(() => { vi.restoreAllMocks(); resetCliWorkersCache(); });
 
   it("(157-A) primary 'copilot' missing → falls back to 'gh copilot' which succeeds", () => {
     mockProbes({ primary: "enoent", fallback: "success" });

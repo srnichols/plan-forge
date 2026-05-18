@@ -213,7 +213,7 @@ Slices are independent. Pick any one; finish it; commit; ship. No slice depends 
 - [x] **A7** Stakeholder Briefing (white paper inside the ebook) ✅ (v3.6.2 · commit pending)
 
 ### Cluster B — Reference
-- [ ] **B1** `.forge.json` Reference (Appendix T)
+- [x] **B1** `.forge.json` Reference (Appendix T) ✅ (v3.6.2 · commit pending)
 - [ ] **B2** Environment Variables Reference (Appendix U)
 - [ ] **B3** Lifecycle Hooks Reference (section in Customization)
 - [ ] **B4** Event Catalog (Appendix V)

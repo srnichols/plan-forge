@@ -82,8 +82,9 @@
     { id: "book-index",           file: "book-index.html",          num: "O",  title: "Book Index (A\u2013Z)",     act: "Appendix" },
     { id: "list-of-figures",      file: "list-of-figures.html",     num: "P",  title: "List of Figures",            act: "Appendix" },
     { id: "api-surface-index",    file: "api-surface-index.html",    num: "Q",  title: "Unified API Surface Index",  act: "Appendix" },
-    { id: "day-in-the-forge",     file: "day-in-the-forge.html",     num: "R",  title: "A Day in the Forge \u2014 Three Vignettes",  act: "Appendix" },
-    { id: "how-do-i",             file: "how-do-i.html",             num: "S",  title: "How Do I\u2026? \u2014 Task Index",          act: "Appendix" },
+    { id: "day-in-the-forge",        file: "day-in-the-forge.html",        num: "R",  title: "A Day in the Forge \u2014 Three Vignettes",  act: "Appendix" },
+    { id: "how-do-i",                file: "how-do-i.html",                num: "S",  title: "How Do I\u2026? \u2014 Task Index",          act: "Appendix" },
+    { id: "forge-json-reference",    file: "forge-json-reference.html",    num: "T",  title: ".forge.json Reference",                       act: "Appendix" },
   ];
 
   // ─── Chapter status registry ───
@@ -95,6 +96,7 @@
     "reader-paths":                  { label: "NEW",     version: "v3.6.2" },
     "day-in-the-forge":              { label: "NEW",     version: "v3.6.2" },
     "how-do-i":                      { label: "NEW",     version: "v3.6.2" },
+    "forge-json-reference":          { label: "NEW",     version: "v3.6.2" },
     "inner-loop":                    { label: "NEW",     version: "v2.57" },
     "self-deterministic-loop":       { label: "NEW",     version: "v2.58" },
     "competitive-loop":              { label: "NEW",     version: "v2.58" },
@@ -142,10 +144,10 @@
     'cli-commands': 97, // pforge.ps1 switch arms (unique) — verify with PowerShell: ([regex]::Matches((Get-Content pforge.ps1 -Raw),"(?m)^\s+''([a-z][a-z-]+)''\s+\{") | %{ $_.Groups[1].Value } | Sort-Object -Unique).Count
     // Manual structure ──────────────────────────────────────────────────
     chapters:     28,  // numbered chapters 1-29 (excludes Quickstart Q1-Q3 and Appendices) — Ch 11 was archived; 26-29 added Third Edition
-    appendices:   19,  // lettered appendices A-S (R Day in the Forge v3.6.2 Slice A3, S How Do I…? Task Index v3.6.2 Slice A4)
+    appendices:   20,  // lettered appendices A-T (R Day in the Forge v3.6.2 Slice A3, S How Do I…? Task Index v3.6.2 Slice A4, T .forge.json Reference v3.6.2 Slice B1)
     parts:         5,  // Smelt, Forge, Guard, Learn, Integrate (Part V added Third Edition)
     // Manual assets ─────────────────────────────────────────────────────
-    htmlFiles:    71,  // total .html files in docs/manual/ (Third Edition Slice A + Slice B; +Foreword/Stakeholder/Reader Paths/Day in the Forge/How Do I…? v3.6.2 Fifth Edition)
+    htmlFiles:    72,  // total .html files in docs/manual/ (Third Edition Slice A + Slice B; +Foreword/Stakeholder/Reader Paths/Day in the Forge/How Do I…?/.forge.json Reference v3.6.2 Fifth Edition)
   };
 
   // Detect current page
@@ -516,6 +518,26 @@
     { t: "How Do I — Debug and Troubleshoot",                      u: "how-do-i.html#debug" },
     { t: "How Do I — Extend and Integrate",                        u: "how-do-i.html#extend" },
     { t: "How Do I — Brief Stakeholders and Onboard Readers",      u: "how-do-i.html#brief" },
+    // .forge.json Reference — field-by-field config schema (Appendix T)
+    { t: ".forge.json Reference — Orientation",                    u: "forge-json-reference.html#orientation" },
+    { t: ".forge.json — Project Identity (projectName, preset)",   u: "forge-json-reference.html#identity" },
+    { t: ".forge.json — updateSource (auto / github-tags)",        u: "forge-json-reference.html#updateSource" },
+    { t: ".forge.json — meta.selfRepairRepo",                      u: "forge-json-reference.html#meta" },
+    { t: ".forge.json — agents (claude, cursor, codex)",           u: "forge-json-reference.html#agents" },
+    { t: ".forge.json — modelRouting (default, execute, review)",  u: "forge-json-reference.html#modelRouting" },
+    { t: ".forge.json — forgeMaster reasoning loop",               u: "forge-json-reference.html#forgeMaster" },
+    { t: ".forge.json — Execution Limits (parallelism, retries)",  u: "forge-json-reference.html#execution" },
+    { t: ".forge.json — quorum (multi-model consensus)",           u: "forge-json-reference.html#quorum" },
+    { t: ".forge.json — extensions",                               u: "forge-json-reference.html#extensions" },
+    { t: ".forge.json — hooks.preDeploy (LiveGuard)",              u: "forge-json-reference.html#hooks-preDeploy" },
+    { t: ".forge.json — hooks.postSlice (drift thresholds)",       u: "forge-json-reference.html#hooks-postSlice" },
+    { t: ".forge.json — hooks.preAgentHandoff",                    u: "forge-json-reference.html#hooks-preAgentHandoff" },
+    { t: ".forge.json — openclaw analytics bridge",                u: "forge-json-reference.html#openclaw" },
+    { t: ".forge.json — runtime.gateSynthesis (Phase-25 L6)",      u: "forge-json-reference.html#runtime-gateSynthesis" },
+    { t: ".forge.json — runtime.reviewer (Phase-25 L4)",           u: "forge-json-reference.html#runtime-reviewer" },
+    { t: ".forge.json — brain.federation (cross-project memory)",  u: "forge-json-reference.html#brain" },
+    { t: ".forge.json — testbed.path",                             u: "forge-json-reference.html#testbed" },
+    { t: ".forge.json — Full Annotated Example",                   u: "forge-json-reference.html#full-example" },
     // Quickstart
     { t: "Check Prerequisites",                  u: "quickstart-install.html#prerequisites" },
     { t: "Clone and Run Setup",                  u: "quickstart-install.html#clone" },

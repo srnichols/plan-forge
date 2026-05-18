@@ -1,0 +1,395 @@
+<!DOCTYPE html>
+<html lang="en" class="scroll-smooth">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Appendix T: .forge.json Reference — Plan Forge Manual</title>
+  <meta name="description" content="Field-by-field reference for .forge.json — the per-project Plan Forge configuration file. Type, default, example, and change impact for every settable key." />
+  <meta property="og:title" content="Appendix T — .forge.json Reference" />
+  <meta property="og:description" content="Every settable .forge.json key with type, default, example, and what changes when you touch it." />
+  <meta property="og:type" content="article" />
+  <link rel="canonical" href="https://planforge.software/manual/forge-json-reference.html" />
+  <link rel="icon" type="image/svg+xml" href="../assets/plan-forge-logo.svg" />
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>tailwind.config={theme:{extend:{colors:{forge:{400:'#f59e0b',500:'#d97706'}}}}}</script>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;600;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="../assets/shared.css" />
+  <link rel="stylesheet" href="assets/manual.css" />
+</head>
+<body class="bg-slate-950 text-slate-300 min-h-screen">
+
+  <button id="mobile-sidebar-btn" class="mobile-sidebar-btn fixed top-4 left-4 z-[101] lg:hidden p-2 bg-slate-900 border border-slate-700 rounded-lg text-slate-400 hover:text-slate-100 transition-colors" aria-label="Open navigation">
+    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"/></svg>
+  </button>
+  <div id="sidebar-overlay" class="sidebar-overlay"></div>
+
+  <div class="manual-layout">
+    <aside id="manual-sidebar" class="manual-sidebar"><nav id="sidebar-nav"></nav></aside>
+
+    <main>
+      <div class="chapter-content">
+
+        <div class="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">Appendix T</div>
+        <h1><code>.forge.json</code> Reference</h1>
+        <p class="text-lg text-slate-400 mb-8">Every settable key in the per-project Plan Forge configuration file &mdash; type, default, example, and what changes when the value is touched. The canonical source of truth for this reference is <code>CONFIG_SCHEMA</code> in <a href="https://github.com/srnichols/plan-forge/blob/master/pforge-mcp/capabilities.mjs" rel="noopener">pforge-mcp/capabilities.mjs</a>; this appendix mirrors that schema in human-readable form.</p>
+
+        <div class="callout callout-info">
+          <strong>How to edit safely.</strong> Prefer the <code>forge_config</code> MCP tool (or the dashboard Config tab) for schema-validated writes &mdash; both perform atomic updates (write to temp, then rename) so partial writes never leave a half-valid file. Hand-editing is fine for small changes; just validate the JSON before saving.
+        </div>
+
+        <h2 id="orientation">Orientation</h2>
+        <p>The file lives at the repo root as <code>.forge.json</code>. It is read at startup by the orchestrator, the dashboard, and most MCP tools. The schema is intentionally <strong>shallow at the top</strong> and grouped by subsystem &mdash; each top-level key controls one slice of Plan Forge behaviour:</p>
+
+        <div class="overflow-x-auto mb-8">
+          <table class="manual-table">
+            <thead><tr><th style="width: 14rem">Top-level key</th><th>Subsystem it controls</th><th>Where it is used</th></tr></thead>
+            <tbody>
+              <tr><td><a href="#identity"><code>projectName</code>, <code>preset</code>, <code>templateVersion</code>, <code>pipelineVersion</code></a></td><td>Project identity</td><td>OpenBrain memory scoping, preset gating, version checks</td></tr>
+              <tr><td><a href="#updateSource"><code>updateSource</code></a></td><td>Update source mode</td><td><code>pforge update</code> source selection (auto / github-tags / local-sibling)</td></tr>
+              <tr><td><a href="#meta"><code>meta</code></a></td><td>Meta-defect routing</td><td><code>forge_meta_bug_file</code> target repository</td></tr>
+              <tr><td><a href="#agents"><code>agents</code></a></td><td>Multi-agent adapters</td><td>Generates per-agent setup files (Claude / Cursor / Codex)</td></tr>
+              <tr><td><a href="#modelRouting"><code>modelRouting</code></a></td><td>Default model selection</td><td>Orchestrator slice dispatch, dashboard Cost tab</td></tr>
+              <tr><td><a href="#forgeMaster"><code>forgeMaster</code></a></td><td>Forge-Master reasoning loop</td><td><code>forge_master_ask</code>, dashboard Forge-Master tab</td></tr>
+              <tr><td><a href="#execution"><code>maxParallelism</code>, <code>maxRetries</code>, <code>maxRunHistory</code></a></td><td>Execution limits</td><td>Orchestrator DAG scheduling and retention</td></tr>
+              <tr><td><a href="#quorum"><code>quorum</code></a></td><td>Multi-model consensus</td><td><code>--quorum=...</code> flag, <code>forge_estimate_quorum</code></td></tr>
+              <tr><td><a href="#extensions"><code>extensions</code></a></td><td>Installed extensions</td><td><code>pforge ext</code>, Extensions tab</td></tr>
+              <tr><td><a href="#hooks"><code>hooks</code></a></td><td>LiveGuard lifecycle hooks</td><td>PreDeploy, PostSlice, PreAgentHandoff</td></tr>
+              <tr><td><a href="#openclaw"><code>openclaw</code></a></td><td>OpenClaw analytics bridge</td><td>PreAgentHandoff snapshot push (optional)</td></tr>
+              <tr><td><a href="#runtime"><code>runtime</code></a></td><td>Inner-loop subsystems</td><td>Phase-25 gate synthesis and quorum reviewer</td></tr>
+              <tr><td><a href="#brain"><code>brain</code></a></td><td>Memory and federation</td><td>OpenBrain federation across local repos</td></tr>
+              <tr><td><a href="#testbed"><code>testbed</code></a></td><td>Testbed path</td><td><code>forge_testbed_*</code> tools</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <p>The next sections describe each group in detail. Every field row uses the same five columns &mdash; <strong>Key</strong>, <strong>Type</strong>, <strong>Default</strong>, <strong>Example</strong>, <strong>Change impact</strong> &mdash; so the table reads the same way no matter which subsystem you land on.</p>
+
+        <!-- ============================================================ -->
+        <h2 id="identity">Project identity</h2>
+        <p>Four fields tell Plan Forge what kind of project it is looking at. <code>projectName</code> is the most important one &mdash; it scopes memory in OpenBrain (so two projects with the same plan name do not collide) and is the default <code>project</code> tag for traces and replay.</p>
+
+        <div class="overflow-x-auto mb-6">
+          <table class="manual-table">
+            <thead><tr><th>Key</th><th>Type</th><th>Default</th><th>Example</th><th>Change impact</th></tr></thead>
+            <tbody>
+              <tr><td><code>projectName</code></td><td>string</td><td><em>(none)</em></td><td><code>"plan-forge"</code></td><td>OpenBrain memory namespace; default <code>project</code> tag for replay; affects all memory-related queries. Changing it splits memory between old and new names.</td></tr>
+              <tr><td><code>preset</code></td><td>enum</td><td><em>(none)</em></td><td><code>"dotnet"</code></td><td>One of <code>dotnet</code>, <code>typescript</code>, <code>python</code>, <code>java</code>, <code>go</code>, <code>swift</code>, <code>azure-iac</code>, <code>custom</code>. Determines which instruction files, agents, and skills are installed by <code>setup</code>. Read by validators and the dashboard.</td></tr>
+              <tr><td><code>templateVersion</code></td><td>string</td><td><em>(none)</em></td><td><code>"2.56.0"</code></td><td>Records the Plan Forge release that last ran <code>setup</code> here. Compared against the running CLI version so <code>pforge update</code> can detect drift.</td></tr>
+              <tr><td><code>pipelineVersion</code></td><td>string</td><td><code>"2.0"</code></td><td><code>"2.0"</code></td><td>Pipeline schema version. Rarely changed by users; bumped when the 7-step pipeline contract changes shape.</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <!-- ============================================================ -->
+        <h2 id="updateSource"><code>updateSource</code> &mdash; how <code>pforge update</code> finds the framework</h2>
+        <p>Controls where the <code>pforge update</code> command pulls framework files from. Defaults to <code>auto</code>, which picks the newer of a local sibling clone (if present) and the latest GitHub tag. See <a href="update-source.html">Appendix G &mdash; Update Source Modes</a> for the full mode-selection story; this entry is the bare schema reference.</p>
+
+        <div class="overflow-x-auto mb-6">
+          <table class="manual-table">
+            <thead><tr><th>Key</th><th>Type</th><th>Default</th><th>Example</th><th>Change impact</th></tr></thead>
+            <tbody>
+              <tr><td><code>updateSource</code></td><td>enum</td><td><code>"auto"</code></td><td><code>"github-tags"</code></td><td>One of <code>auto</code> (pick newer of local-sibling and github-tags), <code>github-tags</code> (always GitHub), or <code>local-sibling</code> (always sibling clone). Validated server-side by <a href="https://github.com/srnichols/plan-forge/blob/master/pforge-mcp/server.mjs" rel="noopener"><code>POST /api/config</code></a>; invalid values are rejected with HTTP 400.</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <!-- ============================================================ -->
+        <h2 id="meta"><code>meta</code> &mdash; meta-defect routing</h2>
+        <p>Where Plan Forge files bugs against <em>itself</em>. When <code>forge_meta_bug_file</code> runs without an explicit target, it reads <code>meta.selfRepairRepo</code>. If the key is missing, it falls back to <code>srnichols/plan-forge</code>.</p>
+
+        <div class="overflow-x-auto mb-6">
+          <table class="manual-table">
+            <thead><tr><th>Key</th><th>Type</th><th>Default</th><th>Example</th><th>Change impact</th></tr></thead>
+            <tbody>
+              <tr><td><code>meta.selfRepairRepo</code></td><td>string</td><td><em>(fallback: srnichols/plan-forge)</em></td><td><code>"acme/plan-forge-fork"</code></td><td>Target repository for self-repair issues. Set this if your team maintains a fork or a private mirror. <code>owner/repo</code> form. See <a href="https://github.com/srnichols/plan-forge/blob/master/.github/instructions/self-repair-reporting.instructions.md" rel="noopener">self-repair-reporting</a>.</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <!-- ============================================================ -->
+        <h2 id="agents"><code>agents</code> &mdash; multi-agent adapters</h2>
+        <p>Which AI agents have native config files generated alongside the GitHub Copilot defaults. See <a href="multi-agent.html">Chapter 13 &mdash; Multi-Agent Setup</a> for what each adapter writes.</p>
+
+        <div class="overflow-x-auto mb-6">
+          <table class="manual-table">
+            <thead><tr><th>Key</th><th>Type</th><th>Default</th><th>Example</th><th>Change impact</th></tr></thead>
+            <tbody>
+              <tr><td><code>agents</code></td><td>array&lt;enum&gt;</td><td><code>[]</code></td><td><code>["claude", "cursor"]</code></td><td>Each entry is one of <code>claude</code>, <code>cursor</code>, <code>codex</code>. Adding an entry causes <code>setup</code> (or <code>setup --agent &lt;name&gt;</code>) to generate that adapter's native file (e.g. <code>CLAUDE.md</code>, <code>.cursorrules</code>). Removing an entry does not delete files &mdash; clean those up manually.</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <!-- ============================================================ -->
+        <h2 id="modelRouting"><code>modelRouting</code> &mdash; default model selection</h2>
+        <p>Where slices go by default when no plan-level <code>Model:</code> directive is present. <code>default</code> is the catch-all; <code>execute</code> and <code>review</code> override it for those phases. See <a href="advanced-execution.html#model-routing">Advanced Execution &mdash; Model Routing</a> for the routing precedence (plan front-matter &gt; flag &gt; <code>execute</code>/<code>review</code> &gt; <code>default</code>).</p>
+
+        <div class="overflow-x-auto mb-6">
+          <table class="manual-table">
+            <thead><tr><th>Key</th><th>Type</th><th>Default</th><th>Example</th><th>Change impact</th></tr></thead>
+            <tbody>
+              <tr><td><code>modelRouting.default</code></td><td>enum</td><td><code>"auto"</code></td><td><code>"claude-opus-4.7"</code></td><td>One of <code>auto</code>, <code>claude-opus-4.7</code>, <code>claude-opus-4.6</code>, <code>claude-sonnet-4.6</code>, <code>claude-haiku-4.5</code>, <code>gpt-5.4</code>, <code>gpt-5.2-codex</code>, <code>gpt-5-mini</code>, <code>gemini-3-pro-preview</code>. <code>auto</code> lets the host pick based on availability.</td></tr>
+              <tr><td><code>modelRouting.execute</code></td><td>string</td><td><em>(uses <code>default</code>)</em></td><td><code>"gpt-5.3-codex"</code></td><td>Model for slice execution. Free-form string so newer models work without a CLI upgrade.</td></tr>
+              <tr><td><code>modelRouting.review</code></td><td>string</td><td><em>(uses <code>default</code>)</em></td><td><code>"claude-opus-4.7"</code></td><td>Model for the Step 5 review gate. Free-form string.</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <!-- ============================================================ -->
+        <h2 id="forgeMaster"><code>forgeMaster</code> &mdash; Forge-Master reasoning loop</h2>
+        <p>Configuration for the Forge-Master intent-routing layer. The <code>routerModel</code> is the small, cheap model that classifies intent; <code>reasoningModel</code> is the heavier model that synthesises the answer.</p>
+
+        <div class="overflow-x-auto mb-6">
+          <table class="manual-table">
+            <thead><tr><th>Key</th><th>Type</th><th>Default</th><th>Example</th><th>Change impact</th></tr></thead>
+            <tbody>
+              <tr><td><code>forgeMaster.reasoningModel</code></td><td>string</td><td><em>(falls back to <code>modelRouting.default</code>)</em></td><td><code>"gpt-4o-mini"</code></td><td>Model used for multi-step reasoning in <code>forge_master_ask</code>. Affects answer quality and per-call cost.</td></tr>
+              <tr><td><code>forgeMaster.reasoningProvider</code></td><td>string</td><td><em>(auto-detected)</em></td><td><code>"githubCopilot"</code></td><td>Which provider serves the reasoning model. One of <code>githubCopilot</code>, <code>anthropic</code>, <code>openai</code>, <code>xai</code>. If unset, Plan Forge picks based on available API keys.</td></tr>
+              <tr><td><code>forgeMaster.routerModel</code></td><td>string</td><td><code>"grok-3-mini"</code></td><td><code>"gpt-4o-mini"</code></td><td>Small classifier model that decides which tools to call. Should be cheap and fast; quality matters less than latency.</td></tr>
+              <tr><td><code>forgeMaster.defaultProvider</code></td><td>string</td><td><em>(auto-detected)</em></td><td><code>"githubCopilot"</code></td><td>Default provider for both router and reasoning if the per-model provider is not set.</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <!-- ============================================================ -->
+        <h2 id="execution">Execution limits</h2>
+        <p>Three numeric caps the orchestrator enforces during <code>pforge run-plan</code>.</p>
+
+        <div class="overflow-x-auto mb-6">
+          <table class="manual-table">
+            <thead><tr><th>Key</th><th>Type</th><th>Default</th><th>Example</th><th>Change impact</th></tr></thead>
+            <tbody>
+              <tr><td><code>maxParallelism</code></td><td>number (1&ndash;10)</td><td><code>3</code></td><td><code>5</code></td><td>Max concurrent <code>[P]</code>-tagged slices. Higher = faster but more contention on shared resources (the file system, the model provider's rate limit, your wallet).</td></tr>
+              <tr><td><code>maxRetries</code></td><td>number (0&ndash;5)</td><td><code>1</code></td><td><code>2</code></td><td>How many times a slice will retry after a gate failure before being marked failed. <code>0</code> means fail-fast; <code>5</code> is the cap to prevent runaway loops.</td></tr>
+              <tr><td><code>maxRunHistory</code></td><td>number (&ge;1)</td><td><code>50</code></td><td><code>100</code></td><td>How many <code>.forge/runs/&lt;timestamp&gt;/</code> directories are retained on disk. The orchestrator auto-prunes the oldest beyond this cap on every run.</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <!-- ============================================================ -->
+        <h2 id="quorum"><code>quorum</code> &mdash; multi-model consensus (v2.5+)</h2>
+        <p>Configuration for quorum mode. Master switch is <code>enabled</code>; with <code>auto: true</code> the orchestrator only quorums slices whose complexity score crosses <code>threshold</code>. See <a href="advanced-execution.html#quorum">Advanced Execution &mdash; Quorum Mode</a> for the scoring rubric and worked examples, and <a href="advanced-execution.html#quorum-complexity">Complexity Scoring Rubric</a> for the seven signals that drive the score.</p>
+
+        <div class="overflow-x-auto mb-6">
+          <table class="manual-table">
+            <thead><tr><th>Key</th><th>Type</th><th>Default</th><th>Example</th><th>Change impact</th></tr></thead>
+            <tbody>
+              <tr><td><code>quorum.enabled</code></td><td>boolean</td><td><code>false</code></td><td><code>true</code></td><td>Master switch. When false, quorum is off regardless of the other keys.</td></tr>
+              <tr><td><code>quorum.auto</code></td><td>boolean</td><td><code>true</code></td><td><code>true</code></td><td>When <code>enabled</code>, gate quorum on slice complexity score. When false, every slice fans out.</td></tr>
+              <tr><td><code>quorum.threshold</code></td><td>number (1&ndash;10)</td><td><code>6</code></td><td><code>5</code></td><td>Complexity score above which auto-mode fires quorum. Lower = more slices use quorum, higher cost.</td></tr>
+              <tr><td><code>quorum.models</code></td><td>array&lt;string&gt;</td><td><code>["claude-opus-4.7", "gpt-5.3-codex", "gemini-3.1-pro"]</code></td><td><code>["claude-opus-4.7", "gpt-5.2-codex"]</code></td><td>Models that participate in the dry-run fan-out. 2&ndash;5 entries is typical; minimum is 1 (degrades to advisory).</td></tr>
+              <tr><td><code>quorum.reviewerModel</code></td><td>string</td><td><code>"claude-opus-4.7"</code></td><td><code>"gpt-5.4"</code></td><td>Model that synthesises the dry-run responses into a single execution plan.</td></tr>
+              <tr><td><code>quorum.dryRunTimeout</code></td><td>number (ms)</td><td><code>300000</code></td><td><code>600000</code></td><td>Per-worker timeout in milliseconds. Increase for very large slices; the default is 5 minutes.</td></tr>
+              <tr><td><code>quorum.strictAvailability</code></td><td>boolean</td><td><code>false</code></td><td><code>true</code></td><td>When true, fail-fast (exit code 2) if any configured model is unavailable. When false (default), drop unavailable models and continue if at least one remains.</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <!-- ============================================================ -->
+        <h2 id="extensions"><code>extensions</code> &mdash; installed extensions</h2>
+        <p>Names of extensions installed via <code>pforge ext add &lt;name&gt;</code>. Managed by the CLI; rarely edited by hand. See <a href="extensions.html">Chapter 12 &mdash; Extensions</a>.</p>
+
+        <div class="overflow-x-auto mb-6">
+          <table class="manual-table">
+            <thead><tr><th>Key</th><th>Type</th><th>Default</th><th>Example</th><th>Change impact</th></tr></thead>
+            <tbody>
+              <tr><td><code>extensions</code></td><td>array&lt;string&gt;</td><td><em>(none)</em></td><td><code>["notify-slack", "notify-teams"]</code></td><td>Extension names from the catalog. <code>pforge ext add</code> appends; <code>pforge ext remove</code> deletes. Affects which tools and skills are registered at startup.</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <!-- ============================================================ -->
+        <h2 id="hooks"><code>hooks</code> &mdash; LiveGuard lifecycle hooks (v2.29+)</h2>
+        <p>Three optional hook configurations &mdash; <code>preDeploy</code> (before deploy slices), <code>postSlice</code> (after every slice), <code>preAgentHandoff</code> (multi-agent turn). Each section is independent; omit any subsection to accept its defaults.</p>
+
+        <h3 id="hooks-preDeploy"><code>hooks.preDeploy</code></h3>
+        <div class="overflow-x-auto mb-6">
+          <table class="manual-table">
+            <thead><tr><th>Key</th><th>Type</th><th>Default</th><th>Example</th><th>Change impact</th></tr></thead>
+            <tbody>
+              <tr><td><code>hooks.preDeploy.enabled</code></td><td>boolean</td><td><code>true</code></td><td><code>false</code></td><td>Master switch for the PreDeploy hook. Disable only if you have an equivalent external gate.</td></tr>
+              <tr><td><code>hooks.preDeploy.blockOnSecrets</code></td><td>boolean</td><td><code>true</code></td><td><code>true</code></td><td>When true, block deploy if <code>forge_secret_scan</code> finds anything at severity &ge; high. Set false to demote to a warning.</td></tr>
+              <tr><td><code>hooks.preDeploy.warnOnEnvGaps</code></td><td>boolean</td><td><code>true</code></td><td><code>true</code></td><td>Warn (do not block) when <code>forge_env_diff</code> finds keys missing from the target environment.</td></tr>
+              <tr><td><code>hooks.preDeploy.scanSince</code></td><td>string (git range)</td><td><code>"HEAD~1"</code></td><td><code>"HEAD~10"</code></td><td>Git range scanned for secrets. Widen for repos with bursty commit cadence.</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <h3 id="hooks-postSlice"><code>hooks.postSlice</code></h3>
+        <div class="overflow-x-auto mb-6">
+          <table class="manual-table">
+            <thead><tr><th>Key</th><th>Type</th><th>Default</th><th>Example</th><th>Change impact</th></tr></thead>
+            <tbody>
+              <tr><td><code>hooks.postSlice.silentDeltaThreshold</code></td><td>number</td><td><code>5</code></td><td><code>3</code></td><td>Drift score delta below this is silent (no log line).</td></tr>
+              <tr><td><code>hooks.postSlice.warnDeltaThreshold</code></td><td>number</td><td><code>10</code></td><td><code>15</code></td><td>Drift score delta at or above this prints a warning. Between silent and warn = info.</td></tr>
+              <tr><td><code>hooks.postSlice.scoreFloor</code></td><td>number</td><td><code>70</code></td><td><code>80</code></td><td>Absolute drift score floor &mdash; below this triggers a red warning regardless of delta.</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <h3 id="hooks-preAgentHandoff"><code>hooks.preAgentHandoff</code></h3>
+        <div class="overflow-x-auto mb-6">
+          <table class="manual-table">
+            <thead><tr><th>Key</th><th>Type</th><th>Default</th><th>Example</th><th>Change impact</th></tr></thead>
+            <tbody>
+              <tr><td><code>hooks.preAgentHandoff.injectContext</code></td><td>boolean</td><td><code>true</code></td><td><code>true</code></td><td>Inject LiveGuard context (drift score, MTTR, open incidents) into the next agent's prompt at handoff.</td></tr>
+              <tr><td><code>hooks.preAgentHandoff.runRegressionGuard</code></td><td>boolean</td><td><code>true</code></td><td><code>true</code></td><td>Run <code>forge_regression_guard</code> at handoff time. Disable if your CI already does this.</td></tr>
+              <tr><td><code>hooks.preAgentHandoff.cacheMaxAgeMinutes</code></td><td>number</td><td><code>30</code></td><td><code>60</code></td><td>Max cache age before LiveGuard tools are re-run. Higher = faster handoffs, staler data.</td></tr>
+              <tr><td><code>hooks.preAgentHandoff.minAlertSeverity</code></td><td>string</td><td><code>"medium"</code></td><td><code>"high"</code></td><td>Minimum severity for an alert to be injected. One of <code>low</code>, <code>medium</code>, <code>high</code>, <code>critical</code>.</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <!-- ============================================================ -->
+        <h2 id="openclaw"><code>openclaw</code> &mdash; OpenClaw analytics bridge (optional, v2.29+)</h2>
+        <p>Optional outbound POST on every PreAgentHandoff. Configures the analytics ingest endpoint. Leave unset to disable.</p>
+
+        <div class="overflow-x-auto mb-6">
+          <table class="manual-table">
+            <thead><tr><th>Key</th><th>Type</th><th>Default</th><th>Example</th><th>Change impact</th></tr></thead>
+            <tbody>
+              <tr><td><code>openclaw.endpoint</code></td><td>string (URL)</td><td><em>(unset = disabled)</em></td><td><code>"https://openclaw.example/api/ingest"</code></td><td>Ingest endpoint URL. When set, every PreAgentHandoff posts a context snapshot.</td></tr>
+              <tr><td><code>openclaw.apiKey</code></td><td>string</td><td><em>(fallback: <code>.forge/secrets.json#OPENCLAW_API_KEY</code>)</em></td><td><code>"sk_live_..."</code></td><td>API key. Prefer storing in <code>.forge/secrets.json</code> (gitignored) rather than in <code>.forge.json</code> (typically committed).</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <!-- ============================================================ -->
+        <h2 id="runtime"><code>runtime</code> &mdash; inner-loop subsystems (v2.57+)</h2>
+        <p>Opt-in subsystems added by Phase-25. Both default to off or advisory; existing users see no behaviour change without explicit configuration.</p>
+
+        <h3 id="runtime-gateSynthesis"><code>runtime.gateSynthesis</code></h3>
+        <p>L6 &mdash; adaptive gate synthesis from Tempering minima. Suggest-only by default; the orchestrator never mutates plans.</p>
+        <div class="overflow-x-auto mb-6">
+          <table class="manual-table">
+            <thead><tr><th>Key</th><th>Type</th><th>Default</th><th>Example</th><th>Change impact</th></tr></thead>
+            <tbody>
+              <tr><td><code>runtime.gateSynthesis.mode</code></td><td>enum</td><td><code>"suggest"</code></td><td><code>"off"</code></td><td>One of <code>off</code> (silent), <code>suggest</code> (print advisory), <code>enforce</code> (track in <code>.forge/gate-suggestions.jsonl</code>, Phase-26+). Plans are still never mutated.</td></tr>
+              <tr><td><code>runtime.gateSynthesis.domains</code></td><td>array&lt;enum&gt;</td><td><code>["domain", "integration", "controller"]</code></td><td><code>["domain"]</code></td><td>Which Tempering profiles to emit suggestions for. Trim to reduce noise.</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <h3 id="runtime-reviewer"><code>runtime.reviewer</code></h3>
+        <p>L4 &mdash; opt-in speed-quorum reviewer that scores slice diffs inside <code>brain.gate-check</code>. Advisory-only in v2.57.</p>
+        <div class="overflow-x-auto mb-6">
+          <table class="manual-table">
+            <thead><tr><th>Key</th><th>Type</th><th>Default</th><th>Example</th><th>Change impact</th></tr></thead>
+            <tbody>
+              <tr><td><code>runtime.reviewer.enabled</code></td><td>boolean</td><td><code>false</code></td><td><code>true</code></td><td>Master switch. Off by default; turn on to get reviewer verdicts in the dashboard Audit-Loop tile.</td></tr>
+              <tr><td><code>runtime.reviewer.quorumPreset</code></td><td>enum</td><td><code>"speed"</code></td><td><code>"power"</code></td><td>One of <code>speed</code> (cheaper, faster) or <code>power</code> (flagship models, slower).</td></tr>
+              <tr><td><code>runtime.reviewer.blockOnCritical</code></td><td>boolean</td><td><code>false</code></td><td><code>false</code></td><td>When true, critical verdicts block the next slice. Advisory-only (false) by design in v2.57.</td></tr>
+              <tr><td><code>runtime.reviewer.timeoutMs</code></td><td>number (ms)</td><td><code>30000</code></td><td><code>60000</code></td><td>Max time to wait for a reviewer response. Increase for power-preset reviewers on large diffs.</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <!-- ============================================================ -->
+        <h2 id="brain"><code>brain</code> &mdash; memory and federation</h2>
+        <p>OpenBrain federation configuration. Off by default; opt-in via <code>brain.federation.enabled</code>.</p>
+
+        <div class="overflow-x-auto mb-6">
+          <table class="manual-table">
+            <thead><tr><th>Key</th><th>Type</th><th>Default</th><th>Example</th><th>Change impact</th></tr></thead>
+            <tbody>
+              <tr><td><code>brain.federation.enabled</code></td><td>boolean</td><td><code>false</code></td><td><code>true</code></td><td>Master switch for cross-project read-only memory federation (L4-lite, Phase-25).</td></tr>
+              <tr><td><code>brain.federation.repos</code></td><td>array&lt;string&gt;</td><td><code>[]</code></td><td><code>["E:/GitHub/Rummag"]</code></td><td>Absolute local repo paths only. Relative paths and URL schemes (http, https, ssh, git) are rejected at load time. Each entry is searched read-only by <code>brain_recall</code>.</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <!-- ============================================================ -->
+        <h2 id="testbed"><code>testbed</code> &mdash; testbed path</h2>
+        <p>Where the reference testbed repo lives. Required for the <code>forge_testbed_*</code> tools and the <code>--testbedPath</code> override.</p>
+
+        <div class="overflow-x-auto mb-6">
+          <table class="manual-table">
+            <thead><tr><th>Key</th><th>Type</th><th>Default</th><th>Example</th><th>Change impact</th></tr></thead>
+            <tbody>
+              <tr><td><code>testbed.path</code></td><td>string (path)</td><td><em>(unset = testbed tools error)</em></td><td><code>"E:/GitHub/plan-forge-testbed"</code></td><td>Absolute or workspace-relative path to the testbed repo. When unset, <code>forge_testbed_run</code> returns <code>ERR_TESTBED_NOT_FOUND</code> with a recovery hint.</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <!-- ============================================================ -->
+        <h2 id="full-example">Full annotated example</h2>
+        <p>A realistic <code>.forge.json</code> for a TypeScript project that has opted into Claude as a secondary agent, runs quorum on high-complexity slices, and uses OpenBrain federation to read from a sibling repo:</p>
+
+        <div class="cmd-block">
+          <div class="cmd-block-header"><span><code>.forge.json</code> &mdash; representative</span><button class="cmd-copy-btn">Copy</button></div>
+<pre><code>{
+  "projectName": "myapp",
+  "preset": "typescript",
+  "templateVersion": "2.56.0",
+  "updateSource": "auto",
+
+  "agents": ["claude"],
+
+  "modelRouting": {
+    "default": "auto",
+    "execute": "gpt-5.3-codex",
+    "review": "claude-opus-4.7"
+  },
+
+  "forgeMaster": {
+    "reasoningModel": "gpt-4o-mini",
+    "reasoningProvider": "githubCopilot",
+    "routerModel": "gpt-4o-mini",
+    "defaultProvider": "githubCopilot"
+  },
+
+  "maxParallelism": 3,
+  "maxRetries": 1,
+  "maxRunHistory": 50,
+
+  "quorum": {
+    "enabled": true,
+    "auto": true,
+    "threshold": 6,
+    "models": ["claude-opus-4.7", "gpt-5.3-codex", "gemini-3.1-pro"],
+    "reviewerModel": "claude-opus-4.7",
+    "dryRunTimeout": 300000,
+    "strictAvailability": false
+  },
+
+  "extensions": ["notify-slack"],
+
+  "hooks": {
+    "preDeploy": { "enabled": true, "blockOnSecrets": true, "warnOnEnvGaps": true, "scanSince": "HEAD~1" },
+    "postSlice": { "silentDeltaThreshold": 5, "warnDeltaThreshold": 10, "scoreFloor": 70 },
+    "preAgentHandoff": { "injectContext": true, "runRegressionGuard": true, "cacheMaxAgeMinutes": 30, "minAlertSeverity": "medium" }
+  },
+
+  "brain": {
+    "federation": {
+      "enabled": true,
+      "repos": ["E:/GitHub/shared-platform-memory"]
+    }
+  },
+
+  "meta": { "selfRepairRepo": "srnichols/plan-forge" }
+}
+</code></pre>
+        </div>
+
+        <!-- ============================================================ -->
+        <h2 id="see-also">See also</h2>
+        <ul class="space-y-2 mb-8">
+          <li><a href="customization.html#config-hierarchy"><strong>Customization &mdash; Configuration Hierarchy</strong></a> &mdash; how <code>.forge.json</code> interacts with <code>copilot-instructions.md</code> and instruction files when settings conflict.</li>
+          <li><a href="update-source.html"><strong>Appendix G &mdash; Update Source Modes</strong></a> &mdash; the full story behind <code>updateSource: auto | github-tags | local-sibling</code>.</li>
+          <li><a href="advanced-execution.html#quorum"><strong>Chapter 14 &mdash; Quorum Mode</strong></a> &mdash; what each <code>quorum.*</code> key does in practice; the complexity scoring rubric that drives <code>auto</code>.</li>
+          <li><a href="multi-agent.html"><strong>Chapter 13 &mdash; Multi-Agent Setup</strong></a> &mdash; what each entry in <code>agents</code> generates.</li>
+          <li><a href="memory-system.html"><strong>Chapter 22 &mdash; How the Shop Remembers</strong></a> &mdash; how <code>brain.federation</code> shapes cross-project memory recall.</li>
+          <li><a href="https://github.com/srnichols/plan-forge/blob/master/pforge-mcp/capabilities.mjs" rel="noopener"><strong>pforge-mcp/capabilities.mjs &mdash; CONFIG_SCHEMA</strong></a> &mdash; the machine-readable JSON Schema this appendix mirrors. If they disagree, the schema wins; please <a href="https://github.com/srnichols/plan-forge/issues/new" rel="noopener">file an issue</a>.</li>
+        </ul>
+
+      </div>
+      <!-- /.chapter-content -->
+    </main>
+  </div>
+  <!-- /.manual-layout -->
+
+  <script src="assets/manual.js"></script>
+</body>
+</html>

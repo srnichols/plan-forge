@@ -3,15 +3,15 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Capabilities — Plan Forge | 69 MCP Tools, 46+ CLI Commands, Quorum Mode, Autonomous Execution, Live Dashboard</title>
-  <meta name="description" content="Complete capability reference for Plan Forge — 69 MCP tools (core + LiveGuard + Watcher + Crucible + Tempering + Bug Registry + Testbed + Forge-Master), 46+ CLI commands, Quorum Mode (multi-model consensus), DAG-based orchestrator, cost tracking, OTLP telemetry, OpenBrain memory, 20 reviewer agents, 14 skills, REST API for external integration, and a live dashboard." />
+  <title>Capabilities — Plan Forge | 88 MCP Tools, 48+ CLI Commands, Quorum Mode, Autonomous Execution, Live Dashboard</title>
+  <meta name="description" content="Complete capability reference for Plan Forge — 88 MCP tools (core + LiveGuard + Watcher + Crucible + Tempering + Bug Registry + Testbed + Forge-Master + Lattice + Copilot Memory Sync), 48+ CLI commands, Quorum Mode (multi-model consensus), DAG-based orchestrator, cost tracking, OTLP telemetry, OpenBrain memory, 20 reviewer agents, 14 skills, REST API for external integration, and a live dashboard." />
   <meta property="og:title" content="Plan Forge Capabilities — Full Tool & Feature Reference" />
-  <meta property="og:description" content="The AI-Native SDLC Forge Shop — four stations (Smelt, Forge, Guard, Learn). 67 MCP tools, 45+ CLI commands, autonomous plan execution, cost tracking, live dashboard, OTLP traces, OpenBrain memory, REST API for OpenClaw &amp; external agents." />
+  <meta property="og:description" content="The AI-Native SDLC Forge Shop — four stations (Smelt, Forge, Guard, Learn). 88 MCP tools, 48+ CLI commands, autonomous plan execution, cost tracking, live dashboard, OTLP traces, OpenBrain memory, REST API for OpenClaw &amp; external agents." />
   <meta property="og:type" content="website" />
   <meta property="og:url" content="https://planforge.software/capabilities.html" />
   <meta property="og:image" content="https://planforge.software/assets/brand/og-card-v2.webp" />
   <meta name="twitter:card" content="summary_large_image" />
-  <meta name="twitter:title" content="Plan Forge Capabilities — 69 MCP Tools + 46+ CLI Commands + Watcher + Crucible + Tempering + Bug Registry + Testbed + Forge-Master" />
+  <meta name="twitter:title" content="Plan Forge Capabilities — 88 MCP Tools + 48+ CLI Commands + Watcher + Crucible + Tempering + Bug Registry + Testbed + Forge-Master + Lattice + Copilot Memory Sync" />
   <meta name="twitter:description" content="Complete capability reference: orchestrator, dashboard, telemetry, memory, 19 agents, 13 skills." />
   <link rel="canonical" href="https://planforge.software/capabilities.html" />
   <meta name="keywords" content="AI coding guardrails, MCP tools, plan execution, DAG scheduler, cost tracking, OTLP traces, OpenBrain, VS Code Copilot, Claude, GPT, autonomous development, quorum mode, multi-model consensus, A/B testing" />
@@ -96,9 +96,9 @@
     <div class="text-center mb-16">
       <h1 class="text-4xl md:text-5xl font-bold text-white mb-4">Capability Reference</h1>
       <p class="text-xl text-slate-400 max-w-2xl mx-auto">Everything Plan Forge can do — tools, commands, agents, skills, telemetry, and integrations. One page, complete coverage.</p>
-      <img src="assets/capabilities-header.webp" alt="67 MCP tools displayed in a honeycomb grid" class="mx-auto max-w-3xl w-full rounded-2xl border border-slate-700/40 shadow-2xl shadow-amber-500/5 mt-8 mb-4" loading="lazy" />
+      <img src="assets/capabilities-header.webp" alt="88 MCP tools displayed in a honeycomb grid" class="mx-auto max-w-3xl w-full rounded-2xl border border-slate-700/40 shadow-2xl shadow-amber-500/5 mt-8 mb-4" loading="lazy" />
       <div class="mt-6 flex justify-center gap-3 text-sm">
-        <span class="px-3 py-1 rounded-full bg-forge-500/20 text-forge-400 border border-forge-500/30">67 MCP Tools</span>
+        <span class="px-3 py-1 rounded-full bg-forge-500/20 text-forge-400 border border-forge-500/30">88 MCP Tools</span>
         <span class="px-3 py-1 rounded-full bg-blue-500/20 text-blue-400 border border-blue-500/30">19 Agents</span>
         <span class="px-3 py-1 rounded-full bg-green-500/20 text-green-400 border border-green-500/30">13 Skills</span>
         <span class="px-3 py-1 rounded-full bg-purple-500/20 text-purple-400 border border-purple-500/30">15 Dashboard Tabs</span>
@@ -340,24 +340,38 @@
         </div>
       </div>
 
-      <!-- Lattice + Hallmark tools preview -->
+      <!-- Lattice + Hallmark + Anvil tools preview -->
       <div class="mt-6 rounded-xl border border-indigo-700/30 bg-indigo-950/10 p-5">
         <div class="flex items-center gap-2 mb-3">
           <span class="text-indigo-400">🕸️</span>
-          <span class="text-sm font-semibold text-indigo-400">Lattice &amp; Hallmark — Code Intelligence (7 tools — v2.95+)</span>
-          <span class="px-2 py-0.5 text-xs rounded-full bg-indigo-900/40 text-indigo-300 border border-indigo-700/30">code-graph · provenance</span>
+          <span class="text-sm font-semibold text-indigo-400">Lattice, Hallmark &amp; Anvil — Code Intelligence (5 MCP tools + CLI — v2.95+)</span>
+          <span class="px-2 py-0.5 text-xs rounded-full bg-indigo-900/40 text-indigo-300 border border-indigo-700/30">code-graph · provenance · cache</span>
         </div>
-        <p class="text-xs text-slate-500 mb-3">The <strong class="text-indigo-300">Lattice</strong> code-graph engine builds a semantic chunk index and BFS call-graph over any git repository. The <strong class="text-indigo-300">Hallmark</strong> provenance SDK attaches a lightweight <code class="text-indigo-300">hallmark/v1</code> envelope to any artifact so drift detection can verify source integrity across sessions.</p>
+        <p class="text-xs text-slate-500 mb-3">The <strong class="text-indigo-300">Lattice</strong> code-graph engine builds a semantic chunk index and BFS call-graph over any git repository (5 MCP tools). <strong class="text-indigo-300">Hallmark</strong> attaches a lightweight <code class="text-indigo-300">hallmark/v1</code> provenance envelope to any artifact so drift detection can verify source integrity across sessions (CLI + SDK). <strong class="text-indigo-300">Anvil</strong> is the content-hash-keyed memoization cache that prevents re-indexing unchanged files and owns the L2→L3 dead-letter queue (CLI). See <a href="manual/memory-system.html" class="text-indigo-300 underline">Chapter 25 — How the Shop Remembers</a> for the plain-English tour.</p>
         <div class="grid gap-2 md:grid-cols-2">
           <div class="bg-slate-800/40 rounded-lg p-3"><code class="text-indigo-400 text-xs">forge_lattice_index</code><p class="text-xs text-slate-500 mt-1">Build or update the Lattice chunk index; <code>--since</code> enables incremental re-indexing from a git SHA</p></div>
           <div class="bg-slate-800/40 rounded-lg p-3"><code class="text-indigo-400 text-xs">forge_lattice_stat</code><p class="text-xs text-slate-500 mt-1">Index statistics: chunk count, edge count, language breakdown, Anvil hit rate, index size</p></div>
-          <div class="bg-slate-800/40 rounded-lg p-3"><code class="text-indigo-400 text-xs">forge_lattice_query</code><p class="text-xs text-slate-500 mt-1">Full-text search over the chunk index; returns bounded 80-char snippets</p></div>
+          <div class="bg-slate-800/40 rounded-lg p-3"><code class="text-indigo-400 text-xs">forge_lattice_query</code><p class="text-xs text-slate-500 mt-1">Full-text search over the chunk index; returns bounded 80-char snippets ranked by camelCase-aware token-overlap score (v3.5.1+)</p></div>
           <div class="bg-slate-800/40 rounded-lg p-3"><code class="text-indigo-400 text-xs">forge_lattice_callers</code><p class="text-xs text-slate-500 mt-1">Find all callers of a named symbol using the edge graph</p></div>
           <div class="bg-slate-800/40 rounded-lg p-3"><code class="text-indigo-400 text-xs">forge_lattice_blast</code><p class="text-xs text-slate-500 mt-1">BFS call-graph traversal up to depth 5; returns <code>truncated: true</code> when frontier is capped</p></div>
-          <div class="bg-slate-800/40 rounded-lg p-3"><code class="text-indigo-400 text-xs">forge_hallmark_show</code><p class="text-xs text-slate-500 mt-1">Read <code>hallmark/v1</code> provenance record for a file — schema version, tool name, captured timestamp, content hash</p></div>
-          <div class="bg-slate-800/40 rounded-lg p-3"><code class="text-indigo-400 text-xs">forge_hallmark_verify</code><p class="text-xs text-slate-500 mt-1">Drift detection — compare stored Hallmark provenance against current file hash; flags modifications since capture</p></div>
+          <div class="bg-slate-800/40 rounded-lg p-3"><code class="text-indigo-400 text-xs">pforge hallmark show · verify</code><p class="text-xs text-slate-500 mt-1">CLI — read or drift-check a <code>hallmark/v1</code> provenance record (schema version, tool name, captured timestamp, content hash). SDK at <code>pforge-sdk/hallmark</code>.</p></div>
+          <div class="bg-slate-800/40 rounded-lg p-3"><code class="text-indigo-400 text-xs">pforge anvil stat · clear · rebuild · dlq</code><p class="text-xs text-slate-500 mt-1">CLI — memoization cache stats, selective invalidation by tool or git SHA, dead-letter queue list/drain. Lives under <code>.forge/anvil/</code>.</p></div>
         </div>
-        <p class="text-xs text-slate-500 mt-3">Lattice and Hallmark ship in v2.95.0. Anvil memoization cache (<code class="text-indigo-300">pforge anvil</code>) prevents re-indexing unchanged files and is available as 5 additional MCP tools. See <code class="text-indigo-300">pforge lattice --help</code> and <code class="text-indigo-300">pforge-sdk/hallmark</code> for full documentation.</p>
+        <p class="text-xs text-slate-500 mt-3">Lattice, Hallmark, and Anvil ship in v2.95.0. Hallmark and Anvil are CLI-only because they are local-file utilities that don't benefit from MCP overhead — capability metadata is still exposed via <code class="text-indigo-300">forge_capabilities</code> so agents can discover them. See <code class="text-indigo-300">pforge lattice --help</code>, <code class="text-indigo-300">pforge hallmark --help</code>, <code class="text-indigo-300">pforge anvil --help</code>.</p>
+      </div>
+
+      <!-- Copilot Memory Sync tools preview -->
+      <div id="copilot-sync" class="mt-6 rounded-xl border border-violet-700/30 bg-violet-950/10 p-5 scroll-mt-24">
+        <div class="flex items-center gap-2 mb-3">
+          <span class="text-violet-400">🧠</span>
+          <span class="text-sm font-semibold text-violet-400">Copilot Memory Sync (2 MCP tools — v2.99+)</span>
+          <span class="px-2 py-0.5 text-xs rounded-full bg-violet-900/40 text-violet-300 border border-violet-700/30">memory bridge · cheaper models</span>
+        </div>
+        <p class="text-xs text-slate-500 mb-3">Bridges forge memory upward into GitHub Copilot's own Memory store — the next IDE session auto-discovers project decisions, lessons, and patterns without requiring OpenBrain configuration. Soft-sync is additive and hash-deduped, so safe to run repeatedly. Together with Hallmark provenance, Anvil DLQ, and the Lattice code-graph, this completes the v3.x memory upgrades that let cheaper, faster models produce flagship-grade results. Full plain-English tour: <a href="manual/memory-system.html" class="text-violet-300 underline">Chapter 25 — How the Shop Remembers</a>.</p>
+        <div class="grid gap-2 md:grid-cols-2">
+          <div class="bg-slate-800/40 rounded-lg p-3"><code class="text-violet-400 text-xs">forge_sync_memories</code><p class="text-xs text-slate-500 mt-1">Generate <code>.github/copilot-memory-hints.md</code> from forge decisions — trajectory notes, auto-skills, brain L2 entries. CLI: <code>pforge sync-memories</code>.</p></div>
+          <div class="bg-slate-800/40 rounded-lg p-3"><code class="text-violet-400 text-xs">forge_sync_instructions</code><p class="text-xs text-slate-500 mt-1">Generate <code>.github/copilot-instructions.md</code> from project profile + principles + <code>.forge.json</code>. Completes the Copilot integration trilogy. CLI: <code>pforge sync-instructions</code>.</p></div>
+        </div>
       </div>
 
       <!-- Forge-Master tools preview -->
@@ -400,7 +414,7 @@
           <div class="bg-slate-800/40 rounded-lg p-3"><code class="text-slate-200 text-xs">forge_delegate_to_agent</code><p class="text-xs text-slate-500 mt-1">Delegate a prompt/slice to a specialized reviewer agent (database, security, performance, …)</p></div>
           <div class="bg-slate-800/40 rounded-lg p-3"><code class="text-slate-200 text-xs">forge_self_update</code><p class="text-xs text-slate-500 mt-1">Check for the latest Plan Forge release, fetch release notes, and optionally install</p></div>
         </div>
-        <p class="text-xs text-slate-500 mt-3">Total: 67 MCP tools across all subsystems. Call <code class="text-forge-400">forge_capabilities</code> or open <code class="text-forge-400">pforge-mcp/tools.json</code> for the machine-readable surface.</p>
+        <p class="text-xs text-slate-500 mt-3">Total: 88 MCP tools across all subsystems. Call <code class="text-forge-400">forge_capabilities</code> or open <code class="text-forge-400">pforge-mcp/tools.json</code> for the machine-readable surface.</p>
       </div>
     </section>
 
@@ -418,7 +432,7 @@
         </div>
         <div class="bg-slate-800/60 rounded-xl p-6 border border-sky-700/30">
           <h3 class="text-lg font-bold text-white mb-2">Cloud Agent</h3>
-          <p class="text-sm text-slate-400">Copilot cloud agent provisions the environment via <code class="text-sky-300">copilot-setup-steps.yml</code>. Guardrails auto-load, all 67 MCP tools are available, and <code class="text-sky-300">forge_run_plan</code> executes slices autonomously on GitHub Issues. Use <code class="text-sky-300">--worker copilot-coding-agent</code> to route each slice to a Copilot cloud agent session via GitHub Issue dispatch.</p>
+          <p class="text-sm text-slate-400">Copilot cloud agent provisions the environment via <code class="text-sky-300">copilot-setup-steps.yml</code>. Guardrails auto-load, all 88 MCP tools are available, and <code class="text-sky-300">forge_run_plan</code> executes slices autonomously on GitHub Issues. Use <code class="text-sky-300">--worker copilot-coding-agent</code> to route each slice to a Copilot cloud agent session via GitHub Issue dispatch.</p>
         </div>
         <div class="bg-slate-800/60 rounded-xl p-6 border border-purple-700/30">
           <h3 class="text-lg font-bold text-white mb-2">Parallel</h3>

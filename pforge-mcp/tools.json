@@ -89,13 +89,53 @@
       "properties": {
         "criteria": {
           "type": "array",
-          "items": { "type": "string" },
+          "items": {
+            "type": "string"
+          },
           "description": "Custom review criteria checklist items. Defaults to standard Plan Forge security, testing, and architecture checks."
         },
         "path": {
           "type": "string",
           "description": "Project root to detect git branch and PR (default: current)"
         }
+      }
+    },
+    "intent": [
+      "review",
+      "delegate",
+      "code-review",
+      "pr"
+    ],
+    "aliases": [
+      "delegate-review",
+      "review-delegate"
+    ],
+    "cost": "low",
+    "maxConcurrent": 5,
+    "addedIn": "3.3.0",
+    "prerequisites": [
+      "gh authenticated",
+      "open PR for current branch"
+    ],
+    "produces": [
+      "GitHub issue assigned to @copilot"
+    ],
+    "consumes": [],
+    "sideEffects": [
+      "Creates a GitHub issue"
+    ],
+    "errors": {
+      "NO_PR": "No open PR found for the current branch",
+      "AUTH_ERROR": "gh permission denied — run gh auth login"
+    },
+    "agentGuidance": "Call after plan execution when you want the Copilot Coding Agent to review the changes. Requires an open PR on the current branch. Returns the review issue URL.",
+    "example": {
+      "input": {},
+      "output": {
+        "ok": true,
+        "delegationType": "issue",
+        "reviewUrl": "https://github.com/org/repo/issues/42",
+        "message": "Review delegated to Copilot Coding Agent. Issue: https://github.com/org/repo/issues/42"
       }
     }
   },
@@ -105,9 +145,18 @@
     "inputSchema": {
       "type": "object",
       "properties": {
-        "limit": { "type": "number", "description": "Max activity entries to aggregate (default 50, max 200)" },
-        "since": { "type": "string", "description": "ISO date string — only aggregate entries after this date" },
-        "path": { "type": "string", "description": "Project root (default: current)" }
+        "limit": {
+          "type": "number",
+          "description": "Max activity entries to aggregate (default 50, max 200)"
+        },
+        "since": {
+          "type": "string",
+          "description": "ISO date string — only aggregate entries after this date"
+        },
+        "path": {
+          "type": "string",
+          "description": "Project root (default: current)"
+        }
       }
     }
   },
@@ -129,6 +178,41 @@
           "type": "string",
           "description": "Project root (default: current)"
         }
+      }
+    },
+    "intent": [
+      "read",
+      "team",
+      "activity"
+    ],
+    "aliases": [
+      "team-activity",
+      "activity-feed"
+    ],
+    "cost": "low",
+    "maxConcurrent": 10,
+    "addedIn": "3.2.0",
+    "prerequisites": [],
+    "produces": [],
+    "consumes": [
+      ".forge/team-activity.jsonl"
+    ],
+    "sideEffects": [],
+    "errors": {},
+    "agentGuidance": "Use this to answer recent team-run questions — who ran what plan, when it happened, whether it completed or aborted, and approximate spend. Prefer forge_plan_status for slice details and forge_cost_report for cost aggregation.",
+    "example": {
+      "input": {},
+      "output": {
+        "count": 2,
+        "activities": [
+          {
+            "run_id": "2026-05-17T20-00-00_Phase-TEAM-ACTIVITY",
+            "plan": "docs/plans/Phase-TEAM-ACTIVITY.md",
+            "status": "completed",
+            "cost_usd": 0.85,
+            "operator": "Scott Nichols <srn@example.com>"
+          }
+        ]
       }
     }
   },
@@ -614,7 +698,7 @@
   },
   {
     "name": "forge_run_plan",
-    "description": "Execute a hardened plan — spawn CLI workers for each slice, validate at every boundary, track tokens. Supports Full Auto (gh copilot CLI) and Assisted (human + automated gates) modes. Use --estimate for cost prediction without executing. Pass manualImport:true for hand-authored plans not registered with Crucible (bypasses crucibleId enforcement).",
+    "description": "Execute a hardened plan — spawn CLI workers for each slice, validate at every boundary, track tokens. Supports Full Auto (gh copilot CLI) and Assisted (human + automated gates) modes. Use --estimate for cost prediction without executing.",
     "inputSchema": {
       "type": "object",
       "properties": {
@@ -2668,71 +2752,44 @@
     "description": "File a GitHub issue proposing a classifier rule update when a tempering finding routes to the 'classifier' lane (infra noise). Deduplicates by finding class + reason hash — repeated occurrences comment on the existing issue instead of creating a duplicate. USE FOR: closing the audit loop when routeFinding returns lane='classifier', tracking recurring noise patterns in GitHub. DO NOT USE FOR: product bugs (use forge_bug_register), spec gaps (submit to Crucible), self-repair defects (use forge_meta_bug_file).",
     "inputSchema": {
       "type": "object",
-      "required": ["payload"],
+      "required": [
+        "payload"
+      ],
       "properties": {
         "payload": {
           "type": "object",
-          "description": "Classifier-lane payload from forge_triage_route: { findingClass, route, currentClassification, reason, rule, proposedAction, evidence }",
+          "description": "Classifier-lane payload from forge_triage_route (lane must be 'classifier'): { findingClass, route, currentClassification, reason, rule, proposedAction, evidence }",
           "properties": {
-            "findingClass": { "type": "string" },
-            "route": { "type": "string" },
-            "currentClassification": { "type": "string" },
-            "reason": { "type": "string" },
-            "rule": { "type": "string" },
-            "proposedAction": { "type": "string" },
-            "evidence": { "type": "object" }
+            "findingClass": {
+              "type": "string"
+            },
+            "route": {
+              "type": "string"
+            },
+            "currentClassification": {
+              "type": "string"
+            },
+            "reason": {
+              "type": "string"
+            },
+            "rule": {
+              "type": "string"
+            },
+            "proposedAction": {
+              "type": "string"
+            },
+            "evidence": {
+              "type": "object"
+            }
           },
-          "required": ["findingClass"]
+          "required": [
+            "findingClass"
+          ]
         },
-        "path": { "type": "string", "description": "Project directory (default: current)" }
-      }
-    },
-    "intent": ["tempering", "triage", "classifier", "github", "issue"],
-    "aliases": ["classifier-issue", "file-classifier-issue"],
-    "cost": "low",
-    "maxConcurrent": 5,
-    "addedIn": "3.5.0",
-    "prerequisites": ["gh CLI authenticated OR GITHUB_TOKEN"],
-    "produces": ["GitHub issue (or comment on existing issue)"],
-    "consumes": [".forge.json"],
-    "sideEffects": ["creates or comments on GitHub issue with label classifier-noise"],
-    "writesFiles": false,
-    "network": true,
-    "risk": "low",
-    "errors": {
-      "NO_TOKEN": {
-        "message": "No GitHub token available",
-        "recovery": "Set GITHUB_TOKEN env var, add to .forge/secrets.json, or authenticate with gh CLI"
-      },
-      "NO_REPO": {
-        "message": "Could not resolve target repository",
-        "recovery": "Set bugRegistry.githubRepo in .forge.json (e.g. 'owner/repo')"
-      },
-      "CREATE_FAILED": {
-        "message": "GitHub issue creation failed",
-        "recovery": "Check token permissions and repository access"
-      },
-      "MISSING_PAYLOAD": {
-        "message": "payload object is required",
-        "recovery": "Pass the classifier-lane payload from forge_triage_route"
-      }
-    },
-    "example": {
-      "input": {
-        "payload": {
-          "findingClass": "missing-alt-text",
-          "route": "/about",
-          "currentClassification": "infra",
-          "reason": "All images on /about are decorative; alt is intentionally empty",
-          "proposedAction": "Add rule: skip alt-text check for role=presentation images"
+        "path": {
+          "type": "string",
+          "description": "Project directory (default: current)"
         }
-      },
-      "output": {
-        "ok": true,
-        "issueNumber": 53,
-        "url": "https://github.com/owner/repo/issues/53",
-        "deduped": false,
-        "message": "Classifier-noise issue #53 created."
       }
     }
   },
@@ -5596,6 +5653,211 @@
     }
   },
   {
+    "name": "forge_export_plan",
+    "description": "Convert a loose Copilot cloud agent session plan (numbered or bulleted steps) into a hardened Plan Forge Phase-X-PLAN.md. Parses steps, extracts file paths, generates per-slice validation gates, and outputs a complete plan with scope contract, forbidden actions template, and acceptance criteria.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "input": {
+          "type": "string",
+          "description": "Markdown text of the loose plan to convert"
+        },
+        "phaseName": {
+          "type": "string",
+          "description": "Override the derived phase slug (UPPERCASE-SLUG, e.g. AUTH-RBAC). Default: derived from title."
+        },
+        "outputPath": {
+          "type": "string",
+          "description": "If set, write the plan to this file path (absolute or relative to cwd)"
+        },
+        "sourceNote": {
+          "type": "string",
+          "description": "Attribution note in the plan header. Default: 'Exported from loose plan via forge_export_plan'"
+        },
+        "path": {
+          "type": "string",
+          "description": "Project directory (default: current)"
+        }
+      },
+      "required": [
+        "input"
+      ]
+    }
+  },
+  {
+    "name": "forge_sync_memories",
+    "description": "Generate .github/copilot-memory-hints.md from forge decisions (trajectory notes, auto-skills, brain L2 entries). Copilot Memory auto-discovers this file as a project knowledge source. Soft-sync approach — no API calls required. USE FOR: populate Copilot Memory with project decisions, regenerate memory hints after plan runs, export trajectory notes, sync brain decisions to Copilot. DO NOT USE FOR: uploading to Copilot Spaces (use forge_sync_spaces), reading individual trajectories.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "dryRun": {
+          "type": "boolean",
+          "description": "Return rendered Markdown without writing the file (default: false)"
+        },
+        "force": {
+          "type": "boolean",
+          "description": "Re-write even if content is unchanged (default: false)"
+        },
+        "limit": {
+          "type": "number",
+          "description": "Max entries per section — trajectories, auto-skills, decisions (default: 10)"
+        },
+        "since": {
+          "type": "string",
+          "description": "ISO 8601 date/datetime string: only include hints newer than this"
+        },
+        "output": {
+          "type": "string",
+          "description": "Override output path (default: .github/copilot-memory-hints.md, relative to project root)"
+        },
+        "path": {
+          "type": "string",
+          "description": "Project directory (default: current)"
+        }
+      },
+      "required": []
+    },
+    "intent": [
+      "sync",
+      "memory",
+      "copilot",
+      "hints",
+      "decisions",
+      "lessons"
+    ],
+    "aliases": [
+      "sync-memories",
+      "copilot-memory-hints"
+    ],
+    "cost": "low",
+    "maxConcurrent": 1,
+    "addedIn": "2.99.0",
+    "prerequisites": [],
+    "produces": [
+      ".github/copilot-memory-hints.md"
+    ],
+    "consumes": [
+      ".forge/trajectories/",
+      ".forge/auto-skills/",
+      ".forge/brain/"
+    ],
+    "sideEffects": [
+      "writes .github/copilot-memory-hints.md (additive, hash-deduped soft-sync)"
+    ],
+    "writesFiles": true,
+    "network": false,
+    "risk": "low",
+    "errors": {
+      "ERR_NO_SOURCES": {
+        "message": "No forge memory sources found",
+        "recovery": "Run a plan first to generate trajectories, auto-skills, or brain entries"
+      }
+    },
+    "example": {
+      "input": {
+        "dryRun": false
+      },
+      "output": {
+        "ok": true,
+        "path": ".github/copilot-memory-hints.md",
+        "added": 12,
+        "deduped": 3,
+        "skipped": 0
+      }
+    }
+  },
+  {
+    "name": "forge_sync_instructions",
+    "description": "Generate .github/copilot-instructions.md from forge project context (project profile, project principles, .forge.json config). GitHub Copilot reads this file automatically. Completes the Copilot integration trilogy: sync-memories → sync-instructions. USE FOR: populate Copilot with project-specific instructions, regenerate instructions after adding project profile or principles, export project context to Copilot. DO NOT USE FOR: uploading to Copilot Spaces (use forge_sync_spaces), reading memory hints (use forge_sync_memories).",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "dryRun": {
+          "type": "boolean",
+          "description": "Return rendered Markdown without writing the file (default: false)"
+        },
+        "force": {
+          "type": "boolean",
+          "description": "Re-write even if content is unchanged (default: false)"
+        },
+        "noPrinciples": {
+          "type": "boolean",
+          "description": "Skip the Project Principles section (default: false)"
+        },
+        "noProfile": {
+          "type": "boolean",
+          "description": "Skip the Project Profile section (default: false)"
+        },
+        "noExtras": {
+          "type": "boolean",
+          "description": "Skip extra .github/instructions/*.instructions.md files (default: false)"
+        },
+        "output": {
+          "type": "string",
+          "description": "Override output path (default: .github/copilot-instructions.md, relative to project root)"
+        },
+        "path": {
+          "type": "string",
+          "description": "Project directory (default: current)"
+        }
+      },
+      "required": []
+    },
+    "intent": [
+      "sync",
+      "copilot",
+      "instructions",
+      "generate",
+      "project-context"
+    ],
+    "aliases": [
+      "sync-instructions",
+      "copilot-instructions"
+    ],
+    "cost": "low",
+    "maxConcurrent": 5,
+    "addedIn": "3.0.0",
+    "prerequisites": [],
+    "produces": [
+      ".github/copilot-instructions.md"
+    ],
+    "consumes": [
+      ".github/instructions/project-profile.instructions.md",
+      "docs/plans/PROJECT-PRINCIPLES.md",
+      ".forge.json",
+      ".github/instructions/*.instructions.md"
+    ],
+    "sideEffects": [
+      "Writes .github/copilot-instructions.md (skipped when content unchanged, unless --force)"
+    ],
+    "writesFiles": true,
+    "network": false,
+    "risk": "low",
+    "errors": {
+      "SYNC_INSTRUCTIONS_ERROR": {
+        "message": "Failed to write output file",
+        "recovery": "Check file permissions on .github/"
+      }
+    },
+    "example": {
+      "input": {},
+      "output": {
+        "ok": true,
+        "outputPath": ".github/copilot-instructions.md",
+        "sectionsCount": 3,
+        "sections": {
+          "profile": true,
+          "principles": true,
+          "forgeConfig": true,
+          "extraCount": 0
+        },
+        "changed": true,
+        "dryRunMode": false,
+        "message": "Wrote 3 section(s) to .github/copilot-instructions.md."
+      }
+    }
+  },
+  {
     "name": "forge_testbed_happypath",
     "description": "Run all happy-path testbed scenarios sequentially. Returns aggregated pass/fail results with per-scenario details. Use dryRun to validate without executing.",
     "inputSchema": {
@@ -5913,216 +6175,58 @@
     }
   },
   {
-    "name": "forge_anvil_stat",
-    "description": "Return a read-only summary of the Anvil memoization cache: total entry count, total bytes, oldest mtime, and per-tool hit/miss/count counters. USE FOR: diagnosing cache effectiveness; dashboards; monitoring anvil growth.",
-    "inputSchema": {
-      "type": "object",
-      "properties": {
-        "path": {
-          "type": "string",
-          "description": "Project directory (default: current)"
-        }
-      }
-    },
-    "intent": ["anvil", "cache", "stat", "memoization"],
-    "aliases": ["anvil-stat", "cache-stat"],
-    "cost": "low",
-    "maxConcurrent": 10,
-    "addedIn": "2.95.0",
-    "example": {
-      "input": {},
-      "output": { "entries": 12, "totalBytes": 40960, "oldestMtime": 1716000000000, "perTool": {} }
-    }
-  },
-  {
-    "name": "forge_anvil_clear",
-    "description": "Bounded deletion of Anvil cache entries. Requires at least one filter: tool (deletes all entries for that tool) or olderThanMs (deletes entries older than N milliseconds). Calling with no filters returns ERR_ANVIL_NO_FILTER.",
-    "inputSchema": {
-      "type": "object",
-      "properties": {
-        "tool": {
-          "type": "string",
-          "description": "Delete all entries for this tool name"
-        },
-        "olderThanMs": {
-          "type": "number",
-          "description": "Delete entries whose mtime is older than this many milliseconds"
-        },
-        "path": {
-          "type": "string",
-          "description": "Project directory (default: current)"
-        }
-      }
-    },
-    "intent": ["anvil", "cache", "clear", "invalidate"],
-    "addedIn": "2.95.0",
-    "example": {
-      "input": { "tool": "forge_sweep" },
-      "output": { "deleted": 3 }
-    }
-  },
-  {
-    "name": "forge_anvil_rebuild",
-    "description": "Selectively invalidate Anvil cache entries whose codeHashSeed references a file changed since a given git commit. Does not re-run tools — next caller gets a clean miss.",
-    "inputSchema": {
-      "type": "object",
-      "required": ["since"],
-      "properties": {
-        "since": {
-          "type": "string",
-          "description": "Git SHA — invalidate entries for files changed between this commit and HEAD"
-        },
-        "path": {
-          "type": "string",
-          "description": "Project directory (default: current)"
-        }
-      }
-    },
-    "intent": ["anvil", "cache", "rebuild", "invalidate", "git"],
-    "addedIn": "2.95.0",
-    "example": {
-      "input": { "since": "abc1234" },
-      "output": { "invalidated": 2, "changedFiles": ["pforge-mcp/orchestrator.mjs"] }
-    }
-  },
-  {
-    "name": "forge_anvil_dlq_list",
-    "description": "List records in the Anvil Dead Letter Queue — tool invocations that failed to complete and were deferred. Optionally filter by tool name or cap by limit.",
-    "inputSchema": {
-      "type": "object",
-      "properties": {
-        "tool": {
-          "type": "string",
-          "description": "Only list DLQ entries for this tool name"
-        },
-        "limit": {
-          "type": "number",
-          "description": "Maximum number of entries to return (default: all)"
-        },
-        "path": {
-          "type": "string",
-          "description": "Project directory (default: current)"
-        }
-      }
-    },
-    "intent": ["anvil", "dlq", "dead-letter-queue", "failures"],
-    "addedIn": "2.95.0",
-    "example": {
-      "input": { "limit": 10 },
-      "output": { "items": [], "total": 0 }
-    }
-  },
-  {
-    "name": "forge_anvil_dlq_drain",
-    "description": "Drain (remove) records from the Anvil Dead Letter Queue. Optionally filter by id or tool. Without filters, drains all DLQ records.",
-    "inputSchema": {
-      "type": "object",
-      "properties": {
-        "id": {
-          "type": "string",
-          "description": "Remove the specific DLQ record with this UUID"
-        },
-        "tool": {
-          "type": "string",
-          "description": "Remove all DLQ records for this tool name"
-        },
-        "path": {
-          "type": "string",
-          "description": "Project directory (default: current)"
-        }
-      }
-    },
-    "intent": ["anvil", "dlq", "drain", "retry", "failures"],
-    "addedIn": "2.95.0",
-    "example": {
-      "input": {},
-      "output": { "drained": 1 }
-    }
-  },
-  {
-    "name": "forge_hallmark_show",
-    "description": "Show a hallmark milestone record by id. Returns the full record (id, payload, writtenAt, source, tags). When id is omitted, lists all hallmarks. USE FOR: inspecting slice completion markers; auditing provenance envelopes.",
-    "inputSchema": {
-      "type": "object",
-      "properties": {
-        "id": {
-          "type": "string",
-          "description": "Hallmark id (alphanumeric, dash, dot, underscore). Omit to list all."
-        },
-        "path": {
-          "type": "string",
-          "description": "Project directory (default: current)"
-        }
-      }
-    },
-    "intent": ["hallmark", "show", "provenance", "milestone"],
-    "aliases": ["hallmark-show"],
-    "addedIn": "2.95.0",
-    "example": {
-      "input": { "id": "slice-3" },
-      "output": { "id": "slice-3", "payload": { "status": "done" }, "writtenAt": "2026-05-16T00:00:00.000Z" }
-    }
-  },
-  {
-    "name": "forge_hallmark_verify",
-    "description": "Verify a hallmark by id. Re-hashes the cited source file (if any) and reports drift. Returns ok:true when the hallmark is present and consistent.",
-    "inputSchema": {
-      "type": "object",
-      "required": ["id"],
-      "properties": {
-        "id": {
-          "type": "string",
-          "description": "Hallmark id to verify"
-        },
-        "path": {
-          "type": "string",
-          "description": "Project directory (default: current)"
-        }
-      }
-    },
-    "intent": ["hallmark", "verify", "drift", "provenance"],
-    "aliases": ["hallmark-verify"],
-    "addedIn": "2.95.0",
-    "example": {
-      "input": { "id": "slice-3" },
-      "output": { "ok": true, "id": "slice-3", "drift": false, "message": "Hallmark present; no source file to verify." }
-    }
-  },
-  {
-    "name": "forge_pipelines_list",
-    "description": "List the four standing capture pipelines (orchestrator→memory, watcher→drift, hub→sessionReplay, crucible→thoughts) with last-write timestamps and Anvil hit rates.",
-    "inputSchema": {
-      "type": "object",
-      "properties": {
-        "path": {
-          "type": "string",
-          "description": "Project directory (default: current)"
-        }
-      }
-    },
-    "intent": ["pipelines", "list", "capture", "memory"],
-    "aliases": ["pipelines-list"],
-    "addedIn": "2.95.0",
-    "example": {
-      "input": {},
-      "output": { "pipelines": [{ "id": "orchestrator-memory", "label": "Orchestrator → Memory", "artifactExists": false, "lastWriteAt": null }], "anvil": { "entries": 0, "totalBytes": 0, "perTool": {} } }
-    }
-  },
-  {
     "name": "forge_lattice_index",
     "description": "Build or update the Lattice code-graph index — walks tracked source files, chunks them, and persists JSONL to .forge/lattice/. USE FOR: initial index build, re-indexing after large changes, warming the Anvil cache for fast re-runs. DO NOT USE FOR: reading index data (use forge_lattice_query, forge_lattice_callers, or forge_lattice_blast).",
     "inputSchema": {
       "type": "object",
       "properties": {
-        "paths": { "type": "array", "items": { "type": "string" }, "description": "Paths to index relative to project root (default: ['.'])" },
-        "since": { "type": "string", "description": "Only re-index files changed since this git revision (e.g. HEAD~1)" },
-        "path": { "type": "string", "description": "Project directory (default: current)" }
+        "paths": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Paths to index relative to project root (default: ['.'])"
+        },
+        "since": {
+          "type": "string",
+          "description": "Only re-index files changed since this git revision (e.g. HEAD~1)"
+        },
+        "path": {
+          "type": "string",
+          "description": "Project directory (default: current)"
+        }
       }
     },
-    "intent": ["lattice", "index", "code-graph", "chunk"],
-    "aliases": ["lattice-index", "code-index"],
+    "intent": [
+      "lattice",
+      "index",
+      "code-graph",
+      "chunk"
+    ],
+    "aliases": [
+      "lattice-index",
+      "code-index"
+    ],
     "cost": "medium",
-    "addedIn": "3.0.0",
+    "maxConcurrent": 1,
+    "addedIn": "2.95.0",
+    "prerequisites": [
+      "git repository"
+    ],
+    "produces": [
+      ".forge/lattice/chunks.jsonl",
+      ".forge/lattice/edges.jsonl",
+      ".forge/lattice/meta.json"
+    ],
+    "consumes": [
+      "src/**"
+    ],
+    "sideEffects": [
+      "writes .forge/lattice/ JSONL files"
+    ],
+    "writesFiles": true,
+    "network": false,
+    "risk": "low",
     "errors": {
       "ERR_LATTICE_PATH_OUTSIDE_REPO": {
         "message": "Path is outside the workspace root",
@@ -6130,8 +6234,18 @@
       }
     },
     "example": {
-      "input": { "paths": ["."] },
-      "output": { "filesIndexed": 42, "chunks": 180, "edges": 95, "anvilHits": 0, "anvilMisses": 42 }
+      "input": {
+        "paths": [
+          "."
+        ]
+      },
+      "output": {
+        "filesIndexed": 42,
+        "chunks": 180,
+        "edges": 95,
+        "anvilHits": 0,
+        "anvilMisses": 42
+      }
     }
   },
   {
@@ -6140,17 +6254,49 @@
     "inputSchema": {
       "type": "object",
       "properties": {
-        "path": { "type": "string", "description": "Project directory (default: current)" }
+        "path": {
+          "type": "string",
+          "description": "Project directory (default: current)"
+        }
       }
     },
-    "intent": ["lattice", "stat", "code-graph", "index-health"],
-    "aliases": ["lattice-stat"],
+    "intent": [
+      "lattice",
+      "stat",
+      "code-graph",
+      "index-health"
+    ],
+    "aliases": [
+      "lattice-stat"
+    ],
     "cost": "low",
-    "addedIn": "3.0.0",
+    "maxConcurrent": 10,
+    "addedIn": "2.95.0",
+    "prerequisites": [],
+    "produces": [],
+    "consumes": [
+      ".forge/lattice/"
+    ],
+    "sideEffects": [],
+    "writesFiles": false,
+    "network": false,
+    "risk": "low",
     "errors": {},
     "example": {
       "input": {},
-      "output": { "chunks": 0, "edges": 0, "languages": {}, "lastIndexedAt": null, "chunkerImpl": null, "chunkerVersion": null, "anvilHitRate": 0, "indexBytes": 0 }
+      "output": {
+        "chunks": 180,
+        "edges": 95,
+        "languages": {
+          "js": 120,
+          "ts": 60
+        },
+        "lastIndexedAt": "2026-05-16T00:00:00.000Z",
+        "chunkerImpl": "pureJs",
+        "chunkerVersion": "1.0.0",
+        "anvilHitRate": 0.95,
+        "indexBytes": 81920
+      }
     }
   },
   {
@@ -6159,22 +6305,77 @@
     "inputSchema": {
       "type": "object",
       "properties": {
-        "query": { "type": "string", "description": "Substring match against chunk name or filePath" },
-        "language": { "type": "string", "description": "Exact language filter (e.g. js, ts, py)" },
-        "kind": { "type": "string", "description": "Exact kind filter (e.g. function, class, file)" },
-        "filePath": { "type": "string", "description": "Substring match against chunk filePath" },
-        "limit": { "type": "number", "description": "Max results (default: 25)" },
-        "path": { "type": "string", "description": "Project directory (default: current)" }
+        "query": {
+          "type": "string",
+          "description": "Substring match against chunk name or filePath"
+        },
+        "language": {
+          "type": "string",
+          "description": "Exact language filter (e.g. js, ts, py)"
+        },
+        "kind": {
+          "type": "string",
+          "description": "Exact kind filter (e.g. function, class, file)"
+        },
+        "filePath": {
+          "type": "string",
+          "description": "Substring match against chunk filePath"
+        },
+        "limit": {
+          "type": "number",
+          "description": "Max results (default: 25)"
+        },
+        "path": {
+          "type": "string",
+          "description": "Project directory (default: current)"
+        }
       }
     },
-    "intent": ["lattice", "query", "search", "code-graph"],
-    "aliases": ["lattice-query", "code-search"],
+    "intent": [
+      "lattice",
+      "query",
+      "search",
+      "code-graph"
+    ],
+    "aliases": [
+      "lattice-query",
+      "code-search"
+    ],
     "cost": "low",
-    "addedIn": "3.0.0",
+    "maxConcurrent": 10,
+    "addedIn": "2.95.0",
+    "prerequisites": [
+      ".forge/lattice/chunks.jsonl exists"
+    ],
+    "produces": [],
+    "consumes": [
+      ".forge/lattice/chunks.jsonl"
+    ],
+    "sideEffects": [],
+    "writesFiles": false,
+    "network": false,
+    "risk": "low",
     "errors": {},
     "example": {
-      "input": { "query": "handleAuth", "limit": 10 },
-      "output": { "chunks": [], "total": 0, "truncated": false, "message": "No chunks matched query \"handleAuth\". Broaden your query or run latticeIndex first." }
+      "input": {
+        "query": "handleAuth",
+        "language": "ts",
+        "limit": 10
+      },
+      "output": {
+        "chunks": [
+          {
+            "id": "a1b2c3d4e5f60001",
+            "name": "handleAuth",
+            "filePath": "src/auth.ts",
+            "language": "ts",
+            "kind": "function"
+          }
+        ],
+        "total": 1,
+        "truncated": false,
+        "message": "Found 1 chunk matching query \"handleAuth\"."
+      }
     }
   },
   {
@@ -6182,21 +6383,61 @@
     "description": "Find all chunks that reference (call) a given symbol name. USE FOR: impact analysis — who depends on this function? DO NOT USE FOR: deep call-graph traversal (use forge_lattice_blast).",
     "inputSchema": {
       "type": "object",
-      "required": ["name"],
+      "required": [
+        "name"
+      ],
       "properties": {
-        "name": { "type": "string", "description": "Symbol name to find callers of" },
-        "limit": { "type": "number", "description": "Max results (default: 25)" },
-        "path": { "type": "string", "description": "Project directory (default: current)" }
+        "name": {
+          "type": "string",
+          "description": "Symbol name to find callers of"
+        },
+        "limit": {
+          "type": "number",
+          "description": "Max results (default: 25)"
+        },
+        "path": {
+          "type": "string",
+          "description": "Project directory (default: current)"
+        }
       }
     },
-    "intent": ["lattice", "callers", "code-graph", "impact-analysis"],
-    "aliases": ["lattice-callers", "who-calls"],
+    "intent": [
+      "lattice",
+      "callers",
+      "code-graph",
+      "impact-analysis"
+    ],
+    "aliases": [
+      "lattice-callers",
+      "who-calls"
+    ],
     "cost": "low",
-    "addedIn": "3.0.0",
+    "maxConcurrent": 10,
+    "addedIn": "2.95.0",
+    "prerequisites": [
+      ".forge/lattice/chunks.jsonl exists",
+      ".forge/lattice/edges.jsonl exists"
+    ],
+    "produces": [],
+    "consumes": [
+      ".forge/lattice/chunks.jsonl",
+      ".forge/lattice/edges.jsonl"
+    ],
+    "sideEffects": [],
+    "writesFiles": false,
+    "network": false,
+    "risk": "low",
     "errors": {},
     "example": {
-      "input": { "name": "handleAuth" },
-      "output": { "chunks": [], "total": 0, "truncated": false, "message": "No callers found for \"handleAuth\". Ensure the index is up to date." }
+      "input": {
+        "name": "handleAuth"
+      },
+      "output": {
+        "chunks": [],
+        "total": 0,
+        "truncated": false,
+        "message": "No callers found for \"handleAuth\". Ensure the index is up to date."
+      }
     }
   },
   {
@@ -6205,68 +6446,79 @@
     "inputSchema": {
       "type": "object",
       "properties": {
-        "chunkId": { "type": "string", "description": "Seed chunk id (exact 16-char hex)" },
-        "name": { "type": "string", "description": "Seed chunk name (all matching chunks are enqueued)" },
-        "direction": { "type": "string", "enum": ["callees", "callers", "both"], "description": "Traversal direction (default: both)" },
-        "depth": { "type": "number", "description": "Max BFS hops (default: 3)" },
-        "limit": { "type": "number", "description": "Max nodes returned (default: 50)" },
-        "path": { "type": "string", "description": "Project directory (default: current)" }
+        "chunkId": {
+          "type": "string",
+          "description": "Seed chunk id (exact 16-char hex)"
+        },
+        "name": {
+          "type": "string",
+          "description": "Seed chunk name (all matching chunks are enqueued)"
+        },
+        "direction": {
+          "type": "string",
+          "enum": [
+            "callees",
+            "callers",
+            "both"
+          ],
+          "description": "Traversal direction (default: both)"
+        },
+        "depth": {
+          "type": "number",
+          "description": "Max BFS hops (default: 3)"
+        },
+        "limit": {
+          "type": "number",
+          "description": "Max nodes returned (default: 50)"
+        },
+        "path": {
+          "type": "string",
+          "description": "Project directory (default: current)"
+        }
       }
     },
-    "intent": ["lattice", "blast", "code-graph", "bfs", "call-chain"],
-    "aliases": ["lattice-blast", "call-graph"],
+    "intent": [
+      "lattice",
+      "blast",
+      "code-graph",
+      "bfs",
+      "call-chain"
+    ],
+    "aliases": [
+      "lattice-blast",
+      "call-graph"
+    ],
     "cost": "low",
-    "addedIn": "3.0.0",
+    "maxConcurrent": 10,
+    "addedIn": "2.95.0",
+    "prerequisites": [
+      ".forge/lattice/chunks.jsonl exists",
+      ".forge/lattice/edges.jsonl exists"
+    ],
+    "produces": [],
+    "consumes": [
+      ".forge/lattice/chunks.jsonl",
+      ".forge/lattice/edges.jsonl"
+    ],
+    "sideEffects": [],
+    "writesFiles": false,
+    "network": false,
+    "risk": "low",
     "errors": {},
     "example": {
-      "input": { "name": "handleAuth", "direction": "callees", "depth": 2 },
-      "output": { "nodes": [], "edges": [], "unresolvedNames": [], "total": 0, "truncated": false, "message": "No chunk found for \"handleAuth\"." }
-    }
-  },
-  {
-    "name": "forge_sync_instructions",
-    "description": "Generate .github/copilot-instructions.md from forge project context (project profile, project principles, .forge.json config). GitHub Copilot reads this file automatically. Completes the Copilot integration trilogy: sync-memories → sync-instructions. USE FOR: populate Copilot with project-specific instructions, regenerate instructions after adding project profile or principles, export project context to Copilot. DO NOT USE FOR: uploading to Copilot Spaces (use forge_sync_spaces), reading memory hints (use forge_sync_memories).",
-    "inputSchema": {
-      "type": "object",
-      "properties": {
-        "dryRun":       { "type": "boolean", "description": "Return rendered Markdown without writing the file (default: false)" },
-        "force":        { "type": "boolean", "description": "Re-write even if content is unchanged (default: false)" },
-        "noPrinciples": { "type": "boolean", "description": "Skip the Project Principles section (default: false)" },
-        "noProfile":    { "type": "boolean", "description": "Skip the Project Profile section (default: false)" },
-        "noExtras":     { "type": "boolean", "description": "Skip extra .github/instructions/*.instructions.md files (default: false)" },
-        "output":       { "type": "string",  "description": "Override output path (default: .github/copilot-instructions.md, relative to project root)" },
-        "path":         { "type": "string",  "description": "Project directory (default: current)" }
+      "input": {
+        "name": "handleAuth",
+        "direction": "callees",
+        "depth": 2
       },
-      "required": []
-    },
-    "intent": ["sync", "copilot", "instructions", "generate", "project-context"],
-    "aliases": ["sync-instructions", "copilot-instructions"],
-    "cost": "low",
-    "addedIn": "3.0.0",
-    "produces": [".github/copilot-instructions.md"],
-    "consumes": [
-      ".github/instructions/project-profile.instructions.md",
-      "docs/plans/PROJECT-PRINCIPLES.md",
-      ".forge.json",
-      ".github/instructions/*.instructions.md"
-    ],
-    "sideEffects": ["Writes .github/copilot-instructions.md (skipped when content unchanged, unless --force)"],
-    "errors": {
-      "SYNC_INSTRUCTIONS_ERROR": { "message": "Failed to write output file", "recovery": "Check file permissions on .github/" }
-    },
-    "example": {
-      "input": {},
       "output": {
-        "ok": true,
-        "outputPath": ".github/copilot-instructions.md",
-        "sectionsCount": 3,
-        "sections": { "profile": true, "principles": true, "forgeConfig": true, "extraCount": 0 },
-        "changed": true,
-        "dryRunMode": false,
-        "message": "Wrote 3 section(s) to .github/copilot-instructions.md."
+        "nodes": [],
+        "edges": [],
+        "unresolvedNames": [],
+        "total": 0,
+        "truncated": false,
+        "message": "No chunk found for \"handleAuth\"."
       }
     }
   }
 ]
-
-

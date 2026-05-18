@@ -1766,6 +1766,50 @@ export const TOOL_METADATA = {
       output: { pipelines: [{ id: "orchestrator-memory", label: "Orchestrator → Memory", artifactExists: true, lastWriteAt: "2026-05-16T00:00:00.000Z" }], anvil: { entries: 0, totalBytes: 0, perTool: {} } },
     },
   },
+  // Roadmap C3 — forge_sync_memories: generate .github/copilot-memory-hints.md from forge decisions
+  forge_sync_memories: {
+    intent: ["sync", "memory", "copilot", "hints", "decisions", "lessons"],
+    aliases: ["sync-memories", "copilot-memory-hints"],
+    cost: "low",
+    maxConcurrent: 1,
+    addedIn: "2.99.0",
+    prerequisites: [],
+    produces: [".github/copilot-memory-hints.md"],
+    consumes: [".forge/trajectories/", ".forge/auto-skills/", ".forge/brain/"],
+    sideEffects: ["writes .github/copilot-memory-hints.md (additive, hash-deduped soft-sync)"],
+    writesFiles: true,
+    network: false,
+    risk: "low",
+    errors: {
+      ERR_NO_SOURCES: { message: "No forge memory sources found", recovery: "Run a plan first to generate trajectories, auto-skills, or brain entries" },
+    },
+    example: {
+      input: { dryRun: false },
+      output: { ok: true, path: ".github/copilot-memory-hints.md", added: 12, deduped: 3, skipped: 0 },
+    },
+  },
+  // Roadmap C3 — forge_sync_instructions: generate .github/copilot-instructions.md from project context
+  forge_sync_instructions: {
+    intent: ["sync", "instructions", "copilot", "profile", "principles"],
+    aliases: ["sync-instructions", "copilot-instructions"],
+    cost: "low",
+    maxConcurrent: 1,
+    addedIn: "2.99.0",
+    prerequisites: [],
+    produces: [".github/copilot-instructions.md"],
+    consumes: [".github/instructions/project-profile.instructions.md", "docs/plans/PROJECT-PRINCIPLES.md", ".forge.json"],
+    sideEffects: ["writes .github/copilot-instructions.md"],
+    writesFiles: true,
+    network: false,
+    risk: "low",
+    errors: {
+      ERR_NO_CONTEXT: { message: "No project context found", recovery: "Generate project profile via project-profile.prompt.md or define principles in docs/plans/PROJECT-PRINCIPLES.md" },
+    },
+    example: {
+      input: { dryRun: false },
+      output: { ok: true, path: ".github/copilot-instructions.md", bytes: 4821 },
+    },
+  },
   // Phase LATTICE Slice 7 — Lattice code-graph index builder
   forge_lattice_index: {
     intent: ["lattice", "index", "code-graph", "chunk"],

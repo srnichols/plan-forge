@@ -1,12 +1,12 @@
 # Plan Forge — Capabilities Reference
 
-> **Tools**: 89 MCP (21 core + 14 LiveGuard + 2 Watcher + 6 Crucible + 6 Tempering + 4 Bug Registry + 3 Testbed + 3 Review + 3 Notify/Home/Delegate + 5 Lattice + 5 Anvil + 2 Hallmark + 1 Pipelines + additional doctor/memory/search/timeline/org/github) | **CLI**: 48+ commands | **Presets**: 9 | **Agents**: 20 | **Skills**: 14
+> **Tools**: 88 MCP (35 core + 14 LiveGuard + 2 Watcher + 8 Crucible + 6 Tempering + 4 Bug Registry + 3 Testbed + 3 Review + 2 Notify + 5 Lattice + 2 Memory + 2 Sync + 1 Forge-Master + 1 Doctor) | **CLI-only families**: Hallmark (`pforge hallmark show|verify`), Anvil (`pforge anvil stat|clear|rebuild|dlq`) | **CLI**: 48+ commands | **Presets**: 9 | **Agents**: 20 | **Skills**: 14
 >
 > Machine-readable version: call `forge_capabilities` MCP tool, `GET https://planforge.software/.well-known/plan-forge.json`, or read `pforge-mcp/tools.json` (auto-generated on every MCP server start).
 
 ---
 
-## MCP Tools (89)
+## MCP Tools (88)
 
 | Tool | Intent | Cost | Description |
 |------|--------|------|-------------|
@@ -73,11 +73,36 @@
 | `forge_timeline` | timeline | low | Unified event timeline across runs, incidents, deploys, bugs, Crucible, Tempering (cursor-paged). |
 | `forge_search` | search | low | Cross-surface search over plans, events, bugs, incidents, memory (filters by type/date/severity). |
 | `forge_memory_report` | memory | low | Summarize OpenBrain memory usage — captures per day, hit rate on searches, top-recalled thoughts. |
+| `forge_memory_capture` | memory | low | Normalise and broadcast a `memory-captured` hub event; returns `capture_thought` payload for OpenBrain. |
+| `forge_sync_memories` | sync | low | **v2.99+** — Generate `.github/copilot-memory-hints.md` from forge decisions (trajectories, auto-skills, brain entries). Additive, hash-deduped soft-sync so Copilot Memory auto-discovers project context without requiring OpenBrain. |
+| `forge_sync_instructions` | sync | low | **v2.99+** — Generate `.github/copilot-instructions.md` from project profile + principles + `.forge.json`. Completes the Copilot integration trilogy. |
+| `forge_lattice_index` | lattice | medium | **v2.95+** — Build or update the Lattice code-graph chunk index; `--since <sha>` enables incremental re-indexing from a git SHA. |
+| `forge_lattice_stat` | lattice | low | **v2.95+** — Index statistics: chunk count, edge count, language breakdown, Anvil cache hit rate, index size. |
+| `forge_lattice_query` | lattice | low | **v2.95+** — Full-text search over the chunk index; returns bounded 80-char snippets ranked by camelCase-aware token-overlap score (v3.5.1+). |
+| `forge_lattice_callers` | lattice | low | **v2.95+** — Find all callers of a named symbol using the edge graph. |
+| `forge_lattice_blast` | lattice | medium | **v2.95+** — BFS call-graph traversal up to depth 5; returns `truncated: true` when frontier is capped. |
 | `forge_org_rules` | org-rules | low | Export aggregated `.github/instructions/*.md` as a single org-rules document (for GitHub org custom instructions). |
 | `forge_doctor_quorum` | diagnostics | low | Health-check every quorum participant model — auth, latency, rate-limit headers, per-model availability. |
 | `forge_delegate_to_agent` | agent-routing | medium | Delegate a prompt/slice to a specialized reviewer agent (database, security, performance, etc.) and return the agent's report. |
+| `forge_master_ask` | reasoning | medium | **v2.63+** — Read-only reasoning orchestrator. Classifies intent, retrieves OpenBrain memory context, orchestrates allowlist-gated read-only tool calls. Purpose-built for multi-step troubleshooting without manual tool chaining. |
 | `forge_self_update` | release | low | Check for the latest Plan Forge release, fetch release notes, and (optionally) trigger install. |
 | `forge_github_status` | diagnose | low | Check GitHub API connectivity, Copilot subscription status, and GitHub Models API availability. Returns auth state, rate limits, and per-service health. |
+
+## CLI-Only Families
+
+Anvil and Hallmark expose CLI commands (and SDK exports) instead of MCP tools — they are local-file utilities that don't benefit from MCP overhead. Capability metadata for them lives in `pforge-mcp/capabilities.mjs` so the agent can still discover and reason about them.
+
+| Command | Purpose | Backing Module |
+|---------|---------|----------------|
+| `pforge hallmark show [<id>]` | **v2.95+** — Read a `hallmark/v1` provenance record (schema version, tool name, captured timestamp, content hash). Omit id to list all. | `pforge-sdk/hallmark` |
+| `pforge hallmark verify <id>` | **v2.95+** — Drift detection — compare stored Hallmark provenance against current file hash; flags modifications since capture. | `pforge-sdk/hallmark` |
+| `pforge anvil stat` | **v2.95+** — Anvil memoization cache stats (entries, total bytes, per-tool breakdown). | `pforge-mcp/anvil.mjs` |
+| `pforge anvil clear [--tool <name>] [--olderThanMs <n>]` | **v2.95+** — Delete cache entries with at least one filter. | `pforge-mcp/anvil.mjs` |
+| `pforge anvil rebuild --since <git-sha>` | **v2.95+** — Selective invalidation of cache entries whose source files changed since the given SHA. | `pforge-mcp/anvil.mjs` |
+| `pforge anvil dlq list\|drain` | **v2.95+** — List or re-drive Anvil dead-letter queue records. | `pforge-mcp/anvil.mjs` |
+| `pforge sync-memories` | **v2.99+** — CLI alias for `forge_sync_memories` MCP tool. | `pforge-mcp/sync-memories.mjs` |
+| `pforge sync-instructions` | **v2.99+** — CLI alias for `forge_sync_instructions` MCP tool. | `pforge-mcp/sync-instructions.mjs` |
+| `pforge lattice <subcommand>` | **v2.95+** — CLI mirror of the 5 `forge_lattice_*` MCP tools. | `pforge-mcp/lattice.mjs` |
 
 ## Execution Modes
 

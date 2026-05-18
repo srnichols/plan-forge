@@ -82,7 +82,7 @@ The plan's Forbidden Actions invariants were preserved throughout:
 
 ### Plan
 
-Built from [docs/plans/Phase-OPENBRAIN-PROMOTION-PLAN.md](docs/plans/Phase-OPENBRAIN-PROMOTION-PLAN.md) — 6 slices, hardened with scope contract, forbidden actions, per-slice validation gates, and explicit decisions D1–D5.
+Built from [docs/plans/archive/Phase-OPENBRAIN-PROMOTION-PLAN.md](docs/plans/archive/Phase-OPENBRAIN-PROMOTION-PLAN.md) — 6 slices, hardened with scope contract, forbidden actions, per-slice validation gates, and explicit decisions D1–D5.
 
 ---
 
@@ -1145,7 +1145,7 @@ Resolves `.cmd` shims (original Bug #82 intent) without `shell:true` + array-arg
 
 ### Phase-TRAJECTORY-SCHEMA-HARDENING — Explicit `source` and `security_risk` on events (2026-05-07)
 
-> **One-liner**: Purely additive schema hardening that stamps two new fields — `source` and `security_risk` — onto every event record written by `appendEvent()` in `orchestrator.mjs`. Backward-compatible: `parseEventLine()` returns `null` for both fields when reading legacy `events.log` lines that predate this change. Downstream consumers (`forge_search`, `forge_timeline`, hub replay) are untouched — they read `data` opaquely and surface the new fields automatically. See `docs/research/enterprise-fleet-readiness.md` §8.5 (OpenHands pattern) and `docs/plans/Phase-TRAJECTORY-SCHEMA-HARDENING-PLAN.md` for the executed plan.
+> **One-liner**: Purely additive schema hardening that stamps two new fields — `source` and `security_risk` — onto every event record written by `appendEvent()` in `orchestrator.mjs`. Backward-compatible: `parseEventLine()` returns `null` for both fields when reading legacy `events.log` lines that predate this change. Downstream consumers (`forge_search`, `forge_timeline`, hub replay) are untouched — they read `data` opaquely and surface the new fields automatically. See `docs/research/enterprise-fleet-readiness.md` §8.5 (OpenHands pattern) and `docs/plans/archive/Phase-TRAJECTORY-SCHEMA-HARDENING-PLAN.md` for the executed plan.
 
 #### Added
 - `source` field on every `appendEvent()` write: enum `"orchestrator" | "worker" | "user" | "hook" | "environment"`. Defaults to `"orchestrator"` when the caller omits it. Caller may override by passing `source` explicitly in the `data` argument.
@@ -1189,7 +1189,7 @@ Resolves `.cmd` shims (original Bug #82 intent) without `shell:true` + array-arg
 
 ### Phase-COST-TOKEN-COVERAGE — Cost-Service Token Coverage (2026-05-06)
 
-> **One-liner**: Adds vendor-aware billing math to `priceSlice()` for prompt-cache reads, ephemeral cache writes (5m + 1h split for Anthropic), reasoning tokens, and OpenAI service tiers (flex/priority). Also refreshes stale base rates (Anthropic Opus dropped 3×, GPT-5.4 dropped 2×) and adds 14 missing model entries. Fixes 30–80% cost underestimate on Anthropic + OpenAI workloads with prompt caching or extended thinking. See `docs/research/enterprise-fleet-readiness.md` §12 for the audit and `docs/plans/Phase-COST-TOKEN-COVERAGE-PLAN.md` for the executed plan.
+> **One-liner**: Adds vendor-aware billing math to `priceSlice()` for prompt-cache reads, ephemeral cache writes (5m + 1h split for Anthropic), reasoning tokens, and OpenAI service tiers (flex/priority). Also refreshes stale base rates (Anthropic Opus dropped 3×, GPT-5.4 dropped 2×) and adds 14 missing model entries. Fixes 30–80% cost underestimate on Anthropic + OpenAI workloads with prompt caching or extended thinking. See `docs/research/enterprise-fleet-readiness.md` §12 for the audit and `docs/plans/archive/Phase-COST-TOKEN-COVERAGE-PLAN.md` for the executed plan.
 
 #### Fixed
 - `priceSlice()` now bills `cache_read_tokens`, `cache_creation_5m_tokens`, `cache_creation_1h_tokens`, and `service_tier`. Resolves systematic 30–80% cost underestimate on Anthropic + OpenAI workloads with prompt caching or extended thinking.
@@ -1541,7 +1541,7 @@ The .NET preset assumed pure backend work. As soon as a consuming project added 
 ### Files
 - New: `pforge-mcp/github-introspect.mjs` (introspection module + CLI entrypoint), `pforge-mcp/tests/github-introspect.test.mjs` (34 tests covering all 8 default + 2 extra checks across green/partial/empty fixtures), `pforge-mcp/tests/fixtures/github-introspect/` (3 fixture directories).
 - New: `docs/manual/plan-forge-on-the-github-stack.html`, `docs/manual/assets/screenshots/github-status-testbed.png`.
-- New: `scripts/capture-github-status-screenshot.mjs`, `docs/plans/Phase-GITHUB-A-INTROSPECTION-PLAN.md`.
+- New: `scripts/capture-github-status-screenshot.mjs`, `docs/plans/archive/Phase-GITHUB-A-INTROSPECTION-PLAN.md`.
 - Modified: `pforge.ps1`, `pforge.sh` (add `github` subcommand dispatcher), `pforge-mcp/server.mjs` + `pforge-mcp/tools.json` (register `forge_github_status` MCP tool), `setup.ps1`, `setup.sh`, `docs/manual/index.html`, `docs/manual/assets/manual.js`, `VERSION`, `pforge-mcp/package.json`.
 
 ### Why this matters

@@ -197,4 +197,4 @@ pforge audit export --run abc123 --format json
 
 - [`otel-schema.md`](./otel-schema.md) — OpenTelemetry span and metric schema
 - [`sample-dashboards/`](./sample-dashboards/) — Grafana, Datadog, and Splunk starter dashboards
-- [`docs/plans/Phase-OTEL-AUDIT-EXPORT-PLAN.md`](../plans/Phase-OTEL-AUDIT-EXPORT-PLAN.md) — Implementation plan
+- [`docs/plans/archive/Phase-OTEL-AUDIT-EXPORT-PLAN.md`](../plans/archive/Phase-OTEL-AUDIT-EXPORT-PLAN.md) — Implementation plan

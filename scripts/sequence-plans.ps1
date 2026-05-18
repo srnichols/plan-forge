@@ -4,7 +4,7 @@
 #
 # Usage:
 #   pwsh -NoProfile -File scripts/sequence-plans.ps1 `
-#     -NextPlan docs/plans/Phase-GITHUB-D-METRICS-LEADERBOARD-PLAN.md `
+#     -NextPlan docs/plans/archive/Phase-GITHUB-D-METRICS-LEADERBOARD-PLAN.md `
 #     -Model claude-sonnet-4.6 `
 #     -Reason "Phase D follows Phase B"
 #

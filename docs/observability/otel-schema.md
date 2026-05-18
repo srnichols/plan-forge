@@ -197,5 +197,5 @@ invoke_workflow Phase-28.2          (root, CLIENT)
 
 - [`audit-log-spec.md`](./audit-log-spec.md) — Event types, fields, and `pforge audit export` format
 - [`sample-dashboards/`](./sample-dashboards/) — Grafana, Datadog, and Splunk starter dashboards
-- [`docs/plans/Phase-OTEL-AUDIT-EXPORT-PLAN.md`](../plans/Phase-OTEL-AUDIT-EXPORT-PLAN.md) — Implementation plan
+- [`docs/plans/archive/Phase-OTEL-AUDIT-EXPORT-PLAN.md`](../plans/archive/Phase-OTEL-AUDIT-EXPORT-PLAN.md) — Implementation plan
 - [`docs/research/enterprise-fleet-readiness.md`](../research/enterprise-fleet-readiness.md) §8.6 — Original spec

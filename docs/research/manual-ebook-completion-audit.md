@@ -25,9 +25,9 @@
 
 If we only do **three things** from this list, do these:
 
-1. **Foreword** absorbing the existing blog posts into ebook voice ("From Impossible to Seven Minutes"). The book has no origin story; the blog does.
-2. **`.forge.json` Reference appendix** — every other Tier-1 reference gap is symptomatic of the same problem: readers go looking for the config schema and find nothing canonical.
-3. **Cost & Economics chapter** — Plan Forge's biggest commercial question is *"how much will this cost me?"* and the manual doesn't answer it directly. The data is in the dashboard's Cost tab and in `forge_cost_report`; the narrative is missing.
+1. **Above-the-fold positioning fix** — one sentence on `index.html`, `README.md`, and `what-is-plan-forge.html` that says explicitly: *Plan Forge is the orchestration harness on top of GitHub Copilot (and other AI coding tools); it does not replace your model or your IDE.* The full "harness on substrate" story already exists in Appendix H but is invisible to a first-contact reader — early-reader feedback shows that even GitHub-ecosystem-fluent readers default-assume Plan Forge is a Copilot alternative. This is the cheapest, highest-impact slice in the entire phase.
+2. **Foreword** absorbing the existing blog posts into ebook voice ("From Impossible to Seven Minutes") **and** explicitly volunteering the positioning disclaimer in a paragraph titled *"What this book is **not**"*. The book has no origin story; the blog does.
+3. **Cost & Economics chapter** — Plan Forge's biggest commercial question is *"how much will this cost me?"* and the manual doesn't answer it directly. The data is in the dashboard's Cost tab and in `forge_cost_report`; the narrative is missing. Lead with the **four levers** documented in §2 below (quality-at-constant-time, quality-per-extra-dollar, rework-avoidance, memory-as-subsidy) and the **compounding flywheel** observation — the cost curve bends downward over the life of a project, which is the opposite of what most engineering managers default-assume.
 
 The full execution plan ([`Phase-MANUAL-EBOOK-COMPLETION-PLAN.md`](../plans/Phase-MANUAL-EBOOK-COMPLETION-PLAN.md))
 breaks the gap-closure into **16 independently shippable slices** across 3 clusters.
@@ -167,6 +167,65 @@ in marketing voice and needs absorbing into reference voice.
 | 3 | **"A Day in the Forge" vignettes** | `the-loop-that-never-ends.html` + `ab-test-plan-forge-vs-vibe-coding.html` + `quorum-mode-3-models.html` | New **Appendix R** with 3 case studies |
 | 4 | **Task-based "How do I…?" index** | All existing chapters — this is a navigational layer over them | New **Appendix S** |
 | 5 | **"What's new in this Edition" banner** | `project-history.html#v3-6-openbrain-l3`, `conventions.html#edition-history` | Edit to **`index.html`** only |
+| 6 | **Above-the-fold positioning: "harness on substrate, not a Copilot replacement"** | [`github-stack-alignment.html`](../manual/github-stack-alignment.html) (Appendix H — the content is excellent but buried in the appendices) + [`plan-forge-on-the-github-stack.html`](../manual/plan-forge-on-the-github-stack.html) (Appendix I) | Promoted into **Foreword (A1)**, **What is Plan Forge? (existing chapter)**, **`index.html` hero**, and **README.md tagline** |
+
+#### The hidden positioning gap (the "Microsoft-coworker test")
+
+This is the single most surprising finding of the audit, and it didn't surface from re-reading the
+manual — it surfaced from **early-reader feedback that even readers fluent in the GitHub/Copilot
+ecosystem assumed Plan Forge was an alternative to Copilot rather than a layer on top of it.** If
+that assumption forms at the homepage or in the first chapter, the rest of the manual is read
+through the wrong frame and everything else (cost, security, plan workflow) gets misinterpreted.
+
+The positioning *is* documented — Appendix H ([`github-stack-alignment.html`](../manual/github-stack-alignment.html))
+is excellent. It introduces the "harness on substrate" metaphor, names the lane GitHub explicitly
+leaves to the ecosystem, and ships an SVG of the full stack. Appendix I
+([`plan-forge-on-the-github-stack.html`](../manual/plan-forge-on-the-github-stack.html)) is the
+surface-by-surface technical companion. Together they're a complete answer.
+
+The problem is **placement**. A new reader's path is roughly:
+
+1. `index.html` (homepage) → mentions "Copilot" 20+ times, never says "Plan Forge does not
+   replace Copilot"
+2. `README.md` → same: lists Copilot as a prerequisite, never explicitly disclaims replacement
+3. `what-is-plan-forge.html` → has the disclaimer ("Not an AI model. Plan Forge works with
+   whatever AI you already use") at **line 231**, three screens below the fold
+4. Appendix H → has the full answer, but it's **Appendix H**, and no reader reaches an appendix
+   on first contact
+
+Result: the positioning is correct but invisible to the audience most at risk of misreading it
+(GitHub-ecosystem-fluent readers who already know Copilot does codegen and assume any other
+"AI coding tool" must be competing).
+
+**What the chapter / surface changes should do** (each is small and additive — not a rewrite):
+
+1. **One-sentence positioning line at the top of three surfaces.** Same sentence, repeated
+   verbatim, on `index.html` hero, `README.md` opening, and the first paragraph of
+   `what-is-plan-forge.html`. Suggested wording:
+   > *Plan Forge is the orchestration harness that sits **on top of** GitHub Copilot (and other AI
+   > coding tools). It does not replace your model or your IDE — it adds the SDLC layer GitHub
+   > deliberately leaves to the ecosystem: planning, validation gates, memory, cost control, and
+   > reviewer separation.*
+2. **Foreword (Slice A1) must explicitly say it.** The Foreword is where a confused reader's
+   assumption gets locked in — it has to volunteer the disclaimer, not wait for the reader to ask.
+   A single paragraph titled "What this book is **not**" early in the Foreword does this best.
+3. **Promote the Appendix H SVG forward.** The "harness on substrate" diagram is the single
+   most clarifying artifact in the entire manual. It belongs above-the-fold on `index.html` and as
+   Figure 1 of the Foreword, not behind a sidebar click into Appendix H. Appendix H stays as the
+   long-form reference; the diagram graduates to front-matter status.
+4. **Add a "Plan Forge is / Plan Forge is not" table** to `what-is-plan-forge.html` immediately
+   after the opening paragraph. Two columns, ~5 rows each. Mirrors the framing of Round 1's
+   "Conventions used in this book" page — same editorial pattern, applied to identity instead of
+   typography. This is the page that absorbs the line-231 disclaimer and gives it the prominence
+   it should have had.
+
+**Why this matters for the plan.** Item #6 should not be a standalone slice; it should be
+**baked into Slices A1 (Foreword) and A2 (Reader-Journey Ladders) plus a small standalone edit
+to `index.html` / `README.md` / `what-is-plan-forge.html`**. The execution plan
+([`Phase-MANUAL-EBOOK-COMPLETION-PLAN.md`](../plans/Phase-MANUAL-EBOOK-COMPLETION-PLAN.md))
+should grow a small new slice — call it **A6 — Above-the-fold positioning** — between A5 and
+Cluster B. Cost: roughly one focused commit. Impact: prevents the wrong frame from forming in
+the first thirty seconds of contact with the book.
 
 ---
 
@@ -219,6 +278,17 @@ These weren't resolved in the audit chat and want a thumbs-up before slice execu
 4. **Edition bump trigger** — at what slice count do we bump the manual to **Fifth Edition (v3.x)**?
    The plan suggests ≥10 of 16 slices; some maintainers prefer "ship the edition when the foreword
    lands" because the foreword is the most ebook-visible change.
+5. **Positioning sentence — sign off on the exact wording.** The audit proposes (§2 Tier 2 / item 6):
+   > *Plan Forge is the orchestration harness that sits **on top of** GitHub Copilot (and other AI
+   > coding tools). It does not replace your model or your IDE — it adds the SDLC layer GitHub
+   > deliberately leaves to the ecosystem: planning, validation gates, memory, cost control, and
+   > reviewer separation.*
+   Three places will repeat this verbatim (`index.html` hero, `README.md` opening,
+   `what-is-plan-forge.html` first paragraph). Cheaper to argue the wording once, before it ships
+   to three surfaces, than to drift them apart later. Sub-questions: do we name competitors ("…and
+   other AI coding tools like Cursor, Claude, Codex") explicitly, or stay generic? Do we lead with
+   "harness on substrate" (the metaphor that already exists in Appendix H) or with the plainer
+   "sits on top of" framing used above?
 
 ---
 

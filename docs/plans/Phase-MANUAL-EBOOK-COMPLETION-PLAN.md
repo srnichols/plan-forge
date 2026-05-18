@@ -140,6 +140,7 @@ Slices are independent. Pick any one; finish it; commit; ship. No slice depends 
 | **A3** | **"A Day in the Forge" vignettes** | New Appendix **R** at `docs/manual/day-in-the-forge.html` with 3 case studies | `docs/blog/the-loop-that-never-ends.html`, `docs/blog/ab-test-plan-forge-vs-vibe-coding.html`, `docs/blog/quorum-mode-3-models.html` | — |
 | **A4** | **Task-based "How do I…?" index** | New Appendix **S** at `docs/manual/how-do-i.html` — task → chapter map, ~40 entries | All existing chapters | — |
 | **A5** | **"What's new in this Edition" banner** | Edit only `docs/manual/index.html` — dismissible `localStorage`-gated banner. Update `EDITION` in `manual.js` if ≥10 slices have shipped | `docs/manual/project-history.html#v3-6-openbrain-l3`, `conventions.html#edition-history` | A1–A4 (banner copy references them) |
+| **A6** | **Above-the-fold positioning ("harness on substrate, not a Copilot replacement")** | Three small edits with **one verbatim sentence repeated across them**: (a) hero band of `docs/index.html`, (b) opening of `README.md`, (c) first paragraph of `docs/manual/what-is-plan-forge.html`. Plus a new "Plan Forge **is** / Plan Forge **is not**" two-column table in `what-is-plan-forge.html`, and a re-use of the Appendix H stack SVG above the fold (don't re-author; reference / inline-copy the existing markup) | [`docs/manual/github-stack-alignment.html`](../manual/github-stack-alignment.html) (Appendix H), [`docs/manual/plan-forge-on-the-github-stack.html`](../manual/plan-forge-on-the-github-stack.html) (Appendix I), line 231 of `what-is-plan-forge.html` (current disclaimer to absorb) | — (independent; safe to ship first if the maintainer wants the positioning fix in production fast) |
 
 ### Cluster B — Reference completeness (Tier 1A)
 
@@ -192,6 +193,7 @@ Slices are independent. Pick any one; finish it; commit; ship. No slice depends 
 - [ ] **A3** "A Day in the Forge" vignettes (Appendix R)
 - [ ] **A4** Task-based "How do I…?" index (Appendix S)
 - [ ] **A5** "What's new in this Edition" banner
+- [ ] **A6** Above-the-fold positioning (harness-on-substrate)
 
 ### Cluster B — Reference
 - [ ] **B1** `.forge.json` Reference (Appendix T)

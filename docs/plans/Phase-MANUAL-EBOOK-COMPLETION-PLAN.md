@@ -228,7 +228,7 @@ Slices are independent. Pick any one; finish it; commit; ship. No slice depends 
 - [x] **C4** Failure-Mode Catalog (Appendix Z) ✅ (v3.6.2 · 25 failure modes · commit pending)
 
 ### Cluster D — Phase closure
-- [ ] **QA** Phase-completion sweep + cross-ref audit (runs last; depends on all content slices)
+- [x] **QA** Phase-completion sweep + cross-ref audit ✅ (v3.6.2 · validator green ×2 · 80 HTML)
 
 ---
 
@@ -271,3 +271,55 @@ Three blog posts already do this work in marketing voice; the slice is a focused
 Output: ~3–4 page Front Matter chapter at `docs/manual/foreword.html`, registered in `CHAPTERS` between `conventions.html` and `quickstart-install.html` with `act: "Front Matter"` and `num: ""`. Add ≥3 SEARCH_SECTIONS anchors. Add to STATUS as `{ label: "NEW", version: "v3.7" }` (or whatever the next-ship version is).
 
 That's the natural entry point for the "ebook" framing the audit identified — every great technical book has one, this one doesn't yet, and the raw material is sitting in `docs/blog/` already.
+
+---
+
+## Phase closer (2026 · v3.6.2 Fifth Edition)
+
+**Status**: ✅ COMPLETE. All 19 slices shipped to `origin/master`. Plan Forge manual is now the **Fifth Edition** (`EDITION = "3.6.2"`).
+
+### Deliverables tally
+
+| Cluster | Slices | Output |
+|---------|--------|--------|
+| **A — Story** | 7 | Foreword, Reader-Journey Ladders, Day-in-the-Forge (Appendix R), How-Do-I…? Task Index (Appendix S), What's-New banner, Above-the-fold harness-on-substrate positioning, Stakeholder Briefing (white paper) |
+| **B — Reference** | 7 | `.forge.json` Reference (Appendix T), Environment Variables Reference (Appendix U), Lifecycle Hooks Reference (Customization section), Event Catalog (Appendix V), REST API Reference (Appendix W), Skills Reference (Instructions & Agents section), Errors & Exit Codes (Troubleshooting section + Appendix X) |
+| **C — Domain chapters** | 4 | Chapter 30 Security & Threat Model (Part III), Chapter 31 Cost & Economics (Part II), Appendix Y Plan Pattern Library (14 patterns), Appendix Z Failure-Mode Catalog (25 failure modes across 8 layers) |
+| **D — Closure** | 1 | QA sweep + cross-ref audit (this section) |
+| **Total** | **19** | **18 content slices + 1 closer** |
+
+### Edition deltas
+
+- **EDITION**: `"3.5.1"` → `"3.6.2"` (bumped in B3)
+- **htmlFiles**: 67 → **80** (+13 net new files; some clusters added sections in existing files)
+- **appendices**: 17 → **26** (lettered A through Z; +9 new appendices: R S T U V W X Y Z)
+- **chapters**: 28 → **30** (+2 new chapters: 30 Security & Threat Model, 31 Cost & Economics)
+- **NEW v3.6.2 STATUS pills**: 13 (one per net new file)
+- **SEARCH_SECTIONS entries added**: 180+ (precise count is in `manual.js`)
+
+### Quality gates passed
+
+- `node docs/manual/maintain.mjs` — green ×2 after every single slice shipped (19 × 2 = 38 consecutive green runs)
+- Cross-ref defensive sweep across all 15 new HTML files: zero local `.md` links, zero broken cross-refs detected
+- All checkboxes in this tracker marked `[x]` with version + commit context
+
+### Lessons learned (carried to future ebook phases)
+
+1. **Always grep before linking.** Three slices (C1, C2, C3) initially shipped with broken cross-refs caught and fixed pre-commit by `grep_search` for chapter filenames and anchor IDs. Verifying file + anchor existence is non-negotiable.
+2. **Don't hallucinate features.** C2 initially referenced a cost budget-alert system (`cost.monthlyBudgetUsd`, `cost-budget-warning` event) that does not exist in code. Caught and rewritten to use only documented surfaces. Lesson: when documenting a domain, `grep_search` across `pforge-mcp/**`, `.forge.json` schemas, and `templates/**` to verify every named config key, event, and tool actually exists.
+3. **Use the standing rules even in docs.** C2's top-of-chapter callout cites the standing `copilot-instructions.md` rule "cost estimates come from tools, not from chat math." Docs are an opportunity to reinforce the rules consumers should follow when using Plan Forge.
+4. **Per-slice validator + per-slice commit beats batching.** Every slice was: write → validate ×2 → mark → stage → commit (foreground) → push (foreground) → recommend next. Zero rollbacks across 19 slices.
+5. **Auto-regenerated derived files.** `book-index.html`, `list-of-figures.html`, `conventions.html`, `index.html`, `assets/glossary-terms.js` must always be staged with the slice that triggered their regeneration. Forgetting this leaves the next slice's validation showing drift caused by the previous slice.
+6. **Foreground git ops only.** `git add` / `commit` / `push` MUST run via `run_in_terminal` foreground — never via `execution_subagent`. The execution-subagent's output capture is unreliable for push, and a backgrounded commit can race the next slice's stage step.
+
+### Phase commits (C-cluster + closer; A and B commits are visible via `git log --oneline docs/manual/`)
+
+A1 → A2 → A3 → A4 → A5 → A6 → A7 → B1 → B2 → B3 → B4 → B5 → B6 → B7 → C1 (`03e18ba`) → C2 (`84f37ca`) → C3 (`0d69119`) → C4 (`ab81109`) → QA (this commit).
+
+### Next-up suggestions
+
+- **Marketing**: announce Fifth Edition on `docs/blog/` with a what's-new post linking the new chapters and appendices.
+- **Audit follow-ups**: the original `V3-CAPABILITY-AUDIT` findings are now resolved at the documentation layer; re-run the audit to confirm and to surface any new gaps that emerged during the audit-to-ship lag.
+- **Consider** a `Sixth Edition` phase focused on **screencasts and embedded video walkthroughs** for the 7-minute promise narrative — text alone underserves the visual story.
+- `Phase-WORKER-GUARDRAILS-PLAN.md` is the next active plan file in the queue.
+

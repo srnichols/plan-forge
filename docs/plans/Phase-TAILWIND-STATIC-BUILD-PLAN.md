@@ -1,6 +1,6 @@
 # Phase TAILWIND-STATIC-BUILD — Replace runtime Tailwind CDN with a pre-built static stylesheet
 
-> **Status**: Draft. Ready for incremental execution slice-by-slice.
+> **Status**: ✅ Complete. All 7 slices shipped. See [What actually shipped](#what-actually-shipped) for the retro.
 > **Tracks**: Docs build pipeline + every HTML file under `docs/`. Adds one dev dependency (`tailwindcss`) and one build script. **No code under `pforge-mcp/`, `pforge-master/`, `pforge-sdk/`, `extensions/`, root scripts, or `.github/`.**
 > **Estimated cost**: $0 (no LLM cost — entirely mechanical edits + a CLI invocation). ~95 HTML files touched in a deterministic find/replace pattern.
 > **Pipeline**: Specify ✅ → Harden (per slice on demand) → Execute (slice at a time) → `node docs/manual/maintain.mjs` (must remain GREEN) → `npm run build:css` (must be idempotent) → Commit + push.
@@ -366,17 +366,17 @@ node docs/manual/maintain.mjs
 > Update this section after each slice ships. The status reflects what is on `master`.
 
 ### Cluster A — Foundation
-- [ ] **S1** Foundation: config + first build + one-page proof
+- [x] **S1** Foundation: config + first build + one-page proof ✅
 
 ### Cluster B — Mass migration
-- [ ] **S2** Migrate `docs/architecture/*.html`
-- [ ] **S3** Migrate `docs/*.html` (root)
-- [ ] **S4** Migrate `docs/blog/*.html`
-- [ ] **S5** Migrate `docs/manual/*.html`
+- [x] **S2** Migrate `docs/architecture/*.html` ✅
+- [x] **S3** Migrate `docs/*.html` (root) ✅
+- [x] **S4** Migrate `docs/blog/*.html` ✅
+- [x] **S5** Migrate `docs/manual/*.html` ✅
 
 ### Cluster C — Hardening
-- [ ] **S6** Drift guard in `maintain.mjs` + documentation
-- [ ] **S7** Phase closure: cross-grep sweep + retro
+- [x] **S6** Drift guard in `maintain.mjs` + documentation ✅
+- [x] **S7** Phase closure: cross-grep sweep + retro ✅
 
 ---
 
@@ -389,3 +389,21 @@ node docs/manual/maintain.mjs
 3. **`shared.css` interaction**: Does `docs/assets/shared.css` define utility classes that overlap with Tailwind? If yes, the new built file may shadow/duplicate them. Audit at S1 harden time.
 4. **Hand-written `<style>` blocks**: Some pages (e.g. `docs/manual/copilot-integration.html`) have inline `<style>` blocks defining `.callout`, `.cmd-block`, etc. These stay as-is — they're page-local component styles outside Tailwind's purview. Confirm none of them duplicate utility classes that the migration would silently shadow.
 5. **Mermaid CSS**: The new `mermaid-init.js` injects mermaid's UMD bundle which ships its own CSS. No interaction expected with Tailwind, but verify at S1 by checking a mermaid-containing page in both pre- and post-migration states.
+
+---
+
+## What actually shipped
+
+**Phase TAILWIND-STATIC-BUILD is complete.** All seven slices shipped across six commits (S1 foundation through S7 closure).
+
+**Migration scope:** 98 HTML pages across `docs/` now load a single pre-built `tailwind.built.css` (51.5 KB minified) instead of the runtime Tailwind CDN compiler. Four HTML files (`_includes/site-nav.html`, `blog/assets/plan-forge-infographic.html`, `walkthroughs/independent-dev-deck.html`, `walkthroughs/quickstart-deck.html`) were correctly excluded — they never used Tailwind. The cross-tree sweep confirms **zero** remaining references to `cdn.tailwindcss.com` or inline `tailwind.config=` blocks across all 102 HTML files in the docs tree.
+
+**Built CSS:** `docs/assets/tailwind.built.css` is 51.5 KB minified with a committed SHA-256 hash for integrity tracking. The `tailwind.config.cjs` consolidates the forge color palette (`forge-300` through `forge-700`) and font families (`Inter`, `JetBrains Mono`) into a single source of truth — eliminating the three divergent inline config variants that had drifted across pages.
+
+**Safelist:** No classes required safelisting. The `safelist` array in `tailwind.config.cjs` is empty — all Tailwind utility classes used in the docs are statically discoverable via the content scan of `docs/**/*.html` and `docs/manual/assets/manual.js`.
+
+**Drift guard:** `docs/manual/maintain.mjs` now includes a Tailwind build-drift check that rebuilds the CSS and verifies `git diff --exit-code` on the output. `CONTRIBUTING.md` and `docs/RELEASE-CHECKLIST.md` document the `npm run build:css` step for contributors.
+
+**Visual regressions:** None detected. The migration was a mechanical two-line-per-file swap (CDN script + inline config → single `<link>` tag) with no class additions or removals. Page-local `<style>` blocks and `shared.css`/`manual.css` were left untouched. Mermaid diagrams render identically since mermaid's CSS is self-contained and does not interact with Tailwind utilities.
+
+**Open questions resolved:** (1) No CI workflow exists on this repo — the `maintain.mjs` drift guard is the primary safety net. (2) Tailwind v3 was used as planned; v4 migration deferred. (3) `shared.css` defines component-level styles (`.card`, `.hero`, etc.) that don't overlap with Tailwind utilities. (4) Inline `<style>` blocks use custom class names outside Tailwind's namespace. (5) Mermaid CSS confirmed non-interfering.

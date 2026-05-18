@@ -88,6 +88,7 @@
     { id: "environment-variables-reference", file: "environment-variables-reference.html", num: "U", title: "Environment Variables Reference",  act: "Appendix" },
     { id: "event-catalog",           file: "event-catalog.html",           num: "V",  title: "Event Catalog",                              act: "Appendix" },
     { id: "rest-api-reference",      file: "rest-api-reference.html",      num: "W",  title: "REST API Reference",                         act: "Appendix" },
+    { id: "errors-and-exit-codes",   file: "errors-and-exit-codes.html",   num: "X",  title: "Errors & Exit Codes",                        act: "Appendix" },
   ];
 
   // ─── Chapter status registry ───
@@ -103,7 +104,9 @@
     "environment-variables-reference": { label: "NEW",   version: "v3.6.2" },
     "event-catalog":                 { label: "NEW",     version: "v3.6.2" },
     "rest-api-reference":            { label: "NEW",     version: "v3.6.2" },
+    "errors-and-exit-codes":         { label: "NEW",     version: "v3.6.2" },
     "instructions-agents-reference": { label: "UPDATED", version: "v3.6.2" },
+    "troubleshooting":               { label: "UPDATED", version: "v3.6.2" },
     "customization":                 { label: "UPDATED", version: "v3.6.2" },
     "inner-loop":                    { label: "NEW",     version: "v2.57" },
     "self-deterministic-loop":       { label: "NEW",     version: "v2.58" },
@@ -152,10 +155,10 @@
     'cli-commands': 97, // pforge.ps1 switch arms (unique) — verify with PowerShell: ([regex]::Matches((Get-Content pforge.ps1 -Raw),"(?m)^\s+''([a-z][a-z-]+)''\s+\{") | %{ $_.Groups[1].Value } | Sort-Object -Unique).Count
     // Manual structure ──────────────────────────────────────────────────
     chapters:     28,  // numbered chapters 1-29 (excludes Quickstart Q1-Q3 and Appendices) — Ch 11 was archived; 26-29 added Third Edition
-    appendices:   23,  // lettered appendices A-W (R Day in the Forge v3.6.2 Slice A3, S How Do I…? Task Index v3.6.2 Slice A4, T .forge.json Reference v3.6.2 Slice B1, U Environment Variables Reference v3.6.2 Slice B2, V Event Catalog v3.6.2 Slice B4, W REST API Reference v3.6.2 Slice B5)
+    appendices:   24,  // lettered appendices A-X (R Day in the Forge v3.6.2 Slice A3, S How Do I…? Task Index v3.6.2 Slice A4, T .forge.json Reference v3.6.2 Slice B1, U Environment Variables Reference v3.6.2 Slice B2, V Event Catalog v3.6.2 Slice B4, W REST API Reference v3.6.2 Slice B5, X Errors & Exit Codes v3.6.2 Slice B7)
     parts:         5,  // Smelt, Forge, Guard, Learn, Integrate (Part V added Third Edition)
     // Manual assets ─────────────────────────────────────────────────────
-    htmlFiles:    75,  // total .html files in docs/manual/ (Third Edition Slice A + Slice B; +Foreword/Stakeholder/Reader Paths/Day in the Forge/How Do I…?/.forge.json Reference/Env Vars Reference/Event Catalog/REST API Reference v3.6.2 Fifth Edition)
+    htmlFiles:    76,  // total .html files in docs/manual/ (Third Edition Slice A + Slice B; +Foreword/Stakeholder/Reader Paths/Day in the Forge/How Do I…?/.forge.json Reference/Env Vars Reference/Event Catalog/REST API Reference/Errors & Exit Codes v3.6.2 Fifth Edition)
   };
 
   // Detect current page
@@ -603,6 +606,17 @@
     { t: "REST API — Forge-Master (conversational entrypoint)",    u: "rest-api-reference.html#forge-master" },
     { t: "REST API — Image generation",                            u: "rest-api-reference.html#image" },
     { t: "REST API — Worked Examples (curl, wscat, SDK)",          u: "rest-api-reference.html#worked-examples" },
+    // Errors & Exit Codes — the contract CI / on-call depends on (Appendix X)
+    { t: "Errors & Exit Codes — Orientation (4 layers)",            u: "errors-and-exit-codes.html#orientation" },
+    { t: "Errors & Exit Codes — pforge CLI exit codes (0/1/2)",     u: "errors-and-exit-codes.html#cli-exit-codes" },
+    { t: "Errors & Exit Codes — Orchestrator exit codes & statusReason", u: "errors-and-exit-codes.html#orchestrator-exit-codes" },
+    { t: "Errors & Exit Codes — MCP tool errors (forge_* envelope)", u: "errors-and-exit-codes.html#mcp-tool-errors" },
+    { t: "Errors & Exit Codes — REST error shape (HTTP 400/404/409/429/500)", u: "errors-and-exit-codes.html#rest-error-shape" },
+    { t: "Errors & Exit Codes — OS subprocess exits (Ctrl+C, SIGKILL, SIGTERM)", u: "errors-and-exit-codes.html#os-subprocess-exits" },
+    { t: "Errors & Exit Codes — Named error catalog (A-Z)",         u: "errors-and-exit-codes.html#named-error-catalog" },
+    { t: "Errors & Exit Codes — Error events on the hub",           u: "errors-and-exit-codes.html#error-events" },
+    { t: "Errors & Exit Codes — CI / scripting recipes",            u: "errors-and-exit-codes.html#ci-recipes" },
+    { t: "Troubleshooting — Errors & Exit Codes quick reference",   u: "troubleshooting.html#errors-exit-codes" },
     // Quickstart
     { t: "Check Prerequisites",                  u: "quickstart-install.html#prerequisites" },
     { t: "Clone and Run Setup",                  u: "quickstart-install.html#clone" },

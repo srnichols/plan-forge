@@ -219,7 +219,7 @@ Slices are independent. Pick any one; finish it; commit; ship. No slice depends 
 - [x] **B4** Event Catalog (Appendix V) ✅ (v3.6.2 · commit pending)
 - [x] **B5** REST API Reference (Appendix W) ✅ (v3.6.2 · commit pending)
 - [x] **B6** Skills Reference (section in Instructions & Agents Reference) ✅ (v3.6.2 · commit pending)
-- [ ] **B7** Errors & Exit Codes (section in Troubleshooting + Appendix X)
+- [x] **B7** Errors & Exit Codes (section in Troubleshooting + Appendix X) ✅ (v3.6.2 · commit pending)
 
 ### Cluster C — Domain chapters
 - [ ] **C1** Security & Threat Model chapter (Part III)

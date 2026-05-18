@@ -158,6 +158,9 @@ Result: 4 OK, 3 WARN, 0 FAIL  —  forge is healthy</code></pre>
       <p>Safe workflow: Use <code>.jpg</code> extensions (matches Grok's native output), generate art in dedicated sessions, or use the REST API: <code>POST /api/image/generate</code>.</p>
 
       <h2 id="common-errors">Common Error Messages</h2>
+      <div class="callout callout-info">
+        <strong>Looking for the contract, not the fix?</strong> Every exit code, MCP error code, and REST status Plan Forge emits is documented in <a href="errors-and-exit-codes.html">Appendix X &mdash; Errors &amp; Exit Codes</a>. This table maps symptom → fix; the appendix maps code → meaning.
+      </div>
       <table class="manual-table">
         <thead><tr><th>Error</th><th>Cause</th><th>Fix</th></tr></thead>
         <tbody>
@@ -212,6 +215,24 @@ Result: 4 OK, 3 WARN, 0 FAIL  —  forge is healthy</code></pre>
           <tr><td>"Quorum pre-run summary table shows different billing per model"</td><td>Working as intended &mdash; the new table shows host + per-model billing surface so you can see spend distribution before dispatch</td><td>None &mdash; this is a feature, not a bug</td></tr>
         </tbody>
       </table>
+
+      <h2 id="errors-exit-codes">Errors &amp; Exit Codes</h2>
+      <p>If a script needs to react to a Plan Forge failure programmatically, branch on the <strong>exit code</strong> (CLI / orchestrator) or the <strong>named error code</strong> (MCP tools / REST). These are stable across releases &mdash; new failure modes get new codes rather than reusing existing ones.</p>
+
+      <table class="manual-table">
+        <thead><tr><th style="width: 10rem">Layer</th><th>Returns</th><th>Branch on</th></tr></thead>
+        <tbody>
+          <tr><td><code>pforge</code> CLI</td><td>POSIX exit code</td><td><code>0</code> success &middot; <code>1</code> generic failure &middot; <code>2</code> environment refusal (not in git repo, update-check failed, audit had no scanners)</td></tr>
+          <tr><td><code>pforge run-plan</code></td><td>Exit code + <code>statusReason</code> in JSON</td><td><code>0</code>=<em>completed</em> / <em>completed-with-warnings</em> &middot; <code>1</code>=<em>failed</em> / <em>aborted</em>. <code>statusReason</code> narrows it: <code>gate-failed</code>, <code>drift-detected</code>, <code>quorum-all-failed</code>, etc.</td></tr>
+          <tr><td>MCP tools (<code>forge_*</code>)</td><td><code>{ ok, code, error }</code> envelope</td><td><code>ok: false</code> with a named <code>code</code> &mdash; e.g. <code>NO_API_KEY</code>, <code>CRITICAL_FIELDS_MISSING</code>, <code>QUORUM_ALL_FAILED</code>, <code>PLAN_NOT_FOUND</code></td></tr>
+          <tr><td>REST (<code>POST /api/&hellip;</code>)</td><td>HTTP status + JSON body</td><td><code>400</code> bad body &middot; <code>404</code> missing &middot; <code>409</code> state conflict (<code>ERR_UPDATE_DURING_RUN</code>) &middot; <code>429</code> rate limited (use <code>retryAfterMs</code>) &middot; <code>500</code> internal</td></tr>
+          <tr><td>OS subprocess (worker, gate)</td><td>Native exit code, surfaced via <code>statusReason</code></td><td><code>0xC000013A</code> Windows Ctrl+C &middot; <code>130/137/143</code> POSIX signals. Mapped to <code>worker-signaled</code>.</td></tr>
+        </tbody>
+      </table>
+
+      <div class="callout callout-info">
+        <strong>Full contract</strong>: every exit code, every named error code, every error event, plus copy-paste Bash and PowerShell CI recipes &mdash; see <a href="errors-and-exit-codes.html">Appendix X &mdash; Errors &amp; Exit Codes</a>.
+      </div>
 
       <h2 id="getting-help">Getting Help</h2>
       <ul>

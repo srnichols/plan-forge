@@ -83,6 +83,7 @@
     { id: "list-of-figures",      file: "list-of-figures.html",     num: "P",  title: "List of Figures",            act: "Appendix" },
     { id: "api-surface-index",    file: "api-surface-index.html",    num: "Q",  title: "Unified API Surface Index",  act: "Appendix" },
     { id: "day-in-the-forge",     file: "day-in-the-forge.html",     num: "R",  title: "A Day in the Forge \u2014 Three Vignettes",  act: "Appendix" },
+    { id: "how-do-i",             file: "how-do-i.html",             num: "S",  title: "How Do I\u2026? \u2014 Task Index",          act: "Appendix" },
   ];
 
   // ─── Chapter status registry ───
@@ -93,6 +94,7 @@
     "stakeholder-briefing":          { label: "NEW",     version: "v3.6.2" },
     "reader-paths":                  { label: "NEW",     version: "v3.6.2" },
     "day-in-the-forge":              { label: "NEW",     version: "v3.6.2" },
+    "how-do-i":                      { label: "NEW",     version: "v3.6.2" },
     "inner-loop":                    { label: "NEW",     version: "v2.57" },
     "self-deterministic-loop":       { label: "NEW",     version: "v2.58" },
     "competitive-loop":              { label: "NEW",     version: "v2.58" },
@@ -140,10 +142,10 @@
     'cli-commands': 97, // pforge.ps1 switch arms (unique) — verify with PowerShell: ([regex]::Matches((Get-Content pforge.ps1 -Raw),"(?m)^\s+''([a-z][a-z-]+)''\s+\{") | %{ $_.Groups[1].Value } | Sort-Object -Unique).Count
     // Manual structure ──────────────────────────────────────────────────
     chapters:     28,  // numbered chapters 1-29 (excludes Quickstart Q1-Q3 and Appendices) — Ch 11 was archived; 26-29 added Third Edition
-    appendices:   17,  // lettered appendices A-Q (P List of Figures, Q Unified API Surface Index added Third Edition)
+    appendices:   19,  // lettered appendices A-S (R Day in the Forge v3.6.2 Slice A3, S How Do I…? Task Index v3.6.2 Slice A4)
     parts:         5,  // Smelt, Forge, Guard, Learn, Integrate (Part V added Third Edition)
     // Manual assets ─────────────────────────────────────────────────────
-    htmlFiles:    66,  // total .html files in docs/manual/ (+4 chapters Third Edition Slice A, +1 Appendix Q Third Edition Slice B)
+    htmlFiles:    71,  // total .html files in docs/manual/ (Third Edition Slice A + Slice B; +Foreword/Stakeholder/Reader Paths/Day in the Forge/How Do I…? v3.6.2 Fifth Edition)
   };
 
   // Detect current page
@@ -503,6 +505,17 @@
     { t: "The .NET A/B Test — 99 vs 44 (Day in the Forge)",         u: "day-in-the-forge.html#vignette-2" },
     { t: "Quorum Mode in Practice (Day in the Forge)",              u: "day-in-the-forge.html#vignette-3" },
     { t: "What the Three Vignettes Share (Day in the Forge)",       u: "day-in-the-forge.html#closing" },
+    // How Do I…? — task-first navigation index (Appendix S)
+    { t: "How Do I — The Nine Intent Groups",                      u: "how-do-i.html#orientation" },
+    { t: "How Do I — Install and Set Up",                          u: "how-do-i.html#install" },
+    { t: "How Do I — Plan a Feature",                              u: "how-do-i.html#plan" },
+    { t: "How Do I — Execute a Plan",                              u: "how-do-i.html#execute" },
+    { t: "How Do I — Review and Ship",                             u: "how-do-i.html#review-ship" },
+    { t: "How Do I — Customize Plan Forge for My Project",         u: "how-do-i.html#customize" },
+    { t: "How Do I — Operate at Scale (Teams and Fleets)",         u: "how-do-i.html#operate" },
+    { t: "How Do I — Debug and Troubleshoot",                      u: "how-do-i.html#debug" },
+    { t: "How Do I — Extend and Integrate",                        u: "how-do-i.html#extend" },
+    { t: "How Do I — Brief Stakeholders and Onboard Readers",      u: "how-do-i.html#brief" },
     // Quickstart
     { t: "Check Prerequisites",                  u: "quickstart-install.html#prerequisites" },
     { t: "Clone and Run Setup",                  u: "quickstart-install.html#clone" },

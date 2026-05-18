@@ -207,7 +207,7 @@ Slices are independent. Pick any one; finish it; commit; ship. No slice depends 
 - [x] **A1** Foreword ✅ (v3.6.2 · commit pending)
 - [x] **A2** Reader-Journey Ladders ✅ (v3.6.2 · commit pending)
 - [x] **A3** "A Day in the Forge" vignettes (Appendix R) ✅ (v3.6.2 · commit pending)
-- [ ] **A4** Task-based "How do I…?" index (Appendix S)
+- [x] **A4** Task-based "How do I…?" index (Appendix S) ✅ (v3.6.2 · commit pending)
 - [x] **A5** "What's new in this Edition" banner ✅ (v3.6.2 · commit pending)
 - [x] **A6** Above-the-fold positioning (harness-on-substrate) ✅ (v3.6.2 · commit pending)
 - [x] **A7** Stakeholder Briefing (white paper inside the ebook) ✅ (v3.6.2 · commit pending)

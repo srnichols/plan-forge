@@ -36,20 +36,20 @@
 
         <!-- ─── Step 1: Prerequisites ─── -->
         <h2 id="prerequisites">1. Check Prerequisites</h2>
-        <p>You need four things installed before running setup:</p>
+        <p>What you need depends on <em>how</em> you'll drive Plan Forge. Three of the four prerequisites are universal; <strong>Node.js</strong> is only needed when you want the dashboard, MCP server, or REST API.</p>
 
-        <table>
-          <thead><tr><th>Tool</th><th>Minimum</th><th>Check</th></tr></thead>
+        <table class="manual-table">
+          <thead><tr><th>Tool</th><th>Minimum</th><th>Check</th><th>Required for</th></tr></thead>
           <tbody>
-            <tr><td><strong>VS Code</strong></td><td>1.99+</td><td><code>code --version</code></td></tr>
-            <tr><td><strong>GitHub Copilot</strong> extension</td><td>Active subscription</td><td>Copilot icon in status bar</td></tr>
-            <tr><td><strong>Git</strong></td><td>2.30+</td><td><code>git --version</code></td></tr>
-            <tr><td><strong>Node.js</strong></td><td>18+</td><td><code>node --version</code></td></tr>
+            <tr><td><strong>Git</strong></td><td>2.30+</td><td><code>git --version</code></td><td>Everyone &mdash; required by setup, all CLI commands, and version-aware features.</td></tr>
+            <tr><td><strong>VS Code</strong> (or Insiders)</td><td>1.99+</td><td><code>code --version</code></td><td>UI path &mdash; prompts, agents, skills, and the Copilot integration all live inside VS Code.</td></tr>
+            <tr><td><strong>GitHub Copilot</strong> extension</td><td>Active subscription</td><td>Copilot icon in status bar</td><td>UI path &mdash; powers the chat prompts and the hardening pipeline.</td></tr>
+            <tr><td><strong>Node.js</strong></td><td>18+</td><td><code>node --version</code></td><td>CLI / server path &mdash; needed for the dashboard, the MCP server, <code>pforge.ps1</code> / <code>pforge.sh</code>, and the <!--c:tools-->88<!--/c--> tools. Skip if you'll only use prompts + instructions + agents inside Copilot Chat.</td></tr>
           </tbody>
         </table>
 
         <div class="callout callout-info">
-          <strong>Node.js optional?</strong> Only required for the MCP server (dashboard + <!--c:tools-->88<!--/c--> tools). The pipeline prompts, instruction files, agents, and skills work without it.
+          <strong>Two paths, one setup.</strong> The <code>setup.ps1</code> / <code>setup.sh</code> wizard runs in either path. If Node.js isn't installed, it skips the MCP server scaffold and still wires up the prompts, instructions, agents, and skills inside <code>.github/</code>.
         </div>
 
         <!-- ─── Step 2: Clone ─── -->

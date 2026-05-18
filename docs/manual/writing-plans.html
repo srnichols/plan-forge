@@ -114,8 +114,30 @@
         <!-- ─── Slicing Strategy ─── -->
         <h2 id="slicing">Slicing Strategy</h2>
 
+        <p>Before the rules, the worked example. The same feature — add a User Profile endpoint &mdash; planned two ways:</p>
+
+        <div class="cmd-block">
+          <div class="cmd-block-header"><span><span class="text-rose-400 font-bold">✗</span> Bad: one mega-slice</span></div>
+          <pre><code>Slice 1 — Add User Profile feature           [≥90 min, unbounded]
+  • Database migration
+  • Repository
+  • Service
+  • Controller
+  • Tests</code></pre>
+        </div>
+        <p class="text-sm text-slate-400 mb-4">When the gate fails you have no idea which layer broke, the migration can't roll back cleanly without nuking the service work, and the reviewer is reading a 12-file diff with no checkpoint to anchor against.</p>
+
+        <div class="cmd-block">
+          <div class="cmd-block-header"><span><span class="text-emerald-400 font-bold">✓</span> Good: 4 layered slices</span></div>
+          <pre><code>Slice 1 — Migration + model                  [30 min]
+Slice 2 — Repository + unit tests            [45 min]
+Slice 3 — Service + business-logic tests     [60 min]
+Slice 4 — Controller + integration tests     [45 min]</code></pre>
+        </div>
+        <p class="text-sm text-slate-400 mb-6">Each slice ends at a real checkpoint. A migration failure stops Slice 1 cleanly. A controller bug at Slice 4 doesn't touch the migration in Slice 1. The reviewer reads four small diffs, each scoped to one architectural layer.</p>
+
         <figure class="manual-figure" id="fig-4-1"><img src="assets/diagrams/slicing-strategy-antipatterns.svg" alt="Slicing strategy: side-by-side comparison of tight scope (left, green) vs loose scope (right, red). Tight scope shows 3 slices each touching one architectural layer (Controller, Service, Repository) with concrete forbidden actions (no migrations, no AppSettings.json, no new NuGet packages). Loose scope shows one mega-slice mixing 4 layers (controllers + services + repositories + migrations) with the consequences: test fails make it impossible to isolate which layer broke, mid-slice migrations can't roll back cleanly, reviewers can't audit one boundary at a time. Forbidden actions section shows 'don't break things' as struck-through (unenforceable). Bottom rule: one layer per slice, scope = exact file paths, forbidden actions = concrete patterns. If you can't write the gate command, the slice is too broad." class="diagram-img diagram-img-md my-4" /><figcaption class="manual-figcaption"><!--fignum--><span class="manual-fignum">Figure 4-1.</span><!--/fignum--> <!--cap:auto-->Slicing strategy<!--/cap--></figcaption></figure>
-        <p>Slices are 30–120 minute chunks of work. Each slice should produce a commit-worthy change — the "one PR" rule.</p>
+        <p>Slices are 30&ndash;120 minute chunks of work. Each slice should produce a commit-worthy change &mdash; the "one PR" rule.</p>
 
         <h3>Rules of Thumb</h3>
         <ul>

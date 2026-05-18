@@ -37,14 +37,56 @@
       <h2 id="diagnostics">Diagnostic Tools</h2>
 
       <figure class="manual-figure" id="fig-15-1"><img src="assets/diagrams/troubleshooting-tree.svg" alt="Troubleshooting decision tree: start with pforge smith, branch to execution, guardrails, dashboard, or setup issues" class="diagram-img diagram-img-lg" /><figcaption class="manual-figcaption"><!--fignum--><span class="manual-fignum">Figure 15-1.</span><!--/fignum--> <!--cap:auto-->Troubleshooting decision tree<!--/cap--></figcaption></figure>
-      <table>
+      <table class="manual-table">
         <thead><tr><th>Tool</th><th>What It Checks</th><th>When to Use</th></tr></thead>
         <tbody>
           <tr><td><code>pforge smith</code></td><td>Environment, VS Code config, setup health, version</td><td>First thing when anything seems off</td></tr>
           <tr><td><code>pforge check</code></td><td>Setup file existence and validity</td><td>After setup or update</td></tr>
-          <tr><td><code>forge_diagnose({ file })</code> <span class="text-xs text-slate-500">(MCP tool)</span></td><td>Multi-model bug investigation on a specific file</td><td>When a slice fails and you can't see why — invoke from Copilot Chat</td></tr>
+          <tr><td><code>forge_diagnose({ file })</code> <span class="text-xs text-slate-500">(MCP tool)</span></td><td>Multi-model bug investigation on a specific file</td><td>When a slice fails and you can't see why &mdash; invoke from Copilot Chat</td></tr>
         </tbody>
       </table>
+
+      <h3 id="smith-output">What a healthy <code>pforge smith</code> looks like</h3>
+      <p>If you've never run it, here's the shape of the output to compare against. Anything red or marked <code>FAIL</code> is a real problem; <code>WARN</code> usually means an optional extension or integration isn't installed.</p>
+
+      <div class="cmd-block">
+        <div class="cmd-block-header"><span>Terminal &mdash; expected output</span><button class="cmd-copy-btn">Copy</button></div>
+        <pre><code>$ pforge smith
+
+Plan Forge v3.5.1 — forge diagnostic
+
+Environment
+  OS                Windows 10.0.22631  OK
+  Shell             PowerShell 7.4.1    OK
+  Node              v20.11.0            OK  (≥ 18 required)
+  Git               2.42.0              OK  (≥ 2.30 required)
+
+Forge layout
+  .github/prompts            11 files   OK
+  .github/instructions       17 files   OK
+  .github/agents             19 files   OK
+  .github/hooks               4 files   OK
+  .github/skills             11 files   OK
+  docs/plans                  3 files   OK
+  .forge/config.json         present    OK
+
+MCP server
+  pforge-mcp/server.mjs      present    OK
+  Port 3100                  free       OK
+  Port 3101 (WS hub)         free       OK
+
+Agent adapters
+  copilot   .vscode/mcp.json  OK
+  claude    .mcp.json         not installed   WARN (run setup with --agent claude)
+  cursor    .cursor/mcp.json  not installed   WARN
+  codex     .codex/mcp.json   not installed   WARN
+
+Result: 4 OK, 3 WARN, 0 FAIL  —  forge is healthy</code></pre>
+      </div>
+
+      <div class="callout callout-tip">
+        <strong>Read it from the bottom.</strong> The <code>Result:</code> line is the headline. If FAIL = 0 you're fine to keep working. WARNs are reminders, not blockers.
+      </div>
 
       <h2 id="guardrails-not-loading">Agent Isn't Following Guardrails</h2>
       <table>

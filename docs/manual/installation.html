@@ -36,18 +36,18 @@
 
         <!-- ─── Prerequisites ─── -->
         <h2 id="prerequisites">Prerequisites</h2>
-        <table>
-          <thead><tr><th>Requirement</th><th>Minimum Version</th><th>Check Command</th></tr></thead>
+        <table class="manual-table">
+          <thead><tr><th>Requirement</th><th>Minimum Version</th><th>Check Command</th><th>Required for</th></tr></thead>
           <tbody>
-            <tr><td><strong>VS Code</strong> (or Insiders)</td><td>1.99+</td><td><code>code --version</code></td></tr>
-            <tr><td><strong>GitHub Copilot</strong> extension</td><td>Copilot subscription active</td><td>Copilot icon visible in status bar</td></tr>
-            <tr><td><strong>Git</strong></td><td>2.30+</td><td><code>git --version</code></td></tr>
-            <tr><td><strong>Node.js</strong> (for MCP server)</td><td>18+</td><td><code>node --version</code></td></tr>
+            <tr><td><strong>Git</strong></td><td>2.30+</td><td><code>git --version</code></td><td>Everyone</td></tr>
+            <tr><td><strong>VS Code</strong> (or Insiders)</td><td>1.99+</td><td><code>code --version</code></td><td>UI path</td></tr>
+            <tr><td><strong>GitHub Copilot</strong> extension</td><td>Copilot subscription active</td><td>Copilot icon visible in status bar</td><td>UI path</td></tr>
+            <tr><td><strong>Node.js</strong></td><td>18+</td><td><code>node --version</code></td><td>CLI / server path</td></tr>
           </tbody>
         </table>
 
         <div class="callout callout-info">
-          <strong>Node.js is optional</strong> unless you want the MCP server (dashboard, <!--c:tools-->88<!--/c--> tools, REST API). The core pipeline (prompts, instructions, agents) works without it.
+          <strong>Node.js is optional.</strong> Required only for the dashboard, MCP server, <code>pforge.ps1</code> / <code>pforge.sh</code>, and the <!--c:tools-->88<!--/c--> tools (REST API + WebSocket hub). <strong>Skip Node.js if you'll only use the core pipeline</strong> &mdash; prompts, instruction files, agents, and skills all live inside <code>.github/</code> and run entirely inside Copilot Chat.
         </div>
 
         <!-- ─── Option A ─── -->

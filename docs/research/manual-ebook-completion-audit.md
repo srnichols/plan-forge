@@ -284,10 +284,11 @@ from a from-scratch task into a remix.
 6. **Adoption path** — two generic routes: (a) adopt as-is from the community, (b) fork and
    brand for your organization. Both end at the same Level-3 destination.
 7. **Why open source matters here** — IP, audit, customization, no vendor lock.
-8. **For prospects: how to extend this briefing for your organization** — a one-paragraph
-   instruction telling the reader (often the internal champion) which sections of *their* own
-   briefing to layer on top: customer-specific squad mapping, KPI mapping, pilot timeline, ask.
-   This is the section that **turns the briefing into a template** for the next per-prospect doc.
+8. **Make this yours — the tailoring flow** — the briefing's closing section is a three-option
+   ladder telling any reader how to tailor the briefing for their own organization, without
+   needing to contact the maintainer. See “The public tailoring flow” below for the deliverable
+   shape. This section is the rhetorical close: the briefing about Plan Forge ends by inviting
+   the reader to use Plan Forge to remix the briefing. That's the demo.
 
 **What this is *not***:
 
@@ -312,7 +313,57 @@ briefing is visually obvious.
 Depends on A6 (positioning sentence locked) and the cost-levers table from Cluster C
 (reusable). Lower-priority than A6 (which fixes the upstream "wrong-frame" problem), but the
 single most leveraged slice for the maintainer who is actively pitching prospects.
+#### The public tailoring flow (Section 8 of the briefing, expanded)
 
+The original draft of this section ended the briefing with *“Need a version tailored to your
+organization's squads, KPIs, and pilot timeline? Open an issue or contact …”* That's wrong
+shape for Plan Forge. The tool's identity is open-source-first, no funnels, no gates. Asking
+the reader to *open an issue and wait* to tailor a briefing is exactly the friction Plan Forge
+claims to eliminate everywhere else in the manual. The closing has to **practice what the
+briefing preaches**.
+
+Replace the “contact us” footer with a **three-option self-service ladder**, in increasing
+order of Plan Forge involvement:
+
+| Path | Effort | Tool surface | Best for |
+|---|---|---|---|
+| **1. Template path** | ~5 minutes | Copy [`docs/manual/stakeholder-briefing-template.md`](../manual/stakeholder-briefing-template.md), fill five placeholders (`<<COMPANY>>`, `<<SQUADS>>`, `<<KPIS>>`, `<<PILOT_TIMELINE>>`, `<<THE_ASK>>`), publish wherever your org publishes briefings | The internal champion who already knows the answers and just needs a structured doc |
+| **2. Skill path** | ~15 minutes | Run `pforge skill stakeholder-briefing` (CLI) or invoke `/stakeholder-briefing` in your AI coding tool. The skill prompts for the five placeholders, optionally crawls your existing strategy docs / org chart / OKR dashboard for context, and emits a tailored briefing as markdown or HTML | The internal champion who wants Plan Forge to draft the prospect-specific 50% from their existing materials |
+| **3. Community path** | days, async | Open a discussion in the Plan Forge repo with your draft. A maintainer or community reviewer will critique structure, sharpen claims, flag overreach | The champion who has a draft and wants a second pair of eyes before sending it to their VP |
+
+Three deliverables ship as part of Slice A7, in this order:
+
+1. **`docs/manual/stakeholder-briefing.html`** — the canonical 8-section briefing itself.
+2. **`docs/manual/stakeholder-briefing-template.md`** — the same 8 sections with the
+   prospect-specific halves replaced by `<<PLACEHOLDER>>` tokens and inline guidance comments
+   (e.g. `<!-- 2–4 sentences: where does this customer say the existing AI-SDLC tooling falls
+   short? Lift from their own slides if possible. -->`). Shipped as `.md` (not `.html`) so
+   `Copy → Paste → Edit` is one shell command.
+3. **`.github/skills/stakeholder-briefing.skill.md`** — a slash-command skill following the
+   existing Plan Forge skill pattern (sibling of `/database-migration`, `/release-notes`, etc.).
+   The skill prompts for the five placeholders, optionally takes a `--source-dir` pointing at
+   the prospect's existing strategy materials, and runs `forge_search` against them to pull
+   relevant context into the “reading alongside” and “where it hurts” sections that the
+   template leaves blank. Output is the filled template, written to a path the user chooses.
+
+**Why all three, and not just the template.** The template alone covers path 1. Path 2 (the
+skill) is the demo — it shows a reader who has never run Plan Forge what running Plan Forge
+feels like, on a task they care about right now (writing a briefing for their boss). Path 3
+(community) catches the long tail of “my draft is weird, can someone look?” without the
+first-class flow depending on a human responding. The three together turn the briefing's
+closing section from a marketing CTA into a working tool.
+
+**Naming.** The skill should be `/stakeholder-briefing`, not `/sales-briefing` or
+`/exec-briefing`. The audience is the internal champion arguing for adoption to their
+stakeholders, not a salesperson. Wrong noun in the skill name will train wrong expectations
+about when to run it.
+
+**Risk.** This expands A7 from one HTML page to three artifacts — measurably more scope than
+the other A-cluster slices. Two ways to manage it: (a) **ship all three under A7** (preferred,
+because the skill is the demo and the demo is the whole point), or (b) **split into A7
+(briefing + template) and A7.1 (skill)** so A7 ships with the template-as-CTA and the skill
+follows in a fast-follower commit. The audit recommends (a); the open question below asks the
+maintainer to confirm.
 ---
 
 ## 3 · Tier 3 — Structural rebalancing (deferred)
@@ -374,8 +425,11 @@ These weren't resolved in the audit chat and want a thumbs-up before slice execu
    to three surfaces, than to drift them apart later. Sub-questions: do we name competitors ("…and
    other AI coding tools like Cursor, Claude, Codex") explicitly, or stay generic? Do we lead with
    "harness on substrate" (the metaphor that already exists in Appendix H) or with the plainer
-   "sits on top of" framing used above?
-
+   "sits on top of" framing used above?6. **Slice A7 scope — ship the skill with the briefing, or split into A7 / A7.1?** The audit
+   recommends shipping all three artifacts (briefing + template + `/stakeholder-briefing` skill)
+   under A7 because the skill is the demo and the demo is the whole rhetorical point of the
+   self-service tailoring flow. The alternative is A7 = briefing + template (with template as
+   the CTA) and A7.1 = skill as a fast-follower. Confirms the scope before A7 work starts.
 ---
 
 ## 6 · Cross-references

@@ -168,6 +168,7 @@ in marketing voice and needs absorbing into reference voice.
 | 4 | **Task-based "How do I…?" index** | All existing chapters — this is a navigational layer over them | New **Appendix S** |
 | 5 | **"What's new in this Edition" banner** | `project-history.html#v3-6-openbrain-l3`, `conventions.html#edition-history` | Edit to **`index.html`** only |
 | 6 | **Above-the-fold positioning: "harness on substrate, not a Copilot replacement"** | [`github-stack-alignment.html`](../manual/github-stack-alignment.html) (Appendix H — the content is excellent but buried in the appendices) + [`plan-forge-on-the-github-stack.html`](../manual/plan-forge-on-the-github-stack.html) (Appendix I) | Promoted into **Foreword (A1)**, **What is Plan Forge? (existing chapter)**, **`index.html` hero**, and **README.md tagline** |
+| 7 | **Stakeholder Briefing (the "white paper inside the ebook")** | The reusable ~50% of the per-prospect briefings the maintainer is already writing (Cohesity briefing, 2026-05-18, sections 1/4/6/8/9/11/AppA) | New Front Matter page **`docs/manual/stakeholder-briefing.html`** sitting between the Foreword (A1) and the Reader-Journey Ladders (A2) |
 
 #### The hidden positioning gap (the "Microsoft-coworker test")
 
@@ -226,6 +227,90 @@ to `index.html` / `README.md` / `what-is-plan-forge.html`**. The execution plan
 should grow a small new slice — call it **A6 — Above-the-fold positioning** — between A5 and
 Cluster B. Cost: roughly one focused commit. Impact: prevents the wrong frame from forming in
 the first thirty seconds of contact with the book.
+
+#### The "Stakeholder Briefing" — a white paper inside the ebook
+
+Closely related to the positioning gap but distinct: today, when a stakeholder, prospect, or
+internal champion needs a sharable explanation of Plan Forge, the maintainer ends up authoring a
+bespoke per-prospect briefing (e.g. the Cohesity briefing prepared on 2026-05-18). Inspecting that
+artifact's TOC tells us exactly which content is being re-derived every time:
+
+| Cohesity-briefing section | Canonical / reusable? | Belongs in… |
+|---|---|---|
+| 1. Executive Summary (problem → solution → result) | ✅ Reusable | The new briefing |
+| 2. Reading alongside the customer's own slides | ❌ Prospect-specific | Stays per-prospect |
+| 3. Where the customer said it hurts | ❌ Prospect-specific | Stays per-prospect |
+| 4. Plan Forge on top of the GitHub Copilot ecosystem | ✅ Reusable (= Appendix H, condensed) | The new briefing |
+| 5. Mapping Plan Forge to customer's squads | ❌ Prospect-specific | Stays per-prospect |
+| 6. The memory layer the customer's plan doesn't have | ✅ Reusable (= memory-system chapter, condensed) | The new briefing |
+| 7. Mapping Plan Forge to customer's KPIs | ❌ Prospect-specific | Stays per-prospect |
+| 8. Things Plan Forge adds you didn't ask for | ✅ Reusable (cross-sell list) | The new briefing |
+| 9. Adoption path — two routes | ✅ Reusable (generic routes) | The new briefing |
+| 10. Concrete 30-day pilot proposal | ❌ Prospect-specific (timeline + names) | Stays per-prospect |
+| 11. Why open source matters | ✅ Reusable | The new briefing |
+| 12. The ask | ❌ Prospect-specific | Stays per-prospect |
+| Appendix A — Visual reference | ✅ Reusable (= existing stack SVGs) | The new briefing |
+
+That's a **clean ~50/50 split**: half is canonical content the manual already owns in long form,
+half is genuinely per-prospect framing that can't and shouldn't be pre-written. The bespoke
+briefings aren't wasteful because they're customized; they're wasteful because **the canonical
+half is re-derived every time**. A pre-written canonical briefing turns the next per-prospect doc
+from a from-scratch task into a remix.
+
+**Format proposal** — a single page, **`docs/manual/stakeholder-briefing.html`**, that:
+
+- Sits in **Front Matter**, after the Foreword (A1) and before the Reader-Journey Ladders (A2).
+- Reads end-to-end in **10–15 minutes** — the longest a busy VP gives you.
+- Is **skimmable** — bold lead sentence per section, bullet-first, ruthless about cutting nuance
+  the chapters cover.
+- Has a clean **shareable URL** (`https://planforge.software/manual/stakeholder-briefing.html`)
+  so it can drop into an email or a chat tool as one link.
+- Is **self-contained** — does not require the reader to navigate into other chapters; cross-links
+  exist for the reader who wants to drill in, but the briefing stands alone.
+- Pulls numbers from the **same source** as the cost chapter (C2) so the briefing and the book
+  can never drift on the headline figures (−55% / −64% / 99 vs 44 / +$0.22 quorum overhead).
+
+**Content skeleton** (≤ 8 sections, mirroring the reusable half of the Cohesity TOC):
+
+1. **Executive Summary** — one paragraph: the 80/20 wall, the four-loop fix, the receipt
+   ($0.07 for the Phase-MEMORY-QA plan on Sonnet alone).
+2. **What Plan Forge is — and is not** — the harness-on-substrate sentence from Slice A6,
+   plus the "is / is not" table.
+3. **The four cost levers** — the table already drafted for Cluster C / Cost & Economics.
+4. **The compounding flywheel** — the paragraph already drafted for the cost chapter.
+5. **What we add that you might not have asked for** — open-source memory layer, reviewer
+   separation, validation gates, plan provenance, fleet ops, audit trail.
+6. **Adoption path** — two generic routes: (a) adopt as-is from the community, (b) fork and
+   brand for your organization. Both end at the same Level-3 destination.
+7. **Why open source matters here** — IP, audit, customization, no vendor lock.
+8. **For prospects: how to extend this briefing for your organization** — a one-paragraph
+   instruction telling the reader (often the internal champion) which sections of *their* own
+   briefing to layer on top: customer-specific squad mapping, KPI mapping, pilot timeline, ask.
+   This is the section that **turns the briefing into a template** for the next per-prospect doc.
+
+**What this is *not***:
+
+- Not a *second book inside the book*. If it grows past ~3000 words, refactor — move detail back
+  into the chapters and cross-link.
+- Not a replacement for the per-prospect briefings. Those still get written. They just start
+  from ~50% pre-written content.
+- Not a marketing landing page. Those live at `index.html`. The Stakeholder Briefing is for the
+  reader who has *already decided to evaluate seriously* and needs to walk a colleague or their
+  boss through the decision.
+
+**Risk and mitigation.** The headline risk is **drift between the briefing and the book** — the
+briefing claims a number, the book updates the number, the briefing forgets to update. Three
+mitigations: (a) all headline numbers are sourced from the same `manual.js` count tokens (already
+proven safe in the drift-sweep commit `d2494c8`); (b) every section ends with a "Read more →"
+link into the canonical chapter, so a reader noticing a discrepancy can self-correct; (c) the
+briefing carries a STATUS pill with the version stamp, identical to other chapters, so a stale
+briefing is visually obvious.
+
+**Slice in the plan.** This is **Slice A7 — Stakeholder Briefing** in
+[`Phase-MANUAL-EBOOK-COMPLETION-PLAN.md`](../plans/Phase-MANUAL-EBOOK-COMPLETION-PLAN.md).
+Depends on A6 (positioning sentence locked) and the cost-levers table from Cluster C
+(reusable). Lower-priority than A6 (which fixes the upstream "wrong-frame" problem), but the
+single most leveraged slice for the maintainer who is actively pitching prospects.
 
 ---
 

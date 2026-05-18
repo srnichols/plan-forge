@@ -365,6 +365,79 @@ because the skill is the demo and the demo is the whole point), or (b) **split i
 (briefing + template) and A7.1 (skill)** so A7 ships with the template-as-CTA and the skill
 follows in a fast-follower commit. The audit recommends (a); the open question below asks the
 maintainer to confirm.
+
+#### The two-axis anti-lock-in story
+
+Closely tied to both the positioning gap and the Stakeholder Briefing, but distinct from each:
+Plan Forge's most differentiated commercial argument is the **anti-lock-in** one, and right now
+it lives mostly in the `LICENSE` file and the OpenBrain technical docs — places a first-contact
+reader never reaches in the first thirty seconds. The argument is strong enough, and currently
+undertold enough, that it deserves its own narrative thread woven through several slices.
+
+**Two distinct axes of lock-in that Plan Forge inverts.** They are orthogonal; missing either
+weakens the argument:
+
+1. **SDLC process lock-in.** Most “AI for SDLC” tools ship a fixed workflow — their planning,
+   their gates, their reviewers, their definition of “done”. Adopt the tool, adopt their
+   opinion of how software should be built. Plan Forge is MIT-licensed *because no two shops'
+   SDLC is the same*. Fork it, tweak it, delete what doesn't apply, add what does. The license
+   is the existence proof: **this is your process, not the vendor's.**
+2. **Institutional memory lock-in — the novel one.** Every commercial AI-coding primitive
+   (Cursor, Claude Projects, Copilot's “knowledge”, future tools) captures your team's
+   conversations, decisions, and patterns inside *their* cloud. The accumulated memory of how
+   your team builds software ends up distributed across N proprietary silos. Switch primitives
+   tomorrow and you lose the memory each one held. Plan Forge inverts this: **L3 memory lives
+   in OpenBrain — a user-owned service the user runs.** Every primitive (Copilot, Claude,
+   Cursor, Codex, future tools) reads from and writes to OpenBrain through the MCP surface.
+   The memory never lives in the primitive, so switching primitives doesn't cost you the
+   memory. The brain follows you.
+
+**These two axes are orthogonal to the “harness on substrate” point** (§2 Tier 2 / item 6):
+
+- *Harness on substrate* says: **we don't compete with your AI model.**
+- *Anti-lock-in* says: **we don't compete with your AI model — and we don't trap your process
+  or your memory inside any one model either.**
+
+The first is a technical-orientation argument (“what kind of tool is this?”). The second is a
+data-sovereignty / strategic-assets argument (“what happens to my company's accumulated
+knowledge?”). Both belong above the fold, but they answer different questions a reader is
+asking. A one-line summary worth quoting: *Plan Forge keeps your two most strategic assets out
+of the vendor's hands — your SDLC process (MIT-licensed harness) and your institutional
+memory (user-owned L3).*
+
+**Why this matters for the manual.** Today the anti-lock-in story is **implicit**:
+
+- `LICENSE` says MIT — but no first-contact reader opens `LICENSE` in their first thirty seconds
+- [`openbrain-memory.html`](../manual/openbrain-memory.html) and [`memory-system.html`](../manual/memory-system.html)
+  explain L3 ownership — but the framing is *technical* (“self-hosted L3 store”), not
+  *commercial* (“your institutional memory stays yours when you switch primitives”)
+- The Stakeholder Briefing's Section 7 (“Why open source matters here”) is the obvious home
+  for this, but its current draft skeleton (§2 Tier 2 / item 7 above) only names “IP, audit,
+  customization, no vendor lock” as bullet points without spelling out the two-axis argument
+
+**Where to surface it** (additive, no new slice required — each item is a few sentences
+woven into an existing slice):
+
+| Surface | What to add |
+|---|---|
+| **A1 Foreword** (“What this book is **not**” paragraph) | *“It is also not a process you rent from us — Plan Forge is MIT-licensed because no two shops' SDLC is the same, and your institutional memory lives in OpenBrain, a service you run, not in any vendor's cloud.”* |
+| **A6 Above-the-fold positioning** | Add a **second** positioning sentence after the substrate sentence: *“It is also licensed MIT because your SDLC is yours, and your institutional memory lives in OpenBrain — a user-owned service — because your accumulated decisions should not be trapped inside any one AI vendor.”* A6 now ships a **two-sentence positioning block** on each of `index.html` / `README.md` / `what-is-plan-forge.html`. |
+| **A7 Stakeholder Briefing §5** (“What we add you didn't ask for”) | New bullet: *“User-owned institutional memory (OpenBrain) — portable across Claude / Copilot / Cursor / Codex / future primitives. The memory never lives in the primitive, so switching primitives doesn't cost you the memory.”* |
+| **A7 Stakeholder Briefing §7** (“Why open source matters here”) | Re-scope from a thin bullet list to a **two-axis explainer**: (1) MIT process ownership — your SDLC is yours; (2) self-hosted memory ownership — your accumulated decisions are yours. This is the briefing's punchiest section once expanded — “we won't be locked in” is consistently in the top three concerns a VP raises in evaluation. |
+| **C1 Security & Threat Model** | Already touches data residency via App N. Should explicitly include the memory-lives-on-your-infrastructure point as a **security** benefit, not just a sovereignty benefit — your team's conversations and decisions never leave your trust boundary. |
+| **C2 Cost & Economics** | One paragraph: switching primitives is normal (token prices change, new models drop, your favourite model gets deprecated). Switching primitives *without losing memory* changes the cost calculus. **Lock-in tax avoidance is itself a cost lever** — a fifth lever alongside the four already in the cost chapter. |
+
+**Cross-ref map update.** §4a already lists forward + backward cross-refs for A1 / A6 / A7 /
+C1 / C2. Each of those slices now owes an additional anti-lock-in callout per the surface map
+above. The QA closer (§4b check #3) will grep for the callout phrases inside each slice's
+output file; missing the anti-lock-in callout in any of these five slices is a QA fail.
+
+**Why no new slice.** The anti-lock-in story is a *narrative thread that runs through several
+slices*, not a standalone chapter. A dedicated “Why Plan Forge is anti-lock-in” chapter would
+read more like vendor-pitch than book — and would let the *other* chapters off the hook for
+surfacing the argument where readers actually encounter the trade-off. Better to weave it
+through five places a reader actually passes through than concentrate it in one place they
+may skip.
 ---
 
 ## 3 · Tier 3 — Structural rebalancing (deferred)
@@ -564,21 +637,36 @@ These weren't resolved in the audit chat and want a thumbs-up before slice execu
 4. **Edition bump trigger** — at what slice count do we bump the manual to **Fifth Edition (v3.x)**?
    The plan suggests ≥10 of 18 content slices; some maintainers prefer “ship the edition when the foreword
    lands" because the foreword is the most ebook-visible change.
-5. **Positioning sentence — sign off on the exact wording.** The audit proposes (§2 Tier 2 / item 6):
-   > *Plan Forge is the orchestration harness that sits **on top of** GitHub Copilot (and other AI
-   > coding tools). It does not replace your model or your IDE — it adds the SDLC layer GitHub
-   > deliberately leaves to the ecosystem: planning, validation gates, memory, cost control, and
-   > reviewer separation.*
-   Three places will repeat this verbatim (`index.html` hero, `README.md` opening,
+5. **Positioning sentence(s) — sign off on the exact wording.** The audit now proposes a
+   **two-sentence block** (§2 Tier 2 / item 6 + the anti-lock-in subsection):
+   > *“Plan Forge is the orchestration harness that sits **on top of** GitHub Copilot (and
+   > other AI coding tools). It does not replace your model or your IDE — it adds the SDLC
+   > layer GitHub deliberately leaves to the ecosystem: planning, validation gates, memory,
+   > cost control, and reviewer separation.”*
+   >
+   > *“It is also licensed MIT because your SDLC is yours, and your institutional memory lives
+   > in OpenBrain — a user-owned service — because your accumulated decisions should not be
+   > trapped inside any one AI vendor.”*
+
+   Three places will repeat this block verbatim (`index.html` hero, `README.md` opening,
    `what-is-plan-forge.html` first paragraph). Cheaper to argue the wording once, before it ships
    to three surfaces, than to drift them apart later. Sub-questions: do we name competitors ("…and
    other AI coding tools like Cursor, Claude, Codex") explicitly, or stay generic? Do we lead with
    "harness on substrate" (the metaphor that already exists in Appendix H) or with the plainer
-   "sits on top of" framing used above?6. **Slice A7 scope — ship the skill with the briefing, or split into A7 / A7.1?** The audit
+   "sits on top of" framing used above? See also OQ #7 below for the one-vs-two-sentence trade-off.6. **Slice A7 scope — ship the skill with the briefing, or split into A7 / A7.1?** The audit
    recommends shipping all three artifacts (briefing + template + `/stakeholder-briefing` skill)
    under A7 because the skill is the demo and the demo is the whole rhetorical point of the
    self-service tailoring flow. The alternative is A7 = briefing + template (with template as
    the CTA) and A7.1 = skill as a fast-follower. Confirms the scope before A7 work starts.
+7. **Two-sentence positioning block — ship both sentences above the fold, or split?** The
+   anti-lock-in subsection in §2 Tier 2 proposes a second positioning sentence covering MIT
+   licensing + user-owned memory. Two options: (a) ship both sentences as a single
+   two-sentence positioning block on `index.html` / `README.md` / `what-is-plan-forge.html`
+   (audit recommendation — each sentence answers a different reader question, both belong
+   above the fold); (b) keep only the substrate sentence above the fold, fold the lock-in
+   sentence into a smaller follow-on note one screen below. The risk in (b) is the same risk
+   that drove A6 in the first place: positioning material below the fold doesn't form the
+   reader's frame.
 ---
 
 ## 6 · Cross-references

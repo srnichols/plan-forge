@@ -1,9 +1,9 @@
 # Plan Forge REST API Reference
 
-> **Server**: `pforge-mcp/server.mjs`  
-> **Default port**: `3100` (configurable via `PFORGE_PORT`)  
-> **Base URL**: `http://localhost:3100`  
-> **Endpoint count**: **103** (as of v3.5.1)  
+> **Server**: `pforge-mcp/server.mjs`
+> **Default port**: `3100` (configurable via `PFORGE_PORT`)
+> **Base URL**: `http://localhost:3100`
+> **Endpoint count**: **103** (as of v3.5.1)
 > **Generated from**: `scripts/dump-rest-routes.mjs`
 
 All endpoints accept and return JSON unless otherwise noted. Every MCP tool can also be invoked over REST through the generic dispatcher (`POST /api/tool/:name`) — the prefixed endpoints below are the "first-class" surfaces used by the dashboard and CLI.

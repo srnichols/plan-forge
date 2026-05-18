@@ -1,19 +1,19 @@
 {
   "name": "pforge-sdk",
-  "version": "0.2.0",
-  "description": "Plan Forge SDK — programmatic access to Plan Forge MCP tools and orchestration primitives",
+  "version": "0.3.0",
+  "description": "Plan Forge SDK — programmatic access to Plan Forge MCP tool metadata, Hallmark provenance, and the Lattice chunker contract",
   "type": "module",
   "main": "src/index.mjs",
   "exports": {
     ".": "./src/index.mjs",
     "./tools": "./src/tools.mjs",
-    "./client": "./src/client.mjs",
-    "./hallmark": "./src/hallmark.mjs"
+    "./hallmark": "./src/hallmark.mjs",
+    "./chunker": "./src/chunker.mjs"
   },
   "scripts": {
     "test": "node --test src/*.test.mjs 2>/dev/null || echo 'No tests yet'"
   },
-  "keywords": ["plan-forge", "mcp", "sdk", "ai-agent"],
+  "keywords": ["plan-forge", "mcp", "sdk", "ai-agent", "hallmark", "lattice"],
   "license": "MIT",
   "engines": {
     "node": ">=20"

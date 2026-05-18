@@ -1,7 +1,7 @@
 # Using This Framework with GitHub Copilot in VS Code
 
-> **Purpose**: Practical guide for running the Plan Forge Pipeline using GitHub Copilot's Agent Mode in VS Code  
-> **Audience**: Developers using GitHub Copilot (free, Pro, or Enterprise) in VS Code  
+> **Purpose**: Practical guide for running the Plan Forge Pipeline using GitHub Copilot's Agent Mode in VS Code
+> **Audience**: Developers using GitHub Copilot (free, Pro, or Enterprise) in VS Code
 > **Last Updated**: 2026-04-07
 
 ---

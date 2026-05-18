@@ -223,7 +223,7 @@ Slices are independent. Pick any one; finish it; commit; ship. No slice depends 
 
 ### Cluster C — Domain chapters
 - [x] **C1** Security & Threat Model chapter (Part III) ✅ (v3.6.2 · Chapter 30 · commit pending)
-- [ ] **C2** Cost & Economics chapter (Part II)
+- [x] **C2** Cost & Economics chapter (Part II) ✅ (v3.6.2 · Chapter 31 · commit pending)
 - [ ] **C3** Plan Pattern Library (Appendix Y)
 - [ ] **C4** Failure-Mode Catalog (Appendix Z)
 

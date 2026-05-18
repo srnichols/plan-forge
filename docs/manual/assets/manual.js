@@ -44,6 +44,7 @@
     { id: "competitive-loop",    file: "competitive-loop.html",    num: "",   title: "The Competitive Loop (Deep Dive)", act: "II" },
     { id: "audit-loop",          file: "audit-loop.html",          num: "",   title: "Audit Loop (Deep Dive)",            act: "II" },
     { id: "troubleshooting",     file: "troubleshooting.html",     num: "15", title: "Troubleshooting",          act: "II" },
+    { id: "cost-and-economics",  file: "cost-and-economics.html",  num: "31", title: "Cost & Economics",         act: "II" },
     // ─── Part III — Guard (post-deploy defense) ───
     { id: "what-is-liveguard",   file: "what-is-liveguard.html",   num: "16", title: "What Is LiveGuard?",        act: "III" },
     { id: "liveguard-tools",     file: "liveguard-tools.html",     num: "17", title: "LiveGuard Tools Reference", act: "III" },
@@ -107,6 +108,7 @@
     "rest-api-reference":            { label: "NEW",     version: "v3.6.2" },
     "errors-and-exit-codes":         { label: "NEW",     version: "v3.6.2" },
     "security-threat-model":         { label: "NEW",     version: "v3.6.2" },
+    "cost-and-economics":            { label: "NEW",     version: "v3.6.2" },
     "instructions-agents-reference": { label: "UPDATED", version: "v3.6.2" },
     "troubleshooting":               { label: "UPDATED", version: "v3.6.2" },
     "customization":                 { label: "UPDATED", version: "v3.6.2" },
@@ -156,11 +158,11 @@
     presets:       9,  // presets/* excluding the "shared" base
     'cli-commands': 97, // pforge.ps1 switch arms (unique) — verify with PowerShell: ([regex]::Matches((Get-Content pforge.ps1 -Raw),"(?m)^\s+''([a-z][a-z-]+)''\s+\{") | %{ $_.Groups[1].Value } | Sort-Object -Unique).Count
     // Manual structure ──────────────────────────────────────────────────
-    chapters:     29,  // numbered chapters 1-30 (excludes Quickstart Q1-Q3 and Appendices) — Ch 11 was archived; 26-29 added Third Edition; 30 (Security & Threat Model) added v3.6.2 Slice C1
+    chapters:     30,  // numbered chapters 1-31 (excludes Quickstart Q1-Q3 and Appendices) — Ch 11 was archived; 26-29 added Third Edition; 30 (Security & Threat Model) + 31 (Cost & Economics) added v3.6.2 Slices C1-C2
     appendices:   24,  // lettered appendices A-X (R Day in the Forge v3.6.2 Slice A3, S How Do I…? Task Index v3.6.2 Slice A4, T .forge.json Reference v3.6.2 Slice B1, U Environment Variables Reference v3.6.2 Slice B2, V Event Catalog v3.6.2 Slice B4, W REST API Reference v3.6.2 Slice B5, X Errors & Exit Codes v3.6.2 Slice B7)
     parts:         5,  // Smelt, Forge, Guard, Learn, Integrate (Part V added Third Edition)
     // Manual assets ─────────────────────────────────────────────────────
-    htmlFiles:    77,  // total .html files in docs/manual/ (Third Edition Slice A + Slice B + C1; +Foreword/Stakeholder/Reader Paths/Day in the Forge/How Do I…?/.forge.json Reference/Env Vars Reference/Event Catalog/REST API Reference/Errors & Exit Codes/Security & Threat Model v3.6.2 Fifth Edition)
+    htmlFiles:    78,  // total .html files in docs/manual/ (Third Edition Slice A + Slice B + C1 + C2; +Foreword/Stakeholder/Reader Paths/Day in the Forge/How Do I…?/.forge.json Reference/Env Vars Reference/Event Catalog/REST API Reference/Errors & Exit Codes/Security & Threat Model/Cost & Economics v3.6.2 Fifth Edition)
   };
 
   // Detect current page
@@ -633,6 +635,16 @@
     { t: "Security — Sandboxing & gate execution (TCB boundary)",   u: "security-threat-model.html#sandboxing" },
     { t: "Security — Hardening checklist (12 controls)",            u: "security-threat-model.html#hardening-checklist" },
     { t: "Security — Incident response (LiveGuard front door)",     u: "security-threat-model.html#incident-response" },
+    // Cost & Economics — pricing surface, drivers, anti-lock-in (Chapter 31, Part II)
+    { t: "Cost — Orientation (BYOK, no markup, per-slice attribution)", u: "cost-and-economics.html#orientation" },
+    { t: "Cost — Three sources of truth (pricing table, estimators, actuals)", u: "cost-and-economics.html#three-sources" },
+    { t: "Cost — Cost drivers (model tier, tokens, quorum, cache, reasoning, retries)", u: "cost-and-economics.html#cost-drivers" },
+    { t: "Cost — Estimate vs actuals (forge_estimate_quorum vs forge_cost_report)", u: "cost-and-economics.html#estimate-vs-actuals" },
+    { t: "Cost — Per-quorum-mode economics (auto / power / speed / disabled)", u: "cost-and-economics.html#quorum-economics" },
+    { t: "Cost — Cost-effective workflows (slice sizing, routing, gates, cache, quorum)", u: "cost-and-economics.html#effective-workflows" },
+    { t: "Cost — Anti-lock-in posture (BYOK, no proxy, no telemetry, open pricing)", u: "cost-and-economics.html#anti-lock-in" },
+    { t: "Cost — Forecasting at scale (groupBy model / role / scope)", u: "cost-and-economics.html#forecasting-at-scale" },
+    { t: "Cost — Worked example (slice B5 ship REST API reference)", u: "cost-and-economics.html#worked-example" },
     // Quickstart
     { t: "Check Prerequisites",                  u: "quickstart-install.html#prerequisites" },
     { t: "Clone and Run Setup",                  u: "quickstart-install.html#clone" },

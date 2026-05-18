@@ -1,0 +1,230 @@
+<!DOCTYPE html>
+<html lang="en" class="scroll-smooth">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Chapter 31: Cost &amp; Economics — Plan Forge Manual</title>
+  <meta name="description" content="How Plan Forge prices LLM calls, where token cost comes from, the three sources of truth (pricing table, estimate tools, actuals), per-quorum-mode economics, cost-effective workflow patterns, and the anti-lock-in commitments that keep your provider bill yours." />
+  <meta property="og:title" content="Chapter 31 — Cost &amp; Economics" />
+  <meta property="og:description" content="Pricing surface, cost drivers, estimation vs actuals, anti-lock-in posture, and a worked example." />
+  <meta property="og:type" content="article" />
+  <link rel="canonical" href="https://planforge.software/manual/cost-and-economics.html" />
+  <link rel="icon" type="image/svg+xml" href="../assets/plan-forge-logo.svg" />
+  <link rel="stylesheet" href="../assets/tailwind.built.css" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;600;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="../assets/shared.css" />
+  <link rel="stylesheet" href="assets/manual.css" />
+</head>
+<body class="bg-slate-950 text-slate-300 min-h-screen">
+
+  <button id="mobile-sidebar-btn" class="mobile-sidebar-btn fixed top-4 left-4 z-[101] lg:hidden p-2 bg-slate-900 border border-slate-700 rounded-lg text-slate-400 hover:text-slate-100 transition-colors" aria-label="Open navigation">
+    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"/></svg>
+  </button>
+  <div id="sidebar-overlay" class="sidebar-overlay"></div>
+
+  <div class="manual-layout">
+    <aside id="manual-sidebar" class="manual-sidebar"><nav id="sidebar-nav"></nav></aside>
+
+    <main>
+      <div class="chapter-content">
+
+        <div class="text-xs font-semibold text-cyan-500 uppercase tracking-wider mb-2">Act II — Forge · Chapter 31</div>
+        <h1>Cost &amp; Economics</h1>
+        <p class="text-lg text-slate-400 mb-8">How Plan Forge prices LLM calls, where token costs come from, the three sources of truth, per-quorum-mode economics, cost-effective workflow patterns, and the anti-lock-in commitments that keep your provider bill yours &mdash; never marked up, never proxied, never withheld.</p>
+
+        <div class="callout callout-warn">
+          <strong>Never hand-compute quorum costs in chat.</strong> Hand-computed quorum estimates have been observed to overshoot reality by an order of magnitude. Always call <a href="rest-api-reference.html#cost"><code>forge_estimate_quorum</code></a> for projections and <a href="rest-api-reference.html#cost"><code>forge_cost_report</code></a> for actuals. If you're a UI building a quorum picker, populate it from <code>forge_estimate_quorum</code> &mdash; do not invent dollar amounts.
+        </div>
+
+        <h2 id="orientation">Orientation</h2>
+        <p>Plan Forge has no Plan Forge bill. It has <em>your provider bill</em>, plus the orchestrator's bookkeeping to tell you what fraction of that bill belongs to which slice, which plan, and which model. Three things follow from that:</p>
+        <ul class="list-disc list-inside space-y-1 mb-4">
+          <li><strong>Bring-your-own-key.</strong> Plan Forge calls Anthropic, OpenAI, Google, and xAI directly using your keys. There is no relay, no proxy, no aggregator endpoint. (Azure OpenAI is also supported &mdash; same direct call, your AOAI deployment.)</li>
+          <li><strong>No markup.</strong> The orchestrator records what the provider charged you. Plan Forge adds zero margin. The numbers in <code>forge_cost_report</code> are the numbers on your provider invoice.</li>
+          <li><strong>Per-slice attribution.</strong> Every LLM call is tagged with the run id, slice number, role (worker / reviewer / quorum responder / forge-master / etc.), and provider. You can answer "which slice cost the most" from the audit trail, not from guessing.</li>
+        </ul>
+
+        <h2 id="three-sources">Three sources of truth</h2>
+        <p>Cost numbers in Plan Forge come from exactly three places. Knowing which is which prevents the common confusion between "what a slice <em>will</em> cost" and "what it <em>did</em> cost."</p>
+        <table class="manual-table">
+          <thead><tr><th style="width: 18rem">Source</th><th>Answers</th><th>How to read it</th></tr></thead>
+          <tbody>
+            <tr><td><strong><code>MODEL_PRICING</code> table</strong><br><span class="text-xs text-slate-500">pforge-mcp/cost-service.mjs</span></td><td>"What does a given model charge per million input / output / cache tokens?"</td><td>Static table, updated when providers publish new prices. Each entry cites its <code>_source</code> URL with date. Cache, flex, priority, and AOAI deployment multipliers are encoded alongside the base rates.</td></tr>
+            <tr><td><strong><code>forge_estimate_quorum</code></strong> &middot; <strong><code>forge_estimate_slice</code></strong></td><td>"What will this plan / slice cost <em>before</em> I run it?"</td><td>Token-aware projections. Walks each slice, projects worker tokens by file size + scope, projects quorum panel by mode. Returns four-mode breakdown (auto / power / speed / disabled) for plans.</td></tr>
+            <tr><td><strong><code>forge_cost_report</code></strong></td><td>"What did Plan Forge actually charge to my providers?"</td><td>Aggregates <code>.forge/cost-history.json</code> &mdash; one record per LLM call with run id, slice, role, model, tokens, ticks (xAI exact-cost), and dollar amount. Roll up by day / month / model / role.</td></tr>
+          </tbody>
+        </table>
+
+        <div class="callout callout-info">
+          <strong>Why three?</strong> The pricing table is the contract (rates per token), the estimate tools are the forecast (rates &times; projected tokens), and the cost report is the actual (rates &times; observed tokens with cache hits, retries, and provider rounding folded in). Estimates and actuals will differ &mdash; the cost report is always authoritative.
+        </div>
+
+        <h2 id="cost-drivers">Cost drivers</h2>
+        <p>The variables that move your bill, ranked roughly by how much leverage they have.</p>
+
+        <table class="manual-table">
+          <thead><tr><th style="width: 16rem">Driver</th><th>Range</th><th>How to manage it</th></tr></thead>
+          <tbody>
+            <tr><td><strong>Model tier</strong></td><td>~50&times; spread between flagship and nano (<code>claude-opus-4.7</code> $5/$25 vs <code>gpt-5-nano</code> $0.05/$0.40 per 1M tokens)</td><td>Use cheaper models for code-search / classification / routing. Reserve flagships for hard reasoning slices. The <code>auto</code> quorum mode does this automatically.</td></tr>
+            <tr><td><strong>Token volume per slice</strong></td><td>1K (small CRUD) to 200K (large refactor with broad context)</td><td>Tighten scope contracts. A slice that touches 4 files costs ~10&times; less than one that touches 40, even with the same logic. Split fat slices.</td></tr>
+            <tr><td><strong>Quorum panel size</strong></td><td>1 model (disabled) to 5+ models (power mode)</td><td>Use <code>auto</code> by default; opt into <code>power</code> only for high-stakes or low-confidence decisions. See <a href="#quorum-economics">per-quorum-mode economics</a>.</td></tr>
+            <tr><td><strong>Cache reuse</strong></td><td>1.0&times; (no cache) down to 0.10&times; (Anthropic / OpenAI cache read)</td><td>Plan Forge prompts the same system blocks across slices in a run, which providers cache. No action needed &mdash; just don't restart the run between slices unnecessarily.</td></tr>
+            <tr><td><strong>Reasoning tokens</strong> (o-series, GPT-5 reasoning)</td><td>Often 5&ndash;20&times; visible output</td><td>Reasoning tokens are billed at the output rate <em>and</em> already counted in <code>output_tokens</code> &mdash; don't double-count when estimating. Use reasoning models only when the slice needs them.</td></tr>
+            <tr><td><strong>Retries &amp; escalation</strong></td><td>1&times; (clean pass) to 3&ndash;5&times; (full escalation chain)</td><td>Tighten validation gates so first-pass success rate climbs. The Inner Loop's reviewer calibration is designed for this &mdash; see <a href="inner-loop.html">Chapter 14 deep dive &mdash; The Inner Loop</a>.</td></tr>
+            <tr><td><strong>AOAI deployment type</strong></td><td>1.0&times; (global / provisioned) to 1.1&times; (data-zone / regional)</td><td>Use global Azure OpenAI deployments unless data-residency requires otherwise. The 10% uplift is encoded in <code>aoai_deployment_type_multiplier</code>.</td></tr>
+            <tr><td><strong>Priority / flex tier</strong> (GPT-5.x)</td><td>0.5&times; (flex) to 2.0&times; input / 1.5&times; output (priority)</td><td>Flex is fine for batch / offline runs; priority is rarely worth it for plan execution. Default tier is standard.</td></tr>
+          </tbody>
+        </table>
+
+        <h2 id="estimate-vs-actuals">Estimate vs actuals</h2>
+        <p>Before running a plan, get a projection. After running, audit the actual.</p>
+
+        <h3 id="estimate-workflow" class="text-base font-semibold text-slate-300 mt-6">Before the run: <code>forge_estimate_quorum</code></h3>
+        <pre><code>// MCP
+forge_estimate_quorum({ plan: "docs/plans/Phase-NN.md" })
+
+// REST
+POST /api/tool/forge_estimate_quorum
+{ "plan": "docs/plans/Phase-NN.md" }
+
+// CLI
+pforge run-plan --estimate docs/plans/Phase-NN.md
+</code></pre>
+
+        <p>Returns a per-slice token projection plus four-mode totals:</p>
+        <pre><code>{
+  "plan": "Phase-NN",
+  "slices": [
+    { "n": 1, "name": "Add user_profiles table", "projectedTokens": 8400, "modelTier": "mid", &hellip; },
+    &hellip;
+  ],
+  "modes": {
+    "auto":     { "totalUsd": 0.42, "breakdown": { /* per-model */ } },
+    "power":    { "totalUsd": 1.85, "breakdown": { /* per-model */ } },
+    "speed":    { "totalUsd": 0.18, "breakdown": { /* per-model */ } },
+    "disabled": { "totalUsd": 0.09, "breakdown": { /* per-model */ } }
+  }
+}
+</code></pre>
+
+        <p>The picker UI in the dashboard uses exactly this payload. If you're building your own UI, populate it the same way &mdash; the four-mode table is the single source of truth for "what does this cost?"</p>
+
+        <h3 id="actuals-workflow" class="text-base font-semibold text-slate-300 mt-6">After the run: <code>forge_cost_report</code></h3>
+        <pre><code>// MCP
+forge_cost_report({ runId: "run-2026-05-18-091234" })   // one run
+forge_cost_report({ scope: "month" })                    // current month
+forge_cost_report({ scope: "month", groupBy: "model" })  // monthly by model
+
+// REST
+GET /api/cost/report?runId=&hellip;
+GET /api/cost/report?scope=month&amp;groupBy=model
+</code></pre>
+
+        <p>Returns the actual provider-billable amounts pulled from <code>.forge/cost-history.json</code>. Group by <code>model</code>, <code>role</code>, <code>day</code>, or <code>slice</code>. For runs that included xAI calls, the dollar amounts use the provider's exact-cost ticks (1 tick = $1&times;10<sup>-10</sup>) rather than multiplier math &mdash; what you see is what xAI billed.</p>
+
+        <h2 id="quorum-economics">Per-quorum-mode economics</h2>
+        <p>Quorum mode is the biggest single cost lever after model tier. Plan Forge ships four modes:</p>
+
+        <table class="manual-table">
+          <thead><tr><th style="width: 9rem">Mode</th><th>Panel</th><th>Threshold</th><th>Cost shape</th><th>When</th></tr></thead>
+          <tbody>
+            <tr><td><strong><code>auto</code></strong> (default)</td><td>Dynamic: 2&ndash;3 models picked by intent class</td><td>Majority of responders</td><td>~3&times; single-model</td><td>Most plans. Cost-effective and adequate for most decisions.</td></tr>
+            <tr><td><strong><code>power</code></strong></td><td>4&ndash;5 flagship models (Opus, GPT-5.5, Gemini Pro, Grok 4.x)</td><td>5</td><td>~8&ndash;12&times; single-model</td><td>Architectural decisions, plan hardening (Session 1), high-stakes refactors.</td></tr>
+            <tr><td><strong><code>speed</code></strong></td><td>4&ndash;7 fast / cheap models (mini / nano tier)</td><td>7</td><td>~1.5&ndash;3&times; single-model</td><td>High-volume CI runs, batch classifications, when latency &gt; depth.</td></tr>
+            <tr><td><strong><code>disabled</code></strong> (<code>--no-quorum</code>)</td><td>1 model</td><td>n/a</td><td>1&times; (baseline)</td><td>Solo dev, trivial slices, dev-loop iteration.</td></tr>
+          </tbody>
+        </table>
+
+        <div class="callout callout-warn">
+          <strong>Picker UIs MUST be tool-backed.</strong> If you're showing a quorum mode chooser with dollar amounts, those numbers come from <code>forge_estimate_quorum</code> &mdash; never from chat math. The ratios above are approximate and shift with model availability; the tool always returns current numbers.
+        </div>
+
+        <h2 id="effective-workflows">Cost-effective workflows</h2>
+        <p>Patterns that have been observed to reduce spend without hurting outcomes.</p>
+
+        <h3 id="slice-sizing" class="text-base font-semibold text-slate-300 mt-6">Right-size slices</h3>
+        <p>A slice that costs $0.50 to succeed is dramatically cheaper than one that costs $3 to fail and $2 to retry. The smaller the slice, the higher the first-pass success rate, the lower the total cost. The Crucible's plan-hardening pass (Session 1) is designed to split slices that are too fat &mdash; trust it. Target: 1&ndash;4 files per slice, 1 conceptual change per slice.</p>
+
+        <h3 id="model-routing" class="text-base font-semibold text-slate-300 mt-6">Let auto-quorum route models</h3>
+        <p>The <code>auto</code> mode classifies each slice into "search-like" / "transform-like" / "reason-like" and routes to a model tier accordingly. Hardcoding a flagship via <code>--model</code> often costs 10&times; more for no measurable quality gain on routine slices.</p>
+
+        <h3 id="tighten-gates" class="text-base font-semibold text-slate-300 mt-6">Tighten validation gates</h3>
+        <p>Loose gates pass bad work; bad work triggers retries; retries cost money. Strict, fast-to-execute gates (the <a href="inner-loop.html">Inner Loop</a> &mdash; reviewer calibration target ~90&ndash;95% precision) catch failures on the first attempt and avoid the retry tax. The Inner Loop's <code>forge_validate</code> and <code>forge_sweep</code> are designed for exactly this trade.</p>
+
+        <h3 id="reuse-cache" class="text-base font-semibold text-slate-300 mt-6">Don't fight the cache</h3>
+        <p>Provider caches give 10&times; savings on cached input. Plan Forge structures prompts so the system block, scope contract, and slice instructions are stable across slices in a run &mdash; providers cache the prefix automatically. Restarting the orchestrator between slices throws this away. Run plans end-to-end when you can.</p>
+
+        <h3 id="quorum-when-it-matters" class="text-base font-semibold text-slate-300 mt-6">Quorum only when it matters</h3>
+        <p><code>power</code> mode at the wrong moment is the most common over-spend. Reserve it for: plan hardening (Session 1), architectural decisions, slices flagged with high blast radius. Routine execution &mdash; even of moderately complex slices &mdash; works fine on <code>auto</code> or <code>disabled</code>.</p>
+
+        <h2 id="anti-lock-in">Anti-lock-in posture</h2>
+        <p>Plan Forge's economic story is <em>your bill stays yours</em>. Concretely:</p>
+
+        <table class="manual-table">
+          <thead><tr><th>Commitment</th><th>What it means</th></tr></thead>
+          <tbody>
+            <tr><td><strong>BYOK across providers</strong></td><td>Anthropic, OpenAI, Google, xAI, Azure OpenAI &mdash; same code path, your keys. Switch providers by changing env vars; no migration tool needed.</td></tr>
+            <tr><td><strong>No proxy layer</strong></td><td>The orchestrator calls the provider's public API directly. There is no Plan Forge endpoint in the data path. Outage isolation: Plan Forge can't take you down &mdash; only your provider can.</td></tr>
+            <tr><td><strong>No usage telemetry</strong></td><td>Plan Forge does not phone home with your token counts. The cost history lives in <code>.forge/cost-history.json</code> on your machine and stays there unless you explicitly export it.</td></tr>
+            <tr><td><strong>Symmetric provider treatment</strong></td><td>Adding a new provider takes ~30 lines in <code>pforge-mcp/cost-service.mjs</code> + a route adapter. No provider is privileged; the pricing table is open-source.</td></tr>
+            <tr><td><strong>Open-source pricing table</strong></td><td><code>MODEL_PRICING</code> is in the repo with <code>_source</code> URLs. If you don't believe a rate, click the source. If a rate is wrong, file a PR.</td></tr>
+            <tr><td><strong>Easy export</strong></td><td><code>forge_cost_report</code> exports JSON or CSV. Your run history is portable to any BI tool. No data lock-in.</td></tr>
+            <tr><td><strong>Skill / plan files are portable</strong></td><td>SKILL.md and plan markdown are vendor-neutral text. Moving to a different agent runtime (Claude Code, Cursor, raw API scripts) preserves your investment.</td></tr>
+          </tbody>
+        </table>
+
+        <h2 id="forecasting-at-scale">Forecasting at scale</h2>
+        <p>For teams or CI use, <code>forge_cost_report</code> aggregates roll up cleanly. Group by the dimension you want to forecast against and feed the result into your spreadsheet, BI tool, or dashboard of choice:</p>
+        <pre><code># Monthly spend by model
+GET /api/cost/report?scope=month&amp;groupBy=model
+
+# Per-run breakdown (granular: every LLM call)
+GET /api/cost/report?runId=run-2026-05-18-091234
+
+# Last-30-day rollup by role (worker vs reviewer vs quorum vs forge-master)
+GET /api/cost/report?scope=month&amp;groupBy=role
+</code></pre>
+
+        <p>Records come straight out of <code>.forge/cost-history.json</code> &mdash; one row per LLM call, with run id, slice, role, model, token counts, and dollar amount (or xAI ticks). The file is plain JSONL; you can pipe it through <code>jq</code>, import to DuckDB, or load to a spreadsheet without going through the API. Plan Forge does not enforce budgets, send alerts, or phone provider invoices &mdash; the data is yours; the policy is yours.</p>
+
+        <h2 id="worked-example">Worked example: a real slice</h2>
+        <p>From the recent v3.6.2 manual-completion phase, slice <strong>B5 ship REST API reference appendix</strong>:</p>
+        <table class="manual-table">
+          <thead><tr><th>Item</th><th>Value</th></tr></thead>
+          <tbody>
+            <tr><td>Mode</td><td><code>auto</code> quorum, 3 models on hardening, 1 model on execution</td></tr>
+            <tr><td>Files touched</td><td>10 (1 new, 9 modified)</td></tr>
+            <tr><td>Worker input tokens</td><td>~42,000 (system + scope + 9 referenced files at ~3K each)</td></tr>
+            <tr><td>Worker output tokens</td><td>~6,400 (mostly the new <code>rest-api-reference.html</code>)</td></tr>
+            <tr><td>Cache hit on system block</td><td>Yes (Anthropic, 0.10&times; on ~3,200 cached tokens)</td></tr>
+            <tr><td>Validation passes</td><td>2 (one failed on broken cross-refs &mdash; ~5K extra worker tokens to fix)</td></tr>
+            <tr><td>Total provider spend</td><td>~$0.78</td></tr>
+            <tr><td>Equivalent <code>power</code> mode estimate</td><td>~$6.20 (8&times; multiplier)</td></tr>
+            <tr><td>Equivalent <code>disabled</code> estimate</td><td>~$0.26 (single model, but expected reduction in reviewer-catch rate raised retry risk; auto was the right pick)</td></tr>
+          </tbody>
+        </table>
+        <p>The lesson: <code>auto</code> mode with right-sized slices and tight gates kept a 600-line appendix delivery under a dollar. The estimator predicted $0.71; actual was $0.78 &mdash; a 10% miss attributable to the second validation pass, which the estimator does not yet model.</p>
+
+        <h2 id="see-also">See also</h2>
+        <ul class="list-disc list-inside space-y-1">
+          <li><a href="rest-api-reference.html#cost">Appendix W &mdash; REST API: Cost</a> &mdash; full endpoint surface for estimates and reports.</li>
+          <li><a href="advanced-execution.html#quorum-multi-agent">Chapter 14 &mdash; Advanced Execution: Quorum &amp; Multi-Agent</a> &mdash; the runtime side of the mode picker.</li>
+          <li><a href="inner-loop.html">Inner Loop deep dive</a> &mdash; reviewer calibration and gate tightening (the retry-tax mitigation).</li>
+          <li><a href="forge-master.html">Forge-Master chapter</a> &mdash; the read-only reasoning entrypoint that orchestrates cost-aware tool chains for open-ended queries.</li>
+          <li><a href="forge-json-reference.html#modelRouting">Appendix T &mdash; <code>.forge.json</code> modelRouting</a> &mdash; default model selection that drives per-slice cost.</li>
+          <li><a href="forge-json-reference.html#quorum">Appendix T &mdash; <code>.forge.json</code> quorum</a> &mdash; threshold and mode that govern panel size.</li>
+          <li><a href="environment-variables-reference.html#provider-api-keys">Appendix U &mdash; Provider API Keys</a> &mdash; the env vars per provider.</li>
+          <li><a href="event-catalog.html">Appendix V &mdash; Event Catalog</a> &mdash; the WebSocket event stream that carries cost-recorded notifications during runs.</li>
+          <li><a href="compliance-and-data-residency.html#data-flow">Appendix N &mdash; Data flow</a> &mdash; what leaves the box and to which provider (the privacy companion to cost).</li>
+        </ul>
+
+        <div id="chapter-prev-next" class="chapter-nav"></div>
+
+      </div>
+    </main>
+  </div>
+  <script src="assets/manual.js"></script>
+</body>
+</html>

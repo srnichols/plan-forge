@@ -210,7 +210,7 @@ Slices are independent. Pick any one; finish it; commit; ship. No slice depends 
 - [ ] **A4** Task-based "How do I…?" index (Appendix S)
 - [ ] **A5** "What's new in this Edition" banner
 - [x] **A6** Above-the-fold positioning (harness-on-substrate) ✅ (v3.6.2 · commit pending)
-- [ ] **A7** Stakeholder Briefing (white paper inside the ebook)
+- [x] **A7** Stakeholder Briefing (white paper inside the ebook) ✅ (v3.6.2 · commit pending)
 
 ### Cluster B — Reference
 - [ ] **B1** `.forge.json` Reference (Appendix T)

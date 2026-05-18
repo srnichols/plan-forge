@@ -9,6 +9,7 @@
     { id: "index",               file: "index.html",               num: "",   title: "Manual Home",              act: "" },
     { id: "conventions",         file: "conventions.html",         num: "",   title: "Conventions Used in This Manual", act: "Front Matter" },
     { id: "foreword",            file: "foreword.html",            num: "",   title: "Foreword \u2014 From Impossible to Seven Minutes", act: "Front Matter" },
+    { id: "stakeholder-briefing", file: "stakeholder-briefing.html", num: "",   title: "Stakeholder Briefing \u2014 the 10-minute white paper", act: "Front Matter" },
     { id: "reader-paths",        file: "reader-paths.html",        num: "",   title: "Reader-Journey Ladders \u2014 Pick Your Path", act: "Front Matter" },
     // ─── Quickstart (Zero to shipped in 30 min) ───
     { id: "quickstart-install",      file: "quickstart-install.html",      num: "Q1", title: "Install",                act: "Quickstart" },
@@ -88,6 +89,7 @@
   // Labels: "NEW" | "UPDATED" | "BETA"
   const STATUS = {
     "foreword":                      { label: "NEW",     version: "v3.6.2" },
+    "stakeholder-briefing":          { label: "NEW",     version: "v3.6.2" },
     "reader-paths":                  { label: "NEW",     version: "v3.6.2" },
     "inner-loop":                    { label: "NEW",     version: "v2.57" },
     "self-deterministic-loop":       { label: "NEW",     version: "v2.58" },
@@ -476,6 +478,15 @@
     { t: "The Four-Station Shop (Foreword)",     u: "foreword.html#four-stations" },
     { t: "What This Book Is Not (Foreword)",     u: "foreword.html#what-this-book-is-not" },
     { t: "How To Read This Book (Foreword)",     u: "foreword.html#how-to-read" },
+    // Stakeholder Briefing
+    { t: "Executive Summary (Stakeholder Briefing)",              u: "stakeholder-briefing.html#section-1" },
+    { t: "What Plan Forge Is and Is Not (Stakeholder Briefing)",  u: "stakeholder-briefing.html#section-2" },
+    { t: "The Four Cost Levers (Stakeholder Briefing)",           u: "stakeholder-briefing.html#section-3" },
+    { t: "The Compounding Flywheel (Stakeholder Briefing)",       u: "stakeholder-briefing.html#section-4" },
+    { t: "What We Add You Didn't Ask For (Stakeholder Briefing)", u: "stakeholder-briefing.html#section-5" },
+    { t: "Adoption Path - Two Routes (Stakeholder Briefing)",     u: "stakeholder-briefing.html#section-6" },
+    { t: "Why Open Source Matters (Stakeholder Briefing)",        u: "stakeholder-briefing.html#section-7" },
+    { t: "Make This Yours - Tailoring Flow (Stakeholder Briefing)", u: "stakeholder-briefing.html#section-8" },
     // Reader-Journey Ladders
     { t: "The Five Ladders at a Glance (Reader Paths)",  u: "reader-paths.html#orientation" },
     { t: "Solo Developer Ladder (Reader Paths)",         u: "reader-paths.html#solo-dev" },

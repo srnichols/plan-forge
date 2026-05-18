@@ -8,6 +8,10 @@
 
 ## The AI-Native SDLC Forge Shop
 
+> **Plan Forge is the orchestration harness that sits *on top of* GitHub Copilot (and other AI coding tools).** It does not replace your model or your IDE — it adds the SDLC layer GitHub deliberately leaves to the ecosystem: planning, validation gates, memory, cost control, and reviewer separation.
+>
+> **It is also licensed MIT because your SDLC is yours, and your institutional memory lives in OpenBrain** — a user-owned service — because your accumulated decisions should not be trapped inside any one AI vendor.
+
 > **A blacksmith doesn't hand raw iron to a customer. They smelt it, hammer it, temper it — and then they watch, because a blade that isn't maintained will dull.**
 >
 > Plan Forge is a **full-lifecycle AI development shop**. Raw ideas are **smelted** through the Crucible into structured plans. Plans are **forged** into working code through a 7-step hardened pipeline. Shipped code is **guarded** by LiveGuard — drift, secrets, dependencies, incidents, all watched in real time. And every finding is **learned** back into the shop's memory, so the next run starts smarter than the last.

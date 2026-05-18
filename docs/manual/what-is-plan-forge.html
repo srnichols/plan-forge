@@ -34,6 +34,17 @@
         <h1>What Is Plan Forge?</h1>
         <p class="text-lg text-slate-400 mb-8">The AI-Native SDLC Forge Shop. One workshop, four stations, every phase of the lifecycle.</p>
 
+        <!-- ─── A6 · Two-sentence positioning block (verbatim across docs/index.html, README.md, what-is-plan-forge.html) ─── -->
+        <div class="callout callout-info" id="positioning">
+          <p><strong>Plan Forge is the orchestration harness that sits <em>on top of</em> GitHub Copilot (and other AI coding tools).</strong> It does not replace your model or your IDE — it adds the SDLC layer GitHub deliberately leaves to the ecosystem: planning, validation gates, memory, cost control, and reviewer separation.</p>
+          <p class="mt-3"><strong>It is also licensed MIT because your SDLC is yours, and your institutional memory lives in <a href="memory-system.html">OpenBrain</a></strong> — a user-owned service — because your accumulated decisions should not be trapped inside any one AI vendor.</p>
+        </div>
+
+        <figure class="manual-figure my-8" id="fig-1-1">
+          <img src="assets/diagrams/github-stack-architecture.svg" alt="The GitHub stack with Plan Forge layered on top. Below: GitHub (the substrate) — repositories, Actions, Copilot model, Issues, PRs. Above: Plan Forge (the harness) — Smelt (intake), Forge (execute), Guard (post-deploy defense), Learn (memory). The harness sits on the substrate; it does not replace it." />
+          <figcaption><!--fignum--><span class="manual-fignum">Figure 1-1.</span><!--/fignum--> Plan Forge is a harness, not a model. It sits <em>on top of</em> the GitHub stack — repositories, Actions, the Copilot model, Issues, and PRs — and adds the SDLC layer GitHub deliberately leaves to the ecosystem. See <a href="github-stack-alignment.html">Appendix H · GitHub stack alignment</a> and <a href="plan-forge-on-the-github-stack.html">Appendix I · Plan Forge on the GitHub stack</a> for the surface-by-surface map.</figcaption>
+        </figure>
+
         <!-- ─── One-line answer ─── -->
         <h2 id="one-line">The One-Line Answer</h2>
         <p><strong>Plan Forge is a complete AI-native SDLC workshop.</strong> Instead of giving your AI agent a single code-generation step, it gives the agent <em>a whole shop</em> — four specialized stations (Smelt, Forge, Guard, Learn) connected by gates, telemetry, and persistent memory.</p>
@@ -222,21 +233,47 @@
         <h3>Enterprise &amp; Regulated Environments</h3>
         <p>You need audit trails, consistent architecture, and code that meets compliance standards. Plan Forge gives you phase-level tracking (DEPLOYMENT-ROADMAP.md), per-slice cost accounting, OTLP telemetry, and 19 independent reviewer agents — including compliance, security, and multi-tenancy auditors that run automatically. Every execution has a trace.</p>
 
-        <!-- ─── What This Is NOT ─── -->
-        <h2 id="what-this-is-not">What This Is <em>Not</em></h2>
-        <ul>
-          <li><strong>Not a code generator.</strong> Plan Forge doesn't write your code — it tells the AI <em>how</em> to write it, then verifies the result.</li>
-          <li><strong>Not a CI/CD system.</strong> It doesn't deploy your app. It validates that what's built matches what was planned. Your CI pipeline is a separate concern.</li>
-          <li><strong>Not a project manager.</strong> It doesn't assign tasks to humans or track sprints. It structures work for AI agents — slices, gates, scope contracts.</li>
-          <li><strong>Not an AI model.</strong> Plan Forge works with whatever AI you already use — Copilot, Claude, Cursor, Codex, Gemini, Windsurf, or any tool that accepts text prompts.</li>
-          <li><strong>Not opinionated about your stack.</strong> Nine presets cover .NET, TypeScript, Python, Java, Go, Swift, Rust, PHP, and Azure IaC. Each installs stack-appropriate guardrails.</li>
-        </ul>
+        <!-- ─── Plan Forge IS / IS NOT ─── -->
+        <h2 id="what-this-is-not">Plan Forge <em>Is</em> / Plan Forge <em>Is Not</em></h2>
+        <p>Positioning matters more than features when an entire category is in motion. The shortest answer is paired: what Plan Forge claims to be, and the closest things it deliberately is not.</p>
+
+        <div class="overflow-x-auto mb-6">
+          <table class="manual-table">
+            <thead><tr><th>Plan Forge <em>is</em></th><th>Plan Forge <em>is not</em></th></tr></thead>
+            <tbody>
+              <tr>
+                <td>The orchestration harness that sits <em>on top of</em> GitHub Copilot (and other AI coding tools).</td>
+                <td><strong>An AI model.</strong> Plan Forge works with whatever AI you already use — Copilot, Claude, Cursor, Codex, Gemini, Windsurf, or any tool that accepts text prompts.</td>
+              </tr>
+              <tr>
+                <td>The SDLC layer GitHub deliberately leaves to the ecosystem: planning, validation gates, memory, cost control, and reviewer separation.</td>
+                <td><strong>A code generator.</strong> Plan Forge doesn't write your code — it tells the AI <em>how</em> to write it, then verifies the result.</td>
+              </tr>
+              <tr>
+                <td>Opinionated about <em>software shape</em> (interfaces, DTOs, typed exceptions, tests) — see the 99-vs-44 evidence below.</td>
+                <td><strong>Opinionated about your stack.</strong> Nine presets cover .NET, TypeScript, Python, Java, Go, Swift, Rust, PHP, and Azure IaC. Each installs stack-appropriate guardrails.</td>
+              </tr>
+              <tr>
+                <td>MIT-licensed because your SDLC is yours.</td>
+                <td><strong>A managed cloud service or a process you rent.</strong> Plan Forge runs entirely inside your existing IDE, CLI, and repo.</td>
+              </tr>
+              <tr>
+                <td>Tied to your repo's source of truth via GitHub Issues, PRs, and Actions — Plan Forge writes to the artifacts you already audit.</td>
+                <td><strong>A CI/CD system.</strong> It doesn't deploy your app. It validates that what's built matches what was planned. Your CI pipeline is a separate concern.</td>
+              </tr>
+              <tr>
+                <td>Designed so your institutional memory lives in <a href="memory-system.html">OpenBrain</a> — a user-owned service — because your accumulated decisions should not be trapped inside any one AI vendor.</td>
+                <td><strong>A project manager.</strong> It doesn't assign tasks to humans or track sprints. It structures work for AI agents — slices, gates, scope contracts.</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
 
         <!-- ─── Evidence: A/B Test Results ─── -->
         <h2 id="evidence">Evidence — A/B Test Results</h2>
         <p>The shop story is testable. The April 2026 .NET A/B test built the same WebAPI twice from an identical .NET 10 skeleton (same git commit baseline) using the same model (Claude Opus 4.6) on the same machine. One run used Plan Forge guardrails; the other used pure vibe coding. Comparable wall-clock time — 7 minutes for Plan Forge, 8 minutes for vibe coding (the extra minute went to fighting build errors).</p>
 
-        <figure class="manual-figure" id="fig-1-1"><img src="assets/diagrams/evidence-ab-test-bars.svg" alt="Head-to-head bar chart comparing Plan Forge against vibe coding across six structural quality metrics from the April 2026 .NET A/B test. Plan Forge: 60 tests, 6 interfaces, 9 DTOs, 4 typed exceptions, 79 CancellationToken references, 99 quality score. Vibe coding: 13 tests, 0 interfaces, 0 DTOs, 0 typed exceptions, 0 CancellationToken references, 44 quality score. Vibe coding scored zero on four of six structural metrics." class="diagram-img diagram-img-md my-6" /><figcaption class="manual-figcaption"><!--fignum--><span class="manual-fignum">Figure 1-1.</span><!--/fignum--> A/B test results &mdash; Plan Forge vs vibe coding across six structural quality metrics (.NET, April 2026).</figcaption></figure>
+        <figure class="manual-figure" id="fig-1-2"><img src="assets/diagrams/evidence-ab-test-bars.svg" alt="Head-to-head bar chart comparing Plan Forge against vibe coding across six structural quality metrics from the April 2026 .NET A/B test. Plan Forge: 60 tests, 6 interfaces, 9 DTOs, 4 typed exceptions, 79 CancellationToken references, 99 quality score. Vibe coding: 13 tests, 0 interfaces, 0 DTOs, 0 typed exceptions, 0 CancellationToken references, 44 quality score. Vibe coding scored zero on four of six structural metrics." class="diagram-img diagram-img-md my-6" /><figcaption class="manual-figcaption"><!--fignum--><span class="manual-fignum">Figure 1-2.</span><!--/fignum--> A/B test results &mdash; Plan Forge vs vibe coding across six structural quality metrics (.NET, April 2026).</figcaption></figure>
 
         <table class="manual-table">
           <thead><tr><th>Metric</th><th>Vibe coding</th><th>Plan Forge</th><th>Delta</th></tr></thead>

@@ -209,7 +209,7 @@ Slices are independent. Pick any one; finish it; commit; ship. No slice depends 
 - [ ] **A3** "A Day in the Forge" vignettes (Appendix R)
 - [ ] **A4** Task-based "How do I…?" index (Appendix S)
 - [ ] **A5** "What's new in this Edition" banner
-- [ ] **A6** Above-the-fold positioning (harness-on-substrate)
+- [x] **A6** Above-the-fold positioning (harness-on-substrate) ✅ (v3.6.2 · commit pending)
 - [ ] **A7** Stakeholder Briefing (white paper inside the ebook)
 
 ### Cluster B — Reference

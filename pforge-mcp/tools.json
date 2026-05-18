@@ -3246,6 +3246,186 @@
     }
   },
   {
+    "name": "forge_brain_test",
+    "description": "Round-trip test against OpenBrain (L3 memory). Captures a unique marker thought via capture_thought, then immediately searches for it via search_thoughts. Returns { ok, marker, hit, durationMs }. USE FOR: confirming the SSE endpoint is reachable, auth key is valid, and capture+search are wired end-to-end — before running bulk replays or after restoring an OpenBrain database. Requires OpenBrain to be configured as an SSE server in .vscode/mcp.json or .claude/mcp.json and a valid OPENBRAIN_KEY env var (or query-form key in the URL).",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "project": {
+          "type": "string",
+          "description": "Project tag for the marker thought (default: 'plan-forge')"
+        },
+        "indexDelayMs": {
+          "type": "number",
+          "description": "ms to wait between capture and search (default: 500). Increase if your OpenBrain backend has indexing lag."
+        },
+        "path": {
+          "type": "string",
+          "description": "Project directory used to locate mcp.json (default: server CWD)"
+        }
+      }
+    },
+    "intent": [
+      "test",
+      "ping",
+      "round-trip",
+      "openbrain"
+    ],
+    "aliases": [
+      "brain-test",
+      "openbrain-test"
+    ],
+    "cost": "low",
+    "maxConcurrent": 5,
+    "addedIn": "3.6.0",
+    "prerequisites": [
+      "openbrain SSE entry in .vscode/mcp.json or .claude/mcp.json",
+      "auth key (OPENBRAIN_KEY env var or query-form ?key= in URL)"
+    ],
+    "produces": [
+      "one marker thought in OpenBrain (safe to ignore)"
+    ],
+    "consumes": [
+      ".vscode/mcp.json"
+    ],
+    "sideEffects": [
+      "captures one test thought + one search call against OpenBrain"
+    ],
+    "errors": {
+      "NOT_CONFIGURED": {
+        "message": "OpenBrain SSE endpoint not found",
+        "recovery": "Add an openbrain server entry (type=sse) to .vscode/mcp.json"
+      },
+      "AUTH_MISSING": {
+        "message": "OpenBrain auth key not resolved",
+        "recovery": "Set OPENBRAIN_KEY env var or embed ?key= in the SSE URL"
+      },
+      "SSE_CONNECT_FAILED": {
+        "message": "SSE handshake failed",
+        "recovery": "Verify the URL is reachable (try curl -I), check the key, confirm OpenBrain is running"
+      },
+      "NO_HIT": {
+        "message": "Search did not return the marker",
+        "recovery": "Increase indexDelayMs (default 500), or check OpenBrain logs for indexing errors"
+      }
+    },
+    "example": {
+      "input": {
+        "project": "plan-forge"
+      },
+      "output": {
+        "ok": true,
+        "marker": "PFTEST-RT-XYZ",
+        "durationMs": 412
+      }
+    }
+  },
+  {
+    "name": "forge_brain_replay",
+    "description": "Bulk-load records into OpenBrain via capture_thought from a local source. Source can be (a) a queue jsonl file like .forge/openbrain-queue.archive.jsonl, (b) a single markdown file (split per H2 heading), or (c) a directory of markdown files. Returns counts + small samples; full per-record receipt log is written to .forge/openbrain-replay-<ts>.jsonl. USE FOR: rebuilding L3 memory after a database wipe, importing curated notes, or replaying a queue that never drained. Pass dryRun=true to validate normalization without writing.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "source": {
+          "type": "string",
+          "description": "Path (absolute or relative to project dir) to a .jsonl queue file, .md file, or directory of .md files."
+        },
+        "project": {
+          "type": "string",
+          "description": "Project tag applied to every record (default: 'plan-forge')"
+        },
+        "dryRun": {
+          "type": "boolean",
+          "description": "If true, normalize + count without sending to OpenBrain. Useful for previewing what would be sent."
+        },
+        "rate": {
+          "type": "number",
+          "description": "ms between capture calls (default: 50). Increase to be gentler on the server."
+        },
+        "maxRetries": {
+          "type": "number",
+          "description": "Per-record retry count on transient failures (default: 3)"
+        },
+        "maxRecords": {
+          "type": "number",
+          "description": "Cap on records sent in one call (default: 500). Use to chunk large markdown directories."
+        },
+        "path": {
+          "type": "string",
+          "description": "Project directory used to locate mcp.json + write the receipt log (default: server CWD)"
+        }
+      },
+      "required": [
+        "source"
+      ]
+    },
+    "intent": [
+      "replay",
+      "bulk-load",
+      "restore",
+      "openbrain"
+    ],
+    "aliases": [
+      "brain-replay",
+      "openbrain-replay"
+    ],
+    "cost": "medium",
+    "maxConcurrent": 1,
+    "addedIn": "3.6.0",
+    "prerequisites": [
+      "openbrain SSE entry",
+      "auth key (unless dryRun=true)",
+      "source path exists (.jsonl, .md, or .md directory)"
+    ],
+    "produces": [
+      ".forge/openbrain-replay-<ts>.jsonl receipt log",
+      "capture_thought records in OpenBrain"
+    ],
+    "consumes": [
+      "source file/dir (queue jsonl, markdown file, or markdown directory)"
+    ],
+    "sideEffects": [
+      "writes N thoughts to OpenBrain (unless dryRun)",
+      "creates a receipt log under .forge/"
+    ],
+    "errors": {
+      "MISSING_SOURCE": {
+        "message": "source is required",
+        "recovery": "Pass a .jsonl queue path, a .md file, or a directory of .md files"
+      },
+      "SOURCE_NOT_FOUND": {
+        "message": "source path does not exist",
+        "recovery": "Use an absolute path or one relative to the project dir"
+      },
+      "UNSUPPORTED_TYPE": {
+        "message": "source is neither .jsonl, .md, nor a directory",
+        "recovery": "Convert source to a supported format or split into chunks"
+      },
+      "AUTH_MISSING": {
+        "message": "OpenBrain auth key not resolved",
+        "recovery": "Set OPENBRAIN_KEY or pass dryRun=true to preview"
+      }
+    },
+    "example": {
+      "input": {
+        "source": ".forge/openbrain-queue.archive.jsonl",
+        "project": "plan-forge"
+      },
+      "output": {
+        "ok": true,
+        "sent": 6,
+        "failed": 0,
+        "skipped": 0,
+        "samples": [
+          {
+            "index": 0,
+            "content": "..."
+          }
+        ]
+      }
+    }
+  },
+  {
     "name": "forge_generate_image",
     "description": "Generate an image using AI image models (xAI Grok Aurora or OpenAI DALL-E). Provide a text description and get a generated image saved to disk. Supports format conversion — request WebP, PNG, AVIF, or JPEG regardless of what the API returns. Useful for creating logos, diagrams, UI mockups, icons, and illustrations during plan execution. Requires XAI_API_KEY (Grok) or OPENAI_API_KEY (DALL-E).",
     "inputSchema": {

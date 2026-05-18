@@ -83,9 +83,51 @@ Chapters whose absence is **conspicuous given Plan Forge's stated audience** (en
 | # | Missing chapter | Why it's missing matters | Suggested home |
 |---|---|---|---|
 | 1 | **Security & Threat Model** | The book moves credentials, source code, and plan files through LLMs. App N (Compliance & Data Residency) covers regulatory framing; no chapter covers the *security posture* — what leaves your machine, prompt-injection mitigations, the extensions-catalog supply chain story | New chapter in **Part III (Guard)** |
-| 2 | **Cost & Economics** | Cost is referenced across 4 chapters and the Cost dashboard tab; no chapter teaches *budgeting a plan*: cost-per-slice in practice, when quorum is worth it, when `--quorum=speed` beats `--quorum=power`, how to set spend caps | New chapter in **Part II (Forge)** |
+| 2 | **Cost & Economics** | Cost is referenced across 4 chapters and the Cost dashboard tab; no chapter teaches *budgeting a plan*: cost-per-slice in practice, when quorum is worth it, when `--quorum=speed` beats `--quorum=power`, how to set spend caps. **Bigger than the token-spend question**: the chapter has to make the **effort-savings / time-to-done / quality** case that lets a team lead or engineering manager justify adopting Plan Forge to their own boss. Today that argument lives in the blog; the manual asks the reader to assemble it themselves. | New chapter in **Part II (Forge)** |
 | 3 | **Plan Pattern Library** | The manual teaches HOW to write a plan; readers want a *Design Patterns*-style catalog of plan archetypes (DB migration, refactor, multi-service rollout, spike+retire, bug-sweep) with skeleton templates | New **Appendix Y** |
 | 4 | **Failure-Mode Catalog** | Troubleshooting Ch 15 is symptom-driven; a parallel catalog organized by Plan Forge *subsystem* (gate, quorum, watcher, OpenBrain, snapshot, model-pool, hub) keyed to "symptom → cause → fix" triples would be the single most-bookmarked page | New **Appendix Z** |
+
+#### Why the Cost & Economics chapter is the highest-leverage one in Cluster C
+
+The other Cluster C chapters answer reader questions a developer would ask in private. Cost &
+Economics has to answer the question a **team lead emails their VP of Engineering** to get budget
+approval. That's a different writing job, and it's the one the manual is most underprepared for
+today.
+
+The chapter should not lead with API pricing tables. It should lead with **the three numbers
+that already exist in our own blog posts** and that nobody on the maintainer team has yet pulled
+into a single page:
+
+| Lever | Concrete evidence already in the repo | Source |
+|---|---|---|
+| **Quality at constant time** | Same model, same ~7-minute budget: **99/100 quality vs 44/100**. 4.6× more tests. The vibe-coded run "needed a rewrite of the architecture" to reach production. | [`docs/blog/ab-test-plan-forge-vs-vibe-coding.html`](../blog/ab-test-plan-forge-vs-vibe-coding.html) |
+| **Quality per extra dollar** | Quorum mode: **+$0.22 per feature** ($0.62 → $0.84, +35%) buys 20% more tests, DRY helpers, and modern patterns. "The cheapest code review you'll ever buy." | [`docs/blog/quorum-mode-3-models.html`](../blog/quorum-mode-3-models.html) |
+| **Rework avoidance** | The vibe run's extra minute was spent fighting 12 compilation errors and backtracking. Plan Forge's guardrails removed the rework loop, not added overhead. | [`docs/blog/ab-test-plan-forge-vs-vibe-coding.html`](../blog/ab-test-plan-forge-vs-vibe-coding.html) ("Guardrails don't slow you down. Rework slows you down.") |
+
+Three reader personas this chapter has to serve, in this order:
+
+1. **The team lead pitching their boss.** Needs a "Total Cost of a Feature" worksheet:
+   *(plan-time tokens) + (build-time tokens) + (quorum overhead, if any) − (avoided rework hours
+   × loaded engineer rate) − (avoided defects shipped to prod)*. The blog has the numerator; the
+   manual has to teach the denominator.
+2. **The engineering manager doing the rollout.** Needs a "When to spend more" decision tree —
+   `--quorum=speed` for refactors, `--quorum=power` for security-sensitive or financial logic,
+   no quorum for boilerplate. Plus spend caps (per-plan, per-day, per-month) and how to alert
+   when a runaway slice burns through budget.
+3. **The IC operator running a plan.** Needs the existing material: `forge_cost_report`, the
+   Cost dashboard tab, per-model pricing, how `forge_estimate_quorum` projects spend *before*
+   the run starts so the picker shows real dollar amounts.
+
+**Token-efficiency angle** (often missed in cost discussions): Plan Forge's planning pass front-loads
+context so the build pass spends fewer tokens re-discovering architecture. The 4-session model
+deliberately starts each session with a fresh context window, which sounds wasteful but is
+*cheaper* than letting a single conversation degrade into hallucination-driven rework. The chapter
+should make this concrete with a token-count comparison from a real run (the `forge_cost_report`
+output for one of our own phases would serve).
+
+**What this chapter must NOT do**: become a price list. Per-token rates change quarterly; the
+chapter must teach the *mental model* (cost per feature, cost per quality unit, cost of rework
+avoided) so it stays useful when GPT-5-mini drops in price or when a new model joins the pool.
 
 ### Tier 2 — Story / ebook UX (5 missing pieces)
 

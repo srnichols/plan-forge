@@ -301,7 +301,7 @@
                 <li><strong>windsurf</strong> — Windsurf: <code class="text-forge-400">.windsurfrules</code> + Cascade instructions with embedded guardrails</li>
                 <li><strong>generic</strong> — Any AI tool: <code class="text-forge-400">AI-ASSISTANT.md</code> with copy-paste guardrails for tools not listed above</li>
               </ul>
-              <p>Copilot files are always installed. Additional agents layer on top — use one, some, or all. All 7 formats include all 16 guardrail files, all pipeline prompts, and all 19 reviewer agents.</p>
+              <p>Copilot files are always installed. Additional agents layer on top — use one, some, or all. All 7 formats include all auto-loading guardrail files, all pipeline prompts, and all ~12 reviewer agents.</p>
             </div>
           </details>
         </div>
@@ -378,7 +378,7 @@
               <svg class="w-4 h-4 text-slate-500 group-open:rotate-180 transition-transform shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
             </summary>
             <div class="px-6 pb-5 text-sm text-slate-400 leading-relaxed border-t border-slate-700/30 pt-4">
-              <p class="mb-3">Yes — run setup with <code class="text-forge-400">-Agent windsurf</code>. This generates <code class="text-forge-400">.windsurfrules</code> and Cascade instruction files with all 16 guardrail files embedded, all pipeline prompts as native commands, and all 19 reviewer agents as invocable skills. Windsurf's Cascade agent reads these automatically — no manual attachment needed.</p>
+              <p class="mb-3">Yes — run setup with <code class="text-forge-400">-Agent windsurf</code>. This generates <code class="text-forge-400">.windsurfrules</code> and Cascade instruction files with all auto-loading guardrail files embedded, all pipeline prompts as native commands, and all ~12 reviewer agents as invocable skills. Windsurf's Cascade agent reads these automatically — no manual attachment needed.</p>
               <p>To install all agent formats at once: <code class="text-forge-400">.\setup.ps1 -Preset &lt;stack&gt; -Agent all</code></p>
             </div>
           </details>

@@ -30,9 +30,9 @@ Plan Forge is an open-source framework that gives AI coding agents (Copilot, Cla
 - Forge Intelligence — self-recursive improvement: auto-tune escalation chains from model performance, cost estimate calibration from historical actuals, adaptive quorum thresholds, slice auto-split advisories.
 - LiveGuard Intelligence — recurring incident detection (auto-escalate systemic), fix proposal outcome tracking, hotspot test priority, Project Health DNA for decay detection.
 - OpenBrain integration — auto-capture findings to persistent memory; pipeline prompts search memory before acting.
-- 20 reviewer agents (6 stack-specific + 8 cross-stack + 5 pipeline + 1 classifier-reviewer)
-- 14 slash command skills (including /audit-loop)
-- 15-18 auto-loading instruction files per preset
+- ~12 reviewer agents (6-7 stack-specific + 5 pipeline + 1 classifier-reviewer)
+- 16+ slash command skills (including /audit-loop, /health-check, /forge-execute, /security-audit)
+- 16-18 auto-loading instruction files per preset
 - 15 scaffolding prompt templates per app preset
 - Live dashboard at localhost:3100/dashboard — multi-tab (FORGE, LIVEGUARD, CRUCIBLE, BUG REGISTRY, NOTIFICATIONS, TIMELINE/SEARCH, WATCHER)
 - Quorum mode: multi-model consensus for complex slices (--quorum=power, --quorum=speed)

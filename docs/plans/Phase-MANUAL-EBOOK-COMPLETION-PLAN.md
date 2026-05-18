@@ -222,7 +222,7 @@ Slices are independent. Pick any one; finish it; commit; ship. No slice depends 
 - [x] **B7** Errors & Exit Codes (section in Troubleshooting + Appendix X) ✅ (v3.6.2 · commit pending)
 
 ### Cluster C — Domain chapters
-- [ ] **C1** Security & Threat Model chapter (Part III)
+- [x] **C1** Security & Threat Model chapter (Part III) ✅ (v3.6.2 · Chapter 30 · commit pending)
 - [ ] **C2** Cost & Economics chapter (Part II)
 - [ ] **C3** Plan Pattern Library (Appendix Y)
 - [ ] **C4** Failure-Mode Catalog (Appendix Z)

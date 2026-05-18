@@ -50,6 +50,7 @@
     { id: "liveguard-dashboard", file: "liveguard-dashboard.html", num: "18", title: "The LiveGuard Dashboard",    act: "III" },
     { id: "watcher",             file: "watcher.html",             num: "19", title: "The Watcher",               act: "III" },
     { id: "remote-bridge",       file: "remote-bridge.html",       num: "20", title: "The Remote Bridge",         act: "III" },
+    { id: "security-threat-model", file: "security-threat-model.html", num: "30", title: "Security & Threat Model",   act: "III" },
     // ─── Part IV — Learn (memory first, retrospectives after) ───
     { id: "memory-architecture", file: "memory-architecture.html", num: "21", title: "Memory Architecture",       act: "IV" },
     { id: "memory-system",       file: "memory-system.html",       num: "22", title: "How the Shop Remembers",   act: "IV" },
@@ -105,6 +106,7 @@
     "event-catalog":                 { label: "NEW",     version: "v3.6.2" },
     "rest-api-reference":            { label: "NEW",     version: "v3.6.2" },
     "errors-and-exit-codes":         { label: "NEW",     version: "v3.6.2" },
+    "security-threat-model":         { label: "NEW",     version: "v3.6.2" },
     "instructions-agents-reference": { label: "UPDATED", version: "v3.6.2" },
     "troubleshooting":               { label: "UPDATED", version: "v3.6.2" },
     "customization":                 { label: "UPDATED", version: "v3.6.2" },
@@ -154,11 +156,11 @@
     presets:       9,  // presets/* excluding the "shared" base
     'cli-commands': 97, // pforge.ps1 switch arms (unique) — verify with PowerShell: ([regex]::Matches((Get-Content pforge.ps1 -Raw),"(?m)^\s+''([a-z][a-z-]+)''\s+\{") | %{ $_.Groups[1].Value } | Sort-Object -Unique).Count
     // Manual structure ──────────────────────────────────────────────────
-    chapters:     28,  // numbered chapters 1-29 (excludes Quickstart Q1-Q3 and Appendices) — Ch 11 was archived; 26-29 added Third Edition
+    chapters:     29,  // numbered chapters 1-30 (excludes Quickstart Q1-Q3 and Appendices) — Ch 11 was archived; 26-29 added Third Edition; 30 (Security & Threat Model) added v3.6.2 Slice C1
     appendices:   24,  // lettered appendices A-X (R Day in the Forge v3.6.2 Slice A3, S How Do I…? Task Index v3.6.2 Slice A4, T .forge.json Reference v3.6.2 Slice B1, U Environment Variables Reference v3.6.2 Slice B2, V Event Catalog v3.6.2 Slice B4, W REST API Reference v3.6.2 Slice B5, X Errors & Exit Codes v3.6.2 Slice B7)
     parts:         5,  // Smelt, Forge, Guard, Learn, Integrate (Part V added Third Edition)
     // Manual assets ─────────────────────────────────────────────────────
-    htmlFiles:    76,  // total .html files in docs/manual/ (Third Edition Slice A + Slice B; +Foreword/Stakeholder/Reader Paths/Day in the Forge/How Do I…?/.forge.json Reference/Env Vars Reference/Event Catalog/REST API Reference/Errors & Exit Codes v3.6.2 Fifth Edition)
+    htmlFiles:    77,  // total .html files in docs/manual/ (Third Edition Slice A + Slice B + C1; +Foreword/Stakeholder/Reader Paths/Day in the Forge/How Do I…?/.forge.json Reference/Env Vars Reference/Event Catalog/REST API Reference/Errors & Exit Codes/Security & Threat Model v3.6.2 Fifth Edition)
   };
 
   // Detect current page
@@ -617,6 +619,20 @@
     { t: "Errors & Exit Codes — Error events on the hub",           u: "errors-and-exit-codes.html#error-events" },
     { t: "Errors & Exit Codes — CI / scripting recipes",            u: "errors-and-exit-codes.html#ci-recipes" },
     { t: "Troubleshooting — Errors & Exit Codes quick reference",   u: "troubleshooting.html#errors-exit-codes" },
+    // Security & Threat Model — engineering view of attack surface (Chapter 30, Part III)
+    { t: "Security — Orientation (developer-machine-first posture)", u: "security-threat-model.html#orientation" },
+    { t: "Security — Trust boundaries (6 boundaries)",              u: "security-threat-model.html#trust-boundaries" },
+    { t: "Security — Attack surface enumeration",                   u: "security-threat-model.html#attack-surface" },
+    { t: "Security — STRIDE per subsystem",                         u: "security-threat-model.html#stride" },
+    { t: "Security — AI-specific threats (prompt injection, untrusted tool output, scope escape)", u: "security-threat-model.html#ai-threats" },
+    { t: "Security — Prompt injection defenses",                    u: "security-threat-model.html#prompt-injection" },
+    { t: "Security — Untrusted tool output defenses",               u: "security-threat-model.html#untrusted-tool-output" },
+    { t: "Security — Scope escape (drift detection, Review Gate)",  u: "security-threat-model.html#scope-escape" },
+    { t: "Security — Secret management (env, .forge/secrets.json, gh auth)", u: "security-threat-model.html#secret-management" },
+    { t: "Security — Supply chain (Plan Forge itself, extensions, providers)", u: "security-threat-model.html#supply-chain" },
+    { t: "Security — Sandboxing & gate execution (TCB boundary)",   u: "security-threat-model.html#sandboxing" },
+    { t: "Security — Hardening checklist (12 controls)",            u: "security-threat-model.html#hardening-checklist" },
+    { t: "Security — Incident response (LiveGuard front door)",     u: "security-threat-model.html#incident-response" },
     // Quickstart
     { t: "Check Prerequisites",                  u: "quickstart-install.html#prerequisites" },
     { t: "Clone and Run Setup",                  u: "quickstart-install.html#clone" },

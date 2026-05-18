@@ -10,6 +10,10 @@
     "test": "npm test --workspaces --if-present",
     "test:mcp": "npm test --workspace=pforge-mcp",
     "test:master": "npm test --workspace=pforge-master",
-    "smoke:forge-master": "FORGE_SMOKE=1 node scripts/smoke-forge-master.mjs"
+    "smoke:forge-master": "FORGE_SMOKE=1 node scripts/smoke-forge-master.mjs",
+    "build:css": "tailwindcss -i docs/assets/tailwind.css -o docs/assets/tailwind.built.css --minify"
+  },
+  "devDependencies": {
+    "tailwindcss": "^3.4.0"
   }
 }

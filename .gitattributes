@@ -28,3 +28,5 @@
 
 pforge text eol=lf
 
+# Generated artifact — suppress from GitHub diffs
+docs/assets/tailwind.built.css linguist-generated=true

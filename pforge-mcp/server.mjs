@@ -21,8 +21,8 @@ import {
   ListToolsRequestSchema,
 } from "@modelcontextprotocol/sdk/types.js";
 import { execSync } from "node:child_process";
-import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync, appendFileSync, watchFile, unwatchFile, statSync, openSync, readSync, closeSync, renameSync } from "node:fs";
-import { resolve, join, dirname, basename } from "node:path";
+import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync, appendFileSync, watchFile, unwatchFile, statSync, openSync, readSync, closeSync, renameSync, createWriteStream } from "node:fs";
+import { resolve, join, dirname, basename, isAbsolute } from "node:path";
 import { fileURLToPath } from "node:url";
 
 // ─── Load .env from project root (cwd) at startup ──────────────────────
@@ -83,6 +83,15 @@ import {
   computeGateSuggestionKey,
   getGateSuggestionCounter,
 } from "./memory.mjs";
+import {
+  readOpenBrainConfig,
+  normalizeQueueRecord,
+  normalizeMarkdownFile,
+  listMarkdownFiles,
+  roundTrip as brainRoundTrip,
+  replayRecords as brainReplayRecords,
+  createSseClient as createOpenBrainClient,
+} from "./openbrain-replay.mjs";
 import { createHub, readHubPort } from "./hub.mjs";
 import { createBridge } from "./bridge.mjs";
 import { buildCapabilitySurface, writeToolsJson, writeCliSchema } from "./capabilities.mjs";
@@ -1346,6 +1355,35 @@ const TOOLS = [
         path: { type: "string", description: "Project directory (default: current)" },
       },
       required: ["content"],
+    },
+  },
+  {
+    name: "forge_brain_test",
+    description: "Round-trip test against OpenBrain (L3 memory). Captures a unique marker thought via capture_thought, then immediately searches for it via search_thoughts. Returns { ok, marker, hit, durationMs }. USE FOR: confirming the SSE endpoint is reachable, auth key is valid, and capture+search are wired end-to-end — before running bulk replays or after restoring an OpenBrain database. Requires OpenBrain to be configured as an SSE server in .vscode/mcp.json or .claude/mcp.json and a valid OPENBRAIN_KEY env var (or query-form key in the URL).",
+    inputSchema: {
+      type: "object",
+      properties: {
+        project: { type: "string", description: "Project tag for the marker thought (default: 'plan-forge')" },
+        indexDelayMs: { type: "number", description: "ms to wait between capture and search (default: 500). Increase if your OpenBrain backend has indexing lag." },
+        path: { type: "string", description: "Project directory used to locate mcp.json (default: server CWD)" },
+      },
+    },
+  },
+  {
+    name: "forge_brain_replay",
+    description: "Bulk-load records into OpenBrain via capture_thought from a local source. Source can be (a) a queue jsonl file like .forge/openbrain-queue.archive.jsonl, (b) a single markdown file (split per H2 heading), or (c) a directory of markdown files. Returns counts + small samples; full per-record receipt log is written to .forge/openbrain-replay-<ts>.jsonl. USE FOR: rebuilding L3 memory after a database wipe, importing curated notes, or replaying a queue that never drained. Pass dryRun=true to validate normalization without writing.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        source: { type: "string", description: "Path (absolute or relative to project dir) to a .jsonl queue file, .md file, or directory of .md files." },
+        project: { type: "string", description: "Project tag applied to every record (default: 'plan-forge')" },
+        dryRun: { type: "boolean", description: "If true, normalize + count without sending to OpenBrain. Useful for previewing what would be sent." },
+        rate: { type: "number", description: "ms between capture calls (default: 50). Increase to be gentler on the server." },
+        maxRetries: { type: "number", description: "Per-record retry count on transient failures (default: 3)" },
+        maxRecords: { type: "number", description: "Cap on records sent in one call (default: 500). Use to chunk large markdown directories." },
+        path: { type: "string", description: "Project directory used to locate mcp.json + write the receipt log (default: server CWD)" },
+      },
+      required: ["source"],
     },
   },
   {
@@ -3593,6 +3631,112 @@ server.setRequestHandler(CallToolRequestSchema, _wrapWithToolSpan(async (request
       };
     } catch (err) {
       return { content: [{ type: "text", text: `Memory capture error: ${err.message}` }], isError: true };
+    }
+  }
+
+  if (name === "forge_brain_test") {
+    const cwd = args.path ? findProjectRoot(resolve(args.path)) : findProjectRoot(PROJECT_DIR);
+    const cfg = readOpenBrainConfig(cwd);
+    if (!cfg) {
+      return { content: [{ type: "text", text: "OpenBrain SSE endpoint not found in .vscode/mcp.json or .claude/mcp.json (stdio-mode entries do not support brain_test)." }], isError: true };
+    }
+    if (!cfg.key) {
+      return { content: [{ type: "text", text: "OpenBrain auth key not resolved. Set OPENBRAIN_KEY env var or check the mcp.json headers entry." }], isError: true };
+    }
+    let client = null;
+    try {
+      client = await createOpenBrainClient(cfg);
+      const result = await brainRoundTrip(client, {
+        project: args.project || "plan-forge",
+        source: "pforge-brain-test",
+        indexDelayMs: Number(args.indexDelayMs ?? 500),
+      });
+      const status = result.ok ? "✓ round-trip OK" : "✗ round-trip FAILED";
+      const summary = [
+        `${status}`,
+        `  endpoint:   ${cfg.url}`,
+        `  marker:     ${result.marker}`,
+        `  duration:   ${result.durationMs}ms`,
+        result.ok ? `  captured:   id=${result.capturedId || "(unknown)"}` : `  error:      ${result.error || "no hit returned by search"}`,
+      ].join("\n");
+      return { content: [{ type: "text", text: summary }], isError: !result.ok };
+    } catch (err) {
+      return { content: [{ type: "text", text: `Brain test error: ${err.message}` }], isError: true };
+    } finally {
+      if (client) { try { await client.close(); } catch { /* best-effort */ } }
+    }
+  }
+
+  if (name === "forge_brain_replay") {
+    if (!args.source || typeof args.source !== "string") {
+      return { content: [{ type: "text", text: "source is required: pass a queue jsonl path, a markdown file, or a directory of .md files." }], isError: true };
+    }
+    const cwd = args.path ? findProjectRoot(resolve(args.path)) : findProjectRoot(PROJECT_DIR);
+    const cfg = readOpenBrainConfig(cwd);
+    if (!cfg) {
+      return { content: [{ type: "text", text: "OpenBrain SSE endpoint not found in mcp.json (stdio-mode entries do not support brain_replay)." }], isError: true };
+    }
+    if (!cfg.key && !args.dryRun) {
+      return { content: [{ type: "text", text: "OpenBrain auth key not resolved. Set OPENBRAIN_KEY env var or pass dryRun=true to preview without sending." }], isError: true };
+    }
+    let client = null;
+    try {
+      const sourcePath = isAbsolute(args.source) ? args.source : resolve(cwd, args.source);
+      if (!existsSync(sourcePath)) {
+        return { content: [{ type: "text", text: `source not found: ${sourcePath}` }], isError: true };
+      }
+      const st = statSync(sourcePath);
+      const project = args.project || "plan-forge";
+
+      let records = [];
+      let sourceType = "unknown";
+      if (st.isDirectory()) {
+        sourceType = "markdown-dir";
+        for (const f of listMarkdownFiles(sourcePath, { recursive: false })) {
+          records.push(...normalizeMarkdownFile(f, { project, source: `replay:${basename(f)}` }));
+        }
+      } else if (/\.md$/i.test(sourcePath)) {
+        sourceType = "markdown-file";
+        records = normalizeMarkdownFile(sourcePath, { project, source: `replay:${basename(sourcePath)}` });
+      } else if (/\.jsonl?$/i.test(sourcePath)) {
+        sourceType = "queue-jsonl";
+        const raw = readFileSync(sourcePath, "utf-8");
+        for (const line of raw.split(/\r?\n/)) {
+          const s = line.trim();
+          if (!s) continue;
+          try { records.push(normalizeQueueRecord(JSON.parse(s))); } catch { /* skip malformed */ }
+        }
+      } else {
+        return { content: [{ type: "text", text: `unsupported source type for ${sourcePath} — expected .jsonl, .md, or directory of .md files.` }], isError: true };
+      }
+
+      const maxRecords = Number(args.maxRecords ?? 500);
+      if (records.length > maxRecords) records = records.slice(0, maxRecords);
+
+      if (!args.dryRun) client = await createOpenBrainClient(cfg);
+      const result = await brainReplayRecords(args.dryRun ? { capture: async () => ({}) } : client, records, {
+        rate: Number(args.rate ?? 50),
+        maxRetries: Number(args.maxRetries ?? 3),
+        dryRun: Boolean(args.dryRun),
+        sampleSize: 3,
+      });
+
+      const summary = [
+        `Brain replay — ${args.dryRun ? "DRY RUN" : "sent"}`,
+        `  source:     ${sourceType} (${sourcePath})`,
+        `  endpoint:   ${cfg.url}`,
+        `  attempted:  ${result.attempted}`,
+        `  sent:       ${result.sent}`,
+        `  failed:     ${result.failed}`,
+        `  skipped:    ${result.skipped}`,
+        `  duration:   ${result.durationMs}ms`,
+        result.samples.length > 0 ? `  samples:    ${result.samples.map(s => `[${s.index}] ${s.content}`).join(" · ")}` : "",
+      ].filter(Boolean).join("\n");
+      return { content: [{ type: "text", text: summary }], isError: result.failed > 0 };
+    } catch (err) {
+      return { content: [{ type: "text", text: `Brain replay error: ${err.message}` }], isError: true };
+    } finally {
+      if (client) { try { await client.close(); } catch { /* best-effort */ } }
     }
   }
 
@@ -8568,6 +8712,131 @@ export function createExpressApp() {
       res.json(result);
     } catch (e) {
       res.status(500).json({ ok: false, error: String(e?.message || e) });
+    }
+  });
+
+  // Brain test — round-trip capture+search against the configured OpenBrain SSE
+  // endpoint. Confirms the L3 memory pipeline is alive before bulk replays.
+  // Returns { ok, marker, hit, capturedId, durationMs } or {ok:false, error}.
+  app.post("/api/brain/test", async (req, res) => {
+    if (!checkApprovalSecret(req, res)) return;
+    const cfg = readOpenBrainConfig(PROJECT_DIR);
+    if (!cfg) {
+      return res.status(503).json({ ok: false, error: "OpenBrain SSE endpoint not found in .vscode/mcp.json or .claude/mcp.json." });
+    }
+    if (!cfg.key) {
+      return res.status(503).json({ ok: false, error: "OpenBrain auth key not resolved. Set OPENBRAIN_KEY env var or check the mcp.json headers entry." });
+    }
+    let client = null;
+    try {
+      client = await createOpenBrainClient(cfg);
+      const project = req.body?.project || "plan-forge";
+      const result = await brainRoundTrip(client, {
+        project,
+        source: "pforge-brain-test",
+        indexDelayMs: Number(req.body?.indexDelayMs ?? 500),
+      });
+      res.json({ ok: result.ok, ...result, endpoint: cfg.url });
+    } catch (e) {
+      res.status(500).json({ ok: false, error: String(e?.message || e) });
+    } finally {
+      if (client) { try { await client.close(); } catch { /* best-effort */ } }
+    }
+  });
+
+  // Brain replay — bulk-load records from a source (queue jsonl, markdown file,
+  // or markdown directory) into OpenBrain via capture_thought. Bounded output:
+  // returns counts + a small samples array; full per-record receipt log lives
+  // at .forge/openbrain-replay-<ts>.jsonl.
+  app.post("/api/brain/replay", async (req, res) => {
+    if (!checkApprovalSecret(req, res)) return;
+    const cfg = readOpenBrainConfig(PROJECT_DIR);
+    if (!cfg) {
+      return res.status(503).json({ ok: false, error: "OpenBrain SSE endpoint not found in .vscode/mcp.json or .claude/mcp.json." });
+    }
+    if (!cfg.key && !req.body?.dryRun) {
+      return res.status(503).json({ ok: false, error: "OpenBrain auth key not resolved. Set OPENBRAIN_KEY env var or check the mcp.json headers entry." });
+    }
+    const sourceArg = String(req.body?.source || "").trim();
+    if (!sourceArg) {
+      return res.status(400).json({ ok: false, error: "source is required: pass a queue jsonl path, a markdown file path, or a directory of .md files." });
+    }
+    const dryRun = Boolean(req.body?.dryRun);
+    const project = req.body?.project || "plan-forge";
+    const maxRecords = Number(req.body?.maxRecords ?? 500);
+
+    let client = null;
+    try {
+      const sourcePath = isAbsolute(sourceArg) ? sourceArg : resolve(PROJECT_DIR, sourceArg);
+      if (!existsSync(sourcePath)) {
+        return res.status(404).json({ ok: false, error: `source not found: ${sourcePath}` });
+      }
+      const st = statSync(sourcePath);
+
+      // Build the record list based on source shape.
+      let records = [];
+      let sourceType = "unknown";
+      if (st.isDirectory()) {
+        sourceType = "markdown-dir";
+        for (const f of listMarkdownFiles(sourcePath, { recursive: false })) {
+          records.push(...normalizeMarkdownFile(f, { project, source: `replay:${basename(f)}` }));
+        }
+      } else if (/\.md$/i.test(sourcePath)) {
+        sourceType = "markdown-file";
+        records = normalizeMarkdownFile(sourcePath, { project, source: `replay:${basename(sourcePath)}` });
+      } else if (/\.jsonl?$/i.test(sourcePath)) {
+        sourceType = "queue-jsonl";
+        const raw = readFileSync(sourcePath, "utf-8");
+        for (const line of raw.split(/\r?\n/)) {
+          const s = line.trim();
+          if (!s) continue;
+          try { records.push(normalizeQueueRecord(JSON.parse(s))); } catch { /* skip malformed line */ }
+        }
+      } else {
+        return res.status(400).json({ ok: false, error: `unsupported source type for ${sourcePath} — expected .jsonl, .md, or a directory.` });
+      }
+
+      if (records.length > maxRecords) {
+        records = records.slice(0, maxRecords);
+      }
+
+      // Build live client only if not dry-running.
+      if (!dryRun) client = await createOpenBrainClient(cfg);
+
+      // Open a receipt log under .forge/ — paginate samples via this file.
+      const receiptPath = resolve(PROJECT_DIR, ".forge", `openbrain-replay-${Date.now()}.jsonl`);
+      let receiptStream = null;
+      try {
+        mkdirSync(resolve(PROJECT_DIR, ".forge"), { recursive: true });
+        receiptStream = createWriteStream(receiptPath, { flags: "a" });
+      } catch { /* receipt log is best-effort */ }
+
+      const result = await brainReplayRecords(dryRun ? { capture: async () => ({}) } : client, records, {
+        rate: Number(req.body?.rate ?? 50),
+        maxRetries: Number(req.body?.maxRetries ?? 3),
+        retryDelayMs: Number(req.body?.retryDelayMs ?? 250),
+        dryRun,
+        sampleSize: 5,
+        onProgress: (ev) => {
+          if (receiptStream) {
+            try { receiptStream.write(JSON.stringify({ ...ev, ts: new Date().toISOString() }) + "\n"); } catch { /* ignore */ }
+          }
+        },
+      });
+      if (receiptStream) { try { receiptStream.end(); } catch { /* ignore */ } }
+
+      res.json({
+        ok: result.failed === 0,
+        sourceType,
+        source: sourcePath,
+        receiptLog: receiptStream ? receiptPath : null,
+        endpoint: cfg.url,
+        ...result,
+      });
+    } catch (e) {
+      res.status(500).json({ ok: false, error: String(e?.message || e) });
+    } finally {
+      if (client) { try { await client.close(); } catch { /* best-effort */ } }
     }
   });
 

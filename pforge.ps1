@@ -5173,20 +5173,201 @@ function Invoke-Brain {
         $script:Arguments = @($Arguments | Select-Object -Skip 1)
     }
     switch ($sub) {
-        'status' { Invoke-BrainStatus }
-        'hint'   { Invoke-BrainHint }
+        'status'  { Invoke-BrainStatus }
+        'hint'    { Invoke-BrainHint }
+        'test'    { Invoke-BrainTest }
+        'replay'  { Invoke-BrainReplay }
         default {
             Write-Host "Usage: pforge brain <subcommand>" -ForegroundColor Yellow
             Write-Host ""
             Write-Host "Subcommands:"
-            Write-Host "  status [--ping]   Check whether OpenBrain (L3 memory) is configured"
-            Write-Host "  hint              Print OpenBrain install options"
+            Write-Host "  status [--ping]              Check whether OpenBrain (L3 memory) is configured"
+            Write-Host "  hint                         Print OpenBrain install options"
+            Write-Host "  test                         Round-trip a marker thought through capture + search"
+            Write-Host "  replay <source> [opts]       Bulk-load a queue.jsonl or markdown source into OpenBrain"
+            Write-Host ""
+            Write-Host "Replay options:  --dry-run   --project <name>   --rate <ms>   --max <n>"
             Write-Host ""
             Write-Host "See also: pforge drain-memory, https://srnichols.github.io/OpenBrain"
             exit 1
         }
     }
 }
+
+# ─── Subcommands: brain test / brain replay (v3.6.0) ────────────────────
+# Both delegate to the running MCP server REST endpoints (matches drain-memory
+# pattern). Requires the MCP server to be running on localhost:3100 and an
+# OpenBrain SSE entry in .vscode/mcp.json or .claude/mcp.json.
+
+function Invoke-BrainTest {
+    Write-ManualSteps "brain test" @(
+        "POST to http://localhost:3100/api/brain/test with bridge secret"
+        "Capture a unique marker thought via OpenBrain capture_thought"
+        "Immediately search for the marker via search_thoughts; report round-trip"
+    )
+
+    $port = 3100
+    $repoRoot = $RepoRoot
+    if (-not $repoRoot) { $repoRoot = (Get-Location).Path }
+
+    $secret = $null
+    $secretPath = Join-Path $repoRoot ".forge" "bridge-secret"
+    if (Test-Path $secretPath) {
+        $secret = (Get-Content -LiteralPath $secretPath -Raw).Trim()
+    }
+    if (-not $secret) { $secret = $env:PFORGE_BRIDGE_SECRET }
+
+    $headers = @{ 'Content-Type' = 'application/json' }
+    if ($secret) { $headers['Authorization'] = "Bearer $secret" }
+
+    # Project tag — read from .forge.json when available
+    $project = "plan-forge"
+    $forgeConfig = Join-Path $repoRoot ".forge.json"
+    if (Test-Path $forgeConfig) {
+        try {
+            $cfg = Get-Content -LiteralPath $forgeConfig -Raw | ConvertFrom-Json
+            if ($cfg.projectName) { $project = $cfg.projectName }
+        } catch { }
+    }
+
+    $body = @{ project = $project } | ConvertTo-Json -Compress
+
+    try {
+        $response = Invoke-RestMethod -Uri "http://localhost:$port/api/brain/test" -Method POST -Headers $headers -Body $body -ErrorAction Stop
+        Write-Host ""
+        if ($response.ok) {
+            Write-Host "🧠 Brain Test — round-trip OK" -ForegroundColor Green
+        } else {
+            Write-Host "🧠 Brain Test — FAILED" -ForegroundColor Red
+        }
+        Write-Host "   Endpoint:  $($response.endpoint)" -ForegroundColor DarkGray
+        Write-Host "   Marker:    $($response.marker)" -ForegroundColor White
+        Write-Host "   Duration:  $($response.durationMs)ms" -ForegroundColor DarkGray
+        if ($response.ok) {
+            Write-Host "   Captured:  id=$($response.capturedId)" -ForegroundColor Green
+        } else {
+            $msg = if ($response.error) { $response.error } else { "search returned no hit for the marker" }
+            Write-Host "   Error:     $msg" -ForegroundColor Red
+            Write-Host ""
+            exit 1
+        }
+        Write-Host ""
+    } catch {
+        Write-Host "ERROR: $($_.Exception.Message)" -ForegroundColor Red
+        Write-Host "       Is the MCP server running on port $port? Start with: node pforge-mcp/server.mjs" -ForegroundColor DarkGray
+        exit 1
+    }
+}
+
+function Invoke-BrainReplay {
+    Write-ManualSteps "brain replay" @(
+        "POST to http://localhost:3100/api/brain/replay with the source path"
+        "Normalize the source into capture_thought payloads"
+        "Stream the payloads via SSE with rate-limit + retries"
+        "Write per-record receipt log to .forge/openbrain-replay-<ts>.jsonl"
+    )
+
+    if ($Arguments.Count -lt 1) {
+        Write-Host "Usage: pforge brain replay <source> [--dry-run] [--project <name>] [--rate <ms>] [--max <n>]" -ForegroundColor Yellow
+        Write-Host ""
+        Write-Host "  <source>   path (absolute or relative to project root) to a .jsonl queue file,"
+        Write-Host "             a single .md file, or a directory of .md files"
+        Write-Host ""
+        exit 1
+    }
+
+    $source = $Arguments[0]
+    $dryRun = $false
+    $project = $null
+    $rate = $null
+    $maxRecords = $null
+
+    $i = 1
+    while ($i -lt $Arguments.Count) {
+        $a = $Arguments[$i]
+        switch ($a) {
+            '--dry-run' { $dryRun = $true; $i++ }
+            '--project' { $project = $Arguments[$i + 1]; $i += 2 }
+            '--rate'    { $rate = [int]$Arguments[$i + 1]; $i += 2 }
+            '--max'     { $maxRecords = [int]$Arguments[$i + 1]; $i += 2 }
+            default     { Write-Host "Unknown option: $a" -ForegroundColor Yellow; $i++ }
+        }
+    }
+
+    $port = 3100
+    $repoRoot = $RepoRoot
+    if (-not $repoRoot) { $repoRoot = (Get-Location).Path }
+
+    $secret = $null
+    $secretPath = Join-Path $repoRoot ".forge" "bridge-secret"
+    if (Test-Path $secretPath) {
+        $secret = (Get-Content -LiteralPath $secretPath -Raw).Trim()
+    }
+    if (-not $secret) { $secret = $env:PFORGE_BRIDGE_SECRET }
+
+    $headers = @{ 'Content-Type' = 'application/json' }
+    if ($secret) { $headers['Authorization'] = "Bearer $secret" }
+
+    if (-not $project) {
+        $project = "plan-forge"
+        $forgeConfig = Join-Path $repoRoot ".forge.json"
+        if (Test-Path $forgeConfig) {
+            try {
+                $cfg = Get-Content -LiteralPath $forgeConfig -Raw | ConvertFrom-Json
+                if ($cfg.projectName) { $project = $cfg.projectName }
+            } catch { }
+        }
+    }
+
+    $body = @{ source = $source; project = $project; dryRun = $dryRun }
+    if ($null -ne $rate) { $body.rate = $rate }
+    if ($null -ne $maxRecords) { $body.maxRecords = $maxRecords }
+    $bodyJson = $body | ConvertTo-Json -Compress
+
+    try {
+        # Replay can take a while for large sources — disable timeout
+        $response = Invoke-RestMethod -Uri "http://localhost:$port/api/brain/replay" -Method POST -Headers $headers -Body $bodyJson -TimeoutSec 0 -ErrorAction Stop
+        Write-Host ""
+        $label = if ($response.dryRun) { "DRY RUN" } else { "live" }
+        if ($response.ok) {
+            Write-Host "🧠 Brain Replay ($label) — OK" -ForegroundColor Green
+        } else {
+            Write-Host "🧠 Brain Replay ($label) — partial / failed" -ForegroundColor Yellow
+        }
+        Write-Host "   Source:    $($response.sourceType) — $($response.source)" -ForegroundColor White
+        Write-Host "   Endpoint:  $($response.endpoint)" -ForegroundColor DarkGray
+        Write-Host "   Attempted: $($response.attempted)" -ForegroundColor White
+        Write-Host "   Sent:      $($response.sent)" -ForegroundColor Green
+        $failedColor = if ($response.failed -gt 0) { 'Red' } else { 'White' }
+        Write-Host "   Failed:    $($response.failed)" -ForegroundColor $failedColor
+        Write-Host "   Skipped:   $($response.skipped)" -ForegroundColor White
+        Write-Host "   Duration:  $($response.durationMs)ms" -ForegroundColor DarkGray
+        if ($response.receiptLog) {
+            Write-Host "   Receipt:   $($response.receiptLog)" -ForegroundColor DarkGray
+        }
+        if ($response.samples -and $response.samples.Count -gt 0) {
+            Write-Host ""
+            Write-Host "   Samples:" -ForegroundColor Cyan
+            foreach ($s in $response.samples) {
+                Write-Host "     [$($s.index)] $($s.content)" -ForegroundColor DarkGray
+            }
+        }
+        if ($response.failures -and $response.failures.Count -gt 0) {
+            Write-Host ""
+            Write-Host "   Failures (first $($response.failures.Count)):" -ForegroundColor Red
+            foreach ($f in $response.failures | Select-Object -First 5) {
+                Write-Host "     [$($f.index)] $($f.error) — $($f.contentPreview)" -ForegroundColor DarkGray
+            }
+        }
+        Write-Host ""
+        if ($response.failed -gt 0) { exit 1 }
+    } catch {
+        Write-Host "ERROR: $($_.Exception.Message)" -ForegroundColor Red
+        Write-Host "       Is the MCP server running on port $port? Start with: node pforge-mcp/server.mjs" -ForegroundColor DarkGray
+        exit 1
+    }
+}
+
 
 # ─── Command: migrate-memory (GX.5 v2.36) ──────────────────────────────
 function Invoke-MigrateMemory {

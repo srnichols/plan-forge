@@ -4649,18 +4649,192 @@ cmd_brain() {
     case "$sub" in
         status) cmd_brain_status "$@" ;;
         hint)   cmd_brain_hint ;;
+        test)   cmd_brain_test "$@" ;;
+        replay) cmd_brain_replay "$@" ;;
         *)
             echo "Usage: pforge brain <subcommand>"
             echo ""
             echo "Subcommands:"
-            echo "  status [--ping]   Check whether OpenBrain (L3 memory) is configured"
-            echo "  hint              Print OpenBrain install options"
+            echo "  status [--ping]              Check whether OpenBrain (L3 memory) is configured"
+            echo "  hint                         Print OpenBrain install options"
+            echo "  test                         Round-trip a marker thought through capture + search"
+            echo "  replay <source> [opts]       Bulk-load a queue.jsonl or markdown source into OpenBrain"
+            echo ""
+            echo "Replay options:  --dry-run   --project <name>   --rate <ms>   --max <n>"
             echo ""
             echo "See also: pforge drain-memory, https://srnichols.github.io/OpenBrain"
             exit 1
             ;;
     esac
 }
+
+# ─── Subcommands: brain test / brain replay (v3.6.0) ────────────────────
+# Mirror Invoke-BrainTest / Invoke-BrainReplay in pforge.ps1. Both delegate to
+# the running MCP server REST endpoints. Requires the MCP server to be running
+# on localhost:3100 and an OpenBrain SSE entry in .vscode/mcp.json.
+
+cmd_brain_test() {
+    print_manual_steps "brain test" \
+        "POST to http://localhost:3100/api/brain/test with bridge secret" \
+        "Capture a unique marker thought via OpenBrain capture_thought" \
+        "Immediately search for the marker via search_thoughts; report round-trip"
+
+    local port=3100
+
+    local secret=""
+    local secret_path="$REPO_ROOT/.forge/bridge-secret"
+    if [ -f "$secret_path" ]; then
+        secret=$(cat "$secret_path" | tr -d '[:space:]')
+    fi
+    if [ -z "$secret" ] && [ -n "$PFORGE_BRIDGE_SECRET" ]; then
+        secret="$PFORGE_BRIDGE_SECRET"
+    fi
+
+    local auth_header=""
+    if [ -n "$secret" ]; then
+        auth_header="-H \"Authorization: Bearer ${secret}\""
+    fi
+
+    local project="plan-forge"
+    if [ -f "$REPO_ROOT/.forge.json" ] && command -v node >/dev/null 2>&1; then
+        project=$(node -e "try { const c=JSON.parse(require('fs').readFileSync('$REPO_ROOT/.forge.json','utf8')); process.stdout.write(c.projectName || 'plan-forge'); } catch { process.stdout.write('plan-forge'); }")
+    fi
+
+    local body
+    body=$(printf '{"project":"%s"}' "$project")
+
+    local response
+    response=$(eval curl -sf -X POST "http://localhost:${port}/api/brain/test" \
+        -H "\"Content-Type: application/json\"" \
+        ${auth_header} \
+        -d "'$body'") || {
+        echo "ERROR: MCP server not running on port ${port}. Start with: node pforge-mcp/server.mjs" >&2
+        exit 1
+    }
+
+    echo "$response" | node -e "
+      const d = JSON.parse(require('fs').readFileSync('/dev/stdin', 'utf8'));
+      console.log('');
+      if (d.ok) console.log('\x1b[32m🧠 Brain Test — round-trip OK\x1b[0m');
+      else      console.log('\x1b[31m🧠 Brain Test — FAILED\x1b[0m');
+      console.log('   Endpoint:  ' + (d.endpoint || ''));
+      console.log('   Marker:    ' + (d.marker || ''));
+      console.log('   Duration:  ' + (d.durationMs || 0) + 'ms');
+      if (d.ok) {
+        console.log('   \x1b[32mCaptured:  id=' + (d.capturedId || '(unknown)') + '\x1b[0m');
+      } else {
+        console.log('   \x1b[31mError:     ' + (d.error || 'search returned no hit for the marker') + '\x1b[0m');
+        process.exit(1);
+      }
+      console.log('');
+    "
+}
+
+cmd_brain_replay() {
+    print_manual_steps "brain replay" \
+        "POST to http://localhost:3100/api/brain/replay with the source path" \
+        "Normalize the source into capture_thought payloads" \
+        "Stream the payloads via SSE with rate-limit + retries" \
+        "Write per-record receipt log to .forge/openbrain-replay-<ts>.jsonl"
+
+    if [ "$#" -lt 1 ]; then
+        echo "Usage: pforge brain replay <source> [--dry-run] [--project <name>] [--rate <ms>] [--max <n>]"
+        echo ""
+        echo "  <source>   path (absolute or relative to project root) to a .jsonl queue file,"
+        echo "             a single .md file, or a directory of .md files"
+        echo ""
+        exit 1
+    fi
+
+    local source="$1"
+    shift
+    local dry_run="false"
+    local project=""
+    local rate=""
+    local max_records=""
+
+    while [ "$#" -gt 0 ]; do
+        case "$1" in
+            --dry-run) dry_run="true"; shift ;;
+            --project) project="$2"; shift 2 ;;
+            --rate)    rate="$2"; shift 2 ;;
+            --max)     max_records="$2"; shift 2 ;;
+            *) echo "Unknown option: $1" >&2; shift ;;
+        esac
+    done
+
+    if [ -z "$project" ]; then
+        project="plan-forge"
+        if [ -f "$REPO_ROOT/.forge.json" ] && command -v node >/dev/null 2>&1; then
+            project=$(node -e "try { const c=JSON.parse(require('fs').readFileSync('$REPO_ROOT/.forge.json','utf8')); process.stdout.write(c.projectName || 'plan-forge'); } catch { process.stdout.write('plan-forge'); }")
+        fi
+    fi
+
+    local port=3100
+    local secret=""
+    local secret_path="$REPO_ROOT/.forge/bridge-secret"
+    if [ -f "$secret_path" ]; then
+        secret=$(cat "$secret_path" | tr -d '[:space:]')
+    fi
+    if [ -z "$secret" ] && [ -n "$PFORGE_BRIDGE_SECRET" ]; then
+        secret="$PFORGE_BRIDGE_SECRET"
+    fi
+
+    local auth_header=""
+    if [ -n "$secret" ]; then
+        auth_header="-H \"Authorization: Bearer ${secret}\""
+    fi
+
+    # Build JSON body via node to avoid escaping pain
+    local body
+    body=$(node -e "
+      const o = { source: process.argv[1], project: process.argv[2], dryRun: process.argv[3]==='true' };
+      if (process.argv[4]) o.rate = Number(process.argv[4]);
+      if (process.argv[5]) o.maxRecords = Number(process.argv[5]);
+      process.stdout.write(JSON.stringify(o));
+    " "$source" "$project" "$dry_run" "$rate" "$max_records")
+
+    local response
+    response=$(eval curl -sf -X POST "http://localhost:${port}/api/brain/replay" \
+        -H "\"Content-Type: application/json\"" \
+        --max-time 0 \
+        ${auth_header} \
+        -d "'$body'") || {
+        echo "ERROR: MCP server not running on port ${port}. Start with: node pforge-mcp/server.mjs" >&2
+        exit 1
+    }
+
+    echo "$response" | node -e "
+      const d = JSON.parse(require('fs').readFileSync('/dev/stdin', 'utf8'));
+      const label = d.dryRun ? 'DRY RUN' : 'live';
+      console.log('');
+      if (d.ok) console.log('\x1b[32m🧠 Brain Replay (' + label + ') — OK\x1b[0m');
+      else      console.log('\x1b[33m🧠 Brain Replay (' + label + ') — partial / failed\x1b[0m');
+      console.log('   Source:    ' + d.sourceType + ' — ' + d.source);
+      console.log('   Endpoint:  ' + d.endpoint);
+      console.log('   Attempted: ' + d.attempted);
+      console.log('   \x1b[32mSent:      ' + d.sent + '\x1b[0m');
+      const failedColor = d.failed > 0 ? '\x1b[31m' : '';
+      const failedReset = d.failed > 0 ? '\x1b[0m' : '';
+      console.log('   ' + failedColor + 'Failed:    ' + d.failed + failedReset);
+      console.log('   Skipped:   ' + d.skipped);
+      console.log('   \x1b[90mDuration:  ' + d.durationMs + 'ms\x1b[0m');
+      if (d.receiptLog) console.log('   \x1b[90mReceipt:   ' + d.receiptLog + '\x1b[0m');
+      if (d.samples && d.samples.length > 0) {
+        console.log('');
+        console.log('   \x1b[36mSamples:\x1b[0m');
+        for (const s of d.samples) console.log('     [' + s.index + '] ' + s.content);
+      }
+      if (d.failures && d.failures.length > 0) {
+        console.log('');
+        console.log('   \x1b[31mFailures (first ' + Math.min(5, d.failures.length) + '):\x1b[0m');
+        for (const f of d.failures.slice(0, 5)) console.log('     [' + f.index + '] ' + f.error + ' — ' + f.contentPreview);
+      }
+      console.log('');
+      if (d.failed > 0) process.exit(1);
+    "
+}
+
 
 # ─── Command: migrate-memory (GX.5 v2.36) ──────────────────────────────
 # Port of Invoke-MigrateMemory from pforge.ps1. Merges legacy `*-history.json`

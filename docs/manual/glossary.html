@@ -112,6 +112,7 @@
           <tr><td><strong>Plan Hardener</strong></td><td>Step 2 agent/runbook that converts a draft plan into a Hardened Plan by adding scope contract, validation gates, forbidden actions, and rollback. Lives at <code>.github/prompts/step2-harden-plan.prompt.md</code>.</td></tr>
           <tr><td><strong>Reviewer Gate</strong></td><td>Step 5 agent persona that runs in a <em>fresh session</em>, reads the plan's Scope Contract, and audits the diff for drift and quality. Distinct from LiveGuard (runtime layer). Can be delegated to GitHub Copilot cloud agent via <code>forge_delegate_review</code>.</td></tr>
           <tr><td><strong>Shipper</strong></td><td>Step 6 agent persona for commit, push, deploy, and close. Lives at <code>.github/agents/shipper.agent.md</code>.</td></tr>
+          <tr><td><strong>Runbook (tool)</strong></td><td>The <code>forge_runbook</code> MCP tool that exposes the AI Plan Hardening Runbook as a callable surface — agents can request the canonical step list, gate templates, and prompt URIs without re-reading the Markdown source.</td></tr>
           <tr><td><strong>applyTo</strong></td><td>Frontmatter field in instruction files that controls which files trigger auto-loading. Uses glob patterns (e.g., <code>**</code> for all files, <code>*.cs</code> for C# only).</td></tr>
         </tbody>
       </table>
@@ -161,6 +162,13 @@
           <tr><td><strong>Worktree</strong></td><td>Git worktree feature used by Plan Forge so multiple developers can run plans on the same repo without colliding. Each worktree gets its own <code>.forge/</code> directory and a row in the shared team-activity ledger.</td></tr>
           <tr><td><strong>Discovery Harness</strong></td><td>4-pass build sequence (Harness → Wrapper → Execute → Auto-smelt) that crawls a running app, converts findings to Crucible smelts, runs slices with Tempering, and re-smelts failures into new bugs.</td></tr>
           <tr><td><strong>Spec Kit Interop</strong></td><td>Bridge that imports GitHub Spec Kit projects via <code>forge_crucible_import</code> using deterministic field mapping (no LLM call). Spec Kit specs become Crucible smelts.</td></tr>
+          <tr><td><strong>Foundry</strong></td><td>Microsoft Foundry — the external Azure-hosted agent platform Plan Forge integrates with. Provides Foundry Toolboxes (MCP-compatible tool bundles), Foundry Agent Service (hosted agent runtime), and Foundry App Insights (OTel sink). See <code>foundry-quota.mjs</code> and the <code>microsoft-foundry</code> skill.</td></tr>
+          <tr><td><strong>Anvil</strong></td><td>Δ-only memoization layer for the Lattice. Caches expensive analyses (chunk extraction, embedding lookups, gate replays) keyed by content hash; only recomputes the delta when source changes. CLI: <code>pforge anvil stat / purge</code>. Hit rate is reported by <code>forge_lattice_stat</code>.</td></tr>
+          <tr><td><strong>Triage</strong></td><td>Plan Forge's noise-vs-signal classifier surface. Two tools: <code>forge_alert_triage</code> (groups and prioritizes open LiveGuard alerts) and <code>forge_triage_route</code> (routes a finding to a lane — real-bug, flaky, noise, or human-review). CLI: <code>pforge triage</code>.</td></tr>
+          <tr><td><strong>Timeline</strong></td><td>Chronological event view exposed via <code>forge_timeline</code> — merges run events, gate results, commits, and incidents on a single axis for the current phase or slice.</td></tr>
+          <tr><td><strong>Home Snapshot</strong></td><td>Bounded activity overview returned by <code>forge_home_snapshot</code>. Pagination-friendly summary of recent runs, open bugs, drift score, and active plans — the default landing payload for Forge-Master and the Studio home tab.</td></tr>
+          <tr><td><strong>Image Generation</strong></td><td>Image synthesis surface (<code>forge_generate_image</code>) that proxies DALL-E / image models for chapter heroes, diagrams, and marketing assets. <code>DIRECT_API_ONLY</code> — requires <code>OPENAI_API_KEY</code>.</td></tr>
+          <tr><td><strong>GitHub Metrics</strong></td><td>Subsystem (<code>github-metrics.mjs</code>) that ingests PR / issue / commit metrics from the GitHub REST API and feeds them into Health DNA and Forge Intelligence. Paired with <code>github-introspect.mjs</code> for repo-shape introspection.</td></tr>
         </tbody>
       </table>
 
@@ -206,6 +214,7 @@
           <tr><td><strong>Health DNA</strong></td><td>Composite project health fingerprint: drift avg, incident rate, test pass rate, model success rate, cost per slice. Persisted to <code>.forge/health-dna.json</code>. Used for cross-session decay detection (v2.32).</td></tr>
           <tr><td><strong>Forge Intelligence</strong></td><td>Build-time self-improvement: auto-tuning escalation chains, cost calibration, adaptive quorum thresholds, slice splitting advisories. The forge gets smarter every run (v2.32).</td></tr>
           <tr><td><strong>Recurring Incident</strong></td><td>When 3+ incidents hit the same files in 30 days, LiveGuard auto-escalates severity and marks the pattern as systemic (v2.32).</td></tr>
+          <tr><td><strong>Deploy Journal</strong></td><td>Append-only deploy history exposed via <code>forge_deploy_journal</code>. Each entry records environment, commit, slice range, gates passed, and outcome — the source of truth for &quot;what shipped when&quot; and the basis for rollback decisions.</td></tr>
         </tbody>
       </table>
 
@@ -219,6 +228,7 @@
           <tr><td><strong>Span</strong></td><td>A timed unit within a trace — run (root), slice (child), gate (grandchild).</td></tr>
           <tr><td><strong>Cost History</strong></td><td><code>.forge/cost-history.json</code> — aggregate token/cost data across all runs.</td></tr>
           <tr><td><strong>Index</strong></td><td><code>.forge/runs/index.jsonl</code> — append-only run registry for instant lookup.</td></tr>
+          <tr><td><strong>SARIF</strong></td><td>Static Analysis Results Interchange Format — the OASIS standard JSON schema CI scanners (CodeQL, Semgrep, ESLint, etc.) emit. Plan Forge converts SARIF files into hardenable plans via <code>sarif-to-plan.mjs</code>, turning third-party findings into Crucible smelts.</td></tr>
         </tbody>
       </table>
 

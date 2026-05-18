@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Chapter 13: Advanced Execution — Plan Forge Manual</title>
+  <title>Chapter 14: Advanced Execution — Plan Forge Manual</title>
   <meta name="description" content="Model routing, quorum mode, escalation chains, cost optimization, CI integration, parallel execution, resume and retry." />
   <link rel="icon" type="image/svg+xml" href="../assets/plan-forge-logo.svg" />
   <script src="https://cdn.tailwindcss.com"></script>
@@ -24,12 +24,12 @@
       <!-- Hero -->
       <img src="assets/chapter-heroes/ch13-hero.jpg" alt="Three model-spirit blacksmiths (green, blue, gold) on diverging escalation paths converging on a central decision node — multi-model quorum and routing" class="chapter-hero" />
 
-      <div class="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">Chapter 13</div>
+      <div class="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">Chapter 14</div>
       <h1>Advanced Execution</h1>
       <p class="text-lg text-slate-400 mb-8">Model routing, quorum mode, cost optimization, CI integration, and resume strategies.</p>
 
       <div class="callout callout-info">
-        <strong>Prerequisite refresher</strong>: This chapter assumes you know what <a href="how-it-works.html#building-blocks">slices, gates, and scope contracts</a> are (Chapter 2) and have run at least one plan (Chapter 4). If those terms are unfamiliar, start there.
+        <strong>Prerequisite refresher</strong>: This chapter assumes you know what <a href="how-it-works.html#building-blocks">slices, gates, and scope contracts</a> are (Chapter 2) and have run at least one plan (Chapter 6). If those terms are unfamiliar, start there.
       </div>
 
       <div class="callout callout-tip">
@@ -365,7 +365,7 @@ score = clamp(1, 10, round(0.5425 × 9) + 1) = 6
         <strong>Don't set this variable manually.</strong> It's owned by the orchestrator and the multi-agent dispatch layer. Setting it yourself in a shell will cause the next <code>PreAgentHandoff</code> to silently skip — which can mask drift alerts. If you see <code>"PFORGE_QUORUM_TURN active"</code> in logs outside a quorum run, something has leaked the variable; clear it with <code>Remove-Item Env:PFORGE_QUORUM_TURN</code> (PowerShell) or <code>unset PFORGE_QUORUM_TURN</code> (bash).
       </div>
 
-      <p class="text-sm text-slate-400">📄 Cross-references: <a href="multi-agent.html">Chapter 12 — Multi-Agent</a> for the handoff model · <a href="remote-bridge.html#openclaw">Chapter 17 — Remote Bridge</a> for the OpenClaw snapshot path · <a href="forge-master.html#quorum-advisory">Forge-Master Quorum Advisory</a> for the per-prompt counterpart.</p>
+      <p class="text-sm text-slate-400">📄 Cross-references: <a href="multi-agent.html">Chapter 13 — Multi-Agent</a> for the handoff model · <a href="remote-bridge.html#openclaw">Chapter 20 — Remote Bridge</a> for the OpenClaw snapshot path · <a href="forge-master.html#quorum-advisory">Forge-Master Quorum Advisory</a> for the per-prompt counterpart.</p>
 
       <h3 id="quorum-quality-examples">Quorum Quality Examples — What 3 Models Catch That 1 Doesn't</h3>
 
@@ -515,7 +515,7 @@ ArgumentException.ThrowIfNullOrWhiteSpace(customerName);</code></pre>
         <li><strong>Preview costs</strong>: <code>pforge run-plan --estimate docs/plans/Phase-7.md</code></li>
         <li><strong>Review spend</strong>: <code>pforge cost</code> or Dashboard Cost tab</li>
         <li><strong>Agent-per-slice routing</strong>: Override model per slice with <code>--model</code> flag</li>
-        <li><strong>Reduce context</strong>: Use targeted <code>Context:</code> lists per slice (see <a href="writing-plans.html#context">Chapter 5</a>)</li>
+        <li><strong>Reduce context</strong>: Use targeted <code>Context:</code> lists per slice (see <a href="writing-plans.html#context">Chapter 4</a>)</li>
       </ul>
 
       <h2 id="api-keys">API Key Configuration</h2>
@@ -590,7 +590,7 @@ pforge run-plan docs/plans/Phase-7.md --dry-run</code></pre>
   }
 }</code></pre>
       </div>
-      <p>See <a href="what-is-liveguard.html">Chapter 15 — What Is LiveGuard?</a> for the full operational intelligence overview.</p>
+      <p>See <a href="what-is-liveguard.html">Chapter 16 — What Is LiveGuard?</a> for the full operational intelligence overview.</p>
 
         <p class="text-sm text-slate-500 mt-8">📄 Full reference: <a href="../capabilities.html">capabilities</a>, <a href="cli-reference.html#run-plan">CLI Reference — run-plan</a></p>
       <div id="chapter-prev-next" class="chapter-nav"></div>

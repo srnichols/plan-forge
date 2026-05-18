@@ -4,9 +4,9 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Project History — Plan Forge Manual</title>
-  <meta name="description" content="Plan Forge version timeline from v1.0 (Summer 2025) through v2.83 (May 2026) — what each milestone shipped, what problem it solved, and why each inflection point mattered." />
+  <meta name="description" content="Plan Forge version timeline from v1.0 (Summer 2025) through v3.6 (May 2026) — what each milestone shipped, what problem it solved, and why each inflection point mattered." />
   <meta property="og:title" content="Project History — Plan Forge Manual" />
-  <meta property="og:description" content="Seven inflection points across a year of building AI coding guardrails." />
+  <meta property="og:description" content="Eleven inflection points across a year of building AI coding guardrails." />
   <meta property="og:type" content="article" />
   <link rel="canonical" href="https://planforge.software/manual/project-history.html" />
   <link rel="icon" type="image/svg+xml" href="../assets/plan-forge-logo.svg" />
@@ -27,13 +27,13 @@
 
       <div class="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">Reference</div>
       <h1>Project History</h1>
-      <p class="text-lg text-slate-400 mb-8">Seven inflection points from v1.0 (Summer 2025) to v2.83 (May 2026). Each one solved a specific problem the previous version exposed.</p>
+      <p class="text-lg text-slate-400 mb-8">Eleven inflection points from v1.0 (Summer 2025) to v3.6 (May 2026). Each one solved a specific problem the previous version exposed.</p>
 
-      <figure class="manual-figure"><img src="assets/diagrams/evolution-timeline.svg" alt="Plan Forge evolution timeline showing seven version milestones: v1.0 Summer 2025 (18 instruction files plus 4-session pipeline), v2.0 January 2026 (autonomous orchestrator plus 17 MCP tools), v2.5 February 2026 (Quorum Mode 3-model consensus), v2.10 March 2026 (OpenClaw bridge for cross-platform notifications), v2.14 March 2026 (Copilot platform integration), v2.18 April 2026 (Temper Guards plus Warning Signs plus Context Fuel), v2.83 May 2026 highlighted in amber as current (host-aware routing plus quorum estimator plus complexity rubric)" class="diagram-img diagram-img-md my-6" /><figcaption class="manual-figcaption"><!--cap:auto-->Plan Forge evolution timeline showing seven version milestones<!--/cap--></figcaption></figure>
+      <figure class="manual-figure"><img src="assets/diagrams/evolution-timeline.svg" alt="Plan Forge evolution timeline showing eight headline version milestones: v1.0 Summer 2025 (18 instruction files plus 4-session pipeline), v2.0 January 2026 (autonomous orchestrator plus 17 MCP tools), v2.5 February 2026 (Quorum Mode 3-model consensus), v2.10 March 2026 (OpenClaw bridge for cross-platform notifications), v2.14 March 2026 (Copilot platform integration), v2.18 April 2026 (Temper Guards plus Warning Signs plus Context Fuel), v2.83 May 2026 (host-aware routing plus quorum estimator plus complexity rubric), and v3.6 May 2026 highlighted in amber as current (OpenBrain promoted to L3 memory layer). The May 2026 v3.x sprint also shipped v2.95 Lattice code-graph indexing, v3.0 Copilot integration trilogy, and v3.2 through v3.4 Team Mode — covered in the prose sections below." class="diagram-img diagram-img-md my-6" /><figcaption class="manual-figcaption"><!--cap:auto-->Plan Forge evolution timeline showing eight headline version milestones<!--/cap--></figcaption></figure>
 
       <div class="rounded-xl border border-slate-700/50 bg-slate-900/40 p-5 mb-10">
         <p class="text-sm text-slate-400 mb-2"><strong class="text-slate-200">When to read this chapter:</strong> understanding why a feature exists, evaluating whether a design constraint is foundational or contingent, or onboarding to the architecture's history.</p>
-        <p class="text-sm text-slate-400 mb-0"><strong class="text-slate-200">Reference adaptation</strong> of the marketing essay <a href="../blog/the-journey-from-impossible-to-seven-minutes.html" class="text-amber-400 hover:underline" rel="noopener">From Impossible to 7 Minutes — A Year of Building AI Coding Guardrails</a> (April 2026), extended through v2.83 from the CHANGELOG.</p>
+        <p class="text-sm text-slate-400 mb-0"><strong class="text-slate-200">Reference adaptation</strong> of the marketing essay <a href="../blog/the-journey-from-impossible-to-seven-minutes.html" class="text-amber-400 hover:underline" rel="noopener">From Impossible to 7 Minutes — A Year of Building AI Coding Guardrails</a> (April 2026), extended through v3.6 from the CHANGELOG.</p>
       </div>
 
       <h2 id="v1-0-foundation">v1.0 — Foundation (Summer 2025)</h2>
@@ -84,13 +84,45 @@
 
       <p><strong>What it solved</strong>: The "looks correct, is structurally wrong" failure mode. Compiling code is not architecturally compliant code.</p>
 
-      <h2 id="v2-83-current">v2.83 — Host-Aware Routing, Quorum Estimator, Complexity Rubric (May 2026, current)</h2>
+      <h2 id="v2-83-host-routing">v2.83 — Host-Aware Routing, Quorum Estimator, Complexity Rubric (May 2026)</h2>
 
       <p><strong>What shipped</strong>: Host-aware model routing (subscription-vs-API billing surface awareness), <code>forge_estimate_quorum</code> tool for tool-backed cost projection across all four quorum modes, and the documented complexity scoring rubric (<a href="advanced-execution.html#quorum-complexity">scoreSliceComplexity()</a>) with seven weighted signals. See <a href="advanced-execution.html#host-routing">Host-Aware Routing</a> and <a href="advanced-execution.html#quorum-estimate">Estimating Quorum Cost</a>.</p>
 
       <p><strong>Inflection point</strong>: Quorum cost was previously hand-computed by agents — and observed to overshoot reality by an order of magnitude. The estimator tool replaced chat math with measured projection. Host-aware routing fixed the silent-double-pay failure mode where <code>gpt-*</code> models on Claude Code or Cursor would bill the user's pay-per-token API instead of their existing subscription.</p>
 
       <p><strong>What it solved</strong>: Cost surprise. Both the quorum overhead surprise (estimator) and the host billing surprise (routing).</p>
+
+      <h2 id="v2-95-lattice">v2.95 — Lattice / Code-Graph Indexing (May 2026)</h2>
+
+      <p><strong>What shipped</strong>: Phase Lattice introduced tree-sitter-based code chunking, code-graph indexing, and the <code>forge_lattice_*</code> tool family (<code>index</code>, <code>query</code>, <code>callers</code>, <code>blast</code>, <code>stat</code>). Anvil caching for cost-effective re-indexing. Hallmark provenance tracking on every chunk. v3.5.1 added camelCase-aware relevance ranking via <code>scoreChunk()</code> / <code>tokenizeForSearch()</code>.</p>
+
+      <p><strong>Inflection point</strong>: Plan Forge could now reason about the user's actual codebase architecture — not just plans and instructions. Searching <code>getUserById</code> returns the function, its callers, and its blast radius across the repository. This made auto-generated plans architecture-aware: a slice that touches a hub function gets flagged as high-blast-radius before execution.</p>
+
+      <p><strong>What it solved</strong>: Plans that looked safe in isolation but rippled unexpectedly. Pre-Lattice, the agent had to grep its way to architectural awareness slice by slice.</p>
+
+      <h2 id="v3-0-copilot-trilogy">v3.0 — Copilot Integration Trilogy (May 2026)</h2>
+
+      <p><strong>What shipped</strong>: Three sync surfaces, completed in three consecutive releases. <code>pforge sync-spaces</code> (v2.98) generates Copilot Spaces from forge plans and principles. <code>forge_sync_memories</code> (v2.99) writes <code>.github/copilot-memory-hints.md</code> from cross-tool memory. <code>forge_sync_instructions</code> (v3.0) generates <code>.github/copilot-instructions.md</code> from project profile, project principles, extra instruction files, and <code>.forge.json</code> config.</p>
+
+      <p><strong>Inflection point</strong>: Copilot became a first-class citizen of the Plan Forge ecosystem, not just one of several agent surfaces. Every Copilot conversation now opens with project-specific guidance auto-loaded by the platform — no manual setup, no forgotten attachments. This collapsed the onboarding gap for the largest installed base of any AI coding agent.</p>
+
+      <p><strong>What it solved</strong>: Copilot users were getting generic guidance because <code>copilot-instructions.md</code> was hand-written or absent. The sync trilogy made the file always up to date and always reflective of the actual project's profile, principles, and configuration.</p>
+
+      <h2 id="v3-2-team-mode">v3.2–3.4 — Team Mode (May 2026)</h2>
+
+      <p><strong>What shipped</strong>: Three releases focused on multi-developer awareness. v3.2 added <code>.forge/team-activity.jsonl</code> (shared run log), the <code>forge_team_activity</code> MCP tool, and <code>pforge team activity</code>. v3.3 added <code>pforge github review delegate</code> — when a slice produces a PR, an issue assigned to <code>@copilot</code> is filed with a structured review checklist, and the Copilot Coding Agent posts findings back on the PR. v3.4 added the <strong>Team</strong> tab in the dashboard with per-operator cards, success rates, costs, and a conflict-risk banner.</p>
+
+      <p><strong>Inflection point</strong>: Plan Forge stopped being a solo tool. Teams running parallel plan executions against the same repository could now see who was working on what, get reviewer attention from the Copilot Coding Agent without a human handoff, and detect coordination risk before two developers stepped on each other's slices.</p>
+
+      <p><strong>What it solved</strong>: The "two of us hit the same file" failure mode. And the "I shipped a PR but nobody reviewed it" failure mode.</p>
+
+      <h2 id="v3-6-openbrain-l3">v3.6 — OpenBrain Promotion / L3 Memory Made Loud (May 2026, current)</h2>
+
+      <p><strong>What shipped</strong>: OpenBrain — the optional cross-session semantic memory backend — was reframed from a row-5 "optional extension" to <strong>L3 memory layer</strong> with a clear on-ramp at every install touchpoint. <code>pforge smith</code> now always reports L3 status. <code>setup.ps1</code> / <code>setup.sh</code> prompt for OpenBrain install at the end of the flow (auto-suppressed in CI). New <code>pforge brain {status, hint, test, replay}</code> subcommands. README gains a numbered Step 3 "Enable Persistent Memory" with four deploy options. The <code>if (openBrainConfigured)</code> gating did <em>not</em> change — Plan Forge still works perfectly without it. See <a href="https://github.com/srnichols/plan-forge/blob/master/docs/MEMORY-ARCHITECTURE.md" rel="noopener">Memory Architecture on GitHub</a>.</p>
+
+      <p><strong>Inflection point</strong>: OpenBrain hooks were already wired into 28 MCP tools, 4 search-before-acting prompts, Reflexion lessons, Auto-skills, and cross-project Federation — but every one was gated and silently no-op'd otherwise. Users who didn't know to install OpenBrain were getting Plan Forge's L1 (Hub events) plus L2 (<code>.forge/*.jsonl</code> durable files) memory but no persistent semantic memory across sessions. The inner loop that makes the agent improve over time was effectively dark. v3.6 made the L3 layer discoverable without changing any soft-fail behavior.</p>
+
+      <p><strong>What it solved</strong>: The "Plan Forge isn't getting smarter over time" failure mode. Without L3, Reflexion lessons, Auto-skills, and postmortem learnings had nowhere durable to live across sessions.</p>
 
       <h2 id="see-also">See Also</h2>
 
@@ -100,7 +132,7 @@
           <li><a href="https://github.com/srnichols/plan-forge/blob/master/CHANGELOG.md" rel="noopener">View CHANGELOG on GitHub</a> — full version-by-version detail beyond the seven inflection points</li>
       </ul>
 
-      <p class="text-sm text-slate-500 mt-8">📄 Reference adaptation of <a href="../blog/the-journey-from-impossible-to-seven-minutes.html" rel="noopener">the-journey-from-impossible-to-seven-minutes.html</a>. v2.83 milestone added from CHANGELOG.md (post-blog).</p>
+      <p class="text-sm text-slate-500 mt-8">📄 Reference adaptation of <a href="../blog/the-journey-from-impossible-to-seven-minutes.html" rel="noopener">the-journey-from-impossible-to-seven-minutes.html</a>. The original essay covered v1.0 through v2.18 (April 2026). v2.83 and the v2.95 → v3.6 May 2026 sprint were added from CHANGELOG.md as they shipped.</p>
       <div id="chapter-prev-next" class="chapter-nav"></div>
     </div></main>
   </div>

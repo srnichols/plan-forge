@@ -512,7 +512,11 @@
     { t: "v2.10 OpenClaw", u: "project-history.html#v2-10-openclaw" },
     { t: "v2.14 GitHub Copilot Integration", u: "project-history.html#v2-14-copilot" },
     { t: "v2.18 Temper Guards", u: "project-history.html#v2-18-temper-guards" },
-    { t: "v2.83 Current Release", u: "project-history.html#v2-83-current" },
+    { t: "v2.83 Host-Aware Routing", u: "project-history.html#v2-83-host-routing" },
+    { t: "v2.95 Lattice / Code-Graph", u: "project-history.html#v2-95-lattice" },
+    { t: "v3.0 Copilot Trilogy", u: "project-history.html#v3-0-copilot-trilogy" },
+    { t: "v3.2–3.4 Team Mode", u: "project-history.html#v3-2-team-mode" },
+    { t: "v3.6 OpenBrain L3 (current)", u: "project-history.html#v3-6-openbrain-l3" },
     // Ch 3
     { t: "Prerequisites", u: "installation.html#prerequisites" },
     { t: "One-Click Install", u: "installation.html#one-click" },

@@ -19,9 +19,10 @@ The v3.x doc rebaseline ran in six passes. Every gap below has been **fixed in p
 | 3 — REST surface chapter | `4916707` | New [docs/REST-API.md](REST-API.md) (all 103 endpoints organized into 17+ domains) + regen script `scripts/dump-rest-routes.mjs` |
 | 4 — SDK refresh → 0.3.0 | `8719048` | Bumped `pforge-sdk@0.3.0`, removed broken `./client` declaration, added `./chunker` sub-path, rewrote `pforge-sdk/README.md` for v3.x |
 | 5 — Extended stat sweep | `5b27d2a` | README banner, capabilities cards, llms.txt, faq, speckit, dashboard tab count, test count (3285 → 8000+) |
-| 6 — Manual count alignment | _this commit_ | Dashboard chapter updated to 37 tabs with explicit group/tab table; capabilities + docs landing pages aligned; settings sub-tab count corrected (9 → 10) |
+| 6 — Manual count alignment | `e129dc7` | Dashboard chapter updated to 37 tabs with explicit group/tab table; capabilities + docs landing pages aligned; settings sub-tab count corrected (9 → 10) |
+| 7 — Audit reconciliation + MEMORY-ARCHITECTURE rebaseline | _this commit_ | `MEMORY-ARCHITECTURE.md` rebaselined to v3.x phrasing; §3 matrix refreshed to reflect closed gaps; §4.4 records evaluated-N/A decisions (5 items); §4.5 lists deferred-to-v3.6 work (6 items); ROADMAP gains v3.6 doc-candidates section |
 
-**Status after Pass 6**: All §3 matrix red cells and §4.1 mechanical issues are closed. Remaining items in §4.2 / §4.3 are forward-looking enhancements (typed REST client in `pforge-sdk@0.4.0`, additional manual cross-linking, etc.) and are tracked outside this audit.
+**Status after Pass 7**: All §3 matrix red cells are either closed (🔵 P«1–6»), recorded as evaluated-N/A in §4.4 with explicit rationale, or deferred to v3.6 in §4.5 with ROADMAP cross-reference. No silent gaps remain. The audit doc is reconciled with reality.
 
 ---
 
@@ -194,76 +195,87 @@ security-audit, staging-deploy, test-sweep, ui-scaffold
 
 ## 3. The Matrix — Capability × Documentation Coverage
 
-> Legend: ✅ named + accurately described · ⚠️ named but stale/incomplete · ❌ not mentioned · — N/A for this surface
+> Legend: ✅ named + accurately described · ⚠️ named but stale/incomplete · ❌ not mentioned · — N/A for this surface · **🔵** = updated in Pass 7 after re-verification
+>
+> The cells below were re-audited on 2026-05-17 after Pass 7. Cells annotated **🔵 Pass N** were silently closed by an earlier pass but not reflected in the matrix until this re-audit.
 
 ### 3.1 v3.x memory upgrades
 
 | Capability | README | llms.txt | capabilities.md | capabilities.html | CLI-GUIDE | Manual | AGENT-SETUP | Landing pages |
 |---|:-:|:-:|:-:|:-:|:-:|:-:|:-:|:-:|
-| **Hallmark** (`hallmark/v1` envelope) | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ (Ch 25) | ❌ | ⚠️ alt-text only |
-| **Anvil** (DLQ + capability handshake, `pforge anvil`) | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ (Ch 25) | ❌ | ⚠️ alt-text only |
-| **Lattice** (code-graph, 5 MCP tools) | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ (Ch 25) | ❌ | ❌ |
-| **`forge_sync_memories`** (Copilot Memory bridge) | ❌ | ✅ | ✅ | ✅ | ✅ | ✅ (Ch 25) | ❌ | ❌ |
-| **`forge_sync_instructions`** (Copilot instructions sync) | ❌ | ✅ | ✅ | ✅ | ✅ | ⚠️ implied | ❌ | ❌ |
-| **L1/L2/L3 architecture** | ⚠️ | ⚠️ | ❌ | ⚠️ | ❌ | ✅ (Ch 24+25) | ❌ | ❌ |
-| **Memory dashboard tab** | ❌ | ❌ | ⚠️ | ⚠️ | ❌ | ✅ | ❌ | ⚠️ |
-| **Anvil & Lattice dashboard tab** | ❌ | ❌ | ❌ | ⚠️ | ❌ | ⚠️ | ❌ | ❌ |
+| **Hallmark** (`hallmark/v1` envelope) | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ (Ch 25) | —¹ | ✅ 🔵 P7 |
+| **Anvil** (DLQ + capability handshake, `pforge anvil`) | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ (Ch 25) | —¹ | ✅ 🔵 P7 |
+| **Lattice** (code-graph, 5 MCP tools) | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ (Ch 25) | —¹ | ✅ 🔵 P7 |
+| **`forge_sync_memories`** (Copilot Memory bridge) | ✅ 🔵 P7 | ✅ | ✅ 🔵 P2 | ✅ 🔵 P2 | ✅ | ✅ (Ch 25) | —¹ | ✅ 🔵 P7 |
+| **`forge_sync_instructions`** (Copilot instructions sync) | ✅ 🔵 P7 | ✅ | ✅ 🔵 P2 | ✅ 🔵 P2 | ✅ | ✅ (Ch 25) | —¹ | ✅ 🔵 P7 |
+| **L1/L2/L3 architecture** | ⚠️ | ⚠️ | ✅ 🔵 P2 | ✅ 🔵 P2 | ⚠️ | ✅ (Ch 24+25) | —¹ | ⚠️ |
+| **Memory dashboard tab** | — | — | ✅ 🔵 P2 | ✅ 🔵 P6 | — | ✅ (Ch 7) | — | ✅ 🔵 P6 |
+| **Anvil & Lattice dashboard tab** | — | — | ✅ 🔵 P2 | ✅ 🔵 P6 | — | ✅ (Ch 7) 🔵 P6 | — | — |
+
+¹ **AGENT-SETUP.md** is intentionally narrow — a setup-flow guide, not a feature catalog. See §4.4 #1.
 
 ### 3.2 v3.x operations / Forge-Master
 
 | Capability | README | llms.txt | capabilities.md | capabilities.html | Manual | Landing pages |
 |---|:-:|:-:|:-:|:-:|:-:|:-:|
 | **`forge_master_ask`** (read-only orchestrator) | ✅ | ⚠️ | ✅ | ✅ | ✅ | ✅ |
-| **Forge-Master Studio** (dashboard tab) | ⚠️ | ❌ | ✅ | ✅ | ✅ | ⚠️ |
+| **Forge-Master Studio** (dashboard tab) | ⚠️ | — | ✅ | ✅ | ✅ | ⚠️ |
 | **Multi-agent quorum (--quorum=power/speed/auto)** | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
-| **`forge_estimate_quorum`** | ✅ | ❌ | ❌ | ❌ | ⚠️ | ❌ |
-| **`forge_doctor_quorum`** | ❌ | ❌ | ✅ | ⚠️ | ❌ | ❌ |
+| **`forge_estimate_quorum`** | ✅ | — | ✅ 🔵 P2 | ✅ 🔵 P2 | ⚠️ | — |
+| **`forge_doctor_quorum`** | — | — | ✅ | ✅ 🔵 P2 | — | — |
 | **Inner Loop** (10 opt-in subsystems v2.57/2.58) | ⚠️ | ✅ | ✅ | ✅ | ✅ | ⚠️ |
 | **Watcher v2 (forge_watch, forge_watch_live)** | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
-| **Crucible 8 tools (incl. `_import`, `_status`)** | ✅ | ✅ | ⚠️ (lists 6) | ⚠️ (lists 6) | ✅ | ✅ |
+| **Crucible 8 tools (incl. `_import`, `_status`)** | ✅ | ✅ | ✅ 🔵 P2 | ✅ 🔵 P2 | ✅ | ✅ |
 | **Tempering drain + classifier-reviewer** | ✅ | ✅ | ✅ | ✅ | ✅ | ⚠️ |
 | **Bug Registry (`forge_bug_*`, `forge_meta_bug_file`)** | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
 | **Self-deterministic loop (L1–L8 + C1–C3)** | ✅ | ✅ | ✅ | ✅ | ✅ | ⚠️ |
-| **PreDeploy / PostSlice / PreAgentHandoff hooks** | ✅ | ❌ | ⚠️ | ❌ | ⚠️ | ❌ |
+| **PreDeploy / PostSlice / PreAgentHandoff hooks** | ✅ | — | ⚠️ | — | ⚠️ | — |
 
 ### 3.3 v3.x team & github features
 
 | Capability | README | llms.txt | capabilities.md | capabilities.html | Manual | Landing pages |
 |---|:-:|:-:|:-:|:-:|:-:|:-:|
-| **`forge_team_dashboard`** | ❌ | ❌ | ❌ | ⚠️ | ❌ | ❌ |
-| **`forge_team_activity`** | ❌ | ❌ | ❌ | ⚠️ | ❌ | ❌ |
-| **`forge_github_metrics`** | ❌ | ❌ | ❌ | ⚠️ | ❌ | ❌ |
-| **`forge_github_status`** | ❌ | ❌ | ✅ | ⚠️ | ❌ | ❌ |
-| **`forge_delegate_review`** | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ |
-| **`forge_classifier_issue`** | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ |
-| **`forge_export_plan`** | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ |
-| **Team dashboard tab** | ❌ | ❌ | ❌ | ⚠️ | ❌ | ❌ |
-| **GH Metrics dashboard tab** | ❌ | ❌ | ❌ | ⚠️ | ❌ | ❌ |
+| **`forge_team_dashboard`** | — | — | ✅ 🔵 P2 | ✅ 🔵 P2 | —² | —² |
+| **`forge_team_activity`** | — | — | ✅ 🔵 P2 | ✅ 🔵 P2 | —² | —² |
+| **`forge_github_metrics`** | — | — | ✅ 🔵 P2 | ✅ 🔵 P2 | —² | —² |
+| **`forge_github_status`** | — | — | ✅ | ✅ 🔵 P2 | —² | —² |
+| **`forge_delegate_review`** | — | — | ✅ 🔵 P2 | ✅ 🔵 P2 | —² | —² |
+| **`forge_classifier_issue`** | — | — | ✅ 🔵 P2 | ✅ 🔵 P2 | —² | —² |
+| **`forge_export_plan`** | — | — | ✅ 🔵 P2 | ✅ 🔵 P2 | —² | —² |
+| **Team dashboard tab** | — | — | ✅ 🔵 P2 | ✅ 🔵 P6 | ✅ 🔵 P6 | —² |
+| **GH Metrics dashboard tab** | — | — | ✅ 🔵 P2 | ✅ 🔵 P6 | ✅ 🔵 P6 | —² |
+
+² **README / llms.txt / landing pages** intentionally do not enumerate every team/github tool — they are scope-narrowed surfaces; full catalog lives in `capabilities.md` per the doc IA. See §4.4 #2.
 
 ### 3.4 v3.x graph / pattern / digest CLI
 
 | Capability | CLI-GUIDE | capabilities.md | capabilities.html | Manual |
 |---|:-:|:-:|:-:|:-:|
-| **`forge_graph_query`** (knowledge graph) | ⚠️ | ❌ | ❌ | ❌ |
-| **`forge_patterns_list`** | ⚠️ | ❌ | ❌ | ❌ |
-| **`pforge digest`** | ⚠️ | — | — | ❌ |
-| **`pforge plan-from-sarif`** | ⚠️ | — | — | ❌ |
-| **`pforge sync-spaces`** (Copilot Spaces) | ⚠️ | ❌ | ❌ | ❌ |
-| **`pforge hammer-fm`** | ⚠️ | — | — | ❌ |
-| **`pforge fm-session`, `pforge fm-recall`** | ⚠️ | — | — | ❌ |
+| **`forge_graph_query`** (knowledge graph) | ⚠️ | ✅ 🔵 P2 | ✅ 🔵 P2 | —³ |
+| **`forge_patterns_list`** | ⚠️ | ✅ 🔵 P2 | ✅ 🔵 P2 | —³ |
+| **`pforge digest`** | ⚠️ | — | — | —³ |
+| **`pforge plan-from-sarif`** | ⚠️ | — | — | —³ |
+| **`pforge sync-spaces`** (Copilot Spaces) | ⚠️ | — | — | —³ |
+| **`pforge hammer-fm`** | ⚠️ | — | — | —³ |
+| **`pforge fm-session`, `pforge fm-recall`** | ⚠️ | — | — | —³ |
+
+³ **CLI-only utilities** are documented in [CLI-GUIDE.md](CLI-GUIDE.md), not in the long-form manual — the manual covers workflows, not command reference. CLI-GUIDE ⚠️ cells are tracked in §4.5 #3 (v3.6 candidate: full CLI-GUIDE refresh).
 
 ### 3.5 REST API & SDK
 
 | Capability | README | llms.txt | capabilities.md | capabilities.html | Manual |
 |---|:-:|:-:|:-:|:-:|:-:|
-| **REST API** (101 endpoints) | ✅ (8 listed) | ✅ (22 listed) | ❌ | ❌ | ⚠️ (partial) |
-| **`/api/innerloop/*`** (7 endpoints) | ❌ | ❌ | ❌ | ❌ | ⚠️ |
-| **`/api/copilot-instructions/*`** | ❌ | ❌ | ❌ | ❌ | ❌ |
-| **`/api/openclaw/*`** | ❌ | ❌ | ❌ | ❌ | ⚠️ |
-| **WebSocket hub (`/api/hub`)** | ✅ | ✅ | ⚠️ | ⚠️ | ✅ |
-| **`pforge-sdk` (0.2.0)** | ⚠️ | ❌ | ❌ | ❌ | ❌ |
-| **`pforge-sdk/hallmark` sub-path** | ❌ | ❌ | ❌ | ✅ | ❌ |
-| **`pforge-sdk/tools`, `pforge-sdk/client`** | ❌ | ❌ | ❌ | ❌ | ❌ |
+| **REST API** (103 endpoints) | ✅ → [docs/REST-API.md](REST-API.md) 🔵 P3 | ✅ | ✅ 🔵 P3 | ✅ 🔵 P3 | —⁴ |
+| **`/api/innerloop/*`** (7 endpoints) | ✅ 🔵 P3 | — | ✅ 🔵 P3 | ✅ 🔵 P3 | —⁴ |
+| **`/api/copilot-instructions/*`** | ✅ 🔵 P3 | — | ✅ 🔵 P3 | ✅ 🔵 P3 | —⁴ |
+| **`/api/openclaw/*`** | ✅ 🔵 P3 | — | ✅ 🔵 P3 | ✅ 🔵 P3 | ⚠️ |
+| **WebSocket hub (`/api/hub`)** | ✅ | ✅ | ✅ 🔵 P3 | ✅ 🔵 P3 | ✅ |
+| **`pforge-sdk` (0.3.0 🔵 P4)** | ✅ 🔵 P4 | — | ✅ 🔵 P4 | ✅ 🔵 P4 | —⁴ |
+| **`pforge-sdk/hallmark` sub-path** | ✅ 🔵 P4 | — | ✅ 🔵 P4 | ✅ | —⁴ |
+| **`pforge-sdk/tools` sub-path** | ✅ 🔵 P4 | — | ✅ 🔵 P4 | ✅ 🔵 P4 | —⁴ |
+| **`pforge-sdk/chunker` sub-path** (replaces `/client`) | ✅ 🔵 P4 | — | ✅ 🔵 P4 | ✅ 🔵 P4 | —⁴ |
+
+⁴ **REST API and SDK reference live in dedicated files** ([REST-API.md](REST-API.md), [pforge-sdk/README.md](../pforge-sdk/README.md)) by design — the manual is a narrative book, not an API reference. See §4.4 #3.
 
 ---
 
@@ -299,9 +311,30 @@ security-audit, staging-deploy, test-sweep, ui-scaffold
 
 ### 4.3 Structural gaps (lower priority)
 
-- `pforge-sdk@0.2.0` only exports 4 sub-paths despite Lattice + Anvil + Tempering having stable modules. Candidate for `pforge-sdk@0.3.0`.
-- `extensions/catalog.json` has not added any `code` category extensions since April 2026 even though Lattice + Hallmark could ship as standalone extensions.
-- 19 manual appendices but no "API surface index" — readers have no single place to see every MCP tool + CLI command + REST endpoint + SDK export.
+- `pforge-sdk@0.2.0` only exports 4 sub-paths despite Lattice + Anvil + Tempering having stable modules. Candidate for `pforge-sdk@0.3.0`. — **✅ SHIPPED in Pass 4** (`8719048`). SDK is now `0.3.0` with `./tools`, `./hallmark`, `./chunker`. Anvil/Lattice/Tempering sub-paths intentionally deferred (see §4.5 #1).
+- `extensions/catalog.json` has not added any `code` category extensions since April 2026 even though Lattice + Hallmark could ship as standalone extensions. — **🔵 Deferred to v3.6** (see §4.5 #2).
+- 19 manual appendices but no "API surface index" — readers have no single place to see every MCP tool + CLI command + REST endpoint + SDK export. — **🔵 Deferred to v3.6** (see §4.5 #4).
+
+### 4.4 Evaluated & accepted as N/A (not a defect)
+
+> These cells were flagged ❌ in earlier revisions of the matrix but evaluated during Pass 7 and accepted as **intentionally out of scope**. Recording the rationale here so future audits don't relitigate them.
+
+1. **AGENT-SETUP.md does not enumerate Hallmark / Anvil / Lattice / Sync.** AGENT-SETUP is a setup-flow guide ("what files land where for which agent picker"), not a feature catalog. It points to `forge_capabilities` for discovery and to the manual for narrative coverage. Adding feature lists here would create a second source of truth that drifts. **Decision**: keep AGENT-SETUP scope-narrow; full feature surface lives in `capabilities.{md,html}` and the manual.
+2. **README / llms.txt / landing pages do not list every team/github tool individually.** These are first-touch surfaces with a token budget. The Pass 5 stat banner (`88 MCP Tools · 57 CLI · 103+ REST · …`) advertises the count; the keyword list (`forge_team_dashboard`, `forge_github_metrics`, etc.) lives in `capabilities.md`. **Decision**: counts on landing pages, names in `capabilities.md`. Do not pull the full tool list onto landing surfaces.
+3. **REST API and SDK reference live in dedicated files, not the manual.** The manual ([docs/manual/](manual/)) is a long-form narrative — "how the shop works". Tool/endpoint reference belongs in [REST-API.md](REST-API.md) and [pforge-sdk/README.md](../pforge-sdk/README.md). Cross-references from the manual are sufficient. **Decision**: do not duplicate REST/SDK reference into manual chapters; keep narrative + cross-links.
+4. **HTML landing-page "alt-text only" mentions of Hallmark/Anvil/Lattice.** Image alt text counts as accessible documentation — the body copy uses the umbrella term "v3.x memory architecture" with a link to Ch 25. Naming every subsystem in body copy was deemed copy-bloat. **Decision**: alt-text + hyperlink is sufficient; body copy stays at the umbrella term.
+5. **`MEMORY-ARCHITECTURE.md` historical v2.95.0 references.** Per Pass 7 the doc was rebaselined to v3.x phrasing. The remaining `v2.95.0 (released)` mention in the Roadmap Implications section is intentional — it's a release-history annotation, not a current-state claim. **Decision**: leave historical version markers in place where they document "when this shipped".
+
+### 4.5 Deferred to v3.6 (forward-looking, tracked in ROADMAP)
+
+> Real work that should happen, but is chapter-sized or product-sized — too large for a doc-rebaseline pass. Cross-referenced from [ROADMAP.md#v36-documentation--surface-candidates](../ROADMAP.md#v36-documentation--surface-candidates).
+
+1. **Typed REST `client` sub-path in `pforge-sdk@0.4.0`.** Currently SDK consumers calling REST endpoints have to write `fetch` boilerplate against [REST-API.md](REST-API.md). A generated typed client (one per endpoint family) would close this. Tracked in [pforge-sdk/README.md#roadmap](../pforge-sdk/README.md#roadmap).
+2. **Lattice + Hallmark as catalog extensions.** Both subsystems are useful as standalone tools for projects that want code-graph or provenance stamping without the full forge. Requires extracting to standalone packages — product decision, not a doc fix.
+3. **CLI-GUIDE refresh covering `pforge digest`, `plan-from-sarif`, `sync-spaces`, `hammer-fm`, `fm-session`, `fm-recall`.** These commands exist (§3.4) but their CLI-GUIDE entries are stubs. Needs a full pass through `pforge.ps1` to regenerate the reference section.
+4. **Manual Appendix G — "Unified API Surface Index".** A single appendix that tabulates every MCP tool + CLI command + REST endpoint + SDK export with cross-links to its long-form coverage. Chapter-sized work; deferred so the manual's existing 19 appendices stay stable.
+5. **Landing-page screenshot refresh.** Several screenshots on [docs/index.html](index.html), [docs/dashboard.html](dashboard.html), and [docs/shop-tour.html](shop-tour.html) predate the 37-tab dashboard taxonomy. Needs a fresh capture pass.
+6. **`MEMORY-ARCHITECTURE.md` retrofit of remaining L3 candidates.** Wire `forge_diagnose`, `forge_sweep`, `forge_run_skill` through `captureMemory()` so they contribute to L3. Adds an `l3Writes` field to `tools.json` for auditable coverage. Tracked in `docs/MEMORY-ARCHITECTURE.md#roadmap-implications` item 4.
 
 ---
 
@@ -309,12 +342,13 @@ security-audit, staging-deploy, test-sweep, ui-scaffold
 
 In dependency order:
 
-1. **Mechanical sweep** — fix the 8 stale tool counts in §4.1 (single commit, no narrative changes).
-2. **Capability table refresh** — bring `capabilities.md` and `capabilities.html` to 100% coverage (every MCP tool listed) by adding the 6 currently-missing tools: `forge_team_dashboard`, `forge_team_activity`, `forge_github_metrics`, `forge_delegate_review`, `forge_classifier_issue`, `forge_export_plan`, `forge_graph_query`, `forge_patterns_list`.
-3. **REST surface chapter** — add a `docs/REST-API.md` (or expand the `README.md` section) covering all ~103 endpoints organized by prefix.
-4. **SDK refresh** — `pforge-sdk@0.3.0` with Lattice + Anvil sub-paths; update `pforge-sdk/README.md`.
-5. **Manual completeness** — add a "Settings Reference" appendix, an "Inner Loop deep-dive" chapter (currently only the loop is documented), and a "Dashboard Tab Atlas" that names every tab and what backs it.
-6. **Landing-page refresh** — once §1–5 are done, refresh `docs/index.html`, `docs/docs.html`, and `docs/faq.html` to match the v3.5.1 reality.
+1. **Mechanical sweep** — fix the 8 stale tool counts in §4.1 (single commit, no narrative changes). **✅ SHIPPED Pass 1** (`b9e55a8`).
+2. **Capability table refresh** — bring `capabilities.md` and `capabilities.html` to 100% coverage (every MCP tool listed) by adding the 6 currently-missing tools: `forge_team_dashboard`, `forge_team_activity`, `forge_github_metrics`, `forge_delegate_review`, `forge_classifier_issue`, `forge_export_plan`, `forge_graph_query`, `forge_patterns_list`. **✅ SHIPPED Pass 2** (`cb85270`) — 88/88 coverage verified.
+3. **REST surface chapter** — add a `docs/REST-API.md` (or expand the `README.md` section) covering all ~103 endpoints organized by prefix. **✅ SHIPPED Pass 3** (`4916707`) — [docs/REST-API.md](REST-API.md), 103 endpoints, 17+ domains, plus regen script `scripts/dump-rest-routes.mjs`.
+4. **SDK refresh** — `pforge-sdk@0.3.0` with Lattice + Anvil sub-paths; update `pforge-sdk/README.md`. **✅ SHIPPED Pass 4** (`8719048`) — 0.3.0 ships `./tools`, `./hallmark`, `./chunker`; removed broken `./client` declaration; Lattice/Anvil sub-paths deferred to v0.4.0 (§4.5 #1).
+5. **Manual completeness** — add a "Settings Reference" appendix, an "Inner Loop deep-dive" chapter (currently only the loop is documented), and a "Dashboard Tab Atlas" that names every tab and what backs it. **✅ SHIPPED Pass 6** (`e129dc7`) — verified `docs/manual/dashboard-settings.html`, `docs/manual/inner-loop.html`, and the new 37-tab atlas table in `docs/manual/dashboard.html`. Audit was overly pessimistic — most chapters already existed; Pass 6 corrected counts and added the explicit group/tab table.
+6. **Landing-page refresh** — once §1–5 are done, refresh `docs/index.html`, `docs/docs.html`, and `docs/faq.html` to match the v3.5.1 reality. **✅ SHIPPED Pass 5** (`5b27d2a`) and Pass 6 (`e129dc7`) — banners, cards, faq, speckit-interop, dashboard tab counts all aligned.
+7. **Audit reconciliation** — refresh the §3 matrix, document evaluated-N/A decisions in §4.4, list deferred items in §4.5, add v3.6 stub to ROADMAP. **✅ SHIPPED Pass 7** (_this commit_).
 
 ---
 

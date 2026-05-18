@@ -4,7 +4,7 @@
 > **Since**: v2.35  
 > **Audience**: contributors adding new MCP tools, skills, or storage surfaces
 
-> **v2.95.0 Memory Upgrade** — This document reflects the v2.95.0 release, which introduced three major additions to the memory subsystem: **Hallmark provenance envelopes** (every L3 write is now tagged with source, hash, and capability negotiation result), **Anvil Δ-only memoization** (a write-through cache layer between tools and L1/L2), and the **Lattice code index** (a parallel structural index for call-graph and cross-reference queries). See the plan files for design rationale: [Phase-HALLMARK-CONTRACT](plans/Phase-HALLMARK-CONTRACT-PLAN.md) · [Phase-ANVIL](plans/Phase-ANVIL-PLAN.md) · [Phase-LATTICE](plans/Phase-LATTICE-PLAN.md) · [Phase-PROVENANCE](plans/Phase-PROVENANCE-PLAN.md). The Hallmark schema is defined in [`pforge-sdk/schemas/hallmark-provenance.v1.json`](../pforge-sdk/schemas/hallmark-provenance.v1.json).
+> **v3.x Memory Architecture** — This document reflects the v3.x memory subsystem, which builds on the L1/L2/L3 tier model with four major additions: **Hallmark provenance envelopes** (every L3 write is tagged with source, hash, and capability negotiation result — originally landed in v2.95.0), **Anvil Δ-only memoization** (write-through cache layer between tools and L1/L2 — v2.95.0), the **Lattice code index** (parallel structural index for call-graph and cross-reference queries — v2.95.0), and **`forge_sync_memories` / `forge_sync_instructions`** (the Copilot Memory bridge that pushes decisions and lessons upward into `.github/copilot-memory-hints.md` and regenerates `copilot-instructions.md` — v2.99/v3.0). See the plan files for design rationale: [Phase-HALLMARK-CONTRACT](plans/Phase-HALLMARK-CONTRACT-PLAN.md) · [Phase-ANVIL](plans/Phase-ANVIL-PLAN.md) · [Phase-LATTICE](plans/Phase-LATTICE-PLAN.md) · [Phase-PROVENANCE](plans/Phase-PROVENANCE-PLAN.md). The Hallmark schema is defined in [`pforge-sdk/schemas/hallmark-provenance.v1.json`](../pforge-sdk/schemas/hallmark-provenance.v1.json).
 
 ---
 
@@ -18,7 +18,7 @@ Plan Forge has **three tiers of memory**, organised by substrate, not by feature
 | **L2** | Structured (left brain) | files on disk (`.forge/`, `.github/`, `docs/plans/`) | repo | exact lookup | free |
 | **L3** | Semantic (right brain) | OpenBrain (Postgres + pgvector) | cross-project, forever | fuzzy / associative | network + embed |
 
-**v2.95.0 additions** layered on top of this hierarchy:
+**v3.x additions** layered on top of this hierarchy:
 
 | Component | Where it sits | What it does |
 |-----------|--------------|-------------|
@@ -185,7 +185,7 @@ When `captureMemory()` is called but OpenBrain is unreachable, thoughts are writ
 
 ## The dual-write pattern
 
-Every MCP tool should follow this shape (v2.95.0: Anvil sits in the write path):
+Every MCP tool should follow this shape (v3.x: Anvil sits in the write path):
 
 ```
 ┌─────────────────────────────────────────────────────┐
@@ -226,7 +226,7 @@ And when reading before acting:
 
 ## Hallmark Provenance Envelope
 
-Every L3 write in v2.95.0 is wrapped in a **Hallmark provenance envelope** before it reaches OpenBrain. The envelope adds:
+Every L3 write in v3.x is wrapped in a **Hallmark provenance envelope** before it reaches OpenBrain. The envelope adds:
 
 | Field | Value | Purpose |
 |-------|-------|---------|
@@ -372,7 +372,7 @@ The **Slag-Heap** is the dead-letter queue (DLQ) for failed or rejected L3 write
 
 ## Tool audit — where we are today
 
-As of v2.95.0, dual-write coverage across 84 MCP tools:
+As of v3.5.1, dual-write coverage across 88 MCP tools:
 
 | Bucket | Count | Status |
 |--------|-------|--------|
@@ -435,9 +435,9 @@ It's not a literal equivalence — it's just that the same pressures (fast/small
 Three concrete items drop out of this architecture:
 
 1. **v2.95.0 (released)** — Hallmark provenance, Anvil Δ-only memoization, Lattice code index, Slag-Heap DLQ, and capability negotiation with OpenBrain. 15 new MCP tools. See the Phase plans for full details.
-2. **v2.96 (planned)** — Wire `forge_watch` / `forge_watch_live` through `captureMemory()`. The only cross-project observer currently has no semantic memory. Lattice blast scoring for watcher anomalies.
-3. **v2.97+ (design)** — Retrofit the medium-value L3 candidates (`forge_diagnose`, `forge_sweep`, `forge_run_skill`). Add an `l3Writes` field to each tool's declaration in `tools.json` so coverage is auditable.
-4. **v3.0+ (design)** — Consider an L4: a shared OpenBrain tenant across an organisation, so lessons from project A surface to project B without any local OpenBrain. This is a deployment pattern, not new code.
+2. **v2.96 (shipped in v3.x)** — Wire `forge_watch` / `forge_watch_live` through `captureMemory()`. The only cross-project observer now has semantic memory; Lattice blast scoring covers watcher anomalies.
+3. **v2.99 / v3.0 (released)** — Copilot bridge: `forge_sync_memories` (writes `.github/copilot-memory-hints.md` from forge decisions/trajectories/auto-skills) and `forge_sync_instructions` (regenerates `.github/copilot-instructions.md` from project profile + principles + `.forge.json`). Completes the Copilot integration trilogy.
+4. **v3.6+ (design)** — Retrofit the remaining L3 candidates (`forge_diagnose`, `forge_sweep`, `forge_run_skill`). Add an `l3Writes` field to each tool's declaration in `tools.json` so coverage is auditable. Consider an L4: shared OpenBrain tenant across an organisation, so lessons from project A surface to project B without any local OpenBrain.
 
 ---
 
@@ -457,7 +457,7 @@ Three concrete items drop out of this architecture:
 
 ## QA & Validation
 
-The v2.95.0 memory subsystem (Hallmark, Anvil, Lattice, Slag-Heap DLQ, capability negotiation) is covered by two validation surfaces:
+The v3.x memory subsystem (Hallmark, Anvil, Lattice, Slag-Heap DLQ, capability negotiation, Copilot sync bridge) is covered by two validation surfaces:
 
 ### Operator smoke script
 

@@ -47,6 +47,21 @@ See [CHANGELOG.md](CHANGELOG.md) for full release notes.
 
 ---
 
+## v3.6 Documentation & Surface Candidates
+
+> Items deferred from the v3.x doc rebaseline (see [docs/V3-CAPABILITY-AUDIT.md §4.5](docs/V3-CAPABILITY-AUDIT.md)). Each is chapter-sized or product-sized — too large for a doc-only commit. Tracked here so they aren't lost.
+
+| # | Item | Effort | Trigger to start |
+|---|------|--------|-----------------|
+| 1 | **Typed REST `client` sub-path for `pforge-sdk@0.4.0`** — generated TypeScript-style typed wrappers for each `/api/*` family, replacing hand-rolled `fetch` boilerplate. Tracked in [pforge-sdk/README.md#roadmap](pforge-sdk/README.md#roadmap). | M | First external SDK consumer asks for it, or a v3.6 enterprise customer needs typed bindings. |
+| 2 | **Lattice + Hallmark as standalone catalog extensions** — extract to standalone packages so projects can adopt code-graph or provenance stamping without the full forge. | L | Demand signal from at least 3 external repos. |
+| 3 | **CLI-GUIDE refresh** covering `pforge digest`, `plan-from-sarif`, `sync-spaces`, `hammer-fm`, `fm-session`, `fm-recall` — these commands exist but their CLI-GUIDE entries are stubs. | S | Next CLI release that adds or removes top-level commands. |
+| 4 | **Manual Appendix G — "Unified API Surface Index"** — single appendix tabulating every MCP tool + CLI command + REST endpoint + SDK export with cross-links. | M | After Appendix F stabilizes; or when SDK 0.4.0 lands. |
+| 5 | **Landing-page screenshot refresh** — several screenshots on [docs/index.html](docs/index.html), [docs/dashboard.html](docs/dashboard.html), and [docs/shop-tour.html](docs/shop-tour.html) predate the 37-tab dashboard taxonomy. | S | Next visible UI change to the dashboard chrome. |
+| 6 | **L3 retrofit** — wire `forge_diagnose`, `forge_sweep`, `forge_run_skill` through `captureMemory()` and add an `l3Writes` field to `tools.json` for auditable coverage. | M | After v3.6 ships; pre-requisite for "L4 shared tenant" experiment. |
+
+---
+
 ## Shipped Versions (Compressed)
 
 > Full details for each release are in [CHANGELOG.md](CHANGELOG.md). Only summaries are kept here.

@@ -51,7 +51,11 @@ param(
 
     [switch]$AutoDetect,
 
-    [switch]$InstallExtensions
+    [switch]$InstallExtensions,
+
+    # Phase-OPENBRAIN-PROMOTION Slice 4 — suppress interactive OpenBrain prompt in CI / automation.
+    # Also honored: $env:CI and $env:PFORGE_NONINTERACTIVE, plus auto-skip when stdin is not a TTY.
+    [switch]$NonInteractive
 )
 
 $ErrorActionPreference = 'Stop'
@@ -1671,6 +1675,64 @@ Write-Host "  - Use .github/prompts/step0-specify-feature.prompt.md to define yo
 Write-Host "  - Start your first plan the Crucible way: call forge_crucible_submit (MCP) — every plan ships with a crucibleId for full traceability" -ForegroundColor DarkCyan
 Write-Host "  - On GitHub? Run 'pforge github status' for a GitHub-native readiness check, or read /manual/plan-forge-on-the-github-stack.html" -ForegroundColor DarkCyan
 Write-Host ""
+
+# ─── Step 7.5: OpenBrain L3 Memory Prompt (Phase-OPENBRAIN-PROMOTION Slice 4) ──
+# Plan Forge ships with L1 (Hub) + L2 (.forge/*.jsonl) memory built in. The L3 layer
+# — cross-session, cross-tool, semantic-search memory — requires OpenBrain. Optional
+# but recommended. Prompt only fires in interactive TTY runs.
+#
+# Skip gates (any one suppresses the prompt):
+#   - $NonInteractive switch
+#   - $env:CI (set by GitHub Actions, GitLab CI, Azure DevOps, CircleCI, etc.)
+#   - $env:PFORGE_NONINTERACTIVE (Plan Forge — internal automation flag)
+#   - Host RawUI is $null (running under a non-interactive host)
+$skipOpenBrainPrompt = $NonInteractive `
+    -or $env:CI `
+    -or $env:PFORGE_NONINTERACTIVE `
+    -or -not $Host.UI.RawUI
+
+if ($skipOpenBrainPrompt) {
+    Write-Host "i Skipping OpenBrain prompt (non-interactive / CI). Run 'pforge brain hint' anytime to revisit." -ForegroundColor DarkGray
+    Write-Host ""
+}
+else {
+    Write-Host "================================================================" -ForegroundColor Cyan
+    Write-Host " Recommended: Enable Persistent Memory (OpenBrain)" -ForegroundColor Cyan
+    Write-Host "================================================================" -ForegroundColor Cyan
+    Write-Host ""
+    Write-Host "Plan Forge ships with L1 (Hub) + L2 (.forge/*.jsonl) memory."
+    Write-Host "The L3 layer — cross-session semantic memory that powers Reflexion"
+    Write-Host "lessons, Auto-skills, and cross-project Federation — requires"
+    Write-Host "OpenBrain, a self-hosted MCP server. Plan Forge works without it,"
+    Write-Host "but the inner loop only improves over time when L3 is present."
+    Write-Host ""
+    $obResp = try { Read-Host "Show me OpenBrain install options? [Y/n/skip]" } catch { "skip" }
+
+    if ($obResp -match '^(n|no)$') {
+        Write-Host ""
+        Write-Host "!  Skipping. Reflexion / Auto-skills / Federation will be inert. Re-enable anytime with 'pforge brain hint'." -ForegroundColor Yellow
+        Write-Host ""
+    }
+    elseif ($obResp -match '^(s|skip)$') {
+        Write-Host ""
+        Write-Host "i Skipped. Re-enable anytime with 'pforge brain hint'." -ForegroundColor DarkGray
+        Write-Host ""
+    }
+    else {
+        # Empty or any other input → default Y branch.
+        Write-Host ""
+        Write-Host "OpenBrain deploy options:" -ForegroundColor Yellow
+        Write-Host "  - Docker Compose       ~5 min   Free                Local dev / single machine"
+        Write-Host "  - Supabase Cloud       ~10 min  ~`$0.10-`$0.30/mo     Solo / small team, zero ops"
+        Write-Host "  - Kubernetes / Azure   ~30 min  Cloud rates         Teams, federation across repos"
+        Write-Host ""
+        Write-Host "Full walkthrough:  https://srnichols.github.io/OpenBrain" -ForegroundColor Cyan
+        Write-Host "Source repo:       https://github.com/srnichols/OpenBrain" -ForegroundColor DarkGray
+        Write-Host ""
+        Write-Host "After installing, run 'pforge brain status' to confirm Plan Forge sees it." -ForegroundColor Green
+        Write-Host ""
+    }
+}
 
 # ─── Step 8: Auto-validate ─────────────────────────────────────────────
 Write-Host "Running validation..." -ForegroundColor Cyan

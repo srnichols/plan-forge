@@ -21,6 +21,9 @@ FORCE=false
 AUTO_DETECT=false
 AGENTS="copilot"
 GENERIC_DIR=".ai"
+# Phase-OPENBRAIN-PROMOTION Slice 4 — suppress interactive OpenBrain prompt in CI / automation.
+# Also honored: $CI and $PFORGE_NONINTERACTIVE, plus auto-skip when stdin is not a TTY.
+NON_INTERACTIVE=false
 
 # ─── Color helpers ─────────────────────────────────────────────────────
 cyan()   { printf '\033[0;36m%s\033[0m\n' "$*"; }
@@ -38,8 +41,9 @@ while [[ $# -gt 0 ]]; do
         --generic-dir) GENERIC_DIR="$2"; shift 2 ;;
         --force|-f)   FORCE=true; shift ;;
         --auto-detect|-a) AUTO_DETECT=true; shift ;;
+        --non-interactive) NON_INTERACTIVE=true; shift ;;
         --help|-h)
-            echo "Usage: ./setup.sh [--preset dotnet|typescript|python|java|go|swift|rust|php|azure-iac|custom] [--path DIR] [--name NAME] [--agent copilot|claude|cursor|codex|gemini|generic|all] [--generic-dir DIR] [--force] [--auto-detect]"
+            echo "Usage: ./setup.sh [--preset dotnet|typescript|python|java|go|swift|rust|php|azure-iac|custom] [--path DIR] [--name NAME] [--agent copilot|claude|cursor|codex|gemini|generic|all] [--generic-dir DIR] [--force] [--auto-detect] [--non-interactive]"
             exit 0 ;;
         *) red "Unknown option: $1"; exit 1 ;;
     esac
@@ -1546,6 +1550,62 @@ echo "  - Use .github/prompts/step0-specify-feature.prompt.md to define your fir
 echo "  - Start your first plan the Crucible way: call forge_crucible_submit (MCP) — every plan ships with a crucibleId for full traceability"
 echo "  - On GitHub? Run 'pforge github status' for a GitHub-native readiness check, or read /manual/plan-forge-on-the-github-stack.html"
 echo ""
+
+# ─── Step 7.5: OpenBrain L3 Memory Prompt (Phase-OPENBRAIN-PROMOTION Slice 4) ──
+# Plan Forge ships with L1 (Hub) + L2 (.forge/*.jsonl) memory built in. The L3 layer
+# — cross-session, cross-tool, semantic-search memory — requires OpenBrain. Optional
+# but recommended. Prompt only fires in interactive TTY runs.
+#
+# Skip gates (any one suppresses the prompt):
+#   - --non-interactive flag (NON_INTERACTIVE=true)
+#   - $CI (set by GitHub Actions, GitLab CI, Azure DevOps, CircleCI, etc.)
+#   - $PFORGE_NONINTERACTIVE (Plan Forge — internal automation flag)
+#   - stdin is not a TTY ([ -t 0 ] is false)
+if [[ "$NON_INTERACTIVE" == "true" ]] || [[ -n "${CI:-}" ]] || [[ -n "${PFORGE_NONINTERACTIVE:-}" ]] || [[ ! -t 0 ]]; then
+    printf '\033[0;90m%s\033[0m\n' "i Skipping OpenBrain prompt (non-interactive / CI). Run 'pforge brain hint' anytime to revisit."
+    echo ""
+else
+    cyan "================================================================"
+    cyan " Recommended: Enable Persistent Memory (OpenBrain)"
+    cyan "================================================================"
+    echo ""
+    echo "Plan Forge ships with L1 (Hub) + L2 (.forge/*.jsonl) memory."
+    echo "The L3 layer — cross-session semantic memory that powers Reflexion"
+    echo "lessons, Auto-skills, and cross-project Federation — requires"
+    echo "OpenBrain, a self-hosted MCP server. Plan Forge works without it,"
+    echo "but the inner loop only improves over time when L3 is present."
+    echo ""
+    OB_RESP=""
+    read -rp "Show me OpenBrain install options? [Y/n/skip]: " OB_RESP || OB_RESP="skip"
+    OB_RESP_LC="$(printf '%s' "$OB_RESP" | tr '[:upper:]' '[:lower:]')"
+
+    case "$OB_RESP_LC" in
+        n|no)
+            echo ""
+            yellow "!  Skipping. Reflexion / Auto-skills / Federation will be inert. Re-enable anytime with 'pforge brain hint'."
+            echo ""
+            ;;
+        s|skip)
+            echo ""
+            printf '\033[0;90m%s\033[0m\n' "i Skipped. Re-enable anytime with 'pforge brain hint'."
+            echo ""
+            ;;
+        *)
+            # Empty or any other input → default Y branch.
+            echo ""
+            yellow "OpenBrain deploy options:"
+            echo "  - Docker Compose       ~5 min   Free                Local dev / single machine"
+            echo "  - Supabase Cloud       ~10 min  ~\$0.10-\$0.30/mo     Solo / small team, zero ops"
+            echo "  - Kubernetes / Azure   ~30 min  Cloud rates         Teams, federation across repos"
+            echo ""
+            cyan "Full walkthrough:  https://srnichols.github.io/OpenBrain"
+            printf '\033[0;90m%s\033[0m\n' "Source repo:       https://github.com/srnichols/OpenBrain"
+            echo ""
+            green "After installing, run 'pforge brain status' to confirm Plan Forge sees it."
+            echo ""
+            ;;
+    esac
+fi
 
 # ─── Step 8: Auto-validate ─────────────────────────────────────────────
 cyan "Running validation..."

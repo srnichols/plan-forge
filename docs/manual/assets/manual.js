@@ -99,6 +99,7 @@
     "how-do-i":                      { label: "NEW",     version: "v3.6.2" },
     "forge-json-reference":          { label: "NEW",     version: "v3.6.2" },
     "environment-variables-reference": { label: "NEW",   version: "v3.6.2" },
+    "customization":                 { label: "UPDATED", version: "v3.6.2" },
     "inner-loop":                    { label: "NEW",     version: "v2.57" },
     "self-deterministic-loop":       { label: "NEW",     version: "v2.58" },
     "competitive-loop":              { label: "NEW",     version: "v2.58" },
@@ -116,8 +117,8 @@
 
   // ─── Edition ───
   // Single source of truth for the manual edition badge shown in the meta-bar.
-  // Third Edition — v3.5.1 (Pass 7 audit reconciliation + Manual Third Edition: 4 new Act V chapters)
-  const EDITION = "3.5.1";
+  // Fifth Edition — v3.6.2 (Phase MANUAL-EBOOK-COMPLETION ≥10/18 content slices shipped: A1-A7 front matter + B1 .forge.json + B2 env vars + B3 lifecycle hooks)
+  const EDITION = "3.6.2";
 
   // ─── Manual counts (single source of truth) ───
   //
@@ -688,6 +689,13 @@
     { t: "copilot-instructions.md", u: "customization.html#master-config" },
     { t: "Custom Instruction Files", u: "customization.html#custom-instructions" },
     { t: "applyTo Pattern Reference", u: "customization.html#custom-instructions" },
+    // Lifecycle Hooks Reference — added in Phase MANUAL-EBOOK-COMPLETION Slice B3 (v3.6.2)
+    { t: "Lifecycle Hooks Reference — all eight hooks",          u: "customization.html#lifecycle-hooks" },
+    { t: "Lifecycle Hooks — Copilot session (SessionStart, PreToolUse, PostToolUse, Stop)", u: "customization.html#hooks-copilot-session" },
+    { t: "Lifecycle Hooks — LiveGuard (PreDeploy, PostSlice, PreAgentHandoff)",             u: "customization.html#hooks-liveguard" },
+    { t: "Lifecycle Hooks — Plan-execution guard (PreCommit)",   u: "customization.html#hooks-plan-execution" },
+    { t: "Lifecycle Hooks — Resolution order",                   u: "customization.html#hooks-resolution" },
+    { t: "Lifecycle Hooks — Writing a custom hook",              u: "customization.html#hooks-writing" },
     { t: "Configuration Hierarchy", u: "customization.html#config-hierarchy" },
     // Ch 9
     { t: "Universal Instruction Files", u: "instructions-agents.html#shared" },

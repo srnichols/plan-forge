@@ -1,0 +1,346 @@
+<!DOCTYPE html>
+<html lang="en" class="scroll-smooth">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Integrating from Outside — REST, SDK, WebSocket, CLI</title>
+  <meta name="description" content="Plan Forge exposes four orthogonal surfaces so any tool — CI runner, custom dashboard, IDE plugin, mobile app — can drive the workshop without depending on the MCP transport. This chapter tours all four with code examples." />
+  <link rel="icon" type="image/svg+xml" href="../assets/plan-forge-logo.svg" />
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>tailwind.config={theme:{extend:{colors:{forge:{400:'#f59e0b',500:'#d97706'}}}}}</script>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;600;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="../assets/shared.css" />
+  <link rel="stylesheet" href="assets/manual.css" />
+  <script type="module">
+    import mermaid from "https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.esm.min.mjs";
+    mermaid.initialize({ startOnLoad: true, theme: "dark", themeVariables: { fontFamily: "Inter, ui-sans-serif", primaryColor: "#f59e0b", primaryTextColor: "#f1f5f9", lineColor: "#64748b" } });
+  </script>
+</head>
+<body class="bg-slate-950 text-slate-300 min-h-screen">
+
+  <button id="mobile-sidebar-btn" class="mobile-sidebar-btn fixed top-4 left-4 z-[101] lg:hidden p-2 bg-slate-900 border border-slate-700 rounded-lg text-slate-400 hover:text-slate-100 transition-colors" aria-label="Open navigation">
+    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"/></svg>
+  </button>
+  <div id="sidebar-overlay" class="sidebar-overlay"></div>
+
+  <div class="manual-layout">
+    <aside id="manual-sidebar" class="manual-sidebar"><nav id="sidebar-nav"></nav></aside>
+
+    <main>
+      <div class="chapter-content">
+
+        <div class="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">Chapter 29 · Act V — Integrate</div>
+        <h1>Integrating from Outside</h1>
+        <p class="text-lg text-slate-400 mb-8">MCP is the native transport for Copilot and similar agents — but it is not the only one. Plan Forge ships four orthogonal surfaces so any tool can drive the workshop: <strong>REST</strong> for HTTP-anything, <strong>SDK</strong> for Node.js callers, <strong>WebSocket hub</strong> for live event streams, and <strong>CLI</strong> for scripts and humans.</p>
+
+        <div class="callout callout-info">
+          <strong>The big numbers.</strong> The integration surface is large by design — <!--c:tools-->88<!--/c--> MCP tools, 103 REST endpoints across 17+ domains, a 4-sub-path SDK (<code>pforge-sdk</code>, <code>/tools</code>, <code>/hallmark</code>, <code>/chunker</code>), and <!--c:cli-commands-->57<!--/c--> CLI commands. The same underlying handlers back every surface — pick the one that fits the caller, not the feature.
+        </div>
+
+        <!-- ─── The four surfaces ─── -->
+        <h2 id="four-surfaces">The four surfaces, at a glance</h2>
+
+        <div class="my-8 p-6 bg-slate-900/50 border border-slate-800/60 rounded-xl overflow-x-auto">
+          <pre class="mermaid">
+flowchart LR
+    subgraph CL[Callers]
+      CP[Copilot / Agents]
+      CI[CI runners]
+      UI[Custom dashboards]
+      SC[Scripts / Humans]
+    end
+
+    subgraph SF[Surfaces]
+      MCP[MCP Server<br/>stdio + websocket]
+      REST[REST API<br/>HTTP/JSON]
+      WS[WebSocket Hub<br/>/api/hub]
+      CLI[CLI<br/>pforge]
+    end
+
+    subgraph CORE[Plan Forge Core]
+      H[Tool handlers]
+    end
+
+    CP --&gt; MCP --&gt; H
+    CI --&gt; REST --&gt; H
+    UI --&gt; REST
+    UI --&gt; WS --&gt; H
+    SC --&gt; CLI --&gt; H
+          </pre>
+        </div>
+
+        <p>The same handler set lives behind all four surfaces. Adding a new tool means the team writes one handler — and it automatically becomes available as MCP tool, REST endpoint, CLI command, and SDK export. This is intentional: the integration surface should never be the bottleneck for a new capability.</p>
+
+        <!-- ─── REST API ─── -->
+        <h2 id="rest">REST API</h2>
+        <p>The REST surface is the right choice for <strong>any caller that already speaks HTTP</strong> — GitHub Actions, GitLab CI, a Python script, a curl one-liner, a Postman collection. It is also the surface the dashboard itself uses.</p>
+
+        <h3 id="rest-base">Base URL and auth</h3>
+
+        <pre class="bg-slate-950 border border-slate-800/60 rounded-xl p-4 overflow-x-auto text-sm"><code># Local dev (default)
+http://localhost:3100/api
+
+# Auth: bearer token from .forge/secrets.json (key: "apiToken")
+curl -H "Authorization: Bearer $PFORGE_API_TOKEN" \
+     http://localhost:3100/api/plan/status</code></pre>
+
+        <p>Tokens are generated by <code>pforge auth issue</code> and stored locally in <code>.forge/secrets.json</code> (gitignored). Multi-developer setups use one token per developer; CI uses a dedicated CI token with scoped permissions.</p>
+
+        <h3 id="rest-domains">The 17+ domains</h3>
+        <p>The 103 endpoints organize into domain prefixes that mirror the MCP tool families. The full per-endpoint reference lives in <a href="https://github.com/srnichols/plan-forge/blob/master/docs/REST-API.md" rel="noopener">docs/REST-API.md on GitHub</a>; this chapter covers the shape:</p>
+
+        <div class="overflow-x-auto my-6">
+          <table class="text-sm w-full border-collapse">
+            <thead>
+              <tr class="border-b border-slate-700/60">
+                <th class="text-left py-2 px-3 text-slate-400 font-semibold">Prefix</th>
+                <th class="text-left py-2 px-3 text-slate-400 font-semibold">Backs</th>
+                <th class="text-left py-2 px-3 text-slate-400 font-semibold">Sample endpoint</th>
+              </tr>
+            </thead>
+            <tbody class="text-slate-300">
+              <tr class="border-b border-slate-800/40">
+                <td class="py-2 px-3"><code>/api/plan</code></td>
+                <td class="py-2 px-3">Plan execution + status</td>
+                <td class="py-2 px-3"><code>POST /api/plan/run</code></td>
+              </tr>
+              <tr class="border-b border-slate-800/40">
+                <td class="py-2 px-3"><code>/api/cost</code></td>
+                <td class="py-2 px-3">Cost reports + estimates</td>
+                <td class="py-2 px-3"><code>GET /api/cost/report</code></td>
+              </tr>
+              <tr class="border-b border-slate-800/40">
+                <td class="py-2 px-3"><code>/api/team</code></td>
+                <td class="py-2 px-3">Team dashboard + activity</td>
+                <td class="py-2 px-3"><code>GET /api/team/dashboard</code></td>
+              </tr>
+              <tr class="border-b border-slate-800/40">
+                <td class="py-2 px-3"><code>/api/copilot-instructions</code></td>
+                <td class="py-2 px-3">Copilot trilogy</td>
+                <td class="py-2 px-3"><code>POST /api/copilot-instructions/sync</code></td>
+              </tr>
+              <tr class="border-b border-slate-800/40">
+                <td class="py-2 px-3"><code>/api/graph</code></td>
+                <td class="py-2 px-3">Knowledge graph queries</td>
+                <td class="py-2 px-3"><code>POST /api/graph/query</code></td>
+              </tr>
+              <tr class="border-b border-slate-800/40">
+                <td class="py-2 px-3"><code>/api/liveguard</code></td>
+                <td class="py-2 px-3">Deploy safety surface</td>
+                <td class="py-2 px-3"><code>POST /api/liveguard/run</code></td>
+              </tr>
+              <tr class="border-b border-slate-800/40">
+                <td class="py-2 px-3"><code>/api/bugs</code></td>
+                <td class="py-2 px-3">Bug registry</td>
+                <td class="py-2 px-3"><code>GET /api/bugs</code></td>
+              </tr>
+              <tr class="border-b border-slate-800/40">
+                <td class="py-2 px-3"><code>/api/crucible</code></td>
+                <td class="py-2 px-3">Idea smelting</td>
+                <td class="py-2 px-3"><code>POST /api/crucible/ask</code></td>
+              </tr>
+              <tr class="border-b border-slate-800/40">
+                <td class="py-2 px-3"><code>/api/forge-master</code></td>
+                <td class="py-2 px-3">Read-only reasoning agent</td>
+                <td class="py-2 px-3"><code>POST /api/forge-master/ask</code></td>
+              </tr>
+              <tr>
+                <td class="py-2 px-3"><code>/api/hub</code></td>
+                <td class="py-2 px-3">WebSocket event stream (see next section)</td>
+                <td class="py-2 px-3"><code>WS /api/hub</code></td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <p>Every endpoint returns RFC 7807 ProblemDetails on error and a structured JSON object on success. The OpenAPI spec lives at <code>GET /api/openapi.json</code> if you need codegen.</p>
+
+        <!-- ─── WebSocket hub ─── -->
+        <h2 id="websocket">WebSocket hub — <code>/api/hub</code></h2>
+        <p>The WebSocket hub is a <strong>broadcast channel</strong> that emits every event the orchestrator generates — plan starts, slice transitions, gate results, cost samples, bug filings, drift updates. It is the substrate the dashboard's live tiles render off.</p>
+
+        <h3 id="ws-connect">Connecting</h3>
+
+        <pre class="bg-slate-950 border border-slate-800/60 rounded-xl p-4 overflow-x-auto text-sm"><code>// Node.js
+import { WebSocket } from "ws";
+const ws = new WebSocket("ws://localhost:3100/api/hub", {
+  headers: { Authorization: `Bearer ${process.env.PFORGE_API_TOKEN}` }
+});
+
+ws.on("message", (raw) =&gt; {
+  const event = JSON.parse(raw.toString());
+  console.log(event.type, event.payload);
+});</code></pre>
+
+        <h3 id="ws-events">Event shape</h3>
+
+        <pre class="bg-slate-950 border border-slate-800/60 rounded-xl p-4 overflow-x-auto text-sm"><code>{
+  "type":    "slice.commit",       // canonical event name
+  "ts":      "2026-05-17T09:18:41Z",
+  "actor":   "alice@example.com",
+  "plan":    "Phase-31",
+  "slice":   "2",
+  "payload": { sha: "e4f5g6h", durationMs: 24100, gates: ["pass","pass"] }
+}</code></pre>
+
+        <p>The full event catalog (60+ event types) lives in <code>pforge-mcp/EVENTS.md</code>. Subscribe to all events or filter by type:</p>
+
+        <pre class="bg-slate-950 border border-slate-800/60 rounded-xl p-4 overflow-x-auto text-sm"><code>ws.send(JSON.stringify({
+  subscribe: ["slice.*", "gate.fail", "bug.opened"]
+}));</code></pre>
+
+        <div class="callout callout-tip">
+          <strong>Custom dashboards</strong>: the entire <code>/dashboard</code> route is built on top of this WebSocket. If you want to embed Plan Forge progress into your own ops portal, point a WebSocket client at <code>/api/hub</code>, filter to the event types you care about, render. Zero polling.
+        </div>
+
+        <!-- ─── pforge-sdk ─── -->
+        <h2 id="sdk"><code>pforge-sdk</code> — the Node.js client</h2>
+        <p>For TypeScript / JavaScript callers, <code>pforge-sdk</code> is a thin wrapper over the REST and WebSocket surfaces with typed responses and bundled helpers. It ships with four entry points:</p>
+
+        <div class="overflow-x-auto my-6">
+          <table class="text-sm w-full border-collapse">
+            <thead>
+              <tr class="border-b border-slate-700/60">
+                <th class="text-left py-2 px-3 text-slate-400 font-semibold">Import</th>
+                <th class="text-left py-2 px-3 text-slate-400 font-semibold">Contains</th>
+              </tr>
+            </thead>
+            <tbody class="text-slate-300">
+              <tr class="border-b border-slate-800/40">
+                <td class="py-2 px-3"><code>pforge-sdk</code></td>
+                <td class="py-2 px-3">Core client — <code>createClient({ baseUrl, token })</code>, all REST methods, WebSocket subscriber</td>
+              </tr>
+              <tr class="border-b border-slate-800/40">
+                <td class="py-2 px-3"><code>pforge-sdk/tools</code></td>
+                <td class="py-2 px-3">Typed wrappers for every MCP tool — call any <code>forge_*</code> tool from Node.js</td>
+              </tr>
+              <tr class="border-b border-slate-800/40">
+                <td class="py-2 px-3"><code>pforge-sdk/hallmark</code></td>
+                <td class="py-2 px-3">Hallmark stamp helpers — sign / verify generated artifacts</td>
+              </tr>
+              <tr>
+                <td class="py-2 px-3"><code>pforge-sdk/chunker</code></td>
+                <td class="py-2 px-3">Plan-chunker — split long plans into Scope-Contract-aligned slices for execution</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <h3 id="sdk-example">Worked example</h3>
+
+        <pre class="bg-slate-950 border border-slate-800/60 rounded-xl p-4 overflow-x-auto text-sm"><code>import { createClient } from "pforge-sdk";
+import { forgeRunPlan, forgeEstimateQuorum } from "pforge-sdk/tools";
+
+const client = createClient({
+  baseUrl: "http://localhost:3100",
+  token:   process.env.PFORGE_API_TOKEN
+});
+
+// Estimate before running (cost discipline — never hand-compute)
+const est = await forgeEstimateQuorum(client, { plan: "docs/plans/Phase-31-PLAN.md" });
+console.log("Cheapest mode:", est.recommendation);
+
+// Execute
+const run = await forgeRunPlan(client, {
+  plan:   "docs/plans/Phase-31-PLAN.md",
+  quorum: est.recommendation
+});
+
+// Subscribe to live events for this run
+const sub = client.subscribe(["slice.*", "gate.*", "plan.complete"]);
+for await (const event of sub) {
+  if (event.plan !== "Phase-31") continue;
+  console.log(event.type, event.payload);
+  if (event.type === "plan.complete") break;
+}</code></pre>
+
+        <!-- ─── CLI ─── -->
+        <h2 id="cli">CLI — for scripts and humans</h2>
+        <p>The CLI is the right surface for <strong>ad-hoc scripts, cron jobs, and direct human use</strong>. Every command has a <code>--json</code> flag for machine-readable output, so it composes cleanly with shell pipelines and CI scripts.</p>
+
+        <pre class="bg-slate-950 border border-slate-800/60 rounded-xl p-4 overflow-x-auto text-sm"><code># Run a plan and pipe the result into jq
+pforge run-plan docs/plans/Phase-31-PLAN.md --json | jq '.cost.totalUsd'
+
+# Loop until a plan completes (useful in CI)
+while [ "$(pforge plan-status --json | jq -r '.state')" != "complete" ]; do
+  sleep 30
+done
+
+# Daily digest into Slack
+pforge digest --post
+
+# Cost rollup for the month
+pforge cost-report --since=30d --json | jq '.byModel'</code></pre>
+
+        <p>The full <!--c:cli-commands-->57<!--/c-->-command reference lives in <a href="cli-reference.html">Chapter 8 — CLI Reference</a>. The <code>pforge --help</code> output is the canonical source.</p>
+
+        <!-- ─── Pick the right surface ─── -->
+        <h2 id="picking">Picking the right surface</h2>
+
+        <div class="overflow-x-auto my-6">
+          <table class="text-sm w-full border-collapse">
+            <thead>
+              <tr class="border-b border-slate-700/60">
+                <th class="text-left py-2 px-3 text-slate-400 font-semibold">Caller</th>
+                <th class="text-left py-2 px-3 text-slate-400 font-semibold">Use</th>
+                <th class="text-left py-2 px-3 text-slate-400 font-semibold">Why</th>
+              </tr>
+            </thead>
+            <tbody class="text-slate-300">
+              <tr class="border-b border-slate-800/40">
+                <td class="py-2 px-3">GitHub Copilot / Claude / Cursor / Codex</td>
+                <td class="py-2 px-3">MCP</td>
+                <td class="py-2 px-3">Native transport; auto-discovered tools</td>
+              </tr>
+              <tr class="border-b border-slate-800/40">
+                <td class="py-2 px-3">GitHub Actions / GitLab CI / Jenkins</td>
+                <td class="py-2 px-3">REST + CLI</td>
+                <td class="py-2 px-3">Already speak HTTP and shell; no MCP transport in CI</td>
+              </tr>
+              <tr class="border-b border-slate-800/40">
+                <td class="py-2 px-3">Custom dashboard / status page</td>
+                <td class="py-2 px-3">REST (initial) + WebSocket (live)</td>
+                <td class="py-2 px-3">Snapshot on load, live updates after</td>
+              </tr>
+              <tr class="border-b border-slate-800/40">
+                <td class="py-2 px-3">Node.js script / automation</td>
+                <td class="py-2 px-3">SDK</td>
+                <td class="py-2 px-3">Typed responses; no transport boilerplate</td>
+              </tr>
+              <tr class="border-b border-slate-800/40">
+                <td class="py-2 px-3">cron job / one-shot batch</td>
+                <td class="py-2 px-3">CLI</td>
+                <td class="py-2 px-3"><code>--json</code> pipes cleanly; no long-running process</td>
+              </tr>
+              <tr>
+                <td class="py-2 px-3">Mobile / web app / Slack bot</td>
+                <td class="py-2 px-3">REST + WebSocket</td>
+                <td class="py-2 px-3">Cross-platform; no Node.js requirement</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <!-- ─── Auth + secrets ─── -->
+        <h2 id="auth">Auth and secrets</h2>
+        <p>All four surfaces share the same auth model:</p>
+        <ul>
+          <li><strong>Bearer tokens</strong> in the <code>Authorization</code> header (REST + WebSocket) or as <code>PFORGE_API_TOKEN</code> env var (CLI + SDK).</li>
+          <li>Tokens are issued via <code>pforge auth issue [--scope=…]</code> and stored in <code>.forge/secrets.json</code> (gitignored).</li>
+          <li>The MCP surface authenticates via the transport itself — stdio inherits the parent process trust; WebSocket MCP uses the same bearer token model.</li>
+          <li>Outbound API keys (Anthropic, OpenAI, xAI, Azure) live in <code>.forge/secrets.json</code> under <code>providers.*</code> or in environment variables. <strong>Never</strong> in code, never in committed config.</li>
+        </ul>
+
+        <div class="callout callout-info mt-8">
+          <strong>See also:</strong> <a href="cli-reference.html">Chapter 8 — CLI Reference</a> for the full command catalog. <a href="https://github.com/srnichols/plan-forge/blob/master/docs/REST-API.md" rel="noopener">docs/REST-API.md</a> for endpoint-by-endpoint REST docs. <a href="https://github.com/srnichols/plan-forge/blob/master/pforge-sdk/README.md" rel="noopener">pforge-sdk/README.md</a> for SDK reference. <a href="dashboard.html">Chapter 7 — The Dashboard</a> for the canonical example of a custom UI built on REST + WebSocket.
+        </div>
+
+      </div>
+    </main>
+  </div>
+
+  <script src="assets/manual.js"></script>
+</body>
+</html>

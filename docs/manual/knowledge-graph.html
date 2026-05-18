@@ -1,0 +1,255 @@
+<!DOCTYPE html>
+<html lang="en" class="scroll-smooth">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>The Knowledge Graph — Pattern Detection &amp; Daily Digest</title>
+  <meta name="description" content="How Plan Forge derives an in-memory graph over Phases, Slices, Commits, Files, Bugs, and Runs — then runs four pattern detectors and a daily digest aggregator across it to spot recurring failures, slice flaps, and cost anomalies before they cost you another week." />
+  <link rel="icon" type="image/svg+xml" href="../assets/plan-forge-logo.svg" />
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>tailwind.config={theme:{extend:{colors:{forge:{400:'#f59e0b',500:'#d97706'}}}}}</script>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;600;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="../assets/shared.css" />
+  <link rel="stylesheet" href="assets/manual.css" />
+  <script type="module">
+    import mermaid from "https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.esm.min.mjs";
+    mermaid.initialize({ startOnLoad: true, theme: "dark", themeVariables: { fontFamily: "Inter, ui-sans-serif", primaryColor: "#f59e0b", primaryTextColor: "#f1f5f9", lineColor: "#64748b" } });
+  </script>
+</head>
+<body class="bg-slate-950 text-slate-300 min-h-screen">
+
+  <button id="mobile-sidebar-btn" class="mobile-sidebar-btn fixed top-4 left-4 z-[101] lg:hidden p-2 bg-slate-900 border border-slate-700 rounded-lg text-slate-400 hover:text-slate-100 transition-colors" aria-label="Open navigation">
+    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"/></svg>
+  </button>
+  <div id="sidebar-overlay" class="sidebar-overlay"></div>
+
+  <div class="manual-layout">
+    <aside id="manual-sidebar" class="manual-sidebar"><nav id="sidebar-nav"></nav></aside>
+
+    <main>
+      <div class="chapter-content">
+
+        <div class="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">Chapter 28 · Act V — Integrate</div>
+        <h1>The Knowledge Graph</h1>
+        <p class="text-lg text-slate-400 mb-8">Plan Forge writes structured events on every action — slice starts, gate failures, commits, bug filings, cost samples. The knowledge graph stitches those events into a queryable graph, then runs four pattern detectors and a daily digest aggregator across it. The result: you find recurring failures before the failures find you.</p>
+
+        <div class="callout callout-info">
+          <strong>Added in v2.96 → v3.3.</strong> <code>forge_graph_query</code> (v2.96) introduced the graph itself; <code>forge_patterns_list</code> (v3.0) added the four detectors; <code>pforge digest</code> (v3.3) ships the daily roll-up that surfaces the most actionable findings into the dashboard's Yesterday's Digest tile.
+        </div>
+
+        <!-- ─── Why a graph ─── -->
+        <h2 id="why">Why a graph?</h2>
+        <p>Every Plan Forge subsystem already writes its own structured log: <code>.forge/runs/*.jsonl</code>, <code>.forge/trajectories/*.jsonl</code>, <code>.forge/bugs/*.json</code>, <code>.forge/cost/*.json</code>, <code>.forge/team-activity.jsonl</code>. Individually, each file answers one question — "what did this run cost?", "what bugs are open?". The interesting questions are <em>cross-file</em>:</p>
+        <ul>
+          <li>"Which file gets touched most often by failing slices?"</li>
+          <li>"Which model has the highest failure rate on slices in the <code>integration</code> domain?"</li>
+          <li>"Has slice 4 of any plan ever shipped on the first try?"</li>
+          <li>"How does this week's cost-per-slice compare to last month's median?"</li>
+        </ul>
+        <p>Answering any of these requires <strong>joining</strong> at least three logs. The knowledge graph builds an in-memory representation of those joins so the answer is a millisecond traversal, not a five-file <code>grep</code>.</p>
+
+        <!-- ─── Node + edge model ─── -->
+        <h2 id="model">The node + edge model</h2>
+
+        <div class="my-8 p-6 bg-slate-900/50 border border-slate-800/60 rounded-xl overflow-x-auto">
+          <pre class="mermaid">
+flowchart TD
+    Ph[Phase / Plan] -- contains --&gt; Sl[Slice]
+    Sl -- produced --&gt; Cm[Commit]
+    Cm -- touches --&gt; Fi[File]
+    Sl -- executed in --&gt; Rn[Run]
+    Rn -- used --&gt; Md[Model]
+    Sl -- raised --&gt; Bg[Bug]
+    Bg -- references --&gt; Cm
+    Bg -- references --&gt; Fi
+    Rn -- cost --&gt; Cs[CostSample]
+          </pre>
+        </div>
+
+        <p>Seven node types: <strong>Phase</strong>, <strong>Slice</strong>, <strong>Commit</strong>, <strong>File</strong>, <strong>Run</strong>, <strong>Bug</strong>, <strong>CostSample</strong>. Six edge types. The whole graph for a year of plans on a medium-sized repo fits in &lt;30 MB of memory and serializes to <code>.forge/graph/snapshot.json</code> in under a second.</p>
+
+        <p>The graph is <strong>derived, not authoritative</strong>. If <code>snapshot.json</code> is deleted, <code>pforge graph rebuild</code> recomputes it from the underlying logs. The logs are the source of truth; the graph is the index.</p>
+
+        <!-- ─── forge_graph_query ─── -->
+        <h2 id="graph-query"><code>forge_graph_query</code> — the query surface</h2>
+        <p>Queries take a starting node selector and a traversal expression. The tool is intentionally <strong>not</strong> a general-purpose graph query language — it ships with a small, opinionated set of canned queries that answer the questions teams actually ask:</p>
+
+        <pre class="bg-slate-950 border border-slate-800/60 rounded-xl p-4 overflow-x-auto text-sm"><code>forge_graph_query({ query: "hot-files", windowDays: 30 })
+// → files touched by the most failed slices in the last 30 days
+
+forge_graph_query({ query: "bug-clusters", windowDays: 90 })
+// → bugs grouped by shared file/symbol
+
+forge_graph_query({ query: "model-leaderboard", domain: "integration" })
+// → success rate per model on slices tagged with the integration domain
+
+forge_graph_query({ query: "slice-history", slice: "4", windowDays: 180 })
+// → every Phase that had a slice 4, with success/cost/duration
+
+forge_graph_query({ query: "phase-roi", phase: "Phase-31" })
+// → cost, duration, file churn, bugs raised, bugs closed for one phase</code></pre>
+
+        <p>Custom traversals are also accepted via the lower-level <code>traverse</code> form (advanced):</p>
+
+        <pre class="bg-slate-950 border border-slate-800/60 rounded-xl p-4 overflow-x-auto text-sm"><code>forge_graph_query({
+  start:   { type: "File", path: "src/orders/repository.ts" },
+  follow:  ["touches&lt;-Commit", "produced&lt;-Slice", "raised-&gt;Bug"],
+  filter:  { "Bug.status": "open" },
+  return:  ["Bug.id", "Bug.title", "Slice.id", "Phase.id"],
+  limit:   25
+})</code></pre>
+
+        <!-- ─── Pattern detectors ─── -->
+        <h2 id="patterns"><code>forge_patterns_list</code> — the four detectors</h2>
+        <p><code>forge_patterns_list</code> runs four detector heuristics across the graph and returns ranked findings. Each detector is implemented as a deterministic graph traversal — no ML, no embeddings, just structural pattern matching.</p>
+
+        <div class="overflow-x-auto my-6">
+          <table class="text-sm w-full border-collapse">
+            <thead>
+              <tr class="border-b border-slate-700/60">
+                <th class="text-left py-2 px-3 text-slate-400 font-semibold">Detector</th>
+                <th class="text-left py-2 px-3 text-slate-400 font-semibold">Looks for</th>
+                <th class="text-left py-2 px-3 text-slate-400 font-semibold">Signal</th>
+              </tr>
+            </thead>
+            <tbody class="text-slate-300">
+              <tr class="border-b border-slate-800/40">
+                <td class="py-2 px-3"><code>gate-failure-recurrence</code></td>
+                <td class="py-2 px-3">Same gate failing across ≥3 slices in different plans within 30 days</td>
+                <td class="py-2 px-3">"The validation is broken, not the code"</td>
+              </tr>
+              <tr class="border-b border-slate-800/40">
+                <td class="py-2 px-3"><code>model-failure-rate-by-complexity</code></td>
+                <td class="py-2 px-3">Models whose failure rate climbs steeply with slice complexity</td>
+                <td class="py-2 px-3">"Use a flagship model for the hard slices, fast model for the easy ones"</td>
+              </tr>
+              <tr class="border-b border-slate-800/40">
+                <td class="py-2 px-3"><code>slice-flap-pattern</code></td>
+                <td class="py-2 px-3">Slices that succeed-then-fail-then-succeed on retry (non-monotonic outcomes)</td>
+                <td class="py-2 px-3">"Flaky gate or non-deterministic test in this slice"</td>
+              </tr>
+              <tr>
+                <td class="py-2 px-3"><code>cost-anomaly</code></td>
+                <td class="py-2 px-3">Runs whose cost-per-slice exceeds the 90-day median by ≥2.5×</td>
+                <td class="py-2 px-3">"Token blow-up — investigate retry logic or context bloat"</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <h3 id="patterns-output">Response shape</h3>
+
+        <pre class="bg-slate-950 border border-slate-800/60 rounded-xl p-4 overflow-x-auto text-sm"><code>forge_patterns_list({ windowDays: 30, limit: 10 })
+
+// Response:
+{
+  generatedAt: "2026-05-17T14:00:00Z",
+  windowDays: 30,
+  patterns: [
+    {
+      detector: "gate-failure-recurrence",
+      severity: "high",
+      title:    "Gate 'tsc --noEmit' failed in 5 slices across 3 plans",
+      evidence: { slices: ["Phase-29:3", "Phase-30:1", "Phase-30:4", "Phase-31:2", "Phase-31:5"], commonError: "TS2307: Cannot find module ..." },
+      suggestedAction: "Investigate tsconfig path mapping; consider widening gate or fixing build config."
+    },
+    {
+      detector: "cost-anomaly",
+      severity: "medium",
+      title:    "Phase-31 cost/slice 3.1× over 90-day median",
+      evidence: { phase: "Phase-31", medianUsd: 0.42, observedUsd: 1.31, primarySuspect: "long-context-retries" }
+    }
+    // ...
+  ],
+  total: 7
+}</code></pre>
+
+        <p>The <strong>Recurring Patterns</strong> dashboard panel is a thin renderer over this tool's output, sorted by severity descending. Each finding has a "Suppress for 7 days" button (the suppression list lives in <code>.forge/patterns-suppressions.json</code> — see <a href="conventions.html">Conventions</a> for the format).</p>
+
+        <!-- ─── pforge digest ─── -->
+        <h2 id="digest"><code>pforge digest</code> — Yesterday's Digest</h2>
+        <p>The graph and the detectors give you raw findings. <code>pforge digest</code> compresses them into a single human-readable summary intended to be the first thing you read each morning.</p>
+
+        <pre class="bg-slate-950 border border-slate-800/60 rounded-xl p-4 overflow-x-auto text-sm"><code>pforge digest
+pforge digest --since=24h         # default
+pforge digest --since=7d          # weekly roll-up
+pforge digest --format=json       # machine-readable
+pforge digest --post              # post to configured notification channel</code></pre>
+
+        <p>A typical digest collects six categories of finding:</p>
+        <ol>
+          <li><strong>Plans shipped</strong> — count, total cost, success-rate-on-first-try</li>
+          <li><strong>Aging meta-bugs</strong> — open self-repair issues older than 14 days</li>
+          <li><strong>Stalled phases</strong> — plans started but no slice committed in 48 hours</li>
+          <li><strong>Probe-lane deltas</strong> — model availability changes since yesterday (from <code>forge_doctor_quorum</code>)</li>
+          <li><strong>Drift score changes</strong> — environment/config drift exceeding threshold (from <code>forge_drift_report</code>)</li>
+          <li><strong>Cost anomalies</strong> — the top finding from the <code>cost-anomaly</code> detector</li>
+        </ol>
+
+        <p>The <strong>Yesterday's Digest</strong> dashboard tile is the same content, rendered in HTML. The CLI form is useful in a daily Slack post or as the body of a <code>forge_notify_send</code> message.</p>
+
+        <div class="callout callout-tip">
+          <strong>Wire it into cron / GitHub Actions</strong>: <code>pforge digest --post</code> at 09:00 every weekday with a Slack notifier configured (<code>notify-slack</code> extension) gives a free daily standup grounded in actual run data, not vibes.
+        </div>
+
+        <!-- ─── Where the data lives ─── -->
+        <h2 id="storage">Where the data lives</h2>
+
+        <div class="overflow-x-auto my-6">
+          <table class="text-sm w-full border-collapse">
+            <thead>
+              <tr class="border-b border-slate-700/60">
+                <th class="text-left py-2 px-3 text-slate-400 font-semibold">Path</th>
+                <th class="text-left py-2 px-3 text-slate-400 font-semibold">Purpose</th>
+                <th class="text-left py-2 px-3 text-slate-400 font-semibold">Rebuildable</th>
+              </tr>
+            </thead>
+            <tbody class="text-slate-300">
+              <tr class="border-b border-slate-800/40">
+                <td class="py-2 px-3"><code>.forge/graph/snapshot.json</code></td>
+                <td class="py-2 px-3">Serialized graph index</td>
+                <td class="py-2 px-3">Yes — <code>pforge graph rebuild</code></td>
+              </tr>
+              <tr class="border-b border-slate-800/40">
+                <td class="py-2 px-3"><code>.forge/patterns-suppressions.json</code></td>
+                <td class="py-2 px-3">User-suppressed pattern findings + expiry</td>
+                <td class="py-2 px-3">No (state)</td>
+              </tr>
+              <tr class="border-b border-slate-800/40">
+                <td class="py-2 px-3"><code>.forge/digests/YYYY-MM-DD.json</code></td>
+                <td class="py-2 px-3">Cached daily digest output</td>
+                <td class="py-2 px-3">Yes — <code>pforge digest --rebuild</code></td>
+              </tr>
+              <tr>
+                <td class="py-2 px-3"><code>.forge/runs/</code>, <code>.forge/trajectories/</code>, <code>.forge/bugs/</code>, <code>.forge/cost/</code></td>
+                <td class="py-2 px-3">Source logs (graph is derived from these)</td>
+                <td class="py-2 px-3">Authoritative</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <!-- ─── CLI ─── -->
+        <h2 id="cli">CLI summary</h2>
+
+        <pre class="bg-slate-950 border border-slate-800/60 rounded-xl p-4 overflow-x-auto text-sm"><code>pforge graph stats               # node/edge counts, last-rebuild timestamp
+pforge graph rebuild             # full rebuild from logs
+pforge graph query hot-files     # run a canned query
+pforge patterns                  # list current findings from all four detectors
+pforge patterns --since=7d
+pforge digest                    # the morning summary
+pforge digest --post             # send via configured notifier</code></pre>
+
+        <div class="callout callout-info mt-8">
+          <strong>See also:</strong> <a href="memory-system.html">Chapter 25 — How the Shop Remembers</a> for the L1/L2/L3 memory tiers the graph draws from. <a href="team-coordination.html">Chapter 27 — Team Coordination</a> for the activity ledger that feeds the Phase/Slice/Run nodes. <a href="health-dna.html">Chapter 23 — Health DNA</a> for trend metrics that complement pattern findings.
+        </div>
+
+      </div>
+    </main>
+  </div>
+
+  <script src="assets/manual.js"></script>
+</body>
+</html>

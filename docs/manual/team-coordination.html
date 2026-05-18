@@ -1,0 +1,310 @@
+<!DOCTYPE html>
+<html lang="en" class="scroll-smooth">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Team Coordination — Sharing the Forge Across Developers</title>
+  <meta name="description" content="How Plan Forge turns a single-developer tool into a team-aware workshop: per-developer dashboards, conflict-risk banners, structured review delegation, audit-loop issue filing, and GitHub metrics — all backed by an append-only team-activity ledger." />
+  <link rel="icon" type="image/svg+xml" href="../assets/plan-forge-logo.svg" />
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>tailwind.config={theme:{extend:{colors:{forge:{400:'#f59e0b',500:'#d97706'}}}}}</script>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;600;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="../assets/shared.css" />
+  <link rel="stylesheet" href="assets/manual.css" />
+  <script type="module">
+    import mermaid from "https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.esm.min.mjs";
+    mermaid.initialize({ startOnLoad: true, theme: "dark", themeVariables: { fontFamily: "Inter, ui-sans-serif", primaryColor: "#f59e0b", primaryTextColor: "#f1f5f9", lineColor: "#64748b" } });
+  </script>
+</head>
+<body class="bg-slate-950 text-slate-300 min-h-screen">
+
+  <button id="mobile-sidebar-btn" class="mobile-sidebar-btn fixed top-4 left-4 z-[101] lg:hidden p-2 bg-slate-900 border border-slate-700 rounded-lg text-slate-400 hover:text-slate-100 transition-colors" aria-label="Open navigation">
+    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"/></svg>
+  </button>
+  <div id="sidebar-overlay" class="sidebar-overlay"></div>
+
+  <div class="manual-layout">
+    <aside id="manual-sidebar" class="manual-sidebar"><nav id="sidebar-nav"></nav></aside>
+
+    <main>
+      <div class="chapter-content">
+
+        <div class="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">Chapter 27 · Act V — Integrate</div>
+        <h1>Team Coordination</h1>
+        <p class="text-lg text-slate-400 mb-8">Plan Forge began as a single-developer flow. v3.x extended it into a team-aware workshop — without forcing a SaaS backend, a shared database, or a new identity system. Everything runs on a flat append-only ledger and the GitHub API.</p>
+
+        <div class="callout callout-info">
+          <strong>Added in v2.93 → v3.4.</strong> Five surfaces compose the team layer: <code>forge_team_dashboard</code> + <code>forge_team_activity</code> (per-developer visibility), <code>forge_github_metrics</code> + <code>forge_github_status</code> (PR throughput + validation stack), <code>forge_delegate_review</code> (dispatching review to Copilot's cloud agent), and <code>forge_classifier_issue</code> (closing the tempering audit loop by filing a GitHub issue when a classifier rule needs to land).
+        </div>
+
+        <!-- ─── Why team coordination ─── -->
+        <h2 id="why">The "shared shop" problem</h2>
+        <p>Two developers on the same repo running Plan Forge simultaneously face three coordination problems:</p>
+        <ol>
+          <li><strong>Concurrent edits</strong>. Both might pick the same plan, or pick plans whose Scope Contracts touch the same files. Without visibility, you discover the conflict at merge time.</li>
+          <li><strong>Lost institutional memory</strong>. Alice solves a tricky gate-portability issue on Monday. Bob hits the same issue on Wednesday because Alice's trajectory lives in her local <code>.forge/</code>.</li>
+          <li><strong>Review fatigue</strong>. Plan Forge runs are productive — a single afternoon can ship 4 plans. If every plan needs a human reviewer, the bottleneck moves from "writing code" to "reviewing code".</li>
+        </ol>
+        <p>v3.x addresses each, in order: <strong>team dashboard</strong> for visibility, <strong>shared activity ledger</strong> + <strong>memory sync</strong> for institutional memory, <strong>delegated review</strong> for the review bottleneck.</p>
+
+        <!-- ─── The activity ledger ─── -->
+        <h2 id="activity-ledger">The activity ledger</h2>
+        <p>Everything starts with one file: <code>.forge/team-activity.jsonl</code>. It is an append-only JSON Lines log that every Plan Forge operation writes to. One event per line, never edited, never compacted.</p>
+
+        <pre class="bg-slate-950 border border-slate-800/60 rounded-xl p-4 overflow-x-auto text-sm"><code>{"ts":"2026-05-17T09:14:22Z","actor":"alice@example.com","action":"plan.start","plan":"Phase-31","sha":"a1b2c3d"}
+{"ts":"2026-05-17T09:18:41Z","actor":"alice@example.com","action":"slice.commit","plan":"Phase-31","slice":"2","sha":"e4f5g6h"}
+{"ts":"2026-05-17T09:31:02Z","actor":"bob@example.com","action":"plan.start","plan":"Phase-32","sha":"a1b2c3d"}
+{"ts":"2026-05-17T09:33:11Z","actor":"alice@example.com","action":"plan.complete","plan":"Phase-31","slices":6,"costUsd":2.41}</code></pre>
+
+        <p>The file is small (typical: 50–200 KB per team-week), git-friendly (line-stable), and trivially indexable. Every team query in this chapter is a streaming read of this file.</p>
+
+        <div class="callout callout-tip">
+          <strong>Where it lives.</strong> By default, <code>.forge/team-activity.jsonl</code> is <em>not</em> gitignored — that's the point. Commit it. The ledger is most useful when every developer's events land in one shared history. If you don't want it in git, set <code>team.ledger.gitignore: true</code> in <code>.forge.json</code> and use a side channel (S3, shared volume) instead.
+        </div>
+
+        <!-- ─── Per-developer dashboard ─── -->
+        <h2 id="team-dashboard"><code>forge_team_dashboard</code> — per-developer cards</h2>
+        <p><code>forge_team_dashboard</code> reduces the ledger into one card per developer, capturing the last 7 days (default; configurable):</p>
+
+        <pre class="bg-slate-950 border border-slate-800/60 rounded-xl p-4 overflow-x-auto text-sm"><code>forge_team_dashboard({ windowDays: 7 })
+
+// Response shape (excerpt):
+{
+  generatedAt: "2026-05-17T14:00:00Z",
+  windowDays: 7,
+  developers: [
+    {
+      actor: "alice@example.com",
+      lastActive: "2026-05-17T09:33:11Z",
+      runs: 12,
+      successRate: 0.917,
+      costUsd: 28.40,
+      plans: ["Phase-31", "Phase-30", "Phase-29"],
+      activePlan: null
+    },
+    {
+      actor: "bob@example.com",
+      lastActive: "2026-05-17T09:31:02Z",
+      runs: 4,
+      successRate: 1.0,
+      costUsd: 6.12,
+      plans: ["Phase-32"],
+      activePlan: "Phase-32"      // currently running
+    }
+  ],
+  totals: { runs: 16, successRate: 0.938, costUsd: 34.52 }
+}</code></pre>
+
+        <p>This is what backs the <strong>Team</strong> dashboard tab — one card per developer, sorted by recency, with a visual badge for "currently running a plan". The same shape powers the <code>pforge team-dashboard</code> CLI command for terminal users.</p>
+
+        <h3 id="conflict-banner">The conflict-risk banner</h3>
+        <p>Above the cards, the dashboard renders a <strong>conflict-risk banner</strong> computed from the active plans of any two developers running simultaneously. The risk score is derived from Scope Contract overlap:</p>
+
+        <div class="overflow-x-auto my-6">
+          <table class="text-sm w-full border-collapse">
+            <thead>
+              <tr class="border-b border-slate-700/60">
+                <th class="text-left py-2 px-3 text-slate-400 font-semibold">Score</th>
+                <th class="text-left py-2 px-3 text-slate-400 font-semibold">Trigger</th>
+                <th class="text-left py-2 px-3 text-slate-400 font-semibold">Banner</th>
+              </tr>
+            </thead>
+            <tbody class="text-slate-300">
+              <tr class="border-b border-slate-800/40">
+                <td class="py-2 px-3"><span class="text-emerald-400 font-semibold">none</span></td>
+                <td class="py-2 px-3">No active plans, or disjoint Scope Contracts</td>
+                <td class="py-2 px-3">(hidden)</td>
+              </tr>
+              <tr class="border-b border-slate-800/40">
+                <td class="py-2 px-3"><span class="text-sky-400 font-semibold">low</span></td>
+                <td class="py-2 px-3">Active plans touch sibling files in the same directory</td>
+                <td class="py-2 px-3">"Alice and Bob are both working in <code>src/orders/</code> — sync up before merge."</td>
+              </tr>
+              <tr class="border-b border-slate-800/40">
+                <td class="py-2 px-3"><span class="text-amber-400 font-semibold">medium</span></td>
+                <td class="py-2 px-3">Active plans share at least one file path</td>
+                <td class="py-2 px-3">"⚠️ Alice and Bob are both editing <code>src/orders/repository.ts</code>."</td>
+              </tr>
+              <tr>
+                <td class="py-2 px-3"><span class="text-rose-400 font-semibold">high</span></td>
+                <td class="py-2 px-3">Active plans share files AND share modified symbols (per <code>forge_diff</code>)</td>
+                <td class="py-2 px-3">"🚨 High collision risk. One of you should pause."</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <!-- ─── team_activity ─── -->
+        <h2 id="team-activity"><code>forge_team_activity</code> — querying the ledger</h2>
+        <p>Where <code>forge_team_dashboard</code> aggregates, <code>forge_team_activity</code> queries. Pass any combination of filters:</p>
+
+        <pre class="bg-slate-950 border border-slate-800/60 rounded-xl p-4 overflow-x-auto text-sm"><code>forge_team_activity({
+  actor:   "alice@example.com",   // optional — who
+  plan:    "Phase-31",            // optional — what
+  action:  "slice.commit",        // optional — kind
+  since:   "2026-05-10T00:00:00Z",// optional — when
+  limit:   100,                   // bounded; default 50, max 1000
+  cursor:  null                   // pagination
+})
+
+// Response:
+{
+  events: [ /* event objects */ ],
+  total: 47,
+  hasMore: false,
+  cursor: null
+}</code></pre>
+
+        <p>This is the tool to reach for when answering questions like "what did Alice work on last week?" or "show me every slice that Phase-31 took and who ran which retry". It is also the data source for the <code>pforge team-activity</code> CLI and the <code>GET /api/team/activity</code> REST endpoint.</p>
+
+        <!-- ─── GitHub metrics ─── -->
+        <h2 id="github-metrics"><code>forge_github_metrics</code> + <code>forge_github_status</code></h2>
+        <p>The activity ledger captures everything that happens inside Plan Forge. <code>forge_github_metrics</code> and <code>forge_github_status</code> capture everything that happens around it: PR throughput, review latency, CI validation results.</p>
+
+        <h3 id="github-metrics-tool"><code>forge_github_metrics</code></h3>
+        <p>Pulls <strong>PR-level analytics</strong> from the GitHub API:</p>
+        <ul>
+          <li>PRs opened / merged / closed in window</li>
+          <li>Time-to-first-review per PR (median + p95)</li>
+          <li>Time-to-merge per PR (median + p95)</li>
+          <li>Review iteration count distribution</li>
+          <li>Per-author breakdown matching the team ledger's actor identities</li>
+        </ul>
+        <p>The dashboard's <strong>GH Metrics</strong> tab is a thin renderer over this tool's response.</p>
+
+        <h3 id="github-status-tool"><code>forge_github_status</code></h3>
+        <p>The validation stack on a single PR. Given a PR number, returns:</p>
+        <ul>
+          <li>Required and optional checks with their current state</li>
+          <li>Review status (approved / changes-requested / pending) by reviewer</li>
+          <li>Mergeable state including conflicts</li>
+          <li>Branch protection rule violations (if any)</li>
+          <li>Linked issues + their open/closed status</li>
+        </ul>
+
+        <div class="callout callout-tip">
+          <strong>Composable pattern</strong>: chain <code>forge_team_activity({ action: "plan.complete" })</code> → for each plan, find its PR → <code>forge_github_status({ pr: N })</code>. This gives you a single-pane view of "what shipped last week and what state is each PR in".
+        </div>
+
+        <!-- ─── Delegate review ─── -->
+        <h2 id="delegate-review"><code>forge_delegate_review</code> — dispatching to Copilot</h2>
+        <p>Plan Forge's reviewer step (the <strong>Reviewer Gate</strong>) is independent — a fresh session reads the plan's Scope Contract and audits the diff. By default it runs locally. <code>forge_delegate_review</code> dispatches the same audit task to the <strong>GitHub Copilot cloud coding agent</strong>, so the review happens server-side and the result lands as a PR comment.</p>
+
+        <pre class="bg-slate-950 border border-slate-800/60 rounded-xl p-4 overflow-x-auto text-sm"><code>forge_delegate_review({
+  pr: 247,
+  plan: "docs/plans/Phase-31-PLAN.md",
+  scope: "scope-contract",   // or "full-plan" | "diff-only"
+  blockOn: "critical"        // file CHANGES_REQUESTED on critical findings
+})
+
+// Response:
+{
+  ok: true,
+  jobId: "copilot-job-7f3a...",
+  dispatched: "2026-05-17T14:22:11Z",
+  pr: 247,
+  estimatedCompletion: "2026-05-17T14:27:00Z"
+}</code></pre>
+
+        <p>Configuration lives under <code>cloudAgentValidation</code> in <code>.forge.json</code>:</p>
+
+        <pre class="bg-slate-950 border border-slate-800/60 rounded-xl p-4 overflow-x-auto text-sm"><code>{
+  "cloudAgentValidation": {
+    "enabled": true,
+    "agent": "copilot",              // current option: copilot
+    "trigger": "post-slice-commit",  // when to dispatch
+    "blockOn": "critical",
+    "timeoutMinutes": 15,
+    "fallback": "local-reviewer"     // if cloud dispatch fails
+  }
+}</code></pre>
+
+        <div class="callout callout-info">
+          <strong>Why "delegate" and not "replace"?</strong> The local Reviewer Gate is faster and cheaper (your tokens, your machine). The cloud agent is asynchronous, shareable, and produces a PR comment that everyone on the team sees. Use the local reviewer in tight inner-loop iterations; use delegation when shipping for human-team review.
+        </div>
+
+        <!-- ─── Classifier issue ─── -->
+        <h2 id="classifier-issue"><code>forge_classifier_issue</code> — closing the audit loop</h2>
+        <p>The tempering subsystem (<a href="audit-loop.html">Audit Loop</a> chapter) audits classifier output and finds <strong>false-positive findings</strong> or <strong>missed-detection rules</strong>. Once tempering has confirmed a rule is needed, <code>forge_classifier_issue</code> files a structured GitHub issue against the rule repository so the rule lands in code, not in a side note.</p>
+
+        <pre class="bg-slate-950 border border-slate-800/60 rounded-xl p-4 overflow-x-auto text-sm"><code>forge_classifier_issue({
+  classifier:  "audit",
+  ruleId:      "audit-stub-detection",
+  category:    "missed-detection",      // or "false-positive"
+  evidence:    [ /* before/after finding pairs */ ],
+  severity:    "high",
+  rationale:   "Three sweeps in a row missed inline TODO markers in JSX comments."
+})
+
+// Response:
+{
+  ok: true,
+  issueNumber: 312,
+  issueUrl: "https://github.com/.../issues/312",
+  deduped: false,
+  hash: "sha256:..."
+}</code></pre>
+
+        <p>The tool deduplicates against open issues with the same rule + category hash within 14 days, so repeated audit findings don't spam the tracker. This is the official "self-repair" path for classifier rules — analogous to <code>forge_meta_bug_file</code> for plan/orchestrator/prompt defects.</p>
+
+        <!-- ─── Dashboard map ─── -->
+        <h2 id="dashboard-tabs">Where to find this in the dashboard</h2>
+
+        <div class="overflow-x-auto my-6">
+          <table class="text-sm w-full border-collapse">
+            <thead>
+              <tr class="border-b border-slate-700/60">
+                <th class="text-left py-2 px-3 text-slate-400 font-semibold">Tab</th>
+                <th class="text-left py-2 px-3 text-slate-400 font-semibold">Backed by</th>
+                <th class="text-left py-2 px-3 text-slate-400 font-semibold">Surfaces</th>
+              </tr>
+            </thead>
+            <tbody class="text-slate-300">
+              <tr class="border-b border-slate-800/40">
+                <td class="py-2 px-3"><strong>Team</strong></td>
+                <td class="py-2 px-3"><code>forge_team_dashboard</code></td>
+                <td class="py-2 px-3">Per-developer cards, conflict-risk banner, "currently running" badges</td>
+              </tr>
+              <tr class="border-b border-slate-800/40">
+                <td class="py-2 px-3"><strong>Team Activity</strong></td>
+                <td class="py-2 px-3"><code>forge_team_activity</code></td>
+                <td class="py-2 px-3">Timeline view of the ledger with filter chips</td>
+              </tr>
+              <tr class="border-b border-slate-800/40">
+                <td class="py-2 px-3"><strong>GH Metrics</strong></td>
+                <td class="py-2 px-3"><code>forge_github_metrics</code></td>
+                <td class="py-2 px-3">PR throughput, review latency, per-author breakdown</td>
+              </tr>
+              <tr>
+                <td class="py-2 px-3"><strong>PR Status</strong> (drill from any PR link)</td>
+                <td class="py-2 px-3"><code>forge_github_status</code></td>
+                <td class="py-2 px-3">Required checks, reviewers, mergeability</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <!-- ─── CLI ─── -->
+        <h2 id="cli">CLI summary</h2>
+
+        <pre class="bg-slate-950 border border-slate-800/60 rounded-xl p-4 overflow-x-auto text-sm"><code>pforge team-dashboard              # per-developer cards in the terminal
+pforge team-dashboard --json       # machine-readable
+pforge team-activity --since=7d    # query the ledger
+pforge team-activity --actor=alice@example.com --action=slice.commit
+pforge gh-metrics --window=30d     # PR throughput
+pforge gh-status --pr=247          # validation stack for one PR
+pforge delegate-review --pr=247 --plan=docs/plans/Phase-31-PLAN.md</code></pre>
+
+        <div class="callout callout-info mt-8">
+          <strong>See also:</strong> <a href="audit-loop.html">The Audit Loop</a> for how tempering produces the findings that <code>forge_classifier_issue</code> dispatches. <a href="copilot-integration.html">Chapter 26 — The Copilot Integration Trilogy</a> for how shared memory hints close the "Bob hits Alice's bug" gap. <a href="dashboard.html">Chapter 7 — The Dashboard</a> for the full tab tour.
+        </div>
+
+      </div>
+    </main>
+  </div>
+
+  <script src="assets/manual.js"></script>
+</body>
+</html>

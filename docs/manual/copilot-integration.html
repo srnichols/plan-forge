@@ -1,0 +1,389 @@
+<!DOCTYPE html>
+<html lang="en" class="scroll-smooth">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>The Copilot Integration Trilogy — Memory, Instructions, Settings</title>
+  <meta name="description" content="How Plan Forge talks to GitHub Copilot end-to-end: forge_sync_memories writes copilot-memory-hints.md, forge_sync_instructions regenerates copilot-instructions.md, and the Settings → Copilot dashboard tab lets you preview and ship both without leaving the browser." />
+  <link rel="icon" type="image/svg+xml" href="../assets/plan-forge-logo.svg" />
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>tailwind.config={theme:{extend:{colors:{forge:{400:'#f59e0b',500:'#d97706'}}}}}</script>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;600;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="../assets/shared.css" />
+  <link rel="stylesheet" href="assets/manual.css" />
+  <script type="module">
+    import mermaid from "https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.esm.min.mjs";
+    mermaid.initialize({ startOnLoad: true, theme: "dark", themeVariables: { fontFamily: "Inter, ui-sans-serif", primaryColor: "#f59e0b", primaryTextColor: "#f1f5f9", lineColor: "#64748b" } });
+  </script>
+</head>
+<body class="bg-slate-950 text-slate-300 min-h-screen">
+
+  <button id="mobile-sidebar-btn" class="mobile-sidebar-btn fixed top-4 left-4 z-[101] lg:hidden p-2 bg-slate-900 border border-slate-700 rounded-lg text-slate-400 hover:text-slate-100 transition-colors" aria-label="Open navigation">
+    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"/></svg>
+  </button>
+  <div id="sidebar-overlay" class="sidebar-overlay"></div>
+
+  <div class="manual-layout">
+    <aside id="manual-sidebar" class="manual-sidebar"><nav id="sidebar-nav"></nav></aside>
+
+    <main>
+      <div class="chapter-content">
+
+        <div class="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">Chapter 26 · Act V — Integrate</div>
+        <h1>The Copilot Integration Trilogy</h1>
+        <p class="text-lg text-slate-400 mb-8">How Plan Forge teaches GitHub Copilot about your project — three tools, two generated files, one dashboard tab, zero manual setup after the first run.</p>
+
+        <div class="callout callout-info">
+          <strong>Added in v2.99 → v3.1.</strong> The trilogy landed in three releases: <code>forge_sync_memories</code> (v2.99), <code>forge_sync_instructions</code> (v3.0), and the Settings → Copilot dashboard tab (v3.1). Together they make every new Copilot conversation start with full project context — no manual context-paste, no copy-and-rebuild instruction files.
+        </div>
+
+        <!-- ─── Why a trilogy ─── -->
+        <h2 id="why-trilogy">Why a trilogy?</h2>
+        <p>GitHub Copilot reads two files automatically when you open a workspace:</p>
+        <ol>
+          <li><code>.github/copilot-instructions.md</code> — "what you must always know about this project". Architectural rules, naming conventions, build commands, security commitments.</li>
+          <li><code>.github/copilot-memory-hints.md</code> — "what we've learned from doing this work". Trajectories from prior plans, recurring patterns, auto-skills extracted from successful slices.</li>
+        </ol>
+        <p>Both files exist <em>before</em> Plan Forge — you can hand-author them. But hand-authoring means: (a) they go stale the moment you ship the next plan, (b) every team member writes a slightly different one, and (c) when the underlying decisions change in <code>.forge.json</code> or <code>PROJECT-PRINCIPLES.md</code>, nothing reminds you to regenerate.</p>
+
+        <p>The trilogy solves all three problems by making both files <strong>build outputs</strong>, not human-authored sources:</p>
+
+        <div class="overflow-x-auto my-6">
+          <table class="text-sm w-full border-collapse">
+            <thead>
+              <tr class="border-b border-slate-700/60">
+                <th class="text-left py-2 px-3 text-slate-400 font-semibold">Tool</th>
+                <th class="text-left py-2 px-3 text-slate-400 font-semibold">Writes</th>
+                <th class="text-left py-2 px-3 text-slate-400 font-semibold">Reads from</th>
+                <th class="text-left py-2 px-3 text-slate-400 font-semibold">Run when</th>
+              </tr>
+            </thead>
+            <tbody class="text-slate-300">
+              <tr class="border-b border-slate-800/40">
+                <td class="py-2 px-3"><code class="text-amber-400">forge_sync_instructions</code></td>
+                <td class="py-2 px-3"><code>.github/copilot-instructions.md</code></td>
+                <td class="py-2 px-3">project profile, principles, extra <code>.instructions.md</code> files, <code>.forge.json</code></td>
+                <td class="py-2 px-3">Architectural rules change</td>
+              </tr>
+              <tr class="border-b border-slate-800/40">
+                <td class="py-2 px-3"><code class="text-amber-400">forge_sync_memories</code></td>
+                <td class="py-2 px-3"><code>.github/copilot-memory-hints.md</code></td>
+                <td class="py-2 px-3">trajectories (<code>.forge/trajectories/</code>), auto-skills, brain entries</td>
+                <td class="py-2 px-3">After each plan ships</td>
+              </tr>
+              <tr>
+                <td class="py-2 px-3"><strong>Settings → Copilot</strong> tab</td>
+                <td class="py-2 px-3">— (preview + apply both above)</td>
+                <td class="py-2 px-3">live state from the two tools</td>
+                <td class="py-2 px-3">Anytime you want to inspect before applying</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <div class="callout callout-tip">
+          <strong>One-liner</strong>: <code>forge_sync_instructions</code> handles the "always true" facts; <code>forge_sync_memories</code> handles the "we learned this last week" facts. The dashboard tab handles "let me look before I commit".
+        </div>
+
+        <!-- ─── The data flow ─── -->
+        <h2 id="data-flow">The data flow</h2>
+
+        <div class="my-8 p-6 bg-slate-900/50 border border-slate-800/60 rounded-xl overflow-x-auto">
+          <pre class="mermaid">
+flowchart LR
+    subgraph SRC[Forge Sources]
+      PP[PROJECT-PRINCIPLES.md]
+      PR[Project Profile]
+      FJ[.forge.json]
+      II[.github/instructions/*.md]
+      TR[.forge/trajectories/]
+      AS[Auto-Skills]
+      BR[OpenBrain entries]
+    end
+
+    subgraph TOOLS[Sync Tools]
+      SI[forge_sync_instructions]
+      SM[forge_sync_memories]
+    end
+
+    subgraph OUT[Copilot Files]
+      CI[.github/copilot-instructions.md]
+      CM[.github/copilot-memory-hints.md]
+    end
+
+    subgraph CP[GitHub Copilot]
+      CTX[Auto-loaded conversation context]
+    end
+
+    PP & PR & FJ & II --> SI --> CI
+    TR & AS & BR --> SM --> CM
+    CI & CM --> CTX
+          </pre>
+        </div>
+
+        <p>Both tools are <strong>idempotent and additive</strong>. They use content-hash deduplication, so running the same sync twice in a row produces zero file changes. They also use atomic write (temp file + rename), so a crash mid-write never leaves a half-baked file.</p>
+
+        <!-- ─── forge_sync_instructions ─── -->
+        <h2 id="sync-instructions"><code>forge_sync_instructions</code> — the "always true" file</h2>
+        <p><code>forge_sync_instructions</code> generates <code>.github/copilot-instructions.md</code> by composing four sources, in this order:</p>
+
+        <ol>
+          <li><strong>Project Profile</strong> (<code>docs/plans/PROJECT-PROFILE.md</code>) — the tech stack, build commands, key paths. Generated once via the <code>project-profile.prompt.md</code> in Session 1.</li>
+          <li><strong>Project Principles</strong> (<code>docs/plans/PROJECT-PRINCIPLES.md</code>) — non-negotiable architectural and engineering commitments. Generated via <code>project-principles.prompt.md</code>.</li>
+          <li><strong>Extra instruction files</strong> (<code>.github/instructions/*.instructions.md</code>) — auto-loaded by Copilot via their <code>applyTo</code> frontmatter. The trilogy stitches the relevant ones into the master file so Copilot sees them as a single context.</li>
+          <li><strong><code>.forge.json</code> commitments</strong> — tech choices that the project has locked in (e.g. <code>"database": "postgres"</code>, <code>"frontend": "react"</code>).</li>
+        </ol>
+
+        <p>The output is a single Markdown file ~150–400 lines (depends on profile complexity) with a deterministic structure: <strong>Identity → Stack → Build commands → Architectural rules → Forbidden patterns → Cost guardrails → Talking to Plan Forge tools</strong>.</p>
+
+        <h3 id="run-instructions">Running it</h3>
+
+        <div class="cmd-block">
+          <div class="cmd-block-header"><span>Terminal · CLI</span><button class="cmd-copy-btn">Copy</button></div>
+          <pre><code># Generate (preview only — does not write)
+pforge sync-instructions --preview
+
+# Generate and write
+pforge sync-instructions
+
+# Force overwrite even if file is identical (skips hash check)
+pforge sync-instructions --force</code></pre>
+        </div>
+
+        <div class="cmd-block">
+          <div class="cmd-block-header"><span>From an agent · MCP</span><button class="cmd-copy-btn">Copy</button></div>
+          <pre><code>forge_sync_instructions({ preview: true })
+// → { ok: true, written: false, diff: "...", contentHash: "sha256:..." }
+
+forge_sync_instructions({ preview: false })
+// → { ok: true, written: true, path: ".github/copilot-instructions.md", contentHash: "..." }</code></pre>
+        </div>
+
+        <h3 id="instructions-output-shape">What the output looks like</h3>
+        <p>The generated file follows a canonical template so that Copilot Chat's prompt-injection logic finds the same anchors every time:</p>
+
+        <pre class="bg-slate-950 border border-slate-800/60 rounded-xl p-4 overflow-x-auto text-sm"><code># Instructions for Copilot
+
+&gt; **Project**: &lt;name&gt;
+&gt; **Stack**: &lt;stack summary&gt;
+&gt; **Generated by**: forge_sync_instructions @ v3.x
+
+## Architecture Principles
+&lt;merged from architecture-principles.instructions.md + project-principles&gt;
+
+## Project Overview
+&lt;merged from PROJECT-PROFILE.md&gt;
+
+## Quick Commands
+&lt;merged from project profile + .forge.json&gt;
+
+## Coding Standards
+&lt;stack-specific from instructions/&gt;
+
+## Planning &amp; Execution
+&lt;pipeline + prompts overview&gt;
+
+## Cost Estimates
+&lt;always-included; mandates forge_estimate_quorum&gt;
+
+## Talking to Forge-Master
+&lt;always-included; mandates forge_master_ask for open-ended reasoning&gt;</code></pre>
+
+        <!-- ─── forge_sync_memories ─── -->
+        <h2 id="sync-memories"><code>forge_sync_memories</code> — the "we learned this" file</h2>
+        <p><code>forge_sync_memories</code> generates <code>.github/copilot-memory-hints.md</code> by harvesting three runtime sources:</p>
+
+        <ol>
+          <li><strong>Trajectories</strong> (<code>.forge/trajectories/*.jsonl</code>) — per-slice notes the worker left for itself: "I tried X, it failed because Y, so I switched to Z". These are the gold for "don't repeat this mistake" guidance.</li>
+          <li><strong>Auto-skills</strong> (<code>.forge/auto-skills/*.md</code>) — reusable patterns extracted by the Inner Loop. If three slices all needed the same shape of repository test, the fourth slice gets it for free as a skill — and Copilot Chat should know it exists too.</li>
+          <li><strong>OpenBrain entries</strong> (L3, if configured) — long-form lessons captured via <code>forge_memory_capture</code> or auto-stamped by tools like <code>forge_run_plan</code>.</li>
+        </ol>
+
+        <p>Each source is filtered, hashed, deduped, and ranked by recency × signal strength. The output is bounded to ~80–120 lines so Copilot's context budget stays healthy.</p>
+
+        <div class="callout callout-info">
+          <strong>Soft-sync, not hard-sync.</strong> The file is additive — the tool never deletes a hint a human added by hand. If you write a custom block under <code>&lt;!-- pforge:custom --&gt;</code> / <code>&lt;!-- /pforge:custom --&gt;</code> markers, the sync tool preserves it verbatim. Only the <code>&lt;!-- pforge:auto --&gt;</code> region is regenerated.
+        </div>
+
+        <h3 id="run-memories">Running it</h3>
+
+        <div class="cmd-block">
+          <div class="cmd-block-header"><span>Terminal · CLI</span><button class="cmd-copy-btn">Copy</button></div>
+          <pre><code># After every plan ships
+pforge sync-memories
+
+# Limit to last N trajectories (default: 50)
+pforge sync-memories --since=14d
+
+# Verbose: show which entries were included/excluded and why
+pforge sync-memories --explain</code></pre>
+        </div>
+
+        <h3 id="memories-output-shape">What the output looks like</h3>
+
+        <pre class="bg-slate-950 border border-slate-800/60 rounded-xl p-4 overflow-x-auto text-sm"><code># Copilot Memory Hints
+
+&gt; **Generated by**: forge_sync_memories @ v3.x
+&gt; **Last sync**: 2026-05-17T14:22:11Z · 47 trajectories, 12 auto-skills, 8 brain entries
+
+&lt;!-- pforge:auto --&gt;
+
+## Recently learned patterns
+- **Snapshot pop** uses `git stash apply` + explicit drop, not blind `git stash pop` (lesson from #201)
+- **Vitest output parser** ignores subagent hallucination markers (lesson from #198)
+- ...
+
+## Auto-skills available
+- `repository-vitest-pattern` — generated 2026-05-12 from 4 slices
+- `bicep-rbac-scaffold` — generated 2026-05-10 from 3 slices
+
+&lt;!-- /pforge:auto --&gt;
+
+&lt;!-- pforge:custom --&gt;
+&lt;!-- Anything you write here is preserved across syncs --&gt;
+&lt;!-- /pforge:custom --&gt;</code></pre>
+
+        <!-- ─── Settings → Copilot tab ─── -->
+        <h2 id="settings-copilot">The Settings → Copilot dashboard tab</h2>
+        <p>If you'd rather see the diff before it lands, open the dashboard and navigate to <strong>Settings → Copilot</strong>. The tab gives you four panels:</p>
+
+        <div class="overflow-x-auto my-6">
+          <table class="text-sm w-full border-collapse">
+            <thead>
+              <tr class="border-b border-slate-700/60">
+                <th class="text-left py-2 px-3 text-slate-400 font-semibold">Panel</th>
+                <th class="text-left py-2 px-3 text-slate-400 font-semibold">Shows</th>
+                <th class="text-left py-2 px-3 text-slate-400 font-semibold">Actions</th>
+              </tr>
+            </thead>
+            <tbody class="text-slate-300">
+              <tr class="border-b border-slate-800/40">
+                <td class="py-2 px-3"><strong>Current file</strong></td>
+                <td class="py-2 px-3">Live content of <code>.github/copilot-instructions.md</code></td>
+                <td class="py-2 px-3">Read-only viewer with syntax highlighting</td>
+              </tr>
+              <tr class="border-b border-slate-800/40">
+                <td class="py-2 px-3"><strong>Preview regenerated</strong></td>
+                <td class="py-2 px-3">What <code>forge_sync_instructions</code> would write right now</td>
+                <td class="py-2 px-3">Inline diff vs the current file</td>
+              </tr>
+              <tr class="border-b border-slate-800/40">
+                <td class="py-2 px-3"><strong>Memory hints</strong></td>
+                <td class="py-2 px-3">Live content of <code>copilot-memory-hints.md</code> + count of entries by source</td>
+                <td class="py-2 px-3">"Regenerate now" button → calls <code>forge_sync_memories</code></td>
+              </tr>
+              <tr>
+                <td class="py-2 px-3"><strong>Apply</strong></td>
+                <td class="py-2 px-3">Confirmation banner with the hash of what's about to be written</td>
+                <td class="py-2 px-3">"Sync instructions" / "Sync memories" / "Sync both" buttons</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <p>Backed by three REST endpoints (full reference: <a href="https://github.com/srnichols/plan-forge/blob/master/docs/REST-API.md" rel="noopener">docs/REST-API.md on GitHub</a>):</p>
+
+        <pre class="bg-slate-950 border border-slate-800/60 rounded-xl p-4 overflow-x-auto text-sm"><code>GET  /api/copilot-instructions         # read current file
+POST /api/copilot-instructions/preview # generate without writing
+POST /api/copilot-instructions/sync    # generate + write atomically</code></pre>
+
+        <!-- ─── When to run what ─── -->
+        <h2 id="when-to-run">When to run what</h2>
+
+        <div class="overflow-x-auto my-6">
+          <table class="text-sm w-full border-collapse">
+            <thead>
+              <tr class="border-b border-slate-700/60">
+                <th class="text-left py-2 px-3 text-slate-400 font-semibold">Event</th>
+                <th class="text-left py-2 px-3 text-slate-400 font-semibold">Run</th>
+                <th class="text-left py-2 px-3 text-slate-400 font-semibold">Why</th>
+              </tr>
+            </thead>
+            <tbody class="text-slate-300">
+              <tr class="border-b border-slate-800/40">
+                <td class="py-2 px-3">Initial project setup</td>
+                <td class="py-2 px-3"><code>sync-instructions</code></td>
+                <td class="py-2 px-3">Bootstraps Copilot with stack + commands</td>
+              </tr>
+              <tr class="border-b border-slate-800/40">
+                <td class="py-2 px-3">After edits to <code>PROJECT-PROFILE.md</code> or <code>PROJECT-PRINCIPLES.md</code></td>
+                <td class="py-2 px-3"><code>sync-instructions</code></td>
+                <td class="py-2 px-3">Architectural facts changed</td>
+              </tr>
+              <tr class="border-b border-slate-800/40">
+                <td class="py-2 px-3">After a plan ships</td>
+                <td class="py-2 px-3"><code>sync-memories</code></td>
+                <td class="py-2 px-3">New trajectories, possibly new auto-skills</td>
+              </tr>
+              <tr class="border-b border-slate-800/40">
+                <td class="py-2 px-3">Weekly maintenance</td>
+                <td class="py-2 px-3">Both</td>
+                <td class="py-2 px-3">Catch drift; safe even if nothing changed (hash dedup skips no-op writes)</td>
+              </tr>
+              <tr>
+                <td class="py-2 px-3">CI on <code>main</code> push</td>
+                <td class="py-2 px-3">Both, with <code>--preview</code> + fail-on-diff</td>
+                <td class="py-2 px-3">Catches "developer forgot to sync after editing PRINCIPLES"</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <div class="callout callout-tip">
+          <strong>Automation pattern</strong>: wire <code>pforge sync-memories</code> into the <strong>PostSlice</strong> hook (already shipped in <code>templates/.github/hooks/PostSlice.md</code>). Every successful slice now feeds the next Copilot conversation. Zero manual upkeep.
+        </div>
+
+        <!-- ─── Capability summary ─── -->
+        <h2 id="capability-summary">Capability summary</h2>
+        <p>For the full tool-by-tool reference, see <a href="https://github.com/srnichols/plan-forge/blob/master/docs/capabilities.md" rel="noopener">docs/capabilities.md on GitHub</a>. The three trilogy surfaces, at a glance:</p>
+
+        <div class="overflow-x-auto my-6">
+          <table class="text-sm w-full border-collapse">
+            <thead>
+              <tr class="border-b border-slate-700/60">
+                <th class="text-left py-2 px-3 text-slate-400 font-semibold">Surface</th>
+                <th class="text-left py-2 px-3 text-slate-400 font-semibold">MCP tool</th>
+                <th class="text-left py-2 px-3 text-slate-400 font-semibold">CLI</th>
+                <th class="text-left py-2 px-3 text-slate-400 font-semibold">REST</th>
+                <th class="text-left py-2 px-3 text-slate-400 font-semibold">Since</th>
+              </tr>
+            </thead>
+            <tbody class="text-slate-300">
+              <tr class="border-b border-slate-800/40">
+                <td class="py-2 px-3">Memory hints</td>
+                <td class="py-2 px-3"><code>forge_sync_memories</code></td>
+                <td class="py-2 px-3"><code>pforge sync-memories</code></td>
+                <td class="py-2 px-3">— (CLI-only)</td>
+                <td class="py-2 px-3">v2.99</td>
+              </tr>
+              <tr class="border-b border-slate-800/40">
+                <td class="py-2 px-3">Instructions</td>
+                <td class="py-2 px-3"><code>forge_sync_instructions</code></td>
+                <td class="py-2 px-3"><code>pforge sync-instructions</code></td>
+                <td class="py-2 px-3"><code>POST /api/copilot-instructions/sync</code></td>
+                <td class="py-2 px-3">v3.0</td>
+              </tr>
+              <tr>
+                <td class="py-2 px-3">Dashboard tab</td>
+                <td class="py-2 px-3">— (UI)</td>
+                <td class="py-2 px-3">— (UI)</td>
+                <td class="py-2 px-3"><code>GET /api/copilot-instructions</code><br/><code>POST /api/copilot-instructions/preview</code></td>
+                <td class="py-2 px-3">v3.1</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <div class="callout callout-info mt-8">
+          <strong>See also:</strong> <a href="memory-system.html">Chapter 25 — How the Shop Remembers</a> for the full L1/L2/L3 memory architecture this trilogy sits on top of. <a href="dashboard-settings.html">Dashboard — Settings</a> for the full Settings tab walkthrough. <a href="customization.html">Chapter 9 — Customization</a> for how to add your own custom blocks to the generated files.
+        </div>
+
+      </div>
+    </main>
+  </div>
+
+  <script src="assets/manual.js"></script>
+</body>
+</html>

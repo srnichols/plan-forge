@@ -47,7 +47,7 @@
 
         <!-- ─── How the book is organised ─── -->
         <h2 id="organisation">How the manual is organised</h2>
-        <p>The manual ships as a <strong>Quickstart</strong> + <strong><!--c:parts-->4<!--/c--> Parts</strong> + <strong><!--c:appendices-->14<!--/c--> Appendices</strong>. The chapter numbering scheme tells you which kind of page you're on at a glance.</p>
+        <p>The manual ships as a <strong>Quickstart</strong> + <strong><!--c:parts-->5<!--/c--> Parts</strong> + <strong><!--c:appendices-->14<!--/c--> Appendices</strong>. The chapter numbering scheme tells you which kind of page you're on at a glance.</p>
 
         <table>
           <thead>
@@ -59,7 +59,7 @@
           </thead>
           <tbody>
             <tr><td><code>Q1 Q2 Q3</code></td><td>Quickstart steps. The 30-minute zero-to-shipped path.</td><td>Q2 · Your First Plan</td></tr>
-            <tr><td><code>1 2 … 24</code></td><td>Numbered chapters across <!--c:parts-->4<!--/c--> Parts (Smelt → Forge → Guard → Learn).</td><td>Chapter 5 · Crucible</td></tr>
+            <tr><td><code>1 2 … 24</code></td><td>Numbered chapters across <!--c:parts-->5<!--/c--> Parts (Smelt → Forge → Guard → Learn).</td><td>Chapter 5 · Crucible</td></tr>
             <tr><td><em>(unnumbered)</em></td><td>Sub-chapters and deep dives that hang off a numbered chapter.</td><td>Dashboard — LiveGuard</td></tr>
             <tr><td><code>A B … N</code></td><td>Lettered appendices &mdash; reference material, runbooks, enterprise track.</td><td>Appendix K · Enterprise Reference Architecture</td></tr>
             <tr><td><code>O</code></td><td>The Book Index &mdash; A&ndash;Z search across the whole manual.</td><td>Appendix O · Book Index</td></tr>
@@ -124,7 +124,7 @@
 
         <!-- ─── Live numbers (counts) ─── -->
         <h2 id="live-numbers">Live numbers</h2>
-        <p>Some sentences refer to a count that changes between releases &mdash; "Plan Forge ships <!--c:tools-->77<!--/c--> MCP tools", "<!--c:instructions-->18<!--/c--> instruction files", "<!--c:agents-->19<!--/c--> agents". Those numbers are <em>tokenized</em> in the page source and rewritten at build time from a single source of truth in <code>docs/manual/assets/manual.js</code>. You'll see the up-to-date number rendered, but if you View Source you'll see the token markers wrapping it.</p>
+        <p>Some sentences refer to a count that changes between releases &mdash; "Plan Forge ships <!--c:tools-->88<!--/c--> MCP tools", "<!--c:instructions-->18<!--/c--> instruction files", "<!--c:agents-->12<!--/c--> agents". Those numbers are <em>tokenized</em> in the page source and rewritten at build time from a single source of truth in <code>docs/manual/assets/manual.js</code>. You'll see the up-to-date number rendered, but if you View Source you'll see the token markers wrapping it.</p>
 
         <div class="callout callout-info">
           <strong>For contributors:</strong> use <code>&lt;!--c:KEY--&gt;NUMBER&lt;!--/c--&gt;</code> instead of typing a literal number in chapter prose. Run <code>node docs/manual/maintain.mjs</code> after editing &mdash; it sweeps every chapter, fixes drift, and warns on unknown keys.
@@ -152,6 +152,14 @@
         <!-- ─── Edition + errata ─── -->
         <h2 id="edition">Edition &amp; errata</h2>
         <p>Every page footer (and the meta-bar at the top of the cover) shows the manual <strong>edition</strong> &mdash; pinned to the Plan Forge version it was published with. The full release history lives in <a href="https://github.com/srnichols/plan-forge/blob/master/CHANGELOG.md" rel="noopener">CHANGELOG.md on GitHub</a>.</p>
+
+        <h3 id="edition-history">Edition history</h3>
+        <ul>
+          <li><strong>Third Edition</strong> (v3.5.1) &mdash; Added Part V “Integrate”: Copilot Integration Trilogy, Team Coordination, The Knowledge Graph, Integrating from Outside. Refreshed counts (88 MCP tools, 5 parts, 28 chapters).</li>
+          <li><strong>Second Edition</strong> (v2.95.0) &mdash; Added Chapter 25 “How the Shop Remembers” (memory architecture: Hallmark, Anvil, Lattice, sync_memories).</li>
+          <li><strong>First Edition</strong> (v2.78.0) &mdash; Initial public release: 24 chapters across Parts I–IV plus 14 appendices.</li>
+        </ul>
+
         <p>Spotted something that's wrong, stale, or missing? File an issue on <a href="https://github.com/srnichols/plan-forge/issues" rel="noopener">github.com/srnichols/plan-forge</a> with the chapter title and section heading. Manual fixes are tagged <code>docs:</code> in the changelog.</p>
 
         <div class="callout callout-tip">

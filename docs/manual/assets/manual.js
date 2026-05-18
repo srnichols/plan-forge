@@ -53,6 +53,11 @@
     { id: "health-dna",          file: "health-dna.html",          num: "23", title: "Health DNA",                 act: "IV" },
     { id: "memory-architecture", file: "memory-architecture.html", num: "24", title: "Memory Architecture",       act: "IV" },
     { id: "memory-system",       file: "memory-system.html",       num: "25", title: "How the Shop Remembers",   act: "IV" },
+    // ─── Part V (Integrate) ───
+    { id: "copilot-integration",     file: "copilot-integration.html",     num: "26", title: "The Copilot Integration Trilogy", act: "V" },
+    { id: "team-coordination",       file: "team-coordination.html",       num: "27", title: "Team Coordination",               act: "V" },
+    { id: "knowledge-graph",         file: "knowledge-graph.html",         num: "28", title: "The Knowledge Graph",             act: "V" },
+    { id: "integrating-from-outside", file: "integrating-from-outside.html", num: "29", title: "Integrating from Outside",        act: "V" },
     // ─── Appendices ───
     { id: "glossary",            file: "glossary.html",            num: "A",  title: "Glossary",                 act: "Appendix" },
     { id: "quick-reference",     file: "quick-reference.html",     num: "B",  title: "Quick Reference Card",     act: "Appendix" },
@@ -88,11 +93,16 @@
     "spec-kit-interop":              { label: "NEW",     version: "v2.70" },
     "plan-forge-on-the-github-stack":{ label: "UPDATED", version: "v2.75" },
     "memory-system":                 { label: "NEW",     version: "v3.5.1" },
+    "copilot-integration":           { label: "NEW",     version: "v3.1" },
+    "team-coordination":             { label: "NEW",     version: "v3.4" },
+    "knowledge-graph":               { label: "NEW",     version: "v3.3" },
+    "integrating-from-outside":      { label: "NEW",     version: "v3.5" },
   };
 
   // ─── Edition ───
   // Single source of truth for the manual edition badge shown in the meta-bar.
-  const EDITION = "2.92.0-dev";
+  // Third Edition — v3.5.1 (Pass 7 audit reconciliation + Manual Third Edition: 4 new Act V chapters)
+  const EDITION = "3.5.1";
 
   // ─── Manual counts (single source of truth) ───
   //
@@ -111,19 +121,20 @@
   //
   const MANUAL_COUNTS = {
     // Pipeline / surface ────────────────────────────────────────────────
-    tools:        77,  // pforge-mcp/tools.json (canonical: array length) — verify with: grep -c '"name": "forge_' pforge-mcp/tools.json
+    tools:        88,  // pforge-mcp/tools.json (canonical: array length) — verify with: grep -c '"name": "forge_' pforge-mcp/tools.json
     instructions: 18,  // presets/dotnet|typescript/.github/instructions/
-    agents:       19,  // 6 stack-specific + 7 cross-stack + 6 pipeline (per copilot-instructions.md)
+    agents:       12,  // 6 stack-specific + 6 pipeline (post Pass 5 reconciliation; cross-stack reviewers folded into stack agents)
     skills:       11,  // dotnet preset (typescript = 10) — varies by preset
     hooks:         5,  // PreDeploy.md, PreCommit.mjs, PreAgentHandoff.md, PostSlice.md (+ plan-forge.json config) — Plan Forge lifecycle hooks (NOT Claude Code hook names)
     prompts:       8,  // project-profile + step0-step6 pipeline prompts
     presets:       9,  // presets/* excluding the "shared" base
+    'cli-commands': 57, // pforge.ps1 / pforge.sh switch arms — verify with: grep -c '^\s*"\w' pforge-mcp/cli-schema.json
     // Manual structure ──────────────────────────────────────────────────
-    chapters:     24,  // numbered chapters 1-24 (excludes Quickstart Q1-Q3 and Appendices)
+    chapters:     28,  // numbered chapters 1-29 (excludes Quickstart Q1-Q3 and Appendices) — Ch 11 was archived; 26-29 added Third Edition
     appendices:   14,  // lettered appendices A-N (+ Appendix O Book Index)
-    parts:         4,  // Smelt, Forge, Guard, Learn
+    parts:         5,  // Smelt, Forge, Guard, Learn, Integrate (Part V added Third Edition)
     // Manual assets ─────────────────────────────────────────────────────
-    htmlFiles:    60,  // total .html files in docs/manual/
+    htmlFiles:    65,  // total .html files in docs/manual/ (+4 chapters Third Edition)
   };
 
   // Detect current page
@@ -211,7 +222,7 @@
     frag.appendChild(searchWrap);
 
     // Group chapters by act so we can render collapsible sections
-    const actLabels = { Quickstart: "⚡ Quickstart", I: "Part I — Smelt", II: "Part II — Forge", III: "Part III — Guard", IV: "Part IV — Learn", Appendix: "Appendices" };
+    const actLabels = { Quickstart: "⚡ Quickstart", I: "Part I — Smelt", II: "Part II — Forge", III: "Part III — Guard", IV: "Part IV — Learn", V: "Part V — Integrate", Appendix: "Appendices" };
     const actOrder = [];
     const actGroups = {};
     CHAPTERS.forEach((ch, i) => {
@@ -778,7 +789,7 @@
     el.innerHTML =
       '<span class="meta-bar__edition">v' + EDITION + '</span>' +
       '<span class="meta-bar__sep">·</span>' +
-      '<span>Quickstart · 24 chapters · 14 appendices · 4 parts</span>' +
+      '<span>Quickstart · 28 chapters · 14 appendices · 5 parts</span>' +
       '<span class="meta-bar__sep">·</span>' +
       '<a href="https://github.com/srnichols/plan-forge/blob/main/CHANGELOG.md" class="meta-bar__link" target="_blank" rel="noopener">What\'s New ↗</a>';
   }

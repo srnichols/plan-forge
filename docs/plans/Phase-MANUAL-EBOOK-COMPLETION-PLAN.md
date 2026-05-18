@@ -2,7 +2,7 @@
 
 > **Status**: Draft. Ready for incremental execution slice-by-slice.
 > **Tracks**: Docs only (`docs/manual/*.html`, `docs/manual/assets/manual.js`, `docs/manual/assets/diagrams/*.svg`). Optional source pulls from `docs/blog/*.html`, `docs/REST-API.md`, `pforge-mcp/EVENTS.md`. **No code under `pforge-mcp/`, `pforge-master/`, `scripts/`, or root.**
-> **Estimated cost**: $30–$60 total across 16 slices if LLM-assisted; $0 if hand-written. Each slice is independently shippable.
+> **Estimated cost**: $30–$60 total across 19 slices (18 content slices + 1 QA closer) if LLM-assisted; $0 if hand-written. Each slice is independently shippable.
 > **Pipeline**: Specify ✅ → Harden (per slice on demand) → Execute (slice at a time) → `node maintain.mjs` (must remain GREEN) → Commit + push.
 > **Recommended starting cluster**: **Cluster A — Story (Tier 2)** because the source material already exists in `docs/blog/` and the highest reader-payoff/lowest-risk slices live here.
 
@@ -18,7 +18,7 @@ The manual is structurally complete as a *reference* (29 chapters across 5 parts
 | **1B** | Domain chapters | 4 missing chapters | New writing; cite existing tools + blog posts |
 | **2** | Story / ebook UX | 5 missing pieces | Mostly absorb `docs/blog/*.html` into manual voice |
 
-Total: **16 slices**, each one chapter/appendix/section, each independently shippable.
+Total: **18 content slices + 1 QA closer = 19 slices** across 4 clusters (A Story · B Reference · C Domain · D Closure). Each slice is one chapter/appendix/section/sweep, each independently shippable.
 
 ---
 
@@ -33,6 +33,9 @@ Total: **16 slices**, each one chapter/appendix/section, each independently ship
   discoverable from the places a reader already passes through. Every slice is expected to touch
   ≥1 earlier file with a backward link — see the cross-ref map in
   [`docs/research/manual-ebook-completion-audit.md`](../research/manual-ebook-completion-audit.md#4a-editorial-convention-forward--backward-cross-references-on-every-slice) §4a
+- **Diagram edits** — re-use of existing SVGs in `docs/manual/assets/diagrams/` (zero authoring
+  cost) and authoring of new SVGs where the per-slice diagram map requires it — see
+  [`docs/research/manual-ebook-completion-audit.md`](../research/manual-ebook-completion-audit.md#4c-diagram-requirements-per-slice) §4c
 - Edits to `docs/manual/index.html` Appendices/Front Matter grid when a new appendix is added
 - Re-runs of `node docs/manual/maintain.mjs` after every slice to propagate counts and regenerate `book-index.html` + `list-of-figures.html`
 
@@ -90,7 +93,7 @@ All resolved during plan drafting; no TBDs remain.
 | 6 | Lifecycle Hooks reference — new chapter or section in Customization? | **Section in Customization Ch 9** + cross-link from `instructions-agents.html`. A standalone hooks chapter would be too thin (5 hooks); a section is the right granularity. |
 | 7 | Skills Reference — appendix or section? | **Section in `instructions-agents-reference.html`**. Skills sit alongside instructions and agents conceptually; a separate appendix would fragment the reference. |
 | 8 | Errors & Exit Codes — appendix or section? | **Section in Troubleshooting Ch 15** + a flat appendix table referenced from that section. The table belongs in the appendix; the narrative ("what to do when…") belongs in Ch 15. |
-| 9 | Edition number after this phase ships | Bump to **Fifth Edition (v3.x)** once ≥10 of the 16 slices ship. EDITION constant in `manual.js` gets updated as part of the slice that crosses the 10-slice threshold. |
+| 9 | Edition number after this phase ships | Bump to **Fifth Edition (v3.x)** once ≥10 of the 18 content slices ship. EDITION constant in `manual.js` gets updated as part of the slice that crosses the 10-slice threshold. The QA closer (Slice QA) verifies the bump actually fired. |
 | 10 | Whether to register new chapters in the `STATUS` registry | Yes. Every new chapter/appendix from this phase gets `{ label: "NEW", version: "v3.x" }` so the sidebar shows the NEW pill. Set version to the actual ship version when the slice lands. |
 
 ---
@@ -168,6 +171,12 @@ Slices are independent. Pick any one; finish it; commit; ship. No slice depends 
 | **C3** | **Plan Pattern Library** | New Appendix **Y** at `docs/manual/plan-patterns.html` — 15–30 archetypes (DB migration, refactor, multi-service rollout, spike+retire, bug-sweep, etc.) with skeleton templates | `docs/plans/examples/`, `docs/plans/archive/Phase-*-PLAN.md`, `docs/plans/PROJECT-PRINCIPLES-TEMPLATE.md`, `docs/plans/DEPLOYMENT-ROADMAP-TEMPLATE.md` | — |
 | **C4** | **Failure-Mode Catalog** | New Appendix **Z** at `docs/manual/failure-modes.html` — organized by Plan Forge subsystem (gate, quorum, watcher, OpenBrain, snapshot, model-pool, hub) with symptom→cause→fix triples | `pforge-mcp/orchestrator.mjs` failure paths, `troubleshooting.html` symptoms, `BUG-*.md` files in `docs/plans/archive/`, `/memories/repo/*-defects-*.md` | B7 (exit codes) |
 
+### Cluster D — Phase closure
+
+| # | Slice | Output | Source | Depends on |
+|---|---|---|---|---|
+| **QA** | **Phase-completion sweep + cross-ref audit** | Sweep report appended to [`docs/research/manual-ebook-completion-audit.md`](../research/manual-ebook-completion-audit.md) as new **§7 “What actually shipped”** — pass/fail per check (1–8) of audit §4b, plus a short narrative of any deferred or follow-up items. The sweep **does not auto-fix**; missing items are named and become explicit follow-up commits by each slice's original author. | The slice tables in this plan, the cross-ref map in audit §4a, the diagram map in audit §4c, `node maintain.mjs` output, the current state of `docs/manual/assets/manual.js` registries | ALL content slices A1–A7, B1–B7, C1–C4 shipped (or explicitly deferred with a recorded reason) |
+
 ---
 
 ## Per-slice playbook (apply to any slice)
@@ -218,6 +227,9 @@ Slices are independent. Pick any one; finish it; commit; ship. No slice depends 
 - [ ] **C3** Plan Pattern Library (Appendix Y)
 - [ ] **C4** Failure-Mode Catalog (Appendix Z)
 
+### Cluster D — Phase closure
+- [ ] **QA** Phase-completion sweep + cross-ref audit (runs last; depends on all content slices)
+
 ---
 
 ## Branch strategy
@@ -240,7 +252,7 @@ No production behaviour changes; nothing to roll back beyond the manual itself.
 
 ## Cost & risk
 
-- **LLM cost**: ~$2–4 per slice if drafted with assistance. Total ~$30–60 across 16 slices.
+- **LLM cost**: ~$2–4 per slice if drafted with assistance. Total ~$30–$60 across 19 slices (18 content + 1 QA closer; QA is cheap because it's mostly `grep` + `Test-Path`).
 - **Risk**: LOW. Docs only. No code paths touched. `maintain.mjs` is the gate; if it goes RED, the slice is incomplete.
 - **Reviewability**: HIGH. Each slice is one chapter or appendix with a single commit.
 

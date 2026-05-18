@@ -30,7 +30,8 @@ If we only do **three things** from this list, do these:
 3. **Cost & Economics chapter** — Plan Forge's biggest commercial question is *"how much will this cost me?"* and the manual doesn't answer it directly. The data is in the dashboard's Cost tab and in `forge_cost_report`; the narrative is missing. Lead with the **four levers** documented in §2 below (quality-at-constant-time, quality-per-extra-dollar, rework-avoidance, memory-as-subsidy) and the **compounding flywheel** observation — the cost curve bends downward over the life of a project, which is the opposite of what most engineering managers default-assume.
 
 The full execution plan ([`Phase-MANUAL-EBOOK-COMPLETION-PLAN.md`](../plans/Phase-MANUAL-EBOOK-COMPLETION-PLAN.md))
-breaks the gap-closure into **16 independently shippable slices** across 3 clusters.
+breaks the gap-closure into **18 independently shippable content slices + 1 QA closer = 19 slices total** across 4 clusters
+(Story · Reference · Domain · Closure).
 
 ---
 
@@ -431,7 +432,7 @@ It is not exhaustive (a slice may discover more during drafting) but it is the *
 | **A5 — What's-new banner** | `project-history.html#v3-6-openbrain-l3` · `conventions.html#edition-history` | (no backward refs — it's a homepage banner, not a chapter) |
 | **A6 — Above-the-fold positioning** | App H stack alignment · App I surface-by-surface · What-is-PF “is / is not” table | `README.md`, `index.html`, `what-is-plan-forge.html` (those *are* the surfaces being edited; A6's commit must touch all three to count) |
 | **A7 — Stakeholder Briefing** | A1 Foreword · What-is-PF · App H · C2 Cost & Economics · [`memory-system.html`](../manual/memory-system.html) · the `/stakeholder-briefing` skill doc (“Tailor with the skill”) | A1 Foreword (“if you only have ten minutes, read the Stakeholder Briefing”) · `index.html` Front Matter grid · A2 Reader-Journey Ladders (“Team-lead ladder → Stakeholder Briefing first”) |
-| **B1–B7 — Reference appendices** | The chapter that first introduces the topic (e.g. B1 `.forge.json` → Customization Ch 9) | The chapter that first introduces the topic (the *first introduction* gains a “full schema in App T” link); plus `unified-api-surface.html` index | 
+| **B1–B7 — Reference appendices** | The chapter that first introduces the topic (e.g. B1 `.forge.json` → Customization Ch 9) | The chapter that first introduces the topic (the *first introduction* gains a “full schema in App T” link); plus `unified-api-surface.html` index |
 | **C1 — Security & Threat Model** | App N Compliance & Data Residency · B2 env-vars (secrets) · B4 event catalog (audit stream) · `extensions/catalog.json` story | App N (forward link “threat-model side in Ch 20a”) · `liveguard-runbooks.html` |
 | **C2 — Cost & Economics** | A3 vignette #2 · B1 `.forge.json#costEstimator` · [`memory-system.html#cheaper-models`](../manual/memory-system.html#cheaper-models) · `quorum-mode-*` blog posts | Every chapter that mentions cost today (8+ chapters) gains a “see C2 for the full economics” footnote |
 | **C3 — Plan Pattern Library (App Y)** | The chapter that teaches plan authoring | The plan-authoring chapter · `quickstart.html` (“start from a pattern in App Y”) |
@@ -458,6 +459,93 @@ mode the design is trying to avoid.
 
 ---
 
+## 4b · Phase closure: the QA sweep slice
+
+Making cross-references and diagram coverage hard requirements only helps if **someone checks at
+the end that all of them actually shipped**. Slice-by-slice execution naturally tunnel-visions on
+the one chapter being written; a missed backward cross-ref or a forgotten registry entry is
+invisible until a reader stumbles into the gap weeks later. The phase therefore ships with a
+**final closer slice — Slice QA — whose sole job is to audit the manual against this audit doc.**
+
+**What the QA sweep checks** (every item is a `grep` or a `node maintain.mjs` invocation — no
+subjective judgement):
+
+| # | Check | Pass criterion |
+|---|---|---|
+| 1 | **Every shipped slice's file exists** at the path the slice table names | `Test-Path` on each path returns `True` |
+| 2 | **Every shipped slice's `manual.js` registry entries are present** | `CHAPTERS` + ≥3 `SEARCH_SECTIONS` + `STATUS` entry for each new file |
+| 3 | **Every required forward cross-ref from §4a is present** in the new chapter | `grep` for the destination anchor inside the new file |
+| 4 | **Every required backward cross-ref from §4a is present** in the named earlier files | `grep` for the new chapter's URL inside each earlier file the map names |
+| 5 | **Every required diagram from §4c is referenced** (re-used existing SVG or new SVG present) | `grep` for the SVG filename inside the new file; `Test-Path` on new SVG files |
+| 6 | **Every internal `../manual/*.html#anchor` link resolves** | Walk all anchors across `docs/manual/*.html`; assert each link target's anchor exists |
+| 7 | **`node maintain.mjs` is GREEN twice consecutively** across the full set of changes | Both runs end with `All checks passed — manual is in sync` |
+| 8 | **`EDITION` constant in `manual.js` has bumped** if ≥10 content slices shipped | String compare against the previous edition value |
+
+**What the QA sweep deliberately does NOT do**:
+
+- **Does not auto-fix anything.** A missing backward cross-ref is named in the sweep report and
+  becomes a follow-up commit by the slice's original author. Auto-fix would mask the discipline
+  failure and train the next phase's executor to skip the same step.
+- **Does not re-write any chapter.** Editorial revisions are out of scope. The sweep verifies
+  the *structure* the plan promised, not the *quality* of the prose.
+- **Does not block on deferred items.** Open question #6 (skill in A7 vs A7.1) and Tier 3
+  deferrals (PDF export, errata page) are recorded as deferred, not as failures.
+
+**Where the sweep report lives**: appended to **this audit doc as a new §7 “What actually
+shipped”**, not as a separate file. Single source of truth; the historical record of the phase
+lives where the phase was planned. The sweep report is a checklist of pass/fail per check
+above, plus a short narrative of any deferred or follow-up items.
+
+**Order in the slice plan**: Slice QA runs **last**. It depends on every content slice having
+shipped (or being explicitly deferred with a recorded reason). Captured as Cluster D — Phase
+Closure in [`Phase-MANUAL-EBOOK-COMPLETION-PLAN.md`](../plans/Phase-MANUAL-EBOOK-COMPLETION-PLAN.md).
+
+## 4c · Diagram requirements per slice
+
+The manual's diagram convention is **hand-authored SVG** in [`docs/manual/assets/diagrams/`](../manual/assets/diagrams/)
+(37 SVGs already exist). Raster image generation is out of scope for the manual — the visual
+language is consistent across the existing assets, and a generated raster would break it. The
+`forge_generate_image` tool is reserved for marketing / blog assets, not manual chapters.
+
+**Most of the new slices re-use existing SVGs.** The table below names the minimum diagram
+coverage each slice owes. “Re-use” means the slice's HTML embeds an existing SVG; “New” means
+the slice authors a new SVG file as part of its commit.
+
+| Slice | Re-use existing SVG(s) | New SVG required | Why no existing match |
+|---|---|---|---|
+| **A1 Foreword** | [`github-stack-architecture.svg`](../manual/assets/diagrams/github-stack-architecture.svg) (as Figure 1) | — | The harness-on-substrate SVG is the right Figure 1; promoting it forward is the whole positioning fix |
+| **A2 Reader-Journey Ladders** | — | `reader-journey-ladders.svg` *(optional but recommended)* | No existing diagram visualises 5-persona paths through the manual. Could fall back to a table if cost-of-authoring is too high |
+| **A3 Vignettes (App R)** | [`evidence-ab-test-bars.svg`](../manual/assets/diagrams/evidence-ab-test-bars.svg) inside vignette #2 (the A/B-test case) | — | Narrative case studies; prose carries the load |
+| **A4 How-Do-I (App S)** | — | — | Pure task table; no diagram |
+| **A5 What's-new banner** | — | — | Text element only |
+| **A6 Above-the-fold positioning** | [`github-stack-architecture.svg`](../manual/assets/diagrams/github-stack-architecture.svg) (embedded above the fold) | — | The whole point of A6 is to surface this existing SVG earlier in the reader's path |
+| **A7 Stakeholder Briefing §2** (What it is / is not) | [`github-stack-architecture.svg`](../manual/assets/diagrams/github-stack-architecture.svg) | — | One canonical asset across A1 / A6 / A7 = zero drift risk |
+| **A7 §3** (Four cost levers) | (deferred to C2's new SVG; reuse there) | — | C2 owns the diagram; A7 cites it |
+| **A7 §4** (Compounding flywheel) | (deferred to C2's new SVG; reuse there) | — | Same |
+| **B1–B7 Reference appendices** | — | — | Tables + code blocks only |
+| **C1 Security & Threat Model** | [`escalation-chain.svg`](../manual/assets/diagrams/escalation-chain.svg) for the escalation context section | **`threat-model-trust-boundaries.svg`** — required | A threat-model chapter must visualise trust boundaries (workspace ↔ MCP host ↔ LLM ↔ extension catalog ↔ memory ↔ Git remote). No existing SVG covers this |
+| **C2 Cost & Economics** | [`evidence-ab-test-bars.svg`](../manual/assets/diagrams/evidence-ab-test-bars.svg) (quality-at-constant-time lever), [`memory-three-tier-capture.svg`](../manual/assets/diagrams/memory-three-tier-capture.svg) (memory-as-subsidy section) | **`cost-four-levers.svg`** + **`cost-compounding-flywheel.svg`** — both required | (1) The four-levers stacked total-cost-of-feature picture is the manager-pitch artifact and has no existing match. (2) `openbrain-cross-agent-compounding.svg` covers **cross-agent memory compounding**, not the cost-per-feature curve bending downward over project lifetime — distinct concept, needs its own SVG |
+| **C3 Plan Pattern Library (App Y)** | — | — (per-pattern diagrams would balloon scope; reconsider after drafting if chapter feels diagram-thin) | 15–30 archetypes; a per-pattern diagram per row is over-scope |
+| **C4 Failure-Mode Catalog (App Z)** | [`troubleshooting-tree.svg`](../manual/assets/diagrams/troubleshooting-tree.svg) as lead-in | — | Pure symptom → cause → fix table; lead-in diagram is enough |
+
+**New SVG totals**: **3 required** (`threat-model-trust-boundaries.svg`, `cost-four-levers.svg`,
+`cost-compounding-flywheel.svg`) + **1 optional** (`reader-journey-ladders.svg`). Each new SVG is
+part of its slice's commit, not a separate slice.
+
+**Authoring notes for the new SVGs**:
+
+- Match the existing style: dark `#0f172a` background, `Inter` sans-serif text, accent colours
+  pulled from the Plan Forge palette (amber `#f59e0b`, blue `#60a5fa`, purple `#a78bfa`,
+  emerald `#34d399`)
+- Always include `<title>` and `<desc>` elements with stable `id`s for the
+  `aria-labelledby` reference (the existing SVGs all do this)
+- Aim for a viewBox in the 800–1000 wide × 400–500 tall range so the SVG fits the chapter
+  content column without horizontal scroll on the typical reader's viewport
+- The QA sweep (§4b check #5) will assert the SVG filename is referenced in the chapter HTML;
+  a slice that authors a new SVG but doesn't embed it fails QA
+
+---
+
 ## 5 · Open questions for the maintainer
 
 These weren't resolved in the audit chat and want a thumbs-up before slice execution starts:
@@ -474,7 +562,7 @@ These weren't resolved in the audit chat and want a thumbs-up before slice execu
 3. **"What's new" banner persistence** — should the banner disappear after the user dismisses it
    (per-edition `localStorage` key), or stay until the next edition ships?
 4. **Edition bump trigger** — at what slice count do we bump the manual to **Fifth Edition (v3.x)**?
-   The plan suggests ≥10 of 16 slices; some maintainers prefer "ship the edition when the foreword
+   The plan suggests ≥10 of 18 content slices; some maintainers prefer “ship the edition when the foreword
    lands" because the foreword is the most ebook-visible change.
 5. **Positioning sentence — sign off on the exact wording.** The audit proposes (§2 Tier 2 / item 6):
    > *Plan Forge is the orchestration harness that sits **on top of** GitHub Copilot (and other AI

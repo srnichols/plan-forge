@@ -38,7 +38,7 @@
         <h2 id="structure">Plan Structure</h2>
         <p>Every hardened plan has these mandatory sections. The plan-hardener agent adds them automatically during Step 2 (or the Crucible interview adds them upstream during Smelt), but you should understand what each does and how to edit them:</p>
 
-        <table>
+        <table class="manual-table">
           <thead><tr><th>Section</th><th>Required?</th><th>Purpose</th></tr></thead>
           <tbody>
             <tr><td><strong>Scope Contract</strong></td><td>Yes</td><td>In-scope paths, out-of-scope, forbidden actions</td></tr>
@@ -59,7 +59,7 @@
         <h2 id="critical-fields">CRITICAL_FIELDS Gate <span class="text-amber-400 text-base font-normal">v2.82.1+</span></h2>
         <p>Plans created via the <a href="crucible.html">Crucible smelter</a> are now blocked from finalizing until <strong>every CRITICAL_FIELD is filled in</strong>. This eliminates the entire class of "TBD-laden plans that compile but can't run."</p>
 
-        <table>
+        <table class="manual-table">
           <thead><tr><th>Field</th><th>What it locks down</th><th>Example</th></tr></thead>
           <tbody>
             <tr><td><code>build-command</code></td><td>The exact command the orchestrator will run as the build gate per slice</td><td><code>dotnet build</code></td></tr>
@@ -239,7 +239,7 @@ Slice 6 — Documentation + cleanup                [30 min]</code></pre>
         <!-- ─── Common Mistakes ─── -->
         <h2 id="mistakes">Common Mistakes</h2>
 
-        <table>
+        <table class="manual-table">
           <thead><tr><th>Mistake</th><th>What Happens</th><th>Fix</th></tr></thead>
           <tbody>
             <tr>
@@ -284,7 +284,7 @@ Slice 6 — Documentation + cleanup                [30 min]</code></pre>
         <h2 id="templates">Plan Templates</h2>
         <p>Eight language-specific plan examples ship with Plan Forge. Use them as starting points:</p>
 
-        <table>
+        <table class="manual-table">
           <thead><tr><th>Stack</th><th>File</th><th>Features Demonstrated</th></tr></thead>
           <tbody>
             <tr><td>.NET</td><td><code>Phase-DOTNET-EXAMPLE.md</code></td><td>RLS, Dapper, Blazor, GraphQL, 12 slices</td></tr>

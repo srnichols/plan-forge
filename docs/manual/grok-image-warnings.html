@@ -56,7 +56,7 @@ but the image appears to be a image/jpeg image</code></pre>
       <h2 id="mitigations">Current Mitigations</h2>
       <p>The <code>generateImage()</code> function in <code>orchestrator.mjs</code> has four layers of defense:</p>
 
-      <table>
+      <table class="manual-table">
         <thead><tr><th>Defense</th><th>What It Does</th><th>Code Location</th></tr></thead>
         <tbody>
           <tr>
@@ -120,7 +120,7 @@ but the image appears to be a image/jpeg image</code></pre>
       <!-- ─── Test Results ─── -->
       <h2 id="test-results">Pipeline Test Results</h2>
       <p>Tested 2026-04-07:</p>
-      <table>
+      <table class="manual-table">
         <thead><tr><th>Test</th><th>Result</th><th>Details</th></tr></thead>
         <tbody>
           <tr><td><strong>JPG direct</strong> (<code>.jpg</code> output)</td><td><span class="text-emerald-400 font-bold">✓</span> PASS</td><td>Grok returns JPEG, saved as <code>.jpg</code> — no conversion. 41 KB.</td></tr>

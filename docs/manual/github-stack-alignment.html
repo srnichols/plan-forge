@@ -375,7 +375,7 @@
 
       <h2 id="what-github-ships-the-substrate">What GitHub ships (the substrate — primitives)</h2>
 
-      <table>
+      <table class="manual-table">
         <thead><tr><th>Primitive</th><th>What it is</th><th>Status (May 2026)</th></tr></thead>
         <tbody>
           <tr><td><strong class="text-slate-200">Copilot Cloud Agent</strong> (formerly Coding Agent)</td><td>Ephemeral Actions-powered runner. Single repo / single branch / single PR per task. Three modes: research-only, plan-only, branch-only</td><td>GA</td></tr>
@@ -403,7 +403,7 @@
 
       <p>These are the surfaces GitHub does not ship and shows no sign of shipping — direct evidence from GitHub's own docs and roadmap:</p>
 
-      <table>
+      <table class="manual-table">
         <thead><tr><th>Gap</th><th>Evidence</th></tr></thead>
         <tbody>
           <tr><td><strong class="text-slate-200">Hardened plan as versioned artifact</strong> with scope contract, slices, validation gates, drift detection</td><td>Plan-mode is session-scoped one-shot; no plan file format, no scope contract, no slice persistence</td></tr>
@@ -440,7 +440,7 @@
       <details class="my-4 rounded-lg border border-slate-700/50 bg-slate-900/30">
         <summary class="cursor-pointer px-4 py-3 text-sm font-semibold text-slate-200 hover:text-slate-100">Per-primitive composition table (16 rows)</summary>
         <div class="px-4 pb-4">
-        <table>
+        <table class="manual-table">
         <thead><tr><th>GitHub primitive</th><th>How Plan Forge consumes it</th><th>Where in Plan Forge</th></tr></thead>
         <tbody>
           <tr><td><strong class="text-slate-200">Copilot Cloud Agent</strong></td><td>Plan Forge dispatches plan slices to CCA via <code>gh issue create --assignee @copilot</code>. Trajectories captured to <code>.forge/trajectories/&lt;plan-slug&gt;.jsonl</code></td><td><code>pforge-mcp/orchestrator.mjs</code> (<code>--worker copilot-coding-agent</code> mode)</td></tr>

@@ -108,7 +108,7 @@ node pforge-mcp/server.mjs --dashboard-only</code></pre>
         <h2 id="runs">Runs Tab</h2>
         <p>History of all plan executions. Each row shows:</p>
 
-        <table>
+        <table class="manual-table">
           <thead><tr><th>Column</th><th>Content</th></tr></thead>
           <tbody>
             <tr><td><strong>Plan</strong></td><td>Plan file path (clickable → shows slice detail)</td></tr>
@@ -210,7 +210,7 @@ node pforge-mcp/server.mjs --dashboard-only</code></pre>
         <h2 id="traces">Traces Tab</h2>
         <p>OTLP (OpenTelemetry Protocol) trace waterfall view. Every plan execution emits OpenTelemetry spans:</p>
 
-        <table>
+        <table class="manual-table">
           <thead><tr><th>Span</th><th>What It Captures</th></tr></thead>
           <tbody>
             <tr><td><strong>run</strong> (root)</td><td>Plan file, total duration, slice count, model</td></tr>
@@ -285,7 +285,7 @@ node pforge-mcp/server.mjs --dashboard-only</code></pre>
 
         <!-- ─── Port Reference ─── -->
         <h2 id="ports">Port Reference</h2>
-        <table>
+        <table class="manual-table">
           <thead><tr><th>Port</th><th>Protocol</th><th>Purpose</th></tr></thead>
           <tbody>
             <tr><td><code>3100</code></td><td>HTTP</td><td>Dashboard UI + REST API</td></tr>

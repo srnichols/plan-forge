@@ -64,7 +64,7 @@
 
         <h3>2. Triage Router</h3>
         <p><code>pforge-mcp/tempering/triage.mjs</code> — <code>routeFinding(finding, classifier)</code> routes each finding to one of three lanes:</p>
-        <table>
+        <table class="manual-table">
           <thead><tr><th>Lane</th><th>Destination</th><th>What happens</th></tr></thead>
           <tbody>
             <tr><td><code>"bug"</code></td><td>Bug Registry</td><td>Finding registered via <code>forge_bug_register</code></td></tr>
@@ -100,7 +100,7 @@
   }
 }</code></pre>
 
-        <table>
+        <table class="manual-table">
           <thead><tr><th>Mode</th><th>Behavior</th></tr></thead>
           <tbody>
             <tr><td><code>"off"</code> (default)</td><td>No automatic drain. Manual only via <code>pforge audit-loop</code>.</td></tr>
@@ -171,7 +171,7 @@ pforge audit-loop --env=staging</code></pre>
         <p>Representative example: the harness finds a 200 OK route with full content but the document title is just <code>"."</code> — the classifier hasn't seen this signal before. Classifier lane creates a smelt asking the maintainer "should pages with single-character titles be flagged as defective?" The answer becomes a new classifier rule for the next run.</p>
 
         <h3>Finding-type to lane mapping</h3>
-        <table>
+        <table class="manual-table">
           <thead><tr><th>Finding type</th><th>Default lane</th><th>Why</th></tr></thead>
           <tbody>
             <tr><td>Non-200 HTTP status</td><td>Bug</td><td>Unambiguous failure, fix is mechanical</td></tr>

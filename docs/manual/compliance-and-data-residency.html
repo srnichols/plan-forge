@@ -38,7 +38,7 @@
 
       <p>Plan Forge is <strong class="text-slate-200">local-first</strong>. The orchestrator runs on the developer's machine or a CI runner inside the customer's network. There is no Plan Forge SaaS service. Source code does not leave the customer's network unless the customer chooses to call a hosted LLM (and even then, all logging stays local). The audit trail is structured, complete, and exportable. Identity is currently bearer-token only and is the largest gap on the roadmap.</p>
 
-      <table>
+      <table class="manual-table">
         <thead><tr><th>Concern</th><th>Status</th></tr></thead>
         <tbody>
           <tr><td>Source code leaves network</td><td>Only when customer-configured LLM provider is hosted; all logging stays local</td></tr>
@@ -90,7 +90,7 @@
 
       <p>Three tiers, three different residency stories:</p>
 
-      <table>
+      <table class="manual-table">
         <thead><tr><th>Tier</th><th>Location</th><th>Lifetime</th><th>Notes</th></tr></thead>
         <tbody>
           <tr><td><strong class="text-slate-200">L1 (volatile hub)</strong></td><td>In-process RAM</td><td>Per-process</td><td>Bounded ring buffer, evicted on restart</td></tr>
@@ -148,7 +148,7 @@
 
       <h3 id="audit-where-logged">Where it's logged</h3>
 
-      <table>
+      <table class="manual-table">
         <thead><tr><th>Sink</th><th>Format</th><th>Retention</th></tr></thead>
         <tbody>
           <tr><td><code>.forge/runs/&lt;id&gt;/events.log</code></td><td>NDJSON</td><td>Per-run, kept until manual cleanup</td></tr>
@@ -221,7 +221,7 @@ pforge search --since 2026-04-01 --sources run,liveguard,bug --output audit.json
 
       <p>That said, several Plan Forge architectural choices are friendly to compliance audits:</p>
 
-      <table>
+      <table class="manual-table">
         <thead><tr><th>Posture</th><th>What helps</th></tr></thead>
         <tbody>
           <tr><td><strong class="text-slate-200">No SaaS data plane</strong></td><td>Nothing to subpoena from a vendor; data lives where you put it</td></tr>
@@ -289,7 +289,7 @@ pforge search --since 2026-04-01 --sources run,liveguard,bug --output audit.json
 
       <h3 id="airgap-special-handling">What requires special handling air-gapped</h3>
 
-      <table>
+      <table class="manual-table">
         <thead><tr><th>Component</th><th>Air-gapped solution</th></tr></thead>
         <tbody>
           <tr><td><strong class="text-slate-200">LLM inference</strong></td><td>Use <strong>Foundry Local powered by Azure Local</strong> (preview May 2026), Ollama, vLLM, llama.cpp, or similar on-prem inference. Configure as the OpenAI-compatible endpoint Plan Forge talks to.</td></tr>

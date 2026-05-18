@@ -48,7 +48,7 @@ applyTo: "**/auth/**,**/security/**,**/middleware/**"
       <h2 id="scenario">A Concrete Scenario</h2>
       <p>Say you ask Copilot Chat to make a change to <code>src/auth/token-validator.cs</code>. Here's what auto-loads, and why each one matters:</p>
 
-      <table>
+      <table class="manual-table">
         <thead><tr><th>File that loads</th><th>Why it matched</th><th>What it whispers to the AI</th></tr></thead>
         <tbody>
           <tr><td><code>architecture-principles.instructions.md</code></td><td>Universal &mdash; <code>applyTo: "**"</code></td><td>Stop! Before writing code, ask the 5 architecture questions. Don't bypass scope, don't skip tests.</td></tr>
@@ -65,7 +65,7 @@ applyTo: "**/auth/**,**/security/**,**/middleware/**"
       <!-- ─── Shared (Universal) ─── -->
       <h2 id="shared">Universal Files (All Presets)</h2>
       <p>These four files ship with every preset — they form the universal baseline:</p>
-      <table>
+      <table class="manual-table">
         <thead><tr><th>File</th><th>applyTo</th><th>Purpose</th></tr></thead>
         <tbody>
           <tr><td><code>architecture-principles</code></td><td><code>**</code></td><td>5 questions before coding, 4-layer architecture, separation of concerns</td></tr>
@@ -78,7 +78,7 @@ applyTo: "**/auth/**,**/security/**,**/middleware/**"
       <!-- ─── Domain Files ─── -->
       <h2 id="domain">Domain Instruction Files (Per Preset)</h2>
       <p>Each preset installs 17 domain-specific instruction files. They auto-load based on what you're editing:</p>
-      <table>
+      <table class="manual-table">
         <thead><tr><th>File</th><th>Domain</th><th>Loads When Editing</th></tr></thead>
         <tbody>
           <tr><td><code>api-patterns</code></td><td>REST conventions, pagination, error responses</td><td>Controllers, routes, endpoints</td></tr>

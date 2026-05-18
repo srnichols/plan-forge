@@ -98,7 +98,7 @@
       <p>The JSON shape is stable and documented in the <a href="mcp-server-reference.html" class="text-amber-400 hover:underline">MCP Server Reference</a> under <code>forge_github_status</code>. Two extra <em>SHOULD</em>-tier checks (instruction-file <code>applyTo:</code> usage, copilot-instructions length) run when you add <code>--extra</code>.</p>
 
       <h3 id="exit-codes">Exit codes</h3>
-      <table>
+      <table class="manual-table">
         <thead><tr><th>Code</th><th>Meaning</th></tr></thead>
         <tbody>
           <tr><td><code>0</code></td><td>No <strong class="text-rose-400">✗ fail</strong> rows. Warns and N/A are allowed.</td></tr>
@@ -124,7 +124,7 @@
 
       <p>Each row below is one check from <code>pforge github status</code>. The "What Plan Forge does with it" column is what makes this chapter different from the GitHub docs: it tells you exactly how Plan Forge uses the primitive, and which Plan Forge feature stops working if you remove it.</p>
 
-      <table>
+      <table class="manual-table">
         <thead>
           <tr>
             <th>Primitive</th>
@@ -213,7 +213,7 @@
 
       <p>After creating the issue and assigning it to <code>@copilot</code>, Plan Forge polls for the resulting PR. It uses a two-stage fallback:</p>
 
-      <table>
+      <table class="manual-table">
         <thead><tr><th>Stage</th><th>Strategy</th><th>How it works</th></tr></thead>
         <tbody>
           <tr>
@@ -241,7 +241,7 @@
 
       <p>The probe has three return states:</p>
 
-      <table>
+      <table class="manual-table">
         <thead><tr><th>Status</th><th>Meaning</th><th>Action taken by orchestrator</th></tr></thead>
         <tbody>
           <tr>
@@ -328,7 +328,7 @@ codeql database analyze my-db --format=sarifv2.1.0 --output=- | \
 
       <p><code>pforge sync-spaces</code> builds a payload from four sources and uploads them as versioned Space files:</p>
 
-      <table>
+      <table class="manual-table">
         <thead><tr><th>Source</th><th>Space path</th><th>Update frequency</th></tr></thead>
         <tbody>
           <tr>
@@ -358,7 +358,7 @@ codeql database analyze my-db --format=sarifv2.1.0 --output=- | \
 
       <h3 id="spaces-sync-flags">Flags</h3>
 
-      <table>
+      <table class="manual-table">
         <thead><tr><th>Flag</th><th>Default</th><th>Effect</th></tr></thead>
         <tbody>
           <tr><td><code>--space &lt;owner/name&gt;</code></td><td>Inferred from remote + <code>.forge.json</code></td><td>Target a specific Space by owner and name.</td></tr>
@@ -445,7 +445,7 @@ jobs:
 
       <p>Additional flags:</p>
 
-      <table>
+      <table class="manual-table">
         <thead><tr><th>Flag</th><th>Default</th><th>Effect</th></tr></thead>
         <tbody>
           <tr><td><code>--team &lt;slug&gt;</code></td><td>(all teams)</td><td>Filter to a single team slug. Repeatable for multiple teams.</td></tr>
@@ -497,7 +497,7 @@ forge_github_metrics({ team: "platform", since: "2026-04-01" })</code></pre>
 
       <p>Input schema:</p>
 
-      <table>
+      <table class="manual-table">
         <thead><tr><th>Field</th><th>Type</th><th>Default</th><th>Description</th></tr></thead>
         <tbody>
           <tr><td><code>team</code></td><td>string | string[]</td><td>(all teams)</td><td>Filter by team slug(s).</td></tr>
@@ -580,7 +580,7 @@ pforge run-plan docs/plans/Phase-28-PLAN.md --quorum=speed   # fast models, thre
 pforge run-plan docs/plans/Phase-28-PLAN.md --quorum=auto    # Plan Forge picks mode per slice
 pforge run-plan docs/plans/Phase-28-PLAN.md --quorum=false   # disable quorum entirely</code></pre>
 
-      <table>
+      <table class="manual-table">
         <thead><tr><th>Mode</th><th>Models polled</th><th>Agreement threshold</th><th>Best for</th></tr></thead>
         <tbody>
           <tr><td><code>power</code></td><td>Up to 3 flagship models (GPT-5, Claude Opus, Grok-4)</td><td>5 / 7 points</td><td>Deploy slices, schema migrations</td></tr>
@@ -674,7 +674,7 @@ pforge run-plan docs/plans/Phase-28-PLAN.md --model grok-4</code></pre>
 
       <p>Before covering the per-platform differences, here is the shared foundation that works identically on all four platforms (Copilot, Claude Code, Cursor, Codex):</p>
 
-      <table>
+      <table class="manual-table">
         <thead><tr><th>Capability</th><th>How it works on any platform</th></tr></thead>
         <tbody>
           <tr>
@@ -716,7 +716,7 @@ pforge setup --agent claude</code></pre>
 
       <h4 class="text-base font-semibold text-slate-200 mt-6 mb-3">What works on Claude Code</h4>
 
-      <table>
+      <table class="manual-table">
         <thead><tr><th>Feature</th><th>Status</th><th>Notes</th></tr></thead>
         <tbody>
           <tr><td><code>pforge run-plan</code> (CLI)</td><td><strong class="text-emerald-400">✓ full</strong></td><td>Identical to Copilot — the CLI runs independently of the agent platform.</td></tr>
@@ -755,7 +755,7 @@ pforge setup --agent claude</code></pre>
 
       <h4 class="text-base font-semibold text-slate-200 mt-6 mb-3">What works on Cursor</h4>
 
-      <table>
+      <table class="manual-table">
         <thead><tr><th>Feature</th><th>Status</th><th>Notes</th></tr></thead>
         <tbody>
           <tr><td><code>pforge run-plan</code> (CLI)</td><td><strong class="text-emerald-400">✓ full</strong></td><td>Run from Cursor's integrated terminal — identical to any terminal.</td></tr>
@@ -796,7 +796,7 @@ pforge setup --agent claude</code></pre>
 
       <h4 class="text-base font-semibold text-slate-200 mt-6 mb-3">What works on Codex</h4>
 
-      <table>
+      <table class="manual-table">
         <thead><tr><th>Feature</th><th>Status</th><th>Notes</th></tr></thead>
         <tbody>
           <tr><td><code>pforge run-plan</code> (CLI)</td><td><strong class="text-emerald-400">✓ full</strong></td><td>CLI runs independently; identical behaviour.</td></tr>
@@ -816,7 +816,7 @@ pforge setup --agent claude</code></pre>
       <!-- ── Platform comparison ── -->
       <h3 id="platform-comparison">Platform comparison at a glance</h3>
 
-      <table>
+      <table class="manual-table">
         <thead>
           <tr>
             <th>Feature</th>
@@ -910,7 +910,7 @@ pforge setup --agent claude</code></pre>
 
       <h3 id="dogfood-runs">Captured runs</h3>
 
-      <table>
+      <table class="manual-table">
         <thead>
           <tr>
             <th>Section</th>

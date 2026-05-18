@@ -44,7 +44,7 @@
       <h3 id="tools-core">Core &mdash; Execution, Diagnosis, Skills, Cost, Memory <span class="text-amber-400 text-sm font-normal">(37 tools)</span></h3>
       <p>Everything that powers the Smelt and Forge stations plus the cross-cutting surfaces (skills, memory, cost, search, review queue, notifications, image generation, meta-bug filing).</p>
 
-      <table>
+      <table class="manual-table">
         <thead><tr><th>Tool</th><th>Description</th></tr></thead>
         <tbody>
           <tr><td colspan="2" class="bg-slate-900/40 text-xs font-bold text-slate-500 uppercase tracking-wider">Diagnostics &amp; setup</td></tr>
@@ -106,7 +106,7 @@
       <h3 id="tools-liveguard">LiveGuard &mdash; Post-Ship Defense <span class="text-cyan-400 text-sm font-normal">(14 tools)</span></h3>
       <p>The Guard station. Detect drift, capture incidents, watch dependencies, scan for secrets, propose fixes &mdash; all running against shipped code. <a href="liveguard-tools.html">Chapter 17 &mdash; LiveGuard Tools Reference</a> covers each one in depth (flags, thresholds, output shapes, severity matrix). Listed here for completeness.</p>
 
-      <table>
+      <table class="manual-table">
         <thead><tr><th>Tool</th><th>Description</th></tr></thead>
         <tbody>
           <tr><td><code>forge_liveguard_run</code></td><td>Composite scan: drift + sweep + secrets + regression + deps + alerts + health. The "everything" command.</td></tr>
@@ -130,7 +130,7 @@
       <h3 id="tools-watcher">Watcher &mdash; Cross-Project Read-Only Tail <span class="text-cyan-400 text-sm font-normal">(2 tools)</span></h3>
       <p>Read-only observation of another project's forge run from a second VS Code session. See <a href="watcher.html">Chapter 19 &mdash; The Watcher</a>.</p>
 
-      <table>
+      <table class="manual-table">
         <thead><tr><th>Tool</th><th>Description</th></tr></thead>
         <tbody>
           <tr><td><code>forge_watch</code></td><td>Snapshot or analyze (claude-opus-4.7) mode. Returns counts, anomalies, recommendations, diff cursor.</td></tr>
@@ -142,7 +142,7 @@
       <h3 id="tools-crucible">Crucible &mdash; Idea Smelting <span class="text-amber-400 text-sm font-normal">(8 tools)</span></h3>
       <p>The Smelt station. Interview-driven plan intake with a <strong>critical-fields gate</strong> (v2.82.1) that refuses to finalize until <code>build-command</code>, <code>test-command</code>, scope, gates, and forbidden-actions are all satisfied. Deterministic Spec Kit importer added in v2.93.0. See <a href="crucible.html">Chapter 5 &mdash; Crucible</a>.</p>
 
-      <table>
+      <table class="manual-table">
         <thead><tr><th>Tool</th><th>Description</th></tr></thead>
         <tbody>
           <tr><td><code>forge_crucible_submit</code></td><td>Submit a raw idea or feature request to start an interview</td></tr>
@@ -160,7 +160,7 @@
       <h3 id="tools-tempering">Tempering &mdash; Quality Drains &amp; Audit Loop <span class="text-amber-400 text-sm font-normal">(5 tools)</span></h3>
       <p>Closed-loop self-tempering &mdash; scan, triage, fix, repeat until convergence. The audit-loop drain (v2.80) is opt-in via <code>.forge.json</code> &rarr; <code>audit.mode = "off" | "auto" | "always"</code>. See <a href="audit-loop.html">Audit Loop Deep Dive</a>.</p>
 
-      <table>
+      <table class="manual-table">
         <thead><tr><th>Tool</th><th>Description</th></tr></thead>
         <tbody>
           <tr><td><code>forge_tempering_scan</code></td><td>Run a single tempering scanner (mutation, content-audit, etc.)</td></tr>
@@ -175,7 +175,7 @@
       <h3 id="tools-bug-registry">Bug Registry &mdash; Closed-Loop Bug Lifecycle <span class="text-emerald-400 text-sm font-normal">(4 tools)</span></h3>
       <p>The Learn station. Fingerprint-deduped bug registry: register, fix, validate, remember. See <a href="bug-registry.html">Chapter 23 &mdash; The Bug Registry</a>.</p>
 
-      <table>
+      <table class="manual-table">
         <thead><tr><th>Tool</th><th>Description</th></tr></thead>
         <tbody>
           <tr><td><code>forge_bug_register</code></td><td>Register a new bug with title, severity, fingerprint inputs, file paths</td></tr>
@@ -189,7 +189,7 @@
       <h3 id="tools-testbed">Testbed &mdash; Scenario Replay <span class="text-emerald-400 text-sm font-normal">(3 tools)</span></h3>
       <p>Replay scenarios against a dedicated fixture repo (typically <code>plan-forge-testbed/</code>) to prove fixes don't regress. See <a href="testbed.html">Chapter 24 &mdash; The Testbed</a>.</p>
 
-      <table>
+      <table class="manual-table">
         <thead><tr><th>Tool</th><th>Description</th></tr></thead>
         <tbody>
           <tr><td><code>forge_testbed_run</code></td><td>Execute a scenario against the testbed fixture</td></tr>
@@ -202,7 +202,7 @@
       <h3 id="tools-forge-master">Forge-Master &mdash; Read-Only Reasoning Orchestrator <span class="text-purple-400 text-sm font-normal">(1 MCP tool + REST surface)</span></h3>
       <p>Intent classifier with embedding cache and quorum advisory mode. Classifies open-ended prompts, fetches OpenBrain memory, and chains read-only forge tools on your behalf. The bulk of the Forge-Master surface is exposed via <code>/api/forge-master/*</code> REST routes (see below) plus the dashboard's Studio tab; only the one-shot reasoning entry-point is an MCP tool.</p>
 
-      <table>
+      <table class="manual-table">
         <thead><tr><th>Tool</th><th>Description</th></tr></thead>
         <tbody>
           <tr><td><code>forge_master_ask</code></td><td>One-shot reasoning entry point. Accepts a free-form message; returns lane classification, tool-call trace, and synthesized reply. Use for open-ended questions instead of chaining tools yourself.</td></tr>
@@ -218,7 +218,7 @@
       <p>All endpoints available at <code>http://localhost:3100</code>. Routes are organized by subsystem; everything in the MCP tool table above also has a matching REST endpoint at <code>POST /api/tool/&lt;tool-name&gt;</code> for any tool not in the explicit list below.</p>
 
       <h3 class="text-base font-semibold text-slate-300 mt-4">Core</h3>
-      <table>
+      <table class="manual-table">
         <thead><tr><th>Method</th><th>Endpoint</th><th>Description</th></tr></thead>
         <tbody>
           <tr><td>GET</td><td><code>/api/status</code></td><td>Current run status</td></tr>
@@ -239,7 +239,7 @@
       </table>
 
       <h3 class="text-base font-semibold text-amber-300 mt-4">Crucible (Smelt station)</h3>
-      <table>
+      <table class="manual-table">
         <thead><tr><th>Method</th><th>Endpoint</th><th>Description</th></tr></thead>
         <tbody>
           <tr><td>POST</td><td><code>/api/crucible/submit</code></td><td>Start a new smelt</td></tr>
@@ -252,7 +252,7 @@
       </table>
 
       <h3 class="text-base font-semibold text-cyan-300 mt-4">LiveGuard (Guard station)</h3>
-      <table>
+      <table class="manual-table">
         <thead><tr><th>Method</th><th>Endpoint</th><th>Description</th></tr></thead>
         <tbody>
           <tr><td>GET</td><td><code>/api/fix/proposals</code></td><td>List all fix proposals</td></tr>
@@ -265,7 +265,7 @@
       </table>
 
       <h3 class="text-base font-semibold text-purple-300 mt-4">Forge-Master</h3>
-      <table>
+      <table class="manual-table">
         <thead><tr><th>Method</th><th>Endpoint</th><th>Description</th></tr></thead>
         <tbody>
           <tr><td>POST</td><td><code>/api/forge-master/chat</code></td><td>Start a chat session (or continue an existing one with <code>sessionId</code>). Returns <code>{ sessionId, ... }</code>.</td></tr>
@@ -281,7 +281,7 @@
       </table>
 
       <h3 class="text-base font-semibold text-amber-300 mt-4">Tempering / Audit-Loop</h3>
-      <table>
+      <table class="manual-table">
         <thead><tr><th>Method</th><th>Endpoint</th><th>Description</th></tr></thead>
         <tbody>
           <tr><td>POST</td><td><code>/api/tempering/scan</code></td><td>Run a single scanner</td></tr>
@@ -295,7 +295,7 @@
       <h2 id="websocket">WebSocket Hub</h2>
       <p>Connect to <code>ws://localhost:3101</code> for real-time events. The dashboard uses this for live progress updates.</p>
 
-      <table>
+      <table class="manual-table">
         <thead><tr><th>Event</th><th>When</th></tr></thead>
         <tbody>
           <tr><td><code>connected</code></td><td>Client connects — includes event history replay</td></tr>

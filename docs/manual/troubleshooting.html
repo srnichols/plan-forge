@@ -89,7 +89,7 @@ Result: 4 OK, 3 WARN, 0 FAIL  —  forge is healthy</code></pre>
       </div>
 
       <h2 id="guardrails-not-loading">Agent Isn't Following Guardrails</h2>
-      <table>
+      <table class="manual-table">
         <thead><tr><th>Symptom</th><th>Cause</th><th>Fix</th></tr></thead>
         <tbody>
           <tr><td>AI ignores coding standards</td><td>Instruction files not loading</td><td>Check <code>applyTo</code> pattern matches the file you're editing. Run <code>pforge smith</code> to verify file counts.</td></tr>
@@ -100,7 +100,7 @@ Result: 4 OK, 3 WARN, 0 FAIL  —  forge is healthy</code></pre>
       </table>
 
       <h2 id="execution-fails">Plan Execution Fails</h2>
-      <table>
+      <table class="manual-table">
         <thead><tr><th>Symptom</th><th>Cause</th><th>Fix</th></tr></thead>
         <tbody>
           <tr><td>Gate fails with build errors</td><td>Code doesn't compile</td><td>Fix the build error, then <code>pforge run-plan --resume-from N</code></td></tr>
@@ -113,7 +113,7 @@ Result: 4 OK, 3 WARN, 0 FAIL  —  forge is healthy</code></pre>
       </table>
 
       <h2 id="dashboard-issues">Dashboard Won't Load</h2>
-      <table>
+      <table class="manual-table">
         <thead><tr><th>Symptom</th><th>Cause</th><th>Fix</th></tr></thead>
         <tbody>
           <tr><td>Connection refused on :3100</td><td>Server not running</td><td><code>node pforge-mcp/server.mjs</code></td></tr>
@@ -125,7 +125,7 @@ Result: 4 OK, 3 WARN, 0 FAIL  —  forge is healthy</code></pre>
       </table>
 
       <h2 id="setup-issues">Setup Failed</h2>
-      <table>
+      <table class="manual-table">
         <thead><tr><th>Symptom</th><th>Cause</th><th>Fix</th></tr></thead>
         <tbody>
           <tr><td>"Preset not found"</td><td>Typo in preset name</td><td>Valid presets: dotnet, typescript, python, java, go, swift, rust, php, azure-iac</td></tr>
@@ -136,7 +136,7 @@ Result: 4 OK, 3 WARN, 0 FAIL  —  forge is healthy</code></pre>
       </table>
 
       <h2 id="costs-high">Costs Are Too High</h2>
-      <table>
+      <table class="manual-table">
         <thead><tr><th>Strategy</th><th>Savings</th><th>How</th></tr></thead>
         <tbody>
           <tr><td>Use cheaper execution model</td><td>50–70%</td><td>Set <code>modelRouting.execute</code> to a smaller model</td></tr>
@@ -155,7 +155,7 @@ Result: 4 OK, 3 WARN, 0 FAIL  —  forge is healthy</code></pre>
       <p>Safe workflow: Use <code>.jpg</code> extensions (matches Grok's native output), generate art in dedicated sessions, or use the REST API: <code>POST /api/image/generate</code>.</p>
 
       <h2 id="common-errors">Common Error Messages</h2>
-      <table>
+      <table class="manual-table">
         <thead><tr><th>Error</th><th>Cause</th><th>Fix</th></tr></thead>
         <tbody>
           <tr><td><code>No .forge.json found</code></td><td>Not in a Plan Forge project</td><td>Run <code>pforge init</code> or <code>setup.ps1</code></td></tr>
@@ -201,7 +201,7 @@ Result: 4 OK, 3 WARN, 0 FAIL  —  forge is healthy</code></pre>
       <h2 id="host-routing">Host-Aware Routing Confusion <span class="text-amber-400 text-base font-normal">v2.82+</span></h2>
       <p>Host-aware routing detects which IDE / CLI host you're running Plan Forge from (VS Code + Copilot, Claude Code, Cursor, Windsurf, Zed, bare terminal) so you don't silently double-pay against your non-Copilot subscription when calling <code>gpt-*</code> models. If you're seeing surprising routing behavior:</p>
 
-      <table>
+      <table class="manual-table">
         <thead><tr><th>Symptom</th><th>What's happening</th><th>Override</th></tr></thead>
         <tbody>
           <tr><td>"My <code>gpt-*</code> calls cost more on Claude Code than VS Code"</td><td>Default <code>auto</code> mode prefers direct OpenAI API on non-Copilot hosts (honors your subscription)</td><td>Set <code>routing.hostPreference: "gh-copilot"</code> in <code>.forge.json</code> to force Copilot subscription billing</td></tr>

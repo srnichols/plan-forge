@@ -53,7 +53,7 @@
 
       <h3 id="component-responsibilities">Component responsibilities</h3>
 
-      <table>
+      <table class="manual-table">
         <thead><tr><th>Component</th><th>Owns</th><th>Does not own</th></tr></thead>
         <tbody>
           <tr><td><strong class="text-slate-200">Developer workstation</strong></td><td>Local plan execution, IDE-time orchestration, the dashboard, all <code>.forge/</code> artifacts</td><td>Multi-team aggregation, long-running compute</td></tr>
@@ -160,7 +160,7 @@ client = OpenAI(
 
       <p>For a team of ~50 developers running ~3 plans/day per developer:</p>
 
-      <table>
+      <table class="manual-table">
         <thead><tr><th>Resource</th><th>Estimate</th></tr></thead>
         <tbody>
           <tr><td>Plan Forge orchestrator processes</td><td>One per active developer, low CPU/memory (Node.js process, dashboard at :3100)</td></tr>
@@ -182,7 +182,7 @@ client = OpenAI(
 
       <h2 id="failure-modes-and-mitigations">Failure modes and mitigations</h2>
 
-      <table>
+      <table class="manual-table">
         <thead><tr><th>Failure</th><th>Detection</th><th>Mitigation</th></tr></thead>
         <tbody>
           <tr><td>LLM provider outage</td><td>OTel error rate spike on <code>gen_ai.*</code> spans</td><td>Plan Forge supports multi-provider routing in <code>.forge.json</code>. Failover order configurable per slice</td></tr>
@@ -197,7 +197,7 @@ client = OpenAI(
 
       <p>For an enterprise rolling out across 5 teams in 90 days:</p>
 
-      <table>
+      <table class="manual-table">
         <thead><tr><th>Week</th><th>Milestone</th></tr></thead>
         <tbody>
           <tr><td>0</td><td>Stakeholder alignment, pick LLM provider strategy, identify pilot team</td></tr>

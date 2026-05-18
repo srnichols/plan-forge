@@ -62,7 +62,7 @@
       <h3 id="routing-split">DIRECT_API_ONLY vs COPILOT_SERVABLE <span class="text-amber-400 text-base font-normal">v2.81+</span></h3>
       <p>Models are split into two routing classes that determine <em>how</em> the orchestrator reaches them:</p>
 
-      <table>
+      <table class="manual-table">
         <thead><tr><th>Class</th><th>Models</th><th>Routing</th></tr></thead>
         <tbody>
           <tr><td><code>DIRECT_API_ONLY</code></td><td><code>grok-*</code>, <code>dall-e-*</code></td><td>HTTP API only. No CLI proxy exists. Requires <code>XAI_API_KEY</code> / <code>OPENAI_API_KEY</code>.</td></tr>
@@ -116,7 +116,7 @@ pforge run-plan docs/plans/Phase-7.md --quorum=power
 # Fast preset (Sonnet + GPT-5.4-mini + Grok 4.1 Fast, threshold 7)
 pforge run-plan docs/plans/Phase-7.md --quorum=speed</code></pre>
       </div>
-      <table>
+      <table class="manual-table">
         <thead><tr><th>Setting</th><th>Effect</th><th>Cost Impact</th></tr></thead>
         <tbody>
           <tr><td><code>--quorum</code></td><td>Every slice gets multi-model consensus</td><td>3× normal cost</td></tr>
@@ -185,7 +185,7 @@ pforge run-plan docs/plans/Phase-7.md --quorum=auto</code></pre>
       <h3 id="quorum-vs-advisory">Quorum Mode vs Quorum Advisory — What's the Difference? <span class="text-amber-400 text-base font-normal">v2.78+</span></h3>
       <p>Two surfaces use the word "quorum." They're related but operate at different scopes:</p>
 
-      <table>
+      <table class="manual-table">
         <thead><tr><th></th><th>Quorum Mode (this section)</th><th>Quorum Advisory <a href="forge-master.html#quorum-advisory">(Forge-Master)</a></th></tr></thead>
         <tbody>
           <tr><td><strong>Where</strong></td><td><code>forge_run_plan</code> / <code>--quorum=&hellip;</code></td><td><code>forge_master_ask</code> / Studio tab</td></tr>
@@ -246,7 +246,7 @@ pforge run-plan docs/plans/Phase-7.md --estimate --quorum-compare</code></pre>
 }</code></pre>
       </div>
 
-      <table>
+      <table class="manual-table">
         <thead><tr><th>Field</th><th>Meaning</th></tr></thead>
         <tbody>
           <tr><td><code>baseCostUSD</code></td><td>What the plan costs <em>without</em> quorum overhead — single-model run for every slice</td></tr>
@@ -262,7 +262,7 @@ pforge run-plan docs/plans/Phase-7.md --estimate --quorum-compare</code></pre>
 
       <p>The numbers above come from the heuristic fixture used in <a href="https://github.com/srnichols/plan-forge/blob/master/pforge-mcp/capabilities.mjs" rel="noopener"><code>capabilities.mjs</code></a> — illustrative, not measured. For a typical mid-size plan (10–15 slices, 1–3 quorum-eligible), real-world numbers from the Plan Forge dogfood corpus look like:</p>
 
-      <table>
+      <table class="manual-table">
         <thead><tr><th>Mode</th><th>Total cost</th><th>Multiplier vs baseline</th><th>Slices fanned out</th><th>Use when</th></tr></thead>
         <tbody>
           <tr><td><code>false</code> (off)</td><td>~$0.30 – $2.00</td><td>1.0×</td><td>0 / 12</td><td>Mechanical work, conversions, doc edits</td></tr>
@@ -288,7 +288,7 @@ pforge run-plan docs/plans/Phase-7.md --estimate --quorum-compare</code></pre>
 
       <h4 class="text-base font-semibold text-slate-200 mt-6 mb-2">The seven signals</h4>
 
-      <table>
+      <table class="manual-table">
         <thead><tr><th>Signal</th><th>Weight</th><th>Source</th><th>What it captures</th></tr></thead>
         <tbody>
           <tr><td><strong>Scope breadth</strong></td><td>0.20</td><td><code>slice.scope[].length / 5</code></td><td>How many files this slice touches. Wide scope ⇒ more places to make a mistake.</td></tr>
@@ -305,7 +305,7 @@ pforge run-plan docs/plans/Phase-7.md --estimate --quorum-compare</code></pre>
 
       <h4 class="text-base font-semibold text-slate-200 mt-6 mb-2">Threshold mapping</h4>
 
-      <table>
+      <table class="manual-table">
         <thead><tr><th>Mode</th><th>Threshold</th><th>What clears it (typical)</th></tr></thead>
         <tbody>
           <tr><td><code>--quorum=power</code></td><td><strong>5</strong></td><td>Slices touching 3+ files <em>or</em> with deep deps <em>or</em> mentioning auth/schema</td></tr>
@@ -347,7 +347,7 @@ score = clamp(1, 10, round(0.5425 × 9) + 1) = 6
 
       <h4 class="text-base font-semibold text-slate-200 mt-6 mb-2">What the variable controls</h4>
 
-      <table>
+      <table class="manual-table">
         <thead><tr><th>Hook / system</th><th>Behavior when <code>PFORGE_QUORUM_TURN</code> is set</th></tr></thead>
         <tbody>
           <tr><td><code>PreAgentHandoff</code> hook</td><td><strong>Skipped.</strong> Returns <code>{ triggered: false, skippedReason: "PFORGE_QUORUM_TURN active" }</code> and logs <code>[PreAgentHandoff] skipping context injection — PFORGE_QUORUM_TURN active</code>. See <a href="https://github.com/srnichols/plan-forge/blob/master/pforge-mcp/orchestrator.mjs" rel="noopener"><code>orchestrator.mjs</code> ~L7585</a>.</td></tr>
@@ -371,7 +371,7 @@ score = clamp(1, 10, round(0.5425 × 9) + 1) = 6
 
       <p>The argument for quorum mode is mostly abstract — "synthesis effect," "independent analyses," "reviewer picks the cleaner approach." A single side-by-side run of the same task makes the argument concrete. The numbers below come from a controlled A/B run on a real C# invoicing slice: same plan, same gates, same acceptance criteria; one execution with the default single-model worker, one with three-model quorum. <strong>Both passed all gates and the independent reviewer.</strong> The difference is in <em>how</em> they passed.</p>
 
-      <table>
+      <table class="manual-table">
         <thead><tr><th>Metric</th><th>Single (control)</th><th>Quorum (3-model)</th></tr></thead>
         <tbody>
           <tr><td>Tests written</td><td>15</td><td><strong>18 (+20%)</strong></td></tr>
@@ -448,7 +448,7 @@ ArgumentException.ThrowIfNullOrWhiteSpace(customerName);</code></pre>
 
       <h4>When this pays off</h4>
 
-      <table>
+      <table class="manual-table">
         <thead><tr><th>Slice type</th><th>Quorum worth it?</th><th>Why</th></tr></thead>
         <tbody>
           <tr><td>Auth / billing / payments</td><td><strong class="text-emerald-400">Yes</strong></td><td>Edge cases here are production bugs that cost money; +35% cost is cheap insurance</td></tr>
@@ -470,7 +470,7 @@ ArgumentException.ThrowIfNullOrWhiteSpace(customerName);</code></pre>
       <img src="assets/diagrams/host-aware-routing-decision.svg" alt="Host-aware routing decision tree: detectClientHost identifies the IDE/CLI host, .forge.json#routing.hostPreference is loaded (default auto), getRoutingPreference picks one of four surfaces. Auto+Copilot host -> gh-copilot first (subscription). Auto+non-Copilot -> direct API first (honor user's subscription). gh-copilot mode -> always Copilot. direct-api mode -> always direct. drop mode -> refuse gpt-* on non-Copilot host without OPENAI_API_KEY." class="diagram-img diagram-img-md my-4" />
 
       <h3>The four modes</h3>
-      <table>
+      <table class="manual-table">
         <thead><tr><th>Mode</th><th>Behavior</th><th>When to use</th></tr></thead>
         <tbody>
           <tr><td><code>auto</code> (default)</td><td>Claude Code / Cursor / Windsurf / Zed prefer direct API <em>first</em>; VS Code + Copilot / CLI keep <code>gh-copilot</code> first</td><td>Recommended. Honors whatever subscription the user is paying for.</td></tr>
@@ -570,7 +570,7 @@ pforge run-plan docs/plans/Phase-7.md --dry-run</code></pre>
       <h2 id="liveguard-hooks">LiveGuard Lifecycle Hooks <span class="text-sm font-normal text-slate-500">(v2.29)</span></h2>
       <p>Three hooks fire automatically during agent sessions to enforce operational safety:</p>
 
-      <table>
+      <table class="manual-table">
         <thead><tr><th>Hook</th><th>Trigger</th><th>Behavior</th><th>Blocking</th></tr></thead>
         <tbody>
           <tr><td><strong>PreDeploy</strong></td><td>Before deploy-related file writes or commands</td><td>Runs <code>forge_secret_scan</code> + <code>forge_env_diff</code> — blocks on findings</td><td>Yes</td></tr>

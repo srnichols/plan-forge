@@ -56,7 +56,7 @@
 
       <p>Verify the GitHub-native primitives Plan Forge depends on are enabled in the org:</p>
 
-      <table>
+      <table class="manual-table">
         <thead><tr><th>Primitive</th><th>Check</th><th>If missing</th></tr></thead>
         <tbody>
           <tr><td>GitHub Copilot Enterprise</td><td>Org admin → Copilot tab → "Copilot Enterprise" enabled</td><td>Provision before continuing</td></tr>
@@ -107,7 +107,7 @@
 
       <h3 id="stack-specific-reviewers">Stack-specific reviewers (6)</h3>
 
-      <table>
+      <table class="manual-table">
         <thead><tr><th>Agent</th><th>Owns</th></tr></thead>
         <tbody>
           <tr><td><code>architecture-reviewer</code></td><td>Layer separation, pattern adherence, refactor proposals</td></tr>
@@ -121,7 +121,7 @@
 
       <h3 id="cross-stack-reviewers">Cross-stack reviewers (7)</h3>
 
-      <table>
+      <table class="manual-table">
         <thead><tr><th>Agent</th><th>Owns</th></tr></thead>
         <tbody>
           <tr><td><code>api-contracts-reviewer</code></td><td>OpenAPI consistency, breaking change detection</td></tr>
@@ -136,7 +136,7 @@
 
       <h3 id="pipeline-agents">Pipeline agents (5) — these have handoff buttons</h3>
 
-      <table>
+      <table class="manual-table">
         <thead><tr><th>Agent</th><th>Stage</th></tr></thead>
         <tbody>
           <tr><td><code>specifier</code></td><td>Step 0: define what &amp; why</td></tr>
@@ -151,7 +151,7 @@
 
       <h3 id="audit-classifier">Audit / classifier (1)</h3>
 
-      <table>
+      <table class="manual-table">
         <thead><tr><th>Agent</th><th>Role</th></tr></thead>
         <tbody>
           <tr><td><code>audit-classifier-reviewer</code></td><td>Reviews changes to the audit classifier itself; enforces before/after finding counts</td></tr>
@@ -205,7 +205,7 @@
 
       <p>Plan Forge ships <!--c:instructions-->18<!--/c--> of these per preset (the dotnet/typescript/python/etc. preset directories under <code>presets/</code>, each with its own <code>.github/instructions/</code>). Each has an <code>applyTo</code> glob that controls when it auto-loads:</p>
 
-      <table>
+      <table class="manual-table">
         <thead><tr><th>File</th><th>Loads on</th></tr></thead>
         <tbody>
           <tr><td><code>architecture-principles.instructions.md</code></td><td><code>**</code> (always — universal baseline)</td></tr>
@@ -342,7 +342,7 @@
 
       <h2 id="common-mistakes">Common mistakes</h2>
 
-      <table>
+      <table class="manual-table">
         <thead><tr><th>Mistake</th><th>Symptom</th><th>Fix</th></tr></thead>
         <tbody>
           <tr><td>Generic project profile</td><td>Agents give generic advice; reviewers ignore them</td><td>Re-run <code>project-profile.prompt.md</code> with thoughtful answers, not defaults</td></tr>

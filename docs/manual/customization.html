@@ -78,7 +78,7 @@
         <li>The prompt generates <code>.github/instructions/project-profile.instructions.md</code></li>
       </ol>
 
-      <table>
+      <table class="manual-table">
         <thead><tr><th></th><th>Project Principles</th><th>Project Profile</th></tr></thead>
         <tbody>
           <tr><td><strong>What it is</strong></td><td>"We use PostgreSQL, not MongoDB"</td><td>"Use parameterized queries with Dapper"</td></tr>
@@ -122,7 +122,7 @@ applyTo: "**/billing/**,**/invoices/**,**/payments/**"
       <p>When you edit <code>src/billing/InvoiceService.cs</code>, this file loads automatically alongside the universal baseline.</p>
 
       <h3><code>applyTo</code> Pattern Reference</h3>
-      <table>
+      <table class="manual-table">
         <thead><tr><th>Pattern</th><th>Loads When</th></tr></thead>
         <tbody>
           <tr><td><code>'**'</code></td><td>ALL files (use sparingly)</td></tr>
@@ -158,7 +158,7 @@ tools: ["read_file", "grep_search", "semantic_search"]
       <!-- ─── Config Hierarchy ─── -->
       <h2 id="config-hierarchy">Configuration Hierarchy</h2>
       <p>Three levels of configuration, from team-wide to personal:</p>
-      <table>
+      <table class="manual-table">
         <thead><tr><th>Level</th><th>File</th><th>Scope</th><th>Committed?</th></tr></thead>
         <tbody>
           <tr><td><strong>Team</strong></td><td><code>.forge.json</code></td><td>Shared project config (presets, models, escalation)</td><td>Yes</td></tr>

@@ -87,6 +87,7 @@
     { id: "forge-json-reference",    file: "forge-json-reference.html",    num: "T",  title: ".forge.json Reference",                       act: "Appendix" },
     { id: "environment-variables-reference", file: "environment-variables-reference.html", num: "U", title: "Environment Variables Reference",  act: "Appendix" },
     { id: "event-catalog",           file: "event-catalog.html",           num: "V",  title: "Event Catalog",                              act: "Appendix" },
+    { id: "rest-api-reference",      file: "rest-api-reference.html",      num: "W",  title: "REST API Reference",                         act: "Appendix" },
   ];
 
   // ─── Chapter status registry ───
@@ -101,6 +102,7 @@
     "forge-json-reference":          { label: "NEW",     version: "v3.6.2" },
     "environment-variables-reference": { label: "NEW",   version: "v3.6.2" },
     "event-catalog":                 { label: "NEW",     version: "v3.6.2" },
+    "rest-api-reference":            { label: "NEW",     version: "v3.6.2" },
     "customization":                 { label: "UPDATED", version: "v3.6.2" },
     "inner-loop":                    { label: "NEW",     version: "v2.57" },
     "self-deterministic-loop":       { label: "NEW",     version: "v2.58" },
@@ -149,10 +151,10 @@
     'cli-commands': 97, // pforge.ps1 switch arms (unique) — verify with PowerShell: ([regex]::Matches((Get-Content pforge.ps1 -Raw),"(?m)^\s+''([a-z][a-z-]+)''\s+\{") | %{ $_.Groups[1].Value } | Sort-Object -Unique).Count
     // Manual structure ──────────────────────────────────────────────────
     chapters:     28,  // numbered chapters 1-29 (excludes Quickstart Q1-Q3 and Appendices) — Ch 11 was archived; 26-29 added Third Edition
-    appendices:   22,  // lettered appendices A-V (R Day in the Forge v3.6.2 Slice A3, S How Do I…? Task Index v3.6.2 Slice A4, T .forge.json Reference v3.6.2 Slice B1, U Environment Variables Reference v3.6.2 Slice B2, V Event Catalog v3.6.2 Slice B4)
+    appendices:   23,  // lettered appendices A-W (R Day in the Forge v3.6.2 Slice A3, S How Do I…? Task Index v3.6.2 Slice A4, T .forge.json Reference v3.6.2 Slice B1, U Environment Variables Reference v3.6.2 Slice B2, V Event Catalog v3.6.2 Slice B4, W REST API Reference v3.6.2 Slice B5)
     parts:         5,  // Smelt, Forge, Guard, Learn, Integrate (Part V added Third Edition)
     // Manual assets ─────────────────────────────────────────────────────
-    htmlFiles:    74,  // total .html files in docs/manual/ (Third Edition Slice A + Slice B; +Foreword/Stakeholder/Reader Paths/Day in the Forge/How Do I…?/.forge.json Reference/Env Vars Reference/Event Catalog v3.6.2 Fifth Edition)
+    htmlFiles:    75,  // total .html files in docs/manual/ (Third Edition Slice A + Slice B; +Foreword/Stakeholder/Reader Paths/Day in the Forge/How Do I…?/.forge.json Reference/Env Vars Reference/Event Catalog/REST API Reference v3.6.2 Fifth Edition)
   };
 
   // Detect current page
@@ -577,6 +579,29 @@
     { t: "Event Catalog — Tempering (bug-validated-fixed)",        u: "event-catalog.html#tempering" },
     { t: "Event Catalog — Consuming the Stream (WebSocket subscription)", u: "event-catalog.html#subscribing" },
     { t: "Event Catalog — Retention (hub ring, run journal, LiveGuard cache, OpenClaw)", u: "event-catalog.html#retention" },
+    // REST API Reference — every endpoint Plan Forge exposes (Appendix W)
+    { t: "REST API — Orientation (16 subsystems, 113 endpoints)",   u: "rest-api-reference.html#orientation" },
+    { t: "REST API — Authentication, binding, and CORS",           u: "rest-api-reference.html#auth-and-binding" },
+    { t: "REST API — Error response shape",                        u: "rest-api-reference.html#error-shape" },
+    { t: "REST API — Discovery (well-known, capabilities, version, status)", u: "rest-api-reference.html#discovery" },
+    { t: "REST API — Plan execution and runs",                     u: "rest-api-reference.html#plan-execution" },
+    { t: "REST API — Cost",                                        u: "rest-api-reference.html#cost" },
+    { t: "REST API — Search, timeline, hub",                       u: "rest-api-reference.html#search-timeline" },
+    { t: "REST API — Memory (L1/L2/L3)",                           u: "rest-api-reference.html#memory" },
+    { t: "REST API — Crucible (idea smelting)",                    u: "rest-api-reference.html#crucible" },
+    { t: "REST API — LiveGuard (drift, incidents, deploys, secret scan)", u: "rest-api-reference.html#liveguard" },
+    { t: "REST API — Quorum and fix proposals",                    u: "rest-api-reference.html#quorum-fix" },
+    { t: "REST API — Tempering and bugs",                          u: "rest-api-reference.html#tempering-bugs" },
+    { t: "REST API — Skills (decision tray)",                      u: "rest-api-reference.html#skills" },
+    { t: "REST API — Inner loop (reviewer calibration, gate suggestions)", u: "rest-api-reference.html#innerloop" },
+    { t: "REST API — Bridge and approvals",                        u: "rest-api-reference.html#bridge" },
+    { t: "REST API — Copilot integration",                         u: "rest-api-reference.html#copilot-integration" },
+    { t: "REST API — GitHub and team coordination",                u: "rest-api-reference.html#github-team" },
+    { t: "REST API — Notifications, audit, dashboard, settings",   u: "rest-api-reference.html#notifications-audit" },
+    { t: "REST API — Generic MCP dispatcher (POST /api/tool/:name)", u: "rest-api-reference.html#generic-dispatcher" },
+    { t: "REST API — Forge-Master (conversational entrypoint)",    u: "rest-api-reference.html#forge-master" },
+    { t: "REST API — Image generation",                            u: "rest-api-reference.html#image" },
+    { t: "REST API — Worked Examples (curl, wscat, SDK)",          u: "rest-api-reference.html#worked-examples" },
     // Quickstart
     { t: "Check Prerequisites",                  u: "quickstart-install.html#prerequisites" },
     { t: "Clone and Run Setup",                  u: "quickstart-install.html#clone" },

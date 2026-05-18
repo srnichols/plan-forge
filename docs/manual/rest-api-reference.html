@@ -1,0 +1,467 @@
+<!DOCTYPE html>
+<html lang="en" class="scroll-smooth">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Appendix W: REST API Reference — Plan Forge Manual</title>
+  <meta name="description" content="Field-by-field reference for every REST endpoint Plan Forge exposes — 113 endpoints across 16 subsystems, authentication model, the generic MCP dispatcher, and worked curl examples for every common workflow." />
+  <meta property="og:title" content="Appendix W — REST API Reference" />
+  <meta property="og:description" content="Every REST endpoint Plan Forge exposes, grouped by subsystem, with verb, path, purpose, request/response shape, and status codes." />
+  <meta property="og:type" content="article" />
+  <link rel="canonical" href="https://planforge.software/manual/rest-api-reference.html" />
+  <link rel="icon" type="image/svg+xml" href="../assets/plan-forge-logo.svg" />
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>tailwind.config={theme:{extend:{colors:{forge:{400:'#f59e0b',500:'#d97706'}}}}}</script>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;600;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="../assets/shared.css" />
+  <link rel="stylesheet" href="assets/manual.css" />
+</head>
+<body class="bg-slate-950 text-slate-300 min-h-screen">
+
+  <button id="mobile-sidebar-btn" class="mobile-sidebar-btn fixed top-4 left-4 z-[101] lg:hidden p-2 bg-slate-900 border border-slate-700 rounded-lg text-slate-400 hover:text-slate-100 transition-colors" aria-label="Open navigation">
+    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"/></svg>
+  </button>
+  <div id="sidebar-overlay" class="sidebar-overlay"></div>
+
+  <div class="manual-layout">
+    <aside id="manual-sidebar" class="manual-sidebar"><nav id="sidebar-nav"></nav></aside>
+
+    <main>
+      <div class="chapter-content">
+
+        <div class="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">Appendix W</div>
+        <h1>REST API Reference</h1>
+        <p class="text-lg text-slate-400 mb-8">Every REST endpoint the Plan Forge MCP server exposes &mdash; grouped by subsystem, with verb, path, request body shape, response shape, and status codes. The companion to <a href="event-catalog.html">Appendix V &mdash; Event Catalog</a> (which covers the WebSocket side) and <a href="api-surface-index.html">Appendix Q &mdash; API Surface Index</a> (which catalogs the MCP tool surface).</p>
+
+        <div class="callout callout-info">
+          <strong>One server, three surfaces.</strong> The MCP server in <code>pforge-mcp/server.mjs</code> serves three concurrent surfaces on the same process: <strong>stdio MCP</strong> for IDE agents, <strong>REST + WebSocket</strong> on port <code>3100</code> for the dashboard and any external integration, and a <strong>Forge-Master HTTP surface</strong> for the conversational entrypoint. This appendix covers the REST + Forge-Master surfaces; the MCP tool surface is documented in <a href="api-surface-index.html">Appendix Q</a>.
+        </div>
+
+        <h2 id="orientation">Orientation</h2>
+        <p>Plan Forge exposes <strong>113 REST endpoints</strong> across 16 subsystems. Every one of the <a href="api-surface-index.html#mcp-tools">88 MCP tools</a> can also be invoked over REST through the generic dispatcher (<code>POST /api/tool/:name</code>) &mdash; the explicit endpoints below are the "first-class" surfaces the dashboard and CLI use, with response shapes shaped for direct UI consumption rather than tool-call envelopes.</p>
+
+        <div class="overflow-x-auto mb-8">
+          <table class="manual-table">
+            <thead><tr><th style="width: 16rem">Subsystem</th><th>Count</th><th>What it covers</th></tr></thead>
+            <tbody>
+              <tr><td><a href="#discovery"><strong>Discovery</strong></a></td><td>4</td><td>Liveness, version, capability manifest, well-known endpoint.</td></tr>
+              <tr><td><a href="#plan-execution"><strong>Plan execution &amp; runs</strong></a></td><td>10</td><td>List/trigger/abort plan runs, traces, replay, plans, workers.</td></tr>
+              <tr><td><a href="#cost"><strong>Cost</strong></a></td><td>1</td><td>Token-spend report across providers and months.</td></tr>
+              <tr><td><a href="#search-timeline"><strong>Search, timeline, hub</strong></a></td><td>3</td><td>Cross-surface search, unified timeline, WebSocket upgrade.</td></tr>
+              <tr><td><a href="#memory"><strong>Memory (L1/L2/L3)</strong></a></td><td>7</td><td>Capture, drain, search, presets, OpenBrain stats and replay.</td></tr>
+              <tr><td><a href="#crucible"><strong>Crucible</strong></a></td><td>10</td><td>Idea smelt lifecycle (submit, ask, preview, finalize, abandon, governance).</td></tr>
+              <tr><td><a href="#liveguard"><strong>LiveGuard</strong></a></td><td>14</td><td>Drift, incidents, deploy journal, regression guard, runbooks, hotspots, triage, secret scan, dep watch, env diff.</td></tr>
+              <tr><td><a href="#quorum-fix"><strong>Quorum &amp; fix proposals</strong></a></td><td>4</td><td>Read/write quorum prompts, list/propose fix plans.</td></tr>
+              <tr><td><a href="#tempering-bugs"><strong>Tempering &amp; bugs</strong></a></td><td>3</td><td>Tempering artifact, bug stub from finding, bug list.</td></tr>
+              <tr><td><a href="#skills"><strong>Skills (decision tray)</strong></a></td><td>5</td><td>Pending decisions, accept/reject/defer, full skill catalog.</td></tr>
+              <tr><td><a href="#innerloop"><strong>Inner loop</strong></a></td><td>7</td><td>Reviewer calibration, gate suggestions, cost anomalies, proposed fixes, federation.</td></tr>
+              <tr><td><a href="#bridge"><strong>Bridge &amp; approvals</strong></a></td><td>3</td><td>Pending approvals, programmatic + browser-link approval.</td></tr>
+              <tr><td><a href="#copilot-integration"><strong>Copilot integration</strong></a></td><td>5</td><td>copilot-instructions.md read/preview/sync, OpenClaw snapshot/config.</td></tr>
+              <tr><td><a href="#github-team"><strong>GitHub &amp; team coordination</strong></a></td><td>4</td><td>GitHub metrics, readiness, team dashboard, team activity.</td></tr>
+              <tr><td><a href="#notifications-audit"><strong>Notifications, audit, dashboard, settings</strong></a></td><td>13</td><td>Notification config, audit config/drain, dashboard state, config, secrets, extensions, update, server restart.</td></tr>
+              <tr><td><a href="#generic-dispatcher"><strong>Generic MCP dispatcher</strong></a></td><td>3</td><td>The <code>POST /api/tool/:name</code> escape hatch that exposes any of the 88 MCP tools over REST.</td></tr>
+              <tr><td><a href="#forge-master"><strong>Forge-Master</strong></a></td><td>10</td><td>The conversational entrypoint &mdash; chat sessions, prompts, prefs, cache stats.</td></tr>
+              <tr><td><a href="#image"><strong>Image generation</strong></a></td><td>1</td><td>Generate images via xAI Grok Aurora or OpenAI DALL-E.</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <h2 id="auth-and-binding">Authentication, binding, and CORS</h2>
+        <p>The trust model is <strong>local user</strong>. The server binds explicitly to <code>127.0.0.1</code> (loopback only) and runs no authentication layer of its own &mdash; the operating system's user account is the access boundary. Concretely:</p>
+        <ul class="list-disc list-inside space-y-1 mb-4">
+          <li><strong>Binding</strong>: <code>app.listen(HTTP_PORT, "127.0.0.1", ...)</code> &mdash; remote hosts cannot reach the API; only processes running as the same OS user can.</li>
+          <li><strong>Port</strong>: <code>3100</code> by default; override with <code>PLAN_FORGE_HTTP_PORT</code> (see <a href="environment-variables-reference.html#server-ports">Appendix U &mdash; Server Ports</a>).</li>
+          <li><strong>CORS</strong>: not enabled. Browser dashboards served from <code>http://127.0.0.1:3100/dashboard</code> share the same origin.</li>
+          <li><strong>Bridge approvals</strong> (the only endpoint family that crosses a trust boundary) are protected by the per-run HMAC token in <code>PFORGE_BRIDGE_SECRET</code> &mdash; see <a href="#bridge">Bridge &amp; approvals</a>.</li>
+        </ul>
+        <p>If you need to expose the API beyond loopback (rare; usually it's the wrong solution), put a reverse proxy in front of it that handles TLS and authentication. <strong>Do not</strong> change the bind address; it's a deliberate safety boundary.</p>
+
+        <div class="callout callout-warn">
+          <strong>Body format.</strong> All <code>POST</code>/<code>PUT</code> endpoints expect <code>Content-Type: application/json</code>. The server uses <code>express.json()</code> with default 100 KB body limit; payloads larger than that return <code>413 Payload Too Large</code>.
+        </div>
+
+        <h2 id="error-shape">Error response shape</h2>
+        <p>Endpoint handlers wrap exceptions in a consistent envelope:</p>
+        <pre><code>// 4xx / 5xx
+{
+  "error": "Human-readable message",
+  "code": "OPTIONAL_MACHINE_CODE",   // e.g. ASK_QUESTION_MISMATCH, PLAN_ALREADY_EXISTS
+  "details": { ... }                  // optional structured context
+}</code></pre>
+        <p>Status codes follow standard HTTP semantics: <code>400</code> for malformed input, <code>404</code> for missing resources, <code>409</code> for state conflicts (most common in Crucible finalize), <code>413</code> for body limits, <code>500</code> for unexpected server errors. The complete error-code table lives in the <strong>Errors &amp; Exit Codes</strong> appendix (forthcoming Appendix X).</p>
+
+        <!-- ─── Discovery ─── -->
+        <h2 id="discovery">Discovery</h2>
+        <p>Lightweight endpoints intended for liveness checks, build identification, and capability negotiation. These are safe to poll &mdash; none of them allocate workers or write files.</p>
+        <table class="manual-table">
+          <thead><tr><th>Method</th><th>Path</th><th>Purpose</th><th>Response</th></tr></thead>
+          <tbody>
+            <tr><td>GET</td><td><code>/.well-known/plan-forge.json</code></td><td>Public discovery manifest</td><td><code>{ version, capabilities, dashboard }</code></td></tr>
+            <tr><td>GET</td><td><code>/api/capabilities</code></td><td>Full capability catalog (mirrors <code>forge_capabilities</code>)</td><td><code>{ tools[], workflows[], config, memory }</code></td></tr>
+            <tr><td>GET</td><td><code>/api/version</code></td><td>Running server version</td><td><code>{ version, framework, build }</code></td></tr>
+            <tr><td>GET</td><td><code>/api/status</code></td><td>Liveness + last error</td><td><code>{ ok, lastError, uptimeMs }</code></td></tr>
+          </tbody>
+        </table>
+
+        <!-- ─── Plan execution ─── -->
+        <h2 id="plan-execution">Plan execution and runs</h2>
+        <p>The lifecycle surface for <code>pforge run-plan</code>. Triggering a run returns immediately with a run ID; subscribe to the <a href="event-catalog.html#lifecycle">lifecycle event family</a> over the WebSocket hub for progress.</p>
+        <table class="manual-table">
+          <thead><tr><th>Method</th><th>Path</th><th>Purpose</th><th>Request / response notes</th></tr></thead>
+          <tbody>
+            <tr><td>GET</td><td><code>/api/runs</code></td><td>List recent runs (last 50)</td><td>Returns <code>{ runs: [{ id, plan, status, startedAt, endedAt }] }</code>.</td></tr>
+            <tr><td>GET</td><td><code>/api/runs/latest</code></td><td>Latest run with full status</td><td>Includes current slice, gate result, cost so far.</td></tr>
+            <tr><td>GET</td><td><code>/api/runs/:runIdx</code></td><td>Specific run by index</td><td><code>runIdx</code> matches <code>.forge/runs/&lt;idx&gt;.jsonl</code>.</td></tr>
+            <tr><td>POST</td><td><code>/api/runs/trigger</code></td><td>Kick off a plan run</td><td>Body: <code>{ plan, mode, quorum, assisted, dryRun, escalate }</code>. Returns <code>{ runIdx, pid }</code>.</td></tr>
+            <tr><td>POST</td><td><code>/api/runs/abort</code></td><td>Abort the active run</td><td>Body: <code>{ runIdx? }</code> (defaults to current). Sends SIGTERM, then SIGKILL after grace.</td></tr>
+            <tr><td>GET</td><td><code>/api/replay/:runIdx/:sliceId</code></td><td>Session replay log for a slice</td><td>Returns the journaled stdout/stderr stream for one slice &mdash; used by the dashboard's session-replay view.</td></tr>
+            <tr><td>GET</td><td><code>/api/plans</code></td><td>Enumerate hardened plans</td><td>Walks <code>docs/plans/</code> and parses Scope Contract headers.</td></tr>
+            <tr><td>GET</td><td><code>/api/workers</code></td><td>Active worker processes</td><td>PIDs, model, slice, elapsed.</td></tr>
+            <tr><td>GET</td><td><code>/api/traces</code></td><td>List execution traces (run index)</td><td>Top-level summary: run, slice count, gate pass/fail.</td></tr>
+            <tr><td>GET</td><td><code>/api/traces/:runId</code></td><td>Trace detail for one run</td><td>Per-slice timing, model, tokens in/out, cost.</td></tr>
+          </tbody>
+        </table>
+
+        <!-- ─── Cost ─── -->
+        <h2 id="cost">Cost</h2>
+        <p>Plan Forge tracks token spend per provider, per model, per run, aggregated monthly. The single REST endpoint mirrors <code>forge_cost_report</code>; richer estimation lives in MCP tools (see <a href="#generic-dispatcher">Generic MCP dispatcher</a>).</p>
+        <table class="manual-table">
+          <thead><tr><th>Method</th><th>Path</th><th>Purpose</th><th>Response</th></tr></thead>
+          <tbody>
+            <tr><td>GET</td><td><code>/api/cost</code></td><td>Cost report (token spend per model + monthly aggregation)</td><td><code>{ thisMonth, lastMonth, perModel: {...}, perRun: [...] }</code></td></tr>
+          </tbody>
+        </table>
+        <p class="text-sm text-slate-500 italic">Estimation endpoints (<code>forge_estimate_quorum</code>, <code>forge_estimate_slice</code>) are MCP-only; invoke via <code>POST /api/tool/&lt;name&gt;</code>.</p>
+
+        <!-- ─── Search & timeline ─── -->
+        <h2 id="search-timeline">Search, timeline, hub</h2>
+        <p>Cross-surface search and the unified timeline are the dashboard's primary navigation aids. The hub endpoint is where browsers (and any other client) upgrade to a WebSocket to receive live events &mdash; see <a href="event-catalog.html#subscribing">Appendix V &mdash; Consuming the Stream</a> for a Node example.</p>
+        <table class="manual-table">
+          <thead><tr><th>Method</th><th>Path</th><th>Purpose</th><th>Notes</th></tr></thead>
+          <tbody>
+            <tr><td>GET</td><td><code>/api/search</code></td><td>Cross-surface search (plans, events, bugs, incidents, memory)</td><td>Query string: <code>?query=&amp;source=&amp;limit=</code>. Returns <code>{ hits: [{ source, recordRef, snippet, score, timestamp }], total, truncated, message }</code> &mdash; the gold-standard ACI shape.</td></tr>
+            <tr><td>GET</td><td><code>/api/timeline</code></td><td>Unified event timeline</td><td>Cursor-paged: <code>?cursor=&amp;limit=</code>. Merges nine sources (runs, slices, deploys, incidents, drift, memory, bugs, crucible, tempering).</td></tr>
+            <tr><td>GET</td><td><code>/api/hub</code></td><td>WebSocket upgrade for live events</td><td>HTTP <code>GET</code> returns hub status + client count; same path accepts <code>Upgrade: websocket</code> for streaming.</td></tr>
+          </tbody>
+        </table>
+
+        <!-- ─── Memory ─── -->
+        <h2 id="memory">Memory (L1 / L2 / L3)</h2>
+        <p>The capture-and-recall surface that backs OpenBrain integration and the auto-skills system. See <a href="memory-system.html">Chapter 22 &mdash; How the Shop Remembers</a> for the architectural overview.</p>
+        <table class="manual-table">
+          <thead><tr><th>Method</th><th>Path</th><th>Purpose</th><th>Notes</th></tr></thead>
+          <tbody>
+            <tr><td>GET</td><td><code>/api/memory</code></td><td>Memory landing &mdash; recent captures + state</td><td>Dashboard primary view.</td></tr>
+            <tr><td>GET</td><td><code>/api/memory/report</code></td><td>Aggregate stats</td><td>Captures/day, hit rate, top thoughts.</td></tr>
+            <tr><td>POST</td><td><code>/api/memory/search</code></td><td>Search L2 captures (and L3 if OpenBrain configured)</td><td>Body: <code>{ query, limit, source? }</code>.</td></tr>
+            <tr><td>POST</td><td><code>/api/memory/capture</code></td><td>Capture a thought</td><td>Body: <code>{ content, tags, source }</code>. Broadcasts <code>memory-captured</code> hub event.</td></tr>
+            <tr><td>POST</td><td><code>/api/memory/drain</code></td><td>Drain pending memory queue</td><td>Forces a flush of buffered captures to disk + L3.</td></tr>
+            <tr><td>GET</td><td><code>/api/memory/presets</code></td><td>Capture-rule presets</td><td>Predefined tag bundles (debugging, architecture, etc.).</td></tr>
+            <tr><td>GET</td><td><code>/api/brain/stats</code></td><td>OpenBrain integration stats</td><td>L3 connection state, capture count, embedding model.</td></tr>
+          </tbody>
+        </table>
+
+        <!-- ─── Crucible ─── -->
+        <h2 id="crucible">Crucible (idea smelting)</h2>
+        <p>The conversational planner surface. The full lifecycle is <code>submit &rarr; ask &rarr; preview &rarr; finalize</code>. See <a href="crucible.html">Chapter 5 &mdash; Crucible (Idea Smelting)</a> for the workflow.</p>
+        <table class="manual-table">
+          <thead><tr><th>Method</th><th>Path</th><th>Purpose</th><th>Notes</th></tr></thead>
+          <tbody>
+            <tr><td>POST</td><td><code>/api/crucible/submit</code></td><td>Start a new smelt</td><td>Body: <code>{ idea, source? }</code>. Returns <code>{ smeltId, firstQuestion }</code>.</td></tr>
+            <tr><td>POST</td><td><code>/api/crucible/ask</code></td><td>Answer current question &mdash; get next</td><td>Body: <code>{ smeltId, answer, questionId? }</code>. Mismatched <code>questionId</code> returns <code>409 ASK_QUESTION_MISMATCH</code>.</td></tr>
+            <tr><td>GET</td><td><code>/api/crucible/preview</code></td><td>Render current draft + unresolved fields</td><td>Query: <code>?smeltId=</code>. Returns plan draft + <code>criticalGaps[]</code>.</td></tr>
+            <tr><td>POST</td><td><code>/api/crucible/finalize</code></td><td>Atomically claim phase + write plan file</td><td>Returns <code>409 + criticalGaps[]</code> if gaps remain; <code>409 + PLAN_ALREADY_EXISTS</code> if file exists (pass <code>overwrite: true</code>).</td></tr>
+            <tr><td>POST</td><td><code>/api/crucible/abandon</code></td><td>Mark smelt abandoned</td><td>Frees the phase number for the next smelt.</td></tr>
+            <tr><td>GET</td><td><code>/api/crucible/list</code></td><td>List all smelts (filter by status)</td><td>Query: <code>?status=draft|finalized|abandoned</code>.</td></tr>
+            <tr><td>GET</td><td><code>/api/crucible/config</code></td><td>Read Crucible config</td><td>Interview model, question budget, autopilot threshold.</td></tr>
+            <tr><td>POST</td><td><code>/api/crucible/config</code></td><td>Write Crucible config</td><td>Partial updates merged into <code>.forge.json#crucible</code>.</td></tr>
+            <tr><td>GET</td><td><code>/api/crucible/manual-imports</code></td><td>List manually-imported smelts</td><td>Spec Kit, hand-authored briefs.</td></tr>
+            <tr><td>GET</td><td><code>/api/crucible/governance</code></td><td>Governance summary</td><td>Autopilot rate, fallback rate, mean question count.</td></tr>
+          </tbody>
+        </table>
+
+        <!-- ─── LiveGuard ─── -->
+        <h2 id="liveguard">LiveGuard (drift, incidents, deploys)</h2>
+        <p>The production-companion surface. Every endpoint here emits at least one event in the <a href="event-catalog.html#liveguard">LiveGuard event family</a>; subscribe over the hub to see real-time alerts.</p>
+        <table class="manual-table">
+          <thead><tr><th>Method</th><th>Path</th><th>Purpose</th><th>Notes</th></tr></thead>
+          <tbody>
+            <tr><td>GET</td><td><code>/api/drift</code></td><td>Current drift score vs architecture rules</td><td>Returns <code>{ score, breakdown, asOf }</code>. Score range 0&ndash;100.</td></tr>
+            <tr><td>GET</td><td><code>/api/drift/history</code></td><td>Drift trend over time</td><td>One entry per <code>forge_drift_report</code> invocation.</td></tr>
+            <tr><td>GET</td><td><code>/api/incidents</code></td><td>List incidents (severity, MTTR)</td><td>Sorted newest first; includes resolution timestamp + MTTR ms.</td></tr>
+            <tr><td>POST</td><td><code>/api/incident</code></td><td>Capture a new incident</td><td>Body: <code>{ title, severity, source, body }</code>. Emits <code>liveguard-incident</code>.</td></tr>
+            <tr><td>GET</td><td><code>/api/deploy-journal</code></td><td>List deploys</td><td>Version, deployer, notes, linked run.</td></tr>
+            <tr><td>POST</td><td><code>/api/deploy-journal</code></td><td>Record a deploy</td><td>Body: <code>{ version, deployer, notes, runIdx? }</code>.</td></tr>
+            <tr><td>POST</td><td><code>/api/regression-guard</code></td><td>Run regression gates against codebase</td><td>Body: <code>{ scope, baseline? }</code>. Returns pass/fail per rule.</td></tr>
+            <tr><td>GET</td><td><code>/api/runbooks</code></td><td>List operational runbooks</td><td>One per alert class.</td></tr>
+            <tr><td>POST</td><td><code>/api/runbook</code></td><td>Generate or update a runbook</td><td>Body: <code>{ alertClass, content }</code>.</td></tr>
+            <tr><td>GET</td><td><code>/api/health-trend</code></td><td>Health DNA aggregator</td><td>Drift + cost + incidents + test pass-rate over time.</td></tr>
+            <tr><td>GET</td><td><code>/api/hotspots</code></td><td>Git churn hotspots</td><td>Files with high change frequency &mdash; refactor candidates.</td></tr>
+            <tr><td>GET</td><td><code>/api/triage</code></td><td>Prioritized alert list</td><td>Drift + incidents + secrets + deps, ranked.</td></tr>
+            <tr><td>GET</td><td><code>/api/liveguard/traces</code></td><td>LiveGuard execution traces</td><td>One per <code>forge_liveguard_run</code> invocation.</td></tr>
+            <tr><td>GET</td><td><code>/api/secret-scan</code></td><td>Latest secret-scan results</td><td>Values redacted; returns <code>{ findings: [{ file, line, severity }] }</code>.</td></tr>
+            <tr><td>POST</td><td><code>/api/secret-scan/run</code></td><td>Trigger a fresh scan</td><td>Body: <code>{ paths? }</code>. Default scans full repo.</td></tr>
+            <tr><td>GET</td><td><code>/api/deps/watch</code></td><td>Latest dependency-vuln snapshot</td><td>Returns CVE list grouped by package.</td></tr>
+            <tr><td>POST</td><td><code>/api/deps/watch/run</code></td><td>Trigger a fresh dep scan</td><td>Body: <code>{ packageManager? }</code>; auto-detects if omitted.</td></tr>
+            <tr><td>GET</td><td><code>/api/env/diff</code></td><td>Env-var key divergence across <code>.env</code> files</td><td>Catches the "key in dev but missing in prod" footgun.</td></tr>
+          </tbody>
+        </table>
+
+        <!-- ─── Quorum & Fix ─── -->
+        <h2 id="quorum-fix">Quorum and fix proposals</h2>
+        <p>The bridge between LiveGuard findings and structured remediation. Quorum prompts gather context across drift/incident/deploy/secret findings; fix proposals materialize that context into an actionable plan slice.</p>
+        <table class="manual-table">
+          <thead><tr><th>Method</th><th>Path</th><th>Purpose</th><th>Notes</th></tr></thead>
+          <tbody>
+            <tr><td>GET</td><td><code>/api/fix/proposals</code></td><td>List fix proposals</td><td>Sorted by recency; filter by <code>?status=</code>.</td></tr>
+            <tr><td>POST</td><td><code>/api/fix/propose</code></td><td>Generate an actionable fix plan</td><td>Body: <code>{ findingId, model? }</code>. Returns proposed plan-slice diff.</td></tr>
+            <tr><td>GET</td><td><code>/api/quorum/prompt</code></td><td>Read XSS-validated quorum prompt</td><td>Query: <code>?promptId=</code>. Output is HTML-escaped for safe rendering.</td></tr>
+            <tr><td>POST</td><td><code>/api/quorum/prompt</code></td><td>Build a quorum prompt</td><td>Body: <code>{ findings: [...], mode }</code>. Returns <code>{ promptId, url }</code>.</td></tr>
+          </tbody>
+        </table>
+
+        <!-- ─── Tempering & Bugs ─── -->
+        <h2 id="tempering-bugs">Tempering and bugs</h2>
+        <p>The bug-registry surface. Tempering scans for TODO/FIXME/stub markers and produces an artifact; the bug stub endpoint converts a finding into a registered bug. Bug create/update/validate is MCP-only; see <a href="api-surface-index.html#mcp-tools">Appendix Q</a>.</p>
+        <table class="manual-table">
+          <thead><tr><th>Method</th><th>Path</th><th>Purpose</th><th>Notes</th></tr></thead>
+          <tbody>
+            <tr><td>GET</td><td><code>/api/tempering/artifact</code></td><td>Latest tempering artifact</td><td>Scan results + temper score.</td></tr>
+            <tr><td>POST</td><td><code>/api/tempering/bug-stub</code></td><td>Create a bug stub from a finding</td><td>Body: <code>{ findingId, title?, severity? }</code>.</td></tr>
+            <tr><td>GET</td><td><code>/api/bugs/list</code></td><td>List registered bugs</td><td>Query: <code>?status=&amp;severity=&amp;plan=</code>.</td></tr>
+          </tbody>
+        </table>
+
+        <!-- ─── Skills ─── -->
+        <h2 id="skills">Skills (decision tray)</h2>
+        <p>Auto-skills surface decisions that the orchestrator wants a human to make &mdash; tag the deferred work, accept/reject the proposal, or defer for later review.</p>
+        <table class="manual-table">
+          <thead><tr><th>Method</th><th>Path</th><th>Purpose</th><th>Notes</th></tr></thead>
+          <tbody>
+            <tr><td>GET</td><td><code>/api/skills</code></td><td>Skill catalog</td><td>Includes hand-authored <code>.github/skills/*/SKILL.md</code> and auto-skills.</td></tr>
+            <tr><td>GET</td><td><code>/api/skills/pending</code></td><td>Pending decisions awaiting accept/reject</td><td>Query: <code>?source=</code>.</td></tr>
+            <tr><td>POST</td><td><code>/api/skills/accept</code></td><td>Accept a pending decision</td><td>Body: <code>{ decisionId, note? }</code>.</td></tr>
+            <tr><td>POST</td><td><code>/api/skills/reject</code></td><td>Reject a pending decision</td><td>Body: <code>{ decisionId, reason? }</code>.</td></tr>
+            <tr><td>POST</td><td><code>/api/skills/defer</code></td><td>Defer a pending decision</td><td>Body: <code>{ decisionId, untilTimestamp? }</code>.</td></tr>
+          </tbody>
+        </table>
+
+        <!-- ─── Inner Loop ─── -->
+        <h2 id="innerloop">Inner loop</h2>
+        <p>The self-improvement surface. Inner-loop subsystems observe runs and propose tightenings: gate suggestions from observed failures, reviewer-score calibration, cost-anomaly detection, federation across sibling repos.</p>
+        <table class="manual-table">
+          <thead><tr><th>Method</th><th>Path</th><th>Purpose</th><th>Notes</th></tr></thead>
+          <tbody>
+            <tr><td>GET</td><td><code>/api/innerloop/status</code></td><td>All inner-loop subsystem states</td><td>Returns rollup of the six subsystems below.</td></tr>
+            <tr><td>GET</td><td><code>/api/innerloop/reviewer-calibration</code></td><td>Reviewer-score calibration trace</td><td>Drift between auto-reviewer and human override decisions.</td></tr>
+            <tr><td>GET</td><td><code>/api/innerloop/gate-suggestions</code></td><td>Gate-tightening suggestions</td><td>Patterns where current gates allowed regressions.</td></tr>
+            <tr><td>GET</td><td><code>/api/innerloop/cost-anomalies</code></td><td>Cost anomalies across runs</td><td>Slices that cost &gt;3&sigma; above their plan baseline.</td></tr>
+            <tr><td>GET</td><td><code>/api/innerloop/proposed-fixes</code></td><td>Auto-proposed fixes from health-trend signals</td><td>Combines drift, incidents, and test trends.</td></tr>
+            <tr><td>GET</td><td><code>/api/innerloop/federation</code></td><td>Federation-mode status</td><td>Advisory cross-repo learning when configured.</td></tr>
+            <tr><td>POST</td><td><code>/api/innerloop/federation/toggle</code></td><td>Enable/disable federation</td><td>Body: <code>{ enabled }</code>.</td></tr>
+          </tbody>
+        </table>
+
+        <!-- ─── Bridge ─── -->
+        <h2 id="bridge">Bridge and approvals</h2>
+        <p>The human-in-the-loop surface. When a plan slice is flagged for approval (<code>assisted</code> mode or escalation), the orchestrator emits an <code>approval-requested</code> event and waits. The browser-link variant is opened by VS Code notification; the POST variant is for programmatic clients.</p>
+        <table class="manual-table">
+          <thead><tr><th>Method</th><th>Path</th><th>Purpose</th><th>Notes</th></tr></thead>
+          <tbody>
+            <tr><td>GET</td><td><code>/api/bridge/status</code></td><td>Pending approvals waiting for a human nudge</td><td>Returns <code>{ pending: [{ runId, sliceId, reason, createdAt }] }</code>.</td></tr>
+            <tr><td>POST</td><td><code>/api/bridge/approve/:runId</code></td><td>Programmatic approval</td><td>Header <code>X-Bridge-Token</code> required (HMAC from <code>PFORGE_BRIDGE_SECRET</code>). Body: <code>{ decision: "approve"|"reject", note? }</code>.</td></tr>
+            <tr><td>GET</td><td><code>/api/bridge/approve/:runId</code></td><td>Browser-link approval</td><td>Query <code>?token=</code> with same HMAC; renders a confirm page. Used by VS Code notification &amp; email links.</td></tr>
+          </tbody>
+        </table>
+
+        <div class="callout callout-warn">
+          <strong>Bridge tokens are the only cross-boundary auth.</strong> Set <code>PFORGE_BRIDGE_SECRET</code> in your environment (see <a href="environment-variables-reference.html#server-ports">Appendix U</a>) before enabling assisted runs. Approvals without a valid token return <code>401 BRIDGE_TOKEN_INVALID</code>.
+        </div>
+
+        <!-- ─── Copilot Integration ─── -->
+        <h2 id="copilot-integration">Copilot integration</h2>
+        <p>The surface that powers the <a href="copilot-integration.html">Copilot Integration Trilogy</a> &mdash; reading, previewing, and syncing <code>.github/copilot-instructions.md</code> from the project profile + principles. OpenClaw endpoints post LiveGuard snapshots to the optional analytics service.</p>
+        <table class="manual-table">
+          <thead><tr><th>Method</th><th>Path</th><th>Purpose</th><th>Notes</th></tr></thead>
+          <tbody>
+            <tr><td>GET</td><td><code>/api/copilot-instructions</code></td><td>Read current file</td><td>Returns raw markdown.</td></tr>
+            <tr><td>POST</td><td><code>/api/copilot-instructions/preview</code></td><td>Preview a regenerated file</td><td>Body: <code>{ projectProfile?, principles? }</code>. Non-destructive.</td></tr>
+            <tr><td>POST</td><td><code>/api/copilot-instructions/sync</code></td><td>Sync from project profile + principles</td><td>Writes the file; emits a hub event for editor refresh.</td></tr>
+            <tr><td>POST</td><td><code>/api/openclaw/snapshot</code></td><td>Post a LiveGuard snapshot to OpenClaw</td><td>Body: snapshot envelope. Requires <code>openclaw.endpoint</code> in <a href="forge-json-reference.html#openclaw"><code>.forge.json</code></a>.</td></tr>
+            <tr><td>GET</td><td><code>/api/openclaw/config</code></td><td>OpenClaw endpoint + auth config</td><td>Token is masked in response.</td></tr>
+          </tbody>
+        </table>
+
+        <!-- ─── GitHub & Team ─── -->
+        <h2 id="github-team">GitHub and team coordination</h2>
+        <p>Team-mode endpoints that wrap the <code>gh</code> CLI for read-only GitHub access plus a per-operator activity feed sourced from <code>.forge/team-activity.jsonl</code>.</p>
+        <table class="manual-table">
+          <thead><tr><th>Method</th><th>Path</th><th>Purpose</th><th>Notes</th></tr></thead>
+          <tbody>
+            <tr><td>GET</td><td><code>/api/github-metrics</code></td><td>Live GitHub repo metrics</td><td>PRs open, stale branches, issue load. Requires <code>gh auth login</code>.</td></tr>
+            <tr><td>GET</td><td><code>/api/github-readiness</code></td><td>Readiness for Copilot Coding Agent dispatch</td><td>Validates labels, branch protection, repo settings.</td></tr>
+            <tr><td>GET</td><td><code>/api/team-dashboard</code></td><td>Per-operator stats + conflict risk</td><td>Aggregates team-activity.jsonl.</td></tr>
+            <tr><td>GET</td><td><code>/api/team-activity</code></td><td>Recent run summaries from team feed</td><td>Cursor-paged: <code>?cursor=&amp;limit=</code>.</td></tr>
+          </tbody>
+        </table>
+
+        <!-- ─── Notifications & Settings ─── -->
+        <h2 id="notifications-audit">Notifications, audit, dashboard, settings</h2>
+        <p>The "everything else" administrative surface &mdash; notification channels, audit drain loop, dashboard state persistence, config + secrets read/write, extensions, update checks, soft restart.</p>
+        <table class="manual-table">
+          <thead><tr><th>Method</th><th>Path</th><th>Purpose</th><th>Notes</th></tr></thead>
+          <tbody>
+            <tr><td>GET</td><td><code>/api/notifications/config</code></td><td>Notification channel config</td><td>Slack, Teams, PagerDuty, Email per <a href="forge-json-reference.html#notifications">.forge.json</a>.</td></tr>
+            <tr><td>POST</td><td><code>/api/notifications/config</code></td><td>Update channels</td><td>Body: partial config; deep-merged.</td></tr>
+            <tr><td>GET</td><td><code>/api/audit/config</code></td><td>Audit drain loop config</td><td>Returns drain interval, ring sizes, destinations.</td></tr>
+            <tr><td>PUT</td><td><code>/api/audit/config</code></td><td>Update audit config</td><td>Full replacement of audit subtree.</td></tr>
+            <tr><td>POST</td><td><code>/api/audit/drain</code></td><td>Trigger one full drain pass</td><td>Useful before shutdown.</td></tr>
+            <tr><td>GET</td><td><code>/api/dashboard-state</code></td><td>Sticky dashboard tab + filter state</td><td>Per-user UI prefs.</td></tr>
+            <tr><td>POST</td><td><code>/api/dashboard-state</code></td><td>Persist dashboard state</td><td>Body: <code>{ tab, filters, layout }</code>.</td></tr>
+            <tr><td>GET</td><td><code>/api/config</code></td><td>Read merged <code>.forge.json</code></td><td>After env-var overlay and computed defaults.</td></tr>
+            <tr><td>POST</td><td><code>/api/config</code></td><td>Update config</td><td>Body: partial; deep-merged. Writes <code>.forge.json</code>.</td></tr>
+            <tr><td>GET</td><td><code>/api/secrets</code></td><td>Read <code>.forge/secrets.json</code> keys</td><td>Values masked; only key presence returned.</td></tr>
+            <tr><td>POST</td><td><code>/api/secrets</code></td><td>Update local secrets store</td><td>Body: <code>{ key, value }</code>. Writes the gitignored file.</td></tr>
+            <tr><td>GET</td><td><code>/api/extensions</code></td><td>Installed extensions</td><td>From <code>.forge/extensions/</code>.</td></tr>
+            <tr><td>GET</td><td><code>/api/update-status</code></td><td>Update-check status</td><td>Latest release, currency, channel.</td></tr>
+            <tr><td>POST</td><td><code>/api/self-update</code></td><td>Trigger self-update install</td><td>Runs <code>pforge self-update</code>; restart required afterward.</td></tr>
+            <tr><td>POST</td><td><code>/api/server/restart</code></td><td>Soft-restart the MCP server</td><td>HMR-friendly: re-loads code without dropping the WebSocket clients (best-effort).</td></tr>
+          </tbody>
+        </table>
+
+        <!-- ─── Generic Dispatcher ─── -->
+        <h2 id="generic-dispatcher">Generic MCP dispatcher</h2>
+        <p>The escape hatch. Any of the 88 MCP tools can be invoked over REST through this surface &mdash; useful for SDK clients, CI scripts, and any external integration that needs richer tool semantics than the first-class endpoints expose.</p>
+        <table class="manual-table">
+          <thead><tr><th>Method</th><th>Path</th><th>Purpose</th><th>Notes</th></tr></thead>
+          <tbody>
+            <tr><td>POST</td><td><code>/api/tool/:name</code></td><td><strong>Invoke any of the 88 MCP tools over REST</strong></td><td>Body is the tool's input contract (see <a href="api-surface-index.html#mcp-tools">Appendix Q</a>). Response is the tool's output payload, unwrapped from the MCP envelope. Crucible and Forge-Master tools route through the MCP handler (v2.82.1 fix).</td></tr>
+            <tr><td>POST</td><td><code>/api/tool/org-rules</code></td><td>Aliased convenience &mdash; <code>forge_org_rules</code></td><td>Equivalent to <code>POST /api/tool/forge_org_rules</code>.</td></tr>
+            <tr><td>POST</td><td><code>/api/tool/run-plan</code></td><td>Aliased convenience &mdash; <code>forge_run_plan</code></td><td>Equivalent to <code>POST /api/tool/forge_run_plan</code>; also surfaced as <code>/api/runs/trigger</code> with a friendlier shape.</td></tr>
+          </tbody>
+        </table>
+
+        <div class="callout callout-info">
+          <strong>When to use the dispatcher vs. the first-class endpoint.</strong> If both exist (e.g. <code>POST /api/runs/trigger</code> and <code>POST /api/tool/forge_run_plan</code>), prefer the first-class endpoint &mdash; its response shape is tailored for direct rendering and skips the MCP envelope. Use the dispatcher when the tool has no first-class equivalent (most estimation, bug, and lattice tools).
+        </div>
+
+        <!-- ─── Forge-Master ─── -->
+        <h2 id="forge-master">Forge-Master (conversational entrypoint)</h2>
+        <p>The HTTP surface for the conversational classifier described in the <a href="forge-master.html">Forge-Master chapter</a>. Lives alongside the main API on the same port; chat sessions are persistent and resumable.</p>
+        <table class="manual-table">
+          <thead><tr><th>Method</th><th>Path</th><th>Purpose</th><th>Notes</th></tr></thead>
+          <tbody>
+            <tr><td>GET</td><td><code>/api/forge-master/capabilities</code></td><td>Classifier + tool surface metadata</td><td>What Forge-Master can do.</td></tr>
+            <tr><td>GET</td><td><code>/api/forge-master/prompts</code></td><td>Suggested starter prompts</td><td>Surfaced by the dashboard chat panel.</td></tr>
+            <tr><td>GET</td><td><code>/api/forge-master/sessions</code></td><td>List active chat sessions</td><td>Returns <code>{ sessions: [{ id, summary, lastTurnAt }] }</code>.</td></tr>
+            <tr><td>GET</td><td><code>/api/forge-master/session/:id</code></td><td>Fetch one session</td><td>Full turn history.</td></tr>
+            <tr><td>POST</td><td><code>/api/forge-master/chat</code></td><td>Start a chat or send a turn</td><td>Body: <code>{ sessionId?, message }</code>. Returns <code>{ sessionId, response }</code>.</td></tr>
+            <tr><td>GET</td><td><code>/api/forge-master/chat/:sessionId/stream</code></td><td>Server-Sent Events stream of a turn</td><td>For incremental rendering.</td></tr>
+            <tr><td>POST</td><td><code>/api/forge-master/chat/:sessionId/approve</code></td><td>Approve a Forge-Master tool call</td><td>For tools requiring human approval (e.g. write actions).</td></tr>
+            <tr><td>GET</td><td><code>/api/forge-master/prefs</code></td><td>Read user preferences</td><td>Tone, verbosity, classifier mode.</td></tr>
+            <tr><td>PUT</td><td><code>/api/forge-master/prefs</code></td><td>Update preferences</td><td>Body: partial prefs.</td></tr>
+            <tr><td>GET</td><td><code>/api/forge-master/cache-stats</code></td><td>Embedding cache liveliness</td><td>Hit rate &mdash; useful as a Forge-Master health probe.</td></tr>
+          </tbody>
+        </table>
+
+        <!-- ─── Image ─── -->
+        <h2 id="image">Image generation</h2>
+        <p>The single image-generation endpoint. Routes to xAI Grok Aurora (if <code>XAI_API_KEY</code> is set) or OpenAI DALL-E (if <code>OPENAI_API_KEY</code> is set). Auto-detects the available provider.</p>
+        <table class="manual-table">
+          <thead><tr><th>Method</th><th>Path</th><th>Purpose</th><th>Notes</th></tr></thead>
+          <tbody>
+            <tr><td>POST</td><td><code>/api/image/generate</code></td><td>Generate an image</td><td>Body: <code>{ prompt, size?, count?, provider? }</code>. Returns <code>{ images: [{ url, b64? }] }</code>.</td></tr>
+          </tbody>
+        </table>
+
+        <!-- ─── Worked Examples ─── -->
+        <h2 id="worked-examples">Worked examples</h2>
+        <p>Five short recipes that cover the most common external-integration patterns. All examples assume the server is running at <code>http://127.0.0.1:3100</code>.</p>
+
+        <h3 class="text-base font-semibold text-slate-300 mt-6">1. Trigger a plan run from a shell script</h3>
+        <pre><code>curl -X POST http://127.0.0.1:3100/api/runs/trigger \
+  -H 'Content-Type: application/json' \
+  -d '{
+        "plan":   "docs/plans/Phase-28-PLAN.md",
+        "mode":   "auto",
+        "quorum": "auto"
+      }'
+
+# Returns: { "runIdx": 47, "pid": 18432 }</code></pre>
+
+        <h3 class="text-base font-semibold text-slate-300 mt-6">2. Stream live events with <code>wscat</code></h3>
+        <pre><code>wscat -c ws://127.0.0.1:3100/api/hub
+
+&gt; {"type":"hello"}
+&lt; {"version":1,"type":"connected","timestamp":"2025-06-15T12:34:56.789Z","source":"hub"}
+&lt; {"version":1,"type":"slice-started","timestamp":"...","source":"orchestrator", ...}</code></pre>
+        <p class="text-sm text-slate-500 italic">Full event catalog in <a href="event-catalog.html">Appendix V</a>.</p>
+
+        <h3 class="text-base font-semibold text-slate-300 mt-6">3. Search across memory, plans, and bugs</h3>
+        <pre><code>curl 'http://127.0.0.1:3100/api/search?query=anvil+cache&amp;source=memory&amp;limit=10'
+
+# Returns the gold-standard ACI shape:
+# {
+#   "hits":      [ { source, recordRef, snippet, score, timestamp } ],
+#   "total":     27,
+#   "truncated": true,
+#   "message":   "Showing 10 of 27 hits across source=memory."
+# }</code></pre>
+
+        <h3 class="text-base font-semibold text-slate-300 mt-6">4. Invoke any MCP tool generically</h3>
+        <pre><code>curl -X POST http://127.0.0.1:3100/api/tool/forge_estimate_quorum \
+  -H 'Content-Type: application/json' \
+  -d '{ "plan": "docs/plans/Phase-28-PLAN.md" }'
+
+# Returns the tool's output payload unwrapped from the MCP envelope:
+# { "modes": { "auto": {...}, "power": {...}, "speed": {...}, "false": {...} } }</code></pre>
+
+        <h3 class="text-base font-semibold text-slate-300 mt-6">5. Approve a bridge-paused run from a browser link</h3>
+        <pre><code># VS Code notification or email link contains:
+# https://127.0.0.1:3100/api/bridge/approve/47?token=&lt;HMAC&gt;
+#
+# Clicking opens a confirm page that POSTs back with the decision.
+# Programmatic equivalent:
+
+curl -X POST http://127.0.0.1:3100/api/bridge/approve/47 \
+  -H 'Content-Type: application/json' \
+  -H 'X-Bridge-Token: &lt;HMAC&gt;' \
+  -d '{ "decision": "approve", "note": "Looks good, ship it" }'</code></pre>
+
+        <h2 id="sdk">Using the SDK instead</h2>
+        <p>The <a href="https://github.com/srnichols/plan-forge/tree/master/pforge-sdk" rel="noopener">pforge-sdk</a> wraps the REST API with typed helpers. Prefer it when integrating from JavaScript/TypeScript:</p>
+        <pre><code>import { client } from 'pforge-sdk';
+
+const c = client({ baseUrl: 'http://127.0.0.1:3100' });
+
+const runs     = await c.get('/api/runs/latest');
+const estimate = await c.callTool('forge_estimate_quorum', {
+  plan: 'docs/plans/Phase-28-PLAN.md',
+});</code></pre>
+
+        <h2 id="see-also">See also</h2>
+        <ul class="list-disc list-inside space-y-1">
+          <li><a href="event-catalog.html">Appendix V &mdash; Event Catalog</a> &mdash; every event emitted over <code>/api/hub</code></li>
+          <li><a href="api-surface-index.html">Appendix Q &mdash; API Surface Index</a> &mdash; the MCP tool surface that the dispatcher delegates to</li>
+          <li><a href="forge-json-reference.html">Appendix T &mdash; <code>.forge.json</code> Reference</a> &mdash; configuration keys that several endpoints read or write</li>
+          <li><a href="environment-variables-reference.html">Appendix U &mdash; Environment Variables Reference</a> &mdash; <code>PLAN_FORGE_HTTP_PORT</code>, <code>PFORGE_BRIDGE_SECRET</code>, provider keys</li>
+          <li><a href="integrating-from-outside.html">Chapter 29 &mdash; Integrating from Outside</a> &mdash; end-to-end integration patterns</li>
+          <li><a href="dashboard.html">Chapter &mdash; Dashboard</a> &mdash; the primary REST consumer, browsable at <code>http://127.0.0.1:3100/dashboard</code></li>
+          <li><a href="https://github.com/srnichols/plan-forge/blob/master/docs/REST-API.md" rel="noopener">docs/REST-API.md on GitHub</a> &mdash; auto-generated endpoint dump (regenerated via <code>node scripts/dump-rest-routes.mjs</code>)</li>
+        </ul>
+
+      </div>
+
+      <nav class="mt-12 flex justify-between border-t border-slate-800 pt-6 text-sm">
+        <a class="text-amber-300 hover:underline" href="event-catalog.html">&larr; Appendix V &mdash; Event Catalog</a>
+        <a class="text-amber-300 hover:underline" href="glossary.html">Appendix A &mdash; Glossary &rarr;</a>
+      </nav>
+
+    </main>
+  </div>
+
+  <script type="module" src="assets/manual.js"></script>
+</body>
+</html>

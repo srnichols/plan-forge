@@ -217,7 +217,7 @@ Slices are independent. Pick any one; finish it; commit; ship. No slice depends 
 - [x] **B2** Environment Variables Reference (Appendix U) ✅ (v3.6.2 · commit pending)
 - [x] **B3** Lifecycle Hooks Reference (section in Customization) ✅ (v3.6.2 · EDITION bumped 3.5.1→3.6.2 Fifth Edition · commit pending)
 - [x] **B4** Event Catalog (Appendix V) ✅ (v3.6.2 · commit pending)
-- [ ] **B5** REST API Reference (Appendix W)
+- [x] **B5** REST API Reference (Appendix W) ✅ (v3.6.2 · commit pending)
 - [ ] **B6** Skills Reference (section in Instructions & Agents Reference)
 - [ ] **B7** Errors & Exit Codes (section in Troubleshooting + Appendix X)
 

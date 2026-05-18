@@ -221,4 +221,4 @@ All `.forge/` files except `.forge.json` (project root) should be in `.gitignore
 .forge/phase.lock
 ```
 
-`.forge.json` is gitignored by default (project-specific config). `.forge/SCHEMA.md` should be committed (documentation).
+`.forge.json` is gitignored by default (project-specific config). This schema doc lives at `docs/forge-directory-schema.md` (the entire `.forge/` directory is gitignored, so the schema reference belongs under `docs/`).

@@ -13,6 +13,9 @@
  *   2. Every internal href="...html" link points to an existing file
  *   3. Each chapter has the standard shell (lang="en", #manual-sidebar,
  *      .chapter-content, manual.js include)
+ *   3b. Chapter numbers in <title>, in-body badges, and cross-references
+ *       match the canonical num/act in assets/manual.js (audit-only — never
+ *       auto-rewrites; chapter numbers carry narrative meaning).
  *   4. Substitutes <!--c:KEY-->VALUE<!--/c--> tokens against MANUAL_COUNTS
  *      so chapter prose stays in sync with a single source of truth.
  *   5. Re-generates the A–Z body of book-index.html from CHAPTERS + SEARCH_SECTIONS
@@ -171,6 +174,118 @@ for (const file of allHtml) {
   }
 }
 log(`   ${shellIssues === 0 ? "✓ All chapters have the standard shell" : "✗ " + shellIssues + " shell issues"}`);
+
+// ─── Step 5b: Chapter-number consistency ───
+//
+// Detects drift between manual.js (source of truth for chapter numbers) and:
+//   (a) <title>Chapter N: ...</title>
+//   (b) in-body badge   <div class="...uppercase tracking-wider...">Chapter N</div>
+//                       (also: "Act III — Guard · Chapter N", "Chapter N · Settings Group")
+//   (c) cross-refs      <a href="X.html">Chapter N — ...</a>
+//
+// AUDIT-ONLY (never auto-rewrites). Chapter numbers carry narrative meaning;
+// a mismatch could mean manual.js is wrong, the badge is wrong, or the cross-ref
+// is wrong. Surface the discrepancy and let a human decide.
+//
+// This step exists because earlier renumbers (Part IV memory-first reorder,
+// Crucible/Writing-Plans swap) updated manual.js + sidebar but left chapter
+// pages and cross-refs with stale labels — and prior --audit runs didn't notice.
+log("\n5b. Checking chapter-number consistency (titles, badges, cross-refs)…");
+const fileToChapter = new Map(CHAPTERS.map((c) => [c.file, c]));
+const TITLE_CHAPTER_RE = /<title>\s*Chapter\s+(\d+)\s*[:·]/i;
+const BADGE_RE = /<div\s+class="[^"]*\buppercase\s+tracking-wider\b[^"]*"[^>]*>([^<]*?Chapter\s+(\d+)[^<]*)<\/div>/gi;
+const XREF_RE = /<a\s+href="([a-z0-9-]+)\.html(?:#[^"]*)?"[^>]*>\s*Chapter\s+(\d+)\b/gi;
+let titleDrifts = 0;
+let badgeDrifts = 0;
+let xrefDrifts = 0;
+const knownNums = new Set(CHAPTERS.map((c) => String(c.num)).filter(Boolean));
+for (const file of allHtml) {
+  if (file === "index.html") continue;
+  const chapter = fileToChapter.get(file);
+  if (!chapter) continue;
+  const content = fs.readFileSync(path.join(MANUAL_DIR, file), "utf8");
+
+  // (a) <title> tag — only validate for numbered chapters
+  if (chapter.num) {
+    const titleMatch = TITLE_CHAPTER_RE.exec(content);
+    if (titleMatch && titleMatch[1] !== String(chapter.num)) {
+      issues.push({ severity: "HIGH", type: "CHNUM", file,
+        msg: `<title> says "Chapter ${titleMatch[1]}" but manual.js has num="${chapter.num}" — update <title> or assets/manual.js` });
+      titleDrifts++;
+    }
+  }
+
+  // (b) in-body badge
+  const badgeRe = new RegExp(BADGE_RE.source, BADGE_RE.flags);
+  let bm;
+  while ((bm = badgeRe.exec(content)) !== null) {
+    const badgeText = bm[1].trim();
+    const badgeNum = bm[2];
+    if (chapter.num) {
+      // Numbered chapter: badge must match own num exactly
+      if (badgeNum !== String(chapter.num)) {
+        issues.push({ severity: "HIGH", type: "CHNUM", file,
+          msg: `Badge "${badgeText}" says "Chapter ${badgeNum}" but manual.js has num="${chapter.num}"` });
+        badgeDrifts++;
+      }
+    } else {
+      // Sub-chapter (num=""): badge references the parent chapter's num.
+      // Surface drift only if no registered chapter has that number at all
+      // (catches stale references to deleted/renumbered parents).
+      if (!knownNums.has(badgeNum)) {
+        issues.push({ severity: "MEDIUM", type: "CHNUM", file,
+          msg: `Sub-chapter badge "${badgeText}" references Chapter ${badgeNum}, but no chapter in manual.js has num="${badgeNum}"` });
+        badgeDrifts++;
+      }
+    }
+  }
+
+  // (c) cross-references — link text starting with "Chapter N"
+  const xrefRe = new RegExp(XREF_RE.source, XREF_RE.flags);
+  let xm;
+  while ((xm = xrefRe.exec(content)) !== null) {
+    const targetFile = xm[1] + ".html";
+    const xrefNum = xm[2];
+    const target = fileToChapter.get(targetFile);
+    if (!target || !target.num) continue; // unknown target or sub-chapter target → skip
+    if (xrefNum !== String(target.num)) {
+      issues.push({ severity: "HIGH", type: "CHNUM", file,
+        msg: `Cross-ref "Chapter ${xrefNum} → ${targetFile}" but manual.js says ${targetFile} has num="${target.num}"` });
+      xrefDrifts++;
+    }
+  }
+}
+const totalChnumDrifts = titleDrifts + badgeDrifts + xrefDrifts;
+log(`   ${totalChnumDrifts === 0 ? "✓ All chapter numbers in sync" : `✗ ${totalChnumDrifts} drift(s) — ${titleDrifts} <title>, ${badgeDrifts} badge, ${xrefDrifts} cross-ref`}`);
+
+// ─── Step 5c: Act consistency (Roman numeral in badge vs manual.js act) ───
+//
+// When a badge includes "Act <ROMAN> — <name>", the roman must match the
+// chapter's `act` field in manual.js. Catches the Part III ↔ Part IV mix-up
+// (e.g. LiveGuard chapters labeled "Act IV — Guard" when LiveGuard is Part III).
+log("\n5c. Checking Act/Part consistency in badges…");
+const ACT_IN_BADGE_RE = /<div\s+class="[^"]*\buppercase\s+tracking-wider\b[^"]*"[^>]*>([^<]*?Act\s+(I{1,3}|IV|V)\b[^<]*)<\/div>/gi;
+let actDrifts = 0;
+for (const file of allHtml) {
+  if (file === "index.html") continue;
+  const chapter = fileToChapter.get(file);
+  if (!chapter || !chapter.act) continue;
+  // Only validate when chapter.act is a Roman numeral (skip "Appendix", "Quickstart")
+  if (!/^(I{1,3}|IV|V)$/.test(chapter.act)) continue;
+  const content = fs.readFileSync(path.join(MANUAL_DIR, file), "utf8");
+  const actRe = new RegExp(ACT_IN_BADGE_RE.source, ACT_IN_BADGE_RE.flags);
+  let am;
+  while ((am = actRe.exec(content)) !== null) {
+    const badgeText = am[1].trim();
+    const badgeAct = am[2];
+    if (badgeAct !== chapter.act) {
+      issues.push({ severity: "HIGH", type: "ACT", file,
+        msg: `Badge "${badgeText}" says "Act ${badgeAct}" but manual.js has act="${chapter.act}"` });
+      actDrifts++;
+    }
+  }
+}
+log(`   ${actDrifts === 0 ? "✓ All Act labels match manual.js" : `✗ ${actDrifts} Act drift(s)`}`);
 
 // ─── Step 6: Substitute count tokens (single source of truth) ───
 //
@@ -337,7 +452,7 @@ log("\n6c. Numbering figures and collecting List of Figures…");
 const FIG_BLOCK_RE = /<figure\b([^>]*\bclass="[^"]*\bmanual-figure\b[^"]*")([^>]*?)>([\s\S]*?)<\/figure>/gi;
 const FIGCAP_RE = /<figcaption\b([^>]*)>([\s\S]*?)<\/figcaption>/i;
 const FIGNUM_PREFIX_RE = /^\s*<!--fignum-->[\s\S]*?<!--\/fignum-->\s*/i;
-const fileToChapter = new Map(CHAPTERS.map((c) => [c.file, c]));
+// fileToChapter is declared earlier in Step 5b
 const figureRegistry = []; // { number, chapterNum, chapterTitle, file, anchor, caption }
 let figuresNumbered = 0;
 let figureFilesNumbered = 0;
@@ -521,6 +636,8 @@ console.log("  Fix:");
 console.log("    NAV   → Add the page to CHAPTERS in assets/manual.js");
 console.log("    LINK  → Fix or remove the broken href");
 console.log("    SHELL → Use an existing chapter as a shell template");
+console.log("    CHNUM → Update either the chapter page (<title> + badge + cross-ref) or num in assets/manual.js. Source of truth is manual.js; pick one direction and align.");
+console.log("    ACT   → Update the badge's 'Act <ROMAN>' to match the chapter's act field in assets/manual.js (or update manual.js if the badge is correct).");
 console.log("    COUNT → Add the key to MANUAL_COUNTS in assets/manual.js, or run without --audit to rewrite drift");
 process.exit(bySev.HIGH.length > 0 ? 1 : 0);
 

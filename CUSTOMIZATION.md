@@ -735,9 +735,11 @@ The 4-session isolation model makes this natural — each session can use a diff
 
 ---
 
-## Persistent Memory with OpenBrain (Optional)
+## Persistent Memory with OpenBrain (Recommended)
 
-Plan Forge's 3-session model is powerful, but each session starts fresh. [OpenBrain](https://github.com/srnichols/OpenBrain) adds **persistent semantic memory** — decisions, patterns, and lessons captured in one session are searchable in every future session, across any AI tool.
+Plan Forge ships with **L1 (Hub events) + L2 (`.forge/*.jsonl` durable files)** memory built in. The L3 layer — cross-session, cross-tool, semantic-search memory — requires [OpenBrain](https://srnichols.github.io/OpenBrain), a self-hosted MCP server (PostgreSQL + pgvector).
+
+Plan Forge works without it: every OpenBrain hook is gated behind "if configured" and degrades silently. But 28 MCP tools, 4 search-before-acting prompts, cross-project Federation, and the Reflexion / Auto-skill / Postmortem lessons that make the inner loop *improve over time* all light up when L3 is present. Easy to skip at install, easy to enable later with `pforge brain hint`.
 
 ### Why This Changes Everything
 

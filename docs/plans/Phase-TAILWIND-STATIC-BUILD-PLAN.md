@@ -145,16 +145,17 @@ All resolved during plan drafting; no TBDs remain.
 
 ### Validation gate (every slice)
 
-```pwsh
-# Mechanical checks
-npm run build:css                                         # MUST exit 0
-git diff --exit-code docs/assets/tailwind.built.css       # MUST be clean (idempotent build)
-node docs/manual/maintain.mjs                             # MUST print "All checks passed — manual is in sync"
-node docs/manual/maintain.mjs                             # second run MUST be idempotent
+The per-slice `### Slice N:` sections in the **Execution Slices** section below each carry their own fenced `bash` Validation Gate that the orchestrator parses and runs. The shared shape is:
 
-# Drift checks (per slice — count must reach 0 after final migration slice)
-(Select-String -Path "docs\**\*.html" -Pattern "cdn\.tailwindcss\.com" -SimpleMatch).Count   # MUST equal 0 after S5
-(Select-String -Path "docs\**\*.html" -Pattern "tailwind\.config=" -SimpleMatch).Count       # MUST equal 0 after S5
+```bash
+# Mechanical idempotence + drift checks
+npm run build:css                                                # MUST exit 0
+git diff --exit-code docs/assets/tailwind.built.css              # MUST be clean after rebuild (idempotent)
+node docs/manual/maintain.mjs                                    # MUST print "All checks passed — manual is in sync"
+
+# Per-slice drift counts (concrete checks live in each slice's gate)
+grep -r -l 'cdn\.tailwindcss\.com' docs --include='*.html' | wc -l   # MUST equal 0 after S5
+grep -r -l 'tailwind\.config='     docs --include='*.html' | wc -l   # MUST equal 0 after S5
 ```
 
 ### Commit message convention
@@ -192,6 +193,212 @@ Slices are mostly sequential because S1 (Foundation) gates everything else, and 
 |---|---|---|---|---|
 | **S6** | **Drift guard in `maintain.mjs` + documentation** | New step in `docs/manual/maintain.mjs` that runs `npm run build:css` and `git diff --exit-code docs/assets/tailwind.built.css`, failing if drift is detected. Updates to `docs/RELEASE-CHECKLIST.md` (add "rebuild tailwind.built.css if any HTML class changed") and `CONTRIBUTING.md` (add "after editing HTML run `npm run build:css`"). Optional: a `.github/workflows/` check if the repo runs CI — confirm at harden time whether one exists. | This plan + maintain.mjs existing validator pattern | S5 |
 | **S7** | **Phase closure: cross-grep sweep + retro** | Run the drift-check greps from the Acceptance Criteria section across the whole tree. Confirm zero occurrences of `cdn.tailwindcss.com` and `tailwind.config=`. Write a 1-paragraph retro note appended to this plan as `## What actually shipped` covering: total HTML pages migrated, built CSS size, any class names that needed safelisting, and any visual regressions caught during migration. | Output of the full slice run | S1–S6 |
+
+---
+
+## Execution Slices
+
+> The sections below are the parser-compatible execution contracts (one `### Slice N:` header each, with a fenced `bash` Validation Gate). The orchestrator parses these into a DAG and runs them in order. The tables above remain as a human-facing overview.
+
+### Slice 1: Foundation — Tailwind config, first build, proof-of-concept page
+
+**Depends On:** —
+
+**Scope** (files in scope):
+- `tailwind.config.cjs` (new, repo root)
+- `docs/assets/tailwind.css` (new — three `@tailwind` directives)
+- `docs/assets/tailwind.built.css` (new, generated artifact, **committed**)
+- `package.json` (add `tailwindcss` to devDependencies; add `build:css` script)
+- `.gitattributes` (add `docs/assets/tailwind.built.css linguist-generated=true`)
+- `docs/manual/copilot-integration.html` (proof-of-concept page — remove CDN script + inline config, add stylesheet `<link>`)
+
+**Worker guidance**: install Tailwind v3 standalone, write the config per decisions #4–#7 in this plan, generate the built CSS, then migrate exactly one page. The CSS-relative path for `docs/manual/*.html` is `../assets/tailwind.built.css`.
+
+**Validation Gate**:
+
+```bash
+set -e
+test -f tailwind.config.cjs
+test -f docs/assets/tailwind.css
+test -f docs/assets/tailwind.built.css
+grep -q '"tailwindcss"' package.json
+grep -q '"build:css"' package.json
+grep -q 'tailwind.built.css' .gitattributes
+grep -q 'forge-500' docs/assets/tailwind.built.css
+test $(wc -c < docs/assets/tailwind.built.css) -le 204800
+if grep -q 'cdn\.tailwindcss\.com' docs/manual/copilot-integration.html; then echo "FAIL: PoC page still has CDN script"; exit 1; fi
+if grep -q 'tailwind\.config=' docs/manual/copilot-integration.html; then echo "FAIL: PoC page still has inline config"; exit 1; fi
+grep -q '../assets/tailwind.built.css' docs/manual/copilot-integration.html
+HASH1=$(sha256sum docs/assets/tailwind.built.css | cut -d' ' -f1)
+npm run build:css > /dev/null
+HASH2=$(sha256sum docs/assets/tailwind.built.css | cut -d' ' -f1)
+test "$HASH1" = "$HASH2" || (echo "FAIL: build not idempotent"; exit 1)
+node docs/manual/maintain.mjs
+```
+
+---
+
+### Slice 2: Migrate `docs/architecture/*.html`
+
+**Depends On:** Slice 1
+
+**Scope** (files in scope):
+- `docs/architecture/*.html` (smallest non-manual subtree — 1 file)
+- `docs/assets/tailwind.built.css` (rebuild if content scan picks up new classes)
+
+**Worker guidance**: for each HTML file in `docs/architecture/`, remove the two-line `<script src="https://cdn.tailwindcss.com">` + `<script>tailwind.config=...</script>` pair and insert `<link rel="stylesheet" href="../assets/tailwind.built.css">` in `<head>`. Rebuild and commit the built CSS in the same commit if it changed.
+
+**Validation Gate**:
+
+```bash
+set -e
+COUNT=$(grep -l 'cdn\.tailwindcss\.com' docs/architecture/*.html 2>/dev/null | wc -l)
+test "$COUNT" -eq 0 || (echo "FAIL: $COUNT architecture pages still load CDN"; exit 1)
+COUNT=$(grep -l 'tailwind\.config=' docs/architecture/*.html 2>/dev/null | wc -l)
+test "$COUNT" -eq 0 || (echo "FAIL: $COUNT architecture pages still have inline config"; exit 1)
+for f in docs/architecture/*.html; do grep -q 'tailwind.built.css' "$f" || (echo "FAIL: $f missing stylesheet link"; exit 1); done
+npm run build:css > /dev/null
+git diff --exit-code docs/assets/tailwind.built.css || (echo "FAIL: built CSS drift not committed"; exit 1)
+node docs/manual/maintain.mjs
+```
+
+---
+
+### Slice 3: Migrate `docs/*.html` (root)
+
+**Depends On:** Slice 1
+
+**Scope** (files in scope):
+- `docs/*.html` (root pages — index, 404, dashboard, capabilities, docs, extensions, examples, faq, problem, shop-tour, speckit-interop, and any others)
+- `docs/assets/tailwind.built.css` (rebuild)
+
+**Worker guidance**: relative path for root pages is `./assets/tailwind.built.css`. Do not touch any file under `docs/manual/`, `docs/blog/`, `docs/architecture/` in this slice.
+
+**Validation Gate**:
+
+```bash
+set -e
+COUNT=$(ls docs/*.html 2>/dev/null | xargs grep -l 'cdn\.tailwindcss\.com' 2>/dev/null | wc -l)
+test "$COUNT" -eq 0 || (echo "FAIL: $COUNT root pages still load CDN"; exit 1)
+COUNT=$(ls docs/*.html 2>/dev/null | xargs grep -l 'tailwind\.config=' 2>/dev/null | wc -l)
+test "$COUNT" -eq 0 || (echo "FAIL: $COUNT root pages still have inline config"; exit 1)
+for f in docs/*.html; do grep -q 'assets/tailwind.built.css' "$f" || (echo "FAIL: $f missing stylesheet link"; exit 1); done
+npm run build:css > /dev/null
+git diff --exit-code docs/assets/tailwind.built.css || (echo "FAIL: built CSS drift not committed"; exit 1)
+node docs/manual/maintain.mjs
+```
+
+---
+
+### Slice 4: Migrate `docs/blog/*.html`
+
+**Depends On:** Slice 1
+
+**Scope** (files in scope):
+- `docs/blog/*.html` (~10 files — all use the full forge palette)
+- `docs/assets/tailwind.built.css` (rebuild)
+
+**Worker guidance**: relative path is `../assets/tailwind.built.css`. Blog posts may contain code snippets showing the OLD pattern as documentation — leave those inside `<pre>`/`<code>` blocks untouched; the find/replace target is only the actual `<head>` script tags.
+
+**Validation Gate**:
+
+```bash
+set -e
+COUNT=$(grep -l 'cdn\.tailwindcss\.com' docs/blog/*.html 2>/dev/null | grep -v '\.bak$' | wc -l)
+# Allow occurrences inside fenced code samples; verify via head-only check on the first 60 lines per file
+for f in docs/blog/*.html; do
+  if head -n 60 "$f" | grep -q 'cdn\.tailwindcss\.com'; then echo "FAIL: $f still loads CDN in <head>"; exit 1; fi
+  if head -n 60 "$f" | grep -q 'tailwind\.config='; then echo "FAIL: $f still has inline config in <head>"; exit 1; fi
+  grep -q '../assets/tailwind.built.css' "$f" || (echo "FAIL: $f missing stylesheet link"; exit 1)
+done
+npm run build:css > /dev/null
+git diff --exit-code docs/assets/tailwind.built.css || (echo "FAIL: built CSS drift not committed"; exit 1)
+node docs/manual/maintain.mjs
+```
+
+---
+
+### Slice 5: Migrate `docs/manual/*.html` + any remaining subtrees
+
+**Depends On:** Slice 1, Slice 2, Slice 4
+
+**Scope** (files in scope):
+- `docs/manual/*.html` (~70 files — the largest cluster)
+- Any other HTML file under `docs/` not covered by S2–S4 (observability/, security/, walkthroughs/, demos/, integrations/, research/) — re-grep `docs/**/*.html` for `cdn.tailwindcss.com` at slice start and migrate every remaining hit
+- `docs/assets/tailwind.built.css` (rebuild)
+
+**Worker guidance**: this is a bulk mechanical edit. Use a scripted pass (sed/PowerShell oneliner) rather than 70 manual edits. The relative path depends on each file's directory depth. Verify one file in the editor before sweeping the rest. After the sweep, **the project must contain zero `cdn.tailwindcss.com` references in any `docs/**/*.html` file under any directory.**
+
+**Validation Gate**:
+
+```bash
+set -e
+TOTAL=$(grep -r -l 'cdn\.tailwindcss\.com' docs --include='*.html' 2>/dev/null | wc -l)
+test "$TOTAL" -eq 0 || (echo "FAIL: $TOTAL pages still load CDN across docs/"; exit 1)
+TOTAL=$(grep -r -l 'tailwind\.config=' docs --include='*.html' 2>/dev/null | wc -l)
+test "$TOTAL" -eq 0 || (echo "FAIL: $TOTAL pages still have inline config across docs/"; exit 1)
+LINKED=$(grep -r -l 'tailwind\.built\.css' docs --include='*.html' 2>/dev/null | wc -l)
+test "$LINKED" -ge 90 || (echo "FAIL: only $LINKED pages link the built stylesheet (expected ~95)"; exit 1)
+npm run build:css > /dev/null
+git diff --exit-code docs/assets/tailwind.built.css || (echo "FAIL: built CSS drift not committed"; exit 1)
+node docs/manual/maintain.mjs
+```
+
+---
+
+### Slice 6: Drift guard in `maintain.mjs` + contributor documentation
+
+**Depends On:** Slice 5
+
+**Scope** (files in scope):
+- `docs/manual/maintain.mjs` (add a step that runs `npm run build:css` and verifies `git diff --exit-code docs/assets/tailwind.built.css` is clean)
+- `docs/RELEASE-CHECKLIST.md` (add bullet: "rebuild `tailwind.built.css` if any HTML class changed")
+- `CONTRIBUTING.md` (add bullet under build steps: "after editing HTML run `npm run build:css`")
+
+**Worker guidance**: the drift step in `maintain.mjs` should fail loudly with an actionable message ("`tailwind.built.css` drift detected — run `npm run build:css` and commit"). Do not add a `postinstall` hook (forbidden by Scope Contract).
+
+**Validation Gate**:
+
+```bash
+set -e
+grep -q 'tailwind\.built\.css' docs/manual/maintain.mjs || (echo "FAIL: maintain.mjs missing tailwind drift check"; exit 1)
+grep -q 'build:css' docs/RELEASE-CHECKLIST.md || (echo "FAIL: RELEASE-CHECKLIST missing build:css mention"; exit 1)
+grep -q 'build:css' CONTRIBUTING.md || (echo "FAIL: CONTRIBUTING missing build:css mention"; exit 1)
+# Verify drift check actually triggers — corrupt the built CSS, expect maintain.mjs to fail, then restore
+cp docs/assets/tailwind.built.css /tmp/__tw_backup.css
+echo "/* drift */" >> docs/assets/tailwind.built.css
+if node docs/manual/maintain.mjs 2>/dev/null; then
+  cp /tmp/__tw_backup.css docs/assets/tailwind.built.css
+  echo "FAIL: maintain.mjs did not catch CSS drift"; exit 1
+fi
+cp /tmp/__tw_backup.css docs/assets/tailwind.built.css
+node docs/manual/maintain.mjs
+```
+
+---
+
+### Slice 7: Phase closure — cross-grep sweep + retro
+
+**Depends On:** Slice 6
+
+**Scope** (files in scope):
+- `docs/plans/Phase-TAILWIND-STATIC-BUILD-PLAN.md` (append a `## What actually shipped` retro section)
+
+**Worker guidance**: run the final grep sweep, summarize the migration (count of pages, built CSS size, any safelisted classes, any visual regressions caught), and append a `## What actually shipped` section to this plan. Mark all `Progress tracker` checkboxes complete.
+
+**Validation Gate**:
+
+```bash
+set -e
+TOTAL=$(grep -r -l 'cdn\.tailwindcss\.com' docs --include='*.html' 2>/dev/null | wc -l)
+test "$TOTAL" -eq 0 || (echo "FAIL: $TOTAL pages still load CDN"; exit 1)
+TOTAL=$(grep -r -l 'tailwind\.config=' docs --include='*.html' 2>/dev/null | wc -l)
+test "$TOTAL" -eq 0 || (echo "FAIL: $TOTAL pages still have inline config"; exit 1)
+grep -q '## What actually shipped' docs/plans/Phase-TAILWIND-STATIC-BUILD-PLAN.md || (echo "FAIL: retro section missing"; exit 1)
+npm run build:css > /dev/null
+git diff --exit-code docs/assets/tailwind.built.css
+node docs/manual/maintain.mjs
+```
 
 ---
 

@@ -29,6 +29,10 @@ Total: **16 slices**, each one chapter/appendix/section, each independently ship
 - New files under `docs/manual/`: chapters, appendices, SVG diagrams
 - Edits to `docs/manual/assets/manual.js` (CHAPTERS, SEARCH_SECTIONS, STATUS, MANUAL_COUNTS registries)
 - Edits to existing chapters when a slice explicitly adds a section or callout
+- **Cross-reference edits to earlier chapters/appendices/`index.html`** so the new chapter is
+  discoverable from the places a reader already passes through. Every slice is expected to touch
+  ≥1 earlier file with a backward link — see the cross-ref map in
+  [`docs/research/manual-ebook-completion-audit.md`](../research/manual-ebook-completion-audit.md#4a-editorial-convention-forward--backward-cross-references-on-every-slice) §4a
 - Edits to `docs/manual/index.html` Appendices/Front Matter grid when a new appendix is added
 - Re-runs of `node docs/manual/maintain.mjs` after every slice to propagate counts and regenerate `book-index.html` + `list-of-figures.html`
 
@@ -173,14 +177,16 @@ Slices are independent. Pick any one; finish it; commit; ship. No slice depends 
 3. **Re-read [`docs/manual/conventions.html`](../manual/conventions.html)** for typography + voice rules
 4. **Open a template chapter** that matches the slice's structure (e.g. `plan-forge-on-the-github-stack.html` for a reference appendix, `memory-architecture.html` for a narrative chapter with a single hero diagram, `liveguard-runbooks.html` for a runbook-style appendix)
 5. **Draft** the new file or section, following the HTML rules above
-6. **Register** the new file in `manual.js`:
+6. **Add forward cross-references** inside the new chapter to every other chapter/appendix that develops a topic the new chapter touches. Use the cross-ref map in [`docs/research/manual-ebook-completion-audit.md`](../research/manual-ebook-completion-audit.md#4a-editorial-convention-forward--backward-cross-references-on-every-slice) §4a as the **minimum** — add more if drafting surfaces them.
+7. **Add backward cross-references** by editing ≥1 earlier chapter/appendix/`index.html` so the new chapter is discoverable from the places a reader already passes through. The slice's commit message must enumerate these backward-edit files — a commit listing only the new chapter is presumptively incomplete.
+8. **Register** the new file in `manual.js`:
    - Add to `CHAPTERS` in the correct `act` group, in the correct position (numbered or appendix-letter slot)
    - Add ≥3 entries to `SEARCH_SECTIONS` covering the page's main H2 anchors
    - Add to `STATUS` registry if it's a new chapter/appendix: `{ label: "NEW", version: "v3.x" }`
-7. **Run `node docs/manual/maintain.mjs` twice** — both runs must end with `All checks passed — manual is in sync`. If the first run rewrites count tokens, the second run validates idempotence.
-8. **Commit** with the convention above. One slice = one commit.
-9. **Push** to `master`.
-10. **Mark the slice complete** in this file by adding `✅` next to the slice ID below.
+9. **Run `node docs/manual/maintain.mjs` twice** — both runs must end with `All checks passed — manual is in sync`. If the first run rewrites count tokens, the second run validates idempotence.
+10. **Commit** with the convention above. One slice = one commit.
+11. **Push** to `master`.
+12. **Mark the slice complete** in this file by adding `✅` next to the slice ID below.
 
 ---
 

@@ -397,6 +397,67 @@ Each slice is **one commit**. The manual's `maintain.mjs` validator is the gate 
 
 ---
 
+## 4a · Editorial convention: forward + backward cross-references on every slice
+
+A reader-grade ebook reads like an interconnected work, not a stack of standalone chapters. A
+good textbook chapter says *“we'll cover this in detail in Chapter 6”* when it touches a topic
+developed elsewhere, and a later chapter says *“as introduced in the Foreword”* when it picks
+up that thread. The Plan Forge manual mostly fails this test today — chapters are well-written
+but self-contained, and a reader pulling at one thread doesn't always discover the next chapter
+where it continues.
+
+**The hard rule for every slice in this phase**: a slice is not done when the new file builds
+and `maintain.mjs` is green. It is done when **both** of the following are true:
+
+1. **The new chapter contains forward cross-refs** to every other chapter or appendix that
+   develops a topic the new chapter introduces. Format: a one-sentence note inline, with the
+   destination as a markdown link, ideally to a named anchor. Example phrasing:
+   > *“The four-lever cost argument is summarised here; §§3–4 of the
+   > [Cost & Economics chapter](cost-economics.html#four-levers) develop it in full.”*
+2. **At least one earlier chapter or appendix gains a backward cross-ref** pointing to the new
+   chapter, so a reader who already passed through the earlier chapter can find the new one.
+   This is the step slice-by-slice execution most often skips. The slice's commit message must
+   explicitly list the backward-edit files.
+
+The cross-ref map below names the expected forward and backward edits for each slice in flight.
+It is not exhaustive (a slice may discover more during drafting) but it is the **minimum**.
+
+| Slice | Must forward-link to… | Must backward-link from… |
+|---|---|---|
+| **A1 — Foreword** | A2 ladders · A7 Stakeholder Briefing · What-is-PF · C2 Cost & Economics · [`memory-system.html`](../manual/memory-system.html) · App H stack alignment | `index.html` (add “Start with the Foreword” above the fold) · `conventions.html` edition-history (Foreword shipped this edition) |
+| **A2 — Reader-Journey Ladders** | Per-persona deep-dive chapters that each ladder rung lands on | A1 Foreword (final paragraph: “next, pick your ladder”) · `index.html` reader-paths card |
+| **A3 — Vignettes (App R)** | The blog post each vignette is absorbed from (preserve attribution) · C2 Cost & Economics (vignette #2 = quorum economics) | A1 Foreword (“see Appendix R for three worked examples”) · `quickstart.html` (“then read Appendix R for context”) |
+| **A4 — How-Do-I index (App S)** | Every chapter App S routes a task into | `index.html` nav · `troubleshooting.html` (“if you're trying to **do** X, see App S”) |
+| **A5 — What's-new banner** | `project-history.html#v3-6-openbrain-l3` · `conventions.html#edition-history` | (no backward refs — it's a homepage banner, not a chapter) |
+| **A6 — Above-the-fold positioning** | App H stack alignment · App I surface-by-surface · What-is-PF “is / is not” table | `README.md`, `index.html`, `what-is-plan-forge.html` (those *are* the surfaces being edited; A6's commit must touch all three to count) |
+| **A7 — Stakeholder Briefing** | A1 Foreword · What-is-PF · App H · C2 Cost & Economics · [`memory-system.html`](../manual/memory-system.html) · the `/stakeholder-briefing` skill doc (“Tailor with the skill”) | A1 Foreword (“if you only have ten minutes, read the Stakeholder Briefing”) · `index.html` Front Matter grid · A2 Reader-Journey Ladders (“Team-lead ladder → Stakeholder Briefing first”) |
+| **B1–B7 — Reference appendices** | The chapter that first introduces the topic (e.g. B1 `.forge.json` → Customization Ch 9) | The chapter that first introduces the topic (the *first introduction* gains a “full schema in App T” link); plus `unified-api-surface.html` index | 
+| **C1 — Security & Threat Model** | App N Compliance & Data Residency · B2 env-vars (secrets) · B4 event catalog (audit stream) · `extensions/catalog.json` story | App N (forward link “threat-model side in Ch 20a”) · `liveguard-runbooks.html` |
+| **C2 — Cost & Economics** | A3 vignette #2 · B1 `.forge.json#costEstimator` · [`memory-system.html#cheaper-models`](../manual/memory-system.html#cheaper-models) · `quorum-mode-*` blog posts | Every chapter that mentions cost today (8+ chapters) gains a “see C2 for the full economics” footnote |
+| **C3 — Plan Pattern Library (App Y)** | The chapter that teaches plan authoring | The plan-authoring chapter · `quickstart.html` (“start from a pattern in App Y”) |
+| **C4 — Failure-Mode Catalog (App Z)** | B7 Errors & Exit Codes · `troubleshooting.html` (each symptom row links to its subsystem in App Z) | `troubleshooting.html` (App Z is the subsystem-organised companion) |
+
+**How to enforce.** Three lightweight checks, in order of cost:
+
+1. **Slice commit message must enumerate backward-edit files.** A slice commit that lists only
+   the new chapter and not the older chapters it edited is presumptively incomplete — reject
+   or amend before push.
+2. **`maintain.mjs` should grow a link-validity check** (Tier 3 follow-up, not blocking this
+   phase). Today it validates count tokens and registry consistency; extend it to assert every
+   `../manual/*.html#anchor` reference resolves. Cheap to add, catches link rot from
+   chapter-anchor renames during future edits.
+3. **A periodic “cross-ref audit” slice** (e.g. quarterly) re-reads the manual end-to-end
+   looking for orphaned chapters (no inbound links) and dead-end chapters (no outbound links).
+   Not in this phase — records as a future maintenance ritual under §3 Tier 3.
+
+**Why this matters disproportionately for A7.** The Stakeholder Briefing is designed to be read
+first and to drive the reader into the deeper chapters. Every section of the briefing ends
+with a “Read more →” link — those links *are* the briefing's value proposition. A Stakeholder
+Briefing that doesn't cross-reference is a self-contained marketing page, which is the failure
+mode the design is trying to avoid.
+
+---
+
 ## 5 · Open questions for the maintainer
 
 These weren't resolved in the audit chat and want a thumbs-up before slice execution starts:

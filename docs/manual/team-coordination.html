@@ -35,15 +35,15 @@
 
         <div class="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">Chapter 27 · Act V — Integrate</div>
         <h1>Team Coordination</h1>
-        <p class="text-lg text-slate-400 mb-8">Plan Forge began as a single-developer flow. v3.x extended it into a team-aware workshop — without forcing a SaaS backend, a shared database, or a new identity system. Everything runs on a flat append-only ledger and the GitHub API.</p>
+        <p class="text-lg text-slate-400 mb-8">Two developers running Plan Forge on the same repo at the same time hit three predictable problems: concurrent edits collide at merge time, hard-won fixes stay trapped in one developer's local <code>.forge/</code>, and a productive day turns every reviewer into a bottleneck. This chapter shows how Plan Forge solves all three with a single shared file and a few GitHub API calls — no SaaS backend, no shared database, no new identity system.</p>
 
         <div class="callout callout-info">
-          <strong>Added in v2.93 → v3.4.</strong> Five surfaces compose the team layer: <code>forge_team_dashboard</code> + <code>forge_team_activity</code> (per-developer visibility), <code>forge_github_metrics</code> + <code>forge_github_status</code> (PR throughput + validation stack), <code>forge_delegate_review</code> (dispatching review to Copilot's cloud agent), and <code>forge_classifier_issue</code> (closing the tempering audit loop by filing a GitHub issue when a classifier rule needs to land).
+          <strong>How it's built (v2.93 → v3.4).</strong> Five surfaces compose the team layer: <code>forge_team_dashboard</code> + <code>forge_team_activity</code> (per-developer visibility), <code>forge_github_metrics</code> + <code>forge_github_status</code> (PR throughput + validation stack), <code>forge_delegate_review</code> (dispatching review to Copilot's cloud agent), and <code>forge_classifier_issue</code> (closing the tempering audit loop by filing a GitHub issue when a classifier rule needs to land).
         </div>
 
         <!-- ─── Why team coordination ─── -->
         <h2 id="why">The "shared shop" problem</h2>
-        <p>Two developers on the same repo running Plan Forge simultaneously face three coordination problems:</p>
+        <p>The three coordination problems in detail:</p>
         <ol>
           <li><strong>Concurrent edits</strong>. Both might pick the same plan, or pick plans whose Scope Contracts touch the same files. Without visibility, you discover the conflict at merge time.</li>
           <li><strong>Lost institutional memory</strong>. Alice solves a tricky gate-portability issue on Monday. Bob hits the same issue on Wednesday because Alice's trajectory lives in her local <code>.forge/</code>.</li>

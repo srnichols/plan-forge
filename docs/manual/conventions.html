@@ -82,6 +82,31 @@
           </div>
         </div>
 
+        <!-- ─── Hero images & supporting figures ─── -->
+        <h2 id="hero-policy">Hero images and supporting figures</h2>
+        <p>Each <strong>numbered</strong> chapter opens with a hero image and may carry inline <strong>figures</strong> (SVG diagrams or photographs) inside the body. The conventions are deliberately uneven by chapter type:</p>
+
+        <table class="manual-table">
+          <thead>
+            <tr>
+              <th style="width: 14rem">Page type</th>
+              <th>Hero image</th>
+              <th>Inline figures</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr><td>Numbered chapter (1, 2, &hellip; 29)</td><td>Yes &mdash; <code>assets/chapter-heroes/chN-hero.jpg</code>, 1024&times;768, generated.</td><td>Yes &mdash; numbered <code>Figure&nbsp;N&#8209;K</code> via <code>maintain.mjs</code>.</td></tr>
+            <tr><td>Quickstart step (Q1, Q2, Q3)</td><td>Yes &mdash; same convention.</td><td>Optional.</td></tr>
+            <tr><td>Unnumbered sub-chapter (Dashboard &mdash; Settings, MCP Reference, deep dives)</td><td><strong>No.</strong> Sub-chapters inherit visual weight from their parent.</td><td>Yes &mdash; un-numbered figures, still wrapped in <code>&lt;figure class="manual-figure"&gt;</code>.</td></tr>
+            <tr><td>Reference appendix (Glossary, Quick Reference, Book Index, List of Figures, API Surface Index)</td><td><strong>No.</strong> Reference pages favour density over decoration.</td><td>Rare &mdash; only when a diagram clarifies the reference.</td></tr>
+            <tr><td>Narrative appendix (Sample Project, Enterprise, Lessons Learned, History, About the Author)</td><td>Yes &mdash; same convention as numbered chapters.</td><td>Yes.</td></tr>
+          </tbody>
+        </table>
+
+        <div class="callout callout-info">
+          <strong>Why the unevenness?</strong> Heroes carry mood, not information. They reward the reader at the top of a long teaching chapter; they would clutter a 7-table reference card or an unnumbered "for the curious" deep dive. The rule is intentional and enforced by editorial judgment, not by <code>maintain.mjs</code>.
+        </div>
+
         <!-- ─── Callouts ─── -->
         <h2 id="callouts">Callouts</h2>
         <p>Three flavors of inline aside, each colored for instant recognition. They never carry information that isn't <em>also</em> in the surrounding prose &mdash; safe to skip on a first pass, useful on a second.</p>

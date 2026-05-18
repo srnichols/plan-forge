@@ -91,6 +91,10 @@ forge_watch_live {
         </ul>
         <p>Anomalies are emitted as <code>watch-anomaly-detected</code> hub events and appear in the dashboard's Watcher tab.</p>
 
+        <div class="callout callout-tip">
+          <strong>Distributed teams or remote runs?</strong> The Watcher only observes what's on the same machine. To watch a forge running on another host &mdash; or to forward anomalies to phones, Slack, or Discord &mdash; pair it with the companion <a href="remote-bridge.html">Chapter 20 &mdash; The Remote Bridge</a>.
+        </div>
+
         <h2 id="history">Watch History</h2>
         <p>When <code>recordHistory=true</code> (the default in v2.35+), each snapshot is appended to the Watcher session's own <code>.forge/watch-history.jsonl</code> — never the target's. Pair with <code>sinceTimestamp</code> (pass the previous report's <code>cursor</code>) for gap-free continuous monitoring across multiple invocations.</p>
 

@@ -360,6 +360,41 @@ button.sidebar-act-toggle.expanded .sidebar-act-chevron { transform: rotate(90de
   letter-spacing: 0.02em;
 }
 
+/* ─── Inline version badge ───
+   Use inside an <h2>/<h3>/<td> next to a feature name to mark the version
+   that introduced or last reworked it. Single semantic class — no inline
+   styles, no off-palette hex codes. Two tones for narrative weight:
+     .version-badge          — neutral slate (the default; reach for this first)
+     .version-badge--accent  — amber (use sparingly when the version is the point)
+   Example: <h2>Watcher Tab <span class="version-badge">v2.35</span></h2>
+*/
+.version-badge {
+  display: inline-block;
+  margin-left: 0.4rem;
+  padding: 0 0.4rem;
+  font-family: 'JetBrains Mono', ui-monospace, monospace;
+  font-size: 0.6em;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  vertical-align: middle;
+  color: #94a3b8;                            /* slate-400 — neutral */
+  background: rgba(148, 163, 184, 0.08);
+  border: 1px solid rgba(148, 163, 184, 0.18);
+  border-radius: 0.25rem;
+  white-space: nowrap;
+}
+.version-badge--accent {
+  color: #f59e0b;                            /* forge-400 — accent */
+  background: rgba(245, 158, 11, 0.08);
+  border-color: rgba(245, 158, 11, 0.25);
+}
+/* Compact version badge for inside table cells (smaller, no left margin) */
+td .version-badge,
+td .version-badge--accent {
+  margin-left: 0.3rem;
+  font-size: 0.72em;
+}
+
 /* Compact cmd-block (less bottom margin) */
 .cmd-block-compact { margin-bottom: 0.5rem; }
 

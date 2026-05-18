@@ -143,10 +143,15 @@ describe("forge_smith L3 OpenBrain status row (Phase-OPENBRAIN-PROMOTION Slice 3
   });
 
   it("server.mjs Memory section includes the L3 OpenBrain status line", () => {
+    // Note: server.mjs uses \u2713 / \u26A0 escape sequences in the source,
+    // so readFileSync returns the six-byte ASCII escape, not the rendered glyph.
+    // Match the ASCII-safe portion of each line plus the literal escape strings.
     const serverSrc = readFileSync(resolve(__dirname, "..", "server.mjs"), "utf-8");
     expect(serverSrc).toContain("L3 OpenBrain:");
-    expect(serverSrc).toContain("\u2713 configured (Reflexion + Federation active)");
-    expect(serverSrc).toContain("\u26A0 not configured");
+    expect(serverSrc).toContain("configured (Reflexion + Federation active)");
+    expect(serverSrc).toContain("not configured");
+    expect(serverSrc).toContain("\\u2713");
+    expect(serverSrc).toContain("\\u26A0");
   });
 
   it("server.mjs references pforge brain hint in the not-configured row", () => {

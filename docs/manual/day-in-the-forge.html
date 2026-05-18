@@ -1,0 +1,280 @@
+<!DOCTYPE html>
+<html lang="en" class="scroll-smooth">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Appendix R: A Day in the Forge &mdash; Three Vignettes from Real Pipelines — Plan Forge Manual</title>
+  <meta name="description" content="Three worked case studies showing Plan Forge at work on real pipelines: the closed-loop audit of a Next.js production site (The Loop That Never Ends), the .NET 99-vs-44 A/B test against vibe coding, and the three-model quorum run that paid $0.22 for measurably better software." />
+  <meta property="og:title" content="Appendix R — A Day in the Forge: Three Vignettes from Real Pipelines" />
+  <meta property="og:description" content="Three case studies from the field: a closed-loop production audit, a head-to-head A/B test against vibe coding, and quorum mode in practice." />
+  <meta property="og:type" content="article" />
+  <link rel="canonical" href="https://planforge.software/manual/day-in-the-forge.html" />
+  <link rel="icon" type="image/svg+xml" href="../assets/plan-forge-logo.svg" />
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>tailwind.config={theme:{extend:{colors:{forge:{400:'#f59e0b',500:'#d97706'}}}}}</script>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;600;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="../assets/shared.css" />
+  <link rel="stylesheet" href="assets/manual.css" />
+</head>
+<body class="bg-slate-950 text-slate-300 min-h-screen">
+
+  <button id="mobile-sidebar-btn" class="mobile-sidebar-btn fixed top-4 left-4 z-[101] lg:hidden p-2 bg-slate-900 border border-slate-700 rounded-lg text-slate-400 hover:text-slate-100 transition-colors" aria-label="Open navigation">
+    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"/></svg>
+  </button>
+  <div id="sidebar-overlay" class="sidebar-overlay"></div>
+
+  <div class="manual-layout">
+    <aside id="manual-sidebar" class="manual-sidebar"><nav id="sidebar-nav"></nav></aside>
+
+    <main>
+      <div class="chapter-content">
+
+        <div class="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">Appendix R</div>
+        <h1>A Day in the Forge &mdash; Three Vignettes from Real Pipelines</h1>
+        <p class="text-lg text-slate-400 mb-8">Three short case studies from production runs, each absorbed from a contemporary blog post and condensed to the parts that survive when the version numbers change. The vignettes are arranged from the largest reframe (Vignette 1 &mdash; the loop that never ends) to the most quantitative receipt (Vignette 2 &mdash; the 99-vs-44 A/B test) to the most operational pattern (Vignette 3 &mdash; the three-model quorum run).</p>
+
+        <div class="rounded-xl border border-slate-700/50 bg-slate-900/40 p-5 mb-10">
+          <p class="text-sm text-slate-400 mb-2"><strong class="text-slate-200">Audience:</strong> Readers who want concrete worked examples before committing to the chapters. Especially useful for stakeholders evaluating Plan Forge for adoption.</p>
+          <p class="text-sm text-slate-400 mb-0"><strong class="text-slate-200">How to use:</strong> Read in order, or skip to the vignette closest to your situation. Each one ends with a "Where to read more" pointer into the canonical chapter that owns the topic and a citation to the original blog post for the first-person account.</p>
+        </div>
+
+        <h2 id="orientation">The three vignettes at a glance</h2>
+
+        <div class="overflow-x-auto mb-6">
+          <table class="manual-table">
+            <thead><tr><th style="width: 14rem">Vignette</th><th>What it shows</th><th style="width: 9rem">Source post</th></tr></thead>
+            <tbody>
+              <tr>
+                <td><a href="#vignette-1"><strong>1. The Loop That Never Ends</strong></a></td>
+                <td>The full closed-loop audit of a real production Next.js site: a Node discovery crawler emitting structured JSON, a three-lane triage filter, the Crucible eating the bug lane, Tempering re-auditing with the same harness that discovered, and the bug registry auto-smelting regressions back into the next pass &mdash; running unattended.</td>
+                <td><a href="../blog/the-loop-that-never-ends.html">blog post</a></td>
+              </tr>
+              <tr>
+                <td><a href="#vignette-2"><strong>2. The .NET A/B Test &mdash; 99 vs 44</strong></a></td>
+                <td>The same .NET 10 WebAPI built twice from an identical skeleton on the same machine, same afternoon, same Claude Opus 4.6 model. One run with Plan Forge guardrails, one with pure vibe coding. <strong>99 vs 44</strong> on structural quality (4.6&times; more tests, 6 vs 0 interfaces, 9 vs 0 DTOs) &mdash; in <em>less</em> wall-clock time.</td>
+                <td><a href="../blog/ab-test-plan-forge-vs-vibe-coding.html">blog post</a></td>
+              </tr>
+              <tr>
+                <td><a href="#vignette-3"><strong>3. Quorum Mode in Practice</strong></a></td>
+                <td>The same C# invoicing slice executed twice from one hardened plan: once with the default single-model worker, once with a three-model quorum. Both passed every gate and the independent reviewer. The quorum run cost <strong>&dollar;0.22 more</strong>, produced <strong>+20&percnt; tests</strong>, extracted DRY helpers the single run inlined, used relative test dates that survive the calendar, and emitted modern .NET 7+ exception patterns.</td>
+                <td><a href="../blog/quorum-mode-3-models.html">blog post</a></td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <p class="text-sm text-slate-500 italic">All three vignettes preserve the pseudonyms used in the original blog posts. "TheProject" in Vignette 1 is a real production Next.js site the maintainer operates; the owner did not clear the real name for publication. Every metric is from the actual run.</p>
+
+        <!-- ============================================================ -->
+        <!-- ─── Vignette 1: The Loop That Never Ends ─── -->
+        <!-- ============================================================ -->
+        <h2 id="vignette-1">Vignette 1 &mdash; The Loop That Never Ends</h2>
+        <p class="text-sm text-slate-500 mb-4"><strong>Source:</strong> <a href="../blog/the-loop-that-never-ends.html">"The Loop That Never Ends"</a> &middot; <strong>Subject:</strong> TheProject (production Next.js site) &middot; <strong>What it demonstrates:</strong> the closed-loop architecture from Discovery to Tempering, running without a human in the loop after the first pass.</p>
+
+        <h3 id="v1-setup">The setup</h3>
+        <p>TheProject is a production Next.js site &mdash; marketing pages, a product catalog, a handful of interactive demos. Like most sites that grow organically, it had accumulated the usual rot: placeholder copy that never got replaced, stale <code>/docs</code> routes, console errors nobody noticed, <code>href="#"</code> waiting to be wired up. The maintainer had two options. Sit down with a checklist and grind through it; or wire the rot into Plan Forge's closed loop and let the loop close on itself.</p>
+
+        <h3 id="v1-loop">The loop, drawn honestly</h3>
+        <p>Plan Forge's seven-step pipeline reads as a straight line in the diagrams, but the production shape is circular. Four passes, with back-edges that matter as much as the forward ones:</p>
+
+        <ul>
+          <li><strong>Pass 1 &mdash; Discovery harness.</strong> A reusable Node crawler (~200 lines, one file) walks the site and emits structured JSON: route, placeholders found, broken hrefs, console errors, redirect chains. Boring JSON. But it is <em>structured</em> boring JSON &mdash; the only kind the Crucible can turn into smelts.</li>
+          <li><strong>Pass 2 &mdash; the Crucible eats the JSON.</strong> A 30-line wrapper reads <code>.forge/audits/dev-&lt;ts&gt;.json</code>, groups findings by route and severity, and for each group calls <code>forge_crucible_submit</code> with a title, the raw evidence, and a priority derived from the severity bucket. The Crucible runs its usual interview, the hardener emits a <code>Phase-NN</code> plan with a Scope Contract.</li>
+          <li><strong>Pass 3 &mdash; execute and Temper.</strong> Nothing exotic; the same <code>pforge run-plan</code> the project uses on itself. The interesting part is what happens after the last slice commits: <strong>Tempering re-runs the discovery harness against the newly-deployed preview URL</strong>. If the same JSON query that found the problem now returns empty, Tempering reports green. If not, the failures get written to the bug registry.</li>
+          <li><strong>Pass 4 &mdash; the loop closes.</strong> The bug registry auto-smelts. No human triage. The same pipeline that wrote the fix now catches the fix's own regressions. After Pass 1, the loop runs without the maintainer.</li>
+        </ul>
+
+        <div class="callout callout-info">
+          <strong>The key insight:</strong> the back-edges are the point. Discovery finds problems and funnels them into the Crucible. Tempering catches regressions and writes them to the bug registry, which auto-smelts them back into Discovery's next pass. The pipeline does not hit a "done" state &mdash; it hits a <em>quiet</em> state. The next deploy starts the loop again.
+        </div>
+
+        <h3 id="v1-mistake">The mistake that almost sank the loop</h3>
+        <p>The first version of the Crucible wrapper routed <em>every</em> finding through the Crucible. Console errors, 404s, auth redirects, placeholder regex hits &mdash; all of it became a proposed smelt for the Crucible to interview. The interview queue grew to 60+ items and half were noise the Crucible had no business thinking about.</p>
+
+        <p>The fix was a three-lane triage <em>before</em> the Crucible ever saw a finding:</p>
+
+        <div class="overflow-x-auto mb-6">
+          <table class="manual-table">
+            <thead><tr><th>Lane</th><th>What goes here</th><th>What happens</th></tr></thead>
+            <tbody>
+              <tr>
+                <td><strong>Bug lane</strong></td>
+                <td>Findings with evidence and scope: broken links, console errors, missing assets.</td>
+                <td>Skip the Crucible entirely. These are not ideas &mdash; they are bugs. Route to the bug registry; let auto-smelt fix them in a single pass.</td>
+              </tr>
+              <tr>
+                <td><strong>Crucible lane</strong></td>
+                <td>Scope-ambiguous feature work the audit revealed: empty CTAs, "Coming soon" sections, half-built flows.</td>
+                <td>Submit to the Crucible. The Crucible interviews for scope, the hardener emits the plan, the Forge executes.</td>
+              </tr>
+              <tr>
+                <td><strong>Noise lane</strong></td>
+                <td>Auth-redirect 307s, 404s on test-data routes, false-positive regex hits.</td>
+                <td>Filter at the harness. Never reach the Crucible. Tune signal-to-noise at the source &mdash; a discovery harness that cries wolf on auth redirects teaches the Crucible to ignore it.</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <p>The bug lane runs first &mdash; fix the known defects, watch Tempering validate them, prove the mechanics end-to-end &mdash; then the feature lane opens. If Round 1's bug lane fails, auto-smelt re-ingests and retries without the human. The loop eats its own mistakes before it ever touches the feature backlog. That ordering is what makes the feature lane safe to run unattended.</p>
+
+        <h3 id="v1-outcome">The outcome</h3>
+        <p>Over two weeks, with no manual TODO list and no human in the loop after the initial wrapper, the system found <strong>23 placeholders the maintainer did not know existed, 7 broken links from a migration the previous month, and a console error in the checkout flow that had been silently firing for weeks</strong>. The loop is still finding things &mdash; slower now, but steady.</p>
+
+        <h3 id="v1-takeaway">What makes the loop work</h3>
+        <p>Four conditions, in order of how long they took to learn:</p>
+
+        <ol>
+          <li><strong>Structured evidence, not prose.</strong> The Crucible cannot smelt <em>"the pricing page looks weird."</em> It can smelt <code>{"route": "/pricing", "placeholders": ["Coming soon", "TODO: price tiers"], "broken_hrefs": ["#"]}</code>. The discovery harness exists to turn the first into the second.</li>
+          <li><strong>Triage before the Crucible, not after.</strong> Three lanes (bug / Crucible / noise) at the wrapper, not inside the Crucible interview. This is the insight that took longest to learn.</li>
+          <li><strong>Tempering must re-audit with the same tool that discovered.</strong> If discovery uses regex and Tempering uses eyeballs, the loop leaks. If both use the same harness, a fix is only <em>done</em> when the same JSON query that found it now returns empty.</li>
+          <li><strong>Auto-smelt is opt-in but default-on.</strong> Turn it off per-project and the loop degrades into a pipeline &mdash; and pipelines end. The whole point is that this one does not.</li>
+        </ol>
+
+        <div class="callout callout-success">
+          <strong>Where to read more &rarr;</strong> <a href="how-it-works.html">Chapter 2 &mdash; How It Works</a> for the seven-step pipeline in detail; <a href="crucible.html">Chapter 5 &mdash; Crucible (Idea Smelting)</a> for the interview model; <a href="memory-system.html">Chapter 22 &mdash; How the Shop Remembers</a> for the bug registry and auto-smelt machinery.
+        </div>
+
+        <!-- ============================================================ -->
+        <!-- ─── Vignette 2: The .NET A/B Test ─── -->
+        <!-- ============================================================ -->
+        <h2 id="vignette-2">Vignette 2 &mdash; The .NET A/B Test (99 vs 44)</h2>
+        <p class="text-sm text-slate-500 mb-4"><strong>Source:</strong> <a href="../blog/ab-test-plan-forge-vs-vibe-coding.html">"The A/B Test: 99 vs 44 &mdash; Same App, Same Model, Same Time"</a> &middot; <strong>Subject:</strong> a .NET 10 WebAPI built twice &middot; <strong>What it demonstrates:</strong> the structural-quality gap between Plan Forge and vibe coding when every other variable is held constant.</p>
+
+        <h3 id="v2-setup">The setup</h3>
+        <p>Both projects started from an identical .NET 10 WebAPI skeleton &mdash; the same git commit, the same empty solution. The requirements were identical: Clients CRUD &rarr; Projects CRUD &rarr; Invoice Engine with rate tiers, volume discounts, tax calculation, and banker's rounding. Both runs used <strong>Claude Opus 4.6</strong>. Same machine, same afternoon. The only variable was whether the AI had guardrails.</p>
+
+        <ul>
+          <li><strong>Run A:</strong> Plan Forge v2.22.1 installed &mdash; guardrails, Temper Guards, instruction files, the full pipeline.</li>
+          <li><strong>Run B:</strong> a blank project and a prompt. Pure vibe coding.</li>
+        </ul>
+
+        <h3 id="v2-numbers">The numbers</h3>
+
+        <figure class="manual-figure my-6" id="fig-R-1">
+          <img src="assets/diagrams/evidence-ab-test-bars.svg" alt="Head-to-head bar chart comparing Plan Forge against vibe coding across six structural quality metrics from the April 2026 .NET A/B test. Plan Forge: 60 tests, 6 interfaces, 9 DTOs, 4 typed exceptions, 79 CancellationToken references, 99 quality score. Vibe coding: 13 tests, 0 interfaces, 0 DTOs, 0 typed exceptions, 0 CancellationToken references, 44 quality score." class="diagram-img diagram-img-md" />
+          <figcaption class="manual-figcaption"><!--fignum--><span class="manual-fignum">Figure R-1.</span><!--/fignum--> The structural-quality gap visualised: same model, same time, different software shape.</figcaption>
+        </figure>
+
+        <div class="overflow-x-auto mb-6">
+          <table class="manual-table">
+            <thead><tr><th>Metric</th><th>Plan Forge (A)</th><th>Vibe coding (B)</th><th>Delta</th></tr></thead>
+            <tbody>
+              <tr><td>Duration</td><td>~7 min</td><td>~8 min</td><td>guardrails did not add overhead</td></tr>
+              <tr><td>Tests</td><td><strong>60</strong></td><td>13</td><td><strong>4.6&times; more</strong></td></tr>
+              <tr><td>Interfaces</td><td><strong>6</strong></td><td>0</td><td>vibe = 0</td></tr>
+              <tr><td>DTOs</td><td><strong>9</strong></td><td>0</td><td>vibe = 0</td></tr>
+              <tr><td>Typed exceptions</td><td><strong>4</strong></td><td>0</td><td>vibe = 0</td></tr>
+              <tr><td>Error middleware</td><td><strong>ProblemDetails (RFC 7807)</strong></td><td>none</td><td>vibe had no error contract</td></tr>
+              <tr><td>Banker's rounding</td><td><strong>5 usages</strong></td><td>0</td><td>requirement silently dropped by vibe</td></tr>
+              <tr><td>CancellationToken</td><td><strong>79 refs</strong></td><td>0</td><td>vibe = 0</td></tr>
+              <tr><td>.gitignore</td><td>present</td><td>missing</td><td>vibe committed <code>bin/</code> and <code>obj/</code></td></tr>
+              <tr><td><strong>Quality score (/100)</strong></td><td><strong>99</strong></td><td>44</td><td><strong>2.25&times; higher</strong></td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <h3 id="v2-what-mattered">What mattered &mdash; the software <em>shape</em>, not the line count</h3>
+        <p>The Plan Forge run did not just produce more code &mdash; it produced the <em>right</em> code:</p>
+
+        <ul>
+          <li><strong>3-layer architecture</strong> (Controller &rarr; Service &rarr; Repository), not a flat 2-layer structure where controllers called EF Core directly.</li>
+          <li><strong>Interfaces for every service and repository.</strong> Dependency injection works, mocking works, testing works.</li>
+          <li><strong>DTOs at the API boundary.</strong> Mass-assignment protection, clean contracts, no entity leakage.</li>
+          <li><strong>Four typed exceptions</strong> (<code>NotFoundException</code>, <code>DuplicateException</code>, <code>ValidationException</code>, <code>BusinessRuleException</code>) mapped via ProblemDetails (RFC 7807) to proper HTTP status codes.</li>
+          <li><strong>Banker's rounding</strong> (<code>MidpointRounding.ToEven</code>) on every financial calculation &mdash; the requirement that was explicitly stated but silently dropped by the vibe run.</li>
+          <li><strong>CancellationToken</strong> on every async method &mdash; 79 references &mdash; enabling graceful shutdown and request cancellation.</li>
+        </ul>
+
+        <p>The vibe-coded version <em>works</em>. You can start it, call the endpoints, and get responses. It also has structural problems that block production deployment: 12 build errors on first attempt (the model removed the EF Core decimal precision configuration to make the build pass &mdash; silently violating the banker's rounding requirement), no interfaces (controllers cannot be unit-tested), entities exposed directly as API responses (change a column, break the API contract), and 111 build-output files committed to the initial git commit because no <code>.gitignore</code> was generated.</p>
+
+        <h3 id="v2-surprise">The surprise &mdash; time was the same</h3>
+        <p>The conventional wisdom is that structure slows you down. More rules, more process, more overhead. Skip the architecture, skip the tests, ship faster. The numbers tell a different story: <strong>Plan Forge produced 4.6&times; more tests and a 2.25&times; higher quality score in less wall-clock time</strong> (7 vs 8 minutes). The guardrails did not add overhead. They prevented the rework loop. The vibe run spent its extra minute fighting the EF Core build errors and applying a fix that sacrificed a requirement.</p>
+
+        <blockquote class="border-l-4 border-amber-500/40 pl-4 text-slate-300 italic mb-4">
+          Guardrails do not slow you down. Rework slows you down. Guardrails prevent rework.
+        </blockquote>
+
+        <div class="callout callout-success">
+          <strong>Where to read more &rarr;</strong> <a href="what-is-plan-forge.html#evidence">Chapter 1 &mdash; What Is Plan Forge?</a> for the canonical evidence table; <a href="writing-plans.html">Chapter 4 &mdash; Writing Plans That Work</a> for the guardrails that produced the structural quality; <a href="../blog/ab-test-plan-forge-vs-vibe-coding.html">the original A/B-test blog post</a> for the full per-metric narrative.
+        </div>
+
+        <!-- ============================================================ -->
+        <!-- ─── Vignette 3: Quorum Mode in Practice ─── -->
+        <!-- ============================================================ -->
+        <h2 id="vignette-3">Vignette 3 &mdash; Quorum Mode in Practice</h2>
+        <p class="text-sm text-slate-500 mb-4"><strong>Source:</strong> <a href="../blog/quorum-mode-3-models.html">"Quorum Mode: What Happens When 3 AI Models Review Each Other's Code"</a> &middot; <strong>Subject:</strong> the same C# invoicing slice, executed twice &middot; <strong>What it demonstrates:</strong> the synthesis effect &mdash; when three models propose, the reviewer picks the cleanest approach, and quality compounds for cents on the dollar.</p>
+
+        <h3 id="v3-setup">The setup</h3>
+        <p>One feature, two executions, identical hardened plan:</p>
+
+        <ul>
+          <li><strong>Feature:</strong> Invoice Engine &mdash; rate tiers, volume discounts, tax calculation, banker's rounding.</li>
+          <li><strong>Plan:</strong> same Scope Contract, same slices, same validation gates, same tech-stack preset.</li>
+          <li><strong>Run A (Control):</strong> standard single-model execution on Claude Sonnet.</li>
+          <li><strong>Run B (Quorum):</strong> three models in parallel (Claude Opus, GPT-5.3-Codex, Claude Sonnet) &rarr; reviewer synthesis &rarr; Claude Sonnet builds from the consensus plan.</li>
+        </ul>
+
+        <p>Both runs passed every gate. Every slice built, every test passed, and the independent reviewer signed off on both. The interesting part is <em>how</em> they passed.</p>
+
+        <h3 id="v3-numbers">The numbers</h3>
+
+        <div class="overflow-x-auto mb-6">
+          <table class="manual-table">
+            <thead><tr><th>Metric</th><th>Single (control)</th><th>Quorum (3-model)</th></tr></thead>
+            <tbody>
+              <tr><td>Tests written</td><td>15</td><td><strong>18 (+20&percnt;)</strong></td></tr>
+              <tr><td>Helper extraction</td><td>Inline, repeated 3&times;</td><td>Reusable helpers, single source</td></tr>
+              <tr><td>Test dates</td><td>Hardcoded literals</td><td>Relative offsets</td></tr>
+              <tr><td>.NET exception pattern</td><td>Generic <code>ValidationException</code></td><td><code>ArgumentException.ThrowIfNullOrWhiteSpace</code> (.NET 7+)</td></tr>
+              <tr><td>Edge cases covered</td><td>Standard happy path</td><td>Voided-invoice regeneration, sequence races</td></tr>
+              <tr><td>Total cost</td><td>&dollar;0.62</td><td><strong>&dollar;0.84 (+&dollar;0.22)</strong></td></tr>
+              <tr><td>Total time</td><td>12 min</td><td>32 min (2.7&times;)</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <h3 id="v3-patterns">The four named patterns</h3>
+        <p>The single-model and the quorum runs are not different code <em>volumes</em> &mdash; they are different code <em>shapes</em>. Four named patterns drive the gap:</p>
+
+        <ol>
+          <li><strong>DRY helper extraction.</strong> The single-model run inlined volume-discount math in three call sites with slight variations. The quorum run extracted <code>IsWeekend()</code>, <code>CalculateVolumeDiscount()</code>, and <code>ApplyBankersRounding()</code> as private static helpers because the synthesizer saw multiple proposals and picked the one that did not repeat itself.</li>
+          <li><strong>Robust test dates.</strong> Single-model tests pinned dates to literal calendar days (<code>new DateTime(2026, 3, 15)</code>). Those tests fail when the dates pass and the business logic correctly refuses future invoices. Quorum tests used relative offsets (<code>DateTime.Now.AddDays(-7)</code>) that stay green forever.</li>
+          <li><strong>Modern .NET patterns.</strong> Control run: <code>throw new ValidationException("...")</code> &mdash; functional but generic. Quorum run: <code>ArgumentException.ThrowIfNullOrWhiteSpace()</code> &mdash; the .NET 7+ recommended API. One model knew about it, the reviewer picked it.</li>
+          <li><strong>Edge-case coverage.</strong> The extra three tests in the quorum run were not padding &mdash; they covered voided invoice regeneration, invoice-number sequencing under concurrent access, and boundary conditions in volume-discount tiers. The exact tests that would have caught production bugs.</li>
+        </ol>
+
+        <h3 id="v3-economics">The economics</h3>
+        <p>The quorum run cost <strong>&dollar;0.22 more</strong> than the control run (&dollar;0.84 vs &dollar;0.62) &mdash; about 35&percnt; in percentage terms, but still under a dollar total. For a feature that will be maintained for years, the differential is rounding error. The time delta was more significant: 32 minutes vs 12 minutes. The extra twenty minutes is the parallel dry-run analysis (three models thinking) plus the reviewer synthesis step. The actual build time was comparable.</p>
+
+        <blockquote class="border-l-4 border-amber-500/40 pl-4 text-slate-300 italic mb-4">
+          For &dollar;0.22 more, you get 20&percnt; more tests, cleaner architecture, and modern patterns. That is the cheapest code review you will ever buy.
+        </blockquote>
+
+        <h3 id="v3-when">When to use it</h3>
+        <p>Quorum mode is not for every slice. Running it on a simple CRUD endpoint that creates a database record is overkill. Running it on an auth flow, billing logic, or a database migration is worth every token. The default <code>--quorum=auto</code> threshold scores each slice's complexity (1&ndash;10) using seven weighted signals &mdash; file scope count, cross-module dependencies, security keywords, database/migration keywords, gate count, task count, historical failure rate &mdash; and only slices at or above the threshold (default 6) get the three-model treatment.</p>
+
+        <div class="callout callout-success">
+          <strong>Where to read more &rarr;</strong> <a href="advanced-execution.html#quorum-quality-examples">Advanced Execution &mdash; Quorum Quality Examples</a> for the canonical side-by-side; <a href="advanced-execution.html#cost-optimization">the same chapter's Cost Optimization section</a> for the auto-threshold details; <a href="../blog/quorum-mode-3-models.html">the original quorum-mode blog post</a> for the under-the-hood dispatch diagram.
+        </div>
+
+        <!-- ============================================================ -->
+        <!-- ─── Closing ─── -->
+        <!-- ============================================================ -->
+        <h2 id="closing">What the three vignettes share</h2>
+
+        <p>Read together, the three vignettes describe the same shape from three angles. Vignette 1 (the loop) is about <em>making the pipeline survive its own output</em> &mdash; Tempering re-auditing with the same tool that discovered, the bug registry auto-smelting regressions, the loop running unattended. Vignette 2 (99 vs 44) is about <em>making the software survive its own future</em> &mdash; interfaces and DTOs and typed exceptions and cancellation, the structural quality that separates a prototype from production code. Vignette 3 (quorum) is about <em>making the next slice survive the gap between what one model knows and what another does</em> &mdash; the synthesis effect, paid for in cents, banked in code that does not need a second rewrite.</p>
+
+        <p>Three vignettes, three different surface areas, one underlying claim: a harness that survives its own output is the difference between a demo and a shop. The chapters this appendix cross-links explain the mechanisms; the blog posts behind the vignettes preserve the first-person account; the receipts above are the part that survives when the version numbers change.</p>
+
+      </div>
+      <!-- /.chapter-content -->
+    </main>
+  </div>
+  <!-- /.manual-layout -->
+
+  <script src="assets/manual.js"></script>
+</body>
+</html>

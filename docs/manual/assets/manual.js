@@ -82,6 +82,7 @@
     { id: "book-index",           file: "book-index.html",          num: "O",  title: "Book Index (A\u2013Z)",     act: "Appendix" },
     { id: "list-of-figures",      file: "list-of-figures.html",     num: "P",  title: "List of Figures",            act: "Appendix" },
     { id: "api-surface-index",    file: "api-surface-index.html",    num: "Q",  title: "Unified API Surface Index",  act: "Appendix" },
+    { id: "day-in-the-forge",     file: "day-in-the-forge.html",     num: "R",  title: "A Day in the Forge \u2014 Three Vignettes",  act: "Appendix" },
   ];
 
   // ─── Chapter status registry ───
@@ -91,6 +92,7 @@
     "foreword":                      { label: "NEW",     version: "v3.6.2" },
     "stakeholder-briefing":          { label: "NEW",     version: "v3.6.2" },
     "reader-paths":                  { label: "NEW",     version: "v3.6.2" },
+    "day-in-the-forge":              { label: "NEW",     version: "v3.6.2" },
     "inner-loop":                    { label: "NEW",     version: "v2.57" },
     "self-deterministic-loop":       { label: "NEW",     version: "v2.58" },
     "competitive-loop":              { label: "NEW",     version: "v2.58" },
@@ -495,6 +497,12 @@
     { t: "Enterprise Architect Ladder (Reader Paths)",   u: "reader-paths.html#enterprise-architect" },
     { t: "Extension Author Ladder (Reader Paths)",       u: "reader-paths.html#extension-author" },
     { t: "When Two Ladders Apply (Reader Paths)",        u: "reader-paths.html#cross-hops" },
+    // A Day in the Forge — three vignettes (Appendix R)
+    { t: "Three Vignettes at a Glance (Day in the Forge)",          u: "day-in-the-forge.html#orientation" },
+    { t: "The Loop That Never Ends (Day in the Forge)",             u: "day-in-the-forge.html#vignette-1" },
+    { t: "The .NET A/B Test — 99 vs 44 (Day in the Forge)",         u: "day-in-the-forge.html#vignette-2" },
+    { t: "Quorum Mode in Practice (Day in the Forge)",              u: "day-in-the-forge.html#vignette-3" },
+    { t: "What the Three Vignettes Share (Day in the Forge)",       u: "day-in-the-forge.html#closing" },
     // Quickstart
     { t: "Check Prerequisites",                  u: "quickstart-install.html#prerequisites" },
     { t: "Clone and Run Setup",                  u: "quickstart-install.html#clone" },

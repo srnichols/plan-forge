@@ -8,6 +8,7 @@
   const CHAPTERS = [
     { id: "index",               file: "index.html",               num: "",   title: "Manual Home",              act: "" },
     { id: "conventions",         file: "conventions.html",         num: "",   title: "Conventions Used in This Manual", act: "Front Matter" },
+    { id: "foreword",            file: "foreword.html",            num: "",   title: "Foreword \u2014 From Impossible to Seven Minutes", act: "Front Matter" },
     // ─── Quickstart (Zero to shipped in 30 min) ───
     { id: "quickstart-install",      file: "quickstart-install.html",      num: "Q1", title: "Install",                act: "Quickstart" },
     { id: "quickstart-first-plan",   file: "quickstart-first-plan.html",   num: "Q2", title: "Your First Plan",         act: "Quickstart" },
@@ -85,6 +86,7 @@
   // Maps chapter id → { label, version } for status pills in the sidebar and index page.
   // Labels: "NEW" | "UPDATED" | "BETA"
   const STATUS = {
+    "foreword":                      { label: "NEW",     version: "v3.6.2" },
     "inner-loop":                    { label: "NEW",     version: "v2.57" },
     "self-deterministic-loop":       { label: "NEW",     version: "v2.58" },
     "competitive-loop":              { label: "NEW",     version: "v2.58" },
@@ -466,6 +468,12 @@
   // ─── Client-side search ───
   // Cross-page search index: chapters + key sections from every chapter
   const SEARCH_SECTIONS = [
+    // Foreword
+    { t: "The One-Paragraph Version (Foreword)", u: "foreword.html#one-paragraph" },
+    { t: "What Changed (and What Did Not)",      u: "foreword.html#what-changed" },
+    { t: "The Four-Station Shop (Foreword)",     u: "foreword.html#four-stations" },
+    { t: "What This Book Is Not (Foreword)",     u: "foreword.html#what-this-book-is-not" },
+    { t: "How To Read This Book (Foreword)",     u: "foreword.html#how-to-read" },
     // Quickstart
     { t: "Check Prerequisites",                  u: "quickstart-install.html#prerequisites" },
     { t: "Clone and Run Setup",                  u: "quickstart-install.html#clone" },

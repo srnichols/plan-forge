@@ -204,7 +204,7 @@ Slices are independent. Pick any one; finish it; commit; ship. No slice depends 
 > Update this section after each slice ships. The status reflects what is on `master`.
 
 ### Cluster A — Story
-- [ ] **A1** Foreword
+- [x] **A1** Foreword ✅ (v3.6.2 · commit pending)
 - [ ] **A2** Reader-Journey Ladders
 - [ ] **A3** "A Day in the Forge" vignettes (Appendix R)
 - [ ] **A4** Task-based "How do I…?" index (Appendix S)

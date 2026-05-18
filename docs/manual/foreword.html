@@ -1,0 +1,185 @@
+<!DOCTYPE html>
+<html lang="en" class="scroll-smooth">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Foreword — From Impossible to Seven Minutes</title>
+  <meta name="description" content="A one-year journey from 'getting enterprise-grade code out of an AI agent is nearly impossible' to a four-station forge shop that produces a 99/100 application in seven minutes. The Foreword frames what changed, what didn't, and what the rest of the book teaches." />
+  <link rel="icon" type="image/svg+xml" href="../assets/plan-forge-logo.svg" />
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>tailwind.config={theme:{extend:{colors:{forge:{400:'#f59e0b',500:'#d97706'}}}}}</script>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;600;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="../assets/shared.css" />
+  <link rel="stylesheet" href="assets/manual.css" />
+</head>
+<body class="bg-slate-950 text-slate-300 min-h-screen">
+
+  <button id="mobile-sidebar-btn" class="mobile-sidebar-btn fixed top-4 left-4 z-[101] lg:hidden p-2 bg-slate-900 border border-slate-700 rounded-lg text-slate-400 hover:text-slate-100 transition-colors" aria-label="Open navigation">
+    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"/></svg>
+  </button>
+  <div id="sidebar-overlay" class="sidebar-overlay"></div>
+
+  <div class="manual-layout">
+    <aside id="manual-sidebar" class="manual-sidebar"><nav id="sidebar-nav"></nav></aside>
+
+    <main>
+      <div class="chapter-content">
+
+        <div class="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">Front Matter · Foreword</div>
+        <h1>From Impossible to Seven Minutes</h1>
+        <p class="text-lg text-slate-400 mb-8">A year. From <em>"getting enterprise-grade code out of an AI agent is nearly impossible"</em> to a four-station forge shop that produces a 99/100 application in seven minutes. Same model. Same machine. No manual intervention. This Foreword frames what changed, what did not, and what the rest of the book teaches.</p>
+
+        <!-- ─── The one-paragraph version ─── -->
+        <h2 id="one-paragraph">The one-paragraph version</h2>
+        <p>Plan Forge began in spring 2025 as a single 2,000-line <code>copilot-instructions.md</code> file written out of frustration with AI agents that could generate code faster than any human team but produced output without interfaces, without DTOs, without tests beyond the happy path, and without any concept of architectural discipline. Over the year that followed, the single file fractured into eighteen focused instruction files, then a six-step pipeline, then a four-session execution model, then a multi-model quorum, then an MCP server with a CLI and a dashboard, then a four-station shop &mdash; Smelt, Forge, Guard, Learn &mdash; with persistent memory, post-deploy defense, and a self-tempering audit loop. The model never got the credit. <strong>The variable was always context.</strong></p>
+
+        <blockquote class="border-l-4 border-forge-500 pl-4 italic text-slate-400 my-6">
+          <p>"The quality of AI-generated code is not a function of model capability &mdash; it's a function of the context you provide."</p>
+          <p class="text-xs text-slate-500 not-italic mt-2">&mdash; <a href="../blog/the-journey-from-impossible-to-seven-minutes.html" class="hover:underline">From Impossible to 7 Minutes</a>, May 2026</p>
+        </blockquote>
+
+        <!-- ─── What changed (and what did not) ─── -->
+        <h2 id="what-changed">What changed (and what did not)</h2>
+        <p>Run the same model against the same requirements on the same machine, twice. Once without guardrails. Once inside Plan Forge. The numbers come from a controlled A/B test documented in detail in <a href="what-is-plan-forge.html">Chapter 1</a>:</p>
+
+        <div class="grid grid-cols-2 gap-4 my-6">
+          <div class="text-center p-6 rounded-2xl bg-red-500/10 border border-red-500/30">
+            <div class="text-5xl font-black text-red-400 mb-1">44</div>
+            <div class="text-xs text-red-400/70 uppercase tracking-wider font-semibold">Without guardrails</div>
+            <div class="text-xs text-slate-500 mt-1">13 tests &middot; 0 interfaces &middot; 0 DTOs &middot; 8 min</div>
+          </div>
+          <div class="text-center p-6 rounded-2xl bg-green-500/10 border border-green-500/30">
+            <div class="text-5xl font-black text-green-400 mb-1">99</div>
+            <div class="text-xs text-green-400/70 uppercase tracking-wider font-semibold">With Plan Forge</div>
+            <div class="text-xs text-slate-500 mt-1">60 tests &middot; 6 interfaces &middot; 9 DTOs &middot; 7 min</div>
+          </div>
+        </div>
+
+        <p>The model was the same in both runs. So was the prompt, the hardware, the afternoon. <strong>What changed was the shop around the model.</strong> Scope contracts told it what to touch. Validation gates told it when a slice was done. The Plan Hardener turned a paragraph of feature description into an execution contract with explicit forbidden actions. The four-session architecture made sure the agent that built the code never reviewed its own work. The numbers are not a model story &mdash; they are an SDLC story.</p>
+
+        <div class="callout callout-info">
+          <strong>The thing that didn't change:</strong> better models did not eliminate the need for guardrails &mdash; they extracted more value from them. Every quarter's model improvement made the same context pay off harder. The guardrails are not training wheels. They are blueprints.
+        </div>
+
+        <!-- ─── The four-station shop ─── -->
+        <h2 id="four-stations">The four-station shop</h2>
+        <p>What started as one file is now <em>a workshop</em>. Every phase of the software lifecycle has a station; every station is AI-run and human-supervised; every station passes its work to the next through a contract the next station can verify.</p>
+
+        <figure class="manual-figure my-8">
+          <img src="assets/diagrams/github-stack-architecture.svg" alt="The GitHub stack with Plan Forge layered on top. Below: GitHub (the substrate) — repositories, Actions, Copilot model, Issues, PRs. Above: Plan Forge (the harness) — Smelt (intake), Forge (execute), Guard (post-deploy defense), Learn (memory). The harness sits on the substrate; it does not replace it." />
+          <figcaption><strong>Figure 1.</strong> Plan Forge is a harness, not a model. It sits <em>on top of</em> the GitHub stack (and any other AI coding tool that speaks the Model Context Protocol). The substrate handles repositories, Actions, the Copilot model, Issues, and PRs. The harness adds the SDLC layer GitHub deliberately leaves to the ecosystem: planning, validation gates, memory, cost control, and reviewer separation. See <a href="github-stack-alignment.html">Appendix H</a> for the full alignment table.</figcaption>
+        </figure>
+
+        <div class="overflow-x-auto mb-6">
+          <table class="manual-table">
+            <thead><tr><th>Station</th><th>Phase of the lifecycle</th><th>What it produces</th></tr></thead>
+            <tbody>
+              <tr>
+                <td>&#x1FAA8; <strong>Smelt</strong></td>
+                <td>Intake &rarr; scope contract</td>
+                <td>A hardened plan the Forge can execute without follow-up questions &mdash; scope boundaries, validation gates, forbidden actions, rollback steps</td>
+              </tr>
+              <tr>
+                <td>&#x1F528; <strong>Forge</strong></td>
+                <td>Scope contract &rarr; shipped code</td>
+                <td>Green tests, green CI, green cost ledger &mdash; or an honest stop with a fix proposal at the slice that failed</td>
+              </tr>
+              <tr>
+                <td>&#x1F6E1;&#xFE0F; <strong>Guard</strong></td>
+                <td>Post-deploy defense (LiveGuard)</td>
+                <td>Pre-deploy block on severity &ge; high, post-slice drift advisory, triaged incidents with proposed fixes</td>
+              </tr>
+              <tr>
+                <td>&#x1F9E0; <strong>Learn</strong></td>
+                <td>Memory &amp; retrospectives</td>
+                <td>Tomorrow's plan is colder, faster, and less wrong than today's. Decisions persist across sessions in <a href="memory-system.html">OpenBrain</a>.</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <p>The same lesson runs through all four. The model is not the bottleneck; context is. The shop is just more places to put context.</p>
+
+        <!-- ─── What this book is ─── -->
+        <h2 id="what-this-book-is">What this book <em>is</em></h2>
+        <p>This book is the practical companion to that shop. It is three things at once, deliberately:</p>
+        <ul class="space-y-2">
+          <li><strong>A reference.</strong> Twenty-nine chapters across five Parts, plus appendices that document every CLI flag, every MCP tool, every event, every error code, every plan pattern. When the answer is "look it up," the book is structured so the answer is one search-bar query away.</li>
+          <li><strong>A story.</strong> The journey from a 2,000-line guardrail file to a four-station shop did not follow a roadmap. Each station emerged because a real problem demanded it. The Foreword, the vignettes, and the chapter narratives carry that story so the design choices read as <em>consequences</em>, not arbitrary opinions.</li>
+          <li><strong>An ebook.</strong> Read it front to back if that is the kind of reader you are. The Foreword leads to the Reader Paths, the Paths lead to the Quickstart, the Quickstart lands you on a working installation, and the rest of the book deepens what you just shipped.</li>
+        </ul>
+
+        <!-- ─── What this book is NOT ─── -->
+        <h2 id="what-this-book-is-not">What this book is <em>not</em></h2>
+        <p>It is not a marketing brochure. The numbers in this book come from the same source files the system is built from &mdash; tool counts from <code>capabilities.mjs</code>, CLI flags from <code>pforge.ps1</code>, event names from <code>EVENTS.md</code>, cost figures from the same <code>cost-service.mjs</code> the orchestrator uses. When a number drifts in the code, the book breaks the build until the number is fixed.</p>
+
+        <p>It is not a tutorial that ends at "hello world." Every Part lands a reader at a different operational depth: Quickstart ships your first plan in thirty minutes; Part II carries you through autonomous orchestration; Part III through post-deploy defense; Part IV through institutional memory; Part V through team-scale coordination.</p>
+
+        <p>It is not a product spec. The shop changes. The principles do not. When the book describes <em>why</em> the four-session architecture exists, that section will still be true two model generations from now &mdash; even if the model names in the example commands change.</p>
+
+        <p>It is also <strong>not a process you rent from us</strong> &mdash; Plan Forge is MIT-licensed because no two shops' SDLC is the same, and your institutional memory lives in <a href="memory-system.html">OpenBrain</a>, a service you run, not in any vendor's cloud. The two most strategic assets a software organisation accumulates &mdash; its <em>process</em> for shipping software, and the <em>memory</em> of why every past decision went the way it did &mdash; stay in your hands. The harness is yours to fork and tweak; the brain is yours to host. The book documents both because the architecture only makes sense once both are explicit.</p>
+
+        <!-- ─── How to read this book ─── -->
+        <h2 id="how-to-read">How to read this book</h2>
+        <p>The book is designed so a reader who has never installed Plan Forge can land on a working pipeline in thirty minutes, and a reader who has been running it for six months can find the one paragraph that explains a behavior they just saw in production. Both readers start in different places.</p>
+
+        <div class="overflow-x-auto mb-6">
+          <table class="manual-table">
+            <thead><tr><th style="width: 12rem">If the reader is&hellip;</th><th>Start here</th><th>Then read</th></tr></thead>
+            <tbody>
+              <tr>
+                <td><strong>First-contact</strong> &mdash; never run Plan Forge</td>
+                <td><a href="quickstart-install.html">Quickstart Q1 &mdash; Install</a></td>
+                <td>Q2 (first plan), Q3 (review &amp; ship), then <a href="what-is-plan-forge.html">Chapter 1</a> for the mental model</td>
+              </tr>
+              <tr>
+                <td><strong>Frame-setting</strong> &mdash; wants the mental model first</td>
+                <td><a href="what-is-plan-forge.html">Chapter 1 &mdash; What Is Plan Forge?</a></td>
+                <td><a href="how-it-works.html">Chapter 2</a> for the pipeline, then back to the Quickstart for hands-on</td>
+              </tr>
+              <tr>
+                <td><strong>Operator</strong> &mdash; already shipping with it</td>
+                <td><a href="troubleshooting.html">Chapter 15 &mdash; Troubleshooting</a> or the <a href="cli-reference.html">CLI Reference</a></td>
+                <td>Targeted dives by symptom or by tool name</td>
+              </tr>
+              <tr>
+                <td><strong>Reviewer / architect</strong> &mdash; evaluating for adoption</td>
+                <td><a href="github-stack-alignment.html">Appendix H &mdash; GitHub Stack Alignment</a></td>
+                <td><a href="plan-forge-on-the-github-stack.html">Appendix I</a> for the substrate map, then Chapter 1 for the four-station overview</td>
+              </tr>
+              <tr>
+                <td><strong>Curious</strong> &mdash; wants the story</td>
+                <td>This Foreword</td>
+                <td>The blog posts cited above, then <a href="project-history.html">Project History</a> for the version-by-version evolution</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <p>A dedicated Reader-Journey Ladders page sits next to this Foreword in Front Matter and unfolds those paths into per-persona deep-dive sequences. When the reader knows which persona they are, the Ladders are the next stop.</p>
+
+        <!-- ─── A note on voice ─── -->
+        <h2 id="voice">A note on voice</h2>
+        <p>The body of this manual is written in third person, present tense &mdash; the voice of a reference. That is deliberate: a reference outlives the version that produced it, and the third-person voice carries forward without re-editing when the maintainer changes, the contributor base grows, or the project's centre of gravity moves outside any one author. Direct first-person material from the project's blog posts appears in <em>blockquote</em> form, attributed, so the reader can see where the editorial voice ends and the contemporary record begins.</p>
+
+        <p>This Foreword and the Reader Paths page break that rule once, narrowly, by leaning on the journey itself. Every other chapter speaks in the reference voice.</p>
+
+        <!-- ─── Closing ─── -->
+        <h2 id="closing">A closing line, borrowed</h2>
+        <blockquote class="border-l-4 border-forge-500 pl-4 italic text-slate-400 my-6">
+          <p>"The forge is lit. The metal is hot. Build something that lasts."</p>
+          <p class="text-xs text-slate-500 not-italic mt-2">&mdash; <a href="../blog/the-journey-from-impossible-to-seven-minutes.html" class="hover:underline">From Impossible to 7 Minutes</a>, May 2026</p>
+        </blockquote>
+
+        <p>The rest of the book is the map for doing exactly that.</p>
+
+        <div id="chapter-prev-next" class="chapter-nav"></div>
+      </div>
+    </main>
+  </div>
+
+  <script src="assets/manual.js"></script>
+</body>
+</html>

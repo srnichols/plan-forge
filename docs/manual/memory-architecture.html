@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Chapter 24: Memory Architecture — Plan Forge Manual</title>
+  <title>Chapter 21: Memory Architecture — Plan Forge Manual</title>
   <meta name="description" content="The three-tier memory system: in-RAM hub (L1), local JSONL files (L2), and OpenBrain pgvector (L3). Dual-write capture, watcher integration, drain queue, and migration tooling." />
   <link rel="icon" type="image/svg+xml" href="../assets/plan-forge-logo.svg" />
   <script src="https://cdn.tailwindcss.com"></script>
@@ -29,7 +29,7 @@
         <!-- Hero -->
         <img src="assets/chapter-heroes/ch24-hero.jpg" alt="Three-tier vault: amber sparks (hub events), glowing scrolls (file artifacts), radiant golden brain-orb (semantic memory) — the three-tier memory architecture" class="chapter-hero" />
 
-        <div class="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">Act IV — Learn · Chapter 24</div>
+        <div class="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">Act IV — Learn · Chapter 21</div>
         <h1>Memory Architecture</h1>
         <p class="text-lg text-slate-400 mb-8">Three tiers, one capture path. How Plan Forge remembers what it learned — across slices, across sessions, across plans.</p>
 
@@ -41,7 +41,7 @@
             <li><strong>L3 (OpenBrain)</strong> — a shared semantic database. Searchable across projects, agents, and machines.</li>
           </ul>
           The same <code>captureMemory()</code> call writes to all three. If any tier fails, the others still succeed — nothing blocks your code.
-          <p class="mt-3 mb-0 text-sm text-slate-400"><strong>And around those three tiers</strong>, v3.x added four pieces of craftsmanship: <strong>Hallmark</strong> stamps every record with a provenance envelope (<code>hallmark/v1</code>) so drift is detectable; <strong>Anvil</strong> hardens the L2→L3 doorway with a dead-letter queue and capability handshake so a network blip never loses a memory; <strong>Lattice</strong> sits alongside as a code-graph index the agent can query (<em>"who calls this function?"</em>); and <strong>forge_sync_memories</strong> pushes decisions and lessons up into Copilot's own Memory store so the next IDE session sees them automatically. The plain-English tour with numbers is in <a href="memory-system.html"><strong>Chapter 25 — How the Shop Remembers</strong></a>.</p>
+          <p class="mt-3 mb-0 text-sm text-slate-400"><strong>And around those three tiers</strong>, v3.x added four pieces of craftsmanship: <strong>Hallmark</strong> stamps every record with a provenance envelope (<code>hallmark/v1</code>) so drift is detectable; <strong>Anvil</strong> hardens the L2→L3 doorway with a dead-letter queue and capability handshake so a network blip never loses a memory; <strong>Lattice</strong> sits alongside as a code-graph index the agent can query (<em>"who calls this function?"</em>); and <strong>forge_sync_memories</strong> pushes decisions and lessons up into Copilot's own Memory store so the next IDE session sees them automatically. The plain-English tour with numbers is in <a href="memory-system.html"><strong>Chapter 22 — How the Shop Remembers</strong></a>.</p>
         </div>
 
         <div class="callout callout-tip">
@@ -49,13 +49,13 @@
         </div>
 
         <div class="callout callout-info">
-          <strong>Looking for the v3.x upgrades (Hallmark, Anvil, Lattice, <code>forge_sync_memories</code>)?</strong> They're covered in plain English in the next chapter — <a href="memory-system.html"><strong>Chapter 25 — How the Shop Remembers</strong></a>. That chapter explains what we layered on top of the L1/L2/L3 tiers described here, and shows the cost/quality numbers proving why a cheaper model can now do work that used to require the expensive one.
+          <strong>Looking for the v3.x upgrades (Hallmark, Anvil, Lattice, <code>forge_sync_memories</code>)?</strong> They're covered in plain English in the next chapter — <a href="memory-system.html"><strong>Chapter 22 — How the Shop Remembers</strong></a>. That chapter explains what we layered on top of the L1/L2/L3 tiers described here, and shows the cost/quality numbers proving why a cheaper model can now do work that used to require the expensive one.
         </div>
 
         <!-- ─── Overview ─── -->
         <h2 id="overview">The Three Tiers</h2>
 
-        <figure class="manual-figure" id="fig-24-1"><img src="assets/diagrams/memory-three-tier-capture.svg" alt="Three-tier memory capture flow: forge_memory_capture call fans out to L1 (hub WebSocket broadcast, instant, ephemeral), L2 (.forge/memory/ files, sync, persistent, gitignored), and L3 (OpenBrain pgvector via async push, cross-project, cross-tool, semantic search). All three readable independently from the read path." class="diagram-img diagram-img-md my-4" /><figcaption class="manual-figcaption"><!--fignum--><span class="manual-fignum">Figure 24-1.</span><!--/fignum--> <!--cap:auto-->Three-tier memory capture flow<!--/cap--></figcaption></figure>
+        <figure class="manual-figure" id="fig-21-1"><img src="assets/diagrams/memory-three-tier-capture.svg" alt="Three-tier memory capture flow: forge_memory_capture call fans out to L1 (hub WebSocket broadcast, instant, ephemeral), L2 (.forge/memory/ files, sync, persistent, gitignored), and L3 (OpenBrain pgvector via async push, cross-project, cross-tool, semantic search). All three readable independently from the read path." class="diagram-img diagram-img-md my-4" /><figcaption class="manual-figcaption"><!--fignum--><span class="manual-fignum">Figure 21-1.</span><!--/fignum--> <!--cap:auto-->Three-tier memory capture flow<!--/cap--></figcaption></figure>
         <p>Plan Forge separates <em>volatile working memory</em> from <em>durable project memory</em> from <em>cross-project semantic memory</em>. Every <code>captureMemory</code> call writes to all three in a single best-effort pass — no tier blocks the others, no failure aborts the calling tool.</p>
 
         <table class="w-full text-sm border border-slate-700/40 rounded-lg overflow-hidden mb-6">
@@ -78,14 +78,14 @@
         </table>
 
         <div class="callout callout-tip">
-          <strong>One picture, all the pieces.</strong> The three tiers didn't go away — we forged better tools around them. For the layered tower diagram showing exactly how Hallmark, Anvil, Lattice, and <code>forge_sync_memories</code> fit on top of L1/L2/L3, see <a href="memory-system.html#how-they-fit">Chapter 25 § How the New Pieces Fit the Old Tiers</a>.
+          <strong>One picture, all the pieces.</strong> The three tiers didn't go away — we forged better tools around them. For the layered tower diagram showing exactly how Hallmark, Anvil, Lattice, and <code>forge_sync_memories</code> fit on top of L1/L2/L3, see <a href="memory-system.html#how-they-fit">Chapter 22 § How the New Pieces Fit the Old Tiers</a>.
         </div>
 
         <!-- ─── Unified Memory Across Agents ─── -->
         <h2 id="unified-memory-across-agents">Unified Memory Across Agents</h2>
         <p>OpenBrain isn't just a per-session scratch pad — it's a <strong>shared memory layer</strong> that compounds across every AI agent, every IDE, and every session. When Claude captures a gotcha in Slice 2, Copilot reads it in Slice 5 without any manual handoff. When Cursor records a naming convention, Claude's next run already knows it.</p>
 
-        <figure class="manual-figure" id="fig-24-2"><img src="assets/diagrams/openbrain-cross-agent-compounding.svg" alt="OpenBrain cross-agent compounding: Claude, Cursor, and Copilot each write decisions via capture_thought and read prior context via search_thoughts. Knowledge compounds — each slice raises the quality floor for every future agent." class="diagram-img diagram-img-md my-4" /><figcaption class="manual-figcaption"><!--fignum--><span class="manual-fignum">Figure 24-2.</span><!--/fignum--> <!--cap:auto-->OpenBrain cross-agent compounding<!--/cap--></figcaption></figure>
+        <figure class="manual-figure" id="fig-21-2"><img src="assets/diagrams/openbrain-cross-agent-compounding.svg" alt="OpenBrain cross-agent compounding: Claude, Cursor, and Copilot each write decisions via capture_thought and read prior context via search_thoughts. Knowledge compounds — each slice raises the quality floor for every future agent." class="diagram-img diagram-img-md my-4" /><figcaption class="manual-figcaption"><!--fignum--><span class="manual-fignum">Figure 21-2.</span><!--/fignum--> <!--cap:auto-->OpenBrain cross-agent compounding<!--/cap--></figcaption></figure>
 
         <h3 class="text-base font-semibold text-slate-200 mt-6 mb-3">How it works — 4 steps</h3>
         <ol>

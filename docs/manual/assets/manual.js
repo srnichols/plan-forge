@@ -25,7 +25,7 @@
     { id: "dashboard-settings",  file: "dashboard-settings.html",  num: "",   title: "Dashboard — Settings",     act: "II" },
     { id: "dashboard-forge-master", file: "dashboard-forge-master.html", num: "", title: "Dashboard — Forge-Master", act: "II" },
     { id: "dashboard-liveguard", file: "dashboard-liveguard.html", num: "",   title: "Dashboard — LiveGuard",    act: "II" },
-    { id: "forge-master",        file: "forge-master.html",        num: "",   title: "Forge-Master (Deep Dive)",  act: "II" },
+    { id: "forge-master",        file: "forge-master.html",        num: "",   title: "Forge-Master",  act: "II" },
     { id: "cli-reference",       file: "cli-reference.html",       num: "8",  title: "CLI Reference",            act: "II" },
     { id: "customization",       file: "customization.html",       num: "9",  title: "Customization",            act: "II" },
     { id: "instructions-agents", file: "instructions-agents.html", num: "10", title: "Instruction Files & Agents", act: "II" },
@@ -47,12 +47,12 @@
     { id: "liveguard-dashboard", file: "liveguard-dashboard.html", num: "18", title: "The LiveGuard Dashboard",    act: "III" },
     { id: "watcher",             file: "watcher.html",             num: "19", title: "The Watcher",               act: "III" },
     { id: "remote-bridge",       file: "remote-bridge.html",       num: "20", title: "The Remote Bridge",         act: "III" },
-    // ─── Part IV — Learn (memory & retrospectives) ───
-    { id: "bug-registry",        file: "bug-registry.html",        num: "21", title: "The Bug Registry",           act: "IV" },
-    { id: "testbed",             file: "testbed.html",             num: "22", title: "The Testbed",                act: "IV" },
-    { id: "health-dna",          file: "health-dna.html",          num: "23", title: "Health DNA",                 act: "IV" },
-    { id: "memory-architecture", file: "memory-architecture.html", num: "24", title: "Memory Architecture",       act: "IV" },
-    { id: "memory-system",       file: "memory-system.html",       num: "25", title: "How the Shop Remembers",   act: "IV" },
+    // ─── Part IV — Learn (memory first, retrospectives after) ───
+    { id: "memory-architecture", file: "memory-architecture.html", num: "21", title: "Memory Architecture",       act: "IV" },
+    { id: "memory-system",       file: "memory-system.html",       num: "22", title: "How the Shop Remembers",   act: "IV" },
+    { id: "bug-registry",        file: "bug-registry.html",        num: "23", title: "The Bug Registry",           act: "IV" },
+    { id: "testbed",             file: "testbed.html",             num: "24", title: "The Testbed",                act: "IV" },
+    { id: "health-dna",          file: "health-dna.html",          num: "25", title: "Health DNA",                 act: "IV" },
     // ─── Part V (Integrate) ───
     { id: "copilot-integration",     file: "copilot-integration.html",     num: "26", title: "The Copilot Integration Trilogy", act: "V" },
     { id: "team-coordination",       file: "team-coordination.html",       num: "27", title: "Team Coordination",               act: "V" },

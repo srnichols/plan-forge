@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Chapter 25: How the Shop Remembers — Plan Forge Manual</title>
+  <title>Chapter 22: How the Shop Remembers — Plan Forge Manual</title>
   <meta name="description" content="The plain-English guide to Plan Forge's upgraded memory system. Hallmark provenance, the Anvil L3 boundary with DLQ, the Lattice code-graph, and forge_sync_memories — and how they make cheaper, faster models punch above their weight." />
   <link rel="icon" type="image/svg+xml" href="../assets/plan-forge-logo.svg" />
   <script src="https://cdn.tailwindcss.com"></script>
@@ -29,7 +29,7 @@
         <!-- Hero -->
         <img src="assets/chapter-heroes/ch25-hero.jpg" alt="A vast bronze-lined memory vault inside a stone forge chamber with tall shelves of small leather-bound notebooks tagged with glowing amber runes; small enchanted brass automatons file and pull notebooks while an open ornate ledger in the foreground emits a stream of softly glowing amber sparks rising upward" class="chapter-hero" />
 
-        <div class="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">Act IV — Learn · Chapter 25</div>
+        <div class="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">Act IV — Learn · Chapter 22</div>
         <h1>How the Shop Remembers</h1>
         <p class="text-lg text-slate-400 mb-8">The plain-English tour of Plan Forge's upgraded memory system — and the reason a cheaper, faster model can now do work that used to require the expensive one.</p>
 
@@ -232,7 +232,7 @@ pforge sync-memories --dry-run</code></pre>
         <!-- ─── How the new pieces fit the old tiers ─── -->
         <h2 id="how-they-fit">How the New Pieces Fit the Old Tiers</h2>
 
-        <p>To make sure the mental model holds, here's the same picture from <a href="memory-architecture.html">Chapter 24</a> with the new pieces drawn in:</p>
+        <p>To make sure the mental model holds, here's the same picture from <a href="memory-architecture.html">Chapter 21</a> with the new pieces drawn in:</p>
 
         <div class="cmd-block mb-4">
           <div class="cmd-block-header"><span>The memory stack — layered, not replaced</span></div>
@@ -261,9 +261,9 @@ pforge sync-memories --dry-run</code></pre>
         <!-- ─── See Also ─── -->
         <h2 id="see-also">See Also</h2>
         <ul>
-          <li><a href="memory-architecture.html">Chapter 24 — Memory Architecture</a> — the technical L1/L2/L3 deep-dive these upgrades build on.</li>
+          <li><a href="memory-architecture.html">Chapter 21 — Memory Architecture</a> — the technical L1/L2/L3 deep-dive these upgrades build on.</li>
           <li><a href="multi-agent.html#openbrain-connective-tissue">Chapter 13 — Multi-Agent → OpenBrain Connective Tissue</a> — how OpenBrain handoffs work across Claude, Copilot, and Cursor.</li>
-          <li><a href="health-dna.html">Chapter 23 — Health DNA</a> — the composite health score that now trends visibly better thanks to memory upgrades.</li>
+          <li><a href="health-dna.html">Chapter 25 — Health DNA</a> — the composite health score that now trends visibly better thanks to memory upgrades.</li>
           <li><a href="mcp-server-reference.html#tools-memory">MCP Server Reference — Memory Tools</a> — the full parameter list for <code>forge_memory_report</code>, <code>forge_hallmark_show</code>, <code>forge_hallmark_verify</code>, and the lattice tools.</li>
           <li><a href="cli-reference.html#commands">Chapter 8 — CLI Reference</a> — every <code>pforge lattice</code>, <code>pforge memory</code>, and <code>pforge sync-memories</code> subcommand.</li>
         </ul>

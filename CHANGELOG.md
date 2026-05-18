@@ -5,6 +5,49 @@ Format follows [Keep a Changelog](https://keepachangelog.com/).
 
 ---
 
+## [3.6.0] — 2026-05-18 — OpenBrain Promotion (L3 Memory Made Loud)
+
+> **One-liner**: Reframes OpenBrain from a row-5 "optional extension" to the L3 memory layer — the only cross-session, cross-tool, semantic-search store. Still optional, but loud and easy to enable at every install touchpoint. Plan Forge works without it; the inner loop only improves over time with it.
+
+### Why
+
+OpenBrain hooks were already wired into 28 MCP tools, 4 search-before-acting prompts, Reflexion lessons, Auto-skills, and cross-project Federation — but every one was gated behind `if (openBrainConfigured)` and silently no-op'd otherwise. Users who didn't know to install OpenBrain got Plan Forge's L1 (Hub events) + L2 (`.forge/*.jsonl` durable files) memory but no persistent semantic memory across sessions. The Reflexion / Auto-skill / Postmortem lessons that make the agent loop *improve over time* were effectively dark.
+
+This release does **not** change the "if configured" gating — Plan Forge still works perfectly without OpenBrain. It changes the discoverability surface so users have a clear, well-signposted on-ramp at every install moment.
+
+### What's new
+
+- **[docs/manual/glossary.html](docs/manual/glossary.html)** — OpenBrain entry now leads with "L3 memory layer" and enumerates what is inert without it (Reflexion, Auto-skills, Federation, 28 auto-capturing tools). Links to install walkthrough.
+- **[CUSTOMIZATION.md](CUSTOMIZATION.md)** — `## Persistent Memory with OpenBrain (Optional)` → `(Recommended)`. Opening paragraph tightened to call out L1/L2/L3 boundaries explicitly.
+- **[README.md](README.md)** — Quick Start gains a numbered `### 3. (Recommended) Enable Persistent Memory` section with a 4-row deploy-options table (Docker Compose / Supabase Cloud / Kubernetes-or-Azure / Skip-for-now). Optional Capabilities table row renamed `**OpenBrain memory** (L3)` and points at the new section.
+- **`pforge smith`** — Memory section gains an always-visible row: `L3 OpenBrain: ✓ configured (Reflexion + Federation active)` or `L3 OpenBrain: ⚠ not configured — run 'pforge brain hint' or see https://srnichols.github.io/OpenBrain`. Never affects exit code (informational only).
+- **`setup.ps1` / `setup.sh`** — End-of-flow OpenBrain install prompt. Y branch prints 4 deploy options + URL; n branch warns; skip is silent. Auto-suppressed in CI (`$CI` / `$PFORGE_NONINTERACTIVE` / `-NonInteractive` / `--non-interactive` / non-TTY stdin). Bash uses portable `tr`-based lowercasing (not bash-4-only `${VAR,,}`). Prompt copy is byte-identical between the two scripts.
+- **`pforge brain status [--ping]`** — Local config check by default; reports configured/not-configured plus the detected config-file path. `--ping` is an opt-in placeholder for future endpoint health checks.
+- **`pforge brain hint`** — Prints the install options (same content as the setup wizard Y branch and README Step 3 — single source of truth).
+- **[pforge-mcp/cli-schema.json](pforge-mcp/cli-schema.json)** — New `brain` command entry with subcommand arg and `--ping` flag.
+
+### Forbidden actions (held)
+
+The plan's Forbidden Actions invariants were preserved throughout:
+
+- No mutation of the user's `.vscode/mcp.json` from setup scripts; install instructions only.
+- No weakening of `if (openBrainConfigured)` gates anywhere in the codebase — soft-fail behavior is unchanged.
+- No change to smith exit code on missing OpenBrain.
+- No breakage of `setup.ps1 -NonInteractive` / `setup.sh --non-interactive` in CI (tested via gate checks).
+- No renaming of `brain_recall` / `brain_remember` / `forge_memory_*` surfaces.
+
+### Tests
+
+- **[pforge-mcp/tests/smith-openbrain-row.test.mjs](pforge-mcp/tests/smith-openbrain-row.test.mjs)** — 10 cases. Mcp.json absent / present / hyphenated alias / `.claude/` fallback / malformed JSON, plus 4 production-source guards.
+- **[pforge-mcp/tests/setup-openbrain-prompt.test.mjs](pforge-mcp/tests/setup-openbrain-prompt.test.mjs)** — ~30 cases. PS / bash gate logic, portable lowercasing guard, and a parity test that runs every shared phrase against both scripts.
+- **[pforge-mcp/tests/brain-cli.test.mjs](pforge-mcp/tests/brain-cli.test.mjs)** — ~30 cases. PS / bash subcommand dispatchers, `--ping` opt-in semantics, cli-schema.json structure, and 4-way parity (`brain hint` vs setup wizard Y branch).
+
+### Plan
+
+Built from [docs/plans/Phase-OPENBRAIN-PROMOTION-PLAN.md](docs/plans/Phase-OPENBRAIN-PROMOTION-PLAN.md) — 6 slices, hardened with scope contract, forbidden actions, per-slice validation gates, and explicit decisions D1–D5.
+
+---
+
 ## [3.5.1] — 2026-05-17 — Lattice Query Relevance Scoring
 
 > **One-liner**: `forge_lattice_query` now ranks results by relevance — camelCase-aware token overlap scores chunk name (2×) and file path (1×) so searching for "user" returns `getUserById` above less-relevant matches. New exported helpers `scoreChunk` and `tokenizeForSearch` available for downstream consumers.

@@ -4563,6 +4563,105 @@ cmd_drain_memory() {
     "
 }
 
+# ─── Command: brain (Phase-OPENBRAIN-PROMOTION Slice 5) ────────────────
+# Subcommands:
+#   pforge brain status [--ping]   — local config check; --ping queries endpoint
+#   pforge brain hint              — print install options
+#
+# Mirrors pforge-mcp/memory.mjs#isOpenBrainConfigured: scans
+# .vscode/mcp.json and .claude/mcp.json for 'openbrain' or 'open-brain'.
+# Never throws; never mutates user config.
+
+_test_openbrain_configured() {
+    local cwd="$1"
+    local p
+    for p in "$cwd/.vscode/mcp.json" "$cwd/.claude/mcp.json"; do
+        if [ -f "$p" ]; then
+            if grep -qE 'openbrain|open-brain' "$p" 2>/dev/null; then
+                echo "$p"
+                return 0
+            fi
+        fi
+    done
+    return 1
+}
+
+cmd_brain_status() {
+    local do_ping=false
+    local arg
+    for arg in "$@"; do
+        if [ "$arg" = "--ping" ]; then do_ping=true; fi
+    done
+
+    local cwd="$REPO_ROOT"
+    [ -z "$cwd" ] && cwd="$(pwd)"
+
+    echo ""
+    printf '\033[0;36m%s\033[0m\n' "Plan Forge — Brain status (L3 OpenBrain memory)"
+    echo ""
+
+    local cfg_path
+    if cfg_path="$(_test_openbrain_configured "$cwd")"; then
+        printf '\033[0;32m%s\033[0m\n' "  ✓ OpenBrain detected in: $cfg_path"
+        printf '\033[0;32m%s\033[0m\n' "  L3 status: configured — Reflexion / Auto-skills / Federation are active."
+
+        if [ "$do_ping" = true ]; then
+            echo ""
+            printf '\033[0;33m%s\033[0m\n' "  --ping: opt-in endpoint check is not yet wired (Slice 5 is local-only by default)."
+            printf '\033[0;90m%s\033[0m\n' "          To verify the endpoint responds, restart your MCP host and inspect the dashboard."
+        fi
+    else
+        printf '\033[0;33m%s\033[0m\n' "  ⚠ OpenBrain NOT configured."
+        printf '\033[0;33m%s\033[0m\n' "  L3 status: inert — Reflexion / Auto-skills / Federation will not capture across sessions."
+        echo ""
+        printf '\033[0;36m%s\033[0m\n' "  Run 'pforge brain hint' to see install options."
+    fi
+    echo ""
+}
+
+cmd_brain_hint() {
+    echo ""
+    printf '\033[0;36m%s\033[0m\n' "================================================================"
+    printf '\033[0;36m%s\033[0m\n' " Recommended: Enable Persistent Memory (OpenBrain)"
+    printf '\033[0;36m%s\033[0m\n' "================================================================"
+    echo ""
+    echo "Plan Forge ships with L1 (Hub) + L2 (.forge/*.jsonl) memory."
+    echo "The L3 layer — cross-session semantic memory that powers Reflexion"
+    echo "lessons, Auto-skills, and cross-project Federation — requires"
+    echo "OpenBrain, a self-hosted MCP server. Plan Forge works without it,"
+    echo "but the inner loop only improves over time when L3 is present."
+    echo ""
+    printf '\033[0;33m%s\033[0m\n' "OpenBrain deploy options:"
+    echo "  - Docker Compose       ~5 min   Free                Local dev / single machine"
+    echo "  - Supabase Cloud       ~10 min  ~\$0.10-\$0.30/mo     Solo / small team, zero ops"
+    echo "  - Kubernetes / Azure   ~30 min  Cloud rates         Teams, federation across repos"
+    echo ""
+    printf '\033[0;36m%s\033[0m\n' "Full walkthrough:  https://srnichols.github.io/OpenBrain"
+    printf '\033[0;90m%s\033[0m\n' "Source repo:       https://github.com/srnichols/OpenBrain"
+    echo ""
+    printf '\033[0;32m%s\033[0m\n' "After installing, run 'pforge brain status' to confirm Plan Forge sees it."
+    echo ""
+}
+
+cmd_brain() {
+    local sub="${1:-}"
+    shift || true
+    case "$sub" in
+        status) cmd_brain_status "$@" ;;
+        hint)   cmd_brain_hint ;;
+        *)
+            echo "Usage: pforge brain <subcommand>"
+            echo ""
+            echo "Subcommands:"
+            echo "  status [--ping]   Check whether OpenBrain (L3 memory) is configured"
+            echo "  hint              Print OpenBrain install options"
+            echo ""
+            echo "See also: pforge drain-memory, https://srnichols.github.io/OpenBrain"
+            exit 1
+            ;;
+    esac
+}
+
 # ─── Command: migrate-memory (GX.5 v2.36) ──────────────────────────────
 # Port of Invoke-MigrateMemory from pforge.ps1. Merges legacy `*-history.json`
 # ledgers into their canonical `.jsonl` siblings. Idempotent; safe to re-run.
@@ -6322,6 +6421,7 @@ case "$COMMAND" in
     version-bump) cmd_version_bump "$@" ;;
     migrate-memory) cmd_migrate_memory "$@" ;;
     drain-memory) cmd_drain_memory "$@" ;;
+    brain)        cmd_brain "$@" ;;
     mcp-call)     cmd_mcp_call "$@" ;;
     tour)         cmd_tour ;;
     config)       cmd_config "$@" ;;

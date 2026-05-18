@@ -5087,6 +5087,107 @@ function Invoke-DrainMemory {
     }
 }
 
+# ─── Command: brain (Phase-OPENBRAIN-PROMOTION Slice 5) ────────────────
+# Subcommands:
+#   pforge brain status [--ping]   — local config check; --ping queries the endpoint
+#   pforge brain hint              — print install options (same content as setup wizard)
+#
+# Reads .vscode/mcp.json and .claude/mcp.json for an 'openbrain' or 'open-brain'
+# server entry — mirrors pforge-mcp/memory.mjs#isOpenBrainConfigured exactly.
+# Never throws on missing files; never mutates user config.
+
+function Test-OpenBrainConfigured([string]$cwd) {
+    $paths = @(
+        (Join-Path $cwd ".vscode/mcp.json"),
+        (Join-Path $cwd ".claude/mcp.json")
+    )
+    foreach ($p in $paths) {
+        if (Test-Path $p) {
+            try {
+                $content = Get-Content -LiteralPath $p -Raw -ErrorAction Stop
+                if ($content -match 'openbrain' -or $content -match 'open-brain') {
+                    return @{ Configured = $true; ConfigPath = $p }
+                }
+            } catch { }
+        }
+    }
+    return @{ Configured = $false; ConfigPath = $null }
+}
+
+function Invoke-BrainStatus {
+    $doPing = ($Arguments -contains '--ping')
+    $cwd = $RepoRoot
+    if (-not $cwd) { $cwd = (Get-Location).Path }
+
+    Write-Host ""
+    Write-Host "Plan Forge — Brain status (L3 OpenBrain memory)" -ForegroundColor Cyan
+    Write-Host ""
+
+    $result = Test-OpenBrainConfigured $cwd
+    if ($result.Configured) {
+        Write-Host "  ✓ OpenBrain detected in: $($result.ConfigPath)" -ForegroundColor Green
+        Write-Host "  L3 status: configured — Reflexion / Auto-skills / Federation are active." -ForegroundColor Green
+
+        if ($doPing) {
+            Write-Host ""
+            Write-Host "  --ping: opt-in endpoint check is not yet wired (Slice 5 is local-only by default)." -ForegroundColor DarkYellow
+            Write-Host "          To verify the endpoint responds, restart your MCP host and inspect the dashboard." -ForegroundColor DarkGray
+        }
+    } else {
+        Write-Host "  ⚠ OpenBrain NOT configured." -ForegroundColor Yellow
+        Write-Host "  L3 status: inert — Reflexion / Auto-skills / Federation will not capture across sessions." -ForegroundColor Yellow
+        Write-Host ""
+        Write-Host "  Run 'pforge brain hint' to see install options." -ForegroundColor Cyan
+    }
+    Write-Host ""
+}
+
+function Invoke-BrainHint {
+    Write-Host ""
+    Write-Host "================================================================" -ForegroundColor Cyan
+    Write-Host " Recommended: Enable Persistent Memory (OpenBrain)" -ForegroundColor Cyan
+    Write-Host "================================================================" -ForegroundColor Cyan
+    Write-Host ""
+    Write-Host "Plan Forge ships with L1 (Hub) + L2 (.forge/*.jsonl) memory."
+    Write-Host "The L3 layer — cross-session semantic memory that powers Reflexion"
+    Write-Host "lessons, Auto-skills, and cross-project Federation — requires"
+    Write-Host "OpenBrain, a self-hosted MCP server. Plan Forge works without it,"
+    Write-Host "but the inner loop only improves over time when L3 is present."
+    Write-Host ""
+    Write-Host "OpenBrain deploy options:" -ForegroundColor Yellow
+    Write-Host "  - Docker Compose       ~5 min   Free                Local dev / single machine"
+    Write-Host "  - Supabase Cloud       ~10 min  ~`$0.10-`$0.30/mo     Solo / small team, zero ops"
+    Write-Host "  - Kubernetes / Azure   ~30 min  Cloud rates         Teams, federation across repos"
+    Write-Host ""
+    Write-Host "Full walkthrough:  https://srnichols.github.io/OpenBrain" -ForegroundColor Cyan
+    Write-Host "Source repo:       https://github.com/srnichols/OpenBrain" -ForegroundColor DarkGray
+    Write-Host ""
+    Write-Host "After installing, run 'pforge brain status' to confirm Plan Forge sees it." -ForegroundColor Green
+    Write-Host ""
+}
+
+function Invoke-Brain {
+    $sub = if ($Arguments.Count -gt 0) { $Arguments[0] } else { "" }
+    # Strip the subcommand from $Arguments so child handlers see the right tail.
+    if ($Arguments.Count -gt 0) {
+        $script:Arguments = @($Arguments | Select-Object -Skip 1)
+    }
+    switch ($sub) {
+        'status' { Invoke-BrainStatus }
+        'hint'   { Invoke-BrainHint }
+        default {
+            Write-Host "Usage: pforge brain <subcommand>" -ForegroundColor Yellow
+            Write-Host ""
+            Write-Host "Subcommands:"
+            Write-Host "  status [--ping]   Check whether OpenBrain (L3 memory) is configured"
+            Write-Host "  hint              Print OpenBrain install options"
+            Write-Host ""
+            Write-Host "See also: pforge drain-memory, https://srnichols.github.io/OpenBrain"
+            exit 1
+        }
+    }
+}
+
 # ─── Command: migrate-memory (GX.5 v2.36) ──────────────────────────────
 function Invoke-MigrateMemory {
     # GX.5: one-shot merge of legacy `*-history.json` and other misnamed
@@ -7102,6 +7203,7 @@ switch ($Command) {
     'testbed-happypath' { Invoke-TestbedHappypath }
     'migrate-memory' { Invoke-MigrateMemory }
     'drain-memory' { Invoke-DrainMemory }
+    'brain'        { Invoke-Brain }
     'mcp-call'     { Invoke-McpCall }
     'tour'         { Invoke-Tour }
     'config'       { Invoke-Config }

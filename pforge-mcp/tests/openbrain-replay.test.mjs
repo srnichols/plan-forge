@@ -37,8 +37,13 @@ function mockClient(overrides = {}) {
     async search(args) {
       calls.push({ tool: "search_thoughts", args });
       if (overrides.searchImpl) return overrides.searchImpl(args, calls.length);
-      // Default: echo back a single hit containing the query string in content
-      return { results: [{ id: "hit-1", content: `record containing ${args.query}` }] };
+      // Default mock mimics OpenBrain's behavior: a semantic search for the
+      // canary probe phrase should surface the most recently captured canary.
+      // Echo back the latest capture_thought content (if any) so the marker
+      // round-trip succeeds; falls back to query echo for non-canary searches.
+      const lastCapture = [...calls].reverse().find((c) => c.tool === "capture_thought");
+      const echoContent = lastCapture?.args?.content ?? `record containing ${args.query}`;
+      return { results: [{ id: "hit-1", content: echoContent }] };
     },
     async close() { calls.push({ tool: "close" }); },
   };
@@ -209,10 +214,15 @@ describe("roundTrip", () => {
     expect(r.ok).toBe(true);
     expect(r.marker).toMatch(/^PFTEST-RT-[A-Z0-9]+$/);
     expect(r.hit).toBeTruthy();
+    expect(r.searchedHits).toBeGreaterThan(0);
     expect(client.calls[0].tool).toBe("capture_thought");
     expect(client.calls[0].args.content).toContain(r.marker);
     expect(client.calls[1].tool).toBe("search_thoughts");
-    expect(client.calls[1].args.query).toBe(r.marker);
+    // Query is the fixed probe phrase, NOT the random marker (issue #204).
+    // Random alphanumeric markers don't embed well; the phrase does.
+    expect(client.calls[1].args.query).not.toBe(r.marker);
+    expect(client.calls[1].args.query).toMatch(/brain test/i);
+    expect(client.calls[1].args.limit).toBeGreaterThanOrEqual(25);
   });
 
   it("returns ok=false when search returns no hits matching the marker", async () => {

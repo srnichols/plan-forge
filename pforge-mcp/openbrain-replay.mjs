@@ -226,11 +226,31 @@ function stripHashPrefix(heading) {
 // ─── Round-trip ────────────────────────────────────────────────────────
 
 /**
+ * Distinctive natural-language probe phrase embedded in every canary thought
+ * and used as the semantic-search query. Random alphanumeric markers (e.g.
+ * `PFTEST-RT-ABC123`) have weak embeddings and rank poorly once the corpus
+ * contains real entries — see issue #204. The probe phrase is unique to our
+ * canary thoughts, so hits are reliably retrievable regardless of corpus size.
+ *
+ * Treat this string as a contract: changing it invalidates older canaries
+ * (which is fine — they're throwaway).
+ */
+const ROUND_TRIP_PROBE_PHRASE =
+  "pforge brain test round-trip canary verifier sentinel phrase";
+
+export { ROUND_TRIP_PROBE_PHRASE };
+
+/**
  * Capture a unique marker thought, then search for it. Returns ok=true when
  * the search response includes a record whose content carries the marker.
  *
+ * Search strategy: query by a fixed distinctive probe phrase (not the random
+ * marker) so semantic search reliably surfaces canary thoughts at the top of
+ * results. Among the returned hits, find the one whose content includes our
+ * marker — that's positive verification of the current round-trip.
+ *
  * @param {object} client  - mock or live MCP client with capture()/search()
- * @param {{ project?: string, source?: string, timeoutMs?: number }} opts
+ * @param {{ project?: string, source?: string, indexDelayMs?: number, searchLimit?: number }} opts
  */
 export async function roundTrip(client, opts = {}) {
   const start = Date.now();
@@ -240,7 +260,7 @@ export async function roundTrip(client, opts = {}) {
 
   try {
     const captureRes = await client.capture({
-      content: `${marker} — pforge brain test marker thought (safe to ignore)`,
+      content: `${ROUND_TRIP_PROBE_PHRASE} — marker=${marker} (pforge brain test canary; safe to ignore)`,
       project,
       source,
     });
@@ -249,9 +269,9 @@ export async function roundTrip(client, opts = {}) {
     if (opts.indexDelayMs) await delay(opts.indexDelayMs);
 
     const searchRes = await client.search({
-      query: marker,
+      query: ROUND_TRIP_PROBE_PHRASE,
       project,
-      limit: 5,
+      limit: opts.searchLimit || 25,
     });
     const hits = searchRes?.results ?? searchRes?.thoughts ?? [];
     const hit = hits.find((h) => String(h.content || "").includes(marker)) ?? null;
@@ -261,6 +281,7 @@ export async function roundTrip(client, opts = {}) {
       marker,
       hit,
       capturedId: captureRes?.id ?? null,
+      searchedHits: hits.length,
       durationMs: Date.now() - start,
     };
   } catch (e) {

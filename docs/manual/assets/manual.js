@@ -471,6 +471,7 @@
     { t: "Clone and Run Setup",                  u: "quickstart-install.html#clone" },
     { t: "Pick Your Preset",                     u: "quickstart-install.html#presets" },
     { t: "Verify with pforge smith",             u: "quickstart-install.html#verify" },
+    { t: "Easy Button (one-prompt install)",     u: "quickstart-install.html#easy-button" },
     { t: "Specify the Feature (Quickstart)",     u: "quickstart-first-plan.html#step-0" },
     { t: "Pre-flight Check (Quickstart)",        u: "quickstart-first-plan.html#step-1" },
     { t: "Harden the Plan (Quickstart)",         u: "quickstart-first-plan.html#step-2" },

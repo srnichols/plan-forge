@@ -50,6 +50,52 @@
           <strong>Node.js is optional.</strong> Required only for the dashboard, MCP server, <code>pforge.ps1</code> / <code>pforge.sh</code>, and the <!--c:tools-->88<!--/c--> tools (REST API + WebSocket hub). <strong>Skip Node.js if you'll only use the core pipeline</strong> &mdash; prompts, instruction files, agents, and skills all live inside <code>.github/</code> and run entirely inside Copilot Chat.
         </div>
 
+        <!-- ─── Easy Button: one-prompt install ─── -->
+        <details id="easy-button" class="group rounded-xl border border-amber-500/40 bg-gradient-to-br from-amber-500/10 to-slate-900/40 overflow-hidden mb-8">
+          <summary class="flex items-center justify-between px-5 py-4 cursor-pointer list-none hover:bg-slate-800/30 transition-colors">
+            <div class="flex items-center gap-3">
+              <span class="px-2.5 py-0.5 rounded-full bg-amber-500/20 text-amber-400 text-xs font-bold border border-amber-500/30">⚡ EASY BUTTON</span>
+              <span class="font-semibold text-slate-100 text-sm">Skip the manual steps — paste one prompt and your AI installs everything</span>
+            </div>
+            <svg class="w-4 h-4 text-slate-500 group-open:rotate-180 transition-transform shrink-0 ml-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
+          </summary>
+          <div class="px-5 pb-5 border-t border-amber-500/20 pt-4">
+            <p class="text-sm text-slate-400 mb-4">Open Copilot Chat (Agent Mode), Claude Code, or Cursor inside your project — paste this prompt. The AI reads <a href="https://github.com/srnichols/plan-forge/blob/master/AGENT-SETUP.md" target="_blank" rel="noopener">AGENT-SETUP.md</a>, detects your stack, runs setup, customizes the files, and validates. Zero manual steps.</p>
+            <div class="cmd-block">
+              <div class="cmd-block-header"><span>Paste into any AI chat — Copilot, Claude, Cursor, Codex</span><button class="cmd-copy-btn">Copy</button></div>
+              <pre><code>Clone https://github.com/srnichols/plan-forge into a temporary directory. Read its AGENT-SETUP.md file completely and follow the instructions exactly:
+
+1. Scan THIS project's root directory and auto-detect the tech stack from marker files (*.csproj = dotnet, go.mod = go, package.json + tsconfig.json = typescript, pom.xml = java, pyproject.toml = python, *.bicep = azure-iac). If multiple stacks exist, combine them.
+
+2. Detect which AI tool is running this prompt and set the -Agent flag:
+   - GitHub Copilot → -Agent copilot (default, can omit)
+   - Claude Code → -Agent claude
+   - Cursor → -Agent cursor
+   - Codex CLI → -Agent codex
+   - Not sure → -Agent all (installs all agent formats)
+
+3. Run the Plan Forge setup script non-interactively:
+   .\setup.ps1 -Preset &lt;detected&gt; -Agent &lt;detected-agent&gt; -ProjectPath "." -ProjectName "&lt;this folder name&gt;" -Force
+
+4. After setup completes, customize the generated files:
+   - Edit .github/copilot-instructions.md with this project's actual name, tech stack, build/test/lint commands, and architecture
+   - If CLAUDE.md was generated, verify it looks correct
+   - Edit docs/plans/DEPLOYMENT-ROADMAP.md with a first phase placeholder
+
+5. Run .\pforge.ps1 smith to inspect the forge and confirm all checks pass.
+
+6. If pforge-mcp/server.mjs was installed, run: cd pforge-mcp &amp;&amp; npm install (activates the forge MCP tools).
+
+7. If specs/ or memory/constitution.md exist (Spec Kit project), note that Step 0 will auto-detect and offer to import them.
+
+8. Call forge_capabilities to verify all tools are available and discover workflows, config options, and OpenBrain memory integration.
+
+9. Show me a summary of what was installed and any issues found.</code></pre>
+            </div>
+            <p class="text-xs text-slate-500 mt-3">Works with GitHub Copilot (Agent Mode), Claude Code, Cursor, Codex CLI, or any AI tool with terminal access. Prefer the manual steps? Continue with Option A or B below ↓</p>
+          </div>
+        </details>
+
         <!-- ─── Option A ─── -->
         <h2 id="one-click">Option A: Clone &amp; Setup</h2>
         <p>The fastest path — clone the repo and run the setup wizard:</p>

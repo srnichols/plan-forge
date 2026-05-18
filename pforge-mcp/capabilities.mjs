@@ -2319,6 +2319,29 @@ export const CLI_SCHEMA = {
         "pforge mcp-call crucible-submit --title=\"Pagination\" --description=\"...\"",
       ],
     },
+    // ─── OpenBrain L3 memory helpers (v3.6.0; brain test/replay receipt fix in v3.6.1) ───
+    brain: {
+      description: "OpenBrain (L3 memory) helpers — local config check, install hint, round-trip self-test, and replay of capture-only records",
+      args: [
+        { name: "subcommand", type: "string", required: true, description: "One of: status, hint, test, replay" },
+        { name: "source", type: "string", required: false, description: "(replay only) Path to a .jsonl queue file, a single .md file, or a directory of .md files" },
+      ],
+      flags: {
+        "--ping": { type: "boolean", description: "(status only) Probe the OpenBrain endpoint after local config check" },
+        "--dry-run": { type: "boolean", description: "(replay only) Preview records without sending to OpenBrain" },
+        "--project": { type: "string", description: "(replay only) Override project tag (defaults to .forge.json projectName or 'plan-forge')" },
+        "--rate": { type: "number", description: "(replay only) Rate-limit between sends in milliseconds" },
+        "--max": { type: "number", description: "(replay only) Cap on number of records to replay" },
+      },
+      examples: [
+        "pforge brain status",
+        "pforge brain status --ping",
+        "pforge brain hint",
+        "pforge brain test",
+        "pforge brain replay .forge/openbrain-queue.jsonl",
+        "pforge brain replay docs/plans/Phase-X-PLAN.md --dry-run",
+      ],
+    },
     tour: {
       description: "Guided walkthrough of your installed Plan Forge files",
       args: [],

@@ -5,6 +5,44 @@ Format follows [Keep a Changelog](https://keepachangelog.com/).
 
 ---
 
+## [Unreleased]
+
+---
+
+## [3.6.1] — 2026-05-18 — Brain Replay Receipt Integrity Hotfix
+
+> **One-liner**: Fixes a silent data-integrity defect in `pforge brain replay` (shipped in v3.6.0): MCP tool responses with `isError: true` (e.g. Ollama embed context-overflow) were being recorded as `status:"sent"` in the per-record receipt log. Also backfills documentation for `brain test` / `brain replay`, which were shipped in v3.6.0 but missing from `cli-schema.json` and the CLI guide.
+
+### Why
+
+In v3.6.0 we shipped `pforge brain test` and `pforge brain replay` plus the underlying [pforge-mcp/openbrain-replay.mjs](pforge-mcp/openbrain-replay.mjs) module. The receipt-writing path treated any MCP response with a text part as a successful capture — but MCP tool responses can return `{ isError: true, content: [...] }` to signal a server-side failure (OpenBrain v0.7.3 surfaces Ollama embed errors this way when a markdown chunk exceeds the 2048-token `nomic-embed-text` context).
+
+The result: a real-world replay of 60 sources reported `0 failures` in the receipt log while 21 records (5.5%) had actually failed embedding on the OpenBrain side. The receipts were unsafe to rely on for data-integrity audits. We caught this only by cross-checking OpenBrain's `replay:%` count against the source ground truth.
+
+### Fixed
+
+- **[pforge-mcp/openbrain-replay.mjs](pforge-mcp/openbrain-replay.mjs)** — `parseToolResult` now throws when `res.isError === true`, surfacing the verbatim server body in `err.message` and `err.mcpBody`. Receipt log now records real per-record failures with the original Ollama / OpenBrain error text. Affects shipped commands `pforge brain test` and `pforge brain replay` plus REST endpoints `POST /api/brain/test` and `POST /api/brain/replay`.
+
+### Documentation backfill (was missing from v3.6.0)
+
+- **[pforge-mcp/cli-schema.json](pforge-mcp/cli-schema.json)** — New `brain` command entry with `subcommand` arg (status / hint / test / replay), optional `source` arg for replay, and flags `--ping` / `--dry-run` / `--project` / `--rate` / `--max`.
+- **[docs/CLI-GUIDE.md](docs/CLI-GUIDE.md)** — New sections for `pforge brain status`, `pforge brain hint`, `pforge brain test`, and `pforge brain replay <source>` (added to the Memory Subsystem block). Includes a v3.6.0 receipt-bug warning callout.
+
+### Distribution sync
+
+- **[pforge-mcp/package.json](pforge-mcp/package.json)** — version bumped 3.5.1 → 3.6.1 (was drifted in v3.6.0 — pre-existing drift cleared as part of this hotfix).
+- **VERSION** — 3.6.0 → 3.6.1.
+
+### Tests
+
+- **[pforge-mcp/tests/openbrain-replay.test.mjs](pforge-mcp/tests/openbrain-replay.test.mjs)** — 21/21 still pass after the parser fix.
+
+### Operational artifacts (not shipped)
+
+The forensic reconciliation that discovered this bug lives in `.forge/runs/reconcile-openbrain-20260518-0343/` (gitignored). All 21 lost records were recovered: 14 cleanly replayed and 7 over-context records recovered via truncate-to-6000-bytes retry.
+
+---
+
 ## [3.6.0] — 2026-05-18 — OpenBrain Promotion (L3 Memory Made Loud)
 
 > **One-liner**: Reframes OpenBrain from a row-5 "optional extension" to the L3 memory layer — the only cross-session, cross-tool, semantic-search store. Still optional, but loud and easy to enable at every install touchpoint. Plan Forge works without it; the inner loop only improves over time with it.

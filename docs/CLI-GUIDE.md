@@ -1221,6 +1221,101 @@ Lattice Index Statistics:
 
 ---
 
+### `pforge brain status` (v3.6.0)
+
+Local config check for OpenBrain (the L3 semantic memory layer). Reports whether `.vscode/mcp.json` (or `.claude/mcp.json`) has an OpenBrain SSE entry, and which config file Plan Forge would use.
+
+```powershell
+.\pforge.ps1 brain status
+.\pforge.ps1 brain status --ping     # Also probe the endpoint (opt-in)
+```
+
+```bash
+./pforge.sh brain status
+./pforge.sh brain status --ping
+```
+
+Exit code is informational only — Plan Forge works without OpenBrain. Use `pforge brain hint` to see install options.
+
+---
+
+### `pforge brain hint` (v3.6.0)
+
+Print the four OpenBrain install options (Docker Compose / Supabase Cloud / Kubernetes-or-Azure / Skip-for-now). Same content as the [setup.ps1](../setup.ps1) / [setup.sh](../setup.sh) end-of-flow wizard.
+
+```powershell
+.\pforge.ps1 brain hint
+```
+
+```bash
+./pforge.sh brain hint
+```
+
+---
+
+### `pforge brain test` (v3.6.0)
+
+End-to-end round-trip self-test. Captures a unique marker thought via OpenBrain `capture_thought`, then immediately searches for it via `search_thoughts`. Prints duration, marker ID, and pass/fail.
+
+Requires the MCP server running on `localhost:3100` and an OpenBrain SSE entry in `.vscode/mcp.json` (or `.claude/mcp.json`).
+
+```powershell
+.\pforge.ps1 brain test
+```
+
+```bash
+./pforge.sh brain test
+```
+
+**Output (success):**
+```
+🧠 Brain Test — round-trip OK
+   Endpoint:  https://openbrain.example/sse
+   Marker:    pforge-brain-test-1747545600000
+   Duration:  342ms
+   Captured:  id=abc-123
+```
+
+Exits non-zero if the round-trip fails. Use this to confirm OpenBrain is reachable, the API key is valid, and the embed pipeline is up before running `pforge brain replay`.
+
+---
+
+### `pforge brain replay <source>` (v3.6.0)
+
+Replay capture-only records into OpenBrain. Use cases: backfill records from a queue file written while OpenBrain was down, re-capture from a markdown plan after recovering from data loss, or migrate from one OpenBrain instance to another.
+
+`<source>` can be:
+- a `.jsonl` queue file (one record per line, e.g. `.forge/openbrain-queue.jsonl`)
+- a single `.md` file (normalized into capture_thought payloads, H2-split)
+- a directory of `.md` files (each split and queued)
+
+```powershell
+.\pforge.ps1 brain replay .forge/openbrain-queue.jsonl
+.\pforge.ps1 brain replay docs/plans/Phase-X-PLAN.md --dry-run
+.\pforge.ps1 brain replay docs/plans/ --rate 250 --max 100
+```
+
+```bash
+./pforge.sh brain replay .forge/openbrain-queue.jsonl
+./pforge.sh brain replay docs/plans/Phase-X-PLAN.md --dry-run
+./pforge.sh brain replay docs/plans/ --rate 250 --max 100
+```
+
+**Flags:**
+
+| Flag | Type | Description |
+|------|------|-------------|
+| `--dry-run` | boolean | Preview records without sending to OpenBrain |
+| `--project <name>` | string | Override project tag (defaults to `.forge.json` `projectName` or `plan-forge`) |
+| `--rate <ms>` | number | Rate-limit between sends in milliseconds |
+| `--max <n>` | number | Cap on number of records to replay |
+
+Writes a per-record receipt log to `.forge/openbrain-replay-<timestamp>.jsonl`. **Receipts now record real per-record success/failure** (v3.6.1): if OpenBrain returns an `isError: true` tool response (e.g. Ollama embed context-overflow), the record is logged with the verbatim error body instead of being silently accepted as `status:"sent"`.
+
+> ⚠️ **v3.6.0 receipt bug**: In v3.6.0 the receipt log silently marked over-context Ollama failures as `sent`. Upgrade to v3.6.1+ before relying on receipts for data-integrity.
+
+---
+
 ## CLI vs Manual Workflow
 
 | Task | CLI | Manual |

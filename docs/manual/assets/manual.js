@@ -594,11 +594,11 @@
     // Ch 9
     { t: "Universal Instruction Files", u: "instructions-agents.html#shared" },
     { t: "Domain Instruction Files", u: "instructions-agents.html#domain" },
-    { t: "Stack-Specific Agents", u: "instructions-agents.html#agents" },
-    { t: "Cross-Stack Agents", u: "instructions-agents.html#agents" },
-    { t: "Pipeline Agents", u: "instructions-agents.html#agents" },
-    { t: "Skills Slash Commands", u: "instructions-agents.html#skills" },
-    { t: "Lifecycle Hooks", u: "instructions-agents.html#hooks" },
+    { t: "Stack-Specific Agents", u: "instructions-agents-reference.html#agents-stack" },
+    { t: "Cross-Stack Agents", u: "instructions-agents-reference.html#agents-cross-stack" },
+    { t: "Pipeline Agents", u: "instructions-agents-reference.html#agents-pipeline" },
+    { t: "Skills Slash Commands", u: "instructions-agents-reference.html#skills" },
+    { t: "Lifecycle Hooks", u: "instructions-agents-reference.html#hooks" },
     // Ch 11
     { t: "MCP Server Architecture", u: "mcp-server.html#architecture" },
     { t: "MCP Server Chapter Overview", u: "mcp-server.html#chapters" },

@@ -683,7 +683,7 @@ if (!auditOnly) {
       const escapedTitle = escapeHtml(chapter.title);
       const partLabel = (chapter.act === "I" || chapter.act === "II" || chapter.act === "III" || chapter.act === "IV")
         ? `Chapter ${chapter.num}` : chapter.act === "Appendix" ? `Appendix ${chapter.num}` : chapter.act === "Quickstart" ? `Quickstart ${chapter.num}` : chapter.num;
-      lofBody += `        <h3 class="!mt-8 !mb-3 text-amber-400">${partLabel} &mdash; <a href="${escapeHtml(file)}" class="hover:underline">${escapedTitle}</a></h3>\n`;
+      lofBody += `        <h2 class="!mt-8 !mb-3 text-amber-400">${partLabel} &mdash; <a href="${escapeHtml(file)}" class="hover:underline">${escapedTitle}</a></h2>\n`;
       lofBody += `        <div class="space-y-1">\n`;
       for (const fig of figs) {
         lofBody += `          <div class="flex items-baseline gap-3 py-1 border-b border-slate-800/40">\n`;
@@ -739,10 +739,29 @@ function prettyPageRef(href, chapters) {
 }
 
 function replaceById(html, id, inner) {
-  const re = new RegExp(`(<div[^>]*id="${id}"[^>]*>)([\\s\\S]*?)(<\\/div>)`, "m");
-  if (!re.test(html)) {
+  // Match the opening tag of the target wrapper div.
+  const openRe = new RegExp(`<div[^>]*id="${id}"[^>]*>`);
+  const openMatch = openRe.exec(html);
+  if (!openMatch) {
     console.error(`   ✗ Could not find <div id="${id}"> in book-index.html`);
     return html;
   }
-  return html.replace(re, `$1\n${inner}\n      $3`);
+  // Walk forward from end-of-open tag, counting <div> nesting depth to find the matching </div>.
+  const openEnd = openMatch.index + openMatch[0].length;
+  const tagRe = /<\/?div\b[^>]*>/gi;
+  tagRe.lastIndex = openEnd;
+  let depth = 1;
+  let closeMatch;
+  while ((closeMatch = tagRe.exec(html)) !== null) {
+    if (closeMatch[0].startsWith("</")) {
+      depth--;
+      if (depth === 0) {
+        return html.slice(0, openEnd) + `\n${inner}\n      ` + html.slice(closeMatch.index);
+      }
+    } else {
+      depth++;
+    }
+  }
+  console.error(`   ✗ Unbalanced <div> nesting for id="${id}"; not replacing`);
+  return html;
 }

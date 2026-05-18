@@ -40,7 +40,7 @@
 
       <p><strong>Failure mode it addresses</strong>: An agent asked to "build a login page" produces a login page plus a password reset flow, an admin panel, a user profile system, and refactored database migrations. The agent is not being creative — it is being thorough with zero scope constraints.</p>
 
-      <p><strong>Where it is enforced</strong>: Every hardened plan ships a <a href="customization.html">Forbidden Actions</a> section in the Scope Contract. The <code>PreToolUse</code> lifecycle hook (see <a href="how-it-works.html#hooks">How It Works → Hooks</a>) blocks file edits to paths listed in the active plan's Forbidden Actions. The pattern is enforced by the plan-hardening prompt, not left to the executing agent's discretion.</p>
+      <p><strong>Where it is enforced</strong>: Every hardened plan ships a <a href="customization.html">Forbidden Actions</a> section in the Scope Contract. The <code>PreToolUse</code> lifecycle hook (see <a href="how-it-works.html#building-blocks">How It Works → Building Blocks</a>) blocks file edits to paths listed in the active plan's Forbidden Actions. The pattern is enforced by the plan-hardening prompt, not left to the executing agent's discretion.</p>
 
       <blockquote class="border-l-4 border-amber-500/50 pl-4 italic text-slate-400 my-4">"The most powerful guardrail isn't 'do this.' It's 'don't do that.'"</blockquote>
 
@@ -60,7 +60,7 @@ applyTo: '**/auth/**,**/middleware/**'
 ---</code></pre>
       </div>
 
-      <p>When a file matching the pattern is edited, the instruction file loads automatically into the agent's context. See <a href="customization.html#instruction-files">Customization → Instruction Files</a> for the full pattern reference.</p>
+      <p>When a file matching the pattern is edited, the instruction file loads automatically into the agent's context. See <a href="customization.html#custom-instructions">Customization → Custom Instructions</a> for the full pattern reference.</p>
 
       <h2 id="independent-review">Lesson 3 — The Builder Must Never Review Its Own Work</h2>
 
@@ -78,7 +78,7 @@ applyTo: '**/auth/**,**/middleware/**'
 
       <p><strong>Failure mode it addresses</strong>: Building 15 files before running tests guarantees that failures compound. The agent burns its context window chasing regressions that span files it has long since stopped reasoning about.</p>
 
-      <p><strong>Where it is enforced</strong>: Every hardened plan decomposes a feature into 3–7 execution slices, each with its own <code>Validation Gate</code>. The orchestrator runs the gate after each slice and refuses to advance on failure. See <a href="writing-plans.html#slices">Writing Plans → Execution Slices</a> for the slice contract and <a href="how-it-works.html#building-blocks">How It Works → Building Blocks</a> for the gate enforcement model.</p>
+      <p><strong>Where it is enforced</strong>: Every hardened plan decomposes a feature into 3–7 execution slices, each with its own <code>Validation Gate</code>. The orchestrator runs the gate after each slice and refuses to advance on failure. See <a href="writing-plans.html#slicing">Writing Plans → Slicing Strategy</a> for the slice contract and <a href="how-it-works.html#building-blocks">How It Works → Building Blocks</a> for the gate enforcement model.</p>
 
       <p>Slice gates produce three observable benefits:</p>
 
@@ -94,7 +94,7 @@ applyTo: '**/auth/**,**/middleware/**'
 
       <p><strong>Failure mode it addresses</strong>: The first version of Plan Forge had a single <code>copilot-instructions.md</code> at roughly 2,000 lines covering security, testing, architecture, database patterns, error handling, and deployment. Key rules buried, contradictions crept in, and the agent applied rules selectively.</p>
 
-      <p><strong>Where it is enforced</strong>: The <code>.github/instructions/</code> directory contains 18+ focused files, each with a single concern. See <a href="customization.html#instruction-files">Customization → Instruction Files</a> for the inventory.</p>
+      <p><strong>Where it is enforced</strong>: The <code>.github/instructions/</code> directory contains 18+ focused files, each with a single concern. See <a href="customization.html#custom-instructions">Customization → Custom Instructions</a> for the inventory.</p>
 
       <p><strong>v2.18 extension — Temper Guards and Warning Signs</strong>: Each instruction file now ends with two named sections — <em>Temper Guards</em> documents the specific shortcuts agents take that produce compiling but architecturally broken code (e.g. "this is just a DTO, no logic to test", "N+1 won't matter at our scale"); <em>Warning Signs</em> lists observable anti-patterns that reviewers can grep for. Each file teaches not just <em>what to do</em> but <em>why not to skip it</em>.</p>
 

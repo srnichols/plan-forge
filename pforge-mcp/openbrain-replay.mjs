@@ -436,20 +436,40 @@ export async function createSseClient(cfg) {
   };
 }
 
-/** Best-effort parse of an MCP tool-call response into a JSON object. */
+/** Best-effort parse of an MCP tool-call response into a JSON object.
+ *  Throws when the MCP server reports `isError: true` so that
+ *  `replayRecords` / callers see the failure instead of silently
+ *  recording the error text as a successful capture. */
 function parseToolResult(res) {
   if (!res) return null;
-  // MCP responses surface content as an array of {type, text} parts.
+
+  // Extract the textual payload (if any) from content parts.
+  let extracted = null;
   if (Array.isArray(res.content)) {
     for (const part of res.content) {
       if (part?.type === "text" && typeof part.text === "string") {
-        try { return JSON.parse(part.text); } catch { return { text: part.text }; }
+        try { extracted = JSON.parse(part.text); } catch { extracted = { text: part.text }; }
+        break;
       }
     }
   }
-  // Some servers return the structured result directly.
-  if (res.structuredContent) return res.structuredContent;
-  return res;
+  if (extracted === null && res.structuredContent) extracted = res.structuredContent;
+  if (extracted === null) extracted = res;
+
+  // Honor MCP-level error flag. Older code silently returned the error
+  // body as if it were a successful result — the root cause of receipt
+  // logs reporting `status: "sent"` for embed-failed records.
+  if (res.isError === true) {
+    const body = typeof extracted === "string"
+      ? extracted
+      : (extracted?.text ?? JSON.stringify(extracted));
+    const err = new Error(`mcp tool error: ${String(body).slice(0, 500)}`);
+    err.mcpError = true;
+    err.mcpBody = extracted;
+    throw err;
+  }
+
+  return extracted;
 }
 
 // ─── helpers ───────────────────────────────────────────────────────────

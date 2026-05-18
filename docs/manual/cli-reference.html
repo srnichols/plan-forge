@@ -857,6 +857,155 @@ pforge quorum-analyze --source incident --custom-question "Which fix should I pr
           <p class="text-sm text-slate-500">Also available as: <code>forge_quorum_analyze</code> MCP tool, <code>POST /api/quorum/prompt</code> REST endpoint (no auth required).</p>
         </div>
 
+        <!-- ─── Third Edition (v3.x) commands ─── -->
+        <h2 id="third-edition">Third Edition Commands <span class="text-amber-400 text-base font-normal">v3.x+</span></h2>
+        <p>Six commands shipped between v2.99 and v3.5 that postdate the original CLI reference. Each is a thin wrapper over a v3.x MCP tool or subsystem — see the per-command "Also available as" link for the full MCP / REST mapping.</p>
+
+        <div class="cmd-ref" id="sync-memories">
+          <div class="cmd-ref-title">pforge sync-memories <span class="text-xs text-amber-400 font-normal">v2.99+</span></div>
+          <div class="cmd-ref-desc">Generate <code>.github/copilot-memory-hints.md</code> from forge decisions — trajectories, auto-skills, OpenBrain entries. Hash-deduped and atomic; safe to run repeatedly. See <a href="copilot-integration.html#sync-memories">Chapter 26 — Copilot Integration Trilogy</a>.</div>
+          <table>
+            <thead><tr><th>Flag</th><th>Type</th><th>Description</th></tr></thead>
+            <tbody>
+              <tr><td><code>--since</code></td><td>duration (optional)</td><td>Limit to trajectories in the last N (e.g. <code>14d</code>, <code>30d</code>). Default: 50 most recent.</td></tr>
+              <tr><td><code>--explain</code></td><td>flag (optional)</td><td>Verbose: show which entries were included/excluded and why</td></tr>
+              <tr><td><code>--preview</code></td><td>flag (optional)</td><td>Generate without writing — print the diff</td></tr>
+            </tbody>
+          </table>
+          <div class="cmd-block"><div class="cmd-block-header"><span>PowerShell / Bash</span><button class="cmd-copy-btn">Copy</button></div>
+          <pre><code>pforge sync-memories
+pforge sync-memories --since=14d
+pforge sync-memories --preview --explain</code></pre></div>
+          <p class="text-sm text-slate-500">Also available as: <code>forge_sync_memories</code> MCP tool.</p>
+        </div>
+
+        <div class="cmd-ref" id="sync-instructions">
+          <div class="cmd-ref-title">pforge sync-instructions <span class="text-xs text-amber-400 font-normal">v3.0+</span></div>
+          <div class="cmd-ref-desc">Generate <code>.github/copilot-instructions.md</code> by composing project profile + principles + extra instruction files + <code>.forge.json</code> commitments. Output is deterministic; same inputs produce identical files.</div>
+          <table>
+            <thead><tr><th>Flag</th><th>Type</th><th>Description</th></tr></thead>
+            <tbody>
+              <tr><td><code>--preview</code></td><td>flag (optional)</td><td>Generate without writing — print the resulting content</td></tr>
+              <tr><td><code>--force</code></td><td>flag (optional)</td><td>Overwrite even if content hash matches (bypass dedup)</td></tr>
+            </tbody>
+          </table>
+          <div class="cmd-block"><div class="cmd-block-header"><span>PowerShell / Bash</span><button class="cmd-copy-btn">Copy</button></div>
+          <pre><code>pforge sync-instructions
+pforge sync-instructions --preview
+pforge sync-instructions --force</code></pre></div>
+          <p class="text-sm text-slate-500">Also available as: <code>forge_sync_instructions</code> MCP tool, <code>POST /api/copilot-instructions/sync</code> REST endpoint.</p>
+        </div>
+
+        <div class="cmd-ref" id="sync-spaces">
+          <div class="cmd-ref-title">pforge sync-spaces <span class="text-xs text-amber-400 font-normal">v3.2+</span></div>
+          <div class="cmd-ref-desc">Sync memory spaces across projects — pull shared knowledge from configured peer repositories into the local OpenBrain L3 store. Read-only on the local side until a confirmation flag is passed. Useful in fleet / multi-repo setups.</div>
+          <table>
+            <thead><tr><th>Flag</th><th>Type</th><th>Description</th></tr></thead>
+            <tbody>
+              <tr><td><code>--peer</code></td><td>string (optional)</td><td>Limit sync to one configured peer name</td></tr>
+              <tr><td><code>--apply</code></td><td>flag (optional)</td><td>Write the merged records (default: dry-run)</td></tr>
+              <tr><td><code>--since</code></td><td>duration (optional)</td><td>Only consider records newer than N (default: <code>7d</code>)</td></tr>
+            </tbody>
+          </table>
+          <div class="cmd-block"><div class="cmd-block-header"><span>PowerShell / Bash</span><button class="cmd-copy-btn">Copy</button></div>
+          <pre><code>pforge sync-spaces                       # dry-run, all peers
+pforge sync-spaces --peer=billing-svc --apply
+pforge sync-spaces --since=30d --apply</code></pre></div>
+          <p class="text-sm text-slate-500">Configured under <code>brain.federation.repos</code> in <code>.forge.json</code>.</p>
+        </div>
+
+        <div class="cmd-ref" id="plan-from-sarif">
+          <div class="cmd-ref-title">pforge plan-from-sarif &lt;sarif-file&gt; <span class="text-xs text-amber-400 font-normal">v3.1+</span></div>
+          <div class="cmd-ref-desc">Generate a Plan Forge phase plan from a SARIF findings file (CodeQL, Semgrep, ESLint with SARIF reporter, etc.). Each finding becomes a slice in the resulting plan; severity drives priority ordering.</div>
+          <table>
+            <thead><tr><th>Flag</th><th>Type</th><th>Description</th></tr></thead>
+            <tbody>
+              <tr><td><code>--min-severity</code></td><td>enum (optional)</td><td><code>low</code> · <code>medium</code> · <code>high</code> · <code>critical</code> (default: <code>medium</code>)</td></tr>
+              <tr><td><code>--max-slices</code></td><td>number (optional)</td><td>Cap the number of slices (default: 10)</td></tr>
+              <tr><td><code>--phase-name</code></td><td>string (optional)</td><td>Override the auto-generated phase name</td></tr>
+            </tbody>
+          </table>
+          <div class="cmd-block"><div class="cmd-block-header"><span>PowerShell / Bash</span><button class="cmd-copy-btn">Copy</button></div>
+          <pre><code>pforge plan-from-sarif codeql-results.sarif
+pforge plan-from-sarif scan.sarif --min-severity=high --max-slices=5
+pforge plan-from-sarif sec.sarif --phase-name="Phase-SEC-FIX"</code></pre></div>
+          <p class="text-sm text-slate-500">Writes to <code>docs/plans/Phase-N-PLAN.md</code>. Plan still needs hardening via <code>step2-harden-plan.prompt.md</code> before execution.</p>
+        </div>
+
+        <div class="cmd-ref" id="digest">
+          <div class="cmd-ref-title">pforge digest <span class="text-xs text-amber-400 font-normal">v3.3+</span></div>
+          <div class="cmd-ref-desc">The "morning summary" — compresses graph findings, pattern detectors, and event ledgers into a single human-readable digest. Categories: plans shipped, aging meta-bugs, stalled phases, probe-lane deltas, drift score changes, cost anomalies. See <a href="knowledge-graph.html#digest">Chapter 28 — The Knowledge Graph</a>.</div>
+          <table>
+            <thead><tr><th>Flag</th><th>Type</th><th>Description</th></tr></thead>
+            <tbody>
+              <tr><td><code>--since</code></td><td>duration (optional)</td><td>Window (default: <code>24h</code>). Common: <code>7d</code> for weekly roll-up.</td></tr>
+              <tr><td><code>--format</code></td><td>enum (optional)</td><td><code>markdown</code> (default) · <code>json</code></td></tr>
+              <tr><td><code>--post</code></td><td>flag (optional)</td><td>Send via configured notification channel (Slack, Teams, etc.)</td></tr>
+              <tr><td><code>--rebuild</code></td><td>flag (optional)</td><td>Recompute from logs instead of reading cached <code>.forge/digests/YYYY-MM-DD.json</code></td></tr>
+            </tbody>
+          </table>
+          <div class="cmd-block"><div class="cmd-block-header"><span>PowerShell / Bash</span><button class="cmd-copy-btn">Copy</button></div>
+          <pre><code>pforge digest                       # today's, markdown
+pforge digest --since=7d            # weekly
+pforge digest --format=json | jq    # pipe-friendly
+pforge digest --post                # broadcast to configured channel</code></pre></div>
+          <p class="text-sm text-slate-500">Backs the Yesterday's Digest dashboard tile. Cron-friendly: <code>pforge digest --post</code> at 09:00 weekdays = free standup.</p>
+        </div>
+
+        <div class="cmd-ref" id="hammer-fm">
+          <div class="cmd-ref-title">pforge hammer-fm <span class="text-xs text-amber-400 font-normal">v3.2+</span></div>
+          <div class="cmd-ref-desc">Run the full Forge-Master tempering harness — false-marker scan across the entire codebase (TODO, FIXME, HACK, stub patterns, mock data, placeholder text). Wraps <code>forge_sweep</code> + <code>forge_tempering_drain</code> in a single tightened loop suitable for pre-release gates.</div>
+          <table>
+            <thead><tr><th>Flag</th><th>Type</th><th>Description</th></tr></thead>
+            <tbody>
+              <tr><td><code>--strict</code></td><td>flag (optional)</td><td>Exit non-zero on any finding (default: report-only)</td></tr>
+              <tr><td><code>--include</code></td><td>glob (optional)</td><td>Limit scan to files matching a glob (default: all tracked)</td></tr>
+              <tr><td><code>--max-rounds</code></td><td>number (optional)</td><td>Cap convergence rounds (default: 3)</td></tr>
+            </tbody>
+          </table>
+          <div class="cmd-block"><div class="cmd-block-header"><span>PowerShell / Bash</span><button class="cmd-copy-btn">Copy</button></div>
+          <pre><code>pforge hammer-fm
+pforge hammer-fm --strict                # CI gate
+pforge hammer-fm --include="src/**/*.ts"</code></pre></div>
+          <p class="text-sm text-slate-500">Pairs well with <code>forge_classifier_issue</code> when findings are noise rather than bugs — see <a href="team-coordination.html#classifier-issue">Chapter 27 — Team Coordination</a>.</p>
+        </div>
+
+        <div class="cmd-ref" id="fm-session">
+          <div class="cmd-ref-title">pforge fm-session [&lt;goal&gt;] <span class="text-xs text-amber-400 font-normal">v3.4+</span></div>
+          <div class="cmd-ref-desc">Start (or resume) a Forge-Master reasoning session — interactive read-only conversation with the orchestrator. Use it for "why did Phase-X fail?", "what's the cheapest way to ship this plan?", and similar open-ended questions. Sessions persist to <code>.forge/forge-master/sessions/</code>.</div>
+          <table>
+            <thead><tr><th>Flag</th><th>Type</th><th>Description</th></tr></thead>
+            <tbody>
+              <tr><td><code>--resume</code></td><td>string (optional)</td><td>Session ID to continue (omit to start new)</td></tr>
+              <tr><td><code>--model</code></td><td>string (optional)</td><td>Override the configured Forge-Master model</td></tr>
+              <tr><td><code>--quiet</code></td><td>flag (optional)</td><td>Suppress thought-trace output (final answer only)</td></tr>
+            </tbody>
+          </table>
+          <div class="cmd-block"><div class="cmd-block-header"><span>PowerShell / Bash</span><button class="cmd-copy-btn">Copy</button></div>
+          <pre><code>pforge fm-session "Why did Phase-31 slice 4 fail?"
+pforge fm-session --resume=fm-7f3a-...
+pforge fm-session --quiet "What's the cheapest quorum for Phase-32?"</code></pre></div>
+          <p class="text-sm text-slate-500">Also available as: <code>forge_master_ask</code> MCP tool (one-shot), <code>POST /api/forge-master/ask</code> REST endpoint.</p>
+        </div>
+
+        <div class="cmd-ref" id="fm-recall">
+          <div class="cmd-ref-title">pforge fm-recall &lt;query&gt; <span class="text-xs text-amber-400 font-normal">v3.4+</span></div>
+          <div class="cmd-ref-desc">Search prior Forge-Master sessions for relevant answers. Useful when you remember asking something similar last week but don't remember the answer. Returns ranked session excerpts with session IDs you can <code>fm-session --resume=...</code> from.</div>
+          <table>
+            <thead><tr><th>Flag</th><th>Type</th><th>Description</th></tr></thead>
+            <tbody>
+              <tr><td><code>--limit</code></td><td>number (optional)</td><td>Max results (default: 5)</td></tr>
+              <tr><td><code>--since</code></td><td>duration (optional)</td><td>Only sessions from last N (default: <code>90d</code>)</td></tr>
+              <tr><td><code>--json</code></td><td>flag (optional)</td><td>Machine-readable output</td></tr>
+            </tbody>
+          </table>
+          <div class="cmd-block"><div class="cmd-block-header"><span>PowerShell / Bash</span><button class="cmd-copy-btn">Copy</button></div>
+          <pre><code>pforge fm-recall "gate timeout"
+pforge fm-recall "snapshot pop strategy" --limit=10
+pforge fm-recall "cost anomaly Phase-31" --since=30d --json</code></pre></div>
+          <p class="text-sm text-slate-500">Backed by the L2 search index over <code>.forge/forge-master/sessions/*.jsonl</code>.</p>
+        </div>
+
         <!-- ─── Server commands ─── -->
         <h2 id="server">MCP Server Commands</h2>
         <p>The MCP server is started directly with Node.js, not through the <code>pforge</code> CLI:</p>

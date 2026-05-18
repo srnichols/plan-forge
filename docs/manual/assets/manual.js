@@ -78,6 +78,7 @@
     { id: "about-author",         file: "about-author.html",        num: "",   title: "About the Author",          act: "Appendix" },
     { id: "book-index",           file: "book-index.html",          num: "O",  title: "Book Index (A\u2013Z)",     act: "Appendix" },
     { id: "list-of-figures",      file: "list-of-figures.html",     num: "P",  title: "List of Figures",            act: "Appendix" },
+    { id: "api-surface-index",    file: "api-surface-index.html",    num: "Q",  title: "Unified API Surface Index",  act: "Appendix" },
   ];
 
   // ─── Chapter status registry ───
@@ -131,10 +132,10 @@
     'cli-commands': 57, // pforge.ps1 / pforge.sh switch arms — verify with: grep -c '^\s*"\w' pforge-mcp/cli-schema.json
     // Manual structure ──────────────────────────────────────────────────
     chapters:     28,  // numbered chapters 1-29 (excludes Quickstart Q1-Q3 and Appendices) — Ch 11 was archived; 26-29 added Third Edition
-    appendices:   14,  // lettered appendices A-N (+ Appendix O Book Index)
+    appendices:   17,  // lettered appendices A-Q (P List of Figures, Q Unified API Surface Index added Third Edition)
     parts:         5,  // Smelt, Forge, Guard, Learn, Integrate (Part V added Third Edition)
     // Manual assets ─────────────────────────────────────────────────────
-    htmlFiles:    65,  // total .html files in docs/manual/ (+4 chapters Third Edition)
+    htmlFiles:    66,  // total .html files in docs/manual/ (+4 chapters Third Edition Slice A, +1 Appendix Q Third Edition Slice B)
   };
 
   // Detect current page

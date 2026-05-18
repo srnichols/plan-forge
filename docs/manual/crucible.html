@@ -38,6 +38,15 @@
           <strong>Why an interview?</strong> Most plans fail because the spec is too vague. Crucible refuses to write a plan until you've answered a fixed set of <strong>CRITICAL_FIELDS</strong> &mdash; build command, test command, scope, validation gates, forbidden actions, and rollback steps. No TBDs allowed. The Forge can only execute plans that pass this gate.
         </div>
 
+        <div class="callout callout-tip">
+          <strong>Third Edition update (v3.x).</strong> Crucible's downstream surfaces have grown since the original chapter:
+          <ul class="mt-2">
+            <li>A finalized smelt that later produces a <strong>tempering finding</strong> can be routed via <a href="team-coordination.html#classifier-issue">forge_classifier_issue</a> when the finding turns out to be classifier noise rather than a product bug &mdash; closing the audit loop.</li>
+            <li>The <code>forge_tempering_drain</code> round-loop (Ch 21 Audit Loop) re-probes a plan's gates until convergence, surfacing residual Crucible <code>STALE_PRINCIPLES</code> warnings as actionable findings rather than transient noise.</li>
+            <li>Every Crucible smelt lands as a Phase / Slice node in the <a href="knowledge-graph.html">knowledge graph</a>, so <code>forge_patterns_list</code>'s detectors can spot Crucible-stage anti-patterns alongside execution-stage ones.</li>
+          </ul>
+        </div>
+
         <h2 id="how-it-works">How It Works</h2>
         <p>The Crucible has three sizes (called <strong>lanes</strong>) that scale the interview to the size of the change:</p>
         <ul>

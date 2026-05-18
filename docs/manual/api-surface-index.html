@@ -1,0 +1,586 @@
+<!DOCTYPE html>
+<html lang="en" class="scroll-smooth">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Appendix Q — Unified API Surface Index</title>
+  <meta name="description" content="The complete cross-referenced index of every Plan Forge MCP tool, CLI command, REST endpoint, and SDK export — grouped by domain, with a coverage matrix that shows which features are available on which surface." />
+  <link rel="icon" type="image/svg+xml" href="../assets/plan-forge-logo.svg" />
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>tailwind.config={theme:{extend:{colors:{forge:{400:'#f59e0b',500:'#d97706'}}}}}</script>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;600;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="../assets/shared.css" />
+  <link rel="stylesheet" href="assets/manual.css" />
+</head>
+<body class="bg-slate-950 text-slate-300 min-h-screen">
+
+  <button id="mobile-sidebar-btn" class="mobile-sidebar-btn fixed top-4 left-4 z-[101] lg:hidden p-2 bg-slate-900 border border-slate-700 rounded-lg text-slate-400 hover:text-slate-100 transition-colors" aria-label="Open navigation">
+    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"/></svg>
+  </button>
+  <div id="sidebar-overlay" class="sidebar-overlay"></div>
+
+  <div class="manual-layout">
+    <aside id="manual-sidebar" class="manual-sidebar"><nav id="sidebar-nav"></nav></aside>
+
+    <main>
+      <div class="chapter-content">
+
+        <div class="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">Appendix Q · Reference</div>
+        <h1>Unified API Surface Index</h1>
+        <p class="text-lg text-slate-400 mb-8">One index, four surfaces. Every <!--c:tools-->88<!--/c--> MCP tool, every <!--c:cli-commands-->57<!--/c--> CLI command, every REST endpoint domain, and every SDK export — alphabetized, grouped, and cross-linked. If you can't remember whether <code>forge_secret_scan</code> has a CLI wrapper, this is the page.</p>
+
+        <div class="callout callout-info">
+          <strong>The source of truth.</strong> This appendix is a navigable index, not a reference manual. For deep usage:
+          <ul class="mt-2">
+            <li>MCP tools → <a href="mcp-server-reference.html">Chapter 11 — MCP Server &amp; Tools Reference</a></li>
+            <li>CLI commands → <a href="cli-reference.html">Chapter 8 — CLI Reference</a></li>
+            <li>REST endpoints → <a href="https://github.com/srnichols/plan-forge/blob/master/docs/REST-API.md" rel="noopener">docs/REST-API.md on GitHub</a></li>
+            <li>SDK exports → <a href="https://github.com/srnichols/plan-forge/blob/master/pforge-sdk/README.md" rel="noopener">pforge-sdk/README.md on GitHub</a></li>
+          </ul>
+        </div>
+
+        <!-- ─── On this page ─── -->
+        <h2 id="on-this-page">On this page</h2>
+        <ul>
+          <li><a href="#surfaces">The four surfaces</a></li>
+          <li><a href="#mcp-tools">MCP tools (88, grouped by domain)</a></li>
+          <li><a href="#cli-commands">CLI commands (57, grouped by use)</a></li>
+          <li><a href="#rest-endpoints">REST endpoints (103, grouped by prefix)</a></li>
+          <li><a href="#sdk">SDK exports (4 sub-paths)</a></li>
+          <li><a href="#coverage-matrix">Surface coverage matrix</a></li>
+        </ul>
+
+        <!-- ─── Surfaces ─── -->
+        <h2 id="surfaces">The four surfaces</h2>
+        <p>Plan Forge exposes its capabilities through four orthogonal transports. The same handler set backs all four — choosing one is a question of who is calling.</p>
+
+        <div class="overflow-x-auto my-6">
+          <table class="text-sm w-full border-collapse">
+            <thead>
+              <tr class="border-b border-slate-700/60">
+                <th class="text-left py-2 px-3 text-slate-400 font-semibold">Surface</th>
+                <th class="text-left py-2 px-3 text-slate-400 font-semibold">Count</th>
+                <th class="text-left py-2 px-3 text-slate-400 font-semibold">Auth</th>
+                <th class="text-left py-2 px-3 text-slate-400 font-semibold">Best for</th>
+              </tr>
+            </thead>
+            <tbody class="text-slate-300">
+              <tr class="border-b border-slate-800/40">
+                <td class="py-2 px-3"><strong>MCP</strong> (stdio + WebSocket)</td>
+                <td class="py-2 px-3"><!--c:tools-->88<!--/c--> tools</td>
+                <td class="py-2 px-3">Transport-bound (stdio = inherited trust; WS = bearer)</td>
+                <td class="py-2 px-3">Copilot, Claude, Cursor, Codex — anything speaking MCP</td>
+              </tr>
+              <tr class="border-b border-slate-800/40">
+                <td class="py-2 px-3"><strong>CLI</strong> (<code>pforge</code>)</td>
+                <td class="py-2 px-3"><!--c:cli-commands-->57<!--/c--> commands</td>
+                <td class="py-2 px-3">Local filesystem trust + <code>PFORGE_API_TOKEN</code></td>
+                <td class="py-2 px-3">Scripts, cron, humans in terminals, CI runners</td>
+              </tr>
+              <tr class="border-b border-slate-800/40">
+                <td class="py-2 px-3"><strong>REST</strong> (<code>/api/*</code>)</td>
+                <td class="py-2 px-3">103 endpoints across 17+ domains</td>
+                <td class="py-2 px-3">Bearer token in <code>Authorization</code> header</td>
+                <td class="py-2 px-3">HTTP clients — CI, dashboards, mobile, anything cross-process</td>
+              </tr>
+              <tr>
+                <td class="py-2 px-3"><strong>SDK</strong> (<code>pforge-sdk</code>)</td>
+                <td class="py-2 px-3">4 sub-paths</td>
+                <td class="py-2 px-3">Bearer token via <code>createClient</code></td>
+                <td class="py-2 px-3">Node.js / TypeScript callers wanting typed responses</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <p>WebSocket events on <code>/api/hub</code> are the fifth, observation-only surface — see <a href="integrating-from-outside.html#websocket">Chapter 29 — Integrating from Outside</a>.</p>
+
+        <!-- ─── MCP Tools ─── -->
+        <h2 id="mcp-tools">MCP tools — by domain</h2>
+        <p>Canonical source: <code>pforge-mcp/tools.json</code>. The full description, input schema, error map, and example for each tool is exposed via <code>forge_capabilities</code>. The table below is the one-line index.</p>
+
+        <h3 id="mcp-diagnostics">Diagnostics &amp; setup (5)</h3>
+        <div class="overflow-x-auto my-4">
+          <table class="text-sm w-full border-collapse">
+            <thead><tr class="border-b border-slate-700/60"><th class="text-left py-2 px-3 text-slate-400 font-semibold">Tool</th><th class="text-left py-2 px-3 text-slate-400 font-semibold">Purpose</th></tr></thead>
+            <tbody class="text-slate-300">
+              <tr class="border-b border-slate-800/40"><td class="py-2 px-3"><code>forge_smith</code></td><td class="py-2 px-3">Inspect the forge — env, VS Code, setup health, version currency, common problems</td></tr>
+              <tr class="border-b border-slate-800/40"><td class="py-2 px-3"><code>forge_validate</code></td><td class="py-2 px-3">Validate Plan Forge setup — required files, counts, unresolved placeholders</td></tr>
+              <tr class="border-b border-slate-800/40"><td class="py-2 px-3"><code>forge_status</code></td><td class="py-2 px-3">All phases from DEPLOYMENT-ROADMAP.md with current status</td></tr>
+              <tr class="border-b border-slate-800/40"><td class="py-2 px-3"><code>forge_diff</code></td><td class="py-2 px-3">Compare changes against a plan's Scope Contract — drift + forbidden edits</td></tr>
+              <tr><td class="py-2 px-3"><code>forge_sweep</code></td><td class="py-2 px-3">Completeness sweep — scan for TODO/FIXME/HACK/stub/placeholder/mock markers</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <h3 id="mcp-github">GitHub stack (3)</h3>
+        <div class="overflow-x-auto my-4">
+          <table class="text-sm w-full border-collapse">
+            <tbody class="text-slate-300">
+              <tr class="border-b border-slate-800/40"><td class="py-2 px-3"><code>forge_github_status</code></td><td class="py-2 px-3">Inspect the GitHub-native AI surface (instructions, agents, MCP wiring, workflows, gh CLI)</td></tr>
+              <tr class="border-b border-slate-800/40"><td class="py-2 px-3"><code>forge_github_metrics</code></td><td class="py-2 px-3">Live GitHub repo metrics via gh CLI — stars, PRs, issues, commit activity</td></tr>
+              <tr><td class="py-2 px-3"><code>forge_delegate_review</code></td><td class="py-2 px-3">Delegate PR review to the Copilot Coding Agent (cloud)</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <h3 id="mcp-team">Team coordination (2)</h3>
+        <div class="overflow-x-auto my-4">
+          <table class="text-sm w-full border-collapse">
+            <tbody class="text-slate-300">
+              <tr class="border-b border-slate-800/40"><td class="py-2 px-3"><code>forge_team_dashboard</code></td><td class="py-2 px-3">Multi-developer coordination — per-developer cards + conflict-risk assessment</td></tr>
+              <tr><td class="py-2 px-3"><code>forge_team_activity</code></td><td class="py-2 px-3">Read recent run summaries from <code>.forge/team-activity.jsonl</code></td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <h3 id="mcp-plan">Plan execution (7)</h3>
+        <div class="overflow-x-auto my-4">
+          <table class="text-sm w-full border-collapse">
+            <tbody class="text-slate-300">
+              <tr class="border-b border-slate-800/40"><td class="py-2 px-3"><code>forge_new_phase</code></td><td class="py-2 px-3">Create a new phase plan + roadmap entry</td></tr>
+              <tr class="border-b border-slate-800/40"><td class="py-2 px-3"><code>forge_analyze</code></td><td class="py-2 px-3">Cross-artifact analysis — traceability, coverage, scope, validation gates</td></tr>
+              <tr class="border-b border-slate-800/40"><td class="py-2 px-3"><code>forge_run_plan</code></td><td class="py-2 px-3">Execute a hardened plan — spawn workers, validate at every boundary, track tokens</td></tr>
+              <tr class="border-b border-slate-800/40"><td class="py-2 px-3"><code>forge_abort</code></td><td class="py-2 px-3">Abort the currently running plan execution</td></tr>
+              <tr class="border-b border-slate-800/40"><td class="py-2 px-3"><code>forge_plan_status</code></td><td class="py-2 px-3">Status of the latest plan execution run</td></tr>
+              <tr class="border-b border-slate-800/40"><td class="py-2 px-3"><code>forge_regression_guard</code></td><td class="py-2 px-3">Run gate commands from plan files against the current codebase</td></tr>
+              <tr><td class="py-2 px-3"><code>forge_export_plan</code></td><td class="py-2 px-3">Convert a Copilot cloud agent session plan into a hardened Phase-X-PLAN.md</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <h3 id="mcp-cost">Cost &amp; quorum (5)</h3>
+        <div class="overflow-x-auto my-4">
+          <table class="text-sm w-full border-collapse">
+            <tbody class="text-slate-300">
+              <tr class="border-b border-slate-800/40"><td class="py-2 px-3"><code>forge_cost_report</code></td><td class="py-2 px-3">Total spend, per-model breakdown, monthly aggregation from cost-history.json</td></tr>
+              <tr class="border-b border-slate-800/40"><td class="py-2 px-3"><code>forge_estimate_quorum</code></td><td class="py-2 px-3">Projected plan cost under all four quorum modes (auto/power/speed/false)</td></tr>
+              <tr class="border-b border-slate-800/40"><td class="py-2 px-3"><code>forge_estimate_slice</code></td><td class="py-2 px-3">Projected cost for a single slice under a chosen quorum mode</td></tr>
+              <tr class="border-b border-slate-800/40"><td class="py-2 px-3"><code>forge_quorum_analyze</code></td><td class="py-2 px-3">Assemble a structured 3-section quorum prompt from any LiveGuard data source</td></tr>
+              <tr><td class="py-2 px-3"><code>forge_doctor_quorum</code></td><td class="py-2 px-3">Preflight viability check — probe all preset models, report availability + fallbacks</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <h3 id="mcp-crucible">Crucible — idea smelting (8)</h3>
+        <div class="overflow-x-auto my-4">
+          <table class="text-sm w-full border-collapse">
+            <tbody class="text-slate-300">
+              <tr class="border-b border-slate-800/40"><td class="py-2 px-3"><code>forge_crucible_submit</code></td><td class="py-2 px-3">Submit a raw idea — start a new smelt</td></tr>
+              <tr class="border-b border-slate-800/40"><td class="py-2 px-3"><code>forge_crucible_ask</code></td><td class="py-2 px-3">Advance the interview — supply an answer, get the next question</td></tr>
+              <tr class="border-b border-slate-800/40"><td class="py-2 px-3"><code>forge_crucible_preview</code></td><td class="py-2 px-3">Render the current draft as a Markdown plan</td></tr>
+              <tr class="border-b border-slate-800/40"><td class="py-2 px-3"><code>forge_crucible_finalize</code></td><td class="py-2 px-3">Atomically claim a phase number, write Phase-NN.md, stamp <code>crucibleId:</code></td></tr>
+              <tr class="border-b border-slate-800/40"><td class="py-2 px-3"><code>forge_crucible_list</code></td><td class="py-2 px-3">List smelts (newest first), optionally filtered by status</td></tr>
+              <tr class="border-b border-slate-800/40"><td class="py-2 px-3"><code>forge_crucible_abandon</code></td><td class="py-2 px-3">Abandon a smelt, release any phase-number claim</td></tr>
+              <tr class="border-b border-slate-800/40"><td class="py-2 px-3"><code>forge_crucible_import</code></td><td class="py-2 px-3">Import a Spec Kit project — deterministic, LLM-free field mapping</td></tr>
+              <tr><td class="py-2 px-3"><code>forge_crucible_status</code></td><td class="py-2 px-3">List smelts by source and status, or inspect a single smelt</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <h3 id="mcp-tempering">Tempering — coverage &amp; quality (5)</h3>
+        <div class="overflow-x-auto my-4">
+          <table class="text-sm w-full border-collapse">
+            <tbody class="text-slate-300">
+              <tr class="border-b border-slate-800/40"><td class="py-2 px-3"><code>forge_tempering_scan</code></td><td class="py-2 px-3">Read-only scan of an existing coverage report (lcov/cobertura/jacoco/cover.out/...)</td></tr>
+              <tr class="border-b border-slate-800/40"><td class="py-2 px-3"><code>forge_tempering_status</code></td><td class="py-2 px-3">Latest N scan summaries — dashboard feed + <code>forge_smith</code> panel</td></tr>
+              <tr class="border-b border-slate-800/40"><td class="py-2 px-3"><code>forge_tempering_run</code></td><td class="py-2 px-3">Execution harness — runs unit/integration/UI/API scanners per stack preset</td></tr>
+              <tr class="border-b border-slate-800/40"><td class="py-2 px-3"><code>forge_tempering_approve_baseline</code></td><td class="py-2 px-3">Promote current screenshot to visual-diff baseline</td></tr>
+              <tr><td class="py-2 px-3"><code>forge_tempering_drain</code></td><td class="py-2 px-3">Round-loop wrapper — re-probe until convergence or max-rounds cap</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <h3 id="mcp-triage">Triage, bugs &amp; classifiers (6)</h3>
+        <div class="overflow-x-auto my-4">
+          <table class="text-sm w-full border-collapse">
+            <tbody class="text-slate-300">
+              <tr class="border-b border-slate-800/40"><td class="py-2 px-3"><code>forge_triage_route</code></td><td class="py-2 px-3">Route a tempering finding into bug / spec / classifier lane</td></tr>
+              <tr class="border-b border-slate-800/40"><td class="py-2 px-3"><code>forge_classifier_issue</code></td><td class="py-2 px-3">File a GitHub issue proposing a classifier rule update (closes the audit loop)</td></tr>
+              <tr class="border-b border-slate-800/40"><td class="py-2 px-3"><code>forge_bug_register</code></td><td class="py-2 px-3">Register a bug discovered by a tempering scanner</td></tr>
+              <tr class="border-b border-slate-800/40"><td class="py-2 px-3"><code>forge_bug_list</code></td><td class="py-2 px-3">List bugs with optional filters</td></tr>
+              <tr class="border-b border-slate-800/40"><td class="py-2 px-3"><code>forge_bug_update_status</code></td><td class="py-2 px-3">Transition status (open → in-fix → fixed) with validation</td></tr>
+              <tr><td class="py-2 px-3"><code>forge_bug_validate_fix</code></td><td class="py-2 px-3">Re-run the scanner that discovered a bug to verify the fix</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <h3 id="mcp-memory">Memory &amp; provenance (3)</h3>
+        <div class="overflow-x-auto my-4">
+          <table class="text-sm w-full border-collapse">
+            <tbody class="text-slate-300">
+              <tr class="border-b border-slate-800/40"><td class="py-2 px-3"><code>forge_memory_capture</code></td><td class="py-2 px-3">Capture a thought, decision, or lesson into OpenBrain persistent memory</td></tr>
+              <tr class="border-b border-slate-800/40"><td class="py-2 px-3"><code>forge_memory_report</code></td><td class="py-2 px-3">Aggregate health of every memory surface (L2 jsonl, OpenBrain queue, search cache, orphans)</td></tr>
+              <tr><td class="py-2 px-3"><code>forge_sync_memories</code></td><td class="py-2 px-3">Generate <code>.github/copilot-memory-hints.md</code> from trajectories + auto-skills + brain</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <h3 id="mcp-copilot">Copilot integration (1)</h3>
+        <div class="overflow-x-auto my-4">
+          <table class="text-sm w-full border-collapse">
+            <tbody class="text-slate-300">
+              <tr><td class="py-2 px-3"><code>forge_sync_instructions</code></td><td class="py-2 px-3">Generate <code>.github/copilot-instructions.md</code> from profile + principles + .forge.json</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <h3 id="mcp-lattice">Lattice — code graph (5)</h3>
+        <div class="overflow-x-auto my-4">
+          <table class="text-sm w-full border-collapse">
+            <tbody class="text-slate-300">
+              <tr class="border-b border-slate-800/40"><td class="py-2 px-3"><code>forge_lattice_index</code></td><td class="py-2 px-3">Build/update the code-graph index — chunks tracked files, persists JSONL</td></tr>
+              <tr class="border-b border-slate-800/40"><td class="py-2 px-3"><code>forge_lattice_stat</code></td><td class="py-2 px-3">Bounded summary — chunk count, edge count, language dist, Anvil hit rate</td></tr>
+              <tr class="border-b border-slate-800/40"><td class="py-2 px-3"><code>forge_lattice_query</code></td><td class="py-2 px-3">Search chunks by name, language, kind, or file path</td></tr>
+              <tr class="border-b border-slate-800/40"><td class="py-2 px-3"><code>forge_lattice_callers</code></td><td class="py-2 px-3">Find all chunks that reference a given symbol</td></tr>
+              <tr><td class="py-2 px-3"><code>forge_lattice_blast</code></td><td class="py-2 px-3">BFS traversal — expand callees/callers from a seed chunk up to depth N</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <h3 id="mcp-graph">Knowledge graph &amp; patterns (2)</h3>
+        <div class="overflow-x-auto my-4">
+          <table class="text-sm w-full border-collapse">
+            <tbody class="text-slate-300">
+              <tr class="border-b border-slate-800/40"><td class="py-2 px-3"><code>forge_graph_query</code></td><td class="py-2 px-3">Query the in-memory knowledge graph (Phase/Slice/Commit/File/Run/Bug nodes)</td></tr>
+              <tr><td class="py-2 px-3"><code>forge_patterns_list</code></td><td class="py-2 px-3">List recurring patterns detected across runs (4 detectors)</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <h3 id="mcp-health">Health, trends &amp; hotspots (4)</h3>
+        <div class="overflow-x-auto my-4">
+          <table class="text-sm w-full border-collapse">
+            <tbody class="text-slate-300">
+              <tr class="border-b border-slate-800/40"><td class="py-2 px-3"><code>forge_drift_report</code></td><td class="py-2 px-3">Score codebase against architecture guardrail rules — track drift over time</td></tr>
+              <tr class="border-b border-slate-800/40"><td class="py-2 px-3"><code>forge_health_trend</code></td><td class="py-2 px-3">Aggregate drift, cost, incidents, model performance over configurable window</td></tr>
+              <tr class="border-b border-slate-800/40"><td class="py-2 px-3"><code>forge_hotspot</code></td><td class="py-2 px-3">Identify git churn hotspots — files that change most frequently</td></tr>
+              <tr><td class="py-2 px-3"><code>forge_alert_triage</code></td><td class="py-2 px-3">Rank incidents + drift violations by severity × recency</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <h3 id="mcp-incident">Incidents, deploys &amp; dependencies (3)</h3>
+        <div class="overflow-x-auto my-4">
+          <table class="text-sm w-full border-collapse">
+            <tbody class="text-slate-300">
+              <tr class="border-b border-slate-800/40"><td class="py-2 px-3"><code>forge_incident_capture</code></td><td class="py-2 px-3">Capture an incident — description, severity, files, resolution time (MTTR)</td></tr>
+              <tr class="border-b border-slate-800/40"><td class="py-2 px-3"><code>forge_deploy_journal</code></td><td class="py-2 px-3">Record a deployment — version, deployer, notes, optional slice ref</td></tr>
+              <tr><td class="py-2 px-3"><code>forge_dep_watch</code></td><td class="py-2 px-3">Scan dependencies for known vulnerabilities (npm audit / equivalent)</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <h3 id="mcp-liveguard">LiveGuard — deploy safety (3)</h3>
+        <div class="overflow-x-auto my-4">
+          <table class="text-sm w-full border-collapse">
+            <tbody class="text-slate-300">
+              <tr class="border-b border-slate-800/40"><td class="py-2 px-3"><code>forge_secret_scan</code></td><td class="py-2 px-3">Post-commit entropy analysis — scan git diff for likely leaked secrets</td></tr>
+              <tr class="border-b border-slate-800/40"><td class="py-2 px-3"><code>forge_env_diff</code></td><td class="py-2 px-3">Compare env var keys across .env files — detect missing keys</td></tr>
+              <tr><td class="py-2 px-3"><code>forge_liveguard_run</code></td><td class="py-2 px-3">Run all applicable LiveGuard checks in a single call, return unified report</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <h3 id="mcp-fix">Fix &amp; runbook (3)</h3>
+        <div class="overflow-x-auto my-4">
+          <table class="text-sm w-full border-collapse">
+            <tbody class="text-slate-300">
+              <tr class="border-b border-slate-800/40"><td class="py-2 px-3"><code>forge_fix_proposal</code></td><td class="py-2 px-3">Generate 1-3 slice fix plan from drift / incident / secret / Crucible / tempering finding</td></tr>
+              <tr class="border-b border-slate-800/40"><td class="py-2 px-3"><code>forge_runbook</code></td><td class="py-2 px-3">Generate human-readable operational runbook from a hardened plan</td></tr>
+              <tr><td class="py-2 px-3"><code>forge_diagnose</code></td><td class="py-2 px-3">Multi-model bug investigation — dispatch to multiple models, synthesize root cause</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <h3 id="mcp-skill">Skills &amp; org rules (3)</h3>
+        <div class="overflow-x-auto my-4">
+          <table class="text-sm w-full border-collapse">
+            <tbody class="text-slate-300">
+              <tr class="border-b border-slate-800/40"><td class="py-2 px-3"><code>forge_skill_status</code></td><td class="py-2 px-3">Recent skill execution events from the WebSocket hub history</td></tr>
+              <tr class="border-b border-slate-800/40"><td class="py-2 px-3"><code>forge_run_skill</code></td><td class="py-2 px-3">Execute a skill programmatically — parse SKILL.md, run with validation gates</td></tr>
+              <tr><td class="py-2 px-3"><code>forge_org_rules</code></td><td class="py-2 px-3">Consolidate <code>.github/instructions/*.instructions.md</code> for org-level Copilot</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <h3 id="mcp-watch">Cross-project watching (2)</h3>
+        <div class="overflow-x-auto my-4">
+          <table class="text-sm w-full border-collapse">
+            <tbody class="text-slate-300">
+              <tr class="border-b border-slate-800/40"><td class="py-2 px-3"><code>forge_watch</code></td><td class="py-2 px-3">Read-only observer that tails another project's pforge run</td></tr>
+              <tr><td class="py-2 px-3"><code>forge_watch_live</code></td><td class="py-2 px-3">Live event stream from another project's pforge run for a fixed duration</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <h3 id="mcp-review">Review queue (3)</h3>
+        <div class="overflow-x-auto my-4">
+          <table class="text-sm w-full border-collapse">
+            <tbody class="text-slate-300">
+              <tr class="border-b border-slate-800/40"><td class="py-2 px-3"><code>forge_review_add</code></td><td class="py-2 px-3">Add an item to the review queue</td></tr>
+              <tr class="border-b border-slate-800/40"><td class="py-2 px-3"><code>forge_review_list</code></td><td class="py-2 px-3">List review queue items with filters and pagination</td></tr>
+              <tr><td class="py-2 px-3"><code>forge_review_resolve</code></td><td class="py-2 px-3">Resolve an open review item (approve/reject/defer)</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <h3 id="mcp-delegate">Delegation &amp; notifications (3)</h3>
+        <div class="overflow-x-auto my-4">
+          <table class="text-sm w-full border-collapse">
+            <tbody class="text-slate-300">
+              <tr class="border-b border-slate-800/40"><td class="py-2 px-3"><code>forge_delegate_to_agent</code></td><td class="py-2 px-3">Route a tempering bug to the appropriate agent/skill for read-only analysis</td></tr>
+              <tr class="border-b border-slate-800/40"><td class="py-2 px-3"><code>forge_notify_send</code></td><td class="py-2 px-3">Send a notification directly via a named adapter (bypass routing)</td></tr>
+              <tr><td class="py-2 px-3"><code>forge_notify_test</code></td><td class="py-2 px-3">Test notification adapter configuration</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <h3 id="mcp-search">Search, timeline &amp; snapshots (4)</h3>
+        <div class="overflow-x-auto my-4">
+          <table class="text-sm w-full border-collapse">
+            <tbody class="text-slate-300">
+              <tr class="border-b border-slate-800/40"><td class="py-2 px-3"><code>forge_search</code></td><td class="py-2 px-3">Search across runs, bugs, incidents, tempering, hub events, review queue, memories, plans</td></tr>
+              <tr class="border-b border-slate-800/40"><td class="py-2 px-3"><code>forge_timeline</code></td><td class="py-2 px-3">Unified chronological view across all sources with correlationId grouping</td></tr>
+              <tr class="border-b border-slate-800/40"><td class="py-2 px-3"><code>forge_home_snapshot</code></td><td class="py-2 px-3">Aggregated snapshot of Crucible, runs, LiveGuard, Tempering + trimmed feed</td></tr>
+              <tr><td class="py-2 px-3"><code>forge_capabilities</code></td><td class="py-2 px-3">Machine-readable API surface — tools, CLI, workflows, config, dashboard, extensions</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <h3 id="mcp-testbed">Testbed (3)</h3>
+        <div class="overflow-x-auto my-4">
+          <table class="text-sm w-full border-collapse">
+            <tbody class="text-slate-300">
+              <tr class="border-b border-slate-800/40"><td class="py-2 px-3"><code>forge_testbed_run</code></td><td class="py-2 px-3">Run a testbed scenario against an external testbed repository</td></tr>
+              <tr class="border-b border-slate-800/40"><td class="py-2 px-3"><code>forge_testbed_findings</code></td><td class="py-2 px-3">Query testbed defect-log findings</td></tr>
+              <tr><td class="py-2 px-3"><code>forge_testbed_happypath</code></td><td class="py-2 px-3">Run all happy-path testbed scenarios sequentially</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <h3 id="mcp-misc">Extensions, Forge-Master, image gen, meta (5)</h3>
+        <div class="overflow-x-auto my-4">
+          <table class="text-sm w-full border-collapse">
+            <tbody class="text-slate-300">
+              <tr class="border-b border-slate-800/40"><td class="py-2 px-3"><code>forge_ext_search</code></td><td class="py-2 px-3">Search the Plan Forge community extension catalog</td></tr>
+              <tr class="border-b border-slate-800/40"><td class="py-2 px-3"><code>forge_ext_info</code></td><td class="py-2 px-3">Detailed info for a specific extension (author, version, install command)</td></tr>
+              <tr class="border-b border-slate-800/40"><td class="py-2 px-3"><code>forge_master_ask</code></td><td class="py-2 px-3">Ask Forge-Master to reason about workflows (read-only orchestration)</td></tr>
+              <tr class="border-b border-slate-800/40"><td class="py-2 px-3"><code>forge_generate_image</code></td><td class="py-2 px-3">Generate an image via xAI Grok Aurora or OpenAI DALL-E</td></tr>
+              <tr><td class="py-2 px-3"><code>forge_meta_bug_file</code></td><td class="py-2 px-3">File a self-repair meta-bug against Plan Forge itself</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <div class="callout callout-tip">
+          <strong>Total: 88 MCP tools across 22 domains.</strong> Run <code>forge_capabilities</code> for the machine-readable manifest with full schemas, cost tiers, intent tags, and error maps.
+        </div>
+
+        <!-- ─── CLI ─── -->
+        <h2 id="cli-commands">CLI commands — <code>pforge</code></h2>
+        <p>Canonical source: <code>pforge.ps1</code> + <code>pforge.sh</code> (mirror implementations). Schema doc: <code>pforge-mcp/cli-schema.json</code>. The full reference with arguments, flags, and examples lives in <a href="cli-reference.html">Chapter 8 — CLI Reference</a>; this is the one-line index.</p>
+
+        <h3 id="cli-core">Core (12)</h3>
+        <pre class="bg-slate-950 border border-slate-800/60 rounded-xl p-4 overflow-x-auto text-sm"><code>pforge smith                    Diagnose environment + setup health
+pforge check                    Validate setup files
+pforge validate                 (alias) Validate Plan Forge setup
+pforge status                   Show phase status from roadmap
+pforge sweep                    Scan for TODO/FIXME markers
+pforge tour                     Guided walkthrough of installed Plan Forge files
+pforge help                     Show help
+pforge config get/set &lt;k&gt; [v]   Read or write keys in .forge.json (atomic)
+pforge update                   Update framework files (auto-selects source)
+pforge self-update              Force-pull latest GitHub release
+pforge install                  First-time install bootstrap
+pforge init                     Initialize a new project</code></pre>
+
+        <h3 id="cli-plan">Plan + analysis (12)</h3>
+        <pre class="bg-slate-950 border border-slate-800/60 rounded-xl p-4 overflow-x-auto text-sm"><code>pforge new-phase &lt;name&gt;         Create a new phase plan + roadmap entry
+pforge analyze                  Cross-artifact consistency scoring (0-100)
+pforge run-plan &lt;plan&gt;          Execute a hardened plan
+pforge diff &lt;plan&gt;              Compare changes against plan Scope Contract
+pforge phase-status             Update phase status in DEPLOYMENT-ROADMAP
+pforge regression-guard &lt;plan&gt;  Run validation gates from plan files
+pforge plan-from-sarif &lt;sarif&gt;  Generate a fix plan from a SARIF findings file
+pforge fix-proposal &lt;finding&gt;   Generate a 1-3 slice fix plan
+pforge runbook &lt;plan&gt;           Generate operational runbook from a plan
+pforge branch &lt;plan&gt;            Create git branch from plan's Branch Strategy
+pforge commit                   Auto-generate conventional commit from slice goal
+pforge version-bump [v]         Update VERSION + package.json + badges</code></pre>
+
+        <h3 id="cli-team">Team + Copilot (8)</h3>
+        <pre class="bg-slate-950 border border-slate-800/60 rounded-xl p-4 overflow-x-auto text-sm"><code>pforge team-dashboard           Per-developer cards in the terminal
+pforge team-activity            Query the team-activity.jsonl ledger
+pforge sync-memories            Generate .github/copilot-memory-hints.md
+pforge sync-instructions        Generate .github/copilot-instructions.md
+pforge sync-spaces              Sync inter-project memory spaces
+pforge github status            Inspect GitHub-native AI surface
+pforge github metrics           Live repo metrics via gh CLI
+pforge org-rules                Export org-level custom instructions</code></pre>
+
+        <h3 id="cli-quality">Quality, drift &amp; health (10)</h3>
+        <pre class="bg-slate-950 border border-slate-800/60 rounded-xl p-4 overflow-x-auto text-sm"><code>pforge drift                    Score codebase against architecture guardrails
+pforge hotspot                  Identify git churn hotspots
+pforge health-trend             Drift, cost, incidents, model perf over time
+pforge digest                   Daily digest — yesterday's deltas + anomalies
+pforge triage                   Triage open alerts by priority
+pforge dep-watch                Dependency vulnerability + freshness
+pforge incident capture         Record an incident
+pforge deploy-log               Record a deployment
+pforge audit-loop               Drive a single audit-loop iteration
+pforge audit list/show          Inspect classifier audit findings</code></pre>
+
+        <h3 id="cli-tempering">Tempering (4)</h3>
+        <pre class="bg-slate-950 border border-slate-800/60 rounded-xl p-4 overflow-x-auto text-sm"><code>pforge hammer-fm                Run the full tempering harness (false-marker scan)
+pforge testbed-happypath        Run all happy-path testbed scenarios
+pforge regression-guard         (also a plan command) Run gates as guard
+pforge mcp-call &lt;tool&gt; ...      Invoke any MCP tool not yet wrapped by a verb</code></pre>
+
+        <h3 id="cli-memory">Memory + brain (6)</h3>
+        <pre class="bg-slate-950 border border-slate-800/60 rounded-xl p-4 overflow-x-auto text-sm"><code>pforge drain-memory             Drain OpenBrain queue via local MCP REST
+pforge migrate-memory           Merge legacy *-history.json into .jsonl
+pforge fm-session               Start a Forge-Master reasoning session
+pforge fm-recall                Recall a prior Forge-Master session
+pforge anvil stat/purge         Inspect / reset the Δ-only memoization layer
+pforge lattice index/stat/...   Code-graph index commands</code></pre>
+
+        <h3 id="cli-security">Security &amp; environment (5)</h3>
+        <pre class="bg-slate-950 border border-slate-800/60 rounded-xl p-4 overflow-x-auto text-sm"><code>pforge secret-scan              Scan recent commits for high-entropy strings
+pforge env-diff                 Compare .env keys across environments
+pforge quorum-analyze           Assemble quorum prompt from LiveGuard data
+pforge hallmark verify          Verify Hallmark provenance envelopes
+pforge ext add/remove/...       Extension management</code></pre>
+
+        <p>Total: 57+ top-level CLI commands across 7 functional areas. Run <code>pforge --help</code> for the live listing on your installed version.</p>
+
+        <!-- ─── REST ─── -->
+        <h2 id="rest-endpoints">REST endpoints — <code>/api/*</code></h2>
+        <p>Canonical source: handlers in <code>pforge-mcp/server.mjs</code> + <code>pforge-mcp/dashboard/</code>. Full per-endpoint reference: <a href="https://github.com/srnichols/plan-forge/blob/master/docs/REST-API.md" rel="noopener">docs/REST-API.md on GitHub</a>. OpenAPI spec: <code>GET /api/openapi.json</code>.</p>
+
+        <p>103 endpoints organize into these prefixes (one-line summary each — see REST-API.md for verbs, query params, request/response shapes, and error codes):</p>
+
+        <div class="overflow-x-auto my-6">
+          <table class="text-sm w-full border-collapse">
+            <thead>
+              <tr class="border-b border-slate-700/60">
+                <th class="text-left py-2 px-3 text-slate-400 font-semibold">Prefix</th>
+                <th class="text-left py-2 px-3 text-slate-400 font-semibold">Endpoints</th>
+                <th class="text-left py-2 px-3 text-slate-400 font-semibold">Covers</th>
+              </tr>
+            </thead>
+            <tbody class="text-slate-300">
+              <tr class="border-b border-slate-800/40"><td class="py-2 px-3"><code>/api/plan</code></td><td class="py-2 px-3">~10</td><td class="py-2 px-3">Plan execution, status, abort, runs</td></tr>
+              <tr class="border-b border-slate-800/40"><td class="py-2 px-3"><code>/api/cost</code></td><td class="py-2 px-3">~6</td><td class="py-2 px-3">Cost report, estimate-quorum, estimate-slice</td></tr>
+              <tr class="border-b border-slate-800/40"><td class="py-2 px-3"><code>/api/team</code></td><td class="py-2 px-3">~5</td><td class="py-2 px-3">Team dashboard, activity feed, ledger queries</td></tr>
+              <tr class="border-b border-slate-800/40"><td class="py-2 px-3"><code>/api/copilot-instructions</code></td><td class="py-2 px-3">3</td><td class="py-2 px-3">Read / preview / sync the trilogy file pair</td></tr>
+              <tr class="border-b border-slate-800/40"><td class="py-2 px-3"><code>/api/graph</code></td><td class="py-2 px-3">~5</td><td class="py-2 px-3">Knowledge graph query, stats, rebuild</td></tr>
+              <tr class="border-b border-slate-800/40"><td class="py-2 px-3"><code>/api/lattice</code></td><td class="py-2 px-3">~5</td><td class="py-2 px-3">Code-graph index, query, callers, blast</td></tr>
+              <tr class="border-b border-slate-800/40"><td class="py-2 px-3"><code>/api/liveguard</code></td><td class="py-2 px-3">~6</td><td class="py-2 px-3">Secret scan, env diff, unified run, runbooks</td></tr>
+              <tr class="border-b border-slate-800/40"><td class="py-2 px-3"><code>/api/bugs</code></td><td class="py-2 px-3">~6</td><td class="py-2 px-3">Register, list, update-status, validate-fix</td></tr>
+              <tr class="border-b border-slate-800/40"><td class="py-2 px-3"><code>/api/crucible</code></td><td class="py-2 px-3">~10</td><td class="py-2 px-3">Submit, ask, preview, finalize, abandon, import, list, status</td></tr>
+              <tr class="border-b border-slate-800/40"><td class="py-2 px-3"><code>/api/tempering</code></td><td class="py-2 px-3">~6</td><td class="py-2 px-3">Scan, status, run, drain, approve-baseline</td></tr>
+              <tr class="border-b border-slate-800/40"><td class="py-2 px-3"><code>/api/incident</code></td><td class="py-2 px-3">~4</td><td class="py-2 px-3">Capture, list, MTTR, deploy-journal</td></tr>
+              <tr class="border-b border-slate-800/40"><td class="py-2 px-3"><code>/api/health</code></td><td class="py-2 px-3">~5</td><td class="py-2 px-3">Drift report, trends, hotspot, alert triage</td></tr>
+              <tr class="border-b border-slate-800/40"><td class="py-2 px-3"><code>/api/review</code></td><td class="py-2 px-3">3</td><td class="py-2 px-3">Add / list / resolve review queue items</td></tr>
+              <tr class="border-b border-slate-800/40"><td class="py-2 px-3"><code>/api/forge-master</code></td><td class="py-2 px-3">~4</td><td class="py-2 px-3">Read-only reasoning agent ask + session mgmt</td></tr>
+              <tr class="border-b border-slate-800/40"><td class="py-2 px-3"><code>/api/search</code></td><td class="py-2 px-3">~3</td><td class="py-2 px-3">Cross-artifact search, timeline, home snapshot</td></tr>
+              <tr class="border-b border-slate-800/40"><td class="py-2 px-3"><code>/api/notify</code></td><td class="py-2 px-3">2</td><td class="py-2 px-3">Send / test notification adapters</td></tr>
+              <tr class="border-b border-slate-800/40"><td class="py-2 px-3"><code>/api/ext</code></td><td class="py-2 px-3">~4</td><td class="py-2 px-3">Extension search, info, install, remove</td></tr>
+              <tr class="border-b border-slate-800/40"><td class="py-2 px-3"><code>/api/hub</code></td><td class="py-2 px-3">1 (WS)</td><td class="py-2 px-3">WebSocket event stream — 60+ event types</td></tr>
+              <tr><td class="py-2 px-3"><code>/api/openapi.json</code></td><td class="py-2 px-3">1</td><td class="py-2 px-3">OpenAPI 3 spec for the entire surface (codegen-ready)</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <!-- ─── SDK ─── -->
+        <h2 id="sdk">SDK — <code>pforge-sdk</code></h2>
+        <p>Four sub-paths, all backed by typed TypeScript declarations. Full reference: <a href="https://github.com/srnichols/plan-forge/blob/master/pforge-sdk/README.md" rel="noopener">pforge-sdk/README.md on GitHub</a>.</p>
+
+        <div class="overflow-x-auto my-6">
+          <table class="text-sm w-full border-collapse">
+            <thead>
+              <tr class="border-b border-slate-700/60">
+                <th class="text-left py-2 px-3 text-slate-400 font-semibold">Import</th>
+                <th class="text-left py-2 px-3 text-slate-400 font-semibold">Key exports</th>
+                <th class="text-left py-2 px-3 text-slate-400 font-semibold">Use when</th>
+              </tr>
+            </thead>
+            <tbody class="text-slate-300">
+              <tr class="border-b border-slate-800/40">
+                <td class="py-2 px-3"><code>pforge-sdk</code></td>
+                <td class="py-2 px-3"><code>createClient</code>, <code>Client</code>, <code>SubscribeStream</code>, <code>HubEvent</code> types</td>
+                <td class="py-2 px-3">Core REST + WebSocket access from Node.js</td>
+              </tr>
+              <tr class="border-b border-slate-800/40">
+                <td class="py-2 px-3"><code>pforge-sdk/tools</code></td>
+                <td class="py-2 px-3">Typed wrappers for every <code>forge_*</code> tool (e.g. <code>forgeRunPlan</code>, <code>forgeEstimateQuorum</code>)</td>
+                <td class="py-2 px-3">Calling MCP tool handlers from Node.js without MCP transport</td>
+              </tr>
+              <tr class="border-b border-slate-800/40">
+                <td class="py-2 px-3"><code>pforge-sdk/hallmark</code></td>
+                <td class="py-2 px-3"><code>stamp</code>, <code>verify</code>, <code>HallmarkEnvelope</code>, schema validators</td>
+                <td class="py-2 px-3">Signing / verifying provenance envelopes on generated artifacts</td>
+              </tr>
+              <tr>
+                <td class="py-2 px-3"><code>pforge-sdk/chunker</code></td>
+                <td class="py-2 px-3"><code>chunkPlan</code>, <code>extractScopeContract</code>, slice-alignment helpers</td>
+                <td class="py-2 px-3">Splitting long plans into Scope-Contract-aligned slices</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <!-- ─── Coverage matrix ─── -->
+        <h2 id="coverage-matrix">Surface coverage matrix</h2>
+        <p>Not every capability is exposed through every surface. This matrix shows which features have CLI wrappers, REST endpoints, and SDK helpers. Use it to pick the right surface for a caller.</p>
+
+        <div class="overflow-x-auto my-6">
+          <table class="text-sm w-full border-collapse">
+            <thead>
+              <tr class="border-b border-slate-700/60">
+                <th class="text-left py-2 px-3 text-slate-400 font-semibold">Capability</th>
+                <th class="text-center py-2 px-3 text-slate-400 font-semibold">MCP</th>
+                <th class="text-center py-2 px-3 text-slate-400 font-semibold">CLI</th>
+                <th class="text-center py-2 px-3 text-slate-400 font-semibold">REST</th>
+                <th class="text-center py-2 px-3 text-slate-400 font-semibold">SDK</th>
+              </tr>
+            </thead>
+            <tbody class="text-slate-300">
+              <tr class="border-b border-slate-800/40"><td class="py-2 px-3">Plan execution (<code>run-plan</code>)</td><td class="text-center py-2 px-3 text-emerald-400">✓</td><td class="text-center py-2 px-3 text-emerald-400">✓</td><td class="text-center py-2 px-3 text-emerald-400">✓</td><td class="text-center py-2 px-3 text-emerald-400">✓</td></tr>
+              <tr class="border-b border-slate-800/40"><td class="py-2 px-3">Cost reporting + estimates</td><td class="text-center py-2 px-3 text-emerald-400">✓</td><td class="text-center py-2 px-3 text-emerald-400">✓</td><td class="text-center py-2 px-3 text-emerald-400">✓</td><td class="text-center py-2 px-3 text-emerald-400">✓</td></tr>
+              <tr class="border-b border-slate-800/40"><td class="py-2 px-3">Copilot trilogy (memory + instructions sync)</td><td class="text-center py-2 px-3 text-emerald-400">✓</td><td class="text-center py-2 px-3 text-emerald-400">✓</td><td class="text-center py-2 px-3 text-emerald-400">✓</td><td class="text-center py-2 px-3 text-emerald-400">✓</td></tr>
+              <tr class="border-b border-slate-800/40"><td class="py-2 px-3">Team dashboard + activity</td><td class="text-center py-2 px-3 text-emerald-400">✓</td><td class="text-center py-2 px-3 text-emerald-400">✓</td><td class="text-center py-2 px-3 text-emerald-400">✓</td><td class="text-center py-2 px-3 text-emerald-400">✓</td></tr>
+              <tr class="border-b border-slate-800/40"><td class="py-2 px-3">Knowledge graph queries</td><td class="text-center py-2 px-3 text-emerald-400">✓</td><td class="text-center py-2 px-3 text-emerald-400">✓</td><td class="text-center py-2 px-3 text-emerald-400">✓</td><td class="text-center py-2 px-3 text-emerald-400">✓</td></tr>
+              <tr class="border-b border-slate-800/40"><td class="py-2 px-3">Daily digest</td><td class="text-center py-2 px-3 text-slate-500">—</td><td class="text-center py-2 px-3 text-emerald-400">✓</td><td class="text-center py-2 px-3 text-emerald-400">✓</td><td class="text-center py-2 px-3 text-emerald-400">✓</td></tr>
+              <tr class="border-b border-slate-800/40"><td class="py-2 px-3">LiveGuard checks (secret/env/full)</td><td class="text-center py-2 px-3 text-emerald-400">✓</td><td class="text-center py-2 px-3 text-emerald-400">✓</td><td class="text-center py-2 px-3 text-emerald-400">✓</td><td class="text-center py-2 px-3 text-emerald-400">✓</td></tr>
+              <tr class="border-b border-slate-800/40"><td class="py-2 px-3">Tempering (scan, run, drain)</td><td class="text-center py-2 px-3 text-emerald-400">✓</td><td class="text-center py-2 px-3 text-emerald-400">✓</td><td class="text-center py-2 px-3 text-emerald-400">✓</td><td class="text-center py-2 px-3 text-emerald-400">✓</td></tr>
+              <tr class="border-b border-slate-800/40"><td class="py-2 px-3">Crucible smelting</td><td class="text-center py-2 px-3 text-emerald-400">✓</td><td class="text-center py-2 px-3 text-emerald-400">✓</td><td class="text-center py-2 px-3 text-emerald-400">✓</td><td class="text-center py-2 px-3 text-emerald-400">✓</td></tr>
+              <tr class="border-b border-slate-800/40"><td class="py-2 px-3">Forge-Master (read-only reasoning)</td><td class="text-center py-2 px-3 text-emerald-400">✓</td><td class="text-center py-2 px-3 text-emerald-400">✓</td><td class="text-center py-2 px-3 text-emerald-400">✓</td><td class="text-center py-2 px-3 text-emerald-400">✓</td></tr>
+              <tr class="border-b border-slate-800/40"><td class="py-2 px-3">Lattice code graph</td><td class="text-center py-2 px-3 text-emerald-400">✓</td><td class="text-center py-2 px-3 text-emerald-400">✓</td><td class="text-center py-2 px-3 text-emerald-400">✓</td><td class="text-center py-2 px-3 text-emerald-400">✓</td></tr>
+              <tr class="border-b border-slate-800/40"><td class="py-2 px-3">Hallmark stamp / verify</td><td class="text-center py-2 px-3 text-slate-500">—</td><td class="text-center py-2 px-3 text-emerald-400">✓</td><td class="text-center py-2 px-3 text-slate-500">—</td><td class="text-center py-2 px-3 text-emerald-400">✓</td></tr>
+              <tr class="border-b border-slate-800/40"><td class="py-2 px-3">Anvil purge / stat</td><td class="text-center py-2 px-3 text-slate-500">—</td><td class="text-center py-2 px-3 text-emerald-400">✓</td><td class="text-center py-2 px-3 text-emerald-400">✓</td><td class="text-center py-2 px-3 text-slate-500">—</td></tr>
+              <tr class="border-b border-slate-800/40"><td class="py-2 px-3">Bug registry CRUD</td><td class="text-center py-2 px-3 text-emerald-400">✓</td><td class="text-center py-2 px-3 text-slate-500">—</td><td class="text-center py-2 px-3 text-emerald-400">✓</td><td class="text-center py-2 px-3 text-emerald-400">✓</td></tr>
+              <tr class="border-b border-slate-800/40"><td class="py-2 px-3">WebSocket live events</td><td class="text-center py-2 px-3 text-slate-500">—</td><td class="text-center py-2 px-3 text-slate-500">—</td><td class="text-center py-2 px-3 text-emerald-400">✓</td><td class="text-center py-2 px-3 text-emerald-400">✓</td></tr>
+              <tr class="border-b border-slate-800/40"><td class="py-2 px-3">Self-update / install</td><td class="text-center py-2 px-3 text-slate-500">—</td><td class="text-center py-2 px-3 text-emerald-400">✓</td><td class="text-center py-2 px-3 text-slate-500">—</td><td class="text-center py-2 px-3 text-slate-500">—</td></tr>
+              <tr><td class="py-2 px-3">Extension marketplace</td><td class="text-center py-2 px-3 text-emerald-400">✓</td><td class="text-center py-2 px-3 text-emerald-400">✓</td><td class="text-center py-2 px-3 text-emerald-400">✓</td><td class="text-center py-2 px-3 text-slate-500">—</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <div class="callout callout-info">
+          <strong>Reading the matrix.</strong> A "—" means "the capability isn't exposed on this surface" — usually intentional. For example, <code>pforge install</code> only makes sense as a CLI command; WebSocket live events have no CLI representation (subscribe via REST + WS).
+        </div>
+
+        <div class="callout callout-info mt-8">
+          <strong>See also:</strong> <a href="cli-reference.html">Chapter 8 — CLI Reference</a> for full CLI usage with flags and examples. <a href="mcp-server-reference.html">Chapter 11 — MCP Server &amp; Tools Reference</a> for tool schemas and intent metadata. <a href="integrating-from-outside.html">Chapter 29 — Integrating from Outside</a> for the surface-picking decision tree.
+        </div>
+
+      </div>
+    </main>
+  </div>
+
+  <script src="assets/manual.js"></script>
+</body>
+</html>

@@ -10,7 +10,7 @@
 
 ## Why this phase exists
 
-The manual is structurally complete as a *reference* (29 chapters across 5 parts, 17 appendices, glossary, book-index, list-of-figures, unified API surface index). The editorial audit in chat on **2026-05-18** identified three categories of remaining gap that prevent it from reading as an **ebook + reference + story**:
+The manual is structurally complete as a *reference* (29 chapters across 5 parts, 17 appendices, glossary, book-index, list-of-figures, unified API surface index). The editorial audit in chat on **2026-05-18** — captured as a research document at [`docs/research/manual-ebook-completion-audit.md`](../research/manual-ebook-completion-audit.md) — identified three categories of remaining gap that prevent it from reading as an **ebook + reference + story**:
 
 | Tier | Category | Gap count | Source of fix |
 |---|---|---|---|

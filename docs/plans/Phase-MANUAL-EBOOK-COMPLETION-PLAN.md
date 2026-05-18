@@ -205,7 +205,7 @@ Slices are independent. Pick any one; finish it; commit; ship. No slice depends 
 
 ### Cluster A — Story
 - [x] **A1** Foreword ✅ (v3.6.2 · commit pending)
-- [ ] **A2** Reader-Journey Ladders
+- [x] **A2** Reader-Journey Ladders ✅ (v3.6.2 · commit pending)
 - [ ] **A3** "A Day in the Forge" vignettes (Appendix R)
 - [ ] **A4** Task-based "How do I…?" index (Appendix S)
 - [ ] **A5** "What's new in this Edition" banner

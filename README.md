@@ -130,11 +130,11 @@ One setup command, every tool: `setup.ps1 -Agent all`
 
 GitHub Copilot (primary) · Claude Code · Cursor · Codex CLI · Gemini CLI · Windsurf · Generic
 
-### MCP Server (69 Tools)
+### MCP Server (88 Tools)
 
-`pforge-mcp/server.mjs` exposes core, LiveGuard, Watcher, Crucible, Tempering, Bug Registry, Testbed, Forge-Master, Hallmark, Anvil, and Lattice operations. Live dashboard at `localhost:3100/dashboard`. REST API for external integrations.
+`pforge-mcp/server.mjs` exposes core, LiveGuard, Watcher, Crucible, Tempering, Bug Registry, Testbed, Forge-Master, Hallmark, Anvil, Lattice, Sync, and Memory operations. Live dashboard at `localhost:3100/dashboard`. 103+ REST endpoints for external integrations.
 
-Key tools: `forge_run_plan` · `forge_liveguard_run` · `forge_analyze` · `forge_master_ask` · `forge_capabilities` · `forge_smith` · `forge_cost_report` · `forge_hallmark_show` · `forge_anvil_stat` · `forge_lattice_query`
+Key tools: `forge_run_plan` · `forge_liveguard_run` · `forge_analyze` · `forge_master_ask` · `forge_capabilities` · `forge_smith` · `forge_cost_report` · `forge_lattice_query` · `forge_sync_memories` · `forge_memory_capture`
 
 ### Optional Capabilities
 
@@ -158,7 +158,7 @@ Key tools: `forge_run_plan` · `forge_liveguard_run` · `forge_analyze` · `forg
 |----------|---------|
 | **[docs/COPILOT-VSCODE-GUIDE.md](docs/COPILOT-VSCODE-GUIDE.md)** | VS Code + Copilot walkthrough |
 | **[docs/CLI-GUIDE.md](docs/CLI-GUIDE.md)** | `pforge` CLI reference |
-| **[docs/capabilities.md](docs/capabilities.md)** | Full feature reference — all 69 tools, 14 agents, 15 skills |
+| **[docs/capabilities.md](docs/capabilities.md)** | Full feature reference — all 88 MCP tools, ~12 agents, 16+ skills, 103+ REST endpoints |
 | **[CUSTOMIZATION.md](CUSTOMIZATION.md)** | Adapt guardrails for your project |
 | **[planforge.software/manual/](https://planforge.software/manual/)** | Interactive web manual (24 chapters + 6 appendices) |
 | **[planforge.software/faq.html](https://planforge.software/faq.html)** | FAQ |

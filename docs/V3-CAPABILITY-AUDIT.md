@@ -1,7 +1,7 @@
 # Plan Forge v3.x — Capability ↔ Documentation Audit
 
-> **Generated**: 2026-05-17 against `master` @ commit `14e38f1`  
-> **System version**: `v3.5.1`  
+> **Generated**: 2026-05-17 against `master` @ commit `14e38f1`
+> **System version**: `v3.5.1`
 > **Purpose**: Authoritative inventory of every capability surface (MCP, CLI, REST, SDK, Dashboard, Hooks, Skills, Agents, Prompts, Instructions, Presets, Extensions, Manual) cross-referenced with every documentation surface, so we can see exactly what is named where — and what isn't.
 >
 > **Method**: All counts come from parsing the source of truth (`pforge-mcp/tools.json`, `pforge.ps1` switch, `pforge-mcp/server.mjs` route handlers, `pforge-sdk/package.json` exports, `docs/manual/assets/manual.js` CHAPTERS, etc.). No hand-counts.

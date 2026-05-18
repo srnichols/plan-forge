@@ -156,7 +156,7 @@
           <tr>
             <td><code>.vscode/mcp.json</code></td>
             <td>VS Code's MCP-server registry. Each entry exposes a server's tools to Copilot Chat.</td>
-            <td>Plan Forge registers itself here as <code>plan-forge</code>, exposing 67 MCP tools (<code>forge_run_plan</code>, <code>forge_estimate_quorum</code>, <code>forge_cost_report</code>, <code>forge_github_status</code>, …). See <a href="mcp-server-quickstart.html" class="text-amber-400 hover:underline">MCP Server Quick Start</a>.</td>
+            <td>Plan Forge registers itself here as <code>plan-forge</code>, exposing 88 MCP tools (<code>forge_run_plan</code>, <code>forge_estimate_quorum</code>, <code>forge_cost_report</code>, <code>forge_github_status</code>, <code>forge_lattice_query</code>, <code>forge_sync_memories</code>, …). See <a href="mcp-server-quickstart.html" class="text-amber-400 hover:underline">MCP Server Quick Start</a>.</td>
           </tr>
           <tr>
             <td><code>.github/workflows/</code></td>
@@ -695,7 +695,7 @@ pforge run-plan docs/plans/Phase-28-PLAN.md --model grok-4</code></pre>
           </tr>
           <tr>
             <td>MCP tools (where MCP is supported)</td>
-            <td>Claude Code and Cursor both support MCP. They can call <code>forge_run_plan</code>, <code>forge_analyze</code>, <code>forge_estimate_quorum</code>, and the other 67 MCP tools directly from chat. Codex does not support MCP today.</td>
+            <td>Claude Code and Cursor both support MCP. They can call <code>forge_run_plan</code>, <code>forge_analyze</code>, <code>forge_estimate_quorum</code>, and the other 88 MCP tools directly from chat. Codex does not support MCP today.</td>
           </tr>
         </tbody>
       </table>

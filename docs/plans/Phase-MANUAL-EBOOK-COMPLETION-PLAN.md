@@ -214,7 +214,7 @@ Slices are independent. Pick any one; finish it; commit; ship. No slice depends 
 
 ### Cluster B — Reference
 - [x] **B1** `.forge.json` Reference (Appendix T) ✅ (v3.6.2 · commit pending)
-- [ ] **B2** Environment Variables Reference (Appendix U)
+- [x] **B2** Environment Variables Reference (Appendix U) ✅ (v3.6.2 · commit pending)
 - [ ] **B3** Lifecycle Hooks Reference (section in Customization)
 - [ ] **B4** Event Catalog (Appendix V)
 - [ ] **B5** REST API Reference (Appendix W)

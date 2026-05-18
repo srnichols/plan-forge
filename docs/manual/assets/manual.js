@@ -85,6 +85,7 @@
     { id: "day-in-the-forge",        file: "day-in-the-forge.html",        num: "R",  title: "A Day in the Forge \u2014 Three Vignettes",  act: "Appendix" },
     { id: "how-do-i",                file: "how-do-i.html",                num: "S",  title: "How Do I\u2026? \u2014 Task Index",          act: "Appendix" },
     { id: "forge-json-reference",    file: "forge-json-reference.html",    num: "T",  title: ".forge.json Reference",                       act: "Appendix" },
+    { id: "environment-variables-reference", file: "environment-variables-reference.html", num: "U", title: "Environment Variables Reference",  act: "Appendix" },
   ];
 
   // ─── Chapter status registry ───
@@ -97,6 +98,7 @@
     "day-in-the-forge":              { label: "NEW",     version: "v3.6.2" },
     "how-do-i":                      { label: "NEW",     version: "v3.6.2" },
     "forge-json-reference":          { label: "NEW",     version: "v3.6.2" },
+    "environment-variables-reference": { label: "NEW",   version: "v3.6.2" },
     "inner-loop":                    { label: "NEW",     version: "v2.57" },
     "self-deterministic-loop":       { label: "NEW",     version: "v2.58" },
     "competitive-loop":              { label: "NEW",     version: "v2.58" },
@@ -144,10 +146,10 @@
     'cli-commands': 97, // pforge.ps1 switch arms (unique) — verify with PowerShell: ([regex]::Matches((Get-Content pforge.ps1 -Raw),"(?m)^\s+''([a-z][a-z-]+)''\s+\{") | %{ $_.Groups[1].Value } | Sort-Object -Unique).Count
     // Manual structure ──────────────────────────────────────────────────
     chapters:     28,  // numbered chapters 1-29 (excludes Quickstart Q1-Q3 and Appendices) — Ch 11 was archived; 26-29 added Third Edition
-    appendices:   20,  // lettered appendices A-T (R Day in the Forge v3.6.2 Slice A3, S How Do I…? Task Index v3.6.2 Slice A4, T .forge.json Reference v3.6.2 Slice B1)
+    appendices:   21,  // lettered appendices A-U (R Day in the Forge v3.6.2 Slice A3, S How Do I…? Task Index v3.6.2 Slice A4, T .forge.json Reference v3.6.2 Slice B1, U Environment Variables Reference v3.6.2 Slice B2)
     parts:         5,  // Smelt, Forge, Guard, Learn, Integrate (Part V added Third Edition)
     // Manual assets ─────────────────────────────────────────────────────
-    htmlFiles:    72,  // total .html files in docs/manual/ (Third Edition Slice A + Slice B; +Foreword/Stakeholder/Reader Paths/Day in the Forge/How Do I…?/.forge.json Reference v3.6.2 Fifth Edition)
+    htmlFiles:    73,  // total .html files in docs/manual/ (Third Edition Slice A + Slice B; +Foreword/Stakeholder/Reader Paths/Day in the Forge/How Do I…?/.forge.json Reference/Env Vars Reference v3.6.2 Fifth Edition)
   };
 
   // Detect current page
@@ -330,6 +332,12 @@
         const next = getTheme() === "light" ? "dark" : "light";
         setTheme(next);
         themeBtn.innerHTML = next === "light" ? '🌙 Dark' : '☀️ Light';
+        // Let theme-aware widgets (e.g. mermaid-init.js) re-render with the
+        // new palette. Listeners attach to `document` so script load order
+        // doesn't matter.
+        try {
+          document.dispatchEvent(new CustomEvent("pforge:theme-change", { detail: { theme: next } }));
+        } catch (e) { /* CustomEvent unsupported — best effort */ }
       });
     }
 
@@ -538,6 +546,19 @@
     { t: ".forge.json — brain.federation (cross-project memory)",  u: "forge-json-reference.html#brain" },
     { t: ".forge.json — testbed.path",                             u: "forge-json-reference.html#testbed" },
     { t: ".forge.json — Full Annotated Example",                   u: "forge-json-reference.html#full-example" },
+    // Environment Variables Reference — every env var Plan Forge reads (Appendix U)
+    { t: "Env Vars Reference — Orientation",                       u: "environment-variables-reference.html#orientation" },
+    { t: "Env Vars — Provider API Keys (XAI, OpenAI, Anthropic)",  u: "environment-variables-reference.html#provider-api-keys" },
+    { t: "Env Vars — Azure OpenAI Alternative Routing",            u: "environment-variables-reference.html#azure-openai" },
+    { t: "Env Vars — Server Ports and Network",                    u: "environment-variables-reference.html#server-ports" },
+    { t: "Env Vars — Project and Runtime",                         u: "environment-variables-reference.html#project-runtime" },
+    { t: "Env Vars — Orchestrator Timing (gate, worker timeouts)", u: "environment-variables-reference.html#orchestrator-timing" },
+    { t: "Env Vars — Feature Toggles",                             u: "environment-variables-reference.html#feature-toggles" },
+    { t: "Env Vars — Telemetry (OpenTelemetry)",                   u: "environment-variables-reference.html#telemetry-otel" },
+    { t: "Env Vars — Host Detection (read-only)",                  u: "environment-variables-reference.html#host-detection" },
+    { t: "Env Vars — CLI Internal (set transiently by pforge)",   u: "environment-variables-reference.html#cli-internal" },
+    { t: "Env Vars — Resolution Precedence",                       u: "environment-variables-reference.html#precedence" },
+    { t: "Env Vars — Worked Example (PowerShell profile)",         u: "environment-variables-reference.html#worked-example" },
     // Quickstart
     { t: "Check Prerequisites",                  u: "quickstart-install.html#prerequisites" },
     { t: "Clone and Run Setup",                  u: "quickstart-install.html#clone" },

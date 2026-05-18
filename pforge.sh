@@ -4377,14 +4377,14 @@ cmd_version_bump() {
 
     # Parallel arrays — one entry per target (index.html appears twice)
     local target_files target_strategies target_patterns target_replaces target_descs target_optional target_validates
-    target_files=(VERSION "pforge-mcp/package.json" "docs/index.html" "docs/index.html" "README.md" "ROADMAP.md")
-    target_strategies=(Overwrite RegexReplace RegexReplace RegexReplace RegexReplace RegexReplace)
-    target_patterns=("" '"version":[[:space:]]*"[^"]+"' 'Dogfooded · v[0-9.]+' '>v[0-9.]+</div>' 'v1\.0 → v[0-9.]+' '\*\*v[0-9.]+\*\* \([0-9]{4}-[0-9]{2}-[0-9]{2}\)')
-    target_replaces=("" "\"version\": \"$new_version\"" "Dogfooded · v$new_version" ">v$short_version</div>" "v1.0 → v$short_version" "**v$new_version** ($today)")
-    target_descs=("VERSION file" "MCP package.json" "index.html hero badge" "index.html stats card" "README track record" "ROADMAP current release")
-    target_optional=(0 0 0 0 1 0)
+    target_files=(VERSION "package.json" "pforge-mcp/package.json" "pforge-master/package.json" "docs/index.html" "docs/index.html" "README.md" "ROADMAP.md")
+    target_strategies=(Overwrite RegexReplace RegexReplace RegexReplace RegexReplace RegexReplace RegexReplace RegexReplace)
+    target_patterns=("" '"version":[[:space:]]*"[^"]+"' '"version":[[:space:]]*"[^"]+"' '"version":[[:space:]]*"[^"]+"' 'Dogfooded · v[0-9.]+' '>v[0-9.]+</div>' 'v1\.0 → v[0-9.]+' '\*\*v[0-9.]+\*\* \([0-9]{4}-[0-9]{2}-[0-9]{2}\)')
+    target_replaces=("" "\"version\": \"$new_version\"" "\"version\": \"$new_version\"" "\"version\": \"$new_version\"" "Dogfooded · v$new_version" ">v$short_version</div>" "v1.0 → v$short_version" "**v$new_version** ($today)")
+    target_descs=("VERSION file" "root package.json" "MCP package.json" "Forge-Master package.json" "index.html hero badge" "index.html stats card" "README track record" "ROADMAP current release")
+    target_optional=(0 0 0 0 0 0 1 0)
     # validate: substring that MUST be present after each write (short_version for targets that write the truncated form)
-    target_validates=("$new_version" "$new_version" "$new_version" "$short_version" "$short_version" "$new_version")
+    target_validates=("$new_version" "$new_version" "$new_version" "$new_version" "$new_version" "$short_version" "$short_version" "$new_version")
 
     local total=${#target_files[@]}
     local written=0 warned=0 failed=0 dry_would_update=0 dry_warnings=0

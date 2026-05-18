@@ -46,6 +46,8 @@ function seedTempDir() {
   const fileMap = {
     "VERSION": "VERSION",
     "package.json": "pforge-mcp/package.json",
+    "package.json/": "package.json",
+    "package.json//": "pforge-master/package.json",
     "index.html": "docs/index.html",
     "README.md": "README.md",
     "ROADMAP.md": "ROADMAP.md",
@@ -53,7 +55,9 @@ function seedTempDir() {
   for (const [src, dest] of Object.entries(fileMap)) {
     const destPath = path.join(tmpDir, dest);
     fs.mkdirSync(path.dirname(destPath), { recursive: true });
-    fs.copyFileSync(path.join(FIXTURES_DIR, src), destPath);
+    // Strip trailing slashes used to disambiguate duplicate fixture sources.
+    const realSrc = src.replace(/\/+$/, "");
+    fs.copyFileSync(path.join(FIXTURES_DIR, realSrc), destPath);
   }
   return tmpDir;
 }
@@ -97,14 +101,16 @@ describe("version-bump sh arm", () => {
     expect(result.status, result.stderr).toBe(0);
 
     expect(fs.readFileSync(path.join(tmpDir, "VERSION"), "utf8")).toBe("2.0.0");
+    expect(fs.readFileSync(path.join(tmpDir, "package.json"), "utf8")).toContain('"version": "2.0.0"');
     expect(fs.readFileSync(path.join(tmpDir, "pforge-mcp/package.json"), "utf8")).toContain('"version": "2.0.0"');
+    expect(fs.readFileSync(path.join(tmpDir, "pforge-master/package.json"), "utf8")).toContain('"version": "2.0.0"');
     expect(fs.readFileSync(path.join(tmpDir, "docs/index.html"), "utf8")).toContain("Dogfooded · v2.0.0");
     expect(fs.readFileSync(path.join(tmpDir, "docs/index.html"), "utf8")).toContain(">v2.0</div>");
     expect(fs.readFileSync(path.join(tmpDir, "README.md"), "utf8")).toContain("v1.0 → v2.0");
     expect(fs.readFileSync(path.join(tmpDir, "ROADMAP.md"), "utf8")).toContain("**v2.0.0** (2024-01-01)");
 
     const out = stripAnsi(result.stdout);
-    expect(out).toContain("Updated 6/6 targets, 0 failure(s)");
+    expect(out).toContain("Updated 8/8 targets, 0 failure(s)");
   });
 
   test.skipIf(isWin)("VERSION byte-exact — no trailing newline", () => {
@@ -188,7 +194,9 @@ describe("version-bump ps1 arm", () => {
     const stripBom = (s) => s.replace(/^\uFEFF/, "");
 
     expect(stripBom(fs.readFileSync(path.join(tmpDir, "VERSION"), "utf8"))).toBe("2.0.0");
+    expect(stripBom(fs.readFileSync(path.join(tmpDir, "package.json"), "utf8"))).toContain('"version": "2.0.0"');
     expect(stripBom(fs.readFileSync(path.join(tmpDir, "pforge-mcp/package.json"), "utf8"))).toContain('"version": "2.0.0"');
+    expect(stripBom(fs.readFileSync(path.join(tmpDir, "pforge-master/package.json"), "utf8"))).toContain('"version": "2.0.0"');
     // ps1 Slice 1 reads files with default Windows-1252 encoding so the UTF-8
     // middle-dot (U+00B7) in the hero-badge line is misread; skip that assertion.
     // The stats card line (ASCII-only) should update correctly.

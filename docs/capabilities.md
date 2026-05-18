@@ -366,6 +366,8 @@ Metrics are written to `.forge/github-metrics.json` and surfaced on the Dashboar
 
 ## REST API
 
+> **Full reference**: [docs/REST-API.md](REST-API.md) — all 103 endpoints organized by domain (runs, memory, crucible, liveguard, inner-loop, copilot integration, github coordination, etc.).
+
 | Method | Path | Description |
 |--------|------|-------------|
 | GET | `/api/status` | Current run status |

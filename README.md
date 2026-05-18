@@ -158,6 +158,7 @@ Key tools: `forge_run_plan` · `forge_liveguard_run` · `forge_analyze` · `forg
 |----------|---------|
 | **[docs/COPILOT-VSCODE-GUIDE.md](docs/COPILOT-VSCODE-GUIDE.md)** | VS Code + Copilot walkthrough |
 | **[docs/CLI-GUIDE.md](docs/CLI-GUIDE.md)** | `pforge` CLI reference |
+| **[docs/REST-API.md](docs/REST-API.md)** | All 103 REST endpoints, organized by domain |
 | **[docs/capabilities.md](docs/capabilities.md)** | Full feature reference — all 88 MCP tools, ~12 agents, 16+ skills, 103+ REST endpoints |
 | **[CUSTOMIZATION.md](CUSTOMIZATION.md)** | Adapt guardrails for your project |
 | **[planforge.software/manual/](https://planforge.software/manual/)** | Interactive web manual (24 chapters + 6 appendices) |

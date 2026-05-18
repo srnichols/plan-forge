@@ -87,6 +87,19 @@
 | `forge_master_ask` | reasoning | medium | **v2.63+** — Read-only reasoning orchestrator. Classifies intent, retrieves OpenBrain memory context, orchestrates allowlist-gated read-only tool calls. Purpose-built for multi-step troubleshooting without manual tool chaining. |
 | `forge_self_update` | release | low | Check for the latest Plan Forge release, fetch release notes, and (optionally) trigger install. |
 | `forge_github_status` | diagnose | low | Check GitHub API connectivity, Copilot subscription status, and GitHub Models API availability. Returns auth state, rate limits, and per-service health. |
+| `forge_github_metrics` | github | low | Fetch live GitHub repository metrics via the `gh` CLI — stars, forks, open issues, PR counts, commit activity. Requires `gh` authenticated. |
+| `forge_team_dashboard` | team | low | Multi-developer plan coordination dashboard — aggregates `.forge/team-activity.jsonl` by operator and returns per-developer stats plus a conflict-risk assessment. |
+| `forge_team_activity` | team | low | Read recent Plan Forge run summaries from the team activity feed across all developers sharing the same repo. |
+| `forge_delegate_review` | github | medium | Delegate code review for the current branch's PR to the Copilot Coding Agent. Finds the open PR, creates a structured `@copilot` issue, returns the issue URL. |
+| `forge_export_plan` | export | medium | Convert a loose Copilot cloud agent session plan (numbered/bulleted steps) into a hardened Plan Forge `Phase-X-PLAN.md` — parses steps, extracts file paths, generates per-slice validation gates. |
+| `forge_estimate_quorum` | cost | low | Projected cost of a plan under all four quorum modes (`auto`/`power`/`speed`/`false`) in one call. **Agents MUST call this before presenting any dollar amount.** |
+| `forge_estimate_slice` | cost | low | Projected cost for a single slice under a chosen quorum mode. Cheaper than `forge_estimate_quorum`. |
+| `forge_meta_bug_file` | self-repair | low | File a self-repair meta-bug against Plan Forge itself (plan/orchestrator/prompt defects). Creates or deduplicates a GitHub issue and auto-attaches trajectory context. |
+| `forge_classifier_issue` | self-repair | low | File a GitHub issue proposing a classifier rule update when a tempering finding routes to the 'classifier' lane (infra noise). Dedupes by finding class + reason hash. |
+| `forge_graph_query` | knowledge-graph | low | Query the Plan Forge knowledge graph. Returns subgraph of nodes and edges matching the query. Supports phase, file, recent-changes, and neighbor traversal queries. |
+| `forge_patterns_list` | knowledge-graph | low | List recurring patterns detected across plan runs — gate-failure recurrences, model failure rates, slice flap patterns, cost anomalies. Advisory only. |
+| `forge_crucible_import` | crucible | low | **v2.37+** — Import a Spec Kit project into a Plan Forge Crucible smelt (deterministic, LLM-free field mapping). Returns smelt id, generated plan path, mapped fields. |
+| `forge_crucible_status` | crucible | low | **v2.37+** — List Crucible smelts by source and status, or inspect a single smelt by id. |
 
 ## CLI-Only Families
 
@@ -196,7 +209,7 @@ Per-slice performance data is appended to `.forge/model-performance.json` after 
 - Dashboard **Cost tab** shows a **Model Performance** table: run count, pass rate (color-coded), average duration, cost per run, total tokens
 - `forge_cost_report` MCP tool includes `forge_model_stats` (aggregated per-model stats)
 
-## CLI Commands (45+)
+## CLI Commands (57)
 
 ```
 pforge smith                          # Environment diagnostics (+ Bug Registry, Notifications, Timeline/Search sources)
@@ -515,7 +528,7 @@ dotnet test
 | `[depends: Slice N]` | Waits for Slice N to complete |
 | `[scope: path/**]` | Restricts worker to these paths, enables conflict detection |
 
-## Guardrails (17-18 per preset)
+## Guardrails (16-18 per preset)
 
 Auto-loading instruction files in `.github/instructions/`:
 
@@ -539,7 +552,7 @@ Every instruction file includes two defensive sections:
 - **Temper Guards** — tables of common shortcuts agents take that still produce compiling code but erode quality (e.g., "This is too simple to test" → "Simple code gets modified later. The test documents the contract."). Named after the metallurgical process — tempering strengthens steel against brittle failure.
 - **Warning Signs** — observable behavioral patterns indicating the file's guidance is being violated (e.g., "Controller contains database queries", "Empty catch block"). Helps agents self-monitor during execution and reviewers catch violations during audit.
 
-## Agents (19 per app preset)
+## Agents (~12 per install: 5 pipeline + 6-7 stack-specific + audit-classifier-reviewer)
 
 **Stack-specific (6)**: architecture-reviewer, database-reviewer, deploy-helper, performance-analyzer, security-reviewer, test-runner
 
@@ -560,7 +573,7 @@ Every instruction file includes two defensive sections:
 | `generic` | `.ai/instructions.md`, `.ai/commands/` | Any AI tool (configurable dir) |
 | `all` | All of the above | Full multi-tool support |
 
-## Skills (13)
+## Skills (18 unique IDs — 10-11 per preset + 6 shared)
 
 Every skill follows the [Skill Blueprint](SKILL-BLUEPRINT.md) format: Frontmatter → Trigger → Steps → Safety Rules → Temper Guards → Warning Signs → Exit Proof → Persistent Memory.
 

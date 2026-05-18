@@ -1,0 +1,106 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 400" fill="none">
+  <title>Team Coordination Flow — multiple developers writing to team-activity.jsonl, team-dashboard + classifier-issue reading from it</title>
+  <style>
+    text { font-family: 'Inter', sans-serif; }
+    .node { rx: 8; ry: 8; stroke-width: 1.5; }
+    .arrow { stroke: #475569; stroke-width: 1.5; fill: none; marker-end: url(#tc-ah); }
+    .arrow-w { stroke: #fbbf24; stroke-width: 1.5; fill: none; marker-end: url(#tc-ahw); }
+    .arrow-r { stroke: #60a5fa; stroke-width: 1.5; fill: none; marker-end: url(#tc-ahr); }
+    .arrow-c { stroke: #fb7185; stroke-width: 1.5; fill: none; marker-end: url(#tc-ahc); }
+    .label  { font-size: 10px; fill: #94a3b8; }
+    .small  { font-size: 9px;  fill: #cbd5e1; }
+    .title  { font-size: 11px; fill: #e2e8f0; font-weight: 600; }
+    .phase  { font-size: 9px;  fill: #f59e0b; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; }
+    .lane   { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; }
+    .mono   { font-family: 'JetBrains Mono', monospace; font-size: 9px; fill: #cbd5e1; }
+  </style>
+  <defs>
+    <marker id="tc-ah" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto">
+      <path d="M0,0 L8,3 L0,6" fill="#475569" />
+    </marker>
+    <marker id="tc-ahw" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto">
+      <path d="M0,0 L8,3 L0,6" fill="#fbbf24" />
+    </marker>
+    <marker id="tc-ahr" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto">
+      <path d="M0,0 L8,3 L0,6" fill="#60a5fa" />
+    </marker>
+    <marker id="tc-ahc" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto">
+      <path d="M0,0 L8,3 L0,6" fill="#fb7185" />
+    </marker>
+  </defs>
+
+  <!-- ── WRITERS — developer worktrees ── -->
+  <text x="120" y="20" class="phase" text-anchor="middle">WRITERS · DEVELOPER WORKTREES</text>
+
+  <rect x="20" y="30" width="200" height="65" class="node" fill="#0f172a" stroke="#fbbf24" />
+  <text x="120" y="52" class="title" text-anchor="middle">alice / feature-auth</text>
+  <text x="120" y="69" class="mono" text-anchor="middle">pforge run-plan ...</text>
+  <text x="120" y="85" class="label" text-anchor="middle">Phase-31 · slice 4</text>
+
+  <rect x="20" y="115" width="200" height="65" class="node" fill="#0f172a" stroke="#fbbf24" />
+  <text x="120" y="137" class="title" text-anchor="middle">bob / feature-billing</text>
+  <text x="120" y="154" class="mono" text-anchor="middle">pforge run-plan ...</text>
+  <text x="120" y="170" class="label" text-anchor="middle">Phase-32 · slice 2</text>
+
+  <rect x="20" y="200" width="200" height="65" class="node" fill="#0f172a" stroke="#fbbf24" />
+  <text x="120" y="222" class="title" text-anchor="middle">carla / hotfix-db</text>
+  <text x="120" y="239" class="mono" text-anchor="middle">pforge run-plan ...</text>
+  <text x="120" y="255" class="label" text-anchor="middle">Phase-31.1 · slice 1</text>
+
+  <rect x="20" y="285" width="200" height="65" class="node" fill="#0f172a" stroke="#fbbf24" />
+  <text x="120" y="307" class="title" text-anchor="middle">+ N more worktrees</text>
+  <text x="120" y="324" class="label" text-anchor="middle">each appends on slice complete</text>
+  <text x="120" y="340" class="label" text-anchor="middle" font-style="italic">~1 line per slice</text>
+
+  <!-- ── CENTER — append-only ledger ── -->
+  <text x="400" y="20" class="phase" text-anchor="middle">CENTRAL LEDGER</text>
+
+  <rect x="300" y="100" width="200" height="200" class="node" fill="#0f172a" stroke="#f59e0b" stroke-width="2.5" />
+  <text x="400" y="128" class="title" text-anchor="middle" fill="#fbbf24">team-activity.jsonl</text>
+  <text x="400" y="146" class="lane" text-anchor="middle" fill="#f59e0b">APPEND-ONLY</text>
+  <text x="400" y="166" class="label" text-anchor="middle">.forge/</text>
+  <text x="400" y="184" class="small" text-anchor="middle">{ ts, dev, branch,</text>
+  <text x="400" y="198" class="small" text-anchor="middle">  phase, slice, files,</text>
+  <text x="400" y="212" class="small" text-anchor="middle">  cost, gateStatus }</text>
+  <text x="400" y="240" class="label" text-anchor="middle" font-style="italic">one event per slice complete</text>
+  <text x="400" y="258" class="label" text-anchor="middle" font-style="italic">+ classifier-issue events</text>
+  <text x="400" y="280" class="phase" text-anchor="middle" fill="#fbbf24">SOURCE OF TRUTH</text>
+
+  <!-- writer arrows -->
+  <path d="M220,62 Q260,80 300,140" class="arrow-w" />
+  <path d="M220,147 L300,160" class="arrow-w" />
+  <path d="M220,232 L300,200" class="arrow-w" />
+  <path d="M220,317 Q260,300 300,260" class="arrow-w" />
+
+  <!-- ── READERS ── -->
+  <text x="680" y="20" class="phase" text-anchor="middle">READERS</text>
+
+  <rect x="580" y="40" width="200" height="65" class="node" fill="#0f172a" stroke="#60a5fa" />
+  <text x="680" y="62" class="title" text-anchor="middle">forge_team_dashboard</text>
+  <text x="680" y="79" class="label" text-anchor="middle">per-dev cards + conflict-risk</text>
+  <text x="680" y="95" class="mono" text-anchor="middle">pforge team-dashboard</text>
+
+  <rect x="580" y="125" width="200" height="65" class="node" fill="#0f172a" stroke="#60a5fa" />
+  <text x="680" y="147" class="title" text-anchor="middle">forge_team_activity</text>
+  <text x="680" y="164" class="label" text-anchor="middle">raw event tail · filterable</text>
+  <text x="680" y="180" class="mono" text-anchor="middle">pforge team-activity --since=24h</text>
+
+  <rect x="580" y="210" width="200" height="65" class="node" fill="#0f172a" stroke="#fb7185" />
+  <text x="680" y="232" class="title" text-anchor="middle">forge_classifier_issue</text>
+  <text x="680" y="249" class="label" text-anchor="middle">files GH issue + appends event</text>
+  <text x="680" y="265" class="mono" text-anchor="middle">closes the audit loop</text>
+
+  <rect x="580" y="295" width="200" height="65" class="node" fill="#0f172a" stroke="#60a5fa" />
+  <text x="680" y="317" class="title" text-anchor="middle">Dashboard · Team tab</text>
+  <text x="680" y="334" class="label" text-anchor="middle">localhost:3100 · live tail</text>
+  <text x="680" y="350" class="label" text-anchor="middle">conflict-risk gauge per pair</text>
+
+  <!-- reader arrows -->
+  <path d="M500,150 L580,72" class="arrow-r" />
+  <path d="M500,170 L580,157" class="arrow-r" />
+  <path d="M500,220 L580,242" class="arrow-c" />
+  <path d="M500,240 L580,327" class="arrow-r" />
+
+  <!-- ── Bottom — what the ledger enables ── -->
+  <text x="400" y="372" class="label" text-anchor="middle">Conflict risk = file-overlap (Jaccard) × time-window proximity · classifier audits route noise → spec / classifier lane</text>
+</svg>

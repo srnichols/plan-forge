@@ -1,0 +1,123 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 420" fill="none">
+  <title>Knowledge Graph Schema — node types (Phase, Slice, Commit, File, Bug, Run, Incident) and edge types connecting them</title>
+  <style>
+    text { font-family: 'Inter', sans-serif; }
+    .node { stroke-width: 2; }
+    .edge { stroke: #475569; stroke-width: 1.2; fill: none; marker-end: url(#kg-ah); }
+    .edge-touched { stroke: #fbbf24; stroke-width: 1.2; fill: none; marker-end: url(#kg-aht); }
+    .edge-found   { stroke: #fb7185; stroke-width: 1.2; fill: none; marker-end: url(#kg-ahf); }
+    .edge-fixed   { stroke: #34d399; stroke-width: 1.2; fill: none; marker-end: url(#kg-ahx); stroke-dasharray: 4 2; }
+    .label  { font-size: 10px; fill: #94a3b8; }
+    .edge-lbl { font-size: 9px; fill: #cbd5e1; }
+    .title  { font-size: 11px; fill: #e2e8f0; font-weight: 700; }
+    .phase  { font-size: 9px;  fill: #f59e0b; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; }
+    .mono   { font-family: 'JetBrains Mono', monospace; font-size: 9px; fill: #cbd5e1; }
+  </style>
+  <defs>
+    <marker id="kg-ah"  markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><path d="M0,0 L8,3 L0,6" fill="#475569" /></marker>
+    <marker id="kg-aht" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><path d="M0,0 L8,3 L0,6" fill="#fbbf24" /></marker>
+    <marker id="kg-ahf" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><path d="M0,0 L8,3 L0,6" fill="#fb7185" /></marker>
+    <marker id="kg-ahx" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><path d="M0,0 L8,3 L0,6" fill="#34d399" /></marker>
+  </defs>
+
+  <!-- ── Phase (top, single) ── -->
+  <text x="400" y="20" class="phase" text-anchor="middle">PLANNING HIERARCHY</text>
+  <ellipse cx="400" cy="60" rx="80" ry="28" fill="#0f172a" class="node" stroke="#f59e0b" />
+  <text x="400" y="58" class="title" text-anchor="middle">Phase</text>
+  <text x="400" y="74" class="mono" text-anchor="middle">Phase-31</text>
+
+  <!-- ── Slices (3 below Phase) ── -->
+  <ellipse cx="220" cy="160" rx="60" ry="24" fill="#0f172a" class="node" stroke="#fbbf24" />
+  <text x="220" y="158" class="title" text-anchor="middle">Slice</text>
+  <text x="220" y="174" class="mono" text-anchor="middle">31-1</text>
+
+  <ellipse cx="400" cy="160" rx="60" ry="24" fill="#0f172a" class="node" stroke="#fbbf24" />
+  <text x="400" y="158" class="title" text-anchor="middle">Slice</text>
+  <text x="400" y="174" class="mono" text-anchor="middle">31-2</text>
+
+  <ellipse cx="580" cy="160" rx="60" ry="24" fill="#0f172a" class="node" stroke="#fbbf24" />
+  <text x="580" y="158" class="title" text-anchor="middle">Slice</text>
+  <text x="580" y="174" class="mono" text-anchor="middle">31-3</text>
+
+  <!-- Phase → Slice (contains) -->
+  <path d="M360,82 Q300,120 240,140" class="edge" />
+  <path d="M400,90 L400,135" class="edge" />
+  <path d="M440,82 Q500,120 560,140" class="edge" />
+  <text x="290" y="115" class="edge-lbl">contains</text>
+
+  <!-- ── Bottom row labels ── -->
+  <text x="120" y="240" class="phase" text-anchor="middle">EXECUTION ARTIFACTS</text>
+
+  <!-- ── Run (top-left bottom) ── -->
+  <rect x="60" y="255" width="130" height="55" rx="6" fill="#0f172a" class="node" stroke="#60a5fa" />
+  <text x="125" y="277" class="title" text-anchor="middle">Run</text>
+  <text x="125" y="294" class="mono" text-anchor="middle">.forge/runs/*</text>
+  <text x="125" y="307" class="label" text-anchor="middle">cost · tokens · model</text>
+
+  <!-- ── Commit ── -->
+  <rect x="220" y="255" width="130" height="55" rx="6" fill="#0f172a" class="node" stroke="#34d399" />
+  <text x="285" y="277" class="title" text-anchor="middle">Commit</text>
+  <text x="285" y="294" class="mono" text-anchor="middle">sha · author</text>
+  <text x="285" y="307" class="label" text-anchor="middle">parsed from git log</text>
+
+  <!-- ── File ── -->
+  <rect x="380" y="255" width="130" height="55" rx="6" fill="#0f172a" class="node" stroke="#fbbf24" />
+  <text x="445" y="277" class="title" text-anchor="middle">File</text>
+  <text x="445" y="294" class="mono" text-anchor="middle">path · churn</text>
+  <text x="445" y="307" class="label" text-anchor="middle">hotspot signal</text>
+
+  <!-- ── Bug ── -->
+  <rect x="540" y="255" width="130" height="55" rx="6" fill="#0f172a" class="node" stroke="#fb7185" />
+  <text x="605" y="277" class="title" text-anchor="middle">Bug</text>
+  <text x="605" y="294" class="mono" text-anchor="middle">id · status</text>
+  <text x="605" y="307" class="label" text-anchor="middle">tempering / sweep</text>
+
+  <!-- ── Incident ── -->
+  <rect x="700" y="255" width="80" height="55" rx="6" fill="#0f172a" class="node" stroke="#a78bfa" />
+  <text x="740" y="277" class="title" text-anchor="middle">Incident</text>
+  <text x="740" y="294" class="mono" text-anchor="middle">sev · mttr</text>
+  <text x="740" y="307" class="label" text-anchor="middle">prod event</text>
+
+  <!-- ── Edges from slices to artifacts ── -->
+  <!-- slice → run (executed_by) -->
+  <path d="M180,180 Q140,220 125,255" class="edge" />
+  <text x="115" y="225" class="edge-lbl">executed_by</text>
+
+  <!-- slice → commit (produced) -->
+  <path d="M210,184 L260,255" class="edge" />
+  <path d="M390,184 L290,255" class="edge" />
+  <path d="M570,184 L320,255" class="edge" />
+  <text x="240" y="225" class="edge-lbl">produced</text>
+
+  <!-- slice → file (touched) -->
+  <path d="M250,184 Q330,220 410,255" class="edge-touched" />
+  <path d="M400,184 L445,255" class="edge-touched" />
+  <path d="M540,184 Q480,220 460,255" class="edge-touched" />
+  <text x="465" y="220" class="edge-lbl" fill="#fbbf24">touched</text>
+
+  <!-- slice → bug (found) -->
+  <path d="M610,184 L610,255" class="edge-found" />
+  <text x="625" y="225" class="edge-lbl" fill="#fb7185">found</text>
+
+  <!-- bug → commit (fixed_by, dashed) -->
+  <path d="M540,290 L350,290" class="edge-fixed" />
+  <text x="430" y="285" class="edge-lbl" fill="#34d399">fixed_by</text>
+
+  <!-- bug → incident (escalated_to) -->
+  <path d="M670,290 L700,290" class="edge-found" />
+  <text x="685" y="285" class="edge-lbl" fill="#fb7185">esc.</text>
+
+  <!-- ── Legend ── -->
+  <text x="60" y="350" class="phase">EDGE TYPES</text>
+  <line x1="60" y1="365" x2="100" y2="365" class="edge" /><text x="110" y="368" class="edge-lbl">contains · produced · executed_by · escalated_to</text>
+  <line x1="60" y1="380" x2="100" y2="380" class="edge-touched" /><text x="110" y="383" class="edge-lbl">touched (slice ↔ file)</text>
+  <line x1="60" y1="395" x2="100" y2="395" class="edge-found" /><text x="110" y="398" class="edge-lbl">found (slice → bug · bug → incident)</text>
+  <line x1="60" y1="410" x2="100" y2="410" class="edge-fixed" /><text x="110" y="413" class="edge-lbl">fixed_by (bug → commit, dashed = resolution)</text>
+
+  <!-- ── Right legend — what queries unlock ── -->
+  <rect x="450" y="340" width="330" height="78" rx="6" fill="#0f172a" stroke="#475569" />
+  <text x="615" y="358" class="title" text-anchor="middle">Queries the schema unlocks</text>
+  <text x="465" y="376" class="mono">Pattern detectors · churn-vs-cost · bug → file</text>
+  <text x="465" y="390" class="mono">blast-radius · phase → fix-time · pforge digest</text>
+  <text x="465" y="404" class="mono">forge_patterns_list · forge_hotspot · forge_graph_query</text>
+</svg>

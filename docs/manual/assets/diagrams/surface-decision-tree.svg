@@ -1,0 +1,112 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 420" fill="none">
+  <title>Surface Decision Tree — choosing between MCP, CLI, REST, and SDK based on caller type and intent</title>
+  <style>
+    text { font-family: 'Inter', sans-serif; }
+    .node { rx: 8; ry: 8; stroke-width: 1.5; }
+    .arrow { stroke: #475569; stroke-width: 1.5; fill: none; marker-end: url(#sdt-ah); }
+    .arrow-yes { stroke: #34d399; stroke-width: 1.5; fill: none; marker-end: url(#sdt-ahy); }
+    .arrow-no  { stroke: #94a3b8; stroke-width: 1.2; fill: none; marker-end: url(#sdt-ahn); stroke-dasharray: 3 2; }
+    .q { rx: 24; ry: 24; stroke-width: 1.5; }
+    .label  { font-size: 10px; fill: #cbd5e1; }
+    .label-em { font-size: 11px; fill: #e2e8f0; font-weight: 600; }
+    .small  { font-size: 9px;  fill: #94a3b8; }
+    .phase  { font-size: 9px;  fill: #f59e0b; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; }
+    .lane   { font-size: 12px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.05em; }
+    .mono   { font-family: 'JetBrains Mono', monospace; font-size: 9px; fill: #cbd5e1; }
+    .yes-lbl { font-size: 9px; fill: #34d399; font-weight: 700; }
+    .no-lbl  { font-size: 9px; fill: #94a3b8; font-weight: 600; }
+  </style>
+  <defs>
+    <marker id="sdt-ah"  markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><path d="M0,0 L8,3 L0,6" fill="#475569" /></marker>
+    <marker id="sdt-ahy" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><path d="M0,0 L8,3 L0,6" fill="#34d399" /></marker>
+    <marker id="sdt-ahn" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><path d="M0,0 L8,3 L0,6" fill="#94a3b8" /></marker>
+  </defs>
+
+  <!-- Title -->
+  <text x="400" y="20" class="phase" text-anchor="middle">PICK A SURFACE · START HERE</text>
+
+  <!-- Q1: Is the caller an AI agent speaking MCP? -->
+  <rect x="270" y="35" width="260" height="60" class="q" fill="#0f172a" stroke="#fbbf24" stroke-width="2" />
+  <text x="400" y="60" class="label-em" text-anchor="middle">Is the caller an AI agent</text>
+  <text x="400" y="76" class="label-em" text-anchor="middle">already speaking MCP?</text>
+  <text x="400" y="89" class="small" text-anchor="middle">(Copilot, Claude Desktop, Cursor, Codex)</text>
+
+  <!-- Q1 → MCP (yes, left) -->
+  <path d="M310,95 Q220,140 130,170" class="arrow-yes" />
+  <text x="220" y="125" class="yes-lbl">YES — use MCP</text>
+
+  <!-- MCP outcome box (far left) -->
+  <rect x="20" y="170" width="220" height="100" class="node" fill="#0f172a" stroke="#34d399" stroke-width="2" />
+  <text x="130" y="195" class="lane" text-anchor="middle" fill="#34d399">MCP</text>
+  <text x="130" y="215" class="label" text-anchor="middle">stdio · 88 tools</text>
+  <text x="130" y="232" class="label" text-anchor="middle">inherited trust</text>
+  <text x="130" y="252" class="small" text-anchor="middle" font-style="italic">Auto-discovered by</text>
+  <text x="130" y="265" class="small" text-anchor="middle" font-style="italic">.vscode/mcp.json</text>
+
+  <!-- Q1 → Q2 (no, down) -->
+  <path d="M400,95 L400,120" class="arrow-no" />
+  <text x="412" y="112" class="no-lbl">NO</text>
+
+  <!-- Q2: human in terminal or local script? -->
+  <rect x="270" y="120" width="260" height="60" class="q" fill="#0f172a" stroke="#fbbf24" stroke-width="2" />
+  <text x="400" y="145" class="label-em" text-anchor="middle">Human in a terminal,</text>
+  <text x="400" y="161" class="label-em" text-anchor="middle">cron job, or local shell script?</text>
+  <text x="400" y="174" class="small" text-anchor="middle">(filesystem-trusted, same machine)</text>
+
+  <!-- Q2 → CLI (yes, left) -->
+  <path d="M310,180 Q220,200 130,290" class="arrow-yes" />
+  <text x="200" y="220" class="yes-lbl">YES — use CLI</text>
+
+  <!-- CLI outcome box -->
+  <rect x="20" y="290" width="220" height="100" class="node" fill="#0f172a" stroke="#34d399" stroke-width="2" />
+  <text x="130" y="315" class="lane" text-anchor="middle" fill="#34d399">CLI</text>
+  <text x="130" y="335" class="label" text-anchor="middle">pforge · 57 commands</text>
+  <text x="130" y="352" class="label" text-anchor="middle">+ PFORGE_API_TOKEN</text>
+  <text x="130" y="372" class="small" text-anchor="middle" font-style="italic">pforge digest, pforge run-plan,</text>
+  <text x="130" y="385" class="small" text-anchor="middle" font-style="italic">pforge fm-session, etc.</text>
+
+  <!-- Q2 → Q3 (no, down) -->
+  <path d="M400,180 L400,205" class="arrow-no" />
+  <text x="412" y="198" class="no-lbl">NO</text>
+
+  <!-- Q3: Node.js / TypeScript caller wanting typed results? -->
+  <rect x="270" y="205" width="260" height="60" class="q" fill="#0f172a" stroke="#fbbf24" stroke-width="2" />
+  <text x="400" y="230" class="label-em" text-anchor="middle">Node.js / TypeScript caller</text>
+  <text x="400" y="246" class="label-em" text-anchor="middle">wanting typed responses?</text>
+  <text x="400" y="259" class="small" text-anchor="middle">(npm package or workspace import)</text>
+
+  <!-- Q3 → SDK (yes, right) -->
+  <path d="M530,235 Q620,235 670,200" class="arrow-yes" />
+  <text x="615" y="225" class="yes-lbl">YES — use SDK</text>
+
+  <!-- SDK outcome (top-right) -->
+  <rect x="560" y="170" width="220" height="100" class="node" fill="#0f172a" stroke="#34d399" stroke-width="2" />
+  <text x="670" y="195" class="lane" text-anchor="middle" fill="#34d399">SDK</text>
+  <text x="670" y="215" class="label" text-anchor="middle">pforge-sdk · 4 sub-paths</text>
+  <text x="670" y="232" class="label" text-anchor="middle">createClient + typed tools</text>
+  <text x="670" y="252" class="small" text-anchor="middle" font-style="italic">import { createClient }</text>
+  <text x="670" y="265" class="small" text-anchor="middle" font-style="italic">from 'pforge-sdk'</text>
+
+  <!-- Q3 → REST (no, default) -->
+  <path d="M400,265 L400,290" class="arrow-no" />
+  <text x="412" y="283" class="no-lbl">NO — default</text>
+
+  <!-- REST outcome (center bottom) -->
+  <rect x="280" y="290" width="240" height="100" class="node" fill="#0f172a" stroke="#34d399" stroke-width="2" />
+  <text x="400" y="315" class="lane" text-anchor="middle" fill="#34d399">REST</text>
+  <text x="400" y="335" class="label" text-anchor="middle">/api/* · 103 endpoints · OpenAPI 3</text>
+  <text x="400" y="352" class="label" text-anchor="middle">Bearer auth · cross-process</text>
+  <text x="400" y="372" class="small" text-anchor="middle" font-style="italic">CI, dashboards, mobile,</text>
+  <text x="400" y="385" class="small" text-anchor="middle" font-style="italic">non-Node clients, webhooks</text>
+
+  <!-- Side note: WebSocket -->
+  <rect x="560" y="290" width="220" height="100" class="node" fill="#0f172a" stroke="#a78bfa" />
+  <text x="670" y="315" class="lane" text-anchor="middle" fill="#a78bfa">+ WS</text>
+  <text x="670" y="335" class="label" text-anchor="middle">/api/hub · 60+ event types</text>
+  <text x="670" y="352" class="label" text-anchor="middle">observation only</text>
+  <text x="670" y="372" class="small" text-anchor="middle" font-style="italic">subscribe alongside REST</text>
+  <text x="670" y="385" class="small" text-anchor="middle" font-style="italic">for live progress streams</text>
+
+  <!-- bottom hint -->
+  <text x="400" y="412" class="small" text-anchor="middle">All four surfaces share one handler set. Pick the surface that matches the caller — not the capability.</text>
+</svg>

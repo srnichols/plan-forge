@@ -30,6 +30,8 @@
 
     <main>
       <div class="chapter-content">
+        <!-- Hero -->
+        <img src="assets/chapter-heroes/ch28-hero.jpg" alt="A floating 3D constellation of glowing bronze nodes connected by amber light edges suspended in a stone forge chamber, with node clusters shaped like scrolls, hammers, vessels, and crossed wrenches representing Phase, Slice, Bug, and Commit nodes" class="chapter-hero" />
 
         <div class="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">Chapter 28 · Act V — Integrate</div>
         <h1>The Knowledge Graph</h1>
@@ -52,6 +54,8 @@
 
         <!-- ─── Node + edge model ─── -->
         <h2 id="model">The node + edge model</h2>
+
+        <figure class="manual-figure" id="fig-28-1"><img src="assets/diagrams/knowledge-graph-schema.svg" alt="Knowledge graph schema with seven node types and four edge classes. Top tier (PLANNING HIERARCHY): one Phase node connects via 'contains' edges to three Slice nodes (31-1, 31-2, 31-3). Bottom tier (EXECUTION ARTIFACTS): five rectangular nodes — Run (cost, tokens, model), Commit (sha, author), File (path, churn), Bug (id, status), Incident (severity, mttr). Slices connect down via four edge types: solid gray for 'executed_by' and 'produced', amber for 'touched' (slice to file), pink for 'found' (slice to bug, bug to incident), and dashed green for 'fixed_by' (bug back to commit). Right panel lists the queries this schema unlocks: pattern detectors, churn-vs-cost, bug-to-file blast radius, phase-to-fix-time, pforge digest, forge_patterns_list, forge_hotspot, forge_graph_query." class="diagram-img diagram-img-md my-4" /><figcaption class="manual-figcaption"><!--fignum--><span class="manual-fignum">Figure 28-1.</span><!--/fignum--> <!--cap:auto-->Knowledge graph schema — seven node types, four edge classes<!--/cap--></figcaption></figure>
 
         <div class="my-8 p-6 bg-slate-900/50 border border-slate-800/60 rounded-xl overflow-x-auto">
           <pre class="mermaid">

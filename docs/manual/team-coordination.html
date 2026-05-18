@@ -30,6 +30,8 @@
 
     <main>
       <div class="chapter-content">
+        <!-- Hero -->
+        <img src="assets/chapter-heroes/ch27-hero.jpg" alt="A vast bronze great hall with five forges arranged in a semicircle, each tended by a hooded smith with a glowing rune overhead, threads of amber light connecting their anvils into a knowledge-sharing web" class="chapter-hero" />
 
         <div class="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">Chapter 27 · Act V — Integrate</div>
         <h1>Team Coordination</h1>
@@ -52,6 +54,8 @@
         <!-- ─── The activity ledger ─── -->
         <h2 id="activity-ledger">The activity ledger</h2>
         <p>Everything starts with one file: <code>.forge/team-activity.jsonl</code>. It is an append-only JSON Lines log that every Plan Forge operation writes to. One event per line, never edited, never compacted.</p>
+
+        <figure class="manual-figure" id="fig-27-1"><img src="assets/diagrams/team-coordination-flow.svg" alt="Team coordination flow: multiple developer worktrees on the left (alice/feature-auth, bob/feature-billing, carla/hotfix-db, plus N more) each append one event per slice complete to the central team-activity.jsonl ledger. On the right, four readers consume the same ledger: forge_team_dashboard renders per-developer cards with a conflict-risk score, forge_team_activity tails raw events with filters, forge_classifier_issue files GitHub issues to close the tempering audit loop, and the Dashboard Team tab provides a live view at localhost:3100. The ledger is append-only and never compacted; conflict risk is calculated as file-overlap (Jaccard) times time-window proximity." class="diagram-img diagram-img-md my-4" /><figcaption class="manual-figcaption"><!--fignum--><span class="manual-fignum">Figure 27-1.</span><!--/fignum--> <!--cap:auto-->Team coordination — many writers, one ledger, four readers<!--/cap--></figcaption></figure>
 
         <pre class="bg-slate-950 border border-slate-800/60 rounded-xl p-4 overflow-x-auto text-sm"><code>{"ts":"2026-05-17T09:14:22Z","actor":"alice@example.com","action":"plan.start","plan":"Phase-31","sha":"a1b2c3d"}
 {"ts":"2026-05-17T09:18:41Z","actor":"alice@example.com","action":"slice.commit","plan":"Phase-31","slice":"2","sha":"e4f5g6h"}

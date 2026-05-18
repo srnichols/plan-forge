@@ -1,0 +1,111 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 380" fill="none">
+  <title>Copilot Integration Trilogy — three sync tools producing three artifact families read by Copilot</title>
+  <style>
+    text { font-family: 'Inter', sans-serif; }
+    .node { rx: 8; ry: 8; stroke-width: 1.5; }
+    .arrow { stroke: #475569; stroke-width: 1.5; fill: none; marker-end: url(#cit-ah); }
+    .arrow-i { stroke: #60a5fa; stroke-width: 1.5; fill: none; marker-end: url(#cit-ahi); }
+    .arrow-m { stroke: #fbbf24; stroke-width: 1.5; fill: none; marker-end: url(#cit-ahm); }
+    .arrow-s { stroke: #34d399; stroke-width: 1.5; fill: none; marker-end: url(#cit-ahs); }
+    .label  { font-size: 10px; fill: #94a3b8; }
+    .small  { font-size: 9px;  fill: #cbd5e1; }
+    .title  { font-size: 11px; fill: #e2e8f0; font-weight: 600; }
+    .phase  { font-size: 9px;  fill: #f59e0b; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; }
+    .lane   { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; }
+    .mono   { font-family: 'JetBrains Mono', monospace; font-size: 9px; fill: #cbd5e1; }
+  </style>
+  <defs>
+    <marker id="cit-ah" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto">
+      <path d="M0,0 L8,3 L0,6" fill="#475569" />
+    </marker>
+    <marker id="cit-ahi" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto">
+      <path d="M0,0 L8,3 L0,6" fill="#60a5fa" />
+    </marker>
+    <marker id="cit-ahm" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto">
+      <path d="M0,0 L8,3 L0,6" fill="#fbbf24" />
+    </marker>
+    <marker id="cit-ahs" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto">
+      <path d="M0,0 L8,3 L0,6" fill="#34d399" />
+    </marker>
+  </defs>
+
+  <!-- ── INPUTS column ── -->
+  <text x="100" y="20" class="phase" text-anchor="middle">SOURCES</text>
+
+  <rect x="20" y="30" width="160" height="50" class="node" fill="#0f172a" stroke="#60a5fa" />
+  <text x="100" y="49" class="title" text-anchor="middle">.forge.json + profile</text>
+  <text x="100" y="65" class="label" text-anchor="middle">project commitments</text>
+
+  <rect x="20" y="100" width="160" height="50" class="node" fill="#0f172a" stroke="#60a5fa" />
+  <text x="100" y="119" class="title" text-anchor="middle">PROJECT-PRINCIPLES.md</text>
+  <text x="100" y="135" class="label" text-anchor="middle">non-negotiables</text>
+
+  <rect x="20" y="170" width="160" height="50" class="node" fill="#0f172a" stroke="#fbbf24" />
+  <text x="100" y="189" class="title" text-anchor="middle">trajectories + auto-skills</text>
+  <text x="100" y="205" class="label" text-anchor="middle">.forge/runs/*.jsonl</text>
+
+  <rect x="20" y="240" width="160" height="50" class="node" fill="#0f172a" stroke="#fbbf24" />
+  <text x="100" y="259" class="title" text-anchor="middle">OpenBrain L3</text>
+  <text x="100" y="275" class="label" text-anchor="middle">capture_thought records</text>
+
+  <rect x="20" y="310" width="160" height="50" class="node" fill="#0f172a" stroke="#34d399" />
+  <text x="100" y="329" class="title" text-anchor="middle">SKILL.md catalog</text>
+  <text x="100" y="345" class="label" text-anchor="middle">.github/skills/*/SKILL.md</text>
+
+  <!-- ── SYNC TOOLS column ── -->
+  <text x="400" y="20" class="phase" text-anchor="middle">SYNC TOOLS</text>
+
+  <rect x="300" y="30" width="200" height="120" class="node" fill="#0f172a" stroke="#60a5fa" stroke-width="2" />
+  <text x="400" y="55" class="title" text-anchor="middle">forge_sync_instructions</text>
+  <text x="400" y="74" class="lane" text-anchor="middle" fill="#60a5fa">INSTRUCTIONS</text>
+  <text x="400" y="93" class="label" text-anchor="middle">composes profile + principles</text>
+  <text x="400" y="108" class="label" text-anchor="middle">+ .forge.json + extra .md</text>
+  <text x="400" y="128" class="label" text-anchor="middle" font-style="italic">deterministic · hash-deduped</text>
+  <text x="400" y="142" class="mono" text-anchor="middle">pforge sync-instructions</text>
+
+  <rect x="300" y="170" width="200" height="120" class="node" fill="#0f172a" stroke="#fbbf24" stroke-width="2" />
+  <text x="400" y="195" class="title" text-anchor="middle">forge_sync_memories</text>
+  <text x="400" y="214" class="lane" text-anchor="middle" fill="#fbbf24">MEMORIES</text>
+  <text x="400" y="233" class="label" text-anchor="middle">aggregates trajectories</text>
+  <text x="400" y="248" class="label" text-anchor="middle">+ auto-skills + brain entries</text>
+  <text x="400" y="268" class="label" text-anchor="middle" font-style="italic">hash-deduped · atomic write</text>
+  <text x="400" y="282" class="mono" text-anchor="middle">pforge sync-memories</text>
+
+  <rect x="300" y="310" width="200" height="60" class="node" fill="#0f172a" stroke="#34d399" stroke-width="2" />
+  <text x="400" y="334" class="title" text-anchor="middle">SKILL.md (authored)</text>
+  <text x="400" y="350" class="lane" text-anchor="middle" fill="#34d399">SKILLS</text>
+  <text x="400" y="364" class="label" text-anchor="middle">hand-authored, repo-committed</text>
+
+  <!-- arrows from sources to tools -->
+  <path d="M180,55 L300,75" class="arrow-i" />
+  <path d="M180,125 L300,105" class="arrow-i" />
+  <path d="M180,195 L300,210" class="arrow-m" />
+  <path d="M180,265 L300,240" class="arrow-m" />
+  <path d="M180,335 L300,335" class="arrow-s" />
+
+  <!-- ── ARTIFACTS column ── -->
+  <text x="700" y="20" class="phase" text-anchor="middle">ARTIFACTS</text>
+
+  <rect x="600" y="60" width="180" height="60" class="node" fill="#0f172a" stroke="#60a5fa" />
+  <text x="690" y="84" class="title" text-anchor="middle">.github/</text>
+  <text x="690" y="100" class="mono" text-anchor="middle">copilot-instructions.md</text>
+  <text x="690" y="114" class="label" text-anchor="middle">always-on Copilot context</text>
+
+  <rect x="600" y="200" width="180" height="60" class="node" fill="#0f172a" stroke="#fbbf24" />
+  <text x="690" y="224" class="title" text-anchor="middle">.github/</text>
+  <text x="690" y="240" class="mono" text-anchor="middle">copilot-memory-hints.md</text>
+  <text x="690" y="254" class="label" text-anchor="middle">opt-in via @workspace</text>
+
+  <rect x="600" y="320" width="180" height="50" class="node" fill="#0f172a" stroke="#34d399" />
+  <text x="690" y="339" class="title" text-anchor="middle">.github/skills/*.md</text>
+  <text x="690" y="355" class="label" text-anchor="middle">/-invoked skill blueprints</text>
+
+  <!-- arrows from tools to artifacts -->
+  <path d="M500,90 L600,90" class="arrow-i" />
+  <path d="M500,230 L600,230" class="arrow-m" />
+  <path d="M500,340 L600,340" class="arrow-s" />
+
+  <!-- ── Copilot consumer ── -->
+  <rect x="320" y="385" width="160" height="0" fill="none" />
+  <!-- Pulled outside view but keep canvas tidy -->
+</svg>

@@ -21,12 +21,13 @@ Open an issue with the `enhancement` label. Describe the problem you're solving,
 1. Fork the repository
 2. Create a feature branch: `git checkout -b feat/your-feature`
 3. Make your changes
-4. Run validation: `.\validate-setup.ps1` or `./validate-setup.sh` (or `pforge check` / `pforge smith`)
-5. If your repo has CI configured, the **Plan Forge Validate** action runs automatically on PR
-6. Commit using [conventional commits](https://www.conventionalcommits.org/): `git commit -m "feat(scope): description"`
+4. If you edited `docs/assets/tailwind.css`, rebuild the docs CSS: `npm run build:css` (also commits the updated `tailwind.built.css.sha256` — `node docs/manual/maintain.mjs` will flag CSS drift if you skip this)
+5. Run validation: `.\validate-setup.ps1` or `./validate-setup.sh` (or `pforge check` / `pforge smith`)
+6. If your repo has CI configured, the **Plan Forge Validate** action runs automatically on PR
+7. Commit using [conventional commits](https://www.conventionalcommits.org/): `git commit -m "feat(scope): description"`
 
 > **Multi-agent users**: If you test with Claude, Cursor, or Codex, run setup with `-Agent <name>` and verify agent-specific files are generated.
-7. Push and open a Pull Request
+8. Push and open a Pull Request
 
 ### What Can You Contribute?
 

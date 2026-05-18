@@ -704,6 +704,35 @@ if (!auditOnly) {
   log("\n7. Skipping regeneration (--audit mode)");
 }
 
+// ─── Step 8: Tailwind CSS drift guard ───
+// Detects manual edits to docs/assets/tailwind.built.css that bypassed `npm run build:css`.
+// The sidecar file docs/assets/tailwind.built.css.sha256 is written by the postbuild:css
+// npm script after every legitimate build. Any divergence means the file was hand-edited
+// or is otherwise stale — re-run `npm run build:css` to fix it.
+log("\n8. Checking docs/assets/tailwind.built.css drift…");
+{
+  const DOCS_ASSETS = path.join(MANUAL_DIR, "..", "assets");
+  const CSS_BUILT   = path.join(DOCS_ASSETS, "tailwind.built.css");
+  const CSS_HASH_FILE = path.join(DOCS_ASSETS, "tailwind.built.css.sha256");
+  let cssOk = true;
+  if (!fs.existsSync(CSS_HASH_FILE)) {
+    issues.push({ severity: "HIGH", type: "CSS", file: "docs/assets/tailwind.built.css.sha256", msg: "hash sidecar missing — run `npm run build:css` to regenerate" });
+    cssOk = false;
+  } else if (!fs.existsSync(CSS_BUILT)) {
+    issues.push({ severity: "HIGH", type: "CSS", file: "docs/assets/tailwind.built.css", msg: "built CSS file missing — run `npm run build:css`" });
+    cssOk = false;
+  } else {
+    const { createHash } = await import("node:crypto");
+    const actualHash = createHash("sha256").update(fs.readFileSync(CSS_BUILT)).digest("hex");
+    const expectedHash = fs.readFileSync(CSS_HASH_FILE, "utf8").trim();
+    if (actualHash !== expectedHash) {
+      issues.push({ severity: "HIGH", type: "CSS", file: "docs/assets/tailwind.built.css", msg: `content hash mismatch — file was edited without running \`npm run build:css\` (expected ${expectedHash.slice(0,12)}…, got ${actualHash.slice(0,12)}…)` });
+      cssOk = false;
+    }
+  }
+  if (cssOk) log("   ✓ tailwind.built.css matches build hash");
+}
+
 // ─── Report ───
 log("\n┌──────────────────────────────────────────────────────┐");
 log("│  RESULTS                                            │");
@@ -729,6 +758,7 @@ console.log("    CHNUM → Update either the chapter page (<title> + badge + cro
 console.log("    ACT   → Update the badge's 'Act <ROMAN>' to match the chapter's act field in assets/manual.js (or update manual.js if the badge is correct).");
 console.log("    GLOSSARY → Run 'node docs/manual/maintain.mjs' (without --audit) to regenerate assets/glossary-terms.js from glossary.html.");
 console.log("    COUNT → Add the key to MANUAL_COUNTS in assets/manual.js, or run without --audit to rewrite drift");
+console.log("    CSS   → Run `npm run build:css` from the repo root to rebuild docs/assets/tailwind.built.css");
 process.exit(bySev.HIGH.length > 0 ? 1 : 0);
 
 // ─── Helpers ───

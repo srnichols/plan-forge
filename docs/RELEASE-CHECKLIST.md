@@ -9,6 +9,7 @@
 - [ ] All target issues / bug IDs are listed in the commit message and CHANGELOG entry.
 - [ ] Tests pass for everything you touched. Note pre-existing failures in your status report — do not let unrelated baseline failures block a hotfix.
 - [ ] No formatter regressions snuck in. `git diff HEAD` against changed files should show only intentional changes (a real one bit us in v2.82.1: `tools.json#forge_run_plan.description` had been silently truncated by an editor between turns).
+- [ ] If documentation CSS (`docs/assets/tailwind.css`) was modified, run `npm run build:css` to rebuild and commit both `tailwind.built.css` and `tailwind.built.css.sha256`. `node docs/manual/maintain.mjs` will fail with a HIGH CSS issue if the built file diverges from the recorded hash.
 - [ ] Working tree clean OR all staged changes belong to this release.
 
 ---
@@ -335,6 +336,7 @@ If a user genuinely wants the older release (e.g. their local v2.96.0 is corrupt
 ```
 [ ] §0  Tests pass on touched suites; baseline failures noted
 [ ] §0  No formatter regressions in diff
+[ ] §0  If docs CSS was changed: `npm run build:css` run and `docs/assets/tailwind.built.css.sha256` committed
 [ ] §1a Hooks mirrored (.github/hooks/ ⊆ templates/.github/hooks/)
 [ ] §1b Every instruction file enumerated in setup.{ps1,sh} + pforge.{ps1,sh}
 [ ] §1c New step-N prompts added to smith's required list (if any)

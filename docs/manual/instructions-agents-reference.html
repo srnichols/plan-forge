@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Chapter 10 · Reference: Agents, Skills &amp; Hooks — Plan Forge Manual</title>
-  <meta name="description" content="Complete reference for Plan Forge reviewer agents (14), slash-command skills (12), and lifecycle hooks. Stack-specific, cross-stack, and pipeline agents; what each reviews and when hooks fire." />
+  <meta name="description" content="Complete reference for Plan Forge reviewer agents (14), slash-command skills (6 shared + 10 per stack), and lifecycle hooks. Stack-specific, cross-stack, and pipeline agents; what each reviews and when hooks fire." />
   <link rel="icon" type="image/svg+xml" href="../assets/plan-forge-logo.svg" />
   <script src="https://cdn.tailwindcss.com"></script>
   <script>tailwind.config={theme:{extend:{colors:{forge:{400:'#f59e0b',500:'#d97706'}}}}}</script>
@@ -26,7 +26,7 @@
 
       <div class="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">Chapter 10 · Reference</div>
       <h1>Agents, Skills &amp; Hooks</h1>
-      <p class="text-lg text-slate-400 mb-8">Complete reference for the 14 reviewer agents, 12 slash-command skills, and the lifecycle hook system.</p>
+      <p class="text-lg text-slate-400 mb-8">Complete reference for the 14 reviewer agents, 16 slash-command skills (6 shared + 10 per stack), and the lifecycle hook system.</p>
 
       <div class="callout callout-tip">
         <strong>Instruction files catalog</strong> — looking for the auto-loading rules, universal files, and domain catalog? See
@@ -83,24 +83,137 @@
 
       <!-- ─── Skills ─── -->
       <h2 id="skills">Skills</h2>
-      <p>12 slash commands per app preset. Skills <strong>do work</strong> — they can read, write, and run terminal commands:</p>
-      <table class="manual-table">
-        <thead><tr><th>Skill</th><th>Invocation</th><th>What It Does</th></tr></thead>
-        <tbody>
-          <tr><td>database-migration</td><td><code>/database-migration</code></td><td>Generate, review, test, deploy schema migrations</td></tr>
-          <tr><td>staging-deploy</td><td><code>/staging-deploy</code></td><td>Build, push, migrate, deploy, verify on staging</td></tr>
-          <tr><td>test-sweep</td><td><code>/test-sweep</code></td><td>Run all test suites and aggregate results</td></tr>
-          <tr><td>dependency-audit</td><td><code>/dependency-audit</code></td><td>Scan for vulnerabilities, outdated packages, licenses</td></tr>
-          <tr><td>security-audit</td><td><code>/security-audit</code></td><td>OWASP scan, secrets detection, severity report</td></tr>
-          <tr><td>code-review</td><td><code>/code-review</code></td><td>Architecture, security, testing, patterns review</td></tr>
-          <tr><td>release-notes</td><td><code>/release-notes</code></td><td>Generate from git history and CHANGELOG</td></tr>
-          <tr><td>api-doc-gen</td><td><code>/api-doc-gen</code></td><td>Generate/update OpenAPI spec, validate consistency</td></tr>
-          <tr><td>onboarding</td><td><code>/onboarding</code></td><td>Walk new dev through setup, architecture, first task</td></tr>
-          <tr><td>health-check</td><td><code>/health-check</code></td><td>Forge diagnostic: smith → validate → sweep</td></tr>
-          <tr><td>forge-execute</td><td><code>/forge-execute</code></td><td>Guided plan execution: list → estimate → execute → report</td></tr>
-          <tr><td>forge-troubleshoot</td><td><code>/forge-troubleshoot</code></td><td>Diagnose common Plan Forge issues</td></tr>
-        </tbody>
-      </table>
+      <p>Skills are <strong>multi-step procedures the AI runs end-to-end</strong> &mdash; they read files, write files, run terminal commands, and emit events the dashboard can watch. Unlike agents (which review) and hooks (which gate), skills <strong>do work</strong>. There are two tiers: <strong>shared skills</strong> installed across every preset, and <strong>stack-specific skills</strong> tailored to the chosen language.</p>
+
+      <h3 id="skills-runtime-contract" class="text-base font-semibold text-slate-300 mt-6">The SKILL.md runtime contract</h3>
+        <p>Every skill is a single Markdown file with YAML frontmatter followed by numbered <code>### N. Step Name</code> sections. The <a href="https://github.com/srnichols/plan-forge/blob/master/pforge-mcp/skill-runner.mjs" rel="noopener">skill-runner</a> parses the file into a step DAG, executes bash blocks per step, and emits lifecycle events to the WebSocket hub. The contract:</p>
+
+        <table class="manual-table">
+          <thead><tr><th style="width: 11rem">Frontmatter field</th><th>Required</th><th>Purpose</th></tr></thead>
+          <tbody>
+            <tr><td><code>name</code></td><td>Yes</td><td>Slash-command alias (the file's directory name). <code>name: database-migration</code> &rarr; <code>/database-migration</code>.</td></tr>
+            <tr><td><code>description</code></td><td>Yes</td><td>One-paragraph trigger guidance. The classifier matches user prompts against this field. Best practice: include <strong>USE FOR</strong> and <strong>DO NOT USE FOR</strong> phrases.</td></tr>
+            <tr><td><code>argument-hint</code></td><td>Optional</td><td>One-line example of the argument shape, surfaced in the slash-command picker.</td></tr>
+            <tr><td><code>tools</code></td><td>Optional</td><td>Allow-list of tools the skill may invoke. Inline (<code>tools: [run_in_terminal, read_file]</code>) or block list. Enforces least-privilege at runtime.</td></tr>
+          </tbody>
+        </table>
+
+        <p>After the frontmatter, three Markdown sections are recognized by the runner:</p>
+        <ul class="list-disc list-inside space-y-1 mb-4">
+          <li><strong><code>## Steps</code></strong> &mdash; the main body. Each <code>### N. Step Name</code> heading defines one step; bash fences inside are executed in order. A step with no bash block is informational and auto-passes.</li>
+          <li><strong><code>## Safety Rules</code></strong> &mdash; bullet list of invariants. Surfaced in the dashboard and injected into the skill's context.</li>
+          <li><strong><code>## Persistent Memory</code></strong> &mdash; optional. Block appended to the skill's L2 capture so OpenBrain remembers cross-run lessons.</li>
+        </ul>
+
+        <p>Two structural patterns are recognized inside step bodies:</p>
+        <ul class="list-disc list-inside space-y-1 mb-4">
+          <li><strong>Conditionals</strong> &mdash; a blockquote starting with <code>If &lt;condition&gt; &rarr; &lt;action&gt;</code>. If the action contains the word <em>skip</em>, the runner aborts the current step's remaining commands. Used for early-exit paths like &ldquo;If migration fails &rarr; rollback &amp; STOP.&rdquo;</li>
+          <li><strong>Temper Guards</strong> &mdash; a Markdown table at the end of the file capturing shortcuts authors took that broke the skill. Surfaced in code review and the Plan Forge knowledge graph.</li>
+        </ul>
+
+      <h3 id="skills-events" class="text-base font-semibold text-slate-300 mt-6">Events the runner emits</h3>
+      <p>Every skill execution emits four event types on the hub (catalogued in <a href="event-catalog.html#skills">Appendix V &mdash; Skills events</a>):</p>
+        <table class="manual-table">
+          <thead><tr><th>Event</th><th>When</th><th>Payload</th></tr></thead>
+          <tbody>
+            <tr><td><code>skill-started</code></td><td>Once, at entry</td><td><code>{ skillName, stepCount }</code></td></tr>
+            <tr><td><code>skill-step-started</code></td><td>Before each step</td><td><code>{ skillName, stepNumber, stepName }</code></td></tr>
+            <tr><td><code>skill-step-completed</code></td><td>After each step</td><td><code>{ skillName, stepNumber, stepName, status, duration }</code></td></tr>
+            <tr><td><code>skill-completed</code></td><td>Once, at exit</td><td><code>{ skillName, passed, failed, duration }</code></td></tr>
+          </tbody>
+        </table>
+
+      <h3 id="skills-invocation" class="text-base font-semibold text-slate-300 mt-6">Three ways to invoke a skill</h3>
+        <ul class="list-disc list-inside space-y-1 mb-4">
+          <li><strong>Slash command in chat</strong> &mdash; <code>/database-migration add user_profiles table</code>. The most common path; works in VS Code Copilot, Claude, Cursor, and Codex once <code>setup.ps1 -Agent &lt;name&gt;</code> has run.</li>
+          <li><strong>MCP tool</strong> &mdash; <code>forge_run_skill</code> with <code>{ name, args }</code>. Returns the same lifecycle events plus a structured result envelope.</li>
+          <li><strong>REST</strong> &mdash; <code>POST /api/tool/forge_run_skill</code> through the generic dispatcher (see <a href="rest-api-reference.html#generic-dispatcher">Appendix W</a>). Used by the dashboard and any external integration.</li>
+        </ul>
+        <p>The orchestrator can also <strong>defer</strong> a skill into the <strong>decision tray</strong> when it wants a human to choose; clients query <code>GET /api/skills/pending</code> and resolve through <code>POST /api/skills/{accept,reject,defer}</code> (full surface in <a href="rest-api-reference.html#skills">Appendix W &mdash; Skills</a>).</p>
+
+      <h3 id="skills-shared" class="text-base font-semibold text-slate-300 mt-6">Shared skills (every preset)</h3>
+        <p>Six skills ship under <code>presets/shared/skills/</code> and install regardless of language. These are the cross-cutting workflows.</p>
+        <table class="manual-table">
+          <thead><tr><th>Skill</th><th>Invocation</th><th>What it does</th><th>Key tools</th></tr></thead>
+          <tbody>
+            <tr><td><code>audit-loop</code></td><td><code>/audit-loop [--max=N --env=dev]</code></td><td>Recursive scan &rarr; triage &rarr; fix until findings converge to zero. The orchestrator's drain loop, exposed as a one-shot.</td><td><code>forge_tempering_*</code>, <code>forge_bug_register</code>, <code>forge_triage_route</code></td></tr>
+            <tr><td><code>forge-execute</code></td><td><code>/forge-execute</code></td><td>Guided plan execution: list plans &rarr; estimate cost &rarr; execute &rarr; report. The friendly path for new users.</td><td><code>forge_run_plan</code>, <code>forge_estimate_quorum</code>, <code>forge_cost_report</code></td></tr>
+            <tr><td><code>forge-quench</code></td><td><code>/forge-quench &lt;plan&gt;</code></td><td>Final hardening pass before committing a plan &mdash; runs validators and the completeness sweep.</td><td><code>forge_validate</code>, <code>forge_sweep</code></td></tr>
+            <tr><td><code>forge-troubleshoot</code></td><td><code>/forge-troubleshoot</code></td><td>Diagnose common Plan Forge issues: missing API keys, stale orchestrator logs, broken hub, hook conflicts.</td><td><code>forge_smith</code>, <code>forge_diagnose</code></td></tr>
+            <tr><td><code>health-check</code></td><td><code>/health-check</code></td><td>Forge diagnostic chain: <code>forge_smith</code> &rarr; <code>forge_validate</code> &rarr; <code>forge_sweep</code>. Run on a clean checkout before opening a PR.</td><td><code>forge_smith</code>, <code>forge_validate</code>, <code>forge_sweep</code></td></tr>
+            <tr><td><code>security-audit</code> <span class="text-slate-500">(shared variant)</span></td><td><code>/security-audit</code></td><td>Generic OWASP scan, secrets detection, severity report. Stack presets override with language-specific scanners.</td><td><code>forge_secret_scan</code>, <code>forge_dep_watch</code></td></tr>
+          </tbody>
+        </table>
+
+      <h3 id="skills-stack" class="text-base font-semibold text-slate-300 mt-6">Stack-specific skills (per language preset)</h3>
+        <p>Ten skills ship per language preset under <code>presets/&lt;stack&gt;/.github/skills/</code>. Same skill names across stacks, but the implementation calls the language's idiomatic toolchain &mdash; <code>database-migration</code> uses Knex / Prisma for TypeScript, EF Core for .NET, Alembic for Python, GORM for Go, and so on.</p>
+        <table class="manual-table">
+          <thead><tr><th>Skill</th><th>Invocation</th><th>What it does</th></tr></thead>
+          <tbody>
+            <tr><td><code>api-doc-gen</code></td><td><code>/api-doc-gen</code></td><td>Generate or update OpenAPI spec, validate spec-to-code consistency.</td></tr>
+            <tr><td><code>code-review</code></td><td><code>/code-review</code></td><td>Comprehensive review: architecture, security, testing, patterns.</td></tr>
+            <tr><td><code>database-migration</code></td><td><code>/database-migration "&lt;change&gt;"</code></td><td>Generate, review, test locally, deploy to staging, with rollback. Five-step DAG with conditional early-exit on migration failure.</td></tr>
+            <tr><td><code>dependency-audit</code></td><td><code>/dependency-audit</code></td><td>Scan for vulnerabilities, outdated packages, license issues. Wraps <code>npm audit</code> / <code>dotnet list package --vulnerable</code> / <code>pip-audit</code> per stack.</td></tr>
+            <tr><td><code>forge-quench</code> <span class="text-slate-500">(stack variant)</span></td><td><code>/forge-quench</code></td><td>Same shape as shared variant, but invokes the stack's linter and test runner.</td></tr>
+            <tr><td><code>onboarding</code></td><td><code>/onboarding</code></td><td>Walk a new developer through project setup, architecture, and first task.</td></tr>
+            <tr><td><code>release-notes</code></td><td><code>/release-notes "&lt;tag&gt;"</code></td><td>Generate release notes from git history and CHANGELOG. Output formatted for GitHub Release, Slack, or email.</td></tr>
+            <tr><td><code>security-audit</code> <span class="text-slate-500">(stack variant)</span></td><td><code>/security-audit</code></td><td>Language-specific OWASP scan plus shared scanners. Wraps semgrep / bandit / brakeman / govulncheck per stack.</td></tr>
+            <tr><td><code>staging-deploy</code></td><td><code>/staging-deploy</code></td><td>Build, push, migrate, deploy, and verify on staging with health-check probe.</td></tr>
+            <tr><td><code>test-sweep</code></td><td><code>/test-sweep [category]</code></td><td>Run all test suites (unit, integration, API, E2E) and aggregate results into a summary report. Run before the Review Gate.</td></tr>
+          </tbody>
+        </table>
+
+      <h3 id="skills-authoring" class="text-base font-semibold text-slate-300 mt-6">Authoring a new skill</h3>
+        <p>The minimum viable skill is one frontmatter block + one numbered step. Drop it under <code>.github/skills/&lt;name&gt;/SKILL.md</code> and it's available as <code>/&lt;name&gt;</code> in the next chat session. Example:</p>
+        <pre><code>---
+name: deploy-canary
+description: "Deploy current branch to canary environment and watch metrics for 10 minutes. USE FOR: gradual rollout. DO NOT USE FOR: hotfixes (use /staging-deploy)."
+argument-hint: "[optional: minutes to watch, default 10]"
+tools: [run_in_terminal, read_file]
+---
+
+# Deploy Canary Skill
+
+## Steps
+
+### 1. Build &amp; Push
+```bash
+docker build -t myapp:canary .
+docker push myregistry/myapp:canary
+```
+
+### 2. Apply
+```bash
+kubectl set image deployment/myapp myapp=myregistry/myapp:canary -n canary
+kubectl rollout status deployment/myapp -n canary --timeout=2m
+```
+
+### Conditional: Rollout Failure
+&gt; If rollout fails &rarr; immediately `kubectl rollout undo`, report the error, and STOP. Do not proceed to watch.
+
+### 3. Watch
+```bash
+sleep ${MINUTES:-600}
+kubectl logs -l app=myapp -n canary --tail=200
+```
+
+## Safety Rules
+- NEVER deploy from a dirty working tree
+- ALWAYS rollback within 60s if 5xx rate exceeds 1%
+</code></pre>
+
+        <p>Authoring guidance:</p>
+        <ul class="list-disc list-inside space-y-1 mb-4">
+          <li><strong>Step granularity</strong>: one step = one logical unit the dashboard can show pass/fail for. Keep step count under 8; longer skills should split into sub-skills called from a coordinator.</li>
+          <li><strong>Conditional placement</strong>: use blockquote conditionals between steps for early-exit paths. They render distinctly in the dashboard timeline.</li>
+          <li><strong>Tool allow-list</strong>: list only the tools the skill actually needs. The runtime warns on unused entries and refuses unlisted tool calls.</li>
+          <li><strong>Idempotency</strong>: assume the skill may be re-run after a partial failure. Use <code>IF NOT EXISTS</code>, check-then-act patterns, and explicit cleanup steps.</li>
+          <li><strong>Persistent memory</strong>: when the skill learns something cross-cutting (a new failure mode, an env-specific quirk), append it under <code>## Persistent Memory</code>. The capture is routed to L2 and, if configured, L3 OpenBrain.</li>
+        </ul>
+
+        <div class="callout callout-info">
+          <strong>Reference reading</strong>: every skill in <code>presets/&lt;stack&gt;/.github/skills/</code> is a worked example. The richest are <code>database-migration</code> (5-step DAG with conditional rollback) and <code>audit-loop</code> (recursive convergence loop).
+        </div>
 
       <!-- ─── Lifecycle Hooks ─── -->
       <h2 id="hooks">Lifecycle Hooks</h2>

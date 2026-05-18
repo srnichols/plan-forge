@@ -153,7 +153,7 @@
 
         <!-- ─── Live numbers (counts) ─── -->
         <h2 id="live-numbers">Live numbers</h2>
-        <p>Some sentences refer to a count that changes between releases &mdash; "Plan Forge ships <!--c:tools-->88<!--/c--> MCP tools", "<!--c:instructions-->18<!--/c--> instruction files", "<!--c:agents-->12<!--/c--> agents". Those numbers are <em>tokenized</em> in the page source and rewritten at build time from a single source of truth in <code>docs/manual/assets/manual.js</code>. You'll see the up-to-date number rendered, but if you View Source you'll see the token markers wrapping it.</p>
+        <p>Some sentences refer to a count that changes between releases &mdash; "Plan Forge ships <!--c:tools-->90<!--/c--> MCP tools", "<!--c:instructions-->18<!--/c--> instruction files", "<!--c:agents-->12<!--/c--> agents". Those numbers are <em>tokenized</em> in the page source and rewritten at build time from a single source of truth in <code>docs/manual/assets/manual.js</code>. You'll see the up-to-date number rendered, but if you View Source you'll see the token markers wrapping it.</p>
 
         <div class="callout callout-info">
           <strong>For contributors:</strong> use <code>&lt;!--c:KEY--&gt;NUMBER&lt;!--/c--&gt;</code> instead of typing a literal number in chapter prose. Run <code>node docs/manual/maintain.mjs</code> after editing &mdash; it sweeps every chapter, fixes drift, and warns on unknown keys.
@@ -184,9 +184,10 @@
 
         <h3 id="edition-history">Edition history</h3>
         <ul>
-          <li><strong>Third Edition</strong> (v3.5.1) &mdash; Added Part V “Integrate”: Copilot Integration Trilogy, Team Coordination, The Knowledge Graph, Integrating from Outside. Refreshed counts (88 MCP tools, 5 parts, 28 chapters).</li>
-          <li><strong>Second Edition</strong> (v2.95.0) &mdash; Added “How the Shop Remembers” (memory architecture: Hallmark, Anvil, Lattice, sync_memories) &mdash; now <a href="memory-system.html">Chapter 22</a> after the Part IV memory-first reorder.</li>
-          <li><strong>First Edition</strong> (v2.78.0) &mdash; Initial public release: 24 chapters across Parts I–IV plus 14 appendices.</li>
+          <li><strong>Fourth Edition</strong> (v3.6) &mdash; OpenBrain promoted to the documented <a href="project-history.html#v3-6-openbrain-l3">L3 memory layer</a>; new <code>pforge brain {status, hint, test, replay}</code> subcommands; Team Dashboard tab added to the Forge group (now 19 tabs). Project History extended through v3.6 with v2.95 Lattice, v3.0 Copilot trilogy, v3.2&ndash;3.4 Team Mode. Refreshed counts (<!--c:tools-->90<!--/c--> MCP tools, <!--c:cli-commands-->97<!--/c--> CLI commands).</li>
+          <li><strong>Third Edition</strong> (v3.5.1) &mdash; Added Part V &ldquo;Integrate&rdquo;: Copilot Integration Trilogy, Team Coordination, The Knowledge Graph, Integrating from Outside. Refreshed counts (88 MCP tools, 5 parts, 28 chapters).</li>
+          <li><strong>Second Edition</strong> (v2.95.0) &mdash; Added &ldquo;How the Shop Remembers&rdquo; (memory architecture: Hallmark, Anvil, Lattice, sync_memories) &mdash; now <a href="memory-system.html">Chapter 22</a> after the Part IV memory-first reorder.</li>
+          <li><strong>First Edition</strong> (v2.78.0) &mdash; Initial public release: 24 chapters across Parts I&ndash;IV plus 14 appendices.</li>
         </ul>
 
         <p>Spotted something that's wrong, stale, or missing? File an issue on <a href="https://github.com/srnichols/plan-forge/issues" rel="noopener">github.com/srnichols/plan-forge</a> with the chapter title and section heading. Manual fixes are tagged <code>docs:</code> in the changelog.</p>

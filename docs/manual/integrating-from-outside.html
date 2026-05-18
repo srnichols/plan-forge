@@ -37,7 +37,7 @@
         <p class="text-lg text-slate-400 mb-8">MCP is the native transport for Copilot and similar agents — but it is not the only one. Plan Forge ships four orthogonal surfaces so any tool can drive the workshop: <strong>REST</strong> for HTTP-anything, <strong>SDK</strong> for Node.js callers, <strong>WebSocket hub</strong> for live event streams, and <strong>CLI</strong> for scripts and humans.</p>
 
         <div class="callout callout-info">
-          <strong>The big numbers.</strong> The integration surface is large by design — <!--c:tools-->88<!--/c--> MCP tools, 103 REST endpoints across 17+ domains, a 4-sub-path SDK (<code>pforge-sdk</code>, <code>/tools</code>, <code>/hallmark</code>, <code>/chunker</code>), and <!--c:cli-commands-->57<!--/c--> CLI commands. The same underlying handlers back every surface — pick the one that fits the caller, not the feature.
+          <strong>The big numbers.</strong> The integration surface is large by design — <!--c:tools-->90<!--/c--> MCP tools, 103 REST endpoints across 17+ domains, a 4-sub-path SDK (<code>pforge-sdk</code>, <code>/tools</code>, <code>/hallmark</code>, <code>/chunker</code>), and <!--c:cli-commands-->97<!--/c--> CLI commands. The same underlying handlers back every surface — pick the one that fits the caller, not the feature.
         </div>
 
         <!-- ─── The four surfaces ─── -->
@@ -74,7 +74,7 @@ flowchart LR
 
         <p>The same handler set lives behind all four surfaces. Adding a new tool means the team writes one handler — and it automatically becomes available as MCP tool, REST endpoint, CLI command, and SDK export. This is intentional: the integration surface should never be the bottleneck for a new capability.</p>
 
-        <figure class="manual-figure" id="fig-29-1"><img src="assets/diagrams/surface-decision-tree.svg" alt="Surface decision tree with three sequential yes/no questions. Q1: Is the caller an AI agent already speaking MCP (Copilot, Claude, Cursor, Codex)? YES routes left to MCP — stdio, 88 tools, inherited trust, auto-discovered by .vscode/mcp.json. Q2 (on NO): Human in a terminal, cron job, or local shell script? YES routes left to CLI — pforge, 57 commands, PFORGE_API_TOKEN, examples include pforge digest, pforge run-plan, pforge fm-session. Q3 (on NO): Node.js or TypeScript caller wanting typed responses? YES routes right to SDK — pforge-sdk, 4 sub-paths, createClient plus typed tools. NO defaults to REST — 103 endpoints, OpenAPI 3, Bearer auth, cross-process; ideal for CI, dashboards, mobile, non-Node clients, and webhooks. A separate purple block shows the WebSocket hub at /api/hub providing 60+ event types for observation only, subscribed alongside REST for live progress streams. Footer hint: all four surfaces share one handler set, so pick the surface that matches the caller, not the capability." class="diagram-img diagram-img-md my-4" /><figcaption class="manual-figcaption"><!--fignum--><span class="manual-fignum">Figure 29-1.</span><!--/fignum--> <!--cap:auto-->Surface decision tree — pick by caller, not by capability<!--/cap--></figcaption></figure>
+        <figure class="manual-figure" id="fig-29-1"><img src="assets/diagrams/surface-decision-tree.svg" alt="Surface decision tree with three sequential yes/no questions. Q1: Is the caller an AI agent already speaking MCP (Copilot, Claude, Cursor, Codex)? YES routes left to MCP — stdio, 90 tools, inherited trust, auto-discovered by .vscode/mcp.json. Q2 (on NO): Human in a terminal, cron job, or local shell script? YES routes left to CLI — pforge, 97 commands, PFORGE_API_TOKEN, examples include pforge digest, pforge run-plan, pforge fm-session. Q3 (on NO): Node.js or TypeScript caller wanting typed responses? YES routes right to SDK — pforge-sdk, 4 sub-paths, createClient plus typed tools. NO defaults to REST — 103 endpoints, OpenAPI 3, Bearer auth, cross-process; ideal for CI, dashboards, mobile, non-Node clients, and webhooks. A separate purple block shows the WebSocket hub at /api/hub providing 60+ event types for observation only, subscribed alongside REST for live progress streams. Footer hint: all four surfaces share one handler set, so pick the surface that matches the caller, not the capability." class="diagram-img diagram-img-md my-4" /><figcaption class="manual-figcaption"><!--fignum--><span class="manual-fignum">Figure 29-1.</span><!--/fignum--> <!--cap:auto-->Surface decision tree — pick by caller, not by capability<!--/cap--></figcaption></figure>
 
         <!-- ─── REST API ─── -->
         <h2 id="rest">REST API</h2>
@@ -277,7 +277,7 @@ pforge digest --post
 # Cost rollup for the month
 pforge cost-report --since=30d --json | jq '.byModel'</code></pre>
 
-        <p>The full <!--c:cli-commands-->57<!--/c-->-command reference lives in <a href="cli-reference.html">Chapter 8 — CLI Reference</a>. The <code>pforge --help</code> output is the canonical source.</p>
+        <p>The full <!--c:cli-commands-->97<!--/c-->-command reference lives in <a href="cli-reference.html">Chapter 8 — CLI Reference</a>. The <code>pforge --help</code> output is the canonical source.</p>
 
         <!-- ─── Pick the right surface ─── -->
         <h2 id="picking">Picking the right surface</h2>

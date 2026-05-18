@@ -563,7 +563,8 @@ pforge run-plan docs/plans/Phase-7.md --dry-run</code></pre>
       <p>When a gate fails, fix the issue manually, then resume. Completed slices are skipped — only remaining slices execute.</p>
 
       <h2 id="openbrain">OpenBrain Memory</h2>
-      <p>The OpenBrain integration bridges the 3-session model with long-term context. Prior decisions, patterns, and postmortems are automatically searched and injected at the start of each session. After every run, lessons are captured for future phases.</p>
+      <p>The OpenBrain integration bridges the 4-session pipeline with long-term, cross-session context. Prior decisions, patterns, and postmortems are automatically searched and injected at the start of each session. After every run, lessons are captured for future phases.</p>
+      <p>As of <strong>v3.6</strong>, OpenBrain is the documented <strong>L3 memory layer</strong> — still optional, but loud and easy to enable. Check status with <code>pforge brain status</code>; see install options with <code>pforge brain hint</code>. Plan Forge works without it; the inner loop (Reflexion, Auto-skills, Federation) only improves over time with it. See <a href="project-history.html#v3-6-openbrain-l3">Project History → v3.6</a>.</p>
       <p>Install via extension: <code>pforge ext add plan-forge-memory</code></p>
 
       <!-- ─── LiveGuard Hooks ─── -->

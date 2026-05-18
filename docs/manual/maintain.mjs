@@ -386,7 +386,8 @@ if (existingTerms === generated) {
 // In audit mode (--audit) drift is flagged but no files are written. In normal
 // mode the VALUE between the tokens is rewritten in-place to MANUAL_COUNTS[KEY].
 log("\n6. Substituting count tokens (<!--c:KEY-->...<!--/c-->)…");
-const COUNT_TOKEN_RE = /<!--c:([a-zA-Z][a-zA-Z0-9_]*)-->([^<]*)<!--\/c-->/g;
+// KEY may include hyphens (e.g. 'cli-commands') to match the MANUAL_COUNTS key form.
+const COUNT_TOKEN_RE = /<!--c:([a-zA-Z][a-zA-Z0-9_-]*)-->([^<]*)<!--\/c-->/g;
 let countTokensSeen = 0;
 let countTokensRewritten = 0;
 let countFilesTouched = 0;

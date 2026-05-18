@@ -122,14 +122,14 @@
   //
   const MANUAL_COUNTS = {
     // Pipeline / surface ────────────────────────────────────────────────
-    tools:        88,  // pforge-mcp/tools.json (canonical: array length) — verify with: grep -c '"name": "forge_' pforge-mcp/tools.json
+    tools:        90,  // pforge-mcp/tools.json (canonical: array length) — verify with: grep -c '"name": "forge_' pforge-mcp/tools.json
     instructions: 18,  // presets/dotnet|typescript/.github/instructions/
     agents:       12,  // 6 stack-specific + 6 pipeline (post Pass 5 reconciliation; cross-stack reviewers folded into stack agents)
     skills:       11,  // dotnet preset (typescript = 10) — varies by preset
     hooks:         5,  // PreDeploy.md, PreCommit.mjs, PreAgentHandoff.md, PostSlice.md (+ plan-forge.json config) — Plan Forge lifecycle hooks (NOT Claude Code hook names)
     prompts:       8,  // project-profile + step0-step6 pipeline prompts
     presets:       9,  // presets/* excluding the "shared" base
-    'cli-commands': 57, // pforge.ps1 / pforge.sh switch arms — verify with: grep -c '^\s*"\w' pforge-mcp/cli-schema.json
+    'cli-commands': 97, // pforge.ps1 switch arms (unique) — verify with PowerShell: ([regex]::Matches((Get-Content pforge.ps1 -Raw),"(?m)^\s+''([a-z][a-z-]+)''\s+\{") | %{ $_.Groups[1].Value } | Sort-Object -Unique).Count
     // Manual structure ──────────────────────────────────────────────────
     chapters:     28,  // numbered chapters 1-29 (excludes Quickstart Q1-Q3 and Appendices) — Ch 11 was archived; 26-29 added Third Edition
     appendices:   17,  // lettered appendices A-Q (P List of Figures, Q Unified API Surface Index added Third Edition)

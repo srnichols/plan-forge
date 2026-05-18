@@ -77,7 +77,7 @@ window.GLOSSARY_TERMS = {
   "Dashboard": "Web UI at localhost:3100/dashboard. 25 tabs for monitoring, cost, replay, skills, config, watcher, and LiveGuard.",
   "Lifecycle Hook": "Automatic actions tied to Plan Forge's pipeline: PreDeploy, PreCommit, PreAgentHandoff, PostSlice (configured via .github/hooks/plan-forge.json). Distinct from Claude Code's own hook names.",
   "OpenBrain": "The L3 memory layer. Self-hosted MCP server (PostgreSQL + pgvector) that provides cross-session, cross-tool semantic memory. Plan Forge ships with L1 (Hub) + L2 (.forge/*.jsonl) memory built-in; L3 requires OpenBrain. Without it, Reflexion lessons, Auto-skills, cross-project Federation, and 28 au…",
-  "MCP": "Model Context Protocol. A standard for AI agents to call functions. Plan Forge's MCP server exposes 88 tools (core + LiveGuard + Watcher + Crucible + Tempering + Bug Registry + Testbed + Forge-Master).",
+  "MCP": "Model Context Protocol. A standard for AI agents to call functions. Plan Forge's MCP server exposes 90 tools (core + LiveGuard + Watcher + Crucible + Tempering + Bug Registry + Testbed + Forge-Master).",
   "ACI": "Agent-Computer Interface. The SWE-agent principle that an agent only performs as well as the surface lets it: bounded payloads, sparse fields, paginated lists, friendly empty-result messages. Enforced in Plan Forge via tool-surface temper guards in architecture-principles.instructions.md. forge_s…",
   "Bridge": "Notification dispatcher that forwards WebSocket hub events to external platforms (Slack, Discord, Telegram, generic webhooks).",
   "Knowledge Graph": "In-memory graph of Phase / Slice / Commit / File / Run / Bug nodes, queryable via forge_graph_query. Used by Forge-Master for cross-feature reasoning. See Chapter 28.",

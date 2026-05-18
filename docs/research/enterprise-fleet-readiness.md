@@ -3,7 +3,7 @@
 > **Status:** Working research document. Iterating live.
 > **Started:** 2026-05-06
 > **Owner:** Scott
-> **Purpose:** Use what we learn from observing large-enterprise AI-SDLC evaluations (Cohesity-class accounts) to harden Plan Forge for fleet-orchestration workloads at scale. **Not** a customer-specific deliverable. Generic improvement track.
+> **Purpose:** Use what we learn from observing large-enterprise AI-SDLC evaluations to harden Plan Forge for fleet-orchestration workloads at scale. **Not** a customer-specific deliverable. Generic improvement track.
 
 ---
 

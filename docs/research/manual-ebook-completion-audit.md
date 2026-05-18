@@ -168,7 +168,7 @@ in marketing voice and needs absorbing into reference voice.
 | 4 | **Task-based "How do I…?" index** | All existing chapters — this is a navigational layer over them | New **Appendix S** |
 | 5 | **"What's new in this Edition" banner** | `project-history.html#v3-6-openbrain-l3`, `conventions.html#edition-history` | Edit to **`index.html`** only |
 | 6 | **Above-the-fold positioning: "harness on substrate, not a Copilot replacement"** | [`github-stack-alignment.html`](../manual/github-stack-alignment.html) (Appendix H — the content is excellent but buried in the appendices) + [`plan-forge-on-the-github-stack.html`](../manual/plan-forge-on-the-github-stack.html) (Appendix I) | Promoted into **Foreword (A1)**, **What is Plan Forge? (existing chapter)**, **`index.html` hero**, and **README.md tagline** |
-| 7 | **Stakeholder Briefing (the "white paper inside the ebook")** | The reusable ~50% of the per-prospect briefings the maintainer is already writing (Cohesity briefing, 2026-05-18, sections 1/4/6/8/9/11/AppA) | New Front Matter page **`docs/manual/stakeholder-briefing.html`** sitting between the Foreword (A1) and the Reader-Journey Ladders (A2) |
+| 7 | **Stakeholder Briefing (the "white paper inside the ebook")** | The reusable ~50% of the per-prospect briefings the maintainer is already writing (an example enterprise-prospect briefing prepared 2026-05-18, sections 1/4/6/8/9/11/AppA — held privately, not in this repo) | New Front Matter page **`docs/manual/stakeholder-briefing.html`** sitting between the Foreword (A1) and the Reader-Journey Ladders (A2) |
 
 #### The hidden positioning gap (the "Microsoft-coworker test")
 
@@ -232,10 +232,11 @@ the first thirty seconds of contact with the book.
 
 Closely related to the positioning gap but distinct: today, when a stakeholder, prospect, or
 internal champion needs a sharable explanation of Plan Forge, the maintainer ends up authoring a
-bespoke per-prospect briefing (e.g. the Cohesity briefing prepared on 2026-05-18). Inspecting that
-artifact's TOC tells us exactly which content is being re-derived every time:
+bespoke per-prospect briefing (an example was prepared on 2026-05-18 for an enterprise prospect;
+that artifact is held privately and is not in this repository). Inspecting that artifact's TOC
+in the abstract tells us exactly which content is being re-derived every time:
 
-| Cohesity-briefing section | Canonical / reusable? | Belongs in… |
+| Per-prospect briefing section | Canonical / reusable? | Belongs in… |
 |---|---|---|
 | 1. Executive Summary (problem → solution → result) | ✅ Reusable | The new briefing |
 | 2. Reading alongside the customer's own slides | ❌ Prospect-specific | Stays per-prospect |
@@ -270,7 +271,7 @@ from a from-scratch task into a remix.
 - Pulls numbers from the **same source** as the cost chapter (C2) so the briefing and the book
   can never drift on the headline figures (−55% / −64% / 99 vs 44 / +$0.22 quorum overhead).
 
-**Content skeleton** (≤ 8 sections, mirroring the reusable half of the Cohesity TOC):
+**Content skeleton** (≤ 8 sections, mirroring the reusable half of the per-prospect briefing TOC):
 
 1. **Executive Summary** — one paragraph: the 80/20 wall, the four-loop fix, the receipt
    ($0.07 for the Phase-MEMORY-QA plan on Sonnet alone).

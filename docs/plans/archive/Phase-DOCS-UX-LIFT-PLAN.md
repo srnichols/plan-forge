@@ -54,7 +54,7 @@ We do **not** copy the password overlay, the BCDR color palette, or the per-page
   - Its group-tabs → sub-tabs structure already maps to the four mental models (Forge / LiveGuard / Forge-Master / Settings)
   - Hero blur-orbs and per-page gradients would eat scroll budget that operators need for tables, logs, and charts
   - Dashboard tokens stay in `pforge-mcp/dashboard/index.html`'s `:root` block; no shared-styles consolidation across that boundary
-- The Plan Forge color identity (blue / amber / cyan / purple per subsystem). Do not adopt BCDR's azure-blue + cohesity-red palette.
+- The Plan Forge color identity (blue / amber / cyan / purple per subsystem). Do not adopt the prior BCDR project's azure-blue + red palette.
 - Password overlays of any kind (`#passwordOverlay`, `content-protected`, `checkPassword()`). Plan Forge docs are open source.
 - Per-page hero blur-orbs and gradient backdrops (`absolute … rounded-full bg-azure-500/10 blur-[120px]`). Acceptable on the marketing landing page only; forbidden in the manual, walkthroughs, and architecture hub.
 - Any change to `pforge-mcp/`, `pforge-master/`, root scripts, `setup.ps1`/`setup.sh`, or `templates/`.
@@ -427,7 +427,7 @@ _(The second check is a no-op assertion — we never create that file. It's a pl
 Documented here so future readers don't re-litigate:
 
 - **Password overlays** — Plan Forge docs are open source.
-- **BCDR color palette** (azure-blue + cohesity-red + midnight) — Plan Forge has a consistent forge identity (blue / amber / cyan / purple per subsystem).
+- **BCDR color palette** (azure-blue + red + midnight) — Plan Forge has a consistent forge identity (blue / amber / cyan / purple per subsystem).
 - **Per-page hero blur-orbs** — fine on a marketing site, exhausting on docs.
 - **Multi-page narrative shell for the dashboard** — the dashboard is an ops console, not a story. Its group-tabs → sub-tabs already work.
 - **Sticky brand bar with confidential ribbon** — not applicable.

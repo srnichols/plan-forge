@@ -13,10 +13,7 @@
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;600;700&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="../assets/shared.css" />
   <link rel="stylesheet" href="assets/manual.css" />
-  <script type="module">
-    import mermaid from "https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.esm.min.mjs";
-    mermaid.initialize({ startOnLoad: true, theme: "dark", themeVariables: { fontFamily: "Inter, ui-sans-serif", primaryColor: "#f59e0b", primaryTextColor: "#f1f5f9", lineColor: "#64748b" } });
-  </script>
+  <script src="assets/mermaid-init.js" defer></script>
 </head>
 <body class="bg-slate-950 text-slate-300 min-h-screen">
 
@@ -188,7 +185,7 @@ ws.on("message", (raw) =&gt; {
   "payload": { sha: "e4f5g6h", durationMs: 24100, gates: ["pass","pass"] }
 }</code></pre>
 
-        <p>The full event catalog (60+ event types) lives in <code>pforge-mcp/EVENTS.md</code>. Subscribe to all events or filter by type:</p>
+        <p>The full event catalog &mdash; <strong>38 event types across eight families</strong> with envelope, source/security_risk enums, payloads, and retention &mdash; lives in <a href="event-catalog.html">Appendix V &mdash; Event Catalog</a>. The canonical JSON schema lives in <code>pforge-mcp/EVENTS.md</code>. Subscribe to all events or filter by type:</p>
 
         <pre class="bg-slate-950 border border-slate-800/60 rounded-xl p-4 overflow-x-auto text-sm"><code>ws.send(JSON.stringify({
   subscribe: ["slice.*", "gate.fail", "bug.opened"]

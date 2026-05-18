@@ -1,0 +1,309 @@
+<!DOCTYPE html>
+<html lang="en" class="scroll-smooth">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Appendix V: Event Catalog — Plan Forge Manual</title>
+  <meta name="description" content="Every event Plan Forge emits over the WebSocket hub and the run journal — common envelope, eight event families, source and security_risk enums, plus subscription patterns and retention notes." />
+  <meta property="og:title" content="Appendix V — Event Catalog" />
+  <meta property="og:description" content="The 38 event types Plan Forge emits, grouped by family, with emitter, trigger, key payload, consumers, and retention." />
+  <meta property="og:type" content="article" />
+  <link rel="canonical" href="https://planforge.software/manual/event-catalog.html" />
+  <link rel="icon" type="image/svg+xml" href="../assets/plan-forge-logo.svg" />
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>tailwind.config={theme:{extend:{colors:{forge:{400:'#f59e0b',500:'#d97706'}}}}}</script>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;600;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="../assets/shared.css" />
+  <link rel="stylesheet" href="assets/manual.css" />
+</head>
+<body class="bg-slate-950 text-slate-300 min-h-screen">
+
+  <button id="mobile-sidebar-btn" class="mobile-sidebar-btn fixed top-4 left-4 z-[101] lg:hidden p-2 bg-slate-900 border border-slate-700 rounded-lg text-slate-400 hover:text-slate-100 transition-colors" aria-label="Open navigation">
+    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"/></svg>
+  </button>
+  <div id="sidebar-overlay" class="sidebar-overlay"></div>
+
+  <div class="manual-layout">
+    <aside id="manual-sidebar" class="manual-sidebar"><nav id="sidebar-nav"></nav></aside>
+
+    <main>
+      <div class="chapter-content">
+
+        <div class="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">Appendix V</div>
+        <h1>Event Catalog</h1>
+        <p class="text-lg text-slate-400 mb-8">Every event Plan Forge emits over the WebSocket hub and the run journal &mdash; grouped by family, with emitter, trigger, the key payload fields, consumers, and retention. This appendix is the ebook companion to the canonical schema at <a href="https://github.com/srnichols/plan-forge/blob/master/pforge-mcp/EVENTS.md" rel="noopener"><code>pforge-mcp/EVENTS.md</code></a>: the source-of-truth JSON examples live in the schema file; this page provides the orientation, classification, and lifecycle guidance that schema files rarely carry.</p>
+
+        <div class="callout callout-info">
+          <strong>One transport, three audiences.</strong> Every event flows through the local WebSocket hub on <code>ws://127.0.0.1:3101</code>. Three different consumers read the same stream: the dashboard (live UI), the run journal (<code>.forge/runs/*.jsonl</code> for replay), and external bridges (Telegram, Slack, OpenClaw). Adding a new consumer is a matter of opening a socket and filtering by <code>type</code>; the schema below tells you exactly what fields each consumer can rely on.
+        </div>
+
+        <h2 id="orientation">Orientation</h2>
+        <p>Plan Forge emits 38 distinct event types across eight families. The two most-watched families are <strong>lifecycle</strong> (run/slice progression) and <strong>LiveGuard</strong> (drift, incidents, secret scans). The remaining six families round out the picture: skills, Crucible, bridge approvals, escalation/CI, the lone client&rarr;server message, and the Tempering validation event.</p>
+
+        <div class="overflow-x-auto mb-8">
+          <table class="manual-table">
+            <thead><tr><th style="width: 14rem">Family</th><th style="width: 5rem">Count</th><th>What it tells you</th></tr></thead>
+            <tbody>
+              <tr><td><a href="#lifecycle"><strong>Lifecycle</strong></a></td><td>7</td><td>Run and slice progression &mdash; the primary signal the dashboard renders on the Progress tab.</td></tr>
+              <tr><td><a href="#skills"><strong>Skills</strong></a></td><td>4</td><td>Per-step skill execution &mdash; surfaces the same Progress UI but for <code>forge_run_skill</code> rather than <code>forge_run_plan</code>.</td></tr>
+              <tr><td><a href="#crucible"><strong>Crucible</strong></a></td><td>3</td><td>Idea&rarr;spec smelt progression; powers the Forge-Master and Crucible dashboard tabs.</td></tr>
+              <tr><td><a href="#bridge"><strong>Bridge</strong></a></td><td>4</td><td>External-channel approvals and notification dispatch status (Telegram, Slack, Discord, webhooks).</td></tr>
+              <tr><td><a href="#escalation"><strong>Escalation &amp; CI</strong></a></td><td>2</td><td>Quorum escalation and GitHub Actions dispatch.</td></tr>
+              <tr><td><a href="#client-server"><strong>Client&rarr;server</strong></a></td><td>1</td><td>The single inbound message type clients can send (<code>set-label</code>).</td></tr>
+              <tr><td><a href="#liveguard"><strong>LiveGuard</strong></a></td><td>10</td><td>Drift, incidents, secret scans, watch snapshots, fix proposals &mdash; the production-ops feedback loop.</td></tr>
+              <tr><td><a href="#tempering"><strong>Tempering</strong></a></td><td>1</td><td>The bug-fix validation event &mdash; emitted only on the green leg of the bug lifecycle.</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <p>Every emitted event shares a five-field envelope (<a href="#envelope">documented below</a>). Two enums &mdash; <a href="#source-enum"><code>source</code></a> and <a href="#security-risk-enum"><code>security_risk</code></a> &mdash; are referenced throughout. Subscription mechanics are at <a href="#subscribing">Consuming the stream</a>, and retention rules for events that escape the WebSocket (logged to <code>.forge/runs/</code>, posted to OpenClaw, etc.) are at <a href="#retention">Retention</a>.</p>
+
+        <!-- ============================================================ -->
+        <h2 id="envelope">Common envelope</h2>
+        <p>Every event &mdash; lifecycle, skill, LiveGuard, all of them &mdash; carries the same five-field envelope. Consumers can rely on these fields being present even on event types this catalog does not list (forward-compatible by design).</p>
+
+        <div class="overflow-x-auto mb-6">
+          <table class="manual-table">
+            <thead><tr><th>Field</th><th>Type</th><th>Example</th><th>Purpose</th></tr></thead>
+            <tbody>
+              <tr><td><code>version</code></td><td>string</td><td><code>"1.0"</code></td><td>Schema version. Always <code>"1.0"</code> today; reserved for future breaking changes.</td></tr>
+              <tr><td><code>type</code></td><td>string</td><td><code>"slice-completed"</code></td><td>The event-type identifier &mdash; the column heading you filter on. Stable across releases.</td></tr>
+              <tr><td><code>timestamp</code></td><td>string (ISO-8601 UTC)</td><td><code>"2026-05-18T09:30:00.000Z"</code></td><td>Emission time. Always UTC; never local time.</td></tr>
+              <tr><td><code>source</code></td><td>enum (9 values)</td><td><code>"orchestrator"</code></td><td>Which subsystem emitted the event &mdash; see <a href="#source-enum">below</a>.</td></tr>
+              <tr><td><code>security_risk</code></td><td>enum (5 values)</td><td><code>"none"</code></td><td>Risk classification at emission time &mdash; see <a href="#security-risk-enum">below</a>. Defaults to <code>"none"</code>.</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <h3 id="source-enum"><code>source</code> enum</h3>
+        <p>The nine subsystems that emit events. New subsystems are added rarely; existing values are never repurposed.</p>
+        <div class="overflow-x-auto mb-6">
+          <table class="manual-table">
+            <thead><tr><th>Value</th><th>Subsystem</th></tr></thead>
+            <tbody>
+              <tr><td><code>orchestrator</code></td><td>Plan execution engine in <code>orchestrator.mjs</code> &mdash; emits the lifecycle family.</td></tr>
+              <tr><td><code>worker</code></td><td>Per-slice child process. Rare &mdash; most worker telemetry is wrapped by the orchestrator.</td></tr>
+              <tr><td><code>hub</code></td><td>The WebSocket hub itself &mdash; emits <code>connected</code> on new sessions.</td></tr>
+              <tr><td><code>bridge</code></td><td>External notification bridge &mdash; emits <code>bridge-notification-*</code>.</td></tr>
+              <tr><td><code>liveguard</code></td><td>The LiveGuard subsystem &mdash; emits the entire LiveGuard family.</td></tr>
+              <tr><td><code>crucible</code></td><td>The idea&rarr;spec funnel &mdash; emits <code>crucible-smelt-*</code>.</td></tr>
+              <tr><td><code>skill</code></td><td>Skill runner &mdash; emits the skill family.</td></tr>
+              <tr><td><code>watcher</code></td><td>Cross-project watcher &mdash; emits <code>watch-*</code>.</td></tr>
+              <tr><td><code>audit</code></td><td>Audit-classifier loop. Rare &mdash; emits reclassification events when run.</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <h3 id="security-risk-enum"><code>security_risk</code> enum</h3>
+        <p>The risk classification attached to every event at emission time. Subscribers (and OpenClaw) can filter by this field to focus on high-risk activity.</p>
+        <div class="overflow-x-auto mb-6">
+          <table class="manual-table">
+            <thead><tr><th>Value</th><th>Meaning</th><th>Typical event types</th></tr></thead>
+            <tbody>
+              <tr><td><code>none</code></td><td>Routine lifecycle activity with no security implication.</td><td><code>slice-started</code>, <code>slice-completed</code>, <code>skill-*</code></td></tr>
+              <tr><td><code>low</code></td><td>Activity that touches managed secrets or external networks but is expected.</td><td><code>bridge-notification-sent</code>, <code>ci-triggered</code></td></tr>
+              <tr><td><code>medium</code></td><td>Quorum dispatch, agent handoff, escalation &mdash; outside the routine path but authorised.</td><td><code>slice-escalated</code>, <code>approval-requested</code></td></tr>
+              <tr><td><code>high</code></td><td>Drift or incident events that warrant a human glance.</td><td><code>liveguard-incident</code>, <code>liveguard-secret-scan</code> (when findings present)</td></tr>
+              <tr><td><code>critical</code></td><td>Reserved for active-incident escalations &mdash; emitted by the audit subsystem only.</td><td>(none in default catalog)</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <!-- ============================================================ -->
+        <h2 id="lifecycle">Lifecycle events</h2>
+        <p><code>source: "orchestrator"</code> (one exception). The Progress tab on the dashboard is driven entirely by this family; the run journal at <code>.forge/runs/&lt;run-id&gt;.jsonl</code> persists every one of them for replay.</p>
+
+        <div class="overflow-x-auto mb-6">
+          <table class="manual-table">
+            <thead><tr><th>Event</th><th>Emitter</th><th>Trigger</th><th>Key payload</th></tr></thead>
+            <tbody>
+              <tr><td><code>connected</code></td><td><code>hub</code></td><td>A client opens a WebSocket connection to <code>ws://127.0.0.1:3101</code>.</td><td><code>clientId</code>, <code>label</code>, <code>historySize</code> (how many past events are about to be replayed).</td></tr>
+              <tr><td><code>run-started</code></td><td><code>orchestrator</code></td><td><code>runPlan()</code> begins.</td><td><code>plan</code>, <code>mode</code>, <code>model</code>, <code>sliceCount</code>, <code>executionOrder</code>.</td></tr>
+              <tr><td><code>slice-started</code></td><td><code>orchestrator</code></td><td>A slice begins execution (after its gate passes).</td><td><code>sliceId</code>, <code>title</code>.</td></tr>
+              <tr><td><code>slice-completed</code></td><td><code>orchestrator</code></td><td>A slice passes all validation gates.</td><td><code>sliceId</code>, <code>status: "passed"</code>, <code>duration</code> (ms), <code>tokens</code> (in/out + model), <code>cost_usd</code>.</td></tr>
+              <tr><td><code>slice-failed</code></td><td><code>orchestrator</code></td><td>A slice or its validation gate fails after retry budget exhausted.</td><td><code>sliceId</code>, <code>status: "failed"</code>, <code>error</code>, <code>failedCommand</code>.</td></tr>
+              <tr><td><code>run-completed</code></td><td><code>orchestrator</code></td><td>All slices finish (mixed pass/fail allowed).</td><td><code>status</code>, <code>results</code> (passed/failed counts), <code>totalDuration</code>, <code>cost</code>, <code>sweep</code>, <code>analyze</code>, <code>report</code>.</td></tr>
+              <tr><td><code>run-aborted</code></td><td><code>orchestrator</code></td><td>Execution aborted via <code>forge_abort</code>.</td><td><code>sliceId</code> (the slice that was running), <code>reason</code>.</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <p class="text-sm text-slate-400 mb-6">Full JSON examples: <a href="https://github.com/srnichols/plan-forge/blob/master/pforge-mcp/EVENTS.md#event-types" rel="noopener">EVENTS.md &mdash; Event Types</a>.</p>
+
+        <!-- ============================================================ -->
+        <h2 id="skills">Skill events</h2>
+        <p><code>source: "skill"</code>. Emitted by <a href="https://github.com/srnichols/plan-forge/blob/master/pforge-mcp/skill-runner.mjs" rel="noopener"><code>skill-runner.mjs</code></a> on every <code>forge_run_skill</code> invocation. The structure mirrors lifecycle events deliberately: dashboard code reuses the same renderer for both families.</p>
+
+        <div class="overflow-x-auto mb-6">
+          <table class="manual-table">
+            <thead><tr><th>Event</th><th>Trigger</th><th>Key payload</th></tr></thead>
+            <tbody>
+              <tr><td><code>skill-started</code></td><td>Skill begins execution.</td><td><code>skillName</code>, <code>stepCount</code>, <code>args</code>.</td></tr>
+              <tr><td><code>skill-step-started</code></td><td>A skill step begins.</td><td><code>skillName</code>, <code>stepNumber</code>, <code>stepName</code>.</td></tr>
+              <tr><td><code>skill-step-completed</code></td><td>A skill step finishes (pass or fail).</td><td><code>stepNumber</code>, <code>stepName</code>, <code>status</code>, <code>duration</code>.</td></tr>
+              <tr><td><code>skill-completed</code></td><td>All skill steps finish.</td><td><code>skillName</code>, <code>status</code>, <code>stepsPassed</code>, <code>stepsFailed</code>, <code>totalDuration</code>.</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <!-- ============================================================ -->
+        <h2 id="crucible">Crucible events</h2>
+        <p><code>source: "crucible"</code>. Emitted as smelts progress through the idea&rarr;hardened-spec funnel. The payload is wrapped in a <code>data</code> object, matching the LiveGuard convention rather than the flat-payload lifecycle convention &mdash; consumers should branch on family rather than assume one shape.</p>
+
+        <div class="overflow-x-auto mb-6">
+          <table class="manual-table">
+            <thead><tr><th>Event</th><th>Trigger</th><th>Key payload (under <code>data</code>)</th></tr></thead>
+            <tbody>
+              <tr><td><code>crucible-smelt-started</code></td><td><code>forge_crucible_submit</code> creates a new smelt.</td><td><code>id</code>, <code>lane</code>, <code>source</code>.</td></tr>
+              <tr><td><code>crucible-smelt-updated</code></td><td><code>forge_crucible_ask</code> records an answer and advances the interview.</td><td><code>id</code>, <code>questionIndex</code>, <code>totalQuestions</code>.</td></tr>
+              <tr><td><code>crucible-smelt-finalized</code></td><td><code>forge_crucible_finalize</code> claims a phase number and writes <code>docs/plans/Phase-NN.md</code>.</td><td><code>id</code>, <code>phaseName</code>, <code>planPath</code>.</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <!-- ============================================================ -->
+        <h2 id="bridge">Bridge events</h2>
+        <p><code>source: "bridge"</code>. Emitted by the notification bridge when it pauses for external approval or dispatches a webhook. Configure the bridge via the <code>extensions/</code> notify-* extensions and <code>PFORGE_BRIDGE_SECRET</code> (see <a href="environment-variables-reference.html#server-ports">Appendix U &mdash; Server Ports</a>).</p>
+
+        <div class="overflow-x-auto mb-6">
+          <table class="manual-table">
+            <thead><tr><th>Event</th><th>Trigger</th><th>Key payload</th></tr></thead>
+            <tbody>
+              <tr><td><code>approval-requested</code></td><td>The bridge pauses execution and requests external approval.</td><td><code>runId</code>, <code>plan</code>, <code>channels</code>, <code>timeoutMinutes</code>.</td></tr>
+              <tr><td><code>approval-received</code></td><td>An external approval callback is received.</td><td><code>runId</code>, <code>action</code> (<code>approve</code> / <code>deny</code>), <code>approver</code>.</td></tr>
+              <tr><td><code>bridge-notification-sent</code></td><td>A webhook notification is successfully dispatched to a channel.</td><td><code>channel</code>, <code>platform</code>, <code>eventType</code>, <code>status: "sent"</code>.</td></tr>
+              <tr><td><code>bridge-notification-failed</code></td><td>A webhook dispatch fails (network error, bad status, etc.).</td><td><code>channel</code>, <code>error</code>.</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <!-- ============================================================ -->
+        <h2 id="escalation">Escalation &amp; CI events</h2>
+        <p><code>source: "orchestrator"</code>. Two events that mark deliberate routing decisions: quorum escalation when a slice's complexity score exceeds the threshold, and CI dispatch when a plan run triggers a GitHub Actions workflow.</p>
+
+        <div class="overflow-x-auto mb-6">
+          <table class="manual-table">
+            <thead><tr><th>Event</th><th>Trigger</th><th>Key payload</th></tr></thead>
+            <tbody>
+              <tr><td><code>slice-escalated</code></td><td>A slice is escalated to quorum for multi-model consensus review.</td><td><code>sliceId</code>, <code>reason</code>, <code>models</code> (array of model IDs).</td></tr>
+              <tr><td><code>ci-triggered</code></td><td>A CI workflow is dispatched from a plan run.</td><td><code>workflow</code>, <code>ref</code>, <code>inputs</code>.</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <!-- ============================================================ -->
+        <h2 id="client-server">Client&rarr;server messages</h2>
+        <p>The only inbound message type the hub honours. Send it once after opening the WebSocket to identify your client in the session registry (visible in the dashboard's <strong>Connections</strong> badge).</p>
+
+        <div class="overflow-x-auto mb-6">
+          <table class="manual-table">
+            <thead><tr><th>Message</th><th>Purpose</th><th>Payload</th></tr></thead>
+            <tbody>
+              <tr><td><code>set-label</code></td><td>Update the client's label in the session registry.</td><td><code>{ "type": "set-label", "label": "my-dashboard" }</code></td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <!-- ============================================================ -->
+        <h2 id="liveguard">LiveGuard events</h2>
+        <p><code>source: "liveguard"</code>. The production-ops feedback family &mdash; emitted by <code>forge_drift_report</code>, <code>forge_incident_capture</code>, <code>forge_alert_triage</code>, <code>forge_secret_scan</code>, <code>forge_fix_proposal</code>, and the watcher tools. Most carry <code>security_risk: "low"</code> or higher; filter on <code>security_risk &gt;= medium</code> to drive paging.</p>
+
+        <div class="overflow-x-auto mb-6">
+          <table class="manual-table">
+            <thead><tr><th>Event</th><th>Trigger</th><th>Key payload (under <code>data</code>)</th><th>Default risk</th></tr></thead>
+            <tbody>
+              <tr><td><code>liveguard-drift</code></td><td>Drift score changes.</td><td><code>score</code>, <code>delta</code>, <code>violations</code>, <code>timestamp</code>.</td><td><code>low</code> (escalates with delta)</td></tr>
+              <tr><td><code>liveguard-incident</code></td><td>An incident is captured or resolved.</td><td><code>id</code>, <code>severity</code>, <code>description</code>, <code>status</code>.</td><td><code>high</code></td></tr>
+              <tr><td><code>liveguard-triage</code></td><td><code>forge_alert_triage</code> runs.</td><td><code>alertCount</code>, <code>topSeverity</code>, <code>rankedAlerts</code>.</td><td><code>medium</code></td></tr>
+              <tr><td><code>liveguard-secret-scan</code></td><td>A secret scan completes.</td><td><code>clean</code>, <code>findingsCount</code>, <code>scannedAt</code>.</td><td><code>none</code> if clean; <code>high</code> if findings.</td></tr>
+              <tr><td><code>liveguard-tool-completed</code></td><td>Any LiveGuard tool finishes executing.</td><td><code>tool</code>, <code>status</code>, <code>durationMs</code>.</td><td><code>none</code></td></tr>
+              <tr><td><code>fix-proposal-ready</code></td><td><code>forge_fix_proposal</code> generates a new fix plan.</td><td><code>fixId</code>, <code>plan</code> (path to LIVEGUARD-FIX plan), <code>source</code>.</td><td><code>medium</code></td></tr>
+              <tr><td><code>watch-snapshot-completed</code></td><td><code>forge_watch</code> builds a snapshot of a target project.</td><td><code>target</code>, <code>runState</code>, <code>runId</code>, <code>anomalyCount</code>, <code>cursor</code>, <code>counts</code>.</td><td><code>none</code></td></tr>
+              <tr><td><code>watch-anomaly-detected</code></td><td><code>forge_watch</code> detects one or more anomalies (one event per invocation, not per anomaly).</td><td><code>target</code>, <code>runId</code>, <code>anomalies</code> (array of <code>{code, severity, message}</code>).</td><td><code>medium</code> (escalates with severity)</td></tr>
+              <tr><td><code>watch-advice-generated</code></td><td><code>forge_watch</code> analyze-mode produces narrative advice from a frontier model.</td><td><code>target</code>, <code>runId</code>, <code>model</code>, <code>tokensIn</code>, <code>tokensOut</code>, <code>durationMs</code>, <code>advicePreview</code>.</td><td><code>low</code></td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <p class="text-sm text-slate-400 mb-6">Anomaly codes used in <code>watch-anomaly-detected</code>: <code>stalled</code>, <code>tokens-zero</code>, <code>high-retries</code>, <code>slice-failed</code>, <code>all-skipped</code>, <code>gate-on-prose</code>, <code>model-escalated</code>, <code>quorum-dissent</code>, <code>quorum-leg-stalled</code>, <code>skill-step-failed</code>.</p>
+
+        <!-- ============================================================ -->
+        <h2 id="tempering">Tempering events</h2>
+        <p><code>source: "audit"</code>. One event &mdash; emitted only on the green leg of the bug lifecycle, when <code>forge_bug_validate_fix</code> confirms all scanners pass re-run. There is no matching <code>tempering-bug-validated-broken</code>; the validation tool returns the result to the caller without emitting on the red leg, to keep the dashboard's <strong>Bugs Fixed</strong> tile a positive-only feed.</p>
+
+        <div class="overflow-x-auto mb-6">
+          <table class="manual-table">
+            <thead><tr><th>Event</th><th>Trigger</th><th>Key payload (under <code>data</code>)</th></tr></thead>
+            <tbody>
+              <tr><td><code>tempering-bug-validated-fixed</code></td><td><code>forge_bug_validate_fix</code> confirms a bug is fixed &mdash; all scanners pass re-run.</td><td><code>bugId</code>, <code>scanner</code>, <code>verdict: "fixed"</code>, <code>attempt</code> (timestamp, scanners array, result).</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <!-- ============================================================ -->
+        <h2 id="subscribing">Consuming the stream</h2>
+        <p>The simplest possible consumer &mdash; a Node script that prints every event:</p>
+
+        <div class="cmd-block">
+          <div class="cmd-block-header"><span>consume.mjs &mdash; minimal event subscriber</span><button class="cmd-copy-btn">Copy</button></div>
+<pre><code>import WebSocket from "ws";
+
+const ws = new WebSocket("ws://127.0.0.1:3101");
+
+ws.on("open", () =&gt; {
+  ws.send(JSON.stringify({ type: "set-label", label: "my-consumer" }));
+});
+
+ws.on("message", (raw) =&gt; {
+  const evt = JSON.parse(raw.toString());
+  // Filter however you like:
+  if (evt.security_risk === "high" || evt.security_risk === "critical") {
+    console.error(`[HIGH] ${evt.type}`, evt);
+  } else if (evt.type?.startsWith("slice-")) {
+    console.log(`[LIFECYCLE] ${evt.type} sliceId=${evt.sliceId} status=${evt.status ?? ""}`);
+  }
+});
+</code></pre>
+        </div>
+
+        <p class="text-sm text-slate-400 mb-6">On connection the hub replays buffered events from the in-memory ring (default ~500 events, see <a href="https://github.com/srnichols/plan-forge/blob/master/pforge-mcp/hub.mjs" rel="noopener"><code>hub.mjs</code></a>). To enable bearer-token auth on the hub, set <a href="environment-variables-reference.html#server-ports"><code>PFORGE_BRIDGE_SECRET</code></a> &mdash; the consumer then sends <code>Authorization: Bearer &lt;secret&gt;</code> on the upgrade request.</p>
+
+        <!-- ============================================================ -->
+        <h2 id="retention">Retention</h2>
+        <p>Events live in up to four places after emission. The retention rules below tell you how long each consumer keeps them, and which fields each consumer can rely on having.</p>
+
+        <div class="overflow-x-auto mb-6">
+          <table class="manual-table">
+            <thead><tr><th>Sink</th><th>What is kept</th><th>Retention</th><th>How to read it</th></tr></thead>
+            <tbody>
+              <tr><td><strong>WebSocket hub (in-memory ring)</strong></td><td>All events.</td><td>~500 events (oldest evicted). Wiped on hub restart.</td><td>Connect to <code>ws://127.0.0.1:3101</code>; the hub replays the ring on <code>connected</code>.</td></tr>
+              <tr><td><strong>Run journal</strong></td><td>Lifecycle, skill, escalation, CI &mdash; everything tied to a <code>runId</code>.</td><td>Forever (until you delete the file). One JSONL per run at <code>.forge/runs/&lt;run-id&gt;.jsonl</code>.</td><td><code>forge_home_snapshot</code>, or <code>jq</code> over the JSONL file.</td></tr>
+              <tr><td><strong>LiveGuard cache</strong></td><td>The most recent <code>liveguard-drift</code>, <code>liveguard-secret-scan</code>, <code>liveguard-incident</code> snapshots.</td><td>One snapshot per type at <code>.forge/liveguard-*.json</code> &mdash; overwritten on next emission.</td><td><code>forge_drift_report</code>, <code>forge_secret_scan</code> (returns the cached snapshot when within <code>cacheMaxAgeMinutes</code>).</td></tr>
+              <tr><td><strong>OpenClaw analytics</strong> (opt-in)</td><td>Whatever the <code>PreAgentHandoff</code> hook posts &mdash; typically a roll-up of drift, MTTR, and open incidents.</td><td>Determined by the OpenClaw deployment; not Plan Forge's responsibility.</td><td>OpenClaw API.</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <!-- ============================================================ -->
+        <h2 id="see-also">See also</h2>
+        <ul class="space-y-2 mb-8">
+          <li><a href="https://github.com/srnichols/plan-forge/blob/master/pforge-mcp/EVENTS.md" rel="noopener"><strong>pforge-mcp/EVENTS.md</strong></a> &mdash; the canonical JSON-schema source for every event. This appendix is the orientation and classification companion; full payloads live there.</li>
+          <li><a href="integrating-from-outside.html"><strong>Chapter 29 &mdash; Integrating from Outside</strong></a> &mdash; building external consumers (dashboards, paging, custom bridges) that subscribe to the hub.</li>
+          <li><a href="compliance-and-data-residency.html#observability-export"><strong>Compliance &amp; Data Residency &mdash; Observability Export</strong></a> &mdash; OTel collector wiring; many of the events in this catalog are also emitted as OTel spans.</li>
+          <li><a href="dashboard.html"><strong>Chapter 12 &mdash; The Dashboard</strong></a> &mdash; the reference UI consumer; reading its source is the fastest way to see how each event family is rendered.</li>
+          <li><a href="forge-json-reference.html#openclaw"><strong>Appendix T &mdash; <code>openclaw</code></strong></a> &mdash; configuring the optional OpenClaw analytics sink.</li>
+          <li><a href="environment-variables-reference.html#server-ports"><strong>Appendix U &mdash; Server Ports</strong></a> &mdash; <code>PFORGE_BRIDGE_SECRET</code>, <code>PLAN_FORGE_WS_PORT</code>, and other env vars that gate hub access.</li>
+          <li><a href="customization.html#lifecycle-hooks"><strong>Customization &mdash; Lifecycle Hooks Reference</strong></a> &mdash; the hooks that fire in response to lifecycle events (<code>postSlice</code>, <code>preDeploy</code>, etc.).</li>
+        </ul>
+
+      </div>
+      <!-- /.chapter-content -->
+    </main>
+  </div>
+  <!-- /.manual-layout -->
+
+  <script src="assets/manual.js"></script>
+</body>
+</html>

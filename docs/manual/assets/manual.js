@@ -86,6 +86,7 @@
     { id: "how-do-i",                file: "how-do-i.html",                num: "S",  title: "How Do I\u2026? \u2014 Task Index",          act: "Appendix" },
     { id: "forge-json-reference",    file: "forge-json-reference.html",    num: "T",  title: ".forge.json Reference",                       act: "Appendix" },
     { id: "environment-variables-reference", file: "environment-variables-reference.html", num: "U", title: "Environment Variables Reference",  act: "Appendix" },
+    { id: "event-catalog",           file: "event-catalog.html",           num: "V",  title: "Event Catalog",                              act: "Appendix" },
   ];
 
   // ─── Chapter status registry ───
@@ -99,6 +100,7 @@
     "how-do-i":                      { label: "NEW",     version: "v3.6.2" },
     "forge-json-reference":          { label: "NEW",     version: "v3.6.2" },
     "environment-variables-reference": { label: "NEW",   version: "v3.6.2" },
+    "event-catalog":                 { label: "NEW",     version: "v3.6.2" },
     "customization":                 { label: "UPDATED", version: "v3.6.2" },
     "inner-loop":                    { label: "NEW",     version: "v2.57" },
     "self-deterministic-loop":       { label: "NEW",     version: "v2.58" },
@@ -147,10 +149,10 @@
     'cli-commands': 97, // pforge.ps1 switch arms (unique) — verify with PowerShell: ([regex]::Matches((Get-Content pforge.ps1 -Raw),"(?m)^\s+''([a-z][a-z-]+)''\s+\{") | %{ $_.Groups[1].Value } | Sort-Object -Unique).Count
     // Manual structure ──────────────────────────────────────────────────
     chapters:     28,  // numbered chapters 1-29 (excludes Quickstart Q1-Q3 and Appendices) — Ch 11 was archived; 26-29 added Third Edition
-    appendices:   21,  // lettered appendices A-U (R Day in the Forge v3.6.2 Slice A3, S How Do I…? Task Index v3.6.2 Slice A4, T .forge.json Reference v3.6.2 Slice B1, U Environment Variables Reference v3.6.2 Slice B2)
+    appendices:   22,  // lettered appendices A-V (R Day in the Forge v3.6.2 Slice A3, S How Do I…? Task Index v3.6.2 Slice A4, T .forge.json Reference v3.6.2 Slice B1, U Environment Variables Reference v3.6.2 Slice B2, V Event Catalog v3.6.2 Slice B4)
     parts:         5,  // Smelt, Forge, Guard, Learn, Integrate (Part V added Third Edition)
     // Manual assets ─────────────────────────────────────────────────────
-    htmlFiles:    73,  // total .html files in docs/manual/ (Third Edition Slice A + Slice B; +Foreword/Stakeholder/Reader Paths/Day in the Forge/How Do I…?/.forge.json Reference/Env Vars Reference v3.6.2 Fifth Edition)
+    htmlFiles:    74,  // total .html files in docs/manual/ (Third Edition Slice A + Slice B; +Foreword/Stakeholder/Reader Paths/Day in the Forge/How Do I…?/.forge.json Reference/Env Vars Reference/Event Catalog v3.6.2 Fifth Edition)
   };
 
   // Detect current page
@@ -560,6 +562,21 @@
     { t: "Env Vars — CLI Internal (set transiently by pforge)",   u: "environment-variables-reference.html#cli-internal" },
     { t: "Env Vars — Resolution Precedence",                       u: "environment-variables-reference.html#precedence" },
     { t: "Env Vars — Worked Example (PowerShell profile)",         u: "environment-variables-reference.html#worked-example" },
+    // Event Catalog — every event Plan Forge emits (Appendix V)
+    { t: "Event Catalog — Orientation",                            u: "event-catalog.html#orientation" },
+    { t: "Event Catalog — Common Envelope (version, type, source, security_risk)", u: "event-catalog.html#envelope" },
+    { t: "Event Catalog — source enum",                            u: "event-catalog.html#source-enum" },
+    { t: "Event Catalog — security_risk enum",                     u: "event-catalog.html#security-risk-enum" },
+    { t: "Event Catalog — Lifecycle (run-started, slice-*, run-completed)", u: "event-catalog.html#lifecycle" },
+    { t: "Event Catalog — Skills (skill-started, skill-step-*)",   u: "event-catalog.html#skills" },
+    { t: "Event Catalog — Crucible (crucible-smelt-*)",            u: "event-catalog.html#crucible" },
+    { t: "Event Catalog — Bridge (approval-*, bridge-notification-*)", u: "event-catalog.html#bridge" },
+    { t: "Event Catalog — Escalation & CI (slice-escalated, ci-triggered)", u: "event-catalog.html#escalation" },
+    { t: "Event Catalog — Client→server (set-label)",            u: "event-catalog.html#client-server" },
+    { t: "Event Catalog — LiveGuard (drift, incident, secret-scan, watch-*)", u: "event-catalog.html#liveguard" },
+    { t: "Event Catalog — Tempering (bug-validated-fixed)",        u: "event-catalog.html#tempering" },
+    { t: "Event Catalog — Consuming the Stream (WebSocket subscription)", u: "event-catalog.html#subscribing" },
+    { t: "Event Catalog — Retention (hub ring, run journal, LiveGuard cache, OpenClaw)", u: "event-catalog.html#retention" },
     // Quickstart
     { t: "Check Prerequisites",                  u: "quickstart-install.html#prerequisites" },
     { t: "Clone and Run Setup",                  u: "quickstart-install.html#clone" },

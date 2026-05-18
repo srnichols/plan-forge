@@ -103,6 +103,7 @@ into a single page:
 | **Quality at constant time** | Same model, same ~7-minute budget: **99/100 quality vs 44/100**. 4.6× more tests. The vibe-coded run "needed a rewrite of the architecture" to reach production. | [`docs/blog/ab-test-plan-forge-vs-vibe-coding.html`](../blog/ab-test-plan-forge-vs-vibe-coding.html) |
 | **Quality per extra dollar** | Quorum mode: **+$0.22 per feature** ($0.62 → $0.84, +35%) buys 20% more tests, DRY helpers, and modern patterns. "The cheapest code review you'll ever buy." | [`docs/blog/quorum-mode-3-models.html`](../blog/quorum-mode-3-models.html) |
 | **Rework avoidance** | The vibe run's extra minute was spent fighting 12 compilation errors and backtracking. Plan Forge's guardrails removed the rework loop, not added overhead. | [`docs/blog/ab-test-plan-forge-vs-vibe-coding.html`](../blog/ab-test-plan-forge-vs-vibe-coding.html) ("Guardrails don't slow you down. Rework slows you down.") |
+| **Memory as a tier-downgrade subsidy** | After the v3.x memory upgrades (Hallmark + Anvil + Lattice + `forge_sync_memories`): **cost per slice ~$0.09 → $0.04 (−55%)**, **Sonnet-4.6 success rate ~78% → 91% (332/365 slices)**, **drift score −64% over 90 days**, **Opus-escalation rate dropped to ~0%** for memory-aware plans. The Phase-MEMORY-QA receipt: **7 slices for $0.07 total on Sonnet alone, zero failed slices**. | [`docs/manual/memory-system.html`](../manual/memory-system.html#cheaper-models) ("The memory upgrades subsidize the model choice.") |
 
 Three reader personas this chapter has to serve, in this order:
 
@@ -124,6 +125,28 @@ deliberately starts each session with a fresh context window, which sounds waste
 *cheaper* than letting a single conversation degrade into hallucination-driven rework. The chapter
 should make this concrete with a token-count comparison from a real run (the `forge_cost_report`
 output for one of our own phases would serve).
+
+**The memory-system multiplier** (the most under-told part of the story today): a fresh session is
+only cheaper than a degraded one *if* the new session starts smarter than the last one ended. That's
+the job of the v3.x memory stack — **Hallmark** (provenance stamps that let the agent trust prior
+records without re-deriving them), **Anvil** (the L3 boundary with a dead-letter queue so bad
+captures don't poison context), **Lattice** (the code graph that turns "who calls this function?"
+from a 50-second grep into a 50-millisecond query), and **`forge_sync_memories`** (knowledge
+crosses session boundaries automatically). The cumulative effect, documented in
+[`memory-system.html`](../manual/memory-system.html#cheaper-models), is that the cheaper model
+(Sonnet-4.6) now succeeds on 91% of slices where it used to manage ~78%, while cost per slice
+fell from ~$0.09 to $0.04 (−55%) and Opus-escalation rate effectively went to zero on
+memory-aware plans. The chapter needs to **lift this story out of the memory chapter and put it in
+the cost chapter where the budget conversation actually happens** — a team lead reading Part II
+should not have to discover this benefit accidentally in Part IV.
+
+The Cost & Economics chapter should also be explicit about the **compounding flywheel**: every
+finished feature deposits decisions and lessons into OpenBrain. The next feature on the same
+project starts with that context already loaded, which makes it both cheaper *and* higher-quality
+than the previous feature. The cost curve bends downward over the life of a project, which is
+exactly the opposite of what most engineering managers assume happens with AI tooling. That single
+observation, backed by the −55% and −64% numbers above, is probably the most persuasive paragraph
+the chapter will contain.
 
 **What this chapter must NOT do**: become a price list. Per-token rates change quarterly; the
 chapter must teach the *mental model* (cost per feature, cost per quality unit, cost of rework

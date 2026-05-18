@@ -5604,7 +5604,20 @@ server.setRequestHandler(CallToolRequestSchema, _wrapWithToolSpan(async (request
           }
         }
       } catch { /* best-effort */ }
-      output += `\n\nMemory:\n  L1 keys:         (session-scoped)\n  L2 store size:   ${l2DirCount} dirs\n  L3 queue depth:  ${l3QueueDepth}\n  L3 last sync:    ${l3LastSync}`;
+
+      // Phase-OPENBRAIN-PROMOTION Slice 3 — explicit L3 configured/not-configured row.
+      // Never fails the smith exit code: this is informational only.
+      let l3StatusLine;
+      try {
+        const l3Configured = isOpenBrainConfigured(smithCwd7);
+        l3StatusLine = l3Configured
+          ? `L3 OpenBrain:    \u2713 configured (Reflexion + Federation active)`
+          : `L3 OpenBrain:    \u26A0 not configured \u2014 run 'pforge brain hint' or see https://srnichols.github.io/OpenBrain`;
+      } catch {
+        l3StatusLine = `L3 OpenBrain:    (status check failed)`;
+      }
+
+      output += `\n\nMemory:\n  L1 keys:         (session-scoped)\n  L2 store size:   ${l2DirCount} dirs\n  ${l3StatusLine}\n  L3 queue depth:  ${l3QueueDepth}\n  L3 last sync:    ${l3LastSync}`;
 
       // Phase-28.4 Slice 4 — drain warning row
       try {

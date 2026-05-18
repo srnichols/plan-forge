@@ -108,6 +108,21 @@ Setup copies all framework files, installs MCP dependencies, and generates confi
 2. Describe your feature → the pipeline guides you through 7 steps
 3. LiveGuard watches automatically after you ship
 
+### 3. (Recommended) Enable Persistent Memory
+
+Plan Forge ships with **L1 (Hub) + L2 (`.forge/*.jsonl`) memory built in**. The **L3 layer** — cross-session, cross-tool, semantic-search memory that powers Reflexion lessons, Auto-skills, cross-project Federation, and 28 auto-capturing MCP tools — requires [**OpenBrain**](https://srnichols.github.io/OpenBrain), a self-hosted MCP server (PostgreSQL + pgvector). Plan Forge works without it (every hook degrades silently), but the inner loop only *improves over time* when L3 is present.
+
+Pick the path that fits:
+
+| Path | Time | Cost | Best for |
+|------|------|------|----------|
+| **Docker Compose** | ~5 min | Free | Local dev, single machine |
+| **Supabase Cloud** | ~10 min | ~$0.10–$0.30 / mo | Solo / small team, zero ops |
+| **Kubernetes / Azure Container Apps** | ~30 min | Cloud rates | Teams, federation across repos |
+| **Skip for now** | 0 min | — | Try Plan Forge first; enable later with `pforge brain hint` |
+
+Full walkthrough: **[srnichols.github.io/OpenBrain](https://srnichols.github.io/OpenBrain)**. Already running OpenBrain? `pforge brain status` confirms Plan Forge sees it.
+
 See [docs/CLI-GUIDE.md](docs/CLI-GUIDE.md) for all presets, flags, and multi-agent options.
 
 ---
@@ -144,7 +159,7 @@ Key tools: `forge_run_plan` · `forge_liveguard_run` · `forge_analyze` · `forg
 | **Audit Loop** | `pforge audit-loop` or `.forge.json#audit` | Closed-loop drain: content-audit scanner → triage → fix. Default off; opt-in via `audit.mode: "auto"` or `"always"`. |
 | **Auto-escalation** | Built-in | Model fails → auto-promotes. Chain reorders by success rate. |
 | **Cost tracking** | Built-in | Per-slice tokens, 23-model pricing, `--estimate` with historical calibration. |
-| **OpenBrain memory** | Configure MCP endpoint | 28 tools auto-capture findings with **Hallmark provenance** stamps via **capability-negotiated OpenBrain writes**. **Anvil** deduplicates Δ-identical writes. 4 prompts search before acting. |
+| **OpenBrain memory** (L3) | **Recommended** — see [Quick Start § 3](#3-recommended-enable-persistent-memory) | The L3 memory layer. 28 tools auto-capture findings with **Hallmark provenance** stamps via **capability-negotiated OpenBrain writes**. **Anvil** deduplicates Δ-identical writes. 4 prompts search before acting. Without it, Reflexion, Auto-skills, and Federation are inert. |
 | **Extensions** | `pforge ext add <name>` | HIPAA, SaaS multi-tenancy, etc. |
 | **CI validation** | `srnichols/plan-forge-validate@v1` | GitHub Action for plan quality gates. |
 | **Notifications** | Configure in `.forge.json` | Slack, Discord, Telegram, webhooks via bridge. |

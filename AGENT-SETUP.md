@@ -4,7 +4,7 @@
 >
 > **This file is your entry point.** Read it top-to-bottom, then execute the appropriate path.
 >
-> **What you get** *(v3.5.1)*: **88 MCP tools** (Core + LiveGuard + Watcher + Crucible + Tempering + Bug Registry + Testbed + Forge-Master + Lattice + Sync + Memory + Notify + Doctor), **57 CLI commands**, ~17 instruction files, ~12 reviewer agents (pipeline + stack-specific), 16+ skills, **103+ REST endpoints**, live dashboard (~36 tabs across 4 groups), audit drain loop, Hallmark-stamped memory across L1/L2/L3, Anvil dedup cache, Lattice code-graph, Copilot Memory bridge (`forge_sync_memories`), self-recursive intelligence (the system gets smarter every run), OpenBrain persistent memory integration. Call `forge_capabilities` for full discovery.
+> **What you get** *(v3.5.1)*: **88 MCP tools** (Core + LiveGuard + Watcher + Crucible + Tempering + Bug Registry + Testbed + Forge-Master + Lattice + Sync + Memory + Notify + Doctor), **57 CLI commands**, ~17 instruction files, ~12 reviewer agents (pipeline + stack-specific), 16+ skills, **103+ REST endpoints**, live dashboard (37 tabs across 4 groups), audit drain loop, Hallmark-stamped memory across L1/L2/L3, Anvil dedup cache, Lattice code-graph, Copilot Memory bridge (`forge_sync_memories`), self-recursive intelligence (the system gets smarter every run), OpenBrain persistent memory integration. Call `forge_capabilities` for full discovery.
 
 ---
 

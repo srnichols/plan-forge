@@ -8,6 +8,23 @@
 
 ---
 
+## 0. Closed gaps (rebaseline log)
+
+The v3.x doc rebaseline ran in six passes. Every gap below has been **fixed in production** as of the cited commit. The full historical content of §3–6 is preserved as the audit record.
+
+| Pass | Commit | Closed |
+|---|---|---|
+| 1 — Mechanical sweep (stale tool counts) | `b9e55a8` | 17 stale `67/69 MCP tools` references across 10 files → `88 MCP tools` |
+| 2 — Capability tables → 100% coverage | `cb85270` | Added 13 missing tools to `docs/capabilities.md` + 12 tool cards to `docs/capabilities.html`; verified 88/88 coverage |
+| 3 — REST surface chapter | `4916707` | New [docs/REST-API.md](REST-API.md) (all 103 endpoints organized into 17+ domains) + regen script `scripts/dump-rest-routes.mjs` |
+| 4 — SDK refresh → 0.3.0 | `8719048` | Bumped `pforge-sdk@0.3.0`, removed broken `./client` declaration, added `./chunker` sub-path, rewrote `pforge-sdk/README.md` for v3.x |
+| 5 — Extended stat sweep | `5b27d2a` | README banner, capabilities cards, llms.txt, faq, speckit, dashboard tab count, test count (3285 → 8000+) |
+| 6 — Manual count alignment | _this commit_ | Dashboard chapter updated to 37 tabs with explicit group/tab table; capabilities + docs landing pages aligned; settings sub-tab count corrected (9 → 10) |
+
+**Status after Pass 6**: All §3 matrix red cells and §4.1 mechanical issues are closed. Remaining items in §4.2 / §4.3 are forward-looking enhancements (typed REST client in `pforge-sdk@0.4.0`, additional manual cross-linking, etc.) and are tracked outside this audit.
+
+---
+
 ## 1. The System (authoritative counts)
 
 | Surface | Count | Source of Truth |
@@ -16,7 +33,7 @@
 | **CLI commands** (top-level) | **57** | `pforge.ps1` line 7071 switch + subcommand handlers |
 | **REST endpoints** | **~103** | `pforge-mcp/server.mjs` `app.{get,post,put,delete}` handlers |
 | **SDK sub-path exports** | **4** | `pforge-sdk/package.json#exports` |
-| **Dashboard groups / tabs** | **4 / ~36** | `pforge-mcp/dashboard/index.html` `data-tab` and `data-group` |
+| **Dashboard groups / tabs** | **4 / 37** | `pforge-mcp/dashboard/index.html` `data-tab` and `data-group` (verified Pass 6) |
 | **Lifecycle hooks** | **8** | `templates/.github/hooks/` + `.github/hooks/` |
 | **Skill IDs** (unique across presets) | **18** | `presets/**/skills/*/SKILL.md` |
 | **Pipeline agents** | **6** | `templates/.github/agents/*.agent.md` (5) + `.github/agents/` (1) |
@@ -312,8 +329,8 @@ Plan Forge v3.5.1 — at a glance
                        1 Forge-Master / 1 Doctor)
  ~103  REST endpoints (organized into 15+ prefixes)
   57   CLI commands   (top-level; many with rich subcommand trees)
-  36   Dashboard tabs (across 4 groups: forge, liveguard, forge-master, settings)
-   4   SDK sub-paths  (.  /tools  /client  /hallmark)
+  37   Dashboard tabs (across 4 groups: forge=19, liveguard=7, forge-master=1, settings=10)
+   4   SDK sub-paths  (.  /tools  /hallmark  /chunker)  — 0.3.0
    8   Lifecycle hooks
   18   Skills         (across 9 stack presets + shared)
    8   Pipeline prompts + 8 instructions + 6 agents

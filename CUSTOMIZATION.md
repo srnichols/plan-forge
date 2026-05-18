@@ -1,6 +1,6 @@
 # Customizing the Plan Forge Framework
 
-> **Purpose**: Guide for adapting this template to your specific project, tech stack, and team workflow.  
+> **Purpose**: Guide for adapting this template to your specific project, tech stack, and team workflow.
 > **Also see**: [docs/COPILOT-VSCODE-GUIDE.md](docs/COPILOT-VSCODE-GUIDE.md) — How to run the pipeline in VS Code with Copilot
 
 ---

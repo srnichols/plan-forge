@@ -92,6 +92,7 @@
     { id: "rest-api-reference",      file: "rest-api-reference.html",      num: "W",  title: "REST API Reference",                         act: "Appendix" },
     { id: "errors-and-exit-codes",   file: "errors-and-exit-codes.html",   num: "X",  title: "Errors & Exit Codes",                        act: "Appendix" },
     { id: "plan-pattern-library",    file: "plan-pattern-library.html",    num: "Y",  title: "Plan Pattern Library",                       act: "Appendix" },
+    { id: "failure-mode-catalog",    file: "failure-mode-catalog.html",    num: "Z",  title: "Failure-Mode Catalog",                       act: "Appendix" },
   ];
 
   // ─── Chapter status registry ───
@@ -111,6 +112,7 @@
     "security-threat-model":         { label: "NEW",     version: "v3.6.2" },
     "cost-and-economics":            { label: "NEW",     version: "v3.6.2" },
     "plan-pattern-library":          { label: "NEW",     version: "v3.6.2" },
+    "failure-mode-catalog":          { label: "NEW",     version: "v3.6.2" },
     "instructions-agents-reference": { label: "UPDATED", version: "v3.6.2" },
     "troubleshooting":               { label: "UPDATED", version: "v3.6.2" },
     "customization":                 { label: "UPDATED", version: "v3.6.2" },
@@ -161,10 +163,10 @@
     'cli-commands': 97, // pforge.ps1 switch arms (unique) — verify with PowerShell: ([regex]::Matches((Get-Content pforge.ps1 -Raw),"(?m)^\s+''([a-z][a-z-]+)''\s+\{") | %{ $_.Groups[1].Value } | Sort-Object -Unique).Count
     // Manual structure ──────────────────────────────────────────────────
     chapters:     30,  // numbered chapters 1-31 (excludes Quickstart Q1-Q3 and Appendices) — Ch 11 was archived; 26-29 added Third Edition; 30 (Security & Threat Model) + 31 (Cost & Economics) added v3.6.2 Slices C1-C2
-    appendices:   25,  // lettered appendices A-Y (R Day in the Forge v3.6.2 Slice A3, S How Do I…? Task Index v3.6.2 Slice A4, T .forge.json Reference v3.6.2 Slice B1, U Environment Variables Reference v3.6.2 Slice B2, V Event Catalog v3.6.2 Slice B4, W REST API Reference v3.6.2 Slice B5, X Errors & Exit Codes v3.6.2 Slice B7, Y Plan Pattern Library v3.6.2 Slice C3)
+    appendices:   26,  // lettered appendices A-Z (R Day in the Forge v3.6.2 Slice A3, S How Do I…? Task Index v3.6.2 Slice A4, T .forge.json Reference v3.6.2 Slice B1, U Environment Variables Reference v3.6.2 Slice B2, V Event Catalog v3.6.2 Slice B4, W REST API Reference v3.6.2 Slice B5, X Errors & Exit Codes v3.6.2 Slice B7, Y Plan Pattern Library v3.6.2 Slice C3, Z Failure-Mode Catalog v3.6.2 Slice C4)
     parts:         5,  // Smelt, Forge, Guard, Learn, Integrate (Part V added Third Edition)
     // Manual assets ─────────────────────────────────────────────────────
-    htmlFiles:    79,  // total .html files in docs/manual/ (Third Edition Slice A + Slice B + C1 + C2 + C3; +Foreword/Stakeholder/Reader Paths/Day in the Forge/How Do I…?/.forge.json Reference/Env Vars Reference/Event Catalog/REST API Reference/Errors & Exit Codes/Security & Threat Model/Cost & Economics/Plan Pattern Library v3.6.2 Fifth Edition)
+    htmlFiles:    80,  // total .html files in docs/manual/ (Third Edition Slice A + Slice B + C1 + C2 + C3 + C4; +Foreword/Stakeholder/Reader Paths/Day in the Forge/How Do I…?/.forge.json Reference/Env Vars Reference/Event Catalog/REST API Reference/Errors & Exit Codes/Security & Threat Model/Cost & Economics/Plan Pattern Library/Failure-Mode Catalog v3.6.2 Fifth Edition)
   };
 
   // Detect current page
@@ -665,6 +667,34 @@
     { t: "Plan Pattern P14 — Spike-Then-Build (time-boxed exploration)", u: "plan-pattern-library.html#p14-spike-then-build" },
     { t: "Plan Patterns — Composing patterns across phases",       u: "plan-pattern-library.html#composition" },
     { t: "Plan Patterns — Anti-patterns (mega-slice, test-after, etc.)", u: "plan-pattern-library.html#anti-patterns" },
+    // Failure-Mode Catalog — 25 failure modes by layer (Appendix Z)
+    { t: "Failure Modes — Index (25 failure modes across 8 layers)", u: "failure-mode-catalog.html#index" },
+    { t: "Failure Mode FM1 — Token limit hit",                       u: "failure-mode-catalog.html#fm1-token-limit" },
+    { t: "Failure Mode FM2 — Model timeout",                         u: "failure-mode-catalog.html#fm2-model-timeout" },
+    { t: "Failure Mode FM3 — Malformed tool call",                   u: "failure-mode-catalog.html#fm3-malformed-tool-call" },
+    { t: "Failure Mode FM4 — Edit blocked by scope / forbidden actions", u: "failure-mode-catalog.html#fm4-scope-blocked" },
+    { t: "Failure Mode FM5 — Worker loop detected",                  u: "failure-mode-catalog.html#fm5-loop-detected" },
+    { t: "Failure Mode FM6 — Gate test failure (legitimate)",        u: "failure-mode-catalog.html#fm6-test-failure" },
+    { t: "Failure Mode FM7 — Gate timeout",                          u: "failure-mode-catalog.html#fm7-gate-timeout" },
+    { t: "Failure Mode FM8 — Non-portable gate command",             u: "failure-mode-catalog.html#fm8-non-portable-gate" },
+    { t: "Failure Mode FM9 — Documentation validator drift",         u: "failure-mode-catalog.html#fm9-validator-drift" },
+    { t: "Failure Mode FM10 — Worker spawn failure",                 u: "failure-mode-catalog.html#fm10-worker-spawn" },
+    { t: "Failure Mode FM11 — Git stash conflict on rollback",       u: "failure-mode-catalog.html#fm11-stash-conflict" },
+    { t: "Failure Mode FM12 — Snapshot apply failure",               u: "failure-mode-catalog.html#fm12-snapshot-apply" },
+    { t: "Failure Mode FM13 — Plan parse error",                     u: "failure-mode-catalog.html#fm13-plan-parse" },
+    { t: "Failure Mode FM14 — Provider rate limit (HTTP 429)",       u: "failure-mode-catalog.html#fm14-rate-limit" },
+    { t: "Failure Mode FM15 — Provider 5xx / outage",                u: "failure-mode-catalog.html#fm15-provider-5xx" },
+    { t: "Failure Mode FM16 — Auth expired",                         u: "failure-mode-catalog.html#fm16-auth-expired" },
+    { t: "Failure Mode FM17 — L2 jsonl corruption",                  u: "failure-mode-catalog.html#fm17-l2-corruption" },
+    { t: "Failure Mode FM18 — L3 endpoint unreachable",              u: "failure-mode-catalog.html#fm18-l3-unreachable" },
+    { t: "Failure Mode FM19 — Hook false positive",                  u: "failure-mode-catalog.html#fm19-hook-false-positive" },
+    { t: "Failure Mode FM20 — Hook script error",                    u: "failure-mode-catalog.html#fm20-hook-script-error" },
+    { t: "Failure Mode FM21 — Quorum panel disagrees below threshold", u: "failure-mode-catalog.html#fm21-panel-disagree" },
+    { t: "Failure Mode FM22 — Quorum panelist timeout",              u: "failure-mode-catalog.html#fm22-panelist-timeout" },
+    { t: "Failure Mode FM23 — Port already in use",                  u: "failure-mode-catalog.html#fm23-port-in-use" },
+    { t: "Failure Mode FM24 — Disk full",                            u: "failure-mode-catalog.html#fm24-disk-full" },
+    { t: "Failure Mode FM25 — File locked (Windows)",                u: "failure-mode-catalog.html#fm25-file-locked" },
+    { t: "Failure Modes — General recovery techniques",              u: "failure-mode-catalog.html#general-recovery" },
     // Quickstart
     { t: "Check Prerequisites",                  u: "quickstart-install.html#prerequisites" },
     { t: "Clone and Run Setup",                  u: "quickstart-install.html#clone" },

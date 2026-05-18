@@ -225,7 +225,7 @@ Slices are independent. Pick any one; finish it; commit; ship. No slice depends 
 - [x] **C1** Security & Threat Model chapter (Part III) ✅ (v3.6.2 · Chapter 30 · commit pending)
 - [x] **C2** Cost & Economics chapter (Part II) ✅ (v3.6.2 · Chapter 31 · commit pending)
 - [x] **C3** Plan Pattern Library (Appendix Y) ✅ (v3.6.2 · 14 patterns · commit pending)
-- [ ] **C4** Failure-Mode Catalog (Appendix Z)
+- [x] **C4** Failure-Mode Catalog (Appendix Z) ✅ (v3.6.2 · 25 failure modes · commit pending)
 
 ### Cluster D — Phase closure
 - [ ] **QA** Phase-completion sweep + cross-ref audit (runs last; depends on all content slices)

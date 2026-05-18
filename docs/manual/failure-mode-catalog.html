@@ -1,0 +1,250 @@
+<!DOCTYPE html>
+<html lang="en" class="scroll-smooth">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Appendix Z: Failure-Mode Catalog — Plan Forge Manual</title>
+  <meta name="description" content="A catalog of common Plan Forge failure modes — worker, gate, orchestrator, provider, memory, hook, quorum, plan, and system failures. For each: symptom, diagnosis path, recovery, and prevention. The companion to Appendix X (Errors & Exit Codes)." />
+  <meta property="og:title" content="Appendix Z — Failure-Mode Catalog" />
+  <meta property="og:description" content="Common failure modes with symptom, diagnosis, recovery, and prevention." />
+  <meta property="og:type" content="article" />
+  <link rel="canonical" href="https://planforge.software/manual/failure-mode-catalog.html" />
+  <link rel="icon" type="image/svg+xml" href="../assets/plan-forge-logo.svg" />
+  <link rel="stylesheet" href="../assets/tailwind.built.css" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;600;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="../assets/shared.css" />
+  <link rel="stylesheet" href="assets/manual.css" />
+</head>
+<body class="bg-slate-950 text-slate-300 min-h-screen">
+
+  <button id="mobile-sidebar-btn" class="mobile-sidebar-btn fixed top-4 left-4 z-[101] lg:hidden p-2 bg-slate-900 border border-slate-700 rounded-lg text-slate-400 hover:text-slate-100 transition-colors" aria-label="Open navigation">
+    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"/></svg>
+  </button>
+  <div id="sidebar-overlay" class="sidebar-overlay"></div>
+
+  <div class="manual-layout">
+    <aside id="manual-sidebar" class="manual-sidebar"><nav id="sidebar-nav"></nav></aside>
+
+    <main>
+      <div class="chapter-content">
+
+        <div class="text-xs font-semibold text-cyan-500 uppercase tracking-wider mb-2">Appendix Z</div>
+        <h1>Failure-Mode Catalog</h1>
+        <p class="text-lg text-slate-400 mb-8">Common Plan Forge failure modes organized by layer. For each: symptom, diagnosis path, recovery action, and prevention. This appendix is the operator's companion to <a href="errors-and-exit-codes.html">Appendix X &mdash; Errors &amp; Exit Codes</a>: Appendix X lists what the system <em>says</em>; Appendix Z lists what to <em>do</em>.</p>
+
+        <div class="callout callout-info">
+          <strong>How to use this appendix.</strong> Read <a href="#index">the index</a>, find the failure mode that matches the symptom you're seeing, jump to its section, follow the diagnosis path, apply the recovery. The <code>forge_diagnose</code> tool and the <code>/health-check</code> skill cover most cases automatically &mdash; this catalog is for when you need to understand <em>why</em> the automation suggests what it does.
+        </div>
+
+        <h2 id="index">Index</h2>
+        <table class="manual-table">
+          <thead><tr><th style="width: 13rem">Layer</th><th>Failure modes</th></tr></thead>
+          <tbody>
+            <tr><td><strong>Worker</strong></td><td><a href="#fm1-token-limit">FM1 token limit</a> &middot; <a href="#fm2-model-timeout">FM2 model timeout</a> &middot; <a href="#fm3-malformed-tool-call">FM3 malformed tool call</a> &middot; <a href="#fm4-scope-blocked">FM4 scope blocked</a> &middot; <a href="#fm5-loop-detected">FM5 loop detected</a></td></tr>
+            <tr><td><strong>Gate</strong></td><td><a href="#fm6-test-failure">FM6 test failure</a> &middot; <a href="#fm7-gate-timeout">FM7 gate timeout</a> &middot; <a href="#fm8-non-portable-gate">FM8 non-portable gate</a> &middot; <a href="#fm9-validator-drift">FM9 validator drift</a></td></tr>
+            <tr><td><strong>Orchestrator</strong></td><td><a href="#fm10-worker-spawn">FM10 worker spawn failure</a> &middot; <a href="#fm11-stash-conflict">FM11 stash conflict</a> &middot; <a href="#fm12-snapshot-apply">FM12 snapshot apply failure</a> &middot; <a href="#fm13-plan-parse">FM13 plan parse error</a></td></tr>
+            <tr><td><strong>Provider</strong></td><td><a href="#fm14-rate-limit">FM14 rate limit</a> &middot; <a href="#fm15-provider-5xx">FM15 provider 5xx / outage</a> &middot; <a href="#fm16-auth-expired">FM16 auth expired</a></td></tr>
+            <tr><td><strong>Memory</strong></td><td><a href="#fm17-l2-corruption">FM17 L2 jsonl corruption</a> &middot; <a href="#fm18-l3-unreachable">FM18 L3 endpoint unreachable</a></td></tr>
+            <tr><td><strong>Hook</strong></td><td><a href="#fm19-hook-false-positive">FM19 hook false positive</a> &middot; <a href="#fm20-hook-script-error">FM20 hook script error</a></td></tr>
+            <tr><td><strong>Quorum</strong></td><td><a href="#fm21-panel-disagree">FM21 panel disagree below threshold</a> &middot; <a href="#fm22-panelist-timeout">FM22 panelist timeout</a></td></tr>
+            <tr><td><strong>System</strong></td><td><a href="#fm23-port-in-use">FM23 port in use</a> &middot; <a href="#fm24-disk-full">FM24 disk full</a> &middot; <a href="#fm25-file-locked">FM25 file locked (Windows)</a></td></tr>
+          </tbody>
+        </table>
+
+        <h2 id="worker-failures">Worker failures</h2>
+
+        <h3 id="fm1-token-limit" class="text-base font-semibold text-slate-300 mt-6">FM1 &mdash; Token limit hit</h3>
+        <p><strong>Symptom</strong>: worker response truncated mid-sentence or mid-tool-call; error like <code>max_tokens reached</code> or HTTP 200 with <code>finish_reason: length</code>.</p>
+        <p><strong>Diagnosis</strong>: check <code>forge_watch_live</code> for the slice's input + output token counts; compare to the model's context window. Most often the prompt grew beyond budget after a few file reads.</p>
+        <p><strong>Recovery</strong>: split the slice. The scope was too broad. Re-run with a tighter file list. If splitting isn't practical, switch the slice's model to one with a larger context (Opus 1M, GPT-5.5).</p>
+        <p><strong>Prevention</strong>: target 1&ndash;4 files per slice; use scope contracts; let <code>auto</code> quorum route bigger slices to larger-context models.</p>
+
+        <h3 id="fm2-model-timeout" class="text-base font-semibold text-slate-300 mt-6">FM2 &mdash; Model timeout</h3>
+        <p><strong>Symptom</strong>: orchestrator waits past the configured <code>provider.timeoutMs</code> and aborts. Status reason: <code>worker-signaled</code> or <code>provider-timeout</code>.</p>
+        <p><strong>Diagnosis</strong>: provider status page; <code>forge_watch_live</code> shows the last successful token timestamp. If the model was streaming and then stopped, the network broke. If it never streamed, the provider is overloaded.</p>
+        <p><strong>Recovery</strong>: <code>pforge run-plan --resume-from &lt;slice&gt;</code>. The retry will use the same prompt; provider issues are usually transient. If repeated, switch provider via <code>--model</code>.</p>
+        <p><strong>Prevention</strong>: keep the provider list in <code>.forge.json#modelRouting.fallback</code> populated so <code>auto</code> mode can fail over without manual intervention.</p>
+
+        <h3 id="fm3-malformed-tool-call" class="text-base font-semibold text-slate-300 mt-6">FM3 &mdash; Malformed tool call</h3>
+        <p><strong>Symptom</strong>: model returns a tool-call block with invalid JSON, wrong argument types, or a tool name that doesn't exist. Orchestrator surfaces <code>tool-call-invalid</code>.</p>
+        <p><strong>Diagnosis</strong>: inspect <code>.forge/runs/&lt;runId&gt;/trajectory.jsonl</code> for the raw tool-call frame.</p>
+        <p><strong>Recovery</strong>: the orchestrator retries with the parse error fed back to the model. If 3 retries fail, the slice errors. Manual fix: tighten the tool's <code>inputSchema</code> in the MCP server so the model gets a clearer contract on the next attempt.</p>
+        <p><strong>Prevention</strong>: follow the <code>forge_search</code> ACI gold standard for new tools &mdash; bounded payloads, sparse fields, explicit schemas, friendly empty-state messages.</p>
+
+        <h3 id="fm4-scope-blocked" class="text-base font-semibold text-slate-300 mt-6">FM4 &mdash; Edit blocked by scope / forbidden actions</h3>
+        <p><strong>Symptom</strong>: PreToolUse hook fires; worker's edit is rejected with <code>scope-violation</code> or <code>forbidden-action</code>. Slice fails or worker pivots to a different file.</p>
+        <p><strong>Diagnosis</strong>: read the hook's output line &mdash; it names the file and the rule. Compare against the plan's Scope Contract and Forbidden Actions sections.</p>
+        <p><strong>Recovery</strong>: <em>two paths</em>. (a) If the worker was wrong (genuine scope creep), let the block stand &mdash; the system is working as designed. (b) If the plan was too narrow (the legitimate fix requires touching a file the scope doesn't allow), <strong>edit the plan</strong> to widen scope, file a <code>plan-defect</code> meta-bug, then resume.</p>
+        <p><strong>Prevention</strong>: write Scope Contracts that match the slice's true file set. Underscoped plans are the #1 source of FM4. See the <a href="https://github.com/srnichols/plan-forge/blob/master/docs/plans/AI-Plan-Hardening-Runbook.md">AI Plan Hardening Runbook</a> for scope-sizing guidance.</p>
+
+        <h3 id="fm5-loop-detected" class="text-base font-semibold text-slate-300 mt-6">FM5 &mdash; Worker loop detected</h3>
+        <p><strong>Symptom</strong>: the worker calls the same tool with the same arguments N times in a row, or alternates between two tool calls indefinitely. Orchestrator emits <code>loop-detected</code> and aborts the slice.</p>
+        <p><strong>Diagnosis</strong>: <code>trajectory.jsonl</code> shows the repeating pattern. Common cause: the model is reading a file, "concluding," then reading it again because no progress was made.</p>
+        <p><strong>Recovery</strong>: abort with <code>forge_abort</code> if not already aborted. Split the slice or give the worker a clearer next-step instruction in the plan. If the loop is between two specific tools, check whether one of them has an ambiguous empty-state message (see <a href="errors-and-exit-codes.html#mcp-tool-errors">Appendix X &mdash; MCP tool errors</a>).</p>
+        <p><strong>Prevention</strong>: ACI hygiene &mdash; tools must return friendly messages on empty results, not bare <code>{ hits: [] }</code>.</p>
+
+        <h2 id="gate-failures">Gate failures</h2>
+
+        <h3 id="fm6-test-failure" class="text-base font-semibold text-slate-300 mt-6">FM6 &mdash; Gate test failure (legitimate)</h3>
+        <p><strong>Symptom</strong>: gate command exits non-zero; test runner reports failed assertions.</p>
+        <p><strong>Diagnosis</strong>: read the gate output. The orchestrator's retry loop will feed the failure back to the worker and let it try again (up to <code>execution.maxRetries</code>).</p>
+        <p><strong>Recovery</strong>: let the retry happen. If it still fails after retries, the slice's gate is the truth &mdash; the implementation is wrong. Triage: is the test correct? Is the implementation incomplete? Is the test too strict?</p>
+        <p><strong>Prevention</strong>: tight, fast gates that fail with clear error messages. Loose gates pass bad work; cryptic gates leave the worker spinning.</p>
+
+        <h3 id="fm7-gate-timeout" class="text-base font-semibold text-slate-300 mt-6">FM7 &mdash; Gate timeout</h3>
+        <p><strong>Symptom</strong>: gate runs past the configured timeout (default 120s); orchestrator kills it. Status reason: <code>gate-timeout</code>.</p>
+        <p><strong>Diagnosis</strong>: was the test suite legitimately too big, or did a test hang? Try running the gate command manually; observe time-to-completion.</p>
+        <p><strong>Recovery</strong>: if legitimate, raise the timeout for that slice in the plan's per-slice <code>gateTimeoutMs</code>. If a hang, fix the test (often a missing mock for an async call or an unbounded retry loop).</p>
+        <p><strong>Prevention</strong>: gates should run in &lt;30s ideally, &lt;60s comfortably. Slice-level gates that need to run a 5-minute suite are usually a smell &mdash; consider running the small slice gate plus a separate periodic sweep.</p>
+
+        <h3 id="fm8-non-portable-gate" class="text-base font-semibold text-slate-300 mt-6">FM8 &mdash; Non-portable gate command</h3>
+        <p><strong>Symptom</strong>: gate passes on the plan author's machine but fails on another platform (typically Windows). Common: bash pipe-to-brace-group like <code>grep -c | { read n; [ "$n" -ge 1 ]; }</code> where the inner variable is invisible through the cmd&rarr;bash shim.</p>
+        <p><strong>Diagnosis</strong>: gate output shows the failure on the second machine; manual run of the gate command reproduces it.</p>
+        <p><strong>Recovery</strong>: rewrite the gate to use simple, portable shell. Prefer <code>grep -q PATTERN file</code> and <code>test -f path</code> over complex pipe-fests. Avoid pipe-to-brace-group; use intermediate files if you need to capture counts.</p>
+        <p><strong>Prevention</strong>: see <a href="https://github.com/srnichols/plan-forge/blob/master/docs/plans/AI-Plan-Hardening-Runbook.md">AI Plan Hardening Runbook &mdash; portable gate commands</a>.</p>
+
+        <h3 id="fm9-validator-drift" class="text-base font-semibold text-slate-300 mt-6">FM9 &mdash; Documentation / index validator drift</h3>
+        <p><strong>Symptom</strong>: gate validator (e.g. <code>node docs/manual/maintain.mjs</code>) reports drift: orphan files, missing index entries, broken cross-refs.</p>
+        <p><strong>Diagnosis</strong>: the validator output lists every drift item. Typical: a new file was created but not registered in the index <code>SEARCH_SECTIONS</code> array.</p>
+        <p><strong>Recovery</strong>: run the validator twice. The first pass detects drift and auto-regenerates derived files (book-index, list-of-figures, glossary). The second pass confirms convergence. If the second pass still shows drift, fix manually (usually a missing manual.js registration).</p>
+        <p><strong>Prevention</strong>: P12 (Documentation Phase) pattern in <a href="plan-pattern-library.html#p12-documentation-phase">Appendix Y</a> mandates the twice-validate gate.</p>
+
+        <h2 id="orchestrator-failures">Orchestrator failures</h2>
+
+        <h3 id="fm10-worker-spawn" class="text-base font-semibold text-slate-300 mt-6">FM10 &mdash; Worker spawn failure</h3>
+        <p><strong>Symptom</strong>: orchestrator can't launch the worker subprocess; exits with <code>worker-spawn-failed</code>. On Windows: <code>ENOENT</code> from <code>spawn</code>.</p>
+        <p><strong>Diagnosis</strong>: usually a missing CLI on PATH (e.g. <code>claude</code>, <code>cursor-agent</code>, <code>codex</code>). Run <code>pforge smith</code> &mdash; it lists which agent CLIs are present.</p>
+        <p><strong>Recovery</strong>: install or reinstall the worker CLI; verify with <code>where claude</code> (Windows) / <code>which claude</code> (POSIX). On Windows, restart the IDE after PATH changes &mdash; child-process PATH is inherited at spawn time.</p>
+        <p><strong>Prevention</strong>: <code>pforge smith</code> in your project's preflight; <code>/health-check</code> skill on session start.</p>
+
+        <h3 id="fm11-stash-conflict" class="text-base font-semibold text-slate-300 mt-6">FM11 &mdash; Git stash conflict on rollback</h3>
+        <p><strong>Symptom</strong>: failed slice rolled back; <code>git stash pop</code> reports merge conflicts because foreign files were modified during the run.</p>
+        <p><strong>Diagnosis</strong>: <code>git status</code> shows conflict markers in files the slice was not supposed to touch.</p>
+        <p><strong>Recovery</strong>: resolve conflicts manually, then drop the stash with <code>git stash drop</code>. The <strong>v3.3.4 / v3.3.5</strong> fixes addressed the most common shapes of this (snapshot-apply-then-drop ordering); if you hit it on a current Plan Forge version, file an <code>orchestrator-defect</code> meta-bug.</p>
+        <p><strong>Prevention</strong>: don't make manual edits while a plan is running. The orchestrator's snapshot model assumes the working tree is stable during execution.</p>
+
+        <h3 id="fm12-snapshot-apply" class="text-base font-semibold text-slate-300 mt-6">FM12 &mdash; Snapshot apply failure</h3>
+        <p><strong>Symptom</strong>: orchestrator can't apply the pre-slice snapshot to roll back a failed slice. Status reason: <code>snapshot-apply-failed</code>.</p>
+        <p><strong>Diagnosis</strong>: <code>.forge/runs/&lt;runId&gt;/snapshots/</code> contains the snapshot artifacts; inspect git output for the actual failure (usually a file-permission issue or a concurrent index lock).</p>
+        <p><strong>Recovery</strong>: manually restore from the snapshot or from the prior git commit. <code>git reflog</code> shows the orchestrator's commits; <code>git reset --hard &lt;sha&gt;</code> to the pre-slice state if necessary.</p>
+        <p><strong>Prevention</strong>: ensure no other git operations are running against the repo during plan execution; close other IDE windows that might be touching the index.</p>
+
+        <h3 id="fm13-plan-parse" class="text-base font-semibold text-slate-300 mt-6">FM13 &mdash; Plan parse error</h3>
+        <p><strong>Symptom</strong>: <code>pforge run-plan</code> exits with code 2 (<code>EX_USAGE</code>) and a plan-parse error. Common: duplicate slice headers, missing required sections, malformed bash gate fences.</p>
+        <p><strong>Diagnosis</strong>: error message names the line. <code>pforge check &lt;plan&gt;</code> validates standalone.</p>
+        <p><strong>Recovery</strong>: fix the markdown. Common issues: two slices with the same heading text; gate code-fence not closed; <code>### Slice N</code> heading without a following body.</p>
+        <p><strong>Prevention</strong>: run <code>pforge check</code> before <code>pforge run-plan</code>; the Crucible's plan-hardening pass (Session 1) catches most parse errors before they reach execution.</p>
+
+        <h2 id="provider-failures">Provider failures</h2>
+
+        <h3 id="fm14-rate-limit" class="text-base font-semibold text-slate-300 mt-6">FM14 &mdash; Rate limit (HTTP 429)</h3>
+        <p><strong>Symptom</strong>: provider returns 429; orchestrator surfaces <code>provider-rate-limit</code>.</p>
+        <p><strong>Diagnosis</strong>: check provider's rate-limit headers (<code>x-ratelimit-remaining-requests</code>, <code>x-ratelimit-reset-*</code>). Are you over your tier's per-minute or per-day cap?</p>
+        <p><strong>Recovery</strong>: the orchestrator backs off and retries automatically (configurable in <code>.forge.json#execution.backoff</code>). Manual: switch to a different provider via <code>--model</code> until the window resets, or upgrade your provider tier.</p>
+        <p><strong>Prevention</strong>: spread load across providers via <code>modelRouting.fallback</code>; reserve <code>power</code> quorum for slices that actually need it (each panelist counts against the rate limit).</p>
+
+        <h3 id="fm15-provider-5xx" class="text-base font-semibold text-slate-300 mt-6">FM15 &mdash; Provider 5xx / outage</h3>
+        <p><strong>Symptom</strong>: 500/502/503 from provider; sustained failures over multiple retries.</p>
+        <p><strong>Diagnosis</strong>: check the provider's status page. If a single provider is degraded, fail over.</p>
+        <p><strong>Recovery</strong>: <code>pforge run-plan --resume-from &lt;slice&gt; --model &lt;different-provider&gt;</code>. Multi-provider routing in <code>auto</code> mode handles this automatically when configured.</p>
+        <p><strong>Prevention</strong>: maintain keys for at least two providers (Anthropic + OpenAI is the common pairing). The marginal cost of having a fallback key configured is zero until you need it.</p>
+
+        <h3 id="fm16-auth-expired" class="text-base font-semibold text-slate-300 mt-6">FM16 &mdash; Auth expired</h3>
+        <p><strong>Symptom</strong>: provider returns 401/403; or <code>gh auth login</code> token expired (relevant for Copilot routing).</p>
+        <p><strong>Diagnosis</strong>: <code>pforge smith</code> reports auth status per provider. For GitHub Copilot: <code>gh auth status</code>.</p>
+        <p><strong>Recovery</strong>: rotate the API key (env var or <code>.forge/secrets.json</code>); for OAuth: <code>gh auth login</code> again. Resume the plan.</p>
+        <p><strong>Prevention</strong>: rotate keys before they expire; for OAuth, the LiveGuard <code>preDeploy</code> hook can be extended to call <code>gh auth status</code> as part of its checks.</p>
+
+        <h2 id="memory-failures">Memory failures</h2>
+
+        <h3 id="fm17-l2-corruption" class="text-base font-semibold text-slate-300 mt-6">FM17 &mdash; L2 jsonl corruption</h3>
+        <p><strong>Symptom</strong>: <code>forge_memory_report</code> errors with JSON parse exception; memory search returns empty.</p>
+        <p><strong>Diagnosis</strong>: open <code>.forge/memory/L2.jsonl</code>; look for a truncated last line (write interrupted by crash).</p>
+        <p><strong>Recovery</strong>: remove the corrupt line. Re-run <code>forge_memory_report</code> to verify. The file is append-only jsonl &mdash; recovery is just trim-the-last-line.</p>
+        <p><strong>Prevention</strong>: don't kill the orchestrator mid-write. The flush-on-write design minimizes the window, but it's not zero.</p>
+
+        <h3 id="fm18-l3-unreachable" class="text-base font-semibold text-slate-300 mt-6">FM18 &mdash; L3 endpoint unreachable</h3>
+        <p><strong>Symptom</strong>: <code>memory_recall</code> calls timing out; OpenBrain (or your configured L3) not responding.</p>
+        <p><strong>Diagnosis</strong>: <code>curl</code> the configured <code>memory.l3Endpoint</code>; check network and auth token.</p>
+        <p><strong>Recovery</strong>: L3 is opt-in and the orchestrator falls back to L2-only when L3 is down. No slice should fail because L3 is unreachable. If a slice does, the worker is over-relying on L3 hints &mdash; tighten the plan instruction set to make L3 advisory rather than required.</p>
+        <p><strong>Prevention</strong>: treat L3 as a hint surface, not a contract. The plan should be runnable with L3 off.</p>
+
+        <h2 id="hook-failures">Hook failures</h2>
+
+        <h3 id="fm19-hook-false-positive" class="text-base font-semibold text-slate-300 mt-6">FM19 &mdash; Hook blocks a legitimate edit (false positive)</h3>
+        <p><strong>Symptom</strong>: PreToolUse blocks an edit that the plan's scope actually allows; or LiveGuard <code>preDeploy</code> flags a "secret" that's a placeholder constant.</p>
+        <p><strong>Diagnosis</strong>: hook output names the rule. Inspect the rule's pattern; compare against the actual content.</p>
+        <p><strong>Recovery</strong>: tighten the pattern (<code>forge_secret_scan</code> ignores patterns are configurable). For scope hooks, widen the Scope Contract in the plan.</p>
+        <p><strong>Prevention</strong>: tune secret-scan ignore patterns when you add codebase-specific constants that match common secret shapes (e.g. fixture IDs that look like API keys).</p>
+
+        <h3 id="fm20-hook-script-error" class="text-base font-semibold text-slate-300 mt-6">FM20 &mdash; Hook script error</h3>
+        <p><strong>Symptom</strong>: a hook script exits non-zero with an actual scripting error (not a policy denial).</p>
+        <p><strong>Diagnosis</strong>: hook output includes the script's stderr. Most common: pwsh-vs-bash mismatch on the wrong platform.</p>
+        <p><strong>Recovery</strong>: fix the script; run it manually to verify. Hook scripts live in <code>.github/hooks/&lt;Event&gt;.md</code> with code fences for each platform.</p>
+        <p><strong>Prevention</strong>: keep both bash and pwsh blocks for every hook; <code>/health-check</code> exercises hooks during smoke testing.</p>
+
+        <h2 id="quorum-failures">Quorum failures</h2>
+
+        <h3 id="fm21-panel-disagree" class="text-base font-semibold text-slate-300 mt-6">FM21 &mdash; Panel disagrees below threshold</h3>
+        <p><strong>Symptom</strong>: quorum panel returns; no answer reaches the configured threshold. Slice fails with <code>quorum-no-consensus</code>.</p>
+        <p><strong>Diagnosis</strong>: <code>forge_quorum_analyze</code> on the run id shows each panelist's answer; look for fundamental disagreement (different APIs proposed, different architectural choices) vs near-misses on wording.</p>
+        <p><strong>Recovery</strong>: split the slice into a P14 (Spike) plus a build slice. The disagreement signal is the panel telling you the question is ambiguous &mdash; resolve the ambiguity at the plan level, not by re-running the same quorum.</p>
+        <p><strong>Prevention</strong>: clearer slice prompts; tighter Scope Contracts. Quorum disagreement is usually a plan-quality signal.</p>
+
+        <h3 id="fm22-panelist-timeout" class="text-base font-semibold text-slate-300 mt-6">FM22 &mdash; Panelist timeout (panel partial)</h3>
+        <p><strong>Symptom</strong>: one or more panelists fail to respond before the per-panelist timeout. Quorum either proceeds with fewer voices (if remaining count &ge; threshold) or fails.</p>
+        <p><strong>Diagnosis</strong>: <code>trajectory.jsonl</code> shows which panelist timed out and at what stage.</p>
+        <p><strong>Recovery</strong>: if quorum failed due to insufficient responders, retry with <code>--quorum=auto</code> (smaller panel, less rate-limit risk) or after the timed-out provider recovers.</p>
+        <p><strong>Prevention</strong>: configure <code>.forge.json#quorum.panelistTimeoutMs</code> to a value your slowest provider tolerates; for cost-sensitive workflows, prefer <code>auto</code> over <code>power</code> &mdash; fewer panelists = fewer timeout opportunities.</p>
+
+        <h2 id="system-failures">System failures</h2>
+
+        <h3 id="fm23-port-in-use" class="text-base font-semibold text-slate-300 mt-6">FM23 &mdash; Port already in use</h3>
+        <p><strong>Symptom</strong>: hub or MCP server can't bind to 3100/3101/3102; exits with <code>EADDRINUSE</code>.</p>
+        <p><strong>Diagnosis</strong>: a previous Plan Forge process didn't shut down cleanly, or another tool grabbed the port. On Windows: <code>netstat -ano | findstr :3100</code>; on POSIX: <code>lsof -i :3100</code>.</p>
+        <p><strong>Recovery</strong>: kill the stale process by PID. <code>pforge smith</code> detects orphan processes and offers to clean them up.</p>
+        <p><strong>Prevention</strong>: shut down cleanly (Ctrl+C, not kill -9). The orchestrator releases its ports on SIGTERM but not on SIGKILL.</p>
+
+        <h3 id="fm24-disk-full" class="text-base font-semibold text-slate-300 mt-6">FM24 &mdash; Disk full</h3>
+        <p><strong>Symptom</strong>: writes to <code>.forge/runs/&lt;runId&gt;/trajectory.jsonl</code> or <code>.forge/cost-history.json</code> fail; orchestrator errors with <code>ENOSPC</code>.</p>
+        <p><strong>Diagnosis</strong>: <code>df -h .</code> (POSIX) / <code>Get-PSDrive</code> (Windows). Trajectory files can grow large for long runs.</p>
+        <p><strong>Recovery</strong>: clear old runs &mdash; <code>.forge/runs/</code> can be aggressively pruned; only keep recent traces. Cost history is small (JSONL one row per LLM call).</p>
+        <p><strong>Prevention</strong>: configure <code>.forge.json#execution.trajectoryRetentionDays</code> (default 30) to a value your disk tolerates.</p>
+
+        <h3 id="fm25-file-locked" class="text-base font-semibold text-slate-300 mt-6">FM25 &mdash; File locked (Windows)</h3>
+        <p><strong>Symptom</strong>: write fails with <code>EBUSY</code> or <code>EPERM</code>; common when an editor, antivirus, or sync client (OneDrive / Dropbox) is holding the file.</p>
+        <p><strong>Diagnosis</strong>: <code>Get-Process | Where { $_.Modules.FileName -contains $path }</code> in pwsh; or use Process Explorer's "Find Handle" feature.</p>
+        <p><strong>Recovery</strong>: close the editor / sync client; the orchestrator's retry loop usually picks up the file on the next attempt. For persistent locks, exclude <code>.forge/</code> from sync-client scope and antivirus realtime scanning.</p>
+        <p><strong>Prevention</strong>: put working repos outside synced folders when possible; add <code>.forge/</code> to OneDrive / Dropbox exclusion lists.</p>
+
+        <h2 id="general-recovery">General recovery techniques</h2>
+        <p>When in doubt, the following are safe in any failure mode:</p>
+        <ul class="list-disc list-inside space-y-1 mb-4">
+          <li><strong><code>pforge smith</code></strong> &mdash; environment diagnostic; reports installed CLIs, configured providers, port status, disk space.</li>
+          <li><strong><code>/health-check</code></strong> skill &mdash; <code>forge_smith</code> &rarr; <code>forge_validate</code> &rarr; <code>forge_sweep</code> in sequence.</li>
+          <li><strong><code>forge_diagnose</code></strong> &mdash; per-run diagnosis with structured remediation suggestions.</li>
+          <li><strong><code>pforge run-plan --resume-from &lt;slice&gt;</code></strong> &mdash; resumes a failed run at a specific slice, preserving prior committed slices.</li>
+          <li><strong><code>git reflog</code> + <code>git reset --hard</code></strong> &mdash; ultimate rollback to any prior orchestrator commit.</li>
+          <li><strong><code>forge_meta_bug_file</code></strong> &mdash; if you worked around a Plan Forge defect, file it so the fix lands upstream. See <a href="https://github.com/srnichols/plan-forge/blob/master/.github/instructions/self-repair-reporting.instructions.md">self-repair reporting</a>.</li>
+        </ul>
+
+        <h2 id="see-also">See also</h2>
+        <ul class="list-disc list-inside space-y-1">
+          <li><a href="errors-and-exit-codes.html">Appendix X &mdash; Errors &amp; Exit Codes</a> &mdash; the symbolic names this catalog references (<code>scope-violation</code>, <code>gate-timeout</code>, etc.).</li>
+          <li><a href="plan-pattern-library.html">Appendix Y &mdash; Plan Pattern Library</a> &mdash; the patterns whose anti-patterns this catalog cross-references.</li>
+          <li><a href="troubleshooting.html">Chapter 15 &mdash; Troubleshooting</a> &mdash; the narrative-style intro to the failure surface.</li>
+          <li><a href="security-threat-model.html#incident-response">Chapter 30 &mdash; Incident response</a> &mdash; the security incident path that overlays this catalog.</li>
+          <li><a href="https://github.com/srnichols/plan-forge/blob/master/docs/plans/AI-Plan-Hardening-Runbook.md">AI Plan Hardening Runbook</a> &mdash; how to write plans that produce fewer of these failures in the first place.</li>
+          <li><a href="https://github.com/srnichols/plan-forge/blob/master/.github/instructions/self-repair-reporting.instructions.md">Self-Repair Reporting</a> &mdash; the meta-bug flow for Plan-Forge-itself defects.</li>
+        </ul>
+
+        <div id="chapter-prev-next" class="chapter-nav"></div>
+
+      </div>
+    </main>
+  </div>
+  <script src="assets/manual.js"></script>
+</body>
+</html>

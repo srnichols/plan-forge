@@ -52,6 +52,7 @@
     { id: "testbed",             file: "testbed.html",             num: "22", title: "The Testbed",                act: "IV" },
     { id: "health-dna",          file: "health-dna.html",          num: "23", title: "Health DNA",                 act: "IV" },
     { id: "memory-architecture", file: "memory-architecture.html", num: "24", title: "Memory Architecture",       act: "IV" },
+    { id: "memory-system",       file: "memory-system.html",       num: "25", title: "How the Shop Remembers",   act: "IV" },
     // ─── Appendices ───
     { id: "glossary",            file: "glossary.html",            num: "A",  title: "Glossary",                 act: "Appendix" },
     { id: "quick-reference",     file: "quick-reference.html",     num: "B",  title: "Quick Reference Card",     act: "Appendix" },
@@ -86,6 +87,7 @@
     "audit-loop":                    { label: "NEW",     version: "v2.80" },
     "spec-kit-interop":              { label: "NEW",     version: "v2.70" },
     "plan-forge-on-the-github-stack":{ label: "UPDATED", version: "v2.75" },
+    "memory-system":                 { label: "NEW",     version: "v3.5.1" },
   };
 
   // ─── Edition ───
@@ -664,6 +666,18 @@
     { t: "End-to-End Workflow: WhatsApp to Shipped PR", u: "remote-bridge.html#end-to-end-workflow" },
     // Ch 24 — Memory Architecture
     { t: "Unified Memory Across Agents", u: "memory-architecture.html#unified-memory-across-agents" },
+    // Ch 25 — How the Shop Remembers
+    { t: "How the Shop Remembers", u: "memory-system.html" },
+    { t: "The Four New Pieces (Hallmark, Anvil, Lattice, sync_memories)", u: "memory-system.html#four-pieces" },
+    { t: "A Day in the Life of a Slice", u: "memory-system.html#day-in-the-life" },
+    { t: "Why Cheaper Models Punch Above Their Weight", u: "memory-system.html#cheaper-models" },
+    { t: "Three Memory Commands You Can Run Today", u: "memory-system.html#three-commands" },
+    { t: "Anvil & Lattice Dashboard Tab", u: "memory-system.html#dashboard" },
+    { t: "How the New Memory Pieces Fit the Old Tiers", u: "memory-system.html#how-they-fit" },
+    { t: "Hallmark (provenance, hallmark/v1)", u: "memory-system.html#four-pieces" },
+    { t: "Anvil (L3 boundary, DLQ, capability handshake)", u: "memory-system.html#four-pieces" },
+    { t: "Lattice (code-graph, chunker, callers, blast)", u: "memory-system.html#four-pieces" },
+    { t: "forge_sync_memories (Copilot Memory soft-sync)", u: "memory-system.html#four-pieces" },
     // Spec Kit Interop (Part I integration)
     { t: "Spec Kit Import Flow", u: "spec-kit-interop.html#import-flow" },
     { t: "Spec Kit Import Procedure", u: "spec-kit-interop.html#import-procedure" },

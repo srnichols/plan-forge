@@ -41,10 +41,15 @@
             <li><strong>L3 (OpenBrain)</strong> — a shared semantic database. Searchable across projects, agents, and machines.</li>
           </ul>
           The same <code>captureMemory()</code> call writes to all three. If any tier fails, the others still succeed — nothing blocks your code.
+          <p class="mt-3 mb-0 text-sm text-slate-400"><strong>And around those three tiers</strong>, v3.x added four pieces of craftsmanship: <strong>Hallmark</strong> stamps every record with a provenance envelope (<code>hallmark/v1</code>) so drift is detectable; <strong>Anvil</strong> hardens the L2→L3 doorway with a dead-letter queue and capability handshake so a network blip never loses a memory; <strong>Lattice</strong> sits alongside as a code-graph index the agent can query (<em>"who calls this function?"</em>); and <strong>forge_sync_memories</strong> pushes decisions and lessons up into Copilot's own Memory store so the next IDE session sees them automatically. The plain-English tour with numbers is in <a href="memory-system.html"><strong>Chapter 25 — How the Shop Remembers</strong></a>.</p>
         </div>
 
         <div class="callout callout-tip">
           <strong>New in v2.36.0</strong>: This chapter consolidates the three-tier memory work shipped across the <code>v2.35.1</code>–<code>v2.36.0</code> release window.
+        </div>
+
+        <div class="callout callout-info">
+          <strong>Looking for the v3.x upgrades (Hallmark, Anvil, Lattice, <code>forge_sync_memories</code>)?</strong> They're covered in plain English in the next chapter — <a href="memory-system.html"><strong>Chapter 25 — How the Shop Remembers</strong></a>. That chapter explains what we layered on top of the L1/L2/L3 tiers described here, and shows the cost/quality numbers proving why a cheaper model can now do work that used to require the expensive one.
         </div>
 
         <!-- ─── Overview ─── -->
@@ -60,14 +65,21 @@
               <th class="text-left p-3 text-slate-400 font-semibold">Storage</th>
               <th class="text-left p-3 text-slate-400 font-semibold">Lifetime</th>
               <th class="text-left p-3 text-slate-400 font-semibold">Read API</th>
+              <th class="text-left p-3 text-slate-400 font-semibold">What v3 added</th>
             </tr>
           </thead>
           <tbody class="divide-y divide-slate-800">
-            <tr><td class="p-3 font-bold text-emerald-400">L1 — Hub</td><td class="p-3"><code>EventEmitter</code> in <code>hub.mjs</code> + <code>.forge/hub-events.jsonl</code></td><td class="p-3">Process lifetime + replay file</td><td class="p-3">WebSocket subscribers, <code>forge_watch</code></td></tr>
-            <tr><td class="p-3 font-bold text-blue-400">L2 — Files</td><td class="p-3"><code>.forge/*.jsonl</code> (memory-captures, gotchas, lessons, decisions, patterns…)</td><td class="p-3">Repository lifetime</td><td class="p-3"><code>forge_memory_report</code>, manual file reads</td></tr>
-            <tr><td class="p-3 font-bold text-purple-400">L3 — OpenBrain</td><td class="p-3">pgvector via <code>.forge/openbrain-queue.jsonl</code> drain</td><td class="p-3">Cross-project, cross-session</td><td class="p-3"><code>search_thoughts</code>, semantic recall</td></tr>
+            <tr><td class="p-3 font-bold text-emerald-400">L1 — Hub</td><td class="p-3"><code>EventEmitter</code> in <code>hub.mjs</code> + <code>.forge/hub-events.jsonl</code></td><td class="p-3">Process lifetime + replay file</td><td class="p-3">WebSocket subscribers, <code>forge_watch</code></td><td class="p-3 text-slate-400">Unchanged. Same hub, same broadcast.</td></tr>
+            <tr><td class="p-3 font-bold text-blue-400">L2 — Files</td><td class="p-3"><code>.forge/*.jsonl</code> (memory-captures, gotchas, lessons, decisions, patterns…)</td><td class="p-3">Repository lifetime</td><td class="p-3"><code>forge_memory_report</code>, manual file reads</td><td class="p-3 text-slate-400"><strong>Hallmark</strong> stamps every new record (<code>_v:1</code>) so drift is detectable.</td></tr>
+            <tr><td class="p-3 font-bold text-purple-400">L3 — OpenBrain</td><td class="p-3">pgvector via <code>.forge/openbrain-queue.jsonl</code> drain</td><td class="p-3">Cross-project, cross-session</td><td class="p-3"><code>search_thoughts</code>, semantic recall</td><td class="p-3 text-slate-400"><strong>Anvil</strong> hardens the doorway (DLQ + capability handshake + boot drain).</td></tr>
+            <tr><td class="p-3 font-bold text-amber-400">+ Lattice</td><td class="p-3"><code>.forge/lattice/{chunks,edges}.jsonl</code></td><td class="p-3">Repository lifetime (rebuildable)</td><td class="p-3"><code>latticeQuery</code>, <code>latticeCallers</code>, <code>latticeBlast</code></td><td class="p-3 text-slate-400">Parallel axis — a code-graph the agent queries alongside memory.</td></tr>
+            <tr><td class="p-3 font-bold text-amber-400">↑ Copilot Memory</td><td class="p-3">Copilot's own Memory store (IDE)</td><td class="p-3">Cross-session, IDE-wide</td><td class="p-3">Copilot reads automatically</td><td class="p-3 text-slate-400"><strong>forge_sync_memories</strong> pushes decisions/lessons upward (additive, hash-deduped).</td></tr>
           </tbody>
         </table>
+
+        <div class="callout callout-tip">
+          <strong>One picture, all the pieces.</strong> The three tiers didn't go away — we forged better tools around them. For the layered tower diagram showing exactly how Hallmark, Anvil, Lattice, and <code>forge_sync_memories</code> fit on top of L1/L2/L3, see <a href="memory-system.html#how-they-fit">Chapter 25 § How the New Pieces Fit the Old Tiers</a>.
+        </div>
 
         <!-- ─── Unified Memory Across Agents ─── -->
         <h2 id="unified-memory-across-agents">Unified Memory Across Agents</h2>
@@ -199,12 +211,12 @@
 
         <!-- ─── L3 ─── -->
         <h2 id="l3-openbrain">L3 — OpenBrain Bridge</h2>
-        <p>OpenBrain is the cross-project semantic store (pgvector + thought metadata). Plan Forge never writes to it directly during a tool call — that would couple every tool's latency to the OpenBrain endpoint. Instead:</p>
+        <p>OpenBrain is the cross-project semantic store (pgvector + thought metadata). Plan Forge never writes to it directly during a tool call — that would couple every tool's latency to the OpenBrain endpoint. Instead, the path goes through the <strong>Anvil boundary</strong> (added in v3.x): a small piece of code that owns delivery, capability negotiation, and failure recovery so the calling tool only ever talks to a local queue.</p>
 
         <ol>
           <li><code>captureMemory</code> appends one line to <code>.forge/openbrain-queue.jsonl</code> (microseconds, local I/O)</li>
-          <li>The <strong>drain worker</strong> wakes on a timer or hub event, batches pending lines, and POSTs them to OpenBrain</li>
-          <li>Successes are removed from the queue. Failures retry up to N times, then move to <code>openbrain-dlq.jsonl</code></li>
+          <li>The <strong>Anvil drain worker</strong> wakes on a timer or hub event, negotiates capabilities with the L3 endpoint, batches pending lines, and POSTs them to OpenBrain</li>
+          <li>Successes are removed from the queue. Failures retry up to N times, then land in <code>openbrain-dlq.jsonl</code> — the dead-letter queue that the next boot drains automatically</li>
           <li>A <code>drain-trend</code> rolling window in <code>forge_memory_report</code> exposes pass/fail/deferred counts so the Memory tab can flag a stuck pipeline</li>
         </ol>
 

@@ -91,6 +91,7 @@
     { id: "event-catalog",           file: "event-catalog.html",           num: "V",  title: "Event Catalog",                              act: "Appendix" },
     { id: "rest-api-reference",      file: "rest-api-reference.html",      num: "W",  title: "REST API Reference",                         act: "Appendix" },
     { id: "errors-and-exit-codes",   file: "errors-and-exit-codes.html",   num: "X",  title: "Errors & Exit Codes",                        act: "Appendix" },
+    { id: "plan-pattern-library",    file: "plan-pattern-library.html",    num: "Y",  title: "Plan Pattern Library",                       act: "Appendix" },
   ];
 
   // ─── Chapter status registry ───
@@ -109,6 +110,7 @@
     "errors-and-exit-codes":         { label: "NEW",     version: "v3.6.2" },
     "security-threat-model":         { label: "NEW",     version: "v3.6.2" },
     "cost-and-economics":            { label: "NEW",     version: "v3.6.2" },
+    "plan-pattern-library":          { label: "NEW",     version: "v3.6.2" },
     "instructions-agents-reference": { label: "UPDATED", version: "v3.6.2" },
     "troubleshooting":               { label: "UPDATED", version: "v3.6.2" },
     "customization":                 { label: "UPDATED", version: "v3.6.2" },
@@ -159,10 +161,10 @@
     'cli-commands': 97, // pforge.ps1 switch arms (unique) — verify with PowerShell: ([regex]::Matches((Get-Content pforge.ps1 -Raw),"(?m)^\s+''([a-z][a-z-]+)''\s+\{") | %{ $_.Groups[1].Value } | Sort-Object -Unique).Count
     // Manual structure ──────────────────────────────────────────────────
     chapters:     30,  // numbered chapters 1-31 (excludes Quickstart Q1-Q3 and Appendices) — Ch 11 was archived; 26-29 added Third Edition; 30 (Security & Threat Model) + 31 (Cost & Economics) added v3.6.2 Slices C1-C2
-    appendices:   24,  // lettered appendices A-X (R Day in the Forge v3.6.2 Slice A3, S How Do I…? Task Index v3.6.2 Slice A4, T .forge.json Reference v3.6.2 Slice B1, U Environment Variables Reference v3.6.2 Slice B2, V Event Catalog v3.6.2 Slice B4, W REST API Reference v3.6.2 Slice B5, X Errors & Exit Codes v3.6.2 Slice B7)
+    appendices:   25,  // lettered appendices A-Y (R Day in the Forge v3.6.2 Slice A3, S How Do I…? Task Index v3.6.2 Slice A4, T .forge.json Reference v3.6.2 Slice B1, U Environment Variables Reference v3.6.2 Slice B2, V Event Catalog v3.6.2 Slice B4, W REST API Reference v3.6.2 Slice B5, X Errors & Exit Codes v3.6.2 Slice B7, Y Plan Pattern Library v3.6.2 Slice C3)
     parts:         5,  // Smelt, Forge, Guard, Learn, Integrate (Part V added Third Edition)
     // Manual assets ─────────────────────────────────────────────────────
-    htmlFiles:    78,  // total .html files in docs/manual/ (Third Edition Slice A + Slice B + C1 + C2; +Foreword/Stakeholder/Reader Paths/Day in the Forge/How Do I…?/.forge.json Reference/Env Vars Reference/Event Catalog/REST API Reference/Errors & Exit Codes/Security & Threat Model/Cost & Economics v3.6.2 Fifth Edition)
+    htmlFiles:    79,  // total .html files in docs/manual/ (Third Edition Slice A + Slice B + C1 + C2 + C3; +Foreword/Stakeholder/Reader Paths/Day in the Forge/How Do I…?/.forge.json Reference/Env Vars Reference/Event Catalog/REST API Reference/Errors & Exit Codes/Security & Threat Model/Cost & Economics/Plan Pattern Library v3.6.2 Fifth Edition)
   };
 
   // Detect current page
@@ -645,6 +647,24 @@
     { t: "Cost — Anti-lock-in posture (BYOK, no proxy, no telemetry, open pricing)", u: "cost-and-economics.html#anti-lock-in" },
     { t: "Cost — Forecasting at scale (groupBy model / role / scope)", u: "cost-and-economics.html#forecasting-at-scale" },
     { t: "Cost — Worked example (slice B5 ship REST API reference)", u: "cost-and-economics.html#worked-example" },
+    // Plan Pattern Library — reusable plan archetypes (Appendix Y)
+    { t: "Plan Patterns — Index of 14 patterns (when, slice count)", u: "plan-pattern-library.html#index" },
+    { t: "Plan Pattern P1 — Add an Entity (DB → service → API → UI)", u: "plan-pattern-library.html#p1-add-entity" },
+    { t: "Plan Pattern P2 — Add an Endpoint (new route on existing entity)", u: "plan-pattern-library.html#p2-add-endpoint" },
+    { t: "Plan Pattern P3 — Add an External Integration (third-party API)", u: "plan-pattern-library.html#p3-add-integration" },
+    { t: "Plan Pattern P4 — Refactor a Subsystem (multi-consumer migration)", u: "plan-pattern-library.html#p4-refactor" },
+    { t: "Plan Pattern P5 — Fix a Regression (strict red-green-refactor)", u: "plan-pattern-library.html#p5-fix-regression" },
+    { t: "Plan Pattern P6 — Hotfix (minimal-surface emergency change)", u: "plan-pattern-library.html#p6-hotfix" },
+    { t: "Plan Pattern P7 — Feature Flag Rollout (ship dark, toggle later)", u: "plan-pattern-library.html#p7-feature-flag" },
+    { t: "Plan Pattern P8 — Data Migration (additive + backfill + verify)", u: "plan-pattern-library.html#p8-data-migration" },
+    { t: "Plan Pattern P9 — Dependency Upgrade (per-module fix slices)", u: "plan-pattern-library.html#p9-dependency-upgrade" },
+    { t: "Plan Pattern P10 — Performance Fix (benchmark-driven)", u: "plan-pattern-library.html#p10-performance-fix" },
+    { t: "Plan Pattern P11 — Security Patch (CVE / vulnerability)",  u: "plan-pattern-library.html#p11-security-patch" },
+    { t: "Plan Pattern P12 — Documentation Phase (one slice per document)", u: "plan-pattern-library.html#p12-documentation-phase" },
+    { t: "Plan Pattern P13 — CI/CD Workflow Change (no-op + promote)", u: "plan-pattern-library.html#p13-ci-workflow" },
+    { t: "Plan Pattern P14 — Spike-Then-Build (time-boxed exploration)", u: "plan-pattern-library.html#p14-spike-then-build" },
+    { t: "Plan Patterns — Composing patterns across phases",       u: "plan-pattern-library.html#composition" },
+    { t: "Plan Patterns — Anti-patterns (mega-slice, test-after, etc.)", u: "plan-pattern-library.html#anti-patterns" },
     // Quickstart
     { t: "Check Prerequisites",                  u: "quickstart-install.html#prerequisites" },
     { t: "Clone and Run Setup",                  u: "quickstart-install.html#clone" },

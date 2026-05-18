@@ -1,0 +1,286 @@
+<!DOCTYPE html>
+<html lang="en" class="scroll-smooth">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Appendix Y: Plan Pattern Library — Plan Forge Manual</title>
+  <meta name="description" content="A catalog of reusable plan archetypes for Plan Forge — when to reach for each, typical slice shape, validation gate flavor, recommended quorum mode, and the failure modes each pattern is designed to avoid." />
+  <meta property="og:title" content="Appendix Y — Plan Pattern Library" />
+  <meta property="og:description" content="Reusable plan archetypes: when to use, slice shape, gate flavor, quorum mode, common failure modes." />
+  <meta property="og:type" content="article" />
+  <link rel="canonical" href="https://planforge.software/manual/plan-pattern-library.html" />
+  <link rel="icon" type="image/svg+xml" href="../assets/plan-forge-logo.svg" />
+  <link rel="stylesheet" href="../assets/tailwind.built.css" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;600;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="../assets/shared.css" />
+  <link rel="stylesheet" href="assets/manual.css" />
+</head>
+<body class="bg-slate-950 text-slate-300 min-h-screen">
+
+  <button id="mobile-sidebar-btn" class="mobile-sidebar-btn fixed top-4 left-4 z-[101] lg:hidden p-2 bg-slate-900 border border-slate-700 rounded-lg text-slate-400 hover:text-slate-100 transition-colors" aria-label="Open navigation">
+    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"/></svg>
+  </button>
+  <div id="sidebar-overlay" class="sidebar-overlay"></div>
+
+  <div class="manual-layout">
+    <aside id="manual-sidebar" class="manual-sidebar"><nav id="sidebar-nav"></nav></aside>
+
+    <main>
+      <div class="chapter-content">
+
+        <div class="text-xs font-semibold text-cyan-500 uppercase tracking-wider mb-2">Appendix Y</div>
+        <h1>Plan Pattern Library</h1>
+        <p class="text-lg text-slate-400 mb-8">A catalog of reusable plan archetypes. For each pattern: when to reach for it, the typical slice shape, the validation gate flavor, recommended quorum mode, and the failure modes the pattern is designed to avoid. Use this when starting a new plan and you want to skip thinking about structure from scratch.</p>
+
+        <div class="callout callout-info">
+          <strong>How to use this appendix.</strong> Read <a href="#index">the index</a>, find the pattern that matches your task, jump to its section, and copy the slice shape into your plan draft. The Crucible's <code>forge_crucible_ask</code> can also be asked "which plan pattern fits &lt;task&gt;?" and will return a pointer to the right section here.
+        </div>
+
+        <h2 id="index">Index</h2>
+        <table class="manual-table">
+          <thead><tr><th style="width: 22rem">Pattern</th><th>When</th><th>Slices</th></tr></thead>
+          <tbody>
+            <tr><td><a href="#p1-add-entity"><strong>P1 &mdash; Add an Entity</strong></a></td><td>New domain object end-to-end (DB &rarr; service &rarr; API &rarr; UI)</td><td>4&ndash;7</td></tr>
+            <tr><td><a href="#p2-add-endpoint"><strong>P2 &mdash; Add an Endpoint</strong></a></td><td>New REST / RPC route on existing entity</td><td>2&ndash;3</td></tr>
+            <tr><td><a href="#p3-add-integration"><strong>P3 &mdash; Add an External Integration</strong></a></td><td>Wire up a third-party API (Stripe / SendGrid / S3 / etc.)</td><td>4&ndash;5</td></tr>
+            <tr><td><a href="#p4-refactor"><strong>P4 &mdash; Refactor a Subsystem</strong></a></td><td>Extract / split / rename module with multiple consumers</td><td>3&ndash;6 (one per consumer)</td></tr>
+            <tr><td><a href="#p5-fix-regression"><strong>P5 &mdash; Fix a Regression</strong></a></td><td>Bug landed in a previous slice; need repro + fix + guard</td><td>2&ndash;3</td></tr>
+            <tr><td><a href="#p6-hotfix"><strong>P6 &mdash; Hotfix</strong></a></td><td>Production incident, minimal-surface emergency change</td><td>1&ndash;2</td></tr>
+            <tr><td><a href="#p7-feature-flag"><strong>P7 &mdash; Feature Flag Rollout</strong></a></td><td>Risky change you want to ship dark, toggle on later</td><td>4&ndash;5</td></tr>
+            <tr><td><a href="#p8-data-migration"><strong>P8 &mdash; Data Migration</strong></a></td><td>Schema change requiring backfill + verification</td><td>4&ndash;6</td></tr>
+            <tr><td><a href="#p9-dependency-upgrade"><strong>P9 &mdash; Dependency Upgrade</strong></a></td><td>Breaking-change SDK / framework bump</td><td>3&ndash;5</td></tr>
+            <tr><td><a href="#p10-performance-fix"><strong>P10 &mdash; Performance Fix</strong></a></td><td>Profile-driven targeted optimization</td><td>2&ndash;3</td></tr>
+            <tr><td><a href="#p11-security-patch"><strong>P11 &mdash; Security Patch</strong></a></td><td>CVE / vulnerability with minimal-surface fix</td><td>2&ndash;3</td></tr>
+            <tr><td><a href="#p12-documentation-phase"><strong>P12 &mdash; Documentation Phase</strong></a></td><td>Multi-document writing pass (manual chapters, runbooks, API docs)</td><td>1 per document</td></tr>
+            <tr><td><a href="#p13-ci-workflow"><strong>P13 &mdash; CI/CD Workflow Change</strong></a></td><td>Modify GitHub Actions / pipelines / deploy automation</td><td>1&ndash;2 + manual verify</td></tr>
+            <tr><td><a href="#p14-spike-then-build"><strong>P14 &mdash; Spike-Then-Build</strong></a></td><td>Unfamiliar domain; need exploration before committing to a design</td><td>1 spike + N build slices in a follow-up plan</td></tr>
+          </tbody>
+        </table>
+
+        <h2 id="p1-add-entity">P1 &mdash; Add an Entity</h2>
+        <p><strong>When</strong>: a new first-class noun in your domain that needs persistence, an API surface, and (often) a UI. The most common shape.</p>
+        <p><strong>Slice shape</strong> (4&ndash;7 slices):</p>
+        <ol class="list-decimal list-inside space-y-1 mb-4">
+          <li>Migration + ORM model.</li>
+          <li>Repository layer + unit tests.</li>
+          <li>Service layer (validation, business rules) + unit tests.</li>
+          <li>Controller / route + integration tests.</li>
+          <li><em>(optional)</em> UI component / form.</li>
+          <li><em>(optional)</em> Background job / event consumer if the entity participates in async flows.</li>
+          <li>OpenAPI / docs update.</li>
+        </ol>
+        <p><strong>Gate flavor</strong>: each slice ends with the test command for its layer (<code>vitest repository.test</code>, <code>vitest service.test</code>, <code>vitest controller.integration.test</code>). The final slice runs the full sweep.</p>
+        <p><strong>Quorum</strong>: <code>auto</code>. The slices are routine; <code>power</code> is overkill.</p>
+        <p><strong>Failure modes avoided</strong>: collapsing layers (controller doing DB writes), missing the OpenAPI update, forgetting to wire the migration into the test setup.</p>
+
+        <h2 id="p2-add-endpoint">P2 &mdash; Add an Endpoint</h2>
+        <p><strong>When</strong>: a new route on an existing entity. No schema change, no UI.</p>
+        <p><strong>Slice shape</strong> (2&ndash;3 slices):</p>
+        <ol class="list-decimal list-inside space-y-1 mb-4">
+          <li>Service method + unit test (red &rarr; green).</li>
+          <li>Controller route + integration test + OpenAPI entry.</li>
+          <li><em>(optional)</em> Client SDK regenerate.</li>
+        </ol>
+        <p><strong>Gate flavor</strong>: per-slice unit / integration test command. Final gate also runs the OpenAPI lint / contract diff.</p>
+        <p><strong>Quorum</strong>: <code>auto</code> or <code>disabled</code> for trivial CRUD additions.</p>
+        <p><strong>Failure modes avoided</strong>: route registered but not wired to service; OpenAPI drift from implementation.</p>
+
+        <h2 id="p3-add-integration">P3 &mdash; Add an External Integration</h2>
+        <p><strong>When</strong>: bringing in Stripe, SendGrid, S3, Twilio, an internal RPC service &mdash; anywhere your code calls an outside system.</p>
+        <p><strong>Slice shape</strong> (4&ndash;5 slices):</p>
+        <ol class="list-decimal list-inside space-y-1 mb-4">
+          <li>Adapter interface + in-process fake (for tests).</li>
+          <li>Real adapter implementation against the SDK / HTTP client.</li>
+          <li>Retry + timeout + circuit-breaker configuration.</li>
+          <li>Caller integration (the service that uses the adapter).</li>
+          <li>Secret wiring + env-var documentation + runbook entry.</li>
+        </ol>
+        <p><strong>Gate flavor</strong>: unit tests use the fake; the real-adapter slice may have an opt-in <code>SMOKE=1</code> guard that hits a sandbox.</p>
+        <p><strong>Quorum</strong>: <code>auto</code>; bump to <code>power</code> for the retry/circuit-breaker slice if SLA-critical.</p>
+        <p><strong>Failure modes avoided</strong>: timeouts not configured (hang forever), retries not idempotent-safe, secrets in source.</p>
+
+        <h2 id="p4-refactor">P4 &mdash; Refactor a Subsystem</h2>
+        <p><strong>When</strong>: extracting a module, splitting a god-class, renaming a heavily-referenced symbol. Multiple consumers must update.</p>
+        <p><strong>Slice shape</strong> (3&ndash;6 slices):</p>
+        <ol class="list-decimal list-inside space-y-1 mb-4">
+          <li>Introduce new shape <em>alongside</em> the old (no consumer changes yet).</li>
+          <li>Migrate consumer 1.</li>
+          <li>Migrate consumer 2.</li>
+          <li>&hellip; (one slice per consumer; keeps each slice individually revertable)</li>
+          <li>Delete the old shape; run full sweep.</li>
+        </ol>
+        <p><strong>Gate flavor</strong>: per-consumer slice gates run that consumer's test file. Final slice runs the full sweep + a grep that asserts zero references to the old shape.</p>
+        <p><strong>Quorum</strong>: <code>auto</code>. Per-consumer slices are mechanical; quorum doesn't help.</p>
+        <p><strong>Failure modes avoided</strong>: big-bang rename that breaks the whole tree at once; consumer drift (one consumer left on the old shape).</p>
+
+        <h2 id="p5-fix-regression">P5 &mdash; Fix a Regression</h2>
+        <p><strong>When</strong>: a bug that worked before now doesn't. The previous slice that introduced it is identified.</p>
+        <p><strong>Slice shape</strong> (2&ndash;3 slices, strict TDD):</p>
+        <ol class="list-decimal list-inside space-y-1 mb-4">
+          <li><strong>Red</strong>: write the test that captures the broken behavior; assert it fails for the right reason.</li>
+          <li><strong>Green</strong>: minimal change to make the test pass; nothing else.</li>
+          <li><em>(optional)</em> <strong>Refactor</strong>: clean up if the green slice introduced obvious duplication.</li>
+        </ol>
+        <p><strong>Gate flavor</strong>: the red slice's gate <em>must</em> assert the test fails (e.g. <code>vitest run regression.test 2&gt;&amp;1 | grep -q "1 failed"</code>). The green slice's gate asserts it now passes.</p>
+        <p><strong>Quorum</strong>: <code>auto</code> for green; <code>disabled</code> often fine for red.</p>
+        <p><strong>Failure modes avoided</strong>: "fix" that doesn't actually fix; scope creep that buries the actual fix in unrelated changes.</p>
+
+        <h2 id="p6-hotfix">P6 &mdash; Hotfix</h2>
+        <p><strong>When</strong>: production is broken; minutes matter; the change is small and reversible.</p>
+        <p><strong>Slice shape</strong> (1&ndash;2 slices):</p>
+        <ol class="list-decimal list-inside space-y-1 mb-4">
+          <li>The minimum fix + a smoke test that exercises the affected path.</li>
+          <li><em>(optional, follow-up)</em> Proper regression test if the smoke wasn't tight enough.</li>
+        </ol>
+        <p><strong>Gate flavor</strong>: fast (under 30s if possible). Skip the broad sweep; run only the affected test file. The completeness sweep can be deferred to a follow-up plan.</p>
+        <p><strong>Quorum</strong>: <code>disabled</code>. Hotfix is about speed and reversibility, not consensus.</p>
+        <p><strong>Failure modes avoided</strong>: bundling "improvements" into the hotfix (each line shipped is a line to roll back); over-validation while production burns.</p>
+        <p><strong>Follow-up</strong>: file a P5 (Fix a Regression) plan once the fire is out, to add proper test coverage and address root cause.</p>
+
+        <h2 id="p7-feature-flag">P7 &mdash; Feature Flag Rollout</h2>
+        <p><strong>When</strong>: a change risky enough to ship dark &mdash; new algorithm, vendor swap, UI redesign.</p>
+        <p><strong>Slice shape</strong> (4&ndash;5 slices):</p>
+        <ol class="list-decimal list-inside space-y-1 mb-4">
+          <li>Flag scaffold (config entry, accessor, default OFF).</li>
+          <li>New implementation behind the flag (parallel to old).</li>
+          <li>Tests covering <em>both</em> branches.</li>
+          <li>Telemetry / metric to compare old vs new behavior in production.</li>
+          <li><em>(separate, later plan)</em> Cleanup: remove the flag and the old branch once new is proven.</li>
+        </ol>
+        <p><strong>Gate flavor</strong>: tests must pass with flag both ON and OFF. The implementation slice's gate explicitly runs the suite twice with different env vars.</p>
+        <p><strong>Quorum</strong>: <code>power</code> for the implementation slice (high blast radius); <code>auto</code> elsewhere.</p>
+        <p><strong>Failure modes avoided</strong>: flag-on path untested; flag never cleaned up (becomes permanent technical debt).</p>
+
+        <h2 id="p8-data-migration">P8 &mdash; Data Migration</h2>
+        <p><strong>When</strong>: a schema change requires moving / reshaping existing data, not just altering the schema.</p>
+        <p><strong>Slice shape</strong> (4&ndash;6 slices):</p>
+        <ol class="list-decimal list-inside space-y-1 mb-4">
+          <li>Schema migration (additive: new columns / tables, old still readable).</li>
+          <li>Dual-write code (write to both old and new shape).</li>
+          <li>Backfill script + dry-run validation against a snapshot.</li>
+          <li>Read-from-new (with fallback to old).</li>
+          <li>Remove dual-write; remove old shape.</li>
+          <li>Rollback playbook documented in the plan's Notes section.</li>
+        </ol>
+        <p><strong>Gate flavor</strong>: each slice's gate asserts the migration is idempotent (re-running it leaves the DB unchanged). Final slice's gate runs against a production-shape fixture.</p>
+        <p><strong>Quorum</strong>: <code>power</code> for the migration, backfill, and remove-old slices (irreversible if wrong); <code>auto</code> elsewhere.</p>
+        <p><strong>Failure modes avoided</strong>: irreversible migrations without a rollback path; backfills that lock production tables; reads switching before the data is fully migrated.</p>
+
+        <h2 id="p9-dependency-upgrade">P9 &mdash; Dependency Upgrade</h2>
+        <p><strong>When</strong>: a major-version bump on a library / framework / SDK with breaking changes.</p>
+        <p><strong>Slice shape</strong> (3&ndash;5 slices):</p>
+        <ol class="list-decimal list-inside space-y-1 mb-4">
+          <li>Pin the new version; run the full sweep to surface every breaking call site.</li>
+          <li>Fix call sites in module 1.</li>
+          <li>Fix call sites in module 2 (one slice per cleanly-bounded module).</li>
+          <li>&hellip;</li>
+          <li>Final slice: full sweep + lint + type-check all green.</li>
+        </ol>
+        <p><strong>Gate flavor</strong>: each per-module slice's gate runs the test set for that module. Final slice's gate runs the full sweep.</p>
+        <p><strong>Quorum</strong>: <code>auto</code>. Mechanical replacements; quorum adds little.</p>
+        <p><strong>Failure modes avoided</strong>: trying to do all the fixes in one slice (un-reviewable diff); missing transitive breakage (final-sweep gate catches it).</p>
+
+        <h2 id="p10-performance-fix">P10 &mdash; Performance Fix</h2>
+        <p><strong>When</strong>: profiling has identified a specific hotspot and you want to fix it without speculative changes.</p>
+        <p><strong>Slice shape</strong> (2&ndash;3 slices):</p>
+        <ol class="list-decimal list-inside space-y-1 mb-4">
+          <li>Add a benchmark / measurement that pins the current performance number (the baseline).</li>
+          <li>The fix.</li>
+          <li><em>(optional)</em> A regression-guard test that fails if perf drops back below threshold.</li>
+        </ol>
+        <p><strong>Gate flavor</strong>: the fix slice's gate runs the benchmark and asserts the new number beats the baseline by the documented margin (e.g. <code>node bench/users.bench.mjs | grep -E "throughput.*[5-9][0-9]{3}"</code>).</p>
+        <p><strong>Quorum</strong>: <code>auto</code>. The hot loop is small; the change should be small.</p>
+        <p><strong>Failure modes avoided</strong>: optimizing without measuring; broad refactors disguised as performance work.</p>
+
+        <h2 id="p11-security-patch">P11 &mdash; Security Patch</h2>
+        <p><strong>When</strong>: a CVE in a dependency, a misconfiguration finding, or a discovered vulnerability in your own code.</p>
+        <p><strong>Slice shape</strong> (2&ndash;3 slices):</p>
+        <ol class="list-decimal list-inside space-y-1 mb-4">
+          <li>The minimum-surface fix (upgrade pin, sanitize input, rotate config &mdash; whichever applies).</li>
+          <li>A regression test that asserts the vulnerable path is now safe.</li>
+          <li><em>(optional)</em> Advisory / disclosure write-up.</li>
+        </ol>
+        <p><strong>Gate flavor</strong>: the fix slice's gate runs the regression test plus <code>forge_secret_scan</code> on the diff. PreDeploy LiveGuard hook applies if shipping to a deploy slice.</p>
+        <p><strong>Quorum</strong>: <code>auto</code> or <code>power</code> &mdash; depends on blast radius.</p>
+        <p><strong>Failure modes avoided</strong>: scope creep (fixing other things "while we're here"); regression test that doesn't actually exercise the vulnerable path.</p>
+        <p>See also <a href="security-threat-model.html#incident-response">Chapter 30 &mdash; Incident response</a>.</p>
+
+        <h2 id="p12-documentation-phase">P12 &mdash; Documentation Phase</h2>
+        <p><strong>When</strong>: writing several documents at once (manual chapters, runbooks, API docs) over multiple sessions.</p>
+        <p><strong>Slice shape</strong> (1 per document):</p>
+        <ol class="list-decimal list-inside space-y-1 mb-4">
+          <li>One slice per document. Each is independent &mdash; if slice N fails, slices N+1, N+2 are unaffected.</li>
+          <li>Scope contract: only the document's source file + any auto-regenerated index files.</li>
+          <li>Gate: the documentation maintainer's validator (e.g. <code>node docs/manual/maintain.mjs</code>).</li>
+        </ol>
+        <p><strong>Gate flavor</strong>: validator runs <em>twice consecutively</em> &mdash; first pass detects drift, second pass confirms the auto-regeneration converged.</p>
+        <p><strong>Quorum</strong>: <code>auto</code>. Doc writing is iterative; quorum doesn't help much.</p>
+        <p><strong>Failure modes avoided</strong>: documents that reference each other but drift apart; orphan files not registered in indexes; bundled commits that touch many unrelated documents at once.</p>
+        <p><strong>Real-world example</strong>: this manual's <code>Phase-MANUAL-EBOOK-COMPLETION-PLAN.md</code> is a literal P12 instance.</p>
+
+        <h2 id="p13-ci-workflow">P13 &mdash; CI/CD Workflow Change</h2>
+        <p><strong>When</strong>: modifying GitHub Actions, deploy pipelines, or release automation. The change can't be fully tested locally.</p>
+        <p><strong>Slice shape</strong> (1&ndash;2 slices + manual verify):</p>
+        <ol class="list-decimal list-inside space-y-1 mb-4">
+          <li>The workflow change itself, with the new step set up to be a no-op (or run against a sandbox branch / test environment).</li>
+          <li>Promote: flip the no-op to real, after the first slice's CI run has been observed end-to-end.</li>
+        </ol>
+        <p><strong>Gate flavor</strong>: local syntax check (e.g. <code>actionlint .github/workflows/*.yml</code>); the real verification happens by observing the next CI run on a branch.</p>
+        <p><strong>Quorum</strong>: <code>auto</code>; bump to <code>power</code> if the change touches deploy gating.</p>
+        <p><strong>Failure modes avoided</strong>: committing a broken workflow that bricks CI for the whole team; deploy steps that worked in the sandbox but fail in production.</p>
+
+        <h2 id="p14-spike-then-build">P14 &mdash; Spike-Then-Build</h2>
+        <p><strong>When</strong>: unfamiliar domain, unclear design space. You need to learn before you commit.</p>
+        <p><strong>Slice shape</strong> (1 spike + a follow-up build plan):</p>
+        <ol class="list-decimal list-inside space-y-1 mb-4">
+          <li><strong>Spike slice</strong>: explicitly time-boxed exploration. Output is a <em>document</em> (an ADR, a design note, an annotated prototype) &mdash; <strong>not</strong> production code. Forbidden Actions deny edits outside <code>docs/research/</code>.</li>
+          <li>Spike output feeds a new plan in a new session (using whichever pattern P1&ndash;P13 fits).</li>
+        </ol>
+        <p><strong>Gate flavor</strong>: the spike's gate is "an ADR or design note exists" (e.g. <code>test -f docs/research/spike-NN-decision.md</code>). Time-box is enforced by reviewing the document and explicitly killing the run if it produced code.</p>
+        <p><strong>Quorum</strong>: <code>power</code>. Spikes benefit from diverse perspectives precisely because the question is open.</p>
+        <p><strong>Failure modes avoided</strong>: spike code accidentally landing in production; spike that produces no decision (just code); spike that bleeds into multi-week exploration without a checkpoint.</p>
+
+        <h2 id="composition">Composing patterns</h2>
+        <p>Real phases often combine patterns. A typical feature ship might be:</p>
+        <ul class="list-disc list-inside space-y-1 mb-4">
+          <li><strong>Phase-NN.1</strong> &mdash; P14 spike to settle the API shape.</li>
+          <li><strong>Phase-NN.2</strong> &mdash; P1 add entity (backend).</li>
+          <li><strong>Phase-NN.3</strong> &mdash; P7 feature-flag rollout for the UI / risky behavior.</li>
+          <li><strong>Phase-NN.4</strong> &mdash; P12 documentation phase (runbook + API docs).</li>
+        </ul>
+        <p>Each phase is a <em>separate plan file</em>, runnable independently, revertable independently, reviewable independently. That's the architectural payoff &mdash; small phases compose; mega-phases don't.</p>
+
+        <h2 id="anti-patterns">Anti-patterns</h2>
+        <p>Shapes that look like patterns but degrade outcomes. If your plan resembles one of these, refactor the plan before running it.</p>
+        <table class="manual-table">
+          <thead><tr><th style="width: 18rem">Anti-pattern</th><th>Why it fails</th><th>Refactor to</th></tr></thead>
+          <tbody>
+            <tr><td><strong>Mega-slice</strong> (one slice, 20+ files)</td><td>Un-reviewable diff; one failure rolls back everything; no useful intermediate state.</td><td>Split into per-layer / per-consumer slices &mdash; P1 or P4.</td></tr>
+            <tr><td><strong>Test-after</strong> (separate slice that only adds tests for code shipped earlier)</td><td>Test slice often "happens to pass" because it's written to match observed behavior, not specified behavior.</td><td>Move tests into the slice that ships the code (or use P5's strict red-then-green for genuine retrofit).</td></tr>
+            <tr><td><strong>Sweep-only-at-end</strong></td><td>All earlier slices appeared green; the sweep at the end discovers cross-slice breakage that's now expensive to localize.</td><td>Run sweep as part of every slice's gate (cost: seconds; benefit: bisectability).</td></tr>
+            <tr><td><strong>Plan-as-essay</strong> (long prose, vague scope contracts)</td><td>Worker treats it as inspiration rather than contract; scope drift becomes the norm.</td><td>Use the standard plan template: explicit Scope Contract + Forbidden Actions + per-slice gate command. See the <a href="https://github.com/srnichols/plan-forge/blob/master/docs/plans/AI-Plan-Hardening-Runbook.md">AI Plan Hardening Runbook</a>.</td></tr>
+            <tr><td><strong>Quorum-power for everything</strong></td><td>10&times; cost without measurable quality lift on routine slices.</td><td>Default <code>auto</code>; opt into <code>power</code> per-slice or per-phase where it actually helps.</td></tr>
+            <tr><td><strong>No rollback path</strong> (data migration, infra change with no documented revert)</td><td>If anything goes wrong post-deploy, you're improvising under stress.</td><td>P8 explicitly lists rollback as a slice; P13 requires a no-op step before promote. Add a Notes section to every plan that describes the revert path.</td></tr>
+          </tbody>
+        </table>
+
+        <h2 id="see-also">See also</h2>
+        <ul class="list-disc list-inside space-y-1">
+          <li><a href="https://github.com/srnichols/plan-forge/blob/master/docs/plans/AI-Plan-Hardening-Runbook.md">AI Plan Hardening Runbook</a> &mdash; the standard plan template these patterns plug into.</li>
+          <li><a href="your-first-plan.html">Chapter 6 &mdash; Your First Plan</a> &mdash; the narrative walkthrough of plan authoring.</li>
+          <li><a href="cost-and-economics.html#effective-workflows">Chapter 31 &mdash; Cost-effective workflows</a> &mdash; per-slice economics that informed pattern choices.</li>
+          <li><a href="advanced-execution.html#quorum-multi-agent">Chapter 14 &mdash; Quorum &amp; Multi-Agent</a> &mdash; how the quorum recommendation per pattern is enforced at runtime.</li>
+          <li><a href="security-threat-model.html#incident-response">Chapter 30 &mdash; Incident response</a> &mdash; the runbook backing P6 (Hotfix) and P11 (Security Patch).</li>
+          <li><a href="errors-and-exit-codes.html">Appendix X &mdash; Errors &amp; Exit Codes</a> &mdash; gate failure surface every pattern relies on.</li>
+        </ul>
+
+        <div id="chapter-prev-next" class="chapter-nav"></div>
+
+      </div>
+    </main>
+  </div>
+  <script src="assets/manual.js"></script>
+</body>
+</html>

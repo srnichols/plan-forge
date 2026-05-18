@@ -17,7 +17,6 @@ intervention between runs.
 | `sequence-plans.ps1` | PowerShell sequencer — watches an in-flight orchestrator, then dispatches the next plan |
 | `sequence-plans.psm1` | Shared PowerShell module with `Get-CurrentOrchestratorPid`, `Test-OrchestratorAlive`, `Get-LatestRunDir`, `Get-RunStatus` |
 | `sequence-plans.sh` | Bash equivalent of `sequence-plans.ps1` (Linux/macOS) |
-| `sequence-hotfix-series.ps1` | One-shot multi-stage sequencer used for the v2.90.x hotfix series |
 | `tests/sequence-plans.tests.ps1` | Pester unit tests for the sequencer module |
 
 ---

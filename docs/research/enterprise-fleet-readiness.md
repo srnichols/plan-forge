@@ -884,7 +884,7 @@ Execution order was determined by code-dependency analysis (search subagent, 202
 - Plan validation gates calling `node` or `pwsh` MUST NOT be wrapped in `bash -c "..."` on Windows. WSL bash resolves first via `where bash` and has no `node` / `pwsh` on PATH. Documented in `/memories/repo/plan-gate-command-rules.md` (anti-pattern #1).
 - Plan validation gates piping pwsh-output into `grep` MUST NOT use cmd.exe-dispatched pwsh. Use `pwsh -NoProfile -Command "... | Select-String -Quiet"` instead.
 
-**Chain runner**: [scripts/run-priority-c-chain.ps1](../../scripts/run-priority-c-chain.ps1) — reusable for future chained-phase work. Supports `-StartFrom <N>` and `-ResumeFromSlice <N>` for incremental resume.
+**Chain runner**: Priority C used a one-shot chain script that has since been removed (all four phases shipped on 2026-05-07). For future chained-phase work, use [scripts/sequence-plans.ps1](../../scripts/sequence-plans.ps1) — the canonical, tested sequencer.
 
 **Remaining Priority D work**: ~~Foundry quota preflight~~ — ✅ shipped via Phase-FOUNDRY-QUOTA-PREFLIGHT on 2026-05-08 (see Priority D entry above and changelog below). **§14 Priority D is now fully complete.**
 

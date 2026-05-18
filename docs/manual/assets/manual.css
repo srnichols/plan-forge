@@ -733,3 +733,100 @@ html.light-mode .back-to-top-btn:hover {
   border-color: #d97706;
   color: #ffffff;
 }
+
+/* ──────────────────────────────────────────────────────────────────────────
+   Glossary tooltips (assets/glossary-tooltips.js)
+   ──────────────────────────────────────────────────────────────────────── */
+
+/* Inline highlighted term — first occurrence per page only. */
+.term-highlight {
+  border-bottom: 1px dotted #f59e0b;
+  cursor: help;
+  color: inherit;
+  transition: background-color 0.12s ease, border-bottom-style 0.12s ease;
+}
+.term-highlight:hover,
+.term-highlight:focus-visible {
+  background: rgba(245, 158, 11, 0.12);
+  border-bottom-style: solid;
+  outline: none;
+}
+.term-highlight:focus-visible {
+  border-radius: 2px;
+  box-shadow: 0 0 0 2px rgba(245, 158, 11, 0.45);
+}
+
+/* Floating tooltip element (single, reused). */
+#glossary-tooltip {
+  position: fixed;
+  z-index: 9999;
+  max-width: 340px;
+  padding: 0.75rem 0.875rem;
+  background: #0f172a;
+  color: #f1f5f9;
+  font-family: 'Inter', system-ui, sans-serif;
+  font-size: 0.8125rem;
+  line-height: 1.55;
+  border: 1px solid rgba(148, 163, 184, 0.18);
+  border-radius: 0.5rem;
+  box-shadow: 0 12px 28px rgba(0, 0, 0, 0.45);
+  opacity: 0;
+  pointer-events: none;
+  transform: translateY(2px);
+  transition: opacity 0.15s ease, transform 0.15s ease;
+}
+#glossary-tooltip.visible {
+  opacity: 1;
+  pointer-events: auto;
+  transform: translateY(0);
+}
+#glossary-tooltip .gt-term {
+  font-weight: 700;
+  color: #f59e0b;
+  margin-bottom: 0.25rem;
+  font-size: 0.875rem;
+}
+#glossary-tooltip .gt-def {
+  color: #cbd5e1;
+  margin-bottom: 0.5rem;
+}
+#glossary-tooltip .gt-link {
+  display: inline-block;
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: #fbbf24;
+  text-decoration: none;
+  border-bottom: 1px dotted #fbbf24;
+}
+#glossary-tooltip .gt-link:hover {
+  color: #fde68a;
+  border-bottom-color: #fde68a;
+}
+
+/* Light-mode overrides — match the rest of light-mode styles in this file. */
+html.light-mode .term-highlight {
+  border-bottom-color: #d97706;
+}
+html.light-mode .term-highlight:hover,
+html.light-mode .term-highlight:focus-visible {
+  background: rgba(217, 119, 6, 0.12);
+}
+html.light-mode #glossary-tooltip {
+  background: #ffffff;
+  color: #1e293b;
+  border-color: #e2e8f0;
+  box-shadow: 0 12px 28px rgba(15, 23, 42, 0.18);
+}
+html.light-mode #glossary-tooltip .gt-term { color: #d97706; }
+html.light-mode #glossary-tooltip .gt-def  { color: #475569; }
+html.light-mode #glossary-tooltip .gt-link { color: #d97706; border-bottom-color: #d97706; }
+
+/* Respect reduced motion + print. */
+@media (prefers-reduced-motion: reduce) {
+  #glossary-tooltip { transition: opacity 0.1s linear; transform: none !important; }
+  .term-highlight { transition: none; }
+}
+@media print {
+  .term-highlight { border-bottom: none; }
+  #glossary-tooltip { display: none !important; }
+}

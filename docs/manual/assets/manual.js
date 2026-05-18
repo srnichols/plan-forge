@@ -804,5 +804,36 @@
     initMobileSidebar();
     initBackToTop();
     initSearch();
+    loadGlossaryTooltips();
   });
+
+  // ─── Glossary tooltips bootstrap ───
+  // Loads the auto-generated terms dictionary (assets/glossary-terms.js) and
+  // the runtime walker/tooltip (assets/glossary-tooltips.js) dynamically, so
+  // chapter shells don't have to add per-page <script> tags. Each chapter
+  // already loads assets/manual.js (enforced by maintain.mjs Step 5 shell
+  // sanity check) — adding the tooltip system here piggybacks on that gate.
+  //
+  // Source of truth: docs/manual/glossary.html. Re-generate glossary-terms.js
+  // by running `node docs/manual/maintain.mjs` (Step 5d).
+  function loadGlossaryTooltips() {
+    // Skip on the glossary page itself (self-tooltipping is pointless and
+    // could recurse if anchors collide with term names).
+    if (/\/glossary\.html$/.test(location.pathname)) return;
+    // Skip if .chapter-content isn't present (e.g., index.html grid).
+    if (!document.querySelector(".chapter-content")) return;
+
+    loadScript("assets/glossary-terms.js", function () {
+      if (!window.GLOSSARY_TERMS || Object.keys(window.GLOSSARY_TERMS).length === 0) return;
+      loadScript("assets/glossary-tooltips.js");
+    });
+  }
+
+  function loadScript(src, onload) {
+    const s = document.createElement("script");
+    s.src = src;
+    s.defer = true;
+    if (onload) s.onload = onload;
+    document.body.appendChild(s);
+  }
 })();

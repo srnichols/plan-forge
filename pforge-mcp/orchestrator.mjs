@@ -2993,7 +2993,7 @@ export function spawnWorker(prompt, options = {}) {
       clearTimeout(timer);
       workerReject(new Error(`Failed to spawn ${cmd}: ${err.message} (code: ${err.code || "unknown"})`));
     });
-  }));
+  });
 }
 
 /**
@@ -6988,6 +6988,28 @@ export function lintGateCommands(planFilePath, cwd = process.cwd()) {
           rule: "cd-chain",
           severity: _sev,
           message: `${loc}: 'cd dir && command' chain — on Windows cmd.exe the directory change does not persist for the next command. Use a --cwd flag or run commands from the target directory directly.`,
+        });
+      }
+
+      // W5. Nested double-quote escapes inside `node -e "..."` — proven repeatable
+      // failure on Windows + PowerShell. The combination of `node -e "..."` outer
+      // quotes + Markdown's backslash rules + PowerShell's parser mangles embedded
+      // `\"` sequences BEFORE they reach Node's --input-type=module evaluator,
+      // producing `SyntaxError: Expected ')', got 'string literal'`. Even the
+      // orchestrator's execFileSync(shell:false) fast-path cannot help — the
+      // mangling happens at shell-parse time. See Phase 52 S3 (broke 3 attempts
+      // including auto-escalation). Fix: use only single quotes inside the inline
+      // JS, or replace dual-form path checks with a single substring check, or
+      // move the logic to a helper `.mjs` script invoked as `node script.mjs`.
+      if (/^node\s+-e\s+".*\\"/.test(line) && !disabledRules.has("W5")) {
+        const _sev = strictMode ? "error" : "warn";
+        (_sev === "error" ? errors : warnings).push({
+          slice: slice.number,
+          command: line,
+          ruleId: "W5",
+          rule: "node-e-nested-double-quote",
+          severity: _sev,
+          message: `${loc}: node -e contains nested '\\"' (escaped double-quote) — mangled by PowerShell before reaching Node, produces runtime SyntaxError. Use single quotes inside the inline JS, or invoke a helper script via 'node script.mjs'.`,
         });
       }
 

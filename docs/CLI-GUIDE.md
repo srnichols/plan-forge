@@ -797,6 +797,13 @@ Setup Health:
 4. Check version currency against Plan Forge source
 5. Scan for common problems (duplicates, orphans, broken references)
 
+> **Internal note**: `pforge smith` reads hook names from `pforge-mcp/bin/enums-cli.mjs` rather than a hardcoded array. If you're writing a custom diagnostic script that needs the canonical list of hooks, run:
+> ```bash
+> node pforge-mcp/bin/enums-cli.mjs --enum HOOK_PASCAL
+> # → one hook name per line: SessionStart PreToolUse PostToolUse Stop PreDeploy PostSlice PreAgentHandoff PostRun
+> ```
+> Other available enums: `HOOK_NAMES`, `MODEL_TIERS`, `QUORUM_MODES`, `FORGE_MASTER_MODES`, `WATCHER_MODES`, `COST_SOURCES`, `TOOL_NAMES`. Source of truth: `pforge-mcp/enums.mjs`.
+
 ---
 
 ### `pforge help`

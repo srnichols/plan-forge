@@ -163,7 +163,7 @@
               <tr><td><code>forgeMaster.observer.maxUsdPerDay</code></td><td>number</td><td><code>0.10</code></td><td><code>0.25</code></td><td>Daily USD budget cap. Once the day's narration spend reaches this cap the observer skips LLM calls and logs a budget-block event. Cap is finite; <code>null</code> or <code>Infinity</code> means no cap (not recommended).</td></tr>
               <tr><td><code>forgeMaster.observer.maxNarrationsPerHour</code></td><td>number</td><td><code>6</code></td><td><code>12</code></td><td>Max narration LLM calls per clock hour. Rate-limits the observer during burst activity.</td></tr>
               <tr><td><code>forgeMaster.observer.batchWindowMs</code></td><td>number</td><td><code>60000</code></td><td><code>30000</code></td><td>Event batch flush interval in milliseconds. Lower = more responsive narrations; higher = fewer LLM calls.</td></tr>
-              <tr><td><code>forgeMaster.observer.modelTier</code></td><td>string | null</td><td><code>null</code></td><td><code>"fast"</code></td><td>Model capability tier for narrations: <code>flagship</code> (quality), <code>mid</code> (balance), <code>fast</code> (cheap, high-volume), or <code>null</code> to inherit ask-mode model. Tier resolves against the existing model registry; no vendor IDs are hardcoded.</td></tr>
+              <tr><td><code>forgeMaster.observer.modelTier</code></td><td>string | null</td><td><code>null</code></td><td><code>"fast"</code></td><td>Model capability tier for narrations: <code>flagship</code> (quality), <code>mid</code> (balance), <code>fast</code> (cheap, high-volume), or <code>null</code> to inherit ask-mode model. Tier resolves against the existing model registry; no vendor IDs are hardcoded. Valid values are the <code>MODEL_TIERS</code> array in <a href="https://github.com/srnichols/plan-forge/blob/planning/main/pforge-mcp/enums.mjs"><code>pforge-mcp/enums.mjs</code></a>.</td></tr>
             </tbody>
           </table>
         </div>
@@ -174,7 +174,7 @@
           <table class="manual-table">
             <thead><tr><th>Key</th><th>Type</th><th>Default</th><th>Example</th><th>Change impact</th></tr></thead>
             <tbody>
-              <tr><td><code>forgeMaster.auditor.modelTier</code></td><td>string | null</td><td><code>null</code></td><td><code>"flagship"</code></td><td>Model tier for auditor reasoning: <code>flagship</code>, <code>mid</code>, <code>fast</code>, or <code>null</code> to inherit ask-mode model. Use <code>flagship</code> for highest-quality health analysis; use <code>fast</code> for high-frequency auto-invocation.</td></tr>
+              <tr><td><code>forgeMaster.auditor.modelTier</code></td><td>string | null</td><td><code>null</code></td><td><code>"flagship"</code></td><td>Model tier for auditor reasoning: <code>flagship</code>, <code>mid</code>, <code>fast</code>, or <code>null</code> to inherit ask-mode model. Use <code>flagship</code> for highest-quality health analysis; use <code>fast</code> for high-frequency auto-invocation. Valid values are the <code>MODEL_TIERS</code> array in <a href="https://github.com/srnichols/plan-forge/blob/planning/main/pforge-mcp/enums.mjs"><code>pforge-mcp/enums.mjs</code></a>.</td></tr>
               <tr><td><code>forgeMaster.auditor.outputPath</code></td><td>string</td><td><code>".forge/health/latest.md"</code></td><td><code>".forge/health/weekly.md"</code></td><td>Path where the auditor writes its health report, relative to project root.</td></tr>
             </tbody>
           </table>
@@ -197,7 +197,7 @@
 
         <!-- ============================================================ -->
         <h2 id="quorum"><code>quorum</code> &mdash; multi-model consensus</h2>
-        <p>Configuration for quorum mode. Master switch is <code>enabled</code>; with <code>auto: true</code> the orchestrator only quorums slices whose complexity score crosses <code>threshold</code>. See <a href="advanced-execution.html#quorum">Advanced Execution &mdash; Quorum Mode</a> for the scoring rubric and worked examples, and <a href="advanced-execution.html#quorum-complexity">Complexity Scoring Rubric</a> for the seven signals that drive the score.</p>
+        <p>Configuration for quorum mode. Master switch is <code>enabled</code>; with <code>auto: true</code> the orchestrator only quorums slices whose complexity score crosses <code>threshold</code>. See <a href="advanced-execution.html#quorum">Advanced Execution &mdash; Quorum Mode</a> for the scoring rubric and worked examples, and <a href="advanced-execution.html#quorum-complexity">Complexity Scoring Rubric</a> for the seven signals that drive the score. The CLI <code>--quorum=</code> flag accepts values from the <code>QUORUM_MODES</code> array in <a href="https://github.com/srnichols/plan-forge/blob/planning/main/pforge-mcp/enums.mjs"><code>pforge-mcp/enums.mjs</code></a>.</p>
 
         <div class="overflow-x-auto mb-6">
           <table class="manual-table">

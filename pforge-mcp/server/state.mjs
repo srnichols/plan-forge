@@ -175,3 +175,9 @@ export function _legacyCaptureMemoryUnused(content, type, source, cwd) {
   void source;
   void cwd;
 }
+
+export let _mcpServerRef = null;
+export function setMcpServerRef(s) {
+  _mcpServerRef = s;
+  return _mcpServerRef;
+}

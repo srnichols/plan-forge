@@ -188,7 +188,7 @@ import {
   setStudioClient,
   FRAMEWORK_VERSION,
   _SERVER_CODE_HASH,
-  setServer,
+  setMcpServerRef,
 } from "./server/state.mjs";
 
 
@@ -205,7 +205,7 @@ import { _sweepAnvilCompute, _analyzeAnvilCompute, _temperingScanAnvilCompute, _
 export { _sweepAnvilCompute, _analyzeAnvilCompute, _temperingScanAnvilCompute, _hotspotAnvilCompute };
 import { TOOLS } from "./server/tool-definitions.mjs";
 
-import { invokeForgeTool, handleCallToolRequest, searchOpenBrainL3, MCP_ONLY_TOOLS } from "./server/tool-handlers.mjs";
+import { invokeForgeTool, callToolRequestHandler, searchOpenBrainL3, MCP_ONLY_TOOLS, planNameToRunbookName, generateRunbook, executeTool } from "./server/tool-handlers.mjs";
 export { invokeForgeTool } from "./server/tool-handlers.mjs";
 
 // ─── MCP Server ───────────────────────────────────────────────────────
@@ -214,13 +214,13 @@ const server = new Server(
   { name: "plan-forge-mcp", version: FRAMEWORK_VERSION },
   { capabilities: { tools: {} } }
 );
-setServer(server);
+setMcpServerRef(server);
 
 server.setRequestHandler(ListToolsRequestSchema, async () => ({
   tools: TOOLS,
 }));
 
-server.setRequestHandler(CallToolRequestSchema, handleCallToolRequest);
+server.setRequestHandler(CallToolRequestSchema, callToolRequestHandler);
 
 // ─── Phase-28.4 — OpenBrain queue drain I/O wrapper ──────────────────────
 

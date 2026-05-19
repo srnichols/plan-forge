@@ -1,6 +1,6 @@
 import { execSync } from "node:child_process";
 import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync, appendFileSync, watchFile, unwatchFile, statSync, openSync, readSync, closeSync, renameSync, createWriteStream } from "node:fs";
-import { resolve, join, dirname, basename, isAbsolute } from "node:path";
+import { resolve, join, dirname, basename, isAbsolute, extname } from "node:path";
 import { fileURLToPath } from "node:url";
 import { parsePlan, runPlan, detectWorkers, getCostReport, getHealthTrend, analyzeWithQuorum, generateImage, runAnalyze, readForgeJson, readForgeJsonl, appendForgeJsonl, emitToolTelemetry, regressionGuard, runPostSliceHook, resetPostSliceHookFired, runPreAgentHandoffHook, postOpenClawSnapshot, loadOpenClawConfig, loadQuorumConfig, runWatch, runWatchLive, readCrucibleState, readHomeSnapshot, addReviewItem, resolveReviewItem, listReviewItems, readReviewQueueState, maybeAddFixPlanReview, assessQuorumViability, detectExecutionRuntime, PROPOSED_FIX_DIR, detectCostAnomaly, computeMedian, spawnWorker } from "../orchestrator.mjs";
 import { recall as brainRecall, getReviewerCalibration, federationReadTrajectories, loadFederationConfig, validateFederationConfig, TRAJECTORY_FEDERATION_LIMIT, readHallmark, listHallmarks, validateHallmarkId, HallmarkError } from "../brain.mjs";
@@ -111,18 +111,22 @@ import {
   setStudioClient,
   FRAMEWORK_VERSION,
   _SERVER_CODE_HASH,
+  _mcpServerRef,
 } from "./state.mjs";
+import { writeAuditArtifact } from "./audit-writer.mjs";
 import { startEventFileWatcher, runPforge, findProjectRoot } from "./helpers.mjs";
 import { callOrgRules } from "./org-rules.mjs";
 import { _sweepAnvilCompute, _analyzeAnvilCompute, _temperingScanAnvilCompute, _hotspotAnvilCompute } from "./anvil-compute.mjs";
-import { server } from "./state.mjs";
+import { TOOLS } from "./tool-definitions.mjs";
 
-function planNameToRunbookName(planPath) {
+const __dirname = resolve(dirname(fileURLToPath(import.meta.url)), "..");
+
+export function planNameToRunbookName(planPath) {
   const base = basename(planPath, ".md");
   return base.toLowerCase().replace(/[^a-z0-9-]+/g, "-").replace(/-+/g, "-").replace(/^-|-$/g, "") + "-runbook.md";
 }
 
-function generateRunbook(plan, cwd, options = {}) {
+export function generateRunbook(plan, cwd, options = {}) {
   const { includeIncidents = true } = options;
   const lines = [];
 
@@ -243,7 +247,7 @@ function generateRunbook(plan, cwd, options = {}) {
 }
 
 
-function executeTool(name, args) {
+export function executeTool(name, args) {
   const cwd = args.path ? findProjectRoot(resolve(args.path)) : findProjectRoot(PROJECT_DIR);
 
   switch (name) {
@@ -343,7 +347,7 @@ export async function invokeForgeTool(toolName, args = {}) {
 
   // ASYNC tool: forward through the registered MCP CallToolRequestSchema handler
   try {
-    const handlers = server._requestHandlers || server.requestHandlers;
+    const handlers = _mcpServerRef?._requestHandlers || _mcpServerRef?.requestHandlers;
     const handler = handlers?.get?.("tools/call");
     if (handler) {
       const mcpResult = await handler({
@@ -451,7 +455,7 @@ async function _mcpAuthGate(toolName, request) {
   return null;
 }
 
-export const handleCallToolRequest = _wrapWithToolSpan(async (request) => {
+export const callToolRequestHandler = _wrapWithToolSpan(async (request) => {
   const { name, arguments: args } = request.params;
 
   // ─── Auth gate — open-by-default when .forge/rbac.json is absent ───

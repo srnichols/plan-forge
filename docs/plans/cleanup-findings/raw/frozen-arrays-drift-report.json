@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-05-19T20:09:56.010Z",
+  "generatedAt": "2026-05-19T23:02:19.381Z",
   "enumsSource": "pforge-mcp/enums.mjs",
   "enumsScanned": {
     "HOOK_PASCAL": {
@@ -12,7 +12,7 @@
   "extendedScan": false,
   "includeTests": false,
   "counts": {
-    "filesScanned": 226,
+    "filesScanned": 245,
     "filesWithDrift": 12,
     "warnings": 6,
     "info": 23,
@@ -138,7 +138,7 @@
         {
           "enum": "ERROR_CODES",
           "literal": "SCANNER_UNAVAILABLE",
-          "line": 1300,
+          "line": 1267,
           "severity": "info",
           "kind": "SOFT-DRIFT",
           "why": "File hand-types \"SCANNER_UNAVAILABLE\" without importing ERROR_CODES — review whether to migrate"
@@ -146,7 +146,7 @@
         {
           "enum": "ERROR_CODES",
           "literal": "SCANNER_UNAVAILABLE",
-          "line": 1328,
+          "line": 1275,
           "severity": "info",
           "kind": "SOFT-DRIFT",
           "why": "File hand-types \"SCANNER_UNAVAILABLE\" without importing ERROR_CODES — review whether to migrate"
@@ -154,7 +154,7 @@
         {
           "enum": "ERROR_CODES",
           "literal": "SCANNER_UNAVAILABLE",
-          "line": 1336,
+          "line": 1311,
           "severity": "info",
           "kind": "SOFT-DRIFT",
           "why": "File hand-types \"SCANNER_UNAVAILABLE\" without importing ERROR_CODES — review whether to migrate"
@@ -162,7 +162,7 @@
         {
           "enum": "ERROR_CODES",
           "literal": "SCANNER_UNAVAILABLE",
-          "line": 1380,
+          "line": 1346,
           "severity": "info",
           "kind": "SOFT-DRIFT",
           "why": "File hand-types \"SCANNER_UNAVAILABLE\" without importing ERROR_CODES — review whether to migrate"
@@ -280,12 +280,12 @@
       ]
     },
     {
-      "file": "pforge-mcp/orchestrator.mjs",
+      "file": "pforge-mcp/orchestrator/run-plan.mjs",
       "findings": [
         {
           "enum": "ERROR_CODES",
           "literal": "LOCK_HASH_MISMATCH",
-          "line": 4445,
+          "line": 827,
           "severity": "info",
           "kind": "SOFT-DRIFT",
           "why": "File hand-types \"LOCK_HASH_MISMATCH\" without importing ERROR_CODES — review whether to migrate"
@@ -298,7 +298,7 @@
         {
           "enum": "ERROR_CODES",
           "literal": "SCANNER_UNAVAILABLE",
-          "line": 1575,
+          "line": 1714,
           "severity": "warn",
           "kind": "HARD-DRIFT",
           "why": "File imports ERROR_CODES but still uses hand-typed \"SCANNER_UNAVAILABLE\" — replace with the constant"

@@ -17,6 +17,8 @@ const __dirname = resolve(fileURLToPath(import.meta.url), "..");
 const src = readFileSync(resolve(__dirname, "..", "orchestrator.mjs"), "utf8");
 // Phase-53 S2: callApiWorker was extracted to orchestrator/worker-spawn.mjs
 const workerSpawnSrc = readFileSync(resolve(__dirname, "..", "orchestrator", "worker-spawn.mjs"), "utf8");
+// Phase-53 S9: runPlan + buildSummary were extracted to orchestrator/run-plan.mjs
+const runPlanSrc = readFileSync(resolve(__dirname, "..", "orchestrator", "run-plan.mjs"), "utf8");
 
 // ─── Defect A: model log format ──────────────────────────────────────────────
 // Bug #127 specifies `resolved=` as the canonical log prefix; Bug #193 Defect A
@@ -93,7 +95,7 @@ describe("#193 Defect B — formatQuorumSummary contradictions", () => {
 
 describe("#193 Defect C — summary.json phase field", () => {
   it("buildSummary source assigns `phase: basename(runMeta.plan, \".md\")`", () => {
-    expect(src).toContain('phase: basename(runMeta.plan, ".md")');
+    expect(runPlanSrc).toContain('phase: basename(runMeta.plan, ".md")');
   });
 
   it("basename produces the expected phase string", () => {
@@ -106,11 +108,11 @@ describe("#193 Defect C — summary.json phase field", () => {
 
 describe("#193 Defect D — API-direct + dry-run duration honesty", () => {
   it("dry-run synth emits apiDurationMs: null, sessionDurationMs: null", () => {
-    expect(src).toContain(
+    expect(runPlanSrc).toContain(
       'tokens: { tokens_in: 0, tokens_out: 0, model: "dry-run", premiumRequests: 0, apiDurationMs: null, sessionDurationMs: null, codeChanges: null, vendor: "dry-run" }'
     );
     // And the old literal-0 form must be gone.
-    expect(src).not.toContain(
+    expect(runPlanSrc).not.toContain(
       'tokens: { tokens_in: 0, tokens_out: 0, model: "dry-run", premiumRequests: 0, apiDurationMs: 0, sessionDurationMs: 0,'
     );
   });

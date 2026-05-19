@@ -1,16 +1,16 @@
 {
-  "generatedAt": "2026-05-19T20:09:55.259Z",
+  "generatedAt": "2026-05-19T23:02:17.738Z",
   "scopes": [
     "pforge-mcp",
     "pforge-master",
     "scripts"
   ],
   "counts": {
-    "filesScanned": 226,
-    "filesWithDeadExports": 103,
-    "totalExports": 1157,
-    "deadExports": 683,
-    "namespaceConsumedFiles": 31
+    "filesScanned": 245,
+    "filesWithDeadExports": 102,
+    "totalExports": 1405,
+    "deadExports": 672,
+    "namespaceConsumedFiles": 47
   },
   "findings": [
     {
@@ -28,6 +28,7 @@
         "GATE_SUGGESTION_AUTO_INJECT_THRESHOLD",
         "POSTMORTEM_RETENTION_COUNT",
         "ParallelScheduler",
+        "QUORUM_PRESETS",
         "REVIEW_RESOLUTIONS",
         "REVIEW_SEVERITIES",
         "REVIEW_SOURCES",
@@ -38,6 +39,7 @@
         "TEMPERING_SCAN_STALE_DAYS",
         "UNIX_TOOLS",
         "__resetBashPathCache",
+        "aggregateModelStats",
         "appendWatchHistory",
         "applyFixProposal",
         "attachSliceSnapshotRestore",
@@ -46,6 +48,7 @@
         "buildApiMessages",
         "buildCostBreakdown",
         "buildEstimate",
+        "buildOrchestratorSurface",
         "buildPlanPostmortem",
         "buildRetryPrompt",
         "buildWatchSnapshot",
@@ -87,6 +90,8 @@
         "generateReviewItemId",
         "getFoundryAuthScope",
         "getRoutingPreference",
+        "inferSliceType",
+        "isApiOnlyModel",
         "isCopilotServableModel",
         "isDeployTrigger",
         "isDestructiveSliceTitle",
@@ -99,6 +104,7 @@
         "loadCompetitiveConfig",
         "loadGateCheckConfig",
         "loadGateSynthesisConfig",
+        "loadModelPerformance",
         "loadRoutingPreference",
         "loadTeardownGuardConfig",
         "loadWorkerCapabilities",
@@ -130,6 +136,7 @@
         "readTemperingConfig",
         "readTemperingState",
         "recommendFromAnomalies",
+        "recommendModel",
         "recordModelPerformance",
         "registerCorrelationThreadResponder",
         "registerGateCheckResponder",
@@ -147,6 +154,7 @@
         "runPostRunAuditorHook",
         "runPostSliceTemperingHook",
         "runPreDeployHook",
+        "scoreSliceComplexity",
         "selectWinner",
         "setGhCopilotProbe",
         "setSecretsLoader",
@@ -165,7 +173,7 @@
         "writeProposedFixPatch",
         "writeSilentExitRecord"
       ],
-      "totalExports": 193
+      "totalExports": 194
     },
     {
       "file": "pforge-mcp/forge-master/index.mjs",
@@ -313,31 +321,6 @@
         "tokenize"
       ],
       "totalExports": 61
-    },
-    {
-      "file": "pforge-mcp/tempering.mjs",
-      "deadExports": [
-        "TEMPERING_DEFAULT_CONFIG",
-        "classifyLayer",
-        "computeGaps",
-        "listScanRecords",
-        "locateCoverageReport",
-        "logSuppression",
-        "parseCobertura",
-        "parseCoverage",
-        "parseCoveragePyJson",
-        "parseGoCover",
-        "parseIstanbulJson",
-        "parseJacoco",
-        "parseLcov",
-        "parseTarpaulin",
-        "readPromoteThreshold",
-        "readRunRecord",
-        "readScanRecord",
-        "readSuppressions",
-        "rollupByLayer"
-      ],
-      "totalExports": 29
     },
     {
       "file": "pforge-mcp/brain.mjs",
@@ -1231,6 +1214,13 @@
       "totalExports": 2
     },
     {
+      "file": "pforge-mcp/scripts/phase53-s0-append-surface.mjs",
+      "deadExports": [
+        "buildOrchestratorSurface"
+      ],
+      "totalExports": 1
+    },
+    {
       "file": "pforge-mcp/secrets.mjs",
       "deadExports": [
         "KNOWN_SECRETS"
@@ -1248,13 +1238,6 @@
       "file": "pforge-mcp/tempering/adapters.mjs",
       "deadExports": [
         "STACK_ADAPTER_PATHS"
-      ],
-      "totalExports": 4
-    },
-    {
-      "file": "pforge-mcp/tempering/auto-activate.mjs",
-      "deadExports": [
-        "AUDIT_DEFAULTS"
       ],
       "totalExports": 4
     },

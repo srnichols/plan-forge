@@ -170,13 +170,7 @@ function countTtiResults(ttiResults) {
   }, { pass: 0, fail: 0 });
 }
 
-// ─── Scanner entry point ──────────────────────────────────────────────
-
-/**
- * @param {object} ctx - DI context
- * @returns {Promise<object>} scanner result
- */
-export async function runPerformanceBudgetScan(ctx) {
+function resolvePerformanceBudgetContext(ctx) {
   const {
     config = {},
     projectDir,
@@ -188,38 +182,33 @@ export async function runPerformanceBudgetScan(ctx) {
     captureMemory = null,
     importFn = (spec) => import(spec),
   } = ctx || {};
+  return {
+    config,
+    projectDir,
+    runId,
+    sliceRef,
+    now,
+    env,
+    hub,
+    captureMemory,
+    importFn,
+  };
+}
 
-  const startedAt = new Date(now()).toISOString();
-  const raw = config.scanners?.["performance-budget"];
-  const settings = { ...PERF_BUDGET_DEFAULTS, ...(typeof raw === "object" ? raw : {}) };
-  const ttiSettings = { ...PERF_BUDGET_DEFAULTS.tti, ...(typeof settings.tti === "object" ? settings.tti : {}) };
-  const deadline = now() + (config.runtimeBudgets?.perfBudgetMaxMs ?? 120_000);
-
-  if (raw === false || settings.enabled === false) {
-    return buildPerfBudgetResult({ sliceRef, startedAt, now, verdict: "skipped", reason: "scanner-disabled" });
-  }
-
-  const endpoints = resolvePerfBudgetEndpoints(settings, projectDir);
-  if (!endpoints || endpoints.length === 0) {
-    return buildPerfBudgetResult({ sliceRef, startedAt, now, verdict: "skipped", reason: "no-endpoints-configured" });
-  }
-
+async function evaluatePerfBudgetEndpoints({ endpoints, budgetCtx, settings, deadline }) {
   const regressions = [];
   let passCount = 0;
   let failCount = 0;
 
   for (const ep of endpoints) {
-    if (now() > deadline) {
-      return buildPerfBudgetResult({
-        sliceRef,
-        startedAt,
-        now,
+    if (budgetCtx.now() > deadline) {
+      return {
         verdict: "budget-exceeded",
-        pass: passCount,
-        fail: failCount,
         regressions,
+        passCount,
+        failCount,
         reason: "budget-exceeded",
-      });
+      };
     }
 
     const endpoint = ep.path || ep.endpoint;
@@ -227,9 +216,16 @@ export async function runPerformanceBudgetScan(ctx) {
     const budgetP95 = ep.p95BudgetMs || null;
     const currentP95 = ep.currentP95 || ep.p95 || null;
 
-    appendBudgetPerfEntry(ep, { now, runId, projectDir, endpoint, method, currentP95 });
+    appendBudgetPerfEntry(ep, {
+      now: budgetCtx.now,
+      runId: budgetCtx.runId,
+      projectDir: budgetCtx.projectDir,
+      endpoint,
+      method,
+      currentP95,
+    });
 
-    const baselineP95 = await resolveBaselineP95(endpoint, method, projectDir);
+    const baselineP95 = await resolveBaselineP95(endpoint, method, budgetCtx.projectDir);
     const evaluation = evaluateEndpointRegression({
       endpoint,
       method,
@@ -237,33 +233,78 @@ export async function runPerformanceBudgetScan(ctx) {
       currentP95,
       baselineP95,
       settings,
-      projectDir,
+      projectDir: budgetCtx.projectDir,
     });
 
     if (evaluation.regression) {
       regressions.push(evaluation.regression);
       failCount++;
-      emit(hub, "tempering-perf-regression", evaluation.regression);
-      maybeCapturePerfRegression(captureMemory, evaluation.regression);
-    } else if (evaluation.pass) {
-      passCount++;
+      emit(budgetCtx.hub, "tempering-perf-regression", evaluation.regression);
+      maybeCapturePerfRegression(budgetCtx.captureMemory, evaluation.regression);
+      continue;
     }
+    if (evaluation.pass) passCount++;
   }
 
-  const ttiResults = readTtiResults(projectDir, runId, ttiSettings);
-  const ttiCounts = countTtiResults(ttiResults);
-  passCount += ttiCounts.pass;
-  failCount += ttiCounts.fail;
+  return { regressions, passCount, failCount };
+}
 
-  const verdict = regressions.length > 0 || ttiCounts.fail > 0 ? "fail" : "pass";
+// ─── Scanner entry point ──────────────────────────────────────────────
+
+/**
+ * @param {object} ctx - DI context
+ * @returns {Promise<object>} scanner result
+ */
+export async function runPerformanceBudgetScan(ctx) {
+  const budgetCtx = resolvePerformanceBudgetContext(ctx);
+  const startedAt = new Date(budgetCtx.now()).toISOString();
+  const raw = budgetCtx.config.scanners?.["performance-budget"];
+  const settings = { ...PERF_BUDGET_DEFAULTS, ...(typeof raw === "object" ? raw : {}) };
+  const ttiSettings = { ...PERF_BUDGET_DEFAULTS.tti, ...(typeof settings.tti === "object" ? settings.tti : {}) };
+  const deadline = budgetCtx.now() + (budgetCtx.config.runtimeBudgets?.perfBudgetMaxMs ?? 120_000);
+
+  if (raw === false || settings.enabled === false) {
+    return buildPerfBudgetResult({ sliceRef: budgetCtx.sliceRef, startedAt, now: budgetCtx.now, verdict: "skipped", reason: "scanner-disabled" });
+  }
+
+  const endpoints = resolvePerfBudgetEndpoints(settings, budgetCtx.projectDir);
+  if (!endpoints || endpoints.length === 0) {
+    return buildPerfBudgetResult({ sliceRef: budgetCtx.sliceRef, startedAt, now: budgetCtx.now, verdict: "skipped", reason: "no-endpoints-configured" });
+  }
+
+  const endpointOutcome = await evaluatePerfBudgetEndpoints({
+    endpoints,
+    budgetCtx,
+    settings,
+    deadline,
+  });
+  if (endpointOutcome.verdict) {
+    return buildPerfBudgetResult({
+      sliceRef: budgetCtx.sliceRef,
+      startedAt,
+      now: budgetCtx.now,
+      verdict: endpointOutcome.verdict,
+      pass: endpointOutcome.passCount,
+      fail: endpointOutcome.failCount,
+      regressions: endpointOutcome.regressions,
+      reason: endpointOutcome.reason,
+    });
+  }
+
+  const ttiResults = readTtiResults(budgetCtx.projectDir, budgetCtx.runId, ttiSettings);
+  const ttiCounts = countTtiResults(ttiResults);
+  const passCount = endpointOutcome.passCount + ttiCounts.pass;
+  const failCount = endpointOutcome.failCount + ttiCounts.fail;
+  const verdict = endpointOutcome.regressions.length > 0 || ttiCounts.fail > 0 ? "fail" : "pass";
+
   return buildPerfBudgetResult({
-    sliceRef,
+    sliceRef: budgetCtx.sliceRef,
     startedAt,
-    now,
+    now: budgetCtx.now,
     verdict,
     pass: passCount,
     fail: failCount,
-    regressions,
+    regressions: endpointOutcome.regressions,
     ttiResults,
   });
 }

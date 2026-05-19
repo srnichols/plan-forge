@@ -85,6 +85,64 @@ async function loadAdapter(projectDir, adapterName) {
 
 // ─── Notification dispatch ────────────────────────────────────────────
 
+function getSectionsForChannel(digest, minSeverity) {
+  return digest.sections.filter(
+    (section) => section.items.length > 0 && severityMeetsThreshold(section.severity, minSeverity)
+  );
+}
+
+function buildDigestNotificationMessage(sectionsToSend) {
+  return sectionsToSend
+    .map((section) => `${section.title} [${section.severity}]: ${section.items.length} item(s)`)
+    .join("\n");
+}
+
+async function dispatchNotificationChannel(digest, projectDir, channel) {
+  const adapterName = channel.adapter;
+  const minSeverity = channel.minSeverity || "warn";
+  const sectionsToSend = getSectionsForChannel(digest, minSeverity);
+  if (sectionsToSend.length === 0) return;
+
+  const adapter = await loadAdapter(projectDir, adapterName);
+  if (!adapter) {
+    console.warn(`[digest] Adapter '${adapterName}' not found at extensions/notify-${adapterName}/index.mjs — skipping.`);
+    return;
+  }
+
+  const adapterConfig = channel.config || {};
+  const validation = adapter.validate(adapterConfig);
+  if (!validation.ok) {
+    console.warn(`[digest] Adapter '${adapterName}' config invalid (${validation.reason}) — skipping.`);
+    return;
+  }
+
+  const message = buildDigestNotificationMessage(sectionsToSend);
+  try {
+    const result = await adapter.send({
+      event: {
+        type: "digest",
+        data: { sections: sectionsToSend, date: digest.generatedAt },
+        severity: sectionsToSend.some((section) => section.severity === "alert") ? "high" : "medium",
+      },
+      route: adapterName,
+      formattedMessage: `Daily Digest — ${sectionsToSend.length} section(s) need attention\n\n${message}`,
+      correlationId: `digest-${digest.generatedAt?.slice(0, 10) || "unknown"}`,
+      config: adapterConfig,
+    });
+    if (result?.ok) {
+      console.log(`[digest] Notified via ${adapterName} ✓`);
+      return;
+    }
+    console.warn(`[digest] ${adapterName} send failed: ${result?.errorCode || result?.error || "unknown"}`);
+  } catch (err) {
+    if (err.code === "ERR_NOT_IMPLEMENTED") {
+      console.warn(`[digest] Adapter '${adapterName}' is a stub (not installed) — skipping.`);
+    } else {
+      console.warn(`[digest] ${adapterName} error: ${err.message}`);
+    }
+  }
+}
+
 async function dispatchNotifications(digest, projectDir) {
   const config = loadNotifyConfig(projectDir);
   if (!config || !Array.isArray(config.channels) || config.channels.length === 0) {
@@ -93,55 +151,7 @@ async function dispatchNotifications(digest, projectDir) {
   }
 
   for (const channel of config.channels) {
-    const adapterName = channel.adapter;
-    const minSeverity = channel.minSeverity || "warn";
-
-    const sectionsToSend = digest.sections.filter(
-      (s) => s.items.length > 0 && severityMeetsThreshold(s.severity, minSeverity)
-    );
-
-    if (sectionsToSend.length === 0) continue;
-
-    const adapter = await loadAdapter(projectDir, adapterName);
-    if (!adapter) {
-      console.warn(`[digest] Adapter '${adapterName}' not found at extensions/notify-${adapterName}/index.mjs — skipping.`);
-      continue;
-    }
-
-    const validation = adapter.validate(channel.config || {});
-    if (!validation.ok) {
-      console.warn(`[digest] Adapter '${adapterName}' config invalid (${validation.reason}) — skipping.`);
-      continue;
-    }
-
-    const message = sectionsToSend
-      .map((s) => `${s.title} [${s.severity}]: ${s.items.length} item(s)`)
-      .join("\n");
-
-    try {
-      const result = await adapter.send({
-        event: {
-          type: "digest",
-          data: { sections: sectionsToSend, date: digest.generatedAt },
-          severity: sectionsToSend.some((s) => s.severity === "alert") ? "high" : "medium",
-        },
-        route: adapterName,
-        formattedMessage: `Daily Digest — ${sectionsToSend.length} section(s) need attention\n\n${message}`,
-        correlationId: `digest-${digest.generatedAt?.slice(0, 10) || "unknown"}`,
-        config: channel.config || {},
-      });
-      if (result?.ok) {
-        console.log(`[digest] Notified via ${adapterName} ✓`);
-      } else {
-        console.warn(`[digest] ${adapterName} send failed: ${result?.errorCode || result?.error || "unknown"}`);
-      }
-    } catch (err) {
-      if (err.code === "ERR_NOT_IMPLEMENTED") {
-        console.warn(`[digest] Adapter '${adapterName}' is a stub (not installed) — skipping.`);
-      } else {
-        console.warn(`[digest] ${adapterName} error: ${err.message}`);
-      }
-    }
+    await dispatchNotificationChannel(digest, projectDir, channel);
   }
 }
 

@@ -157,6 +157,22 @@ function evaluateAutoDrainSignals({ filesChanged, lastDrainTs, lastVerdict, rece
   };
 }
 
+function buildAutoDrainDecision(evaluated) {
+  const fire = (evaluated.filesSignal || evaluated.daysSignal)
+    && evaluated.findingsSignal
+    && evaluated.verdictSignal;
+  return {
+    fire,
+    decision: {
+      filesSignal: evaluated.filesSignal,
+      daysSignal: evaluated.daysSignal,
+      findingsSignal: evaluated.findingsSignal,
+      verdictSignal: evaluated.verdictSignal,
+    },
+    reason: fire ? "threshold signals tripped" : "no drain signals tripped",
+  };
+}
+
 export function shouldAutoDrain(planContext = {}) {
   const {
     cwd = process.cwd(),
@@ -198,18 +214,11 @@ export function shouldAutoDrain(planContext = {}) {
     thresholds,
     now,
   });
-  const fire = (evaluated.filesSignal || evaluated.daysSignal)
-    && evaluated.findingsSignal
-    && evaluated.verdictSignal;
+  const decision = buildAutoDrainDecision(evaluated);
 
-  return autoDrainModeResponse("auto", fire, {
+  return autoDrainModeResponse("auto", decision.fire, {
     ...evaluated.signals,
-    decision: {
-      filesSignal: evaluated.filesSignal,
-      daysSignal: evaluated.daysSignal,
-      findingsSignal: evaluated.findingsSignal,
-      verdictSignal: evaluated.verdictSignal,
-    },
-    reason: fire ? "threshold signals tripped" : "no drain signals tripped",
+    decision: decision.decision,
+    reason: decision.reason,
   });
 }

@@ -178,13 +178,7 @@ function captureMutationFailure({ captureMemory, layerResults, overallScore, ove
   } catch { /* best-effort */ }
 }
 
-// ─── Scanner entry point ──────────────────────────────────────────────
-
-/**
- * @param {object} ctx - DI context
- * @returns {Promise<object>} scanner result
- */
-export async function runMutationScan(ctx) {
+function resolveMutationContext(ctx) {
   const {
     config = {},
     projectDir,
@@ -199,79 +193,30 @@ export async function runMutationScan(ctx) {
     trigger = "manual",
     touchedFiles = [],
   } = ctx || {};
+  return {
+    config,
+    projectDir,
+    runId,
+    sliceRef,
+    now,
+    env,
+    hub,
+    captureMemory,
+    importFn,
+    spawnFn,
+    trigger,
+    touchedFiles,
+  };
+}
 
-  const startedAt = new Date(now()).toISOString();
-  const raw = config.scanners?.mutation;
-  if (raw === false) {
-    return skippedFrame(sliceRef, now, "scanner-disabled");
-  }
+function buildScheduleSkippedFrame(sliceRef, now, schedule) {
+  return {
+    ...skippedFrame(sliceRef, now, "schedule-skipped"),
+    scheduleReason: schedule.reason,
+  };
+}
 
-  const settings = { ...MUTATION_DEFAULTS, ...(typeof raw === "object" ? raw : {}) };
-  const schedule = shouldRunMutation({ config, trigger, touchedFiles });
-  if (!schedule.run) {
-    return {
-      ...skippedFrame(sliceRef, now, "schedule-skipped"),
-      scheduleReason: schedule.reason,
-    };
-  }
-
-  const adapter = await loadMutationAdapter(config, importFn);
-  if (!adapter || !adapter.mutation || !adapter.mutation.supported) {
-    return skippedFrame(sliceRef, now, "stack-not-supported");
-  }
-
-  const budgetMs = config.runtimeBudgets?.mutationMaxMs ?? settings.mutationMaxMs;
-  const deadline = now() + budgetMs;
-
-  let proc;
-  try {
-    proc = await runMutationProcess({
-      spawnFn,
-      command: adapter.mutation.cmd,
-      projectDir,
-      budgetMs,
-    });
-  } catch (err) {
-    return buildMutationFrame({
-      sliceRef,
-      startedAt,
-      now,
-      verdict: "error",
-      reason: `spawn-error:${err.message || err}`,
-    });
-  }
-
-  if (proc?.skipped) {
-    return skippedFrame(sliceRef, now, proc.reason);
-  }
-  if (proc?.budgetExceeded || now() > deadline) {
-    return buildMutationFrame({ sliceRef, startedAt, now, verdict: "budget-exceeded", reason: "budget-exceeded" });
-  }
-
-  const parsed = parseMutationOutput(adapter.mutation.parseOutput, proc.stdout, proc.stderr, proc.exitCode);
-  const evaluation = evaluateMutationResults(parsed, settings);
-  if (evaluation.totalMutants === 0 && parsed.mutationScore == null) {
-    return skippedFrame(sliceRef, now, "no-mutants-generated");
-  }
-
-  if (evaluation.verdict === "fail") {
-    emitMutationFailure({
-      hub,
-      runId,
-      sliceRef,
-      overallScore: evaluation.overallScore,
-      overallMinimum: evaluation.overallMinimum,
-      layerResults: evaluation.layerResults,
-    });
-    captureMutationFailure({
-      captureMemory,
-      layerResults: evaluation.layerResults,
-      overallScore: evaluation.overallScore,
-      overallMinimum: evaluation.overallMinimum,
-      projectDir,
-    });
-  }
-
+function buildMutationSuccessResult(sliceRef, startedAt, now, parsed, evaluation) {
   const completedAt = new Date(now()).toISOString();
   return {
     scanner: "mutation",
@@ -291,4 +236,88 @@ export async function runMutationScan(ctx) {
     layers: evaluation.layerResults.length > 0 ? evaluation.layerResults : null,
     reason: parsed.reason || null,
   };
+}
+
+function handleMutationFailureEffects(mutationCtx, evaluation) {
+  if (evaluation.verdict !== "fail") return;
+  emitMutationFailure({
+    hub: mutationCtx.hub,
+    runId: mutationCtx.runId,
+    sliceRef: mutationCtx.sliceRef,
+    overallScore: evaluation.overallScore,
+    overallMinimum: evaluation.overallMinimum,
+    layerResults: evaluation.layerResults,
+  });
+  captureMutationFailure({
+    captureMemory: mutationCtx.captureMemory,
+    layerResults: evaluation.layerResults,
+    overallScore: evaluation.overallScore,
+    overallMinimum: evaluation.overallMinimum,
+    projectDir: mutationCtx.projectDir,
+  });
+}
+
+async function executeMutationProcess(mutationCtx, adapter, budgetMs, startedAt) {
+  try {
+    return await runMutationProcess({
+      spawnFn: mutationCtx.spawnFn,
+      command: adapter.mutation.cmd,
+      projectDir: mutationCtx.projectDir,
+      budgetMs,
+    });
+  } catch (err) {
+    return buildMutationFrame({
+      sliceRef: mutationCtx.sliceRef,
+      startedAt,
+      now: mutationCtx.now,
+      verdict: "error",
+      reason: `spawn-error:${err.message || err}`,
+    });
+  }
+}
+
+// ─── Scanner entry point ──────────────────────────────────────────────
+
+/**
+ * @param {object} ctx - DI context
+ * @returns {Promise<object>} scanner result
+ */
+export async function runMutationScan(ctx) {
+  const mutationCtx = resolveMutationContext(ctx);
+  const startedAt = new Date(mutationCtx.now()).toISOString();
+  const raw = mutationCtx.config.scanners?.mutation;
+  if (raw === false) {
+    return skippedFrame(mutationCtx.sliceRef, mutationCtx.now, "scanner-disabled");
+  }
+
+  const settings = { ...MUTATION_DEFAULTS, ...(typeof raw === "object" ? raw : {}) };
+  const schedule = shouldRunMutation({
+    config: mutationCtx.config,
+    trigger: mutationCtx.trigger,
+    touchedFiles: mutationCtx.touchedFiles,
+  });
+  if (!schedule.run) return buildScheduleSkippedFrame(mutationCtx.sliceRef, mutationCtx.now, schedule);
+
+  const adapter = await loadMutationAdapter(mutationCtx.config, mutationCtx.importFn);
+  if (!adapter || !adapter.mutation || !adapter.mutation.supported) {
+    return skippedFrame(mutationCtx.sliceRef, mutationCtx.now, "stack-not-supported");
+  }
+
+  const budgetMs = mutationCtx.config.runtimeBudgets?.mutationMaxMs ?? settings.mutationMaxMs;
+  const deadline = mutationCtx.now() + budgetMs;
+  const proc = await executeMutationProcess(mutationCtx, adapter, budgetMs, startedAt);
+  if (proc?.scanner === "mutation") return proc;
+  if (proc?.skipped) return skippedFrame(mutationCtx.sliceRef, mutationCtx.now, proc.reason);
+  if (proc?.budgetExceeded || mutationCtx.now() > deadline) {
+    return buildMutationFrame({ sliceRef: mutationCtx.sliceRef, startedAt, now: mutationCtx.now, verdict: "budget-exceeded", reason: "budget-exceeded" });
+  }
+
+  const parsed = parseMutationOutput(adapter.mutation.parseOutput, proc.stdout, proc.stderr, proc.exitCode);
+  const evaluation = evaluateMutationResults(parsed, settings);
+  if (evaluation.totalMutants === 0 && parsed.mutationScore == null) {
+    return skippedFrame(mutationCtx.sliceRef, mutationCtx.now, "no-mutants-generated");
+  }
+
+  handleMutationFailureEffects(mutationCtx, evaluation);
+  return buildMutationSuccessResult(mutationCtx.sliceRef, startedAt, mutationCtx.now, parsed, evaluation);
 }

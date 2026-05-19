@@ -1,5 +1,33 @@
 [
   {
+    "file": "pforge-mcp/cost-service.mjs",
+    "line": 697,
+    "col": 11,
+    "callee": "_priceSliceAnthropic",
+    "argCount": 6
+  },
+  {
+    "file": "pforge-mcp/cost-service.mjs",
+    "line": 700,
+    "col": 11,
+    "callee": "_priceSliceOpenAiXai",
+    "argCount": 6
+  },
+  {
+    "file": "pforge-mcp/cost-service.mjs",
+    "line": 703,
+    "col": 9,
+    "callee": "_priceSliceDefault",
+    "argCount": 6
+  },
+  {
+    "file": "pforge-mcp/cost-service.mjs",
+    "line": 1174,
+    "col": 11,
+    "callee": "_buildCopilotCodingAgentEstimate",
+    "argCount": 6
+  },
+  {
     "file": "pforge-mcp/hub.mjs",
     "line": 394,
     "col": 10,
@@ -14,569 +42,471 @@
     "argCount": 6
   },
   {
-    "file": "pforge-mcp/orchestrator.mjs",
-    "line": 4503,
+    "file": "pforge-mcp/orchestrator/run-plan.mjs",
+    "line": 885,
     "col": 11,
     "callee": "buildEstimate",
     "argCount": 6
   },
   {
-    "file": "pforge-mcp/orchestrator.mjs",
-    "line": 13004,
+    "file": "pforge-mcp/orchestrator/run-plan.mjs",
+    "line": 2611,
     "col": 9,
     "callee": "_estimatePlan",
     "argCount": 6
   },
   {
+    "file": "pforge-mcp/sarif-to-plan.mjs",
+    "line": 183,
+    "col": 2,
+    "callee": "lines.push",
+    "argCount": 9
+  },
+  {
     "file": "pforge-mcp/server/tool-handlers.mjs",
-    "line": 739,
+    "line": 765,
     "col": 6,
     "callee": "emitToolTelemetry",
     "argCount": 6
   },
   {
     "file": "pforge-mcp/server/tool-handlers.mjs",
-    "line": 805,
+    "line": 835,
     "col": 6,
     "callee": "emitToolTelemetry",
     "argCount": 6
   },
   {
     "file": "pforge-mcp/server/tool-handlers.mjs",
-    "line": 1080,
+    "line": 1148,
     "col": 10,
     "callee": "join",
     "argCount": 6
   },
   {
     "file": "pforge-mcp/server/tool-handlers.mjs",
-    "line": 1279,
+    "line": 1384,
     "col": 6,
     "callee": "emitToolTelemetry",
     "argCount": 6
   },
   {
     "file": "pforge-mcp/server/tool-handlers.mjs",
-    "line": 1312,
+    "line": 1421,
     "col": 6,
     "callee": "emitToolTelemetry",
     "argCount": 6
   },
   {
     "file": "pforge-mcp/server/tool-handlers.mjs",
-    "line": 1333,
+    "line": 1445,
     "col": 6,
     "callee": "emitToolTelemetry",
     "argCount": 6
   },
   {
     "file": "pforge-mcp/server/tool-handlers.mjs",
-    "line": 1379,
+    "line": 1494,
     "col": 6,
     "callee": "emitToolTelemetry",
     "argCount": 6
   },
   {
     "file": "pforge-mcp/server/tool-handlers.mjs",
-    "line": 1410,
+    "line": 1528,
     "col": 6,
     "callee": "emitToolTelemetry",
     "argCount": 6
   },
   {
     "file": "pforge-mcp/server/tool-handlers.mjs",
-    "line": 1436,
+    "line": 1558,
     "col": 6,
     "callee": "emitToolTelemetry",
     "argCount": 6
   },
   {
     "file": "pforge-mcp/server/tool-handlers.mjs",
-    "line": 1450,
+    "line": 1575,
     "col": 8,
     "callee": "emitToolTelemetry",
     "argCount": 6
   },
   {
     "file": "pforge-mcp/server/tool-handlers.mjs",
-    "line": 1456,
+    "line": 1581,
     "col": 6,
     "callee": "emitToolTelemetry",
     "argCount": 6
   },
   {
     "file": "pforge-mcp/server/tool-handlers.mjs",
-    "line": 1459,
+    "line": 1584,
     "col": 6,
     "callee": "emitToolTelemetry",
     "argCount": 6
   },
   {
     "file": "pforge-mcp/server/tool-handlers.mjs",
-    "line": 1488,
+    "line": 1616,
     "col": 6,
     "callee": "emitToolTelemetry",
     "argCount": 6
   },
   {
     "file": "pforge-mcp/server/tool-handlers.mjs",
-    "line": 1506,
+    "line": 1638,
     "col": 6,
     "callee": "emitToolTelemetry",
     "argCount": 6
   },
   {
     "file": "pforge-mcp/server/tool-handlers.mjs",
-    "line": 1536,
+    "line": 1672,
     "col": 6,
     "callee": "emitToolTelemetry",
     "argCount": 6
   },
   {
     "file": "pforge-mcp/server/tool-handlers.mjs",
-    "line": 1632,
+    "line": 1771,
     "col": 6,
     "callee": "emitToolTelemetry",
     "argCount": 6
   },
   {
     "file": "pforge-mcp/server/tool-handlers.mjs",
-    "line": 1921,
+    "line": 2080,
     "col": 6,
     "callee": "emitToolTelemetry",
     "argCount": 6
   },
   {
     "file": "pforge-mcp/server/tool-handlers.mjs",
-    "line": 1958,
+    "line": 2121,
     "col": 6,
     "callee": "emitToolTelemetry",
     "argCount": 6
   },
   {
     "file": "pforge-mcp/server/tool-handlers.mjs",
-    "line": 2054,
+    "line": 2221,
     "col": 6,
     "callee": "emitToolTelemetry",
     "argCount": 6
   },
   {
     "file": "pforge-mcp/server/tool-handlers.mjs",
-    "line": 2196,
+    "line": 2367,
     "col": 6,
     "callee": "emitToolTelemetry",
     "argCount": 6
   },
   {
     "file": "pforge-mcp/server/tool-handlers.mjs",
-    "line": 2233,
+    "line": 2408,
     "col": 6,
     "callee": "emitToolTelemetry",
     "argCount": 6
   },
   {
     "file": "pforge-mcp/server/tool-handlers.mjs",
-    "line": 2249,
+    "line": 2426,
     "col": 6,
     "callee": "emitToolTelemetry",
     "argCount": 6
   },
   {
     "file": "pforge-mcp/server/tool-handlers.mjs",
-    "line": 2380,
+    "line": 2560,
     "col": 6,
     "callee": "emitToolTelemetry",
     "argCount": 6
   },
   {
     "file": "pforge-mcp/server/tool-handlers.mjs",
-    "line": 2404,
+    "line": 2587,
     "col": 6,
     "callee": "emitToolTelemetry",
     "argCount": 6
   },
   {
     "file": "pforge-mcp/server/tool-handlers.mjs",
-    "line": 2407,
+    "line": 2590,
     "col": 6,
     "callee": "emitToolTelemetry",
     "argCount": 6
   },
   {
     "file": "pforge-mcp/server/tool-handlers.mjs",
-    "line": 2442,
+    "line": 2628,
     "col": 10,
     "callee": "emitToolTelemetry",
     "argCount": 6
   },
   {
     "file": "pforge-mcp/server/tool-handlers.mjs",
-    "line": 2544,
+    "line": 2730,
     "col": 6,
     "callee": "emitToolTelemetry",
     "argCount": 6
   },
   {
     "file": "pforge-mcp/server/tool-handlers.mjs",
-    "line": 2570,
+    "line": 2759,
     "col": 8,
     "callee": "emitToolTelemetry",
     "argCount": 6
   },
   {
     "file": "pforge-mcp/server/tool-handlers.mjs",
-    "line": 2648,
+    "line": 2837,
     "col": 6,
     "callee": "emitToolTelemetry",
     "argCount": 6
   },
   {
     "file": "pforge-mcp/server/tool-handlers.mjs",
-    "line": 3137,
+    "line": 3329,
     "col": 6,
     "callee": "emitToolTelemetry",
     "argCount": 6
   },
   {
     "file": "pforge-mcp/server/tool-handlers.mjs",
-    "line": 3343,
+    "line": 3538,
     "col": 6,
     "callee": "emitToolTelemetry",
     "argCount": 6
   },
   {
     "file": "pforge-mcp/server/tool-handlers.mjs",
-    "line": 3368,
+    "line": 3566,
     "col": 4,
     "callee": "emitToolTelemetry",
     "argCount": 6
   },
   {
     "file": "pforge-mcp/server/tool-handlers.mjs",
-    "line": 3390,
+    "line": 3591,
     "col": 6,
     "callee": "emitToolTelemetry",
     "argCount": 6
   },
   {
     "file": "pforge-mcp/server/tool-handlers.mjs",
-    "line": 3410,
+    "line": 3614,
     "col": 6,
     "callee": "emitToolTelemetry",
     "argCount": 6
   },
   {
     "file": "pforge-mcp/server/tool-handlers.mjs",
-    "line": 3428,
+    "line": 3635,
     "col": 6,
     "callee": "emitToolTelemetry",
     "argCount": 6
   },
   {
     "file": "pforge-mcp/server/tool-handlers.mjs",
-    "line": 3446,
+    "line": 3656,
     "col": 8,
     "callee": "emitToolTelemetry",
     "argCount": 6
   },
   {
     "file": "pforge-mcp/server/tool-handlers.mjs",
-    "line": 3453,
+    "line": 3663,
     "col": 8,
     "callee": "emitToolTelemetry",
     "argCount": 6
   },
   {
     "file": "pforge-mcp/server/tool-handlers.mjs",
-    "line": 3479,
+    "line": 3689,
     "col": 6,
     "callee": "emitToolTelemetry",
     "argCount": 6
   },
   {
     "file": "pforge-mcp/server/tool-handlers.mjs",
-    "line": 3496,
+    "line": 3709,
     "col": 6,
     "callee": "emitToolTelemetry",
     "argCount": 6
   },
   {
     "file": "pforge-mcp/server/tool-handlers.mjs",
-    "line": 3513,
+    "line": 3729,
     "col": 6,
     "callee": "emitToolTelemetry",
     "argCount": 6
   },
   {
     "file": "pforge-mcp/server/tool-handlers.mjs",
-    "line": 3541,
+    "line": 3755,
     "col": 6,
     "callee": "emitToolTelemetry",
     "argCount": 6
   },
   {
     "file": "pforge-mcp/server/tool-handlers.mjs",
-    "line": 3545,
+    "line": 3759,
     "col": 6,
     "callee": "emitToolTelemetry",
     "argCount": 6
   },
   {
     "file": "pforge-mcp/server/tool-handlers.mjs",
-    "line": 3556,
+    "line": 3773,
     "col": 6,
     "callee": "emitToolTelemetry",
     "argCount": 6
   },
   {
     "file": "pforge-mcp/server/tool-handlers.mjs",
-    "line": 3560,
+    "line": 3777,
     "col": 6,
     "callee": "emitToolTelemetry",
     "argCount": 6
   },
   {
     "file": "pforge-mcp/server/tool-handlers.mjs",
-    "line": 3573,
+    "line": 3793,
     "col": 6,
     "callee": "emitToolTelemetry",
     "argCount": 6
   },
   {
     "file": "pforge-mcp/server/tool-handlers.mjs",
-    "line": 3577,
+    "line": 3797,
     "col": 6,
     "callee": "emitToolTelemetry",
     "argCount": 6
   },
   {
     "file": "pforge-mcp/server/tool-handlers.mjs",
-    "line": 3714,
+    "line": 3937,
     "col": 6,
     "callee": "emitToolTelemetry",
     "argCount": 6
   },
   {
     "file": "pforge-mcp/server/tool-handlers.mjs",
-    "line": 3929,
+    "line": 4158,
     "col": 6,
     "callee": "emitToolTelemetry",
     "argCount": 6
   },
   {
     "file": "pforge-mcp/server/tool-handlers.mjs",
-    "line": 3933,
+    "line": 4162,
     "col": 6,
     "callee": "emitToolTelemetry",
     "argCount": 6
   },
   {
     "file": "pforge-mcp/server/tool-handlers.mjs",
-    "line": 3952,
+    "line": 4184,
     "col": 6,
     "callee": "emitToolTelemetry",
     "argCount": 6
   },
   {
     "file": "pforge-mcp/server/tool-handlers.mjs",
-    "line": 3955,
+    "line": 4187,
     "col": 6,
     "callee": "emitToolTelemetry",
     "argCount": 6
   },
   {
     "file": "pforge-mcp/server/tool-handlers.mjs",
-    "line": 3971,
+    "line": 4206,
     "col": 6,
     "callee": "emitToolTelemetry",
     "argCount": 6
   },
   {
     "file": "pforge-mcp/server/tool-handlers.mjs",
-    "line": 3974,
+    "line": 4209,
     "col": 6,
     "callee": "emitToolTelemetry",
     "argCount": 6
   },
   {
     "file": "pforge-mcp/server/tool-handlers.mjs",
-    "line": 3992,
+    "line": 4230,
     "col": 6,
     "callee": "emitToolTelemetry",
     "argCount": 6
   },
   {
     "file": "pforge-mcp/server/tool-handlers.mjs",
-    "line": 3995,
+    "line": 4233,
     "col": 6,
     "callee": "emitToolTelemetry",
     "argCount": 6
   },
   {
     "file": "pforge-mcp/server/tool-handlers.mjs",
-    "line": 4014,
+    "line": 4255,
     "col": 6,
     "callee": "emitToolTelemetry",
     "argCount": 6
   },
   {
     "file": "pforge-mcp/server/tool-handlers.mjs",
-    "line": 4017,
+    "line": 4258,
     "col": 6,
     "callee": "emitToolTelemetry",
     "argCount": 6
   },
   {
     "file": "pforge-mcp/server/tool-handlers.mjs",
-    "line": 4087,
+    "line": 4331,
     "col": 6,
     "callee": "emitToolTelemetry",
     "argCount": 6
   },
   {
     "file": "pforge-mcp/server/tool-handlers.mjs",
-    "line": 4091,
+    "line": 4335,
     "col": 6,
     "callee": "emitToolTelemetry",
     "argCount": 6
   },
   {
     "file": "pforge-mcp/server/tool-handlers.mjs",
-    "line": 4111,
+    "line": 4358,
     "col": 10,
     "callee": "emitToolTelemetry",
     "argCount": 6
   },
   {
     "file": "pforge-mcp/server/tool-handlers.mjs",
-    "line": 4139,
+    "line": 4386,
     "col": 6,
     "callee": "emitToolTelemetry",
     "argCount": 6
   },
   {
     "file": "pforge-mcp/server/tool-handlers.mjs",
-    "line": 4148,
+    "line": 4395,
     "col": 6,
     "callee": "emitToolTelemetry",
     "argCount": 6
   },
   {
     "file": "pforge-mcp/server/tool-handlers.mjs",
-    "line": 4163,
+    "line": 4413,
     "col": 8,
     "callee": "emitToolTelemetry",
     "argCount": 6
   },
   {
     "file": "pforge-mcp/server/tool-handlers.mjs",
-    "line": 4168,
+    "line": 4418,
     "col": 8,
-    "callee": "emitToolTelemetry",
-    "argCount": 6
-  },
-  {
-    "file": "pforge-mcp/server/tool-handlers.mjs",
-    "line": 4215,
-    "col": 6,
-    "callee": "emitToolTelemetry",
-    "argCount": 6
-  },
-  {
-    "file": "pforge-mcp/server/tool-handlers.mjs",
-    "line": 4218,
-    "col": 6,
-    "callee": "emitToolTelemetry",
-    "argCount": 6
-  },
-  {
-    "file": "pforge-mcp/server/tool-handlers.mjs",
-    "line": 4240,
-    "col": 6,
-    "callee": "emitToolTelemetry",
-    "argCount": 6
-  },
-  {
-    "file": "pforge-mcp/server/tool-handlers.mjs",
-    "line": 4244,
-    "col": 6,
-    "callee": "emitToolTelemetry",
-    "argCount": 6
-  },
-  {
-    "file": "pforge-mcp/server/tool-handlers.mjs",
-    "line": 4265,
-    "col": 6,
-    "callee": "emitToolTelemetry",
-    "argCount": 6
-  },
-  {
-    "file": "pforge-mcp/server/tool-handlers.mjs",
-    "line": 4269,
-    "col": 6,
-    "callee": "emitToolTelemetry",
-    "argCount": 6
-  },
-  {
-    "file": "pforge-mcp/server/tool-handlers.mjs",
-    "line": 4279,
-    "col": 6,
-    "callee": "emitToolTelemetry",
-    "argCount": 6
-  },
-  {
-    "file": "pforge-mcp/server/tool-handlers.mjs",
-    "line": 4286,
-    "col": 6,
-    "callee": "emitToolTelemetry",
-    "argCount": 6
-  },
-  {
-    "file": "pforge-mcp/server/tool-handlers.mjs",
-    "line": 4297,
-    "col": 6,
-    "callee": "emitToolTelemetry",
-    "argCount": 6
-  },
-  {
-    "file": "pforge-mcp/server/tool-handlers.mjs",
-    "line": 4318,
-    "col": 6,
-    "callee": "emitToolTelemetry",
-    "argCount": 6
-  },
-  {
-    "file": "pforge-mcp/server/tool-handlers.mjs",
-    "line": 4354,
-    "col": 8,
-    "callee": "emitToolTelemetry",
-    "argCount": 6
-  },
-  {
-    "file": "pforge-mcp/server/tool-handlers.mjs",
-    "line": 4434,
-    "col": 6,
-    "callee": "emitToolTelemetry",
-    "argCount": 6
-  },
-  {
-    "file": "pforge-mcp/server/tool-handlers.mjs",
-    "line": 4437,
-    "col": 6,
-    "callee": "emitToolTelemetry",
-    "argCount": 6
-  },
-  {
-    "file": "pforge-mcp/server/tool-handlers.mjs",
-    "line": 4448,
-    "col": 6,
-    "callee": "emitToolTelemetry",
-    "argCount": 6
-  },
-  {
-    "file": "pforge-mcp/server/tool-handlers.mjs",
-    "line": 4451,
-    "col": 6,
     "callee": "emitToolTelemetry",
     "argCount": 6
   },
@@ -589,42 +519,21 @@
   },
   {
     "file": "pforge-mcp/server/tool-handlers.mjs",
-    "line": 4469,
+    "line": 4468,
     "col": 6,
     "callee": "emitToolTelemetry",
     "argCount": 6
   },
   {
     "file": "pforge-mcp/server/tool-handlers.mjs",
-    "line": 4484,
+    "line": 4493,
     "col": 6,
     "callee": "emitToolTelemetry",
     "argCount": 6
   },
   {
     "file": "pforge-mcp/server/tool-handlers.mjs",
-    "line": 4487,
-    "col": 6,
-    "callee": "emitToolTelemetry",
-    "argCount": 6
-  },
-  {
-    "file": "pforge-mcp/server/tool-handlers.mjs",
-    "line": 4501,
-    "col": 6,
-    "callee": "emitToolTelemetry",
-    "argCount": 6
-  },
-  {
-    "file": "pforge-mcp/server/tool-handlers.mjs",
-    "line": 4504,
-    "col": 6,
-    "callee": "emitToolTelemetry",
-    "argCount": 6
-  },
-  {
-    "file": "pforge-mcp/server/tool-handlers.mjs",
-    "line": 4518,
+    "line": 4497,
     "col": 6,
     "callee": "emitToolTelemetry",
     "argCount": 6
@@ -638,133 +547,259 @@
   },
   {
     "file": "pforge-mcp/server/tool-handlers.mjs",
-    "line": 4535,
+    "line": 4525,
+    "col": 6,
+    "callee": "emitToolTelemetry",
+    "argCount": 6
+  },
+  {
+    "file": "pforge-mcp/server/tool-handlers.mjs",
+    "line": 4539,
+    "col": 6,
+    "callee": "emitToolTelemetry",
+    "argCount": 6
+  },
+  {
+    "file": "pforge-mcp/server/tool-handlers.mjs",
+    "line": 4546,
+    "col": 6,
+    "callee": "emitToolTelemetry",
+    "argCount": 6
+  },
+  {
+    "file": "pforge-mcp/server/tool-handlers.mjs",
+    "line": 4561,
+    "col": 6,
+    "callee": "emitToolTelemetry",
+    "argCount": 6
+  },
+  {
+    "file": "pforge-mcp/server/tool-handlers.mjs",
+    "line": 4586,
+    "col": 6,
+    "callee": "emitToolTelemetry",
+    "argCount": 6
+  },
+  {
+    "file": "pforge-mcp/server/tool-handlers.mjs",
+    "line": 4625,
+    "col": 8,
+    "callee": "emitToolTelemetry",
+    "argCount": 6
+  },
+  {
+    "file": "pforge-mcp/server/tool-handlers.mjs",
+    "line": 4705,
+    "col": 6,
+    "callee": "emitToolTelemetry",
+    "argCount": 6
+  },
+  {
+    "file": "pforge-mcp/server/tool-handlers.mjs",
+    "line": 4708,
+    "col": 6,
+    "callee": "emitToolTelemetry",
+    "argCount": 6
+  },
+  {
+    "file": "pforge-mcp/server/tool-handlers.mjs",
+    "line": 4722,
+    "col": 6,
+    "callee": "emitToolTelemetry",
+    "argCount": 6
+  },
+  {
+    "file": "pforge-mcp/server/tool-handlers.mjs",
+    "line": 4725,
+    "col": 6,
+    "callee": "emitToolTelemetry",
+    "argCount": 6
+  },
+  {
+    "file": "pforge-mcp/server/tool-handlers.mjs",
+    "line": 4742,
+    "col": 6,
+    "callee": "emitToolTelemetry",
+    "argCount": 6
+  },
+  {
+    "file": "pforge-mcp/server/tool-handlers.mjs",
+    "line": 4746,
+    "col": 6,
+    "callee": "emitToolTelemetry",
+    "argCount": 6
+  },
+  {
+    "file": "pforge-mcp/server/tool-handlers.mjs",
+    "line": 4764,
+    "col": 6,
+    "callee": "emitToolTelemetry",
+    "argCount": 6
+  },
+  {
+    "file": "pforge-mcp/server/tool-handlers.mjs",
+    "line": 4767,
+    "col": 6,
+    "callee": "emitToolTelemetry",
+    "argCount": 6
+  },
+  {
+    "file": "pforge-mcp/server/tool-handlers.mjs",
+    "line": 4784,
+    "col": 6,
+    "callee": "emitToolTelemetry",
+    "argCount": 6
+  },
+  {
+    "file": "pforge-mcp/server/tool-handlers.mjs",
+    "line": 4787,
+    "col": 6,
+    "callee": "emitToolTelemetry",
+    "argCount": 6
+  },
+  {
+    "file": "pforge-mcp/server/tool-handlers.mjs",
+    "line": 4804,
+    "col": 6,
+    "callee": "emitToolTelemetry",
+    "argCount": 6
+  },
+  {
+    "file": "pforge-mcp/server/tool-handlers.mjs",
+    "line": 4807,
+    "col": 6,
+    "callee": "emitToolTelemetry",
+    "argCount": 6
+  },
+  {
+    "file": "pforge-mcp/server/tool-handlers.mjs",
+    "line": 4824,
     "col": 10,
     "callee": "emitToolTelemetry",
     "argCount": 6
   },
   {
     "file": "pforge-mcp/server/tool-handlers.mjs",
-    "line": 4538,
+    "line": 4827,
     "col": 8,
     "callee": "emitToolTelemetry",
     "argCount": 6
   },
   {
     "file": "pforge-mcp/server/tool-handlers.mjs",
-    "line": 4543,
+    "line": 4832,
     "col": 8,
     "callee": "emitToolTelemetry",
     "argCount": 6
   },
   {
     "file": "pforge-mcp/server/tool-handlers.mjs",
-    "line": 4549,
+    "line": 4838,
     "col": 6,
     "callee": "emitToolTelemetry",
     "argCount": 6
   },
   {
     "file": "pforge-mcp/server/tool-handlers.mjs",
-    "line": 4565,
+    "line": 4857,
     "col": 8,
     "callee": "emitToolTelemetry",
     "argCount": 6
   },
   {
     "file": "pforge-mcp/server/tool-handlers.mjs",
-    "line": 4597,
+    "line": 4889,
     "col": 6,
     "callee": "emitToolTelemetry",
     "argCount": 6
   },
   {
     "file": "pforge-mcp/server/tool-handlers.mjs",
-    "line": 4602,
+    "line": 4894,
     "col": 6,
     "callee": "emitToolTelemetry",
     "argCount": 6
   },
   {
     "file": "pforge-mcp/server/tool-handlers.mjs",
-    "line": 4613,
+    "line": 4908,
     "col": 6,
     "callee": "emitToolTelemetry",
     "argCount": 6
   },
   {
     "file": "pforge-mcp/server/tool-handlers.mjs",
-    "line": 4616,
+    "line": 4911,
     "col": 6,
     "callee": "emitToolTelemetry",
     "argCount": 6
   },
   {
     "file": "pforge-mcp/server/tool-handlers.mjs",
-    "line": 4629,
+    "line": 4927,
     "col": 6,
     "callee": "emitToolTelemetry",
     "argCount": 6
   },
   {
     "file": "pforge-mcp/server/tool-handlers.mjs",
-    "line": 4632,
+    "line": 4930,
     "col": 6,
     "callee": "emitToolTelemetry",
     "argCount": 6
   },
   {
     "file": "pforge-mcp/server/tool-handlers.mjs",
-    "line": 4642,
+    "line": 4944,
     "col": 6,
     "callee": "emitToolTelemetry",
     "argCount": 6
   },
   {
     "file": "pforge-mcp/server/tool-handlers.mjs",
-    "line": 4645,
+    "line": 4947,
     "col": 6,
     "callee": "emitToolTelemetry",
     "argCount": 6
   },
   {
     "file": "pforge-mcp/server/tool-handlers.mjs",
-    "line": 4662,
+    "line": 4968,
     "col": 6,
     "callee": "emitToolTelemetry",
     "argCount": 6
   },
   {
     "file": "pforge-mcp/server/tool-handlers.mjs",
-    "line": 4665,
+    "line": 4971,
     "col": 6,
     "callee": "emitToolTelemetry",
     "argCount": 6
   },
   {
     "file": "pforge-mcp/server/tool-handlers.mjs",
-    "line": 4679,
+    "line": 4989,
     "col": 6,
     "callee": "emitToolTelemetry",
     "argCount": 6
   },
   {
     "file": "pforge-mcp/server/tool-handlers.mjs",
-    "line": 4682,
+    "line": 4992,
     "col": 6,
     "callee": "emitToolTelemetry",
     "argCount": 6
   },
   {
     "file": "pforge-mcp/server/tool-handlers.mjs",
-    "line": 4699,
+    "line": 5013,
     "col": 6,
     "callee": "emitToolTelemetry",
     "argCount": 6
   },
   {
     "file": "pforge-mcp/server/tool-handlers.mjs",
-    "line": 4702,
+    "line": 5016,
     "col": 6,
     "callee": "emitToolTelemetry",
     "argCount": 6
@@ -778,7 +813,7 @@
   },
   {
     "file": "pforge-mcp/tempering/baselines.mjs",
-    "line": 221,
+    "line": 226,
     "col": 21,
     "callee": "pixelmatch",
     "argCount": 6
@@ -837,6 +872,34 @@
     "line": 278,
     "col": 17,
     "callee": "createViaGh",
+    "argCount": 6
+  },
+  {
+    "file": "pforge-mcp/tempering/scanners/visual-diff.mjs",
+    "line": 470,
+    "col": 10,
+    "callee": "maybeQueueVisualReview",
+    "argCount": 6
+  },
+  {
+    "file": "pforge-mcp/tempering/scanners/visual-diff.mjs",
+    "line": 475,
+    "col": 10,
+    "callee": "maybeQueueInconclusiveReview",
+    "argCount": 6
+  },
+  {
+    "file": "pforge-mcp/tempering/scanners/visual-diff.mjs",
+    "line": 478,
+    "col": 2,
+    "callee": "captureVisualAnalysis",
+    "argCount": 6
+  },
+  {
+    "file": "pforge-master/src/reasoning.mjs",
+    "line": 1092,
+    "col": 21,
+    "callee": "checkObserverBudgetGate",
     "argCount": 6
   }
 ]

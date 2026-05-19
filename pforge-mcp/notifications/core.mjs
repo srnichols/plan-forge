@@ -335,49 +335,84 @@ export function createNotificationCore({ hub = null, projectRoot, adapters = {},
     } catch { /* best-effort */ }
   });
 
-  /**
-   * Dispatch a single event to a single adapter.
-   */
-  async function dispatchToAdapter(adapterName, event) {
+  function broadcastNotification(metaEvent) {
+    try {
+      hub?.broadcast({ ...metaEvent, timestamp: new Date().toISOString() });
+    } catch { /* best-effort */ }
+  }
+
+  function captureNotificationFailure(adapterName, errorCode) {
+    try {
+      captureMemoryFn?.(`Notification delivery failed: ${adapterName} → ${errorCode}`, "gotcha", `notification/${adapterName}`, projectRoot);
+    } catch { /* best-effort */ }
+  }
+
+  function resolveDispatchContext(adapterName, event) {
     const adapter = adapters[adapterName];
-    if (!adapter) return;
+    if (!adapter) return { skip: true };
 
     const adapterConfig = config.adapters?.[adapterName] || {};
-    if (adapterConfig.enabled === false) return;
+    if (adapterConfig.enabled === false) return { skip: true };
 
-    // Resolve env vars
-    let resolvedConfig;
     try {
-      resolvedConfig = resolveAdapterConfig(adapterConfig);
+      const resolvedConfig = resolveAdapterConfig(adapterConfig);
+      return { adapter, resolvedConfig };
     } catch (err) {
       if (err.code === "ERR_LITERAL_SECRET") {
-        try { hub?.broadcast({ type: "notification-send-failed", adapter: adapterName, event: event.type, errorCode: "ERR_LITERAL_SECRET", timestamp: new Date().toISOString() }); } catch { /* */ }
+        broadcastNotification({ type: "notification-send-failed", adapter: adapterName, event: event.type, errorCode: "ERR_LITERAL_SECRET" });
         failedCount++;
-        return;
+        return { skip: true };
       }
       throw err;
     }
+  }
 
-    // Null URL warning (once per session per adapter)
+  function shouldSkipResolvedAdapter(adapterName, event, resolvedConfig) {
     if (resolvedConfig.url === "" || resolvedConfig.url === undefined || resolvedConfig.url === null) {
       if (!warnedNullUrls.has(adapterName)) {
         console.warn(`[notifications] ${adapterName} enabled but URL is null or empty`);
         warnedNullUrls.add(adapterName);
       }
-      return;
+      return true;
     }
 
-    // Rate limit check
     const allowed = rateLimiter.tryConsume(adapterName);
     if (!allowed.ok) {
-      try { hub?.broadcast({ type: "notification-rate-limited", adapter: adapterName, event: event.type, reason: allowed.reason, timestamp: new Date().toISOString() }); } catch { /* */ }
+      broadcastNotification({ type: "notification-rate-limited", adapter: adapterName, event: event.type, reason: allowed.reason });
+      return true;
+    }
+
+    const routeKey = `${adapterName}:${event.type}`;
+    return !digestTracker.track(routeKey, event);
+  }
+
+  function handleDispatchSuccess(adapterName, event, correlationId, deliveryMs, result) {
+    if (result?.ok) {
+      sentCount++;
+      broadcastNotification({ type: "notification-sent", adapter: adapterName, event: event.type, correlationId, deliveryMs });
       return;
     }
 
-    // Digest coalescing
-    const routeKey = `${adapterName}:${event.type}`;
-    const sendIndividually = digestTracker.track(routeKey, event);
-    if (!sendIndividually) return;
+    const errorCode = result?.errorCode || "SEND_FAILED";
+    failedCount++;
+    broadcastNotification({ type: "notification-send-failed", adapter: adapterName, event: event.type, errorCode, correlationId, deliveryMs });
+    captureNotificationFailure(adapterName, errorCode);
+  }
+
+  function handleDispatchError(adapterName, event, correlationId, deliveryMs, err) {
+    const errorCode = err.message === "TIMEOUT" ? "TIMEOUT" : (err.code || "SEND_FAILED");
+    failedCount++;
+    broadcastNotification({ type: "notification-send-failed", adapter: adapterName, event: event.type, errorCode, correlationId, deliveryMs });
+    captureNotificationFailure(adapterName, errorCode);
+  }
+
+  /**
+   * Dispatch a single event to a single adapter.
+   */
+  async function dispatchToAdapter(adapterName, event) {
+    const context = resolveDispatchContext(adapterName, event);
+    if (context.skip) return;
+    if (shouldSkipResolvedAdapter(adapterName, event, context.resolvedConfig)) return;
 
     const correlationId = event.correlationId || randomUUID();
     const formattedMessage = formatMessage(event);
@@ -385,25 +420,12 @@ export function createNotificationCore({ hub = null, projectRoot, adapters = {},
 
     try {
       const result = await Promise.race([
-        adapter.send({ event, route: adapterName, formattedMessage, correlationId, config: resolvedConfig }),
+        context.adapter.send({ event, route: adapterName, formattedMessage, correlationId, config: context.resolvedConfig }),
         new Promise((_, reject) => setTimeout(() => reject(new Error("TIMEOUT")), SEND_TIMEOUT_MS)),
       ]);
-
-      const deliveryMs = nowFn() - t0;
-      if (result?.ok) {
-        sentCount++;
-        try { hub?.broadcast({ type: "notification-sent", adapter: adapterName, event: event.type, correlationId, deliveryMs, timestamp: new Date().toISOString() }); } catch { /* */ }
-      } else {
-        failedCount++;
-        try { hub?.broadcast({ type: "notification-send-failed", adapter: adapterName, event: event.type, errorCode: result?.errorCode || "SEND_FAILED", correlationId, deliveryMs, timestamp: new Date().toISOString() }); } catch { /* */ }
-        try { captureMemoryFn?.(`Notification delivery failed: ${adapterName} → ${result?.errorCode || "SEND_FAILED"}`, "gotcha", `notification/${adapterName}`, projectRoot); } catch { /* */ }
-      }
+      handleDispatchSuccess(adapterName, event, correlationId, nowFn() - t0, result);
     } catch (err) {
-      const deliveryMs = nowFn() - t0;
-      const errorCode = err.message === "TIMEOUT" ? "TIMEOUT" : (err.code || "SEND_FAILED");
-      failedCount++;
-      try { hub?.broadcast({ type: "notification-send-failed", adapter: adapterName, event: event.type, errorCode, correlationId, deliveryMs, timestamp: new Date().toISOString() }); } catch { /* */ }
-      try { captureMemoryFn?.(`Notification delivery failed: ${adapterName} → ${errorCode}`, "gotcha", `notification/${adapterName}`, projectRoot); } catch { /* */ }
+      handleDispatchError(adapterName, event, correlationId, nowFn() - t0, err);
     }
   }
 

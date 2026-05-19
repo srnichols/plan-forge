@@ -288,6 +288,75 @@ function writeUiScreenshotManifest(artifactDir, settings, visited, projectDir, r
   } catch { /* best-effort */ }
 }
 
+function resolveUiSweepContext(ctx) {
+  const {
+    config = {},
+    projectDir,
+    runId,
+    sliceRef = null,
+    importFn = (spec) => import(spec),
+    now = () => Date.now(),
+    env = process.env,
+  } = ctx || {};
+  return { config, projectDir, runId, sliceRef, importFn, now, env };
+}
+
+function isUiSweepDisabled(config) {
+  return !config || !config.scanners || config.scanners["ui-playwright"] === false;
+}
+
+function prepareUiArtifactDir(settings, projectDir, runId) {
+  if (!settings.captureScreenshots) return null;
+  const artifactDir = ensureScannerArtifactDir(projectDir, runId, "ui-playwright");
+  if (artifactDir) seedArtifactsGitignore(projectDir);
+  return artifactDir;
+}
+
+function buildUiErrorFrame(base, now, t0, crawl) {
+  return {
+    ...base,
+    verdict: "error",
+    error: crawl.error.message || String(crawl.error),
+    pagesVisited: crawl.state?.pagesVisited || 0,
+    brokenLinks: crawl.state?.brokenLinks || [],
+    a11yViolationCount: crawl.state?.a11yViolations?.length || 0,
+    durationMs: now() - t0,
+    completedAt: new Date(now()).toISOString(),
+  };
+}
+
+function buildUiSweepResult({ base, now, t0, url, settings, artifactDir, projectDir, runId, crawlState }) {
+  const { visited, a11yViolations, brokenLinks, pagesVisited, budgetTripped } = crawlState;
+  const scoringViolations = getScoringA11yViolations(a11yViolations, settings.a11yMinSeverity);
+  const verdict = determineUiVerdict({ budgetTripped, brokenLinks, scoringViolations, settings });
+  writeUiReport(artifactDir, {
+    startedAt: base.startedAt,
+    url,
+    pagesVisited,
+    brokenLinks,
+    a11yViolations,
+    settings,
+    verdict,
+  });
+  writeUiScreenshotManifest(artifactDir, settings, visited, projectDir, runId);
+
+  return {
+    ...base,
+    verdict,
+    pagesVisited,
+    pass: pagesVisited - brokenLinks.length,
+    fail: brokenLinks.length + scoringViolations.length,
+    skipped: 0,
+    brokenLinkCount: brokenLinks.length,
+    a11yViolationCount: a11yViolations.length,
+    a11yScoringCount: scoringViolations.length,
+    budgetTripped,
+    durationMs: now() - t0,
+    artifactDir,
+    completedAt: new Date(now()).toISOString(),
+  };
+}
+
 /**
  * Run the UI sweep scanner. Contract mirrors runScannerUnit /
  * runScannerIntegration from runner.mjs:
@@ -302,100 +371,51 @@ function writeUiScreenshotManifest(artifactDir, settings, visited, projectDir, r
  * @returns {Promise<object>} scanner result record
  */
 export async function runUiSweep(ctx) {
-  const {
-    config = {},
-    projectDir,
-    runId,
-    sliceRef = null,
-    importFn = (spec) => import(spec),
-    now = () => Date.now(),
-    env = process.env,
-  } = ctx || {};
-
-  const t0 = now();
+  const uiCtx = resolveUiSweepContext(ctx);
+  const t0 = uiCtx.now();
   const base = {
     scanner: "ui-playwright",
-    sliceRef,
+    sliceRef: uiCtx.sliceRef,
     startedAt: new Date(t0).toISOString(),
   };
 
-  if (!config || !config.scanners || config.scanners["ui-playwright"] === false) {
-    return createUiSkippedFrame(base, now, "scanner-disabled");
+  if (isUiSweepDisabled(uiCtx.config)) {
+    return createUiSkippedFrame(base, uiCtx.now, "scanner-disabled");
   }
 
-  const settings = { ...UI_SCANNER_DEFAULTS, ...(config["ui-playwright"] || {}) };
-  const url = resolveAppUrl(config, env);
-  if (!url) return createUiSkippedFrame(base, now, "url-not-configured");
+  const settings = { ...UI_SCANNER_DEFAULTS, ...(uiCtx.config["ui-playwright"] || {}) };
+  const url = resolveAppUrl(uiCtx.config, uiCtx.env);
+  if (!url) return createUiSkippedFrame(base, uiCtx.now, "url-not-configured");
   if (looksLikeProduction(url) && !settings.allowProduction) {
-    return createUiSkippedFrame(base, now, "production-url-without-opt-in");
+    return createUiSkippedFrame(base, uiCtx.now, "production-url-without-opt-in");
   }
 
-  const deps = await loadUiDependencies(settings, importFn);
-  if (deps.reason) {
-    return createUiSkippedFrame(base, now, deps.reason);
-  }
+  const deps = await loadUiDependencies(settings, uiCtx.importFn);
+  if (deps.reason) return createUiSkippedFrame(base, uiCtx.now, deps.reason);
 
-  const artifactDir = settings.captureScreenshots
-    ? ensureScannerArtifactDir(projectDir, runId, "ui-playwright")
-    : null;
-  if (artifactDir) {
-    seedArtifactsGitignore(projectDir);
-  }
-
-  const hardDeadline = t0 + ((config.runtimeBudgets && config.runtimeBudgets.uiMaxMs) || 600000);
+  const artifactDir = prepareUiArtifactDir(settings, uiCtx.projectDir, uiCtx.runId);
+  const hardDeadline = t0 + ((uiCtx.config.runtimeBudgets && uiCtx.config.runtimeBudgets.uiMaxMs) || 600000);
   const crawl = await executeUiCrawl(deps.playwright, {
     url,
     settings,
     artifactDir,
     axeInjector: deps.axeInjector,
-    now,
+    now: uiCtx.now,
     hardDeadline,
   });
 
-  if (crawl.error) {
-    return {
-      ...base,
-      verdict: "error",
-      error: crawl.error.message || String(crawl.error),
-      pagesVisited: crawl.state?.pagesVisited || 0,
-      brokenLinks: crawl.state?.brokenLinks || [],
-      a11yViolationCount: crawl.state?.a11yViolations?.length || 0,
-      durationMs: now() - t0,
-      completedAt: new Date(now()).toISOString(),
-    };
-  }
-
-  const { visited, a11yViolations, brokenLinks, pagesVisited, budgetTripped } = crawl.state;
-  const scoringViolations = getScoringA11yViolations(a11yViolations, settings.a11yMinSeverity);
-  const verdict = determineUiVerdict({ budgetTripped, brokenLinks, scoringViolations, settings });
-  writeUiReport(artifactDir, {
-    startedAt: base.startedAt,
+  if (crawl.error) return buildUiErrorFrame(base, uiCtx.now, t0, crawl);
+  return buildUiSweepResult({
+    base,
+    now: uiCtx.now,
+    t0,
     url,
-    pagesVisited,
-    brokenLinks,
-    a11yViolations,
     settings,
-    verdict,
-  });
-
-  const durationMs = now() - t0;
-  writeUiScreenshotManifest(artifactDir, settings, visited, projectDir, runId);
-
-  return {
-    ...base,
-    verdict,
-    pagesVisited,
-    pass: pagesVisited - brokenLinks.length,
-    fail: brokenLinks.length + scoringViolations.length,
-    skipped: 0,
-    brokenLinkCount: brokenLinks.length,
-    a11yViolationCount: a11yViolations.length,
-    a11yScoringCount: scoringViolations.length,
-    budgetTripped,
-    durationMs,
     artifactDir,
-    completedAt: new Date(now()).toISOString(),
-  };
+    projectDir: uiCtx.projectDir,
+    runId: uiCtx.runId,
+    crawlState: crawl.state,
+  });
 }
 
 // ─── Per-page work ────────────────────────────────────────────────────

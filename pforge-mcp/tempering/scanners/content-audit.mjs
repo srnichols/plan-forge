@@ -309,7 +309,7 @@ function writeContentAuditArtifact(projectDir, runId, report) {
   return artifactDir;
 }
 
-export async function runContentAudit(ctx) {
+function resolveContentAuditContext(ctx) {
   const {
     config = {},
     projectDir,
@@ -321,41 +321,38 @@ export async function runContentAudit(ctx) {
     routes: explicitRoutes = null,
     seeds = null,
   } = ctx || {};
-
-  const t0 = now();
-  const base = {
-    scanner: "content-audit",
+  return {
+    config,
+    projectDir,
+    runId,
     sliceRef,
-    startedAt: new Date(t0).toISOString(),
+    now,
+    env,
+    fetcher,
+    explicitRoutes,
+    seeds,
   };
+}
 
-  const scannerConfig = config.scanners?.["content-audit"];
-  if (scannerConfig === false || (scannerConfig && scannerConfig.enabled === false)) {
-    return createContentAuditSkippedFrame(base, now, "scanner-disabled");
-  }
+function isContentAuditDisabled(scannerConfig) {
+  return scannerConfig === false || (scannerConfig && scannerConfig.enabled === false);
+}
 
-  const settings = resolveContentAuditSettings(scannerConfig);
-  const baseUrl = resolveContentAuditBaseUrl(settings, config, env);
-  if (!baseUrl) return createContentAuditSkippedFrame(base, now, "url-not-configured");
-  if (looksLikeProduction(baseUrl) && !settings.allowProduction) {
-    return createContentAuditSkippedFrame(base, now, "production-url-without-opt-in");
-  }
-
-  const routeList = loadRoutes({
+function resolveContentAuditRouteList(projectDir, explicitRoutes, settings) {
+  return loadRoutes({
     routes: explicitRoutes,
     projectDir: projectDir || ".",
     settings,
-  });
-  if (routeList.length === 0) return createContentAuditSkippedFrame(base, now, "no-routes");
+  }).slice(0, settings.maxRoutes);
+}
 
-  const capped = routeList.slice(0, settings.maxRoutes);
-  const hardDeadline = t0 + ((config.runtimeBudgets && config.runtimeBudgets.contentAuditMaxMs) || 300000);
+async function processContentAuditRoutes({ routes, now, hardDeadline, seeds, baseUrl, fetcher, settings }) {
   const findings = [];
   let passCount = 0;
   let failCount = 0;
   let budgetTripped = false;
 
-  for (const route of capped) {
+  for (const route of routes) {
     if (now() >= hardDeadline) {
       budgetTripped = true;
       break;
@@ -369,13 +366,28 @@ export async function runContentAudit(ctx) {
     findings.push(result.finding);
   }
 
+  return { findings, passCount, failCount, budgetTripped };
+}
+
+function buildContentAuditResult({
+  base,
+  now,
+  t0,
+  projectDir,
+  runId,
+  baseUrl,
+  routes,
+  findings,
+  passCount,
+  failCount,
+  budgetTripped,
+}) {
   const overallVerdict = resolveContentAuditVerdict(findings, budgetTripped);
-  const durationMs = now() - t0;
   const artifactDir = writeContentAuditArtifact(projectDir, runId, {
     scanner: "content-audit",
     startedAt: base.startedAt,
     baseUrl,
-    routeCount: capped.length,
+    routeCount: routes.length,
     verdict: overallVerdict,
     findings,
     summary: { pass: passCount, fail: failCount },
@@ -389,12 +401,61 @@ export async function runContentAudit(ctx) {
     skipped: 0,
     findings,
     findingCount: findings.length,
-    routesProbed: Math.min(capped.length, passCount + failCount),
+    routesProbed: Math.min(routes.length, passCount + failCount),
     budgetTripped,
-    durationMs,
+    durationMs: now() - t0,
     artifactDir,
     completedAt: new Date(now()).toISOString(),
   };
+}
+
+export async function runContentAudit(ctx) {
+  const auditCtx = resolveContentAuditContext(ctx);
+  const t0 = auditCtx.now();
+  const base = {
+    scanner: "content-audit",
+    sliceRef: auditCtx.sliceRef,
+    startedAt: new Date(t0).toISOString(),
+  };
+  const scannerConfig = auditCtx.config.scanners?.["content-audit"];
+  if (isContentAuditDisabled(scannerConfig)) {
+    return createContentAuditSkippedFrame(base, auditCtx.now, "scanner-disabled");
+  }
+
+  const settings = resolveContentAuditSettings(scannerConfig);
+  const baseUrl = resolveContentAuditBaseUrl(settings, auditCtx.config, auditCtx.env);
+  if (!baseUrl) return createContentAuditSkippedFrame(base, auditCtx.now, "url-not-configured");
+  if (looksLikeProduction(baseUrl) && !settings.allowProduction) {
+    return createContentAuditSkippedFrame(base, auditCtx.now, "production-url-without-opt-in");
+  }
+
+  const routes = resolveContentAuditRouteList(auditCtx.projectDir, auditCtx.explicitRoutes, settings);
+  if (routes.length === 0) return createContentAuditSkippedFrame(base, auditCtx.now, "no-routes");
+
+  const hardDeadline = t0 + ((auditCtx.config.runtimeBudgets && auditCtx.config.runtimeBudgets.contentAuditMaxMs) || 300000);
+  const scanResult = await processContentAuditRoutes({
+    routes,
+    now: auditCtx.now,
+    hardDeadline,
+    seeds: auditCtx.seeds,
+    baseUrl,
+    fetcher: auditCtx.fetcher,
+    settings,
+  });
+
+  return buildContentAuditResult({
+    base,
+    now: auditCtx.now,
+    t0,
+    projectDir: auditCtx.projectDir,
+    runId: auditCtx.runId,
+    baseUrl,
+    routes,
+    findings: scanResult.findings,
+    passCount: scanResult.passCount,
+    failCount: scanResult.failCount,
+    budgetTripped: scanResult.budgetTripped,
+  });
 }
 
 // ─── Default export (scanner module interface) ───────────────────────

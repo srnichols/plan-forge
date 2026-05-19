@@ -80,6 +80,85 @@ function parseArgs(argv) {
   return args;
 }
 
+function collectArchiveCandidates(forgeDir) {
+  const candidates = [];
+  for (const entry of readdirSync(forgeDir)) {
+    if (entry.startsWith(".")) continue;
+    const fullPath = join(forgeDir, entry);
+    let st;
+    try { st = statSync(fullPath); } catch { continue; }
+    if (st.isDirectory()) continue;
+    if (!isEphemeral(entry)) continue;
+    candidates.push({ name: entry, fullPath, size: st.size, mtime: st.mtime });
+  }
+  return candidates;
+}
+
+function logArchiveCandidates(candidates) {
+  console.log(`Found ${candidates.length} ephemeral file(s) to archive:\n`);
+  for (const candidate of candidates) {
+    const kb = (candidate.size / 1024).toFixed(1);
+    console.log(`  ${candidate.name}  (${kb} KB, modified ${candidate.mtime.toISOString().slice(0, 10)})`);
+  }
+  console.log();
+}
+
+function buildArchiveSlot(forgeDir, now = new Date()) {
+  return { now, slotName: yyyymm(now), slotPath: join(forgeDir, "archive", yyyymm(now)) };
+}
+
+function archiveCandidates(candidates, archiveSlot) {
+  mkdirSync(archiveSlot.slotPath, { recursive: true });
+  let moved = 0;
+  for (const candidate of candidates) {
+    const dest = join(archiveSlot.slotPath, candidate.name);
+    try {
+      renameSync(candidate.fullPath, dest);
+      moved++;
+    } catch (err) {
+      console.warn(`  ⚠ Could not move ${candidate.name}: ${err.message}`);
+    }
+  }
+  console.log(`✓ Moved ${moved} file(s) → .forge/archive/${archiveSlot.slotName}/\n`);
+}
+
+function collectOldArchiveSlots(archiveDir, cutoff) {
+  const old = [];
+  for (const slot of readdirSync(archiveDir)) {
+    const slotPath = join(archiveDir, slot);
+    let st;
+    try { st = statSync(slotPath); } catch { continue; }
+    if (!st.isDirectory()) continue;
+    if (st.mtime < cutoff) {
+      const files = readdirSync(slotPath);
+      old.push({ slot, slotPath, fileCount: files.length });
+    }
+  }
+  return old;
+}
+
+function logOldArchiveSlots(old, maxAgeDays) {
+  const totalFiles = old.reduce((n, slot) => n + slot.fileCount, 0);
+  console.log(`Found ${old.length} archive slot(s) older than ${maxAgeDays} days (${totalFiles} file(s)):\n`);
+  for (const slot of old) {
+    console.log(`  .forge/archive/${slot.slot}/  (${slot.fileCount} files)`);
+  }
+  console.log();
+}
+
+function deleteArchiveSlots(old) {
+  let deleted = 0;
+  for (const slot of old) {
+    try {
+      rmSync(slot.slotPath, { recursive: true, force: true });
+      deleted++;
+    } catch (err) {
+      console.warn(`  ⚠ Could not delete .forge/archive/${slot.slot}: ${err.message}`);
+    }
+  }
+  console.log(`✓ Deleted ${deleted} archive slot(s).`);
+}
+
 // ─── Main ────────────────────────────────────────────────────────────────────
 
 async function main() {
@@ -96,46 +175,19 @@ async function main() {
   }
 
   // ── Phase 1: collect candidates ─────────────────────────────────────────
-  const candidates = [];
-  for (const entry of readdirSync(forgeDir)) {
-    if (entry.startsWith(".")) continue;
-    const fullPath = join(forgeDir, entry);
-    let st;
-    try { st = statSync(fullPath); } catch { continue; }
-    if (st.isDirectory()) continue; // only archive top-level files
-    if (!isEphemeral(entry)) continue;
-    candidates.push({ name: entry, fullPath, size: st.size, mtime: st.mtime });
-  }
+  const candidates = collectArchiveCandidates(forgeDir);
 
   if (candidates.length === 0) {
     console.log("✓ No ephemeral files found — .forge/ looks clean.");
   } else {
-    console.log(`Found ${candidates.length} ephemeral file(s) to archive:\n`);
-    for (const c of candidates) {
-      const kb = (c.size / 1024).toFixed(1);
-      console.log(`  ${c.name}  (${kb} KB, modified ${c.mtime.toISOString().slice(0, 10)})`);
-    }
-    console.log();
-
+    logArchiveCandidates(candidates);
     const proceed =
       args.dryRun ||
       args.noConfirm ||
       (await confirm(`Move ${candidates.length} file(s) to .forge/archive/?`));
 
     if (proceed && !args.dryRun) {
-      const archiveSlot = join(forgeDir, "archive", yyyymm(new Date()));
-      mkdirSync(archiveSlot, { recursive: true });
-      let moved = 0;
-      for (const c of candidates) {
-        const dest = join(archiveSlot, c.name);
-        try {
-          renameSync(c.fullPath, dest);
-          moved++;
-        } catch (err) {
-          console.warn(`  ⚠ Could not move ${c.name}: ${err.message}`);
-        }
-      }
-      console.log(`✓ Moved ${moved} file(s) → .forge/archive/${yyyymm(new Date())}/\n`);
+      archiveCandidates(candidates, buildArchiveSlot(forgeDir));
     } else if (!proceed) {
       console.log("⏭  Skipped archiving.\n");
     }
@@ -154,29 +206,14 @@ async function main() {
   }
 
   const cutoff = new Date(Date.now() - args.maxAgeDays * 24 * 60 * 60 * 1000);
-  const old = [];
-  for (const slot of readdirSync(archiveDir)) {
-    const slotPath = join(archiveDir, slot);
-    let st;
-    try { st = statSync(slotPath); } catch { continue; }
-    if (!st.isDirectory()) continue;
-    if (st.mtime < cutoff) {
-      const files = readdirSync(slotPath);
-      old.push({ slot, slotPath, fileCount: files.length });
-    }
-  }
+  const old = collectOldArchiveSlots(archiveDir, cutoff);
 
   if (old.length === 0) {
     console.log(`✓ No archive entries older than ${args.maxAgeDays} days.`);
     return;
   }
 
-  const totalFiles = old.reduce((n, s) => n + s.fileCount, 0);
-  console.log(`Found ${old.length} archive slot(s) older than ${args.maxAgeDays} days (${totalFiles} file(s)):\n`);
-  for (const o of old) {
-    console.log(`  .forge/archive/${o.slot}/  (${o.fileCount} files)`);
-  }
-  console.log();
+  logOldArchiveSlots(old, args.maxAgeDays);
 
   if (args.dryRun) {
     console.log("⚡ DRY RUN — would delete the above slots.");
@@ -187,16 +224,7 @@ async function main() {
     args.noConfirm || (await confirm(`Permanently delete ${old.length} archive slot(s)?`));
 
   if (deleteProceed) {
-    let deleted = 0;
-    for (const o of old) {
-      try {
-        rmSync(o.slotPath, { recursive: true, force: true });
-        deleted++;
-      } catch (err) {
-        console.warn(`  ⚠ Could not delete .forge/archive/${o.slot}: ${err.message}`);
-      }
-    }
-    console.log(`✓ Deleted ${deleted} archive slot(s).`);
+    deleteArchiveSlots(old);
   } else {
     console.log("⏭  Skipped deletion.");
   }

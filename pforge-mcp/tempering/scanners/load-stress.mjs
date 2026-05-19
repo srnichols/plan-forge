@@ -63,16 +63,38 @@ async function loadAutocannon(importFn) {
   return mod.default || mod;
 }
 
-function extractAutocannonMetrics(acResult) {
-  const totalRequests = acResult?.requests?.total ?? acResult?.totalRequests ?? 0;
-  const errors = acResult?.errors ?? acResult?.non2xx ?? 0;
+function firstDefinedMetric(...values) {
+  for (const value of values) {
+    if (value != null) return value;
+  }
+  return 0;
+}
+
+function extractLatencyMetrics(acResult) {
+  const latency = acResult?.latency || {};
   return {
-    p50: acResult?.latency?.p50 ?? acResult?.p50 ?? 0,
-    p95: acResult?.latency?.p95 ?? acResult?.p95 ?? 0,
-    p99: acResult?.latency?.p99 ?? acResult?.p99 ?? 0,
-    totalRequests,
-    throughput: acResult?.throughput?.average ?? acResult?.throughput ?? 0,
-    errorRate: totalRequests > 0 ? errors / totalRequests : 0,
+    p50: firstDefinedMetric(latency.p50, acResult?.p50),
+    p95: firstDefinedMetric(latency.p95, acResult?.p95),
+    p99: firstDefinedMetric(latency.p99, acResult?.p99),
+  };
+}
+
+function extractRequestMetrics(acResult) {
+  return {
+    totalRequests: firstDefinedMetric(acResult?.requests?.total, acResult?.totalRequests),
+    errors: firstDefinedMetric(acResult?.errors, acResult?.non2xx),
+    throughput: firstDefinedMetric(acResult?.throughput?.average, acResult?.throughput),
+  };
+}
+
+function extractAutocannonMetrics(acResult) {
+  const latencyMetrics = extractLatencyMetrics(acResult);
+  const requestMetrics = extractRequestMetrics(acResult);
+  return {
+    ...latencyMetrics,
+    totalRequests: requestMetrics.totalRequests,
+    throughput: requestMetrics.throughput,
+    errorRate: requestMetrics.totalRequests > 0 ? requestMetrics.errors / requestMetrics.totalRequests : 0,
   };
 }
 
@@ -174,7 +196,7 @@ function countLoadStressViolations(results, settings) {
  * @param {object} ctx - DI context
  * @returns {Promise<object>} scanner result
  */
-export async function runLoadStressScan(ctx) {
+function resolveLoadStressContext(ctx) {
   const {
     config = {},
     projectDir,
@@ -185,32 +207,14 @@ export async function runLoadStressScan(ctx) {
     hub = null,
     importFn = (spec) => import(spec),
   } = ctx || {};
+  return { config, projectDir, runId, sliceRef, now, env, hub, importFn };
+}
 
-  const startedAt = new Date(now()).toISOString();
-  const raw = config.scanners?.["load-stress"];
-  const settings = { ...LOAD_DEFAULTS, ...(typeof raw === "object" ? raw : {}) };
-  const deadline = now() + (config.runtimeBudgets?.loadStressMaxMs ?? 300_000);
+function buildLoadStressSkippedResult(sliceRef, startedAt, now, reason) {
+  return buildLoadStressResult({ sliceRef, startedAt, now, verdict: "skipped", reason });
+}
 
-  if (raw === false || settings.enabled === false) {
-    return buildLoadStressResult({ sliceRef, startedAt, now, verdict: "skipped", reason: "scanner-disabled" });
-  }
-
-  if (env.NODE_ENV === "production" && !settings.allowProduction) {
-    return buildLoadStressResult({ sliceRef, startedAt, now, verdict: "skipped", reason: "production-url-without-opt-in" });
-  }
-
-  const endpoints = resolveLoadEndpoints(settings, projectDir);
-  if (!endpoints || endpoints.length === 0) {
-    return buildLoadStressResult({ sliceRef, startedAt, now, verdict: "skipped", reason: "no-endpoints-configured" });
-  }
-
-  let autocannon;
-  try {
-    autocannon = await loadAutocannon(importFn);
-  } catch {
-    return buildLoadStressResult({ sliceRef, startedAt, now, verdict: "error", reason: "autocannon-import-failed" });
-  }
-
+async function runLoadStressEndpoints({ endpoints, autocannon, settings, now, deadline, runId, projectDir, sliceRef, startedAt }) {
   const results = [];
   let passCount = 0;
   let failCount = 0;
@@ -244,22 +248,64 @@ export async function runLoadStressScan(ctx) {
     else failCount++;
   }
 
-  const verdict = countLoadStressViolations(results, settings) > 0 ? "fail" : "pass";
-  emit(hub, "tempering-load-completed", {
-    endpointCount: results.length,
-    passCount,
-    failCount,
+  return { results, passCount, failCount };
+}
+
+export async function runLoadStressScan(ctx) {
+  const loadCtx = resolveLoadStressContext(ctx);
+  const startedAt = new Date(loadCtx.now()).toISOString();
+  const raw = loadCtx.config.scanners?.["load-stress"];
+  const settings = { ...LOAD_DEFAULTS, ...(typeof raw === "object" ? raw : {}) };
+  const deadline = loadCtx.now() + (loadCtx.config.runtimeBudgets?.loadStressMaxMs ?? 300_000);
+
+  if (raw === false || settings.enabled === false) {
+    return buildLoadStressSkippedResult(loadCtx.sliceRef, startedAt, loadCtx.now, "scanner-disabled");
+  }
+  if (loadCtx.env.NODE_ENV === "production" && !settings.allowProduction) {
+    return buildLoadStressSkippedResult(loadCtx.sliceRef, startedAt, loadCtx.now, "production-url-without-opt-in");
+  }
+
+  const endpoints = resolveLoadEndpoints(settings, loadCtx.projectDir);
+  if (!endpoints || endpoints.length === 0) {
+    return buildLoadStressSkippedResult(loadCtx.sliceRef, startedAt, loadCtx.now, "no-endpoints-configured");
+  }
+
+  let autocannon;
+  try {
+    autocannon = await loadAutocannon(loadCtx.importFn);
+  } catch {
+    return buildLoadStressResult({ sliceRef: loadCtx.sliceRef, startedAt, now: loadCtx.now, verdict: "error", reason: "autocannon-import-failed" });
+  }
+
+  const outcome = await runLoadStressEndpoints({
+    endpoints,
+    autocannon,
+    settings,
+    now: loadCtx.now,
+    deadline,
+    runId: loadCtx.runId,
+    projectDir: loadCtx.projectDir,
+    sliceRef: loadCtx.sliceRef,
+    startedAt,
+  });
+  if (outcome.verdict) return outcome;
+
+  const verdict = countLoadStressViolations(outcome.results, settings) > 0 ? "fail" : "pass";
+  emit(loadCtx.hub, "tempering-load-completed", {
+    endpointCount: outcome.results.length,
+    passCount: outcome.passCount,
+    failCount: outcome.failCount,
     verdict,
   });
 
   return buildLoadStressResult({
-    sliceRef,
+    sliceRef: loadCtx.sliceRef,
     startedAt,
-    now,
+    now: loadCtx.now,
     verdict,
-    pass: passCount,
-    fail: failCount,
-    results,
+    pass: outcome.passCount,
+    fail: outcome.failCount,
+    results: outcome.results,
     settings,
   });
 }

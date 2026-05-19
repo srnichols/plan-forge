@@ -148,6 +148,67 @@ export function classifyLegError(stderr) {
   return "unknown";
 }
 
+function emitQuorumLegCompleted(eventBus, sliceNumber, legResult) {
+  if (eventBus) {
+    eventBus.emit("quorum-leg-completed", { sliceId: sliceNumber, ...legResult });
+  }
+}
+
+function createSuccessfulLegResult(model, result, legStart) {
+  const legResult = {
+    model,
+    output: result.output || result.stderr || "",
+    tokens: result.tokens,
+    duration: Date.now() - legStart,
+    exitCode: result.exitCode,
+    success: true,
+  };
+  legResult.success = (legResult.output || "").trim().length > 50;
+  if (!legResult.success) {
+    const stderr = String(result?.stderr || "").slice(-2048);
+    legResult.error = {
+      code: legResult.exitCode ?? 1,
+      reason: classifyLegError(stderr),
+      stderr,
+    };
+  }
+  return legResult;
+}
+
+function createFailedLegResult(model, err, legStart) {
+  const rawStderr = err?.stderr ?? err?.message ?? String(err ?? "");
+  const stderr = rawStderr.slice(-2048);
+  const exitCode = Number.isInteger(err?.exitCode) ? err.exitCode : (err?.code ?? 1);
+  return {
+    model,
+    output: "",
+    tokens: { tokens_in: null, tokens_out: null, model },
+    duration: Date.now() - legStart,
+    exitCode,
+    success: false,
+    error: { code: exitCode, reason: classifyLegError(stderr), stderr },
+  };
+}
+
+async function executeQuorumLeg({ model, dryPrompt, cwd, timeoutMs, eventBus, sliceNumber }) {
+  const legStart = Date.now();
+  try {
+    const result = await spawnWorker(dryPrompt, {
+      model,
+      cwd,
+      timeout: timeoutMs,
+      role: "quorum-dry-run",
+    });
+    const legResult = createSuccessfulLegResult(model, result, legStart);
+    emitQuorumLegCompleted(eventBus, sliceNumber, legResult);
+    return legResult;
+  } catch (err) {
+    const legResult = createFailedLegResult(model, err, legStart);
+    emitQuorumLegCompleted(eventBus, sliceNumber, legResult);
+    return legResult;
+  }
+}
+
 /**
  * Dispatch a slice to multiple models for parallel dry-run analysis.
  * Returns array of dry-run results.
@@ -176,58 +237,15 @@ export async function quorumDispatch(slice, config, options = {}) {
   }
 
   const startTime = Date.now();
-  const promises = config.models.map(async (model) => {
-    const legStart = Date.now();
-    try {
-      const result = await spawnWorker(dryPrompt, {
-        model,
-        cwd,
-        timeout: config.dryRunTimeout || 300_000,
-        role: "quorum-dry-run", // bug #80: API providers see system-framed prompt
-      });
-      const legResult = {
-        model,
-        output: result.output || result.stderr || "",
-        tokens: result.tokens,
-        duration: Date.now() - legStart,
-        exitCode: result.exitCode,
-        success: true, // gh copilot may exit non-zero but still produce useful output
-      };
-      // Determine success: has meaningful output (stdout or stderr) regardless of exit code
-      // gh copilot outputs text to stderr in non-TTY mode
-      legResult.success = (legResult.output || "").trim().length > 50;
-      if (!legResult.success) {
-        const stderr = String(result?.stderr || "").slice(-2048);
-        legResult.error = {
-          code: legResult.exitCode ?? 1,
-          reason: classifyLegError(stderr),
-          stderr,
-        };
-      }
-      if (eventBus) {
-        eventBus.emit("quorum-leg-completed", { sliceId: slice.number, ...legResult });
-      }
-      return legResult;
-    } catch (err) {
-      const rawStderr = err?.stderr ?? err?.message ?? String(err ?? "");
-      const stderr = rawStderr.slice(-2048);
-      const reason = classifyLegError(stderr);
-      const exitCode = Number.isInteger(err?.exitCode) ? err.exitCode : (err?.code ?? 1);
-      const legResult = {
-        model,
-        output: "",
-        tokens: { tokens_in: null, tokens_out: null, model },
-        duration: Date.now() - legStart,
-        exitCode,
-        success: false,
-        error: { code: exitCode, reason, stderr },
-      };
-      if (eventBus) {
-        eventBus.emit("quorum-leg-completed", { sliceId: slice.number, ...legResult });
-      }
-      return legResult;
-    }
-  });
+  const timeoutMs = config.dryRunTimeout || 300_000;
+  const promises = config.models.map((model) => executeQuorumLeg({
+    model,
+    dryPrompt,
+    cwd,
+    timeoutMs,
+    eventBus,
+    sliceNumber: slice.number,
+  }));
 
   const results = await Promise.all(promises);
 

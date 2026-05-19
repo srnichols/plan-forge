@@ -71,23 +71,21 @@ function _handleUpdateResult(current, r) {
   }
 }
 
-export async function runServerMain() {
-  // --validate: quick startup check — verify imports, tool list, and exit
-  if (VALIDATE_ONLY) {
-    try {
-      const toolNames = TOOLS.map((t) => t.name);
-      if (!toolNames.length) throw new Error("No tools registered");
-      writeToolsJson(TOOLS, __dirname);
-      writeCliSchema(__dirname);
-      console.error(`[validate] OK — ${toolNames.length} tools registered, capabilities generated`);
-      process.exit(0);
-    } catch (err) {
-      console.error(`[validate] FAIL — ${err.message}`);
-      process.exit(1);
-    }
+function _runValidateMode() {
+  try {
+    const toolNames = TOOLS.map((t) => t.name);
+    if (!toolNames.length) throw new Error("No tools registered");
+    writeToolsJson(TOOLS, __dirname);
+    writeCliSchema(__dirname);
+    console.error(`[validate] OK — ${toolNames.length} tools registered, capabilities generated`);
+    process.exit(0);
+  } catch (err) {
+    console.error(`[validate] FAIL — ${err.message}`);
+    process.exit(1);
   }
+}
 
-  // Auto-generate tools.json + cli-schema.json on startup
+function _generateCapabilities() {
   try {
     writeToolsJson(TOOLS, __dirname);
     writeCliSchema(__dirname);
@@ -95,17 +93,86 @@ export async function runServerMain() {
   } catch (err) {
     console.error(`[capabilities] Auto-generation failed: ${err.message} (non-fatal)`);
   }
+}
+
+function _startHttpServer() {
+  try {
+    const app = createExpressApp();
+    app.listen(HTTP_PORT, "127.0.0.1", () => {
+      console.error(`Plan Forge Dashboard at http://127.0.0.1:${HTTP_PORT}/dashboard`);
+    });
+  } catch (err) {
+    console.error(`[http] Express server failed to start: ${err.message} (non-fatal)`);
+  }
+}
+
+function _scheduleUpdateCheck() {
+  try {
+    const current = FRAMEWORK_VERSION && FRAMEWORK_VERSION !== "unknown" ? FRAMEWORK_VERSION : null;
+    if (!current) return;
+    setTimeout(() => {
+      checkForUpdate({ currentVersion: current, projectDir: PROJECT_DIR })
+        .then((r) => _handleUpdateResult(current, r))
+        .catch(() => { /* silent */ });
+    }, 2000).unref?.();
+  } catch { /* silent */ }
+}
+
+async function _startHubServices() {
+  try {
+    setActiveHub(await createHub({ cwd: PROJECT_DIR }));
+    console.error(`Plan Forge WebSocket hub running on port ${activeHub.port}`);
+    setActiveEventWatcher(startEventFileWatcher(activeHub, PROJECT_DIR));
+  } catch (err) {
+    console.error(`[hub] WebSocket hub failed to start: ${err.message} (non-fatal)`);
+  }
+}
+
+async function _startTransport() {
+  if (!DASHBOARD_ONLY) {
+    const transport = new StdioServerTransport();
+    await server.connect(transport);
+    console.error("Plan Forge MCP server running (stdio transport)");
+    return;
+  }
+  console.error("Plan Forge Dashboard-only mode (no MCP stdio)");
+}
+
+function _scheduleInitialDrain() {
+  try {
+    if (__shouldDrainOnInit()) {
+      setTimeout(() => {
+        runDrainPass(PROJECT_DIR, "initialize-drain", activeHub)
+          .then((r) => console.error(`[drain] initialize-drain: ${JSON.stringify(r)}`))
+          .catch((e) => console.error(`[drain] initialize-drain failed: ${e.message || e}`));
+      }, 3000);
+    }
+  } catch { /* setTimeout registration must never crash startup */ }
+}
+
+function _startBridge() {
+  try {
+    setActiveBridge(createBridge({ cwd: PROJECT_DIR, port: activeHub?.port }));
+    if (activeBridge) {
+      console.error("[bridge] Bridge manager started");
+    }
+  } catch (err) {
+    console.error(`[bridge] Bridge failed to start: ${err.message} (non-fatal)`);
+  }
+}
+
+export async function runServerMain() {
+  // --validate: quick startup check — verify imports, tool list, and exit
+  if (VALIDATE_ONLY) {
+    _runValidateMode();
+  }
+
+  // Auto-generate tools.json + cli-schema.json on startup
+  _generateCapabilities();
 
   if (!process.env.PFORGE_CHILD_MODE) {
     // Start Express HTTP server for dashboard + REST API
-    try {
-      const app = createExpressApp();
-      app.listen(HTTP_PORT, "127.0.0.1", () => {
-        console.error(`Plan Forge Dashboard at http://127.0.0.1:${HTTP_PORT}/dashboard`);
-      });
-    } catch (err) {
-      console.error(`[http] Express server failed to start: ${err.message} (non-fatal)`);
-    }
+    _startHttpServer();
   }
 
   if (!process.env.PFORGE_CHILD_MODE) {
@@ -119,62 +186,24 @@ export async function runServerMain() {
     // is about the FRAMEWORK, so the comparison must use the framework's own
     // VERSION — otherwise misresolved PROJECT_DIRs (issues #105/#125) cause
     // the log to claim the user is on an unrelated number from their cwd.
-    try {
-      const current = FRAMEWORK_VERSION && FRAMEWORK_VERSION !== "unknown" ? FRAMEWORK_VERSION : null;
-      if (current) {
-        setTimeout(() => {
-          checkForUpdate({ currentVersion: current, projectDir: PROJECT_DIR })
-            .then((r) => _handleUpdateResult(current, r))
-            .catch(() => { /* silent */ });
-        }, 2000).unref?.();
-      }
-    } catch { /* silent */ }
+    _scheduleUpdateCheck();
   }
 
   if (!process.env.PFORGE_CHILD_MODE) {
     // Start WebSocket hub BEFORE stdio transport — ensures activeHub is set before any tool calls arrive
-    try {
-      setActiveHub(await createHub({ cwd: PROJECT_DIR }));
-      console.error(`Plan Forge WebSocket hub running on port ${activeHub.port}`);
-
-      // Start event file watcher to bridge orchestrator events → dashboard
-      setActiveEventWatcher(startEventFileWatcher(activeHub, PROJECT_DIR));
-    } catch (err) {
-      console.error(`[hub] WebSocket hub failed to start: ${err.message} (non-fatal)`);
-    }
+    await _startHubServices();
   }
 
   // MCP stdio transport — AFTER hub so broadcastLiveGuard has a hub to send to
-  if (!DASHBOARD_ONLY) {
-    const transport = new StdioServerTransport();
-    await server.connect(transport);
-    console.error("Plan Forge MCP server running (stdio transport)");
-  } else {
-    console.error("Plan Forge Dashboard-only mode (no MCP stdio)");
-  }
+  await _startTransport();
 
   if (!process.env.PFORGE_CHILD_MODE) {
     // Phase-28.4: schedule background drain of OpenBrain queue ~3s after start
-    try {
-      if (__shouldDrainOnInit()) {
-        setTimeout(() => {
-          runDrainPass(PROJECT_DIR, "initialize-drain", activeHub)
-            .then(r => console.error(`[drain] initialize-drain: ${JSON.stringify(r)}`))
-            .catch(e => console.error(`[drain] initialize-drain failed: ${e.message || e}`));
-        }, 3000);
-      }
-    } catch { /* setTimeout registration must never crash startup */ }
+    _scheduleInitialDrain();
   }
 
   // Start Bridge (connects to hub as a WS client; activates if bridge config present)
-  try {
-    setActiveBridge(createBridge({ cwd: PROJECT_DIR, port: activeHub?.port }));
-    if (activeBridge) {
-      console.error("[bridge] Bridge manager started");
-    }
-  } catch (err) {
-    console.error(`[bridge] Bridge failed to start: ${err.message} (non-fatal)`);
-  }
+  _startBridge();
 
   // Graceful shutdown
   process.on("SIGTERM", () => {

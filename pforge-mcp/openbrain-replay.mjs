@@ -343,6 +343,10 @@ async function captureReplayRecord(client, rec, maxRetries, retryDelayMs) {
   return { ok: false, error: lastErr };
 }
 
+function shouldDelayReplay(rate, index, total) {
+  return rate > 0 && index < total - 1;
+}
+
 export async function replayRecords(client, records, opts = {}) {
   const {
     rate = 50,
@@ -386,7 +390,7 @@ export async function replayRecords(client, records, opts = {}) {
       onProgress?.({ index: i, total, status: "failed", error: outcome.error });
     }
 
-    if (rate > 0 && i < records.length - 1) await delay(rate);
+    if (shouldDelayReplay(rate, i, records.length)) await delay(rate);
   }
 
   return {

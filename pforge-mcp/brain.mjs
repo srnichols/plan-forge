@@ -392,6 +392,69 @@ export function validateFederationConfig(cwd = process.cwd()) {
 /** Hard ceiling on trajectory files returned per federationReadTrajectories call. */
 export const TRAJECTORY_FEDERATION_LIMIT = 100;
 
+function listTrajectoryFiles(planDir) {
+  try {
+    return readdirSync(planDir);
+  } catch {
+    return [];
+  }
+}
+
+function listPlanDirectories(trajRoot) {
+  try {
+    return readdirSync(trajRoot, { withFileTypes: true });
+  } catch {
+    return [];
+  }
+}
+
+function readTrajectoryFile(repo, planBasename, planDir, fileName) {
+  const match = /^slice-(.+)\.md$/.exec(fileName);
+  if (!match) return null;
+  const filePath = resolve(planDir, fileName);
+  if (!filePath.startsWith(planDir)) return null;
+
+  let stats;
+  try {
+    stats = statSync(filePath);
+  } catch {
+    return null;
+  }
+  if (!stats.isFile()) return null;
+
+  try {
+    return {
+      repo,
+      planBasename,
+      sliceId: match[1],
+      path: filePath,
+      mtimeMs: stats.mtimeMs,
+      content: readFileSync(filePath, "utf-8"),
+    };
+  } catch {
+    return null;
+  }
+}
+
+function collectRepoTrajectoryEntries(repo) {
+  const entries = [];
+  const trajRoot = resolve(repo, ".forge", "trajectories");
+  if (!existsSync(trajRoot)) return entries;
+
+  for (const planDirEntry of listPlanDirectories(trajRoot)) {
+    if (!planDirEntry.isDirectory()) continue;
+    const planBasename = planDirEntry.name;
+    const planDir = resolve(trajRoot, planBasename);
+    if (!planDir.startsWith(trajRoot)) continue;
+
+    for (const fileName of listTrajectoryFiles(planDir)) {
+      const trajectoryEntry = readTrajectoryFile(repo, planBasename, planDir, fileName);
+      if (trajectoryEntry) entries.push(trajectoryEntry);
+    }
+  }
+  return entries;
+}
+
 /**
  * Read trajectory notes (`.forge/trajectories/<plan>/slice-<id>.md`) across
  * allowlisted sibling repos. READ-ONLY — never writes to federated repos.
@@ -424,47 +487,7 @@ export function federationReadTrajectories(opts = {}) {
   for (const repo of cfg.repos) {
     const v = validateFederationRepo(repo);
     if (!v.ok) continue;
-    const trajRoot = resolve(repo, ".forge", "trajectories");
-    if (!existsSync(trajRoot)) continue;
-
-    // Depth-2 walk: trajRoot/<planBasename>/slice-<id>.md
-    let planDirs;
-    try { planDirs = readdirSync(trajRoot, { withFileTypes: true }); }
-    catch { continue; }
-
-    for (const pd of planDirs) {
-      if (!pd.isDirectory()) continue;
-      const planBasename = pd.name;
-      const planDir = resolve(trajRoot, planBasename);
-      // Confinement: resolved path must stay inside trajRoot (symlink guard)
-      if (!planDir.startsWith(trajRoot)) continue;
-
-      let files;
-      try { files = readdirSync(planDir); }
-      catch { continue; }
-
-      for (const f of files) {
-        const m = /^slice-(.+)\.md$/.exec(f);
-        if (!m) continue;
-        const filePath = resolve(planDir, f);
-        if (!filePath.startsWith(planDir)) continue;
-        let st;
-        try { st = statSync(filePath); }
-        catch { continue; }
-        if (!st.isFile()) continue;
-        let content = "";
-        try { content = readFileSync(filePath, "utf-8"); }
-        catch { continue; }
-        collected.push({
-          repo,
-          planBasename,
-          sliceId: m[1],
-          path: filePath,
-          mtimeMs: st.mtimeMs,
-          content,
-        });
-      }
-    }
+    collected.push(...collectRepoTrajectoryEntries(repo));
   }
 
   // Sort by mtime desc, cap at limit.
@@ -741,6 +764,42 @@ function buildDefaultDeps(overrides = {}) {
   return { ...defaults, ...overrides };
 }
 
+async function recallFromTiers(key, opts, deps, readTiers) {
+  for (const tier of readTiers) {
+    if (tier === "l1") {
+      const value = l1Recall(key, opts.runId);
+      if (value != null) return { result: value, servedFrom: "l1" };
+      continue;
+    }
+
+    if (tier === "l2") {
+      const value = l2Recall(key, deps);
+      if (value != null) return { result: value, servedFrom: "l2" };
+      continue;
+    }
+
+    if (tier === "l3") {
+      const value = await l3Recall(key, deps);
+      if (value != null) return { result: value, servedFrom: "l3" };
+    }
+  }
+  return { result: null, servedFrom: "miss" };
+}
+
+function shouldAttemptFederatedRecall(scope, result) {
+  return result == null && (scope === "cross" || scope === "cross-project");
+}
+
+function recallFromFederation(key, cwd) {
+  try {
+    const hits = federationRead(key, { cwd });
+    if (hits.length > 0) {
+      return { result: hits[0].value, servedFrom: "federation" };
+    }
+  } catch { /* federation read never fails the call */ }
+  return { result: null, servedFrom: "miss" };
+}
+
 // ─── Public API ──────────────────────────────────────────────────────────────
 
 /**
@@ -768,48 +827,14 @@ export async function recall(key, opts = {}, deps = {}) {
     });
   }
 
-  let result = null;
-  let servedFrom = "miss";
-
-  for (const tier of readTiers) {
-    if (tier === "l1") {
-      result = l1Recall(key, opts.runId);
-    } else if (tier === "l2") {
-      const l2Result = l2Recall(key, d);
-      if (l2Result != null) {
-        // Freshness check
-        if (opts.freshnessMs && readTiers.includes("l3")) {
-          // L2 hit but possibly stale — we can't check mtime on routed readers,
-          // so freshnessMs only applies to L1-backed data with mtime tracking.
-          // For L2 routed data, treat as always fresh unless explicitly stale.
-          result = l2Result;
-          servedFrom = "l2";
-          break;
-        }
-        result = l2Result;
-        servedFrom = "l2";
-        break;
-      }
-    } else if (tier === "l3") {
-      result = await l3Recall(key, d);
-      if (result != null) {
-        servedFrom = "l3";
-      }
-    }
-  }
+  let { result, servedFrom } = await recallFromTiers(key, opts, d, readTiers);
 
   // Phase-25 Slice 6 (MUST #10): for cross.* keys that still missed, attempt
   // a read-only fan-out across federated repos. Opt-in via .forge.json →
   // brain.federation.enabled; silent no-op when disabled. Returns the first
   // hit; ties broken by repo array order (deterministic).
-  if (result == null && (effectiveScope === "cross" || effectiveScope === "cross-project")) {
-    try {
-      const hits = federationRead(key, { cwd: d.cwd });
-      if (hits.length > 0) {
-        result = hits[0].value;
-        servedFrom = "federation";
-      }
-    } catch { /* federation read never fails the call */ }
+  if (shouldAttemptFederatedRecall(effectiveScope, result)) {
+    ({ result, servedFrom } = recallFromFederation(key, d.cwd));
   }
 
   if (span) {

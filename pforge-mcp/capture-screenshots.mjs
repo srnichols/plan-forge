@@ -99,26 +99,7 @@ const SIMULATED_EVENTS = [
   // Slice 4 is "executing" — screenshot captures this state
 ];
 
-async function main() {
-  mkdirSync(OUTPUT_DIR, { recursive: true });
-  console.log(`Output: ${OUTPUT_DIR}`);
-
-  const browser = await chromium.launch({ headless: true });
-  const context = await browser.newContext({
-    viewport: { width: 1280, height: 720 },
-    deviceScaleFactor: 2,
-    colorScheme: "dark",
-  });
-  const page = await context.newPage();
-
-  // ─── 1. Load dashboard ──────────────────────────────────────────────
-  console.log("Loading dashboard...");
-  await page.goto(DASHBOARD_URL, { waitUntil: "networkidle", timeout: 15000 });
-
-  // Wait for page to settle
-  await page.waitForTimeout(1500);
-
-  // ─── 2. Progress tab — inject plan browser + simulated run events ───
+async function captureProgressTab(page) {
   console.log("Capturing Progress tab (plan browser + simulated live run)...");
 
   // Dashboard now defaults to Home — click Progress first so injection targets exist.
@@ -238,13 +219,9 @@ async function main() {
   await page.waitForTimeout(300);
 
   await page.screenshot({ path: resolve(OUTPUT_DIR, "progress.png"), fullPage: true });
+}
 
-  // ─── 3. Runs tab ────────────────────────────────────────────────────
-  console.log("Capturing Runs tab...");
-  await clickTab(page, "runs");
-  await page.waitForTimeout(1500);
-  await page.screenshot({ path: resolve(OUTPUT_DIR, "runs.png"), fullPage: false });
-
+async function captureCostTab(page) {
   // ─── 4. Cost tab — Section Screenshots ───────────────────────────────
   console.log("Capturing Cost tab sections...");
   await clickTab(page, "cost");
@@ -277,36 +254,13 @@ async function main() {
     </table>`;
   });
   await page.waitForTimeout(500);
-
   // Full page screenshot (backward compat)
   await page.screenshot({ path: resolve(OUTPUT_DIR, "cost.png"), fullPage: true });
-
   // Section screenshots
-  const costSections = [
-    { selector: "#tab-cost > .grid.md\\:grid-cols-3", name: "cost-overview.png" },
-    { selector: "#tab-cost > .grid.md\\:grid-cols-2", name: "cost-charts.png" },
-    { selector: "#chart-cost-trend", name: "cost-trend.png", parent: true },
-    { selector: "#chart-duration-trend", name: "cost-duration.png", parent: true },
-    { selector: "#chart-model-perf", name: "cost-models.png", parent: true },
-  ];
-  for (const sec of costSections) {
-    try {
-      const el = sec.parent
-        ? await page.$(`${sec.selector}`).then(async (e) => e ? await e.evaluateHandle((e) => e.closest(".bg-gray-800")) : null)
-        : await page.$(sec.selector);
-      if (el) {
-        await el.screenshot({ path: resolve(OUTPUT_DIR, sec.name) });
-        console.log(`  ✅ ${sec.name}`);
-      }
-    } catch { /* skip if section not found */ }
-  }
+  await captureCostSections(page);
+}
 
-  // ─── 5. Actions tab ─────────────────────────────────────────────────
-  console.log("Capturing Actions tab...");
-  await clickTab(page, "actions");
-  await page.waitForTimeout(500);
-  await page.screenshot({ path: resolve(OUTPUT_DIR, "actions.png"), fullPage: true });
-
+async function captureConfigTab(page) {
   // ─── 6. Config tab + Memory Search (v2.7) ────────────────────────────
   console.log("Capturing Config tab...");
   await clickTab(page, "config");
@@ -319,7 +273,6 @@ async function main() {
     if (apiEl) apiEl.innerHTML = '<span class="text-green-400">✓ xAI Grok</span> <span class="text-gray-500">— XAI_API_KEY configured</span>';
     const obEl = document.getElementById("cfg-openbrain");
     if (obEl) obEl.innerHTML = '<span class="text-green-400">✓ Connected</span> <span class="text-gray-500">— openbrain</span><br><span class="text-xs text-gray-500">http://localhost:3200</span>';
-    // v2.9: Advanced settings panel
     const advDetails = document.querySelector('#tab-config details');
     if (advDetails) advDetails.open = true;
     const maxP = document.getElementById('cfg-max-parallel');
@@ -334,14 +287,11 @@ async function main() {
     if (qThresh) qThresh.value = 7;
     const qModels = document.getElementById('cfg-quorum-models');
     if (qModels) qModels.value = 'grok-3-mini, claude-sonnet-4.6, gpt-5.2-codex';
-    // Workers
     const workersEl = document.getElementById('cfg-workers');
     if (workersEl) workersEl.innerHTML = '<span class="text-green-400 text-xs mr-3">✓ gh-copilot</span><span class="text-green-400 text-xs mr-3">✓ claude</span><span class="text-gray-600 text-xs mr-3">✗ codex</span><span class="text-green-400 text-xs mr-3">✓ grok (API)</span>';
-    // v2.9: Memory search with presets
     const searchPanel = document.getElementById("memory-search-panel");
     if (searchPanel) {
       searchPanel.classList.remove("hidden");
-      // Inject presets
       const presetsEl = document.getElementById("memory-presets");
       if (presetsEl) presetsEl.innerHTML = [
         '📋 Phase', '📋 PLAN', '📋 roadmap',
@@ -367,12 +317,13 @@ async function main() {
   });
   await page.waitForTimeout(300);
   await page.screenshot({ path: resolve(OUTPUT_DIR, "config.png"), fullPage: true });
+}
 
+async function captureTracesTab(page) {
   // ─── 7. Traces tab ─────────────────────────────────────────────────
   console.log("Capturing Traces tab...");
   await clickTab(page, "traces");
   await page.waitForTimeout(1500);
-  // Try to select the first run if available
   const traceOptions = await page.$$eval("#trace-run-select option", (opts) =>
     opts.filter((o) => o.value).map((o) => o.value)
   );
@@ -380,68 +331,18 @@ async function main() {
     await page.selectOption("#trace-run-select", traceOptions[0]);
     await page.waitForTimeout(2000);
   }
-  // v2.9: Show search input with value
   await page.evaluate(() => {
     const searchEl = document.getElementById("trace-search");
     if (searchEl) searchEl.value = "slice";
   });
   await page.screenshot({ path: resolve(OUTPUT_DIR, "traces.png"), fullPage: false });
+}
 
-  // ─── 8. Skills tab ──────────────────────────────────────────────────
-  console.log("Capturing Skills tab...");
-  await clickTab(page, "skills");
-  // Inject a mock skill execution for visual interest
-  await page.evaluate(() => {
-    if (typeof handleEvent === "function") {
-      handleEvent({
-        type: "skill-started",
-        data: { skillName: "code-review", stepCount: 5, timestamp: new Date().toISOString() },
-      });
-      handleEvent({
-        type: "skill-step-started",
-        data: { skillName: "code-review", stepNumber: 1, stepName: "Gather context", timestamp: new Date().toISOString() },
-      });
-      handleEvent({
-        type: "skill-step-completed",
-        data: { skillName: "code-review", stepNumber: 1, stepName: "Gather context", status: "passed", duration: 2300 },
-      });
-      handleEvent({
-        type: "skill-step-started",
-        data: { skillName: "code-review", stepNumber: 2, stepName: "Architecture review", timestamp: new Date().toISOString() },
-      });
-      handleEvent({
-        type: "skill-step-completed",
-        data: { skillName: "code-review", stepNumber: 2, stepName: "Architecture review", status: "passed", duration: 4100 },
-      });
-      handleEvent({
-        type: "skill-step-started",
-        data: { skillName: "code-review", stepNumber: 3, stepName: "Security scan", timestamp: new Date().toISOString() },
-      });
-      handleEvent({
-        type: "skill-step-completed",
-        data: { skillName: "code-review", stepNumber: 3, stepName: "Security scan", status: "passed", duration: 3200 },
-      });
-      handleEvent({
-        type: "skill-step-started",
-        data: { skillName: "code-review", stepNumber: 4, stepName: "Test coverage", timestamp: new Date().toISOString() },
-      });
-      // Step 4 still executing — screenshot captures this
-    }
-  });
-  await page.waitForTimeout(500);
-  await page.screenshot({ path: resolve(OUTPUT_DIR, "skills.png"), fullPage: false });
-
-  // ─── 9. Replay tab ──────────────────────────────────────────────────
-  console.log("Capturing Replay tab...");
-  await clickTab(page, "replay");
-  await page.waitForTimeout(1500);
-  await page.screenshot({ path: resolve(OUTPUT_DIR, "replay.png"), fullPage: false });
-
+async function captureExtensionsTab(page) {
   // ─── 10. Extensions tab (v2.7) ───────────────────────────────────────
   console.log("Capturing Extensions tab...");
   await clickTab(page, "extensions");
   await page.waitForTimeout(2000);
-  // Mark first extension as installed (renderExtensions already has Install/Uninstall buttons)
   await page.evaluate(() => {
     const firstCard = document.querySelector('#tab-extensions .bg-gray-800');
     if (firstCard) {
@@ -454,10 +355,90 @@ async function main() {
   });
   await page.waitForTimeout(300);
   await page.screenshot({ path: resolve(OUTPUT_DIR, "extensions.png"), fullPage: false });
+}
+
+async function main() {
+  mkdirSync(OUTPUT_DIR, { recursive: true });
+  console.log(`Output: ${OUTPUT_DIR}`);
+
+  const browser = await chromium.launch({ headless: true });
+  const context = await browser.newContext({
+    viewport: { width: 1280, height: 720 },
+    deviceScaleFactor: 2,
+    colorScheme: "dark",
+  });
+  const page = await context.newPage();
+
+  // ─── 1. Load dashboard ──────────────────────────────────────────────
+  console.log("Loading dashboard...");
+  await page.goto(DASHBOARD_URL, { waitUntil: "networkidle", timeout: 15000 });
+  // Wait for page to settle
+  await page.waitForTimeout(1500);
+
+  // ─── 2. Progress tab ────────────────────────────────────────────────
+  await captureProgressTab(page);
+
+  // ─── 3. Runs tab ────────────────────────────────────────────────────
+  console.log("Capturing Runs tab...");
+  await clickTab(page, "runs");
+  await page.waitForTimeout(1500);
+  await page.screenshot({ path: resolve(OUTPUT_DIR, "runs.png"), fullPage: false });
+
+  // ─── 4. Cost tab ────────────────────────────────────────────────────
+  await captureCostTab(page);
+
+  // ─── 5. Actions tab ─────────────────────────────────────────────────
+  console.log("Capturing Actions tab...");
+  await clickTab(page, "actions");
+  await page.waitForTimeout(500);
+  await page.screenshot({ path: resolve(OUTPUT_DIR, "actions.png"), fullPage: true });
+
+  // ─── 6. Config tab ──────────────────────────────────────────────────
+  await captureConfigTab(page);
+
+  // ─── 7. Traces tab ──────────────────────────────────────────────────
+  await captureTracesTab(page);
+
+  // ─── 8. Skills tab ──────────────────────────────────────────────────
+  console.log("Capturing Skills tab...");
+  await clickTab(page, "skills");
+  await injectSkillsDemoEvents(page);
+  await page.waitForTimeout(500);
+  await page.screenshot({ path: resolve(OUTPUT_DIR, "skills.png"), fullPage: false });
+
+  // ─── 9. Replay tab ──────────────────────────────────────────────────
+  console.log("Capturing Replay tab...");
+  await clickTab(page, "replay");
+  await page.waitForTimeout(1500);
+  await page.screenshot({ path: resolve(OUTPUT_DIR, "replay.png"), fullPage: false });
+
+  // ─── 10. Extensions tab ─────────────────────────────────────────────
+  await captureExtensionsTab(page);
 
   // ─── Done ───────────────────────────────────────────────────────────
   await browser.close();
   console.log(`\n✅ Captured 9 screenshots to ${OUTPUT_DIR}`);
+}
+
+async function captureCostSections(page) {
+  const costSections = [
+    { selector: "#tab-cost > .grid.md\\:grid-cols-3", name: "cost-overview.png" },
+    { selector: "#tab-cost > .grid.md\\:grid-cols-2", name: "cost-charts.png" },
+    { selector: "#chart-cost-trend", name: "cost-trend.png", parent: true },
+    { selector: "#chart-duration-trend", name: "cost-duration.png", parent: true },
+    { selector: "#chart-model-perf", name: "cost-models.png", parent: true },
+  ];
+  for (const sec of costSections) {
+    try {
+      const el = sec.parent
+        ? await page.$(`${sec.selector}`).then(async (e) => e ? await e.evaluateHandle((node) => node.closest(".bg-gray-800")) : null)
+        : await page.$(sec.selector);
+      if (el) {
+        await el.screenshot({ path: resolve(OUTPUT_DIR, sec.name) });
+        console.log(`  ✅ ${sec.name}`);
+      }
+    } catch { /* skip if section not found */ }
+  }
 }
 
 async function injectSkillsDemoEvents(page) {

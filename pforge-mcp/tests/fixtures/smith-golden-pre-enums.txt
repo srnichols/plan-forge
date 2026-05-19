@@ -7,109 +7,112 @@ Equivalent manual steps (smith):
   5. Scan for common problems (duplicates, orphans, broken references)
 
 
-ΓòöΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòù
-Γòæ       Plan Forge ΓÇö The Smith                                  Γòæ
-ΓòÜΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓò¥
+╔══════════════════════════════════════════════════════════════╗
+║       Plan Forge — The Smith                                  ║
+╚══════════════════════════════════════════════════════════════╝
 
 Environment:
-  Γ£à git 2.53.0.windows.3
-  Γ£à code (VS Code CLI) found
-  Γ£à PowerShell 7.6.1 (pwsh) ΓÇö running shell is 5.1.26100.8457; pwsh is preferred
-  Γ£à gh (GitHub CLI) 2.92.0
+  ✅ git 2.53.0.windows.3
+  ✅ code (VS Code CLI) found
+  ✅ PowerShell 7.6.1 (pwsh)
+  ✅ gh (GitHub CLI) 2.92.0
 
 Runtime & Worker Readiness:
-  Γ£à git v2.53.0
-  Γ£à gh v2.92.0
-  Γ£à node v24.11.1
-  Γ£à pwsh v7.6.1
-  Γ£à gh-copilot v1.0.49 (agentic capable)
-  ΓÜá∩╕Å  claude not found on PATH (agent worker)
+  ✅ git v2.53.0
+  ✅ gh v2.92.0
+  ✅ node v24.11.1
+  ✅ pwsh v7.6.1
+  ✅ gh-copilot v1.0.49 (agentic capable)
+  ⚠️  claude not found on PATH (agent worker)
      FIX: winget install Anthropic.Claude   (or npm install -g @anthropic-ai/claude-code)
-  Γ¥î copilot-coding-agent v lacks agentic flags: Logged in to github.com (issue #28)
+  ❌ copilot-coding-agent v lacks agentic flags: Logged in to github.com (issue #28)
      FIX: winget upgrade --id GitHub.cli && gh auth login
-  ΓÜá∩╕Å  codex not found on PATH (agent worker)
+  ⚠️  codex not found on PATH (agent worker)
      FIX: npm install -g @openai/codex
 
 VS Code Configuration:
-  Γ¥î .vscode/settings.json has invalid JSON
-     FIX: Fix the JSON syntax in .vscode/settings.json
+  ✅ chat.agent.enabled (default — OK)
+  ⚠️  chat.useCustomizationsInParentRepositories not set
+     FIX: Add "chat.useCustomizationsInParentRepositories": true to .vscode/settings.json
+  ⚠️  chat.promptFiles not set
+     FIX: Add "chat.promptFiles": true to .vscode/settings.json
 
 Setup Health:
-  Γ¥î .forge.json not found
+  ❌ .forge.json not found
      FIX: Run 'pforge init' to bootstrap your project
-  Γ£à .github/copilot-instructions.md exists
+  ✅ .github/copilot-instructions.md exists
 
 Version Currency:
-  ΓÜá∩╕Å  Cannot determine installed version (.forge.json missing templateVersion)
-     (cached 192m ago)
+  ⚠️  Cannot determine installed version (.forge.json missing templateVersion)
+     (cached 208m ago)
 
 Auto-update:
-  Γ£à Auto-update: disabled (opt-in) | Cache age: no cache | Last tag: unknown | Last check: never
+  ✅ Auto-update: disabled (opt-in) | Cache age: no cache | Last tag: unknown | Last check: never
      Tip: Run 'pforge self-update' to check + install, or 'pforge smith --refresh-version-cache' to clear cache
 
 MCP Server:
-  Γ£à pforge-mcp/server.mjs exists
-  Γ£à MCP dependencies installed
-  Γ£à .vscode/mcp.json has 'plan-forge' server entry
+  ✅ pforge-mcp/server.mjs exists
+  ✅ MCP dependencies installed
+  ✅ .vscode/mcp.json has 'plan-forge' server entry
 
 Image Generation:
-  Γ£à sharp installed (WebP, PNG, AVIF conversion)
-  ΓÜá∩╕Å  No image API keys configured
+  ✅ sharp installed (WebP, PNG, AVIF conversion)
+  ⚠️  No image API keys configured
      FIX: Set XAI_API_KEY or OPENAI_API_KEY env var, or add to .forge/secrets.json
-  Γ£à Node.js v24.11.1 (sharp requires >= 18.17)
+  ✅ Node.js v24.11.1 (sharp requires >= 18.17)
 
 MCP Runtime:
-  Γ£à MCP SDK (protocol layer) v1.29.0
-  Γ£à Express (dashboard + REST API) v5.2.1
-  Γ£à ws (WebSocket hub for real-time events) v8.20.0
-  Γ£à Playwright (screenshot capture)
-  Γ£à MCP server version v3.7.0 matches VERSION file
-  Γ£à forge-master-routes.mjs (Phase-29 route wiring)
-  Γ£à tools.json + cli-schema.json (92 MCP tools registered)
+  ✅ MCP SDK (protocol layer) v1.29.0
+  ✅ Express (dashboard + REST API) v5.2.1
+  ✅ ws (WebSocket hub for real-time events) v8.20.0
+  ✅ Playwright (screenshot capture)
+  ✅ MCP server version v3.7.0 matches VERSION file
+  ✅ forge-master-routes.mjs (Phase-29 route wiring)
+  ✅ tools.json + cli-schema.json (92 MCP tools registered)
 
 Dashboard:
-  Γ£à dashboard/index.html
-  Γ£à dashboard/app.js
-  Γ£à dashboard/forge-master.js (Forge-Master Studio tab)
+  ✅ dashboard/index.html
+  ✅ dashboard/app.js
+  ✅ dashboard/forge-master.js (Forge-Master Studio tab)
 
 Lifecycle Hooks:
-  Γ£à 7/7 lifecycle hooks present (core + LiveGuard)
+  ✅ 8/8 lifecycle hooks present (core + LiveGuard)
 
 Extensions:
-  Γ£à Extension catalog valid ( extension(s))
-  Γ£à Spec Kit compatible
+  ✅ Extension catalog valid (1 extension(s))
+  ✅ Spec Kit compatible
 
 Version & Changelog:
-  Γ£à VERSION: 3.7.0
-  Γ£à CHANGELOG.md present (framework v3.7.0 ΓÇö downstream CHANGELOG tracks your app, not pforge)
+  ✅ VERSION: 3.7.0
+  ✅ CHANGELOG.md present (framework v3.7.0 — downstream CHANGELOG tracks your app, not pforge)
 
 Common Problems:
-  Γ£à No common problems detected
+  ✅ No common problems detected
 
 Orchestrator:
-  Γ£à Orchestrator ready ΓÇö use 'pforge run-plan <plan>' to execute a plan
-  Γ£à pforge-mcp/orchestrator.mjs present
+  ✅ Orchestrator ready — use 'pforge run-plan <plan>' to execute a plan
+  ✅ pforge-mcp/orchestrator.mjs present
 
 Intelligence:
-  Γ£à 92 MCP tools (14 LiveGuard) in tools.json
+  ✅ 92 MCP tools (14 LiveGuard) in tools.json
 
 Crucible:
-  Γ£à Crucible inactive ΓÇö no .forge/crucible/ directory yet
+  ✅ Crucible inactive — no .forge/crucible/ directory yet
 
 Tempering:
-  Γ£à Tempering inactive ΓÇö no .forge/tempering/ directory yet
+  ✅ Tempering inactive — no .forge/tempering/ directory yet
 
 Bug Registry:
-  Γ£à Bug registry inactive ΓÇö no .forge/bugs/ directory yet
+  ✅ Bug registry inactive — no .forge/bugs/ directory yet
 
 Notifications:
-  Γ£à No .forge.json ΓÇö notifications inactive (optional)
+  ✅ No .forge.json — notifications inactive (optional)
 
 Timeline / Search sources:
-  Γ£à 0 of 6 L2 source(s) with indexable events
+  ✅ 0 of 6 L2 source(s) with indexable events
 
-ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
-  Results:  40 passed  |  3 failed  |  4 warnings
-ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
+────────────────────────────────────────────────────
+  Results:  41 passed  |  2 failed  |  6 warnings
+────────────────────────────────────────────────────
 
-Fix the 3 issue(s) above for the best Plan Forge experience.
+Fix the 2 issue(s) above for the best Plan Forge experience.

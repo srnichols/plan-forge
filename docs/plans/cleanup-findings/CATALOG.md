@@ -41,6 +41,18 @@
 
 ---
 
+## Proposed remediation phases
+
+Phase stubs for high-severity categories have been drafted in
+[`proposed-phases/`](proposed-phases/README.md).
+
+| Stub | Findings | Priority |
+|------|----------|----------|
+| [`Phase-PROPOSED-D-ESLINT-ERRORS-STUB.md`](proposed-phases/Phase-PROPOSED-D-ESLINT-ERRORS-STUB.md) | D1–D3 | 1 — fix first (blocking) |
+| [`Phase-PROPOSED-A-MODULE-SIZE-STUB.md`](proposed-phases/Phase-PROPOSED-A-MODULE-SIZE-STUB.md) | A1–A3 | 2 — architectural debt |
+
+---
+
 ## Excluded findings
 
 The following source categories were audited and produced **no actionable findings**:

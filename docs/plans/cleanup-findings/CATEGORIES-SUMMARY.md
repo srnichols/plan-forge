@@ -35,8 +35,8 @@
 
 ## Remediation priority order
 
-1. **D-series (ESLint errors)** — blocking; fix first. Focus: `complexity-error` in orchestrator.mjs and server.mjs.
-2. **A-series (high module size)** — architectural debt; plan extraction as dedicated work items.
+1. **D-series (ESLint errors)** — blocking; fix first. Focus: `complexity-error` in orchestrator.mjs and server.mjs. → [`Phase-PROPOSED-D-ESLINT-ERRORS-STUB.md`](proposed-phases/Phase-PROPOSED-D-ESLINT-ERRORS-STUB.md)
+2. **A-series (high module size)** — architectural debt; plan extraction as dedicated work items. → [`Phase-PROPOSED-A-MODULE-SIZE-STUB.md`](proposed-phases/Phase-PROPOSED-A-MODULE-SIZE-STUB.md)
 3. **C-series (long params)** — medium effort; options-object refactor per function.
 4. **E-series (ESLint warnings)** — high volume; batch-fix rule by rule starting with complexity-warn.
 5. **B-series (medium module size)** — monitor; no immediate action required.

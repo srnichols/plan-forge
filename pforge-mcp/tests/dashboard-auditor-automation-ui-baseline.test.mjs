@@ -1,13 +1,12 @@
 /**
- * Phase 40 — AUDITOR-AUTOMATION-UI baseline harness.
+ * Phase 40 — AUDITOR-AUTOMATION-UI baseline harness (updated to reflect S1–S6 shipped state).
  *
- * Confirms the current dashboard/API contract after S4 lands.
- * Later slices intentionally update the remaining absent surfaces.
+ * Originally captured the pre-change dashboard/API state.
+ * Updated per Phase-39 precedent (c19e9f2) to assert the shipped state.
  */
 
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { readFileSync, mkdtempSync, rmSync, existsSync } from "node:fs";
-import { tmpdir } from "node:os";
+import { readFileSync, mkdirSync, rmSync, existsSync } from "node:fs";
 import { join, resolve, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -15,6 +14,7 @@ const HERE = dirname(fileURLToPath(import.meta.url));
 const INDEX_HTML = readFileSync(resolve(HERE, "..", "dashboard", "index.html"), "utf-8");
 const APP_JS = readFileSync(resolve(HERE, "..", "dashboard", "app.js"), "utf-8");
 const SERVER_SRC = readFileSync(resolve(HERE, "..", "server.mjs"), "utf-8");
+const SCRATCH_ROOT = resolve(HERE, "..", ".vitest-scratch");
 
 const EXPECTED_SETTINGS_SECTIONS = [
   "tab-settings-general",
@@ -27,6 +27,7 @@ const EXPECTED_SETTINGS_SECTIONS = [
   "tab-settings-crucible",
   "tab-settings-brain",
   "tab-settings-copilot",
+  "tab-settings-forgemaster",
 ];
 
 const PHASE40_FIELD_IDS = [
@@ -47,7 +48,9 @@ let tmpProject;
 let savedCwd;
 
 beforeAll(async () => {
-  tmpProject = mkdtempSync(join(tmpdir(), "pforge-phase40-baseline-"));
+  mkdirSync(SCRATCH_ROOT, { recursive: true });
+  tmpProject = join(SCRATCH_ROOT, `pforge-phase40-baseline-${process.pid}-${Date.now()}`);
+  mkdirSync(tmpProject, { recursive: true });
   savedCwd = process.cwd();
   process.env.PLAN_FORGE_PROJECT = tmpProject;
   process.chdir(tmpProject);
@@ -67,34 +70,38 @@ afterAll(async () => {
   if (tmpProject && existsSync(tmpProject)) rmSync(tmpProject, { recursive: true, force: true });
 });
 
-describe("Phase 40 baseline — settings surfaces", () => {
-  it("keeps the current 10 settings sections and now includes Forge-Master", () => {
+describe("Phase 40 shipped — settings surfaces (S1 + S2)", () => {
+  it("has all 11 settings sections including new Forge-Master tab", () => {
     for (const id of EXPECTED_SETTINGS_SECTIONS) {
-      expect(INDEX_HTML).toContain(`id="${id}"`);
+      expect(INDEX_HTML, `${id} must be present`).toContain(`id="${id}"`);
     }
-    expect(INDEX_HTML).toContain('id="tab-settings-forgemaster"');
-    expect(APP_JS).toContain("settings-forgemaster");
   });
 
-  it("now declares observer and auditor cfg-* fields", () => {
+  it("declares all nine observer + auditor cfg-* fields", () => {
     for (const id of PHASE40_FIELD_IDS) {
-      expect(INDEX_HTML).toContain(`id="${id}"`);
+      expect(INDEX_HTML, `${id} must be present`).toContain(`id="${id}"`);
     }
   });
 });
 
-describe("Phase 40 baseline — card and API surfaces", () => {
-  it("wires observer narrations and still omits cross-run anomalies and auditor report cards", () => {
-    expect(APP_JS).toContain("observer:narration");
-    expect(INDEX_HTML).toContain("Observer Narrations");
-    expect(APP_JS).toContain("/api/brain/recall?source=observer&limit=20");
-    expect(INDEX_HTML).not.toContain("Cross-Run Watcher Anomalies");
-    expect(INDEX_HTML).not.toContain("Auditor Latest Report");
-    expect(APP_JS).not.toContain("/api/watcher/cross-run");
-    expect(APP_JS).not.toContain("/api/auditor/latest");
+describe("Phase 40 shipped — card and API surfaces (S3 + S4 + S5 + S6)", () => {
+  it("wires observer:narration event type in index.html", () => {
+    expect(INDEX_HTML).toContain("observer:narration");
   });
 
-  it("server source exposes the current read endpoints", () => {
+  it("renders Observer Narrations, Cross-Run Watcher Anomalies, and Auditor Latest Report cards", () => {
+    expect(INDEX_HTML).toContain("Observer Narrations");
+    expect(INDEX_HTML).toContain("Cross-Run Watcher Anomalies");
+    expect(INDEX_HTML).toContain("Auditor Latest Report");
+  });
+
+  it("app.js calls /api/watcher/cross-run and /api/auditor/latest and /api/brain/recall", () => {
+    expect(APP_JS).toContain("/api/watcher/cross-run");
+    expect(APP_JS).toContain("/api/auditor/latest");
+    expect(APP_JS).toContain("/api/brain/recall?source=observer&limit=20");
+  });
+
+  it("server exposes both Phase 40 read endpoints", () => {
     expect(SERVER_SRC).toContain('/api/watcher/cross-run');
     expect(SERVER_SRC).toContain('/api/auditor/latest');
   });

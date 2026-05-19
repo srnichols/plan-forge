@@ -1,6 +1,6 @@
 {
   "schemaVersion": "2.3.0",
-  "toolCount": 94,
+  "toolCount": 95,
   "toolNames": [
     "forge_abort",
     "forge_alert_triage",
@@ -56,6 +56,7 @@
     "forge_lattice_stat",
     "forge_liveguard_run",
     "forge_master_ask",
+    "forge_master_observe",
     "forge_memory_capture",
     "forge_memory_report",
     "forge_meta_bug_file",

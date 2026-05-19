@@ -32,11 +32,9 @@ const ORCHESTRATOR_PATH = resolve(HERE, "../orchestrator.mjs");
  * and have documented it in both the source file and this list.
  */
 const KNOWN_SERVER_CYCLES = new Set([
-  // orchestrator.mjs re-exports cost-service.mjs functions for backward
-  // compatibility. cost-service.mjs imports back into orchestrator.mjs for
-  // model-scoring helpers. This documented cycle is inherited by the
-  // orchestrator.mjs gate in Phase 53 S0 and removed in Phase 53 S8.
-  "cost-service.mjs -> orchestrator.mjs",
+  // Phase-53 S8: cost-service.mjs ↔ orchestrator.mjs cycle resolved by
+  // extracting model-scoring helpers to orchestrator/model-scoring.mjs.
+  // cost-service.mjs now imports directly from that sub-module.
 ]);
 
 const KNOWN_ORCHESTRATOR_CYCLES = new Set(KNOWN_SERVER_CYCLES);

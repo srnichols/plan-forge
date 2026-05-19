@@ -16,7 +16,7 @@ import {
   aggregateModelStats,
   isApiOnlyModel,
   QUORUM_PRESETS,
-} from "./orchestrator.mjs";
+} from "./orchestrator/model-scoring.mjs";
 import { COST_SOURCES } from "./enums.mjs";
 import { quotaCacheGet, compareSliceEstimate } from "./foundry-quota.mjs";
 

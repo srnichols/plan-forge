@@ -91,6 +91,7 @@ describe("Schema/Contract (Slice 06.3)", () => {
   const serverSrc = SERVER_COMBINED_SRC;
   const capSrc = readFileSync(resolve(MCP_ROOT, "capabilities.mjs"), "utf-8");
   const orchestratorSrc = readFileSync(resolve(MCP_ROOT, "orchestrator.mjs"), "utf-8");
+  const forgeIoSrc = readFileSync(resolve(MCP_ROOT, "orchestrator", "forge-io.mjs"), "utf-8");
 
   it("tools.json registers forge_bug_validate_fix", () => {
     const entry = toolsJson.find(t => t.name === "forge_bug_validate_fix");

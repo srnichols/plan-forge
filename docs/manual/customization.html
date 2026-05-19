@@ -145,6 +145,8 @@ tools: ["read_file", "grep_search", "semantic_search"]
       </div>
       <p>Agents are <strong>read-only</strong>, they can search and read but can't edit files. This makes them safe to run as independent auditors. To create a new agent, copy an existing one and modify the expertise section.</p>
 
+      <p>Plan Forge ships a built-in <strong>plan-health-auditor</strong> agent (<code>.github/agents/plan-health-auditor.agent.md</code>) that reads plan files and reports on slice sizing, gate coverage, missing forbidden actions, and scope contract completeness. Invoke it via <code>forge_delegate_to_agent</code> with <code>agent: "plan-health-auditor"</code> or from the Dashboard Agents tab. Read-only; cannot modify plans.</p>
+
       <!-- ─── Customizing Skills ─── -->
       <h2 id="skills">Customizing Skills</h2>
         <p>Skills are multi-step procedures in <code>.github/skills/*/SKILL.md</code>. Each skill defines steps, validation gates, and expected outputs. Every skill follows the <a href="instructions-agents-reference.html#skills">Skill Blueprint</a> format, including Temper Guards, Warning Signs, and Exit Proof sections. To create a custom skill:</p>

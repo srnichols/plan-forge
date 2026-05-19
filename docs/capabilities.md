@@ -1,12 +1,12 @@
 # Plan Forge — Capabilities Reference
 
-> **Tools**: 88 MCP (35 core + 14 LiveGuard + 2 Watcher + 8 Crucible + 6 Tempering + 4 Bug Registry + 3 Testbed + 3 Review + 2 Notify + 5 Lattice + 2 Memory + 2 Sync + 1 Forge-Master + 1 Doctor) | **CLI-only families**: Hallmark (`pforge hallmark show|verify`), Anvil (`pforge anvil stat|clear|rebuild|dlq`) | **CLI**: 48+ commands | **Presets**: 9 | **Agents**: 20 | **Skills**: 14
+> **Tools**: 89 MCP (35 core + 14 LiveGuard + 2 Watcher + 8 Crucible + 6 Tempering + 4 Bug Registry + 3 Testbed + 3 Review + 2 Notify + 5 Lattice + 2 Memory + 2 Sync + 1 Forge-Master + 1 Doctor + 1 Worker Guardrails) | **CLI-only families**: Hallmark (`pforge hallmark show|verify`), Anvil (`pforge anvil stat|clear|rebuild|dlq`) | **CLI**: 48+ commands | **Presets**: 9 | **Agents**: 20 | **Skills**: 14
 >
 > Machine-readable version: call `forge_capabilities` MCP tool, `GET https://planforge.software/.well-known/plan-forge.json`, or read `pforge-mcp/tools.json` (auto-generated on every MCP server start).
 
 ---
 
-## MCP Tools (88)
+## MCP Tools (89)
 
 | Tool | Intent | Cost | Description |
 |------|--------|------|-------------|
@@ -51,12 +51,13 @@
 | `forge_crucible_finalize` | crucible | medium | **v2.37-dev** — Atomically claim next phase number, write `docs/plans/<phase>.md` with `crucibleId:` frontmatter, mark smelt finalized, emit `crucible-smelt-finalized`. |
 | `forge_crucible_list` | crucible | low | **v2.37-dev** — List all smelts with status filter (in-progress / finalized / abandoned). |
 | `forge_crucible_abandon` | crucible | low | **v2.37-dev** — Mark smelt abandoned, release any claimed phase number. |
-| `forge_tempering_run` | tempering | medium | **v2.40+** — Run full tempering pipeline (scan + score) against a Crucible-finalized plan. Writes temper-score snapshot. |
+| `forge_tempering_run` | tempering | medium | **v2.40+** — Run full tempering pipeline (scan + score) against a Crucible-finalized plan. Supports objective-gated runs via `objective.command` + `objective.acceptIf` (`--objective <cmd> --accept-if greater\|less` in the CLI wrapper). Writes temper-score snapshot. |
 | `forge_tempering_scan` | tempering | low | **v2.40+** — Scan for temper-quality signals (Scope Contract clarity, validation gates, slice sizing, forbidden actions). |
 | `forge_tempering_status` | tempering | low | **v2.40+** — Read latest tempering results per plan. |
 | `forge_tempering_approve_baseline` | tempering | low | **v2.40+** — Approve current tempering score as the new baseline threshold. |
 | `forge_tempering_drain` | tempering | medium | **v2.80+** — Run the audit drain loop: iterates content-audit scan → triage → fix rounds until convergence or maxRounds. Accepts `project`, `maxRounds`, `scanners`, `dryRun`, `env`. |
 | `forge_triage_route` | tempering | low | **v2.80+** — Route a single finding through the triage classifier. Returns `{ lane, payload, confidence }` where lane is `"bug"`, `"spec"`, or `"classifier"`. |
+| `forge_diff_classify` | security | low | Classifies staged git diffs for security and quality issues; blocks on severity ≥ high. |
 | `forge_bug_register` | bug-registry | low | **v2.45+** — Register a bug with severity, title, description, affected files, linked plan/slice. |
 | `forge_bug_list` | bug-registry | low | **v2.45+** — List bugs with status/severity/plan filters. |
 | `forge_bug_update_status` | bug-registry | low | **v2.45+** — Update bug status (open → investigating → in-progress → resolved → closed). |
@@ -235,6 +236,7 @@ pforge run-plan <plan> --quorum       # Multi-model consensus (all slices)
 pforge run-plan <plan> --quorum=auto  # Consensus for complex slices only
 pforge run-plan <plan> --quorum=power # Flagship models, threshold 5, 5min timeout
 pforge run-plan <plan> --quorum=speed # Fast models, threshold 7, 2min timeout
+pforge run-plan <plan> --objective "<goal>" # Set run-level objective for Forge-Master evaluation
 pforge ext search|add|info|list       # Extension management
 
 # LiveGuard CLI (v2.27.0+)
@@ -480,6 +482,7 @@ Three hooks configured in `.forge.json` `hooks.*` block. Specs in `.github/hooks
 | **PreDeploy** | File write to `deploy/**`, `Dockerfile*`, `*.tf`; CLI command `docker push`, `git push`, `azd up` | Runs `forge_secret_scan`; blocks on findings (hard stop). Runs `forge_env_diff`; warns on missing keys. | Hard block on secrets; advisory on env gaps |
 | **PostSlice** | `git commit` with conventional commit message (`feat\|fix\|refactor\|...`) | Reads drift history; injects amber advisory (delta >5) or red warning (delta >10 or score <70) | Never blocks |
 | **PreAgentHandoff** | SessionStart with dirty branch, active plan, or `--resume-from` flag | Injects LiveGuard context header; runs regression guard on dirty files; POSTs snapshot to OpenClaw (fire-and-forget, 5s timeout). Skipped when `PFORGE_QUORUM_TURN` env var is set. | Never blocks |
+| **PreCommit chain** | `git commit` during `pforge run-plan` | Runs all scripts listed in `hooks.preCommit.chain` in order — e.g. `forge_diff_classify`, lock-hash verification, tool-denylist check. Each script can exit non-zero to abort the commit. | Yes (any chain member can block) |
 
 Config (`.forge.json`):
 ```json
@@ -487,10 +490,21 @@ Config (`.forge.json`):
   "hooks": {
     "preDeploy":        { "enabled": true, "blockOnSecrets": true,  "warnOnEnvGaps": true, "scanSince": "HEAD~1" },
     "postSlice":        { "enabled": true, "silentDeltaThreshold": 5, "warnDeltaThreshold": 10, "scoreFloor": 70 },
-    "preAgentHandoff":  { "enabled": true, "injectContext": true, "runRegressionGuard": true, "cacheMaxAgeMinutes": 30, "minAlertSeverity": "medium" }
+    "preAgentHandoff":  { "enabled": true, "injectContext": true, "runRegressionGuard": true, "cacheMaxAgeMinutes": 30, "minAlertSeverity": "medium" },
+    "preCommit": { "chain": ["forge_diff_classify", "lock-hash-verify", "tool-denylist-check"] }
   },
-  "openclaw": { "endpoint": "https://your-openclaw-instance", "apiKey": "see .forge/secrets.json" }
+  "network": { "allowed": ["models.github.ai", "api.x.ai", "api.openai.com", "api.anthropic.com"] },
+  "tools": { "deny": [] }
 }
+```
+
+Worker Guardrails configuration reference (v3.7+):
+
+| Key | Purpose |
+|-----|---------|
+| `network.allowed` | Domain allowlist — blocks outbound requests to unlisted hosts (`network-allowlist-violation`). Unset = no restriction. |
+| `tools.deny` | Tool denylist — MCP tool names the orchestrator refuses to call (`tool-denied`). Default `[]`. |
+| `hooks.preCommit.chain` | Ordered check chain before every commit during `pforge run-plan`. Built-ins: `forge_diff_classify`, `lock-hash-verify`, `tool-denylist-check`. |
 ```
 
 ## Pipeline (6 Steps)
@@ -530,6 +544,14 @@ dotnet test
 | `[depends: Slice N]` | Waits for Slice N to complete |
 | `[scope: path/**]` | Restricts worker to these paths, enables conflict detection |
 
+Plan frontmatter keys:
+
+| Key | Meaning |
+|-----|---------|
+| `network.allowed` | Outbound host allowlist for a slice. When present, the orchestrator starts the network proxy in log-only mode (`PFORGE_NETWORK_LOG_ONLY=1`) and records contacted hostnames per slice. |
+| `lockHash` | SHA-256 of the plan file at the time it was hardened. Mismatches (`lock-hash-mismatch`) abort execution to prevent running a stale plan against changed code. |
+| `tools.deny` | MCP tool denylist applied at worker-session init. Denied tools are removed from the worker's visible tool list and attempted use surfaces `tool-denied`. |
+
 ## Guardrails (16-18 per preset)
 
 Auto-loading instruction files in `.github/instructions/`:
@@ -561,6 +583,8 @@ Every instruction file includes two defensive sections:
 **Cross-stack (8)**: accessibility-reviewer, api-contract-reviewer, cicd-reviewer, compliance-reviewer, dependency-reviewer, error-handling-reviewer, multi-tenancy-reviewer, observability-reviewer
 
 **Pipeline (6)**: specifier → preflight → plan-hardener → executor → reviewer-gate → shipper
+
+**Health (1)**: plan-health-auditor — read-only agent that analyzes plan health: slice sizing, gate coverage, missing forbidden actions, scope contract completeness. Invoked via `forge_delegate_to_agent` or directly from the Dashboard Agents tab.
 
 **AI Tool Adapters**: `pforge init -Agent <tool>` generates adapter files for each platform:
 

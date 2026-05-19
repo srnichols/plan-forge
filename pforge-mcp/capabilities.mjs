@@ -178,6 +178,15 @@ export const TOOL_METADATA = {
       },
       config: ".forge.json → quorum { enabled, auto, threshold, models[], reviewerModel, dryRunTimeout }",
     },
+    guardrails: {
+      preCommitChain: "Before each slice commit, PreCommit.mjs runs hooks.preCommit.chain entries in order. Built-ins start with master-branch-reject and diff-classify; the first non-zero exit aborts the commit.",
+      planFrontmatter: {
+        "network.allowed": "Optional outbound host allowlist. When present, run-plan starts the in-process proxy logger and records contacted hosts per slice. Current default is log-only mode via PFORGE_NETWORK_LOG_ONLY=1.",
+        lockHash: "SHA-256 hash over the hardened plan body. If the plan text drifts, run-plan aborts with lock-hash-mismatch rather than executing a stale contract.",
+        "tools.deny": "Optional MCP tool denylist stripped from the worker session during bridge initialization. Denied tools are invisible to the worker; attempted use surfaces tool-denied.",
+      },
+      healthAgent: "plan-health-auditor — read-only reviewer that inspects plan files, run history, memories, and bug patterns, then writes a markdown health report to .forge/health/latest.md.",
+    },
     errors: {
       PLAN_NOT_FOUND: { message: "Plan file not found", recovery: "Check the path or run forge_status to see available plans" },
       NO_WORKER: { message: "No CLI workers available", recovery: "Install gh copilot CLI, or use mode: 'assisted'" },
@@ -2623,10 +2632,11 @@ const SYSTEM_REFERENCE = {
   },
 
   agents: {
-    description: "19 specialized AI reviewer/executor agents per app preset",
+    description: "20 specialized AI reviewer/executor agents per app preset, including a read-only health auditor",
     stackSpecific: ["architecture-reviewer", "database-reviewer", "deploy-helper", "performance-analyzer", "security-reviewer", "test-runner"],
     crossStack: ["accessibility-reviewer", "api-contract-reviewer", "cicd-reviewer", "compliance-reviewer", "dependency-reviewer", "error-handling-reviewer", "multi-tenancy-reviewer", "observability-reviewer"],
     pipeline: ["specifier", "plan-hardener", "executor", "reviewer-gate", "shipper"],
+    health: ["plan-health-auditor"],
     invocation: "Select from agent picker dropdown in VS Code, or reference via #file:.github/agents/<name>.agent.md",
   },
 

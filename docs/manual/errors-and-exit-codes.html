@@ -185,6 +185,10 @@
             <tr><td><code>SCOPE_VIOLATION</code></td><td>PreToolUse hook</td><td>Same as <code>DRIFT_DETECTED</code> but for path patterns rather than explicit file lists.</td></tr>
             <tr><td><code>STRICT_GATES_REJECTED</code></td><td>Orchestrator</td><td><code>--strict-gates</code> refused a plan that would otherwise have escalated. Either drop <code>--strict-gates</code> or strengthen the failing gate.</td></tr>
             <tr><td><code>WORKER_TIMEOUT</code></td><td>Orchestrator</td><td>LLM call exceeded its per-slice budget (default 300s). Split the slice or switch to a faster model.</td></tr>
+            <tr><td><code>diff-classify-blocked</code></td><td><code>forge_diff_classify</code> / PreCommit chain</td><td>The diff classifier returned <code>blocked</code> for one or more files. The commit is aborted. Fix: review the diff against the plan's scope contract, revert or move out-of-scope changes, then retry.</td></tr>
+            <tr><td><code>lock-hash-mismatch</code></td><td>Orchestrator / PreCommit chain</td><td>The <code>lockHash</code> frontmatter field in the plan does not match the plan file's current SHA-256. Either the plan was edited since it was hardened (re-harden and update <code>lockHash</code>), or the wrong plan file was passed to <code>pforge run-plan</code>.</td></tr>
+            <tr><td><code>network-allowlist-violation</code></td><td>Orchestrator</td><td>The orchestrator attempted to reach a host not listed in <code>network.allowed</code>. Add the domain to the allowlist or remove the outbound call from the plan / worker prompt.</td></tr>
+            <tr><td><code>tool-denied</code></td><td>Orchestrator</td><td>A worker or hook tried to invoke an MCP tool listed in <code>tools.deny</code>. Remove the tool from the denylist or update the worker prompt to avoid calling it.</td></tr>
           </tbody>
         </table>
 

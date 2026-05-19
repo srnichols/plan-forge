@@ -9,6 +9,23 @@ Format follows [Keep a Changelog](https://keepachangelog.com/).
 
 ---
 
+## [3.7.0] — 2026-05-18 — Worker Guardrails
+
+> **One-liner**: Seven new worker guardrail primitives that prevent agents from going off-script during autonomous runs: diff classifier, plan lock hash, tool denylist, network allowlist, PreCommit chain, plan-health-auditor agent, and a run-level objective flag.
+
+### Added
+
+- **[A1] `forge_diff_classify` MCP tool** — Evaluates a git diff against the active plan's scope contract; returns per-file `{ verdict: "safe" | "blocked" | "review-required", reason }`. Blocking verdicts abort the slice before the worker modifies any file. Runs as the default first entry in `hooks.preCommit.chain`. Named error: `diff-classify-blocked`.
+- **[A2] `plan-health-auditor` agent** — Read-only reviewer agent (`.github/agents/plan-health-auditor.agent.md`) that audits plan health: slice sizing, gate coverage, missing forbidden actions, scope contract completeness. Invokable via `forge_delegate_to_agent` or the Dashboard Agents tab.
+- **[A3] `network.allowed` — network allowlist** — New `.forge.json` field. Lists domain patterns the orchestrator is permitted to reach. Outbound requests to unlisted hosts are blocked and logged as `network-allowlist-violation`. Unset = no restriction.
+- **[A4] `lockHash` — plan integrity frontmatter** — SHA-256 of the plan file stored in plan YAML frontmatter. The orchestrator recomputes the hash at run-start; a mismatch emits `lock-hash-mismatch` and aborts. Prevents running a stale or tampered plan. Step 2 hardener writes the initial hash; `pforge run-plan` verifies it.
+- **[A5] `tools.deny` — tool denylist** — New `.forge.json` field. Array of MCP tool names the orchestrator will refuse to invoke. Attempts return `tool-denied`. Empty by default.
+- **[A6] `hooks.preCommit.chain` — PreCommit chain** — New `.forge.json` key. Ordered list of checks (`forge_diff_classify`, `lock-hash-verify`, `tool-denylist-check`, or custom scripts) that run synchronously before every `git commit` during `pforge run-plan`. Any non-zero exit aborts the commit. Extends the base master-branch guard.
+- **[A7] `--objective` flag for `pforge run-plan`** — Sets a run-level objective string passed to Forge-Master for post-run evaluation. The objective is stored in `summary.json` under `objective` and surfaced on the Dashboard Home tab.
+- **[A8] Docs sweep** — All seven guardrail primitives documented across `docs/capabilities.md`, `docs/llms.txt`, root `llms.txt`, `docs/manual/glossary.html` (5 new terms: Diff Classifier, Network Allowlist, Plan Lock Hash, Tool Denylist, PreCommit Chain), `docs/manual/customization.html` (plan-health-auditor agent note), `docs/manual/errors-and-exit-codes.html` (4 new codes: `diff-classify-blocked`, `lock-hash-mismatch`, `network-allowlist-violation`, `tool-denied`), and `docs/manual/forge-json-reference.html` (`hooks.preCommit.chain` field reference).
+
+---
+
 ## [3.6.2] — 2026-05-18 — Memory L3 Search & Auto-Drain Hotfix (#205)
 
 > **One-liner**: Fixes three systemic gaps in the OpenBrain L3 memory pipeline. Before this hotfix, CLI plan runs silently dropped captures, `forge_search` never queried OpenBrain (hard-coded to L2-only), and the queue file grew forever because nothing auto-drained it. After: captures land in L2 + L3 on every CLI run, `forge_search` merges live L3 semantic hits, and the orchestrator auto-drains the queue at end-of-run.

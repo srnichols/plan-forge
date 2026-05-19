@@ -142,21 +142,6 @@ export const SECURITY_RISK_FOR_TYPE = Object.freeze(new Map([
 ]));
 
 /** Default gate timeout: 10 minutes (raised from 2 min in v2.62.1). Override with PFORGE_GATE_TIMEOUT_MS. */
-export const DEFAULT_GATE_TIMEOUT_MS = 600_000;
-
-/**
- * Resolve the gate timeout in milliseconds.
- * Priority: PFORGE_GATE_TIMEOUT_MS env var → default (600 000 ms / 10 min).
- * @returns {number}
- */
-export function resolveGateTimeoutMs() {
-  const envVal = process.env.PFORGE_GATE_TIMEOUT_MS;
-  if (envVal != null && envVal !== "") {
-    const parsed = Number(envVal);
-    if (Number.isFinite(parsed) && parsed > 0) return parsed;
-  }
-  return DEFAULT_GATE_TIMEOUT_MS;
-}
 
 /** Default worker output idle timeout: 8 minutes. Override with PFORGE_WORKER_OUTPUT_IDLE_MS. */
 export const DEFAULT_WORKER_OUTPUT_IDLE_MS = 480_000;
@@ -179,7 +164,6 @@ export function resolveWorkerOutputIdleMs() {
 /** Default worker total-run timeout: 30 minutes. Override with PFORGE_WORKER_TIMEOUT_MS. */
 export const DEFAULT_WORKER_TIMEOUT_MS = 1_800_000;
 
-
 /**
  * Resolve the worker total-run timeout in milliseconds.
  * Priority: opts.sliceOverride (per-slice frontmatter) → PFORGE_WORKER_TIMEOUT_MS env var → default (1 800 000 ms / 30 min).
@@ -198,84 +182,6 @@ export function resolveWorkerTimeoutMs(opts = {}) {
     if (Number.isFinite(parsed) && parsed > 0) return parsed;
   }
   return DEFAULT_WORKER_TIMEOUT_MS;
-}
-
-/** Allowlist of commands permitted in validation gates. Shared by runGate() and lintGateCommands(). */
-export const GATE_ALLOWED_PREFIXES = [
-  // Build / test runners
-  "npm", "npx", "node", "cargo", "go", "dotnet", "python", "python3",
-  "pip", "mvn", "gradle", "make", "cmake", "bash", "sh", "pwsh",
-  "powershell", "pytest", "mypy", "ruff", "eslint", "tsc", "vitest",
-  "jest", "mocha",
-  // Shell builtins & coreutils used in gate commands
-  "cd", "cat", "ls", "rm", "mkdir", "cp", "mv", "diff", "wc",
-  "head", "tail", "sort", "curl", "git", "grep", "test", "echo",
-  "exit", "true", "false",
-  // Project tools
-  "pforge",
-];
-
-/**
- * Unix tools not available in cmd.exe on Windows.
- * Shared by runGate() (bash dispatch) and lintGateCommands() (portability lint).
- */
-export const UNIX_TOOLS = ["grep", "sed", "awk", "wc", "head", "tail", "sort", "diff", "test", "tr", "xargs", "find"];
-
-// ─── Windows bash dispatch ─────────────────────────────────────────────
-
-// cachedBashPath state lives in orchestrator/state.mjs (Phase-53 S1).
-
-/** Reset bash path probe cache — for tests only. */
-export function __resetBashPathCache() {
-  setCachedBashPath(undefined);
-}
-
-/**
- * Locate bash.exe on Windows. Probe order:
- *   1. PFORGE_BASH_PATH env (always re-checked; not cached)
- *   2. Cached result from a previous probe
- *   3. Fixed Git-for-Windows locations
- *   4. `where bash` PATH search
- *
- * @returns {string|null} Absolute path to bash, or null if not found.
- */
-export function resolveBashPath() {
-  const envPath = (process.env.PFORGE_BASH_PATH || "").trim();
-  if (envPath && existsSync(envPath)) return envPath;
-
-  if (getCachedBashPath() !== undefined) return getCachedBashPath();
-
-  const fixed = [
-    "C:\\Program Files\\Git\\bin\\bash.exe",
-    "C:\\Program Files (x86)\\Git\\bin\\bash.exe",
-  ];
-  for (const p of fixed) {
-    if (existsSync(p)) {
-      setCachedBashPath(p);
-      return getCachedBashPath();
-    }
-  }
-
-  try {
-    const raw = execFileSync("where", ["bash"], {
-      encoding: "utf-8",
-      timeout: 5000,
-      stdio: ["ignore", "pipe", "ignore"],
-      windowsHide: true,
-    }).trim();
-    for (const candidate of raw.split(/\r?\n/)) {
-      const line = candidate.trim();
-      if (line && existsSync(line)) {
-        setCachedBashPath(line);
-        return getCachedBashPath();
-      }
-    }
-  } catch {
-    // `where` failed or bash not on PATH
-  }
-
-  setCachedBashPath(null);
-  return null;
 }
 
 // ─── Event Bus (C3: Dependency Injection) ─────────────────────────────
@@ -455,318 +361,24 @@ export {
   spawnWorker, detectHelpTextOutput, detectSilentWorkerFailure, detectKilledBySignal,
   deriveVendorFromModel, extractTokens, shouldDefaultPremiumRequestsToOne, parseStderrStats,
 };
+// ─── Windows bash dispatch ────────────────────────────────────────────
 // ─── Phase-28.3 Slice 4: Post-slice advisory scanner ─────────────────
 // ─── Schedulers (C2: Pluggable) ───────────────────────────────────────
 // Phase-53 S3: extracted to orchestrator/schedulers.mjs
 import {
-  detectSelfRepairMissed, buildRetryPrompt,
-  SequentialScheduler, ParallelScheduler, CompetitiveScheduler,
-  selectWinner,
+  DEFAULT_GATE_TIMEOUT_MS, GATE_ALLOWED_PREFIXES, UNIX_TOOLS,
+  resolveGateTimeoutMs, __resetBashPathCache, resolveBashPath,
+  detectSelfRepairMissed, buildRetryPrompt, coalesceGateLines, editDistance,
+  isPlaceholderToken, suggestAllowedCommand, looksLikeProse, runGate,
+  SequentialScheduler, ParallelScheduler, CompetitiveScheduler, selectWinner,
 } from "./orchestrator/schedulers.mjs";
 export {
-  detectSelfRepairMissed, buildRetryPrompt,
-  SequentialScheduler, ParallelScheduler, CompetitiveScheduler,
-  selectWinner,
+  DEFAULT_GATE_TIMEOUT_MS, GATE_ALLOWED_PREFIXES, UNIX_TOOLS,
+  resolveGateTimeoutMs, __resetBashPathCache, resolveBashPath,
+  detectSelfRepairMissed, buildRetryPrompt, coalesceGateLines, editDistance,
+  isPlaceholderToken, suggestAllowedCommand, looksLikeProse, runGate,
+  SequentialScheduler, ParallelScheduler, CompetitiveScheduler, selectWinner,
 };
-
-// ─── parseJSONL helpers ───────────────────────────────────────────────
-// Phase-53 S2: moved to orchestrator/worker-spawn.mjs
-
-/**
- * Coalesce multi-line gate commands from a validation gate block.
- * Joins lines inside unmatched quotes into single commands, strips
- * inline comments and standalone comment lines.
- *
- * @param {string} gateText - Raw validation gate text block
- * @returns {string[]} Array of complete, executable gate commands
- */
-export function coalesceGateLines(gateText) {
-  const rawLines = gateText.split("\n");
-  const commands = [];
-  let pending = "";
-  for (const raw of rawLines) {
-    const trimmed = raw.trim();
-    if (!trimmed) continue;
-    if (pending) {
-      pending += "\n" + trimmed;
-      const dblQuotes = (pending.match(/"/g) || []).length;
-      if (dblQuotes % 2 === 0) {
-        commands.push(pending);
-        pending = "";
-      }
-    } else {
-      const stripped = trimmed.replace(/\s{2,}#\s.*$/, "");
-      if (!stripped || stripped.startsWith("#")) continue;
-      // Skip markdown-style numbered list items (e.g. "1. Server generates CSRF...")
-      // and bulleted prose (e.g. "- Install dependencies"). These are documentation,
-      // not shell commands, and would fail the allowlist check with a misleading error.
-      if (/^(\d+\.|[-*+])\s+\S/.test(stripped)) continue;
-      if (looksLikeProse(stripped)) continue;
-      const dblQuotes = (stripped.match(/"/g) || []).length;
-      if (dblQuotes % 2 !== 0) {
-        pending = stripped;
-      } else {
-        commands.push(stripped);
-      }
-    }
-  }
-  if (pending) commands.push(pending);
-  return commands;
-}
-
-/**
- * Compute Levenshtein edit distance between two short strings.
- * Used by runGate() to surface "did you mean X?" suggestions on allowlist misses.
- * Small inputs only (command base tokens) — O(m*n) is fine.
- *
- * @param {string} a
- * @param {string} b
- * @returns {number}
- */
-export function editDistance(a, b) {
-  if (a === b) return 0;
-  if (!a.length) return b.length;
-  if (!b.length) return a.length;
-  const rows = a.length + 1;
-  const cols = b.length + 1;
-  let prev = new Array(cols);
-  let curr = new Array(cols);
-  for (let j = 0; j < cols; j++) prev[j] = j;
-  for (let i = 1; i < rows; i++) {
-    curr[0] = i;
-    for (let j = 1; j < cols; j++) {
-      const cost = a.charCodeAt(i - 1) === b.charCodeAt(j - 1) ? 0 : 1;
-      curr[j] = Math.min(curr[j - 1] + 1, prev[j] + 1, prev[j - 1] + cost);
-    }
-    [prev, curr] = [curr, prev];
-  }
-  return prev[cols - 1];
-}
-
-/**
- * Detect obvious template-placeholder tokens in gate commands
- * (e.g. "{{cmd}}", "<CMD>", "$CMD", or literal words like "item"/"command"
- * that typically leak in from plan templates that weren't filled in).
- *
- * @param {string} token
- * @returns {boolean}
- */
-export function isPlaceholderToken(token) {
-  if (!token) return false;
-  if (/^[{<$].+[}>]?$/.test(token)) return true;
-  return ["item", "command", "cmd", "tool", "runner", "your-tool", "your_cmd", "todo"].includes(token);
-}
-
-/**
- * Suggest the closest allowlisted command to an unrecognized token.
- * Returns null when no reasonable match exists (distance > 2).
- *
- * @param {string} token
- * @returns {string|null}
- */
-export function suggestAllowedCommand(token) {
-  if (!token) return null;
-  let best = null;
-  let bestDist = Infinity;
-  for (const cmd of GATE_ALLOWED_PREFIXES) {
-    const d = editDistance(token, cmd);
-    if (d < bestDist) { bestDist = d; best = cmd; }
-  }
-  return bestDist <= 2 ? best : null;
-}
-
-/**
- * Run a validation gate command directly (no AI worker needed).
- * Commands are validated against an allowlist of common build/test tools.
- *
- * Issue #133: pass/fail is strictly determined by the child process's
- * exit code. Stderr content alone never causes a failure (Prisma's
- * "Loaded Prisma config from prisma.config.ts" banner used to false-fail
- * gates that exited 0). Stderr is captured separately so callers can
- * surface it for diagnostics. Opt-in via `failOnStderr` if a gate
- * genuinely needs strict-stderr behaviour.
- *
- * Issue #131: `node -e "<script>"` (and `node -p "<expr>"`) commands are
- * executed via `execFileSync('node', ['-e', script], { shell: false })`
- * so PowerShell never sees the script. Previously, `$transaction` was
- * expanded to "" and `\b`/`\s`/`\d` regex escapes were stripped before
- * node received the argv \u2014 producing false-fail gates with shipped
- * deliverables.
- *
- * @param {string} command - Shell command to run
- * @param {string} cwd - Working directory
- * @param {object} [opts]
- * @param {boolean} [opts.failOnStderr=false] - Issue #133 opt-in: treat
- *   non-empty stderr as failure even when exit code is 0.
- * @returns {{ success: boolean, output: string, error: string, stderr: string, exitCode: number }}
- */
-export function runGate(command, cwd, opts = {}) {
-  const failOnStderr = opts.failOnStderr === true;
-  // C1: Validate gate commands against allowlist to prevent arbitrary execution
-  const cmdBase = command.trim().split(/\s+/)[0].toLowerCase();
-  const isAllowed = GATE_ALLOWED_PREFIXES.some((p) => cmdBase === p || cmdBase.endsWith(`/${p}`));
-  if (!isAllowed) {
-    const hints = [];
-    if (isPlaceholderToken(cmdBase)) {
-      hints.push(`'${cmdBase}' looks like an unfilled template placeholder \u2014 edit your plan file and replace it with a real build/test command.`);
-    }
-    const suggestion = suggestAllowedCommand(cmdBase);
-    if (suggestion) hints.push(`Did you mean '${suggestion}'?`);
-    const hintSuffix = hints.length ? ` ${hints.join(" ")}` : "";
-    return {
-      success: false,
-      output: "",
-      stderr: "",
-      error: `Validation gate blocked: '${cmdBase}' not in allowlist.${hintSuffix} Allowed: ${GATE_ALLOWED_PREFIXES.join(", ")}`,
-      exitCode: -1,
-    };
-  }
-
-  const gateTimeout = resolveGateTimeoutMs();
-
-  // Issue #131 \u2014 inline-script node invocations (`node -e "..."` / `node -p "..."`).
-  // Run via execFileSync with shell:false so PowerShell never parses `$var`
-  // or strips `\b`/`\s`/`\d` regex escapes from the script body.
-  const inlineNodeMatch = command.match(/^\s*node\s+(-e|-p|--eval|--print)\s+(.+)$/i);
-  if (inlineNodeMatch) {
-    const flag = inlineNodeMatch[1].startsWith("--") ? inlineNodeMatch[1] : (inlineNodeMatch[1] === "-p" ? "--print" : "--eval");
-    let script = inlineNodeMatch[2].trim();
-    // Strip a single matching pair of outer quotes (single or double) the
-    // shell would normally consume. Inner quotes survive because we never
-    // round-trip through a shell.
-    if ((script.startsWith('"') && script.endsWith('"')) || (script.startsWith("'") && script.endsWith("'"))) {
-      script = script.slice(1, -1);
-    }
-    try {
-      const stdoutBuf = execFileSync("node", [flag, script], {
-        cwd,
-        encoding: "utf-8",
-        timeout: gateTimeout,
-        maxBuffer: 16 * 1024 * 1024,
-        env: { ...process.env, NO_COLOR: "1" },
-        stdio: ["ignore", "pipe", "pipe"],
-        shell: false,
-        // Bug #121 / spawn-storm fix: suppress the console window flash that
-        // appears on every gate execution when running under a piped-stdio host.
-        windowsHide: true,
-      });
-      return { success: true, output: (stdoutBuf || "").trim(), stderr: "", error: "", exitCode: 0 };
-    } catch (err) {
-      const exitCode = typeof err.status === "number" ? err.status : 1;
-      const stderrText = (err.stderr || "").toString();
-      const stdoutText = (err.stdout || "").toString();
-      // Issue #133 \u2014 if exit was zero (signal etc.), still treat as success
-      // unless caller opted in to failOnStderr.
-      if (exitCode === 0 && !failOnStderr) {
-        return { success: true, output: stdoutText.trim(), stderr: stderrText.trim(), error: "", exitCode };
-      }
-      return {
-        success: false,
-        output: stdoutText.trim(),
-        stderr: stderrText.trim(),
-        error: stderrText.trim() || err.message || "node -e gate failed",
-        exitCode,
-      };
-    }
-  }
-
-  // Windows bash dispatch: route Unix tools through bash so plans that use
-  // grep/sed/awk/etc. work on Windows without manual wrapping.
-  // Also route shell-chained commands (`cmd1 ; cmd2`, `cmd1 && cmd2`) through bash,
-  // because cmd.exe treats `;` as a literal character (not a separator) and would
-  // pass the remainder as argv to the first tool \u2014 a common false-failure source.
-  if (process.platform === "win32") {
-    // Strip any path prefix and .exe/.cmd extension to get the bare tool name.
-    const cmdName = cmdBase.split("/").pop().split("\\").pop().replace(/\.(exe|cmd|bat)$/i, "");
-    const hasShellChain = /(^|[^&|])(\s;\s|\s&&\s|\s\|\|\s)/.test(command);
-    // Issue #172 — also route literal `bash -c "..."` gates through resolveBashPath().
-    // Without this, `where bash` lookup picks WSL bash on modern Windows (which has
-    // no Windows PATH), and `pwsh`/`node`/`npx` calls inside the wrapped command fail
-    // with `command not found`. Empirically observed twice (Phase GITHUB-B,
-    // Phase CRUCIBLE-IMPORT-CLI). See memory note plan-gate-command-rules.md L52-73.
-    const isBashWrapped = cmdName === "bash";
-    if (UNIX_TOOLS.includes(cmdName) || hasShellChain || isBashWrapped) {
-      const bashPath = resolveBashPath();
-      if (bashPath === null) {
-        return {
-          success: false,
-          output: "",
-          stderr: "",
-          error: `gate requires bash but none found on Windows. Install Git for Windows or set PFORGE_BASH_PATH to a bash.exe path. Detected Unix tool: '${cmdName}'.`,
-          exitCode: -1,
-        };
-      }
-      // When the gate already starts with `bash -c "..."`, strip the redundant
-      // `bash` token and pass only the body to execFileSync (which spawns
-      // bashPath itself). Otherwise we'd double-wrap and confuse quoting.
-      let bashArgs = ["-c", command];
-      if (isBashWrapped) {
-        const m = command.match(/^bash(?:\.exe)?\s+-c\s+(.+)$/i);
-        if (m) {
-          let body = m[1].trim();
-          if ((body.startsWith('"') && body.endsWith('"')) || (body.startsWith("'") && body.endsWith("'"))) {
-            body = body.slice(1, -1);
-          }
-          bashArgs = ["-c", body];
-        }
-      }
-      try {
-        const output = execFileSync(bashPath, bashArgs, {
-          cwd,
-          encoding: "utf-8",
-          timeout: gateTimeout,
-          maxBuffer: 16 * 1024 * 1024,
-          env: {
-            ...process.env,
-            NO_COLOR: "1",
-            // Prepend repo root so bash shims (e.g. `pforge`) are on PATH.
-            PATH: `${cwd}${process.platform === "win32" ? ";" : ":"}${process.env.PATH || ""}`,
-          },
-          stdio: ["ignore", "pipe", "pipe"],
-          // Bug #121 / spawn-storm fix: suppress the bash console window flash
-          // on Windows for every bash-dispatched gate.
-          windowsHide: true,
-        });
-        return { success: true, output: (output || "").trim(), stderr: "", error: "", exitCode: 0 };
-      } catch (err) {
-        const exitCode = typeof err.status === "number" ? err.status : 1;
-        const stdoutText = (err.stdout || "").toString().trim();
-        const stderrText = (err.stderr || err.message || "").toString().trim();
-        if (exitCode === 0 && !failOnStderr) {
-          return { success: true, output: stdoutText, stderr: stderrText, error: "", exitCode };
-        }
-        return { success: false, output: stdoutText, stderr: stderrText, error: stderrText, exitCode };
-      }
-    }
-  }
-
-  try {
-    const output = execSync(command, {
-      cwd,
-      encoding: "utf-8",
-      timeout: gateTimeout,
-      maxBuffer: 16 * 1024 * 1024,
-      env: { ...process.env, NO_COLOR: "1" },
-      stdio: ["ignore", "pipe", "pipe"],
-    });
-    return { success: true, output: (output || "").trim(), stderr: "", error: "", exitCode: 0 };
-  } catch (err) {
-    const exitCode = typeof err.status === "number" ? err.status : 1;
-    const stdoutText = (err.stdout || "").toString().trim();
-    const stderrText = (err.stderr || err.message || "").toString().trim();
-    // Issue #133 \u2014 some shells (notably cmd.exe wrapping `pnpm`) will throw
-    // even with exit 0 in unusual signal/timeout cases. Honour exit code as
-    // the source of truth and only surface stderr as `error` on failure.
-    if (exitCode === 0 && !failOnStderr) {
-      return { success: true, output: stdoutText, stderr: stderrText, error: "", exitCode };
-    }
-    return { success: false, output: stdoutText, stderr: stderrText, error: stderrText, exitCode };
-  }
-}
-
-// ─── Schedulers (C2: Pluggable) ───────────────────────────────────────
-// Phase-53 S3: extracted to orchestrator/schedulers.mjs (see import above)
-
 // ─── Orchestrator ─────────────────────────────────────────────────────
 
 /**
@@ -1827,7 +1439,6 @@ const GATE_SYNTH_TEMPLATES = {
   integration: "node -e \"process.chdir('pforge-mcp'); require('child_process').execSync('npx vitest run tests/<your-integration>.test.mjs', {stdio:'inherit',shell:true});\"",
   controller:  "node -e \"process.chdir('pforge-mcp'); require('child_process').execSync('npx vitest run tests/<your-controller>.test.mjs', {stdio:'inherit',shell:true});\"",
 };
-
 
 /**
  * Phase-26 Slice 7 (C4 / D8): a gate suggestion auto-injects into enforce-mode
@@ -3545,40 +3156,6 @@ export function validateGatePortability(command) {
   }
 
   return { warnings };
-}
-
-/**
- * Detect plan-prose lines that are not executable commands.
- * Conservative — prefers under-matching to avoid false-positives on real commands.
- * @param {string} line - A single gate line
- * @returns {boolean} true if the line looks like documentation prose, not a command
- */
-export function looksLikeProse(line) {
-  if (!line || typeof line !== "string") return false;
-  const trimmed = line.trim();
-  if (!trimmed) return false;
-
-  // 1. Numbered-list prose: "1. Server generates..." — decimal + period + space + letter
-  if (/^\d+\.\s+[a-zA-Z]/.test(trimmed)) return true;
-
-  // 2. Currency tokens: $10.00, $5 — "$" must be followed by a digit (NOT $PATH, $VAR)
-  if (/(?:^|[^A-Za-z_])\$\d/.test(trimmed) || /\\\$\d/.test(trimmed)) return true;
-
-  // 3. Mermaid / diagram keywords at start-of-line
-  if (/^(sequenceDiagram|graph\s|flowchart\s|classDiagram|erDiagram|gantt|pie\s)/i.test(trimmed)) return true;
-
-  // 4. Markdown table row
-  if (/^\|\s/.test(trimmed)) return true;
-
-  // 5. Formula-like assignment with arithmetic op (distinguishes from env-var NODE_ENV=test)
-  if (/^[a-z_]\w*\s*=\s*.*[+\-*/x×]/.test(trimmed)) return true;
-
-  // 6. Box-drawing characters (U+2500–U+257F): lines like ┌──────┐, │ text │, └──────┘
-  // These appear in plan files as visual borders and are never valid shell commands.
-  // Range: 0x2500 .. 0x257F
-  if (/[\u2500-\u257F]/.test(trimmed)) return true;
-
-  return false;
 }
 
 /**
@@ -7011,7 +6588,6 @@ export function ensureNotificationsConfig(projectRoot) {
   return configPath;
 }
 
-
 export function generateReviewItemId(projectRoot, nowFn = () => new Date()) {
   const dir = ensureReviewQueueDirs(projectRoot);
   const date = nowFn().toISOString().slice(0, 10);
@@ -9487,7 +9063,6 @@ export function buildEstimate(plan, model, cwd, quorumConfig = null, resumeFrom 
   return _estimatePlan(plan, model, cwd, quorumConfig, resumeFrom, worker);
 }
 
-
 /**
  * Run auto-sweep after all slices pass.
  * Calls pforge sweep and captures results.
@@ -9747,7 +9322,6 @@ function createRunDir(cwd, planPath) {
   mkdirSync(runDir, { recursive: true });
   return runDir;
 }
-
 
 // ─── Self-Test ────────────────────────────────────────────────────────
 
@@ -10253,7 +9827,6 @@ async function selfTest() {
 
   process.exit(failed > 0 ? 1 : 0);
 }
-
 
 /**
  * Phase 53 S0 — Orchestrator surface snapshot contract.

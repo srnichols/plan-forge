@@ -23,6 +23,7 @@ Plan Forge is an agentic plan-execution pipeline for AI-driven software delivery
 | [`.github/instructions/architecture-principles.instructions.md`](.github/instructions/architecture-principles.instructions.md) | The 5 Questions to answer before ANY code change |
 | [`docs/plans/DEPLOYMENT-ROADMAP.md`](docs/plans/DEPLOYMENT-ROADMAP.md) | Phase queue (what's planned, what's in flight, what's done) |
 | [`docs/plans/AI-Plan-Hardening-Runbook.md`](docs/plans/AI-Plan-Hardening-Runbook.md) | How to harden a phase plan before execution |
+| [`.github/instructions/clean-code.instructions.md`](.github/instructions/clean-code.instructions.md) | Clean Code guardrails — function design, naming, module-size limits, `/clean-code-review` skill |
 | `forge_capabilities` (MCP tool) | Live inventory of every `forge_*` tool, skill, config, extension. **Call this first** — don't grep |
 
 When in doubt, call [`forge_master_ask`](pforge-master/) for open-ended reasoning instead of chaining tools manually.

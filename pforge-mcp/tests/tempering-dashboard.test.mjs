@@ -12,11 +12,12 @@ import { describe, it, expect } from "vitest";
 import { readFileSync } from "node:fs";
 import { resolve, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
+import { SERVER_COMBINED_SRC } from "./helpers/server-combined-src.mjs";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const indexHtml = readFileSync(resolve(__dirname, "..", "dashboard", "index.html"), "utf-8");
 const appJs = readFileSync(resolve(__dirname, "..", "dashboard", "app.js"), "utf-8");
-const serverMjs = readFileSync(resolve(__dirname, "..", "server.mjs"), "utf-8");
+const serverMjs = SERVER_COMBINED_SRC;
 
 describe("dashboard/index.html — Tempering tab shell", () => {
   it("registers a Tempering tab button in the Forge sub-tabs", () => {

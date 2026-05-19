@@ -23,9 +23,10 @@ import { resolve, dirname } from "node:path";
 import { tmpdir } from "node:os";
 import { fileURLToPath } from "node:url";
 import { TOOL_METADATA } from "../capabilities.mjs";
+import { SERVER_COMBINED_SRC } from "./helpers/server-combined-src.mjs";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
-const serverSrc = readFileSync(resolve(__dirname, "..", "server.mjs"), "utf-8");
+const serverSrc = SERVER_COMBINED_SRC;
 const toolsJson = JSON.parse(readFileSync(resolve(__dirname, "..", "tools.json"), "utf-8"));
 
 // ─── Schema / metadata contract ─────────────────────────────────────

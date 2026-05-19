@@ -12,6 +12,7 @@ import { resolve, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import { tmpdir } from "node:os";
 import { randomUUID } from "node:crypto";
+import { SERVER_COMBINED_SRC } from "./helpers/server-combined-src.mjs";
 
 import {
   runSubprocess,
@@ -610,7 +611,7 @@ describe("deriveOverallVerdict", () => {
 // ─── Server tool wiring (capabilities + tools.json + server.mjs) ─────
 
 describe("tempering-runner — MCP wiring", () => {
-  const serverSrc = readFileSync(resolve(MCP_ROOT, "server.mjs"), "utf-8");
+  const serverSrc = SERVER_COMBINED_SRC;
 
   it("server.mjs imports runTemperingRun from tempering/runner.mjs", () => {
     expect(serverSrc).toMatch(/import\s*\{[^}]*runTemperingRun[^}]*\}\s*from\s*"\.\/tempering\/runner\.mjs"/);

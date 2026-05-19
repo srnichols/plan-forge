@@ -9,11 +9,12 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { readFileSync, mkdirSync, rmSync, existsSync } from "node:fs";
 import { join, resolve, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
+import { SERVER_COMBINED_SRC } from "./helpers/server-combined-src.mjs";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const INDEX_HTML = readFileSync(resolve(HERE, "..", "dashboard", "index.html"), "utf-8");
 const APP_JS = readFileSync(resolve(HERE, "..", "dashboard", "app.js"), "utf-8");
-const SERVER_SRC = readFileSync(resolve(HERE, "..", "server.mjs"), "utf-8");
+const SERVER_SRC = SERVER_COMBINED_SRC;
 const SCRATCH_ROOT = resolve(HERE, "..", ".vitest-scratch");
 
 const EXPECTED_SETTINGS_SECTIONS = [

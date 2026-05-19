@@ -12,6 +12,7 @@ import { mkdirSync, rmSync, writeFileSync, readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { tmpdir } from "node:os";
 import { randomUUID } from "node:crypto";
+import { SERVER_COMBINED_SRC } from "./helpers/server-combined-src.mjs";
 
 import { runTemperingRun } from "../tempering/runner.mjs";
 import {
@@ -184,18 +185,12 @@ describe("runPostSliceTemperingHook — spawnWorker forwarding", () => {
 
 describe("server.mjs spawnWorker import wiring", () => {
   it("imports spawnWorker from orchestrator.mjs", () => {
-    const serverSrc = readFileSync(
-      resolve(import.meta.dirname, "..", "server.mjs"),
-      "utf-8",
-    );
+    const serverSrc = SERVER_COMBINED_SRC;
     expect(serverSrc).toMatch(/spawnWorker.*from\s*"\.\/orchestrator\.mjs"/);
   });
 
   it("passes spawnWorker to runTemperingRun call", () => {
-    const serverSrc = readFileSync(
-      resolve(import.meta.dirname, "..", "server.mjs"),
-      "utf-8",
-    );
+    const serverSrc = SERVER_COMBINED_SRC;
     // The forge_tempering_run handler should forward spawnWorker
     expect(serverSrc).toMatch(/runTemperingRun\(\{[^}]*spawnWorker/s);
   });

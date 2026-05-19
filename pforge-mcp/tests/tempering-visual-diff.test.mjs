@@ -12,6 +12,7 @@ import { fileURLToPath } from "node:url";
 import { tmpdir } from "node:os";
 import { randomUUID } from "node:crypto";
 import { PNG } from "pngjs";
+import { SERVER_COMBINED_SRC } from "./helpers/server-combined-src.mjs";
 
 import {
   listBaselines,
@@ -540,7 +541,7 @@ describe("runner integration — visual-diff", () => {
   });
 
   it("server.mjs registers forge_tempering_approve_baseline tool", () => {
-    const serverMjs = readFileSync(resolve(__dirname, "..", "server.mjs"), "utf-8");
+    const serverMjs = SERVER_COMBINED_SRC;
     expect(serverMjs).toContain("forge_tempering_approve_baseline");
   });
 

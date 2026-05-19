@@ -2,7 +2,7 @@
 phase: 53
 name: ORCHESTRATOR-SPLIT
 status: HARDENED
-lockHash: 9179a1da53297545cd6644b8d42ec9cb08c6b74aae24fca02cc1399bc99a412d
+lockHash: 30c9fdaf529dd08dada7e9641417030f9d7ec17af129a3b0d34f247c37955ba0
 ---
 
 # Phase 53 — ORCHESTRATOR-SPLIT — Decompose `pforge-mcp/orchestrator.mjs` into focused sub-modules

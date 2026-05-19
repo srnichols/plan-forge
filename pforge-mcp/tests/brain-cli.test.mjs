@@ -129,7 +129,7 @@ describe("cli-schema.json brain entry (Phase-OPENBRAIN-PROMOTION Slice 5)", () =
   });
 
   it("brain command declares the subcommand arg", () => {
-    expect(cliSchema.commands.brain.args).toHaveLength(1);
+    expect(cliSchema.commands.brain.args).toHaveLength(2);
     expect(cliSchema.commands.brain.args[0].name).toBe("subcommand");
     expect(cliSchema.commands.brain.args[0].required).toBe(true);
   });

@@ -8,6 +8,7 @@ import {
   HOOK_PASCAL,
   MODEL_TIERS,
   QUORUM_MODES,
+  TOOL_NAMES,
   WATCHER_MODES,
   assertCostSource,
   assertForgeMasterMode,
@@ -30,10 +31,12 @@ describe("enums.mjs", () => {
     expect(Object.isFrozen(WATCHER_MODES)).toBe(true);
     expect(Object.isFrozen(COST_SOURCES)).toBe(true);
     expect(Object.isFrozen(ERROR_CODES)).toBe(true);
+    expect(Object.isFrozen(TOOL_NAMES)).toBe(true);
     expect(() => { HOOK_NAMES.Stop = "changed"; }).toThrow();
     expect(() => { HOOK_PASCAL.push("Broken"); }).toThrow();
     expect(() => { HOOK_CATEGORY.session.push("Broken"); }).toThrow();
     expect(() => { MODEL_TIERS[0] = "slow"; }).toThrow();
+    expect(() => { TOOL_NAMES[0] = "modified"; }).toThrow();
   });
 
   it("accepts valid enum values", () => {
@@ -62,5 +65,12 @@ describe("enums.mjs", () => {
     for (const [hook, count] of counts) {
       expect(count, `${hook} should appear in exactly one hook category`).toBe(1);
     }
+  });
+
+  it("TOOL_NAMES is sorted and has no duplicates", () => {
+    const sorted = [...TOOL_NAMES].sort();
+    expect([...TOOL_NAMES]).toEqual(sorted);
+    const unique = new Set(TOOL_NAMES);
+    expect(unique.size).toBe(TOOL_NAMES.length);
   });
 });

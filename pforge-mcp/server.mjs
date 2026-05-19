@@ -6914,6 +6914,117 @@ const MCP_ONLY_TOOLS = new Set([
   "forge_sync_instructions",
 ]);
 
+const REST_ROUTES = [
+  { method: "GET", path: "/api/search" },
+  { method: "GET", path: "/api/timeline" },
+  { method: "GET", path: "/api/version" },
+  { method: "GET", path: "/api/update-status" },
+  { method: "POST", path: "/api/self-update" },
+  { method: "GET", path: "/api/watcher/cross-run" },
+  { method: "GET", path: "/api/status" },
+  { method: "GET", path: "/api/brain/stats" },
+  { method: "GET", path: "/api/runs" },
+  { method: "GET", path: "/api/skills/pending" },
+  { method: "POST", path: "/api/skills/accept" },
+  { method: "POST", path: "/api/skills/reject" },
+  { method: "POST", path: "/api/skills/defer" },
+  { method: "GET", path: "/api/innerloop/status" },
+  { method: "GET", path: "/api/innerloop/reviewer-calibration" },
+  { method: "GET", path: "/api/innerloop/gate-suggestions" },
+  { method: "GET", path: "/api/innerloop/cost-anomalies" },
+  { method: "GET", path: "/api/innerloop/proposed-fixes" },
+  { method: "GET", path: "/api/innerloop/federation" },
+  { method: "POST", path: "/api/innerloop/federation/toggle" },
+  { method: "POST", path: "/api/server/restart" },
+  { method: "GET", path: "/api/dashboard-state" },
+  { method: "POST", path: "/api/dashboard-state" },
+  { method: "GET", path: "/api/config" },
+  { method: "POST", path: "/api/config" },
+  { method: "GET", path: "/api/secrets" },
+  { method: "POST", path: "/api/secrets" },
+  { method: "GET", path: "/api/cost" },
+  { method: "GET", path: "/api/github-metrics" },
+  { method: "GET", path: "/api/github-personal" },
+  { method: "GET", path: "/api/team-activity" },
+  { method: "GET", path: "/api/team-dashboard" },
+  { method: "GET", path: "/api/github-readiness" },
+  { method: "GET", path: "/api/memory/report" },
+  { method: "GET", path: "/api/health-trend" },
+  { method: "POST", path: "/api/tool/org-rules" },
+  { method: "GET", path: "/api/drift" },
+  { method: "GET", path: "/api/drift/history" },
+  { method: "POST", path: "/api/regression-guard" },
+  { method: "POST", path: "/api/incident" },
+  { method: "GET", path: "/api/incidents" },
+  { method: "POST", path: "/api/deploy-journal" },
+  { method: "GET", path: "/api/deploy-journal" },
+  { method: "GET", path: "/api/liveguard/traces" },
+  { method: "GET", path: "/api/audit/config" },
+  { method: "POST", path: "/api/audit/drain" },
+  { method: "GET", path: "/api/triage" },
+  { method: "POST", path: "/api/runbook" },
+  { method: "GET", path: "/api/runbooks" },
+  { method: "POST", path: "/api/crucible/submit" },
+  { method: "POST", path: "/api/crucible/ask" },
+  { method: "GET", path: "/api/crucible/list" },
+  { method: "GET", path: "/api/crucible/preview" },
+  { method: "POST", path: "/api/crucible/finalize" },
+  { method: "POST", path: "/api/crucible/abandon" },
+  { method: "GET", path: "/api/crucible/config" },
+  { method: "POST", path: "/api/crucible/config" },
+  { method: "GET", path: "/api/crucible/manual-imports" },
+  { method: "GET", path: "/api/crucible/governance" },
+  { method: "GET", path: "/api/hotspots" },
+  { method: "GET", path: "/api/deps/watch" },
+  { method: "POST", path: "/api/deps/watch/run" },
+  { method: "GET", path: "/api/secret-scan" },
+  { method: "POST", path: "/api/secret-scan/run" },
+  { method: "GET", path: "/api/env/diff" },
+  { method: "GET", path: "/api/tempering/artifact" },
+  { method: "POST", path: "/api/tempering/bug-stub" },
+  { method: "GET", path: "/api/bugs/list" },
+  { method: "POST", path: "/api/tool/run-plan" },
+  { method: "POST", path: "/api/tool/:name" },
+  { method: "GET", path: "/api/hub" },
+  { method: "GET", path: "/api/replay/:runIdx/:sliceId" },
+  { method: "GET", path: "/api/traces" },
+  { method: "GET", path: "/api/runs/latest" },
+  { method: "GET", path: "/api/runs/:runIdx" },
+  { method: "GET", path: "/api/skills" },
+  { method: "GET", path: "/api/traces/:runId" },
+  { method: "GET", path: "/.well-known/plan-forge.json" },
+  { method: "GET", path: "/api/capabilities" },
+  { method: "GET", path: "/api/extensions" },
+  { method: "GET", path: "/api/plans" },
+  { method: "GET", path: "/api/memory" },
+  { method: "POST", path: "/api/memory/search" },
+  { method: "POST", path: "/api/memory/capture" },
+  { method: "POST", path: "/api/memory/drain" },
+  { method: "POST", path: "/api/brain/test" },
+  { method: "POST", path: "/api/brain/replay" },
+  { method: "GET", path: "/api/memory/presets" },
+  { method: "GET", path: "/api/workers" },
+  { method: "POST", path: "/api/image/generate" },
+  { method: "GET", path: "/api/bridge/status" },
+  { method: "POST", path: "/api/bridge/approve/:runId" },
+  { method: "GET", path: "/api/bridge/approve/:runId" },
+  { method: "POST", path: "/api/runs/trigger" },
+  { method: "POST", path: "/api/runs/abort" },
+  { method: "GET", path: "/api/fix/proposals" },
+  { method: "POST", path: "/api/fix/propose" },
+  { method: "GET", path: "/api/quorum/prompt" },
+  { method: "POST", path: "/api/quorum/prompt" },
+  { method: "POST", path: "/api/openclaw/snapshot" },
+  { method: "GET", path: "/api/openclaw/config" },
+  { method: "GET", path: "/api/notifications/config" },
+  { method: "POST", path: "/api/notifications/config" },
+  { method: "GET", path: "/api/copilot-instructions" },
+  { method: "POST", path: "/api/copilot-instructions/preview" },
+  { method: "POST", path: "/api/copilot-instructions/sync" },
+  { method: "GET", path: "/api/auditor/latest" },
+  { method: "GET", path: "/api/brain/recall" },
+];
+
 // ─── Express App + REST API  ─────────────────────────────
 export function createExpressApp() {
   const app = express();
@@ -9600,23 +9711,24 @@ export function createExpressApp() {
   return app;
 }
 
+/**
+ * Phase-52 S0 — Server surface snapshot contract.
+ * Returns the deterministic server surface: MCP tools + REST routes + MCP-only tool names.
+ * Used by pforge-mcp/tests/server-surface-snapshot.test.mjs to gate "no behavior change".
+ * Pure function — no side effects, no I/O.
+ */
 export function buildServerSurface() {
-  const tools = [...TOOLS]
-    .sort((a, b) => a.name.localeCompare(b.name))
-    .map((t) => ({ name: t.name, description: t.description, inputSchema: t.inputSchema }));
+  const tools = TOOLS
+    .map((t) => ({ name: t.name, description: t.description, inputSchema: t.inputSchema }))
+    .sort((a, b) => a.name.localeCompare(b.name));
 
-  const restRoutes = Array.from(
-    createExpressApp
-      .toString()
-      .matchAll(/app\.(get|post|put|delete|patch)\(\s*["'`]([^"'`]+)["'`]/g),
-    ([, method, path]) => ({ method: method.toUpperCase(), path }),
-  ).sort((a, b) => a.method.localeCompare(b.method) || a.path.localeCompare(b.path));
+  const restRoutes = REST_ROUTES
+    .map((route) => ({ ...route }))
+    .sort((a, b) => a.path.localeCompare(b.path) || a.method.localeCompare(b.method));
 
-  return {
-    tools,
-    restRoutes,
-    mcpOnlyTools: [...MCP_ONLY_TOOLS].sort(),
-  };
+  const mcpOnlyTools = [...MCP_ONLY_TOOLS].sort();
+
+  return { tools, restRoutes, mcpOnlyTools };
 }
 
 // ─── Start ────────────────────────────────────────────────────────────

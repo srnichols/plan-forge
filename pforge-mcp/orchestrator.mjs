@@ -2749,9 +2749,17 @@ export function spawnWorker(prompt, options = {}) {
     // Issue #162: retry with backoff before giving up — handles transient
     // race conditions where the previous slice's worker subprocess hadn't
     // fully released handles (e.g. token-cache write lock).
+    //
+    // P50 follow-up (2026-05-19): bust the 60s probe cache between retries.
+    // Without this, the first failed runProbe() poisons _cliWorkersCache and
+    // every back-off retry returns the same stale empty result — defeating
+    // the retry's purpose. Symptom: after 4+ minute slices, the next probe
+    // would fail in ~9s and stay failed for a full minute, forcing manual
+    // `--only-slices` recovery from a fresh shell.
     if (workers.length === 0 && !worker) {
       for (const delay of [1_000, 3_000, 5_000]) {
         await new Promise((r) => setTimeout(r, delay));
+        resetCliWorkersCache();
         workers = runProbe();
         if (workers.length > 0) break;
       }

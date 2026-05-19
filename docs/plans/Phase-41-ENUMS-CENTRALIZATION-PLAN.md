@@ -2,7 +2,7 @@
 phase: 41
 name: ENUMS-CENTRALIZATION
 status: HARDENED
-lockHash: b00d38c9f7f41e326ec1636e4ba920eb4910ff276bd544052bce1931703cfc5e
+lockHash: 1bcce75c5863776ca802e9258d74969a663575b635b00ddfc4d7d4aef119095f
 ---
 
 # Phase ENUMS-CENTRALIZATION — Single source of truth for stable small-set identifiers

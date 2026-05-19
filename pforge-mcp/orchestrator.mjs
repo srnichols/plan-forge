@@ -630,24 +630,24 @@ export function computeLockHash(planContent) {
       continue;
     }
 
-    // Scope marker
-    if (/^\*\*Scope\*\*\s*\(files in scope\)\s*:/i.test(line)) {
+    // Scope marker (accepts either column-0 `**Scope**…` or list-item `- **Scope**…` form)
+    if (/^\s*(?:[-*]\s+)?\*\*Scope\*\*\s*\(files in scope\)\s*:/i.test(line)) {
       inScope = true;
       inGate = false;
       parts.push(line);
       continue;
     }
 
-    // Validation Gate marker
-    if (/^\*\*Validation Gate\*\*\s*:/i.test(line)) {
+    // Validation Gate marker (accepts either column-0 or list-item form)
+    if (/^\s*(?:[-*]\s+)?\*\*Validation Gate\*\*\s*:/i.test(line)) {
       inScope = false;
       inGate = true;
       parts.push(line);
       continue;
     }
 
-    // Any bold section heading (not scope/gate) resets state
-    if (/^\*\*[A-Z][^*]*\*\*\s*:/.test(line)) {
+    // Any other bold section heading (not scope/gate) resets state — both forms
+    if (/^\s*(?:[-*]\s+)?\*\*[A-Z][^*]*\*\*\s*:/.test(line)) {
       inScope = false;
       inGate = false;
       continue;

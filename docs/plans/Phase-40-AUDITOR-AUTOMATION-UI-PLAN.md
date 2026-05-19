@@ -2,7 +2,7 @@
 phase: 40
 name: AUDITOR-AUTOMATION-UI
 status: HARDENED
-lockHash: b9cf736fc215c03036ac1c7e528c019550f1983d7821ae621f65905e88e91596
+lockHash: 31cd06481bc699c0ef8df95b7e4233952bd674bf3c9b538a2bb260270e806185
 ---
 
 # Phase AUDITOR-AUTOMATION-UI — Dashboard surfaces for observer, watcher cross-run, and auditor

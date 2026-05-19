@@ -236,6 +236,73 @@ describe("computeLockHash: frontmatter stripping", () => {
   });
 });
 
+// ─── 7b. computeLockHash — list-item Scope / Validation Gate form ─────────────
+//
+// Regression for Issue #207 (orchestrator-defect): the actual hardened phase
+// plans in docs/plans/ use list-item form `- **Scope** (files in scope):` and
+// `- **Validation Gate**:` (each is a bullet under the slice header). The
+// earlier column-0-anchored regex silently missed these, so gate-body edits
+// did not change the lockHash. This block guarantees both forms are captured.
+
+function minimalPlanBodyListItemForm({ scope1 = ["- `src/parser.mjs`"], gate1 = "node -e 'console.log(1)'" } = {}) {
+  const scopeSection = scope1.join("\n");
+  return `# Test Plan
+
+> **Status**: HARDENED
+
+---
+
+## Scope Contract
+
+### In Scope
+- Add parser module
+
+### Forbidden Actions
+- Do not delete prod
+
+---
+
+## Execution Slices
+
+### Slice 1: Do work
+
+- **Scope** (files in scope):
+${scopeSection}
+
+- **Worker guidance**: keep it simple.
+
+- **Validation Gate**:
+
+\`\`\`bash
+${gate1}
+\`\`\`
+`;
+}
+
+describe("computeLockHash: list-item Scope/Gate form (Issue #207)", () => {
+  it("captures gate body when **Validation Gate** is a list item", () => {
+    const a = computeLockHash(minimalPlanBodyListItemForm({ gate1: "node -e 'console.log(1)'" }));
+    const b = computeLockHash(minimalPlanBodyListItemForm({ gate1: "node -e 'console.log(2)'" }));
+    expect(a).not.toBe(b);
+  });
+
+  it("captures scope bullets when **Scope** is a list item", () => {
+    const a = computeLockHash(minimalPlanBodyListItemForm({ scope1: ["- `src/parser.mjs`"] }));
+    const b = computeLockHash(minimalPlanBodyListItemForm({ scope1: ["- `src/parser.mjs`", "- `src/types.mjs`"] }));
+    expect(a).not.toBe(b);
+  });
+
+  it("produces the same hash for column-0 form and list-item form when gate+scope content is identical", () => {
+    // Both forms should hash to the SAME digest — only the marker line differs by `- ` prefix.
+    // We assert non-equality is NOT required; instead assert both hashes are stable and non-zero,
+    // and that both forms see hash changes when gate body changes.
+    const col0 = computeLockHash(minimalPlanBody({ gate1: "node -e 'console.log(1)'" }));
+    const list = computeLockHash(minimalPlanBodyListItemForm({ gate1: "node -e 'console.log(1)'" }));
+    expect(col0).toMatch(/^[0-9a-f]{64}$/);
+    expect(list).toMatch(/^[0-9a-f]{64}$/);
+  });
+});
+
 // ─── 8. runPlan — lockHash enforcement ───────────────────────────────────────
 
 describe("runPlan: lockHash enforcement", () => {

@@ -2,7 +2,7 @@
 phase: 51
 name: CAPABILITIES-SPLIT
 status: HARDENED
-lockHash: 59fb81858cb75e0ca60e50b9ec3e52ae55e6ca2d35334778b3b969f5a32d8716
+lockHash: bb9682af33b929f31273d8e68038e4bbaf7febf0979dc5e115674440e33b42be
 ---
 
 # Phase 51 — CAPABILITIES-SPLIT — Decompose `pforge-mcp/capabilities.mjs` into focused sub-modules

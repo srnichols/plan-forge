@@ -17,8 +17,12 @@
  */
 
 import WebSocket from "ws";
-import { existsSync, readFileSync } from "node:fs";
-import { resolve } from "node:path";
+import { existsSync, readFileSync, writeFileSync, mkdirSync } from "node:fs";
+import { resolve, dirname } from "node:path";
+import { fileURLToPath } from "node:url";
+import { spawn } from "node:child_process";
+
+const __filename = fileURLToPath(import.meta.url);
 
 // ─── Constants ────────────────────────────────────────────────────────
 
@@ -49,6 +53,92 @@ export const OBSERVER_SUBSCRIBED_EVENTS = new Set([
  * Defined here so Slice 7 can import the constant without hard-coding the string.
  */
 export const OBSERVER_NARRATION_EVENT_TYPE = "observer:narration";
+
+// ─── Observer daemon PID helpers ─────────────────────────────────────
+
+/**
+ * The filename used for the observer daemon PID file (relative to .forge/).
+ */
+export const OBSERVER_PID_FILE = "forge-master-observer.pid";
+
+/**
+ * Resolve the full path to the observer PID file.
+ *
+ * @param {string} cwd  Project root.
+ * @returns {string}
+ */
+export function getObserverPidPath(cwd) {
+  return resolve(cwd, ".forge", OBSERVER_PID_FILE);
+}
+
+/**
+ * Return the running status of the observer daemon by inspecting the PID file.
+ *
+ * @param {{ cwd?: string }} [opts]
+ * @returns {Promise<{ running: boolean, pid?: number }>}
+ */
+export async function getObserverStatus(opts = {}) {
+  const cwd = opts.cwd ?? process.cwd();
+  const pidFile = getObserverPidPath(cwd);
+  if (!existsSync(pidFile)) return { running: false };
+  const pidStr = readFileSync(pidFile, "utf-8").trim();
+  if (!pidStr) return { running: false };
+  const pid = parseInt(pidStr, 10);
+  if (!Number.isFinite(pid)) return { running: false };
+  try {
+    process.kill(pid, 0); // existence check — throws if process not found
+    return { running: true, pid };
+  } catch {
+    return { running: false };
+  }
+}
+
+/**
+ * Start the observer as a detached background daemon.
+ * Writes the daemon PID to `.forge/forge-master-observer.pid`.
+ *
+ * @param {{ cwd?: string }} [opts]
+ */
+export async function startObserverDaemon(opts = {}) {
+  const cwd = opts.cwd ?? process.cwd();
+  const pidFile = getObserverPidPath(cwd);
+
+  const current = await getObserverStatus({ cwd });
+  if (current.running) {
+    console.log(`forge-master observer already running (PID ${current.pid})`);
+    return;
+  }
+
+  const forgeDir = resolve(cwd, ".forge");
+  if (!existsSync(forgeDir)) mkdirSync(forgeDir, { recursive: true });
+
+  const child = spawn(process.execPath, [__filename, "daemon"], {
+    detached: true,
+    stdio: ["ignore", "ignore", "ignore"],
+    cwd,
+  });
+
+  writeFileSync(pidFile, String(child.pid));
+  child.unref();
+  console.log(`forge-master observer started (PID ${child.pid})`);
+}
+
+/**
+ * Stop the running observer daemon.
+ *
+ * @param {{ cwd?: string }} [opts]
+ */
+export async function stopObserverDaemon(opts = {}) {
+  const cwd = opts.cwd ?? process.cwd();
+  const pidFile = getObserverPidPath(cwd);
+  if (!existsSync(pidFile)) { console.log("forge-master observer is not running"); return; }
+  const pidStr = readFileSync(pidFile, "utf-8").trim();
+  if (!pidStr) { console.log("forge-master observer is not running"); return; }
+  const pid = parseInt(pidStr, 10);
+  try { process.kill(pid, "SIGTERM"); } catch { /* already dead */ }
+  try { writeFileSync(pidFile, ""); } catch { /* non-fatal */ }
+  console.log(`forge-master observer stopped (PID ${pid})`);
+}
 
 // ─── Port discovery ──────────────────────────────────────────────────
 
@@ -264,4 +354,42 @@ export function startObserver(opts = {}) {
       };
     },
   };
+}
+
+// ─── CLI entry point ─────────────────────────────────────────────────
+
+const isMain = process.argv[1] && resolve(process.argv[1]) === resolve(__filename);
+
+if (isMain) {
+  const [,, cliCmd] = process.argv;
+
+  if (cliCmd === "daemon") {
+    // Running as the observer daemon — keep process alive until killed.
+    // The onBatch callback is intentionally a no-op here: narration is
+    // handled by Slice 7's observer-reasoning layer.
+    startObserver({
+      onBatch: () => {},
+    });
+    // Keep the event loop alive; the observer's internal timers do this
+    // automatically, but guard against empty environments.
+    setInterval(() => {}, 60_000);
+  } else if (cliCmd && ["start", "stop", "status"].includes(cliCmd)) {
+    const cwd = process.cwd();
+    if (cliCmd === "start") {
+      startObserverDaemon({ cwd }).catch(err => { console.error(err.message); process.exit(1); });
+    } else if (cliCmd === "stop") {
+      stopObserverDaemon({ cwd }).catch(err => { console.error(err.message); process.exit(1); });
+    } else {
+      getObserverStatus({ cwd }).then(st => {
+        if (st.running) {
+          console.log(`forge-master observer running (PID ${st.pid})`);
+        } else {
+          console.log("forge-master observer is not running");
+        }
+      }).catch(err => { console.error(err.message); process.exit(1); });
+    }
+  } else {
+    console.error("Usage: node observer-loop.mjs <start|stop|status|daemon>");
+    process.exit(1);
+  }
 }

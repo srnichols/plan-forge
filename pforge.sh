@@ -5286,8 +5286,25 @@ cmd_forge_master() {
     case "$sub" in
         status) node "$lifecycle_path" status ;;
         logs)   node "$lifecycle_path" logs ;;
+        observe)
+            local observe_sub="${2:-}"
+            local observer_path="$REPO_ROOT/pforge-master/src/observer-loop.mjs"
+            if [[ ! -f "$observer_path" ]]; then
+                echo "ERROR: observer-loop.mjs not found at $observer_path" >&2
+                exit 1
+            fi
+            case "$observe_sub" in
+                start)  node "$observer_path" start ;;
+                stop)   node "$observer_path" stop ;;
+                status) node "$observer_path" status ;;
+                *)
+                    echo "Usage: pforge forge-master observe <start|stop|status>" >&2
+                    exit 1
+                    ;;
+            esac
+            ;;
         *)
-            echo "Usage: pforge forge-master <status|logs>" >&2
+            echo "Usage: pforge forge-master <status|logs|observe>" >&2
             exit 1
             ;;
     esac

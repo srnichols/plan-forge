@@ -6116,8 +6116,25 @@ function Invoke-ForgeMaster {
     switch ($sub) {
         'status' { node $lifecyclePath status }
         'logs'   { node $lifecyclePath logs }
+        'observe' {
+            $observeSub = if ($Arguments.Count -gt 1) { $Arguments[1] } else { "" }
+            $observerPath = Join-Path $RepoRoot "pforge-master/src/observer-loop.mjs"
+            if (-not (Test-Path $observerPath)) {
+                Write-Host "ERROR: observer-loop.mjs not found at $observerPath" -ForegroundColor Red
+                exit 1
+            }
+            switch ($observeSub) {
+                'start'  { node $observerPath start }
+                'stop'   { node $observerPath stop }
+                'status' { node $observerPath status }
+                default  {
+                    Write-Host "Usage: pforge forge-master observe <start|stop|status>" -ForegroundColor Yellow
+                    exit 1
+                }
+            }
+        }
         default  {
-            Write-Host "Usage: pforge forge-master <status|logs>" -ForegroundColor Yellow
+            Write-Host "Usage: pforge forge-master <status|logs|observe>" -ForegroundColor Yellow
             exit 1
         }
     }

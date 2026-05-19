@@ -219,7 +219,7 @@ tools: ["read_file", "grep_search", "semantic_search"]
       <p class="text-sm text-slate-400 mb-6">To disable a session hook for one project, edit <code>.github/hooks/plan-forge.json</code> and remove the entry from the relevant array. To disable a session hook globally, delete or rename the file, missing hook files are silently ignored.</p>
 
       <h3 id="hooks-liveguard">LiveGuard and orchestration hooks</h3>
-      <p>Configured in <a href="forge-json-reference.html#hooks"><code>.forge.json#hooks</code></a>. These fire during plan execution, the orchestrator invokes the relevant hook function directly (no shell scripts) and reads the matching <code>.forge.json</code> sub-block to pick up project-specific tuning. All three are opt-in at the project level (<code>enabled: true</code> in the field schema) and ship with safe defaults.</p>
+      <p>Configured in <a href="forge-json-reference.html#hooks"><code>.forge.json#hooks</code></a>. These fire during plan execution, the orchestrator invokes the relevant hook function directly (no shell scripts) and reads the matching <code>.forge.json</code> sub-block to pick up project-specific tuning. All hooks are opt-in at the project level and ship with safe defaults.</p>
 
       <div class="overflow-x-auto mb-6">
         <table class="manual-table">
@@ -246,9 +246,28 @@ tools: ["read_file", "grep_search", "semantic_search"]
               <td>No (advisory)</td>
               <td><code>hooks.preAgentHandoff</code></td>
             </tr>
+            <tr>
+              <td><code>PostRun (invokeAuditor)</code></td>
+              <td>After every completed <code>pforge run-plan</code> run when <code>hooks.postRun.invokeAuditor.onFailure</code> is true and the run failed, or when <code>everyNRuns</code> is set and the run counter is a multiple of N.</td>
+              <td>Triggers the plan-health auditor agent (A4). The auditor receives cross-run anomaly context from <code>runWatch(mode: "cross-run")</code> and writes its report to <code>.forge/health/latest.md</code> (configurable via <code>forgeMaster.auditor.outputPath</code>).</td>
+              <td>No (advisory)</td>
+              <td><code>hooks.postRun.invokeAuditor</code></td>
+            </tr>
           </tbody>
         </table>
       </div>
+
+      <p>Example <code>.forge.json</code> snippet for the PostRun auditor hook:</p>
+      <pre><code>{
+  "hooks": {
+    "postRun": {
+      "invokeAuditor": {
+        "onFailure": true,
+        "everyNRuns": 10
+      }
+    }
+  }
+}</code></pre>
 
       <p class="text-sm text-slate-400 mb-6">To disable a LiveGuard hook, set the corresponding block in <code>.forge.json</code> to <code>{ "enabled": false }</code> or, for finer-grained control, lower its threshold (e.g. <code>blockOnSecrets: false</code> keeps the PreDeploy scan running but downgrades it to advisory). Full schema in <a href="forge-json-reference.html#hooks">Appendix T &mdash; hooks</a>.</p>
 

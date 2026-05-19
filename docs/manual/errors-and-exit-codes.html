@@ -185,6 +185,8 @@
             <tr><td><code>SCOPE_VIOLATION</code></td><td>PreToolUse hook</td><td>Same as <code>DRIFT_DETECTED</code> but for path patterns rather than explicit file lists.</td></tr>
             <tr><td><code>STRICT_GATES_REJECTED</code></td><td>Orchestrator</td><td><code>--strict-gates</code> refused a plan that would otherwise have escalated. Either drop <code>--strict-gates</code> or strengthen the failing gate.</td></tr>
             <tr><td><code>WORKER_TIMEOUT</code></td><td>Orchestrator</td><td>LLM call exceeded its per-slice budget (default 300s). Split the slice or switch to a faster model.</td></tr>
+            <tr><td><code>auditor-spawn-failed</code></td><td>Orchestrator / PostRun hook</td><td>The PostRun auditor hook was triggered (<code>hooks.postRun.invokeAuditor.onFailure</code> or <code>everyNRuns</code>) but the auditor process could not be spawned. Run exits 0 regardless; the auditor failure is advisory. Check that <code>forgeMaster.auditor.outputPath</code> is writable and the model tier is accessible.</td></tr>
+            <tr><td><code>observer-budget-exceeded</code></td><td>Observer daemon</td><td>The Forge-Master Observer hit its daily USD cap (<code>forgeMaster.observer.maxUsdPerDay</code>) or its per-hour narration limit (<code>maxNarrationsPerHour</code>). Narrations are suppressed until the budget resets (daily cap resets at UTC midnight; hourly cap resets each clock hour). Budget state persists in <code>.forge/forge-master-observer-state.json</code>.</td></tr>
             <tr><td><code>diff-classify-blocked</code></td><td><code>forge_diff_classify</code> / PreCommit chain</td><td>The diff classifier returned <code>blocked</code> for one or more files. The commit is aborted. Fix: review the diff against the plan's scope contract, revert or move out-of-scope changes, then retry.</td></tr>
             <tr><td><code>lock-hash-mismatch</code></td><td>Orchestrator / PreCommit chain</td><td>The <code>lockHash</code> frontmatter field in the plan does not match the plan file's current SHA-256. Either the plan was edited since it was hardened (re-harden and update <code>lockHash</code>), or the wrong plan file was passed to <code>pforge run-plan</code>.</td></tr>
             <tr><td><code>network-allowlist-violation</code></td><td>Orchestrator</td><td>The orchestrator attempted to reach a host not listed in <code>network.allowed</code>. Add the domain to the allowlist or remove the outbound call from the plan / worker prompt.</td></tr>
@@ -202,6 +204,7 @@
             <tr><td><code>quorum-model-failed</code></td><td>warn</td><td>Individual model in a quorum panel timed out or errored. The panel proceeds with remaining responders unless threshold breaks.</td></tr>
             <tr><td><code>gate-retry-exhausted</code></td><td>error</td><td>Slice gate failed all retries. Orchestrator marks slice failed, exits 1.</td></tr>
             <tr><td><code>preDeploy-blocked</code></td><td>error</td><td>LiveGuard hook found a secret or unauthorized env var. Run aborts before the deploy slice executes.</td></tr>
+            <tr><td><code>observer:budget-blocked</code></td><td>warn</td><td>Forge-Master Observer hit its daily cost cap or hourly narration cap. Narrations are silently skipped until the budget window resets. No impact on plan execution.</td></tr>
           </tbody>
         </table>
 

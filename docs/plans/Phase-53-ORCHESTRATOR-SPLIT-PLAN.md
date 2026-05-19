@@ -445,7 +445,7 @@ Per-slice failure modes and recovery:
 
 - The Step-2 hardener should sharpen the line-number estimates for the section-banner seams immediately before execution.
 - The hardener should compute `lockHash` and replace `TBD` in the frontmatter.
-- The hardener should validate that every slice includes both `**Scope** (files in scope):` and `**Validation Gate**:` markers so `computeLockHash()` captures the intended contract.
+- The hardener should validate that every slice includes both the Scope (files in scope) header and the Validation Gate header, so that the lock-hash computation captures the intended contract.
 - The hardener should preserve the locked S0–S10 slice ordering; only wording and line ranges may sharpen.
 - If the banner survey changes (for example, the Watcher/PostRun boundary moves slightly), update the slice context ranges — not the structural decomposition order.
 - S8 is the only slice allowed to touch `pforge-mcp/cost-service.mjs`; the hardener should reject any earlier slice scope that includes it.

@@ -101,6 +101,20 @@ Each piece is opt-in. No existing plan, hook, or config needs editing for the ph
 - `docs/CLI-GUIDE.md` — `master observe` subcommand
 - `CHANGELOG.md` — one entry per cluster; group under a single MINOR bump (multiple `feat:` commits → MINOR)
 
+**Pre-existing surfaces that need code-level updates** (hardcoded lists/arrays that auto-discovery does NOT cover — surgical edits at known line numbers; assigned to the cluster that adds the underlying capability):
+
+| Surface | Line | Today | Needed change | Owning slice |
+|---|---|---|---|---|
+| `pforge.ps1` `$liveGuardHooks` array | ~line 3428 | `("PostSlice", "PreAgentHandoff", "PreDeploy")` | append `"PostRun"` so `pforge smith` reports it as expected | **Cluster A S1** (same slice that creates the hook) |
+| `pforge.ps1` `$configKeyMap` hash | ~line 3431 | 7 PascalCase→camelCase entries | add `"PostRun" = "postRun"` so smith detects the `.forge.json#hooks.postRun` configuration block | **Cluster A S1** |
+| `pforge.sh` symmetric LiveGuard hooks check | _absent_ — bash currently only enumerates session hooks at ~line 2893 | `expected_hooks=("SessionStart" "PreToolUse" "PostToolUse" "Stop")` | If bash parity for LiveGuard hooks gets added later, ensure `PostRun` is included. **No-op this phase** unless bash parity is broadened — call out for awareness, not change. | _Awareness only_ |
+| `pforge-master/server.mjs` `ListToolsRequestSchema` handler | ~line 108 | `return { tools: [FORGE_MASTER_ASK_TOOL] };` | `return { tools: [FORGE_MASTER_ASK_TOOL, FORGE_MASTER_OBSERVE_TOOL] };` (matches MUST #6 "exactly 2 tools" assertion) | **Cluster C S5** (slice that registers the tool) |
+| `pforge-master/server.mjs` self-test banner | ~line 183-186 | "1 tool: forge_master_ask" | "2 tools: forge_master_ask, forge_master_observe" (already locked by Forbidden Action #13) | **Cluster C S5** |
+| `pforge-mcp/capabilities.mjs` `buildForgeMasterCapabilities()` | line 3084 | `tools: ["forge_master_ask"]` | `tools: ["forge_master_ask", "forge_master_observe"]` so `forge_capabilities` surfaces both | **Cluster C S5** |
+| `pforge-mcp/capabilities.mjs` `studio:` block | lines 3076–3082 | Exposes `reasoningModel`, `routerModel`, `promptCatalogVersion` | Add `observerEnabled: <bool>` reading `forgeMaster.observer.enabled` from config, so dashboard / agent introspection can detect observer state without re-parsing `.forge.json` | **Cluster C S5** |
+
+> **Why this matters**: `pforge smith` and `forge_capabilities` are agent-facing diagnostic surfaces. If they don't enumerate the new hook + tool, every consuming agent (including future Forge-Master sessions) will believe the capability doesn't exist. This is a classic auto-discovery gap.
+
 ### Out of Scope
 
 - **Anything not listed in §"In Scope"**. This is not a refactor pass.
@@ -426,9 +440,18 @@ grep -E "id=\"hooks-postRun\"|id=\"forgeMaster-observer\"|id=\"forgeMaster-audit
 
 # Error catalog has both new codes
 grep -E "observer-budget-exceeded|auditor-spawn-failed" docs/manual/errors-and-exit-codes.html
+
+# Hardcoded diagnostic surfaces (Scope Contract §"Pre-existing surfaces")
+# — these MUST have been edited by their owning slice; S11 verifies they landed.
+grep -q '"PostRun"' pforge.ps1                                    # expect match (smith)
+grep -q '"PostRun" = "postRun"' pforge.ps1                        # expect match (smith config map)
+grep -q 'forge_master_observe' pforge-mcp/capabilities.mjs        # expect match (forge_capabilities)
+grep -q 'forge_master_observe' pforge-master/server.mjs           # expect match (self-test tool list)
+node pforge-master/server.mjs --self-test 2>&1 | grep -q '2 tools' # expect exit 0 + "2 tools" in banner
+pforge smith 2>&1 | grep -qE 'PostRun|postRun'                    # expect smith reports PostRun present
 ```
 
-All five lines must produce non-empty output.
+All seven greps and the two node/cli probes must produce non-empty output / zero exit.
 
 ### Pre-flight grep sentinel (run BEFORE starting S11)
 

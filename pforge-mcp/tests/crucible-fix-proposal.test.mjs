@@ -71,7 +71,7 @@ describe("forge_fix_proposal — Crucible source schema (Slice 04.1)", () => {
 
 describe("forge_fix_proposal — Crucible handler branches (Slice 04.1)", () => {
   it("server.mjs imports readCrucibleState from orchestrator", () => {
-    expect(serverSrc).toMatch(/readCrucibleState[^}]*from\s+"\.\/orchestrator\.mjs"|import\s*\{[^}]*readCrucibleState[^}]*\}\s*from\s*"\.\/orchestrator\.mjs"/);
+    expect(serverSrc).toMatch(/readCrucibleState[^}]*from\s+"\.\.?\/orchestrator\.mjs"|import\s*\{[^}]*readCrucibleState[^}]*\}\s*from\s*"\.\.?\/orchestrator\.mjs"/);
   });
 
   it("handler adds a 'crucible' source branch with auto-mode fallthrough", () => {

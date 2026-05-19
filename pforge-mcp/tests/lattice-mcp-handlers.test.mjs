@@ -79,7 +79,7 @@ describe("Lattice MCP handlers — server.mjs wiring", () => {
   }
 
   it("lattice functions are imported in server.mjs", () => {
-    expect(serverSrc).toContain('from "./lattice.mjs"');
+    expect(serverSrc).toMatch(/from "\.{1,2}\/lattice\.mjs"/);
     expect(serverSrc).toContain("latticeIndex");
     expect(serverSrc).toContain("latticeStat");
     expect(serverSrc).toContain("latticeQuery");

@@ -272,7 +272,8 @@ All commits land on `master`. PreCommit chain runs on each. S0 commit triggers `
 | Date | Action | By |
 |---|---|---|
 | 2026-05-18 | Draft created from Phase 41 (ENUMS-CENTRALIZATION) planning carryover — user asked whether the cleanup phase should look for more Clean Code-style cleanup opportunities. Answer: separate read-only audit phase rather than expand ENUMS scope. | Copilot session |
-| _pending_ | Step-2 harden: lockHash, sharpen rule pack thresholds based on a calibration pass on `pforge-mcp/server.mjs`, decide whether to use system `cloc` or npm `cloc` package | _pending_ |
+| 2026-05-19 | Pre-harden research pass completed — codebase shape measured, G14 candidates identified, tech-debt marker baseline captured, threshold calibration recommendations drafted. See **Appendix C**. **Status remains DRAFT — plan body unchanged.** Findings feed the Step-2 hardener as advisory data. | Copilot session |
+| _pending_ | Step-2 harden: lockHash, sharpen rule pack thresholds (start from Appendix C recommendations, not draft S0 values), decide CLI-script tooling (PSScriptAnalyzer + shellcheck vs. carve-out), decide jscpd token threshold, decide stop-condition volume gate against measured codebase size, decide whether to use system `cloc` or npm `cloc` package, decide on `knip`/`madge` adoption | _pending_ |
 | _pending_ | Execution Hold lifted (gates on Phase 41 shipping) | _pending_ |
 
 ---
@@ -334,3 +335,147 @@ All commits land on `master`. PreCommit chain runs on each. S0 commit triggers `
 | `long-param-walker` (>5-arg call sites) | F1 (call-site complement to ESLint's declaration-site rule) |
 
 Heuristics not covered by tooling (N1–N7 naming quality, G20/G21 intent, T1–T9 test smells) require human triage in S2 — flagged via grep for suspicious patterns but final judgment is reviewer's.
+
+---
+
+## Appendix C — Pre-harden research findings (2026-05-19)
+
+> **Status**: Advisory data for the Step-2 hardener. The plan body above is UNCHANGED — thresholds in S0, volume gates in Stop Conditions, and tool selection in In-Scope are all subject to the hardener's decisions informed by this appendix. Numbers below are point-in-time measurements taken at draft commit; the hardener should re-measure if more than ~30 days have elapsed.
+
+### C.1 — Codebase shape (audit target)
+
+| Workspace | Files | LOC (incl. blanks) | Notes |
+|---|---|---|---|
+| `pforge-mcp/` `*.mjs` (excl. `tests/`, `ui/`, `public/`, `node_modules`) | 112 | **61,758** | 49 at top level. The dominant audit target. |
+| `pforge-master/` `*.mjs` (excl. `tests/`, `ui/`, `node_modules`) | 54 | 10,921 | Recently introduced; smaller surface. |
+| `scripts/` `*.mjs` (excl. `node_modules`) | 12 | 1,352 | Tiny; cheap to audit. |
+| **Total `.mjs` source in scope** | **178** | **~74,000** | |
+| CLI scripts (root) | `pforge.ps1` 6,746 + `pforge.sh` 5,985 | **12,731** | Not lintable by ESLint. See C.5. |
+| Setup scripts (root) | `setup.ps1` 1,553 + `setup.sh` 1,468 + `validate-setup.ps1` 400 + `validate-setup.sh` 369 | 3,790 | Same gap as CLI scripts. |
+
+**Callable units in `pforge-mcp/`**: ~1,120 named function declarations + ~404 arrow blocks = **~1,500 callable units**. Any per-function ESLint rule will produce dozens to hundreds of findings; threshold calibration matters.
+
+### C.2 — Likely G14 (God-module) candidates — confirmed pre-audit
+
+The top of the file-size distribution is steep enough that the catalog can pre-bake G14 expectations rather than discovering them blind.
+
+| Rank | File | LOC | Pre-classified severity hint |
+|---|---|---|---|
+| 1 | `pforge-mcp/orchestrator.mjs` | **12,641** | extreme |
+| 2 | `pforge-mcp/server.mjs` | **9,034** | extreme |
+| 3 | `pforge.ps1` | 6,746 | extreme (CLI dispatcher; not ESLint-reachable) |
+| 4 | `pforge.sh` | 5,985 | extreme (CLI dispatcher parity; not ESLint-reachable) |
+| 5 | `pforge-mcp/capabilities.mjs` | 3,191 | high |
+| 6 | `pforge-mcp/memory.mjs` | 1,957 | high |
+| 7 | `setup.ps1` / `setup.sh` | 1,553 / 1,468 | medium |
+| 8 | `pforge-mcp/cost-service.mjs` | 1,315 | medium |
+| 9 | `pforge-mcp/tempering/runner.mjs` | 1,311 | medium |
+| 10 | `pforge-mcp/tempering.mjs` | 1,179 | medium |
+| 11 | `pforge-mcp/brain.mjs` | 1,140 | medium |
+| 12 | `pforge-mcp/bridge.mjs` | 1,082 | medium |
+| 13 | `pforge-master/src/reasoning.mjs` | 814 | medium |
+
+Per Out-of-Scope, **G14 fixes are NOT proposed by this audit** — they require multi-phase decomposition. The catalog records them; promotion to phase stubs is a human decision.
+
+### C.3 — Tech-debt marker baseline (production source, tests excluded)
+
+| Marker | Hits | Comment |
+|---|---|---|
+| `console.log` | **129** | High. Plan Forge is a CLI — most are legitimate user-facing output. Hardener should scope the rule to non-CLI handlers OR accept en-masse as a single bulk-triaged category. |
+| `TODO` | 28 | The plan's "TODO older than 90 days via git blame" filter likely cuts this to ~10. |
+| `FIXME` | 9 | All real findings. |
+| `HACK` | 6 | All real findings. |
+| `XXX` | 3 | All real findings. |
+| **Total marker hits** | **~175** | |
+
+### C.4 — Existing tooling status
+
+```
+absent: eslint.config.mjs
+absent: .eslintrc.json / .eslintrc.cjs / .eslintrc.js
+absent: jscpd.config.json / .jscpd.json
+absent: .prettierrc
+absent: scripts/audit/
+```
+
+**Greenfield.** S0 can land a clean ESLint config without merge concerns. No existing audit infrastructure to integrate with.
+
+### C.5 — Threshold calibration recommendations for the Step-2 hardener
+
+The S0 draft thresholds are likely too tight given the measured codebase. The hardener should consider sharpening to:
+
+| Rule | S0 draft | Recommended | Rationale |
+|---|---|---|---|
+| `max-lines-per-function` | warn 50, **error 150** | warn **100**, error **300** | Error at 150 will fire hundreds of times in orchestrator.mjs / server.mjs; reviewers will rubber-stamp. Looser error keeps signal. |
+| `max-params` | warn 4 | warn 4 + **error 6** | Keep warn; add hard cap. |
+| `complexity` (cyclomatic) | warn 10 | warn **12**, error 20 | 10 is aggressive on dispatcher functions — which is exactly what `forge_*` handlers are. |
+| `max-depth` | warn 4 | warn 4 (keep) | Sensible. |
+| `no-magic-numbers` | warn, "sensible ignores" | warn with `ignore: [-1, 0, 1, 2, 100, 1000]` + `ignoreArrayIndexes: true` + `ignoreDefaultValues: true` | Without these, port 3100 / ring-buffer 5000 / timeout 600 will flood the report. |
+| jscpd token threshold | 50 | **75** | 50 on 74k LOC surfaces every repeated error-string; 75 preserves true-duplication signal. |
+| **G14 file-LOC threshold** | *(not specified in draft)* | **>1000 LOC = flag**, **>3000 = high-severity** | Numeric rule needed. This cleanly catches the top 5 without flagging the 729-line median. |
+| **Stop Conditions volume gate** | catalog >500 findings | **catalog >750** OR **raw >3000 pre-triage** | With measured codebase + lenient thresholds, raw findings likely 1,500–3,000. Categorization buckets them down, but 500 may trip on a healthy first run. |
+
+### C.6 — Gaps in the current draft (for the hardener to resolve)
+
+1. **CLI scripts have no covering tool.** `pforge.ps1` (6,746 LOC) and `pforge.sh` (5,985 LOC) are the largest files in the repo and ESLint cannot touch them. Hardener options:
+   - **(A)** Add **PSScriptAnalyzer** for `.ps1` (Microsoft, MIT, `Install-Module`) + **shellcheck** for `.sh` (system binary, available via choco/scoop on Windows).
+   - **(B)** Explicitly scope CLI scripts OUT of S1 and reserve a follow-up phase (Phase-42b-CLI-AUDIT) for them.
+   - **(C)** Include them only in `measure-modules.mjs` LOC counts (G14 detection) but exempt from rule-based scanning.
+   - Recommendation: (A) if PSScriptAnalyzer + shellcheck can be wired in <2 hr of S0 effort; otherwise (B).
+
+2. **`pforge-master/` workspace coverage is implicit.** In-Scope S1 enumerates `pforge-master/**` but Resolved Decisions don't acknowledge it as a separate workspace with its own `package.json`. Hardener should explicitly confirm BOTH workspaces in scope and have audit reports separated by workspace in `docs/plans/cleanup-findings/raw/` (e.g., `eslint-report-mcp.json` vs `eslint-report-master.json`).
+
+3. **Phase 41 (ENUMS) baseline comparison.** The Execution Hold correctly gates on Phase 41 shipping. The retro (S5) should additionally compare post-ENUMS jscpd output against a pre-ENUMS baseline if Phase 41 emitted one — this quantifies how much duplication ENUMS killed.
+
+4. **Modern alternative tooling not yet decided.** Hardener should evaluate and record decisions:
+   - **`knip`** — finds unused exports / dead code (cleaner than custom grep for G7/F4). Suggest adopt as an S0 tool.
+   - **`madge`** — detects circular dependencies (G14-adjacent; signal of bad module boundaries). Suggest adopt as an S0 tool.
+   - **`biome`** — single-tool ESLint+Prettier replacement. **Reject** — violates Principle 7 (lean deps); too much surface for what we need.
+
+5. **AST walker parser dependency.** `long-param-walker.mjs` needs an AST. Options for the hardener:
+   - **(A)** Add `acorn` directly (already a vitest transitive dep; can hoist).
+   - **(B)** Drop the custom walker and rely on ESLint `max-params` (declaration-site only) plus a separate jscpd-style call-site sweep.
+   - Recommendation: (B) if it materially reduces tooling footprint.
+
+6. **`console.log` (129 hits) deserves pre-classification as a bulk category.** Rather than 129 individual findings, the hardener should declare in S0 that grep-matrix groups all `console.log` hits into a single bulk-triage bucket with one rationale (legitimate CLI surface vs. debug leakage).
+
+### C.7 — Tooling cost & install footprint (devDependencies S0 will add)
+
+All proposed audit deps are small and scoped to dev tooling only — well within Principle 7 since they don't enter the runtime.
+
+| Package | Approx. install size | Justification |
+|---|---|---|
+| `eslint@^9` | ~6 MB | Industry-standard; covers F1/F3/G16/G25/G34. |
+| `jscpd@^4` | ~12 MB | Only audit tool that finds copy-paste at the token level (G5). |
+| `cloc` | shell-out to system binary (0 npm) OR `cloc@^2` (~200 KB) | Recommend shell-out path; npm package is a JS reimplementation. |
+| `knip` (if adopted per C.6) | ~5 MB | G7 dead code, F4 dead functions. |
+| `madge` (if adopted per C.6) | ~3 MB | G14 circular-dep signal. |
+| `acorn` (if adopted per C.6) | already transitive via vitest | AST for `long-param-walker.mjs` if (A) chosen. |
+
+**Total devDep growth ceiling**: ~26 MB (one-time, `node_modules` gitignored). Acceptable for a dev-only audit toolchain.
+
+### C.8 — Reproduction commands (point-in-time, 2026-05-19)
+
+The measurements above came from these PowerShell pipelines run from repo root:
+
+```pwsh
+# LOC + file counts per workspace
+Get-ChildItem -Path pforge-mcp -Filter *.mjs -Recurse | Where-Object { $_.FullName -notmatch 'node_modules|\\tests\\|\\ui\\|\\public\\' } | Measure-Object
+Get-ChildItem -Path pforge-master -Filter *.mjs -Recurse | Where-Object { $_.FullName -notmatch 'node_modules|\\tests\\|\\ui\\' } | Measure-Object
+
+# Top-15 largest files
+$all = @()
+$all += Get-ChildItem -Path pforge-mcp -Filter *.mjs -Recurse | Where-Object { $_.FullName -notmatch 'node_modules|\\tests\\|\\ui\\|\\public\\' }
+$all += Get-ChildItem -Path pforge-master -Filter *.mjs -Recurse | Where-Object { $_.FullName -notmatch 'node_modules|\\tests\\|\\ui\\' }
+$all += Get-ChildItem -Path scripts -Filter *.mjs -Recurse | Where-Object { $_.FullName -notmatch 'node_modules' }
+$all | ForEach-Object { [PSCustomObject]@{ Lines = (Get-Content $_.FullName | Measure-Object -Line).Lines; Path = $_.FullName } } | Sort-Object Lines -Descending | Select-Object -First 15
+
+# Tech-debt markers
+foreach ($marker in 'TODO','FIXME','HACK','XXX','console.log') {
+  $files = Get-ChildItem -Path pforge-mcp,pforge-master -Filter *.mjs -Recurse | Where-Object { $_.FullName -notmatch 'node_modules|\\tests\\' }
+  $c = (Select-String -Path ($files.FullName) -Pattern $marker -SimpleMatch | Measure-Object).Count
+  "$marker = $c"
+}
+```
+
+The Step-2 hardener should re-run these if Phase 41 ships meaningfully later than 2026-06 — the orchestrator.mjs and server.mjs counts in particular are the canonical drift indicators.

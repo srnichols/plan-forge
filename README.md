@@ -82,6 +82,33 @@ For architecture diagrams, the 7-step pipeline mermaid, the LiveGuard cycle, and
 
 ---
 
+## The Virtual Engineering Team
+
+Plan Forge is not "AI plus a code-completion plugin." It is a full enterprise engineering shop where every traditional role is filled by a specialized agent or guardrail, governed by 40 years of software engineering practice encoded into 17+ auto-loading instruction files and 20 specialized reviewers.
+
+| Traditional engineering team role | Plan Forge equivalent |
+|---|---|
+| **Product Owner** (spec, direction, acceptance) | **You — non-negotiable, non-replaceable** |
+| IC engineers (architecture, security, performance, DB, deploy, API, accessibility, multi-tenancy, CI/CD, observability, dependency, compliance) | 20 specialized agents + 17 auto-loading guardrail files |
+| Tech lead / staff engineer | Quorum mode (multi-model consensus) + auto-escalation on slice failure |
+| Engineering manager | [Forge-Master](docs/manual/forge-master.html) Observer + Auditor — agents supervising agents, not metaphorically, literally |
+| QA team | Tempering harness + testbed + regression guard + slice gates |
+| SRE / on-call | LiveGuard (secret scan, drift, dep watch, env diff, incident capture, runbooks) |
+| Continuous improvement / retros | Audit loop + bug registry auto-smelt + Reflexion lessons + auto-skill promotion |
+| Architecture review board | Independent Session-3 review gate (fresh AI session, full guardrail load) |
+| Institutional knowledge / wiki | OpenBrain L3 memory with Hallmark provenance |
+| Release manager | Shipper agent + release-checklist + version.instructions.md |
+
+**Your three jobs as the human:**
+
+1. **Make a few technology choices once** — pick a preset (`dotnet`, `typescript`, `python`, etc.), declare Project Principles, set forbidden patterns. One-time, then locked.
+2. **Own the spec and the direction** — Product Owner duties. Crucible interviews you; you decide what to build and why. The shop won't deviate from the Scope Contract you sign off on.
+3. **Run manual acceptance testing** — agents don't read minds. They implement what the spec says, not what you intended. A green pipeline (all tests pass, no drift, no secrets, no regressions, Forge-Master independently audited) proves the code is *correct*. Only you can decide whether it's *what you actually wanted*. That's Product Owner UAT, same as it has been for 40 years.
+
+**Three closed loops, not one.** The Forge builds. Forge-Master supervises. The Learn station feeds every finding back into the next plan. The audit loop ran for two weeks unattended on a real production Next.js site and surfaced 30+ defects the maintainer didn't know existed — see [Day in the Forge](docs/manual/day-in-the-forge.html). Skeptical CTOs: this is the part that distinguishes Plan Forge from "an AI that writes code."
+
+---
+
 ## Quick Start
 
 ### Prerequisites

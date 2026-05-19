@@ -9,6 +9,30 @@ Format follows [Keep a Changelog](https://keepachangelog.com/).
 
 ---
 
+## [3.8.0] — 2026-05-19 — Auditor Automation & Observer (Phase-39)
+
+> **One-liner**: Ships automated post-run auditing hooks and a live-pipeline Observer that subscribes to the hub WebSocket, batches events, and narrates notable patterns in plain prose via the Forge-Master reasoning loop.
+
+### What's new
+
+- **[S1]** `hooks.postRun.invokeAuditor.onFailure`: orchestrator automatically invokes the plan-health auditor when a run ends in failure. Writes auditor report to `.forge/health/latest.md`. No configuration required — enable via `.forge.json`.
+- **[S2]** `hooks.postRun.invokeAuditor.everyNRuns`: periodic auditor invocation every N runs (configurable). Keeps health reports fresh without manual triggers.
+- **[S3]** `runWatch(mode: "cross-run")`: new cross-run analysis mode in `watcher.mjs`. Aggregates `.forge/runs/*/summary.json` into a health snapshot, feeds it through `detectWatchAnomalies()` with four new anomaly codes — `cross-run.recurring-gate-failure`, `cross-run.retry-rate-spike`, `cross-run.cost-anomaly-trend`, `cross-run.slice-timeout-cluster`.
+- **[S4]** Cross-run watcher wired into A4 plan-health-auditor agent: the auditor now receives cross-run anomaly context alongside standard run history.
+- **[S5]** Observer loop (`pforge-master/src/observer-loop.mjs`): subscribes to the Plan Forge hub WebSocket, buffers incoming events in a 60-second batch window, and flushes to an `onBatch` callback. Handles disconnect with bounded exponential backoff (3 retries).
+- **[S6]** Observer budget caps (`pforge-master/src/observer-budget.mjs`): configurable daily USD spending cap and hourly narration frequency cap. Emits `observer:budget-blocked` hub event when limits are hit.
+- **[S7]** Observer reasoning loop (`pforge-master/src/observer-prompt.mjs`): on each batch flush, builds a compact LLM-friendly event description and runs it through `runObserverTurn()`. Returns 2–5 sentence narration or `"N routine events — nothing notable."` for low-signal batches. Max 200 words.
+- **[S8]** CLI surface: `pforge forge-master observe [--interval <ms>] [--dry-run]` — starts the observer loop, prints narrations to stdout, exits cleanly on SIGINT.
+
+### Distribution sync
+
+- **VERSION** — 3.8.0-dev → 3.8.0.
+- **[pforge-mcp/package.json](pforge-mcp/package.json)** — version bumped 3.8.0-dev → 3.8.0.
+- **[pforge-master/package.json](pforge-master/package.json)** — version bumped 3.8.0-dev → 3.8.0.
+- **[package.json](package.json)** — root workspace version bumped 3.8.0-dev → 3.8.0.
+
+---
+
 ## [3.7.0] — 2026-05-18 — Worker Guardrails (A1–A8)
 
 > **One-liner**: Ships the Worker Guardrails sweep: hardened Forbidden Actions matching, diff classification in the PreCommit chain, plan-health auditing, plan/body lock hashes, log-only network allowlists, objective-gated tempering runs, and worker-session tool denylists.

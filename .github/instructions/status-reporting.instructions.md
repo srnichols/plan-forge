@@ -168,52 +168,6 @@ Status icons:
 
 ---
 
-## Reading Test Output Before Reporting
+## Reading Test Output
 
-> **Field bug (Issue #198)**: subagents have hallucinated `"1 failed"` summaries on **fully green** vitest runs because they confused in-test log lines with vitest's own summary. Cost: false-positive failure reports trigger unnecessary investigation and risk shipping reverts for non-existent bugs.
-
-### The trap
-
-Plan Forge's own test suite contains many tests that *exercise* slice-failure code paths. Those tests legitimately emit log lines like:
-
-```
-❌ Slice 1: Fix the login bug — FAILED
-Run complete: 0 passed, 1 failed
-```
-
-…**inside** a passing test, to assert the failure-handling code did the right thing. These are NOT vitest failures — they are application logs printed during a successful assertion.
-
-### The rule
-
-When you read captured test output to determine pass/fail counts:
-
-1. **ONLY trust vitest's own summary block** — the lines that look like:
-   ```
-   Test Files  271 passed | 2 skipped (273)
-        Tests  5699 passed | 35 skipped (5734)
-     Duration  459.65s
-   ```
-2. **NEVER count grep hits on `FAILED`, `failed`, `❌`, or `Slice N — FAILED`** — those match in-test logs from tests that pass while asserting failure behavior.
-3. **If the suite times out before the summary block appears** (>120s is common for the full sweep, ~460s for `pforge-mcp` end-to-end), say so explicitly: *"timed out before vitest emitted the summary block — re-run with a longer timeout or scope to a specific file."* Do NOT guess from partial output.
-4. **For programmatic capture**, grep the literal anchor:
-   ```powershell
-   Get-Content $log | Select-String -Pattern '^\s*Test Files\s+\d+\s+passed' -Context 0,3
-   ```
-   This anchors to vitest's actual summary line and captures the next three lines (`Tests`, `Start at`, `Duration`).
-5. **The exit code is authoritative** — if `$LASTEXITCODE` is 0 AND the summary block shows `0 failed` (or no `failed` token at all), the suite is green. Any other interpretation is a hallucination.
-
-### Quick template for reporting test results
-
-```
-## Test Sweep
-
-**Command:** <exact command>
-**Exit code:** <0|N>
-**Summary (verbatim from vitest):**
-  Test Files  <X> passed | <Y> skipped (<total>)
-       Tests  <X> passed | <Y> skipped (<total>)
-    Duration  <X>s
-**Failures:** <None | list of file:test names from the FAIL block>
-```
-
-If you cannot find the verbatim summary in the output, the right answer is *"unknown — re-run is needed"* — not a guess.
+> **Moved to [testing.instructions.md](testing.instructions.md) § Rule 3** — the rule auto-loads now when you edit a test file, which is where it actually matters. The Issue #198 field bug, the vitest-summary anchor, the `Test Sweep` template — all live there.

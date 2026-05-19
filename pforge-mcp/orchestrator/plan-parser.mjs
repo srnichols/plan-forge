@@ -87,101 +87,107 @@ export function parseOnlySlicesExpr(expr) {
  * @param {string} planPath - Path to the plan Markdown file
  * @returns {{ meta, scopeContract, slices, dag }}
  */
-export function parsePlan(planPath, cwd = process.cwd()) {
+function resolvePlanPath(planPath, cwd) {
   const fullPath = resolve(planPath);
-  // C4: Validate path is within project to prevent traversal
-  // Normalize to lowercase for comparison on Windows where drive letters are case-insensitive
   const projectRoot = resolve(cwd);
   const normalizedFull = fullPath.toLowerCase();
   const normalizedRoot = projectRoot.toLowerCase();
   if (!normalizedFull.startsWith(normalizedRoot)) {
     throw new Error(`Plan path must be within project directory: ${planPath}`);
   }
+  return fullPath;
+}
+
+function parseFrontmatterFlowSequence(key, rawValue, lineNumber) {
+  const trimmed = rawValue.trim();
+  if (!trimmed.startsWith("[") || !trimmed.endsWith("]")) {
+    throw new Error(
+      `frontmatter ${key} must be a YAML flow sequence (e.g. [host1, host2]) ` +
+      `at line ${lineNumber} — got: ${rawValue}`
+    );
+  }
+  const inner = trimmed.slice(1, -1).trim();
+  return inner ? inner.split(/\s*,\s*/).map((s) => s.trim()).filter(Boolean) : [];
+}
+
+function maybeApplyModelFrontmatter(meta, rawValue, value) {
+  const isQuotedValue =
+    (rawValue.startsWith('"') && rawValue.endsWith('"')) ||
+    (rawValue.startsWith("'") && rawValue.endsWith("'"));
+  const looksLikeNonString =
+    !isQuotedValue &&
+    (/^\d+(\.\d+)?$/.test(value) ||
+      /^(true|false|null|~)$/i.test(value) ||
+      /^[{\[]/.test(value));
+  if (looksLikeNonString) {
+    // eslint-disable-next-line no-console
+    console.warn("[model] frontmatter model: ignored — not a string");
+    return;
+  }
+  if (value.length > 0) meta.model = value;
+}
+
+function applyPlanFrontmatter(meta, key, rawValue, value, lineNumber) {
+  if (key === "crucibleId") {
+    meta.crucibleId = value;
+    return;
+  }
+  if (key === "lane") {
+    meta.lane = value;
+    return;
+  }
+  if (key === "source") {
+    meta.crucibleSource = value;
+    return;
+  }
+  if (key === "network.allowed") {
+    meta.networkAllowed = parseFrontmatterFlowSequence(key, rawValue, lineNumber);
+    return;
+  }
+  if (key === "network.enforce") {
+    meta.networkEnforce = value.toLowerCase() === "true";
+    return;
+  }
+  if (key === "lockHash") {
+    if (value.length > 0) meta.lockHash = value;
+    return;
+  }
+  if (key === "tools.deny") {
+    meta.toolsDeny = parseFrontmatterFlowSequence(key, rawValue, lineNumber);
+    return;
+  }
+  if (key === "model") {
+    maybeApplyModelFrontmatter(meta, rawValue, value);
+  }
+}
+
+function parsePlanFrontmatter(meta, content) {
+  const fmMatch = content.match(/^---\r?\n([\s\S]*?)\r?\n---\r?\n/);
+  if (!fmMatch) return;
+  const fmLines = fmMatch[1].split(/\r?\n/);
+  for (let fmIdx = 0; fmIdx < fmLines.length; fmIdx++) {
+    const fmLine = fmLines[fmIdx];
+    const kv = fmLine.match(/^\s*([A-Za-z_][A-Za-z0-9_.-]*)\s*:\s*(.*?)\s*$/);
+    if (!kv) continue;
+    let value = kv[2];
+    if ((value.startsWith('"') && value.endsWith('"')) || (value.startsWith("'") && value.endsWith("'"))) {
+      value = value.slice(1, -1);
+    }
+    applyPlanFrontmatter(meta, kv[1], kv[2], value, fmIdx + 2);
+  }
+}
+
+export function parsePlan(planPath, cwd = process.cwd()) {
+  const fullPath = resolvePlanPath(planPath, cwd);
   const content = readFileSync(fullPath, "utf-8");
   const lines = content.replace(/\r\n/g, "\n").split("\n");
-
   const meta = parseMeta(lines);
   const scopeContract = parseScopeContract(lines);
-  // Meta-bug #89: optional implicit-gate capture — when enabled, a bare
-  // bash/sh code block under a slice header with no explicit
-  // **Validation Gate**: marker is treated as the gate. Opt-in via
-  // .forge.json → runtime.planParser.implicitGates = true (default false).
   const parserCfg = loadPlanParserConfig(cwd);
   const slices = parseSlices(lines, { implicitGates: parserCfg.implicitGates });
   const dag = buildDAG(slices);
 
-  // v2.37 Crucible (Slice 01.4): expose crucibleId + import source on
-  // plan.meta so downstream code (status, reporting, dashboard) can
-  // display provenance. Enforcement happens in runPlan(), not here —
-  // parsePlan() avoids enforcement/mutation side effects but may emit
-  // advisory console.warn for invalid frontmatter values (e.g. Bug #127).
-  const fmMatch = content.match(/^---\r?\n([\s\S]*?)\r?\n---\r?\n/);
-  if (fmMatch) {
-    // fmIdx + 2 gives the 1-based file line number (line 1 is "---", line 2 is first fm key)
-    const fmLines = fmMatch[1].split(/\r?\n/);
-    for (let fmIdx = 0; fmIdx < fmLines.length; fmIdx++) {
-      const fmLine = fmLines[fmIdx];
-      // Phase-WORKER-GUARDRAILS Slice 4: key pattern extended to allow dots (network.allowed, network.enforce)
-      const kv = fmLine.match(/^\s*([A-Za-z_][A-Za-z0-9_.-]*)\s*:\s*(.*?)\s*$/);
-      if (!kv) continue;
-      let v = kv[2];
-      if ((v.startsWith('"') && v.endsWith('"')) || (v.startsWith("'") && v.endsWith("'"))) {
-        v = v.slice(1, -1);
-      }
-      if (kv[1] === "crucibleId") meta.crucibleId = v;
-      else if (kv[1] === "lane") meta.lane = v;
-      else if (kv[1] === "source") meta.crucibleSource = v;
-      // Phase-WORKER-GUARDRAILS Slice 4 (A5): network.allowed — YAML flow sequence of allowed hostnames
-      else if (kv[1] === "network.allowed") {
-        const rawV = kv[2].trim();
-        if (!rawV.startsWith("[") || !rawV.endsWith("]")) {
-          throw new Error(
-            `frontmatter network.allowed must be a YAML flow sequence (e.g. [host1, host2]) ` +
-            `at line ${fmIdx + 2} — got: ${kv[2]}`
-          );
-        }
-        const inner = rawV.slice(1, -1).trim();
-        meta.networkAllowed = inner ? inner.split(/\s*,\s*/).map((s) => s.trim()).filter(Boolean) : [];
-      }
-      // Phase-WORKER-GUARDRAILS Slice 4 (A5): network.enforce — default false (log-only)
-      else if (kv[1] === "network.enforce") {
-        meta.networkEnforce = v.toLowerCase() === "true";
-      }
-      // Phase-WORKER-GUARDRAILS Slice 5 (A6): lockHash — sha256 of plan body anchors
-      else if (kv[1] === "lockHash") {
-        if (v.length > 0) meta.lockHash = v;
-      }
-      // Phase-WORKER-GUARDRAILS Slice 6 (A8): tools.deny — YAML flow sequence of MCP tool names the worker may not call
-      else if (kv[1] === "tools.deny") {
-        const rawV = kv[2].trim();
-        if (!rawV.startsWith("[") || !rawV.endsWith("]")) {
-          throw new Error(
-            `frontmatter tools.deny must be a YAML flow sequence (e.g. [tool1, tool2]) ` +
-            `at line ${fmIdx + 2} — got: ${kv[2]}`
-          );
-        }
-        const inner = rawV.slice(1, -1).trim();
-        meta.toolsDeny = inner ? inner.split(/\s*,\s*/).map((s) => s.trim()).filter(Boolean) : [];
-      }
-      else if (kv[1] === "model") {
-        const rawValue = kv[2];
-        const isQuotedValue =
-          (rawValue.startsWith('"') && rawValue.endsWith('"')) ||
-          (rawValue.startsWith("'") && rawValue.endsWith("'"));
-        const looksLikeNonString =
-          !isQuotedValue &&
-          (/^\d+(\.\d+)?$/.test(v) ||
-            /^(true|false|null|~)$/i.test(v) ||
-            /^[{\[]/.test(v));
-        if (looksLikeNonString) {
-          // eslint-disable-next-line no-console
-          console.warn("[model] frontmatter model: ignored — not a string");
-        } else if (v.length > 0) {
-          meta.model = v;
-        }
-      }
-    }
-  }
+  parsePlanFrontmatter(meta, content);
 
   return { meta, scopeContract, slices, dag };
 }
@@ -337,309 +343,252 @@ function parseScopeContract(lines) {
  *   [P]                          → parallel-eligible (Phase 6)
  *   [scope: src/auth/**]         → file scope metadata
  */
-export function parseSlices(lines, opts = {}) {
-  const implicitGates = opts.implicitGates === true;
-  const slices = [];
-  let current = null;
-  let inCodeBlock = false;
-  let inValidationGate = false;
-  let codeBlockContent = [];
-  // Issue #130 — when set, subsequent bullet lines are appended to current.scope
-  // until a blank line, another bold heading, or a non-bullet line is reached.
-  // Reset whenever we hit a slice header, a fence, or a non-matching line.
-  let inFilesInScopeBlock = false;
-  // Meta-bug #89: track whether the current code block was captured as an
-  // implicit validation gate (bare bash/sh block under a slice header with
-  // no prior **Validation Gate**: marker). Lint-tracked separately from
-  // explicit marker capture so callers can distinguish behaviours.
-  let implicitGateActive = false;
+function appendUniqueValues(target, values) {
+  for (const value of values) {
+    if (!target.includes(value)) target.push(value);
+  }
+}
 
-  for (let i = 0; i < lines.length; i++) {
-    const line = lines[i];
+function appendValidationGateText(current, body) {
+  current.validationGate = (current.validationGate ? current.validationGate + "\n" : "") + body;
+}
 
-    // Track code blocks
-    if (line.startsWith("```")) {
-      // Issue #130 \u2014 a fence always closes any open Files-in-scope window.
-      inFilesInScopeBlock = false;
-      if (inCodeBlock) {
-        // Closing code block
-        if (inValidationGate && current) {
-          const body = codeBlockContent.join("\n").trim();
-          current.validationGate = (current.validationGate ? current.validationGate + "\n" : "") + body;
-          if (implicitGateActive) {
-            current.implicitGate = true;
-            implicitGateActive = false;
-          }
-          inValidationGate = false;
-        }
-        codeBlockContent = [];
-        inCodeBlock = false;
-      } else {
-        inCodeBlock = true;
-        codeBlockContent = [];
-        // Meta-bug #89: lint — record that this slice had a bash/sh block
-        // in its body so analyzers can warn when no explicit gate marker
-        // was declared. Capture language off the opening fence.
-        const lang = line.slice(3).trim().toLowerCase();
-        const isShellLang = lang === "bash" || lang === "sh" || lang === "";
-        if (current && isShellLang) {
-          current._bashBlockCount = (current._bashBlockCount || 0) + 1;
-          // Implicit-gate capture (opt-in): first bare bash/sh block under
-          // a slice header with no explicit **Validation Gate**: marker
-          // becomes the validation gate. Default off — callers must pass
-          // { implicitGates: true } to enable (see loadPlanParserConfig).
-          if (implicitGates && !current.validationGate && !inValidationGate) {
-            inValidationGate = true;
-            implicitGateActive = true;
-          }
-        }
-      }
-      continue;
-    }
-    if (inCodeBlock) {
-      codeBlockContent.push(line);
-      continue;
-    }
+function createSliceRecord(sliceMatch, rawTags) {
+  const rawNumber = sliceMatch[1];
+  const rawTitle = sliceMatch[2].trim();
+  const current = {
+    number: rawNumber,
+    title: rawTitle,
+    depends: [],
+    parallel: false,
+    competitive: false,
+    competitiveVariants: null,
+    scope: [],
+    buildCommand: null,
+    testCommand: null,
+    validationGate: null,
+    stopCondition: null,
+    workerTimeoutMs: null,
+    tasks: [],
+    rawLines: [],
+  };
 
-    // Match slice headers (case-insensitive, flexible separators):
-    //   ### Slice N: Title
-    //   #### Slice N: Title (nested under Session/Group subheadings)
-    //   ### slice N — Title
-    //   ### SLICE N.N - Title
-    //   ### Slice 2A: Title (optional single trailing alpha)
-    const sliceMatch = line.match(
-      /^#{2,4}\s+slice\s+([\d.]+[A-Za-z]?)\s*[:\u2014\u2013—–-]\s*(.+?)(?:\s*\[.+?\])*\s*$/ui
-    );
-    if (sliceMatch) {
-      // Save previous slice
-      if (current) slices.push(current);
-      // Issue #130 \u2014 reset any open Files-in-scope window when crossing a
-      // slice boundary so file lists never leak between slices.
-      inFilesInScopeBlock = false;
-
-      const rawNumber = sliceMatch[1];
-      const rawTitle = sliceMatch[2].trim();
-      const rawTags = line; // Re-parse tags from full line
-
-      current = {
-        number: rawNumber,
-        title: rawTitle,
-        depends: [],
-        parallel: false,
-        competitive: false,
-        competitiveVariants: null,
-        scope: [],
-        buildCommand: null,
-        testCommand: null,
-        validationGate: null,
-        stopCondition: null,
-        workerTimeoutMs: null,
-        tasks: [],
-        rawLines: [],
-      };
-
-      // Parse tags from the full header line
-      // Fuzzy depends: [depends: ...], [depends on: ...], [dep: ...], [needs: ...]
-      const dependsMatch = rawTags.match(/\[(?:depends\s+on|depends|dep|needs):\s*([^\]]+)\]/i);
-      if (dependsMatch) {
-        current.depends = dependsMatch[1]
-          .split(",")
-          .map((d) => normalizeSliceId(d));
-      }
-
-      // Fuzzy parallel: [P], [parallel], [parallel-safe]
-      const parallelMatch = rawTags.match(/\[(?:P|parallel(?:-safe)?)\]/i);
-      if (parallelMatch) current.parallel = true;
-
-      // Phase-26 Slice 2 — [competitive] tag triggers CompetitiveScheduler.
-      // Same-slice best-of-N via isolated worktrees. Opt-in per slice.
-      const competitiveMatch = rawTags.match(/\[competitive(?::\s*(\d+))?\]/i);
-      if (competitiveMatch) {
-        current.competitive = true;
-        if (competitiveMatch[1]) {
-          current.competitiveVariants = parseInt(competitiveMatch[1], 10);
-        }
-      } else {
-        current.competitive = false;
-      }
-
-      const scopeMatch = rawTags.match(/\[scope:\s*([^\]]+)\]/i);
-      if (scopeMatch) {
-        current.scope = scopeMatch[1].split(",").map((s) => s.trim());
-      }
-
-      // Check for status marker (✅)
-      if (rawTitle.includes("✅") || rawTags.includes("✅")) {
-        current.status = "completed";
-      }
-
-      continue;
-    }
-
-    if (!current) continue;
-
-    // Collect raw lines for the current slice
-    current.rawLines.push(line);
-
-    // Parse build command (case-insensitive)
-    const buildMatch = line.match(/\*\*Build [Cc]ommand\*\*:\s*`(.+?)`/i);
-    if (buildMatch) current.buildCommand = buildMatch[1];
-
-    // Parse test command (case-insensitive)
-    const testMatch = line.match(/\*\*Test [Cc]ommand\*\*:\s*`(.+?)`/i);
-    if (testMatch) current.testCommand = testMatch[1];
-
-    // Detect validation gate section
-    // Supports two formats:
-    //   1. **Validation Gate**: <inline text>  (prose description, no code block)
-    //   2. **Validation Gate**:\n```bash\n<commands>\n```  (fenced code block)
-    // Issue #130 — also accept **Exit gate** as an alias for Validation Gate;
-    // many hand-authored plans use that label and the absence of a parser
-    // match silently produced "No validation gate defined" + false-positive passes.
-    const gateMatch = line.match(/\*\*(?:Validation Gate|Exit [Gg]ate)\*?\*?\s*:?\s*(.*)$/i);
-    if (gateMatch) {
-      inFilesInScopeBlock = false;
-      const inlineText = (gateMatch[1] || "").trim();
-      if (inlineText && current) {
-        // Inline gate text — extract backtick-wrapped commands or use prose
-        const backtickCmds = [];
-        const backtickRe = /`([^`]+)`/g;
-        let bm;
-        while ((bm = backtickRe.exec(inlineText)) !== null) backtickCmds.push(bm[1]);
-        if (backtickCmds.length > 0) {
-          current.validationGate = (current.validationGate ? current.validationGate + "\n" : "") + backtickCmds.join("\n");
-        } else {
-          // Store prose description as gate (regression guard won't execute it, but it's discoverable)
-          current.validationGateDescription = inlineText;
-        }
-      }
-      inValidationGate = true;
-      continue;
-    }
-
-    // Parse stop condition
-    const stopMatch = line.match(/\*\*Stop Condition\*\*:\s*(.+)/);
-    if (stopMatch) current.stopCondition = stopMatch[1].trim();
-
-    // Parse per-slice worker timeout override
-    const workerTimeoutMatch = line.match(/\*\*WorkerTimeoutMs\*\*:\s*(.+)/i);
-    if (workerTimeoutMatch) {
-      const parsed = parseWorkerTimeoutValue(workerTimeoutMatch[1].trim());
-      if (parsed !== null) current.workerTimeoutMs = parsed;
-    }
-
-    // Parse body-line **Depends On:** — merges with any [depends: ...] header tag.
-    // Formats supported (colon can be inside OR outside the bold markers):
-    //   **Depends On:** Slice 1, Slice 2A (auth required)
-    //   **Depends On**: Slice 0
-    const dependsBodyMatch = line.match(/\*\*Depends\s+On:?\*\*:?\s*(.+)/i);
-    if (dependsBodyMatch) {
-      // Strip trailing parenthetical notes, then split on commas
-      const rawDeps = dependsBodyMatch[1].replace(/\s*\([^)]*\)\s*$/, "").trim();
-      const bodyDeps = rawDeps
-        .split(/\s*,\s*/)
-        .map((d) => normalizeSliceId(d))
-        .filter((d) => d.length > 0);
-      // Merge with header-tag deps, de-dup
-      for (const d of bodyDeps) {
-        if (!current.depends.includes(d)) current.depends.push(d);
-      }
-    }
-
-    // Parse body-line **Context Files:** — merges with any [scope: ...] header tag.
-    // Extracts backtick-wrapped paths. Colon may appear inside OR outside bold markers.
-    //   **Context Files:** `path/to/file.md`, `.github/instructions/auth.md`
-    const contextBodyMatch = line.match(/\*\*Context Files:?\*\*:?\s*(.+)/i);
-    if (contextBodyMatch) {
-      const backticks = contextBodyMatch[1].match(/`([^`]+)`/g) || [];
-      const files = backticks.map((s) => s.replace(/`/g, "").trim()).filter((s) => s.length > 0);
-      for (const f of files) {
-        if (!current.scope.includes(f)) current.scope.push(f);
-      }
-    }
-
-    // Issues #108/#109/#113/#115: plans frequently use **Files:** to list the
-    // files a slice will create or modify. Without parsing this, the
-    // orchestrator-injected SCOPE clause was built only from [scope: ...] /
-    // **Context Files:** and contradicted the plan's own Files list. Merge
-    // them so SCOPE always covers what the plan declares as in-scope.
-    //
-    // Match: **Files:** `a.ts`, `b.ts`  /  **Files**: a.ts, b.ts
-    //        **Files in scope**: `a.ts`, `b.ts`
-    // We only treat backtick-wrapped or whitespace-separated path-like tokens
-    // as files; prose lines that happen to start with the word "Files" are
-    // ignored when no path tokens are found.
-    //
-    // Issue #130 — also accept the multi-line bullet-list form:
-    //   **Files in scope**
-    //   - `path/to/file.tsx` — prose description
-    //   - `path/to/other.tsx` — more prose
-    // The orchestrator silently no-op'd Phase-57 Slice 5 because it parsed
-    // **Context Files** as the edit allow-list and never saw **Files in scope**.
-    const filesBodyMatch = line.match(/^\s*[-*]?\s*\*\*Files(?:\s+in\s+scope)?:?\*\*:?\s*(.*)$/i);
-    if (filesBodyMatch) {
-      const rest = (filesBodyMatch[1] || "").trim();
-      const backticks = rest.match(/`([^`]+)`/g) || [];
-      let candidates = backticks.map((s) => s.replace(/`/g, "").trim());
-      if (candidates.length === 0 && rest.length > 0) {
-        // No backticks — fall back to comma/whitespace splitting and keep
-        // only tokens that look like a path (contain '/' or '.' or end in *).
-        candidates = rest
-          .split(/[\s,]+/)
-          .map((s) => s.trim().replace(/[.,;]+$/, ""))
-          .filter((s) => s.length > 0 && /[\/.*]/.test(s));
-      }
-      for (const f of candidates) {
-        if (!current.scope.includes(f)) current.scope.push(f);
-      }
-      // Issue #130 — if the heading line carried no inline files, the file
-      // list is on subsequent bullet lines. Open a multi-line capture window.
-      inFilesInScopeBlock = candidates.length === 0;
-      continue;
-    }
-
-    // Issue #130 — multi-line `**Files in scope**` bullet capture. While the
-    // window is open, every `- `/`* ` line is parsed for backtick-wrapped or
-    // path-like tokens. The window closes on a blank line, a new bold heading,
-    // or any non-bullet line.
-    if (inFilesInScopeBlock) {
-      const trimmed = line.trim();
-      if (!trimmed) {
-        inFilesInScopeBlock = false;
-      } else if (/^\*\*/.test(trimmed) || /^#/.test(trimmed)) {
-        inFilesInScopeBlock = false;
-        // fall through so this line is parsed by the rules below
-      } else {
-        const bulletMatch = trimmed.match(/^[-*]\s+(.+)/);
-        if (bulletMatch) {
-          const body = bulletMatch[1];
-          const backticks = body.match(/`([^`]+)`/g) || [];
-          let candidates = backticks.map((s) => s.replace(/`/g, "").trim());
-          if (candidates.length === 0) {
-            // First whitespace-separated token that looks like a path.
-            const firstToken = body.split(/[\s,]+/)[0].replace(/[.,;]+$/, "");
-            if (firstToken && /[\/.*]/.test(firstToken)) candidates = [firstToken];
-          }
-          for (const f of candidates) {
-            if (!current.scope.includes(f)) current.scope.push(f);
-          }
-          continue;
-        } else {
-          inFilesInScopeBlock = false;
-          // fall through
-        }
-      }
-    }
-
-    // Parse numbered tasks
-    const taskMatch = line.match(/^\d+\.\s+(.+)/);
-    if (taskMatch) current.tasks.push(taskMatch[1].trim());
+  const dependsMatch = rawTags.match(/\[(?:depends\s+on|depends|dep|needs):\s*([^\]]+)\]/i);
+  if (dependsMatch) {
+    current.depends = dependsMatch[1]
+      .split(",")
+      .map((d) => normalizeSliceId(d));
   }
 
-  // Push last slice
-  if (current) slices.push(current);
+  if (/\[(?:P|parallel(?:-safe)?)\]/i.test(rawTags)) current.parallel = true;
 
-  return slices;
+  const competitiveMatch = rawTags.match(/\[competitive(?::\s*(\d+))?\]/i);
+  if (competitiveMatch) {
+    current.competitive = true;
+    if (competitiveMatch[1]) current.competitiveVariants = parseInt(competitiveMatch[1], 10);
+  }
+
+  const scopeMatch = rawTags.match(/\[scope:\s*([^\]]+)\]/i);
+  if (scopeMatch) current.scope = scopeMatch[1].split(",").map((s) => s.trim());
+  if (rawTitle.includes("✅") || rawTags.includes("✅")) current.status = "completed";
+
+  return current;
+}
+
+function handleCodeFenceLine(state, line) {
+  if (!line.startsWith("```")) return false;
+  state.inFilesInScopeBlock = false;
+
+  if (state.inCodeBlock) {
+    if (state.inValidationGate && state.current) {
+      appendValidationGateText(state.current, state.codeBlockContent.join("\n").trim());
+      if (state.implicitGateActive) {
+        state.current.implicitGate = true;
+        state.implicitGateActive = false;
+      }
+      state.inValidationGate = false;
+    }
+    state.codeBlockContent = [];
+    state.inCodeBlock = false;
+    return true;
+  }
+
+  state.inCodeBlock = true;
+  state.codeBlockContent = [];
+  const lang = line.slice(3).trim().toLowerCase();
+  const isShellLang = lang === "bash" || lang === "sh" || lang === "";
+  if (state.current && isShellLang) {
+    state.current._bashBlockCount = (state.current._bashBlockCount || 0) + 1;
+    if (state.implicitGates && !state.current.validationGate && !state.inValidationGate) {
+      state.inValidationGate = true;
+      state.implicitGateActive = true;
+    }
+  }
+  return true;
+}
+
+function handleCodeBlockContentLine(state, line) {
+  if (!state.inCodeBlock) return false;
+  state.codeBlockContent.push(line);
+  return true;
+}
+
+function handleSliceHeaderLine(state, line) {
+  const sliceMatch = line.match(
+    /^#{2,4}\s+slice\s+([\d.]+[A-Za-z]?)\s*[:\u2014\u2013—–-]\s*(.+?)(?:\s*\[.+?\])*\s*$/ui
+  );
+  if (!sliceMatch) return false;
+  if (state.current) state.slices.push(state.current);
+  state.inFilesInScopeBlock = false;
+  state.current = createSliceRecord(sliceMatch, line);
+  return true;
+}
+
+function handleValidationGateLine(state, line) {
+  const gateMatch = line.match(/\*\*(?:Validation Gate|Exit [Gg]ate)\*?\*?\s*:?\s*(.*)$/i);
+  if (!gateMatch) return false;
+  state.inFilesInScopeBlock = false;
+  const inlineText = (gateMatch[1] || "").trim();
+  if (inlineText && state.current) {
+    const backtickCmds = [];
+    const backtickRe = /`([^`]+)`/g;
+    let bm;
+    while ((bm = backtickRe.exec(inlineText)) !== null) backtickCmds.push(bm[1]);
+    if (backtickCmds.length > 0) appendValidationGateText(state.current, backtickCmds.join("\n"));
+    else state.current.validationGateDescription = inlineText;
+  }
+  state.inValidationGate = true;
+  return true;
+}
+
+function applyBuildCommand(current, line) {
+  const buildMatch = line.match(/\*\*Build [Cc]ommand\*\*:\s*`(.+?)`/i);
+  if (buildMatch) current.buildCommand = buildMatch[1];
+}
+
+function applyTestCommand(current, line) {
+  const testMatch = line.match(/\*\*Test [Cc]ommand\*\*:\s*`(.+?)`/i);
+  if (testMatch) current.testCommand = testMatch[1];
+}
+
+function applyStopCondition(current, line) {
+  const stopMatch = line.match(/\*\*Stop Condition\*\*:\s*(.+)/);
+  if (stopMatch) current.stopCondition = stopMatch[1].trim();
+}
+
+function applyWorkerTimeout(current, line) {
+  const workerTimeoutMatch = line.match(/\*\*WorkerTimeoutMs\*\*:\s*(.+)/i);
+  if (!workerTimeoutMatch) return;
+  const parsed = parseWorkerTimeoutValue(workerTimeoutMatch[1].trim());
+  if (parsed !== null) current.workerTimeoutMs = parsed;
+}
+
+function applyBodyDependencies(current, line) {
+  const dependsBodyMatch = line.match(/\*\*Depends\s+On:?\*\*:?\s*(.+)/i);
+  if (!dependsBodyMatch) return;
+  const rawDeps = dependsBodyMatch[1].replace(/\s*\([^)]*\)\s*$/, "").trim();
+  const bodyDeps = rawDeps
+    .split(/\s*,\s*/)
+    .map((d) => normalizeSliceId(d))
+    .filter((d) => d.length > 0);
+  appendUniqueValues(current.depends, bodyDeps);
+}
+
+function extractBacktickValues(text) {
+  const backticks = text.match(/`([^`]+)`/g) || [];
+  return backticks.map((s) => s.replace(/`/g, "").trim()).filter((s) => s.length > 0);
+}
+
+function applyContextFiles(current, line) {
+  const contextBodyMatch = line.match(/\*\*Context Files:?\*\*:?\s*(.+)/i);
+  if (!contextBodyMatch) return;
+  appendUniqueValues(current.scope, extractBacktickValues(contextBodyMatch[1]));
+}
+
+function extractInlineScopeCandidates(rest) {
+  const backtickValues = extractBacktickValues(rest);
+  if (backtickValues.length > 0) return backtickValues;
+  if (!rest) return [];
+  return rest
+    .split(/[\s,]+/)
+    .map((s) => s.trim().replace(/[.,;]+$/, ""))
+    .filter((s) => s.length > 0 && /[\/.*]/.test(s));
+}
+
+function extractBulletScopeCandidates(body) {
+  const backtickValues = extractBacktickValues(body);
+  if (backtickValues.length > 0) return backtickValues;
+  const firstToken = body.split(/[\s,]+/)[0].replace(/[.,;]+$/, "");
+  return firstToken && /[\/.*]/.test(firstToken) ? [firstToken] : [];
+}
+
+function handleFilesHeading(state, line) {
+  const filesBodyMatch = line.match(/^\s*[-*]?\s*\*\*Files(?:\s+in\s+scope)?:?\*\*:?\s*(.*)$/i);
+  if (!filesBodyMatch) return false;
+  const candidates = extractInlineScopeCandidates((filesBodyMatch[1] || "").trim());
+  appendUniqueValues(state.current.scope, candidates);
+  state.inFilesInScopeBlock = candidates.length === 0;
+  return true;
+}
+
+function handleFilesInScopeContinuation(state, line) {
+  if (!state.inFilesInScopeBlock) return false;
+  const trimmed = line.trim();
+  if (!trimmed) {
+    state.inFilesInScopeBlock = false;
+    return false;
+  }
+  if (/^\*\*/.test(trimmed) || /^#/.test(trimmed)) {
+    state.inFilesInScopeBlock = false;
+    return false;
+  }
+  const bulletMatch = trimmed.match(/^[-*]\s+(.+)/);
+  if (!bulletMatch) {
+    state.inFilesInScopeBlock = false;
+    return false;
+  }
+  appendUniqueValues(state.current.scope, extractBulletScopeCandidates(bulletMatch[1]));
+  return true;
+}
+
+function applyTaskLine(current, line) {
+  const taskMatch = line.match(/^\d+\.\s+(.+)/);
+  if (taskMatch) current.tasks.push(taskMatch[1].trim());
+}
+
+export function parseSlices(lines, opts = {}) {
+  const state = {
+    implicitGates: opts.implicitGates === true,
+    slices: [],
+    current: null,
+    inCodeBlock: false,
+    inValidationGate: false,
+    codeBlockContent: [],
+    inFilesInScopeBlock: false,
+    implicitGateActive: false,
+  };
+
+  for (const line of lines) {
+    if (handleCodeFenceLine(state, line)) continue;
+    if (handleCodeBlockContentLine(state, line)) continue;
+    if (handleSliceHeaderLine(state, line)) continue;
+    if (!state.current) continue;
+
+    state.current.rawLines.push(line);
+    applyBuildCommand(state.current, line);
+    applyTestCommand(state.current, line);
+    if (handleValidationGateLine(state, line)) continue;
+    applyStopCondition(state.current, line);
+    applyWorkerTimeout(state.current, line);
+    applyBodyDependencies(state.current, line);
+    applyContextFiles(state.current, line);
+    if (handleFilesHeading(state, line)) continue;
+    if (handleFilesInScopeContinuation(state, line)) continue;
+    applyTaskLine(state.current, line);
+  }
+
+  if (state.current) state.slices.push(state.current);
+  return state.slices;
 }
 
 /**

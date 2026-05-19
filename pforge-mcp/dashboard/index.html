@@ -455,8 +455,8 @@
           <h3 class="text-sm font-semibold text-purple-400">🔭 Observer Narrations</h3>
           <span class="text-xs text-gray-500" id="observer-narrations-cost"></span>
         </div>
-        <div id="observer-narrations-list" class="max-h-48 overflow-y-auto space-y-2 text-xs" role="log" aria-live="polite">
-          <p class="text-gray-500 text-center py-3" id="observer-narrations-empty">
+        <div id="home-observer-narrations-list" class="max-h-48 overflow-y-auto space-y-2 text-xs" role="log" aria-live="polite">
+          <p class="text-gray-500 text-center py-3" id="home-observer-narrations-empty">
             Observer disabled — <a href="#settings-forgemaster" class="text-blue-400 hover:text-blue-300" onclick="activateTab('settings-forgemaster');return false;">enable in Settings</a>
           </p>
         </div>
@@ -467,7 +467,7 @@
           <h3 class="text-sm font-semibold text-amber-400">⚡ Cross-Run Watcher Anomalies</h3>
           <button onclick="loadCrossRunAnomalies()" class="text-xs text-gray-500 hover:text-white px-2 py-0.5 rounded border border-gray-700">↺ Refresh</button>
         </div>
-        <div id="cross-run-anomalies-list" class="max-h-48 overflow-y-auto space-y-2 text-xs" role="log">
+        <div id="home-cross-run-anomalies-list" class="max-h-48 overflow-y-auto space-y-2 text-xs" role="log">
           <p class="text-gray-500 text-center py-3">Click Refresh to scan the last 14 days of run history.</p>
         </div>
       </div>
@@ -2275,6 +2275,44 @@
               <p>No tool calls yet.</p>
             </div>
           </div>
+        </div>
+
+        <!-- Phase-40: Observer Narrations · Cross-Run Anomalies · Auditor Latest Report -->
+        <div class="mt-4 grid grid-cols-1 lg:grid-cols-3 gap-4">
+
+          <!-- S4: Observer Narrations card -->
+          <details class="bg-gray-800 rounded-lg" open data-testid="observer-narrations-card">
+            <summary class="cursor-pointer px-4 py-3 text-sm font-medium text-cyan-300 hover:bg-gray-750 flex items-center justify-between select-none">
+              <span>👁 Observer Narrations</span>
+              <button onclick="event.preventDefault();loadObserverNarrations()" class="text-gray-500 hover:text-white text-base" title="Refresh">↺</button>
+            </summary>
+            <div id="observer-narrations-list" data-event-type="observer:narration" class="px-4 pb-4 space-y-2 max-h-64 overflow-y-auto text-xs text-gray-400">
+              <p id="observer-narrations-empty" class="text-gray-600 text-center py-4">Observer disabled — <a href="#" onclick="event.preventDefault();document.querySelector('[data-tab=settings-forgemaster]').click()" class="text-cyan-400 underline">enable in Settings → Forge-Master</a>.</p>
+            </div>
+          </details>
+
+          <!-- S5: Cross-Run Watcher Anomalies card -->
+          <details class="bg-gray-800 rounded-lg" data-testid="cross-run-anomalies-card">
+            <summary class="cursor-pointer px-4 py-3 text-sm font-medium text-amber-300 hover:bg-gray-750 flex items-center justify-between select-none">
+              <span>📈 Cross-Run Watcher Anomalies</span>
+              <button onclick="event.preventDefault();loadCrossRunAnomalies()" class="text-gray-500 hover:text-white text-base" title="Refresh">↺</button>
+            </summary>
+            <div id="cross-run-anomalies-list" class="px-4 pb-4 space-y-2 max-h-64 overflow-y-auto text-xs text-gray-400">
+              <p class="text-gray-600 text-center py-4">Loading…</p>
+            </div>
+          </details>
+
+          <!-- S6: Auditor Latest Report card -->
+          <details class="bg-gray-800 rounded-lg" data-testid="auditor-report-card">
+            <summary class="cursor-pointer px-4 py-3 text-sm font-medium text-purple-300 hover:bg-gray-750 flex items-center justify-between select-none">
+              <span>🔍 Auditor Latest Report</span>
+              <button onclick="event.preventDefault();loadAuditorLatest()" class="text-gray-500 hover:text-white text-base" title="Refresh">↺</button>
+            </summary>
+            <div id="auditor-latest-report" class="px-4 pb-4 text-xs text-gray-400">
+              <p class="text-gray-600 text-center py-4">Loading…</p>
+            </div>
+          </details>
+
         </div>
 
       </div>

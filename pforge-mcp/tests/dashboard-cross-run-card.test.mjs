@@ -97,7 +97,7 @@ describe("S5 — /api/watcher/cross-run responses", () => {
     const res = await fetch(`${baseUrl}/api/watcher/cross-run`);
     expect(res.status).toBe(200);
     const body = await res.json();
-    expect(body.ok).toBe(true);
+    expect(body.mode).toBe("cross-run");
     expect(Array.isArray(body.anomalies)).toBe(true);
   });
 

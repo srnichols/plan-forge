@@ -366,13 +366,17 @@ function handleEvent(event) {
       break;
     // Phase-40 S4 — observer narration live updates
     case "observer:narration": {
-      const list = document.getElementById("observer-narrations-list");
-      const empty = document.getElementById("observer-narrations-empty");
-      if (!list) break;
-      if (empty) empty.style.display = "none";
-      const el = renderObserverNarration(event.data || {});
-      list.prepend(el);
-      while (list.children.length > 20) list.removeChild(list.lastChild);
+      const targets = [
+        [document.getElementById("observer-narrations-list"), document.getElementById("observer-narrations-empty")],
+        [document.getElementById("home-observer-narrations-list"), document.getElementById("home-observer-narrations-empty")],
+      ].filter(([list]) => !!list);
+      if (targets.length === 0) break;
+      for (const [list, empty] of targets) {
+        if (empty) empty.style.display = "none";
+        const el = renderObserverNarration(event.data || {});
+        list.prepend(el);
+        while (list.children.length > 20) list.removeChild(list.lastChild);
+      }
       break;
     }
     // Phase Hotfix-v2.90.8 Slice 3 — slice-output-stalled pill
@@ -7402,21 +7406,27 @@ function loadObserverNarrations() {
   fetch("/api/brain/recall?source=observer&limit=20")
     .then(r => r.ok ? r.json() : null)
     .then(data => {
-      const list = document.getElementById("observer-narrations-list");
-      const empty = document.getElementById("observer-narrations-empty");
-      if (!list) return;
+      const targets = [
+        [document.getElementById("observer-narrations-list"), document.getElementById("observer-narrations-empty")],
+        [document.getElementById("home-observer-narrations-list"), document.getElementById("home-observer-narrations-empty")],
+      ].filter(([list]) => !!list);
+      if (targets.length === 0) return;
       const items = Array.isArray(data?.thoughts)
         ? data.thoughts
         : Array.isArray(data?.records)
           ? data.records
           : [];
       if (items.length === 0) {
-        if (empty) empty.style.display = "";
+        for (const [, empty] of targets) {
+          if (empty) empty.style.display = "";
+        }
         return;
       }
-      if (empty) empty.style.display = "none";
-      list.innerHTML = "";
-      for (const item of items) list.appendChild(renderObserverNarration(item));
+      for (const [list, empty] of targets) {
+        if (empty) empty.style.display = "none";
+        list.innerHTML = "";
+        for (const item of items) list.appendChild(renderObserverNarration(item));
+      }
     })
     .catch(() => {});
 }
@@ -7425,30 +7435,36 @@ window.loadObserverNarrations = loadObserverNarrations;
 
 // Phase-40 S5 — Cross-run watcher anomalies card
 function loadCrossRunAnomalies() {
-  const el = document.getElementById("cross-run-anomalies-list");
-  if (!el) return;
-  el.innerHTML = '<p class="text-gray-600 text-center py-2">Loading…</p>';
+  const els = [
+    document.getElementById("cross-run-anomalies-list"),
+    document.getElementById("home-cross-run-anomalies-list"),
+  ].filter(Boolean);
+  if (els.length === 0) return;
+  for (const el of els) el.innerHTML = '<p class="text-gray-600 text-center py-2">Loading…</p>';
   fetch("/api/watcher/cross-run")
     .then(r => r.ok ? r.json() : null)
     .then(data => {
       if (!data || (!data.ok && data.error)) {
-        el.innerHTML = `<p class="text-gray-600 text-center py-4">${escapeHtml(data?.error || "No data available.")}</p>`;
+        for (const el of els) el.innerHTML = `<p class="text-gray-600 text-center py-4">${escapeHtml(data?.error || "No data available.")}</p>`;
         return;
       }
       const anomalies = data.anomalies || [];
       if (anomalies.length === 0) {
-        el.innerHTML = `<p class="text-gray-600 text-center py-4">No anomalies detected in the last ${escapeHtml(data.window || "14d")} (${data.totalRuns ?? 0} runs).</p>`;
+        for (const el of els) el.innerHTML = `<p class="text-gray-600 text-center py-4">No anomalies detected in the last ${escapeHtml(data.window || "14d")} (${data.totalRuns ?? 0} runs).</p>`;
         return;
       }
-      el.innerHTML = anomalies.slice(0, 10).map(a => {
+      const content = anomalies.slice(0, 10).map(a => {
         const col = a.severity === "error" ? "text-red-400" : "text-amber-400";
         return `<div class="border-b border-gray-700/50 pb-2 last:border-0">
           <p class="${col} font-medium">${escapeHtml(a.code || "anomaly")}</p>
           <p class="text-gray-400">${escapeHtml(a.message || a.recommendation || "")}</p>
         </div>`;
       }).join("");
+      for (const el of els) el.innerHTML = content;
     })
-    .catch(err => { el.innerHTML = `<p class="text-red-400 text-xs">Error: ${escapeHtml(err.message)}</p>`; });
+    .catch(err => {
+      for (const el of els) el.innerHTML = `<p class="text-red-400 text-xs">Error: ${escapeHtml(err.message)}</p>`;
+    });
 }
 
 // Phase-40 S6 — Auditor latest report card

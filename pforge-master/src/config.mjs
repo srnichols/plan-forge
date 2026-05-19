@@ -42,6 +42,9 @@ export const FORGE_MASTER_DEFAULTS = Object.freeze({
     maxNarrationsPerHour: 6,
     modelTier: null,
   }),
+  auditor: Object.freeze({
+    modelTier: null,
+  }),
 });
 
 const VALID_PROVIDERS = new Set(["githubCopilot", "anthropic", "openai", "xai"]);
@@ -90,6 +93,7 @@ function resolveReasoningProvider(forgeMasterBlock, resolvedModel) {
  *   defaultTier: "low"|"medium"|"high"|null,
  *   autoEscalate: boolean,
  *   observer: { enabled: boolean, maxUsdPerDay: number, maxNarrationsPerHour: number, modelTier: string|null },
+ *   auditor: { modelTier: string|null },
  * }}
  */
 export function getForgeMasterConfig({ cwd = process.cwd() } = {}) {
@@ -184,6 +188,14 @@ export function getForgeMasterConfig({ cwd = process.cwd() } = {}) {
     ? observerBlock.modelTier
     : FORGE_MASTER_DEFAULTS.observer.modelTier;
 
+  const auditorBlock = block?.auditor ?? {};
+  const auditorModelTier = (
+    typeof auditorBlock.modelTier === "string" &&
+    VALID_MODEL_TIERS.includes(auditorBlock.modelTier)
+  )
+    ? auditorBlock.modelTier
+    : FORGE_MASTER_DEFAULTS.auditor.modelTier;
+
   return {
     reasoningModel,
     reasoningProvider,
@@ -202,6 +214,9 @@ export function getForgeMasterConfig({ cwd = process.cwd() } = {}) {
       maxUsdPerDay: observerMaxUsdPerDay,
       maxNarrationsPerHour: observerMaxNarrationsPerHour,
       modelTier: observerModelTier,
+    },
+    auditor: {
+      modelTier: auditorModelTier,
     },
   };
 }

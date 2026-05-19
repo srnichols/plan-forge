@@ -114,6 +114,7 @@ describe("Phase-30 decomposition mapping (Slice 6 sweep)", () => {
     ["tab-settings-forgemaster", [
       "cfg-observer-enabled", "cfg-observer-modeltier", "cfg-observer-budget-usd",
       "cfg-observer-budget-narrations", "cfg-observer-batch-window-ms", "cfg-observer-brain-capture",
+      "cfg-auditor-modeltier", "cfg-auditor-on-failure", "cfg-auditor-every-n-runs",
     ]],
   ];
 

@@ -7483,6 +7483,28 @@ export function createExpressApp() {
           return res.status(400).json({ error: `updateSource must be one of: ${allowed.join(", ")}` });
         }
       }
+      const observerConfig = config.forgeMaster?.observer;
+      if (observerConfig && typeof observerConfig === "object") {
+        if (observerConfig.maxUsdPerDay !== undefined) {
+          if (typeof observerConfig.maxUsdPerDay !== "number" || !Number.isFinite(observerConfig.maxUsdPerDay) || observerConfig.maxUsdPerDay < 0) {
+            return res.status(400).json({ error: "forgeMaster.observer.maxUsdPerDay must be a finite number >= 0" });
+          }
+        }
+        if (observerConfig.maxNarrationsPerHour !== undefined) {
+          if (typeof observerConfig.maxNarrationsPerHour !== "number" || !Number.isFinite(observerConfig.maxNarrationsPerHour) || observerConfig.maxNarrationsPerHour < 0) {
+            return res.status(400).json({ error: "forgeMaster.observer.maxNarrationsPerHour must be a finite number >= 0" });
+          }
+        }
+      }
+      const auditorConfig = config.forgeMaster?.auditor;
+      if (auditorConfig && typeof auditorConfig === "object" && auditorConfig.everyNRuns !== undefined && auditorConfig.everyNRuns !== null) {
+        if (!Number.isFinite(auditorConfig.everyNRuns) || auditorConfig.everyNRuns <= 0 || auditorConfig.everyNRuns !== Math.trunc(auditorConfig.everyNRuns)) {
+          return res.status(400).json({ error: "forgeMaster.auditor.everyNRuns must be a positive integer or null" });
+        }
+        if (auditorConfig.everyNRuns >= 1 && auditorConfig.everyNRuns <= 4) {
+          return res.status(400).json({ error: "forgeMaster.auditor.everyNRuns must be null/blank or at least 5" });
+        }
+      }
       writeFileSync(configPath, JSON.stringify(config, null, 2));
       res.json({ success: true });
     } catch (err) { res.status(500).json({ error: err.message }); }

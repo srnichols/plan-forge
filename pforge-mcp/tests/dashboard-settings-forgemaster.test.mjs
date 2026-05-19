@@ -5,10 +5,12 @@
  */
 
 import { describe, it, expect } from "vitest";
-import { readFileSync } from "node:fs";
-import { resolve, dirname } from "node:path";
+import { readFileSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { resolve, dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { JSDOM } from "jsdom";
+import { FORGE_MASTER_DEFAULTS, getForgeMasterConfig } from "../../pforge-master/src/config.mjs";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const html = readFileSync(resolve(HERE, "..", "dashboard", "index.html"), "utf-8");
@@ -23,6 +25,12 @@ const OBSERVER_FIELD_IDS = [
   "cfg-observer-budget-narrations",
   "cfg-observer-batch-window-ms",
   "cfg-observer-brain-capture",
+];
+
+const AUDITOR_FIELD_IDS = [
+  "cfg-auditor-modeltier",
+  "cfg-auditor-on-failure",
+  "cfg-auditor-every-n-runs",
 ];
 
 describe("settings-forgemaster observer tab markup", () => {
@@ -81,5 +89,61 @@ describe("settings-forgemaster observer tab wiring", () => {
     expect(js).toContain("maxNarrationsPerHour: Number.isFinite(observerBudgetNarrations) ? observerBudgetNarrations : 6");
     expect(js).toContain("batchWindowMs: Number.isFinite(observerBatchWindowMs) ? observerBatchWindowMs : 60000");
     expect(js).toContain("brainCapture: observerBrainCapture");
+  });
+});
+
+describe("settings-forgemaster auditor tab markup", () => {
+  it("renders all three auditor cfg-* fields exactly once inside the same section", () => {
+    const section = document.getElementById("tab-settings-forgemaster");
+    for (const id of AUDITOR_FIELD_IDS) {
+      expect(document.querySelectorAll(`#${id}`)).toHaveLength(1);
+      expect(section?.querySelector(`#${id}`), `${id} must live inside tab-settings-forgemaster`).not.toBeNull();
+    }
+  });
+
+  it("reuses the documented model tier labels for the auditor selector", () => {
+    const labels = [...document.querySelectorAll("#cfg-auditor-modeltier option")].map((opt) => opt.textContent.trim());
+    expect(labels).toEqual([
+      "Inherit ask mode (default)",
+      "Flagship (best quality)",
+      "Mid (balanced)",
+      "Fast (cheapest)",
+    ]);
+  });
+});
+
+describe("settings-forgemaster auditor wiring", () => {
+  it("loadConfig hydrates auditor values from currentConfig.forgeMaster.auditor", () => {
+    expect(js).toContain("const auditorCfg = currentConfig.forgeMaster?.auditor || {};");
+    expect(js).toContain('document.getElementById("cfg-auditor-modeltier")');
+    expect(js).toContain('document.getElementById("cfg-auditor-on-failure")');
+    expect(js).toContain('document.getElementById("cfg-auditor-every-n-runs")');
+  });
+
+  it("saveConfig persists forgeMaster.auditor fields through /api/config", () => {
+    expect(js).toContain("auditor: {");
+    expect(js).toContain("modelTier: auditorModelTier || null");
+    expect(js).toContain("onFailure: auditorOnFailure");
+    expect(js).toContain("everyNRuns: auditorEveryNRuns");
+  });
+
+  it("client validation rejects everyNRuns values 1 through 4", () => {
+    expect(js).toContain("auditorEveryNRuns >= 1 && auditorEveryNRuns <= 4");
+    expect(js).toContain("Auditor run cadence must be blank or at least 5.");
+  });
+
+  it("Forge-Master defaults now include an auditor block", () => {
+    expect(FORGE_MASTER_DEFAULTS.auditor).toEqual({ modelTier: null });
+  });
+
+  it("getForgeMasterConfig resolves forgeMaster.auditor.modelTier", () => {
+    const cwd = mkdtempSync(join(tmpdir(), "pforge-master-config-"));
+    try {
+      writeFileSync(resolve(cwd, ".forge.json"), JSON.stringify({ forgeMaster: { auditor: { modelTier: "mid" } } }), "utf-8");
+      const cfg = getForgeMasterConfig({ cwd });
+      expect(cfg.auditor).toEqual({ modelTier: "mid" });
+    } finally {
+      rmSync(cwd, { recursive: true, force: true });
+    }
   });
 });

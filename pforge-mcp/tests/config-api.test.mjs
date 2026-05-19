@@ -138,3 +138,56 @@ describe("POST /api/config — updateSource validation", () => {
     expect(persisted.updateSource).toBe("github-tags");
   });
 });
+
+describe("POST /api/config — Forge-Master observer and auditor validation", () => {
+  it("rejects a negative observer USD budget", async () => {
+    const res = await post("/api/config", {
+      preset: "dotnet",
+      forgeMaster: { observer: { maxUsdPerDay: -1 } },
+    });
+    expect(res.status).toBe(400);
+    const body = await res.json();
+    expect(body.error).toMatch(/maxUsdPerDay/);
+  });
+
+  it("rejects a negative observer narration budget", async () => {
+    const res = await post("/api/config", {
+      preset: "dotnet",
+      forgeMaster: { observer: { maxNarrationsPerHour: -1 } },
+    });
+    expect(res.status).toBe(400);
+    const body = await res.json();
+    expect(body.error).toMatch(/maxNarrationsPerHour/);
+  });
+
+  it("rejects forgeMaster.auditor.everyNRuns values 1 through 4", async () => {
+    for (const everyNRuns of [1, 2, 3, 4]) {
+      const res = await post("/api/config", {
+        preset: "dotnet",
+        forgeMaster: { auditor: { everyNRuns } },
+      });
+      expect(res.status, `everyNRuns=${everyNRuns} should fail`).toBe(400);
+      const body = await res.json();
+      expect(body.error).toMatch(/everyNRuns/);
+      expect(body.error).toMatch(/at least 5|null\/blank/);
+    }
+  });
+
+  it("accepts forgeMaster.auditor.everyNRuns = null (blank/off)", async () => {
+    const res = await post("/api/config", {
+      preset: "dotnet",
+      forgeMaster: { auditor: { everyNRuns: null, onFailure: true, modelTier: "fast" } },
+    });
+    expect(res.status).toBe(200);
+    expect(readConfig().forgeMaster.auditor).toEqual({ everyNRuns: null, onFailure: true, modelTier: "fast" });
+  });
+
+  it("accepts forgeMaster.auditor.everyNRuns >= 5", async () => {
+    const res = await post("/api/config", {
+      preset: "dotnet",
+      forgeMaster: { auditor: { everyNRuns: 5, onFailure: false, modelTier: null } },
+    });
+    expect(res.status).toBe(200);
+    expect(readConfig().forgeMaster.auditor.everyNRuns).toBe(5);
+  });
+});

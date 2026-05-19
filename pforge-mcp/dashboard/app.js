@@ -2677,6 +2677,14 @@ async function loadConfig() {
     if (observerBatchWindowEl) observerBatchWindowEl.value = observerCfg.batchWindowMs ?? 60000;
     if (observerBrainCaptureEl) observerBrainCaptureEl.checked = observerCfg.brainCapture !== false;
 
+    const auditorCfg = currentConfig.forgeMaster?.auditor || {};
+    const auditorModelTierEl = document.getElementById("cfg-auditor-modeltier");
+    const auditorOnFailureEl = document.getElementById("cfg-auditor-on-failure");
+    const auditorEveryNRunsEl = document.getElementById("cfg-auditor-every-n-runs");
+    if (auditorModelTierEl) auditorModelTierEl.value = auditorCfg.modelTier || "";
+    if (auditorOnFailureEl) auditorOnFailureEl.checked = auditorCfg.onFailure === true;
+    if (auditorEveryNRunsEl) auditorEveryNRunsEl.value = Number.isFinite(auditorCfg.everyNRuns) ? auditorCfg.everyNRuns : "";
+
     // Check API provider availability
     loadApiProviderStatus();
     loadApiKeys();
@@ -2873,6 +2881,7 @@ async function loadOpenBrainStatus() {
 async function saveConfig() {
   if (!confirm("Save configuration changes to .forge.json?")) return;
   try {
+    const statusEl = document.getElementById("cfg-status");
     const agents = [...document.querySelectorAll(".cfg-agent-checkbox:checked")].map((c) => c.value);
     const modelDefault = document.getElementById("cfg-model-default").value;
     const modelImage = document.getElementById("cfg-model-image")?.value || "";
@@ -2891,6 +2900,27 @@ async function saveConfig() {
     const observerBudgetNarrations = parseInt(document.getElementById("cfg-observer-budget-narrations")?.value ?? "6", 10);
     const observerBatchWindowMs = parseInt(document.getElementById("cfg-observer-batch-window-ms")?.value ?? "60000", 10);
     const observerBrainCapture = document.getElementById("cfg-observer-brain-capture")?.checked ?? true;
+    const auditorModelTier = document.getElementById("cfg-auditor-modeltier")?.value || "";
+    const auditorOnFailure = document.getElementById("cfg-auditor-on-failure")?.checked || false;
+    const auditorEveryNRunsRaw = document.getElementById("cfg-auditor-every-n-runs")?.value?.trim() || "";
+    const auditorEveryNRuns = auditorEveryNRunsRaw === "" ? null : parseInt(auditorEveryNRunsRaw, 10);
+
+    if (Number.isFinite(observerBudgetUsd) && observerBudgetUsd < 0) {
+      if (statusEl) statusEl.textContent = "Error: Observer daily budget cannot be negative.";
+      return;
+    }
+    if (Number.isFinite(observerBudgetNarrations) && observerBudgetNarrations < 0) {
+      if (statusEl) statusEl.textContent = "Error: Observer narration budget cannot be negative.";
+      return;
+    }
+    if (auditorEveryNRunsRaw !== "" && (!Number.isFinite(auditorEveryNRuns) || auditorEveryNRuns <= 0)) {
+      if (statusEl) statusEl.textContent = "Error: Auditor run cadence must be a positive integer or blank.";
+      return;
+    }
+    if (auditorEveryNRuns !== null && auditorEveryNRuns >= 1 && auditorEveryNRuns <= 4) {
+      if (statusEl) statusEl.textContent = "Error: Auditor run cadence must be blank or at least 5.";
+      return;
+    }
 
     const updated = {
       ...currentConfig,
@@ -2916,6 +2946,12 @@ async function saveConfig() {
           maxNarrationsPerHour: Number.isFinite(observerBudgetNarrations) ? observerBudgetNarrations : 6,
           batchWindowMs: Number.isFinite(observerBatchWindowMs) ? observerBatchWindowMs : 60000,
           brainCapture: observerBrainCapture,
+        },
+        auditor: {
+          ...(currentConfig.forgeMaster?.auditor || {}),
+          modelTier: auditorModelTier || null,
+          onFailure: auditorOnFailure,
+          everyNRuns: auditorEveryNRuns,
         },
       },
     };

@@ -191,7 +191,7 @@ All decisions for this phase are resolved in §"Resolved Decisions" above (13 it
 
 > All slices are tagged **[sequential]** — each builds on content/decisions locked in the prior. No parallel group exists; the dependency chain (content → architecture → skill → rollout → docs → retro) is strict.
 
-### S0 — Author `clean-code.instructions.md`
+### Slice 0 — Author `clean-code.instructions.md`
 
 - **Depends On**: nothing (Phase 42 retro must have shipped per Execution Hold, but that is enforced outside the slice graph)
 - **Parallelism**: [sequential]
@@ -200,11 +200,11 @@ All decisions for this phase are resolved in §"Resolved Decisions" above (13 it
 - Create `.github/instructions/clean-code.instructions.md` (≤120 lines, YAML frontmatter + 6 decision-point sections + References block + skill pointer)
 - Pull rule-priority signal from Phase 42's `CATEGORIES-SUMMARY.md` — top-finding categories drive section emphasis and rule selection
 - **Validation Gate**:
-  ```bash
-  node -e "const c=require('fs').readFileSync('.github/instructions/clean-code.instructions.md','utf8');const lines=c.split('\n').length;if(lines>120)throw new Error('exceeds 120 lines: '+lines);for(const k of ['When writing a function','When naming','When commenting','## References','clean-code-review']){if(!c.includes(k))throw new Error('missing required section/marker: '+k);}console.log('ok '+lines+' lines, all required sections present');"
-  ```
+```bash
+node -e "const c=require('fs').readFileSync('.github/instructions/clean-code.instructions.md','utf8');const lines=c.split('\n').length;if(lines>120)throw new Error('exceeds 120 lines: '+lines);for(const k of ['When writing a function','When naming','When commenting','## References','clean-code-review']){if(!c.includes(k))throw new Error('missing required section/marker: '+k);}console.log('ok '+lines+' lines, all required sections present');"
+```
 
-### S1 — Expand `architecture-principles.instructions.md`
+### Slice 1 — Expand `architecture-principles.instructions.md`
 
 - **Depends On**: S0 (drives which architectural rules deserve emphasis based on what `clean-code.instructions.md` already covers — avoid duplication)
 - **Parallelism**: [sequential]
@@ -214,11 +214,11 @@ All decisions for this phase are resolved in §"Resolved Decisions" above (13 it
 - Each addition cites the existing structural anchor it integrates with (Temper Guards row / Warning Signs row / Code Review Checklist row / new sub-section between Best Practices and Decision Framework)
 - 80-line net-add cap enforced via S5 review (post-commit `git diff` against the lockHash baseline), not via per-slice gate — gate verifies presence of all concepts, sweep verifies budget
 - **Validation Gate**:
-  ```bash
-  node -e "const c=require('fs').readFileSync('.github/instructions/architecture-principles.instructions.md','utf8');for(const k of ['Dependency Rule','SOLID','Boy Scout','Component Cohesion','Stable Dependencies','Professional Refusal']){if(!c.includes(k))throw new Error('missing concept: '+k);}console.log('ok all 6 concepts present');"
-  ```
+```bash
+node -e "const c=require('fs').readFileSync('.github/instructions/architecture-principles.instructions.md','utf8');for(const k of ['Dependency Rule','SOLID','Boy Scout','Component Cohesion','Stable Dependencies','Professional Refusal']){if(!c.includes(k))throw new Error('missing concept: '+k);}console.log('ok all 6 concepts present');"
+```
 
-### S2 — `/clean-code-review` skill
+### Slice 2 — `/clean-code-review` skill
 
 - **Depends On**: S0 (skill maps findings to instruction-file sections), S1 (skill may cite architectural rules from expanded file)
 - **Parallelism**: [sequential]
@@ -229,11 +229,11 @@ All decisions for this phase are resolved in §"Resolved Decisions" above (13 it
 - Optional `--fix-suggestions` flag emits proposed fixes inline; never applies them
 - Zero new devDependencies — verified by parsing `package.json` against Phase 42's tooling list
 - **Validation Gate**:
-  ```bash
-  node -e "const fs=require('fs');const path='.github/skills/clean-code-review/SKILL.md';if(!fs.existsSync(path))throw new Error('SKILL.md missing');const s=fs.readFileSync(path,'utf8');if(!s.includes('description:'))throw new Error('missing description frontmatter');if(!/clean[- ]?code[- ]?review/i.test(s))throw new Error('missing skill identifier');if(!s.includes('--fix-suggestions'))throw new Error('missing --fix-suggestions flag doc');console.log('ok skill file structurally valid');"
-  ```
+```bash
+node -e "const fs=require('fs');const path='.github/skills/clean-code-review/SKILL.md';if(!fs.existsSync(path))throw new Error('SKILL.md missing');const s=fs.readFileSync(path,'utf8');if(!s.includes('description:'))throw new Error('missing description frontmatter');if(!/clean[- ]?code[- ]?review/i.test(s))throw new Error('missing skill identifier');if(!s.includes('--fix-suggestions'))throw new Error('missing --fix-suggestions flag doc');console.log('ok skill file structurally valid');"
+```
 
-### S3 — Roll out to 9 presets
+### Slice 3 — Roll out to 9 presets
 
 - **Depends On**: S0 (canonical instruction file content)
 - **Parallelism**: [sequential] (single agent does the 9 copies; copy correctness depends on having one finalized source)
@@ -242,11 +242,11 @@ All decisions for this phase are resolved in §"Resolved Decisions" above (13 it
 - Copy canonical `clean-code.instructions.md` to each of the 9 preset directories (`dotnet`, `go`, `java`, `php`, `python`, `rust`, `swift`, `typescript`, `azure-iac`)
 - Adjust `applyTo` glob per preset's primary extensions; all other content identical
 - **Validation Gate**:
-  ```bash
-  node -e "const fs=require('fs');const presets=['dotnet','go','java','php','python','rust','swift','typescript','azure-iac'];const missing=presets.filter(p=>!fs.existsSync('presets/'+p+'/.github/instructions/clean-code.instructions.md'));if(missing.length)throw new Error('missing presets: '+missing.join(','));console.log('ok 9 preset copies present');"
-  ```
+```bash
+node -e "const fs=require('fs');const presets=['dotnet','go','java','php','python','rust','swift','typescript','azure-iac'];const missing=presets.filter(p=>!fs.existsSync('presets/'+p+'/.github/instructions/clean-code.instructions.md'));if(missing.length)throw new Error('missing presets: '+missing.join(','));console.log('ok 9 preset copies present');"
+```
 
-### S4 — Roll out to `templates/`
+### Slice 4 — Roll out to `templates/`
 
 - **Depends On**: S0 (canonical source)
 - **Parallelism**: [sequential]
@@ -254,11 +254,11 @@ All decisions for this phase are resolved in §"Resolved Decisions" above (13 it
 - **Traces to**: MUST #5
 - Copy canonical `clean-code.instructions.md` to `templates/.github/instructions/`
 - **Validation Gate**:
-  ```bash
-  node -e "const fs=require('fs');if(!fs.existsSync('templates/.github/instructions/clean-code.instructions.md'))throw new Error('missing in templates');const t=fs.readFileSync('templates/.github/instructions/clean-code.instructions.md','utf8');const c=fs.readFileSync('.github/instructions/clean-code.instructions.md','utf8');if(t.length<100)throw new Error('templates copy suspiciously short');console.log('ok templates copy present ('+t.length+' bytes)');"
-  ```
+```bash
+node -e "const fs=require('fs');if(!fs.existsSync('templates/.github/instructions/clean-code.instructions.md'))throw new Error('missing in templates');const t=fs.readFileSync('templates/.github/instructions/clean-code.instructions.md','utf8');const c=fs.readFileSync('.github/instructions/clean-code.instructions.md','utf8');if(t.length<100)throw new Error('templates copy suspiciously short');console.log('ok templates copy present ('+t.length+' bytes)');"
+```
 
-### S5 — Cross-reference updates
+### Slice 5 — Cross-reference updates
 
 - **Depends On**: S0 (instruction file exists), S2 (skill exists), S3 + S4 (rollouts complete so references are accurate)
 - **Parallelism**: [sequential]
@@ -268,11 +268,11 @@ All decisions for this phase are resolved in §"Resolved Decisions" above (13 it
 - Add `/clean-code-review` row to the Skill Slash Commands table in both
 - Add `clean-code.instructions.md` pointer to AGENTS.md "Start Here" list
 - **Validation Gate**:
-  ```bash
-  node -e "const fs=require('fs');const ci=fs.readFileSync('.github/copilot-instructions.md','utf8');const tci=fs.readFileSync('templates/.github/copilot-instructions.md','utf8');const a=fs.readFileSync('AGENTS.md','utf8');const checks=[[ci,'clean-code.instructions.md','copilot-instructions'],[ci,'/clean-code-review','copilot-instructions'],[tci,'clean-code.instructions.md','templates/copilot-instructions'],[a,'clean-code','AGENTS.md']];for(const[c,k,n]of checks)if(!c.includes(k))throw new Error('missing '+k+' in '+n);console.log('ok all 4 references present');"
-  ```
+```bash
+node -e "const fs=require('fs');const ci=fs.readFileSync('.github/copilot-instructions.md','utf8');const tci=fs.readFileSync('templates/.github/copilot-instructions.md','utf8');const a=fs.readFileSync('AGENTS.md','utf8');const checks=[[ci,'clean-code.instructions.md','copilot-instructions'],[ci,'/clean-code-review','copilot-instructions'],[tci,'clean-code.instructions.md','templates/copilot-instructions'],[a,'clean-code','AGENTS.md']];for(const[c,k,n]of checks)if(!c.includes(k))throw new Error('missing '+k+' in '+n);console.log('ok all 4 references present');"
+```
 
-### S6 — Retro + roadmap update
+### Slice 6 — Retro + roadmap update
 
 - **Depends On**: S0-S5 all green
 - **Parallelism**: [sequential]
@@ -282,9 +282,9 @@ All decisions for this phase are resolved in §"Resolved Decisions" above (13 it
 - Update `docs/plans/DEPLOYMENT-ROADMAP.md` — Phase 50 promoted to Completed/Shipped with date
 - Add `[Unreleased]` entry to `CHANGELOG.md`: `### Added — Clean-code agent guidance (instruction file + /clean-code-review skill + architecture-principles expansion)`
 - **Validation Gate**:
-  ```bash
-  node -e "const fs=require('fs');const r='docs/plans/testbed-findings/Phase-50-CLEAN-CODE-GUIDANCE-retro.md';if(!fs.existsSync(r))throw new Error('retro missing');const c=fs.readFileSync(r,'utf8');if(!c.includes('clean-code-review'))throw new Error('retro missing dogfood evidence');const ch=fs.readFileSync('CHANGELOG.md','utf8');if(!ch.includes('Clean-code agent guidance'))throw new Error('CHANGELOG entry missing');const dr=fs.readFileSync('docs/plans/DEPLOYMENT-ROADMAP.md','utf8');if(!/Phase 50.*(Completed|Shipped|✅)/s.test(dr))throw new Error('roadmap not updated');console.log('ok retro + CHANGELOG + roadmap');"
-  ```
+```bash
+node -e "const fs=require('fs');const r='docs/plans/testbed-findings/Phase-50-CLEAN-CODE-GUIDANCE-retro.md';if(!fs.existsSync(r))throw new Error('retro missing');const c=fs.readFileSync(r,'utf8');if(!c.includes('clean-code-review'))throw new Error('retro missing dogfood evidence');const ch=fs.readFileSync('CHANGELOG.md','utf8');if(!ch.includes('Clean-code agent guidance'))throw new Error('CHANGELOG entry missing');const dr=fs.readFileSync('docs/plans/DEPLOYMENT-ROADMAP.md','utf8');if(!/Phase 50.*(Completed|Shipped|✅)/s.test(dr))throw new Error('roadmap not updated');console.log('ok retro + CHANGELOG + roadmap');"
+```
 
 ---
 

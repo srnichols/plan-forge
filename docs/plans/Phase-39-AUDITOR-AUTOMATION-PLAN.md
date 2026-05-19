@@ -199,7 +199,7 @@ All 15 architectural decisions are locked in §"Resolved Decisions" above. Step-
 
 > **Parallelism summary**: All slices are tagged **[sequential]**. Within clusters, each slice depends on its predecessor (S2 on S1, S6 on S5, etc.). Across clusters, Cluster B (S3-S4) is independent of Cluster A in code but depends on it for empirical validation (auditor must actually auto-invoke before we wire cross-run data into it meaningfully). Cluster C (S5-S8) builds the heaviest new infra and depends on neither A nor B in code but conceptually completes the three-tier model only when all three clusters ship. **Recommended session breaks**: after S2 (Cluster A green, evaluate signal quality), after S6 (observer infra + budget done, before reasoning prompt work), after S9 (unit QA green, fresh session for testbed E2E).
 
-### S0 — Baseline test harness
+### Slice 0 — Baseline test harness
 
 - **Depends On**: nothing (Phase-WORKER-GUARDRAILS must have shipped per Execution Hold, but enforced outside slice graph)
 - **Parallelism**: [sequential]
@@ -207,13 +207,13 @@ All 15 architectural decisions are locked in §"Resolved Decisions" above. Step-
 - **Traces to**: MUST #7 (baseline regression protection)
 - Captures today's behavior of: `runWatch(targetPath)` snapshot output (golden file), `runWatchLive(targetPath, onEvent)` event stream shape (golden file), `forge_master_ask({ message })` happy-path response shape, `runPlan()` end-of-run path (no auditor invoke today), `.forge.json` schema rejects unknown `hooks.postRun.*` keys today (will pass after S1), `pforge-master/server.mjs` exposes exactly 1 tool today (will be 2 after S5)
 - **Validation Gate**:
-  ```bash
-  node -e "process.chdir('pforge-mcp'); require('child_process').execSync('npx vitest run tests/auditor-automation-baseline.test.mjs', {stdio:'inherit'});"
-  ```
+```bash
+node -e "process.chdir('pforge-mcp'); require('child_process').execSync('npx vitest run tests/auditor-automation-baseline.test.mjs', {stdio:'inherit'});"
+```
 
 ### Cluster A — Auditor auto-invocation
 
-**S1 — `hooks.postRun.invokeAuditor.onFailure`**
+#### Slice 1 — `hooks.postRun.invokeAuditor.onFailure`
 
 - **Depends On**: S0
 - **Parallelism**: [sequential]
@@ -224,11 +224,11 @@ All 15 architectural decisions are locked in §"Resolved Decisions" above. Step-
 - Spawn is best-effort: failure to spawn logs a warning but never bubbles up to the parent run
 - Attach auditor receipt (process id, exit code, generated report path) to `summary._auditor`
 - **Validation Gate**:
-  ```bash
-  node -e "process.chdir('pforge-mcp'); require('child_process').execSync('npx vitest run tests/auditor-auto-invoke.test.mjs -t onFailure', {stdio:'inherit'});"
-  ```
+```bash
+node -e "process.chdir('pforge-mcp'); require('child_process').execSync('npx vitest run tests/auditor-auto-invoke.test.mjs -t onFailure', {stdio:'inherit'});"
+```
 
-**S2 — `hooks.postRun.invokeAuditor.everyNRuns`**
+#### Slice 2 — `hooks.postRun.invokeAuditor.everyNRuns`
 
 - **Depends On**: S1 (shares the auditor-invoke spawn path)
 - **Parallelism**: [sequential]
@@ -239,13 +239,13 @@ All 15 architectural decisions are locked in §"Resolved Decisions" above. Step-
 - Counter starts at `everyNRuns` so first run after enabling triggers
 - If both `onFailure` (and run failed) and `everyNRuns` would fire on the same run, invoke once and reset
 - **Validation Gate**:
-  ```bash
-  node -e "process.chdir('pforge-mcp'); require('child_process').execSync('npx vitest run tests/auditor-auto-invoke.test.mjs -t everyNRuns', {stdio:'inherit'});"
-  ```
+```bash
+node -e "process.chdir('pforge-mcp'); require('child_process').execSync('npx vitest run tests/auditor-auto-invoke.test.mjs -t everyNRuns', {stdio:'inherit'});"
+```
 
 ### Cluster B — Watcher cross-run mode
 
-**S3 — `runWatch(mode: "cross-run")`**
+#### Slice 3 — `runWatch(mode: "cross-run")`
 
 - **Depends On**: S0 (baseline captures pre-cross-run `runWatch` shape)
 - **Parallelism**: [sequential] (within Cluster B; B itself is conceptually parallel to Cluster A in code, but recommended sequential per session-break advice above)
@@ -256,11 +256,11 @@ All 15 architectural decisions are locked in §"Resolved Decisions" above. Step-
 - Feeds aggregate through existing `detectWatchAnomalies()` (extend with cross-run anomaly codes — new codes only, no signature change)
 - Returns same `{ ok, anomalies, recommendations, snapshot }` shape — no breaking change to `forge_watch` callers
 - **Validation Gate**:
-  ```bash
-  node -e "process.chdir('pforge-mcp'); require('child_process').execSync('npx vitest run tests/watcher-cross-run-mode.test.mjs', {stdio:'inherit'});"
-  ```
+```bash
+node -e "process.chdir('pforge-mcp'); require('child_process').execSync('npx vitest run tests/watcher-cross-run-mode.test.mjs', {stdio:'inherit'});"
+```
 
-**S4 — Wire cross-run watcher into A4 auditor**
+#### Slice 4 — Wire cross-run watcher into A4 auditor
 
 - **Depends On**: S3 (auditor agent reads `mode: "cross-run"` data; the mode must exist first)
 - **Parallelism**: [sequential]
@@ -269,13 +269,13 @@ All 15 architectural decisions are locked in §"Resolved Decisions" above. Step-
 - Update `.github/agents/plan-health-auditor.agent.md`: add `forge_watch` to `tools:` list with `mode: "cross-run"` usage note; update §"Data Sources" table to replace raw log scan reference with cross-run watcher invocation; add §"Recommended Invocation" guidance
 - Behavior verification: invoke `forge_master_ask({ message: "@plan-health-auditor weekly report" })` against the current repo; verify report's §"Top Failure Modes" cites cross-run watcher output
 - **Validation Gate**:
-  ```bash
-  node -e "const c=require('fs').readFileSync('.github/agents/plan-health-auditor.agent.md','utf8'); if(!/mode:\s*[\"']cross-run[\"']/.test(c))throw new Error('agent file missing cross-run mode usage'); if(!c.includes('forge_watch'))throw new Error('agent file missing forge_watch tool reference'); console.log('ok auditor agent wired to cross-run watcher');"
-  ```
+```bash
+node -e "const c=require('fs').readFileSync('.github/agents/plan-health-auditor.agent.md','utf8'); if(!/mode:\s*[\"']cross-run[\"']/.test(c))throw new Error('agent file missing cross-run mode usage'); if(!c.includes('forge_watch'))throw new Error('agent file missing forge_watch tool reference'); console.log('ok auditor agent wired to cross-run watcher');"
+```
 
 ### Cluster C — Forge-Master observer mode
 
-**S5 — Observer infra: hub subscription + event-batch buffer**
+#### Slice 5 — Observer infra: hub subscription + event-batch buffer
 
 - **Depends On**: S0 (baseline captures pre-observer server.mjs tool count of 1)
 - **Parallelism**: [sequential] (within Cluster C; C does not depend on A/B in code)
@@ -286,11 +286,11 @@ All 15 architectural decisions are locked in §"Resolved Decisions" above. Step-
 - Tool currently echoes batches back (no LLM yet — S7 wires that)
 - Self-test path updated: now expects 2 tools (`forge_master_ask`, `forge_master_observe`)
 - **Validation Gate**:
-  ```bash
-  node -e "process.chdir('pforge-master'); require('child_process').execSync('npx vitest run tests/observer-loop.test.mjs', {stdio:'inherit'});"
-  ```
+```bash
+node -e "process.chdir('pforge-master'); require('child_process').execSync('npx vitest run tests/observer-loop.test.mjs', {stdio:'inherit'});"
+```
 
-**S6 — Budget caps**
+#### Slice 6 — Budget caps
 
 - **Depends On**: S5 (budget enforcement attaches to observer-loop call path)
 - **Parallelism**: [sequential]
@@ -300,11 +300,11 @@ All 15 architectural decisions are locked in §"Resolved Decisions" above. Step-
 - Wire budget check **before** any LLM call site (none exist yet — S7 will be the first; this slice asserts wiring is impossible to forget)
 - Test state-machine covers: (under-cap → ok), (over-narration-cap → block), (over-usd-cap → block), (day-rollover → reset), (hour-rollover → reset), (concurrent spend → atomic)
 - **Validation Gate**:
-  ```bash
-  node -e "process.chdir('pforge-master'); require('child_process').execSync('npx vitest run tests/observer-budget.test.mjs', {stdio:'inherit'});"
-  ```
+```bash
+node -e "process.chdir('pforge-master'); require('child_process').execSync('npx vitest run tests/observer-budget.test.mjs', {stdio:'inherit'});"
+```
 
-**S7 — Reasoning loop: narrate notable patterns**
+#### Slice 7 — Reasoning loop: narrate notable patterns
 
 - **Depends On**: S5 (observer infra), S6 (budget enforcement — S7 is first LLM call site)
 - **Parallelism**: [sequential]
@@ -320,11 +320,11 @@ All 15 architectural decisions are locked in §"Resolved Decisions" above. Step-
   - Emits `observer:narration` event on the hub with payload `{ timestamp, batchEventCount, narration, usd, modelTier }`
 - Observer loop's `onBatch` callback now calls `runObserverTurn`
 - **Validation Gate**:
-  ```bash
-  node -e "process.chdir('pforge-master'); require('child_process').execSync('npx vitest run tests/observer-reasoning.test.mjs', {stdio:'inherit'});"
-  ```
+```bash
+node -e "process.chdir('pforge-master'); require('child_process').execSync('npx vitest run tests/observer-reasoning.test.mjs', {stdio:'inherit'});"
+```
 
-**S8 — CLI surface: `pforge master observe`**
+#### Slice 8 — CLI surface: `pforge master observe`
 
 - **Depends On**: S5 (`forge_master_observe` tool exists), S7 (reasoning loop wired so CLI has something to drive)
 - **Parallelism**: [sequential]
@@ -336,11 +336,11 @@ All 15 architectural decisions are locked in §"Resolved Decisions" above. Step-
 - `--stop`: reads pid file, signals SIGTERM, waits for graceful shutdown
 - `--status`: prints budget state, running/stopped, last N narrations from Brain
 - **Validation Gate**:
-  ```bash
-  node -e "process.chdir('pforge-master'); require('child_process').execSync('npx vitest run tests/observer-cli.test.mjs', {stdio:'inherit'});"
-  ```
+```bash
+node -e "process.chdir('pforge-master'); require('child_process').execSync('npx vitest run tests/observer-cli.test.mjs', {stdio:'inherit'});"
+```
 
-### S9 — Full QA sweep
+### Slice 9 — Full QA sweep
 
 - **Depends On**: S0-S8 all green
 - **Parallelism**: [sequential]
@@ -355,11 +355,11 @@ All 15 architectural decisions are locked in §"Resolved Decisions" above. Step-
   - `pforge-master/tests/observer-cli.test.mjs`
   - Plus the pre-existing full `pforge-mcp` and `pforge-master` test suites
 - **Validation Gate**:
-  ```bash
-  node -e "const {execSync}=require('child_process'); process.chdir('pforge-mcp'); execSync('npx vitest run', {stdio:'inherit'}); process.chdir('../pforge-master'); execSync('npx vitest run', {stdio:'inherit'});"
-  ```
+```bash
+node -e "const {execSync}=require('child_process'); process.chdir('pforge-mcp'); execSync('npx vitest run', {stdio:'inherit'}); process.chdir('../pforge-master'); execSync('npx vitest run', {stdio:'inherit'});"
+```
 
-### S10 — Testbed E2E + chaos validation
+### Slice 10 — Testbed E2E + chaos validation
 
 - **Depends On**: S9 (unit QA must be green before investing in slower E2E)
 - **Parallelism**: [sequential]
@@ -369,12 +369,12 @@ All 15 architectural decisions are locked in §"Resolved Decisions" above. Step-
 - For chaos scenarios specifically: verify system reaches clean state after chaos event (no orphaned processes, no half-written state files, no budget phantom spend)
 - Also runs existing `forge_testbed_happypath` suite to verify no pre-existing scenario regressed
 - **Validation Gate** (two separate commands so a failure isolates cleanly):
-  ```bash
-  node -e "process.chdir('pforge-mcp'); require('child_process').execSync('npx vitest run tests/testbed-auditor-automation.test.mjs', {stdio:'inherit'});"
-  node -e "process.chdir('pforge-mcp'); const m=require('./server.mjs'); Promise.resolve(m.forge_testbed_happypath({dryRun:false})).then(r=>{if(!r||r.ok===false)throw new Error('happypath regressed'); console.log('ok happypath');}).catch(e=>{console.error(e.message); process.exit(1);});"
-  ```
+```bash
+node -e "process.chdir('pforge-mcp'); require('child_process').execSync('npx vitest run tests/testbed-auditor-automation.test.mjs', {stdio:'inherit'});"
+node -e "process.chdir('pforge-mcp'); const m=require('./server.mjs'); Promise.resolve(m.forge_testbed_happypath({dryRun:false})).then(r=>{if(!r||r.ok===false)throw new Error('happypath regressed'); console.log('ok happypath');}).catch(e=>{console.error(e.message); process.exit(1);});"
+```
 
-### S11 — Docs sweep + auto-discovery
+### Slice 11 — Docs sweep + auto-discovery
 
 - **Depends On**: S8 (CLI shape final), S7 (config blocks final)
 - **Parallelism**: [sequential]
@@ -382,12 +382,12 @@ All 15 architectural decisions are locked in §"Resolved Decisions" above. Step-
 - **Traces to**: DoD (auto-discovery requirement)
 - Per the §"Docs sweep" list in Scope Contract. Regenerate `forge_capabilities` output and verify all new tools/flags/configs appear.
 - **Validation Gate**:
-  ```bash
-  node pforge-mcp/capabilities.mjs --check
-  node -e "const fs=require('fs'); const cap=fs.readFileSync('docs/capabilities.md','utf8'); const ref=fs.readFileSync('docs/manual/forge-json-reference.html','utf8'); if(!cap.includes('forge_master_observe'))throw new Error('capabilities.md missing forge_master_observe'); if(!ref.includes('hooks.postRun.invokeAuditor'))throw new Error('forge-json-reference missing hooks.postRun.invokeAuditor'); console.log('ok docs sweep complete');"
-  ```
+```bash
+node pforge-mcp/capabilities.mjs --check
+node -e "const fs=require('fs'); const cap=fs.readFileSync('docs/capabilities.md','utf8'); const ref=fs.readFileSync('docs/manual/forge-json-reference.html','utf8'); if(!cap.includes('forge_master_observe'))throw new Error('capabilities.md missing forge_master_observe'); if(!ref.includes('hooks.postRun.invokeAuditor'))throw new Error('forge-json-reference missing hooks.postRun.invokeAuditor'); console.log('ok docs sweep complete');"
+```
 
-### S12 — Retro
+### Slice 12 — Retro
 
 - **Depends On**: S0-S11 all green
 - **Parallelism**: [sequential]
@@ -395,9 +395,9 @@ All 15 architectural decisions are locked in §"Resolved Decisions" above. Step-
 - **Traces to**: DoD (postmortem requirement)
 - Append §"What actually shipped" to this plan file: final commit SHAs per slice, deviations from draft (slices added/removed/reordered, scope drift), known gotchas surfaced during execution (especially testbed-only failures from S10), carryover for next phase (e.g., dashboard card UI for observer, A4 auto-PR mode, observer cross-machine aggregation)
 - **Validation Gate**:
-  ```bash
-  node -e "const c=require('fs').readFileSync('docs/plans/Phase-39-AUDITOR-AUTOMATION-PLAN.md','utf8'); if(!c.includes('## What actually shipped'))throw new Error('retro section missing'); console.log('ok retro appended');"
-  ```
+```bash
+node -e "const c=require('fs').readFileSync('docs/plans/Phase-39-AUDITOR-AUTOMATION-PLAN.md','utf8'); if(!c.includes('## What actually shipped'))throw new Error('retro section missing'); console.log('ok retro appended');"
+```
 
 ---
 

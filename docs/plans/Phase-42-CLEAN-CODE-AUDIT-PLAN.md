@@ -176,7 +176,7 @@ Calibration outcomes recorded in `docs/plans/cleanup-findings/raw/RUN-CONTEXT.md
 
 > All slices are tagged **[sequential]**. The dependency chain (tooling → run → triage → stubs → guardrails → retro) is strict; no slice can begin before its predecessor's gate is green. Triage feedback may force a return to S0/S1 (re-calibrate + re-run) — this is normal and is what the Stop Conditions for high false-positive rates protect.
 
-### S0 — Tooling setup
+### Slice 0 — Tooling setup
 
 - **Depends On**: nothing (Phase 41 must have shipped per Execution Hold, but that is enforced outside the slice graph)
 - **Parallelism**: [sequential]
@@ -188,11 +188,11 @@ Calibration outcomes recorded in `docs/plans/cleanup-findings/raw/RUN-CONTEXT.md
 - `scripts/audit/README.md` — usage + false-positive triage guide + threshold calibration outcomes (RD #11-13)
 - Dry-run each script against `pforge-mcp/server.mjs` to verify non-empty output without crash
 - **Validation Gate**:
-  ```bash
-  node -e "const fs=require('fs');const required=['scripts/audit/eslint-clean-code.config.mjs','scripts/audit/run-jscpd.mjs','scripts/audit/grep-matrix.mjs','scripts/audit/measure-modules.mjs','scripts/audit/long-param-walker.mjs','scripts/audit/scan-architecture.mjs','scripts/audit/layer-policy.json','scripts/audit/README.md'];const missing=required.filter(p=>!fs.existsSync(p));if(missing.length)throw new Error('missing files: '+missing.join(','));const pkg=JSON.parse(fs.readFileSync('package.json','utf8'));for(const d of ['jscpd','eslint','madge']){if(!(pkg.devDependencies||{})[d])throw new Error('missing devDep: '+d);}console.log('ok '+required.length+' tooling files + 3 devDeps present');"
-  ```
+```bash
+node -e "const fs=require('fs');const required=['scripts/audit/eslint-clean-code.config.mjs','scripts/audit/run-jscpd.mjs','scripts/audit/grep-matrix.mjs','scripts/audit/measure-modules.mjs','scripts/audit/long-param-walker.mjs','scripts/audit/scan-architecture.mjs','scripts/audit/layer-policy.json','scripts/audit/README.md'];const missing=required.filter(p=>!fs.existsSync(p));if(missing.length)throw new Error('missing files: '+missing.join(','));const pkg=JSON.parse(fs.readFileSync('package.json','utf8'));for(const d of ['jscpd','eslint','madge']){if(!(pkg.devDependencies||{})[d])throw new Error('missing devDep: '+d);}console.log('ok '+required.length+' tooling files + 3 devDeps present');"
+```
 
-### S1 — Run the audit
+### Slice 1 — Run the audit
 
 - **Depends On**: S0
 - **Parallelism**: [sequential]
@@ -204,11 +204,11 @@ Calibration outcomes recorded in `docs/plans/cleanup-findings/raw/RUN-CONTEXT.md
 - Emit reports to `docs/plans/cleanup-findings/raw/`: `eslint-report.json`, `duplication-report.json`, `grep-matrix-report.json`, `module-metrics.json`, `long-param-report.json`, `architecture-report.json` (A1-A4 from madge)
 - Verify each report file is non-empty
 - **Validation Gate**:
-  ```bash
-  node -e "const fs=require('fs');const reports=['eslint-report.json','duplication-report.json','grep-matrix-report.json','module-metrics.json','long-param-report.json','architecture-report.json'];const base='docs/plans/cleanup-findings/raw/';if(!fs.existsSync(base+'RUN-CONTEXT.md'))throw new Error('RUN-CONTEXT.md missing');for(const r of reports){const p=base+r;if(!fs.existsSync(p))throw new Error('missing: '+r);const sz=fs.statSync(p).size;if(sz===0)throw new Error('empty: '+r);}console.log('ok '+reports.length+' raw reports + RUN-CONTEXT present');"
-  ```
+```bash
+node -e "const fs=require('fs');const reports=['eslint-report.json','duplication-report.json','grep-matrix-report.json','module-metrics.json','long-param-report.json','architecture-report.json'];const base='docs/plans/cleanup-findings/raw/';if(!fs.existsSync(base+'RUN-CONTEXT.md'))throw new Error('RUN-CONTEXT.md missing');for(const r of reports){const p=base+r;if(!fs.existsSync(p))throw new Error('missing: '+r);const sz=fs.statSync(p).size;if(sz===0)throw new Error('empty: '+r);}console.log('ok '+reports.length+' raw reports + RUN-CONTEXT present');"
+```
 
-### S2 — Triage & categorize
+### Slice 2 — Triage & categorize
 
 - **Depends On**: S1
 - **Parallelism**: [sequential]
@@ -218,11 +218,11 @@ Calibration outcomes recorded in `docs/plans/cleanup-findings/raw/RUN-CONTEXT.md
 - New `docs/plans/cleanup-findings/CATEGORIES-SUMMARY.md` — pivot table category × severity × count, sorted by total-severity-weight descending
 - Cross-check: every raw finding either appears in `CATALOG.md` Findings section OR is explicitly listed in `CATALOG.md` "Excluded findings" with reason
 - **Validation Gate**:
-  ```bash
-  node -e "const fs=require('fs');const cat=fs.readFileSync('docs/plans/cleanup-findings/CATALOG.md','utf8');const sum=fs.readFileSync('docs/plans/cleanup-findings/CATEGORIES-SUMMARY.md','utf8');if(!cat.includes('## Findings'))throw new Error('CATALOG.md missing ## Findings section');if(!cat.includes('Excluded findings'))throw new Error('CATALOG.md missing Excluded findings section');if(!sum.includes('| Category |'))throw new Error('CATEGORIES-SUMMARY.md missing pivot header');const rows=(cat.match(/^\\|\\s*[A-Z]\\d+\\s*\\|/gm)||[]).length;if(rows<1)throw new Error('CATALOG.md has zero finding rows');console.log('ok catalog has '+rows+' findings + summary pivot');"
-  ```
+```bash
+node -e "const fs=require('fs');const cat=fs.readFileSync('docs/plans/cleanup-findings/CATALOG.md','utf8');const sum=fs.readFileSync('docs/plans/cleanup-findings/CATEGORIES-SUMMARY.md','utf8');if(!cat.includes('## Findings'))throw new Error('CATALOG.md missing ## Findings section');if(!cat.includes('Excluded findings'))throw new Error('CATALOG.md missing Excluded findings section');if(!sum.includes('| Category |'))throw new Error('CATEGORIES-SUMMARY.md missing pivot header');const rows=(cat.match(/^\\|\\s*[A-Z]\\d+\\s*\\|/gm)||[]).length;if(rows<1)throw new Error('CATALOG.md has zero finding rows');console.log('ok catalog has '+rows+' findings + summary pivot');"
+```
 
-### S3 — Draft phase stubs for high-severity categories
+### Slice 3 — Draft phase stubs for high-severity categories
 
 - **Depends On**: S2
 - **Parallelism**: [sequential]
@@ -234,11 +234,11 @@ Calibration outcomes recorded in `docs/plans/cleanup-findings/raw/RUN-CONTEXT.md
 - New `docs/plans/cleanup-findings/proposed-phases/README.md` — index of stubs with one-line summary each
 - If audit found zero high-severity categories, write `proposed-phases/NO-STUBS-NEEDED.md` explaining why (still counts as ≥1 file for the gate)
 - **Validation Gate**:
-  ```bash
-  node -e "const fs=require('fs');const dir='docs/plans/cleanup-findings/proposed-phases';if(!fs.existsSync(dir))throw new Error('proposed-phases/ missing');if(!fs.existsSync(dir+'/README.md'))throw new Error('proposed-phases/README.md missing');const stubs=fs.readdirSync(dir).filter(f=>/^Phase-PROPOSED-.*-STUB\\.md$/.test(f));const noStubs=fs.existsSync(dir+'/NO-STUBS-NEEDED.md');if(stubs.length===0&&!noStubs)throw new Error('zero stubs AND no NO-STUBS-NEEDED.md');console.log('ok '+stubs.length+' stubs (NO-STUBS-NEEDED='+noStubs+')');"
-  ```
+```bash
+node -e "const fs=require('fs');const dir='docs/plans/cleanup-findings/proposed-phases';if(!fs.existsSync(dir))throw new Error('proposed-phases/ missing');if(!fs.existsSync(dir+'/README.md'))throw new Error('proposed-phases/README.md missing');const stubs=fs.readdirSync(dir).filter(f=>/^Phase-PROPOSED-.*-STUB\\.md$/.test(f));const noStubs=fs.existsSync(dir+'/NO-STUBS-NEEDED.md');if(stubs.length===0&&!noStubs)throw new Error('zero stubs AND no NO-STUBS-NEEDED.md');console.log('ok '+stubs.length+' stubs (NO-STUBS-NEEDED='+noStubs+')');"
+```
 
-### S4 — Guardrail updates
+### Slice 4 — Guardrail updates
 
 - **Depends On**: S2 (needs catalog to cite specific findings)
 - **Parallelism**: [sequential]
@@ -248,11 +248,11 @@ Calibration outcomes recorded in `docs/plans/cleanup-findings/raw/RUN-CONTEXT.md
 - Same file Warning Signs section — add observable patterns for the top-2 high-severity categories
 - Edits MUST cite the catalog category for traceability (text like "From Phase 42 catalog, category G14 (12 findings)")
 - **Validation Gate**:
-  ```bash
-  node -e "const fs=require('fs');const c=fs.readFileSync('.github/instructions/architecture-principles.instructions.md','utf8');if(!/Clean Code/.test(c))throw new Error('Clean Code citation missing');if(!/Phase 42/.test(c))throw new Error('Phase 42 catalog citation missing — guardrails must reference source');console.log('ok guardrails cite Clean Code + Phase 42 catalog');"
-  ```
+```bash
+node -e "const fs=require('fs');const c=fs.readFileSync('.github/instructions/architecture-principles.instructions.md','utf8');if(!/Clean Code/.test(c))throw new Error('Clean Code citation missing');if(!/Phase 42/.test(c))throw new Error('Phase 42 catalog citation missing — guardrails must reference source');console.log('ok guardrails cite Clean Code + Phase 42 catalog');"
+```
 
-### S5 — Retro + roadmap update
+### Slice 5 — Retro + roadmap update
 
 - **Depends On**: S0-S4 all green
 - **Parallelism**: [sequential]
@@ -262,9 +262,9 @@ Calibration outcomes recorded in `docs/plans/cleanup-findings/raw/RUN-CONTEXT.md
 - `docs/plans/DEPLOYMENT-ROADMAP.md` — add promoted phase stubs as Phase 43-49 entries in Planned section (numbers reserved for Phase 42 fix-stubs per roadmap note)
 - `CHANGELOG.md` — `[Unreleased]` entry: `### Added — Clean Code audit catalog (read-only; no behavior change)`
 - **Validation Gate**:
-  ```bash
-  node -e "const fs=require('fs');if(!fs.existsSync('docs/plans/testbed-findings/Phase-42-CLEAN-CODE-AUDIT-retro.md'))throw new Error('retro missing');const dr=fs.readFileSync('docs/plans/DEPLOYMENT-ROADMAP.md','utf8');if(!/Phase 4[3-9]/.test(dr)&&!/NO-STUBS-NEEDED/.test(dr))throw new Error('roadmap missing promoted phases AND no NO-STUBS-NEEDED reference');const ch=fs.readFileSync('CHANGELOG.md','utf8');if(!/Clean Code audit catalog/.test(ch))throw new Error('CHANGELOG entry missing');console.log('ok retro + roadmap + CHANGELOG');"
-  ```
+```bash
+node -e "const fs=require('fs');if(!fs.existsSync('docs/plans/testbed-findings/Phase-42-CLEAN-CODE-AUDIT-retro.md'))throw new Error('retro missing');const dr=fs.readFileSync('docs/plans/DEPLOYMENT-ROADMAP.md','utf8');if(!/Phase 4[3-9]/.test(dr)&&!/NO-STUBS-NEEDED/.test(dr))throw new Error('roadmap missing promoted phases AND no NO-STUBS-NEEDED reference');const ch=fs.readFileSync('CHANGELOG.md','utf8');if(!/Clean Code audit catalog/.test(ch))throw new Error('CHANGELOG entry missing');console.log('ok retro + roadmap + CHANGELOG');"
+```
 
 ---
 

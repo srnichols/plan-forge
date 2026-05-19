@@ -909,6 +909,30 @@ Aggregated health score from drift, cost, incidents, and model performance over 
 .\pforge.ps1 health-trend --days 30
 ```
 
+### `pforge tempering-run`
+
+Run the tempering harness with an optional numeric objective. The objective command runs before and after the scanner suite; the candidate is accepted only if the metric improves in the configured direction.
+
+```powershell
+# PowerShell — require coverage to go up
+.\pforge.ps1 tempering-run --objective "node scripts/measure-coverage.mjs" --accept-if greater
+
+# PowerShell — require bundle size to go down
+.\pforge.ps1 tempering-run --objective "node scripts/measure-bundle-kb.mjs" --accept-if less
+```
+
+**Flags:**
+
+| Flag | Default | Description |
+|------|---------|-------------|
+| `--objective <cmd>` | *(off)* | Shell command that prints exactly one numeric value on stdout. Runs before and after the tempering scanners. |
+| `--accept-if greater\|less` | `greater` | Accept the candidate only if the post-run metric is greater than or less than the baseline. |
+
+**Notes:**
+- Non-zero objective exit or non-numeric stdout fails the run.
+- The worker never sees the captured baseline value.
+- MCP equivalent: `forge_tempering_run` with `objective.command` + `objective.acceptIf`.
+
 ### `pforge audit-loop`
 
 Run the audit drain loop — discovers bugs from the running system by probing live routes, triaging findings, and iterating until convergence.

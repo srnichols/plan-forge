@@ -145,6 +145,19 @@ tools: ["read_file", "grep_search", "semantic_search"]
       </div>
       <p>Agents are <strong>read-only</strong>, they can search and read but can't edit files. This makes them safe to run as independent auditors. To create a new agent, copy an existing one and modify the expertise section.</p>
 
+      <div class="overflow-x-auto mb-6">
+        <table class="manual-table">
+          <thead><tr><th>Agent</th><th>Role</th><th>How to invoke</th></tr></thead>
+          <tbody>
+            <tr>
+              <td><code>plan-health-auditor</code></td>
+              <td>Reads run history, memories, bugs, and the active plan to report on slice sizing, gate coverage, missing forbidden actions, and scope contract completeness. Emits a markdown report to <code>.forge/health/latest.md</code>.</td>
+              <td><code>forge_master_ask({ message: "@plan-health-auditor weekly report" })</code> or <code>forge_delegate_to_agent</code> with <code>agent: "plan-health-auditor"</code>.</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
       <p>Plan Forge ships a built-in <strong>plan-health-auditor</strong> agent (<code>.github/agents/plan-health-auditor.agent.md</code>) that reads plan files and reports on slice sizing, gate coverage, missing forbidden actions, and scope contract completeness. Invoke it via <code>forge_delegate_to_agent</code> with <code>agent: "plan-health-auditor"</code> or from the Dashboard Agents tab. Read-only; cannot modify plans.</p>
 
       <!-- ─── Customizing Skills ─── -->
@@ -240,7 +253,7 @@ tools: ["read_file", "grep_search", "semantic_search"]
       <p class="text-sm text-slate-400 mb-6">To disable a LiveGuard hook, set the corresponding block in <code>.forge.json</code> to <code>{ "enabled": false }</code> or, for finer-grained control, lower its threshold (e.g. <code>blockOnSecrets: false</code> keeps the PreDeploy scan running but downgrades it to advisory). Full schema in <a href="forge-json-reference.html#hooks">Appendix T &mdash; hooks</a>.</p>
 
       <h3 id="hooks-plan-execution">Plan-execution guard</h3>
-      <p>One special hook lives outside both buckets above: <code>PreCommit.mjs</code> is a Node script in <code>.github/hooks/</code> that runs synchronously before every commit during <code>pforge run-plan</code>. It is the safety rail that keeps autonomous runs from accidentally committing to <code>master</code> outside an authorised execution context.</p>
+      <p>One special hook lives outside both buckets above: <code>PreCommit.mjs</code> is a Node script in <code>.github/hooks/</code> that runs synchronously before every commit during <code>pforge run-plan</code>. It now executes an ordered <strong>PreCommit chain</strong> declared in <code>hooks.preCommit.chain[]</code>. The built-in chain starts with <code>master-branch-reject</code> (refuse interactive commits on <code>master</code>/<code>main</code>) and then <code>diff-classify</code> (run <code>forge_diff_classify</code> against the staged diff). The first non-zero exit aborts the commit.</p>
 
       <div class="overflow-x-auto mb-6">
         <table class="manual-table">
@@ -248,10 +261,10 @@ tools: ["read_file", "grep_search", "semantic_search"]
           <tbody>
             <tr>
               <td><code>PreCommit</code></td>
-              <td>Before every <code>git commit</code> when the current branch is <code>master</code> (or <code>main</code>).</td>
-              <td>Refuses the commit unless the orchestrator has set <code>PFORGE_RUN_PLAN_ACTIVE=1</code>, meaning the commit is part of a <code>pforge run-plan</code> invocation and not an interactive shell session that wandered onto the wrong branch.</td>
+              <td>Before every <code>git commit</code> during <code>pforge run-plan</code>.</td>
+              <td>Runs each <code>hooks.preCommit.chain[]</code> entry in order. The default chain begins with <code>master-branch-reject</code> (blocks unauthorized commits on <code>master</code>/<code>main</code>) and then <code>diff-classify</code> (blocks high/critical findings from <code>forge_diff_classify</code>). First non-zero exit aborts the chain.</td>
               <td><strong>Yes</strong></td>
-              <td>Set <code>PFORGE_ALLOW_MASTER_COMMIT=1</code> for one invocation. Discouraged, the guard exists because LiveGuard runs caught several "accidental master commit" incidents in the v3.3.x sweeps.</td>
+              <td>Set <code>PFORGE_ALLOW_MASTER_COMMIT=1</code> for one invocation, or edit <code>.forge.json#hooks.preCommit.chain</code> to add/remove entries. Discouraged, the defaults exist because LiveGuard runs caught several accidental-master-commit incidents in the v3.3.x sweeps.</td>
             </tr>
           </tbody>
         </table>

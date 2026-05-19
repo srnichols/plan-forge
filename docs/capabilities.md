@@ -236,7 +236,7 @@ pforge run-plan <plan> --quorum       # Multi-model consensus (all slices)
 pforge run-plan <plan> --quorum=auto  # Consensus for complex slices only
 pforge run-plan <plan> --quorum=power # Flagship models, threshold 5, 5min timeout
 pforge run-plan <plan> --quorum=speed # Fast models, threshold 7, 2min timeout
-pforge run-plan <plan> --objective "<goal>" # Set run-level objective for Forge-Master evaluation
+forge_tempering_run --objective "node scripts/measure-coverage.mjs" --accept-if greater # Accept only if the numeric metric improves
 pforge ext search|add|info|list       # Extension management
 
 # LiveGuard CLI (v2.27.0+)
@@ -488,13 +488,19 @@ Config (`.forge.json`):
 ```json
 {
   "hooks": {
-    "preDeploy":        { "enabled": true, "blockOnSecrets": true,  "warnOnEnvGaps": true, "scanSince": "HEAD~1" },
-    "postSlice":        { "enabled": true, "silentDeltaThreshold": 5, "warnDeltaThreshold": 10, "scoreFloor": 70 },
-    "preAgentHandoff":  { "enabled": true, "injectContext": true, "runRegressionGuard": true, "cacheMaxAgeMinutes": 30, "minAlertSeverity": "medium" },
-    "preCommit": { "chain": ["forge_diff_classify", "lock-hash-verify", "tool-denylist-check"] }
+    "preDeploy":       { "enabled": true, "blockOnSecrets": true, "warnOnEnvGaps": true, "scanSince": "HEAD~1" },
+    "postSlice":       { "enabled": true, "silentDeltaThreshold": 5, "warnDeltaThreshold": 10, "scoreFloor": 70 },
+    "preAgentHandoff": { "enabled": true, "injectContext": true, "runRegressionGuard": true, "cacheMaxAgeMinutes": 30, "minAlertSeverity": "medium" },
+    "preCommit": {
+      "chain": [
+        { "name": "master-branch-reject", "command": "node .github/hooks/PreCommit.mjs master-branch-reject" },
+        { "name": "diff-classify", "command": "node .github/hooks/PreCommit.mjs diff-classify" }
+      ]
+    }
   },
   "network": { "allowed": ["models.github.ai", "api.x.ai", "api.openai.com", "api.anthropic.com"] },
-  "tools": { "deny": [] }
+  "tools": { "deny": [] },
+  "openclaw": { "endpoint": "https://your-openclaw-instance", "apiKey": "see .forge/secrets.json" }
 }
 ```
 
@@ -502,10 +508,9 @@ Worker Guardrails configuration reference (v3.7+):
 
 | Key | Purpose |
 |-----|---------|
-| `network.allowed` | Domain allowlist — blocks outbound requests to unlisted hosts (`network-allowlist-violation`). Unset = no restriction. |
-| `tools.deny` | Tool denylist — MCP tool names the orchestrator refuses to call (`tool-denied`). Default `[]`. |
-| `hooks.preCommit.chain` | Ordered check chain before every commit during `pforge run-plan`. Built-ins: `forge_diff_classify`, `lock-hash-verify`, `tool-denylist-check`. |
-```
+| `network.allowed` | Domain allowlist for outbound connections. Current mode is log-only (`PFORGE_NETWORK_LOG_ONLY=1`), so hosts are recorded per slice without blocking. |
+| `tools.deny` | Tool denylist — MCP tool names the orchestrator strips from the worker session (`tool-denied` if a denied tool is attempted). |
+| `hooks.preCommit.chain` | Ordered check chain before every commit during `pforge run-plan`. Built-ins begin with `master-branch-reject` and `diff-classify`; first non-zero exit aborts the chain. |
 
 ## Pipeline (6 Steps)
 

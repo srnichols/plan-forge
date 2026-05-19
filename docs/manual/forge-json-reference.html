@@ -202,9 +202,9 @@
 
         <!-- ============================================================ -->
         <h2 id="hooks"><code>hooks</code> &mdash; LiveGuard lifecycle hooks (v2.29+)</h2>
-        <p>Three optional hook configurations, <code>preDeploy</code> (before deploy slices), <code>postSlice</code> (after every slice), <code>preAgentHandoff</code> (multi-agent turn). Each section is independent; omit any subsection to accept its defaults.</p>
+        <p>Four hook configurations live under this object: <code>preDeploy</code> (before deploy slices), <code>postSlice</code> (after every slice), <code>preAgentHandoff</code> (multi-agent turn), and <code>preCommit</code> (ordered commit-time guard chain). Each section is independent; omit any subsection to accept its defaults.</p>
 
-        <p class="text-sm text-slate-400 mb-6">For the full eight-hook picture, including the Copilot session hooks (<code>SessionStart</code>, <code>PreToolUse</code>, <code>PostToolUse</code>, <code>Stop</code>) configured separately in <code>.github/hooks/plan-forge.json</code> and the <code>PreCommit</code> master-branch guard, see <a href="customization.html#lifecycle-hooks"><strong>Customization &mdash; Lifecycle Hooks Reference</strong></a>.</p>
+        <p class="text-sm text-slate-400 mb-6">For the full eight-hook picture, including the Copilot session hooks (<code>SessionStart</code>, <code>PreToolUse</code>, <code>PostToolUse</code>, <code>Stop</code>) configured separately in <code>.github/hooks/plan-forge.json</code> and the <code>PreCommit</code> chain runner, see <a href="customization.html#lifecycle-hooks"><strong>Customization &mdash; Lifecycle Hooks Reference</strong></a>.</p>
 
         <h3 id="hooks-preDeploy"><code>hooks.preDeploy</code></h3>
         <div class="overflow-x-auto mb-6">

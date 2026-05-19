@@ -225,6 +225,18 @@
         </tbody>
       </table>
 
+      <h2 id="worker-guardrails">Worker Guardrails</h2>
+      <table class="manual-table">
+        <thead><tr><th>Term</th><th>Definition</th></tr></thead>
+        <tbody>
+          <tr><td><strong>PreCommit Chain</strong></td><td>Ordered list of validation scripts declared in <code>hooks.preCommit.chain[]</code> that run before every slice commit.</td></tr>
+          <tr><td><strong>Diff Classifier</strong></td><td>The <code>forge_diff_classify</code> MCP tool that scans staged git diffs for security and quality issues.</td></tr>
+          <tr><td><strong>Plan Lock Hash</strong></td><td>SHA-256 hash stored in <code>lockHash</code> frontmatter; the orchestrator refuses to run if the plan body has drifted.</td></tr>
+          <tr><td><strong>Tool Denylist</strong></td><td>The <code>tools.deny</code> frontmatter field that strips listed MCP tools from the worker's session.</td></tr>
+          <tr><td><strong>Network Allowlist</strong></td><td>The <code>network.allowed</code> frontmatter field listing permitted hosts for outbound connections (currently log-only).</td></tr>
+        </tbody>
+      </table>
+
       <h2 id="data">Data Structures</h2>
       <table class="manual-table">
         <thead><tr><th>Term</th><th>Definition</th></tr></thead>

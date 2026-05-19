@@ -831,7 +831,7 @@ const TOOLS = [
   },
   {
     name: "forge_run_plan",
-    description: "Execute a hardened plan — spawn CLI workers for each slice, validate at every boundary, track tokens. Supports Full Auto (gh copilot CLI) and Assisted (human + automated gates) modes. Use --estimate for cost prediction without executing.",
+    description: "Execute a hardened plan — spawn CLI workers for each slice, validate at every boundary, track tokens. Supports Full Auto (gh copilot CLI) and Assisted (human + automated gates) modes. Use --estimate for cost prediction without executing. To bypass the Crucible gate: pass manualImport:true (MCP) or --manual-import (CLI).",
     inputSchema: {
       type: "object",
       properties: {
@@ -7010,7 +7010,7 @@ export function createExpressApp() {
 
       // Guard: reject if a plan run is active
       if (activeAbortController) {
-        return res.status(409).json({ error: "Cannot update during active plan run", code: "ERR_UPDATE_DURING_RUN" });
+        return res.status(409).json({ error: "Cannot update during active plan run", code: ERROR_CODES.ERR_UPDATE_DURING_RUN.code });
       }
 
       // SSE headers
@@ -7446,7 +7446,7 @@ export function createExpressApp() {
   app.post("/api/server/restart", (_req, res) => {
     try {
       if (activeAbortController) {
-        return res.status(409).json({ error: "Cannot restart during active plan run", code: "ERR_RESTART_DURING_RUN" });
+        return res.status(409).json({ error: "Cannot restart during active plan run", code: "ERR_RESTART_DURING_RUN" }); // TODO: enum migration
       }
       const now = Date.now();
       if (now - _lastRestartTs < _RESTART_COOLDOWN_MS) {

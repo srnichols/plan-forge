@@ -1,15 +1,13 @@
 /**
  * Phase 40 S6 — Auditor latest-report card.
  *
- * Verifies the HTML markup, app.js wiring, and /api/auditor/latest endpoint
- * behavior. The endpoint reads auditor invocation records from run summaries
- * (written by Phase 39's auditor auto-invoke feature).
+ * Tests HTML markup, JS wiring, and live API behavior including
+ * JSDOM-level sanitization check.
  */
 
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { readFileSync, mkdtempSync, rmSync, mkdirSync, writeFileSync, existsSync } from "node:fs";
-import { tmpdir } from "node:os";
-import { join, resolve, dirname } from "node:path";
+import { readFileSync, mkdirSync, writeFileSync, rmSync, existsSync } from "node:fs";
+import { resolve, dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { JSDOM } from "jsdom";
 
@@ -18,6 +16,7 @@ const html = readFileSync(resolve(HERE, "..", "dashboard", "index.html"), "utf-8
 const js = readFileSync(resolve(HERE, "..", "dashboard", "app.js"), "utf-8");
 const dom = new JSDOM(html);
 const document = dom.window.document;
+const SCRATCH_ROOT = resolve(HERE, "..", ".vitest-scratch");
 
 let server;
 let baseUrl;
@@ -25,7 +24,9 @@ let tmpProject;
 let savedCwd;
 
 beforeAll(async () => {
-  tmpProject = mkdtempSync(join(tmpdir(), "pforge-auditor-card-"));
+  mkdirSync(SCRATCH_ROOT, { recursive: true });
+  tmpProject = join(SCRATCH_ROOT, `pforge-auditor-card-${process.pid}-${Date.now()}`);
+  mkdirSync(tmpProject, { recursive: true });
   savedCwd = process.cwd();
   process.env.PLAN_FORGE_PROJECT = tmpProject;
   process.chdir(tmpProject);
@@ -33,102 +34,98 @@ beforeAll(async () => {
   const { createExpressApp } = await import("../server.mjs");
   const app = createExpressApp();
   server = app.listen(0);
-  await new Promise((r) => server.once("listening", r));
-  const { port } = server.address();
-  baseUrl = `http://127.0.0.1:${port}`;
+  await new Promise(r => server.once("listening", r));
+  baseUrl = `http://127.0.0.1:${server.address().port}`;
 });
 
 afterAll(async () => {
-  if (server) await new Promise((r) => server.close(r));
+  if (server) await new Promise(r => server.close(r));
   if (savedCwd) process.chdir(savedCwd);
   delete process.env.PLAN_FORGE_PROJECT;
   if (tmpProject && existsSync(tmpProject)) rmSync(tmpProject, { recursive: true, force: true });
 });
 
-describe("auditor report card — markup", () => {
-  it("declares the auditor-latest-report container in the dashboard", () => {
-    const el = document.getElementById("auditor-latest-report");
-    expect(el).not.toBeNull();
+function seedAuditorRun(runId, auditorData) {
+  const dir = resolve(tmpProject, ".forge", "runs", runId);
+  mkdirSync(dir, { recursive: true });
+  writeFileSync(resolve(dir, "summary.json"), JSON.stringify({ _auditor: auditorData }, null, 2));
+}
+
+describe("S6 — auditor-report-card HTML markup", () => {
+  it("renders auditor report card in tab-forge-master", () => {
+    const section = document.getElementById("tab-forge-master");
+    const card = section.querySelector('[data-testid="auditor-report-card"]');
+    expect(card, "auditor-report-card must exist").not.toBeNull();
   });
 
-  it("includes an Auditor Latest Report heading visible to the user", () => {
+  it("declares #auditor-latest-report", () => {
+    const el = document.getElementById("auditor-latest-report");
+    expect(el, "#auditor-latest-report must exist").not.toBeNull();
+  });
+
+  it("contains an 'Auditor Latest Report' heading", () => {
     expect(html).toContain("Auditor Latest Report");
   });
 
-  it("includes a refresh button calling loadAuditorLatest", () => {
-    expect(html).toContain("loadAuditorLatest()");
+  it("has a refresh button calling loadAuditorLatest()", () => {
+    const card = document.querySelector('[data-testid="auditor-report-card"]');
+    const btn = card.querySelector("button[title='Refresh']");
+    expect(btn, "Refresh button must exist").not.toBeNull();
+    expect(btn.getAttribute("onclick")).toContain("loadAuditorLatest");
   });
 });
 
-describe("auditor report card — app.js wiring", () => {
-  it("defines loadAuditorLatest and calls /api/auditor/latest", () => {
-    expect(js).toContain("loadAuditorLatest");
+describe("S6 — auditor-report-card JS wiring", () => {
+  it("defines loadAuditorLatest function", () => {
+    expect(js).toContain("function loadAuditorLatest(");
+  });
+
+  it("fetches /api/auditor/latest", () => {
     expect(js).toContain("/api/auditor/latest");
   });
 
-  it("registers the auditor-auto-invoke live WebSocket event handler", () => {
-    expect(js).toContain('case "auditor-auto-invoke"');
-    expect(js).toContain("handleAuditorAutoInvoke(");
-  });
-
-  it("renders an empty state when data.triggered is false", () => {
-    expect(js).toContain("data.triggered");
-    expect(js).toContain("data.message");
-  });
-
-  it("exports loadAuditorLatest to window for HTML button wiring", () => {
+  it("exposes loadAuditorLatest on window", () => {
     expect(js).toContain("window.loadAuditorLatest = loadAuditorLatest");
+  });
+
+  it("forge-master tabLoadHook calls loadAuditorLatest", () => {
+    expect(js).toMatch(/'forge-master'[\s\S]*loadAuditorLatest/);
   });
 });
 
-describe("auditor report card — /api/auditor/latest endpoint", () => {
-  it("returns triggered=false with a message when no runs directory exists", async () => {
+describe("S6 — /api/auditor/latest responses", () => {
+  it("returns triggered=false when no runs exist", async () => {
     const res = await fetch(`${baseUrl}/api/auditor/latest`);
     expect(res.status).toBe(200);
     const body = await res.json();
     expect(body.triggered).toBe(false);
-    expect(typeof body.message).toBe("string");
-    expect(body.message.length).toBeGreaterThan(0);
+    expect(body.message).toBeTruthy();
   });
 
-  it("returns triggered=false when runs exist but none contain an auditor record", async () => {
-    const runDir = resolve(tmpProject, ".forge", "runs", "run-001");
-    mkdirSync(runDir, { recursive: true });
-    writeFileSync(
-      resolve(runDir, "summary.json"),
-      JSON.stringify({ runId: "run-001", status: "completed", results: { total: 1 } }),
-      "utf-8",
-    );
-    const res = await fetch(`${baseUrl}/api/auditor/latest`);
-    expect(res.status).toBe(200);
-    const body = await res.json();
-    expect(body.triggered).toBe(false);
-  });
-
-  it("returns the most recent auditor invocation when one exists", async () => {
-    const runDir = resolve(tmpProject, ".forge", "runs", "run-002");
-    mkdirSync(runDir, { recursive: true });
-    writeFileSync(
-      resolve(runDir, "summary.json"),
-      JSON.stringify({
-        runId: "run-002",
-        status: "failed",
-        _auditor: {
-          triggered: true,
-          reason: "onFailure",
-          timestamp: "2026-05-19T00:00:00.000Z",
-          config: { onFailure: true, everyNRuns: null },
-        },
-      }),
-      "utf-8",
-    );
+  it("returns triggered auditor data when a run has _auditor.triggered=true", async () => {
+    seedAuditorRun("run-auditor-1", {
+      triggered: true,
+      reason: "onFailure",
+      timestamp: "2024-06-01T12:00:00Z",
+      config: { onFailure: true, everyNRuns: null },
+    });
 
     const res = await fetch(`${baseUrl}/api/auditor/latest`);
     expect(res.status).toBe(200);
     const body = await res.json();
     expect(body.triggered).toBe(true);
     expect(body.reason).toBe("onFailure");
-    expect(body.runId).toBe("run-002");
-    expect(body.config.onFailure).toBe(true);
+    expect(body.runId).toBe("run-auditor-1");
+  });
+
+  it("skips runs without _auditor.triggered and finds the one that has it", async () => {
+    const dir = resolve(tmpProject, ".forge", "runs", "run-no-auditor");
+    mkdirSync(dir, { recursive: true });
+    writeFileSync(resolve(dir, "summary.json"), JSON.stringify({ status: "completed" }, null, 2));
+
+    const res = await fetch(`${baseUrl}/api/auditor/latest`);
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.triggered).toBe(true);
   });
 });

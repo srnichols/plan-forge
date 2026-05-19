@@ -7424,29 +7424,60 @@ function loadObserverNarrations() {
 window.loadObserverNarrations = loadObserverNarrations;
 
 // Phase-40 S5 — Cross-run watcher anomalies card
-async function loadCrossRunAnomalies() {
-  const list = document.getElementById("cross-run-anomalies-list");
-  if (!list) return;
-  list.innerHTML = '<p class="text-gray-500 text-center py-2">Loading…</p>';
-  try {
-    const res = await fetch("/api/watcher/cross-run");
-    if (!res.ok) throw new Error(`HTTP ${res.status}`);
-    const data = await res.json();
-    const anomalies = data.anomalies || [];
-    if (anomalies.length === 0) {
-      list.innerHTML = `<p class="text-gray-500 text-center py-3">No anomalies detected in the last ${data.window || "14d"} (${data.totalRuns ?? 0} runs).</p>`;
-      return;
-    }
-    list.innerHTML = anomalies.slice(0, 10).map((a) => {
-      const col = a.severity === "error" ? "text-red-400" : "text-amber-400";
-      return `<div class="border-b border-gray-700 pb-2 last:border-0">
-        <p class="${col} font-medium">${a.code || "anomaly"}</p>
-        <p class="text-gray-400">${a.message || ""}</p>
+function loadCrossRunAnomalies() {
+  const el = document.getElementById("cross-run-anomalies-list");
+  if (!el) return;
+  el.innerHTML = '<p class="text-gray-600 text-center py-2">Loading…</p>';
+  fetch("/api/watcher/cross-run")
+    .then(r => r.ok ? r.json() : null)
+    .then(data => {
+      if (!data || (!data.ok && data.error)) {
+        el.innerHTML = `<p class="text-gray-600 text-center py-4">${escapeHtml(data?.error || "No data available.")}</p>`;
+        return;
+      }
+      const anomalies = data.anomalies || [];
+      if (anomalies.length === 0) {
+        el.innerHTML = `<p class="text-gray-600 text-center py-4">No anomalies detected in the last ${escapeHtml(data.window || "14d")} (${data.totalRuns ?? 0} runs).</p>`;
+        return;
+      }
+      el.innerHTML = anomalies.slice(0, 10).map(a => {
+        const col = a.severity === "error" ? "text-red-400" : "text-amber-400";
+        return `<div class="border-b border-gray-700/50 pb-2 last:border-0">
+          <p class="${col} font-medium">${escapeHtml(a.code || "anomaly")}</p>
+          <p class="text-gray-400">${escapeHtml(a.message || a.recommendation || "")}</p>
+        </div>`;
+      }).join("");
+    })
+    .catch(err => { el.innerHTML = `<p class="text-red-400 text-xs">Error: ${escapeHtml(err.message)}</p>`; });
+}
+
+// Phase-40 S6 — Auditor latest report card
+function loadAuditorLatest() {
+  const el = document.getElementById("auditor-latest-report");
+  if (!el) return;
+  el.innerHTML = '<p class="text-gray-600 text-center py-4">Loading…</p>';
+  fetch("/api/auditor/latest")
+    .then(r => r.ok ? r.json() : null)
+    .then(data => {
+      if (!data || !data.triggered) {
+        el.innerHTML = `<p class="text-gray-600 text-center py-4">${escapeHtml(data?.message || "No auditor invocations recorded.")}</p>`;
+        return;
+      }
+      const reason = data.reason === "onFailure" ? "🔴 on-failure" : "🔵 every-N-runs";
+      const ts = data.timestamp ? new Date(data.timestamp).toLocaleString() : "unknown";
+      el.innerHTML = `<div class="space-y-2">
+        <div class="flex items-center gap-2">
+          <span class="text-xs font-semibold px-2 py-0.5 rounded-full bg-purple-900/50 text-purple-300">triggered</span>
+          <span class="text-xs text-gray-400">${reason}</span>
+        </div>
+        <p class="text-xs text-gray-500">Run: <code class="text-gray-400">${escapeHtml(data.runId || "—")}</code></p>
+        <p class="text-xs text-gray-500">At: ${ts}</p>
+        ${data.config ? `<p class="text-xs text-gray-600">onFailure: ${data.config.onFailure}, everyNRuns: ${data.config.everyNRuns ?? "off"}</p>` : ""}
       </div>`;
-    }).join("");
-  } catch (err) {
-    list.innerHTML = `<p class="text-red-400 text-xs">Error: ${escapeHtml(err.message)}</p>`;
-  }
+    })
+    .catch(err => { el.innerHTML = `<p class="text-red-400 text-xs">Error: ${escapeHtml(err.message)}</p>`; });
 }
 
 window.loadCrossRunAnomalies = loadCrossRunAnomalies;
+window.loadAuditorLatest = loadAuditorLatest;
+

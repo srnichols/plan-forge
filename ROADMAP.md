@@ -7,9 +7,11 @@
 
 ## Current Release
 
-**v3.5.1** (2026-05-17) — Lattice Query Relevance Scoring. `forge_lattice_query` now ranks results by camelCase-aware token overlap — name tokens weighted 2×, file path 1×. Searching for "user" returns `getUserById` before less-relevant matches. New exported helpers `scoreChunk` and `tokenizeForSearch` for downstream consumers. 18 new tests.
+**v3.8.0** (2026-05-19) — Auditor Automation & Observer (Phase-39). Automated post-run auditing hooks (`hooks.postRun.invokeAuditor.onFailure` + `everyNRuns`), cross-run watcher mode with four new anomaly codes, and a live-pipeline Observer that subscribes to the hub WebSocket, batches events, and narrates notable patterns via the Forge-Master reasoning loop. CLI: `pforge forge-master observe`.
 
-Previous: **v3.5.0** (2026-05-17) — Classifier-Lane GitHub Issue Creation (Phase CLASSIFIER-ISSUE). New `forge_classifier_issue` MCP tool closes the tempering audit loop: when `routeFinding` returns `lane: "classifier"` (infra noise), the tool creates a GitHub issue labelled `classifier-noise` proposing a classifier rule update. Hash-based deduplication prevents spam — repeated patterns add a comment on the existing issue instead of creating a duplicate.
+Previous: **v3.7.0** (2026-05-18) — Worker Guardrails (A1–A8). Hardened Forbidden Actions matching, diff classification, PreCommit chain, plan-health auditor agent, network allowlists, lockHash, objective-gated tempering, and tool denylists.
+
+Previous: **v3.5.1** (2026-05-17) — Classifier-Lane GitHub Issue Creation (Phase CLASSIFIER-ISSUE). New `forge_classifier_issue` MCP tool closes the tempering audit loop: when `routeFinding` returns `lane: "classifier"` (infra noise), the tool creates a GitHub issue labelled `classifier-noise` proposing a classifier rule update. Hash-based deduplication prevents spam — repeated patterns add a comment on the existing issue instead of creating a duplicate.
 
 Previous: **v3.4.1** (2026-05-17) — Snapshot Pop Hotfix (Issue #201). `popSliceSnapshot` now uses `git stash apply` + explicit drop instead of blind `git stash pop`. Startup janitor drops orphaned `pforge-slice-N-snapshot` stashes older than 7 days.
 

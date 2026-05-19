@@ -42,12 +42,6 @@ Listed in **execution order**. Each phase's Execution Hold gates on its predeces
 - **Status**: 📋 Planned (DRAFT, pending Step-2 harden)
 - **Depends on**: Phase 52 shipping (risk-graduated progression — server split must validate the pattern at medium scale before tackling orchestrator)
 
-### Phase 54 — GH-METRICS-PERSONAL
-- **Goal**: Personal-account fallback for the "GitHub × Plan-Forge" dashboard tab. Today the tab is hard-wired to `/orgs/{org}/copilot/metrics` which 404s for personal Copilot accounts. Phase 54 adds a `GET /api/github-personal` endpoint backed by a new `pforge-mcp/github-personal.mjs` module that returns user profile + repo activity + Copilot-coauthor commit % (heuristic AI-assist signal). Dashboard auto-detects mode and renders three new cards in personal mode while preserving the org-mode path verbatim.
-- **Plan**: [Phase-54-GH-METRICS-PERSONAL-PLAN.md](./Phase-54-GH-METRICS-PERSONAL-PLAN.md)
-- **Status**: 🔬 Hardened (lockHash `44a28f3b…`, ready for `pforge run-plan`)
-- **Depends on**: nothing — independent of the Phase 43/51/52/53 dependency chain. May run concurrently.
-
 ---
 
 ## Completed Phases

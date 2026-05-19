@@ -2,12 +2,12 @@
 phase: 52
 name: SERVER-SPLIT
 status: HARDENED
-lockHash: 3b3c4de212f1af4902956894517d823fbd7098dd152dbf898b628b3d3259db2f
+lockHash: a359dcc40ec1b9f8086285e6ac569623abe940f53b76aa45d627f6e1d3805530
 ---
 
 # Phase 52 — SERVER-SPLIT — Decompose `pforge-mcp/server.mjs` into focused sub-modules
 
-> **Status**: **HARDENED — awaiting Execution Hold lift**. Cleared for `pforge run-plan` once Execution Hold checklist below is satisfied. Step-2 harden completed 2026-05-19.
+> **Status**: **HARDENED — cleared for execution 2026-05-19**
 > **Source**: Promoted from the A-series module-size findings in Phase 42's audit catalog (A2 — `server.mjs` at 9,202–9,812 LOC, ~3.3× the 3,000-LOC threshold). Phase 51 (CAPABILITIES-SPLIT) validated the pattern at marginal scale (3.3 k LOC); this phase applies it at medium scale before the 13.9 k LOC `orchestrator.mjs` in Phase 53.
 > **Tracks**: `pforge-mcp/server.mjs` (becomes thin re-export + entrypoint shim), `pforge-mcp/server/*.mjs` (NEW directory of focused sub-modules), `pforge-mcp/tests/server-surface-snapshot.test.mjs` (NEW), `pforge-mcp/tests/fixtures/server-surface.golden.json` (NEW), `pforge-mcp/tests/no-circular-imports.test.mjs` (inherited from Phase 51 — unchanged), `docs/plans/DEPLOYMENT-ROADMAP.md`, `CHANGELOG.md`.
 > **Estimated cost**: low–medium. Zero LLM-cost surfaces. Pure mechanical extraction with snapshot-as-contract validation. Larger blast radius than Phase 51 (server.mjs is the MCP entrypoint AND the Express app host, so the shim retains a `main()` wiring section in addition to re-exports).

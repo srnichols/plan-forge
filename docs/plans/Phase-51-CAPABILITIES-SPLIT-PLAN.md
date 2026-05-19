@@ -51,9 +51,10 @@ This phase is also the **pattern-validation** phase for the harder splits in 52 
 
 ### In Scope
 
-**S0 — Golden snapshot + circular-import gate**:
+**S0 — Golden snapshot + whole-tree circular-import gate**:
 - Add `pforge-mcp/tests/capabilities-snapshot.test.mjs` — calls `buildCapabilitySurface()` with a fixed input (no env-dependent values) and asserts the serialised JSON matches a checked-in golden fixture `pforge-mcp/tests/fixtures/capabilities-surface.golden.json`
-- Add `pforge-mcp/tests/capabilities-no-circular.test.mjs` — shells out to `madge --circular pforge-mcp/capabilities.mjs pforge-mcp/capabilities/*.mjs` and asserts exit 0
+- Add `pforge-mcp/tests/no-circular-imports.test.mjs` — shells out to `madge --circular --extensions mjs pforge-mcp/` (whole-tree scope), parses its output, and asserts the set of detected cycles equals the **known-cycles allowlist** (`KNOWN_CYCLES = new Set(['orchestrator.mjs > cost-service.mjs'])` at S0, documented in `/memories/repo/esm-circular-shim-pattern.md`). Any NEW cycle fails the test. Removing a cycle from the allowlist when the underlying cycle is gone is a welcome separate commit.
+- Whole-tree scope is deliberate: Phases 52 (`server.mjs` split) and 53 (`orchestrator.mjs` split) inherit this single test file verbatim — zero new test files in 52/53. Phase 53 has the architectural obligation to fix `orchestrator.mjs > cost-service.mjs`, after which the allowlist drops to empty.
 - Add `madge` as a `devDependency` in `pforge-mcp/package.json` (one new dev dep — explicitly allowed for this phase; documented in Required Decisions)
 - Capture the current `capabilities.mjs` SHA-256 to the slice's commit message body (forensic anchor — every later slice can verify "the source we started from was X")
 - Generate the golden fixture by snapshotting current `buildCapabilitySurface()` output once, before any extraction begins
@@ -133,7 +134,7 @@ Decisions locked at draft time; Step-2 hardener may sharpen but should not re-li
 1. **Capabilities-first ordering** — the three module-split phases run 51 (capabilities, 3.3 k LOC) → 52 (server, 9.8 k LOC) → 53 (orchestrator, 13.9 k LOC). Smallest-first validates the pattern before applying it to the riskier files.
 2. **Re-export shim is the public contract** — `pforge-mcp/capabilities.mjs` survives as a ≤50-line shim. Consumer imports are NEVER modified. This is a hard constraint inherited by Phase 52/53.
 3. **Snapshot-as-contract** — byte-identical JSON output of `buildCapabilitySurface()` before/after is the sole acceptance criterion for "no behavior change". Per-function unit tests are nice-to-have; the snapshot is the gate.
-4. **Circular-import gate is non-negotiable** — `madge --circular` runs in every slice's validation gate, not just S0. ESM circular imports are a known trap in this codebase (see `/memories/repo/esm-circular-shim-pattern.md`).
+4. **Circular-import gate is non-negotiable AND whole-tree** — `madge --circular --extensions mjs pforge-mcp/` runs in every slice's validation gate, not just S0. Scope is the **entire `pforge-mcp/` tree** (not just `capabilities/`) so Phases 52 and 53 inherit the test file unchanged — zero per-phase duplication. A small `KNOWN_CYCLES` allowlist in the test file carries the one pre-existing cycle (`orchestrator.mjs > cost-service.mjs`, see `/memories/repo/esm-circular-shim-pattern.md`); Phase 53 has the architectural obligation to fix it, after which the allowlist drops to empty. ESM circular imports are a known trap in this codebase.
 5. **Sub-modules in `pforge-mcp/capabilities/` subdirectory** — not flat sibling files. Keeps related extracted modules grouped, makes future cleanup atomic, and signals "these belong together" to readers.
 6. **4 sub-modules, not 6** — `tool-metadata.mjs`, `schemas.mjs`, `reference.mjs` + `subsystems.mjs` (separate files, one slice), `surface.mjs`. Combines small unrelated files into one slice while keeping each file single-purpose.
 7. **`madge` is the only new devDependency** — required for the circular-import gate. No other new deps allowed by Forbidden Actions.
@@ -155,7 +156,7 @@ All decisions for this phase are resolved in §"Resolved Decisions" above (13 it
 | 1 | Phase ordering within module-split work | ✅ Resolved | Capabilities → server → orchestrator (RD #1) |
 | 2 | Backward-compat strategy | ✅ Resolved | Re-export shim, consumer imports untouched (RD #2) |
 | 3 | "No behavior change" enforcement | ✅ Resolved | Byte-identical JSON snapshot (RD #3) |
-| 4 | Circular-import prevention | ✅ Resolved | `madge --circular` gate on every slice (RD #4) |
+| 4 | Circular-import prevention | ✅ Resolved | Whole-tree `madge --circular` gate every slice; `KNOWN_CYCLES` allowlist with one entry (Phase 53 must clear); test file inherited by 52/53 unchanged (RD #4) |
 | 5 | Sub-module directory layout | ✅ Resolved | `pforge-mcp/capabilities/` subdirectory (RD #5) |
 | 6 | Number and grouping of sub-modules | ✅ Resolved | 4 files: tool-metadata, schemas, reference + subsystems, surface (RD #6) |
 | 7 | New devDependency policy | ✅ Resolved | `madge` only; nothing else (RD #7) |
@@ -181,11 +182,11 @@ All decisions for this phase are resolved in §"Resolved Decisions" above (13 it
 - Add `madge@^7` to `pforge-mcp/package.json` devDependencies; run `npm install` in `pforge-mcp/` workspace
 - Generate `pforge-mcp/tests/fixtures/capabilities-surface.golden.json` by writing a one-shot script that calls `buildCapabilitySurface()` with fixed input (mock env-dependent values like `APP_VERSION` to deterministic strings) and writes the serialised output
 - Add `pforge-mcp/tests/capabilities-snapshot.test.mjs` — reads the golden fixture, calls `buildCapabilitySurface()` with the same fixed input, asserts `JSON.stringify(actual, null, 2) === goldenContent`
-- Add `pforge-mcp/tests/capabilities-no-circular.test.mjs` — uses `child_process.execFileSync('npx', ['madge', '--circular', 'pforge-mcp/capabilities.mjs'])` and asserts exit 0 + empty stdout
+- Add `pforge-mcp/tests/no-circular-imports.test.mjs` — uses `child_process.execFileSync('npx', ['madge', '--circular', '--extensions', 'mjs', 'pforge-mcp/'], { encoding: 'utf8' })`, parses its stdout to extract the cycle list, and asserts `detectedCycles` equals `KNOWN_CYCLES = new Set(['orchestrator.mjs > cost-service.mjs'])`. Phases 52/53 inherit this file unchanged.
 - Capture the current `capabilities.mjs` SHA-256 in the commit message body: `Anchor SHA256 of capabilities.mjs at S0: <hash>`
 - **Validation Gate**:
 ```bash
-bash -c "cd pforge-mcp && npx vitest run tests/capabilities-snapshot.test.mjs tests/capabilities-no-circular.test.mjs" && node -e "const fs=require('fs');if(!fs.existsSync('pforge-mcp/tests/fixtures/capabilities-surface.golden.json'))throw new Error('golden missing');const j=JSON.parse(fs.readFileSync('pforge-mcp/tests/fixtures/capabilities-surface.golden.json','utf8'));if(!j.tools||!j.skills)throw new Error('golden fixture incomplete: missing tools or skills key');console.log('ok S0')"
+bash -c "cd pforge-mcp && npx vitest run tests/capabilities-snapshot.test.mjs tests/no-circular-imports.test.mjs" && node -e "const fs=require('fs');if(!fs.existsSync('pforge-mcp/tests/fixtures/capabilities-surface.golden.json'))throw new Error('golden missing');const j=JSON.parse(fs.readFileSync('pforge-mcp/tests/fixtures/capabilities-surface.golden.json','utf8'));if(!j.tools||!j.skills)throw new Error('golden fixture incomplete: missing tools or skills key');console.log('ok S0')"
 ```
 
 ### Slice 1 — Extract `capabilities/tool-metadata.mjs`
@@ -200,7 +201,7 @@ bash -c "cd pforge-mcp && npx vitest run tests/capabilities-snapshot.test.mjs te
 - In `pforge-mcp/capabilities.mjs`, replace the moved declarations with `export { TOOL_METADATA, WORKFLOWS } from './capabilities/tool-metadata.mjs';`
 - **Validation Gate**:
 ```bash
-node -e "const fs=require('fs');if(!fs.existsSync('pforge-mcp/capabilities/tool-metadata.mjs'))throw new Error('tool-metadata.mjs missing');const sub=fs.readFileSync('pforge-mcp/capabilities/tool-metadata.mjs','utf8');if(!/export\s+const\s+TOOL_METADATA\b/.test(sub))throw new Error('TOOL_METADATA not exported from sub-module');if(!/export\s+const\s+WORKFLOWS\b/.test(sub))throw new Error('WORKFLOWS not exported from sub-module');const shim=fs.readFileSync('pforge-mcp/capabilities.mjs','utf8');if(!shim.includes(\"from './capabilities/tool-metadata.mjs'\"))throw new Error('capabilities.mjs missing re-export');console.log('ok S1 structure')" && bash -c "cd pforge-mcp && npx vitest run tests/capabilities-snapshot.test.mjs tests/capabilities-no-circular.test.mjs tests/capabilities.test.mjs"
+node -e "const fs=require('fs');if(!fs.existsSync('pforge-mcp/capabilities/tool-metadata.mjs'))throw new Error('tool-metadata.mjs missing');const sub=fs.readFileSync('pforge-mcp/capabilities/tool-metadata.mjs','utf8');if(!/export\s+const\s+TOOL_METADATA\b/.test(sub))throw new Error('TOOL_METADATA not exported from sub-module');if(!/export\s+const\s+WORKFLOWS\b/.test(sub))throw new Error('WORKFLOWS not exported from sub-module');const shim=fs.readFileSync('pforge-mcp/capabilities.mjs','utf8');if(!shim.includes(\"from './capabilities/tool-metadata.mjs'\"))throw new Error('capabilities.mjs missing re-export');console.log('ok S1 structure')" && bash -c "cd pforge-mcp && npx vitest run tests/capabilities-snapshot.test.mjs tests/no-circular-imports.test.mjs tests/capabilities.test.mjs"
 ```
 
 ### Slice 2 — Extract `capabilities/schemas.mjs`
@@ -215,7 +216,7 @@ node -e "const fs=require('fs');if(!fs.existsSync('pforge-mcp/capabilities/tool-
 - `capabilities.mjs` adds: `export { CLI_SCHEMA, CONFIG_SCHEMA } from './capabilities/schemas.mjs';`
 - **Validation Gate**:
 ```bash
-node -e "const fs=require('fs');if(!fs.existsSync('pforge-mcp/capabilities/schemas.mjs'))throw new Error('schemas.mjs missing');const sub=fs.readFileSync('pforge-mcp/capabilities/schemas.mjs','utf8');if(!/export\s+const\s+CLI_SCHEMA\b/.test(sub))throw new Error('CLI_SCHEMA not exported');if(!/export\s+const\s+CONFIG_SCHEMA\b/.test(sub))throw new Error('CONFIG_SCHEMA not exported');const shim=fs.readFileSync('pforge-mcp/capabilities.mjs','utf8');if(!shim.includes(\"from './capabilities/schemas.mjs'\"))throw new Error('shim missing schemas re-export');console.log('ok S2 structure')" && bash -c "cd pforge-mcp && npx vitest run tests/capabilities-snapshot.test.mjs tests/capabilities-no-circular.test.mjs tests/capabilities.test.mjs"
+node -e "const fs=require('fs');if(!fs.existsSync('pforge-mcp/capabilities/schemas.mjs'))throw new Error('schemas.mjs missing');const sub=fs.readFileSync('pforge-mcp/capabilities/schemas.mjs','utf8');if(!/export\s+const\s+CLI_SCHEMA\b/.test(sub))throw new Error('CLI_SCHEMA not exported');if(!/export\s+const\s+CONFIG_SCHEMA\b/.test(sub))throw new Error('CONFIG_SCHEMA not exported');const shim=fs.readFileSync('pforge-mcp/capabilities.mjs','utf8');if(!shim.includes(\"from './capabilities/schemas.mjs'\"))throw new Error('shim missing schemas re-export');console.log('ok S2 structure')" && bash -c "cd pforge-mcp && npx vitest run tests/capabilities-snapshot.test.mjs tests/no-circular-imports.test.mjs tests/capabilities.test.mjs"
 ```
 
 ### Slice 3 — Extract `capabilities/reference.mjs` + `capabilities/subsystems.mjs`
@@ -230,7 +231,7 @@ node -e "const fs=require('fs');if(!fs.existsSync('pforge-mcp/capabilities/schem
 - Two files created in one slice (allowed exception to "one extraction per slice" — both are <250 LOC and unrelated; bundling avoids a thin slice)
 - **Validation Gate**:
 ```bash
-node -e "const fs=require('fs');for(const f of ['pforge-mcp/capabilities/reference.mjs','pforge-mcp/capabilities/subsystems.mjs'])if(!fs.existsSync(f))throw new Error('missing: '+f);const ref=fs.readFileSync('pforge-mcp/capabilities/reference.mjs','utf8');if(!/export\s+const\s+SYSTEM_REFERENCE\b/.test(ref))throw new Error('SYSTEM_REFERENCE not exported');const sub=fs.readFileSync('pforge-mcp/capabilities/subsystems.mjs','utf8');if(!/export\s+const\s+INNER_LOOP_SURFACE\b/.test(sub))throw new Error('INNER_LOOP_SURFACE not exported');const shim=fs.readFileSync('pforge-mcp/capabilities.mjs','utf8');if(!shim.includes(\"from './capabilities/reference.mjs'\"))throw new Error('shim missing reference re-export');if(!shim.includes(\"from './capabilities/subsystems.mjs'\"))throw new Error('shim missing subsystems re-export');console.log('ok S3 structure')" && bash -c "cd pforge-mcp && npx vitest run tests/capabilities-snapshot.test.mjs tests/capabilities-no-circular.test.mjs tests/capabilities.test.mjs"
+node -e "const fs=require('fs');for(const f of ['pforge-mcp/capabilities/reference.mjs','pforge-mcp/capabilities/subsystems.mjs'])if(!fs.existsSync(f))throw new Error('missing: '+f);const ref=fs.readFileSync('pforge-mcp/capabilities/reference.mjs','utf8');if(!/export\s+const\s+SYSTEM_REFERENCE\b/.test(ref))throw new Error('SYSTEM_REFERENCE not exported');const sub=fs.readFileSync('pforge-mcp/capabilities/subsystems.mjs','utf8');if(!/export\s+const\s+INNER_LOOP_SURFACE\b/.test(sub))throw new Error('INNER_LOOP_SURFACE not exported');const shim=fs.readFileSync('pforge-mcp/capabilities.mjs','utf8');if(!shim.includes(\"from './capabilities/reference.mjs'\"))throw new Error('shim missing reference re-export');if(!shim.includes(\"from './capabilities/subsystems.mjs'\"))throw new Error('shim missing subsystems re-export');console.log('ok S3 structure')" && bash -c "cd pforge-mcp && npx vitest run tests/capabilities-snapshot.test.mjs tests/no-circular-imports.test.mjs tests/capabilities.test.mjs"
 ```
 
 ### Slice 4 — Extract `capabilities/surface.mjs` + convert `capabilities.mjs` to shim
@@ -244,7 +245,7 @@ node -e "const fs=require('fs');for(const f of ['pforge-mcp/capabilities/referen
 - Snapshot gate is the proof — byte-identical JSON output OR the slice fails and is rolled back
 - **Validation Gate**:
 ```bash
-node -e "const fs=require('fs');if(!fs.existsSync('pforge-mcp/capabilities/surface.mjs'))throw new Error('surface.mjs missing');const surf=fs.readFileSync('pforge-mcp/capabilities/surface.mjs','utf8');if(!/export\s+(async\s+)?function\s+buildCapabilitySurface\b|export\s+const\s+buildCapabilitySurface\b/.test(surf))throw new Error('buildCapabilitySurface not exported');if(!/writeToolsJson/.test(surf))throw new Error('writeToolsJson not in surface');if(!/writeCliSchema/.test(surf))throw new Error('writeCliSchema not in surface');const shim=fs.readFileSync('pforge-mcp/capabilities.mjs','utf8');const lines=shim.split(/\r?\n/).length;if(lines>50)throw new Error('shim too large: '+lines+' lines (max 50)');if(!shim.includes(\"from './capabilities/surface.mjs'\"))throw new Error('shim missing surface re-export');console.log('ok S4 shim is '+lines+' lines')" && bash -c "cd pforge-mcp && npx vitest run tests/capabilities-snapshot.test.mjs tests/capabilities-no-circular.test.mjs tests/capabilities.test.mjs tests/capabilities-doc-sync.test.mjs tests/brain-capability-negotiation.test.mjs"
+node -e "const fs=require('fs');if(!fs.existsSync('pforge-mcp/capabilities/surface.mjs'))throw new Error('surface.mjs missing');const surf=fs.readFileSync('pforge-mcp/capabilities/surface.mjs','utf8');if(!/export\s+(async\s+)?function\s+buildCapabilitySurface\b|export\s+const\s+buildCapabilitySurface\b/.test(surf))throw new Error('buildCapabilitySurface not exported');if(!/writeToolsJson/.test(surf))throw new Error('writeToolsJson not in surface');if(!/writeCliSchema/.test(surf))throw new Error('writeCliSchema not in surface');const shim=fs.readFileSync('pforge-mcp/capabilities.mjs','utf8');const lines=shim.split(/\r?\n/).length;if(lines>50)throw new Error('shim too large: '+lines+' lines (max 50)');if(!shim.includes(\"from './capabilities/surface.mjs'\"))throw new Error('shim missing surface re-export');console.log('ok S4 shim is '+lines+' lines')" && bash -c "cd pforge-mcp && npx vitest run tests/capabilities-snapshot.test.mjs tests/no-circular-imports.test.mjs tests/capabilities.test.mjs tests/capabilities-doc-sync.test.mjs tests/brain-capability-negotiation.test.mjs"
 ```
 
 ### Slice 5 — Retro + roadmap update + CHANGELOG
@@ -266,7 +267,7 @@ node -e "const fs=require('fs');if(!fs.existsSync('docs/plans/testbed-findings/P
 ## Acceptance Criteria
 
 - **MUST**: A golden snapshot of `buildCapabilitySurface()` output exists at `pforge-mcp/tests/fixtures/capabilities-surface.golden.json` and is checked into git (owned by S0).
-- **MUST**: A circular-import gate (`madge --circular`) runs in every slice's validation and exits 0 (defined in S0; consumed by S1-S4).
+- **MUST**: A whole-tree circular-import gate (`madge --circular --extensions mjs pforge-mcp/`) runs in every slice's validation; the set of detected cycles MUST equal `KNOWN_CYCLES = { 'orchestrator.mjs > cost-service.mjs' }` — no new cycles allowed (defined in S0; consumed by S1-S4; inherited by Phase 52/53).
 - **MUST**: `TOOL_METADATA` and `WORKFLOWS` move verbatim into `pforge-mcp/capabilities/tool-metadata.mjs` and are re-exported from `pforge-mcp/capabilities.mjs` (S1).
 - **MUST**: `CLI_SCHEMA` and `CONFIG_SCHEMA` move verbatim into `pforge-mcp/capabilities/schemas.mjs` and are re-exported (S2).
 - **MUST**: `SYSTEM_REFERENCE` + `APP_VERSION` move into `pforge-mcp/capabilities/reference.mjs`; `INNER_LOOP_SURFACE` moves into `pforge-mcp/capabilities/subsystems.mjs`; all three re-exported (S3).
@@ -310,7 +311,7 @@ node -e "const fs=require('fs');if(!fs.existsSync('docs/plans/testbed-findings/P
 - [ ] All four sub-modules exist under `pforge-mcp/capabilities/` (`tool-metadata.mjs`, `schemas.mjs`, `reference.mjs`, `subsystems.mjs`, `surface.mjs` — five files total)
 - [ ] Full `pforge-mcp` test suite passes (`bash -c "cd pforge-mcp && npx vitest run"`)
 - [ ] Full `pforge-master` test suite passes (no cross-impact expected, but verified)
-- [ ] `madge --circular pforge-mcp/` exits 0
+- [ ] `madge --circular --extensions mjs pforge-mcp/` reports exactly the `KNOWN_CYCLES` set (no new cycles introduced)
 - [ ] No consumer file outside this plan's scope is modified (verified via `git log --name-only` for the phase's commit range)
 - [ ] `docs/plans/testbed-findings/Phase-51-CAPABILITIES-SPLIT-retro.md` written and committed
 - [ ] `docs/plans/DEPLOYMENT-ROADMAP.md` updated: Phase 51 in Completed table; legacy Phase 44 Active entry removed; Phase 52 + 53 DRAFT stubs added
@@ -327,7 +328,7 @@ Halt the phase immediately (do NOT brute-force a retry) when any of the followin
 | Condition | Why halt | Recovery |
 |-----------|----------|----------|
 | **Snapshot gate fails twice on the same slice** | Indicates a non-trivial behavior change crept in — either a moved declaration depends on a private helper still in `capabilities.mjs` (broken closure), or a re-export drops something. Brute-force will not find it. | Roll back the slice; diff `git show HEAD` against the snapshot output; identify the missing/changed JSON field; refile the extraction. |
-| **`madge --circular` reports a cycle** | A sub-module imports from another sub-module (forbidden by RD #4). The cycle WILL break at runtime in unpredictable ways. | Roll back; route the offending dependency through `enums.mjs` / `memory.mjs` / Node built-ins. |
+| **`madge --circular` reports a NEW cycle (not in `KNOWN_CYCLES`)** | A sub-module imports from another sub-module (forbidden by RD #4), or a moved declaration accidentally created a new cycle elsewhere. The cycle WILL break at runtime in unpredictable ways. | Roll back; identify the offending import via `madge --circular --extensions mjs pforge-mcp/` output; route the offending dependency through `enums.mjs` / `memory.mjs` / Node built-ins. NEVER add a Phase-51-introduced cycle to `KNOWN_CYCLES`. |
 | **Any test outside the 5 capability tests starts failing post-slice** | The split has leaked into the consumer surface — possible re-export typo (e.g. default vs named export mismatch). | Roll back; verify each re-export line exactly matches the pre-split export signature (named vs default, sync vs async). |
 | **Build / lint failure introduced by the slice** | New file has a syntax error or violates an existing lint rule. | Fix in the same commit OR roll back. Do not advance with a broken build. |
 | **A consumer file outside this plan's scope was modified** | Scope-contract violation. Per Forbidden Actions, consumer imports MUST NOT be touched. | Roll back the offending change; the shim makes consumer edits unnecessary. |
@@ -344,7 +345,7 @@ Per-slice failure modes and recovery:
 | Failure | Recovery |
 |---------|----------|
 | Snapshot gate fails after extraction | Roll back the slice's commit (`git reset --hard HEAD~1`), re-attempt the extraction with closer attention to import-preservation. Snapshot diff in the test output identifies the exact missing/changed field. |
-| `madge --circular` reports a cycle | Roll back, identify the offending cross-import between sub-modules, route the dependency through `enums.mjs` / `memory.mjs` / Node built-ins instead. Sub-modules must be leaf-level. |
+| `madge --circular` reports a NEW cycle | Roll back, identify the offending cross-import (between sub-modules, or a moved declaration accidentally linking back to `capabilities.mjs`), route the dependency through `enums.mjs` / `memory.mjs` / Node built-ins instead. Sub-modules must be leaf-level. Adding to `KNOWN_CYCLES` is NEVER the right fix for a Phase-51-introduced cycle. |
 | `tests/capabilities.test.mjs` fails after extraction but snapshot passes | Existing test is asserting something the snapshot doesn't capture. Add the missing field to the golden fixture FIRST, regenerate, re-run. Then re-attempt the extraction. (This is the only legitimate reason to regenerate the fixture mid-phase.) |
 | `npm install` fails after adding `madge` | Pin to a known-good version (`madge@^7`); if still broken, file a meta-bug via `forge_meta_bug_file` (class: orchestrator-defect, severity: medium) and halt. |
 | Slice 4 produces a `capabilities.mjs` shim >50 LOC | Audit for accidentally-retained code (top-of-file comment block, JSDoc, dead imports). The shim is mechanical — anything beyond `export … from …` lines (+ file header comment) is a mistake. |

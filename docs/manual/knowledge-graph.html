@@ -12,7 +12,6 @@
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;600;700&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="../assets/shared.css" />
   <link rel="stylesheet" href="assets/manual.css" />
-  <script src="assets/mermaid-init.js" defer></script>
 </head>
 <body class="bg-slate-950 text-slate-300 min-h-screen">
 
@@ -51,21 +50,6 @@
         <h2 id="model">The node + edge model</h2>
 
         <figure class="manual-figure" id="fig-28-1"><img src="assets/diagrams/knowledge-graph-schema.svg" alt="Knowledge graph schema with seven node types and four edge classes. Top tier (PLANNING HIERARCHY): one Phase node connects via 'contains' edges to three Slice nodes (31-1, 31-2, 31-3). Bottom tier (EXECUTION ARTIFACTS): five rectangular nodes — Run (cost, tokens, model), Commit (sha, author), File (path, churn), Bug (id, status), Incident (severity, mttr). Slices connect down via four edge types: solid gray for 'executed_by' and 'produced', amber for 'touched' (slice to file), pink for 'found' (slice to bug, bug to incident), and dashed green for 'fixed_by' (bug back to commit). Right panel lists the queries this schema unlocks: pattern detectors, churn-vs-cost, bug-to-file blast radius, phase-to-fix-time, pforge digest, forge_patterns_list, forge_hotspot, forge_graph_query." class="diagram-img diagram-img-md my-4" /><figcaption class="manual-figcaption"><!--fignum--><span class="manual-fignum">Figure 28-1.</span><!--/fignum--> <!--cap:auto-->Knowledge graph schema — seven node types, four edge classes<!--/cap--></figcaption></figure>
-
-        <div class="my-8 p-6 bg-slate-900/50 border border-slate-800/60 rounded-xl overflow-x-auto">
-          <pre class="mermaid">
-flowchart TD
-    Ph[Phase / Plan] -- contains --&gt; Sl[Slice]
-    Sl -- produced --&gt; Cm[Commit]
-    Cm -- touches --&gt; Fi[File]
-    Sl -- executed in --&gt; Rn[Run]
-    Rn -- used --&gt; Md[Model]
-    Sl -- raised --&gt; Bg[Bug]
-    Bg -- references --&gt; Cm
-    Bg -- references --&gt; Fi
-    Rn -- cost --&gt; Cs[CostSample]
-          </pre>
-        </div>
 
         <p>Seven node types: <strong>Phase</strong>, <strong>Slice</strong>, <strong>Commit</strong>, <strong>File</strong>, <strong>Run</strong>, <strong>Bug</strong>, <strong>CostSample</strong>. Six edge types. The whole graph for a year of plans on a medium-sized repo fits in &lt;30 MB of memory and serializes to <code>.forge/graph/snapshot.json</code> in under a second.</p>
 

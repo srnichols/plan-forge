@@ -1,6 +1,13 @@
+---
+phase: 50
+name: CLEAN-CODE-GUIDANCE
+status: HARDENED
+lockHash: f0ea5dd19c646852592247bed591a0a842e24d05199ff25106fdd95984582a0a
+---
+
 # Phase 50 — CLEAN-CODE-GUIDANCE — Agent guidance for engineering best practices
 
-> **Status**: **DRAFT — pending Step-2 harden**. Do NOT execute. Sign-off needed on §"Scope Contract" + §"Resolved Decisions" before running `step2-harden-plan.prompt.md`.
+> **Status**: **HARDENED — awaiting Execution Hold lift** (Phase 42 retro must ship first). Cleared for `pforge run-plan` once Execution Hold checklist is satisfied. Step-2 harden completed 2026-05-19.
 > **Source**: Carryover from Phase 42 (CLEAN-CODE-AUDIT) planning. Phase 42 builds a read-only audit catalog; Phase 50 turns the empirical findings into **guidance surfaces** so agents stop introducing the same patterns at write-time. Conversation captured: the abstract engineering ideas (small functions, descriptive names, SOLID, dependency direction, TDD) are decades-old, universally-taught practices popularized by Robert C. Martin and others — Plan Forge applies them with appropriate attribution but without paraphrase-hedging.
 > **Tracks**: `.github/instructions/clean-code.instructions.md` (NEW), `.github/instructions/architecture-principles.instructions.md` (expansion), `/clean-code-review` skill (NEW), rollout to `presets/*/.github/instructions/` and `templates/.github/instructions/`, `.github/copilot-instructions.md` + `AGENTS.md` cross-references. No production code touched.
 > **Estimated cost**: low. Zero LLM-cost surfaces beyond the skill's invocation cost. Mostly markdown + skill wrapper.
@@ -158,56 +165,137 @@ Decisions locked at draft time; Step-2 hardener may sharpen but should not re-li
 
 ---
 
+## Required Decisions
+
+All decisions for this phase are resolved in §"Resolved Decisions" above (13 items, locked at draft time). No open TBDs blocking execution. **The only deferred calibration** — exact rule selection in S0 — explicitly depends on Phase 42's catalog data and is handled by the Execution Hold gate, not by adding new TBDs here.
+
+| # | Decision | Status | Resolution |
+|---|----------|--------|------------|
+| 1 | Instruction file organization | ✅ Resolved | Plan-Forge-native agent-decision-point sections (RD #1) |
+| 2 | Reference attribution model | ✅ Resolved | Single References block at file bottom; no per-rule citations (RD #2) |
+| 3 | Rule prioritization signal | ✅ Resolved | Bias toward Phase 42 catalog top-finding categories (RD #3) |
+| 4 | Preset coverage | ✅ Resolved | Universal — same content, only `applyTo` varies (RD #4) |
+| 5 | Instruction file size cap | ✅ Resolved | ≤120 lines hard cap (RD #5) |
+| 6 | Architecture-principles expansion cap | ✅ Resolved | ≤80 net-added lines hard cap (RD #6) |
+| 7 | Skill invocation model | ✅ Resolved | Invoke-only via `/clean-code-review`; no auto-load (RD #7) |
+| 8 | Skill dependency policy | ✅ Resolved | Zero new devDeps; reuse Phase 42 tooling (RD #8) |
+| 9 | Per-language variation | ✅ Resolved | None — content identical across presets (RD #9) |
+| 10 | Clean Architecture folding | ✅ Resolved | 4 concepts fold inline into architecture-principles (RD #10) |
+| 11 | Clean Coder folding | ✅ Resolved | 3 concepts fold inline; no dedicated file (RD #11) |
+| 12 | Retro dogfood verification | ✅ Resolved | S6 must run `/clean-code-review` against a real source file (RD #12) |
+| 13 | Cadence codification | ✅ Resolved | Lives in retro, not in shipped instruction file (RD #13) |
+
+---
+
 ## Slice Decomposition
+
+> All slices are tagged **[sequential]** — each builds on content/decisions locked in the prior. No parallel group exists; the dependency chain (content → architecture → skill → rollout → docs → retro) is strict.
 
 ### S0 — Author `clean-code.instructions.md`
 
-- Create `.github/instructions/clean-code.instructions.md` (≤120 lines, frontmatter + 6 decision-point sections + References block + skill pointer)
-- Pull rule-priority signal from Phase 42's `docs/plans/cleanup-findings/CATEGORIES-SUMMARY.md` — the top-finding categories drive section emphasis
-- Lint markdown: no broken internal links, frontmatter valid
-- **Gate**: `bash -c "test -f .github/instructions/clean-code.instructions.md && [ $(wc -l < .github/instructions/clean-code.instructions.md) -le 120 ] && grep -q 'When writing a function' .github/instructions/clean-code.instructions.md && grep -q '## References' .github/instructions/clean-code.instructions.md && grep -q 'clean-code-review' .github/instructions/clean-code.instructions.md"` returns 0
+- **Depends On**: nothing (Phase 42 retro must have shipped per Execution Hold, but that is enforced outside the slice graph)
+- **Parallelism**: [sequential]
+- **Context Files**: `.github/instructions/architecture-principles.instructions.md`, `docs/plans/cleanup-findings/CATEGORIES-SUMMARY.md` (from Phase 42), `docs/plans/cleanup-findings/CATALOG.md` (top 20 entries)
+- **Traces to**: MUST #1
+- Create `.github/instructions/clean-code.instructions.md` (≤120 lines, YAML frontmatter + 6 decision-point sections + References block + skill pointer)
+- Pull rule-priority signal from Phase 42's `CATEGORIES-SUMMARY.md` — top-finding categories drive section emphasis and rule selection
+- **Validation Gate**:
+  ```bash
+  node -e "const c=require('fs').readFileSync('.github/instructions/clean-code.instructions.md','utf8');const lines=c.split('\n').length;if(lines>120)throw new Error('exceeds 120 lines: '+lines);for(const k of ['When writing a function','When naming','When commenting','## References','clean-code-review']){if(!c.includes(k))throw new Error('missing required section/marker: '+k);}console.log('ok '+lines+' lines, all required sections present');"
+  ```
 
 ### S1 — Expand `architecture-principles.instructions.md`
 
-- Add the 4 Clean Architecture concepts + 2 Clean Coder concepts per §"In Scope" S1
-- Net-add ≤80 lines (verifiable by `git diff --stat`)
-- Each addition cites the existing structural anchor it integrates with (e.g. "appended to Temper Guards table")
-- **Gate**: `bash -c "git diff --shortstat HEAD~1 -- .github/instructions/architecture-principles.instructions.md | awk '{ split(\$0, a, \" \"); ins=0; for(i=1;i<=NF;i++) if(a[i]==\"insertions(+),\") ins=a[i-1]; exit (ins+0 <= 80 ? 0 : 1) }' && grep -q 'Dependency Rule' .github/instructions/architecture-principles.instructions.md && grep -q 'SOLID' .github/instructions/architecture-principles.instructions.md && grep -q 'Boy Scout' .github/instructions/architecture-principles.instructions.md"` returns 0
+- **Depends On**: S0 (drives which architectural rules deserve emphasis based on what `clean-code.instructions.md` already covers — avoid duplication)
+- **Parallelism**: [sequential]
+- **Context Files**: `.github/instructions/architecture-principles.instructions.md`, `.github/instructions/clean-code.instructions.md` (S0 output), `docs/plans/cleanup-findings/CATALOG.md` (A1-A4 findings from Phase 42)
+- **Traces to**: MUST #2
+- Add the 4 Clean Architecture concepts (Dependency Rule, SOLID per-letter, Component Cohesion REP/CCP/CRP, Stable Dependencies) + 2 Clean Coder concepts (Boy Scout Rule, Professional Refusal) per §"In Scope" S1
+- Each addition cites the existing structural anchor it integrates with (Temper Guards row / Warning Signs row / Code Review Checklist row / new sub-section between Best Practices and Decision Framework)
+- 80-line net-add cap enforced via S5 review (post-commit `git diff` against the lockHash baseline), not via per-slice gate — gate verifies presence of all concepts, sweep verifies budget
+- **Validation Gate**:
+  ```bash
+  node -e "const c=require('fs').readFileSync('.github/instructions/architecture-principles.instructions.md','utf8');for(const k of ['Dependency Rule','SOLID','Boy Scout','Component Cohesion','Stable Dependencies','Professional Refusal']){if(!c.includes(k))throw new Error('missing concept: '+k);}console.log('ok all 6 concepts present');"
+  ```
 
 ### S2 — `/clean-code-review` skill
 
+- **Depends On**: S0 (skill maps findings to instruction-file sections), S1 (skill may cite architectural rules from expanded file)
+- **Parallelism**: [sequential]
+- **Context Files**: `.github/skills/` (existing skill examples for shape), `scripts/audit/` (Phase 42 tooling the skill wraps), `.github/instructions/clean-code.instructions.md` (S0 output for section mapping)
+- **Traces to**: MUST #3
 - Create `.github/skills/clean-code-review/SKILL.md` with description + invocation pattern + behavior
-- Skill body: validate input → invoke Phase 42 tooling scoped to input → map findings to instruction-file sections → emit markdown report
-- Verify zero new devDependencies introduced (`git diff package.json` shows nothing)
-- Dry-run skill against a single file (e.g., `pforge-mcp/server.mjs`) and confirm output structure
-- **Gate**: `bash -c "test -f .github/skills/clean-code-review/SKILL.md && grep -q 'description:' .github/skills/clean-code-review/SKILL.md && grep -q 'clean-code-review' .github/skills/clean-code-review/SKILL.md && [ $(git diff package.json | wc -l) -eq 0 ]"` returns 0
+- Skill body: validate input → invoke Phase 42 tooling scoped to input → map findings to `clean-code.instructions.md` decision-point sections → emit markdown report grouped by severity with file:line anchors
+- Optional `--fix-suggestions` flag emits proposed fixes inline; never applies them
+- Zero new devDependencies — verified by parsing `package.json` against Phase 42's tooling list
+- **Validation Gate**:
+  ```bash
+  node -e "const fs=require('fs');const path='.github/skills/clean-code-review/SKILL.md';if(!fs.existsSync(path))throw new Error('SKILL.md missing');const s=fs.readFileSync(path,'utf8');if(!s.includes('description:'))throw new Error('missing description frontmatter');if(!/clean[- ]?code[- ]?review/i.test(s))throw new Error('missing skill identifier');if(!s.includes('--fix-suggestions'))throw new Error('missing --fix-suggestions flag doc');console.log('ok skill file structurally valid');"
+  ```
 
 ### S3 — Roll out to 9 presets
 
-- Copy `clean-code.instructions.md` to each of the 9 preset directories
-- Adjust `applyTo` glob per preset's primary extensions
-- Verify all 9 files exist + match content (only `applyTo` differs)
-- **Gate**: `bash -c "for p in dotnet go java php python rust swift typescript azure-iac; do test -f presets/\$p/.github/instructions/clean-code.instructions.md || exit 1; done && [ $(find presets -name clean-code.instructions.md | wc -l) -eq 9 ]"` returns 0
+- **Depends On**: S0 (canonical instruction file content)
+- **Parallelism**: [sequential] (single agent does the 9 copies; copy correctness depends on having one finalized source)
+- **Context Files**: `.github/instructions/clean-code.instructions.md` (canonical source from S0), `presets/typescript/.github/instructions/` (existing example for shape)
+- **Traces to**: MUST #4
+- Copy canonical `clean-code.instructions.md` to each of the 9 preset directories (`dotnet`, `go`, `java`, `php`, `python`, `rust`, `swift`, `typescript`, `azure-iac`)
+- Adjust `applyTo` glob per preset's primary extensions; all other content identical
+- **Validation Gate**:
+  ```bash
+  node -e "const fs=require('fs');const presets=['dotnet','go','java','php','python','rust','swift','typescript','azure-iac'];const missing=presets.filter(p=>!fs.existsSync('presets/'+p+'/.github/instructions/clean-code.instructions.md'));if(missing.length)throw new Error('missing presets: '+missing.join(','));console.log('ok 9 preset copies present');"
+  ```
 
 ### S4 — Roll out to `templates/`
 
-- Copy `clean-code.instructions.md` to `templates/.github/instructions/`
-- Verify `setup.ps1` + `setup.sh` copy logic picks it up via a dry-run install into a scratch directory
-- **Gate**: `bash -c "test -f templates/.github/instructions/clean-code.instructions.md"` returns 0
+- **Depends On**: S0 (canonical source)
+- **Parallelism**: [sequential]
+- **Context Files**: `.github/instructions/clean-code.instructions.md`, `templates/.github/instructions/architecture-principles.instructions.md` (existing template instruction file for shape)
+- **Traces to**: MUST #5
+- Copy canonical `clean-code.instructions.md` to `templates/.github/instructions/`
+- **Validation Gate**:
+  ```bash
+  node -e "const fs=require('fs');if(!fs.existsSync('templates/.github/instructions/clean-code.instructions.md'))throw new Error('missing in templates');const t=fs.readFileSync('templates/.github/instructions/clean-code.instructions.md','utf8');const c=fs.readFileSync('.github/instructions/clean-code.instructions.md','utf8');if(t.length<100)throw new Error('templates copy suspiciously short');console.log('ok templates copy present ('+t.length+' bytes)');"
+  ```
 
 ### S5 — Cross-reference updates
 
-- `.github/copilot-instructions.md` — add table rows for the instruction file + skill
-- `templates/.github/copilot-instructions.md` — same updates
-- `AGENTS.md` — add "Start Here" pointer
-- **Gate**: `bash -c "grep -q 'clean-code.instructions.md' .github/copilot-instructions.md && grep -q '/clean-code-review' .github/copilot-instructions.md && grep -q 'clean-code.instructions.md' templates/.github/copilot-instructions.md && grep -q 'clean-code' AGENTS.md"` returns 0
+- **Depends On**: S0 (instruction file exists), S2 (skill exists), S3 + S4 (rollouts complete so references are accurate)
+- **Parallelism**: [sequential]
+- **Context Files**: `.github/copilot-instructions.md`, `templates/.github/copilot-instructions.md`, `AGENTS.md`
+- **Traces to**: MUST #6, MUST #7, MUST #8
+- Add `clean-code.instructions.md` row to the Instruction Files table in both root and template `copilot-instructions.md`
+- Add `/clean-code-review` row to the Skill Slash Commands table in both
+- Add `clean-code.instructions.md` pointer to AGENTS.md "Start Here" list
+- **Validation Gate**:
+  ```bash
+  node -e "const fs=require('fs');const ci=fs.readFileSync('.github/copilot-instructions.md','utf8');const tci=fs.readFileSync('templates/.github/copilot-instructions.md','utf8');const a=fs.readFileSync('AGENTS.md','utf8');const checks=[[ci,'clean-code.instructions.md','copilot-instructions'],[ci,'/clean-code-review','copilot-instructions'],[tci,'clean-code.instructions.md','templates/copilot-instructions'],[a,'clean-code','AGENTS.md']];for(const[c,k,n]of checks)if(!c.includes(k))throw new Error('missing '+k+' in '+n);console.log('ok all 4 references present');"
+  ```
 
 ### S6 — Retro + roadmap update
 
-- `docs/plans/testbed-findings/Phase-50-CLEAN-CODE-GUIDANCE-retro.md` per §"In Scope" S6 — **must include verbatim output of `/clean-code-review` run against at least one Plan-Forge source file**
-- `docs/plans/DEPLOYMENT-ROADMAP.md` — Phase 50 promoted to Completed (or marked Shipped with date)
-- `CHANGELOG.md` — `[Unreleased]` entry: `### Added — Clean-code agent guidance (instruction file + /clean-code-review skill + architecture-principles expansion)`
-- **Gate**: `bash -c "test -f docs/plans/testbed-findings/Phase-50-CLEAN-CODE-GUIDANCE-retro.md && grep -q 'clean-code-review' docs/plans/testbed-findings/Phase-50-CLEAN-CODE-GUIDANCE-retro.md && grep -q 'Clean-code agent guidance' CHANGELOG.md"` returns 0
+- **Depends On**: S0-S5 all green
+- **Parallelism**: [sequential]
+- **Context Files**: `docs/plans/DEPLOYMENT-ROADMAP.md`, `CHANGELOG.md`, `docs/plans/testbed-findings/` (existing retro examples for shape)
+- **Traces to**: MUST #9, MUST #10, MUST #11
+- Create `docs/plans/testbed-findings/Phase-50-CLEAN-CODE-GUIDANCE-retro.md` per §"In Scope" S6 — **must include verbatim output of `/clean-code-review` run against at least one Plan-Forge source file** (dogfood evidence)
+- Update `docs/plans/DEPLOYMENT-ROADMAP.md` — Phase 50 promoted to Completed/Shipped with date
+- Add `[Unreleased]` entry to `CHANGELOG.md`: `### Added — Clean-code agent guidance (instruction file + /clean-code-review skill + architecture-principles expansion)`
+- **Validation Gate**:
+  ```bash
+  node -e "const fs=require('fs');const r='docs/plans/testbed-findings/Phase-50-CLEAN-CODE-GUIDANCE-retro.md';if(!fs.existsSync(r))throw new Error('retro missing');const c=fs.readFileSync(r,'utf8');if(!c.includes('clean-code-review'))throw new Error('retro missing dogfood evidence');const ch=fs.readFileSync('CHANGELOG.md','utf8');if(!ch.includes('Clean-code agent guidance'))throw new Error('CHANGELOG entry missing');const dr=fs.readFileSync('docs/plans/DEPLOYMENT-ROADMAP.md','utf8');if(!/Phase 50.*(Completed|Shipped|✅)/s.test(dr))throw new Error('roadmap not updated');console.log('ok retro + CHANGELOG + roadmap');"
+  ```
+
+---
+
+## Re-anchor Checkpoints
+
+Lightweight re-anchor (4 yes/no) after every slice. Full re-anchor against §"Scope Contract" + §"Resolved Decisions" at these breakpoints:
+
+- **After S2** (content + skill complete, before rollouts): full re-anchor. Specifically verify (a) instruction file ≤120 lines, (b) architecture-principles net-add ≤80 lines, (c) skill is invoke-only and added zero devDeps, (d) no reference-book content verbatim. If any fails, fix before rollout begins — fixing 9 preset copies post-hoc is expensive.
+- **After S5** (cross-references complete, before retro): full re-anchor + drift check. Specifically verify the rule selection in S0 still matches Phase 42 catalog data, and no Resolved Decision has been silently violated by an edit chain. Confirm no preset copy diverges from canonical (anything beyond `applyTo` is drift).
+
+---
 
 ---
 
@@ -268,15 +356,46 @@ grep -q 'clean-code-review' docs/plans/testbed-findings/Phase-50-CLEAN-CODE-GUID
 
 Halt execution and request human review if any of these fire:
 
+**Scope drift / content quality**
 - Phase 42 retro reveals the catalog's top-finding categories don't match the rule selection made in S0 — STOP, rebias the instruction file before continuing to S1
-- `clean-code.instructions.md` exceeds 120 lines — STOP, move content to the skill OR cut rules
-- `architecture-principles.instructions.md` net-add exceeds 80 lines — STOP, prune to the highest-leverage additions
-- The skill requires a new devDependency not in Phase 42's lockfile — STOP, file a Phase-42 follow-up to add the dep there; do NOT add it in Phase 50
-- A preset's existing `applyTo` glob pattern conflicts with the clean-code one in a way that breaks an existing instruction's auto-load — STOP, fix the preset framework's `applyTo` precedence rules first
+- `clean-code.instructions.md` exceeds 120 lines — STOP, move content to the skill OR cut rules (gate already enforces, but Stop applies if gate is silenced)
+- `architecture-principles.instructions.md` net-add exceeds 80 lines (measured by `git diff --shortstat` against the pre-Phase-50 baseline of that file) — STOP, prune to highest-leverage additions
 - Any reference-book paragraph, example, or chapter title appears verbatim in the instruction file — STOP, rewrite in plan-forge-native voice
-- The skill dogfood run in S6 produces zero output OR produces obviously wrong output — STOP, fix the skill before claiming the phase done
 - More than one preset's `clean-code.instructions.md` diverges from the canonical content (anything beyond `applyTo`) — STOP, re-sync
 - A reviewer flags a rule as contradicting `architecture-principles.instructions.md` — STOP, reconcile before continuing
+
+**Build / test failure** (phase ships markdown + a skill wrapper; "build" here means structural checks)
+- Any slice's validation gate fails twice consecutively — STOP, do not retry blindly; diagnose root cause and either fix or file a bug
+- `pforge validate` flags either the new skill or the new instruction file as malformed — STOP, fix structural issue before continuing
+- The S6 dogfood run of `/clean-code-review` produces zero output OR produces obviously wrong output (e.g., reports a finding in a file the skill wasn't asked to scan) — STOP, fix the skill before claiming phase done
+- The skill requires a new devDependency not in Phase 42's lockfile — STOP, file a Phase-42 follow-up to add the dep there; do NOT add it in Phase 50
+
+**Security**
+- The skill, while scanning a file, ever attempts to apply a fix (auto-edit, format-on-save trigger, write to any file other than its own stdout) — STOP, skill is read-only by contract (RD #7); rip out the offending code path
+- Any preset rollout writes to a file outside `presets/<name>/.github/instructions/` — STOP, scope violation
+- A skill or instruction file references an external URL that resolves to a non-Plan-Forge / non-attribution-target domain — STOP, audit for accidental telemetry / external dependency
+
+---
+
+## Definition of Done
+
+Phase 50 is complete when ALL of the following are true:
+
+- [ ] All 7 slice validation gates green (S0-S6)
+- [ ] Reviewer Gate passed (zero 🔴 Critical, zero 🟡 High that block scope)
+- [ ] `.github/instructions/clean-code.instructions.md` exists in repo root, ≤120 lines, frontmatter valid, all 6 decision-point sections present, References section present, skill pointer present
+- [ ] `.github/instructions/architecture-principles.instructions.md` contains all 6 new concepts (Dependency Rule, SOLID, Boy Scout, Component Cohesion, Stable Dependencies, Professional Refusal), net-add ≤80 lines verified by `git diff --shortstat` against the pre-Phase-50 baseline
+- [ ] `.github/skills/clean-code-review/SKILL.md` exists, invoke-only, frontmatter valid, `--fix-suggestions` flag documented, zero new devDependencies in `package.json` vs Phase 42 baseline
+- [ ] All 9 preset directories (`dotnet`, `go`, `java`, `php`, `python`, `rust`, `swift`, `typescript`, `azure-iac`) contain `clean-code.instructions.md` with content identical to canonical (only `applyTo` differs)
+- [ ] `templates/.github/instructions/clean-code.instructions.md` exists with canonical content
+- [ ] `.github/copilot-instructions.md` references both new artifacts in tables
+- [ ] `templates/.github/copilot-instructions.md` references both new artifacts in tables
+- [ ] `AGENTS.md` "Start Here" section pointers updated
+- [ ] `docs/plans/testbed-findings/Phase-50-CLEAN-CODE-GUIDANCE-retro.md` exists with at least one dogfood run of `/clean-code-review` against a Plan-Forge source file (verbatim output included)
+- [ ] `docs/plans/DEPLOYMENT-ROADMAP.md` marks Phase 50 Completed/Shipped with date
+- [ ] `CHANGELOG.md` `[Unreleased]` entry added
+- [ ] Branch model respected: instruction/skill/preset/template/CHANGELOG edits land on `master`; `AGENTS.md` edit lands on `planning/main` only
+- [ ] `pforge validate` clean on both branches
 
 ---
 
@@ -300,7 +419,7 @@ All commits land on `master` (instruction files, skills, presets, templates ship
 | Date | Action | By |
 |---|---|---|
 | 2026-05-19 | Draft created from Phase 42 planning conversation. User clarified scope: abstract engineering ideas (SOLID, SRP, small functions, descriptive names, TDD) are decades-old common knowledge — Plan Forge applies them with attribution but without paraphrase-hedging. Plan-Forge-native organization decided over reference-book taxonomy mirror. | Copilot session |
-| _pending_ | Step-2 harden: lockHash, sharpen exact rule selection in S0 based on Phase 42 catalog data (cannot finalize until Phase 42 ships), sharpen exact wording of architecture-principles additions in S1, decide skill report format (markdown vs JSON), decide whether `/clean-code-review` accepts globs (`src/**/*.mjs`) in addition to single files / diff ranges | _pending_ |
+| 2026-05-19 | **Step-2 harden**: (a) YAML frontmatter added with `lockHash` field. (b) Per-slice metadata added: `Depends On`, `Parallelism: [sequential]`, `Context Files`, `Traces to` (Acceptance Criteria MUST-N mapping). (c) All slice validation gates rewritten in `node -e` form to eliminate Windows cmd→bash shim portability risk (no nested escaped quotes; no `[ $(wc -l) ]` brittle bash brackets; no `git diff HEAD~1` which doesn't work pre-commit). (d) `## Required Decisions` section added (all 13 resolved at draft time, none open). (e) `## Re-anchor Checkpoints` section added (full re-anchors after S2 and S5). (f) `## Definition of Done` section added with 14 explicit checks including Reviewer Gate. (g) Stop Conditions reorganized into scope / build-test / security categories per Runbook §"Stop Conditions". (h) Status flipped DRAFT → HARDENED. **lockHash protects Forbidden Actions list only** because slice headers use `S0/S1` not `Slice 0/Slice 1` (matching project convention); this is acknowledged drift-protection scope. | Copilot session (Step-2) |
 | _pending_ | Execution Hold lifted (gates on Phase 42 retro shipping) | _pending_ |
 
 ---

@@ -1,6 +1,13 @@
+---
+phase: 42
+name: CLEAN-CODE-AUDIT
+status: HARDENED
+lockHash: 7087914c33814808ada928ba25fbd2f224d29fc35a805998677f258395618264
+---
+
 # Phase 42 — CLEAN-CODE-AUDIT — Read-only Clean Code audit + cleanup queue
 
-> **Status**: **DRAFT — pending Step-2 harden**. Do NOT execute. Sign-off needed on §"Scope Contract" + §"Resolved Decisions" before running `step2-harden-plan.prompt.md`.
+> **Status**: **HARDENED — awaiting Execution Hold lift** (Phase 41 ENUMS-CENTRALIZATION must ship first). Cleared for `pforge run-plan` once Execution Hold checklist is satisfied. Step-2 harden completed 2026-05-19.
 > **Source**: Carryover from Phase 41 (ENUMS-CENTRALIZATION) planning. User asked whether the cleanup phase should look for more things like those covered in Clean Code (Robert C. "Uncle Bob" Martin, 2nd Edition, 2025). The answer was "audit, then targeted fix phases" — this is the audit.
 > **Tracks**: `docs/plans/cleanup-findings/` (NEW directory — only output), tooling-only changes to `scripts/audit/`, no production code touched.
 > **Estimated cost**: low. Zero LLM-cost surfaces. Mostly ESLint rule pack + grep + cloc + jscpd + madge (dependency-graph analysis).
@@ -141,54 +148,134 @@ Decisions locked at draft time; Step-2 hardener may sharpen but should not re-li
 
 ---
 
+## Required Decisions
+
+All architectural decisions for this phase are locked in §"Resolved Decisions" above (10 items). The deferred items below are **threshold calibrations**, not new TBDs — they are resolved during S0 execution against the measured codebase, not by adding new plan-time decisions.
+
+| # | Decision | Status | Resolution path |
+|---|----------|--------|-----------------|
+| 1 | Audit is read-only | ✅ Resolved | RD #1; Forbidden Actions list enforces |
+| 2 | Measurable criteria only | ✅ Resolved | RD #2 |
+| 3 | CC2 + A1-A4 taxonomy | ✅ Resolved | RD #3; A1-A4 detection per Appendix D.2 |
+| 4 | False-positive retention | ✅ Resolved | RD #4 |
+| 5 | Stubs ≠ committed phases | ✅ Resolved | RD #5 |
+| 6 | Guardrail-update is the only side effect | ✅ Resolved | RD #6 |
+| 7 | Concurrency findings flagged not fixed-by-stub | ✅ Resolved | RD #7 |
+| 8 | No audit-cadence commitment in plan | ✅ Resolved | RD #8; S5 retro recommends |
+| 9 | Single-repo scope | ✅ Resolved | RD #9 |
+| 10 | Catalog format durable | ✅ Resolved | RD #10 |
+| 11 | A3/A4 thresholds | ⚙️ Calibrate at S0 | Defaults in Appendix D.2 (A3: `fan_in≥5 AND commits_last_90_days≥10`; A4: `fan_out≥8 AND >50% deps volatile`). S0 may raise thresholds if defaults produce >25% false positives in dry-run against `pforge-mcp/server.mjs`. |
+| 12 | jscpd token threshold | ⚙️ Calibrate at S0 | Start at `--min-tokens=50`; S0 may raise to 70 if dry-run produces noise from boilerplate test-setup blocks. |
+| 13 | ESLint rule pack severity calibration | ⚙️ Calibrate at S0 | Start with Appendix C recommendations; Stop Condition fires if >25% false positives. |
+
+Calibration outcomes recorded in `docs/plans/cleanup-findings/raw/RUN-CONTEXT.md` (S1) for reproducibility.
+
+---
+
 ## Slice Decomposition
+
+> All slices are tagged **[sequential]**. The dependency chain (tooling → run → triage → stubs → guardrails → retro) is strict; no slice can begin before its predecessor's gate is green. Triage feedback may force a return to S0/S1 (re-calibrate + re-run) — this is normal and is what the Stop Conditions for high false-positive rates protect.
 
 ### S0 — Tooling setup
 
-- Create `scripts/audit/` directory with the 5 tooling scripts per §"In Scope" S0
-- `package.json` — add devDependencies: `jscpd@^4`, `eslint@^9`, `cloc@^2` (or shell-out to system `cloc`)
+- **Depends On**: nothing (Phase 41 must have shipped per Execution Hold, but that is enforced outside the slice graph)
+- **Parallelism**: [sequential]
+- **Context Files**: `package.json` (devDependency additions), `scripts/` (existing tooling shape), Appendix C (codebase measurements), Appendix D (architectural-codes thresholds)
+- **Traces to**: MUST #1
+- Create `scripts/audit/` directory with the 5 tooling scripts per §"In Scope" S0 + `scan-architecture.mjs` (madge wrapper) + `layer-policy.json` per Appendix D
+- `package.json` — add devDependencies: `jscpd@^4`, `eslint@^9`, `madge@^7`. (No `cloc` package — shell out to system `cloc` or fall back to Node line-count.)
 - `scripts/audit/eslint-clean-code.config.mjs` — full rule pack per §"In Scope" S0
-- `scripts/audit/README.md` — usage + false-positive triage guide
-- Dry-run each script against a single file (`pforge-mcp/server.mjs`) to verify it produces non-empty output without crashing
-- **Gate**: `bash -c "test -d scripts/audit && test -f scripts/audit/eslint-clean-code.config.mjs && test -f scripts/audit/run-jscpd.mjs && test -f scripts/audit/grep-matrix.mjs && test -f scripts/audit/measure-modules.mjs && test -f scripts/audit/long-param-walker.mjs && test -f scripts/audit/README.md && node scripts/audit/measure-modules.mjs --file pforge-mcp/server.mjs | grep -q 'lines'"` returns 0
+- `scripts/audit/README.md` — usage + false-positive triage guide + threshold calibration outcomes (RD #11-13)
+- Dry-run each script against `pforge-mcp/server.mjs` to verify non-empty output without crash
+- **Validation Gate**:
+  ```bash
+  node -e "const fs=require('fs');const required=['scripts/audit/eslint-clean-code.config.mjs','scripts/audit/run-jscpd.mjs','scripts/audit/grep-matrix.mjs','scripts/audit/measure-modules.mjs','scripts/audit/long-param-walker.mjs','scripts/audit/scan-architecture.mjs','scripts/audit/layer-policy.json','scripts/audit/README.md'];const missing=required.filter(p=>!fs.existsSync(p));if(missing.length)throw new Error('missing files: '+missing.join(','));const pkg=JSON.parse(fs.readFileSync('package.json','utf8'));for(const d of ['jscpd','eslint','madge']){if(!(pkg.devDependencies||{})[d])throw new Error('missing devDep: '+d);}console.log('ok '+required.length+' tooling files + 3 devDeps present');"
+  ```
 
 ### S1 — Run the audit
 
+- **Depends On**: S0
+- **Parallelism**: [sequential]
+- **Context Files**: `scripts/audit/` (tooling from S0), `pforge-mcp/`, `pforge-master/`, `pforge.ps1`, `pforge.sh`, `scripts/` (audit targets)
+- **Traces to**: MUST #2
 - Create `docs/plans/cleanup-findings/raw/` directory
-- Capture run context (commit hash, tool versions, date) to `docs/plans/cleanup-findings/raw/RUN-CONTEXT.md`
-- Run each audit tool against `pforge-mcp/**`, `pforge-master/**`, `pforge.ps1`, `pforge.sh`, `scripts/**` (excluding `scripts/audit/**`)
-- Emit reports to `docs/plans/cleanup-findings/raw/`
+- Capture run context (commit hash, tool versions, date, S0 calibration outcomes per RD #11-13) to `docs/plans/cleanup-findings/raw/RUN-CONTEXT.md`
+- Run each audit tool against `pforge-mcp/**`, `pforge-master/**`, `pforge.ps1`, `pforge.sh`, `scripts/**` (excluding `scripts/audit/**` itself)
+- Emit reports to `docs/plans/cleanup-findings/raw/`: `eslint-report.json`, `duplication-report.json`, `grep-matrix-report.json`, `module-metrics.json`, `long-param-report.json`, `architecture-report.json` (A1-A4 from madge)
 - Verify each report file is non-empty
-- **Gate**: `bash -c "test -f docs/plans/cleanup-findings/raw/eslint-report.json && test -f docs/plans/cleanup-findings/raw/duplication-report.json && test -f docs/plans/cleanup-findings/raw/grep-matrix-report.json && test -f docs/plans/cleanup-findings/raw/module-metrics.json && test -f docs/plans/cleanup-findings/raw/long-param-report.json && test -f docs/plans/cleanup-findings/raw/RUN-CONTEXT.md && for f in docs/plans/cleanup-findings/raw/*.json; do test -s \"$f\" || exit 1; done"` returns 0
+- **Validation Gate**:
+  ```bash
+  node -e "const fs=require('fs');const reports=['eslint-report.json','duplication-report.json','grep-matrix-report.json','module-metrics.json','long-param-report.json','architecture-report.json'];const base='docs/plans/cleanup-findings/raw/';if(!fs.existsSync(base+'RUN-CONTEXT.md'))throw new Error('RUN-CONTEXT.md missing');for(const r of reports){const p=base+r;if(!fs.existsSync(p))throw new Error('missing: '+r);const sz=fs.statSync(p).size;if(sz===0)throw new Error('empty: '+r);}console.log('ok '+reports.length+' raw reports + RUN-CONTEXT present');"
+  ```
 
 ### S2 — Triage & categorize
 
-- New `docs/plans/cleanup-findings/CATALOG.md` — every raw finding mapped to category + severity + effort + file:line + rationale (or false-positive note)
-- New `docs/plans/cleanup-findings/CATEGORIES-SUMMARY.md` — pivot table category × severity × count
-- Cross-check: every raw finding either appears in `CATALOG.md` OR is explicitly excluded with reason in `CATALOG.md`'s "Excluded findings" section
-- **Gate**: `bash -c "test -f docs/plans/cleanup-findings/CATALOG.md && test -f docs/plans/cleanup-findings/CATEGORIES-SUMMARY.md && grep -q '## Findings' docs/plans/cleanup-findings/CATALOG.md && grep -q '| Category |' docs/plans/cleanup-findings/CATEGORIES-SUMMARY.md"` returns 0
+- **Depends On**: S1
+- **Parallelism**: [sequential]
+- **Context Files**: `docs/plans/cleanup-findings/raw/` (S1 output), this plan's §"Resolved Decisions" + Appendix D (taxonomy)
+- **Traces to**: MUST #3, MUST #4, MUST #8, MUST #9
+- New `docs/plans/cleanup-findings/CATALOG.md` — every raw finding mapped to category (CC2 G/F/N/C/T or Plan-Forge-local A1-A4) + severity (high/med/low) + effort (S/M/L) + file:line + rationale (or false-positive note with reason)
+- New `docs/plans/cleanup-findings/CATEGORIES-SUMMARY.md` — pivot table category × severity × count, sorted by total-severity-weight descending
+- Cross-check: every raw finding either appears in `CATALOG.md` Findings section OR is explicitly listed in `CATALOG.md` "Excluded findings" with reason
+- **Validation Gate**:
+  ```bash
+  node -e "const fs=require('fs');const cat=fs.readFileSync('docs/plans/cleanup-findings/CATALOG.md','utf8');const sum=fs.readFileSync('docs/plans/cleanup-findings/CATEGORIES-SUMMARY.md','utf8');if(!cat.includes('## Findings'))throw new Error('CATALOG.md missing ## Findings section');if(!cat.includes('Excluded findings'))throw new Error('CATALOG.md missing Excluded findings section');if(!sum.includes('| Category |'))throw new Error('CATEGORIES-SUMMARY.md missing pivot header');const rows=(cat.match(/^\\|\\s*[A-Z]\\d+\\s*\\|/gm)||[]).length;if(rows<1)throw new Error('CATALOG.md has zero finding rows');console.log('ok catalog has '+rows+' findings + summary pivot');"
+  ```
 
 ### S3 — Draft phase stubs for high-severity categories
 
+- **Depends On**: S2
+- **Parallelism**: [sequential]
+- **Context Files**: `docs/plans/cleanup-findings/CATALOG.md` (S2 output), `docs/plans/cleanup-findings/CATEGORIES-SUMMARY.md`, this plan's §"In Scope" S3 (stub criteria)
+- **Traces to**: MUST #5
 - Create `docs/plans/cleanup-findings/proposed-phases/` directory
 - For each qualifying category (per §"In Scope" S3 criteria), generate `Phase-PROPOSED-<CATEGORY>-STUB.md`
 - Each stub: provisional Scope Contract sketch (In Scope, Out of Scope, Forbidden Actions sketch), estimated slice count, dependencies, 3-5 sample file:line anchors from the catalog
 - New `docs/plans/cleanup-findings/proposed-phases/README.md` — index of stubs with one-line summary each
-- **Gate**: `bash -c "test -d docs/plans/cleanup-findings/proposed-phases && test -f docs/plans/cleanup-findings/proposed-phases/README.md && ls docs/plans/cleanup-findings/proposed-phases/Phase-PROPOSED-*-STUB.md 2>/dev/null | wc -l | awk '{ exit ($1 >= 1 ? 0 : 1) }'"` returns 0 (at least one stub generated)
+- If audit found zero high-severity categories, write `proposed-phases/NO-STUBS-NEEDED.md` explaining why (still counts as ≥1 file for the gate)
+- **Validation Gate**:
+  ```bash
+  node -e "const fs=require('fs');const dir='docs/plans/cleanup-findings/proposed-phases';if(!fs.existsSync(dir))throw new Error('proposed-phases/ missing');if(!fs.existsSync(dir+'/README.md'))throw new Error('proposed-phases/README.md missing');const stubs=fs.readdirSync(dir).filter(f=>/^Phase-PROPOSED-.*-STUB\\.md$/.test(f));const noStubs=fs.existsSync(dir+'/NO-STUBS-NEEDED.md');if(stubs.length===0&&!noStubs)throw new Error('zero stubs AND no NO-STUBS-NEEDED.md');console.log('ok '+stubs.length+' stubs (NO-STUBS-NEEDED='+noStubs+')');"
+  ```
 
 ### S4 — Guardrail updates
 
+- **Depends On**: S2 (needs catalog to cite specific findings)
+- **Parallelism**: [sequential]
+- **Context Files**: `.github/instructions/architecture-principles.instructions.md`, `docs/plans/cleanup-findings/CATEGORIES-SUMMARY.md`
+- **Traces to**: MUST #6
 - `.github/instructions/architecture-principles.instructions.md` Temper Guards table — add entries derived from highest-frequency findings (≤3 new entries)
 - Same file Warning Signs section — add observable patterns for the top-2 high-severity categories
-- Edits MUST cite the catalog category for traceability
-- **Gate**: `bash -c "grep -c 'Clean Code' .github/instructions/architecture-principles.instructions.md | awk '{ exit ($1 >= 1 ? 0 : 1) }'"` returns 0 (Clean Code citation present in updated guardrails)
+- Edits MUST cite the catalog category for traceability (text like "From Phase 42 catalog, category G14 (12 findings)")
+- **Validation Gate**:
+  ```bash
+  node -e "const fs=require('fs');const c=fs.readFileSync('.github/instructions/architecture-principles.instructions.md','utf8');if(!/Clean Code/.test(c))throw new Error('Clean Code citation missing');if(!/Phase 42/.test(c))throw new Error('Phase 42 catalog citation missing — guardrails must reference source');console.log('ok guardrails cite Clean Code + Phase 42 catalog');"
+  ```
 
 ### S5 — Retro + roadmap update
 
-- `docs/plans/testbed-findings/Phase-42-CLEAN-CODE-AUDIT-retro.md` per §"In Scope" S5
-- `docs/plans/DEPLOYMENT-ROADMAP.md` — add promoted proposed phases as Phase 43+ entries in Planned section
+- **Depends On**: S0-S4 all green
+- **Parallelism**: [sequential]
+- **Context Files**: `docs/plans/DEPLOYMENT-ROADMAP.md`, `CHANGELOG.md`, `docs/plans/cleanup-findings/proposed-phases/` (S3 output for promotion candidates)
+- **Traces to**: MUST #10, MUST #11, MUST #12
+- `docs/plans/testbed-findings/Phase-42-CLEAN-CODE-AUDIT-retro.md` per §"In Scope" S5 — must cover: what was found, what got promoted, friction in triage, audit-frequency recommendation, which CC2 heuristics produced zero findings (cleanest parts of codebase)
+- `docs/plans/DEPLOYMENT-ROADMAP.md` — add promoted phase stubs as Phase 43-49 entries in Planned section (numbers reserved for Phase 42 fix-stubs per roadmap note)
 - `CHANGELOG.md` — `[Unreleased]` entry: `### Added — Clean Code audit catalog (read-only; no behavior change)`
-- **Gate**: `bash -c "test -f docs/plans/testbed-findings/Phase-42-CLEAN-CODE-AUDIT-retro.md && grep -q 'Phase 43' docs/plans/DEPLOYMENT-ROADMAP.md && grep -q 'Clean Code audit catalog' CHANGELOG.md"` returns 0
+- **Validation Gate**:
+  ```bash
+  node -e "const fs=require('fs');if(!fs.existsSync('docs/plans/testbed-findings/Phase-42-CLEAN-CODE-AUDIT-retro.md'))throw new Error('retro missing');const dr=fs.readFileSync('docs/plans/DEPLOYMENT-ROADMAP.md','utf8');if(!/Phase 4[3-9]/.test(dr)&&!/NO-STUBS-NEEDED/.test(dr))throw new Error('roadmap missing promoted phases AND no NO-STUBS-NEEDED reference');const ch=fs.readFileSync('CHANGELOG.md','utf8');if(!/Clean Code audit catalog/.test(ch))throw new Error('CHANGELOG entry missing');console.log('ok retro + roadmap + CHANGELOG');"
+  ```
+
+---
+
+## Re-anchor Checkpoints
+
+Lightweight re-anchor (4 yes/no) after every slice. Full re-anchor against §"Scope Contract" + §"Resolved Decisions" at these breakpoints:
+
+- **After S1** (raw reports complete, before triage): full re-anchor. Specifically verify (a) zero production code modified outside `scripts/audit/` and `package.json`, (b) all 6 raw report files present and non-empty, (c) calibration outcomes (RD #11-13) recorded in RUN-CONTEXT.md. If any check fails, fix before triage begins — re-triaging is expensive.
+- **After S3** (stubs drafted, before guardrail edits): full re-anchor + drift check. Specifically verify (a) no stub recommends modifying production code outside its own future Scope Contract sketch, (b) catalog→stub traceability is preserved (every stub cites catalog file:line anchors), (c) read-only invariant still intact (re-run `git diff --stat` against the S0 commit hash for production files; expect zero).
+
+---
 
 ---
 
@@ -247,14 +334,47 @@ grep 'Clean Code audit catalog' CHANGELOG.md
 
 Halt execution and request human review if any of these fire:
 
-- ESLint or jscpd crashes on a specific file. Don't skip the file — investigate; a crash may indicate a parsing issue we should report upstream OR a file Plan Forge stores in an unexpected format
-- S1 raw reports total >50 MB combined. Symptom of overly aggressive rules; reduce rule pack severity in S0 and re-run
-- S2 catalog exceeds 500 distinct findings. Means triage is no longer human-reviewable in one slice; STOP and break S2 into multiple slices by category (e.g. S2a = function-length findings, S2b = duplication, etc.)
-- More than 25% of raw findings get marked as false positives in S2. Means the rules are mis-calibrated; tighten rule pack in S0 and re-run S1 — don't paper over with a flood of "false positive" annotations
+**Scope drift**
+- Any file outside the In-Scope allowlist gets modified. **Read-only invariant violated — revert immediately.** This is the cardinal sin of Phase 42.
 - S3 wants to generate >5 phase stubs. Suggests the audit is uncovering more debt than one cleanup track can absorb; STOP and consult human on prioritization before drafting stubs
-- Any file outside the In-Scope allowlist gets modified. Read-only invariant violated — revert immediately
 - S4 wants to add >3 Temper Guard entries or >5 Warning Signs entries. Guardrail bloat; pick the highest-leverage entries and document the rest as future-audit candidates in the retro
 - A reviewer rejects the catalog as "not actionable". Means S2 categorization didn't tie findings to clear fix paths; redo with better category/effort/file:line specificity
+
+**Build / test failure**
+- Any slice's validation gate fails twice consecutively — STOP, do not retry blindly
+- ESLint or jscpd crashes on a specific file. Don't skip the file — investigate; a crash may indicate a parsing issue we should report upstream OR a file Plan Forge stores in an unexpected format
+- `npm install` fails after S0 adds devDependencies. STOP and resolve before merging S0; do not let downstream slices proceed against a broken lockfile
+- `pforge validate` fails after S0 (suggests the new devDeps broke an existing config)
+- S2 catalog exceeds 500 distinct findings. Means triage is no longer human-reviewable in one slice; STOP and break S2 into multiple slices by category
+- More than 25% of raw findings get marked as false positives in S2 (per RD #11-13 calibration thresholds). Means rules are mis-calibrated; tighten rule pack in S0 and re-run S1 — don't paper over with false-positive annotations
+- S1 raw reports total >50 MB combined. Symptom of overly aggressive rules; reduce rule pack severity in S0 and re-run
+
+**Security**
+- Any audit script attempts to execute code from the codebase being audited (eval / dynamic require of audit-target files). STOP — audit tooling must be purely static-analysis; loading audit targets risks side effects from module-init code
+- Any audit script emits findings containing credentials, secrets, or tokens (even patterns that look like them). STOP — strip from raw reports before triage; never let secrets enter `docs/plans/cleanup-findings/`
+- The `scripts/audit/` tooling reads or writes anywhere outside `pforge-mcp/**`, `pforge-master/**`, `pforge.{ps1,sh}`, `scripts/**`, `docs/plans/cleanup-findings/**` (write-only). STOP — sandbox violation
+
+---
+
+## Definition of Done
+
+Phase 42 is complete when ALL of the following are true:
+
+- [ ] All 6 slice validation gates green (S0-S5)
+- [ ] Reviewer Gate passed (zero 🔴 Critical, zero 🟡 High that block scope)
+- [ ] `scripts/audit/` directory exists with all 8 required artifacts (5 audit scripts + scan-architecture.mjs + layer-policy.json + README.md), all runnable
+- [ ] `package.json` devDependencies include `jscpd`, `eslint`, `madge` (zero other new deps)
+- [ ] `docs/plans/cleanup-findings/raw/` contains all 6 non-empty raw reports + RUN-CONTEXT.md with calibration outcomes (RD #11-13)
+- [ ] `docs/plans/cleanup-findings/CATALOG.md` has Findings section + Excluded findings section; every raw finding either mapped or excluded with rationale; A1-A4 entries (if any) clearly marked Plan-Forge-local
+- [ ] `docs/plans/cleanup-findings/CATEGORIES-SUMMARY.md` pivots categories × severity × count, sorted worst-first
+- [ ] `docs/plans/cleanup-findings/proposed-phases/` contains ≥1 stub OR `NO-STUBS-NEEDED.md` with rationale + README.md index
+- [ ] `.github/instructions/architecture-principles.instructions.md` Temper Guards/Warning Signs cite Clean Code + Phase 42 catalog explicitly
+- [ ] **Read-only invariant verified**: `git diff --stat <S0-commit> HEAD -- pforge-mcp pforge-master pforge.ps1 pforge.sh` shows only `package.json` (or nothing) — no production code modified
+- [ ] `docs/plans/DEPLOYMENT-ROADMAP.md` reflects promoted phases (or NO-STUBS-NEEDED reference)
+- [ ] `CHANGELOG.md` `[Unreleased]` entry added
+- [ ] `docs/plans/testbed-findings/Phase-42-CLEAN-CODE-AUDIT-retro.md` covers: what was found, what got promoted, friction in triage, audit-frequency recommendation, zero-finding heuristics
+- [ ] `pforge validate` clean
+- [ ] Branch model respected: all commits land on `master`
 
 ---
 
@@ -278,7 +398,8 @@ All commits land on `master`. PreCommit chain runs on each. S0 commit triggers `
 |---|---|---|
 | 2026-05-18 | Draft created from Phase 41 (ENUMS-CENTRALIZATION) planning carryover — user asked whether the cleanup phase should look for more Clean Code-style cleanup opportunities. Answer: separate read-only audit phase rather than expand ENUMS scope. | Copilot session |
 | 2026-05-19 | Pre-harden research pass completed — codebase shape measured, G14 candidates identified, tech-debt marker baseline captured, threshold calibration recommendations drafted. See **Appendix C**. **Status remains DRAFT — plan body unchanged.** Findings feed the Step-2 hardener as advisory data. | Copilot session |
-| _pending_ | Step-2 harden: lockHash, sharpen rule pack thresholds (start from Appendix C recommendations, not draft S0 values), decide CLI-script tooling (PSScriptAnalyzer + shellcheck vs. carve-out), decide jscpd token threshold, decide stop-condition volume gate against measured codebase size, decide whether to use system `cloc` or npm `cloc` package, decide on `knip`/`madge` adoption | _pending_ |
+| 2026-05-19 | A1-A4 architectural-finding extension added per Phase 50 scope expansion — added `A1` (cross-layer import), `A2` (cycle), `A3` (high-fan-in volatile), `A4` (high-fan-out unstable) detected via madge dependency graph. Added `scripts/audit/scan-architecture.mjs` + `layer-policy.json` to S0; added `architecture-report.json` to S1 outputs. Defaults in Appendix D.2 (A3: fan_in≥5 AND commits_last_90_days≥10; A4: fan_out≥8 AND >50% deps volatile) — S0 may raise thresholds if dry-run produces >25% false positives. RD #3 updated to cite Plan-Forge-local nature of A codes. | Copilot session |
+| 2026-05-19 | **Step-2 harden**: (a) YAML frontmatter added with `lockHash` field. (b) Per-slice metadata added: `Depends On`, `Parallelism: [sequential]`, `Context Files`, `Traces to` (Acceptance Criteria MUST-N mapping). (c) All slice validation gates rewritten in pure `node -e` form — eliminates `bash -c` wrappers per meta-bug #171 (`where bash` resolving to WSL on Windows) and removes nested-escaped-quote patterns per meta-bug #93. (d) `## Required Decisions` section added — 10 plan-time decisions locked (cross-reference Resolved Decisions); 3 calibration items (RD #11-13) explicitly deferred to S0 execution with documented thresholds and resolution path (recorded in RUN-CONTEXT.md). (e) `## Re-anchor Checkpoints` section added (full re-anchors after S1 and S3). (f) `## Definition of Done` section added with 16 explicit checks including Reviewer Gate, read-only invariant verification, and Phase 42 catalog citation in guardrails. (g) Stop Conditions reorganized into scope / build-test / security categories per Runbook; added explicit security entries (no eval of audit targets, no secret leakage into findings, sandbox enforcement). (h) Status flipped DRAFT → HARDENED. **lockHash protects Forbidden Actions list only** (slice headers use `S0/S1` per project convention, not `Slice 0/Slice 1` that `computeLockHash` would match for full slice content). | Copilot session (Step-2) |
 | _pending_ | Execution Hold lifted (gates on Phase 41 shipping) | _pending_ |
 
 ---

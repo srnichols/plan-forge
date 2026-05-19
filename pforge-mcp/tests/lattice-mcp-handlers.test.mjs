@@ -6,6 +6,7 @@ import { describe, it, expect } from "vitest";
 import { readFileSync } from "fs";
 import { join, dirname } from "path";
 import { fileURLToPath } from "url";
+import { SERVER_COMBINED_SRC } from "./helpers/server-combined-src.mjs";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const ROOT = join(__dirname, "..");
@@ -25,7 +26,7 @@ try {
   toolsJson = [];
 }
 
-const serverSrc = readFileSync(join(ROOT, "server.mjs"), "utf8");
+const serverSrc = SERVER_COMBINED_SRC;
 
 describe("Lattice MCP handlers — tools.json registration", () => {
   for (const toolName of LATTICE_TOOLS) {

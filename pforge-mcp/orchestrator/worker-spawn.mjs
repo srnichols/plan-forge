@@ -712,7 +712,8 @@ export async function generateImage(prompt, options = {}) {
 export function loadWorkerCapabilities() {
   if (getWorkerCapabilitiesCacheState()) return getWorkerCapabilitiesCacheState();
   try {
-    const path = resolve(dirname(fileURLToPath(import.meta.url)), "worker-capabilities.json");
+    // worker-capabilities.json lives in pforge-mcp/ (one level up from orchestrator/)
+    const path = resolve(dirname(fileURLToPath(import.meta.url)), "..", "worker-capabilities.json");
     setWorkerCapabilitiesCacheState(JSON.parse(readFileSync(path, "utf-8")));
   } catch {
     setWorkerCapabilitiesCacheState({ workers: {}, runtimes: {}, packageManagers: {} });

@@ -402,11 +402,12 @@ import {
   normalizeSliceId,
   compareSliceIds,
   parseOnlySlicesExpr,
+  parseWorkerTimeoutValue,
   parseSlices,
   buildDAG,
   loadPlanParserConfig,
 } from "./orchestrator/plan-parser.mjs";
-export { parsePlan, computeLockHash, normalizeSliceId, compareSliceIds, parseOnlySlicesExpr };
+export { parsePlan, computeLockHash, normalizeSliceId, compareSliceIds, parseOnlySlicesExpr, parseWorkerTimeoutValue };
 /* Source-test anchors retained after extraction:
 function parseSlices(lines, opts = {}) {
   const implicitGates = opts.implicitGates === true;
@@ -455,68 +456,18 @@ export {
   deriveVendorFromModel, extractTokens, shouldDefaultPremiumRequestsToOne, parseStderrStats,
 };
 // ─── Phase-28.3 Slice 4: Post-slice advisory scanner ─────────────────
-//
-// Non-blocking scan of completed slice trajectory for self-repair markers.
-// If markers are present but no forge_meta_bug_file call was made during
-// the slice, emit a `self-repair-missed` advisory to events.log.
-// Pure advisory — does NOT change slice status, does NOT auto-file.
-
-const SELF_REPAIR_MARKERS = /plan was wrong|fixed the plan|gate pattern|brittle gate|workaround|hand-fix|plan forge bug|orchestrator bug/i;
-
-/**
- * Detect whether a completed slice likely performed self-repair work
- * but did not file a meta-bug via forge_meta_bug_file.
- *
- * @param {string|null} trajectoryContent - The trajectory text (last 200 lines).
- * @param {string|null} workerOutput - Full worker stdout text.
- * @returns {{ matched: string[] } | null} Matched markers, or null if no advisory needed.
- */
-export function detectSelfRepairMissed(trajectoryContent, workerOutput) {
-  if (!trajectoryContent) return null;
-
-  // Scan trajectory for self-repair markers
-  const lines = trajectoryContent.split("\n").slice(-200);
-  const matched = [];
-  for (const line of lines) {
-    const m = line.match(SELF_REPAIR_MARKERS);
-    if (m) matched.push(m[0]);
-  }
-  if (matched.length === 0) return null;
-
-  // Check if forge_meta_bug_file was called anywhere in worker output
-  const output = workerOutput || "";
-  if (output.includes("forge_meta_bug_file")) return null;
-
-  // Deduplicate matched markers
-  return { matched: [...new Set(matched)] };
-}
-
-/**
- * Phase-31 Slice 3 (Reflexion prompt wiring): builds the final slice prompt for
- * a retry attempt by prepending the reflexion context block as a system-prompt
- * preamble so the worker sees it before all other instructions.
- *
- * Invariant: all retry paths that increment `attempt` MUST populate
- * `lastFailureContext` before calling this function, otherwise reflexion is
- * silently skipped. See the two assignment sites in `executeSlice` (~line 6256
- * and ~line 6276).
- *
- * Pure function: no fs, no network, deterministic. Safe to unit-test in isolation.
- *
- * @param {string} sliceInstructions - The fully-assembled prompt for this attempt.
- * @param {object|null} lastFailureContext - Context from the previous failed attempt,
- *   or null on the first attempt. Must conform to the `buildReflexionBlock` contract:
- *   `{ previousAttempt, gateName, model, durationMs, stderrTail }`.
- * @returns {string} `sliceInstructions` unchanged when `lastFailureContext` is null;
- *   otherwise the reflexion preamble block + "\n\n" + `sliceInstructions`.
- */
-export function buildRetryPrompt(sliceInstructions, lastFailureContext) {
-  if (lastFailureContext === null || lastFailureContext === undefined) {
-    return sliceInstructions;
-  }
-  const reflexionBlock = buildReflexionBlock(lastFailureContext);
-  return `${reflexionBlock}\n\n${sliceInstructions}`;
-}
+// ─── Schedulers (C2: Pluggable) ───────────────────────────────────────
+// Phase-53 S3: extracted to orchestrator/schedulers.mjs
+import {
+  detectSelfRepairMissed, buildRetryPrompt,
+  SequentialScheduler, ParallelScheduler, CompetitiveScheduler,
+  selectWinner,
+} from "./orchestrator/schedulers.mjs";
+export {
+  detectSelfRepairMissed, buildRetryPrompt,
+  SequentialScheduler, ParallelScheduler, CompetitiveScheduler,
+  selectWinner,
+};
 
 // ─── parseJSONL helpers ───────────────────────────────────────────────
 // Phase-53 S2: moved to orchestrator/worker-spawn.mjs
@@ -814,11 +765,9 @@ export function runGate(command, cwd, opts = {}) {
 }
 
 // ─── Schedulers (C2: Pluggable) ───────────────────────────────────────
+// Phase-53 S3: extracted to orchestrator/schedulers.mjs (see import above)
 
-/**
- * Sequential scheduler — executes slices one at a time in DAG order.
- * Phase 1 implementation.
- */
+/* Source-test anchors retained after extraction:
 export class SequentialScheduler {
   constructor(eventBus) {
     this.eventBus = eventBus;

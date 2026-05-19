@@ -30,17 +30,11 @@ Listed in **execution order**. Each phase's Execution Hold gates on its predeces
 - **Status**: 📋 Planned (DRAFT, pending Step-2 harden)
 - **Depends on**: Phase 42 retro shipping ✅
 
-### Phase 52 — SERVER-SPLIT
-- **Goal**: Decompose `pforge-mcp/server.mjs` (9,202 LOC, A2 finding) into focused sub-modules under `pforge-mcp/server/`. `server.mjs` becomes a ≤120-line entrypoint + re-export shim — zero consumer imports modified. Inherits Phase 51's four cross-cutting concerns: re-export shim (entrypoint-shim variant — file is also the executable entrypoint), snapshot-as-contract (new `buildServerSurface()` pure function returns tools + REST routes + MCP_ONLY_TOOLS), circular-import gate (`no-circular-imports.test.mjs` inherited unchanged), no-behavior-change rule.
-- **Plan**: [Phase-52-SERVER-SPLIT-PLAN.md](./Phase-52-SERVER-SPLIT-PLAN.md)
-- **Status**: 🔬 Hardened (lockHash `3b3c4de2…`, ready for `pforge run-plan`)
-- **Depends on**: Phase 51 shipping ✅ (establishes re-export shim + snapshot-as-contract pattern)
-
 ### Phase 53 — ORCHESTRATOR-SPLIT
 - **Goal**: Decompose `pforge-mcp/orchestrator.mjs` (13,933 LOC, A1 finding) into focused sub-modules under `pforge-mcp/orchestrator/`. `orchestrator.mjs` becomes a ≤50-line re-export shim — zero consumer imports modified. Inherits Phase 51's four cross-cutting concerns. **Adds architectural obligation**: resolve the pre-existing `orchestrator.mjs > cost-service.mjs` circular import (clearing the `KNOWN_CYCLES` allowlist to empty). Highest blast radius of the three splits — recommend `--quorum=power` and full test run before promotion.
-- **Plan**: _DRAFT — to be hardened. Run `step2-harden-plan.prompt.md` before executing. Expect 8–12 sub-modules. Snapshot approach may require mocking more runtime state; a dry-run plan-execution fixture test is the recommended analog._
+- **Plan**: _DRAFT — to be hardened. Run `step2-harden-plan.prompt.md` before executing. Expect 8–12 sub-modules. Snapshot approach may require mocking more runtime state; a dry-run plan-execution fixture test is the recommended analog. See Phase-52-SERVER-SPLIT-retro.md for entrypoint-shim and shared-state pattern lessons._
 - **Status**: 📋 Planned (DRAFT, pending Step-2 harden)
-- **Depends on**: Phase 52 shipping (risk-graduated progression — server split must validate the pattern at medium scale before tackling orchestrator)
+- **Depends on**: Phase 52 ✅ (server-split validated the entrypoint-shim + snapshot-as-contract pattern at medium scale)
 
 ---
 
@@ -48,6 +42,7 @@ Listed in **execution order**. Each phase's Execution Hold gates on its predeces
 
 | Phase | Goal | Shipped | Reference |
 |-------|------|---------|-----------|
+| 52 — SERVER-SPLIT | Decomposed `pforge-mcp/server.mjs` (~9.2k LOC) into 12 focused sub-modules under `pforge-mcp/server/`; `server.mjs` is a ≤40-line entrypoint + re-export shim. All public imports preserved. Zero behavioral changes (byte-identical `buildServerSurface()` snapshot + full test suite green). A2 finding resolved. | 2026-05-19 | [Phase-52-SERVER-SPLIT-PLAN.md](./Phase-52-SERVER-SPLIT-PLAN.md) |
 | 39 — AUDITOR-AUTOMATION | Tier the sense-making layer (Watcher / Forge-Master observer / A4 auditor) with config blocks, cross-run watcher mode, and auto-invoke wiring | 2026-05-19 | [Phase-39-AUDITOR-AUTOMATION-PLAN.md](./Phase-39-AUDITOR-AUTOMATION-PLAN.md) |
 | 40 — AUDITOR-AUTOMATION-UI | Dashboard surfaces for Phase 39's config knobs — settings tab + observer/watcher/auditor observability cards | 2026-05-19 | [Phase-40-AUDITOR-AUTOMATION-UI-PLAN.md](./Phase-40-AUDITOR-AUTOMATION-UI-PLAN.md) |
 | 41 — ENUMS-CENTRALIZATION | Single source of truth for stable small-set identifiers (`pforge-mcp/enums.mjs`) — zero hardcoded-array drift | 2026-05-19 | [Phase-41-ENUMS-CENTRALIZATION-PLAN.md](./Phase-41-ENUMS-CENTRALIZATION-PLAN.md) |

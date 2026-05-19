@@ -9,6 +9,49 @@ Format follows [Keep a Changelog](https://keepachangelog.com/).
 
 ---
 
+## [3.6.2] — 2026-05-18 — Memory L3 Search & Auto-Drain Hotfix (#205)
+
+> **One-liner**: Fixes three systemic gaps in the OpenBrain L3 memory pipeline. Before this hotfix, CLI plan runs silently dropped captures, `forge_search` never queried OpenBrain (hard-coded to L2-only), and the queue file grew forever because nothing auto-drained it. After: captures land in L2 + L3 on every CLI run, `forge_search` merges live L3 semantic hits, and the orchestrator auto-drains the queue at end-of-run.
+
+### Why
+
+Three defects in the L3 pipeline meant OpenBrain was effectively write-only and increasingly stale:
+
+1. **CLI captures silently dropped.** `captureMemory()` lived only in `server.mjs` and was wired only into the MCP `forge_run_plan` handler. `pforge run-plan` (CLI) spawned the orchestrator as a child process — so `_memoryCapture` was emitted into the postmortem JSON but no caller ever consumed it. `.forge/liveguard-memories.jsonl` and `.forge/openbrain-queue.jsonl` never received any records from CLI runs.
+2. **`forge_search` never queried L3.** The L3 merge hook in the MCP handler was hard-coded to `null` (`server.mjs:5428: const openBrainSearchFn = isOpenBrainConfigured(cwd) ? null : null; // L3 merge is opt-in via OpenBrain MCP; no direct call available yet`) — but `createSseClient` + `client.search()` had existed in [pforge-mcp/openbrain-replay.mjs](pforge-mcp/openbrain-replay.mjs) for ages (used by `forge_brain_test`). Search returned only stale L2 file scans.
+3. **Queue never auto-drained.** `drainOpenBrainQueue` (pure function) existed in [pforge-mcp/memory.mjs](pforge-mcp/memory.mjs) and `runDrainPass` in [pforge-mcp/server.mjs](pforge-mcp/server.mjs) wrapped it, but were only invoked at MCP server init and via REST. CLI orchestrator runs never touched it — the queue file grew forever until a human ran `pforge brain replay`.
+
+### Fixed
+
+- **[pforge-mcp/memory.mjs](pforge-mcp/memory.mjs)** — `captureMemory()` promoted to the single source of truth for L2 + L3 capture. New `autoDrainOpenBrainQueue(cwd, opts)` builds a direct SSE dispatcher via dynamic-imported `createSseClient` + `normalizeQueueRecord`, calls the pure `drainOpenBrainQueue`, atomically rewrites the queue with deferred survivors, and appends `openbrain-queue.archive.jsonl` / `openbrain-dlq.jsonl` / `openbrain-stats.jsonl`. `opts.dispatcher` DI override added for testability (matches the `runDrainPass(cwd, source, hub, { dispatcher })` pattern).
+- **[pforge-mcp/server.mjs](pforge-mcp/server.mjs)** — New `searchOpenBrainL3(cwd, args)` helper pre-fetches L3 semantic hits via SSE with a 5s timeout, normalizes them to the ranker's record shape, and feeds a sync closure to the existing `forgeSearch` ranker via `openBrainSearchFn`. Same merge applied to REST `/api/search`. Wraps `captureMemory` with an `onCapture` hub broadcast hook. `forge_run_plan` handler skips its legacy re-capture path when the orchestrator stamps `_captured: true` on the receipt.
+- **[pforge-mcp/orchestrator.mjs](pforge-mcp/orchestrator.mjs)** — End-of-run path now calls `captureMemory()` inline and awaits `autoDrainOpenBrainQueue(cwd, { source: "cli-drain", timeoutMs: 10_000 })` best-effort. Drain receipt attached to `summary._memoryCapture.drain`. Never throws — drain failures are contained.
+
+### Tests
+
+- **[pforge-mcp/tests/capture-memory-issue-205.test.mjs](pforge-mcp/tests/capture-memory-issue-205.test.mjs)** — 15 cases, 8 covering `captureMemory` (Finding 1) plus 7 covering `autoDrainOpenBrainQueue` (Finding 3): skipped-not-configured, skipped-empty, successful delivery + queue clear + archive append + stats row, retry with attempt-counter increment, DLQ promotion at `_attempts >= maxAttempts`, dispatcher-throw containment. All 15 pass. Related suites still green: `search-core` (35), `search-smoke` (3), `drain-io-wrapper` (16), `drain-rest-endpoint` (3), `aci-hardening` (23) — **80/80 across affected suites**.
+
+### End-to-end QA (against real OpenBrain SSE)
+
+Against `https://openbrain.tailfb4202.ts.net/sse`:
+
+- `captureMemory()` grew `.forge/openbrain-queue.jsonl` from 1 → 2 records (+398 bytes), `openBrainQueued: true`.
+- `autoDrainOpenBrainQueue()` delivered 2/2 records in 4124 ms, queue cleared to 0, archive grew 6 → 8.
+- Stats row appended: `{"_v":1,"source":"qa-e2e","attempted":2,"delivered":2,"deferred":0,"dlq":0,"durationMs":4124}`.
+- L3 `client.search({ query: "auto-drain Finding 3 end-to-end QA" })` returned 10 hits.
+- `search/core.mjs` correctly placed the synthetic L3 hit at rank 1 with `source: "openbrain"`.
+
+### Distribution sync
+
+- **VERSION** — 3.6.1 → 3.6.2.
+- **[pforge-mcp/package.json](pforge-mcp/package.json)** — version bumped 3.6.1 → 3.6.2.
+
+### Closes
+
+- [#205](https://github.com/srnichols/plan-forge/issues/205) (Findings 1, 2, 3)
+
+---
+
 ## [3.6.1] — 2026-05-18 — Brain Replay Receipt Integrity Hotfix
 
 > **One-liner**: Fixes a silent data-integrity defect in `pforge brain replay` (shipped in v3.6.0): MCP tool responses with `isError: true` (e.g. Ollama embed context-overflow) were being recorded as `status:"sent"` in the per-record receipt log. Also backfills documentation for `brain test` / `brain replay`, which were shipped in v3.6.0 but missing from `cli-schema.json` and the CLI guide.

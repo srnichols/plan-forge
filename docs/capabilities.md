@@ -149,7 +149,7 @@ Ten opt-in subsystems that turn deterministic slice execution into a closed rese
 | **Auto-fix proposals** (v2.58) | L6 | advisory | `innerLoop.autoFix.applyWithoutReview` | `.forge/proposed-fixes/*.patch` |
 | **Cost-anomaly detection** (v2.58) | L5 | advisory | `innerLoop.costAnomaly.ratio` | `.forge/cost-anomalies.jsonl` |
 
-Discover at runtime via `forge_capabilities` → `innerLoop`. Configure via Dashboard → Config tab, Dashboard → Inner Loop tab (v2.58+), or `.forge.json`.
+Discover at runtime via `forge_capabilities` → `innerLoop`. Configure via Dashboard → Config tab, Dashboard → Inner Loop tab (v2.58+), or Dashboard → main view (Observer Narrations / Cross-Run Anomalies / Auditor Report cards), or `.forge.json`.
 
 ## Self-Deterministic Agent Loop
 

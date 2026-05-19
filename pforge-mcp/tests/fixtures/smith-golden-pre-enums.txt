@@ -7,7 +7,6 @@ Equivalent manual steps (smith):
   5. Scan for common problems (duplicates, orphans, broken references)
 
 
-<<<<<<< Updated upstream
 ╔══════════════════════════════════════════════════════════════╗
 ║       Plan Forge — The Smith                                  ║
 ╚══════════════════════════════════════════════════════════════╝
@@ -45,7 +44,7 @@ Setup Health:
 
 Version Currency:
   ⚠️  Cannot determine installed version (.forge.json missing templateVersion)
-     (cached 98m ago)
+     (cached 104m ago)
 
 Auto-update:
   ✅ Auto-update: disabled (opt-in) | Cache age: no cache | Last tag: unknown | Last check: never
@@ -115,116 +114,5 @@ Timeline / Search sources:
 ────────────────────────────────────────────────────
   Results:  43 passed  |  2 failed  |  5 warnings
 ────────────────────────────────────────────────────
-=======
-ΓòöΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòù
-Γòæ       Plan Forge ΓÇö The Smith                                  Γòæ
-ΓòÜΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓò¥
-
-Environment:
-  Γ£à git 2.53.0.windows.3
-  Γ£à code (VS Code CLI) found
-  Γ£à PowerShell 7.6.1 (pwsh)
-  Γ£à gh (GitHub CLI) 2.92.0
-
-Runtime & Worker Readiness:
-  Γ£à git v2.53.0
-  Γ£à gh v2.92.0
-  Γ£à node v24.11.1
-  Γ£à pwsh v7.6.1
-  Γ£à gh-copilot v1.0.49 (agentic capable)
-  ΓÜá∩╕Å  claude not found on PATH (agent worker)
-     FIX: winget install Anthropic.Claude   (or npm install -g @anthropic-ai/claude-code)
-  Γ¥î copilot-coding-agent v lacks agentic flags: Logged in to github.com (issue #28)
-     FIX: winget upgrade --id GitHub.cli && gh auth login
-  ΓÜá∩╕Å  codex not found on PATH (agent worker)
-     FIX: npm install -g @openai/codex
-
-VS Code Configuration:
-  Γ£à chat.agent.enabled (default ΓÇö OK)
-  ΓÜá∩╕Å  chat.useCustomizationsInParentRepositories not set
-     FIX: Add "chat.useCustomizationsInParentRepositories": true to .vscode/settings.json
-  ΓÜá∩╕Å  chat.promptFiles not set
-     FIX: Add "chat.promptFiles": true to .vscode/settings.json
-
-Setup Health:
-  Γ¥î .forge.json not found
-     FIX: Run 'pforge init' to bootstrap your project
-  Γ£à .github/copilot-instructions.md exists
-
-Version Currency:
-  ΓÜá∩╕Å  Cannot determine installed version (.forge.json missing templateVersion)
-     (cached 7m ago)
-
-Auto-update:
-  Γ£à Auto-update: disabled (opt-in) | Cache age: no cache | Last tag: unknown | Last check: never
-     Tip: Run 'pforge self-update' to check + install, or 'pforge smith --refresh-version-cache' to clear cache
-
-MCP Server:
-  Γ£à pforge-mcp/server.mjs exists
-  Γ£à MCP dependencies installed
-  Γ£à .vscode/mcp.json has 'plan-forge' server entry
-
-Image Generation:
-  Γ£à sharp installed (WebP, PNG, AVIF conversion)
-  Γ£à XAI_API_KEY set (Grok Aurora)
-  Γ£à OPENAI_API_KEY not set (DALL-E unavailable ΓÇö optional)
-  Γ£à Node.js v24.11.1 (sharp requires >= 18.17)
-
-MCP Runtime:
-  Γ£à MCP SDK (protocol layer) v1.29.0
-  Γ£à Express (dashboard + REST API) v5.2.1
-  Γ£à ws (WebSocket hub for real-time events) v8.20.0
-  Γ£à Playwright (screenshot capture)
-  Γ£à MCP server version v3.7.0 matches VERSION file
-  Γ£à forge-master-routes.mjs (Phase-29 route wiring)
-  Γ£à tools.json + cli-schema.json (92 MCP tools registered)
-
-Dashboard:
-  Γ£à dashboard/index.html
-  Γ£à dashboard/app.js
-  Γ£à dashboard/forge-master.js (Forge-Master Studio tab)
-
-Lifecycle Hooks:
-  Γ£à 7/8 hooks present
-  ΓÜá∩╕Å  Missing hooks: PostRun
-     FIX: Run 'pforge update' to install missing hook files, or add entries under 'hooks' in .forge.json
-
-Extensions:
-  Γ£à Extension catalog valid (1 extension(s))
-  Γ£à Spec Kit compatible
-
-Version & Changelog:
-  Γ£à VERSION: 3.7.0
-  Γ£à CHANGELOG.md present (framework v3.7.0 ΓÇö downstream CHANGELOG tracks your app, not pforge)
-
-Common Problems:
-  Γ£à No common problems detected
-
-Orchestrator:
-  Γ£à Orchestrator ready ΓÇö use 'pforge run-plan <plan>' to execute a plan
-  Γ£à pforge-mcp/orchestrator.mjs present
-
-Intelligence:
-  Γ£à 92 MCP tools (14 LiveGuard) in tools.json
-
-Crucible:
-  Γ£à Crucible inactive ΓÇö no .forge/crucible/ directory yet
-
-Tempering:
-  Γ£à Tempering inactive ΓÇö no .forge/tempering/ directory yet
-
-Bug Registry:
-  Γ£à Bug registry inactive ΓÇö no .forge/bugs/ directory yet
-
-Notifications:
-  Γ£à No .forge.json ΓÇö notifications inactive (optional)
-
-Timeline / Search sources:
-  Γ£à 0 of 6 L2 source(s) with indexable events
-
-ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
-  Results:  43 passed  |  2 failed  |  6 warnings
-ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
->>>>>>> Stashed changes
 
 Fix the 2 issue(s) above for the best Plan Forge experience.

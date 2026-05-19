@@ -63,6 +63,10 @@
         <p>The Studio tab maintains a persistent per-tab session ID in <code>sessionStorage</code> and sends it as <code>x-pforge-session-id</code> on every request. This means prior turns survive page reloads and New Chat resets, Forge-Master can reference earlier messages in the same browser tab session.</p>
         <p>Session history is stored as JSONL in <code>.forge/fm-sessions/</code>. Use <code>pforge fm-session list</code> to inspect sessions or <code>pforge fm-session purge</code> to clean up. Sessions auto-rotate at 200 turns.</p>
 
+        <div class="callout callout-info">
+          <strong>Observer narrations vs. Studio</strong>: The Studio tab is pull-based — you ask, Forge-Master answers. Live narrations from <em>observer mode</em> (when enabled) are push-based: they appear on the <strong>main dashboard view</strong>, not in this Studio tab. See <a href="dashboard.html#observer-narrations">Dashboard — Observer Narrations Card</a> for the live feed. Enable the observer in <a href="dashboard-settings.html#settings-forgemaster">Settings → Forge-Master</a>.
+        </div>
+
         <h3 id="studio-timeline">Timeline Source</h3>
         <p>Forge-Master turns are indexed as the <code>fm-turn</code> source in the <a href="dashboard.html#timeline">Timeline tab</a>. Each entry shows the lane, a truncated user message, and turn number. Useful for correlating reasoning decisions with plan execution events.</p>
 

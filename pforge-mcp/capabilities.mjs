@@ -17,6 +17,7 @@ import { resolve, dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { execSync } from "node:child_process";
 import { isOpenBrainConfigured } from "./memory.mjs";
+import { TOOL_NAMES } from "./enums.mjs";
 
 const VERSION = "2.3.0"; // capability-surface schema version (not the app version)
 
@@ -1409,6 +1410,7 @@ export const TOOL_METADATA = {
     ],
     sideEffects: [],
     securityNote: "Read-only aggregator. No data leaves the server.",
+    dashboardSurfaces: ["observer-narrations", "cross-run-anomalies", "auditor-report"],
     errors: {
       IO_FAILURE: {
         message: "Failed to read project state",
@@ -2953,8 +2955,8 @@ export const INNER_LOOP_SURFACE = Object.freeze({
 export function buildCapabilitySurface(mcpTools, options = {}) {
   const { cwd = process.cwd(), hubPort = null } = options;
 
-  // If no tools array provided, build minimal tool objects from TOOL_METADATA keys
-  const tools = mcpTools || Object.keys(TOOL_METADATA).map((name) => ({ name, description: TOOL_METADATA[name]?.intent?.[0] || name }));
+  // If no tools array provided, build minimal tool objects from TOOL_NAMES (enums.mjs source of truth)
+  const tools = mcpTools || TOOL_NAMES.map((name) => ({ name, description: TOOL_METADATA[name]?.intent?.[0] || name }));
 
   // Enrich MCP tools with metadata
   const enrichedTools = tools.map((tool) => {

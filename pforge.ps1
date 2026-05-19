@@ -3424,7 +3424,6 @@ function Invoke-Smith {
 
     if ($hasHookFiles -or $hookConfig -or $hooksJsonConfig) {
         Write-Host "Lifecycle Hooks:" -ForegroundColor Cyan
-<<<<<<< Updated upstream
         $enumsCli = Join-Path $RepoRoot "pforge-mcp/bin/enums-cli.mjs"
         if (Test-Path $enumsCli) {
             $allExpectedHooks = @(node $enumsCli --enum HOOK_PASCAL 2>$null)
@@ -3438,19 +3437,6 @@ function Invoke-Smith {
             # Fallback when pforge-mcp/bin/enums-cli.mjs is not present
             $allExpectedHooks = @("SessionStart","PreToolUse","PostToolUse","Stop","PreDeploy","PostSlice","PreAgentHandoff","PostRun")
             $configKeyMap = @{ SessionStart="sessionStart"; PreToolUse="preToolUse"; PostToolUse="postToolUse"; Stop="stop"; PreDeploy="preDeploy"; PostSlice="postSlice"; PreAgentHandoff="preAgentHandoff"; PostRun="postRun" }
-=======
-        $enumsCli = Join-Path $RepoRoot "pforge-mcp\bin\enums-cli.mjs"
-        if (-not (Test-Path $enumsCli)) {
-            $enumsCli = Join-Path $PSScriptRoot "pforge-mcp\bin\enums-cli.mjs"
-        }
-        $coreHooks = @(& node $enumsCli --enum HOOK_CATEGORY.session 2>$null)
-        $liveGuardHooks = @(& node $enumsCli --enum HOOK_CATEGORY.liveGuard 2>$null)
-        $allExpectedHooks = @(& node $enumsCli --enum HOOK_PASCAL 2>$null)
-
-        $configKeyMap = @{}
-        foreach ($hook in $allExpectedHooks) {
-            $configKeyMap[$hook] = $hook.Substring(0, 1).ToLowerInvariant() + $hook.Substring(1)
->>>>>>> Stashed changes
         }
 
         $hookFiles = @()

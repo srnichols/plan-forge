@@ -7,6 +7,14 @@ Format follows [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
+### Added — Forge-Master Dashboard Surfaces
+
+- New settings tab `tab-settings-forgemaster` for observer + auditor configuration: six `cfg-observer-*` fields (enabled, model tier, daily USD cap, hourly narration cap, batch window, Brain capture toggle) and three `cfg-auditor-*` fields (model tier, on-failure invocation, periodic every-N-runs). Validates `everyNRuns` ≥ 5 client-side and server-side (400 if bypassed). Wired to existing `GET/POST /api/config` atomic-merge pattern.
+- Observer narrations live card on main dashboard view: renders last 20 narrations from Brain, live-updates via `observer:narration` WebSocket events, per-narration display includes timestamp + batch-event-count badge + narration text + cost in $. Empty state links to Settings → Forge-Master.
+- Cross-run watcher anomalies card with manual Refresh + 1 h cache (`GET /api/watcher/cross-run`): aggregates `.forge/runs/*/summary.json` for `cross-run.*` anomaly codes; caches result in `.forge/cross-run-cache.json`; table columns code / severity / recommendation.
+- Auditor latest-report card with sanitized markdown render + archive link (`GET /api/auditor/latest`): renders `.forge/health/latest.md` server-side with `<script>`, `<iframe>`, and `javascript:` URL stripping; shows timestamp + "N reports since…" counter + "View history" archive link.
+- New read endpoints `GET /api/watcher/cross-run` and `GET /api/auditor/latest`.
+
 ---
 
 ## [3.8.1] — 2026-05-19 — Forge-Home Cleanup (Issue #203)

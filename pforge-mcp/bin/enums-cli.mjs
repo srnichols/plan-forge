@@ -22,6 +22,7 @@ import {
   HOOK_PASCAL,
   MODEL_TIERS,
   QUORUM_MODES,
+  TOOL_NAMES,
   WATCHER_MODES,
 } from "../enums.mjs";
 
@@ -34,6 +35,7 @@ const REGISTRY = {
   HOOK_PASCAL,
   MODEL_TIERS,
   QUORUM_MODES,
+  TOOL_NAMES,
   WATCHER_MODES,
 };
 

@@ -107,6 +107,49 @@
           <strong>Audit-Loop activation</strong> isn't on a Settings tab, it lives in <code>.forge.json#audit.mode</code> (<code>off | auto | always</code>) and is toggled via the <a href="audit-loop.html">Audit Loop chapter</a>. Drain results stream into the <strong>Tempering</strong> tab in the Forge group.
         </div>
 
+        <h3 id="settings-forgemaster">⚒ Forge-Master</h3>
+        <p>Configuration for Forge-Master's autonomous background roles: the <strong>Observer</strong> (live narration of hub events) and the <strong>Auditor</strong> (automated post-run health analysis). Both are <em>off by default</em> — enable each role with one click here or by editing <code>.forge.json</code> directly.</p>
+
+        <img src="assets/screenshots/dashboard-settings-forgemaster.png" alt="Settings → Forge-Master sub-tab showing Observer enabled with budget fields and Auditor field set with everyNRuns set to 10" class="rounded-xl border border-slate-700/40 mb-6" loading="lazy" />
+
+        <h4>Observer</h4>
+        <p>The Observer is a mute-by-default background hub subscriber. When enabled it batches live plan events into 60-second windows and narrates notable patterns via the Forge-Master reasoning loop. Narrations are stored in Brain and stream to the <a href="dashboard.html#observer-narrations">Observer Narrations card</a> on the main dashboard view.</p>
+        <table class="manual-table">
+          <thead><tr><th>Field ID</th><th>Type</th><th>Default</th><th>Effect</th></tr></thead>
+          <tbody>
+            <tr><td><code>cfg-observer-enabled</code></td><td>checkbox</td><td>off</td><td>Enables/disables the observer process. Maps to <code>forgeMaster.observer.enabled</code>.</td></tr>
+            <tr><td><code>cfg-observer-modeltier</code></td><td>select</td><td><code>inherit</code></td><td>Model quality tier for narration calls. <code>inherit</code> uses the Brain <code>reasoningModel</code>; other options: <code>flagship</code>, <code>mid</code>, <code>fast</code>. See <em>Model tier dropdown</em> below.</td></tr>
+            <tr><td><code>cfg-observer-budget-usd</code></td><td>number</td><td>0.10</td><td>Daily USD spending cap. Rejects negative values. Maps to <code>forgeMaster.observer.maxUsdPerDay</code>.</td></tr>
+            <tr><td><code>cfg-observer-budget-narrations</code></td><td>number</td><td>6</td><td>Hourly narration frequency cap. Rejects negative values. Maps to <code>forgeMaster.observer.maxNarrationsPerHour</code>.</td></tr>
+            <tr><td><code>cfg-observer-batch-window-ms</code></td><td>number</td><td>60000</td><td>Event batch window in milliseconds. Lower values produce more frequent (and expensive) narrations. Maps to <code>forgeMaster.observer.batchWindowMs</code>.</td></tr>
+            <tr><td><code>cfg-observer-brain-capture</code></td><td>checkbox</td><td>on</td><td>Whether narrations are written to Brain (via <code>brain_capture</code>) in addition to the hub event stream. Disable to reduce Brain storage usage. Maps to <code>forgeMaster.observer.brainCapture</code>.</td></tr>
+          </tbody>
+        </table>
+
+        <h4>Auditor</h4>
+        <p>The Auditor automatically invokes the Plan-Health Auditor agent after runs, writing reports to <code>.forge/health/latest.md</code>. Results are surfaced on the <a href="dashboard.html#auditor-report">Auditor Latest Report card</a>.</p>
+        <table class="manual-table">
+          <thead><tr><th>Field ID</th><th>Type</th><th>Default</th><th>Effect</th></tr></thead>
+          <tbody>
+            <tr><td><code>cfg-auditor-modeltier</code></td><td>select</td><td><code>inherit</code></td><td>Model quality tier for auditor analysis. Same four canonical tokens as the observer tier. Maps to <code>forgeMaster.auditor.modelTier</code>.</td></tr>
+            <tr><td><code>cfg-auditor-on-failure</code></td><td>checkbox</td><td>off</td><td>Invoke the auditor automatically whenever a run ends in failure. Maps to <code>hooks.postRun.invokeAuditor.onFailure</code>.</td></tr>
+            <tr><td><code>cfg-auditor-every-n-runs</code></td><td>number</td><td>blank (off)</td><td>Invoke the auditor periodically every N runs. Leave blank to disable periodic invocation. <strong>Values 1–4 are rejected</strong> — the minimum opt-in value is 5 (reasonable cadence; see Resolved Decision in Phase-40 plan). Maps to <code>hooks.postRun.invokeAuditor.everyNRuns</code>.</td></tr>
+          </tbody>
+        </table>
+
+        <h4>Model tier dropdown</h4>
+        <p>Both the Observer and Auditor share the same four canonical model-tier tokens. The UI displays human-friendly labels while the backend stores the canonical token in <code>.forge.json</code>:</p>
+        <table class="manual-table">
+          <thead><tr><th>UI label</th><th>Canonical token</th><th>Meaning</th></tr></thead>
+          <tbody>
+            <tr><td>Inherit from Brain settings</td><td><code>null</code> / <code>inherit</code></td><td>Uses the <code>reasoningModel</code> configured in Settings → Brain</td></tr>
+            <tr><td>Flagship (best quality)</td><td><code>flagship</code></td><td>Highest-capability model in the configured provider (e.g., Claude Opus, GPT-4o)</td></tr>
+            <tr><td>Balanced</td><td><code>mid</code></td><td>Mid-tier model — good quality at lower cost</td></tr>
+            <tr><td>Fast (low cost)</td><td><code>fast</code></td><td>Fastest, cheapest model — suitable for high-frequency narrations</td></tr>
+          </tbody>
+        </table>
+        <p>Cross-references: <a href="forge-json-reference.html#forgeMaster-observer"><code>forgeMaster.observer</code> schema</a> · <a href="forge-json-reference.html#forgeMaster-auditor"><code>forgeMaster.auditor</code> schema</a>.</p>
+
         <div id="chapter-prev-next" class="chapter-nav"></div>
 
       </div>

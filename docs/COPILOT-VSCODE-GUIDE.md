@@ -285,7 +285,9 @@ Auto-escalation is on by default: turns classified into the `tempering`, `princi
 
 The Observer is an optional background companion that monitors your Plan Forge hub in real time. It subscribes to the WebSocket event stream, batches events into 60-second windows, and narrates notable patterns in plain prose — think of it as a pair programmer watching your pipeline and calling out anything worth your attention.
 
-**Observer is mute-by-default.** To enable:
+**Observer is mute-by-default.** To enable, open the dashboard **Settings → Forge-Master** tab and toggle **cfg-observer-enabled** on — the page validates budget caps and `everyNRuns` server-side, so you don't need to touch `.forge.json` directly. Cross-reference: [`docs/manual/dashboard-settings.html#settings-forgemaster`](manual/dashboard-settings.html#settings-forgemaster).
+
+Alternatively, edit `.forge.json` directly:
 
 ```json
 // .forge.json

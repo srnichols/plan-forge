@@ -1,12 +1,13 @@
 /**
  * Plan Forge -- Phase-51 Slice 0: No circular imports gate for capabilities.mjs.
  * Plan Forge -- Phase-52 Slice 0: Inherit gate to server.mjs.
+ * Plan Forge -- Phase-53 Slice 0: Inherit gate to orchestrator.mjs.
  *
  * Uses madge to walk the static import graph and assert that no NEW import
- * cycles exist. Capabilities.mjs must have zero cycles; server.mjs allows one
- * known pre-existing cycle (orchestrator.mjs <-> cost-service.mjs) that is
- * explicitly documented in orchestrator.mjs and worked around with hoisted
- * function declarations.
+ * cycles exist. Capabilities.mjs must have zero cycles; server.mjs and
+ * orchestrator.mjs each allow one known pre-existing cycle
+ * (orchestrator.mjs <-> cost-service.mjs) that is explicitly documented and
+ * will be cleared in Phase 53 S8.
  *
  * Scope: local (relative) imports only.
  * Node built-ins and npm packages are excluded by madge automatically.
@@ -20,6 +21,7 @@ import madge from "madge";
 const HERE = dirname(fileURLToPath(import.meta.url));
 const CAPABILITIES_PATH = resolve(HERE, "../capabilities.mjs");
 const SERVER_PATH = resolve(HERE, "../server.mjs");
+const ORCHESTRATOR_PATH = resolve(HERE, "../orchestrator.mjs");
 
 /**
  * Pre-existing cycles in server.mjs's transitive import graph that have been
@@ -31,11 +33,13 @@ const SERVER_PATH = resolve(HERE, "../server.mjs");
  */
 const KNOWN_SERVER_CYCLES = new Set([
   // orchestrator.mjs re-exports cost-service.mjs functions for backward
-  // compatibility (see orchestrator.mjs ~line 12983). cost-service.mjs imports
-  // back into orchestrator.mjs for model-scoring helpers. Worked around with
-  // hoisted function declarations so const aliases do not arrive undefined.
+  // compatibility. cost-service.mjs imports back into orchestrator.mjs for
+  // model-scoring helpers. This documented cycle is inherited by the
+  // orchestrator.mjs gate in Phase 53 S0 and removed in Phase 53 S8.
   "cost-service.mjs -> orchestrator.mjs",
 ]);
+
+const KNOWN_ORCHESTRATOR_CYCLES = new Set(KNOWN_SERVER_CYCLES);
 
 /** Normalise a madge cycle array to a canonical direction-insensitive key. */
 function cycleKey(cycle) {
@@ -82,6 +86,30 @@ describe("no circular imports in server.mjs (Phase-52 S0)", () => {
 
     // Assert the known cycles have not been silently multiplied.
     expect(circular.length).toBeLessThanOrEqual(KNOWN_SERVER_CYCLES.size);
+    expect(newCycles).toHaveLength(0);
+  }, 60_000);
+});
+
+describe("no circular imports in orchestrator.mjs (Phase-53 S0)", () => {
+  it("orchestrator.mjs has no NEW circular import cycles beyond known exceptions", async () => {
+    const result = await madge(ORCHESTRATOR_PATH, {
+      fileExtensions: ["mjs", "js"],
+      detectiveOptions: {
+        esm: { mixedImports: true },
+      },
+    });
+
+    const circular = result.circular();
+    const newCycles = circular.filter((cycle) => !KNOWN_ORCHESTRATOR_CYCLES.has(cycleKey(cycle)));
+
+    if (newCycles.length > 0) {
+      const formatted = newCycles.map((cycle) => cycle.join(" -> ")).join("\n  ");
+      throw new Error(
+        `New circular imports detected in orchestrator.mjs (not in KNOWN_ORCHESTRATOR_CYCLES):\n  ${formatted}`,
+      );
+    }
+
+    expect(circular.length).toBeLessThanOrEqual(KNOWN_ORCHESTRATOR_CYCLES.size);
     expect(newCycles).toHaveLength(0);
   }, 60_000);
 });

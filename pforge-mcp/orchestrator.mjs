@@ -26,6 +26,26 @@ import { EventEmitter } from "node:events";
 import { tmpdir } from "node:os";
 import { fileURLToPath } from "node:url";
 import { createHash } from "node:crypto";
+import {
+  getCachedBashPath,
+  setCachedBashPath,
+  getGhCopilotProbeState,
+  setGhCopilotProbeState,
+  getGhCopilotCacheState,
+  setGhCopilotCacheState,
+  getSecretsLoaderState,
+  setSecretsLoaderState,
+  getCliWorkersCacheState,
+  setCliWorkersCacheState,
+  getCliWorkersCacheExpiryState,
+  setCliWorkersCacheExpiryState,
+  getWorkerCapabilitiesCacheState,
+  setWorkerCapabilitiesCacheState,
+  getPostSliceHookFiredState,
+  setPostSliceHookFiredState,
+  getPostSliceTemperingFiredState,
+  setPostSliceTemperingFiredState,
+} from "./orchestrator/state.mjs";
 import { QUORUM_MODES, WATCHER_MODES } from "./enums.mjs";
 import { createTraceContext, createTelemetryHandler, writeManifest, appendRunIndex, pruneRunHistory, addLogSummary } from "./telemetry.mjs";
 import { recordActivity } from "./team-activity.mjs";
@@ -274,12 +294,11 @@ export function parseOnlySlicesExpr(expr) {
 
 // ─── Windows bash dispatch ─────────────────────────────────────────────
 
-/** undefined = not yet probed; null = probed, not found; string = probed, found */
-let cachedBashPath = undefined;
+// cachedBashPath state lives in orchestrator/state.mjs (Phase-53 S1).
 
 /** Reset bash path probe cache — for tests only. */
 export function __resetBashPathCache() {
-  cachedBashPath = undefined;
+  setCachedBashPath(undefined);
 }
 
 /**
@@ -295,7 +314,7 @@ export function resolveBashPath() {
   const envPath = (process.env.PFORGE_BASH_PATH || "").trim();
   if (envPath && existsSync(envPath)) return envPath;
 
-  if (cachedBashPath !== undefined) return cachedBashPath;
+  if (getCachedBashPath() !== undefined) return getCachedBashPath();
 
   const fixed = [
     "C:\\Program Files\\Git\\bin\\bash.exe",
@@ -303,8 +322,8 @@ export function resolveBashPath() {
   ];
   for (const p of fixed) {
     if (existsSync(p)) {
-      cachedBashPath = p;
-      return cachedBashPath;
+      setCachedBashPath(p);
+      return getCachedBashPath();
     }
   }
 
@@ -317,15 +336,15 @@ export function resolveBashPath() {
     for (const candidate of raw.split(/\r?\n/)) {
       const line = candidate.trim();
       if (line && existsSync(line)) {
-        cachedBashPath = line;
-        return cachedBashPath;
+        setCachedBashPath(line);
+        return getCachedBashPath();
       }
     }
   } catch {
     // `where` failed or bash not on PATH
   }
 
-  cachedBashPath = null;
+  setCachedBashPath(null);
   return null;
 }
 
@@ -1214,34 +1233,23 @@ const API_PROVIDERS = { ...DIRECT_API_ONLY, ...COPILOT_SERVABLE };
  * Dependency-injectable for testing.
  * @returns {boolean}
  */
-let _ghCopilotProbe = () => {
-  try {
-    const workers = loadWorkerCapabilities();
-    const spec = workers.workers?.["gh-copilot"];
-    if (!spec) return false;
-    return probeWorker("gh-copilot", spec).available;
-  } catch {
-    return false;
-  }
-};
-let _ghCopilotCache = null;
-let _secretsLoader = null;
+// orchestratorState.ghCopilotProbe / orchestratorState.ghCopilotCache / orchestratorState.secretsLoader state lives in orchestrator/state.mjs (Phase-53 S1).
+// Default probe is installed below `loadWorkerCapabilities` so it can reference helpers safely.
 
 // Cache for CLI worker probes (excludes API-provider checks, which are env-var-dependent).
 // 60-second TTL — workers don't change during a single pforge run; re-probing on every
 // model in assessQuorumViability multiplied detectWorkers() latency into minutes of I/O.
-let _cliWorkersCache = null;
-let _cliWorkersCacheExpiry = 0;
+// orchestratorState.cliWorkersCache / orchestratorState.cliWorkersCacheExpiry live in orchestrator/state.mjs (Phase-53 S1).
 
 /**
  * Reset the cached CLI-worker probe results. Intended for tests that mutate
  * `execSync` mocks between cases — without this reset, the 60-second TTL on
- * `_cliWorkersCache` leaks the first test's probe outcomes into subsequent
+ * `orchestratorState.cliWorkersCache` leaks the first test's probe outcomes into subsequent
  * tests, defeating per-test mock setup (issue #157 / #159 regression suite).
  */
 export function resetCliWorkersCache() {
-  _cliWorkersCache = null;
-  _cliWorkersCacheExpiry = 0;
+  setCliWorkersCacheState(null);
+  setCliWorkersCacheExpiryState(0);
 }
 
 /**
@@ -1250,10 +1258,10 @@ export function resetCliWorkersCache() {
  * @param {(() => boolean) | null} probe
  */
 export function setGhCopilotProbe(probe) {
-  _ghCopilotCache = null;
-  _cliWorkersCache = null;
-  _cliWorkersCacheExpiry = 0;
-  _ghCopilotProbe = probe || (() => {
+  setGhCopilotCacheState(null);
+  setCliWorkersCacheState(null);
+  setCliWorkersCacheExpiryState(0);
+  setGhCopilotProbeState(probe || (() => {
     try {
       const workers = loadWorkerCapabilities();
       const spec = workers.workers?.["gh-copilot"];
@@ -1262,12 +1270,12 @@ export function setGhCopilotProbe(probe) {
     } catch {
       return false;
     }
-  });
+  }));
 }
 
 function isGhCopilotAvailable() {
-  if (_ghCopilotCache === null) _ghCopilotCache = _ghCopilotProbe();
-  return _ghCopilotCache;
+  if (getGhCopilotCacheState() === null) setGhCopilotCacheState(getGhCopilotProbeState()());
+  return getGhCopilotCacheState();
 }
 
 /**
@@ -1430,7 +1438,7 @@ export { detectApiProvider };
  * @returns {string|null}
  */
 function loadSecretFromForge(key) {
-  if (_secretsLoader) return _secretsLoader(key);
+  if (getSecretsLoaderState()) return getSecretsLoaderState()(key);
   try {
     const secretsPath = resolve(process.cwd(), ".forge", "secrets.json");
     if (existsSync(secretsPath)) {
@@ -1445,7 +1453,7 @@ function loadSecretFromForge(key) {
  * Override the secrets loader — for testing only.
  * Pass null to restore the default file-based loader.
  */
-export function setSecretsLoader(fn) { _secretsLoader = fn || null; }
+export function setSecretsLoader(fn) { setSecretsLoaderState(fn || null); }
 
 /**
  * Build the chat-completions `messages` array for an API worker call based
@@ -1835,17 +1843,30 @@ export async function generateImage(prompt, options = {}) {
  * Worker + runtime capability matrix. Single source of truth for version mins,
  * agentic capability markers, and per-OS install hints. See issue #28.
  */
-let _workerCapabilitiesCache = null;
+// workerCapabilities cache lives in orchestrator/state.mjs (Phase-53 S1).
 export function loadWorkerCapabilities() {
-  if (_workerCapabilitiesCache) return _workerCapabilitiesCache;
+  if (getWorkerCapabilitiesCacheState()) return getWorkerCapabilitiesCacheState();
   try {
     const path = resolve(dirname(fileURLToPath(import.meta.url)), "worker-capabilities.json");
-    _workerCapabilitiesCache = JSON.parse(readFileSync(path, "utf-8"));
+    setWorkerCapabilitiesCacheState(JSON.parse(readFileSync(path, "utf-8")));
   } catch {
-    _workerCapabilitiesCache = { workers: {}, runtimes: {}, packageManagers: {} };
+    setWorkerCapabilitiesCacheState({ workers: {}, runtimes: {}, packageManagers: {} });
   }
-  return _workerCapabilitiesCache;
+  return getWorkerCapabilitiesCacheState();
 }
+
+// Phase-53 S1 — install default ghCopilotProbe now that loadWorkerCapabilities
+// is defined. The state module holds the mutable probe callback.
+setGhCopilotProbeState(() => {
+  try {
+    const workers = loadWorkerCapabilities();
+    const spec = workers.workers?.["gh-copilot"];
+    if (!spec) return false;
+    return probeWorker("gh-copilot", spec).available;
+  } catch {
+    return false;
+  }
+});
 
 /**
  * Compare semver-style versions. Returns -1/0/1.
@@ -2094,16 +2115,16 @@ export function detectWorkers(_projectDir) {
   // (one per model per preset) would otherwise block for minutes.
   const now = Date.now();
   let cliWorkers;
-  if (_cliWorkersCache && now < _cliWorkersCacheExpiry) {
-    cliWorkers = _cliWorkersCache;
+  if (getCliWorkersCacheState() && now < getCliWorkersCacheExpiryState()) {
+    cliWorkers = getCliWorkersCacheState();
   } else {
     const matrix = loadWorkerCapabilities();
     cliWorkers = [];
     for (const [name, spec] of Object.entries(matrix.workers || {})) {
       cliWorkers.push(probeWorker(name, spec));
     }
-    _cliWorkersCache = cliWorkers;
-    _cliWorkersCacheExpiry = now + 60_000;
+    setCliWorkersCacheState(cliWorkers);
+    setCliWorkersCacheExpiryState(now + 60_000);
   }
 
   // API providers are NOT cached — env vars can change between calls (e.g. in tests).
@@ -2751,7 +2772,7 @@ export function spawnWorker(prompt, options = {}) {
     // fully released handles (e.g. token-cache write lock).
     //
     // P50 follow-up (2026-05-19): bust the 60s probe cache between retries.
-    // Without this, the first failed runProbe() poisons _cliWorkersCache and
+    // Without this, the first failed runProbe() poisons orchestratorState.cliWorkersCache and
     // every back-off retry returns the same stale empty result — defeating
     // the retry's purpose. Symptom: after 4+ minute slices, the next probe
     // would fail in ~9s and stay failed for a full minute, forcing manual
@@ -2972,7 +2993,7 @@ export function spawnWorker(prompt, options = {}) {
       clearTimeout(timer);
       workerReject(new Error(`Failed to spawn ${cmd}: ${err.message} (code: ${err.code || "unknown"})`));
     });
-  });
+  }));
 }
 
 /**
@@ -7605,7 +7626,7 @@ export function registerGateCheckResponder(hub, cwd, deps = {}) {
       openIncidents,
       reviewer,
     };
-  });
+  }));
 }
 
 // ─── Phase FORGE-SHOP-06 Slice 06.2 — Correlation Thread Responder ──
@@ -7643,7 +7664,7 @@ export function registerCorrelationThreadResponder(hub, cwd, deps = {}) {
       events: filtered.slice(0, limit),
       count: filtered.length,
     };
-  });
+  }));
 }
 
 /**
@@ -7896,13 +7917,13 @@ const POSTSLICE_DEFAULTS = {
 };
 
 /** Module-level guard to prevent duplicate firings within the same session. */
-let _postSliceHookFired = false;
+// postSliceHookFired state lives in orchestrator/state.mjs (Phase-53 S1).
 
 /**
  * Reset the PostSlice hook fired flag. Exposed for testing.
  */
 export function resetPostSliceHookFired() {
-  _postSliceHookFired = false;
+  orchestratorState.postSliceHookFired = false;
 }
 
 /**
@@ -8695,7 +8716,7 @@ export function runPostSliceHook({ commitMessage, cwd = process.cwd() } = {}) {
   if (!commitMessage) return { triggered: false, skippedReason: "no-commit-message" };
 
   // Guard: prevent duplicate firings in the same session
-  if (_postSliceHookFired) {
+  if (getPostSliceHookFiredState()) {
     return { triggered: false, skippedReason: "already-fired" };
   }
 
@@ -8744,7 +8765,7 @@ export function runPostSliceHook({ commitMessage, cwd = process.cwd() } = {}) {
   const delta = priorScore - newScore; // positive = regression
 
   // Mark as fired (prevent duplicate firing for the same commit)
-  _postSliceHookFired = true;
+  setPostSliceHookFiredState(true);
 
   // Evaluate thresholds
   if (newScore >= priorScore) {
@@ -8775,11 +8796,11 @@ export function runPostSliceHook({ commitMessage, cwd = process.cwd() } = {}) {
  * attempt. Exposed as `resetPostSliceTemperingFired` for tests and for
  * `pforge run-plan` to reset when starting a new slice.
  */
-let _postSliceTemperingFired = new Set();
+// postSliceTemperingFired state lives in orchestrator/state.mjs (Phase-53 S1).
 
 /** Reset the fired guard. Exposed for testing + CLI reuse. */
 export function resetPostSliceTemperingFired() {
-  _postSliceTemperingFired = new Set();
+  setPostSliceTemperingFiredState(new Set());
 }
 
 /**
@@ -8843,7 +8864,7 @@ export async function runPostSliceTemperingHook({
   const fireKey = sliceRef
     ? `${sliceRef.plan}::${sliceRef.slice}`
     : `commit::${commitMessage.slice(0, 80)}`;
-  if (_postSliceTemperingFired.has(fireKey)) {
+  if (getPostSliceTemperingFiredState().has(fireKey)) {
     return { triggered: false, skippedReason: "already-fired-for-slice" };
   }
 
@@ -8866,7 +8887,7 @@ export async function runPostSliceTemperingHook({
     return { triggered: false, skippedReason: `trigger-mode:${triggerMode}` };
   }
 
-  _postSliceTemperingFired.add(fireKey);
+  getPostSliceTemperingFiredState().add(fireKey);
 
   let result;
   try {
@@ -12314,7 +12335,7 @@ export async function runWatchLive(options = {}) {
     };
 
     poll();
-  });
+  }));
 }
 
 export function loadQuorumConfig(cwd, presetOverride = null) {
@@ -13266,218 +13287,6 @@ function createRunDir(cwd, planPath) {
 }
 
 
-// ─── Phase 53 — Snapshot-as-contract surface (pure, no side-effects) ─────────
-
-/**
- * Returns the sorted list of all exported symbol names from this module.
- * Used by `tests/orchestrator-surface-snapshot.test.mjs` to verify that
- * the Phase 53 (ORCHESTRATOR-SPLIT) extraction slices don't add or remove
- * any public exports (zero-behavior-change contract).
- *
- * NOTE: This list is static — update it (and regenerate the golden fixture) if
- * you intentionally add or remove a public export.
- */
-export function buildOrchestratorSurface() {
-  return {
-    exports: [
-      "API_ALLOWED_ROLES",
-      "COST_ANOMALY_MULTIPLIER",
-      "CRUCIBLE_STALL_CUTOFF_DAYS",
-      "CompetitiveScheduler",
-      "DEFAULT_GATE_TIMEOUT_MS",
-      "DEFAULT_WORKER_OUTPUT_IDLE_MS",
-      "DEFAULT_WORKER_TIMEOUT_MS",
-      "EVENT_SOURCE",
-      "GATE_ALLOWED_PREFIXES",
-      "GATE_SUGGESTION_AUTO_INJECT_THRESHOLD",
-      "POSTMORTEM_RETENTION_COUNT",
-      "PROPOSED_FIX_DIR",
-      "ParallelScheduler",
-      "QUORUM_PRESETS",
-      "REVIEW_RESOLUTIONS",
-      "REVIEW_SEVERITIES",
-      "REVIEW_SOURCES",
-      "REVIEW_STATUSES",
-      "SECURITY_RISK",
-      "SECURITY_RISK_FOR_TYPE",
-      "SUPPORTED_AGENTS",
-      "SequentialScheduler",
-      "TEMPERING_SCAN_STALE_DAYS",
-      "UNIX_TOOLS",
-      "__resetBashPathCache",
-      "addReviewItem",
-      "aggregateModelStats",
-      "analyzeWithQuorum",
-      "appendEvent",
-      "appendForgeJsonl",
-      "appendWatchHistory",
-      "applyFixProposal",
-      "assessQuorumViability",
-      "attachSliceSnapshotRestore",
-      "auditOrphanForgeFiles",
-      "autoCommitSliceIfDirty",
-      "buildApiMessages",
-      "buildCostBreakdown",
-      "buildEstimate",
-      "buildOrchestratorSurface",
-      "buildPlanPostmortem",
-      "buildRetryPrompt",
-      "buildWatchSnapshot",
-      "calculateSliceCost",
-      "captureAbsorbedCommits",
-      "classifyLegError",
-      "classifyProbeFailure",
-      "classifySliceDomain",
-      "cleanupStaleSnapshots",
-      "coalesceGateLines",
-      "compareSliceIds",
-      "compareVersions",
-      "computeLockHash",
-      "computeMedian",
-      "defaultRunGitApply",
-      "deriveVendorFromModel",
-      "describeBillingSurface",
-      "detectApiProvider",
-      "detectClientHost",
-      "detectCostAnomaly",
-      "detectExecutionRuntime",
-      "detectHelpTextOutput",
-      "detectKilledBySignal",
-      "detectPackageManager",
-      "detectRuntimes",
-      "detectSelfRepairMissed",
-      "detectSilentWorkerFailure",
-      "detectVersionCollision",
-      "detectWatchAnomalies",
-      "detectWorkers",
-      "editDistance",
-      "emitToolTelemetry",
-      "ensureForgeDir",
-      "ensureNotificationsConfig",
-      "ensureNotificationsDirs",
-      "ensureReviewQueueDirs",
-      "extractFilesModifiedExhaustive",
-      "extractPlanReleaseVersion",
-      "extractTokens",
-      "filterQuorumModels",
-      "findLatestRun",
-      "findMatchingFixProposal",
-      "formatGateSuggestions",
-      "formatQuorumSummary",
-      "generateImage",
-      "generateReviewItemId",
-      "getCostReport",
-      "getFoundryAuthScope",
-      "getHealthTrend",
-      "getRoutingPreference",
-      "inferSliceType",
-      "isApiOnlyModel",
-      "isCopilotServableModel",
-      "isDeployTrigger",
-      "isDestructiveSliceTitle",
-      "isDirectApiOnlyModel",
-      "isGateCommandAllowed",
-      "isPlaceholderToken",
-      "isWorktreeExemptPath",
-      "lintGateCommands",
-      "listPlanPostmortems",
-      "listReviewItems",
-      "loadAuditConfig",
-      "loadCompetitiveConfig",
-      "loadGateCheckConfig",
-      "loadGateSynthesisConfig",
-      "loadModelPerformance",
-      "loadOpenClawConfig",
-      "loadQuorumConfig",
-      "loadRoutingPreference",
-      "loadTeardownGuardConfig",
-      "loadWorkerCapabilities",
-      "looksLikeProse",
-      "markFixAttempted",
-      "maybeAddBugReview",
-      "maybeAddFixPlanReview",
-      "maybeAddStallReview",
-      "maybeAddTemperingReview",
-      "maybeAddVisualBaselineReview",
-      "normalizeRunState",
-      "normalizeSliceId",
-      "parseAnalyzeScore",
-      "parseEventLine",
-      "parseEventsLog",
-      "parseGitPorcelain",
-      "parseOnlySlicesExpr",
-      "parsePlan",
-      "parseShortstat",
-      "parseStderrStats",
-      "parseValidationGates",
-      "parseWorkerTimeoutValue",
-      "popSliceSnapshot",
-      "postOpenClawSnapshot",
-      "probeQuorumModelAvailability",
-      "pruneForgeRuns",
-      "pushSliceSnapshot",
-      "quorumDispatch",
-      "quorumReview",
-      "readCrucibleState",
-      "readForgeJson",
-      "readForgeJsonl",
-      "readHomeSnapshot",
-      "readReviewItem",
-      "readReviewQueueState",
-      "readSliceArtifacts",
-      "readTemperingConfig",
-      "readTemperingState",
-      "recommendFromAnomalies",
-      "recommendModel",
-      "recordModelPerformance",
-      "registerCorrelationThreadResponder",
-      "registerGateCheckResponder",
-      "regressionGuard",
-      "rerankEscalationChain",
-      "resetCliWorkersCache",
-      "resetPostSliceHookFired",
-      "resetPostSliceTemperingFired",
-      "resolveBashPath",
-      "resolveGateTimeoutMs",
-      "resolveRequiredCli",
-      "resolveReviewItem",
-      "resolveWorkerOutputIdleMs",
-      "resolveWorkerTimeoutMs",
-      "rollbackFixProposal",
-      "runAnalyze",
-      "runAutoSweep",
-      "runGate",
-      "runPlan",
-      "runPostRunAuditorHook",
-      "runPostSliceHook",
-      "runPostSliceTemperingHook",
-      "runPreAgentHandoffHook",
-      "runPreDeployHook",
-      "runWatch",
-      "runWatchLive",
-      "scoreSliceComplexity",
-      "selectWinner",
-      "setGhCopilotProbe",
-      "setSecretsLoader",
-      "shouldAutoDrain",
-      "shouldAutoRetryFix",
-      "shouldDefaultPremiumRequestsToOne",
-      "snapshotPreSliceState",
-      "spawnWorker",
-      "stageOrphansOnSliceFailure",
-      "suggestAllowedCommand",
-      "suggestInstall",
-      "synthesizeGateSuggestions",
-      "validateGatePortability",
-      "verifyBranchSafety",
-      "verifyFilesModified",
-      "writePlanPostmortem",
-      "writeProposedFixPatch",
-      "writeSilentExitRecord",
-    ],
-  };
-}
-
 // ─── Self-Test ────────────────────────────────────────────────────────
 
 async function selfTest() {
@@ -13983,6 +13792,258 @@ async function selfTest() {
   process.exit(failed > 0 ? 1 : 0);
 }
 
+
+/**
+ * Phase 53 S0 — Orchestrator surface snapshot contract.
+ * Returns deterministic export + section-banner metadata for snapshot testing.
+ * Pure function — no side effects, no I/O.
+ */
+export function buildOrchestratorSurface() {
+  return {
+    exports: [
+      "API_ALLOWED_ROLES",
+      "COST_ANOMALY_MULTIPLIER",
+      "CRUCIBLE_STALL_CUTOFF_DAYS",
+      "CompetitiveScheduler",
+      "DEFAULT_GATE_TIMEOUT_MS",
+      "DEFAULT_WORKER_OUTPUT_IDLE_MS",
+      "DEFAULT_WORKER_TIMEOUT_MS",
+      "EVENT_SOURCE",
+      "GATE_ALLOWED_PREFIXES",
+      "GATE_SUGGESTION_AUTO_INJECT_THRESHOLD",
+      "POSTMORTEM_RETENTION_COUNT",
+      "PROPOSED_FIX_DIR",
+      "ParallelScheduler",
+      "QUORUM_PRESETS",
+      "REVIEW_RESOLUTIONS",
+      "REVIEW_SEVERITIES",
+      "REVIEW_SOURCES",
+      "REVIEW_STATUSES",
+      "SECURITY_RISK",
+      "SECURITY_RISK_FOR_TYPE",
+      "SUPPORTED_AGENTS",
+      "SequentialScheduler",
+      "TEMPERING_SCAN_STALE_DAYS",
+      "UNIX_TOOLS",
+      "__resetBashPathCache",
+      "addReviewItem",
+      "aggregateModelStats",
+      "analyzeWithQuorum",
+      "appendEvent",
+      "appendForgeJsonl",
+      "appendWatchHistory",
+      "applyFixProposal",
+      "assessQuorumViability",
+      "attachSliceSnapshotRestore",
+      "auditOrphanForgeFiles",
+      "autoCommitSliceIfDirty",
+      "buildApiMessages",
+      "buildCostBreakdown",
+      "buildEstimate",
+      "buildOrchestratorSurface",
+      "buildPlanPostmortem",
+      "buildRetryPrompt",
+      "buildWatchSnapshot",
+      "calculateSliceCost",
+      "captureAbsorbedCommits",
+      "classifyLegError",
+      "classifyProbeFailure",
+      "classifySliceDomain",
+      "cleanupStaleSnapshots",
+      "coalesceGateLines",
+      "compareSliceIds",
+      "compareVersions",
+      "computeLockHash",
+      "computeMedian",
+      "defaultRunGitApply",
+      "deriveVendorFromModel",
+      "describeBillingSurface",
+      "detectApiProvider",
+      "detectClientHost",
+      "detectCostAnomaly",
+      "detectExecutionRuntime",
+      "detectHelpTextOutput",
+      "detectKilledBySignal",
+      "detectPackageManager",
+      "detectRuntimes",
+      "detectSelfRepairMissed",
+      "detectSilentWorkerFailure",
+      "detectVersionCollision",
+      "detectWatchAnomalies",
+      "detectWorkers",
+      "editDistance",
+      "emitToolTelemetry",
+      "ensureForgeDir",
+      "ensureNotificationsConfig",
+      "ensureNotificationsDirs",
+      "ensureReviewQueueDirs",
+      "extractFilesModifiedExhaustive",
+      "extractPlanReleaseVersion",
+      "extractTokens",
+      "filterQuorumModels",
+      "findLatestRun",
+      "findMatchingFixProposal",
+      "formatGateSuggestions",
+      "formatQuorumSummary",
+      "generateImage",
+      "generateReviewItemId",
+      "getCostReport",
+      "getFoundryAuthScope",
+      "getHealthTrend",
+      "getRoutingPreference",
+      "inferSliceType",
+      "isApiOnlyModel",
+      "isCopilotServableModel",
+      "isDeployTrigger",
+      "isDestructiveSliceTitle",
+      "isDirectApiOnlyModel",
+      "isGateCommandAllowed",
+      "isPlaceholderToken",
+      "isWorktreeExemptPath",
+      "lintGateCommands",
+      "listPlanPostmortems",
+      "listReviewItems",
+      "loadAuditConfig",
+      "loadCompetitiveConfig",
+      "loadGateCheckConfig",
+      "loadGateSynthesisConfig",
+      "loadModelPerformance",
+      "loadOpenClawConfig",
+      "loadQuorumConfig",
+      "loadRoutingPreference",
+      "loadTeardownGuardConfig",
+      "loadWorkerCapabilities",
+      "looksLikeProse",
+      "markFixAttempted",
+      "maybeAddBugReview",
+      "maybeAddFixPlanReview",
+      "maybeAddStallReview",
+      "maybeAddTemperingReview",
+      "maybeAddVisualBaselineReview",
+      "normalizeRunState",
+      "normalizeSliceId",
+      "parseAnalyzeScore",
+      "parseEventLine",
+      "parseEventsLog",
+      "parseGitPorcelain",
+      "parseOnlySlicesExpr",
+      "parsePlan",
+      "parseShortstat",
+      "parseStderrStats",
+      "parseValidationGates",
+      "parseWorkerTimeoutValue",
+      "popSliceSnapshot",
+      "postOpenClawSnapshot",
+      "probeQuorumModelAvailability",
+      "pruneForgeRuns",
+      "pushSliceSnapshot",
+      "quorumDispatch",
+      "quorumReview",
+      "readCrucibleState",
+      "readForgeJson",
+      "readForgeJsonl",
+      "readHomeSnapshot",
+      "readReviewItem",
+      "readReviewQueueState",
+      "readSliceArtifacts",
+      "readTemperingConfig",
+      "readTemperingState",
+      "recommendFromAnomalies",
+      "recommendModel",
+      "recordModelPerformance",
+      "registerCorrelationThreadResponder",
+      "registerGateCheckResponder",
+      "regressionGuard",
+      "rerankEscalationChain",
+      "resetCliWorkersCache",
+      "resetPostSliceHookFired",
+      "resetPostSliceTemperingFired",
+      "resolveBashPath",
+      "resolveGateTimeoutMs",
+      "resolveRequiredCli",
+      "resolveReviewItem",
+      "resolveWorkerOutputIdleMs",
+      "resolveWorkerTimeoutMs",
+      "rollbackFixProposal",
+      "runAnalyze",
+      "runAutoSweep",
+      "runGate",
+      "runPlan",
+      "runPostRunAuditorHook",
+      "runPostSliceHook",
+      "runPostSliceTemperingHook",
+      "runPreAgentHandoffHook",
+      "runPreDeployHook",
+      "runWatch",
+      "runWatchLive",
+      "scoreSliceComplexity",
+      "selectWinner",
+      "setGhCopilotProbe",
+      "setSecretsLoader",
+      "shouldAutoDrain",
+      "shouldAutoRetryFix",
+      "shouldDefaultPremiumRequestsToOne",
+      "snapshotPreSliceState",
+      "spawnWorker",
+      "stageOrphansOnSliceFailure",
+      "suggestAllowedCommand",
+      "suggestInstall",
+      "synthesizeGateSuggestions",
+      "validateGatePortability",
+      "verifyBranchSafety",
+      "verifyFilesModified",
+      "writePlanPostmortem",
+      "writeProposedFixPatch",
+      "writeSilentExitRecord",
+    ],
+    sectionBanners: [
+      "API Provider Registry",
+      "API Provider Role Allowlist",
+      "Architecture Guardrail Rules",
+      "CLI Entry Point",
+      "Centralized Constants",
+      "Client Host Detection",
+      "Cost History (Phase 2)",
+      "Event Bus (C3: Dependency Injection)",
+      "Execution Runtime Detection",
+      "G2.3 — Run pruning",
+      "G2.5 — Orphan file audit",
+      "Health Trend Analysis",
+      "Host-Aware Routing Preference (#104)",
+      "Model Performance Tracking (Phase 3)",
+      "OpenClaw Integration (v2.29)",
+      "Operational Data Infrastructure",
+      "Orchestrator",
+      "Phase FORGE-SHOP-01 Slice 01.1 — Shop-floor home snapshot",
+      "Phase FORGE-SHOP-02 Slice 02.1 — Review Queue Storage",
+      "Phase FORGE-SHOP-02 Slice 02.2 — Review Queue Producer Hooks",
+      "Phase FORGE-SHOP-06 Slice 06.2 — Correlation Thread Responder",
+      "Phase FORGE-SHOP-06 Slice 06.2 — Gate Check Configuration",
+      "Phase FORGE-SHOP-06 Slice 06.2 — Gate Check Responder",
+      "Phase-25 Slice 4: Adaptive gate synthesis (L6)",
+      "Phase-25 Slice 5: Plan postmortem (L5 closed research loop)",
+      "Phase-26 Slice 10: Cost-anomaly detector + escalation re-ranking",
+      "Phase-26 Slice 9: Incident → fix-proposal auto-retry (C5)",
+      "Phase-28.3 Slice 4: Post-slice advisory scanner",
+      "Plan Parser",
+      "PostRun Auditor Hook (Phase-39 Slice 1 + Slice 2)",
+      "PostSlice Hook",
+      "PostSlice Tempering Hook (TEMPER-02 Slice 02.2)",
+      "PreAgentHandoff Hook",
+      "PreDeploy Hook",
+      "Pricing + Cost Estimation",
+      "Quorum Analysis",
+      "Quorum Mode (Phase 7 — v2.5)",
+      "Quorum Model Availability Probing (H.3)",
+      "Schedulers (C2: Pluggable)",
+      "Self-Test",
+      "Watcher (v2.34)",
+      "Windows bash dispatch",
+      "Worker Spawning",
+    ],
+  };
+}
+
 // ─── CLI Entry Point ──────────────────────────────────────────────────
 
 // Fix 1: Clean up zombie child processes when parent exits
@@ -13993,7 +14054,7 @@ for (const sig of ["exit", "SIGINT", "SIGTERM", "SIGHUP"]) {
         try { child.kill("SIGTERM"); } catch { /* already dead */ }
       }
     }
-  });
+  }));
 }
 
 const args = process.argv.slice(2);

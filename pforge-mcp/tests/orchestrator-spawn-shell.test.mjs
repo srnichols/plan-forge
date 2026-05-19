@@ -14,7 +14,8 @@ import { resolve } from "path";
 import { fileURLToPath } from "url";
 
 const __dirname = resolve(fileURLToPath(import.meta.url), "..");
-const src = readFileSync(resolve(__dirname, "..", "orchestrator.mjs"), "utf8");
+// Phase-53 S2: spawnWorker moved to orchestrator/worker-spawn.mjs
+const src = readFileSync(resolve(__dirname, "..", "orchestrator", "worker-spawn.mjs"), "utf8");
 
 // The new spawn call uses the local names _spawnBin / _spawnArg created by the
 // Bug #192 prelude. Extract THAT block (not the old `spawn(cmd, args, …)`).
@@ -41,7 +42,7 @@ describe("spawnWorker — Bug #82 .cmd shim resolution (post Bug #192)", () => {
     expect(spawnBlock).toContain("cwd");
   });
 
-  it("only one spawn(_spawnBin, _spawnArg, …) call-site exists in orchestrator.mjs", () => {
+  it("only one spawn(_spawnBin, _spawnArg, …) call-site exists in worker-spawn.mjs", () => {
     const all = src.match(/spawn\(_spawnBin, _spawnArg,/g) ?? [];
     expect(all.length).toBe(1);
   });

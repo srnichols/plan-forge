@@ -7,6 +7,14 @@ Format follows [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
+### Added — Phase 42 Clean Code audit catalog
+
+- **`docs/plans/cleanup-findings/`**: Audited Plan Forge's own codebase against *Clean Code* 2nd ed (Robert C. Martin, 2025). Clean Code audit catalog contains 27 actionable findings across 6 categories (A–F): module size (high and medium), long parameter lists, ESLint errors, ESLint warnings, and console.log advisory. Categories summary pivot at `CATEGORIES-SUMMARY.md`; two phase stubs promoted — Phase 43 (ESLint errors, blocking) and Phase 44 (module extraction, architectural debt). No production code changed — read-only audit output only.
+- **`.github/instructions/architecture-principles.instructions.md`**: Temper Guards section updated with three entries derived from the catalog — module size threshold (A-series), long parameter lists (C-series), and ESLint error-severity violations (D-series).
+- **`scripts/audit/`**: Five audit tooling scripts (`eslint-audit.mjs`, `duplication-audit.mjs`, `module-metrics.mjs`, `grep-matrix.mjs`, `long-param-walker.mjs`) and a `README.md`. All runnable independently or via `pforge audit`.
+
+---
+
 ### Changed — Centralized stable enums (no behavior change)
 
 - New `pforge-mcp/enums.mjs` — single source of truth for 8 stable small-set identifier arrays: `HOOK_NAMES`, `HOOK_PASCAL`, `HOOK_CATEGORY`, `MODEL_TIERS`, `QUORUM_MODES`, `FORGE_MASTER_MODES`, `WATCHER_MODES`, `COST_SOURCES`, `ERROR_CODES`, `TOOL_NAMES`. All `Object.freeze`'d with runtime assert helpers.

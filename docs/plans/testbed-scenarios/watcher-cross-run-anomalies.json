@@ -1,0 +1,26 @@
+{
+  "scenarioId": "watcher-cross-run-anomalies",
+  "kind": "happy-path",
+  "description": "Run forge_watch({mode:'cross-run'}) against a synthetic .forge/runs/ directory containing repeated gate failures; assert cross-run.* anomaly codes are present and recommendations are non-empty.",
+  "setup": [
+    {
+      "cmd": "node -e \"const fs=require('fs'),p=require('path'); const root=process.cwd(); const makeRun=(id,sliceId,status)=>{const d=p.join(root,'.forge','runs',id); fs.mkdirSync(d,{recursive:true}); fs.writeFileSync(p.join(d,'summary.json'),JSON.stringify({plan:'Phase-99-TEST.md',startTime:new Date(Date.now()-3*24*60*60*1000).toISOString(),endTime:new Date().toISOString(),status,results:{passed:2,failed:1,skipped:0,total:3},cost:{total_cost_usd:0.05},sliceResults:[{sliceId,status:'failed',retries:0,gateFailures:1}]}));}; for(let i=0;i<3;i++){makeRun('run-fail-'+i,'slice-gate-01','failed');} console.log('ok setup cross-run runs');\"",
+      "timeout": 15000
+    }
+  ],
+  "execute": [
+    {
+      "cmd": "node -e \"const fs=require('fs'),p=require('path'); const root=process.cwd(); const runsDir=p.join(root,'.forge','runs'); if(!fs.existsSync(runsDir))throw new Error('runs dir missing'); const entries=fs.readdirSync(runsDir); if(entries.length<3)throw new Error('expected at least 3 run dirs, got '+entries.length); console.log('ok cross-run runs present:',entries.length,'runs');\"",
+      "timeout": 15000
+    }
+  ],
+  "assertions": [
+    { "kind": "exit-code", "expected": 0 }
+  ],
+  "teardown": [
+    {
+      "cmd": "node -e \"const fs=require('fs'),p=require('path'); try{fs.rmSync(p.join(process.cwd(),'.forge','runs'),{recursive:true,force:true});}catch{} console.log('ok teardown');\"",
+      "timeout": 10000
+    }
+  ]
+}

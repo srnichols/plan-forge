@@ -105,6 +105,7 @@ function Show-Help {
     Write-Host "  testbed-happypath Run all happy-path testbed scenarios sequentially with aggregated pass/fail summary"
     Write-Host "  migrate-memory    Migrate legacy .forge/memory/ entries into the L2 brain store"
     Write-Host "  drain-memory      Drain pending OpenBrain queue records to the configured OpenBrain server"
+    Write-Host "  forge-home-cleanup Archive ephemeral .forge/ files (logs, tmp, release notes) and prune old archive slots"
     Write-Host "  mcp-call <tool>   Invoke any MCP tool by name (e.g. forge_crucible_list) via the local MCP server"
     Write-Host "  tour              Guided walkthrough of your installed Plan Forge files"
     Write-Host "  hammer-fm         Run Forge-Master hammer harness against a live dashboard (see: pforge hammer-fm --help)"
@@ -5473,6 +5474,23 @@ function Invoke-MigrateMemory {
     }
 }
 
+# ─── Command: forge-home-cleanup (Issue #203) ──────────────────────────
+# Moves ephemeral .forge/ files (logs, tmp, release-notes, meta-bug drafts)
+# to .forge/archive/<YYYY-MM>/ and optionally prunes old archive slots.
+#
+# Usage:
+#   pforge forge-home-cleanup [--dry-run] [--no-confirm] [--max-age-days=90]
+function Invoke-ForgeHomeCleanup {
+    $scriptPath = Join-Path $PSScriptRoot "scripts\forge-home-cleanup.mjs"
+    if (-not (Test-Path $scriptPath)) {
+        Write-Host "ERROR: forge-home-cleanup.mjs not found at $scriptPath" -ForegroundColor Red
+        exit 1
+    }
+    $nodeArgs = @($scriptPath) + $Arguments
+    & node @nodeArgs
+    exit $LASTEXITCODE
+}
+
 # ─── Command: mcp-call ─────────────────────────────────────────────────
 # Generic proxy for any MCP tool exposed by the running pforge-mcp server
 # on :3100. Covers crucible-*, tempering-*, bug-*, generate-image,
@@ -7401,6 +7419,7 @@ switch ($Command) {
     'version-bump' { Invoke-VersionBump }
     'smith'        { Invoke-Smith }
     'testbed-happypath' { Invoke-TestbedHappypath }
+    'forge-home-cleanup' { Invoke-ForgeHomeCleanup }
     'migrate-memory' { Invoke-MigrateMemory }
     'drain-memory' { Invoke-DrainMemory }
     'brain'        { Invoke-Brain }

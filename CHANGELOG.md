@@ -9,6 +9,23 @@ Format follows [Keep a Changelog](https://keepachangelog.com/).
 
 ---
 
+## [3.8.1] — 2026-05-19 — Forge-Home Cleanup (Issue #203)
+
+> **One-liner**: Silences 115+ false-positive orphan reports from `forge_memory_report` by expanding its known-file/dir whitelist and ephemeral-pattern exclusions; ships `pforge forge-home-cleanup` CLI + `scripts/forge-home-cleanup.mjs` to archive and prune stale `.forge/` files; adds `.forge/.gitignore` template to keep ephemeral files out of source control. 12 new tests.
+
+### What's new
+
+- **`pforge-mcp/memory.mjs` — `buildMemoryReport` whitelist expanded**: Added ~20 known state files (`cost-history.json`, `drift-history.json`, `model-performance.json`, `quorum-history.jsonl`, `watch-history.jsonl`, `dashboard-state.json`, `secrets.json`, `update-check.json`, `version-check.json`, `secret-scan-cache.json`, `fm-prefs.json`, `forge-master-observer-state.json`, `liveguard-events.jsonl`, `fix-proposals.json`, `team-activity.jsonl`, `health-dna.jsonl`, `last-orch.pid`, `server-ports.json`, `openbrain-queue.archive.jsonl`, `rbac.example.json`) and ~20 known subdirs (`plans/`, `digests/`, `trajectories/`, `crucible/`, `tempering/`, `runbooks/`, `graph/`, `bugs/`, `analysis/`, `fm-sessions/`, `skills-auto/`, `cache/`, `validation/`, `chain-logs/`, `health/`, `archive/`, `network-logs/`, `hammer-forge-master/`, `load-sim/`, `orchestrator-logs/`). Added `ephemeralPatterns` regex array so release-note files, chain-runner/harden/fm/mcp/sequencer logs, meta-bug drafts, tmp files, PID files, and liveguard broadcast logs are excluded from orphan reporting.
+- **`scripts/forge-home-cleanup.mjs`**: New standalone script. Scans `.forge/` for ephemeral files matching the same pattern list, moves them to `.forge/archive/<YYYY-MM>/` (reversible), and optionally deletes archive slots older than `--max-age-days` (default 90). Flags: `--dry-run`, `--no-confirm`, `--max-age-days=N`, `--cwd=<path>`.
+- **`pforge forge-home-cleanup` / `pforge.sh forge-home-cleanup`**: Both shells dispatch to `scripts/forge-home-cleanup.mjs` with all forwarded arguments.
+- **`.forge/.gitignore`**: Template file that keeps release-note archives, chain/harden/fm/mcp logs, meta-bug drafts, and tmp files out of source control.
+
+### Tests
+
+- **`pforge-mcp/tests/forge-home-cleanup.test.mjs`** — 12 tests: whitelist covers all known L2 files (7 known files), state files (18), subdirs (20), ephemeral patterns (14); unknown files still reported as orphans; cleanup script dry-run keeps files in place; cleanup script moves ephemeral files to archive; non-ephemeral files are untouched; `--max-age-days=0` disables pruning. All 12 pass.
+
+---
+
 ## [3.8.0] — 2026-05-19 — Auditor Automation & Observer (Phase-39)
 
 > **One-liner**: Ships automated post-run auditing hooks and a live-pipeline Observer that subscribes to the hub WebSocket, batches events, and narrates notable patterns in plain prose via the Forge-Master reasoning loop.

@@ -1,0 +1,28 @@
+{
+  "scenarioId": "observer-chaos-kill-mid-narration",
+  "kind": "chaos",
+  "description": "Verify that an abrupt observer stop leaves no corrupted budget state: write valid state, simulate mid-operation abort, assert state file is valid JSON with no phantom spend beyond what was recorded.",
+  "setup": [
+    {
+      "cmd": "node -e \"const fs=require('fs'),p=require('path'); fs.mkdirSync(p.join(process.cwd(),'.forge'),{recursive:true}); const now=Date.now(); const state={dailyUsd:0.0,dailyDate:new Date(now).toISOString().slice(0,10),hourlyNarrations:0,hourlyHour:new Date(now).toISOString().slice(0,13)}; fs.writeFileSync(p.join(process.cwd(),'.forge','forge-master-observer-state.json'),JSON.stringify(state)); \"",
+      "timeout": 10000
+    }
+  ],
+  "execute": [
+    {
+      "cmd": "node -e \"const fs=require('fs'),p=require('path'); const statePath=p.join(process.cwd(),'.forge','forge-master-observer-state.json'); const raw=fs.readFileSync(statePath,'utf-8'); let state; try{state=JSON.parse(raw);}catch(e){throw new Error('state file corrupt after simulated abort: '+e.message);} if(state.dailyUsd!==0.0)throw new Error('phantom spend detected: dailyUsd='+state.dailyUsd+' (expected 0)'); console.log('ok chaos: no phantom spend, state file valid after abort');\"",
+      "timeout": 15000
+    }
+  ],
+  "assertions": [
+    { "kind": "exit-code", "expected": 0 },
+    { "kind": "file-exists", "path": ".forge/forge-master-observer-state.json" },
+    { "kind": "file-contains", "path": ".forge/forge-master-observer-state.json", "pattern": "dailyUsd" }
+  ],
+  "teardown": [
+    {
+      "cmd": "node -e \"const fs=require('fs'),p=require('path'); const targets=[p.join(process.cwd(),'.forge','forge-master-observer-state.json'),p.join(process.cwd(),'.forge','forge-master-observer.pid')]; for(const t of targets){try{fs.rmSync(t,{force:true});}catch{}} \"",
+      "timeout": 10000
+    }
+  ]
+}

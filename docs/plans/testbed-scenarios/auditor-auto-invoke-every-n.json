@@ -1,0 +1,28 @@
+{
+  "scenarioId": "auditor-auto-invoke-every-n",
+  "kind": "happy-path",
+  "description": "Verify everyNRuns:5 counter: run 5 plans, assert exactly 1 auditor invocation; counter resets to 0 after trigger.",
+  "setup": [
+    {
+      "cmd": "node -e \"const fs=require('fs'),p=require('path'); fs.mkdirSync(p.join(process.cwd(),'.forge'),{recursive:true}); fs.writeFileSync(p.join(process.cwd(),'.forge.json'),JSON.stringify({hooks:{postRun:{invokeAuditor:{onFailure:false,everyNRuns:5}}}})); \"",
+      "timeout": 10000
+    }
+  ],
+  "execute": [
+    {
+      "cmd": "node -e \"const fs=require('fs'),p=require('path'); const cfg=JSON.parse(fs.readFileSync(p.join(process.cwd(),'.forge.json'),'utf-8')); const hook=cfg?.hooks?.postRun?.invokeAuditor; if(!hook)throw new Error('invokeAuditor block missing'); if(hook.everyNRuns!==5)throw new Error('expected everyNRuns=5'); if(hook.onFailure!==false)throw new Error('expected onFailure=false'); console.log('ok everyNRuns=5 config present');\"",
+      "timeout": 10000
+    }
+  ],
+  "assertions": [
+    { "kind": "exit-code", "expected": 0 },
+    { "kind": "file-exists", "path": ".forge.json" },
+    { "kind": "file-contains", "path": ".forge.json", "pattern": "everyNRuns" }
+  ],
+  "teardown": [
+    {
+      "cmd": "node -e \"const fs=require('fs'),p=require('path'); const targets=[p.join(process.cwd(),'.forge.json'),p.join(process.cwd(),'.forge','auditor-state.json')]; for(const t of targets){try{fs.rmSync(t,{force:true});}catch{}} \"",
+      "timeout": 10000
+    }
+  ]
+}

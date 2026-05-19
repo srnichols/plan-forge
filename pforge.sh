@@ -113,6 +113,7 @@ COMMANDS:
   version-bump <v>  Update VERSION, package.json, docs/README/ROADMAP version badges to v<version>
   migrate-memory    Merge legacy *-history.json ledgers into canonical .jsonl siblings (idempotent)
   drain-memory      Drain pending OpenBrain queue records to the configured OpenBrain server
+  forge-home-cleanup Archive ephemeral .forge/ files (logs, tmp, release notes) and prune old archive slots
   mcp-call <tool>   Invoke any MCP tool by name (e.g. forge_crucible_list) via the local MCP server
   tour              Guided walkthrough of your installed Plan Forge files
   help              Show this help message
@@ -4894,6 +4895,23 @@ else console.log(`\x1b[36m─── migrate-memory complete: ${migrated} migrate
 '
 }
 
+# ─── Command: forge-home-cleanup (Issue #203) ──────────────────────────
+# Moves ephemeral .forge/ files to .forge/archive/<YYYY-MM>/ and optionally
+# prunes old archive slots. Mirrors Invoke-ForgeHomeCleanup in pforge.ps1.
+#
+# Usage:
+#   pforge forge-home-cleanup [--dry-run] [--no-confirm] [--max-age-days=90]
+cmd_forge_home_cleanup() {
+    local script_path
+    script_path="$(dirname "$0")/scripts/forge-home-cleanup.mjs"
+    if [ ! -f "$script_path" ]; then
+        printf "\033[31mERROR: forge-home-cleanup.mjs not found at %s\033[0m\n" "$script_path" >&2
+        exit 1
+    fi
+    node "$script_path" "$@"
+    exit $?
+}
+
 # ─── Command: mcp-call ─────────────────────────────────────────────────
 # Generic proxy for any MCP tool exposed by the running pforge-mcp server
 # on :3100. Covers crucible-*, tempering-*, bug-*, generate-image,
@@ -6612,6 +6630,7 @@ case "$COMMAND" in
     version-bump) cmd_version_bump "$@" ;;
     migrate-memory) cmd_migrate_memory "$@" ;;
     drain-memory) cmd_drain_memory "$@" ;;
+    forge-home-cleanup) cmd_forge_home_cleanup "$@" ;;
     brain)        cmd_brain "$@" ;;
     mcp-call)     cmd_mcp_call "$@" ;;
     tour)         cmd_tour ;;

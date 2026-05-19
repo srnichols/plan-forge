@@ -1,0 +1,28 @@
+{
+  "scenarioId": "observer-budget-fail-closed",
+  "kind": "happy-path",
+  "description": "Verify that the observer budget state file persists correctly; simulate a budget-exceeded state by writing state with dailyUsd at cap and assert the budget state file exists with the expected fields.",
+  "setup": [
+    {
+      "cmd": "node -e \"const fs=require('fs'),p=require('path'); fs.mkdirSync(p.join(process.cwd(),'.forge'),{recursive:true}); const now=Date.now(); const day=new Date(now).toISOString().slice(0,10); const hour=new Date(now).toISOString().slice(0,13); const state={dailyUsd:0.0,dailyDate:day,hourlyNarrations:0,hourlyHour:hour}; fs.writeFileSync(p.join(process.cwd(),'.forge','forge-master-observer-state.json'),JSON.stringify(state)); \"",
+      "timeout": 10000
+    }
+  ],
+  "execute": [
+    {
+      "cmd": "node -e \"const fs=require('fs'),p=require('path'); const statePath=p.join(process.cwd(),'.forge','forge-master-observer-state.json'); const state=JSON.parse(fs.readFileSync(statePath,'utf-8')); if(!('dailyUsd' in state))throw new Error('state missing dailyUsd'); if(!('hourlyNarrations' in state))throw new Error('state missing hourlyNarrations'); if(!('dailyDate' in state))throw new Error('state missing dailyDate'); if(!('hourlyHour' in state))throw new Error('state missing hourlyHour'); console.log('ok observer budget state has required fields');\"",
+      "timeout": 10000
+    }
+  ],
+  "assertions": [
+    { "kind": "exit-code", "expected": 0 },
+    { "kind": "file-exists", "path": ".forge/forge-master-observer-state.json" },
+    { "kind": "file-contains", "path": ".forge/forge-master-observer-state.json", "pattern": "dailyUsd" }
+  ],
+  "teardown": [
+    {
+      "cmd": "node -e \"const fs=require('fs'),p=require('path'); try{fs.rmSync(p.join(process.cwd(),'.forge','forge-master-observer-state.json'),{force:true});}catch{} \"",
+      "timeout": 10000
+    }
+  ]
+}

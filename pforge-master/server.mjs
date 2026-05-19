@@ -160,6 +160,18 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
     }
 
     if (action === "start") {
+      const fmConfig = getForgeMasterConfig({ cwd });
+      if (!fmConfig.observer.enabled) {
+        return {
+          content: [{ type: "text", text: JSON.stringify({
+            ok: false,
+            error: "observer-disabled",
+            message: "Observer is disabled. Set forgeMaster.observer.enabled: true in .forge.json to enable.",
+          }, null, 2) }],
+          isError: true,
+        };
+      }
+
       if (_activeObserver && !_activeObserver.getStatus().stopped) {
         return {
           content: [{ type: "text", text: JSON.stringify({

@@ -1961,20 +1961,68 @@ export function buildMemoryReport(cwd = process.cwd()) {
 
   // Orphan audit — files in .forge/ not listed in the known registry
   const knownFiles = new Set([
+    // L2 memory files
     "liveguard-memories.jsonl", "openbrain-queue.jsonl", "openbrain-dlq.jsonl",
     "openbrain-stats.jsonl", "hub-events.jsonl", "drift-history.jsonl",
     "incidents.jsonl", "regression-history.jsonl", "env-diff-history.jsonl",
-    "memory-search-cache.jsonl", "runs",
+    "memory-search-cache.jsonl", "openbrain-queue.archive.jsonl",
+    // Orchestrator state files
+    "runs", "traces", "last-orch.pid", "server-ports.json",
+    // Cost / performance / quorum history
+    "cost-history.json", "drift-history.json", "model-performance.json",
+    "quorum-history.jsonl", "watch-history.jsonl",
+    // Dashboard / UI state
+    "dashboard-state.json",
+    // Config / secrets (user-managed)
+    "secrets.json", "rbac.example.json",
+    // Update checks
+    "update-check.json", "version-check.json",
+    // Security scan cache
+    "secret-scan-cache.json",
+    // Forge-Master operational state
+    "fm-prefs.json", "forge-master-observer-state.json",
+    // Liveguard / tempering operational files
+    "liveguard-events.jsonl", "fix-proposals.json",
+    // Team activity
+    "team-activity.jsonl",
+    // Health / DNA
+    "health-dna.jsonl",
   ]);
+  // Known subdirectories — never flagged as orphans
+  const knownDirs = new Set([
+    "telemetry", "runs", "traces", "plans", "digests", "trajectories",
+    "crucible", "tempering", "runbooks", "graph", "bugs", "analysis",
+    "fm-sessions", "skills-auto", "cache", "validation", "chain-logs",
+    "health", "archive", "network-logs", "notifications",
+    "hammer-forge-master", "load-sim", "orchestrator-logs", "bugs",
+  ]);
+  // Patterns for ephemeral files that accumulate during normal operation
+  const ephemeralPatterns = [
+    /^release-notes-v[\d.]+.*\.(md|txt)$/,
+    /^chain-runner.*\.log$/,
+    /^run-phase-.*\.log$/,
+    /^harden-.*\.log$/,
+    /^fm-.*\.(log|json|txt)$/,
+    /^mcp-.*\.log$/,
+    /^sequencer-.*\.log$/,
+    /^load-sim.*\.(log|json)$/,
+    /^meta-bug-.*\.(md|txt|json)$/,
+    /^gate-tmp\./,
+    /^tmp[-_]/,
+    /\.pid$/,
+    /\.log$/,
+  ];
   const orphans = [];
   if (exists) {
     try {
       for (const entry of readdirSync(forgeDir)) {
         if (entry.startsWith(".")) continue;
         if (knownFiles.has(entry)) continue;
-        if (entry === "telemetry") continue;
-        // Tolerate .bak files (from migrate-memory) and directories
+        if (knownDirs.has(entry)) continue;
+        // Tolerate .bak files (from migrate-memory)
         if (entry.endsWith(".bak") || /\.bak-\d{4}-\d{2}-\d{2}$/.test(entry)) continue;
+        // Tolerate ephemeral log/tmp/scratch files
+        if (ephemeralPatterns.some((re) => re.test(entry))) continue;
         orphans.push(entry);
       }
     } catch { /* ignore */ }

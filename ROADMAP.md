@@ -7,7 +7,9 @@
 
 ## Current Release
 
-**v3.8.0** (2026-05-19) — Auditor Automation & Observer (Phase-39). Automated post-run auditing hooks (`hooks.postRun.invokeAuditor.onFailure` + `everyNRuns`), cross-run watcher mode with four new anomaly codes, and a live-pipeline Observer that subscribes to the hub WebSocket, batches events, and narrates notable patterns via the Forge-Master reasoning loop. CLI: `pforge forge-master observe`.
+**v3.8.1** (2026-05-19) — Forge-Home Cleanup (Issue #203). `forge_memory_report` now silences 115+ false-positive orphan reports by recognizing 20+ legitimate state files and 20+ known subdirectories, plus ephemeral-pattern exclusions for logs, tmp files, and meta-bug drafts. New `pforge forge-home-cleanup` CLI dispatches to `scripts/forge-home-cleanup.mjs` — moves stale ephemeral files to `.forge/archive/<YYYY-MM>/` and prunes archive slots older than `--max-age-days` (default 90). `.forge/.gitignore` template added. 12 new tests.
+
+Previous: **v3.8.0** (2026-05-19) — Auditor Automation & Observer (Phase-39). Automated post-run auditing hooks (`hooks.postRun.invokeAuditor.onFailure` + `everyNRuns`), cross-run watcher mode with four new anomaly codes, and a live-pipeline Observer that subscribes to the hub WebSocket, batches events, and narrates notable patterns via the Forge-Master reasoning loop. CLI: `pforge forge-master observe`.
 
 Previous: **v3.7.0** (2026-05-18) — Worker Guardrails (A1–A8). Hardened Forbidden Actions matching, diff classification, PreCommit chain, plan-health auditor agent, network allowlists, lockHash, objective-gated tempering, and tool denylists.
 
@@ -43,7 +45,7 @@ Previous: **v2.90.10** (2026-05-05) — Forge-Master Cross-Session Recall (Phase
 
 Previous: **v2.90.10** (2026-05-05) — Forge-Master Conversation Memory (Phase-38.1). Adds file-based JSONL session persistence to the Forge-Master reasoning engine. `runTurn` loads prior conversation turns before classification and persists each turn to disk. Per-tab session IDs flow from the dashboard (`sessionStorage` UUID) through `x-pforge-session-id` HTTP header to `deps.sessionId` in `runTurn`. Sessions auto-rotate at 200 turns. New CLI: `pforge fm-session list|purge`.
 
-**In flight (next)**: Phase CLASSIFIER-ISSUE ✅ complete (v3.5.0). Next phase TBD — candidates: embedding fallback hardening (first-class WASM model), enterprise hardening track (OTel exporter, BYO Azure OpenAI first-class, auth/RBAC scaffolding), Issue #198 fix (vitest output parser for subagent hallucination).
+**In flight (next)**: Issue #203 ✅ complete (v3.8.1). Next phase TBD — candidates: embedding fallback hardening (first-class WASM model), enterprise hardening track (OTel exporter, BYO Azure OpenAI first-class, auth/RBAC scaffolding).
 
 See [CHANGELOG.md](CHANGELOG.md) for full release notes.
 

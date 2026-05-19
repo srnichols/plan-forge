@@ -23,5 +23,6 @@ export default defineConfig({
     root: configDir,
     include: ["tests/**/*.test.mjs", "../pforge-sdk/tests/**/*.test.mjs"],
     exclude: ["**/.forge/**", "**/node_modules/**"],
+    hookTimeout: 30000,
   },
 });

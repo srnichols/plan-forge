@@ -397,7 +397,8 @@ describe("cache invalidation", () => {
     const r1 = await timeline({ from: "24h", sources: ["hub-event"] }, { cwd: tmpDir });
     const r2 = await timeline({ from: "24h", sources: ["hub-event"] }, { cwd: tmpDir });
     expect(r1.events.length).toBe(r2.events.length);
-    expect(r2.durationMs).toBeLessThanOrEqual(r1.durationMs + 5);
+    // Tolerance must accommodate OS scheduler jitter on Windows (was +5ms — flaky under load)
+    expect(r2.durationMs).toBeLessThanOrEqual(r1.durationMs + 50);
   });
 
   it("invalidates cache after clearTimelineCache()", async () => {

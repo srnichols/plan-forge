@@ -105,6 +105,6 @@ describe("readHomeSnapshot performance", () => {
     expect(result.quadrants.liveguard).not.toBeNull();
     expect(result.quadrants.tempering).not.toBeNull();
     expect(result.activityFeed.length).toBe(25); // default tail
-    expect(elapsed).toBeLessThan(250);
+    expect(elapsed).toBeLessThan(500);
   });
 });

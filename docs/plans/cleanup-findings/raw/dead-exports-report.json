@@ -1,16 +1,16 @@
 {
-  "generatedAt": "2026-05-19T16:54:58.001Z",
+  "generatedAt": "2026-05-19T20:09:55.259Z",
   "scopes": [
     "pforge-mcp",
     "pforge-master",
     "scripts"
   ],
   "counts": {
-    "filesScanned": 207,
-    "filesWithDeadExports": 100,
-    "totalExports": 1078,
-    "deadExports": 674,
-    "namespaceConsumedFiles": 20
+    "filesScanned": 226,
+    "filesWithDeadExports": 103,
+    "totalExports": 1157,
+    "deadExports": 683,
+    "namespaceConsumedFiles": 31
   },
   "findings": [
     {
@@ -557,6 +557,19 @@
       "totalExports": 8
     },
     {
+      "file": "pforge-mcp/capabilities.mjs",
+      "deadExports": [
+        "CLI_SCHEMA",
+        "CONFIG_SCHEMA",
+        "INNER_LOOP_SURFACE",
+        "SYSTEM_REFERENCE",
+        "TOOL_METADATA",
+        "WORKFLOWS",
+        "buildCapabilities"
+      ],
+      "totalExports": 10
+    },
+    {
       "file": "pforge-mcp/crucible-server.mjs",
       "deadExports": [
         "collectExistingPhaseNames",
@@ -607,18 +620,6 @@
         "setExternalRef"
       ],
       "totalExports": 13
-    },
-    {
-      "file": "pforge-mcp/capabilities.mjs",
-      "deadExports": [
-        "CLI_SCHEMA",
-        "CONFIG_SCHEMA",
-        "INNER_LOOP_SURFACE",
-        "TOOL_METADATA",
-        "WORKFLOWS",
-        "buildCapabilities"
-      ],
-      "totalExports": 9
     },
     {
       "file": "pforge-mcp/crucible-interview.mjs",
@@ -800,6 +801,16 @@
       "totalExports": 4
     },
     {
+      "file": "pforge-mcp/dashboard/github-personal-tab.mjs",
+      "deadExports": [
+        "renderAccountCard",
+        "renderAiAssistCard",
+        "renderPersonalEmptyState",
+        "renderRepoActivityCard"
+      ],
+      "totalExports": 4
+    },
+    {
       "file": "pforge-mcp/lattice.mjs",
       "deadExports": [
         "_resetChunkerForTesting",
@@ -923,6 +934,15 @@
         "normaliseGatePattern"
       ],
       "totalExports": 3
+    },
+    {
+      "file": "pforge-mcp/server/state.mjs",
+      "deadExports": [
+        "_legacyCaptureMemoryUnused",
+        "server",
+        "setServer"
+      ],
+      "totalExports": 28
     },
     {
       "file": "pforge-mcp/tempering/bug-adapters/contract.mjs",
@@ -1174,6 +1194,13 @@
         "quotaCacheSet"
       ],
       "totalExports": 4
+    },
+    {
+      "file": "pforge-mcp/github-personal.mjs",
+      "deadExports": [
+        "PersonalError"
+      ],
+      "totalExports": 7
     },
     {
       "file": "pforge-mcp/hub.mjs",

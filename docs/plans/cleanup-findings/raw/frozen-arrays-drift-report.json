@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-05-19T16:54:58.415Z",
+  "generatedAt": "2026-05-19T20:09:56.010Z",
   "enumsSource": "pforge-mcp/enums.mjs",
   "enumsScanned": {
     "HOOK_PASCAL": {
@@ -12,8 +12,8 @@
   "extendedScan": false,
   "includeTests": false,
   "counts": {
-    "filesScanned": 207,
-    "filesWithDrift": 11,
+    "filesScanned": 226,
+    "filesWithDrift": 12,
     "warnings": 6,
     "info": 23,
     "byEnum": {
@@ -199,20 +199,12 @@
       ]
     },
     {
-      "file": "pforge-mcp/server.mjs",
+      "file": "pforge-mcp/server/rest-api.mjs",
       "findings": [
         {
           "enum": "ERROR_CODES",
-          "literal": "SCANNER_UNAVAILABLE",
-          "line": 3551,
-          "severity": "warn",
-          "kind": "HARD-DRIFT",
-          "why": "File imports ERROR_CODES but still uses hand-typed \"SCANNER_UNAVAILABLE\" — replace with the constant"
-        },
-        {
-          "enum": "ERROR_CODES",
           "literal": "ASK_QUESTION_MISMATCH",
-          "line": 7989,
+          "line": 1461,
           "severity": "warn",
           "kind": "HARD-DRIFT",
           "why": "File imports ERROR_CODES but still uses hand-typed \"ASK_QUESTION_MISMATCH\" — replace with the constant"
@@ -220,7 +212,7 @@
         {
           "enum": "ERROR_CODES",
           "literal": "PLAN_ALREADY_EXISTS",
-          "line": 8049,
+          "line": 1521,
           "severity": "warn",
           "kind": "HARD-DRIFT",
           "why": "File imports ERROR_CODES but still uses hand-typed \"PLAN_ALREADY_EXISTS\" — replace with the constant"
@@ -249,12 +241,12 @@
       ]
     },
     {
-      "file": "pforge-mcp/capabilities.mjs",
+      "file": "pforge-mcp/capabilities/tool-metadata.mjs",
       "findings": [
         {
           "enum": "ERROR_CODES",
           "literal": "observer-budget-exceeded",
-          "line": 1672,
+          "line": 1642,
           "severity": "info",
           "kind": "SOFT-DRIFT",
           "why": "File hand-types \"observer-budget-exceeded\" without importing ERROR_CODES — review whether to migrate"
@@ -297,6 +289,19 @@
           "severity": "info",
           "kind": "SOFT-DRIFT",
           "why": "File hand-types \"LOCK_HASH_MISMATCH\" without importing ERROR_CODES — review whether to migrate"
+        }
+      ]
+    },
+    {
+      "file": "pforge-mcp/server/tool-handlers.mjs",
+      "findings": [
+        {
+          "enum": "ERROR_CODES",
+          "literal": "SCANNER_UNAVAILABLE",
+          "line": 1575,
+          "severity": "warn",
+          "kind": "HARD-DRIFT",
+          "why": "File imports ERROR_CODES but still uses hand-typed \"SCANNER_UNAVAILABLE\" — replace with the constant"
         }
       ]
     },

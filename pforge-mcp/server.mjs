@@ -2631,7 +2631,7 @@ server.setRequestHandler(CallToolRequestSchema, _wrapWithToolSpan(async (request
       }
       const planFullPath = resolve(cwd, args.planPath);
       if (!existsSync(planFullPath)) {
-        return { content: [{ type: "text", text: `PLAN_NOT_FOUND: ${args.planPath}` }], isError: true };
+        return { content: [{ type: "text", text: `${ERROR_CODES.PLAN_NOT_FOUND.code}: ${args.planPath}` }], isError: true };
       }
       const { parsePlan } = await import("./orchestrator.mjs");
       const { estimateQuorum } = await import("./cost-service.mjs");
@@ -2639,7 +2639,7 @@ server.setRequestHandler(CallToolRequestSchema, _wrapWithToolSpan(async (request
       try {
         plan = parsePlan(planFullPath, cwd);
       } catch (err) {
-        return { content: [{ type: "text", text: `PLAN_PARSE_FAILED: ${err.message}` }], isError: true };
+        return { content: [{ type: "text", text: `${ERROR_CODES.PLAN_PARSE_ERROR.code}: ${err.message}` }], isError: true };
       }
       const result = estimateQuorum({
         plan,
@@ -2668,7 +2668,7 @@ server.setRequestHandler(CallToolRequestSchema, _wrapWithToolSpan(async (request
       }
       const planFullPath = resolve(cwd, args.planPath);
       if (!existsSync(planFullPath)) {
-        return { content: [{ type: "text", text: `PLAN_NOT_FOUND: ${args.planPath}` }], isError: true };
+        return { content: [{ type: "text", text: `${ERROR_CODES.PLAN_NOT_FOUND.code}: ${args.planPath}` }], isError: true };
       }
       const { parsePlan } = await import("./orchestrator.mjs");
       const { estimateSlice } = await import("./cost-service.mjs");
@@ -2676,7 +2676,7 @@ server.setRequestHandler(CallToolRequestSchema, _wrapWithToolSpan(async (request
       try {
         plan = parsePlan(planFullPath, cwd);
       } catch (err) {
-        return { content: [{ type: "text", text: `PLAN_PARSE_FAILED: ${err.message}` }], isError: true };
+        return { content: [{ type: "text", text: `${ERROR_CODES.PLAN_PARSE_ERROR.code}: ${err.message}` }], isError: true };
       }
       let result;
       try {
@@ -3234,7 +3234,7 @@ server.setRequestHandler(CallToolRequestSchema, _wrapWithToolSpan(async (request
       if (args.smeltId) {
         const smelt = getSmelt(cwd, args.smeltId);
         if (!smelt) {
-          return { content: [{ type: "text", text: JSON.stringify({ ok: false, error: ERROR_CODES.SMELT_NOT_FOUND, smeltId: args.smeltId }) }] };
+          return { content: [{ type: "text", text: JSON.stringify({ ok: false, error: ERROR_CODES.SMELT_NOT_FOUND.code, smeltId: args.smeltId }) }] };
         }
         return { content: [{ type: "text", text: JSON.stringify({ ok: true, smelt }, null, 2) }] };
       }
@@ -3422,7 +3422,7 @@ server.setRequestHandler(CallToolRequestSchema, _wrapWithToolSpan(async (request
     try {
       const cwd = args.path ? findProjectRoot(resolve(args.path)) : findProjectRoot(PROJECT_DIR);
       if (!args.payload || typeof args.payload !== "object") {
-        const result = { ok: false, error: ERROR_CODES.MISSING_PAYLOAD, message: "payload object is required" };
+        const result = { ok: false, error: ERROR_CODES.MISSING_PAYLOAD.code, message: "payload object is required" };
         emitToolTelemetry("forge_classifier_issue", args, result, Date.now() - t0, "ERROR", cwd);
         return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }], isError: true };
       }
@@ -3497,7 +3497,7 @@ server.setRequestHandler(CallToolRequestSchema, _wrapWithToolSpan(async (request
       // a clear error if neither is provided.
       const newStatus = args.newStatus || args.status;
       if (typeof newStatus !== "string" || newStatus === "") {
-        return { content: [{ type: "text", text: JSON.stringify({ error: ERROR_CODES.MISSING_STATUS, message: "forge_bug_update_status requires 'newStatus' (or alias 'status'). Valid values: open|in-fix|fixed|wont-fix|duplicate." }) }], isError: true };
+        return { content: [{ type: "text", text: JSON.stringify({ error: ERROR_CODES.MISSING_STATUS.code, message: "forge_bug_update_status requires 'newStatus' (or alias 'status'). Valid values: open|in-fix|fixed|wont-fix|duplicate." }) }], isError: true };
       }
       const result = await updateBugStatus(cwd, args.bugId, newStatus, { note: args.note || null });
       if (result.ok && activeHub) {
@@ -3523,12 +3523,12 @@ server.setRequestHandler(CallToolRequestSchema, _wrapWithToolSpan(async (request
       const cwd = args.path ? findProjectRoot(resolve(args.path)) : findProjectRoot(PROJECT_DIR);
       const bug = loadBug(cwd, args.bugId);
       if (!bug) {
-        return { content: [{ type: "text", text: JSON.stringify({ error: ERROR_CODES.BUG_NOT_FOUND, bugId: args.bugId }) }], isError: true };
+        return { content: [{ type: "text", text: JSON.stringify({ error: ERROR_CODES.BUG_NOT_FOUND.code, bugId: args.bugId }) }], isError: true };
       }
 
       // Reject terminal statuses
       if (bug.status === "fixed" || bug.status === "wont-fix" || bug.status === "duplicate") {
-        return { content: [{ type: "text", text: JSON.stringify({ error: ERROR_CODES.ALREADY_FIXED, bugId: args.bugId, currentStatus: bug.status }) }], isError: true };
+        return { content: [{ type: "text", text: JSON.stringify({ error: ERROR_CODES.ALREADY_FIXED.code, bugId: args.bugId, currentStatus: bug.status }) }], isError: true };
       }
 
       // Advisory warning if open with no linkedFixPlan (manual fix is valid)
@@ -3549,7 +3549,7 @@ server.setRequestHandler(CallToolRequestSchema, _wrapWithToolSpan(async (request
           results.push({ scanner: s, passed: r.failures === 0, details: r });
         } catch (e) {
           if (e.code === "SCANNER_UNAVAILABLE") {
-            return { content: [{ type: "text", text: JSON.stringify({ error: ERROR_CODES.SCANNER_UNAVAILABLE, scanner: s, message: e.message }) }], isError: true };
+            return { content: [{ type: "text", text: JSON.stringify({ error: ERROR_CODES.SCANNER_UNAVAILABLE.code, scanner: s, message: e.message }) }], isError: true };
           }
           results.push({ scanner: s, passed: false, error: e.message });
         }
@@ -4795,18 +4795,18 @@ server.setRequestHandler(CallToolRequestSchema, _wrapWithToolSpan(async (request
       if (source === "tempering-bug" || (source === "auto" && !fixId)) {
         const bugId = args.bugId || null;
         if (source === "tempering-bug" && !bugId) {
-          return { content: [{ type: "text", text: JSON.stringify({ error: ERROR_CODES.MISSING_BUG_ID, message: "bugId is required when source is tempering-bug" }) }], isError: true };
+          return { content: [{ type: "text", text: JSON.stringify({ error: ERROR_CODES.MISSING_BUG_ID.code, message: "bugId is required when source is tempering-bug" }) }], isError: true };
         }
 
         if (bugId) {
           const bug = loadBug(cwd, bugId);
           if (!bug) {
             if (source === "tempering-bug") {
-              return { content: [{ type: "text", text: JSON.stringify({ error: ERROR_CODES.BUG_NOT_FOUND, bugId }) }], isError: true };
+              return { content: [{ type: "text", text: JSON.stringify({ error: ERROR_CODES.BUG_NOT_FOUND.code, bugId }) }], isError: true };
             }
           } else if (bug.status === "fixed" || bug.status === "wont-fix" || bug.status === "duplicate") {
             if (source === "tempering-bug") {
-              return { content: [{ type: "text", text: JSON.stringify({ error: ERROR_CODES.BUG_TERMINAL_STATUS, bugId, currentStatus: bug.status }) }], isError: true };
+              return { content: [{ type: "text", text: JSON.stringify({ error: ERROR_CODES.BUG_TERMINAL_STATUS.code, bugId, currentStatus: bug.status }) }], isError: true };
             }
           } else {
             sourceData = { type: "tempering-bug", bug };
@@ -5418,7 +5418,7 @@ server.setRequestHandler(CallToolRequestSchema, _wrapWithToolSpan(async (request
 
       const bug = loadBug(cwd, args.bugId);
       if (!bug) {
-        const result = { ok: false, error: "BUG_NOT_FOUND", bugId: args.bugId };
+        const result = { ok: false, error: ERROR_CODES.BUG_NOT_FOUND.code, bugId: args.bugId };
         emitToolTelemetry("forge_delegate_to_agent", args, result, Date.now() - t0, "ERROR", cwd);
         return { content: [{ type: "text", text: JSON.stringify(result) }], isError: true };
       }
@@ -6135,12 +6135,12 @@ server.setRequestHandler(CallToolRequestSchema, _wrapWithToolSpan(async (request
 
       // Validate class enum
       if (!args.class || !META_BUG_CLASSES.includes(args.class)) {
-        const result = { ok: false, error: ERROR_CODES.INVALID_CLASS, validClasses: [...META_BUG_CLASSES] };
+        const result = { ok: false, error: ERROR_CODES.INVALID_CLASS.code, validClasses: [...META_BUG_CLASSES] };
         emitToolTelemetry("forge_meta_bug_file", args, result, Date.now() - t0, "ERROR", cwd);
         return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
       }
       if (!args.title || !args.symptom) {
-        const result = { ok: false, error: ERROR_CODES.MISSING_REQUIRED_FIELDS };
+        const result = { ok: false, error: ERROR_CODES.MISSING_REQUIRED_FIELDS.code };
         emitToolTelemetry("forge_meta_bug_file", args, result, Date.now() - t0, "ERROR", cwd);
         return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
       }

@@ -31,6 +31,7 @@ describe("enums.mjs", () => {
     expect(Object.isFrozen(WATCHER_MODES)).toBe(true);
     expect(Object.isFrozen(COST_SOURCES)).toBe(true);
     expect(Object.isFrozen(ERROR_CODES)).toBe(true);
+    expect(Object.isFrozen(ERROR_CODES.ASK_QUESTION_MISMATCH)).toBe(true);
     expect(Object.isFrozen(TOOL_NAMES)).toBe(true);
     expect(() => { HOOK_NAMES.Stop = "changed"; }).toThrow();
     expect(() => { HOOK_PASCAL.push("Broken"); }).toThrow();
@@ -46,6 +47,8 @@ describe("enums.mjs", () => {
     expect(assertWatcherMode("cross-run")).toBe("cross-run");
     expect(assertCostSource("observer")).toBe("observer");
     expect(assertForgeMasterMode("observe")).toBe("observe");
+    expect(ERROR_CODES.ASK_QUESTION_MISMATCH.code).toBe("ASK_QUESTION_MISMATCH");
+    expect(ERROR_CODES.ASK_QUESTION_MISMATCH.docAnchor).toBe("named-error-catalog");
   });
 
   it("rejects invalid enum values with helpful valid-token lists", () => {

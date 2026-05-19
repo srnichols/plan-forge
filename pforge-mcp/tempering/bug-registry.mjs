@@ -16,6 +16,7 @@
 import { existsSync, mkdirSync, writeFileSync, readFileSync, readdirSync, renameSync } from "node:fs";
 import { resolve, basename, join } from "node:path";
 import { createHash, randomUUID } from "node:crypto";
+import { ERROR_CODES } from "../enums.mjs";
 import { dispatch } from "./bug-adapters/contract.mjs";
 
 // ─── Constants ────────────────────────────────────────────────────────
@@ -270,14 +271,14 @@ export async function registerBug(opts) {
 
     // 2. Validate evidence
     if (!evidence.testName && !(evidence.assertionMessage && evidence.stackTrace)) {
-      return { ok: false, error: "MISSING_EVIDENCE" };
+      return { ok: false, error: ERROR_CODES.MISSING_EVIDENCE.code };
     }
 
     // 3. Dedup by fingerprint
     const fingerprint = computeFingerprint(scanner, evidence);
     const dup = findDuplicate(cwd, scanner, evidence.testName, fingerprint);
     if (dup) {
-      return { ok: false, error: "DUPLICATE_BUG", existingBugId: dup.bugId };
+      return { ok: false, error: ERROR_CODES.DUPLICATE_BUG.code, existingBugId: dup.bugId };
     }
 
     // 4. Generate ID + build record
@@ -417,16 +418,16 @@ export async function updateBugStatus(cwd, bugId, newStatus, opts = {}) {
   try {
     const bug = loadBug(cwd, bugId);
     if (!bug) {
-      return { ok: false, error: "BUG_NOT_FOUND" };
+      return { ok: false, error: ERROR_CODES.BUG_NOT_FOUND.code };
     }
 
     if (!BUG_STATUSES.includes(newStatus)) {
-      return { ok: false, error: "INVALID_STATUS" };
+      return { ok: false, error: ERROR_CODES.INVALID_STATUS.code };
     }
 
     const allowed = VALID_TRANSITIONS[bug.status];
     if (!allowed || !allowed.includes(newStatus)) {
-      return { ok: false, error: "INVALID_TRANSITION", from: bug.status, to: newStatus };
+      return { ok: false, error: ERROR_CODES.INVALID_TRANSITION.code, from: bug.status, to: newStatus };
     }
 
     bug.status = newStatus;
@@ -479,7 +480,7 @@ export async function updateBugStatus(cwd, bugId, newStatus, opts = {}) {
 export function setExternalRef(cwd, bugId, ref) {
   try {
     const bug = loadBug(cwd, bugId);
-    if (!bug) return { ok: false, error: "BUG_NOT_FOUND" };
+    if (!bug) return { ok: false, error: ERROR_CODES.BUG_NOT_FOUND.code };
 
     bug.externalRef = ref;
     bug.updatedAt = new Date().toISOString();
@@ -513,7 +514,7 @@ export function setExternalRef(cwd, bugId, ref) {
 export function setLinkedFixPlan(cwd, bugId, planPath) {
   try {
     const bug = loadBug(cwd, bugId);
-    if (!bug) return { ok: false, error: "BUG_NOT_FOUND" };
+    if (!bug) return { ok: false, error: ERROR_CODES.BUG_NOT_FOUND.code };
 
     bug.linkedFixPlan = planPath;
     bug.updatedAt = new Date().toISOString();
@@ -545,7 +546,7 @@ export function setLinkedFixPlan(cwd, bugId, planPath) {
 export function appendValidationAttempt(cwd, bugId, attempt) {
   try {
     const bug = loadBug(cwd, bugId);
-    if (!bug) return { ok: false, error: "BUG_NOT_FOUND" };
+    if (!bug) return { ok: false, error: ERROR_CODES.BUG_NOT_FOUND.code };
 
     if (!Array.isArray(bug.validationAttempts)) {
       bug.validationAttempts = [];

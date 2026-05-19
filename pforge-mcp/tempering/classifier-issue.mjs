@@ -20,6 +20,7 @@
 import { createHash } from "node:crypto";
 import { existsSync, readFileSync } from "node:fs";
 import { resolve } from "node:path";
+import { ERROR_CODES } from "../enums.mjs";
 
 // ─── Labels ──────────────────────────────────────────────────────────────────
 
@@ -118,7 +119,7 @@ function resolveToken(config, { execSync: execSyncFn, cwd } = {}) {
     } catch { /* gh not available */ }
   }
 
-  return { token: null, error: "NO_TOKEN" };
+  return { token: null, error: ERROR_CODES.NO_TOKEN.code };
 }
 
 function resolveRepo(config, { execSync: execSyncFn, cwd } = {}) {
@@ -206,7 +207,7 @@ async function createViaRest(token, owner, repo, title, body, labels, { fetch: f
     const data = await res.json();
     return { issueNumber: data.number, url: data.html_url };
   } catch (err) {
-    return { error: err.name === "TimeoutError" ? "TIMEOUT" : "NETWORK_ERROR" };
+    return { error: err.name === "TimeoutError" ? ERROR_CODES.TIMEOUT.code : ERROR_CODES.NETWORK_ERROR.code };
   }
 }
 
@@ -255,12 +256,12 @@ export async function fileClassifierIssue(payload, config, {
 
     const tokenResult = resolveToken(config, { execSync: execSyncFn, cwd });
     if (!tokenResult.token) {
-      return { ok: false, error: "NO_TOKEN", message: "No GitHub token — set GITHUB_TOKEN, .forge/secrets.json#github.token, or run `gh auth login`." };
+      return { ok: false, error: ERROR_CODES.NO_TOKEN.code, message: "No GitHub token — set GITHUB_TOKEN, .forge/secrets.json#github.token, or run `gh auth login`." };
     }
 
     const repoInfo = resolveRepo(config, { execSync: execSyncFn, cwd });
     if (!repoInfo) {
-      return { ok: false, error: "NO_REPO", message: "Could not resolve GitHub repository. Set bugRegistry.githubRepo in .forge.json." };
+      return { ok: false, error: ERROR_CODES.NO_REPO.code, message: "Could not resolve GitHub repository. Set bugRegistry.githubRepo in .forge.json." };
     }
 
     // Dedup: check for existing open issue with same hash
@@ -280,11 +281,11 @@ export async function fileClassifierIssue(payload, config, {
     }
 
     if (!result || result.error) {
-      return { ok: false, error: result?.error || "CREATE_FAILED", message: "GitHub issue creation failed. Check token permissions and repository access." };
+      return { ok: false, error: result?.error || ERROR_CODES.CREATE_FAILED.code, message: "GitHub issue creation failed. Check token permissions and repository access." };
     }
 
     return { ok: true, issueNumber: result.issueNumber, url: result.url, deduped: false, message: `Classifier-noise issue #${result.issueNumber} created.` };
   } catch (err) {
-    return { ok: false, error: "UNEXPECTED", message: err?.message || "Unexpected error in fileClassifierIssue." };
+    return { ok: false, error: ERROR_CODES.UNEXPECTED.code, message: err?.message || "Unexpected error in fileClassifierIssue." };
   }
 }

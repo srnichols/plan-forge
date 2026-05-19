@@ -3130,7 +3130,7 @@ function buildForgeMasterCapabilities(cwd) {
   return {
     description: "Forge-Master: an in-IDE reasoning assistant that classifies intent, fetches memory context, and orchestrates read-only tool calls on the owner's behalf. Phase-28 MVP.",
     addedIn: "2.61.0",
-    tools: ["forge_master_ask", "forge_master_observe"],
+    tools: TOOL_NAMES.filter((n) => n.startsWith("forge_master_")),
     reasoningModel: config.reasoningModel ?? null,
     routerModel: config.routerModel ?? "grok-3-mini",
     configKey: "forgeMaster",

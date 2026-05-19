@@ -119,7 +119,7 @@ export function importSpeckit(opts) {
       result.missingFields.push({ file: "spec.md", field: "<file>", severity: "error" });
     if (!plan)
       result.missingFields.push({ file: "plan.md", field: "<file>", severity: "error" });
-    result.error = ERROR_CODES.SPECKIT_IMPORT_MISSING_REQUIRED;
+    result.error = ERROR_CODES.SPECKIT_IMPORT_MISSING_REQUIRED.code;
     result.warnings.push(
       "Both spec.md and plan.md are required. Re-run after creating them."
     );
@@ -127,7 +127,7 @@ export function importSpeckit(opts) {
   }
   if (!spec.title) {
     result.missingFields.push({ file: "spec.md", field: "title", severity: "error" });
-    result.error = "SPECKIT_IMPORT_MISSING_FIELD";
+    result.error = ERROR_CODES.SPECKIT_IMPORT_MISSING_FIELD.code;
     result.warnings.push(
       "spec.md is missing a top-level `# Title` heading; import blocked."
     );
@@ -135,7 +135,7 @@ export function importSpeckit(opts) {
   }
   if (!plan.scope) {
     result.missingFields.push({ file: "plan.md", field: "scope", severity: "error" });
-    result.error = "SPECKIT_IMPORT_MISSING_FIELD";
+    result.error = ERROR_CODES.SPECKIT_IMPORT_MISSING_FIELD.code;
     result.warnings.push(
       "plan.md is missing a `## Scope` section; import blocked."
     );
@@ -220,14 +220,14 @@ export function importSpeckit(opts) {
   // ── 5. Sync-principles guard (must run before any write) ────────────────
   if (syncPrinciples) {
     if (!constitution) {
-      result.error = ERROR_CODES.PROJECT_PRINCIPLES_NO_SOURCE;
+      result.error = ERROR_CODES.PROJECT_PRINCIPLES_NO_SOURCE.code;
       result.warnings.push(
         "--sync-principles requested but constitution.md is absent."
       );
       return result;
     }
     if (existsSync(principlesPath)) {
-      result.error = ERROR_CODES.PROJECT_PRINCIPLES_EXISTS;
+      result.error = ERROR_CODES.PROJECT_PRINCIPLES_EXISTS.code;
       result.warnings.push(
         `${principlesPath} already exists; refusing to overwrite. Remove it first or omit --sync-principles.`
       );

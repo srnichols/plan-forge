@@ -82,7 +82,6 @@ import {
   deferAutoSkill,
   computeGateSuggestionKey,
   getGateSuggestionCounter,
-  captureMemory as _captureMemoryCore,
 } from "./memory.mjs";
 import {
   readOpenBrainConfig,
@@ -163,6 +162,32 @@ import { syncInstructions } from "./sync-instructions.mjs";
 import { classifyDiff } from "./diff-classify.mjs";
 import { ERROR_CODES } from "./enums.mjs";
 import express from "express";
+import {
+  PROJECT_DIR,
+  PROJECT_DIR_SOURCE,
+  HTTP_PORT,
+  IS_WINDOWS,
+  PFORGE,
+  activeAbortController,
+  _planPathAliasWarned,
+  activeRunPromise,
+  activeHub,
+  activeBridge,
+  activeEventWatcher,
+  _studioClient,
+  _approvedRunIds,
+  getOrSpawnStudioChild,
+  broadcastLiveGuard,
+  captureMemory,
+  setActiveAbortController,
+  setPlanPathAliasWarned,
+  setActiveRunPromise,
+  setActiveHub,
+  setActiveBridge,
+  setActiveEventWatcher,
+  setStudioClient,
+} from "./server/state.mjs";
+
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
@@ -178,115 +203,8 @@ const FRAMEWORK_VERSION = resolveFrameworkVersion({ serverDir: __dirname });
 // is the right granularity for CLI-delegated read-only tools.
 const _SERVER_CODE_HASH = FRAMEWORK_VERSION || "server-unknown";
 
-// ─── Config ───────────────────────────────────────────────────────────
-const { resolved: PROJECT_DIR, source: PROJECT_DIR_SOURCE } = resolveProjectRoot({ env: process.env, argv: process.argv, serverDir: __dirname, cwd: process.cwd() });
 console.error(`[pforge-mcp] PROJECT_DIR=${PROJECT_DIR} (source=${PROJECT_DIR_SOURCE})`);
 console.error(`[pforge-mcp] FRAMEWORK_VERSION=${FRAMEWORK_VERSION}`);
-const HTTP_PORT = parseInt(process.env.PLAN_FORGE_HTTP_PORT || "3100", 10);
-const IS_WINDOWS = process.platform === "win32";
-const PFORGE = IS_WINDOWS ? "powershell.exe -NoProfile -ExecutionPolicy Bypass -File pforge.ps1" : "bash pforge.sh";
-
-// ─── Orchestrator State ───────────────────────────────────────────────
-let activeAbortController = null;
-let _planPathAliasWarned = false;
-let activeRunPromise = null;
-let activeHub = null;    // WebSocket hub instance
-let activeBridge = null; // OpenClaw Bridge instance
-let activeEventWatcher = null; // events.log file watcher
-let _studioClient = null; // McpClient for pforge-master/server.mjs (proxy path)
-
-// Set of runIds that have already received an approval decision (rate-limit: 1 per runId)
-const _approvedRunIds = new Set();
-
-/**
- * Return a connected McpClient pointed at pforge-master/server.mjs, spawning it
- * on first call. Returns null if the package is unavailable or spawn fails.
- * Subsequent calls reuse the cached client (warm path).
- */
-async function getOrSpawnStudioChild() {
-  if (_studioClient?.ready) return _studioClient;
-  const studioPath = resolve(__dirname, "../pforge-master/server.mjs");
-  if (!existsSync(studioPath)) return null;
-  try {
-    const { McpClient } = await import("../pforge-master/src/mcp-client.mjs");
-    const client = new McpClient({ logger: console });
-    await client.connect({ serverPath: studioPath });
-    _studioClient = client;
-    try {
-      const forgeDir = resolve(PROJECT_DIR, ".forge");
-      if (!existsSync(forgeDir)) mkdirSync(forgeDir, { recursive: true });
-    } catch { /* non-fatal */ }
-    return client;
-  } catch (err) {
-    console.error(`forge-master: failed to spawn studio child: ${err.message} — using in-process fallback`);
-    return null;
-  }
-}
-
-/**
- * Broadcast a LiveGuard tool event to the WebSocket hub.
- * Emits both the detailed `liveguard-tool-completed` event and a simple
- * `liveguard` event for dashboard filtering.
- * Returns a Promise — callers should await to ensure WS writes flush.
- */
-async function broadcastLiveGuard(tool, status, durationMs, summary = {}) {
-  const ts = new Date().toISOString();
-  const clientCount = activeHub?.clients?.size || 0;
-
-  // File-based diagnostic log (stderr is captured by MCP stdio transport)
-  try {
-    const logDir = resolve(PROJECT_DIR, ".forge");
-    mkdirSync(logDir, { recursive: true });
-    appendFileSync(resolve(logDir, "liveguard-broadcast.log"),
-      `${ts} ${tool} hub=${!!activeHub} clients=${clientCount} status=${status}\n`);
-  } catch { /* best-effort logging */ }
-
-  if (!activeHub) {
-    console.error(`[liveguard] broadcastLiveGuard(${tool}) — hub not initialized, event dropped`);
-    return;
-  }
-  activeHub.broadcast({ type: "liveguard-tool-completed", tool, status, durationMs, timestamp: ts });
-  activeHub.broadcast({ type: "liveguard", tool: tool.replace("forge_", "").replace(/_/g, "-"), status, ...summary, timestamp: ts });
-  console.error(`[liveguard] ${tool} → ${clientCount} client(s)`);
-
-  // Force event loop tick so WebSocket writes flush before MCP returns the response
-  await new Promise(r => setImmediate(r));
-}
-
-/**
- * Auto-capture a LiveGuard finding to persistent memory.
- *
- * Issue #205 (May 2026): the actual capture pipeline now lives in
- * `memory.mjs#captureMemory` so both the MCP server path and the CLI
- * orchestrator path use a single implementation. This wrapper exists
- * only to forward the dashboard hub broadcast via `onCapture`.
- *
- * @param {string} content - Human-readable description of the finding
- * @param {string} type - Thought type: 'decision', 'gotcha', 'lesson', 'pattern', 'convention'
- * @param {string} source - Tool that generated this (e.g., 'forge_drift_report')
- * @param {string} cwd - Project directory
- */
-function captureMemory(content, type, source, cwd) {
-  return _captureMemoryCore(content, type, source, cwd, {
-    onCapture: (thought, deduped) => {
-      try {
-        activeHub?.broadcast({
-          type: "memory-captured",
-          thought,
-          deduped,
-          timestamp: thought.captured_at,
-        });
-      } catch { /* never break capture on broadcast failure */ }
-    },
-  });
-}
-
-// Legacy local body kept commented for reference — see Issue #205.
-function _legacyCaptureMemoryUnused(content, type, source, cwd) {
-  // Body removed — see memory.mjs#captureMemory for the canonical implementation.
-  // Retained as a named no-op only so any historical static references resolve.
-  void content; void type; void source; void cwd;
-}
 
 // ─── Audit artifact writer (Phase-39 Slice 4) ──────────────────────
 
@@ -2447,7 +2365,7 @@ server.setRequestHandler(CallToolRequestSchema, _wrapWithToolSpan(async (request
       let planArg = args.plan;
       if ((typeof planArg !== "string" || planArg === "") && typeof args.planPath === "string" && args.planPath !== "") {
         if (!_planPathAliasWarned) {
-          _planPathAliasWarned = true;
+          setPlanPathAliasWarned(true);
           console.warn("[forge_run_plan] 'planPath' is an alias; prefer 'plan'");
         }
         planArg = args.planPath;
@@ -2463,7 +2381,7 @@ server.setRequestHandler(CallToolRequestSchema, _wrapWithToolSpan(async (request
         return { content: [{ type: "text", text: `Plan file not found: ${planArg}` }], isError: true };
       }
 
-      activeAbortController = new AbortController();
+      setActiveAbortController(new AbortController());
       // If hub is running, use it as event handler for live broadcasting
       const eventHandler = activeHub ? { handle: (event) => activeHub.broadcast(event) } : null;
       // Parse quorum parameter — default: "auto" (threshold-based)
@@ -2492,7 +2410,7 @@ server.setRequestHandler(CallToolRequestSchema, _wrapWithToolSpan(async (request
         manualImportSource: args.manualImportSource || "human",
         manualImportReason: args.manualImportReason || null,
       });
-      activeAbortController = null;
+      setActiveAbortController(null);
 
       // Persist run summary + cost anomaly memories from orchestrator.
       // Issue #205 (May 2026): the orchestrator now captures inline before
@@ -2531,7 +2449,7 @@ server.setRequestHandler(CallToolRequestSchema, _wrapWithToolSpan(async (request
         isError,
       };
     } catch (err) {
-      activeAbortController = null;
+      setActiveAbortController(null);
       return { content: [{ type: "text", text: `Orchestrator error: ${err.message}` }], isError: true };
     }
   }
@@ -6090,7 +6008,7 @@ server.setRequestHandler(CallToolRequestSchema, _wrapWithToolSpan(async (request
           return { content: [{ type: "text", text }] };
         } catch (proxyErr) {
           console.error(`forge-master: proxy error, falling back in-process: ${proxyErr.message}`);
-          _studioClient = null; // reset so next call retries
+          setStudioClient(null); // reset so next call retries
         }
       }
 
@@ -6864,7 +6782,7 @@ export async function runDrainPass(cwd, source, hub, deps = {}) {
 
 /** Reset the planPath-alias deprecation warning flag. Exported for testing only. */
 export function __resetPlanPathAliasWarned() {
-  _planPathAliasWarned = false;
+  setPlanPathAliasWarned(false);
 }
 
 /** Check whether the initialize-time drain should run. Exported for testing. */
@@ -9316,7 +9234,7 @@ export function createExpressApp() {
     const triggerId = `trigger-${Date.now()}`;
 
     // Fire-and-forget — run executes in background; dashboard + bridge handle progress
-    activeAbortController = new AbortController();
+    setActiveAbortController(new AbortController());
     const eventHandler = activeHub ? { handle: (event) => activeHub.broadcast(event) } : null;
     runPlan(planPath, {
       cwd,
@@ -9330,9 +9248,9 @@ export function createExpressApp() {
       abortController: activeAbortController,
       eventHandler,
     }).then(() => {
-      activeAbortController = null;
+      setActiveAbortController(null);
     }).catch((err) => {
-      activeAbortController = null;
+      setActiveAbortController(null);
       console.error(`[trigger] Run failed: ${err.message}`);
     });
 
@@ -9829,11 +9747,11 @@ async function main() {
   if (!process.env.PFORGE_CHILD_MODE) {
     // Start WebSocket hub BEFORE stdio transport — ensures activeHub is set before any tool calls arrive
     try {
-      activeHub = await createHub({ cwd: PROJECT_DIR });
+      setActiveHub(await createHub({ cwd: PROJECT_DIR }));
       console.error(`Plan Forge WebSocket hub running on port ${activeHub.port}`);
 
       // Start event file watcher to bridge orchestrator events → dashboard
-      activeEventWatcher = startEventFileWatcher(activeHub, PROJECT_DIR);
+      setActiveEventWatcher(startEventFileWatcher(activeHub, PROJECT_DIR));
     } catch (err) {
       console.error(`[hub] WebSocket hub failed to start: ${err.message} (non-fatal)`);
     }
@@ -9863,7 +9781,7 @@ async function main() {
 
   // Start Bridge (connects to hub as a WS client; activates if bridge config present)
   try {
-    activeBridge = createBridge({ cwd: PROJECT_DIR, port: activeHub?.port });
+    setActiveBridge(createBridge({ cwd: PROJECT_DIR, port: activeHub?.port }));
     if (activeBridge) {
       console.error("[bridge] Bridge manager started");
     }

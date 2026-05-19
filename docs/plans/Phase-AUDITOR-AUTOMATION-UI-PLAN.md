@@ -343,3 +343,67 @@ All commits land on `master`. PreCommit chain runs on each.
 - Real-time narration cost meter (incremental cost over the day — would extend `dashboard-forge-master-cost-meter` but requires observer to emit cost-per-narration events)
 - Export auditor report as PDF or share link
 - Notification integration: route observer narrations to Slack/Teams/email (existing notification system already extends here)
+
+---
+
+## Appendix A — S9 Docs Sweep Pre-Work
+
+> **Why this exists**: S9 is mechanical, low-creativity work (write text + paste screenshots). This appendix front-loads the discovery so the slice runs cheap (low model, single session). Every target below has been verified against the current repo state at draft time. Parent phase's Appendix A also lists items shared between the two phases — read parent's Appendix A first if shared rows (`docs/capabilities.md`, `CHANGELOG.md`) have already been edited.
+
+### Screenshots to capture (S9 deliverables, manually via dashboard at `localhost:3100/dashboard`)
+
+| # | Path | What it must show | Capture state |
+|---|---|---|---|
+| 1 | `docs/manual/assets/screenshots/dashboard-settings-forgemaster.png` | The new `tab-settings-forgemaster` panel fully expanded with both observer and auditor field sets visible. `cfg-observer-enabled` toggled ON to show the budget caps; `cfg-observer-modeltier` showing the "Flagship (best quality)" selection so the dropdown's human-friendly labels are visible. | Settings tab active, all fields populated with realistic values (`maxUsdPerDay: 0.50`, `everyNRuns: 10`). |
+| 2 | `docs/manual/assets/screenshots/dashboard-observer-narrations.png` | Observer narrations card with **at least 3 real narrations** visible (run testbed for 5 min with observer enabled to generate). Timestamp, batch-event-count badge, and per-narration cost in $ must all be readable. | Main dashboard view, scrolled so card is centered. |
+| 3 | `docs/manual/assets/screenshots/dashboard-cross-run-anomalies.png` | Cross-run watcher anomalies card after clicking Refresh against the testbed's 30+ run history. Table must show **≥3 rows** of `cross-run.*` codes with severity + recommendation visible. | Card expanded, Refresh-button "loading" state finished, fresh data rendered. |
+| 4 | `docs/manual/assets/screenshots/dashboard-auditor-report.png` | Auditor latest-report card rendered from the testbed's most recent `.forge/health/latest.md`. Must show: timestamp header, "N reports since…" counter, the first ~half-screen of sanitized markdown (headings + lists), and the "View history" archive link. | Card expanded, markdown body visible (do not show only the header). |
+
+**Dimensions**: match existing screenshots in `docs/manual/assets/screenshots/` (1440×900 viewport, no browser chrome — use a clean window or crop in post). Existing examples: `dashboard-cost-tab.png`, `dashboard-settings-general.png`.
+
+### Target inventory (verified at draft time)
+
+| # | File | Insertion anchor | Pattern in file | What to add |
+|---|---|---|---|---|
+| 1 | `docs/manual/dashboard-settings.html` | After existing `<h3 id="settings-brain">🧠 Brain</h3>` (line 103) | `grep -n "id=\"settings-brain\"" docs/manual/dashboard-settings.html` | Append new `<h3 id="settings-forgemaster">⚒ Forge-Master</h3>` section as the **10th** settings group. Three subsections in the body: (a) "Observer" — list all six `cfg-observer-*` fields with type, default, and effect (matches parent phase's `forgeMaster.observer` config block); (b) "Auditor" — list both `cfg-auditor-*` fields and explain that `everyNRuns` rejects values 1–4 (Resolved Decision: opt-in starts at 5); (c) "Model tier dropdown" — explain the four canonical tokens (`null`/`flagship`/`mid`/`fast`) and that the UI shows human labels while the backend stores the canonical token. Cross-link to `forge-json-reference.html#forgeMaster-observer` and `#forgeMaster-auditor`. Include `<img src="assets/screenshots/dashboard-settings-forgemaster.png" alt="...">` near the top of the section. |
+| 2 | `docs/manual/dashboard.html` | Three insertion points: under §"Tab Categories" (line 56) AND a new `<h2>` per card | `grep -n "id=\"tab-overview\"\|id=\"watcher\"\|id=\"audit-loop\"" docs/manual/dashboard.html` (~lines 56, 238, 253) | (a) Update Tab Categories list to mention three new main-view cards (not new tabs). (b) Insert new `<h2 id="observer-narrations">Observer Narrations Card</h2>` after §"Watcher" (~line 238) — describe live-update behavior, empty state with deep-link, per-narration display, that it's driven by the `observer:narration` hub event. Embed `dashboard-observer-narrations.png`. (c) Insert new `<h2 id="cross-run-anomalies">Cross-Run Watcher Anomalies Card</h2>` immediately after — Refresh-button mechanic, 1 h cache via `.forge/cross-run-cache.json`, table columns (code, severity, recommendation). Embed `dashboard-cross-run-anomalies.png`. (d) Insert `<h2 id="auditor-report">Auditor Latest Report Card</h2>` after that — server-side markdown sanitization, "N reports since…" counter, archive link to `.forge/health/`. Embed `dashboard-auditor-report.png`. |
+| 3 | `docs/manual/dashboard-forge-master.html` | After existing `<h3 id="studio-classification">Classification Badge</h3>` (line 48) or in a new "See also" footer | `grep -n "studio-classification\|studio-sessions" docs/manual/dashboard-forge-master.html` (~lines 48, 62) | Add a short cross-reference paragraph or admonition: "Live narrations from observer mode (when enabled) surface on the main dashboard view, not in this Studio tab. See [Dashboard — Observer Narrations Card](dashboard.html#observer-narrations)." This avoids confusion between Studio's pull-based ask-mode UI and the new push-based narrations card. |
+| 4 | `docs/capabilities.md` | The `Dashboard ... tabs ... cards` enumerations | `grep -n "dashboard\|Dashboard " docs/capabilities.md` (~lines 73, 151, 210) | (a) The `forge_home_snapshot` row's category `dashboard` already exists — leave as-is. (b) In §"Inner Loop" (~line 151), append the new cards to the discovery line: "… or Dashboard → main view (Observer Narrations / Cross-Run Anomalies / Auditor Report cards)…" (c) Note: the **tool count bump** for `forge_master_observe` is owned by the PARENT phase's Appendix A row 2 — DO NOT double-bump here. |
+| 5 | `pforge-mcp/capabilities.mjs` | `TOOL_METADATA` for `forge_home_snapshot` (search for `forge_home_snapshot:`) | `grep -n "forge_home_snapshot:" pforge-mcp/capabilities.mjs` | If `forge_home_snapshot` exposes a `dashboardSurfaces` array, append `"observer-narrations"`, `"cross-run-anomalies"`, `"auditor-report"`. If no such field exists, append the three surface names to the `description` text so `forge_capabilities` agent discovery surfaces them. |
+| 6 | `docs/COPILOT-VSCODE-GUIDE.md` | Forge-Master workflow section | `grep -n "forge_master_ask\|Forge-Master\|^### " docs/COPILOT-VSCODE-GUIDE.md` | Replace any guidance that says "edit `.forge.json` to enable observer" with "open the dashboard Settings → Forge-Master tab to enable observer with one click; the page validates budgets and `everyNRuns` server-side." Cross-link to `docs/manual/dashboard-settings.html#settings-forgemaster`. |
+| 7 | `CHANGELOG.md` | `[Unreleased]` section | `grep -n "## \[Unreleased\]" CHANGELOG.md` | **If parent phase's CHANGELOG entry has already been promoted to a versioned heading**, add a NEW `[Unreleased]` block for this MINOR: `### Added — Forge-Master Dashboard Surfaces`. Bullets: (a) New settings tab `tab-settings-forgemaster` for observer + auditor config. (b) Observer narrations live card on main dashboard view. (c) Cross-run watcher anomalies card with manual refresh + 1 h cache. (d) Auditor latest-report card with sanitized markdown render + archive link. (e) New read endpoints `GET /api/watcher/cross-run` and `GET /api/auditor/latest`. Promotion to a versioned heading happens in this phase's release slice, NOT in S9. |
+
+### Auto-discovery + visual verification (executor checklist after edits)
+
+After all rows above are applied + screenshots captured:
+
+```bash
+# All four screenshots present and ≥ 50 KB (a blank 1x1 PNG is ~100 bytes — guard against empties)
+for f in dashboard-settings-forgemaster dashboard-observer-narrations dashboard-cross-run-anomalies dashboard-auditor-report; do
+  ls -l "docs/manual/assets/screenshots/$f.png" || echo "MISSING: $f"
+done
+
+# New section IDs landed and are unique
+grep -E 'id="settings-forgemaster"|id="observer-narrations"|id="cross-run-anomalies"|id="auditor-report"' docs/manual/dashboard*.html
+# Expect exactly one match per ID across all dashboard*.html files
+
+# Settings tab count bumped from 9 to 10
+grep -c '<h3 id="settings-' docs/manual/dashboard-settings.html   # expect 10 (was 9)
+
+# Cross-link from Studio tab back to main view exists
+grep -q 'observer-narrations' docs/manual/dashboard-forge-master.html
+```
+
+All four checks must succeed.
+
+### Pre-flight grep sentinel (run BEFORE starting S9)
+
+If any of these has drifted since this appendix was written, update the row above first:
+
+| Value | Expected at draft time | Re-check command |
+|---|---|---|
+| Settings tab count in `dashboard-settings.html` | 9 `<h3 id="settings-">` | `grep -c '<h3 id="settings-' docs/manual/dashboard-settings.html` |
+| Last existing settings tab heading | `<h3 id="settings-brain">🧠 Brain</h3>` (line 103) | `grep -n "settings-brain" docs/manual/dashboard-settings.html` |
+| Dashboard main-view `<h2>` count | ~15 sections (Progress, Runs, Cost, Actions, Replay, Extensions, Traces, Skills, Watcher, Audit-Loop, Timeline, Ports …) | `grep -c '<h2 id=' docs/manual/dashboard.html` |
+| Screenshots folder file count | 13 PNGs | `ls docs/manual/assets/screenshots/*.png \| wc -l` (this phase adds 4 → 17) |
+| Parent phase's CHANGELOG entry state | Either still in `[Unreleased]` or already promoted to a `[X.Y.Z]` heading | `head -20 CHANGELOG.md` |

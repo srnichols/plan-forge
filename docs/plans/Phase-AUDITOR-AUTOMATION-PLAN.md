@@ -384,3 +384,60 @@ All commits land on `master`. PreCommit chain (shipped in WORKER-GUARDRAILS A3) 
 - Cross-machine observer aggregation (single-machine only this phase)
 - Watcher → auditor real-time escalation (when watcher fires a critical anomaly mid-run, auto-invoke auditor with that anomaly as a hint — needs Cluster A + Cluster B to ship first to evaluate signal quality)
 - Auto-tuning `everyNRuns` based on observed failure rate (constant default this phase; learning is a separate concern)
+
+---
+
+## Appendix A — S11 Docs Sweep Pre-Work
+
+> **Why this exists**: S11 is mechanical, low-creativity work. This appendix front-loads the discovery so the slice runs cheap (low model, single session). Every target below has been verified against the current repo state at draft time. If the file structure shifts before execution, fall back to grep — but most rows should match exactly.
+
+### Target inventory (verified at draft time)
+
+| # | File | Insertion anchor | Pattern in file | What to add |
+|---|---|---|---|---|
+| 1 | `pforge-mcp/capabilities.mjs` | After the `forge_master_ask:` block (~line 1605) | `grep -n "forge_master_ask: {" pforge-mcp/capabilities.mjs` | New `forge_master_observe:` entry in `TOOL_METADATA` — mirror `forge_master_ask` shape: `intent`, `description`, `agentGuidance` ("Use to start/stop the live observer that narrates notable hub events…"), `inputSchema` matching the tool's actual params, `example.output` showing a `{ ok, status, processId? }` payload. Also update the existing `forge_watch:` block (~line 1306) to document `mode: "cross-run"` in its `inputSchema` enum. |
+| 2 | `docs/capabilities.md` | The `## MCP Tools (89)` table around line 9–105 | `grep -n "forge_master_ask" docs/capabilities.md` (~line 88) | (a) Insert new row for `forge_master_observe` directly under `forge_master_ask`, category `reasoning`, cost `medium`, description: live narrative observer (read-only, budgeted, mute-by-default). (b) Update header count `## MCP Tools (89)` → **`(90)`**. (c) Edit existing `forge_watch` row to mention `mode: "cross-run"` after "Snapshot or analyze mode." |
+| 3 | `docs/manual/glossary.html` | Three insertion points | `grep -n "<strong>Watcher</strong>\|<strong>Forge-Master</strong>\|<strong>Crucible</strong>" docs/manual/glossary.html` (~lines 89, 137, 96) | Add three new `<tr>` rows: **Forge-Master Observer** (after the existing Forge-Master row at line 137), **Cross-Run Watcher** (after Watcher at line 89), **Auditor Auto-Invoke** (place near Forge-Master row). Also bump the embedded count: `<!--c:tools-->90<!--/c-->` → `91` at line 158 (matches capabilities.md tool count). |
+| 4 | `docs/manual/customization.html` | "LiveGuard and orchestration hooks" table (~line 228) | `grep -n "hooks-liveguard\|hooks.preAgentHandoff" docs/manual/customization.html` (~lines 228, 247) | Insert a new `<tr>` row in the table between the `PostSlice` and `PreAgentHandoff` rows: hook=`PostRun`, trigger="After every `pforge run-plan` completion (success or failure)", effect="Spawns Forge-Master with `@plan-health-auditor` when `hooks.postRun.invokeAuditor.onFailure` is true and the run failed, OR every Nth completed run when `everyNRuns` is set. Auditor invocation tokens attribute to the `forge-master` source, never the parent run.", blocks="No (advisory)", configure=`hooks.postRun.invokeAuditor`. |
+| 5 | `docs/manual/forge-json-reference.html` | After `hooks.preCommit.chain[]` (~line 280) AND a brand-new `<h2 id="forgeMaster">` section | `grep -n "hooks-preCommit\|<h2 id=\"openclaw\"" docs/manual/forge-json-reference.html` | (a) Insert `<h3 id="hooks-postRun"><code>hooks.postRun.invokeAuditor</code></h3>` block after preCommit. Three keys: `onFailure` (boolean, default `false`), `everyNRuns` (number\|null, default `null`, validated 5–25), `cooldownMinutes` (number, default `5` — re-entrancy guard). Use the same `<table class="manual-table">` shape as existing hook tables. (b) Insert new top-level `<h2 id="forgeMaster"><code>forgeMaster</code> — Forge-Master observer + auditor</h2>` section, ideally before `<h2 id="hooks">` so reasoning config sits with the rest of the role config. Two subsections: `<h3 id="forgeMaster-observer">` (keys: `enabled`, `batchWindowMs`, `maxNarrationsPerHour`, `maxUsdPerDay`, `brainCapture`, `dashboardCard`, `modelTier`) and `<h3 id="forgeMaster-auditor">` (key: `modelTier`). For each `modelTier` row, document the canonical tokens `null | "flagship" | "mid" | "fast"` with `null` = inherit ask mode. Also update the top-of-file `hooks` summary line (~line 205) "Four hook configurations" → **"Five hook configurations"** and append `<code>postRun</code>` to the enumeration. |
+| 6 | `docs/manual/environment-variables-reference.html` | `<h2 id="feature-toggles">` (line 155) | `grep -n "feature-toggles" docs/manual/environment-variables-reference.html` | Insert a new row in the Feature toggles table: `PFORGE_FORGE_MASTER_OBSERVE_DISABLE`, default unset, value `"1"`, effect="Kill switch. When set, `forge_master_observe` and `pforge master observe --start` immediately refuse with a clear error. Takes precedence over `.forge.json#forgeMaster.observer.enabled`. Use during incidents to disarm the observer fleet-wide without editing config." |
+| 7 | `docs/manual/errors-and-exit-codes.html` | `<h2 id="named-error-catalog">` (line 167) | `grep -n "named-error-catalog" docs/manual/errors-and-exit-codes.html` | Add two `<tr>` rows: **`observer-budget-exceeded`** (raised by `pforge-master/src/observer-budget.mjs` when `maxUsdPerDay` or `maxNarrationsPerHour` cap is hit; remediation: widen cap in `.forge.json#forgeMaster.observer` or wait for daily reset) and **`auditor-spawn-failed`** (raised by `pforge-mcp/orchestrator.mjs` when the post-run auditor spawn cannot reach Forge-Master; remediation: check `forge_master_ask` works manually, then re-run the failed plan to re-trigger). |
+| 8 | `docs/manual/book-index.html` | The alphabetical index entries (~line 568+) | `grep -n "hooks.postSlice\|hooks.preAgentHandoff" docs/manual/book-index.html` (~lines 572, 576) | Add three entries in alphabetical order: `.forge.json — forgeMaster.auditor`, `.forge.json — forgeMaster.observer (modelTier, budgets)`, `.forge.json — hooks.postRun.invokeAuditor`. Use the same `<div class="font-semibold text-slate-200 min-w-[14rem] text-sm">` markup as siblings. |
+| 9 | `docs/llms.txt` AND root `llms.txt` | Auto-discovery payload | `grep -n "^## \|^# " llms.txt docs/llms.txt` | Append `forge_master_observe` to the tool inventory and a one-line "Auditor auto-invoke + cross-run watcher anomalies + live observer narrations" under §"Capabilities" / §"Key Concepts" as appropriate. Total tool count bumps from 89 → 90 (matches capabilities.md). |
+| 10 | `docs/CLI-GUIDE.md` | `pforge master ask` reference, if present (else add a "Forge-Master" sub-section) | `grep -n "master ask\|^## \|^### " docs/CLI-GUIDE.md` | Document `pforge master observe --start [--detach] \| --stop \| --status`. Note daemon mode, pid file location (`.forge/forge-master-observer.pid`), graceful SIGTERM shutdown, and that observer respects `PFORGE_FORGE_MASTER_OBSERVE_DISABLE`. |
+| 11 | `docs/COPILOT-VSCODE-GUIDE.md` | Forge-Master workflow section, if present (else add) | `grep -n "forge_master_ask\|Forge-Master" docs/COPILOT-VSCODE-GUIDE.md` | Add: "**Live observer** — Run `pforge master observe --start` in a long-lived terminal during a `run-plan`. Narrations land in OpenBrain and surface via `brain_recall` in subsequent ask-mode prompts. Disable globally with `PFORGE_FORGE_MASTER_OBSERVE_DISABLE=1`." |
+| 12 | `CHANGELOG.md` | `[Unreleased]` section | `grep -n "## \[Unreleased\]" CHANGELOG.md` | One grouped entry: `### Added — Forge-Master Observer + Cross-Run Watcher + Auditor Auto-Invoke`. Bullets: (a) `forge_master_observe` tool — read-only live narrator (mute-by-default, daily budget cap). (b) `forge_watch({ mode: "cross-run" })` — aggregates `.forge/runs/*` for cross-run anomalies. (c) `hooks.postRun.invokeAuditor` — auto-spawn A4 auditor on failure or every Nth run. (d) `forgeMaster.observer.modelTier` + `forgeMaster.auditor.modelTier` knobs. (e) New env var `PFORGE_FORGE_MASTER_OBSERVE_DISABLE` kill switch. (f) New named errors `observer-budget-exceeded`, `auditor-spawn-failed`. Promotion to a versioned heading happens in the release slice, NOT in S11. |
+
+### Auto-discovery verification (executor checklist after edits)
+
+After all rows above are applied, run these to confirm coverage:
+
+```bash
+# Total tool count consistency: docs say 90, server must say 90
+node pforge-mcp/capabilities.mjs --check
+grep -c "^| \`forge_" docs/capabilities.md        # expect 90 (was 89)
+grep -c "<!--c:tools-->90<!--/c-->" docs/manual/glossary.html   # expect 1
+
+# All three sense-making roles surfaced in glossary
+grep -E "Forge-Master Observer|Cross-Run Watcher|Auditor Auto-Invoke" docs/manual/glossary.html
+
+# forge-json reference has the new config blocks
+grep -E "id=\"hooks-postRun\"|id=\"forgeMaster-observer\"|id=\"forgeMaster-auditor\"" docs/manual/forge-json-reference.html
+
+# Error catalog has both new codes
+grep -E "observer-budget-exceeded|auditor-spawn-failed" docs/manual/errors-and-exit-codes.html
+```
+
+All five lines must produce non-empty output.
+
+### Pre-flight grep sentinel (run BEFORE starting S11)
+
+If any of these grep'd values has changed since this appendix was written (e.g. tool count drifted from another phase), DO NOT execute S11 blindly — update the affected rows above first:
+
+| Value | Expected at draft time | Re-check command |
+|---|---|---|
+| Tools count in `docs/capabilities.md` heading | `## MCP Tools (89)` | `grep -E "^## MCP Tools \([0-9]+\)" docs/capabilities.md` |
+| Tools count in `docs/manual/glossary.html` | `<!--c:tools-->90<!--/c-->` (already 90 — pre-existing drift; +1 → 91 after this phase) | `grep -E "c:tools-->[0-9]+<" docs/manual/glossary.html` |
+| `forge_master_ask:` line in capabilities.mjs | ~line 1605 | `grep -n "forge_master_ask: {" pforge-mcp/capabilities.mjs` |
+| Hook table row count in `customization.html` | 3 rows in "LiveGuard and orchestration hooks" | `grep -c "<tr>" docs/manual/customization.html` (note: includes other tables) |
+| Settings tab count in `dashboard-settings.html` (used by UI follow-up plan) | 9 `<h3 id="settings-">` | `grep -c "<h3 id=\"settings-" docs/manual/dashboard-settings.html` |

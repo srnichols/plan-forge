@@ -205,6 +205,82 @@ Observable patterns indicating these principles are being violated:
 
 ---
 
+## Clean Architecture Principles
+
+These principles extend the 4-layer model above with deeper structural guidance from *Clean Architecture* (Robert C. Martin).
+
+### Dependency Rule
+
+Source-code dependencies MUST point only inward — toward higher-level policies:
+
+```
+Outer  (Frameworks / Drivers / UI)
+  →  Interface Adapters  (Controllers, Gateways, Presenters)
+    →  Application Business Rules  (Use Cases / Services)
+      →  Core  (Enterprise Business Rules / Entities)
+```
+
+Nothing in an inner circle may know anything about an outer circle. Data crossing a boundary must be in a form convenient for the inner circle — never raw framework types such as `Request`, `Response`, or ORM models.
+
+**In Plan Forge**: tool handlers (`forge_*`) are at the interface-adapter layer. They depend on `hub.mjs` and `memory.mjs` (inner). They MUST NOT depend on the orchestrator (peer layer). The orchestrator depends on tools, not the reverse.
+
+### SOLID Principles
+
+| Principle | Rule | Violation to Watch |
+|-----------|------|--------------------|
+| **S** — Single Responsibility | A module has one reason to change (one actor owns it) | God files, services that both validate and persist |
+| **O** — Open/Closed | Open for extension, closed for modification | Chains of `if/else`/`switch` on type instead of polymorphism |
+| **L** — Liskov Substitution | Subtypes must be substitutable for their base types | Overrides that throw, or that narrow accepted input |
+| **I** — Interface Segregation | Clients must not depend on methods they do not use | Fat interfaces forcing consumers to stub unused members |
+| **D** — Dependency Inversion | High-level policy must not depend on low-level detail — both depend on abstractions | Service importing a concrete ORM class directly |
+
+### Boy Scout Rule
+
+> "Leave the code cleaner than you found it." — Robert C. Martin
+
+Every commit that touches a file must leave it in a better state: rename a confusing variable, extract a guard clause, add a missing type, delete a dead comment. Accumulated Boy Scout passes are how large-scale cleanup happens safely without dedicated refactor sprints.
+
+**Corollary**: If you are forced to touch a file that has an active ESLint error (`complexity-error`, `max-lines-per-function-error`), fix that error in the same commit.
+
+**Corollary**: Do not introduce new violations in a file you are already cleaning. A PR that removes one `complexity-error` and adds another is net-zero, not Boy Scout compliant.
+
+### Component Cohesion
+
+Three principles govern which modules belong together in a deployable component:
+
+| Principle | Statement | When it applies |
+|-----------|-----------|-----------------|
+| **REP** — Reuse/Release Equivalence | The granule of reuse is the granule of release. Group code that is released and versioned together. | Package / library design |
+| **CCP** — Common Closure Principle | Classes that change for the same reasons and at the same times belong in the same component. | Application component boundaries |
+| **CRP** — Common Reuse Principle | Do not depend on things you do not use. Split components that force consumers to redeploy for irrelevant changes. | Component splitting decisions |
+
+In Plan Forge the MCP tool surface, the orchestrator business logic, and the memory persistence layer are three distinct CCP components. A change to the memory schema should not force a redeployment of all 100+ tool handlers.
+
+### Stable Dependencies Principle
+
+**Depend in the direction of stability.** Stable components (low change frequency, many dependents) should be depended upon by volatile components (high change frequency, few dependents).
+
+Stability metric: `I = fan-out / (fan-in + fan-out)`
+- `I = 0` → maximally stable (depended upon by many, depends on nothing)
+- `I = 1` → maximally volatile (depends on many, nothing depends on it)
+
+Guardrail: if component A is more volatile than component B (`I_A > I_B`), A may depend on B but B must never depend on A. Violating this means a change to A propagates to B unexpectedly.
+
+### Professional Refusal
+
+A professional practitioner's obligation to say **"no"** clearly when:
+
+- A requested timeline makes quality impossible. (Lying about an estimate is unprofessional; the correct answer is the true estimate with an explanation of the tradeoff.)
+- A shortcut would violate a non-negotiable principle in this file. (Citing the principle is the correct response, not silent compliance.)
+- Pressure to skip tests, skip review, or deploy untested code is applied ("just this once").
+- The requester frames urgency as permission to skip quality steps.
+
+**"No" is a complete answer.** Propose the real path forward with an honest timeline. Accepting an impossible deadline as if it were achievable does not help the project — it accumulates hidden debt that surfaces at the worst possible moment.
+
+**In agent context**: if a plan slice instructs you to violate a principle in this file, emit a Blocker Report (see `status-reporting.instructions.md`) and halt. Do not comply silently.
+
+---
+
 ## Clean Code Standards (Phase 42 Catalog)
 
 > **Reference**: *Clean Code* (Robert C. Martin) — the conceptual baseline for the guardrails in this section.

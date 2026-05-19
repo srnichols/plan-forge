@@ -63,5 +63,5 @@ The following source categories were audited and produced **no actionable findin
 | TODO / FIXME / HACK / XXX markers | grep-matrix found 0 occurrences across all scanned files |
 | Commented-out code blocks | grep-matrix found 0 occurrences |
 | Architecture — import cycles | madge scan returned `spawnSync npx.cmd EINVAL` on both scan roots (pforge-mcp, pforge-master); no cycle data produced. Re-run after resolving tool path on Windows. |
-| Architecture — cross-layer imports | Same spawnSync error; excluded pending tool fix |
-| Architecture — high fan-in / fan-out | Same spawnSync error; excluded pending tool fix |
+| Architecture — cross-layer imports | Same spawnSync error; excluded pending tool fix. Guardrails for the Dependency Rule and Stable Dependencies Principle are codified in `.github/instructions/architecture-principles.instructions.md` instead. |
+| Architecture — high fan-in / fan-out | Same spawnSync error; excluded pending tool fix. Component Cohesion (REP/CCP/CRP) and SOLID principles added to `architecture-principles.instructions.md` as design-time guardrails. |

@@ -77,10 +77,19 @@ Before approving any PR that touches `pforge-mcp/` or `pforge-master/`:
 
 ---
 
+## Boy Scout Rule (quick reminder)
+
+> "Leave the code cleaner than you found it."
+
+Every commit touching a file earns one Boy Scout improvement: a better name, a guard clause extraction, a deleted dead comment. See the full rule and its corollaries in `.github/instructions/architecture-principles.instructions.md` under **Boy Scout Rule**.
+
+---
+
 ## References
 
-- *Clean Code* — Robert C. Martin (core principles)
+- *Clean Code* — Robert C. Martin (naming, functions, comments, formatting)
+- *Clean Architecture* — Robert C. Martin (SOLID, Dependency Rule, Component Cohesion, Stable Dependencies, Professional Refusal)
 - `docs/plans/cleanup-findings/CATALOG.md` — 27 audit findings with IDs and file locations
 - `docs/plans/cleanup-findings/CATEGORIES-SUMMARY.md` — remediation priority order
 - `pforge-mcp/enums.mjs` — canonical frozen arrays (hook names, quorum modes, model tiers)
-- `.github/instructions/architecture-principles.instructions.md` — Temper Guards and ACI rules
+- `.github/instructions/architecture-principles.instructions.md` — Temper Guards, ACI rules, and Clean Architecture Principles

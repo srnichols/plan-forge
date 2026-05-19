@@ -439,7 +439,7 @@ forge_diagnose({ file: "src/auth/token-validator.ts", models: "grok-3-mini,grok-
           <table class="manual-table">
             <thead><tr><th>Mode</th><th>Flag</th><th>What Happens</th></tr></thead>
             <tbody>
-              <tr><td>Full Auto</td><td><em>(default)</em></td><td><code>gh copilot</code> CLI executes each slice with full project context. Routing honors host-aware preference (v2.82) so non-Copilot hosts (Claude Code, Cursor, Windsurf, Zed) prefer direct API to honor your subscription.</td></tr>
+              <tr><td>Full Auto</td><td><em>(default)</em></td><td><code>gh copilot</code> CLI executes each slice with full project context. Routing honors a host-aware preference so non-Copilot hosts (Claude Code, Cursor, Windsurf, Zed) prefer direct API to honor your subscription.</td></tr>
               <tr><td>Assisted</td><td><code>--assisted</code></td><td>You code in VS Code; orchestrator prompts and validates gates</td></tr>
               <tr><td>Estimate</td><td><code>--estimate</code></td><td>Shows slice count, token estimate, and cost, without executing. Returns the same numbers as the <code>forge_estimate_quorum</code> tool.</td></tr>
             </tbody>

@@ -32,7 +32,7 @@
         <h1>The LiveGuard Dashboard</h1>
         <p class="text-lg text-slate-400 mb-8">The same unified dashboard, extended with a LIVEGUARD section, 7 real-time tabs driven by WebSocket hub events.</p>
         <div class="callout callout-tip">
-          <strong>v2.30.0</strong>, Dashboard LiveGuard section fully operational. 7 tabs: Health, Incidents, Triage, Security, Env, Watcher, Bug Registry. Quorum Analysis links and Fix Proposals Feed available since v2.29. <code>forge_liveguard_run</code> composite results displayed since v2.30.
+          <strong>Dashboard LiveGuard section.</strong> 7 tabs: Health, Incidents, Triage, Security, Env, Watcher, Bug Registry. Quorum Analysis links and Fix Proposals Feed are available. <code>forge_liveguard_run</code> composite results are displayed inline.
         </div>
 
         <!-- CONTENT: full dashboard walkthrough -->
@@ -88,7 +88,7 @@
           <li><strong>On-call</strong>, engineer name from <code class="text-forge-400">.forge.json</code> <code>onCall</code> config</li>
           <li><strong>Affected files</strong>, file list, clickable to view in editor</li>
         </ul>
-        <p id="fix-proposals-feed"><strong>Fix Proposals Feed (v2.29)</strong>, when <code class="text-forge-400">forge_fix_proposal</code> has generated plans, a <strong>Proposed Fixes</strong> section appears at the top of the Incidents tab. Each entry shows the proposal file path, source type (regression/drift/incident/secret), and a <strong>Run in Assisted Mode →</strong> button that opens the Actions tab pre-filled with the plan path. The feed reads from <code>GET /api/fix/proposals</code> on tab load and on every <code>fix-proposal-ready</code> hub event.</p>
+        <p id="fix-proposals-feed"><strong>Fix Proposals Feed</strong>, when <code class="text-forge-400">forge_fix_proposal</code> has generated plans, a <strong>Proposed Fixes</strong> section appears at the top of the Incidents tab. Each entry shows the proposal file path, source type (regression/drift/incident/secret), and a <strong>Run in Assisted Mode →</strong> button that opens the Actions tab pre-filled with the plan path. The feed reads from <code>GET /api/fix/proposals</code> on tab load and on every <code>fix-proposal-ready</code> hub event.</p>
 
         <h2 id="triage-tab-heading">Triage Tab</h2>
         <p>Displays the output of <code class="text-forge-400">forge_alert_triage</code>, a ranked list of all open alerts sorted by priority (severity × recency). Each row shows:</p>
@@ -121,7 +121,7 @@
         </ul>
         <p>The tab reads from <code class="text-forge-400">.forge/env-diff-cache.json</code> on load. Cache is refreshed when <code>forge_env_diff</code> completes.</p>
 
-        <h2 id="quorum-in-dashboard">Quorum Analysis from the Dashboard (v2.29)</h2>
+        <h2 id="quorum-in-dashboard">Quorum Analysis from the Dashboard</h2>
         <p>The Health and Incidents tabs each include a <strong>Run Quorum Analysis →</strong> link. Clicking it calls <code>GET /api/quorum/prompt?source=&lt;tab-source&gt;&amp;goal=risk-assess</code> and opens a pre-populated quorum prompt in the Actions tab, ready to copy into your AI client. No model calls happen from the dashboard, it assembles the prompt for you.</p>
 
         <h2 id="help-links">Help Links from the Dashboard</h2>

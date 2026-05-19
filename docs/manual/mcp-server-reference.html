@@ -139,31 +139,31 @@
 
       <!-- Crucible (Smelt station) -->
       <h3 id="tools-crucible">Crucible &mdash; Idea Smelting <span class="text-amber-400 text-sm font-normal">(8 tools)</span></h3>
-      <p>The Smelt station. Interview-driven plan intake with a <strong>critical-fields gate</strong> (v2.82.1) that refuses to finalize until <code>build-command</code>, <code>test-command</code>, scope, gates, and forbidden-actions are all satisfied. Deterministic Spec Kit importer added in v2.93.0. See <a href="crucible.html">Chapter 5 &mdash; Crucible</a>.</p>
+      <p>The Smelt station. Interview-driven plan intake with a <strong>critical-fields gate</strong> that refuses to finalize until <code>build-command</code>, <code>test-command</code>, scope, gates, and forbidden-actions are all satisfied. Includes a deterministic Spec Kit importer. See <a href="crucible.html">Chapter 5 &mdash; Crucible</a>.</p>
 
       <table class="manual-table">
         <thead><tr><th>Tool</th><th>Description</th></tr></thead>
         <tbody>
           <tr><td><code>forge_crucible_submit</code></td><td>Submit a raw idea or feature request to start an interview</td></tr>
-          <tr><td><code>forge_crucible_ask</code></td><td>Answer the next interview question. Supports optional <code>questionId</code> (v2.82.1) to refuse on out-of-sync clients with <code>ASK_QUESTION_MISMATCH</code>.</td></tr>
+          <tr><td><code>forge_crucible_ask</code></td><td>Answer the next interview question. Supports an optional <code>questionId</code> to refuse on out-of-sync clients with <code>ASK_QUESTION_MISMATCH</code>.</td></tr>
           <tr><td><code>forge_crucible_preview</code></td><td>Preview the draft plan + flag any unresolved CRITICAL_FIELDS</td></tr>
           <tr><td><code>forge_crucible_finalize</code></td><td>Finalize into <code>docs/plans/Phase-NN.md</code>. Refuses if plan exists with <code>PLAN_ALREADY_EXISTS</code>; pass <code>overwrite: true</code> to bypass. Refuses on missing CRITICAL_FIELDS with <code>CRITICAL_FIELDS_MISSING</code>.</td></tr>
           <tr><td><code>forge_crucible_list</code></td><td>List all in-flight and finalized smelts</td></tr>
           <tr><td><code>forge_crucible_abandon</code></td><td>Abandon an in-flight smelt</td></tr>
-          <tr><td><code>forge_crucible_import</code> <span class="text-xs text-amber-400">(v2.93.0)</span></td><td>Deterministic Spec Kit importer. Maps a Spec Kit checkout (<code>spec.md</code> + <code>plan.md</code> + <code>tasks.md</code> + optional <code>constitution.md</code>) into a Plan Forge smelt under <code>.forge/crucible/</code>. No LLM calls. Supports <code>--dry-run</code> and <code>--json</code>.</td></tr>
-          <tr><td><code>forge_crucible_status</code> <span class="text-xs text-amber-400">(v2.93.0)</span></td><td>Inspect imported smelts. Lists all smelts when called without an id, or returns the full smelt record (metadata + draft plan) when given a smelt id.</td></tr>
+          <tr><td><code>forge_crucible_import</code></td><td>Deterministic Spec Kit importer. Maps a Spec Kit checkout (<code>spec.md</code> + <code>plan.md</code> + <code>tasks.md</code> + optional <code>constitution.md</code>) into a Plan Forge smelt under <code>.forge/crucible/</code>. No LLM calls. Supports <code>--dry-run</code> and <code>--json</code>.</td></tr>
+          <tr><td><code>forge_crucible_status</code></td><td>Inspect imported smelts. Lists all smelts when called without an id, or returns the full smelt record (metadata + draft plan) when given a smelt id.</td></tr>
         </tbody>
       </table>
 
       <!-- Tempering -->
       <h3 id="tools-tempering">Tempering &mdash; Quality Drains &amp; Audit Loop <span class="text-amber-400 text-sm font-normal">(5 tools)</span></h3>
-      <p>Closed-loop self-tempering, scan, triage, fix, repeat until convergence. The audit-loop drain (v2.80) is opt-in via <code>.forge.json</code> &rarr; <code>audit.mode = "off" | "auto" | "always"</code>. See <a href="audit-loop.html">Audit Loop Deep Dive</a>.</p>
+      <p>Closed-loop self-tempering, scan, triage, fix, repeat until convergence. The audit-loop drain is opt-in via <code>.forge.json</code> &rarr; <code>audit.mode = "off" | "auto" | "always"</code>. See <a href="audit-loop.html">Audit Loop Deep Dive</a>.</p>
 
       <table class="manual-table">
         <thead><tr><th>Tool</th><th>Description</th></tr></thead>
         <tbody>
           <tr><td><code>forge_tempering_scan</code></td><td>Run a single tempering scanner (mutation, content-audit, etc.)</td></tr>
-          <tr><td><code>forge_tempering_run</code></td><td>Run the full standard scanner sequence (10 scanners as of v2.81)</td></tr>
+          <tr><td><code>forge_tempering_run</code></td><td>Run the full standard scanner sequence (10 scanners)</td></tr>
           <tr><td><code>forge_tempering_drain</code></td><td>Iterate scan &rarr; triage &rarr; fix until convergence or <code>maxRounds</code></td></tr>
           <tr><td><code>forge_tempering_status</code></td><td>Latest tempering run status, scanners, findings</td></tr>
           <tr><td><code>forge_tempering_approve_baseline</code></td><td>Approve current findings as the new baseline for visual-diff scanners</td></tr>
@@ -254,15 +254,15 @@
           <tr><td><code>skill-completed</code></td><td>Skill finishes all steps</td></tr>
           <tr><td><code>approval-requested</code></td><td>Bridge pauses for external approval</td></tr>
           <tr><td><code>bridge-notification-sent</code></td><td>Webhook dispatched (Telegram, Slack, Discord)</td></tr>
-          <tr><td><code>watch-snapshot-completed</code> <span class="version-badge">v2.35</span></td><td>Watcher built a snapshot of a target project</td></tr>
-          <tr><td><code>watch-anomaly-detected</code> <span class="version-badge">v2.35</span></td><td>Watcher detected one or more anomalies (stalled, slice-failed, quorum-dissent, etc.)</td></tr>
-          <tr><td><code>watch-advice-generated</code> <span class="version-badge">v2.35</span></td><td>Watcher analyze-mode produced narrative advice from frontier model</td></tr>
-          <tr><td><code>fm-turn</code> <span class="version-badge">v2.82</span></td><td>Forge-Master turn (intent classification + tool-call trace + reply). Surfaces in the unified Timeline.</td></tr>
-          <tr><td><code>quorum-estimate</code> <span class="version-badge">v2.78</span></td><td>Forge-Master quorum advisory cost estimate, emitted before model dispatch so clients can cancel</td></tr>
+          <tr><td><code>watch-snapshot-completed</code></td><td>Watcher built a snapshot of a target project</td></tr>
+          <tr><td><code>watch-anomaly-detected</code></td><td>Watcher detected one or more anomalies (stalled, slice-failed, quorum-dissent, etc.)</td></tr>
+          <tr><td><code>watch-advice-generated</code></td><td>Watcher analyze-mode produced narrative advice from frontier model</td></tr>
+          <tr><td><code>fm-turn</code></td><td>Forge-Master turn (intent classification + tool-call trace + reply). Surfaces in the unified Timeline.</td></tr>
+          <tr><td><code>quorum-estimate</code></td><td>Forge-Master quorum advisory cost estimate, emitted before model dispatch so clients can cancel</td></tr>
           <tr><td><code>memory-captured</code></td><td>Decision / pattern / postmortem captured to OpenBrain</td></tr>
           <tr><td><code>crucible-started</code> / <code>crucible-question</code> / <code>crucible-finalized</code></td><td>Crucible interview lifecycle events</td></tr>
           <tr><td><code>tempering-round-completed</code></td><td>One round of audit-loop drain finished (scan &rarr; triage &rarr; fix)</td></tr>
-          <tr><td><code>slice-orphan-warning</code> <span class="version-badge">v2.82.1</span></td><td>Failed slice's worker deliverables were staged but not committed; recovery commands available</td></tr>
+          <tr><td><code>slice-orphan-warning</code></td><td>Failed slice's worker deliverables were staged but not committed; recovery commands available</td></tr>
         </tbody>
       </table>
 

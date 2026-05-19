@@ -83,7 +83,7 @@
       <p>Model A fails → Model B retries the same slice → Model C if B fails too. Emits <code>slice-escalated</code> WebSocket event at each step. No manual intervention required.</p>
 
       <div class="callout callout-tip">
-        <strong>Forge Intelligence (v2.32)</strong>, Escalation chains auto-tune from history. After 5+ recorded slices, <code>loadEscalationChain()</code> reorders models by success rate × cost efficiency. The best-performing, cheapest model moves to position 1 automatically. No configuration needed, just run plans and the forge learns.
+        <strong>Forge Intelligence</strong>, Escalation chains auto-tune from history. After 5+ recorded slices, <code>loadEscalationChain()</code> reorders models by success rate × cost efficiency. The best-performing, cheapest model moves to position 1 automatically. No configuration needed, just run plans and the forge learns.
       </div>
 
       <figure class="manual-figure" id="fig-14-1"><img src="assets/diagrams/escalation-chain.svg" alt="Escalation chain: grok-4 fails, escalates to claude-opus-4.6 which fails, escalates to gpt-5.2-codex which passes" class="diagram-img diagram-img-sm" /><figcaption class="manual-figcaption"><!--fignum--><span class="manual-fignum">Figure 14-1.</span><!--/fignum--> <!--cap:auto-->Escalation chain<!--/cap--></figcaption></figure>
@@ -502,7 +502,7 @@ ArgumentException.ThrowIfNullOrWhiteSpace(customerName);</code></pre>
       <p>The orchestrator tracks model performance in <code>.forge/model-performance.json</code>, success rate, average cost, and duration per model. It auto-selects the cheapest model with &gt;80% historical pass rate.</p>
 
       <div class="callout callout-tip">
-        <strong>Forge Intelligence (v2.32)</strong>, Three self-tuning systems reduce cost over time:
+        <strong>Forge Intelligence</strong>, Three self-tuning systems reduce cost over time:
         <ul class="mt-2 space-y-1 text-sm">
           <li><strong>Cost Calibration</strong>, Estimates auto-correct using a historical estimate-vs-actual ratio (clamped 0.5×–3×). After 3+ runs, <code>--estimate</code> accuracy improves automatically.</li>
           <li><strong>Adaptive Quorum Threshold</strong>, Reads <code>.forge/quorum-history.json</code> to learn which slices actually need quorum. If &lt;20% needed it, threshold rises (fewer quorum runs = lower cost). If &gt;60% needed it, threshold drops.</li>
@@ -567,7 +567,7 @@ pforge run-plan docs/plans/Phase-7.md --dry-run</code></pre>
       <p>Install via extension: <code>pforge ext add plan-forge-memory</code></p>
 
       <!-- ─── LiveGuard Hooks ─── -->
-      <h2 id="liveguard-hooks">LiveGuard Lifecycle Hooks <span class="text-sm font-normal text-slate-500">(v2.29)</span></h2>
+      <h2 id="liveguard-hooks">LiveGuard Lifecycle Hooks</h2>
       <p>Three hooks fire automatically during agent sessions to enforce operational safety:</p>
 
       <table class="manual-table">

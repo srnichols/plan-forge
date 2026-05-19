@@ -43,7 +43,7 @@
         </div>
 
         <div class="callout callout-tip">
-          <strong>New in v2.36.0</strong>: This chapter consolidates the three-tier memory work shipped across the <code>v2.35.1</code>–<code>v2.36.0</code> release window.
+          This chapter consolidates the three-tier memory work in one place. The companion <a href="memory-system.html"><strong>Chapter 22 — How the Shop Remembers</strong></a> tells the same story in plain English with the cost/quality numbers.
         </div>
 
         <div class="callout callout-info">
@@ -205,11 +205,11 @@
           </tbody>
         </table>
 
-        <p>The <strong>Memory tab</strong> in the dashboard (new in v2.36.0) renders this exact set as a live KPI strip + per-file breakdown, see <a href="dashboard-settings.html#settings-memory">the dashboard chapter</a>. The data comes from <code>forge_memory_report</code>, also exposed at <code>GET /api/memory/report</code>.</p>
+        <p>The <strong>Memory tab</strong> in the dashboard renders this exact set as a live KPI strip + per-file breakdown, see <a href="dashboard-settings.html#settings-memory">the dashboard chapter</a>. The data comes from <code>forge_memory_report</code>, also exposed at <code>GET /api/memory/report</code>.</p>
 
         <!-- ─── L3 ─── -->
         <h2 id="l3-openbrain">L3 — OpenBrain Bridge</h2>
-        <p>OpenBrain is the cross-project semantic store (pgvector + thought metadata). Plan Forge never writes to it directly during a tool call, that would couple every tool's latency to the OpenBrain endpoint. Instead, the path goes through the <strong>Anvil boundary</strong> (added in v3.x): a small piece of code that owns delivery, capability negotiation, and failure recovery so the calling tool only ever talks to a local queue.</p>
+        <p>OpenBrain is the cross-project semantic store (pgvector + thought metadata). Plan Forge never writes to it directly during a tool call, that would couple every tool's latency to the OpenBrain endpoint. Instead, the path goes through the <strong>Anvil boundary</strong>: a small piece of code that owns delivery, capability negotiation, and failure recovery so the calling tool only ever talks to a local queue.</p>
 
         <ol>
           <li><code>captureMemory</code> appends one line to <code>.forge/openbrain-queue.jsonl</code> (microseconds, local I/O)</li>

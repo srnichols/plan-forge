@@ -202,8 +202,8 @@ forge_crucible_abandon { id, reason? }                   → { ok }</code></pre>
           <dd class="text-slate-400 text-sm">You haven't created <code>docs/plans/PROJECT-PRINCIPLES.md</code> yet. Run <code>/project-principles</code> in Copilot chat, or create the file manually.</dd>
         </dl>
 
-        <h2 id="whats-new-v3">What's new in v3.x</h2>
-        <p>Crucible's downstream surfaces have grown since the original chapter. None of these change the core interview → plan → hardener flow above; they extend it with feedback loops the rest of the system uses:</p>
+        <h2 id="whats-new-v3">Downstream extensions</h2>
+        <p>Crucible's downstream surfaces have grown beyond the original chapter. None of these change the core interview → plan → hardener flow above; they extend it with feedback loops the rest of the system uses:</p>
         <ul>
           <li><strong>Classifier feedback loop.</strong> A finalized smelt that later produces a <strong>tempering finding</strong> can be routed via <a href="team-coordination.html#classifier-issue">forge_classifier_issue</a> when the finding turns out to be classifier noise rather than a product bug, closing the audit loop.</li>
           <li><strong>Drain round-loop.</strong> The <code>forge_tempering_drain</code> round-loop (Ch 21 Audit Loop) re-probes a plan's gates until convergence, surfacing residual Crucible <code>STALE_PRINCIPLES</code> warnings as actionable findings rather than transient noise.</li>

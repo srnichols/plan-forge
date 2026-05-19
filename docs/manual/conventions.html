@@ -73,17 +73,17 @@
           <strong>Skim path:</strong> read every chapter's H1 + first paragraph + final summary box and you'll have a working mental model of Plan Forge in roughly an hour. Drill into a chapter when you actually need to do the thing.
         </div>
 
-        <!-- ─── Status pills ─── -->
-        <h2 id="status-pills">Status pills</h2>
-        <p>Pills next to a chapter title in the sidebar or on the cover signal recent change. They're tied to the version that introduced or last reworked the chapter.</p>
-
-        <div class="cmd-block" style="background: rgba(15,23,42,0.6); padding: 1.25rem; border-radius: 0.5rem;">
-          <div class="space-y-2 text-sm">
-            <div><span class="pill-demo pill-demo--new">NEW v2.78</span> &nbsp; This chapter is new in the version shown. Worth a fresh read even if you know Plan Forge.</div>
-            <div><span class="pill-demo pill-demo--updated">UPDATED v2.75</span> &nbsp; This chapter exists already but had material rewrites. The change-log inside the chapter (when present) calls out what moved.</div>
-            <div><span class="pill-demo pill-demo--beta">BETA</span> &nbsp; The feature is shipping but still under active iteration. Expect APIs and flags to drift between point releases.</div>
-          </div>
-        </div>
+        <!-- ─── Versioning & freshness ─── -->
+        <h2 id="versioning">Versioning &amp; freshness</h2>
+        <p>This manual describes <strong>current behavior</strong>. We deliberately avoid <em>NEW vX.Y</em> badges and <em>&ldquo;introduced in vX.Y&rdquo;</em> stamps inside reference chapters &mdash; they age into anti-signals within a release or two and force every reader to know the version history of every feature.</p>
+        <p>For version-stamped history, see:</p>
+        <ul>
+          <li><a href="https://github.com/srnichols/plan-forge/blob/master/CHANGELOG.md" rel="noopener"><code>CHANGELOG.md</code></a> &mdash; the canonical, machine-parseable list of what shipped when.</li>
+          <li><a href="project-history.html">Project History</a> &mdash; the narrative version of the same thing: which inflection point solved which problem.</li>
+          <li><a href="foreword.html">Foreword</a> &mdash; the one-year arc from <em>&ldquo;impossible&rdquo;</em> to <em>&ldquo;seven minutes&rdquo;</em>.</li>
+          <li>The <strong>Editions</strong> list further down this page &mdash; manual-level revisions, when the book itself was reshaped.</li>
+        </ul>
+        <p>Maturity signals (<span class="pill-demo pill-demo--beta">BETA</span>, deprecation warnings, security advisories) <em>are</em> kept inline because they describe a feature's <em>current trust level</em>, not its history.</p>
 
         <!-- ─── Hero images & supporting figures ─── -->
         <h2 id="hero-policy">Hero images and supporting figures</h2>

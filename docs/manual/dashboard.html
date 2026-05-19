@@ -235,7 +235,7 @@ node pforge-mcp/server.mjs --dashboard-only</code></pre>
         <img src="../assets/dashboard/skills.png" alt="Dashboard Skills tab showing recent skill runs with step-level detail and event log" class="rounded-xl border border-slate-700/40 mb-6" loading="lazy" />
 
         <!-- ─── Watcher Tab (v2.35) ─── -->
-        <h2 id="watcher">Watcher Tab <span class="version-badge">v2.35</span></h2>
+        <h2 id="watcher">Watcher Tab</h2>
         <p>Read-only view of <em>another</em> project's pforge run, consumed from a second VS Code / Copilot session. Subscribes to <code>watch-snapshot-completed</code>, <code>watch-anomaly-detected</code>, and <code>watch-advice-generated</code> hub events emitted by <code>forge_watch</code> / <code>forge_watch_live</code>. Shows:</p>
         <ul>
           <li><strong>Latest snapshot</strong>, target path, run state, run ID, anomaly count, diff cursor</li>
@@ -246,11 +246,11 @@ node pforge-mcp/server.mjs --dashboard-only</code></pre>
 
         <!-- ─── Forge-Master Studio Tab (moved to sub-page) ─── -->
         <div class="callout callout-info" id="studio">
-          <strong>📋 Forge-Master Studio Tab</strong>, The Studio tab (v2.61+) provides the reasoning orchestrator's chat interface with prompt gallery, streaming replies, embedding cache tile, and quorum advisory. Full reference: <a href="dashboard-forge-master.html">Dashboard — Forge-Master Studio →</a>
+          <strong>📋 Forge-Master Studio Tab</strong>, The Studio tab provides the reasoning orchestrator's chat interface with prompt gallery, streaming replies, embedding cache tile, and quorum advisory. Full reference: <a href="dashboard-forge-master.html">Dashboard — Forge-Master Studio →</a>
         </div>
 
         <!-- ─── Audit-Loop activation surfaces ─── -->
-        <h2 id="audit-loop">Audit-Loop Activation <span class="version-badge version-badge--accent">v2.80</span></h2>
+        <h2 id="audit-loop">Audit-Loop Activation</h2>
         <p>The audit loop is opt-in. It's <strong>not</strong> on a Settings tab, mode is read from <code>.forge.json#audit.mode</code> directly:</p>
         <ul>
           <li><strong>Mode values</strong>, <code>off</code> (default) / <code>auto</code> / <code>always</code></li>
@@ -261,7 +261,7 @@ node pforge-mcp/server.mjs --dashboard-only</code></pre>
         <p>Trigger manually with <code>pforge audit-loop --auto</code> (respects <code>.forge.json#audit.mode</code>) or via the <code>forge_tempering_drain</code> MCP tool. See <a href="audit-loop.html">Audit Loop deep dive</a> for the full activation flow.</p>
 
         <!-- ─── Timeline Tab (v2.82) ─── -->
-        <h2 id="timeline">Timeline Tab <span class="version-badge">v2.82 · 9 sources</span></h2>
+        <h2 id="timeline">Timeline Tab <span class="version-badge">9 sources</span></h2>
         <p>Unified chronological view of every event across the shop. Source chips filter the feed:</p>
         <ol>
           <li><code>run</code>, plan executions (slice progress, completes, aborts)</li>

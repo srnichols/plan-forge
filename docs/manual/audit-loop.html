@@ -29,7 +29,7 @@
       <div class="chapter-content">
         <div class="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">Deep Dive · Act II, Forge</div>
         <h1>Audit Loop</h1>
-        <p class="text-lg text-slate-400 mb-8">Closed-loop bug discovery: content-audit scan &rarr; triage &rarr; fix, iterating until convergence or max rounds. Added in v2.80.0.</p>
+        <p class="text-lg text-slate-400 mb-8">Closed-loop bug discovery: content-audit scan &rarr; triage &rarr; fix, iterating until convergence or max rounds.</p>
 
         <div class="callout callout-info">
           <strong>New here? Read this first.</strong> The audit loop is Plan Forge's way of <em>finding bugs in a running app and fixing them automatically</em>. Point it at your dev or staging server and it will:
@@ -45,7 +45,7 @@
         <img src="assets/diagrams/audit-loop-triage-lanes.svg" alt="Audit loop drain flow: content-audit scanner produces findings, forge_triage_route classifies each into one of three lanes (bug -> forge_bug_register, spec -> forge_crucible_submit, classifier -> .forge/audits/ artifact), then spawnWorker applies fixes and the loop iterates. Activation via .forge.json#audit.mode (default off). Production environments are hard-blocked." class="diagram-img diagram-img-md my-4" />
 
         <div class="callout callout-info">
-          <strong>Added in v2.80.0.</strong> The audit loop defaults to <code>off</code>. It never runs automatically unless you explicitly set <code>audit.mode</code> to <code>"auto"</code> or <code>"always"</code> in <code>.forge.json</code>. Production environments are always forbidden.
+          <strong>Off by default.</strong> The audit loop defaults to <code>off</code>. It never runs automatically unless you explicitly set <code>audit.mode</code> to <code>"auto"</code> or <code>"always"</code> in <code>.forge.json</code>. Production environments are always forbidden.
         </div>
 
         <h2>What It Does</h2>
@@ -190,7 +190,7 @@ pforge audit-loop --env=staging</code></pre>
 
         <h2>Design Decisions</h2>
         <ul>
-          <li><strong>Classifier proposals are local files</strong> (v2.80): Written to <code>.forge/audits/</code> as JSON artifacts. GitHub PR creation deferred to v2.81+.</li>
+          <li><strong>Classifier proposals are local files</strong>: Written to <code>.forge/audits/</code> as JSON artifacts. GitHub PR creation is a deferred enhancement.</li>
           <li><strong><code>spawnWorker</code> is injectable</strong>: Consistent with visual-diff quorum and bug classifier patterns. Already in the function signature.</li>
           <li><strong>Production is immutably forbidden</strong>: <code>forbidProduction: true</code> cannot be overridden via config, it's hardcoded in <code>auto-activate.mjs</code>.</li>
         </ul>

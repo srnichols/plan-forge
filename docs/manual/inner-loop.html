@@ -46,7 +46,7 @@
         </div>
 
         <div class="callout callout-info">
-          <strong>Added in v2.57.0.</strong> All seven subsystems default to <em>off / suggest / read-only</em> for existing projects. New installs get best-defaults. Toggle everything from the Dashboard → <em>Config</em> tab. Nothing in your current workflow breaks.
+          <strong>Opt-in by default.</strong> All seven subsystems default to <em>off / suggest / read-only</em> for existing projects. New installs get best-defaults. Toggle everything from the Dashboard → <em>Config</em> tab. Nothing in your current workflow breaks.
         </div>
 
         <p class="text-sm text-slate-400 mt-4">For the canonical system-wide overview covering Phase-25 <em>and</em> Phase-26 together, see <a href="self-deterministic-loop.html">The Self-Deterministic Agent Loop</a>.</p>
@@ -84,7 +84,7 @@
         <p>A slice that passes gets captured as a candidate auto-skill with its domain keywords, gate commands, and a SHA prefix. Before the next slice, the orchestrator retrieves matching skills (ranked by reuse count) and injects them into the prompt. A skill promotes to "stable" once its reuse count hits the threshold (default <strong>3</strong>).</p>
         <ul>
           <li><strong>Module:</strong> <code>pforge-mcp/memory.mjs → retrieveAutoSkills() / writeAutoSkill()</code></li>
-          <li><strong>Config:</strong> none in v2.57, defaults are Dashboard-editable in Phase-26</li>
+          <li><strong>Config:</strong> none — defaults are Dashboard-editable in Phase-26</li>
           <li><strong>Storage:</strong> <code>.forge/auto-skills/*.md</code></li>
         </ul>
 
@@ -117,7 +117,7 @@
 
         <!-- Reviewer -->
         <h3 id="reviewer">7. Reviewer-agent in-loop (L4) — cheap second pair of eyes</h3>
-        <p>Opt-in. When enabled, the <code>brain.gate-check</code> responder invokes a speed-quorum reviewer on each slice's diff summary and attaches a verdict to the response (<code>score</code>, <code>critical</code>, <code>summary</code>, <code>durationMs</code>). <strong>Advisory-only in v2.57</strong>: critical verdicts do not block the next slice unless operators explicitly set <code>blockOnCritical: true</code>. Blocking mode enters Phase-26 after calibration data exists.</p>
+        <p>Opt-in. When enabled, the <code>brain.gate-check</code> responder invokes a speed-quorum reviewer on each slice's diff summary and attaches a verdict to the response (<code>score</code>, <code>critical</code>, <code>summary</code>, <code>durationMs</code>). <strong>Advisory-only by default</strong>: critical verdicts do not block the next slice unless operators explicitly set <code>blockOnCritical: true</code>. Blocking mode enters Phase-26 after calibration data exists.</p>
         <ul>
           <li><strong>Module:</strong> <code>pforge-mcp/brain.mjs → invokeReviewer()</code></li>
           <li><strong>Config:</strong> <code>runtime.reviewer: { enabled, quorumPreset, blockOnCritical, timeoutMs }</code></li>

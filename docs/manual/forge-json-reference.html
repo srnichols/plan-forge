@@ -169,7 +169,7 @@
         </div>
 
         <!-- ============================================================ -->
-        <h2 id="quorum"><code>quorum</code> &mdash; multi-model consensus (v2.5+)</h2>
+        <h2 id="quorum"><code>quorum</code> &mdash; multi-model consensus</h2>
         <p>Configuration for quorum mode. Master switch is <code>enabled</code>; with <code>auto: true</code> the orchestrator only quorums slices whose complexity score crosses <code>threshold</code>. See <a href="advanced-execution.html#quorum">Advanced Execution &mdash; Quorum Mode</a> for the scoring rubric and worked examples, and <a href="advanced-execution.html#quorum-complexity">Complexity Scoring Rubric</a> for the seven signals that drive the score.</p>
 
         <div class="overflow-x-auto mb-6">
@@ -201,7 +201,7 @@
         </div>
 
         <!-- ============================================================ -->
-        <h2 id="hooks"><code>hooks</code> &mdash; LiveGuard lifecycle hooks (v2.29+)</h2>
+        <h2 id="hooks"><code>hooks</code> &mdash; LiveGuard lifecycle hooks</h2>
         <p>Four hook configurations live under this object: <code>preDeploy</code> (before deploy slices), <code>postSlice</code> (after every slice), <code>preAgentHandoff</code> (multi-agent turn), and <code>preCommit</code> (ordered commit-time guard chain). Each section is independent; omit any subsection to accept its defaults.</p>
 
         <p class="text-sm text-slate-400 mb-6">For the full eight-hook picture, including the Copilot session hooks (<code>SessionStart</code>, <code>PreToolUse</code>, <code>PostToolUse</code>, <code>Stop</code>) configured separately in <code>.github/hooks/plan-forge.json</code> and the <code>PreCommit</code> chain runner, see <a href="customization.html#lifecycle-hooks"><strong>Customization &mdash; Lifecycle Hooks Reference</strong></a>.</p>
@@ -258,7 +258,7 @@
         </div>
 
         <!-- ============================================================ -->
-        <h2 id="openclaw"><code>openclaw</code> &mdash; OpenClaw analytics bridge (optional, v2.29+)</h2>
+        <h2 id="openclaw"><code>openclaw</code> &mdash; OpenClaw analytics bridge (optional)</h2>
         <p>Optional outbound POST on every PreAgentHandoff. Configures the analytics ingest endpoint. Leave unset to disable.</p>
 
         <div class="overflow-x-auto mb-6">
@@ -272,7 +272,7 @@
         </div>
 
         <!-- ============================================================ -->
-        <h2 id="runtime"><code>runtime</code> &mdash; inner-loop subsystems (v2.57+)</h2>
+        <h2 id="runtime"><code>runtime</code> &mdash; inner-loop subsystems</h2>
         <p>Opt-in subsystems added by Phase-25. Both default to off or advisory; existing users see no behavior change without explicit configuration.</p>
 
         <h3 id="runtime-gateSynthesis"><code>runtime.gateSynthesis</code></h3>
@@ -288,14 +288,14 @@
         </div>
 
         <h3 id="runtime-reviewer"><code>runtime.reviewer</code></h3>
-        <p>L4, opt-in speed-quorum reviewer that scores slice diffs inside <code>brain.gate-check</code>. Advisory-only in v2.57.</p>
+        <p>L4, opt-in speed-quorum reviewer that scores slice diffs inside <code>brain.gate-check</code>. Advisory-only by default.</p>
         <div class="overflow-x-auto mb-6">
           <table class="manual-table">
             <thead><tr><th>Key</th><th>Type</th><th>Default</th><th>Example</th><th>Change impact</th></tr></thead>
             <tbody>
               <tr><td><code>runtime.reviewer.enabled</code></td><td>boolean</td><td><code>false</code></td><td><code>true</code></td><td>Master switch. Off by default; turn on to get reviewer verdicts in the dashboard Audit-Loop tile.</td></tr>
               <tr><td><code>runtime.reviewer.quorumPreset</code></td><td>enum</td><td><code>"speed"</code></td><td><code>"power"</code></td><td>One of <code>speed</code> (cheaper, faster) or <code>power</code> (flagship models, slower).</td></tr>
-              <tr><td><code>runtime.reviewer.blockOnCritical</code></td><td>boolean</td><td><code>false</code></td><td><code>false</code></td><td>When true, critical verdicts block the next slice. Advisory-only (false) by design in v2.57.</td></tr>
+              <tr><td><code>runtime.reviewer.blockOnCritical</code></td><td>boolean</td><td><code>false</code></td><td><code>false</code></td><td>When true, critical verdicts block the next slice. Advisory-only (false) by design.</td></tr>
               <tr><td><code>runtime.reviewer.timeoutMs</code></td><td>number (ms)</td><td><code>30000</code></td><td><code>60000</code></td><td>Max time to wait for a reviewer response. Increase for power-preset reviewers on large diffs.</td></tr>
             </tbody>
           </table>

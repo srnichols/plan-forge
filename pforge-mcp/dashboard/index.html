@@ -347,6 +347,7 @@
       <button class="tab-btn px-3 py-1.5 whitespace-nowrap text-xs font-medium text-gray-400 hover:text-purple-400" data-tab="settings-brain" data-testid="settings-brain-tab-btn" role="tab"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9.5 2A2.5 2.5 0 0 1 12 4.5v15a2.5 2.5 0 0 1-4.96.44A2.5 2.5 0 0 1 4.5 17.5a2.5 2.5 0 0 1-.44-4.96A2.5 2.5 0 0 1 4.5 10 2.5 2.5 0 0 1 7 7.5a2.5 2.5 0 0 1 .44-4.96A2.5 2.5 0 0 1 9.5 2z"/><path d="M14.5 2A2.5 2.5 0 0 0 12 4.5v15a2.5 2.5 0 0 0 4.96.44A2.5 2.5 0 0 0 19.5 17.5a2.5 2.5 0 0 0 .44-4.96A2.5 2.5 0 0 0 19.5 10 2.5 2.5 0 0 0 17 7.5a2.5 2.5 0 0 0-.44-4.96A2.5 2.5 0 0 0 14.5 2z"/></svg><span>Brain</span></button>
       <button class="tab-btn px-3 py-1.5 whitespace-nowrap text-xs font-medium text-gray-400 hover:text-purple-400" data-tab="extensions" role="tab"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 6a2 2 0 0 1 2-2h4v3a2 2 0 1 0 4 0V4h4a2 2 0 0 1 2 2v4h-3a2 2 0 1 0 0 4h3v4a2 2 0 0 1-2 2h-4v-3a2 2 0 1 0-4 0v3H6a2 2 0 0 1-2-2v-4h3a2 2 0 1 0 0-4H4V6z"/></svg><span>Extensions</span></button>
       <button class="tab-btn px-3 py-1.5 whitespace-nowrap text-xs font-medium text-gray-400 hover:text-purple-400" data-tab="settings-copilot" data-testid="settings-copilot-tab-btn" role="tab" title="Chat Customizations — edit .github/copilot-instructions.md (D5 / v3.1.0)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2z"/><path d="M8 10h8M8 14h5"/></svg><span>Copilot</span></button>
+      <button class="tab-btn px-3 py-1.5 whitespace-nowrap text-xs font-medium text-gray-400 hover:text-purple-400" data-tab="settings-forgemaster" data-testid="settings-forgemaster-tab-btn" role="tab" title="Forge-Master observer settings"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3l2.5 5 5.5.8-4 3.9.9 5.5-4.9-2.6-4.9 2.6.9-5.5-4-3.9 5.5-.8L12 3z"/></svg><span>Forge-Master</span></button>
     </div>
     <!-- Sub tabs: LiveGuard -->
     <div id="subtabs-liveguard" class="hidden flex flex-wrap gap-x-0.5 gap-y-1 pt-1 pb-1" role="tablist" aria-label="LiveGuard sections">
@@ -1260,6 +1261,57 @@
                 <li class="text-gray-500">Loading...</li>
               </ul>
             </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section id="tab-settings-forgemaster" class="tab-content hidden">
+      <div class="bg-gray-800 rounded-lg p-6 max-w-2xl">
+        <h2 class="text-lg font-semibold mb-4">⚒ Forge-Master</h2>
+        <p class="text-sm text-gray-400 mb-4">Observer controls for live narrations, budget caps, and Brain capture. Values persist to <code class="text-gray-500">.forge.json</code> → <code class="text-gray-500">forgeMaster.observer</code>.</p>
+        <div class="space-y-6">
+          <div>
+            <h3 class="text-sm font-semibold text-gray-300 mb-3">Observer</h3>
+            <div class="space-y-4">
+              <label class="flex items-center gap-2 text-sm text-gray-300">
+                <input id="cfg-observer-enabled" type="checkbox" class="rounded border-gray-600 bg-gray-700 text-purple-500 focus:ring-0">
+                Enable observer narrations
+              </label>
+              <div>
+                <label class="block text-sm text-gray-400 mb-1">Model Tier</label>
+                <select id="cfg-observer-modeltier" class="bg-gray-700 text-white text-sm rounded px-3 py-2 w-full border border-gray-600 focus:border-purple-500 outline-none">
+                  <option value="">Inherit ask mode (default)</option>
+                  <option value="flagship">Flagship (best quality)</option>
+                  <option value="mid">Mid (balanced)</option>
+                  <option value="fast">Fast (cheapest)</option>
+                </select>
+              </div>
+              <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+                <div>
+                  <label class="block text-xs text-gray-500 mb-1">Daily budget (USD)</label>
+                  <input id="cfg-observer-budget-usd" type="number" min="0" step="0.01" class="bg-gray-700 text-white text-sm rounded px-3 py-2 w-full border border-gray-600 focus:border-purple-500 outline-none">
+                </div>
+                <div>
+                  <label class="block text-xs text-gray-500 mb-1">Narrations per hour</label>
+                  <input id="cfg-observer-budget-narrations" type="number" min="0" step="1" class="bg-gray-700 text-white text-sm rounded px-3 py-2 w-full border border-gray-600 focus:border-purple-500 outline-none">
+                </div>
+              </div>
+              <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+                <div>
+                  <label class="block text-xs text-gray-500 mb-1">Batch window (ms)</label>
+                  <input id="cfg-observer-batch-window-ms" type="number" min="0" step="1000" class="bg-gray-700 text-white text-sm rounded px-3 py-2 w-full border border-gray-600 focus:border-purple-500 outline-none">
+                </div>
+                <label class="flex items-center gap-2 text-sm text-gray-300 md:mt-6">
+                  <input id="cfg-observer-brain-capture" type="checkbox" class="rounded border-gray-600 bg-gray-700 text-purple-500 focus:ring-0">
+                  Capture narrations to Brain
+                </label>
+              </div>
+            </div>
+          </div>
+          <div class="flex gap-2 pt-2">
+            <button onclick="saveConfig()" class="bg-blue-600 hover:bg-blue-500 text-white px-4 py-2 rounded text-sm">Save Configuration</button>
+            <button onclick="loadConfig()" class="bg-gray-600 hover:bg-gray-500 text-white px-4 py-2 rounded text-sm">Reload</button>
           </div>
         </div>
       </div>

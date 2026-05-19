@@ -2663,6 +2663,20 @@ async function loadConfig() {
       }
     }
 
+    const observerCfg = currentConfig.forgeMaster?.observer || {};
+    const observerEnabledEl = document.getElementById("cfg-observer-enabled");
+    const observerModelTierEl = document.getElementById("cfg-observer-modeltier");
+    const observerBudgetUsdEl = document.getElementById("cfg-observer-budget-usd");
+    const observerBudgetNarrationsEl = document.getElementById("cfg-observer-budget-narrations");
+    const observerBatchWindowEl = document.getElementById("cfg-observer-batch-window-ms");
+    const observerBrainCaptureEl = document.getElementById("cfg-observer-brain-capture");
+    if (observerEnabledEl) observerEnabledEl.checked = observerCfg.enabled === true;
+    if (observerModelTierEl) observerModelTierEl.value = observerCfg.modelTier || "";
+    if (observerBudgetUsdEl) observerBudgetUsdEl.value = observerCfg.maxUsdPerDay ?? 1;
+    if (observerBudgetNarrationsEl) observerBudgetNarrationsEl.value = observerCfg.maxNarrationsPerHour ?? 6;
+    if (observerBatchWindowEl) observerBatchWindowEl.value = observerCfg.batchWindowMs ?? 60000;
+    if (observerBrainCaptureEl) observerBrainCaptureEl.checked = observerCfg.brainCapture !== false;
+
     // Check API provider availability
     loadApiProviderStatus();
     loadApiKeys();
@@ -2871,6 +2885,12 @@ async function saveConfig() {
     const qModelsStr = document.getElementById("cfg-quorum-models")?.value || "";
     const qModels = qModelsStr ? qModelsStr.split(",").map((m) => m.trim()).filter(Boolean) : [];
     const qPreset = document.getElementById("cfg-quorum-preset")?.value || "";
+    const observerEnabled = document.getElementById("cfg-observer-enabled")?.checked || false;
+    const observerModelTier = document.getElementById("cfg-observer-modeltier")?.value || "";
+    const observerBudgetUsd = parseFloat(document.getElementById("cfg-observer-budget-usd")?.value ?? "1");
+    const observerBudgetNarrations = parseInt(document.getElementById("cfg-observer-budget-narrations")?.value ?? "6", 10);
+    const observerBatchWindowMs = parseInt(document.getElementById("cfg-observer-batch-window-ms")?.value ?? "60000", 10);
+    const observerBrainCapture = document.getElementById("cfg-observer-brain-capture")?.checked ?? true;
 
     const updated = {
       ...currentConfig,
@@ -2885,6 +2905,18 @@ async function saveConfig() {
         threshold: isNaN(qThresh) ? 7 : qThresh,
         models: qModels.length > 0 ? qModels : (currentConfig.quorum?.models || []),
         ...(qPreset ? { preset: qPreset } : {}),
+      },
+      forgeMaster: {
+        ...(currentConfig.forgeMaster || {}),
+        observer: {
+          ...(currentConfig.forgeMaster?.observer || {}),
+          enabled: observerEnabled,
+          modelTier: observerModelTier || null,
+          maxUsdPerDay: Number.isFinite(observerBudgetUsd) ? observerBudgetUsd : 1,
+          maxNarrationsPerHour: Number.isFinite(observerBudgetNarrations) ? observerBudgetNarrations : 6,
+          batchWindowMs: Number.isFinite(observerBatchWindowMs) ? observerBatchWindowMs : 60000,
+          brainCapture: observerBrainCapture,
+        },
       },
     };
     const res = await fetch(`${API_BASE}/api/config`, {
@@ -4098,6 +4130,7 @@ const tabLoadHooks = {
   'settings-crucible': () => { loadCrucibleConfigUI(); },
   'settings-brain': () => { loadBrainSubtab(); },
   'settings-copilot': () => { loadCopilotInstrStatus(); },
+  'settings-forgemaster': () => { loadConfig(); },
 };
 
 // ─── Theme Toggle ─────────────────────────────────────────────

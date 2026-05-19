@@ -81,6 +81,8 @@ describe("Phase-30 destination sections exist (Slice 6 sweep)", () => {
     "tab-settings-bridge",
     "tab-settings-crucible",
     "tab-settings-brain",
+    "tab-settings-copilot",
+    "tab-settings-forgemaster",
   ];
 
   for (const id of SETTINGS_SECTIONS) {
@@ -109,6 +111,10 @@ describe("Phase-30 decomposition mapping (Slice 6 sweep)", () => {
       "memory-search-input", "memory-search-results", "memory-presets",
     ]],
     ["tab-settings-brain",     ["cfg-brain"]],
+    ["tab-settings-forgemaster", [
+      "cfg-observer-enabled", "cfg-observer-modeltier", "cfg-observer-budget-usd",
+      "cfg-observer-budget-narrations", "cfg-observer-batch-window-ms", "cfg-observer-brain-capture",
+    ]],
   ];
 
   for (const [sectionId, elementIds] of MAPPINGS) {

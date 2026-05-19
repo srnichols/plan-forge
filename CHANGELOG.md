@@ -9,7 +9,7 @@ Format follows [Keep a Changelog](https://keepachangelog.com/).
 
 ---
 
-## [3.6.3] — 2026-05-18 — Worker Guardrails (A1–A8)
+## [3.7.0] — 2026-05-18 — Worker Guardrails (A1–A8)
 
 > **One-liner**: Ships the Worker Guardrails sweep: hardened Forbidden Actions matching, diff classification in the PreCommit chain, plan-health auditing, plan/body lock hashes, log-only network allowlists, objective-gated tempering runs, and worker-session tool denylists.
 
@@ -26,8 +26,10 @@ Format follows [Keep a Changelog](https://keepachangelog.com/).
 
 ### Distribution sync
 
-- **VERSION** — 3.6.3-dev → 3.6.3.
-- **[pforge-mcp/package.json](pforge-mcp/package.json)** — version bumped 3.6.3-dev → 3.6.3.
+- **VERSION** — 3.6.3-dev → 3.7.0 (SemVer MINOR — phase contains `feat:` commits).
+- **[pforge-mcp/package.json](pforge-mcp/package.json)** — version bumped 3.6.3-dev → 3.7.0.
+- **[package.json](package.json)** — root workspace version bumped 3.7.0-dev → 3.7.0.
+- **[pforge-master/package.json](pforge-master/package.json)** — version bumped 3.7.0-dev → 3.7.0.
 
 ---
 

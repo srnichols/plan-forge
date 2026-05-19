@@ -1,6 +1,6 @@
 {
   "name": "plan-forge",
-  "version": "3.7.0-dev",
+  "version": "3.7.0",
   "private": true,
   "workspaces": [
     "pforge-mcp",

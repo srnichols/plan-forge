@@ -11,6 +11,7 @@
   },
   "devDependencies": {
     "jsdom": "^29.0.2",
+    "madge": "^8.0.0",
     "vitest": "^2.1.9"
   },
   "dependencies": {

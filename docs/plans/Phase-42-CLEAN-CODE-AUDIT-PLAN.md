@@ -3,7 +3,7 @@
 > **Status**: **DRAFT — pending Step-2 harden**. Do NOT execute. Sign-off needed on §"Scope Contract" + §"Resolved Decisions" before running `step2-harden-plan.prompt.md`.
 > **Source**: Carryover from Phase 41 (ENUMS-CENTRALIZATION) planning. User asked whether the cleanup phase should look for more things like those covered in Clean Code (Robert C. "Uncle Bob" Martin, 2nd Edition, 2025). The answer was "audit, then targeted fix phases" — this is the audit.
 > **Tracks**: `docs/plans/cleanup-findings/` (NEW directory — only output), tooling-only changes to `scripts/audit/`, no production code touched.
-> **Estimated cost**: low. Zero LLM-cost surfaces. Mostly ESLint rule pack + grep + cloc + jscpd.
+> **Estimated cost**: low. Zero LLM-cost surfaces. Mostly ESLint rule pack + grep + cloc + jscpd + madge (dependency-graph analysis).
 > **Pipeline**: Specify ✅ → Harden ⏳ → HOLD → Execute → S5 retro. **No QA/E2E slice** because this phase produces no behavior change; the "QA" is reviewing the catalog for false positives.
 > **Recommended starting slice**: **S0 → S1 → S2** (tooling → run → triage). Worst case S3 (phase stub drafting) reveals the catalog is too granular and we re-triage.
 > **Session budget**: 6 slices. Recommend one session — phase is bounded and read-only, low cognitive overhead per slice.
@@ -50,7 +50,9 @@ The phase deliberately does **not** fix anything. Fixes are scoped, prioritized,
 - `scripts/audit/grep-matrix.mjs` — custom grep sweep for non-AST patterns: dead/lying comments (`// TODO:` older than 90 days via git blame), commented-out code blocks (>3 consecutive comment lines containing code-like syntax), `console.log` in production paths, `// HACK` / `// XXX` markers
 - `scripts/audit/measure-modules.mjs` — emits per-file line counts, function counts, export counts (cloc wrapper) — feeds the G14 (God module) detector
 - `scripts/audit/long-param-walker.mjs` — AST walk for >5-param call sites
-- `package.json` — new devDependencies (`jscpd`, `eslint`, `@typescript-eslint/parser` for JS too, `cloc`)
+- `scripts/audit/scan-architecture.mjs` — madge wrapper that emits the dependency graph + derives the four `A` (Architecture) findings: import cycles (`A2`), cross-layer imports (`A1` — configurable layer policy in `scripts/audit/layer-policy.json` defining which directories are "inner" vs "outer"), high-fan-in-on-volatile modules (`A3` — fan-in × git-churn over a threshold), and high-fan-out-on-unstable modules (`A4` — fan-out where >50% of dependencies are themselves volatile). **Reuses madge — no new tool family.**
+- `scripts/audit/layer-policy.json` — declarative layer map driving `A1` detection. Initial seed: `pforge-mcp/tools/**` is inner of `pforge-mcp/orchestrator.mjs`; `pforge-mcp/orchestrator.mjs` is inner of `pforge-mcp/server.mjs`; cross-package imports between `pforge-mcp/` and `pforge-master/` are flagged unless whitelisted. Hardener sharpens the initial policy.
+- `package.json` — new devDependencies (`jscpd`, `eslint`, `@typescript-eslint/parser` for JS too, `cloc`, `madge`)
 - `scripts/audit/README.md` — how to run, how to interpret, false-positive triage guide
 
 **S1 — Run the audit toolchain**:
@@ -60,11 +62,13 @@ The phase deliberately does **not** fix anything. Fixes are scoped, prioritized,
   - `grep-matrix-report.json` — custom grep findings
   - `module-metrics.json` — per-file line/function/export counts
   - `long-param-report.json` — call sites with >5 args
+  - `dep-graph.json` — madge raw dependency graph (per-module imports + cycles)
+  - `architecture-findings.json` — `scan-architecture.mjs` output: A1 cross-layer imports, A2 cycles, A3 high-fan-in volatile modules, A4 high-fan-out unstable modules (each with file:line anchors, fan-in/fan-out counts, churn metric)
 - Capture tool versions and commit hash at run time into `docs/plans/cleanup-findings/raw/RUN-CONTEXT.md` so the audit is reproducible
 
 **S2 — Triage & categorize**:
 - New `docs/plans/cleanup-findings/CATALOG.md` — for each raw finding:
-  - Map to Clean Code chapter or heuristic (e.g. `G5`, `F3`, `N1`, `T9`)
+  - Map to Clean Code chapter or heuristic (`G5`, `F3`, `N1`, `T9`, …) OR to a Plan-Forge architecture code (`A1` cross-layer import, `A2` import cycle, `A3` high-fan-in volatile module, `A4` high-fan-out unstable module). Codes `A1-A4` are a Plan-Forge-local extension to the CC2 taxonomy — they cover structural concerns CC2 does not audit (Dependency Rule, Stable Dependencies Principle, Component Cohesion). See Appendix D for rationale.
   - Assign severity: **high** (architectural debt, hot path), **medium** (maintainability friction), **low** (cosmetic)
   - Assign effort estimate: **S** (<1 day), **M** (1-3 days), **L** (>3 days)
   - Record file:line anchors
@@ -79,9 +83,10 @@ The phase deliberately does **not** fix anything. Fixes are scoped, prioritized,
 - Stubs are **proposals**, not commitments. Human review decides which to promote to numbered Phase 43+.
 
 **S4 — Update guardrails to prevent regression**:
-- `.github/instructions/architecture-principles.instructions.md` Temper Guards table — add 1–3 new entries derived from the highest-frequency Clean Code violations found (e.g. if F3 long-function dominates the catalog, add "Adding a 100-line function? STOP, decompose first")
-- `.github/instructions/architecture-principles.instructions.md` Warning Signs section — add observable patterns matching the catalog's high-severity categories
+- `.github/instructions/architecture-principles.instructions.md` Temper Guards table — add 1–3 new entries derived from the highest-frequency Clean Code violations found (e.g. if F3 long-function dominates the catalog, add "Adding a 100-line function? STOP, decompose first"). High-severity `A` findings get equal consideration (e.g., "Importing across the orchestrator → tool layer boundary? STOP — wrong direction").
+- `.github/instructions/architecture-principles.instructions.md` Warning Signs section — add observable patterns matching the catalog's high-severity categories (including any structural patterns from `A1-A4`).
 - These additions are the **only** modifications to non-audit files this phase makes. They are guardrails against re-introducing the patterns we just catalogued.
+- **Note**: S4 deliberately produces only NEW guardrail text. The deeper guidance build-out (Dependency Rule explainer, SOLID per-letter, Component Cohesion section, `/clean-code-review` skill) belongs to Phase 50 and is gated on this phase's catalog.
 
 **S5 — Retro + roadmap update**:
 - `docs/plans/testbed-findings/Phase-42-CLEAN-CODE-AUDIT-retro.md` — what the audit found vs expected, which proposed phases got promoted, friction in the triage process, recommendations for the next audit (frequency, tooling improvements)
@@ -107,7 +112,7 @@ The phase deliberately does **not** fix anything. Fixes are scoped, prioritized,
 ### Forbidden Actions
 
 - **Do NOT run `eslint --fix`** at any point. Audit is read-only. Auto-fix would (a) silently change code, (b) prevent the human review the catalog exists to enable, (c) violate the no-behavior-change invariant.
-- **Do NOT** modify any file under `pforge-mcp/`, `pforge-master/`, `pforge.ps1`, `pforge.sh`. The only `pforge-*` change permitted is `package.json` devDependency additions for ESLint/jscpd/cloc.
+- **Do NOT** modify any file under `pforge-mcp/`, `pforge-master/`, `pforge.ps1`, `pforge.sh`. The only `pforge-*` change permitted is `package.json` devDependency additions for ESLint/jscpd/cloc/madge.
 - **Do NOT** open any fix PR or fix commit during this phase, even for "trivially obvious" findings. Trivially obvious findings still need a fix phase Scope Contract — even a single-slice one — to maintain plan-disciplined execution.
 - **Do NOT** include subjective findings ("this name is ugly", "this looks complicated"). Every catalog entry must trace to a measurable rule output or a verifiable grep match.
 - **Do NOT** delete or rewrite anything in `docs/plans/cleanup-findings/raw/` after S1 emits it. Raw output is the audit's evidence trail; later slices add interpretation in adjacent files.
@@ -125,7 +130,7 @@ Decisions locked at draft time; Step-2 hardener may sharpen but should not re-li
 
 1. **Read-only audit** — zero production code change. Fixes are downstream phases with their own Scope Contracts. This is the entire premise.
 2. **Measurable criteria only** — every catalog entry traces to ESLint rule output, jscpd duplication block, custom grep match, or AST walk hit. Subjective findings (style, naming "ugliness") are explicitly out.
-3. **Clean Code 2nd ed. as the rubric** — the catalog uses CC2 chapter + heuristic IDs (G1–G36, N1–N7, C1–C5, F1–F4, J1–J3, T1–T9) so future audits use the same taxonomy.
+3. **Clean Code 2nd ed. as the rubric, extended with Plan-Forge `A1-A4` for architectural findings** — the catalog uses CC2 chapter + heuristic IDs (G1–G36, N1–N7, C1–C5, F1–F4, J1–J3, T1–T9) so future audits use the same taxonomy. The CC2 rubric does not cover dependency direction, fan-in/fan-out skew, or import cycles; `A1` (cross-layer import), `A2` (import cycle), `A3` (high-fan-in volatile module), `A4` (high-fan-out unstable module) are a Plan-Forge-local extension detected from the madge dependency graph. The `A` codes are clearly marked as Plan-Forge-local in the catalog and in Appendix A to avoid mis-citing them as CC2.
 4. **False positives stay in the catalog** — with a rationale. This prevents re-flagging in future audits and documents architectural decisions ("this long parameter list is justified because…").
 5. **Phase stubs ≠ committed phases** — S3 produces *proposals*. Promotion to numbered phases is a separate human decision in S5 or later.
 6. **Guardrail update is the only side effect** — S4's Temper Guards / Warning Signs additions are the leverage: catching the pattern at write-time is more valuable than the audit itself.
@@ -316,6 +321,14 @@ All commits land on `master`. PreCommit chain runs on each. S0 commit triggers `
 
 **Concurrency (Ch.13)** — flagged in catalog but no fix-phase proposals generated (per Resolved Decision #7).
 
+**Architecture (A1–A4)** — _Plan-Forge-local extension; NOT from CC2._ Codified from Robert C. Martin's _Clean Architecture_ (2017) Dependency Rule + Robert C. Martin's _Agile Software Development_ (2002) Stable Dependencies Principle + Component Cohesion (REP/CCP/CRP). Detected via madge dependency graph + git churn metric:
+- `A1` cross-layer import (outer depends on outer, or inner depends on outer — wrong-direction dependency per layer-policy.json)
+- `A2` import cycle (any strongly-connected component of size ≥ 2 in the module graph)
+- `A3` high-fan-in volatile module (`fan_in × commits_last_90_days` above threshold — a stable component whose code keeps churning is a stable-dependencies violation)
+- `A4` high-fan-out unstable module (fan-out where >50% of dependencies have themselves changed in the last 90 days — an unstable component depending on other unstable components)
+
+See Appendix D for why these four codes (and not more) were chosen.
+
 ---
 
 ## Appendix B — Tool-to-heuristic mapping
@@ -333,6 +346,8 @@ All commits land on `master`. PreCommit chain runs on each. S0 commit triggers `
 | `grep-matrix` (HACK/XXX markers) | G27 (signal of structural issue) |
 | `measure-modules` (per-file line counts) | G14 |
 | `long-param-walker` (>5-arg call sites) | F1 (call-site complement to ESLint's declaration-site rule) |
+| `scan-architecture` (madge graph + layer-policy.json) | A1 cross-layer import, A2 cycle |
+| `scan-architecture` (madge graph + git churn) | A3 high-fan-in volatile, A4 high-fan-out unstable |
 
 Heuristics not covered by tooling (N1–N7 naming quality, G20/G21 intent, T1–T9 test smells) require human triage in S2 — flagged via grep for suspicious patterns but final judgment is reviewer's.
 
@@ -479,3 +494,57 @@ foreach ($marker in 'TODO','FIXME','HACK','XXX','console.log') {
 ```
 
 The Step-2 hardener should re-run these if Phase 41 ships meaningfully later than 2026-06 — the orchestrator.mjs and server.mjs counts in particular are the canonical drift indicators.
+
+
+---
+
+## Appendix D — Architectural triage rationale (2026-05-19 carryover from Phase-50 planning)
+
+> **Why this appendix exists**: Phase 50 (CLEAN-CODE-GUIDANCE) needs empirical signal on architectural patterns to prioritize its `architecture-principles.instructions.md` expansion (Dependency Rule, SOLID per-letter, Component Cohesion, Stable Dependencies). CC2's G/F/N/C/T taxonomy does not produce that signal — CC2 audits *code quality*, not *structure*. Rather than insert a Phase 42.5, the `A1-A4` codes piggyback on madge (already a low-cost addition) and use the existing triage discipline.
+
+### D.1 — Why exactly four `A` codes (and not more)
+
+The four codes are the maximum that is **mechanically detectable from source + git history** without semantic analysis. Anything richer requires either a heavyweight static analyzer (sonar / semgrep) or human reading — both out of scope for an automated audit phase.
+
+| Considered | Why included / excluded |
+|---|---|
+| `A1` cross-layer import | INCLUDED. Detectable from import graph + layer policy. Direct Dependency Rule violation. |
+| `A2` import cycle | INCLUDED. madge detects natively. Cycles defeat the Dependency Rule and signal Component Cohesion (CCP) failure. |
+| `A3` high-fan-in volatile module | INCLUDED. `fan_in` from graph × commit count from `git log --since` = Stable Dependencies Principle signal. |
+| `A4` high-fan-out unstable module | INCLUDED. Inverse of A3. Surfaces "shotgun surgery" pattern (modules whose every change cascades). |
+| Fowler "feature envy" | EXCLUDED. Requires semantic analysis (which method accesses which other module's data more than its own). Out of scope for grep + madge. |
+| Fowler "shotgun surgery" | EXCLUDED. Partially covered by A4 + git-blame correlation, but full detection requires change-set correlation across commits — too expensive. |
+| Fowler "divergent change" | EXCLUDED. Requires per-file change-frequency clustering by reason — needs commit-message NLP. |
+| LSP / ISP / DIP violations | EXCLUDED. Require type system + interface-vs-implementation analysis. JavaScript's structural typing makes this unreliable. |
+| Component Cohesion REP/CCP/CRP | PARTIALLY COVERED by A2 + A3 + A4. Full cohesion analysis requires release-unit definition (Plan Forge has no concept of internal sub-packages). |
+| SRP "one reason to change" | PARTIALLY COVERED by A4 + commit-message review. Mechanically intractable without human judgment. |
+
+The pattern: `A1-A4` are the **structural smells with high signal-to-noise ratio under cheap tooling**. The rest are intentionally deferred to the `/clean-code-review` skill (Phase 50) for human-triggered deeper review, or to per-PR judgment.
+
+### D.2 — Threshold defaults (hardener calibrates)
+
+| Code | Default threshold | Justification |
+|---|---|---|
+| `A1` | Any wrong-direction import per `layer-policy.json` | Boolean — either it crosses the line or it doesn't |
+| `A2` | Cycles of size ≥ 2 | All cycles are bugs; size ≥ 2 is the minimum |
+| `A3` | `fan_in ≥ 5` AND `commits_last_90_days ≥ 10` | A module imported by ≥5 others that changed ≥10 times in 90 days is genuinely unstable for its responsibility |
+| `A4` | `fan_out ≥ 8` AND `>50%` of dependencies have `commits_last_90_days ≥ 10` | A module depending on ≥8 others where the majority are volatile is shotgun-surgery-prone |
+
+Hardener should re-calibrate after running once against the actual codebase — `pforge-mcp/orchestrator.mjs` and `pforge-mcp/server.mjs` (per Appendix C.2) will almost certainly trip A3 due to size + churn. That's expected; the question is whether the *catalog* records it once or 30 times.
+
+### D.3 — Linkage to Phase 50
+
+Phase 50 S0 (drafting `clean-code.instructions.md`) and S1 (expanding `architecture-principles.instructions.md`) explicitly bias rule selection toward heuristics with non-zero catalog hits. Without the `A` codes in this phase's catalog, Phase 50 would either guess at structural rule prioritization OR ship guidance with no empirical backing — defeating its own design contract. The `A` codes close that loop.
+
+### D.4 — What this does NOT do
+
+This addition does NOT make Phase 42 an "architectural audit". It adds a thin layer of architectural smell detection riding on tooling that's already required (madge for cycles was already a candidate). The phase remains a code-quality catalog with a small structural appendix. A true architectural audit (component boundaries, release-unit analysis, contract verification) remains future work and would warrant its own numbered phase.
+
+### D.5 — Cost impact on the phase
+
+- **Slice count**: unchanged (S0-S5)
+- **New tool**: 1 (`scan-architecture.mjs` — thin wrapper over madge)
+- **New devDep**: 1 (`madge`)
+- **New raw-output files**: 2 (`dep-graph.json`, `architecture-findings.json`)
+- **New triage codes**: 4 (`A1-A4`, all in one new category section)
+- **Estimated added effort**: <1 slice equivalent. Folds into S0 (tool) + S1 (run) + S2 (triage) with marginal additions.

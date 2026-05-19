@@ -252,30 +252,29 @@ describe("Phase-39 Baseline: forge_master_ask / runTurn() module contract", () =
   );
 });
 
-// ─── 4. Orchestrator end-of-run — no _auditor field today (pre-S1) ──
+// ─── 4. Orchestrator end-of-run — _auditor field present (post-S1) ──
 
-describe("Phase-39 Baseline: orchestrator end-of-run — no auditor auto-invoke today", () => {
-  it("orchestrator source has no summary._auditor assignment (pre-S1)", () => {
+describe("Phase-39 Baseline: orchestrator end-of-run — auditor auto-invoke active (S1 shipped)", () => {
+  it("orchestrator source HAS summary._auditor assignment (S1 shipped)", () => {
     const src = readFileSync(ORCHESTRATOR_PATH, "utf-8");
-    // S1 adds: summary._auditor = { ... }
-    // This assertion will FAIL after S1 ships — update baseline at that point.
-    expect(src).not.toMatch(/summary\._auditor\s*=/);
+    // S1 added: summary._auditor = { ... }
+    expect(src).toMatch(/summary\._auditor\s*=/);
   });
 
-  it("orchestrator source has no invokeAuditor reference (pre-S1)", () => {
+  it("orchestrator source HAS invokeAuditor reference (S1 shipped)", () => {
     const src = readFileSync(ORCHESTRATOR_PATH, "utf-8");
-    // S1 reads hooks.postRun.invokeAuditor from .forge.json — absent today.
-    expect(src).not.toMatch(/invokeAuditor/);
+    // S1 added reading of hooks.postRun.invokeAuditor from .forge.json.
+    expect(src).toMatch(/invokeAuditor/);
   });
 });
 
-// ─── 5. .forge.json: hooks.postRun.* is absent from orchestrator today ─
+// ─── 5. .forge.json: hooks.postRun.* is processed by orchestrator (post-S1) ─
 
-describe("Phase-39 Baseline: .forge.json hooks.postRun is not processed today", () => {
-  it("orchestrator source has no hooks.postRun processing (pre-S1)", () => {
+describe("Phase-39 Baseline: .forge.json hooks.postRun is processed (S1 shipped)", () => {
+  it("orchestrator source HAS hooks.postRun processing (S1 shipped)", () => {
     const src = readFileSync(ORCHESTRATOR_PATH, "utf-8");
-    // S1 adds reading of hooks.postRun.invokeAuditor — absent today.
-    expect(src).not.toMatch(/hooks\.postRun/);
+    // S1 added reading of hooks.postRun.invokeAuditor from .forge.json.
+    expect(src).toMatch(/hooks\.postRun/);
   });
 
   it(".forge.json with hooks.postRun.invokeAuditor parses cleanly (silently ignored today)", () => {
@@ -293,31 +292,27 @@ describe("Phase-39 Baseline: .forge.json hooks.postRun is not processed today", 
     expect(parsed.hooks.postRun.invokeAuditor.everyNRuns).toBe(5);
   });
 
-  it(".forge.json in this repo has no hooks.postRun block today", () => {
+  it(".forge.json in this repo HAS hooks.postRun.invokeAuditor (S1 shipped)", () => {
     const forgeJson = JSON.parse(
       readFileSync(resolve(REPO_ROOT, ".forge.json"), "utf-8"),
     );
-    expect(forgeJson).not.toHaveProperty("hooks.postRun");
-    // The top-level hooks key may or may not exist — if it does, postRun must be absent.
-    if (forgeJson.hooks) {
-      expect(forgeJson.hooks).not.toHaveProperty("postRun");
-    }
+    expect(forgeJson).toHaveProperty("hooks.postRun");
+    expect(forgeJson.hooks.postRun).toHaveProperty("invokeAuditor");
   });
 });
 
-// ─── 6. pforge-master/server.mjs: exactly 1 tool today (pre-S5) ─────
+// ─── 6. pforge-master/server.mjs: 2 tools (post-S5) ─────────────────
 
-describe("Phase-39 Baseline: pforge-master/server.mjs tool count = 1 today", () => {
-  it("ListTools handler returns array with only FORGE_MASTER_ASK_TOOL (pre-S5)", () => {
+describe("Phase-39 Baseline: pforge-master/server.mjs tool count = 2 (S5 shipped)", () => {
+  it("ListTools handler returns array with both tools (S5 shipped)", () => {
     const src = readFileSync(SERVER_MJS_PATH, "utf-8");
-    // S5 changes this to: tools: [FORGE_MASTER_ASK_TOOL, FORGE_MASTER_OBSERVE_TOOL]
-    // This assertion will FAIL after S5 ships — update baseline at that point.
-    expect(src).toContain("tools: [FORGE_MASTER_ASK_TOOL]");
+    // S5 updated to: tools: [FORGE_MASTER_ASK_TOOL, FORGE_MASTER_OBSERVE_TOOL]
+    expect(src).toContain("tools: [FORGE_MASTER_ASK_TOOL, FORGE_MASTER_OBSERVE_TOOL]");
   });
 
-  it("FORGE_MASTER_OBSERVE_TOOL is NOT defined in server.mjs today (pre-S5)", () => {
+  it("FORGE_MASTER_OBSERVE_TOOL IS defined in server.mjs (S5 shipped)", () => {
     const src = readFileSync(SERVER_MJS_PATH, "utf-8");
-    expect(src).not.toContain("FORGE_MASTER_OBSERVE_TOOL");
+    expect(src).toContain("FORGE_MASTER_OBSERVE_TOOL");
   });
 
   it("startup banner reports '1 tool: forge_master_ask' today (pre-S5)", () => {

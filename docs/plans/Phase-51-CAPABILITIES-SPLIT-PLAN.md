@@ -2,7 +2,7 @@
 phase: 51
 name: CAPABILITIES-SPLIT
 status: HARDENED
-lockHash: bb9682af33b929f31273d8e68038e4bbaf7febf0979dc5e115674440e33b42be
+lockHash: b758ab23fd7baafb75edd8cb67404001e5e778fb5a3b3834ee101062858690b8
 ---
 
 # Phase 51 — CAPABILITIES-SPLIT — Decompose `pforge-mcp/capabilities.mjs` into focused sub-modules
@@ -186,7 +186,8 @@ All decisions for this phase are resolved in §"Resolved Decisions" above (13 it
 - Capture the current `capabilities.mjs` SHA-256 in the commit message body: `Anchor SHA256 of capabilities.mjs at S0: <hash>`
 - **Validation Gate**:
 ```bash
-bash -c "cd pforge-mcp && npx vitest run tests/capabilities-snapshot.test.mjs tests/no-circular-imports.test.mjs" && node -e "const fs=require('fs');if(!fs.existsSync('pforge-mcp/tests/fixtures/capabilities-surface.golden.json'))throw new Error('golden missing');const j=JSON.parse(fs.readFileSync('pforge-mcp/tests/fixtures/capabilities-surface.golden.json','utf8'));if(!j.tools||!j.skills)throw new Error('golden fixture incomplete: missing tools or skills key');console.log('ok S0')"
+node -e "process.chdir('pforge-mcp'); require('child_process').execSync('npx vitest run tests/capabilities-snapshot.test.mjs tests/no-circular-imports.test.mjs', {stdio:'inherit',shell:true});"
+node -e "const fs=require('fs');if(!fs.existsSync('pforge-mcp/tests/fixtures/capabilities-surface.golden.json'))throw new Error('golden missing');const j=JSON.parse(fs.readFileSync('pforge-mcp/tests/fixtures/capabilities-surface.golden.json','utf8'));if(!j.tools||!j.skills)throw new Error('golden fixture incomplete');console.log('ok S0');"
 ```
 
 ### Slice 1 — Extract `capabilities/tool-metadata.mjs`
@@ -201,7 +202,8 @@ bash -c "cd pforge-mcp && npx vitest run tests/capabilities-snapshot.test.mjs te
 - In `pforge-mcp/capabilities.mjs`, replace the moved declarations with `export { TOOL_METADATA, WORKFLOWS } from './capabilities/tool-metadata.mjs';`
 - **Validation Gate**:
 ```bash
-node -e "const fs=require('fs');if(!fs.existsSync('pforge-mcp/capabilities/tool-metadata.mjs'))throw new Error('tool-metadata.mjs missing');const sub=fs.readFileSync('pforge-mcp/capabilities/tool-metadata.mjs','utf8');if(!/export\s+const\s+TOOL_METADATA\b/.test(sub))throw new Error('TOOL_METADATA not exported from sub-module');if(!/export\s+const\s+WORKFLOWS\b/.test(sub))throw new Error('WORKFLOWS not exported from sub-module');const shim=fs.readFileSync('pforge-mcp/capabilities.mjs','utf8');if(!shim.includes(\"from './capabilities/tool-metadata.mjs'\"))throw new Error('capabilities.mjs missing re-export');console.log('ok S1 structure')" && bash -c "cd pforge-mcp && npx vitest run tests/capabilities-snapshot.test.mjs tests/no-circular-imports.test.mjs tests/capabilities.test.mjs"
+node -e "const fs=require('fs');if(!fs.existsSync('pforge-mcp/capabilities/tool-metadata.mjs'))throw new Error('tool-metadata.mjs missing');const sub=fs.readFileSync('pforge-mcp/capabilities/tool-metadata.mjs','utf8');if(!/export\s+const\s+TOOL_METADATA\b/.test(sub))throw new Error('TOOL_METADATA not exported');if(!/export\s+const\s+WORKFLOWS\b/.test(sub))throw new Error('WORKFLOWS not exported');const shim=fs.readFileSync('pforge-mcp/capabilities.mjs','utf8');if(!/from\s+'\.\/capabilities\/tool-metadata\.mjs'/.test(shim))throw new Error('shim missing tool-metadata re-export');console.log('ok S1 structure');"
+node -e "process.chdir('pforge-mcp'); require('child_process').execSync('npx vitest run tests/capabilities-snapshot.test.mjs tests/no-circular-imports.test.mjs tests/capabilities.test.mjs', {stdio:'inherit',shell:true});"
 ```
 
 ### Slice 2 — Extract `capabilities/schemas.mjs`
@@ -216,7 +218,8 @@ node -e "const fs=require('fs');if(!fs.existsSync('pforge-mcp/capabilities/tool-
 - `capabilities.mjs` adds: `export { CLI_SCHEMA, CONFIG_SCHEMA } from './capabilities/schemas.mjs';`
 - **Validation Gate**:
 ```bash
-node -e "const fs=require('fs');if(!fs.existsSync('pforge-mcp/capabilities/schemas.mjs'))throw new Error('schemas.mjs missing');const sub=fs.readFileSync('pforge-mcp/capabilities/schemas.mjs','utf8');if(!/export\s+const\s+CLI_SCHEMA\b/.test(sub))throw new Error('CLI_SCHEMA not exported');if(!/export\s+const\s+CONFIG_SCHEMA\b/.test(sub))throw new Error('CONFIG_SCHEMA not exported');const shim=fs.readFileSync('pforge-mcp/capabilities.mjs','utf8');if(!shim.includes(\"from './capabilities/schemas.mjs'\"))throw new Error('shim missing schemas re-export');console.log('ok S2 structure')" && bash -c "cd pforge-mcp && npx vitest run tests/capabilities-snapshot.test.mjs tests/no-circular-imports.test.mjs tests/capabilities.test.mjs"
+node -e "const fs=require('fs');if(!fs.existsSync('pforge-mcp/capabilities/schemas.mjs'))throw new Error('schemas.mjs missing');const sub=fs.readFileSync('pforge-mcp/capabilities/schemas.mjs','utf8');if(!/export\s+const\s+CLI_SCHEMA\b/.test(sub))throw new Error('CLI_SCHEMA not exported');if(!/export\s+const\s+CONFIG_SCHEMA\b/.test(sub))throw new Error('CONFIG_SCHEMA not exported');const shim=fs.readFileSync('pforge-mcp/capabilities.mjs','utf8');if(!/from\s+'\.\/capabilities\/schemas\.mjs'/.test(shim))throw new Error('shim missing schemas re-export');console.log('ok S2 structure');"
+node -e "process.chdir('pforge-mcp'); require('child_process').execSync('npx vitest run tests/capabilities-snapshot.test.mjs tests/no-circular-imports.test.mjs tests/capabilities.test.mjs', {stdio:'inherit',shell:true});"
 ```
 
 ### Slice 3 — Extract `capabilities/reference.mjs` + `capabilities/subsystems.mjs`
@@ -231,7 +234,8 @@ node -e "const fs=require('fs');if(!fs.existsSync('pforge-mcp/capabilities/schem
 - Two files created in one slice (allowed exception to "one extraction per slice" — both are <250 LOC and unrelated; bundling avoids a thin slice)
 - **Validation Gate**:
 ```bash
-node -e "const fs=require('fs');for(const f of ['pforge-mcp/capabilities/reference.mjs','pforge-mcp/capabilities/subsystems.mjs'])if(!fs.existsSync(f))throw new Error('missing: '+f);const ref=fs.readFileSync('pforge-mcp/capabilities/reference.mjs','utf8');if(!/export\s+const\s+SYSTEM_REFERENCE\b/.test(ref))throw new Error('SYSTEM_REFERENCE not exported');const sub=fs.readFileSync('pforge-mcp/capabilities/subsystems.mjs','utf8');if(!/export\s+const\s+INNER_LOOP_SURFACE\b/.test(sub))throw new Error('INNER_LOOP_SURFACE not exported');const shim=fs.readFileSync('pforge-mcp/capabilities.mjs','utf8');if(!shim.includes(\"from './capabilities/reference.mjs'\"))throw new Error('shim missing reference re-export');if(!shim.includes(\"from './capabilities/subsystems.mjs'\"))throw new Error('shim missing subsystems re-export');console.log('ok S3 structure')" && bash -c "cd pforge-mcp && npx vitest run tests/capabilities-snapshot.test.mjs tests/no-circular-imports.test.mjs tests/capabilities.test.mjs"
+node -e "const fs=require('fs');for(const f of ['pforge-mcp/capabilities/reference.mjs','pforge-mcp/capabilities/subsystems.mjs'])if(!fs.existsSync(f))throw new Error('missing: '+f);const ref=fs.readFileSync('pforge-mcp/capabilities/reference.mjs','utf8');if(!/export\s+const\s+SYSTEM_REFERENCE\b/.test(ref))throw new Error('SYSTEM_REFERENCE not exported');const sub=fs.readFileSync('pforge-mcp/capabilities/subsystems.mjs','utf8');if(!/export\s+const\s+INNER_LOOP_SURFACE\b/.test(sub))throw new Error('INNER_LOOP_SURFACE not exported');const shim=fs.readFileSync('pforge-mcp/capabilities.mjs','utf8');if(!/from\s+'\.\/capabilities\/reference\.mjs'/.test(shim))throw new Error('shim missing reference re-export');if(!/from\s+'\.\/capabilities\/subsystems\.mjs'/.test(shim))throw new Error('shim missing subsystems re-export');console.log('ok S3 structure');"
+node -e "process.chdir('pforge-mcp'); require('child_process').execSync('npx vitest run tests/capabilities-snapshot.test.mjs tests/no-circular-imports.test.mjs tests/capabilities.test.mjs', {stdio:'inherit',shell:true});"
 ```
 
 ### Slice 4 — Extract `capabilities/surface.mjs` + convert `capabilities.mjs` to shim
@@ -245,7 +249,8 @@ node -e "const fs=require('fs');for(const f of ['pforge-mcp/capabilities/referen
 - Snapshot gate is the proof — byte-identical JSON output OR the slice fails and is rolled back
 - **Validation Gate**:
 ```bash
-node -e "const fs=require('fs');if(!fs.existsSync('pforge-mcp/capabilities/surface.mjs'))throw new Error('surface.mjs missing');const surf=fs.readFileSync('pforge-mcp/capabilities/surface.mjs','utf8');if(!/export\s+(async\s+)?function\s+buildCapabilitySurface\b|export\s+const\s+buildCapabilitySurface\b/.test(surf))throw new Error('buildCapabilitySurface not exported');if(!/writeToolsJson/.test(surf))throw new Error('writeToolsJson not in surface');if(!/writeCliSchema/.test(surf))throw new Error('writeCliSchema not in surface');const shim=fs.readFileSync('pforge-mcp/capabilities.mjs','utf8');const lines=shim.split(/\r?\n/).length;if(lines>50)throw new Error('shim too large: '+lines+' lines (max 50)');if(!shim.includes(\"from './capabilities/surface.mjs'\"))throw new Error('shim missing surface re-export');console.log('ok S4 shim is '+lines+' lines')" && bash -c "cd pforge-mcp && npx vitest run tests/capabilities-snapshot.test.mjs tests/no-circular-imports.test.mjs tests/capabilities.test.mjs tests/capabilities-doc-sync.test.mjs tests/brain-capability-negotiation.test.mjs"
+node -e "const fs=require('fs');if(!fs.existsSync('pforge-mcp/capabilities/surface.mjs'))throw new Error('surface.mjs missing');const surf=fs.readFileSync('pforge-mcp/capabilities/surface.mjs','utf8');if(!/export\s+(async\s+)?function\s+buildCapabilitySurface\b|export\s+const\s+buildCapabilitySurface\b/.test(surf))throw new Error('buildCapabilitySurface not exported');if(!/writeToolsJson/.test(surf))throw new Error('writeToolsJson not in surface');if(!/writeCliSchema/.test(surf))throw new Error('writeCliSchema not in surface');const shim=fs.readFileSync('pforge-mcp/capabilities.mjs','utf8');const lines=shim.split(/\r?\n/).length;if(lines>50)throw new Error('shim too large: '+lines+' lines (max 50)');if(!/from\s+'\.\/capabilities\/surface\.mjs'/.test(shim))throw new Error('shim missing surface re-export');console.log('ok S4 shim is '+lines+' lines');"
+node -e "process.chdir('pforge-mcp'); require('child_process').execSync('npx vitest run tests/capabilities-snapshot.test.mjs tests/no-circular-imports.test.mjs tests/capabilities.test.mjs tests/capabilities-doc-sync.test.mjs tests/brain-capability-negotiation.test.mjs', {stdio:'inherit',shell:true});"
 ```
 
 ### Slice 5 — Retro + roadmap update + CHANGELOG

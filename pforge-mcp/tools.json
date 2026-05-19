@@ -412,6 +412,71 @@
     }
   },
   {
+    "name": "forge_diff_classify",
+    "description": "Classify staged git diff changes by category (plan, test, docs, config, chore, scope, unknown). Advisory-only — never blocks. Returns a per-file classification and summary counts. Also available as a preCommit chain entry in plan-forge.json.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "since": {
+          "type": "string",
+          "description": "Git ref to diff against instead of --staged (e.g., HEAD~1)"
+        },
+        "path": {
+          "type": "string",
+          "description": "Project directory (default: current)"
+        }
+      }
+    },
+    "intent": [
+      "diff-classify",
+      "commit-guard",
+      "diff-security-scan"
+    ],
+    "aliases": [
+      "classify-diff",
+      "diff-scan",
+      "commit-safety-check"
+    ],
+    "cost": "low",
+    "maxConcurrent": 10,
+    "addedIn": "3.7.0",
+    "prerequisites": [
+      "git initialized"
+    ],
+    "produces": [],
+    "consumes": [
+      "git diff output"
+    ],
+    "sideEffects": [],
+    "errors": {
+      "NO_DIFF": {
+        "message": "No diff provided — pass diff directly or run in a git repo with staged changes",
+        "recovery": "Stage changes with git add before calling, or pass the diff string directly"
+      },
+      "TRUNCATED": {
+        "message": "Diff exceeded maxLines and was truncated",
+        "recovery": "Use a smaller diff range"
+      }
+    },
+    "example": {
+      "input": {
+        "diff": "+const key = 'AKIAIOSFODNN7EXAMPLE';"
+      },
+      "output": {
+        "severity": "critical",
+        "findings": [
+          {
+            "category": "leaked-secret",
+            "severity": "critical",
+            "detail": "AWS access key pattern detected"
+          }
+        ],
+        "totalAdded": 1,
+        "truncated": false
+      }
+    }
+  },
+  {
     "name": "forge_ext_search",
     "description": "Search the Plan Forge community extension catalog. Returns matching extensions with names, descriptions, categories, and install commands.",
     "inputSchema": {
@@ -4252,6 +4317,75 @@
           "capturedAt": "2024-01-01T00:00:00.000Z",
           "depCount": 42
         }
+      }
+    }
+  },
+  {
+    "name": "forge_diff_classify",
+    "description": "Classify staged git diff against 6 safety categories: leaked-secret (critical), prompt-injection-echo (high), license-incompatible-paste (high), eval-exec-introduced (medium), unexpected-network-call (low), large-binary-dump (medium). Returns { severity, findings[], totalAdded, truncated }. Blocking threshold: severity >= high. USE FOR: PreCommit chain gate, post-worker diff review, CI gate. DO NOT USE FOR: static analysis (use a linter), deep code review (use forge_delegate_review).",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "diff": {
+          "type": "string",
+          "description": "Git diff text to classify. If omitted, runs git diff --cached in the project directory."
+        },
+        "maxLines": {
+          "type": "number",
+          "description": "Maximum diff lines to process (default: 3000)."
+        },
+        "path": {
+          "type": "string",
+          "description": "Project directory (default: current)."
+        }
+      }
+    },
+    "intent": [
+      "diff-classify",
+      "commit-guard",
+      "diff-security-scan"
+    ],
+    "aliases": [
+      "classify-diff",
+      "diff-scan",
+      "commit-safety-check"
+    ],
+    "cost": "low",
+    "maxConcurrent": 10,
+    "addedIn": "3.7.0",
+    "prerequisites": [
+      "git initialized"
+    ],
+    "produces": [],
+    "consumes": [
+      "git diff output"
+    ],
+    "sideEffects": [],
+    "errors": {
+      "NO_DIFF": {
+        "message": "No diff provided — pass diff directly or run in a git repo with staged changes",
+        "recovery": "Stage changes with git add before calling, or pass the diff string directly"
+      },
+      "TRUNCATED": {
+        "message": "Diff exceeded maxLines and was truncated",
+        "recovery": "Use a smaller diff range"
+      }
+    },
+    "example": {
+      "input": {
+        "diff": "+const key = 'AKIAIOSFODNN7EXAMPLE';"
+      },
+      "output": {
+        "severity": "critical",
+        "findings": [
+          {
+            "category": "leaked-secret",
+            "severity": "critical",
+            "detail": "AWS access key pattern detected"
+          }
+        ],
+        "totalAdded": 1,
+        "truncated": false
       }
     }
   },

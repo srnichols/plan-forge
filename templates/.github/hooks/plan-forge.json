@@ -12,8 +12,8 @@
           "type": "command",
           "command": ".github/hooks/scripts/check-diff-classify.sh",
           "windows": "powershell -ExecutionPolicy Bypass -File .github/hooks/scripts/check-diff-classify.ps1",
-          "timeout": 15,
-          "description": "Classify staged diff by category (plan, test, docs, config, chore, scope) — advisory only"
+          "timeout": 30,
+          "description": "Block commits with leaked secrets, prompt injection, or license-incompatible pastes"
         }
       ]
     },

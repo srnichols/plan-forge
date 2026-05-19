@@ -1,0 +1,9 @@
+diff --git a/src/gpl.js b/src/gpl.js
+index 1111111..2222222 100644
+--- a/src/gpl.js
++++ b/src/gpl.js
+@@ -0,0 +1,4 @@
++/*
++ * GNU General Public License
++ * This file is free software: you can redistribute it and/or modify
++ * it under the terms of the GNU General Public License.

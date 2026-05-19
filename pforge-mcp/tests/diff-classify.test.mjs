@@ -1,329 +1,175 @@
-/**
- * Plan Forge — diff-classify.test.mjs (Phase WORKER-GUARDRAILS Slice A2)
- *
- * Tests for the diff-classify module:
- *   - classifyFile: per-file category detection
- *   - classifyFiles: batch classification
- *   - classifyDiff: git-backed diff classification (execSync mocked)
- *   - runDiffClassifyCheck: preCommit chain result shape
- */
+import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
+import { readFileSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
+import { dirname, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
+import { randomUUID } from "node:crypto";
 
-import { describe, it, expect, afterEach, vi } from "vitest";
-
-// ─── Mock child_process ─────────────────────────────────────────────────────
+import { classifyDiff, CATEGORIES, SEVERITY_ORDER, maxSeverity } from "../diff-classify.mjs";
 
 const mockExecSync = vi.fn();
 
 vi.mock("node:child_process", async (importOriginal) => {
   const actual = await importOriginal();
-  return { ...actual, execSync: (...args) => mockExecSync(...args) };
+  return {
+    ...actual,
+    execSync: (...args) => mockExecSync(...args),
+  };
 });
 
-// ─── Test subjects (imported AFTER vi.mock) ─────────────────────────────────
+import { runPreCommitChain } from "../../.github/hooks/PreCommit.mjs";
 
-import {
-  classifyFile,
-  classifyFiles,
-  classifyDiff,
-  runDiffClassifyCheck,
-} from "../../pforge-mcp/diff-classify.mjs";
+const HERE = dirname(fileURLToPath(import.meta.url));
+const FIXTURES = resolve(HERE, "fixtures", "diff-classify");
+const RUNTIME_ROOT = resolve(FIXTURES, "runtime");
 
-// ─── classifyFile ────────────────────────────────────────────────────────────
+function loadFixture(name) {
+  return readFileSync(resolve(FIXTURES, name), "utf-8");
+}
 
-describe("classifyFile — plan category", () => {
-  it("classifies docs/plans/ files as plan", () => {
-    expect(classifyFile("docs/plans/Phase-1-AUTH-PLAN.md")).toBe("plan");
-  });
+function makeSandboxDir() {
+  mkdirSync(RUNTIME_ROOT, { recursive: true });
+  const dir = resolve(RUNTIME_ROOT, randomUUID());
+  mkdirSync(dir, { recursive: true });
+  return dir;
+}
 
-  it("classifies nested docs/plans/ files as plan", () => {
-    expect(classifyFile("docs/plans/Phase-28/slice-3.md")).toBe("plan");
-  });
-});
-
-describe("classifyFile — test category", () => {
-  it("classifies .test.mjs files as test", () => {
-    expect(classifyFile("pforge-mcp/tests/baselines.test.mjs")).toBe("test");
-  });
-
-  it("classifies .spec.ts files as test", () => {
-    expect(classifyFile("src/auth.spec.ts")).toBe("test");
-  });
-
-  it("classifies files under __tests__ as test", () => {
-    expect(classifyFile("src/__tests__/auth.js")).toBe("test");
-  });
-
-  it("classifies files under tests/ directory as test", () => {
-    expect(classifyFile("tests/unit/auth.test.js")).toBe("test");
-  });
-});
-
-describe("classifyFile — docs category", () => {
-  it("classifies .md files as docs", () => {
-    expect(classifyFile("README.md")).toBe("docs");
-  });
-
-  it("classifies .rst files as docs", () => {
-    expect(classifyFile("docs/api.rst")).toBe("docs");
-  });
-
-  it("classifies .txt files as docs", () => {
-    expect(classifyFile("CHANGELOG.txt")).toBe("docs");
-  });
-
-  it("does NOT classify docs/plans/ .md as docs (plan takes precedence)", () => {
-    expect(classifyFile("docs/plans/Phase-1-PLAN.md")).toBe("plan");
-  });
-});
-
-describe("classifyFile — config category", () => {
-  it("classifies .env files as config", () => {
-    expect(classifyFile(".env")).toBe("config");
-  });
-
-  it("classifies .env.staging as config", () => {
-    expect(classifyFile(".env.staging")).toBe("config");
-  });
-
-  it("classifies .github/ files as config", () => {
-    expect(classifyFile(".github/workflows/ci.yml")).toBe("config");
-  });
-
-  it("classifies .vscode/ files as config", () => {
-    expect(classifyFile(".vscode/mcp.json")).toBe("config");
-  });
-
-  it("classifies .forge.json as config", () => {
-    expect(classifyFile(".forge.json")).toBe("config");
-  });
-
-  it("classifies tsconfig.json as config", () => {
-    expect(classifyFile("tsconfig.json")).toBe("config");
-  });
-
-  it("classifies vitest.config.mjs as config", () => {
-    expect(classifyFile("vitest.config.mjs")).toBe("config");
-  });
-
-  it("classifies Dockerfile as config", () => {
-    expect(classifyFile("Dockerfile")).toBe("config");
-  });
-});
-
-describe("classifyFile — chore category", () => {
-  it("classifies package.json as chore", () => {
-    expect(classifyFile("package.json")).toBe("chore");
-  });
-
-  it("classifies package-lock.json as chore", () => {
-    expect(classifyFile("package-lock.json")).toBe("chore");
-  });
-
-  it("classifies yarn.lock as chore", () => {
-    expect(classifyFile("yarn.lock")).toBe("chore");
-  });
-
-  it("classifies .sh scripts as chore", () => {
-    expect(classifyFile("setup.sh")).toBe("chore");
-  });
-
-  it("classifies .ps1 scripts as chore", () => {
-    expect(classifyFile("validate-setup.ps1")).toBe("chore");
-  });
-});
-
-describe("classifyFile — scope category", () => {
-  it("classifies .mjs files as scope", () => {
-    expect(classifyFile("pforge-mcp/server.mjs")).toBe("scope");
-  });
-
-  it("classifies .ts files as scope", () => {
-    expect(classifyFile("src/auth/service.ts")).toBe("scope");
-  });
-
-  it("classifies .py files as scope", () => {
-    expect(classifyFile("app/main.py")).toBe("scope");
-  });
-
-  it("classifies .go files as scope", () => {
-    expect(classifyFile("cmd/main.go")).toBe("scope");
-  });
-
-  it("classifies .cs files as scope", () => {
-    expect(classifyFile("src/Controllers/UserController.cs")).toBe("scope");
-  });
-});
-
-describe("classifyFile — unknown category", () => {
-  it("classifies unknown extensions as unknown", () => {
-    expect(classifyFile("assets/logo.webp")).toBe("unknown");
-  });
-
-  it("classifies binary-like files as unknown", () => {
-    expect(classifyFile("dist/bundle.wasm")).toBe("unknown");
-  });
-});
-
-// ─── classifyFiles ───────────────────────────────────────────────────────────
-
-describe("classifyFiles", () => {
-  it("returns an array of { file, category } objects", () => {
-    const result = classifyFiles(["src/main.ts", "README.md", "package.json"]);
-    expect(result).toEqual([
-      { file: "src/main.ts", category: "scope" },
-      { file: "README.md", category: "docs" },
-      { file: "package.json", category: "chore" },
+describe("diff-classify heuristics", () => {
+  it("exports category and severity constants", () => {
+    expect(CATEGORIES).toEqual([
+      "leaked-secret",
+      "prompt-injection-echo",
+      "license-incompatible-paste",
+      "eval-exec-introduced",
+      "unexpected-network-call",
+      "large-binary-dump",
     ]);
+    expect(SEVERITY_ORDER).toEqual(["none", "low", "medium", "high", "critical"]);
   });
 
-  it("returns empty array for empty input", () => {
-    expect(classifyFiles([])).toEqual([]);
+  it("returns none for a clean diff", () => {
+    const result = classifyDiff(loadFixture("clean.diff"));
+    expect(result.severity).toBe("none");
+    expect(result.findings).toEqual([]);
+    expect(result.totalAdded).toBe(1);
+    expect(result.truncated).toBe(false);
   });
 
-  it("handles mixed categories correctly", () => {
-    const paths = [
-      "docs/plans/Phase-1-PLAN.md",
-      "src/auth.test.ts",
-      "CHANGELOG.md",
-      ".forge.json",
-      "setup.sh",
-      "src/api.ts",
-      "assets/logo.png",
+  it("detects leaked secrets as critical", () => {
+    const result = classifyDiff(loadFixture("leaked-secret.diff"));
+    expect(result.severity).toBe("critical");
+    expect(result.findings.some((f) => f.category === "leaked-secret")).toBe(true);
+  });
+
+  it("detects prompt injection echo as high", () => {
+    const result = classifyDiff(loadFixture("prompt-injection.diff"));
+    expect(result.severity).toBe("high");
+    expect(result.findings.some((f) => f.category === "prompt-injection-echo")).toBe(true);
+  });
+
+  it("detects eval-exec introduction as medium", () => {
+    const result = classifyDiff(loadFixture("eval-exec.diff"));
+    expect(result.severity).toBe("medium");
+    expect(result.findings.some((f) => f.category === "eval-exec-introduced")).toBe(true);
+  });
+
+  it("detects GPL-family paste as high", () => {
+    const result = classifyDiff(loadFixture("license-paste.diff"));
+    expect(result.severity).toBe("high");
+    expect(result.findings.some((f) => f.category === "license-incompatible-paste")).toBe(true);
+  });
+
+  it("detects unexpected network calls as low", () => {
+    const result = classifyDiff(loadFixture("network-call.diff"));
+    expect(result.severity).toBe("low");
+    expect(result.findings.some((f) => f.category === "unexpected-network-call")).toBe(true);
+  });
+
+  it("detects large binary dumps as medium", () => {
+    const result = classifyDiff(loadFixture("binary-dump.diff"));
+    expect(result.severity).toBe("medium");
+    expect(result.findings.some((f) => f.category === "large-binary-dump")).toBe(true);
+  });
+
+  it("returns none for an empty diff", () => {
+    const result = classifyDiff("");
+    expect(result).toEqual({ severity: "none", findings: [], totalAdded: 0, truncated: false });
+  });
+
+  it("uses the maximum severity across combined findings", () => {
+    const combined = `${loadFixture("leaked-secret.diff")}\n${loadFixture("eval-exec.diff")}`;
+    const result = classifyDiff(combined);
+    expect(result.severity).toBe("critical");
+    expect(result.findings.some((f) => f.category === "leaked-secret")).toBe(true);
+    expect(result.findings.some((f) => f.category === "eval-exec-introduced")).toBe(true);
+  });
+
+  it("computes maxSeverity correctly", () => {
+    expect(maxSeverity("none", "low")).toBe("low");
+    expect(maxSeverity("medium", "high")).toBe("high");
+    expect(maxSeverity("critical", "high")).toBe("critical");
+    expect(maxSeverity("medium", "medium")).toBe("medium");
+  });
+
+  it("truncates input above the default maxLines", () => {
+    const lines = [
+      "diff --git a/src/huge.txt b/src/huge.txt",
+      "index 1111111..2222222 100644",
+      "--- a/src/huge.txt",
+      "+++ b/src/huge.txt",
+      "@@ -0,0 +1,3505 @@",
+      ...Array.from({ length: 3505 }, (_, i) => `+line-${i}`),
     ];
-    const categories = classifyFiles(paths).map((r) => r.category);
-    expect(categories).toEqual(["plan", "test", "docs", "config", "chore", "scope", "unknown"]);
+    const result = classifyDiff(lines.join("\n"));
+    expect(result.truncated).toBe(true);
+    expect(result.totalAdded).toBeLessThan(3505);
+  });
+
+  it("honors maxLines option", () => {
+    const result = classifyDiff(loadFixture("leaked-secret.diff"), { maxLines: 1 });
+    expect(result.truncated).toBe(true);
+    expect(result.totalAdded).toBe(0);
+    expect(result.findings).toEqual([]);
   });
 });
 
-// ─── classifyDiff ────────────────────────────────────────────────────────────
+describe("diff-classify precommit integration", () => {
+  const savedEnv = {};
 
-describe("classifyDiff — git unavailable", () => {
-  afterEach(() => { mockExecSync.mockReset(); });
-
-  it("returns ok: false when git diff throws", () => {
-    mockExecSync.mockImplementation(() => { throw new Error("not a git repo"); });
-
-    const result = classifyDiff({ cwd: "/tmp/no-git" });
-    expect(result.ok).toBe(false);
-    expect(result.files).toEqual([]);
-    expect(result.summary).toEqual({});
-    expect(result.total).toBe(0);
-    expect(result.error).toMatch(/git diff failed/);
-  });
-});
-
-describe("classifyDiff — empty staged diff", () => {
-  afterEach(() => { mockExecSync.mockReset(); });
-
-  it("returns ok: true with empty files when no staged changes", () => {
-    mockExecSync.mockReturnValue("");
-
-    const result = classifyDiff({ cwd: "/some/project" });
-    expect(result.ok).toBe(true);
-    expect(result.files).toEqual([]);
-    expect(result.total).toBe(0);
-    expect(result.advisory).toMatch(/No staged changes/);
-  });
-});
-
-describe("classifyDiff — staged changes", () => {
-  afterEach(() => { mockExecSync.mockReset(); });
-
-  it("classifies staged files and builds summary", () => {
-    mockExecSync.mockReturnValue(
-      "src/api.ts\npforge-mcp/tests/auth.test.mjs\nREADME.md\n"
-    );
-
-    const result = classifyDiff({ cwd: "/project" });
-    expect(result.ok).toBe(true);
-    expect(result.total).toBe(3);
-    expect(result.summary.scope).toBe(1);
-    expect(result.summary.test).toBe(1);
-    expect(result.summary.docs).toBe(1);
-    expect(result.advisory).toMatch(/3 file/);
-    expect(result.advisory).toMatch(/scope: 1/);
-    expect(result.advisory).toMatch(/test: 1/);
-    expect(result.advisory).toMatch(/docs: 1/);
+  beforeEach(() => {
+    savedEnv.PFORGE_RUN_PLAN_ACTIVE = process.env.PFORGE_RUN_PLAN_ACTIVE;
+    process.env.PFORGE_RUN_PLAN_ACTIVE = "1";
+    mockExecSync.mockReset();
   });
 
-  it("uses 'since' option when provided", () => {
-    mockExecSync.mockReturnValue("src/auth.ts\n");
-
-    classifyDiff({ cwd: "/project", since: "HEAD~1" });
-    const [cmd] = mockExecSync.mock.calls[0];
-    expect(cmd).toMatch(/git diff --name-only HEAD~1/);
+  afterEach(() => {
+    if (savedEnv.PFORGE_RUN_PLAN_ACTIVE === undefined) delete process.env.PFORGE_RUN_PLAN_ACTIVE;
+    else process.env.PFORGE_RUN_PLAN_ACTIVE = savedEnv.PFORGE_RUN_PLAN_ACTIVE;
+    mockExecSync.mockReset();
+    rmSync(RUNTIME_ROOT, { recursive: true, force: true });
   });
 
-  it("uses staged diff by default", () => {
-    mockExecSync.mockReturnValue("src/auth.ts\n");
+  it("blocks the PreCommit chain on critical results", () => {
+    const dir = makeSandboxDir();
+    const configPath = resolve(dir, "plan-forge.json");
+    writeFileSync(configPath, JSON.stringify({
+      hooks: {
+        preCommit: {
+          chain: [
+            { name: "diff-classify", type: "command", command: ".github/hooks/scripts/check-diff-classify.sh" },
+          ],
+        },
+      },
+    }, null, 2));
 
-    classifyDiff({ cwd: "/project" });
-    const [cmd] = mockExecSync.mock.calls[0];
-    expect(cmd).toMatch(/--staged/);
-  });
+    mockExecSync.mockReturnValue(JSON.stringify({
+      blocked: true,
+      message: "diff-classify blocked [critical]: leaked-secret",
+    }));
 
-  it("builds advisory text with sorted categories", () => {
-    mockExecSync.mockReturnValue(
-      "src/main.ts\nsrc/lib.ts\ndocs/plans/Phase-1.md\nREADME.md\n"
-    );
-
-    const result = classifyDiff({ cwd: "/project" });
-    expect(result.advisory).toMatch(/4 file/);
-    expect(result.summary.scope).toBe(2);
-    expect(result.summary.plan).toBe(1);
-    expect(result.summary.docs).toBe(1);
-  });
-});
-
-// ─── runDiffClassifyCheck ────────────────────────────────────────────────────
-
-describe("runDiffClassifyCheck — git unavailable", () => {
-  afterEach(() => { mockExecSync.mockReset(); });
-
-  it("returns blocked: false with advisory when git fails", () => {
-    mockExecSync.mockImplementation(() => { throw new Error("not a git repo"); });
-
-    const result = runDiffClassifyCheck({ cwd: "/no-git" });
-    expect(result.blocked).toBe(false);
-    expect(result.advisory).toMatch(/diff-classify/);
-  });
-});
-
-describe("runDiffClassifyCheck — no staged changes", () => {
-  afterEach(() => { mockExecSync.mockReset(); });
-
-  it("returns blocked: false with advisory when no changes", () => {
-    mockExecSync.mockReturnValue("");
-
-    const result = runDiffClassifyCheck({ cwd: "/project" });
-    expect(result.blocked).toBe(false);
-    expect(result.advisory).toMatch(/No staged changes/);
-    expect(result.classification).toBeDefined();
-    expect(result.classification.total).toBe(0);
-  });
-});
-
-describe("runDiffClassifyCheck — with staged changes", () => {
-  afterEach(() => { mockExecSync.mockReset(); });
-
-  it("returns blocked: false with classification payload", () => {
-    mockExecSync.mockReturnValue("src/api.ts\nREADME.md\n");
-
-    const result = runDiffClassifyCheck({ cwd: "/project" });
-    expect(result.blocked).toBe(false);
-    expect(result.advisory).toBeDefined();
-    expect(result.classification).toBeDefined();
-    expect(result.classification.total).toBe(2);
-    expect(result.classification.files).toHaveLength(2);
-    expect(result.classification.summary.scope).toBe(1);
-    expect(result.classification.summary.docs).toBe(1);
-  });
-
-  it("never returns blocked: true (always advisory)", () => {
-    // Even with only scope changes, never blocks
-    mockExecSync.mockReturnValue("src/api.ts\nsrc/auth.ts\nsrc/utils.ts\n");
-
-    const result = runDiffClassifyCheck({ cwd: "/project" });
-    expect(result.blocked).toBe(false);
+    const result = runPreCommitChain({ cwd: dir, configPath });
+    expect(result.blocked).toBe(true);
+    expect(result.message).toContain("diff-classify blocked [critical]");
+    expect(result.results).toHaveLength(1);
+    expect(result.results[0].name).toBe("diff-classify");
   });
 });

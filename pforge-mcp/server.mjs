@@ -96,6 +96,7 @@ import {
 import { createHub, readHubPort } from "./hub.mjs";
 import { createBridge } from "./bridge.mjs";
 import { buildCapabilitySurface, writeToolsJson, writeCliSchema } from "./capabilities.mjs";
+import { classifyDiff as diffClassify } from "./diff-classify.mjs";
 import { readRunIndex, emitToolSpan } from "./telemetry.mjs";
 import { parseSkill, executeSkill } from "./skill-runner.mjs";
 import {
@@ -1480,6 +1481,18 @@ const TOOLS = [
         notify: { type: "boolean", description: "Send bridge notification for new vulnerabilities. Default: true" },
       },
       required: [],
+    },
+  },
+  {
+    name: "forge_diff_classify",
+    description: "Classify staged git diff against 6 safety categories: leaked-secret (critical), prompt-injection-echo (high), license-incompatible-paste (high), eval-exec-introduced (medium), unexpected-network-call (low), large-binary-dump (medium). Returns { severity, findings[], totalAdded, truncated }. Blocking threshold: severity >= high. USE FOR: PreCommit chain gate, post-worker diff review, CI gate. DO NOT USE FOR: static analysis (use a linter), deep code review (use forge_delegate_review).",
+    inputSchema: {
+      type: "object",
+      properties: {
+        diff: { type: "string", description: "Git diff text to classify. If omitted, runs git diff --cached in the project directory." },
+        maxLines: { type: "number", description: "Maximum diff lines to process (default: 3000)." },
+        path: { type: "string", description: "Project directory (default: current)." },
+      },
     },
   },
   {
@@ -4334,6 +4347,30 @@ server.setRequestHandler(CallToolRequestSchema, _wrapWithToolSpan(async (request
       return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }], isError: false };
     } catch (err) {
       return { content: [{ type: "text", text: `Dependency watch error: ${err.message}` }], isError: true };
+    }
+  }
+
+  // Phase WORKER-GUARDRAILS A2 — Diff classifier
+  if (name === "forge_diff_classify") {
+    const t0 = Date.now();
+    try {
+      const cwd = args.path ? findProjectRoot(resolve(args.path)) : findProjectRoot(PROJECT_DIR);
+      let diff = args.diff;
+      if (!diff) {
+        try {
+          diff = execSync("git diff --cached", { cwd, encoding: "utf-8", timeout: 10000, stdio: "pipe" });
+        } catch {
+          diff = "";
+        }
+      }
+      const opts = {};
+      if (args.maxLines) opts.maxLines = args.maxLines;
+      const result = diffClassify(diff, opts);
+      emitToolTelemetry("forge_diff_classify", args, result, Date.now() - t0, "OK", cwd);
+      return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
+    } catch (err) {
+      emitToolTelemetry("forge_diff_classify", args, { error: err.message }, Date.now() - t0, "ERROR", findProjectRoot(PROJECT_DIR));
+      return { content: [{ type: "text", text: `Diff classify error: ${err.message}` }], isError: true };
     }
   }
 
@@ -8267,7 +8304,7 @@ export function createExpressApp() {
     "forge_liveguard_run", "forge_quorum_analyze", "forge_health_trend",
     "forge_alert_triage", "forge_drift_report", "forge_regression_guard",
     "forge_incident_capture", "forge_deploy_journal", "forge_dep_watch",
-    "forge_secret_scan", "forge_env_diff", "forge_fix_proposal",
+    "forge_diff_classify", "forge_secret_scan", "forge_env_diff", "forge_fix_proposal",
     "forge_hotspot", "forge_runbook", "forge_run_plan", "forge_cost_report",
     // Phase-27.1 Slice 2b — forge_estimate_quorum was registered in
     // capabilities.mjs/tools.json/switch case/handler in Phase-27 Slice 6 but

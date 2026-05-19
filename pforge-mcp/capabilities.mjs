@@ -1160,6 +1160,25 @@ export const TOOL_METADATA = {
       output: { newVulnerabilities: [], resolvedVulnerabilities: [], unchanged: 42, snapshot: { capturedAt: "2024-01-01T00:00:00.000Z", depCount: 42 } },
     },
   },
+  forge_diff_classify: {
+    intent: ["diff-classify", "commit-guard", "diff-security-scan"],
+    aliases: ["classify-diff", "diff-scan", "commit-safety-check"],
+    cost: "low",
+    maxConcurrent: 10,
+    addedIn: "3.7.0",
+    prerequisites: ["git initialized"],
+    produces: [],
+    consumes: ["git diff output"],
+    sideEffects: [],
+    errors: {
+      NO_DIFF: { message: "No diff provided — pass diff directly or run in a git repo with staged changes", recovery: "Stage changes with git add before calling, or pass the diff string directly" },
+      TRUNCATED: { message: "Diff exceeded maxLines and was truncated", recovery: "Use a smaller diff range" },
+    },
+    example: {
+      input: { diff: "+const key = 'AKIAIOSFODNN7EXAMPLE';" },
+      output: { severity: "critical", findings: [{ category: "leaked-secret", severity: "critical", detail: "AWS access key pattern detected" }], totalAdded: 1, truncated: false },
+    },
+  },
   forge_secret_scan: {
     intent: ["secret-scan", "entropy-scan", "leak-detection"],
     aliases: ["secret-scan", "scan-secrets", "entropy-check"],

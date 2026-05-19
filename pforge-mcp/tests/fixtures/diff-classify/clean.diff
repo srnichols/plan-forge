@@ -1,0 +1,8 @@
+diff --git a/src/math.js b/src/math.js
+index 1111111..2222222 100644
+--- a/src/math.js
++++ b/src/math.js
+@@ -1,1 +1,2 @@
+ export function add(a, b) {
++  return a + b + 1;
+ }

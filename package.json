@@ -15,6 +15,9 @@
     "postbuild:css": "node -e \"const{createHash}=require('crypto'),fs=require('fs');const h=createHash('sha256').update(fs.readFileSync('docs/assets/tailwind.built.css')).digest('hex');fs.writeFileSync('docs/assets/tailwind.built.css.sha256',h);console.log('CSS hash updated:',h.slice(0,12)+'…');\""
   },
   "devDependencies": {
+    "eslint": "^9",
+    "jscpd": "^4",
+    "madge": "^7",
     "tailwindcss": "^3.4.0"
   }
 }

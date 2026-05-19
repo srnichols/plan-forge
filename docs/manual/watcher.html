@@ -24,25 +24,25 @@
     <aside id="manual-sidebar" class="manual-sidebar"><nav id="sidebar-nav"></nav></aside>
 
     <main>
-      <img src="assets/chapter-heroes/ch19-hero.jpg" alt="Tall stone watchtower at dusk with amber lantern-eyes scanning a foggy valley dotted with distant forge fires — read-only observation of other projects' forge runs" class="chapter-hero" />
+      <img src="assets/chapter-heroes/ch19-hero.jpg" alt="Tall stone watchtower at dusk with amber lantern-eyes scanning a foggy valley dotted with distant forge fires, read-only observation of other projects' forge runs" class="chapter-hero" />
 
       <div class="chapter-content">
 
-        <div class="text-xs font-semibold text-cyan-500 uppercase tracking-wider mb-2">Act III — Guard · Chapter 19</div>
+        <div class="text-xs font-semibold text-cyan-500 uppercase tracking-wider mb-2">Act III, Guard · Chapter 19</div>
         <h1>The Watcher</h1>
         <p class="text-lg text-slate-400 mb-8">A second pair of eyes on a running forge. Read-only by design.</p>
 
         <div class="callout callout-info">
-          <strong>New here? Read this first.</strong> Imagine you kick off a long Plan Forge run — maybe an hour of work across 30 slices — and you want to <em>watch it happen</em> without distracting the AI that's doing the work. The Watcher is exactly that: open a second VS Code window, point it at the running project, and ask &ldquo;how's it going?&rdquo; The Watcher reads the live event stream and tells you. <strong>It cannot edit, commit, or change anything</strong> in the project being watched — that's a safety guarantee, not a feature gap.
+          <strong>New here? Read this first.</strong> You kick off a long Plan Forge run, maybe an hour of work across 30 slices, and you want to <em>watch it happen</em> without distracting the AI that's doing the work. The Watcher is exactly that: open a second VS Code window, point it at the running project, and ask &ldquo;how's it going?&rdquo; The Watcher reads the live event stream and tells you. <strong>It cannot edit, commit, or change anything</strong> in the project being watched, that's a safety guarantee, not a feature gap.
           <ul class="mt-2 mb-0">
-            <li><strong>Snapshot mode</strong> — instant point-in-time read. Free. &ldquo;Slice 12 of 30, no errors, $4 spent so far.&rdquo;</li>
-            <li><strong>Analyze mode</strong> — same data but with an AI summary. Costs a few cents. &ldquo;Run is healthy but Slice 8 retried twice on a flaky test — worth investigating.&rdquo;</li>
-            <li><strong>Live tail</strong> — short streaming window (default 60 seconds). Useful when you suspect something is hanging.</li>
+            <li><strong>Snapshot mode</strong>, instant point-in-time read. Free. &ldquo;Slice 12 of 30, no errors, $4 spent so far.&rdquo;</li>
+            <li><strong>Analyze mode</strong>, same data but with an AI summary. Costs a few cents. &ldquo;Run is healthy but Slice 8 retried twice on a flaky test, worth investigating.&rdquo;</li>
+            <li><strong>Live tail</strong>, short streaming window (default 60 seconds). Useful when you suspect something is hanging.</li>
           </ul>
         </div>
 
         <div class="callout callout-tip">
-          <strong>Shipped in v2.34 (snapshot) · v2.35 (live tail).</strong> The Watcher runs in a <em>separate</em> VS Code Copilot session with Plan-Forge as the workspace and points at another project that's executing a plan. It cannot modify anything in the target — it only reads.
+          <strong>Shipped in v2.34 (snapshot) · v2.35 (live tail).</strong> The Watcher runs in a <em>separate</em> VS Code Copilot session with Plan-Forge as the workspace and points at another project that's executing a plan. It cannot modify anything in the target, it only reads.
         </div>
 
         <h2 id="why">Why a Watcher?</h2>
@@ -52,8 +52,8 @@
 
         <p>Two modes, one tool:</p>
         <ul>
-          <li><strong>Snapshot</strong> (<code>forge_watch</code>) — file-reads only, zero AI cost. Returns slice counts, token usage, gate errors, anomalies.</li>
-          <li><strong>Analyze</strong> (<code>forge_watch</code> with <code>mode=analyze</code>) — invokes a frontier model (default <code>claude-opus-4.7</code>) to produce narrative advice from the snapshot.</li>
+          <li><strong>Snapshot</strong> (<code>forge_watch</code>), file-reads only, zero AI cost. Returns slice counts, token usage, gate errors, anomalies.</li>
+          <li><strong>Analyze</strong> (<code>forge_watch</code> with <code>mode=analyze</code>), invokes a frontier model (default <code>claude-opus-4.7</code>) to produce narrative advice from the snapshot.</li>
         </ul>
 
         <h2 id="live-tail">Live Tail &mdash; <code>forge_watch_live</code></h2>
@@ -83,10 +83,10 @@ forge_watch_live {
         <h2 id="anomalies">Anomaly Rules</h2>
         <p>The snapshot watcher runs heuristic rules over the run state and surfaces anomalies automatically. Examples:</p>
         <ul>
-          <li><code>review-queue-backlog</code> — independent reviewer slices piling up.</li>
-          <li><code>tempering-run-failed</code> — a Tempering run returned non-zero.</li>
-          <li><code>mutationBelowMinimum</code> / <code>flakyCount</code> / <code>perfRegressionCount</code> — Tempering quality thresholds breached.</li>
-          <li>Crucible funnel stalls — ideas stuck in <em>Crystallized</em> with no hardener handoff.</li>
+          <li><code>review-queue-backlog</code>, independent reviewer slices piling up.</li>
+          <li><code>tempering-run-failed</code>, a Tempering run returned non-zero.</li>
+          <li><code>mutationBelowMinimum</code> / <code>flakyCount</code> / <code>perfRegressionCount</code>, Tempering quality thresholds breached.</li>
+          <li>Crucible funnel stalls, ideas stuck in <em>Crystallized</em> with no hardener handoff.</li>
         </ul>
         <p>Anomalies are emitted as <code>watch-anomaly-detected</code> hub events and appear in the dashboard's Watcher tab.</p>
 
@@ -95,15 +95,15 @@ forge_watch_live {
         </div>
 
         <h2 id="history">Watch History</h2>
-        <p>When <code>recordHistory=true</code> (the default in v2.35+), each snapshot is appended to the Watcher session's own <code>.forge/watch-history.jsonl</code> — never the target's. Pair with <code>sinceTimestamp</code> (pass the previous report's <code>cursor</code>) for gap-free continuous monitoring across multiple invocations.</p>
+        <p>When <code>recordHistory=true</code> (the default in v2.35+), each snapshot is appended to the Watcher session's own <code>.forge/watch-history.jsonl</code>, never the target's. Pair with <code>sinceTimestamp</code> (pass the previous report's <code>cursor</code>) for gap-free continuous monitoring across multiple invocations.</p>
 
         <h2 id="dashboard">Dashboard Watcher Tab</h2>
         <p>The dashboard's Watcher tab consumes two event types:</p>
         <ul>
-          <li><code>watch-snapshot-completed</code> — emitted when <code>forge_watch</code> builds a snapshot.</li>
-          <li><code>watch-anomaly-detected</code> — emitted when one or more anomaly rules fire.</li>
+          <li><code>watch-snapshot-completed</code>, emitted when <code>forge_watch</code> builds a snapshot.</li>
+          <li><code>watch-anomaly-detected</code>, emitted when one or more anomaly rules fire.</li>
         </ul>
-        <p>Chip rows surface Tempering state, Crucible funnel state, and a Home chip showing in-flight runs / open incidents / open bugs — all without touching the target project.</p>
+        <p>Chip rows surface Tempering state, Crucible funnel state, and a Home chip showing in-flight runs / open incidents / open bugs, all without touching the target project.</p>
 
         <h2 id="security">Security Model</h2>
         <div class="callout callout-info">
@@ -111,7 +111,7 @@ forge_watch_live {
         </div>
 
         <h2 id="pairing">Pairing the Watcher With the Remote Bridge</h2>
-        <p>A natural pairing: the Watcher runs headless on a long run, and the <a href="remote-bridge.html">Remote Bridge</a> (Chapter 20) forwards hub events to Telegram, Slack, Discord, or OpenClaw so you can check progress from your phone. The Watcher never pushes — it just observes; the Remote Bridge decides what to surface.</p>
+        <p>A natural pairing: the Watcher runs headless on a long run, and the <a href="remote-bridge.html">Remote Bridge</a> (Chapter 20) forwards hub events to Telegram, Slack, Discord, or OpenClaw so you can check progress from your phone. The Watcher never pushes, it just observes; the Remote Bridge decides what to surface.</p>
 
         <div id="chapter-prev-next" class="chapter-nav"></div>
 

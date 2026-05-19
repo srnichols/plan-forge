@@ -204,7 +204,7 @@
         <pre><code># Bash: fail the build on any exit &ne; 0
 set -euo pipefail
 pforge run-plan docs/plans/Phase-NN.md
-# Exit 0 here means "completed" or "completed-with-warnings" — both safe to ship
+# Exit 0 here means "completed" or "completed-with-warnings", both safe to ship
 </code></pre>
 
         <p>If you need to distinguish soft warnings from hard failures:</p>
@@ -213,9 +213,9 @@ output=$(pforge run-plan docs/plans/Phase-NN.md --json)
 status=$(echo "$output" | jq -r '.status')
 case "$status" in
   completed)               echo "Clean."; exit 0 ;;
-  completed-with-warnings) echo "Advisories — review the run log."; exit 0 ;;
+  completed-with-warnings) echo "Advisories, review the run log."; exit 0 ;;
   failed)                  reason=$(echo "$output" | jq -r '.statusReason'); echo "FAILED ($reason)"; exit 1 ;;
-  aborted)                 echo "ABORTED — preserved state at .forge/runs/$(echo "$output" | jq -r '.runId')/"; exit 2 ;;
+  aborted)                 echo "ABORTED, preserved state at .forge/runs/$(echo "$output" | jq -r '.runId')/"; exit 2 ;;
   *)                       echo "UNKNOWN STATUS: $status"; exit 1 ;;
 esac
 </code></pre>

@@ -242,7 +242,7 @@
       <table class="manual-table">
         <thead><tr><th>Event</th><th>When</th></tr></thead>
         <tbody>
-          <tr><td><code>connected</code></td><td>Client connects — includes event history replay</td></tr>
+          <tr><td><code>connected</code></td><td>Client connects, includes event history replay</td></tr>
           <tr><td><code>run-started</code></td><td>Plan execution begins</td></tr>
           <tr><td><code>slice-started</code></td><td>Slice begins execution</td></tr>
           <tr><td><code>slice-completed</code></td><td>Slice passes all validation gates</td></tr>
@@ -270,20 +270,20 @@
       <h2 id="telemetry">Telemetry</h2>
       <p>Every plan execution emits OpenTelemetry (OTLP) traces stored in <code>.forge/runs/&lt;timestamp&gt;/traces.json</code>:</p>
       <ul>
-        <li><strong>Resource context</strong> — project name, version, preset, model</li>
-        <li><strong>Span hierarchy</strong> — run → slice → gate → escalation</li>
-        <li><strong>Severity levels</strong> — INFO for passes, WARN for retries, ERROR for failures</li>
-        <li><strong>Export</strong> — traces are OTLP-compatible — send to Jaeger, Grafana Tempo, or any collector</li>
+        <li><strong>Resource context</strong>, project name, version, preset, model</li>
+        <li><strong>Span hierarchy</strong>, run → slice → gate → escalation</li>
+        <li><strong>Severity levels</strong>, INFO for passes, WARN for retries, ERROR for failures</li>
+        <li><strong>Export</strong>, traces are OTLP-compatible, send to Jaeger, Grafana Tempo, or any collector</li>
       </ul>
 
       <!-- ─── Cost Tracking ─── -->
       <h2 id="cost">Cost Tracking</h2>
       <p>The orchestrator tracks tokens and computes cost per slice using a 23-model pricing table:</p>
       <ul>
-        <li><strong>Per-slice</strong> — tokens in/out, model, duration, USD cost</li>
-        <li><strong>Per-run</strong> — total cost, model breakdown</li>
-        <li><strong>Monthly</strong> — aggregated in <code>.forge/cost-history.json</code></li>
-        <li><strong>Model performance</strong> — <code>.forge/model-performance.json</code> tracks success rate, avg cost, avg duration per model</li>
+        <li><strong>Per-slice</strong>, tokens in/out, model, duration, USD cost</li>
+        <li><strong>Per-run</strong>, total cost, model breakdown</li>
+        <li><strong>Monthly</strong>, aggregated in <code>.forge/cost-history.json</code></li>
+        <li><strong>Model performance</strong>, <code>.forge/model-performance.json</code> tracks success rate, avg cost, avg duration per model</li>
       </ul>
       <p>The orchestrator auto-selects the cheapest model with &gt;80% historical pass rate. Use <code>--estimate</code> to preview costs before executing.</p>
 
@@ -307,7 +307,7 @@ const run = await forge.runPlan('docs/plans/Phase-1.md', {
   mode: 'estimate'
 });</code></pre>
       </div>
-      <p>The SDK is currently in scaffold stage (v0.1.0) — API surface defined, implementation in progress.</p>
+      <p>The SDK is currently in scaffold stage (v0.1.0), API surface defined, implementation in progress.</p>
 
       <!-- ─── API Key Configuration ─── -->
       <h2 id="api-keys">API Key Configuration</h2>
@@ -319,7 +319,7 @@ const run = await forge.runPlan('docs/plans/Phase-1.md', {
   "OPENAI_API_KEY": "sk-..."
 }</code></pre>
       </div>
-      <p>The <code>.forge/</code> directory is gitignored by default — secrets never enter version control.</p>
+      <p>The <code>.forge/</code> directory is gitignored by default, secrets never enter version control.</p>
 
         <p class="text-sm text-slate-500 mt-8">📄 Full reference: <a href="../capabilities.html">capabilities</a>, <a href="event-catalog.html"><strong>Appendix V — Event Catalog</strong></a> (every WebSocket event grouped by family), <a href="https://github.com/srnichols/plan-forge/blob/master/pforge-mcp/EVENTS.md" rel="noopener">EVENTS.md on GitHub</a>, <a href="https://github.com/srnichols/plan-forge/blob/master/pforge-mcp/tools.json" rel="noopener">tools.json on GitHub</a></p>
       <div id="chapter-prev-next" class="chapter-nav"></div>

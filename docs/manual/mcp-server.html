@@ -25,22 +25,22 @@
 
       <div class="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">Chapter 11</div>
       <h1>MCP Server &amp; Tools</h1>
-      <p class="text-lg text-slate-400 mb-8"><!--c:tools-->90<!--/c--> MCP tools across 8 categories — Core, LiveGuard, Watcher, Crucible, Tempering, Bug Registry, Testbed, Forge-Master — plus REST API, WebSocket hub, telemetry, and cost tracking. The integration layer.</p>
+      <p class="text-lg text-slate-400 mb-8"><!--c:tools-->90<!--/c--> MCP tools across 8 categories, Core, LiveGuard, Watcher, Crucible, Tempering, Bug Registry, Testbed, Forge-Master, plus REST API, WebSocket hub, telemetry, and cost tracking. The integration layer.</p>
 
       <div class="callout callout-info">
         <strong>What is MCP?</strong><br>
         MCP (Model Context Protocol) is a standard that lets AI agents call functions. When Copilot needs to run a plan,
-        check costs, or scan for secrets, it calls the MCP server — which executes the command and returns structured results.
-        Think of it as the API layer between your AI agent and Plan Forge's capabilities.
+        check costs, or scan for secrets, it calls the MCP server, which executes the command and returns structured results.
+        MCP is the API layer between your AI agent and Plan Forge's capabilities.
       </div>
 
       <div class="callout callout-info">
-        <strong>LiveGuard tools shipped in v2.27.0</strong> — 14 additional MCP tools for post-coding intelligence: drift detection, incident capture, secret scanning, env diff, health trending, regression guards, and alert triage. They follow the same MCP tool and REST endpoint patterns described in this chapter. See <a href="what-is-liveguard.html">Chapter 16 — What Is LiveGuard?</a> for the overview and <a href="liveguard-tools.html">Chapter 17</a> for the full reference.
+        <strong>LiveGuard tools shipped in v2.27.0</strong>, 14 additional MCP tools for post-coding intelligence: drift detection, incident capture, secret scanning, env diff, health trending, regression guards, and alert triage. They follow the same MCP tool and REST endpoint patterns described in this chapter. See <a href="what-is-liveguard.html">Chapter 16 — What Is LiveGuard?</a> for the overview and <a href="liveguard-tools.html">Chapter 17</a> for the full reference.
       </div>
 
       <!-- ─── Architecture ─── -->
       <h2 id="architecture">Architecture</h2>
-      <p>A single Node.js process runs three subsystems — the nervous system that lets all your tools talk to each other:</p>
+      <p>A single Node.js process runs three subsystems, the nervous system that lets all your tools talk to each other:</p>
 
       <div class="overflow-x-auto mb-6">
         <div class="flex gap-3 min-w-[500px] py-2">

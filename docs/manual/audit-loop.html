@@ -25,21 +25,21 @@
 
     <main>
       <!-- Hero -->
-      <img src="assets/chapter-heroes/ch-audit-hero.jpg" alt="Bronze funnel with glowing amber findings flowing in from above and being routed to three output channels that loop back to the top — the closed-loop audit drain" class="chapter-hero" />
+      <img src="assets/chapter-heroes/ch-audit-hero.jpg" alt="Bronze funnel with glowing amber findings flowing in from above and being routed to three output channels that loop back to the top, the closed-loop audit drain" class="chapter-hero" />
       <div class="chapter-content">
-        <div class="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">Deep Dive · Act II — Forge</div>
+        <div class="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">Deep Dive · Act II, Forge</div>
         <h1>Audit Loop</h1>
         <p class="text-lg text-slate-400 mb-8">Closed-loop bug discovery: content-audit scan &rarr; triage &rarr; fix, iterating until convergence or max rounds. Added in v2.80.0.</p>
 
         <div class="callout callout-info">
           <strong>New here? Read this first.</strong> The audit loop is Plan Forge's way of <em>finding bugs in a running app and fixing them automatically</em>. Point it at your dev or staging server and it will:
           <ol class="mt-2 mb-2">
-            <li><strong>Scan</strong> — visit every page/route and record what's broken (404s, blank pages, &ldquo;Coming soon&rdquo; placeholders, broken links).</li>
-            <li><strong>Triage</strong> — sort each finding into one of three lanes: <em>fix it now</em>, <em>ask a human</em>, or <em>I'm not sure</em>.</li>
-            <li><strong>Fix</strong> — for the &ldquo;fix it now&rdquo; lane, spawn a worker to apply the fix, then re-scan.</li>
-            <li><strong>Repeat</strong> — keep going until no new bugs appear (&ldquo;convergence&rdquo;) or the round limit hits.</li>
+            <li><strong>Scan</strong>, visit every page/route and record what's broken (404s, blank pages, &ldquo;Coming soon&rdquo; placeholders, broken links).</li>
+            <li><strong>Triage</strong>, sort each finding into one of three lanes: <em>fix it now</em>, <em>ask a human</em>, or <em>I'm not sure</em>.</li>
+            <li><strong>Fix</strong>, for the &ldquo;fix it now&rdquo; lane, spawn a worker to apply the fix, then re-scan.</li>
+            <li><strong>Repeat</strong>, keep going until no new bugs appear (&ldquo;convergence&rdquo;) or the round limit hits.</li>
           </ol>
-          Think of it as a tireless QA tester that not only files bugs but closes them. <strong>It's off by default</strong> — you have to opt in. Production is permanently off-limits.
+          It works like a tireless QA tester that not only files bugs but closes them. <strong>It's off by default</strong>, you have to opt in. Production is permanently off-limits.
         </div>
 
         <img src="assets/diagrams/audit-loop-triage-lanes.svg" alt="Audit loop drain flow: content-audit scanner produces findings, forge_triage_route classifies each into one of three lanes (bug -> forge_bug_register, spec -> forge_crucible_submit, classifier -> .forge/audits/ artifact), then spawnWorker applies fixes and the loop iterates. Activation via .forge.json#audit.mode (default off). Production environments are hard-blocked." class="diagram-img diagram-img-md my-4" />
@@ -54,14 +54,14 @@
         <h2>The Three Components</h2>
 
         <h3>1. Content-Audit Scanner</h3>
-        <p><code>pforge-mcp/tempering/scanners/content-audit.mjs</code> — HTTP-probes a set of routes against a live base URL and emits structured findings: HTTP status, page title, h1, word count, placeholder markers, and client-shell detection for hydrated SPAs.</p>
+        <p><code>pforge-mcp/tempering/scanners/content-audit.mjs</code>, HTTP-probes a set of routes against a live base URL and emits structured findings: HTTP status, page title, h1, word count, placeholder markers, and client-shell detection for hydrated SPAs.</p>
         <ul>
           <li><strong>Production guard</strong>: Reuses <code>looksLikeProduction()</code> from <code>ui-playwright.mjs</code>. Refuses to crawl production URLs unless <code>allowProduction: true</code> is explicitly set (and <code>forbidProduction</code> in config is immutably <code>true</code>).</li>
-          <li><strong>Injectable fetcher</strong>: Tests use a mock fetcher — no real HTTP in the test suite.</li>
+          <li><strong>Injectable fetcher</strong>: Tests use a mock fetcher, no real HTTP in the test suite.</li>
         </ul>
 
         <h3>2. Triage Router</h3>
-        <p><code>pforge-mcp/tempering/triage.mjs</code> — <code>routeFinding(finding, classifier)</code> routes each finding to one of three lanes:</p>
+        <p><code>pforge-mcp/tempering/triage.mjs</code>, <code>routeFinding(finding, classifier)</code> routes each finding to one of three lanes:</p>
         <table class="manual-table">
           <thead><tr><th>Lane</th><th>Destination</th><th>What happens</th></tr></thead>
           <tbody>
@@ -70,10 +70,10 @@
             <tr><td><code>"classifier"</code></td><td>Local artifact</td><td>Proposal written to <code>.forge/audits/</code> for human review</td></tr>
           </tbody>
         </table>
-        <p>Unknown classifier output falls safe to <code>{ lane: "bug", confidence: "low" }</code> — findings are never dropped.</p>
+        <p>Unknown classifier output falls safe to <code>{ lane: "bug", confidence: "low" }</code>, findings are never dropped.</p>
 
         <h3>3. Drain Loop</h3>
-        <p><code>pforge-mcp/tempering/drain.mjs</code> — <code>runTemperingDrain(opts)</code> orchestrates the full cycle:</p>
+        <p><code>pforge-mcp/tempering/drain.mjs</code>, <code>runTemperingDrain(opts)</code> orchestrates the full cycle:</p>
         <ol>
           <li>Run all registered scanners (content-audit + any others)</li>
           <li>Triage each finding through <code>routeFinding()</code></li>
@@ -122,21 +122,21 @@ pforge audit-loop --env=staging</code></pre>
 
         <h2>MCP Tools</h2>
         <ul>
-          <li><code>forge_tempering_drain</code> — programmatic drain loop access. Accepts <code>project</code>, <code>maxRounds</code>, <code>scanners</code>, <code>dryRun</code>, <code>env</code>.</li>
-          <li><code>forge_triage_route</code> — route a single finding through the classifier. Returns <code>{ lane, payload, confidence }</code>.</li>
+          <li><code>forge_tempering_drain</code>, programmatic drain loop access. Accepts <code>project</code>, <code>maxRounds</code>, <code>scanners</code>, <code>dryRun</code>, <code>env</code>.</li>
+          <li><code>forge_triage_route</code>, route a single finding through the classifier. Returns <code>{ lane, payload, confidence }</code>.</li>
         </ul>
 
         <h2>Dashboard</h2>
-        <p>The audit-loop toggle in the dashboard persists to <code>.forge.json#audit</code> — not session-scoped. This matches the pattern used by Forge-Master prefs (<code>.forge/fm-prefs.json</code>) and the quorum advisory toggle.</p>
+        <p>The audit-loop toggle in the dashboard persists to <code>.forge.json#audit</code>, not session-scoped. This matches the pattern used by Forge-Master prefs (<code>.forge/fm-prefs.json</code>) and the quorum advisory toggle.</p>
 
         <h2 id="discovery-harness">Discovery Harness Implementation</h2>
-        <p>The discovery harness is the engine that turns a running dev server into a stream of structured findings. It uses a 4-pass build sequence — crawl, wrap, execute, auto-smelt — to close the loop between bug discovery and bug resolution with no human triage required.</p>
+        <p>The discovery harness is the engine that turns a running dev server into a stream of structured findings. It uses a 4-pass build sequence, crawl, wrap, execute, auto-smelt, to close the loop between bug discovery and bug resolution with no human triage required.</p>
 
         <figure class="manual-figure"><img src="assets/diagrams/discovery-harness-four-pass.svg" alt="Discovery Harness 4-pass build sequence: Pass 1 (Harness) crawls routes with Node + Playwright, Pass 2 (Wrapper) transforms JSON into Crucible smelts, Pass 3 (Execute) runs slices with Tempering, Pass 4 (Auto-smelt) converts failures into new smelts" class="diagram-img diagram-img-md my-4" /><figcaption class="manual-figcaption"><!--cap:auto-->Discovery Harness 4-pass build sequence<!--/cap--></figcaption></figure>
 
         <h3>Pass 1 — Harness (Node + Playwright)</h3>
         <p>A headless Playwright browser crawls every route exposed by the dev server. For each page the harness records HTTP status, document title, <code>h1</code> text, word count, placeholder markers (e.g. <code>Coming soon</code>, <code>TODO</code>), broken links, and client-shell detection for hydrated SPAs. Results are written as structured JSON to <code>.forge/audits/</code>.</p>
-        <p>Representative example: a marketing site with 47 routes produces 12 findings on its first pass — three placeholder headings, two broken anchor links, four pages returning non-200 status codes, and three pages with zero meaningful content.</p>
+        <p>Representative example: a marketing site with 47 routes produces 12 findings on its first pass, three placeholder headings, two broken anchor links, four pages returning non-200 status codes, and three pages with zero meaningful content.</p>
 
         <h3>Pass 2 — Wrapper (JSON → Crucible)</h3>
         <p>Each finding from Pass 1 is transformed into a Crucible smelt via <code>forge_crucible_submit</code>. The wrapper applies severity triage, routing findings through the three-lane classifier (bug, spec, classifier) before packaging them as structured smelt input with enough context for the hardener to produce actionable plan slices.</p>
@@ -145,7 +145,7 @@ pforge audit-loop --env=staging</code></pre>
         <p>The hardened plan runs slice-by-slice through <code>forge_run_plan</code>. Each slice carries its own validation gate and Tempering re-audit. LiveGuard hooks fire between slices, catching regressions before they compound.</p>
 
         <h3>Pass 4 — Auto-smelt (Closed Loop)</h3>
-        <p>Any Tempering failures from Pass 3 are converted into new smelts via <code>forge_tempering_drain</code> and re-entered into the bug registry — no human triage required. The loop iterates until convergence (zero new findings) or the configured <code>maxRounds</code> limit (default 5) is reached.</p>
+        <p>Any Tempering failures from Pass 3 are converted into new smelts via <code>forge_tempering_drain</code> and re-entered into the bug registry, no human triage required. The loop iterates until convergence (zero new findings) or the configured <code>maxRounds</code> limit (default 5) is reached.</p>
 
         <div class="callout callout-info">
           <strong>Further reading.</strong> For a real-world walkthrough of the 4-pass sequence applied to a production Next.js site, see the blog post <a href="../../blog/the-loop-that-never-ends.html">The Loop That Never Ends</a>.
@@ -157,16 +157,16 @@ pforge audit-loop --env=staging</code></pre>
         <figure class="manual-figure"><img src="assets/diagrams/triage-three-lane-funnel.svg" alt="Three-Lane Triage Funnel: discovery findings sorted into Bug Lane (auto-smelt to bug-registry), Spec Lane (escalate to human spec author), and Classifier Lane (refine the classifier itself when uncertain)" class="diagram-img diagram-img-md my-4" /><figcaption class="manual-figcaption"><!--cap:auto-->Three-Lane Triage Funnel<!--/cap--></figcaption></figure>
 
         <h3 id="bug-lane">Bug Lane — Auto-smelt to Bug Registry</h3>
-        <p>Findings with high confidence and a clear remediation pattern (broken links, non-200 status codes, placeholder markers, hydration failures) drop into the bug lane. The wrapper packages them as Crucible smelts with severity attached, then the auto-smelt pass converts them into entries in the <a href="bug-registry.html">bug registry</a>. No human triage required — the loop closes automatically.</p>
+        <p>Findings with high confidence and a clear remediation pattern (broken links, non-200 status codes, placeholder markers, hydration failures) drop into the bug lane. The wrapper packages them as Crucible smelts with severity attached, then the auto-smelt pass converts them into entries in the <a href="bug-registry.html">bug registry</a>. No human triage required, the loop closes automatically.</p>
         <p>Representative example: a 4-pass run finds 8 broken anchor links across the docs. All 8 land in the bug lane as a single batch smelt with severity <code>medium</code>, generate one plan slice that fixes them together, and close themselves out via tempering re-audit.</p>
 
         <h3 id="spec-lane">Spec Lane — Escalate to Human Spec Author</h3>
-        <p>Findings that imply missing or ambiguous spec content (placeholder headings like "Coming soon," pages with zero meaningful content, hydrated SPAs that crash without JS) drop into the spec lane. These can't be auto-fixed because the harness doesn't know what content <em>should</em> be there — only that something is missing. The wrapper escalates them as <a href="crucible.html">Crucible</a> smelts requiring human input before they can be hardened into plan slices.</p>
-        <p>Representative example: the harness finds a route titled "Pricing — Coming soon" with 12 words of body content. Spec lane escalates this to a human as a Crucible smelt requesting a draft of the actual pricing tier copy. The human responds in the Crucible interview funnel, the wrapper hardens the response into a plan slice, and the loop resumes.</p>
+        <p>Findings that imply missing or ambiguous spec content (placeholder headings like "Coming soon," pages with zero meaningful content, hydrated SPAs that crash without JS) drop into the spec lane. These can't be auto-fixed because the harness doesn't know what content <em>should</em> be there, only that something is missing. The wrapper escalates them as <a href="crucible.html">Crucible</a> smelts requiring human input before they can be hardened into plan slices.</p>
+        <p>Representative example: the harness finds a route titled "Pricing, Coming soon" with 12 words of body content. Spec lane escalates this to a human as a Crucible smelt requesting a draft of the actual pricing tier copy. The human responds in the Crucible interview funnel, the wrapper hardens the response into a plan slice, and the loop resumes.</p>
 
         <h3 id="classifier-lane">Classifier Lane — Refine the Classifier</h3>
         <p>Findings the classifier can't confidently sort (novel signals, contradictory evidence, low confidence scores) drop into the classifier lane. Rather than guess, the wrapper records the finding plus the classifier's confusion signal as a Crucible smelt targeting the classifier itself. Over time, classifier-lane volume should drop as the classifier learns from each handoff.</p>
-        <p>Representative example: the harness finds a 200 OK route with full content but the document title is just <code>"."</code> — the classifier hasn't seen this signal before. Classifier lane creates a smelt asking the maintainer "should pages with single-character titles be flagged as defective?" The answer becomes a new classifier rule for the next run.</p>
+        <p>Representative example: the harness finds a 200 OK route with full content but the document title is just <code>"."</code>, the classifier hasn't seen this signal before. Classifier lane creates a smelt asking the maintainer "should pages with single-character titles be flagged as defective?" The answer becomes a new classifier rule for the next run.</p>
 
         <h3>Finding-type to lane mapping</h3>
         <table class="manual-table">
@@ -175,7 +175,7 @@ pforge audit-loop --env=staging</code></pre>
             <tr><td>Non-200 HTTP status</td><td>Bug</td><td>Unambiguous failure, fix is mechanical</td></tr>
             <tr><td>Broken anchor / link</td><td>Bug</td><td>Target either exists or it doesn't; trivial to verify</td></tr>
             <tr><td>Placeholder marker (TODO, Coming soon)</td><td>Spec</td><td>Implies missing content, not broken content</td></tr>
-            <tr><td>Zero meaningful content</td><td>Spec</td><td>Page exists but says nothing — needs human authoring</td></tr>
+            <tr><td>Zero meaningful content</td><td>Spec</td><td>Page exists but says nothing, needs human authoring</td></tr>
             <tr><td>Hydration failure (SPA crashes without JS)</td><td>Bug</td><td>Build / config defect, not a content gap</td></tr>
             <tr><td>Novel signal / low confidence</td><td>Classifier</td><td>Classifier can't sort; ask the maintainer</td></tr>
             <tr><td>Mixed signals (multiple conflicting findings)</td><td>Classifier</td><td>Pre-empt a wrong auto-smelt by asking first</td></tr>
@@ -183,7 +183,7 @@ pforge audit-loop --env=staging</code></pre>
         </table>
 
         <div class="callout callout-info">
-          <strong>What gets auto-smelted.</strong> Only the bug lane runs autonomously. Spec and classifier lanes always require a human in the loop — by design. The point of the funnel is to keep humans focused on <em>what only humans can answer</em> (intent, scope, novel signals), not on triaging mechanical defects the harness already understands.
+          <strong>What gets auto-smelted.</strong> Only the bug lane runs autonomously. Spec and classifier lanes always require a human in the loop, by design. The point of the funnel is to keep humans focused on <em>what only humans can answer</em> (intent, scope, novel signals), not on triaging mechanical defects the harness already understands.
         </div>
 
         <p>For a worked example of how the bug lane closes a real defect end-to-end, including the multi-model quality patterns that catch issues a single model misses, see <a href="advanced-execution.html#quorum-quality-examples">Quorum Quality Examples</a> in Chapter 14.</p>
@@ -192,7 +192,7 @@ pforge audit-loop --env=staging</code></pre>
         <ul>
           <li><strong>Classifier proposals are local files</strong> (v2.80): Written to <code>.forge/audits/</code> as JSON artifacts. GitHub PR creation deferred to v2.81+.</li>
           <li><strong><code>spawnWorker</code> is injectable</strong>: Consistent with visual-diff quorum and bug classifier patterns. Already in the function signature.</li>
-          <li><strong>Production is immutably forbidden</strong>: <code>forbidProduction: true</code> cannot be overridden via config — it's hardcoded in <code>auto-activate.mjs</code>.</li>
+          <li><strong>Production is immutably forbidden</strong>: <code>forbidProduction: true</code> cannot be overridden via config, it's hardcoded in <code>auto-activate.mjs</code>.</li>
         </ul>
 
         <div class="chapter-nav">

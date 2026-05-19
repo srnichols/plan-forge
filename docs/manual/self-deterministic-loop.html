@@ -25,50 +25,50 @@
 
     <main>
       <!-- Hero -->
-      <img src="assets/chapter-heroes/ch-sdl-hero.jpg" alt="Circular feedback flow with amber arrows curving between hammer, mirror, scroll, and brain totems converging on a central glowing core — the self-deterministic agent loop" class="chapter-hero" />
+      <img src="assets/chapter-heroes/ch-sdl-hero.jpg" alt="Circular feedback flow with amber arrows curving between hammer, mirror, scroll, and brain totems converging on a central glowing core, the self-deterministic agent loop" class="chapter-hero" />
       <div class="chapter-content">
-        <div class="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">Deep Dive · Act II — Forge · Master Narrative</div>
+        <div class="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">Deep Dive · Act II, Forge · Master Narrative</div>
         <h1>The Self-Deterministic Agent Loop</h1>
         <p class="text-lg text-slate-400 mb-8">The canonical overview. How Plan Forge's deterministic slice executor, the Phase-25 reflective layer, and the Phase-26 competitive layer compose into a single self-deterministic agent loop.</p>
 
         <div class="callout callout-info">
-          <strong>New here? Plain-English version.</strong> &ldquo;Self-deterministic&rdquo; is a mouthful. Here's what it really means: <strong>Plan Forge runs the same way every time</strong> (same plan + same config = same outcome — no surprises), but <strong>it also learns from every run</strong> and uses that knowledge to make the next run smarter. The execution stays predictable; the context gets richer.
+          <strong>New here? Plain-English version.</strong> &ldquo;Self-deterministic&rdquo; is a mouthful. Here's what it really means: <strong>Plan Forge runs the same way every time</strong> (same plan + same config = same outcome, no surprises), but <strong>it also learns from every run</strong> and uses that knowledge to make the next run smarter. The execution stays predictable; the context gets richer.
           <ul class="mt-2 mb-2">
-            <li><strong>Deterministic part</strong> — the slice executor. No random model picking, no hidden retries that change the result. You can re-run a plan and get the same answer.</li>
-            <li><strong>Self-learning part</strong> — the &ldquo;inner loop&rdquo; (reflection on what worked) and &ldquo;competitive loop&rdquo; (multiple models racing) feed lessons back into the next slice or plan.</li>
-            <li><strong>Safety</strong> — every learning signal is opt-in or advisory. Nothing silently changes a run you've already started.</li>
+            <li><strong>Deterministic part</strong>, the slice executor. No random model picking, no hidden retries that change the result. You can re-run a plan and get the same answer.</li>
+            <li><strong>Self-learning part</strong>, the &ldquo;inner loop&rdquo; (reflection on what worked) and &ldquo;competitive loop&rdquo; (multiple models racing) feed lessons back into the next slice or plan.</li>
+            <li><strong>Safety</strong>, every learning signal is opt-in or advisory. Nothing silently changes a run you've already started.</li>
           </ul>
           This chapter is the <em>master narrative</em> tying it all together. If you want the focused deep dives, jump to <a href="inner-loop.html">Inner Loop</a> (reflection) or <a href="competitive-loop.html">Competitive Loop</a> (racing).
         </div>
 
         <div class="callout callout-info">
-          <strong>Canonical reference.</strong> Start here if you want the whole picture. The companion chapters — <a href="inner-loop.html">The Inner Loop</a> (Phase-25 reflective layer) and <a href="competitive-loop.html">The Competitive Loop</a> (Phase-26 worktree race, auto-fix, cost anomalies) — drill into the individual subsystems.
+          <strong>Canonical reference.</strong> Start here if you want the whole picture. The companion chapters, <a href="inner-loop.html">The Inner Loop</a> (Phase-25 reflective layer) and <a href="competitive-loop.html">The Competitive Loop</a> (Phase-26 worktree race, auto-fix, cost anomalies), drill into the individual subsystems.
         </div>
 
         <!-- ─── What "self-deterministic" means ─── -->
         <h2 id="definition">What "self-deterministic" means</h2>
         <p>Plan Forge's slice executor is <em>deterministic</em>: same plan, same config, same model routing, same outcome. On top of that spine, the Phase-25 and Phase-26 subsystems let the loop observe itself and feed what it learns back into the next slice, the next plan, or a sibling project. The execution contract stays deterministic; the loop's context gets progressively better-informed. That combination is what we mean by <em>self-deterministic</em>:</p>
         <ul>
-          <li>Determinism at the execution boundary — no randomized control flow, no hidden model selection.</li>
-          <li>Reflective feedback at the learning boundary — trajectories, postmortems, auto-skills, and advisory signals.</li>
+          <li>Determinism at the execution boundary, no randomized control flow, no hidden model selection.</li>
+          <li>Reflective feedback at the learning boundary, trajectories, postmortems, auto-skills, and advisory signals.</li>
           <li>Every signal is opt-in or advisory by default; nothing silently changes a deterministic plan run.</li>
         </ul>
 
-        <!-- ─── Diagram A — System-wide state flow ─── -->
+        <!-- ─── Diagram A, System-wide state flow ─── -->
         <h2 id="system-flow">Diagram A — System-wide state flow</h2>
         <p>The outer pipeline is the same one Plan Forge has always had. The inner loop adds callback arrows that let later stages feed earlier stages without breaking the forward progression.</p>
 
-        <figure class="manual-figure"><img src="assets/diagrams/self-deterministic-system-flow.svg" alt="System-wide state diagram. runPlan moves through Plan, Preflight (environment validation), Harden (Step-2 hardener), Execute (slice loop), Sweep, Review, then Ship. Execute self-loops on reflexion retry when a gate fails. Sweep loops back to Execute when a completeness gap is found, and forward to Review when artifacts are consistent. Review loops back to Execute on an advisory signal (blocking if opted-in) and forward to Ship on a clean verdict. A long-range arrow runs from Execute back to Harden, indicating that postmortems written this run feed the next plan's hardener. An operator halt drops Review into a Stopped terminal state." class="diagram-img diagram-img-md my-4" /><figcaption class="manual-figcaption">System-wide state flow — the deterministic outer pipeline with callback arrows that let later stages feed earlier stages.</figcaption></figure>
+        <figure class="manual-figure"><img src="assets/diagrams/self-deterministic-system-flow.svg" alt="System-wide state diagram. runPlan moves through Plan, Preflight (environment validation), Harden (Step-2 hardener), Execute (slice loop), Sweep, Review, then Ship. Execute self-loops on reflexion retry when a gate fails. Sweep loops back to Execute when a completeness gap is found, and forward to Review when artifacts are consistent. Review loops back to Execute on an advisory signal (blocking if opted-in) and forward to Ship on a clean verdict. A long-range arrow runs from Execute back to Harden, indicating that postmortems written this run feed the next plan's hardener. An operator halt drops Review into a Stopped terminal state." class="diagram-img diagram-img-md my-4" /><figcaption class="manual-figcaption">System-wide state flow, the deterministic outer pipeline with callback arrows that let later stages feed earlier stages.</figcaption></figure>
 
-        <p>Two things to notice: first, every backward arrow from <em>Execute</em>, <em>Sweep</em>, and <em>Review</em> is <em>opt-in or advisory</em> by default — the forward pipeline stays honest. Second, the arrow from <em>Execute</em> back to <em>Harden</em> crosses a plan boundary: a postmortem written at the end of this run is read by the hardener at the start of the next one.</p>
+        <p>Two things to notice: first, every backward arrow from <em>Execute</em>, <em>Sweep</em>, and <em>Review</em> is <em>opt-in or advisory</em> by default, the forward pipeline stays honest. Second, the arrow from <em>Execute</em> back to <em>Harden</em> crosses a plan boundary: a postmortem written at the end of this run is read by the hardener at the start of the next one.</p>
 
-        <!-- ─── Diagram B — Inner-loop callback graph ─── -->
+        <!-- ─── Diagram B, Inner-loop callback graph ─── -->
         <h2 id="callback-graph">Diagram B — Inner-loop callback graph</h2>
-        <p>Zooming into a single slice, here is what happens at the slice boundary and how each Phase-25 and Phase-26 subsystem feeds something downstream — the next slice, the next plan's hardener, or a Dashboard promotion surface.</p>
+        <p>Zooming into a single slice, here is what happens at the slice boundary and how each Phase-25 and Phase-26 subsystem feeds something downstream, the next slice, the next plan's hardener, or a Dashboard promotion surface.</p>
 
-        <figure class="manual-figure"><img src="assets/diagrams/self-deterministic-callback-graph.svg" alt="Inner-loop callback graph. The slice-execution subgraph runs BuildPrompt → AutoSkill lookup (L2) → WorkerInvoke → GateRun, with a fail-edge to a Reflexion block (L7) that loops back to WorkerInvoke and a pass-edge to Trajectory write (L8). Trajectory fans out into Postmortem (L5), AutoSkill capture (L2), GateSuggestion accrual (L6), and Cost-anomaly check (C3). GateRun also emits an advisory Reviewer call (L4) and a gate-fail-with-small-diff Auto-fix proposal (C2). BuildPrompt reads from Federation (L4-lite). Postmortems feed the next plan's hardener; auto-skill capture and federation reads feed the next slice; GateSuggestion, Reviewer, Cost-anomaly, and Auto-fix all surface on the Dashboard. A separate competitive-layer subgraph (C1) spawns Strategy A and Strategy B worktrees, runs winner election, promotes the winner to the working tree, and that winner feeds Trajectory write." class="diagram-img diagram-img-md my-4" /><figcaption class="manual-figcaption">Inner-loop callback graph — slice-boundary signals (L2, L4, L5, L6, L8, C1, C2, C3) feeding the next slice, the next hardener, and Dashboard surfaces.</figcaption></figure>
+        <figure class="manual-figure"><img src="assets/diagrams/self-deterministic-callback-graph.svg" alt="Inner-loop callback graph. The slice-execution subgraph runs BuildPrompt → AutoSkill lookup (L2) → WorkerInvoke → GateRun, with a fail-edge to a Reflexion block (L7) that loops back to WorkerInvoke and a pass-edge to Trajectory write (L8). Trajectory fans out into Postmortem (L5), AutoSkill capture (L2), GateSuggestion accrual (L6), and Cost-anomaly check (C3). GateRun also emits an advisory Reviewer call (L4) and a gate-fail-with-small-diff Auto-fix proposal (C2). BuildPrompt reads from Federation (L4-lite). Postmortems feed the next plan's hardener; auto-skill capture and federation reads feed the next slice; GateSuggestion, Reviewer, Cost-anomaly, and Auto-fix all surface on the Dashboard. A separate competitive-layer subgraph (C1) spawns Strategy A and Strategy B worktrees, runs winner election, promotes the winner to the working tree, and that winner feeds Trajectory write." class="diagram-img diagram-img-md my-4" /><figcaption class="manual-figcaption">Inner-loop callback graph, slice-boundary signals (L2, L4, L5, L6, L8, C1, C2, C3) feeding the next slice, the next hardener, and Dashboard surfaces.</figcaption></figure>
 
-        <p>The Phase-25 subsystems are labeled L1–L8 in the capabilities surface (<code>forge_capabilities → innerLoop</code>); the Phase-26 subsystems — C1 competitive, C2 auto-fix, C3 cost-anomaly — extend the same surface. Every node in the diagram corresponds to one entry in <code>INNER_LOOP_SURFACE.subsystems</code>.</p>
+        <p>The Phase-25 subsystems are labeled L1–L8 in the capabilities surface (<code>forge_capabilities → innerLoop</code>); the Phase-26 subsystems, C1 competitive, C2 auto-fix, C3 cost-anomaly, extend the same surface. Every node in the diagram corresponds to one entry in <code>INNER_LOOP_SURFACE.subsystems</code>.</p>
 
         <!-- ─── Subsystem roll-call ─── -->
         <h2 id="subsystem-rollcall">Subsystem roll-call</h2>
@@ -94,7 +94,7 @@
 
         <!-- ─── Why this matters ─── -->
         <h2 id="why-this-matters">Why this matters</h2>
-        <p>The individual subsystems are useful on their own. The mesh is what turns a slice runner into a self-deterministic loop: a trajectory written today becomes part of tomorrow's planning context; a cost anomaly noticed this run becomes the reason next run's hardener picks a cheaper model for that slice; a gate command accepted three times graduates into the validation template for that domain. None of this changes the deterministic execution contract — it only changes the information the deterministic executor runs with.</p>
+        <p>The individual subsystems are useful on their own. The mesh is what turns a slice runner into a self-deterministic loop: a trajectory written today becomes part of tomorrow's planning context; a cost anomaly noticed this run becomes the reason next run's hardener picks a cheaper model for that slice; a gate command accepted three times graduates into the validation template for that domain. None of this changes the deterministic execution contract, it only changes the information the deterministic executor runs with.</p>
 
         <div class="callout callout-info mt-8">
           <strong>Companion chapters.</strong> <a href="inner-loop.html">The Inner Loop</a> covers L1–L8 (Phase-25) mechanics and configuration. <a href="competitive-loop.html">The Competitive Loop</a> covers C1–C3 (Phase-26). Dashboard → <em>Inner Loop</em> tab shows live state for all ten subsystems.

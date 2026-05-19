@@ -47,7 +47,7 @@
 
       <figure class="my-6">
         <img src="assets/diagrams/enterprise-reference-architecture-generic.svg" alt="Generic 5-team enterprise reference architecture: developer workstations → GitHub Enterprise → CI/fleet execution → observability → LLM provider, all within the customer's network boundary." class="w-full max-w-4xl mx-auto rounded-xl border border-slate-700/50 shadow-2xl shadow-amber-500/5" loading="lazy" />
-        <figcaption class="text-xs text-slate-500 mt-2 text-center">Generic enterprise reference architecture — 5 teams × ~200 developers. Plan Forge orchestrator runs in the customer's network; only LLM inference may cross the boundary depending on provider choice.</figcaption>
+        <figcaption class="text-xs text-slate-500 mt-2 text-center">Generic enterprise reference architecture, 5 teams × ~200 developers. Plan Forge orchestrator runs in the customer's network; only LLM inference may cross the boundary depending on provider choice.</figcaption>
       </figure>
 
       <h3 id="component-responsibilities">Component responsibilities</h3>
@@ -88,7 +88,7 @@
       <ul>
         <li><strong class="text-slate-200">Plan Forge above Foundry</strong>: Plan Forge is the SDLC orchestrator (specify, plan, harden, execute, validate, ship). Foundry is the model gateway and production agent runtime. Plan Forge is not inside Foundry, not beside Foundry as a peer agent product, but above Foundry as the higher-altitude orchestration layer.</li>
         <li><strong class="text-slate-200">Foundry as model provider</strong>: Plan Forge talks to AOAI via the OpenAI-compatible endpoint <code>https://{resource}.openai.azure.com/openai/v1/</code>. Auth via Entra ID (recommended), API key, or managed identity. Customer configures <strong>deployment names</strong>, not model families.</li>
-        <li><strong class="text-slate-200">Foundry Toolbox as shared MCP surface</strong>: Customer's curated, governed, audited tool surface — exposed once via Foundry Toolbox, consumed by Plan Forge in worker sessions and by Foundry agents in production. Single source of truth for org tools.</li>
+        <li><strong class="text-slate-200">Foundry Toolbox as shared MCP surface</strong>: Customer's curated, governed, audited tool surface, exposed once via Foundry Toolbox, consumed by Plan Forge in worker sessions and by Foundry agents in production. Single source of truth for org tools.</li>
         <li><strong class="text-slate-200">App Insights as OTel sink</strong>: Plan Forge emits OTel traces (per the <code>gen_ai.*</code> spec). Pointed at the Foundry-attached Application Insights resource, Plan Forge runs show up in the same dashboards as Foundry agent runs.</li>
         <li><strong class="text-slate-200">Plan Forge generates code that deploys to Foundry</strong>: A Plan Forge plan can ship a feature that <em>is</em> a Foundry agent. <code>deploy.instructions.md</code> and the skill system include <code>/staging-deploy</code> and similar skills that target Foundry deployment paths.</li>
       </ul>
@@ -151,7 +151,7 @@ client = OpenAI(
         <li>Right for: defense, FedRAMP High, IL5/IL6, sovereign cloud customers</li>
       </ul>
 
-      <p>Plan Forge is structurally compatible with all three. <strong class="text-amber-400">Pattern 3 is the differentiator</strong> — Cursor cannot offer this (control plane in AWS), Sourcegraph Amp explicitly cannot (no self-host, no BYOK), GitHub Copilot Cloud Agent runs on GitHub-hosted infrastructure. <strong class="text-slate-200">For air-gapped requirements, Plan Forge is structurally the only viable option in the comparison set.</strong></p>
+      <p>Plan Forge is structurally compatible with all three. <strong class="text-amber-400">Pattern 3 is the differentiator</strong>, Cursor cannot offer this (control plane in AWS), Sourcegraph Amp explicitly cannot (no self-host, no BYOK), GitHub Copilot Cloud Agent runs on GitHub-hosted infrastructure. <strong class="text-slate-200">For air-gapped requirements, Plan Forge is structurally the only viable option in the comparison set.</strong></p>
 
       <h2 id="capacity-planning">Capacity planning</h2>
 

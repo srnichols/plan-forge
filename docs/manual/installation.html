@@ -25,7 +25,7 @@
 
     <main>
       <!-- Hero -->
-      <img src="assets/chapter-heroes/ch3-hero.jpg" alt="Plan Forge installation workshop — craftsperson setting up tools at a wooden workbench under the Plan Forge anvil emblem" class="chapter-hero" />
+      <img src="assets/chapter-heroes/ch3-hero.jpg" alt="Plan Forge installation workshop, craftsperson setting up tools at a wooden workbench under the Plan Forge anvil emblem" class="chapter-hero" />
 
       <div class="chapter-content">
 
@@ -54,14 +54,14 @@
           <summary class="flex items-center justify-between px-5 py-4 cursor-pointer list-none hover:bg-slate-800/30 transition-colors">
             <div class="flex items-center gap-3">
               <span class="px-2.5 py-0.5 rounded-full bg-amber-500/20 text-amber-400 text-xs font-bold border border-amber-500/30">⚡ EASY BUTTON</span>
-              <span class="font-semibold text-slate-100 text-sm">Skip the manual steps — paste one prompt and your AI installs everything</span>
+              <span class="font-semibold text-slate-100 text-sm">Skip the manual steps, paste one prompt and your AI installs everything</span>
             </div>
             <svg class="w-4 h-4 text-slate-500 group-open:rotate-180 transition-transform shrink-0 ml-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
           </summary>
           <div class="px-5 pb-5 border-t border-amber-500/20 pt-4">
-            <p class="text-sm text-slate-400 mb-4">Open Copilot Chat (Agent Mode), Claude Code, or Cursor inside your project — paste this prompt. The AI reads <a href="https://github.com/srnichols/plan-forge/blob/master/AGENT-SETUP.md" target="_blank" rel="noopener">AGENT-SETUP.md</a>, detects your stack, runs setup, customizes the files, and validates. Zero manual steps.</p>
+            <p class="text-sm text-slate-400 mb-4">Open Copilot Chat (Agent Mode), Claude Code, or Cursor inside your project, paste this prompt. The AI reads <a href="https://github.com/srnichols/plan-forge/blob/master/AGENT-SETUP.md" target="_blank" rel="noopener">AGENT-SETUP.md</a>, detects your stack, runs setup, customizes the files, and validates. Zero manual steps.</p>
             <div class="cmd-block">
-              <div class="cmd-block-header"><span>Paste into any AI chat — Copilot, Claude, Cursor, Codex</span><button class="cmd-copy-btn">Copy</button></div>
+              <div class="cmd-block-header"><span>Paste into any AI chat, Copilot, Claude, Cursor, Codex</span><button class="cmd-copy-btn">Copy</button></div>
               <pre><code>Clone https://github.com/srnichols/plan-forge into a temporary directory. Read its AGENT-SETUP.md file completely and follow the instructions exactly:
 
 1. Scan THIS project's root directory and auto-detect the tech stack from marker files (*.csproj = dotnet, go.mod = go, package.json + tsconfig.json = typescript, pom.xml = java, pyproject.toml = python, *.bicep = azure-iac). If multiple stacks exist, combine them.
@@ -97,7 +97,7 @@
 
         <!-- ─── Option A ─── -->
         <h2 id="one-click">Option A: Clone &amp; Setup</h2>
-        <p>The fastest path — clone the repo and run the setup wizard:</p>
+        <p>The fastest path, clone the repo and run the setup wizard:</p>
 
         <div class="cmd-block mb-6">
           <div class="cmd-block-header"><span>Terminal</span></div>
@@ -113,14 +113,14 @@ cd my-project-plans
         <p>Clone the template and run the setup wizard:</p>
 
         <div class="cmd-block">
-          <div class="cmd-block-header"><span>Step 1 — Clone</span><button class="cmd-copy-btn">Copy</button></div>
+          <div class="cmd-block-header"><span>Step 1, Clone</span><button class="cmd-copy-btn">Copy</button></div>
           <pre><code>git clone https://github.com/srnichols/plan-forge.git my-project-plans
 cd my-project-plans</code></pre>
         </div>
 
         <div class="cmd-block">
-          <div class="cmd-block-header"><span>Step 2 — Run setup (PowerShell)</span><button class="cmd-copy-btn">Copy</button></div>
-          <pre><code># Interactive — the wizard asks which preset
+          <div class="cmd-block-header"><span>Step 2, Run setup (PowerShell)</span><button class="cmd-copy-btn">Copy</button></div>
+          <pre><code># Interactive, the wizard asks which preset
 .\setup.ps1
 
 # Or specify directly
@@ -128,7 +128,7 @@ cd my-project-plans</code></pre>
         </div>
 
         <div class="cmd-block">
-          <div class="cmd-block-header"><span>Step 2 — Run setup (Bash)</span><button class="cmd-copy-btn">Copy</button></div>
+          <div class="cmd-block-header"><span>Step 2, Run setup (Bash)</span><button class="cmd-copy-btn">Copy</button></div>
           <pre><code>chmod +x setup.sh
 ./setup.sh --preset typescript</code></pre>
         </div>
@@ -206,7 +206,7 @@ cd my-project-plans</code></pre>
         <div class="cmd-block">
           <div class="cmd-block-header"><span>Files created (dotnet preset example)</span></div>
           <pre><code>.github/
-├── instructions/     ~26 files  (architecture, security, testing, database, ... — 18 preset + 8 shared)
+├── instructions/     ~26 files  (architecture, security, testing, database, ..., 18 preset + 8 shared)
 ├── agents/           19 files  (6 stack-specific + 7 cross-stack + 5 pipeline + 1 audit-classifier)
 ├── prompts/         ~23 files  (15 preset + 8 shared pipeline: project-profile + step0–step6)
 ├── skills/           11 dirs   (varies by preset: dotnet 11, typescript 10)
@@ -222,12 +222,12 @@ pforge.ps1 / pforge.sh          (CLI scripts)</code></pre>
         </div>
 
         <div class="callout callout-info">
-          <strong>Note on hook names.</strong> Plan Forge ships lifecycle hooks named <code>PreDeploy</code>, <code>PreCommit</code>, <code>PreAgentHandoff</code>, and <code>PostSlice</code> (plus the <code>plan-forge.json</code> hook config). These are <em>not</em> the same as Claude Code's hook names (<code>SessionStart</code>, <code>PreToolUse</code>, etc.) — if you're coming from Claude Code, the trigger semantics differ. See <a href="../../.github/hooks/plan-forge.json"><code>.github/hooks/plan-forge.json</code></a> for the live configuration.
+          <strong>Note on hook names.</strong> Plan Forge ships lifecycle hooks named <code>PreDeploy</code>, <code>PreCommit</code>, <code>PreAgentHandoff</code>, and <code>PostSlice</code> (plus the <code>plan-forge.json</code> hook config). These are <em>not</em> the same as Claude Code's hook names (<code>SessionStart</code>, <code>PreToolUse</code>, etc.), if you're coming from Claude Code, the trigger semantics differ. See <a href="../../.github/hooks/plan-forge.json"><code>.github/hooks/plan-forge.json</code></a> for the live configuration.
         </div>
 
         <!-- ─── Verify with Smith ─── -->
         <h2 id="verify">Verify with <code>pforge smith</code></h2>
-        <p>The Smith inspects your forge — environment, VS Code config, setup health, version currency. Run it to confirm everything is green:</p>
+        <p>The Smith inspects your forge, environment, VS Code config, setup health, version currency. Run it to confirm everything is green:</p>
 
         <div class="cmd-block">
           <div class="cmd-block-header"><span>PowerShell</span><button class="cmd-copy-btn">Copy</button></div>
@@ -237,7 +237,7 @@ pforge.ps1 / pforge.sh          (CLI scripts)</code></pre>
         <div class="cmd-block">
           <div class="cmd-block-header"><span>Expected output</span></div>
           <pre><code>╔══════════════════════════════════════════════════════════════╗
-║       Plan Forge — The Smith                                 ║
+║       Plan Forge, The Smith                                 ║
 ╚══════════════════════════════════════════════════════════════╝
 
 Environment:
@@ -286,7 +286,7 @@ Setup Health:
             <tr><td><code>codex</code></td><td>Codex CLI</td><td><code>AGENTS.md</code> + skill scripts</td></tr>
             <tr><td><code>gemini</code></td><td>Gemini CLI</td><td><code>GEMINI.md</code> + <code>.gemini/commands/*.toml</code></td></tr>
             <tr><td><code>windsurf</code></td><td>Windsurf</td><td><code>.windsurfrules</code> + <code>.windsurf/rules/*.md</code></td></tr>
-            <tr><td><code>generic</code></td><td>Any AI tool</td><td><code>AI-ASSISTANT.md</code> — copy-paste guardrails</td></tr>
+            <tr><td><code>generic</code></td><td>Any AI tool</td><td><code>AI-ASSISTANT.md</code>, copy-paste guardrails</td></tr>
           </tbody>
         </table>
 
@@ -309,7 +309,7 @@ Setup Health:
 
         <div class="callout callout-info">
           <strong>Where does <code>pforge update</code> pull from?</strong>
-          By default (<code>auto</code>), it picks the newer of a local sibling clone at <code>../plan-forge</code> and the latest GitHub tag — so a stale master checkout won't drag you onto unreleased <code>-dev</code> bytes. See <a href="update-source.html">Appendix G: Update Source Modes</a> for the <code>github-tags</code> and <code>local-sibling</code> options and when to use them.
+          By default (<code>auto</code>), it picks the newer of a local sibling clone at <code>../plan-forge</code> and the latest GitHub tag, so a stale master checkout won't drag you onto unreleased <code>-dev</code> bytes. See <a href="update-source.html">Appendix G: Update Source Modes</a> for the <code>github-tags</code> and <code>local-sibling</code> options and when to use them.
         </div>
 
         <div class="callout callout-tip">

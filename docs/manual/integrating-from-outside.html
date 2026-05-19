@@ -27,26 +27,26 @@
       <!-- Hero -->
       <img src="assets/chapter-heroes/ch29-hero.jpg" alt="A massive bronze gateway in a stone wall opening from a misty exterior into a brightly-lit forge interior, with four glowing amber paths labeled MCP, CLI, REST, and SDK converging toward the threshold and pouring their light into the forge beyond" class="chapter-hero" />
       <div class="chapter-content">
-        <div class="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">Chapter 29 · Act V — Integrate</div>
+        <div class="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">Chapter 29 · Act V, Integrate</div>
         <h1>Integrating from Outside</h1>
-        <p class="text-lg text-slate-400 mb-8">MCP is the native transport for Copilot and similar agents — but it is not the only one. Plan Forge ships four orthogonal surfaces so any tool can drive the workshop: <strong>REST</strong> for HTTP-anything, <strong>SDK</strong> for Node.js callers, <strong>WebSocket hub</strong> for live event streams, and <strong>CLI</strong> for scripts and humans.</p>
+        <p class="text-lg text-slate-400 mb-8">MCP is the native transport for Copilot and similar agents, but it is not the only one. Plan Forge ships four orthogonal surfaces so any tool can drive the workshop: <strong>REST</strong> for HTTP-anything, <strong>SDK</strong> for Node.js callers, <strong>WebSocket hub</strong> for live event streams, and <strong>CLI</strong> for scripts and humans.</p>
 
         <div class="callout callout-info">
-          <strong>The big numbers.</strong> The integration surface is large by design — <!--c:tools-->90<!--/c--> MCP tools, 103 REST endpoints across 17+ domains, a 4-sub-path SDK (<code>pforge-sdk</code>, <code>/tools</code>, <code>/hallmark</code>, <code>/chunker</code>), and <!--c:cli-commands-->97<!--/c--> CLI commands. The same underlying handlers back every surface — pick the one that fits the caller, not the feature.
+          <strong>The big numbers.</strong> The integration surface is large by design, <!--c:tools-->90<!--/c--> MCP tools, 103 REST endpoints across 17+ domains, a 4-sub-path SDK (<code>pforge-sdk</code>, <code>/tools</code>, <code>/hallmark</code>, <code>/chunker</code>), and <!--c:cli-commands-->97<!--/c--> CLI commands. The same underlying handlers back every surface, pick the one that fits the caller, not the feature.
         </div>
 
         <!-- ─── The four surfaces ─── -->
         <h2 id="four-surfaces">The four surfaces, at a glance</h2>
 
-        <figure class="manual-figure" id="fig-29-1"><img src="assets/diagrams/integration-surfaces.svg" alt="Left-to-right integration surface map. Three clustered columns: Callers (Copilot/Agents, CI runners, Custom dashboards, Scripts/Humans), Surfaces (MCP Server over stdio plus websocket, REST API over HTTP/JSON, WebSocket Hub at /api/hub, CLI pforge), and Plan Forge Core (Tool handlers). Copilot routes through MCP to handlers, CI routes through REST to handlers, dashboards route through both REST and the WebSocket Hub to handlers, and scripts and humans route through the CLI to handlers — all four surfaces converging on the same shared handler set." class="diagram-img diagram-img-md my-4" /><figcaption class="manual-figcaption"><!--fignum--><span class="manual-fignum">Figure 29-1.</span><!--/fignum--> Integration surface map — MCP, REST, WebSocket Hub, and CLI all route to the same handlers.</figcaption></figure>
+        <figure class="manual-figure" id="fig-29-1"><img src="assets/diagrams/integration-surfaces.svg" alt="Left-to-right integration surface map. Three clustered columns: Callers (Copilot/Agents, CI runners, Custom dashboards, Scripts/Humans), Surfaces (MCP Server over stdio plus websocket, REST API over HTTP/JSON, WebSocket Hub at /api/hub, CLI pforge), and Plan Forge Core (Tool handlers). Copilot routes through MCP to handlers, CI routes through REST to handlers, dashboards route through both REST and the WebSocket Hub to handlers, and scripts and humans route through the CLI to handlers, all four surfaces converging on the same shared handler set." class="diagram-img diagram-img-md my-4" /><figcaption class="manual-figcaption"><!--fignum--><span class="manual-fignum">Figure 29-1.</span><!--/fignum--> Integration surface map, MCP, REST, WebSocket Hub, and CLI all route to the same handlers.</figcaption></figure>
 
-        <p>The same handler set lives behind all four surfaces. Adding a new tool means the team writes one handler — and it automatically becomes available as MCP tool, REST endpoint, CLI command, and SDK export. This is intentional: the integration surface should never be the bottleneck for a new capability.</p>
+        <p>The same handler set lives behind all four surfaces. Adding a new tool means the team writes one handler, and it automatically becomes available as MCP tool, REST endpoint, CLI command, and SDK export. This is intentional: the integration surface should never be the bottleneck for a new capability.</p>
 
-        <figure class="manual-figure" id="fig-29-2"><img src="assets/diagrams/surface-decision-tree.svg" alt="Surface decision tree with three sequential yes/no questions. Q1: Is the caller an AI agent already speaking MCP (Copilot, Claude, Cursor, Codex)? YES routes left to MCP — stdio, 90 tools, inherited trust, auto-discovered by .vscode/mcp.json. Q2 (on NO): Human in a terminal, cron job, or local shell script? YES routes left to CLI — pforge, 97 commands, PFORGE_API_TOKEN, examples include pforge digest, pforge run-plan, pforge fm-session. Q3 (on NO): Node.js or TypeScript caller wanting typed responses? YES routes right to SDK — pforge-sdk, 4 sub-paths, createClient plus typed tools. NO defaults to REST — 103 endpoints, OpenAPI 3, Bearer auth, cross-process; ideal for CI, dashboards, mobile, non-Node clients, and webhooks. A separate purple block shows the WebSocket hub at /api/hub providing 60+ event types for observation only, subscribed alongside REST for live progress streams. Footer hint: all four surfaces share one handler set, so pick the surface that matches the caller, not the capability." class="diagram-img diagram-img-md my-4" /><figcaption class="manual-figcaption"><!--fignum--><span class="manual-fignum">Figure 29-2.</span><!--/fignum--> <!--cap:auto-->Surface decision tree — pick by caller, not by capability<!--/cap--></figcaption></figure>
+        <figure class="manual-figure" id="fig-29-2"><img src="assets/diagrams/surface-decision-tree.svg" alt="Surface decision tree with three sequential yes/no questions. Q1: Is the caller an AI agent already speaking MCP (Copilot, Claude, Cursor, Codex)? YES routes left to MCP, stdio, 90 tools, inherited trust, auto-discovered by .vscode/mcp.json. Q2 (on NO): Human in a terminal, cron job, or local shell script? YES routes left to CLI, pforge, 97 commands, PFORGE_API_TOKEN, examples include pforge digest, pforge run-plan, pforge fm-session. Q3 (on NO): Node.js or TypeScript caller wanting typed responses? YES routes right to SDK, pforge-sdk, 4 sub-paths, createClient plus typed tools. NO defaults to REST, 103 endpoints, OpenAPI 3, Bearer auth, cross-process; ideal for CI, dashboards, mobile, non-Node clients, and webhooks. A separate purple block shows the WebSocket hub at /api/hub providing 60+ event types for observation only, subscribed alongside REST for live progress streams. Footer hint: all four surfaces share one handler set, so pick the surface that matches the caller, not the capability." class="diagram-img diagram-img-md my-4" /><figcaption class="manual-figcaption"><!--fignum--><span class="manual-fignum">Figure 29-2.</span><!--/fignum--> <!--cap:auto-->Surface decision tree, pick by caller, not by capability<!--/cap--></figcaption></figure>
 
         <!-- ─── REST API ─── -->
         <h2 id="rest">REST API</h2>
-        <p>The REST surface is the right choice for <strong>any caller that already speaks HTTP</strong> — GitHub Actions, GitLab CI, a Python script, a curl one-liner, a Postman collection. It is also the surface the dashboard itself uses.</p>
+        <p>The REST surface is the right choice for <strong>any caller that already speaks HTTP</strong>, GitHub Actions, GitLab CI, a Python script, a curl one-liner, a Postman collection. It is also the surface the dashboard itself uses.</p>
 
         <h3 id="rest-base">Base URL and auth</h3>
 
@@ -130,7 +130,7 @@ curl -H "Authorization: Bearer $PFORGE_API_TOKEN" \
 
         <!-- ─── WebSocket hub ─── -->
         <h2 id="websocket">WebSocket hub — <code>/api/hub</code></h2>
-        <p>The WebSocket hub is a <strong>broadcast channel</strong> that emits every event the orchestrator generates — plan starts, slice transitions, gate results, cost samples, bug filings, drift updates. It is the substrate the dashboard's live tiles render off.</p>
+        <p>The WebSocket hub is a <strong>broadcast channel</strong> that emits every event the orchestrator generates, plan starts, slice transitions, gate results, cost samples, bug filings, drift updates. It is the substrate the dashboard's live tiles render off.</p>
 
         <h3 id="ws-connect">Connecting</h3>
 
@@ -181,19 +181,19 @@ ws.on("message", (raw) =&gt; {
             <tbody class="text-slate-300">
               <tr class="border-b border-slate-800/40">
                 <td class="py-2 px-3"><code>pforge-sdk</code></td>
-                <td class="py-2 px-3">Core client — <code>createClient({ baseUrl, token })</code>, all REST methods, WebSocket subscriber</td>
+                <td class="py-2 px-3">Core client, <code>createClient({ baseUrl, token })</code>, all REST methods, WebSocket subscriber</td>
               </tr>
               <tr class="border-b border-slate-800/40">
                 <td class="py-2 px-3"><code>pforge-sdk/tools</code></td>
-                <td class="py-2 px-3">Typed wrappers for every MCP tool — call any <code>forge_*</code> tool from Node.js</td>
+                <td class="py-2 px-3">Typed wrappers for every MCP tool, call any <code>forge_*</code> tool from Node.js</td>
               </tr>
               <tr class="border-b border-slate-800/40">
                 <td class="py-2 px-3"><code>pforge-sdk/hallmark</code></td>
-                <td class="py-2 px-3">Hallmark stamp helpers — sign / verify generated artifacts</td>
+                <td class="py-2 px-3">Hallmark stamp helpers, sign / verify generated artifacts</td>
               </tr>
               <tr>
                 <td class="py-2 px-3"><code>pforge-sdk/chunker</code></td>
-                <td class="py-2 px-3">Plan-chunker — split long plans into Scope-Contract-aligned slices for execution</td>
+                <td class="py-2 px-3">Plan-chunker, split long plans into Scope-Contract-aligned slices for execution</td>
               </tr>
             </tbody>
           </table>
@@ -209,7 +209,7 @@ const client = createClient({
   token:   process.env.PFORGE_API_TOKEN
 });
 
-// Estimate before running (cost discipline — never hand-compute)
+// Estimate before running (cost discipline, never hand-compute)
 const est = await forgeEstimateQuorum(client, { plan: "docs/plans/Phase-31-PLAN.md" });
 console.log("Cheapest mode:", est.recommendation);
 
@@ -300,7 +300,7 @@ pforge cost-report --since=30d --json | jq '.byModel'</code></pre>
         <ul>
           <li><strong>Bearer tokens</strong> in the <code>Authorization</code> header (REST + WebSocket) or as <code>PFORGE_API_TOKEN</code> env var (CLI + SDK).</li>
           <li>Tokens are issued via <code>pforge auth issue [--scope=…]</code> and stored in <code>.forge/secrets.json</code> (gitignored).</li>
-          <li>The MCP surface authenticates via the transport itself — stdio inherits the parent process trust; WebSocket MCP uses the same bearer token model.</li>
+          <li>The MCP surface authenticates via the transport itself, stdio inherits the parent process trust; WebSocket MCP uses the same bearer token model.</li>
           <li>Outbound API keys (Anthropic, OpenAI, xAI, Azure) live in <code>.forge/secrets.json</code> under <code>providers.*</code> or in environment variables. <strong>Never</strong> in code, never in committed config.</li>
         </ul>
 

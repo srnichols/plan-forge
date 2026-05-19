@@ -63,7 +63,7 @@
             <li>Verify: <code>pforge smith</code> returns clean</li>
           </ul>
         </li>
-        <li><strong class="text-slate-200">Configure</strong> (1–2 hr) — see <a href="agent-factory-recipe.html" class="text-amber-400 hover:underline">Appendix L — Agent Factory Recipe</a> Steps 2–5
+        <li><strong class="text-slate-200">Configure</strong> (1–2 hr), see <a href="agent-factory-recipe.html" class="text-amber-400 hover:underline">Appendix L — Agent Factory Recipe</a> Steps 2–5
           <ul>
             <li>Run <code>project-profile.prompt.md</code> once for the pilot repo</li>
             <li>Run <code>project-principles.prompt.md</code> once</li>
@@ -94,19 +94,19 @@
         <thead><tr><th>Signal</th><th>Pass</th><th>Fail</th></tr></thead>
         <tbody>
           <tr><td>First plan ran end-to-end</td><td>Yes</td><td>Stop, debug</td></tr>
-          <tr><td><code>pforge diff</code> clean post-merge</td><td>Yes (drift score ≥ 80)</td><td>Plan was too vague — re-harden</td></tr>
-          <tr><td>Cost within 50% of estimate</td><td>Yes</td><td>Either pricing data is stale or workload differs from typical — investigate</td></tr>
-          <tr><td>Pilot team's reaction</td><td>"Useful, with caveats"</td><td>"Confusing" or "in the way" — review configuration</td></tr>
+          <tr><td><code>pforge diff</code> clean post-merge</td><td>Yes (drift score ≥ 80)</td><td>Plan was too vague, re-harden</td></tr>
+          <tr><td>Cost within 50% of estimate</td><td>Yes</td><td>Either pricing data is stale or workload differs from typical, investigate</td></tr>
+          <tr><td>Pilot team's reaction</td><td>"Useful, with caveats"</td><td>"Confusing" or "in the way", review configuration</td></tr>
         </tbody>
       </table>
 
       <h3 id="day-1-anti-patterns">Anti-patterns</h3>
 
       <ul>
-        <li><strong class="text-rose-400">Picking a toy feature</strong> — lessons don't scale to real work</li>
-        <li><strong class="text-rose-400">Skipping <code>--assisted</code> first time</strong> — first plan should be observable</li>
-        <li><strong class="text-rose-400">Running multiple plans in parallel before lessons land</strong> — waste of cost</li>
-        <li><strong class="text-rose-400">Skipping the baseline measurement</strong> — you'll have nothing to compare against in Week 4</li>
+        <li><strong class="text-rose-400">Picking a toy feature</strong>, lessons don't scale to real work</li>
+        <li><strong class="text-rose-400">Skipping <code>--assisted</code> first time</strong>, first plan should be observable</li>
+        <li><strong class="text-rose-400">Running multiple plans in parallel before lessons land</strong>, waste of cost</li>
+        <li><strong class="text-rose-400">Skipping the baseline measurement</strong>, you'll have nothing to compare against in Week 4</li>
       </ul>
 
       <h2 id="week-1-pilot-runs-n-plans">Week 1 — Pilot runs N plans</h2>
@@ -121,7 +121,7 @@
         <li><strong class="text-slate-200">End of week</strong>: dedicated 1-hour retro
           <ul>
             <li>What worked</li>
-            <li>What didn't (be specific — instruction file, prompt, agent persona, gate, cost)</li>
+            <li>What didn't (be specific, instruction file, prompt, agent persona, gate, cost)</li>
             <li>What changed in <code>.github/instructions/*</code> as a result</li>
           </ul>
         </li>
@@ -132,19 +132,19 @@
       <table class="manual-table">
         <thead><tr><th>Signal</th><th>Pass</th><th>Fail</th></tr></thead>
         <tbody>
-          <tr><td>≥ 5 plans completed</td><td>Yes</td><td>Slow uptake — investigate barriers (often: fear of cost, unclear when to use vs not)</td></tr>
+          <tr><td>≥ 5 plans completed</td><td>Yes</td><td>Slow uptake, investigate barriers (often: fear of cost, unclear when to use vs not)</td></tr>
           <tr><td>Drift score average ≥ 70</td><td>Yes</td><td>Plan-hardener prompt needs project-specific tuning</td></tr>
-          <tr><td>Instruction files updated ≥ 3 times</td><td>Yes</td><td>Team isn't iterating — that's the value loop, must enable it</td></tr>
-          <tr><td>Cost-per-PR trending down or stable</td><td>Yes</td><td>Cost going up plan-over-plan suggests waste — investigate slice sizing</td></tr>
+          <tr><td>Instruction files updated ≥ 3 times</td><td>Yes</td><td>Team isn't iterating, that's the value loop, must enable it</td></tr>
+          <tr><td>Cost-per-PR trending down or stable</td><td>Yes</td><td>Cost going up plan-over-plan suggests waste, investigate slice sizing</td></tr>
         </tbody>
       </table>
 
       <h3 id="week-1-anti-patterns">Anti-patterns</h3>
 
       <ul>
-        <li><strong class="text-rose-400">Devs using Plan Forge for everything</strong> — it's wrong for trivial bug fixes; right for plan-able work</li>
-        <li><strong class="text-rose-400">No iteration on instructions</strong> — the value compounds via instructions; if they're untouched, the team isn't learning</li>
-        <li><strong class="text-rose-400">Hidden cost surprises</strong> — surface costs daily, not weekly, in the first month</li>
+        <li><strong class="text-rose-400">Devs using Plan Forge for everything</strong>, it's wrong for trivial bug fixes; right for plan-able work</li>
+        <li><strong class="text-rose-400">No iteration on instructions</strong>, the value compounds via instructions; if they're untouched, the team isn't learning</li>
+        <li><strong class="text-rose-400">Hidden cost surprises</strong>, surface costs daily, not weekly, in the first month</li>
       </ul>
 
       <h2 id="week-4-pilot-graduation">Week 4 — Pilot graduation, second team onboarding</h2>
@@ -185,9 +185,9 @@
       <table class="manual-table">
         <thead><tr><th>Signal</th><th>Pass</th><th>Fail</th></tr></thead>
         <tbody>
-          <tr><td>Pilot team self-sufficient</td><td>Yes</td><td>Means platform team is still bottleneck — extract patterns into docs</td></tr>
+          <tr><td>Pilot team self-sufficient</td><td>Yes</td><td>Means platform team is still bottleneck, extract patterns into docs</td></tr>
           <tr><td>Team 2 ran first plan within 1 day of onboarding</td><td>Yes</td><td>Onboarding pattern needs simplification</td></tr>
-          <tr><td>Multi-team dashboards reflect real data</td><td>Yes</td><td>OTel pipeline issue — fix before adding more teams</td></tr>
+          <tr><td>Multi-team dashboards reflect real data</td><td>Yes</td><td>OTel pipeline issue, fix before adding more teams</td></tr>
           <tr><td>Cost per merged PR vs. baseline</td><td>Trending down or stable</td><td>If up, investigate model routing and slice sizing</td></tr>
         </tbody>
       </table>
@@ -195,9 +195,9 @@
       <h3 id="week-4-anti-patterns">Anti-patterns</h3>
 
       <ul>
-        <li><strong class="text-rose-400">Onboarding team 2 before team 1 is ready to teach</strong> — copy-paste failures multiply</li>
-        <li><strong class="text-rose-400">Letting two teams diverge on instruction files</strong> — common ground is what makes the fleet feel like a fleet</li>
-        <li><strong class="text-rose-400">Platform team trying to operate every team's Plan Forge instance</strong> — doesn't scale; build the office-hours model early</li>
+        <li><strong class="text-rose-400">Onboarding team 2 before team 1 is ready to teach</strong>, copy-paste failures multiply</li>
+        <li><strong class="text-rose-400">Letting two teams diverge on instruction files</strong>, common ground is what makes the fleet feel like a fleet</li>
+        <li><strong class="text-rose-400">Platform team trying to operate every team's Plan Forge instance</strong>, doesn't scale; build the office-hours model early</li>
       </ul>
 
       <h2 id="week-8-fleet-patterns">Week 8 — 4 teams active, fleet patterns formalized</h2>
@@ -246,18 +246,18 @@
         <thead><tr><th>Signal</th><th>Pass</th><th>Fail</th></tr></thead>
         <tbody>
           <tr><td>4 teams active and self-sufficient</td><td>Yes</td><td>Onboarding pattern still has friction; investigate</td></tr>
-          <tr><td>Shared MCP server reduces per-team config drift</td><td>Yes</td><td>Adoption needs nudging — show concrete value</td></tr>
+          <tr><td>Shared MCP server reduces per-team config drift</td><td>Yes</td><td>Adoption needs nudging, show concrete value</td></tr>
           <tr><td>Reviewer-agent comments acted on ≥ 30% of the time</td><td>Yes</td><td>Personas need tuning, or routing is wrong</td></tr>
-          <tr><td>Cost guardrails preventing runaway</td><td>Yes</td><td>Budgets ineffective — likely too high or unenforced</td></tr>
+          <tr><td>Cost guardrails preventing runaway</td><td>Yes</td><td>Budgets ineffective, likely too high or unenforced</td></tr>
         </tbody>
       </table>
 
       <h3 id="week-8-anti-patterns">Anti-patterns</h3>
 
       <ul>
-        <li><strong class="text-rose-400">Adding team 5 before teams 3 and 4 are stable</strong> — compounds confusion</li>
-        <li><strong class="text-rose-400">MCP server becomes a kitchen sink</strong> — keep it curated; resist "add every API"</li>
-        <li><strong class="text-rose-400">Reviewer agents never tuned</strong> — they degrade over time as the codebase evolves</li>
+        <li><strong class="text-rose-400">Adding team 5 before teams 3 and 4 are stable</strong>, compounds confusion</li>
+        <li><strong class="text-rose-400">MCP server becomes a kitchen sink</strong>, keep it curated; resist "add every API"</li>
+        <li><strong class="text-rose-400">Reviewer agents never tuned</strong>, they degrade over time as the codebase evolves</li>
       </ul>
 
       <h2 id="week-12-full-fleet">Week 12 — Full fleet, first quarterly review</h2>
@@ -298,19 +298,19 @@
       <table class="manual-table">
         <thead><tr><th>Signal</th><th>Pass</th><th>Fail</th></tr></thead>
         <tbody>
-          <tr><td>All 5 teams operating without daily platform support</td><td>Yes</td><td>Fleet is too dependent — invest in self-service</td></tr>
-          <tr><td>Cost per merged PR is below baseline</td><td>Yes</td><td>Diminishing returns — investigate where time is going</td></tr>
-          <tr><td>Quarterly KPIs trending right direction</td><td>Yes</td><td>Hypothesis was wrong somewhere — adjust</td></tr>
-          <tr><td>Engineering leadership confident in scale-out to next 5 teams</td><td>Yes</td><td>Trust gap — surface what's missing</td></tr>
+          <tr><td>All 5 teams operating without daily platform support</td><td>Yes</td><td>Fleet is too dependent, invest in self-service</td></tr>
+          <tr><td>Cost per merged PR is below baseline</td><td>Yes</td><td>Diminishing returns, investigate where time is going</td></tr>
+          <tr><td>Quarterly KPIs trending right direction</td><td>Yes</td><td>Hypothesis was wrong somewhere, adjust</td></tr>
+          <tr><td>Engineering leadership confident in scale-out to next 5 teams</td><td>Yes</td><td>Trust gap, surface what's missing</td></tr>
         </tbody>
       </table>
 
       <h3 id="week-12-anti-patterns">Anti-patterns</h3>
 
       <ul>
-        <li><strong class="text-rose-400">Treating quarterly review as a status update</strong> — it's a planning session, not a report</li>
-        <li><strong class="text-rose-400">Skipping eval flywheel</strong> — trajectories are an asset; ignored, they're just storage</li>
-        <li><strong class="text-rose-400">No documented operations model</strong> — Plan Forge becomes one person's hobby instead of a fleet capability</li>
+        <li><strong class="text-rose-400">Treating quarterly review as a status update</strong>, it's a planning session, not a report</li>
+        <li><strong class="text-rose-400">Skipping eval flywheel</strong>, trajectories are an asset; ignored, they're just storage</li>
+        <li><strong class="text-rose-400">No documented operations model</strong>, Plan Forge becomes one person's hobby instead of a fleet capability</li>
       </ul>
 
       <h2 id="kpis">KPIs</h2>
@@ -344,7 +344,7 @@
 
       <h2 id="cost-attribution">Cost attribution</h2>
 
-      <p>Today, Plan Forge tracks cost per plan, per slice, per model. <strong class="text-slate-200">Per-engineer attribution is on the roadmap</strong> (planned) — until then, the workaround is:</p>
+      <p>Today, Plan Forge tracks cost per plan, per slice, per model. <strong class="text-slate-200">Per-engineer attribution is on the roadmap</strong> (planned), until then, the workaround is:</p>
 
       <ul>
         <li>Each developer runs Plan Forge under their own user account</li>

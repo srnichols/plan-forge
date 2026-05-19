@@ -31,7 +31,7 @@
         <p class="text-lg text-slate-400 mb-8">9 purpose-built sub-tabs for platform-wide configuration. Part of <a href="dashboard.html">Chapter 7: The Dashboard</a>.</p>
 
         <div class="callout callout-info mb-6">
-          <strong>Part of Chapter 7</strong> — This page covers the <strong>Settings</strong> top-level group. See <a href="dashboard.html">The Dashboard</a> for the Forge group tabs (Progress, Runs, Cost, Actions, Replay, etc.), <a href="dashboard-liveguard.html">Dashboard — LiveGuard Tabs</a>, and <a href="dashboard-forge-master.html">Dashboard — Forge-Master Studio</a>.
+          <strong>Part of Chapter 7</strong>, This page covers the <strong>Settings</strong> top-level group. See <a href="dashboard.html">The Dashboard</a> for the Forge group tabs (Progress, Runs, Cost, Actions, Replay, etc.), <a href="dashboard-liveguard.html">Dashboard — LiveGuard Tabs</a>, and <a href="dashboard-forge-master.html">Dashboard — Forge-Master Studio</a>.
         </div>
 
         <!-- ─── Settings Group ─── -->
@@ -45,22 +45,22 @@
           <div class="p-3 bg-slate-900/40 border border-purple-500/20 rounded-lg"><strong class="text-purple-400">⚙ Settings</strong> <span class="text-slate-500 text-xs">(this section)</span><br><span class="text-xs text-slate-400">9 sub-tabs covering platform-wide configuration</span></div>
         </div>
 
-        <p>Click <strong>Settings</strong> in the top nav and you'll see 9 purple-accented sub-tabs. Every tab persists changes to its specific config file via the dashboard's safe-write path (sanitizer drops unknown fields, snaps numbers to safe bounds — no UI bug can corrupt your config).</p>
+        <p>Click <strong>Settings</strong> in the top nav and you'll see 9 purple-accented sub-tabs. Every tab persists changes to its specific config file via the dashboard's safe-write path (sanitizer drops unknown fields, snaps numbers to safe bounds, no UI bug can corrupt your config).</p>
 
         <h3 id="settings-general">⚙ General</h3>
         <p>Project identity: preset, template version, and agent enablement.</p>
         <ul>
-          <li><strong>Preset</strong> — the stack profile applied during setup (dotnet, typescript, python, etc.). Read-only on this tab; change via <code>setup.ps1 -Preset &lt;name&gt;</code>.</li>
-          <li><strong>Template Version</strong> — current framework version applied to your project files. <code>pforge update</code> bumps this.</li>
-          <li><strong>Agents</strong> — toggle which reviewer agents are active. Persists to <code>.forge.json#agents</code>.</li>
+          <li><strong>Preset</strong>, the stack profile applied during setup (dotnet, typescript, python, etc.). Read-only on this tab; change via <code>setup.ps1 -Preset &lt;name&gt;</code>.</li>
+          <li><strong>Template Version</strong>, current framework version applied to your project files. <code>pforge update</code> bumps this.</li>
+          <li><strong>Agents</strong>, toggle which reviewer agents are active. Persists to <code>.forge.json#agents</code>.</li>
         </ul>
         <img src="../assets/dashboard/settings-general.png" alt="Settings → General sub-tab showing project identity fields (preset, template version, agents) with Save Configuration and Reload buttons" class="rounded-xl border border-slate-700/40 mb-6" loading="lazy" />
 
         <h3 id="settings-models">⚛ Models</h3>
         <p>Model routing: default execution model and image generation model selection.</p>
         <ul>
-          <li><strong>Model Routing — Default</strong> — <code>auto</code> (orchestrator picks per slice), or pin to a specific model</li>
-          <li><strong>Image Generation Model</strong> — Grok Aurora (<code>XAI_API_KEY</code>) or DALL-E (<code>OPENAI_API_KEY</code>) for diagrams and chapter heroes via <code>forge_generate_image</code></li>
+          <li><strong>Model Routing: Default</strong>, <code>auto</code> (orchestrator picks per slice), or pin to a specific model</li>
+          <li><strong>Image Generation Model</strong>, Grok Aurora (<code>XAI_API_KEY</code>) or DALL-E (<code>OPENAI_API_KEY</code>) for diagrams and chapter heroes via <code>forge_generate_image</code></li>
         </ul>
         <img src="../assets/dashboard/settings-models.png" alt="Settings → Models sub-tab with Model Routing dropdown set to auto and Image Generation Model dropdown" class="rounded-xl border border-slate-700/40 mb-6" loading="lazy" />
 
@@ -71,11 +71,11 @@
         <h3 id="settings-api-keys">⚿ API Keys</h3>
         <p>Stores API keys in <code>.forge/secrets.json</code> (gitignored). Same precedence as env vars: anything set here is picked up by the orchestrator without restarting the server.</p>
         <ul>
-          <li><code>XAI_API_KEY</code> — Grok models + Aurora image generation</li>
-          <li><code>OPENAI_API_KEY</code> — GPT models direct + DALL-E (also enables OpenAI fallback for <code>COPILOT_SERVABLE</code> models)</li>
-          <li><code>ANTHROPIC_API_KEY</code> — Claude direct (Forge-Master + workers without <code>claude</code> CLI)</li>
+          <li><code>XAI_API_KEY</code>, Grok models + Aurora image generation</li>
+          <li><code>OPENAI_API_KEY</code>, GPT models direct + DALL-E (also enables OpenAI fallback for <code>COPILOT_SERVABLE</code> models)</li>
+          <li><code>ANTHROPIC_API_KEY</code>, Claude direct (Forge-Master + workers without <code>claude</code> CLI)</li>
         </ul>
-        <p>Values are masked on display. The "Test" button against each key validates by calling the provider's lightweight endpoint — never the full reasoning model.</p>
+        <p>Values are masked on display. The "Test" button against each key validates by calling the provider's lightweight endpoint, never the full reasoning model.</p>
         <img src="../assets/dashboard/settings-api-keys.png" alt="Settings → API Keys sub-tab showing masked input fields for XAI, OpenAI, Anthropic keys with per-row Test buttons" class="rounded-xl border border-slate-700/40 mb-6" loading="lazy" />
 
         <h3 id="settings-updates">↓ Updates</h3>
@@ -90,11 +90,11 @@
         <h3 id="settings-crucible">🔥 Crucible</h3>
         <p>Idea-smelting pipeline configuration. Persists to <code>.forge/crucible/config.json</code>.</p>
         <ul>
-          <li><strong>Default Lane</strong> — <code>tweak</code> (4q) / <code>feature</code> (7q) / <code>full</code> (~12q). Lane controls interview length.</li>
-          <li><strong>Self-Referral Depth</strong> — max child smelts a parent can spawn (0–3, default 1)</li>
-          <li><strong>Auto-approve agent-submitted smelts</strong> — when <code>source: agent</code>, finalize without human approval (off by default)</li>
-          <li><strong>Default-Source Weights</strong> — Memory / Principles / Plans (sum to 100). Server normalizes if you don't.</li>
-          <li><strong>Stale Defaults Warning</strong> — hours after which Principles/profile changes flag <code>STALE_PRINCIPLES</code>/<code>STALE_PROFILE</code> in the interview</li>
+          <li><strong>Default Lane</strong>, <code>tweak</code> (4q) / <code>feature</code> (7q) / <code>full</code> (~12q). Lane controls interview length.</li>
+          <li><strong>Self-Referral Depth</strong>, max child smelts a parent can spawn (0–3, default 1)</li>
+          <li><strong>Auto-approve agent-submitted smelts</strong>, when <code>source: agent</code>, finalize without human approval (off by default)</li>
+          <li><strong>Default-Source Weights</strong>, Memory / Principles / Plans (sum to 100). Server normalizes if you don't.</li>
+          <li><strong>Stale Defaults Warning</strong>, hours after which Principles/profile changes flag <code>STALE_PRINCIPLES</code>/<code>STALE_PROFILE</code> in the interview</li>
         </ul>
         <img src="../assets/dashboard/settings-crucible.png" alt="Settings → Crucible sub-tab showing Default Lane dropdown, Self-Referral Depth, Auto-approve toggle, Default-Source Weights, and Stale Defaults Warning fields" class="rounded-xl border border-slate-700/40 mb-6" loading="lazy" />
 
@@ -102,7 +102,7 @@
         <p>Forge-Master reasoning configuration: <code>reasoningModel</code>, <code>routerModel</code>, <code>quorumAdvisory</code>, <code>embeddingFallback</code>, GitHub Models zero-key path. See <a href="forge-master.html#config">Forge-Master → Configuration</a> for every field.</p>
 
         <div class="callout callout-tip">
-          <strong>Audit-Loop activation</strong> isn't on a Settings tab — it lives in <code>.forge.json#audit.mode</code> (<code>off | auto | always</code>) and is toggled via the <a href="audit-loop.html">Audit Loop chapter</a>. Drain results stream into the <strong>Tempering</strong> tab in the Forge group.
+          <strong>Audit-Loop activation</strong> isn't on a Settings tab, it lives in <code>.forge.json#audit.mode</code> (<code>off | auto | always</code>) and is toggled via the <a href="audit-loop.html">Audit Loop chapter</a>. Drain results stream into the <strong>Tempering</strong> tab in the Forge group.
         </div>
 
         <div id="chapter-prev-next" class="chapter-nav"></div>

@@ -30,10 +30,10 @@
     <main>
       <div class="chapter-content">
 
-        <div class="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">Integrations · Act I — Smelt</div>
+        <div class="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">Integrations · Act I, Smelt</div>
         <h1>Spec Kit Interop</h1>
-        <p class="text-lg text-slate-400 mb-2">Plan Forge's native import path for <a href="https://github.com/github/spec-kit" class="text-amber-400 hover:underline">Spec Kit</a> artifacts — map <code>spec.md</code>, <code>plan.md</code>, <code>tasks.md</code>, and <code>constitution.md</code> directly into a Crucible smelt with zero re-specifying.</p>
-        <p class="text-sm text-slate-500 italic mb-8">Spec Kit is an <strong>alternative entry path into Crucible</strong>. Read this chapter if your organization already writes formal specifications and you'd rather import them than answer the interactive interview. If you don't use Spec Kit, you can safely skip the whole chapter — nothing else in the manual depends on it.</p>
+        <p class="text-lg text-slate-400 mb-2">Plan Forge's native import path for <a href="https://github.com/github/spec-kit" class="text-amber-400 hover:underline">Spec Kit</a> artifacts, map <code>spec.md</code>, <code>plan.md</code>, <code>tasks.md</code>, and <code>constitution.md</code> directly into a Crucible smelt with zero re-specifying.</p>
+        <p class="text-sm text-slate-500 italic mb-8">Spec Kit is an <strong>alternative entry path into Crucible</strong>. Read this chapter if your organization already writes formal specifications and you'd rather import them than answer the interactive interview. If you don't use Spec Kit, you can safely skip the whole chapter, nothing else in the manual depends on it.</p>
 
         <div class="callout callout-info">
           <strong>New to the Spec Kit + Plan Forge partnership?</strong> Read the blog post first: <a href="../../blog/spec-kit-plan-forge.html" class="text-amber-400 hover:underline">Spec Kit + Plan Forge: Write the Spec, Enforce the Build</a>. This chapter is the operational reference for the import mechanism described there.
@@ -45,7 +45,7 @@
 
         <figure class="manual-figure"><img src="assets/diagrams/speckit-import-field-mapping.svg" alt="Spec Kit Interop field-mapping diagram: four source files (spec.md, plan.md, tasks.md, constitution.md) feed into the SpecKit Import Field Mapper, which maps each field to its corresponding Crucible Smelt field. PROJECT-PRINCIPLES applies as a policy overlay. Missing required fields block the import with SPECKIT_IMPORT_MISSING_FIELD error." class="diagram-img diagram-img-md my-4" /><figcaption class="manual-figcaption"><!--cap:auto-->Spec Kit Interop field-mapping diagram<!--/cap--></figcaption></figure>
 
-        <p>The diagram above shows the full mapping surface. Source fields on the left feed into the field mapper (center), which outputs a populated Crucible smelt (right). <code>PROJECT-PRINCIPLES.md</code>, if present, is applied as a policy overlay — tech-stack constraints and forbidden patterns are enforced pre-smelt so they don't need to be re-entered during hardening.</p>
+        <p>The diagram above shows the full mapping surface. Source fields on the left feed into the field mapper (center), which outputs a populated Crucible smelt (right). <code>PROJECT-PRINCIPLES.md</code>, if present, is applied as a policy overlay, tech-stack constraints and forbidden patterns are enforced pre-smelt so they don't need to be re-entered during hardening.</p>
 
         <h3>Source files</h3>
 
@@ -72,7 +72,7 @@
             <tr>
               <td><code>constitution.md</code></td>
               <td><code>/speckit.constitution</code></td>
-              <td>Agent rules, commitments, and prohibitions. Imports as <code>agent-constraints</code> in the smelt — directly equivalent to Plan Forge's <code>PROJECT-PRINCIPLES.md</code>.</td>
+              <td>Agent rules, commitments, and prohibitions. Imports as <code>agent-constraints</code> in the smelt, directly equivalent to Plan Forge's <code>PROJECT-PRINCIPLES.md</code>.</td>
             </tr>
           </tbody>
         </table>
@@ -135,7 +135,7 @@ pforge crucible import --from=spec-kit --dry-run</code></pre>
 
         <h3>Option 3 — Auto-detection in <code>pforge run-plan</code></h3>
 
-        <p>When you run a plan that was generated from a Crucible smelt, the orchestrator checks whether the smelt originated from a Spec Kit import. If so, LiveGuard's PostSlice hook automatically compares each completed slice against the original <code>spec.md</code> acceptance criteria — providing drift detection that goes back to the original specification, not just the hardened plan.</p>
+        <p>When you run a plan that was generated from a Crucible smelt, the orchestrator checks whether the smelt originated from a Spec Kit import. If so, LiveGuard's PostSlice hook automatically compares each completed slice against the original <code>spec.md</code> acceptance criteria, providing drift detection that goes back to the original specification, not just the hardened plan.</p>
 
         <pre><code>pforge run-plan docs/plans/my-feature-PLAN.md</code></pre>
 
@@ -144,11 +144,11 @@ pforge crucible import --from=spec-kit --dry-run</code></pre>
         <h3>Step-by-step walkthrough</h3>
 
         <ol>
-          <li><strong>Generate Spec Kit artifacts</strong> — run <code>/speckit.specify</code>, <code>/speckit.plan</code>, <code>/speckit.tasks</code>, and <code>/speckit.constitution</code> in your Spec Kit–enabled IDE. This produces <code>spec.md</code>, <code>plan.md</code>, <code>tasks.md</code>, and <code>constitution.md</code>.</li>
-          <li><strong>Run the import</strong> — from the Plan Forge project root: <code>pforge crucible import --from=spec-kit</code>. Confirm the field mapping report looks correct.</li>
-          <li><strong>Review the generated smelt</strong> — the Crucible smelt is written to your project's smelt directory. Open it in the dashboard or inspect it with <code>pforge crucible status</code>. Adjust any field overrides before hardening.</li>
-          <li><strong>Harden the plan</strong> — run Step 2 (Plan Hardener) against the smelt using the <code>/step2-harden-plan</code> prompt in Copilot Chat, or invoke <code>forge_crucible_harden</code> from any MCP client. This produces the execution-ready plan file with validation gates.</li>
-          <li><strong>Execute</strong> — <code>pforge run-plan docs/plans/my-feature-PLAN.md</code>. Spec Kit provenance in the smelt metadata activates LiveGuard drift checks against <code>spec.md</code> criteria throughout the run.</li>
+          <li><strong>Generate Spec Kit artifacts</strong>, run <code>/speckit.specify</code>, <code>/speckit.plan</code>, <code>/speckit.tasks</code>, and <code>/speckit.constitution</code> in your Spec Kit–enabled IDE. This produces <code>spec.md</code>, <code>plan.md</code>, <code>tasks.md</code>, and <code>constitution.md</code>.</li>
+          <li><strong>Run the import</strong>, from the Plan Forge project root: <code>pforge crucible import --from=spec-kit</code>. Confirm the field mapping report looks correct.</li>
+          <li><strong>Review the generated smelt</strong>, the Crucible smelt is written to your project's smelt directory. Open it in the dashboard or inspect it with <code>pforge crucible status</code>. Adjust any field overrides before hardening.</li>
+          <li><strong>Harden the plan</strong>, run Step 2 (Plan Hardener) against the smelt using the <code>/step2-harden-plan</code> prompt in Copilot Chat, or invoke <code>forge_crucible_harden</code> from any MCP client. This produces the execution-ready plan file with validation gates.</li>
+          <li><strong>Execute</strong>, <code>pforge run-plan docs/plans/my-feature-PLAN.md</code>. Spec Kit provenance in the smelt metadata activates LiveGuard drift checks against <code>spec.md</code> criteria throughout the run.</li>
         </ol>
 
         <h3>Resolving import warnings</h3>
@@ -171,7 +171,7 @@ pforge crucible import --from=spec-kit --dry-run</code></pre>
             <tr>
               <td><code>SPECKIT_IMPORT_POLICY_CONFLICT</code></td>
               <td><code>PROJECT-PRINCIPLES.md</code> forbids a pattern that <code>constitution.md</code> or <code>plan.md</code> permits.</td>
-              <td><code>PROJECT-PRINCIPLES.md</code> wins — it is the non-negotiable layer. Update the Spec Kit artifact to align with your project principles, or remove the conflicting rule from <code>constitution.md</code>.</td>
+              <td><code>PROJECT-PRINCIPLES.md</code> wins, it is the non-negotiable layer. Update the Spec Kit artifact to align with your project principles, or remove the conflicting rule from <code>constitution.md</code>.</td>
             </tr>
             <tr>
               <td><code>tasks.md → status</code> import skipped</td>
@@ -201,7 +201,7 @@ pforge crucible import --from=spec-kit --dry-run</code></pre>
           </tbody>
         </table>
 
-        <p>Extensions that produce non-standard artifact shapes are queued in the smelt's unresolved section for manual review — no extension output is silently dropped.</p>
+        <p>Extensions that produce non-standard artifact shapes are queued in the smelt's unresolved section for manual review, no extension output is silently dropped.</p>
 
         <h3>Bidirectional handoff: Plan Forge → Spec Kit</h3>
 
@@ -224,7 +224,7 @@ pforge crucible export --to=spec-kit docs/plans/my-feature-PLAN.md
 
         <h3>Spec Kit interop in multi-agent runs</h3>
 
-        <p>When using Plan Forge's <a href="multi-agent.html" class="text-amber-400 hover:underline">multi-agent mode</a>, each agent worker receives the Spec Kit provenance metadata in its slice context. This means a Copilot Coding Agent worker dispatched via <code>pforge run-plan --worker copilot-coding-agent</code> receives the original <code>spec.md</code> acceptance criteria alongside the Plan Forge scope contract — both constraint systems are active simultaneously.</p>
+        <p>When using Plan Forge's <a href="multi-agent.html" class="text-amber-400 hover:underline">multi-agent mode</a>, each agent worker receives the Spec Kit provenance metadata in its slice context. This means a Copilot Coding Agent worker dispatched via <code>pforge run-plan --worker copilot-coding-agent</code> receives the original <code>spec.md</code> acceptance criteria alongside the Plan Forge scope contract, both constraint systems are active simultaneously.</p>
 
         <h3>Community extension registry entry</h3>
 
@@ -236,11 +236,11 @@ pforge crucible export --to=spec-kit docs/plans/my-feature-PLAN.md
 
         <h2>Further Reading</h2>
         <ul>
-          <li><a href="../../blog/spec-kit-plan-forge.html" class="text-amber-400 hover:underline">Blog: Spec Kit + Plan Forge: Write the Spec, Enforce the Build</a> — the motivation and combined workflow in narrative form</li>
-          <li><a href="crucible.html" class="text-amber-400 hover:underline">Crucible</a> — the Smelt station that receives the import</li>
-          <li><a href="extensions.html" class="text-amber-400 hover:underline">Extensions</a> — the community extension surface</li>
-          <li><a href="multi-agent.html" class="text-amber-400 hover:underline">Multi-Agent Mode</a> — dispatching Spec Kit–sourced plans to multiple workers</li>
-          <li><a href="https://github.com/github/spec-kit" class="text-amber-400 hover:underline">Spec Kit on GitHub</a> — the upstream tool</li>
+          <li><a href="../../blog/spec-kit-plan-forge.html" class="text-amber-400 hover:underline">Blog: Spec Kit + Plan Forge: Write the Spec, Enforce the Build</a>, the motivation and combined workflow in narrative form</li>
+          <li><a href="crucible.html" class="text-amber-400 hover:underline">Crucible</a>, the Smelt station that receives the import</li>
+          <li><a href="extensions.html" class="text-amber-400 hover:underline">Extensions</a>, the community extension surface</li>
+          <li><a href="multi-agent.html" class="text-amber-400 hover:underline">Multi-Agent Mode</a>, dispatching Spec Kit–sourced plans to multiple workers</li>
+          <li><a href="https://github.com/github/spec-kit" class="text-amber-400 hover:underline">Spec Kit on GitHub</a>, the upstream tool</li>
         </ul>
 
         <div class="chapter-nav">

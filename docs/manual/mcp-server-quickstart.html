@@ -47,7 +47,7 @@ node pforge-mcp/server.mjs --dashboard-only
 # Custom project path
 node pforge-mcp/server.mjs --project /path/to/project</code></pre>
       </div>
-      <p>With <code>.vscode/mcp.json</code> configured (created by <code>setup.ps1</code> / <code>setup.sh</code>), the server auto-starts when Copilot calls any forge tool — you don't need to start it manually.</p>
+      <p>With <code>.vscode/mcp.json</code> configured (created by <code>setup.ps1</code> / <code>setup.sh</code>), the server auto-starts when Copilot calls any forge tool, you don't need to start it manually.</p>
 
       <h3 id="verify">Verify It's Running</h3>
       <div class="cmd-block">
@@ -64,7 +64,7 @@ open http://localhost:3100</code></pre>
       <p>These are the tools you'll use most often. Start with <code>forge_capabilities</code> to discover the full surface; use <code>forge_run_plan</code> to execute your work.</p>
 
       <div class="callout callout-tip">
-        <strong>Discovery first</strong>: Always call <code>forge_capabilities</code> at the start of a session — it returns the live API surface including tool schemas, config options, extensions, and per-tool error codes.
+        <strong>Discovery first</strong>: Always call <code>forge_capabilities</code> at the start of a session, it returns the live API surface including tool schemas, config options, extensions, and per-tool error codes.
       </div>
 
       <h3 id="tool-capabilities">forge_capabilities — Discovery</h3>
@@ -138,12 +138,12 @@ forge_run_plan({ plan: "docs/plans/Phase-1.md", resumeFrom: 3 })</code></pre>
       <!-- ─── Typical Workflow ─── -->
       <h2 id="workflow">Typical Workflow</h2>
       <ol class="space-y-2 text-sm">
-        <li><strong>1. Discover</strong> — <code>forge_capabilities({})</code> to see the live API surface</li>
-        <li><strong>2. Check setup</strong> — <code>forge_smith({})</code> to confirm everything is green</li>
-        <li><strong>3. Estimate</strong> — <code>forge_estimate_quorum({ planPath: "…" })</code> before any execution</li>
-        <li><strong>4. Run</strong> — <code>forge_run_plan({ plan: "…" })</code> to execute your plan</li>
-        <li><strong>5. Monitor</strong> — <code>forge_plan_status({})</code> to track progress</li>
-        <li><strong>6. Review</strong> — <code>forge_analyze({ plan: "…" })</code> to confirm artifact consistency</li>
+        <li><strong>1. Discover</strong>, <code>forge_capabilities({})</code> to see the live API surface</li>
+        <li><strong>2. Check setup</strong>, <code>forge_smith({})</code> to confirm everything is green</li>
+        <li><strong>3. Estimate</strong>, <code>forge_estimate_quorum({ planPath: "…" })</code> before any execution</li>
+        <li><strong>4. Run</strong>, <code>forge_run_plan({ plan: "…" })</code> to execute your plan</li>
+        <li><strong>5. Monitor</strong>, <code>forge_plan_status({})</code> to track progress</li>
+        <li><strong>6. Review</strong>, <code>forge_analyze({ plan: "…" })</code> to confirm artifact consistency</li>
       </ol>
 
       <div class="callout callout-info mt-6">

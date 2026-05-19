@@ -40,13 +40,13 @@
 
         <div class="callout callout-info">
           <strong>📖 Reference Section</strong><br>
-          You've built your first feature. Chapters 7–14 are reference material — you don't need to read them in order.
+          You've built your first feature. Chapters 7–14 are reference material, you don't need to read them in order.
           Jump to whichever chapter answers your current question, then return to building.
         </div>
 
         <!-- ─── Overview ─── -->
         <h2 id="overview">Overview</h2>
-        <p>The <code>pforge</code> CLI is a convenience wrapper — two scripts, no dependencies beyond Git and your shell. Every command shows the equivalent manual steps, so non-CLI users can follow along.</p>
+        <p>The <code>pforge</code> CLI is a convenience wrapper, two scripts, no dependencies beyond Git and your shell. Every command shows the equivalent manual steps, so non-CLI users can follow along.</p>
 
         <table class="manual-table">
           <thead>
@@ -64,8 +64,8 @@
 
         <!-- ─── analyze vs diagnose ─── -->
         <div class="callout callout-info">
-          <strong>analyze vs diagnose — which do I use?</strong><br />
-          <code>pforge analyze</code> scores a plan's quality (traceability, coverage, gates — 0 to 100).<br />
+          <strong>analyze vs diagnose: which do I use?</strong><br />
+          <code>pforge analyze</code> scores a plan's quality (traceability, coverage, gates, 0 to 100).<br />
           <code>forge_diagnose</code> (MCP tool) investigates a bug in code (root cause, fix recommendations).<br />
           One tells you if your blueprint is solid. The other finds out why the bridge collapsed.<br />
           Use <strong>analyze</strong> after hardening a plan. Use <strong>forge_diagnose</strong> from Copilot Chat when a slice fails.
@@ -234,7 +234,7 @@
           </div>
 
           <div class="callout callout-info" class="callout-sm">
-            <strong>CLI-only</strong> — not available as MCP tool. Use via terminal.
+            <strong>CLI-only</strong>, not available as MCP tool. Use via terminal.
           </div>
         </div>
 
@@ -259,7 +259,7 @@
           </div>
 
           <div class="callout callout-info" class="callout-sm">
-            <strong>CLI-only</strong> — not available as MCP tool.
+            <strong>CLI-only</strong>, not available as MCP tool.
           </div>
         </div>
 
@@ -283,7 +283,7 @@
           </div>
 
           <div class="callout callout-info" class="callout-sm">
-            <strong>CLI-only</strong> — not available as MCP tool.
+            <strong>CLI-only</strong>, not available as MCP tool.
           </div>
         </div>
 
@@ -298,7 +298,7 @@
           </div>
           <div class="cmd-block">
             <div class="cmd-block-header"><span>Example output</span></div>
-            <pre><code>Completeness Sweep — scanning for deferred-work markers:
+            <pre><code>Completeness Sweep, scanning for deferred-work markers:
 ─────────────────────────────────────────────────────────
   src/Services/UserService.cs:42: // TODO: Wire to real email service
   src/Controllers/AuthController.cs:18: // FIXME: Add rate limiting
@@ -320,14 +320,14 @@ FOUND 2 deferred-work marker(s). Resolve before Step 5 (Review Gate).</code></pr
           </div>
           <div class="cmd-block">
             <div class="cmd-block-header"><span>Example output</span></div>
-            <pre><code>Scope Drift Check — 4 changed file(s) vs plan:
+            <pre><code>Scope Drift Check, 4 changed file(s) vs plan:
 ──────────────────────────────────────────────────
   <span class="text-emerald-400 font-bold">✓</span> IN SCOPE   src/Services/UserService.cs
   <span class="text-emerald-400 font-bold">✓</span> IN SCOPE   src/Repositories/UserRepository.cs
   <span class="text-amber-400 font-bold">●</span> UNPLANNED  src/Config/AppSettings.cs
   <span class="text-rose-400 font-bold">●</span> FORBIDDEN  tests/Legacy/OldTests.cs
 
-DRIFT DETECTED — 1 forbidden file(s) touched.</code></pre>
+DRIFT DETECTED, 1 forbidden file(s) touched.</code></pre>
           </div>
 
           <p class="text-sm text-slate-500">Also available as: <code>forge_diff</code> MCP tool</p>
@@ -336,7 +336,7 @@ DRIFT DETECTED — 1 forbidden file(s) touched.</code></pre>
         <!-- ─── analyze ─── -->
         <div class="cmd-ref" id="analyze">
           <div class="cmd-ref-title">pforge analyze &lt;plan-file&gt;</div>
-          <div class="cmd-ref-desc">Cross-artifact consistency scoring — validates traceability, scope coverage, test coverage, and gate definitions. Scores 0–100.</div>
+          <div class="cmd-ref-desc">Cross-artifact consistency scoring, validates traceability, scope coverage, test coverage, and gate definitions. Scores 0–100.</div>
 
           <table class="manual-table">
             <thead><tr><th>Flag</th><th>Type</th><th>Description</th></tr></thead>
@@ -375,8 +375,8 @@ DRIFT DETECTED — 1 forbidden file(s) touched.</code></pre>
 
         <!-- ─── forge_diagnose (MCP tool, no CLI wrapper) ─── -->
         <div class="cmd-ref" id="diagnose">
-          <div class="cmd-ref-title">forge_diagnose <span class="text-xs text-amber-400">(MCP tool — no CLI wrapper)</span></div>
-          <div class="cmd-ref-desc">Multi-model bug investigation — dispatches file analysis to multiple AI models independently, then synthesizes root cause analysis with fix recommendations. <strong>Invoke from Copilot Chat or any MCP client</strong>; there is no <code>pforge diagnose</code> CLI command.</div>
+          <div class="cmd-ref-title">forge_diagnose <span class="text-xs text-amber-400">(MCP tool, no CLI wrapper)</span></div>
+          <div class="cmd-ref-desc">Multi-model bug investigation, dispatches file analysis to multiple AI models independently, then synthesizes root cause analysis with fix recommendations. <strong>Invoke from Copilot Chat or any MCP client</strong>; there is no <code>pforge diagnose</code> CLI command.</div>
 
           <table class="manual-table">
             <thead><tr><th>Parameter</th><th>Type</th><th>Description</th></tr></thead>
@@ -400,7 +400,7 @@ forge_diagnose({ file: "src/auth/token-validator.ts", models: "grok-3-mini,grok-
         <!-- ─── run-plan ─── -->
         <div class="cmd-ref" id="run-plan">
           <div class="cmd-ref-title">pforge run-plan &lt;plan-file&gt;</div>
-          <div class="cmd-ref-desc">Execute a hardened plan — spawn CLI workers for each slice, validate at every boundary, track tokens and cost.</div>
+          <div class="cmd-ref-desc">Execute a hardened plan, spawn CLI workers for each slice, validate at every boundary, track tokens and cost.</div>
 
           <table class="manual-table">
             <thead><tr><th>Flag</th><th>Type</th><th>Default</th><th>Description</th></tr></thead>
@@ -451,7 +451,7 @@ forge_diagnose({ file: "src/auth/token-validator.ts", models: "grok-3-mini,grok-
         <!-- ─── smith ─── -->
         <div class="cmd-ref" id="smith">
           <div class="cmd-ref-title">pforge smith</div>
-          <div class="cmd-ref-desc">Inspect your forge — diagnose environment, VS Code config, setup health, version currency, and common problems. Every issue includes a <code>FIX:</code> suggestion.</div>
+          <div class="cmd-ref-desc">Inspect your forge, diagnose environment, VS Code config, setup health, version currency, and common problems. Every issue includes a <code>FIX:</code> suggestion.</div>
 
           <div class="cmd-block">
             <div class="cmd-block-header"><span>PowerShell / Bash</span><button class="cmd-copy-btn">Copy</button></div>
@@ -476,7 +476,7 @@ forge_diagnose({ file: "src/auth/token-validator.ts", models: "grok-3-mini,grok-
         <!-- ─── ext ─── -->
         <div class="cmd-ref" id="ext">
           <div class="cmd-ref-title">pforge ext &lt;subcommand&gt;</div>
-          <div class="cmd-ref-desc">Extension management — browse, install, remove, and publish guardrail extensions.</div>
+          <div class="cmd-ref-desc">Extension management, browse, install, remove, and publish guardrail extensions.</div>
 
           <table class="manual-table">
             <thead><tr><th>Subcommand</th><th>Description</th></tr></thead>
@@ -544,7 +544,7 @@ forge_diagnose({ file: "src/auth/token-validator.ts", models: "grok-3-mini,grok-
         <!-- ─── help ─── -->
         <div class="cmd-ref" id="help">
           <div class="cmd-ref-title">pforge help</div>
-          <div class="cmd-ref-desc">Show help — list all available commands with one-line descriptions.</div>
+          <div class="cmd-ref-desc">Show help, list all available commands with one-line descriptions.</div>
           <div class="cmd-block">
             <div class="cmd-block-header"><span>PowerShell / Bash</span><button class="cmd-copy-btn">Copy</button></div>
             <pre><code>pforge help</code></pre>
@@ -626,7 +626,7 @@ pforge timeline --window 24h --json | jq '.[] | select(.source == "incident")'</
 
         <!-- ─── LiveGuard commands ─── -->
         <h2 id="liveguard">LiveGuard Commands (v2.27.0+)</h2>
-        <p>Post-coding intelligence commands. All run locally — no network unless <code>openclaw.endpoint</code> is configured.</p>
+        <p>Post-coding intelligence commands. All run locally, no network unless <code>openclaw.endpoint</code> is configured.</p>
 
         <div class="cmd-ref" id="liveguard-drift">
           <div class="cmd-ref-title">pforge drift</div>
@@ -781,7 +781,7 @@ pforge secret-scan --since HEAD~3 --threshold 4.0</code></pre>
 
         <div class="cmd-ref" id="liveguard-env-diff">
           <div class="cmd-ref-title">pforge env-diff</div>
-          <div class="cmd-ref-desc">Compare environment variable keys across <code>.env</code> files. Keys only — values are never read.</div>
+          <div class="cmd-ref-desc">Compare environment variable keys across <code>.env</code> files. Keys only, values are never read.</div>
 
           <table class="manual-table">
             <thead><tr><th>Flag</th><th>Type</th><th>Description</th></tr></thead>
@@ -858,17 +858,17 @@ pforge quorum-analyze --source incident --custom-question "Which fix should I pr
 
         <!-- ─── Third Edition (v3.x) commands ─── -->
         <h2 id="third-edition">Third Edition Commands <span class="text-amber-400 text-base font-normal">v3.x+</span></h2>
-        <p>Six commands shipped between v2.99 and v3.5 that postdate the original CLI reference. Each is a thin wrapper over a v3.x MCP tool or subsystem — see the per-command "Also available as" link for the full MCP / REST mapping.</p>
+        <p>Six commands shipped between v2.99 and v3.5 that postdate the original CLI reference. Each is a thin wrapper over a v3.x MCP tool or subsystem, see the per-command "Also available as" link for the full MCP / REST mapping.</p>
 
         <div class="cmd-ref" id="sync-memories">
           <div class="cmd-ref-title">pforge sync-memories <span class="text-xs text-amber-400 font-normal">v2.99+</span></div>
-          <div class="cmd-ref-desc">Generate <code>.github/copilot-memory-hints.md</code> from forge decisions — trajectories, auto-skills, OpenBrain entries. Hash-deduped and atomic; safe to run repeatedly. See <a href="copilot-integration.html#sync-memories">Chapter 26 — Copilot Integration Trilogy</a>.</div>
+          <div class="cmd-ref-desc">Generate <code>.github/copilot-memory-hints.md</code> from forge decisions, trajectories, auto-skills, OpenBrain entries. Hash-deduped and atomic; safe to run repeatedly. See <a href="copilot-integration.html#sync-memories">Chapter 26 — Copilot Integration Trilogy</a>.</div>
           <table class="manual-table">
             <thead><tr><th>Flag</th><th>Type</th><th>Description</th></tr></thead>
             <tbody>
               <tr><td><code>--since</code></td><td>duration (optional)</td><td>Limit to trajectories in the last N (e.g. <code>14d</code>, <code>30d</code>). Default: 50 most recent.</td></tr>
               <tr><td><code>--explain</code></td><td>flag (optional)</td><td>Verbose: show which entries were included/excluded and why</td></tr>
-              <tr><td><code>--preview</code></td><td>flag (optional)</td><td>Generate without writing — print the diff</td></tr>
+              <tr><td><code>--preview</code></td><td>flag (optional)</td><td>Generate without writing, print the diff</td></tr>
             </tbody>
           </table>
           <div class="cmd-block"><div class="cmd-block-header"><span>PowerShell / Bash</span><button class="cmd-copy-btn">Copy</button></div>
@@ -884,7 +884,7 @@ pforge sync-memories --preview --explain</code></pre></div>
           <table class="manual-table">
             <thead><tr><th>Flag</th><th>Type</th><th>Description</th></tr></thead>
             <tbody>
-              <tr><td><code>--preview</code></td><td>flag (optional)</td><td>Generate without writing — print the resulting content</td></tr>
+              <tr><td><code>--preview</code></td><td>flag (optional)</td><td>Generate without writing, print the resulting content</td></tr>
               <tr><td><code>--force</code></td><td>flag (optional)</td><td>Overwrite even if content hash matches (bypass dedup)</td></tr>
             </tbody>
           </table>
@@ -897,7 +897,7 @@ pforge sync-instructions --force</code></pre></div>
 
         <div class="cmd-ref" id="sync-spaces">
           <div class="cmd-ref-title">pforge sync-spaces <span class="text-xs text-amber-400 font-normal">v3.2+</span></div>
-          <div class="cmd-ref-desc">Sync memory spaces across projects — pull shared knowledge from configured peer repositories into the local OpenBrain L3 store. Read-only on the local side until a confirmation flag is passed. Useful in fleet / multi-repo setups.</div>
+          <div class="cmd-ref-desc">Sync memory spaces across projects, pull shared knowledge from configured peer repositories into the local OpenBrain L3 store. Read-only on the local side until a confirmation flag is passed. Useful in fleet / multi-repo setups.</div>
           <table class="manual-table">
             <thead><tr><th>Flag</th><th>Type</th><th>Description</th></tr></thead>
             <tbody>
@@ -933,7 +933,7 @@ pforge plan-from-sarif sec.sarif --phase-name="Phase-SEC-FIX"</code></pre></div>
 
         <div class="cmd-ref" id="digest">
           <div class="cmd-ref-title">pforge digest <span class="text-xs text-amber-400 font-normal">v3.3+</span></div>
-          <div class="cmd-ref-desc">The "morning summary" — compresses graph findings, pattern detectors, and event ledgers into a single human-readable digest. Categories: plans shipped, aging meta-bugs, stalled phases, probe-lane deltas, drift score changes, cost anomalies. See <a href="knowledge-graph.html#digest">Chapter 28 — The Knowledge Graph</a>.</div>
+          <div class="cmd-ref-desc">The "morning summary", compresses graph findings, pattern detectors, and event ledgers into a single human-readable digest. Categories: plans shipped, aging meta-bugs, stalled phases, probe-lane deltas, drift score changes, cost anomalies. See <a href="knowledge-graph.html#digest">Chapter 28 — The Knowledge Graph</a>.</div>
           <table class="manual-table">
             <thead><tr><th>Flag</th><th>Type</th><th>Description</th></tr></thead>
             <tbody>
@@ -953,7 +953,7 @@ pforge digest --post                # broadcast to configured channel</code></pr
 
         <div class="cmd-ref" id="hammer-fm">
           <div class="cmd-ref-title">pforge hammer-fm <span class="text-xs text-amber-400 font-normal">v3.2+</span></div>
-          <div class="cmd-ref-desc">Run the full Forge-Master tempering harness — false-marker scan across the entire codebase (TODO, FIXME, HACK, stub patterns, mock data, placeholder text). Wraps <code>forge_sweep</code> + <code>forge_tempering_drain</code> in a single tightened loop suitable for pre-release gates.</div>
+          <div class="cmd-ref-desc">Run the full Forge-Master tempering harness, false-marker scan across the entire codebase (TODO, FIXME, HACK, stub patterns, mock data, placeholder text). Wraps <code>forge_sweep</code> + <code>forge_tempering_drain</code> in a single tightened loop suitable for pre-release gates.</div>
           <table class="manual-table">
             <thead><tr><th>Flag</th><th>Type</th><th>Description</th></tr></thead>
             <tbody>
@@ -966,12 +966,12 @@ pforge digest --post                # broadcast to configured channel</code></pr
           <pre><code>pforge hammer-fm
 pforge hammer-fm --strict                # CI gate
 pforge hammer-fm --include="src/**/*.ts"</code></pre></div>
-          <p class="text-sm text-slate-500">Pairs well with <code>forge_classifier_issue</code> when findings are noise rather than bugs — see <a href="team-coordination.html#classifier-issue">Chapter 27 — Team Coordination</a>.</p>
+          <p class="text-sm text-slate-500">Pairs well with <code>forge_classifier_issue</code> when findings are noise rather than bugs, see <a href="team-coordination.html#classifier-issue">Chapter 27 — Team Coordination</a>.</p>
         </div>
 
         <div class="cmd-ref" id="fm-session">
           <div class="cmd-ref-title">pforge fm-session [&lt;goal&gt;] <span class="text-xs text-amber-400 font-normal">v3.4+</span></div>
-          <div class="cmd-ref-desc">Start (or resume) a Forge-Master reasoning session — interactive read-only conversation with the orchestrator. Use it for "why did Phase-X fail?", "what's the cheapest way to ship this plan?", and similar open-ended questions. Sessions persist to <code>.forge/forge-master/sessions/</code>.</div>
+          <div class="cmd-ref-desc">Start (or resume) a Forge-Master reasoning session, interactive read-only conversation with the orchestrator. Use it for "why did Phase-X fail?", "what's the cheapest way to ship this plan?", and similar open-ended questions. Sessions persist to <code>.forge/forge-master/sessions/</code>.</div>
           <table class="manual-table">
             <thead><tr><th>Flag</th><th>Type</th><th>Description</th></tr></thead>
             <tbody>
@@ -1015,7 +1015,7 @@ pforge fm-recall "cost anomaly Phase-31" --since=30d --json</code></pre></div>
 
           <div class="cmd-block">
             <div class="cmd-block-header"><span>Terminal</span><button class="cmd-copy-btn">Copy</button></div>
-            <pre><code># Full MCP server (normal usage — started by VS Code via mcp.json)
+            <pre><code># Full MCP server (normal usage, started by VS Code via mcp.json)
 node pforge-mcp/server.mjs
 
 # Dashboard + REST API only (no MCP stdio)

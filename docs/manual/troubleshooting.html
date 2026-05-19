@@ -21,13 +21,13 @@
     <main><div class="chapter-content">
 
       <!-- Hero -->
-      <img src="assets/chapter-heroes/ch15-hero.jpg" alt="A dimly lit bronze workshop diagnostic bench at night with an open ledger, an oil-lit brass lantern overhead, and a magnifying loupe held in a mechanical iron arm focusing a beam of amber light onto a glowing ERR rune — floating diagnostic glyphs (wrench, checkmark, gear, question-mark) orbit the workshop" class="chapter-hero" />
+      <img src="assets/chapter-heroes/ch15-hero.jpg" alt="A dimly lit bronze workshop diagnostic bench at night with an open ledger, an oil-lit brass lantern overhead, and a magnifying loupe held in a mechanical iron arm focusing a beam of amber light onto a glowing ERR rune, floating diagnostic glyphs (wrench, checkmark, gear, question-mark) orbit the workshop" class="chapter-hero" />
 
       <div class="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">Chapter 15</div>
       <h1>Troubleshooting</h1>
       <p class="text-lg text-slate-400 mb-8">"Something's wrong." Find the answer fast.</p>
 
-      <p class="text-sm text-slate-500 italic mb-4">Every tool breaks eventually. The question is whether you have a diagnostic path or just a prayer. Start with <code>pforge smith</code> — it catches 80% of issues in 5 seconds.</p>
+      <p class="text-sm text-slate-500 italic mb-4">Every tool breaks eventually. The question is whether you have a diagnostic path or just a prayer. Start with <code>pforge smith</code>, it catches 80% of issues in 5 seconds.</p>
 
       <div class="callout callout-info">
         <strong>Key terms</strong>: <a href="glossary.html">Glossary</a> defines every Plan Forge term. If you see "scope contract," "validation gate," "slice," or "applyTo" and aren't sure what they mean, check there first.
@@ -56,7 +56,7 @@
         <div class="cmd-block-header"><span>Terminal, expected output</span><button class="cmd-copy-btn">Copy</button></div>
         <pre><code>$ pforge smith
 
-Plan Forge v3.5.1 — forge diagnostic
+Plan Forge v3.5.1, forge diagnostic
 
 Environment
   OS                Windows 10.0.22631  OK
@@ -84,7 +84,7 @@ Agent adapters
   cursor    .cursor/mcp.json  not installed   WARN
   codex     .codex/mcp.json   not installed   WARN
 
-Result: 4 OK, 3 WARN, 0 FAIL  —  forge is healthy</code></pre>
+Result: 4 OK, 3 WARN, 0 FAIL ,  forge is healthy</code></pre>
       </div>
 
       <div class="callout callout-tip">
@@ -96,7 +96,7 @@ Result: 4 OK, 3 WARN, 0 FAIL  —  forge is healthy</code></pre>
         <thead><tr><th>Symptom</th><th>Cause</th><th>Fix</th></tr></thead>
         <tbody>
           <tr><td>AI ignores coding standards</td><td>Instruction files not loading</td><td>Check <code>applyTo</code> pattern matches the file you're editing. Run <code>pforge smith</code> to verify file counts.</td></tr>
-          <tr><td>Wrong instructions loading</td><td><code>applyTo</code> glob too broad</td><td>Narrow the pattern — use <code>**/auth/**</code> instead of <code>**</code></td></tr>
+          <tr><td>Wrong instructions loading</td><td><code>applyTo</code> glob too broad</td><td>Narrow the pattern, use <code>**/auth/**</code> instead of <code>**</code></td></tr>
           <tr><td>Guardrails load but AI ignores them</td><td>Context budget exceeded</td><td>Reduce <code>copilot-instructions.md</code> to &lt;80 lines. Remove <code>applyTo: '**'</code> from non-essential files.</td></tr>
           <tr><td>Project Principles not enforced</td><td><code>PROJECT-PRINCIPLES.md</code> missing</td><td>Run the project-principles prompt. The instruction file activates only when this file exists.</td></tr>
         </tbody>
@@ -107,11 +107,11 @@ Result: 4 OK, 3 WARN, 0 FAIL  —  forge is healthy</code></pre>
         <thead><tr><th>Symptom</th><th>Cause</th><th>Fix</th></tr></thead>
         <tbody>
           <tr><td>Gate fails with build errors</td><td>Code doesn't compile</td><td>Fix the build error, then <code>pforge run-plan --resume-from N</code></td></tr>
-          <tr><td>Gate fails — tests regress</td><td>New code broke existing tests</td><td>Fix the regression. Check if scope contract is too broad.</td></tr>
+          <tr><td>Gate fails, tests regress</td><td>New code broke existing tests</td><td>Fix the regression. Check if scope contract is too broad.</td></tr>
           <tr><td>Slice times out</td><td>Context window exhausted or model overloaded</td><td>Split the slice into smaller chunks. Try a different <code>--model</code>.</td></tr>
           <tr><td>Model returns error</td><td>API key invalid or rate limited</td><td>Check <code>XAI_API_KEY</code> / <code>OPENAI_API_KEY</code> env vars. Wait for rate limit reset.</td></tr>
           <tr><td>Scope violation detected</td><td>AI touched forbidden files</td><td>The PreToolUse hook should catch this. If not, tighten the Scope Contract.</td></tr>
-          <tr><td>Escalation exhausted</td><td>All models in chain failed</td><td>Review the slice — it may be too complex. Break into sub-slices or simplify gates.</td></tr>
+          <tr><td>Escalation exhausted</td><td>All models in chain failed</td><td>Review the slice, it may be too complex. Break into sub-slices or simplify gates.</td></tr>
         </tbody>
       </table>
 
@@ -153,7 +153,7 @@ Result: 4 OK, 3 WARN, 0 FAIL  —  forge is healthy</code></pre>
       <h2 id="image-generation">Grok Image Generation Crashes Session</h2>
       <p>xAI Grok Aurora returns JPEG bytes regardless of requested format. If raw bytes with wrong MIME type enter the conversation history, the session becomes unrecoverable.</p>
       <div class="callout callout-warning">
-        <strong>Current mitigations</strong>: The MCP tool returns text-only responses (file path + metadata, never raw base64). The <code>generateImage()</code> function detects actual format via magic bytes and converts using <code>sharp</code>. Sessions should be safe — but if you encounter the MIME mismatch error, start a fresh session.
+        <strong>Current mitigations</strong>: The MCP tool returns text-only responses (file path + metadata, never raw base64). The <code>generateImage()</code> function detects actual format via magic bytes and converts using <code>sharp</code>. Sessions should be safe, but if you encounter the MIME mismatch error, start a fresh session.
       </div>
       <p>Safe workflow: Use <code>.jpg</code> extensions (matches Grok's native output), generate art in dedicated sessions, or use the REST API: <code>POST /api/image/generate</code>.</p>
 

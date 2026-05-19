@@ -39,7 +39,7 @@
 
         <!-- ─── What We're Building ─── -->
         <h2 id="what-were-building">What We're Building</h2>
-        <p>A <code>GET /health</code> endpoint. It's deliberately simple — the point is to learn the pipeline, not build something complex. You'll run the full 7-step flow (Specify → Pre-flight → Harden → Execute → Sweep → Review → Ship) on a feature that takes 15 minutes to code, so you can focus on <em>how</em> the system works.</p>
+        <p>A <code>GET /health</code> endpoint. It's deliberately simple, the point is to learn the pipeline, not build something complex. You'll run the full 7-step flow (Specify → Pre-flight → Harden → Execute → Sweep → Review → Ship) on a feature that takes 15 minutes to code, so you can focus on <em>how</em> the system works.</p>
 
         <!-- ─── Step 0 ─── -->
         <h2 id="step-0">Step 0: Specify the Feature</h2>
@@ -82,15 +82,15 @@
           <li>Attach <code>.github/prompts/step2-harden-plan.prompt.md</code></li>
           <li>Replace <code>&lt;YOUR-PLAN&gt;</code> with <code>Phase-1-HEALTH-ENDPOINT-PLAN</code> and send</li>
         </ol>
-        <p>The agent adds the mandatory blocks to your plan. When it says <strong>"Plan hardened"</strong> — Session 1 is done.</p>
+        <p>The agent adds the mandatory blocks to your plan. When it says <strong>"Plan hardened"</strong>, Session 1 is done.</p>
 
         <!-- ─── Reading the Hardened Plan ─── -->
         <h2 id="reading-the-plan">Reading the Hardened Plan</h2>
-        <p>Open the plan file. Every hardened plan has these sections — here's what each means:</p>
+        <p>Open the plan file. Every hardened plan has these sections, here's what each means:</p>
 
         <div class="cmd-block">
           <div class="cmd-block-header"><span>Annotated hardened plan structure</span></div>
-          <pre><code># Phase 1 — Health Endpoint
+          <pre><code># Phase 1, Health Endpoint
 
 ## Scope Contract                    ← What files the AI can touch
 <strong>In Scope</strong>: src/controllers/**, tests/health/**
@@ -107,14 +107,14 @@
 
 ## Execution Slices                  ← Checkpointed work chunks
 
-### Slice 1 — Health Controller [30 min]
+### Slice 1, Health Controller [30 min]
 <strong>Tasks</strong>: Create controller, route, response model
 <strong>Gate</strong>: `dotnet build` passes             ← Must pass before Slice 2
 <strong>Stop if</strong>: Build fails                     ← Halts execution
 
-### Slice 2 — Tests + Edge Cases [30 min]
+### Slice 2, Tests + Edge Cases [30 min]
 <strong>Tasks</strong>: Unit tests, 503 degraded scenario
-<strong>Gate</strong>: `dotnet test` — 4+ tests pass
+<strong>Gate</strong>: `dotnet test`, 4+ tests pass
 <strong>Stop if</strong>: Any test regresses
 
 ## Branch Strategy
@@ -138,7 +138,7 @@
 
         <!-- ─── Step 3 ─── -->
         <h2 id="step-3">Step 3: Execute</h2>
-        <p>Three ways to execute — pick one:</p>
+        <p>Three ways to execute, pick one:</p>
 
         <div class="overflow-x-auto mb-6">
           <div class="flex gap-4 min-w-[600px]">
@@ -163,7 +163,7 @@
           </div>
         </div>
 
-        <p>The agent creates the health endpoint, runs <code>build</code>, runs <code>test</code>, and reports pass/fail at each gate. If a gate fails, execution stops — no silent failures.</p>
+        <p>The agent creates the health endpoint, runs <code>build</code>, runs <code>test</code>, and reports pass/fail at each gate. If a gate fails, execution stops, no silent failures.</p>
 
         <!-- ─── Step 4 ─── -->
         <h2 id="step-4">Step 4: Sweep</h2>
@@ -178,7 +178,7 @@
 
         <!-- ─── Step 5 ─── -->
         <h2 id="step-5">Step 5: Review</h2>
-        <p><strong>Start a NEW chat session</strong> — click the <code>+</code> button. This is critical: the reviewer must not carry context from the builder.</p>
+        <p><strong>Start a NEW chat session</strong>, click the <code>+</code> button. This is critical: the reviewer must not carry context from the builder.</p>
         <ol>
           <li>Select <strong>Agent Mode</strong></li>
           <li>Attach <code>.github/prompts/step5-review-gate.prompt.md</code></li>
@@ -197,7 +197,7 @@
         </ol>
 
         <div class="callout callout-tip">
-          <strong>Done!</strong> You've run the full 7-step pipeline. The same process works for complex features with 8+ slices — the pipeline scales with the work.
+          <strong>Done!</strong> You've run the full 7-step pipeline. The same process works for complex features with 8+ slices, the pipeline scales with the work.
         </div>
 
         <!-- ─── What Just Happened ─── -->
@@ -211,7 +211,7 @@ Session 3 (Review)          → A fresh AI session checked for mistakes and drif
 Session 4 (Ship)            → The AI committed, updated docs, captured lessons</code></pre>
         </div>
 
-        <p>Each session was isolated — the reviewer didn't carry bias from the builder. Every step had guardrails loaded automatically from your <code>.github/instructions/</code> files.</p>
+        <p>Each session was isolated, the reviewer didn't carry bias from the builder. Every step had guardrails loaded automatically from your <code>.github/instructions/</code> files.</p>
 
         <!-- ─── Brownfield Sidebar ─── -->
         <div class="callout callout-warning">

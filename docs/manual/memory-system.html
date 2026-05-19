@@ -27,16 +27,16 @@
       <!-- Hero -->
       <img src="assets/chapter-heroes/ch25-hero.jpg" alt="A vast bronze-lined memory vault inside a stone forge chamber with tall shelves of small leather-bound notebooks tagged with glowing amber runes; small enchanted brass automatons file and pull notebooks while an open ornate ledger in the foreground emits a stream of softly glowing amber sparks rising upward" class="chapter-hero" />
       <div class="chapter-content">
-        <div class="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">Act IV — Learn · Chapter 22</div>
+        <div class="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">Act IV, Learn · Chapter 22</div>
         <h1>How the Shop Remembers</h1>
-        <p class="text-lg text-slate-400 mb-8">The plain-English tour of Plan Forge's upgraded memory system — and the reason a cheaper, faster model can now do work that used to require the expensive one.</p>
+        <p class="text-lg text-slate-400 mb-8">The plain-English tour of Plan Forge's upgraded memory system, and the reason a cheaper, faster model can now do work that used to require the expensive one.</p>
 
         <div class="callout callout-info">
-          <strong>New here? Start with this.</strong> The previous chapter (<a href="memory-architecture.html">Memory Architecture</a>) explains the three-tier plumbing (L1 hub, L2 files, L3 OpenBrain). This chapter explains <em>what we added on top</em> in plain language — the maker's mark on every record (<strong>Hallmark</strong>), the safer doorway to the shared brain (<strong>Anvil</strong>), the code-map that lets the agent ask "who calls this function?" (<strong>Lattice</strong>), and the bridge that hands all of it to Copilot's own memory (<strong>forge_sync_memories</strong>).
+          <strong>New here? Start with this.</strong> The previous chapter (<a href="memory-architecture.html">Memory Architecture</a>) explains the three-tier plumbing (L1 hub, L2 files, L3 OpenBrain). This chapter explains <em>what we added on top</em> in plain language, the maker's mark on every record (<strong>Hallmark</strong>), the safer doorway to the shared brain (<strong>Anvil</strong>), the code-map that lets the agent ask "who calls this function?" (<strong>Lattice</strong>), and the bridge that hands all of it to Copilot's own memory (<strong>forge_sync_memories</strong>).
           <ul class="mt-2 mb-0">
             <li><strong>Still three tiers.</strong> L1/L2/L3 didn't go away. We forged better tools <em>around</em> them.</li>
             <li><strong>Still one capture call.</strong> Your code doesn't change. The shop just remembers more reliably now.</li>
-            <li><strong>The payoff is measurable.</strong> Drift dropped 64% over 90 days. A 7-slice plan now executes for $0.07 on Sonnet alone — no Opus escalation.</li>
+            <li><strong>The payoff is measurable.</strong> Drift dropped 64% over 90 days. A 7-slice plan now executes for $0.07 on Sonnet alone, no Opus escalation.</li>
           </ul>
         </div>
 
@@ -60,17 +60,17 @@
           <tbody class="divide-y divide-slate-800">
             <tr>
               <td class="p-3 font-bold text-amber-400">Hallmark</td>
-              <td class="p-3">The maker's mark stamped into the metal — proves who forged it, when, from what stock.</td>
+              <td class="p-3">The maker's mark stamped into the metal, proves who forged it, when, from what stock.</td>
               <td class="p-3">A small JSON envelope (<code>hallmark/v1</code>) attached to every memory record and artifact. Lets any tool ask <em>"is this still the version I think it is?"</em> and catch drift before it bites.</td>
             </tr>
             <tr>
               <td class="p-3 font-bold text-amber-400">Anvil</td>
-              <td class="p-3">The anvil where everything gets struck — solid, reliable, never drops the hammer.</td>
+              <td class="p-3">The anvil where everything gets struck, solid, reliable, never drops the hammer.</td>
               <td class="p-3">The boundary code that delivers L2 records to OpenBrain (L3). Adds a dead-letter queue, a capability handshake, and a boot-time drain so a network blip never loses a memory.</td>
             </tr>
             <tr>
               <td class="p-3 font-bold text-amber-400">Lattice</td>
-              <td class="p-3">The map of the shop — every workbench, every tool, every chain pulley, indexed by where it sits.</td>
+              <td class="p-3">The map of the shop, every workbench, every tool, every chain pulley, indexed by where it sits.</td>
               <td class="p-3">A code-graph index over your repo. Splits source into semantic chunks, records who-calls-whom, and answers "show me everyone who calls <code>executeSlice</code>" in milliseconds.</td>
             </tr>
             <tr>
@@ -82,7 +82,7 @@
         </table>
 
         <div class="callout callout-info">
-          <strong>Why "soft" sync?</strong> Copilot Memory is read-only-from-our-side. We can write, but we can't delete what the user has curated. So the sync is additive only — never destructive. Deduplication is handled by content hash, so re-running is safe.
+          <strong>Why "soft" sync?</strong> Copilot Memory is read-only-from-our-side. We can write, but we can't delete what the user has curated. So the sync is additive only, never destructive. Deduplication is handled by content hash, so re-running is safe.
         </div>
 
         <!-- ─── A Day in the Life of a Slice ─── -->
@@ -92,19 +92,19 @@
 
         <ol>
           <li>
-            <strong>Preload</strong> — The orchestrator calls <code>buildPlanBootContext</code> and emits a <code>memory-preload</code> event with semantic queries derived from the slice's Scope Contract. The agent runtime (Copilot, Claude, Cursor) catches the event and runs <code>search_thoughts</code> against L3 + a <code>latticeQuery</code> against the code-graph. <em>The agent now knows what prior slices learned and which files are relevant — before it reads a single line.</em>
+            <strong>Preload</strong>, The orchestrator calls <code>buildPlanBootContext</code> and emits a <code>memory-preload</code> event with semantic queries derived from the slice's Scope Contract. The agent runtime (Copilot, Claude, Cursor) catches the event and runs <code>search_thoughts</code> against L3 + a <code>latticeQuery</code> against the code-graph. <em>The agent now knows what prior slices learned and which files are relevant, before it reads a single line.</em>
           </li>
           <li>
-            <strong>Execute</strong> — The agent edits files. When it hits a tricky pattern ("Windows shell quoting breaks <code>grep -c</code> when piped into a brace group"), it calls <code>capture_thought</code> with type <code>gotcha</code>. The capture path stamps the record with a fresh <strong>Hallmark</strong> envelope and writes to L1 (instant), L2 (durable), and queues it for L3.
+            <strong>Execute</strong>, The agent edits files. When it hits a tricky pattern ("Windows shell quoting breaks <code>grep -c</code> when piped into a brace group"), it calls <code>capture_thought</code> with type <code>gotcha</code>. The capture path stamps the record with a fresh <strong>Hallmark</strong> envelope and writes to L1 (instant), L2 (durable), and queues it for L3.
           </li>
           <li>
-            <strong>Anvil delivery</strong> — A background drainer pulls from <code>.forge/openbrain-queue.jsonl</code> and pushes to OpenBrain. If OpenBrain is down or rejects the schema, the record lands in <code>.forge/openbrain-dlq.jsonl</code> instead of vanishing. The next boot drains the DLQ automatically.
+            <strong>Anvil delivery</strong>, A background drainer pulls from <code>.forge/openbrain-queue.jsonl</code> and pushes to OpenBrain. If OpenBrain is down or rejects the schema, the record lands in <code>.forge/openbrain-dlq.jsonl</code> instead of vanishing. The next boot drains the DLQ automatically.
           </li>
           <li>
-            <strong>Verify with Lattice</strong> — Before declaring the slice done, the agent runs <code>latticeCallers</code> on every function it touched. If the call graph shows an unexpected caller (a test it forgot about, or a sibling slice's import), the slice gate catches it. <em>This is the step that prevents "I refactored X and didn't realize Y depended on it."</em>
+            <strong>Verify with Lattice</strong>, Before declaring the slice done, the agent runs <code>latticeCallers</code> on every function it touched. If the call graph shows an unexpected caller (a test it forgot about, or a sibling slice's import), the slice gate catches it. <em>This is the step that prevents "I refactored X and didn't realize Y depended on it."</em>
           </li>
           <li>
-            <strong>Sync out</strong> — At slice end, <code>forge_sync_memories</code> copies new decisions and lessons into Copilot Memory. Tomorrow's VS Code session sees them in the global memory pane without anyone running anything.
+            <strong>Sync out</strong>, At slice end, <code>forge_sync_memories</code> copies new decisions and lessons into Copilot Memory. Tomorrow's VS Code session sees them in the global memory pane without anyone running anything.
           </li>
         </ol>
 
@@ -115,7 +115,7 @@
 
         <p>The classic AI cost equation goes <em>better model → fewer mistakes → less wasted spend</em>. That's still true, but it ignores a second lever: <strong>context quality</strong>. A medium-tier model with the right context will routinely outperform a flagship model with vague context. Memory <em>is</em> context. And the memory upgrades make the context dramatically better.</p>
 
-        <p>Here's the receipt — measured on <em>this repo</em> over the last 90 days:</p>
+        <p>Here's the receipt, measured on <em>this repo</em> over the last 90 days:</p>
 
         <table class="w-full text-sm border border-slate-700/40 rounded-lg overflow-hidden mb-6">
           <thead class="bg-slate-900/60">
@@ -177,7 +177,7 @@
         <p>Put bluntly: <strong>the memory upgrades subsidize the model choice.</strong> You can pick Sonnet (or another mid-tier) and let memory carry the load that used to require Opus reasoning. The savings show up in the cost ledger; the quality shows up in the drift score.</p>
 
         <div class="callout callout-info">
-          <strong>The Phase-MEMORY-QA receipt.</strong> When we tested the memory upgrades themselves, the QA plan (7 slices, full E2E with mock OpenBrain, lattice callers, hallmark show/verify, backward-compat checks) ran for <strong>$0.07 total in ~51 minutes</strong>, 100% on Sonnet-4.6, no escalation, zero failed slices. The system QA'd itself with the very upgrades it was QA'ing — and did it for the price of a coffee. That's the loop closing.
+          <strong>The Phase-MEMORY-QA receipt.</strong> When we tested the memory upgrades themselves, the QA plan (7 slices, full E2E with mock OpenBrain, lattice callers, hallmark show/verify, backward-compat checks) ran for <strong>$0.07 total in ~51 minutes</strong>, 100% on Sonnet-4.6, no escalation, zero failed slices. The system QA'd itself with the very upgrades it was QA'ing, and did it for the price of a coffee. That's the loop closing.
         </div>
 
         <!-- ─── Three Commands ─── -->
@@ -199,7 +199,7 @@ pforge lattice callees attachSliceSnapshotRestore</code></pre>
 
         <div class="cmd-block mb-4">
           <div class="cmd-block-header"><span>2. Inspect the memory subsystem (any time)</span></div>
-          <pre><code># Health of every memory surface — L2 files, OpenBrain queue, DLQ, dedup rate, orphans
+          <pre><code># Health of every memory surface, L2 files, OpenBrain queue, DLQ, dedup rate, orphans
 pforge memory report
 
 # 90-day trend across drift / cost / models / incidents
@@ -209,7 +209,7 @@ pforge health-trend --days 90</code></pre>
         <div class="cmd-block mb-4">
           <div class="cmd-block-header"><span>3. Sync local decisions into Copilot Memory</span></div>
           <pre><code># Push new decisions / lessons / gotchas into Copilot's own memory store.
-# Safe to re-run — dedupes by content hash.
+# Safe to re-run, dedupes by content hash.
 pforge sync-memories
 
 # Dry-run preview (shows what would be written, writes nothing)
@@ -222,9 +222,9 @@ pforge sync-memories --dry-run</code></pre>
         <p>The live dashboard (<code>localhost:3100/dashboard</code>) added an <strong>Anvil &amp; Lattice tab</strong> when these subsystems shipped. From there you can see:</p>
 
         <ul>
-          <li><strong>Anvil panel</strong> — current OpenBrain queue depth, DLQ depth, last-drain timestamp, drain success rate over time. A non-zero DLQ depth that doesn't clear within a drain pass is your only "go look at this" signal.</li>
-          <li><strong>Lattice panel</strong> — index size (chunks, edges, files), last-rebuild timestamp, top-N hottest functions by caller count. Rebuild from here if you've made structural changes outside a plan run.</li>
-          <li><strong>Hallmark coverage</strong> — percentage of L2 records carrying a <code>_v</code> stamp. Should sit at 100% for newly-written records; older records may show <code>none</code>.</li>
+          <li><strong>Anvil panel</strong>, current OpenBrain queue depth, DLQ depth, last-drain timestamp, drain success rate over time. A non-zero DLQ depth that doesn't clear within a drain pass is your only "go look at this" signal.</li>
+          <li><strong>Lattice panel</strong>, index size (chunks, edges, files), last-rebuild timestamp, top-N hottest functions by caller count. Rebuild from here if you've made structural changes outside a plan run.</li>
+          <li><strong>Hallmark coverage</strong>, percentage of L2 records carrying a <code>_v</code> stamp. Should sit at 100% for newly-written records; older records may show <code>none</code>.</li>
         </ul>
 
         <!-- ─── How the new pieces fit the old tiers ─── -->
@@ -233,23 +233,23 @@ pforge sync-memories --dry-run</code></pre>
         <p>To make sure the mental model holds, here's the same picture from <a href="memory-architecture.html">Chapter 21</a> with the new pieces drawn in:</p>
 
         <div class="cmd-block mb-4">
-          <div class="cmd-block-header"><span>The memory stack — layered, not replaced</span></div>
+          <div class="cmd-block-header"><span>The memory stack, layered, not replaced</span></div>
           <pre><code>┌─────────────────────────────────────────────────────────────────┐
 │  Copilot Memory (cross-session, IDE-wide)                       │
 │       ▲                                                         │
 │       │ forge_sync_memories  (additive, hash-deduped)           │
 │  ┌────┴─────────────────────────────────────────────────────┐   │
-│  │  L3 — OpenBrain (pgvector, cross-project)                │   │
+│  │  L3, OpenBrain (pgvector, cross-project)                │   │
 │  │       ▲                                                  │   │
 │  │       │ Anvil  (DLQ + capability handshake + boot drain) │   │
 │  │  ┌────┴─────────────────────────────────────────────┐    │   │
-│  │  │  L2 — .forge/*.jsonl   (Hallmark-stamped, _v:1)  │    │   │
-│  │  │  L1 — Hub (in-process, runId-scoped)             │    │   │
+│  │  │  L2, .forge/*.jsonl   (Hallmark-stamped, _v:1)  │    │   │
+│  │  │  L1, Hub (in-process, runId-scoped)             │    │   │
 │  │  └──────────────────────────────────────────────────┘    │   │
 │  └──────────────────────────────────────────────────────────┘   │
 │                                                                 │
 │  Parallel axis (not a tier):                                    │
-│    Lattice — .forge/lattice/{chunks,edges}.jsonl                │
+│    Lattice, .forge/lattice/{chunks,edges}.jsonl                │
 │      (code-graph; queried alongside, not stacked on, memory)    │
 └─────────────────────────────────────────────────────────────────┘</code></pre>
         </div>
@@ -259,11 +259,11 @@ pforge sync-memories --dry-run</code></pre>
         <!-- ─── See Also ─── -->
         <h2 id="see-also">See Also</h2>
         <ul>
-          <li><a href="memory-architecture.html">Chapter 21 — Memory Architecture</a> — the technical L1/L2/L3 deep-dive these upgrades build on.</li>
-          <li><a href="multi-agent.html#openbrain-connective-tissue">Chapter 13 — Multi-Agent → OpenBrain Connective Tissue</a> — how OpenBrain handoffs work across Claude, Copilot, and Cursor.</li>
-          <li><a href="health-dna.html">Chapter 25 — Health DNA</a> — the composite health score that now trends visibly better thanks to memory upgrades.</li>
-          <li><a href="mcp-server-reference.html#tools-core">MCP Server Reference — Memory Tools</a> — the full parameter list for <code>forge_memory_report</code>, <code>forge_hallmark_show</code>, <code>forge_hallmark_verify</code>, and the lattice tools.</li>
-          <li><a href="cli-reference.html#commands">Chapter 8 — CLI Reference</a> — every <code>pforge lattice</code>, <code>pforge memory</code>, and <code>pforge sync-memories</code> subcommand.</li>
+          <li><a href="memory-architecture.html">Chapter 21 — Memory Architecture</a>, the technical L1/L2/L3 deep-dive these upgrades build on.</li>
+          <li><a href="multi-agent.html#openbrain-connective-tissue">Chapter 13 — Multi-Agent → OpenBrain Connective Tissue</a>, how OpenBrain handoffs work across Claude, Copilot, and Cursor.</li>
+          <li><a href="health-dna.html">Chapter 25 — Health DNA</a>, the composite health score that now trends visibly better thanks to memory upgrades.</li>
+          <li><a href="mcp-server-reference.html#tools-core">MCP Server Reference — Memory Tools</a>, the full parameter list for <code>forge_memory_report</code>, <code>forge_hallmark_show</code>, <code>forge_hallmark_verify</code>, and the lattice tools.</li>
+          <li><a href="cli-reference.html#commands">Chapter 8 — CLI Reference</a>, every <code>pforge lattice</code>, <code>pforge memory</code>, and <code>pforge sync-memories</code> subcommand.</li>
         </ul>
 
         <div id="chapter-prev-next" class="chapter-nav"></div>

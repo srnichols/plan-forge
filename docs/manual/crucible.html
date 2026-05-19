@@ -25,7 +25,7 @@
 
     <main>
       <!-- Hero -->
-      <img src="assets/chapter-heroes/ch6-hero.jpg" alt="Fiery crucible smelter with question-mark glyphs crystallizing into a blueprint shape — the idea-smelting station" class="chapter-hero" />
+      <img src="assets/chapter-heroes/ch6-hero.jpg" alt="Fiery crucible smelter with question-mark glyphs crystallizing into a blueprint shape, the idea-smelting station" class="chapter-hero" />
 
       <div class="chapter-content">
 
@@ -137,18 +137,18 @@ forge_crucible_abandon { id, reason? }                   → { ok }</code></pre>
         </div>
 
         <h2 id="recursion">Recursion Guardrails</h2>
-        <p>A smelt can spawn a child smelt — useful when answering a question reveals a sub-feature that itself needs its own phase. The server enforces a <strong>maximum recursion depth</strong> (default <code>1</code>, configurable up to <code>3</code>) so a runaway agent cannot chain smelts indefinitely.</p>
+        <p>A smelt can spawn a child smelt, useful when answering a question reveals a sub-feature that itself needs its own phase. The server enforces a <strong>maximum recursion depth</strong> (default <code>1</code>, configurable up to <code>3</code>) so a runaway agent cannot chain smelts indefinitely.</p>
         <p>Child smelts inherit <code>parentSmeltId</code> and appear linked in the dashboard. The parent can reference the child's <code>crucibleId</code> in its frontmatter so the audit chain stays intact.</p>
 
         <h2 id="enforcement">Enforcement Gate</h2>
         <p>The <code>crucible-enforce</code> gate refuses to accept any plan under <code>docs/plans/Phase-*.md</code> without a <code>crucibleId</code>. There are exactly three legitimate ways to satisfy it:</p>
         <ol>
-          <li><strong>Finalize a smelt</strong> — the normal path. Frontmatter is written automatically.</li>
-          <li><strong>Grandfather migration</strong> — on first run after upgrade, existing phase files get a synthetic <code>crucibleId: grandfathered-&lt;uuid&gt;</code> and a row in <code>.forge/crucible/manual-imports.jsonl</code>.</li>
-          <li><strong>Manual import</strong> — <code>pforge run-plan --manual-import path/to/plan.md</code> stamps a synthetic <code>imported-&lt;source&gt;-&lt;uuid&gt;</code> id and logs the bypass. Reserved for Spec Kit imports, offline drafts, and genuine emergencies.</li>
+          <li><strong>Finalize a smelt</strong>, the normal path. Frontmatter is written automatically.</li>
+          <li><strong>Grandfather migration</strong>, on first run after upgrade, existing phase files get a synthetic <code>crucibleId: grandfathered-&lt;uuid&gt;</code> and a row in <code>.forge/crucible/manual-imports.jsonl</code>.</li>
+          <li><strong>Manual import</strong>, <code>pforge run-plan --manual-import path/to/plan.md</code> stamps a synthetic <code>imported-&lt;source&gt;-&lt;uuid&gt;</code> id and logs the bypass. Reserved for Spec Kit imports, offline drafts, and genuine emergencies.</li>
         </ol>
         <div class="callout callout-warning">
-          <strong>Every manual import is audited.</strong> The Governance tab surfaces every row in the audit log. If a reviewer sees an unexplained import, the gate did its job — investigate.
+          <strong>Every manual import is audited.</strong> The Governance tab surfaces every row in the audit log. If a reviewer sees an unexplained import, the gate did its job, investigate.
         </div>
 
         <h2 id="speckit">Spec Kit Coexistence</h2>
@@ -156,13 +156,13 @@ forge_crucible_abandon { id, reason? }                   → { ok }</code></pre>
         <pre><code>pforge run-plan --manual-import docs/plans/imported/Phase-from-speckit.md \
                  --source speckit \
                  --reason "Imported from Spec Kit session 2026-04-15"</code></pre>
-        <p>The gate writes frontmatter with <code>source: speckit</code> and appends an audit row. The Spec Kit importer does not require a full interview — it trusts that the external spec already carried equivalent structure.</p>
+        <p>The gate writes frontmatter with <code>source: speckit</code> and appends an audit row. The Spec Kit importer does not require a full interview, it trusts that the external spec already carried equivalent structure.</p>
 
         <h2 id="dashboard">Dashboard Integration</h2>
         <p>Two tabs expose Crucible's state:</p>
         <ul>
-          <li><strong>🔥 Crucible tab</strong> — live list of in-progress smelts, the active interview prompt, and a draft preview that updates as answers are recorded. A "Hardener ready" notice appears after finalize.</li>
-          <li><strong>🛡 Governance tab</strong> — <em>read-only</em> view of <code>docs/plans/PROJECT-PRINCIPLES.md</code>, <code>.github/instructions/project-profile.instructions.md</code>, and <code>.github/instructions/project-principles.instructions.md</code>, plus the full manual-import audit log. Edits happen in your editor; this tab is intentionally non-editable.</li>
+          <li><strong>🔥 Crucible tab</strong>, live list of in-progress smelts, the active interview prompt, and a draft preview that updates as answers are recorded. A "Hardener ready" notice appears after finalize.</li>
+          <li><strong>🛡 Governance tab</strong>, <em>read-only</em> view of <code>docs/plans/PROJECT-PRINCIPLES.md</code>, <code>.github/instructions/project-profile.instructions.md</code>, and <code>.github/instructions/project-principles.instructions.md</code>, plus the full manual-import audit log. Edits happen in your editor; this tab is intentionally non-editable.</li>
         </ul>
 
         <h2 id="config">Config Tab Fields</h2>
@@ -196,7 +196,7 @@ forge_crucible_abandon { id, reason? }                   → { ok }</code></pre>
           <dd class="text-slate-400 text-sm">Your Principles file changed after the smelt started. Read it, then resume or abandon. If you consistently hit this, raise <code>staleDefaultsHours</code> in Config.</dd>
 
           <dt class="font-semibold text-slate-100">Recursion blocked at depth 1</dt>
-          <dd class="text-slate-400 text-sm">By design. If you genuinely need deeper chains, bump <code>recursionDepth</code> in Config. Three is the hard ceiling — beyond that, extract a separate Phase.</dd>
+          <dd class="text-slate-400 text-sm">By design. If you genuinely need deeper chains, bump <code>recursionDepth</code> in Config. Three is the hard ceiling, beyond that, extract a separate Phase.</dd>
 
           <dt class="font-semibold text-slate-100">Governance tab shows empty file list</dt>
           <dd class="text-slate-400 text-sm">You haven't created <code>docs/plans/PROJECT-PRINCIPLES.md</code> yet. Run <code>/project-principles</code> in Copilot chat, or create the file manually.</dd>

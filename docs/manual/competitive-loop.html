@@ -25,18 +25,18 @@
 
     <main>
       <!-- Hero -->
-      <img src="assets/chapter-heroes/ch-comp-hero.jpg" alt="Three blacksmith-spirits (green, blue, gold) racing on parallel forge tracks toward a finish-line beam — worktree races and winner election" class="chapter-hero" />
+      <img src="assets/chapter-heroes/ch-comp-hero.jpg" alt="Three blacksmith-spirits (green, blue, gold) racing on parallel forge tracks toward a finish-line beam, worktree races and winner election" class="chapter-hero" />
       <div class="chapter-content">
-        <div class="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">Deep Dive · Act II — Forge</div>
+        <div class="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">Deep Dive · Act II, Forge</div>
         <h1>The Competitive Loop</h1>
-        <p class="text-lg text-slate-400 mb-8">Opt-in worktree races, winner election, auto-fix proposals, and cost-anomaly detection — three new inner-loop subsystems added in v2.58.0.</p>
+        <p class="text-lg text-slate-400 mb-8">Opt-in worktree races, winner election, auto-fix proposals, and cost-anomaly detection, three new inner-loop subsystems added in v2.58.0.</p>
 
         <div class="callout callout-info">
           <strong>New here? Decode the jargon first.</strong> This chapter introduces three new tricks; here's what they actually do:
           <ul class="mt-2 mb-2">
-            <li><strong>Worktree race</strong> — a <em>worktree</em> is a sandbox copy of your repo. Instead of one model trying a slice, Plan Forge can spawn 2–3 sandboxes in parallel, let different models compete, and pick whichever produces the best result. (A &ldquo;winner election&rdquo; is just &ldquo;score them and choose one.&rdquo;)</li>
-            <li><strong>Auto-fix proposals</strong> — when a slice fails, the loop drafts a patch file in <code>.forge/proposed-fixes/</code> for you to review. It never applies the fix automatically.</li>
-            <li><strong>Cost-anomaly detection</strong> — watches token spend per slice. If today's run costs 3× yesterday's, you get a warning. Advisory only; doesn't stop the run.</li>
+            <li><strong>Worktree race</strong>, a <em>worktree</em> is a sandbox copy of your repo. Instead of one model trying a slice, Plan Forge can spawn 2–3 sandboxes in parallel, let different models compete, and pick whichever produces the best result. (A &ldquo;winner election&rdquo; is just &ldquo;score them and choose one.&rdquo;)</li>
+            <li><strong>Auto-fix proposals</strong>, when a slice fails, the loop drafts a patch file in <code>.forge/proposed-fixes/</code> for you to review. It never applies the fix automatically.</li>
+            <li><strong>Cost-anomaly detection</strong>, watches token spend per slice. If today's run costs 3× yesterday's, you get a warning. Advisory only; doesn't stop the run.</li>
           </ul>
           All three are <strong>off by default</strong> and only kick in when you opt in. Nothing here changes existing behavior unless you ask for it.
         </div>
@@ -53,7 +53,7 @@
         <img src="assets/diagrams/competitive-worktree-race.svg" alt="Competitive loop flow across 4 phases: Spawn (slice arrives, competitive enabled, spawn N worktrees), Race (3 parallel worktrees with claude-sonnet-4.6, grok-4, gpt-5.3-codex executing in their own .forge/worktrees/slice-N-* directories with build/test gates), Election (4 tie-breaker rules in order: gates pass -> reviewer score -> token cost lower wins -> wall-clock faster wins), Winner (worktree B chosen as cheapest passing, applied to main). Eliminated worktrees retained for trace and auto-fix proposal generation. Cost-anomaly detection runs advisory-only and never halts a run." class="diagram-img diagram-img-md my-4" />
         <p>When a slice is marked for competitive execution, the orchestrator spawns a worktree per strategy, runs each in isolation, and elects a single winner. Losing worktrees are cleaned up; only the winner's changes enter the working tree.</p>
 
-        <figure class="manual-figure"><img src="assets/diagrams/competitive-loop-flow.svg" alt="Competitive loop flowchart. Start: slice marked competitive. A decision node spawn-worktrees branches to Strategy A (.forge/worktrees/A/) and Strategy B (.forge/worktrees/B/). Both worktrees run a validation gate and then conditionally invoke a reviewer when innerLoop.reviewer.enabled is true. The two reviewer outputs converge on a winner-election decision node. The path labeled gate-pass-plus-best-reviewer-score promotes the winner to the working tree; the path labeled tie-on-gate-and-reviewer drops into a token-cost tie-breaker that feeds back into winner. Winner flows through clean-up of losing worktrees to slice-committed. A dotted secondary path connects gate-failure on either strategy to an auto-fix-proposal decision node, which routes small local diffs to .forge/proposed-fixes/*.patch and complex failures to a postmortem record." class="diagram-img diagram-img-md my-4" /><figcaption class="manual-figcaption">Competitive worktree lifecycle — spawn, gate, reviewer, winner election, plus the auto-fix branch on gate failure.</figcaption></figure>
+        <figure class="manual-figure"><img src="assets/diagrams/competitive-loop-flow.svg" alt="Competitive loop flowchart. Start: slice marked competitive. A decision node spawn-worktrees branches to Strategy A (.forge/worktrees/A/) and Strategy B (.forge/worktrees/B/). Both worktrees run a validation gate and then conditionally invoke a reviewer when innerLoop.reviewer.enabled is true. The two reviewer outputs converge on a winner-election decision node. The path labeled gate-pass-plus-best-reviewer-score promotes the winner to the working tree; the path labeled tie-on-gate-and-reviewer drops into a token-cost tie-breaker that feeds back into winner. Winner flows through clean-up of losing worktrees to slice-committed. A dotted secondary path connects gate-failure on either strategy to an auto-fix-proposal decision node, which routes small local diffs to .forge/proposed-fixes/*.patch and complex failures to a postmortem record." class="diagram-img diagram-img-md my-4" /><figcaption class="manual-figcaption">Competitive worktree lifecycle, spawn, gate, reviewer, winner election, plus the auto-fix branch on gate failure.</figcaption></figure>
 
         <!-- ─── Winner election rules ─── -->
         <h2 id="election">Winner election rules</h2>
@@ -72,13 +72,13 @@
         <ul>
           <li>Patches are written to <code>.forge/proposed-fixes/&lt;fixId&gt;.patch</code> with metadata in <code>.forge/fix-proposals.json</code>.</li>
           <li>Nothing is applied automatically. The operator (or a reviewer agent) must invoke <code>applyFixProposal</code>; the patch is git-apply-style so <code>rollbackFixProposal</code> can undo it cleanly.</li>
-          <li>To allow the orchestrator to apply patches itself on gate-fail retries, set <code>innerLoop.autoFix.applyWithoutReview: true</code>. This is off by default for a reason — review the patch first.</li>
+          <li>To allow the orchestrator to apply patches itself on gate-fail retries, set <code>innerLoop.autoFix.applyWithoutReview: true</code>. This is off by default for a reason, review the patch first.</li>
         </ul>
 
         <!-- ─── Cost-anomaly detection ─── -->
         <h2 id="cost-anomaly">Cost-anomaly detection</h2>
         <p>Every slice's total token cost is compared against the rolling per-model median (default window: 20 runs). Ratios above <code>innerLoop.costAnomaly.ratio</code> (default 2.0) are logged to <code>.forge/cost-anomalies.jsonl</code> and surfaced in the Dashboard's <em>Inner Loop</em> tab.</p>
-        <p>Detection is <em>advisory</em>: anomalies never halt a run. The signal is there so you can investigate why a slice drifted — stale prompts, model degradation, a gate that's suddenly looping — before it shows up as a surprise on the month's bill.</p>
+        <p>Detection is <em>advisory</em>: anomalies never halt a run. The signal is there so you can investigate why a slice drifted, stale prompts, model degradation, a gate that's suddenly looping, before it shows up as a surprise on the month's bill.</p>
 
         <!-- ─── Configuration ─── -->
         <h2 id="config">Configuration summary</h2>

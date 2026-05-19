@@ -20,7 +20,7 @@
     <aside id="manual-sidebar" class="manual-sidebar"><nav id="sidebar-nav"></nav></aside>
     <main>
       <!-- Hero -->
-      <img src="assets/chapter-heroes/ch12-hero-ext.jpg" alt="Marketplace shelves in a forge workshop holding glowing amber crate-boxes with abstract guild symbols — the extensions catalog" class="chapter-hero" />
+      <img src="assets/chapter-heroes/ch12-hero-ext.jpg" alt="Marketplace shelves in a forge workshop holding glowing amber crate-boxes with abstract guild symbols, the extensions catalog" class="chapter-hero" />
       <div class="chapter-content">
 
       <div class="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">Chapter 12</div>
@@ -28,7 +28,7 @@
       <p class="text-lg text-slate-400 mb-8">Install, create, and publish guardrail extensions.</p>
 
       <h2 id="what-extensions-add">What Extensions Add</h2>
-      <p>Extensions are packaged bundles of instruction files, agents, and prompts that add domain-specific guardrails to your project. Think of them as drop-in expertise for domains you haven't solved yet — instead of writing compliance rules from scratch, install a community extension and get pre-built knowledge.</p>
+      <p>Extensions are packaged bundles of instruction files, agents, and prompts that add domain-specific guardrails to your project. They give you drop-in expertise for domains you haven't solved yet: instead of writing compliance rules from scratch, install a community extension and get pre-built knowledge.</p>
 
       <h2 id="catalog">Browsing the Catalog</h2>
       <div class="cmd-block">
@@ -50,7 +50,7 @@ pforge ext info saas-multi-tenancy</code></pre>
         <tbody>
           <tr><td><code>saas-multi-tenancy</code></td><td>Architecture</td><td>Tenant isolation patterns, RLS enforcement, cache separation, cross-tenant audit</td></tr>
           <tr><td><code>azure-infrastructure</code></td><td>Cloud</td><td>Bicep/Terraform guardrails, resource naming, tagging, cost governance</td></tr>
-          <tr><td><code>plan-forge-memory</code></td><td>Integration</td><td>OpenBrain memory — persistent context across sessions, postmortem injection</td></tr>
+          <tr><td><code>plan-forge-memory</code></td><td>Integration</td><td>OpenBrain memory, persistent context across sessions, postmortem injection</td></tr>
         </tbody>
       </table>
 
@@ -99,7 +99,7 @@ pforge ext install .forge/extensions/my-extension</code></pre>
       </ol>
 
       <h2 id="publishing">Publishing</h2>
-      <p>Publishing generates a catalog entry — it doesn't upload anything. You submit via pull request:</p>
+      <p>Publishing generates a catalog entry, it doesn't upload anything. You submit via pull request:</p>
       <ol>
         <li>Run <code>pforge ext publish .forge/extensions/my-extension</code></li>
         <li>Fork <a href="https://github.com/srnichols/plan-forge">plan-forge</a> on GitHub</li>

@@ -20,17 +20,17 @@
     <aside id="manual-sidebar" class="manual-sidebar"><nav id="sidebar-nav"></nav></aside>
     <main>
       <!-- Hero -->
-      <img src="assets/chapter-heroes/ch-update-hero.jpg" alt="Stone forge crossroads at twilight with two diverging glowing amber paths — GitHub upstream vs sibling clone" class="chapter-hero" />
+      <img src="assets/chapter-heroes/ch-update-hero.jpg" alt="Stone forge crossroads at twilight with two diverging glowing amber paths, GitHub upstream vs sibling clone" class="chapter-hero" />
       <div class="chapter-content">
 
       <div class="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">Appendix G</div>
       <h1>Update Source Modes</h1>
-      <p class="text-lg text-slate-400 mb-8">Where <code>pforge update</code> pulls template bytes from — and why the default changed in v2.56.0.</p>
+      <p class="text-lg text-slate-400 mb-8">Where <code>pforge update</code> pulls template bytes from, and why the default changed in v2.56.0.</p>
 
       <!-- ─── Background ─── -->
       <h2 id="background">The Problem</h2>
       <p>
-        Before v2.56.0, <code>pforge update</code> had a single hard-coded source-selection rule: use the sibling clone at <code>../plan-forge</code> if one existed, otherwise fail and ask for <code>--from-github</code>. This was optimized for contributors on their primary machine — the sibling is always on master, which is always freshly built, so contributors dogfood every change.
+        Before v2.56.0, <code>pforge update</code> had a single hard-coded source-selection rule: use the sibling clone at <code>../plan-forge</code> if one existed, otherwise fail and ask for <code>--from-github</code>. This was optimized for contributors on their primary machine, the sibling is always on master, which is always freshly built, so contributors dogfood every change.
       </p>
       <p>
         The trouble showed up on secondary machines: users who happened to have cloned the Plan Forge repo earlier (say, to browse the source) would later run <code>pforge update</code> on an unrelated project and get surprise <code>-dev</code> bytes from a stale master checkout. The <em>second</em> PC behaved differently from the first, for reasons that weren't obvious.
@@ -39,7 +39,7 @@
       <!-- ─── The Three Modes ─── -->
       <h2 id="modes">The Three Modes</h2>
       <p>
-        <code>.forge.json</code> now accepts an <code>updateSource</code> key with three values. The default — <code>auto</code> — picks the right thing for most people; the other two give you explicit control.
+        <code>.forge.json</code> now accepts an <code>updateSource</code> key with three values. The default, <code>auto</code>, picks the right thing for most people; the other two give you explicit control.
       </p>
       <table class="manual-table">
         <thead><tr><th>Mode</th><th>Behavior</th><th>When to use</th></tr></thead>
@@ -63,12 +63,12 @@
       </table>
 
       <div class="callout callout-info">
-        <strong>Auto mode in detail.</strong> It calls the GitHub Releases API (cached 24h in <code>.forge/update-check.json</code>) to resolve the latest tag, reads the sibling's <code>VERSION</code> file, and compares the two with semver precedence — any <code>-dev</code> pre-release loses to a clean tag. If the sibling wins or there's no network, it uses the sibling. If GitHub wins or there's no sibling, it uses the tag.
+        <strong>Auto mode in detail.</strong> It calls the GitHub Releases API (cached 24h in <code>.forge/update-check.json</code>) to resolve the latest tag, reads the sibling's <code>VERSION</code> file, and compares the two with semver precedence, any <code>-dev</code> pre-release loses to a clean tag. If the sibling wins or there's no network, it uses the sibling. If GitHub wins or there's no sibling, it uses the tag.
       </div>
 
       <!-- ─── How to Change ─── -->
       <h2 id="change">How to Change Your Mode</h2>
-      <p>Three ways, all equivalent — they all write <code>.forge.json</code>.</p>
+      <p>Three ways, all equivalent, they all write <code>.forge.json</code>.</p>
 
       <h3 id="change-cli">1. CLI</h3>
       <div class="cmd-block">
@@ -86,7 +86,7 @@ pforge config list</code></pre>
       </div>
 
       <h3 id="change-dashboard">2. Dashboard</h3>
-      <p>Open the dashboard (<code>localhost:3100/dashboard</code>), switch to the <strong>Config</strong> tab, find the <strong>Update Source</strong> select. Your choice saves immediately — no Save button required. The hint text below the dropdown reminds you what each mode does.</p>
+      <p>Open the dashboard (<code>localhost:3100/dashboard</code>), switch to the <strong>Config</strong> tab, find the <strong>Update Source</strong> select. Your choice saves immediately, no Save button required. The hint text below the dropdown reminds you what each mode does.</p>
 
       <h3 id="change-json">3. Hand-edit <code>.forge.json</code></h3>
       <div class="cmd-block">
@@ -108,7 +108,7 @@ pforge config list</code></pre>
 
       <h3 id="faq-offline">What happens offline in <code>auto</code> mode?</h3>
       <p>
-        If the GitHub tag lookup fails (timeout, no network, rate-limit), <code>auto</code> falls back to the sibling if one exists. If there's no sibling and no network, you'll get the same error you would have gotten pre-v2.56.0 — run <code>--from-github</code> when you're back online, or set a sibling clone.
+        If the GitHub tag lookup fails (timeout, no network, rate-limit), <code>auto</code> falls back to the sibling if one exists. If there's no sibling and no network, you'll get the same error you would have gotten pre-v2.56.0, run <code>--from-github</code> when you're back online, or set a sibling clone.
       </p>
 
       <h3 id="faq-self-update"><code>pforge self-update</code> — does this affect it?</h3>
@@ -118,7 +118,7 @@ pforge config list</code></pre>
 
       <h3 id="faq-ci">Should CI pipelines set a mode?</h3>
       <p>
-        Yes — set <code>updateSource</code> to <code>github-tags</code> in your CI's <code>.forge.json</code>. This guarantees every CI run pulls from a specific tagged release and ignores whatever happens to be checked out in adjacent directories.
+        Yes, set <code>updateSource</code> to <code>github-tags</code> in your CI's <code>.forge.json</code>. This guarantees every CI run pulls from a specific tagged release and ignores whatever happens to be checked out in adjacent directories.
       </p>
 
       <h3 id="faq-migrate">Do I need to migrate my existing <code>.forge.json</code>?</h3>
@@ -129,9 +129,9 @@ pforge config list</code></pre>
       <!-- ─── Cross-links ─── -->
       <h2 id="see-also">See Also</h2>
       <ul>
-        <li><a href="installation.html#updating">Chapter 3 § Updating</a> — the quick command reference.</li>
-        <li><a href="cli-reference.html">Chapter 8: CLI Reference</a> — full <code>pforge update</code> and <code>pforge config</code> flag list.</li>
-        <li><a href="dashboard.html">Chapter 7: The Dashboard</a> — Config tab walkthrough.</li>
+        <li><a href="installation.html#updating">Chapter 3 § Updating</a>, the quick command reference.</li>
+        <li><a href="cli-reference.html">Chapter 8: CLI Reference</a>, full <code>pforge update</code> and <code>pforge config</code> flag list.</li>
+        <li><a href="dashboard.html">Chapter 7: The Dashboard</a>, Config tab walkthrough.</li>
       </ul>
 
       <div id="chapter-prev-next" class="chapter-nav"></div>

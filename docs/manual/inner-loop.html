@@ -25,22 +25,22 @@
 
     <main>
       <!-- Hero -->
-      <img src="assets/chapter-heroes/ch-inner-hero.jpg" alt="Polished bronze hand-mirror reflecting a glowing amber spiral of feedback loops curving inward to a glowing core — the inner reflection loop" class="chapter-hero" />
+      <img src="assets/chapter-heroes/ch-inner-hero.jpg" alt="Polished bronze hand-mirror reflecting a glowing amber spiral of feedback loops curving inward to a glowing core, the inner reflection loop" class="chapter-hero" />
       <div class="chapter-content">
-        <div class="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">Deep Dive · Act II — Forge</div>
+        <div class="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">Deep Dive · Act II, Forge</div>
         <h1>The Inner Loop</h1>
-        <p class="text-lg text-slate-400 mb-8">Seven subsystems — reflexion, trajectories, auto-skills, gate synthesis, postmortems, federation, and the opt-in reviewer — that turn every slice into a research step.</p>
+        <p class="text-lg text-slate-400 mb-8">Seven subsystems, reflexion, trajectories, auto-skills, gate synthesis, postmortems, federation, and the opt-in reviewer, that turn every slice into a research step.</p>
 
         <div class="callout callout-info">
           <strong>New here? Decode the seven words first.</strong> The subtitle drops a lot of jargon. Here's a one-line plain-English read on each:
           <ul class="mt-2 mb-2">
-            <li><strong>Reflexion</strong> — when a slice fails, the model gets to <em>re-read its own previous attempt</em> before retrying. (Like reviewing your own essay before rewriting it.)</li>
-            <li><strong>Trajectories</strong> — short notes the model leaves for itself about what worked and what didn't. Saved per slice.</li>
-            <li><strong>Auto-skills</strong> — if a pattern keeps showing up across slices, Plan Forge auto-generates a reusable skill so the next slice starts from a higher baseline.</li>
-            <li><strong>Gate synthesis</strong> — advisory suggestions for stricter validation gates based on what's been failing.</li>
-            <li><strong>Postmortems</strong> — a one-paragraph summary written after every run: what retried, what cost more, what drifted.</li>
-            <li><strong>Federation</strong> — optionally publish those postmortems to a shared store so sibling projects benefit from each other's lessons.</li>
-            <li><strong>Opt-in reviewer</strong> — a second AI checks the slice before it commits. You decide whether to enable it.</li>
+            <li><strong>Reflexion</strong>, when a slice fails, the model gets to <em>re-read its own previous attempt</em> before retrying. (Like reviewing your own essay before rewriting it.)</li>
+            <li><strong>Trajectories</strong>, short notes the model leaves for itself about what worked and what didn't. Saved per slice.</li>
+            <li><strong>Auto-skills</strong>, if a pattern keeps showing up across slices, Plan Forge auto-generates a reusable skill so the next slice starts from a higher baseline.</li>
+            <li><strong>Gate synthesis</strong>, advisory suggestions for stricter validation gates based on what's been failing.</li>
+            <li><strong>Postmortems</strong>, a one-paragraph summary written after every run: what retried, what cost more, what drifted.</li>
+            <li><strong>Federation</strong>, optionally publish those postmortems to a shared store so sibling projects benefit from each other's lessons.</li>
+            <li><strong>Opt-in reviewer</strong>, a second AI checks the slice before it commits. You decide whether to enable it.</li>
           </ul>
           <strong>All seven default to off, advisory, or read-only.</strong> Existing workflows don't change unless you opt in.
         </div>
@@ -53,9 +53,9 @@
 
         <!-- ─── The State-Flow Diagram ─── -->
         <h2 id="state-flow">The Inner Loop — State Flow</h2>
-        <p>The deterministic slice executor (Phase-1 through Phase-24) is the spine. The Phase-25 subsystems bolt on reflective behavior at specific transitions — they never replace the spine, they only enrich it.</p>
+        <p>The deterministic slice executor (Phase-1 through Phase-24) is the spine. The Phase-25 subsystems bolt on reflective behavior at specific transitions, they never replace the spine, they only enrich it.</p>
 
-        <figure class="manual-figure"><img src="assets/diagrams/inner-loop-state.svg" alt="Inner-loop state diagram. runPlan parses the plan, then walks through pre-flight gate synthesis (L6 advisory), per-slice prompt build, auto-skill lookup (L2), worker invocation, gate run, trajectory write on pass (L8), auto-skill capture (L2), reviewer check, and an optional reviewer invocation (L4, opt-in) that emits an advisory verdict or blocks on critical when blockOnCritical is true. Gate failure routes through a reflexion build (L7) that injects context into the next prompt attempt. Run completion writes a postmortem (L5) capturing retries, gateFlaps, costDelta, and driftDelta, optionally publishing to federation (L4-lite) when brain.federation.enabled is true." class="diagram-img diagram-img-md my-4" /><figcaption class="manual-figcaption">Inner-loop state flow — Phase-25 subsystems (L2, L4, L5, L6, L7, L8) enriching the deterministic slice executor at specific transitions.</figcaption></figure>
+        <figure class="manual-figure"><img src="assets/diagrams/inner-loop-state.svg" alt="Inner-loop state diagram. runPlan parses the plan, then walks through pre-flight gate synthesis (L6 advisory), per-slice prompt build, auto-skill lookup (L2), worker invocation, gate run, trajectory write on pass (L8), auto-skill capture (L2), reviewer check, and an optional reviewer invocation (L4, opt-in) that emits an advisory verdict or blocks on critical when blockOnCritical is true. Gate failure routes through a reflexion build (L7) that injects context into the next prompt attempt. Run completion writes a postmortem (L5) capturing retries, gateFlaps, costDelta, and driftDelta, optionally publishing to federation (L4-lite) when brain.federation.enabled is true." class="diagram-img diagram-img-md my-4" /><figcaption class="manual-figcaption">Inner-loop state flow, Phase-25 subsystems (L2, L4, L5, L6, L7, L8) enriching the deterministic slice executor at specific transitions.</figcaption></figure>
 
         <!-- ─── Subsystem Anchors ─── -->
         <h2 id="subsystems">The Seven Subsystems</h2>
@@ -66,7 +66,7 @@
         <p>When a slice's validation gate fails, the orchestrator builds a compact Markdown block with the gate command, model, duration, and the stderr tail (≤2KB). That block is injected into the <em>next</em> attempt's prompt so the worker reasons about its prior failure instead of blindly trying the same thing.</p>
         <ul>
           <li><strong>Module:</strong> <code>pforge-mcp/memory.mjs → buildReflexionBlock()</code></li>
-          <li><strong>Config:</strong> none — always on</li>
+          <li><strong>Config:</strong> none, always on</li>
           <li><strong>Storage:</strong> in-memory per attempt</li>
         </ul>
 
@@ -75,7 +75,7 @@
         <p>On slice pass, Plan Forge extracts the sentinel-wrapped note the worker produced (<code>&lt;!-- PFORGE_TRAJECTORY:BEGIN --&gt;…&lt;!-- PFORGE_TRAJECTORY:END --&gt;</code>), word-caps it at 500, and writes it to disk. Postmortems and federation consumers read these for compact run narratives.</p>
         <ul>
           <li><strong>Module:</strong> <code>pforge-mcp/memory.mjs → writeTrajectory()</code></li>
-          <li><strong>Config:</strong> none — always on</li>
+          <li><strong>Config:</strong> none, always on</li>
           <li><strong>Storage:</strong> <code>.forge/trajectories/&lt;slice&gt;/&lt;iso&gt;.md</code></li>
         </ul>
 
@@ -84,7 +84,7 @@
         <p>A slice that passes gets captured as a candidate auto-skill with its domain keywords, gate commands, and a SHA prefix. Before the next slice, the orchestrator retrieves matching skills (ranked by reuse count) and injects them into the prompt. A skill promotes to "stable" once its reuse count hits the threshold (default <strong>3</strong>).</p>
         <ul>
           <li><strong>Module:</strong> <code>pforge-mcp/memory.mjs → retrieveAutoSkills() / writeAutoSkill()</code></li>
-          <li><strong>Config:</strong> none in v2.57 — defaults are Dashboard-editable in Phase-26</li>
+          <li><strong>Config:</strong> none in v2.57, defaults are Dashboard-editable in Phase-26</li>
           <li><strong>Storage:</strong> <code>.forge/auto-skills/*.md</code></li>
         </ul>
 
@@ -99,7 +99,7 @@
 
         <!-- Postmortems -->
         <h3 id="postmortem">5. Plan postmortems (L5) — the hardener learns from you</h3>
-        <p>After every run — pass or fail — Plan Forge writes a JSON postmortem with <code>retriesPerSlice</code>, <code>gateFlaps</code>, <code>topFailureReason</code>, <code>costDelta</code>, and <code>driftDelta</code> (deltas vs the prior run). Retention is 10 per plan. The Step-2 hardener now reads the newest 3 postmortems and folds their signals into the Scope Contract — closing the loop from execution back into planning.</p>
+        <p>After every run, pass or fail, Plan Forge writes a JSON postmortem with <code>retriesPerSlice</code>, <code>gateFlaps</code>, <code>topFailureReason</code>, <code>costDelta</code>, and <code>driftDelta</code> (deltas vs the prior run). Retention is 10 per plan. The Step-2 hardener now reads the newest 3 postmortems and folds their signals into the Scope Contract, closing the loop from execution back into planning.</p>
         <ul>
           <li><strong>Module:</strong> <code>pforge-mcp/orchestrator.mjs → buildPlanPostmortem() / writePlanPostmortem()</code></li>
           <li><strong>Config:</strong> retention count via <code>maxRunHistory</code>-style defaults</li>
@@ -108,10 +108,10 @@
 
         <!-- Federation -->
         <h3 id="federation">6. Cross-project federation (L4-lite) — one project's memory helps another</h3>
-        <p>Opt-in. When a <code>cross.*</code> brain recall misses L3 (OpenBrain), the facade fans out to the repos listed in <code>brain.federation.repos[]</code> and reads their <code>.forge/brain/&lt;entity&gt;/&lt;id&gt;.json</code> — read-only, absolute local paths only. URLs and relative paths are rejected by contract.</p>
+        <p>Opt-in. When a <code>cross.*</code> brain recall misses L3 (OpenBrain), the facade fans out to the repos listed in <code>brain.federation.repos[]</code> and reads their <code>.forge/brain/&lt;entity&gt;/&lt;id&gt;.json</code>, read-only, absolute local paths only. URLs and relative paths are rejected by contract.</p>
         <ul>
           <li><strong>Module:</strong> <code>pforge-mcp/brain.mjs → federationRead()</code></li>
-          <li><strong>Config:</strong> <code>brain.federation: { enabled, repos: [] }</code> — defaults off</li>
+          <li><strong>Config:</strong> <code>brain.federation: { enabled, repos: [] }</code>, defaults off</li>
           <li><strong>Security:</strong> absolute-local-paths-only (D9); <code>..</code> rejected; defense-in-depth path containment check</li>
         </ul>
 
@@ -139,12 +139,12 @@
 
         <!-- ─── Phase-26 additions ─────────────────────────────────────── -->
         <h2 id="phase-26">Phase-26 additions (v2.58.0)</h2>
-        <p>Three more subsystems close the loop further — the slice executor can now race strategies, draft its own patches when a gate fails, and flag token-cost drift without halting a run.</p>
+        <p>Three more subsystems close the loop further, the slice executor can now race strategies, draft its own patches when a gate fails, and flag token-cost drift without halting a run.</p>
 
         <ul>
-          <li><strong>Competitive execution (L9)</strong> — Opt-in worktree race. Two or more strategies run the same slice under isolated git worktrees; the winner is elected by gate result, reviewer verdict, and token-cost tie-breaker. Off by default. Config: <code>innerLoop.competitive</code>. See <a href="competitive-loop.html">The Competitive Loop</a> for the full flow.</li>
-          <li><strong>Auto-fix patch proposals (L6)</strong> — When a gate-fail trajectory suggests a small local correction, the orchestrator drafts a <code>.patch</code> file under <code>.forge/proposed-fixes/</code>. Advisory — nothing auto-applies unless <code>applyWithoutReview: true</code>.</li>
-          <li><strong>Cost-anomaly detection (L5)</strong> — Slices whose token cost drifts above the per-model median by more than <code>ratio</code> (default 2.0) are recorded in <code>.forge/cost-anomalies.jsonl</code>. Detection only; never halts a run.</li>
+          <li><strong>Competitive execution (L9)</strong>, Opt-in worktree race. Two or more strategies run the same slice under isolated git worktrees; the winner is elected by gate result, reviewer verdict, and token-cost tie-breaker. Off by default. Config: <code>innerLoop.competitive</code>. See <a href="competitive-loop.html">The Competitive Loop</a> for the full flow.</li>
+          <li><strong>Auto-fix patch proposals (L6)</strong>, When a gate-fail trajectory suggests a small local correction, the orchestrator drafts a <code>.patch</code> file under <code>.forge/proposed-fixes/</code>. Advisory, nothing auto-applies unless <code>applyWithoutReview: true</code>.</li>
+          <li><strong>Cost-anomaly detection (L5)</strong>, Slices whose token cost drifts above the per-model median by more than <code>ratio</code> (default 2.0) are recorded in <code>.forge/cost-anomalies.jsonl</code>. Detection only; never halts a run.</li>
         </ul>
 
         <p>Additional config block (added by the v2.58 best-defaults preset for new installs; existing projects opt in):</p>

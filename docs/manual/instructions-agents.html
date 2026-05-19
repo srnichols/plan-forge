@@ -20,7 +20,7 @@
     <aside id="manual-sidebar" class="manual-sidebar"><nav id="sidebar-nav"></nav></aside>
     <main>
       <!-- Hero -->
-      <img src="assets/chapter-heroes/ch10-hero.jpg" alt="Constellation of glowing amber instruction-rule nodes interconnected by threads of light — auto-loading guardrails activating in context" class="chapter-hero" />
+      <img src="assets/chapter-heroes/ch10-hero.jpg" alt="Constellation of glowing amber instruction-rule nodes interconnected by threads of light, auto-loading guardrails activating in context" class="chapter-hero" />
       <div class="chapter-content">
 
       <div class="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">Chapter 10</div>
@@ -29,17 +29,17 @@
 
       <!-- ─── Overview ─── -->
       <h2 id="overview">How Auto-Loading Works</h2>
-      <p>Each instruction file has an <code>applyTo</code> glob pattern in its YAML frontmatter. When you edit a file matching that pattern, the instruction auto-loads into the AI's context. No manual action needed — it's the difference between drowning the AI in every rule you have and having the right guidance whisper only when it's relevant. (For full details on writing your own <code>applyTo</code> patterns, see <a href="customization.html#custom-instructions">Chapter 9</a>.)</p>
+      <p>Each instruction file has an <code>applyTo</code> glob pattern in its YAML frontmatter. When you edit a file matching that pattern, the instruction auto-loads into the AI's context. No manual action needed, it's the difference between drowning the AI in every rule you have and having the right guidance whisper only when it's relevant. (For full details on writing your own <code>applyTo</code> patterns, see <a href="customization.html#custom-instructions">Chapter 9</a>.)</p>
       <div class="cmd-block">
         <div class="cmd-block-header"><span>Example: security.instructions.md</span></div>
         <pre><code>---
-description: Security best practices — input validation, auth, secrets
+description: Security best practices, input validation, auth, secrets
 applyTo: "**/auth/**,**/security/**,**/middleware/**"
 ---
 # Security Rules
-- Parameterized queries only — never string interpolation in SQL
+- Parameterized queries only, never string interpolation in SQL
 - Input validation at system boundaries
-- No secrets in code — use environment variables or secret managers
+- No secrets in code, use environment variables or secret managers
 ...</code></pre>
       </div>
 
@@ -63,7 +63,7 @@ applyTo: "**/auth/**,**/security/**,**/middleware/**"
 
       <!-- ─── Shared (Universal) ─── -->
       <h2 id="shared">Universal Files (All Presets)</h2>
-      <p>These four files ship with every preset — they form the universal baseline:</p>
+      <p>These four files ship with every preset, they form the universal baseline:</p>
       <table class="manual-table">
         <thead><tr><th>File</th><th>applyTo</th><th>Purpose</th></tr></thead>
         <tbody>
@@ -105,7 +105,7 @@ applyTo: "**/auth/**,**/security/**,**/middleware/**"
       <p>As of v2.18, every instruction file includes <strong>Temper Guards</strong> (shortcut prevention tables) and <strong>Warning Signs</strong> (observable anti-patterns). These help agents avoid common quality erosion and help reviewers detect violations.</p>
 
       <div class="callout callout-tip">
-        <strong>Agents, Skills &amp; Hooks</strong> — the reviewer agents (14), slash-command skills (12), and lifecycle hooks are covered in the companion reference:
+        <strong>Agents, Skills &amp; Hooks</strong>, the reviewer agents (14), slash-command skills (12), and lifecycle hooks are covered in the companion reference:
         <a href="instructions-agents-reference.html">Chapter 10 · Reference — Agents, Skills &amp; Hooks →</a>
       </div>
 

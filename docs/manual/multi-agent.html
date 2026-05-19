@@ -29,16 +29,16 @@
       <p class="text-lg text-slate-400 mb-8">One setup, all agents. Configure Plan Forge for 7 AI tools.</p>
 
       <div class="callout callout-info">
-        <strong>New here? What this chapter is about.</strong> Plan Forge isn't tied to one AI tool. Whatever you (or your team) already use — GitHub Copilot, Claude Code, Cursor, Codex, Gemini, Windsurf — the same plans, instructions, and reviewer agents work in all of them. This chapter shows how to install the right files for each tool. <strong>You don't need all of them</strong>; just pick the agent(s) your team uses.
+        <strong>New here? What this chapter is about.</strong> Plan Forge isn't tied to one AI tool. Whatever you (or your team) already use, GitHub Copilot, Claude Code, Cursor, Codex, Gemini, Windsurf, the same plans, instructions, and reviewer agents work in all of them. This chapter shows how to install the right files for each tool. <strong>You don't need all of them</strong>; just pick the agent(s) your team uses.
         <ul class="mt-2 mb-0">
-          <li><strong>What gets installed</strong> — native config files for each agent (e.g. <code>CLAUDE.md</code>, <code>.cursorrules</code>, <code>AGENTS.md</code>) so the agent reads Plan Forge's guardrails automatically.</li>
-          <li><strong>Why it matters</strong> — you get the same architecture rules, same reviewers, same skills, no matter which AI you're talking to. Switching tools doesn't mean re-teaching the rules.</li>
-          <li><strong>Default</strong> — GitHub Copilot files always install (Plan Forge's reference implementation). Add others with the <code>-Agent</code> flag.</li>
+          <li><strong>What gets installed</strong>, native config files for each agent (e.g. <code>CLAUDE.md</code>, <code>.cursorrules</code>, <code>AGENTS.md</code>) so the agent reads Plan Forge's guardrails automatically.</li>
+          <li><strong>Why it matters</strong>, you get the same architecture rules, same reviewers, same skills, no matter which AI you're talking to. Switching tools doesn't mean re-teaching the rules.</li>
+          <li><strong>Default</strong>, GitHub Copilot files always install (Plan Forge's reference implementation). Add others with the <code>-Agent</code> flag.</li>
         </ul>
       </div>
 
       <div class="callout callout-tip">
-        <strong>Read this first if you haven't:</strong> the orchestration concepts this chapter assumes — <em>intent lanes</em>, <em>quorum advisory</em>, and the <em>Forge-Master</em> reasoning UI — are introduced in the <a href="forge-master.html">Forge-Master (Deep Dive)</a> sub-chapter and exposed on the <a href="dashboard-forge-master.html">Dashboard — Forge-Master</a> tab. Skim either before wiring a second agent in if those terms are new.
+        <strong>Read this first if you haven't:</strong> the orchestration concepts this chapter assumes, <em>intent lanes</em>, <em>quorum advisory</em>, and the <em>Forge-Master</em> reasoning UI, are introduced in the <a href="forge-master.html">Forge-Master (Deep Dive)</a> sub-chapter and exposed on the <a href="dashboard-forge-master.html">Dashboard — Forge-Master</a> tab. Skim either before wiring a second agent in if those terms are new.
       </div>
 
       <h2 id="one-setup">One Setup, All Agents</h2>
@@ -50,7 +50,7 @@
 # Or pick specific agents
 .\setup.ps1 -Preset dotnet -Agent claude,cursor</code></pre>
       </div>
-      <p>Copilot files are always installed. The <code>-Agent</code> flag adds native files for other tools — each with all 16 guardrail files embedded, prompts as native skills/commands, and 19 reviewer agents as invocable procedures.</p>
+      <p>Copilot files are always installed. The <code>-Agent</code> flag adds native files for other tools, each with all 16 guardrail files embedded, prompts as native skills/commands, and 19 reviewer agents as invocable procedures.</p>
 
       <h2 id="comparison">Feature Parity Matrix</h2>
       <table class="manual-table">
@@ -67,7 +67,7 @@
       </table>
 
       <h2 id="copilot">GitHub Copilot (Default)</h2>
-      <p>Native integration. Instruction files auto-load via <code>applyTo</code>. Agents appear in the agent picker. Skills invoke via <code>/slash-command</code>. Hooks run automatically. This is the reference implementation — all other agents emulate this behavior.</p>
+      <p>Native integration. Instruction files auto-load via <code>applyTo</code>. Agents appear in the agent picker. Skills invoke via <code>/slash-command</code>. Hooks run automatically. This is the reference implementation, all other agents emulate this behavior.</p>
       <p><strong>Key file</strong>: <code>.github/copilot-instructions.md</code></p>
 
       <h2 id="claude">Claude Code</h2>
@@ -99,7 +99,7 @@
       <p><strong>Key file</strong>: <code>AI-ASSISTANT.md</code></p>
 
       <h2 id="cloud-agent">Cloud Agent</h2>
-      <p>GitHub's Copilot cloud agent uses the same <code>copilot</code> flag — no separate adapter needed. Add <code>copilot-setup-steps.yml</code> to provision the agent's environment:</p>
+      <p>GitHub's Copilot cloud agent uses the same <code>copilot</code> flag, no separate adapter needed. Add <code>copilot-setup-steps.yml</code> to provision the agent's environment:</p>
       <div class="cmd-block">
         <div class="cmd-block-header"><span>Terminal</span><button class="cmd-copy-btn">Copy</button></div>
         <pre><code>cp templates/copilot-setup-steps.yml .github/copilot-setup-steps.yml</code></pre>
@@ -107,13 +107,13 @@
       <p>The cloud agent gets all guardrails, MCP tools, and <code>pforge run-plan</code> automatically.</p>
 
       <h2 id="openbrain-connective-tissue">OpenBrain: The Connective Tissue</h2>
-      <p>Across all seven agents, one challenge remains: each tool starts each session with a blank slate. OpenBrain solves this by acting as a shared, persistent memory layer that every agent reads from and writes to — regardless of which tool authored the thought.</p>
+      <p>Across all seven agents, one challenge remains: each tool starts each session with a blank slate. OpenBrain solves this by acting as a shared, persistent memory layer that every agent reads from and writes to, regardless of which tool authored the thought.</p>
       <p>When Claude Code resolves an architectural ambiguity, that decision is captured as a thought. When you switch to Copilot the next morning, it retrieves that thought before writing a single line. When your team's Cursor instance encounters the same pattern, it inherits the same guardrails. The agents change; the institutional knowledge compounds.</p>
       <div class="callout callout-amber">
         <strong>How it works at the tool level:</strong> the Memory bridge row in the <a href="#comparison">Feature Parity Matrix</a> above shows each agent's integration tier. Copilot and Claude have full native integration; Cursor, Codex, Gemini, and Windsurf use the <code>pforge recall</code> CLI to inject context at session start. The Generic adapter includes copy-paste recall snippets.
       </div>
       <p>For a deep dive into the three-tier memory architecture (in-RAM hub → local JSONL → pgvector semantic index), see <a href="memory-architecture.html#unified-memory-across-agents">Unified Memory Across Agents</a> in Chapter 24.</p>
-      <p>See also: <a href="../blog/seven-agents.html">One Framework, Seven AI Agents</a> — a practical walkthrough of how a mixed-agent team operates on a shared Plan Forge project without knowledge silos.</p>
+      <p>See also: <a href="../blog/seven-agents.html">One Framework, Seven AI Agents</a>, a practical walkthrough of how a mixed-agent team operates on a shared Plan Forge project without knowledge silos.</p>
 
       <h2 id="spec-kit">Spec Kit Interop</h2>
       <p>If you use Spec Kit for specifications, Plan Forge picks up where your specs end. The setup wizard auto-detects existing Spec Kit files and imports them as context. Extensions marked <code>speckit_compatible</code> work in both frameworks.</p>

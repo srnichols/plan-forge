@@ -26,7 +26,7 @@
 
       <div class="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">Appendix J</div>
       <h1>Plan Forge for Enterprise</h1>
-      <p class="text-lg text-slate-400 mb-8">The landing page for enterprise evaluators — reference architecture, GitHub stack alignment, operator playbook, compliance reference, and the map of where to find every enterprise answer.</p>
+      <p class="text-lg text-slate-400 mb-8">The landing page for enterprise evaluators, reference architecture, GitHub stack alignment, operator playbook, compliance reference, and the map of where to find every enterprise answer.</p>
 
       <div class="rounded-xl border border-slate-700/50 bg-slate-900/40 p-5 mb-10">
         <p class="text-sm text-slate-400 mb-2"><strong class="text-slate-200">Audience:</strong> Platform leads, security architects, and engineering managers evaluating Plan Forge for multi-team deployment in regulated or large-scale environments.</p>
@@ -35,7 +35,7 @@
 
       <h2 id="why-plan-forge-for-the-enterprise">Why Plan Forge for the enterprise</h2>
 
-      <p>Most "AI-SDLC" tools today are point solutions: a code completion in the IDE, an autonomous agent that opens one PR, a code reviewer that comments on PRs. Plan Forge is the layer above those — a plan-driven, gate-enforced, cost-tracked, multi-slice orchestration framework that turns a feature spec into a series of validated commits.</p>
+      <p>Most "AI-SDLC" tools today are point solutions: a code completion in the IDE, an autonomous agent that opens one PR, a code reviewer that comments on PRs. Plan Forge is the layer above those, a plan-driven, gate-enforced, cost-tracked, multi-slice orchestration framework that turns a feature spec into a series of validated commits.</p>
 
       <p>Three structural choices make it enterprise-fit:</p>
 
@@ -132,14 +132,14 @@
       <ol>
         <li>Read <a href="enterprise-reference-architecture.html" class="text-amber-400 hover:underline">Reference Architecture</a> for the picture.</li>
         <li>Read <a href="github-stack-alignment.html" class="text-amber-400 hover:underline">GitHub Stack Alignment</a> for the why.</li>
-        <li>Skim <a href="compliance-and-data-residency.html" class="text-amber-400 hover:underline">Compliance and Data Residency</a> — Sections 1–3 cover 80% of typical security review questions.</li>
+        <li>Skim <a href="compliance-and-data-residency.html" class="text-amber-400 hover:underline">Compliance and Data Residency</a>, Sections 1–3 cover 80% of typical security review questions.</li>
       </ol>
 
       <p>If you have 90 minutes:</p>
 
       <ol start="4">
-        <li>Read <a href="fleet-operator-playbook.html" class="text-amber-400 hover:underline">Fleet Operator Playbook</a> — gives you a calendar, not a feature list.</li>
-        <li>Read <a href="agent-factory-recipe.html" class="text-amber-400 hover:underline">Agent Factory Recipe</a> — the concrete onboarding pattern.</li>
+        <li>Read <a href="fleet-operator-playbook.html" class="text-amber-400 hover:underline">Fleet Operator Playbook</a>, gives you a calendar, not a feature list.</li>
+        <li>Read <a href="agent-factory-recipe.html" class="text-amber-400 hover:underline">Agent Factory Recipe</a>, the concrete onboarding pattern.</li>
       </ol>
 
       <p>If you want to run it:</p>
@@ -157,7 +157,7 @@
         <li><strong class="text-slate-200">Separation of concerns</strong>: orchestrator → worker → repository → presentation, never collapsed</li>
         <li><strong class="text-slate-200">Test-driven for business logic</strong>: Red → Green → Refactor</li>
         <li><strong class="text-slate-200">Type safety</strong>: explicit types at every boundary</li>
-        <li><strong class="text-slate-200">Open standards</strong>: AGENTS.md, MCP, Skills, OTel <code>gen_ai.*</code> — adopt, don't invent</li>
+        <li><strong class="text-slate-200">Open standards</strong>: AGENTS.md, MCP, Skills, OTel <code>gen_ai.*</code>, adopt, don't invent</li>
       </ol>
 
       <p>Customers can read the same instruction files Plan Forge agents read. Nothing is hidden. The framework is the documentation.</p>
@@ -169,7 +169,7 @@
       <ul>
         <li><strong class="text-slate-200">Issues</strong> on GitHub for bugs and feature requests</li>
         <li><strong class="text-slate-200">GitHub Discussions</strong> for usage questions</li>
-        <li><strong class="text-slate-200">Self-repair tooling</strong> built in — <code>forge_meta_bug_file</code> lets agents file defects against Plan Forge itself when they encounter them, and the project is dogfooded against itself</li>
+        <li><strong class="text-slate-200">Self-repair tooling</strong> built in, <code>forge_meta_bug_file</code> lets agents file defects against Plan Forge itself when they encounter them, and the project is dogfooded against itself</li>
         <li><strong class="text-slate-200">No commercial support tier today.</strong> This may change. When it does, the open-source core stays open source.</li>
       </ul>
 

@@ -27,26 +27,26 @@
       <!-- Hero -->
       <img src="assets/chapter-heroes/ch26-hero.jpg" alt="Three interlocking bronze rings labeled INSTRUCTIONS, MEMORIES, and SKILLS hovering above a glowing forge anvil with amber sparks orbiting where the rings overlap" class="chapter-hero" />
       <div class="chapter-content">
-        <div class="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">Chapter 26 · Act V — Integrate</div>
+        <div class="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">Chapter 26 · Act V, Integrate</div>
         <h1>The Copilot Integration Trilogy</h1>
-        <p class="text-lg text-slate-400 mb-8">How Plan Forge teaches GitHub Copilot about your project — three tools, two generated files, one dashboard tab, zero manual setup after the first run.</p>
+        <p class="text-lg text-slate-400 mb-8">How Plan Forge teaches GitHub Copilot about your project, three tools, two generated files, one dashboard tab, zero manual setup after the first run.</p>
 
         <div class="callout callout-info">
-          <strong>Part V is integration material, not sequential lessons.</strong> These four chapters (Copilot Integration, Team Coordination, Knowledge Graph, Integrating from Outside) each declare their own prerequisites in the lede — read them in whatever order matches the integration you're doing. The expected baseline across Part V is Parts I–IV: you've shipped at least one plan, you know what Crucible (Ch 5), Bug Registry (Ch 21), and Memory (Ch 24–25) are, and you've poked the Dashboard (Ch 7) at least once.
+          <strong>Part V is integration material, not sequential lessons.</strong> These four chapters (Copilot Integration, Team Coordination, Knowledge Graph, Integrating from Outside) each declare their own prerequisites in the lede, read them in whatever order matches the integration you're doing. The expected baseline across Part V is Parts I–IV: you've shipped at least one plan, you know what Crucible (Ch 5), Bug Registry (Ch 21), and Memory (Ch 24–25) are, and you've poked the Dashboard (Ch 7) at least once.
         </div>
 
         <div class="callout callout-info">
-          <strong>Added in v2.99 → v3.1.</strong> The trilogy landed in three releases: <code>forge_sync_memories</code> (v2.99), <code>forge_sync_instructions</code> (v3.0), and the Settings → Copilot dashboard tab (v3.1). Together they make every new Copilot conversation start with full project context — no manual context-paste, no copy-and-rebuild instruction files.
+          <strong>Added in v2.99 → v3.1.</strong> The trilogy landed in three releases: <code>forge_sync_memories</code> (v2.99), <code>forge_sync_instructions</code> (v3.0), and the Settings → Copilot dashboard tab (v3.1). Together they make every new Copilot conversation start with full project context, no manual context-paste, no copy-and-rebuild instruction files.
         </div>
 
         <!-- ─── Why a trilogy ─── -->
         <h2 id="why-trilogy">Why a trilogy?</h2>
         <p>GitHub Copilot reads two files automatically when you open a workspace:</p>
         <ol>
-          <li><code>.github/copilot-instructions.md</code> — "what you must always know about this project". Architectural rules, naming conventions, build commands, security commitments.</li>
-          <li><code>.github/copilot-memory-hints.md</code> — "what we've learned from doing this work". Trajectories from prior plans, recurring patterns, auto-skills extracted from successful slices.</li>
+          <li><code>.github/copilot-instructions.md</code>, "what you must always know about this project". Architectural rules, naming conventions, build commands, security commitments.</li>
+          <li><code>.github/copilot-memory-hints.md</code>, "what we've learned from doing this work". Trajectories from prior plans, recurring patterns, auto-skills extracted from successful slices.</li>
         </ol>
-        <p>Both files exist <em>before</em> Plan Forge — you can hand-author them. But hand-authoring means: (a) they go stale the moment you ship the next plan, (b) every team member writes a slightly different one, and (c) when the underlying decisions change in <code>.forge.json</code> or <code>PROJECT-PRINCIPLES.md</code>, nothing reminds you to regenerate.</p>
+        <p>Both files exist <em>before</em> Plan Forge, you can hand-author them. But hand-authoring means: (a) they go stale the moment you ship the next plan, (b) every team member writes a slightly different one, and (c) when the underlying decisions change in <code>.forge.json</code> or <code>PROJECT-PRINCIPLES.md</code>, nothing reminds you to regenerate.</p>
 
         <p>The trilogy solves all three problems by making both files <strong>build outputs</strong>, not human-authored sources:</p>
 
@@ -90,7 +90,7 @@
         <!-- ─── The data flow ─── -->
         <h2 id="data-flow">The data flow</h2>
 
-        <figure class="manual-figure" id="fig-26-1"><img src="assets/diagrams/copilot-trilogy-flow.svg" alt="Copilot Trilogy data flow: SOURCES column (.forge.json + profile, PROJECT-PRINCIPLES.md, trajectories + auto-skills, OpenBrain L3, SKILL.md catalog) feed into SYNC TOOLS column (forge_sync_instructions for the INSTRUCTIONS lane, forge_sync_memories for the MEMORIES lane, hand-authored SKILL.md for the SKILLS lane) which produce ARTIFACTS column (.github/copilot-instructions.md, .github/copilot-memory-hints.md, .github/skills/*.md). Three color-coded swimlanes — blue for instructions, amber for memories, green for skills — keep the trilogy roles visually separate." class="diagram-img diagram-img-md my-4" /><figcaption class="manual-figcaption"><!--fignum--><span class="manual-fignum">Figure 26-1.</span><!--/fignum--> <!--cap:auto-->Copilot Integration Trilogy — three sources, three tools, three artifacts<!--/cap--></figcaption></figure>
+        <figure class="manual-figure" id="fig-26-1"><img src="assets/diagrams/copilot-trilogy-flow.svg" alt="Copilot Trilogy data flow: SOURCES column (.forge.json + profile, PROJECT-PRINCIPLES.md, trajectories + auto-skills, OpenBrain L3, SKILL.md catalog) feed into SYNC TOOLS column (forge_sync_instructions for the INSTRUCTIONS lane, forge_sync_memories for the MEMORIES lane, hand-authored SKILL.md for the SKILLS lane) which produce ARTIFACTS column (.github/copilot-instructions.md, .github/copilot-memory-hints.md, .github/skills/*.md). Three color-coded swimlanes, blue for instructions, amber for memories, green for skills, keep the trilogy roles visually separate." class="diagram-img diagram-img-md my-4" /><figcaption class="manual-figcaption"><!--fignum--><span class="manual-fignum">Figure 26-1.</span><!--/fignum--> <!--cap:auto-->Copilot Integration Trilogy, three sources, three tools, three artifacts<!--/cap--></figcaption></figure>
 
         <p>Both tools are <strong>idempotent and additive</strong>. They use content-hash deduplication, so running the same sync twice in a row produces zero file changes. They also use atomic write (temp file + rename), so a crash mid-write never leaves a half-baked file.</p>
 
@@ -99,10 +99,10 @@
         <p><code>forge_sync_instructions</code> generates <code>.github/copilot-instructions.md</code> by composing four sources, in this order:</p>
 
         <ol>
-          <li><strong>Project Profile</strong> (<code>docs/plans/PROJECT-PROFILE.md</code>) — the tech stack, build commands, key paths. Generated once via the <code>project-profile.prompt.md</code> in Session 1.</li>
-          <li><strong>Project Principles</strong> (<code>docs/plans/PROJECT-PRINCIPLES.md</code>) — non-negotiable architectural and engineering commitments. Generated via <code>project-principles.prompt.md</code>.</li>
-          <li><strong>Extra instruction files</strong> (<code>.github/instructions/*.instructions.md</code>) — auto-loaded by Copilot via their <code>applyTo</code> frontmatter. The trilogy stitches the relevant ones into the master file so Copilot sees them as a single context.</li>
-          <li><strong><code>.forge.json</code> commitments</strong> — tech choices that the project has locked in (e.g. <code>"database": "postgres"</code>, <code>"frontend": "react"</code>).</li>
+          <li><strong>Project Profile</strong> (<code>docs/plans/PROJECT-PROFILE.md</code>), the tech stack, build commands, key paths. Generated once via the <code>project-profile.prompt.md</code> in Session 1.</li>
+          <li><strong>Project Principles</strong> (<code>docs/plans/PROJECT-PRINCIPLES.md</code>), non-negotiable architectural and engineering commitments. Generated via <code>project-principles.prompt.md</code>.</li>
+          <li><strong>Extra instruction files</strong> (<code>.github/instructions/*.instructions.md</code>), auto-loaded by Copilot via their <code>applyTo</code> frontmatter. The trilogy stitches the relevant ones into the master file so Copilot sees them as a single context.</li>
+          <li><strong><code>.forge.json</code> commitments</strong>, tech choices that the project has locked in (e.g. <code>"database": "postgres"</code>, <code>"frontend": "react"</code>).</li>
         </ol>
 
         <p>The output is a single Markdown file ~150–400 lines (depends on profile complexity) with a deterministic structure: <strong>Identity → Stack → Build commands → Architectural rules → Forbidden patterns → Cost guardrails → Talking to Plan Forge tools</strong>.</p>
@@ -111,7 +111,7 @@
 
         <div class="cmd-block">
           <div class="cmd-block-header"><span>Terminal · CLI</span><button class="cmd-copy-btn">Copy</button></div>
-          <pre><code># Generate (preview only — does not write)
+          <pre><code># Generate (preview only, does not write)
 pforge sync-instructions --preview
 
 # Generate and write
@@ -165,15 +165,15 @@ forge_sync_instructions({ preview: false })
         <p><code>forge_sync_memories</code> generates <code>.github/copilot-memory-hints.md</code> by harvesting three runtime sources:</p>
 
         <ol>
-          <li><strong>Trajectories</strong> (<code>.forge/trajectories/*.jsonl</code>) — per-slice notes the worker left for itself: "I tried X, it failed because Y, so I switched to Z". These are the gold for "don't repeat this mistake" guidance.</li>
-          <li><strong>Auto-skills</strong> (<code>.forge/auto-skills/*.md</code>) — reusable patterns extracted by the Inner Loop. If three slices all needed the same shape of repository test, the fourth slice gets it for free as a skill — and Copilot Chat should know it exists too.</li>
-          <li><strong>OpenBrain entries</strong> (L3, if configured) — long-form lessons captured via <code>forge_memory_capture</code> or auto-stamped by tools like <code>forge_run_plan</code>.</li>
+          <li><strong>Trajectories</strong> (<code>.forge/trajectories/*.jsonl</code>), per-slice notes the worker left for itself: "I tried X, it failed because Y, so I switched to Z". These are the gold for "don't repeat this mistake" guidance.</li>
+          <li><strong>Auto-skills</strong> (<code>.forge/auto-skills/*.md</code>), reusable patterns extracted by the Inner Loop. If three slices all needed the same shape of repository test, the fourth slice gets it for free as a skill, and Copilot Chat should know it exists too.</li>
+          <li><strong>OpenBrain entries</strong> (L3, if configured), long-form lessons captured via <code>forge_memory_capture</code> or auto-stamped by tools like <code>forge_run_plan</code>.</li>
         </ol>
 
         <p>Each source is filtered, hashed, deduped, and ranked by recency × signal strength. The output is bounded to ~80–120 lines so Copilot's context budget stays healthy.</p>
 
         <div class="callout callout-info">
-          <strong>Soft-sync, not hard-sync.</strong> The file is additive — the tool never deletes a hint a human added by hand. If you write a custom block under <code>&lt;!-- pforge:custom --&gt;</code> / <code>&lt;!-- /pforge:custom --&gt;</code> markers, the sync tool preserves it verbatim. Only the <code>&lt;!-- pforge:auto --&gt;</code> region is regenerated.
+          <strong>Soft-sync, not hard-sync.</strong> The file is additive, the tool never deletes a hint a human added by hand. If you write a custom block under <code>&lt;!-- pforge:custom --&gt;</code> / <code>&lt;!-- /pforge:custom --&gt;</code> markers, the sync tool preserves it verbatim. Only the <code>&lt;!-- pforge:auto --&gt;</code> region is regenerated.
         </div>
 
         <h3 id="run-memories">Running it</h3>
@@ -205,8 +205,8 @@ pforge sync-memories --explain</code></pre>
 - ...
 
 ## Auto-skills available
-- `repository-vitest-pattern` — generated 2026-05-12 from 4 slices
-- `bicep-rbac-scaffold` — generated 2026-05-10 from 3 slices
+- `repository-vitest-pattern`, generated 2026-05-12 from 4 slices
+- `bicep-rbac-scaffold`, generated 2026-05-10 from 3 slices
 
 &lt;!-- /pforge:auto --&gt;
 

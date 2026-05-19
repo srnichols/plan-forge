@@ -27,9 +27,9 @@
       <!-- Hero -->
       <img src="assets/chapter-heroes/ch27-hero.jpg" alt="A vast bronze great hall with five forges arranged in a semicircle, each tended by a hooded smith with a glowing rune overhead, threads of amber light connecting their anvils into a knowledge-sharing web" class="chapter-hero" />
       <div class="chapter-content">
-        <div class="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">Chapter 27 · Act V — Integrate</div>
+        <div class="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">Chapter 27 · Act V, Integrate</div>
         <h1>Team Coordination</h1>
-        <p class="text-lg text-slate-400 mb-8">Two developers running Plan Forge on the same repo at the same time hit three predictable problems: concurrent edits collide at merge time, hard-won fixes stay trapped in one developer's local <code>.forge/</code>, and a productive day turns every reviewer into a bottleneck. This chapter shows how Plan Forge solves all three with a single shared file and a few GitHub API calls — no SaaS backend, no shared database, no new identity system.</p>
+        <p class="text-lg text-slate-400 mb-8">Two developers running Plan Forge on the same repo at the same time hit three predictable problems: concurrent edits collide at merge time, hard-won fixes stay trapped in one developer's local <code>.forge/</code>, and a productive day turns every reviewer into a bottleneck. This chapter shows how Plan Forge solves all three with a single shared file and a few GitHub API calls, no SaaS backend, no shared database, no new identity system.</p>
 
         <div class="callout callout-info">
           <strong>How it's built (v2.93 → v3.4).</strong> Five surfaces compose the team layer: <code>forge_team_dashboard</code> + <code>forge_team_activity</code> (per-developer visibility), <code>forge_github_metrics</code> + <code>forge_github_status</code> (PR throughput + validation stack), <code>forge_delegate_review</code> (dispatching review to Copilot's cloud agent), and <code>forge_classifier_issue</code> (closing the tempering audit loop by filing a GitHub issue when a classifier rule needs to land).
@@ -41,7 +41,7 @@
         <ol>
           <li><strong>Concurrent edits</strong>. Both might pick the same plan, or pick plans whose Scope Contracts touch the same files. Without visibility, you discover the conflict at merge time.</li>
           <li><strong>Lost institutional memory</strong>. Alice solves a tricky gate-portability issue on Monday. Bob hits the same issue on Wednesday because Alice's trajectory lives in her local <code>.forge/</code>.</li>
-          <li><strong>Review fatigue</strong>. Plan Forge runs are productive — a single afternoon can ship 4 plans. If every plan needs a human reviewer, the bottleneck moves from "writing code" to "reviewing code".</li>
+          <li><strong>Review fatigue</strong>. Plan Forge runs are productive, a single afternoon can ship 4 plans. If every plan needs a human reviewer, the bottleneck moves from "writing code" to "reviewing code".</li>
         </ol>
         <p>v3.x addresses each, in order: <strong>team dashboard</strong> for visibility, <strong>shared activity ledger</strong> + <strong>memory sync</strong> for institutional memory, <strong>delegated review</strong> for the review bottleneck.</p>
 
@@ -49,7 +49,7 @@
         <h2 id="activity-ledger">The activity ledger</h2>
         <p>Everything starts with one file: <code>.forge/team-activity.jsonl</code>. It is an append-only JSON Lines log that every Plan Forge operation writes to. One event per line, never edited, never compacted.</p>
 
-        <figure class="manual-figure" id="fig-27-1"><img src="assets/diagrams/team-coordination-flow.svg" alt="Team coordination flow: multiple developer worktrees on the left (alice/feature-auth, bob/feature-billing, carla/hotfix-db, plus N more) each append one event per slice complete to the central team-activity.jsonl ledger. On the right, four readers consume the same ledger: forge_team_dashboard renders per-developer cards with a conflict-risk score, forge_team_activity tails raw events with filters, forge_classifier_issue files GitHub issues to close the tempering audit loop, and the Dashboard Team tab provides a live view at localhost:3100. The ledger is append-only and never compacted; conflict risk is calculated as file-overlap (Jaccard) times time-window proximity." class="diagram-img diagram-img-md my-4" /><figcaption class="manual-figcaption"><!--fignum--><span class="manual-fignum">Figure 27-1.</span><!--/fignum--> <!--cap:auto-->Team coordination — many writers, one ledger, four readers<!--/cap--></figcaption></figure>
+        <figure class="manual-figure" id="fig-27-1"><img src="assets/diagrams/team-coordination-flow.svg" alt="Team coordination flow: multiple developer worktrees on the left (alice/feature-auth, bob/feature-billing, carla/hotfix-db, plus N more) each append one event per slice complete to the central team-activity.jsonl ledger. On the right, four readers consume the same ledger: forge_team_dashboard renders per-developer cards with a conflict-risk score, forge_team_activity tails raw events with filters, forge_classifier_issue files GitHub issues to close the tempering audit loop, and the Dashboard Team tab provides a live view at localhost:3100. The ledger is append-only and never compacted; conflict risk is calculated as file-overlap (Jaccard) times time-window proximity." class="diagram-img diagram-img-md my-4" /><figcaption class="manual-figcaption"><!--fignum--><span class="manual-fignum">Figure 27-1.</span><!--/fignum--> <!--cap:auto-->Team coordination, many writers, one ledger, four readers<!--/cap--></figcaption></figure>
 
         <pre class="bg-slate-950 border border-slate-800/60 rounded-xl p-4 overflow-x-auto text-sm"><code>{"ts":"2026-05-17T09:14:22Z","actor":"alice@example.com","action":"plan.start","plan":"Phase-31","sha":"a1b2c3d"}
 {"ts":"2026-05-17T09:18:41Z","actor":"alice@example.com","action":"slice.commit","plan":"Phase-31","slice":"2","sha":"e4f5g6h"}
@@ -59,7 +59,7 @@
         <p>The file is small (typical: 50–200 KB per team-week), git-friendly (line-stable), and trivially indexable. Every team query in this chapter is a streaming read of this file.</p>
 
         <div class="callout callout-tip">
-          <strong>Where it lives.</strong> By default, <code>.forge/team-activity.jsonl</code> is <em>not</em> gitignored — that's the point. Commit it. The ledger is most useful when every developer's events land in one shared history. If you don't want it in git, set <code>team.ledger.gitignore: true</code> in <code>.forge.json</code> and use a side channel (S3, shared volume) instead.
+          <strong>Where it lives.</strong> By default, <code>.forge/team-activity.jsonl</code> is <em>not</em> gitignored, that's the point. Commit it. The ledger is most useful when every developer's events land in one shared history. If you don't want it in git, set <code>team.ledger.gitignore: true</code> in <code>.forge.json</code> and use a side channel (S3, shared volume) instead.
         </div>
 
         <!-- ─── Per-developer dashboard ─── -->
@@ -95,7 +95,7 @@
   totals: { runs: 16, successRate: 0.938, costUsd: 34.52 }
 }</code></pre>
 
-        <p>This is what backs the <strong>Team</strong> dashboard tab — one card per developer, sorted by recency, with a visual badge for "currently running a plan". The same shape powers the <code>pforge team-dashboard</code> CLI command for terminal users.</p>
+        <p>This is what backs the <strong>Team</strong> dashboard tab, one card per developer, sorted by recency, with a visual badge for "currently running a plan". The same shape powers the <code>pforge team-dashboard</code> CLI command for terminal users.</p>
 
         <h3 id="conflict-banner">The conflict-risk banner</h3>
         <p>Above the cards, the dashboard renders a <strong>conflict-risk banner</strong> computed from the active plans of any two developers running simultaneously. The risk score is derived from Scope Contract overlap:</p>
@@ -118,7 +118,7 @@
               <tr class="border-b border-slate-800/40">
                 <td class="py-2 px-3"><span class="text-sky-400 font-semibold">low</span></td>
                 <td class="py-2 px-3">Active plans touch sibling files in the same directory</td>
-                <td class="py-2 px-3">"Alice and Bob are both working in <code>src/orders/</code> — sync up before merge."</td>
+                <td class="py-2 px-3">"Alice and Bob are both working in <code>src/orders/</code>, sync up before merge."</td>
               </tr>
               <tr class="border-b border-slate-800/40">
                 <td class="py-2 px-3"><span class="text-amber-400 font-semibold">medium</span></td>
@@ -139,10 +139,10 @@
         <p>Where <code>forge_team_dashboard</code> aggregates, <code>forge_team_activity</code> queries. Pass any combination of filters:</p>
 
         <pre class="bg-slate-950 border border-slate-800/60 rounded-xl p-4 overflow-x-auto text-sm"><code>forge_team_activity({
-  actor:   "alice@example.com",   // optional — who
-  plan:    "Phase-31",            // optional — what
-  action:  "slice.commit",        // optional — kind
-  since:   "2026-05-10T00:00:00Z",// optional — when
+  actor:   "alice@example.com",   // optional, who
+  plan:    "Phase-31",            // optional, what
+  action:  "slice.commit",        // optional, kind
+  since:   "2026-05-10T00:00:00Z",// optional, when
   limit:   100,                   // bounded; default 50, max 1000
   cursor:  null                   // pagination
 })
@@ -188,7 +188,7 @@
 
         <!-- ─── Delegate review ─── -->
         <h2 id="delegate-review"><code>forge_delegate_review</code> — dispatching to Copilot</h2>
-        <p>Plan Forge's reviewer step (the <strong>Reviewer Gate</strong>) is independent — a fresh session reads the plan's Scope Contract and audits the diff. By default it runs locally. <code>forge_delegate_review</code> dispatches the same audit task to the <strong>GitHub Copilot cloud coding agent</strong>, so the review happens server-side and the result lands as a PR comment.</p>
+        <p>Plan Forge's reviewer step (the <strong>Reviewer Gate</strong>) is independent, a fresh session reads the plan's Scope Contract and audits the diff. By default it runs locally. <code>forge_delegate_review</code> dispatches the same audit task to the <strong>GitHub Copilot cloud coding agent</strong>, so the review happens server-side and the result lands as a PR comment.</p>
 
         <pre class="bg-slate-950 border border-slate-800/60 rounded-xl p-4 overflow-x-auto text-sm"><code>forge_delegate_review({
   pr: 247,
@@ -245,7 +245,7 @@
   hash: "sha256:..."
 }</code></pre>
 
-        <p>The tool deduplicates against open issues with the same rule + category hash within 14 days, so repeated audit findings don't spam the tracker. This is the official "self-repair" path for classifier rules — analogous to <code>forge_meta_bug_file</code> for plan/orchestrator/prompt defects.</p>
+        <p>The tool deduplicates against open issues with the same rule + category hash within 14 days, so repeated audit findings don't spam the tracker. This is the official "self-repair" path for classifier rules, analogous to <code>forge_meta_bug_file</code> for plan/orchestrator/prompt defects.</p>
 
         <!-- ─── Dashboard map ─── -->
         <h2 id="dashboard-tabs">Where to find this in the dashboard</h2>

@@ -26,7 +26,7 @@
 
       <div class="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">Reference</div>
       <h1>Lessons Learned</h1>
-      <p class="text-lg text-slate-400 mb-8">Seven principles behind Plan Forge's architecture — what each one prevents, where it is enforced.</p>
+      <p class="text-lg text-slate-400 mb-8">Seven principles behind Plan Forge's architecture, what each one prevents, where it is enforced.</p>
 
       <div class="rounded-xl border border-slate-700/50 bg-slate-900/40 p-5 mb-10">
         <p class="text-sm text-slate-400 mb-2"><strong class="text-slate-200">When to read this chapter:</strong> reviewing why Plan Forge enforces what it enforces, onboarding to the architecture, or evaluating whether a proposed change conflicts with a foundational principle.</p>
@@ -35,9 +35,9 @@
 
       <h2 id="agents-dont-drift-maliciously">Lesson 1 — Agents Don't Drift Maliciously; They Drift Because No Rule Said Stop</h2>
 
-      <p><strong>Principle</strong>: Define what should <em>not</em> be built, not just what should. Explicit prohibitions cut scope drift by — to quote the source — "an order of magnitude" (<a href="../blog/guardrails-lessons-learned.html#:~:text=an%20order%20of%20magnitude" rel="noopener">guardrails-lessons-learned blog</a>).</p>
+      <p><strong>Principle</strong>: Define what should <em>not</em> be built, not just what should. Explicit prohibitions cut scope drift by, to quote the source, "an order of magnitude" (<a href="../blog/guardrails-lessons-learned.html#:~:text=an%20order%20of%20magnitude" rel="noopener">guardrails-lessons-learned blog</a>).</p>
 
-      <p><strong>Failure mode it addresses</strong>: An agent asked to "build a login page" produces a login page plus a password reset flow, an admin panel, a user profile system, and refactored database migrations. The agent is not being creative — it is being thorough with zero scope constraints.</p>
+      <p><strong>Failure mode it addresses</strong>: An agent asked to "build a login page" produces a login page plus a password reset flow, an admin panel, a user profile system, and refactored database migrations. The agent is not being creative, it is being thorough with zero scope constraints.</p>
 
       <p><strong>Where it is enforced</strong>: Every hardened plan ships a <a href="customization.html">Forbidden Actions</a> section in the Scope Contract. The <code>PreToolUse</code> lifecycle hook (see <a href="how-it-works.html#building-blocks">How It Works → Building Blocks</a>) blocks file edits to paths listed in the active plan's Forbidden Actions. The pattern is enforced by the plan-hardening prompt, not left to the executing agent's discretion.</p>
 
@@ -47,7 +47,7 @@
 
       <p><strong>Principle</strong>: Guardrails that require manual activation are guardrails that go unused. File-pattern-scoped auto-loading drives compliance from optional to default.</p>
 
-      <p><strong>Failure mode it addresses</strong>: Early Plan Forge required developers to manually attach instruction files to each chat session. Adoption sat at roughly 20% — "whoever remembered." After the breakthrough of <code>applyTo</code> frontmatter, adoption climbed to 100% because activation became automatic on file edits.</p>
+      <p><strong>Failure mode it addresses</strong>: Early Plan Forge required developers to manually attach instruction files to each chat session. Adoption sat at roughly 20%, "whoever remembered." After the breakthrough of <code>applyTo</code> frontmatter, adoption climbed to 100% because activation became automatic on file edits.</p>
 
       <p><strong>Where it is enforced</strong>: Each instruction file in <code>.github/instructions/</code> declares which file patterns it cares about via YAML frontmatter:</p>
 
@@ -65,7 +65,7 @@ applyTo: '**/auth/**,**/middleware/**'
 
       <p><strong>Principle</strong>: The session that wrote the code cannot evaluate it objectively. Sunk-cost bias is a property of the context window, not the model. A fresh review session catches what the build session is structurally unable to see.</p>
 
-      <p><strong>Failure mode it addresses</strong>: In a single long chat session, the agent that wrote the code will always believe its code is correct. The blind spots that produced the bug live in the same token sequence as the proposed fix. Self-review fails silently — the agent gives itself a passing grade and moves on.</p>
+      <p><strong>Failure mode it addresses</strong>: In a single long chat session, the agent that wrote the code will always believe its code is correct. The blind spots that produced the bug live in the same token sequence as the proposed fix. Self-review fails silently, the agent gives itself a passing grade and moves on.</p>
 
       <p><strong>Where it is enforced</strong>: Plan Forge mandates session isolation. Builder works in Session 2; reviewer works in Session 3 with fresh context, the same guardrails, and independent judgment. See <a href="how-it-works.html#why-session-isolation-works">How It Works → Why Session Isolation Works</a> for the deeper psychological breakdown, and <a href="how-it-works.html#sessions">How It Works → The 4-Session Model</a> for the structural reference.</p>
 
@@ -73,7 +73,7 @@ applyTo: '**/auth/**,**/middleware/**'
 
       <h2 id="slice-boundaries">Lesson 4 — Slice Boundaries Are the Only Real Validation Points</h2>
 
-      <p><strong>Principle</strong>: Testing "at the end" does not work. Failures cascade across files faster than the agent can debug them. Validation must happen at every slice boundary — the agent cannot proceed to slice N+1 until slice N passes its gate.</p>
+      <p><strong>Principle</strong>: Testing "at the end" does not work. Failures cascade across files faster than the agent can debug them. Validation must happen at every slice boundary, the agent cannot proceed to slice N+1 until slice N passes its gate.</p>
 
       <p><strong>Failure mode it addresses</strong>: Building 15 files before running tests guarantees that failures compound. The agent burns its context window chasing regressions that span files it has long since stopped reasoning about.</p>
 
@@ -89,13 +89,13 @@ applyTo: '**/auth/**,**/middleware/**'
 
       <h2 id="focused-instructions">Lesson 5 — Focused Instruction Files Beat One Giant Guardrails Document</h2>
 
-      <p><strong>Principle</strong>: One concern per file. Each file under ~150 lines. Auto-loaded only when relevant. Long monolithic instruction documents process worse than short focused ones — agents cherry-pick what's convenient and ignore the rest.</p>
+      <p><strong>Principle</strong>: One concern per file. Each file under ~150 lines. Auto-loaded only when relevant. Long monolithic instruction documents process worse than short focused ones, agents cherry-pick what's convenient and ignore the rest.</p>
 
       <p><strong>Failure mode it addresses</strong>: The first version of Plan Forge had a single <code>copilot-instructions.md</code> at roughly 2,000 lines covering security, testing, architecture, database patterns, error handling, and deployment. Key rules buried, contradictions crept in, and the agent applied rules selectively.</p>
 
       <p><strong>Where it is enforced</strong>: The <code>.github/instructions/</code> directory contains 18+ focused files, each with a single concern. See <a href="customization.html#custom-instructions">Customization → Custom Instructions</a> for the inventory.</p>
 
-      <p><strong>v2.18 extension — Temper Guards and Warning Signs</strong>: Each instruction file now ends with two named sections — <em>Temper Guards</em> documents the specific shortcuts agents take that produce compiling but architecturally broken code (e.g. "this is just a DTO, no logic to test", "N+1 won't matter at our scale"); <em>Warning Signs</em> lists observable anti-patterns that reviewers can grep for. Each file teaches not just <em>what to do</em> but <em>why not to skip it</em>.</p>
+      <p><strong>v2.18 extension: Temper Guards and Warning Signs</strong>: Each instruction file now ends with two named sections, <em>Temper Guards</em> documents the specific shortcuts agents take that produce compiling but architecturally broken code (e.g. "this is just a DTO, no logic to test", "N+1 won't matter at our scale"); <em>Warning Signs</em> lists observable anti-patterns that reviewers can grep for. Each file teaches not just <em>what to do</em> but <em>why not to skip it</em>.</p>
 
       <h2 id="tech-stack-presets">Lesson 6 — Tech Stack Presets Are Not Optional</h2>
 
@@ -103,27 +103,27 @@ applyTo: '**/auth/**,**/middleware/**'
 
       <p><strong>Failure mode it addresses</strong>: A stack-agnostic guardrail document either contradicts the project's conventions in places (loss of trust) or stays so generic that it fails to enforce anything specific (loss of value). The middle ground does not exist.</p>
 
-      <p><strong>Where it is enforced</strong>: Nine first-party presets ship with Plan Forge — .NET, TypeScript, Python, Java, Go, Swift, Rust, PHP, and Azure IaC — selectable via <code>setup.ps1 -Preset &lt;name&gt;</code> at install time. Multi-preset combinations are supported (e.g. <code>-Preset typescript,azure-iac</code>) for full-stack projects. See <a href="stack-notes.html">Stack-Specific Notes</a> for what each preset adjusts.</p>
+      <p><strong>Where it is enforced</strong>: Nine first-party presets ship with Plan Forge, .NET, TypeScript, Python, Java, Go, Swift, Rust, PHP, and Azure IaC, selectable via <code>setup.ps1 -Preset &lt;name&gt;</code> at install time. Multi-preset combinations are supported (e.g. <code>-Preset typescript,azure-iac</code>) for full-stack projects. See <a href="stack-notes.html">Stack-Specific Notes</a> for what each preset adjusts.</p>
 
       <h2 id="enterprise-quality-default">Lesson 7 — Enterprise Quality Must Be the Default, Not an Upgrade</h2>
 
-      <p><strong>Principle</strong>: Treating quality as optional ("add tests later", "we'll refactor", "security can wait") guarantees that the optional steps never happen. Quality must be structural — the path of least resistance must produce tested, validated, architecturally compliant code.</p>
+      <p><strong>Principle</strong>: Treating quality as optional ("add tests later", "we'll refactor", "security can wait") guarantees that the optional steps never happen. Quality must be structural, the path of least resistance must produce tested, validated, architecturally compliant code.</p>
 
       <p><strong>Failure mode it addresses</strong>: Every "we'll fix it later" trains the next agent session to copy the same shortcut. The codebase accumulates technical debt that nobody is responsible for paying down.</p>
 
-      <p><strong>Where it is enforced</strong>: Hardened plans include test expectations per slice. Architecture guardrails load on every file change. Security guardrails load on every auth file. Testing guardrails load on every test file. There is no "opt in to quality" path — bypassing the defaults requires actively working around them.</p>
+      <p><strong>Where it is enforced</strong>: Hardened plans include test expectations per slice. Architecture guardrails load on every file change. Security guardrails load on every auth file. Testing guardrails load on every test file. There is no "opt in to quality" path, bypassing the defaults requires actively working around them.</p>
 
-      <p><strong>v2.19 extension — Exit Proof</strong>: Every skill now ends with a verifiable checklist — not "it seems right" but "paste the test output, show the migration file, prove coverage didn't drop." Evidence over assumption. See <a href="customization.html#skills">Customization → Skills</a> for the Exit Proof contract.</p>
+      <p><strong>v2.19 extension: Exit Proof</strong>: Every skill now ends with a verifiable checklist, not "it seems right" but "paste the test output, show the migration file, prove coverage didn't drop." Evidence over assumption. See <a href="customization.html#skills">Customization → Skills</a> for the Exit Proof contract.</p>
 
       <blockquote class="border-l-4 border-amber-500/50 pl-4 italic text-slate-400 my-4">"The best developer tools don't make quality easier. They make it unavoidable."</blockquote>
 
       <h2 id="see-also">See Also</h2>
 
       <ul>
-        <li><a href="../blog/guardrails-lessons-learned.html" rel="noopener">Original blog post</a> — first-person narrative version with the failure stories behind each lesson</li>
-        <li><a href="how-it-works.html#why-session-isolation-works">How It Works → Why Session Isolation Works</a> — deeper treatment of Lesson 3</li>
-        <li><a href="customization.html">Customization</a> — where Forbidden Actions, Instruction Files, and Skills are configured</li>
-        <li><a href="project-history.html">Project History</a> — the version timeline showing when each lesson was codified</li>
+        <li><a href="../blog/guardrails-lessons-learned.html" rel="noopener">Original blog post</a>, first-person narrative version with the failure stories behind each lesson</li>
+        <li><a href="how-it-works.html#why-session-isolation-works">How It Works → Why Session Isolation Works</a>, deeper treatment of Lesson 3</li>
+        <li><a href="customization.html">Customization</a>, where Forbidden Actions, Instruction Files, and Skills are configured</li>
+        <li><a href="project-history.html">Project History</a>, the version timeline showing when each lesson was codified</li>
       </ul>
 
       <p class="text-sm text-slate-500 mt-8">📄 Reference adaptation of <a href="../blog/guardrails-lessons-learned.html" rel="noopener">guardrails-lessons-learned.html</a>. Reference voice; first-person voice preserved only inside cited blockquotes.</p>

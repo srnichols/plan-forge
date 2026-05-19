@@ -25,7 +25,7 @@
 
     <main>
       <!-- Hero -->
-      <img src="assets/chapter-heroes/ch7-hero.jpg" alt="Master smith at the dashboard control room — wall of glowing amber screens showing live gauges, charts, and status lights" class="chapter-hero" />
+      <img src="assets/chapter-heroes/ch7-hero.jpg" alt="Master smith at the dashboard control room, wall of glowing amber screens showing live gauges, charts, and status lights" class="chapter-hero" />
 
       <div class="chapter-content">
 
@@ -68,11 +68,11 @@ node pforge-mcp/server.mjs --dashboard-only</code></pre>
           </table>
         </div>
 
-        <figure class="manual-figure" id="fig-7-1"><img src="assets/diagrams/dashboard-tabs-grouped.svg" alt="Dashboard tab taxonomy: 4 top-level groups. Forge (blue, default, 19 tabs) holds Home, Review, Progress, Crucible, Governance, Runs, Cost, Actions, Replay, Traces, Skills, Tempering, Memory, Timeline, Inner Loop, Extensions, Anvil/Lattice, GitHub Metrics, Team Dashboard — covers build/execute/ship and active-run monitoring. LiveGuard (amber, 7 tabs) holds Health, Incidents, Triage, Security, Env, Watcher, Bug Registry — covers post-deploy defense. Forge-Master (cyan, 1 tab) holds Studio — read-only reasoning orchestrator. Settings (purple, 10 sub-tabs) holds General, Models, Execution, API Keys, Updates, Memory, Bridge, Crucible, Brain, Copilot — platform-wide configuration with safe-write to .forge.json." class="diagram-img diagram-img-md my-4" /><figcaption class="manual-figcaption"><!--fignum--><span class="manual-fignum">Figure 7-1.</span><!--/fignum--> <!--cap:auto-->Dashboard tab taxonomy<!--/cap--></figcaption></figure>
+        <figure class="manual-figure" id="fig-7-1"><img src="assets/diagrams/dashboard-tabs-grouped.svg" alt="Dashboard tab taxonomy: 4 top-level groups. Forge (blue, default, 19 tabs) holds Home, Review, Progress, Crucible, Governance, Runs, Cost, Actions, Replay, Traces, Skills, Tempering, Memory, Timeline, Inner Loop, Extensions, Anvil/Lattice, GitHub Metrics, Team Dashboard, covers build/execute/ship and active-run monitoring. LiveGuard (amber, 7 tabs) holds Health, Incidents, Triage, Security, Env, Watcher, Bug Registry, covers post-deploy defense. Forge-Master (cyan, 1 tab) holds Studio, read-only reasoning orchestrator. Settings (purple, 10 sub-tabs) holds General, Models, Execution, API Keys, Updates, Memory, Bridge, Crucible, Brain, Copilot, platform-wide configuration with safe-write to .forge.json." class="diagram-img diagram-img-md my-4" /><figcaption class="manual-figcaption"><!--fignum--><span class="manual-fignum">Figure 7-1.</span><!--/fignum--> <!--cap:auto-->Dashboard tab taxonomy<!--/cap--></figcaption></figure>
 
         <!-- ─── Progress Tab ─── -->
         <h2 id="progress">Progress Tab</h2>
-        <p>The default view during plan execution. This is where you watch your plan come to life — real-time slice status via WebSocket updates:</p>
+        <p>The default view during plan execution. This is where you watch your plan come to life, real-time slice status via WebSocket updates:</p>
 
         <div class="overflow-x-auto mb-6">
           <div class="flex gap-3 min-w-[600px] py-2">
@@ -101,7 +101,7 @@ node pforge-mcp/server.mjs --dashboard-only</code></pre>
 
         <p>Each card shows: slice title, status (queued → executing → passed/failed), duration, model used, token count, and cost. Cards update in real-time as events arrive over WebSocket.</p>
 
-        <img src="../assets/dashboard/progress.png" alt="Dashboard Progress tab — Slice 1 passed (✅57.8s), Slice 2 executing (amber pulse), Slices 3-4 queued. Quorum auto badge and live event log streaming run-started / slice-started / slice-completed events." class="rounded-xl border border-slate-700/40 mb-6" loading="lazy" />
+        <img src="../assets/dashboard/progress.png" alt="Dashboard Progress tab, Slice 1 passed (✅57.8s), Slice 2 executing (amber pulse), Slices 3-4 queued. Quorum auto badge and live event log streaming run-started / slice-started / slice-completed events." class="rounded-xl border border-slate-700/40 mb-6" loading="lazy" />
 
         <!-- ─── Runs Tab ─── -->
         <h2 id="runs">Runs Tab</h2>
@@ -128,10 +128,10 @@ node pforge-mcp/server.mjs --dashboard-only</code></pre>
         <h2 id="cost">Cost Tab</h2>
         <p>Two visualizations:</p>
         <ul>
-          <li><strong>Doughnut chart</strong> — spend breakdown by model (which models cost the most)</li>
-          <li><strong>Bar chart</strong> — monthly trend (cost over time, spot anomalies)</li>
+          <li><strong>Doughnut chart</strong>, spend breakdown by model (which models cost the most)</li>
+          <li><strong>Bar chart</strong>, monthly trend (cost over time, spot anomalies)</li>
         </ul>
-        <p>Data comes from <code>.forge/cost-history.json</code> which is updated automatically after each run. The cost tab supports a 23-model pricing table — including Claude, GPT, Grok, Gemini, and custom API providers.</p>
+        <p>Data comes from <code>.forge/cost-history.json</code> which is updated automatically after each run. The cost tab supports a 23-model pricing table, including Claude, GPT, Grok, Gemini, and custom API providers.</p>
 
         <img src="../assets/dashboard/cost.png" alt="Dashboard Cost tab showing total spend, doughnut chart by model, monthly spend bar chart, and model performance table with pass rates" class="rounded-xl border border-slate-700/40 mb-6" loading="lazy" />
 
@@ -141,7 +141,7 @@ node pforge-mcp/server.mjs --dashboard-only</code></pre>
 
         <!-- ─── Actions Tab ─── -->
         <h2 id="actions">Actions Tab</h2>
-        <p>One-click buttons for common operations — no terminal needed:</p>
+        <p>One-click buttons for common operations, no terminal needed:</p>
 
         <div class="grid grid-cols-3 gap-3 mb-6">
           <div class="rounded-lg border border-slate-700/40 bg-slate-900/40 p-3 text-center">
@@ -178,12 +178,12 @@ node pforge-mcp/server.mjs --dashboard-only</code></pre>
         <h2 id="replay">Replay Tab</h2>
         <p>Browse agent session logs from past executions. Each run's <code>.forge/runs/&lt;timestamp&gt;/</code> directory contains per-slice logs. The Replay tab renders them with:</p>
         <ul>
-          <li><strong>Slice selector</strong> — pick which slice's log to view</li>
-          <li><strong>Error highlighting</strong> — errors and warnings highlighted in red/amber</li>
-          <li><strong>File filter</strong> — filter log entries by file path patterns</li>
-          <li><strong>Search</strong> — free-text search within the session log</li>
+          <li><strong>Slice selector</strong>, pick which slice's log to view</li>
+          <li><strong>Error highlighting</strong>, errors and warnings highlighted in red/amber</li>
+          <li><strong>File filter</strong>, filter log entries by file path patterns</li>
+          <li><strong>Search</strong>, free-text search within the session log</li>
         </ul>
-        <p>Use this to diagnose <em>why</em> a slice failed — the full agent conversation, including tool calls, is captured.</p>
+        <p>Use this to diagnose <em>why</em> a slice failed, the full agent conversation, including tool calls, is captured.</p>
 
         <img src="../assets/dashboard/replay.png" alt="Dashboard Replay tab showing session log viewer with slice selector, error highlighting, and search" class="rounded-xl border border-slate-700/40 mb-6" loading="lazy" />
 
@@ -202,7 +202,7 @@ node pforge-mcp/server.mjs --dashboard-only</code></pre>
 
         <!-- ─── Settings Group (moved to sub-page) ─── -->
         <div class="callout callout-info" id="config">
-          <strong>⚙ Settings Group</strong> — The Settings group has 9 purpose-built sub-tabs (General, Models, Execution, API Keys, Updates, Memory, Bridge, Crucible, Brain) for platform-wide configuration. Full reference: <a href="dashboard-settings.html">Dashboard — Settings Group →</a>
+          <strong>⚙ Settings Group</strong>, The Settings group has 9 purpose-built sub-tabs (General, Models, Execution, API Keys, Updates, Memory, Bridge, Crucible, Brain) for platform-wide configuration. Full reference: <a href="dashboard-settings.html">Dashboard — Settings Group →</a>
         </div>
 
         <!-- ─── Traces Tab ─── -->
@@ -227,9 +227,9 @@ node pforge-mcp/server.mjs --dashboard-only</code></pre>
         <h2 id="skills">Skills Tab</h2>
         <p>Monitor skill executions triggered via <code>forge_run_skill</code> or <code>/slash-command</code>. Shows:</p>
         <ul>
-          <li><strong>Recent skill runs</strong> — skill name, start time, status, duration</li>
-          <li><strong>Step-level detail</strong> — each skill step with pass/fail, output, timing</li>
-          <li><strong>Event log</strong> — WebSocket events (<code>skill-started</code>, <code>skill-step-completed</code>, <code>skill-completed</code>)</li>
+          <li><strong>Recent skill runs</strong>, skill name, start time, status, duration</li>
+          <li><strong>Step-level detail</strong>, each skill step with pass/fail, output, timing</li>
+          <li><strong>Event log</strong>, WebSocket events (<code>skill-started</code>, <code>skill-step-completed</code>, <code>skill-completed</code>)</li>
         </ul>
 
         <img src="../assets/dashboard/skills.png" alt="Dashboard Skills tab showing recent skill runs with step-level detail and event log" class="rounded-xl border border-slate-700/40 mb-6" loading="lazy" />
@@ -238,15 +238,15 @@ node pforge-mcp/server.mjs --dashboard-only</code></pre>
         <h2 id="watcher">Watcher Tab <span class="version-badge">v2.35</span></h2>
         <p>Read-only view of <em>another</em> project's pforge run, consumed from a second VS Code / Copilot session. Subscribes to <code>watch-snapshot-completed</code>, <code>watch-anomaly-detected</code>, and <code>watch-advice-generated</code> hub events emitted by <code>forge_watch</code> / <code>forge_watch_live</code>. Shows:</p>
         <ul>
-          <li><strong>Latest snapshot</strong> — target path, run state, run ID, anomaly count, diff cursor</li>
-          <li><strong>Anomalies feed</strong> — severity-coded codes (<code>stalled</code>, <code>slice-failed</code>, <code>quorum-dissent</code>, <code>quorum-leg-stalled</code>, <code>skill-step-failed</code>, <code>model-escalated</code>, etc.) with message + run ID</li>
-          <li><strong>Advice history</strong> — analyze-mode narratives from the frontier model, with token + timing metadata</li>
+          <li><strong>Latest snapshot</strong>, target path, run state, run ID, anomaly count, diff cursor</li>
+          <li><strong>Anomalies feed</strong>, severity-coded codes (<code>stalled</code>, <code>slice-failed</code>, <code>quorum-dissent</code>, <code>quorum-leg-stalled</code>, <code>skill-step-failed</code>, <code>model-escalated</code>, etc.) with message + run ID</li>
+          <li><strong>Advice history</strong>, analyze-mode narratives from the frontier model, with token + timing metadata</li>
           <li><strong>Live Watch</strong> + <strong>Watch Snapshot</strong> cards on the Actions tab copy the matching <code>pforge watch-live</code> / <code>pforge watch</code> invocations</li>
         </ul>
 
         <!-- ─── Forge-Master Studio Tab (moved to sub-page) ─── -->
         <div class="callout callout-info" id="studio">
-          <strong>📋 Forge-Master Studio Tab</strong> — The Studio tab (v2.61+) provides the reasoning orchestrator's chat interface with prompt gallery, streaming replies, embedding cache tile, and quorum advisory. Full reference: <a href="dashboard-forge-master.html">Dashboard — Forge-Master Studio →</a>
+          <strong>📋 Forge-Master Studio Tab</strong>, The Studio tab (v2.61+) provides the reasoning orchestrator's chat interface with prompt gallery, streaming replies, embedding cache tile, and quorum advisory. Full reference: <a href="dashboard-forge-master.html">Dashboard — Forge-Master Studio →</a>
         </div>
 
         <!-- ─── Audit-Loop activation surfaces ─── -->
@@ -275,11 +275,11 @@ node pforge-mcp/server.mjs --dashboard-only</code></pre>
           <li><code>watch</code>, watcher snapshot / anomaly / advice events</li>
         </ol>
         <p>The CLI equivalent is <code>pforge timeline</code>, same 9 sources, same correlation-id grouping, JSON-pipeable for scripts.</p>
-        <img src="../assets/dashboard/timeline.png" alt="Dashboard Timeline tab — unified chronological view across 9 sources (run, incident, bug, deploy, crucible, fm-turn, memory, tempering, watch)" class="rounded-xl border border-slate-700/40 mb-6" loading="lazy" />
+        <img src="../assets/dashboard/timeline.png" alt="Dashboard Timeline tab, unified chronological view across 9 sources (run, incident, bug, deploy, crucible, fm-turn, memory, tempering, watch)" class="rounded-xl border border-slate-700/40 mb-6" loading="lazy" />
 
         <!-- ─── LiveGuard Section (moved to sub-page) ─── -->
         <div class="callout callout-info" id="liveguard">
-          <strong>🛡 LiveGuard Tabs</strong> — The LiveGuard group has 7 amber-accented tabs (Health, Incidents, Triage, Security, Env, Watcher, Bug Registry) for post-deploy defense. Full reference: <a href="dashboard-liveguard.html">Dashboard — LiveGuard Tabs →</a>
+          <strong>🛡 LiveGuard Tabs</strong>, The LiveGuard group has 7 amber-accented tabs (Health, Incidents, Triage, Security, Env, Watcher, Bug Registry) for post-deploy defense. Full reference: <a href="dashboard-liveguard.html">Dashboard — LiveGuard Tabs →</a>
         </div>
 
         <!-- ─── Port Reference ─── -->

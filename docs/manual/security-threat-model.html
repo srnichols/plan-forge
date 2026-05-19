@@ -30,7 +30,7 @@
     <main>
       <div class="chapter-content">
 
-        <div class="text-xs font-semibold text-cyan-500 uppercase tracking-wider mb-2">Act III — Guard · Chapter 30</div>
+        <div class="text-xs font-semibold text-cyan-500 uppercase tracking-wider mb-2">Act III, Guard · Chapter 30</div>
         <h1>Security &amp; Threat Model</h1>
         <p class="text-lg text-slate-400 mb-8">Trust boundaries, attack surface, STRIDE per subsystem, AI-specific threats, and a hardening checklist for self-hosted deployments.</p>
 
@@ -41,7 +41,7 @@
         <h2 id="orientation">Orientation</h2>
         <p>Plan Forge is a <strong>developer-machine-first</strong> tool. The default deployment puts every component, orchestrator, MCP server, REST/WebSocket hub, memory store, dashboard, on a single workstation, bound to <code>127.0.0.1</code>. There is no managed cloud, no shared multi-tenant control plane, no external authentication broker. This is a deliberate posture: the threat model that applies to most users is <em>my own machine plus the LLM providers I call</em>, and the entire surface is designed to keep it that small.</p>
 
-        <p>That said, three configurations expand the surface and deserve explicit treatment:</p>
+        <p>Even so, three configurations expand the surface and deserve explicit treatment:</p>
         <ul class="list-disc list-inside space-y-1 mb-4">
           <li><strong>Team mode</strong>, multiple developers share a forge through GitHub-coordinated artifacts (plans in <code>docs/plans/</code>, memory hints in <code>.github/copilot-memory-hints.md</code>). The shared surface is the git repository.</li>
           <li><strong>Remote Bridge</strong>, hub events are forwarded to Slack / Teams / Telegram / Discord / PagerDuty / OpenClaw. Inbound approval flows reach back through the bridge.</li>

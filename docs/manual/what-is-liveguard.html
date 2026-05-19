@@ -28,31 +28,31 @@
       <img src="assets/chapter-heroes/ch15-hero.jpg" alt="Dark forge watchtower with amber sentinel eyes scanning a walled city of code architecture, guardian shields with rune symbols floating in the night sky" class="chapter-hero" />
       <div class="chapter-content">
 
-        <div class="text-xs font-semibold text-amber-500 uppercase tracking-wider mb-2">Act III — Guard with LiveGuard · Chapter 16</div>
+        <div class="text-xs font-semibold text-amber-500 uppercase tracking-wider mb-2">Act III, Guard with LiveGuard · Chapter 16</div>
         <h1>What Is LiveGuard?</h1>
         <p class="text-lg text-slate-400 mb-8">The forge builds your software. LiveGuard watches the gates after it ships.</p>
         <div class="callout callout-tip">
-          <strong>Shipped in v2.30.0</strong> — This chapter is now complete. LiveGuard I (v2.27) shipped 9 post-coding tools; LiveGuard II (v2.28) added secret scanning and env diff; LiveGuard III (v2.29) added fix proposals, quorum analysis, and lifecycle hooks; LiveGuard IV (v2.30) added composite health checks, auto-chaining, and incident auto-resolution.
+          <strong>Shipped in v2.30.0</strong>, This chapter is now complete. LiveGuard I (v2.27) shipped 9 post-coding tools; LiveGuard II (v2.28) added secret scanning and env diff; LiveGuard III (v2.29) added fix proposals, quorum analysis, and lifecycle hooks; LiveGuard IV (v2.30) added composite health checks, auto-chaining, and incident auto-resolution.
         </div>
 
         <!-- CONTENT: full chapter below -->
 
         <h2 id="the-problem">The Problem LiveGuard Solves</h2>
-        <p>Plan Forge sessions end when the code ships. The forge hardens your plan, executes your slices, and pushes a clean commit. Then it stops — because that's the right boundary for a build-time tool.</p>
-        <p>But software doesn't stop when the build does. Secrets drift into environment variables. Dependencies acquire CVEs. Configuration diverges between environments. The regression gate you wrote last month no longer covers the new payment flow. None of these are build-time failures — they're post-coding failures. And without a watch on the gates, they grow silently until they become incidents.</p>
+        <p>Plan Forge sessions end when the code ships. The forge hardens your plan, executes your slices, and pushes a clean commit. Then it stops, because that's the right boundary for a build-time tool.</p>
+        <p>But software doesn't stop when the build does. Secrets drift into environment variables. Dependencies acquire CVEs. Configuration diverges between environments. The regression gate you wrote last month no longer covers the new payment flow. None of these are build-time failures, they're post-coding failures. And without a watch on the gates, they grow silently until they become incidents.</p>
         <p><strong>LiveGuard is what watches after the forge stops.</strong></p>
 
         <h2 id="intelligence">LiveGuard Intelligence (v2.32)</h2>
-        <p>LiveGuard doesn't just observe — it learns. Every finding feeds back into the system:</p>
+        <p>LiveGuard doesn't just observe, it learns. Every finding feeds back into the system:</p>
         <ul class="space-y-2 text-sm text-slate-400 mb-6 ml-4">
-          <li><strong class="text-amber-400">Recurring Incident Detection</strong> — When the same files trigger incidents 3+ times in 30 days, LiveGuard auto-escalates the severity and marks the pattern as systemic.</li>
-          <li><strong class="text-amber-400">Fix Proposal Outcome Tracking</strong> — When a regression guard passes after a fix proposal was generated, the proposal is marked as "effective." Over time, the system learns which fix patterns work.</li>
-          <li><strong class="text-amber-400">Hotspot Test Priority</strong> — High-churn files (from <code>forge_hotspot</code>) are tested first by the regression guard. Risk-based testing — test the code most likely to break.</li>
-          <li><strong class="text-amber-400">Project Health DNA</strong> — A composite fingerprint combining drift score, incident rate, test pass rate, model success rate, and cost per slice. Persisted to <code>.forge/health-dna.json</code> for cross-session decay detection.</li>
+          <li><strong class="text-amber-400">Recurring Incident Detection</strong>, When the same files trigger incidents 3+ times in 30 days, LiveGuard auto-escalates the severity and marks the pattern as systemic.</li>
+          <li><strong class="text-amber-400">Fix Proposal Outcome Tracking</strong>, When a regression guard passes after a fix proposal was generated, the proposal is marked as "effective." Over time, the system learns which fix patterns work.</li>
+          <li><strong class="text-amber-400">Hotspot Test Priority</strong>, High-churn files (from <code>forge_hotspot</code>) are tested first by the regression guard. Risk-based testing, test the code most likely to break.</li>
+          <li><strong class="text-amber-400">Project Health DNA</strong>, A composite fingerprint combining drift score, incident rate, test pass rate, model success rate, and cost per slice. Persisted to <code>.forge/health-dna.json</code> for cross-session decay detection.</li>
         </ul>
 
         <h2 id="lifecycle">The Lifecycle Position</h2>
-        <p>LiveGuard occupies the operational phase — after code is shipped but before (and alongside) production APM:</p>
+        <p>LiveGuard occupies the operational phase, after code is shipped but before (and alongside) production APM:</p>
 
         <div class="overflow-x-auto mb-6">
           <div class="flex items-center gap-2 min-w-[640px] py-3 text-xs font-mono">
@@ -72,19 +72,19 @@
 
         <h2 id="not-an-apm">What LiveGuard Is Not</h2>
         <p>LiveGuard is <strong>not</strong> an APM (Application Performance Monitoring) system. It doesn't instrument your production runtime, collect request traces, or measure p99 latency. Tools like Datadog, New Relic, and Application Insights already do that well.</p>
-        <p>LiveGuard operates at the <strong>project level</strong>, not the request level. It watches your codebase, your environment files, your dependency tree, and your deployment history — the things that change between builds, not between HTTP requests. Think of it as a quality gate that stays active between coding sessions.</p>
+        <p>LiveGuard operates at the <strong>project level</strong>, not the request level. It watches your codebase, your environment files, your dependency tree, and your deployment history, the things that change between builds, not between HTTP requests. Think of it as a quality gate that stays active between coding sessions.</p>
 
         <h2 id="guardian-metaphor">The Guardian Metaphor</h2>
-        <p>In the forge metaphor, the build pipeline is the <em>smith</em> — it shapes raw material into a finished product. LiveGuard is the <em>guardian</em> posted at the gate after the smith finishes. The guardian doesn't shape the metal; it watches for cracks, drift, and intrusions that appear over time.</p>
+        <p>In the forge metaphor, the build pipeline is the <em>smith</em>, it shapes raw material into a finished product. LiveGuard is the <em>guardian</em> posted at the gate after the smith finishes. The guardian doesn't shape the metal; it watches for cracks, drift, and intrusions that appear over time.</p>
         <p>Each LiveGuard tool is a different kind of watch:</p>
         <ul class="space-y-2 text-sm text-slate-300 list-disc list-inside mb-6">
-          <li><strong>Drift watch</strong> — architecture diverging from the plan baseline (<code class="text-forge-400">forge_drift_report</code>)</li>
-          <li><strong>Incident watch</strong> — production failures and MTTR tracking (<code class="text-forge-400">forge_incident_capture</code>)</li>
-          <li><strong>Dependency watch</strong> — new CVEs in your dependency tree (<code class="text-forge-400">forge_dep_watch</code>)</li>
-          <li><strong>Regression watch</strong> — validation gates that used to pass now fail (<code class="text-forge-400">forge_regression_guard</code>)</li>
-          <li><strong>Churn watch</strong> — files that change too frequently signal instability (<code class="text-forge-400">forge_hotspot</code>)</li>
-          <li><strong>Secret watch</strong> — high-entropy strings committed in diffs (<code class="text-forge-400">forge_secret_scan</code>)</li>
-          <li><strong>Env watch</strong> — configuration key divergence across environments (<code class="text-forge-400">forge_env_diff</code>)</li>
+          <li><strong>Drift watch</strong>, architecture diverging from the plan baseline (<code class="text-forge-400">forge_drift_report</code>)</li>
+          <li><strong>Incident watch</strong>, production failures and MTTR tracking (<code class="text-forge-400">forge_incident_capture</code>)</li>
+          <li><strong>Dependency watch</strong>, new CVEs in your dependency tree (<code class="text-forge-400">forge_dep_watch</code>)</li>
+          <li><strong>Regression watch</strong>, validation gates that used to pass now fail (<code class="text-forge-400">forge_regression_guard</code>)</li>
+          <li><strong>Churn watch</strong>, files that change too frequently signal instability (<code class="text-forge-400">forge_hotspot</code>)</li>
+          <li><strong>Secret watch</strong>, high-entropy strings committed in diffs (<code class="text-forge-400">forge_secret_scan</code>)</li>
+          <li><strong>Env watch</strong>, configuration key divergence across environments (<code class="text-forge-400">forge_env_diff</code>)</li>
         </ul>
 
         <h2 id="when-to-run">When to Run LiveGuard Tools</h2>
@@ -124,7 +124,7 @@
           </table>
         </div>
 
-        <p>In v2.29, lifecycle hooks automate this — <code class="text-forge-400">PreDeploy</code> runs secret scan and env diff automatically before any deploy command, and <code class="text-forge-400">PostSlice</code> runs drift analysis after every commit.</p>
+        <p>In v2.29, lifecycle hooks automate this, <code class="text-forge-400">PreDeploy</code> runs secret scan and env diff automatically before any deploy command, and <code class="text-forge-400">PostSlice</code> runs drift analysis after every commit.</p>
 
         <div class="callout callout-tip">
           <strong>Next steps</strong>: See <a href="liveguard-tools.html">Chapter 17 — LiveGuard Tools Reference</a> for every tool and its CLI flags. See <a href="liveguard-dashboard.html">Chapter 18 — The LiveGuard Dashboard</a> to learn the real-time monitoring UI.

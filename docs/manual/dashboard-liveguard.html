@@ -31,7 +31,7 @@
         <p class="text-lg text-slate-400 mb-8">Five amber-accented tabs for post-deploy defense: Health, Incidents, Triage, Security, and Env. Part of <a href="dashboard.html">Chapter 7: The Dashboard</a>.</p>
 
         <div class="callout callout-info mb-6">
-          <strong>Part of Chapter 7</strong> — This page covers the <strong>LiveGuard</strong> top-level group. See <a href="dashboard.html">The Dashboard</a> for the Forge group tabs, <a href="dashboard-settings.html">Dashboard — Settings Group</a>, and <a href="dashboard-forge-master.html">Dashboard — Forge-Master Studio</a>.
+          <strong>Part of Chapter 7</strong>, This page covers the <strong>LiveGuard</strong> top-level group. See <a href="dashboard.html">The Dashboard</a> for the Forge group tabs, <a href="dashboard-settings.html">Dashboard — Settings Group</a>, and <a href="dashboard-forge-master.html">Dashboard — Forge-Master Studio</a>.
         </div>
 
         <!-- ─── LiveGuard Section ─── -->
@@ -39,50 +39,50 @@
         <p>Five amber-accented tabs separated by a visual divider from the FORGE section. LiveGuard tools (<code>forge_drift_report</code>, <code>forge_regression_guard</code>, <code>forge_incident_capture</code>, <code>forge_secret_scan</code>, <code>forge_env_diff</code>, <code>forge_liveguard_run</code>, etc.) broadcast <code>liveguard</code> + <code>liveguard-tool-completed</code> events that populate these tabs in real time.</p>
 
         <div class="callout callout-tip">
-          For a full LiveGuard deep-dive — what it guards against, how drift detection works, and how incidents flow to resolution — see <a href="what-is-liveguard.html">Chapter 16: What Is LiveGuard?</a> and <a href="liveguard-tools.html">Chapter 17: LiveGuard Tools Reference</a>.
+          For a full LiveGuard deep-dive, what it guards against, how drift detection works, and how incidents flow to resolution, see <a href="what-is-liveguard.html">Chapter 16: What Is LiveGuard?</a> and <a href="liveguard-tools.html">Chapter 17: LiveGuard Tools Reference</a>.
         </div>
 
         <h2 id="lg-health">Health Tab <span class="version-badge version-badge--accent">LiveGuard</span></h2>
         <p>Composite project health fingerprint produced by <code>forge_health_trend</code> and <code>forge_liveguard_run</code>:</p>
         <ul>
           <li><strong>Overall score</strong> (0–100) with trend direction (improving / stable / degrading)</li>
-          <li><strong>Component metrics</strong> — drift average, incident rate, test pass rate, model success rate, cost per slice</li>
-          <li><strong>Gate summary</strong> — drift / sweep / secret-scan / regression-guard / dep-watch / alert-triage pass/fail counts from the last <code>forge_liveguard_run</code></li>
-          <li><strong>Health DNA</strong> — persisted to <code>.forge/health-dna.json</code> for cross-session decay detection</li>
+          <li><strong>Component metrics</strong>, drift average, incident rate, test pass rate, model success rate, cost per slice</li>
+          <li><strong>Gate summary</strong>, drift / sweep / secret-scan / regression-guard / dep-watch / alert-triage pass/fail counts from the last <code>forge_liveguard_run</code></li>
+          <li><strong>Health DNA</strong>, persisted to <code>.forge/health-dna.json</code> for cross-session decay detection</li>
         </ul>
 
         <h2 id="lg-incidents">Incidents Tab <span class="version-badge version-badge--accent">LiveGuard</span></h2>
         <p>Open and recently resolved incidents captured by <code>forge_incident_capture</code> and auto-chained from drift:</p>
         <ul>
-          <li><strong>Incident list</strong> — ID, severity, description, affected files, first seen, MTTR when resolved</li>
-          <li><strong>Recurring pattern flag</strong> — incidents on the same files ≥3 times in 30 days are auto-escalated to <code>high</code></li>
-          <li><strong>Auto-resolve</strong> — incidents close automatically when <code>forge_regression_guard</code> passes on overlapping scope</li>
-          <li><strong>Fix proposals</strong> — <code>forge_fix_proposal</code> plans linked to the originating incident are surfaced inline</li>
+          <li><strong>Incident list</strong>, ID, severity, description, affected files, first seen, MTTR when resolved</li>
+          <li><strong>Recurring pattern flag</strong>, incidents on the same files ≥3 times in 30 days are auto-escalated to <code>high</code></li>
+          <li><strong>Auto-resolve</strong>, incidents close automatically when <code>forge_regression_guard</code> passes on overlapping scope</li>
+          <li><strong>Fix proposals</strong>, <code>forge_fix_proposal</code> plans linked to the originating incident are surfaced inline</li>
         </ul>
 
         <h2 id="lg-triage">Triage Tab <span class="version-badge version-badge--accent">LiveGuard</span></h2>
         <p>Prioritized alert stream from <code>forge_alert_triage</code>:</p>
         <ul>
-          <li><strong>Severity-ordered alerts</strong> — critical / high / medium / low with source tool and timestamp</li>
-          <li><strong>Source breakdown</strong> — drift violations, secret-scan findings, env-diff gaps, dep-watch vulnerabilities</li>
-          <li><strong>Framework-code filtering</strong> — <code>pforge-mcp/</code>, <code>pforge.*</code>, <code>setup.*</code> paths are excluded from app-code scoring</li>
+          <li><strong>Severity-ordered alerts</strong>, critical / high / medium / low with source tool and timestamp</li>
+          <li><strong>Source breakdown</strong>, drift violations, secret-scan findings, env-diff gaps, dep-watch vulnerabilities</li>
+          <li><strong>Framework-code filtering</strong>, <code>pforge-mcp/</code>, <code>pforge.*</code>, <code>setup.*</code> paths are excluded from app-code scoring</li>
         </ul>
 
         <h2 id="lg-security">Security Tab <span class="version-badge version-badge--accent">LiveGuard</span></h2>
         <p>Secret hygiene and dependency vulnerability posture:</p>
         <ul>
-          <li><strong>Secret scan results</strong> — entropy + key-name findings from <code>forge_secret_scan</code>, masked as <code>&lt;REDACTED&gt;</code>, confidence high / medium / low</li>
-          <li><strong>Vulnerable dependencies</strong> — <code>forge_dep_watch</code> output for npm (<code>npm audit</code>) and .NET (<code>dotnet list package --vulnerable</code>)</li>
-          <li><strong>PreDeploy gate status</strong> — blocks deploys on high-severity secret findings when <code>hooks.preDeploy</code> is enabled</li>
+          <li><strong>Secret scan results</strong>, entropy + key-name findings from <code>forge_secret_scan</code>, masked as <code>&lt;REDACTED&gt;</code>, confidence high / medium / low</li>
+          <li><strong>Vulnerable dependencies</strong>, <code>forge_dep_watch</code> output for npm (<code>npm audit</code>) and .NET (<code>dotnet list package --vulnerable</code>)</li>
+          <li><strong>PreDeploy gate status</strong>, blocks deploys on high-severity secret findings when <code>hooks.preDeploy</code> is enabled</li>
         </ul>
 
         <h2 id="lg-env">Env Tab <span class="version-badge version-badge--accent">LiveGuard</span></h2>
         <p>Environment-variable drift between local <code>.env</code>, example templates, and deploy targets via <code>forge_env_diff</code>:</p>
         <ul>
-          <li><strong>Missing keys</strong> — present in <code>.env.example</code> / deploy config but absent from local <code>.env</code></li>
-          <li><strong>Extra keys</strong> — local-only values that are not in the shared template</li>
-          <li><strong>Cache freshness</strong> — stale-cache warning when the scan has not run since the last deploy</li>
-          <li><strong>Deploy journal link</strong> — correlates env gaps with the most recent <code>forge_deploy_journal</code> entry</li>
+          <li><strong>Missing keys</strong>, present in <code>.env.example</code> / deploy config but absent from local <code>.env</code></li>
+          <li><strong>Extra keys</strong>, local-only values that are not in the shared template</li>
+          <li><strong>Cache freshness</strong>, stale-cache warning when the scan has not run since the last deploy</li>
+          <li><strong>Deploy journal link</strong>, correlates env gaps with the most recent <code>forge_deploy_journal</code> entry</li>
         </ul>
 
         <div id="chapter-prev-next" class="chapter-nav"></div>

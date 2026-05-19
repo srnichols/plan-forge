@@ -31,16 +31,16 @@
         <p class="text-lg text-slate-400 mb-8">The reasoning orchestrator's home in the dashboard. Part of <a href="dashboard.html">Chapter 7: The Dashboard</a>.</p>
 
         <div class="callout callout-info mb-6">
-          <strong>Part of Chapter 7</strong> — This page covers the <strong>Forge-Master</strong> top-level group. See <a href="dashboard.html">The Dashboard</a> for the Forge group tabs, <a href="dashboard-settings.html">Dashboard — Settings Group</a>, and <a href="dashboard-liveguard.html">Dashboard — LiveGuard Tabs</a>.
+          <strong>Part of Chapter 7</strong>, This page covers the <strong>Forge-Master</strong> top-level group. See <a href="dashboard.html">The Dashboard</a> for the Forge group tabs, <a href="dashboard-settings.html">Dashboard — Settings Group</a>, and <a href="dashboard-liveguard.html">Dashboard — LiveGuard Tabs</a>.
         </div>
 
         <!-- ─── Forge-Master Studio Tab ─── -->
         <h2 id="studio">Forge-Master Studio Tab <span class="version-badge">v2.61+ · expanded v2.78–v2.79 · timeline v2.82</span></h2>
         <p>The reasoning orchestrator's home. See <a href="forge-master.html">the Forge-Master chapter</a> for the deep dive. Three panels:</p>
         <ul>
-          <li><strong>Prompt gallery</strong> — pre-built prompts grouped by intent (operational, troubleshoot, advisory). Click to populate the chat box; edit before sending.</li>
-          <li><strong>Streaming chat</strong> — <code>POST /api/forge-master/chat</code> to start, then subscribes to <code>GET /api/forge-master/chat/:sessionId/stream</code>. Shows live <code>classification</code> badge with the <code>via</code> field (<code>keyword</code> / <code>embedding-cache</code> / <code>router-llm</code>), <code>quorum-estimate</code> cost preview if advisory mode triggers (with cancel button), live <code>tool-call</code> trace, and the streaming reply token-by-token.</li>
-          <li><strong>Embedding cache tile</strong> — pulls from <code>GET /api/forge-master/cache-stats</code>. Shows <code>{size, hitRate, maxSize: 500}</code>. When cold, displays a hint that hits start once you've used Forge-Master a few times.</li>
+          <li><strong>Prompt gallery</strong>, pre-built prompts grouped by intent (operational, troubleshoot, advisory). Click to populate the chat box; edit before sending.</li>
+          <li><strong>Streaming chat</strong>, <code>POST /api/forge-master/chat</code> to start, then subscribes to <code>GET /api/forge-master/chat/:sessionId/stream</code>. Shows live <code>classification</code> badge with the <code>via</code> field (<code>keyword</code> / <code>embedding-cache</code> / <code>router-llm</code>), <code>quorum-estimate</code> cost preview if advisory mode triggers (with cancel button), live <code>tool-call</code> trace, and the streaming reply token-by-token.</li>
+          <li><strong>Embedding cache tile</strong>, pulls from <code>GET /api/forge-master/cache-stats</code>. Shows <code>{size, hitRate, maxSize: 500}</code>. When cold, displays a hint that hits start once you've used Forge-Master a few times.</li>
         </ul>
 
         <h3 id="studio-classification">Classification Badge</h3>
@@ -49,7 +49,7 @@
           <thead><tr><th>Via value</th><th>Meaning</th></tr></thead>
           <tbody>
             <tr><td><code>keyword</code></td><td>Fast-path: matched by keyword rules, no model call for routing</td></tr>
-            <tr><td><code>embedding-cache</code></td><td>Hit the write-through embedding cache — free re-route</td></tr>
+            <tr><td><code>embedding-cache</code></td><td>Hit the write-through embedding cache, free re-route</td></tr>
             <tr><td><code>router-llm</code></td><td>Router model called to classify intent (stage 3 fallback)</td></tr>
           </tbody>
         </table>
@@ -58,14 +58,14 @@
         <p>When <code>quorumAdvisory</code> is set to <code>auto</code> or <code>always</code> in Settings → Brain, advisory-lane responses show a <code>quorum-estimate</code> cost preview before the models are called. A cancel button aborts the quorum dispatch if the estimated cost is too high.</p>
 
         <h3 id="studio-sessions">Session Persistence <span class="version-badge">v2.72</span></h3>
-        <p>The Studio tab maintains a persistent per-tab session ID in <code>sessionStorage</code> and sends it as <code>x-pforge-session-id</code> on every request. This means prior turns survive page reloads and New Chat resets — Forge-Master can reference earlier messages in the same browser tab session.</p>
+        <p>The Studio tab maintains a persistent per-tab session ID in <code>sessionStorage</code> and sends it as <code>x-pforge-session-id</code> on every request. This means prior turns survive page reloads and New Chat resets, Forge-Master can reference earlier messages in the same browser tab session.</p>
         <p>Session history is stored as JSONL in <code>.forge/fm-sessions/</code>. Use <code>pforge fm-session list</code> to inspect sessions or <code>pforge fm-session purge</code> to clean up. Sessions auto-rotate at 200 turns.</p>
 
         <h3 id="studio-timeline">Timeline Source <span class="version-badge">v2.82</span></h3>
         <p>Forge-Master turns are indexed as the <code>fm-turn</code> source in the <a href="dashboard.html#timeline">Timeline tab</a>. Each entry shows the lane, a truncated user message, and turn number. Useful for correlating reasoning decisions with plan execution events.</p>
 
         <div class="callout callout-tip">
-          <strong>Deep dive</strong>: The <a href="forge-master.html">Forge-Master chapter</a> covers the full reasoning pipeline — intent classification, tool call orchestration, BM25 recall, quorum dispatch, and session management.
+          <strong>Deep dive</strong>: The <a href="forge-master.html">Forge-Master chapter</a> covers the full reasoning pipeline, intent classification, tool call orchestration, BM25 recall, quorum dispatch, and session management.
         </div>
 
         <div id="chapter-prev-next" class="chapter-nav"></div>

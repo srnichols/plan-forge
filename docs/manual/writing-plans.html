@@ -25,7 +25,7 @@
 
     <main>
       <!-- Hero -->
-      <img src="assets/chapter-heroes/ch5-hero.jpg" alt="Architect's blueprint scroll with glowing scope (amber), validation gate (green), and forbidden zone (red) annotations — a brass compass marks a key boundary" class="chapter-hero" />
+      <img src="assets/chapter-heroes/ch5-hero.jpg" alt="Architect's blueprint scroll with glowing scope (amber), validation gate (green), and forbidden zone (red) annotations, a brass compass marks a key boundary" class="chapter-hero" />
 
       <div class="chapter-content">
 
@@ -80,7 +80,7 @@
 
         <!-- ─── Scope Contract ─── -->
         <h2 id="scope-contract">Writing a Good Scope Contract</h2>
-        <p>The scope contract is the most important section. It tells the AI exactly what files it can touch — and what's off-limits.</p>
+        <p>The scope contract is the most important section. It tells the AI exactly what files it can touch, and what's off-limits.</p>
 
         <h3>Good: Tight Scope</h3>
         <div class="cmd-block">
@@ -108,16 +108,16 @@
           <strong>Forbidden Actions come from the Crucible interview</strong>: The 7th feature-lane question explicitly asks for forbidden actions. Answers like &ldquo;don't touch the migrations folder&rdquo; or &ldquo;don't add new NuGet packages without approval&rdquo; flow directly into this section as concrete patterns. If you skip the interview and hand-author the plan, write them as <em>file patterns or named actions</em>, not vibes.
         </div>
 
-        <p>"Anything related to users" gives the AI free rein to refactor 20 files. "Don't break things" isn't enforceable. Be specific about paths, and list forbidden actions as concrete file patterns. That's how you get lasagna code — clean layers, each with a purpose — instead of spaghetti where everything touches everything.</p>
+        <p>"Anything related to users" gives the AI free rein to refactor 20 files. "Don't break things" isn't enforceable. Be specific about paths, and list forbidden actions as concrete file patterns. That's how you get lasagna code, clean layers, each with a purpose, instead of spaghetti where everything touches everything.</p>
 
         <!-- ─── Slicing Strategy ─── -->
         <h2 id="slicing">Slicing Strategy</h2>
 
-        <p>Before the rules, the worked example. The same feature — add a User Profile endpoint, planned two ways:</p>
+        <p>Before the rules, the worked example. The same feature, add a User Profile endpoint, planned two ways:</p>
 
         <div class="cmd-block">
           <div class="cmd-block-header"><span><span class="text-rose-400 font-bold">✗</span> Bad: one mega-slice</span></div>
-          <pre><code>Slice 1 — Add User Profile feature           [≥90 min, unbounded]
+          <pre><code>Slice 1, Add User Profile feature           [≥90 min, unbounded]
   • Database migration
   • Repository
   • Service
@@ -128,10 +128,10 @@
 
         <div class="cmd-block">
           <div class="cmd-block-header"><span><span class="text-emerald-400 font-bold">✓</span> Good: 4 layered slices</span></div>
-          <pre><code>Slice 1 — Migration + model                  [30 min]
-Slice 2 — Repository + unit tests            [45 min]
-Slice 3 — Service + business-logic tests     [60 min]
-Slice 4 — Controller + integration tests     [45 min]</code></pre>
+          <pre><code>Slice 1, Migration + model                  [30 min]
+Slice 2, Repository + unit tests            [45 min]
+Slice 3, Service + business-logic tests     [60 min]
+Slice 4, Controller + integration tests     [45 min]</code></pre>
         </div>
         <p class="text-sm text-slate-400 mb-6">Each slice ends at a real checkpoint. A migration failure stops Slice 1 cleanly. A controller bug at Slice 4 doesn't touch the migration in Slice 1. The reviewer reads four small diffs, each scoped to one architectural layer.</p>
 
@@ -140,27 +140,27 @@ Slice 4 — Controller + integration tests     [45 min]</code></pre>
 
         <h3>Rules of Thumb</h3>
         <ul>
-          <li><strong>One layer per slice</strong> — don't mix database migration with API controller in the same slice</li>
-          <li><strong>Build on foundations</strong> — create the model/migration first, then the repository, then the service, then the controller</li>
-          <li><strong>Tests with the code</strong> — include tests in the same slice as the code they test (not a separate "add tests" slice at the end)</li>
-          <li><strong>30 minutes minimum</strong> — slices shorter than this have too much gate overhead</li>
-          <li><strong>120 minutes maximum</strong> — slices longer than this accumulate too much risk before the next checkpoint</li>
+          <li><strong>One layer per slice</strong>, don't mix database migration with API controller in the same slice</li>
+          <li><strong>Build on foundations</strong>, create the model/migration first, then the repository, then the service, then the controller</li>
+          <li><strong>Tests with the code</strong>, include tests in the same slice as the code they test (not a separate "add tests" slice at the end)</li>
+          <li><strong>30 minutes minimum</strong>, slices shorter than this have too much gate overhead</li>
+          <li><strong>120 minutes maximum</strong>, slices longer than this accumulate too much risk before the next checkpoint</li>
         </ul>
 
         <h3>Example: 6-Slice Plan</h3>
         <div class="cmd-block">
           <div class="cmd-block-header"><span>Layer-by-layer slicing</span></div>
-          <pre><code>Slice 1 — Database migration + model           [30 min]
-Slice 2 — Repository + unit tests               [45 min]
-Slice 3 — Service layer + business logic tests   [60 min]
-Slice 4 — API controller + integration tests     [45 min]
-Slice 5 — Error handling + edge case tests       [30 min]
-Slice 6 — Documentation + cleanup                [30 min]</code></pre>
+          <pre><code>Slice 1, Database migration + model           [30 min]
+Slice 2, Repository + unit tests               [45 min]
+Slice 3, Service layer + business logic tests   [60 min]
+Slice 4, API controller + integration tests     [45 min]
+Slice 5, Error handling + edge case tests       [30 min]
+Slice 6, Documentation + cleanup                [30 min]</code></pre>
         </div>
 
         <!-- ─── Validation Gates ─── -->
         <h2 id="gates">Validation Gates</h2>
-        <p>Gates are the quality checkpoints between slices. A gate must be a concrete, executable command — not a human judgment call.</p>
+        <p>Gates are the quality checkpoints between slices. A gate must be a concrete, executable command, not a human judgment call.</p>
 
         <h3>Good Gates</h3>
         <div class="cmd-block">
@@ -185,20 +185,20 @@ Slice 6 — Documentation + cleanup                [30 min]</code></pre>
 
         <div class="cmd-block">
           <div class="cmd-block-header"><span>Parallel slices with dependencies</span></div>
-          <pre><code>### Slice 1 — Database Migration [30 min]
+          <pre><code>### Slice 1, Database Migration [30 min]
 ...
 
-### Slice 2 — Repository Layer [P] [depends: Slice 1] [scope: src/repos/**]
+### Slice 2, Repository Layer [P] [depends: Slice 1] [scope: src/repos/**]
 ...
 
-### Slice 3 — Service Layer [P] [depends: Slice 1] [scope: src/services/**]
+### Slice 3, Service Layer [P] [depends: Slice 1] [scope: src/services/**]
 ...
 
-### Slice 4 — API Controller [depends: Slice 2, Slice 3]
+### Slice 4, API Controller [depends: Slice 2, Slice 3]
 ...</code></pre>
         </div>
 
-        <p>Slices 2 and 3 both depend on Slice 1 (the migration) but are independent of each other — they run in parallel. Slice 4 waits for both to finish. The orchestrator builds a DAG (directed acyclic graph) and schedules accordingly.</p>
+        <p>Slices 2 and 3 both depend on Slice 1 (the migration) but are independent of each other, they run in parallel. Slice 4 waits for both to finish. The orchestrator builds a DAG (directed acyclic graph) and schedules accordingly.</p>
 
         <figure class="manual-figure" id="fig-4-2"><img src="assets/diagrams/dag-parallel.svg" alt="DAG diagram showing parallel slices 2 and 3 executing concurrently after slice 1, then converging on slice 4" class="diagram-img diagram-img-lg" /><figcaption class="manual-figcaption"><!--fignum--><span class="manual-fignum">Figure 4-2.</span><!--/fignum--> Parallel slice DAG, slices 2 and 3 run concurrently after slice 1, converging on slice 4.</figcaption></figure>
 
@@ -222,14 +222,14 @@ Slice 6 — Documentation + cleanup                [30 min]</code></pre>
 
         <!-- ─── Context Files ─── -->
         <h2 id="context">Context Files</h2>
-        <p>Each slice can list which instruction files are relevant. Don't load all 18 — load only what's needed:</p>
+        <p>Each slice can list which instruction files are relevant. Don't load all 18, load only what's needed:</p>
 
         <div class="cmd-block">
           <div class="cmd-block-header"><span>Targeted context loading</span></div>
-          <pre><code>### Slice 1 — Database Migration
+          <pre><code>### Slice 1, Database Migration
 **Context**: database.instructions.md, security.instructions.md
 
-### Slice 4 — API Controller
+### Slice 4, API Controller
 **Context**: api-patterns.instructions.md, auth.instructions.md, errorhandling.instructions.md</code></pre>
         </div>
 

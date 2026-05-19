@@ -21,7 +21,7 @@
     <main><div class="chapter-content">
 
       <!-- Hero -->
-      <img src="assets/chapter-heroes/ch13-hero.jpg" alt="Three model-spirit blacksmiths (green, blue, gold) on diverging escalation paths converging on a central decision node — multi-model quorum and routing" class="chapter-hero" />
+      <img src="assets/chapter-heroes/ch13-hero.jpg" alt="Three model-spirit blacksmiths (green, blue, gold) on diverging escalation paths converging on a central decision node, multi-model quorum and routing" class="chapter-hero" />
 
       <div class="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">Chapter 14</div>
       <h1>Advanced Execution</h1>
@@ -32,15 +32,15 @@
       </div>
 
       <div class="callout callout-tip">
-        <strong>New here? What this chapter is about.</strong> Up until now, you've run plans with default settings — one model, one pass, all slices treated equally. This chapter shows you the dials you can turn to make execution <em>cheaper, smarter, or more reliable</em>. Each section is independent — pick what you need:
+        <strong>New here? What this chapter is about.</strong> Up until now, you've run plans with default settings, one model, one pass, all slices treated equally. This chapter shows you the dials you can turn to make execution <em>cheaper, smarter, or more reliable</em>. Each section is independent, pick what you need:
         <ul class="mt-2 mb-0">
-          <li><strong>Model Routing</strong> — assign different AI models to different jobs (cheap one for grunt work, expensive one for review).</li>
-          <li><strong>Escalation Chains</strong> — if Model A fails a slice, automatically retry with Model B, then C.</li>
-          <li><strong>Quorum Mode</strong> — have multiple models solve the same slice in parallel and pick the best answer. Higher quality, higher cost.</li>
-          <li><strong>Cost Optimization &amp; CI Integration</strong> — caps, budgets, and running plans inside GitHub Actions.</li>
-          <li><strong>Resume &amp; Retry</strong> — pick up where a failed run left off without redoing finished slices.</li>
+          <li><strong>Model Routing</strong>, assign different AI models to different jobs (cheap one for grunt work, expensive one for review).</li>
+          <li><strong>Escalation Chains</strong>, if Model A fails a slice, automatically retry with Model B, then C.</li>
+          <li><strong>Quorum Mode</strong>, have multiple models solve the same slice in parallel and pick the best answer. Higher quality, higher cost.</li>
+          <li><strong>Cost Optimization &amp; CI Integration</strong>, caps, budgets, and running plans inside GitHub Actions.</li>
+          <li><strong>Resume &amp; Retry</strong>, pick up where a failed run left off without redoing finished slices.</li>
         </ul>
-        Defaults are sensible — you don't need any of this for your first run. Come back when you want to tune.
+        Defaults are sensible, you don't need any of this for your first run. Come back when you want to tune.
       </div>
 
       <h2 id="model-routing">Model Routing</h2>
@@ -83,7 +83,7 @@
       <p>Model A fails → Model B retries the same slice → Model C if B fails too. Emits <code>slice-escalated</code> WebSocket event at each step. No manual intervention required.</p>
 
       <div class="callout callout-tip">
-        <strong>Forge Intelligence (v2.32)</strong> — Escalation chains auto-tune from history. After 5+ recorded slices, <code>loadEscalationChain()</code> reorders models by success rate × cost efficiency. The best-performing, cheapest model moves to position 1 automatically. No configuration needed — just run plans and the forge learns.
+        <strong>Forge Intelligence (v2.32)</strong>, Escalation chains auto-tune from history. After 5+ recorded slices, <code>loadEscalationChain()</code> reorders models by success rate × cost efficiency. The best-performing, cheapest model moves to position 1 automatically. No configuration needed, just run plans and the forge learns.
       </div>
 
       <figure class="manual-figure" id="fig-14-1"><img src="assets/diagrams/escalation-chain.svg" alt="Escalation chain: grok-4 fails, escalates to claude-opus-4.6 which fails, escalates to gpt-5.2-codex which passes" class="diagram-img diagram-img-sm" /><figcaption class="manual-figcaption"><!--fignum--><span class="manual-fignum">Figure 14-1.</span><!--/fignum--> <!--cap:auto-->Escalation chain<!--/cap--></figcaption></figure>
@@ -166,7 +166,7 @@ $env:XAI_API_KEY = "xai-..."
         <pre><code># See the projected cost across all four modes first (always tool-backed)
 pforge run-plan --estimate docs/plans/Phase-7.md
 
-# Then run — quorum-eligible slices fan out to all three models in parallel
+# Then run, quorum-eligible slices fan out to all three models in parallel
 pforge run-plan docs/plans/Phase-7.md --quorum=auto</code></pre>
       </div>
 
@@ -202,10 +202,10 @@ pforge run-plan docs/plans/Phase-7.md --quorum=auto</code></pre>
       <h3 id="quorum-estimate">Estimating Quorum Cost — <code>forge_estimate_quorum</code> <span class="text-amber-400 text-base font-normal">v2.83+</span></h3>
 
       <div class="callout callout-warning">
-        <strong>Cost estimates come from tools, not chat math.</strong> When deciding which quorum mode to run — or showing the user dollar amounts in any picker — call <code>forge_estimate_quorum</code> first. Hand-computed quorum estimates have been observed to overshoot reality by an order of magnitude (Phase-COST-TOKEN-COVERAGE field reports). The agent guidance shipped in <code>.github/copilot-instructions.md</code> requires this for any quorum picker UI.
+        <strong>Cost estimates come from tools, not chat math.</strong> When deciding which quorum mode to run, or showing the user dollar amounts in any picker, call <code>forge_estimate_quorum</code> first. Hand-computed quorum estimates have been observed to overshoot reality by an order of magnitude (Phase-COST-TOKEN-COVERAGE field reports). The agent guidance shipped in <code>.github/copilot-instructions.md</code> requires this for any quorum picker UI.
       </div>
 
-      <p><code>forge_estimate_quorum</code> projects the cost of a plan under <strong>all four quorum modes</strong> in one round-trip — no need to call <code>--estimate</code> four separate times. It returns per-mode totals plus a per-slice breakdown showing which slices cleared the threshold.</p>
+      <p><code>forge_estimate_quorum</code> projects the cost of a plan under <strong>all four quorum modes</strong> in one round-trip, no need to call <code>--estimate</code> four separate times. It returns per-mode totals plus a per-slice breakdown showing which slices cleared the threshold.</p>
 
       <figure class="manual-figure" id="fig-14-3"><img src="assets/diagrams/quorum-estimate-tool-flow.svg" alt="forge_estimate_quorum flow: tool call with planPath, parsePlan + scoreSliceComplexity, four parallel mode estimations (false/auto/power/speed), comparison JSON output with per-mode totals and per-slice breakdown" class="diagram-img diagram-img-md my-4" /><figcaption class="manual-figcaption"><!--fignum--><span class="manual-fignum">Figure 14-3.</span><!--/fignum--> <!--cap:auto-->forge_estimate_quorum flow<!--/cap--></figcaption></figure>
 
@@ -216,7 +216,7 @@ pforge run-plan docs/plans/Phase-7.md --quorum=auto</code></pre>
         <pre><code>// Direct MCP call
 forge_estimate_quorum({
   planPath: "docs/plans/Phase-7.md",
-  resumeFrom: 1   // optional — only estimate slices ≥ N
+  resumeFrom: 1   // optional, only estimate slices ≥ N
 })
 
 // CLI equivalent (runs all four modes under the hood)
@@ -248,7 +248,7 @@ pforge run-plan docs/plans/Phase-7.md --estimate --quorum-compare</code></pre>
       <table class="manual-table">
         <thead><tr><th>Field</th><th>Meaning</th></tr></thead>
         <tbody>
-          <tr><td><code>baseCostUSD</code></td><td>What the plan costs <em>without</em> quorum overhead — single-model run for every slice</td></tr>
+          <tr><td><code>baseCostUSD</code></td><td>What the plan costs <em>without</em> quorum overhead, single-model run for every slice</td></tr>
           <tr><td><code>overheadUSD</code></td><td>Δ added by the extra quorum legs + reviewer synthesis. <code>baseCostUSD + overheadUSD = totalCostUSD</code>.</td></tr>
           <tr><td><code>quorumSliceCount</code></td><td>How many slices cleared the mode's threshold and will fan out to multiple models</td></tr>
           <tr><td><code>confidence</code></td><td><code>"historical"</code> when calibrated against ≥ 3 prior runs, <code>"heuristic"</code> for cold-start projects</td></tr>
@@ -259,7 +259,7 @@ pforge run-plan docs/plans/Phase-7.md --estimate --quorum-compare</code></pre>
 
       <h4 class="text-base font-semibold text-slate-200 mt-6 mb-2">Worked cost example: 7-slice fixture plan</h4>
 
-      <p>The numbers above come from the heuristic fixture used in <a href="https://github.com/srnichols/plan-forge/blob/master/pforge-mcp/capabilities.mjs" rel="noopener"><code>capabilities.mjs</code></a> — illustrative, not measured. For a typical mid-size plan (10–15 slices, 1–3 quorum-eligible), real-world numbers from the Plan Forge dogfood corpus look like:</p>
+      <p>The numbers above come from the heuristic fixture used in <a href="https://github.com/srnichols/plan-forge/blob/master/pforge-mcp/capabilities.mjs" rel="noopener"><code>capabilities.mjs</code></a>, illustrative, not measured. For a typical mid-size plan (10–15 slices, 1–3 quorum-eligible), real-world numbers from the Plan Forge dogfood corpus look like:</p>
 
       <table class="manual-table">
         <thead><tr><th>Mode</th><th>Total cost</th><th>Multiplier vs baseline</th><th>Slices fanned out</th><th>Use when</th></tr></thead>
@@ -272,7 +272,7 @@ pforge run-plan docs/plans/Phase-7.md --estimate --quorum-compare</code></pre>
         </tbody>
       </table>
 
-      <p class="text-sm text-slate-500 italic">Numbers are order-of-magnitude — actual cost depends on slice scope size, host (subscription-covered vs pay-per-token), and the cost-calibration ratio in <code>.forge/cost-history.json</code>. Always estimate before running.</p>
+      <p class="text-sm text-slate-500 italic">Numbers are order-of-magnitude, actual cost depends on slice scope size, host (subscription-covered vs pay-per-token), and the cost-calibration ratio in <code>.forge/cost-history.json</code>. Always estimate before running.</p>
 
       <div class="callout callout-info">
         <strong>Single-slice variant</strong>: <code>forge_estimate_slice</code> (companion tool) returns cost for one slice with rationale strings like <code>"threshold 5 met: complexity 6"</code> or <code>"mode false: quorum disabled"</code>. Useful when you want to ask &ldquo;is <em>this</em> specific slice worth quorum?&rdquo; without re-estimating the whole plan.
@@ -309,13 +309,13 @@ pforge run-plan docs/plans/Phase-7.md --estimate --quorum-compare</code></pre>
         <tbody>
           <tr><td><code>--quorum=power</code></td><td><strong>5</strong></td><td>Slices touching 3+ files <em>or</em> with deep deps <em>or</em> mentioning auth/schema</td></tr>
           <tr><td><code>--quorum=auto</code></td><td><strong>6</strong> (CLI default)</td><td>The above <em>plus</em> a substantial gate or 6+ tasks</td></tr>
-          <tr><td><code>--quorum=speed</code></td><td><strong>7</strong></td><td>Only the genuinely hard slices — wide scope <em>and</em> security/db keywords <em>and</em> failure history</td></tr>
+          <tr><td><code>--quorum=speed</code></td><td><strong>7</strong></td><td>Only the genuinely hard slices, wide scope <em>and</em> security/db keywords <em>and</em> failure history</td></tr>
           <tr><td>Custom</td><td><code>--quorum-threshold N</code></td><td>Override per run; <code>1</code> = quorum everything, <code>10</code> = quorum almost nothing</td></tr>
         </tbody>
       </table>
 
       <div class="callout callout-tip">
-        <strong>Real-plan calibration</strong>: across the Plan Forge dogfood corpus, observed maximum scores land between 4 and 6 — most slices score 2–4. That means threshold 5 is the sweet spot for <code>power</code> mode (catches the architectural slices), threshold 6 is conservative for <code>auto</code> (catches roughly 10–25% of slices in a typical phase), and threshold 7 fires on &lt;5% of slices. The <a href="#cost-optimization">Adaptive Quorum Threshold</a> system in <code>.forge/quorum-history.json</code> auto-tunes these from your project's run history.
+        <strong>Real-plan calibration</strong>: across the Plan Forge dogfood corpus, observed maximum scores land between 4 and 6, most slices score 2–4. That means threshold 5 is the sweet spot for <code>power</code> mode (catches the architectural slices), threshold 6 is conservative for <code>auto</code> (catches roughly 10–25% of slices in a typical phase), and threshold 7 fires on &lt;5% of slices. The <a href="#cost-optimization">Adaptive Quorum Threshold</a> system in <code>.forge/quorum-history.json</code> auto-tunes these from your project's run history.
       </div>
 
       <h4 class="text-base font-semibold text-slate-200 mt-6 mb-2">Worked example</h4>
@@ -342,14 +342,14 @@ score = clamp(1, 10, round(0.5425 × 9) + 1) = 6
       <!-- ─── Multi-Agent Quorum Turns ─── -->
       <h3 id="quorum-multi-agent">Multi-Agent Quorum Turns — <code>PFORGE_QUORUM_TURN</code> <span class="text-amber-400 text-base font-normal">v2.78+</span></h3>
 
-      <p>When quorum runs in <a href="multi-agent.html">multi-agent mode</a> (Claude → Codex → Cursor handoffs), the orchestrator sets the <code>PFORGE_QUORUM_TURN</code> environment variable for the duration of each quorum-leg invocation. This is a coordination signal, not user-facing config — but it shows up in logs and matters when debugging hook behavior.</p>
+      <p>When quorum runs in <a href="multi-agent.html">multi-agent mode</a> (Claude → Codex → Cursor handoffs), the orchestrator sets the <code>PFORGE_QUORUM_TURN</code> environment variable for the duration of each quorum-leg invocation. This is a coordination signal, not user-facing config, but it shows up in logs and matters when debugging hook behavior.</p>
 
       <h4 class="text-base font-semibold text-slate-200 mt-6 mb-2">What the variable controls</h4>
 
       <table class="manual-table">
         <thead><tr><th>Hook / system</th><th>Behavior when <code>PFORGE_QUORUM_TURN</code> is set</th></tr></thead>
         <tbody>
-          <tr><td><code>PreAgentHandoff</code> hook</td><td><strong>Skipped.</strong> Returns <code>{ triggered: false, skippedReason: "PFORGE_QUORUM_TURN active" }</code> and logs <code>[PreAgentHandoff] skipping context injection — PFORGE_QUORUM_TURN active</code>. See <a href="https://github.com/srnichols/plan-forge/blob/master/pforge-mcp/orchestrator.mjs" rel="noopener"><code>orchestrator.mjs</code> ~L7585</a>.</td></tr>
+          <tr><td><code>PreAgentHandoff</code> hook</td><td><strong>Skipped.</strong> Returns <code>{ triggered: false, skippedReason: "PFORGE_QUORUM_TURN active" }</code> and logs <code>[PreAgentHandoff] skipping context injection, PFORGE_QUORUM_TURN active</code>. See <a href="https://github.com/srnichols/plan-forge/blob/master/pforge-mcp/orchestrator.mjs" rel="noopener"><code>orchestrator.mjs</code> ~L7585</a>.</td></tr>
           <tr><td><a href="remote-bridge.html#openclaw">OpenClaw snapshot post</a></td><td><strong>Skipped.</strong> No drift / MTTR / incident snapshot is sent between quorum legs.</td></tr>
           <tr><td>Cost telemetry</td><td>Per-leg cost is tagged <code>quorumTurn: true</code> in <code>slice-N.json</code> so the Cost Report can roll up the legs into a single quorum line item.</td></tr>
           <tr><td>Tracing</td><td>Each leg gets its own trace span but with a shared <code>quorumGroupId</code> so dashboards can collapse them.</td></tr>
@@ -358,17 +358,17 @@ score = clamp(1, 10, round(0.5425 × 9) + 1) = 6
 
       <h4 class="text-base font-semibold text-slate-200 mt-6 mb-2">Why skip context injection?</h4>
 
-      <p>Quorum exists to get <em>independent</em> analyses from each model. If <code>PreAgentHandoff</code> injected the same drift / MTTR / open-incident context into every leg, the models would converge — defeating the whole point. The reviewer (the synthesizing model) <em>does</em> get the full handoff context when it merges the proposals, because that's where the project-wide state actually matters.</p>
+      <p>Quorum exists to get <em>independent</em> analyses from each model. If <code>PreAgentHandoff</code> injected the same drift / MTTR / open-incident context into every leg, the models would converge, defeating the whole point. The reviewer (the synthesizing model) <em>does</em> get the full handoff context when it merges the proposals, because that's where the project-wide state actually matters.</p>
 
       <div class="callout callout-warning">
-        <strong>Don't set this variable manually.</strong> It's owned by the orchestrator and the multi-agent dispatch layer. Setting it yourself in a shell will cause the next <code>PreAgentHandoff</code> to silently skip — which can mask drift alerts. If you see <code>"PFORGE_QUORUM_TURN active"</code> in logs outside a quorum run, something has leaked the variable; clear it with <code>Remove-Item Env:PFORGE_QUORUM_TURN</code> (PowerShell) or <code>unset PFORGE_QUORUM_TURN</code> (bash).
+        <strong>Don't set this variable manually.</strong> It's owned by the orchestrator and the multi-agent dispatch layer. Setting it yourself in a shell will cause the next <code>PreAgentHandoff</code> to silently skip, which can mask drift alerts. If you see <code>"PFORGE_QUORUM_TURN active"</code> in logs outside a quorum run, something has leaked the variable; clear it with <code>Remove-Item Env:PFORGE_QUORUM_TURN</code> (PowerShell) or <code>unset PFORGE_QUORUM_TURN</code> (bash).
       </div>
 
       <p class="text-sm text-slate-400">📄 Cross-references: <a href="multi-agent.html">Chapter 13 — Multi-Agent</a> for the handoff model · <a href="remote-bridge.html#openclaw">Chapter 20 — Remote Bridge</a> for the OpenClaw snapshot path · <a href="forge-master.html#quorum-advisory">Forge-Master Quorum Advisory</a> for the per-prompt counterpart.</p>
 
       <h3 id="quorum-quality-examples">Quorum Quality Examples — What 3 Models Catch That 1 Doesn't</h3>
 
-      <p>The argument for quorum mode is mostly abstract — "synthesis effect," "independent analyses," "reviewer picks the cleaner approach." A single side-by-side run of the same task makes the argument concrete. The numbers below come from a controlled A/B run on a real C# invoicing slice: same plan, same gates, same acceptance criteria; one execution with the default single-model worker, one with three-model quorum. <strong>Both passed all gates and the independent reviewer.</strong> The difference is in <em>how</em> they passed.</p>
+      <p>The argument for quorum mode is mostly abstract, "synthesis effect," "independent analyses," "reviewer picks the cleaner approach." A single side-by-side run of the same task makes the argument concrete. The numbers below come from a controlled A/B run on a real C# invoicing slice: same plan, same gates, same acceptance criteria; one execution with the default single-model worker, one with three-model quorum. <strong>Both passed all gates and the independent reviewer.</strong> The difference is in <em>how</em> they passed.</p>
 
       <table class="manual-table">
         <thead><tr><th>Metric</th><th>Single (control)</th><th>Quorum (3-model)</th></tr></thead>
@@ -392,10 +392,10 @@ score = clamp(1, 10, round(0.5425 × 9) + 1) = 6
         <strong>Representative example.</strong> The quorum run produced <code>IsWeekend()</code>, <code>CalculateVolumeDiscount()</code>, and <code>ApplyBankersRounding()</code> as private static helpers, called from each invoicing entry point. The single-model run inlined the equivalent ternary expressions at every call site. Same behavior; different debuggability when the discount tier changes a year from now.</p>
       </div>
 
-      <pre><code>// Single model — inlined at three call sites
+      <pre><code>// Single model, inlined at three call sites
 var discount = quantity &gt;= 100 ? 0.15m : quantity &gt;= 50 ? 0.10m : quantity &gt;= 10 ? 0.05m : 0m;
 
-// Quorum — extracted helper
+// Quorum, extracted helper
 private static decimal CalculateVolumeDiscount(int quantity) =&gt; quantity switch
 {
     &gt;= 100 =&gt; 0.15m,
@@ -412,10 +412,10 @@ private static decimal CalculateVolumeDiscount(int quantity) =&gt; quantity swit
         <strong>Representative example.</strong> The control run wrote <code>new DateTime(2026, 3, 15)</code> in test fixtures. The quorum run wrote <code>DateTime.Now.AddDays(-7)</code>. Identical intent; only one survives March 16th.</p>
       </div>
 
-      <pre><code>// Single model — breaks on April 16th
+      <pre><code>// Single model, breaks on April 16th
 var invoice = new Invoice { Date = new DateTime(2026, 3, 15) };
 
-// Quorum — stays green forever
+// Quorum, stays green forever
 var invoice = new Invoice { Date = DateTime.Now.AddDays(-7) };</code></pre>
 
       <h4>Pattern 3 — Modern .NET patterns</h4>
@@ -426,11 +426,11 @@ var invoice = new Invoice { Date = DateTime.Now.AddDays(-7) };</code></pre>
         <strong>Representative example.</strong> The control run used <code>throw new ValidationException("Customer name is required")</code>. The quorum run used <code>ArgumentException.ThrowIfNullOrWhiteSpace(customerName)</code>. The quorum reviewer chose the .NET 7+ helper because one of the three workers proposed it; the synthesizer recognized it as the modern equivalent.</p>
       </div>
 
-      <pre><code>// Single model — generic, manual message
+      <pre><code>// Single model, generic, manual message
 if (string.IsNullOrWhiteSpace(customerName))
     throw new ValidationException("Customer name is required");
 
-// Quorum — modern .NET 7+ helper, auto-generated message including parameter name
+// Quorum, modern .NET 7+ helper, auto-generated message including parameter name
 ArgumentException.ThrowIfNullOrWhiteSpace(customerName);</code></pre>
 
       <h4>Pattern 4 — Edge-case coverage the control missed entirely</h4>
@@ -443,7 +443,7 @@ ArgumentException.ThrowIfNullOrWhiteSpace(customerName);</code></pre>
 
       <h4>The synthesis mechanism</h4>
 
-      <p>The pattern across all four examples is the same: <strong>one model proposes one thing, another model proposes a cleaner version, the reviewer picks the cleaner one.</strong> Inline code vs extracted helper — extraction wins. Hardcoded date vs relative offset — relative offset wins. Generic exception vs modern helper — modern helper wins. Standard tests vs edge-case tests — edge-case tests win. The quorum doesn't make any individual model smarter; it makes the worst-case output of each model less likely to be what ships.</p>
+      <p>The pattern across all four examples is the same: <strong>one model proposes one thing, another model proposes a cleaner version, the reviewer picks the cleaner one.</strong> Inline code vs extracted helper, extraction wins. Hardcoded date vs relative offset, relative offset wins. Generic exception vs modern helper, modern helper wins. Standard tests vs edge-case tests, edge-case tests win. The quorum doesn't make any individual model smarter; it makes the worst-case output of each model less likely to be what ships.</p>
 
       <h4>When this pays off</h4>
 
@@ -499,14 +499,14 @@ ArgumentException.ThrowIfNullOrWhiteSpace(customerName);</code></pre>
       <p>Per-slice telemetry now records <code>host</code>, <code>billingSurface</code>, and <code>billingWarning</code> in <code>slice-N.json</code> so cost aggregation can distinguish subscription-covered vs pay-per-token spend in the Cost Report.</p>
 
       <h2 id="cost-optimization">Cost Optimization</h2>
-      <p>The orchestrator tracks model performance in <code>.forge/model-performance.json</code> — success rate, average cost, and duration per model. It auto-selects the cheapest model with &gt;80% historical pass rate.</p>
+      <p>The orchestrator tracks model performance in <code>.forge/model-performance.json</code>, success rate, average cost, and duration per model. It auto-selects the cheapest model with &gt;80% historical pass rate.</p>
 
       <div class="callout callout-tip">
-        <strong>Forge Intelligence (v2.32)</strong> — Three self-tuning systems reduce cost over time:
+        <strong>Forge Intelligence (v2.32)</strong>, Three self-tuning systems reduce cost over time:
         <ul class="mt-2 space-y-1 text-sm">
-          <li><strong>Cost Calibration</strong> — Estimates auto-correct using a historical estimate-vs-actual ratio (clamped 0.5×–3×). After 3+ runs, <code>--estimate</code> accuracy improves automatically.</li>
-          <li><strong>Adaptive Quorum Threshold</strong> — Reads <code>.forge/quorum-history.json</code> to learn which slices actually need quorum. If &lt;20% needed it, threshold rises (fewer quorum runs = lower cost). If &gt;60% needed it, threshold drops.</li>
-          <li><strong>Slice Auto-Split Advisory</strong> — <code>--estimate</code> flags slices with 2+ prior failures or &gt;6 tasks as candidates for splitting. Smaller slices cost less and succeed more often.</li>
+          <li><strong>Cost Calibration</strong>, Estimates auto-correct using a historical estimate-vs-actual ratio (clamped 0.5×–3×). After 3+ runs, <code>--estimate</code> accuracy improves automatically.</li>
+          <li><strong>Adaptive Quorum Threshold</strong>, Reads <code>.forge/quorum-history.json</code> to learn which slices actually need quorum. If &lt;20% needed it, threshold rises (fewer quorum runs = lower cost). If &gt;60% needed it, threshold drops.</li>
+          <li><strong>Slice Auto-Split Advisory</strong>, <code>--estimate</code> flags slices with 2+ prior failures or &gt;6 tasks as candidates for splitting. Smaller slices cost less and succeed more often.</li>
         </ul>
       </div>
 
@@ -527,7 +527,7 @@ ArgumentException.ThrowIfNullOrWhiteSpace(customerName);</code></pre>
   "OPENAI_API_KEY": "sk-..."
 }</code></pre>
       </div>
-      <p>The <code>.forge/</code> directory is in <code>.gitignore</code> by default — secrets are never committed.</p>
+      <p>The <code>.forge/</code> directory is in <code>.gitignore</code> by default, secrets are never committed.</p>
 
       <h2 id="ci-integration">CI Integration</h2>
       <p>Add Plan Forge validation to your GitHub Actions PR workflow:</p>
@@ -556,14 +556,14 @@ ArgumentException.ThrowIfNullOrWhiteSpace(customerName);</code></pre>
         <pre><code># Resume from slice 3 after fixing a failure
 pforge run-plan docs/plans/Phase-7.md --resume-from 3
 
-# Dry run — parse and validate without executing
+# Dry run, parse and validate without executing
 pforge run-plan docs/plans/Phase-7.md --dry-run</code></pre>
       </div>
-      <p>When a gate fails, fix the issue manually, then resume. Completed slices are skipped — only remaining slices execute.</p>
+      <p>When a gate fails, fix the issue manually, then resume. Completed slices are skipped, only remaining slices execute.</p>
 
       <h2 id="openbrain">OpenBrain Memory</h2>
       <p>The OpenBrain integration bridges the 4-session pipeline with long-term, cross-session context. Prior decisions, patterns, and postmortems are automatically searched and injected at the start of each session. After every run, lessons are captured for future phases.</p>
-      <p>As of <strong>v3.6</strong>, OpenBrain is the documented <strong>L3 memory layer</strong> — still optional, but loud and easy to enable. Check status with <code>pforge brain status</code>; see install options with <code>pforge brain hint</code>. Plan Forge works without it; the inner loop (Reflexion, Auto-skills, Federation) only improves over time with it. See <a href="project-history.html#v3-6-openbrain-l3">Project History → v3.6</a>.</p>
+      <p>As of <strong>v3.6</strong>, OpenBrain is the documented <strong>L3 memory layer</strong>, still optional, but loud and easy to enable. Check status with <code>pforge brain status</code>; see install options with <code>pforge brain hint</code>. Plan Forge works without it; the inner loop (Reflexion, Auto-skills, Federation) only improves over time with it. See <a href="project-history.html#v3-6-openbrain-l3">Project History → v3.6</a>.</p>
       <p>Install via extension: <code>pforge ext add plan-forge-memory</code></p>
 
       <!-- ─── LiveGuard Hooks ─── -->
@@ -573,8 +573,8 @@ pforge run-plan docs/plans/Phase-7.md --dry-run</code></pre>
       <table class="manual-table">
         <thead><tr><th>Hook</th><th>Trigger</th><th>Behavior</th><th>Blocking</th></tr></thead>
         <tbody>
-          <tr><td><strong>PreDeploy</strong></td><td>Before deploy-related file writes or commands</td><td>Runs <code>forge_secret_scan</code> + <code>forge_env_diff</code> — blocks on findings</td><td>Yes</td></tr>
-          <tr><td><strong>PostSlice</strong></td><td>After every slice commit</td><td>Runs <code>forge_drift_report</code> — warns on drift regression</td><td>No (advisory)</td></tr>
+          <tr><td><strong>PreDeploy</strong></td><td>Before deploy-related file writes or commands</td><td>Runs <code>forge_secret_scan</code> + <code>forge_env_diff</code>, blocks on findings</td><td>Yes</td></tr>
+          <tr><td><strong>PostSlice</strong></td><td>After every slice commit</td><td>Runs <code>forge_drift_report</code>, warns on drift regression</td><td>No (advisory)</td></tr>
           <tr><td><strong>PreAgentHandoff</strong></td><td>At session start when resuming work</td><td>Injects LiveGuard context into agent prompt</td><td>No</td></tr>
         </tbody>
       </table>

@@ -22,10 +22,10 @@
 
       <div class="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">Appendix D</div>
       <h1>Grok Image Generation Warnings</h1>
-      <p class="text-lg text-slate-400 mb-8">xAI Aurora MIME mismatch — root cause, impact, mitigations, and safe workflows.</p>
+      <p class="text-lg text-slate-400 mb-8">xAI Aurora MIME mismatch, root cause, impact, mitigations, and safe workflows.</p>
 
       <div class="callout callout-warning">
-        <strong>KNOWN ISSUE</strong>: xAI Grok Aurora returns JPEG bytes regardless of requested format. If mismatched bytes enter a Claude conversation history, the session becomes unrecoverable. Current code mitigates this — read on for safe workflows.
+        <strong>KNOWN ISSUE</strong>: xAI Grok Aurora returns JPEG bytes regardless of requested format. If mismatched bytes enter a Claude conversation history, the session becomes unrecoverable. Current code mitigates this, read on for safe workflows.
       </div>
 
       <!-- ─── The Problem ─── -->
@@ -40,11 +40,11 @@ but the image appears to be a image/jpeg image</code></pre>
       <!-- ─── Why Sessions Lock Up ─── -->
       <h2 id="session-lockup">Why Sessions Lock Up</h2>
       <ol>
-        <li>The image tool generates an image — bytes land in the MCP tool result</li>
+        <li>The image tool generates an image, bytes land in the MCP tool result</li>
         <li>If raw base64 is included in the response, Claude adds it to <strong>conversation history</strong></li>
         <li>Claude's API validates MIME types on <strong>every subsequent request</strong> (the entire message history is re-sent)</li>
         <li>Once a mismatched image enters the history, <strong>every future message fails</strong> with the same 400 error</li>
-        <li>The session cannot be recovered — you must start a new conversation</li>
+        <li>The session cannot be recovered, you must start a new conversation</li>
       </ol>
 
       <div class="callout callout-info">
@@ -70,7 +70,7 @@ but the image appears to be a image/jpeg image</code></pre>
           </tr>
           <tr>
             <td><strong>Text-only MCP response</strong></td>
-            <td>Tool returns <code>type: "text"</code> with JSON payload (file path, metadata) — never raw base64</td>
+            <td>Tool returns <code>type: "text"</code> with JSON payload (file path, metadata), never raw base64</td>
             <td><code>server.mjs</code> handler</td>
           </tr>
           <tr>
@@ -86,11 +86,11 @@ but the image appears to be a image/jpeg image</code></pre>
 
       <h3>For Chapter Art and Illustrations</h3>
       <ol>
-        <li><strong>Always specify <code>outputPath</code></strong> — image saves to disk, not returned inline</li>
-        <li><strong>Prefer <code>.jpg</code> extension</strong> — matches what Grok actually returns (no conversion needed)</li>
+        <li><strong>Always specify <code>outputPath</code></strong>, image saves to disk, not returned inline</li>
+        <li><strong>Prefer <code>.jpg</code> extension</strong>, matches what Grok actually returns (no conversion needed)</li>
         <li><strong>If you need PNG</strong>, ensure <code>sharp</code> is installed: <code>cd pforge-mcp && npm install sharp</code></li>
-        <li><strong>Never generate images in a long-running session</strong> — use the REST API or a standalone script</li>
-        <li><strong>Batch image generation</strong> — generate all art in one dedicated session, separate from writing</li>
+        <li><strong>Never generate images in a long-running session</strong>, use the REST API or a standalone script</li>
+        <li><strong>Batch image generation</strong>, generate all art in one dedicated session, separate from writing</li>
       </ol>
 
       <h3>Standalone Script (Recommended)</h3>
@@ -122,8 +122,8 @@ but the image appears to be a image/jpeg image</code></pre>
       <table class="manual-table">
         <thead><tr><th>Test</th><th>Result</th><th>Details</th></tr></thead>
         <tbody>
-          <tr><td><strong>JPG direct</strong> (<code>.jpg</code> output)</td><td><span class="text-emerald-400 font-bold">✓</span> PASS</td><td>Grok returns JPEG, saved as <code>.jpg</code> — no conversion. 41 KB.</td></tr>
-          <tr><td><strong>PNG conversion</strong> (<code>.png</code> output)</td><td><span class="text-emerald-400 font-bold">✓</span> PASS</td><td>Grok returns JPEG, <code>sharp</code> converts to PNG — 312 KB.</td></tr>
+          <tr><td><strong>JPG direct</strong> (<code>.jpg</code> output)</td><td><span class="text-emerald-400 font-bold">✓</span> PASS</td><td>Grok returns JPEG, saved as <code>.jpg</code>, no conversion. 41 KB.</td></tr>
+          <tr><td><strong>PNG conversion</strong> (<code>.png</code> output)</td><td><span class="text-emerald-400 font-bold">✓</span> PASS</td><td>Grok returns JPEG, <code>sharp</code> converts to PNG, 312 KB.</td></tr>
           <tr><td><strong>MIME detection</strong></td><td><span class="text-emerald-400 font-bold">✓</span> PASS</td><td><code>detectImageFormat()</code> correctly identified JPEG bytes.</td></tr>
           <tr><td><strong>MCP tool response</strong></td><td><span class="text-emerald-400 font-bold">✓</span> SAFE</td><td>Returns text-only JSON, never raw base64.</td></tr>
           <tr><td><strong>Session recovery</strong></td><td><span class="text-amber-400 font-bold">⚠</span> MITIGATED</td><td>Crash only occurs if raw base64 with wrong MIME enters history. Current code prevents this.</td></tr>
@@ -133,17 +133,17 @@ but the image appears to be a image/jpeg image</code></pre>
       <!-- ─── If It Happens Anyway ─── -->
       <h2 id="recovery">If a Session Crashes</h2>
       <ol>
-        <li><strong>Start a new conversation</strong> — the current session cannot be recovered</li>
-        <li><strong>Don't retry the same tool call</strong> in the new session — it will produce the same crash if the root cause persists</li>
+        <li><strong>Start a new conversation</strong>, the current session cannot be recovered</li>
+        <li><strong>Don't retry the same tool call</strong> in the new session, it will produce the same crash if the root cause persists</li>
         <li><strong>Use the REST API</strong> instead of the MCP tool for the image generation</li>
-        <li><strong>Check <code>sharp</code></strong>: run <code>cd pforge-mcp && npm ls sharp</code> — if not installed, format conversion won't work and the extension gets corrected to <code>.jpg</code> instead</li>
+        <li><strong>Check <code>sharp</code></strong>: run <code>cd pforge-mcp && npm ls sharp</code>, if not installed, format conversion won't work and the extension gets corrected to <code>.jpg</code> instead</li>
       </ol>
 
       <div class="callout callout-tip">
-        <strong>Best practice</strong>: Use <code>.jpg</code> for all generated images. It matches Grok's native output format — no conversion, no risk, fastest save.
+        <strong>Best practice</strong>: Use <code>.jpg</code> for all generated images. It matches Grok's native output format, no conversion, no risk, fastest save.
       </div>
 
-      <p class="text-sm text-slate-500 mt-8">📄 Source: <code>pforge-mcp/orchestrator.mjs</code> — <code>detectImageFormat()</code>, <code>convertImageFormat()</code>, <code>generateImage()</code></p>
+      <p class="text-sm text-slate-500 mt-8">📄 Source: <code>pforge-mcp/orchestrator.mjs</code>, <code>detectImageFormat()</code>, <code>convertImageFormat()</code>, <code>generateImage()</code></p>
       <div id="chapter-prev-next" class="chapter-nav"></div>
     </div></main>
   </div>

@@ -32,7 +32,7 @@
         <h1>LiveGuard Alert Runbooks</h1>
         <p class="text-lg text-slate-400 mb-8">The guardian fired. Here's exactly what to do next.</p>
         <div class="callout callout-tip">
-          <strong>v2.30.0</strong> — Full runbook content for all 6 alert types. Severity matrix, per-alert response procedures, escalation paths, and fix proposal workflow. Auto-chaining and composite health checks available since v2.30.
+          <strong>v2.30.0</strong>, Full runbook content for all 6 alert types. Severity matrix, per-alert response procedures, escalation paths, and fix proposal workflow. Auto-chaining and composite health checks available since v2.30.
         </div>
 
         <!-- CONTENT: full runbooks -->
@@ -53,7 +53,7 @@
             <tbody class="divide-y divide-slate-800/60">
               <tr>
                 <td class="py-2 pr-4"><span class="px-2 py-0.5 rounded text-xs font-bold bg-red-950/50 text-red-400 border border-red-800/40">Critical</span></td>
-                <td class="py-2 pr-4 text-slate-400">Immediate — within 1 hour</td>
+                <td class="py-2 pr-4 text-slate-400">Immediate, within 1 hour</td>
                 <td class="py-2 pr-4 text-slate-400">On-call + team lead</td>
                 <td class="py-2 text-slate-400">Red badge on Triage tab</td>
               </tr>
@@ -85,10 +85,10 @@
         <p class="text-sm text-slate-400 mb-2"><strong>Source</strong>: <code class="text-forge-400">forge_drift_report</code> | <strong>Typical severity</strong>: Medium–High</p>
         <ol class="mt-2 space-y-2 text-sm text-slate-300 list-decimal list-inside mb-6">
           <li><strong>Assess</strong>: Run <code class="text-forge-400">pforge drift</code> to get the current score and delta. If delta &gt; 10 points in one session, treat as High.</li>
-          <li><strong>Identify</strong>: Check the <code>violations[]</code> in the output — each violation lists the file, rule, and instruction file it violates.</li>
+          <li><strong>Identify</strong>: Check the <code>violations[]</code> in the output, each violation lists the file, rule, and instruction file it violates.</li>
           <li><strong>Root cause</strong>: Was this an intentional architectural change? If yes, update the instruction file or plan baseline. If no, the code drifted from the plan.</li>
           <li><strong>Fix</strong>: For unintentional drift, refactor to match the plan. For intentional changes, update the plan's Scope Contract to reflect the new architecture.</li>
-          <li><strong>Verify</strong>: Re-run <code class="text-forge-400">pforge drift</code> — score should recover to within 5 points of the previous baseline.</li>
+          <li><strong>Verify</strong>: Re-run <code class="text-forge-400">pforge drift</code>, score should recover to within 5 points of the previous baseline.</li>
         </ol>
 
         <h3 id="runbook-secret">Secret Found — High-Entropy String in Committed Diff</h3>
@@ -96,12 +96,12 @@
         <ol class="mt-2 space-y-2 text-sm text-slate-300 list-decimal list-inside mb-6">
           <li><strong>Do not push</strong>: If the commit hasn't been pushed, amend it to remove the secret. <code>git reset HEAD~1</code>, remove the credential, re-commit.</li>
           <li><strong>Rotate immediately</strong>: If the commit has been pushed, the credential is compromised. Rotate it in the external provider (API dashboard, vault, etc.) before any other action.</li>
-          <li><strong>Remove from history</strong>: Use <code>git filter-repo</code> or BFG Repo-Cleaner to purge the secret from git history. A simple amendment is not sufficient — the old commit object still exists.</li>
+          <li><strong>Remove from history</strong>: Use <code>git filter-repo</code> or BFG Repo-Cleaner to purge the secret from git history. A simple amendment is not sufficient, the old commit object still exists.</li>
           <li><strong>Move to secrets manager</strong>: Store the new credential in <code>.forge/secrets.json</code> (gitignored), an environment variable, or your cloud vault. Never in source code.</li>
-          <li><strong>Verify</strong>: Re-run <code class="text-forge-400">pforge secret-scan</code> — output should show <code>clean: true</code>.</li>
+          <li><strong>Verify</strong>: Re-run <code class="text-forge-400">pforge secret-scan</code>, output should show <code>clean: true</code>.</li>
         </ol>
         <div class="callout callout-warning mb-6">
-          <strong>Time-critical</strong>: Secret findings should be treated as Critical regardless of the entropy score. Automated rotation is out of scope for LiveGuard — the tool detects and alerts; humans rotate.
+          <strong>Time-critical</strong>: Secret findings should be treated as Critical regardless of the entropy score. Automated rotation is out of scope for LiveGuard, the tool detects and alerts; humans rotate.
         </div>
 
         <h3 id="runbook-env">Env Diff Gap — Required Key Missing from Environment File</h3>
@@ -111,7 +111,7 @@
           <li><strong>Categorize</strong>: Is the key required for the target environment? Some keys (e.g., <code>DEBUG=true</code>) are intentionally absent from production.</li>
           <li><strong>Add missing keys</strong>: For required keys, add them to the target <code>.env.*</code> file with the appropriate value for that environment.</li>
           <li><strong>Document exceptions</strong>: If a key is intentionally absent, add a comment in the baseline <code>.env</code> file: <code># NOT_IN_PROD: DEBUG</code>.</li>
-          <li><strong>Verify</strong>: Re-run <code class="text-forge-400">pforge env-diff</code> — output should show <code>clean: true</code> or only expected gaps.</li>
+          <li><strong>Verify</strong>: Re-run <code class="text-forge-400">pforge env-diff</code>, output should show <code>clean: true</code> or only expected gaps.</li>
         </ol>
 
         <h3 id="runbook-regression">Regression Gate Failure — Previously Passing Gate Now Fails</h3>
@@ -120,7 +120,7 @@
           <li><strong>Identify</strong>: Run <code class="text-forge-400">pforge regression-guard</code> to see which gates failed and their error output.</li>
           <li><strong>Bisect</strong>: Use <code>git log</code> to find which commit broke the gate. The gate command output usually points at the exact file.</li>
           <li><strong>Fix or update</strong>: If the code broke a valid gate, fix the code. If the gate is outdated (the feature was intentionally changed), update the gate command in the plan file.</li>
-          <li><strong>Verify</strong>: Re-run <code class="text-forge-400">pforge regression-guard --plan &lt;affected-plan&gt;</code> — all gates should pass.</li>
+          <li><strong>Verify</strong>: Re-run <code class="text-forge-400">pforge regression-guard --plan &lt;affected-plan&gt;</code>, all gates should pass.</li>
         </ol>
 
         <h3 id="runbook-dep">Dependency Vulnerability — New CVE in a Watched Package</h3>
@@ -130,7 +130,7 @@
           <li><strong>Check exploitability</strong>: Not all CVEs are exploitable in your context. Check if the vulnerable code path is reachable in your app.</li>
           <li><strong>Update</strong>: <code>npm update &lt;package&gt;</code> or pin to a patched version. For transitive dependencies, use <code>npm audit fix</code>.</li>
           <li><strong>If no patch exists</strong>: Evaluate alternatives, add a compensating control, or document the accepted risk with a timeline for re-evaluation.</li>
-          <li><strong>Verify</strong>: Re-run <code class="text-forge-400">pforge dep-watch</code> — the vulnerability should move from <code>newVulnerabilities</code> to <code>resolvedVulnerabilities</code>.</li>
+          <li><strong>Verify</strong>: Re-run <code class="text-forge-400">pforge dep-watch</code>, the vulnerability should move from <code>newVulnerabilities</code> to <code>resolvedVulnerabilities</code>.</li>
         </ol>
 
         <h3 id="runbook-mttr">Incident MTTR Exceeded — Time-to-Resolve Beyond Threshold</h3>
@@ -149,13 +149,13 @@
           <li><strong>Trigger</strong>: Run <code>pforge fix-proposal --source regression</code> (or drift/incident/secret) after the alert fires.</li>
           <li><strong>Review the plan</strong>: Open <code>docs/plans/auto/LIVEGUARD-FIX-&lt;incidentId&gt;.md</code>. The plan contains the failing command, affected files, and a template fix slice with <code>&lt;!-- TODO --&gt;</code> markers for you to fill in.</li>
           <li><strong>Fill in the fix</strong>: Complete the TODO markers in the fix slice. For secret findings, the template directs you to remove the credential from the diff and rotate it externally before proceeding.</li>
-          <li><strong>Execute on a branch</strong>: <code>pforge run-plan --assisted docs/plans/auto/LIVEGUARD-FIX-&lt;incidentId&gt;.md</code>. The plan targets a dedicated branch — never master.</li>
+          <li><strong>Execute on a branch</strong>: <code>pforge run-plan --assisted docs/plans/auto/LIVEGUARD-FIX-&lt;incidentId&gt;.md</code>. The plan targets a dedicated branch, never master.</li>
           <li><strong>Verify</strong>: The second slice re-runs the exact commands that originally failed. Green gate = fix confirmed.</li>
-          <li><strong>Promote or close</strong>: Merge the branch if the fix holds. Close the proposal by updating its status in <code>.forge/fix-proposals.json</code>. Auto-generated plans in <code>docs/plans/auto/</code> are gitignored — promote manually to <code>docs/plans/</code> if you want to keep it in version history.</li>
+          <li><strong>Promote or close</strong>: Merge the branch if the fix holds. Close the proposal by updating its status in <code>.forge/fix-proposals.json</code>. Auto-generated plans in <code>docs/plans/auto/</code> are gitignored, promote manually to <code>docs/plans/</code> if you want to keep it in version history.</li>
         </ol>
 
         <div class="callout callout-warning">
-          <strong>Loop cap</strong>: <code>forge_fix_proposal</code> generates at most one proposal per <code>incidentId</code>. If the first proposal doesn’t resolve the issue, address it manually — the tool will return <code>status: &quot;needs-human-intervention&quot;</code> on the second call.
+          <strong>Loop cap</strong>: <code>forge_fix_proposal</code> generates at most one proposal per <code>incidentId</code>. If the first proposal doesn’t resolve the issue, address it manually, the tool will return <code>status: &quot;needs-human-intervention&quot;</code> on the second call.
         </div>
 
         <div class="callout callout-tip">

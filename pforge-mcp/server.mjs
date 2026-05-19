@@ -6895,6 +6895,107 @@ function readCrossRunCache(cachePath, now = Date.now()) {
   }
 }
 
+// REST API: POST /api/tool/:name — invoke forge tool
+// MCP-only tools route through internal handler; CLI tools proxy through pforge.ps1
+const MCP_ONLY_TOOLS = new Set([
+  "forge_liveguard_run", "forge_quorum_analyze", "forge_health_trend",
+  "forge_alert_triage", "forge_drift_report", "forge_regression_guard",
+  "forge_incident_capture", "forge_deploy_journal", "forge_dep_watch",
+  "forge_diff_classify", "forge_secret_scan", "forge_env_diff", "forge_fix_proposal",
+  "forge_hotspot", "forge_runbook", "forge_run_plan", "forge_cost_report",
+  // Phase-27.1 Slice 2b — forge_estimate_quorum was registered in
+  // capabilities.mjs/tools.json/switch case/handler in Phase-27 Slice 6 but
+  // missed this Set, so /api/tool/forge_estimate_quorum fell through to
+  // runPforge() (no CLI counterpart). Added here so the HTTP bridge reaches
+  // the MCP handler.
+  "forge_estimate_quorum",
+  // Phase-27.2 Slice 3 — forge_estimate_slice is MCP-native (no CLI
+  // counterpart). Adding here so /api/tool/forge_estimate_slice reaches
+  // the MCP handler instead of falling through to runPforge().
+  "forge_estimate_slice",
+  "forge_capabilities", "forge_memory_capture",
+  // Phase TEMPER-01 Slice 01.2 — Tempering tools handle their own IO
+  // via tempering.mjs; they are MCP-native and must not be shelled
+  // through pforge.ps1 (which has no Tempering command).
+  "forge_tempering_scan", "forge_tempering_status",
+  // Phase TEMPER-02 Slice 02.1 — execution harness owns its own
+  // subprocess boundary; must not shell through pforge.ps1.
+  "forge_tempering_run",
+  // Phase TEMPER-04 Slice 04.1 — baseline promotion is MCP-native.
+  "forge_tempering_approve_baseline",
+  // Phase TEMPER-06 Slice 06.1 — Bug registry tools are MCP-native.
+  "forge_bug_register", "forge_bug_list", "forge_bug_update_status",
+  // Phase TEMPER-06 Slice 06.3 — Closed-loop validation is MCP-native.
+  "forge_bug_validate_fix",
+  // Phase FORGE-SHOP-01 Slice 01.1 — Home snapshot is MCP-native read-only.
+  "forge_home_snapshot",
+  // Phase FORGE-SHOP-02 Slice 02.1 — Review Queue tools are MCP-native.
+  "forge_review_add", "forge_review_list", "forge_review_resolve",
+  // Phase TEMPER-07 Slice 07.1 — Agent delegation is MCP-native.
+  "forge_delegate_to_agent",
+  // Phase FORGE-SHOP-03 Slice 03.1 — Notification tools are MCP-native.
+  "forge_notify_send", "forge_notify_test",
+  // Phase FORGE-SHOP-04 Slice 04.1 — Search is MCP-native read-only.
+  "forge_search",
+  // Phase FORGE-SHOP-05 Slice 05.1 — Timeline is MCP-native read-only.
+  "forge_timeline",
+  // Issue #73 — Doctor quorum is MCP-native read-only.
+  "forge_doctor_quorum",
+  // Phase TESTBED-01 Slice 01 — Testbed runner is MCP-native.
+  "forge_testbed_run",
+  // Phase TESTBED-02 Slice 01 — Testbed happypath runner is MCP-native.
+  "forge_testbed_happypath",
+  // Phase-28.3 Slice 03 — Self-repair meta-bug filer is MCP-native.
+  "forge_meta_bug_file",
+  // Phase-38.3 — Knowledge graph query is MCP-native.
+  "forge_graph_query",
+  // Phase-38.6 — Pattern list is MCP-native.
+  "forge_patterns_list",
+  // Phase GITHUB-D — GitHub metrics is MCP-native.
+  "forge_github_metrics",
+  // Phase-TEAM-ACTIVITY — Team activity feed is MCP-native.
+  // Phase-TEAM-DASHBOARD — Team coordination dashboard is MCP-native.
+  "forge_team_dashboard",
+  "forge_team_activity",
+  // Phase CLASSIFIER-ISSUE — Classifier-lane GitHub issue filer is MCP-native.
+  "forge_classifier_issue",
+  // D6 — Agentic code review delegation is MCP-native.
+  "forge_delegate_review",
+  // Phase-ANVIL Slice 6 — Anvil + Hallmark + Pipelines tools are MCP-native.
+  "forge_anvil_stat",
+  "forge_anvil_clear",
+  "forge_anvil_rebuild",
+  "forge_anvil_dlq_list",
+  "forge_anvil_dlq_drain",
+  "forge_hallmark_show",
+  "forge_hallmark_verify",
+  "forge_pipelines_list",
+  // Phase LATTICE Slice 7 — Lattice code-graph tools are MCP-native.
+  "forge_lattice_index",
+  "forge_lattice_stat",
+  "forge_lattice_query",
+  "forge_lattice_callers",
+  "forge_lattice_blast",
+  // Issue #134 — Crucible tools are MCP-native (handled by switch-case
+  // in CallToolRequestSchema). Without these in the allowlist,
+  // POST /api/tool/forge_crucible_* falls through to runPforge() which
+  // has no Crucible CLI commands and returns "Unknown command".
+  "forge_crucible_submit",
+  "forge_crucible_ask",
+  "forge_crucible_preview",
+  "forge_crucible_finalize",
+  "forge_crucible_list",
+  "forge_crucible_abandon",
+  "forge_crucible_import",
+  "forge_crucible_status",
+  // Roadmap C2 — forge_export_plan is MCP-native (no CLI shell equivalent).
+  "forge_export_plan",
+  // Roadmap C3 — forge_sync_memories is MCP-native (CLI also available via pforge sync-memories).
+  "forge_sync_memories",
+  // v3.0.0 — forge_sync_instructions is MCP-native (CLI also available via pforge sync-instructions).
+  "forge_sync_instructions",
+]);
+
 // ─── Express App + REST API  ─────────────────────────────
 export function createExpressApp() {
   const app = express();
@@ -8450,8 +8551,6 @@ export function createExpressApp() {
     } catch (err) { res.status(500).json({ error: err.message }); }
   });
 
-  // REST API: POST /api/tool/:name — invoke forge tool
-  // MCP-only tools route through internal handler; CLI tools proxy through pforge.ps1
   app.post("/api/tool/:name", async (req, res) => {
     try {
       const toolName = req.params.name;
@@ -9583,105 +9682,6 @@ export function createExpressApp() {
   return app;
 }
 
-  const MCP_ONLY_TOOLS = new Set([
-    "forge_liveguard_run", "forge_quorum_analyze", "forge_health_trend",
-    "forge_alert_triage", "forge_drift_report", "forge_regression_guard",
-    "forge_incident_capture", "forge_deploy_journal", "forge_dep_watch",
-    "forge_diff_classify", "forge_secret_scan", "forge_env_diff", "forge_fix_proposal",
-    "forge_hotspot", "forge_runbook", "forge_run_plan", "forge_cost_report",
-    // Phase-27.1 Slice 2b — forge_estimate_quorum was registered in
-    // capabilities.mjs/tools.json/switch case/handler in Phase-27 Slice 6 but
-    // missed this Set, so /api/tool/forge_estimate_quorum fell through to
-    // runPforge() (no CLI counterpart). Added here so the HTTP bridge reaches
-    // the MCP handler.
-    "forge_estimate_quorum",
-    // Phase-27.2 Slice 3 — forge_estimate_slice is MCP-native (no CLI
-    // counterpart). Adding here so /api/tool/forge_estimate_slice reaches
-    // the MCP handler instead of falling through to runPforge().
-    "forge_estimate_slice",
-    "forge_capabilities", "forge_memory_capture",
-    // Phase TEMPER-01 Slice 01.2 — Tempering tools handle their own IO
-    // via tempering.mjs; they are MCP-native and must not be shelled
-    // through pforge.ps1 (which has no Tempering command).
-    "forge_tempering_scan", "forge_tempering_status",
-    // Phase TEMPER-02 Slice 02.1 — execution harness owns its own
-    // subprocess boundary; must not shell through pforge.ps1.
-    "forge_tempering_run",
-    // Phase TEMPER-04 Slice 04.1 — baseline promotion is MCP-native.
-    "forge_tempering_approve_baseline",
-    // Phase TEMPER-06 Slice 06.1 — Bug registry tools are MCP-native.
-    "forge_bug_register", "forge_bug_list", "forge_bug_update_status",
-    // Phase TEMPER-06 Slice 06.3 — Closed-loop validation is MCP-native.
-    "forge_bug_validate_fix",
-    // Phase FORGE-SHOP-01 Slice 01.1 — Home snapshot is MCP-native read-only.
-    "forge_home_snapshot",
-    // Phase FORGE-SHOP-02 Slice 02.1 — Review Queue tools are MCP-native.
-    "forge_review_add", "forge_review_list", "forge_review_resolve",
-    // Phase TEMPER-07 Slice 07.1 — Agent delegation is MCP-native.
-    "forge_delegate_to_agent",
-    // Phase FORGE-SHOP-03 Slice 03.1 — Notification tools are MCP-native.
-    "forge_notify_send", "forge_notify_test",
-    // Phase FORGE-SHOP-04 Slice 04.1 — Search is MCP-native read-only.
-    "forge_search",
-    // Phase FORGE-SHOP-05 Slice 05.1 — Timeline is MCP-native read-only.
-    "forge_timeline",
-    // Issue #73 — Doctor quorum is MCP-native read-only.
-    "forge_doctor_quorum",
-    // Phase TESTBED-01 Slice 01 — Testbed runner is MCP-native.
-    "forge_testbed_run",
-    // Phase TESTBED-02 Slice 01 — Testbed happypath runner is MCP-native.
-    "forge_testbed_happypath",
-    // Phase-28.3 Slice 03 — Self-repair meta-bug filer is MCP-native.
-    "forge_meta_bug_file",
-    // Phase-38.3 — Knowledge graph query is MCP-native.
-    "forge_graph_query",
-    // Phase-38.6 — Pattern list is MCP-native.
-    "forge_patterns_list",
-    // Phase GITHUB-D — GitHub metrics is MCP-native.
-    "forge_github_metrics",
-    // Phase-TEAM-ACTIVITY — Team activity feed is MCP-native.
-    // Phase-TEAM-DASHBOARD — Team coordination dashboard is MCP-native.
-    "forge_team_dashboard",
-    "forge_team_activity",
-    // Phase CLASSIFIER-ISSUE — Classifier-lane GitHub issue filer is MCP-native.
-    "forge_classifier_issue",
-    // D6 — Agentic code review delegation is MCP-native.
-    "forge_delegate_review",
-    // Phase-ANVIL Slice 6 — Anvil + Hallmark + Pipelines tools are MCP-native.
-    "forge_anvil_stat",
-    "forge_anvil_clear",
-    "forge_anvil_rebuild",
-    "forge_anvil_dlq_list",
-    "forge_anvil_dlq_drain",
-    "forge_hallmark_show",
-    "forge_hallmark_verify",
-    "forge_pipelines_list",
-    // Phase LATTICE Slice 7 — Lattice code-graph tools are MCP-native.
-    "forge_lattice_index",
-    "forge_lattice_stat",
-    "forge_lattice_query",
-    "forge_lattice_callers",
-    "forge_lattice_blast",
-    // Issue #134 — Crucible tools are MCP-native (handled by switch-case
-    // in CallToolRequestSchema). Without these in the allowlist,
-    // POST /api/tool/forge_crucible_* falls through to runPforge() which
-    // has no Crucible CLI commands and returns "Unknown command".
-    "forge_crucible_submit",
-    "forge_crucible_ask",
-    "forge_crucible_preview",
-    "forge_crucible_finalize",
-    "forge_crucible_list",
-    "forge_crucible_abandon",
-    "forge_crucible_import",
-    "forge_crucible_status",
-    // Roadmap C2 — forge_export_plan is MCP-native (no CLI shell equivalent).
-    "forge_export_plan",
-    // Roadmap C3 — forge_sync_memories is MCP-native (CLI also available via pforge sync-memories).
-    "forge_sync_memories",
-    // v3.0.0 — forge_sync_instructions is MCP-native (CLI also available via pforge sync-instructions).
-    "forge_sync_instructions",
-  ]);
-
 export function buildServerSurface() {
   const tools = [...TOOLS]
     .sort((a, b) => a.name.localeCompare(b.name))
@@ -9690,7 +9690,7 @@ export function buildServerSurface() {
   const restRoutes = Array.from(
     createExpressApp
       .toString()
-      .matchAll(/app\.(get|post|put|delete)\(\s*"([^"]+)"/g),
+      .matchAll(/app\.(get|post|put|delete|patch)\(\s*["'`]([^"'`]+)["'`]/g),
     ([, method, path]) => ({ method: method.toUpperCase(), path }),
   ).sort((a, b) => a.method.localeCompare(b.method) || a.path.localeCompare(b.path));
 

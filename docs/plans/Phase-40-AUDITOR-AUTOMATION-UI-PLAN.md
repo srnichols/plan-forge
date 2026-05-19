@@ -1,6 +1,13 @@
+---
+phase: 40
+name: AUDITOR-AUTOMATION-UI
+status: HARDENED
+lockHash: b9cf736fc215c03036ac1c7e528c019550f1983d7821ae621f65905e88e91596
+---
+
 # Phase AUDITOR-AUTOMATION-UI — Dashboard surfaces for observer, watcher cross-run, and auditor
 
-> **Status**: **DRAFT — gated on Phase-AUDITOR-AUTOMATION shipping first**. Do NOT execute (or even Step-2 harden) until the parent phase ships. Many fields and capabilities this plan surfaces don't exist yet.
+> **Status**: **HARDENED — awaiting Execution Hold lift**. Cleared for `pforge run-plan` once Execution Hold checklist is satisfied. Step-2 harden completed 2026-05-19. Parent phase Phase-39 shipped on 2026-05-19 (commit 9945c3bd).
 > **Parent phase**: [docs/plans/Phase-39-AUDITOR-AUTOMATION-PLAN.md](Phase-39-AUDITOR-AUTOMATION-PLAN.md). The parent ships the *capability* (config blocks, observer process, cross-run watcher mode, auditor auto-invoke). This phase ships the *discoverability* (settings UI to configure them, observability cards to see them work).
 > **Tracks**: `pforge-mcp/ui/index.html` + `pforge-mcp/ui/app.js` (new settings tab, three new dashboard cards), `pforge-mcp/server.mjs` (any new `/api/*` endpoints needed for the cards), `pforge-mcp/tests/dashboard-*.test.mjs` (mapping invariants + behavior), docs sweep with new screenshots.
 > **Estimated cost**: low-to-medium. All mechanical UI work on an established pattern (Phase-30 settings decomposition). Zero new backend capabilities, zero new MCP tools. The only `/api/*` additions are read endpoints to feed the cards.
@@ -156,7 +163,7 @@ Decisions locked at draft time; Step-2 hardener may sharpen but should not re-li
 
 ## Slice Decomposition
 
-### S0 — Baseline test harness
+### Slice 0 — Baseline test harness
 
 Captures today's dashboard state for non-regression:
 - Existing nine settings tabs render and route correctly
@@ -165,61 +172,93 @@ Captures today's dashboard state for non-regression:
 - `tab-settings-forgemaster` does NOT exist yet (will after S1)
 - New endpoints `/api/watcher/cross-run` and `/api/auditor/latest` return 404 today (will be 200 after S5 + S6)
 
-**Gate**: `bash -c "cd pforge-mcp && npx vitest run tests/dashboard-auditor-automation-ui-baseline.test.mjs"` returns 0.
+- **Validation Gate**:
+
+```bash
+node -e "process.chdir('pforge-mcp'); require('child_process').execSync('npx vitest run tests/dashboard-auditor-automation-ui-baseline.test.mjs', {stdio:'inherit'});"
+```
 
 ### Cluster A — Settings tab for Forge-Master roles
 
-**S1 — `tab-settings-forgemaster` section + observer fields**
+### Slice 1 — `tab-settings-forgemaster` section + observer fields
 - New `<section id="tab-settings-forgemaster">` with six observer `cfg-*` fields
 - Tab routing entry in `app.js`
 - Read from `/api/config` `forgeMaster.observer.*`; write via `POST /api/config`
 - Phase-30 mapping test extended: new tab listed in `SETTINGS_SECTIONS`; new field IDs mapped
-- **Gate**: `bash -c "cd pforge-mcp && npx vitest run tests/dashboard-settings-forgemaster.test.mjs -t 'observer'"` returns 0
+- **Validation Gate**:
 
-**S2 — Auditor fields in `tab-settings-forgemaster`**
+```bash
+node -e "process.chdir('pforge-mcp'); require('child_process').execSync('npx vitest run tests/dashboard-settings-forgemaster.test.mjs -t observer', {stdio:'inherit'});"
+```
+
+### Slice 2 — Auditor fields in `tab-settings-forgemaster`
 - Add three auditor `cfg-*` fields (modelTier, onFailure, everyNRuns) to same section
 - Field validation: `everyNRuns` rejects 1–4; `null`/blank = off
 - Save round-trip: write → reload page → fields show same values
-- **Gate**: `bash -c "cd pforge-mcp && npx vitest run tests/dashboard-settings-forgemaster.test.mjs -t 'auditor'"` returns 0
+- **Validation Gate**:
+
+```bash
+node -e "process.chdir('pforge-mcp'); require('child_process').execSync('npx vitest run tests/dashboard-settings-forgemaster.test.mjs -t auditor', {stdio:'inherit'});"
+```
 
 ### Cluster B — Observability cards
 
-**S3 — `/api/watcher/cross-run` read endpoint**
+### Slice 3 — `/api/watcher/cross-run` read endpoint
 - Wraps `runWatch({ mode: "cross-run", window: "14d" })`
 - Reads/writes `.forge/cross-run-cache.json` (1 h TTL, atomic write)
 - Returns `{ ok, anomalies, recommendations, snapshot, cachedAt }`
-- **Gate**: `bash -c "cd pforge-mcp && npx vitest run tests/api-watcher-cross-run.test.mjs"` returns 0
+- **Validation Gate**:
 
-**S4 — Observer narrations card**
+```bash
+node -e "process.chdir('pforge-mcp'); require('child_process').execSync('npx vitest run tests/api-watcher-cross-run.test.mjs', {stdio:'inherit'});"
+```
+
+### Slice 4 — Observer narrations card
 - New card in `index.html` after existing live session card
 - Subscribes to existing dashboard WebSocket; listens for `observer:narration` events (the parent phase's S7 already emits these — this slice is strictly a subscriber, no parent-file edits)
 - Initial render: query Brain via `GET /api/brain/recall?source=observer&limit=20`
 - Empty state UI + deep-link to settings tab
-- **Gate**: `bash -c "cd pforge-mcp && npx vitest run tests/dashboard-observer-narrations-card.test.mjs"` returns 0
+- **Validation Gate**:
 
-**S5 — Cross-run watcher anomalies card**
+```bash
+node -e "process.chdir('pforge-mcp'); require('child_process').execSync('npx vitest run tests/dashboard-observer-narrations-card.test.mjs', {stdio:'inherit'});"
+```
+
+### Slice 5 — Cross-run watcher anomalies card
 - New card in `index.html` after observer narrations card
 - "Refresh" button → `GET /api/watcher/cross-run`
 - Renders anomaly table (code, severity, recommendation, occurrence count)
 - Auto-loads cached on page load
-- **Gate**: `bash -c "cd pforge-mcp && npx vitest run tests/dashboard-cross-run-card.test.mjs"` returns 0
+- **Validation Gate**:
 
-**S6 — Auditor latest-report card**
+```bash
+node -e "process.chdir('pforge-mcp'); require('child_process').execSync('npx vitest run tests/dashboard-cross-run-card.test.mjs', {stdio:'inherit'});"
+```
+
+### Slice 6 — Auditor latest-report card
 - New `GET /api/auditor/latest` endpoint: reads `.forge/health/latest.md`, sanitizes markdown server-side (strip HTML/script), returns `{ markdown, timestamp, archive: [{ filename, timestamp }, ...] }`
 - New card renders markdown using existing dashboard markdown renderer (already used elsewhere — verify which one and reuse)
 - "View history" link opens collapsible list of archived reports
-- **Gate**: `bash -c "cd pforge-mcp && npx vitest run tests/dashboard-auditor-report-card.test.mjs"` returns 0
+- **Validation Gate**:
 
-### S7 — Full QA sweep
+```bash
+node -e "process.chdir('pforge-mcp'); require('child_process').execSync('npx vitest run tests/dashboard-auditor-report-card.test.mjs', {stdio:'inherit'});"
+```
+
+### Slice 7 — Full QA sweep
 
 Run ALL new test suites together; verify they don't regress each other, existing dashboard tests, or parent phase tests:
 - All new tests from S0–S6
 - Pre-existing full `pforge-mcp` test suite (including all dashboard-*.test.mjs)
 - Parent phase's tests remain green
 
-**Gate**: `bash -c "cd pforge-mcp && npx vitest run"` returns 0; **zero** failed tests across the workspace.
+- **Validation Gate**:
 
-### S8 — Testbed E2E + real-browser validation
+```bash
+node -e "process.chdir('pforge-mcp'); require('child_process').execSync('npx vitest run', {stdio:'inherit'});"
+```
+
+### Slice 8 — Testbed E2E + real-browser validation
 
 Exercises the dashboard against the real testbed at `E:\GitHub\plan-forge-testbed`. Launches a dashboard server pointed at the testbed, then runs 8 scenarios via `forge_testbed_run` + Playwright (`run_playwright_code`) for browser interactions. Catches what JSDOM and vitest cannot: real-browser XSS evaluation, concurrent-save race conditions, deep-link focus behavior, real-network performance, cross-run card under realistic data volumes.
 
@@ -231,18 +270,26 @@ For each scenario in §"Testbed scenarios + browser tests" list (under Scope Con
 
 Also re-runs the existing `forge_testbed_happypath` suite to verify this phase did not regress any pre-existing scenario.
 
-**Gate**: `bash -c "cd pforge-mcp && npx vitest run tests/testbed-dashboard-ui.test.mjs"` returns 0; `forge_testbed_findings --severity blocker` AND `--severity high` both return zero findings for this phase.
+- **Validation Gate**:
 
-### S9 — Docs sweep + screenshots
+```bash
+node -e "process.chdir('pforge-mcp'); require('child_process').execSync('npx vitest run tests/testbed-dashboard-ui.test.mjs', {stdio:'inherit'});"
+```
+
+### Slice 9 — Docs sweep + screenshots
 
 - Capture screenshots per §"Docs sweep" list using existing `capture-screenshots.mjs` infrastructure
 - Update manual pages per §"Docs sweep" list
 - Regenerate `forge_capabilities` output and verify dashboard surfaces show up in `dashboard:` capability description
 - Update `CHANGELOG.md` `[Unreleased]` with single grouped entry covering all three card additions + settings tab
 
-**Gate**: `bash -c "ls docs/manual/assets/screenshots/dashboard-settings-forgemaster.png docs/manual/assets/screenshots/dashboard-observer-narrations.png docs/manual/assets/screenshots/dashboard-cross-run-anomalies.png docs/manual/assets/screenshots/dashboard-auditor-report.png"` returns 0.
+- **Validation Gate**:
 
-### S10 — Retro
+```bash
+node -e "const fs=require('fs');const files=['docs/manual/assets/screenshots/dashboard-settings-forgemaster.png','docs/manual/assets/screenshots/dashboard-observer-narrations.png','docs/manual/assets/screenshots/dashboard-cross-run-anomalies.png','docs/manual/assets/screenshots/dashboard-auditor-report.png'];for(const f of files){if(!fs.existsSync(f))throw new Error('missing screenshot: '+f);}console.log('ok all 4 screenshots present');"
+```
+
+### Slice 10 — Retro
 
 Append §"What actually shipped" to this plan file:
 - Final commit SHAs per slice
@@ -250,7 +297,11 @@ Append §"What actually shipped" to this plan file:
 - Known gotchas surfaced during execution (especially any testbed-only failures caught in S8)
 - Carryover for next phase (e.g., per-run drill-down on cross-run anomalies, auditor PR-opening UI, mobile-responsive cards)
 
-**Gate**: `bash -c "grep -q '## What actually shipped' docs/plans/Phase-40-AUDITOR-AUTOMATION-UI-PLAN.md"` returns 0.
+- **Validation Gate**:
+
+```bash
+node -e "const fs=require('fs');const c=fs.readFileSync('docs/plans/Phase-40-AUDITOR-AUTOMATION-UI-PLAN.md','utf8');if(!/^##\s+What actually shipped/m.test(c))throw new Error('retro section missing');console.log('ok retro present');"
+```
 
 ---
 
@@ -329,8 +380,8 @@ All commits land on `master`. PreCommit chain runs on each.
 | Date | Action | By |
 |---|---|---|
 | 2026-05-18 | Draft created as planned follow-up to [Phase-39-AUDITOR-AUTOMATION-PLAN.md](Phase-39-AUDITOR-AUTOMATION-PLAN.md). Held until parent phase ships. | Copilot session |
-| _pending_ | Parent phase shipped — verify dependencies before lifting Execution Hold | _pending_ |
-| _pending_ | Step-2 harden: lockHash, tightened acceptance criteria, screenshot capture script confirmed | _pending_ |
+| 2026-05-19 | Parent phase Phase-39 shipped at commit 9945c3bd (S12 retro). Step-2 harden cleared to proceed. | Copilot session |
+| 2026-05-19 | Step-2 harden: added frontmatter (phase 40, name AUDITOR-AUTOMATION-UI, status HARDENED, lockHash); renamed slice headers (mix of H3 S0/S7-S10 and bold-bullet S1-S6) to uniform Slice 0..Slice 10 H3 headers; rewrote 11 inline-backtick gate markers as fenced bash blocks with portable node -e bodies; S8 testbed-findings cli assertion deferred to in-slice judgment (severity gate cannot run from inside a bash command without orchestrator wiring); S10 retro grep ported to fs.readFileSync regex check | Copilot session (auto-harden) |
 | _pending_ | Execution Hold lifted | _pending_ |
 
 ---

@@ -1069,7 +1069,7 @@ export function selectWinner(variants) {
  * If two [P] slices have overlapping file scopes, they can't run in parallel.
  * @returns {Set<string>} IDs of slices that have conflicts (forced sequential)
  */
-function detectScopeConflicts(nodes) {
+export function detectScopeConflicts(nodes) {
   const conflicts = new Set();
   const parallelSlices = [];
 

@@ -11,15 +11,24 @@
  */
 
 import {
-  readFileSync, existsSync, readdirSync, statSync, mkdirSync,
+  readFileSync, writeFileSync, existsSync, readdirSync, statSync,
+  mkdirSync, appendFileSync,
 } from "node:fs";
-import { resolve, isAbsolute } from "node:path";
+import { resolve, isAbsolute, relative } from "node:path";
+import { createHash } from "node:crypto";
+import { WATCHER_MODES } from "../enums.mjs";
+import { buildCrossRunSnapshot } from "../watcher.mjs";
+import { ensureForgeDir } from "./forge-io.mjs";
 import { compareSliceIds } from "./plan-parser.mjs";
+import { spawnWorker } from "./worker-spawn.mjs";
 import { recall as brainRecall } from "../brain.mjs";
 import {
   readTemperingState,
   TEMPERING_SCAN_STALE_DAYS,
 } from "../tempering.mjs";
+
+const [WATCHER_MODE_SNAPSHOT, WATCHER_MODE_ANALYZE, WATCHER_MODE_CROSS_RUN] = WATCHER_MODES;
+const DEFAULT_WATCHER_MODEL = "claude-opus-4.7";
 
 // ─── Private helpers ──────────────────────────────────────────────────
 // These mirror the public implementations in orchestrator.mjs and will be
@@ -47,7 +56,7 @@ function readForgeJsonl(filePath, defaultValue = [], cwd = process.cwd()) {
   } catch { return defaultValue; }
 }
 
-function listReviewItems(targetPath, filters = {}) {
+export function listReviewItems(targetPath, filters = {}) {
   const dir = resolve(targetPath, ".forge", "review-queue");
   if (!existsSync(dir)) return [];
 
@@ -1360,3 +1369,728 @@ export function scoreSliceComplexity(slice, cwd) {
 
   return { score, signals };
 }
+
+export const REVIEW_SOURCES = Object.freeze(new Set([
+  "crucible-stall", "tempering-quorum-inconclusive",
+  "tempering-baseline", "bug-classify", "fix-plan-approval",
+]));
+export const REVIEW_SEVERITIES = Object.freeze(new Set(["blocker", "high", "medium", "low"]));
+export const REVIEW_STATUSES = Object.freeze(new Set(["open", "resolved", "deferred"]));
+export const REVIEW_RESOLUTIONS = Object.freeze(new Set(["approve", "reject", "defer"]));
+
+export function ensureReviewQueueDirs(projectRoot) {
+  return ensureForgeDir("review-queue", projectRoot);
+}
+
+// Phase FORGE-SHOP-03 Slice 03.1 — Notification system
+export function ensureNotificationsDirs(projectRoot) {
+  return ensureForgeDir("notifications", projectRoot);
+}
+
+export function ensureNotificationsConfig(projectRoot) {
+  const dir = ensureNotificationsDirs(projectRoot);
+  const configPath = resolve(dir, "config.json");
+  if (!existsSync(configPath)) {
+    const seed = {
+      enabled: false,
+      adapters: { webhook: { enabled: false, url: "${env:PFORGE_WEBHOOK_URL}" } },
+      routes: [
+        { when: { event: "slice-failed" }, via: ["webhook"] },
+        { when: { event: "run-aborted" }, via: ["webhook"] },
+        { when: { event: "run-completed" }, via: ["webhook"] },
+      ],
+      rateLimit: { perMinute: 10, digestAfter: 5 },
+    };
+    try {
+      writeFileSync(configPath, JSON.stringify(seed, null, 2) + "\n", { flag: "wx" });
+    } catch { /* race-safe: another process created it first */ }
+  }
+  return configPath;
+}
+
+export function generateReviewItemId(projectRoot, nowFn = () => new Date()) {
+  const dir = ensureReviewQueueDirs(projectRoot);
+  const date = nowFn().toISOString().slice(0, 10);
+  const prefix = `review-${date}-`;
+
+  let existing = [];
+  try {
+    existing = readdirSync(dir)
+      .filter((f) => f.startsWith(prefix) && f.endsWith(".json"))
+      .map((f) => {
+        const numStr = f.slice(prefix.length, -5);
+        return parseInt(numStr, 10);
+      })
+      .filter((n) => !isNaN(n));
+  } catch { /* empty dir or unreadable */ }
+
+  const next = existing.length > 0 ? Math.max(...existing) + 1 : 1;
+  return `${prefix}${String(next).padStart(3, "0")}`;
+}
+
+export function readReviewItem(targetPath, itemId) {
+  const filePath = resolve(targetPath, ".forge", "review-queue", `${itemId}.json`);
+  try {
+    return JSON.parse(readFileSync(filePath, "utf-8"));
+  } catch {
+    return null;
+  }
+}
+
+
+export function addReviewItem(targetPath, input, hub = null, captureMemoryFn = null) {
+  if (!REVIEW_SOURCES.has(input.source)) {
+    const err = new Error(`Invalid source: ${input.source}. Must be one of: ${[...REVIEW_SOURCES].join(", ")}`);
+    err.code = "ERR_INVALID_SOURCE";
+    throw err;
+  }
+  if (!REVIEW_SEVERITIES.has(input.severity)) {
+    const err = new Error(`Invalid severity: ${input.severity}. Must be one of: ${[...REVIEW_SEVERITIES].join(", ")}`);
+    err.code = "ERR_INVALID_SEVERITY";
+    throw err;
+  }
+  if (!input.title || typeof input.title !== "string" || !input.title.trim()) {
+    const err = new Error("Title is required and must be a non-empty string");
+    err.code = "ERR_INVALID_TITLE";
+    throw err;
+  }
+  if (input.context !== undefined && input.context !== null && typeof input.context !== "object") {
+    const err = new Error("Context must be an object, not a string or primitive");
+    err.code = "ERR_INVALID_CONTEXT";
+    throw err;
+  }
+
+  const itemId = generateReviewItemId(targetPath, input._nowFn);
+  const now = (input._nowFn || (() => new Date()))().toISOString();
+  const record = {
+    _v: 1,
+    itemId,
+    source: input.source,
+    severity: input.severity,
+    title: input.title.trim(),
+    context: input.context || null,
+    correlationId: input.correlationId || null,
+    status: "open",
+    createdAt: now,
+    resolvedAt: null,
+    resolvedBy: null,
+    resolution: null,
+    note: null,
+  };
+
+  const dir = ensureReviewQueueDirs(targetPath);
+  const filePath = resolve(dir, `${itemId}.json`);
+  try {
+    writeFileSync(filePath, JSON.stringify(record, null, 2), { flag: "wx" });
+  } catch (wxErr) {
+    if (wxErr.code === "EEXIST") {
+      // Collision: retry with next sequence
+      const retryId = generateReviewItemId(targetPath, input._nowFn);
+      record.itemId = retryId;
+      const retryPath = resolve(dir, `${retryId}.json`);
+      writeFileSync(retryPath, JSON.stringify(record, null, 2), { flag: "wx" });
+    } else {
+      throw wxErr;
+    }
+  }
+
+  try {
+    hub?.broadcast({
+      type: "review-queue-item-added",
+      itemId: record.itemId,
+      source: record.source,
+      severity: record.severity,
+      correlationId: record.correlationId,
+      timestamp: now,
+    });
+  } catch { /* hub broadcast is best-effort */ }
+
+  return record;
+}
+
+export function resolveReviewItem(targetPath, input, hub = null, captureMemoryFn = null) {
+  const existing = readReviewItem(targetPath, input.itemId);
+  if (!existing) {
+    const err = new Error(`Review item not found: ${input.itemId}`);
+    err.code = "ERR_ITEM_NOT_FOUND";
+    throw err;
+  }
+  if (!REVIEW_RESOLUTIONS.has(input.resolution)) {
+    const err = new Error(`Invalid resolution: ${input.resolution}. Must be one of: ${[...REVIEW_RESOLUTIONS].join(", ")}`);
+    err.code = "ERR_INVALID_RESOLUTION";
+    throw err;
+  }
+  if (!input.resolvedBy || typeof input.resolvedBy !== "string" || !input.resolvedBy.trim()) {
+    const err = new Error("resolvedBy is required and must be a non-empty string");
+    err.code = "ERR_INVALID_RESOLVED_BY";
+    throw err;
+  }
+  if (existing.status !== "open") {
+    const err = new Error(`Item ${input.itemId} is already ${existing.status}`);
+    err.code = "ERR_ALREADY_RESOLVED";
+    throw err;
+  }
+
+  const now = new Date().toISOString();
+  const updated = {
+    ...existing,
+    status: input.resolution === "defer" ? "deferred" : "resolved",
+    resolution: input.resolution,
+    resolvedBy: input.resolvedBy.trim(),
+    resolvedAt: now,
+    note: input.note || null,
+  };
+
+  const filePath = resolve(targetPath, ".forge", "review-queue", `${input.itemId}.json`);
+  writeFileSync(filePath, JSON.stringify(updated, null, 2));
+
+  try {
+    hub?.broadcast({
+      type: "review-queue-item-resolved",
+      itemId: input.itemId,
+      resolution: input.resolution,
+      resolvedBy: input.resolvedBy.trim(),
+      timestamp: now,
+    });
+  } catch { /* hub broadcast is best-effort */ }
+
+  try {
+    captureMemoryFn?.(
+      `Review ${input.itemId} ${input.resolution} by ${input.resolvedBy}`,
+      "decision",
+      "forge_review_resolve",
+      targetPath
+    );
+  } catch { /* L3 capture is best-effort */ }
+
+  return updated;
+}
+
+// ─── Phase FORGE-SHOP-02 Slice 02.2 — Review Queue Producer Hooks ────
+
+/**
+ * Shared producer hook pattern.  Each `maybeAdd*Review` helper:
+ *   1. Short-circuits in NODE_ENV=test (no side-effects)
+ *   2. Checks for an existing open item with the same correlationId+source (idempotence)
+ *   3. Creates a new review item if none exists
+ *   4. Catches all errors — never propagates to the caller
+ */
+
+export function maybeAddStallReview(root, args, hub, captureMemoryFn) {
+  if (process.env.NODE_ENV === "test") return null;
+  try {
+    const existing = listReviewItems(root, {
+      correlationId: args.correlationId,
+      source: "crucible-stall",
+      status: "open",
+    });
+    if (existing.length > 0) return existing[0];
+    return addReviewItem(root, {
+      source: "crucible-stall",
+      severity: "medium",
+      title: args.title || `Crucible smelt stalled — ${args.correlationId}`,
+      context: args.context || null,
+      correlationId: args.correlationId,
+    }, hub, captureMemoryFn);
+  } catch (err) {
+    try { console.warn(`[review-hook] maybeAddStallReview failed: ${err.message}`); } catch {}
+    return null;
+  }
+}
+
+export function maybeAddTemperingReview(root, args, hub, captureMemoryFn) {
+  if (process.env.NODE_ENV === "test") return null;
+  try {
+    const existing = listReviewItems(root, {
+      correlationId: args.correlationId,
+      source: "tempering-quorum-inconclusive",
+      status: "open",
+    });
+    if (existing.length > 0) return existing[0];
+    return addReviewItem(root, {
+      source: "tempering-quorum-inconclusive",
+      severity: "medium",
+      title: args.title || `Tempering quorum inconclusive — ${args.correlationId}`,
+      context: args.context || null,
+      correlationId: args.correlationId,
+    }, hub, captureMemoryFn);
+  } catch (err) {
+    try { console.warn(`[review-hook] maybeAddTemperingReview failed: ${err.message}`); } catch {}
+    return null;
+  }
+}
+
+export function maybeAddBugReview(root, args, hub, captureMemoryFn) {
+  if (process.env.NODE_ENV === "test") return null;
+  try {
+    const existing = listReviewItems(root, {
+      correlationId: args.correlationId,
+      source: "bug-classify",
+      status: "open",
+    });
+    if (existing.length > 0) return existing[0];
+    return addReviewItem(root, {
+      source: "bug-classify",
+      severity: args.severity || "blocker",
+      title: args.title || `Bug ${args.correlationId} needs human review (critical/functional)`,
+      context: args.context || null,
+      correlationId: args.correlationId,
+    }, hub, captureMemoryFn);
+  } catch (err) {
+    try { console.warn(`[review-hook] maybeAddBugReview failed: ${err.message}`); } catch {}
+    return null;
+  }
+}
+
+export function maybeAddVisualBaselineReview(root, args, hub, captureMemoryFn) {
+  if (process.env.NODE_ENV === "test") return null;
+  try {
+    const existing = listReviewItems(root, {
+      correlationId: args.correlationId,
+      source: "tempering-baseline",
+      status: "open",
+    });
+    if (existing.length > 0) return existing[0];
+    return addReviewItem(root, {
+      source: "tempering-baseline",
+      severity: "medium",
+      title: args.title || `Visual regression — review baseline update`,
+      context: args.context || null,
+      correlationId: args.correlationId,
+    }, hub, captureMemoryFn);
+  } catch (err) {
+    try { console.warn(`[review-hook] maybeAddVisualBaselineReview failed: ${err.message}`); } catch {}
+    return null;
+  }
+}
+
+export function maybeAddFixPlanReview(root, args, hub, captureMemoryFn) {
+  if (process.env.NODE_ENV === "test") return null;
+  try {
+    const existing = listReviewItems(root, {
+      correlationId: args.correlationId,
+      source: "fix-plan-approval",
+      status: "open",
+    });
+    if (existing.length > 0) return existing[0];
+    return addReviewItem(root, {
+      source: "fix-plan-approval",
+      severity: args.severity || "high",
+      title: args.title || `Fix proposal ${args.correlationId} pending approval`,
+      context: args.context || null,
+      correlationId: args.correlationId,
+    }, hub, captureMemoryFn);
+  } catch (err) {
+    try { console.warn(`[review-hook] maybeAddFixPlanReview failed: ${err.message}`); } catch {}
+    return null;
+  }
+}
+
+// Phase-53 S7: buildWatchSnapshot, clampActivityTail, buildCrucibleQuadrant,
+// buildActiveRunsQuadrant, buildLiveguardQuadrant, buildTemperingQuadrant,
+// buildActivityFeed, readHomeSnapshot → orchestrator/review-watcher.mjs
+
+
+// Phase-53 S7: detectWatchAnomalies, recommendFromAnomalies → orchestrator/review-watcher.mjs
+
+
+/**
+ * Build the watcher analyzer prompt for the frontier model.
+ */
+function buildWatcherPrompt(snapshot, anomalies) {
+  const lines = [
+    "You are the Plan Forge WATCHER — a read-only observer of another AI agent's plan execution.",
+    "You CANNOT modify any files. Your job is to:",
+    "  1. Summarize the watched run's current state in 2-3 sentences.",
+    "  2. Flag anomalies, regressions, or concerning patterns.",
+    "  3. Recommend specific corrective actions the executing agent should take.",
+    "",
+    "Be concise. Prefer concrete recommendations over generic observations.",
+    "When advising commands, format them as: `pforge <command>` or shell snippets.",
+    "",
+    "--- SNAPSHOT ---",
+    JSON.stringify({
+      targetPath: snapshot.targetPath,
+      runId: snapshot.runId,
+      runState: snapshot.runState,
+      plan: snapshot.plan,
+      model: snapshot.model,
+      counts: snapshot.counts,
+      lastEventAgeMs: snapshot.lastEventAgeMs,
+      summary: snapshot.summary
+        ? {
+            status: snapshot.summary.status,
+            results: snapshot.summary.results,
+            totalDuration: snapshot.summary.totalDuration,
+            totalTokensOut: snapshot.summary.totalTokensOut,
+            cost: snapshot.summary.cost?.total_cost_usd,
+          }
+        : null,
+      artifacts: snapshot.artifacts,
+    }, null, 2),
+    "",
+    "--- HEURISTIC ANOMALIES (already detected) ---",
+    anomalies.length === 0 ? "(none)" : JSON.stringify(anomalies, null, 2),
+    "",
+    "--- LAST 25 EVENTS ---",
+    JSON.stringify(snapshot.events, null, 2),
+    "",
+    "Produce your watcher report as Markdown with sections: ## Status / ## Anomalies / ## Recommendations.",
+  ];
+  return lines.join("\n");
+}
+
+/**
+ * (v2.35) Append a watcher observation to the watcher's OWN .forge/watch-history.jsonl.
+ * NEVER writes inside the target project — preserves the read-only contract.
+ *
+ * @param {object} report - Watcher report
+ * @param {string} watcherCwd - Watcher's own working directory
+ */
+export function appendWatchHistory(report, watcherCwd = process.cwd()) {
+  try {
+    const historyDir = resolve(watcherCwd, ".forge");
+    if (!existsSync(historyDir)) mkdirSync(historyDir, { recursive: true });
+    const historyPath = resolve(historyDir, "watch-history.jsonl");
+    const record = {
+      ts: report.timestamp || new Date().toISOString(),
+      targetPath: report.targetPath,
+      runId: report.runId,
+      runState: report.runState,
+      mode: report.mode,
+      anomalyCount: Array.isArray(report.anomalies) ? report.anomalies.length : 0,
+      anomalyCodes: Array.isArray(report.anomalies) ? report.anomalies.map((a) => a.code) : [],
+      counts: report.counts,
+      cursor: report.cursor || null,
+    };
+    appendFileSync(historyPath, JSON.stringify(record) + "\n");
+    return { ok: true, path: historyPath };
+  } catch (err) {
+    return { ok: false, error: err.message };
+  }
+}
+
+/**
+ * Watch another project's pforge execution. Read-only.
+ *
+ * Modes:
+ *   - "snapshot": Return current state + heuristic anomalies. No AI call. Cheap.
+ *   - "analyze":  Snapshot + invoke frontier model for advice. Costs a worker call.
+ *
+ * @param {object} options
+ * @param {string} options.targetPath  - Absolute path to project being watched
+ * @param {string} [options.runId]     - Specific run dir; default = latest
+ * @param {"snapshot"|"analyze"} [options.mode="snapshot"]
+ * @param {string} [options.model]     - Override watcher model (default: claude-opus-4.7)
+ * @param {number} [options.timeout=300000] - Worker timeout for analyze mode
+ * @param {number} [options.tailEvents=25] - Trailing events (1-200)
+ * @param {string} [options.sinceTimestamp] - (v2.35) Only flag events newer than this ISO timestamp
+ * @param {boolean} [options.recordHistory=true] - (v2.35) Append to watcher's .forge/watch-history.jsonl
+ * @param {object} [options.eventBus] - (v2.35) Optional event bus to emit watch-* events
+ * @returns {Promise<object>} Watcher report
+ */
+export async function runWatch(options = {}) {
+  const {
+    targetPath,
+    runId = null,
+    mode = WATCHER_MODE_SNAPSHOT,
+    crossRunWindow = "14d",
+    model = DEFAULT_WATCHER_MODEL,
+    timeout = 300_000,
+    tailEvents = 25,
+    sinceTimestamp = null,
+    recordHistory = true,
+    eventBus = null,
+  } = options;
+
+  if (!targetPath) {
+    return { ok: false, error: "targetPath is required" };
+  }
+  const resolved = resolve(targetPath);
+  if (!existsSync(resolved)) {
+    return { ok: false, error: `Target path does not exist: ${resolved}` };
+  }
+
+  // Phase-39 Slice 3 — cross-run aggregation mode
+  if (mode === WATCHER_MODE_CROSS_RUN) {
+    const xSnap = await buildCrossRunSnapshot(resolved, { window: crossRunWindow });
+    const xAnomalies = detectWatchAnomalies(xSnap);
+    const xRecs = recommendFromAnomalies(xAnomalies, xSnap);
+    return {
+      ok: xSnap.ok,
+      mode: WATCHER_MODE_CROSS_RUN,
+      targetPath: resolved,
+      crossRunWindow,
+      timestamp: new Date().toISOString(),
+      totalRuns: xSnap.totalRuns,
+      passedRuns: xSnap.passedRuns,
+      failedRuns: xSnap.failedRuns,
+      runs: xSnap.runs,
+      anomalies: xAnomalies,
+      recommendations: xRecs,
+      snapshot: xSnap,
+    };
+  }
+
+  const snapshot = await buildWatchSnapshot(resolved, runId, { tailEvents, sinceTimestamp });
+  if (!snapshot.ok) return snapshot;
+
+  const anomalies = detectWatchAnomalies(snapshot);
+  const recommendations = recommendFromAnomalies(anomalies, snapshot);
+
+  const report = {
+    ok: true,
+    mode,
+    watcherModel: mode === WATCHER_MODE_ANALYZE ? model : null,
+    targetPath: resolved,
+    runId: snapshot.runId,
+    runState: snapshot.runState,
+    lastEventType: snapshot.lastEventType,
+    plan: snapshot.plan,
+    counts: snapshot.counts,
+    lastEventAgeMs: snapshot.lastEventAgeMs,
+    tailEvents: snapshot.tailEvents,
+    // v2.35: cursor for stateful polling
+    cursor: snapshot.cursor,
+    sinceTimestamp: snapshot.sinceTimestamp,
+    hasNewEvents: snapshot.hasNewEvents,
+    newEventsCount: snapshot.newEventsCount,
+    summary: snapshot.summary
+      ? {
+          status: snapshot.summary.status,
+          results: snapshot.summary.results,
+          totalDuration: snapshot.summary.totalDuration,
+          totalTokensOut: snapshot.summary.totalTokensOut,
+          cost: snapshot.summary.cost?.total_cost_usd,
+        }
+      : null,
+    artifacts: snapshot.artifacts,
+    anomalies,
+    recommendations,
+    // Phase CRUCIBLE-03 Slice 03.1 — funnel health alongside run health
+    crucible: snapshot.crucible,
+    // Phase TEMPER-01 Slice 01.2 — test-coverage health alongside run + funnel
+    tempering: snapshot.tempering,
+    timestamp: new Date().toISOString(),
+  };
+
+  // v2.35: emit hub events (when watcher's hub is active)
+  if (eventBus && typeof eventBus.emit === "function") {
+    try {
+      eventBus.emit("watch-snapshot-completed", {
+        targetPath: report.targetPath,
+        runId: report.runId,
+        runState: report.runState,
+        anomalyCount: anomalies.length,
+        cursor: report.cursor,
+        // Phase CRUCIBLE-03 Slice 03.2 — compact Crucible summary so the
+        // dashboard Watcher tab can render the funnel row without a
+        // follow-up REST call. Kept to primitives so the WS payload
+        // stays small for clients on bandwidth-constrained links.
+        crucible: report.crucible
+          ? {
+              total: report.crucible.counts.total,
+              finalized: report.crucible.counts.finalized,
+              in_progress: report.crucible.counts.in_progress,
+              abandoned: report.crucible.counts.abandoned,
+              staleInProgress: report.crucible.staleInProgress,
+              orphanHandoffs: report.crucible.orphanHandoffs.length,
+              stallCutoffDays: report.crucible.stallCutoffDays,
+            }
+          : null,
+        // Phase TEMPER-01 Slice 01.2 — compact Tempering summary for the
+        // Watcher tab row. Already primitives (readTemperingState returns
+        // a flat shape), so we just forward a whitelist of fields.
+        tempering: report.tempering
+          ? {
+              totalScans: report.tempering.totalScans,
+              latestStatus: report.tempering.latestStatus,
+              latestScanAgeMs: report.tempering.latestScanAgeMs,
+              latestScanTs: report.tempering.latestScanTs,
+              gaps: report.tempering.gaps,
+              belowMinimum: report.tempering.belowMinimum,
+              stale: report.tempering.stale,
+              staleCutoffDays: report.tempering.staleCutoffDays,
+            }
+          : null,
+        // Phase FORGE-SHOP-01 Slice 01.2 — Home chip data for watcher tab.
+        // Already extracted by buildWatchSnapshot; forward as-is.
+        home: snapshot.home || null,
+      });
+      for (const anomaly of anomalies) {
+        eventBus.emit("watch-anomaly-detected", {
+          targetPath: report.targetPath,
+          runId: report.runId,
+          ...anomaly,
+        });
+      }
+    } catch { /* never throw from event emission */ }
+  }
+
+  if (mode === WATCHER_MODE_SNAPSHOT) {
+    if (recordHistory) appendWatchHistory(report);
+    return report;
+  }
+
+  // Analyze mode: invoke frontier watcher model
+  // CRITICAL: spawn the worker with cwd = watcher's own directory, NEVER the target's,
+  // so any tool calls the watcher might make cannot touch the target project.
+  const prompt = buildWatcherPrompt(snapshot, anomalies);
+  const watcherCwd = process.cwd(); // watcher's own working directory
+  try {
+    const result = await spawnWorker(prompt, { model, cwd: watcherCwd, timeout });
+    report.advice = result.output || "(no advice returned)";
+    report.tokens = result.tokens || null;
+    report.workerExitCode = result.exitCode;
+    if (eventBus && typeof eventBus.emit === "function") {
+      try {
+        eventBus.emit("watch-advice-generated", {
+          targetPath: report.targetPath,
+          runId: report.runId,
+          model,
+          tokensOut: result.tokens?.tokens_out || null,
+        });
+      } catch { /* never throw */ }
+    }
+  } catch (err) {
+    report.adviceError = err.message;
+  }
+
+  if (recordHistory) appendWatchHistory(report);
+  return report;
+}
+
+/**
+ * (v2.35) Connect to a target project's WebSocket hub for live event streaming.
+ * Falls back to polling buildWatchSnapshot if hub is not running.
+ *
+ * Read-only by design: only subscribes to events; never sends any messages
+ * to the target hub other than the initial label handshake.
+ *
+ * @param {object} options
+ * @param {string} options.targetPath - Absolute path to project being watched
+ * @param {(event: object) => void} options.onEvent - Callback per event received
+ * @param {(error: Error) => void} [options.onError] - Optional error callback
+ * @param {number} [options.durationMs=60000] - How long to listen (1-3600s window)
+ * @param {number} [options.pollIntervalMs=3000] - Polling interval if hub not available
+ * @returns {Promise<{ ok: boolean, mode: "websocket"|"polling", events: number, durationMs: number, error?: string }>}
+ */
+export async function runWatchLive(options = {}) {
+  const {
+    targetPath,
+    onEvent,
+    onError,
+    durationMs = 60_000,
+    pollIntervalMs = 3_000,
+  } = options;
+
+  if (!targetPath) return { ok: false, error: "targetPath is required" };
+  if (typeof onEvent !== "function") return { ok: false, error: "onEvent callback is required" };
+  const resolved = resolve(targetPath);
+  if (!existsSync(resolved)) return { ok: false, error: `Target path does not exist: ${resolved}` };
+
+  const cappedDuration = Math.min(3_600_000, Math.max(1_000, durationMs));
+
+  // Try WebSocket connection to target's hub
+  const portsPath = resolve(resolved, ".forge", "server-ports.json");
+  let hubInfo = null;
+  if (existsSync(portsPath)) {
+    try { hubInfo = JSON.parse(readFileSync(portsPath, "utf-8")); } catch { /* fall through */ }
+  }
+
+  if (hubInfo?.ws) {
+    // WebSocket mode
+    let ws;
+    let WSCtor;
+    try {
+      WSCtor = (await import("ws")).default;
+    } catch (err) {
+      // ws library not installed; fall through to polling
+      hubInfo = null;
+    }
+
+    if (WSCtor) {
+      return new Promise((resolveP) => {
+        let eventCount = 0;
+        let timer = null;
+        const url = `ws://127.0.0.1:${hubInfo.ws}?label=watcher-${Date.now()}`;
+        try {
+          ws = new WSCtor(url);
+        } catch (err) {
+          return resolveP({ ok: false, mode: "websocket", events: 0, durationMs: 0, error: err.message });
+        }
+
+        const cleanup = (result) => {
+          if (timer) clearTimeout(timer);
+          try { ws.close(); } catch { /* ignore */ }
+          resolveP(result);
+        };
+
+        ws.on("open", () => {
+          timer = setTimeout(() => cleanup({ ok: true, mode: "websocket", events: eventCount, durationMs: cappedDuration }), cappedDuration);
+        });
+
+        ws.on("message", (raw) => {
+          try {
+            const event = JSON.parse(raw.toString());
+            eventCount++;
+            onEvent(event);
+          } catch { /* skip malformed */ }
+        });
+
+        ws.on("error", (err) => {
+          if (typeof onError === "function") onError(err);
+        });
+
+        ws.on("close", () => {
+          if (timer) {
+            // Connection closed before duration expired — return what we got
+            cleanup({ ok: true, mode: "websocket", events: eventCount, durationMs: Date.now() % cappedDuration });
+          }
+        });
+      });
+    }
+  }
+
+  // Polling fallback — diff cursor pattern
+  return new Promise((resolveP) => {
+    let cursor = null;
+    let eventCount = 0;
+    const startTime = Date.now();
+
+    const poll = async () => {
+      try {
+        const snap = await buildWatchSnapshot(resolved, null, { tailEvents: 200, sinceTimestamp: cursor });
+        if (snap.ok) {
+          // Yield only events newer than cursor
+          if (cursor) {
+            const cutoffMs = new Date(cursor).getTime();
+            for (const ev of snap.events) {
+              if (new Date(ev.ts).getTime() > cutoffMs) {
+                eventCount++;
+                onEvent(ev);
+              }
+            }
+          } else {
+            // First poll — yield all in tail
+            for (const ev of snap.events) {
+              eventCount++;
+              onEvent(ev);
+            }
+          }
+          cursor = snap.cursor || cursor;
+        }
+      } catch (err) {
+        if (typeof onError === "function") onError(err);
+      }
+
+      if (Date.now() - startTime >= cappedDuration) {
+        return resolveP({ ok: true, mode: "polling", events: eventCount, durationMs: cappedDuration });
+      }
+      setTimeout(poll, pollIntervalMs);
+    };
+
+    poll();
+  });
+}
+

@@ -14,8 +14,44 @@ import {
   getCliWorkersCacheExpiryState, setCliWorkersCacheExpiryState,
   getWorkerCapabilitiesCacheState, setWorkerCapabilitiesCacheState,
 } from "./state.mjs";
-import { API_ALLOWED_ROLES, QUORUM_PRESETS } from "./constants.mjs";
+import { API_ALLOWED_ROLES, QUORUM_PRESETS, DEFAULT_WORKER_OUTPUT_IDLE_MS, DEFAULT_WORKER_TIMEOUT_MS } from "./constants.mjs";
 export { API_ALLOWED_ROLES };
+
+
+/**
+ * Resolve the worker output idle timeout in milliseconds.
+ * Priority: PFORGE_WORKER_OUTPUT_IDLE_MS env var → default (480 000 ms / 8 min).
+ * Used by the watchdog to detect stalled worker processes.
+ * @returns {number}
+ */
+export function resolveWorkerOutputIdleMs() {
+  const envVal = process.env.PFORGE_WORKER_OUTPUT_IDLE_MS;
+  if (envVal != null && envVal !== "") {
+    const parsed = Number(envVal);
+    if (Number.isFinite(parsed) && parsed > 0) return parsed;
+  }
+  return DEFAULT_WORKER_OUTPUT_IDLE_MS;
+}
+
+/**
+ * Resolve the worker total-run timeout in milliseconds.
+ * Priority: opts.sliceOverride (per-slice frontmatter) → PFORGE_WORKER_TIMEOUT_MS env var → default (1 800 000 ms / 30 min).
+ * Used by spawnWorker() to hard-kill a worker that never finishes.
+ * @param {{ sliceOverride?: number|null }} [opts]
+ * @returns {number}
+ */
+export function resolveWorkerTimeoutMs(opts = {}) {
+  const sliceOverride = opts && opts.sliceOverride != null ? opts.sliceOverride : null;
+  if (sliceOverride !== null && Number.isFinite(sliceOverride) && sliceOverride > 0) {
+    return sliceOverride;
+  }
+  const envVal = process.env.PFORGE_WORKER_TIMEOUT_MS;
+  if (envVal != null && envVal !== "") {
+    const parsed = Number(envVal);
+    if (Number.isFinite(parsed) && parsed > 0) return parsed;
+  }
+  return DEFAULT_WORKER_TIMEOUT_MS;
+}
 
 // ─── API Provider Registry ────────────────────────────────────────────
 //

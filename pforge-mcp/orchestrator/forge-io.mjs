@@ -23,7 +23,7 @@ import { recall as brainRecall, loadReviewerConfig, invokeReviewer } from "../br
 // These mirror the public implementations in orchestrator.mjs and will be
 // removed when the corresponding sub-modules are extracted (Phase-53 S6+).
 
-function readForgeJson(filePath, defaultValue = null, cwd = process.cwd()) {
+export function readForgeJson(filePath, defaultValue = null, cwd = process.cwd()) {
   const fullPath = resolve(cwd, ".forge", filePath);
   try {
     if (existsSync(fullPath)) {
@@ -33,7 +33,7 @@ function readForgeJson(filePath, defaultValue = null, cwd = process.cwd()) {
   return defaultValue;
 }
 
-function readForgeJsonl(filePath, defaultValue = [], cwd = process.cwd()) {
+export function readForgeJsonl(filePath, defaultValue = [], cwd = process.cwd()) {
   const fullPath = resolve(cwd, ".forge", filePath);
   try {
     if (existsSync(fullPath)) {
@@ -56,7 +56,7 @@ function readForgeJsonl(filePath, defaultValue = [], cwd = process.cwd()) {
   } catch { return defaultValue; }
 }
 
-function appendForgeJsonl(filePath, record, cwd = process.cwd(), opts = {}) {
+export function appendForgeJsonl(filePath, record, cwd = process.cwd(), opts = {}) {
   const fullPath = resolve(cwd, ".forge", filePath);
   mkdirSync(dirname(fullPath), { recursive: true });
   const stamped = {
@@ -629,4 +629,121 @@ export function registerGateCheckResponder(hub, cwd, deps = {}) {
       reviewer,
     };
   });
+}
+
+export function recordModelPerformance(cwd, entry) {
+  const perfPath = resolve(cwd, ".forge", "model-performance.json");
+  const records = loadModelPerformance(cwd);
+  records.push(entry);
+  mkdirSync(resolve(cwd, ".forge"), { recursive: true });
+  writeFileSync(perfPath, JSON.stringify(records, null, 2));
+}
+
+// Phase-53 S5: aggregateModelStats, ensureForgeDir → orchestrator/forge-io.mjs
+
+/**
+ * Read and parse a JSON file from .forge/.
+ * @param {string} filePath - Path relative to .forge/ (e.g. "cost-history.json")
+ * @param {*} [defaultValue=null] - Returned when file is missing or contains invalid JSON
+ * @param {string} [cwd=process.cwd()] - Project root directory
+ * @returns {*} Parsed JSON or defaultValue
+ */
+
+export function auditOrphanForgeFiles(cwd = process.cwd()) {
+  // Patterns of recognised artifacts (substring or RegExp)
+  const WHITELIST = [
+    // Top-level state
+    "server-ports.json", "hub-events.jsonl", "watch-history.jsonl",
+    // L2 LiveGuard / dual-write
+    "drift-history.jsonl", "drift-history.json",
+    "regression-history.jsonl", "regression-history.json",
+    "health-dna.jsonl", "health-dna.json",
+    "quorum-history.jsonl", "quorum-history.json",
+    "incidents.jsonl", "deploy-journal.jsonl",
+    "liveguard-events.jsonl", "liveguard-memories.jsonl",
+    "openbrain-queue.jsonl", "openbrain-dlq.jsonl", "openbrain-stats.jsonl",
+    "env-diff-history.jsonl",
+    // Caches
+    "cost-history.json", "model-performance.json",
+    "secret-scan-cache.json", "regression-gates.json",
+    // Subdirectories handled separately
+  ];
+  const KNOWN_DIRS = new Set(["runs", "telemetry", "cache", "skills"]);
+
+  const dir = resolve(cwd, ".forge");
+  const known = [];
+  const orphan = [];
+  if (!existsSync(dir)) return { known, orphan, whitelist: WHITELIST };
+
+  let entries;
+  try { entries = readdirSync(dir, { withFileTypes: true }); }
+  catch { return { known, orphan, whitelist: WHITELIST }; }
+
+  for (const e of entries) {
+    if (e.isDirectory()) {
+      if (KNOWN_DIRS.has(e.name)) known.push(e.name + "/");
+      else orphan.push(e.name + "/");
+      continue;
+    }
+    if (WHITELIST.includes(e.name)) known.push(e.name);
+    else orphan.push(e.name);
+  }
+  return { known, orphan, whitelist: WHITELIST };
+}
+
+// Phase-53 S5: getHealthTrend → orchestrator/forge-io.mjs
+
+/**
+ * Extract a target release version from a plan file.
+ *
+ * Scans (in order):
+ *   1. Plan filename for `v<MAJOR>.<MINOR>[.<PATCH>][-...]` (e.g. `Phase-33.4-...-v2.67.4-PLAN.md`)
+ *   2. Plan frontmatter `version:` field (if present)
+ *   3. First `chore(release): vX.Y.Z` literal in the body
+ *
+ * Returns `null` when no version literal is found (non-release plan).
+ *
+ * @param {string} planPath - Path to plan markdown file
+ * @returns {string|null} Bare semver string (no `v` prefix) or null
+ */
+
+const LIVEGUARD_TOOLS = new Set([
+  "forge_drift_report", "forge_incident_capture", "forge_dep_watch",
+  "forge_regression_guard", "forge_runbook", "forge_hotspot",
+  "forge_health_trend", "forge_alert_triage", "forge_deploy_journal",
+  "forge_secret_scan", "forge_env_diff", "forge_fix_proposal",
+  "forge_quorum_analyze", "forge_liveguard_run",
+  // Phase TEMPER-06 Slice 06.1 — Bug Registry tools
+  "forge_bug_register", "forge_bug_list", "forge_bug_update_status",
+  // Phase TEMPER-06 Slice 06.3 — Closed-loop fix validation
+  "forge_bug_validate_fix",
+  // Phase FORGE-SHOP-02 Slice 02.1 — Review Queue tools
+  "forge_review_add", "forge_review_list", "forge_review_resolve",
+  // Phase TEMPER-07 Slice 07.1 — Agent delegation
+  "forge_delegate_to_agent",
+  // Phase FORGE-SHOP-03 Slice 03.1 — Notification tools
+  "forge_notify_send", "forge_notify_test",
+]);
+
+export function emitToolTelemetry(toolName, inputs, result, durationMs, status, cwd = process.cwd()) {
+  const normalizedResult = typeof result === "string"
+    ? result.slice(0, 2000)
+    : JSON.stringify(result ?? "").slice(0, 2000);
+  const record = {
+    timestamp: new Date().toISOString(),
+    tool: toolName,
+    inputs: typeof inputs === "object" ? inputs : { raw: inputs },
+    result: normalizedResult,
+    durationMs,
+    status,
+  };
+  try {
+    appendForgeJsonl("telemetry/tool-calls.jsonl", record, cwd);
+  } catch { /* telemetry is best-effort — never crash the tool */ }
+  if (LIVEGUARD_TOOLS.has(toolName)) {
+    try {
+      appendForgeJsonl("liveguard-events.jsonl", { timestamp: record.timestamp, tool: toolName, status, durationMs }, cwd);
+    } catch { /* best-effort */ }
+  }
+  return record;
 }

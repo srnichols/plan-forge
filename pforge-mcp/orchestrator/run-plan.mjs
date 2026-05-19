@@ -1,29 +1,52 @@
-/**
- * Plan Forge — Phase-53 (ORCHESTRATOR-SPLIT) S4: run-plan sub-module
- *
- * Contains the self-contained helpers extracted from the Orchestrator section
- * of orchestrator.mjs: competitive config, adaptive gate synthesis, incident
- * fix-proposal auto-retry, cost-anomaly detection, and plan-postmortem helpers.
- *
- * runPlan itself remains in orchestrator.mjs until S9, when all of its
- * transitive dependencies (executeSlice, buildEstimate, loadQuorumConfig, etc.)
- * have been extracted to their own sub-modules and the circular-import cycle
- * with cost-service.mjs has been cleared.
- */
+/** Plan Forge — Phase-53 S9: run-plan sub-module */
 
-// runPlan — main plan execution entry point (orchestrator.mjs); wired here at S9.
-
-import { readFileSync, existsSync, writeFileSync, mkdirSync, unlinkSync, readdirSync } from "node:fs";
-import { resolve, basename } from "node:path";
-import { execSync } from "node:child_process";
+import { readFileSync, writeFileSync, mkdirSync, existsSync, unlinkSync, appendFileSync, readdirSync, statSync, rmSync } from "node:fs";
+import { spawn, execSync, execFileSync } from "node:child_process";
+import { resolve, basename, dirname, join, relative, extname, isAbsolute } from "node:path";
+import { tmpdir } from "node:os";
+import { fileURLToPath } from "node:url";
+import { createHash } from "node:crypto";
+import { QUORUM_MODES, WATCHER_MODES } from "../enums.mjs";
+import { createTraceContext, createTelemetryHandler, writeManifest, appendRunIndex, pruneRunHistory, addLogSummary } from "../telemetry.mjs";
+import { recordActivity } from "../team-activity.mjs";
+import { isOpenBrainConfigured, buildMemorySearchBlock, buildMemoryCaptureBlock, buildReflexionBlock, buildTrajectorySuffix, extractTrajectory, writeTrajectory, retrieveAutoSkills, buildAutoSkillContext, extractAutoSkill, writeAutoSkill, incrementAutoSkillReuse, buildRunSummaryThought, buildCostAnomalyThought, loadProjectContext, buildPlanBootContext, computeGateSuggestionKey, getGateSuggestionCounter, captureMemory, autoDrainOpenBrainQueue } from "../memory.mjs";
+import { enforceCrucibleId, CrucibleEnforcementError } from "../crucible-enforce.mjs";
+import { recall as brainRecall, loadReviewerConfig, invokeReviewer } from "../brain.mjs";
+import { anvilDlqDrain as _anvilDlqDrain } from "../anvil.mjs";
 import {
-  GATE_SUGGESTION_AUTO_INJECT_THRESHOLD,
-  PROPOSED_FIX_DIR,
-  COST_ANOMALY_MULTIPLIER,
-  POSTMORTEM_RETENTION_COUNT,
-} from "./constants.mjs";
-import { computeGateSuggestionKey, getGateSuggestionCounter } from "../memory.mjs";
-import { getMinimaForDomain } from "../tempering.mjs";
+  readTemperingState as _readTemperingState,
+  readTemperingConfig as _readTemperingConfig,
+  TEMPERING_SCAN_STALE_DAYS,
+  getMinimaForDomain,
+  promoteSuppressions as _promoteSuppressions,
+} from "../tempering.mjs";
+import { loadAuditConfig as _loadAuditConfig, shouldAutoDrain as _shouldAutoDrain } from "../tempering/auto-activate.mjs";
+import { getDeploymentQuota, compareSliceEstimate } from "../foundry-quota.mjs";
+import { startProxyLogger } from "../proxy-logger.mjs";
+import { buildCrossRunSnapshot } from "../watcher.mjs";
+import { inspectGithubStack as _inspectGithubStackDefault } from "../github-introspect.mjs";
+import { buildIssueBody as _buildIssueBodyDefault, dispatchSlice as _dispatchSliceDefault, pollPullRequest as _pollPullRequestDefault, DEFAULT_POLL_INTERVAL_MS, DEFAULT_TIMEOUT_MS } from "../workers/copilot-coding-agent.mjs";
+import { API_ALLOWED_ROLES, COST_ANOMALY_MULTIPLIER, CRUCIBLE_STALL_CUTOFF_DAYS, DEFAULT_GATE_TIMEOUT_MS, DEFAULT_WORKER_OUTPUT_IDLE_MS, DEFAULT_WORKER_TIMEOUT_MS, EVENT_SOURCE, GATE_ALLOWED_PREFIXES, GATE_SUGGESTION_AUTO_INJECT_THRESHOLD, POSTMORTEM_RETENTION_COUNT, PROPOSED_FIX_DIR, QUORUM_PRESETS, REVIEW_RESOLUTIONS, REVIEW_SEVERITIES, REVIEW_SOURCES, REVIEW_STATUSES, SECURITY_RISK, SECURITY_RISK_FOR_TYPE, SUPPORTED_AGENTS, UNIX_TOOLS } from "./constants.mjs";
+import { LogEventHandler, OrchestratorEventBus, appendEvent, writeSilentExitRecord } from "./event-bus.mjs";
+import { buildSlicePrompt } from "./prompt-builders.mjs";
+import { parsePlan, computeLockHash, normalizeSliceId, compareSliceIds, parseOnlySlicesExpr, parseWorkerTimeoutValue, parseSlices, buildDAG, loadPlanParserConfig } from "./plan-parser.mjs";
+import { resetCliWorkersCache, setGhCopilotProbe, isDirectApiOnlyModel, isCopilotServableModel, isApiOnlyModel, getFoundryAuthScope, detectApiProvider, setSecretsLoader, buildApiMessages, generateImage, loadWorkerCapabilities, compareVersions, detectPackageManager, suggestInstall, classifyProbeFailure, detectWorkers, detectExecutionRuntime, detectClientHost, describeBillingSurface, getRoutingPreference, loadRoutingPreference, resolveRequiredCli, probeQuorumModelAvailability, filterQuorumModels, formatQuorumSummary, assessQuorumViability, detectRuntimes, spawnWorker, detectHelpTextOutput, detectSilentWorkerFailure, detectKilledBySignal, deriveVendorFromModel, extractTokens, shouldDefaultPremiumRequestsToOne, parseStderrStats, resolveWorkerOutputIdleMs, resolveWorkerTimeoutMs } from "./worker-spawn.mjs";
+import { resolveGateTimeoutMs, __resetBashPathCache, resolveBashPath, detectSelfRepairMissed, buildRetryPrompt, coalesceGateLines, editDistance, isPlaceholderToken, suggestAllowedCommand, looksLikeProse, runGate, SequentialScheduler, ParallelScheduler, CompetitiveScheduler, selectWinner, detectScopeConflicts } from "./schedulers.mjs";
+import { ensureForgeDir, pruneForgeRuns, recordModelPerformance, readForgeJson, appendForgeJsonl, readForgeJsonl, auditOrphanForgeFiles, loadModelPerformance, aggregateModelStats, getCostReport, getHealthTrend, emitToolTelemetry, loadGateCheckConfig, registerGateCheckResponder } from "./forge-io.mjs";
+import { extractPlanReleaseVersion, detectVersionCollision, parseValidationGates, lintGateCommands, validateGatePortability, isGateCommandAllowed, regressionGuard } from "./gate-helpers.mjs";
+import { isDestructiveSliceTitle, isWorktreeExemptPath, loadTeardownGuardConfig, verifyBranchSafety, captureAbsorbedCommits, snapshotPreSliceState, pushSliceSnapshot, popSliceSnapshot, attachSliceSnapshotRestore, cleanupStaleSnapshots, extractFilesModifiedExhaustive, verifyFilesModified, autoCommitSliceIfDirty, stageOrphansOnSliceFailure } from "./git-safety.mjs";
+import { registerCorrelationThreadResponder, isDeployTrigger, runPreDeployHook, parseGitPorcelain, parseShortstat, resetPostSliceHookFired, runPostSliceHook, resetPostSliceTemperingFired, runPostSliceTemperingHook, runPreAgentHandoffHook, loadOpenClawConfig, postOpenClawSnapshot, runPostRunAuditorHook } from "./hooks.mjs";
+import { findLatestRun, parseEventLine, parseEventsLog, readSliceArtifacts, normalizeRunState, readCrucibleState, readReviewQueueState, buildWatchSnapshot, readHomeSnapshot, detectWatchAnomalies, recommendFromAnomalies, ensureReviewQueueDirs, ensureNotificationsDirs, ensureNotificationsConfig, generateReviewItemId, readReviewItem, listReviewItems, addReviewItem, resolveReviewItem, maybeAddStallReview, maybeAddTemperingReview, maybeAddBugReview, maybeAddVisualBaselineReview, maybeAddFixPlanReview, appendWatchHistory, runWatch, runWatchLive, scoreSliceComplexity } from "./review-watcher.mjs";
+import { inferSliceType, recommendModel } from "./model-scoring.mjs";
+import { loadQuorumConfig, classifyLegError, quorumDispatch, quorumReview, analyzeWithQuorum, calculateSliceCost, buildCostBreakdown } from "./quorum.mjs";
+import { estimatePlan as _estimatePlan } from "../cost-service.mjs";
+
+const [QUORUM_MODE_AUTO, QUORUM_PRESET_POWER, QUORUM_PRESET_SPEED, QUORUM_MODE_FALSE] = QUORUM_MODES;
+export const loadAuditConfig = _loadAuditConfig;
+export const shouldAutoDrain = _shouldAutoDrain;
+export const readTemperingState = _readTemperingState;
+export const readTemperingConfig = _readTemperingConfig;
+export { TEMPERING_SCAN_STALE_DAYS };
 
 // ─── Phase-26 Slice 2 — Competitive config ────────────────────────────
 
@@ -659,4 +682,2948 @@ export function writePlanPostmortem({ cwd = process.cwd(), planBasename, record 
   } catch { /* non-fatal */ }
 
   return path;
+}
+
+export async function runPlan(planPath, options = {}) {
+  const {
+    cwd = process.cwd(),
+    model = null,
+    mode = "auto",
+    resumeFrom = null,
+    estimate = false,
+    dryRun = false,
+    eventHandler = null,
+    abortController = null,
+    quorum = QUORUM_MODE_AUTO, // false | true | "auto" — default: auto (threshold-based)
+    quorumThreshold = null, // override threshold from config
+    quorumPreset = null,   // "power" | "speed" | null — selects model preset
+    bridge = null,         // BridgeManager instance for approval gate
+    manualImport = false,   // v2.37 Crucible (Slice 01.4): bypass crucibleId gate
+    manualImportSource = "human", // audit tag: "human" | "speckit" | "grandfather"
+    manualImportReason = null,    // free-form note for audit log
+    hub = null,             // Phase FORGE-SHOP-06 Slice 06.2: Hub instance for gate-check
+    strictGates = false,    // Phase-31 Slice 4: force enforce mode for this run only
+    onlySlices = null,      // Phase-33.1: number[] | null — run only specified slice IDs
+    noTempering = false,    // Phase-33.1: disable post-slice tempering for this run
+    allowRetrograde = false, // Meta-bug #129: allow plan whose target version already exists on origin
+    worker = null,           // Phase GITHUB-B Slice 3: e.g. "copilot-coding-agent"
+    // Issue #176 — dryRunWorker: skip the real worker spawn (executeSlice) and
+    // synthesize a passing slice result. Tests that exercise runPlan setup
+    // (quorum probe, config loading, escalation chain) without needing real
+    // worker side-effects must opt in. Default false preserves prod behavior.
+    // Without this guard, tests that call runPlan() with a real worker (e.g.
+    // gh-copilot) hand the worker full shell access in the operator's cwd —
+    // the worker can edit any source file and even `git push` to origin.
+    dryRunWorker = false,
+    // Injectable dependencies for testing (copilot-coding-agent dispatch path)
+    _inspectGithubStack = _inspectGithubStackDefault,
+    _dispatchSlice = _dispatchSliceDefault,
+    _pollPullRequest = _pollPullRequestDefault,
+    // Phase-ANVIL Slice 4: injectable DLQ drain for testing
+    _anvilDlqDrain: anvilDlqDrain = _anvilDlqDrain,
+  } = options;
+
+  // Phase-ANVIL Slice 4 — DLQ boot-time drain (5-second budget, best-effort).
+  // Runs before any slice work so stale L3-deferred records can be recovered.
+  // Does NOT block the run: errors are silently swallowed.
+  try {
+    const DRAIN_BUDGET_MS = 5000;
+    const drainResult = await Promise.race([
+      Promise.resolve(anvilDlqDrain({}, { cwd })),
+      new Promise((resolve) => setTimeout(() => resolve({ drained: 0, timedOut: true }), DRAIN_BUDGET_MS)),
+    ]);
+    if (drainResult && typeof drainResult.drained === "number" && drainResult.drained > 0) {
+      console.info(`[orchestrator] DLQ boot drain: removed ${drainResult.drained} stale record(s).`);
+    }
+  } catch {
+    // Boot-time drain is best-effort — never block the plan run
+  }
+
+  // Mutual exclusion: --resume-from and --only-slices cannot both be active
+  if (resumeFrom !== null && onlySlices !== null && onlySlices.length > 0) {
+    throw new Error("--resume-from and --only-slices are mutually exclusive");
+  }
+
+  // Load model routing from .forge.json (Slice 5 — effectiveModel resolved after parsePlan)
+  const modelRouting = loadModelRouting(cwd);
+
+  // v2.37 Crucible (Slice 01.4) — enforce that the plan was smelted
+  // through the Crucible funnel or an explicit `--manual-import` bypass
+  // was provided. Runs BEFORE parsePlan / estimate / dryRun so nobody
+  // can sneak a plan in by claiming "I'm only estimating."
+  try {
+    enforceCrucibleId(planPath, {
+      cwd,
+      manualImport,
+      source: manualImportSource,
+      reason: manualImportReason,
+    });
+  } catch (err) {
+    if (err instanceof CrucibleEnforcementError) {
+      return {
+        status: "failed",
+        error: err.message,
+        code: err.code,
+        planPath: err.planPath,
+        hint:
+          "Run `forge_crucible_submit` to start a smelt, or re-invoke with " +
+          "--manual-import to bypass (audited in .forge/crucible/manual-imports.jsonl).",
+      };
+    }
+    throw err;
+  }
+
+  // Parse plan
+  const plan = parsePlan(planPath, cwd);
+
+  // Bug #127: Precedence: options.model > frontmatter model: > .forge.json default > null
+  const fmModel = (plan.meta && typeof plan.meta.model === "string" && plan.meta.model.trim().length > 0)
+    ? plan.meta.model.trim() : null;
+  let effectiveModel, modelSource;
+  if (model) {
+    effectiveModel = model;
+    modelSource = "options";
+  } else if (fmModel) {
+    effectiveModel = fmModel;
+    modelSource = "frontmatter";
+  } else if (modelRouting.default) {
+    effectiveModel = modelRouting.default;
+    modelSource = "config";
+  } else {
+    effectiveModel = null;
+    modelSource = "default";
+  }
+  // Bug #127: emit resolution log so users can trace which source won.
+  // Uses `resolved=` to match the Bug #127 contract. Note: CLI workers
+  // (gh-copilot, claude-cli, codex-cli) may select their own model regardless
+  // of what is resolved here; they emit their own `[model]` line when they do.
+  // eslint-disable-next-line no-console
+  console.error(`[model] resolved=${effectiveModel} source=${modelSource}`);
+
+  // Zero-slice guard: loud-fail before any dispatch (Bug #124)
+  if (plan.slices.length === 0) {
+    return {
+      status: "failed",
+      error: "No slices found in plan — expected '### Slice N: …' headers (h2/h3/h4 accepted)",
+      code: "NO_SLICES",
+      planPath,
+    };
+  }
+
+  // Phase-WORKER-GUARDRAILS Slice 5 (A6): lockHash enforcement.
+  // If frontmatter has `lockHash`, verify plan body has not drifted since hardening.
+  // Absent lockHash → runs as today (backwards-compatible per decision #7).
+  if (plan.meta && typeof plan.meta.lockHash === "string") {
+    const planContent = readFileSync(planPath, "utf-8");
+    const computedHash = computeLockHash(planContent);
+    if (computedHash !== plan.meta.lockHash) {
+      return {
+        status: "failed",
+        error:
+          `Plan body has drifted since it was hardened — lockHash mismatch.\n` +
+          `  stored:   ${plan.meta.lockHash}\n` +
+          `  computed: ${computedHash}\n` +
+          `Re-run Step 2 hardening to regenerate the lockHash, then retry.`,
+        code: "LOCK_HASH_MISMATCH",
+        storedHash: plan.meta.lockHash,
+        computedHash,
+        planPath,
+        hint: "Re-run Step 2 (step2-harden-plan.prompt.md) to update the lockHash in frontmatter.",
+      };
+    }
+  }
+
+  // Meta-bug #129 preflight: refuse to run a plan whose target release version
+  // already exists as a tag on origin. Prevents the "retrograde release" class
+  // of disaster (re-running an old plan against newer master, producing a
+  // chore(release): commit + tag that overwrites a shipped release). Runs
+  // BEFORE estimate / dryRun so estimating a doomed plan also surfaces the
+  // problem early. Bypass with `--allow-retrograde` if intentional (e.g.
+  // patch release on a hotfix branch). Network / git errors degrade to
+  // advisory — offline runs are not blocked.
+  if (!allowRetrograde) {
+    const collision = detectVersionCollision(planPath, cwd);
+    if (collision.collision) {
+      return {
+        status: "failed",
+        error:
+          `Refusing to run plan: target version v${collision.version} ` +
+          `already exists on origin (sha=${collision.originSha?.slice(0, 12) || "?"}). ` +
+          `Re-running this plan would overwrite a shipped release.`,
+        code: "VERSION_COLLISION",
+        version: collision.version,
+        originSha: collision.originSha,
+        planPath,
+        hint:
+          "Either bump the plan to a fresh version (recommended), " +
+          "or pass --allow-retrograde if you intentionally want to re-tag " +
+          "(this is almost never what you want — see meta-bug #129).",
+      };
+    }
+    if (collision.error) {
+      // eslint-disable-next-line no-console
+      console.error(
+        `[preflight] Could not check origin for v${collision.version} ` +
+        `tag collision (advisory): ${collision.error}`,
+      );
+    }
+  }
+
+  // Estimation mode — return without executing
+  if (estimate) {
+    // Build quorum config for estimate even though we're not running
+    let estimateQuorumConfig = null;
+    if (quorum) {
+      estimateQuorumConfig = loadQuorumConfig(cwd, quorumPreset);
+      estimateQuorumConfig.enabled = true;
+      if (quorum === QUORUM_MODE_AUTO) estimateQuorumConfig.auto = true;
+      else if (quorum === true) estimateQuorumConfig.auto = false;
+      if (quorumThreshold !== null && typeof quorumThreshold === "number") {
+        estimateQuorumConfig.threshold = quorumThreshold;
+      }
+    }
+    return buildEstimate(plan, effectiveModel, cwd, estimateQuorumConfig, resumeFrom, worker);
+  }
+
+  // Dry run — parse and validate only
+  if (dryRun) {
+    // Phase GITHUB-B Slice 5: copilot-coding-agent dry-run prints issue body previews
+    // without requiring `gh` to be installed.
+    if (worker === "copilot-coding-agent") {
+      const issuePreviews = plan.slices.map((s) => ({
+        number: s.number,
+        title: s.title || "Untitled slice",
+        issueBody: _buildIssueBodyDefault({
+          goal: s.goal || (Array.isArray(s.tasks) ? s.tasks.join("\n") : s.tasks),
+          scope: s.scope,
+          gate: s.validationGate,
+        }),
+      }));
+      return { status: "dry-run", plan, issuePreviews };
+    }
+    return { status: "dry-run", plan };
+  }
+
+  // Phase GITHUB-B Slice 3 — Copilot Coding Agent pre-flight (skipped for estimate/dryRun)
+  // Hotfix v2.90.4: always probe copilot-coding-agent-assignable (ghToken:true) so a
+  // missing Copilot Coding Agent enablement is caught before any issue is created.
+  if (worker === "copilot-coding-agent") {
+    const inspection = _inspectGithubStack(cwd, { ghToken: true });
+    const githubRemote = inspection.checks.find((c) => c.id === "github-remote");
+    const ghCli = inspection.checks.find((c) => c.id === "gh-cli");
+    const copilotAssignable = inspection.checks.find((c) => c.id === "copilot-coding-agent-assignable");
+    const failed = [];
+    if (!githubRemote || githubRemote.status !== "pass") {
+      const detail = githubRemote?.detail ?? "check unavailable";
+      const hint = githubRemote?.fixHint ? ` — ${githubRemote.fixHint}` : "";
+      failed.push(`github-remote: ${detail}${hint}`);
+    }
+    if (!ghCli || ghCli.status !== "pass") {
+      const detail = ghCli?.detail ?? "check unavailable";
+      const hint = ghCli?.fixHint ? ` — ${ghCli.fixHint}` : "";
+      failed.push(`gh-cli: ${detail}${hint}`);
+    }
+    // warn = Copilot Coding Agent not enabled; fail = API error. Both block dispatch.
+    // na = check was skipped (token not available or check deferred) — not blocking.
+    if (copilotAssignable && (copilotAssignable.status === "warn" || copilotAssignable.status === "fail")) {
+      const detail = copilotAssignable.detail ?? "check unavailable";
+      const hint = copilotAssignable.fixHint ? ` — ${copilotAssignable.fixHint}` : "";
+      failed.push(`copilot-coding-agent-assignable: ${detail}${hint}`);
+    }
+    if (failed.length > 0) {
+      return {
+        status: "failed",
+        error:
+          "copilot-coding-agent worker requires a GitHub repo. " +
+          "Run 'pforge github status' for diagnostics.\n" +
+          failed.join("\n"),
+        code: "COPILOT_AGENT_PREFLIGHT_FAILED",
+        planPath,
+      };
+    }
+  }
+
+  // Pre-flight: lint gate commands before burning time on execution
+  const gateLint = lintGateCommands(planPath, cwd);
+  if (!gateLint.passed) {
+    const errorSummary = gateLint.errors.map(e => `  ❌ ${e.message}`).join("\n");
+    const warnSummary = gateLint.warnings.map(w => `  ⚠️ ${w.message}`).join("\n");
+    return {
+      status: "failed",
+      error: "Gate lint pre-flight failed — fix these before executing:",
+      gateLint: {
+        errors: gateLint.errors,
+        warnings: gateLint.warnings,
+        summary: gateLint.summary,
+      },
+      detail: [errorSummary, warnSummary].filter(Boolean).join("\n"),
+    };
+  }
+
+  // Phase-25 Slice 4 (L6 adaptive gate synthesis): scan plan slices for
+  // domain-matched slices that lack a validation gate and print suggestions.
+  // Advisory-only by default (D8 mode="suggest"). When strictGates=true the
+  // mode is overridden to "enforce" for this run only (never written to
+  // .forge.json) and pre-flight fails with a structured error listing each
+  // offending slice. (Phase-31 Slice 4.)
+  try {
+    const baseCfg = loadGateSynthesisConfig(cwd);
+    const synthConfig = strictGates ? { ...baseCfg, mode: "enforce" } : undefined;
+    const synthResult = synthesizeGateSuggestions({ slices: plan.slices, cwd, config: synthConfig });
+    if (strictGates && synthResult.suggestions.length > 0) {
+      return {
+        status: "failed",
+        error: "--strict-gates: pre-flight failed — the following slices lack a domain-matched validation gate:",
+        code: "STRICT_GATES_PREFLIGHT",
+        offendingSlices: synthResult.suggestions.map((s) => ({
+          sliceNumber: s.sliceNumber,
+          sliceTitle: s.sliceTitle,
+          domain: s.domain,
+          reason: s.reason,
+          suggestedCommand: s.suggestedCommand,
+        })),
+      };
+    }
+    const formatted = formatGateSuggestions(synthResult);
+    if (formatted) {
+      // eslint-disable-next-line no-console
+      console.log(formatted);
+    }
+  } catch { /* advisory must never fail a run */ }
+
+  // Set up event bus with DI handler
+  const runDir = createRunDir(cwd, planPath);
+  const logHandler = new LogEventHandler(runDir);
+
+  // v2.4: Create trace context and telemetry handler
+  const trace = createTraceContext(planPath, { mode, model: effectiveModel, sliceCount: plan.slices.length });
+  const telemetryHandler = createTelemetryHandler(trace, runDir);
+
+  // Chain handlers: user-provided → telemetry → log → console progress
+  const isCliRun = !eventHandler; // If no custom handler, we're running from CLI — show progress on stdout
+  const combinedHandler = {
+    handle(event) {
+      telemetryHandler.handle(event);
+      if (eventHandler) eventHandler.handle(event);
+      logHandler.handle(event);
+      // Write progress to stdout so terminal stays alive (prevents VS Code "awaiting input" stall)
+      if (isCliRun && event?.type) {
+        const ts = new Date().toISOString().slice(11, 19);
+        const d = event.data || event; // data is nested under event.data by the EventBus
+        switch (event.type) {
+          case "run-started":
+            process.stdout.write(`[${ts}] ▶ Run started: ${d.sliceCount || "?"} slices, mode=${d.mode || "auto"}\n`);
+            break;
+          case "slice-started":
+            process.stdout.write(`[${ts}] ⏳ Slice ${d.sliceId || "?"}: ${d.title || ""} — executing...\n`);
+            break;
+          case "slice-completed":
+            process.stdout.write(`[${ts}] ✅ Slice ${d.sliceId || "?"}: ${d.title || ""} — ${d.status || "done"} (${Math.round((d.duration || 0) / 1000)}s)\n`);
+            break;
+          case "slice-failed":
+            process.stdout.write(`[${ts}] ❌ Slice ${d.sliceId || "?"}: ${d.title || ""} — FAILED\n`);
+            break;
+          case "slice-escalated":
+            process.stdout.write(`[${ts}] ⬆ Slice ${d.sliceId || "?"}: ${d.title || ""} — escalating to ${d.toModel} (attempt ${d.attempt})\n`);
+            break;
+          case "run-completed":
+            process.stdout.write(`[${ts}] 🏁 Run complete: ${d.results?.passed || 0} passed, ${d.results?.failed || 0} failed\n`);
+            break;
+          case "ci-triggered":
+            process.stdout.write(`[${ts}] 🚀 CI triggered: ${d.workflow} @ ${d.ref} — ${d.status}\n`);
+            break;
+        }
+      }
+    },
+  };
+  const eventBus = new OrchestratorEventBus(combinedHandler);
+
+  // Issue #197 — Silent-death guard.
+  // When Node is launched in background mode on Windows without an attached
+  // console (Start-Process -FilePath 'node' -WindowStyle Hidden), the gh
+  // copilot CLI worker needs a console to initialize its progress reporter.
+  // Without one, it exits immediately with no output, the worker promise
+  // resolves with an empty result, and the orchestrator's event loop drains
+  // cleanly — leaving the run log with slice-started but no slice-failed.
+  //
+  // This guard registers a synchronous `process.on('exit')` listener that
+  // writes a slice-failed event whenever the process exits while a slice is
+  // still in-progress, making the silent death detectable and retriable.
+  let _guardSliceId = null;
+  let _guardSliceTitle = null;
+  const _silentDeathGuard = () => {
+    writeSilentExitRecord(_guardSliceId, _guardSliceTitle, runDir);
+  };
+  process.once("exit", _silentDeathGuard);
+  eventBus.on("slice-started", (d) => {
+    _guardSliceId = d.sliceId ?? null;
+    _guardSliceTitle = d.title || "";
+  });
+  eventBus.on("slice-completed", () => { _guardSliceId = null; _guardSliceTitle = null; });
+  eventBus.on("slice-failed",    () => { _guardSliceId = null; _guardSliceTitle = null; });
+  eventBus.on("run-completed",   () => { _guardSliceId = null; process.off("exit", _silentDeathGuard); });
+  eventBus.on("run-aborted",     () => { _guardSliceId = null; process.off("exit", _silentDeathGuard); });
+
+  // Write run.json metadata
+  const runMeta = {
+    plan: planPath,
+    traceId: trace.traceId,
+    startTime: new Date().toISOString(),
+    model: effectiveModel || "auto",
+    modelRouting,
+    mode,
+    // Issue #182: surface the quorum *mode* separately from the worker `mode`
+    // (auto/assisted). Before this fix, summary.mode was "auto" both for
+    // single-model auto runs and for --quorum=power runs, making cost
+    // attribution and historical filtering impossible.
+    quorumMode: quorum === false ? QUORUM_MODE_FALSE
+              : quorumPreset // "power" | "speed"
+              || (quorum === true ? "all" : QUORUM_MODE_AUTO),
+    quorumPreset: quorumPreset || null,
+    sliceCount: plan.slices.length,
+    executionOrder: plan.dag.order,
+  };
+  writeFileSync(resolve(runDir, "run.json"), JSON.stringify(runMeta, null, 2));
+
+  // Select scheduler — use ParallelScheduler if plan has [P] tags
+  const hasParallelSlices = plan.slices.some((s) => s.parallel);
+  const hasCompetitiveSlices = plan.slices.some((s) => s.competitive);
+  const maxParallelism = loadMaxParallelism(cwd);
+  let scheduler;
+  if (hasCompetitiveSlices) {
+    const compConfig = loadCompetitiveConfig(cwd);
+    // Lazy-load worktree manager so projects without competitive slices don't
+    // pay the import cost.
+    const worktreeManager = await import("./worktree-manager.mjs");
+    scheduler = new CompetitiveScheduler(eventBus, {
+      maxVariants: compConfig.maxVariants,
+      projectDir: resolve(cwd),
+      planBasename: basename(planPath, ".md"),
+      worktreeManager,
+    });
+  } else if (hasParallelSlices) {
+    scheduler = new ParallelScheduler(eventBus, maxParallelism);
+  } else {
+    scheduler = new SequentialScheduler(eventBus);
+  }
+  const abortSignal = abortController?.signal || null;
+
+  // OpenBrain memory integration
+  const memoryEnabled = isOpenBrainConfigured(cwd);
+  const projectName = loadProjectName(cwd);
+
+  // Quorum mode (v2.5) — fix #122: respect .forge.json quorum.enabled when quorum==="auto"
+  let quorumConfig = null;
+  if (quorum) {
+    quorumConfig = loadQuorumConfig(cwd, quorumPreset);
+
+    // "auto" (CLI default): preserve quorumConfig.enabled from .forge.json.
+    // Absence of .forge.json quorum.enabled ≙ legacy default ≙ enabled=true.
+    // true / "true" / preset: caller explicitly requested quorum — force enabled regardless of config.
+    const callerExplicit = quorum === true || quorum === "true" || quorumPreset !== null;
+
+    let configHasExplicitEnabled = false;
+    if (!callerExplicit) {
+      try {
+        const fp = resolve(cwd, ".forge.json");
+        if (existsSync(fp)) {
+          const raw = JSON.parse(readFileSync(fp, "utf-8"));
+          configHasExplicitEnabled = raw.quorum != null && typeof raw.quorum === "object" && "enabled" in raw.quorum;
+        }
+      } catch { /* ignore — use legacy default */ }
+    }
+
+    if (callerExplicit) {
+      quorumConfig.enabled = true;
+    } else if (!configHasExplicitEnabled) {
+      // Legacy default: absence of quorum.enabled in .forge.json means enabled
+      quorumConfig.enabled = true;
+    }
+    // else: quorum === "auto" AND .forge.json has explicit enabled — use the loaded value
+
+    if (quorum === QUORUM_MODE_AUTO) {
+      quorumConfig.auto = true;
+    } else if (quorum === true || quorum === "true") {
+      quorumConfig.auto = false; // Force quorum on all slices
+    }
+    if (quorumThreshold !== null && typeof quorumThreshold === "number") {
+      quorumConfig.threshold = quorumThreshold;
+    }
+
+    const quorumSource = callerExplicit ? "cli" : (configHasExplicitEnabled ? "config" : "default");
+    console.error(`[quorum] enabled=${quorumConfig.enabled} auto=${quorumConfig.auto} source=${quorumSource}`);
+
+    // H.3: Probe model availability — only when quorum is actually enabled
+    if (quorumConfig.enabled) {
+      const { available: availableModels, dropped: droppedModels } = filterQuorumModels(quorumConfig);
+
+      if (availableModels.length === 0) {
+        const err = new Error(
+          `[quorum] no available models. Dropped: ${droppedModels.map((d) => `${d.model} (${d.reason})`).join(", ")}. ` +
+          `Install hints: ${droppedModels.map((d) => d.install).filter(Boolean).join(" | ")}`,
+        );
+        err.exitCode = 2;
+        throw err;
+      }
+
+      if (quorumConfig.strictAvailability && droppedModels.length > 0) {
+        const err = new Error(
+          `[quorum] strictAvailability=true and ${droppedModels.length} model(s) unavailable: ` +
+          droppedModels.map((d) => `${d.model} (${d.reason})`).join(", "),
+        );
+        err.exitCode = 2;
+        throw err;
+      }
+
+      if (availableModels.length === 1) {
+        console.error(
+          `[quorum] only 1 of ${quorumConfig.models.length} models available — degrading to single-model ` +
+          `(no multi-perspective synthesis benefit); set quorum.strictAvailability=true to fail instead`,
+        );
+      }
+
+      quorumConfig.models = availableModels;
+      quorumConfig.droppedModels = droppedModels;
+
+      // Probe reviewerModel separately — warn but do not block (existing fallback handles it)
+      if (quorumConfig.reviewerModel) {
+        const reviewerResult = probeQuorumModelAvailability(quorumConfig.reviewerModel);
+        if (!reviewerResult.available) {
+          console.error(
+            `[quorum] reviewer model ${quorumConfig.reviewerModel} unavailable: ${reviewerResult.reason} — ` +
+            `existing reviewer fallback will be used`,
+          );
+        }
+      }
+    }
+  }
+
+  eventBus.emit("run-started", { ...runMeta, quorum: quorumConfig ? { enabled: quorumConfig.enabled, auto: quorumConfig.auto, threshold: quorumConfig.threshold } : null });
+
+  // Issue #201 — janitor pass: drop any pforge-slice-N-snapshot stashes older
+  // than 7 days. Prevents accumulation of orphaned snapshots from conflicted
+  // pops in prior runs (testbed observed 60+ orphans). Best-effort.
+  try {
+    const cleanup = cleanupStaleSnapshots({ cwd });
+    if (cleanup.dropped.length > 0) {
+      eventBus.emit("snapshot-janitor", {
+        scanned: cleanup.scanned,
+        dropped: cleanup.dropped.length,
+        errors: cleanup.errors.length,
+      });
+    }
+  } catch { /* best-effort — never break run start */ }
+
+  // GX.2 (v2.36): L3 → L1 preload. Emit a `memory-preload` event right after
+  // run-started carrying the deterministic search-hints derived from the plan.
+  // The dashboard, watchers, and the first worker pick this up via hub history
+  // *before* the first slice runs — closing the "no semantic context at boot" gap.
+  if (memoryEnabled && projectName) {
+    try {
+      const boot = buildPlanBootContext(
+        { name: basename(planPath, ".md"), slices: plan.slices },
+        projectName,
+      );
+      if (boot.hints.length > 0) {
+        eventBus.emit("memory-preload", boot);
+      }
+    } catch { /* best-effort — never break run start */ }
+  }
+
+  // Execute slices
+  const maxRetries = loadMaxRetries(cwd);
+  const escalationChain = loadEscalationChain(cwd);
+
+  // Phase CRUCIBLE-02 Slice 02.1 — pre-compute complexity for every slice so
+  // slice-started events (emitted by the scheduler) can carry the score.
+  // Best-effort: a scoring failure on one slice should not block the run.
+  for (const [sliceId, sliceNode] of plan.dag.nodes) {
+    try {
+      const { score } = scoreSliceComplexity(sliceNode, cwd);
+      sliceNode.complexityScore = score;
+    } catch { /* leave undefined — UI will render a neutral '—' */ }
+  }
+
+  // Phase FORGE-SHOP-06 Slice 06.2 — Gate check config for inter-slice validation
+  const gateCheckConfig = hub ? loadGateCheckConfig(cwd) : null;
+
+  // Phase-33.1: Set PFORGE_DISABLE_TEMPERING env var before the slice loop when requested.
+  // Use try/finally to restore the prior value so in-process callers don't leak state.
+  const _priorDisableTempering = process.env.PFORGE_DISABLE_TEMPERING;
+  if (noTempering) {
+    process.env.PFORGE_DISABLE_TEMPERING = "1";
+  }
+
+  // Phase-33.1: Pre-filter execution order for --only-slices.
+  // Filtering here (before scheduler dispatch) ensures all scheduler types respect it.
+  let executionOrder = plan.dag.order;
+  if (onlySlices !== null && onlySlices.length > 0) {
+    const onlySet = new Set(onlySlices.map(String));
+    for (const id of plan.dag.order) {
+      if (!onlySet.has(id)) {
+        console.log(`[orchestrator] Slice ${id} skipped (not in --only-slices)`);
+      }
+    }
+    for (const id of onlySlices) {
+      if (!plan.dag.nodes.has(String(id))) {
+        console.warn(`[orchestrator] Slice ${id} requested via --only-slices was not found in plan`);
+      }
+    }
+    executionOrder = plan.dag.order.filter((id) => onlySet.has(id));
+  }
+
+  let results;
+  try {
+    results = await scheduler.execute(
+      plan.dag.nodes,
+      executionOrder,
+      async (slice) => {
+        // Bug #123: capture HEAD before the slice so we can deterministically
+        // detect commits made by the worker itself (gh-copilot, claude CLI).
+        // Without this, autoCommitSliceIfDirty saw a clean tree post-slice
+        // and reported "clean-tree" \u2014 even though the worker had committed
+        // multiple times \u2014 producing non-deterministic per-slice commit
+        // counts in run summaries.
+        let startSha = null;
+        try {
+          startSha = execSync("git rev-parse HEAD", { cwd, encoding: "utf-8", timeout: 5_000 }).trim();
+        } catch { /* not a git repo or detached \u2014 fall through */ }
+        // Issue #151: snapshot working-tree state so autoCommitSliceIfDirty
+        // can distinguish worker-owned paths from operator-owned paths that
+        // were already dirty when the slice began.
+        const preSliceState = snapshotPreSliceState({ cwd });
+        // Issue #176 — dryRunWorker short-circuits the executeSlice spawn so
+        // tests that exercise runPlan setup (probe, config, escalation chain)
+        // don't hand a real worker (gh-copilot, claude CLI) shell access in
+        // the operator's cwd. Synthesizes a passing slice result with the
+        // same shape executeSlice would have returned.
+        if (dryRunWorker) {
+          return {
+            sliceId: slice.id ?? String(slice.number),
+            number: slice.number,
+            title: slice.title,
+            status: "passed",
+            duration: 0,
+            exitCode: 0,
+            gateStatus: "passed",
+            gateOutput: "dry-run-worker",
+            gateError: null,
+            failedCommand: null,
+            tokens: { tokens_in: 0, tokens_out: 0, model: "dry-run", premiumRequests: 0, apiDurationMs: null, sessionDurationMs: null, codeChanges: null, vendor: "dry-run" },
+            worker: "dry-run",
+            model: "dry-run",
+            host: "dry-run",
+            billingSurface: "dry-run-worker (no spawn)",
+            attempts: 1,
+            cost_usd: 0,
+            autoCommit: { committed: false, reason: "dry-run-worker" },
+          };
+        }
+        const result = await executeSlice(slice, {
+          cwd, model: effectiveModel, modelRouting, mode, runDir, maxRetries,
+          memoryEnabled, projectName, planName: basename(planPath, ".md"),
+          quorumConfig, escalationChain, eventBus,
+          worker, _dispatchSlice, _pollPullRequest,
+          networkAllowed: plan.meta?.networkAllowed ?? null,
+          networkEnforce: plan.meta?.networkEnforce ?? false,
+          toolsDeny: plan.meta?.toolsDeny ?? null,
+        });
+        if (result.status === "passed") {
+          result.autoCommit = autoCommitSliceIfDirty({ slice, cwd, mode, eventBus, startSha, preSliceState });
+          // #186 v2.96.2: bubble auto-commit codeChanges back into tokens when
+          // the worker's JSONL events didn't surface result.usage.codeChanges.
+          // gh-copilot currently doesn't emit this field, so without the
+          // fallback every slice records codeChanges=null and downstream
+          // dashboards (forge_drift_report, forge_health_trend) plot zeros.
+          if (result.tokens && !result.tokens.codeChanges && result.autoCommit?.codeChanges) {
+            result.tokens.codeChanges = result.autoCommit.codeChanges;
+          }
+          // Issue #195: when the orchestrator's own commit was housekeeping
+          // only, the real product diffstat lives on the absorbed (external)
+          // commit. Fall back so tokens.codeChanges reflects actual work.
+          if (result.tokens && !result.tokens.codeChanges
+              && result.autoCommit?.absorbedCommits?.length) {
+            const firstWithStat = result.autoCommit.absorbedCommits.find((c) => c.diffstat);
+            if (firstWithStat) result.tokens.codeChanges = firstWithStat.diffstat;
+          }
+          // Issue #195: re-persist slice-N.json so the on-disk record matches
+          // the slice-completed event. Without this, autoCommit, raceDetected,
+          // absorbedCommits, and the bubbled codeChanges are only visible in
+          // events.log — every consumer reading slice-N.json (dashboards,
+          // reviewers, postmortems) sees `autoCommit: {}` and
+          // `codeChanges: null` even on slices that committed real work.
+          try {
+            writeFileSync(
+              resolve(runDir, `slice-${slice.number}.json`),
+              JSON.stringify(result, null, 2),
+            );
+          } catch { /* non-fatal */ }
+        } else if (result.status === "failed") {
+          // Issue #132 \u2014 the gate said no, but the worker may have written
+          // perfectly correct files (typical when the gate script itself is
+          // buggy). Stage them and warn so the operator can triage instead of
+          // losing work to a clean-tree on the next resume.
+          const orphans = stageOrphansOnSliceFailure({ slice, cwd, runDir, mode, eventBus });
+          if (orphans) {
+            result.orphans = orphans;
+          }
+        }
+        return result;
+      },
+      { abortSignal, resumeFrom: resumeFrom ? String(resumeFrom) : null, hub, gateCheckConfig },
+    );
+  } finally {
+    // Restore the prior value of PFORGE_DISABLE_TEMPERING regardless of outcome
+    if (_priorDisableTempering === undefined) {
+      delete process.env.PFORGE_DISABLE_TEMPERING;
+    } else {
+      process.env.PFORGE_DISABLE_TEMPERING = _priorDisableTempering;
+    }
+  }
+
+  // Auto-sweep + auto-analyze after all slices (Slice 6)
+  const allPassed = results.every((r) => r.status === "passed" || r.status === "skipped");
+  let sweepResult = null;
+  let analyzeResult = null;
+
+  if (allPassed && !estimate && !dryRun) {
+    sweepResult = runAutoSweep(cwd);
+    analyzeResult = runAutoAnalyze(cwd, planPath);
+  }
+
+  // Build summary in memory (needed for approval message content)
+  const runId = basename(runDir);
+  const summary = buildSummary(plan, results, runMeta, { sweepResult, analyzeResult });
+  const activitySummary = {
+    runId,
+    plan: summary.plan,
+    sliceCount: summary.sliceCount,
+    duration_ms: summary.totalDuration,
+    cost_usd: summary.cost?.total_cost_usd ?? null,
+    timestamp: summary.endTime,
+  };
+
+  if (abortSignal?.aborted) {
+    try {
+      recordActivity({ ...activitySummary, status: "aborted" }, { storeDir: join(cwd, ".forge") });
+    } catch {
+      // Never block the run on team activity write failure.
+    }
+  }
+
+  // Approval gate (Phase 16) — pause and await human approval before finalising
+  if (allPassed && bridge?.hasApprovalChannels) {
+    try {
+      const approvalResult = await bridge.requestApproval(runId, { ...summary, runId });
+      if (!approvalResult.approved) {
+        summary.status = "approval-rejected";
+        summary.approval = {
+          status: "rejected",
+          approver: approvalResult.approver ?? null,
+          timedOut: approvalResult.timedOut ?? false,
+          timestamp: new Date().toISOString(),
+        };
+      } else {
+        summary.approval = {
+          status: "approved",
+          approver: approvalResult.approver ?? null,
+          timestamp: new Date().toISOString(),
+        };
+      }
+    } catch (err) {
+      // Non-fatal — log and continue without blocking the run
+      console.error(`[orchestrator] Approval gate error: ${err.message}`);
+    }
+  }
+
+  // CI/CD Integration Hook — trigger workflow after successful run
+  if (allPassed && summary.status !== "approval-rejected") {
+    const ciConfig = loadCiConfig(cwd);
+    if (ciConfig.enabled && ciConfig.workflow) {
+      summary.ci = triggerCiWorkflow(ciConfig, eventBus);
+    }
+  }
+
+  // Phase-39 Slice 7 — audit-loop activation hook (end-of-plan)
+  if (allPassed && !estimate && !dryRun) {
+    try {
+      const auditConfig = _loadAuditConfig(cwd);
+      const evaluation = _shouldAutoDrain({
+        cwd,
+        config: auditConfig,
+        filesChanged: results.length,
+        env: process.env.PFORGE_ENV || "dev",
+      });
+      if (evaluation.fire) {
+        eventBus.emit("drain-auto-estimate", {
+          mode: auditConfig.mode,
+          maxRounds: auditConfig.maxRounds,
+          signals: evaluation.signals,
+        });
+        summary.auditDrain = { dispatched: true, mode: auditConfig.mode, signals: evaluation.signals };
+      }
+    } catch { /* non-fatal — never fail the run for audit activation */ }
+  }
+
+  // Phase-39 Slice 1 — post-run auditor auto-invoke on failure
+  if (!estimate && !dryRun) {
+    try {
+      const auditorResult = runPostRunAuditorHook({ cwd, allPassed, eventBus });
+      if (auditorResult.triggered) {
+        summary._auditor = auditorResult;
+      }
+    } catch { /* never block the run on auditor hook failure */ }
+  }
+
+  // Write summary
+  writeFileSync(resolve(runDir, "summary.json"), JSON.stringify(summary, null, 2));
+
+  // Phase 2: Append to cost history
+  if (summary.cost && summary.status !== "estimate" && summary.status !== "approval-rejected") {
+    appendCostHistory(cwd, summary);
+  }
+
+  // Emit run-completed — telemetry handler writes trace.json during this emit
+  eventBus.emit("run-completed", summary);
+  if (!abortSignal?.aborted) {
+    try {
+      recordActivity({ ...activitySummary, status: summary.status }, { storeDir: join(cwd, ".forge") });
+    } catch {
+      // Never block the run on team activity write failure.
+    }
+  }
+
+  // v2.4: Write manifest + index + prune (AFTER trace.json is written by emit)
+  const manifest = writeManifest(runDir, runId, { ...summary, traceId: trace.traceId });
+  appendRunIndex(cwd, runId, manifest);
+  pruneRunHistory(cwd, loadMaxRunHistory(cwd));
+
+  // OpenBrain: capture run summary + cost anomaly as thoughts.
+  // Issue #205 (May 2026): the capture now happens here in the orchestrator
+  // — previously it only fired from the MCP `forge_run_plan` handler in
+  // `server.mjs`, so CLI runs (`pforge run-plan`) silently dropped every
+  // capture. `_captured: true` on the receipt tells the server handler to
+  // skip its legacy re-capture path and avoid double-writing.
+  if (memoryEnabled) {
+    const runSummary = buildRunSummaryThought(summary, projectName);
+    const costAnomaly = buildCostAnomalyThought(summary, getCostReport(cwd), projectName);
+    const receipts = { runSummary: null, costAnomaly: null };
+    if (runSummary) {
+      receipts.runSummary = captureMemory(runSummary, "decision", "forge_run_plan", cwd);
+    }
+    if (costAnomaly) {
+      receipts.costAnomaly = captureMemory(costAnomaly, "gotcha", "forge_run_plan/cost", cwd);
+    }
+    summary._memoryCapture = {
+      runSummary,
+      costAnomaly,
+      _captured: true,
+      receipts,
+    };
+
+    // Issue #205 fix #3: auto-drain the OpenBrain queue so newly-captured
+    // thoughts land in L3 without requiring a manual `pforge brain replay`.
+    // Best-effort with 10s timeout — never blocks the run. Previously the
+    // queue file grew forever until a human ran `pforge brain replay`, so
+    // L3 search returned stale results for days after a successful run.
+    try {
+      const drainResult = await autoDrainOpenBrainQueue(cwd, {
+        source: "cli-drain",
+        timeoutMs: 10_000,
+      });
+      summary._memoryCapture.drain = drainResult;
+    } catch (err) {
+      summary._memoryCapture.drain = { error: String(err?.message || err) };
+    }
+  }
+
+  // Phase-25 Slice 5 (L5 closed loop): write a plan postmortem after every
+  // run regardless of pass/fail, bounded by retention count (D7). Delta
+  // fields compare against the most-recent prior postmortem for the same
+  // plan basename. Never fails the run.
+  try {
+    const planBasename = basename(planPath, ".md");
+    const prior = listPlanPostmortems({ cwd, planBasename }).map((e) => e.record);
+    const record = buildPlanPostmortem({ summary, planBasename, priorPostmortems: prior });
+    const path = writePlanPostmortem({ cwd, planBasename, record });
+    summary.postmortem = { path, record };
+  } catch (err) {
+    // Never block the run on postmortem failure.
+    summary.postmortem = { error: err?.message || String(err) };
+  }
+
+  // Phase-31 Slice 6: promote recurring tempering suppressions to bug files.
+  // Runs after postmortem so suppression data from this run is fully written.
+  try {
+    _promoteSuppressions({ cwd });
+  } catch { /* never block the run on promoter failure */ }
+
+  return summary;
+}
+
+/**
+ * Load model routing configuration from .forge.json.
+ * Schema: { "modelRouting": { "execute": "gpt-5.2-codex", "review": "claude-sonnet-4.6", "default": "auto" } }
+ * Returns the modelRouting object, or defaults if not configured.
+ */
+function loadModelRouting(cwd) {
+  const configPath = resolve(cwd, ".forge.json");
+  try {
+    if (existsSync(configPath)) {
+      const config = JSON.parse(readFileSync(configPath, "utf-8"));
+      if (config.modelRouting && typeof config.modelRouting === "object") {
+        return config.modelRouting;
+      }
+    }
+  } catch {
+    // Invalid JSON or missing file — use defaults
+  }
+  return { default: "claude-opus-4.6" };
+}
+
+/**
+ * Load max parallelism from .forge.json.
+ * Schema: { "maxParallelism": 3 }
+ * @returns {number}
+ */
+function loadMaxParallelism(cwd) {
+  const configPath = resolve(cwd, ".forge.json");
+  try {
+    if (existsSync(configPath)) {
+      const config = JSON.parse(readFileSync(configPath, "utf-8"));
+      if (typeof config.maxParallelism === "number" && config.maxParallelism > 0) {
+        return config.maxParallelism;
+      }
+    }
+  } catch { /* defaults */ }
+  return 3; // Default: 3 concurrent workers
+}
+
+// Phase-53 S4: loadCompetitiveConfig → orchestrator/run-plan.mjs
+
+/**
+ * Load max retries from .forge.json.
+ * Schema: { "maxRetries": 1 }
+ * @returns {number}
+ */
+function loadMaxRetries(cwd) {
+  const configPath = resolve(cwd, ".forge.json");
+  try {
+    if (existsSync(configPath)) {
+      const config = JSON.parse(readFileSync(configPath, "utf-8"));
+      if (typeof config.maxRetries === "number" && config.maxRetries >= 0) {
+        return config.maxRetries;
+      }
+    }
+  } catch { /* defaults */ }
+  return 1; // Default: 1 retry (2 total attempts)
+}
+
+/**
+ * Load escalation chain from .forge.json.
+ * Schema: { "escalationChain": ["auto", "claude-opus-4.7", "gpt-5.3-codex"] }
+ * On each retry, the orchestrator escalates to the next model in the chain.
+ * First escalation jumps to top-tier reasoning (Opus 4.7 — strongest reasoner
+ * for hard bugs), then to Codex for bug-fixing.
+ * @returns {string[]}
+ */
+function loadEscalationChain(cwd) {
+  const configPath = resolve(cwd, ".forge.json");
+  try {
+    if (existsSync(configPath)) {
+      const config = JSON.parse(readFileSync(configPath, "utf-8"));
+      if (Array.isArray(config.escalationChain) && config.escalationChain.length > 0) {
+        return config.escalationChain;
+      }
+    }
+  } catch { /* defaults */ }
+
+  // Auto-tune: reorder default chain by historical success rate × cost efficiency
+  try {
+    const perf = loadModelPerformance(cwd);
+    if (perf.length >= 5) {
+      const stats = {};
+      for (const p of perf) {
+        const m = p.model || "unknown";
+        if (!stats[m]) stats[m] = { passed: 0, total: 0, cost: 0 };
+        stats[m].total++;
+        if (p.status === "passed") stats[m].passed++;
+        stats[m].cost += p.cost_usd || 0;
+      }
+      const ranked = Object.entries(stats)
+        .filter(([, s]) => s.total >= 3)
+        .map(([model, s]) => ({
+          model,
+          successRate: s.passed / s.total,
+          avgCost: s.cost / s.total,
+          score: (s.passed / s.total) * 100 - (s.cost / s.total) * 1000, // success weighted, cost penalized
+        }))
+        .sort((a, b) => b.score - a.score);
+      if (ranked.length >= 2) {
+        return ["auto", ...ranked.slice(0, 3).map(r => r.model)];
+      }
+    }
+  } catch { /* fall through to static default */ }
+
+  return ["auto", "claude-opus-4.7", "gpt-5.3-codex"];
+}
+
+// Phase-53 S4: gate-synthesis helpers → orchestrator/run-plan.mjs
+
+// Phase-53 S4: gate-synthesis helpers → orchestrator/run-plan.mjs
+
+// Phase-53 S4: fix-proposal helpers → orchestrator/run-plan.mjs
+
+// Phase-53 S4: fix-proposal helpers (writeProposedFixPatch, applyFixProposal, rollbackFixProposal) → orchestrator/run-plan.mjs
+
+// Phase-53 S4: cost-anomaly helpers → orchestrator/run-plan.mjs
+
+// Phase-53 S4: plan-postmortem helpers → orchestrator/run-plan.mjs
+
+/**
+ * @returns {number}
+ */
+function loadMaxRunHistory(cwd) {
+  const configPath = resolve(cwd, ".forge.json");
+  try {
+    if (existsSync(configPath)) {
+      const config = JSON.parse(readFileSync(configPath, "utf-8"));
+      if (typeof config.maxRunHistory === "number" && config.maxRunHistory > 0) return config.maxRunHistory;
+    }
+  } catch { /* defaults */ }
+  return 50;
+}
+
+/**
+ * Load project name from .forge.json.
+ */
+function loadProjectName(cwd) {
+  const configPath = resolve(cwd, ".forge.json");
+  try {
+    if (existsSync(configPath)) {
+      const config = JSON.parse(readFileSync(configPath, "utf-8"));
+      if (config.projectName) return config.projectName;
+    }
+  } catch { /* defaults */ }
+  return basename(cwd);
+}
+
+/**
+ * Load CI/CD integration configuration from .forge.json.
+ * Schema: { "ci": { "enabled": true, "workflow": "ci.yml", "ref": "main", "inputs": { "key": "value" } } }
+ * @returns {{ enabled: boolean, workflow: string|null, ref: string, inputs: object }}
+ */
+function loadCiConfig(cwd) {
+  const configPath = resolve(cwd, ".forge.json");
+  try {
+    if (existsSync(configPath)) {
+      const config = JSON.parse(readFileSync(configPath, "utf-8"));
+      if (config.ci && typeof config.ci === "object") {
+        return {
+          enabled: config.ci.enabled === true,
+          workflow: config.ci.workflow || null,
+          ref: config.ci.ref || "main",
+          inputs: config.ci.inputs && typeof config.ci.inputs === "object" ? config.ci.inputs : {},
+        };
+      }
+    }
+  } catch { /* defaults */ }
+  return { enabled: false, workflow: null, ref: "main", inputs: {} };
+}
+
+/**
+ * Trigger a GitHub Actions workflow via `gh workflow run`.
+ * Emits a `ci-triggered` event and returns a CI result object.
+ * @param {{ workflow: string, ref: string, inputs: object }} ciConfig
+ * @param {OrchestratorEventBus} eventBus
+ * @returns {{ workflow: string, ref: string, status: "triggered"|"failed", error?: string, timestamp: string }}
+ */
+function triggerCiWorkflow(ciConfig, eventBus) {
+  const { workflow, ref, inputs } = ciConfig;
+  const timestamp = new Date().toISOString();
+
+  try {
+    const args = ["workflow", "run", workflow, "--ref", ref];
+    if (inputs && Object.keys(inputs).length > 0) {
+      for (const [key, value] of Object.entries(inputs)) {
+        args.push("-f", `${key}=${value}`);
+      }
+    }
+    execSync(`gh ${args.join(" ")}`, { encoding: "utf-8", timeout: 30_000 });
+
+    const result = { workflow, ref, status: "triggered", timestamp };
+    eventBus.emit("ci-triggered", result);
+    return result;
+  } catch (err) {
+    const error = err.stderr?.trim() || err.message || "unknown error";
+    const result = { workflow, ref, status: "failed", error, timestamp };
+    eventBus.emit("ci-triggered", result);
+    return result;
+  }
+}
+
+/**
+ * Resolve which model to use for a given slice based on routing config.
+ * Priority: CLI override > slice-type routing > default routing > null (auto)
+ */
+function resolveModel(cliModel, modelRouting, slice) {
+  if (cliModel && cliModel !== "auto") return cliModel;
+  // Match slice type to routing keys (e.g. modelRouting.test, modelRouting.review, etc.)
+  if (slice) {
+    const sliceType = inferSliceType(slice);
+    if (modelRouting[sliceType] && modelRouting[sliceType] !== "auto") return modelRouting[sliceType];
+  }
+  if (modelRouting.default && modelRouting.default !== "auto") return modelRouting.default;
+  return null; // Let CLI worker pick default
+}
+
+// ─── Cost History (Phase 2) ───────────────────────────────────────────
+
+/**
+ * Append a run's cost data to .forge/cost-history.json.
+ * Each entry captures date, plan, total cost, and per-model breakdown.
+ */
+function appendCostHistory(cwd, summary) {
+  const historyPath = resolve(cwd, ".forge", "cost-history.json");
+  let history = [];
+  try {
+    if (existsSync(historyPath)) {
+      history = JSON.parse(readFileSync(historyPath, "utf-8"));
+      if (!Array.isArray(history)) history = [];
+    }
+  } catch {
+    history = [];
+  }
+
+  const entry = {
+    date: summary.endTime || new Date().toISOString(),
+    plan: summary.plan,
+    sliceCount: summary.sliceCount,
+    status: summary.status,
+    total_tokens_in: summary.cost?.total_tokens_in || 0,
+    total_tokens_out: summary.cost?.total_tokens_out || 0,
+    total_cost_usd: summary.cost?.total_cost_usd || 0,
+    by_model: summary.cost?.by_model || {},
+    duration_ms: summary.totalDuration || 0,
+  };
+
+  history.push(entry);
+
+  mkdirSync(resolve(cwd, ".forge"), { recursive: true });
+  writeFileSync(historyPath, JSON.stringify(history, null, 2));
+}
+
+// Phase-53 S5: getCostReport, loadModelPerformance → orchestrator/forge-io.mjs
+
+/**
+ * Append a per-slice performance entry to .forge/model-performance.json.
+ * Each entry records the model used, pass/fail outcome, cost, and timing.
+ *
+ * @param {string} cwd
+ * @param {{ date, plan, sliceId, sliceTitle, model, status, attempts, duration_ms, cost_usd }} entry
+ */
+
+async function executeSlice(slice, options) {
+  const { cwd, model, modelRouting = {}, mode, runDir, maxRetries = 1,
+    memoryEnabled = false, projectName = "", planName = "",
+    quorumConfig = null,
+    escalationChain = ["auto", "claude-opus-4.7", "gpt-5.3-codex"],
+    eventBus = null,
+    worker = null,
+    _dispatchSlice = _dispatchSliceDefault,
+    _pollPullRequest = _pollPullRequestDefault,
+    networkAllowed = null,  // Phase-WORKER-GUARDRAILS Slice 4 (A5): string[] | null
+    networkEnforce = false, // Phase-WORKER-GUARDRAILS Slice 4 (A5): default log-only
+    toolsDeny = null,       // Phase-WORKER-GUARDRAILS Slice 6 (A8): string[] | null — MCP tool names the worker may not invoke
+  } = options;
+  const startTime = Date.now();
+  const resolvedModel = resolveModel(model, modelRouting, slice);
+
+  // Meta-bug #88: capture HEAD at slice start so the timeout-retry path can
+  // detect a worker that committed successfully just before being killed by
+  // the timeout. Without this, the retry loop burns a premium request
+  // re-doing work that already landed on master.
+  let sliceStartHead = null;
+  try {
+    sliceStartHead = execSync("git rev-parse HEAD", {
+      cwd, encoding: "utf-8", timeout: 5000,
+    }).trim();
+  } catch { /* not a git repo — leave null, retry logic falls back to default */ }
+
+  // Fix 8 + Issue #178: Snapshot working tree before slice. Always restored
+  // at slice end via popSliceSnapshot — pre-fix, the stash was pushed but
+  // never popped, silently capturing operator WIP into `git stash list`.
+  const snapshot = pushSliceSnapshot({ cwd, sliceNumber: slice.number });
+  const snapshotStash = snapshot.pushed;
+  const finalizeSliceResult = (result) => attachSliceSnapshotRestore({
+    sliceResult: result,
+    snapshotStash,
+    cwd,
+    sliceNumber: slice.number,
+    eventBus,
+  });
+
+  // ─── Teardown Safety Guard: capture git baseline ────────────────────
+  let teardownBaseline = null;
+  const teardownGuardConfig = isDestructiveSliceTitle(slice.title)
+    ? loadTeardownGuardConfig(cwd)
+    : { enabled: false };
+
+  if (teardownGuardConfig.enabled) {
+    try {
+      const branch = execSync("git rev-parse --abbrev-ref HEAD", {
+        cwd, encoding: "utf-8", timeout: 5000,
+      }).trim();
+      const headSha = execSync("git rev-parse HEAD", {
+        cwd, encoding: "utf-8", timeout: 5000,
+      }).trim();
+      let upstream = null;
+      try {
+        upstream = execSync("git rev-parse --abbrev-ref --symbolic-full-name @{u}", {
+          cwd, encoding: "utf-8", timeout: 5000, stdio: "pipe",
+        }).trim();
+      } catch { /* no upstream — local-only check */ }
+      teardownBaseline = { branch, headSha, upstream, capturedAt: new Date().toISOString() };
+    } catch {
+      teardownBaseline = null; // non-git context — skip verification
+    }
+  }
+
+  // ─── Agent-Per-Slice Routing (Slice 1) ───────────────────────────────
+  // When no explicit model is set, recommend one from historical performance data.
+  let finalModel = resolvedModel;
+  if (!finalModel && cwd) {
+    const sliceType = inferSliceType(slice);
+    const rec = recommendModel(cwd, sliceType);
+    if (rec) {
+      finalModel = rec.model;
+      if (eventBus) {
+        eventBus.emit("slice-model-routed", {
+          sliceId: slice.number,
+          title: slice.title,
+          model: rec.model,
+          sliceType,
+          success_rate: rec.success_rate,
+          based_on_slices: rec.total_slices,
+        });
+      }
+    }
+  }
+
+  // ─── Quorum Mode (v2.5) ───
+  let quorumResult = null;
+  let useQuorum = false;
+  let complexityScore = 0;
+
+  if (quorumConfig && quorumConfig.enabled && mode !== "assisted") {
+    const { score, signals } = scoreSliceComplexity(slice, cwd);
+    complexityScore = score;
+
+    // Determine if this slice qualifies for quorum
+    if (quorumConfig.auto) {
+      useQuorum = score >= quorumConfig.threshold;
+    } else {
+      useQuorum = true; // Force quorum on all slices
+    }
+
+    if (useQuorum) {
+      // Dispatch to multiple models for dry-run analysis
+      const dispatchResult = await quorumDispatch(slice, quorumConfig, {
+        cwd,
+        memoryEnabled,
+        projectName,
+        complexityScore: score,
+      });
+
+      // Synthesize responses
+      quorumResult = await quorumReview(dispatchResult, slice, quorumConfig, { cwd });
+
+      // Log quorum data
+      const quorumLog = {
+        score,
+        signals,
+        threshold: quorumConfig.threshold,
+        models: quorumConfig.models,
+        successfulLegs: dispatchResult.successful.length,
+        totalLegs: dispatchResult.all.length,
+        legsFailed: dispatchResult.all.length - dispatchResult.successful.length,
+        legErrors: dispatchResult.all
+          .filter(r => !r.success && r.error)
+          .map(r => ({ model: r.model, reason: r.error.reason, code: r.error.code })),
+        dispatchDuration: dispatchResult.totalDuration,
+        reviewerFallback: quorumResult.fallback,
+        reviewerCost: quorumResult.reviewerCost,
+      };
+      writeFileSync(
+        resolve(runDir, `slice-${slice.number}-quorum.json`),
+        JSON.stringify(quorumLog, null, 2),
+      );
+    }
+  }
+
+  let attempt = 0;
+  let workerResult = null;
+  let gateResult = { success: true, output: "No validation gate defined" };
+  let lastError = null;
+  // Phase-25 Slice 1 (L1 Reflexion): per-attempt context used to build the
+  // "## Previous attempt (N-1) summary" block on retry. Contains the fields
+  // mandated by Phase-25 MUST #1: gateName, model, durationMs, stderrTail.
+  let lastFailureContext = null;
+  let currentModel = finalModel;
+  // Phase GITHUB-B Slice 4 — trajectory schema for copilot-coding-agent slices.
+  // Captures issue + PR provenance so sliceResult.trajectory carries render hints.
+  let copilotDispatchData = null;
+
+  // Phase-25 Slice 3 (L2 Voyager): retrieve auto-skills matching this slice's
+  // domain keywords once per slice so every retry sees the same context.
+  // reuseCount is only bumped after the slice ultimately passes — skills that
+  // did not help an eventually-failing slice should not promote.
+  let injectedAutoSkills = [];
+  try {
+    injectedAutoSkills = retrieveAutoSkills({ cwd, slice, limit: 3 }) || [];
+  } catch {
+    injectedAutoSkills = [];
+  }
+  const autoSkillContextBlock = buildAutoSkillContext(injectedAutoSkills);
+
+  // Phase-FOUNDRY-QUOTA-PREFLIGHT Slice 3 — emit pforge.foundry.quota warning before
+  // dispatching to worker when PFORGE_FOUNDRY_QUOTA_PREFLIGHT=1 and an Azure Foundry
+  // deployment model (azure/* prefix) is configured. Fail-open: quota errors never
+  // block execution; they only emit an advisory event to events.log.
+  if (process.env.PFORGE_FOUNDRY_QUOTA_PREFLIGHT === "1") {
+    const _fqRawModel = finalModel || "";
+    if (_fqRawModel.startsWith("azure/")) {
+      const _fqSubscriptionId = process.env.AZURE_SUBSCRIPTION_ID;
+      const _fqResourceGroup  = process.env.AZURE_RESOURCE_GROUP;
+      const _fqAccountName    = process.env.AZURE_OPENAI_ACCOUNT_NAME || process.env.AZURE_OPENAI_RESOURCE_NAME || "";
+      const _fqDeploymentName = _fqRawModel.replace(/^azure\//, "") || process.env.AZURE_OPENAI_DEPLOYMENT || "default";
+      let _fqQuota = null;
+      try {
+        _fqQuota = await getDeploymentQuota({
+          subscriptionId: _fqSubscriptionId,
+          resourceGroup: _fqResourceGroup,
+          accountName: _fqAccountName,
+          deploymentName: _fqDeploymentName,
+        });
+      } catch {
+        _fqQuota = { ok: false, reason: "preflight_fetch_error" };
+      }
+      const _fqAssessment = compareSliceEstimate(_fqQuota, { tokens_in: 0, tokens_out: 0 });
+      if (_fqAssessment.status === "warning" || _fqAssessment.status === "critical") {
+        const _fqEventData = {
+          sliceId: slice.number,
+          title: slice.title,
+          deploymentName: _fqDeploymentName,
+          status: _fqAssessment.status,
+          headroomPct: _fqAssessment.headroomPct,
+          message: _fqAssessment.message,
+        };
+        appendEvent("pforge.foundry.quota", _fqEventData, runDir);
+        if (eventBus) {
+          eventBus.emit("pforge.foundry.quota", _fqEventData);
+        }
+        console.warn(`[pforge] foundry-quota preflight: ${_fqAssessment.message}`);
+      }
+    }
+  }
+
+  while (attempt <= maxRetries) {
+    const attemptStartTime = Date.now();
+    // Auto-escalate model on retries — skip past the current model in chain
+    if (attempt > 0 && escalationChain.length > 1) {
+      let nextModel = currentModel;
+      for (let i = 0; i < escalationChain.length; i++) {
+        const candidate = escalationChain[i] === "auto" ? null : escalationChain[i];
+        if (candidate !== currentModel) {
+          nextModel = candidate;
+          break;
+        }
+      }
+      // If starting model is already the top of the chain, try the next one down
+      if (nextModel === currentModel) {
+        const curIdx = escalationChain.findIndex(m => (m === "auto" ? null : m) === currentModel);
+        const nextIdx = Math.min(curIdx + attempt, escalationChain.length - 1);
+        const candidate = escalationChain[nextIdx] === "auto" ? null : escalationChain[nextIdx];
+        if (candidate !== currentModel) nextModel = candidate;
+      }
+      if (nextModel !== currentModel) {
+        const fromModel = currentModel || "auto";
+        currentModel = nextModel;
+        if (eventBus) {
+          eventBus.emit("slice-escalated", {
+            sliceId: slice.number,
+            title: slice.title,
+            attempt,
+            fromModel,
+            toModel: currentModel || "auto",
+          });
+        }
+      }
+    }
+
+    // Build prompt — on retry, include the error context
+    let sliceInstructions = (useQuorum && quorumResult)
+      ? quorumResult.enhancedPrompt
+      : buildSlicePrompt(slice);
+
+    // OpenBrain: inject memory search + capture instructions
+    if (memoryEnabled) {
+      sliceInstructions = buildMemorySearchBlock(projectName, slice) + "\n" + sliceInstructions;
+      sliceInstructions += "\n" + buildMemoryCaptureBlock(projectName, slice, planName);
+    }
+
+    // Phase-25 Slice 3 (L2 Voyager): inject auto-skill recipes that matched
+    // this slice's domain keywords. Injected once per attempt so retries also
+    // see the prior-knowledge cues.
+    if (autoSkillContextBlock) {
+      sliceInstructions += autoSkillContextBlock;
+    }
+
+    // Phase-25 Slice 2 (L8 Trajectory): ask the worker to emit a first-person
+    // sentinel-wrapped prose note after its work is done. The note is captured
+    // from stdout after gate success and persisted to
+    // .forge/trajectories/<plan>/slice-<id>.md for future slices to consult.
+    sliceInstructions += "\n" + buildTrajectorySuffix();
+
+    // Teardown Safety Guard: inject pre-flight constraint
+    if (teardownGuardConfig.enabled && isDestructiveSliceTitle(slice.title)) {
+      const preFlightWarning = [
+        "",
+        "--- TEARDOWN SAFETY GUARD (v2.49.1) ---",
+        "This slice MUST NOT delete, reset, or rename local or remote git branches.",
+        "Forbidden commands: `git branch -d`, `git branch -D`, `git push --delete`,",
+        "`git reset --hard` against protected refs, `git update-ref -d`.",
+        "Forbidden mutations: setting status to `abandoned` in `.github/` or `docs/plans/`",
+        "without an explicit plan directive.",
+        "Cleanup applies ONLY to cloud resources or scratch files the plan explicitly names.",
+        "A post-slice branch-safety check will verify HEAD reachability and ref integrity.",
+        "--- END TEARDOWN SAFETY GUARD ---",
+        "",
+      ].join("\n");
+      sliceInstructions = preFlightWarning + sliceInstructions;
+    }
+
+    // Phase-31 Slice 3: prepend reflexion preamble when a prior attempt context
+    // is available. First attempts (lastFailureContext === null) are unchanged.
+    sliceInstructions = buildRetryPrompt(sliceInstructions, lastFailureContext);
+
+    if (mode === "assisted") {
+      workerResult = {
+        output: "Assisted mode — human executes in VS Code",
+        tokens: { tokens_in: null, tokens_out: null, model: "human" },
+        exitCode: 0,
+        worker: "human",
+        model: "human",
+      };
+    } else if (worker === "copilot-coding-agent") {
+      // Phase GITHUB-B Slice 3 — dispatch via GitHub Issue + poll for PR.
+      // Uses injected _dispatchSlice / _pollPullRequest for testability.
+      try {
+        const issueResult = _dispatchSlice(slice, { cwd });
+        const prResult = await _pollPullRequest(issueResult.issueNumber, {
+          cwd,
+          intervalMs: DEFAULT_POLL_INTERVAL_MS,
+          timeoutMs: DEFAULT_TIMEOUT_MS,
+        });
+        const timedOut = prResult.status === "timeout";
+        // Phase GITHUB-B Slice 4 — capture trajectory data for sliceResult
+        const prHint = timedOut
+          ? `PR pending (timeout)`
+          : `PR #${prResult.prNumber} (${prResult.status})`;
+        copilotDispatchData = {
+          issueNumber: issueResult.issueNumber,
+          issueUrl: issueResult.issueUrl,
+          prNumber: timedOut ? null : prResult.prNumber,
+          prUrl: timedOut ? null : prResult.prUrl,
+          prStatus: prResult.status,
+          renderHint: `🤖 Issue #${issueResult.issueNumber} → ${prHint}`,
+        };
+        workerResult = {
+          output: JSON.stringify({ ...issueResult, pr: prResult }),
+          exitCode: timedOut ? 1 : 0,
+          worker: "copilot-coding-agent",
+          model: "copilot-coding-agent",
+          stderr: timedOut
+            ? `Copilot did not open a PR within the polling timeout (issue #${issueResult.issueNumber})`
+            : "",
+        };
+      } catch (err) {
+        return finalizeSliceResult({
+          status: "failed",
+          duration: Date.now() - startTime,
+          error: err.message,
+          attempts: attempt + 1,
+        });
+      }
+    } else {
+      // Phase-WORKER-GUARDRAILS Slice 4 (A5): start network proxy when plan declares network.allowed.
+      // Proxy is active only during the worker's execution and stopped in all exit paths via finally.
+      let _attemptProxy = null;
+      let _attemptProxyEnv = null;
+      if (networkAllowed && Array.isArray(networkAllowed) && networkAllowed.length >= 0) {
+        const _nLogPath = resolve(runDir, "slices", String(slice.number), "network.log");
+        try {
+          _attemptProxy = await startProxyLogger({
+            allowlist: networkAllowed,
+            networkLogPath: _nLogPath,
+            enforce: networkEnforce,
+          });
+          _attemptProxyEnv = {
+            HTTPS_PROXY: _attemptProxy.proxyUrl,
+            HTTP_PROXY: _attemptProxy.proxyUrl,
+            PFORGE_NETWORK_LOG_ONLY: "1",
+          };
+        } catch (pErr) {
+          console.warn(`[pforge] network proxy start failed: ${pErr.message}`);
+        }
+      }
+      try {
+        workerResult = await spawnWorker(sliceInstructions, { model: currentModel, cwd, runPlanActive: true, timeout: resolveWorkerTimeoutMs({ sliceOverride: slice.workerTimeoutMs }), eventBus, extraEnv: _attemptProxyEnv });
+      } catch (err) {
+        return finalizeSliceResult({
+          status: "failed",
+          duration: Date.now() - startTime,
+          error: err.message,
+          attempts: attempt + 1,
+        });
+      } finally {
+        if (_attemptProxy) try { _attemptProxy.stop(); } catch { /* ignore */ }
+      }
+    }
+
+    // Capture session log (C4) — append on retry
+    const logFile = resolve(runDir, `slice-${slice.number}-log.txt`);
+    const logContent = [
+      attempt > 0 ? `\n=== RETRY ATTEMPT ${attempt + 1} ===` : "",
+      `=== Slice ${slice.number}: ${slice.title} ===`,
+      `Worker: ${workerResult.worker}`,
+      `Model: ${workerResult.model}`,
+      `Started: ${new Date(startTime).toISOString()}`,
+      "",
+      "=== STDOUT ===",
+      workerResult.output || "(empty)",
+      "",
+      "=== STDERR ===",
+      workerResult.stderr || "(empty)",
+    ].join("\n");
+    writeFileSync(logFile, logContent, attempt > 0 ? { flag: "a" } : undefined);
+
+    // Run validation gate if defined
+    gateResult = { success: true, output: "No validation gate defined" };
+    if (slice.validationGate) {
+      const gateLines = coalesceGateLines(slice.validationGate);
+
+      for (const gateLine of gateLines) {
+        gateResult = runGate(gateLine, cwd);
+        if (!gateResult.success) {
+          gateResult.failedCommand = gateLine;
+          break;
+        }
+      }
+    }
+
+    // If gate passed AND worker didn't timeout/fail, we're done
+    if (gateResult.success && workerResult.exitCode === 0) break;
+
+    // Worker timed out — retry with timeout context
+    if (workerResult.timedOut) {
+      // Meta-bug #88: before paying for a retry, check whether the worker
+      // committed successfully in its last seconds. If HEAD advanced since
+      // slice start, the work already landed — treat as success and break.
+      if (sliceStartHead) {
+        try {
+          const postTimeoutHead = execSync("git rev-parse HEAD", {
+            cwd, encoding: "utf-8", timeout: 5000,
+          }).trim();
+          if (postTimeoutHead && postTimeoutHead !== sliceStartHead) {
+            writeFileSync(logFile,
+              `\n\n--- WORKER TIMED OUT BUT COMMITTED (${sliceStartHead.slice(0, 7)} -> ${postTimeoutHead.slice(0, 7)}) — treating as success ---\n`,
+              { flag: "a" });
+            if (eventBus && typeof eventBus.emit === "function") {
+              try {
+                eventBus.emit("slice-timeout-but-committed", {
+                  sliceNumber: slice.number,
+                  sliceTitle: slice.title,
+                  preSliceHead: sliceStartHead,
+                  postTimeoutHead,
+                });
+              } catch { /* best-effort */ }
+            }
+            // Force exitCode to 0 so downstream logic (status writer, summary)
+            // sees this as a clean success.
+            workerResult.exitCode = 0;
+            workerResult.timedOut = false;
+            workerResult.committedBeforeTimeout = true;
+            break;
+          }
+        } catch { /* git unavailable — fall through to existing retry logic */ }
+      }
+
+      lastError = `Worker timed out after ${Math.round((Date.now() - startTime) / 1000)}s. The task may be too complex for a single slice — consider splitting it.`;
+      // Phase-25 Slice 1: capture reflexion context for next attempt's prompt
+      lastFailureContext = {
+        previousAttempt: attempt + 1,
+        gateName: "(worker timed out before gate)",
+        model: workerResult.model || currentModel || "auto",
+        durationMs: Date.now() - attemptStartTime,
+        stderrTail: [lastError, workerResult.stderr].filter(Boolean).join("\n\n"),
+      };
+      attempt++;
+      if (attempt <= maxRetries) {
+        writeFileSync(logFile, `\n\n--- WORKER TIMED OUT, RETRYING (attempt ${attempt + 1}) ---\n${lastError}\n`, { flag: "a" });
+      }
+      continue;
+    }
+
+    // Worker failed with non-zero exit (not timeout) — no point retrying
+    if (workerResult.exitCode !== 0) break;
+
+    // Gate failed — set error for retry prompt
+    lastError = `Gate command '${gateResult.failedCommand || "unknown"}' failed:\n${gateResult.error || gateResult.output}`;
+    // Phase-25 Slice 1: capture reflexion context for next attempt's prompt
+    lastFailureContext = {
+      previousAttempt: attempt + 1,
+      gateName: gateResult.failedCommand || "unknown",
+      model: workerResult.model || currentModel || "auto",
+      durationMs: Date.now() - attemptStartTime,
+      stderrTail: [gateResult.error, gateResult.output, workerResult.stderr].filter(Boolean).join("\n\n"),
+    };
+    attempt++;
+
+    if (attempt <= maxRetries) {
+      // Log the retry
+      writeFileSync(logFile, `\n\n--- GATE FAILED, RETRYING (attempt ${attempt + 1}) ---\n${lastError}\n`, { flag: "a" });
+    }
+  }
+
+  // ─── Teardown Safety Guard: post-slice branch verification ──────────
+  if (teardownBaseline && teardownGuardConfig.enabled) {
+    const verification = verifyBranchSafety(teardownBaseline, teardownGuardConfig, cwd);
+    if (!verification.ok) {
+      const incident = {
+        id: `INC-teardown-${Date.now()}`,
+        capturedAt: new Date().toISOString(),
+        severity: "critical",
+        title: "teardown-branch-loss",
+        sliceNumber: slice.number,
+        sliceTitle: slice.title,
+        baseline: teardownBaseline,
+        failures: verification.failures,
+        reflogTail: verification.reflogTail,
+        tags: ["teardown", "branch-loss", "critical"],
+      };
+      appendForgeJsonl("incidents.jsonl", incident, cwd);
+
+      // L3 memory capture (LiveGuard)
+      appendForgeJsonl("liveguard-memories.jsonl", {
+        capturedAt: incident.capturedAt,
+        type: "gotcha",
+        source: "teardown-guard",
+        content: `Branch safety failure during slice "${slice.title}": ${verification.failures.join("; ")}. Reflog tip: ${verification.reflogTail?.[0] ?? "n/a"}.`,
+        tags: ["teardown", "branch-loss", "critical"],
+        sliceRef: `${planName}::${slice.number}`,
+      }, cwd);
+
+      if (eventBus) {
+        eventBus.emit("teardown-branch-loss", {
+          sliceNumber: slice.number,
+          failures: verification.failures,
+          blocked: teardownGuardConfig.blockOnBranchLoss,
+        });
+      }
+
+      if (teardownGuardConfig.blockOnBranchLoss) {
+        return finalizeSliceResult({
+          ok: false,
+          sliceNumber: slice.number,
+          reason: "teardown-branch-loss",
+          incident,
+        });
+      }
+    }
+  }
+
+  const duration = Date.now() - startTime;
+
+  // Issue #77: silent-failure guard. A worker that exits 0 with empty/trivial stdout
+  // did not actually do any work — previously this slipped through as "passed" because
+  // the gate (if any) ran against unchanged files. Treat as a failure so operators see it.
+  const silentFailure = detectSilentWorkerFailure(workerResult, mode, slice.number);
+
+  // Meta-bug #99: worker killed by signal / Ctrl+C must never be marked passed,
+  // even when no validation gate exists. Previously this fell through because
+  // the default `gateResult.success = true` for slices without a gate combined
+  // with `silentFailure` only firing on exit 0.
+  const killedBySignal = detectKilledBySignal(workerResult.exitCode);
+  const hadValidationGate = !!slice.validationGate;
+
+  // Status: gate is the authority when it ran. Without a gate, the worker's
+  // exit code becomes the fallback signal — a non-zero exit (especially a
+  // signal-kill) is a failure even if no gate existed to catch it.
+  //   - silentFailure (exit 0, no output) → failed
+  //   - killedBySignal (Ctrl+C, SIGTERM, etc.) → failed
+  //   - gate exists and failed → failed
+  //   - no gate AND worker exited non-zero → failed (meta-bug #99)
+  //   - otherwise → passed
+  let status;
+  let statusReason = null;
+  if (silentFailure) {
+    status = "failed";
+    statusReason = silentFailure;
+  } else if (killedBySignal) {
+    status = "failed";
+    statusReason = `worker killed before completion: ${killedBySignal}`;
+  } else if (!gateResult.success) {
+    status = "failed";
+    statusReason = `validation gate failed: ${gateResult.failedCommand || "unknown"}`;
+  } else if (!hadValidationGate && workerResult.exitCode !== 0) {
+    status = "failed";
+    statusReason = `worker exited ${workerResult.exitCode} with no validation gate to cross-check — cannot assume success`;
+  } else {
+    status = "passed";
+  }
+
+  const sliceResult = {
+    number: slice.number,
+    title: slice.title,
+    status,
+    duration,
+    exitCode: workerResult.exitCode,
+    gateStatus: gateResult.success ? "passed" : "failed",
+    gateOutput: gateResult.output,
+    gateError: gateResult.error || null,
+    failedCommand: gateResult.failedCommand || null,
+    ...(silentFailure && { silentFailure }),
+    ...(killedBySignal && { killedBySignal }),
+    ...(statusReason && { statusReason }),
+    tokens: workerResult.tokens || { tokens_in: null, tokens_out: null, model: "unknown" },
+    worker: workerResult.worker,
+    model: workerResult.model,
+    // #104: record host + billing surface per slice so cost aggregation
+    // can distinguish subscription-covered vs pay-per-token spend.
+    ...(() => {
+      try {
+        const host = detectClientHost();
+        const via = workerResult.worker === "gh-copilot"
+          ? "gh-copilot"
+          : (workerResult.worker && /^(claude|codex|grok|xai)/i.test(workerResult.worker) ? "other-cli" : "direct-api");
+        const billing = describeBillingSurface(via, host);
+        return {
+          host,
+          billingSurface: billing.label,
+          ...(billing.warning ? { billingWarning: billing.warning } : {}),
+        };
+      } catch { return {}; }
+    })(),
+    attempts: attempt + 1,
+    ...(currentModel !== finalModel && { escalatedModel: finalModel || "auto" }),
+    ...(useQuorum && {
+      quorum: {
+        score: complexityScore,
+        models: quorumResult?.modelResponses?.map((r) => r.model) || [],
+        reviewerFallback: quorumResult?.fallback || false,
+        reviewerCost: quorumResult?.reviewerCost || 0,
+        dryRunTokens: quorumResult?.modelResponses?.reduce((sum, r) => ({
+          tokens_in: (sum.tokens_in || 0) + (r.tokens?.tokens_in || 0),
+          tokens_out: (sum.tokens_out || 0) + (r.tokens?.tokens_out || 0),
+        }), { tokens_in: 0, tokens_out: 0 }) || { tokens_in: 0, tokens_out: 0 },
+      },
+    }),
+    // Phase GITHUB-B Slice 4 — trajectory schema for copilot-coding-agent.
+    // Present only when worker dispatched via GitHub Issue + PR polling.
+    ...(copilotDispatchData && { trajectory: copilotDispatchData }),
+  };
+
+  // Issue #152 — verify the slice's Files Modified (Exhaustive) table.
+  // Non-blocking advisory: never flips status to failed. Surfaces missing
+  // declarations as a warning event + sliceResult.filesModifiedCheck so the
+  // run summary, dashboard, and post-run audits can see the omission.
+  if (status === "passed") {
+    try {
+      const fmCheck = verifyFilesModified({ slice, cwd, startSha: sliceStartHead });
+      if (fmCheck.enforced) {
+        sliceResult.filesModifiedCheck = {
+          enforced: true,
+          declared: fmCheck.declared,
+          missing: fmCheck.missing,
+        };
+        if (fmCheck.missing.length > 0 && eventBus) {
+          eventBus.emit("slice-files-modified-warning", {
+            sliceNumber: slice.number,
+            sliceTitle: slice.title,
+            declared: fmCheck.declared,
+            missing: fmCheck.missing,
+          });
+        }
+      }
+    } catch {
+      // Non-fatal — Files Modified verification must never fail a passing slice
+    }
+  }
+
+  // Phase-COST-BADGE-FIX — stamp cost_usd onto sliceResult so it lands in
+  // slice-${n}.json AND is spread into the slice-completed SSE event
+  // (dashboard reads `data.cost_usd` to render the 💰 spend badge).
+  // calculateSliceCost is pure; safe to call here. Non-fatal on error.
+  let _sliceCostForRecord = null;
+  try {
+    _sliceCostForRecord = calculateSliceCost(sliceResult.tokens, sliceResult.worker);
+    sliceResult.cost_usd = _sliceCostForRecord.cost_usd;
+    sliceResult.cost_breakdown = _sliceCostForRecord.cost_breakdown;
+  } catch {
+    // Non-fatal — missing cost field just means the spend badge won't render
+  }
+
+  writeFileSync(
+    resolve(runDir, `slice-${slice.number}.json`),
+    JSON.stringify(sliceResult, null, 2),
+  );
+
+  // Phase-25 Slice 2 (L8 Trajectory): persist worker's sentinel-wrapped trajectory
+  // note on successful slices to .forge/trajectories/<plan>/slice-<id>.md.
+  // Word-capped to TRAJECTORY_MAX_WORDS (D2). Non-fatal on failure.
+  if (status === "passed" && planName) {
+    try {
+      const note = extractTrajectory(workerResult.output || "");
+      if (note) {
+        const path = writeTrajectory({
+          cwd,
+          planBasename: planName,
+          sliceId: slice.number,
+          content: note,
+        });
+        sliceResult.trajectoryPath = relative(cwd, path);
+        if (eventBus) {
+          eventBus.emit("trajectory-written", {
+            sliceNumber: slice.number,
+            path: sliceResult.trajectoryPath,
+          });
+        }
+      }
+    } catch {
+      // Non-fatal — trajectory persistence must never fail a passing slice
+    }
+  }
+
+  // Phase-28.3 Slice 4: Post-slice advisory — scan trajectory for self-repair
+  // markers. If markers found but no forge_meta_bug_file call, emit advisory.
+  // Non-blocking, non-fatal, does not change slice status.
+  if (status === "passed") {
+    try {
+      const trajectoryText = sliceResult.trajectoryPath
+        ? readFileSync(resolve(cwd, sliceResult.trajectoryPath), "utf8")
+        : null;
+      const advisory = detectSelfRepairMissed(trajectoryText, workerResult?.output);
+      if (advisory) {
+        const advisoryEvent = {
+          sliceId: slice.number,
+          markers: advisory.matched,
+          suggestion: "Consider calling forge_meta_bug_file to record this Plan Forge defect for future prevention.",
+        };
+        sliceResult.selfRepairAdvisory = advisoryEvent;
+        if (eventBus) {
+          eventBus.emit("self-repair-missed", advisoryEvent);
+        }
+      }
+    } catch {
+      // Non-fatal — advisory must never fail a passing slice
+    }
+  }
+
+  // Phase-25 Slice 3 (L2 Voyager): on successful slices, (a) bump reuseCount
+  // for every auto-skill that was injected into this slice's context, so skills
+  // that helped produce passing work accrue toward the promotion threshold
+  // (MUST #4 / D3), and (b) capture this slice itself as a new auto-skill
+  // candidate (MUST #3). Non-fatal on failure.
+  if (status === "passed") {
+    try {
+      for (const injected of injectedAutoSkills) {
+        if (injected && injected.sha256Prefix) {
+          incrementAutoSkillReuse({ cwd, sha256Prefix: injected.sha256Prefix });
+        }
+      }
+    } catch {
+      // Non-fatal — reuse-count bookkeeping must never fail a passing slice
+    }
+    try {
+      const record = extractAutoSkill({ slice, planBasename: planName, cwd });
+      if (record) {
+        const path = writeAutoSkill({ cwd, record });
+        sliceResult.autoSkillPath = relative(cwd, path);
+        sliceResult.autoSkillPrefix = record.sha256Prefix;
+        if (eventBus) {
+          eventBus.emit("auto-skill-captured", {
+            sliceNumber: slice.number,
+            prefix: record.sha256Prefix,
+            path: sliceResult.autoSkillPath,
+          });
+        }
+      }
+    } catch {
+      // Non-fatal — auto-skill capture must never fail a passing slice
+    }
+  }
+
+  // Record model performance for this slice
+  try {
+    // Reuse the cost computed pre-write (Phase-COST-BADGE-FIX) when available;
+    // fall back to a fresh compute so this block stays robust if the earlier
+    // try/catch swallowed an error.
+    const sliceCost = _sliceCostForRecord
+      || calculateSliceCost(sliceResult.tokens, sliceResult.worker);
+    recordModelPerformance(cwd, {
+      date: new Date().toISOString(),
+      plan: planName,
+      sliceId: slice.number,
+      sliceTitle: slice.title,
+      sliceType: inferSliceType(slice),
+      model: sliceResult.model || "unknown",
+      status: sliceResult.status,
+      attempts: sliceResult.attempts,
+      duration_ms: sliceResult.duration,
+      cost_usd: sliceCost.cost_usd,
+    });
+  } catch {
+    // Non-fatal — don't fail the slice over a tracking write error
+  }
+
+  // Record quorum outcome for adaptive threshold tuning
+  if (quorumConfig?.enabled) {
+    try {
+      const initialFailed = sliceResult.attempts > 1;
+      appendForgeJsonl("quorum-history.jsonl", { // G2.1: was .json
+        timestamp: new Date().toISOString(),
+        sliceNumber: slice.number,
+        sliceTitle: slice.title,
+        complexityScore: complexityScore || null,
+        quorumUsed: useQuorum,
+        quorumNeeded: useQuorum && !initialFailed, // Needed = quorum used AND initial model would have failed
+        status: sliceResult.status,
+      }, cwd);
+    } catch { /* non-fatal */ }
+  }
+
+  return finalizeSliceResult(sliceResult);
+}
+
+
+export function buildEstimate(plan, model, cwd, quorumConfig = null, resumeFrom = null, worker = null) {
+  return _estimatePlan(plan, model, cwd, quorumConfig, resumeFrom, worker);
+}
+
+/**
+ * Run auto-sweep after all slices pass.
+ * Calls pforge sweep and captures results.
+ */
+export function runAutoSweep(cwd) {
+  const IS_WINDOWS = process.platform === "win32";
+  const pforge = IS_WINDOWS
+    ? `powershell.exe -NoProfile -ExecutionPolicy Bypass -File pforge.ps1 sweep`
+    : `bash pforge.sh sweep`;
+  try {
+    const output = execSync(pforge, { cwd, encoding: "utf-8", timeout: 120_000, maxBuffer: 64 * 1024 * 1024, env: { ...process.env, NO_COLOR: "1" } });
+    const markerCount = (output.match(/TODO|FIXME|HACK|stub|placeholder/gi) || []).length;
+    return { ran: true, clean: markerCount === 0, markerCount, output: output.trim() };
+  } catch (err) {
+    if (err.code === "ENOBUFS" || err instanceof RangeError) {
+      return { ran: false, clean: false, error: "ENOBUFS: sweep output exceeded 64MB buffer", markerCount: 0, output: "" };
+    }
+    return { ran: true, clean: false, error: (err.stderr || err.message || "").trim() };
+  }
+}
+
+// ─── Architecture Guardrail Rules ────────────────────────────────────
+const GUARDRAIL_RULES = [
+  { id: "empty-catch",     pattern: /catch\s*(?:\([^)]*\))?\s*\{\s*(?:\/\/[^\n]*)?\s*\}|catch\s*(?:\([^)]*\))?\s*\{\s*\/\*[^*]*\*\/\s*\}/g, severity: "high",     description: "Empty catch block — must log or handle the error (comments alone don't count)" },
+  { id: "any-type",        pattern: /:\s*any\b|<any>|as\s+any\b/g,                             severity: "medium",   description: "Avoid 'any' type — use explicit types" },
+  { id: "sync-over-async", pattern: /\.(Result|Wait\(\))\b/g,                                  severity: "high",     description: "Sync-over-async (.Result/.Wait()) — use await instead" },
+  { id: "sql-injection",   pattern: /`[^`]*\b(SELECT|INSERT|UPDATE|DELETE|WHERE)\b[^`]*\$\{/gi, severity: "critical", description: "SQL string interpolation — use parameterized queries" },
+  { id: "deferred-work",   pattern: /\b(TODO|FIXME|HACK)\b/g,                                  severity: "low",      description: "Deferred work marker in production code" },
+];
+
+const SOURCE_EXTENSIONS = new Set([".js", ".mjs", ".ts", ".tsx", ".cs", ".py"]);
+const EXCLUDE_DIRS = new Set(["node_modules", ".git", "bin", "obj", "dist", ".forge", "vendor", "coverage", ".next", "out"]);
+
+/** Framework paths that belong to Plan Forge itself, not the user's application code. */
+const FRAMEWORK_PATHS = ["pforge-mcp", "pforge.ps1", "pforge.sh", "setup.ps1", "setup.sh", "validate-setup.ps1", "validate-setup.sh"];
+
+/**
+ * Scan source files for architecture guardrail violations.
+ * Called by forge_drift_report to score the codebase without spawning a subprocess.
+ * Separates app code violations from framework (Plan Forge) code violations.
+ *
+ * @param {object} options
+ * @param {string} [options.path="."]   - Directory to scan (relative to cwd)
+ * @param {string} [options.mode="file"] - Analysis mode (currently only "file" is used)
+ * @param {string[]|null} [options.rules=null] - Rule IDs to run; null = all rules
+ * @param {string} [options.cwd=process.cwd()] - Project root
+ * @returns {Promise<{violations: Array<{file,rule,severity,line,description,framework?:boolean}>, frameworkViolations: Array, filesScanned: number}>}
+ */
+export async function runAnalyze({ mode = "file", path: targetPath = ".", rules = null, cwd = process.cwd(), planPath = null } = {}) {
+  const activeRules = rules
+    ? GUARDRAIL_RULES.filter(r => rules.includes(r.id))
+    : GUARDRAIL_RULES;
+
+  const rootPath = resolve(cwd, targetPath);
+  const violations = [];
+  const frameworkViolations = [];
+  let filesScanned = 0;
+
+  function isFrameworkPath(relPath) {
+    const normalized = relPath.replace(/\\/g, "/");
+    return FRAMEWORK_PATHS.some(fp => normalized === fp || normalized.startsWith(fp + "/"));
+  }
+
+  function scanDir(dirPath) {
+    let entries;
+    try { entries = readdirSync(dirPath, { withFileTypes: true }); } catch { return; }
+    for (const entry of entries) {
+      const fullPath = join(dirPath, entry.name);
+      if (entry.isDirectory()) {
+        if (!EXCLUDE_DIRS.has(entry.name)) scanDir(fullPath);
+      } else if (entry.isFile() && SOURCE_EXTENSIONS.has(extname(entry.name))) {
+        filesScanned++;
+        let content;
+        try { content = readFileSync(fullPath, "utf-8"); } catch { continue; }
+        const relPath = relative(cwd, fullPath);
+        const isFramework = isFrameworkPath(relPath);
+        const applicableRules = isFramework
+          ? activeRules.filter(r => r.id !== "sql-injection") // Skip SQL injection in framework/client-side code
+          : activeRules;
+        for (const rule of applicableRules) {
+          const re = new RegExp(rule.pattern.source, rule.pattern.flags);
+          let match;
+          while ((match = re.exec(content)) !== null) {
+            const line = content.substring(0, match.index).split("\n").length;
+            const violation = { file: relPath, rule: rule.id, severity: rule.severity, line, description: rule.description };
+            if (isFramework) {
+              frameworkViolations.push({ ...violation, framework: true });
+            } else {
+              violations.push(violation);
+            }
+          }
+        }
+      }
+    }
+  }
+
+  scanDir(rootPath);
+
+  // Phase-31 Slice 2 — plan-parser lint advisories.
+  // When planPath is provided, parse the plan and emit an advisory for every
+  // slice that has bash code blocks but no explicit **Validation Gate**: marker.
+  // Advisory is suppressed when runtime.planParser.implicitGates is true because
+  // in that mode parseSlices captures bare bash blocks as the validation gate.
+  // Note: we resolve planPath against cwd (not process.cwd()) and call parseSlices
+  // directly rather than parsePlan(), which resolves paths against process.cwd().
+  const advisories = [];
+  if (planPath) {
+    try {
+      const fullPlanPath = resolve(cwd, planPath);
+      const content = readFileSync(fullPlanPath, "utf-8");
+      const lines = content.replace(/\r\n/g, "\n").split("\n");
+      const { implicitGates } = loadPlanParserConfig(cwd);
+      const slices = parseSlices(lines, { implicitGates });
+      for (const slice of slices) {
+        const bashCount = slice._bashBlockCount || 0;
+        if (bashCount > 0 && !slice.validationGate) {
+          const blockWord = bashCount === 1 ? "bash block" : "bash blocks";
+          advisories.push(
+            `ADVISORY plan-parser-gate-missing: Slice ${slice.number} (${slice.title}) has ${bashCount} ${blockWord} but no **Validation Gate**: marker. Add a validation gate or set runtime.planParser.implicitGates = true to suppress.`
+          );
+        }
+      }
+    } catch { /* best-effort — missing plan file should not crash runAnalyze */ }
+  }
+
+  return { violations, frameworkViolations, filesScanned, advisories };
+}
+
+/**
+ * Parse the consistency score from `pforge analyze` stdout.
+ * Exported for testing — see tests/auto-analyze-issue-189.test.mjs.
+ *
+ * Looks for either "Consistency Score: NN/100", "NN/100", or "Score: NN".
+ * Returns null when no recognizable score line is present.
+ */
+export function parseAnalyzeScore(output) {
+  if (typeof output !== "string" || output.length === 0) return null;
+  const match = output.match(/(\d+)\s*\/\s*100|Score:\s*(\d+)/i);
+  if (!match) return null;
+  const n = parseInt(match[1] || match[2], 10);
+  return Number.isFinite(n) ? n : null;
+}
+
+/**
+ * Run auto-analyze after all slices pass.
+ * Calls pforge analyze and captures consistency score.
+ *
+ * Bug #189: `pforge analyze` exits non-zero (1) as a *warning signal* when the
+ * consistency score falls below the configured threshold (default 60).
+ * Previously the catch block discarded `err.stdout` and reported
+ * `{ score: null, error: "Command failed" }`, hiding the actual score from
+ * the run summary. Now we always parse the score from stdout regardless of
+ * exit code, and only surface `error` when the score genuinely cannot be
+ * recovered (timeout, missing wrapper, parser crash).
+ */
+function runAutoAnalyze(cwd, planPath) {
+  const IS_WINDOWS = process.platform === "win32";
+  // Issue #196: force PowerShell's host output encoding to UTF-8 BEFORE
+  // invoking pforge.ps1, so box-drawing chars (╔═╗║) + ✓/⚠ glyphs survive
+  // the execSync capture instead of collapsing to U+FFFD. Defense-in-depth
+  // alongside the same fix in pforge.ps1 itself — protects callers that
+  // checked out a pre-#196 wrapper script.
+  const pforge = IS_WINDOWS
+    ? `powershell.exe -NoProfile -ExecutionPolicy Bypass -Command "[Console]::OutputEncoding=[System.Text.Encoding]::UTF8; & .\\pforge.ps1 analyze \\"${planPath}\\""`
+    : `bash pforge.sh analyze "${planPath}"`;
+  try {
+    const output = execSync(pforge, { cwd, encoding: "utf-8", timeout: 30_000, env: { ...process.env, NO_COLOR: "1" } });
+    const score = parseAnalyzeScore(output);
+    return { ran: true, score, output: output.trim() };
+  } catch (err) {
+    // execSync attaches stdout/stderr on the thrown error even when exit != 0.
+    // Try to recover a score from stdout first — analyze exits 1 as a warning
+    // when score < threshold but the score itself is still printed.
+    const stdout = (err.stdout || "").toString();
+    const stderr = (err.stderr || "").toString();
+    const score = parseAnalyzeScore(stdout);
+    if (score !== null) {
+      // Below-threshold warning — keep the score, surface the full output, and
+      // record exitCode for callers that want to gate on it.
+      return {
+        ran: true,
+        score,
+        output: stdout.trim(),
+        exitCode: err.status ?? null,
+        warning: `analyze exited ${err.status ?? "non-zero"} (score ${score} below threshold)`,
+      };
+    }
+    // Genuine failure (timeout / parse crash / missing wrapper) — preserve
+    // both stdout and stderr so the diagnostic trail isn't lost.
+    return {
+      ran: true,
+      score: null,
+      error: (stderr || err.message || "").trim(),
+      stdout: stdout.trim() || undefined,
+    };
+  }
+}
+
+function buildSummary(plan, results, runMeta, extras = {}) {
+  const passed = results.filter((r) => r.status === "passed").length;
+  const failed = results.filter((r) => r.status === "failed" || r.status === "error").length;
+  const skipped = results.filter((r) => r.status === "skipped").length;
+  const totalDuration = results.reduce((sum, r) => sum + (r.duration || 0), 0);
+  const totalTokensOut = results.reduce((sum, r) => {
+    const t = r.tokens?.tokens_out;
+    return sum + (typeof t === "number" ? t : 0);
+  }, 0);
+
+  const summary = {
+    plan: runMeta.plan,
+    // Issue #193 (v3.0.1) Defect C: expose `phase` (plan basename without .md)
+    // as a top-level field so dashboards and aggregators don't have to re-parse
+    // the absolute `plan` path. Example: "Phase-2-PROJECTS-CRUD-PLAN".
+    phase: basename(runMeta.plan, ".md"),
+    startTime: runMeta.startTime,
+    endTime: new Date().toISOString(),
+    mode: runMeta.mode,
+    // Issue #182: persist quorum mode separately so cost reports and run
+    // history can distinguish "auto" (single model) from "power"/"speed"
+    // (quorum presets). `mode` continues to mean "auto" vs "assisted".
+    quorumMode: runMeta.quorumMode ?? null,
+    quorumPreset: runMeta.quorumPreset ?? null,
+    model: runMeta.model,
+    sliceCount: plan.slices.length,
+    results: { passed, failed, skipped, total: results.length },
+    totalDuration,
+    totalTokensOut,
+    status: failed > 0 ? "failed" : "completed",
+    cost: buildCostBreakdown(results),
+    sliceResults: results,
+  };
+
+  // Auto-sweep + auto-analyze results (Slice 6)
+  if (extras.sweepResult) summary.sweep = extras.sweepResult;
+  if (extras.analyzeResult) summary.analyze = extras.analyzeResult;
+
+  // Build report line
+  const parts = [`All slices: ${passed} passed, ${failed} failed`];
+  if (summary.cost?.total_cost_usd > 0) {
+    parts.push(`Cost: $${summary.cost.total_cost_usd}`);
+  }
+  if (extras.sweepResult?.ran) {
+    parts.push(`Sweep: ${extras.sweepResult.clean ? "clean" : `${extras.sweepResult.markerCount || "?"} markers`}`);
+  }
+  if (extras.analyzeResult?.ran && extras.analyzeResult.score !== null) {
+    parts.push(`Score: ${extras.analyzeResult.score}/100`);
+  }
+  summary.report = parts.join(". ") + ".";
+
+  return summary;
+}
+
+function createRunDir(cwd, planPath) {
+  const timestamp = new Date().toISOString().replace(/[:.]/g, "-");
+  const planName = basename(planPath, ".md");
+  const runDir = resolve(cwd, ".forge", "runs", `${timestamp}_${planName}`);
+  mkdirSync(runDir, { recursive: true });
+  return runDir;
+}
+
+// ─── Self-Test ────────────────────────────────────────────────────────
+
+export async function selfTest() {
+  console.log("╔══════════════════════════════════════════╗");
+  console.log("║  Plan Forge Orchestrator — Self Test     ║");
+  console.log("╚══════════════════════════════════════════╝\n");
+
+  let passed = 0;
+  let failed = 0;
+
+  function assert(label, condition) {
+    if (condition) {
+      console.log(`  ✅ ${label}`);
+      passed++;
+    } else {
+      console.log(`  ❌ ${label}`);
+      failed++;
+    }
+  }
+
+  // Test 1: Parse example plan
+  console.log("─── Plan Parser ───");
+  try {
+    const examplePlan = resolve(process.cwd(), "docs/plans/examples/Phase-DOTNET-EXAMPLE.md");
+    if (existsSync(examplePlan)) {
+      const plan = parsePlan(examplePlan);
+      assert("Parses plan without error", true);
+      assert(`Found ${plan.slices.length} slices`, plan.slices.length > 0);
+      assert("First slice has number", !!plan.slices[0]?.number);
+      assert("First slice has title", !!plan.slices[0]?.title);
+      assert("DAG has execution order", plan.dag.order.length > 0);
+      assert("DAG order matches slice count", plan.dag.order.length === plan.slices.length);
+      assert("Meta title extracted", !!plan.meta.title);
+
+      // Check validation gate parsing
+      const sliceWithGate = plan.slices.find((s) => s.validationGate);
+      assert("At least one slice has validation gate", !!sliceWithGate);
+
+      // Check build command parsing
+      const sliceWithBuild = plan.slices.find((s) => s.buildCommand);
+      assert("At least one slice has build command", !!sliceWithBuild);
+    } else {
+      console.log("  ⚠️  Example plan not found — skipping parser tests");
+    }
+  } catch (err) {
+    assert(`Parse plan: ${err.message}`, false);
+  }
+
+  // Test 2: Parse Phase 1 plan (with tags)
+  console.log("\n─── Phase 1 Plan (tags) ───");
+  try {
+    const phase1Plan = resolve(process.cwd(), "docs/plans/Phase-1-ORCHESTRATOR-RUN-PLAN-PLAN.md");
+    if (existsSync(phase1Plan)) {
+      const plan = parsePlan(phase1Plan);
+      assert("Parses Phase 1 plan", true);
+      assert(`Found ${plan.slices.length} slices`, plan.slices.length >= 8);
+      assert("Has scope contract", plan.scopeContract.inScope.length > 0);
+      assert("Has forbidden actions", plan.scopeContract.forbidden.length > 0);
+    }
+  } catch (err) {
+    assert(`Parse Phase 1: ${err.message}`, false);
+  }
+
+  // Test 3: DAG with dependencies
+  console.log("\n─── DAG Builder ───");
+  try {
+    const testSlices = [
+      { number: "1", title: "First", depends: [], parallel: false, scope: [], tasks: [] },
+      { number: "2", title: "Second", depends: ["1"], parallel: false, scope: [], tasks: [] },
+      { number: "3", title: "Third", depends: ["1"], parallel: true, scope: ["src/**"], tasks: [] },
+      { number: "4", title: "Fourth", depends: ["2", "3"], parallel: false, scope: [], tasks: [] },
+    ];
+    const dag = buildDAG(testSlices);
+    assert("DAG built from explicit deps", true);
+    assert("Topological order has 4 entries", dag.order.length === 4);
+    assert("Slice 1 is first", dag.order[0] === "1");
+    assert("Slice 4 is last", dag.order[dag.order.length - 1] === "4");
+    assert("Parallel flag preserved", dag.nodes.get("3").parallel === true);
+    assert("Scope metadata preserved", dag.nodes.get("3").scope.length > 0);
+  } catch (err) {
+    assert(`DAG builder: ${err.message}`, false);
+  }
+
+  // Test 4: Cycle detection
+  console.log("\n─── Cycle Detection ───");
+  try {
+    const cyclicSlices = [
+      { number: "1", title: "A", depends: ["2"], parallel: false, scope: [], tasks: [] },
+      { number: "2", title: "B", depends: ["1"], parallel: false, scope: [], tasks: [] },
+    ];
+    try {
+      buildDAG(cyclicSlices);
+      assert("Cycle detection throws error", false);
+    } catch (err) {
+      assert("Cycle detection throws error", err.message.includes("Cycle"));
+    }
+  } catch (err) {
+    assert(`Cycle test: ${err.message}`, false);
+  }
+
+  // Test 5: Event bus
+  console.log("\n─── Event Bus ───");
+  try {
+    const events = [];
+    const handler = { handle: (e) => events.push(e) };
+    const bus = new OrchestratorEventBus(handler);
+    bus.emit("slice-started", { sliceId: "1" });
+    bus.emit("slice-completed", { sliceId: "1" });
+    assert("Event bus fires events", events.length === 2);
+    assert("Events have type", events[0].type === "slice-started");
+    assert("Events have timestamp", !!events[0].timestamp);
+    assert("Events have data", !!events[0].data.sliceId);
+  } catch (err) {
+    assert(`Event bus: ${err.message}`, false);
+  }
+
+  // Test 6: Sequential scheduler with mock executor
+  console.log("\n─── Sequential Scheduler ───");
+  try {
+    const events = [];
+    const handler = { handle: (e) => events.push(e) };
+    const bus = new OrchestratorEventBus(handler);
+    const scheduler = new SequentialScheduler(bus);
+
+    const nodes = new Map();
+    nodes.set("1", { number: "1", title: "First", children: ["2"], inDegree: 0 });
+    nodes.set("2", { number: "2", title: "Second", children: [], inDegree: 1 });
+    const order = ["1", "2"];
+
+    const results = await scheduler.execute(nodes, order, async (slice) => {
+      return { status: "passed", duration: 100 };
+    });
+
+    assert("Scheduler executed 2 slices", results.length === 2);
+    assert("Both passed", results.every((r) => r.status === "passed"));
+    assert("Events fired for lifecycle",
+      events.some((e) => e.type === "slice-started") &&
+      events.some((e) => e.type === "slice-completed"));
+  } catch (err) {
+    assert(`Scheduler: ${err.message}`, false);
+  }
+
+  // Test 7: Worker detection
+  console.log("\n─── Worker Detection ───");
+  try {
+    const workers = detectWorkers();
+    assert("Detects workers array", Array.isArray(workers));
+    assert(`Found ${workers.filter((w) => w.available).length} available worker(s)`,
+      workers.some((w) => w.available));
+
+    const ghCopilot = workers.find((w) => w.name === "gh-copilot");
+    assert("gh-copilot in worker list", !!ghCopilot);
+  } catch (err) {
+    assert(`Worker detection: ${err.message}`, false);
+  }
+
+  // Test 8: Gate execution
+  console.log("\n─── Gate Execution ───");
+  try {
+    const result = runGate("node --version", process.cwd());
+    assert("Gate runs command", result.success);
+    assert("Gate captures output", result.output.startsWith("v"));
+
+    const failResult = runGate("exit 1", process.cwd());
+    assert("Gate detects failure", !failResult.success);
+
+    // C1: Gate allowlist blocks unknown commands
+    const blockedResult = runGate("wget http://example.com", process.cwd());
+    assert("Gate blocks non-allowlisted commands", !blockedResult.success);
+    assert("Gate error mentions allowlist", blockedResult.error.includes("allowlist"));
+
+    // C1: Gate allows common build tools
+    const npmResult = runGate("node -e \"console.log('ok')\"", process.cwd());
+    assert("Gate allows node commands", npmResult.success);
+
+    // C1: Gate allows curl (used in gate verification commands)
+    const curlResult = runGate("curl --version", process.cwd());
+    assert("Gate allows curl commands", curlResult.success);
+  } catch (err) {
+    assert(`Gate execution: ${err.message}`, false);
+  }
+
+  // Test 8b: Gate Lint
+  console.log("\n─── Gate Lint ───");
+  try {
+    // Use a real plan file if available
+    const lintPlan = resolve(process.cwd(), "docs/plans/Phase-LiveGuard-v2.27.0-PLAN.md");
+    if (existsSync(lintPlan)) {
+      const result = lintGateCommands(lintPlan);
+      assert("Gate lint returns warnings array", Array.isArray(result.warnings));
+      assert("Gate lint returns errors array", Array.isArray(result.errors));
+      assert("Gate lint returns passed boolean", typeof result.passed === "boolean");
+      assert("Gate lint returns summary string", typeof result.summary === "string");
+      assert("Cleaned plan has 0 errors", result.errors.length === 0);
+    } else {
+      console.log("  ⚠️  LiveGuard plan not found — skipping gate lint tests");
+    }
+
+    // Test lint detection with synthetic bad commands
+    const origParse = parsePlan;
+    // Temporarily test the detection logic inline
+    const testLines = [
+      "# this is a comment",
+      "node pforge-mcp/tests/foo.test.mjs",
+      "curl http://localhost:3100/api/test",
+      "wget http://example.com",
+    ];
+    const commentLine = testLines[0];
+    assert("Detects comment lines", commentLine.startsWith("#"));
+
+    const vitestLine = testLines[1];
+    assert("Detects node *.test.mjs pattern", /^node\s+.*\.test\.(mjs|js|ts)/.test(vitestLine));
+
+    const curlLine = testLines[2];
+    assert("Detects curl localhost pattern", /curl\s.*localhost[:\s]/.test(curlLine));
+
+    const wgetCmd = testLines[3].split(/\s+/)[0].toLowerCase();
+    assert("Detects blocked command", !GATE_ALLOWED_PREFIXES.some(p => wgetCmd === p));
+  } catch (err) {
+    assert(`Gate lint: ${err.message}`, false);
+  }
+
+  // Test 9: Estimate mode
+  console.log("\n─── Estimate Mode ───");
+  try {
+    const examplePlan = resolve(process.cwd(), "docs/plans/examples/Phase-DOTNET-EXAMPLE.md");
+    if (existsSync(examplePlan)) {
+      const plan = parsePlan(examplePlan);
+      const est = buildEstimate(plan, "claude-sonnet-4.6", process.cwd());
+      assert("Estimate has slice count", est.sliceCount > 0);
+      assert("Estimate has cost", est.estimatedCostUSD >= 0);
+      assert("Estimate has tokens", est.tokens.estimatedInput > 0);
+      assert("Estimate has execution order", est.executionOrder.length > 0);
+      assert("Estimate has confidence", est.confidence === "heuristic" || est.confidence === "historical");
+      assert("Estimate has source", !!est.tokens.source);
+    }
+  } catch (err) {
+    assert(`Estimate: ${err.message}`, false);
+  }
+
+  // Test 10: runPlan() dry-run mode (T1: end-to-end test)
+  console.log("\n─── Full Run (Dry-Run) ───");
+  try {
+    const examplePlan = resolve(process.cwd(), "docs/plans/examples/Phase-DOTNET-EXAMPLE.md");
+    if (existsSync(examplePlan)) {
+      const result = await runPlan(examplePlan, { dryRun: true, cwd: process.cwd() });
+      assert("Dry-run returns status", result.status === "dry-run");
+      assert("Dry-run returns plan object", !!result.plan);
+      assert("Dry-run plan has slices", result.plan.slices.length > 0);
+    }
+  } catch (err) {
+    assert(`Dry-run: ${err.message}`, false);
+  }
+
+  // Test 11: Model routing (T2: loadModelRouting)
+  console.log("\n─── Model Routing ───");
+  try {
+    const routing = loadModelRouting(process.cwd());
+    assert("loadModelRouting returns object", typeof routing === "object");
+    assert("Has default key", "default" in routing);
+
+    // resolveModel priority chain
+    assert("CLI override wins", resolveModel("claude-sonnet-4.6", { default: "gpt-5" }, null) === "claude-sonnet-4.6");
+    assert("Routing default when CLI is auto", resolveModel("auto", { default: "gpt-5" }, null) === "gpt-5");
+    assert("Null when both auto", resolveModel(null, { default: "auto" }, null) === null);
+    assert("Default is claude-opus-4.6 when no .forge.json", loadModelRouting("/nonexistent-path-pforge-test").default === "claude-opus-4.6");
+  } catch (err) {
+    assert(`Model routing: ${err.message}`, false);
+  }
+
+  // Test 12: Path traversal prevention (C4)
+  console.log("\n─── Security ───");
+  try {
+    try {
+      parsePlan("../../../../etc/passwd");
+      assert("Path traversal blocked", false);
+    } catch (err) {
+      assert("Path traversal blocked", err.message.includes("within project"));
+    }
+  } catch (err) {
+    assert(`Security: ${err.message}`, false);
+  }
+
+  // Test 13: Error paths (T2: missing file)
+  console.log("\n─── Error Paths ───");
+  try {
+    try {
+      parsePlan("nonexistent-plan.md");
+      assert("Missing file throws", false);
+    } catch {
+      assert("Missing file throws", true);
+    }
+
+    // Token extraction with empty events
+    const emptyTokens = extractTokens([]);
+    assert("Empty events returns null tokens_in", emptyTokens.tokens_in === null);
+    assert("Empty events returns 0 tokens_out", emptyTokens.tokens_out === 0);
+  } catch (err) {
+    assert(`Error paths: ${err.message}`, false);
+  }
+
+  // Test 14: Cost calculation (Phase 2)
+  console.log("\n─── Cost Calculation ───");
+  try {
+    // Per-slice cost
+    const cost1 = calculateSliceCost({ tokens_in: 1000, tokens_out: 500, model: "claude-sonnet-4.6" });
+    assert("Cost calculated for Claude Sonnet", cost1.cost_usd > 0);
+    assert("Cost has model", cost1.model === "claude-sonnet-4.6");
+    // 1000 * 3/1M + 500 * 15/1M = 0.003 + 0.0075 = 0.0105
+    assert("Cost matches expected", Math.abs(cost1.cost_usd - 0.0105) < 0.0001);
+
+    const cost2 = calculateSliceCost({ tokens_in: null, tokens_out: 100, model: "unknown-model" });
+    assert("Unknown model uses default pricing", cost2.cost_usd > 0);
+    assert("Null tokens_in treated as 0", cost2.tokens_in === 0);
+
+    // CLI worker uses premium request costing, not token pricing
+    const cost3 = calculateSliceCost({ tokens_in: 500000, tokens_out: 5000, model: "claude-opus-4.6", premiumRequests: 3 }, "gh-copilot");
+    assert("CLI worker uses premium request rate", cost3.cost_usd === 0.03);
+    assert("CLI worker preserves token counts", cost3.tokens_in === 500000);
+
+    // API worker uses per-token pricing
+    const cost4 = calculateSliceCost({ tokens_in: 1000, tokens_out: 500, model: "grok-4" }, "api-xai");
+    assert("API worker uses token pricing", cost4.cost_usd > 0);
+    assert("API worker cost matches expected", Math.abs(cost4.cost_usd - 0.0025) < 0.0001);
+
+    // Breakdown
+    const mockResults = [
+      { number: "1", tokens: { tokens_in: 500, tokens_out: 200, model: "claude-sonnet-4.6" }, status: "passed" },
+      { number: "2", tokens: { tokens_in: 300, tokens_out: 100, model: "gpt-5-mini" }, status: "passed" },
+      { number: "3", status: "skipped" },
+    ];
+    const breakdown = buildCostBreakdown(mockResults);
+    assert("Breakdown has total cost", breakdown.total_cost_usd >= 0);
+    assert("Breakdown has 2 models", Object.keys(breakdown.by_model).length === 2);
+    assert("Breakdown has 2 slices (skipped excluded)", breakdown.by_slice.length === 2);
+
+    // Cost report with no history
+    const report = getCostReport(process.cwd());
+    assert("Cost report works (may be empty)", report !== undefined);
+  } catch (err) {
+    assert(`Cost calculation: ${err.message}`, false);
+  }
+
+  // Test 15: Parallel scheduler (Phase 6)
+  console.log("\n─── Parallel Scheduler ───");
+  try {
+    const events = [];
+    const handler = { handle: (e) => events.push(e) };
+    const bus = new OrchestratorEventBus(handler);
+    const pScheduler = new ParallelScheduler(bus, 2);
+
+    // Build a DAG with parallel slices
+    const pNodes = new Map();
+    pNodes.set("1", { number: "1", title: "Setup", depends: [], parallel: false, scope: [], children: ["2", "3"], inDegree: 0 });
+    pNodes.set("2", { number: "2", title: "AuthModule", depends: ["1"], parallel: true, scope: ["src/auth/**"], children: ["4"], inDegree: 1 });
+    pNodes.set("3", { number: "3", title: "UserModule", depends: ["1"], parallel: true, scope: ["src/user/**"], children: ["4"], inDegree: 1 });
+    pNodes.set("4", { number: "4", title: "Integration", depends: ["2", "3"], parallel: false, scope: [], children: [], inDegree: 2 });
+    const pOrder = ["1", "2", "3", "4"];
+
+    let concurrentCount = 0;
+    let maxConcurrent = 0;
+    const pResults = await pScheduler.execute(pNodes, pOrder, async (slice) => {
+      concurrentCount++;
+      maxConcurrent = Math.max(maxConcurrent, concurrentCount);
+      await new Promise((r) => setTimeout(r, 50)); // Simulate work
+      concurrentCount--;
+      return { status: "passed", duration: 50 };
+    });
+
+    assert("Parallel scheduler executed all 4 slices", pResults.length === 4);
+    assert("All slices passed", pResults.every((r) => r.status === "passed"));
+    assert("Slices 2+3 ran in parallel", maxConcurrent >= 2);
+    assert("Events fired for parallel slices", events.some((e) => e.type === "slice-completed"));
+
+    // Test conflict detection
+    const conflictNodes = new Map();
+    conflictNodes.set("1", { parallel: true, scope: ["src/auth/**"] });
+    conflictNodes.set("2", { parallel: true, scope: ["src/auth/login.js"] }); // Overlaps!
+    conflictNodes.set("3", { parallel: true, scope: ["src/user/**"] }); // No overlap
+    const conflicts = detectScopeConflicts(conflictNodes);
+    assert("Conflict detection finds overlapping scopes", conflicts.has("1") && conflicts.has("2"));
+    assert("Non-overlapping scope has no conflict", !conflicts.has("3"));
+  } catch (err) {
+    assert(`Parallel scheduler: ${err.message}`, false);
+  }
+
+  // Test 16: Quorum — Complexity scoring (v2.5)
+  console.log("\n─── Quorum: Complexity Scoring ───");
+  try {
+    // Simple slice — low complexity
+    const simpleSlice = {
+      number: "1", title: "Add README",
+      tasks: ["Create README.md"],
+      scope: [], depends: [], validationGate: "",
+    };
+    const simpleResult = scoreSliceComplexity(simpleSlice, process.cwd());
+    assert("Simple slice scores low", simpleResult.score <= 3);
+    assert("Score has signals object", typeof simpleResult.signals === "object");
+    assert("Signals have scopeWeight", "scopeWeight" in simpleResult.signals);
+
+    // Complex slice — auth + migration + many deps + many tasks
+    const complexSlice = {
+      number: "2", title: "Auth migration with RBAC",
+      tasks: [
+        "Create migration for users table",
+        "Implement JWT authentication",
+        "Add RBAC role checking middleware",
+        "Create token refresh endpoint",
+        "Add password hashing service",
+        "Write auth integration tests",
+        "Add CORS policy for auth endpoints",
+        "Seed admin role data",
+      ],
+      scope: ["src/auth/**", "src/middleware/**", "db/migrations/**", "tests/auth/**"],
+      depends: ["1", "3", "4"],
+      validationGate: "dotnet build\ndotnet test --filter Auth\ndotnet ef database update\ncurl -f http://localhost/health",
+    };
+    const complexResult = scoreSliceComplexity(complexSlice, process.cwd());
+    assert("Complex slice scores high", complexResult.score >= 7);
+    assert("Security keywords detected", complexResult.signals.securityWeight > 0);
+    assert("Database keywords detected", complexResult.signals.databaseWeight > 0);
+    assert("High task count detected", complexResult.signals.taskWeight > 0);
+    assert("Multiple deps detected", complexResult.signals.dependencyWeight > 0);
+
+    // Score is always 1-10
+    assert("Score >= 1", simpleResult.score >= 1);
+    assert("Score <= 10", complexResult.score <= 10);
+  } catch (err) {
+    assert(`Complexity scoring: ${err.message}`, false);
+  }
+
+  // Test 17: Quorum — Config loading (v2.5)
+  console.log("\n─── Quorum: Config ───");
+  try {
+    const config = loadQuorumConfig(process.cwd());
+    assert("Config has enabled flag", "enabled" in config);
+    assert("Config has auto flag", "auto" in config);
+    assert("Config has threshold", typeof config.threshold === "number");
+    assert("Config has models array", Array.isArray(config.models));
+    assert("Config has 3 default models", config.models.length === 3);
+    assert("Config has reviewerModel", typeof config.reviewerModel === "string");
+    assert("Config has dryRunTimeout", typeof config.dryRunTimeout === "number");
+    assert("Threshold is a positive number", Number.isFinite(config.threshold) && config.threshold > 0);
+  } catch (err) {
+    assert(`Quorum config: ${err.message}`, false);
+  }
+
+  // Test 18: CI config loading
+  console.log("\n─── CI/CD Integration ───");
+  try {
+    const ciConfig = loadCiConfig(process.cwd());
+    assert("loadCiConfig returns object", typeof ciConfig === "object");
+    assert("Has enabled flag", "enabled" in ciConfig);
+    assert("Has workflow field", "workflow" in ciConfig);
+    assert("Has ref field", "ref" in ciConfig);
+    assert("Has inputs field", typeof ciConfig.inputs === "object");
+    assert("Default enabled is false", ciConfig.enabled === false || typeof ciConfig.enabled === "boolean");
+    assert("Default ref is main (when no config)", ciConfig.workflow === null || typeof ciConfig.workflow === "string");
+  } catch (err) {
+    assert(`CI config: ${err.message}`, false);
+  }
+
+  // Test 19: Agent-Per-Slice Routing (Slice 1)
+  console.log("\n─── Agent-Per-Slice Routing ───");
+  try {
+    // inferSliceType detection
+    const testSlice = { title: "Write unit tests for auth module", tasks: ["Add spec coverage"] };
+    assert("Infers test type", inferSliceType(testSlice) === "test");
+
+    const reviewSlice = { title: "Code review and audit", tasks: ["Review PR changes"] };
+    assert("Infers review type", inferSliceType(reviewSlice) === "review");
+
+    const migrationSlice = { title: "Database migration", tasks: ["Add schema migration for users table"] };
+    assert("Infers migration type", inferSliceType(migrationSlice) === "migration");
+
+    const executeSlice2 = { title: "Implement auth service", tasks: ["Add login endpoint"] };
+    assert("Defaults to execute type", inferSliceType(executeSlice2) === "execute");
+
+    // recommendModel returns null when no performance data
+    const noRec = recommendModel(process.cwd(), "execute");
+    assert("recommendModel returns null or object", noRec === null || typeof noRec === "object");
+    if (noRec !== null) {
+      assert("Recommendation has model", typeof noRec.model === "string");
+      assert("Recommendation has success_rate", typeof noRec.success_rate === "number");
+      assert("Recommendation has total_slices", typeof noRec.total_slices === "number");
+    }
+
+    // slice-model-routed event is registered in the event bus
+    const events2 = [];
+    const handler2 = { handle: (e) => events2.push(e) };
+    const bus2 = new OrchestratorEventBus(handler2);
+    bus2.emit("slice-model-routed", { sliceId: "1", model: "test-model" });
+    assert("slice-model-routed event fires", events2.some((e) => e.type === "slice-model-routed"));
+  } catch (err) {
+    assert(`Agent-per-slice routing: ${err.message}`, false);
+  }
+
+  // Summary
+  console.log(`\n═══════════════════════════════════════════`);
+  console.log(`  Results: ${passed} passed, ${failed} failed`);
+  console.log(`═══════════════════════════════════════════`);
+
+  process.exit(failed > 0 ? 1 : 0);
+}
+
+/**
+ * Phase 53 S0 — Orchestrator surface snapshot contract.
+ * Returns deterministic export + section-banner metadata for snapshot testing.
+ * Pure function — no side effects, no I/O.
+ */
+
+export function buildOrchestratorSurface() {
+  return {
+    exports: [
+      "API_ALLOWED_ROLES",
+      "COST_ANOMALY_MULTIPLIER",
+      "CRUCIBLE_STALL_CUTOFF_DAYS",
+      "CompetitiveScheduler",
+      "DEFAULT_GATE_TIMEOUT_MS",
+      "DEFAULT_WORKER_OUTPUT_IDLE_MS",
+      "DEFAULT_WORKER_TIMEOUT_MS",
+      "EVENT_SOURCE",
+      "GATE_ALLOWED_PREFIXES",
+      "GATE_SUGGESTION_AUTO_INJECT_THRESHOLD",
+      "POSTMORTEM_RETENTION_COUNT",
+      "PROPOSED_FIX_DIR",
+      "ParallelScheduler",
+      "QUORUM_PRESETS",
+      "REVIEW_RESOLUTIONS",
+      "REVIEW_SEVERITIES",
+      "REVIEW_SOURCES",
+      "REVIEW_STATUSES",
+      "SECURITY_RISK",
+      "SECURITY_RISK_FOR_TYPE",
+      "SUPPORTED_AGENTS",
+      "SequentialScheduler",
+      "TEMPERING_SCAN_STALE_DAYS",
+      "UNIX_TOOLS",
+      "__resetBashPathCache",
+      "addReviewItem",
+      "aggregateModelStats",
+      "analyzeWithQuorum",
+      "appendEvent",
+      "appendForgeJsonl",
+      "appendWatchHistory",
+      "applyFixProposal",
+      "assessQuorumViability",
+      "attachSliceSnapshotRestore",
+      "auditOrphanForgeFiles",
+      "autoCommitSliceIfDirty",
+      "buildApiMessages",
+      "buildCostBreakdown",
+      "buildEstimate",
+      "buildOrchestratorSurface",
+      "buildPlanPostmortem",
+      "buildRetryPrompt",
+      "buildWatchSnapshot",
+      "calculateSliceCost",
+      "captureAbsorbedCommits",
+      "classifyLegError",
+      "classifyProbeFailure",
+      "classifySliceDomain",
+      "cleanupStaleSnapshots",
+      "coalesceGateLines",
+      "compareSliceIds",
+      "compareVersions",
+      "computeLockHash",
+      "computeMedian",
+      "defaultRunGitApply",
+      "deriveVendorFromModel",
+      "describeBillingSurface",
+      "detectApiProvider",
+      "detectClientHost",
+      "detectCostAnomaly",
+      "detectExecutionRuntime",
+      "detectHelpTextOutput",
+      "detectKilledBySignal",
+      "detectPackageManager",
+      "detectRuntimes",
+      "detectSelfRepairMissed",
+      "detectSilentWorkerFailure",
+      "detectVersionCollision",
+      "detectWatchAnomalies",
+      "detectWorkers",
+      "editDistance",
+      "emitToolTelemetry",
+      "ensureForgeDir",
+      "ensureNotificationsConfig",
+      "ensureNotificationsDirs",
+      "ensureReviewQueueDirs",
+      "extractFilesModifiedExhaustive",
+      "extractPlanReleaseVersion",
+      "extractTokens",
+      "filterQuorumModels",
+      "findLatestRun",
+      "findMatchingFixProposal",
+      "formatGateSuggestions",
+      "formatQuorumSummary",
+      "generateImage",
+      "generateReviewItemId",
+      "getCostReport",
+      "getFoundryAuthScope",
+      "getHealthTrend",
+      "getRoutingPreference",
+      "inferSliceType",
+      "isApiOnlyModel",
+      "isCopilotServableModel",
+      "isDeployTrigger",
+      "isDestructiveSliceTitle",
+      "isDirectApiOnlyModel",
+      "isGateCommandAllowed",
+      "isPlaceholderToken",
+      "isWorktreeExemptPath",
+      "lintGateCommands",
+      "listPlanPostmortems",
+      "listReviewItems",
+      "loadAuditConfig",
+      "loadCompetitiveConfig",
+      "loadGateCheckConfig",
+      "loadGateSynthesisConfig",
+      "loadModelPerformance",
+      "loadOpenClawConfig",
+      "loadQuorumConfig",
+      "loadRoutingPreference",
+      "loadTeardownGuardConfig",
+      "loadWorkerCapabilities",
+      "looksLikeProse",
+      "markFixAttempted",
+      "maybeAddBugReview",
+      "maybeAddFixPlanReview",
+      "maybeAddStallReview",
+      "maybeAddTemperingReview",
+      "maybeAddVisualBaselineReview",
+      "normalizeRunState",
+      "normalizeSliceId",
+      "parseAnalyzeScore",
+      "parseEventLine",
+      "parseEventsLog",
+      "parseGitPorcelain",
+      "parseOnlySlicesExpr",
+      "parsePlan",
+      "parseShortstat",
+      "parseStderrStats",
+      "parseValidationGates",
+      "parseWorkerTimeoutValue",
+      "popSliceSnapshot",
+      "postOpenClawSnapshot",
+      "probeQuorumModelAvailability",
+      "pruneForgeRuns",
+      "pushSliceSnapshot",
+      "quorumDispatch",
+      "quorumReview",
+      "readCrucibleState",
+      "readForgeJson",
+      "readForgeJsonl",
+      "readHomeSnapshot",
+      "readReviewItem",
+      "readReviewQueueState",
+      "readSliceArtifacts",
+      "readTemperingConfig",
+      "readTemperingState",
+      "recommendFromAnomalies",
+      "recommendModel",
+      "recordModelPerformance",
+      "registerCorrelationThreadResponder",
+      "registerGateCheckResponder",
+      "regressionGuard",
+      "rerankEscalationChain",
+      "resetCliWorkersCache",
+      "resetPostSliceHookFired",
+      "resetPostSliceTemperingFired",
+      "resolveBashPath",
+      "resolveGateTimeoutMs",
+      "resolveRequiredCli",
+      "resolveReviewItem",
+      "resolveWorkerOutputIdleMs",
+      "resolveWorkerTimeoutMs",
+      "rollbackFixProposal",
+      "runAnalyze",
+      "runAutoSweep",
+      "runGate",
+      "runPlan",
+      "runPostRunAuditorHook",
+      "runPostSliceHook",
+      "runPostSliceTemperingHook",
+      "runPreAgentHandoffHook",
+      "runPreDeployHook",
+      "runWatch",
+      "runWatchLive",
+      "scoreSliceComplexity",
+      "selectWinner",
+      "setGhCopilotProbe",
+      "setSecretsLoader",
+      "shouldAutoDrain",
+      "shouldAutoRetryFix",
+      "shouldDefaultPremiumRequestsToOne",
+      "snapshotPreSliceState",
+      "spawnWorker",
+      "stageOrphansOnSliceFailure",
+      "suggestAllowedCommand",
+      "suggestInstall",
+      "synthesizeGateSuggestions",
+      "validateGatePortability",
+      "verifyBranchSafety",
+      "verifyFilesModified",
+      "writePlanPostmortem",
+      "writeProposedFixPatch",
+      "writeSilentExitRecord",
+    ],
+    sectionBanners: [
+      "API Provider Registry",
+      "API Provider Role Allowlist",
+      "Architecture Guardrail Rules",
+      "CLI Entry Point",
+      "Centralized Constants",
+      "Client Host Detection",
+      "Cost History (Phase 2)",
+      "Event Bus (C3: Dependency Injection)",
+      "Execution Runtime Detection",
+      "G2.3 — Run pruning",
+      "G2.5 — Orphan file audit",
+      "Health Trend Analysis",
+      "Host-Aware Routing Preference (#104)",
+      "Model Performance Tracking (Phase 3)",
+      "OpenClaw Integration (v2.29)",
+      "Operational Data Infrastructure",
+      "Orchestrator",
+      "Phase FORGE-SHOP-01 Slice 01.1 — Shop-floor home snapshot",
+      "Phase FORGE-SHOP-02 Slice 02.1 — Review Queue Storage",
+      "Phase FORGE-SHOP-02 Slice 02.2 — Review Queue Producer Hooks",
+      "Phase FORGE-SHOP-06 Slice 06.2 — Correlation Thread Responder",
+      "Phase FORGE-SHOP-06 Slice 06.2 — Gate Check Configuration",
+      "Phase FORGE-SHOP-06 Slice 06.2 — Gate Check Responder",
+      "Phase-25 Slice 4: Adaptive gate synthesis (L6)",
+      "Phase-25 Slice 5: Plan postmortem (L5 closed research loop)",
+      "Phase-26 Slice 10: Cost-anomaly detector + escalation re-ranking",
+      "Phase-26 Slice 9: Incident → fix-proposal auto-retry (C5)",
+      "Phase-28.3 Slice 4: Post-slice advisory scanner",
+      "Plan Parser",
+      "PostRun Auditor Hook (Phase-39 Slice 1 + Slice 2)",
+      "PostSlice Hook",
+      "PostSlice Tempering Hook (TEMPER-02 Slice 02.2)",
+      "PreAgentHandoff Hook",
+      "PreDeploy Hook",
+      "Pricing + Cost Estimation",
+      "Quorum Analysis",
+      "Quorum Mode (Phase 7 — v2.5)",
+      "Quorum Model Availability Probing (H.3)",
+      "Schedulers (C2: Pluggable)",
+      "Self-Test",
+      "Watcher (v2.34)",
+      "Windows bash dispatch",
+      "Worker Spawning",
+    ],
+  };
 }

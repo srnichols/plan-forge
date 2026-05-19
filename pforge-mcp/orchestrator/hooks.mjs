@@ -9,7 +9,7 @@
  * introducing circular imports during the phased orchestrator split.
  */
 
-import { readFileSync, existsSync } from "node:fs";
+import { readFileSync, writeFileSync, mkdirSync, existsSync } from "node:fs";
 import { resolve } from "node:path";
 import {
   getPostSliceHookFiredState,
@@ -18,6 +18,9 @@ import {
   setPostSliceTemperingFiredState,
 } from "./state.mjs";
 import { QUORUM_PRESETS } from "./constants.mjs";
+import { regressionGuard } from "./gate-helpers.mjs";
+import { buildWatchSnapshot, detectWatchAnomalies } from "./review-watcher.mjs";
+import { spawnWorker } from "./worker-spawn.mjs";
 export { QUORUM_PRESETS };
 
 // ─── Private helpers ──────────────────────────────────────────────────
@@ -651,8 +654,9 @@ export async function runPreAgentHandoffHook({
   let regressionResult = null;
   if (hasDirtyBranch && config.runRegressionGuard !== false) {
     try {
-      if (_deps._regressionGuard) {
-        regressionResult = await _deps._regressionGuard(dirtyFiles, { cwd });
+      const guard = _deps._regressionGuard || regressionGuard;
+      if (guard) {
+        regressionResult = await guard(dirtyFiles, { cwd });
       }
       if (regressionResult && regressionResult.failed > 0) {
         const failedGates = (regressionResult.results || []).filter(r => r.status === "failed");
@@ -798,3 +802,120 @@ export async function postOpenClawSnapshot(cwd, extraContext = {}) {
     return { sent: false, endpoint, error: err.name === "AbortError" ? "timeout (5s)" : err.message };
   }
 }
+
+const DEFAULT_WATCHER_MODEL = "claude-opus-4.7";
+
+// Phase-53 S7: findLatestRun, parseEventLine, parseEventsLog, readSliceArtifacts,
+// normalizeRunState, CRUCIBLE_STALL_CUTOFF_DAYS, readCrucibleState
+// → orchestrator/review-watcher.mjs
+
+
+// ─── PostRun Auditor Hook (Phase-39 Slice 1 + Slice 2) ───────────────
+
+/**
+ * Read persisted auditor state from .forge/auditor-state.json.
+ * Returns {} if the file is missing or unreadable.
+ *
+ * @param {string} cwd - Project root directory
+ * @returns {{ runsSinceLastAudit?: number }}
+ */
+function readAuditorState(cwd) {
+  try {
+    const statePath = resolve(cwd, ".forge", "auditor-state.json");
+    if (existsSync(statePath)) {
+      return JSON.parse(readFileSync(statePath, "utf-8"));
+    }
+  } catch { /* use empty defaults */ }
+  return {};
+}
+
+/**
+ * Write auditor state to .forge/auditor-state.json (creates .forge dir if needed).
+ * Failure is non-fatal — the run must never block on a counter write.
+ *
+ * @param {string} cwd - Project root directory
+ * @param {{ runsSinceLastAudit: number }} state
+ */
+function writeAuditorState(cwd, state) {
+  try {
+    const forgeDir = resolve(cwd, ".forge");
+    mkdirSync(forgeDir, { recursive: true });
+    const statePath = resolve(forgeDir, "auditor-state.json");
+    writeFileSync(statePath, JSON.stringify(state, null, 2) + "\n", "utf-8");
+  } catch { /* non-fatal */ }
+}
+
+/**
+ * Post-run auditor hook — reads hooks.postRun.invokeAuditor from .forge.json
+ * and fires when the configured condition is met.
+ *
+ * Supports:
+ *   onFailure: true   — fire when the run failed (!allPassed)
+ *   everyNRuns: N     — fire after every N completed runs (pass or fail)
+ *                       Counter is persisted in .forge/auditor-state.json.
+ *                       When the state file is absent, counter starts at N so
+ *                       the first run after enabling always triggers.
+ *                       If both conditions fire on the same run, invoke once
+ *                       and reset the everyNRuns counter.
+ *
+ * @param {object} params
+ * @param {string} [params.cwd=process.cwd()] - Project root directory
+ * @param {boolean} [params.allPassed=true]   - Whether all slices passed
+ * @param {object|null} [params.eventBus=null] - EventEmitter for broadcasting
+ * @returns {{ triggered: boolean, reason?: string, config?: object, timestamp?: string }}
+ */
+export function runPostRunAuditorHook({ cwd = process.cwd(), allPassed = true, eventBus = null } = {}) {
+  let config = { onFailure: false, everyNRuns: null };
+  try {
+    const configPath = resolve(cwd, ".forge.json");
+    if (existsSync(configPath)) {
+      const raw = JSON.parse(readFileSync(configPath, "utf-8"));
+      if (raw?.hooks?.postRun?.invokeAuditor) {
+        config = { ...config, ...raw.hooks.postRun.invokeAuditor };
+      }
+    }
+  } catch { /* use defaults on any parse/read failure */ }
+
+  const onFailureFires = config.onFailure === true && !allPassed;
+
+  // Phase-39 Slice 2 — everyNRuns counter
+  let everyNRunsFires = false;
+  const everyN = config.everyNRuns;
+  if (everyN !== null && typeof everyN === "number" && everyN > 0) {
+    const state = readAuditorState(cwd);
+    // Counter starts at everyN (absent file ≡ threshold already reached) so the
+    // first run after enabling always triggers.  Subsequent runs increment from 0.
+    const currentCount = typeof state.runsSinceLastAudit === "number"
+      ? state.runsSinceLastAudit + 1
+      : everyN;
+    everyNRunsFires = currentCount >= everyN;
+    writeAuditorState(cwd, { runsSinceLastAudit: everyNRunsFires ? 0 : currentCount });
+  }
+
+  const shouldFire = onFailureFires || everyNRunsFires;
+  if (!shouldFire) {
+    return { triggered: false };
+  }
+
+  // When both conditions fire on the same run, invoke once (onFailure takes
+  // priority in the reason label; counter has already been reset above).
+  const reason = onFailureFires ? "onFailure" : "everyNRuns";
+
+  const result = {
+    triggered: true,
+    reason,
+    config,
+    timestamp: new Date().toISOString(),
+  };
+
+  if (eventBus && typeof eventBus.emit === "function") {
+    try {
+      eventBus.emit("auditor-auto-invoke", { reason, config });
+    } catch { /* non-fatal */ }
+  }
+
+  return result;
+}
+
+// ─── Phase FORGE-SHOP-02 Slice 02.1 — Review Queue Storage ───────────
+

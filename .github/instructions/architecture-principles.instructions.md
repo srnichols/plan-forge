@@ -210,6 +210,7 @@ Observable patterns indicating these principles are being violated:
 > **Reference**: *Clean Code* (Robert C. Martin) — the conceptual baseline for the guardrails in this section.
 > **Audit source**: Phase 42 Clean-Code Audit catalog — 27 actionable findings across 6 categories.
 > See `docs/plans/cleanup-findings/CATEGORIES-SUMMARY.md` for the full finding set.
+> **Detailed guardrails**: `.github/instructions/clean-code.instructions.md` (function rules, naming, commenting, PR checklist).
 
 Active guardrails derived from the Phase 42 audit:
 

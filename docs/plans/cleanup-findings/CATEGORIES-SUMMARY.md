@@ -41,3 +41,5 @@
 4. **E-series (ESLint warnings)** — high volume; batch-fix rule by rule starting with complexity-warn.
 5. **B-series (medium module size)** — monitor; no immediate action required.
 6. **F-series (console.log)** — audit for debug leakage in a single pass.
+
+> **Active guardrails**: see `.github/instructions/clean-code.instructions.md` for actionable per-function, naming, and commenting rules derived from this catalog.

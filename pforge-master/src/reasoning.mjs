@@ -513,15 +513,26 @@ function _formatCrossRunSnap(snap) {
   void (`${snap.totalRuns ?? 0} runs — ${snap.failedRuns ?? 0} failed${retryFlag}${costFlag}\n${anomalyLines.join("\n")}`);
 }
 
+function _shouldPreFetchCrossRunContext(classification, message, deps) {
+  return classification.lane === LANES.OPERATIONAL
+    && /\b(health|audit|failure|retry|gate|slice|plan.health|watcher)\b/i.test(message)
+    && !!deps.dispatcher;
+}
+
+async function _warmCrossRunContextCache({ cwd, allowlist, deps }) {
+  const watchResult = await invokeAllowlisted(
+    { tool: "forge_watch", args: { targetPath: cwd || ".", mode: "cross-run" }, cwd },
+    { resolvedAllowlist: allowlist, dispatcher: deps.dispatcher, hub: deps.hub || null },
+  );
+  _formatCrossRunSnap(watchResult?.result ?? watchResult);
+}
+
 async function _preFetchCrossRunContext({ classification, message, cwd, allowlist, deps }) {
-  if (classification.lane !== LANES.OPERATIONAL) return;
-  if (!/\b(health|audit|failure|retry|gate|slice|plan.health|watcher)\b/i.test(message)) return;
-  if (!deps.dispatcher) return;
+  if (!_shouldPreFetchCrossRunContext(classification, message, deps)) return;
   // Behavioral parity: original code fetched cross-run context here but systemPrompt was already built.
   // The fetch is preserved for side-effects (watcher cache warm-up); result is not injected.
   try {
-    const watchResult = await invokeAllowlisted({ tool: "forge_watch", args: { targetPath: cwd || ".", mode: "cross-run" }, cwd }, { resolvedAllowlist: allowlist, dispatcher: deps.dispatcher, hub: deps.hub || null });
-    _formatCrossRunSnap(watchResult?.result ?? watchResult);
+    await _warmCrossRunContextCache({ cwd, allowlist, deps });
   } catch { /* non-fatal */ }
 }
 

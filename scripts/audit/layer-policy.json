@@ -6,7 +6,9 @@
     { "name": "server", "paths": ["pforge-mcp/server.mjs"], "level": 3 }
   ],
   "crossPackageWhitelist": [
-    "pforge-master/src/config.mjs -> pforge-mcp/enums.mjs"
+    "pforge-master/src/config.mjs -> pforge-mcp/enums.mjs",
+    "pforge-master/src/retrieval.mjs -> pforge-mcp/brain.mjs",
+    "pforge-mcp/server.mjs -> pforge-master/src/mcp-client.mjs"
   ],
   "flagCrossPackage": true
 }

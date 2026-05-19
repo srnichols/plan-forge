@@ -1,0 +1,23 @@
+{
+  "base": "HEAD~3",
+  "head": "7dc7d4afe4769086b7e5591f124493b3f83f2b39",
+  "timestamp": "2026-05-19T15:45:58.469Z",
+  "changedFileCount": 15,
+  "counts": {
+    "exports": {
+      "breaking": 0,
+      "additive": 0
+    },
+    "tools": {
+      "breaking": 0,
+      "additive": 0
+    },
+    "cli": {
+      "breaking": 0,
+      "additive": 0
+    }
+  },
+  "exports": [],
+  "tools": [],
+  "cli": []
+}

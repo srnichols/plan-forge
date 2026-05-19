@@ -14,7 +14,7 @@
  *   from: "forge@example.com"
  *   to: "team@example.com"
  */
-import { ERR_NOT_IMPLEMENTED } from "../../pforge-mcp/notifications/adapter-contract.mjs";
+import { ERR_NOT_IMPLEMENTED } from "../../pforge-sdk/src/notifications/adapter-contract.mjs";
 
 export const adapter = {
   name: "email",

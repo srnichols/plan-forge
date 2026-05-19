@@ -1,0 +1,53 @@
+name: Code Quality Audit
+
+on:
+  push:
+    branches: [planning/main, master]
+  pull_request:
+    branches: [planning/main, master]
+
+# Two-tier strategy:
+#   1. dep-boundaries  — HARD GATE  (exits non-zero on BLOCKED imports)
+#   2. audit:full      — ADVISORY   (surfaces module size, long params, dead exports,
+#                                    test smells, shell parity, frozen-array drift)
+#
+# Pre-existing baseline (Round 5): ~11 errors, ~1237 warnings in advisory tier.
+# These are tracked in docs/plans/cleanup-findings/ and reduced incrementally.
+# Only NEW dep-boundaries violations fail the build.
+
+jobs:
+  dep-boundaries:
+    name: Dep Boundaries (hard gate)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - run: npm run audit:dep-boundaries
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: dep-boundaries-report
+          path: docs/plans/cleanup-findings/raw/dep-boundaries-report.json
+
+  audit-full:
+    name: Full Audit (advisory)
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: Install root deps (for eslint, jscpd, madge)
+        run: npm ci --no-audit --no-fund
+        continue-on-error: true
+      - name: Run aggregator
+        run: npm run audit:full
+        continue-on-error: true
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: audit-reports
+          path: docs/plans/cleanup-findings/raw/*.json

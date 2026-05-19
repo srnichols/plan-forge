@@ -17,7 +17,7 @@
 
 import { randomUUID } from "node:crypto";
 import { readForgeJson } from "../orchestrator.mjs";
-import { validateAdapterShape } from "./adapter-contract.mjs";
+import { validateAdapterShape } from "../../pforge-sdk/src/notifications/adapter-contract.mjs";
 
 // ─── Constants ────────────────────────────────────────────────────────
 const SEND_TIMEOUT_MS = 5_000;

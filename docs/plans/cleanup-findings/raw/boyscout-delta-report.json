@@ -1,0 +1,32 @@
+{
+  "base": "HEAD~3",
+  "head": "7dc7d4afe4769086b7e5591f124493b3f83f2b39",
+  "timestamp": "2026-05-19T15:45:58.282Z",
+  "fileCount": 2,
+  "counts": {
+    "improved": 0,
+    "clean": 1,
+    "boyScoutViolation": 1,
+    "regression": 0,
+    "newFile": 0
+  },
+  "findings": [
+    {
+      "file": "pforge-mcp/orchestrator.mjs",
+      "totalBefore": 250,
+      "totalAfter": 250,
+      "totalDelta": 0,
+      "perRuleDelta": {},
+      "classification": "boy-scout-violation"
+    },
+    {
+      "file": "pforge-mcp/tests/copilot-cli-probe.test.mjs",
+      "totalBefore": 0,
+      "totalAfter": 0,
+      "totalDelta": 0,
+      "perRuleDelta": {},
+      "classification": "clean"
+    }
+  ],
+  "errors": []
+}

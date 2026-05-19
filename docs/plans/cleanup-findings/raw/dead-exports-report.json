@@ -1,0 +1,1297 @@
+{
+  "generatedAt": "2026-05-19T16:46:54.443Z",
+  "scopes": [
+    "pforge-mcp",
+    "pforge-master",
+    "scripts"
+  ],
+  "counts": {
+    "filesScanned": 207,
+    "filesWithDeadExports": 100,
+    "totalExports": 1078,
+    "deadExports": 674,
+    "namespaceConsumedFiles": 20
+  },
+  "findings": [
+    {
+      "file": "pforge-mcp/orchestrator.mjs",
+      "deadExports": [
+        "API_ALLOWED_ROLES",
+        "COST_ANOMALY_MULTIPLIER",
+        "CRUCIBLE_STALL_CUTOFF_DAYS",
+        "CompetitiveScheduler",
+        "DEFAULT_GATE_TIMEOUT_MS",
+        "DEFAULT_WORKER_OUTPUT_IDLE_MS",
+        "DEFAULT_WORKER_TIMEOUT_MS",
+        "EVENT_SOURCE",
+        "GATE_ALLOWED_PREFIXES",
+        "GATE_SUGGESTION_AUTO_INJECT_THRESHOLD",
+        "POSTMORTEM_RETENTION_COUNT",
+        "ParallelScheduler",
+        "REVIEW_RESOLUTIONS",
+        "REVIEW_SEVERITIES",
+        "REVIEW_SOURCES",
+        "REVIEW_STATUSES",
+        "SECURITY_RISK_FOR_TYPE",
+        "SUPPORTED_AGENTS",
+        "SequentialScheduler",
+        "TEMPERING_SCAN_STALE_DAYS",
+        "UNIX_TOOLS",
+        "__resetBashPathCache",
+        "appendWatchHistory",
+        "applyFixProposal",
+        "attachSliceSnapshotRestore",
+        "auditOrphanForgeFiles",
+        "autoCommitSliceIfDirty",
+        "buildApiMessages",
+        "buildCostBreakdown",
+        "buildEstimate",
+        "buildPlanPostmortem",
+        "buildRetryPrompt",
+        "buildWatchSnapshot",
+        "calculateSliceCost",
+        "captureAbsorbedCommits",
+        "classifyLegError",
+        "classifyProbeFailure",
+        "classifySliceDomain",
+        "cleanupStaleSnapshots",
+        "coalesceGateLines",
+        "compareSliceIds",
+        "compareVersions",
+        "defaultRunGitApply",
+        "deriveVendorFromModel",
+        "describeBillingSurface",
+        "detectApiProvider",
+        "detectClientHost",
+        "detectHelpTextOutput",
+        "detectKilledBySignal",
+        "detectPackageManager",
+        "detectRuntimes",
+        "detectSelfRepairMissed",
+        "detectSilentWorkerFailure",
+        "detectVersionCollision",
+        "detectWatchAnomalies",
+        "editDistance",
+        "ensureForgeDir",
+        "ensureNotificationsConfig",
+        "ensureNotificationsDirs",
+        "ensureReviewQueueDirs",
+        "extractFilesModifiedExhaustive",
+        "extractPlanReleaseVersion",
+        "extractTokens",
+        "filterQuorumModels",
+        "findLatestRun",
+        "findMatchingFixProposal",
+        "formatGateSuggestions",
+        "formatQuorumSummary",
+        "generateReviewItemId",
+        "getFoundryAuthScope",
+        "getRoutingPreference",
+        "isCopilotServableModel",
+        "isDeployTrigger",
+        "isDestructiveSliceTitle",
+        "isDirectApiOnlyModel",
+        "isGateCommandAllowed",
+        "isPlaceholderToken",
+        "isWorktreeExemptPath",
+        "listPlanPostmortems",
+        "loadAuditConfig",
+        "loadCompetitiveConfig",
+        "loadGateCheckConfig",
+        "loadGateSynthesisConfig",
+        "loadRoutingPreference",
+        "loadTeardownGuardConfig",
+        "loadWorkerCapabilities",
+        "looksLikeProse",
+        "markFixAttempted",
+        "maybeAddBugReview",
+        "maybeAddStallReview",
+        "maybeAddTemperingReview",
+        "maybeAddVisualBaselineReview",
+        "normalizeRunState",
+        "normalizeSliceId",
+        "parseAnalyzeScore",
+        "parseEventLine",
+        "parseEventsLog",
+        "parseGitPorcelain",
+        "parseOnlySlicesExpr",
+        "parseShortstat",
+        "parseStderrStats",
+        "parseValidationGates",
+        "parseWorkerTimeoutValue",
+        "popSliceSnapshot",
+        "probeQuorumModelAvailability",
+        "pruneForgeRuns",
+        "pushSliceSnapshot",
+        "quorumDispatch",
+        "quorumReview",
+        "readReviewItem",
+        "readSliceArtifacts",
+        "readTemperingConfig",
+        "readTemperingState",
+        "recommendFromAnomalies",
+        "recordModelPerformance",
+        "registerCorrelationThreadResponder",
+        "registerGateCheckResponder",
+        "rerankEscalationChain",
+        "resetCliWorkersCache",
+        "resetPostSliceTemperingFired",
+        "resolveBashPath",
+        "resolveGateTimeoutMs",
+        "resolveRequiredCli",
+        "resolveWorkerOutputIdleMs",
+        "resolveWorkerTimeoutMs",
+        "rollbackFixProposal",
+        "runAutoSweep",
+        "runGate",
+        "runPostRunAuditorHook",
+        "runPostSliceTemperingHook",
+        "runPreDeployHook",
+        "selectWinner",
+        "setGhCopilotProbe",
+        "setSecretsLoader",
+        "shouldAutoDrain",
+        "shouldAutoRetryFix",
+        "shouldDefaultPremiumRequestsToOne",
+        "snapshotPreSliceState",
+        "stageOrphansOnSliceFailure",
+        "suggestAllowedCommand",
+        "suggestInstall",
+        "synthesizeGateSuggestions",
+        "validateGatePortability",
+        "verifyBranchSafety",
+        "verifyFilesModified",
+        "writePlanPostmortem",
+        "writeProposedFixPatch",
+        "writeSilentExitRecord"
+      ],
+      "totalExports": 193
+    },
+    {
+      "file": "pforge-mcp/forge-master/index.mjs",
+      "deadExports": [
+        "ABSOLUTE_CEILING",
+        "BASE_ALLOWLIST",
+        "FORGE_MASTER_DEFAULTS",
+        "L1_KEYS",
+        "L2_KEYS_BY_LANE",
+        "L3_KEYS",
+        "LANES",
+        "LANE_TOOLS",
+        "OFFTOPIC_REDIRECT",
+        "PHASE29_FULL_ALLOWLIST",
+        "SUMMARIZE_COUNT",
+        "SUMMARIZE_THRESHOLD",
+        "SUMMARY_LIMIT",
+        "TOKEN_CAP",
+        "UNIVERSAL_BASELINE",
+        "USAGE_HINTS",
+        "WRITE_ALLOWLIST",
+        "WRITE_TOOLS_EXCLUDED",
+        "_clearPrinciplesCache",
+        "_resetLocks",
+        "appendTurn",
+        "autoSelectProvider",
+        "buildToolSchemas",
+        "classify",
+        "createApprovalGate",
+        "createDispatcher",
+        "createHttpDispatcher",
+        "createHttpRoutes",
+        "createHubSubscriber",
+        "createSseStream",
+        "ensureSessionId",
+        "fetchContext",
+        "getForgeMasterConfig",
+        "getPromptById",
+        "getPromptCatalog",
+        "invokeAllowlisted",
+        "invokeForgeTool",
+        "invokeMany",
+        "isAllowlisted",
+        "lifecycleLogs",
+        "lifecycleStart",
+        "lifecycleStatus",
+        "lifecycleStop",
+        "loadPrefs",
+        "loadPrinciples",
+        "resolveAllowlist",
+        "runTurn",
+        "savePrefs",
+        "selectProvider",
+        "summarize",
+        "summarizeIfNeeded"
+      ],
+      "totalExports": 51
+    },
+    {
+      "file": "pforge-master/src/index.mjs",
+      "deadExports": [
+        "ABSOLUTE_CEILING",
+        "BASE_ALLOWLIST",
+        "FORGE_MASTER_DEFAULTS",
+        "L1_KEYS",
+        "L2_KEYS_BY_LANE",
+        "L3_KEYS",
+        "LANES",
+        "LANE_TOOLS",
+        "OFFTOPIC_REDIRECT",
+        "PHASE29_FULL_ALLOWLIST",
+        "SUMMARIZE_COUNT",
+        "SUMMARIZE_THRESHOLD",
+        "SUMMARY_LIMIT",
+        "TOKEN_CAP",
+        "UNIVERSAL_BASELINE",
+        "USAGE_HINTS",
+        "WRITE_ALLOWLIST",
+        "WRITE_TOOLS_EXCLUDED",
+        "_clearPrinciplesCache",
+        "_resetLocks",
+        "appendTurn",
+        "autoSelectProvider",
+        "buildToolSchemas",
+        "classify",
+        "createApprovalGate",
+        "createDispatcher",
+        "createHttpDispatcher",
+        "createHttpRoutes",
+        "createHubSubscriber",
+        "createSseStream",
+        "ensureSessionId",
+        "fetchContext",
+        "getForgeMasterConfig",
+        "getPromptById",
+        "getPromptCatalog",
+        "invokeAllowlisted",
+        "invokeForgeTool",
+        "invokeMany",
+        "isAllowlisted",
+        "lifecycleLogs",
+        "lifecycleStart",
+        "lifecycleStatus",
+        "lifecycleStop",
+        "loadPrefs",
+        "loadPrinciples",
+        "resolveAllowlist",
+        "runTurn",
+        "savePrefs",
+        "selectProvider",
+        "summarize",
+        "summarizeIfNeeded"
+      ],
+      "totalExports": 51
+    },
+    {
+      "file": "pforge-mcp/memory.mjs",
+      "deadExports": [
+        "AUTOSKILL_DEFAULT_THRESHOLD",
+        "AUTOSKILL_DEFER_MS",
+        "AUTOSKILL_SHA_PREFIX_LEN",
+        "TRAJECTORY_BEGIN_SENTINEL",
+        "TRAJECTORY_END_SENTINEL",
+        "TRAJECTORY_MAX_WORDS",
+        "applyDeliveryFailure",
+        "buildCacheEntry",
+        "buildDrainStatsRecord",
+        "capTrajectoryWords",
+        "cosineSimilarity",
+        "extractDomainKeywords",
+        "filterUnexpiredThoughts",
+        "getAutoSkillStatus",
+        "isCacheEntryFresh",
+        "listAutoSkills",
+        "listTrajectories",
+        "loadKeywordSearchMap",
+        "nextBackoffTimestamp",
+        "parseAutoSkillMarkdown",
+        "partitionByBackoff",
+        "readAutoSkill",
+        "readTrajectory",
+        "recordGateAccept",
+        "renderAutoSkillMarkdown",
+        "shouldPromoteAutoSkill",
+        "tokenize"
+      ],
+      "totalExports": 61
+    },
+    {
+      "file": "pforge-mcp/tempering.mjs",
+      "deadExports": [
+        "TEMPERING_DEFAULT_CONFIG",
+        "classifyLayer",
+        "computeGaps",
+        "listScanRecords",
+        "locateCoverageReport",
+        "logSuppression",
+        "parseCobertura",
+        "parseCoverage",
+        "parseCoveragePyJson",
+        "parseGoCover",
+        "parseIstanbulJson",
+        "parseJacoco",
+        "parseLcov",
+        "parseTarpaulin",
+        "readPromoteThreshold",
+        "readRunRecord",
+        "readScanRecord",
+        "readSuppressions",
+        "rollupByLayer"
+      ],
+      "totalExports": 29
+    },
+    {
+      "file": "pforge-mcp/brain.mjs",
+      "deadExports": [
+        "BrainKeyError",
+        "L3_CAPABILITY",
+        "REVIEWER_DEFAULTS",
+        "_resetL1",
+        "createL3Client",
+        "describeKey",
+        "federationRead",
+        "forget",
+        "negotiateL3Capabilities",
+        "parseReviewerResponse",
+        "remember",
+        "validateFederationRepo",
+        "validateKey",
+        "withL3Boundary",
+        "writeHallmark"
+      ],
+      "totalExports": 27
+    },
+    {
+      "file": "pforge-mcp/worktree-manager.mjs",
+      "deadExports": [
+        "DEFAULT_ARCHIVE_DAYS",
+        "DEFAULT_MAX_VARIANTS",
+        "MAX_VARIANTS",
+        "MIN_VARIANTS",
+        "WORKTREES_ARCHIVE_DIR",
+        "WORKTREES_DIR",
+        "archivePath",
+        "archiveWorktree",
+        "clampMaxVariants",
+        "cleanupAgedArchives",
+        "createWorktree",
+        "listLiveVariants",
+        "promoteWinner",
+        "sanitizeComponent",
+        "variantPath"
+      ],
+      "totalExports": 15
+    },
+    {
+      "file": "pforge-mcp/spaces-sync.mjs",
+      "deadExports": [
+        "SpacesAuthError",
+        "SpacesNotFoundError",
+        "SpacesRateLimitError",
+        "SpacesSyncError",
+        "buildPayload",
+        "findSpace",
+        "getActivePlan",
+        "getExistingFileShas",
+        "getInstructionFiles",
+        "getToolCatalog",
+        "listOrgSpaces",
+        "sha256",
+        "syncSpaces",
+        "uploadFile"
+      ],
+      "totalExports": 14
+    },
+    {
+      "file": "pforge-mcp/tempering/bug-adapters/github.mjs",
+      "deadExports": [
+        "META_BUG_CLASSES",
+        "SELF_REPAIR_LABELS",
+        "buildIssueBody",
+        "buildLabels",
+        "commentValidatedFix",
+        "computeMetaBugHash",
+        "fileMetaBug",
+        "parseGitRemoteUrl",
+        "registerBug",
+        "resolveGitHubRepo",
+        "resolveGitHubToken",
+        "resolveSelfRepairRepo",
+        "syncStatusFromProvider",
+        "updateBugStatus"
+      ],
+      "totalExports": 14
+    },
+    {
+      "file": "pforge-master/src/embedding/index.mjs",
+      "deadExports": [
+        "HASH_BAG_DIM",
+        "MAX_ENTRIES",
+        "__resetCacheForTests",
+        "__resetProviderForTests",
+        "addEntry",
+        "cosineSimilarity",
+        "createHashBagProvider",
+        "embed",
+        "evictLRU",
+        "getProvider",
+        "load",
+        "query",
+        "save",
+        "size"
+      ],
+      "totalExports": 14
+    },
+    {
+      "file": "pforge-mcp/tempering/scanners/content-audit.mjs",
+      "deadExports": [
+        "CONTENT_AUDIT_DEFAULTS",
+        "classifyRoute",
+        "cleanBodyText",
+        "expandRoute",
+        "extractTag",
+        "findPlaceholders",
+        "loadRoutes",
+        "looksLikeClientShell",
+        "runContentAudit",
+        "wordCount"
+      ],
+      "totalExports": 10
+    },
+    {
+      "file": "pforge-mcp/update-from-github.mjs",
+      "deadExports": [
+        "UpdateError",
+        "appendAuditLog",
+        "buildTarballUrl",
+        "checkLatestDrift",
+        "computeSha256",
+        "downloadTarball",
+        "fetchNewestSemverTag",
+        "loadFromGitHubConfig",
+        "resolveTag",
+        "verifyGzip"
+      ],
+      "totalExports": 10
+    },
+    {
+      "file": "pforge-mcp/cost-service.mjs",
+      "deadExports": [
+        "COPILOT_AGENT_MINUTES_PER_SLICE",
+        "MODEL_PRICING",
+        "SUBSCRIPTION_PROVIDERS",
+        "buildQuorumConfigForMode",
+        "detectCostModel",
+        "estimateQuorum",
+        "estimateSlice",
+        "getPricing"
+      ],
+      "totalExports": 11
+    },
+    {
+      "file": "pforge-mcp/sync-instructions.mjs",
+      "deadExports": [
+        "SyncInstructionsError",
+        "collectForgeConfig",
+        "collectInstructionFiles",
+        "collectProjectPrinciples",
+        "collectProjectProfile",
+        "renderInstructions",
+        "sha256",
+        "stripFrontmatter"
+      ],
+      "totalExports": 9
+    },
+    {
+      "file": "pforge-mcp/tempering/agent-router.mjs",
+      "deadExports": [
+        "ROUTING_TABLE",
+        "buildAnalystPrompt",
+        "deriveBugType",
+        "loadAgentRoutingConfig",
+        "recordDelegation",
+        "registerDelegateSyncResponder",
+        "resolveRoute",
+        "writeAnalystFinding"
+      ],
+      "totalExports": 8
+    },
+    {
+      "file": "pforge-mcp/testbed/defect-log.mjs",
+      "deadExports": [
+        "OWNER_ARC_VALUES",
+        "SEVERITY_VALUES",
+        "STATUS_VALUES",
+        "SURFACE_VALUES",
+        "listFindings",
+        "toSlug",
+        "updateFindingStatus",
+        "validateFinding"
+      ],
+      "totalExports": 9
+    },
+    {
+      "file": "pforge-master/src/observer-loop.mjs",
+      "deadExports": [
+        "DEFAULT_BATCH_WINDOW_MS",
+        "MAX_RECONNECT_RETRIES",
+        "OBSERVER_PID_FILE",
+        "OBSERVER_SUBSCRIBED_EVENTS",
+        "getObserverPidPath",
+        "getObserverStatus",
+        "startObserverDaemon",
+        "stopObserverDaemon"
+      ],
+      "totalExports": 10
+    },
+    {
+      "file": "pforge-mcp/bridge.mjs",
+      "deadExports": [
+        "ApprovalGate",
+        "BridgeManager",
+        "formatDiscord",
+        "formatGeneric",
+        "formatSlack",
+        "formatTelegram",
+        "isDeniedTool"
+      ],
+      "totalExports": 8
+    },
+    {
+      "file": "pforge-mcp/crucible-server.mjs",
+      "deadExports": [
+        "collectExistingPhaseNames",
+        "computeStaleDefaultsWarnings",
+        "extractUnresolvedFields",
+        "getNextQuestion",
+        "inferLane",
+        "renderDraft",
+        "renderDraftStub"
+      ],
+      "totalExports": 16
+    },
+    {
+      "file": "pforge-mcp/github-metrics.mjs",
+      "deadExports": [
+        "MetricsAuthError",
+        "MetricsError",
+        "MetricsNotFoundError",
+        "MetricsRateLimitError",
+        "parseDateArg",
+        "pullMetrics",
+        "writeMetrics"
+      ],
+      "totalExports": 8
+    },
+    {
+      "file": "pforge-mcp/sync-memories.mjs",
+      "deadExports": [
+        "SyncMemoriesError",
+        "collectAutoSkills",
+        "collectBrainDecisions",
+        "collectTrajectories",
+        "parseAutoSkillFrontmatter",
+        "renderMemoryHints",
+        "sha256"
+      ],
+      "totalExports": 8
+    },
+    {
+      "file": "pforge-mcp/tempering/bug-registry.mjs",
+      "deadExports": [
+        "BUG_STATUSES",
+        "VALID_TRANSITIONS",
+        "computeFingerprint",
+        "ensureBugsDir",
+        "findDuplicate",
+        "generateBugId",
+        "setExternalRef"
+      ],
+      "totalExports": 13
+    },
+    {
+      "file": "pforge-mcp/capabilities.mjs",
+      "deadExports": [
+        "CLI_SCHEMA",
+        "CONFIG_SCHEMA",
+        "INNER_LOOP_SURFACE",
+        "TOOL_METADATA",
+        "WORKFLOWS",
+        "buildCapabilities"
+      ],
+      "totalExports": 9
+    },
+    {
+      "file": "pforge-mcp/crucible-interview.mjs",
+      "deadExports": [
+        "FEATURE_QUESTIONS",
+        "FULL_QUESTIONS",
+        "TWEAK_QUESTIONS",
+        "buildRecommendedDefault",
+        "getQuestionBank",
+        "recordAnswer"
+      ],
+      "totalExports": 8
+    },
+    {
+      "file": "pforge-mcp/enums.mjs",
+      "deadExports": [
+        "assertCostSource",
+        "assertForgeMasterMode",
+        "assertHookName",
+        "assertModelTier",
+        "assertQuorumMode",
+        "assertWatcherMode"
+      ],
+      "totalExports": 16
+    },
+    {
+      "file": "pforge-mcp/export-plan.mjs",
+      "deadExports": [
+        "buildGate",
+        "buildSlice",
+        "derivePhaseSlug",
+        "extractPaths",
+        "parseSteps",
+        "parseTitle"
+      ],
+      "totalExports": 8
+    },
+    {
+      "file": "pforge-mcp/forbidden-matcher.mjs",
+      "deadExports": [
+        "ALLOW_RESPONSE",
+        "EDIT_TOOLS",
+        "buildDenyResponse",
+        "extractForbiddenPaths",
+        "matchesForbiddenPath",
+        "parseForbiddenRequest"
+      ],
+      "totalExports": 6
+    },
+    {
+      "file": "pforge-mcp/notifications/core.mjs",
+      "deadExports": [
+        "DigestTracker",
+        "TokenBucket",
+        "createNotificationCore",
+        "loadNotificationsConfig",
+        "matchRoutes",
+        "resolveEnvTemplate"
+      ],
+      "totalExports": 6
+    },
+    {
+      "file": "pforge-mcp/tempering/runner.mjs",
+      "deadExports": [
+        "deriveOverallVerdict",
+        "pickChangedFiles",
+        "runScanner",
+        "runScannerIntegration",
+        "runScannerUnit",
+        "runSubprocess"
+      ],
+      "totalExports": 8
+    },
+    {
+      "file": "pforge-mcp/graph/query.mjs",
+      "deadExports": [
+        "_resetGraphCache",
+        "neighbors",
+        "queryByFile",
+        "queryByPhase",
+        "queryRecentChanges"
+      ],
+      "totalExports": 5
+    },
+    {
+      "file": "pforge-mcp/lattice-chunker-treesitter.mjs",
+      "deadExports": [
+        "_resetForTesting",
+        "chunkFile",
+        "kinds",
+        "languages",
+        "version"
+      ],
+      "totalExports": 5
+    },
+    {
+      "file": "pforge-mcp/telemetry.mjs",
+      "deadExports": [
+        "emitAgentSpan",
+        "emitGateSpan",
+        "emitWorkflowSpan",
+        "startRootSpan",
+        "writeTrace"
+      ],
+      "totalExports": 17
+    },
+    {
+      "file": "pforge-mcp/tempering/scanners/ui-playwright.mjs",
+      "deadExports": [
+        "UI_SCANNER_DEFAULTS",
+        "isAllowedOrigin",
+        "normalizeUrl",
+        "runUiSweep",
+        "writeScreenshotManifest"
+      ],
+      "totalExports": 7
+    },
+    {
+      "file": "pforge-master/src/embedding/transformers-mini.mjs",
+      "deadExports": [
+        "DIM",
+        "__resetPipelineForTests",
+        "createTransformersMiniProvider",
+        "embed",
+        "name"
+      ],
+      "totalExports": 5
+    },
+    {
+      "file": "pforge-master/src/providers/anthropic-tools.mjs",
+      "deadExports": [
+        "PROVIDER_NAME",
+        "buildAnthropicTools",
+        "formatMessages",
+        "parseResponse",
+        "sendTurn"
+      ],
+      "totalExports": 5
+    },
+    {
+      "file": "scripts/audit-cli-parity.mjs",
+      "deadExports": [
+        "audit",
+        "extractPsCommands",
+        "extractShCommands",
+        "loadMcpToolNames",
+        "mcpToCli"
+      ],
+      "totalExports": 5
+    },
+    {
+      "file": "pforge-mcp/crucible-config.mjs",
+      "deadExports": [
+        "DEFAULT_CRUCIBLE_CONFIG",
+        "VALID_QUORUM_PRESETS",
+        "configPath",
+        "sanitize"
+      ],
+      "totalExports": 6
+    },
+    {
+      "file": "pforge-mcp/crucible-import.mjs",
+      "deadExports": [
+        "parseConstitution",
+        "parsePlan",
+        "parseSpec",
+        "parseTasks"
+      ],
+      "totalExports": 7
+    },
+    {
+      "file": "pforge-mcp/dashboard/github-metrics-tab.mjs",
+      "deadExports": [
+        "renderAdoptionPanel",
+        "renderEmptyState",
+        "renderOrchestrationPanel",
+        "renderPerTeamTable"
+      ],
+      "totalExports": 4
+    },
+    {
+      "file": "pforge-mcp/lattice.mjs",
+      "deadExports": [
+        "_resetChunkerForTesting",
+        "latticeCallees",
+        "scoreChunk",
+        "tokenizeForSearch"
+      ],
+      "totalExports": 9
+    },
+    {
+      "file": "pforge-mcp/patterns/detectors/slice-flap-pattern.mjs",
+      "deadExports": [
+        "buildSliceTimelines",
+        "countFlaps",
+        "detect",
+        "resolveStatus"
+      ],
+      "totalExports": 4
+    },
+    {
+      "file": "pforge-mcp/sarif-to-plan.mjs",
+      "deadExports": [
+        "NoFindingsError",
+        "ParseError",
+        "SarifError",
+        "sarifToPlan"
+      ],
+      "totalExports": 4
+    },
+    {
+      "file": "pforge-mcp/search/core.mjs",
+      "deadExports": [
+        "clearCache",
+        "parseQuery",
+        "resetOpenBrainSentinel",
+        "scoreRecord"
+      ],
+      "totalExports": 6
+    },
+    {
+      "file": "pforge-mcp/tempering/artifacts.mjs",
+      "deadExports": [
+        "DEFAULT_ARTIFACT_RETENTION_DAYS",
+        "gcArtifacts",
+        "getArtifactDir",
+        "getScannerArtifactDir"
+      ],
+      "totalExports": 7
+    },
+    {
+      "file": "pforge-mcp/tempering/bug-adapters/jsonl-fallback.mjs",
+      "deadExports": [
+        "commentValidatedFix",
+        "registerBug",
+        "syncStatusFromProvider",
+        "updateBugStatus"
+      ],
+      "totalExports": 4
+    },
+    {
+      "file": "pforge-mcp/testbed/runner.mjs",
+      "deadExports": [
+        "ASSERTION_HANDLERS",
+        "acquireLock",
+        "preflight",
+        "releaseLock"
+      ],
+      "totalExports": 5
+    },
+    {
+      "file": "pforge-master/src/providers/xai-tools.mjs",
+      "deadExports": [
+        "PROVIDER_NAME",
+        "parseResponse",
+        "sendReplyOnly",
+        "sendTurn"
+      ],
+      "totalExports": 4
+    },
+    {
+      "file": "pforge-mcp/crucible.mjs",
+      "deadExports": [
+        "_resetClaimsForTest",
+        "comparePhaseNames",
+        "parsePhaseName"
+      ],
+      "totalExports": 8
+    },
+    {
+      "file": "pforge-mcp/diff-classify.mjs",
+      "deadExports": [
+        "CATEGORIES",
+        "SEVERITY_ORDER",
+        "maxSeverity"
+      ],
+      "totalExports": 4
+    },
+    {
+      "file": "pforge-mcp/github-review-delegate.mjs",
+      "deadExports": [
+        "ReviewDelegateError",
+        "buildReviewIssueBody",
+        "findPrForBranch"
+      ],
+      "totalExports": 6
+    },
+    {
+      "file": "pforge-mcp/patterns/detectors/cost-anomaly.mjs",
+      "deadExports": [
+        "detect",
+        "groupBySliceType",
+        "rollingAverage"
+      ],
+      "totalExports": 3
+    },
+    {
+      "file": "pforge-mcp/patterns/detectors/gate-failure-recurrence.mjs",
+      "deadExports": [
+        "detect",
+        "extractGateFailures",
+        "normaliseGatePattern"
+      ],
+      "totalExports": 3
+    },
+    {
+      "file": "pforge-mcp/tempering/bug-adapters/contract.mjs",
+      "deadExports": [
+        "ADAPTER_CONTRACT",
+        "loadExtensionAdapter",
+        "validateAdapter"
+      ],
+      "totalExports": 4
+    },
+    {
+      "file": "pforge-mcp/tempering/bug-classifier.mjs",
+      "deadExports": [
+        "classifyByLLM",
+        "classifyByRules",
+        "loadFlakinessData"
+      ],
+      "totalExports": 4
+    },
+    {
+      "file": "pforge-mcp/tempering/classifier-issue.mjs",
+      "deadExports": [
+        "CLASSIFIER_ISSUE_LABELS",
+        "buildClassifierIssueBody",
+        "computeClassifierIssueHash"
+      ],
+      "totalExports": 4
+    },
+    {
+      "file": "pforge-mcp/testbed/scenarios.mjs",
+      "deadExports": [
+        "ASSERTION_KINDS",
+        "SCENARIO_KINDS",
+        "validateScenarioFixture"
+      ],
+      "totalExports": 6
+    },
+    {
+      "file": "pforge-mcp/update-check.mjs",
+      "deadExports": [
+        "cachePath",
+        "compareVersions",
+        "writeFreshCache"
+      ],
+      "totalExports": 6
+    },
+    {
+      "file": "pforge-mcp/crucible-draft.mjs",
+      "deadExports": [
+        "MANDATORY_BLOCKS",
+        "synthesizeSliceBlock"
+      ],
+      "totalExports": 4
+    },
+    {
+      "file": "pforge-mcp/dashboard/anvil-lattice.mjs",
+      "deadExports": [
+        "renderAnvilCard",
+        "renderLatticeCard"
+      ],
+      "totalExports": 2
+    },
+    {
+      "file": "pforge-mcp/dashboard/team-dashboard.mjs",
+      "deadExports": [
+        "aggregateTeamActivity",
+        "detectConflictRisk"
+      ],
+      "totalExports": 3
+    },
+    {
+      "file": "pforge-mcp/digest/render.mjs",
+      "deadExports": [
+        "renderJson",
+        "renderMarkdown"
+      ],
+      "totalExports": 2
+    },
+    {
+      "file": "pforge-mcp/otel-init.mjs",
+      "deadExports": [
+        "initOtel",
+        "isOtelEnabled"
+      ],
+      "totalExports": 2
+    },
+    {
+      "file": "pforge-mcp/patterns/detectors/model-failure-rate-by-complexity.mjs",
+      "deadExports": [
+        "buildModelStats",
+        "detect"
+      ],
+      "totalExports": 2
+    },
+    {
+      "file": "pforge-mcp/tempering/scanners/flakiness.mjs",
+      "deadExports": [
+        "FLAKINESS_DEFAULTS",
+        "runFlakinessScan"
+      ],
+      "totalExports": 2
+    },
+    {
+      "file": "pforge-mcp/tempering/scanners/load-stress.mjs",
+      "deadExports": [
+        "LOAD_DEFAULTS",
+        "runLoadStressScan"
+      ],
+      "totalExports": 2
+    },
+    {
+      "file": "pforge-mcp/tempering/scanners/mutation.mjs",
+      "deadExports": [
+        "MUTATION_DEFAULTS",
+        "runMutationScan"
+      ],
+      "totalExports": 2
+    },
+    {
+      "file": "pforge-mcp/tempering/scanners/performance-budget.mjs",
+      "deadExports": [
+        "PERF_BUDGET_DEFAULTS",
+        "runPerformanceBudgetScan"
+      ],
+      "totalExports": 2
+    },
+    {
+      "file": "pforge-mcp/tempering/scheduling.mjs",
+      "deadExports": [
+        "isCriticalPathTouched",
+        "isNightlyWindow"
+      ],
+      "totalExports": 3
+    },
+    {
+      "file": "pforge-mcp/testbed/scenarios/index.mjs",
+      "deadExports": [
+        "REGISTERED_SCENARIOS",
+        "memoryUpgradeE2E"
+      ],
+      "totalExports": 2
+    },
+    {
+      "file": "pforge-mcp/timeline/core.mjs",
+      "deadExports": [
+        "clearTimelineCache",
+        "matchEventGlob"
+      ],
+      "totalExports": 3
+    },
+    {
+      "file": "pforge-master/src/mcp-client.mjs",
+      "deadExports": [
+        "BASE_TOOL_COUNT_MIN",
+        "McpClient"
+      ],
+      "totalExports": 3
+    },
+    {
+      "file": "pforge-master/src/observer-budget.mjs",
+      "deadExports": [
+        "BUDGET_STATE_FILE",
+        "DEFAULT_BUDGET_STATE"
+      ],
+      "totalExports": 6
+    },
+    {
+      "file": "pforge-master/src/observer-prompt.mjs",
+      "deadExports": [
+        "OBSERVER_SYSTEM_PROMPT",
+        "formatBatchMessage"
+      ],
+      "totalExports": 3
+    },
+    {
+      "file": "pforge-master/src/providers/openai-tools.mjs",
+      "deadExports": [
+        "PROVIDER_NAME",
+        "sendTurn"
+      ],
+      "totalExports": 5
+    },
+    {
+      "file": "pforge-mcp/crucible-enforce.mjs",
+      "deadExports": [
+        "manualImportLogPath"
+      ],
+      "totalExports": 7
+    },
+    {
+      "file": "pforge-mcp/crucible-migrate.mjs",
+      "deadExports": [
+        "grandfatherExistingPlans"
+      ],
+      "totalExports": 1
+    },
+    {
+      "file": "pforge-mcp/crucible-store.mjs",
+      "deadExports": [
+        "_deleteSmeltForTest"
+      ],
+      "totalExports": 6
+    },
+    {
+      "file": "pforge-mcp/dashboard/github-readiness-widget.mjs",
+      "deadExports": [
+        "renderReadinessWidget"
+      ],
+      "totalExports": 1
+    },
+    {
+      "file": "pforge-mcp/dashboard/team-activity.mjs",
+      "deadExports": [
+        "renderTeamActivityPanel"
+      ],
+      "totalExports": 1
+    },
+    {
+      "file": "pforge-mcp/digest/aggregator.mjs",
+      "deadExports": [
+        "buildDigest"
+      ],
+      "totalExports": 1
+    },
+    {
+      "file": "pforge-mcp/forge-master-routes.mjs",
+      "deadExports": [
+        "getForgeMasterCapabilitiesSummary"
+      ],
+      "totalExports": 2
+    },
+    {
+      "file": "pforge-mcp/forge-tools/hotspot.mjs",
+      "deadExports": [
+        "augmentHotspots"
+      ],
+      "totalExports": 1
+    },
+    {
+      "file": "pforge-mcp/forge-tools/regression-guard.mjs",
+      "deadExports": [
+        "computeBlastRadius"
+      ],
+      "totalExports": 1
+    },
+    {
+      "file": "pforge-mcp/foundry-quota.mjs",
+      "deadExports": [
+        "quotaCacheSet"
+      ],
+      "totalExports": 4
+    },
+    {
+      "file": "pforge-mcp/hub.mjs",
+      "deadExports": [
+        "Hub"
+      ],
+      "totalExports": 3
+    },
+    {
+      "file": "pforge-mcp/notifications/webhook-adapter.mjs",
+      "deadExports": [
+        "webhookAdapter"
+      ],
+      "totalExports": 1
+    },
+    {
+      "file": "pforge-mcp/openbrain-replay.mjs",
+      "deadExports": [
+        "ROUND_TRIP_PROBE_PHRASE"
+      ],
+      "totalExports": 8
+    },
+    {
+      "file": "pforge-mcp/patterns/registry.mjs",
+      "deadExports": [
+        "loadDetectors"
+      ],
+      "totalExports": 2
+    },
+    {
+      "file": "pforge-mcp/secrets.mjs",
+      "deadExports": [
+        "KNOWN_SECRETS"
+      ],
+      "totalExports": 2
+    },
+    {
+      "file": "pforge-mcp/team-activity.mjs",
+      "deadExports": [
+        "getOperator"
+      ],
+      "totalExports": 3
+    },
+    {
+      "file": "pforge-mcp/tempering/adapters.mjs",
+      "deadExports": [
+        "STACK_ADAPTER_PATHS"
+      ],
+      "totalExports": 4
+    },
+    {
+      "file": "pforge-mcp/tempering/auto-activate.mjs",
+      "deadExports": [
+        "AUDIT_DEFAULTS"
+      ],
+      "totalExports": 4
+    },
+    {
+      "file": "pforge-mcp/tempering/baselines.mjs",
+      "deadExports": [
+        "listBaselines"
+      ],
+      "totalExports": 6
+    },
+    {
+      "file": "pforge-mcp/tempering/perf-history.mjs",
+      "deadExports": [
+        "getBaselineP95"
+      ],
+      "totalExports": 4
+    },
+    {
+      "file": "pforge-mcp/tempering/scanners/contract-graphql.mjs",
+      "deadExports": [
+        "extractRootFields"
+      ],
+      "totalExports": 2
+    },
+    {
+      "file": "pforge-mcp/tempering/scanners/contract.mjs",
+      "deadExports": [
+        "runContractScan"
+      ],
+      "totalExports": 1
+    },
+    {
+      "file": "pforge-mcp/tempering/scanners/visual-diff.mjs",
+      "deadExports": [
+        "runVisualDiffScan"
+      ],
+      "totalExports": 1
+    },
+    {
+      "file": "pforge-mcp/watcher.mjs",
+      "deadExports": [
+        "parseWindowMs"
+      ],
+      "totalExports": 2
+    },
+    {
+      "file": "pforge-mcp/workers/copilot-coding-agent.mjs",
+      "deadExports": [
+        "GhError"
+      ],
+      "totalExports": 6
+    },
+    {
+      "file": "pforge-master/src/__fixtures__/MockReasoningClient.mjs",
+      "deadExports": [
+        "MockReasoningClient"
+      ],
+      "totalExports": 1
+    }
+  ],
+  "notes": [
+    "Entry-point modules (server.mjs, *-cli.mjs, scripts/audit/*.mjs) are skipped.",
+    "Files consumed via `import * as ns` or `export * from` are skipped (all exports potentially used).",
+    "Dynamic `import()` and string-based requires are not tracked.",
+    "False positives possible for symbols consumed by external tools or via convention (route handlers, etc)."
+  ]
+}

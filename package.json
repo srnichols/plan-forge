@@ -11,6 +11,8 @@
     "test:mcp": "npm test --workspace=pforge-mcp",
     "test:master": "npm test --workspace=pforge-master",
     "smoke:forge-master": "FORGE_SMOKE=1 node scripts/smoke-forge-master.mjs",
+    "audit:full": "node scripts/audit/clean-code-review.mjs",
+    "audit:dep-boundaries": "node scripts/audit/dep-boundaries.mjs",
     "build:css": "tailwindcss -i docs/assets/tailwind.css -o docs/assets/tailwind.built.css --minify",
     "postbuild:css": "node -e \"const{createHash}=require('crypto'),fs=require('fs');const h=createHash('sha256').update(fs.readFileSync('docs/assets/tailwind.built.css')).digest('hex');fs.writeFileSync('docs/assets/tailwind.built.css.sha256',h);console.log('CSS hash updated:',h.slice(0,12)+'…');\""
   },

@@ -9,7 +9,7 @@
  * Config fields:
  *   webhookUrl: "${env:SLACK_WEBHOOK_URL}"
  */
-import { ERR_NOT_IMPLEMENTED } from "../../pforge-mcp/notifications/adapter-contract.mjs";
+import { ERR_NOT_IMPLEMENTED } from "../../pforge-sdk/src/notifications/adapter-contract.mjs";
 
 export const adapter = {
   name: "slack",

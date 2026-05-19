@@ -51,7 +51,7 @@ const EXCLUDED_DIRS = new Set(['node_modules', '.forge', '.git', 'dist', 'archiv
 const PACKAGE_RULES = {
   'scripts':       { 'pforge-mcp': true,  'pforge-master': true,  'pforge-sdk': true,  'extensions': true  },
   'pforge-master': { 'pforge-mcp': 'whitelist', 'pforge-sdk': true, 'pforge-master': true, 'scripts': false, 'extensions': false },
-  'pforge-mcp':    { 'pforge-master': false, 'pforge-sdk': true, 'pforge-mcp': true, 'scripts': false, 'extensions': false },
+  'pforge-mcp':    { 'pforge-master': 'whitelist', 'pforge-sdk': true, 'pforge-mcp': true, 'scripts': false, 'extensions': false },
   'pforge-sdk':    { 'pforge-mcp': false, 'pforge-master': false, 'pforge-sdk': true, 'scripts': false, 'extensions': false },
   'extensions':    { 'pforge-mcp': false, 'pforge-master': false, 'pforge-sdk': true, 'extensions': true, 'scripts': false },
 };

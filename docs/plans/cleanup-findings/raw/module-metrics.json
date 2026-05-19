@@ -1,9 +1,9 @@
 [
   {
     "file": "pforge-mcp/orchestrator.mjs",
-    "loc": 13933,
+    "loc": 13941,
     "blank": 1112,
-    "comment": 1338,
+    "comment": 1345,
     "functions": 299,
     "g14Severity": "high-severity"
   },
@@ -1386,14 +1386,6 @@
   {
     "file": "pforge-mcp/secrets.mjs",
     "loc": 51,
-    "blank": 3,
-    "comment": 0,
-    "functions": 1,
-    "g14Severity": null
-  },
-  {
-    "file": "pforge-mcp/notifications/adapter-contract.mjs",
-    "loc": 48,
     "blank": 3,
     "comment": 0,
     "functions": 1,

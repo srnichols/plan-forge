@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-05-19T16:35:42.911Z",
+  "generatedAt": "2026-05-19T16:46:54.906Z",
   "enumsSource": "pforge-mcp/enums.mjs",
   "enumsScanned": {
     "HOOK_PASCAL": {
@@ -12,7 +12,7 @@
   "extendedScan": false,
   "includeTests": false,
   "counts": {
-    "filesScanned": 208,
+    "filesScanned": 207,
     "filesWithDrift": 11,
     "warnings": 6,
     "info": 23,

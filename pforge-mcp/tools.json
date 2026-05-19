@@ -439,7 +439,7 @@
     ],
     "cost": "low",
     "maxConcurrent": 10,
-    "addedIn": "3.7.0",
+    "addedIn": "3.6.3",
     "prerequisites": [
       "git initialized"
     ],
@@ -763,7 +763,7 @@
   },
   {
     "name": "forge_run_plan",
-    "description": "Execute a hardened plan — spawn CLI workers for each slice, validate at every boundary, track tokens. Supports Full Auto (gh copilot CLI) and Assisted (human + automated gates) modes. Use --estimate for cost prediction without executing. To skip Crucible enforcement pass manualImport:true.",
+    "description": "Execute a hardened plan — spawn CLI workers for each slice, validate at every boundary, track tokens. Supports Full Auto (gh copilot CLI) and Assisted (human + automated gates) modes. Use --estimate for cost prediction without executing.",
     "inputSchema": {
       "type": "object",
       "properties": {
@@ -885,6 +885,15 @@
         }
       },
       "config": ".forge.json → quorum { enabled, auto, threshold, models[], reviewerModel, dryRunTimeout }"
+    },
+    "guardrails": {
+      "preCommitChain": "Before each slice commit, PreCommit.mjs runs hooks.preCommit.chain entries in order. Built-ins start with master-branch-reject and diff-classify; the first non-zero exit aborts the commit.",
+      "planFrontmatter": {
+        "network.allowed": "Optional outbound host allowlist. When present, run-plan starts the in-process proxy logger and records contacted hosts per slice. Current default is log-only mode via PFORGE_NETWORK_LOG_ONLY=1.",
+        "lockHash": "SHA-256 hash over the hardened plan body. If the plan text drifts, run-plan aborts with lock-hash-mismatch rather than executing a stale contract.",
+        "tools.deny": "Optional MCP tool denylist stripped from the worker session during bridge initialization. Denied tools are invisible to the worker; attempted use surfaces tool-denied."
+      },
+      "healthAgent": "plan-health-auditor — read-only reviewer that inspects plan files, run history, memories, and bug patterns, then writes a markdown health report to .forge/health/latest.md."
     },
     "errors": {
       "PLAN_NOT_FOUND": {
@@ -1363,6 +1372,11 @@
       "<targetPath>/.forge/runs/<runId>/slice-*.json",
       "<targetPath>/.forge/runs/<runId>/summary.json"
     ],
+    "modes": {
+      "snapshot": "Snapshot the latest run in progress — returns counts, anomalies, diff cursor.",
+      "analyze": "Snapshot + frontier-model analysis for deeper recommendations.",
+      "cross-run": "Aggregate all historical .forge/runs/ summaries to detect recurring failure patterns. Returns cross-run.* anomaly codes (recurring-gate-failure, retry-rate-spike, cost-anomaly-trend, slice-timeout-cluster). Accepts optional crossRunWindow (e.g. '7d', '14d') to limit the time window."
+    },
     "sideEffects": [
       "appends to watcher's own .forge/watch-history.jsonl (NEVER target's)",
       "may emit watch-snapshot-completed/watch-anomaly-detected/watch-advice-generated hub events",
@@ -1396,6 +1410,32 @@
         "anomalies": [],
         "recommendations": [],
         "cursor": "2025-04-17T12:34:56.789Z"
+      }
+    },
+    "crossRunExample": {
+      "input": {
+        "targetPath": "E:/GitHub/Rummag",
+        "mode": "cross-run",
+        "crossRunWindow": "14d"
+      },
+      "output": {
+        "ok": true,
+        "mode": "cross-run",
+        "runsScanned": 8,
+        "anomalies": [
+          {
+            "code": "cross-run.recurring-gate-failure",
+            "severity": "error",
+            "sliceId": "slice-3",
+            "occurrences": 3
+          }
+        ],
+        "recommendations": [
+          {
+            "code": "cross-run.recurring-gate-failure",
+            "action": "Inspect gate for slice-3 across runs"
+          }
+        ]
       }
     }
   },
@@ -2406,45 +2446,26 @@
     "name": "forge_tempering_run",
     "description": "Tempering execution harness — runs the enabled test scanners (unit, integration, UI/Playwright, and API contract/OpenAPI/GraphQL) through each stack's preset adapter (typescript/dotnet/python/go/java/rust; php/swift/azure-iac stub until extension). Enforces config.runtimeBudgets with SIGTERM→SIGKILL, writes .forge/tempering/run-<ts>.json and .forge/tempering/artifacts/<runId>/contract/report.json, emits tempering-run-started / tempering-run-scanner-started / tempering-run-scanner-completed / tempering-run-completed hub events. USE FOR: post-slice verification, pre-deploy gates, CI adapters. Forbidden: does NOT edit source, does NOT create bugs (that lands in TEMPER-06), does NOT recurse into plan-forge itself.",
     "inputSchema": {
-      "type": "object",
-      "properties": {
-        "path": {
-          "type": "string",
-          "description": "Project directory (default: current)"
-        },
-        "correlationId": {
-          "type": "string",
-          "description": "Optional correlation id to thread this run to an upstream smelt / plan / slice. When omitted, one is minted."
-        },
-        "sliceRef": {
-          "type": "object",
-          "description": "Optional plan+slice context. Surfaced in the run record and hub events so dashboards can group runs by slice.",
-          "properties": {
-            "plan": {
-              "type": "string"
-            },
-            "slice": {
-              "type": "string"
-            }
+      "objective": {
+        "type": "object",
+        "description": "Optional objective guard (A7 — Worker Guardrails). When provided, the harness runs `command` before and after the scanner suite and accepts the candidate only if the metric moves in the `acceptIf` direction. Non-zero exit or non-numeric stdout fails fast. Worker never sees the baseline number.",
+        "properties": {
+          "command": {
+            "type": "string",
+            "description": "Shell command that prints a single numeric value on stdout. Non-zero exit = rejected."
+          },
+          "acceptIf": {
+            "type": "string",
+            "enum": [
+              "greater",
+              "less"
+            ],
+            "description": "Accept when post-run metric is greater (default) or less than the baseline."
           }
         },
-        "lastGreenSha": {
-          "type": "string",
-          "description": "Git SHA of the most recent green run; when present and config.execution.regressionFirst is true, the adapter is hinted to run tests covering changed files first."
-        },
-        "fullMutation": {
-          "type": "boolean",
-          "description": "Force mutation scanner regardless of scheduling gate. Default: false."
-        },
-        "trigger": {
-          "type": "string",
-          "enum": [
-            "post-slice",
-            "nightly",
-            "manual"
-          ],
-          "description": "Trigger context for scheduling decisions (mutation scanner gating). Default: manual."
-        }
+        "required": [
+          "command"
+        ]
       }
     },
     "intent": [
@@ -2491,6 +2512,14 @@
       "NO_ADAPTER": {
         "message": "No preset adapter for detected stack",
         "recovery": "Install the matching preset or extend presets/<stack>/tempering-adapter.mjs"
+      },
+      "OBJECTIVE_BASELINE_FAILED": {
+        "message": "Objective command failed at baseline capture",
+        "recovery": "Ensure command exits 0 and prints a single numeric line"
+      },
+      "OBJECTIVE_BASELINE_NON_NUMERIC": {
+        "message": "Objective command stdout was not a number",
+        "recovery": "Command must print exactly one numeric value (e.g., 87.5)"
       }
     },
     "example": {
@@ -2498,6 +2527,10 @@
         "sliceRef": {
           "plan": "Phase-FOO.md",
           "slice": "04.1"
+        },
+        "objective": {
+          "command": "node coverage-pct.js",
+          "acceptIf": "greater"
         }
       },
       "output": {
@@ -2511,20 +2544,14 @@
             "pass": 412,
             "fail": 0,
             "skipped": 1
-          },
-          {
-            "scanner": "contract",
-            "pass": 8,
-            "fail": 0,
-            "violations": []
-          },
-          {
-            "scanner": "visual-diff",
-            "verdict": "pass",
-            "pass": 3,
-            "fail": 0
           }
-        ]
+        ],
+        "objective": {
+          "accepted": true,
+          "blocked": false,
+          "reason": "objective-met",
+          "acceptIf": "greater"
+        }
       }
     }
   },
@@ -4352,7 +4379,7 @@
     ],
     "cost": "low",
     "maxConcurrent": 10,
-    "addedIn": "3.7.0",
+    "addedIn": "3.6.3",
     "prerequisites": [
       "git initialized"
     ],

@@ -21,6 +21,7 @@ find_repo_root() {
 }
 
 REPO_ROOT="$(find_repo_root)"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 # ─── Helpers ───────────────────────────────────────────────────────────
 print_manual_steps() {
@@ -2889,9 +2890,27 @@ cmd_doctor() {
     # 4f. LIFECYCLE HOOKS
     # ═══════════════════════════════════════════════════════════════
     local hooks_dir="$REPO_ROOT/.github/hooks"
-    if [ -d "$hooks_dir" ]; then
+    local hooks_json="$hooks_dir/plan-forge.json"
+    local forge_config="$REPO_ROOT/.forge.json"
+    local hook_config_present=0 hooks_json_present=0
+    if [ -f "$forge_config" ]; then
+        local hooks_cfg_raw
+        hooks_cfg_raw="$(_json_field "$forge_config" "hooks")"
+        if [ -n "$hooks_cfg_raw" ] && [ "$hooks_cfg_raw" != "false" ] && [ "$hooks_cfg_raw" != "null" ]; then
+            hook_config_present=1
+        fi
+    fi
+    if [ -f "$hooks_json" ]; then
+        local hooks_json_raw
+        hooks_json_raw="$(_json_field "$hooks_json" "hooks")"
+        if [ -n "$hooks_json_raw" ] && [ "$hooks_json_raw" != "false" ] && [ "$hooks_json_raw" != "null" ]; then
+            hooks_json_present=1
+        fi
+    fi
+    if [ -d "$hooks_dir" ] || [ $hook_config_present -eq 1 ] || [ $hooks_json_present -eq 1 ]; then
         echo "Lifecycle Hooks:"
         local enums_cli="$REPO_ROOT/pforge-mcp/bin/enums-cli.mjs"
+<<<<<<< Updated upstream
         local expected_hooks=()
         if command -v node >/dev/null 2>&1 && [ -f "$enums_cli" ]; then
             mapfile -t expected_hooks < <(node "$enums_cli" --enum HOOK_PASCAL 2>/dev/null)
@@ -2907,18 +2926,35 @@ cmd_doctor() {
                 hook_cfg_keys["$key"]="$val"
             done < <(node "$enums_cli" --enum HOOK_NAMES --format json 2>/dev/null | jq -r 'to_entries | .[] | .key + "=" + .value' 2>/dev/null)
         fi
+=======
+        [ ! -f "$enums_cli" ] && enums_cli="$SCRIPT_DIR/pforge-mcp/bin/enums-cli.mjs"
+        local core_hooks=() liveguard_hooks=() expected_hooks=()
+        mapfile -t core_hooks < <(node "$enums_cli" --enum HOOK_CATEGORY.session 2>/dev/null)
+        mapfile -t liveguard_hooks < <(node "$enums_cli" --enum HOOK_CATEGORY.liveGuard 2>/dev/null)
+        mapfile -t expected_hooks < <(node "$enums_cli" --enum HOOK_PASCAL 2>/dev/null)
+>>>>>>> Stashed changes
         local hook_count=0 hook_missing=""
-        # plan-forge.json (shipped by `pforge update` from templates/) declares core hooks in PascalCase.
-        local hooks_json="$hooks_dir/plan-forge.json"
         for hook in "${expected_hooks[@]}"; do
-            local found=0
-            # Source 1: hook file matching the name (e.g. SessionStart.md, SessionStart.ps1)
-            if ls "$hooks_dir"/*"$hook"* >/dev/null 2>&1; then
+            local found=0 cfg_key cfg_val hook_json_val
+            cfg_key="${hook,}${hook:1}"
+            if [ -d "$hooks_dir" ] && find "$hooks_dir" -type f -name "*$hook*" -print -quit 2>/dev/null | grep -q .; then
                 found=1
             fi
+<<<<<<< Updated upstream
             # Source 2: .github/hooks/plan-forge.json declares this hook (PascalCase key)
             if [ $found -eq 0 ] && [ -f "$hooks_json" ] && command -v jq >/dev/null 2>&1; then
                 if jq -e ".hooks.\"$hook\"" "$hooks_json" >/dev/null 2>&1; then
+=======
+            if [ $found -eq 0 ] && [ $hook_config_present -eq 1 ]; then
+                cfg_val="$(_json_field "$forge_config" "hooks.$cfg_key")"
+                if [ -n "$cfg_val" ] && [ "$cfg_val" != "false" ] && [ "$cfg_val" != "null" ]; then
+                    found=1
+                fi
+            fi
+            if [ $found -eq 0 ] && [ $hooks_json_present -eq 1 ]; then
+                hook_json_val="$(_json_field "$hooks_json" "hooks.$hook")"
+                if [ -n "$hook_json_val" ] && [ "$hook_json_val" != "false" ] && [ "$hook_json_val" != "null" ]; then
+>>>>>>> Stashed changes
                     found=1
                 fi
             fi

@@ -1376,42 +1376,9 @@ async function _finalizeRunPlan({
     await _runApprovalGate(bridge, runId, summary);
   }
 
-  // CI/CD Integration Hook — trigger workflow after successful run
-  if (allPassed && summary.status !== "approval-rejected") {
-    const ciConfig = loadCiConfig(cwd);
-    if (ciConfig.enabled && ciConfig.workflow) {
-      summary.ci = triggerCiWorkflow(ciConfig, eventBus);
-    }
-  }
+  _runPostRunHooks({ summary, allPassed, estimate, dryRun, results, cwd, bridge, eventBus, runId });
 
-  // Phase-39 Slice 7 — audit-loop activation hook (end-of-plan)
-  if (allPassed && !estimate && !dryRun) {
-    _runAuditDrainHook(summary, cwd, results, eventBus);
-  }
-
-  // Phase-39 Slice 1 — post-run auditor auto-invoke on failure
-  if (!estimate && !dryRun) {
-    _runPostAuditorHook(summary, cwd, allPassed, eventBus);
-  }
-
-  // Write summary
-  writeFileSync(resolve(runDir, "summary.json"), JSON.stringify(summary, null, 2));
-
-  // Phase 2: Append to cost history
-  if (summary.cost && summary.status !== "estimate" && summary.status !== "approval-rejected") {
-    appendCostHistory(cwd, summary);
-  }
-
-  // Emit run-completed — telemetry handler writes trace.json during this emit
-  eventBus.emit("run-completed", summary);
-  if (!abortSignal?.aborted) {
-    _recordActivitySafe(activitySummary, summary.status, cwd);
-  }
-
-  // v2.4: Write manifest + index + prune (AFTER trace.json is written by emit)
-  const manifest = writeManifest(runDir, runId, { ...summary, traceId: trace.traceId });
-  appendRunIndex(cwd, runId, manifest);
-  pruneRunHistory(cwd, loadMaxRunHistory(cwd));
+  _writeFinalRunArtifacts({ summary, runDir, runId, cwd, trace, eventBus, activitySummary, abortSignal });
 
   // OpenBrain: capture run summary + cost anomaly as thoughts.
   if (memoryEnabled) {
@@ -1582,26 +1549,9 @@ export async function runPlan(planPath, options = {}) {
   // eslint-disable-next-line no-console
   console.error(`[model] resolved=${effectiveModel} source=${modelSource}`);
 
-  // Zero-slice guard: loud-fail before any dispatch (Bug #124)
-  if (plan.slices.length === 0) {
-    return {
-      status: "failed",
-      error: "No slices found in plan — expected '### Slice N: …' headers (h2/h3/h4 accepted)",
-      code: "NO_SLICES",
-      planPath,
-    };
-  }
-
-  // Phase-WORKER-GUARDRAILS Slice 5 (A6): lockHash enforcement.
-  const lockHashFail = _checkLockHash(plan, planPath);
-  if (lockHashFail) return lockHashFail;
-
-  // Meta-bug #129 preflight: refuse to run a plan whose target release version
-  // already exists as a tag on origin.
-  if (!allowRetrograde) {
-    const collisionFail = _checkVersionCollision(planPath, cwd);
-    if (collisionFail) return collisionFail;
-  }
+  // Zero-slice / lockHash / version-collision preflight (post-parse)
+  const planPreflightFail = _runPlanPrePlanPreflight({ plan, planPath, cwd, allowRetrograde });
+  if (planPreflightFail) return planPreflightFail;
 
   // Estimation mode — return without executing
   if (estimate) {
@@ -1620,24 +1570,10 @@ export async function runPlan(planPath, options = {}) {
   });
   if (postExecFail) return postExecFail;
 
-  // Set up event bus with DI handler
-  const runDir = createRunDir(cwd, planPath);
-  const logHandler = new LogEventHandler(runDir);
-
-  // v2.4: Create trace context and telemetry handler
-  const trace = createTraceContext(planPath, { mode, model: effectiveModel, sliceCount: plan.slices.length });
-  const telemetryHandler = createTelemetryHandler(trace, runDir);
-
-  // Chain handlers: user-provided → telemetry → log → console progress
-  const isCliRun = !eventHandler; // If no custom handler, we're running from CLI — show progress on stdout
-  const combinedHandler = _buildCombinedEventHandler(telemetryHandler, eventHandler, logHandler, isCliRun);
-  const eventBus = new OrchestratorEventBus(combinedHandler);
-
-  // Issue #197 — Silent-death guard.
-  // When Node is launched in background mode on Windows without an attached
-  // console (Start-Process -FilePath 'node' -WindowStyle Hidden), the gh
-  // copilot CLI worker needs a console to initialize its progress reporter.
-  _setupSilentDeathGuard(eventBus, runDir);
+  // Set up event bus, run dir, telemetry, silent-death guard
+  const { runDir, trace, eventBus } = _setupRunInfrastructure({
+    planPath, cwd, mode, effectiveModel, plan, eventHandler,
+  });
 
   // Write run.json metadata
   const runMeta = _buildRunMeta({ planPath, trace, effectiveModel, modelRouting, mode, quorum, quorumPreset, plan });
@@ -1677,32 +1613,17 @@ export async function runPlan(planPath, options = {}) {
   // Phase FORGE-SHOP-06 Slice 06.2 — Gate check config for inter-slice validation
   const gateCheckConfig = hub ? loadGateCheckConfig(cwd) : null;
 
-  // Phase-33.1: Set PFORGE_DISABLE_TEMPERING env var before the slice loop when requested.
-  // Use try/finally to restore the prior value so in-process callers don't leak state.
-  const _priorDisableTempering = process.env.PFORGE_DISABLE_TEMPERING;
-  if (noTempering) {
-    process.env.PFORGE_DISABLE_TEMPERING = "1";
-  }
-
   // Phase-33.1: Pre-filter execution order for --only-slices.
   const executionOrder = _resolveExecutionOrder(plan, onlySlices);
 
-  let results;
-  try {
-    results = await scheduler.execute(
-      plan.dag.nodes,
-      executionOrder,
-      (slice) => _runPlanSliceCallback(slice, {
-        cwd, dryRunWorker, effectiveModel, modelRouting, mode, runDir, maxRetries,
-        memoryEnabled, projectName, planPath, quorumConfig, escalationChain, eventBus,
-        worker, _dispatchSlice, _pollPullRequest, planMeta: plan.meta,
-      }),
-      { abortSignal, resumeFrom: resumeFrom ? String(resumeFrom) : null, hub, gateCheckConfig },
-    );
-  } finally {
-    // Restore the prior value of PFORGE_DISABLE_TEMPERING regardless of outcome
-    _restoreDisableTempering(_priorDisableTempering);
-  }
+  const results = await _executeSlicesWithTempering({
+    plan, executionOrder, noTempering, scheduler, abortSignal, resumeFrom, hub, gateCheckConfig,
+    sliceCtx: {
+      cwd, dryRunWorker, effectiveModel, modelRouting, mode, runDir, maxRetries,
+      memoryEnabled, projectName, planPath, quorumConfig, escalationChain, eventBus,
+      worker, _dispatchSlice, _pollPullRequest, planMeta: plan.meta,
+    },
+  });
 
   return _finalizeRunPlan({
     results, plan, runMeta, runDir, planPath, cwd,

@@ -377,3 +377,6 @@ Idea 6 (objective tempering)        — now A7
   for backwards compatibility.
 - 2026-05-18: **Action list A1–A8 agreed.** Next pass: draft a plan for the
   A1 + A3 + A2 unit (highest-leverage first step). A4–A8 land independently.
+- 2026-05-18: **Phase-WORKER-GUARDRAILS-PLAN shipped.** All 11 slices (S0–S10)
+  complete. A1–A8 all landed. See `docs/plans/Phase-WORKER-GUARDRAILS-PLAN.md`
+  §"What actually shipped" for the full retro, commit SHAs, and gotchas.

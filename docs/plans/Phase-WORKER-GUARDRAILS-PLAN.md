@@ -767,3 +767,46 @@ All 18 Required Decisions are resolved \u2014 zero TBDs remain.
 - **Release-Slice Hardening**: N/A per decision #15 — this plan ships a MINOR version bump in S10 but does NOT create a git tag (release is a separate phase). Release-slice tag-collision and retrograde gates are not required.
 
 If a future linter version reclassifies any of the above warnings as errors, re-evaluate before resuming execution.
+
+---
+
+## What actually shipped
+
+> **Retro completed**: 2026-05-18 (Slice 11 — final slice)
+
+All 11 slices (S0–S10) shipped without requiring any plan amendments. The phase delivered every action in the agreed A1–A8 set plus the baseline harness (S0), full QA sweep (S9), and docs sweep (S10).
+
+### Shipped actions
+
+| Action | Slice | Commits | What landed |
+|--------|-------|---------|-------------|
+| **S0** baseline | S0 | `3c653a1` | Vitest baseline test harness capturing capabilities payload, plan-parse output, hook-deny behavior, and estimate baseline |
+| **A1** Forbidden-Actions matcher | S1 | `bf02aca` | Expanded matcher: glob patterns, directory prefixes, and `**Do NOT**` intent-line matching; strict superset of prior substring match |
+| **A3** PreCommit chain | S2 | `57a8c0d`, `0a7ea48` | PreCommit hook chain framework; master-branch reject promoted to first hard chain entry; chain protocol matches `{ blocked, reason }` JSON |
+| **A2** `forge_diff_classify` | S3 | `1cd0308` | New MCP tool wired into PreCommit chain; cheap-tier model; `high`/`critical` block, `medium` warn, `low` log; categories: leaked-secret, prompt-injection-echo, eval-exec-introduced, license-incompatible-paste, unexpected-network-call, large-binary-dump |
+| **A5** network allowlist | S4 | `320144b`, `749ca10` | `network.allowed` plan frontmatter field; in-process Node proxy logging hostnames to slice run log; log-only mode default (`PFORGE_NETWORK_LOG_ONLY=1`) |
+| **A6** `lockHash` | S5 | `a1bbb8c` | `lockHash` frontmatter field; orchestrator computes SHA-256 over slices + gates + scope contracts + forbidden actions at plan load; refuses run on mismatch; absent = backwards-compatible |
+| **A8** `tools.deny` | S6 | `2fe0baf` | `tools.deny` frontmatter field; MCP bridge strips denied tools at session init; denylist semantics (absent = empty = no effect); worker never sees denied tools |
+| **A7** `--objective` tempering | S7 | `cc1a540` | `--objective <cmd> --accept-if greater\|less` flag on `forge_tempering_run`; baseline captured before worker proposes; numeric stdout; non-zero exit = fail |
+| **A4** Plan Health Auditor | S8 | `7d3e557` | `.github/agents/plan-health-auditor.agent.md`; read-only tool allowlist; output to `.forge/health/latest.md` + `.forge/health/<ISO-date>.md`; invoked via `forge_master_ask @plan-health-auditor` |
+| **S9** full QA | S9 | `e040f6f` | All new test suites green together: `diff-classify.test.mjs`, `precommit-chain.test.mjs`, `plan-frontmatter-extensions.test.mjs`, `tempering-objective.test.mjs`, `forbidden-matcher.test.mjs` |
+| **S10** docs sweep | S10 | `3cf6866`, `46f921a` | `forge_capabilities` payload updated; `llms.txt` (both); manual HTML pages (`customization.html`, `forge-json-reference.html`, `environment-variables-reference.html`, `errors-and-exit-codes.html`, `glossary.html`, `book-index.html`); `CHANGELOG.md` entries for A1–A8; MINOR version bump |
+
+### What was NOT shipped (by design)
+
+- A5 enforce mode — log-only this phase as planned; flip deferred to a later phase once real traffic data is available
+- A6 `lockHash` auto-insertion in Step-2 hardener — deferred; the field can be hand-added when re-hardening a plan
+- Dashboard surfacing for A4 health report — markdown file only this phase
+- A7 objective-loop budget controls — `--max-iterations` and cost-cap deferred; flag ships in basic form
+- Any new top-level CLI verb — all behavior reached users through existing surfaces as required
+
+### Surprises and gotchas
+
+- S2 required two commits to resolve a hook entry-point conflict — the first commit (`57a8c0d`) landed the chain runner framework; the second (`0a7ea48`) patched an em-dash editorial pass collision that had crept in from a parallel manual docs run. No plan amendment was needed.
+- S4 picked up a duplicate commit (`320144b` then `749ca10`) due to a docs/manual hero-image fix landing between the two attempts. The second commit is canonical.
+- Gate linter's `vitest-direct-node` false positive (flagged during hardening audit) did not surface as a real issue during execution — every vitest gate used the `bash -c "cd pforge-mcp && ..."` preferred pattern correctly.
+- No slice violated the 500 net LOC soft cap except S10 (docs sweep), which was expected and called out in the plan.
+
+### Reference
+
+See `docs/research/gh-aw-agent-factory-comparison.md` for the full A1–A8 action list, dependency graph, and sequencing rationale that drove this phase.

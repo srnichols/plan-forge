@@ -100,7 +100,7 @@ but the image appears to be a image/jpeg image</code></pre>
   -H "Content-Type: application/json" \
   -d '{
     "prompt": "dark fantasy forge workshop panoramic, amber firelight",
-    "outputPath": "docs/manual/assets/chapter-heroes/ch1-hero.jpg"
+    "outputPath": "docs/manual/assets/chapter-heroes/ch1-hero.webp"
   }'</code></pre>
       </div>
 
@@ -109,7 +109,7 @@ but the image appears to be a image/jpeg image</code></pre>
         <pre><code>node -e "
   import('./pforge-mcp/orchestrator.mjs').then(m =>
     m.generateImage('dark fantasy forge workshop, amber firelight', {
-      outputPath: 'docs/manual/assets/chapter-heroes/ch1-hero.jpg',
+      outputPath: 'docs/manual/assets/chapter-heroes/ch1-hero.webp',
       model: 'grok-imagine-image'
     }).then(r => console.log(JSON.stringify(r, null, 2)))
   )

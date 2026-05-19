@@ -244,14 +244,15 @@
           </table>
         </div>
 
-        <h3 id="hooks-preCommit"><code>hooks.preCommit.chain</code></h3>
-        <p>An ordered list of checks that run synchronously before every <code>git commit</code> during <code>pforge run-plan</code>. Each entry is a built-in tool name (<code>forge_diff_classify</code>, <code>lock-hash-verify</code>, <code>tool-denylist-check</code>) or an absolute path to a custom Node/shell script. Any entry that exits non-zero aborts the commit and emits the matching named error code. The base <code>PreCommit</code> guard (master-branch check) always runs first and cannot be removed from the chain.</p>
+        <h3 id="hooks-preCommit"><code>hooks.preCommit.chain[]</code></h3>
+        <p>Ordered commit-time validation chain executed by <code>.github/hooks/PreCommit.mjs</code> during <code>pforge run-plan</code>. The built-in entries are <code>master-branch-reject</code> first and <code>diff-classify</code> second; the first non-zero exit stops the commit.</p>
         <div class="overflow-x-auto mb-6">
           <table class="manual-table">
             <thead><tr><th>Key</th><th>Type</th><th>Default</th><th>Example</th><th>Change impact</th></tr></thead>
             <tbody>
-              <tr><td><code>hooks.preCommit.chain</code></td><td>array&lt;string&gt;</td><td><code>[]</code></td><td><code>["forge_diff_classify", "lock-hash-verify"]</code></td><td>Ordered list of checks appended after the base <code>PreCommit</code> guard. Built-in values: <code>forge_diff_classify</code> (blocks on diff classifier verdict), <code>lock-hash-verify</code> (blocks on <code>lock-hash-mismatch</code>), <code>tool-denylist-check</code> (blocks on <code>tool-denied</code>). Custom scripts receive the staged diff on stdin.</td></tr>
-              <tr><td><code>hooks.preCommit.enabled</code></td><td>boolean</td><td><code>true</code></td><td><code>false</code></td><td>Master switch for the entire PreCommit chain (including the base master-branch guard). Disable only when running in an environment where the guard cannot be honored (e.g., detached HEAD CI).</td></tr>
+              <tr><td><code>hooks.preCommit.chain</code></td><td>array</td><td><code>[{ name: "master-branch-reject", ... }, { name: "diff-classify", ... }]</code></td><td><code>[{ "name": "custom-check", "command": "node scripts/check.js" }]</code></td><td>Defines the ordered PreCommit chain. Entries run sequentially; first non-zero exit aborts the commit.</td></tr>
+              <tr><td><code>hooks.preCommit.chain[].name</code></td><td>string</td><td><code>"master-branch-reject"</code> / <code>"diff-classify"</code></td><td><code>"license-scan"</code></td><td>Stable display name for logs and diagnostics. The first built-in entry is <code>master-branch-reject</code>; the second is <code>diff-classify</code>.</td></tr>
+              <tr><td><code>hooks.preCommit.chain[].command</code></td><td>string</td><td><code>node .github/hooks/PreCommit.mjs &lt;name&gt;</code></td><td><code>node scripts/license-scan.mjs</code></td><td>Command executed for that chain entry. Use a deterministic command that exits non-zero on block.</td></tr>
             </tbody>
           </table>
         </div>

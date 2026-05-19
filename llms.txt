@@ -30,7 +30,7 @@ Plan Forge is an open-source framework that gives AI coding agents (Copilot, Cla
 - Forge Intelligence — self-recursive improvement: auto-tune escalation chains from model performance, cost estimate calibration from historical actuals, adaptive quorum thresholds, slice auto-split advisories.
 - LiveGuard Intelligence — recurring incident detection (auto-escalate systemic), fix proposal outcome tracking, hotspot test priority, Project Health DNA for decay detection.
 - OpenBrain integration — auto-capture findings to persistent memory; pipeline prompts search memory before acting.
-- Worker Guardrails (v3.7+) — `forge_diff_classify` (diff classifier), `plan-health-auditor` agent, `lockHash` plan frontmatter, `tools.deny` denylist, `network.allowed` allowlist, PreCommit chain, `--objective` flag.
+- Worker Guardrails (v3.6.3+) — `forge_diff_classify` (diff classifier), `plan-health-auditor` agent, `lockHash` plan frontmatter, `tools.deny` tool-denylist frontmatter, `network.allowed` allowlist frontmatter, PreCommit chain (`hooks.preCommit.chain[]`), `--objective` mode on `forge_tempering_run`.
 - ~12 reviewer agents (6-7 stack-specific + 5 pipeline + 1 classifier-reviewer + 1 plan-health-auditor)
 - 16+ slash command skills (including /audit-loop, /health-check, /forge-execute, /security-audit)
 - 16-18 auto-loading instruction files per preset

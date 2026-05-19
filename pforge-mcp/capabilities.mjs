@@ -1187,7 +1187,7 @@ export const TOOL_METADATA = {
     aliases: ["classify-diff", "diff-scan", "commit-safety-check"],
     cost: "low",
     maxConcurrent: 10,
-    addedIn: "3.7.0",
+    addedIn: "3.6.3",
     prerequisites: ["git initialized"],
     produces: [],
     consumes: ["git diff output"],

@@ -482,7 +482,7 @@ Three hooks configured in `.forge.json` `hooks.*` block. Specs in `.github/hooks
 | **PreDeploy** | File write to `deploy/**`, `Dockerfile*`, `*.tf`; CLI command `docker push`, `git push`, `azd up` | Runs `forge_secret_scan`; blocks on findings (hard stop). Runs `forge_env_diff`; warns on missing keys. | Hard block on secrets; advisory on env gaps |
 | **PostSlice** | `git commit` with conventional commit message (`feat\|fix\|refactor\|...`) | Reads drift history; injects amber advisory (delta >5) or red warning (delta >10 or score <70) | Never blocks |
 | **PreAgentHandoff** | SessionStart with dirty branch, active plan, or `--resume-from` flag | Injects LiveGuard context header; runs regression guard on dirty files; POSTs snapshot to OpenClaw (fire-and-forget, 5s timeout). Skipped when `PFORGE_QUORUM_TURN` env var is set. | Never blocks |
-| **PreCommit chain** | `git commit` during `pforge run-plan` | Runs all scripts listed in `hooks.preCommit.chain` in order — e.g. `forge_diff_classify`, lock-hash verification, tool-denylist check. Each script can exit non-zero to abort the commit. | Yes (any chain member can block) |
+| **PreCommit chain** | `git commit` during `pforge run-plan` | Runs all entries listed in `hooks.preCommit.chain[]` in order. The built-in chain starts with `master-branch-reject` and `diff-classify`; any chain member can exit non-zero to abort the commit. | Yes (any chain member can block) |
 
 Config (`.forge.json`):
 ```json
@@ -504,7 +504,7 @@ Config (`.forge.json`):
 }
 ```
 
-Worker Guardrails configuration reference (v3.7+):
+Worker Guardrails configuration reference (v3.6.3):
 
 | Key | Purpose |
 |-----|---------|

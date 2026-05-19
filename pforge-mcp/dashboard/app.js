@@ -7149,6 +7149,42 @@ async function loadGithubMetrics() {
       teamEl.innerHTML = window.githubMetricsRenderPerTeamTable?.([]) ?? "";
     }
 
+    // Personal Mode: engage when org mode produced no metrics data
+    if (!metrics.length) {
+      try {
+        const personalBody = await fetch(`${API_BASE}/api/github-personal`).then((r) => r.json());
+        const { user = null, repo = null, copilotSignal = null } = personalBody;
+
+        // Show personal cards, hide org-mode panels
+        const orgContainers = ["gm-adoption-panel", "gm-orchestration-panel", "gm-per-team-panel"];
+        const personalContainers = ["gm-personal-account-card", "gm-personal-repo-card", "gm-personal-ai-card"];
+        orgContainers.forEach((id) => document.getElementById(id)?.classList.add("hidden"));
+        personalContainers.forEach((id) => document.getElementById(id)?.classList.remove("hidden"));
+
+        const accountEl = document.getElementById("gm-personal-account-card");
+        if (accountEl) {
+          accountEl.innerHTML = window.githubPersonalRenderAccountCard?.(user) ?? "";
+        }
+
+        const repoEl = document.getElementById("gm-personal-repo-card");
+        if (repoEl) {
+          repoEl.innerHTML = window.githubPersonalRenderRepoActivityCard?.(repo) ?? "";
+        }
+
+        const aiEl = document.getElementById("gm-personal-ai-card");
+        if (aiEl) {
+          aiEl.innerHTML = window.githubPersonalRenderAiAssistCard?.(copilotSignal) ?? "";
+        }
+
+        if (!user && !repo && !copilotSignal) {
+          const reason = personalBody.errors?.user === "auth" ? "auth" : "no-remote";
+          if (accountEl) {
+            accountEl.innerHTML = window.githubPersonalRenderPersonalEmptyState?.({ reason }) ?? "";
+          }
+        }
+      } catch { /* personal-mode fetch failure — suppress silently */ }
+    }
+
     state.githubMetrics.lastFetch = Date.now();
   } catch (e) {
     if (errEl) {

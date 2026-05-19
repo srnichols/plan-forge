@@ -1914,7 +1914,7 @@
       <div class="mb-4 flex items-center justify-between">
         <div>
           <h2 class="text-lg font-semibold text-green-400">📊 GitHub × Plan-Forge</h2>
-          <p class="text-xs text-gray-500">Copilot adoption and orchestration metrics for your organization.</p>
+          <p class="text-xs text-gray-500">Copilot adoption (org mode) or your account &amp; repo activity (personal mode).</p>
         </div>
         <div class="flex items-center gap-2">
           <input id="gm-org-input" type="text" placeholder="org-name"
@@ -1927,6 +1927,9 @@
       <div id="gm-adoption-panel" class="mb-4"></div>
       <div id="gm-orchestration-panel" class="mb-4"></div>
       <div id="gm-per-team-panel" class="mb-4"></div>
+      <div id="gm-personal-account-card" class="mb-4 hidden"></div>
+      <div id="gm-personal-repo-card" class="mb-4 hidden"></div>
+      <div id="gm-personal-ai-card" class="mb-4 hidden"></div>
       <div id="gm-error" class="hidden text-red-400 text-xs text-center mt-2"></div>
     </section>
     <!-- Team Dashboard Tab (Phase-TEAM-DASHBOARD, v3.4.0) -->
@@ -2327,6 +2330,7 @@
   <script src="live-session.js"></script>
   <script src="forge-master.js" type="module"></script>
   <script src="github-metrics-tab.mjs" type="module"></script>
+  <script src="github-personal-tab.mjs" type="module"></script>
   <script src="github-readiness-widget.mjs" type="module"></script>
   <script src="anvil-lattice.mjs" type="module"></script>
 </body>

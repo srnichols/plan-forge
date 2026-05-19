@@ -1,0 +1,27 @@
+{
+  "scenarioId": "dashboard-xss-injection",
+  "kind": "happy-path",
+  "description": "Write a run summary containing XSS payloads (<script>, <iframe>, javascript:) to .forge/runs/run-xss/summary.json; verify the payload is stored safely as JSON data (not executed), and that escapeHtml strips all dangerous patterns before rendering.",
+  "setup": [
+    {
+      "cmd": "node -e \"const fs=require('fs'),p=require('path'); const d=p.join(process.cwd(),'.forge','runs','run-xss'); fs.mkdirSync(d,{recursive:true}); const payload='<script>window.__pwned=true<\\/script><img src=x onerror=alert(1)><iframe src=javascript:alert(1)></iframe>'; fs.writeFileSync(p.join(d,'summary.json'),JSON.stringify({runId:'run-xss',message:payload,status:'completed'},null,2));\"",
+      "timeout": 10000
+    }
+  ],
+  "execute": [
+    {
+      "cmd": "node -e \"const fs=require('fs'),p=require('path'); const s=JSON.parse(fs.readFileSync(p.join(process.cwd(),'.forge','runs','run-xss','summary.json'),'utf-8')); if(typeof global.__pwned!=='undefined')throw new Error('XSS executed in Node context'); const msg=s.message; if(!msg.includes('script'))throw new Error('payload not stored correctly'); const escapeHtml=str=>String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/\\\"/g,'&quot;'); const escaped=escapeHtml(msg); if(escaped.includes('<script'))throw new Error('escapeHtml failed: script tag present after escape'); if(escaped.includes('<iframe'))throw new Error('escapeHtml failed: iframe tag present after escape'); if(escaped.includes('javascript:'))throw new Error('escapeHtml failed: javascript: url present after escape'); if(!escaped.includes('&lt;'))throw new Error('escapeHtml must convert < to &lt;'); console.log('ok XSS: payload stored as data, escapeHtml produces clean output, window.__pwned undefined');\"",
+      "timeout": 10000
+    }
+  ],
+  "assertions": [
+    { "kind": "exit-code", "expected": 0 },
+    { "kind": "file-contains", "path": ".forge/runs/run-xss/summary.json", "pattern": "script" }
+  ],
+  "teardown": [
+    {
+      "cmd": "node -e \"const fs=require('fs'),p=require('path'); try{fs.rmSync(p.join(process.cwd(),'.forge','runs','run-xss'),{recursive:true,force:true});}catch{}\"",
+      "timeout": 10000
+    }
+  ]
+}

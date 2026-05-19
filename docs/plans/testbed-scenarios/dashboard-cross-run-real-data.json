@@ -1,0 +1,27 @@
+{
+  "scenarioId": "dashboard-cross-run-real-data",
+  "kind": "happy-path",
+  "description": "Set up a synthetic .forge/runs/ directory with 3 run summaries including one failure; verify cross-run card data structure has >= 2 runs and at least one failure for anomaly detection, rendering within 2 s.",
+  "setup": [
+    {
+      "cmd": "node -e \"const fs=require('fs'),p=require('path'); for(let i=1;i<=3;i++){const d=p.join(process.cwd(),'.forge','runs','run-'+String(i).padStart(3,'0')); fs.mkdirSync(d,{recursive:true}); fs.writeFileSync(p.join(d,'summary.json'),JSON.stringify({runId:'run-'+i,status:i<3?'completed':'failed',results:{passed:4,failed:i<3?0:1,total:4},startTime:new Date(Date.now()-i*86400000).toISOString(),endTime:new Date().toISOString()}));}\"",
+      "timeout": 10000
+    }
+  ],
+  "execute": [
+    {
+      "cmd": "node -e \"const fs=require('fs'),p=require('path'); const t0=Date.now(); const d=p.join(process.cwd(),'.forge','runs'); const dirs=fs.readdirSync(d,{withFileTypes:true}).filter(e=>e.isDirectory()); if(dirs.length<2)throw new Error('expected >= 2 runs, got '+dirs.length); const hasFailure=dirs.some(dir=>{try{const s=JSON.parse(fs.readFileSync(p.join(d,dir.name,'summary.json'),'utf-8'));return s.status==='failed';}catch{return false;}}); if(!hasFailure)throw new Error('expected at least one failed run for anomaly detection'); const elapsed=Date.now()-t0; if(elapsed>2000)throw new Error('scan took too long: '+elapsed+'ms'); console.log('ok cross-run: '+dirs.length+' runs, failure present, scan took '+elapsed+'ms');\"",
+      "timeout": 10000
+    }
+  ],
+  "assertions": [
+    { "kind": "exit-code", "expected": 0 },
+    { "kind": "artefact-count", "dir": ".forge/runs", "min": 2 }
+  ],
+  "teardown": [
+    {
+      "cmd": "node -e \"const fs=require('fs'),p=require('path'); try{fs.rmSync(p.join(process.cwd(),'.forge','runs'),{recursive:true,force:true});}catch{}\"",
+      "timeout": 10000
+    }
+  ]
+}

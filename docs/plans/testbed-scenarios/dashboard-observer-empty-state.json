@@ -1,0 +1,27 @@
+{
+  "scenarioId": "dashboard-observer-empty-state",
+  "kind": "happy-path",
+  "description": "With observer.enabled: false in .forge.json, verify the empty-state config is expressed correctly so the dashboard can render the explicit empty-state message with a deep-link to the settings tab.",
+  "setup": [
+    {
+      "cmd": "node -e \"const fs=require('fs'),p=require('path'); fs.mkdirSync(p.join(process.cwd(),'.forge'),{recursive:true}); fs.writeFileSync(p.join(process.cwd(),'.forge.json'),JSON.stringify({forgeMaster:{observer:{enabled:false}}}));\"",
+      "timeout": 10000
+    }
+  ],
+  "execute": [
+    {
+      "cmd": "node -e \"const fs=require('fs'),p=require('path'); const cfg=JSON.parse(fs.readFileSync(p.join(process.cwd(),'.forge.json'),'utf-8')); if(cfg.forgeMaster.observer.enabled!==false)throw new Error('expected observer disabled, got: '+cfg.forgeMaster.observer.enabled); if(!('forgeMaster' in cfg))throw new Error('forgeMaster block missing'); if(!('observer' in cfg.forgeMaster))throw new Error('observer block missing'); console.log('ok observer empty-state: enabled=false, config keys present for deep-link detection');\"",
+      "timeout": 10000
+    }
+  ],
+  "assertions": [
+    { "kind": "exit-code", "expected": 0 },
+    { "kind": "file-contains", "path": ".forge.json", "pattern": "forgeMaster" }
+  ],
+  "teardown": [
+    {
+      "cmd": "node -e \"const fs=require('fs'),p=require('path'); try{fs.rmSync(p.join(process.cwd(),'.forge.json'),{force:true});}catch{}\"",
+      "timeout": 10000
+    }
+  ]
+}

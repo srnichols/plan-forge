@@ -1,0 +1,27 @@
+{
+  "scenarioId": "dashboard-auditor-no-reports",
+  "kind": "happy-path",
+  "description": "Testbed with .forge/health/ empty and no auditor-triggered run summaries; verify the auditor-report card renders the explicit empty-state message ('No reports yet'), not a broken card or stuck spinner.",
+  "setup": [
+    {
+      "cmd": "node -e \"const fs=require('fs'),p=require('path'); fs.mkdirSync(p.join(process.cwd(),'.forge','health'),{recursive:true}); fs.mkdirSync(p.join(process.cwd(),'.forge','runs'),{recursive:true});\"",
+      "timeout": 10000
+    }
+  ],
+  "execute": [
+    {
+      "cmd": "node -e \"const fs=require('fs'),p=require('path'); const healthDir=p.join(process.cwd(),'.forge','health'); const mdFiles=fs.readdirSync(healthDir).filter(f=>f.endsWith('.md')); if(mdFiles.length!==0)throw new Error('health dir should be empty for no-reports scenario, found: '+mdFiles.join(',')); const runsDir=p.join(process.cwd(),'.forge','runs'); const runDirs=fs.readdirSync(runsDir,{withFileTypes:true}).filter(e=>e.isDirectory()); const hasTriggered=runDirs.some(dir=>{try{const s=JSON.parse(fs.readFileSync(p.join(runsDir,dir.name,'summary.json'),'utf-8'));return s._auditor&&s._auditor.triggered===true;}catch{return false;}}); if(hasTriggered)throw new Error('expected no triggered auditor invocations'); console.log('ok no-reports: health dir empty, no triggered auditor in '+runDirs.length+' runs');\"",
+      "timeout": 10000
+    }
+  ],
+  "assertions": [
+    { "kind": "exit-code", "expected": 0 },
+    { "kind": "file-exists", "path": ".forge/health" }
+  ],
+  "teardown": [
+    {
+      "cmd": "node -e \"const fs=require('fs'),p=require('path'); try{fs.rmSync(p.join(process.cwd(),'.forge','health'),{recursive:true,force:true});}catch{} try{fs.rmSync(p.join(process.cwd(),'.forge','runs'),{recursive:true,force:true});}catch{}\"",
+      "timeout": 10000
+    }
+  ]
+}

@@ -1,12 +1,14 @@
 /**
- * Plan Forge — Phase-51 Slice 0: No circular imports gate for capabilities.mjs.
+ * Plan Forge -- Phase-51 Slice 0: No circular imports gate for capabilities.mjs.
+ * Plan Forge -- Phase-52 Slice 0: Inherit gate to server.mjs.
  *
- * Uses madge to walk the static import graph of capabilities.mjs and assert
- * that no import cycle exists. A cycle here would cause unpredictable module
- * initialization order and intermittent failures in tests that import
- * capabilities.mjs directly.
+ * Uses madge to walk the static import graph and assert that no NEW import
+ * cycles exist. Capabilities.mjs must have zero cycles; server.mjs allows one
+ * known pre-existing cycle (orchestrator.mjs <-> cost-service.mjs) that is
+ * explicitly documented in orchestrator.mjs and worked around with hoisted
+ * function declarations.
  *
- * Scope: capabilities.mjs and its local (relative) imports only.
+ * Scope: local (relative) imports only.
  * Node built-ins and npm packages are excluded by madge automatically.
  */
 
@@ -19,6 +21,27 @@ const HERE = dirname(fileURLToPath(import.meta.url));
 const CAPABILITIES_PATH = resolve(HERE, "../capabilities.mjs");
 const SERVER_PATH = resolve(HERE, "../server.mjs");
 
+/**
+ * Pre-existing cycles in server.mjs's transitive import graph that have been
+ * reviewed and documented. Each entry is a canonical cycle key formed by
+ * sorting the cycle members and joining with " -> ".
+ *
+ * DO NOT ADD entries here unless you have verified the cycle is unavoidable
+ * and have documented it in both the source file and this list.
+ */
+const KNOWN_SERVER_CYCLES = new Set([
+  // orchestrator.mjs re-exports cost-service.mjs functions for backward
+  // compatibility (see orchestrator.mjs ~line 12983). cost-service.mjs imports
+  // back into orchestrator.mjs for model-scoring helpers. Worked around with
+  // hoisted function declarations so const aliases do not arrive undefined.
+  "cost-service.mjs -> orchestrator.mjs",
+]);
+
+/** Normalise a madge cycle array to a canonical direction-insensitive key. */
+function cycleKey(cycle) {
+  return [...cycle].sort().join(" -> ");
+}
+
 describe("no circular imports in capabilities.mjs (Phase-51 S0)", () => {
   it("capabilities.mjs has no circular import cycles", async () => {
     const result = await madge(CAPABILITIES_PATH, {
@@ -30,8 +53,7 @@ describe("no circular imports in capabilities.mjs (Phase-51 S0)", () => {
 
     const circular = result.circular();
     if (circular.length > 0) {
-      // Surface the cycles so the developer can fix them without grepping.
-      const formatted = circular.map((cycle) => cycle.join(" → ")).join("\n  ");
+      const formatted = circular.map((cycle) => cycle.join(" -> ")).join("\n  ");
       throw new Error(`Circular imports detected in capabilities.mjs:\n  ${formatted}`);
     }
 
@@ -40,11 +62,7 @@ describe("no circular imports in capabilities.mjs (Phase-51 S0)", () => {
 });
 
 describe("no circular imports in server.mjs (Phase-52 S0)", () => {
-  // Pre-existing cycle from Phase-52 S0 baseline — tracked as tech debt.
-  // The gate prevents NEW cycles; fix of this cycle is deferred to a later slice.
-  const KNOWN_CYCLES = new Set(["orchestrator.mjs → cost-service.mjs"]);
-
-  it("server.mjs has no circular import cycles beyond the known baseline", async () => {
+  it("server.mjs has no NEW circular import cycles beyond known exceptions", async () => {
     const result = await madge(SERVER_PATH, {
       fileExtensions: ["mjs", "js"],
       detectiveOptions: {
@@ -53,14 +71,17 @@ describe("no circular imports in server.mjs (Phase-52 S0)", () => {
     });
 
     const circular = result.circular();
-    const newCycles = circular.filter(
-      (cycle) => !KNOWN_CYCLES.has(cycle.join(" → ")),
-    );
+    const newCycles = circular.filter((cycle) => !KNOWN_SERVER_CYCLES.has(cycleKey(cycle)));
+
     if (newCycles.length > 0) {
-      const formatted = newCycles.map((cycle) => cycle.join(" → ")).join("\n  ");
-      throw new Error(`New circular imports detected in server.mjs:\n  ${formatted}`);
+      const formatted = newCycles.map((cycle) => cycle.join(" -> ")).join("\n  ");
+      throw new Error(
+        `New circular imports detected in server.mjs (not in KNOWN_SERVER_CYCLES):\n  ${formatted}`,
+      );
     }
 
+    // Assert the known cycles have not been silently multiplied.
+    expect(circular.length).toBeLessThanOrEqual(KNOWN_SERVER_CYCLES.size);
     expect(newCycles).toHaveLength(0);
   }, 60_000);
 });

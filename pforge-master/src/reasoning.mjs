@@ -437,6 +437,43 @@ export async function runTurn(input, deps = {}) {
   });
   const toolSchemas = buildToolSchemas(allowlist);
 
+  // ── 4a. Cross-run watcher pre-fetch (plan-health context injection) ──
+  // For OPERATIONAL lane health queries, proactively fetch cross-run watcher
+  // data and inject a compact summary into the context block. This gives the
+  // model pre-aggregated failure evidence (recurring gates, retry spikes, cost
+  // trend, timeout clusters) before it enters the tool-use loop.
+  // Pre-fetch failure is always non-fatal — it must never fail the turn.
+  if (
+    classification.lane === LANES.OPERATIONAL &&
+    /\b(health|audit|failure|retry|gate|slice|plan.health|watcher)\b/i.test(message) &&
+    deps.dispatcher
+  ) {
+    try {
+      const watchResult = await invokeAllowlisted(
+        { tool: "forge_watch", args: { targetPath: cwd || ".", mode: "cross-run" }, cwd },
+        { resolvedAllowlist: allowlist, dispatcher: deps.dispatcher, hub: deps.hub || null },
+      );
+      const snap = watchResult?.result ?? watchResult;
+      if (snap && snap.ok !== false && snap.mode === "cross-run") {
+        const totalRuns = snap.totalRuns ?? 0;
+        const failedRuns = snap.failedRuns ?? 0;
+        const cr = snap.crossRun || snap.snapshot?.crossRun || {};
+        const anomalyLines = Array.isArray(snap.anomalies) && snap.anomalies.length > 0
+          ? snap.anomalies.slice(0, 4).map((a) => `  - ${a.code}: ${a.message || ""}`)
+          : ["  (none in window)"];
+        const crossRunBlock =
+          `> **Cross-run snapshot (mode: "cross-run", window: ${snap.crossRunWindow ?? snap.window ?? "14d"}):**\n` +
+          `> ${totalRuns} runs — ${failedRuns} failed` +
+          (cr.retryRateSpike ? " — ⚠ retry-rate spike detected" : "") +
+          (cr.costTrend === "up" ? ` — ⚠ cost trend +${cr.costTrendPercent ?? "?"}%` : "") +
+          `\n> Anomalies:\n${anomalyLines.join("\n")}`;
+        contextBlock = `${contextBlock}\n\n${crossRunBlock}`.trimStart();
+      }
+    } catch {
+      // Non-fatal — proceed without cross-run context
+    }
+  }
+
   // ── 5. Select provider adapter ────────────────────────────────────
   let provider = deps.provider || null;
   if (!provider) {

@@ -12,7 +12,6 @@
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;600;700&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="../assets/shared.css" />
   <link rel="stylesheet" href="assets/manual.css" />
-  <script src="assets/mermaid-init.js" defer></script>
 </head>
 <body class="bg-slate-950 text-slate-300 min-h-screen">
 
@@ -56,35 +55,7 @@
         <h2 id="state-flow">The Inner Loop — State Flow</h2>
         <p>The deterministic slice executor (Phase-1 through Phase-24) is the spine. The Phase-25 subsystems bolt on reflective behavior at specific transitions — they never replace the spine, they only enrich it.</p>
 
-        <div class="my-8 p-6 bg-slate-900/50 border border-slate-800/60 rounded-xl overflow-x-auto">
-          <pre class="mermaid">
-stateDiagram-v2
-    [*] --> PlanParsed : runPlan(plan)
-    PlanParsed --> GateSynthesis : pre-flight
-    GateSynthesis --> SliceReady : advisory printed (L6)
-    SliceReady --> BuildPrompt
-    BuildPrompt --> AutoSkillLookup : retrieve matching skills (L2)
-    AutoSkillLookup --> WorkerInvoke : inject skill context + trajectory sentinel
-    WorkerInvoke --> GateRun
-    GateRun --> GatePassed : exit 0
-    GateRun --> ReflexionBuild : exit != 0 (L7)
-    ReflexionBuild --> BuildPrompt : retry with reflexion block
-    GatePassed --> TrajectoryWrite : extract sentinel-wrapped note (L8)
-    TrajectoryWrite --> AutoSkillCapture : save slice pattern (L2)
-    AutoSkillCapture --> ReviewerCheck : brain.gate-check
-    ReviewerCheck --> ReviewerInvoke : runtime.reviewer.enabled (L4, opt-in)
-    ReviewerCheck --> NextSlice : reviewer disabled
-    ReviewerInvoke --> NextSlice : advisory verdict (D6)
-    ReviewerInvoke --> BlockedCritical : critical + blockOnCritical=true
-    BlockedCritical --> [*]
-    NextSlice --> SliceReady : more slices
-    NextSlice --> RunComplete : last slice
-    RunComplete --> PostmortemWrite : retries, gateFlaps, costDelta, driftDelta (L5)
-    PostmortemWrite --> FederationPublish : brain.federation.enabled (L4-lite)
-    FederationPublish --> [*]
-    PostmortemWrite --> [*]
-          </pre>
-        </div>
+        <figure class="manual-figure"><img src="assets/diagrams/inner-loop-state.svg" alt="Inner-loop state diagram. runPlan parses the plan, then walks through pre-flight gate synthesis (L6 advisory), per-slice prompt build, auto-skill lookup (L2), worker invocation, gate run, trajectory write on pass (L8), auto-skill capture (L2), reviewer check, and an optional reviewer invocation (L4, opt-in) that emits an advisory verdict or blocks on critical when blockOnCritical is true. Gate failure routes through a reflexion build (L7) that injects context into the next prompt attempt. Run completion writes a postmortem (L5) capturing retries, gateFlaps, costDelta, and driftDelta, optionally publishing to federation (L4-lite) when brain.federation.enabled is true." class="diagram-img diagram-img-md my-4" /><figcaption class="manual-figcaption">Inner-loop state flow — Phase-25 subsystems (L2, L4, L5, L6, L7, L8) enriching the deterministic slice executor at specific transitions.</figcaption></figure>
 
         <!-- ─── Subsystem Anchors ─── -->
         <h2 id="subsystems">The Seven Subsystems</h2>

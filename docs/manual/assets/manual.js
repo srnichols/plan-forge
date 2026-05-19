@@ -349,9 +349,8 @@
         const next = getTheme() === "light" ? "dark" : "light";
         setTheme(next);
         themeBtn.innerHTML = next === "light" ? '🌙 Dark' : '☀️ Light';
-        // Let theme-aware widgets (e.g. mermaid-init.js) re-render with the
-        // new palette. Listeners attach to `document` so script load order
-        // doesn't matter.
+        // Let theme-aware widgets re-render with the new palette. Listeners
+        // attach to `document` so script load order doesn't matter.
         try {
           document.dispatchEvent(new CustomEvent("pforge:theme-change", { detail: { theme: next } }));
         } catch (e) { /* CustomEvent unsupported — best effort */ }

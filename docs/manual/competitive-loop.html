@@ -12,7 +12,6 @@
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;600;700&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="../assets/shared.css" />
   <link rel="stylesheet" href="assets/manual.css" />
-  <script src="assets/mermaid-init.js" defer></script>
 </head>
 <body class="bg-slate-950 text-slate-300 min-h-screen">
 
@@ -54,29 +53,7 @@
         <img src="assets/diagrams/competitive-worktree-race.svg" alt="Competitive loop flow across 4 phases: Spawn (slice arrives, competitive enabled, spawn N worktrees), Race (3 parallel worktrees with claude-sonnet-4.6, grok-4, gpt-5.3-codex executing in their own .forge/worktrees/slice-N-* directories with build/test gates), Election (4 tie-breaker rules in order: gates pass -> reviewer score -> token cost lower wins -> wall-clock faster wins), Winner (worktree B chosen as cheapest passing, applied to main). Eliminated worktrees retained for trace and auto-fix proposal generation. Cost-anomaly detection runs advisory-only and never halts a run." class="diagram-img diagram-img-md my-4" />
         <p>When a slice is marked for competitive execution, the orchestrator spawns a worktree per strategy, runs each in isolation, and elects a single winner. Losing worktrees are cleaned up; only the winner's changes enter the working tree.</p>
 
-        <div class="my-8 p-6 bg-slate-900/50 border border-slate-800/60 rounded-xl overflow-x-auto">
-          <pre class="mermaid">
-flowchart TD
-    Start([Slice marked competitive]) --> Spawn{Spawn worktrees}
-    Spawn -->|Strategy A| WTA[.forge/worktrees/A/]
-    Spawn -->|Strategy B| WTB[.forge/worktrees/B/]
-    WTA --> GateA[Run validation gate]
-    WTB --> GateB[Run validation gate]
-    GateA --> RevA[Invoke reviewer\nif innerLoop.reviewer.enabled]
-    GateB --> RevB[Invoke reviewer\nif innerLoop.reviewer.enabled]
-    RevA --> Elect{Winner election}
-    RevB --> Elect
-    Elect -->|Gate pass + best reviewer score| Winner[Promote winner → working tree]
-    Elect -->|Tie on gate + reviewer| Cost[Token-cost tie-breaker]
-    Cost --> Winner
-    Winner --> Cleanup[Clean up losing worktrees]
-    Cleanup --> Done([Slice committed])
-    GateA -.gate fail.-> AutoFix{Auto-fix proposal?}
-    GateB -.gate fail.-> AutoFix
-    AutoFix -->|Small, local diff| Patch[Write .forge/proposed-fixes/*.patch]
-    AutoFix -->|Complex| Skip[Record in postmortem]
-          </pre>
-        </div>
+        <figure class="manual-figure"><img src="assets/diagrams/competitive-loop-flow.svg" alt="Competitive loop flowchart. Start: slice marked competitive. A decision node spawn-worktrees branches to Strategy A (.forge/worktrees/A/) and Strategy B (.forge/worktrees/B/). Both worktrees run a validation gate and then conditionally invoke a reviewer when innerLoop.reviewer.enabled is true. The two reviewer outputs converge on a winner-election decision node. The path labeled gate-pass-plus-best-reviewer-score promotes the winner to the working tree; the path labeled tie-on-gate-and-reviewer drops into a token-cost tie-breaker that feeds back into winner. Winner flows through clean-up of losing worktrees to slice-committed. A dotted secondary path connects gate-failure on either strategy to an auto-fix-proposal decision node, which routes small local diffs to .forge/proposed-fixes/*.patch and complex failures to a postmortem record." class="diagram-img diagram-img-md my-4" /><figcaption class="manual-figcaption">Competitive worktree lifecycle — spawn, gate, reviewer, winner election, plus the auto-fix branch on gate failure.</figcaption></figure>
 
         <!-- ─── Winner election rules ─── -->
         <h2 id="election">Winner election rules</h2>

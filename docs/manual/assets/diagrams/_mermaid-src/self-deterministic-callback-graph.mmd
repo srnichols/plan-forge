@@ -1,0 +1,37 @@
+flowchart TD
+    subgraph Slice[Slice execution]
+      direction TB
+      S0[BuildPrompt] --> S1[AutoSkill lookup L2]
+      S1 --> S2[WorkerInvoke]
+      S2 --> S3[GateRun]
+      S3 -->|fail| R1[Reflexion block L7]
+      R1 --> S2
+      S3 -->|pass| T1[Trajectory write L8]
+    end
+
+    T1 --> PM[Postmortem L5]
+    T1 --> AS[AutoSkill capture L2]
+    T1 --> GS[GateSuggestion accrual L6]
+    T1 --> CA[Cost-anomaly check C3]
+    S3 -->|advisory| RV[Reviewer L4]
+    S3 -->|gate fail + small diff| AF[Auto-fix proposal C2]
+    S0 --> FED[Federation read L4-lite]
+
+    PM --> NextHardener[Next plan: Harden reads postmortems]
+    AS --> NextSlice[Next slice: skill injected by L2]
+    GS --> Dash[Dashboard: gate promotion surface]
+    RV --> Dash
+    CA --> Dash
+    AF --> Dash
+    FED --> NextSlice
+
+    subgraph Competitive[Competitive layer C1]
+      direction TB
+      Spawn[Spawn worktrees] --> RaceA[Strategy A: Slice]
+      Spawn --> RaceB[Strategy B: Slice]
+      RaceA --> Elect[Winner election]
+      RaceB --> Elect
+      Elect --> Winner[Promote winner to tree]
+    end
+
+    Winner --> T1

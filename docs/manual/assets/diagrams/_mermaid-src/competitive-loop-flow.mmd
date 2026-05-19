@@ -1,0 +1,19 @@
+flowchart TD
+    Start([Slice marked competitive]) --> Spawn{Spawn worktrees}
+    Spawn -->|Strategy A| WTA[.forge/worktrees/A/]
+    Spawn -->|Strategy B| WTB[.forge/worktrees/B/]
+    WTA --> GateA[Run validation gate]
+    WTB --> GateB[Run validation gate]
+    GateA --> RevA[Invoke reviewer<br/>if innerLoop.reviewer.enabled]
+    GateB --> RevB[Invoke reviewer<br/>if innerLoop.reviewer.enabled]
+    RevA --> Elect{Winner election}
+    RevB --> Elect
+    Elect -->|Gate pass + best reviewer score| Winner[Promote winner to working tree]
+    Elect -->|Tie on gate + reviewer| Cost[Token-cost tie-breaker]
+    Cost --> Winner
+    Winner --> Cleanup[Clean up losing worktrees]
+    Cleanup --> Done([Slice committed])
+    GateA -.gate fail.-> AutoFix{Auto-fix proposal?}
+    GateB -.gate fail.-> AutoFix
+    AutoFix -->|Small, local diff| Patch[Write .forge/proposed-fixes/*.patch]
+    AutoFix -->|Complex| Skip[Record in postmortem]

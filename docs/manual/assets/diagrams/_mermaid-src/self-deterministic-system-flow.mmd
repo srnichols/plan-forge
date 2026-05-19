@@ -1,0 +1,15 @@
+stateDiagram-v2
+    [*] --> Plan : runPlan(plan)
+    Plan --> Preflight : validate environment
+    Preflight --> Harden : Step-2 hardener
+    Harden --> Execute : slice loop
+    Execute --> Execute : reflexion retry (gate fail)
+    Execute --> Sweep : all slices pass
+    Sweep --> Execute : completeness gap found
+    Sweep --> Review : artifacts consistent
+    Review --> Execute : advisory signal (blocking if opted-in)
+    Review --> Ship : verdict clean
+    Ship --> [*]
+    Execute --> Harden : postmortem feeds next hardener
+    Review --> Stopped : operator halt
+    Stopped --> [*]

@@ -1,0 +1,24 @@
+flowchart LR
+    subgraph CL[Callers]
+      CP[Copilot / Agents]
+      CI[CI runners]
+      UI[Custom dashboards]
+      SC[Scripts / Humans]
+    end
+
+    subgraph SF[Surfaces]
+      MCP[MCP Server<br/>stdio + websocket]
+      REST[REST API<br/>HTTP/JSON]
+      WS[WebSocket Hub<br/>/api/hub]
+      CLI[CLI<br/>pforge]
+    end
+
+    subgraph CORE[Plan Forge Core]
+      H[Tool handlers]
+    end
+
+    CP --> MCP --> H
+    CI --> REST --> H
+    UI --> REST
+    UI --> WS --> H
+    SC --> CLI --> H

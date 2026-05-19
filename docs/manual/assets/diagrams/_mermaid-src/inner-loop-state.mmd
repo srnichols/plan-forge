@@ -1,0 +1,25 @@
+stateDiagram-v2
+    [*] --> PlanParsed : runPlan(plan)
+    PlanParsed --> GateSynthesis : pre-flight
+    GateSynthesis --> SliceReady : advisory printed (L6)
+    SliceReady --> BuildPrompt
+    BuildPrompt --> AutoSkillLookup : retrieve matching skills (L2)
+    AutoSkillLookup --> WorkerInvoke : inject skill context + trajectory sentinel
+    WorkerInvoke --> GateRun
+    GateRun --> GatePassed : exit 0
+    GateRun --> ReflexionBuild : exit != 0 (L7)
+    ReflexionBuild --> BuildPrompt : retry with reflexion block
+    GatePassed --> TrajectoryWrite : extract sentinel-wrapped note (L8)
+    TrajectoryWrite --> AutoSkillCapture : save slice pattern (L2)
+    AutoSkillCapture --> ReviewerCheck : brain.gate-check
+    ReviewerCheck --> ReviewerInvoke : runtime.reviewer.enabled (L4, opt-in)
+    ReviewerCheck --> NextSlice : reviewer disabled
+    ReviewerInvoke --> NextSlice : advisory verdict (D6)
+    ReviewerInvoke --> BlockedCritical : critical + blockOnCritical=true
+    BlockedCritical --> [*]
+    NextSlice --> SliceReady : more slices
+    NextSlice --> RunComplete : last slice
+    RunComplete --> PostmortemWrite : retries, gateFlaps, costDelta, driftDelta (L5)
+    PostmortemWrite --> FederationPublish : brain.federation.enabled (L4-lite)
+    FederationPublish --> [*]
+    PostmortemWrite --> [*]

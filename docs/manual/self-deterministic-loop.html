@@ -12,7 +12,6 @@
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;600;700&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="../assets/shared.css" />
   <link rel="stylesheet" href="assets/manual.css" />
-  <script src="assets/mermaid-init.js" defer></script>
 </head>
 <body class="bg-slate-950 text-slate-300 min-h-screen">
 
@@ -59,25 +58,7 @@
         <h2 id="system-flow">Diagram A — System-wide state flow</h2>
         <p>The outer pipeline is the same one Plan Forge has always had. The inner loop adds callback arrows that let later stages feed earlier stages without breaking the forward progression.</p>
 
-        <div class="my-8 p-6 bg-slate-900/50 border border-slate-800/60 rounded-xl overflow-x-auto">
-          <pre class="mermaid">
-stateDiagram-v2
-    [*] --> Plan : runPlan(plan)
-    Plan --> Preflight : validate environment
-    Preflight --> Harden : Step-2 hardener
-    Harden --> Execute : slice loop
-    Execute --> Execute : reflexion retry (gate fail)
-    Execute --> Sweep : all slices pass
-    Sweep --> Execute : completeness gap found
-    Sweep --> Review : artifacts consistent
-    Review --> Execute : advisory signal (blocking if opted-in)
-    Review --> Ship : verdict clean
-    Ship --> [*]
-    Execute --> Harden : postmortem feeds next hardener
-    Review --> Stopped : operator halt
-    Stopped --> [*]
-          </pre>
-        </div>
+        <figure class="manual-figure"><img src="assets/diagrams/self-deterministic-system-flow.svg" alt="System-wide state diagram. runPlan moves through Plan, Preflight (environment validation), Harden (Step-2 hardener), Execute (slice loop), Sweep, Review, then Ship. Execute self-loops on reflexion retry when a gate fails. Sweep loops back to Execute when a completeness gap is found, and forward to Review when artifacts are consistent. Review loops back to Execute on an advisory signal (blocking if opted-in) and forward to Ship on a clean verdict. A long-range arrow runs from Execute back to Harden, indicating that postmortems written this run feed the next plan's hardener. An operator halt drops Review into a Stopped terminal state." class="diagram-img diagram-img-md my-4" /><figcaption class="manual-figcaption">System-wide state flow — the deterministic outer pipeline with callback arrows that let later stages feed earlier stages.</figcaption></figure>
 
         <p>Two things to notice: first, every backward arrow from <em>Execute</em>, <em>Sweep</em>, and <em>Review</em> is <em>opt-in or advisory</em> by default — the forward pipeline stays honest. Second, the arrow from <em>Execute</em> back to <em>Harden</em> crosses a plan boundary: a postmortem written at the end of this run is read by the hardener at the start of the next one.</p>
 
@@ -85,47 +66,7 @@ stateDiagram-v2
         <h2 id="callback-graph">Diagram B — Inner-loop callback graph</h2>
         <p>Zooming into a single slice, here is what happens at the slice boundary and how each Phase-25 and Phase-26 subsystem feeds something downstream — the next slice, the next plan's hardener, or a Dashboard promotion surface.</p>
 
-        <div class="my-8 p-6 bg-slate-900/50 border border-slate-800/60 rounded-xl overflow-x-auto">
-          <pre class="mermaid">
-flowchart TD
-    subgraph Slice[Slice execution]
-      direction TB
-      S0[BuildPrompt] --> S1[AutoSkill lookup L2]
-      S1 --> S2[WorkerInvoke]
-      S2 --> S3[GateRun]
-      S3 -->|fail| R1[Reflexion block L7]
-      R1 --> S2
-      S3 -->|pass| T1[Trajectory write L8]
-    end
-
-    T1 --> PM[Postmortem L5]
-    T1 --> AS[AutoSkill capture L2]
-    T1 --> GS[GateSuggestion accrual L6]
-    T1 --> CA[Cost-anomaly check C3]
-    S3 -->|advisory| RV[Reviewer L4]
-    S3 -->|gate fail + small diff| AF[Auto-fix proposal C2]
-    S0 --> FED[Federation read L4-lite]
-
-    PM --> NextHardener[Next plan: Harden reads postmortems]
-    AS --> NextSlice[Next slice: skill injected by L2]
-    GS --> Dash[Dashboard: gate promotion surface]
-    RV --> Dash
-    CA --> Dash
-    AF --> Dash
-    FED --> NextSlice
-
-    subgraph Competitive[Competitive layer C1]
-      direction TB
-      Spawn[Spawn worktrees] --> RaceA[Strategy A: Slice]
-      Spawn --> RaceB[Strategy B: Slice]
-      RaceA --> Elect[Winner election]
-      RaceB --> Elect
-      Elect --> Winner[Promote winner → tree]
-    end
-
-    Winner --> T1
-          </pre>
-        </div>
+        <figure class="manual-figure"><img src="assets/diagrams/self-deterministic-callback-graph.svg" alt="Inner-loop callback graph. The slice-execution subgraph runs BuildPrompt → AutoSkill lookup (L2) → WorkerInvoke → GateRun, with a fail-edge to a Reflexion block (L7) that loops back to WorkerInvoke and a pass-edge to Trajectory write (L8). Trajectory fans out into Postmortem (L5), AutoSkill capture (L2), GateSuggestion accrual (L6), and Cost-anomaly check (C3). GateRun also emits an advisory Reviewer call (L4) and a gate-fail-with-small-diff Auto-fix proposal (C2). BuildPrompt reads from Federation (L4-lite). Postmortems feed the next plan's hardener; auto-skill capture and federation reads feed the next slice; GateSuggestion, Reviewer, Cost-anomaly, and Auto-fix all surface on the Dashboard. A separate competitive-layer subgraph (C1) spawns Strategy A and Strategy B worktrees, runs winner election, promotes the winner to the working tree, and that winner feeds Trajectory write." class="diagram-img diagram-img-md my-4" /><figcaption class="manual-figcaption">Inner-loop callback graph — slice-boundary signals (L2, L4, L5, L6, L8, C1, C2, C3) feeding the next slice, the next hardener, and Dashboard surfaces.</figcaption></figure>
 
         <p>The Phase-25 subsystems are labeled L1–L8 in the capabilities surface (<code>forge_capabilities → innerLoop</code>); the Phase-26 subsystems — C1 competitive, C2 auto-fix, C3 cost-anomaly — extend the same surface. Every node in the diagram corresponds to one entry in <code>INNER_LOOP_SURFACE.subsystems</code>.</p>
 

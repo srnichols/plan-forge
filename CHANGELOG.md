@@ -7,6 +7,14 @@ Format follows [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
+### Added — Clean-code agent guidance (Phase 50)
+
+- **`.github/instructions/clean-code.instructions.md`**: New ~98-line instruction file organized by agent decision point — function rules (length, complexity, params, nesting), naming conventions, commenting guidelines, module-size thresholds, quick review checklist, and Boy Scout Rule reminder. Ships to all 9 preset directories and `templates/.github/instructions/`. References the Phase 42 audit catalog and links to `/clean-code-review` skill.
+- **`.github/skills/clean-code-review/SKILL.md`**: Invoke-only skill definition for the `/clean-code-review` slash command. Reuses Phase 42 devDeps (`@babel/parser`, audit scripts) — zero new packages added.
+- **`.github/instructions/architecture-principles.instructions.md`**: Expanded with Clean Architecture Principles section (~80 lines net-add): Dependency Rule, SOLID per-letter table, Component Cohesion (REP/CCP/CRP), Stable Dependencies Principle, Boy Scout Rule with corollaries, and Professional Refusal (Clean Coder). Plan Forge–specific annotations in each subsection.
+
+---
+
 ### Added — Phase 42 Clean Code audit catalog
 
 - **`docs/plans/cleanup-findings/`**: Audited Plan Forge's own codebase against *Clean Code* 2nd ed (Robert C. Martin, 2025). Clean Code audit catalog contains 27 actionable findings across 6 categories (A–F): module size (high and medium), long parameter lists, ESLint errors, ESLint warnings, and console.log advisory. Categories summary pivot at `CATEGORIES-SUMMARY.md`; two phase stubs promoted — Phase 43 (ESLint errors, blocking) and Phase 44 (module extraction, architectural debt). No production code changed — read-only audit output only.

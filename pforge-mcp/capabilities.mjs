@@ -1316,6 +1316,11 @@ export const TOOL_METADATA = {
       "<targetPath>/.forge/runs/<runId>/slice-*.json",
       "<targetPath>/.forge/runs/<runId>/summary.json",
     ],
+    modes: {
+      snapshot: "Snapshot the latest run in progress — returns counts, anomalies, diff cursor.",
+      analyze: "Snapshot + frontier-model analysis for deeper recommendations.",
+      "cross-run": "Aggregate all historical .forge/runs/ summaries to detect recurring failure patterns. Returns cross-run.* anomaly codes (recurring-gate-failure, retry-rate-spike, cost-anomaly-trend, slice-timeout-cluster). Accepts optional crossRunWindow (e.g. '7d', '14d') to limit the time window.",
+    },
     sideEffects: [
       "appends to watcher's own .forge/watch-history.jsonl (NEVER target's)",
       "may emit watch-snapshot-completed/watch-anomaly-detected/watch-advice-generated hub events",
@@ -1329,6 +1334,10 @@ export const TOOL_METADATA = {
     example: {
       input: { targetPath: "E:/GitHub/Rummag", mode: "snapshot" },
       output: { ok: true, runState: "in-progress", counts: { started: 5, completed: 4, failed: 0, escalated: 0 }, anomalies: [], recommendations: [], cursor: "2025-04-17T12:34:56.789Z" },
+    },
+    crossRunExample: {
+      input: { targetPath: "E:/GitHub/Rummag", mode: "cross-run", crossRunWindow: "14d" },
+      output: { ok: true, mode: "cross-run", runsScanned: 8, anomalies: [{ code: "cross-run.recurring-gate-failure", severity: "error", sliceId: "slice-3", occurrences: 3 }], recommendations: [{ code: "cross-run.recurring-gate-failure", action: "Inspect gate for slice-3 across runs" }] },
     },
   },
   forge_watch_live: {
@@ -1633,6 +1642,43 @@ export const TOOL_METADATA = {
         totalCostUSD: 0.003,
         truncated: false,
       },
+    },
+  },
+  forge_master_observe: {
+    intent: ["observe", "observer", "narrate", "forge-master", "start-observer", "stop-observer"],
+    aliases: ["observe_forge", "forge_observe"],
+    cost: "medium",
+    maxConcurrent: 1,
+    addedIn: "3.8.0",
+    prerequisites: ["forgeMaster.observer.enabled: true in .forge.json", "ANTHROPIC_API_KEY or OPENAI_API_KEY or XAI_API_KEY (for narration)"],
+    produces: [".forge/brain/session.forgemaster.observer.*.json (narrations)", ".forge/forge-master-observer.pid (when --detach)"],
+    consumes: [".forge.json (observer config)", ".forge/runs/** (hub events via WebSocket)"],
+    sideEffects: [
+      "starts or stops a background hub subscriber process",
+      "writes narration summaries to OpenBrain via brain.remember",
+      "emits observer-started/observer-stopped/observer-narration-captured hub events",
+    ],
+    writesFiles: false,
+    network: true,
+    risk: "low",
+    agentGuidance: "Use forge_master_observe to start/stop the live observer that narrates notable hub events during plan execution. Observer is muted by default — enable with forgeMaster.observer.enabled: true in .forge.json. Budget-capped via maxUsdPerDay and maxNarrationsPerHour. Read-only: cannot invoke write tools or modify project files. Kill switch: PFORGE_FORGE_MASTER_OBSERVE_DISABLE=1.",
+    errors: {
+      "observer-disabled": {
+        message: "Observer is disabled",
+        recovery: "Set forgeMaster.observer.enabled: true in .forge.json",
+      },
+      "observer-budget-exceeded": {
+        message: "Daily USD or hourly narration cap reached",
+        recovery: "Widen cap in .forge.json#forgeMaster.observer or wait for daily reset",
+      },
+    },
+    example: {
+      input: { action: "start" },
+      output: { ok: true, status: "started", processId: 12345, message: "Observer started — batching hub events." },
+    },
+    statusExample: {
+      input: { action: "status" },
+      output: { ok: true, status: "running", processId: 12345, batchesProcessed: 4, narrationsGenerated: 1, budgetUsedUSD: 0.0012 },
     },
   },
   forge_testbed_happypath: {
@@ -3074,14 +3120,15 @@ function buildForgeMasterCapabilities(cwd) {
         reasoningModel: block.reasoningModel ?? forgeJson?.model?.default ?? null,
         routerModel: block.routerModel ?? "grok-3-mini",
         discoverExtensionTools: block.discoverExtensionTools ?? true,
-      };
+          observerEnabled: block.observer?.enabled ?? false,
+        };
     }
   } catch { /* fall through to defaults */ }
 
   return {
     description: "Forge-Master: an in-IDE reasoning assistant that classifies intent, fetches memory context, and orchestrates read-only tool calls on the owner's behalf. Phase-28 MVP.",
     addedIn: "2.61.0",
-    tools: ["forge_master_ask"],
+    tools: ["forge_master_ask", "forge_master_observe"],
     reasoningModel: config.reasoningModel ?? null,
     routerModel: config.routerModel ?? "grok-3-mini",
     configKey: "forgeMaster",
@@ -3090,6 +3137,7 @@ function buildForgeMasterCapabilities(cwd) {
       reasoningModel: config.reasoningModel ?? null,
       routerModel: config.routerModel ?? "grok-3-mini",
       promptCatalogVersion: "1.0.0",
+      observerEnabled: config.observerEnabled ?? false,
     },
   };
 }

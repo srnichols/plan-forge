@@ -6,7 +6,7 @@
 
 ---
 
-## MCP Tools (89)
+## MCP Tools (90)
 
 | Tool | Intent | Cost | Description |
 |------|--------|------|-------------|
@@ -43,7 +43,7 @@
 | `forge_fix_proposal` | propose-fix | medium | Generate actionable fix plans for regressions, drift, or incidents |
 | `forge_quorum_analyze` | quorum-analyze | low | Build XSS-validated quorum prompts from drift, incidents, deploy journal, or secret findings |
 | `forge_liveguard_run` | liveguard-all | medium | Composite LiveGuard scan: drift + sweep + secrets + regression + deps + alerts + health in one call |
-| `forge_watch` | observe | low | Watcher v2.34/v2.35 — read-only observer that tails another project's pforge run from a second VS Code session. Snapshot or analyze mode. Returns counts, anomalies, recommendations, diff cursor. Optionally appends to watcher's own `.forge/watch-history.jsonl`. |
+| `forge_watch` | observe | low | Watcher v2.34/v2.35 — read-only observer that tails another project's pforge run from a second VS Code session. Snapshot or analyze mode. Cross-run mode (`mode: "cross-run"`) aggregates historical `.forge/runs/` for recurring failure patterns (`cross-run.*` anomaly codes: `recurring-gate-failure`, `retry-rate-spike`, `cost-anomaly-trend`, `slice-timeout-cluster`). Returns counts, anomalies, recommendations, diff cursor. Optionally appends to watcher's own `.forge/watch-history.jsonl`. |
 | `forge_watch_live` | stream | low | Watcher v2.35 live tail — streams events from a target project for a fixed duration via WebSocket subscription (preferred) or `events.log` polling (fallback). Read-only subscriber. |
 | `forge_crucible_submit` | crucible | low | **v2.37-dev** — Start a smelt (raw idea) in the Crucible interview funnel; infers lane (tweak/feature/full); emits `crucible-smelt-started`. |
 | `forge_crucible_ask` | crucible | low | **v2.37-dev** — Return next interview question (lane-scoped) with optional recommended default sourced from L3 memory / principles / prior phases. |

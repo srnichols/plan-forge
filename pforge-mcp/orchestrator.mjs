@@ -52,6 +52,8 @@ import {
 import { getDeploymentQuota, compareSliceEstimate } from "./foundry-quota.mjs";
 // Phase-WORKER-GUARDRAILS Slice 4 (A5) — network egress proxy logger
 import { startProxyLogger } from "./proxy-logger.mjs";
+// Phase-39 Slice 3 — cross-run watcher
+import { buildCrossRunSnapshot } from "./watcher.mjs";
 // Phase GITHUB-B Slice 3 — Copilot Coding Agent dispatch routing
 import { inspectGithubStack as _inspectGithubStackDefault } from "./github-introspect.mjs";
 import {
@@ -11318,6 +11320,30 @@ export function detectWatchAnomalies(snapshot) {
   const anomalies = [];
   if (!snapshot.ok) return anomalies;
 
+  // Phase-39 Slice 3 — cross-run mode: run own checks then return early
+  if (snapshot.crossRun) {
+    const { recurringFailures, retryRateSpike, costTrend, costTrendPercent, sliceTimeoutClusters } = snapshot.crossRun;
+    if (recurringFailures.length > 0) {
+      const worst = recurringFailures[0];
+      anomalies.push({ severity: "error", code: "cross-run.recurring-gate-failure",
+        message: `Slice "${worst.sliceName}" failed in ${worst.failCount} of ${worst.totalCount} runs — recurring gate failure` });
+    }
+    if (retryRateSpike) {
+      anomalies.push({ severity: "warn", code: "cross-run.retry-rate-spike",
+        message: "One or more slices are averaging >2 retry attempts across runs — retry rate is spiking" });
+    }
+    if (costTrend === "up") {
+      anomalies.push({ severity: "warn", code: "cross-run.cost-anomaly-trend",
+        message: `Run costs have increased ~${costTrendPercent}% compared to earlier runs in the window` });
+    }
+    if (sliceTimeoutClusters.length > 0) {
+      const worst = sliceTimeoutClusters[0];
+      anomalies.push({ severity: "warn", code: "cross-run.slice-timeout-cluster",
+        message: `Slice "${worst.sliceName}" timed out in ${worst.timeoutCount} runs — likely needs a longer timeout or should be split` });
+    }
+    return anomalies;
+  }
+
   // 1. Stalled run: in-progress but no events for >5 min
   if (snapshot.runState === "in-progress" && snapshot.lastEventAgeMs && snapshot.lastEventAgeMs > 5 * 60_000) {
     anomalies.push({
@@ -11800,6 +11826,32 @@ export function recommendFromAnomalies(anomalies, snapshot) {
         });
         break;
 
+      case "cross-run.recurring-gate-failure": {
+        const rf = snapshot.crossRun?.recurringFailures?.[0];
+        recs.push({ code, severity: anomaly.severity,
+          action: `Investigate slice "${rf?.sliceName}" — it has failed in ${rf?.failCount} consecutive runs`,
+          command: null });
+        break;
+      }
+      case "cross-run.retry-rate-spike":
+        recs.push({ code, severity: anomaly.severity,
+          action: "Check worker reliability — high retry rates may indicate flaky tests or resource contention",
+          command: null });
+        break;
+      case "cross-run.cost-anomaly-trend": {
+        const pct = snapshot.crossRun?.costTrendPercent;
+        recs.push({ code, severity: anomaly.severity,
+          action: `Run costs are trending up ~${pct}% — review model selection and slice token budgets`,
+          command: null });
+        break;
+      }
+      case "cross-run.slice-timeout-cluster": {
+        const tc = snapshot.crossRun?.sliceTimeoutClusters?.[0];
+        recs.push({ code, severity: anomaly.severity,
+          action: `Slice "${tc?.sliceName}" repeatedly times out — increase its timeout or split it into smaller slices`,
+          command: null });
+        break;
+      }
       default:
         recs.push({
           code,
@@ -11913,6 +11965,7 @@ export async function runWatch(options = {}) {
     targetPath,
     runId = null,
     mode = "snapshot",
+    crossRunWindow = "14d",
     model = DEFAULT_WATCHER_MODEL,
     timeout = 300_000,
     tailEvents = 25,
@@ -11927,6 +11980,27 @@ export async function runWatch(options = {}) {
   const resolved = resolve(targetPath);
   if (!existsSync(resolved)) {
     return { ok: false, error: `Target path does not exist: ${resolved}` };
+  }
+
+  // Phase-39 Slice 3 — cross-run aggregation mode
+  if (mode === "cross-run") {
+    const xSnap = await buildCrossRunSnapshot(resolved, { window: crossRunWindow });
+    const xAnomalies = detectWatchAnomalies(xSnap);
+    const xRecs = recommendFromAnomalies(xAnomalies, xSnap);
+    return {
+      ok: xSnap.ok,
+      mode: "cross-run",
+      targetPath: resolved,
+      crossRunWindow,
+      timestamp: new Date().toISOString(),
+      totalRuns: xSnap.totalRuns,
+      passedRuns: xSnap.passedRuns,
+      failedRuns: xSnap.failedRuns,
+      runs: xSnap.runs,
+      anomalies: xAnomalies,
+      recommendations: xRecs,
+      snapshot: xSnap,
+    };
   }
 
   const snapshot = await buildWatchSnapshot(resolved, runId, { tailEvents, sinceTimestamp });

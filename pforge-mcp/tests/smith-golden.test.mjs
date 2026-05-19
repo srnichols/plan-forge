@@ -56,6 +56,10 @@ function normalize(text) {
       .replace(/[^\S\n]*(?:✓|✅|Γ£à)[^\n]*Grok Aurora[^\n]*/g, "  <api-key-present>")
       .replace(/[^\S\n]*(?:⚠|⚠️|ΓÜá∩╕Å)[^\n]*No image API keys configured[^\n]*/g, "  <no-api-keys>")
       .replace(/[^\S\n]+FIX: Set XAI_API_KEY or OPENAI_API_KEY[^\n]*/g, "")
+      // Normalise block: 0/1/N api-key lines → single placeholder so the test is
+      // environment-agnostic regardless of how many keys are configured.
+      // Also consume any immediately-following blank line (left by FIX-line removal).
+      .replace(/(?:  <api-key-present>\n?|  <no-api-keys>\n?)+\n?/g, "  <api-key-section>\n")
       // Results summary: pass/fail/warning counts vary with environment state
       .replace(/Results:\s+\d+ passed\s*\|\s*\d+ failed\s*\|\s*\d+ warnings/g, "Results: <summary>")
       // "Fix the N issue(s) above" count varies

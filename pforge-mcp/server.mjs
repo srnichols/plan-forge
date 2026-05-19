@@ -4,30 +4,11 @@
  * Thin entrypoint + public re-export shim for the split server modules.
  */
 
-import { existsSync, readFileSync } from "node:fs";
+import "dotenv/config";
 import { resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { PROJECT_DIR, PROJECT_DIR_SOURCE, FRAMEWORK_VERSION } from "./server/state.mjs";
 import { runServerMain } from "./server/main.mjs";
-
-// ─── Load .env from project root (cwd) at startup ──────────────────────
-// Lightweight parser — existing process.env values always win.
-try {
-  const envPath = resolve(process.cwd(), ".env");
-  if (existsSync(envPath)) {
-    const envContent = readFileSync(envPath, "utf8");
-    for (const rawLine of envContent.split(/\r?\n/)) {
-      const line = rawLine.trim();
-      if (!line || line.startsWith("#")) continue;
-      const eq = line.indexOf("=");
-      if (eq < 1) continue;
-      const key = line.slice(0, eq).trim();
-      let value = line.slice(eq + 1).trim();
-      if ((value.startsWith('"') && value.endsWith('"')) || (value.startsWith("'") && value.endsWith("'"))) value = value.slice(1, -1);
-      if (key && process.env[key] === undefined) process.env[key] = value;
-    }
-  }
-} catch {}
 
 console.error(`[pforge-mcp] PROJECT_DIR=${PROJECT_DIR} (source=${PROJECT_DIR_SOURCE})`);
 console.error(`[pforge-mcp] FRAMEWORK_VERSION=${FRAMEWORK_VERSION}`);

@@ -25,9 +25,9 @@ intervention between runs.
 
 ```powershell
 pwsh -NoProfile -File scripts/sequence-plans.ps1 `
-  -NextPlan docs/plans/archive/Phase-GITHUB-D-METRICS-LEADERBOARD-PLAN.md `
+  -NextPlan docs/plans/Phase-N-YOUR-FEATURE-PLAN.md `
   -Model claude-sonnet-4.6 `
-  -Reason "Phase D follows Phase B"
+  -Reason "Sequenced after the previous plan finished"
 ```
 
 **Parameters**
@@ -49,9 +49,9 @@ pwsh -NoProfile -File scripts/sequence-plans.ps1 `
 
 ```bash
 bash scripts/sequence-plans.sh \
-  --next-plan docs/plans/archive/Phase-GITHUB-D-METRICS-LEADERBOARD-PLAN.md \
+  --next-plan docs/plans/Phase-N-YOUR-FEATURE-PLAN.md \
   --model claude-sonnet-4.6 \
-  --reason "Phase D follows Phase B"
+  --reason "Sequenced after the previous plan finished"
 ```
 
 ---

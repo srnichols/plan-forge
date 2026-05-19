@@ -149,7 +149,7 @@ The plan's Forbidden Actions invariants were preserved throughout:
 
 ### Plan
 
-Built from [docs/plans/archive/Phase-OPENBRAIN-PROMOTION-PLAN.md](docs/plans/archive/Phase-OPENBRAIN-PROMOTION-PLAN.md) — 6 slices, hardened with scope contract, forbidden actions, per-slice validation gates, and explicit decisions D1–D5.
+Built from [docs/plans/archive/Phase-OPENBRAIN-PROMOTION-PLAN.md](https://github.com/srnichols/plan-forge/blob/planning/main/docs/plans/archive/Phase-OPENBRAIN-PROMOTION-PLAN.md) — 6 slices, hardened with scope contract, forbidden actions, per-slice validation gates, and explicit decisions D1–D5.
 
 ---
 

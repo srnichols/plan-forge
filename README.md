@@ -201,6 +201,8 @@ See [.github/instructions/git-workflow.instructions.md](.github/instructions/git
 
 See [CONTRIBUTING.md](CONTRIBUTING.md). For extensions: [extensions/PUBLISHING.md](extensions/PUBLISHING.md). For skills: [docs/SKILL-BLUEPRINT.md](docs/SKILL-BLUEPRINT.md).
 
+> **Heads-up for forkers**: Plan Forge's own dev planning artifacts (active phase plans, internal roadmap, testbed findings) live on the [`planning/main`](https://github.com/srnichols/plan-forge/tree/planning/main) branch, not `master`. This keeps `master` clean as a template. See [CONTRIBUTING.md → Branch Model](CONTRIBUTING.md#branch-model) for the workflow.
+
 ---
 
 ## License

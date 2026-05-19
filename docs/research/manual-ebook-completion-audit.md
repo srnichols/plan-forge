@@ -6,7 +6,8 @@
 > chapters and references that an ebook reader expects to find but that the manual doesn't yet provide.
 >
 > **Status**: Discussion document. Drives the execution plan at
-> [`docs/plans/Phase-MANUAL-EBOOK-COMPLETION-PLAN.md`](../plans/Phase-MANUAL-EBOOK-COMPLETION-PLAN.md).
+> [`docs/plans/Phase-MANUAL-EBOOK-COMPLETION-PLAN.md`](https://github.com/srnichols/plan-forge/blob/planning/main/docs/plans/Phase-MANUAL-EBOOK-COMPLETION-PLAN.md)
+> (lives on `planning/main`).
 > **Scope reviewed**: Full TOC of `docs/manual/` (29 chapters across 5 Parts + 17 appendices),
 > the blog inventory under `docs/blog/`, and the source surfaces (`pforge-mcp/EVENTS.md`,
 > `docs/REST-API.md`, `pforge-mcp/capabilities.mjs`, `pforge.ps1`, `extensions/catalog.json`).
@@ -29,7 +30,7 @@ If we only do **three things** from this list, do these:
 2. **Foreword** absorbing the existing blog posts into ebook voice ("From Impossible to Seven Minutes") **and** explicitly volunteering the positioning disclaimer in a paragraph titled *"What this book is **not**"*. The book has no origin story; the blog does.
 3. **Cost & Economics chapter** — Plan Forge's biggest commercial question is *"how much will this cost me?"* and the manual doesn't answer it directly. The data is in the dashboard's Cost tab and in `forge_cost_report`; the narrative is missing. Lead with the **four levers** documented in §2 below (quality-at-constant-time, quality-per-extra-dollar, rework-avoidance, memory-as-subsidy) and the **compounding flywheel** observation — the cost curve bends downward over the life of a project, which is the opposite of what most engineering managers default-assume.
 
-The full execution plan ([`Phase-MANUAL-EBOOK-COMPLETION-PLAN.md`](../plans/Phase-MANUAL-EBOOK-COMPLETION-PLAN.md))
+The full execution plan ([`Phase-MANUAL-EBOOK-COMPLETION-PLAN.md`](https://github.com/srnichols/plan-forge/blob/planning/main/docs/plans/Phase-MANUAL-EBOOK-COMPLETION-PLAN.md))
 breaks the gap-closure into **18 independently shippable content slices + 1 QA closer = 19 slices total** across 4 clusters
 (Story · Reference · Domain · Closure).
 
@@ -224,7 +225,7 @@ Result: the positioning is correct but invisible to the audience most at risk of
 **Why this matters for the plan.** Item #6 should not be a standalone slice; it should be
 **baked into Slices A1 (Foreword) and A2 (Reader-Journey Ladders) plus a small standalone edit
 to `index.html` / `README.md` / `what-is-plan-forge.html`**. The execution plan
-([`Phase-MANUAL-EBOOK-COMPLETION-PLAN.md`](../plans/Phase-MANUAL-EBOOK-COMPLETION-PLAN.md))
+([`Phase-MANUAL-EBOOK-COMPLETION-PLAN.md`](https://github.com/srnichols/plan-forge/blob/planning/main/docs/plans/Phase-MANUAL-EBOOK-COMPLETION-PLAN.md))
 should grow a small new slice — call it **A6 — Above-the-fold positioning** — between A5 and
 Cluster B. Cost: roughly one focused commit. Impact: prevents the wrong frame from forming in
 the first thirty seconds of contact with the book.
@@ -310,7 +311,7 @@ briefing carries a STATUS pill with the version stamp, identical to other chapte
 briefing is visually obvious.
 
 **Slice in the plan.** This is **Slice A7 — Stakeholder Briefing** in
-[`Phase-MANUAL-EBOOK-COMPLETION-PLAN.md`](../plans/Phase-MANUAL-EBOOK-COMPLETION-PLAN.md).
+[`Phase-MANUAL-EBOOK-COMPLETION-PLAN.md`](https://github.com/srnichols/plan-forge/blob/planning/main/docs/plans/Phase-MANUAL-EBOOK-COMPLETION-PLAN.md).
 Depends on A6 (positioning sentence locked) and the cost-levers table from Cluster C
 (reusable). Lower-priority than A6 (which fixes the upstream "wrong-frame" problem), but the
 single most leveraged slice for the maintainer who is actively pitching prospects.
@@ -454,7 +455,7 @@ Not blocking, not in the execution plan; recorded here so it isn't forgotten:
 
 ## 4 · Why this round picks the slices it picks
 
-The execution plan ([`Phase-MANUAL-EBOOK-COMPLETION-PLAN.md`](../plans/Phase-MANUAL-EBOOK-COMPLETION-PLAN.md))
+The execution plan ([`Phase-MANUAL-EBOOK-COMPLETION-PLAN.md`](https://github.com/srnichols/plan-forge/blob/planning/main/docs/plans/Phase-MANUAL-EBOOK-COMPLETION-PLAN.md))
 orders work as **Cluster A (Story) → B (Reference) → C (Domain chapters)** even though the gap
 analysis above is presented in the opposite order. The reasoning:
 
@@ -571,7 +572,7 @@ above, plus a short narrative of any deferred or follow-up items.
 
 **Order in the slice plan**: Slice QA runs **last**. It depends on every content slice having
 shipped (or being explicitly deferred with a recorded reason). Captured as Cluster D — Phase
-Closure in [`Phase-MANUAL-EBOOK-COMPLETION-PLAN.md`](../plans/Phase-MANUAL-EBOOK-COMPLETION-PLAN.md).
+Closure in [`Phase-MANUAL-EBOOK-COMPLETION-PLAN.md`](https://github.com/srnichols/plan-forge/blob/planning/main/docs/plans/Phase-MANUAL-EBOOK-COMPLETION-PLAN.md).
 
 ## 4c · Diagram requirements per slice
 
@@ -672,7 +673,7 @@ These weren't resolved in the audit chat and want a thumbs-up before slice execu
 ## 6 · Cross-references
 
 - **Round 1 review** (Apress scaffolding focus): [`manual-apress-publisher-review.md`](manual-apress-publisher-review.md)
-- **Execution plan** (slice-by-slice playbook): [`../plans/Phase-MANUAL-EBOOK-COMPLETION-PLAN.md`](../plans/Phase-MANUAL-EBOOK-COMPLETION-PLAN.md)
+- **Execution plan** (slice-by-slice playbook): [`Phase-MANUAL-EBOOK-COMPLETION-PLAN.md`](https://github.com/srnichols/plan-forge/blob/planning/main/docs/plans/Phase-MANUAL-EBOOK-COMPLETION-PLAN.md) (lives on `planning/main`)
 - **Source surfaces**:
   - Blog inventory: [`../blog/`](../blog/)
   - Tools manifest: `pforge-mcp/tools.json` (canonical tool count)

@@ -4,9 +4,9 @@
 #
 # Usage:
 #   pwsh -NoProfile -File scripts/sequence-plans.ps1 `
-#     -NextPlan docs/plans/archive/Phase-GITHUB-D-METRICS-LEADERBOARD-PLAN.md `
+#     -NextPlan docs/plans/Phase-N-YOUR-FEATURE-PLAN.md `
 #     -Model claude-sonnet-4.6 `
-#     -Reason "Phase D follows Phase B"
+#     -Reason "Sequenced after the previous plan finished"
 #
 # Designed to run unattended overnight. Polls every 60s; on completion of the
 # current orchestrator, validates exit (non-empty events.log + a 'run-completed'

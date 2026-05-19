@@ -1,6 +1,6 @@
 # How We Plan & Build
 
-> **Purpose**: Overview of the planning and execution pipeline for this project.  
+> **Purpose**: Overview of the planning and execution pipeline for this project.
 > **Audience**: Developers and AI agents working on roadmap phases.
 
 ---
@@ -78,21 +78,34 @@ See the [Instructions file](./AI-Plan-Hardening-Runbook-Instructions.md) for det
 
 ---
 
-## Historical Phase Archives
+## Plan Forge's Own Dev Plans Live On Another Branch
 
-Plan Forge's own development is built using the pipeline it ships. Completed
-`Phase-*.md` files from prior release cycles are kept on archive branches so
-this template project's `docs/plans/` stays clean for downstream users:
+Plan Forge's own development uses the pipeline it ships, but those internal
+`Phase-*-PLAN.md` files (active drafts, shipped phase records, internal
+roadmaps, testbed findings) are **not** on `master`. They live on
+[`planning/main`](https://github.com/srnichols/plan-forge/tree/planning/main/docs/plans)
+so this template project's `master` stays clean for downstream users — what
+you see in `docs/plans/` here is exactly what a consuming project gets.
 
-| Branch | Contents | Cycle |
-|--------|----------|-------|
-| [`archive/plans-v2.52.x`](https://github.com/srnichols/plan-forge/tree/archive/plans-v2.52.x/docs/plans) | 28 Phase files: CRUCIBLE-01..04, FORGE-SHOP-01..07 + ARC, TEMPER-01..07 + ARC, TESTBED-01..02 + ARC, HOTFIX-2.49.1 / 2.50.1, AUTO-UPDATE-01, SMITH-01 | v2.33 → v2.52.x |
+| Branch | Contents | When |
+|--------|----------|------|
+| [`planning/main`](https://github.com/srnichols/plan-forge/tree/planning/main/docs/plans) | Active Plan Forge dev phases (`Phase-N-*-PLAN.md`), internal `DEPLOYMENT-ROADMAP.md`, cleanup findings, testbed findings | Current cycle (v3.x +) |
+| [`planning/<topic>`](https://github.com/srnichols/plan-forge/branches/all?query=planning) | Short-lived topic branches forked off `planning/main` for in-flight DRAFTs | While DRAFT |
+| [`archive/plans-v2.52.x`](https://github.com/srnichols/plan-forge/tree/archive/plans-v2.52.x/docs/plans) | 28 historical Phase files: CRUCIBLE-01..04, FORGE-SHOP-01..07 + ARC, TEMPER-01..07 + ARC, TESTBED-01..02 + ARC, HOTFIX-2.49.1 / 2.50.1, AUTO-UPDATE-01, SMITH-01 | v2.33 → v2.52.x |
 
-To view a historical plan:
+To view a Plan Forge phase plan:
 
 ```bash
+# Current cycle (v3.x +)
+git show planning/main:docs/plans/Phase-39-AUDITOR-AUTOMATION-PLAN.md
+
+# Or check the planning branch out locally
+git fetch origin planning/main
+git checkout planning/main -- docs/plans/
+
+# Older cycles
 git show archive/plans-v2.52.x:docs/plans/Phase-CRUCIBLE-01.md
-# or
-git checkout archive/plans-v2.52.x -- docs/plans/Phase-TEMPER-01.md
 ```
+
+> **Why this split?** See [CONTRIBUTING.md → Branch Model](../../CONTRIBUTING.md#branch-model) for the full rationale.
 

@@ -1,0 +1,74 @@
+name: Sync master → planning/main
+
+# Keeps the long-lived planning/main branch in sync with master so Plan Forge
+# dev plans see the latest framework code and instruction updates.
+#
+# See CONTRIBUTING.md → Branch Model for the rationale.
+#
+# Behaviour:
+#   - Fast-forwards / clean merges → auto-push planning/main.
+#   - Merge conflicts → workflow FAILS with resolution instructions in the log.
+#     Maintainer resolves locally, preserving dev artifacts on planning/main.
+
+on:
+  push:
+    branches: [master]
+  schedule:
+    # Weekly safety net — every Monday 06:00 UTC
+    - cron: '0 6 * * 1'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: sync-master-to-planning
+  cancel-in-progress: false
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out planning/main
+        uses: actions/checkout@v4
+        with:
+          ref: planning/main
+          fetch-depth: 0
+
+      - name: Configure git identity
+        run: |
+          git config user.name  "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+      - name: Fetch master
+        run: git fetch origin master:refs/remotes/origin/master
+
+      - name: Attempt merge
+        id: merge
+        run: |
+          set +e
+          git merge --no-edit --no-ff origin/master \
+            -m "chore: sync master into planning/main"
+          status=$?
+          set -e
+          echo "exit_code=$status" >> "$GITHUB_OUTPUT"
+          if [ "$status" -ne 0 ]; then
+            echo "Conflict detected. Aborting merge to leave planning/main clean."
+            git merge --abort || true
+          fi
+
+      - name: Push merged planning/main
+        if: steps.merge.outputs.exit_code == '0'
+        run: git push origin planning/main
+
+      - name: Report conflict (fails the run)
+        if: steps.merge.outputs.exit_code != '0'
+        run: |
+          echo "::error::Merge conflict syncing master into planning/main."
+          echo "::error::Resolve locally, preserving dev artifacts on planning/main:"
+          echo "::error::  git checkout planning/main && git pull"
+          echo "::error::  git fetch origin master && git merge origin/master"
+          echo "::error::  # On conflict in docs/plans/Phase-*-PLAN.md, archive/, DEPLOYMENT-ROADMAP.md:"
+          echo "::error::  #   keep the planning/main version (git checkout --ours <path>)"
+          echo "::error::  git push origin planning/main"
+          exit 1

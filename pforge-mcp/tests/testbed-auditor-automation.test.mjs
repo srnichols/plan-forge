@@ -422,7 +422,7 @@ describe("S10 — behavioral: watcher-cross-run-anomalies", () => {
 
     const snapshot = await buildCrossRunSnapshot(rootDir, { window: "14d" });
     const anomalies = detectWatchAnomalies(snapshot);
-    const recs = recommendFromAnomalies(anomalies);
+    const recs = recommendFromAnomalies(anomalies, snapshot);
     expect(Array.isArray(recs)).toBe(true);
     if (anomalies.length > 0) {
       expect(recs.length).toBeGreaterThan(0);

@@ -1,6 +1,13 @@
+---
+phase: 41
+name: ENUMS-CENTRALIZATION
+status: HARDENED
+lockHash: b00d38c9f7f41e326ec1636e4ba920eb4910ff276bd544052bce1931703cfc5e
+---
+
 # Phase ENUMS-CENTRALIZATION — Single source of truth for stable small-set identifiers
 
-> **Status**: **DRAFT — pending Step-2 harden**. Do NOT execute. Sign-off needed on §"Scope Contract" + §"Resolved Decisions" before running `step2-harden-plan.prompt.md`.
+> **Status**: **HARDENED — awaiting Execution Hold lift**. Cleared for `pforge run-plan` once Execution Hold checklist is satisfied. Step-2 harden completed 2026-05-19.
 > **Source**: Carryover from Phase-AUDITOR-AUTOMATION planning session (2026-05-18) where four hardcoded-array surfaces had to be hand-scoped into the parent plan because no enum existed to enumerate against.
 > **Tracks**: `pforge-mcp/enums.mjs` (new), `pforge-mcp/capabilities.mjs`, `pforge-mcp/cost-service.mjs`, `pforge.ps1` + `pforge.sh` (`smith`), `docs/capabilities.md` (auto-gen target), `docs/manual/errors-and-exit-codes.html` (auto-gen target), `docs/manual/forge-json-reference.html` (cross-link target).
 > **Estimated cost**: low–medium. Zero new LLM-cost surfaces. Most slices are mechanical migration with CI guards. The doc auto-gen in S3/S4 is the only creative work.
@@ -157,71 +164,104 @@ Decisions locked at draft time; Step-2 hardener may sharpen but should not re-li
 
 ## Slice Decomposition
 
-### S0 — Baseline test harness
+### Slice 0 — Baseline test harness
 
 - Capture golden `pforge smith` output against `E:\GitHub\plan-forge-testbed` to `pforge-mcp/tests/fixtures/smith-golden-pre-enums.txt`
 - Capture current `docs/capabilities.md` tool count, `docs/manual/glossary.html` count comment, and `docs/llms.txt` tool inventory to `pforge-mcp/tests/fixtures/capabilities-doc-pre-enums.snapshot.json`
 - Capture current named-error-catalog HTML row count + code list to `pforge-mcp/tests/fixtures/error-catalog-pre-enums.snapshot.json`
 - New stub `pforge-mcp/tests/enums.test.mjs` that fails on missing import (red-state baseline for S1)
-- **Gate**: `bash -c "test -f pforge-mcp/tests/fixtures/smith-golden-pre-enums.txt && test -f pforge-mcp/tests/fixtures/capabilities-doc-pre-enums.snapshot.json && test -f pforge-mcp/tests/fixtures/error-catalog-pre-enums.snapshot.json && cd pforge-mcp && npx vitest run tests/enums.test.mjs 2>&1 | grep -q 'fail'"` returns 0 (red baseline confirmed)
+- **Validation Gate**:
 
-### S1 — Create `pforge-mcp/enums.mjs` + tests
+```bash
+node -e "const fs=require('fs');const files=['pforge-mcp/tests/fixtures/smith-golden-pre-enums.txt','pforge-mcp/tests/fixtures/capabilities-doc-pre-enums.snapshot.json','pforge-mcp/tests/fixtures/error-catalog-pre-enums.snapshot.json'];for(const f of files){if(!fs.existsSync(f))throw new Error('missing fixture: '+f);}const{spawnSync}=require('child_process');const r=spawnSync('npx',['vitest','run','tests/enums.test.mjs'],{cwd:'pforge-mcp',shell:true,encoding:'utf8'});if(r.status===0)throw new Error('expected red baseline but enums.test.mjs passed');console.log('ok red baseline confirmed');"
+```
+
+### Slice 1 — Create `pforge-mcp/enums.mjs` + tests
 
 - New file `pforge-mcp/enums.mjs` with all 8 exports per §"In Scope" S1 (excluding `ERROR_CODES`, which is filled in S4)
 - `ERROR_CODES = Object.freeze({})` placeholder with TODO comment pointing to S4
 - `pforge-mcp/tests/enums.test.mjs` — covers frozen-ness, assert helpers, cross-checks
 - No consumer migration in this slice; enums.mjs ships unconsumed
-- **Gate**: `bash -c "cd pforge-mcp && npx vitest run tests/enums.test.mjs"` returns 0
+- **Validation Gate**:
 
-### S2 — Migrate `pforge smith` (ps1 + sh)
+```bash
+node -e "process.chdir('pforge-mcp'); require('child_process').execSync('npx vitest run tests/enums.test.mjs', {stdio:'inherit'});"
+```
+
+### Slice 2 — Migrate `pforge smith` (ps1 + sh)
 
 - New `pforge-mcp/bin/enums-cli.mjs` — minimal CLI: `--enum <NAME> [--format text|json]`
 - `pforge.ps1` smith section — replace `$liveGuardHooks`, `$configKeyMap`, `$allExpectedHooks` literals with calls to enums-cli; preserve all output formatting
 - `pforge.sh` smith section — same migration; ADD LiveGuard hooks check (was previously absent — bash parity)
 - New test `pforge-mcp/tests/smith-golden.test.mjs` — runs `pforge smith` against the testbed, diffs stdout against S0 golden, asserts byte-identical
-- **Gate**: `bash -c "cd pforge-mcp && npx vitest run tests/smith-golden.test.mjs && diff <(./pforge.sh smith 2>&1) <(pwsh -NoProfile -File ./pforge.ps1 smith 2>&1) | head -50"` exits 0 and the diff shows only expected platform differences (path separators, etc.) — not enum content
+- Cross-shell diff verification deferred to S6 (process-spawn diff is platform-fragile inside a node -e gate; smith-golden vitest is the authoritative check)
+- **Validation Gate**:
 
-### S3 — Migrate `capabilities.mjs` + auto-gen `docs/capabilities.md`
+```bash
+node -e "process.chdir('pforge-mcp'); require('child_process').execSync('npx vitest run tests/smith-golden.test.mjs', {stdio:'inherit'});"
+```
+
+### Slice 3 — Migrate `capabilities.mjs` + auto-gen `docs/capabilities.md`
 
 - `pforge-mcp/capabilities.mjs` — every tool-name literal replaced with `TOOL_NAMES.foo`
 - New `scripts/generate-capabilities-doc.mjs` — emits the `## MCP Tools (N)` table; also updates count in `docs/manual/glossary.html` `<!--c:tools-->N<!--/c-->` and `docs/llms.txt`
 - New `scripts/check-capabilities-doc.mjs` — runs generator into temp dir, diffs against committed; non-zero exit on drift
 - Run generator once to regenerate committed doc (this slice's actual content change to docs/)
 - Wire `check-capabilities-doc.mjs` into the preCommit chain (per Phase-WORKER-GUARDRAILS pattern)
-- **Gate**: `bash -c "node scripts/generate-capabilities-doc.mjs --dry-run && node scripts/check-capabilities-doc.mjs"` returns 0
+- **Validation Gate**:
 
-### S4 — Migrate error catalog + auto-gen `errors-and-exit-codes.html`
+```bash
+node -e "const cp=require('child_process');cp.execSync('node scripts/generate-capabilities-doc.mjs --dry-run',{stdio:'inherit'});cp.execSync('node scripts/check-capabilities-doc.mjs',{stdio:'inherit'});"
+```
+
+### Slice 4 — Migrate error catalog + auto-gen `errors-and-exit-codes.html`
 
 - Walk throw sites; populate `ERROR_CODES` in `enums.mjs`
 - Migrate throw sites to use `ERROR_CODES.foo` (incremental; codes that can't be cleanly migrated stay literal with a `// TODO: enum migration` marker — those become a follow-up SHOULD)
 - New `scripts/generate-error-catalog.mjs` — emits the named-error table in `docs/manual/errors-and-exit-codes.html`
 - New `scripts/check-error-catalog.mjs` — same pattern as S3
 - Wire into preCommit chain
-- **Gate**: `bash -c "node scripts/generate-error-catalog.mjs --dry-run && node scripts/check-error-catalog.mjs"` returns 0
+- **Validation Gate**:
 
-### S5 — Migrate quorum/cost-source/mode strings
+```bash
+node -e "const cp=require('child_process');cp.execSync('node scripts/generate-error-catalog.mjs --dry-run',{stdio:'inherit'});cp.execSync('node scripts/check-error-catalog.mjs',{stdio:'inherit'});"
+```
+
+### Slice 5 — Migrate quorum/cost-source/mode strings
 
 - `pforge-mcp/orchestrator.mjs` — `QUORUM_MODES` and `WATCHER_MODES` migrations
 - `pforge-mcp/cost-service.mjs` — `COST_SOURCES` validation at ingest boundary only (do NOT touch `costForLeg()`)
 - `pforge-master/src/config.mjs` — `MODEL_TIERS` + `FORGE_MASTER_MODES` validation in `getForgeMasterConfig()`
 - `pforge.ps1` + `pforge.sh` — quorum mode parsing migrated via enums-cli (only if node already required on that path; otherwise defer to a follow-up)
-- **Gate**: `bash -c "cd pforge-mcp && npx vitest run && cd ../pforge-master && npx vitest run"` returns 0 (full existing test suites must still pass — pure migration, zero behavior change)
+- **Validation Gate**:
 
-### S6 — Full QA sweep
+```bash
+node -e "const cp=require('child_process');cp.execSync('npx vitest run',{cwd:'pforge-mcp',stdio:'inherit',shell:true});cp.execSync('npx vitest run',{cwd:'pforge-master',stdio:'inherit',shell:true});"
+```
+
+### Slice 6 — Full QA sweep
 
 - Re-run S0 golden capture; diff against post-migration smith output (MUST be byte-identical)
 - Run both `pforge-mcp` and `pforge-master` test suites
 - Run `node scripts/check-capabilities-doc.mjs && node scripts/check-error-catalog.mjs` (both exit 0)
 - Run `forge_capabilities` via MCP — assert `tools.length === TOOL_NAMES.length`
 - Run `pforge smith` and `pforge check` against the testbed — both exit 0, output reviewed manually
-- **Gate**: `bash -c "cd pforge-mcp && npx vitest run && cd ../pforge-master && npx vitest run && node scripts/check-capabilities-doc.mjs && node scripts/check-error-catalog.mjs"` returns 0
+- **Validation Gate**:
 
-### S7 — Docs sweep + retro
+```bash
+node -e "const cp=require('child_process');cp.execSync('npx vitest run',{cwd:'pforge-mcp',stdio:'inherit',shell:true});cp.execSync('npx vitest run',{cwd:'pforge-master',stdio:'inherit',shell:true});cp.execSync('node scripts/check-capabilities-doc.mjs',{stdio:'inherit'});cp.execSync('node scripts/check-error-catalog.mjs',{stdio:'inherit'});"
+```
+
+### Slice 7 — Docs sweep + retro
 
 - Per §"In Scope" S7
 - `CHANGELOG.md` entry under `[Unreleased]`: `### Changed — Centralized stable enums (no behavior change)`
 - Retro at `docs/plans/testbed-findings/Phase-ENUMS-CENTRALIZATION-retro.md`
-- **Gate**: `bash -c "grep -q 'enums.mjs' .github/instructions/architecture-principles.instructions.md && grep -q 'Centralized stable enums' CHANGELOG.md && test -f docs/plans/testbed-findings/Phase-ENUMS-CENTRALIZATION-retro.md"` returns 0
+- **Validation Gate**:
+
+```bash
+node -e "const fs=require('fs');const a=fs.readFileSync('.github/instructions/architecture-principles.instructions.md','utf8');if(!/enums\.mjs/i.test(a))throw new Error('Temper Guard not updated with enums.mjs reference');const c=fs.readFileSync('CHANGELOG.md','utf8');if(!/Centralized stable enums/.test(c))throw new Error('CHANGELOG entry missing');if(!fs.existsSync('docs/plans/testbed-findings/Phase-ENUMS-CENTRALIZATION-retro.md'))throw new Error('retro file missing');console.log('ok S7 verification');"
+```
 
 ---
 
@@ -319,7 +359,7 @@ All commits land on `master`. PreCommit chain (shipped in WORKER-GUARDRAILS A3) 
 | Date | Action | By |
 |---|---|---|
 | 2026-05-18 | Draft created from Phase-AUDITOR-AUTOMATION planning carryover — user surfaced the question "should we make some global enumerations so we are consistent across the app?" after observing that PostRun + forge_master_observe each had to be scoped as multiple separate file edits because no enum existed | Copilot session |
-| _pending_ | Step-2 harden: lockHash, sharpen S4 throw-site walk methodology, decide whether quorum-mode parsing in `pforge.ps1` / `pforge.sh` ships in S5 or deferred | _pending_ |
+| 2026-05-19 | Step-2 harden: added frontmatter (phase 41, name ENUMS-CENTRALIZATION, status HARDENED, lockHash); renamed slice headers S0..S7 → Slice 0..Slice 7 for parser compatibility; rewrote all 8 inline-backtick gate markers as fenced bash blocks containing portable node -e bodies (no shell pipes, no bash invocation, no process-substitution diff, no grep redirect). S2 cross-shell diff verification deferred to S6. S4 throw-site walk methodology and S5 quorum-mode parsing scope left as in-slice judgment calls per Resolved Decision #9. lockHash protects Forbidden Actions list + slice contents | Copilot session (auto-harden) |
 | _pending_ | Execution Hold lifted (gates on AUDITOR-AUTOMATION + AUDITOR-AUTOMATION-UI shipping) | _pending_ |
 
 ---

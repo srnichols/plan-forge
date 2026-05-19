@@ -393,6 +393,7 @@ All commits land on `master`. PreCommit chain (shipped in WORKER-GUARDRAILS A3) 
 
 ## Carryover (explicitly out of this phase)
 
+- **Stable-enum centralization** — [docs/plans/Phase-ENUMS-CENTRALIZATION-PLAN.md](Phase-ENUMS-CENTRALIZATION-PLAN.md) drafted from this phase's planning friction. The 4 hardcoded-surface updates locked into this plan's Scope Contract (smith hook arrays, capabilities.mjs tool list, server.mjs self-test) are exactly the pattern that drove the enums phase. Execution Hold gates on **this** phase + the UI follow-up shipping first, so enums.mjs seeds with the final post-AUDITOR shape.
 - **Dashboard UI follow-up** — [docs/plans/Phase-AUDITOR-AUTOMATION-UI-PLAN.md](Phase-AUDITOR-AUTOMATION-UI-PLAN.md) covers: settings tab for Forge-Master roles (`tab-settings-forgemaster` with `observer.*` and `auditor.*` `cfg-*` fields), observer narrations live card, cross-run watcher anomalies card, auditor latest-report card. Drafted but explicitly gated on this phase shipping first — the UI surfaces depend on the config fields and capabilities this phase creates.
 - A4 auditor opening PRs with proposed patches (auditor stays read-only this phase)
 - Cross-machine observer aggregation (single-machine only this phase)

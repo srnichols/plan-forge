@@ -51,6 +51,24 @@ tags: [clean-code-review]
 
 ---
 
+## When you spot duplication (DRY)
+
+Two copies is already drift. Don't wait for a third.
+
+| Pattern | Action |
+|---------|--------|
+| Same string/numeric literal in ≥2 sites | Extract to a `const`. If it's from a stable small set (hook names, modes, tiers, error codes), centralize in an enums/constants module — never re-type |
+| Same 3+ line code block in ≥2 sites | Extract to a helper function in the nearest shared module |
+| Same regex / format string in ≥2 sites | Extract to a named `const` so a fix lands in one place |
+| Same config shape constructed in ≥2 sites | Extract a factory function returning the shape |
+| Parallel switch/if chains over the same values in ≥2 functions | Extract a single mapping object or strategy table |
+
+**Why so strict?** Hand-typed string literals scattered across a codebase become multi-week cleanup projects once they reach 20+ sites. Catching duplication at copy #2 is one extract; catching it at #50 is a migration phase.
+
+`/clean-code-review` runs `jscpd` to surface inline duplicates mechanically — but the literal/symbol duplicates above won't trigger jscpd unless the surrounding code matches. Catch those by hand at review time.
+
+---
+
 ## Module size
 
 | Tier | LOC | Action |

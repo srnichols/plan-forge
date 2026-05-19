@@ -2,7 +2,7 @@
 phase: 54
 name: GH-METRICS-PERSONAL
 status: HARDENED
-lockHash: PENDING
+lockHash: 44a28f3b656d50e9a79a9c7b769adcae57c95b19ef86b82753e7520dbe28217c
 ---
 
 # Phase 54 — GH-METRICS-PERSONAL — Make the "GitHub × Plan-Forge" tab useful for personal accounts
@@ -192,7 +192,7 @@ All decisions for this phase are resolved in §"Resolved Decisions" above (15 it
 - Each test MUST use `createMockGh` (no real `gh` invocation) — the test suite must pass on a machine without `gh` installed
 - **Validation Gate**:
 ```bash
-node -e "const fs=require('fs');const required=['pforge-mcp/github-personal.mjs','pforge-mcp/tests/github-personal.test.mjs','pforge-mcp/tests/fixtures/github-personal/user-profile.json','pforge-mcp/tests/fixtures/github-personal/repo-summary.json','pforge-mcp/tests/fixtures/github-personal/commits-with-copilot.json','pforge-mcp/tests/fixtures/github-personal/commits-no-copilot.json','pforge-mcp/tests/fixtures/github-personal/repo-not-found.json'];for(const p of required){if(!fs.existsSync(p))throw new Error('missing: '+p);}const m=fs.readFileSync('pforge-mcp/github-personal.mjs','utf8');for(const sym of ['fetchUserProfile','fetchRepoSummary','scanCopilotCoauthors','PersonalError','PersonalAuthError','PersonalNotFoundError','PersonalRateLimitError']){if(!new RegExp('export\\\\s+(function|class)\\\\s+'+sym+'\\\\b').test(m))throw new Error('missing export: '+sym);}console.log('ok S0 structure');"
+node -e "const fs=require('fs');const required=['pforge-mcp/github-personal.mjs','pforge-mcp/tests/github-personal.test.mjs','pforge-mcp/tests/fixtures/github-personal/user-profile.json','pforge-mcp/tests/fixtures/github-personal/repo-summary.json','pforge-mcp/tests/fixtures/github-personal/commits-with-copilot.json','pforge-mcp/tests/fixtures/github-personal/commits-no-copilot.json','pforge-mcp/tests/fixtures/github-personal/repo-not-found.json'];for(const p of required){if(!fs.existsSync(p))throw new Error('missing: '+p);}const m=fs.readFileSync('pforge-mcp/github-personal.mjs','utf8');for(const sym of ['fetchUserProfile','fetchRepoSummary','scanCopilotCoauthors','PersonalError','PersonalAuthError','PersonalNotFoundError','PersonalRateLimitError']){if(!m.includes('export function '+sym)&&!m.includes('export class '+sym))throw new Error('missing export: '+sym);}console.log('ok S0 structure');"
 node -e "process.chdir('pforge-mcp'); require('child_process').execSync('npx vitest run tests/github-personal.test.mjs', {stdio:'inherit',shell:true});"
 ```
 
@@ -245,7 +245,7 @@ node -e "process.chdir('pforge-mcp'); require('child_process').execSync('npx vit
 - The org-mode code path (the four `xxxEl.innerHTML = window.githubMetricsRender...` lines) MUST be preserved unchanged
 - **Validation Gate**:
 ```bash
-node -e "const fs=require('fs');const h=fs.readFileSync('pforge-mcp/dashboard/index.html','utf8');for(const id of ['gm-personal-account-card','gm-personal-repo-card','gm-personal-ai-card']){if(!h.includes('id=\"'+id+'\"'))throw new Error('container missing: '+id);}if(!/github-personal-tab\\.mjs/.test(h))throw new Error('script tag missing');if(!/personal mode/i.test(h))throw new Error('subtitle not updated');const a=fs.readFileSync('pforge-mcp/dashboard/app.js','utf8');if(!/\\/api\\/github-personal/.test(a))throw new Error('app.js does not call /api/github-personal');if(!/githubPersonalRenderAccountCard/.test(a))throw new Error('app.js does not call account renderer');if(!/githubMetricsRenderAdoptionPanel/.test(a))throw new Error('org-mode renderer call deleted from app.js');console.log('ok S3 structure');"
+node -e "const fs=require('fs');const h=fs.readFileSync('pforge-mcp/dashboard/index.html','utf8');for(const id of ['gm-personal-account-card','gm-personal-repo-card','gm-personal-ai-card']){if(!h.includes('id=\"'+id+'\"'))throw new Error('container missing: '+id);}if(!h.includes('github-personal-tab.mjs'))throw new Error('script tag missing');if(h.toLowerCase().indexOf('personal mode')<0)throw new Error('subtitle not updated');const a=fs.readFileSync('pforge-mcp/dashboard/app.js','utf8');if(!a.includes('/api/github-personal'))throw new Error('app.js does not call /api/github-personal');if(!a.includes('githubPersonalRenderAccountCard'))throw new Error('app.js does not call account renderer');if(!a.includes('githubMetricsRenderAdoptionPanel'))throw new Error('org-mode renderer call deleted from app.js');console.log('ok S3 structure');"
 node -e "process.chdir('pforge-mcp'); require('child_process').execSync('npx vitest run tests/github-personal-tab.test.mjs tests/github-personal-rest.test.mjs tests/github-personal.test.mjs tests/github-metrics-dashboard.test.mjs', {stdio:'inherit',shell:true});"
 ```
 

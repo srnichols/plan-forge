@@ -7,6 +7,11 @@ Format follows [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
+### Fixed — ESLint D-series tooling integration (Phase 43 S0)
+
+- **`scripts/audit/run-eslint-clean-code.mjs`** (NEW): CJS-safe ESLint runner that invokes `node_modules/eslint/bin/eslint.js` via `spawnSync` instead of ESM import, bypassing the `@eslint/eslintrc`/ajv incompatibility under Node.js 24+. Saves structured JSON to `docs/plans/cleanup-findings/raw/eslint-report.json`.
+- **`scripts/audit/clean-code-review.mjs`**: Added `run-eslint-clean-code` to the audit scripts array; added `eslint-d-series` category that parses `eslint-report.json` for D1 (`complexity-error`), D2 (`max-lines-per-function-error`), and D3 (`max-params-error`) violations. `npm run audit:full` now reports all D-series errors inline. Current baseline: **127 errors** (119 D1, 8 D2, 0 D3 — D3 resolved by Phase 51/52 splits).
+
 ### Added — Personal Mode for the GitHub × Plan-Forge dashboard tab (Phase 54)
 
 **Personal Mode** auto-engages when no org slug is configured or the Copilot Metrics API returns no data. Org Mode is preserved verbatim; Personal Mode is purely additive.

@@ -91,9 +91,23 @@ function suggestFrozenArraysFix(finding, file) {
   return `Consider importing ${finding.enum} and replacing hand-typed "${finding.literal}" in ${file}:${finding.line}`;
 }
 
+function suggestEslintFix(msg, file) {
+  if (msg.ruleId === 'clean-code/complexity-error' || msg.ruleId === 'clean-code/complexity-warn') {
+    return `Extract helper functions from the complex function at ${file}:${msg.line} to reduce cyclomatic complexity below threshold`;
+  }
+  if (msg.ruleId === 'clean-code/max-lines-per-function-error' || msg.ruleId === 'clean-code/max-lines-per-function-warn') {
+    return `Split the long function at ${file}:${msg.line} into smaller, named helpers (each ≤100 lines ideally, ≤300 required)`;
+  }
+  if (msg.ruleId === 'clean-code/max-params-error' || msg.ruleId === 'clean-code/max-params-warn') {
+    return `Wrap the positional parameters at ${file}:${msg.line} in an options object`;
+  }
+  return `Fix ESLint violation '${msg.ruleId}' at ${file}:${msg.line}`;
+}
+
 const scripts = [
   { name: 'measure-modules', path: path.join(root, 'scripts', 'audit', 'measure-modules.mjs') },
   { name: 'grep-matrix', path: path.join(root, 'scripts', 'audit', 'grep-matrix.mjs') },
+  { name: 'run-eslint-clean-code', path: path.join(root, 'scripts', 'audit', 'run-eslint-clean-code.mjs') },
   { name: 'long-param-walker', path: path.join(root, 'scripts', 'audit', 'long-param-walker.mjs') },
   { name: 'dead-exports', path: path.join(root, 'scripts', 'audit', 'dead-exports.mjs') },
   { name: 'test-smells', path: path.join(root, 'scripts', 'audit', 'test-smells.mjs') },
@@ -279,6 +293,51 @@ if (frozenArrays && Array.isArray(frozenArrays.findings)) {
     findings
   };
   report.summary.totalWarnings += warnCount;
+}
+
+// D-series: ESLint clean-code violations (complexity-error, max-lines-per-function-error, max-params-error)
+const eslintReport = loadJson(path.join(rawDir, 'eslint-report.json'));
+if (Array.isArray(eslintReport)) {
+  const dSeriesErrorRules = new Set([
+    'clean-code/complexity-error',
+    'clean-code/max-lines-per-function-error',
+    'clean-code/max-params-error'
+  ]);
+  const dSeriesWarnRules = new Set([
+    'clean-code/complexity-warn',
+    'clean-code/max-lines-per-function-warn',
+    'clean-code/max-params-warn'
+  ]);
+
+  const errorFindings = [];
+  const warnFindings = [];
+
+  for (const fileResult of eslintReport) {
+    for (const msg of fileResult.messages) {
+      const finding = {
+        file: fileResult.filePath,
+        line: msg.line,
+        column: msg.column,
+        ruleId: msg.ruleId,
+        message: msg.message,
+        severity: msg.severity === 2 ? 'error' : 'warn',
+        ...(fixSuggestions ? { fix: suggestEslintFix(msg, fileResult.filePath) } : {})
+      };
+      if (msg.severity === 2 && dSeriesErrorRules.has(msg.ruleId)) {
+        errorFindings.push(finding);
+      } else if (msg.severity === 1 && dSeriesWarnRules.has(msg.ruleId)) {
+        warnFindings.push(finding);
+      }
+    }
+  }
+
+  report.categories['eslint-d-series'] = {
+    errorCount: errorFindings.length,
+    warnCount: warnFindings.length,
+    findings: [...errorFindings, ...warnFindings]
+  };
+  report.summary.totalErrors += errorFindings.length;
+  report.summary.totalWarnings += warnFindings.length;
 }
 
 if (outPath) {

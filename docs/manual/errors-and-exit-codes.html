@@ -32,10 +32,10 @@
 
         <div class="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">Appendix X</div>
         <h1>Errors &amp; Exit Codes</h1>
-        <p class="text-lg text-slate-400 mb-8">The complete contract for every <strong>exit code</strong>, <strong>named error code</strong>, and <strong>error event</strong> Plan Forge emits &mdash; <code>pforge</code> CLI, the <code>run-plan</code> orchestrator, MCP tool responses, REST status shapes, and OS-level subprocess signals. The reference CI scripts and on-call runbooks depend on.</p>
+        <p class="text-lg text-slate-400 mb-8">The complete contract for every <strong>exit code</strong>, <strong>named error code</strong>, and <strong>error event</strong> Plan Forge emits, <code>pforge</code> CLI, the <code>run-plan</code> orchestrator, MCP tool responses, REST status shapes, and OS-level subprocess signals. The reference CI scripts and on-call runbooks depend on.</p>
 
         <div class="callout callout-info">
-          <strong>Exit codes are a contract.</strong> CI scripts, GitHub Actions workflows, and on-call automation all branch on them. Once published, an exit code's meaning does not change between releases &mdash; new failure modes get new codes. If you script against Plan Forge, branch on the codes in this appendix and treat anything outside the contract as <em>unknown failure, fail safe</em>.
+          <strong>Exit codes are a contract.</strong> CI scripts, GitHub Actions workflows, and on-call automation all branch on them. Once published, an exit code's meaning does not change between releases, new failure modes get new codes. If you script against Plan Forge, branch on the codes in this appendix and treat anything outside the contract as <em>unknown failure, fail safe</em>.
         </div>
 
         <h2 id="orientation">Orientation</h2>
@@ -62,12 +62,12 @@
           <tbody>
             <tr><td><code>0</code></td><td><strong>Success.</strong> The command completed and produced its intended side effect. May still emit warnings on stderr.</td><td>Every happy path. Also includes <em>nothing-to-do</em> states (e.g. <code>pforge release-notes</code> in a repo without a roadmap).</td></tr>
             <tr><td><code>1</code></td><td><strong>Generic failure.</strong> A subcommand failed, validation rejected input, or an external tool (git, node, network) errored.</td><td>Most error paths. Examples: missing <code>.forge.json</code>, validate found problems, <code>self-update</code> couldn't fetch a release, audit drain aborted, <code>setup</code> couldn't reach the template repo.</td></tr>
-            <tr><td><code>2</code></td><td><strong>Environment-level refusal.</strong> Plan Forge cannot run at all because a prerequisite is wrong or the action is intentionally blocked.</td><td>Three cases today: (1) <code>pforge</code> invoked outside a git repository; (2) <code>pforge self-update</code> when the GitHub update check itself failed (not a stale version &mdash; a network failure that prevents confirming you're current); (3) <code>pforge audit</code> when no scanners ran and the tempering config is empty or misconfigured.</td></tr>
+            <tr><td><code>2</code></td><td><strong>Environment-level refusal.</strong> Plan Forge cannot run at all because a prerequisite is wrong or the action is intentionally blocked.</td><td>Three cases today: (1) <code>pforge</code> invoked outside a git repository; (2) <code>pforge self-update</code> when the GitHub update check itself failed (not a stale version, a network failure that prevents confirming you're current); (3) <code>pforge audit</code> when no scanners ran and the tempering config is empty or misconfigured.</td></tr>
           </tbody>
         </table>
 
         <div class="callout callout-warn">
-          <strong>Exit 2 is not "warning".</strong> It means Plan Forge could not establish a known state. Treat it the same as exit 1 in CI gates &mdash; it should fail the build &mdash; but log it distinctly so on-call can see "environment is bad" vs "command found real problems".
+          <strong>Exit 2 is not "warning".</strong> It means Plan Forge could not establish a known state. Treat it the same as exit 1 in CI gates, it should fail the build, but log it distinctly so on-call can see "environment is bad" vs "command found real problems".
         </div>
 
         <h2 id="orchestrator-exit-codes">Orchestrator exit codes (<code>pforge run-plan</code>)</h2>
@@ -79,7 +79,7 @@
             <tr><td><code>0</code></td><td><code>completed-with-warnings</code></td><td>Plan landed but the audit-loop or post-deploy hook surfaced advisories. Treat as success in CI but post the warnings to the run log.</td></tr>
             <tr><td><code>1</code></td><td><code>failed</code></td><td>A slice's validation gate failed after exhausting retries / escalation, a forbidden-action hook fired, the Review Gate rejected, or an LLM call errored without a recoverable path. <code>statusReason</code> contains the precise reason.</td></tr>
             <tr><td><code>1</code></td><td><code>aborted</code></td><td>The user pressed Ctrl+C, an extension's <code>preDeploy</code> hook returned <code>blocked: true</code>, or <code>--strict-gates</code> rejected a plan that would otherwise have escalated. Run state is preserved at <code>.forge/runs/&lt;runId&gt;/</code> for <code>--resume-from</code>.</td></tr>
-            <tr><td><code>err.exitCode</code></td><td><code>failed</code></td><td>If an internal error throws with a numeric <code>exitCode</code> property, the orchestrator propagates that value. Used by the workers to surface specific failures like <em>git is in a detached HEAD</em> (no defined code today &mdash; reserved for future use).</td></tr>
+            <tr><td><code>err.exitCode</code></td><td><code>failed</code></td><td>If an internal error throws with a numeric <code>exitCode</code> property, the orchestrator propagates that value. Used by the workers to surface specific failures like <em>git is in a detached HEAD</em> (no defined code today, reserved for future use).</td></tr>
           </tbody>
         </table>
 
@@ -88,19 +88,19 @@
           <thead><tr><th>Reason</th><th>What it means</th></tr></thead>
           <tbody>
             <tr><td><code>gate-failed</code></td><td>The slice's bash validation gate exited non-zero after retries / escalation.</td></tr>
-            <tr><td><code>worker-failed</code></td><td>The worker process (the LLM call) returned an error envelope &mdash; e.g. API timeout, rate-limit-exhausted, model refused.</td></tr>
+            <tr><td><code>worker-failed</code></td><td>The worker process (the LLM call) returned an error envelope, e.g. API timeout, rate-limit-exhausted, model refused.</td></tr>
             <tr><td><code>worker-signaled</code></td><td>The worker process was killed by a signal. On Windows the native code <code>0xC000013A</code> (STATUS_CONTROL_C_EXIT) maps here. See <a href="#os-subprocess-exits">§ OS subprocess exits</a>.</td></tr>
             <tr><td><code>drift-detected</code></td><td>The PreToolUse hook caught the worker editing a file listed in the plan's Forbidden Actions.</td></tr>
             <tr><td><code>review-rejected</code></td><td>The Review Gate (Session 3) explicitly rejected the slice. The reviewer's notes are at <code>.forge/runs/&lt;runId&gt;/review-slice-&lt;N&gt;.md</code>.</td></tr>
             <tr><td><code>escalation-exhausted</code></td><td>All models in the escalation chain failed. Try a different model with <code>--model</code> or split the slice.</td></tr>
             <tr><td><code>quorum-all-failed</code></td><td>Quorum mode: every model in the panel timed out or errored. See <code>QUORUM_ALL_FAILED</code> in the <a href="#named-error-catalog">named error catalog</a>.</td></tr>
-            <tr><td><code>preDeploy-blocked</code></td><td>A LiveGuard <code>preDeploy</code> hook returned severity &ge; high &mdash; usually <code>forge_secret_scan</code> finding a secret or <code>forge_env_diff</code> finding an unauthorized variable.</td></tr>
+            <tr><td><code>preDeploy-blocked</code></td><td>A LiveGuard <code>preDeploy</code> hook returned severity &ge; high, usually <code>forge_secret_scan</code> finding a secret or <code>forge_env_diff</code> finding an unauthorized variable.</td></tr>
             <tr><td><code>manual-import-rejected</code></td><td><code>--strict-gates</code> with a hand-authored plan that lacks a <code>crucibleId:</code> frontmatter and was not invoked with <code>--manual-import</code>.</td></tr>
           </tbody>
         </table>
 
         <h2 id="mcp-tool-errors">MCP tool errors (<code>forge_*</code>)</h2>
-        <p>MCP tools never crash the server &mdash; they return a structured envelope. The contract is:</p>
+        <p>MCP tools never crash the server, they return a structured envelope. The contract is:</p>
         <pre><code>// Success
 { "ok": true, "&hellip;": "tool-specific payload" }
 
@@ -112,7 +112,7 @@
           <thead><tr><th>Code</th><th>Tool</th><th>Cause</th></tr></thead>
           <tbody>
             <tr><td><code>NO_REASONING_MODEL</code></td><td><code>forge_master_ask</code></td><td>No model configured and no provider API key detected.</td></tr>
-            <tr><td><code>CRITICAL_FIELDS_MISSING</code></td><td><code>forge_crucible_finalize</code></td><td>Smelt blocked &mdash; the draft plan is missing one of: build-command, test-command, scope, gates, forbidden-actions, rollback.</td></tr>
+            <tr><td><code>CRITICAL_FIELDS_MISSING</code></td><td><code>forge_crucible_finalize</code></td><td>Smelt blocked, the draft plan is missing one of: build-command, test-command, scope, gates, forbidden-actions, rollback.</td></tr>
             <tr><td><code>PLAN_ALREADY_EXISTS</code></td><td><code>forge_crucible_finalize</code></td><td>Refused to overwrite an existing hand-authored plan. Pass <code>overwrite: true</code> if intentional.</td></tr>
             <tr><td><code>ASK_QUESTION_MISMATCH</code></td><td><code>forge_crucible_ask</code></td><td>Client passed a stale <code>questionId</code>. Re-fetch state with <code>forge_crucible_preview</code>.</td></tr>
             <tr><td><code>QUORUM_ALL_FAILED</code></td><td><code>forge_quorum_analyze</code>, <code>forge_diagnose</code></td><td>Every model in the panel timed out (60s each) or errored.</td></tr>
@@ -150,7 +150,7 @@
         <table class="manual-table">
           <thead><tr><th>Code</th><th>Platform</th><th>Meaning</th></tr></thead>
           <tbody>
-            <tr><td><code>0xC000013A</code> (3221225786)</td><td>Windows</td><td><code>STATUS_CONTROL_C_EXIT</code> &mdash; subprocess was killed by Ctrl+C or its parent. Mapped to <code>statusReason: "worker-signaled"</code>. Was historically silently treated as success (bug #82-class); now correctly marked failed.</td></tr>
+            <tr><td><code>0xC000013A</code> (3221225786)</td><td>Windows</td><td><code>STATUS_CONTROL_C_EXIT</code>, subprocess was killed by Ctrl+C or its parent. Mapped to <code>statusReason: "worker-signaled"</code>. Was historically silently treated as success (bug #82-class); now correctly marked failed.</td></tr>
             <tr><td><code>130</code></td><td>POSIX</td><td>Killed by <code>SIGINT</code> (Ctrl+C). Same handling as Windows Ctrl+C.</td></tr>
             <tr><td><code>137</code></td><td>POSIX</td><td>Killed by <code>SIGKILL</code> (OOM kill, kernel terminator). Surfaces as <code>statusReason: "worker-signaled"</code> with <code>signal: "SIGKILL"</code> in the slice record.</td></tr>
             <tr><td><code>143</code></td><td>POSIX</td><td>Killed by <code>SIGTERM</code> (graceful shutdown). Same handling.</td></tr>
@@ -233,11 +233,11 @@ switch ($LASTEXITCODE) {
 
         <h2 id="see-also">See also</h2>
         <ul class="list-disc list-inside space-y-1">
-          <li><a href="troubleshooting.html#common-errors">Chapter 15 &mdash; Common Error Messages</a> &mdash; symptom &rarr; cause &rarr; fix triage table.</li>
-          <li><a href="event-catalog.html">Appendix V &mdash; Event Catalog</a> &mdash; full taxonomy of hub events including error events.</li>
-          <li><a href="rest-api-reference.html#error-shape">Appendix W &mdash; REST API Reference: Error shape</a> &mdash; the HTTP contract in context.</li>
-          <li><a href="environment-variables-reference.html#provider-api-keys">Appendix U &mdash; Provider API Keys</a> &mdash; for <code>NO_API_KEY</code> and <code>NO_REASONING_MODEL</code> resolution.</li>
-          <li><a href="forge-json-reference.html#hooks">Appendix T &mdash; <code>.forge.json</code> hooks</a> &mdash; configures the LiveGuard <code>preDeploy</code> hook behind <code>preDeploy-blocked</code>.</li>
+          <li><a href="troubleshooting.html#common-errors">Chapter 15 &mdash; Common Error Messages</a>, symptom &rarr; cause &rarr; fix triage table.</li>
+          <li><a href="event-catalog.html">Appendix V &mdash; Event Catalog</a>, full taxonomy of hub events including error events.</li>
+          <li><a href="rest-api-reference.html#error-shape">Appendix W &mdash; REST API Reference: Error shape</a>, the HTTP contract in context.</li>
+          <li><a href="environment-variables-reference.html#provider-api-keys">Appendix U &mdash; Provider API Keys</a>, for <code>NO_API_KEY</code> and <code>NO_REASONING_MODEL</code> resolution.</li>
+          <li><a href="forge-json-reference.html#hooks">Appendix T &mdash; <code>.forge.json</code> hooks</a>, configures the LiveGuard <code>preDeploy</code> hook behind <code>preDeploy-blocked</code>.</li>
         </ul>
 
         <div id="chapter-prev-next" class="chapter-nav"></div>

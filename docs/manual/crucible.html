@@ -34,24 +34,24 @@
         <p class="text-lg text-slate-400 mb-8">The Crucible is the intake interview for Plan Forge. You bring a rough idea ("add user profile editing") and the smelter walks you through 4&ndash;12 questions, then writes out a complete Phase plan that's ready for the Forge to execute.</p>
 
         <div class="callout callout-info">
-          <strong>Why an interview?</strong> Most plans fail because the spec is too vague. Crucible refuses to write a plan until you've answered a fixed set of <strong>CRITICAL_FIELDS</strong> &mdash; build command, test command, scope, validation gates, forbidden actions, and rollback steps. No TBDs allowed. The Forge can only execute plans that pass this gate.
+          <strong>Why an interview?</strong> Most plans fail because the spec is too vague. Crucible refuses to write a plan until you've answered a fixed set of <strong>CRITICAL_FIELDS</strong>, build command, test command, scope, validation gates, forbidden actions, and rollback steps. No TBDs allowed. The Forge can only execute plans that pass this gate.
         </div>
 
         <h2 id="how-it-works">How It Works</h2>
         <p>The Crucible has three sizes (called <strong>lanes</strong>) that scale the interview to the size of the change:</p>
         <ul>
-          <li><strong>tweak</strong> &mdash; 4 questions. For version bumps, config tweaks, doc edits, small fixes.</li>
-          <li><strong>feature</strong> &mdash; 7 questions. The default. For new endpoints, new tools, new services with a handful of slices.</li>
-          <li><strong>full</strong> &mdash; about 12 questions. For architectural changes that touch three or more top-level modules.</li>
+          <li><strong>tweak</strong>, 4 questions. For version bumps, config tweaks, doc edits, small fixes.</li>
+          <li><strong>feature</strong>, 7 questions. The default. For new endpoints, new tools, new services with a handful of slices.</li>
+          <li><strong>full</strong>, about 12 questions. For architectural changes that touch three or more top-level modules.</li>
         </ul>
         <p>You can pick a lane explicitly, or let Crucible infer one from your raw idea (it looks for keywords like "bump" or "refactor subsystem"). When the interview ends, Crucible writes <code>docs/plans/Phase-NN.md</code> and hands it off to the Plan Hardener (Step 2 of the pipeline).</p>
 
         <h2 id="why">Why Smelt Before Hardening?</h2>
-        <p>The Plan Hardener (Step 2) assumes you already know what you want to build. Crucible exists because most of the time, you don't &mdash; not precisely enough for a hardened plan. The smelter enforces three things:</p>
+        <p>The Plan Hardener (Step 2) assumes you already know what you want to build. Crucible exists because most of the time, you don't, not precisely enough for a hardened plan. The smelter enforces three things:</p>
         <ul>
-          <li><strong>A stable phase name</strong> &mdash; an atomic claim prevents two parallel agents from both creating "Phase 17".</li>
-          <li><strong>A minimum set of answered questions</strong> &mdash; lane-scaled (4 / 7 / ~12) so trivial tweaks don't get full-feature ceremony.</li>
-          <li><strong>A provenance stamp</strong> &mdash; every plan carries <code>crucibleId</code>, <code>lane</code>, and <code>source</code> in its frontmatter so downstream gates can audit how it got here.</li>
+          <li><strong>A stable phase name</strong>, an atomic claim prevents two parallel agents from both creating "Phase 17".</li>
+          <li><strong>A minimum set of answered questions</strong>, lane-scaled (4 / 7 / ~12) so trivial tweaks don't get full-feature ceremony.</li>
+          <li><strong>A provenance stamp</strong>, every plan carries <code>crucibleId</code>, <code>lane</code>, and <code>source</code> in its frontmatter so downstream gates can audit how it got here.</li>
         </ul>
 
         <div class="callout callout-tip">
@@ -82,7 +82,7 @@
 
         <h2 id="interview">The Interview Loop</h2>
         <p>Crucible streams one question at a time. You answer, it writes the answer to the smelt's JSONL record, then it computes the next question. Six MCP tools drive the loop:</p>
-        <pre><code>forge_crucible_submit  { rawIdea, lane?, source? }      → { id, firstQuestion }
+        <pre><code>forge_crucible_submit  { rawIdea, lane? source? }      → { id, firstQuestion }
 forge_crucible_ask     { id, answer, questionId? }      → { nextQuestion | done: true }
 forge_crucible_preview { id }                            → { draft, criticalGaps[] }
 forge_crucible_finalize{ id, overwrite? }                → { phaseName, planPath, hardenerHandoff }
@@ -91,7 +91,7 @@ forge_crucible_abandon { id, reason? }                   → { ok }</code></pre>
 
         <p><strong>Optional <code>questionId</code> on <code>ask</code></strong>: pass the question id you're answering. If it doesn't match the server's pending question id, the call returns <code>409</code> with <code>ASK_QUESTION_MISMATCH</code> and an <code>{ expected, got }</code> payload. Multi-turn LLM clients that fall out of sync get a loud failure instead of silent answer corruption.</p>
 
-        <p><strong>Build/test command inference</strong>: when the build-command or test-command questions come up, the interview pre-fills suggestions via <code>inferRepoCommands</code> &mdash; it inspects <code>package.json</code> scripts, <code>*.csproj</code>, <code>pyproject.toml</code>, <code>Cargo.toml</code>, <code>go.mod</code>, etc. You usually just confirm.</p>
+        <p><strong>Build/test command inference</strong>: when the build-command or test-command questions come up, the interview pre-fills suggestions via <code>inferRepoCommands</code>, it inspects <code>package.json</code> scripts, <code>*.csproj</code>, <code>pyproject.toml</code>, <code>Cargo.toml</code>, <code>go.mod</code>, etc. You usually just confirm.</p>
 
         <p>Finalize writes <code>docs/plans/&lt;phaseName&gt;.md</code> with the answer-derived draft and emits <code>crucible-handoff-to-hardener</code> on the hub so the dashboard (and downstream agents) can pick up the plan for Step 2.</p>
 
@@ -129,7 +129,7 @@ forge_crucible_abandon { id, reason? }                   → { ok }</code></pre>
           <li>A side-by-side <code>&lt;phaseName&gt;.crucible-draft.md</code> is written so the smelt's draft is preserved</li>
           <li><strong>MCP tool</strong>: <code>{ ok: false, code: "PLAN_ALREADY_EXISTS", phaseName, planPath, draftPath }</code></li>
           <li><strong>REST</strong>: <code>409 Conflict</code> with the same payload</li>
-          <li>Pass <code>overwrite: true</code> on either surface to bypass &mdash; the previous plan moves to <code>&lt;phaseName&gt;.replaced-&lt;timestamp&gt;.md</code></li>
+          <li>Pass <code>overwrite: true</code> on either surface to bypass, the previous plan moves to <code>&lt;phaseName&gt;.replaced-&lt;timestamp&gt;.md</code></li>
         </ul>
 
         <div class="callout callout-warning">
@@ -205,7 +205,7 @@ forge_crucible_abandon { id, reason? }                   → { ok }</code></pre>
         <h2 id="whats-new-v3">What's new in v3.x</h2>
         <p>Crucible's downstream surfaces have grown since the original chapter. None of these change the core interview → plan → hardener flow above; they extend it with feedback loops the rest of the system uses:</p>
         <ul>
-          <li><strong>Classifier feedback loop.</strong> A finalized smelt that later produces a <strong>tempering finding</strong> can be routed via <a href="team-coordination.html#classifier-issue">forge_classifier_issue</a> when the finding turns out to be classifier noise rather than a product bug &mdash; closing the audit loop.</li>
+          <li><strong>Classifier feedback loop.</strong> A finalized smelt that later produces a <strong>tempering finding</strong> can be routed via <a href="team-coordination.html#classifier-issue">forge_classifier_issue</a> when the finding turns out to be classifier noise rather than a product bug, closing the audit loop.</li>
           <li><strong>Drain round-loop.</strong> The <code>forge_tempering_drain</code> round-loop (Ch 21 Audit Loop) re-probes a plan's gates until convergence, surfacing residual Crucible <code>STALE_PRINCIPLES</code> warnings as actionable findings rather than transient noise.</li>
           <li><strong>Knowledge graph enrollment.</strong> Every Crucible smelt lands as a Phase / Slice node in the <a href="knowledge-graph.html">knowledge graph</a>, so <code>forge_patterns_list</code>'s detectors can spot Crucible-stage anti-patterns alongside execution-stage ones.</li>
         </ul>

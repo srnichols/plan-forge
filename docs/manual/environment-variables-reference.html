@@ -32,10 +32,10 @@
 
         <div class="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">Appendix U</div>
         <h1>Environment Variables Reference</h1>
-        <p class="text-lg text-slate-400 mb-8">Every environment variable Plan Forge reads &mdash; grouped by subsystem, with type, default, scope, and security note. The companion reference to <a href="forge-json-reference.html">Appendix T &mdash; <code>.forge.json</code></a>: settings that change per-machine or contain secrets live here; settings that travel with the project live there.</p>
+        <p class="text-lg text-slate-400 mb-8">Every environment variable Plan Forge reads, grouped by subsystem, with type, default, scope, and security note. The companion reference to <a href="forge-json-reference.html">Appendix T &mdash; <code>.forge.json</code></a>: settings that change per-machine or contain secrets live here; settings that travel with the project live there.</p>
 
         <div class="callout callout-warn">
-          <strong>Secrets belong in <code>.forge/secrets.json</code> or your shell environment &mdash; never in <code>.forge.json</code>.</strong> The secrets file is gitignored by default; the env-var fallback works the same way in CI runners and on developer machines. The <a href="#provider-api-keys">Provider API Keys</a> table flags every secret with a lock icon.
+          <strong>Secrets belong in <code>.forge/secrets.json</code> or your shell environment: never in <code>.forge.json</code>.</strong> The secrets file is gitignored by default; the env-var fallback works the same way in CI runners and on developer machines. The <a href="#provider-api-keys">Provider API Keys</a> table flags every secret with a lock icon.
         </div>
 
         <h2 id="orientation">Orientation</h2>
@@ -45,24 +45,24 @@
           <table class="manual-table">
             <thead><tr><th style="width: 14rem">Group</th><th>When you touch it</th></tr></thead>
             <tbody>
-              <tr><td><a href="#provider-api-keys"><strong>Provider API keys</strong></a></td><td>Always &mdash; at least one model provider must be configured.</td></tr>
+              <tr><td><a href="#provider-api-keys"><strong>Provider API keys</strong></a></td><td>Always, at least one model provider must be configured.</td></tr>
               <tr><td><a href="#azure-openai"><strong>Azure OpenAI</strong></a></td><td>Only when routing through Azure OpenAI instead of the model vendor's public API.</td></tr>
               <tr><td><a href="#server-ports"><strong>Server ports and network</strong></a></td><td>Only if the default ports collide or you need to harden the bridge.</td></tr>
               <tr><td><a href="#project-runtime"><strong>Project and runtime</strong></a></td><td>Mostly internal (set by tests or by <code>pforge</code> itself).</td></tr>
               <tr><td><a href="#orchestrator-timing"><strong>Orchestrator timing</strong></a></td><td>Tuning gate or worker timeouts on slow CI runners.</td></tr>
               <tr><td><a href="#feature-toggles"><strong>Feature toggles</strong></a></td><td>Enabling experimental subsystems or bypassing checks.</td></tr>
               <tr><td><a href="#telemetry-otel"><strong>Telemetry (OTel)</strong></a></td><td>Sending traces to a collector.</td></tr>
-              <tr><td><a href="#host-detection"><strong>Host detection (read-only)</strong></a></td><td>Never &mdash; Plan Forge reads these from your IDE to pick the right adapter.</td></tr>
+              <tr><td><a href="#host-detection"><strong>Host detection (read-only)</strong></a></td><td>Never, Plan Forge reads these from your IDE to pick the right adapter.</td></tr>
               <tr><td><a href="#cli-internal"><strong>CLI internal</strong></a></td><td>Set transiently by <code>pforge</code> itself; documented for transparency only.</td></tr>
             </tbody>
           </table>
         </div>
 
-        <p>Every field row uses the same six columns &mdash; <strong>Variable</strong>, <strong>Type</strong>, <strong>Default</strong>, <strong>Scope</strong>, <strong>Set when</strong>, <strong>Security</strong> &mdash; so the table reads the same way no matter which subsystem you land on. <em>Scope</em> is one of <code>per-user</code> (export in your shell profile), <code>per-machine</code> (system env or CI variable), or <code>per-session</code> (transient, set on a single invocation).</p>
+        <p>Every field row uses the same six columns, <strong>Variable</strong>, <strong>Type</strong>, <strong>Default</strong>, <strong>Scope</strong>, <strong>Set when</strong>, <strong>Security</strong>, so the table reads the same way no matter which subsystem you land on. <em>Scope</em> is one of <code>per-user</code> (export in your shell profile), <code>per-machine</code> (system env or CI variable), or <code>per-session</code> (transient, set on a single invocation).</p>
 
         <!-- ============================================================ -->
         <h2 id="provider-api-keys">Provider API keys</h2>
-        <p>The orchestrator needs at least one of these to route a slice through a non-Copilot model. All are read from the environment first, then from <code>.forge/secrets.json</code> as a fallback (see <a href="https://github.com/srnichols/plan-forge/blob/master/pforge-mcp/secrets.mjs" rel="noopener">pforge-mcp/secrets.mjs</a> for the loader). The dashboard <strong>Config &rarr; Secrets</strong> tab is the friendliest way to set them &mdash; it writes the secrets file atomically and never echoes the value back.</p>
+        <p>The orchestrator needs at least one of these to route a slice through a non-Copilot model. All are read from the environment first, then from <code>.forge/secrets.json</code> as a fallback (see <a href="https://github.com/srnichols/plan-forge/blob/master/pforge-mcp/secrets.mjs" rel="noopener">pforge-mcp/secrets.mjs</a> for the loader). The dashboard <strong>Config &rarr; Secrets</strong> tab is the friendliest way to set them, it writes the secrets file atomically and never echoes the value back.</p>
 
         <div class="overflow-x-auto mb-6">
           <table class="manual-table">
@@ -127,7 +127,7 @@
             <tbody>
               <tr><td><code>PLAN_FORGE_PROJECT</code></td><td>string (path)</td><td><code>process.cwd()</code></td><td>per-session</td><td>Pointing the orchestrator at a project directory other than the working directory (mostly tests).</td><td>Not secret.</td></tr>
               <tr><td><code>PFORGE_ENV</code></td><td>string</td><td><code>"dev"</code></td><td>per-machine</td><td>You want LiveGuard and the run journal to tag runs with an env label other than <code>dev</code>.</td><td>Not secret.</td></tr>
-              <tr><td><code>PFORGE_LOG_LEVEL</code></td><td>enum</td><td><em>(unset = info)</em></td><td>per-session</td><td>Debugging &mdash; set to <code>debug</code> to surface cost-service tracing and other diagnostic logs.</td><td>Not secret.</td></tr>
+              <tr><td><code>PFORGE_LOG_LEVEL</code></td><td>enum</td><td><em>(unset = info)</em></td><td>per-session</td><td>Debugging, set to <code>debug</code> to surface cost-service tracing and other diagnostic logs.</td><td>Not secret.</td></tr>
               <tr><td><code>PFORGE_NO_UPDATE_CHECK</code></td><td>boolean (1/0)</td><td><em>(unset)</em></td><td>per-machine</td><td>CI environment where reaching out to GitHub for an update check is unwanted.</td><td>Not secret.</td></tr>
             </tbody>
           </table>
@@ -135,7 +135,7 @@
 
         <!-- ============================================================ -->
         <h2 id="orchestrator-timing">Orchestrator timing</h2>
-        <p>Tune these only when defaults are biting &mdash; usually on slow CI runners or when a long-running gate (large vitest suite, integration test, browser test) hits the wall.</p>
+        <p>Tune these only when defaults are biting, usually on slow CI runners or when a long-running gate (large vitest suite, integration test, browser test) hits the wall.</p>
 
         <div class="overflow-x-auto mb-6">
           <table class="manual-table">
@@ -157,12 +157,12 @@
           <table class="manual-table">
             <thead><tr><th>Variable</th><th>Type</th><th>Default</th><th>Scope</th><th>Set when</th><th>Security</th></tr></thead>
             <tbody>
-              <tr><td><code>PFORGE_DISABLE_TEMPERING</code></td><td>boolean (1/0)</td><td><em>(unset)</em></td><td>per-session</td><td>You need to bypass Tempering scans for one run (e.g. running an audit-loop slice that would scan its own scaffolding).</td><td>Not secret. Use sparingly &mdash; this disables quality scans.</td></tr>
+              <tr><td><code>PFORGE_DISABLE_TEMPERING</code></td><td>boolean (1/0)</td><td><em>(unset)</em></td><td>per-session</td><td>You need to bypass Tempering scans for one run (e.g. running an audit-loop slice that would scan its own scaffolding).</td><td>Not secret. Use sparingly, this disables quality scans.</td></tr>
               <tr><td><code>PFORGE_FOUNDRY_QUOTA_PREFLIGHT</code></td><td>boolean (1/0)</td><td><em>(unset)</em></td><td>per-machine</td><td>You want the orchestrator to check Foundry quota before dispatching slices to an Azure OpenAI deployment.</td><td>Not secret.</td></tr>
               <tr><td><code>PFORGE_GATE_LINT_STRICT</code></td><td>boolean (1/0)</td><td><code>0</code></td><td>per-session</td><td>You want gate-lint findings to be hard failures rather than warnings.</td><td>Not secret.</td></tr>
               <tr><td><code>PFORGE_DRAIN_ON_INIT</code></td><td>boolean (true/false)</td><td><code>true</code></td><td>per-machine</td><td>You do not want the MCP server to drain the Tempering queue on startup (CI runners that start and stop the server many times).</td><td>Not secret.</td></tr>
-              <tr><td><code>PFORGE_ALLOW_MASTER_COMMIT</code></td><td>boolean (1/0)</td><td><em>(unset)</em></td><td>per-session</td><td>You explicitly want to allow a commit on <code>master</code> while a <code>run-plan</code> is active (PreCommit hook normally blocks this).</td><td>Not secret. Discouraged &mdash; the guard exists for a reason.</td></tr>
-              <tr><td><code>PFORGE_COST_MODEL</code></td><td>string</td><td><em>(auto-detected)</em></td><td>per-session</td><td>You want to pin slice pricing to a specific model (subscription mode &mdash; e.g. flat Copilot pricing &mdash; or a non-default vendor).</td><td>Not secret.</td></tr>
+              <tr><td><code>PFORGE_ALLOW_MASTER_COMMIT</code></td><td>boolean (1/0)</td><td><em>(unset)</em></td><td>per-session</td><td>You explicitly want to allow a commit on <code>master</code> while a <code>run-plan</code> is active (PreCommit hook normally blocks this).</td><td>Not secret. Discouraged, the guard exists for a reason.</td></tr>
+              <tr><td><code>PFORGE_COST_MODEL</code></td><td>string</td><td><em>(auto-detected)</em></td><td>per-session</td><td>You want to pin slice pricing to a specific model (subscription mode, e.g. flat Copilot pricing, or a non-default vendor).</td><td>Not secret.</td></tr>
             </tbody>
           </table>
         </div>
@@ -184,7 +184,7 @@
 
         <!-- ============================================================ -->
         <h2 id="host-detection">Host detection (read-only)</h2>
-        <p>Plan Forge reads these to figure out which IDE or agent CLI is hosting it, so the orchestrator can pick the right routing default and the right model surface. <strong>You should never set these yourself</strong> &mdash; they are populated automatically by the host. Listed here for transparency only.</p>
+        <p>Plan Forge reads these to figure out which IDE or agent CLI is hosting it, so the orchestrator can pick the right routing default and the right model surface. <strong>You should never set these yourself</strong>, they are populated automatically by the host. Listed here for transparency only.</p>
 
         <div class="overflow-x-auto mb-6">
           <table class="manual-table">
@@ -192,7 +192,7 @@
             <tbody>
               <tr><td><code>NODE_ENV</code></td><td>enum</td><td><em>(unset)</em></td><td>Node.js convention</td><td><code>test</code> short-circuits hub init and notifications side-effects; <code>production</code> tightens logging.</td><td>Not secret.</td></tr>
               <tr><td><code>VSCODE_PID</code></td><td>number (PID)</td><td><em>(set by VS Code)</em></td><td>VS Code</td><td>Plan Forge is running inside VS Code.</td><td>Not secret.</td></tr>
-              <tr><td><code>VSCODE_AGENT_MODE</code></td><td>string</td><td><em>(set by VS Code)</em></td><td>VS Code Agent Mode</td><td><code>enterprise</code> means VS Code Agents Enterprise &mdash; Plan Forge picks a different default model route.</td><td>Not secret.</td></tr>
+              <tr><td><code>VSCODE_AGENT_MODE</code></td><td>string</td><td><em>(set by VS Code)</em></td><td>VS Code Agent Mode</td><td><code>enterprise</code> means VS Code Agents Enterprise, Plan Forge picks a different default model route.</td><td>Not secret.</td></tr>
               <tr><td><code>TERM_PROGRAM</code></td><td>string</td><td><em>(set by terminal)</em></td><td>Terminal</td><td><code>vscode</code> or <code>cursor</code> trigger host-specific routing.</td><td>Not secret.</td></tr>
               <tr><td><code>CLAUDECODE</code></td><td>string</td><td><em>(set by Claude Code)</em></td><td>Claude Code CLI</td><td><code>1</code> means Plan Forge is running under Claude Code.</td><td>Not secret.</td></tr>
               <tr><td><code>CLAUDE_CODE_ENTRYPOINT</code></td><td>string</td><td><em>(set by Claude Code)</em></td><td>Claude Code CLI</td><td>Alternate signal for Claude Code detection.</td><td>Not secret.</td></tr>
@@ -204,7 +204,7 @@
 
         <!-- ============================================================ -->
         <h2 id="cli-internal">CLI internal (set transiently by <code>pforge</code>)</h2>
-        <p>These variables are set by the CLI or the orchestrator for the duration of one invocation and then unset. <strong>Do not set them in your shell profile</strong> &mdash; they are documented for transparency and for users writing extensions.</p>
+        <p>These variables are set by the CLI or the orchestrator for the duration of one invocation and then unset. <strong>Do not set them in your shell profile</strong>, they are documented for transparency and for users writing extensions.</p>
 
         <div class="overflow-x-auto mb-6">
           <table class="manual-table">
@@ -221,7 +221,7 @@
 
         <!-- ============================================================ -->
         <h2 id="precedence">Resolution precedence</h2>
-        <p>When a setting has multiple sources, the orchestrator resolves in this order &mdash; first one that yields a non-empty value wins:</p>
+        <p>When a setting has multiple sources, the orchestrator resolves in this order, first one that yields a non-empty value wins:</p>
 
         <ol class="space-y-2 mb-8 ml-6 list-decimal">
           <li><strong>CLI flag</strong> on the running command (e.g. <code>--quorum=power</code>).</li>
@@ -239,7 +239,7 @@
         <p>A representative shell setup for a developer on Windows running a hybrid Azure-OpenAI / Anthropic stack with the dashboard on a non-default port:</p>
 
         <div class="cmd-block">
-          <div class="cmd-block-header"><span>PowerShell profile snippet &mdash; representative</span><button class="cmd-copy-btn">Copy</button></div>
+          <div class="cmd-block-header"><span>PowerShell profile snippet, representative</span><button class="cmd-copy-btn">Copy</button></div>
 <pre><code># Provider keys (better: store in .forge/secrets.json)
 $env:ANTHROPIC_API_KEY = "sk-ant-..."
 $env:OPENAI_API_KEY    = "sk-..."
@@ -267,11 +267,11 @@ $env:PFORGE_GATE_TIMEOUT_MS = "600000"   # 10 minutes
         <!-- ============================================================ -->
         <h2 id="see-also">See also</h2>
         <ul class="space-y-2 mb-8">
-          <li><a href="forge-json-reference.html"><strong>Appendix T &mdash; <code>.forge.json</code> Reference</strong></a> &mdash; the per-project config file that pairs with this appendix.</li>
-          <li><a href="customization.html#config-hierarchy"><strong>Customization &mdash; Configuration Hierarchy</strong></a> &mdash; how <code>.forge.json</code>, env vars, and instruction files interact when settings conflict.</li>
-          <li><a href="mcp-server-reference.html#rest-api"><strong>MCP Server Reference &mdash; REST API</strong></a> &mdash; the dashboard's HTTP surface, including the bearer-token auth flow that <code>PFORGE_AUTH_TOKEN</code> gates.</li>
-          <li><a href="https://github.com/srnichols/plan-forge/blob/master/pforge-mcp/secrets.mjs" rel="noopener"><strong>pforge-mcp/secrets.mjs</strong></a> &mdash; the loader for <code>.forge/secrets.json</code> and the canonical source for the provider-key whitelist.</li>
-          <li><a href="troubleshooting.html#common-errors"><strong>Troubleshooting &mdash; Common Errors</strong></a> &mdash; recovery hints for <code>ERR_NO_API_KEY</code>, <code>ERR_TESTBED_NOT_FOUND</code>, and the gate-timeout family.</li>
+          <li><a href="forge-json-reference.html"><strong>Appendix T &mdash; <code>.forge.json</code> Reference</strong></a>, the per-project config file that pairs with this appendix.</li>
+          <li><a href="customization.html#config-hierarchy"><strong>Customization &mdash; Configuration Hierarchy</strong></a>, how <code>.forge.json</code>, env vars, and instruction files interact when settings conflict.</li>
+          <li><a href="mcp-server-reference.html#rest-api"><strong>MCP Server Reference &mdash; REST API</strong></a>, the dashboard's HTTP surface, including the bearer-token auth flow that <code>PFORGE_AUTH_TOKEN</code> gates.</li>
+          <li><a href="https://github.com/srnichols/plan-forge/blob/master/pforge-mcp/secrets.mjs" rel="noopener"><strong>pforge-mcp/secrets.mjs</strong></a>, the loader for <code>.forge/secrets.json</code> and the canonical source for the provider-key whitelist.</li>
+          <li><a href="troubleshooting.html#common-errors"><strong>Troubleshooting &mdash; Common Errors</strong></a>, recovery hints for <code>ERR_NO_API_KEY</code>, <code>ERR_TESTBED_NOT_FOUND</code>, and the gate-timeout family.</li>
         </ul>
 
       </div>

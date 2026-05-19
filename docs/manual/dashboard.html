@@ -35,7 +35,7 @@
 
         <!-- ─── Starting ─── -->
         <h2 id="starting">Starting the Dashboard</h2>
-        <p>The dashboard is part of the MCP server (Model Context Protocol &mdash; the standard that lets AI agents call functions). Start it, then open your browser:</p>
+        <p>The dashboard is part of the MCP server (Model Context Protocol, the standard that lets AI agents call functions). Start it, then open your browser:</p>
 
         <div class="cmd-block">
           <div class="cmd-block-header"><span>Terminal</span><button class="cmd-copy-btn">Copy</button></div>
@@ -54,7 +54,7 @@ node pforge-mcp/server.mjs --dashboard-only</code></pre>
 
         <!-- ─── Tab Categories overview ─── -->
         <h2 id="tab-overview">Tab Categories</h2>
-        <p>The dashboard groups its tabs into <strong>4 top-level groups</strong> (Forge / LiveGuard / Forge-Master / Settings). Knowing which group a tab lives in is the fastest way to find what you're looking for &mdash; especially across the 37 tabs total. Click a group tab in the top nav to expose its sub-tabs.</p>
+        <p>The dashboard groups its tabs into <strong>4 top-level groups</strong> (Forge / LiveGuard / Forge-Master / Settings). Knowing which group a tab lives in is the fastest way to find what you're looking for, especially across the 37 tabs total. Click a group tab in the top nav to expose its sub-tabs.</p>
 
         <div class="overflow-x-auto mb-4">
           <table class="text-sm w-full">
@@ -251,12 +251,12 @@ node pforge-mcp/server.mjs --dashboard-only</code></pre>
 
         <!-- ─── Audit-Loop activation surfaces ─── -->
         <h2 id="audit-loop">Audit-Loop Activation <span class="version-badge version-badge--accent">v2.80</span></h2>
-        <p>The audit loop is opt-in. It's <strong>not</strong> on a Settings tab &mdash; mode is read from <code>.forge.json#audit.mode</code> directly:</p>
+        <p>The audit loop is opt-in. It's <strong>not</strong> on a Settings tab, mode is read from <code>.forge.json#audit.mode</code> directly:</p>
         <ul>
-          <li><strong>Mode values</strong> &mdash; <code>off</code> (default) / <code>auto</code> / <code>always</code></li>
-          <li><strong>Max rounds</strong> &mdash; drain caps after N rounds (default 5)</li>
-          <li><strong>Allowed environments</strong> &mdash; <code>dev</code> and <code>staging</code> by default; production is hard-blocked unless <code>allowProduction: true</code> in scanner opts (and even then only with explicit override)</li>
-          <li><strong>Live progress</strong> &mdash; drain rounds stream via <code>tempering-round-completed</code> hub events and surface in the <strong>Forge → Tempering</strong> tab</li>
+          <li><strong>Mode values</strong>, <code>off</code> (default) / <code>auto</code> / <code>always</code></li>
+          <li><strong>Max rounds</strong>, drain caps after N rounds (default 5)</li>
+          <li><strong>Allowed environments</strong>, <code>dev</code> and <code>staging</code> by default; production is hard-blocked unless <code>allowProduction: true</code> in scanner opts (and even then only with explicit override)</li>
+          <li><strong>Live progress</strong>, drain rounds stream via <code>tempering-round-completed</code> hub events and surface in the <strong>Forge → Tempering</strong> tab</li>
         </ul>
         <p>Trigger manually with <code>pforge audit-loop --auto</code> (respects <code>.forge.json#audit.mode</code>) or via the <code>forge_tempering_drain</code> MCP tool. See <a href="audit-loop.html">Audit Loop deep dive</a> for the full activation flow.</p>
 
@@ -264,17 +264,17 @@ node pforge-mcp/server.mjs --dashboard-only</code></pre>
         <h2 id="timeline">Timeline Tab <span class="version-badge">v2.82 · 9 sources</span></h2>
         <p>Unified chronological view of every event across the shop. Source chips filter the feed:</p>
         <ol>
-          <li><code>run</code> &mdash; plan executions (slice progress, completes, aborts)</li>
-          <li><code>incident</code> &mdash; LiveGuard incident lifecycle</li>
-          <li><code>bug</code> &mdash; Bug Registry status changes</li>
-          <li><code>deploy</code> &mdash; <code>forge_deploy_journal</code> entries</li>
-          <li><code>crucible</code> &mdash; smelt lifecycle (started / question / finalized)</li>
-          <li><code>fm-turn</code> <span class="text-purple-300 text-xs">v2.82</span> &mdash; Forge-Master turns (lane + truncated user message + turn number)</li>
-          <li><code>memory</code> &mdash; <code>memory-captured</code> events from OpenBrain</li>
-          <li><code>tempering</code> &mdash; audit-loop drain rounds</li>
-          <li><code>watch</code> &mdash; watcher snapshot / anomaly / advice events</li>
+          <li><code>run</code>, plan executions (slice progress, completes, aborts)</li>
+          <li><code>incident</code>, LiveGuard incident lifecycle</li>
+          <li><code>bug</code>, Bug Registry status changes</li>
+          <li><code>deploy</code>, <code>forge_deploy_journal</code> entries</li>
+          <li><code>crucible</code>, smelt lifecycle (started / question / finalized)</li>
+          <li><code>fm-turn</code> <span class="text-purple-300 text-xs">v2.82</span>, Forge-Master turns (lane + truncated user message + turn number)</li>
+          <li><code>memory</code>, <code>memory-captured</code> events from OpenBrain</li>
+          <li><code>tempering</code>, audit-loop drain rounds</li>
+          <li><code>watch</code>, watcher snapshot / anomaly / advice events</li>
         </ol>
-        <p>The CLI equivalent is <code>pforge timeline</code> &mdash; same 9 sources, same correlation-id grouping, JSON-pipeable for scripts.</p>
+        <p>The CLI equivalent is <code>pforge timeline</code>, same 9 sources, same correlation-id grouping, JSON-pipeable for scripts.</p>
         <img src="../assets/dashboard/timeline.png" alt="Dashboard Timeline tab — unified chronological view across 9 sources (run, incident, bug, deploy, crucible, fm-turn, memory, tempering, watch)" class="rounded-xl border border-slate-700/40 mb-6" loading="lazy" />
 
         <!-- ─── LiveGuard Section (moved to sub-page) ─── -->

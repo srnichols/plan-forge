@@ -80,7 +80,7 @@
         </div>
 
         <div class="callout callout-info">
-          <strong>🔁 See also: <a href="inner-loop.html">The Inner Loop</a></strong> &mdash; an optional reflective layer that adds reflexion retries, trajectories, auto-skill promotion, adaptive gate synthesis, postmortems, cross-project federation, and a reviewer agent. All opt-in, all Dashboard-configurable.
+          <strong>🔁 See also: <a href="inner-loop.html">The Inner Loop</a></strong>, an optional reflective layer that adds reflexion retries, trajectories, auto-skill promotion, adaptive gate synthesis, postmortems, cross-project federation, and a reviewer agent. All opt-in, all Dashboard-configurable.
         </div>
 
         <!-- ─── The Loop That Never Ends ─── -->
@@ -238,7 +238,7 @@
         <p>The executor shouldn't self-audit — that's like grading your own exam. Each session starts fresh, loads the same guardrails, but brings independent judgment. Session 3 (Review) has never seen the code being written — it reads the plan, reads the code, and checks for drift. Session 4 is when Guard and Learn take over: LiveGuard does its pre-deploy scan, OpenBrain writes the lessons.</p>
 
         <div class="callout callout-info">
-          <strong>Nested subagents</strong>: Within a session, agents can spawn sub-agents for complex tasks &mdash; the architecture reviewer can call the security reviewer, for example. This happens automatically; you don't need to configure it.
+          <strong>Nested subagents</strong>: Within a session, agents can spawn sub-agents for complex tasks, the architecture reviewer can call the security reviewer, for example. This happens automatically; you don't need to configure it.
         </div>
 
         <!-- ─── Why Session Isolation Works ─── -->
@@ -246,19 +246,19 @@
         <p>The grading-your-own-exam analogy above is the short version. Three concrete mechanisms make session isolation a structural requirement rather than a stylistic preference:</p>
 
         <h3 id="sunk-cost-bias">1. Sunk-cost bias is a property of the context window</h3>
-        <p>The session that wrote the code will defend it. Not because the model is stubborn &mdash; because the bad code and the proposed fix live in the same token sequence. The model's belief that the code is correct is encoded in the same context that produced it; the model literally cannot evaluate the code from a position of "I have not seen this before." A fresh session reads the same code without any prior commitment to it.</p>
+        <p>The session that wrote the code will defend it. Not because the model is stubborn, because the bad code and the proposed fix live in the same token sequence. The model's belief that the code is correct is encoded in the same context that produced it; the model literally cannot evaluate the code from a position of "I have not seen this before." A fresh session reads the same code without any prior commitment to it.</p>
 
         <h3 id="context-contamination">2. Context contamination clouds review judgment</h3>
-        <p>Build sessions accumulate context as they work &mdash; rejected approaches, half-considered alternatives, partial refactors. By the time the session finishes, its reasoning is shaped by paths it considered but didn't take. A reviewer in the same session inherits all of that as background noise. A reviewer in a fresh session sees only the final code, against the original plan, with no memory of the rabbit holes.</p>
+        <p>Build sessions accumulate context as they work, rejected approaches, half-considered alternatives, partial refactors. By the time the session finishes, its reasoning is shaped by paths it considered but didn't take. A reviewer in the same session inherits all of that as background noise. A reviewer in a fresh session sees only the final code, against the original plan, with no memory of the rabbit holes.</p>
 
         <h3 id="fresh-context-blind-spots">3. Fresh-context reviews catch blind spots the build session is structurally unable to see</h3>
-        <p>Some bugs are only visible from outside the build session's mental model. A naming inconsistency, a forgotten edge case, an architectural violation that the build session rationalized in the moment &mdash; these surface immediately to a reviewer that didn't participate in the rationalization. The build session is not lying; it cannot see what is invisible from inside its own context.</p>
+        <p>Some bugs are only visible from outside the build session's mental model. A naming inconsistency, a forgotten edge case, an architectural violation that the build session rationalized in the moment, these surface immediately to a reviewer that didn't participate in the rationalization. The build session is not lying; it cannot see what is invisible from inside its own context.</p>
 
         <div class="callout callout-warning">
           <strong>The 4-session model is not optional polish.</strong> Combined feedback from production runs (see the <a href="lessons-learned.html#independent-review">Lessons Learned chapter</a>) shows that single-session execute-and-review consistently misses defects that fresh-session review catches in seconds. The cost of running an extra session is roughly the cost of one model invocation; the cost of shipping a missed defect is measured in incidents.
         </div>
 
-        <p>The <a href="advanced-execution.html">v2.18 Temper Guards and Warning Signs</a> system codified the failure modes that emerged from this pattern &mdash; the specific shortcuts agents take that produce compiling but architecturally broken code. Each instruction file now teaches agents not just <em>what to do</em> but <em>why not to skip it</em>. Session isolation is the structural defense; Temper Guards are the named anti-patterns it catches.</p>
+        <p>The <a href="advanced-execution.html">v2.18 Temper Guards and Warning Signs</a> system codified the failure modes that emerged from this pattern, the specific shortcuts agents take that produce compiling but architecturally broken code. Each instruction file now teaches agents not just <em>what to do</em> but <em>why not to skip it</em>. Session isolation is the structural defense; Temper Guards are the named anti-patterns it catches.</p>
 
         <p class="text-sm text-slate-500 italic">Source material: <a href="../blog/the-80-20-wall.html" class="text-amber-400 hover:underline" rel="noopener">The 80/20 Wall</a> and <a href="../blog/guardrails-lessons-learned.html" class="text-amber-400 hover:underline" rel="noopener">Guardrails Lessons Learned</a>. The grading-your-own-exam analogy is adapted from Lesson 3.</p>
 

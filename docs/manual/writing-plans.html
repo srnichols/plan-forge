@@ -43,7 +43,7 @@
             <tr><td><strong>Scope Contract</strong></td><td>Yes</td><td>In-scope paths, out-of-scope, forbidden actions</td></tr>
             <tr><td><strong>MUST Criteria</strong></td><td>Yes</td><td>Non-negotiable outcomes (checkboxes)</td></tr>
             <tr><td><strong>SHOULD Criteria</strong></td><td>Optional</td><td>Best-effort goals</td></tr>
-            <tr><td><strong>Build / Test Commands</strong></td><td>Yes <span class="text-amber-400 text-xs">v2.82.1+</span></td><td><code>build-command</code> + <code>test-command</code> &mdash; required by the Crucible critical-fields gate</td></tr>
+            <tr><td><strong>Build / Test Commands</strong></td><td>Yes <span class="text-amber-400 text-xs">v2.82.1+</span></td><td><code>build-command</code> + <code>test-command</code>, required by the Crucible critical-fields gate</td></tr>
             <tr><td><strong>Execution Slices</strong></td><td>Yes</td><td>Checkpointed work chunks with gates and per-slice <code>**Files in scope**</code></td></tr>
             <tr><td><strong>Branch Strategy</strong></td><td>Recommended</td><td>Git branch name and merge approach</td></tr>
             <tr><td><strong>Rollback Plan</strong></td><td>Recommended</td><td>How to undo if things go wrong</td></tr>
@@ -70,12 +70,12 @@
           </tbody>
         </table>
 
-        <p>If any CRITICAL_FIELD is missing, <code>forge_crucible_finalize</code> returns <code>409</code> with <code>CRITICAL_FIELDS_MISSING</code> and a <code>criticalGaps[]</code> array pointing at the unresolved fields. The Crucible interview adds a question for each missing field automatically &mdash; the feature lane now asks 7 questions (was 6); the tweak lane asks 4 (was 3).</p>
+        <p>If any CRITICAL_FIELD is missing, <code>forge_crucible_finalize</code> returns <code>409</code> with <code>CRITICAL_FIELDS_MISSING</code> and a <code>criticalGaps[]</code> array pointing at the unresolved fields. The Crucible interview adds a question for each missing field automatically, the feature lane now asks 7 questions (was 6); the tweak lane asks 4 (was 3).</p>
 
-        <p>The build/test commands are inferred from your repo when possible (via <code>inferRepoCommands</code> &mdash; checks <code>package.json</code>, <code>*.csproj</code>, <code>pyproject.toml</code>, <code>Cargo.toml</code>, etc.) so most projects don't have to type them by hand.</p>
+        <p>The build/test commands are inferred from your repo when possible (via <code>inferRepoCommands</code>, checks <code>package.json</code>, <code>*.csproj</code>, <code>pyproject.toml</code>, <code>Cargo.toml</code>, etc.) so most projects don't have to type them by hand.</p>
 
         <div class="callout callout-tip">
-          <strong>Hand-authored plans bypass the gate</strong>: If you write the plan yourself in <code>docs/plans/Phase-NN.md</code> instead of using the Crucible, the gate doesn't apply. But you still want to fill these fields in &mdash; the orchestrator reads <code>build-command</code> and <code>test-command</code> from the plan frontmatter when running gates that don't specify a full command inline.
+          <strong>Hand-authored plans bypass the gate</strong>: If you write the plan yourself in <code>docs/plans/Phase-NN.md</code> instead of using the Crucible, the gate doesn't apply. But you still want to fill these fields in, the orchestrator reads <code>build-command</code> and <code>test-command</code> from the plan frontmatter when running gates that don't specify a full command inline.
         </div>
 
         <!-- ─── Scope Contract ─── -->
@@ -105,7 +105,7 @@
         </div>
 
         <div class="callout callout-info">
-          <strong>Forbidden Actions come from the Crucible interview</strong>: The 7th feature-lane question explicitly asks for forbidden actions. Answers like &ldquo;don't touch the migrations folder&rdquo; or &ldquo;don't add new NuGet packages without approval&rdquo; flow directly into this section as concrete patterns. If you skip the interview and hand-author the plan, write them as <em>file patterns or named actions</em> &mdash; not vibes.
+          <strong>Forbidden Actions come from the Crucible interview</strong>: The 7th feature-lane question explicitly asks for forbidden actions. Answers like &ldquo;don't touch the migrations folder&rdquo; or &ldquo;don't add new NuGet packages without approval&rdquo; flow directly into this section as concrete patterns. If you skip the interview and hand-author the plan, write them as <em>file patterns or named actions</em>, not vibes.
         </div>
 
         <p>"Anything related to users" gives the AI free rein to refactor 20 files. "Don't break things" isn't enforceable. Be specific about paths, and list forbidden actions as concrete file patterns. That's how you get lasagna code — clean layers, each with a purpose — instead of spaghetti where everything touches everything.</p>
@@ -113,7 +113,7 @@
         <!-- ─── Slicing Strategy ─── -->
         <h2 id="slicing">Slicing Strategy</h2>
 
-        <p>Before the rules, the worked example. The same feature — add a User Profile endpoint &mdash; planned two ways:</p>
+        <p>Before the rules, the worked example. The same feature — add a User Profile endpoint, planned two ways:</p>
 
         <div class="cmd-block">
           <div class="cmd-block-header"><span><span class="text-rose-400 font-bold">✗</span> Bad: one mega-slice</span></div>
@@ -136,7 +136,7 @@ Slice 4 — Controller + integration tests     [45 min]</code></pre>
         <p class="text-sm text-slate-400 mb-6">Each slice ends at a real checkpoint. A migration failure stops Slice 1 cleanly. A controller bug at Slice 4 doesn't touch the migration in Slice 1. The reviewer reads four small diffs, each scoped to one architectural layer.</p>
 
         <figure class="manual-figure" id="fig-4-1"><img src="assets/diagrams/slicing-strategy-antipatterns.svg" alt="Slicing strategy: side-by-side comparison of tight scope (left, green) vs loose scope (right, red). Tight scope shows 3 slices each touching one architectural layer (Controller, Service, Repository) with concrete forbidden actions (no migrations, no AppSettings.json, no new NuGet packages). Loose scope shows one mega-slice mixing 4 layers (controllers + services + repositories + migrations) with the consequences: test fails make it impossible to isolate which layer broke, mid-slice migrations can't roll back cleanly, reviewers can't audit one boundary at a time. Forbidden actions section shows 'don't break things' as struck-through (unenforceable). Bottom rule: one layer per slice, scope = exact file paths, forbidden actions = concrete patterns. If you can't write the gate command, the slice is too broad." class="diagram-img diagram-img-md my-4" /><figcaption class="manual-figcaption"><!--fignum--><span class="manual-fignum">Figure 4-1.</span><!--/fignum--> <!--cap:auto-->Slicing strategy<!--/cap--></figcaption></figure>
-        <p>Slices are 30&ndash;120 minute chunks of work. Each slice should produce a commit-worthy change &mdash; the "one PR" rule.</p>
+        <p>Slices are 30&ndash;120 minute chunks of work. Each slice should produce a commit-worthy change, the "one PR" rule.</p>
 
         <h3>Rules of Thumb</h3>
         <ul>
@@ -200,7 +200,7 @@ Slice 6 — Documentation + cleanup                [30 min]</code></pre>
 
         <p>Slices 2 and 3 both depend on Slice 1 (the migration) but are independent of each other — they run in parallel. Slice 4 waits for both to finish. The orchestrator builds a DAG (directed acyclic graph) and schedules accordingly.</p>
 
-        <figure class="manual-figure" id="fig-4-2"><img src="assets/diagrams/dag-parallel.svg" alt="DAG diagram showing parallel slices 2 and 3 executing concurrently after slice 1, then converging on slice 4" class="diagram-img diagram-img-lg" /><figcaption class="manual-figcaption"><!--fignum--><span class="manual-fignum">Figure 4-2.</span><!--/fignum--> Parallel slice DAG &mdash; slices 2 and 3 run concurrently after slice 1, converging on slice 4.</figcaption></figure>
+        <figure class="manual-figure" id="fig-4-2"><img src="assets/diagrams/dag-parallel.svg" alt="DAG diagram showing parallel slices 2 and 3 executing concurrently after slice 1, then converging on slice 4" class="diagram-img diagram-img-lg" /><figcaption class="manual-figcaption"><!--fignum--><span class="manual-fignum">Figure 4-2.</span><!--/fignum--> Parallel slice DAG, slices 2 and 3 run concurrently after slice 1, converging on slice 4.</figcaption></figure>
 
         <div class="callout callout-warning">
           <strong>When NOT to parallelize</strong>: If two slices modify the same files, they'll conflict. Only use <code>[P]</code> when slices touch different <code>[scope: ...]</code> paths.

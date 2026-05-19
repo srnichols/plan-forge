@@ -36,7 +36,7 @@
       <p>Every tool is callable from Copilot Chat, Claude Code, Cursor, or any MCP-compatible client. Tools are grouped by station / subsystem. The four "station" categories (Crucible, LiveGuard, Tempering, Bug Registry / Testbed) map directly to the four shop stations; the rest are cross-cutting infrastructure.</p>
 
       <div class="callout callout-tip">
-        <strong>Discovery first</strong>: Call <code>forge_capabilities</code> before anything else &mdash; it returns the full live API surface including tool schemas, config options, available extensions, and per-tool error codes. Always authoritative.
+        <strong>Discovery first</strong>: Call <code>forge_capabilities</code> before anything else, it returns the full live API surface including tool schemas, config options, available extensions, and per-tool error codes. Always authoritative.
       </div>
 
       <!-- Core (Smelt + Forge stations + cross-cutting) -->
@@ -48,22 +48,22 @@
         <tbody>
           <tr><td colspan="2" class="bg-slate-900/40 text-xs font-bold text-slate-500 uppercase tracking-wider">Diagnostics &amp; setup</td></tr>
           <tr><td><code>forge_smith</code></td><td>Diagnose environment, VS Code config, setup health, version currency. The "shop inspector."</td></tr>
-          <tr><td><code>forge_validate</code></td><td>Validate setup files &mdash; check counts match preset, no placeholders</td></tr>
+          <tr><td><code>forge_validate</code></td><td>Validate setup files, check counts match preset, no placeholders</td></tr>
           <tr><td><code>forge_sweep</code></td><td>Scan for TODO/FIXME/HACK/stub/placeholder markers</td></tr>
-          <tr><td><code>forge_capabilities</code></td><td>Machine-readable API surface &mdash; tools, intents, config, extensions, error codes</td></tr>
+          <tr><td><code>forge_capabilities</code></td><td>Machine-readable API surface, tools, intents, config, extensions, error codes</td></tr>
           <tr><td><code>forge_status</code></td><td>Show phases from <code>DEPLOYMENT-ROADMAP.md</code> with status</td></tr>
 
           <tr><td colspan="2" class="bg-slate-900/40 text-xs font-bold text-slate-500 uppercase tracking-wider">Plan execution (Forge station)</td></tr>
           <tr><td><code>forge_run_plan</code></td><td>Execute a hardened plan: spawn workers, validate gates, track tokens. Supports <code>--quorum=auto|power|speed|false</code></td></tr>
           <tr><td><code>forge_abort</code></td><td>Abort the currently running plan execution</td></tr>
-          <tr><td><code>forge_plan_status</code></td><td>Latest execution status &mdash; per-slice results, tokens, duration</td></tr>
-          <tr><td><code>forge_diff</code></td><td>Compare changes against the plan's Scope Contract &mdash; detect drift</td></tr>
+          <tr><td><code>forge_plan_status</code></td><td>Latest execution status, per-slice results, tokens, duration</td></tr>
+          <tr><td><code>forge_diff</code></td><td>Compare changes against the plan's Scope Contract, detect drift</td></tr>
           <tr><td><code>forge_new_phase</code></td><td>Create a new phase plan file + roadmap entry</td></tr>
 
           <tr><td colspan="2" class="bg-slate-900/40 text-xs font-bold text-slate-500 uppercase tracking-wider">Analysis &amp; estimation</td></tr>
           <tr><td><code>forge_analyze</code></td><td>Cross-artifact consistency scoring (0&ndash;100, 4 dimensions)</td></tr>
-          <tr><td><code>forge_diagnose</code></td><td>Multi-model bug investigation &mdash; root cause + fix recommendations</td></tr>
-          <tr><td><code>forge_estimate_quorum</code></td><td>Projected cost of a plan under all four quorum modes (auto/power/speed/false). <strong>Always call this</strong> before showing cost estimates &mdash; never hand-compute.</td></tr>
+          <tr><td><code>forge_diagnose</code></td><td>Multi-model bug investigation, root cause + fix recommendations</td></tr>
+          <tr><td><code>forge_estimate_quorum</code></td><td>Projected cost of a plan under all four quorum modes (auto/power/speed/false). <strong>Always call this</strong> before showing cost estimates, never hand-compute.</td></tr>
           <tr><td><code>forge_estimate_slice</code></td><td>Per-slice cost estimate with confidence (heuristic vs historical)</td></tr>
           <tr><td><code>forge_doctor_quorum</code></td><td>Diagnose quorum-mode availability and routing issues</td></tr>
           <tr><td><code>forge_graph_query</code></td><td>Query the Plan Forge knowledge graph (built post-Slice via <code>postSlice</code> hook)</td></tr>
@@ -72,7 +72,7 @@
           <tr><td colspan="2" class="bg-slate-900/40 text-xs font-bold text-slate-500 uppercase tracking-wider">Cost &amp; performance</td></tr>
           <tr><td><code>forge_cost_report</code></td><td>Cost tracking: total spend, per-model breakdown, monthly trend. <strong>Authoritative source</strong> for actual spend.</td></tr>
           <tr><td><code>forge_timeline</code></td><td>Unified chronological view of runs, incidents, bugs, deploys, fm-turns, crucible events. 9 sources.</td></tr>
-          <tr><td><code>forge_home_snapshot</code></td><td>Snapshot of the &ldquo;home&rdquo; dashboard tile state &mdash; aggregate health surface</td></tr>
+          <tr><td><code>forge_home_snapshot</code></td><td>Snapshot of the &ldquo;home&rdquo; dashboard tile state, aggregate health surface</td></tr>
 
           <tr><td colspan="2" class="bg-slate-900/40 text-xs font-bold text-slate-500 uppercase tracking-wider">Skills &amp; review</td></tr>
           <tr><td><code>forge_run_skill</code></td><td>Execute a skill programmatically with step-level tracking</td></tr>
@@ -94,23 +94,23 @@
           <tr><td colspan="2" class="bg-slate-900/40 text-xs font-bold text-slate-500 uppercase tracking-wider">Extensions &amp; meta</td></tr>
           <tr><td><code>forge_ext_search</code></td><td>Search the community extension catalog</td></tr>
           <tr><td><code>forge_ext_info</code></td><td>Detailed info about a specific extension</td></tr>
-          <tr><td><code>forge_org_rules</code></td><td>Export org custom instructions &mdash; consolidate instruction files for GitHub org-level Copilot config</td></tr>
+          <tr><td><code>forge_org_rules</code></td><td>Export org custom instructions, consolidate instruction files for GitHub org-level Copilot config</td></tr>
           <tr><td><code>forge_meta_bug_file</code></td><td>File a self-repair bug against Plan Forge itself (plan-defect / orchestrator-defect / prompt-defect)</td></tr>
-          <tr><td><code>forge_triage_route</code></td><td>Route a finding to the appropriate lane (bug / spec / classifier) &mdash; powers the audit-loop drain</td></tr>
+          <tr><td><code>forge_triage_route</code></td><td>Route a finding to the appropriate lane (bug / spec / classifier), powers the audit-loop drain</td></tr>
           <tr><td><code>forge_generate_image</code></td><td>Generate images via Grok Aurora or DALL-E, save with format conversion</td></tr>
         </tbody>
       </table>
 
       <!-- LiveGuard (Guard station) -->
       <h3 id="tools-liveguard">LiveGuard &mdash; Post-Ship Defense <span class="text-cyan-400 text-sm font-normal">(14 tools)</span></h3>
-      <p>The Guard station. Detect drift, capture incidents, watch dependencies, scan for secrets, propose fixes &mdash; all running against shipped code. <a href="liveguard-tools.html">Chapter 17 &mdash; LiveGuard Tools Reference</a> covers each one in depth (flags, thresholds, output shapes, severity matrix). Listed here for completeness.</p>
+      <p>The Guard station. Detect drift, capture incidents, watch dependencies, scan for secrets, propose fixes, all running against shipped code. <a href="liveguard-tools.html">Chapter 17 &mdash; LiveGuard Tools Reference</a> covers each one in depth (flags, thresholds, output shapes, severity matrix). Listed here for completeness.</p>
 
       <table class="manual-table">
         <thead><tr><th>Tool</th><th>Description</th></tr></thead>
         <tbody>
           <tr><td><code>forge_liveguard_run</code></td><td>Composite scan: drift + sweep + secrets + regression + deps + alerts + health. The "everything" command.</td></tr>
           <tr><td><code>forge_drift_report</code></td><td>Score codebase against architecture guardrail rules; track drift over time</td></tr>
-          <tr><td><code>forge_secret_scan</code></td><td>High-entropy secret detection &mdash; values always redacted</td></tr>
+          <tr><td><code>forge_secret_scan</code></td><td>High-entropy secret detection, values always redacted</td></tr>
           <tr><td><code>forge_dep_watch</code></td><td>Scan dependencies for CVEs; alert on new vulnerabilities</td></tr>
           <tr><td><code>forge_regression_guard</code></td><td>Extract validation gates from plans, execute against codebase</td></tr>
           <tr><td><code>forge_incident_capture</code></td><td>Record incidents with severity, affected files, MTTR tracking</td></tr>
@@ -118,10 +118,10 @@
           <tr><td><code>forge_env_diff</code></td><td>Environment variable key divergence across <code>.env</code> files</td></tr>
           <tr><td><code>forge_fix_proposal</code></td><td>Generate scoped 1&ndash;2 slice fix plan from a regression / drift / incident finding</td></tr>
           <tr><td><code>forge_health_trend</code></td><td>Aggregate drift, cost, incidents, model performance into health score 0&ndash;100</td></tr>
-          <tr><td><code>forge_hotspot</code></td><td>Identify git-churn hotspots &mdash; files that change most frequently</td></tr>
+          <tr><td><code>forge_hotspot</code></td><td>Identify git-churn hotspots, files that change most frequently</td></tr>
           <tr><td><code>forge_runbook</code></td><td>Generate an operational runbook from a hardened plan file</td></tr>
           <tr><td><code>forge_deploy_journal</code></td><td>Record deployments with version, deployer, notes</td></tr>
-          <tr><td><code>forge_quorum_analyze</code></td><td>Assemble structured quorum prompt from LiveGuard data &mdash; no LLM calls</td></tr>
+          <tr><td><code>forge_quorum_analyze</code></td><td>Assemble structured quorum prompt from LiveGuard data, no LLM calls</td></tr>
         </tbody>
       </table>
 
@@ -133,7 +133,7 @@
         <thead><tr><th>Tool</th><th>Description</th></tr></thead>
         <tbody>
           <tr><td><code>forge_watch</code></td><td>Snapshot or analyze (claude-opus-4.7) mode. Returns counts, anomalies, recommendations, diff cursor.</td></tr>
-          <tr><td><code>forge_watch_live</code></td><td>Live tail &mdash; streams events for fixed duration via target's WebSocket hub or events.log polling.</td></tr>
+          <tr><td><code>forge_watch_live</code></td><td>Live tail, streams events for fixed duration via target's WebSocket hub or events.log polling.</td></tr>
         </tbody>
       </table>
 
@@ -157,7 +157,7 @@
 
       <!-- Tempering -->
       <h3 id="tools-tempering">Tempering &mdash; Quality Drains &amp; Audit Loop <span class="text-amber-400 text-sm font-normal">(5 tools)</span></h3>
-      <p>Closed-loop self-tempering &mdash; scan, triage, fix, repeat until convergence. The audit-loop drain (v2.80) is opt-in via <code>.forge.json</code> &rarr; <code>audit.mode = "off" | "auto" | "always"</code>. See <a href="audit-loop.html">Audit Loop Deep Dive</a>.</p>
+      <p>Closed-loop self-tempering, scan, triage, fix, repeat until convergence. The audit-loop drain (v2.80) is opt-in via <code>.forge.json</code> &rarr; <code>audit.mode = "off" | "auto" | "always"</code>. See <a href="audit-loop.html">Audit Loop Deep Dive</a>.</p>
 
       <table class="manual-table">
         <thead><tr><th>Tool</th><th>Description</th></tr></thead>
@@ -214,7 +214,7 @@
 
       <!-- ─── REST API ─── -->
       <h2 id="rest-api">REST API</h2>
-      <p>The REST surface is documented in full in <a href="rest-api-reference.html"><strong>Appendix W &mdash; REST API Reference</strong></a>: every endpoint, request/response shape, status codes, authentication model, and worked examples. The summary below points at the most-used subsystems &mdash; click through to Appendix W for the per-endpoint detail.</p>
+      <p>The REST surface is documented in full in <a href="rest-api-reference.html"><strong>Appendix W &mdash; REST API Reference</strong></a>: every endpoint, request/response shape, status codes, authentication model, and worked examples. The summary below points at the most-used subsystems, click through to Appendix W for the per-endpoint detail.</p>
 
       <table class="manual-table">
         <thead><tr><th style="width: 16rem">Subsystem</th><th>What it covers</th></tr></thead>
@@ -226,8 +226,8 @@
           <tr><td><a href="rest-api-reference.html#crucible">Crucible</a></td><td>Idea-smelt lifecycle: <code>submit &rarr; ask &rarr; preview &rarr; finalize</code>.</td></tr>
           <tr><td><a href="rest-api-reference.html#liveguard">LiveGuard</a></td><td>Drift, incidents, deploy journal, regression guard, runbooks, secret scan, dep watch.</td></tr>
           <tr><td><a href="rest-api-reference.html#bridge">Bridge &amp; approvals</a></td><td>The only cross-boundary auth surface (HMAC via <code>PFORGE_BRIDGE_SECRET</code>).</td></tr>
-          <tr><td><a href="rest-api-reference.html#forge-master">Forge-Master</a></td><td>Conversational entrypoint &mdash; chat, prefs, cache stats.</td></tr>
-          <tr><td><a href="rest-api-reference.html#generic-dispatcher">Generic MCP dispatcher</a></td><td><code>POST /api/tool/:name</code> &mdash; invoke any of the 88 MCP tools over REST.</td></tr>
+          <tr><td><a href="rest-api-reference.html#forge-master">Forge-Master</a></td><td>Conversational entrypoint, chat, prefs, cache stats.</td></tr>
+          <tr><td><a href="rest-api-reference.html#generic-dispatcher">Generic MCP dispatcher</a></td><td><code>POST /api/tool/:name</code>, invoke any of the 88 MCP tools over REST.</td></tr>
         </tbody>
       </table>
 

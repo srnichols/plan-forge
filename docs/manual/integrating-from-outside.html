@@ -156,7 +156,7 @@ ws.on("message", (raw) =&gt; {
   "payload": { sha: "e4f5g6h", durationMs: 24100, gates: ["pass","pass"] }
 }</code></pre>
 
-        <p>The full event catalog &mdash; <strong>38 event types across eight families</strong> with envelope, source/security_risk enums, payloads, and retention &mdash; lives in <a href="event-catalog.html">Appendix V &mdash; Event Catalog</a>. The canonical JSON schema lives in <code>pforge-mcp/EVENTS.md</code>. Subscribe to all events or filter by type:</p>
+        <p>The full event catalog, <strong>38 event types across eight families</strong> with envelope, source/security_risk enums, payloads, and retention, lives in <a href="event-catalog.html">Appendix V &mdash; Event Catalog</a>. The canonical JSON schema lives in <code>pforge-mcp/EVENTS.md</code>. Subscribe to all events or filter by type:</p>
 
         <pre class="bg-slate-950 border border-slate-800/60 rounded-xl p-4 overflow-x-auto text-sm"><code>ws.send(JSON.stringify({
   subscribe: ["slice.*", "gate.fail", "bug.opened"]

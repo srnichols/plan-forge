@@ -31,19 +31,19 @@
 
       <ol class="space-y-3 my-6 ml-6 list-decimal">
         <li>
-          <strong><a href="#core" class="text-forge-400">Plan Forge</a></strong> &mdash; the whole shop. A workshop with four stations (Smelt, Forge, Guard, Learn) that take an idea from "vague feature request" all the way to "shipped, monitored, and remembered."
+          <strong><a href="#core" class="text-forge-400">Plan Forge</a></strong>, the whole shop. A workshop with four stations (Smelt, Forge, Guard, Learn) that take an idea from "vague feature request" all the way to "shipped, monitored, and remembered."
         </li>
         <li>
-          <strong><a href="#core" class="text-forge-400">Plan</a></strong> &mdash; a Markdown file in <code>docs/plans/</code> that describes one feature. The unit of work Plan Forge operates on.
+          <strong><a href="#core" class="text-forge-400">Plan</a></strong>, a Markdown file in <code>docs/plans/</code> that describes one feature. The unit of work Plan Forge operates on.
         </li>
         <li>
-          <strong><a href="#core" class="text-forge-400">Scope contract</a></strong> &mdash; the section of the plan that says exactly which files are in-scope, out-of-scope, and forbidden. Without this, AI agents drift into unrelated code.
+          <strong><a href="#core" class="text-forge-400">Scope contract</a></strong>, the section of the plan that says exactly which files are in-scope, out-of-scope, and forbidden. Without this, AI agents drift into unrelated code.
         </li>
         <li>
-          <strong><a href="#core" class="text-forge-400">Slice</a></strong> &mdash; one numbered step inside a plan. Plans are broken into 3&ndash;7 slices so the AI works in checkpointed chunks. Each slice ends at a validation gate.
+          <strong><a href="#core" class="text-forge-400">Slice</a></strong>, one numbered step inside a plan. Plans are broken into 3&ndash;7 slices so the AI works in checkpointed chunks. Each slice ends at a validation gate.
         </li>
         <li>
-          <strong><a href="#core" class="text-forge-400">Validation gate</a></strong> &mdash; a concrete shell command (e.g., <code>dotnet test</code>) that must pass before the next slice runs. Gates are how Plan Forge knows the AI didn't break anything.
+          <strong><a href="#core" class="text-forge-400">Validation gate</a></strong>, a concrete shell command (e.g., <code>dotnet test</code>) that must pass before the next slice runs. Gates are how Plan Forge knows the AI didn't break anything.
         </li>
       </ol>
 

@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Stakeholder Briefing &mdash; the 10-minute white paper for the manager who has to approve this</title>
+  <title>Stakeholder Briefing, the 10-minute white paper for the manager who has to approve this</title>
   <meta name="description" content="A 10-15 minute, eight-section stakeholder briefing for the internal champion who needs to walk a colleague, a manager, or a VP through the decision to adopt Plan Forge. Skimmable, self-contained, sourced from the same canonical numbers as the rest of the book so the briefing and the manual can never drift." />
   <link rel="icon" type="image/svg+xml" href="../assets/plan-forge-logo.svg" />
   <link rel="stylesheet" href="../assets/tailwind.built.css" />
@@ -31,26 +31,26 @@
         <p class="text-lg text-slate-400 mb-6">A skimmable, self-contained, eight-section white paper sized for the longest read a busy manager or VP gives you in one sitting. Designed to be shared as one link, read end-to-end without leaving the page, and remixed into a per-organization briefing using the <a href="#section-8">three-path ladder in Section 8</a>.</p>
 
         <div class="callout callout-info">
-          <p><strong>Who this is for.</strong> The internal champion who has already decided Plan Forge deserves serious evaluation and now needs to walk a colleague, a manager, or a VP through the decision. <strong>What this is not.</strong> A marketing landing page (those live at <a href="../index.html">planforge.software</a>) and not a replacement for a per-prospect briefing (those still need writing &mdash; this just hands you the ~50&percnt; that is canonical so you can spend your time on the ~50&percnt; that is yours).</p>
+          <p><strong>Who this is for.</strong> The internal champion who has already decided Plan Forge deserves serious evaluation and now needs to walk a colleague, a manager, or a VP through the decision. <strong>What this is not.</strong> A marketing landing page (those live at <a href="../index.html">planforge.software</a>) and not a replacement for a per-prospect briefing (those still need writing, this just hands you the ~50&percnt; that is canonical so you can spend your time on the ~50&percnt; that is yours).</p>
           <p class="mt-3 text-sm"><strong>How to read it.</strong> ≈10&ndash;15 minutes end-to-end. Each section opens with a bolded lead sentence, then bullets, then a "Read more &rarr;" link into the canonical chapter for the reader who wants to drill in. Every headline number is sourced from the same place as the rest of the book (see the <a href="project-history.html">Project History</a> for the version stamps); the briefing and the manual cannot drift.</p>
         </div>
 
         <!-- ─── Section 1: Executive Summary ─── -->
         <h2 id="section-1">1. Executive Summary</h2>
-        <p><strong>AI coding tools get a feature from prompt to running code in minutes &mdash; and then leave the rest of the SDLC to humans.</strong> Plan Forge is the orchestration harness that closes that gap. It sits on top of GitHub Copilot (and any other AI coding tool that speaks the Model Context Protocol) and adds the four layers production software actually needs: planning, validation gates, memory, and reviewer separation. The receipt on the project's own seven-slice memory-QA plan is <strong>&dollar;0.07 on a single mid-tier model in roughly 51 minutes, zero failed slices, zero escalation</strong>. The system QA'd itself with the very upgrades it was QA'ing &mdash; for the price of a coffee.</p>
+        <p><strong>AI coding tools get a feature from prompt to running code in minutes: and then leave the rest of the SDLC to humans.</strong> Plan Forge is the orchestration harness that closes that gap. It sits on top of GitHub Copilot (and any other AI coding tool that speaks the Model Context Protocol) and adds the four layers production software actually needs: planning, validation gates, memory, and reviewer separation. The receipt on the project's own seven-slice memory-QA plan is <strong>&dollar;0.07 on a single mid-tier model in roughly 51 minutes, zero failed slices, zero escalation</strong>. The system QA'd itself with the very upgrades it was QA'ing, for the price of a coffee.</p>
 
         <ul>
-          <li><strong>The problem.</strong> Vibe coding clears the 80&percnt; demo bar fast and stalls at the 20&percnt; that ships &mdash; tests, interfaces, DTOs, typed exceptions, cancellation, audit. The <a href="what-is-plan-forge.html#evidence">.NET A/B test</a> measured the gap at <strong>99 vs 44</strong> on structural quality, same model, same time budget.</li>
-          <li><strong>The fix.</strong> Four named loops &mdash; Smelt (intake), Forge (execute), Guard (post-deploy defence), Learn (memory) &mdash; each with its own concrete artifacts, gates, and hand-offs. The pipeline reads like a workshop, not a black box.</li>
+          <li><strong>The problem.</strong> Vibe coding clears the 80&percnt; demo bar fast and stalls at the 20&percnt; that ships, tests, interfaces, DTOs, typed exceptions, cancellation, audit. The <a href="what-is-plan-forge.html#evidence">.NET A/B test</a> measured the gap at <strong>99 vs 44</strong> on structural quality, same model, same time budget.</li>
+          <li><strong>The fix.</strong> Four named loops, Smelt (intake), Forge (execute), Guard (post-deploy defence), Learn (memory), each with its own concrete artifacts, gates, and hand-offs. The pipeline reads like a workshop, not a black box.</li>
           <li><strong>The receipt.</strong> The Phase-MEMORY-QA plan (7 slices, full E2E, mock OpenBrain, lattice callers, hallmark show/verify, backward-compat checks) ran for <strong>&dollar;0.07 total in ~51 minutes</strong>, 100&percnt; on Sonnet-4.6, no escalation, zero failed slices. See the <a href="memory-system.html#the-payoff">payoff section of the Memory chapter</a> for the full breakdown.</li>
         </ul>
         <p class="text-sm text-slate-500"><strong>Read more &rarr;</strong> <a href="foreword.html">Foreword &mdash; From Impossible to Seven Minutes</a> (10 min, the year-long story behind the receipt).</p>
 
         <!-- ─── Section 2: What Plan Forge is — and is not ─── -->
         <h2 id="section-2">2. What Plan Forge is &mdash; and is not</h2>
-        <p><strong>Plan Forge is the orchestration harness that sits <em>on top of</em> GitHub Copilot (and other AI coding tools).</strong> It does not replace your model or your IDE &mdash; it adds the SDLC layer GitHub deliberately leaves to the ecosystem: planning, validation gates, memory, cost control, and reviewer separation. It is also licensed MIT because your SDLC is yours, and your institutional memory lives in <a href="memory-system.html">OpenBrain</a> &mdash; a user-owned service &mdash; because your accumulated decisions should not be trapped inside any one AI vendor.</p>
+        <p><strong>Plan Forge is the orchestration harness that sits <em>on top of</em> GitHub Copilot (and other AI coding tools).</strong> It does not replace your model or your IDE, it adds the SDLC layer GitHub deliberately leaves to the ecosystem: planning, validation gates, memory, cost control, and reviewer separation. It is also licensed MIT because your SDLC is yours, and your institutional memory lives in <a href="memory-system.html">OpenBrain</a>, a user-owned service, because your accumulated decisions should not be trapped inside any one AI vendor.</p>
 
-        <p>The two-axis claim &mdash; <em>harness on substrate</em> and <em>your-SDLC-is-yours</em> &mdash; matters in equal measure. The first one explains why Plan Forge does not compete with GitHub Copilot, Claude Code, Cursor, Codex, Gemini CLI, or Windsurf; it routes work through them. The second explains why nothing in the harness is rented, gated, or trapped behind a control plane the user does not own. The condensed positioning table:</p>
+        <p>The two-axis claim, <em>harness on substrate</em> and <em>your-SDLC-is-yours</em>, matters in equal measure. The first one explains why Plan Forge does not compete with GitHub Copilot, Claude Code, Cursor, Codex, Gemini CLI, or Windsurf; it routes work through them. The second explains why nothing in the harness is rented, gated, or trapped behind a control plane the user does not own. The condensed positioning table:</p>
 
         <div class="overflow-x-auto mb-6">
           <table class="manual-table">
@@ -62,10 +62,10 @@
               </tr>
               <tr>
                 <td>The SDLC layer (planning, validation, memory, cost, reviewer separation) GitHub deliberately leaves to the ecosystem.</td>
-                <td><strong>A code generator.</strong> Plan Forge does not write the code &mdash; it tells the model how to, then verifies the result.</td>
+                <td><strong>A code generator.</strong> Plan Forge does not write the code, it tells the model how to, then verifies the result.</td>
               </tr>
               <tr>
-                <td>Opinionated about <em>software shape</em> &mdash; interfaces, DTOs, typed exceptions, tests.</td>
+                <td>Opinionated about <em>software shape</em>, interfaces, DTOs, typed exceptions, tests.</td>
                 <td><strong>Opinionated about the stack.</strong> Nine presets cover .NET, TypeScript, Python, Java, Go, Swift, Rust, PHP, and Azure IaC.</td>
               </tr>
               <tr>
@@ -77,7 +77,7 @@
                 <td><strong>A CI/CD system.</strong> It does not deploy your app; it validates that what was built matches what was planned.</td>
               </tr>
               <tr>
-                <td>Designed so institutional memory lives in <a href="memory-system.html">OpenBrain</a> &mdash; a user-owned service.</td>
+                <td>Designed so institutional memory lives in <a href="memory-system.html">OpenBrain</a>, a user-owned service.</td>
                 <td><strong>A project manager.</strong> It does not assign work to humans or track sprints; it structures work for AI agents.</td>
               </tr>
             </tbody>
@@ -120,27 +120,27 @@
 
         <!-- ─── Section 4: The compounding flywheel ─── -->
         <h2 id="section-4">4. The compounding flywheel</h2>
-        <p><strong>A vibe-coding pipeline runs the same plan tomorrow at the same cost it ran today.</strong> A Plan-Forge pipeline runs tomorrow's plan a bit colder &mdash; the gates that were tight yesterday are still tight, the patterns that worked are recalled, the patterns that failed are flagged in the lattice before the model touches the file. After ninety days, the same plan that cost a dollar on day one costs a fraction of that on day ninety, with fewer escalations, fewer failed slices, and fewer reviewer-found defects. That curve is what compounds.</p>
+        <p><strong>A vibe-coding pipeline runs the same plan tomorrow at the same cost it ran today.</strong> A Plan-Forge pipeline runs tomorrow's plan a bit colder, the gates that were tight yesterday are still tight, the patterns that worked are recalled, the patterns that failed are flagged in the lattice before the model touches the file. After ninety days, the same plan that cost a dollar on day one costs a fraction of that on day ninety, with fewer escalations, fewer failed slices, and fewer reviewer-found defects. That curve is what compounds.</p>
 
         <p>Three concrete mechanisms make the curve real, not aspirational:</p>
 
         <ul>
-          <li><strong>OpenBrain recall.</strong> Every plan's outcomes &mdash; passing gates, failing gates, fix proposals, post-mortem notes &mdash; are written to a user-owned memory service. The next plan starts with that recall pre-pulled into its context. See the <a href="memory-system.html">Memory chapter</a> for the full architecture.</li>
+          <li><strong>OpenBrain recall.</strong> Every plan's outcomes, passing gates, failing gates, fix proposals, post-mortem notes, are written to a user-owned memory service. The next plan starts with that recall pre-pulled into its context. See the <a href="memory-system.html">Memory chapter</a> for the full architecture.</li>
           <li><strong>Lattice callers.</strong> The repo is indexed semantically and structurally. Before the model edits a function, the orchestrator pulls the call sites the model would otherwise have to discover by guessing. Token spend on speculative reads drops materially.</li>
-          <li><strong>Pattern registry.</strong> Recurring fixes &mdash; "always inject the cancellation token", "the typed-exception base class lives here" &mdash; are promoted from one-off comments into named patterns that the harden-plan step references by name. The same fix is not re-derived every plan.</li>
+          <li><strong>Pattern registry.</strong> Recurring fixes, "always inject the cancellation token", "the typed-exception base class lives here", are promoted from one-off comments into named patterns that the harden-plan step references by name. The same fix is not re-derived every plan.</li>
         </ul>
-        <p class="text-sm text-slate-500"><strong>Read more &rarr;</strong> <a href="memory-system.html">Memory System chapter</a> (architecture, the Phase-MEMORY-QA receipt, and the four pieces &mdash; Hallmark, Anvil, Lattice, <code>sync_memories</code> &mdash; that make the recall layer concrete).</p>
+        <p class="text-sm text-slate-500"><strong>Read more &rarr;</strong> <a href="memory-system.html">Memory System chapter</a> (architecture, the Phase-MEMORY-QA receipt, and the four pieces, Hallmark, Anvil, Lattice, <code>sync_memories</code>, that make the recall layer concrete).</p>
 
         <!-- ─── Section 5: What we add that you might not have asked for ─── -->
         <h2 id="section-5">5. What we add that you might not have asked for</h2>
-        <p><strong>The brief above covers the things teams come to Plan Forge for.</strong> A handful of capabilities ship in the same box without being part of the headline pitch &mdash; they exist because they kept being the missing piece in production AI-SDLC adoptions and adding them once was cheaper than re-explaining their absence to every new team. None of them is hidden, gated, or paywalled; they ship in the same MIT-licensed harness as everything else.</p>
+        <p><strong>The brief above covers the things teams come to Plan Forge for.</strong> A handful of capabilities ship in the same box without being part of the headline pitch, they exist because they kept being the missing piece in production AI-SDLC adoptions and adding them once was cheaper than re-explaining their absence to every new team. None of them is hidden, gated, or paywalled; they ship in the same MIT-licensed harness as everything else.</p>
 
         <ul>
-          <li><strong>An open-source memory layer (<a href="memory-system.html">OpenBrain</a>).</strong> A user-owned memory service. Your decisions stay in your tenancy, on your hardware, behind your audit boundary &mdash; not in a vendor's control plane.</li>
+          <li><strong>An open-source memory layer (<a href="memory-system.html">OpenBrain</a>).</strong> A user-owned memory service. Your decisions stay in your tenancy, on your hardware, behind your audit boundary, not in a vendor's control plane.</li>
           <li><strong>Reviewer separation.</strong> The model that writes the code and the model that reviews the code are different sessions, different model selections (often different model <em>families</em>), and run against the same hardened plan but with different prompts. The reviewer cannot be flattered into approval by the author's framing.</li>
           <li><strong>Validation gates baked into the plan, not the CI script.</strong> The plan owns its gates. The CI script verifies that the gates ran and passed; it does not get to redefine them. Plans cannot drift away from the verification they ship with.</li>
           <li><strong>Plan provenance.</strong> Every plan carries a Scope Contract, a Forbidden Actions list, and an immutable record of which slices ran on which model, at what cost, with what outcome. Six months later, the reason any line of code landed is still answerable.</li>
-          <li><strong>Fleet operations.</strong> Multiple plans, multiple repos, multiple agents &mdash; the same dashboard, the same cost ledger, the same memory recall surface. Single-repo and multi-repo orgs do not pay different conceptual taxes.</li>
+          <li><strong>Fleet operations.</strong> Multiple plans, multiple repos, multiple agents, the same dashboard, the same cost ledger, the same memory recall surface. Single-repo and multi-repo orgs do not pay different conceptual taxes.</li>
           <li><strong>Audit trail.</strong> GitHub Issues, PRs, Actions runs, and the plan's commit history are the audit trail. Nothing is logged to a separate system the auditor has to chase.</li>
         </ul>
         <p class="text-sm text-slate-500"><strong>Read more &rarr;</strong> <a href="enterprise-deployment.html">Appendix J &mdash; Plan Forge for Enterprise</a> (multi-tenancy, data residency, compliance posture).</p>
@@ -150,21 +150,21 @@
         <p><strong>There are two ways to adopt Plan Forge, and they are both first-class.</strong> Neither one is a downgrade of the other; the right route depends on whether your organization needs the harness to look like your shop or the community's shop. Both routes terminate at the same place: a hardened, gated, memory-backed pipeline running against your repo with audit trail on every artifact.</p>
 
         <ul>
-          <li><strong>Route A &mdash; adopt as-is.</strong> Clone the repo, run <code>setup.ps1</code> (or <code>setup.sh</code>) against the preset that matches your stack, and start running <code>pforge run-plan</code> against your plans within the hour. Stay on the community upgrade cadence; PRs flow upstream when something is generally useful, locally when something is yours alone. Best for teams that want to skip the build phase and adopt a working pipeline today.</li>
-          <li><strong>Route B &mdash; fork and brand.</strong> Fork the repo into your org. Rebrand the presets, the agent set, the skill list, and the plan templates to match how your organization already talks about software. Rebase from upstream on a cadence that suits your release rhythm. Best for organisations whose SDLC vocabulary, agent naming, or compliance constraints make the as-is shop a poor fit out of the box.</li>
+          <li><strong>Route A: adopt as-is.</strong> Clone the repo, run <code>setup.ps1</code> (or <code>setup.sh</code>) against the preset that matches your stack, and start running <code>pforge run-plan</code> against your plans within the hour. Stay on the community upgrade cadence; PRs flow upstream when something is generally useful, locally when something is yours alone. Best for teams that want to skip the build phase and adopt a working pipeline today.</li>
+          <li><strong>Route B: fork and brand.</strong> Fork the repo into your org. Rebrand the presets, the agent set, the skill list, and the plan templates to match how your organization already talks about software. Rebase from upstream on a cadence that suits your release rhythm. Best for organisations whose SDLC vocabulary, agent naming, or compliance constraints make the as-is shop a poor fit out of the box.</li>
         </ul>
 
         <p class="text-sm text-slate-500"><strong>Read more &rarr;</strong> <a href="installation.html">Installation chapter</a> (route A, step-by-step) and <a href="customization.html">Customization chapter</a> (route B, the customization spine).</p>
 
         <!-- ─── Section 7: Why open source matters here ─── -->
         <h2 id="section-7">7. Why open source matters here</h2>
-        <p><strong>An SDLC harness is the wrong layer to rent.</strong> Renting the model is fine &mdash; the model is interchangeable, replaceable, and improves on a vendor's roadmap that is not your problem to manage. Renting the orchestration on top of the model is a category mistake. The orchestration is where your decisions live, where your audit trail accumulates, where your compliance posture is encoded, and where your institutional memory is stored. The closer that layer sits to your business, the worse the lock-in if you do not own it.</p>
+        <p><strong>An SDLC harness is the wrong layer to rent.</strong> Renting the model is fine, the model is interchangeable, replaceable, and improves on a vendor's roadmap that is not your problem to manage. Renting the orchestration on top of the model is a category mistake. The orchestration is where your decisions live, where your audit trail accumulates, where your compliance posture is encoded, and where your institutional memory is stored. The closer that layer sits to your business, the worse the lock-in if you do not own it.</p>
 
         <p>Four things change when the harness is open source and the memory layer is user-owned:</p>
 
         <ul>
-          <li><strong>IP stays yours.</strong> The plans, the patterns, the memory entries, the agent definitions, the skill library &mdash; all of it is in your repo or your tenancy. No vendor takedown can strand any of it.</li>
-          <li><strong>Audit is in-place.</strong> The artifacts an auditor wants &mdash; the plan, the gates, the run log, the cost ledger, the reviewer's verdict &mdash; are GitHub objects under your existing access controls. There is no second system to grant the auditor a seat in.</li>
+          <li><strong>IP stays yours.</strong> The plans, the patterns, the memory entries, the agent definitions, the skill library, all of it is in your repo or your tenancy. No vendor takedown can strand any of it.</li>
+          <li><strong>Audit is in-place.</strong> The artifacts an auditor wants, the plan, the gates, the run log, the cost ledger, the reviewer's verdict, are GitHub objects under your existing access controls. There is no second system to grant the auditor a seat in.</li>
           <li><strong>Customisation is unbounded.</strong> Anything in the harness can be forked, replaced, or augmented. The presets, the agents, the skills, the hooks, the notifier extensions, the orchestrator itself. The customization story is the customization story for the whole stack.</li>
           <li><strong>No vendor lock-in on the orchestration layer.</strong> The model you use can change tomorrow; the harness does not. The cost lever can change tomorrow; the lever owner is you. The memory schema can change tomorrow; the migration tool ships in the harness.</li>
         </ul>
@@ -172,7 +172,7 @@
 
         <!-- ─── Section 8: Make this yours — the public tailoring flow ─── -->
         <h2 id="section-8">8. Make this yours &mdash; the tailoring flow</h2>
-        <p><strong>The eight sections above are the ~50&percnt; of any per-organization briefing that is canonical.</strong> The other ~50&percnt; &mdash; the parts that name your squads, your KPIs, your pilot timeline, your ask &mdash; cannot and should not be pre-written. They are the parts the internal champion has to author or commission. The tailoring flow is the path from this generic briefing to that per-organization briefing, without anyone needing to open an issue and wait for a maintainer to respond. Three paths, in increasing order of Plan Forge involvement:</p>
+        <p><strong>The eight sections above are the ~50&percnt; of any per-organization briefing that is canonical.</strong> The other ~50&percnt; (the parts that name your squads, your KPIs, your pilot timeline, your ask) cannot and should not be pre-written. They are the parts the internal champion has to author or commission. The tailoring flow is the path from this generic briefing to that per-organization briefing, without anyone needing to open an issue and wait for a maintainer to respond. Three paths, in increasing order of Plan Forge involvement:</p>
 
         <div class="overflow-x-auto mb-6">
           <table class="manual-table">
@@ -193,21 +193,21 @@
               <tr>
                 <td><strong>3. Community</strong></td>
                 <td>days, async</td>
-                <td>Open a discussion in the Plan Forge repo with your draft. A maintainer or community reviewer critiques structure, sharpens claims, and flags overreach. No SLA &mdash; this is the open-source long tail.</td>
+                <td>Open a discussion in the Plan Forge repo with your draft. A maintainer or community reviewer critiques structure, sharpens claims, and flags overreach. No SLA, this is the open-source long tail.</td>
                 <td>The champion who has a draft and wants a second pair of eyes before sending it to a VP.</td>
               </tr>
             </tbody>
           </table>
         </div>
 
-        <p>The closing thought is deliberately recursive: <em>the briefing about Plan Forge ends by inviting the reader to use Plan Forge to remix the briefing</em>. That is the demo. A tool whose closing CTA is "open an issue and wait" is selling something other than what its first seven sections claimed. A tool whose closing CTA is "here is the template, here is the skill, here is the community &mdash; pick the one that matches your effort budget" has the same shape inside and outside.</p>
+        <p>The closing thought is deliberately recursive: <em>the briefing about Plan Forge ends by inviting the reader to use Plan Forge to remix the briefing</em>. That is the demo. A tool whose closing CTA is "open an issue and wait" is selling something other than what its first seven sections claimed. A tool whose closing CTA is "here is the template, here is the skill, here is the community, pick the one that matches your effort budget" has the same shape inside and outside.</p>
 
         <!-- ─── Closing ─── -->
         <h2 id="closing">A closing line, borrowed</h2>
         <blockquote class="border-l-4 border-amber-500/40 pl-4 text-slate-300 italic mb-4">
-          A blacksmith doesn't hand raw iron to a customer. They smelt it, hammer it, temper it &mdash; and then they watch, because a blade that isn't maintained will dull.
+          A blacksmith doesn't hand raw iron to a customer. They smelt it, hammer it, temper it, and then they watch, because a blade that isn't maintained will dull.
         </blockquote>
-        <p>The briefing above is the case made in ten minutes. The book is the case made in detail, station by station, decision by decision, with the receipts. The Foreword opens the door; the Reader-Journey Ladders pick the path; the chapters do the work. Start anywhere &mdash; the harness is yours either way.</p>
+        <p>The briefing above is the case made in ten minutes. The book is the case made in detail, station by station, decision by decision, with the receipts. The Foreword opens the door; the Reader-Journey Ladders pick the path; the chapters do the work. Start anywhere, the harness is yours either way.</p>
 
         <!-- ─── What to read next ─── -->
         <div class="callout callout-info">

@@ -159,7 +159,7 @@ tools: ["read_file", "grep_search", "semantic_search"]
       <p>Plan Forge fires <strong>eight lifecycle hooks</strong> across three buckets. The Copilot session hooks live in <code>.github/hooks/plan-forge.json</code> and run during every agent turn; the LiveGuard / orchestration hooks are configured in <a href="forge-json-reference.html#hooks"><code>.forge.json#hooks</code></a> and fire during plan execution; the plan-execution guard is a single Node script that runs ahead of every commit during <code>pforge run-plan</code>. The tables below are the normative reference — every hook the orchestrator knows about, what triggers it, what it can block, and where to configure it.</p>
 
       <h3 id="hooks-copilot-session">Copilot session hooks</h3>
-      <p>Configured in <code>.github/hooks/plan-forge.json</code>. Scripts live in <code>.github/hooks/scripts/</code> with a <code>.sh</code> POSIX variant and a <code>.ps1</code> Windows variant; the hook runner picks the right one per host. The default timeout for each hook is shown in the <strong>Timeout</strong> column &mdash; long-running scripts that exceed it are killed and skipped (not failed).</p>
+      <p>Configured in <code>.github/hooks/plan-forge.json</code>. Scripts live in <code>.github/hooks/scripts/</code> with a <code>.sh</code> POSIX variant and a <code>.ps1</code> Windows variant; the hook runner picks the right one per host. The default timeout for each hook is shown in the <strong>Timeout</strong> column, long-running scripts that exceed it are killed and skipped (not failed).</p>
 
       <div class="overflow-x-auto mb-6">
         <table class="manual-table">
@@ -184,7 +184,7 @@ tools: ["read_file", "grep_search", "semantic_search"]
             <tr>
               <td><code>PostToolUse</code></td>
               <td>After every agent tool call that wrote to the filesystem.</td>
-              <td>Auto-formats the touched file with the project's formatter (Prettier, dotnet format, Black, etc.) and then runs a quick scan for stub markers (TODO, FIXME, "throw new NotImplementedException", etc.). Stub findings are advisory &mdash; they surface in the agent's next turn but do not block.</td>
+              <td>Auto-formats the touched file with the project's formatter (Prettier, dotnet format, Black, etc.) and then runs a quick scan for stub markers (TODO, FIXME, "throw new NotImplementedException", etc.). Stub findings are advisory, they surface in the agent's next turn but do not block.</td>
               <td>No (advisory)</td>
               <td>15 s / 15 s</td>
               <td><code>post-edit-format.{sh,ps1}</code> &middot; <code>post-edit-validate.{sh,ps1}</code></td>
@@ -201,10 +201,10 @@ tools: ["read_file", "grep_search", "semantic_search"]
         </table>
       </div>
 
-      <p class="text-sm text-slate-400 mb-6">To disable a session hook for one project, edit <code>.github/hooks/plan-forge.json</code> and remove the entry from the relevant array. To disable a session hook globally, delete or rename the file &mdash; missing hook files are silently ignored.</p>
+      <p class="text-sm text-slate-400 mb-6">To disable a session hook for one project, edit <code>.github/hooks/plan-forge.json</code> and remove the entry from the relevant array. To disable a session hook globally, delete or rename the file, missing hook files are silently ignored.</p>
 
       <h3 id="hooks-liveguard">LiveGuard and orchestration hooks</h3>
-      <p>Configured in <a href="forge-json-reference.html#hooks"><code>.forge.json#hooks</code></a>. These fire during plan execution &mdash; the orchestrator invokes the relevant hook function directly (no shell scripts) and reads the matching <code>.forge.json</code> sub-block to pick up project-specific tuning. All three are opt-in at the project level (<code>enabled: true</code> in the field schema) and ship with safe defaults.</p>
+      <p>Configured in <a href="forge-json-reference.html#hooks"><code>.forge.json#hooks</code></a>. These fire during plan execution, the orchestrator invokes the relevant hook function directly (no shell scripts) and reads the matching <code>.forge.json</code> sub-block to pick up project-specific tuning. All three are opt-in at the project level (<code>enabled: true</code> in the field schema) and ship with safe defaults.</p>
 
       <div class="overflow-x-auto mb-6">
         <table class="manual-table">
@@ -226,8 +226,8 @@ tools: ["read_file", "grep_search", "semantic_search"]
             </tr>
             <tr>
               <td><code>PreAgentHandoff</code></td>
-              <td>On agent-to-agent turn boundaries in multi-agent mode &mdash; for example, when the executor agent hands off to the reviewer agent at the end of a slice.</td>
-              <td>Injects LiveGuard context (drift score, MTTR, open incidents) into the next agent's prompt. Also posts a snapshot to OpenClaw when <a href="forge-json-reference.html#openclaw"><code>openclaw.endpoint</code></a> is configured. <strong>Skipped</strong> when the orchestrator sets <code>PFORGE_QUORUM_TURN=1</code> during quorum fan-out (one of the documented bypasses &mdash; see <a href="environment-variables-reference.html#cli-internal">Appendix U &mdash; CLI Internal</a>).</td>
+              <td>On agent-to-agent turn boundaries in multi-agent mode, for example, when the executor agent hands off to the reviewer agent at the end of a slice.</td>
+              <td>Injects LiveGuard context (drift score, MTTR, open incidents) into the next agent's prompt. Also posts a snapshot to OpenClaw when <a href="forge-json-reference.html#openclaw"><code>openclaw.endpoint</code></a> is configured. <strong>Skipped</strong> when the orchestrator sets <code>PFORGE_QUORUM_TURN=1</code> during quorum fan-out (one of the documented bypasses, see <a href="environment-variables-reference.html#cli-internal">Appendix U &mdash; CLI Internal</a>).</td>
               <td>No (advisory)</td>
               <td><code>hooks.preAgentHandoff</code></td>
             </tr>
@@ -247,27 +247,27 @@ tools: ["read_file", "grep_search", "semantic_search"]
             <tr>
               <td><code>PreCommit</code></td>
               <td>Before every <code>git commit</code> when the current branch is <code>master</code> (or <code>main</code>).</td>
-              <td>Refuses the commit unless the orchestrator has set <code>PFORGE_RUN_PLAN_ACTIVE=1</code> &mdash; meaning the commit is part of a <code>pforge run-plan</code> invocation and not an interactive shell session that wandered onto the wrong branch.</td>
+              <td>Refuses the commit unless the orchestrator has set <code>PFORGE_RUN_PLAN_ACTIVE=1</code>, meaning the commit is part of a <code>pforge run-plan</code> invocation and not an interactive shell session that wandered onto the wrong branch.</td>
               <td><strong>Yes</strong></td>
-              <td>Set <code>PFORGE_ALLOW_MASTER_COMMIT=1</code> for one invocation. Discouraged &mdash; the guard exists because LiveGuard runs caught several "accidental master commit" incidents in the v3.3.x sweeps.</td>
+              <td>Set <code>PFORGE_ALLOW_MASTER_COMMIT=1</code> for one invocation. Discouraged, the guard exists because LiveGuard runs caught several "accidental master commit" incidents in the v3.3.x sweeps.</td>
             </tr>
           </tbody>
         </table>
       </div>
 
       <h3 id="hooks-resolution">Hook resolution order</h3>
-      <p>When the orchestrator needs to fire a hook, it looks for configuration in this order &mdash; first source that yields a non-empty value wins, with a built-in default at the end:</p>
+      <p>When the orchestrator needs to fire a hook, it looks for configuration in this order, first source that yields a non-empty value wins, with a built-in default at the end:</p>
       <ol class="space-y-2 mb-6 ml-6 list-decimal">
-        <li><strong>Environment override</strong> &mdash; e.g. <code>PFORGE_DISABLE_TEMPERING=1</code>, <code>PFORGE_ALLOW_MASTER_COMMIT=1</code>, <code>PFORGE_QUORUM_TURN=1</code>. See <a href="environment-variables-reference.html#feature-toggles">Appendix U &mdash; Feature Toggles</a> and <a href="environment-variables-reference.html#cli-internal">CLI Internal</a> for the full list.</li>
-        <li><strong>Project config</strong> &mdash; the matching block in <code>.forge.json#hooks</code> for LiveGuard hooks, or the matching entry in <code>.github/hooks/plan-forge.json</code> for session hooks.</li>
-        <li><strong>Hook script presence</strong> &mdash; for session hooks, a missing <code>.sh</code>/<code>.ps1</code> file is treated as "hook disabled" rather than an error. This lets you delete an unused hook script without editing the JSON.</li>
-        <li><strong>Built-in default</strong> &mdash; bakes into <code>orchestrator.mjs</code>. The defaults are deliberately conservative: every hook is enabled, every blocking hook actually blocks, every advisory hook actually emits its advisory.</li>
+        <li><strong>Environment override</strong>, e.g. <code>PFORGE_DISABLE_TEMPERING=1</code>, <code>PFORGE_ALLOW_MASTER_COMMIT=1</code>, <code>PFORGE_QUORUM_TURN=1</code>. See <a href="environment-variables-reference.html#feature-toggles">Appendix U &mdash; Feature Toggles</a> and <a href="environment-variables-reference.html#cli-internal">CLI Internal</a> for the full list.</li>
+        <li><strong>Project config</strong>, the matching block in <code>.forge.json#hooks</code> for LiveGuard hooks, or the matching entry in <code>.github/hooks/plan-forge.json</code> for session hooks.</li>
+        <li><strong>Hook script presence</strong>, for session hooks, a missing <code>.sh</code>/<code>.ps1</code> file is treated as "hook disabled" rather than an error. This lets you delete an unused hook script without editing the JSON.</li>
+        <li><strong>Built-in default</strong>, bakes into <code>orchestrator.mjs</code>. The defaults are deliberately conservative: every hook is enabled, every blocking hook actually blocks, every advisory hook actually emits its advisory.</li>
       </ol>
 
       <h3 id="hooks-writing">Writing a custom hook</h3>
-      <p>You can add scripts to existing buckets without modifying the orchestrator. For session hooks, drop a new script into <code>.github/hooks/scripts/</code> and append an entry to the appropriate array in <code>plan-forge.json</code>; the next agent session picks it up. For LiveGuard hooks, the contract is fixed by the orchestrator &mdash; you can't add new ones, but you can swap a hook's behavior by wrapping the underlying tool (e.g. point <code>hooks.preDeploy.scanSince</code> at a wider git range, or pre-populate <code>.forge/secret-scan-cache.json</code> with a custom scanner's output).</p>
+      <p>You can add scripts to existing buckets without modifying the orchestrator. For session hooks, drop a new script into <code>.github/hooks/scripts/</code> and append an entry to the appropriate array in <code>plan-forge.json</code>; the next agent session picks it up. For LiveGuard hooks, the contract is fixed by the orchestrator, you can't add new ones, but you can swap a hook's behavior by wrapping the underlying tool (e.g. point <code>hooks.preDeploy.scanSince</code> at a wider git range, or pre-populate <code>.forge/secret-scan-cache.json</code> with a custom scanner's output).</p>
 
-      <p class="text-sm text-slate-400 mb-6">A representative custom <code>SessionStart</code> hook that injects organization-specific reminders lives in <a href="https://github.com/srnichols/plan-forge/blob/master/templates/.github/hooks/scripts/session-start.ps1" rel="noopener">templates/.github/hooks/scripts/session-start.ps1</a> &mdash; copy it and edit the <code>$reminders</code> block. The script must emit a single line of JSON in the form <code>{"hookSpecificOutput":{"hookEventName":"SessionStart","additionalContext":"..."}}</code> for the agent host to honor the injection.</p>
+      <p class="text-sm text-slate-400 mb-6">A representative custom <code>SessionStart</code> hook that injects organization-specific reminders lives in <a href="https://github.com/srnichols/plan-forge/blob/master/templates/.github/hooks/scripts/session-start.ps1" rel="noopener">templates/.github/hooks/scripts/session-start.ps1</a>, copy it and edit the <code>$reminders</code> block. The script must emit a single line of JSON in the form <code>{"hookSpecificOutput":{"hookEventName":"SessionStart","additionalContext":"..."}}</code> for the agent host to honor the injection.</p>
 
       <!-- ─── Config Hierarchy ─── -->
       <h2 id="config-hierarchy">Configuration Hierarchy</h2>
@@ -282,7 +282,7 @@ tools: ["read_file", "grep_search", "semantic_search"]
       </table>
       <p>Personal preferences override team config for the individual developer. Editor settings control VS Code behavior (agent mode enabled, prompt files, etc.).</p>
 
-      <p class="text-sm text-slate-400 mt-4">For a field-by-field schema of <code>.forge.json</code> &mdash; every settable key with type, default, example, and change impact &mdash; see <a href="forge-json-reference.html"><strong>Appendix T &mdash; <code>.forge.json</code> Reference</strong></a>. For everything that lives <em>outside</em> <code>.forge.json</code> &mdash; provider API keys, server ports, orchestrator timing &mdash; see <a href="environment-variables-reference.html"><strong>Appendix U &mdash; Environment Variables Reference</strong></a>.</p>
+      <p class="text-sm text-slate-400 mt-4">For a field-by-field schema of <code>.forge.json</code>, every settable key with type, default, example, and change impact, see <a href="forge-json-reference.html"><strong>Appendix T &mdash; <code>.forge.json</code> Reference</strong></a>. For everything that lives <em>outside</em> <code>.forge.json</code>, provider API keys, server ports, orchestrator timing, see <a href="environment-variables-reference.html"><strong>Appendix U &mdash; Environment Variables Reference</strong></a>.</p>
 
         <p class="text-sm text-slate-500 mt-8">📄 Full reference: <a href="https://github.com/srnichols/plan-forge/blob/master/CUSTOMIZATION.md" rel="noopener">CUSTOMIZATION.md on GitHub</a></p>
       <div id="chapter-prev-next" class="chapter-nav"></div>

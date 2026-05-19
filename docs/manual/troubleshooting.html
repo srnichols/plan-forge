@@ -34,7 +34,7 @@
       </div>
 
       <div class="callout callout-info">
-        <strong>Trying to <em>do</em> something, not fix something?</strong> This chapter answers "why is X broken?" If the question is "how do I X?" &mdash; for example "how do I lower the cost of a run" or "how do I add a custom skill" &mdash; jump to <a href="how-do-i.html">Appendix S &mdash; How Do I&hellip;? Task Index</a>. It maps verbs to chapters.
+        <strong>Trying to <em>do</em> something, not fix something?</strong> This chapter answers "why is X broken?" If the question is "how do I X?", for example "how do I lower the cost of a run" or "how do I add a custom skill", jump to <a href="how-do-i.html">Appendix S &mdash; How Do I&hellip;? Task Index</a>. It maps verbs to chapters.
       </div>
 
       <h2 id="diagnostics">Diagnostic Tools</h2>
@@ -45,7 +45,7 @@
         <tbody>
           <tr><td><code>pforge smith</code></td><td>Environment, VS Code config, setup health, version</td><td>First thing when anything seems off</td></tr>
           <tr><td><code>pforge check</code></td><td>Setup file existence and validity</td><td>After setup or update</td></tr>
-          <tr><td><code>forge_diagnose({ file })</code> <span class="text-xs text-slate-500">(MCP tool)</span></td><td>Multi-model bug investigation on a specific file</td><td>When a slice fails and you can't see why &mdash; invoke from Copilot Chat</td></tr>
+          <tr><td><code>forge_diagnose({ file })</code> <span class="text-xs text-slate-500">(MCP tool)</span></td><td>Multi-model bug investigation on a specific file</td><td>When a slice fails and you can't see why, invoke from Copilot Chat</td></tr>
         </tbody>
       </table>
 
@@ -53,7 +53,7 @@
       <p>If you've never run it, here's the shape of the output to compare against. Anything red or marked <code>FAIL</code> is a real problem; <code>WARN</code> usually means an optional extension or integration isn't installed.</p>
 
       <div class="cmd-block">
-        <div class="cmd-block-header"><span>Terminal &mdash; expected output</span><button class="cmd-copy-btn">Copy</button></div>
+        <div class="cmd-block-header"><span>Terminal, expected output</span><button class="cmd-copy-btn">Copy</button></div>
         <pre><code>$ pforge smith
 
 Plan Forge v3.5.1 — forge diagnostic
@@ -144,7 +144,7 @@ Result: 4 OK, 3 WARN, 0 FAIL  —  forge is healthy</code></pre>
         <tbody>
           <tr><td>Use cheaper execution model</td><td>50–70%</td><td>Set <code>modelRouting.execute</code> to a smaller model</td></tr>
           <tr><td>Reserve expensive model for review</td><td>30–50%</td><td><code>modelRouting.review: "claude-opus-4.6"</code></td></tr>
-          <tr><td>Raise quorum threshold</td><td>20–40%</td><td><code>--quorum-threshold 8</code> (fewer slices trigger consensus &mdash; see <a href="advanced-execution.html#quorum-complexity">scoring rubric</a>)</td></tr>
+          <tr><td>Raise quorum threshold</td><td>20–40%</td><td><code>--quorum-threshold 8</code> (fewer slices trigger consensus, see <a href="advanced-execution.html#quorum-complexity">scoring rubric</a>)</td></tr>
           <tr><td>Reduce context per slice</td><td>10–20%</td><td>Use targeted <code>Context:</code> lists (see <a href="writing-plans.html#context">Chapter 4</a>)</td></tr>
           <tr><td>Preview before running</td><td>N/A</td><td><code>pforge run-plan --estimate</code> or <a href="advanced-execution.html#quorum-estimate"><code>forge_estimate_quorum</code></a> (compares all four modes)</td></tr>
         </tbody>
@@ -170,7 +170,7 @@ Result: 4 OK, 3 WARN, 0 FAIL  —  forge is healthy</code></pre>
           <tr><td><code>Plan parsing failed</code></td><td>Malformed plan file</td><td>Check for missing <code>## Execution Slices</code> section or broken markdown</td></tr>
           <tr><td><code>Gate command failed (exit 1)</code></td><td>Build or test failure</td><td>Fix the code, then <code>--resume-from N</code></td></tr>
           <tr><td><code>DRIFT DETECTED</code></td><td>Forbidden file modified</td><td>Revert the forbidden change, re-run the slice</td></tr>
-          <tr><td><code>CRITICAL_FIELDS_MISSING</code> <span class="text-amber-400 text-xs">v2.82.1</span></td><td>Crucible finalize blocked &mdash; missing build-command, test-command, scope, gates, forbidden-actions, or rollback</td><td>Call <code>forge_crucible_preview</code> for <code>criticalGaps[]</code>, then continue the interview</td></tr>
+          <tr><td><code>CRITICAL_FIELDS_MISSING</code> <span class="text-amber-400 text-xs">v2.82.1</span></td><td>Crucible finalize blocked, missing build-command, test-command, scope, gates, forbidden-actions, or rollback</td><td>Call <code>forge_crucible_preview</code> for <code>criticalGaps[]</code>, then continue the interview</td></tr>
           <tr><td><code>PLAN_ALREADY_EXISTS</code> <span class="text-amber-400 text-xs">v2.82.1</span></td><td>Crucible finalize refuses to overwrite hand-authored <code>docs/plans/Phase-NN.md</code></td><td>Read both files (existing plan + <code>.crucible-draft.md</code>), then re-finalize with <code>overwrite: true</code> if you really mean it</td></tr>
           <tr><td><code>ASK_QUESTION_MISMATCH</code> <span class="text-amber-400 text-xs">v2.82.1</span></td><td>Client passed a stale <code>questionId</code> to <code>forge_crucible_ask</code></td><td>Re-fetch state via <code>forge_crucible_preview</code>, retry with the current question id</td></tr>
           <tr><td><code>QUORUM_ALL_FAILED</code> <span class="text-amber-400 text-xs">v2.78</span></td><td>All quorum models timed out (60s each) or errored</td><td>Check API keys / network; retry. Consider <code>--quorum=speed</code> if flagship models are unavailable. <a href="advanced-execution.html#quorum-multi-agent">Multi-agent quorum reference</a>.</td></tr>
@@ -184,22 +184,22 @@ Result: 4 OK, 3 WARN, 0 FAIL  —  forge is healthy</code></pre>
       <p>The Crucible critical-fields gate refuses to draft TBD-laden plans. If finalize keeps returning <code>CRITICAL_FIELDS_MISSING</code>, the recovery path is:</p>
 
       <ol>
-        <li><code>forge_crucible_preview { id }</code> &mdash; returns <code>criticalGaps: [{ field, reason, hint }, &hellip;]</code></li>
+        <li><code>forge_crucible_preview { id }</code>, returns <code>criticalGaps: [{ field, reason, hint }, &hellip;]</code></li>
         <li>For each gap, the next call to <code>forge_crucible_ask</code> queues a question that targets that field</li>
-        <li>Build/test command questions auto-fill suggestions via <code>inferRepoCommands</code> &mdash; usually you just confirm</li>
+        <li>Build/test command questions auto-fill suggestions via <code>inferRepoCommands</code>, usually you just confirm</li>
         <li>Once all gaps resolved, finalize succeeds</li>
       </ol>
 
-      <p>If the gate is blocking on something you genuinely don't need (rare &mdash; the gate exists for good reason), the escape hatch is <code>--manual-import</code> on a hand-authored plan. See <a href="crucible.html#enforcement">Chapter 5 &mdash; Enforcement Gate</a>.</p>
+      <p>If the gate is blocking on something you genuinely don't need (rare, the gate exists for good reason), the escape hatch is <code>--manual-import</code> on a hand-authored plan. See <a href="crucible.html#enforcement">Chapter 5 &mdash; Enforcement Gate</a>.</p>
 
       <h2 id="forge-master-issues">Forge-Master Misroutes Intent</h2>
       <p>Forge-Master classifies prompts into <code>operational</code>, <code>troubleshoot</code>, <code>build</code>, <code>advisory</code>, or <code>offtopic</code>. Misroutes happen most often when:</p>
 
       <ul>
-        <li><strong>Stage 1 keyword scorer didn't match</strong> &mdash; check the <code>via</code> field in the response. If <code>"keyword"</code>, try a more keyword-rich phrasing ("status of &hellip;", "why did &hellip; fail", "should we &hellip;")</li>
-        <li><strong>Embedding cache is cold</strong> &mdash; new project, no prior classifications. Hit rate climbs after 10&ndash;20 turns. Check <code>GET /api/forge-master/cache-stats</code></li>
-        <li><strong>Router model is too small</strong> &mdash; default <code>grok-3-mini</code> is fine for most prompts but quirky vocabulary may need <code>grok-4</code> or <code>gpt-4o-mini</code>. Override via <code>forgeMaster.routerModel</code> in <code>.forge.json</code></li>
-        <li><strong>Quorum advisory not firing on <code>"auto"</code></strong> &mdash; requires lane=advisory + autoEscalated=true + fromTier=high + confidence&ge;medium. Use <code>"always"</code> to remove gating during testing</li>
+        <li><strong>Stage 1 keyword scorer didn't match</strong>, check the <code>via</code> field in the response. If <code>"keyword"</code>, try a more keyword-rich phrasing ("status of &hellip;", "why did &hellip; fail", "should we &hellip;")</li>
+        <li><strong>Embedding cache is cold</strong>, new project, no prior classifications. Hit rate climbs after 10&ndash;20 turns. Check <code>GET /api/forge-master/cache-stats</code></li>
+        <li><strong>Router model is too small</strong>, default <code>grok-3-mini</code> is fine for most prompts but quirky vocabulary may need <code>grok-4</code> or <code>gpt-4o-mini</code>. Override via <code>forgeMaster.routerModel</code> in <code>.forge.json</code></li>
+        <li><strong>Quorum advisory not firing on <code>"auto"</code></strong>, requires lane=advisory + autoEscalated=true + fromTier=high + confidence&ge;medium. Use <code>"always"</code> to remove gating during testing</li>
       </ul>
 
       <p>See <a href="forge-master.html#troubleshooting">Forge-Master chapter &mdash; Troubleshooting</a> for the full list.</p>
@@ -212,26 +212,26 @@ Result: 4 OK, 3 WARN, 0 FAIL  —  forge is healthy</code></pre>
         <tbody>
           <tr><td>"My <code>gpt-*</code> calls cost more on Claude Code than VS Code"</td><td>Default <code>auto</code> mode prefers direct OpenAI API on non-Copilot hosts (honors your subscription)</td><td>Set <code>routing.hostPreference: "gh-copilot"</code> in <code>.forge.json</code> to force Copilot subscription billing</td></tr>
           <tr><td>"Quorum dropped <code>gpt-*</code> from the run"</td><td>You're on a non-Copilot host AND <code>OPENAI_API_KEY</code> is unset AND <code>routing.hostPreference</code> is <code>"drop"</code></td><td>Set the API key, or change preference to <code>"auto"</code> / <code>"gh-copilot"</code></td></tr>
-          <tr><td>"Quorum pre-run summary table shows different billing per model"</td><td>Working as intended &mdash; the new table shows host + per-model billing surface so you can see spend distribution before dispatch</td><td>None &mdash; this is a feature, not a bug</td></tr>
+          <tr><td>"Quorum pre-run summary table shows different billing per model"</td><td>Working as intended, the new table shows host + per-model billing surface so you can see spend distribution before dispatch</td><td>None, this is a feature, not a bug</td></tr>
         </tbody>
       </table>
 
       <h2 id="errors-exit-codes">Errors &amp; Exit Codes</h2>
-      <p>If a script needs to react to a Plan Forge failure programmatically, branch on the <strong>exit code</strong> (CLI / orchestrator) or the <strong>named error code</strong> (MCP tools / REST). These are stable across releases &mdash; new failure modes get new codes rather than reusing existing ones.</p>
+      <p>If a script needs to react to a Plan Forge failure programmatically, branch on the <strong>exit code</strong> (CLI / orchestrator) or the <strong>named error code</strong> (MCP tools / REST). These are stable across releases, new failure modes get new codes rather than reusing existing ones.</p>
 
       <table class="manual-table">
         <thead><tr><th style="width: 10rem">Layer</th><th>Returns</th><th>Branch on</th></tr></thead>
         <tbody>
           <tr><td><code>pforge</code> CLI</td><td>POSIX exit code</td><td><code>0</code> success &middot; <code>1</code> generic failure &middot; <code>2</code> environment refusal (not in git repo, update-check failed, audit had no scanners)</td></tr>
           <tr><td><code>pforge run-plan</code></td><td>Exit code + <code>statusReason</code> in JSON</td><td><code>0</code>=<em>completed</em> / <em>completed-with-warnings</em> &middot; <code>1</code>=<em>failed</em> / <em>aborted</em>. <code>statusReason</code> narrows it: <code>gate-failed</code>, <code>drift-detected</code>, <code>quorum-all-failed</code>, etc.</td></tr>
-          <tr><td>MCP tools (<code>forge_*</code>)</td><td><code>{ ok, code, error }</code> envelope</td><td><code>ok: false</code> with a named <code>code</code> &mdash; e.g. <code>NO_API_KEY</code>, <code>CRITICAL_FIELDS_MISSING</code>, <code>QUORUM_ALL_FAILED</code>, <code>PLAN_NOT_FOUND</code></td></tr>
+          <tr><td>MCP tools (<code>forge_*</code>)</td><td><code>{ ok, code, error }</code> envelope</td><td><code>ok: false</code> with a named <code>code</code>, e.g. <code>NO_API_KEY</code>, <code>CRITICAL_FIELDS_MISSING</code>, <code>QUORUM_ALL_FAILED</code>, <code>PLAN_NOT_FOUND</code></td></tr>
           <tr><td>REST (<code>POST /api/&hellip;</code>)</td><td>HTTP status + JSON body</td><td><code>400</code> bad body &middot; <code>404</code> missing &middot; <code>409</code> state conflict (<code>ERR_UPDATE_DURING_RUN</code>) &middot; <code>429</code> rate limited (use <code>retryAfterMs</code>) &middot; <code>500</code> internal</td></tr>
           <tr><td>OS subprocess (worker, gate)</td><td>Native exit code, surfaced via <code>statusReason</code></td><td><code>0xC000013A</code> Windows Ctrl+C &middot; <code>130/137/143</code> POSIX signals. Mapped to <code>worker-signaled</code>.</td></tr>
         </tbody>
       </table>
 
       <div class="callout callout-info">
-        <strong>Full contract</strong>: every exit code, every named error code, every error event, plus copy-paste Bash and PowerShell CI recipes &mdash; see <a href="errors-and-exit-codes.html">Appendix X &mdash; Errors &amp; Exit Codes</a>.
+        <strong>Full contract</strong>: every exit code, every named error code, every error event, plus copy-paste Bash and PowerShell CI recipes, see <a href="errors-and-exit-codes.html">Appendix X &mdash; Errors &amp; Exit Codes</a>.
       </div>
 
       <h2 id="getting-help">Getting Help</h2>

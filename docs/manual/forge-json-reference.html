@@ -32,14 +32,14 @@
 
         <div class="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">Appendix T</div>
         <h1><code>.forge.json</code> Reference</h1>
-        <p class="text-lg text-slate-400 mb-8">Every settable key in the per-project Plan Forge configuration file &mdash; type, default, example, and what changes when the value is touched. The canonical source of truth for this reference is <code>CONFIG_SCHEMA</code> in <a href="https://github.com/srnichols/plan-forge/blob/master/pforge-mcp/capabilities.mjs" rel="noopener">pforge-mcp/capabilities.mjs</a>; this appendix mirrors that schema in human-readable form.</p>
+        <p class="text-lg text-slate-400 mb-8">Every settable key in the per-project Plan Forge configuration file, type, default, example, and what changes when the value is touched. The canonical source of truth for this reference is <code>CONFIG_SCHEMA</code> in <a href="https://github.com/srnichols/plan-forge/blob/master/pforge-mcp/capabilities.mjs" rel="noopener">pforge-mcp/capabilities.mjs</a>; this appendix mirrors that schema in human-readable form.</p>
 
         <div class="callout callout-info">
-          <strong>How to edit safely.</strong> Prefer the <code>forge_config</code> MCP tool (or the dashboard Config tab) for schema-validated writes &mdash; both perform atomic updates (write to temp, then rename) so partial writes never leave a half-valid file. Hand-editing is fine for small changes; just validate the JSON before saving.
+          <strong>How to edit safely.</strong> Prefer the <code>forge_config</code> MCP tool (or the dashboard Config tab) for schema-validated writes, both perform atomic updates (write to temp, then rename) so partial writes never leave a half-valid file. Hand-editing is fine for small changes; just validate the JSON before saving.
         </div>
 
         <h2 id="orientation">Orientation</h2>
-        <p>The file lives at the repo root as <code>.forge.json</code>. It is read at startup by the orchestrator, the dashboard, and most MCP tools. The schema is intentionally <strong>shallow at the top</strong> and grouped by subsystem &mdash; each top-level key controls one slice of Plan Forge behavior:</p>
+        <p>The file lives at the repo root as <code>.forge.json</code>. It is read at startup by the orchestrator, the dashboard, and most MCP tools. The schema is intentionally <strong>shallow at the top</strong> and grouped by subsystem, each top-level key controls one slice of Plan Forge behavior:</p>
 
         <div class="overflow-x-auto mb-8">
           <table class="manual-table">
@@ -63,11 +63,11 @@
           </table>
         </div>
 
-        <p>The next sections describe each group in detail. Every field row uses the same five columns &mdash; <strong>Key</strong>, <strong>Type</strong>, <strong>Default</strong>, <strong>Example</strong>, <strong>Change impact</strong> &mdash; so the table reads the same way no matter which subsystem you land on.</p>
+        <p>The next sections describe each group in detail. Every field row uses the same five columns, <strong>Key</strong>, <strong>Type</strong>, <strong>Default</strong>, <strong>Example</strong>, <strong>Change impact</strong>, so the table reads the same way no matter which subsystem you land on.</p>
 
         <!-- ============================================================ -->
         <h2 id="identity">Project identity</h2>
-        <p>Four fields tell Plan Forge what kind of project it is looking at. <code>projectName</code> is the most important one &mdash; it scopes memory in OpenBrain (so two projects with the same plan name do not collide) and is the default <code>project</code> tag for traces and replay.</p>
+        <p>Four fields tell Plan Forge what kind of project it is looking at. <code>projectName</code> is the most important one, it scopes memory in OpenBrain (so two projects with the same plan name do not collide) and is the default <code>project</code> tag for traces and replay.</p>
 
         <div class="overflow-x-auto mb-6">
           <table class="manual-table">
@@ -115,7 +115,7 @@
           <table class="manual-table">
             <thead><tr><th>Key</th><th>Type</th><th>Default</th><th>Example</th><th>Change impact</th></tr></thead>
             <tbody>
-              <tr><td><code>agents</code></td><td>array&lt;enum&gt;</td><td><code>[]</code></td><td><code>["claude", "cursor"]</code></td><td>Each entry is one of <code>claude</code>, <code>cursor</code>, <code>codex</code>. Adding an entry causes <code>setup</code> (or <code>setup --agent &lt;name&gt;</code>) to generate that adapter's native file (e.g. <code>CLAUDE.md</code>, <code>.cursorrules</code>). Removing an entry does not delete files &mdash; clean those up manually.</td></tr>
+              <tr><td><code>agents</code></td><td>array&lt;enum&gt;</td><td><code>[]</code></td><td><code>["claude", "cursor"]</code></td><td>Each entry is one of <code>claude</code>, <code>cursor</code>, <code>codex</code>. Adding an entry causes <code>setup</code> (or <code>setup --agent &lt;name&gt;</code>) to generate that adapter's native file (e.g. <code>CLAUDE.md</code>, <code>.cursorrules</code>). Removing an entry does not delete files, clean those up manually.</td></tr>
             </tbody>
           </table>
         </div>
@@ -200,9 +200,9 @@
 
         <!-- ============================================================ -->
         <h2 id="hooks"><code>hooks</code> &mdash; LiveGuard lifecycle hooks (v2.29+)</h2>
-        <p>Three optional hook configurations &mdash; <code>preDeploy</code> (before deploy slices), <code>postSlice</code> (after every slice), <code>preAgentHandoff</code> (multi-agent turn). Each section is independent; omit any subsection to accept its defaults.</p>
+        <p>Three optional hook configurations, <code>preDeploy</code> (before deploy slices), <code>postSlice</code> (after every slice), <code>preAgentHandoff</code> (multi-agent turn). Each section is independent; omit any subsection to accept its defaults.</p>
 
-        <p class="text-sm text-slate-400 mb-6">For the full eight-hook picture &mdash; including the Copilot session hooks (<code>SessionStart</code>, <code>PreToolUse</code>, <code>PostToolUse</code>, <code>Stop</code>) configured separately in <code>.github/hooks/plan-forge.json</code> and the <code>PreCommit</code> master-branch guard &mdash; see <a href="customization.html#lifecycle-hooks"><strong>Customization &mdash; Lifecycle Hooks Reference</strong></a>.</p>
+        <p class="text-sm text-slate-400 mb-6">For the full eight-hook picture, including the Copilot session hooks (<code>SessionStart</code>, <code>PreToolUse</code>, <code>PostToolUse</code>, <code>Stop</code>) configured separately in <code>.github/hooks/plan-forge.json</code> and the <code>PreCommit</code> master-branch guard, see <a href="customization.html#lifecycle-hooks"><strong>Customization &mdash; Lifecycle Hooks Reference</strong></a>.</p>
 
         <h3 id="hooks-preDeploy"><code>hooks.preDeploy</code></h3>
         <div class="overflow-x-auto mb-6">
@@ -224,7 +224,7 @@
             <tbody>
               <tr><td><code>hooks.postSlice.silentDeltaThreshold</code></td><td>number</td><td><code>5</code></td><td><code>3</code></td><td>Drift score delta below this is silent (no log line).</td></tr>
               <tr><td><code>hooks.postSlice.warnDeltaThreshold</code></td><td>number</td><td><code>10</code></td><td><code>15</code></td><td>Drift score delta at or above this prints a warning. Between silent and warn = info.</td></tr>
-              <tr><td><code>hooks.postSlice.scoreFloor</code></td><td>number</td><td><code>70</code></td><td><code>80</code></td><td>Absolute drift score floor &mdash; below this triggers a red warning regardless of delta.</td></tr>
+              <tr><td><code>hooks.postSlice.scoreFloor</code></td><td>number</td><td><code>70</code></td><td><code>80</code></td><td>Absolute drift score floor, below this triggers a red warning regardless of delta.</td></tr>
             </tbody>
           </table>
         </div>
@@ -261,7 +261,7 @@
         <p>Opt-in subsystems added by Phase-25. Both default to off or advisory; existing users see no behavior change without explicit configuration.</p>
 
         <h3 id="runtime-gateSynthesis"><code>runtime.gateSynthesis</code></h3>
-        <p>L6 &mdash; adaptive gate synthesis from Tempering minima. Suggest-only by default; the orchestrator never mutates plans.</p>
+        <p>L6, adaptive gate synthesis from Tempering minima. Suggest-only by default; the orchestrator never mutates plans.</p>
         <div class="overflow-x-auto mb-6">
           <table class="manual-table">
             <thead><tr><th>Key</th><th>Type</th><th>Default</th><th>Example</th><th>Change impact</th></tr></thead>
@@ -273,7 +273,7 @@
         </div>
 
         <h3 id="runtime-reviewer"><code>runtime.reviewer</code></h3>
-        <p>L4 &mdash; opt-in speed-quorum reviewer that scores slice diffs inside <code>brain.gate-check</code>. Advisory-only in v2.57.</p>
+        <p>L4, opt-in speed-quorum reviewer that scores slice diffs inside <code>brain.gate-check</code>. Advisory-only in v2.57.</p>
         <div class="overflow-x-auto mb-6">
           <table class="manual-table">
             <thead><tr><th>Key</th><th>Type</th><th>Default</th><th>Example</th><th>Change impact</th></tr></thead>
@@ -318,7 +318,7 @@
         <p>A realistic <code>.forge.json</code> for a TypeScript project that has opted into Claude as a secondary agent, runs quorum on high-complexity slices, and uses OpenBrain federation to read from a sibling repo:</p>
 
         <div class="cmd-block">
-          <div class="cmd-block-header"><span><code>.forge.json</code> &mdash; representative</span><button class="cmd-copy-btn">Copy</button></div>
+          <div class="cmd-block-header"><span><code>.forge.json</code>, representative</span><button class="cmd-copy-btn">Copy</button></div>
 <pre><code>{
   "projectName": "myapp",
   "preset": "typescript",
@@ -377,13 +377,13 @@
         <!-- ============================================================ -->
         <h2 id="see-also">See also</h2>
         <ul class="space-y-2 mb-8">
-          <li><a href="customization.html#config-hierarchy"><strong>Customization &mdash; Configuration Hierarchy</strong></a> &mdash; how <code>.forge.json</code> interacts with <code>copilot-instructions.md</code> and instruction files when settings conflict.</li>
-          <li><a href="environment-variables-reference.html"><strong>Appendix U &mdash; Environment Variables Reference</strong></a> &mdash; the companion reference for everything that lives outside <code>.forge.json</code>: provider API keys, server ports, orchestrator timing, telemetry. Includes the full <a href="environment-variables-reference.html#precedence">resolution precedence</a> when flags, env vars, secrets, and <code>.forge.json</code> overlap.</li>
-          <li><a href="update-source.html"><strong>Appendix G &mdash; Update Source Modes</strong></a> &mdash; the full story behind <code>updateSource: auto | github-tags | local-sibling</code>.</li>
-          <li><a href="advanced-execution.html#quorum"><strong>Chapter 14 &mdash; Quorum Mode</strong></a> &mdash; what each <code>quorum.*</code> key does in practice; the complexity scoring rubric that drives <code>auto</code>.</li>
-          <li><a href="multi-agent.html"><strong>Chapter 13 &mdash; Multi-Agent Setup</strong></a> &mdash; what each entry in <code>agents</code> generates.</li>
-          <li><a href="memory-system.html"><strong>Chapter 22 &mdash; How the Shop Remembers</strong></a> &mdash; how <code>brain.federation</code> shapes cross-project memory recall.</li>
-          <li><a href="https://github.com/srnichols/plan-forge/blob/master/pforge-mcp/capabilities.mjs" rel="noopener"><strong>pforge-mcp/capabilities.mjs &mdash; CONFIG_SCHEMA</strong></a> &mdash; the machine-readable JSON Schema this appendix mirrors. If they disagree, the schema wins; please <a href="https://github.com/srnichols/plan-forge/issues/new" rel="noopener">file an issue</a>.</li>
+          <li><a href="customization.html#config-hierarchy"><strong>Customization &mdash; Configuration Hierarchy</strong></a>, how <code>.forge.json</code> interacts with <code>copilot-instructions.md</code> and instruction files when settings conflict.</li>
+          <li><a href="environment-variables-reference.html"><strong>Appendix U &mdash; Environment Variables Reference</strong></a>, the companion reference for everything that lives outside <code>.forge.json</code>: provider API keys, server ports, orchestrator timing, telemetry. Includes the full <a href="environment-variables-reference.html#precedence">resolution precedence</a> when flags, env vars, secrets, and <code>.forge.json</code> overlap.</li>
+          <li><a href="update-source.html"><strong>Appendix G &mdash; Update Source Modes</strong></a>, the full story behind <code>updateSource: auto | github-tags | local-sibling</code>.</li>
+          <li><a href="advanced-execution.html#quorum"><strong>Chapter 14 &mdash; Quorum Mode</strong></a>, what each <code>quorum.*</code> key does in practice; the complexity scoring rubric that drives <code>auto</code>.</li>
+          <li><a href="multi-agent.html"><strong>Chapter 13 &mdash; Multi-Agent Setup</strong></a>, what each entry in <code>agents</code> generates.</li>
+          <li><a href="memory-system.html"><strong>Chapter 22 &mdash; How the Shop Remembers</strong></a>, how <code>brain.federation</code> shapes cross-project memory recall.</li>
+          <li><a href="https://github.com/srnichols/plan-forge/blob/master/pforge-mcp/capabilities.mjs" rel="noopener"><strong>pforge-mcp/capabilities.mjs &mdash; CONFIG_SCHEMA</strong></a>, the machine-readable JSON Schema this appendix mirrors. If they disagree, the schema wins; please <a href="https://github.com/srnichols/plan-forge/issues/new" rel="noopener">file an issue</a>.</li>
         </ul>
 
       </div>

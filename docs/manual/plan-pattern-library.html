@@ -88,7 +88,7 @@
         <p><strong>Failure modes avoided</strong>: route registered but not wired to service; OpenAPI drift from implementation.</p>
 
         <h2 id="p3-add-integration">P3 &mdash; Add an External Integration</h2>
-        <p><strong>When</strong>: bringing in Stripe, SendGrid, S3, Twilio, an internal RPC service &mdash; anywhere your code calls an outside system.</p>
+        <p><strong>When</strong>: bringing in Stripe, SendGrid, S3, Twilio, an internal RPC service, anywhere your code calls an outside system.</p>
         <p><strong>Slice shape</strong> (4&ndash;5 slices):</p>
         <ol class="list-decimal list-inside space-y-1 mb-4">
           <li>Adapter interface + in-process fake (for tests).</li>
@@ -140,7 +140,7 @@
         <p><strong>Follow-up</strong>: file a P5 (Fix a Regression) plan once the fire is out, to add proper test coverage and address root cause.</p>
 
         <h2 id="p7-feature-flag">P7 &mdash; Feature Flag Rollout</h2>
-        <p><strong>When</strong>: a change risky enough to ship dark &mdash; new algorithm, vendor swap, UI redesign.</p>
+        <p><strong>When</strong>: a change risky enough to ship dark, new algorithm, vendor swap, UI redesign.</p>
         <p><strong>Slice shape</strong> (4&ndash;5 slices):</p>
         <ol class="list-decimal list-inside space-y-1 mb-4">
           <li>Flag scaffold (config entry, accessor, default OFF).</li>
@@ -198,12 +198,12 @@
         <p><strong>When</strong>: a CVE in a dependency, a misconfiguration finding, or a discovered vulnerability in your own code.</p>
         <p><strong>Slice shape</strong> (2&ndash;3 slices):</p>
         <ol class="list-decimal list-inside space-y-1 mb-4">
-          <li>The minimum-surface fix (upgrade pin, sanitize input, rotate config &mdash; whichever applies).</li>
+          <li>The minimum-surface fix (upgrade pin, sanitize input, rotate config, whichever applies).</li>
           <li>A regression test that asserts the vulnerable path is now safe.</li>
           <li><em>(optional)</em> Advisory / disclosure write-up.</li>
         </ol>
         <p><strong>Gate flavor</strong>: the fix slice's gate runs the regression test plus <code>forge_secret_scan</code> on the diff. PreDeploy LiveGuard hook applies if shipping to a deploy slice.</p>
-        <p><strong>Quorum</strong>: <code>auto</code> or <code>power</code> &mdash; depends on blast radius.</p>
+        <p><strong>Quorum</strong>: <code>auto</code> or <code>power</code>, depends on blast radius.</p>
         <p><strong>Failure modes avoided</strong>: scope creep (fixing other things "while we're here"); regression test that doesn't actually exercise the vulnerable path.</p>
         <p>See also <a href="security-threat-model.html#incident-response">Chapter 30 &mdash; Incident response</a>.</p>
 
@@ -211,11 +211,11 @@
         <p><strong>When</strong>: writing several documents at once (manual chapters, runbooks, API docs) over multiple sessions.</p>
         <p><strong>Slice shape</strong> (1 per document):</p>
         <ol class="list-decimal list-inside space-y-1 mb-4">
-          <li>One slice per document. Each is independent &mdash; if slice N fails, slices N+1, N+2 are unaffected.</li>
+          <li>One slice per document. Each is independent, if slice N fails, slices N+1, N+2 are unaffected.</li>
           <li>Scope contract: only the document's source file + any auto-regenerated index files.</li>
           <li>Gate: the documentation maintainer's validator (e.g. <code>node docs/manual/maintain.mjs</code>).</li>
         </ol>
-        <p><strong>Gate flavor</strong>: validator runs <em>twice consecutively</em> &mdash; first pass detects drift, second pass confirms the auto-regeneration converged.</p>
+        <p><strong>Gate flavor</strong>: validator runs <em>twice consecutively</em>, first pass detects drift, second pass confirms the auto-regeneration converged.</p>
         <p><strong>Quorum</strong>: <code>auto</code>. Doc writing is iterative; quorum doesn't help much.</p>
         <p><strong>Failure modes avoided</strong>: documents that reference each other but drift apart; orphan files not registered in indexes; bundled commits that touch many unrelated documents at once.</p>
         <p><strong>Real-world example</strong>: this manual's <code>Phase-MANUAL-EBOOK-COMPLETION-PLAN.md</code> is a literal P12 instance.</p>
@@ -235,7 +235,7 @@
         <p><strong>When</strong>: unfamiliar domain, unclear design space. You need to learn before you commit.</p>
         <p><strong>Slice shape</strong> (1 spike + a follow-up build plan):</p>
         <ol class="list-decimal list-inside space-y-1 mb-4">
-          <li><strong>Spike slice</strong>: explicitly time-boxed exploration. Output is a <em>document</em> (an ADR, a design note, an annotated prototype) &mdash; <strong>not</strong> production code. Forbidden Actions deny edits outside <code>docs/research/</code>.</li>
+          <li><strong>Spike slice</strong>: explicitly time-boxed exploration. Output is a <em>document</em> (an ADR, a design note, an annotated prototype), <strong>not</strong> production code. Forbidden Actions deny edits outside <code>docs/research/</code>.</li>
           <li>Spike output feeds a new plan in a new session (using whichever pattern P1&ndash;P13 fits).</li>
         </ol>
         <p><strong>Gate flavor</strong>: the spike's gate is "an ADR or design note exists" (e.g. <code>test -f docs/research/spike-NN-decision.md</code>). Time-box is enforced by reviewing the document and explicitly killing the run if it produced code.</p>
@@ -245,19 +245,19 @@
         <h2 id="composition">Composing patterns</h2>
         <p>Real phases often combine patterns. A typical feature ship might be:</p>
         <ul class="list-disc list-inside space-y-1 mb-4">
-          <li><strong>Phase-NN.1</strong> &mdash; P14 spike to settle the API shape.</li>
-          <li><strong>Phase-NN.2</strong> &mdash; P1 add entity (backend).</li>
-          <li><strong>Phase-NN.3</strong> &mdash; P7 feature-flag rollout for the UI / risky behavior.</li>
-          <li><strong>Phase-NN.4</strong> &mdash; P12 documentation phase (runbook + API docs).</li>
+          <li><strong>Phase-NN.1</strong>, P14 spike to settle the API shape.</li>
+          <li><strong>Phase-NN.2</strong>, P1 add entity (backend).</li>
+          <li><strong>Phase-NN.3</strong>, P7 feature-flag rollout for the UI / risky behavior.</li>
+          <li><strong>Phase-NN.4</strong>, P12 documentation phase (runbook + API docs).</li>
         </ul>
-        <p>Each phase is a <em>separate plan file</em>, runnable independently, revertable independently, reviewable independently. That's the architectural payoff &mdash; small phases compose; mega-phases don't.</p>
+        <p>Each phase is a <em>separate plan file</em>, runnable independently, revertable independently, reviewable independently. That's the architectural payoff, small phases compose; mega-phases don't.</p>
 
         <h2 id="anti-patterns">Anti-patterns</h2>
         <p>Shapes that look like patterns but degrade outcomes. If your plan resembles one of these, refactor the plan before running it.</p>
         <table class="manual-table">
           <thead><tr><th style="width: 18rem">Anti-pattern</th><th>Why it fails</th><th>Refactor to</th></tr></thead>
           <tbody>
-            <tr><td><strong>Mega-slice</strong> (one slice, 20+ files)</td><td>Un-reviewable diff; one failure rolls back everything; no useful intermediate state.</td><td>Split into per-layer / per-consumer slices &mdash; P1 or P4.</td></tr>
+            <tr><td><strong>Mega-slice</strong> (one slice, 20+ files)</td><td>Un-reviewable diff; one failure rolls back everything; no useful intermediate state.</td><td>Split into per-layer / per-consumer slices, P1 or P4.</td></tr>
             <tr><td><strong>Test-after</strong> (separate slice that only adds tests for code shipped earlier)</td><td>Test slice often "happens to pass" because it's written to match observed behavior, not specified behavior.</td><td>Move tests into the slice that ships the code (or use P5's strict red-then-green for genuine retrofit).</td></tr>
             <tr><td><strong>Sweep-only-at-end</strong></td><td>All earlier slices appeared green; the sweep at the end discovers cross-slice breakage that's now expensive to localize.</td><td>Run sweep as part of every slice's gate (cost: seconds; benefit: bisectability).</td></tr>
             <tr><td><strong>Plan-as-essay</strong> (long prose, vague scope contracts)</td><td>Worker treats it as inspiration rather than contract; scope drift becomes the norm.</td><td>Use the standard plan template: explicit Scope Contract + Forbidden Actions + per-slice gate command. See the <a href="https://github.com/srnichols/plan-forge/blob/master/docs/plans/AI-Plan-Hardening-Runbook.md">AI Plan Hardening Runbook</a>.</td></tr>
@@ -268,12 +268,12 @@
 
         <h2 id="see-also">See also</h2>
         <ul class="list-disc list-inside space-y-1">
-          <li><a href="https://github.com/srnichols/plan-forge/blob/master/docs/plans/AI-Plan-Hardening-Runbook.md">AI Plan Hardening Runbook</a> &mdash; the standard plan template these patterns plug into.</li>
-          <li><a href="your-first-plan.html">Chapter 6 &mdash; Your First Plan</a> &mdash; the narrative walkthrough of plan authoring.</li>
-          <li><a href="cost-and-economics.html#effective-workflows">Chapter 31 &mdash; Cost-effective workflows</a> &mdash; per-slice economics that informed pattern choices.</li>
-          <li><a href="advanced-execution.html#quorum-multi-agent">Chapter 14 &mdash; Quorum &amp; Multi-Agent</a> &mdash; how the quorum recommendation per pattern is enforced at runtime.</li>
-          <li><a href="security-threat-model.html#incident-response">Chapter 30 &mdash; Incident response</a> &mdash; the runbook backing P6 (Hotfix) and P11 (Security Patch).</li>
-          <li><a href="errors-and-exit-codes.html">Appendix X &mdash; Errors &amp; Exit Codes</a> &mdash; gate failure surface every pattern relies on.</li>
+          <li><a href="https://github.com/srnichols/plan-forge/blob/master/docs/plans/AI-Plan-Hardening-Runbook.md">AI Plan Hardening Runbook</a>, the standard plan template these patterns plug into.</li>
+          <li><a href="your-first-plan.html">Chapter 6 &mdash; Your First Plan</a>, the narrative walkthrough of plan authoring.</li>
+          <li><a href="cost-and-economics.html#effective-workflows">Chapter 31 &mdash; Cost-effective workflows</a>, per-slice economics that informed pattern choices.</li>
+          <li><a href="advanced-execution.html#quorum-multi-agent">Chapter 14 &mdash; Quorum &amp; Multi-Agent</a>, how the quorum recommendation per pattern is enforced at runtime.</li>
+          <li><a href="security-threat-model.html#incident-response">Chapter 30 &mdash; Incident response</a>, the runbook backing P6 (Hotfix) and P11 (Security Patch).</li>
+          <li><a href="errors-and-exit-codes.html">Appendix X &mdash; Errors &amp; Exit Codes</a>, gate failure surface every pattern relies on.</li>
         </ul>
 
         <div id="chapter-prev-next" class="chapter-nav"></div>

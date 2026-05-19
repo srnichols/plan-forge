@@ -32,10 +32,10 @@
 
         <!-- ─── The one-paragraph version ─── -->
         <h2 id="one-paragraph">The one-paragraph version</h2>
-        <p>Plan Forge began in spring 2025 as a single 2,000-line <code>copilot-instructions.md</code> file written out of frustration with AI agents that could generate code faster than any human team but produced output without interfaces, without DTOs, without tests beyond the happy path, and without any concept of architectural discipline. Over the year that followed, the single file fractured into eighteen focused instruction files, then a six-step pipeline, then a four-session execution model, then a multi-model quorum, then an MCP server with a CLI and a dashboard, then a four-station shop &mdash; Smelt, Forge, Guard, Learn &mdash; with persistent memory, post-deploy defense, and a self-tempering audit loop. The model never got the credit. <strong>The variable was always context.</strong></p>
+        <p>Plan Forge began in spring 2025 as a single 2,000-line <code>copilot-instructions.md</code> file written out of frustration with AI agents that could generate code faster than any human team but produced output without interfaces, without DTOs, without tests beyond the happy path, and without any concept of architectural discipline. Over the year that followed, the single file fractured into eighteen focused instruction files, then a six-step pipeline, then a four-session execution model, then a multi-model quorum, then an MCP server with a CLI and a dashboard, then a four-station shop, Smelt, Forge, Guard, Learn, with persistent memory, post-deploy defense, and a self-tempering audit loop. The model never got the credit. <strong>The variable was always context.</strong></p>
 
         <blockquote class="border-l-4 border-forge-500 pl-4 italic text-slate-400 my-6">
-          <p>"The quality of AI-generated code is not a function of model capability &mdash; it's a function of the context you provide."</p>
+          <p>"The quality of AI-generated code is not a function of model capability, it's a function of the context you provide."</p>
           <p class="text-xs text-slate-500 not-italic mt-2">&mdash; <a href="../blog/the-journey-from-impossible-to-seven-minutes.html" class="hover:underline">From Impossible to 7 Minutes</a>, May 2026</p>
         </blockquote>
 
@@ -56,10 +56,10 @@
           </div>
         </div>
 
-        <p>The model was the same in both runs. So was the prompt, the hardware, the afternoon. <strong>What changed was the shop around the model.</strong> Scope contracts told it what to touch. Validation gates told it when a slice was done. The Plan Hardener turned a paragraph of feature description into an execution contract with explicit forbidden actions. The four-session architecture made sure the agent that built the code never reviewed its own work. The numbers are not a model story &mdash; they are an SDLC story.</p>
+        <p>The model was the same in both runs. So was the prompt, the hardware, the afternoon. <strong>What changed was the shop around the model.</strong> Scope contracts told it what to touch. Validation gates told it when a slice was done. The Plan Hardener turned a paragraph of feature description into an execution contract with explicit forbidden actions. The four-session architecture made sure the agent that built the code never reviewed its own work. The numbers are not a model story, they are an SDLC story.</p>
 
         <div class="callout callout-info">
-          <strong>The thing that didn't change:</strong> better models did not eliminate the need for guardrails &mdash; they extracted more value from them. Every quarter's model improvement made the same context pay off harder. The guardrails are not training wheels. They are blueprints.
+          <strong>The thing that didn't change:</strong> better models did not eliminate the need for guardrails, they extracted more value from them. Every quarter's model improvement made the same context pay off harder. The guardrails are not training wheels. They are blueprints.
         </div>
 
         <!-- ─── The four-station shop ─── -->
@@ -78,12 +78,12 @@
               <tr>
                 <td>&#x1FAA8; <strong>Smelt</strong></td>
                 <td>Intake &rarr; scope contract</td>
-                <td>A hardened plan the Forge can execute without follow-up questions &mdash; scope boundaries, validation gates, forbidden actions, rollback steps</td>
+                <td>A hardened plan the Forge can execute without follow-up questions, scope boundaries, validation gates, forbidden actions, rollback steps</td>
               </tr>
               <tr>
                 <td>&#x1F528; <strong>Forge</strong></td>
                 <td>Scope contract &rarr; shipped code</td>
-                <td>Green tests, green CI, green cost ledger &mdash; or an honest stop with a fix proposal at the slice that failed</td>
+                <td>Green tests, green CI, green cost ledger, or an honest stop with a fix proposal at the slice that failed</td>
               </tr>
               <tr>
                 <td>&#x1F6E1;&#xFE0F; <strong>Guard</strong></td>
@@ -112,13 +112,13 @@
 
         <!-- ─── What this book is NOT ─── -->
         <h2 id="what-this-book-is-not">What this book is <em>not</em></h2>
-        <p>It is not a marketing brochure. The numbers in this book come from the same source files the system is built from &mdash; tool counts from <code>capabilities.mjs</code>, CLI flags from <code>pforge.ps1</code>, event names from <code>EVENTS.md</code>, cost figures from the same <code>cost-service.mjs</code> the orchestrator uses. When a number drifts in the code, the book breaks the build until the number is fixed.</p>
+        <p>It is not a marketing brochure. The numbers in this book come from the same source files the system is built from, tool counts from <code>capabilities.mjs</code>, CLI flags from <code>pforge.ps1</code>, event names from <code>EVENTS.md</code>, cost figures from the same <code>cost-service.mjs</code> the orchestrator uses. When a number drifts in the code, the book breaks the build until the number is fixed.</p>
 
         <p>It is not a tutorial that ends at "hello world." Every Part lands a reader at a different operational depth: Quickstart ships your first plan in thirty minutes; Part II carries you through autonomous orchestration; Part III through post-deploy defense; Part IV through institutional memory; Part V through team-scale coordination.</p>
 
-        <p>It is not a product spec. The shop changes. The principles do not. When the book describes <em>why</em> the four-session architecture exists, that section will still be true two model generations from now &mdash; even if the model names in the example commands change.</p>
+        <p>It is not a product spec. The shop changes. The principles do not. When the book describes <em>why</em> the four-session architecture exists, that section will still be true two model generations from now, even if the model names in the example commands change.</p>
 
-        <p>It is also <strong>not a process you rent from us</strong> &mdash; Plan Forge is MIT-licensed because no two shops' SDLC is the same, and your institutional memory lives in <a href="memory-system.html">OpenBrain</a>, a service you run, not in any vendor's cloud. The two most strategic assets a software organization accumulates &mdash; its <em>process</em> for shipping software, and the <em>memory</em> of why every past decision went the way it did &mdash; stay in your hands. The harness is yours to fork and tweak; the brain is yours to host. The book documents both because the architecture only makes sense once both are explicit.</p>
+        <p>It is also <strong>not a process you rent from us</strong>, Plan Forge is MIT-licensed because no two shops' SDLC is the same, and your institutional memory lives in <a href="memory-system.html">OpenBrain</a>, a service you run, not in any vendor's cloud. The two most strategic assets a software organization accumulates, its <em>process</em> for shipping software, and the <em>memory</em> of why every past decision went the way it did, stay in your hands. The harness is yours to fork and tweak; the brain is yours to host. The book documents both because the architecture only makes sense once both are explicit.</p>
 
         <!-- ─── How to read this book ─── -->
         <h2 id="how-to-read">How to read this book</h2>
@@ -129,27 +129,27 @@
             <thead><tr><th style="width: 12rem">If the reader is&hellip;</th><th>Start here</th><th>Then read</th></tr></thead>
             <tbody>
               <tr>
-                <td><strong>First-contact</strong> &mdash; never run Plan Forge</td>
+                <td><strong>First-contact</strong>, never run Plan Forge</td>
                 <td><a href="quickstart-install.html">Quickstart Q1 &mdash; Install</a></td>
                 <td>Q2 (first plan), Q3 (review &amp; ship), then <a href="what-is-plan-forge.html">Chapter 1</a> for the mental model</td>
               </tr>
               <tr>
-                <td><strong>Frame-setting</strong> &mdash; wants the mental model first</td>
+                <td><strong>Frame-setting</strong>, wants the mental model first</td>
                 <td><a href="what-is-plan-forge.html">Chapter 1 &mdash; What Is Plan Forge?</a></td>
                 <td><a href="how-it-works.html">Chapter 2</a> for the pipeline, then back to the Quickstart for hands-on</td>
               </tr>
               <tr>
-                <td><strong>Operator</strong> &mdash; already shipping with it</td>
+                <td><strong>Operator</strong>, already shipping with it</td>
                 <td><a href="troubleshooting.html">Chapter 15 &mdash; Troubleshooting</a> or the <a href="cli-reference.html">CLI Reference</a></td>
                 <td>Targeted dives by symptom or by tool name</td>
               </tr>
               <tr>
-                <td><strong>Reviewer / architect</strong> &mdash; evaluating for adoption</td>
+                <td><strong>Reviewer / architect</strong>, evaluating for adoption</td>
                 <td><a href="github-stack-alignment.html">Appendix H &mdash; GitHub Stack Alignment</a></td>
                 <td><a href="plan-forge-on-the-github-stack.html">Appendix I</a> for the substrate map, then Chapter 1 for the four-station overview</td>
               </tr>
               <tr>
-                <td><strong>Curious</strong> &mdash; wants the story</td>
+                <td><strong>Curious</strong>, wants the story</td>
                 <td>This Foreword</td>
                 <td>The blog posts cited above, then <a href="project-history.html">Project History</a> for the version-by-version evolution</td>
               </tr>
@@ -157,15 +157,15 @@
           </table>
         </div>
 
-        <p>A dedicated <a href="reader-paths.html">Reader-Journey Ladders</a> page sits next to this Foreword in Front Matter and unfolds those paths into per-persona deep-dive sequences &mdash; solo developer, team lead, reviewer or architect, enterprise architect, extension author &mdash; each ending at a concrete <em>ship-it moment</em>. When the reader knows which persona they are, the Ladders are the next stop.</p>
+        <p>A dedicated <a href="reader-paths.html">Reader-Journey Ladders</a> page sits next to this Foreword in Front Matter and unfolds those paths into per-persona deep-dive sequences, solo developer, team lead, reviewer or architect, enterprise architect, extension author, each ending at a concrete <em>ship-it moment</em>. When the reader knows which persona they are, the Ladders are the next stop.</p>
 
-        <p>For the reader who needs to walk a colleague, a manager, or a VP through the adoption decision in a single sitting, the <a href="stakeholder-briefing.html">Stakeholder Briefing</a> &mdash; also in Front Matter &mdash; is the 10&ndash;15 minute white-paper version: eight sections, bold lead sentences, all the canonical numbers, the same source-of-truth as the rest of the book, and a closing <a href="stakeholder-briefing.html#section-8">tailoring flow</a> with a template and a slash-command skill for remixing the briefing for the reader's own organization.</p>
+        <p>For the reader who needs to walk a colleague, a manager, or a VP through the adoption decision in a single sitting, the <a href="stakeholder-briefing.html">Stakeholder Briefing</a>, also in Front Matter, is the 10&ndash;15 minute white-paper version: eight sections, bold lead sentences, all the canonical numbers, the same source-of-truth as the rest of the book, and a closing <a href="stakeholder-briefing.html#section-8">tailoring flow</a> with a template and a slash-command skill for remixing the briefing for the reader's own organization.</p>
 
         <p>For the reader who prefers to start from worked examples rather than from architecture, <a href="day-in-the-forge.html">Appendix R &mdash; A Day in the Forge</a> collects three short case studies absorbed from contemporary blog posts: <a href="day-in-the-forge.html#vignette-1">the closed-loop audit of a production Next.js site</a>, <a href="day-in-the-forge.html#vignette-2">the .NET 99-vs-44 A/B test against vibe coding</a>, and <a href="day-in-the-forge.html#vignette-3">the three-model quorum run that paid &dollar;0.22 for measurably better software</a>. Each vignette ends with a cross-link into the canonical chapter that owns the topic.</p>
 
         <!-- ─── A note on voice ─── -->
         <h2 id="voice">A note on voice</h2>
-        <p>The body of this manual is written in third person, present tense &mdash; the voice of a reference. That is deliberate: a reference outlives the version that produced it, and the third-person voice carries forward without re-editing when the maintainer changes, the contributor base grows, or the project's center of gravity moves outside any one author. Direct first-person material from the project's blog posts appears in <em>blockquote</em> form, attributed, so the reader can see where the editorial voice ends and the contemporary record begins.</p>
+        <p>The body of this manual is written in third person, present tense, the voice of a reference. That is deliberate: a reference outlives the version that produced it, and the third-person voice carries forward without re-editing when the maintainer changes, the contributor base grows, or the project's center of gravity moves outside any one author. Direct first-person material from the project's blog posts appears in <em>blockquote</em> form, attributed, so the reader can see where the editorial voice ends and the contemporary record begins.</p>
 
         <p>This Foreword and the Reader Paths page break that rule once, narrowly, by leaning on the journey itself. Every other chapter speaks in the reference voice.</p>
 

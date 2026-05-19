@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Reader-Journey Ladders &mdash; Pick Your Path</title>
+  <title>Reader-Journey Ladders, Pick Your Path</title>
   <meta name="description" content="Five reader paths through the Plan Forge manual: solo developer, team lead, reviewer or architect, enterprise architect, and extension author. Each ladder is an ordered sequence of chapters with a ship-it moment so you know when you have arrived." />
   <link rel="icon" type="image/svg+xml" href="../assets/plan-forge-logo.svg" />
   <link rel="stylesheet" href="../assets/tailwind.built.css" />
@@ -32,7 +32,7 @@
 
         <!-- ─── Orientation ─── -->
         <h2 id="orientation">The five ladders at a glance</h2>
-        <p>Pick the ladder that matches the work in front of you. Two ladders may apply &mdash; that is fine, climb the one whose ship-it moment is closer to today's problem. The book is designed so any ladder lands you on a useful artifact within a sitting or two of reading.</p>
+        <p>Pick the ladder that matches the work in front of you. Two ladders may apply, that is fine, climb the one whose ship-it moment is closer to today's problem. The book is designed so any ladder lands you on a useful artifact within a sitting or two of reading.</p>
 
         <div class="overflow-x-auto mb-6">
           <table class="manual-table">
@@ -60,7 +60,7 @@
               </tr>
               <tr>
                 <td><a href="#extension-author"><strong>Extension author</strong></a></td>
-                <td>You want to extend Plan Forge &mdash; a new tool, a new agent, a new skill, a new notifier. You need the MCP surface and the customization spine.</td>
+                <td>You want to extend Plan Forge, a new tool, a new agent, a new skill, a new notifier. You need the MCP surface and the customization spine.</td>
                 <td><a href="what-is-plan-forge.html">Chapter 1 &mdash; What Is Plan Forge?</a></td>
               </tr>
             </tbody>
@@ -71,7 +71,7 @@
 
         <!-- ─── Ladder 1: Solo developer ─── -->
         <h2 id="solo-dev">Ladder 1 &mdash; Solo developer</h2>
-        <p><strong>You are here if</strong> you are the only one shipping code on your project. You want Plan Forge's structural quality benefits (interfaces, DTOs, typed exceptions, tests &mdash; see the <a href="what-is-plan-forge.html#evidence">99-vs-44 evidence in Chapter 1</a>) without the team-coordination machinery. The Quickstart trilogy gets you from zero to a shipped feature in thirty minutes; the rest of the ladder turns that one-shot into a habit.</p>
+        <p><strong>You are here if</strong> you are the only one shipping code on your project. You want Plan Forge's structural quality benefits (interfaces, DTOs, typed exceptions, tests, see the <a href="what-is-plan-forge.html#evidence">99-vs-44 evidence in Chapter 1</a>) without the team-coordination machinery. The Quickstart trilogy gets you from zero to a shipped feature in thirty minutes; the rest of the ladder turns that one-shot into a habit.</p>
 
         <ol class="ladder-list space-y-3 mb-6 ml-6 list-decimal">
           <li><a href="quickstart-install.html"><strong>Q1 &mdash; Install</strong></a>. Clone, run setup, pick a preset that matches your stack. Verify with <code>pforge smith</code>.</li>
@@ -83,7 +83,7 @@
         </ol>
 
         <div class="callout callout-success">
-          <strong>Ship-it moment.</strong> You have a hardened plan in <code>docs/plans/</code>, run it autonomously via <code>pforge run-plan</code>, watch the slices land green, and ship the feature &mdash; all without leaving the terminal or asking another human to review the AI's work.
+          <strong>Ship-it moment.</strong> You have a hardened plan in <code>docs/plans/</code>, run it autonomously via <code>pforge run-plan</code>, watch the slices land green, and ship the feature, all without leaving the terminal or asking another human to review the AI's work.
         </div>
 
         <p class="text-sm text-slate-500 italic">Skip for now (come back later if you grow): team coordination, multi-agent setup, enterprise reference architecture. They will be waiting when you need them.</p>
@@ -100,7 +100,7 @@
           <li><a href="dashboard.html"><strong>Chapter 7 &mdash; The Dashboard</strong></a> + <a href="dashboard-settings.html">Dashboard Settings</a>. The shared surface for cost, live runs, and session attribution.</li>
           <li><a href="multi-agent.html"><strong>Chapter 13 &mdash; Multi-Agent Setup</strong></a>. When more than one developer is running plans in parallel, this is the configuration that keeps them out of each other's way.</li>
           <li><a href="team-coordination.html"><strong>Chapter 27 &mdash; Team Coordination</strong></a>. Shared plan queues, reviewer rotation, the hand-off protocols.</li>
-          <li><a href="fleet-operator-playbook.html"><strong>Appendix M &mdash; Fleet Operator Playbook</strong></a>. The day-two and day-thirty operational guides &mdash; what to check, when, and what to do when something is wrong.</li>
+          <li><a href="fleet-operator-playbook.html"><strong>Appendix M &mdash; Fleet Operator Playbook</strong></a>. The day-two and day-thirty operational guides, what to check, when, and what to do when something is wrong.</li>
         </ol>
 
         <div class="callout callout-success">
@@ -116,13 +116,13 @@
           <li><a href="plan-forge-on-the-github-stack.html"><strong>Appendix I &mdash; Plan Forge on the GitHub Stack</strong></a>. The surface-by-surface layering: what runs in Actions, what runs in MCP, what writes to Issues and PRs.</li>
           <li><a href="what-is-plan-forge.html"><strong>Chapter 1 &mdash; What Is Plan Forge?</strong></a>. Especially the <a href="what-is-plan-forge.html#what-this-is-not">IS / IS NOT table</a>. This is the chapter that answers the &ldquo;why not just Copilot?&rdquo; question without hand-waving.</li>
           <li><a href="how-it-works.html"><strong>Chapter 2 &mdash; How It Works</strong></a>. The seven-step pipeline. Read this to verify the architecture is what it claims to be.</li>
-          <li><a href="memory-system.html"><strong>Chapter 22 &mdash; How the Shop Remembers</strong></a>. OpenBrain &mdash; the user-owned memory layer. This is the lock-in answer: your institutional memory lives in a service you run, not in any AI vendor's cloud.</li>
+          <li><a href="memory-system.html"><strong>Chapter 22 &mdash; How the Shop Remembers</strong></a>. OpenBrain, the user-owned memory layer. This is the lock-in answer: your institutional memory lives in a service you run, not in any AI vendor's cloud.</li>
           <li><a href="enterprise-reference-architecture.html"><strong>Appendix K &mdash; Enterprise Reference Architecture</strong></a>. The deployment topology that will be relevant when you write up your recommendation.</li>
           <li><a href="compliance-and-data-residency.html"><strong>Appendix N &mdash; Compliance &amp; Data Residency</strong></a>. The shortest paragraph in your write-up that says &ldquo;here is where the data lives.&rdquo;</li>
         </ol>
 
         <div class="callout callout-success">
-          <strong>Ship-it moment.</strong> You can write a one-page adoption recommendation that names the substrate (GitHub + Copilot), the harness (Plan Forge), the memory layer (OpenBrain, self-hosted), the cost levers, and the lock-in story &mdash; with chapter citations for every claim.
+          <strong>Ship-it moment.</strong> You can write a one-page adoption recommendation that names the substrate (GitHub + Copilot), the harness (Plan Forge), the memory layer (OpenBrain, self-hosted), the cost levers, and the lock-in story, with chapter citations for every claim.
         </div>
 
         <!-- ─── Ladder 4: Enterprise architect ─── -->
@@ -135,7 +135,7 @@
           <li><a href="agent-factory-recipe.html"><strong>Appendix L &mdash; Agent Factory Recipe</strong></a>. How to manufacture agent configurations consistently across teams without each team reinventing the wheel.</li>
           <li><a href="fleet-operator-playbook.html"><strong>Appendix M &mdash; Fleet Operator Playbook</strong></a>. Day-one, day-two, day-thirty operational procedures. The on-call runbooks for the platform team running Plan Forge centrally.</li>
           <li><a href="compliance-and-data-residency.html"><strong>Appendix N &mdash; Compliance &amp; Data Residency</strong></a>. Where every byte lives, who can see it, and the audit trail it leaves.</li>
-          <li><a href="memory-system.html"><strong>Chapter 22 &mdash; How the Shop Remembers</strong></a>. OpenBrain as the self-hosted memory service &mdash; the architecture, the threat model, the operational profile. Lock-in avoidance is itself a compliance posture: your accumulated decisions live on your infrastructure, not a vendor's.</li>
+          <li><a href="memory-system.html"><strong>Chapter 22 &mdash; How the Shop Remembers</strong></a>. OpenBrain as the self-hosted memory service, the architecture, the threat model, the operational profile. Lock-in avoidance is itself a compliance posture: your accumulated decisions live on your infrastructure, not a vendor's.</li>
           <li><a href="team-coordination.html"><strong>Chapter 27 &mdash; Team Coordination</strong></a>. Multi-team operational patterns when several squads share one Plan Forge fleet.</li>
         </ol>
 
@@ -145,16 +145,16 @@
 
         <!-- ─── Ladder 5: Extension author ─── -->
         <h2 id="extension-author">Ladder 5 &mdash; Extension author</h2>
-        <p><strong>You are here if</strong> you want to extend Plan Forge &mdash; add a tool, a skill, an agent, a notifier, or a custom workflow. The ladder starts with the mental model, walks through the customisation spine, and lands on the MCP surface and the extension catalog.</p>
+        <p><strong>You are here if</strong> you want to extend Plan Forge, add a tool, a skill, an agent, a notifier, or a custom workflow. The ladder starts with the mental model, walks through the customisation spine, and lands on the MCP surface and the extension catalog.</p>
 
         <ol class="ladder-list space-y-3 mb-6 ml-6 list-decimal">
-          <li><a href="what-is-plan-forge.html"><strong>Chapter 1 &mdash; What Is Plan Forge?</strong></a>. Internalise the four-station mental model first &mdash; extensions land at one of the four stations, and knowing which one shapes the design.</li>
+          <li><a href="what-is-plan-forge.html"><strong>Chapter 1 &mdash; What Is Plan Forge?</strong></a>. Internalise the four-station mental model first, extensions land at one of the four stations, and knowing which one shapes the design.</li>
           <li><a href="how-it-works.html"><strong>Chapter 2 &mdash; How It Works</strong></a>. The pipeline shape. Extensions slot between steps; understanding the steps is prerequisite.</li>
           <li><a href="extensions.html"><strong>Chapter 12 &mdash; Extensions</strong></a>. The extension contract, the catalog, the publishing flow. Start here for the &ldquo;hello world&rdquo; extension.</li>
           <li><a href="mcp-server-quickstart.html"><strong>MCP Server &mdash; Quick Start</strong></a> &amp; <a href="mcp-server-reference.html">Reference</a>. The MCP surface where tool-shaped extensions live. The Quick Start gets you a working tool in one sitting; the Reference is the long-form contract.</li>
           <li><a href="customization.html"><strong>Chapter 9 &mdash; Customization</strong></a>. The hooks, the override points, the configuration surface every extension can lean on.</li>
           <li><a href="instructions-agents.html"><strong>Chapter 10 &mdash; Instruction Files &amp; Agents</strong></a>. If your extension ships an agent persona or an instruction file, this is where the conventions live.</li>
-          <li><a href="knowledge-graph.html"><strong>Chapter 28 &mdash; The Knowledge Graph</strong></a>. If your extension needs to persist relationships across runs &mdash; tag, link, query &mdash; this is the substrate to use rather than a sidecar database.</li>
+          <li><a href="knowledge-graph.html"><strong>Chapter 28 &mdash; The Knowledge Graph</strong></a>. If your extension needs to persist relationships across runs, tag, link, query, this is the substrate to use rather than a sidecar database.</li>
         </ol>
 
         <div class="callout callout-success">
@@ -163,7 +163,7 @@
 
         <!-- ─── Cross-ladder hops ─── -->
         <h2 id="cross-hops">When two ladders apply</h2>
-        <p>Some readers will fit two ladders &mdash; a team lead who is also evaluating adoption, an enterprise architect who wants to author an internal extension, a solo developer who later inherits a team. The ladders are not exclusive. The recommended hops:</p>
+        <p>Some readers will fit two ladders, a team lead who is also evaluating adoption, an enterprise architect who wants to author an internal extension, a solo developer who later inherits a team. The ladders are not exclusive. The recommended hops:</p>
 
         <div class="overflow-x-auto mb-6">
           <table class="manual-table">
@@ -204,7 +204,7 @@
 
         <!-- ─── Closing ─── -->
         <h2 id="closing">Climb</h2>
-        <p>The book is the map; the ladder is the route. Start at rung one of your ladder. The ship-it moment marks the top &mdash; and from there you can either start a new ladder or follow your own curiosity through the rest of the manual.</p>
+        <p>The book is the map; the ladder is the route. Start at rung one of your ladder. The ship-it moment marks the top, and from there you can either start a new ladder or follow your own curiosity through the rest of the manual.</p>
 
         <div id="chapter-prev-next" class="chapter-nav"></div>
       </div>

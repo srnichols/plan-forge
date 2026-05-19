@@ -32,14 +32,14 @@
 
         <div class="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">Appendix W</div>
         <h1>REST API Reference</h1>
-        <p class="text-lg text-slate-400 mb-8">Every REST endpoint the Plan Forge MCP server exposes &mdash; grouped by subsystem, with verb, path, request body shape, response shape, and status codes. The companion to <a href="event-catalog.html">Appendix V &mdash; Event Catalog</a> (which covers the WebSocket side) and <a href="api-surface-index.html">Appendix Q &mdash; API Surface Index</a> (which catalogs the MCP tool surface).</p>
+        <p class="text-lg text-slate-400 mb-8">Every REST endpoint the Plan Forge MCP server exposes, grouped by subsystem, with verb, path, request body shape, response shape, and status codes. The companion to <a href="event-catalog.html">Appendix V &mdash; Event Catalog</a> (which covers the WebSocket side) and <a href="api-surface-index.html">Appendix Q &mdash; API Surface Index</a> (which catalogs the MCP tool surface).</p>
 
         <div class="callout callout-info">
           <strong>One server, three surfaces.</strong> The MCP server in <code>pforge-mcp/server.mjs</code> serves three concurrent surfaces on the same process: <strong>stdio MCP</strong> for IDE agents, <strong>REST + WebSocket</strong> on port <code>3100</code> for the dashboard and any external integration, and a <strong>Forge-Master HTTP surface</strong> for the conversational entrypoint. This appendix covers the REST + Forge-Master surfaces; the MCP tool surface is documented in <a href="api-surface-index.html">Appendix Q</a>.
         </div>
 
         <h2 id="orientation">Orientation</h2>
-        <p>Plan Forge exposes <strong>113 REST endpoints</strong> across 16 subsystems. Every one of the <a href="api-surface-index.html#mcp-tools">88 MCP tools</a> can also be invoked over REST through the generic dispatcher (<code>POST /api/tool/:name</code>) &mdash; the explicit endpoints below are the "first-class" surfaces the dashboard and CLI use, with response shapes shaped for direct UI consumption rather than tool-call envelopes.</p>
+        <p>Plan Forge exposes <strong>113 REST endpoints</strong> across 16 subsystems. Every one of the <a href="api-surface-index.html#mcp-tools">88 MCP tools</a> can also be invoked over REST through the generic dispatcher (<code>POST /api/tool/:name</code>), the explicit endpoints below are the "first-class" surfaces the dashboard and CLI use, with response shapes shaped for direct UI consumption rather than tool-call envelopes.</p>
 
         <div class="overflow-x-auto mb-8">
           <table class="manual-table">
@@ -61,19 +61,19 @@
               <tr><td><a href="#github-team"><strong>GitHub &amp; team coordination</strong></a></td><td>4</td><td>GitHub metrics, readiness, team dashboard, team activity.</td></tr>
               <tr><td><a href="#notifications-audit"><strong>Notifications, audit, dashboard, settings</strong></a></td><td>13</td><td>Notification config, audit config/drain, dashboard state, config, secrets, extensions, update, server restart.</td></tr>
               <tr><td><a href="#generic-dispatcher"><strong>Generic MCP dispatcher</strong></a></td><td>3</td><td>The <code>POST /api/tool/:name</code> escape hatch that exposes any of the 88 MCP tools over REST.</td></tr>
-              <tr><td><a href="#forge-master"><strong>Forge-Master</strong></a></td><td>10</td><td>The conversational entrypoint &mdash; chat sessions, prompts, prefs, cache stats.</td></tr>
+              <tr><td><a href="#forge-master"><strong>Forge-Master</strong></a></td><td>10</td><td>The conversational entrypoint, chat sessions, prompts, prefs, cache stats.</td></tr>
               <tr><td><a href="#image"><strong>Image generation</strong></a></td><td>1</td><td>Generate images via xAI Grok Aurora or OpenAI DALL-E.</td></tr>
             </tbody>
           </table>
         </div>
 
         <h2 id="auth-and-binding">Authentication, binding, and CORS</h2>
-        <p>The trust model is <strong>local user</strong>. The server binds explicitly to <code>127.0.0.1</code> (loopback only) and runs no authentication layer of its own &mdash; the operating system's user account is the access boundary. Concretely:</p>
+        <p>The trust model is <strong>local user</strong>. The server binds explicitly to <code>127.0.0.1</code> (loopback only) and runs no authentication layer of its own, the operating system's user account is the access boundary. Concretely:</p>
         <ul class="list-disc list-inside space-y-1 mb-4">
-          <li><strong>Binding</strong>: <code>app.listen(HTTP_PORT, "127.0.0.1", ...)</code> &mdash; remote hosts cannot reach the API; only processes running as the same OS user can.</li>
+          <li><strong>Binding</strong>: <code>app.listen(HTTP_PORT, "127.0.0.1", ...)</code>, remote hosts cannot reach the API; only processes running as the same OS user can.</li>
           <li><strong>Port</strong>: <code>3100</code> by default; override with <code>PLAN_FORGE_HTTP_PORT</code> (see <a href="environment-variables-reference.html#server-ports">Appendix U &mdash; Server Ports</a>).</li>
           <li><strong>CORS</strong>: not enabled. Browser dashboards served from <code>http://127.0.0.1:3100/dashboard</code> share the same origin.</li>
-          <li><strong>Bridge approvals</strong> (the only endpoint family that crosses a trust boundary) are protected by the per-run HMAC token in <code>PFORGE_BRIDGE_SECRET</code> &mdash; see <a href="#bridge">Bridge &amp; approvals</a>.</li>
+          <li><strong>Bridge approvals</strong> (the only endpoint family that crosses a trust boundary) are protected by the per-run HMAC token in <code>PFORGE_BRIDGE_SECRET</code>, see <a href="#bridge">Bridge &amp; approvals</a>.</li>
         </ul>
         <p>If you need to expose the API beyond loopback (rare; usually it's the wrong solution), put a reverse proxy in front of it that handles TLS and authentication. <strong>Do not</strong> change the bind address; it's a deliberate safety boundary.</p>
 
@@ -93,7 +93,7 @@
 
         <!-- ─── Discovery ─── -->
         <h2 id="discovery">Discovery</h2>
-        <p>Lightweight endpoints intended for liveness checks, build identification, and capability negotiation. These are safe to poll &mdash; none of them allocate workers or write files.</p>
+        <p>Lightweight endpoints intended for liveness checks, build identification, and capability negotiation. These are safe to poll, none of them allocate workers or write files.</p>
         <table class="manual-table">
           <thead><tr><th>Method</th><th>Path</th><th>Purpose</th><th>Response</th></tr></thead>
           <tbody>
@@ -115,7 +115,7 @@
             <tr><td>GET</td><td><code>/api/runs/:runIdx</code></td><td>Specific run by index</td><td><code>runIdx</code> matches <code>.forge/runs/&lt;idx&gt;.jsonl</code>.</td></tr>
             <tr><td>POST</td><td><code>/api/runs/trigger</code></td><td>Kick off a plan run</td><td>Body: <code>{ plan, mode, quorum, assisted, dryRun, escalate }</code>. Returns <code>{ runIdx, pid }</code>.</td></tr>
             <tr><td>POST</td><td><code>/api/runs/abort</code></td><td>Abort the active run</td><td>Body: <code>{ runIdx? }</code> (defaults to current). Sends SIGTERM, then SIGKILL after grace.</td></tr>
-            <tr><td>GET</td><td><code>/api/replay/:runIdx/:sliceId</code></td><td>Session replay log for a slice</td><td>Returns the journaled stdout/stderr stream for one slice &mdash; used by the dashboard's session-replay view.</td></tr>
+            <tr><td>GET</td><td><code>/api/replay/:runIdx/:sliceId</code></td><td>Session replay log for a slice</td><td>Returns the journaled stdout/stderr stream for one slice, used by the dashboard's session-replay view.</td></tr>
             <tr><td>GET</td><td><code>/api/plans</code></td><td>Enumerate hardened plans</td><td>Walks <code>docs/plans/</code> and parses Scope Contract headers.</td></tr>
             <tr><td>GET</td><td><code>/api/workers</code></td><td>Active worker processes</td><td>PIDs, model, slice, elapsed.</td></tr>
             <tr><td>GET</td><td><code>/api/traces</code></td><td>List execution traces (run index)</td><td>Top-level summary: run, slice count, gate pass/fail.</td></tr>
@@ -136,11 +136,11 @@
 
         <!-- ─── Search & timeline ─── -->
         <h2 id="search-timeline">Search, timeline, hub</h2>
-        <p>Cross-surface search and the unified timeline are the dashboard's primary navigation aids. The hub endpoint is where browsers (and any other client) upgrade to a WebSocket to receive live events &mdash; see <a href="event-catalog.html#subscribing">Appendix V &mdash; Consuming the Stream</a> for a Node example.</p>
+        <p>Cross-surface search and the unified timeline are the dashboard's primary navigation aids. The hub endpoint is where browsers (and any other client) upgrade to a WebSocket to receive live events, see <a href="event-catalog.html#subscribing">Appendix V &mdash; Consuming the Stream</a> for a Node example.</p>
         <table class="manual-table">
           <thead><tr><th>Method</th><th>Path</th><th>Purpose</th><th>Notes</th></tr></thead>
           <tbody>
-            <tr><td>GET</td><td><code>/api/search</code></td><td>Cross-surface search (plans, events, bugs, incidents, memory)</td><td>Query string: <code>?query=&amp;source=&amp;limit=</code>. Returns <code>{ hits: [{ source, recordRef, snippet, score, timestamp }], total, truncated, message }</code> &mdash; the gold-standard ACI shape.</td></tr>
+            <tr><td>GET</td><td><code>/api/search</code></td><td>Cross-surface search (plans, events, bugs, incidents, memory)</td><td>Query string: <code>?query=&amp;source=&amp;limit=</code>. Returns <code>{ hits: [{ source, recordRef, snippet, score, timestamp }], total, truncated, message }</code>, the gold-standard ACI shape.</td></tr>
             <tr><td>GET</td><td><code>/api/timeline</code></td><td>Unified event timeline</td><td>Cursor-paged: <code>?cursor=&amp;limit=</code>. Merges nine sources (runs, slices, deploys, incidents, drift, memory, bugs, crucible, tempering).</td></tr>
             <tr><td>GET</td><td><code>/api/hub</code></td><td>WebSocket upgrade for live events</td><td>HTTP <code>GET</code> returns hub status + client count; same path accepts <code>Upgrade: websocket</code> for streaming.</td></tr>
           </tbody>
@@ -152,7 +152,7 @@
         <table class="manual-table">
           <thead><tr><th>Method</th><th>Path</th><th>Purpose</th><th>Notes</th></tr></thead>
           <tbody>
-            <tr><td>GET</td><td><code>/api/memory</code></td><td>Memory landing &mdash; recent captures + state</td><td>Dashboard primary view.</td></tr>
+            <tr><td>GET</td><td><code>/api/memory</code></td><td>Memory landing, recent captures + state</td><td>Dashboard primary view.</td></tr>
             <tr><td>GET</td><td><code>/api/memory/report</code></td><td>Aggregate stats</td><td>Captures/day, hit rate, top thoughts.</td></tr>
             <tr><td>POST</td><td><code>/api/memory/search</code></td><td>Search L2 captures (and L3 if OpenBrain configured)</td><td>Body: <code>{ query, limit, source? }</code>.</td></tr>
             <tr><td>POST</td><td><code>/api/memory/capture</code></td><td>Capture a thought</td><td>Body: <code>{ content, tags, source }</code>. Broadcasts <code>memory-captured</code> hub event.</td></tr>
@@ -169,7 +169,7 @@
           <thead><tr><th>Method</th><th>Path</th><th>Purpose</th><th>Notes</th></tr></thead>
           <tbody>
             <tr><td>POST</td><td><code>/api/crucible/submit</code></td><td>Start a new smelt</td><td>Body: <code>{ idea, source? }</code>. Returns <code>{ smeltId, firstQuestion }</code>.</td></tr>
-            <tr><td>POST</td><td><code>/api/crucible/ask</code></td><td>Answer current question &mdash; get next</td><td>Body: <code>{ smeltId, answer, questionId? }</code>. Mismatched <code>questionId</code> returns <code>409 ASK_QUESTION_MISMATCH</code>.</td></tr>
+            <tr><td>POST</td><td><code>/api/crucible/ask</code></td><td>Answer current question, get next</td><td>Body: <code>{ smeltId, answer, questionId? }</code>. Mismatched <code>questionId</code> returns <code>409 ASK_QUESTION_MISMATCH</code>.</td></tr>
             <tr><td>GET</td><td><code>/api/crucible/preview</code></td><td>Render current draft + unresolved fields</td><td>Query: <code>?smeltId=</code>. Returns plan draft + <code>criticalGaps[]</code>.</td></tr>
             <tr><td>POST</td><td><code>/api/crucible/finalize</code></td><td>Atomically claim phase + write plan file</td><td>Returns <code>409 + criticalGaps[]</code> if gaps remain; <code>409 + PLAN_ALREADY_EXISTS</code> if file exists (pass <code>overwrite: true</code>).</td></tr>
             <tr><td>POST</td><td><code>/api/crucible/abandon</code></td><td>Mark smelt abandoned</td><td>Frees the phase number for the next smelt.</td></tr>
@@ -197,7 +197,7 @@
             <tr><td>GET</td><td><code>/api/runbooks</code></td><td>List operational runbooks</td><td>One per alert class.</td></tr>
             <tr><td>POST</td><td><code>/api/runbook</code></td><td>Generate or update a runbook</td><td>Body: <code>{ alertClass, content }</code>.</td></tr>
             <tr><td>GET</td><td><code>/api/health-trend</code></td><td>Health DNA aggregator</td><td>Drift + cost + incidents + test pass-rate over time.</td></tr>
-            <tr><td>GET</td><td><code>/api/hotspots</code></td><td>Git churn hotspots</td><td>Files with high change frequency &mdash; refactor candidates.</td></tr>
+            <tr><td>GET</td><td><code>/api/hotspots</code></td><td>Git churn hotspots</td><td>Files with high change frequency, refactor candidates.</td></tr>
             <tr><td>GET</td><td><code>/api/triage</code></td><td>Prioritized alert list</td><td>Drift + incidents + secrets + deps, ranked.</td></tr>
             <tr><td>GET</td><td><code>/api/liveguard/traces</code></td><td>LiveGuard execution traces</td><td>One per <code>forge_liveguard_run</code> invocation.</td></tr>
             <tr><td>GET</td><td><code>/api/secret-scan</code></td><td>Latest secret-scan results</td><td>Values redacted; returns <code>{ findings: [{ file, line, severity }] }</code>.</td></tr>
@@ -228,14 +228,14 @@
           <thead><tr><th>Method</th><th>Path</th><th>Purpose</th><th>Notes</th></tr></thead>
           <tbody>
             <tr><td>GET</td><td><code>/api/tempering/artifact</code></td><td>Latest tempering artifact</td><td>Scan results + temper score.</td></tr>
-            <tr><td>POST</td><td><code>/api/tempering/bug-stub</code></td><td>Create a bug stub from a finding</td><td>Body: <code>{ findingId, title?, severity? }</code>.</td></tr>
+            <tr><td>POST</td><td><code>/api/tempering/bug-stub</code></td><td>Create a bug stub from a finding</td><td>Body: <code>{ findingId, title? severity? }</code>.</td></tr>
             <tr><td>GET</td><td><code>/api/bugs/list</code></td><td>List registered bugs</td><td>Query: <code>?status=&amp;severity=&amp;plan=</code>.</td></tr>
           </tbody>
         </table>
 
         <!-- ─── Skills ─── -->
         <h2 id="skills">Skills (decision tray)</h2>
-        <p>Auto-skills surface decisions that the orchestrator wants a human to make &mdash; tag the deferred work, accept/reject the proposal, or defer for later review.</p>
+        <p>Auto-skills surface decisions that the orchestrator wants a human to make, tag the deferred work, accept/reject the proposal, or defer for later review.</p>
         <table class="manual-table">
           <thead><tr><th>Method</th><th>Path</th><th>Purpose</th><th>Notes</th></tr></thead>
           <tbody>
@@ -281,12 +281,12 @@
 
         <!-- ─── Copilot Integration ─── -->
         <h2 id="copilot-integration">Copilot integration</h2>
-        <p>The surface that powers the <a href="copilot-integration.html">Copilot Integration Trilogy</a> &mdash; reading, previewing, and syncing <code>.github/copilot-instructions.md</code> from the project profile + principles. OpenClaw endpoints post LiveGuard snapshots to the optional analytics service.</p>
+        <p>The surface that powers the <a href="copilot-integration.html">Copilot Integration Trilogy</a>, reading, previewing, and syncing <code>.github/copilot-instructions.md</code> from the project profile + principles. OpenClaw endpoints post LiveGuard snapshots to the optional analytics service.</p>
         <table class="manual-table">
           <thead><tr><th>Method</th><th>Path</th><th>Purpose</th><th>Notes</th></tr></thead>
           <tbody>
             <tr><td>GET</td><td><code>/api/copilot-instructions</code></td><td>Read current file</td><td>Returns raw markdown.</td></tr>
-            <tr><td>POST</td><td><code>/api/copilot-instructions/preview</code></td><td>Preview a regenerated file</td><td>Body: <code>{ projectProfile?, principles? }</code>. Non-destructive.</td></tr>
+            <tr><td>POST</td><td><code>/api/copilot-instructions/preview</code></td><td>Preview a regenerated file</td><td>Body: <code>{ projectProfile? principles? }</code>. Non-destructive.</td></tr>
             <tr><td>POST</td><td><code>/api/copilot-instructions/sync</code></td><td>Sync from project profile + principles</td><td>Writes the file; emits a hub event for editor refresh.</td></tr>
             <tr><td>POST</td><td><code>/api/openclaw/snapshot</code></td><td>Post a LiveGuard snapshot to OpenClaw</td><td>Body: snapshot envelope. Requires <code>openclaw.endpoint</code> in <a href="forge-json-reference.html#openclaw"><code>.forge.json</code></a>.</td></tr>
             <tr><td>GET</td><td><code>/api/openclaw/config</code></td><td>OpenClaw endpoint + auth config</td><td>Token is masked in response.</td></tr>
@@ -308,7 +308,7 @@
 
         <!-- ─── Notifications & Settings ─── -->
         <h2 id="notifications-audit">Notifications, audit, dashboard, settings</h2>
-        <p>The "everything else" administrative surface &mdash; notification channels, audit drain loop, dashboard state persistence, config + secrets read/write, extensions, update checks, soft restart.</p>
+        <p>The "everything else" administrative surface, notification channels, audit drain loop, dashboard state persistence, config + secrets read/write, extensions, update checks, soft restart.</p>
         <table class="manual-table">
           <thead><tr><th>Method</th><th>Path</th><th>Purpose</th><th>Notes</th></tr></thead>
           <tbody>
@@ -332,18 +332,18 @@
 
         <!-- ─── Generic Dispatcher ─── -->
         <h2 id="generic-dispatcher">Generic MCP dispatcher</h2>
-        <p>The escape hatch. Any of the 88 MCP tools can be invoked over REST through this surface &mdash; useful for SDK clients, CI scripts, and any external integration that needs richer tool semantics than the first-class endpoints expose.</p>
+        <p>The escape hatch. Any of the 88 MCP tools can be invoked over REST through this surface, useful for SDK clients, CI scripts, and any external integration that needs richer tool semantics than the first-class endpoints expose.</p>
         <table class="manual-table">
           <thead><tr><th>Method</th><th>Path</th><th>Purpose</th><th>Notes</th></tr></thead>
           <tbody>
             <tr><td>POST</td><td><code>/api/tool/:name</code></td><td><strong>Invoke any of the 88 MCP tools over REST</strong></td><td>Body is the tool's input contract (see <a href="api-surface-index.html#mcp-tools">Appendix Q</a>). Response is the tool's output payload, unwrapped from the MCP envelope. Crucible and Forge-Master tools route through the MCP handler (v2.82.1 fix).</td></tr>
-            <tr><td>POST</td><td><code>/api/tool/org-rules</code></td><td>Aliased convenience &mdash; <code>forge_org_rules</code></td><td>Equivalent to <code>POST /api/tool/forge_org_rules</code>.</td></tr>
-            <tr><td>POST</td><td><code>/api/tool/run-plan</code></td><td>Aliased convenience &mdash; <code>forge_run_plan</code></td><td>Equivalent to <code>POST /api/tool/forge_run_plan</code>; also surfaced as <code>/api/runs/trigger</code> with a friendlier shape.</td></tr>
+            <tr><td>POST</td><td><code>/api/tool/org-rules</code></td><td>Aliased convenience, <code>forge_org_rules</code></td><td>Equivalent to <code>POST /api/tool/forge_org_rules</code>.</td></tr>
+            <tr><td>POST</td><td><code>/api/tool/run-plan</code></td><td>Aliased convenience, <code>forge_run_plan</code></td><td>Equivalent to <code>POST /api/tool/forge_run_plan</code>; also surfaced as <code>/api/runs/trigger</code> with a friendlier shape.</td></tr>
           </tbody>
         </table>
 
         <div class="callout callout-info">
-          <strong>When to use the dispatcher vs. the first-class endpoint.</strong> If both exist (e.g. <code>POST /api/runs/trigger</code> and <code>POST /api/tool/forge_run_plan</code>), prefer the first-class endpoint &mdash; its response shape is tailored for direct rendering and skips the MCP envelope. Use the dispatcher when the tool has no first-class equivalent (most estimation, bug, and lattice tools).
+          <strong>When to use the dispatcher vs. the first-class endpoint.</strong> If both exist (e.g. <code>POST /api/runs/trigger</code> and <code>POST /api/tool/forge_run_plan</code>), prefer the first-class endpoint, its response shape is tailored for direct rendering and skips the MCP envelope. Use the dispatcher when the tool has no first-class equivalent (most estimation, bug, and lattice tools).
         </div>
 
         <!-- ─── Forge-Master ─── -->
@@ -356,12 +356,12 @@
             <tr><td>GET</td><td><code>/api/forge-master/prompts</code></td><td>Suggested starter prompts</td><td>Surfaced by the dashboard chat panel.</td></tr>
             <tr><td>GET</td><td><code>/api/forge-master/sessions</code></td><td>List active chat sessions</td><td>Returns <code>{ sessions: [{ id, summary, lastTurnAt }] }</code>.</td></tr>
             <tr><td>GET</td><td><code>/api/forge-master/session/:id</code></td><td>Fetch one session</td><td>Full turn history.</td></tr>
-            <tr><td>POST</td><td><code>/api/forge-master/chat</code></td><td>Start a chat or send a turn</td><td>Body: <code>{ sessionId?, message }</code>. Returns <code>{ sessionId, response }</code>.</td></tr>
+            <tr><td>POST</td><td><code>/api/forge-master/chat</code></td><td>Start a chat or send a turn</td><td>Body: <code>{ sessionId? message }</code>. Returns <code>{ sessionId, response }</code>.</td></tr>
             <tr><td>GET</td><td><code>/api/forge-master/chat/:sessionId/stream</code></td><td>Server-Sent Events stream of a turn</td><td>For incremental rendering.</td></tr>
             <tr><td>POST</td><td><code>/api/forge-master/chat/:sessionId/approve</code></td><td>Approve a Forge-Master tool call</td><td>For tools requiring human approval (e.g. write actions).</td></tr>
             <tr><td>GET</td><td><code>/api/forge-master/prefs</code></td><td>Read user preferences</td><td>Tone, verbosity, classifier mode.</td></tr>
             <tr><td>PUT</td><td><code>/api/forge-master/prefs</code></td><td>Update preferences</td><td>Body: partial prefs.</td></tr>
-            <tr><td>GET</td><td><code>/api/forge-master/cache-stats</code></td><td>Embedding cache liveliness</td><td>Hit rate &mdash; useful as a Forge-Master health probe.</td></tr>
+            <tr><td>GET</td><td><code>/api/forge-master/cache-stats</code></td><td>Embedding cache liveliness</td><td>Hit rate, useful as a Forge-Master health probe.</td></tr>
           </tbody>
         </table>
 
@@ -371,7 +371,7 @@
         <table class="manual-table">
           <thead><tr><th>Method</th><th>Path</th><th>Purpose</th><th>Notes</th></tr></thead>
           <tbody>
-            <tr><td>POST</td><td><code>/api/image/generate</code></td><td>Generate an image</td><td>Body: <code>{ prompt, size?, count?, provider? }</code>. Returns <code>{ images: [{ url, b64? }] }</code>.</td></tr>
+            <tr><td>POST</td><td><code>/api/image/generate</code></td><td>Generate an image</td><td>Body: <code>{ prompt, size? count? provider? }</code>. Returns <code>{ images: [{ url, b64? }] }</code>.</td></tr>
           </tbody>
         </table>
 
@@ -442,13 +442,13 @@ const estimate = await c.callTool('forge_estimate_quorum', {
 
         <h2 id="see-also">See also</h2>
         <ul class="list-disc list-inside space-y-1">
-          <li><a href="event-catalog.html">Appendix V &mdash; Event Catalog</a> &mdash; every event emitted over <code>/api/hub</code></li>
-          <li><a href="api-surface-index.html">Appendix Q &mdash; API Surface Index</a> &mdash; the MCP tool surface that the dispatcher delegates to</li>
-          <li><a href="forge-json-reference.html">Appendix T &mdash; <code>.forge.json</code> Reference</a> &mdash; configuration keys that several endpoints read or write</li>
-          <li><a href="environment-variables-reference.html">Appendix U &mdash; Environment Variables Reference</a> &mdash; <code>PLAN_FORGE_HTTP_PORT</code>, <code>PFORGE_BRIDGE_SECRET</code>, provider keys</li>
-          <li><a href="integrating-from-outside.html">Chapter 29 &mdash; Integrating from Outside</a> &mdash; end-to-end integration patterns</li>
-          <li><a href="dashboard.html">Chapter &mdash; Dashboard</a> &mdash; the primary REST consumer, browsable at <code>http://127.0.0.1:3100/dashboard</code></li>
-          <li><a href="https://github.com/srnichols/plan-forge/blob/master/docs/REST-API.md" rel="noopener">docs/REST-API.md on GitHub</a> &mdash; auto-generated endpoint dump (regenerated via <code>node scripts/dump-rest-routes.mjs</code>)</li>
+          <li><a href="event-catalog.html">Appendix V &mdash; Event Catalog</a>, every event emitted over <code>/api/hub</code></li>
+          <li><a href="api-surface-index.html">Appendix Q &mdash; API Surface Index</a>, the MCP tool surface that the dispatcher delegates to</li>
+          <li><a href="forge-json-reference.html">Appendix T &mdash; <code>.forge.json</code> Reference</a>, configuration keys that several endpoints read or write</li>
+          <li><a href="environment-variables-reference.html">Appendix U &mdash; Environment Variables Reference</a>, <code>PLAN_FORGE_HTTP_PORT</code>, <code>PFORGE_BRIDGE_SECRET</code>, provider keys</li>
+          <li><a href="integrating-from-outside.html">Chapter 29 &mdash; Integrating from Outside</a>, end-to-end integration patterns</li>
+          <li><a href="dashboard.html">Chapter &mdash; Dashboard</a>, the primary REST consumer, browsable at <code>http://127.0.0.1:3100/dashboard</code></li>
+          <li><a href="https://github.com/srnichols/plan-forge/blob/master/docs/REST-API.md" rel="noopener">docs/REST-API.md on GitHub</a>, auto-generated endpoint dump (regenerated via <code>node scripts/dump-rest-routes.mjs</code>)</li>
         </ul>
 
       </div>

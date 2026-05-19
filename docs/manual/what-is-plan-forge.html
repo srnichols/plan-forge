@@ -51,13 +51,13 @@
 
         <!-- ─── Plan Forge in 5 terms ─── -->
         <div class="callout callout-info">
-          <strong>Plan Forge in 5 terms</strong> &mdash; you'll see these everywhere; bookmark them now.
+          <strong>Plan Forge in 5 terms</strong>, you'll see these everywhere; bookmark them now.
           <ul class="mt-2 space-y-1 text-sm">
-            <li><strong>Plan</strong> &mdash; a Markdown file in <code>docs/plans/</code> describing one feature: what to build, what files it can touch, what tests must pass.</li>
-            <li><strong>Slice</strong> &mdash; one numbered step inside a plan. Plans are broken into 3&ndash;7 slices so the AI works in checkpointed chunks instead of one giant edit.</li>
-            <li><strong>Scope contract</strong> &mdash; the section of the plan that lists exactly which files are in-scope vs out-of-scope vs forbidden. The orchestrator enforces it: edits outside scope are blocked.</li>
-            <li><strong>Validation gate</strong> &mdash; a concrete shell command (e.g., <code>dotnet test</code>) that must pass before the next slice runs. Gates are how Plan Forge knows the AI didn't break anything.</li>
-            <li><strong>Hardened plan</strong> &mdash; a plan that has gone through Step 2 of the pipeline (Plan Hardener), which adds the scope contract, validation gates, forbidden actions, and rollback steps. Plans the AI can execute autonomously must be hardened.</li>
+            <li><strong>Plan</strong>, a Markdown file in <code>docs/plans/</code> describing one feature: what to build, what files it can touch, what tests must pass.</li>
+            <li><strong>Slice</strong>, one numbered step inside a plan. Plans are broken into 3&ndash;7 slices so the AI works in checkpointed chunks instead of one giant edit.</li>
+            <li><strong>Scope contract</strong>, the section of the plan that lists exactly which files are in-scope vs out-of-scope vs forbidden. The orchestrator enforces it: edits outside scope are blocked.</li>
+            <li><strong>Validation gate</strong>, a concrete shell command (e.g., <code>dotnet test</code>) that must pass before the next slice runs. Gates are how Plan Forge knows the AI didn't break anything.</li>
+            <li><strong>Hardened plan</strong>, a plan that has gone through Step 2 of the pipeline (Plan Hardener), which adds the scope contract, validation gates, forbidden actions, and rollback steps. Plans the AI can execute autonomously must be hardened.</li>
           </ul>
           <p class="mt-2 text-xs text-slate-500">All five terms have full entries in the <a href="glossary.html">Glossary</a>.</p>
         </div>
@@ -272,7 +272,7 @@
         <h2 id="evidence">Evidence — A/B Test Results</h2>
         <p>The shop story is testable. The April 2026 .NET A/B test built the same WebAPI twice from an identical .NET 10 skeleton (same git commit baseline) using the same model (Claude Opus 4.6) on the same machine. One run used Plan Forge guardrails; the other used pure vibe coding. Comparable wall-clock time — 7 minutes for Plan Forge, 8 minutes for vibe coding (the extra minute went to fighting build errors).</p>
 
-        <figure class="manual-figure" id="fig-1-2"><img src="assets/diagrams/evidence-ab-test-bars.svg" alt="Head-to-head bar chart comparing Plan Forge against vibe coding across six structural quality metrics from the April 2026 .NET A/B test. Plan Forge: 60 tests, 6 interfaces, 9 DTOs, 4 typed exceptions, 79 CancellationToken references, 99 quality score. Vibe coding: 13 tests, 0 interfaces, 0 DTOs, 0 typed exceptions, 0 CancellationToken references, 44 quality score. Vibe coding scored zero on four of six structural metrics." class="diagram-img diagram-img-md my-6" /><figcaption class="manual-figcaption"><!--fignum--><span class="manual-fignum">Figure 1-2.</span><!--/fignum--> A/B test results &mdash; Plan Forge vs vibe coding across six structural quality metrics (.NET, April 2026).</figcaption></figure>
+        <figure class="manual-figure" id="fig-1-2"><img src="assets/diagrams/evidence-ab-test-bars.svg" alt="Head-to-head bar chart comparing Plan Forge against vibe coding across six structural quality metrics from the April 2026 .NET A/B test. Plan Forge: 60 tests, 6 interfaces, 9 DTOs, 4 typed exceptions, 79 CancellationToken references, 99 quality score. Vibe coding: 13 tests, 0 interfaces, 0 DTOs, 0 typed exceptions, 0 CancellationToken references, 44 quality score. Vibe coding scored zero on four of six structural metrics." class="diagram-img diagram-img-md my-6" /><figcaption class="manual-figcaption"><!--fignum--><span class="manual-fignum">Figure 1-2.</span><!--/fignum--> A/B test results, Plan Forge vs vibe coding across six structural quality metrics (.NET, April 2026).</figcaption></figure>
 
         <table class="manual-table">
           <thead><tr><th>Metric</th><th>Vibe coding</th><th>Plan Forge</th><th>Delta</th></tr></thead>

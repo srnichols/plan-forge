@@ -50,14 +50,14 @@ applyTo: "**/auth/**,**/security/**,**/middleware/**"
       <table class="manual-table">
         <thead><tr><th>File that loads</th><th>Why it matched</th><th>What it whispers to the AI</th></tr></thead>
         <tbody>
-          <tr><td><code>architecture-principles.instructions.md</code></td><td>Universal &mdash; <code>applyTo: "**"</code></td><td>Stop! Before writing code, ask the 5 architecture questions. Don't bypass scope, don't skip tests.</td></tr>
+          <tr><td><code>architecture-principles.instructions.md</code></td><td>Universal, <code>applyTo: "**"</code></td><td>Stop! Before writing code, ask the 5 architecture questions. Don't bypass scope, don't skip tests.</td></tr>
           <tr><td><code>security.instructions.md</code></td><td>Path matched <code>**/auth/**</code></td><td>Parameterized queries only. No secrets in code. Validate inputs at every boundary. OWASP Top 10 defense patterns.</td></tr>
           <tr><td><code>auth.instructions.md</code></td><td>Path matched <code>**/auth/**</code></td><td>JWT/OIDC patterns, token expiry rules, RBAC enforcement, multi-tenant isolation guards.</td></tr>
-          <tr><td><code>testing.instructions.md</code></td><td>Universal &mdash; <code>applyTo: "**"</code></td><td>Tests required for new behavior. Use the project's test framework. Cover edge cases (expired token, tampered signature).</td></tr>
+          <tr><td><code>testing.instructions.md</code></td><td>Universal, <code>applyTo: "**"</code></td><td>Tests required for new behavior. Use the project's test framework. Cover edge cases (expired token, tampered signature).</td></tr>
         </tbody>
       </table>
 
-      <p>The AI now has 4 focused instruction files in its context &mdash; not 17. If you switch to editing <code>src/db/UserRepository.cs</code>, security stays loaded but auth swaps out for <code>database.instructions.md</code>. The right rules whisper at the right time, without you doing anything.</p>
+      <p>The AI now has 4 focused instruction files in its context, not 17. If you switch to editing <code>src/db/UserRepository.cs</code>, security stays loaded but auth swaps out for <code>database.instructions.md</code>. The right rules whisper at the right time, without you doing anything.</p>
 
       <p>Below is the full catalog: which files exist, what each covers, and which patterns trigger them.</p>
 

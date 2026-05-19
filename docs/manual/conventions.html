@@ -64,8 +64,8 @@
             <tr><td><code>Q1 Q2 Q3</code></td><td>Quickstart steps. The 30-minute zero-to-shipped path.</td><td>Q2 · Your First Plan</td></tr>
             <tr><td><code>1 2 … 24</code></td><td>Numbered chapters across <!--c:parts-->5<!--/c--> Parts (Smelt → Forge → Guard → Learn).</td><td>Chapter 5 · Crucible</td></tr>
             <tr><td><em>(unnumbered)</em></td><td>Sub-chapters and deep dives that hang off a numbered chapter.</td><td>Dashboard — LiveGuard</td></tr>
-            <tr><td><code>A B … N</code></td><td>Lettered appendices &mdash; reference material, runbooks, enterprise track.</td><td>Appendix K · Enterprise Reference Architecture</td></tr>
-            <tr><td><code>O</code></td><td>The Book Index &mdash; A&ndash;Z search across the whole manual.</td><td>Appendix O · Book Index</td></tr>
+            <tr><td><code>A B … N</code></td><td>Lettered appendices, reference material, runbooks, enterprise track.</td><td>Appendix K · Enterprise Reference Architecture</td></tr>
+            <tr><td><code>O</code></td><td>The Book Index, A&ndash;Z search across the whole manual.</td><td>Appendix O · Book Index</td></tr>
           </tbody>
         </table>
 
@@ -98,11 +98,11 @@
             </tr>
           </thead>
           <tbody>
-            <tr><td>Numbered chapter (1, 2, &hellip; 29)</td><td>Yes &mdash; <code>assets/chapter-heroes/chN-hero.jpg</code>, 1024&times;768, generated.</td><td>Yes &mdash; numbered <code>Figure&nbsp;N&#8209;K</code> via <code>maintain.mjs</code>.</td></tr>
-            <tr><td>Quickstart step (Q1, Q2, Q3)</td><td>Yes &mdash; same convention.</td><td>Optional.</td></tr>
-            <tr><td>Unnumbered sub-chapter (Dashboard &mdash; Settings, MCP Reference, deep dives)</td><td><strong>No.</strong> Sub-chapters inherit visual weight from their parent.</td><td>Yes &mdash; un-numbered figures, still wrapped in <code>&lt;figure class="manual-figure"&gt;</code>.</td></tr>
-            <tr><td>Reference appendix (Glossary, Quick Reference, Book Index, List of Figures, API Surface Index)</td><td><strong>No.</strong> Reference pages favor density over decoration.</td><td>Rare &mdash; only when a diagram clarifies the reference.</td></tr>
-            <tr><td>Narrative appendix (Sample Project, Enterprise, Lessons Learned, History, About the Author)</td><td>Yes &mdash; same convention as numbered chapters.</td><td>Yes.</td></tr>
+            <tr><td>Numbered chapter (1, 2, &hellip; 29)</td><td>Yes, <code>assets/chapter-heroes/chN-hero.jpg</code>, 1024&times;768, generated.</td><td>Yes, numbered <code>Figure&nbsp;N&#8209;K</code> via <code>maintain.mjs</code>.</td></tr>
+            <tr><td>Quickstart step (Q1, Q2, Q3)</td><td>Yes, same convention.</td><td>Optional.</td></tr>
+            <tr><td>Unnumbered sub-chapter (Dashboard, Settings, MCP Reference, deep dives)</td><td><strong>No.</strong> Sub-chapters inherit visual weight from their parent.</td><td>Yes, un-numbered figures, still wrapped in <code>&lt;figure class="manual-figure"&gt;</code>.</td></tr>
+            <tr><td>Reference appendix (Glossary, Quick Reference, Book Index, List of Figures, API Surface Index)</td><td><strong>No.</strong> Reference pages favor density over decoration.</td><td>Rare, only when a diagram clarifies the reference.</td></tr>
+            <tr><td>Narrative appendix (Sample Project, Enterprise, Lessons Learned, History, About the Author)</td><td>Yes, same convention as numbered chapters.</td><td>Yes.</td></tr>
           </tbody>
         </table>
 
@@ -112,23 +112,23 @@
 
         <!-- ─── Callouts ─── -->
         <h2 id="callouts">Callouts</h2>
-        <p>Three flavors of inline aside, each colored for instant recognition. They never carry information that isn't <em>also</em> in the surrounding prose &mdash; safe to skip on a first pass, useful on a second.</p>
+        <p>Three flavors of inline aside, each colored for instant recognition. They never carry information that isn't <em>also</em> in the surrounding prose, safe to skip on a first pass, useful on a second.</p>
 
         <div class="callout callout-info">
-          <strong>Info</strong> &mdash; context, background, or "see also" pointers. Skippable on a fast read; helpful when you want the why.
+          <strong>Info</strong>, context, background, or "see also" pointers. Skippable on a fast read; helpful when you want the why.
         </div>
 
         <div class="callout callout-tip">
-          <strong>Tip</strong> &mdash; a working shortcut, defaults that almost always do the right thing, or a habit that pays off long-term.
+          <strong>Tip</strong>, a working shortcut, defaults that almost always do the right thing, or a habit that pays off long-term.
         </div>
 
         <div class="callout callout-warning">
-          <strong>Warning</strong> &mdash; a foot-gun, a known pitfall, or a non-obvious failure mode. Read these. They're rare; they exist for a reason.
+          <strong>Warning</strong>, a foot-gun, a known pitfall, or a non-obvious failure mode. Read these. They're rare; they exist for a reason.
         </div>
 
         <!-- ─── Code blocks ─── -->
         <h2 id="code-blocks">Code blocks</h2>
-        <p>Code, terminal, and config samples come in a labelled block. The header tells you <em>what</em> the snippet is &mdash; a terminal command, a config file path, a JSON payload &mdash; and there's a <strong>Copy</strong> button on the right when the snippet is meant to be run as-is.</p>
+        <p>Code, terminal, and config samples come in a labelled block. The header tells you <em>what</em> the snippet is, a terminal command, a config file path, a JSON payload, and there's a <strong>Copy</strong> button on the right when the snippet is meant to be run as-is.</p>
 
         <div class="cmd-block">
           <div class="cmd-block-header"><span>Terminal</span><button class="cmd-copy-btn">Copy</button></div>
@@ -143,19 +143,19 @@
 }</code></pre>
         </div>
 
-        <p>Inside body prose, <code>monospace</code> means a literal name &mdash; a file path, an env var, a tool ID, an <code>argv</code> flag. Italics mean a placeholder you fill in.</p>
+        <p>Inside body prose, <code>monospace</code> means a literal name, a file path, an env var, a tool ID, an <code>argv</code> flag. Italics mean a placeholder you fill in.</p>
 
         <!-- ─── Diagrams ─── -->
         <h2 id="diagrams">Diagrams and figures</h2>
-        <p>Inline SVGs and rasters live under <code>docs/manual/assets/diagrams/</code>. Each one carries an <code>alt</code> attribute that describes the diagram in prose &mdash; readers using a screen reader (or readers who'd rather skim) get the full meaning without seeing the picture.</p>
-        <p>Diagrams come in three sizes (<code>diagram-img-sm</code> &mdash; 700&thinsp;px, <code>-md</code> &mdash; 750&thinsp;px, <code>-lg</code> &mdash; 800&thinsp;px), all centered in the body column. Every diagram is wrapped in a <code>&lt;figure&gt;</code> with a one-line italic caption underneath, derived automatically from the alt text title clause. To override an auto-caption with hand-authored prose, edit the <code>&lt;figcaption&gt;</code> directly and remove the <code>&lt;!--cap:auto--&gt;</code> marker &mdash; subsequent <code>maintain.mjs</code> runs will leave it alone.</p>
+        <p>Inline SVGs and rasters live under <code>docs/manual/assets/diagrams/</code>. Each one carries an <code>alt</code> attribute that describes the diagram in prose, readers using a screen reader (or readers who'd rather skim) get the full meaning without seeing the picture.</p>
+        <p>Diagrams come in three sizes (<code>diagram-img-sm</code>, 700&thinsp;px, <code>-md</code>, 750&thinsp;px, <code>-lg</code>, 800&thinsp;px), all centered in the body column. Every diagram is wrapped in a <code>&lt;figure&gt;</code> with a one-line italic caption underneath, derived automatically from the alt text title clause. To override an auto-caption with hand-authored prose, edit the <code>&lt;figcaption&gt;</code> directly and remove the <code>&lt;!--cap:auto--&gt;</code> marker, subsequent <code>maintain.mjs</code> runs will leave it alone.</p>
 
         <!-- ─── Live numbers (counts) ─── -->
         <h2 id="live-numbers">Live numbers</h2>
-        <p>Some sentences refer to a count that changes between releases &mdash; "Plan Forge ships <!--c:tools-->90<!--/c--> MCP tools", "<!--c:instructions-->18<!--/c--> instruction files", "<!--c:agents-->12<!--/c--> agents". Those numbers are <em>tokenized</em> in the page source and rewritten at build time from a single source of truth in <code>docs/manual/assets/manual.js</code>. You'll see the up-to-date number rendered, but if you View Source you'll see the token markers wrapping it.</p>
+        <p>Some sentences refer to a count that changes between releases, "Plan Forge ships <!--c:tools-->90<!--/c--> MCP tools", "<!--c:instructions-->18<!--/c--> instruction files", "<!--c:agents-->12<!--/c--> agents". Those numbers are <em>tokenized</em> in the page source and rewritten at build time from a single source of truth in <code>docs/manual/assets/manual.js</code>. You'll see the up-to-date number rendered, but if you View Source you'll see the token markers wrapping it.</p>
 
         <div class="callout callout-info">
-          <strong>For contributors:</strong> use <code>&lt;!--c:KEY--&gt;NUMBER&lt;!--/c--&gt;</code> instead of typing a literal number in chapter prose. Run <code>node docs/manual/maintain.mjs</code> after editing &mdash; it sweeps every chapter, fixes drift, and warns on unknown keys.
+          <strong>For contributors:</strong> use <code>&lt;!--c:KEY--&gt;NUMBER&lt;!--/c--&gt;</code> instead of typing a literal number in chapter prose. Run <code>node docs/manual/maintain.mjs</code> after editing, it sweeps every chapter, fixes drift, and warns on unknown keys.
         </div>
 
         <!-- ─── Navigation ─── -->
@@ -175,19 +175,19 @@
 
         <!-- ─── Audience tags ─── -->
         <h2 id="audience">Reader paths</h2>
-        <p>The cover offers four "where to next?" tiles &mdash; new to Plan Forge, on the GitHub stack, extending it, on a different stack. Pick the path that matches what you're doing today and the manual stays roughly half its apparent size.</p>
+        <p>The cover offers four "where to next?" tiles, new to Plan Forge, on the GitHub stack, extending it, on a different stack. Pick the path that matches what you're doing today and the manual stays roughly half its apparent size.</p>
 
         <!-- ─── Edition + errata ─── -->
         <h2 id="edition">Edition &amp; errata</h2>
-        <p>Every page footer (and the meta-bar at the top of the cover) shows the manual <strong>edition</strong> &mdash; pinned to the Plan Forge version it was published with. The full release history lives in <a href="https://github.com/srnichols/plan-forge/blob/master/CHANGELOG.md" rel="noopener">CHANGELOG.md on GitHub</a>.</p>
+        <p>Every page footer (and the meta-bar at the top of the cover) shows the manual <strong>edition</strong>, pinned to the Plan Forge version it was published with. The full release history lives in <a href="https://github.com/srnichols/plan-forge/blob/master/CHANGELOG.md" rel="noopener">CHANGELOG.md on GitHub</a>.</p>
 
         <h3 id="edition-history">Edition history</h3>
         <ul>
-          <li><strong>Fifth Edition (in progress)</strong> (v3.6.2+) &mdash; Ebook-completion phase. <strong>Cluster A &mdash; Front Matter</strong> shipped so far: the new <a href="foreword.html">Foreword &mdash; From Impossible to Seven Minutes</a> framing the one-year journey from "impossible" to a 99/100 application in seven minutes; the <a href="stakeholder-briefing.html">Stakeholder Briefing</a> as the 10&ndash;15 minute white-paper version with a <a href="stakeholder-briefing.html#section-8">tailoring flow</a> for prospect-specific remixing; the <a href="reader-paths.html">Reader-Journey Ladders</a> with five persona ladders (solo developer, team lead, reviewer or architect, enterprise architect, extension author); and <a href="day-in-the-forge.html">Appendix R &mdash; A Day in the Forge</a> collecting three worked case studies absorbed from contemporary blog posts (the closed loop, the .NET 99-vs-44 A/B test, the three-model quorum run). Further story, reference, and domain-chapter slices land through this edition as the phase ships.</li>
-          <li><strong>Fourth Edition</strong> (v3.6) &mdash; OpenBrain promoted to the documented <a href="project-history.html#v3-6-openbrain-l3">L3 memory layer</a>; new <code>pforge brain {status, hint, test, replay}</code> subcommands; Team Dashboard tab added to the Forge group (now 19 tabs). Project History extended through v3.6 with v2.95 Lattice, v3.0 Copilot trilogy, v3.2&ndash;3.4 Team Mode. Refreshed counts (<!--c:tools-->90<!--/c--> MCP tools, <!--c:cli-commands-->97<!--/c--> CLI commands).</li>
-          <li><strong>Third Edition</strong> (v3.5.1) &mdash; Added Part V &ldquo;Integrate&rdquo;: Copilot Integration Trilogy, Team Coordination, The Knowledge Graph, Integrating from Outside. Refreshed counts (88 MCP tools, 5 parts, 28 chapters).</li>
-          <li><strong>Second Edition</strong> (v2.95.0) &mdash; Added &ldquo;How the Shop Remembers&rdquo; (memory architecture: Hallmark, Anvil, Lattice, sync_memories) &mdash; now <a href="memory-system.html">Chapter 22</a> after the Part IV memory-first reorder.</li>
-          <li><strong>First Edition</strong> (v2.78.0) &mdash; Initial public release: 24 chapters across Parts I&ndash;IV plus 14 appendices.</li>
+          <li><strong>Fifth Edition (in progress)</strong> (v3.6.2+), Ebook-completion phase. <strong>Cluster A: Front Matter</strong> shipped so far: the new <a href="foreword.html">Foreword &mdash; From Impossible to Seven Minutes</a> framing the one-year journey from "impossible" to a 99/100 application in seven minutes; the <a href="stakeholder-briefing.html">Stakeholder Briefing</a> as the 10&ndash;15 minute white-paper version with a <a href="stakeholder-briefing.html#section-8">tailoring flow</a> for prospect-specific remixing; the <a href="reader-paths.html">Reader-Journey Ladders</a> with five persona ladders (solo developer, team lead, reviewer or architect, enterprise architect, extension author); and <a href="day-in-the-forge.html">Appendix R &mdash; A Day in the Forge</a> collecting three worked case studies absorbed from contemporary blog posts (the closed loop, the .NET 99-vs-44 A/B test, the three-model quorum run). Further story, reference, and domain-chapter slices land through this edition as the phase ships.</li>
+          <li><strong>Fourth Edition</strong> (v3.6), OpenBrain promoted to the documented <a href="project-history.html#v3-6-openbrain-l3">L3 memory layer</a>; new <code>pforge brain {status, hint, test, replay}</code> subcommands; Team Dashboard tab added to the Forge group (now 19 tabs). Project History extended through v3.6 with v2.95 Lattice, v3.0 Copilot trilogy, v3.2&ndash;3.4 Team Mode. Refreshed counts (<!--c:tools-->90<!--/c--> MCP tools, <!--c:cli-commands-->97<!--/c--> CLI commands).</li>
+          <li><strong>Third Edition</strong> (v3.5.1), Added Part V &ldquo;Integrate&rdquo;: Copilot Integration Trilogy, Team Coordination, The Knowledge Graph, Integrating from Outside. Refreshed counts (88 MCP tools, 5 parts, 28 chapters).</li>
+          <li><strong>Second Edition</strong> (v2.95.0), Added &ldquo;How the Shop Remembers&rdquo; (memory architecture: Hallmark, Anvil, Lattice, sync_memories), now <a href="memory-system.html">Chapter 22</a> after the Part IV memory-first reorder.</li>
+          <li><strong>First Edition</strong> (v2.78.0), Initial public release: 24 chapters across Parts I&ndash;IV plus 14 appendices.</li>
         </ul>
 
         <p>Spotted something that's wrong, stale, or missing? File an issue on <a href="https://github.com/srnichols/plan-forge/issues" rel="noopener">github.com/srnichols/plan-forge</a> with the chapter title and section heading. Manual fixes are tagged <code>docs:</code> in the changelog.</p>

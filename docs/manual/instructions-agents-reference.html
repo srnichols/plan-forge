@@ -34,7 +34,7 @@
 
       <!-- ─── Agents ─── -->
       <h2 id="agents">Agents</h2>
-      <p>14 reviewer agents organized in three categories. Agents are <strong>read-only</strong> &mdash; they audit code but can't edit files.</p>
+      <p>14 reviewer agents organized in three categories. Agents are <strong>read-only</strong>, they audit code but can't edit files.</p>
 
       <h3 id="agents-stack">Stack-Specific Agents (6)</h3>
       <p>Vary by preset — examples for <code>dotnet</code>:</p>
@@ -82,7 +82,7 @@
 
       <!-- ─── Skills ─── -->
       <h2 id="skills">Skills</h2>
-      <p>Skills are <strong>multi-step procedures the AI runs end-to-end</strong> &mdash; they read files, write files, run terminal commands, and emit events the dashboard can watch. Unlike agents (which review) and hooks (which gate), skills <strong>do work</strong>. There are two tiers: <strong>shared skills</strong> installed across every preset, and <strong>stack-specific skills</strong> tailored to the chosen language.</p>
+      <p>Skills are <strong>multi-step procedures the AI runs end-to-end</strong>, they read files, write files, run terminal commands, and emit events the dashboard can watch. Unlike agents (which review) and hooks (which gate), skills <strong>do work</strong>. There are two tiers: <strong>shared skills</strong> installed across every preset, and <strong>stack-specific skills</strong> tailored to the chosen language.</p>
 
       <h3 id="skills-runtime-contract" class="text-base font-semibold text-slate-300 mt-6">The SKILL.md runtime contract</h3>
         <p>Every skill is a single Markdown file with YAML frontmatter followed by numbered <code>### N. Step Name</code> sections. The <a href="https://github.com/srnichols/plan-forge/blob/master/pforge-mcp/skill-runner.mjs" rel="noopener">skill-runner</a> parses the file into a step DAG, executes bash blocks per step, and emits lifecycle events to the WebSocket hub. The contract:</p>
@@ -99,15 +99,15 @@
 
         <p>After the frontmatter, three Markdown sections are recognized by the runner:</p>
         <ul class="list-disc list-inside space-y-1 mb-4">
-          <li><strong><code>## Steps</code></strong> &mdash; the main body. Each <code>### N. Step Name</code> heading defines one step; bash fences inside are executed in order. A step with no bash block is informational and auto-passes.</li>
-          <li><strong><code>## Safety Rules</code></strong> &mdash; bullet list of invariants. Surfaced in the dashboard and injected into the skill's context.</li>
-          <li><strong><code>## Persistent Memory</code></strong> &mdash; optional. Block appended to the skill's L2 capture so OpenBrain remembers cross-run lessons.</li>
+          <li><strong><code>## Steps</code></strong>, the main body. Each <code>### N. Step Name</code> heading defines one step; bash fences inside are executed in order. A step with no bash block is informational and auto-passes.</li>
+          <li><strong><code>## Safety Rules</code></strong>, bullet list of invariants. Surfaced in the dashboard and injected into the skill's context.</li>
+          <li><strong><code>## Persistent Memory</code></strong>, optional. Block appended to the skill's L2 capture so OpenBrain remembers cross-run lessons.</li>
         </ul>
 
         <p>Two structural patterns are recognized inside step bodies:</p>
         <ul class="list-disc list-inside space-y-1 mb-4">
-          <li><strong>Conditionals</strong> &mdash; a blockquote starting with <code>If &lt;condition&gt; &rarr; &lt;action&gt;</code>. If the action contains the word <em>skip</em>, the runner aborts the current step's remaining commands. Used for early-exit paths like &ldquo;If migration fails &rarr; rollback &amp; STOP.&rdquo;</li>
-          <li><strong>Temper Guards</strong> &mdash; a Markdown table at the end of the file capturing shortcuts authors took that broke the skill. Surfaced in code review and the Plan Forge knowledge graph.</li>
+          <li><strong>Conditionals</strong>, a blockquote starting with <code>If &lt;condition&gt; &rarr; &lt;action&gt;</code>. If the action contains the word <em>skip</em>, the runner aborts the current step's remaining commands. Used for early-exit paths like &ldquo;If migration fails &rarr; rollback &amp; STOP.&rdquo;</li>
+          <li><strong>Temper Guards</strong>, a Markdown table at the end of the file capturing shortcuts authors took that broke the skill. Surfaced in code review and the Plan Forge knowledge graph.</li>
         </ul>
 
       <h3 id="skills-events" class="text-base font-semibold text-slate-300 mt-6">Events the runner emits</h3>
@@ -124,9 +124,9 @@
 
       <h3 id="skills-invocation" class="text-base font-semibold text-slate-300 mt-6">Three ways to invoke a skill</h3>
         <ul class="list-disc list-inside space-y-1 mb-4">
-          <li><strong>Slash command in chat</strong> &mdash; <code>/database-migration add user_profiles table</code>. The most common path; works in VS Code Copilot, Claude, Cursor, and Codex once <code>setup.ps1 -Agent &lt;name&gt;</code> has run.</li>
-          <li><strong>MCP tool</strong> &mdash; <code>forge_run_skill</code> with <code>{ name, args }</code>. Returns the same lifecycle events plus a structured result envelope.</li>
-          <li><strong>REST</strong> &mdash; <code>POST /api/tool/forge_run_skill</code> through the generic dispatcher (see <a href="rest-api-reference.html#generic-dispatcher">Appendix W</a>). Used by the dashboard and any external integration.</li>
+          <li><strong>Slash command in chat</strong>, <code>/database-migration add user_profiles table</code>. The most common path; works in VS Code Copilot, Claude, Cursor, and Codex once <code>setup.ps1 -Agent &lt;name&gt;</code> has run.</li>
+          <li><strong>MCP tool</strong>, <code>forge_run_skill</code> with <code>{ name, args }</code>. Returns the same lifecycle events plus a structured result envelope.</li>
+          <li><strong>REST</strong>, <code>POST /api/tool/forge_run_skill</code> through the generic dispatcher (see <a href="rest-api-reference.html#generic-dispatcher">Appendix W</a>). Used by the dashboard and any external integration.</li>
         </ul>
         <p>The orchestrator can also <strong>defer</strong> a skill into the <strong>decision tray</strong> when it wants a human to choose; clients query <code>GET /api/skills/pending</code> and resolve through <code>POST /api/skills/{accept,reject,defer}</code> (full surface in <a href="rest-api-reference.html#skills">Appendix W &mdash; Skills</a>).</p>
 
@@ -137,7 +137,7 @@
           <tbody>
             <tr><td><code>audit-loop</code></td><td><code>/audit-loop [--max=N --env=dev]</code></td><td>Recursive scan &rarr; triage &rarr; fix until findings converge to zero. The orchestrator's drain loop, exposed as a one-shot.</td><td><code>forge_tempering_*</code>, <code>forge_bug_register</code>, <code>forge_triage_route</code></td></tr>
             <tr><td><code>forge-execute</code></td><td><code>/forge-execute</code></td><td>Guided plan execution: list plans &rarr; estimate cost &rarr; execute &rarr; report. The friendly path for new users.</td><td><code>forge_run_plan</code>, <code>forge_estimate_quorum</code>, <code>forge_cost_report</code></td></tr>
-            <tr><td><code>forge-quench</code></td><td><code>/forge-quench &lt;plan&gt;</code></td><td>Final hardening pass before committing a plan &mdash; runs validators and the completeness sweep.</td><td><code>forge_validate</code>, <code>forge_sweep</code></td></tr>
+            <tr><td><code>forge-quench</code></td><td><code>/forge-quench &lt;plan&gt;</code></td><td>Final hardening pass before committing a plan, runs validators and the completeness sweep.</td><td><code>forge_validate</code>, <code>forge_sweep</code></td></tr>
             <tr><td><code>forge-troubleshoot</code></td><td><code>/forge-troubleshoot</code></td><td>Diagnose common Plan Forge issues: missing API keys, stale orchestrator logs, broken hub, hook conflicts.</td><td><code>forge_smith</code>, <code>forge_diagnose</code></td></tr>
             <tr><td><code>health-check</code></td><td><code>/health-check</code></td><td>Forge diagnostic chain: <code>forge_smith</code> &rarr; <code>forge_validate</code> &rarr; <code>forge_sweep</code>. Run on a clean checkout before opening a PR.</td><td><code>forge_smith</code>, <code>forge_validate</code>, <code>forge_sweep</code></td></tr>
             <tr><td><code>security-audit</code> <span class="text-slate-500">(shared variant)</span></td><td><code>/security-audit</code></td><td>Generic OWASP scan, secrets detection, severity report. Stack presets override with language-specific scanners.</td><td><code>forge_secret_scan</code>, <code>forge_dep_watch</code></td></tr>
@@ -145,7 +145,7 @@
         </table>
 
       <h3 id="skills-stack" class="text-base font-semibold text-slate-300 mt-6">Stack-specific skills (per language preset)</h3>
-        <p>Ten skills ship per language preset under <code>presets/&lt;stack&gt;/.github/skills/</code>. Same skill names across stacks, but the implementation calls the language's idiomatic toolchain &mdash; <code>database-migration</code> uses Knex / Prisma for TypeScript, EF Core for .NET, Alembic for Python, GORM for Go, and so on.</p>
+        <p>Ten skills ship per language preset under <code>presets/&lt;stack&gt;/.github/skills/</code>. Same skill names across stacks, but the implementation calls the language's idiomatic toolchain, <code>database-migration</code> uses Knex / Prisma for TypeScript, EF Core for .NET, Alembic for Python, GORM for Go, and so on.</p>
         <table class="manual-table">
           <thead><tr><th>Skill</th><th>Invocation</th><th>What it does</th></tr></thead>
           <tbody>

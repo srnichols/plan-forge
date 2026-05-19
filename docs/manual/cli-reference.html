@@ -405,7 +405,7 @@ forge_diagnose({ file: "src/auth/token-validator.ts", models: "grok-3-mini,grok-
           <table class="manual-table">
             <thead><tr><th>Flag</th><th>Type</th><th>Default</th><th>Description</th></tr></thead>
             <tbody>
-              <tr><td><code>--estimate</code></td><td>boolean</td><td>&mdash;</td><td>Cost prediction only, no execution. Always backed by <code>forge_estimate_quorum</code> &mdash; never hand-computed.</td></tr>
+              <tr><td><code>--estimate</code></td><td>boolean</td><td>&mdash;</td><td>Cost prediction only, no execution. Always backed by <code>forge_estimate_quorum</code>, never hand-computed.</td></tr>
               <tr><td><code>--assisted</code></td><td>boolean</td><td>&mdash;</td><td>Human codes, orchestrator validates gates</td></tr>
               <tr><td><code>--model</code></td><td>string</td><td>&mdash;</td><td>Model override (e.g., <code>claude-sonnet-4.6</code>)</td></tr>
               <tr><td><code>--resume-from</code></td><td>number</td><td>&mdash;</td><td>Skip completed slices, resume from N</td></tr>
@@ -441,7 +441,7 @@ forge_diagnose({ file: "src/auth/token-validator.ts", models: "grok-3-mini,grok-
             <tbody>
               <tr><td>Full Auto</td><td><em>(default)</em></td><td><code>gh copilot</code> CLI executes each slice with full project context. Routing honors host-aware preference (v2.82) so non-Copilot hosts (Claude Code, Cursor, Windsurf, Zed) prefer direct API to honor your subscription.</td></tr>
               <tr><td>Assisted</td><td><code>--assisted</code></td><td>You code in VS Code; orchestrator prompts and validates gates</td></tr>
-              <tr><td>Estimate</td><td><code>--estimate</code></td><td>Shows slice count, token estimate, and cost &mdash; without executing. Returns the same numbers as the <code>forge_estimate_quorum</code> tool.</td></tr>
+              <tr><td>Estimate</td><td><code>--estimate</code></td><td>Shows slice count, token estimate, and cost, without executing. Returns the same numbers as the <code>forge_estimate_quorum</code> tool.</td></tr>
             </tbody>
           </table>
 
@@ -559,7 +559,7 @@ forge_diagnose({ file: "src/auth/token-validator.ts", models: "grok-3-mini,grok-
           <table class="manual-table">
             <thead><tr><th>Flag</th><th>Type</th><th>Default</th><th>Description</th></tr></thead>
             <tbody>
-              <tr><td><code>--auto</code></td><td>boolean</td><td>&mdash;</td><td>Respect <code>.forge.json#audit.mode</code> &mdash; skip cleanly if <code>off</code></td></tr>
+              <tr><td><code>--auto</code></td><td>boolean</td><td>&mdash;</td><td>Respect <code>.forge.json#audit.mode</code>, skip cleanly if <code>off</code></td></tr>
               <tr><td><code>--max</code></td><td>number</td><td>5</td><td>Maximum drain rounds before terminating</td></tr>
               <tr><td><code>--dry-run</code></td><td>boolean</td><td>&mdash;</td><td>Scan + triage but skip fix dispatch</td></tr>
               <tr><td><code>--env</code></td><td>dev | staging</td><td>dev</td><td>Environment name passed to content-audit scanner. Production is hard-blocked unless <code>allowProduction: true</code> in scanner opts.</td></tr>
@@ -588,7 +588,7 @@ pforge audit-loop --auto --env staging</code></pre>
         <!-- ─── timeline (v2.82) ─── -->
         <div class="cmd-ref" id="timeline">
           <div class="cmd-ref-title">pforge timeline <span class="text-xs text-amber-400 font-normal">v2.82+</span></div>
-          <div class="cmd-ref-desc">Offline chronological view of every event across the shop &mdash; runs, slices, incidents, bugs, deploys, Crucible interviews, Forge-Master turns, audit-loop rounds, memory captures. 9 sources, dedupe-safe across log rotation.</div>
+          <div class="cmd-ref-desc">Offline chronological view of every event across the shop, runs, slices, incidents, bugs, deploys, Crucible interviews, Forge-Master turns, audit-loop rounds, memory captures. 9 sources, dedupe-safe across log rotation.</div>
 
           <table class="manual-table">
             <thead><tr><th>Flag</th><th>Type</th><th>Default</th><th>Description</th></tr></thead>

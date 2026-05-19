@@ -32,7 +32,7 @@
 
         <div class="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">Appendix V</div>
         <h1>Event Catalog</h1>
-        <p class="text-lg text-slate-400 mb-8">Every event Plan Forge emits over the WebSocket hub and the run journal &mdash; grouped by family, with emitter, trigger, the key payload fields, consumers, and retention. This appendix is the ebook companion to the canonical schema at <a href="https://github.com/srnichols/plan-forge/blob/master/pforge-mcp/EVENTS.md" rel="noopener"><code>pforge-mcp/EVENTS.md</code></a>: the source-of-truth JSON examples live in the schema file; this page provides the orientation, classification, and lifecycle guidance that schema files rarely carry.</p>
+        <p class="text-lg text-slate-400 mb-8">Every event Plan Forge emits over the WebSocket hub and the run journal, grouped by family, with emitter, trigger, the key payload fields, consumers, and retention. This appendix is the ebook companion to the canonical schema at <a href="https://github.com/srnichols/plan-forge/blob/master/pforge-mcp/EVENTS.md" rel="noopener"><code>pforge-mcp/EVENTS.md</code></a>: the source-of-truth JSON examples live in the schema file; this page provides the orientation, classification, and lifecycle guidance that schema files rarely carry.</p>
 
         <div class="callout callout-info">
           <strong>One transport, three audiences.</strong> Every event flows through the local WebSocket hub on <code>ws://127.0.0.1:3101</code>. Three different consumers read the same stream: the dashboard (live UI), the run journal (<code>.forge/runs/*.jsonl</code> for replay), and external bridges (Telegram, Slack, OpenClaw). Adding a new consumer is a matter of opening a socket and filtering by <code>type</code>; the schema below tells you exactly what fields each consumer can rely on.
@@ -45,33 +45,33 @@
           <table class="manual-table">
             <thead><tr><th style="width: 14rem">Family</th><th style="width: 5rem">Count</th><th>What it tells you</th></tr></thead>
             <tbody>
-              <tr><td><a href="#lifecycle"><strong>Lifecycle</strong></a></td><td>7</td><td>Run and slice progression &mdash; the primary signal the dashboard renders on the Progress tab.</td></tr>
-              <tr><td><a href="#skills"><strong>Skills</strong></a></td><td>4</td><td>Per-step skill execution &mdash; surfaces the same Progress UI but for <code>forge_run_skill</code> rather than <code>forge_run_plan</code>.</td></tr>
+              <tr><td><a href="#lifecycle"><strong>Lifecycle</strong></a></td><td>7</td><td>Run and slice progression, the primary signal the dashboard renders on the Progress tab.</td></tr>
+              <tr><td><a href="#skills"><strong>Skills</strong></a></td><td>4</td><td>Per-step skill execution, surfaces the same Progress UI but for <code>forge_run_skill</code> rather than <code>forge_run_plan</code>.</td></tr>
               <tr><td><a href="#crucible"><strong>Crucible</strong></a></td><td>3</td><td>Idea&rarr;spec smelt progression; powers the Forge-Master and Crucible dashboard tabs.</td></tr>
               <tr><td><a href="#bridge"><strong>Bridge</strong></a></td><td>4</td><td>External-channel approvals and notification dispatch status (Telegram, Slack, Discord, webhooks).</td></tr>
               <tr><td><a href="#escalation"><strong>Escalation &amp; CI</strong></a></td><td>2</td><td>Quorum escalation and GitHub Actions dispatch.</td></tr>
               <tr><td><a href="#client-server"><strong>Client&rarr;server</strong></a></td><td>1</td><td>The single inbound message type clients can send (<code>set-label</code>).</td></tr>
-              <tr><td><a href="#liveguard"><strong>LiveGuard</strong></a></td><td>10</td><td>Drift, incidents, secret scans, watch snapshots, fix proposals &mdash; the production-ops feedback loop.</td></tr>
-              <tr><td><a href="#tempering"><strong>Tempering</strong></a></td><td>1</td><td>The bug-fix validation event &mdash; emitted only on the green leg of the bug lifecycle.</td></tr>
+              <tr><td><a href="#liveguard"><strong>LiveGuard</strong></a></td><td>10</td><td>Drift, incidents, secret scans, watch snapshots, fix proposals, the production-ops feedback loop.</td></tr>
+              <tr><td><a href="#tempering"><strong>Tempering</strong></a></td><td>1</td><td>The bug-fix validation event, emitted only on the green leg of the bug lifecycle.</td></tr>
             </tbody>
           </table>
         </div>
 
-        <p>Every emitted event shares a five-field envelope (<a href="#envelope">documented below</a>). Two enums &mdash; <a href="#source-enum"><code>source</code></a> and <a href="#security-risk-enum"><code>security_risk</code></a> &mdash; are referenced throughout. Subscription mechanics are at <a href="#subscribing">Consuming the stream</a>, and retention rules for events that escape the WebSocket (logged to <code>.forge/runs/</code>, posted to OpenClaw, etc.) are at <a href="#retention">Retention</a>.</p>
+        <p>Every emitted event shares a five-field envelope (<a href="#envelope">documented below</a>). Two enums, <a href="#source-enum"><code>source</code></a> and <a href="#security-risk-enum"><code>security_risk</code></a>, are referenced throughout. Subscription mechanics are at <a href="#subscribing">Consuming the stream</a>, and retention rules for events that escape the WebSocket (logged to <code>.forge/runs/</code>, posted to OpenClaw, etc.) are at <a href="#retention">Retention</a>.</p>
 
         <!-- ============================================================ -->
         <h2 id="envelope">Common envelope</h2>
-        <p>Every event &mdash; lifecycle, skill, LiveGuard, all of them &mdash; carries the same five-field envelope. Consumers can rely on these fields being present even on event types this catalog does not list (forward-compatible by design).</p>
+        <p>Every event, lifecycle, skill, LiveGuard, all of them, carries the same five-field envelope. Consumers can rely on these fields being present even on event types this catalog does not list (forward-compatible by design).</p>
 
         <div class="overflow-x-auto mb-6">
           <table class="manual-table">
             <thead><tr><th>Field</th><th>Type</th><th>Example</th><th>Purpose</th></tr></thead>
             <tbody>
               <tr><td><code>version</code></td><td>string</td><td><code>"1.0"</code></td><td>Schema version. Always <code>"1.0"</code> today; reserved for future breaking changes.</td></tr>
-              <tr><td><code>type</code></td><td>string</td><td><code>"slice-completed"</code></td><td>The event-type identifier &mdash; the column heading you filter on. Stable across releases.</td></tr>
+              <tr><td><code>type</code></td><td>string</td><td><code>"slice-completed"</code></td><td>The event-type identifier, the column heading you filter on. Stable across releases.</td></tr>
               <tr><td><code>timestamp</code></td><td>string (ISO-8601 UTC)</td><td><code>"2026-05-18T09:30:00.000Z"</code></td><td>Emission time. Always UTC; never local time.</td></tr>
-              <tr><td><code>source</code></td><td>enum (9 values)</td><td><code>"orchestrator"</code></td><td>Which subsystem emitted the event &mdash; see <a href="#source-enum">below</a>.</td></tr>
-              <tr><td><code>security_risk</code></td><td>enum (5 values)</td><td><code>"none"</code></td><td>Risk classification at emission time &mdash; see <a href="#security-risk-enum">below</a>. Defaults to <code>"none"</code>.</td></tr>
+              <tr><td><code>source</code></td><td>enum (9 values)</td><td><code>"orchestrator"</code></td><td>Which subsystem emitted the event, see <a href="#source-enum">below</a>.</td></tr>
+              <tr><td><code>security_risk</code></td><td>enum (5 values)</td><td><code>"none"</code></td><td>Risk classification at emission time, see <a href="#security-risk-enum">below</a>. Defaults to <code>"none"</code>.</td></tr>
             </tbody>
           </table>
         </div>
@@ -82,15 +82,15 @@
           <table class="manual-table">
             <thead><tr><th>Value</th><th>Subsystem</th></tr></thead>
             <tbody>
-              <tr><td><code>orchestrator</code></td><td>Plan execution engine in <code>orchestrator.mjs</code> &mdash; emits the lifecycle family.</td></tr>
-              <tr><td><code>worker</code></td><td>Per-slice child process. Rare &mdash; most worker telemetry is wrapped by the orchestrator.</td></tr>
-              <tr><td><code>hub</code></td><td>The WebSocket hub itself &mdash; emits <code>connected</code> on new sessions.</td></tr>
-              <tr><td><code>bridge</code></td><td>External notification bridge &mdash; emits <code>bridge-notification-*</code>.</td></tr>
-              <tr><td><code>liveguard</code></td><td>The LiveGuard subsystem &mdash; emits the entire LiveGuard family.</td></tr>
-              <tr><td><code>crucible</code></td><td>The idea&rarr;spec funnel &mdash; emits <code>crucible-smelt-*</code>.</td></tr>
-              <tr><td><code>skill</code></td><td>Skill runner &mdash; emits the skill family.</td></tr>
-              <tr><td><code>watcher</code></td><td>Cross-project watcher &mdash; emits <code>watch-*</code>.</td></tr>
-              <tr><td><code>audit</code></td><td>Audit-classifier loop. Rare &mdash; emits reclassification events when run.</td></tr>
+              <tr><td><code>orchestrator</code></td><td>Plan execution engine in <code>orchestrator.mjs</code>, emits the lifecycle family.</td></tr>
+              <tr><td><code>worker</code></td><td>Per-slice child process. Rare, most worker telemetry is wrapped by the orchestrator.</td></tr>
+              <tr><td><code>hub</code></td><td>The WebSocket hub itself, emits <code>connected</code> on new sessions.</td></tr>
+              <tr><td><code>bridge</code></td><td>External notification bridge, emits <code>bridge-notification-*</code>.</td></tr>
+              <tr><td><code>liveguard</code></td><td>The LiveGuard subsystem, emits the entire LiveGuard family.</td></tr>
+              <tr><td><code>crucible</code></td><td>The idea&rarr;spec funnel, emits <code>crucible-smelt-*</code>.</td></tr>
+              <tr><td><code>skill</code></td><td>Skill runner, emits the skill family.</td></tr>
+              <tr><td><code>watcher</code></td><td>Cross-project watcher, emits <code>watch-*</code>.</td></tr>
+              <tr><td><code>audit</code></td><td>Audit-classifier loop. Rare, emits reclassification events when run.</td></tr>
             </tbody>
           </table>
         </div>
@@ -103,9 +103,9 @@
             <tbody>
               <tr><td><code>none</code></td><td>Routine lifecycle activity with no security implication.</td><td><code>slice-started</code>, <code>slice-completed</code>, <code>skill-*</code></td></tr>
               <tr><td><code>low</code></td><td>Activity that touches managed secrets or external networks but is expected.</td><td><code>bridge-notification-sent</code>, <code>ci-triggered</code></td></tr>
-              <tr><td><code>medium</code></td><td>Quorum dispatch, agent handoff, escalation &mdash; outside the routine path but authorised.</td><td><code>slice-escalated</code>, <code>approval-requested</code></td></tr>
+              <tr><td><code>medium</code></td><td>Quorum dispatch, agent handoff, escalation, outside the routine path but authorised.</td><td><code>slice-escalated</code>, <code>approval-requested</code></td></tr>
               <tr><td><code>high</code></td><td>Drift or incident events that warrant a human glance.</td><td><code>liveguard-incident</code>, <code>liveguard-secret-scan</code> (when findings present)</td></tr>
-              <tr><td><code>critical</code></td><td>Reserved for active-incident escalations &mdash; emitted by the audit subsystem only.</td><td>(none in default catalog)</td></tr>
+              <tr><td><code>critical</code></td><td>Reserved for active-incident escalations, emitted by the audit subsystem only.</td><td>(none in default catalog)</td></tr>
             </tbody>
           </table>
         </div>
@@ -149,7 +149,7 @@
 
         <!-- ============================================================ -->
         <h2 id="crucible">Crucible events</h2>
-        <p><code>source: "crucible"</code>. Emitted as smelts progress through the idea&rarr;hardened-spec funnel. The payload is wrapped in a <code>data</code> object, matching the LiveGuard convention rather than the flat-payload lifecycle convention &mdash; consumers should branch on family rather than assume one shape.</p>
+        <p><code>source: "crucible"</code>. Emitted as smelts progress through the idea&rarr;hardened-spec funnel. The payload is wrapped in a <code>data</code> object, matching the LiveGuard convention rather than the flat-payload lifecycle convention, consumers should branch on family rather than assume one shape.</p>
 
         <div class="overflow-x-auto mb-6">
           <table class="manual-table">
@@ -207,7 +207,7 @@
 
         <!-- ============================================================ -->
         <h2 id="liveguard">LiveGuard events</h2>
-        <p><code>source: "liveguard"</code>. The production-ops feedback family &mdash; emitted by <code>forge_drift_report</code>, <code>forge_incident_capture</code>, <code>forge_alert_triage</code>, <code>forge_secret_scan</code>, <code>forge_fix_proposal</code>, and the watcher tools. Most carry <code>security_risk: "low"</code> or higher; filter on <code>security_risk &gt;= medium</code> to drive paging.</p>
+        <p><code>source: "liveguard"</code>. The production-ops feedback family, emitted by <code>forge_drift_report</code>, <code>forge_incident_capture</code>, <code>forge_alert_triage</code>, <code>forge_secret_scan</code>, <code>forge_fix_proposal</code>, and the watcher tools. Most carry <code>security_risk: "low"</code> or higher; filter on <code>security_risk &gt;= medium</code> to drive paging.</p>
 
         <div class="overflow-x-auto mb-6">
           <table class="manual-table">
@@ -230,23 +230,23 @@
 
         <!-- ============================================================ -->
         <h2 id="tempering">Tempering events</h2>
-        <p><code>source: "audit"</code>. One event &mdash; emitted only on the green leg of the bug lifecycle, when <code>forge_bug_validate_fix</code> confirms all scanners pass re-run. There is no matching <code>tempering-bug-validated-broken</code>; the validation tool returns the result to the caller without emitting on the red leg, to keep the dashboard's <strong>Bugs Fixed</strong> tile a positive-only feed.</p>
+        <p><code>source: "audit"</code>. One event, emitted only on the green leg of the bug lifecycle, when <code>forge_bug_validate_fix</code> confirms all scanners pass re-run. There is no matching <code>tempering-bug-validated-broken</code>; the validation tool returns the result to the caller without emitting on the red leg, to keep the dashboard's <strong>Bugs Fixed</strong> tile a positive-only feed.</p>
 
         <div class="overflow-x-auto mb-6">
           <table class="manual-table">
             <thead><tr><th>Event</th><th>Trigger</th><th>Key payload (under <code>data</code>)</th></tr></thead>
             <tbody>
-              <tr><td><code>tempering-bug-validated-fixed</code></td><td><code>forge_bug_validate_fix</code> confirms a bug is fixed &mdash; all scanners pass re-run.</td><td><code>bugId</code>, <code>scanner</code>, <code>verdict: "fixed"</code>, <code>attempt</code> (timestamp, scanners array, result).</td></tr>
+              <tr><td><code>tempering-bug-validated-fixed</code></td><td><code>forge_bug_validate_fix</code> confirms a bug is fixed, all scanners pass re-run.</td><td><code>bugId</code>, <code>scanner</code>, <code>verdict: "fixed"</code>, <code>attempt</code> (timestamp, scanners array, result).</td></tr>
             </tbody>
           </table>
         </div>
 
         <!-- ============================================================ -->
         <h2 id="subscribing">Consuming the stream</h2>
-        <p>The simplest possible consumer &mdash; a Node script that prints every event:</p>
+        <p>The simplest possible consumer, a Node script that prints every event:</p>
 
         <div class="cmd-block">
-          <div class="cmd-block-header"><span>consume.mjs &mdash; minimal event subscriber</span><button class="cmd-copy-btn">Copy</button></div>
+          <div class="cmd-block-header"><span>consume.mjs, minimal event subscriber</span><button class="cmd-copy-btn">Copy</button></div>
 <pre><code>import WebSocket from "ws";
 
 const ws = new WebSocket("ws://127.0.0.1:3101");
@@ -267,7 +267,7 @@ ws.on("message", (raw) =&gt; {
 </code></pre>
         </div>
 
-        <p class="text-sm text-slate-400 mb-6">On connection the hub replays buffered events from the in-memory ring (default ~500 events, see <a href="https://github.com/srnichols/plan-forge/blob/master/pforge-mcp/hub.mjs" rel="noopener"><code>hub.mjs</code></a>). To enable bearer-token auth on the hub, set <a href="environment-variables-reference.html#server-ports"><code>PFORGE_BRIDGE_SECRET</code></a> &mdash; the consumer then sends <code>Authorization: Bearer &lt;secret&gt;</code> on the upgrade request.</p>
+        <p class="text-sm text-slate-400 mb-6">On connection the hub replays buffered events from the in-memory ring (default ~500 events, see <a href="https://github.com/srnichols/plan-forge/blob/master/pforge-mcp/hub.mjs" rel="noopener"><code>hub.mjs</code></a>). To enable bearer-token auth on the hub, set <a href="environment-variables-reference.html#server-ports"><code>PFORGE_BRIDGE_SECRET</code></a>, the consumer then sends <code>Authorization: Bearer &lt;secret&gt;</code> on the upgrade request.</p>
 
         <!-- ============================================================ -->
         <h2 id="retention">Retention</h2>
@@ -278,9 +278,9 @@ ws.on("message", (raw) =&gt; {
             <thead><tr><th>Sink</th><th>What is kept</th><th>Retention</th><th>How to read it</th></tr></thead>
             <tbody>
               <tr><td><strong>WebSocket hub (in-memory ring)</strong></td><td>All events.</td><td>~500 events (oldest evicted). Wiped on hub restart.</td><td>Connect to <code>ws://127.0.0.1:3101</code>; the hub replays the ring on <code>connected</code>.</td></tr>
-              <tr><td><strong>Run journal</strong></td><td>Lifecycle, skill, escalation, CI &mdash; everything tied to a <code>runId</code>.</td><td>Forever (until you delete the file). One JSONL per run at <code>.forge/runs/&lt;run-id&gt;.jsonl</code>.</td><td><code>forge_home_snapshot</code>, or <code>jq</code> over the JSONL file.</td></tr>
-              <tr><td><strong>LiveGuard cache</strong></td><td>The most recent <code>liveguard-drift</code>, <code>liveguard-secret-scan</code>, <code>liveguard-incident</code> snapshots.</td><td>One snapshot per type at <code>.forge/liveguard-*.json</code> &mdash; overwritten on next emission.</td><td><code>forge_drift_report</code>, <code>forge_secret_scan</code> (returns the cached snapshot when within <code>cacheMaxAgeMinutes</code>).</td></tr>
-              <tr><td><strong>OpenClaw analytics</strong> (opt-in)</td><td>Whatever the <code>PreAgentHandoff</code> hook posts &mdash; typically a roll-up of drift, MTTR, and open incidents.</td><td>Determined by the OpenClaw deployment; not Plan Forge's responsibility.</td><td>OpenClaw API.</td></tr>
+              <tr><td><strong>Run journal</strong></td><td>Lifecycle, skill, escalation, CI, everything tied to a <code>runId</code>.</td><td>Forever (until you delete the file). One JSONL per run at <code>.forge/runs/&lt;run-id&gt;.jsonl</code>.</td><td><code>forge_home_snapshot</code>, or <code>jq</code> over the JSONL file.</td></tr>
+              <tr><td><strong>LiveGuard cache</strong></td><td>The most recent <code>liveguard-drift</code>, <code>liveguard-secret-scan</code>, <code>liveguard-incident</code> snapshots.</td><td>One snapshot per type at <code>.forge/liveguard-*.json</code>, overwritten on next emission.</td><td><code>forge_drift_report</code>, <code>forge_secret_scan</code> (returns the cached snapshot when within <code>cacheMaxAgeMinutes</code>).</td></tr>
+              <tr><td><strong>OpenClaw analytics</strong> (opt-in)</td><td>Whatever the <code>PreAgentHandoff</code> hook posts, typically a roll-up of drift, MTTR, and open incidents.</td><td>Determined by the OpenClaw deployment; not Plan Forge's responsibility.</td><td>OpenClaw API.</td></tr>
             </tbody>
           </table>
         </div>
@@ -288,13 +288,13 @@ ws.on("message", (raw) =&gt; {
         <!-- ============================================================ -->
         <h2 id="see-also">See also</h2>
         <ul class="space-y-2 mb-8">
-          <li><a href="https://github.com/srnichols/plan-forge/blob/master/pforge-mcp/EVENTS.md" rel="noopener"><strong>pforge-mcp/EVENTS.md</strong></a> &mdash; the canonical JSON-schema source for every event. This appendix is the orientation and classification companion; full payloads live there.</li>
-          <li><a href="integrating-from-outside.html"><strong>Chapter 29 &mdash; Integrating from Outside</strong></a> &mdash; building external consumers (dashboards, paging, custom bridges) that subscribe to the hub.</li>
-          <li><a href="compliance-and-data-residency.html#observability-export"><strong>Compliance &amp; Data Residency &mdash; Observability Export</strong></a> &mdash; OTel collector wiring; many of the events in this catalog are also emitted as OTel spans.</li>
-          <li><a href="dashboard.html"><strong>Chapter 12 &mdash; The Dashboard</strong></a> &mdash; the reference UI consumer; reading its source is the fastest way to see how each event family is rendered.</li>
-          <li><a href="forge-json-reference.html#openclaw"><strong>Appendix T &mdash; <code>openclaw</code></strong></a> &mdash; configuring the optional OpenClaw analytics sink.</li>
-          <li><a href="environment-variables-reference.html#server-ports"><strong>Appendix U &mdash; Server Ports</strong></a> &mdash; <code>PFORGE_BRIDGE_SECRET</code>, <code>PLAN_FORGE_WS_PORT</code>, and other env vars that gate hub access.</li>
-          <li><a href="customization.html#lifecycle-hooks"><strong>Customization &mdash; Lifecycle Hooks Reference</strong></a> &mdash; the hooks that fire in response to lifecycle events (<code>postSlice</code>, <code>preDeploy</code>, etc.).</li>
+          <li><a href="https://github.com/srnichols/plan-forge/blob/master/pforge-mcp/EVENTS.md" rel="noopener"><strong>pforge-mcp/EVENTS.md</strong></a>, the canonical JSON-schema source for every event. This appendix is the orientation and classification companion; full payloads live there.</li>
+          <li><a href="integrating-from-outside.html"><strong>Chapter 29 &mdash; Integrating from Outside</strong></a>, building external consumers (dashboards, paging, custom bridges) that subscribe to the hub.</li>
+          <li><a href="compliance-and-data-residency.html#observability-export"><strong>Compliance &amp; Data Residency &mdash; Observability Export</strong></a>, OTel collector wiring; many of the events in this catalog are also emitted as OTel spans.</li>
+          <li><a href="dashboard.html"><strong>Chapter 12 &mdash; The Dashboard</strong></a>, the reference UI consumer; reading its source is the fastest way to see how each event family is rendered.</li>
+          <li><a href="forge-json-reference.html#openclaw"><strong>Appendix T &mdash; <code>openclaw</code></strong></a>, configuring the optional OpenClaw analytics sink.</li>
+          <li><a href="environment-variables-reference.html#server-ports"><strong>Appendix U &mdash; Server Ports</strong></a>, <code>PFORGE_BRIDGE_SECRET</code>, <code>PLAN_FORGE_WS_PORT</code>, and other env vars that gate hub access.</li>
+          <li><a href="customization.html#lifecycle-hooks"><strong>Customization &mdash; Lifecycle Hooks Reference</strong></a>, the hooks that fire in response to lifecycle events (<code>postSlice</code>, <code>preDeploy</code>, etc.).</li>
         </ul>
 
       </div>

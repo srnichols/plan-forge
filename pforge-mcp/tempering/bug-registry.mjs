@@ -223,6 +223,123 @@ function emit(hub, type, data) {
 
 // ─── Registration ─────────────────────────────────────────────────────
 
+function validateRegisterBugInput(classification, evidence) {
+  if (classification === "infra") {
+    return {
+      ok: true,
+      classification: "infra",
+      action: "recorded-in-run",
+    };
+  }
+  if (!evidence.testName && !(evidence.assertionMessage && evidence.stackTrace)) {
+    return { ok: false, error: ERROR_CODES.MISSING_EVIDENCE.code };
+  }
+  return null;
+}
+
+function findDuplicateRegistration(cwd, scanner, evidence) {
+  const fingerprint = computeFingerprint(scanner, evidence);
+  const dup = findDuplicate(cwd, scanner, evidence.testName, fingerprint);
+  return { fingerprint, dup };
+}
+
+function buildBugRecord({ bugId, fingerprint, scanner, severity, classification, classifierMeta, evidence, affectedFiles, reproSteps, correlationId, sliceRef, discoveredAt }) {
+  return {
+    bugId,
+    fingerprint,
+    scanner,
+    severity,
+    status: "open",
+    classification,
+    classifierMeta,
+    evidence,
+    affectedFiles,
+    reproSteps,
+    correlationId,
+    sliceRef,
+    discoveredAt,
+    updatedAt: discoveredAt,
+  };
+}
+
+function persistBugRecord(dir, bugId, record, tmpSuffix = "tmp") {
+  const finalPath = resolve(dir, `${bugId}.json`);
+  const tmpPath = resolve(dir, `.${bugId}.${tmpSuffix}`);
+  writeFileSync(tmpPath, JSON.stringify(record, null, 2) + "\n", "utf-8");
+  try {
+    renameSync(tmpPath, finalPath);
+  } catch {
+    writeFileSync(finalPath, JSON.stringify(record, null, 2) + "\n", "utf-8");
+  }
+  return finalPath;
+}
+
+async function maybeQueueCriticalBugReview({ classification, severity, cwd, bugId, scanner, evidence, hub, captureMemory }) {
+  if (classification !== "real-bug" || severity !== "critical") return;
+  try {
+    const { maybeAddBugReview } = await import("../orchestrator.mjs");
+    maybeAddBugReview(cwd, {
+      title: `Bug ${bugId} needs human review (critical/functional)`,
+      severity: "blocker",
+      context: { bugId, classification, scanner, evidence: evidence ?? null },
+      correlationId: bugId,
+    }, hub, captureMemory);
+  } catch { /* review hook is advisory */ }
+}
+
+async function maybeDelegateRegisteredBug({ classification, severity, cwd, bugId, record, hub, captureMemory }) {
+  if (classification !== "real-bug" || (severity !== "critical" && severity !== "major")) return;
+  try {
+    const { loadAgentRoutingConfig, resolveRoute, recordDelegation, deriveBugType } = await import("./agent-router.mjs");
+    const routingCfg = loadAgentRoutingConfig(cwd);
+    if (!routingCfg.enabled) return;
+    const route = resolveRoute({ ...record, type: deriveBugType(record) });
+    if (!route) return;
+    recordDelegation(cwd, bugId, route, "review-queue-item", null);
+    const { addReviewItem } = await import("../orchestrator.mjs");
+    const reviewResult = addReviewItem(cwd, {
+      source: "fix-plan-approval",
+      severity: severity === "critical" ? "blocker" : "high",
+      title: `Agent delegation: ${bugId} → ${route.agent}`,
+      context: { bugId, recordRef: `.forge/bugs/${bugId}.json`, suggestedAgent: route.agent, suggestedSkill: route.skill },
+      correlationId: bugId,
+    }, hub, captureMemory);
+    emit(hub, "tempering-bug-delegated", { bugId, agent: route.agent, skill: route.skill, mode: "review-queue-item", reviewItemId: reviewResult?.itemId || null });
+  } catch { /* advisory — never block registration */ }
+}
+
+function maybeCaptureRegisteredBug({ classification, captureMemory, bugId, scanner, evidence, severity, cwd }) {
+  if (classification !== "real-bug" || typeof captureMemory !== "function") return;
+  try {
+    const summary = `Bug ${bugId} from ${scanner}: ${evidence.testName || evidence.assertionMessage || "unknown"} — severity=${severity}`;
+    captureMemory(summary, "decision", `forge_bug_register/${scanner}/${severity}`, cwd);
+  } catch { /* best-effort */ }
+}
+
+function attachExternalRef(record, external) {
+  if (!external?.ok || !external?.issueNumber) return false;
+  record.externalRef = {
+    provider: external.provider,
+    issueNumber: external.issueNumber,
+    url: external.url || null,
+    syncedAt: new Date().toISOString(),
+  };
+  return true;
+}
+
+async function maybeDispatchRegisteredBug(opts, record, dir, bugId) {
+  if (record.classification !== "real-bug") return null;
+  try {
+    const dispatchConfig = opts?.config || {};
+    const dispatchResult = await dispatch("register", record, dispatchConfig, { cwd: opts.cwd, ...opts });
+    const external = dispatchResult?.external || null;
+    if (attachExternalRef(record, external)) persistBugRecord(dir, bugId, record, "ext.tmp");
+    return external;
+  } catch {
+    return null;
+  }
+}
+
 /**
  * Register a bug discovered by a tempering scanner.
  *
@@ -260,37 +377,21 @@ export async function registerBug(opts) {
       nowFn = () => Date.now(),
     } = opts || {};
 
-    // 1. Infra classification → no file, return early
-    if (classification === "infra") {
-      return {
-        ok: true,
-        classification: "infra",
-        action: "recorded-in-run",
-      };
-    }
+    const earlyResult = validateRegisterBugInput(classification, evidence);
+    if (earlyResult) return earlyResult;
 
-    // 2. Validate evidence
-    if (!evidence.testName && !(evidence.assertionMessage && evidence.stackTrace)) {
-      return { ok: false, error: ERROR_CODES.MISSING_EVIDENCE.code };
-    }
-
-    // 3. Dedup by fingerprint
-    const fingerprint = computeFingerprint(scanner, evidence);
-    const dup = findDuplicate(cwd, scanner, evidence.testName, fingerprint);
+    const { fingerprint, dup } = findDuplicateRegistration(cwd, scanner, evidence);
     if (dup) {
       return { ok: false, error: ERROR_CODES.DUPLICATE_BUG.code, existingBugId: dup.bugId };
     }
 
-    // 4. Generate ID + build record
     const bugId = generateBugId(cwd, nowFn);
     const discoveredAt = new Date(nowFn()).toISOString();
-
-    const record = {
+    const record = buildBugRecord({
       bugId,
       fingerprint,
       scanner,
       severity,
-      status: "open",
       classification,
       classifierMeta,
       evidence,
@@ -299,22 +400,11 @@ export async function registerBug(opts) {
       correlationId,
       sliceRef,
       discoveredAt,
-      updatedAt: discoveredAt,
-    };
+    });
 
-    // 5. Atomic write (tmp + rename)
     const dir = ensureBugsDir(cwd);
-    const finalPath = resolve(dir, `${bugId}.json`);
-    const tmpPath = resolve(dir, `.${bugId}.tmp`);
-    writeFileSync(tmpPath, JSON.stringify(record, null, 2) + "\n", "utf-8");
-    try {
-      renameSync(tmpPath, finalPath);
-    } catch {
-      // Fallback: direct write if rename fails (e.g., cross-device)
-      writeFileSync(finalPath, JSON.stringify(record, null, 2) + "\n", "utf-8");
-    }
+    persistBugRecord(dir, bugId, record);
 
-    // 6. Hub event
     emit(hub, "tempering-bug-registered", {
       bugId,
       scanner,
@@ -324,77 +414,10 @@ export async function registerBug(opts) {
       timestamp: discoveredAt,
     });
 
-    // Phase FORGE-SHOP-02 Slice 02.2 — review queue hook for critical functional bugs
-    if (classification === "real-bug" && severity === "critical") {
-      try {
-        const { maybeAddBugReview } = await import("../orchestrator.mjs");
-        maybeAddBugReview(cwd, {
-          title: `Bug ${bugId} needs human review (critical/functional)`,
-          severity: "blocker",
-          context: { bugId, classification, scanner, evidence: evidence ?? null },
-          correlationId: bugId,
-        }, hub, captureMemory);
-      } catch { /* review hook is advisory */ }
-    }
-
-    // Phase TEMPER-07 Slice 07.1 — agent delegation for critical/major real bugs
-    if (classification === "real-bug" && (severity === "critical" || severity === "major")) {
-      try {
-        const { loadAgentRoutingConfig, resolveRoute, recordDelegation, deriveBugType } = await import("./agent-router.mjs");
-        const routingCfg = loadAgentRoutingConfig(cwd);
-        if (routingCfg.enabled) {
-          const route = resolveRoute({ ...record, type: deriveBugType(record) });
-          if (route) {
-            recordDelegation(cwd, bugId, route, "review-queue-item", null);
-            const { addReviewItem } = await import("../orchestrator.mjs");
-            const reviewResult = addReviewItem(cwd, {
-              source: "fix-plan-approval",
-              severity: severity === "critical" ? "blocker" : "high",
-              title: `Agent delegation: ${bugId} → ${route.agent}`,
-              context: { bugId, recordRef: `.forge/bugs/${bugId}.json`, suggestedAgent: route.agent, suggestedSkill: route.skill },
-              correlationId: bugId,
-            }, hub, captureMemory);
-            emit(hub, "tempering-bug-delegated", { bugId, agent: route.agent, skill: route.skill, mode: "review-queue-item", reviewItemId: reviewResult?.itemId || null });
-          }
-        }
-      } catch { /* advisory — never block registration */ }
-    }
-
-    // 7. L3 memory capture — only for real bugs
-    if (classification === "real-bug" && typeof captureMemory === "function") {
-      try {
-        const summary = `Bug ${bugId} from ${scanner}: ${evidence.testName || evidence.assertionMessage || "unknown"} — severity=${severity}`;
-        captureMemory(summary, "decision", `forge_bug_register/${scanner}/${severity}`, cwd);
-      } catch { /* best-effort */ }
-    }
-
-    // 8. External adapter dispatch — only for real bugs
-    let external = null;
-    if (classification === "real-bug") {
-      try {
-        const dispatchConfig = opts?.config || {};
-        const dispatchResult = await dispatch("register", record, dispatchConfig, { cwd, ...opts });
-        external = dispatchResult?.external || null;
-
-        // Persist externalRef if adapter returned an issue reference
-        if (external?.ok && external?.issueNumber) {
-          record.externalRef = {
-            provider: external.provider,
-            issueNumber: external.issueNumber,
-            url: external.url || null,
-            syncedAt: new Date().toISOString(),
-          };
-          // Atomic re-write with externalRef
-          const tmpPath2 = resolve(dir, `.${bugId}.ext.tmp`);
-          writeFileSync(tmpPath2, JSON.stringify(record, null, 2) + "\n", "utf-8");
-          try {
-            renameSync(tmpPath2, finalPath);
-          } catch {
-            writeFileSync(finalPath, JSON.stringify(record, null, 2) + "\n", "utf-8");
-          }
-        }
-      } catch { /* external dispatch is advisory — never fail registration */ }
-    }
+    await maybeQueueCriticalBugReview({ classification, severity, cwd, bugId, scanner, evidence, hub, captureMemory });
+    await maybeDelegateRegisteredBug({ classification, severity, cwd, bugId, record, hub, captureMemory });
+    maybeCaptureRegisteredBug({ classification, captureMemory, bugId, scanner, evidence, severity, cwd });
+    const external = await maybeDispatchRegisteredBug(opts || {}, record, dir, bugId);
 
     return { ok: true, bugId, classification, external };
   } catch (err) {

@@ -349,41 +349,42 @@ async function _getOtelMeter() {
  *
  * @param {object} data - Same payload as _emitChatSpan.
  */
+function _buildOtelBaseAttrs(data, model) {
+  const provider = data?.provider ?? _inferProvider(model);
+  return {
+    "gen_ai.operation.name": "chat",
+    "gen_ai.system": provider,
+    "gen_ai.request.model": data?.requestModel ?? model,
+    "gen_ai.response.model": data?.responseModel ?? model,
+  };
+}
+
+function _extractOtelTokenCounts(data) {
+  return {
+    tokensIn: data?.tokens?.tokens_in ?? data?.tokensIn ?? 0,
+    tokensOut: data?.tokens?.tokens_out ?? data?.tokensOut ?? 0,
+  };
+}
+
 async function _recordChatMetrics(data) {
   try {
     const meter = await _getOtelMeter();
     if (!meter) return;
 
     const model = data?.model ?? "unknown";
-    const provider = data?.provider ?? _inferProvider(model);
-    const baseAttrs = {
-      "gen_ai.operation.name": "chat",
-      "gen_ai.system": provider,
-      "gen_ai.request.model": data?.requestModel ?? model,
-      "gen_ai.response.model": data?.responseModel ?? model,
-    };
-
-    // gen_ai.client.operation.duration — seconds
+    const baseAttrs = _buildOtelBaseAttrs(data, model);
     const durationMs = data?.durationMs ?? data?.duration ?? 0;
-    const durationHist = meter.createHistogram("gen_ai.client.operation.duration", {
-      description: "GenAI operation duration",
-      unit: "s",
-    });
-    durationHist.record(durationMs / 1000, baseAttrs);
 
-    // gen_ai.client.token.usage — one recording per token type
+    meter.createHistogram("gen_ai.client.operation.duration", {
+      description: "GenAI operation duration", unit: "s",
+    }).record(durationMs / 1000, baseAttrs);
+
     const tokenHist = meter.createHistogram("gen_ai.client.token.usage", {
-      description: "GenAI token usage",
-      unit: "{token}",
+      description: "GenAI token usage", unit: "{token}",
     });
-    const tokensIn = data?.tokens?.tokens_in ?? data?.tokensIn ?? 0;
-    const tokensOut = data?.tokens?.tokens_out ?? data?.tokensOut ?? 0;
-    if (tokensIn > 0) {
-      tokenHist.record(tokensIn, { ...baseAttrs, "gen_ai.token.type": "input" });
-    }
-    if (tokensOut > 0) {
-      tokenHist.record(tokensOut, { ...baseAttrs, "gen_ai.token.type": "output" });
-    }
+    const { tokensIn, tokensOut } = _extractOtelTokenCounts(data);
+    if (tokensIn > 0) tokenHist.record(tokensIn, { ...baseAttrs, "gen_ai.token.type": "input" });
+    if (tokensOut > 0) tokenHist.record(tokensOut, { ...baseAttrs, "gen_ai.token.type": "output" });
   } catch {
     // Never surface OTel errors to the orchestrator.
   }
@@ -412,6 +413,21 @@ function _inferProvider(model) {
  *   Expected fields: model, requestModel, responseModel, provider,
  *   tokens.tokens_in, tokens.tokens_out, cost_usd, sliceId, runId.
  */
+function _buildChatSpanAttrs(data, model) {
+  const { tokensIn, tokensOut } = _extractOtelTokenCounts(data);
+  return {
+    "gen_ai.operation.name": "chat",
+    "gen_ai.provider.name": data?.provider ?? _inferProvider(model),
+    "gen_ai.request.model": data?.requestModel ?? model,
+    "gen_ai.response.model": data?.responseModel ?? model,
+    "gen_ai.usage.input_tokens": tokensIn,
+    "gen_ai.usage.output_tokens": tokensOut,
+    "pforge.cost.usd": data?.cost_usd ?? data?.costUsd ?? 0,
+    "pforge.slice.number": String(data?.sliceId ?? ""),
+    "pforge.run.id": data?.runId ?? "",
+  };
+}
+
 async function _emitChatSpan(data) {
   try {
     const tracer = await _getOtelTracer();
@@ -420,22 +436,10 @@ async function _emitChatSpan(data) {
     const model = data?.model ?? "unknown";
     const span = tracer.startSpan(`gen_ai.chat ${model}`, {
       kind: 3, // SpanKind.CLIENT
-      attributes: {
-        "gen_ai.operation.name": "chat",
-        "gen_ai.provider.name": data?.provider ?? _inferProvider(model),
-        "gen_ai.request.model": data?.requestModel ?? model,
-        "gen_ai.response.model": data?.responseModel ?? model,
-        "gen_ai.usage.input_tokens": data?.tokens?.tokens_in ?? data?.tokensIn ?? 0,
-        "gen_ai.usage.output_tokens": data?.tokens?.tokens_out ?? data?.tokensOut ?? 0,
-        "pforge.cost.usd": data?.cost_usd ?? data?.costUsd ?? 0,
-        "pforge.slice.number": String(data?.sliceId ?? ""),
-        "pforge.run.id": data?.runId ?? "",
-      },
+      attributes: _buildChatSpanAttrs(data, model),
     });
-
     span.end();
 
-    // Record GenAI metrics — operation duration + token usage histograms.
     await _recordChatMetrics(data);
   } catch {
     // Never surface OTel errors to the orchestrator.

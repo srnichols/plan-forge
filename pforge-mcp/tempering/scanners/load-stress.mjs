@@ -33,6 +33,141 @@ function emit(hub, type, data) {
   } catch { /* best-effort */ }
 }
 
+function buildLoadStressResult({ sliceRef, startedAt, now, verdict, pass = 0, fail = 0, results = [], reason = null, settings = LOAD_DEFAULTS }) {
+  const completedAt = new Date(now()).toISOString();
+  return {
+    scanner: "load-stress",
+    sliceRef,
+    startedAt,
+    completedAt,
+    verdict,
+    pass,
+    fail,
+    skipped: 0,
+    violationCount: countLoadStressViolations(results, settings),
+    durationMs: new Date(completedAt).getTime() - new Date(startedAt).getTime(),
+    results,
+    ...(reason ? { reason } : {}),
+  };
+}
+
+function resolveLoadEndpoints(settings, projectDir) {
+  if (Array.isArray(settings.endpoints) && settings.endpoints.length > 0) {
+    return settings.endpoints;
+  }
+  return resolveEndpointsFromOpenAPI(projectDir);
+}
+
+async function loadAutocannon(importFn) {
+  const mod = await importFn("autocannon");
+  return mod.default || mod;
+}
+
+function extractAutocannonMetrics(acResult) {
+  const totalRequests = acResult?.requests?.total ?? acResult?.totalRequests ?? 0;
+  const errors = acResult?.errors ?? acResult?.non2xx ?? 0;
+  return {
+    p50: acResult?.latency?.p50 ?? acResult?.p50 ?? 0,
+    p95: acResult?.latency?.p95 ?? acResult?.p95 ?? 0,
+    p99: acResult?.latency?.p99 ?? acResult?.p99 ?? 0,
+    totalRequests,
+    throughput: acResult?.throughput?.average ?? acResult?.throughput ?? 0,
+    errorRate: totalRequests > 0 ? errors / totalRequests : 0,
+  };
+}
+
+async function findStressBreakpoint({ autocannon, url, method, settings, now, deadline }) {
+  let breakpoint = null;
+  let currentConcurrency = settings.concurrency;
+  while (currentConcurrency <= settings.concurrency * 8) {
+    if (now() > deadline) break;
+    currentConcurrency *= 2;
+    try {
+      const stressResult = await autocannon({
+        url,
+        connections: currentConcurrency,
+        duration: Math.min(settings.durationSec, 10),
+        method,
+      });
+      const { errorRate } = extractAutocannonMetrics(stressResult);
+      if (errorRate >= settings.stressErrorRateThreshold) {
+        breakpoint = currentConcurrency;
+        break;
+      }
+    } catch {
+      breakpoint = currentConcurrency;
+      break;
+    }
+  }
+  return breakpoint;
+}
+
+function appendLoadPerfEntry({ now, runId, projectDir, url, method, metrics }) {
+  try {
+    appendPerfEntry({
+      timestamp: new Date(now()).toISOString(),
+      runId,
+      endpoint: url,
+      method,
+      p50: metrics.p50,
+      p95: metrics.p95,
+      p99: metrics.p99,
+      errorRate: metrics.errorRate,
+      source: "load-stress",
+    }, projectDir);
+  } catch { /* best-effort */ }
+}
+
+async function scanLoadEndpoint({ autocannon, endpoint, settings, now, deadline, runId, projectDir }) {
+  const url = endpoint.url || endpoint.path || endpoint.endpoint;
+  const method = (endpoint.method || "GET").toUpperCase();
+
+  try {
+    const acResult = await autocannon({
+      url,
+      connections: settings.concurrency,
+      duration: settings.durationSec,
+      method,
+    });
+    const metrics = extractAutocannonMetrics(acResult);
+    const result = { endpoint: url, method, ...metrics };
+    if (settings.stressMode) {
+      result.breakpointConcurrency = await findStressBreakpoint({
+        autocannon,
+        url,
+        method,
+        settings,
+        now,
+        deadline,
+      });
+    }
+    appendLoadPerfEntry({ now, runId, projectDir, url, method, metrics });
+    return {
+      result,
+      pass: metrics.errorRate <= settings.stressErrorRateThreshold,
+    };
+  } catch (err) {
+    return {
+      result: {
+        endpoint: url,
+        method,
+        p50: 0,
+        p95: 0,
+        p99: 0,
+        errorRate: 1,
+        totalRequests: 0,
+        throughput: 0,
+        error: err.message || String(err),
+      },
+      pass: false,
+    };
+  }
+}
+
+function countLoadStressViolations(results, settings) {
+  return results.filter((result) => result.errorRate > settings.stressErrorRateThreshold).length;
+}
+
 // ─── Scanner entry point ──────────────────────────────────────────────
 
 /**
@@ -52,193 +187,81 @@ export async function runLoadStressScan(ctx) {
   } = ctx || {};
 
   const startedAt = new Date(now()).toISOString();
-
-  // Merge defaults
   const raw = config.scanners?.["load-stress"];
   const settings = { ...LOAD_DEFAULTS, ...(typeof raw === "object" ? raw : {}) };
+  const deadline = now() + (config.runtimeBudgets?.loadStressMaxMs ?? 300_000);
 
-  // Budget
-  const budgetMs = config.runtimeBudgets?.loadStressMaxMs ?? 300_000;
-  const deadline = now() + budgetMs;
-
-  // Skip: scanner disabled
   if (raw === false || settings.enabled === false) {
-    return {
-      scanner: "load-stress", sliceRef,
-      startedAt, completedAt: new Date(now()).toISOString(),
-      verdict: "skipped", pass: 0, fail: 0, skipped: 0,
-      violationCount: 0, durationMs: 0,
-      results: [],
-      reason: "scanner-disabled",
-    };
+    return buildLoadStressResult({ sliceRef, startedAt, now, verdict: "skipped", reason: "scanner-disabled" });
   }
 
-  // Production guard
   if (env.NODE_ENV === "production" && !settings.allowProduction) {
-    return {
-      scanner: "load-stress", sliceRef,
-      startedAt, completedAt: new Date(now()).toISOString(),
-      verdict: "skipped", pass: 0, fail: 0, skipped: 0,
-      violationCount: 0, durationMs: 0,
-      results: [],
-      reason: "production-url-without-opt-in",
-    };
+    return buildLoadStressResult({ sliceRef, startedAt, now, verdict: "skipped", reason: "production-url-without-opt-in" });
   }
 
-  // Resolve endpoints
-  let endpoints = Array.isArray(settings.endpoints) && settings.endpoints.length > 0
-    ? settings.endpoints
-    : resolveEndpointsFromOpenAPI(projectDir);
-
+  const endpoints = resolveLoadEndpoints(settings, projectDir);
   if (!endpoints || endpoints.length === 0) {
-    return {
-      scanner: "load-stress", sliceRef,
-      startedAt, completedAt: new Date(now()).toISOString(),
-      verdict: "skipped", pass: 0, fail: 0, skipped: 0,
-      violationCount: 0, durationMs: 0,
-      results: [],
-      reason: "no-endpoints-configured",
-    };
+    return buildLoadStressResult({ sliceRef, startedAt, now, verdict: "skipped", reason: "no-endpoints-configured" });
   }
 
-  // Lazy import autocannon
   let autocannon;
   try {
-    const mod = await importFn("autocannon");
-    autocannon = mod.default || mod;
+    autocannon = await loadAutocannon(importFn);
   } catch {
-    return {
-      scanner: "load-stress", sliceRef,
-      startedAt, completedAt: new Date(now()).toISOString(),
-      verdict: "error", pass: 0, fail: 0, skipped: 0,
-      violationCount: 0, durationMs: 0,
-      results: [],
-      reason: "autocannon-import-failed",
-    };
+    return buildLoadStressResult({ sliceRef, startedAt, now, verdict: "error", reason: "autocannon-import-failed" });
   }
 
   const results = [];
   let passCount = 0;
   let failCount = 0;
 
-  for (const ep of endpoints) {
-    // Budget check between endpoints
+  for (const endpoint of endpoints) {
     if (now() >= deadline) {
-      return {
-        scanner: "load-stress", sliceRef,
-        startedAt, completedAt: new Date(now()).toISOString(),
+      return buildLoadStressResult({
+        sliceRef,
+        startedAt,
+        now,
         verdict: "budget-exceeded",
-        pass: passCount, fail: failCount, skipped: 0,
-        violationCount: results.filter((r) => r.errorRate > settings.stressErrorRateThreshold).length,
-        durationMs: now() - new Date(startedAt).getTime(),
+        pass: passCount,
+        fail: failCount,
         results,
         reason: "budget-exceeded",
-      };
+        settings,
+      });
     }
 
-    const url = ep.url || ep.path || ep.endpoint;
-    const method = (ep.method || "GET").toUpperCase();
-
-    try {
-      const acResult = await autocannon({
-        url,
-        connections: settings.concurrency,
-        duration: settings.durationSec,
-        method,
-      });
-
-      const p50 = acResult?.latency?.p50 ?? acResult?.p50 ?? 0;
-      const p95 = acResult?.latency?.p95 ?? acResult?.p95 ?? 0;
-      const p99 = acResult?.latency?.p99 ?? acResult?.p99 ?? 0;
-      const totalRequests = acResult?.requests?.total ?? acResult?.totalRequests ?? 0;
-      const throughput = acResult?.throughput?.average ?? acResult?.throughput ?? 0;
-      const errors = acResult?.errors ?? acResult?.non2xx ?? 0;
-      const errorRate = totalRequests > 0 ? errors / totalRequests : 0;
-
-      const endpointResult = {
-        endpoint: url, method, p50, p95, p99,
-        errorRate, totalRequests, throughput,
-      };
-
-      // Stress mode: ramp concurrency until error threshold
-      if (settings.stressMode) {
-        let breakpoint = null;
-        let currentConcurrency = settings.concurrency;
-        while (currentConcurrency <= settings.concurrency * 8) {
-          if (now() > deadline) break;
-          currentConcurrency *= 2;
-          try {
-            const stressResult = await autocannon({
-              url,
-              connections: currentConcurrency,
-              duration: Math.min(settings.durationSec, 10),
-              method,
-            });
-            const stressErrors = stressResult?.errors ?? stressResult?.non2xx ?? 0;
-            const stressTotal = stressResult?.requests?.total ?? stressResult?.totalRequests ?? 0;
-            const stressErrorRate = stressTotal > 0 ? stressErrors / stressTotal : 0;
-            if (stressErrorRate >= settings.stressErrorRateThreshold) {
-              breakpoint = currentConcurrency;
-              break;
-            }
-          } catch {
-            breakpoint = currentConcurrency;
-            break;
-          }
-        }
-        endpointResult.breakpointConcurrency = breakpoint;
-      }
-
-      results.push(endpointResult);
-
-      // Append to perf-history
-      try {
-        appendPerfEntry({
-          timestamp: new Date(now()).toISOString(),
-          runId,
-          endpoint: url,
-          method,
-          p50, p95, p99,
-          errorRate,
-          source: "load-stress",
-        }, projectDir);
-      } catch { /* best-effort */ }
-
-      if (errorRate > settings.stressErrorRateThreshold) {
-        failCount++;
-      } else {
-        passCount++;
-      }
-    } catch (err) {
-      results.push({
-        endpoint: url, method,
-        p50: 0, p95: 0, p99: 0,
-        errorRate: 1, totalRequests: 0, throughput: 0,
-        error: err.message || String(err),
-      });
-      failCount++;
-    }
+    const outcome = await scanLoadEndpoint({
+      autocannon,
+      endpoint,
+      settings,
+      now,
+      deadline,
+      runId,
+      projectDir,
+    });
+    results.push(outcome.result);
+    if (outcome.pass) passCount++;
+    else failCount++;
   }
 
-  const completedAt = new Date(now()).toISOString();
-  const hasFailures = results.some((r) => r.errorRate > settings.stressErrorRateThreshold);
-  const verdict = hasFailures ? "fail" : "pass";
-
+  const verdict = countLoadStressViolations(results, settings) > 0 ? "fail" : "pass";
   emit(hub, "tempering-load-completed", {
     endpointCount: results.length,
-    passCount, failCount,
+    passCount,
+    failCount,
     verdict,
   });
 
-  return {
-    scanner: "load-stress", sliceRef,
-    startedAt, completedAt,
+  return buildLoadStressResult({
+    sliceRef,
+    startedAt,
+    now,
     verdict,
-    pass: passCount, fail: failCount, skipped: 0,
-    violationCount: results.filter((r) => r.errorRate > settings.stressErrorRateThreshold).length,
-    durationMs: new Date(completedAt).getTime() - new Date(startedAt).getTime(),
+    pass: passCount,
+    fail: failCount,
     results,
-  };
+    settings,
+  });
 }
 
 // ─── Internals ────────────────────────────────────────────────────────

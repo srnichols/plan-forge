@@ -18,6 +18,59 @@ const __dirname = resolve(fileURLToPath(new URL("..", import.meta.url)));
 const DASHBOARD_ONLY = process.argv.includes("--dashboard-only") || process.argv.includes("--dashboard");
 const VALIDATE_ONLY = process.argv.includes("--validate");
 
+function _emitCorruptInstallEvent(current, r, corrupt) {
+  try {
+    if (activeHub && typeof activeHub.broadcast === "function") {
+      activeHub.broadcast({
+        type: "install:corrupt", severity: "high", current, latest: r.latest,
+        reason: corrupt.reason, recommendedAction: corrupt.recommendedAction,
+        detectedAt: new Date().toISOString(),
+      });
+    }
+  } catch { /* silent */ }
+  try {
+    const forgeDir = resolve(PROJECT_DIR, ".forge");
+    if (!existsSync(forgeDir)) mkdirSync(forgeDir, { recursive: true });
+    writeFileSync(resolve(forgeDir, "install-health.json"), JSON.stringify({
+      isCorrupt: true, current, latest: r.latest,
+      reason: corrupt.reason, recommendedAction: corrupt.recommendedAction,
+      detectedAt: new Date().toISOString(),
+    }, null, 2), "utf-8");
+  } catch { /* silent */ }
+}
+
+function _handleUpdateResult(current, r) {
+  if (r && r.isNewer) {
+    console.error(`[update-check] A newer Plan Forge release is available: v${r.latest} (you are on v${r.current}). ${r.url}`);
+  }
+  if (!r || !r.latest) return;
+  const corrupt = detectCorruptInstall({ currentVersion: current, latestVersion: r.latest });
+  if (corrupt.isCorrupt) {
+    console.error("");
+    console.error("  ┌──────────────────────────────────────────────────────────────┐");
+    console.error("  │  ⚠  CORRUPT INSTALL DETECTED                                 │");
+    console.error("  ├──────────────────────────────────────────────────────────────┤");
+    console.error(`  │  Local VERSION: ${current.padEnd(44)} │`);
+    console.error(`  │  Latest release: v${r.latest.padEnd(43)} │`);
+    console.error("  │                                                              │");
+    console.error("  │  Your install is from a broken release tarball that shipped  │");
+    console.error("  │  with a '-dev' VERSION file. Self-heal with:                 │");
+    console.error("  │                                                              │");
+    console.error("  │      pforge self-update --force                              │");
+    console.error("  │                                                              │");
+    console.error("  └──────────────────────────────────────────────────────────────┘");
+    console.error("");
+    _emitCorruptInstallEvent(current, r, corrupt);
+  } else {
+    try {
+      const statePath = resolve(PROJECT_DIR, ".forge", "install-health.json");
+      if (existsSync(statePath)) {
+        writeFileSync(statePath, JSON.stringify({ isCorrupt: false, current, latest: r.latest, healedAt: new Date().toISOString() }, null, 2), "utf-8");
+      }
+    } catch { /* silent */ }
+  }
+}
+
 export async function runServerMain() {
   // --validate: quick startup check — verify imports, tool list, and exit
   if (VALIDATE_ONLY) {
@@ -69,70 +122,9 @@ export async function runServerMain() {
     try {
       const current = FRAMEWORK_VERSION && FRAMEWORK_VERSION !== "unknown" ? FRAMEWORK_VERSION : null;
       if (current) {
-        // Delay 2s so startup logs stay clean and we don't race the hub.
         setTimeout(() => {
           checkForUpdate({ currentVersion: current, projectDir: PROJECT_DIR })
-            .then((r) => {
-              if (r && r.isNewer) {
-                console.error(`[update-check] A newer Plan Forge release is available: v${r.latest} (you are on v${r.current}). ${r.url}`);
-              }
-              // v2.53.1 — corrupt-install self-heal detection.
-              // Flags clients stuck on v2.50.0/v2.51.0/v2.52.0 broken tarballs.
-              if (r && r.latest) {
-                const corrupt = detectCorruptInstall({ currentVersion: current, latestVersion: r.latest });
-                if (corrupt.isCorrupt) {
-                  console.error("");
-                  console.error("  ┌──────────────────────────────────────────────────────────────┐");
-                  console.error("  │  ⚠  CORRUPT INSTALL DETECTED                                 │");
-                  console.error("  ├──────────────────────────────────────────────────────────────┤");
-                  console.error(`  │  Local VERSION: ${current.padEnd(44)} │`);
-                  console.error(`  │  Latest release: v${r.latest.padEnd(43)} │`);
-                  console.error("  │                                                              │");
-                  console.error("  │  Your install is from a broken release tarball that shipped  │");
-                  console.error("  │  with a '-dev' VERSION file. Self-heal with:                 │");
-                  console.error("  │                                                              │");
-                  console.error("  │      pforge self-update --force                              │");
-                  console.error("  │                                                              │");
-                  console.error("  └──────────────────────────────────────────────────────────────┘");
-                  console.error("");
-                  // Emit hub event + dashboard state so the UI can show a banner.
-                  try {
-                    if (activeHub && typeof activeHub.broadcast === "function") {
-                      activeHub.broadcast({
-                        type: "install:corrupt",
-                        severity: "high",
-                        current,
-                        latest: r.latest,
-                        reason: corrupt.reason,
-                        recommendedAction: corrupt.recommendedAction,
-                        detectedAt: new Date().toISOString(),
-                      });
-                    }
-                  } catch { /* silent */ }
-                  try {
-                    const forgeDir = resolve(PROJECT_DIR, ".forge");
-                    if (!existsSync(forgeDir)) mkdirSync(forgeDir, { recursive: true });
-                    const statePath = resolve(forgeDir, "install-health.json");
-                    writeFileSync(statePath, JSON.stringify({
-                      isCorrupt: true,
-                      current,
-                      latest: r.latest,
-                      reason: corrupt.reason,
-                      recommendedAction: corrupt.recommendedAction,
-                      detectedAt: new Date().toISOString(),
-                    }, null, 2), "utf-8");
-                  } catch { /* silent */ }
-                } else {
-                  // Clear any stale corrupt flag from a prior healed session.
-                  try {
-                    const statePath = resolve(PROJECT_DIR, ".forge", "install-health.json");
-                    if (existsSync(statePath)) {
-                      writeFileSync(statePath, JSON.stringify({ isCorrupt: false, current, latest: r.latest, healedAt: new Date().toISOString() }, null, 2), "utf-8");
-                    }
-                  } catch { /* silent */ }
-                }
-              }
-            })
+            .then((r) => _handleUpdateResult(current, r))
             .catch(() => { /* silent */ });
         }, 2000).unref?.();
       }

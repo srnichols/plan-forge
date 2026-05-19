@@ -110,6 +110,74 @@ function writeCache(projectDir, payload) {
   } catch { /* best-effort; cache is not critical */ }
 }
 
+function updateCheckSuppressed(env) {
+  return env.PFORGE_NO_UPDATE_CHECK === "1" || env.PFORGE_NO_UPDATE_CHECK === "true";
+}
+
+function cachedUpdatePayload(cached, currentVersion) {
+  return {
+    ...cached,
+    current: currentVersion,
+    isNewer: compareVersions(currentVersion, cached.latest) < 0,
+    fromCache: true,
+  };
+}
+
+function versionFileNewerThanCache(projectDir) {
+  const versionFile = resolve(projectDir, "VERSION");
+  const cacheFile = cachePath(projectDir);
+  if (!existsSync(versionFile) || !existsSync(cacheFile)) return false;
+  return statSync(versionFile).mtimeMs > statSync(cacheFile).mtimeMs;
+}
+
+function readFreshCachedUpdate(projectDir, currentVersion, ttlMs) {
+  const cached = readCache(projectDir);
+  if (!cached?.checkedAt) return null;
+  const age = Date.now() - new Date(cached.checkedAt).getTime();
+  if (!Number.isFinite(age) || age < 0 || age >= ttlMs) return null;
+  try {
+    return versionFileNewerThanCache(projectDir) ? null : cachedUpdatePayload(cached, currentVersion);
+  } catch {
+    return cachedUpdatePayload(cached, currentVersion);
+  }
+}
+
+async function fetchLatestRelease(fetchImpl) {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
+  try {
+    const res = await fetchImpl(RELEASES_URL, {
+      headers: {
+        accept: "application/vnd.github+json",
+        "user-agent": "plan-forge-update-check",
+      },
+      signal: controller.signal,
+    });
+    if (!res || !res.ok) return null;
+    return await res.json();
+  } catch {
+    return null;
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+function buildUpdatePayload(currentVersion, json) {
+  const tag = typeof json?.tag_name === "string" ? json.tag_name : null;
+  if (!tag) return null;
+  const latest = tag.replace(/^v/i, "").trim();
+  if (!/^\d+\.\d+\.\d+/.test(latest)) return null;
+  return {
+    current: currentVersion,
+    latest,
+    isNewer: compareVersions(currentVersion, latest) < 0,
+    url: typeof json.html_url === "string" ? json.html_url : `https://github.com/srnichols/plan-forge/releases/tag/${tag}`,
+    publishedAt: typeof json.published_at === "string" ? json.published_at : null,
+    checkedAt: new Date().toISOString(),
+    fromCache: false,
+  };
+}
+
 /**
  * Check GitHub for a newer release. Returns:
  *   {
@@ -141,71 +209,15 @@ export async function checkForUpdate({
   fetchImpl = globalThis.fetch,
   env = process.env,
 } = {}) {
-  if (env.PFORGE_NO_UPDATE_CHECK === "1" || env.PFORGE_NO_UPDATE_CHECK === "true") {
-    return null;
-  }
-  if (!currentVersion || !projectDir) return null;
-
-  // Serve from cache when fresh
+  if (updateCheckSuppressed(env) || !currentVersion || !projectDir) return null;
   if (!force) {
-    const cached = readCache(projectDir);
-    if (cached && cached.checkedAt) {
-      const age = Date.now() - new Date(cached.checkedAt).getTime();
-      if (Number.isFinite(age) && age >= 0 && age < ttlMs) {
-        // Defense-in-depth (Fix D): if VERSION was touched after the cache
-        // was written, treat the cache as stale so a manual version bump or
-        // tarball extraction always triggers a fresh network check.
-        const versionFile = resolve(projectDir, "VERSION");
-        const cacheFile = cachePath(projectDir);
-        try {
-          if (existsSync(versionFile) && existsSync(cacheFile)) {
-            if (statSync(versionFile).mtimeMs > statSync(cacheFile).mtimeMs) {
-              // VERSION is newer — fall through to network refresh.
-            } else {
-              return { ...cached, current: currentVersion, isNewer: compareVersions(currentVersion, cached.latest) < 0, fromCache: true };
-            }
-          } else {
-            return { ...cached, current: currentVersion, isNewer: compareVersions(currentVersion, cached.latest) < 0, fromCache: true };
-          }
-        } catch {
-          return { ...cached, current: currentVersion, isNewer: compareVersions(currentVersion, cached.latest) < 0, fromCache: true };
-        }
-      }
-    }
+    const cached = readFreshCachedUpdate(projectDir, currentVersion, ttlMs);
+    if (cached) return cached;
   }
-
   if (typeof fetchImpl !== "function") return null;
 
-  let json;
-  try {
-    const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
-    const res = await fetchImpl(RELEASES_URL, {
-      headers: {
-        accept: "application/vnd.github+json",
-        "user-agent": "plan-forge-update-check",
-      },
-      signal: controller.signal,
-    });
-    clearTimeout(timer);
-    if (!res || !res.ok) return null;
-    json = await res.json();
-  } catch { return null; }
-
-  const tag = typeof json?.tag_name === "string" ? json.tag_name : null;
-  if (!tag) return null;
-  const latest = tag.replace(/^v/i, "").trim();
-  if (!/^\d+\.\d+\.\d+/.test(latest)) return null;
-
-  const payload = {
-    current: currentVersion,
-    latest,
-    isNewer: compareVersions(currentVersion, latest) < 0,
-    url: typeof json.html_url === "string" ? json.html_url : `https://github.com/srnichols/plan-forge/releases/tag/${tag}`,
-    publishedAt: typeof json.published_at === "string" ? json.published_at : null,
-    checkedAt: new Date().toISOString(),
-    fromCache: false,
-  };
+  const payload = buildUpdatePayload(currentVersion, await fetchLatestRelease(fetchImpl));
+  if (!payload) return null;
   writeCache(projectDir, payload);
   return payload;
 }

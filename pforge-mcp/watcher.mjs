@@ -51,155 +51,144 @@ export function parseWindowMs(window = "14d") {
  * @param {string} [opts.window="14d"] - Lookback window (e.g. "7d", "14d", "30d")
  * @returns {Promise<object>} Cross-run snapshot
  */
-export async function buildCrossRunSnapshot(rootDir, opts = {}) {
-  const { window = "14d" } = opts;
-  const windowMs = parseWindowMs(window);
-  const cutoffMs = Date.now() - windowMs;
-
-  const runsDir = resolve(rootDir, ".forge", "runs");
-  if (!existsSync(runsDir)) {
-    return {
-      ok: false,
-      mode: "cross-run",
-      error: `No .forge/runs/ directory found at ${rootDir}`,
-    };
-  }
-
-  let entries;
-  try {
-    entries = readdirSync(runsDir, { withFileTypes: true });
-  } catch (err) {
-    return {
-      ok: false,
-      mode: "cross-run",
-      error: `Cannot read runs directory: ${err.message}`,
-    };
-  }
-
-  const runIds = entries.filter((e) => e.isDirectory()).map((e) => e.name);
-
+function readRunSummaries(runsDir, cutoffMs) {
   const summaries = [];
-  for (const runId of runIds) {
-    const summaryPath = resolve(runsDir, runId, "summary.json");
+  const entries = readdirSync(runsDir, { withFileTypes: true });
+  for (const entry of entries) {
+    if (!entry.isDirectory()) continue;
+    const summaryPath = resolve(runsDir, entry.name, "summary.json");
     if (!existsSync(summaryPath)) continue;
     try {
       const raw = JSON.parse(readFileSync(summaryPath, "utf-8"));
-      if (!raw.startTime) continue;
-      const startMs = new Date(raw.startTime).getTime();
+      const startMs = raw.startTime ? new Date(raw.startTime).getTime() : NaN;
       if (!Number.isFinite(startMs) || startMs < cutoffMs) continue;
-      summaries.push({ runId, ...raw });
+      summaries.push({ runId: entry.name, ...raw });
     } catch {
       // Skip unreadable or malformed summary files
     }
   }
+  return summaries;
+}
 
-  if (summaries.length === 0) {
-    return {
-      ok: true,
-      mode: "cross-run",
-      targetPath: rootDir,
-      window,
-      windowMs,
-      totalRuns: 0,
-      passedRuns: 0,
-      failedRuns: 0,
-      runs: [],
-      message: `No completed runs found within the last ${window} under ${runsDir}. Try a wider window or run a plan first.`,
-      crossRun: {
-        recurringFailures: [],
-        retryRateSpike: false,
-        costTrend: "flat",
-        costTrendPercent: 0,
-        sliceTimeoutClusters: [],
-      },
-    };
-  }
+function emptyCrossRunSnapshot(rootDir, runsDir, window, windowMs) {
+  return {
+    ok: true,
+    mode: "cross-run",
+    targetPath: rootDir,
+    window,
+    windowMs,
+    totalRuns: 0,
+    passedRuns: 0,
+    failedRuns: 0,
+    runs: [],
+    message: `No completed runs found within the last ${window} under ${runsDir}. Try a wider window or run a plan first.`,
+    crossRun: {
+      recurringFailures: [],
+      retryRateSpike: false,
+      costTrend: "flat",
+      costTrendPercent: 0,
+      sliceTimeoutClusters: [],
+    },
+  };
+}
 
-  // Sort chronologically for cost-trend split
-  const sorted = [...summaries].sort(
-    (a, b) => new Date(a.startTime).getTime() - new Date(b.startTime).getTime()
-  );
+function sliceKey(sr) {
+  const label = (sr.title ?? "slice").replace(/\s+/g, "-").slice(0, 40);
+  return `${sr.number ?? "?"}-${label}`;
+}
 
-  const passedRuns = summaries.filter((s) => s.status === "completed").length;
-  const failedRuns = summaries.filter((s) => s.status === "failed").length;
+function isSliceTimeout(sr) {
+  return (sr.duration != null && sr.duration > 5 * 60_000)
+    || sr.killedBySignal === true
+    || (typeof sr.statusReason === "string" && sr.statusReason.toLowerCase().includes("timeout"));
+}
 
-  // ── Per-slice aggregation ────────────────────────────────────────────
-  const sliceFailMap = {};    // key → { failCount, totalCount, runIds[] }
-  const sliceRetryMap = {};   // key → { totalAttempts, occurrences }
-  const sliceTimeoutMap = {}; // key → count
-
+function aggregateSliceStats(summaries) {
+  const sliceFailMap = {};
+  const sliceRetryMap = {};
+  const sliceTimeoutMap = {};
   for (const run of summaries) {
     if (!Array.isArray(run.sliceResults)) continue;
     for (const sr of run.sliceResults) {
-      const label = (sr.title ?? "slice").replace(/\s+/g, "-").slice(0, 40);
-      const key = `${sr.number ?? "?"}-${label}`;
-
-      // Failure tracking
+      const key = sliceKey(sr);
       if (!sliceFailMap[key]) sliceFailMap[key] = { failCount: 0, totalCount: 0, runIds: [] };
       sliceFailMap[key].totalCount++;
       if (sr.status === "failed") {
         sliceFailMap[key].failCount++;
-        if (!sliceFailMap[key].runIds.includes(run.runId)) {
-          sliceFailMap[key].runIds.push(run.runId);
-        }
+        if (!sliceFailMap[key].runIds.includes(run.runId)) sliceFailMap[key].runIds.push(run.runId);
       }
-
-      // Retry tracking (attempts defaults to 1 = no retry)
-      const attempts = typeof sr.attempts === "number" ? sr.attempts : 1;
       if (!sliceRetryMap[key]) sliceRetryMap[key] = { totalAttempts: 0, occurrences: 0 };
-      sliceRetryMap[key].totalAttempts += attempts;
+      sliceRetryMap[key].totalAttempts += typeof sr.attempts === "number" ? sr.attempts : 1;
       sliceRetryMap[key].occurrences++;
-
-      // Timeout detection: long duration OR killedBySignal OR statusReason contains "timeout"
-      const isTimeout =
-        (sr.duration != null && sr.duration > 5 * 60_000) ||
-        sr.killedBySignal === true ||
-        (typeof sr.statusReason === "string" &&
-          sr.statusReason.toLowerCase().includes("timeout"));
-      if (isTimeout) {
-        sliceTimeoutMap[key] = (sliceTimeoutMap[key] ?? 0) + 1;
-      }
+      if (isSliceTimeout(sr)) sliceTimeoutMap[key] = (sliceTimeoutMap[key] ?? 0) + 1;
     }
   }
+  return { sliceFailMap, sliceRetryMap, sliceTimeoutMap };
+}
 
-  // Recurring gate failures: same slice failed in ≥2 distinct runs
-  const recurringFailures = Object.entries(sliceFailMap)
-    .filter(([, v]) => v.failCount >= 2)
-    .map(([sliceName, v]) => ({
-      sliceName,
-      failCount: v.failCount,
-      totalCount: v.totalCount,
-      runIds: v.runIds,
-    }))
+function buildRecurringFailures(sliceFailMap) {
+  return Object.entries(sliceFailMap)
+    .filter(([, value]) => value.failCount >= 2)
+    .map(([sliceName, value]) => ({ sliceName, failCount: value.failCount, totalCount: value.totalCount, runIds: value.runIds }))
     .sort((a, b) => b.failCount - a.failCount);
+}
 
-  // Retry rate spike: any slice averaging >2 attempts per occurrence
-  const retryRateSpike = Object.values(sliceRetryMap).some(
-    (v) => v.occurrences > 0 && v.totalAttempts / v.occurrences > 2
-  );
+function hasRetryRateSpike(sliceRetryMap) {
+  return Object.values(sliceRetryMap).some((value) => value.occurrences > 0 && value.totalAttempts / value.occurrences > 2);
+}
 
-  // Cost trend: average cost first-half vs second-half of the window
+function buildCostTrend(sorted) {
   const half = Math.floor(sorted.length / 2);
-  let costTrend = "flat";
-  let costTrendPercent = 0;
-  if (half >= 1) {
-    const first = sorted.slice(0, half);
-    const second = sorted.slice(half);
-    const avgFirst = first.reduce((s, r) => s + (r.cost?.total_cost_usd ?? 0), 0) / first.length;
-    const avgSecond =
-      second.reduce((s, r) => s + (r.cost?.total_cost_usd ?? 0), 0) / second.length;
-    if (avgFirst > 0) {
-      costTrendPercent = Math.round(((avgSecond - avgFirst) / avgFirst) * 100);
-      if (costTrendPercent > 20) costTrend = "up";
-      else if (costTrendPercent < -20) costTrend = "down";
-    }
-  }
+  if (half < 1) return { costTrend: "flat", costTrendPercent: 0 };
+  const first = sorted.slice(0, half);
+  const second = sorted.slice(half);
+  const avgFirst = first.reduce((sum, run) => sum + (run.cost?.total_cost_usd ?? 0), 0) / first.length;
+  const avgSecond = second.reduce((sum, run) => sum + (run.cost?.total_cost_usd ?? 0), 0) / second.length;
+  if (avgFirst <= 0) return { costTrend: "flat", costTrendPercent: 0 };
+  const costTrendPercent = Math.round(((avgSecond - avgFirst) / avgFirst) * 100);
+  return {
+    costTrend: costTrendPercent > 20 ? "up" : costTrendPercent < -20 ? "down" : "flat",
+    costTrendPercent,
+  };
+}
 
-  // Slice timeout clusters: same slice timed out in ≥2 runs
-  const sliceTimeoutClusters = Object.entries(sliceTimeoutMap)
+function buildSliceTimeoutClusters(sliceTimeoutMap) {
+  return Object.entries(sliceTimeoutMap)
     .filter(([, count]) => count >= 2)
     .map(([sliceName, timeoutCount]) => ({ sliceName, timeoutCount }))
     .sort((a, b) => b.timeoutCount - a.timeoutCount);
+}
+
+function summarizeRuns(sorted) {
+  return sorted.map((run) => ({
+    runId: run.runId,
+    startTime: run.startTime,
+    endTime: run.endTime ?? null,
+    status: run.status ?? null,
+    cost: run.cost?.total_cost_usd ?? null,
+    sliceCount: run.results?.total ?? (run.sliceResults?.length ?? 0),
+  }));
+}
+
+export async function buildCrossRunSnapshot(rootDir, opts = {}) {
+  const { window = "14d" } = opts;
+  const windowMs = parseWindowMs(window);
+  const runsDir = resolve(rootDir, ".forge", "runs");
+  if (!existsSync(runsDir)) {
+    return { ok: false, mode: "cross-run", error: `No .forge/runs/ directory found at ${rootDir}` };
+  }
+
+  let summaries;
+  try {
+    summaries = readRunSummaries(runsDir, Date.now() - windowMs);
+  } catch (err) {
+    return { ok: false, mode: "cross-run", error: `Cannot read runs directory: ${err.message}` };
+  }
+  if (summaries.length === 0) return emptyCrossRunSnapshot(rootDir, runsDir, window, windowMs);
+
+  const sorted = [...summaries].sort((a, b) => new Date(a.startTime).getTime() - new Date(b.startTime).getTime());
+  const { sliceFailMap, sliceRetryMap, sliceTimeoutMap } = aggregateSliceStats(summaries);
+  const { costTrend, costTrendPercent } = buildCostTrend(sorted);
 
   return {
     ok: true,
@@ -208,22 +197,15 @@ export async function buildCrossRunSnapshot(rootDir, opts = {}) {
     window,
     windowMs,
     totalRuns: summaries.length,
-    passedRuns,
-    failedRuns,
-    runs: sorted.map((s) => ({
-      runId: s.runId,
-      startTime: s.startTime,
-      endTime: s.endTime ?? null,
-      status: s.status ?? null,
-      cost: s.cost?.total_cost_usd ?? null,
-      sliceCount: s.results?.total ?? (s.sliceResults?.length ?? 0),
-    })),
+    passedRuns: summaries.filter((s) => s.status === "completed").length,
+    failedRuns: summaries.filter((s) => s.status === "failed").length,
+    runs: summarizeRuns(sorted),
     crossRun: {
-      recurringFailures,
-      retryRateSpike,
+      recurringFailures: buildRecurringFailures(sliceFailMap),
+      retryRateSpike: hasRetryRateSpike(sliceRetryMap),
       costTrend,
       costTrendPercent,
-      sliceTimeoutClusters,
+      sliceTimeoutClusters: buildSliceTimeoutClusters(sliceTimeoutMap),
     },
   };
 }

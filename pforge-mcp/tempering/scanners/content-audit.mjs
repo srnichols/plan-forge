@@ -224,6 +224,91 @@ export function expandRoute(route, seeds) {
  * @param {object}   [ctx.seeds]    — seed values for parameterized routes
  * @returns {Promise<object>} scanner result record
  */
+function createContentAuditSkippedFrame(base, now, reason) {
+  return {
+    ...base,
+    skipped: true,
+    reason,
+    verdict: "skipped",
+    pass: 0,
+    fail: 0,
+    durationMs: 0,
+    findings: [],
+    completedAt: new Date(now()).toISOString(),
+  };
+}
+
+function resolveContentAuditSettings(scannerConfig) {
+  return {
+    ...CONTENT_AUDIT_DEFAULTS,
+    ...(typeof scannerConfig === "object" ? scannerConfig : {}),
+  };
+}
+
+function resolveContentAuditBaseUrl(settings, config, env) {
+  return settings.baseUrl || (env && env.PFORGE_TEMPERING_URL) || resolveAppUrl(config, env);
+}
+
+function buildAuditUrl(baseUrl, expandedRoute) {
+  return baseUrl.replace(/\/+$/, "") + (expandedRoute.startsWith("/") ? expandedRoute : `/${expandedRoute}`);
+}
+
+async function auditRoute({ route, seeds, baseUrl, fetcher, settings }) {
+  const { expanded, seed } = expandRoute(route, seeds);
+  const url = buildAuditUrl(baseUrl, expanded);
+  const response = await fetcher(url, {
+    userAgent: settings.userAgent,
+    timeoutMs: settings.timeoutMs,
+  });
+  const body = response.body ?? "";
+  const title = extractTag(body, "title");
+  const h1 = extractTag(body, "h1");
+  const words = wordCount(cleanBodyText(body));
+  const placeholders = findPlaceholders(body);
+  const verdict = classifyRoute({
+    status: response.status,
+    location: response.location,
+    body,
+    title,
+    h1,
+    words,
+    placeholders,
+  });
+  return {
+    verdict,
+    finding: verdict.severity === "ok"
+      ? null
+      : {
+          class: verdict.class,
+          route,
+          severity: verdict.severity,
+          evidence: { ...verdict.evidence, url, status: response.status, title, h1, words },
+          ...(seed ? { seed } : {}),
+        },
+  };
+}
+
+function resolveContentAuditVerdict(findings, budgetTripped) {
+  if (budgetTripped) return "budget-exceeded";
+  if (findings.some((finding) => finding.severity === "blocker" || finding.severity === "high")) return "fail";
+  if (findings.length > 0) return "warn";
+  return "pass";
+}
+
+function writeContentAuditArtifact(projectDir, runId, report) {
+  const artifactDir = ensureScannerArtifactDir(projectDir, runId, "content-audit");
+  if (!artifactDir) return artifactDir;
+  seedArtifactsGitignore(projectDir);
+  try {
+    writeFileSync(
+      pathResolve(artifactDir, "report.json"),
+      JSON.stringify(report, null, 2) + "\n",
+      "utf-8",
+    );
+  } catch { /* best-effort */ }
+  return artifactDir;
+}
+
 export async function runContentAudit(ctx) {
   const {
     config = {},
@@ -243,56 +328,28 @@ export async function runContentAudit(ctx) {
     sliceRef,
     startedAt: new Date(t0).toISOString(),
   };
-  const skippedFrame = (reason) => ({
-    ...base,
-    skipped: true,
-    reason,
-    verdict: "skipped",
-    pass: 0,
-    fail: 0,
-    durationMs: 0,
-    findings: [],
-    completedAt: new Date(now()).toISOString(),
-  });
 
-  // Scanner disabled
   const scannerConfig = config.scanners?.["content-audit"];
   if (scannerConfig === false || (scannerConfig && scannerConfig.enabled === false)) {
-    return skippedFrame("scanner-disabled");
+    return createContentAuditSkippedFrame(base, now, "scanner-disabled");
   }
 
-  const settings = {
-    ...CONTENT_AUDIT_DEFAULTS,
-    ...(typeof scannerConfig === "object" ? scannerConfig : {}),
-  };
-
-  // Resolve base URL
-  const baseUrl = settings.baseUrl
-    || (env && env.PFORGE_TEMPERING_URL)
-    || resolveAppUrl(config, env);
-  if (!baseUrl) return skippedFrame("url-not-configured");
-
-  // Production guard
+  const settings = resolveContentAuditSettings(scannerConfig);
+  const baseUrl = resolveContentAuditBaseUrl(settings, config, env);
+  if (!baseUrl) return createContentAuditSkippedFrame(base, now, "url-not-configured");
   if (looksLikeProduction(baseUrl) && !settings.allowProduction) {
-    return skippedFrame("production-url-without-opt-in");
+    return createContentAuditSkippedFrame(base, now, "production-url-without-opt-in");
   }
 
-  // Load routes
   const routeList = loadRoutes({
     routes: explicitRoutes,
     projectDir: projectDir || ".",
     settings,
   });
-  if (routeList.length === 0) return skippedFrame("no-routes");
+  if (routeList.length === 0) return createContentAuditSkippedFrame(base, now, "no-routes");
 
-  // Cap routes to prevent runaway
   const capped = routeList.slice(0, settings.maxRoutes);
-
-  // Budget
-  const budgetMs = (config.runtimeBudgets && config.runtimeBudgets.contentAuditMaxMs) || 300000;
-  const hardDeadline = t0 + budgetMs;
-
-  // ── Probe each route ─────────────────────────────────────────────
+  const hardDeadline = t0 + ((config.runtimeBudgets && config.runtimeBudgets.contentAuditMaxMs) || 300000);
   const findings = [];
   let passCount = 0;
   let failCount = 0;
@@ -303,75 +360,26 @@ export async function runContentAudit(ctx) {
       budgetTripped = true;
       break;
     }
-
-    const { expanded, seed } = expandRoute(route, seeds);
-    const url = baseUrl.replace(/\/+$/, "") + (expanded.startsWith("/") ? expanded : `/${expanded}`);
-
-    const r = await fetcher(url, {
-      userAgent: settings.userAgent,
-      timeoutMs: settings.timeoutMs,
-    });
-
-    const body = r.body ?? "";
-    const title = extractTag(body, "title");
-    const h1 = extractTag(body, "h1");
-    const mainText = cleanBodyText(body);
-    const words = wordCount(mainText);
-    const placeholders = findPlaceholders(body);
-
-    const verdict = classifyRoute({
-      status: r.status,
-      location: r.location,
-      body,
-      title,
-      h1,
-      words,
-      placeholders,
-    });
-
-    if (verdict.severity === "ok") {
+    const result = await auditRoute({ route, seeds, baseUrl, fetcher, settings });
+    if (!result.finding) {
       passCount++;
-    } else {
-      failCount++;
-      findings.push({
-        class: verdict.class,
-        route,
-        severity: verdict.severity,
-        evidence: { ...verdict.evidence, url, status: r.status, title, h1, words },
-        ...(seed ? { seed } : {}),
-      });
+      continue;
     }
+    failCount++;
+    findings.push(result.finding);
   }
 
-  // ── Verdict ──────────────────────────────────────────────────────
-  let overallVerdict;
-  if (budgetTripped) overallVerdict = "budget-exceeded";
-  else if (findings.some((f) => f.severity === "blocker" || f.severity === "high")) overallVerdict = "fail";
-  else if (findings.length > 0) overallVerdict = "warn";
-  else overallVerdict = "pass";
-
+  const overallVerdict = resolveContentAuditVerdict(findings, budgetTripped);
   const durationMs = now() - t0;
-
-  // ── Artifact ─────────────────────────────────────────────────────
-  const artifactDir = ensureScannerArtifactDir(projectDir, runId, "content-audit");
-  if (artifactDir) {
-    seedArtifactsGitignore(projectDir);
-    try {
-      writeFileSync(
-        pathResolve(artifactDir, "report.json"),
-        JSON.stringify({
-          scanner: "content-audit",
-          startedAt: base.startedAt,
-          baseUrl,
-          routeCount: capped.length,
-          verdict: overallVerdict,
-          findings,
-          summary: { pass: passCount, fail: failCount },
-        }, null, 2) + "\n",
-        "utf-8",
-      );
-    } catch { /* best-effort */ }
-  }
+  const artifactDir = writeContentAuditArtifact(projectDir, runId, {
+    scanner: "content-audit",
+    startedAt: base.startedAt,
+    baseUrl,
+    routeCount: capped.length,
+    verdict: overallVerdict,
+    findings,
+    summary: { pass: passCount, fail: failCount },
+  });
 
   return {
     ...base,

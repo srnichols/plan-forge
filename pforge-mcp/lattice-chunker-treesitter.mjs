@@ -145,60 +145,54 @@ function makeChunk({ filePath, language, kind, name, node, content }) {
  * nested functions inside function bodies are intentionally not emitted (they
  * would cause overlapping byte ranges).
  */
+function jsFunctionChunk(filePath, language, node, content) {
+  const name = node.childForFieldName('name')?.text ?? '';
+  return makeChunk({ filePath, language, kind: 'function', name, node, content });
+}
+
+function jsClassChunks(filePath, language, node, content) {
+  const className = node.childForFieldName('name')?.text ?? '';
+  const chunks = [makeChunk({ filePath, language, kind: 'class', name: className, node, content })];
+  const body = node.childForFieldName('body');
+  if (!body) return chunks;
+  for (const member of body.namedChildren) {
+    if (member.type !== 'method_definition') continue;
+    const methodName = member.childForFieldName('name')?.text ?? '';
+    chunks.push(makeChunk({ filePath, language, kind: 'method', name: methodName, node: member, content }));
+  }
+  return chunks;
+}
+
+function isJsFunctionValue(node) {
+  return ["arrow_function", "function_expression", "generator_function"].includes(node?.type);
+}
+
+function jsVariableChunks(filePath, language, node, content) {
+  const chunks = [];
+  for (const declarator of node.namedChildren) {
+    if (declarator.type !== 'variable_declarator') continue;
+    const nameNode = declarator.childForFieldName('name');
+    const valueNode = declarator.childForFieldName('value');
+    if (!nameNode || !isJsFunctionValue(valueNode)) continue;
+    chunks.push(makeChunk({ filePath, language, kind: 'function', name: nameNode.text, node: declarator, content }));
+  }
+  return chunks;
+}
+
 function extractJsChunks(filePath, language, rootNode, content) {
   const chunks = [];
 
   for (const node of rootNode.namedChildren) {
-    // Named function declarations: function foo() {}
     if (node.type === 'function_declaration') {
-      const name = node.childForFieldName('name')?.text ?? '';
-      chunks.push(makeChunk({ filePath, language, kind: 'function', name, node, content }));
-
-    // Class declarations — also walk the body for methods
-    } else if (node.type === 'class_declaration') {
-      const className = node.childForFieldName('name')?.text ?? '';
-      chunks.push(makeChunk({ filePath, language, kind: 'class', name: className, node, content }));
-
-      const body = node.childForFieldName('body');
-      if (body) {
-        for (const member of body.namedChildren) {
-          if (member.type === 'method_definition') {
-            const methodName = member.childForFieldName('name')?.text ?? '';
-            chunks.push(
-              makeChunk({ filePath, language, kind: 'method', name: methodName, node: member, content }),
-            );
-          }
-        }
-      }
-
-    // const/let/var arrow functions and function expressions
-    } else if (
-      node.type === 'lexical_declaration' ||
-      node.type === 'variable_declaration'
-    ) {
-      for (const declarator of node.namedChildren) {
-        if (declarator.type !== 'variable_declarator') continue;
-        const nameNode = declarator.childForFieldName('name');
-        const valueNode = declarator.childForFieldName('value');
-        if (
-          nameNode &&
-          valueNode &&
-          (valueNode.type === 'arrow_function' ||
-            valueNode.type === 'function_expression' ||
-            valueNode.type === 'generator_function')
-        ) {
-          chunks.push(
-            makeChunk({
-              filePath,
-              language,
-              kind: 'function',
-              name: nameNode.text,
-              node: declarator,
-              content,
-            }),
-          );
-        }
-      }
+      chunks.push(jsFunctionChunk(filePath, language, node, content));
+      continue;
+    }
+    if (node.type === 'class_declaration') {
+      chunks.push(...jsClassChunks(filePath, language, node, content));
+      continue;
+    }
+    if (node.type === 'lexical_declaration' || node.type === 'variable_declaration') {
+      chunks.push(...jsVariableChunks(filePath, language, node, content));
     }
   }
 

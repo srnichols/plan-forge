@@ -194,6 +194,24 @@ const SCANNER_BUDGET_KEYS = Object.freeze({
  * @param {Function} [ctx.now]
  * @returns {Promise<object>} scanner result record
  */
+function _checkScannerSkipReason(scanner, config, adapter) {
+  if (!scanner) return "missing-scanner-id";
+  if (!config || !config.scanners || config.scanners[scanner] === false) return "scanner-disabled";
+  if (!adapter || !adapter[scanner]) return "no-adapter";
+  const check = validateAdapterEntry(adapter[scanner]);
+  if (!check.ok) return `invalid-adapter:${check.reason}`;
+  if (adapter[scanner].supported === false) return adapter[scanner].reason || "stack-not-supported";
+  return null;
+}
+
+function _computeScannerVerdict(proc, parsed) {
+  if (proc.timedOut) return "budget-exceeded";
+  if (proc.error && proc.exitCode === -1) return "error";
+  if ((parsed.fail || 0) > 0) return "fail";
+  if (proc.exitCode !== 0) return "fail";
+  return "pass";
+}
+
 export async function runScanner(ctx) {
   const {
     scanner,
@@ -207,40 +225,14 @@ export async function runScanner(ctx) {
   } = ctx || {};
 
   const t0 = now();
-  const base = {
-    scanner,
-    stack,
-    sliceRef,
-    startedAt: new Date(t0).toISOString(),
-  };
+  const base = { scanner, stack, sliceRef, startedAt: new Date(t0).toISOString() };
   const skippedFrame = (reason) => ({
-    ...base,
-    skipped: true,
-    reason,
-    verdict: "skipped",
-    durationMs: 0,
+    ...base, skipped: true, reason, verdict: "skipped", durationMs: 0,
     completedAt: new Date(now()).toISOString(),
   });
 
-  if (!scanner) return skippedFrame("missing-scanner-id");
-
-  // Scanner globally disabled
-  if (!config || !config.scanners || config.scanners[scanner] === false) {
-    return skippedFrame("scanner-disabled");
-  }
-
-  // No adapter for this stack
-  if (!adapter || !adapter[scanner]) {
-    return skippedFrame("no-adapter");
-  }
-
-  const check = validateAdapterEntry(adapter[scanner]);
-  if (!check.ok) return skippedFrame(`invalid-adapter:${check.reason}`);
-
-  // Explicit unsupported stub
-  if (adapter[scanner].supported === false) {
-    return skippedFrame(adapter[scanner].reason || "stack-not-supported");
-  }
+  const skipReason = _checkScannerSkipReason(scanner, config, adapter);
+  if (skipReason) return skippedFrame(skipReason);
 
   const budgetKey = SCANNER_BUDGET_KEYS[scanner] || `${scanner}MaxMs`;
   const budgetMs = (config.runtimeBudgets && config.runtimeBudgets[budgetKey]) || DEFAULT_UNIT_BUDGET_MS;
@@ -254,15 +246,6 @@ export async function runScanner(ctx) {
     parsed = { pass: 0, fail: 0, skipped: 0, coverage: null, parseError: err.message };
   }
 
-  const durationMs = now() - t0;
-
-  let verdict;
-  if (proc.timedOut) verdict = "budget-exceeded";
-  else if (proc.error && proc.exitCode === -1) verdict = "error";
-  else if ((parsed.fail || 0) > 0) verdict = "fail";
-  else if (proc.exitCode !== 0) verdict = "fail";
-  else verdict = "pass";
-
   return {
     ...base,
     completedAt: new Date(now()).toISOString(),
@@ -275,8 +258,8 @@ export async function runScanner(ctx) {
     skipped: parsed.skipped || 0,
     coverage: parsed.coverage || null,
     parseError: parsed.parseError || null,
-    durationMs,
-    verdict,
+    durationMs: now() - t0,
+    verdict: _computeScannerVerdict(proc, parsed),
   };
 }
 
@@ -303,65 +286,54 @@ export function runScannerIntegration(ctx) {
 // TEMPER-06 Slice 06.1 — Extract failures from a scanner result.
 // Per-scanner normalizer: each scanner shape may encode failures
 // differently. This function returns a uniform `{ evidence, severity }` array.
+function _extractFromFailuresArray(scannerResult) {
+  return scannerResult.failures.map((f) => ({
+    evidence: f.evidence || f,
+    severity: f.severity || (scannerResult.verdict === "error" ? "high" : "medium"),
+  }));
+}
+
+function _extractFromRegressionsArray(scannerResult) {
+  return scannerResult.regressions.map((r) => ({
+    evidence: {
+      testName: r.url || r.urlHash || r.name || `${scannerResult.scanner}-regression`,
+      assertionMessage: r.explanation || r.verdict || "regression detected",
+      visualDiffScore: r.diffScore || r.score || null,
+      quorumVerdict: r.quorumVerdict || null,
+    },
+    severity: r.severity || "medium",
+  }));
+}
+
+function _extractFromViolationsArray(scannerResult) {
+  return scannerResult.violations.map((v) => ({
+    evidence: {
+      testName: v.path || v.endpoint || `${scannerResult.scanner}-violation`,
+      assertionMessage: v.message || v.description || "contract violation",
+      violation: true,
+    },
+    severity: v.severity || "medium",
+  }));
+}
+
+function _extractGenericFailure(scannerResult) {
+  if (scannerResult.fail <= 0 && scannerResult.verdict !== "fail" && scannerResult.verdict !== "error") return [];
+  return [{
+    evidence: {
+      testName: `${scannerResult.scanner}-failure`,
+      assertionMessage: scannerResult.error || scannerResult.reason || `${scannerResult.scanner} ${scannerResult.verdict}`,
+      stackTrace: scannerResult.stderr || null,
+    },
+    severity: scannerResult.verdict === "error" ? "high" : "medium",
+  }];
+}
+
 function extractFailures(scannerResult) {
   if (!scannerResult || scannerResult.skipped || scannerResult.verdict === "skipped" || scannerResult.verdict === "pass") return [];
-  const failures = [];
-
-  // If scanner already has a `failures` array, use it directly
-  if (Array.isArray(scannerResult.failures)) {
-    for (const f of scannerResult.failures) {
-      failures.push({
-        evidence: f.evidence || f,
-        severity: f.severity || (scannerResult.verdict === "error" ? "high" : "medium"),
-      });
-    }
-    return failures;
-  }
-
-  // Regressions array (visual-diff, perf-budget)
-  if (Array.isArray(scannerResult.regressions)) {
-    for (const r of scannerResult.regressions) {
-      failures.push({
-        evidence: {
-          testName: r.url || r.urlHash || r.name || `${scannerResult.scanner}-regression`,
-          assertionMessage: r.explanation || r.verdict || "regression detected",
-          visualDiffScore: r.diffScore || r.score || null,
-          quorumVerdict: r.quorumVerdict || null,
-        },
-        severity: r.severity || "medium",
-      });
-    }
-    return failures;
-  }
-
-  // Violations array (contract scanner)
-  if (Array.isArray(scannerResult.violations)) {
-    for (const v of scannerResult.violations) {
-      failures.push({
-        evidence: {
-          testName: v.path || v.endpoint || `${scannerResult.scanner}-violation`,
-          assertionMessage: v.message || v.description || "contract violation",
-          violation: true,
-        },
-        severity: v.severity || "medium",
-      });
-    }
-    return failures;
-  }
-
-  // Generic: scanner failed but no structured failures — synthesize one
-  if (scannerResult.fail > 0 || scannerResult.verdict === "fail" || scannerResult.verdict === "error") {
-    failures.push({
-      evidence: {
-        testName: `${scannerResult.scanner}-failure`,
-        assertionMessage: scannerResult.error || scannerResult.reason || `${scannerResult.scanner} ${scannerResult.verdict}`,
-        stackTrace: scannerResult.stderr || null,
-      },
-      severity: scannerResult.verdict === "error" ? "high" : "medium",
-    });
-  }
-
-  return failures;
+  if (Array.isArray(scannerResult.failures)) return _extractFromFailuresArray(scannerResult);
+  if (Array.isArray(scannerResult.regressions)) return _extractFromRegressionsArray(scannerResult);
+  if (Array.isArray(scannerResult.violations)) return _extractFromViolationsArray(scannerResult);
+  return _extractGenericFailure(scannerResult);
 }
 
 /**
@@ -1286,93 +1258,51 @@ const SCANNER_ENTRY_POINTS = {
  * @param {Function} [opts.scannerImpl] - DI override for tests
  * @returns {Promise<{ scanner: string, startedAt: string, completedAt: string, failures: number, findings: Array, raw: object }>}
  */
-export async function runSingleScanner(name, opts = {}) {
-  const {
-    cwd = process.cwd(),
-    testNameFilter = null,
-    timeoutMs = 120_000,
-    now = () => new Date(),
-    scannerImpl = null,
-  } = opts;
-
-  if (!name || !(name in SCANNER_IMPORT_MAP)) {
-    const err = new Error(`Scanner "${name}" is not registered`);
+async function _runSpawnBasedScanner(name, cwd, timeoutMs, started, now) {
+  const config = await readTemperingConfig(cwd);
+  const stack = detectStack(cwd);
+  const adapter = loadAdapter(stack);
+  if (!adapter) {
+    const err = new Error(`No adapter for stack "${stack}" — scanner "${name}" unavailable`);
+    err.code = "SCANNER_UNAVAILABLE";
+    throw err;
+  }
+  const cmd = name === "unit"
+    ? adapter.unitTestCommand(config, cwd)
+    : adapter.integrationTestCommand?.(config, cwd) ?? adapter.unitTestCommand(config, cwd);
+  if (!cmd) {
+    const err = new Error(`Adapter does not provide a ${name} command for stack "${stack}"`);
     err.code = "SCANNER_UNAVAILABLE";
     throw err;
   }
 
-  const started = now();
+  const result = await new Promise((resolve, reject) => {
+    const timer = setTimeout(() => {
+      try { child.kill("SIGTERM"); } catch { /* ignore */ }
+      setTimeout(() => { try { child.kill("SIGKILL"); } catch { /* ignore */ } }, KILL_GRACE_MS);
+      reject(Object.assign(new Error(`Scanner "${name}" timed out after ${timeoutMs}ms`), { code: "SCANNER_TIMEOUT" }));
+    }, timeoutMs);
 
-  // Allow DI override for tests
-  if (scannerImpl) {
-    const result = await scannerImpl({ cwd, filter: { testName: testNameFilter } });
-    const completed = now();
-    return {
-      scanner: name,
-      startedAt: started.toISOString(),
-      completedAt: completed.toISOString(),
-      failures: result.failures?.length ?? (result.fail ?? 0),
-      findings: result.findings ?? [],
-      raw: result,
-    };
-  }
+    let stdout = "", stderr = "";
+    const child = realSpawn(cmd.bin, cmd.args || [], { cwd, shell: true, env: { ...process.env, CI: "1" } });
+    child.stdout?.on("data", (d) => { stdout += d; });
+    child.stderr?.on("data", (d) => { stderr += d; });
+    child.on("close", (code) => { clearTimeout(timer); resolve({ code, stdout, stderr }); });
+    child.on("error", (err) => { clearTimeout(timer); reject(err); });
+  });
 
-  // Unit/integration scanners are spawn-based; re-run via a minimal
-  // adapter-driven approach matching runTemperingRun's inline logic.
-  if (name === "unit" || name === "integration") {
-    const config = await readTemperingConfig(cwd);
-    const stack = detectStack(cwd);
-    const adapter = loadAdapter(stack);
-    if (!adapter) {
-      const err = new Error(`No adapter for stack "${stack}" — scanner "${name}" unavailable`);
-      err.code = "SCANNER_UNAVAILABLE";
-      throw err;
-    }
-    const cmd = name === "unit"
-      ? adapter.unitTestCommand(config, cwd)
-      : adapter.integrationTestCommand?.(config, cwd) ?? adapter.unitTestCommand(config, cwd);
-    if (!cmd) {
-      const err = new Error(`Adapter does not provide a ${name} command for stack "${stack}"`);
-      err.code = "SCANNER_UNAVAILABLE";
-      throw err;
-    }
+  const completed = now();
+  return {
+    scanner: name,
+    startedAt: started.toISOString(),
+    completedAt: completed.toISOString(),
+    failures: result.code !== 0 ? 1 : 0,
+    findings: [],
+    raw: { exitCode: result.code, stdout: result.stdout.slice(0, 2000), stderr: result.stderr.slice(0, 2000) },
+  };
+}
 
-    const result = await new Promise((resolve, reject) => {
-      const timer = setTimeout(() => {
-        try { child.kill("SIGTERM"); } catch { /* ignore */ }
-        setTimeout(() => { try { child.kill("SIGKILL"); } catch { /* ignore */ } }, KILL_GRACE_MS);
-        reject(Object.assign(new Error(`Scanner "${name}" timed out after ${timeoutMs}ms`), { code: "SCANNER_TIMEOUT" }));
-      }, timeoutMs);
-
-      let stdout = "", stderr = "";
-      const child = realSpawn(cmd.bin, cmd.args || [], { cwd, shell: true, env: { ...process.env, CI: "1" } });
-      child.stdout?.on("data", (d) => { stdout += d; });
-      child.stderr?.on("data", (d) => { stderr += d; });
-      child.on("close", (code) => {
-        clearTimeout(timer);
-        resolve({ code, stdout, stderr });
-      });
-      child.on("error", (err) => {
-        clearTimeout(timer);
-        reject(err);
-      });
-    });
-
-    const completed = now();
-    const failures = result.code !== 0 ? 1 : 0;
-    return {
-      scanner: name,
-      startedAt: started.toISOString(),
-      completedAt: completed.toISOString(),
-      failures,
-      findings: [],
-      raw: { exitCode: result.code, stdout: result.stdout.slice(0, 2000), stderr: result.stderr.slice(0, 2000) },
-    };
-  }
-
-  // Dynamic import-based scanners
-  const modulePath = SCANNER_IMPORT_MAP[name];
-  const entryPoint = SCANNER_ENTRY_POINTS[name];
+async function _runImportBasedScanner(name, modulePath, entryPoint, cwd, timeoutMs, started, now) {
   const mod = await import(modulePath);
   const runFn = mod[entryPoint];
   if (typeof runFn !== "function") {
@@ -1399,6 +1329,45 @@ export async function runSingleScanner(name, opts = {}) {
     findings: result.findings ?? [],
     raw: result,
   };
+}
+
+export async function runSingleScanner(name, opts = {}) {
+  const {
+    cwd = process.cwd(),
+    testNameFilter = null,
+    timeoutMs = 120_000,
+    now = () => new Date(),
+    scannerImpl = null,
+  } = opts;
+
+  if (!name || !(name in SCANNER_IMPORT_MAP)) {
+    const err = new Error(`Scanner "${name}" is not registered`);
+    err.code = "SCANNER_UNAVAILABLE";
+    throw err;
+  }
+
+  const started = now();
+
+  if (scannerImpl) {
+    const result = await scannerImpl({ cwd, filter: { testName: testNameFilter } });
+    const completed = now();
+    return {
+      scanner: name,
+      startedAt: started.toISOString(),
+      completedAt: completed.toISOString(),
+      failures: result.failures?.length ?? (result.fail ?? 0),
+      findings: result.findings ?? [],
+      raw: result,
+    };
+  }
+
+  if (name === "unit" || name === "integration") {
+    return _runSpawnBasedScanner(name, cwd, timeoutMs, started, now);
+  }
+
+  const modulePath = SCANNER_IMPORT_MAP[name];
+  const entryPoint = SCANNER_ENTRY_POINTS[name];
+  return _runImportBasedScanner(name, modulePath, entryPoint, cwd, timeoutMs, started, now);
 }
 
 /**

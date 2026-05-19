@@ -455,15 +455,13 @@ async function _mcpAuthGate(toolName, request) {
   return null;
 }
 
-export const callToolRequestHandler = _wrapWithToolSpan(async (request) => {
-  const { name, arguments: args } = request.params;
+const _CALL_TOOL_NO_MATCH = Symbol("call-tool-no-match");
 
-  // ─── Auth gate — open-by-default when .forge/rbac.json is absent ───
-  const authDenied = await _mcpAuthGate(name, request);
-  if (authDenied) return authDenied;
+/* eslint-disable complexity */
+async function _callToolHandler_001_forge_run_plan(request, args) {
+  const { name } = request.params;
+  if (!(name === "forge_run_plan")) return _CALL_TOOL_NO_MATCH;
 
-  // ─── Async orchestrator tools ───
-  if (name === "forge_run_plan") {
     try {
       // Validate plan path before any resolve() — accepts planPath as an alias for plan
       let planArg = args.plan;
@@ -556,17 +554,25 @@ export const callToolRequestHandler = _wrapWithToolSpan(async (request) => {
       setActiveAbortController(null);
       return { content: [{ type: "text", text: `Orchestrator error: ${err.message}` }], isError: true };
     }
-  }
+  
+}
 
-  if (name === "forge_abort") {
+async function _callToolHandler_002_forge_abort(request, args) {
+  const { name } = request.params;
+  if (!(name === "forge_abort")) return _CALL_TOOL_NO_MATCH;
+
     if (activeAbortController) {
       activeAbortController.abort();
       return { content: [{ type: "text", text: "Abort signal sent. Current slice will finish, then execution stops." }] };
     }
     return { content: [{ type: "text", text: "No active plan execution to abort." }] };
-  }
+  
+}
 
-  if (name === "forge_plan_status") {
+async function _callToolHandler_003_forge_plan_status(request, args) {
+  const { name } = request.params;
+  if (!(name === "forge_plan_status")) return _CALL_TOOL_NO_MATCH;
+
     try {
       const cwd = args.path ? findProjectRoot(resolve(args.path)) : findProjectRoot(PROJECT_DIR);
       const runsDir = resolve(cwd, ".forge", "runs");
@@ -611,9 +617,13 @@ export const callToolRequestHandler = _wrapWithToolSpan(async (request) => {
     } catch (err) {
       return { content: [{ type: "text", text: `Status error: ${err.message}` }], isError: true };
     }
-  }
+  
+}
 
-  if (name === "forge_diff_classify") {
+async function _callToolHandler_004_forge_diff_classify(request, args) {
+  const { name } = request.params;
+  if (!(name === "forge_diff_classify")) return _CALL_TOOL_NO_MATCH;
+
     try {
       const cwd = args.path ? findProjectRoot(resolve(args.path)) : findProjectRoot(PROJECT_DIR);
       const result = classifyDiff({ cwd, since: args.since || undefined });
@@ -621,9 +631,13 @@ export const callToolRequestHandler = _wrapWithToolSpan(async (request) => {
     } catch (err) {
       return { content: [{ type: "text", text: `diff-classify error: ${err.message}` }], isError: true };
     }
-  }
+  
+}
 
-  if (name === "forge_cost_report") {
+async function _callToolHandler_005_forge_cost_report(request, args) {
+  const { name } = request.params;
+  if (!(name === "forge_cost_report")) return _CALL_TOOL_NO_MATCH;
+
     const t0 = Date.now();
     try {
       const cwd = args.path ? findProjectRoot(resolve(args.path)) : findProjectRoot(PROJECT_DIR);
@@ -644,9 +658,13 @@ export const callToolRequestHandler = _wrapWithToolSpan(async (request) => {
     } catch (err) {
       return { content: [{ type: "text", text: `Cost report error: ${err.message}` }], isError: true };
     }
-  }
+  
+}
 
-  if (name === "forge_estimate_quorum") {
+async function _callToolHandler_006_forge_estimate_quorum(request, args) {
+  const { name } = request.params;
+  if (!(name === "forge_estimate_quorum")) return _CALL_TOOL_NO_MATCH;
+
     const t0 = Date.now();
     try {
       const cwd = args.path ? findProjectRoot(resolve(args.path)) : findProjectRoot(PROJECT_DIR);
@@ -678,9 +696,13 @@ export const callToolRequestHandler = _wrapWithToolSpan(async (request) => {
     } catch (err) {
       return { content: [{ type: "text", text: `Estimate error: ${err.message}` }], isError: true };
     }
-  }
+  
+}
 
-  if (name === "forge_estimate_slice") {
+async function _callToolHandler_007_forge_estimate_slice(request, args) {
+  const { name } = request.params;
+  if (!(name === "forge_estimate_slice")) return _CALL_TOOL_NO_MATCH;
+
     const t0 = Date.now();
     try {
       const cwd = args.path ? findProjectRoot(resolve(args.path)) : findProjectRoot(PROJECT_DIR);
@@ -727,9 +749,13 @@ export const callToolRequestHandler = _wrapWithToolSpan(async (request) => {
     } catch (err) {
       return { content: [{ type: "text", text: `Estimate error: ${err.message}` }], isError: true };
     }
-  }
+  
+}
 
-  if (name === "forge_health_trend") {
+async function _callToolHandler_008_forge_health_trend(request, args) {
+  const { name } = request.params;
+  if (!(name === "forge_health_trend")) return _CALL_TOOL_NO_MATCH;
+
     const t0 = Date.now();
     try {
       const cwd = args.path ? findProjectRoot(resolve(args.path)) : findProjectRoot(PROJECT_DIR);
@@ -750,9 +776,13 @@ export const callToolRequestHandler = _wrapWithToolSpan(async (request) => {
     } catch (err) {
       return { content: [{ type: "text", text: `Health trend error: ${err.message}` }], isError: true };
     }
-  }
+  
+}
 
-  if (name === "forge_alert_triage") {
+async function _callToolHandler_009_forge_alert_triage(request, args) {
+  const { name } = request.params;
+  if (!(name === "forge_alert_triage")) return _CALL_TOOL_NO_MATCH;
+
     try {
       const t0 = Date.now();
       const cwd = args.path ? findProjectRoot(resolve(args.path)) : findProjectRoot(PROJECT_DIR);
@@ -817,10 +847,13 @@ export const callToolRequestHandler = _wrapWithToolSpan(async (request) => {
     } catch (err) {
       return { content: [{ type: "text", text: `Alert triage error: ${err.message}` }], isError: true };
     }
-  }
+  
+}
 
-  // ─── Phase ANVIL Slice 5 — Anvil-wrapped forge_sweep ─────────────────────
-  if (name === "forge_sweep") {
+async function _callToolHandler_010_forge_sweep(request, args) {
+  const { name } = request.params;
+  if (!(name === "forge_sweep")) return _CALL_TOOL_NO_MATCH;
+
     try {
       const cwd = args.path ? findProjectRoot(resolve(args.path)) : findProjectRoot(PROJECT_DIR);
       const result = await _sweepAnvilCompute(args, { _cwd: cwd });
@@ -831,10 +864,13 @@ export const callToolRequestHandler = _wrapWithToolSpan(async (request) => {
     } catch (err) {
       return { content: [{ type: "text", text: `Sweep error: ${err.message}` }], isError: true };
     }
-  }
+  
+}
 
-  // ─── Phase ANVIL Slice 5 — Anvil-wrapped forge_analyze (non-quorum) ──────
-  if (name === "forge_analyze" && !args.quorum) {
+async function _callToolHandler_011_forge_analyze(request, args) {
+  const { name } = request.params;
+  if (!(name === "forge_analyze" && !args.quorum)) return _CALL_TOOL_NO_MATCH;
+
     try {
       const cwd = args.path ? findProjectRoot(resolve(args.path)) : findProjectRoot(PROJECT_DIR);
       const result = await _analyzeAnvilCompute(args, { _cwd: cwd });
@@ -845,9 +881,13 @@ export const callToolRequestHandler = _wrapWithToolSpan(async (request) => {
     } catch (err) {
       return { content: [{ type: "text", text: `Analyze error: ${err.message}` }], isError: true };
     }
-  }
+  
+}
 
-  if (name === "forge_analyze" && args.quorum) {
+async function _callToolHandler_012_forge_analyze(request, args) {
+  const { name } = request.params;
+  if (!(name === "forge_analyze" && args.quorum)) return _CALL_TOOL_NO_MATCH;
+
     try {
       const cwd = args.path ? findProjectRoot(resolve(args.path)) : findProjectRoot(PROJECT_DIR);
       const mode = args.mode || (args.plan.match(/plan/i) ? "plan" : "file");
@@ -867,9 +907,13 @@ export const callToolRequestHandler = _wrapWithToolSpan(async (request) => {
     } catch (err) {
       return { content: [{ type: "text", text: `Quorum analysis error: ${err.message}` }], isError: true };
     }
-  }
+  
+}
 
-  if (name === "forge_diagnose") {
+async function _callToolHandler_013_forge_diagnose(request, args) {
+  const { name } = request.params;
+  if (!(name === "forge_diagnose")) return _CALL_TOOL_NO_MATCH;
+
     try {
       const cwd = args.path ? findProjectRoot(resolve(args.path)) : findProjectRoot(PROJECT_DIR);
       const models = args.models ? args.models.split(",").map((m) => m.trim()) : null;
@@ -888,9 +932,13 @@ export const callToolRequestHandler = _wrapWithToolSpan(async (request) => {
     } catch (err) {
       return { content: [{ type: "text", text: `Diagnosis error: ${err.message}` }], isError: true };
     }
-  }
+  
+}
 
-  if (name === "forge_capabilities") {
+async function _callToolHandler_014_forge_capabilities(request, args) {
+  const { name } = request.params;
+  if (!(name === "forge_capabilities")) return _CALL_TOOL_NO_MATCH;
+
     try {
       const cwd = args.path ? findProjectRoot(resolve(args.path)) : findProjectRoot(PROJECT_DIR);
       const surface = buildCapabilitySurface(TOOLS, { cwd, hubPort: activeHub?.port || null });
@@ -898,9 +946,13 @@ export const callToolRequestHandler = _wrapWithToolSpan(async (request) => {
     } catch (err) {
       return { content: [{ type: "text", text: `Capabilities error: ${err.message}` }], isError: true };
     }
-  }
+  
+}
 
-  if (name === "forge_watch") {
+async function _callToolHandler_015_forge_watch(request, args) {
+  const { name } = request.params;
+  if (!(name === "forge_watch")) return _CALL_TOOL_NO_MATCH;
+
     try {
       if (!args.targetPath) {
         return { content: [{ type: "text", text: "forge_watch requires targetPath (absolute path to the project being watched)." }], isError: true };
@@ -951,9 +1003,13 @@ export const callToolRequestHandler = _wrapWithToolSpan(async (request) => {
     } catch (err) {
       return { content: [{ type: "text", text: `Watcher error: ${err.message}` }], isError: true };
     }
-  }
+  
+}
 
-  if (name === "forge_watch_live") {
+async function _callToolHandler_016_forge_watch_live(request, args) {
+  const { name } = request.params;
+  if (!(name === "forge_watch_live")) return _CALL_TOOL_NO_MATCH;
+
     try {
       if (!args.targetPath) {
         return { content: [{ type: "text", text: "forge_watch_live requires targetPath." }], isError: true };
@@ -1034,9 +1090,13 @@ export const callToolRequestHandler = _wrapWithToolSpan(async (request) => {
     } catch (err) {
       return { content: [{ type: "text", text: `Watcher live error: ${err.message}` }], isError: true };
     }
-  }
+  
+}
 
-  if (name === "forge_memory_report") {
+async function _callToolHandler_017_forge_memory_report(request, args) {
+  const { name } = request.params;
+  if (!(name === "forge_memory_report")) return _CALL_TOOL_NO_MATCH;
+
     // GX.3 (v2.36): aggregate every memory surface (L2 files, OpenBrain queue
     // state, drain stats trend, capture telemetry, search cache, orphans).
     // Read-only — never mutates the forge dir.
@@ -1046,9 +1106,13 @@ export const callToolRequestHandler = _wrapWithToolSpan(async (request) => {
     } catch (err) {
       return { content: [{ type: "text", text: `Memory report error: ${err.message}` }], isError: true };
     }
-  }
+  
+}
 
-  if (name === "forge_skill_status") {
+async function _callToolHandler_018_forge_skill_status(request, args) {
+  const { name } = request.params;
+  if (!(name === "forge_skill_status")) return _CALL_TOOL_NO_MATCH;
+
     try {
       if (!activeHub) {
         return { content: [{ type: "text", text: "Hub not running. Start the MCP server with --port to enable skill event tracking." }] };
@@ -1065,9 +1129,13 @@ export const callToolRequestHandler = _wrapWithToolSpan(async (request) => {
     } catch (err) {
       return { content: [{ type: "text", text: `Skill status error: ${err.message}` }], isError: true };
     }
-  }
+  
+}
 
-  if (name === "forge_run_skill") {
+async function _callToolHandler_019_forge_run_skill(request, args) {
+  const { name } = request.params;
+  if (!(name === "forge_run_skill")) return _CALL_TOOL_NO_MATCH;
+
     try {
       const cwd = args.path ? findProjectRoot(resolve(args.path)) : findProjectRoot(PROJECT_DIR);
 
@@ -1122,9 +1190,13 @@ export const callToolRequestHandler = _wrapWithToolSpan(async (request) => {
     } catch (err) {
       return { content: [{ type: "text", text: `Skill execution error: ${err.message}` }], isError: true };
     }
-  }
+  
+}
 
-  if (name === "forge_org_rules") {
+async function _callToolHandler_020_forge_org_rules(request, args) {
+  const { name } = request.params;
+  if (!(name === "forge_org_rules")) return _CALL_TOOL_NO_MATCH;
+
     try {
       const cwd = args.path ? findProjectRoot(resolve(args.path)) : findProjectRoot(PROJECT_DIR);
       const result = callOrgRules({ format: args.format || "github", output: args.output || null }, cwd);
@@ -1132,10 +1204,13 @@ export const callToolRequestHandler = _wrapWithToolSpan(async (request) => {
     } catch (err) {
       return { content: [{ type: "text", text: `Org rules error: ${err.message}` }], isError: true };
     }
-  }
+  
+}
 
-  // ─── Crucible (v2.37) — raw idea → hardened spec workflow ─────────
-  if (name === "forge_crucible_submit") {
+async function _callToolHandler_021_forge_crucible_submit(request, args) {
+  const { name } = request.params;
+  if (!(name === "forge_crucible_submit")) return _CALL_TOOL_NO_MATCH;
+
     try {
       const cwd = args.path ? findProjectRoot(resolve(args.path)) : findProjectRoot(PROJECT_DIR);
       const result = crucibleHandleSubmit({
@@ -1150,9 +1225,13 @@ export const callToolRequestHandler = _wrapWithToolSpan(async (request) => {
     } catch (err) {
       return { content: [{ type: "text", text: `Crucible submit error: ${err.message}` }], isError: true };
     }
-  }
+  
+}
 
-  if (name === "forge_crucible_ask") {
+async function _callToolHandler_022_forge_crucible_ask(request, args) {
+  const { name } = request.params;
+  if (!(name === "forge_crucible_ask")) return _CALL_TOOL_NO_MATCH;
+
     try {
       const cwd = args.path ? findProjectRoot(resolve(args.path)) : findProjectRoot(PROJECT_DIR);
       const result = crucibleHandleAsk({
@@ -1172,9 +1251,13 @@ export const callToolRequestHandler = _wrapWithToolSpan(async (request) => {
       }
       return { content: [{ type: "text", text: `Crucible ask error: ${err.message}` }], isError: true };
     }
-  }
+  
+}
 
-  if (name === "forge_crucible_preview") {
+async function _callToolHandler_023_forge_crucible_preview(request, args) {
+  const { name } = request.params;
+  if (!(name === "forge_crucible_preview")) return _CALL_TOOL_NO_MATCH;
+
     try {
       const cwd = args.path ? findProjectRoot(resolve(args.path)) : findProjectRoot(PROJECT_DIR);
       const result = crucibleHandlePreview({ id: args.id, projectDir: cwd });
@@ -1182,9 +1265,13 @@ export const callToolRequestHandler = _wrapWithToolSpan(async (request) => {
     } catch (err) {
       return { content: [{ type: "text", text: `Crucible preview error: ${err.message}` }], isError: true };
     }
-  }
+  
+}
 
-  if (name === "forge_crucible_finalize") {
+async function _callToolHandler_024_forge_crucible_finalize(request, args) {
+  const { name } = request.params;
+  if (!(name === "forge_crucible_finalize")) return _CALL_TOOL_NO_MATCH;
+
     try {
       const cwd = args.path ? findProjectRoot(resolve(args.path)) : findProjectRoot(PROJECT_DIR);
       const result = crucibleHandleFinalize({
@@ -1215,9 +1302,13 @@ export const callToolRequestHandler = _wrapWithToolSpan(async (request) => {
       }
       return { content: [{ type: "text", text: `Crucible finalize error: ${err.message}` }], isError: true };
     }
-  }
+  
+}
 
-  if (name === "forge_crucible_list") {
+async function _callToolHandler_025_forge_crucible_list(request, args) {
+  const { name } = request.params;
+  if (!(name === "forge_crucible_list")) return _CALL_TOOL_NO_MATCH;
+
     try {
       const cwd = args.path ? findProjectRoot(resolve(args.path)) : findProjectRoot(PROJECT_DIR);
       const result = crucibleHandleList({ status: args.status || null, projectDir: cwd });
@@ -1225,9 +1316,13 @@ export const callToolRequestHandler = _wrapWithToolSpan(async (request) => {
     } catch (err) {
       return { content: [{ type: "text", text: `Crucible list error: ${err.message}` }], isError: true };
     }
-  }
+  
+}
 
-  if (name === "forge_crucible_abandon") {
+async function _callToolHandler_026_forge_crucible_abandon(request, args) {
+  const { name } = request.params;
+  if (!(name === "forge_crucible_abandon")) return _CALL_TOOL_NO_MATCH;
+
     try {
       const cwd = args.path ? findProjectRoot(resolve(args.path)) : findProjectRoot(PROJECT_DIR);
       const result = crucibleHandleAbandon({ id: args.id, projectDir: cwd });
@@ -1235,9 +1330,13 @@ export const callToolRequestHandler = _wrapWithToolSpan(async (request) => {
     } catch (err) {
       return { content: [{ type: "text", text: `Crucible abandon error: ${err.message}` }], isError: true };
     }
-  }
+  
+}
 
-  if (name === "forge_crucible_import") {
+async function _callToolHandler_027_forge_crucible_import(request, args) {
+  const { name } = request.params;
+  if (!(name === "forge_crucible_import")) return _CALL_TOOL_NO_MATCH;
+
     try {
       const cwd = args.path ? findProjectRoot(resolve(args.path)) : findProjectRoot(PROJECT_DIR);
       const result = importSpeckit({
@@ -1250,9 +1349,13 @@ export const callToolRequestHandler = _wrapWithToolSpan(async (request) => {
     } catch (err) {
       return { content: [{ type: "text", text: `Crucible import error: ${err.message}` }], isError: true };
     }
-  }
+  
+}
 
-  if (name === "forge_crucible_status") {
+async function _callToolHandler_028_forge_crucible_status(request, args) {
+  const { name } = request.params;
+  if (!(name === "forge_crucible_status")) return _CALL_TOOL_NO_MATCH;
+
     try {
       const cwd = args.path ? findProjectRoot(resolve(args.path)) : findProjectRoot(PROJECT_DIR);
       if (args.smeltId) {
@@ -1267,11 +1370,13 @@ export const callToolRequestHandler = _wrapWithToolSpan(async (request) => {
     } catch (err) {
       return { content: [{ type: "text", text: `Crucible status error: ${err.message}` }], isError: true };
     }
-  }
+  
+}
 
-  // ─── Tempering (TEMPER-01) — read-only coverage scan ──────────────
-  // Phase ANVIL Slice 5: wrapped in _temperingScanAnvilCompute for Δ-only memoization.
-  if (name === "forge_tempering_scan") {
+async function _callToolHandler_029_forge_tempering_scan(request, args) {
+  const { name } = request.params;
+  if (!(name === "forge_tempering_scan")) return _CALL_TOOL_NO_MATCH;
+
     const t0 = Date.now();
     try {
       const cwd = args.path ? findProjectRoot(resolve(args.path)) : findProjectRoot(PROJECT_DIR);
@@ -1299,9 +1404,13 @@ export const callToolRequestHandler = _wrapWithToolSpan(async (request) => {
     } catch (err) {
       return { content: [{ type: "text", text: `Tempering scan error: ${err.message}` }], isError: true };
     }
-  }
+  
+}
 
-  if (name === "forge_tempering_status") {
+async function _callToolHandler_030_forge_tempering_status(request, args) {
+  const { name } = request.params;
+  if (!(name === "forge_tempering_status")) return _CALL_TOOL_NO_MATCH;
+
     const t0 = Date.now();
     try {
       const cwd = args.path ? findProjectRoot(resolve(args.path)) : findProjectRoot(PROJECT_DIR);
@@ -1314,10 +1423,13 @@ export const callToolRequestHandler = _wrapWithToolSpan(async (request) => {
     } catch (err) {
       return { content: [{ type: "text", text: `Tempering status error: ${err.message}` }], isError: true };
     }
-  }
+  
+}
 
-  // Phase TEMPER-02 Slice 02.1 — execution harness (unit scanner)
-  if (name === "forge_tempering_run") {
+async function _callToolHandler_031_forge_tempering_run(request, args) {
+  const { name } = request.params;
+  if (!(name === "forge_tempering_run")) return _CALL_TOOL_NO_MATCH;
+
     const t0 = Date.now();
     try {
       const cwd = args.path ? findProjectRoot(resolve(args.path)) : findProjectRoot(PROJECT_DIR);
@@ -1352,10 +1464,13 @@ export const callToolRequestHandler = _wrapWithToolSpan(async (request) => {
     } catch (err) {
       return { content: [{ type: "text", text: `Tempering run error: ${err.message}` }], isError: true };
     }
-  }
+  
+}
 
-  // Phase TEMPER-04 Slice 04.1 — approve visual-diff baseline
-  if (name === "forge_tempering_approve_baseline") {
+async function _callToolHandler_032_forge_tempering_approve_baseline(request, args) {
+  const { name } = request.params;
+  if (!(name === "forge_tempering_approve_baseline")) return _CALL_TOOL_NO_MATCH;
+
     const t0 = Date.now();
     try {
       const cwd = args.path ? findProjectRoot(resolve(args.path)) : findProjectRoot(PROJECT_DIR);
@@ -1381,10 +1496,13 @@ export const callToolRequestHandler = _wrapWithToolSpan(async (request) => {
     } catch (err) {
       return { content: [{ type: "text", text: `Baseline approval error: ${err.message}` }], isError: true };
     }
-  }
+  
+}
 
-  // ─── Phase-39 Slice 4 — Audit loop tools ────────────────────────
-  if (name === "forge_tempering_drain") {
+async function _callToolHandler_033_forge_tempering_drain(request, args) {
+  const { name } = request.params;
+  if (!(name === "forge_tempering_drain")) return _CALL_TOOL_NO_MATCH;
+
     const t0 = Date.now();
     try {
       const cwd = args.path ? findProjectRoot(resolve(args.path)) : findProjectRoot(PROJECT_DIR);
@@ -1424,9 +1542,13 @@ export const callToolRequestHandler = _wrapWithToolSpan(async (request) => {
     } catch (err) {
       return { content: [{ type: "text", text: `Tempering drain error: ${err.message}` }], isError: true };
     }
-  }
+  
+}
 
-  if (name === "forge_triage_route") {
+async function _callToolHandler_034_forge_triage_route(request, args) {
+  const { name } = request.params;
+  if (!(name === "forge_triage_route")) return _CALL_TOOL_NO_MATCH;
+
     const t0 = Date.now();
     try {
       if (!args.finding || typeof args.finding !== "object") {
@@ -1438,10 +1560,13 @@ export const callToolRequestHandler = _wrapWithToolSpan(async (request) => {
     } catch (err) {
       return { content: [{ type: "text", text: `Triage route error: ${err.message}` }], isError: true };
     }
-  }
+  
+}
 
-  // ─── Classifier-lane GitHub issue filer (Phase CLASSIFIER-ISSUE) ──
-  if (name === "forge_classifier_issue") {
+async function _callToolHandler_035_forge_classifier_issue(request, args) {
+  const { name } = request.params;
+  if (!(name === "forge_classifier_issue")) return _CALL_TOOL_NO_MATCH;
+
     const t0 = Date.now();
     try {
       const cwd = args.path ? findProjectRoot(resolve(args.path)) : findProjectRoot(PROJECT_DIR);
@@ -1459,10 +1584,13 @@ export const callToolRequestHandler = _wrapWithToolSpan(async (request) => {
       emitToolTelemetry("forge_classifier_issue", args, { error: err.message }, Date.now() - t0, "ERROR", findProjectRoot(PROJECT_DIR));
       return { content: [{ type: "text", text: `Classifier issue error: ${err.message}` }], isError: true };
     }
-  }
+  
+}
 
-  // ─── Bug Registry (TEMPER-06 Slice 06.1) ─────────────────────────
-  if (name === "forge_bug_register") {
+async function _callToolHandler_036_forge_bug_register(request, args) {
+  const { name } = request.params;
+  if (!(name === "forge_bug_register")) return _CALL_TOOL_NO_MATCH;
+
     const t0 = Date.now();
     try {
       const cwd = args.path ? findProjectRoot(resolve(args.path)) : findProjectRoot(PROJECT_DIR);
@@ -1490,9 +1618,13 @@ export const callToolRequestHandler = _wrapWithToolSpan(async (request) => {
     } catch (err) {
       return { content: [{ type: "text", text: `Bug registration error: ${err.message}` }], isError: true };
     }
-  }
+  
+}
 
-  if (name === "forge_bug_list") {
+async function _callToolHandler_037_forge_bug_list(request, args) {
+  const { name } = request.params;
+  if (!(name === "forge_bug_list")) return _CALL_TOOL_NO_MATCH;
+
     const t0 = Date.now();
     try {
       const cwd = args.path ? findProjectRoot(resolve(args.path)) : findProjectRoot(PROJECT_DIR);
@@ -1508,9 +1640,13 @@ export const callToolRequestHandler = _wrapWithToolSpan(async (request) => {
     } catch (err) {
       return { content: [{ type: "text", text: `Bug list error: ${err.message}` }], isError: true };
     }
-  }
+  
+}
 
-  if (name === "forge_bug_update_status") {
+async function _callToolHandler_038_forge_bug_update_status(request, args) {
+  const { name } = request.params;
+  if (!(name === "forge_bug_update_status")) return _CALL_TOOL_NO_MATCH;
+
     const t0 = Date.now();
     try {
       const cwd = args.path ? findProjectRoot(resolve(args.path)) : findProjectRoot(PROJECT_DIR);
@@ -1538,10 +1674,13 @@ export const callToolRequestHandler = _wrapWithToolSpan(async (request) => {
     } catch (err) {
       return { content: [{ type: "text", text: `Bug status update error: ${err.message}` }], isError: true };
     }
-  }
+  
+}
 
-  // ─── forge_bug_validate_fix — closed-loop fix validation (TEMPER-06 Slice 06.3) ───
-  if (name === "forge_bug_validate_fix") {
+async function _callToolHandler_039_forge_bug_validate_fix(request, args) {
+  const { name } = request.params;
+  if (!(name === "forge_bug_validate_fix")) return _CALL_TOOL_NO_MATCH;
+
     const t0 = Date.now();
     try {
       const cwd = args.path ? findProjectRoot(resolve(args.path)) : findProjectRoot(PROJECT_DIR);
@@ -1634,9 +1773,13 @@ export const callToolRequestHandler = _wrapWithToolSpan(async (request) => {
     } catch (err) {
       return { content: [{ type: "text", text: `Bug validation error: ${err.message}` }], isError: true };
     }
-  }
+  
+}
 
-  if (name === "forge_memory_capture") {
+async function _callToolHandler_040_forge_memory_capture(request, args) {
+  const { name } = request.params;
+  if (!(name === "forge_memory_capture")) return _CALL_TOOL_NO_MATCH;
+
     try {
       const cwd = args.path ? findProjectRoot(resolve(args.path)) : findProjectRoot(PROJECT_DIR);
       if (!isOpenBrainConfigured(cwd)) {
@@ -1671,9 +1814,13 @@ export const callToolRequestHandler = _wrapWithToolSpan(async (request) => {
     } catch (err) {
       return { content: [{ type: "text", text: `Memory capture error: ${err.message}` }], isError: true };
     }
-  }
+  
+}
 
-  if (name === "forge_brain_test") {
+async function _callToolHandler_041_forge_brain_test(request, args) {
+  const { name } = request.params;
+  if (!(name === "forge_brain_test")) return _CALL_TOOL_NO_MATCH;
+
     const cwd = args.path ? findProjectRoot(resolve(args.path)) : findProjectRoot(PROJECT_DIR);
     const cfg = readOpenBrainConfig(cwd);
     if (!cfg) {
@@ -1704,9 +1851,13 @@ export const callToolRequestHandler = _wrapWithToolSpan(async (request) => {
     } finally {
       if (client) { try { await client.close(); } catch { /* best-effort */ } }
     }
-  }
+  
+}
 
-  if (name === "forge_brain_replay") {
+async function _callToolHandler_042_forge_brain_replay(request, args) {
+  const { name } = request.params;
+  if (!(name === "forge_brain_replay")) return _CALL_TOOL_NO_MATCH;
+
     if (!args.source || typeof args.source !== "string") {
       return { content: [{ type: "text", text: "source is required: pass a queue jsonl path, a markdown file, or a directory of .md files." }], isError: true };
     }
@@ -1777,9 +1928,13 @@ export const callToolRequestHandler = _wrapWithToolSpan(async (request) => {
     } finally {
       if (client) { try { await client.close(); } catch { /* best-effort */ } }
     }
-  }
+  
+}
 
-  if (name === "forge_generate_image") {
+async function _callToolHandler_043_forge_generate_image(request, args) {
+  const { name } = request.params;
+  if (!(name === "forge_generate_image")) return _CALL_TOOL_NO_MATCH;
+
     try {
       const cwd = args.path ? findProjectRoot(resolve(args.path)) : findProjectRoot(PROJECT_DIR);
       const result = await generateImage(args.prompt, {
@@ -1818,9 +1973,13 @@ export const callToolRequestHandler = _wrapWithToolSpan(async (request) => {
     } catch (err) {
       return { content: [{ type: "text", text: `Image generation error: ${err.message}` }], isError: true };
     }
-  }
+  
+}
 
-  if (name === "forge_incident_capture") {
+async function _callToolHandler_044_forge_incident_capture(request, args) {
+  const { name } = request.params;
+  if (!(name === "forge_incident_capture")) return _CALL_TOOL_NO_MATCH;
+
     try {
       const t0 = Date.now();
       const cwd = args.path ? findProjectRoot(resolve(args.path)) : findProjectRoot(PROJECT_DIR);
@@ -1931,9 +2090,13 @@ export const callToolRequestHandler = _wrapWithToolSpan(async (request) => {
     } catch (err) {
       return { content: [{ type: "text", text: `Incident capture error: ${err.message}` }], isError: true };
     }
-  }
+  
+}
 
-  if (name === "forge_deploy_journal") {
+async function _callToolHandler_045_forge_deploy_journal(request, args) {
+  const { name } = request.params;
+  if (!(name === "forge_deploy_journal")) return _CALL_TOOL_NO_MATCH;
+
     try {
       const t0 = Date.now();
       const cwd = args.path ? findProjectRoot(resolve(args.path)) : findProjectRoot(PROJECT_DIR);
@@ -1968,9 +2131,13 @@ export const callToolRequestHandler = _wrapWithToolSpan(async (request) => {
     } catch (err) {
       return { content: [{ type: "text", text: `Deploy journal error: ${err.message}` }], isError: true };
     }
-  }
+  
+}
 
-  if (name === "forge_regression_guard") {
+async function _callToolHandler_046_forge_regression_guard(request, args) {
+  const { name } = request.params;
+  if (!(name === "forge_regression_guard")) return _CALL_TOOL_NO_MATCH;
+
     try {
       const t0 = Date.now();
       const cwd = args.path ? findProjectRoot(resolve(args.path)) : findProjectRoot(PROJECT_DIR);
@@ -2073,9 +2240,13 @@ export const callToolRequestHandler = _wrapWithToolSpan(async (request) => {
     } catch (err) {
       return { content: [{ type: "text", text: `Regression guard error: ${err.message}` }], isError: true };
     }
-  }
+  
+}
 
-  if (name === "forge_drift_report") {
+async function _callToolHandler_047_forge_drift_report(request, args) {
+  const { name } = request.params;
+  if (!(name === "forge_drift_report")) return _CALL_TOOL_NO_MATCH;
+
     try {
       const t0 = Date.now();
       const cwd = args.path ? findProjectRoot(resolve(args.path)) : findProjectRoot(PROJECT_DIR);
@@ -2208,9 +2379,13 @@ export const callToolRequestHandler = _wrapWithToolSpan(async (request) => {
     } catch (err) {
       return { content: [{ type: "text", text: `Drift report error: ${err.message}` }], isError: true };
     }
-  }
+  
+}
 
-  if (name === "forge_runbook") {
+async function _callToolHandler_048_forge_runbook(request, args) {
+  const { name } = request.params;
+  if (!(name === "forge_runbook")) return _CALL_TOOL_NO_MATCH;
+
     try {
       const t0 = Date.now();
       const cwd = args.path ? findProjectRoot(resolve(args.path)) : findProjectRoot(PROJECT_DIR);
@@ -2237,11 +2412,13 @@ export const callToolRequestHandler = _wrapWithToolSpan(async (request) => {
     } catch (err) {
       return { content: [{ type: "text", text: `Runbook error: ${err.message}` }], isError: true };
     }
-  }
+  
+}
 
-  // Phase ANVIL Slice 5: forge_hotspot wrapped in _hotspotAnvilCompute for Δ-only memoization.
-  // The legacy .forge/hotspot-cache.json file-level cache is superseded by the Anvil cache.
-  if (name === "forge_hotspot") {
+async function _callToolHandler_049_forge_hotspot(request, args) {
+  const { name } = request.params;
+  if (!(name === "forge_hotspot")) return _CALL_TOOL_NO_MATCH;
+
     try {
       const t0 = Date.now();
       const cwd = args.path ? findProjectRoot(resolve(args.path)) : findProjectRoot(PROJECT_DIR);
@@ -2261,10 +2438,13 @@ export const callToolRequestHandler = _wrapWithToolSpan(async (request) => {
     } catch (err) {
       return { content: [{ type: "text", text: `Hotspot analysis error: ${err.message}` }], isError: true };
     }
-  }
+  
+}
 
-  // ─── forge_dep_watch — dependency vulnerability scan ───
-  if (name === "forge_dep_watch") {
+async function _callToolHandler_050_forge_dep_watch(request, args) {
+  const { name } = request.params;
+  if (!(name === "forge_dep_watch")) return _CALL_TOOL_NO_MATCH;
+
     const t0 = Date.now();
     try {
       const cwd = args.path ? findProjectRoot(resolve(args.path)) : PROJECT_DIR;
@@ -2383,10 +2563,13 @@ export const callToolRequestHandler = _wrapWithToolSpan(async (request) => {
     } catch (err) {
       return { content: [{ type: "text", text: `Dependency watch error: ${err.message}` }], isError: true };
     }
-  }
+  
+}
 
-  // Phase WORKER-GUARDRAILS A2 — Diff classifier
-  if (name === "forge_diff_classify") {
+async function _callToolHandler_051_forge_diff_classify(request, args) {
+  const { name } = request.params;
+  if (!(name === "forge_diff_classify")) return _CALL_TOOL_NO_MATCH;
+
     const t0 = Date.now();
     try {
       const cwd = args.path ? findProjectRoot(resolve(args.path)) : findProjectRoot(PROJECT_DIR);
@@ -2407,10 +2590,13 @@ export const callToolRequestHandler = _wrapWithToolSpan(async (request) => {
       emitToolTelemetry("forge_diff_classify", args, { error: err.message }, Date.now() - t0, "ERROR", findProjectRoot(PROJECT_DIR));
       return { content: [{ type: "text", text: `Diff classify error: ${err.message}` }], isError: true };
     }
-  }
+  
+}
 
-  // ─── forge_secret_scan — post-commit entropy analysis ───
-  if (name === "forge_secret_scan") {
+async function _callToolHandler_052_forge_secret_scan(request, args) {
+  const { name } = request.params;
+  if (!(name === "forge_secret_scan")) return _CALL_TOOL_NO_MATCH;
+
     const t0 = Date.now();
     try {
       const cwd = args.path ? findProjectRoot(resolve(args.path)) : findProjectRoot(PROJECT_DIR);
@@ -2555,10 +2741,13 @@ export const callToolRequestHandler = _wrapWithToolSpan(async (request) => {
     } catch (err) {
       return { content: [{ type: "text", text: `Secret scan error: ${err.message}` }], isError: true };
     }
-  }
+  
+}
 
-  // ─── forge_env_diff — environment key comparison ───
-  if (name === "forge_env_diff") {
+async function _callToolHandler_053_forge_env_diff(request, args) {
+  const { name } = request.params;
+  if (!(name === "forge_env_diff")) return _CALL_TOOL_NO_MATCH;
+
     const t0 = Date.now();
     try {
       const cwd = args.path ? findProjectRoot(resolve(args.path)) : findProjectRoot(PROJECT_DIR);
@@ -2659,10 +2848,13 @@ export const callToolRequestHandler = _wrapWithToolSpan(async (request) => {
     } catch (err) {
       return { content: [{ type: "text", text: `Env diff error: ${err.message}` }], isError: true };
     }
-  }
+  
+}
 
-  // ─── forge_fix_proposal — generate fix plan from LiveGuard data ───
-  if (name === "forge_fix_proposal") {
+async function _callToolHandler_054_forge_fix_proposal(request, args) {
+  const { name } = request.params;
+  if (!(name === "forge_fix_proposal")) return _CALL_TOOL_NO_MATCH;
+
     const t0 = Date.now();
     try {
       const cwd = args.path ? findProjectRoot(resolve(args.path)) : PROJECT_DIR;
@@ -3147,10 +3339,13 @@ export const callToolRequestHandler = _wrapWithToolSpan(async (request) => {
     } catch (err) {
       return { content: [{ type: "text", text: `Fix proposal error: ${err.message}` }], isError: true };
     }
-  }
+  
+}
 
-  // ─── forge_liveguard_run — composite LiveGuard health check ───
-  if (name === "forge_liveguard_run") {
+async function _callToolHandler_055_forge_liveguard_run(request, args) {
+  const { name } = request.params;
+  if (!(name === "forge_liveguard_run")) return _CALL_TOOL_NO_MATCH;
+
     const t0 = Date.now();
     try {
       const cwd = args.path ? findProjectRoot(resolve(args.path)) : findProjectRoot(PROJECT_DIR);
@@ -3352,10 +3547,13 @@ export const callToolRequestHandler = _wrapWithToolSpan(async (request) => {
     } catch (err) {
       return { content: [{ type: "text", text: `LiveGuard run error: ${err.message}` }], isError: true };
     }
-  }
+  
+}
 
-  // ─── forge_home_snapshot — shop-floor health overview ───
-  if (name === "forge_home_snapshot") {
+async function _callToolHandler_056_forge_home_snapshot(request, args) {
+  const { name } = request.params;
+  if (!(name === "forge_home_snapshot")) return _CALL_TOOL_NO_MATCH;
+
     const t0 = Date.now();
     const cwd = args.targetPath
       ? findProjectRoot(resolve(args.targetPath))
@@ -3373,10 +3571,13 @@ export const callToolRequestHandler = _wrapWithToolSpan(async (request) => {
       content: [{ type: "text", text: JSON.stringify(result) }],
       isError: !result.ok,
     };
-  }
+  
+}
 
-  // ─── forge_review_add — add item to review queue ───
-  if (name === "forge_review_add") {
+async function _callToolHandler_057_forge_review_add(request, args) {
+  const { name } = request.params;
+  if (!(name === "forge_review_add")) return _CALL_TOOL_NO_MATCH;
+
     const t0 = Date.now();
     try {
       const cwd = args.path ? findProjectRoot(resolve(args.path)) : findProjectRoot(PROJECT_DIR);
@@ -3392,10 +3593,13 @@ export const callToolRequestHandler = _wrapWithToolSpan(async (request) => {
     } catch (err) {
       return { content: [{ type: "text", text: JSON.stringify({ error: err.code || "ERR_UNKNOWN", message: err.message }) }], isError: true };
     }
-  }
+  
+}
 
-  // ─── forge_review_list — list review queue items ───
-  if (name === "forge_review_list") {
+async function _callToolHandler_058_forge_review_list(request, args) {
+  const { name } = request.params;
+  if (!(name === "forge_review_list")) return _CALL_TOOL_NO_MATCH;
+
     const t0 = Date.now();
     try {
       const cwd = args.path ? findProjectRoot(resolve(args.path)) : findProjectRoot(PROJECT_DIR);
@@ -3412,10 +3616,13 @@ export const callToolRequestHandler = _wrapWithToolSpan(async (request) => {
     } catch (err) {
       return { content: [{ type: "text", text: JSON.stringify({ error: err.code || "ERR_UNKNOWN", message: err.message }) }], isError: true };
     }
-  }
+  
+}
 
-  // ─── forge_review_resolve — resolve a review queue item ───
-  if (name === "forge_review_resolve") {
+async function _callToolHandler_059_forge_review_resolve(request, args) {
+  const { name } = request.params;
+  if (!(name === "forge_review_resolve")) return _CALL_TOOL_NO_MATCH;
+
     const t0 = Date.now();
     try {
       const cwd = args.path ? findProjectRoot(resolve(args.path)) : findProjectRoot(PROJECT_DIR);
@@ -3430,10 +3637,13 @@ export const callToolRequestHandler = _wrapWithToolSpan(async (request) => {
     } catch (err) {
       return { content: [{ type: "text", text: JSON.stringify({ error: err.code || "ERR_UNKNOWN", message: err.message }) }], isError: true };
     }
-  }
+  
+}
 
-  // ─── forge_delegate_to_agent — route bug to agent/skill for analysis ───
-  if (name === "forge_delegate_to_agent") {
+async function _callToolHandler_060_forge_delegate_to_agent(request, args) {
+  const { name } = request.params;
+  if (!(name === "forge_delegate_to_agent")) return _CALL_TOOL_NO_MATCH;
+
     const t0 = Date.now();
     try {
       const cwd = args.targetPath ? findProjectRoot(resolve(args.targetPath)) : findProjectRoot(PROJECT_DIR);
@@ -3481,10 +3691,13 @@ export const callToolRequestHandler = _wrapWithToolSpan(async (request) => {
     } catch (err) {
       return { content: [{ type: "text", text: JSON.stringify({ error: err.code || "ERR_DELEGATE", message: err.message }) }], isError: true };
     }
-  }
+  
+}
 
-  // ─── forge_notify_send — direct notification dispatch ───
-  if (name === "forge_notify_send") {
+async function _callToolHandler_061_forge_notify_send(request, args) {
+  const { name } = request.params;
+  if (!(name === "forge_notify_send")) return _CALL_TOOL_NO_MATCH;
+
     const t0 = Date.now();
     try {
       const cwd = args.path ? findProjectRoot(resolve(args.path)) : findProjectRoot(PROJECT_DIR);
@@ -3498,10 +3711,13 @@ export const callToolRequestHandler = _wrapWithToolSpan(async (request) => {
     } catch (err) {
       return { content: [{ type: "text", text: JSON.stringify({ error: err.code || "ERR_NOTIFY", message: err.message }) }], isError: true };
     }
-  }
+  
+}
 
-  // ─── forge_notify_test — test notification adapter config ───
-  if (name === "forge_notify_test") {
+async function _callToolHandler_062_forge_notify_test(request, args) {
+  const { name } = request.params;
+  if (!(name === "forge_notify_test")) return _CALL_TOOL_NO_MATCH;
+
     const t0 = Date.now();
     try {
       const cwd = args.path ? findProjectRoot(resolve(args.path)) : findProjectRoot(PROJECT_DIR);
@@ -3515,15 +3731,13 @@ export const callToolRequestHandler = _wrapWithToolSpan(async (request) => {
     } catch (err) {
       return { content: [{ type: "text", text: JSON.stringify({ error: err.code || "ERR_NOTIFY_TEST", message: err.message }) }], isError: true };
     }
-  }
+  
+}
 
-  // ─── forge_search — cross-artifact search with L2/L3 merge ───
-  // Issue #205 fix #2 (May 2026): previously the L3 hook was hard-coded to
-  // `null` with a comment "no direct call available yet" — so search NEVER
-  // returned OpenBrain hits, only stale L2 file scans. Now we pre-fetch L3
-  // semantic hits via SSE and pass a sync closure to the ranker, so L3
-  // results land in the merged + ranked output exactly as designed.
-  if (name === "forge_search") {
+async function _callToolHandler_063_forge_search(request, args) {
+  const { name } = request.params;
+  if (!(name === "forge_search")) return _CALL_TOOL_NO_MATCH;
+
     const t0 = Date.now();
     try {
       const cwd = args.path ? findProjectRoot(resolve(args.path)) : findProjectRoot(PROJECT_DIR);
@@ -3545,10 +3759,13 @@ export const callToolRequestHandler = _wrapWithToolSpan(async (request) => {
       emitToolTelemetry("forge_search", args, { error: err.message }, durationMs, "ERROR", findProjectRoot(PROJECT_DIR));
       return { content: [{ type: "text", text: `Search error: ${err.message}` }], isError: true };
     }
-  }
+  
+}
 
-  // ─── forge_timeline — unified chronological event view ───
-  if (name === "forge_timeline") {
+async function _callToolHandler_064_forge_timeline(request, args) {
+  const { name } = request.params;
+  if (!(name === "forge_timeline")) return _CALL_TOOL_NO_MATCH;
+
     const t0 = Date.now();
     try {
       const cwd = findProjectRoot(PROJECT_DIR);
@@ -3560,10 +3777,13 @@ export const callToolRequestHandler = _wrapWithToolSpan(async (request) => {
       emitToolTelemetry("forge_timeline", args, { error: err.message }, durationMs, "ERROR", findProjectRoot(PROJECT_DIR));
       return { content: [{ type: "text", text: `Timeline error: ${err.message}` }], isError: true };
     }
-  }
+  
+}
 
-  // ─── forge_doctor_quorum — runtime-aware quorum viability (#73) ───
-  if (name === "forge_doctor_quorum") {
+async function _callToolHandler_065_forge_doctor_quorum(request, args) {
+  const { name } = request.params;
+  if (!(name === "forge_doctor_quorum")) return _CALL_TOOL_NO_MATCH;
+
     const t0 = Date.now();
     try {
       const presetArg = args.preset || "all";
@@ -3577,10 +3797,13 @@ export const callToolRequestHandler = _wrapWithToolSpan(async (request) => {
       emitToolTelemetry("forge_doctor_quorum", args, { error: err.message }, durationMs, "ERROR", findProjectRoot(PROJECT_DIR));
       return { content: [{ type: "text", text: `Doctor quorum error: ${err.message}` }], isError: true };
     }
-  }
+  
+}
 
-  // ─── forge_quorum_analyze — assemble structured quorum prompt ───
-  if (name === "forge_quorum_analyze") {
+async function _callToolHandler_066_forge_quorum_analyze(request, args) {
+  const { name } = request.params;
+  if (!(name === "forge_quorum_analyze")) return _CALL_TOOL_NO_MATCH;
+
     const t0 = Date.now();
     try {
       const cwd = args.path ? findProjectRoot(resolve(args.path)) : PROJECT_DIR;
@@ -3717,10 +3940,13 @@ export const callToolRequestHandler = _wrapWithToolSpan(async (request) => {
     } catch (err) {
       return { content: [{ type: "text", text: JSON.stringify({ quorumPrompt: null, error: `Quorum analyze error: ${err.message}` }) }], isError: true };
     }
-  }
+  
+}
 
-  // ─── forge_smith — onCall validation enhancement ───
-  if (name === "forge_smith") {
+async function _callToolHandler_067_forge_smith(request, args) {
+  const { name } = request.params;
+  if (!(name === "forge_smith")) return _CALL_TOOL_NO_MATCH;
+
     const result = executeTool(name, args || {});
     let output = result.success ? result.output : `Error (exit code ${result.exitCode}):\n${result.output}\n${result.error}`;
     try {
@@ -3908,10 +4134,13 @@ export const callToolRequestHandler = _wrapWithToolSpan(async (request) => {
     } catch { /* testbed not configured — skip */ }
 
     return { content: [{ type: "text", text: output }], isError: !result.success };
-  }
+  
+}
 
-  // ─── forge_testbed_run — testbed scenario execution (TESTBED-01) ───
-  if (name === "forge_testbed_run") {
+async function _callToolHandler_068_forge_testbed_run(request, args) {
+  const { name } = request.params;
+  if (!(name === "forge_testbed_run")) return _CALL_TOOL_NO_MATCH;
+
     const t0 = Date.now();
     try {
       const cwd = args.path ? findProjectRoot(resolve(args.path)) : findProjectRoot(PROJECT_DIR);
@@ -3933,10 +4162,13 @@ export const callToolRequestHandler = _wrapWithToolSpan(async (request) => {
       emitToolTelemetry("forge_testbed_run", args, { error: err.message, code: err.code }, durationMs, "ERROR", findProjectRoot(PROJECT_DIR));
       return { content: [{ type: "text", text: JSON.stringify({ error: err.code || "ERR_TESTBED", message: err.message }) }], isError: true };
     }
-  }
+  
+}
 
-  // ─── forge_testbed_findings — query defect-log (TESTBED-01 Slice 02) ───
-  if (name === "forge_testbed_findings") {
+async function _callToolHandler_069_forge_testbed_findings(request, args) {
+  const { name } = request.params;
+  if (!(name === "forge_testbed_findings")) return _CALL_TOOL_NO_MATCH;
+
     const t0 = Date.now();
     try {
       const cwd = args.path ? findProjectRoot(resolve(args.path)) : findProjectRoot(PROJECT_DIR);
@@ -3955,10 +4187,13 @@ export const callToolRequestHandler = _wrapWithToolSpan(async (request) => {
       emitToolTelemetry("forge_testbed_findings", args, { error: err.message }, Date.now() - t0, "ERROR", findProjectRoot(PROJECT_DIR));
       return { content: [{ type: "text", text: `Tool error: ${err.message}` }], isError: true };
     }
-  }
+  
+}
 
-  // ─── forge_export_plan — convert loose plan to hardened Plan Forge format (Roadmap C2) ───
-  if (name === "forge_export_plan") {
+async function _callToolHandler_070_forge_export_plan(request, args) {
+  const { name } = request.params;
+  if (!(name === "forge_export_plan")) return _CALL_TOOL_NO_MATCH;
+
     const t0 = Date.now();
     try {
       const cwd = args.path ? resolve(args.path) : findProjectRoot(PROJECT_DIR);
@@ -3974,10 +4209,13 @@ export const callToolRequestHandler = _wrapWithToolSpan(async (request) => {
       emitToolTelemetry("forge_export_plan", args, { error: err.message }, Date.now() - t0, "ERROR", findProjectRoot(PROJECT_DIR));
       return { content: [{ type: "text", text: `Tool error: ${err.message}` }], isError: true };
     }
-  }
+  
+}
 
-  // ─── forge_sync_memories — generate .github/copilot-memory-hints.md (Roadmap C3) ────────
-  if (name === "forge_sync_memories") {
+async function _callToolHandler_071_forge_sync_memories(request, args) {
+  const { name } = request.params;
+  if (!(name === "forge_sync_memories")) return _CALL_TOOL_NO_MATCH;
+
     const t0 = Date.now();
     try {
       const cwd = args.path ? resolve(args.path) : findProjectRoot(PROJECT_DIR);
@@ -3995,10 +4233,13 @@ export const callToolRequestHandler = _wrapWithToolSpan(async (request) => {
       emitToolTelemetry("forge_sync_memories", args, { error: err.message }, Date.now() - t0, "ERROR", findProjectRoot(PROJECT_DIR));
       return { content: [{ type: "text", text: `Tool error: ${err.message}` }], isError: true };
     }
-  }
+  
+}
 
-  // ─── forge_sync_instructions — generate .github/copilot-instructions.md (v3.0.0) ──────
-  if (name === "forge_sync_instructions") {
+async function _callToolHandler_072_forge_sync_instructions(request, args) {
+  const { name } = request.params;
+  if (!(name === "forge_sync_instructions")) return _CALL_TOOL_NO_MATCH;
+
     const t0 = Date.now();
     try {
       const cwd = args.path ? resolve(args.path) : findProjectRoot(PROJECT_DIR);
@@ -4017,10 +4258,13 @@ export const callToolRequestHandler = _wrapWithToolSpan(async (request) => {
       emitToolTelemetry("forge_sync_instructions", args, { error: err.message }, Date.now() - t0, "ERROR", findProjectRoot(PROJECT_DIR));
       return { content: [{ type: "text", text: `Tool error: ${err.message}` }], isError: true };
     }
-  }
+  
+}
 
+async function _callToolHandler_073_forge_testbed_happypath(request, args) {
+  const { name } = request.params;
+  if (!(name === "forge_testbed_happypath")) return _CALL_TOOL_NO_MATCH;
 
-  if (name === "forge_testbed_happypath") {
     const t0 = Date.now();
     try {
       const cwd = args.path ? findProjectRoot(resolve(args.path)) : findProjectRoot(PROJECT_DIR);
@@ -4091,10 +4335,13 @@ export const callToolRequestHandler = _wrapWithToolSpan(async (request) => {
       emitToolTelemetry("forge_testbed_happypath", args, { error: err.message, code: err.code }, durationMs, "ERROR", findProjectRoot(PROJECT_DIR));
       return { content: [{ type: "text", text: JSON.stringify({ error: err.code || "ERR_TESTBED", message: err.message }) }], isError: true };
     }
-  }
+  
+}
 
-  // ─── forge_master_ask — Forge-Master reasoning (Phase-28 Slice 07) ───
-  if (name === "forge_master_ask") {
+async function _callToolHandler_074_forge_master_ask(request, args) {
+  const { name } = request.params;
+  if (!(name === "forge_master_ask")) return _CALL_TOOL_NO_MATCH;
+
     const t0 = Date.now();
     try {
       const cwd = args.path ? findProjectRoot(resolve(args.path)) : findProjectRoot(PROJECT_DIR);
@@ -4148,10 +4395,13 @@ export const callToolRequestHandler = _wrapWithToolSpan(async (request) => {
       emitToolTelemetry("forge_master_ask", args, { error: err.message }, Date.now() - t0, "ERROR", findProjectRoot(PROJECT_DIR));
       return { content: [{ type: "text", text: `Forge-Master error: ${err.message}` }], isError: true };
     }
-  }
+  
+}
 
-  // ─── forge_meta_bug_file — self-repair meta-bug filer (Phase-28.3 Slice 03) ───
-  if (name === "forge_meta_bug_file") {
+async function _callToolHandler_075_forge_meta_bug_file(request, args) {
+  const { name } = request.params;
+  if (!(name === "forge_meta_bug_file")) return _CALL_TOOL_NO_MATCH;
+
     const t0 = Date.now();
     try {
       const cwd = args.path ? findProjectRoot(resolve(args.path)) : findProjectRoot(PROJECT_DIR);
@@ -4218,10 +4468,13 @@ export const callToolRequestHandler = _wrapWithToolSpan(async (request) => {
       emitToolTelemetry("forge_meta_bug_file", args, { error: err.message }, Date.now() - t0, "ERROR", findProjectRoot(PROJECT_DIR));
       return { content: [{ type: "text", text: `Meta-bug filing error: ${err.message}` }], isError: true };
     }
-  }
+  
+}
 
-  // ─── forge_graph_query — knowledge graph query (Phase-38.3) ───
-  if (name === "forge_graph_query") {
+async function _callToolHandler_076_forge_graph_query(request, args) {
+  const { name } = request.params;
+  if (!(name === "forge_graph_query")) return _CALL_TOOL_NO_MATCH;
+
     const t0 = Date.now();
     try {
       const cwd = args.path ? findProjectRoot(resolve(args.path)) : findProjectRoot(PROJECT_DIR);
@@ -4244,10 +4497,13 @@ export const callToolRequestHandler = _wrapWithToolSpan(async (request) => {
       emitToolTelemetry("forge_graph_query", args, { error: err.message }, durationMs, "ERROR", findProjectRoot(PROJECT_DIR));
       return { content: [{ type: "text", text: `Graph query error: ${err.message}` }], isError: true };
     }
-  }
+  
+}
 
-  // ─── forge_patterns_list — pattern surfacing (Phase-38.6) ───
-  if (name === "forge_patterns_list") {
+async function _callToolHandler_077_forge_patterns_list(request, args) {
+  const { name } = request.params;
+  if (!(name === "forge_patterns_list")) return _CALL_TOOL_NO_MATCH;
+
     const t0 = Date.now();
     try {
       const cwd = args.path ? findProjectRoot(resolve(args.path)) : findProjectRoot(PROJECT_DIR);
@@ -4269,9 +4525,13 @@ export const callToolRequestHandler = _wrapWithToolSpan(async (request) => {
       emitToolTelemetry("forge_patterns_list", args, { error: err.message }, durationMs, "ERROR", findProjectRoot(PROJECT_DIR));
       return { content: [{ type: "text", text: `Pattern list error: ${err.message}` }], isError: true };
     }
-  }
+  
+}
 
-  if (name === "forge_delegate_review") {
+async function _callToolHandler_078_forge_delegate_review(request, args) {
+  const { name } = request.params;
+  if (!(name === "forge_delegate_review")) return _CALL_TOOL_NO_MATCH;
+
     const t0 = Date.now();
     try {
       const cwd = args.path ? resolve(args.path) : findProjectRoot(PROJECT_DIR);
@@ -4286,9 +4546,13 @@ export const callToolRequestHandler = _wrapWithToolSpan(async (request) => {
       emitToolTelemetry("forge_delegate_review", args, response, Date.now() - t0, "ERROR", "");
       return { content: [{ type: "text", text: JSON.stringify(response, null, 2) }] };
     }
-  }
+  
+}
 
-  if (name === "forge_team_dashboard") {
+async function _callToolHandler_079_forge_team_dashboard(request, args) {
+  const { name } = request.params;
+  if (!(name === "forge_team_dashboard")) return _CALL_TOOL_NO_MATCH;
+
     const t0 = Date.now();
     try {
       const cwd = args.path ? resolve(args.path) : findProjectRoot(PROJECT_DIR);
@@ -4299,9 +4563,13 @@ export const callToolRequestHandler = _wrapWithToolSpan(async (request) => {
     } catch (err) {
       return { content: [{ type: "text", text: JSON.stringify({ ok: false, error: err.message }) }] };
     }
-  }
+  
+}
 
-  if (name === "forge_team_activity") {
+async function _callToolHandler_080_forge_team_activity(request, args) {
+  const { name } = request.params;
+  if (!(name === "forge_team_activity")) return _CALL_TOOL_NO_MATCH;
+
     const t0 = Date.now();
     try {
       const cwd = args.path ? resolve(args.path) : findProjectRoot(PROJECT_DIR);
@@ -4320,10 +4588,13 @@ export const callToolRequestHandler = _wrapWithToolSpan(async (request) => {
     } catch (err) {
       return { content: [{ type: "text", text: JSON.stringify({ ok: false, error: err.message }) }] };
     }
-  }
+  
+}
 
-  // ─── forge_github_metrics — live GitHub repository metrics (Phase GITHUB-D) ───
-  if (name === "forge_github_metrics") {
+async function _callToolHandler_081_forge_github_metrics(request, args) {
+  const { name } = request.params;
+  if (!(name === "forge_github_metrics")) return _CALL_TOOL_NO_MATCH;
+
     const t0 = Date.now();
     try {
       const cwd = args.path ? findProjectRoot(resolve(args.path)) : findProjectRoot(PROJECT_DIR);
@@ -4437,10 +4708,13 @@ export const callToolRequestHandler = _wrapWithToolSpan(async (request) => {
       emitToolTelemetry("forge_github_metrics", args, { error: err.message }, Date.now() - t0, "ERROR", findProjectRoot(PROJECT_DIR));
       return { content: [{ type: "text", text: `GitHub metrics error: ${err.message}` }], isError: true };
     }
-  }
+  
+}
 
-  // ─── forge_anvil_stat — Anvil cache summary (Phase-ANVIL Slice 6) ───
-  if (name === "forge_anvil_stat") {
+async function _callToolHandler_082_forge_anvil_stat(request, args) {
+  const { name } = request.params;
+  if (!(name === "forge_anvil_stat")) return _CALL_TOOL_NO_MATCH;
+
     const t0 = Date.now();
     try {
       const cwd = args.path ? findProjectRoot(resolve(args.path)) : findProjectRoot(PROJECT_DIR);
@@ -4451,10 +4725,13 @@ export const callToolRequestHandler = _wrapWithToolSpan(async (request) => {
       emitToolTelemetry("forge_anvil_stat", args, { error: err.message }, Date.now() - t0, "ERROR", findProjectRoot(PROJECT_DIR));
       return { content: [{ type: "text", text: `forge_anvil_stat error: ${err.message}` }], isError: true };
     }
-  }
+  
+}
 
-  // ─── forge_anvil_clear — bounded cache deletion (Phase-ANVIL Slice 6) ───
-  if (name === "forge_anvil_clear") {
+async function _callToolHandler_083_forge_anvil_clear(request, args) {
+  const { name } = request.params;
+  if (!(name === "forge_anvil_clear")) return _CALL_TOOL_NO_MATCH;
+
     const t0 = Date.now();
     try {
       const cwd = args.path ? findProjectRoot(resolve(args.path)) : findProjectRoot(PROJECT_DIR);
@@ -4469,10 +4746,13 @@ export const callToolRequestHandler = _wrapWithToolSpan(async (request) => {
       emitToolTelemetry("forge_anvil_clear", args, errPayload, Date.now() - t0, "ERROR", findProjectRoot(PROJECT_DIR));
       return { content: [{ type: "text", text: JSON.stringify(errPayload, null, 2) }], isError: true };
     }
-  }
+  
+}
 
-  // ─── forge_anvil_rebuild — selective cache invalidation (Phase-ANVIL Slice 6) ───
-  if (name === "forge_anvil_rebuild") {
+async function _callToolHandler_084_forge_anvil_rebuild(request, args) {
+  const { name } = request.params;
+  if (!(name === "forge_anvil_rebuild")) return _CALL_TOOL_NO_MATCH;
+
     const t0 = Date.now();
     try {
       const cwd = args.path ? findProjectRoot(resolve(args.path)) : findProjectRoot(PROJECT_DIR);
@@ -4487,10 +4767,13 @@ export const callToolRequestHandler = _wrapWithToolSpan(async (request) => {
       emitToolTelemetry("forge_anvil_rebuild", args, { error: err.message }, Date.now() - t0, "ERROR", findProjectRoot(PROJECT_DIR));
       return { content: [{ type: "text", text: `forge_anvil_rebuild error: ${err.message}` }], isError: true };
     }
-  }
+  
+}
 
-  // ─── forge_anvil_dlq_list — DLQ enumeration (Phase-ANVIL Slice 6) ───
-  if (name === "forge_anvil_dlq_list") {
+async function _callToolHandler_085_forge_anvil_dlq_list(request, args) {
+  const { name } = request.params;
+  if (!(name === "forge_anvil_dlq_list")) return _CALL_TOOL_NO_MATCH;
+
     const t0 = Date.now();
     try {
       const cwd = args.path ? findProjectRoot(resolve(args.path)) : findProjectRoot(PROJECT_DIR);
@@ -4504,10 +4787,13 @@ export const callToolRequestHandler = _wrapWithToolSpan(async (request) => {
       emitToolTelemetry("forge_anvil_dlq_list", args, { error: err.message }, Date.now() - t0, "ERROR", findProjectRoot(PROJECT_DIR));
       return { content: [{ type: "text", text: `forge_anvil_dlq_list error: ${err.message}` }], isError: true };
     }
-  }
+  
+}
 
-  // ─── forge_anvil_dlq_drain — DLQ drain (Phase-ANVIL Slice 6) ───
-  if (name === "forge_anvil_dlq_drain") {
+async function _callToolHandler_086_forge_anvil_dlq_drain(request, args) {
+  const { name } = request.params;
+  if (!(name === "forge_anvil_dlq_drain")) return _CALL_TOOL_NO_MATCH;
+
     const t0 = Date.now();
     try {
       const cwd = args.path ? findProjectRoot(resolve(args.path)) : findProjectRoot(PROJECT_DIR);
@@ -4521,10 +4807,13 @@ export const callToolRequestHandler = _wrapWithToolSpan(async (request) => {
       emitToolTelemetry("forge_anvil_dlq_drain", args, { error: err.message }, Date.now() - t0, "ERROR", findProjectRoot(PROJECT_DIR));
       return { content: [{ type: "text", text: `forge_anvil_dlq_drain error: ${err.message}` }], isError: true };
     }
-  }
+  
+}
 
-  // ─── forge_hallmark_show — hallmark read (Phase-ANVIL Slice 6) ───
-  if (name === "forge_hallmark_show") {
+async function _callToolHandler_087_forge_hallmark_show(request, args) {
+  const { name } = request.params;
+  if (!(name === "forge_hallmark_show")) return _CALL_TOOL_NO_MATCH;
+
     const t0 = Date.now();
     try {
       const cwd = args.path ? findProjectRoot(resolve(args.path)) : findProjectRoot(PROJECT_DIR);
@@ -4549,10 +4838,13 @@ export const callToolRequestHandler = _wrapWithToolSpan(async (request) => {
       emitToolTelemetry("forge_hallmark_show", args, errPayload, Date.now() - t0, "ERROR", findProjectRoot(PROJECT_DIR));
       return { content: [{ type: "text", text: JSON.stringify(errPayload, null, 2) }], isError: true };
     }
-  }
+  
+}
 
-  // ─── forge_hallmark_verify — hallmark drift check (Phase-ANVIL Slice 6) ───
-  if (name === "forge_hallmark_verify") {
+async function _callToolHandler_088_forge_hallmark_verify(request, args) {
+  const { name } = request.params;
+  if (!(name === "forge_hallmark_verify")) return _CALL_TOOL_NO_MATCH;
+
     const t0 = Date.now();
     try {
       const cwd = args.path ? findProjectRoot(resolve(args.path)) : findProjectRoot(PROJECT_DIR);
@@ -4602,10 +4894,13 @@ export const callToolRequestHandler = _wrapWithToolSpan(async (request) => {
       emitToolTelemetry("forge_hallmark_verify", args, errPayload, Date.now() - t0, "ERROR", findProjectRoot(PROJECT_DIR));
       return { content: [{ type: "text", text: JSON.stringify(errPayload, null, 2) }], isError: true };
     }
-  }
+  
+}
 
-  // ─── forge_pipelines_list — capture pipeline enumeration (Phase-ANVIL Slice 6) ───
-  if (name === "forge_pipelines_list") {
+async function _callToolHandler_089_forge_pipelines_list(request, args) {
+  const { name } = request.params;
+  if (!(name === "forge_pipelines_list")) return _CALL_TOOL_NO_MATCH;
+
     const t0 = Date.now();
     try {
       const cwd = args.path ? findProjectRoot(resolve(args.path)) : findProjectRoot(PROJECT_DIR);
@@ -4616,10 +4911,13 @@ export const callToolRequestHandler = _wrapWithToolSpan(async (request) => {
       emitToolTelemetry("forge_pipelines_list", args, { error: err.message }, Date.now() - t0, "ERROR", findProjectRoot(PROJECT_DIR));
       return { content: [{ type: "text", text: `forge_pipelines_list error: ${err.message}` }], isError: true };
     }
-  }
+  
+}
 
-  // ─── Phase LATTICE Slice 7 — Lattice code-graph tools ───
-  if (name === "forge_lattice_index") {
+async function _callToolHandler_090_forge_lattice_index(request, args) {
+  const { name } = request.params;
+  if (!(name === "forge_lattice_index")) return _CALL_TOOL_NO_MATCH;
+
     const t0 = Date.now();
     try {
       const cwd = args.path ? findProjectRoot(resolve(args.path)) : findProjectRoot(PROJECT_DIR);
@@ -4632,9 +4930,13 @@ export const callToolRequestHandler = _wrapWithToolSpan(async (request) => {
       emitToolTelemetry("forge_lattice_index", args, { error: err.message }, Date.now() - t0, "ERROR", findProjectRoot(PROJECT_DIR));
       return { content: [{ type: "text", text: `forge_lattice_index error: ${err.message}` }], isError: true };
     }
-  }
+  
+}
 
-  if (name === "forge_lattice_stat") {
+async function _callToolHandler_091_forge_lattice_stat(request, args) {
+  const { name } = request.params;
+  if (!(name === "forge_lattice_stat")) return _CALL_TOOL_NO_MATCH;
+
     const t0 = Date.now();
     try {
       const cwd = args.path ? findProjectRoot(resolve(args.path)) : findProjectRoot(PROJECT_DIR);
@@ -4645,9 +4947,13 @@ export const callToolRequestHandler = _wrapWithToolSpan(async (request) => {
       emitToolTelemetry("forge_lattice_stat", args, { error: err.message }, Date.now() - t0, "ERROR", findProjectRoot(PROJECT_DIR));
       return { content: [{ type: "text", text: `forge_lattice_stat error: ${err.message}` }], isError: true };
     }
-  }
+  
+}
 
-  if (name === "forge_lattice_query") {
+async function _callToolHandler_092_forge_lattice_query(request, args) {
+  const { name } = request.params;
+  if (!(name === "forge_lattice_query")) return _CALL_TOOL_NO_MATCH;
+
     const t0 = Date.now();
     try {
       const cwd = args.path ? findProjectRoot(resolve(args.path)) : findProjectRoot(PROJECT_DIR);
@@ -4665,9 +4971,13 @@ export const callToolRequestHandler = _wrapWithToolSpan(async (request) => {
       emitToolTelemetry("forge_lattice_query", args, { error: err.message }, Date.now() - t0, "ERROR", findProjectRoot(PROJECT_DIR));
       return { content: [{ type: "text", text: `forge_lattice_query error: ${err.message}` }], isError: true };
     }
-  }
+  
+}
 
-  if (name === "forge_lattice_callers") {
+async function _callToolHandler_093_forge_lattice_callers(request, args) {
+  const { name } = request.params;
+  if (!(name === "forge_lattice_callers")) return _CALL_TOOL_NO_MATCH;
+
     const t0 = Date.now();
     try {
       const cwd = args.path ? findProjectRoot(resolve(args.path)) : findProjectRoot(PROJECT_DIR);
@@ -4682,9 +4992,13 @@ export const callToolRequestHandler = _wrapWithToolSpan(async (request) => {
       emitToolTelemetry("forge_lattice_callers", args, { error: err.message }, Date.now() - t0, "ERROR", findProjectRoot(PROJECT_DIR));
       return { content: [{ type: "text", text: `forge_lattice_callers error: ${err.message}` }], isError: true };
     }
-  }
+  
+}
 
-  if (name === "forge_lattice_blast") {
+async function _callToolHandler_094_forge_lattice_blast(request, args) {
+  const { name } = request.params;
+  if (!(name === "forge_lattice_blast")) return _CALL_TOOL_NO_MATCH;
+
     const t0 = Date.now();
     try {
       const cwd = args.path ? findProjectRoot(resolve(args.path)) : findProjectRoot(PROJECT_DIR);
@@ -4702,10 +5016,121 @@ export const callToolRequestHandler = _wrapWithToolSpan(async (request) => {
       emitToolTelemetry("forge_lattice_blast", args, { error: err.message }, Date.now() - t0, "ERROR", findProjectRoot(PROJECT_DIR));
       return { content: [{ type: "text", text: `forge_lattice_blast error: ${err.message}` }], isError: true };
     }
+  
+}
+/* eslint-enable complexity */
+
+const _CALL_TOOL_HANDLERS = [
+  _callToolHandler_001_forge_run_plan,
+  _callToolHandler_002_forge_abort,
+  _callToolHandler_003_forge_plan_status,
+  _callToolHandler_004_forge_diff_classify,
+  _callToolHandler_005_forge_cost_report,
+  _callToolHandler_006_forge_estimate_quorum,
+  _callToolHandler_007_forge_estimate_slice,
+  _callToolHandler_008_forge_health_trend,
+  _callToolHandler_009_forge_alert_triage,
+  _callToolHandler_010_forge_sweep,
+  _callToolHandler_011_forge_analyze,
+  _callToolHandler_012_forge_analyze,
+  _callToolHandler_013_forge_diagnose,
+  _callToolHandler_014_forge_capabilities,
+  _callToolHandler_015_forge_watch,
+  _callToolHandler_016_forge_watch_live,
+  _callToolHandler_017_forge_memory_report,
+  _callToolHandler_018_forge_skill_status,
+  _callToolHandler_019_forge_run_skill,
+  _callToolHandler_020_forge_org_rules,
+  _callToolHandler_021_forge_crucible_submit,
+  _callToolHandler_022_forge_crucible_ask,
+  _callToolHandler_023_forge_crucible_preview,
+  _callToolHandler_024_forge_crucible_finalize,
+  _callToolHandler_025_forge_crucible_list,
+  _callToolHandler_026_forge_crucible_abandon,
+  _callToolHandler_027_forge_crucible_import,
+  _callToolHandler_028_forge_crucible_status,
+  _callToolHandler_029_forge_tempering_scan,
+  _callToolHandler_030_forge_tempering_status,
+  _callToolHandler_031_forge_tempering_run,
+  _callToolHandler_032_forge_tempering_approve_baseline,
+  _callToolHandler_033_forge_tempering_drain,
+  _callToolHandler_034_forge_triage_route,
+  _callToolHandler_035_forge_classifier_issue,
+  _callToolHandler_036_forge_bug_register,
+  _callToolHandler_037_forge_bug_list,
+  _callToolHandler_038_forge_bug_update_status,
+  _callToolHandler_039_forge_bug_validate_fix,
+  _callToolHandler_040_forge_memory_capture,
+  _callToolHandler_041_forge_brain_test,
+  _callToolHandler_042_forge_brain_replay,
+  _callToolHandler_043_forge_generate_image,
+  _callToolHandler_044_forge_incident_capture,
+  _callToolHandler_045_forge_deploy_journal,
+  _callToolHandler_046_forge_regression_guard,
+  _callToolHandler_047_forge_drift_report,
+  _callToolHandler_048_forge_runbook,
+  _callToolHandler_049_forge_hotspot,
+  _callToolHandler_050_forge_dep_watch,
+  _callToolHandler_051_forge_diff_classify,
+  _callToolHandler_052_forge_secret_scan,
+  _callToolHandler_053_forge_env_diff,
+  _callToolHandler_054_forge_fix_proposal,
+  _callToolHandler_055_forge_liveguard_run,
+  _callToolHandler_056_forge_home_snapshot,
+  _callToolHandler_057_forge_review_add,
+  _callToolHandler_058_forge_review_list,
+  _callToolHandler_059_forge_review_resolve,
+  _callToolHandler_060_forge_delegate_to_agent,
+  _callToolHandler_061_forge_notify_send,
+  _callToolHandler_062_forge_notify_test,
+  _callToolHandler_063_forge_search,
+  _callToolHandler_064_forge_timeline,
+  _callToolHandler_065_forge_doctor_quorum,
+  _callToolHandler_066_forge_quorum_analyze,
+  _callToolHandler_067_forge_smith,
+  _callToolHandler_068_forge_testbed_run,
+  _callToolHandler_069_forge_testbed_findings,
+  _callToolHandler_070_forge_export_plan,
+  _callToolHandler_071_forge_sync_memories,
+  _callToolHandler_072_forge_sync_instructions,
+  _callToolHandler_073_forge_testbed_happypath,
+  _callToolHandler_074_forge_master_ask,
+  _callToolHandler_075_forge_meta_bug_file,
+  _callToolHandler_076_forge_graph_query,
+  _callToolHandler_077_forge_patterns_list,
+  _callToolHandler_078_forge_delegate_review,
+  _callToolHandler_079_forge_team_dashboard,
+  _callToolHandler_080_forge_team_activity,
+  _callToolHandler_081_forge_github_metrics,
+  _callToolHandler_082_forge_anvil_stat,
+  _callToolHandler_083_forge_anvil_clear,
+  _callToolHandler_084_forge_anvil_rebuild,
+  _callToolHandler_085_forge_anvil_dlq_list,
+  _callToolHandler_086_forge_anvil_dlq_drain,
+  _callToolHandler_087_forge_hallmark_show,
+  _callToolHandler_088_forge_hallmark_verify,
+  _callToolHandler_089_forge_pipelines_list,
+  _callToolHandler_090_forge_lattice_index,
+  _callToolHandler_091_forge_lattice_stat,
+  _callToolHandler_092_forge_lattice_query,
+  _callToolHandler_093_forge_lattice_callers,
+  _callToolHandler_094_forge_lattice_blast,
+];
+
+export const callToolRequestHandler = _wrapWithToolSpan(async (request) => {
+  const { name, arguments: args } = request.params;
+
+  // ─── Auth gate — open-by-default when .forge/rbac.json is absent ───
+  const authDenied = await _mcpAuthGate(name, request);
+  if (authDenied) return authDenied;
+
+  // ─── Async orchestrator tools ───
+    for (const handler of _CALL_TOOL_HANDLERS) {
+    const handled = await handler(request, args);
+    if (handled !== _CALL_TOOL_NO_MATCH) return handled;
   }
 
-  // ─── Sync pforge tools ───
-  const result = executeTool(name, args || {});
+const result = executeTool(name, args || {});
 
   return {
     content: [

@@ -148,44 +148,60 @@ export function collectAutoSkills(projectRoot, { since, limit = 20 } = {}) {
  * @param {string} text
  * @returns {{ sha256Prefix, summary, commands, domainKeywords, createdAt, reuseCount }|null}
  */
+function frontmatterField(fm, field) {
+  return (new RegExp(`^${field}:\\s*(.+)$`, "m").exec(fm) || [])[1] || "";
+}
+
+function parseFrontmatterJson(value, fallback) {
+  try {
+    return JSON.parse(value);
+  } catch {
+    return fallback;
+  }
+}
+
+function parseFrontmatterInlineStringArray(fm, field) {
+  const match = new RegExp(`^\\s*${field}:\\s*\\[([^\\]]*)\\]$`, "m").exec(fm);
+  if (!match || !match[1].trim()) return [];
+  const parsed = parseFrontmatterJson(`[${match[1]}]`, []);
+  return Array.isArray(parsed) ? parsed.filter((s) => typeof s === "string") : [];
+}
+
+function parseFrontmatterCommands(fm) {
+  const commands = [];
+  const sectionMatch = /\ncommands:\n([\s\S]*)$/.exec(fm);
+  if (!sectionMatch) return commands;
+  for (const raw of sectionMatch[1].split("\n")) {
+    const match = /^\s*-\s*(.+)$/.exec(raw);
+    if (!match) continue;
+    const value = parseFrontmatterJson(match[1].trim(), match[1].trim());
+    if (typeof value === "string" && value.length > 0) commands.push(value);
+  }
+  return commands;
+}
+
 export function parseAutoSkillFrontmatter(text) {
   if (typeof text !== "string") return null;
   const fmMatch = /^---\n([\s\S]*?)\n---/.exec(text);
   if (!fmMatch) return null;
   const fm = fmMatch[1];
 
-  const sha256Prefix = (/^sha256Prefix:\s*(\S+)$/m.exec(fm) || [])[1];
+  const sha256Prefix = frontmatterField(fm, "sha256Prefix");
   if (!sha256Prefix) return null;
 
-  const summaryLine = (/^summary:\s*(.+)$/m.exec(fm) || [])[1] || "";
-  let summary = summaryLine;
-  try { summary = JSON.parse(summaryLine); } catch { /* keep raw */ }
+  const summaryLine = frontmatterField(fm, "summary");
+  const summary = parseFrontmatterJson(summaryLine, summaryLine);
+  const createdAt = frontmatterField(fm, "createdAt");
+  const reuseCount = Number(frontmatterField(fm, "reuseCount") || 0) || 0;
 
-  const createdAt = (/^createdAt:\s*(\S+)$/m.exec(fm) || [])[1] || "";
-  const reuseCount = Number((/^reuseCount:\s*(\S+)$/m.exec(fm) || [])[1] || 0) || 0;
-
-  const domainKeywords = [];
-  const kwMatch = /^\s*domainKeywords:\s*\[([^\]]*)\]$/m.exec(fm);
-  if (kwMatch && kwMatch[1].trim()) {
-    try {
-      const parsed = JSON.parse("[" + kwMatch[1] + "]");
-      if (Array.isArray(parsed)) domainKeywords.push(...parsed.filter((s) => typeof s === "string"));
-    } catch { /* leave empty */ }
-  }
-
-  const commands = [];
-  const cmdSectionMatch = /\ncommands:\n([\s\S]*)$/.exec(fm);
-  if (cmdSectionMatch) {
-    for (const raw of cmdSectionMatch[1].split("\n")) {
-      const m = /^\s*-\s*(.+)$/.exec(raw);
-      if (!m) continue;
-      let v = m[1].trim();
-      try { v = JSON.parse(v); } catch { /* keep raw */ }
-      if (typeof v === "string" && v.length > 0) commands.push(v);
-    }
-  }
-
-  return { sha256Prefix, summary, commands, domainKeywords, createdAt, reuseCount };
+  return {
+    sha256Prefix,
+    summary,
+    commands: parseFrontmatterCommands(fm),
+    domainKeywords: parseFrontmatterInlineStringArray(fm, "domainKeywords"),
+    createdAt,
+    reuseCount,
+  };
 }
 
 /**

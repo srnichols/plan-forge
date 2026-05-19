@@ -89,6 +89,39 @@ const MAX_LIMIT = 2000;
  * @param {{ cwd: string }} opts
  * @returns {Promise<{ events?: Array, threads?: Array, total: number, truncated: boolean, durationMs: number, windowFrom: string, windowTo: string, sourcesQueried: string[] }>}
  */
+function _groupEventsByCorrelation(allEvents, limit) {
+  const threadMap = new Map();
+  for (const evt of allEvents) {
+    const cid = evt.correlationId || "__ungrouped__";
+    if (!threadMap.has(cid)) threadMap.set(cid, []);
+    threadMap.get(cid).push(evt);
+  }
+  let threads = [];
+  for (const [cid, events] of threadMap) {
+    threads.push({
+      correlationId: cid,
+      events,
+      firstTs: events[0].ts,
+      lastTs: events[events.length - 1].ts,
+      sources: [...new Set(events.map((e) => e.source))],
+    });
+  }
+  threads.sort((a, b) => (new Date(b.lastTs).getTime() || 0) - (new Date(a.lastTs).getTime() || 0));
+  const truncated = threads.length > limit;
+  return { threads: threads.slice(0, limit), truncated };
+}
+
+function _buildTimelineEmptyMessage(windowFrom, windowTo, correlationId, eventFilters, params) {
+  const fromHuman = windowFrom || "unset";
+  const toHuman = windowTo || "now";
+  const filterParts = [];
+  if (correlationId) filterParts.push(`correlationId=${correlationId}`);
+  if (eventFilters && eventFilters.length > 0) filterParts.push(`events=[${eventFilters.join(", ")}]`);
+  if (params.sources) filterParts.push(`sources=[${(params.sources || []).join(", ")}]`);
+  const filterDesc = filterParts.length > 0 ? ` with filters ${filterParts.join(", ")}` : "";
+  return `No events in window ${fromHuman} → ${toHuman}${filterDesc}. Try widening the from/to range (default is last 24h), removing event filters, or checking that the project has activity in .forge/.`;
+}
+
 export async function timeline(params = {}, opts = {}) {
   const start = performance.now();
   const cwd = opts.cwd || process.cwd();

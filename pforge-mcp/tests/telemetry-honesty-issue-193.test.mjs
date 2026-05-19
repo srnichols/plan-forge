@@ -15,6 +15,8 @@ import { formatQuorumSummary } from "../orchestrator.mjs";
 
 const __dirname = resolve(fileURLToPath(import.meta.url), "..");
 const src = readFileSync(resolve(__dirname, "..", "orchestrator.mjs"), "utf8");
+// Phase-53 S2: callApiWorker was extracted to orchestrator/worker-spawn.mjs
+const workerSpawnSrc = readFileSync(resolve(__dirname, "..", "orchestrator", "worker-spawn.mjs"), "utf8");
 
 // ─── Defect A: model log format ──────────────────────────────────────────────
 // Bug #127 specifies `resolved=` as the canonical log prefix; Bug #193 Defect A
@@ -114,22 +116,22 @@ describe("#193 Defect D — API-direct + dry-run duration honesty", () => {
   });
 
   it("callApiWorker captures _apiStartMs before fetch", () => {
-    expect(src).toContain("const _apiStartMs = Date.now();");
+    expect(workerSpawnSrc).toContain("const _apiStartMs = Date.now();");
   });
 
   it("callApiWorker computes _apiDurationMs after response.json()", () => {
-    expect(src).toContain("const _apiDurationMs = Date.now() - _apiStartMs;");
+    expect(workerSpawnSrc).toContain("const _apiDurationMs = Date.now() - _apiStartMs;");
   });
 
   it("callApiWorker assigns measured value to both duration fields", () => {
     // Match the success-path tokens block by structure (apiDurationMs + sessionDurationMs both bound to _apiDurationMs).
-    const m = src.match(/apiDurationMs:\s*_apiDurationMs,[\s\S]{0,80}sessionDurationMs:\s*_apiDurationMs,/);
+    const m = workerSpawnSrc.match(/apiDurationMs:\s*_apiDurationMs,[\s\S]{0,80}sessionDurationMs:\s*_apiDurationMs,/);
     expect(m).not.toBeNull();
   });
 
   it("callApiWorker no longer hardcodes apiDurationMs: 0 in its success path", () => {
     // The success-path tokens block starts shortly after `const choice = data.choices?.[0];`
-    const successPath = src.split("const choice = data.choices?.[0];")[1] ?? "";
+    const successPath = workerSpawnSrc.split("const choice = data.choices?.[0];")[1] ?? "";
     // Take the first ~1KB of the success path (covers the tokens block).
     const window = successPath.slice(0, 1200);
     expect(window).not.toMatch(/apiDurationMs:\s*0,/);

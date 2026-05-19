@@ -229,6 +229,36 @@ export function archiveWorktree({
  * @param {Function} [opts.spawn=spawnSync]
  * @returns {{ promoted: boolean, commits: string[], from: string, to: string }}
  */
+function gitRevParse(spawn, cwd, ref, errorMessage) {
+  const result = spawn("git", ["rev-parse", ref], { cwd, encoding: "utf8" });
+  if (!result || result.status !== 0) {
+    const stderr = result?.stderr ? String(result.stderr) : "";
+    throw new Error(errorMessage(stderr));
+  }
+  return String(result.stdout).trim();
+}
+
+function gitRevList(spawn, cwd, from, to) {
+  const result = spawn("git", ["rev-list", "--reverse", `${from}..${to}`], { cwd, encoding: "utf8" });
+  if (!result || result.status !== 0) {
+    throw new Error(`promoteWinner: rev-list failed: ${String(result?.stderr || "").slice(0, 300)}`);
+  }
+  return String(result.stdout || "")
+    .split("\n")
+    .map((s) => s.trim())
+    .filter(Boolean);
+}
+
+function cherryPickCommits(spawn, projectDir, commits) {
+  if (commits.length === 0) return;
+  const result = spawn("git", ["cherry-pick", "-x", ...commits], { cwd: projectDir, encoding: "utf8" });
+  if (!result || result.status !== 0) {
+    throw new Error(
+      `promoteWinner: cherry-pick failed (status=${result?.status ?? "?"}): ${String(result?.stderr || "").slice(0, 500)}`,
+    );
+  }
+}
+
 export function promoteWinner({
   projectDir,
   planBasename,
@@ -242,55 +272,25 @@ export function promoteWinner({
     return { promoted: false, commits: [], from: worktree, to: projectDir, error: "worktree missing" };
   }
 
-  // Resolve the winner worktree HEAD SHA.
-  const head = spawn("git", ["rev-parse", "HEAD"], { cwd: worktree, encoding: "utf8" });
-  if (!head || head.status !== 0) {
-    const stderr = head?.stderr ? String(head.stderr) : "";
-    throw new Error(`promoteWinner: rev-parse HEAD failed in worktree: ${stderr.slice(0, 300)}`);
-  }
-  const headSha = String(head.stdout).trim();
-
-  // Resolve baseRef to a SHA so the range is unambiguous even if the parent
-  // branch has advanced since the worktree was created.
-  const base = spawn("git", ["rev-parse", baseRef], { cwd: worktree, encoding: "utf8" });
-  if (!base || base.status !== 0) {
-    throw new Error(`promoteWinner: rev-parse ${baseRef} failed`);
-  }
-  const baseSha = String(base.stdout).trim();
+  const headSha = gitRevParse(
+    spawn,
+    worktree,
+    "HEAD",
+    (stderr) => `promoteWinner: rev-parse HEAD failed in worktree: ${stderr.slice(0, 300)}`,
+  );
+  const baseSha = gitRevParse(
+    spawn,
+    worktree,
+    baseRef,
+    () => `promoteWinner: rev-parse ${baseRef} failed`,
+  );
 
   if (baseSha === headSha) {
-    // Variant produced no commits — nothing to cherry-pick.
     return { promoted: true, commits: [], from: worktree, to: projectDir };
   }
 
-  // List commits baseSha..headSha oldest-first for cherry-pick.
-  const logResult = spawn(
-    "git",
-    ["rev-list", "--reverse", `${baseSha}..${headSha}`],
-    { cwd: worktree, encoding: "utf8" },
-  );
-  if (!logResult || logResult.status !== 0) {
-    throw new Error(`promoteWinner: rev-list failed: ${String(logResult?.stderr || "").slice(0, 300)}`);
-  }
-  const commits = String(logResult.stdout || "")
-    .split("\n")
-    .map((s) => s.trim())
-    .filter(Boolean);
-
-  // Cherry-pick them into the parent branch (projectDir HEAD).
-  if (commits.length > 0) {
-    const cp = spawn(
-      "git",
-      ["cherry-pick", "-x", ...commits],
-      { cwd: projectDir, encoding: "utf8" },
-    );
-    if (!cp || cp.status !== 0) {
-      throw new Error(
-        `promoteWinner: cherry-pick failed (status=${cp?.status ?? "?"}): ${String(cp?.stderr || "").slice(0, 500)}`,
-      );
-    }
-  }
-
+  const commits = gitRevList(spawn, worktree, baseSha, headSha);
+  cherryPickCommits(spawn, projectDir, commits);
   return { promoted: true, commits, from: worktree, to: projectDir };
 }
 

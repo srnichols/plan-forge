@@ -111,58 +111,64 @@ export function getScreenshotManifest(cwd) {
  * @param {string} cwd
  * @returns {{ok: boolean, urlHash: string, baselinePath: string, sidecarPath: string, previousHash?: string}}
  */
+function listArtifactRuns(artRoot) {
+  return readdirSync(artRoot)
+    .filter((d) => {
+      if (!d.startsWith("run-")) return false;
+      try { return statSync(resolve(artRoot, d)).isDirectory(); } catch { return false; }
+    })
+    .map((d) => ({ name: d, mtimeMs: statSync(resolve(artRoot, d)).mtimeMs }))
+    .sort((a, b) => b.mtimeMs - a.mtimeMs)
+    .map((entry) => entry.name);
+}
+
+function findScreenshotToPromote(cwd, urlHash, runId, screenshotPath) {
+  if (screenshotPath) return screenshotPath;
+  const artRoot = artifactsDir(cwd);
+  if (!existsSync(artRoot)) return null;
+  for (const run of listArtifactRuns(artRoot)) {
+    if (runId && run !== runId) continue;
+    for (const scanner of ["ui-playwright", "visual-diff"]) {
+      const candidate = resolve(artRoot, run, scanner, `${urlHash}.png`);
+      if (existsSync(candidate)) return candidate;
+    }
+  }
+  return null;
+}
+
+function readPreviousBaselineHash(baselinePath) {
+  if (!existsSync(baselinePath)) return null;
+  try {
+    return createHash("sha256").update(readFileSync(baselinePath)).digest("hex").slice(0, 16);
+  } catch {
+    return null;
+  }
+}
+
+function writeBaselineSidecar(sidecarPath, sidecar) {
+  writeFileSync(sidecarPath, JSON.stringify(sidecar, null, 2) + "\n", "utf-8");
+}
+
 export function promoteBaseline(opts, cwd) {
   const { url, runId, screenshotPath } = opts || {};
   const urlHash = opts?.urlHash || (url ? hashUrl(url) : null);
   if (!urlHash) throw new Error("INVALID_URL_HASH: urlHash or url required");
 
   const dir = baselinesDir(cwd);
-  assertSafePath(resolve(dir, `${urlHash}.png`), dir);
+  const baselinePath = resolve(dir, `${urlHash}.png`);
+  assertSafePath(baselinePath, dir);
 
-  // Find the screenshot to promote
-  let srcPath = screenshotPath;
-  if (!srcPath) {
-    const artRoot = artifactsDir(cwd);
-    if (existsSync(artRoot)) {
-      const runs = readdirSync(artRoot)
-        .filter((d) => {
-          if (!d.startsWith("run-")) return false;
-          try { return statSync(resolve(artRoot, d)).isDirectory(); } catch { return false; }
-        })
-        .map((d) => ({ name: d, mtimeMs: statSync(resolve(artRoot, d)).mtimeMs }))
-        .sort((a, b) => b.mtimeMs - a.mtimeMs)
-        .map((e) => e.name);
-      for (const run of runs) {
-        if (runId && run !== runId) continue;
-        for (const scanner of ["ui-playwright", "visual-diff"]) {
-          const candidate = resolve(artRoot, run, scanner, `${urlHash}.png`);
-          if (existsSync(candidate)) { srcPath = candidate; break; }
-        }
-        if (srcPath) break;
-      }
-    }
-  }
-
+  const srcPath = findScreenshotToPromote(cwd, urlHash, runId, screenshotPath);
   if (!srcPath || !existsSync(srcPath)) {
     throw new Error(`NO_SCREENSHOT: No screenshot found for hash ${urlHash}`);
   }
 
-  // Read previous hash for sidecar
-  const baselinePath = resolve(dir, `${urlHash}.png`);
-  let previousHash = null;
-  if (existsSync(baselinePath)) {
-    try {
-      previousHash = createHash("sha256").update(readFileSync(baselinePath)).digest("hex").slice(0, 16);
-    } catch { /* no previous */ }
-  }
-
-  // Write baseline
+  const previousHash = readPreviousBaselineHash(baselinePath);
   if (!existsSync(dir)) mkdirSync(dir, { recursive: true });
   copyFileSync(srcPath, baselinePath);
 
-  // Write sidecar
   const sidecarPath = resolve(dir, `${urlHash}.json`);
-  const sidecar = {
+  writeBaselineSidecar(sidecarPath, {
     urlHash,
     url: url || null,
     promotedAt: new Date().toISOString(),
@@ -170,8 +176,7 @@ export function promoteBaseline(opts, cwd) {
     previousHash,
     runId: runId || null,
     sourcePath: srcPath,
-  };
-  writeFileSync(sidecarPath, JSON.stringify(sidecar, null, 2) + "\n", "utf-8");
+  });
 
   return { ok: true, urlHash, baselinePath, sidecarPath, previousHash };
 }

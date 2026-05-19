@@ -66,6 +66,13 @@ function toCsvRow(record) {
   return CSV_COLUMNS.map((col) => csvEscape(record[col])).join(",");
 }
 
+function firstDefined(...values) {
+  for (const value of values) {
+    if (value !== undefined && value !== null) return value;
+  }
+  return null;
+}
+
 // ─── Record builder ──────────────────────────────────────────────────
 
 /**
@@ -76,17 +83,17 @@ function buildRecord(parsed, runId, plan) {
   return {
     timestamp: parsed.ts,
     run_id: runId,
-    plan: plan ?? d.plan ?? null,
-    slice_id: d.sliceId ?? d.slice ?? d.sliceNumber ?? null,
+    plan: firstDefined(plan, d.plan),
+    slice_id: firstDefined(d.sliceId, d.slice, d.sliceNumber),
     event_type: parsed.type,
-    source: d.source ?? null,
-    security_risk: d.security_risk ?? null,
-    gate_result: d.gateResult ?? d.gate_result ?? null,
-    cost_usd: d.cost ?? d.costUsd ?? d.cost_usd ?? null,
-    tokens_in: d.tokensIn ?? d.tokens_in ?? d.inputTokens ?? null,
-    tokens_out: d.tokensOut ?? d.tokens_out ?? d.outputTokens ?? null,
-    model: d.model ?? null,
-    worker: d.worker ?? null,
+    source: firstDefined(d.source),
+    security_risk: firstDefined(d.security_risk),
+    gate_result: firstDefined(d.gateResult, d.gate_result),
+    cost_usd: firstDefined(d.cost, d.costUsd, d.cost_usd),
+    tokens_in: firstDefined(d.tokensIn, d.tokens_in, d.inputTokens),
+    tokens_out: firstDefined(d.tokensOut, d.tokens_out, d.outputTokens),
+    model: firstDefined(d.model),
+    worker: firstDefined(d.worker),
   };
 }
 

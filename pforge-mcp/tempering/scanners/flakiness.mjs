@@ -36,6 +36,46 @@ function emit(hub, type, data) {
  * @param {object} ctx - DI context
  * @returns {Promise<object>} scanner result
  */
+function buildFlakinessResult({ sliceRef, startedAt, completedAt, verdict, pass = 0, fail = 0, flakes = [], quarantined = [], reason = null, nowMs = 0 }) {
+  const result = {
+    scanner: "flakiness",
+    sliceRef,
+    startedAt,
+    completedAt,
+    verdict,
+    pass,
+    fail,
+    skipped: 0,
+    violationCount: flakes.length,
+    durationMs: nowMs,
+    flakes,
+    quarantined,
+  };
+  if (reason) result.reason = reason;
+  return result;
+}
+
+function maybeCaptureConfirmedFlake(captureMemory, settings, testId, outcomes, classification) {
+  const failureCount = outcomes.filter((o) => o !== "pass").length;
+  if (!captureMemory || failureCount < settings.confirmedFlakeMinFailures) return failureCount;
+  try {
+    captureMemory({
+      type: "flaky-test",
+      testId,
+      failureRate: classification.failureRate,
+      window: classification.window,
+    });
+  } catch { /* best-effort */ }
+  return failureCount;
+}
+
+function buildQuarantineList(flakes, outcomeMap, settings) {
+  if (!settings.quarantine) return [];
+  return flakes
+    .filter((flake) => (outcomeMap[flake.testId] || []).filter((o) => o !== "pass").length >= settings.confirmedFlakeMinFailures)
+    .map((flake) => flake.testId);
+}
+
 export async function runFlakinessScan(ctx) {
   const {
     config = {},
@@ -49,117 +89,80 @@ export async function runFlakinessScan(ctx) {
   } = ctx || {};
 
   const startedAt = new Date(now()).toISOString();
-
-  // Merge defaults
   const raw = config.scanners?.flakiness;
   const settings = { ...FLAKINESS_DEFAULTS, ...(typeof raw === "object" ? raw : {}) };
+  const deadline = now() + (config.runtimeBudgets?.flakinessMaxMs ?? 60_000);
 
-  // Budget
-  const budgetMs = config.runtimeBudgets?.flakinessMaxMs ?? 60_000;
-  const deadline = now() + budgetMs;
-
-  // Skip: scanner disabled
   if (raw === false || settings.enabled === false) {
-    return {
-      scanner: "flakiness", sliceRef,
-      startedAt, completedAt: new Date(now()).toISOString(),
-      verdict: "skipped", pass: 0, fail: 0, skipped: 0,
-      violationCount: 0, durationMs: 0,
-      flakes: [], quarantined: [],
+    return buildFlakinessResult({
+      sliceRef,
+      startedAt,
+      completedAt: new Date(now()).toISOString(),
+      verdict: "skipped",
       reason: "scanner-disabled",
-    };
+    });
   }
 
-  // Read prior run records
-  const temperingDir = resolve(projectDir, ".forge", "tempering");
-  const runs = loadRunRecords(temperingDir, settings.windowSize);
-
-  // Skip: not enough history
+  const runs = loadRunRecords(resolve(projectDir, ".forge", "tempering"), settings.windowSize);
   if (runs.length < 2) {
-    return {
-      scanner: "flakiness", sliceRef,
-      startedAt, completedAt: new Date(now()).toISOString(),
-      verdict: "skipped", pass: 0, fail: 0, skipped: 0,
-      violationCount: 0, durationMs: 0,
-      flakes: [], quarantined: [],
+    return buildFlakinessResult({
+      sliceRef,
+      startedAt,
+      completedAt: new Date(now()).toISOString(),
+      verdict: "skipped",
       reason: "no-prior-runs",
-    };
+    });
   }
 
-  // Build outcome map: testId → [outcomes]
   const outcomeMap = buildOutcomeMap(runs);
-
-  // Classify each test
   const flakes = [];
   let passCount = 0;
   let failCount = 0;
 
   for (const [testId, outcomes] of Object.entries(outcomeMap)) {
-    // Budget check
     if (now() > deadline) {
-      return {
-        scanner: "flakiness", sliceRef,
-        startedAt, completedAt: new Date(now()).toISOString(),
+      return buildFlakinessResult({
+        sliceRef,
+        startedAt,
+        completedAt: new Date(now()).toISOString(),
         verdict: "budget-exceeded",
-        pass: passCount, fail: failCount, skipped: 0,
-        violationCount: flakes.length, durationMs: now() - new Date(startedAt).getTime(),
-        flakes, quarantined: [],
+        pass: passCount,
+        fail: failCount,
+        flakes,
+        quarantined: [],
         reason: "budget-exceeded",
-      };
+        nowMs: now() - new Date(startedAt).getTime(),
+      });
     }
 
     const classification = classifyTest(testId, outcomes, settings);
-    if (classification.classification === "flaky") {
-      flakes.push(classification);
-      failCount++;
-
-      emit(hub, "tempering-flakiness-detected", {
-        testId,
-        failureRate: classification.failureRate,
-        window: classification.window,
-      });
-
-      // captureMemory only for confirmed flakes (guard: >= confirmedFlakeMinFailures)
-      const failureCount = outcomes.filter((o) => o !== "pass").length;
-      if (captureMemory && failureCount >= settings.confirmedFlakeMinFailures) {
-        try {
-          captureMemory({
-            type: "flaky-test",
-            testId,
-            failureRate: classification.failureRate,
-            window: classification.window,
-          });
-        } catch { /* best-effort */ }
-      }
-    } else {
+    if (classification.classification !== "flaky") {
       passCount++;
+      continue;
     }
-  }
 
-  // Build quarantine list (only if opt-in AND meets threshold)
-  const quarantined = [];
-  if (settings.quarantine) {
-    for (const flake of flakes) {
-      const outcomes = outcomeMap[flake.testId] || [];
-      const failureCount = outcomes.filter((o) => o !== "pass").length;
-      if (failureCount >= settings.confirmedFlakeMinFailures) {
-        quarantined.push(flake.testId);
-      }
-    }
+    flakes.push(classification);
+    failCount++;
+    emit(hub, "tempering-flakiness-detected", {
+      testId,
+      failureRate: classification.failureRate,
+      window: classification.window,
+    });
+    maybeCaptureConfirmedFlake(captureMemory, settings, testId, outcomes, classification);
   }
 
   const completedAt = new Date(now()).toISOString();
-  const verdict = flakes.length > 0 ? "fail" : "pass";
-
-  return {
-    scanner: "flakiness", sliceRef,
-    startedAt, completedAt,
-    verdict,
-    pass: passCount, fail: failCount, skipped: 0,
-    violationCount: flakes.length,
-    durationMs: new Date(completedAt).getTime() - new Date(startedAt).getTime(),
-    flakes, quarantined,
-  };
+  return buildFlakinessResult({
+    sliceRef,
+    startedAt,
+    completedAt,
+    verdict: flakes.length > 0 ? "fail" : "pass",
+    pass: passCount,
+    fail: failCount,
+    flakes,
+    quarantined: buildQuarantineList(flakes, outcomeMap, settings),
+    nowMs: new Date(completedAt).getTime() - new Date(startedAt).getTime(),
+  });
 }
 
 // ─── Internals ────────────────────────────────────────────────────────

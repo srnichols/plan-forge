@@ -74,61 +74,66 @@ export function sha256(content) {
  * @param {string}   ghCmd - Path to the `gh` binary
  * @param {Object}   env   - Process environment override
  */
+function ghSpawnConfig(args, ghCmd, env) {
+  const isWin = process.platform === "win32";
+  return {
+    spawnBin: isWin ? "cmd" : ghCmd,
+    spawnArg: isWin ? ["/d", "/s", "/c", ghCmd, "api", ...args] : ["api", ...args],
+    options: {
+      encoding: "utf-8",
+      env: env ?? process.env,
+      windowsHide: isWin,
+    },
+  };
+}
+
+function parseGhJson(text, fallback) {
+  try {
+    return JSON.parse(text || "null");
+  } catch {
+    return fallback;
+  }
+}
+
+function throwGhApiError(result) {
+  const stderr = result.stderr?.trim() ?? "";
+  const stdout = result.stdout?.trim() ?? "";
+  const body = parseGhJson(stdout || "{}", {});
+
+  if (result.status === 401 || /401|Unauthorized|Bad credentials/i.test(stderr)) {
+    throw new SpacesAuthError(
+      "gh auth failed — run `gh auth login` or set GH_TOKEN. " +
+      "Token needs `copilot_spaces:write` scope."
+    );
+  }
+  if (result.status === 403 || /403|Forbidden/i.test(stderr)) {
+    throw new SpacesAuthError(
+      "Token lacks `copilot_spaces:write` scope. " +
+      "Run `gh auth refresh -s copilot_spaces:write --hostname github.com`."
+    );
+  }
+  if (result.status === 404 || body.message?.includes("Not Found")) {
+    throw new SpacesNotFoundError(`Space not found: ${body.message ?? stderr}`);
+  }
+  if (result.status === 429 || /429|rate limit/i.test(stderr)) {
+    throw new SpacesRateLimitError(
+      `API rate limit hit. ${stderr.includes("retry-after") ? stderr : "Retry after 60s."}`
+    );
+  }
+  throw new SpacesSyncError(`gh api failed (exit ${result.status}): ${stderr || stdout}`);
+}
+
 function ghApi(args, ghCmd, env) {
-  // Bug #192 (v2.99.1): avoid DEP0190 — on Windows route through cmd.exe
-  // instead of shell:true + array args.
-  const isWin    = process.platform === "win32";
-  const spawnBin = isWin ? "cmd" : ghCmd;
-  const spawnArg = isWin ? ["/d", "/s", "/c", ghCmd, "api", ...args] : ["api", ...args];
-  const result = spawnSync(spawnBin, spawnArg, {
-    encoding: "utf-8",
-    env: env ?? process.env,
-    windowsHide: isWin,
-  });
+  const { spawnBin, spawnArg, options } = ghSpawnConfig(args, ghCmd, env);
+  const result = spawnSync(spawnBin, spawnArg, options);
 
   if (result.error) {
     throw new SpacesSyncError(`Failed to spawn gh: ${result.error.message}`);
   }
-
   if (result.status !== 0) {
-    const stderr = result.stderr?.trim() ?? "";
-    const stdout = result.stdout?.trim() ?? "";
-    const body = (() => {
-      try { return JSON.parse(stdout || "{}"); } catch { return {}; }
-    })();
-
-    if (result.status === 401 || /401|Unauthorized|Bad credentials/i.test(stderr)) {
-      throw new SpacesAuthError(
-        "gh auth failed — run `gh auth login` or set GH_TOKEN. " +
-        "Token needs `copilot_spaces:write` scope."
-      );
-    }
-    if (result.status === 403 || /403|Forbidden/i.test(stderr)) {
-      throw new SpacesAuthError(
-        "Token lacks `copilot_spaces:write` scope. " +
-        "Run `gh auth refresh -s copilot_spaces:write --hostname github.com`."
-      );
-    }
-    if (result.status === 404 || body.message?.includes("Not Found")) {
-      throw new SpacesNotFoundError(
-        `Space not found: ${body.message ?? stderr}`
-      );
-    }
-    if (result.status === 429 || /429|rate limit/i.test(stderr)) {
-      throw new SpacesRateLimitError(
-        `API rate limit hit. ${stderr.includes("retry-after") ? stderr : "Retry after 60s."}`
-      );
-    }
-    throw new SpacesSyncError(
-      `gh api failed (exit ${result.status}): ${stderr || stdout}`
-    );
+    throwGhApiError(result);
   }
-
-  try {
-    return JSON.parse(result.stdout || "null");
-  } catch {
-    return result.stdout;
-  }
+  return parseGhJson(result.stdout, result.stdout);
 }
 
 // ─── Space discovery ─────────────────────────────────────────────────────────

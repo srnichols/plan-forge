@@ -173,6 +173,38 @@ export function classifyByRules(opts) {
 
 const CLASSIFIER_SYSTEM_PROMPT = `You are a bug classifier. Given scanner evidence from an automated test suite, decide if this is a product bug ('real-bug') or test-infrastructure issue ('infra'). Return JSON only: { "classification": "real-bug"|"infra", "reason": "<brief explanation>", "confidence": <0.0-1.0> }`;
 
+function buildClassifierPrompt(scanner, evidence) {
+  return JSON.stringify({
+    scanner,
+    testName: evidence?.testName || null,
+    assertionMessage: evidence?.assertionMessage || null,
+    stackTrace: (evidence?.stackTrace || "").slice(0, 1500),
+    visualDiffScore: evidence?.visualDiffScore || null,
+  });
+}
+
+function parseClassifierResponse(response) {
+  const text = typeof response === "string" ? response : response?.text || response?.content || "";
+  const jsonMatch = text.match(/\{[\s\S]*\}/);
+  if (!jsonMatch) return null;
+  const parsed = JSON.parse(jsonMatch[0]);
+  return {
+    classification: parsed.classification || "unknown",
+    confidence: typeof parsed.confidence === "number" ? parsed.confidence : 0,
+    reason: parsed.reason || "LLM classified",
+  };
+}
+
+function finalizeClassifierResult(parsed) {
+  if (!parsed) {
+    return { classification: "unknown", reason: "LLM response not parseable", confidence: 0, source: "llm" };
+  }
+  if (parsed.confidence < 0.7) {
+    return { classification: "needs-human-review", reason: parsed.reason, confidence: parsed.confidence, source: "llm" };
+  }
+  return { ...parsed, source: "llm" };
+}
+
 /**
  * Classify using LLM when rules don't match. Never throws.
  *
@@ -191,39 +223,13 @@ export async function classifyByLLM(opts) {
   }
 
   try {
-    const userPrompt = JSON.stringify({
-      scanner,
-      testName: evidence?.testName || null,
-      assertionMessage: evidence?.assertionMessage || null,
-      stackTrace: (evidence?.stackTrace || "").slice(0, 1500),
-      visualDiffScore: evidence?.visualDiffScore || null,
-    });
-
     const response = await callModel({
       systemPrompt: CLASSIFIER_SYSTEM_PROMPT,
-      userPrompt,
+      userPrompt: buildClassifierPrompt(scanner, evidence),
       maxTokens: 200,
       temperature: 0.1,
     });
-
-    // Parse LLM response
-    const text = typeof response === "string" ? response : response?.text || response?.content || "";
-    const jsonMatch = text.match(/\{[\s\S]*\}/);
-    if (!jsonMatch) {
-      return { classification: "unknown", reason: "LLM response not parseable", confidence: 0, source: "llm" };
-    }
-
-    const parsed = JSON.parse(jsonMatch[0]);
-    const classification = parsed.classification || "unknown";
-    const confidence = typeof parsed.confidence === "number" ? parsed.confidence : 0;
-    const reason = parsed.reason || "LLM classified";
-
-    // Low confidence → needs-human-review
-    if (confidence < 0.7) {
-      return { classification: "needs-human-review", reason, confidence, source: "llm" };
-    }
-
-    return { classification, reason, confidence, source: "llm" };
+    return finalizeClassifierResult(parseClassifierResponse(response));
   } catch (err) {
     return { classification: "unknown", reason: `LLM unavailable: ${err.message}`, confidence: 0, source: "llm" };
   }

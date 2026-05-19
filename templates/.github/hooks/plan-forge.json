@@ -14,6 +14,14 @@
           "windows": "powershell -ExecutionPolicy Bypass -File .github/hooks/scripts/check-diff-classify.ps1",
           "timeout": 30,
           "description": "Block commits with leaked secrets, prompt injection, or license-incompatible pastes"
+        },
+        {
+          "name": "error-catalog",
+          "type": "command",
+          "command": ".github/hooks/scripts/check-error-catalog.sh",
+          "windows": "powershell -ExecutionPolicy Bypass -File .github/hooks/scripts/check-error-catalog.ps1",
+          "timeout": 30,
+          "description": "Block commits when docs/manual/errors-and-exit-codes.html drifts from pforge-mcp/enums.mjs ERROR_CODES"
         }
       ]
     },

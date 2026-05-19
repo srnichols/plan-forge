@@ -32,8 +32,53 @@ export const QUORUM_MODES = freezeArray(["auto", "power", "speed", "false"]);
 export const FORGE_MASTER_MODES = freezeArray(["ask", "observe"]);
 export const WATCHER_MODES = freezeArray(["snapshot", "analyze", "cross-run"]);
 export const COST_SOURCES = freezeArray(["worker", "forge-master", "observer", "auditor"]);
-// TODO(phase-41/S4): populate ERROR_CODES from the generated named error catalog.
-export const ERROR_CODES = Object.freeze({});
+export const ERROR_CODES = Object.freeze({
+  ALREADY_FIXED: "ALREADY_FIXED", // Bug is already fixed or otherwise terminal; reopen it before validating again.
+  ASK_QUESTION_MISMATCH: "ASK_QUESTION_MISMATCH", // Client passed a stale questionId to forge_crucible_ask; re-fetch state and retry.
+  AUDITOR_SPAWN_FAILED: "auditor-spawn-failed", // PostRun auditor hook could not be spawned; advisory only.
+  BUG_NOT_FOUND: "BUG_NOT_FOUND", // Requested bug record does not exist.
+  BUG_TERMINAL_STATUS: "BUG_TERMINAL_STATUS", // Bug is fixed, wont-fix, or duplicate and cannot be used for active remediation.
+  CRITICAL_FIELDS_MISSING: "CRITICAL_FIELDS_MISSING", // Crucible finalize blocked because required plan sections are missing.
+  DIFF_CLASSIFY_BLOCKED: "diff-classify-blocked", // PreCommit diff classifier blocked the staged change set.
+  DRIFT_DETECTED: "DRIFT_DETECTED", // A forbidden or out-of-scope edit was detected.
+  DUPLICATE_BUG: "DUPLICATE_BUG", // Bug fingerprint already exists in the registry.
+  ERR_UPDATE_DURING_RUN: "ERR_UPDATE_DURING_RUN", // Self-update was refused while a plan run is active.
+  GATE_COMMAND_FAILED: "GATE_COMMAND_FAILED", // Slice validation gate exited non-zero.
+  INVALID_CLASS: "INVALID_CLASS", // Meta-bug class is missing or not in the allowed class list.
+  INVALID_STATUS: "INVALID_STATUS", // Requested bug status is not a valid enum member.
+  INVALID_TRANSITION: "INVALID_TRANSITION", // Requested bug status transition is not allowed.
+  LOCK_HASH_MISMATCH: "lock-hash-mismatch", // Plan lockHash does not match the current plan contents.
+  MISSING_BUG_ID: "MISSING_BUG_ID", // bugId is required for tempering-bug workflows.
+  MISSING_EVIDENCE: "MISSING_EVIDENCE", // Bug evidence must include a test name or assertion+stack trace.
+  MISSING_PAYLOAD: "MISSING_PAYLOAD", // Required request payload object was not provided.
+  MISSING_REQUIRED_FIELDS: "MISSING_REQUIRED_FIELDS", // Required fields are missing from the request payload.
+  MISSING_STATUS: "MISSING_STATUS", // Target bug status was not provided.
+  NETWORK_ALLOWLIST_VIOLATION: "network-allowlist-violation", // Outbound call targeted a host outside network.allowed.
+  NO_API_KEY: "NO_API_KEY", // Provider API key is missing.
+  NO_REASONING_MODEL: "NO_REASONING_MODEL", // Forge-Master has no reasoning model configured.
+  NO_REPO: "NO_REPO", // GitHub repository could not be resolved from config or remotes.
+  NO_TOKEN: "NO_TOKEN", // GitHub token is missing from env, secrets, or gh auth.
+  OBSERVER_BUDGET_EXCEEDED: "observer-budget-exceeded", // Forge-Master observer hit its configured narration budget.
+  PLAN_ALREADY_EXISTS: "PLAN_ALREADY_EXISTS", // Crucible finalize refused to overwrite an existing plan.
+  PLAN_NOT_FOUND: "PLAN_NOT_FOUND", // Plan file path does not exist or is outside the workspace.
+  PLAN_PARSE_ERROR: "PLAN_PARSE_ERROR", // Plan file is malformed or missing required sections.
+  PROJECT_PRINCIPLES_EXISTS: "PROJECT_PRINCIPLES_EXISTS", // project-principles.md already exists; overwrite explicitly to replace it.
+  PROJECT_PRINCIPLES_NO_SOURCE: "PROJECT_PRINCIPLES_NO_SOURCE", // No project-principles source was found in the imported Spec Kit.
+  QUORUM_ALL_FAILED: "QUORUM_ALL_FAILED", // All quorum models timed out or errored.
+  RATE_LIMITED: "RATE_LIMITED", // Request was throttled; honor retry timing before retrying.
+  REVIEW_REJECTED: "REVIEW_REJECTED", // Review gate rejected the slice.
+  SCANNER_UNAVAILABLE: "SCANNER_UNAVAILABLE", // Requested scanner is not installed or cannot run in this environment.
+  SCOPE_VIOLATION: "SCOPE_VIOLATION", // Worker edited a path outside the allowed scope contract.
+  SMELT_NOT_FOUND: "SMELT_NOT_FOUND", // Requested Crucible smelt ID does not exist.
+  SPECKIT_IMPORT_DIR_NOT_FOUND: "SPECKIT_IMPORT_DIR_NOT_FOUND", // Spec Kit import directory path does not exist.
+  SPECKIT_IMPORT_MISSING_FIELD: "SPECKIT_IMPORT_MISSING_FIELD", // Required Spec Kit field is missing from an input artifact.
+  SPECKIT_IMPORT_MISSING_REQUIRED: "SPECKIT_IMPORT_MISSING_REQUIRED", // Required Spec Kit files are missing.
+  SPECKIT_IMPORT_NOT_FOUND: "SPECKIT_IMPORT_NOT_FOUND", // Requested imported smelt was not found.
+  STRICT_GATES_REJECTED: "STRICT_GATES_REJECTED", // --strict-gates refused a plan that would otherwise escalate.
+  TOOL_DENIED: "tool-denied", // Worker or hook attempted to call a denied MCP tool.
+  UNEXPECTED: "UNEXPECTED", // Unexpected catch-all failure; inspect the attached message/details.
+  WORKER_TIMEOUT: "WORKER_TIMEOUT", // Worker exceeded its per-slice execution budget.
+});
 
 export function assertHookName(name) {
   return assertOneOf("hook name", name, HOOK_PASCAL);

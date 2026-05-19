@@ -5,7 +5,9 @@
   "type": "module",
   "scripts": {
     "start": "node server.mjs",
-    "test": "vitest run"
+    "test": "vitest run",
+    "generate:error-catalog": "node ../scripts/generate-error-catalog.mjs",
+    "check:error-catalog": "node ../scripts/check-error-catalog.mjs"
   },
   "devDependencies": {
     "jsdom": "^29.0.2",

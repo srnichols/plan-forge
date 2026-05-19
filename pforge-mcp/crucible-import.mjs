@@ -29,6 +29,7 @@ import {
 } from "node:fs";
 import { dirname, join, resolve, basename } from "node:path";
 import { randomUUID } from "node:crypto";
+import { ERROR_CODES } from "./enums.mjs";
 
 // ─── Public API ─────────────────────────────────────────────────────────────
 
@@ -118,7 +119,7 @@ export function importSpeckit(opts) {
       result.missingFields.push({ file: "spec.md", field: "<file>", severity: "error" });
     if (!plan)
       result.missingFields.push({ file: "plan.md", field: "<file>", severity: "error" });
-    result.error = "SPECKIT_IMPORT_MISSING_REQUIRED";
+    result.error = ERROR_CODES.SPECKIT_IMPORT_MISSING_REQUIRED;
     result.warnings.push(
       "Both spec.md and plan.md are required. Re-run after creating them."
     );
@@ -219,14 +220,14 @@ export function importSpeckit(opts) {
   // ── 5. Sync-principles guard (must run before any write) ────────────────
   if (syncPrinciples) {
     if (!constitution) {
-      result.error = "PROJECT_PRINCIPLES_NO_SOURCE";
+      result.error = ERROR_CODES.PROJECT_PRINCIPLES_NO_SOURCE;
       result.warnings.push(
         "--sync-principles requested but constitution.md is absent."
       );
       return result;
     }
     if (existsSync(principlesPath)) {
-      result.error = "PROJECT_PRINCIPLES_EXISTS";
+      result.error = ERROR_CODES.PROJECT_PRINCIPLES_EXISTS;
       result.warnings.push(
         `${principlesPath} already exists; refusing to overwrite. Remove it first or omit --sync-principles.`
       );

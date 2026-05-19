@@ -77,6 +77,39 @@ export function formatMessages(messages) {
   return formatted;
 }
 
+function parseUsage(data) {
+  const usage = data.usage || {};
+  return {
+    tokensIn: usage.prompt_tokens ?? usage.input_tokens ?? 0,
+    tokensOut: usage.completion_tokens ?? usage.output_tokens ?? 0,
+    cacheReadTokens: usage.prompt_tokens_details?.cached_tokens ?? usage.input_tokens_details?.cached_tokens ?? 0,
+    reasoningTokens: usage.completion_tokens_details?.reasoning_tokens ?? usage.output_tokens_details?.reasoning_tokens ?? 0,
+    serviceTier: data.service_tier ?? null,
+    vendor: "openai",
+  };
+}
+
+function buildReplyResponse(content, usage) {
+  return {
+    type: "reply",
+    content,
+    ...usage,
+  };
+}
+
+function buildToolCallsResponse(message, usage) {
+  return {
+    type: "tool_calls",
+    content: message.content || undefined,
+    toolCalls: message.tool_calls.map((tc) => ({
+      id: tc.id,
+      name: tc.function.name,
+      args: safeParseArgs(tc.function.arguments),
+    })),
+    ...usage,
+  };
+}
+
 /**
  * Parse OpenAI response into the generic format.
  *
@@ -96,54 +129,18 @@ export function formatMessages(messages) {
  * }}
  */
 export function parseResponse(data) {
-  const usage = data.usage || {};
-  // Chat Completions API uses prompt_tokens/completion_tokens; Responses API
-  // uses input_tokens/output_tokens. Read whichever is present.
-  const tokensIn = usage.prompt_tokens ?? usage.input_tokens ?? 0;
-  const tokensOut = usage.completion_tokens ?? usage.output_tokens ?? 0;
-  // Phase-COST-TOKEN-COVERAGE Slice 6: cache + reasoning + tier extraction
-  const cacheReadTokens = usage.prompt_tokens_details?.cached_tokens ?? usage.input_tokens_details?.cached_tokens ?? 0;
-  const reasoningTokens = usage.completion_tokens_details?.reasoning_tokens ?? usage.output_tokens_details?.reasoning_tokens ?? 0;
-  const serviceTier = data.service_tier ?? null;
+  const usage = parseUsage(data);
+  const message = data.choices?.[0]?.message;
 
-  const choice = data.choices?.[0];
-  if (!choice) {
-    return {
-      type: "reply", content: "", tokensIn, tokensOut,
-      cacheReadTokens, reasoningTokens, serviceTier, vendor: "openai",
-    };
+  if (!message) {
+    return buildReplyResponse("", usage);
   }
 
-  const message = choice.message || {};
-
-  if (message.tool_calls && message.tool_calls.length > 0) {
-    return {
-      type: "tool_calls",
-      content: message.content || undefined,
-      toolCalls: message.tool_calls.map((tc) => ({
-        id: tc.id,
-        name: tc.function.name,
-        args: safeParseArgs(tc.function.arguments),
-      })),
-      tokensIn,
-      tokensOut,
-      cacheReadTokens,
-      reasoningTokens,
-      serviceTier,
-      vendor: "openai",
-    };
+  if (message.tool_calls?.length > 0) {
+    return buildToolCallsResponse(message, usage);
   }
 
-  return {
-    type: "reply",
-    content: message.content || "",
-    tokensIn,
-    tokensOut,
-    cacheReadTokens,
-    reasoningTokens,
-    serviceTier,
-    vendor: "openai",
-  };
+  return buildReplyResponse(message.content || "", usage);
 }
 
 function safeParseArgs(str) {

@@ -97,6 +97,102 @@ function resolveReasoningProvider(forgeMasterBlock, resolvedModel) {
   return null;
 }
 
+const VALID_DEFAULT_TIERS = ["low", "medium", "high"];
+
+function loadForgeMasterBlock(configPath) {
+  let forgeJson = null;
+  let block = null;
+
+  try {
+    if (existsSync(configPath)) {
+      forgeJson = JSON.parse(readFileSync(configPath, "utf-8"));
+      block = forgeJson?.forgeMaster ?? null;
+    }
+  } catch { /* fall through to defaults */ }
+
+  return { forgeJson, block };
+}
+
+function clampIntegerOption(value, fallback, min, max) {
+  if (!Number.isFinite(value)) return fallback;
+  return Math.max(min, Math.min(max, Math.trunc(value)));
+}
+
+function resolveCeilingToolCalls(value, maxToolCalls) {
+  if (!Number.isFinite(value)) return FORGE_MASTER_DEFAULTS.ceilingToolCalls;
+  return Math.max(maxToolCalls, Math.min(20, Math.trunc(value)));
+}
+
+function resolveBooleanOption(value, fallback) {
+  return typeof value === "boolean" ? value : fallback;
+}
+
+function resolveDefaultProvider(block) {
+  return (typeof block?.defaultProvider === "string" && VALID_PROVIDERS.has(block.defaultProvider))
+    ? block.defaultProvider
+    : FORGE_MASTER_DEFAULTS.defaultProvider;
+}
+
+function resolveReasoningTiers(block) {
+  return {
+    low: typeof block?.reasoningTiers?.low === "string" ? block.reasoningTiers.low : null,
+    medium: typeof block?.reasoningTiers?.medium === "string" ? block.reasoningTiers.medium : null,
+    high: typeof block?.reasoningTiers?.high === "string" ? block.reasoningTiers.high : null,
+  };
+}
+
+function resolveDefaultTier(block) {
+  return (typeof block?.defaultTier === "string" && VALID_DEFAULT_TIERS.includes(block.defaultTier))
+    ? block.defaultTier
+    : FORGE_MASTER_DEFAULTS.defaultTier;
+}
+
+function resolveObserverNumber(value, fallback) {
+  return (typeof value === "number" && Number.isFinite(value) && value >= 0)
+    ? value
+    : fallback;
+}
+
+function resolveObserverNarrationLimit(value, fallback) {
+  return (typeof value === "number" && Number.isFinite(value) && value >= 0)
+    ? Math.trunc(value)
+    : fallback;
+}
+
+function resolveOptionalModelTierValue(kind, value, fallback) {
+  return typeof value === "string"
+    ? validateOptionalModelTier(kind, value)
+    : fallback;
+}
+
+function resolveObserverConfig(block) {
+  const observerBlock = block?.observer ?? {};
+  return {
+    enabled: resolveBooleanOption(observerBlock.enabled, FORGE_MASTER_DEFAULTS.observer.enabled),
+    maxUsdPerDay: resolveObserverNumber(observerBlock.maxUsdPerDay, FORGE_MASTER_DEFAULTS.observer.maxUsdPerDay),
+    maxNarrationsPerHour: resolveObserverNarrationLimit(
+      observerBlock.maxNarrationsPerHour,
+      FORGE_MASTER_DEFAULTS.observer.maxNarrationsPerHour,
+    ),
+    modelTier: resolveOptionalModelTierValue(
+      "forgeMaster.observer.modelTier",
+      observerBlock.modelTier,
+      FORGE_MASTER_DEFAULTS.observer.modelTier,
+    ),
+  };
+}
+
+function resolveAuditorConfig(block) {
+  const auditorBlock = block?.auditor ?? {};
+  return {
+    modelTier: resolveOptionalModelTierValue(
+      "forgeMaster.auditor.modelTier",
+      auditorBlock.modelTier,
+      FORGE_MASTER_DEFAULTS.auditor.modelTier,
+    ),
+  };
+}
+
 /**
  * Load and return a fully-resolved Forge-Master config.
  *
@@ -120,120 +216,41 @@ function resolveReasoningProvider(forgeMasterBlock, resolvedModel) {
  */
 export function getForgeMasterConfig({ cwd = process.cwd() } = {}) {
   const configPath = resolve(cwd, ".forge.json");
-  let forgeJson = null;
-  let block = null;
-
-  try {
-    if (existsSync(configPath)) {
-      forgeJson = JSON.parse(readFileSync(configPath, "utf-8"));
-      block = forgeJson?.forgeMaster ?? null;
-    }
-  } catch { /* fall through to defaults */ }
-
+  const { forgeJson, block } = loadForgeMasterBlock(configPath);
   const reasoningModel = resolveReasoningModel(block, forgeJson);
   const reasoningProvider = resolveReasoningProvider(block, reasoningModel);
-
-  const routerModel =
-    (typeof block?.routerModel === "string" && block.routerModel)
-      ? block.routerModel
-      : FORGE_MASTER_DEFAULTS.routerModel;
-
-  const maxToolCalls = Number.isFinite(block?.maxToolCalls)
-    ? Math.max(1, Math.min(10, Math.trunc(block.maxToolCalls)))
-    : FORGE_MASTER_DEFAULTS.maxToolCalls;
-
-  const ceilingToolCalls = Number.isFinite(block?.ceilingToolCalls)
-    ? Math.max(maxToolCalls, Math.min(20, Math.trunc(block.ceilingToolCalls)))
-    : FORGE_MASTER_DEFAULTS.ceilingToolCalls;
-
-  const sessionRetentionDays = Number.isFinite(block?.sessionRetentionDays)
-    ? Math.max(1, Math.min(365, Math.trunc(block.sessionRetentionDays)))
-    : FORGE_MASTER_DEFAULTS.sessionRetentionDays;
-
-  const l3Enabled = typeof block?.l3Enabled === "boolean"
-    ? block.l3Enabled
-    : FORGE_MASTER_DEFAULTS.l3Enabled;
-
-  const discoverExtensionTools = typeof block?.discoverExtensionTools === "boolean"
-    ? block.discoverExtensionTools
-    : FORGE_MASTER_DEFAULTS.discoverExtensionTools;
-
-  const defaultProvider =
-    (typeof block?.defaultProvider === "string" && VALID_PROVIDERS.has(block.defaultProvider))
-      ? block.defaultProvider
-      : FORGE_MASTER_DEFAULTS.defaultProvider;
-
-  const reasoningTiers = {
-    low: typeof block?.reasoningTiers?.low === "string" ? block.reasoningTiers.low : null,
-    medium: typeof block?.reasoningTiers?.medium === "string" ? block.reasoningTiers.medium : null,
-    high: typeof block?.reasoningTiers?.high === "string" ? block.reasoningTiers.high : null,
-  };
-
-  const VALID_TIER_VALUES = ["low", "medium", "high"];
-  const defaultTier =
-    (typeof block?.defaultTier === "string" && VALID_TIER_VALUES.includes(block.defaultTier))
-      ? block.defaultTier
-      : FORGE_MASTER_DEFAULTS.defaultTier;
-
-  const autoEscalate = typeof block?.autoEscalate === "boolean"
-    ? block.autoEscalate
-    : FORGE_MASTER_DEFAULTS.autoEscalate;
+  const observer = resolveObserverConfig(block);
+  const auditor = resolveAuditorConfig(block);
 
   validateOptionalForgeMasterMode(block?.mode);
-
-  // ── Observer budget config ────────────────────────────────────────
-  const observerBlock = block?.observer ?? {};
-
-  const observerEnabled = typeof observerBlock.enabled === "boolean"
-    ? observerBlock.enabled
-    : FORGE_MASTER_DEFAULTS.observer.enabled;
-
-  const observerMaxUsdPerDay = (
-    typeof observerBlock.maxUsdPerDay === "number" &&
-    Number.isFinite(observerBlock.maxUsdPerDay) &&
-    observerBlock.maxUsdPerDay >= 0
-  )
-    ? observerBlock.maxUsdPerDay
-    : FORGE_MASTER_DEFAULTS.observer.maxUsdPerDay;
-
-  const observerMaxNarrationsPerHour = (
-    typeof observerBlock.maxNarrationsPerHour === "number" &&
-    Number.isFinite(observerBlock.maxNarrationsPerHour) &&
-    observerBlock.maxNarrationsPerHour >= 0
-  )
-    ? Math.trunc(observerBlock.maxNarrationsPerHour)
-    : FORGE_MASTER_DEFAULTS.observer.maxNarrationsPerHour;
-
-  const observerModelTier = typeof observerBlock.modelTier === "string"
-    ? validateOptionalModelTier("forgeMaster.observer.modelTier", observerBlock.modelTier)
-    : FORGE_MASTER_DEFAULTS.observer.modelTier;
-
-  const auditorBlock = block?.auditor ?? {};
-  const auditorModelTier = typeof auditorBlock.modelTier === "string"
-    ? validateOptionalModelTier("forgeMaster.auditor.modelTier", auditorBlock.modelTier)
-    : FORGE_MASTER_DEFAULTS.auditor.modelTier;
 
   return {
     reasoningModel,
     reasoningProvider,
-    defaultProvider,
-    routerModel,
-    maxToolCalls,
-    ceilingToolCalls,
-    sessionRetentionDays,
-    l3Enabled,
-    discoverExtensionTools,
-    reasoningTiers,
-    defaultTier,
-    autoEscalate,
-    observer: {
-      enabled: observerEnabled,
-      maxUsdPerDay: observerMaxUsdPerDay,
-      maxNarrationsPerHour: observerMaxNarrationsPerHour,
-      modelTier: observerModelTier,
-    },
-    auditor: {
-      modelTier: auditorModelTier,
-    },
+    defaultProvider: resolveDefaultProvider(block),
+    routerModel: (typeof block?.routerModel === "string" && block.routerModel)
+      ? block.routerModel
+      : FORGE_MASTER_DEFAULTS.routerModel,
+    maxToolCalls: clampIntegerOption(block?.maxToolCalls, FORGE_MASTER_DEFAULTS.maxToolCalls, 1, 10),
+    ceilingToolCalls: resolveCeilingToolCalls(
+      block?.ceilingToolCalls,
+      clampIntegerOption(block?.maxToolCalls, FORGE_MASTER_DEFAULTS.maxToolCalls, 1, 10),
+    ),
+    sessionRetentionDays: clampIntegerOption(
+      block?.sessionRetentionDays,
+      FORGE_MASTER_DEFAULTS.sessionRetentionDays,
+      1,
+      365,
+    ),
+    l3Enabled: resolveBooleanOption(block?.l3Enabled, FORGE_MASTER_DEFAULTS.l3Enabled),
+    discoverExtensionTools: resolveBooleanOption(
+      block?.discoverExtensionTools,
+      FORGE_MASTER_DEFAULTS.discoverExtensionTools,
+    ),
+    reasoningTiers: resolveReasoningTiers(block),
+    defaultTier: resolveDefaultTier(block),
+    autoEscalate: resolveBooleanOption(block?.autoEscalate, FORGE_MASTER_DEFAULTS.autoEscalate),
+    observer,
+    auditor,
   };
 }

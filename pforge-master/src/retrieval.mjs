@@ -121,6 +121,40 @@ function truncateSections(l1Section, l2Section, l3Section) {
 
 // ─── Public API ─────────────────────────────────────────────────────
 
+async function collectContextEntries(keys, doRecall, recallArgs, cwd, sourceBucket) {
+  const entries = [];
+
+  for (const key of keys) {
+    try {
+      const value = await doRecall(key, recallArgs(key), { cwd });
+      const text = summarizeValue(key, value);
+      if (text) {
+        entries.push({ key, text });
+        sourceBucket.push(key);
+      }
+    } catch { /* non-fatal — best-effort retrieval */ }
+  }
+
+  return entries;
+}
+
+function buildHubEventsSection(hubSubscriber) {
+  if (!hubSubscriber) return null;
+
+  const events = hubSubscriber.getRecentEvents(10);
+  if (events.length === 0) return null;
+
+  const lines = ["### Recent Operational Events", ""];
+  for (const ev of events) {
+    const ts = ev.timestamp ? ` (${ev.timestamp})` : "";
+    const detail = ev.sliceId
+      ? ` — ${ev.sliceId}`
+      : ev.runId ? ` — run:${ev.runId}` : "";
+    lines.push(`- **${ev.type}**${detail}${ts}`);
+  }
+  return lines.join("\n");
+}
+
 /**
  * Fetch context from all brain tiers and format as a markdown block.
  *
@@ -132,76 +166,36 @@ export async function fetchContext(opts = {}, deps = {}) {
   const { sessionId, lane, cwd } = opts;
   const doRecall = deps.recall || recall;
   const getConfig = deps.getForgeMasterConfig || getForgeMasterConfig;
-
   const config = getConfig({ cwd });
   const sources = { l1: [], l2: [], l3: [] };
 
-  // ── L1: session-scoped ────────────────────────────────────────────
-  const l1Entries = [];
-  for (const key of L1_KEYS) {
-    try {
-      const value = await doRecall(key, { runId: sessionId }, { cwd });
-      const text = summarizeValue(key, value);
-      if (text) {
-        l1Entries.push({ key, text });
-        sources.l1.push(key);
-      }
-    } catch { /* non-fatal — best-effort retrieval */ }
-  }
+  const l1Entries = await collectContextEntries(
+    L1_KEYS,
+    doRecall,
+    () => ({ runId: sessionId }),
+    cwd,
+    sources.l1,
+  );
+  const l2Entries = await collectContextEntries(
+    L2_KEYS_BY_LANE[lane] || L2_KEYS_DEFAULT,
+    doRecall,
+    () => ({}),
+    cwd,
+    sources.l2,
+  );
+  const l3Entries = config.l3Enabled
+    ? await collectContextEntries(L3_KEYS, doRecall, () => ({ scope: "cross" }), cwd, sources.l3)
+    : [];
 
-  // ── L2: project-scoped, lane-aware ────────────────────────────────
-  const l2Keys = L2_KEYS_BY_LANE[lane] || L2_KEYS_DEFAULT;
-  const l2Entries = [];
-  for (const key of l2Keys) {
-    try {
-      const value = await doRecall(key, {}, { cwd });
-      const text = summarizeValue(key, value);
-      if (text) {
-        l2Entries.push({ key, text });
-        sources.l2.push(key);
-      }
-    } catch { /* non-fatal */ }
-  }
+  let contextBlock = truncateSections(
+    buildSection("l1", l1Entries),
+    buildSection("l2", l2Entries),
+    buildSection("l3", l3Entries),
+  );
+  const hubSection = buildHubEventsSection(deps.hubSubscriber);
 
-  // ── L3: cross-project (only when enabled) ─────────────────────────
-  const l3Entries = [];
-  if (config.l3Enabled) {
-    for (const key of L3_KEYS) {
-      try {
-        const value = await doRecall(key, { scope: "cross" }, { cwd });
-        const text = summarizeValue(key, value);
-        if (text) {
-          l3Entries.push({ key, text });
-          sources.l3.push(key);
-        }
-      } catch { /* non-fatal */ }
-    }
-  }
-
-  // ── Format & truncate ─────────────────────────────────────────────
-  const l1Section = buildSection("l1", l1Entries);
-  const l2Section = buildSection("l2", l2Entries);
-  const l3Section = buildSection("l3", l3Entries);
-
-  let contextBlock = truncateSections(l1Section, l2Section, l3Section);
-
-  // ── Hub events overlay (non-breaking: skipped if no hubSubscriber) ─
-  if (deps.hubSubscriber) {
-    const events = deps.hubSubscriber.getRecentEvents(10);
-    if (events.length > 0) {
-      const lines = ["### Recent Operational Events", ""];
-      for (const ev of events) {
-        const ts = ev.timestamp ? ` (${ev.timestamp})` : "";
-        const detail = ev.sliceId
-          ? ` — ${ev.sliceId}`
-          : ev.runId ? ` — run:${ev.runId}` : "";
-        lines.push(`- **${ev.type}**${detail}${ts}`);
-      }
-      const hubSection = lines.join("\n");
-      contextBlock = contextBlock
-        ? contextBlock + "\n\n" + hubSection
-        : hubSection;
-    }
+  if (hubSection) {
+    contextBlock = contextBlock ? `${contextBlock}\n\n${hubSection}` : hubSection;
   }
 
   return { contextBlock, sources };

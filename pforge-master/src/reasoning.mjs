@@ -944,6 +944,110 @@ export async function runTurn(input, deps = {}) {
 
 // ─── Observer Reasoning Turn ────────────────────────────────────────
 
+function getObserverBudgetFns(opts) {
+  return {
+    checkBudgetFn: opts._checkBudget ?? checkBudget,
+    recordSpendFn: opts._recordSpend ?? recordSpend,
+    loadBudgetStateFn: opts._loadBudgetState ?? loadBudgetState,
+    saveBudgetStateFn: opts._saveBudgetState ?? saveBudgetState,
+  };
+}
+
+function resolveObserverConfigBlock(config) {
+  return config?.observer && typeof config.observer === "object"
+    ? config.observer
+    : config;
+}
+
+function buildObserverCaps(observerConfig) {
+  return {
+    maxUsdPerDay: observerConfig.maxUsdPerDay ?? 1.0,
+    maxNarrationsPerHour: observerConfig.maxNarrationsPerHour ?? 6,
+  };
+}
+
+function blockObserverBudget(hub, budgetCheck) {
+  console.error(`[observer] budget block: ${budgetCheck.reason}`);
+  if (hub && typeof hub.broadcast === "function") {
+    hub.broadcast({
+      type: "observer:budget-blocked",
+      reason: budgetCheck.reason,
+      timestamp: new Date().toISOString(),
+    });
+  }
+  return { ok: false, skipped: true, reason: budgetCheck.reason, narration: null };
+}
+
+function checkObserverBudgetGate(opts, cwd, loadBudgetStateFn, checkBudgetFn, caps, hub) {
+  const state = opts.budgetState ?? loadBudgetStateFn({ cwd });
+  const budgetCheck = checkBudgetFn(state, caps);
+  if (!budgetCheck.ok) {
+    return { state: null, blocked: blockObserverBudget(hub, budgetCheck) };
+  }
+  return { state, blocked: null };
+}
+
+async function resolveObserverProvider(opts, config) {
+  return opts.provider ?? autoSelectProvider(config, process.env, opts._providers ?? null);
+}
+
+function resolveObserverModel(config, observerConfig) {
+  const modelTier = observerConfig.modelTier ?? null;
+  return (modelTier ? resolveModel(modelTier, config) : null)
+    ?? config?.reasoningModel
+    ?? null;
+}
+
+async function callObserverModel(provider, resolvedModel, batch) {
+  const { systemPrompt, userMessage } = buildObserverPrompt(batch);
+  return provider.sendTurn({
+    messages: [
+      { role: "system", content: systemPrompt },
+      { role: "user", content: userMessage },
+    ],
+    tools: buildToolSchemas(OBSERVER_TOOL_ALLOWLIST),
+    model: resolvedModel,
+    apiKey: "",
+  });
+}
+
+function saveObserverBudgetState(saveBudgetStateFn, updatedState, cwd) {
+  try {
+    saveBudgetStateFn(updatedState, { cwd });
+  } catch (err) {
+    console.error(`[observer] budget state save failed (non-fatal): ${err?.message ?? err}`);
+  }
+}
+
+function captureObserverNarration(observerConfig, rememberFn, batch, narration, usd) {
+  if (observerConfig.brainCapture === false || typeof rememberFn !== "function") return;
+
+  try {
+    const captureKey = `project.observer.narration-${Date.now()}`;
+    rememberFn(captureKey, {
+      timestamp: new Date().toISOString(),
+      narration,
+      batchEventCount: Array.isArray(batch) ? batch.length : 0,
+      usd,
+    });
+  } catch (err) {
+    console.error(`[observer] brain capture failed (non-fatal): ${err?.message ?? err}`);
+  }
+}
+
+function emitObserverNarration(hub, batch, narration, usd, observerConfig) {
+  if (!hub || typeof hub.broadcast !== "function") return;
+
+  hub.broadcast({
+    type: OBSERVER_NARRATION_EVENT_TYPE,
+    timestamp: new Date().toISOString(),
+    batchEventCount: Array.isArray(batch) ? batch.length : 0,
+    narration,
+    usd,
+    modelTier: observerConfig.modelTier ?? null,
+  });
+}
+
 /**
  * Run a single observer narration turn: check budget → call model → capture → emit.
  *
@@ -983,71 +1087,31 @@ export async function runObserverTurn(batch, opts = {}) {
     cwd = process.cwd(),
     remember: _remember = null,
   } = opts;
+  const { checkBudgetFn, recordSpendFn, loadBudgetStateFn, saveBudgetStateFn } = getObserverBudgetFns(opts);
+  const observerConfig = resolveObserverConfigBlock(config);
+  const budgetGate = checkObserverBudgetGate(
+    opts,
+    cwd,
+    loadBudgetStateFn,
+    checkBudgetFn,
+    buildObserverCaps(observerConfig),
+    hub,
+  );
 
-  const checkBudgetFn = opts._checkBudget ?? checkBudget;
-  const recordSpendFn = opts._recordSpend ?? recordSpend;
-  const loadBudgetStateFn = opts._loadBudgetState ?? loadBudgetState;
-  const saveBudgetStateFn = opts._saveBudgetState ?? saveBudgetState;
-
-  // Support both getForgeMasterConfig() shape (config.observer.*) and
-  // flat observer-only shape (config.maxUsdPerDay etc.) for flexibility.
-  const observerConfig = config?.observer && typeof config.observer === "object"
-    ? config.observer
-    : config;
-
-  const caps = {
-    maxUsdPerDay: observerConfig.maxUsdPerDay ?? 1.0,
-    maxNarrationsPerHour: observerConfig.maxNarrationsPerHour ?? 6,
-  };
-
-  // ── 1. Check budget (MUST be first — fail closed) ─────────────────
-  const state = opts.budgetState ?? loadBudgetStateFn({ cwd });
-  const budgetCheck = checkBudgetFn(state, caps);
-  if (!budgetCheck.ok) {
-    console.error(`[observer] budget block: ${budgetCheck.reason}`);
-    if (hub && typeof hub.broadcast === "function") {
-      hub.broadcast({
-        type: "observer:budget-blocked",
-        reason: budgetCheck.reason,
-        timestamp: new Date().toISOString(),
-      });
-    }
-    return { ok: false, skipped: true, reason: budgetCheck.reason, narration: null };
+  if (budgetGate.blocked) {
+    return budgetGate.blocked;
   }
 
-  // ── 2. Resolve provider ────────────────────────────────────────────
-  let provider = opts.provider ?? null;
-  if (!provider) {
-    provider = await autoSelectProvider(config, process.env, opts._providers ?? null);
-  }
+  const provider = await resolveObserverProvider(opts, config);
   if (!provider) {
     return { ok: false, skipped: false, reason: "no provider available", narration: null };
   }
 
-  // ── 3. Resolve model — tier override or inherit ask-mode default ──
-  const modelTier = observerConfig.modelTier ?? null;
-  const resolvedModel = (modelTier ? resolveModel(modelTier, config) : null)
-    ?? config?.reasoningModel
-    ?? null;
+  const resolvedModel = resolveObserverModel(config, observerConfig);
 
-  // ── 4. Build observer prompt ───────────────────────────────────────
-  const { systemPrompt, userMessage } = buildObserverPrompt(batch);
-
-  // ── 5. Build tool schemas limited to observer allowlist (RD #11) ─
-  const toolSchemas = buildToolSchemas(OBSERVER_TOOL_ALLOWLIST);
-
-  // ── 6. Call model ──────────────────────────────────────────────────
   let response;
   try {
-    response = await provider.sendTurn({
-      messages: [
-        { role: "system", content: systemPrompt },
-        { role: "user", content: userMessage },
-      ],
-      tools: toolSchemas,
-      model: resolvedModel,
-      apiKey: "",
-    });
+    response = await callObserverModel(provider, resolvedModel, batch);
   } catch (err) {
     return {
       ok: false,
@@ -1061,41 +1125,11 @@ export async function runObserverTurn(batch, opts = {}) {
   const tokensIn = response.tokensIn || 0;
   const tokensOut = response.tokensOut || 0;
   const usd = computeTurnCost(resolvedModel, tokensIn, tokensOut);
+  const updatedState = recordSpendFn(budgetGate.state, { usd, timestamp: Date.now() });
 
-  // ── 7. Record spend atomically (write-to-tmp + rename) ─────────────
-  const updatedState = recordSpendFn(state, { usd, timestamp: Date.now() });
-  try {
-    saveBudgetStateFn(updatedState, { cwd });
-  } catch (err) {
-    console.error(`[observer] budget state save failed (non-fatal): ${err?.message ?? err}`);
-  }
-
-  // ── 8. Brain capture (brainCapture defaults to true) ───────────────
-  if (observerConfig.brainCapture !== false && typeof _remember === "function") {
-    try {
-      const captureKey = `project.observer.narration-${Date.now()}`;
-      _remember(captureKey, {
-        timestamp: new Date().toISOString(),
-        narration,
-        batchEventCount: Array.isArray(batch) ? batch.length : 0,
-        usd,
-      });
-    } catch (err) {
-      console.error(`[observer] brain capture failed (non-fatal): ${err?.message ?? err}`);
-    }
-  }
-
-  // ── 9. Emit hub event ──────────────────────────────────────────────
-  if (hub && typeof hub.broadcast === "function") {
-    hub.broadcast({
-      type: OBSERVER_NARRATION_EVENT_TYPE,
-      timestamp: new Date().toISOString(),
-      batchEventCount: Array.isArray(batch) ? batch.length : 0,
-      narration,
-      usd,
-      modelTier: observerConfig.modelTier ?? null,
-    });
-  }
+  saveObserverBudgetState(saveBudgetStateFn, updatedState, cwd);
+  captureObserverNarration(observerConfig, _remember, batch, narration, usd);
+  emitObserverNarration(hub, batch, narration, usd, observerConfig);
 
   return { ok: true, narration, tokensIn, tokensOut, usd };
 }

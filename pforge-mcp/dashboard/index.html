@@ -461,6 +461,16 @@
           </p>
         </div>
       </div>
+      <!-- Phase-40 S5 — Cross-Run Watcher Anomalies card -->
+      <div id="card-cross-run-anomalies" class="mt-4 bg-gray-800 rounded-lg p-4">
+        <div class="flex items-center justify-between mb-2">
+          <h3 class="text-sm font-semibold text-amber-400">⚡ Cross-Run Watcher Anomalies</h3>
+          <button onclick="loadCrossRunAnomalies()" class="text-xs text-gray-500 hover:text-white px-2 py-0.5 rounded border border-gray-700">↺ Refresh</button>
+        </div>
+        <div id="cross-run-anomalies-list" class="max-h-48 overflow-y-auto space-y-2 text-xs" role="log">
+          <p class="text-gray-500 text-center py-3">Click Refresh to scan the last 14 days of run history.</p>
+        </div>
+      </div>
     </section>
 
     <!-- Review Tab (Phase FORGE-SHOP-02 Slice 02.2) — review queue UI -->

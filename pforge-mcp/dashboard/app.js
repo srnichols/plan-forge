@@ -7422,3 +7422,31 @@ function loadObserverNarrations() {
 }
 
 window.loadObserverNarrations = loadObserverNarrations;
+
+// Phase-40 S5 — Cross-run watcher anomalies card
+async function loadCrossRunAnomalies() {
+  const list = document.getElementById("cross-run-anomalies-list");
+  if (!list) return;
+  list.innerHTML = '<p class="text-gray-500 text-center py-2">Loading…</p>';
+  try {
+    const res = await fetch("/api/watcher/cross-run");
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const data = await res.json();
+    const anomalies = data.anomalies || [];
+    if (anomalies.length === 0) {
+      list.innerHTML = `<p class="text-gray-500 text-center py-3">No anomalies detected in the last ${data.window || "14d"} (${data.totalRuns ?? 0} runs).</p>`;
+      return;
+    }
+    list.innerHTML = anomalies.slice(0, 10).map((a) => {
+      const col = a.severity === "error" ? "text-red-400" : "text-amber-400";
+      return `<div class="border-b border-gray-700 pb-2 last:border-0">
+        <p class="${col} font-medium">${a.code || "anomaly"}</p>
+        <p class="text-gray-400">${a.message || ""}</p>
+      </div>`;
+    }).join("");
+  } catch (err) {
+    list.innerHTML = `<p class="text-red-400 text-xs">Error: ${escapeHtml(err.message)}</p>`;
+  }
+}
+
+window.loadCrossRunAnomalies = loadCrossRunAnomalies;

@@ -30,18 +30,13 @@ Listed in **execution order**. Each phase's Execution Hold gates on its predeces
 - **Status**: 🚧 In Progress — S0 shipped (ESLint tooling: `scripts/audit/run-eslint-clean-code.mjs` + `eslint-d-series` category in `clean-code-review.mjs`). Slices S1–S6 pending.
 - **Depends on**: Phase 42 retro shipping ✅
 
-### Phase 53 — ORCHESTRATOR-SPLIT
-- **Goal**: Decompose `pforge-mcp/orchestrator.mjs` (13,933 LOC, A1 finding) into focused sub-modules under `pforge-mcp/orchestrator/`. `orchestrator.mjs` becomes a ≤50-line re-export shim — zero consumer imports modified. Inherits Phase 51's four cross-cutting concerns. **Adds architectural obligation**: resolve the pre-existing `orchestrator.mjs > cost-service.mjs` circular import (clearing the `KNOWN_CYCLES` allowlist to empty). Highest blast radius of the three splits — recommend `--quorum=power` and full test run before promotion.
-- **Plan**: [Phase-53-ORCHESTRATOR-SPLIT-PLAN.md](./Phase-53-ORCHESTRATOR-SPLIT-PLAN.md) _(to be created)_
-- **Status**: 🚧 In Progress — S0 snapshot contract + S1 state.mjs shipped. Phase concurrent with Phase 43 (non-overlapping file scope).
-- **Depends on**: Phase 52 ✅ (server-split validated the entrypoint-shim + snapshot-as-contract pattern at medium scale)
-
 ---
 
 ## Completed Phases
 
 | Phase | Goal | Shipped | Reference |
 |-------|------|---------|-----------|
+| 53 — ORCHESTRATOR-SPLIT | Decomposed `pforge-mcp/orchestrator.mjs` (~13,933 LOC) into 16 focused sub-modules under `pforge-mcp/orchestrator/`; `orchestrator.mjs` is a 117-line CLI-entrypoint + re-export shim. Resolved the pre-existing `cost-service.mjs → orchestrator.mjs` circular import — `madge --circular` now reports zero cycles in `pforge-mcp/`. A1 finding resolved. | 2026-05-19 | [Phase-53-ORCHESTRATOR-SPLIT-PLAN.md](./Phase-53-ORCHESTRATOR-SPLIT-PLAN.md) |
 | 52 — SERVER-SPLIT | Decomposed `pforge-mcp/server.mjs` (~9.2k LOC) into 12 focused sub-modules under `pforge-mcp/server/`; `server.mjs` is a ≤40-line entrypoint + re-export shim. All public imports preserved. Zero behavioral changes (byte-identical `buildServerSurface()` snapshot + full test suite green). A2 finding resolved. | 2026-05-19 | [Phase-52-SERVER-SPLIT-PLAN.md](./Phase-52-SERVER-SPLIT-PLAN.md) |
 | 39 — AUDITOR-AUTOMATION | Tier the sense-making layer (Watcher / Forge-Master observer / A4 auditor) with config blocks, cross-run watcher mode, and auto-invoke wiring | 2026-05-19 | [Phase-39-AUDITOR-AUTOMATION-PLAN.md](./Phase-39-AUDITOR-AUTOMATION-PLAN.md) |
 | 40 — AUDITOR-AUTOMATION-UI | Dashboard surfaces for Phase 39's config knobs — settings tab + observer/watcher/auditor observability cards | 2026-05-19 | [Phase-40-AUDITOR-AUTOMATION-UI-PLAN.md](./Phase-40-AUDITOR-AUTOMATION-UI-PLAN.md) |

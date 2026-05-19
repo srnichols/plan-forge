@@ -186,7 +186,7 @@ describe("runPostSliceTemperingHook — spawnWorker forwarding", () => {
 describe("server.mjs spawnWorker import wiring", () => {
   it("imports spawnWorker from orchestrator.mjs", () => {
     const serverSrc = SERVER_COMBINED_SRC;
-    expect(serverSrc).toMatch(/spawnWorker.*from\s*"\.\/orchestrator\.mjs"/);
+    expect(serverSrc).toMatch(/spawnWorker.*from\s*"\.\.?\/orchestrator\.mjs"/);
   });
 
   it("passes spawnWorker to runTemperingRun call", () => {

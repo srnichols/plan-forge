@@ -9,6 +9,7 @@
 
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import { mkdtempSync, rmSync, mkdirSync, writeFileSync, readFileSync, readdirSync, existsSync } from "node:fs";
+import { SERVER_COMBINED_SRC } from "./helpers/server-combined-src.mjs";
 import { resolve, join, dirname } from "node:path";
 import { tmpdir } from "node:os";
 import { fileURLToPath } from "node:url";
@@ -3444,7 +3445,7 @@ describe("TOOL_METADATA forge_bug_update_status", () => {
 });
 
 describe("Bug Registry tools in server.mjs TOOLS array", () => {
-  const serverSrc = readFileSync(resolve(__dirname, "..", "server.mjs"), "utf-8");
+  const serverSrc = SERVER_COMBINED_SRC;
   it("registers forge_bug_register in TOOLS array", () => {
     expect(serverSrc).toContain('"forge_bug_register"');
   });

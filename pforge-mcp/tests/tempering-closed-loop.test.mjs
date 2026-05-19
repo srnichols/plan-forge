@@ -16,6 +16,7 @@ import { resolve, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import { tmpdir } from "node:os";
 import { randomUUID } from "node:crypto";
+import { SERVER_COMBINED_SRC } from "./helpers/server-combined-src.mjs";
 
 import {
   loadBug,
@@ -87,7 +88,7 @@ function makeBug(cwd, overrides = {}) {
 
 describe("Schema/Contract (Slice 06.3)", () => {
   const toolsJson = JSON.parse(readFileSync(resolve(MCP_ROOT, "tools.json"), "utf-8"));
-  const serverSrc = readFileSync(resolve(MCP_ROOT, "server.mjs"), "utf-8");
+  const serverSrc = SERVER_COMBINED_SRC;
   const capSrc = readFileSync(resolve(MCP_ROOT, "capabilities.mjs"), "utf-8");
   const orchestratorSrc = readFileSync(resolve(MCP_ROOT, "orchestrator.mjs"), "utf-8");
 
@@ -151,7 +152,7 @@ describe("forge_fix_proposal tempering-bug source (Slice 06.3)", () => {
   afterEach(() => { try { rmSync(cwd, { recursive: true, force: true }); } catch {} });
 
   it("server.mjs source description mentions tempering-bug", () => {
-    const serverSrc = readFileSync(resolve(MCP_ROOT, "server.mjs"), "utf-8");
+    const serverSrc = SERVER_COMBINED_SRC;
     expect(serverSrc).toContain("tempering-bug");
   });
 
@@ -170,18 +171,18 @@ describe("forge_fix_proposal tempering-bug source (Slice 06.3)", () => {
   });
 
   it("fixId namespacing uses tempering-bug-<bugId>", () => {
-    const serverSrc = readFileSync(resolve(MCP_ROOT, "server.mjs"), "utf-8");
+    const serverSrc = SERVER_COMBINED_SRC;
     expect(serverSrc).toContain("tempering-bug-${bugId}");
   });
 
   it("ALREADY_EXISTS pattern uses file presence check", () => {
-    const serverSrc = readFileSync(resolve(MCP_ROOT, "server.mjs"), "utf-8");
+    const serverSrc = SERVER_COMBINED_SRC;
     expect(serverSrc).toContain("existsSync(planPath)");
     expect(serverSrc).toContain("alreadyExists: true");
   });
 
   it("auto mode places tempering-bug last in cascade", () => {
-    const serverSrc = readFileSync(resolve(MCP_ROOT, "server.mjs"), "utf-8");
+    const serverSrc = SERVER_COMBINED_SRC;
     // tempering-bug check should appear after crucible
     const crucibleIdx = serverSrc.indexOf("source === \"crucible\"");
     const temperingBugIdx = serverSrc.indexOf("source === \"tempering-bug\"");
@@ -189,24 +190,24 @@ describe("forge_fix_proposal tempering-bug source (Slice 06.3)", () => {
   });
 
   it("bug transitions to in-fix on fix proposal generation", () => {
-    const serverSrc = readFileSync(resolve(MCP_ROOT, "server.mjs"), "utf-8");
+    const serverSrc = SERVER_COMBINED_SRC;
     // Verify the code calls updateBugStatus with "in-fix"
     expect(serverSrc).toContain('updateBugStatus(cwd, bugId, "in-fix"');
   });
 
   it("linkedFixPlan is set during fix proposal", () => {
-    const serverSrc = readFileSync(resolve(MCP_ROOT, "server.mjs"), "utf-8");
+    const serverSrc = SERVER_COMBINED_SRC;
     expect(serverSrc).toContain("setLinkedFixPlan(cwd, bugId, relPlanPath)");
   });
 
   it("hub event fix-proposal-ready includes source in data", () => {
-    const serverSrc = readFileSync(resolve(MCP_ROOT, "server.mjs"), "utf-8");
+    const serverSrc = SERVER_COMBINED_SRC;
     expect(serverSrc).toContain("fix-proposal-ready");
     expect(serverSrc).toContain("source: sourceData.type");
   });
 
   it("3-slice plan generated for critical severity bugs", () => {
-    const serverSrc = readFileSync(resolve(MCP_ROOT, "server.mjs"), "utf-8");
+    const serverSrc = SERVER_COMBINED_SRC;
     // Conditional slice 3 for critical/high
     expect(serverSrc).toContain('severity === "critical" || severity === "high"');
     expect(serverSrc).toContain("Regression guard");
@@ -275,34 +276,34 @@ describe("forge_bug_validate_fix (Slice 06.3)", () => {
   });
 
   it("server.mjs handler returns BUG_NOT_FOUND for missing bugId", () => {
-    const serverSrc = readFileSync(resolve(MCP_ROOT, "server.mjs"), "utf-8");
+    const serverSrc = SERVER_COMBINED_SRC;
     expect(serverSrc).toContain("BUG_NOT_FOUND");
   });
 
   it("server.mjs handler returns ALREADY_FIXED for terminal status", () => {
-    const serverSrc = readFileSync(resolve(MCP_ROOT, "server.mjs"), "utf-8");
+    const serverSrc = SERVER_COMBINED_SRC;
     expect(serverSrc).toContain("ALREADY_FIXED");
   });
 
   it("server.mjs handler dispatches commentValidatedFix on pass", () => {
-    const serverSrc = readFileSync(resolve(MCP_ROOT, "server.mjs"), "utf-8");
+    const serverSrc = SERVER_COMBINED_SRC;
     expect(serverSrc).toContain("commentValidatedFix");
     expect(serverSrc).toContain("dispatchBugAdapter");
   });
 
   it("server.mjs handler broadcasts hub event on pass", () => {
-    const serverSrc = readFileSync(resolve(MCP_ROOT, "server.mjs"), "utf-8");
+    const serverSrc = SERVER_COMBINED_SRC;
     expect(serverSrc).toContain("tempering-bug-validated-fixed");
   });
 
   it("server.mjs handler captures OpenBrain thought on pass", () => {
-    const serverSrc = readFileSync(resolve(MCP_ROOT, "server.mjs"), "utf-8");
+    const serverSrc = SERVER_COMBINED_SRC;
     expect(serverSrc).toContain("isOpenBrainConfigured");
     expect(serverSrc).toContain("forge_bug_validate_fix");
   });
 
   it("server.mjs handler returns advisory warning for open bug without linkedFixPlan", () => {
-    const serverSrc = readFileSync(resolve(MCP_ROOT, "server.mjs"), "utf-8");
+    const serverSrc = SERVER_COMBINED_SRC;
     expect(serverSrc).toContain("manual fix assumed");
   });
 });
@@ -315,13 +316,13 @@ describe("LiveGuard tempering dimension (Slice 06.3)", () => {
   afterEach(() => { try { rmSync(cwd, { recursive: true, force: true }); } catch {} });
 
   it("server.mjs includes tempering dimension in forge_liveguard_run", () => {
-    const serverSrc = readFileSync(resolve(MCP_ROOT, "server.mjs"), "utf-8");
+    const serverSrc = SERVER_COMBINED_SRC;
     expect(serverSrc).toContain("report.tempering");
     expect(serverSrc).toContain("temperingOk");
   });
 
   it("dimension shape includes expected fields", () => {
-    const serverSrc = readFileSync(resolve(MCP_ROOT, "server.mjs"), "utf-8");
+    const serverSrc = SERVER_COMBINED_SRC;
     expect(serverSrc).toContain("openBugs:");
     expect(serverSrc).toContain("criticalOrHighOpen:");
     expect(serverSrc).toContain("coverageVsMinima");
@@ -331,33 +332,33 @@ describe("LiveGuard tempering dimension (Slice 06.3)", () => {
   });
 
   it("red on critical/high open bugs", () => {
-    const serverSrc = readFileSync(resolve(MCP_ROOT, "server.mjs"), "utf-8");
+    const serverSrc = SERVER_COMBINED_SRC;
     expect(serverSrc).toContain('criticalOrHigh.length > 0) temperingStatus = "red"');
   });
 
   it("yellow on any open bugs", () => {
-    const serverSrc = readFileSync(resolve(MCP_ROOT, "server.mjs"), "utf-8");
+    const serverSrc = SERVER_COMBINED_SRC;
     expect(serverSrc).toContain('openBugs.length > 0');
     expect(serverSrc).toContain('"yellow"');
   });
 
   it("green on no open bugs", () => {
-    const serverSrc = readFileSync(resolve(MCP_ROOT, "server.mjs"), "utf-8");
+    const serverSrc = SERVER_COMBINED_SRC;
     expect(serverSrc).toContain('"green"');
   });
 
   it("overallStatus composition includes temperingOk", () => {
-    const serverSrc = readFileSync(resolve(MCP_ROOT, "server.mjs"), "utf-8");
+    const serverSrc = SERVER_COMBINED_SRC;
     expect(serverSrc).toMatch(/driftOk && secretsOk && regressionOk && depsOk && alertsOk && temperingOk/);
   });
 
   it("temperingOk is red-condition alongside regression and secrets", () => {
-    const serverSrc = readFileSync(resolve(MCP_ROOT, "server.mjs"), "utf-8");
+    const serverSrc = SERVER_COMBINED_SRC;
     expect(serverSrc).toMatch(/!regressionOk \|\| !secretsOk \|\| !temperingOk/);
   });
 
   it("missing config results in graceful status", () => {
-    const serverSrc = readFileSync(resolve(MCP_ROOT, "server.mjs"), "utf-8");
+    const serverSrc = SERVER_COMBINED_SRC;
     expect(serverSrc).toContain('status: "unknown"');
   });
 });

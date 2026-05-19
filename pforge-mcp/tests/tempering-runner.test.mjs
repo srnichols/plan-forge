@@ -614,7 +614,7 @@ describe("tempering-runner — MCP wiring", () => {
   const serverSrc = SERVER_COMBINED_SRC;
 
   it("server.mjs imports runTemperingRun from tempering/runner.mjs", () => {
-    expect(serverSrc).toMatch(/import\s*\{[^}]*runTemperingRun[^}]*\}\s*from\s*"\.\/tempering\/runner\.mjs"/);
+    expect(serverSrc).toMatch(/import\s*\{[^}]*runTemperingRun[^}]*\}\s*from\s*"\.\.?\/tempering\/runner\.mjs"/);
   });
 
   it("server.mjs registers forge_tempering_run handler", () => {

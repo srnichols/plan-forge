@@ -1,6 +1,7 @@
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import * as costService from "../cost-service.mjs";
 import { calculateSliceCost, buildCostBreakdown, buildEstimate, QUORUM_PRESETS } from "../orchestrator.mjs";
+import { SERVER_COMBINED_SRC } from "./helpers/server-combined-src.mjs";
 
 describe("cost-service: MODEL_PRICING + getPricing (Slice 1)", () => {
   it("exports MODEL_PRICING as an object with a default rate", () => {
@@ -396,10 +397,7 @@ describe("http-bridge coverage: every MCP-handled tool is in MCP_ONLY_TOOLS (Pha
   it("every tool with a dedicated switch-case handler is listed in MCP_ONLY_TOOLS", async () => {
     const { readFileSync } = await import("node:fs");
     const { resolve } = await import("node:path");
-    const serverSrc = readFileSync(
-      resolve(import.meta.dirname, "..", "server.mjs"),
-      "utf-8"
-    );
+    const serverSrc = SERVER_COMBINED_SRC;
 
     // Extract the MCP_ONLY_TOOLS Set literal
     const setMatch = serverSrc.match(/const\s+MCP_ONLY_TOOLS\s*=\s*new\s+Set\(\[([\s\S]*?)\]\)/);
@@ -449,9 +447,7 @@ describe("forge_estimate_slice registration (Phase-27.2 Slice 3)", () => {
   });
 
   it("server.mjs registers forge_estimate_slice in tool list and dispatcher switch", async () => {
-    const { readFileSync } = await import("node:fs");
-    const { resolve } = await import("node:path");
-    const serverSrc = readFileSync(resolve(import.meta.dirname, "..", "server.mjs"), "utf-8");
+    const serverSrc = SERVER_COMBINED_SRC;
     // Tool list entry
     expect(serverSrc).toMatch(/name:\s*"forge_estimate_slice"/);
     // Switch-case (case label on its own line)

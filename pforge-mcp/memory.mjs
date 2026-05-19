@@ -1881,6 +1881,84 @@ function _summariseFile(forgeDir, name) {
 }
 
 /**
+ * Bucket openbrain-queue.jsonl records by status (pending / delivered /
+ * failed / deferred). Extracted helper so buildMemoryReport stays readable.
+ *
+ * @param {object[]} records
+ * @param {number} now - Date.now()
+ * @returns {{ pending: number, delivered: number, failed: number, deferred: number }}
+ */
+function _computeQueueHealth(records, now) {
+  const buckets = { pending: 0, delivered: 0, failed: 0, deferred: 0 };
+  for (const r of records) {
+    const status = r?._status || "pending";
+    if (status === "delivered") buckets.delivered++;
+    else if (status === "failed") buckets.failed++;
+    else {
+      const next = r?._nextAttemptAt ? Date.parse(r._nextAttemptAt) : 0;
+      if (Number.isFinite(next) && next > now) buckets.deferred++;
+      else buckets.pending++;
+    }
+  }
+  return buckets;
+}
+
+/**
+ * Scan `.forge/` for files/dirs not in the known registry.
+ *
+ * @param {string} forgeDir - Absolute path to the .forge/ directory
+ * @param {boolean} exists - Whether forgeDir exists on disk
+ * @returns {string[]}
+ */
+function _findForgeOrphans(forgeDir, exists) {
+  const knownFiles = new Set([
+    "liveguard-memories.jsonl", "openbrain-queue.jsonl", "openbrain-dlq.jsonl",
+    "openbrain-stats.jsonl", "hub-events.jsonl", "drift-history.jsonl",
+    "incidents.jsonl", "regression-history.jsonl", "env-diff-history.jsonl",
+    "memory-search-cache.jsonl", "openbrain-queue.archive.jsonl",
+    "runs", "traces", "last-orch.pid", "server-ports.json",
+    "cost-history.json", "drift-history.json", "model-performance.json",
+    "quorum-history.jsonl", "watch-history.jsonl",
+    "dashboard-state.json",
+    "secrets.json", "rbac.example.json",
+    "update-check.json", "version-check.json",
+    "secret-scan-cache.json",
+    "fm-prefs.json", "forge-master-observer-state.json",
+    "liveguard-events.jsonl", "fix-proposals.json",
+    "team-activity.jsonl",
+    "health-dna.jsonl",
+  ]);
+  const knownDirs = new Set([
+    "telemetry", "runs", "traces", "plans", "digests", "trajectories",
+    "crucible", "tempering", "runbooks", "graph", "bugs", "analysis",
+    "fm-sessions", "skills-auto", "cache", "validation", "chain-logs",
+    "health", "archive", "network-logs", "notifications",
+    "hammer-forge-master", "load-sim", "orchestrator-logs",
+  ]);
+  const ephemeralPatterns = [
+    /^release-notes-v[\d.]+.*\.(md|txt)$/,
+    /^chain-runner.*\.log$/, /^run-phase-.*\.log$/, /^harden-.*\.log$/,
+    /^fm-.*\.(log|json|txt)$/, /^mcp-.*\.log$/, /^sequencer-.*\.log$/,
+    /^load-sim.*\.(log|json)$/, /^meta-bug-.*\.(md|txt|json)$/,
+    /^gate-tmp\./, /^tmp[-_]/, /\.pid$/, /\.log$/,
+  ];
+  const orphans = [];
+  if (exists) {
+    try {
+      for (const entry of readdirSync(forgeDir)) {
+        if (entry.startsWith(".")) continue;
+        if (knownFiles.has(entry)) continue;
+        if (knownDirs.has(entry)) continue;
+        if (entry.endsWith(".bak") || /\.bak-\d{4}-\d{2}-\d{2}$/.test(entry)) continue;
+        if (ephemeralPatterns.some((re) => re.test(entry))) continue;
+        orphans.push(entry);
+      }
+    } catch { /* ignore unreadable dirs */ }
+  }
+  return orphans;
+}
+
+/**
  * GX.3 (v2.36): aggregate the health of every memory surface into a
  * single report — L2 files, OpenBrain queue state, drain stats trend,
  * capture telemetry, search cache. Consumed by the `forge_memory_report`

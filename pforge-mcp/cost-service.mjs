@@ -1065,7 +1065,7 @@ function _estimatePlanHistoryContext(cwd, pricingMode) {
   };
 }
 
-function _estimatePlanBaseCost(pricingMode, sliceCount, avgPremiumPerSlice, costModel, totalInputTokens, totalOutputTokens, pricing) {
+function _estimatePlanBaseCost(pricingMode, sliceCount, avgPremiumPerSlice, { costModel, totalInputTokens, totalOutputTokens, pricing }) {
   if (pricingMode === "subscription") {
     const reqPerSlice = avgPremiumPerSlice !== null ? avgPremiumPerSlice : 1.5;
     return sliceCount * reqPerSlice * costModel.perRequestUsd;

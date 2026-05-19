@@ -1,0 +1,898 @@
+[
+  {
+    "file": "pforge-mcp/hub.mjs",
+    "line": 394,
+    "col": 10,
+    "callee": "this._deliverResponse",
+    "argCount": 6
+  },
+  {
+    "file": "pforge-mcp/hub.mjs",
+    "line": 397,
+    "col": 10,
+    "callee": "this._deliverResponse",
+    "argCount": 6
+  },
+  {
+    "file": "pforge-mcp/orchestrator.mjs",
+    "line": 4495,
+    "col": 11,
+    "callee": "buildEstimate",
+    "argCount": 6
+  },
+  {
+    "file": "pforge-mcp/orchestrator.mjs",
+    "line": 12956,
+    "col": 9,
+    "callee": "_estimatePlan",
+    "argCount": 6
+  },
+  {
+    "file": "pforge-mcp/server.mjs",
+    "line": 2715,
+    "col": 6,
+    "callee": "emitToolTelemetry",
+    "argCount": 6
+  },
+  {
+    "file": "pforge-mcp/server.mjs",
+    "line": 2781,
+    "col": 6,
+    "callee": "emitToolTelemetry",
+    "argCount": 6
+  },
+  {
+    "file": "pforge-mcp/server.mjs",
+    "line": 3056,
+    "col": 10,
+    "callee": "join",
+    "argCount": 6
+  },
+  {
+    "file": "pforge-mcp/server.mjs",
+    "line": 3255,
+    "col": 6,
+    "callee": "emitToolTelemetry",
+    "argCount": 6
+  },
+  {
+    "file": "pforge-mcp/server.mjs",
+    "line": 3288,
+    "col": 6,
+    "callee": "emitToolTelemetry",
+    "argCount": 6
+  },
+  {
+    "file": "pforge-mcp/server.mjs",
+    "line": 3309,
+    "col": 6,
+    "callee": "emitToolTelemetry",
+    "argCount": 6
+  },
+  {
+    "file": "pforge-mcp/server.mjs",
+    "line": 3355,
+    "col": 6,
+    "callee": "emitToolTelemetry",
+    "argCount": 6
+  },
+  {
+    "file": "pforge-mcp/server.mjs",
+    "line": 3386,
+    "col": 6,
+    "callee": "emitToolTelemetry",
+    "argCount": 6
+  },
+  {
+    "file": "pforge-mcp/server.mjs",
+    "line": 3412,
+    "col": 6,
+    "callee": "emitToolTelemetry",
+    "argCount": 6
+  },
+  {
+    "file": "pforge-mcp/server.mjs",
+    "line": 3426,
+    "col": 8,
+    "callee": "emitToolTelemetry",
+    "argCount": 6
+  },
+  {
+    "file": "pforge-mcp/server.mjs",
+    "line": 3432,
+    "col": 6,
+    "callee": "emitToolTelemetry",
+    "argCount": 6
+  },
+  {
+    "file": "pforge-mcp/server.mjs",
+    "line": 3435,
+    "col": 6,
+    "callee": "emitToolTelemetry",
+    "argCount": 6
+  },
+  {
+    "file": "pforge-mcp/server.mjs",
+    "line": 3464,
+    "col": 6,
+    "callee": "emitToolTelemetry",
+    "argCount": 6
+  },
+  {
+    "file": "pforge-mcp/server.mjs",
+    "line": 3482,
+    "col": 6,
+    "callee": "emitToolTelemetry",
+    "argCount": 6
+  },
+  {
+    "file": "pforge-mcp/server.mjs",
+    "line": 3512,
+    "col": 6,
+    "callee": "emitToolTelemetry",
+    "argCount": 6
+  },
+  {
+    "file": "pforge-mcp/server.mjs",
+    "line": 3608,
+    "col": 6,
+    "callee": "emitToolTelemetry",
+    "argCount": 6
+  },
+  {
+    "file": "pforge-mcp/server.mjs",
+    "line": 3897,
+    "col": 6,
+    "callee": "emitToolTelemetry",
+    "argCount": 6
+  },
+  {
+    "file": "pforge-mcp/server.mjs",
+    "line": 3934,
+    "col": 6,
+    "callee": "emitToolTelemetry",
+    "argCount": 6
+  },
+  {
+    "file": "pforge-mcp/server.mjs",
+    "line": 4030,
+    "col": 6,
+    "callee": "emitToolTelemetry",
+    "argCount": 6
+  },
+  {
+    "file": "pforge-mcp/server.mjs",
+    "line": 4172,
+    "col": 6,
+    "callee": "emitToolTelemetry",
+    "argCount": 6
+  },
+  {
+    "file": "pforge-mcp/server.mjs",
+    "line": 4209,
+    "col": 6,
+    "callee": "emitToolTelemetry",
+    "argCount": 6
+  },
+  {
+    "file": "pforge-mcp/server.mjs",
+    "line": 4225,
+    "col": 6,
+    "callee": "emitToolTelemetry",
+    "argCount": 6
+  },
+  {
+    "file": "pforge-mcp/server.mjs",
+    "line": 4356,
+    "col": 6,
+    "callee": "emitToolTelemetry",
+    "argCount": 6
+  },
+  {
+    "file": "pforge-mcp/server.mjs",
+    "line": 4380,
+    "col": 6,
+    "callee": "emitToolTelemetry",
+    "argCount": 6
+  },
+  {
+    "file": "pforge-mcp/server.mjs",
+    "line": 4383,
+    "col": 6,
+    "callee": "emitToolTelemetry",
+    "argCount": 6
+  },
+  {
+    "file": "pforge-mcp/server.mjs",
+    "line": 4418,
+    "col": 10,
+    "callee": "emitToolTelemetry",
+    "argCount": 6
+  },
+  {
+    "file": "pforge-mcp/server.mjs",
+    "line": 4520,
+    "col": 6,
+    "callee": "emitToolTelemetry",
+    "argCount": 6
+  },
+  {
+    "file": "pforge-mcp/server.mjs",
+    "line": 4546,
+    "col": 8,
+    "callee": "emitToolTelemetry",
+    "argCount": 6
+  },
+  {
+    "file": "pforge-mcp/server.mjs",
+    "line": 4624,
+    "col": 6,
+    "callee": "emitToolTelemetry",
+    "argCount": 6
+  },
+  {
+    "file": "pforge-mcp/server.mjs",
+    "line": 5113,
+    "col": 6,
+    "callee": "emitToolTelemetry",
+    "argCount": 6
+  },
+  {
+    "file": "pforge-mcp/server.mjs",
+    "line": 5319,
+    "col": 6,
+    "callee": "emitToolTelemetry",
+    "argCount": 6
+  },
+  {
+    "file": "pforge-mcp/server.mjs",
+    "line": 5344,
+    "col": 4,
+    "callee": "emitToolTelemetry",
+    "argCount": 6
+  },
+  {
+    "file": "pforge-mcp/server.mjs",
+    "line": 5366,
+    "col": 6,
+    "callee": "emitToolTelemetry",
+    "argCount": 6
+  },
+  {
+    "file": "pforge-mcp/server.mjs",
+    "line": 5386,
+    "col": 6,
+    "callee": "emitToolTelemetry",
+    "argCount": 6
+  },
+  {
+    "file": "pforge-mcp/server.mjs",
+    "line": 5404,
+    "col": 6,
+    "callee": "emitToolTelemetry",
+    "argCount": 6
+  },
+  {
+    "file": "pforge-mcp/server.mjs",
+    "line": 5422,
+    "col": 8,
+    "callee": "emitToolTelemetry",
+    "argCount": 6
+  },
+  {
+    "file": "pforge-mcp/server.mjs",
+    "line": 5429,
+    "col": 8,
+    "callee": "emitToolTelemetry",
+    "argCount": 6
+  },
+  {
+    "file": "pforge-mcp/server.mjs",
+    "line": 5455,
+    "col": 6,
+    "callee": "emitToolTelemetry",
+    "argCount": 6
+  },
+  {
+    "file": "pforge-mcp/server.mjs",
+    "line": 5472,
+    "col": 6,
+    "callee": "emitToolTelemetry",
+    "argCount": 6
+  },
+  {
+    "file": "pforge-mcp/server.mjs",
+    "line": 5489,
+    "col": 6,
+    "callee": "emitToolTelemetry",
+    "argCount": 6
+  },
+  {
+    "file": "pforge-mcp/server.mjs",
+    "line": 5517,
+    "col": 6,
+    "callee": "emitToolTelemetry",
+    "argCount": 6
+  },
+  {
+    "file": "pforge-mcp/server.mjs",
+    "line": 5521,
+    "col": 6,
+    "callee": "emitToolTelemetry",
+    "argCount": 6
+  },
+  {
+    "file": "pforge-mcp/server.mjs",
+    "line": 5532,
+    "col": 6,
+    "callee": "emitToolTelemetry",
+    "argCount": 6
+  },
+  {
+    "file": "pforge-mcp/server.mjs",
+    "line": 5536,
+    "col": 6,
+    "callee": "emitToolTelemetry",
+    "argCount": 6
+  },
+  {
+    "file": "pforge-mcp/server.mjs",
+    "line": 5549,
+    "col": 6,
+    "callee": "emitToolTelemetry",
+    "argCount": 6
+  },
+  {
+    "file": "pforge-mcp/server.mjs",
+    "line": 5553,
+    "col": 6,
+    "callee": "emitToolTelemetry",
+    "argCount": 6
+  },
+  {
+    "file": "pforge-mcp/server.mjs",
+    "line": 5690,
+    "col": 6,
+    "callee": "emitToolTelemetry",
+    "argCount": 6
+  },
+  {
+    "file": "pforge-mcp/server.mjs",
+    "line": 5905,
+    "col": 6,
+    "callee": "emitToolTelemetry",
+    "argCount": 6
+  },
+  {
+    "file": "pforge-mcp/server.mjs",
+    "line": 5909,
+    "col": 6,
+    "callee": "emitToolTelemetry",
+    "argCount": 6
+  },
+  {
+    "file": "pforge-mcp/server.mjs",
+    "line": 5928,
+    "col": 6,
+    "callee": "emitToolTelemetry",
+    "argCount": 6
+  },
+  {
+    "file": "pforge-mcp/server.mjs",
+    "line": 5931,
+    "col": 6,
+    "callee": "emitToolTelemetry",
+    "argCount": 6
+  },
+  {
+    "file": "pforge-mcp/server.mjs",
+    "line": 5947,
+    "col": 6,
+    "callee": "emitToolTelemetry",
+    "argCount": 6
+  },
+  {
+    "file": "pforge-mcp/server.mjs",
+    "line": 5950,
+    "col": 6,
+    "callee": "emitToolTelemetry",
+    "argCount": 6
+  },
+  {
+    "file": "pforge-mcp/server.mjs",
+    "line": 5968,
+    "col": 6,
+    "callee": "emitToolTelemetry",
+    "argCount": 6
+  },
+  {
+    "file": "pforge-mcp/server.mjs",
+    "line": 5971,
+    "col": 6,
+    "callee": "emitToolTelemetry",
+    "argCount": 6
+  },
+  {
+    "file": "pforge-mcp/server.mjs",
+    "line": 5990,
+    "col": 6,
+    "callee": "emitToolTelemetry",
+    "argCount": 6
+  },
+  {
+    "file": "pforge-mcp/server.mjs",
+    "line": 5993,
+    "col": 6,
+    "callee": "emitToolTelemetry",
+    "argCount": 6
+  },
+  {
+    "file": "pforge-mcp/server.mjs",
+    "line": 6063,
+    "col": 6,
+    "callee": "emitToolTelemetry",
+    "argCount": 6
+  },
+  {
+    "file": "pforge-mcp/server.mjs",
+    "line": 6067,
+    "col": 6,
+    "callee": "emitToolTelemetry",
+    "argCount": 6
+  },
+  {
+    "file": "pforge-mcp/server.mjs",
+    "line": 6087,
+    "col": 10,
+    "callee": "emitToolTelemetry",
+    "argCount": 6
+  },
+  {
+    "file": "pforge-mcp/server.mjs",
+    "line": 6115,
+    "col": 6,
+    "callee": "emitToolTelemetry",
+    "argCount": 6
+  },
+  {
+    "file": "pforge-mcp/server.mjs",
+    "line": 6124,
+    "col": 6,
+    "callee": "emitToolTelemetry",
+    "argCount": 6
+  },
+  {
+    "file": "pforge-mcp/server.mjs",
+    "line": 6139,
+    "col": 8,
+    "callee": "emitToolTelemetry",
+    "argCount": 6
+  },
+  {
+    "file": "pforge-mcp/server.mjs",
+    "line": 6144,
+    "col": 8,
+    "callee": "emitToolTelemetry",
+    "argCount": 6
+  },
+  {
+    "file": "pforge-mcp/server.mjs",
+    "line": 6191,
+    "col": 6,
+    "callee": "emitToolTelemetry",
+    "argCount": 6
+  },
+  {
+    "file": "pforge-mcp/server.mjs",
+    "line": 6194,
+    "col": 6,
+    "callee": "emitToolTelemetry",
+    "argCount": 6
+  },
+  {
+    "file": "pforge-mcp/server.mjs",
+    "line": 6216,
+    "col": 6,
+    "callee": "emitToolTelemetry",
+    "argCount": 6
+  },
+  {
+    "file": "pforge-mcp/server.mjs",
+    "line": 6220,
+    "col": 6,
+    "callee": "emitToolTelemetry",
+    "argCount": 6
+  },
+  {
+    "file": "pforge-mcp/server.mjs",
+    "line": 6241,
+    "col": 6,
+    "callee": "emitToolTelemetry",
+    "argCount": 6
+  },
+  {
+    "file": "pforge-mcp/server.mjs",
+    "line": 6245,
+    "col": 6,
+    "callee": "emitToolTelemetry",
+    "argCount": 6
+  },
+  {
+    "file": "pforge-mcp/server.mjs",
+    "line": 6255,
+    "col": 6,
+    "callee": "emitToolTelemetry",
+    "argCount": 6
+  },
+  {
+    "file": "pforge-mcp/server.mjs",
+    "line": 6262,
+    "col": 6,
+    "callee": "emitToolTelemetry",
+    "argCount": 6
+  },
+  {
+    "file": "pforge-mcp/server.mjs",
+    "line": 6273,
+    "col": 6,
+    "callee": "emitToolTelemetry",
+    "argCount": 6
+  },
+  {
+    "file": "pforge-mcp/server.mjs",
+    "line": 6294,
+    "col": 6,
+    "callee": "emitToolTelemetry",
+    "argCount": 6
+  },
+  {
+    "file": "pforge-mcp/server.mjs",
+    "line": 6330,
+    "col": 8,
+    "callee": "emitToolTelemetry",
+    "argCount": 6
+  },
+  {
+    "file": "pforge-mcp/server.mjs",
+    "line": 6410,
+    "col": 6,
+    "callee": "emitToolTelemetry",
+    "argCount": 6
+  },
+  {
+    "file": "pforge-mcp/server.mjs",
+    "line": 6413,
+    "col": 6,
+    "callee": "emitToolTelemetry",
+    "argCount": 6
+  },
+  {
+    "file": "pforge-mcp/server.mjs",
+    "line": 6424,
+    "col": 6,
+    "callee": "emitToolTelemetry",
+    "argCount": 6
+  },
+  {
+    "file": "pforge-mcp/server.mjs",
+    "line": 6427,
+    "col": 6,
+    "callee": "emitToolTelemetry",
+    "argCount": 6
+  },
+  {
+    "file": "pforge-mcp/server.mjs",
+    "line": 6441,
+    "col": 6,
+    "callee": "emitToolTelemetry",
+    "argCount": 6
+  },
+  {
+    "file": "pforge-mcp/server.mjs",
+    "line": 6445,
+    "col": 6,
+    "callee": "emitToolTelemetry",
+    "argCount": 6
+  },
+  {
+    "file": "pforge-mcp/server.mjs",
+    "line": 6460,
+    "col": 6,
+    "callee": "emitToolTelemetry",
+    "argCount": 6
+  },
+  {
+    "file": "pforge-mcp/server.mjs",
+    "line": 6463,
+    "col": 6,
+    "callee": "emitToolTelemetry",
+    "argCount": 6
+  },
+  {
+    "file": "pforge-mcp/server.mjs",
+    "line": 6477,
+    "col": 6,
+    "callee": "emitToolTelemetry",
+    "argCount": 6
+  },
+  {
+    "file": "pforge-mcp/server.mjs",
+    "line": 6480,
+    "col": 6,
+    "callee": "emitToolTelemetry",
+    "argCount": 6
+  },
+  {
+    "file": "pforge-mcp/server.mjs",
+    "line": 6494,
+    "col": 6,
+    "callee": "emitToolTelemetry",
+    "argCount": 6
+  },
+  {
+    "file": "pforge-mcp/server.mjs",
+    "line": 6497,
+    "col": 6,
+    "callee": "emitToolTelemetry",
+    "argCount": 6
+  },
+  {
+    "file": "pforge-mcp/server.mjs",
+    "line": 6511,
+    "col": 10,
+    "callee": "emitToolTelemetry",
+    "argCount": 6
+  },
+  {
+    "file": "pforge-mcp/server.mjs",
+    "line": 6514,
+    "col": 8,
+    "callee": "emitToolTelemetry",
+    "argCount": 6
+  },
+  {
+    "file": "pforge-mcp/server.mjs",
+    "line": 6519,
+    "col": 8,
+    "callee": "emitToolTelemetry",
+    "argCount": 6
+  },
+  {
+    "file": "pforge-mcp/server.mjs",
+    "line": 6525,
+    "col": 6,
+    "callee": "emitToolTelemetry",
+    "argCount": 6
+  },
+  {
+    "file": "pforge-mcp/server.mjs",
+    "line": 6541,
+    "col": 8,
+    "callee": "emitToolTelemetry",
+    "argCount": 6
+  },
+  {
+    "file": "pforge-mcp/server.mjs",
+    "line": 6573,
+    "col": 6,
+    "callee": "emitToolTelemetry",
+    "argCount": 6
+  },
+  {
+    "file": "pforge-mcp/server.mjs",
+    "line": 6578,
+    "col": 6,
+    "callee": "emitToolTelemetry",
+    "argCount": 6
+  },
+  {
+    "file": "pforge-mcp/server.mjs",
+    "line": 6589,
+    "col": 6,
+    "callee": "emitToolTelemetry",
+    "argCount": 6
+  },
+  {
+    "file": "pforge-mcp/server.mjs",
+    "line": 6592,
+    "col": 6,
+    "callee": "emitToolTelemetry",
+    "argCount": 6
+  },
+  {
+    "file": "pforge-mcp/server.mjs",
+    "line": 6605,
+    "col": 6,
+    "callee": "emitToolTelemetry",
+    "argCount": 6
+  },
+  {
+    "file": "pforge-mcp/server.mjs",
+    "line": 6608,
+    "col": 6,
+    "callee": "emitToolTelemetry",
+    "argCount": 6
+  },
+  {
+    "file": "pforge-mcp/server.mjs",
+    "line": 6618,
+    "col": 6,
+    "callee": "emitToolTelemetry",
+    "argCount": 6
+  },
+  {
+    "file": "pforge-mcp/server.mjs",
+    "line": 6621,
+    "col": 6,
+    "callee": "emitToolTelemetry",
+    "argCount": 6
+  },
+  {
+    "file": "pforge-mcp/server.mjs",
+    "line": 6638,
+    "col": 6,
+    "callee": "emitToolTelemetry",
+    "argCount": 6
+  },
+  {
+    "file": "pforge-mcp/server.mjs",
+    "line": 6641,
+    "col": 6,
+    "callee": "emitToolTelemetry",
+    "argCount": 6
+  },
+  {
+    "file": "pforge-mcp/server.mjs",
+    "line": 6655,
+    "col": 6,
+    "callee": "emitToolTelemetry",
+    "argCount": 6
+  },
+  {
+    "file": "pforge-mcp/server.mjs",
+    "line": 6658,
+    "col": 6,
+    "callee": "emitToolTelemetry",
+    "argCount": 6
+  },
+  {
+    "file": "pforge-mcp/server.mjs",
+    "line": 6675,
+    "col": 6,
+    "callee": "emitToolTelemetry",
+    "argCount": 6
+  },
+  {
+    "file": "pforge-mcp/server.mjs",
+    "line": 6678,
+    "col": 6,
+    "callee": "emitToolTelemetry",
+    "argCount": 6
+  },
+  {
+    "file": "pforge-mcp/sync-instructions.mjs",
+    "line": 302,
+    "col": 4,
+    "callee": "lines.push",
+    "argCount": 6
+  },
+  {
+    "file": "pforge-mcp/tempering/baselines.mjs",
+    "line": 221,
+    "col": 21,
+    "callee": "pixelmatch",
+    "argCount": 6
+  },
+  {
+    "file": "pforge-mcp/tempering/bug-adapters/github.mjs",
+    "line": 167,
+    "col": 2,
+    "callee": "lines.push",
+    "argCount": 12
+  },
+  {
+    "file": "pforge-mcp/tempering/bug-adapters/github.mjs",
+    "line": 329,
+    "col": 17,
+    "callee": "createIssueViaGh",
+    "argCount": 6
+  },
+  {
+    "file": "pforge-mcp/tempering/bug-adapters/github.mjs",
+    "line": 332,
+    "col": 21,
+    "callee": "createIssueViaRest",
+    "argCount": 7
+  },
+  {
+    "file": "pforge-mcp/tempering/bug-adapters/github.mjs",
+    "line": 368,
+    "col": 25,
+    "callee": "addComment",
+    "argCount": 6
+  },
+  {
+    "file": "pforge-mcp/tempering/bug-adapters/github.mjs",
+    "line": 404,
+    "col": 25,
+    "callee": "addComment",
+    "argCount": 6
+  },
+  {
+    "file": "pforge-mcp/tempering/bug-adapters/github.mjs",
+    "line": 679,
+    "col": 34,
+    "callee": "addComment",
+    "argCount": 6
+  },
+  {
+    "file": "pforge-mcp/tempering/bug-adapters/github.mjs",
+    "line": 696,
+    "col": 17,
+    "callee": "createIssueViaGh",
+    "argCount": 6
+  },
+  {
+    "file": "pforge-mcp/tempering/bug-adapters/github.mjs",
+    "line": 702,
+    "col": 21,
+    "callee": "createIssueViaRest",
+    "argCount": 7
+  },
+  {
+    "file": "pforge-mcp/tempering/classifier-issue.mjs",
+    "line": 63,
+    "col": 2,
+    "callee": "lines.push",
+    "argCount": 6
+  },
+  {
+    "file": "pforge-mcp/tempering/classifier-issue.mjs",
+    "line": 79,
+    "col": 4,
+    "callee": "lines.push",
+    "argCount": 9
+  },
+  {
+    "file": "pforge-mcp/tempering/classifier-issue.mjs",
+    "line": 271,
+    "col": 12,
+    "callee": "addComment",
+    "argCount": 6
+  },
+  {
+    "file": "pforge-mcp/tempering/classifier-issue.mjs",
+    "line": 278,
+    "col": 17,
+    "callee": "createViaGh",
+    "argCount": 6
+  },
+  {
+    "file": "pforge-mcp/tempering/classifier-issue.mjs",
+    "line": 280,
+    "col": 21,
+    "callee": "createViaRest",
+    "argCount": 7
+  },
+  {
+    "file": "pforge-mcp/tempering/scanners/performance-budget.mjs",
+    "line": 196,
+    "col": 23,
+    "callee": "resolve",
+    "argCount": 7
+  },
+  {
+    "file": "pforge-mcp/tempering/scanners/visual-diff.mjs",
+    "line": 147,
+    "col": 8,
+    "callee": "resolve",
+    "argCount": 7
+  },
+  {
+    "file": "pforge-mcp/tempering/scanners/visual-diff.mjs",
+    "line": 148,
+    "col": 8,
+    "callee": "resolve",
+    "argCount": 7
+  }
+]

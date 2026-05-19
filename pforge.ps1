@@ -4163,6 +4163,18 @@ function Invoke-RunPlan {
         }
     }
 
+    if ($quorumArg -like '--quorum=*') {
+        $quorumVal = $quorumArg.Substring(9)
+        $enumsCli = Join-Path $RepoRoot "pforge-mcp/bin/enums-cli.mjs"
+        if (Test-Path $enumsCli) {
+            $validModes = @(node $enumsCli --enum QUORUM_MODES 2>$null)
+            if ($validModes.Count -gt 0 -and $quorumVal -notin $validModes) {
+                Write-Host "ERROR: Invalid --quorum mode '$quorumVal'. Valid: $($validModes -join ', ')" -ForegroundColor Red
+                exit 1
+            }
+        }
+    }
+
     $mode = if ($assisted) { 'assisted' } else { 'auto' }
 
     Write-ManualSteps "run-plan" @(

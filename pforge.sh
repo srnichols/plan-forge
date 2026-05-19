@@ -3504,6 +3504,25 @@ cmd_run_plan() {
         shift
     done
 
+    if [[ "$quorum_arg" == --quorum=* ]]; then
+        local quorum_val="${quorum_arg#--quorum=}"
+        local enums_cli_qm="$REPO_ROOT/pforge-mcp/bin/enums-cli.mjs"
+        if command -v node >/dev/null 2>&1 && [ -f "$enums_cli_qm" ]; then
+            local valid_qmodes=()
+            mapfile -t valid_qmodes < <(node "$enums_cli_qm" --enum QUORUM_MODES 2>/dev/null)
+            if [ ${#valid_qmodes[@]} -gt 0 ]; then
+                local qm_valid=false
+                for qm in "${valid_qmodes[@]}"; do
+                    if [ "$quorum_val" = "$qm" ]; then qm_valid=true; break; fi
+                done
+                if [ "$qm_valid" = false ]; then
+                    printf "ERROR: Invalid --quorum mode '%s'. Valid: %s\n" "$quorum_val" "$(IFS=', '; echo "${valid_qmodes[*]}")" >&2
+                    exit 1
+                fi
+            fi
+        fi
+    fi
+
     local mode="auto"
     if [ "$assisted" = true ]; then mode="assisted"; fi
 

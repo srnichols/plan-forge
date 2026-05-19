@@ -202,3 +202,22 @@ Observable patterns indicating these principles are being violated:
 - Test files are absent for new service or repository classes (TDD skipped)
 - A new MCP tool returns more than ~10KB of JSON in its happy path with no opt-in flag (unbounded ACI surface — paginate or summarize)
 - A new MCP tool returns silent empty results (`{ hits: [] }` with no `message` field) when filters match nothing (ambiguous to agents)
+
+---
+
+## Clean Code Standards (Phase 42 Catalog)
+
+> **Reference**: *Clean Code* (Robert C. Martin) — the conceptual baseline for the guardrails in this section.
+> **Audit source**: Phase 42 Clean-Code Audit catalog — 27 actionable findings across 6 categories.
+> See `docs/plans/cleanup-findings/CATEGORIES-SUMMARY.md` for the full finding set.
+
+Active guardrails derived from the Phase 42 audit:
+
+| Category | Guard |
+|----------|-------|
+| **Module Size — high (A-series)** | No file may exceed 3,000 LOC. Extract sub-modules, split by Single Responsibility. |
+| **Module Size — medium (B-series)** | Files 1,000–3,000 LOC must be monitored; extract on the next feature addition to that file. |
+| **Long Parameter Lists (C-series)** | Functions with ≥4 positional parameters MUST wrap args in an options object (*Clean Code* Ch. 3: "Dyadic and Triadic Functions"). |
+| **ESLint Errors (D-series)** | All `complexity-error` violations in `orchestrator.mjs` and `server.mjs` are **blocking** — fix before any release gate. |
+| **ESLint Warnings (E-series)** | Batch-fix by rule; prioritise `complexity-warn` first, then nesting depth. |
+| **Console.log advisory (F-series)** | Every `console.log` must be intentional CLI output. Debug leakage is a warning sign; audit with each PR. |

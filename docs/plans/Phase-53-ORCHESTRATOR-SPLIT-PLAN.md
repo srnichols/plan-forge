@@ -161,7 +161,7 @@ All decisions for this phase are resolved in §"Resolved Decisions" above (16 it
 - Extend `pforge-mcp/tests/no-circular-imports.test.mjs` with a new `orchestrator.mjs` block that inherits `KNOWN_CYCLES = new Set(["cost-service.mjs -> orchestrator.mjs"])` for S0–S7.
 - **Validation Gate**:
 ```bash
-node -e "process.chdir('pforge-mcp'); require('child_process').execSync('npx vitest run tests/orchestrator-surface-snapshot.test.mjs tests/no-circular-imports.test.mjs', {stdio:\'inherit\', shell:true});"
+cd pforge-mcp && npx vitest run tests/orchestrator-surface-snapshot.test.mjs tests/no-circular-imports.test.mjs
 node -e "const fs=require('fs');const j=JSON.parse(fs.readFileSync('pforge-mcp/tests/fixtures/orchestrator-surface.golden.json','utf8'));if(!Array.isArray(j.exports)||j.exports.length<150)throw new Error('exports array missing or too small');if(!Array.isArray(j.sectionBanners)||j.sectionBanners.length<30)throw new Error('sectionBanners array missing or too small');console.log('ok S0 — exports:'+j.exports.length+' sectionBanners:'+j.sectionBanners.length);"
 ```
 
@@ -179,7 +179,7 @@ node -e "const fs=require('fs');const j=JSON.parse(fs.readFileSync('pforge-mcp/t
 - **Validation Gate**:
 ```bash
 node -e "const fs=require('fs');const p='pforge-mcp/orchestrator/plan-parser.mjs';if(!fs.existsSync(p))throw new Error('plan-parser.mjs missing');const src=fs.readFileSync(p,'utf8');for(const name of ['parsePlan','computeLockHash','normalizeSliceId','compareSliceIds','parseOnlySlicesExpr'])if(!new RegExp('export\\s+(?:async\\s+)?function\\s+'+name+'\\b').test(src)&&!new RegExp('export\\s*\\{[^}]*\\b'+name+'\\b').test(src))throw new Error(name+' not exported');console.log('ok S1 structure');"
-node -e "process.chdir('pforge-mcp'); require('child_process').execSync('npx vitest run tests/orchestrator-surface-snapshot.test.mjs tests/no-circular-imports.test.mjs tests/orchestrator-plan-parser-gates.test.mjs', {stdio:\'inherit\', shell:true});"
+cd pforge-mcp && npx vitest run tests/orchestrator-surface-snapshot.test.mjs tests/no-circular-imports.test.mjs tests/orchestrator-plan-parser-gates.test.mjs
 ```
 
 ### Slice 2 — Extract `orchestrator/worker-spawn.mjs`
@@ -196,7 +196,7 @@ node -e "process.chdir('pforge-mcp'); require('child_process').execSync('npx vit
 - **Validation Gate**:
 ```bash
 node -e "const fs=require('fs');const p='pforge-mcp/orchestrator/worker-spawn.mjs';if(!fs.existsSync(p))throw new Error('worker-spawn.mjs missing');const src=fs.readFileSync(p,'utf8');for(const name of ['detectWorkers','spawnWorker','detectExecutionRuntime','detectClientHost','getRoutingPreference','assessQuorumViability'])if(!src.includes(name))throw new Error(name+' missing from worker-spawn.mjs');console.log('ok S2 structure');"
-node -e "process.chdir('pforge-mcp'); require('child_process').execSync('npx vitest run tests/orchestrator-surface-snapshot.test.mjs tests/no-circular-imports.test.mjs tests/orchestrator-spawn-shell.test.mjs tests/orchestrator-launch-controls.test.mjs tests/orchestrator-timeout-committed.test.mjs', {stdio:\'inherit\', shell:true});"
+cd pforge-mcp && npx vitest run tests/orchestrator-surface-snapshot.test.mjs tests/no-circular-imports.test.mjs tests/orchestrator-spawn-shell.test.mjs tests/orchestrator-launch-controls.test.mjs tests/orchestrator-timeout-committed.test.mjs
 ```
 
 ### Slice 3 — Extract `orchestrator/schedulers.mjs`
@@ -212,7 +212,7 @@ node -e "process.chdir('pforge-mcp'); require('child_process').execSync('npx vit
 - **Validation Gate**:
 ```bash
 node -e "const fs=require('fs');const p='pforge-mcp/orchestrator/schedulers.mjs';if(!fs.existsSync(p))throw new Error('schedulers.mjs missing');const src=fs.readFileSync(p,'utf8');for(const name of ['SequentialScheduler','ParallelScheduler','CompetitiveScheduler','selectWinner'])if(!src.includes(name))throw new Error(name+' missing from schedulers.mjs');console.log('ok S3 structure');"
-node -e "process.chdir('pforge-mcp'); require('child_process').execSync('npx vitest run tests/orchestrator-surface-snapshot.test.mjs tests/no-circular-imports.test.mjs tests/orchestrator-gate-dispatch.test.mjs', {stdio:\'inherit\', shell:true});"
+cd pforge-mcp && npx vitest run tests/orchestrator-surface-snapshot.test.mjs tests/no-circular-imports.test.mjs tests/orchestrator-gate-dispatch.test.mjs
 ```
 
 ### Slice 4 — Extract `orchestrator/run-plan.mjs`
@@ -228,7 +228,7 @@ node -e "process.chdir('pforge-mcp'); require('child_process').execSync('npx vit
 - **Validation Gate**:
 ```bash
 node -e "const fs=require('fs');const p='pforge-mcp/orchestrator/run-plan.mjs';if(!fs.existsSync(p))throw new Error('run-plan.mjs missing');const src=fs.readFileSync(p,'utf8');for(const name of ['runPlan','loadCompetitiveConfig','synthesizeGateSuggestions','detectCostAnomaly','buildPlanPostmortem'])if(!src.includes(name))throw new Error(name+' missing from run-plan.mjs');console.log('ok S4 structure');"
-node -e "process.chdir('pforge-mcp'); require('child_process').execSync('npx vitest run tests/orchestrator-surface-snapshot.test.mjs tests/no-circular-imports.test.mjs tests/orchestrator-gate-synthesis.test.mjs tests/orchestrator-complexity.test.mjs', {stdio:\'inherit\', shell:true});"
+cd pforge-mcp && npx vitest run tests/orchestrator-surface-snapshot.test.mjs tests/no-circular-imports.test.mjs tests/orchestrator-gate-synthesis.test.mjs tests/orchestrator-complexity.test.mjs
 ```
 
 ### Slice 5 — Extract `orchestrator/forge-io.mjs`
@@ -244,7 +244,7 @@ node -e "process.chdir('pforge-mcp'); require('child_process').execSync('npx vit
 - **Validation Gate**:
 ```bash
 node -e "const fs=require('fs');const p='pforge-mcp/orchestrator/forge-io.mjs';if(!fs.existsSync(p))throw new Error('forge-io.mjs missing');const src=fs.readFileSync(p,'utf8');for(const name of ['getCostReport','loadModelPerformance','aggregateModelStats','ensureForgeDir','pruneForgeRuns','getHealthTrend','loadGateCheckConfig','registerGateCheckResponder'])if(!src.includes(name))throw new Error(name+' missing from forge-io.mjs');console.log('ok S5 structure');"
-node -e "process.chdir('pforge-mcp'); require('child_process').execSync('npx vitest run tests/orchestrator-surface-snapshot.test.mjs tests/no-circular-imports.test.mjs tests/orchestrator-version-collision.test.mjs', {stdio:\'inherit\', shell:true});"
+cd pforge-mcp && npx vitest run tests/orchestrator-surface-snapshot.test.mjs tests/no-circular-imports.test.mjs tests/orchestrator-version-collision.test.mjs
 ```
 
 ### Slice 6 — Extract `orchestrator/hooks.mjs`
@@ -261,7 +261,7 @@ node -e "process.chdir('pforge-mcp'); require('child_process').execSync('npx vit
 - **Validation Gate**:
 ```bash
 node -e "const fs=require('fs');const p='pforge-mcp/orchestrator/hooks.mjs';if(!fs.existsSync(p))throw new Error('hooks.mjs missing');const src=fs.readFileSync(p,'utf8');for(const name of ['runPreDeployHook','registerCorrelationThreadResponder','runPostSliceHook','runPostSliceTemperingHook','runPreAgentHandoffHook','QUORUM_PRESETS','loadOpenClawConfig'])if(!src.includes(name))throw new Error(name+' missing from hooks.mjs');console.log('ok S6 structure');"
-node -e "process.chdir('pforge-mcp'); require('child_process').execSync('npx vitest run tests/orchestrator-surface-snapshot.test.mjs tests/no-circular-imports.test.mjs tests/orchestrator-reflexion-prompt.test.mjs tests/drain-orchestrator.test.mjs', {stdio:\'inherit\', shell:true});"
+cd pforge-mcp && npx vitest run tests/orchestrator-surface-snapshot.test.mjs tests/no-circular-imports.test.mjs tests/orchestrator-reflexion-prompt.test.mjs tests/drain-orchestrator.test.mjs
 ```
 
 ### Slice 7 — Extract `orchestrator/review-watcher.mjs`
@@ -277,7 +277,7 @@ node -e "process.chdir('pforge-mcp'); require('child_process').execSync('npx vit
 - **Validation Gate**:
 ```bash
 node -e "const fs=require('fs');const p='pforge-mcp/orchestrator/review-watcher.mjs';if(!fs.existsSync(p))throw new Error('review-watcher.mjs missing');const src=fs.readFileSync(p,'utf8');for(const name of ['findLatestRun','readReviewQueueState','buildWatchSnapshot','readHomeSnapshot','scoreSliceComplexity'])if(!src.includes(name))throw new Error(name+' missing from review-watcher.mjs');console.log('ok S7 structure');"
-node -e "process.chdir('pforge-mcp'); require('child_process').execSync('npx vitest run tests/orchestrator-surface-snapshot.test.mjs tests/no-circular-imports.test.mjs tests/orchestrator.test.mjs tests/orchestrator-analyze.test.mjs', {stdio:\'inherit\', shell:true});"
+cd pforge-mcp && npx vitest run tests/orchestrator-surface-snapshot.test.mjs tests/no-circular-imports.test.mjs tests/orchestrator.test.mjs tests/orchestrator-analyze.test.mjs
 ```
 
 ### Slice 8 — Extract `orchestrator/model-scoring.mjs` + resolve circular import
@@ -297,8 +297,8 @@ node -e "process.chdir('pforge-mcp'); require('child_process').execSync('npx vit
 - **Validation Gate**:
 ```bash
 node -e "const fs=require('fs');const p='pforge-mcp/orchestrator/model-scoring.mjs';if(!fs.existsSync(p))throw new Error('model-scoring.mjs missing');const src=fs.readFileSync(p,'utf8');for(const name of ['scoreSliceComplexity','loadModelPerformance','inferSliceType','recommendModel','assessQuorumViability','aggregateModelStats','isApiOnlyModel','QUORUM_PRESETS'])if(!src.includes(name))throw new Error(name+' missing from model-scoring.mjs');const cost=fs.readFileSync('pforge-mcp/cost-service.mjs','utf8');if(!cost.includes('./orchestrator/model-scoring.mjs'))throw new Error('cost-service import not updated');console.log('ok S8 structure');"
-node -e "process.chdir('pforge-mcp'); require('child_process').execSync('npx vitest run tests/orchestrator-surface-snapshot.test.mjs tests/no-circular-imports.test.mjs tests/orchestrator-complexity.test.mjs', {stdio:\'inherit\', shell:true});"
-node -e "process.chdir('pforge-mcp'); require('child_process').execSync('npx madge --circular --extensions mjs .', {stdio:\'inherit\', shell:true});"
+cd pforge-mcp && npx vitest run tests/orchestrator-surface-snapshot.test.mjs tests/no-circular-imports.test.mjs tests/orchestrator-complexity.test.mjs
+cd pforge-mcp && npx madge --circular --extensions mjs .
 ```
 
 ### Slice 9 — Full shim conversion (`orchestrator.mjs` ≤120 LOC)
@@ -315,9 +315,9 @@ node -e "process.chdir('pforge-mcp'); require('child_process').execSync('npx mad
 - The snapshot fixture MUST remain byte-identical after shim conversion.
 - **Validation Gate**:
 ```bash
-node -e "const fs=require('fs');const shim=fs.readFileSync('pforge-mcp/orchestrator.mjs','utf8');const lines=shim.split(/\r?\n/).length;if(lines>120)throw new Error('shim too large: '+lines+' lines');if(!/from\s+['\"]\.\/orchestrator\//.test(shim))throw new Error('shim missing orchestrator sub-module imports');console.log('ok S9 shim is '+lines+' lines');"
-node -e "process.chdir('pforge-mcp'); require('child_process').execSync('npx vitest run', {stdio:\'inherit\', shell:true});"
-node -e "process.chdir('pforge-mcp'); require('child_process').execSync('node orchestrator.mjs --test', {stdio:\'inherit\', shell:true});"
+node -e "const fs=require('fs');const shim=fs.readFileSync('pforge-mcp/orchestrator.mjs','utf8');const lines=shim.split(/[\r\n]+/).length;if(lines>120)throw new Error('shim too large: '+lines+' lines');if(shim.indexOf('./orchestrator/')<0)throw new Error('shim missing orchestrator sub-module imports');console.log('ok S9 shim is '+lines+' lines');"
+cd pforge-mcp && npx vitest run
+cd pforge-mcp && node orchestrator.mjs --test
 ```
 
 ### Slice 10 — Retro + roadmap update + CHANGELOG

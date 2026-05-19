@@ -2,7 +2,7 @@
 phase: 52
 name: SERVER-SPLIT
 status: HARDENED
-lockHash: a359dcc40ec1b9f8086285e6ac569623abe940f53b76aa45d627f6e1d3805530
+lockHash: 3b3c4de212f1af4902956894517d823fbd7098dd152dbf898b628b3d3259db2f
 ---
 
 # Phase 52 — SERVER-SPLIT — Decompose `pforge-mcp/server.mjs` into focused sub-modules

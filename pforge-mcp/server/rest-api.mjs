@@ -450,6 +450,108 @@ function _collectReplayRecords(sourcePath, { project, maxRecords }) {
   return { ok: true, sourceType, records };
 }
 
+function _buildBrainReplayRequest(body, cfg) {
+  const validation = _validateBrainReplayRequest(body, cfg);
+  if (!validation.ok) return validation;
+  return {
+    ok: true,
+    cfg,
+    sourceArg: validation.sourceArg,
+    dryRun: Boolean(body?.dryRun),
+    project: body?.project || "plan-forge",
+    maxRecords: Number(body?.maxRecords ?? 500),
+    rate: Number(body?.rate ?? 50),
+    maxRetries: Number(body?.maxRetries ?? 3),
+    retryDelayMs: Number(body?.retryDelayMs ?? 250),
+  };
+}
+
+function _createBrainReplayReceiptLog() {
+  const receiptPath = resolve(PROJECT_DIR, ".forge", `openbrain-replay-${Date.now()}.jsonl`);
+  let receiptStream = null;
+  try {
+    mkdirSync(resolve(PROJECT_DIR, ".forge"), { recursive: true });
+    receiptStream = createWriteStream(receiptPath, { flags: "a" });
+  } catch { /* receipt log is best-effort */ }
+  return { receiptPath, receiptStream };
+}
+
+async function _prepareBrainReplayRun(request) {
+  const sourcePath = isAbsolute(request.sourceArg) ? request.sourceArg : resolve(PROJECT_DIR, request.sourceArg);
+  const collected = _collectReplayRecords(sourcePath, { project: request.project, maxRecords: request.maxRecords });
+  if (!collected.ok) return collected;
+  const client = request.dryRun ? null : await createOpenBrainClient(request.cfg);
+  return {
+    ok: true,
+    cfg: request.cfg,
+    dryRun: request.dryRun,
+    rate: request.rate,
+    maxRetries: request.maxRetries,
+    retryDelayMs: request.retryDelayMs,
+    sourcePath,
+    collected,
+    client,
+    ..._createBrainReplayReceiptLog(),
+  };
+}
+
+function _recordBrainReplayProgress(receiptStream, ev) {
+  if (!receiptStream) return;
+  try { receiptStream.write(JSON.stringify({ ...ev, ts: new Date().toISOString() }) + "\n"); } catch { /* ignore */ }
+}
+
+function _closeBrainReplayReceiptLog(receiptStream) {
+  if (!receiptStream) return;
+  try { receiptStream.end(); } catch { /* ignore */ }
+}
+
+async function _closeBrainReplayClient(client) {
+  if (!client) return;
+  try { await client.close(); } catch { /* best-effort */ }
+}
+
+async function _runBrainReplay(run) {
+  const captureClient = run.dryRun ? { capture: async () => ({}) } : run.client;
+  const result = await brainReplayRecords(captureClient, run.collected.records, {
+    rate: run.rate,
+    maxRetries: run.maxRetries,
+    retryDelayMs: run.retryDelayMs,
+    dryRun: run.dryRun,
+    sampleSize: 5,
+    onProgress: (ev) => _recordBrainReplayProgress(run.receiptStream, ev),
+  });
+  return {
+    ok: result.failed === 0,
+    sourceType: run.collected.sourceType,
+    source: run.sourcePath,
+    receiptLog: run.receiptStream ? run.receiptPath : null,
+    endpoint: run.cfg.url,
+    ...result,
+  };
+}
+
+const _EXPRESS_ROUTE_REGISTRARS = [
+  _registerSearchTimelineRoutes,
+  _registerStaticVersionRoutes,
+  _registerStatusRunsSkillsRoutes,
+  _registerInnerloopServerRoutes,
+  _registerConfigSecretsRoutes,
+  _registerMetricsTeamRoutes,
+  _registerDriftIncidentRoutes,
+  _registerCrucibleHotspotRoutes,
+  _registerDepsTemperingToolRoutes,
+  _registerHubTracesPlansRoutes,
+  _registerMemoryBrainRoutes,
+  _registerImageBridgeFixRoutes,
+  _registerQuorumMiscRoutes,
+];
+
+function _registerExpressRouteGroups(app) {
+  for (const registerRoutes of _EXPRESS_ROUTE_REGISTRARS) {
+    registerRoutes(app);
+  }
+}
+
 const _QUORUM_GOAL_PRESETS = {
   "root-cause": "Identify the root cause of the issues shown in the data. Trace the causal chain from symptoms to underlying problems.",
   "risk-assess": "Assess the risk level of the current project state. Identify the highest-impact risks and their likelihood.",
@@ -513,12 +615,12 @@ function _formatQuorumResponse({ context, oldestTimestamp, customQuestion, analy
 export function createExpressApp() {
   const app = express();
   app.use(express.json());
-
-  // Dashboard static files
   app.use("/dashboard", express.static(resolve(__dirname, "dashboard")));
+  _registerExpressRouteGroups(app);
+  return app;
+}
 
-  // Phase FORGE-SHOP-04 Slice 04.2 — search API for dashboard
-  // Issue #205 fix #2: parity with MCP forge_search — also merges L3 hits.
+function _registerSearchTimelineRoutes(app) {
   app.get("/api/search", async (req, res) => {
     try {
       const params = {
@@ -565,6 +667,9 @@ export function createExpressApp() {
   });
 
   // Plan Browser static files
+}
+
+function _registerStaticVersionRoutes(app) {
   app.use("/ui", express.static(resolve(__dirname, "ui")));
 
   // REST API: GET /api/version — server + framework version
@@ -745,6 +850,9 @@ export function createExpressApp() {
   });
 
   // REST API: GET /api/status — current run status
+}
+
+function _registerStatusRunsSkillsRoutes(app) {
   app.get("/api/status", (_req, res) => {
     try {
       const runsDir = resolve(PROJECT_DIR, ".forge", "runs");
@@ -890,6 +998,9 @@ export function createExpressApp() {
   // data so the UI can render the right empty-state message.
 
   // GET /api/innerloop/status — all subsystem states in one payload
+}
+
+function _registerInnerloopServerRoutes(app) {
   app.get("/api/innerloop/status", (_req, res) => {
     try {
       const cwd = PROJECT_DIR;
@@ -1114,6 +1225,9 @@ export function createExpressApp() {
   });
 
   // REST API: GET /api/config — read .forge.json
+}
+
+function _registerConfigSecretsRoutes(app) {
   app.get("/api/config", (_req, res) => {
     try {
       const configPath = resolve(PROJECT_DIR, ".forge.json");
@@ -1186,6 +1300,9 @@ export function createExpressApp() {
   });
 
   // REST API: GET /api/cost — cost report
+}
+
+function _registerMetricsTeamRoutes(app) {
   app.get("/api/cost", (_req, res) => {
     try {
       res.json(getCostReport(PROJECT_DIR));
@@ -1376,6 +1493,9 @@ export function createExpressApp() {
   });
 
   // REST API: GET /api/drift — run drift check
+}
+
+function _registerDriftIncidentRoutes(app) {
   app.get("/api/drift", async (_req, res) => {
     try {
       const threshold = Math.max(0, Math.min(100, parseInt(_req.query.threshold) || 70));
@@ -1613,6 +1733,9 @@ export function createExpressApp() {
   // dashboard and the agent share one code path.
 
   // POST /api/crucible/submit — start a new smelt
+}
+
+function _registerCrucibleHotspotRoutes(app) {
   app.post("/api/crucible/submit", (req, res) => {
     try {
       const { rawIdea, lane = null, source = "human", parentSmeltId = null } = req.body || {};
@@ -1829,6 +1952,9 @@ export function createExpressApp() {
   });
 
   // REST API: GET /api/deps/watch — latest dependency vulnerability snapshot
+}
+
+function _registerDepsTemperingToolRoutes(app) {
   app.get("/api/deps/watch", (_req, res) => {
     try {
       const snapshotPath = resolve(PROJECT_DIR, ".forge", "deps-snapshot.json");
@@ -2019,6 +2145,9 @@ export function createExpressApp() {
   });
 
   // REST API: GET /api/hub — hub status
+}
+
+function _registerHubTracesPlansRoutes(app) {
   app.get("/api/hub", (_req, res) => {
     if (activeHub) {
       res.json({ running: true, port: activeHub.port, clients: activeHub.getClients() });
@@ -2284,6 +2413,9 @@ export function createExpressApp() {
   });
 
   // OpenBrain memory status API
+}
+
+function _registerMemoryBrainRoutes(app) {
   app.get("/api/memory", (_req, res) => {
     try {
       const configured = isOpenBrainConfigured(PROJECT_DIR);
@@ -2448,55 +2580,19 @@ export function createExpressApp() {
   // at .forge/openbrain-replay-<ts>.jsonl.
   app.post("/api/brain/replay", async (req, res) => {
     if (!checkApprovalSecret(req, res)) return;
-    const cfg = readOpenBrainConfig(PROJECT_DIR);
-    const v = _validateBrainReplayRequest(req.body, cfg);
-    if (!v.ok) return res.status(v.status).json({ ok: false, error: v.error });
-    const sourceArg = v.sourceArg;
-    const dryRun = Boolean(req.body?.dryRun);
-    const project = req.body?.project || "plan-forge";
-    const maxRecords = Number(req.body?.maxRecords ?? 500);
+    const replayRequest = _buildBrainReplayRequest(req.body, readOpenBrainConfig(PROJECT_DIR));
+    if (!replayRequest.ok) return res.status(replayRequest.status).json({ ok: false, error: replayRequest.error });
 
-    let client = null;
+    let replayRun = null;
     try {
-      const sourcePath = isAbsolute(sourceArg) ? sourceArg : resolve(PROJECT_DIR, sourceArg);
-      const collected = _collectReplayRecords(sourcePath, { project, maxRecords });
-      if (!collected.ok) return res.status(collected.status).json({ ok: false, error: collected.error });
-
-      if (!dryRun) client = await createOpenBrainClient(cfg);
-
-      const receiptPath = resolve(PROJECT_DIR, ".forge", `openbrain-replay-${Date.now()}.jsonl`);
-      let receiptStream = null;
-      try {
-        mkdirSync(resolve(PROJECT_DIR, ".forge"), { recursive: true });
-        receiptStream = createWriteStream(receiptPath, { flags: "a" });
-      } catch { /* receipt log is best-effort */ }
-
-      const result = await brainReplayRecords(dryRun ? { capture: async () => ({}) } : client, collected.records, {
-        rate: Number(req.body?.rate ?? 50),
-        maxRetries: Number(req.body?.maxRetries ?? 3),
-        retryDelayMs: Number(req.body?.retryDelayMs ?? 250),
-        dryRun,
-        sampleSize: 5,
-        onProgress: (ev) => {
-          if (receiptStream) {
-            try { receiptStream.write(JSON.stringify({ ...ev, ts: new Date().toISOString() }) + "\n"); } catch { /* ignore */ }
-          }
-        },
-      });
-      if (receiptStream) { try { receiptStream.end(); } catch { /* ignore */ } }
-
-      res.json({
-        ok: result.failed === 0,
-        sourceType: collected.sourceType,
-        source: sourcePath,
-        receiptLog: receiptStream ? receiptPath : null,
-        endpoint: cfg.url,
-        ...result,
-      });
+      replayRun = await _prepareBrainReplayRun(replayRequest);
+      if (!replayRun.ok) return res.status(replayRun.status).json({ ok: false, error: replayRun.error });
+      res.json(await _runBrainReplay(replayRun));
     } catch (e) {
       res.status(500).json({ ok: false, error: String(e?.message || e) });
     } finally {
-      if (client) { try { await client.close(); } catch { /* best-effort */ } }
+      _closeBrainReplayReceiptLog(replayRun?.receiptStream);
+      await _closeBrainReplayClient(replayRun?.client);
     }
   });
 
@@ -2552,6 +2648,9 @@ export function createExpressApp() {
   });
 
   // Image generation API
+}
+
+function _registerImageBridgeFixRoutes(app) {
   app.post("/api/image/generate", async (req, res) => {
     try {
       const { prompt, outputPath, model, size } = req.body || {};
@@ -2795,6 +2894,9 @@ export function createExpressApp() {
   });
 
   // GET /api/quorum/prompt — assemble quorum prompt (read-only)
+}
+
+function _registerQuorumMiscRoutes(app) {
   app.get("/api/quorum/prompt", (req, res) => {
     try {
       const source = req.query.source || "all";
@@ -2986,6 +3088,5 @@ export function createExpressApp() {
       return res.json({ records, total: files.length, showing: records.length });
     } catch (err) { res.status(500).json({ error: err.message }); }
   });
-
-  return app;
 }
+

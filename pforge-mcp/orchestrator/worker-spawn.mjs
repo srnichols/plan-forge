@@ -438,7 +438,7 @@ async function _resolveApiAuthHeaders(provider, model) {
   return { headers };
 }
 
-function _buildApiSuccess({ data, choice, usage, completionDetails, model, provider, apiDurationMs }) {
+function _buildApiSuccess({ data, choice, usage, completionDetails, model, provider, apiDurationMs: _apiDurationMs }) {
   return {
     output: choice?.message?.content || "",
     stderr: "",
@@ -450,8 +450,8 @@ function _buildApiSuccess({ data, choice, usage, completionDetails, model, provi
       tokens_out: usage.completion_tokens || 0,
       model: data.model || model,
       premiumRequests: 0,
-      apiDurationMs,
-      sessionDurationMs: apiDurationMs,
+      apiDurationMs: _apiDurationMs,
+      sessionDurationMs: _apiDurationMs,
       codeChanges: null,
       reasoning_tokens: completionDetails.reasoning_tokens || 0,
     },

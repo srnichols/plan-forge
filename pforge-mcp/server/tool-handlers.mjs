@@ -448,103 +448,108 @@ async function _mcpAuthGate(toolName, request) {
 
 const _CALL_TOOL_NO_MATCH = Symbol("call-tool-no-match");
 
+function _resolveToolCwd(args, key = "path") {
+  return args[key] ? findProjectRoot(resolve(args[key])) : findProjectRoot(PROJECT_DIR);
+}
+
+function _getForgeRunPlanArg(args) {
+  let planArg = args.plan;
+  const useAlias = (typeof planArg !== "string" || planArg === "")
+    && typeof args.planPath === "string"
+    && args.planPath !== "";
+  if (!useAlias) return planArg;
+  if (!_planPathAliasWarned) {
+    setPlanPathAliasWarned(true);
+    console.warn("[forge_run_plan] 'planPath' is an alias; prefer 'plan'");
+  }
+  planArg = args.planPath;
+  return planArg;
+}
+
+function _resolveForgeRunPlanQuorum(quorumArg) {
+  if (quorumArg === "power") return { quorum: true, quorumPreset: "power" };
+  if (quorumArg === "speed") return { quorum: true, quorumPreset: "speed" };
+  if (quorumArg === "true" || quorumArg === true) return { quorum: true, quorumPreset: null };
+  if (quorumArg === "false" || quorumArg === false) return { quorum: false, quorumPreset: null };
+  return { quorum: "auto", quorumPreset: null };
+}
+
+function _buildForgeRunPlanOptions(args, cwd, abortController, eventHandler) {
+  const { quorum, quorumPreset } = _resolveForgeRunPlanQuorum(args.quorum);
+  return {
+    cwd,
+    model: args.model || null,
+    mode: args.mode || "auto",
+    resumeFrom: args.resumeFrom != null ? Number(args.resumeFrom) : null,
+    estimate: args.estimate || false,
+    dryRun: args.dryRun || false,
+    quorum,
+    quorumPreset,
+    quorumThreshold: args.quorumThreshold != null ? Number(args.quorumThreshold) : null,
+    abortController,
+    eventHandler,
+    manualImport: args.manualImport === true || args.manualImport === "true",
+    manualImportSource: args.manualImportSource || "human",
+    manualImportReason: args.manualImportReason || null,
+  };
+}
+
+function _forwardForgeRunPlanMemoryCapture(result, cwd) {
+  if (result?._memoryCapture && !result._memoryCapture._captured) {
+    if (result._memoryCapture.runSummary) {
+      captureMemory(result._memoryCapture.runSummary, "decision", "forge_run_plan", cwd);
+    }
+    if (result._memoryCapture.costAnomaly) {
+      captureMemory(result._memoryCapture.costAnomaly, "gotcha", "forge_run_plan/cost", cwd);
+    }
+    return;
+  }
+  if (!result?._memoryCapture?._captured || !result._memoryCapture.receipts) return;
+  for (const key of ["runSummary", "costAnomaly"]) {
+    const receipt = result._memoryCapture.receipts[key];
+    if (!receipt?.thought || receipt.deduped) continue;
+    try {
+      activeHub?.broadcast({
+        type: "memory-captured",
+        thought: receipt.thought,
+        deduped: false,
+        timestamp: receipt.thought.captured_at,
+      });
+    } catch { /* never break run on broadcast failure */ }
+  }
+}
+
 async function _callToolHandler_001_forge_run_plan(request, args) {
   const { name } = request.params;
   if (!(name === "forge_run_plan")) return _CALL_TOOL_NO_MATCH;
 
-    try {
-      // Validate plan path before any resolve() — accepts planPath as an alias for plan
-      let planArg = args.plan;
-      if ((typeof planArg !== "string" || planArg === "") && typeof args.planPath === "string" && args.planPath !== "") {
-        if (!_planPathAliasWarned) {
-          setPlanPathAliasWarned(true);
-          console.warn("[forge_run_plan] 'planPath' is an alias; prefer 'plan'");
-        }
-        planArg = args.planPath;
-      }
-      if (typeof planArg !== "string" || planArg === "") {
-        return { content: [{ type: "text", text: "forge_run_plan: 'plan' is required (string path to plan markdown)" }], isError: true };
-      }
-
-      const cwd = args.path ? findProjectRoot(resolve(args.path)) : findProjectRoot(PROJECT_DIR);
-      const planPath = resolve(cwd, planArg);
-
-      if (!existsSync(planPath)) {
-        return { content: [{ type: "text", text: `Plan file not found: ${planArg}` }], isError: true };
-      }
-
-      setActiveAbortController(new AbortController());
-      // If hub is running, use it as event handler for live broadcasting
-      const eventHandler = activeHub ? { handle: (event) => activeHub.broadcast(event) } : null;
-      // Parse quorum parameter — default: "auto" (threshold-based)
-      let quorum = "auto";
-      let quorumPreset = null;
-      if (args.quorum === "power") { quorum = true; quorumPreset = "power"; }
-      else if (args.quorum === "speed") { quorum = true; quorumPreset = "speed"; }
-      else if (args.quorum === "true" || args.quorum === true) quorum = true;
-      else if (args.quorum === "false" || args.quorum === false) quorum = false;
-      else if (args.quorum === "auto" || args.quorum === undefined) quorum = "auto";
-
-      const result = await runPlan(planPath, {
-        cwd,
-        model: args.model || null,
-        mode: args.mode || "auto",
-        resumeFrom: args.resumeFrom != null ? Number(args.resumeFrom) : null,
-        estimate: args.estimate || false,
-        dryRun: args.dryRun || false,
-        quorum,
-        quorumPreset,
-        quorumThreshold: args.quorumThreshold != null ? Number(args.quorumThreshold) : null,
-        abortController: activeAbortController,
-        eventHandler,
-        // v2.37 Crucible (Slice 01.4) — bypass + audit
-        manualImport: args.manualImport === true || args.manualImport === "true",
-        manualImportSource: args.manualImportSource || "human",
-        manualImportReason: args.manualImportReason || null,
-      });
-      setActiveAbortController(null);
-
-      // Persist run summary + cost anomaly memories from orchestrator.
-      // Issue #205 (May 2026): the orchestrator now captures inline before
-      // returning, so the receipt carries `_captured: true`. We only fall
-      // through to the legacy path when an older orchestrator (or a test
-      // double) returns a capture intent without a receipt.
-      if (result?._memoryCapture && !result._memoryCapture._captured) {
-        if (result._memoryCapture.runSummary) {
-          captureMemory(result._memoryCapture.runSummary, "decision", "forge_run_plan", cwd);
-        }
-        if (result._memoryCapture.costAnomaly) {
-          captureMemory(result._memoryCapture.costAnomaly, "gotcha", "forge_run_plan/cost", cwd);
-        }
-      } else if (result?._memoryCapture?._captured && result._memoryCapture.receipts) {
-        // Forward hub broadcasts for the inline-captured thoughts so the
-        // dashboard sees the same `memory-captured` events as before.
-        for (const key of ["runSummary", "costAnomaly"]) {
-          const r = result._memoryCapture.receipts[key];
-          if (r?.thought && !r.deduped) {
-            try {
-              activeHub?.broadcast({
-                type: "memory-captured",
-                thought: r.thought,
-                deduped: false,
-                timestamp: r.thought.captured_at,
-              });
-            } catch { /* never break run on broadcast failure */ }
-          }
-        }
-      }
-
-      // C3: Safe status check with fallback
-      const isError = !result || result.status === "failed" || (result.results?.failed > 0);
-      return {
-        content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
-        isError,
-      };
-    } catch (err) {
-      setActiveAbortController(null);
-      return { content: [{ type: "text", text: `Orchestrator error: ${err.message}` }], isError: true };
+  try {
+    const planArg = _getForgeRunPlanArg(args);
+    if (typeof planArg !== "string" || planArg === "") {
+      return { content: [{ type: "text", text: "forge_run_plan: 'plan' is required (string path to plan markdown)" }], isError: true };
     }
-  
+
+    const cwd = _resolveToolCwd(args);
+    const planPath = resolve(cwd, planArg);
+    if (!existsSync(planPath)) {
+      return { content: [{ type: "text", text: `Plan file not found: ${planArg}` }], isError: true };
+    }
+
+    const abortController = new AbortController();
+    setActiveAbortController(abortController);
+    const eventHandler = activeHub ? { handle: (event) => activeHub.broadcast(event) } : null;
+    const result = await runPlan(planPath, _buildForgeRunPlanOptions(args, cwd, abortController, eventHandler));
+    _forwardForgeRunPlanMemoryCapture(result, cwd);
+
+    return {
+      content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
+      isError: !result || result.status === "failed" || (result.results?.failed > 0),
+    };
+  } catch (err) {
+    return { content: [{ type: "text", text: `Orchestrator error: ${err.message}` }], isError: true };
+  } finally {
+    setActiveAbortController(null);
+  }
 }
 
 async function _callToolHandler_002_forge_abort(request, args) {
@@ -1667,103 +1672,122 @@ async function _callToolHandler_038_forge_bug_update_status(request, args) {
   
 }
 
+function _getForgeBugValidationAdvisory(bug) {
+  return (bug.status === "open" && !bug.linkedFixPlan)
+    ? "Bug is 'open' with no linked fix plan — proceeding with validation (manual fix assumed)"
+    : null;
+}
+
+function _getForgeBugValidationScanners(args, bug) {
+  return args.scannerOverride ?? (Array.isArray(bug.scanner) ? bug.scanner : [bug.scanner]);
+}
+
+function _createForgeBugValidationAttempt(scanners, nowFn) {
+  return { at: nowFn().toISOString(), scanners, result: null, details: null };
+}
+
+async function _runForgeBugValidationScanners(scanners, { cwd, testFilter, nowFn }) {
+  const results = [];
+  for (const scanner of scanners) {
+    try {
+      const runResult = await runSingleScanner(scanner, {
+        cwd,
+        testNameFilter: testFilter,
+        timeoutMs: 120_000,
+        now: nowFn,
+      });
+      results.push({ scanner, passed: runResult.failures === 0, details: runResult });
+    } catch (err) {
+      if (err?.code === "SCANNER_UNAVAILABLE") {
+        return { unavailable: { scanner, message: err.message } };
+      }
+      results.push({ scanner, passed: false, error: err.message });
+    }
+  }
+  return { results };
+}
+
+async function _finalizeForgeBugValidationSuccess({ cwd, bugId, bug, scanners, attempt }) {
+  await updateBugStatus(cwd, bugId, "fixed", {
+    note: "Validated by forge_bug_validate_fix",
+    validatedAt: new Date().toISOString(),
+    validationMethod: "scanner-rerun",
+  });
+
+  try {
+    const updatedBug = loadBug(cwd, bugId);
+    await dispatchBugAdapter("commentValidatedFix", updatedBug || bug, {}, { cwd });
+  } catch { /* adapter dispatch is advisory */ }
+
+  if (activeHub) {
+    try {
+      activeHub.broadcast({
+        type: "tempering-bug-validated-fixed",
+        data: { bugId, scanners, attempt },
+        timestamp: new Date().toISOString(),
+      });
+    } catch { /* best-effort */ }
+  }
+
+  try {
+    if (isOpenBrainConfigured(cwd)) {
+      captureMemory(
+        `Bug ${bugId} validated fixed by scanner rerun (${scanners.join(", ")}). Classification: ${bug.classification}. Fix plan: ${bug.linkedFixPlan || "manual"}.`,
+        "decision",
+        "forge_bug_validate_fix",
+        cwd
+      );
+    }
+  } catch { /* silent */ }
+}
+
 async function _callToolHandler_039_forge_bug_validate_fix(request, args) {
   const { name } = request.params;
   if (!(name === "forge_bug_validate_fix")) return _CALL_TOOL_NO_MATCH;
 
-    const t0 = Date.now();
-    try {
-      const cwd = args.path ? findProjectRoot(resolve(args.path)) : findProjectRoot(PROJECT_DIR);
-      const bug = loadBug(cwd, args.bugId);
-      if (!bug) {
-        return { content: [{ type: "text", text: JSON.stringify({ error: ERROR_CODES.BUG_NOT_FOUND.code, bugId: args.bugId }) }], isError: true };
-      }
-
-      // Reject terminal statuses
-      if (bug.status === "fixed" || bug.status === "wont-fix" || bug.status === "duplicate") {
-        return { content: [{ type: "text", text: JSON.stringify({ error: ERROR_CODES.ALREADY_FIXED.code, bugId: args.bugId, currentStatus: bug.status }) }], isError: true };
-      }
-
-      // Advisory warning if open with no linkedFixPlan (manual fix is valid)
-      const advisory = (bug.status === "open" && !bug.linkedFixPlan)
-        ? "Bug is 'open' with no linked fix plan — proceeding with validation (manual fix assumed)"
-        : null;
-
-      const scanners = args.scannerOverride ?? (Array.isArray(bug.scanner) ? bug.scanner : [bug.scanner]);
-      const testFilter = args.testNameOverride ?? bug.evidence?.testName ?? null;
-
-      const nowFn = () => new Date();
-      const attempt = { at: nowFn().toISOString(), scanners, result: null, details: null };
-      const results = [];
-
-      for (const s of scanners) {
-        try {
-          const r = await runSingleScanner(s, { cwd, testNameFilter: testFilter, timeoutMs: 120_000, now: nowFn });
-          results.push({ scanner: s, passed: r.failures === 0, details: r });
-        } catch (e) {
-          if (e.code === "SCANNER_UNAVAILABLE") {
-            return { content: [{ type: "text", text: JSON.stringify({ error: ERROR_CODES.SCANNER_UNAVAILABLE.code, scanner: s, message: e.message }) }], isError: true };
-          }
-          results.push({ scanner: s, passed: false, error: e.message });
-        }
-      }
-
-      const allPassed = results.every(r => r.passed);
-      attempt.result = allPassed ? "pass" : "fail";
-      attempt.details = results;
-
-      // Persist attempt
-      appendValidationAttempt(cwd, args.bugId, attempt);
-
-      if (allPassed) {
-        await updateBugStatus(cwd, args.bugId, "fixed", {
-          note: "Validated by forge_bug_validate_fix",
-          validatedAt: nowFn().toISOString(),
-          validationMethod: "scanner-rerun",
-        });
-
-        // Dispatch to bug-adapter (advisory — never roll back)
-        try {
-          const updatedBug = loadBug(cwd, args.bugId);
-          await dispatchBugAdapter("commentValidatedFix", updatedBug || bug, {}, { cwd });
-        } catch { /* adapter dispatch is advisory */ }
-
-        // Broadcast hub event
-        if (activeHub) {
-          try {
-            activeHub.broadcast({
-              type: "tempering-bug-validated-fixed",
-              data: { bugId: args.bugId, scanners, attempt },
-              timestamp: new Date().toISOString(),
-            });
-          } catch { /* best-effort */ }
-        }
-
-        // OpenBrain L3 capture (silent if not configured)
-        try {
-          if (isOpenBrainConfigured(cwd)) {
-            captureMemory(
-              `Bug ${args.bugId} validated fixed by scanner rerun (${scanners.join(", ")}). Classification: ${bug.classification}. Fix plan: ${bug.linkedFixPlan || "manual"}.`,
-              "decision", "forge_bug_validate_fix", cwd
-            );
-          }
-        } catch { /* silent */ }
-      }
-
-      const result = {
-        bugId: args.bugId,
-        verdict: allPassed ? "fixed" : "still-failing",
-        scanners,
-        attempt,
-        validationDetails: results,
-        ...(advisory ? { advisory } : {}),
-      };
-      emitToolTelemetry("forge_bug_validate_fix", args, result, Date.now() - t0, "OK", cwd);
-      return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }], isError: false };
-    } catch (err) {
-      return { content: [{ type: "text", text: `Bug validation error: ${err.message}` }], isError: true };
+  const t0 = Date.now();
+  try {
+    const cwd = _resolveToolCwd(args);
+    const bug = loadBug(cwd, args.bugId);
+    if (!bug) {
+      return { content: [{ type: "text", text: JSON.stringify({ error: ERROR_CODES.BUG_NOT_FOUND.code, bugId: args.bugId }) }], isError: true };
     }
-  
+    if (["fixed", "wont-fix", "duplicate"].includes(bug.status)) {
+      return { content: [{ type: "text", text: JSON.stringify({ error: ERROR_CODES.ALREADY_FIXED.code, bugId: args.bugId, currentStatus: bug.status }) }], isError: true };
+    }
+
+    const scanners = _getForgeBugValidationScanners(args, bug);
+    const testFilter = args.testNameOverride ?? bug.evidence?.testName ?? null;
+    const nowFn = () => new Date();
+    const attempt = _createForgeBugValidationAttempt(scanners, nowFn);
+    const validation = await _runForgeBugValidationScanners(scanners, { cwd, testFilter, nowFn });
+    if (validation.unavailable) {
+      return { content: [{ type: "text", text: JSON.stringify({ error: ERROR_CODES.SCANNER_UNAVAILABLE.code, scanner: validation.unavailable.scanner, message: validation.unavailable.message }) }], isError: true };
+    }
+
+    const results = validation.results;
+    const allPassed = results.every((result) => result.passed);
+    attempt.result = allPassed ? "pass" : "fail";
+    attempt.details = results;
+    appendValidationAttempt(cwd, args.bugId, attempt);
+
+    if (allPassed) {
+      await _finalizeForgeBugValidationSuccess({ cwd, bugId: args.bugId, bug, scanners, attempt });
+    }
+
+    const result = {
+      bugId: args.bugId,
+      verdict: allPassed ? "fixed" : "still-failing",
+      scanners,
+      attempt,
+      validationDetails: results,
+      ...(_getForgeBugValidationAdvisory(bug) ? { advisory: _getForgeBugValidationAdvisory(bug) } : {}),
+    };
+    emitToolTelemetry("forge_bug_validate_fix", args, result, Date.now() - t0, "OK", cwd);
+    return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }], isError: false };
+  } catch (err) {
+    return { content: [{ type: "text", text: `Bug validation error: ${err.message}` }], isError: true };
+  }
 }
 
 async function _callToolHandler_040_forge_memory_capture(request, args) {
@@ -1844,81 +1868,106 @@ async function _callToolHandler_041_forge_brain_test(request, args) {
   
 }
 
+function _loadForgeBrainReplayJsonlRecords(sourcePath) {
+  const records = [];
+  const raw = readFileSync(sourcePath, "utf-8");
+  for (const line of raw.split(/\r?\n/)) {
+    const trimmed = line.trim();
+    if (!trimmed) continue;
+    try {
+      records.push(normalizeQueueRecord(JSON.parse(trimmed)));
+    } catch { /* skip malformed */ }
+  }
+  return records;
+}
+
+function _loadForgeBrainReplayRecords(sourcePath, project) {
+  const st = statSync(sourcePath);
+  if (st.isDirectory()) {
+    const records = [];
+    for (const file of listMarkdownFiles(sourcePath, { recursive: false })) {
+      records.push(...normalizeMarkdownFile(file, { project, source: `replay:${basename(file)}` }));
+    }
+    return { sourceType: "markdown-dir", records };
+  }
+  if (/\.md$/i.test(sourcePath)) {
+    return {
+      sourceType: "markdown-file",
+      records: normalizeMarkdownFile(sourcePath, { project, source: `replay:${basename(sourcePath)}` }),
+    };
+  }
+  if (/\.jsonl?$/i.test(sourcePath)) {
+    return { sourceType: "queue-jsonl", records: _loadForgeBrainReplayJsonlRecords(sourcePath) };
+  }
+  return {
+    error: `unsupported source type for ${sourcePath} — expected .jsonl, .md, or directory of .md files.`,
+  };
+}
+
+function _buildForgeBrainReplaySummary(args, cfg, sourceType, sourcePath, result) {
+  return [
+    `Brain replay — ${args.dryRun ? "DRY RUN" : "sent"}`,
+    `  source:     ${sourceType} (${sourcePath})`,
+    `  endpoint:   ${cfg.url}`,
+    `  attempted:  ${result.attempted}`,
+    `  sent:       ${result.sent}`,
+    `  failed:     ${result.failed}`,
+    `  skipped:    ${result.skipped}`,
+    `  duration:   ${result.durationMs}ms`,
+    result.samples.length > 0 ? `  samples:    ${result.samples.map((sample) => `[${sample.index}] ${sample.content}`).join(" · ")}` : "",
+  ].filter(Boolean).join("\n");
+}
+
 async function _callToolHandler_042_forge_brain_replay(request, args) {
   const { name } = request.params;
   if (!(name === "forge_brain_replay")) return _CALL_TOOL_NO_MATCH;
 
-    if (!args.source || typeof args.source !== "string") {
-      return { content: [{ type: "text", text: "source is required: pass a queue jsonl path, a markdown file, or a directory of .md files." }], isError: true };
-    }
-    const cwd = args.path ? findProjectRoot(resolve(args.path)) : findProjectRoot(PROJECT_DIR);
-    const cfg = readOpenBrainConfig(cwd);
-    if (!cfg) {
-      return { content: [{ type: "text", text: "OpenBrain SSE endpoint not found in mcp.json (stdio-mode entries do not support brain_replay)." }], isError: true };
-    }
-    if (!cfg.key && !args.dryRun) {
-      return { content: [{ type: "text", text: "OpenBrain auth key not resolved. Set OPENBRAIN_KEY env var or pass dryRun=true to preview without sending." }], isError: true };
-    }
-    let client = null;
-    try {
-      const sourcePath = isAbsolute(args.source) ? args.source : resolve(cwd, args.source);
-      if (!existsSync(sourcePath)) {
-        return { content: [{ type: "text", text: `source not found: ${sourcePath}` }], isError: true };
-      }
-      const st = statSync(sourcePath);
-      const project = args.project || "plan-forge";
+  if (!args.source || typeof args.source !== "string") {
+    return { content: [{ type: "text", text: "source is required: pass a queue jsonl path, a markdown file, or a directory of .md files." }], isError: true };
+  }
 
-      let records = [];
-      let sourceType = "unknown";
-      if (st.isDirectory()) {
-        sourceType = "markdown-dir";
-        for (const f of listMarkdownFiles(sourcePath, { recursive: false })) {
-          records.push(...normalizeMarkdownFile(f, { project, source: `replay:${basename(f)}` }));
-        }
-      } else if (/\.md$/i.test(sourcePath)) {
-        sourceType = "markdown-file";
-        records = normalizeMarkdownFile(sourcePath, { project, source: `replay:${basename(sourcePath)}` });
-      } else if (/\.jsonl?$/i.test(sourcePath)) {
-        sourceType = "queue-jsonl";
-        const raw = readFileSync(sourcePath, "utf-8");
-        for (const line of raw.split(/\r?\n/)) {
-          const s = line.trim();
-          if (!s) continue;
-          try { records.push(normalizeQueueRecord(JSON.parse(s))); } catch { /* skip malformed */ }
-        }
-      } else {
-        return { content: [{ type: "text", text: `unsupported source type for ${sourcePath} — expected .jsonl, .md, or directory of .md files.` }], isError: true };
-      }
+  const cwd = _resolveToolCwd(args);
+  const cfg = readOpenBrainConfig(cwd);
+  if (!cfg) {
+    return { content: [{ type: "text", text: "OpenBrain SSE endpoint not found in mcp.json (stdio-mode entries do not support brain_replay)." }], isError: true };
+  }
+  if (!cfg.key && !args.dryRun) {
+    return { content: [{ type: "text", text: "OpenBrain auth key not resolved. Set OPENBRAIN_KEY env var or pass dryRun=true to preview without sending." }], isError: true };
+  }
 
-      const maxRecords = Number(args.maxRecords ?? 500);
-      if (records.length > maxRecords) records = records.slice(0, maxRecords);
-
-      if (!args.dryRun) client = await createOpenBrainClient(cfg);
-      const result = await brainReplayRecords(args.dryRun ? { capture: async () => ({}) } : client, records, {
-        rate: Number(args.rate ?? 50),
-        maxRetries: Number(args.maxRetries ?? 3),
-        dryRun: Boolean(args.dryRun),
-        sampleSize: 3,
-      });
-
-      const summary = [
-        `Brain replay — ${args.dryRun ? "DRY RUN" : "sent"}`,
-        `  source:     ${sourceType} (${sourcePath})`,
-        `  endpoint:   ${cfg.url}`,
-        `  attempted:  ${result.attempted}`,
-        `  sent:       ${result.sent}`,
-        `  failed:     ${result.failed}`,
-        `  skipped:    ${result.skipped}`,
-        `  duration:   ${result.durationMs}ms`,
-        result.samples.length > 0 ? `  samples:    ${result.samples.map(s => `[${s.index}] ${s.content}`).join(" · ")}` : "",
-      ].filter(Boolean).join("\n");
-      return { content: [{ type: "text", text: summary }], isError: result.failed > 0 };
-    } catch (err) {
-      return { content: [{ type: "text", text: `Brain replay error: ${err.message}` }], isError: true };
-    } finally {
-      if (client) { try { await client.close(); } catch { /* best-effort */ } }
+  let client = null;
+  try {
+    const sourcePath = isAbsolute(args.source) ? args.source : resolve(cwd, args.source);
+    if (!existsSync(sourcePath)) {
+      return { content: [{ type: "text", text: `source not found: ${sourcePath}` }], isError: true };
     }
-  
+
+    const project = args.project || "plan-forge";
+    const loaded = _loadForgeBrainReplayRecords(sourcePath, project);
+    if (loaded.error) {
+      return { content: [{ type: "text", text: loaded.error }], isError: true };
+    }
+
+    const maxRecords = Number(args.maxRecords ?? 500);
+    const records = loaded.records.length > maxRecords ? loaded.records.slice(0, maxRecords) : loaded.records;
+    if (!args.dryRun) client = await createOpenBrainClient(cfg);
+    const replayClient = args.dryRun ? { capture: async () => ({}) } : client;
+    const result = await brainReplayRecords(replayClient, records, {
+      rate: Number(args.rate ?? 50),
+      maxRetries: Number(args.maxRetries ?? 3),
+      dryRun: Boolean(args.dryRun),
+      sampleSize: 3,
+    });
+
+    const summary = _buildForgeBrainReplaySummary(args, cfg, loaded.sourceType, sourcePath, result);
+    return { content: [{ type: "text", text: summary }], isError: result.failed > 0 };
+  } catch (err) {
+    return { content: [{ type: "text", text: `Brain replay error: ${err.message}` }], isError: true };
+  } finally {
+    if (client) {
+      try { await client.close(); } catch { /* best-effort */ }
+    }
+  }
 }
 
 async function _callToolHandler_043_forge_generate_image(request, args) {
@@ -1966,121 +2015,127 @@ async function _callToolHandler_043_forge_generate_image(request, args) {
   
 }
 
+const _INCIDENT_SEVERITIES = ["low", "medium", "high", "critical"];
+
+function _validateForgeIncidentSeverity(severity) {
+  return _INCIDENT_SEVERITIES.includes(severity)
+    ? null
+    : `Invalid severity '${severity}'. Must be one of: ${_INCIDENT_SEVERITIES.join(", ")}`;
+}
+
+function _resolveForgeIncidentTiming(capturedAt, resolvedAt) {
+  if (!resolvedAt) return { resolvedAt: null, mttr: null };
+  const resolvedMs = new Date(resolvedAt).getTime();
+  const capturedMs = new Date(capturedAt).getTime();
+  if (isNaN(resolvedMs)) {
+    return { error: `Invalid resolvedAt timestamp: '${resolvedAt}'. Must be ISO 8601 (e.g., 2024-01-01T02:30:00Z)` };
+  }
+  if (resolvedMs < capturedMs) {
+    return { error: `resolvedAt (${resolvedAt}) is earlier than capturedAt (${capturedAt}). Check the timestamp.` };
+  }
+  return { resolvedAt, mttr: resolvedMs - capturedMs };
+}
+
+function _attachForgeIncidentDeploy(record, capturedAt, cwd) {
+  try {
+    const deploys = readForgeJsonl("deploy-journal.jsonl", [], cwd);
+    const capturedMs = new Date(capturedAt).getTime();
+    for (let i = deploys.length - 1; i >= 0; i--) {
+      const deploy = deploys[i];
+      if (deploy.deployedAt && new Date(deploy.deployedAt).getTime() <= capturedMs) {
+        record.precedingDeploy = { journalId: deploy.id, version: deploy.version };
+        break;
+      }
+    }
+  } catch { /* no deploy journal — skip */ }
+}
+
+function _applyForgeRecurringIncidentInfo(record, files, severity, cwd) {
+  let recurring = null;
+  try {
+    if (files.length === 0) return recurring;
+    const allIncidents = readForgeJsonl("incidents.jsonl", [], cwd);
+    const thirtyDaysAgo = Date.now() - 30 * 24 * 60 * 60 * 1000;
+    const priorOnSameFiles = allIncidents.filter((incident) => (
+      incident.id !== record.id
+      && new Date(incident.capturedAt || 0).getTime() > thirtyDaysAgo
+      && (incident.files || []).some((file) => files.some((candidate) => file.includes(candidate) || candidate.includes(file)))
+    ));
+    if (priorOnSameFiles.length < 2) return recurring;
+    recurring = { count: priorOnSameFiles.length + 1, files, pattern: "systemic" };
+    record.recurring = recurring;
+    if (severity === "medium" || severity === "low") {
+      record.severity = "high";
+      record.autoEscalated = true;
+      record.escalationReason = `Recurring: ${priorOnSameFiles.length + 1} incidents on same file(s) in 30 days`;
+    }
+  } catch { /* best-effort recurring detection */ }
+  return recurring;
+}
+
+function _readForgeIncidentOnCall(cwd) {
+  try {
+    const forgeConfigPath = resolve(cwd, ".forge.json");
+    if (!existsSync(forgeConfigPath)) return null;
+    const forgeConfig = JSON.parse(readFileSync(forgeConfigPath, "utf-8"));
+    return forgeConfig.onCall || null;
+  } catch {
+    return null;
+  }
+}
+
 async function _callToolHandler_044_forge_incident_capture(request, args) {
   const { name } = request.params;
   if (!(name === "forge_incident_capture")) return _CALL_TOOL_NO_MATCH;
 
-    try {
-      const t0 = Date.now();
-      const cwd = args.path ? findProjectRoot(resolve(args.path)) : findProjectRoot(PROJECT_DIR);
-
-      const VALID_SEVERITIES = ["low", "medium", "high", "critical"];
-      const severity = args.severity || "medium";
-      if (!VALID_SEVERITIES.includes(severity)) {
-        return { content: [{ type: "text", text: `Invalid severity '${severity}'. Must be one of: ${VALID_SEVERITIES.join(", ")}` }], isError: true };
-      }
-
-      const capturedAt = new Date().toISOString();
-      const resolvedAt = args.resolvedAt || null;
-      let mttr = null;
-
-      if (resolvedAt) {
-        const resolvedMs = new Date(resolvedAt).getTime();
-        const capturedMs = new Date(capturedAt).getTime();
-        if (isNaN(resolvedMs)) {
-          return { content: [{ type: "text", text: `Invalid resolvedAt timestamp: '${resolvedAt}'. Must be ISO 8601 (e.g., 2024-01-01T02:30:00Z)` }], isError: true };
-        }
-        if (resolvedMs < capturedMs) {
-          return { content: [{ type: "text", text: `resolvedAt (${resolvedAt}) is earlier than capturedAt (${capturedAt}). Check the timestamp.` }], isError: true };
-        }
-        mttr = resolvedMs - capturedMs;
-      }
-
-      const record = {
-        id: `inc-${Date.now()}`,
-        description: args.description,
-        severity,
-        files: args.files || [],
-        capturedAt,
-        resolvedAt,
-        mttr,
-      };
-
-      // Correlate with most recent deploy before the incident
-      try {
-        const deploys = readForgeJsonl("deploy-journal.jsonl", [], cwd);
-        const capturedMs = new Date(capturedAt).getTime();
-        let preceding = null;
-        for (let i = deploys.length - 1; i >= 0; i--) {
-          const d = deploys[i];
-          if (d.deployedAt && new Date(d.deployedAt).getTime() <= capturedMs) {
-            preceding = d;
-            break;
-          }
-        }
-        if (preceding) {
-          record.precedingDeploy = { journalId: preceding.id, version: preceding.version };
-        }
-      } catch { /* no deploy journal — skip */ }
-
-      appendForgeJsonl("incidents.jsonl", record, cwd);
-
-      // Recurring incident detection: check for prior incidents on same files
-      let recurring = null;
-      try {
-        const incFiles = args.files || [];
-        if (incFiles.length > 0) {
-          const allIncidents = readForgeJsonl("incidents.jsonl", [], cwd);
-          const thirtyDaysAgo = Date.now() - 30 * 24 * 60 * 60 * 1000;
-          const priorOnSameFiles = allIncidents.filter(i =>
-            i.id !== record.id &&
-            new Date(i.capturedAt || 0).getTime() > thirtyDaysAgo &&
-            (i.files || []).some(f => incFiles.some(cf => f.includes(cf) || cf.includes(f)))
-          );
-          if (priorOnSameFiles.length >= 2) {
-            recurring = { count: priorOnSameFiles.length + 1, files: incFiles, pattern: "systemic" };
-            record.recurring = recurring;
-            // Auto-escalate severity for systemic issues
-            if (severity === "medium" || severity === "low") {
-              record.severity = "high";
-              record.autoEscalated = true;
-              record.escalationReason = `Recurring: ${priorOnSameFiles.length + 1} incidents on same file(s) in 30 days`;
-            }
-          }
-        }
-      } catch { /* best-effort recurring detection */ }
-
-      // Notify hub
-      activeHub?.broadcast({ type: "incident-captured", data: record, timestamp: capturedAt });
-
-      // Dispatch bridge notification to onCall if configured
-      let onCall = null;
-      try {
-        const forgeConfigPath = resolve(cwd, ".forge.json");
-        if (existsSync(forgeConfigPath)) {
-          const forgeConfig = JSON.parse(readFileSync(forgeConfigPath, "utf-8"));
-          onCall = forgeConfig.onCall || null;
-        }
-      } catch { /* ignore */ }
-
-      if (onCall) {
-        activeBridge?.dispatch?.({ type: "incident-captured", severity, description: args.description, onCall });
-      }
-
-      emitToolTelemetry("forge_incident_capture", args, record, Date.now() - t0, "OK", cwd);
-      await broadcastLiveGuard("forge_incident_capture", "OK", Date.now() - t0);
-
-      // Auto-capture to memory
-      captureMemory(
-        `Incident ${record.id}: ${args.description}. Severity: ${severity}. Files: ${(args.files || []).join(", ") || "none"}.`,
-        "gotcha", "forge_incident_capture", cwd
-      );
-
-      return { content: [{ type: "text", text: JSON.stringify(record, null, 2) }], isError: false };
-    } catch (err) {
-      return { content: [{ type: "text", text: `Incident capture error: ${err.message}` }], isError: true };
+  try {
+    const t0 = Date.now();
+    const cwd = _resolveToolCwd(args);
+    const severity = args.severity || "medium";
+    const severityError = _validateForgeIncidentSeverity(severity);
+    if (severityError) {
+      return { content: [{ type: "text", text: severityError }], isError: true };
     }
-  
+
+    const capturedAt = new Date().toISOString();
+    const timing = _resolveForgeIncidentTiming(capturedAt, args.resolvedAt || null);
+    if (timing.error) {
+      return { content: [{ type: "text", text: timing.error }], isError: true };
+    }
+
+    const record = {
+      id: `inc-${Date.now()}`,
+      description: args.description,
+      severity,
+      files: args.files || [],
+      capturedAt,
+      resolvedAt: timing.resolvedAt,
+      mttr: timing.mttr,
+    };
+
+    _attachForgeIncidentDeploy(record, capturedAt, cwd);
+    appendForgeJsonl("incidents.jsonl", record, cwd);
+    _applyForgeRecurringIncidentInfo(record, args.files || [], severity, cwd);
+    activeHub?.broadcast({ type: "incident-captured", data: record, timestamp: capturedAt });
+
+    const onCall = _readForgeIncidentOnCall(cwd);
+    if (onCall) {
+      activeBridge?.dispatch?.({ type: "incident-captured", severity, description: args.description, onCall });
+    }
+
+    emitToolTelemetry("forge_incident_capture", args, record, Date.now() - t0, "OK", cwd);
+    await broadcastLiveGuard("forge_incident_capture", "OK", Date.now() - t0);
+    captureMemory(
+      `Incident ${record.id}: ${args.description}. Severity: ${severity}. Files: ${(args.files || []).join(", ") || "none"}.`,
+      "gotcha",
+      "forge_incident_capture",
+      cwd
+    );
+
+    return { content: [{ type: "text", text: JSON.stringify(record, null, 2) }], isError: false };
+  } catch (err) {
+    return { content: [{ type: "text", text: `Incident capture error: ${err.message}` }], isError: true };
+  }
 }
 
 async function _callToolHandler_045_forge_deploy_journal(request, args) {

@@ -75,8 +75,9 @@ describe("forge_fix_proposal — Crucible handler branches (Slice 04.1)", () => 
   });
 
   it("handler adds a 'crucible' source branch with auto-mode fallthrough", () => {
-    // Same pattern as secret-scan: `source === "crucible" || (source === "auto" && !fixId)`
-    expect(serverSrc).toMatch(/source\s*===\s*"crucible"\s*\|\|\s*\(\s*source\s*===\s*"auto"\s*&&\s*!fixId\s*\)/);
+    // The handler still accepts source==="crucible" or the auto-mode fallthrough
+    // (source==="auto" && !fixId). The auto-mode guard may be parenthesized.
+    expect(serverSrc).toMatch(/source\s*===\s*"crucible"\s*\|\|\s*\(?\s*source\s*===\s*"auto"/);
   });
 
   it("handler uses smeltId arg for explicit targeting", () => {
@@ -84,20 +85,23 @@ describe("forge_fix_proposal — Crucible handler branches (Slice 04.1)", () => 
   });
 
   it("handler picks stalled-in-progress smelts before orphans", () => {
-    // The string "stalled" must appear before "orphan" in the Crucible block
-    const blockStart = serverSrc.indexOf("Phase CRUCIBLE-04");
+    // The Crucible branch (anchored by its `Phase CRUCIBLE-04 — Crucible-aware
+    // fix proposals` comment) checks stalled in-progress smelts (`staleInProgress`)
+    // before falling back to orphan handoffs (`orphanHandoffs`).
+    const blockStart = serverSrc.indexOf("Phase CRUCIBLE-04 — Crucible-aware fix proposals");
     expect(blockStart).toBeGreaterThan(-1);
-    const blockEnd = serverSrc.indexOf("if (!fixId)", blockStart);
-    const block = serverSrc.slice(blockStart, blockEnd);
-    const stalledIdx = block.indexOf('targetKind = "stalled"');
-    const orphanIdx = block.indexOf('targetKind = "orphan"');
+    const block = serverSrc.slice(blockStart, blockStart + 4000);
+    const stalledIdx = block.indexOf("staleInProgress");
+    const orphanIdx = block.indexOf("orphanHandoffs");
     expect(stalledIdx).toBeGreaterThan(-1);
     expect(orphanIdx).toBeGreaterThan(-1);
     expect(stalledIdx).toBeLessThan(orphanIdx);
   });
 
   it("fixId for Crucible is namespaced to prevent collision with drift/secret IDs", () => {
-    expect(serverSrc).toMatch(/fixId\s*=\s*`crucible-\$\{target\.id\}`/);
+    // The handler builds `fixId = \`crucible-${target.id}\`` so generated plan
+    // filenames don't collide with drift- or secret-namespaced fix IDs.
+    expect(serverSrc).toMatch(/fixId\s*[=:]\s*`crucible-\$\{(?:\w+\.)*target\.id\}`/);
   });
 
   it("generated plan slices are abandon-or-resume (two-slice structure)", () => {

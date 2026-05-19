@@ -336,6 +336,186 @@ function extractFailures(scannerResult) {
   return _extractGenericFailure(scannerResult);
 }
 
+async function _runUnitScanner({ config, stack, adapter, sliceRef, projectDir, spawnFn, now, hub, corr }) {
+  emit(hub, "tempering-run-scanner-started", { correlationId: corr, scanner: "unit", stack });
+  const unitResult = await runScanner({
+    scanner: "unit", config, stack, adapter, sliceRef,
+    cwd: projectDir, spawn: spawnFn, now,
+  });
+  emit(hub, "tempering-run-scanner-completed", {
+    correlationId: corr,
+    scanner: "unit",
+    stack,
+    verdict: unitResult.verdict,
+    pass: unitResult.pass,
+    fail: unitResult.fail,
+    skipped: unitResult.skipped,
+    durationMs: unitResult.durationMs,
+  });
+  return unitResult;
+}
+
+async function _runIntegrationScanner({ unitResult, config, stack, adapter, sliceRef, projectDir, spawnFn, now, hub, corr }) {
+  emit(hub, "tempering-run-scanner-started", { correlationId: corr, scanner: "integration", stack });
+  let integrationResult;
+  if (unitResult.verdict === "budget-exceeded") {
+    integrationResult = {
+      scanner: "integration",
+      stack,
+      sliceRef,
+      startedAt: new Date(now()).toISOString(),
+      completedAt: new Date(now()).toISOString(),
+      skipped: true,
+      reason: "prior-budget-exceeded",
+      verdict: "skipped",
+      durationMs: 0,
+    };
+  } else {
+    integrationResult = await runScanner({
+      scanner: "integration", config, stack, adapter, sliceRef,
+      cwd: projectDir, spawn: spawnFn, now,
+    });
+  }
+  emit(hub, "tempering-run-scanner-completed", {
+    correlationId: corr,
+    scanner: "integration",
+    stack,
+    verdict: integrationResult.verdict,
+    pass: integrationResult.pass || 0,
+    fail: integrationResult.fail || 0,
+    skipped: integrationResult.skipped || 0,
+    durationMs: integrationResult.durationMs || 0,
+  });
+  return integrationResult;
+}
+
+async function _runCrossStackScanners(opts) {
+  const {
+    unitResult, integrationResult,
+    config, projectDir, runId, sliceRef, now, hub, corr, stack, env,
+    importFn, uiImportFn, captureMemory, spawnWorker,
+    uiScannerImpl, contractScannerImpl, visualDiffScannerImpl,
+    flakinessScannerImpl, perfBudgetScannerImpl, loadStressScannerImpl,
+    mutationScannerImpl, contentAuditScannerImpl,
+  } = opts;
+
+  const stepCommon = { sliceRef, now, hub, corr, stack };
+  const importFnSafe = importFn || ((spec) => import(spec));
+  const uiImportFnSafe = uiImportFn || ((spec) => import(spec));
+
+  const uiResult = await _runCrossStackScannerStep({
+    ...stepCommon,
+    name: "ui-playwright",
+    priorScanners: [unitResult, integrationResult],
+    invokeInjected: _maybeInvoke(uiScannerImpl, { config, projectDir, runId, sliceRef, now, env, importFn: uiImportFn }),
+    invokeDefault: async () => {
+      const { runUiSweep } = await import("./scanners/ui-playwright.mjs");
+      return runUiSweep({ config, projectDir, runId, sliceRef, now, env, importFn: uiImportFnSafe });
+    },
+  });
+
+  const contractResult = await _runCrossStackScannerStep({
+    ...stepCommon,
+    name: "contract",
+    priorScanners: [unitResult, integrationResult, uiResult],
+    invokeInjected: _maybeInvoke(contractScannerImpl, { config, projectDir, runId, sliceRef, now, env, importFn }),
+    invokeDefault: async () => {
+      const { runContractScan } = await import("./scanners/contract.mjs");
+      return runContractScan({ config, projectDir, runId, sliceRef, now, env, importFn: importFnSafe });
+    },
+  });
+
+  const visualDiffEnabled = config.scanners?.["visual-diff"] !== false
+    && config.visualAnalyzer?.enabled !== false;
+  const visualDiffResult = await _runCrossStackScannerStep({
+    ...stepCommon,
+    name: "visual-diff",
+    priorScanners: [unitResult, integrationResult, uiResult, contractResult],
+    enabled: visualDiffEnabled,
+    invokeInjected: _maybeInvoke(visualDiffScannerImpl, { config, projectDir, runId, sliceRef, now, env, hub, captureMemory, spawnWorker }),
+    invokeDefault: async () => {
+      const { runVisualDiffScan } = await import("./scanners/visual-diff.mjs");
+      return runVisualDiffScan({ config, projectDir, runId, sliceRef, now, env, hub, captureMemory, spawnWorker });
+    },
+  });
+
+  const flakinessResult = await _runCrossStackScannerStep({
+    ...stepCommon,
+    name: "flakiness",
+    priorScanners: [unitResult, integrationResult, uiResult, contractResult, visualDiffResult],
+    invokeInjected: _maybeInvoke(flakinessScannerImpl, { config, projectDir, runId, sliceRef, now, env, hub, captureMemory }),
+    invokeDefault: async () => {
+      const { runFlakinessScan } = await import("./scanners/flakiness.mjs");
+      return runFlakinessScan({ config, projectDir, runId, sliceRef, now, env, hub, captureMemory });
+    },
+  });
+
+  const perfBudgetResult = await _runCrossStackScannerStep({
+    ...stepCommon,
+    name: "performance-budget",
+    priorScanners: [unitResult, integrationResult, uiResult, contractResult, visualDiffResult, flakinessResult],
+    invokeInjected: _maybeInvoke(perfBudgetScannerImpl, { config, projectDir, runId, sliceRef, now, env, hub, captureMemory, importFn: importFnSafe }),
+    invokeDefault: async () => {
+      const { runPerformanceBudgetScan } = await import("./scanners/performance-budget.mjs");
+      return runPerformanceBudgetScan({ config, projectDir, runId, sliceRef, now, env, hub, captureMemory, importFn: importFnSafe });
+    },
+  });
+
+  const loadStressResult = await _runCrossStackScannerStep({
+    ...stepCommon,
+    name: "load-stress",
+    priorScanners: [unitResult, integrationResult, uiResult, contractResult, visualDiffResult, flakinessResult, perfBudgetResult],
+    invokeInjected: _maybeInvoke(loadStressScannerImpl, { config, projectDir, runId, sliceRef, now, env, hub, importFn: importFnSafe }),
+    invokeDefault: async () => {
+      const { runLoadStressScan } = await import("./scanners/load-stress.mjs");
+      return runLoadStressScan({ config, projectDir, runId, sliceRef, now, env, hub, importFn: importFnSafe });
+    },
+  });
+
+  const mutationResult = await _runCrossStackScannerStep({
+    ...stepCommon,
+    name: "mutation",
+    priorScanners: [unitResult, integrationResult, uiResult, contractResult, visualDiffResult, flakinessResult, perfBudgetResult, loadStressResult],
+    invokeInjected: _maybeInvoke(mutationScannerImpl, { config, projectDir, runId, sliceRef, now, env, hub, captureMemory }),
+    invokeDefault: async () => {
+      const { runMutationScan } = await import("./scanners/mutation.mjs");
+      return runMutationScan({ config, projectDir, runId, sliceRef, now, env, hub, captureMemory });
+    },
+  });
+
+  const contentAuditResult = await _runCrossStackScannerStep({
+    ...stepCommon,
+    name: "content-audit",
+    priorScanners: [unitResult, integrationResult, uiResult, contractResult, visualDiffResult, flakinessResult, perfBudgetResult, loadStressResult, mutationResult],
+    invokeInjected: _maybeInvoke(contentAuditScannerImpl, { config, projectDir, runId, sliceRef, now, env }),
+    invokeDefault: async () => {
+      const { runContentAudit } = await import("./scanners/content-audit.mjs");
+      return runContentAudit({ config, projectDir, runId, sliceRef, now, env });
+    },
+  });
+
+  return [uiResult, contractResult, visualDiffResult, flakinessResult, perfBudgetResult, loadStressResult, mutationResult, contentAuditResult];
+}
+
+function _maybeInvoke(impl, args) {
+  if (!impl) return null;
+  return () => impl(args);
+}
+
+async function _maybeRunObjectivePost(opts) {
+  const { objective, objectiveBaseline, objectiveSpawn, spawnFn, projectDir } = opts;
+  const enabled = objective && objective.command && typeof objective.command === "string" && objectiveBaseline !== null;
+  if (!enabled) return { objectiveResult: null, failed: false };
+  return _runObjectivePost({
+    objective, baseline: objectiveBaseline, objectiveSpawn, spawnFn, projectDir,
+  });
+}
+
+async function _maybeFetchChangedFiles({ config, lastGreenSha, projectDir, spawnFn }) {
+  if (!(config.execution && config.execution.regressionFirst && lastGreenSha)) return [];
+  return pickChangedFiles({ cwd: projectDir, lastGreenSha, gitSpawn: spawnFn });
+}
+
 // ─── Tempering run sub-helpers (Phase ESLINT-D1/D2 — extracted) ───────
 
 function _crossStackSkippedResult(name, sliceRef, now, reason) {
@@ -567,37 +747,58 @@ function _persistRunRecord(runRecord, temperingDir, outPath) {
  * @param {Function} [opts.now]
  * @returns {Promise<object>}
  */
-export async function runTemperingRun(opts = {}) {
-  const {
-    projectDir,
-    hub = null,
-    correlationId = null,
-    sliceRef = null,
-    lastGreenSha = null,
-    spawn: spawnFn = realSpawn,
-    importFn,
-    adapter: adapterOverride = null,
-    now = () => Date.now(),
-    uiImportFn = null,
-    uiScannerImpl = null,
-    contractScannerImpl = null,
-    visualDiffScannerImpl = null,
-    captureMemory = null,
-    flakinessScannerImpl = null,
-    perfBudgetScannerImpl = null,
-    loadStressScannerImpl = null,
-    mutationScannerImpl = null,
-    contentAuditScannerImpl = null,
-    classifyFn = null,
-    registerBugFn = null,
-    callModel = null,
-    env = process.env,
-    spawnWorker = null,
-    objective = null,
-    objectiveSpawn = null,
-  } = opts;
+const _RUN_OPTS_DEFAULTS = Object.freeze({
+  projectDir: undefined,
+  hub: null,
+  correlationId: null,
+  sliceRef: null,
+  lastGreenSha: null,
+  importFn: undefined,
+  now: undefined,
+  uiImportFn: null,
+  uiScannerImpl: null,
+  contractScannerImpl: null,
+  visualDiffScannerImpl: null,
+  captureMemory: null,
+  flakinessScannerImpl: null,
+  perfBudgetScannerImpl: null,
+  loadStressScannerImpl: null,
+  mutationScannerImpl: null,
+  contentAuditScannerImpl: null,
+  classifyFn: null,
+  registerBugFn: null,
+  callModel: null,
+  spawnWorker: null,
+  objective: null,
+  objectiveSpawn: null,
+});
 
-  const corr = correlationId || `temper-run-${randomUUID()}`;
+function _normalizeRunOpts(opts) {
+  const merged = { ..._RUN_OPTS_DEFAULTS, ...opts };
+  merged.spawnFn = opts.spawn || realSpawn;
+  merged.adapterOverride = opts.adapter || null;
+  merged.now = opts.now || (() => Date.now());
+  merged.env = opts.env || process.env;
+  return merged;
+}
+
+function _sumScannerTotals(scanners) {
+  return scanners.reduce((acc, s) => ({
+    pass: acc.pass + (s.pass || 0),
+    fail: acc.fail + (s.fail || 0),
+    skipped: acc.skipped + (s.skipped || 0),
+    durationMs: acc.durationMs + (s.durationMs || 0),
+  }), { pass: 0, fail: 0, skipped: 0, durationMs: 0 });
+}
+
+export async function runTemperingRun(opts = {}) {
+  const o = _normalizeRunOpts(opts);
+  const {
+    projectDir, hub, sliceRef, lastGreenSha, spawnFn, importFn, now,
+    uiImportFn, captureMemory, env, spawnWorker, objective, objectiveSpawn,
+  } = o;
+
+  const corr = o.correlationId || `temper-run-${randomUUID()}`;
   const startedAt = new Date(now()).toISOString();
   const runId = `run-${startedAt.replace(/[:.]/g, "-")}`;
 
@@ -610,282 +811,81 @@ export async function runTemperingRun(opts = {}) {
 
   if (config.enabled === false) {
     emit(hub, "tempering-run-skipped", { correlationId: corr, reason: "disabled" });
-    return {
-      ok: true,
-      skipped: true,
-      reason: "tempering-disabled",
-      correlationId: corr,
-      configWritten,
-    };
+    return { ok: true, skipped: true, reason: "tempering-disabled", correlationId: corr, configWritten };
   }
 
   const stack = detectStack(projectDir);
+  emit(hub, "tempering-run-started", { correlationId: corr, projectDir, stack, sliceRef, configWritten });
 
-  emit(hub, "tempering-run-started", {
-    correlationId: corr,
-    projectDir,
-    stack,
-    sliceRef,
-    configWritten,
-  });
+  const adapter = o.adapterOverride || await loadAdapter(stack, { importFn });
+  const changedFiles = await _maybeFetchChangedFiles({ config, lastGreenSha, projectDir, spawnFn });
 
-  let adapter = adapterOverride;
-  if (!adapter) {
-    adapter = await loadAdapter(stack, { importFn });
-  }
-
-  let changedFiles = [];
-  if (config.execution && config.execution.regressionFirst && lastGreenSha) {
-    changedFiles = await pickChangedFiles({ cwd: projectDir, lastGreenSha, gitSpawn: spawnFn });
-  }
-
-  // A7 Objective — capture baseline BEFORE scanners run.
   const baselineGate = await _runObjectiveBaseline({ objective, objectiveSpawn, spawnFn, projectDir, corr });
   if (!baselineGate.ok) return baselineGate.response;
   const objectiveBaseline = baselineGate.baseline;
 
-  // ── Unit scanner ──
-  emit(hub, "tempering-run-scanner-started", { correlationId: corr, scanner: "unit", stack });
-  const unitResult = await runScanner({
-    scanner: "unit", config, stack, adapter, sliceRef,
-    cwd: projectDir, spawn: spawnFn, now,
+  const unitResult = await _runUnitScanner({
+    config, stack, adapter, sliceRef, projectDir, spawnFn, now, hub, corr,
   });
-  emit(hub, "tempering-run-scanner-completed", {
-    correlationId: corr,
-    scanner: "unit",
-    stack,
-    verdict: unitResult.verdict,
-    pass: unitResult.pass,
-    fail: unitResult.fail,
-    skipped: unitResult.skipped,
-    durationMs: unitResult.durationMs,
+  const integrationResult = await _runIntegrationScanner({
+    unitResult, config, stack, adapter, sliceRef, projectDir, spawnFn, now, hub, corr,
   });
 
-  // ── Integration scanner ──
-  emit(hub, "tempering-run-scanner-started", { correlationId: corr, scanner: "integration", stack });
-  let integrationResult;
-  if (unitResult.verdict === "budget-exceeded") {
-    integrationResult = {
-      scanner: "integration",
-      stack,
-      sliceRef,
-      startedAt: new Date(now()).toISOString(),
-      completedAt: new Date(now()).toISOString(),
-      skipped: true,
-      reason: "prior-budget-exceeded",
-      verdict: "skipped",
-      durationMs: 0,
-    };
-  } else {
-    integrationResult = await runScanner({
-      scanner: "integration", config, stack, adapter, sliceRef,
-      cwd: projectDir, spawn: spawnFn, now,
-    });
-  }
-  emit(hub, "tempering-run-scanner-completed", {
-    correlationId: corr,
-    scanner: "integration",
-    stack,
-    verdict: integrationResult.verdict,
-    pass: integrationResult.pass || 0,
-    fail: integrationResult.fail || 0,
-    skipped: integrationResult.skipped || 0,
-    durationMs: integrationResult.durationMs || 0,
+  const crossStack = await _runCrossStackScanners({
+    unitResult, integrationResult,
+    config, projectDir, runId, sliceRef, now, hub, corr, stack, env,
+    importFn, uiImportFn, captureMemory, spawnWorker,
+    uiScannerImpl: o.uiScannerImpl,
+    contractScannerImpl: o.contractScannerImpl,
+    visualDiffScannerImpl: o.visualDiffScannerImpl,
+    flakinessScannerImpl: o.flakinessScannerImpl,
+    perfBudgetScannerImpl: o.perfBudgetScannerImpl,
+    loadStressScannerImpl: o.loadStressScannerImpl,
+    mutationScannerImpl: o.mutationScannerImpl,
+    contentAuditScannerImpl: o.contentAuditScannerImpl,
   });
 
-  const stepCommon = { sliceRef, now, hub, corr, stack };
-  const importFnSafe = importFn || ((spec) => import(spec));
-  const uiImportFnSafe = uiImportFn || ((spec) => import(spec));
-
-  // ── UI sweep scanner ──
-  const uiResult = await _runCrossStackScannerStep({
-    ...stepCommon,
-    name: "ui-playwright",
-    priorScanners: [unitResult, integrationResult],
-    invokeInjected: uiScannerImpl
-      ? () => uiScannerImpl({ config, projectDir, runId, sliceRef, now, env, importFn: uiImportFn })
-      : null,
-    invokeDefault: async () => {
-      const { runUiSweep } = await import("./scanners/ui-playwright.mjs");
-      return runUiSweep({ config, projectDir, runId, sliceRef, now, env, importFn: uiImportFnSafe });
-    },
-  });
-
-  // ── Contract scanner ──
-  const contractResult = await _runCrossStackScannerStep({
-    ...stepCommon,
-    name: "contract",
-    priorScanners: [unitResult, integrationResult, uiResult],
-    invokeInjected: contractScannerImpl
-      ? () => contractScannerImpl({ config, projectDir, runId, sliceRef, now, env, importFn })
-      : null,
-    invokeDefault: async () => {
-      const { runContractScan } = await import("./scanners/contract.mjs");
-      return runContractScan({ config, projectDir, runId, sliceRef, now, env, importFn: importFnSafe });
-    },
-  });
-
-  // ── Visual-diff scanner ──
-  const visualDiffEnabled = config.scanners?.["visual-diff"] !== false
-    && config.visualAnalyzer?.enabled !== false;
-  const visualDiffResult = await _runCrossStackScannerStep({
-    ...stepCommon,
-    name: "visual-diff",
-    priorScanners: [unitResult, integrationResult, uiResult, contractResult],
-    enabled: visualDiffEnabled,
-    invokeInjected: visualDiffScannerImpl
-      ? () => visualDiffScannerImpl({ config, projectDir, runId, sliceRef, now, env, hub, captureMemory, spawnWorker })
-      : null,
-    invokeDefault: async () => {
-      const { runVisualDiffScan } = await import("./scanners/visual-diff.mjs");
-      return runVisualDiffScan({ config, projectDir, runId, sliceRef, now, env, hub, captureMemory, spawnWorker });
-    },
-  });
-
-  // ── Flakiness scanner ──
-  const flakinessResult = await _runCrossStackScannerStep({
-    ...stepCommon,
-    name: "flakiness",
-    priorScanners: [unitResult, integrationResult, uiResult, contractResult, visualDiffResult],
-    invokeInjected: flakinessScannerImpl
-      ? () => flakinessScannerImpl({ config, projectDir, runId, sliceRef, now, env, hub, captureMemory })
-      : null,
-    invokeDefault: async () => {
-      const { runFlakinessScan } = await import("./scanners/flakiness.mjs");
-      return runFlakinessScan({ config, projectDir, runId, sliceRef, now, env, hub, captureMemory });
-    },
-  });
-
-  // ── Performance Budget scanner ──
-  const perfBudgetResult = await _runCrossStackScannerStep({
-    ...stepCommon,
-    name: "performance-budget",
-    priorScanners: [unitResult, integrationResult, uiResult, contractResult, visualDiffResult, flakinessResult],
-    invokeInjected: perfBudgetScannerImpl
-      ? () => perfBudgetScannerImpl({ config, projectDir, runId, sliceRef, now, env, hub, captureMemory, importFn: importFnSafe })
-      : null,
-    invokeDefault: async () => {
-      const { runPerformanceBudgetScan } = await import("./scanners/performance-budget.mjs");
-      return runPerformanceBudgetScan({ config, projectDir, runId, sliceRef, now, env, hub, captureMemory, importFn: importFnSafe });
-    },
-  });
-
-  // ── Load / Stress scanner ──
-  const loadStressResult = await _runCrossStackScannerStep({
-    ...stepCommon,
-    name: "load-stress",
-    priorScanners: [unitResult, integrationResult, uiResult, contractResult, visualDiffResult, flakinessResult, perfBudgetResult],
-    invokeInjected: loadStressScannerImpl
-      ? () => loadStressScannerImpl({ config, projectDir, runId, sliceRef, now, env, hub, importFn: importFnSafe })
-      : null,
-    invokeDefault: async () => {
-      const { runLoadStressScan } = await import("./scanners/load-stress.mjs");
-      return runLoadStressScan({ config, projectDir, runId, sliceRef, now, env, hub, importFn: importFnSafe });
-    },
-  });
-
-  // ── Mutation scanner ──
-  const mutationResult = await _runCrossStackScannerStep({
-    ...stepCommon,
-    name: "mutation",
-    priorScanners: [unitResult, integrationResult, uiResult, contractResult, visualDiffResult, flakinessResult, perfBudgetResult, loadStressResult],
-    invokeInjected: mutationScannerImpl
-      ? () => mutationScannerImpl({ config, projectDir, runId, sliceRef, now, env, hub, captureMemory })
-      : null,
-    invokeDefault: async () => {
-      const { runMutationScan } = await import("./scanners/mutation.mjs");
-      return runMutationScan({ config, projectDir, runId, sliceRef, now, env, hub, captureMemory });
-    },
-  });
-
-  // ── Content-audit scanner ──
-  const contentAuditResult = await _runCrossStackScannerStep({
-    ...stepCommon,
-    name: "content-audit",
-    priorScanners: [unitResult, integrationResult, uiResult, contractResult, visualDiffResult, flakinessResult, perfBudgetResult, loadStressResult, mutationResult],
-    invokeInjected: contentAuditScannerImpl
-      ? () => contentAuditScannerImpl({ config, projectDir, runId, sliceRef, now, env })
-      : null,
-    invokeDefault: async () => {
-      const { runContentAudit } = await import("./scanners/content-audit.mjs");
-      return runContentAudit({ config, projectDir, runId, sliceRef, now, env });
-    },
-  });
-
-  const scanners = [
-    unitResult, integrationResult, uiResult, contractResult, visualDiffResult,
-    flakinessResult, perfBudgetResult, loadStressResult, mutationResult, contentAuditResult,
-  ];
+  const scanners = [unitResult, integrationResult, ...crossStack];
   let overallVerdict = deriveOverallVerdict(scanners);
 
-  // A7 Objective — compare post-scanner metric against baseline.
-  let objectiveResult = null;
-  if (objective && objective.command && typeof objective.command === "string" && objectiveBaseline !== null) {
-    const postOut = await _runObjectivePost({
-      objective, baseline: objectiveBaseline, objectiveSpawn, spawnFn, projectDir,
-    });
-    objectiveResult = postOut.objectiveResult;
-    if (postOut.failed) overallVerdict = "fail";
-  }
+  const postOut = await _maybeRunObjectivePost({
+    objective, objectiveBaseline, objectiveSpawn, spawnFn, projectDir,
+  });
+  const objectiveResult = postOut.objectiveResult;
+  if (postOut.failed) overallVerdict = "fail";
 
   const { registeredBugs, infraFixes } = await _registerScannerBugs({
-    scanners, projectDir, corr, sliceRef, hub, captureMemory, config, callModel,
-    classifyFn, registerBugFn,
+    scanners, projectDir, corr, sliceRef, hub, captureMemory, config, callModel: o.callModel,
+    classifyFn: o.classifyFn, registerBugFn: o.registerBugFn,
   });
 
   const completedAt = new Date(now()).toISOString();
+  const objectiveFields = objectiveResult !== null ? { objective: objectiveResult } : {};
   const runRecord = {
-    runId,
-    correlationId: corr,
-    startedAt,
-    completedAt,
-    stack,
-    sliceRef,
-    changedFilesCount: changedFiles.length,
-    lastGreenSha,
-    scanners,
-    verdict: overallVerdict,
-    infraFixes,
-    registeredBugs,
-    ...(objectiveResult !== null ? { objective: objectiveResult } : {}),
-    phase: "TEMPER-06",
-    slice: "06.1",
+    runId, correlationId: corr, startedAt, completedAt, stack, sliceRef,
+    changedFilesCount: changedFiles.length, lastGreenSha,
+    scanners, verdict: overallVerdict, infraFixes, registeredBugs,
+    ...objectiveFields,
+    phase: "TEMPER-06", slice: "06.1",
   };
 
   const outPath = resolve(temperingDir, `${runId}.json`);
   _persistRunRecord(runRecord, temperingDir, outPath);
 
-  const totals = scanners.reduce((acc, s) => ({
-    pass: acc.pass + (s.pass || 0),
-    fail: acc.fail + (s.fail || 0),
-    skipped: acc.skipped + (s.skipped || 0),
-    durationMs: acc.durationMs + (s.durationMs || 0),
-  }), { pass: 0, fail: 0, skipped: 0, durationMs: 0 });
+  const totals = _sumScannerTotals(scanners);
 
   emit(hub, "tempering-run-completed", {
-    correlationId: corr,
-    runId,
-    stack,
-    verdict: overallVerdict,
+    correlationId: corr, runId, stack, verdict: overallVerdict,
     scannerCount: scanners.length,
-    pass: totals.pass,
-    fail: totals.fail,
-    skipped: totals.skipped,
-    durationMs: totals.durationMs,
+    pass: totals.pass, fail: totals.fail, skipped: totals.skipped, durationMs: totals.durationMs,
     sliceRef,
   });
 
   return {
-    ok: true,
-    runId,
-    correlationId: corr,
-    stack,
-    verdict: overallVerdict,
-    scanners,
-    runRecordPath: outPath,
-    configWritten,
+    ok: true, runId, correlationId: corr, stack, verdict: overallVerdict,
+    scanners, runRecordPath: outPath, configWritten,
     changedFilesCount: changedFiles.length,
-    ...(objectiveResult !== null ? { objective: objectiveResult } : {}),
+    ...objectiveFields,
   };
 }
 

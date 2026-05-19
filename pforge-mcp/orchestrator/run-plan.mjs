@@ -1483,44 +1483,59 @@ function _writeFinalRunArtifacts({ summary, runDir, runId, cwd, trace, eventBus,
   pruneRunHistory(cwd, loadMaxRunHistory(cwd));
 }
 
+const _RUN_PLAN_DEFAULTS = Object.freeze({
+  mode: "auto",
+  quorum: QUORUM_MODE_AUTO,
+  manualImportSource: "human",
+});
+
+function _normalizeRunPlanOptions(options) {
+  const defaultsApplied = {
+    cwd: options.cwd ?? process.cwd(),
+    model: options.model ?? null,
+    mode: options.mode ?? _RUN_PLAN_DEFAULTS.mode,
+    resumeFrom: options.resumeFrom ?? null,
+    estimate: options.estimate ?? false,
+    dryRun: options.dryRun ?? false,
+    eventHandler: options.eventHandler ?? null,
+    abortController: options.abortController ?? null,
+    quorum: options.quorum ?? _RUN_PLAN_DEFAULTS.quorum,
+    quorumThreshold: options.quorumThreshold ?? null,
+    quorumPreset: options.quorumPreset ?? null,
+    bridge: options.bridge ?? null,
+    manualImport: options.manualImport ?? false,
+    manualImportSource: options.manualImportSource ?? _RUN_PLAN_DEFAULTS.manualImportSource,
+    manualImportReason: options.manualImportReason ?? null,
+  };
+  return { ...defaultsApplied, ..._normalizeRunPlanOptionsExtras(options) };
+}
+
+function _normalizeRunPlanOptionsExtras(options) {
+  return {
+    hub: options.hub ?? null,
+    strictGates: options.strictGates ?? false,
+    onlySlices: options.onlySlices ?? null,
+    noTempering: options.noTempering ?? false,
+    allowRetrograde: options.allowRetrograde ?? false,
+    worker: options.worker ?? null,
+    dryRunWorker: options.dryRunWorker ?? false,
+    _inspectGithubStack: options._inspectGithubStack ?? _inspectGithubStackDefault,
+    _dispatchSlice: options._dispatchSlice ?? _dispatchSliceDefault,
+    _pollPullRequest: options._pollPullRequest ?? _pollPullRequestDefault,
+    _anvilDlqDrain: options._anvilDlqDrain ?? _anvilDlqDrain,
+  };
+}
+
 export async function runPlan(planPath, options = {}) {
   const {
-    cwd = process.cwd(),
-    model = null,
-    mode = "auto",
-    resumeFrom = null,
-    estimate = false,
-    dryRun = false,
-    eventHandler = null,
-    abortController = null,
-    quorum = QUORUM_MODE_AUTO, // false | true | "auto" — default: auto (threshold-based)
-    quorumThreshold = null, // override threshold from config
-    quorumPreset = null,   // "power" | "speed" | null — selects model preset
-    bridge = null,         // BridgeManager instance for approval gate
-    manualImport = false,   // v2.37 Crucible (Slice 01.4): bypass crucibleId gate
-    manualImportSource = "human", // audit tag: "human" | "speckit" | "grandfather"
-    manualImportReason = null,    // free-form note for audit log
-    hub = null,             // Phase FORGE-SHOP-06 Slice 06.2: Hub instance for gate-check
-    strictGates = false,    // Phase-31 Slice 4: force enforce mode for this run only
-    onlySlices = null,      // Phase-33.1: number[] | null — run only specified slice IDs
-    noTempering = false,    // Phase-33.1: disable post-slice tempering for this run
-    allowRetrograde = false, // Meta-bug #129: allow plan whose target version already exists on origin
-    worker = null,           // Phase GITHUB-B Slice 3: e.g. "copilot-coding-agent"
-    // Issue #176 — dryRunWorker: skip the real worker spawn (executeSlice) and
-    // synthesize a passing slice result. Tests that exercise runPlan setup
-    // (quorum probe, config loading, escalation chain) without needing real
-    // worker side-effects must opt in. Default false preserves prod behavior.
-    // Without this guard, tests that call runPlan() with a real worker (e.g.
-    // gh-copilot) hand the worker full shell access in the operator's cwd —
-    // the worker can edit any source file and even `git push` to origin.
-    dryRunWorker = false,
-    // Injectable dependencies for testing (copilot-coding-agent dispatch path)
-    _inspectGithubStack = _inspectGithubStackDefault,
-    _dispatchSlice = _dispatchSliceDefault,
-    _pollPullRequest = _pollPullRequestDefault,
-    // Phase-ANVIL Slice 4: injectable DLQ drain for testing
-    _anvilDlqDrain: anvilDlqDrain = _anvilDlqDrain,
-  } = options;
+    cwd, model, mode, resumeFrom, estimate, dryRun, eventHandler, abortController,
+    quorum, quorumThreshold, quorumPreset, bridge,
+    manualImport, manualImportSource, manualImportReason,
+    hub, strictGates, onlySlices, noTempering, allowRetrograde,
+    worker, dryRunWorker,
+    _inspectGithubStack, _dispatchSlice, _pollPullRequest,
+    _anvilDlqDrain: anvilDlqDrain,
+  } = _normalizeRunPlanOptions(options);
 
   // Phase-ANVIL Slice 4 — DLQ boot-time drain (5-second budget, best-effort).
   // Runs before any slice work so stale L3-deferred records can be recovered.
@@ -1893,52 +1908,25 @@ function appendCostHistory(cwd, summary) {
  * @param {{ date, plan, sliceId, sliceTitle, model, status, attempts, duration_ms, cost_usd }} entry
  */
 
-async function executeSlice(slice, options) {
-  const { cwd, model, modelRouting = {}, mode, runDir, maxRetries = 1,
-    memoryEnabled = false, projectName = "", planName = "",
-    quorumConfig = null,
-    escalationChain = ["auto", "claude-opus-4.7", "gpt-5.3-codex"],
-    eventBus = null,
-    worker = null,
-    _dispatchSlice = _dispatchSliceDefault,
-    _pollPullRequest = _pollPullRequestDefault,
-    networkAllowed = null,  // Phase-WORKER-GUARDRAILS Slice 4 (A5): string[] | null
-    networkEnforce = false, // Phase-WORKER-GUARDRAILS Slice 4 (A5): default log-only
-    toolsDeny = null,       // Phase-WORKER-GUARDRAILS Slice 6 (A8): string[] | null — MCP tool names the worker may not invoke
-  } = options;
-  const startTime = Date.now();
-  const resolvedModel = resolveModel(model, modelRouting, slice);
+// ─── executeSlice helpers (extracted to satisfy clean-code D1/D2) ────
 
-  // Meta-bug #88: capture HEAD at slice start so the timeout-retry path can
-  // detect a worker that committed successfully just before being killed by
-  // the timeout. Without this, the retry loop burns a premium request
-  // re-doing work that already landed on master.
+function _executeSliceCaptureBaseline({ cwd, slice }) {
   let sliceStartHead = null;
   try {
     sliceStartHead = execSync("git rev-parse HEAD", {
       cwd, encoding: "utf-8", timeout: 5000,
     }).trim();
-  } catch { /* not a git repo — leave null, retry logic falls back to default */ }
-
-  // Fix 8 + Issue #178: Snapshot working tree before slice. Always restored
-  // at slice end via popSliceSnapshot — pre-fix, the stash was pushed but
-  // never popped, silently capturing operator WIP into `git stash list`.
+  } catch { /* not a git repo */ }
   const snapshot = pushSliceSnapshot({ cwd, sliceNumber: slice.number });
   const snapshotStash = snapshot.pushed;
-  const finalizeSliceResult = (result) => attachSliceSnapshotRestore({
-    sliceResult: result,
-    snapshotStash,
-    cwd,
-    sliceNumber: slice.number,
-    eventBus,
-  });
+  return { sliceStartHead, snapshotStash };
+}
 
-  // ─── Teardown Safety Guard: capture git baseline ────────────────────
-  let teardownBaseline = null;
+function _executeSliceCaptureTeardownBaseline({ cwd, slice }) {
   const teardownGuardConfig = isDestructiveSliceTitle(slice.title)
     ? loadTeardownGuardConfig(cwd)
     : { enabled: false };
-
+  let teardownBaseline = null;
   if (teardownGuardConfig.enabled) {
     try {
       const branch = execSync("git rev-parse --abbrev-ref HEAD", {
@@ -1952,15 +1940,16 @@ async function executeSlice(slice, options) {
         upstream = execSync("git rev-parse --abbrev-ref --symbolic-full-name @{u}", {
           cwd, encoding: "utf-8", timeout: 5000, stdio: "pipe",
         }).trim();
-      } catch { /* no upstream — local-only check */ }
+      } catch { /* no upstream */ }
       teardownBaseline = { branch, headSha, upstream, capturedAt: new Date().toISOString() };
     } catch {
-      teardownBaseline = null; // non-git context — skip verification
+      teardownBaseline = null;
     }
   }
+  return { teardownBaseline, teardownGuardConfig };
+}
 
-  // ─── Agent-Per-Slice Routing (Slice 1) ───────────────────────────────
-  // When no explicit model is set, recommend one from historical performance data.
+function _executeSliceRouteAgent({ resolvedModel, cwd, slice, eventBus }) {
   let finalModel = resolvedModel;
   if (!finalModel && cwd) {
     const sliceType = inferSliceType(slice);
@@ -1979,462 +1968,293 @@ async function executeSlice(slice, options) {
       }
     }
   }
+  return finalModel;
+}
 
-  // ─── Quorum Mode (v2.5) ───
+async function _executeSliceSetupQuorum({ slice, cwd, mode, quorumConfig, memoryEnabled, projectName, runDir }) {
   let quorumResult = null;
   let useQuorum = false;
   let complexityScore = 0;
-
-  if (quorumConfig && quorumConfig.enabled && mode !== "assisted") {
-    const { score, signals } = scoreSliceComplexity(slice, cwd);
-    complexityScore = score;
-
-    // Determine if this slice qualifies for quorum
-    if (quorumConfig.auto) {
-      useQuorum = score >= quorumConfig.threshold;
-    } else {
-      useQuorum = true; // Force quorum on all slices
-    }
-
-    if (useQuorum) {
-      // Dispatch to multiple models for dry-run analysis
-      const dispatchResult = await quorumDispatch(slice, quorumConfig, {
-        cwd,
-        memoryEnabled,
-        projectName,
-        complexityScore: score,
-      });
-
-      // Synthesize responses
-      quorumResult = await quorumReview(dispatchResult, slice, quorumConfig, { cwd });
-
-      // Log quorum data
-      const quorumLog = {
-        score,
-        signals,
-        threshold: quorumConfig.threshold,
-        models: quorumConfig.models,
-        successfulLegs: dispatchResult.successful.length,
-        totalLegs: dispatchResult.all.length,
-        legsFailed: dispatchResult.all.length - dispatchResult.successful.length,
-        legErrors: dispatchResult.all
-          .filter(r => !r.success && r.error)
-          .map(r => ({ model: r.model, reason: r.error.reason, code: r.error.code })),
-        dispatchDuration: dispatchResult.totalDuration,
-        reviewerFallback: quorumResult.fallback,
-        reviewerCost: quorumResult.reviewerCost,
-      };
-      writeFileSync(
-        resolve(runDir, `slice-${slice.number}-quorum.json`),
-        JSON.stringify(quorumLog, null, 2),
-      );
-    }
+  if (!quorumConfig || !quorumConfig.enabled || mode === "assisted") {
+    return { quorumResult, useQuorum, complexityScore };
   }
+  const { score, signals } = scoreSliceComplexity(slice, cwd);
+  complexityScore = score;
+  useQuorum = quorumConfig.auto ? score >= quorumConfig.threshold : true;
+  if (!useQuorum) return { quorumResult, useQuorum, complexityScore };
+  const dispatchResult = await quorumDispatch(slice, quorumConfig, {
+    cwd, memoryEnabled, projectName, complexityScore: score,
+  });
+  quorumResult = await quorumReview(dispatchResult, slice, quorumConfig, { cwd });
+  const quorumLog = {
+    score, signals,
+    threshold: quorumConfig.threshold,
+    models: quorumConfig.models,
+    successfulLegs: dispatchResult.successful.length,
+    totalLegs: dispatchResult.all.length,
+    legsFailed: dispatchResult.all.length - dispatchResult.successful.length,
+    legErrors: dispatchResult.all
+      .filter(r => !r.success && r.error)
+      .map(r => ({ model: r.model, reason: r.error.reason, code: r.error.code })),
+    dispatchDuration: dispatchResult.totalDuration,
+    reviewerFallback: quorumResult.fallback,
+    reviewerCost: quorumResult.reviewerCost,
+  };
+  writeFileSync(
+    resolve(runDir, `slice-${slice.number}-quorum.json`),
+    JSON.stringify(quorumLog, null, 2),
+  );
+  return { quorumResult, useQuorum, complexityScore };
+}
 
-  let attempt = 0;
-  let workerResult = null;
-  let gateResult = { success: true, output: "No validation gate defined" };
-  let lastError = null;
-  // Phase-25 Slice 1 (L1 Reflexion): per-attempt context used to build the
-  // "## Previous attempt (N-1) summary" block on retry. Contains the fields
-  // mandated by Phase-25 MUST #1: gateName, model, durationMs, stderrTail.
-  let lastFailureContext = null;
-  let currentModel = finalModel;
-  // Phase GITHUB-B Slice 4 — trajectory schema for copilot-coding-agent slices.
-  // Captures issue + PR provenance so sliceResult.trajectory carries render hints.
-  let copilotDispatchData = null;
-
-  // Phase-25 Slice 3 (L2 Voyager): retrieve auto-skills matching this slice's
-  // domain keywords once per slice so every retry sees the same context.
-  // reuseCount is only bumped after the slice ultimately passes — skills that
-  // did not help an eventually-failing slice should not promote.
-  let injectedAutoSkills = [];
+async function _executeSliceFoundryQuotaPreflight({ finalModel, slice, runDir, eventBus }) {
+  if (process.env.PFORGE_FOUNDRY_QUOTA_PREFLIGHT !== "1") return;
+  const rawModel = finalModel || "";
+  if (!rawModel.startsWith("azure/")) return;
+  const subscriptionId = process.env.AZURE_SUBSCRIPTION_ID;
+  const resourceGroup  = process.env.AZURE_RESOURCE_GROUP;
+  const accountName    = process.env.AZURE_OPENAI_ACCOUNT_NAME || process.env.AZURE_OPENAI_RESOURCE_NAME || "";
+  const deploymentName = rawModel.replace(/^azure\//, "") || process.env.AZURE_OPENAI_DEPLOYMENT || "default";
+  let quota = null;
   try {
-    injectedAutoSkills = retrieveAutoSkills({ cwd, slice, limit: 3 }) || [];
+    quota = await getDeploymentQuota({ subscriptionId, resourceGroup, accountName, deploymentName });
   } catch {
-    injectedAutoSkills = [];
+    quota = { ok: false, reason: "preflight_fetch_error" };
   }
-  const autoSkillContextBlock = buildAutoSkillContext(injectedAutoSkills);
+  const assessment = compareSliceEstimate(quota, { tokens_in: 0, tokens_out: 0 });
+  if (assessment.status !== "warning" && assessment.status !== "critical") return;
+  const eventData = {
+    sliceId: slice.number,
+    title: slice.title,
+    deploymentName,
+    status: assessment.status,
+    headroomPct: assessment.headroomPct,
+    message: assessment.message,
+  };
+  appendEvent("pforge.foundry.quota", eventData, runDir);
+  if (eventBus) eventBus.emit("pforge.foundry.quota", eventData);
+  console.warn(`[pforge] foundry-quota preflight: ${assessment.message}`);
+}
 
-  // Phase-FOUNDRY-QUOTA-PREFLIGHT Slice 3 — emit pforge.foundry.quota warning before
-  // dispatching to worker when PFORGE_FOUNDRY_QUOTA_PREFLIGHT=1 and an Azure Foundry
-  // deployment model (azure/* prefix) is configured. Fail-open: quota errors never
-  // block execution; they only emit an advisory event to events.log.
-  if (process.env.PFORGE_FOUNDRY_QUOTA_PREFLIGHT === "1") {
-    const _fqRawModel = finalModel || "";
-    if (_fqRawModel.startsWith("azure/")) {
-      const _fqSubscriptionId = process.env.AZURE_SUBSCRIPTION_ID;
-      const _fqResourceGroup  = process.env.AZURE_RESOURCE_GROUP;
-      const _fqAccountName    = process.env.AZURE_OPENAI_ACCOUNT_NAME || process.env.AZURE_OPENAI_RESOURCE_NAME || "";
-      const _fqDeploymentName = _fqRawModel.replace(/^azure\//, "") || process.env.AZURE_OPENAI_DEPLOYMENT || "default";
-      let _fqQuota = null;
-      try {
-        _fqQuota = await getDeploymentQuota({
-          subscriptionId: _fqSubscriptionId,
-          resourceGroup: _fqResourceGroup,
-          accountName: _fqAccountName,
-          deploymentName: _fqDeploymentName,
-        });
-      } catch {
-        _fqQuota = { ok: false, reason: "preflight_fetch_error" };
-      }
-      const _fqAssessment = compareSliceEstimate(_fqQuota, { tokens_in: 0, tokens_out: 0 });
-      if (_fqAssessment.status === "warning" || _fqAssessment.status === "critical") {
-        const _fqEventData = {
-          sliceId: slice.number,
-          title: slice.title,
-          deploymentName: _fqDeploymentName,
-          status: _fqAssessment.status,
-          headroomPct: _fqAssessment.headroomPct,
-          message: _fqAssessment.message,
-        };
-        appendEvent("pforge.foundry.quota", _fqEventData, runDir);
-        if (eventBus) {
-          eventBus.emit("pforge.foundry.quota", _fqEventData);
-        }
-        console.warn(`[pforge] foundry-quota preflight: ${_fqAssessment.message}`);
-      }
-    }
+function _executeSliceEscalateModel({ attempt, currentModel, escalationChain, slice, eventBus }) {
+  if (attempt === 0 || escalationChain.length <= 1) return currentModel;
+  let nextModel = currentModel;
+  for (let i = 0; i < escalationChain.length; i++) {
+    const candidate = escalationChain[i] === "auto" ? null : escalationChain[i];
+    if (candidate !== currentModel) { nextModel = candidate; break; }
   }
+  if (nextModel === currentModel) {
+    const curIdx = escalationChain.findIndex(m => (m === "auto" ? null : m) === currentModel);
+    const nextIdx = Math.min(curIdx + attempt, escalationChain.length - 1);
+    const candidate = escalationChain[nextIdx] === "auto" ? null : escalationChain[nextIdx];
+    if (candidate !== currentModel) nextModel = candidate;
+  }
+  if (nextModel !== currentModel && eventBus) {
+    eventBus.emit("slice-escalated", {
+      sliceId: slice.number,
+      title: slice.title,
+      attempt,
+      fromModel: currentModel || "auto",
+      toModel: nextModel || "auto",
+    });
+  }
+  return nextModel;
+}
 
-  while (attempt <= maxRetries) {
-    const attemptStartTime = Date.now();
-    // Auto-escalate model on retries — skip past the current model in chain
-    if (attempt > 0 && escalationChain.length > 1) {
-      let nextModel = currentModel;
-      for (let i = 0; i < escalationChain.length; i++) {
-        const candidate = escalationChain[i] === "auto" ? null : escalationChain[i];
-        if (candidate !== currentModel) {
-          nextModel = candidate;
-          break;
-        }
-      }
-      // If starting model is already the top of the chain, try the next one down
-      if (nextModel === currentModel) {
-        const curIdx = escalationChain.findIndex(m => (m === "auto" ? null : m) === currentModel);
-        const nextIdx = Math.min(curIdx + attempt, escalationChain.length - 1);
-        const candidate = escalationChain[nextIdx] === "auto" ? null : escalationChain[nextIdx];
-        if (candidate !== currentModel) nextModel = candidate;
-      }
-      if (nextModel !== currentModel) {
-        const fromModel = currentModel || "auto";
-        currentModel = nextModel;
-        if (eventBus) {
-          eventBus.emit("slice-escalated", {
-            sliceId: slice.number,
-            title: slice.title,
-            attempt,
-            fromModel,
-            toModel: currentModel || "auto",
-          });
-        }
-      }
-    }
-
-    // Build prompt — on retry, include the error context
-    let sliceInstructions = (useQuorum && quorumResult)
-      ? quorumResult.enhancedPrompt
-      : buildSlicePrompt(slice);
-
-    // OpenBrain: inject memory search + capture instructions
-    if (memoryEnabled) {
-      sliceInstructions = buildMemorySearchBlock(projectName, slice) + "\n" + sliceInstructions;
-      sliceInstructions += "\n" + buildMemoryCaptureBlock(projectName, slice, planName);
-    }
-
-    // Phase-25 Slice 3 (L2 Voyager): inject auto-skill recipes that matched
-    // this slice's domain keywords. Injected once per attempt so retries also
-    // see the prior-knowledge cues.
-    if (autoSkillContextBlock) {
-      sliceInstructions += autoSkillContextBlock;
-    }
-
-    // Phase-25 Slice 2 (L8 Trajectory): ask the worker to emit a first-person
-    // sentinel-wrapped prose note after its work is done. The note is captured
-    // from stdout after gate success and persisted to
-    // .forge/trajectories/<plan>/slice-<id>.md for future slices to consult.
-    sliceInstructions += "\n" + buildTrajectorySuffix();
-
-    // Teardown Safety Guard: inject pre-flight constraint
-    if (teardownGuardConfig.enabled && isDestructiveSliceTitle(slice.title)) {
-      const preFlightWarning = [
-        "",
-        "--- TEARDOWN SAFETY GUARD (v2.49.1) ---",
-        "This slice MUST NOT delete, reset, or rename local or remote git branches.",
-        "Forbidden commands: `git branch -d`, `git branch -D`, `git push --delete`,",
-        "`git reset --hard` against protected refs, `git update-ref -d`.",
-        "Forbidden mutations: setting status to `abandoned` in `.github/` or `docs/plans/`",
-        "without an explicit plan directive.",
-        "Cleanup applies ONLY to cloud resources or scratch files the plan explicitly names.",
-        "A post-slice branch-safety check will verify HEAD reachability and ref integrity.",
-        "--- END TEARDOWN SAFETY GUARD ---",
-        "",
-      ].join("\n");
-      sliceInstructions = preFlightWarning + sliceInstructions;
-    }
-
-    // Phase-31 Slice 3: prepend reflexion preamble when a prior attempt context
-    // is available. First attempts (lastFailureContext === null) are unchanged.
-    sliceInstructions = buildRetryPrompt(sliceInstructions, lastFailureContext);
-
-    if (mode === "assisted") {
-      workerResult = {
-        output: "Assisted mode — human executes in VS Code",
-        tokens: { tokens_in: null, tokens_out: null, model: "human" },
-        exitCode: 0,
-        worker: "human",
-        model: "human",
-      };
-    } else if (worker === "copilot-coding-agent") {
-      // Phase GITHUB-B Slice 3 — dispatch via GitHub Issue + poll for PR.
-      // Uses injected _dispatchSlice / _pollPullRequest for testability.
-      try {
-        const issueResult = _dispatchSlice(slice, { cwd });
-        const prResult = await _pollPullRequest(issueResult.issueNumber, {
-          cwd,
-          intervalMs: DEFAULT_POLL_INTERVAL_MS,
-          timeoutMs: DEFAULT_TIMEOUT_MS,
-        });
-        const timedOut = prResult.status === "timeout";
-        // Phase GITHUB-B Slice 4 — capture trajectory data for sliceResult
-        const prHint = timedOut
-          ? `PR pending (timeout)`
-          : `PR #${prResult.prNumber} (${prResult.status})`;
-        copilotDispatchData = {
-          issueNumber: issueResult.issueNumber,
-          issueUrl: issueResult.issueUrl,
-          prNumber: timedOut ? null : prResult.prNumber,
-          prUrl: timedOut ? null : prResult.prUrl,
-          prStatus: prResult.status,
-          renderHint: `🤖 Issue #${issueResult.issueNumber} → ${prHint}`,
-        };
-        workerResult = {
-          output: JSON.stringify({ ...issueResult, pr: prResult }),
-          exitCode: timedOut ? 1 : 0,
-          worker: "copilot-coding-agent",
-          model: "copilot-coding-agent",
-          stderr: timedOut
-            ? `Copilot did not open a PR within the polling timeout (issue #${issueResult.issueNumber})`
-            : "",
-        };
-      } catch (err) {
-        return finalizeSliceResult({
-          status: "failed",
-          duration: Date.now() - startTime,
-          error: err.message,
-          attempts: attempt + 1,
-        });
-      }
-    } else {
-      // Phase-WORKER-GUARDRAILS Slice 4 (A5): start network proxy when plan declares network.allowed.
-      // Proxy is active only during the worker's execution and stopped in all exit paths via finally.
-      let _attemptProxy = null;
-      let _attemptProxyEnv = null;
-      if (networkAllowed && Array.isArray(networkAllowed) && networkAllowed.length >= 0) {
-        const _nLogPath = resolve(runDir, "slices", String(slice.number), "network.log");
-        try {
-          _attemptProxy = await startProxyLogger({
-            allowlist: networkAllowed,
-            networkLogPath: _nLogPath,
-            enforce: networkEnforce,
-          });
-          _attemptProxyEnv = {
-            HTTPS_PROXY: _attemptProxy.proxyUrl,
-            HTTP_PROXY: _attemptProxy.proxyUrl,
-            PFORGE_NETWORK_LOG_ONLY: "1",
-          };
-        } catch (pErr) {
-          console.warn(`[pforge] network proxy start failed: ${pErr.message}`);
-        }
-      }
-      try {
-        workerResult = await spawnWorker(sliceInstructions, { model: currentModel, cwd, runPlanActive: true, timeout: resolveWorkerTimeoutMs({ sliceOverride: slice.workerTimeoutMs }), eventBus, extraEnv: _attemptProxyEnv });
-      } catch (err) {
-        return finalizeSliceResult({
-          status: "failed",
-          duration: Date.now() - startTime,
-          error: err.message,
-          attempts: attempt + 1,
-        });
-      } finally {
-        if (_attemptProxy) try { _attemptProxy.stop(); } catch { /* ignore */ }
-      }
-    }
-
-    // Capture session log (C4) — append on retry
-    const logFile = resolve(runDir, `slice-${slice.number}-log.txt`);
-    const logContent = [
-      attempt > 0 ? `\n=== RETRY ATTEMPT ${attempt + 1} ===` : "",
-      `=== Slice ${slice.number}: ${slice.title} ===`,
-      `Worker: ${workerResult.worker}`,
-      `Model: ${workerResult.model}`,
-      `Started: ${new Date(startTime).toISOString()}`,
+function _executeSliceBuildInstructions({ slice, useQuorum, quorumResult, memoryEnabled, projectName, planName, autoSkillContextBlock, teardownGuardConfig, lastFailureContext }) {
+  let sliceInstructions = (useQuorum && quorumResult)
+    ? quorumResult.enhancedPrompt
+    : buildSlicePrompt(slice);
+  if (memoryEnabled) {
+    sliceInstructions = buildMemorySearchBlock(projectName, slice) + "\n" + sliceInstructions;
+    sliceInstructions += "\n" + buildMemoryCaptureBlock(projectName, slice, planName);
+  }
+  if (autoSkillContextBlock) {
+    sliceInstructions += autoSkillContextBlock;
+  }
+  sliceInstructions += "\n" + buildTrajectorySuffix();
+  if (teardownGuardConfig.enabled && isDestructiveSliceTitle(slice.title)) {
+    const preFlightWarning = [
       "",
-      "=== STDOUT ===",
-      workerResult.output || "(empty)",
+      "--- TEARDOWN SAFETY GUARD (v2.49.1) ---",
+      "This slice MUST NOT delete, reset, or rename local or remote git branches.",
+      "Forbidden commands: `git branch -d`, `git branch -D`, `git push --delete`,",
+      "`git reset --hard` against protected refs, `git update-ref -d`.",
+      "Forbidden mutations: setting status to `abandoned` in `.github/` or `docs/plans/`",
+      "without an explicit plan directive.",
+      "Cleanup applies ONLY to cloud resources or scratch files the plan explicitly names.",
+      "A post-slice branch-safety check will verify HEAD reachability and ref integrity.",
+      "--- END TEARDOWN SAFETY GUARD ---",
       "",
-      "=== STDERR ===",
-      workerResult.stderr || "(empty)",
     ].join("\n");
-    writeFileSync(logFile, logContent, attempt > 0 ? { flag: "a" } : undefined);
+    sliceInstructions = preFlightWarning + sliceInstructions;
+  }
+  return buildRetryPrompt(sliceInstructions, lastFailureContext);
+}
 
-    // Run validation gate if defined
-    gateResult = { success: true, output: "No validation gate defined" };
-    if (slice.validationGate) {
-      const gateLines = coalesceGateLines(slice.validationGate);
+async function _executeSliceDispatchCopilot({ slice, cwd, _dispatchSlice, _pollPullRequest }) {
+  const issueResult = _dispatchSlice(slice, { cwd });
+  const prResult = await _pollPullRequest(issueResult.issueNumber, {
+    cwd,
+    intervalMs: DEFAULT_POLL_INTERVAL_MS,
+    timeoutMs: DEFAULT_TIMEOUT_MS,
+  });
+  const timedOut = prResult.status === "timeout";
+  const prHint = timedOut ? `PR pending (timeout)` : `PR #${prResult.prNumber} (${prResult.status})`;
+  const copilotDispatchData = {
+    issueNumber: issueResult.issueNumber,
+    issueUrl: issueResult.issueUrl,
+    prNumber: timedOut ? null : prResult.prNumber,
+    prUrl: timedOut ? null : prResult.prUrl,
+    prStatus: prResult.status,
+    renderHint: `🤖 Issue #${issueResult.issueNumber} → ${prHint}`,
+  };
+  const workerResult = {
+    output: JSON.stringify({ ...issueResult, pr: prResult }),
+    exitCode: timedOut ? 1 : 0,
+    worker: "copilot-coding-agent",
+    model: "copilot-coding-agent",
+    stderr: timedOut
+      ? `Copilot did not open a PR within the polling timeout (issue #${issueResult.issueNumber})`
+      : "",
+  };
+  return { workerResult, copilotDispatchData };
+}
 
-      for (const gateLine of gateLines) {
-        gateResult = runGate(gateLine, cwd);
-        if (!gateResult.success) {
-          gateResult.failedCommand = gateLine;
-          break;
-        }
-      }
-    }
-
-    // If gate passed AND worker didn't timeout/fail, we're done
-    if (gateResult.success && workerResult.exitCode === 0) break;
-
-    // Worker timed out — retry with timeout context
-    if (workerResult.timedOut) {
-      // Meta-bug #88: before paying for a retry, check whether the worker
-      // committed successfully in its last seconds. If HEAD advanced since
-      // slice start, the work already landed — treat as success and break.
-      if (sliceStartHead) {
-        try {
-          const postTimeoutHead = execSync("git rev-parse HEAD", {
-            cwd, encoding: "utf-8", timeout: 5000,
-          }).trim();
-          if (postTimeoutHead && postTimeoutHead !== sliceStartHead) {
-            writeFileSync(logFile,
-              `\n\n--- WORKER TIMED OUT BUT COMMITTED (${sliceStartHead.slice(0, 7)} -> ${postTimeoutHead.slice(0, 7)}) — treating as success ---\n`,
-              { flag: "a" });
-            if (eventBus && typeof eventBus.emit === "function") {
-              try {
-                eventBus.emit("slice-timeout-but-committed", {
-                  sliceNumber: slice.number,
-                  sliceTitle: slice.title,
-                  preSliceHead: sliceStartHead,
-                  postTimeoutHead,
-                });
-              } catch { /* best-effort */ }
-            }
-            // Force exitCode to 0 so downstream logic (status writer, summary)
-            // sees this as a clean success.
-            workerResult.exitCode = 0;
-            workerResult.timedOut = false;
-            workerResult.committedBeforeTimeout = true;
-            break;
-          }
-        } catch { /* git unavailable — fall through to existing retry logic */ }
-      }
-
-      lastError = `Worker timed out after ${Math.round((Date.now() - startTime) / 1000)}s. The task may be too complex for a single slice — consider splitting it.`;
-      // Phase-25 Slice 1: capture reflexion context for next attempt's prompt
-      lastFailureContext = {
-        previousAttempt: attempt + 1,
-        gateName: "(worker timed out before gate)",
-        model: workerResult.model || currentModel || "auto",
-        durationMs: Date.now() - attemptStartTime,
-        stderrTail: [lastError, workerResult.stderr].filter(Boolean).join("\n\n"),
-      };
-      attempt++;
-      if (attempt <= maxRetries) {
-        writeFileSync(logFile, `\n\n--- WORKER TIMED OUT, RETRYING (attempt ${attempt + 1}) ---\n${lastError}\n`, { flag: "a" });
-      }
-      continue;
-    }
-
-    // Worker failed with non-zero exit (not timeout) — no point retrying
-    if (workerResult.exitCode !== 0) break;
-
-    // Gate failed — set error for retry prompt
-    lastError = `Gate command '${gateResult.failedCommand || "unknown"}' failed:\n${gateResult.error || gateResult.output}`;
-    // Phase-25 Slice 1: capture reflexion context for next attempt's prompt
-    lastFailureContext = {
-      previousAttempt: attempt + 1,
-      gateName: gateResult.failedCommand || "unknown",
-      model: workerResult.model || currentModel || "auto",
-      durationMs: Date.now() - attemptStartTime,
-      stderrTail: [gateResult.error, gateResult.output, workerResult.stderr].filter(Boolean).join("\n\n"),
+async function _executeSliceStartProxy({ networkAllowed, networkEnforce, runDir, slice }) {
+  if (!networkAllowed || !Array.isArray(networkAllowed) || networkAllowed.length < 0) {
+    return { proxy: null, proxyEnv: null };
+  }
+  const nLogPath = resolve(runDir, "slices", String(slice.number), "network.log");
+  try {
+    const proxy = await startProxyLogger({
+      allowlist: networkAllowed,
+      networkLogPath: nLogPath,
+      enforce: networkEnforce,
+    });
+    return {
+      proxy,
+      proxyEnv: {
+        HTTPS_PROXY: proxy.proxyUrl,
+        HTTP_PROXY: proxy.proxyUrl,
+        PFORGE_NETWORK_LOG_ONLY: "1",
+      },
     };
-    attempt++;
+  } catch (pErr) {
+    console.warn(`[pforge] network proxy start failed: ${pErr.message}`);
+    return { proxy: null, proxyEnv: null };
+  }
+}
 
-    if (attempt <= maxRetries) {
-      // Log the retry
-      writeFileSync(logFile, `\n\n--- GATE FAILED, RETRYING (attempt ${attempt + 1}) ---\n${lastError}\n`, { flag: "a" });
+function _executeSliceWriteLog({ runDir, slice, attempt, workerResult, startTime }) {
+  const logFile = resolve(runDir, `slice-${slice.number}-log.txt`);
+  const logContent = [
+    attempt > 0 ? `\n=== RETRY ATTEMPT ${attempt + 1} ===` : "",
+    `=== Slice ${slice.number}: ${slice.title} ===`,
+    `Worker: ${workerResult.worker}`,
+    `Model: ${workerResult.model}`,
+    `Started: ${new Date(startTime).toISOString()}`,
+    "",
+    "=== STDOUT ===",
+    workerResult.output || "(empty)",
+    "",
+    "=== STDERR ===",
+    workerResult.stderr || "(empty)",
+  ].join("\n");
+  writeFileSync(logFile, logContent, attempt > 0 ? { flag: "a" } : undefined);
+  return logFile;
+}
+
+function _executeSliceRunGates(slice, cwd) {
+  let gateResult = { success: true, output: "No validation gate defined" };
+  if (!slice.validationGate) return gateResult;
+  const gateLines = coalesceGateLines(slice.validationGate);
+  for (const gateLine of gateLines) {
+    gateResult = runGate(gateLine, cwd);
+    if (!gateResult.success) {
+      gateResult.failedCommand = gateLine;
+      break;
     }
   }
+  return gateResult;
+}
 
-  // ─── Teardown Safety Guard: post-slice branch verification ──────────
-  if (teardownBaseline && teardownGuardConfig.enabled) {
-    const verification = verifyBranchSafety(teardownBaseline, teardownGuardConfig, cwd);
-    if (!verification.ok) {
-      const incident = {
-        id: `INC-teardown-${Date.now()}`,
-        capturedAt: new Date().toISOString(),
-        severity: "critical",
-        title: "teardown-branch-loss",
-        sliceNumber: slice.number,
-        sliceTitle: slice.title,
-        baseline: teardownBaseline,
-        failures: verification.failures,
-        reflogTail: verification.reflogTail,
-        tags: ["teardown", "branch-loss", "critical"],
-      };
-      appendForgeJsonl("incidents.jsonl", incident, cwd);
-
-      // L3 memory capture (LiveGuard)
-      appendForgeJsonl("liveguard-memories.jsonl", {
-        capturedAt: incident.capturedAt,
-        type: "gotcha",
-        source: "teardown-guard",
-        content: `Branch safety failure during slice "${slice.title}": ${verification.failures.join("; ")}. Reflog tip: ${verification.reflogTail?.[0] ?? "n/a"}.`,
-        tags: ["teardown", "branch-loss", "critical"],
-        sliceRef: `${planName}::${slice.number}`,
-      }, cwd);
-
-      if (eventBus) {
-        eventBus.emit("teardown-branch-loss", {
+function _executeSliceHandleTimeoutCommit({ workerResult, sliceStartHead, cwd, slice, logFile, eventBus }) {
+  if (!sliceStartHead) return false;
+  try {
+    const postTimeoutHead = execSync("git rev-parse HEAD", {
+      cwd, encoding: "utf-8", timeout: 5000,
+    }).trim();
+    if (!postTimeoutHead || postTimeoutHead === sliceStartHead) return false;
+    writeFileSync(logFile,
+      `\n\n--- WORKER TIMED OUT BUT COMMITTED (${sliceStartHead.slice(0, 7)} -> ${postTimeoutHead.slice(0, 7)}) — treating as success ---\n`,
+      { flag: "a" });
+    if (eventBus && typeof eventBus.emit === "function") {
+      try {
+        eventBus.emit("slice-timeout-but-committed", {
           sliceNumber: slice.number,
-          failures: verification.failures,
-          blocked: teardownGuardConfig.blockOnBranchLoss,
+          sliceTitle: slice.title,
+          preSliceHead: sliceStartHead,
+          postTimeoutHead,
         });
-      }
-
-      if (teardownGuardConfig.blockOnBranchLoss) {
-        return finalizeSliceResult({
-          ok: false,
-          sliceNumber: slice.number,
-          reason: "teardown-branch-loss",
-          incident,
-        });
-      }
+      } catch { /* best-effort */ }
     }
+    workerResult.exitCode = 0;
+    workerResult.timedOut = false;
+    workerResult.committedBeforeTimeout = true;
+    return true;
+  } catch {
+    return false;
   }
+}
 
-  const duration = Date.now() - startTime;
+function _executeSlicePostTeardownVerify({ teardownBaseline, teardownGuardConfig, cwd, slice, planName, eventBus, finalizeSliceResult }) {
+  if (!teardownBaseline || !teardownGuardConfig.enabled) return null;
+  const verification = verifyBranchSafety(teardownBaseline, teardownGuardConfig, cwd);
+  if (verification.ok) return null;
+  const incident = {
+    id: `INC-teardown-${Date.now()}`,
+    capturedAt: new Date().toISOString(),
+    severity: "critical",
+    title: "teardown-branch-loss",
+    sliceNumber: slice.number,
+    sliceTitle: slice.title,
+    baseline: teardownBaseline,
+    failures: verification.failures,
+    reflogTail: verification.reflogTail,
+    tags: ["teardown", "branch-loss", "critical"],
+  };
+  appendForgeJsonl("incidents.jsonl", incident, cwd);
+  appendForgeJsonl("liveguard-memories.jsonl", {
+    capturedAt: incident.capturedAt,
+    type: "gotcha",
+    source: "teardown-guard",
+    content: `Branch safety failure during slice "${slice.title}": ${verification.failures.join("; ")}. Reflog tip: ${verification.reflogTail?.[0] ?? "n/a"}.`,
+    tags: ["teardown", "branch-loss", "critical"],
+    sliceRef: `${planName}::${slice.number}`,
+  }, cwd);
+  if (eventBus) {
+    eventBus.emit("teardown-branch-loss", {
+      sliceNumber: slice.number,
+      failures: verification.failures,
+      blocked: teardownGuardConfig.blockOnBranchLoss,
+    });
+  }
+  if (teardownGuardConfig.blockOnBranchLoss) {
+    return finalizeSliceResult({
+      ok: false,
+      sliceNumber: slice.number,
+      reason: "teardown-branch-loss",
+      incident,
+    });
+  }
+  return null;
+}
 
-  // Issue #77: silent-failure guard. A worker that exits 0 with empty/trivial stdout
-  // did not actually do any work — previously this slipped through as "passed" because
-  // the gate (if any) ran against unchanged files. Treat as a failure so operators see it.
+function _executeSliceDetermineStatus({ workerResult, mode, slice, gateResult }) {
   const silentFailure = detectSilentWorkerFailure(workerResult, mode, slice.number);
-
-  // Meta-bug #99: worker killed by signal / Ctrl+C must never be marked passed,
-  // even when no validation gate exists. Previously this fell through because
-  // the default `gateResult.success = true` for slices without a gate combined
-  // with `silentFailure` only firing on exit 0.
   const killedBySignal = detectKilledBySignal(workerResult.exitCode);
   const hadValidationGate = !!slice.validationGate;
-
-  // Status: gate is the authority when it ran. Without a gate, the worker's
-  // exit code becomes the fallback signal — a non-zero exit (especially a
-  // signal-kill) is a failure even if no gate existed to catch it.
-  //   - silentFailure (exit 0, no output) → failed
-  //   - killedBySignal (Ctrl+C, SIGTERM, etc.) → failed
-  //   - gate exists and failed → failed
-  //   - no gate AND worker exited non-zero → failed (meta-bug #99)
-  //   - otherwise → passed
   let status;
   let statusReason = null;
   if (silentFailure) {
@@ -2452,8 +2272,42 @@ async function executeSlice(slice, options) {
   } else {
     status = "passed";
   }
+  return { status, statusReason, silentFailure, killedBySignal };
+}
 
-  const sliceResult = {
+function _executeSliceBillingInfo(workerResult) {
+  try {
+    const host = detectClientHost();
+    const via = workerResult.worker === "gh-copilot"
+      ? "gh-copilot"
+      : (workerResult.worker && /^(claude|codex|grok|xai)/i.test(workerResult.worker) ? "other-cli" : "direct-api");
+    const billing = describeBillingSurface(via, host);
+    return {
+      host,
+      billingSurface: billing.label,
+      ...(billing.warning ? { billingWarning: billing.warning } : {}),
+    };
+  } catch { return {}; }
+}
+
+function _executeSliceQuorumPayload({ useQuorum, quorumResult, complexityScore }) {
+  if (!useQuorum) return null;
+  return {
+    score: complexityScore,
+    models: quorumResult?.modelResponses?.map((r) => r.model) || [],
+    reviewerFallback: quorumResult?.fallback || false,
+    reviewerCost: quorumResult?.reviewerCost || 0,
+    dryRunTokens: quorumResult?.modelResponses?.reduce((sum, r) => ({
+      tokens_in: (sum.tokens_in || 0) + (r.tokens?.tokens_in || 0),
+      tokens_out: (sum.tokens_out || 0) + (r.tokens?.tokens_out || 0),
+    }), { tokens_in: 0, tokens_out: 0 }) || { tokens_in: 0, tokens_out: 0 },
+  };
+}
+
+function _executeSliceBuildResult({ slice, status, statusReason, duration, workerResult, gateResult, silentFailure, killedBySignal, attempt, currentModel, finalModel, useQuorum, quorumResult, complexityScore, copilotDispatchData }) {
+  const quorumPayload = _executeSliceQuorumPayload({ useQuorum, quorumResult, complexityScore });
+  const escalated = currentModel !== finalModel ? { escalatedModel: finalModel || "auto" } : null;
+  return {
     number: slice.number,
     title: slice.title,
     status,
@@ -2469,178 +2323,110 @@ async function executeSlice(slice, options) {
     tokens: workerResult.tokens || { tokens_in: null, tokens_out: null, model: "unknown" },
     worker: workerResult.worker,
     model: workerResult.model,
-    // #104: record host + billing surface per slice so cost aggregation
-    // can distinguish subscription-covered vs pay-per-token spend.
-    ...(() => {
-      try {
-        const host = detectClientHost();
-        const via = workerResult.worker === "gh-copilot"
-          ? "gh-copilot"
-          : (workerResult.worker && /^(claude|codex|grok|xai)/i.test(workerResult.worker) ? "other-cli" : "direct-api");
-        const billing = describeBillingSurface(via, host);
-        return {
-          host,
-          billingSurface: billing.label,
-          ...(billing.warning ? { billingWarning: billing.warning } : {}),
-        };
-      } catch { return {}; }
-    })(),
+    ..._executeSliceBillingInfo(workerResult),
     attempts: attempt + 1,
-    ...(currentModel !== finalModel && { escalatedModel: finalModel || "auto" }),
-    ...(useQuorum && {
-      quorum: {
-        score: complexityScore,
-        models: quorumResult?.modelResponses?.map((r) => r.model) || [],
-        reviewerFallback: quorumResult?.fallback || false,
-        reviewerCost: quorumResult?.reviewerCost || 0,
-        dryRunTokens: quorumResult?.modelResponses?.reduce((sum, r) => ({
-          tokens_in: (sum.tokens_in || 0) + (r.tokens?.tokens_in || 0),
-          tokens_out: (sum.tokens_out || 0) + (r.tokens?.tokens_out || 0),
-        }), { tokens_in: 0, tokens_out: 0 }) || { tokens_in: 0, tokens_out: 0 },
-      },
-    }),
-    // Phase GITHUB-B Slice 4 — trajectory schema for copilot-coding-agent.
-    // Present only when worker dispatched via GitHub Issue + PR polling.
+    ...(escalated || {}),
+    ...(quorumPayload && { quorum: quorumPayload }),
     ...(copilotDispatchData && { trajectory: copilotDispatchData }),
   };
+}
 
-  // Issue #152 — verify the slice's Files Modified (Exhaustive) table.
-  // Non-blocking advisory: never flips status to failed. Surfaces missing
-  // declarations as a warning event + sliceResult.filesModifiedCheck so the
-  // run summary, dashboard, and post-run audits can see the omission.
-  if (status === "passed") {
-    try {
-      const fmCheck = verifyFilesModified({ slice, cwd, startSha: sliceStartHead });
-      if (fmCheck.enforced) {
-        sliceResult.filesModifiedCheck = {
-          enforced: true,
-          declared: fmCheck.declared,
-          missing: fmCheck.missing,
-        };
-        if (fmCheck.missing.length > 0 && eventBus) {
-          eventBus.emit("slice-files-modified-warning", {
-            sliceNumber: slice.number,
-            sliceTitle: slice.title,
-            declared: fmCheck.declared,
-            missing: fmCheck.missing,
-          });
-        }
-      }
-    } catch {
-      // Non-fatal — Files Modified verification must never fail a passing slice
-    }
-  }
-
-  // Phase-COST-BADGE-FIX — stamp cost_usd onto sliceResult so it lands in
-  // slice-${n}.json AND is spread into the slice-completed SSE event
-  // (dashboard reads `data.cost_usd` to render the 💰 spend badge).
-  // calculateSliceCost is pure; safe to call here. Non-fatal on error.
-  let _sliceCostForRecord = null;
+function _executeSliceFilesModifiedCheck({ sliceResult, slice, cwd, sliceStartHead, eventBus }) {
+  if (sliceResult.status !== "passed") return;
   try {
-    _sliceCostForRecord = calculateSliceCost(sliceResult.tokens, sliceResult.worker);
-    sliceResult.cost_usd = _sliceCostForRecord.cost_usd;
-    sliceResult.cost_breakdown = _sliceCostForRecord.cost_breakdown;
+    const fmCheck = verifyFilesModified({ slice, cwd, startSha: sliceStartHead });
+    if (!fmCheck.enforced) return;
+    sliceResult.filesModifiedCheck = {
+      enforced: true,
+      declared: fmCheck.declared,
+      missing: fmCheck.missing,
+    };
+    if (fmCheck.missing.length > 0 && eventBus) {
+      eventBus.emit("slice-files-modified-warning", {
+        sliceNumber: slice.number,
+        sliceTitle: slice.title,
+        declared: fmCheck.declared,
+        missing: fmCheck.missing,
+      });
+    }
+  } catch { /* non-fatal */ }
+}
+
+function _executeSliceStampCost(sliceResult) {
+  try {
+    const rec = calculateSliceCost(sliceResult.tokens, sliceResult.worker);
+    sliceResult.cost_usd = rec.cost_usd;
+    sliceResult.cost_breakdown = rec.cost_breakdown;
+    return rec;
   } catch {
-    // Non-fatal — missing cost field just means the spend badge won't render
+    return null;
   }
+}
 
-  writeFileSync(
-    resolve(runDir, `slice-${slice.number}.json`),
-    JSON.stringify(sliceResult, null, 2),
-  );
-
-  // Phase-25 Slice 2 (L8 Trajectory): persist worker's sentinel-wrapped trajectory
-  // note on successful slices to .forge/trajectories/<plan>/slice-<id>.md.
-  // Word-capped to TRAJECTORY_MAX_WORDS (D2). Non-fatal on failure.
-  if (status === "passed" && planName) {
-    try {
-      const note = extractTrajectory(workerResult.output || "");
-      if (note) {
-        const path = writeTrajectory({
-          cwd,
-          planBasename: planName,
-          sliceId: slice.number,
-          content: note,
-        });
-        sliceResult.trajectoryPath = relative(cwd, path);
-        if (eventBus) {
-          eventBus.emit("trajectory-written", {
-            sliceNumber: slice.number,
-            path: sliceResult.trajectoryPath,
-          });
-        }
-      }
-    } catch {
-      // Non-fatal — trajectory persistence must never fail a passing slice
-    }
-  }
-
-  // Phase-28.3 Slice 4: Post-slice advisory — scan trajectory for self-repair
-  // markers. If markers found but no forge_meta_bug_file call, emit advisory.
-  // Non-blocking, non-fatal, does not change slice status.
-  if (status === "passed") {
-    try {
-      const trajectoryText = sliceResult.trajectoryPath
-        ? readFileSync(resolve(cwd, sliceResult.trajectoryPath), "utf8")
-        : null;
-      const advisory = detectSelfRepairMissed(trajectoryText, workerResult?.output);
-      if (advisory) {
-        const advisoryEvent = {
-          sliceId: slice.number,
-          markers: advisory.matched,
-          suggestion: "Consider calling forge_meta_bug_file to record this Plan Forge defect for future prevention.",
-        };
-        sliceResult.selfRepairAdvisory = advisoryEvent;
-        if (eventBus) {
-          eventBus.emit("self-repair-missed", advisoryEvent);
-        }
-      }
-    } catch {
-      // Non-fatal — advisory must never fail a passing slice
-    }
-  }
-
-  // Phase-25 Slice 3 (L2 Voyager): on successful slices, (a) bump reuseCount
-  // for every auto-skill that was injected into this slice's context, so skills
-  // that helped produce passing work accrue toward the promotion threshold
-  // (MUST #4 / D3), and (b) capture this slice itself as a new auto-skill
-  // candidate (MUST #3). Non-fatal on failure.
-  if (status === "passed") {
-    try {
-      for (const injected of injectedAutoSkills) {
-        if (injected && injected.sha256Prefix) {
-          incrementAutoSkillReuse({ cwd, sha256Prefix: injected.sha256Prefix });
-        }
-      }
-    } catch {
-      // Non-fatal — reuse-count bookkeeping must never fail a passing slice
-    }
-    try {
-      const record = extractAutoSkill({ slice, planBasename: planName, cwd });
-      if (record) {
-        const path = writeAutoSkill({ cwd, record });
-        sliceResult.autoSkillPath = relative(cwd, path);
-        sliceResult.autoSkillPrefix = record.sha256Prefix;
-        if (eventBus) {
-          eventBus.emit("auto-skill-captured", {
-            sliceNumber: slice.number,
-            prefix: record.sha256Prefix,
-            path: sliceResult.autoSkillPath,
-          });
-        }
-      }
-    } catch {
-      // Non-fatal — auto-skill capture must never fail a passing slice
-    }
-  }
-
-  // Record model performance for this slice
+function _executeSlicePersistTrajectory({ sliceResult, workerResult, planName, slice, cwd, eventBus }) {
+  if (sliceResult.status !== "passed" || !planName) return;
   try {
-    // Reuse the cost computed pre-write (Phase-COST-BADGE-FIX) when available;
-    // fall back to a fresh compute so this block stays robust if the earlier
-    // try/catch swallowed an error.
-    const sliceCost = _sliceCostForRecord
-      || calculateSliceCost(sliceResult.tokens, sliceResult.worker);
+    const note = extractTrajectory(workerResult.output || "");
+    if (!note) return;
+    const path = writeTrajectory({
+      cwd, planBasename: planName, sliceId: slice.number, content: note,
+    });
+    sliceResult.trajectoryPath = relative(cwd, path);
+    if (eventBus) {
+      eventBus.emit("trajectory-written", {
+        sliceNumber: slice.number,
+        path: sliceResult.trajectoryPath,
+      });
+    }
+  } catch { /* non-fatal */ }
+}
+
+function _executeSliceSelfRepairAdvisory({ sliceResult, workerResult, cwd, slice, eventBus }) {
+  if (sliceResult.status !== "passed") return;
+  try {
+    const trajectoryText = sliceResult.trajectoryPath
+      ? readFileSync(resolve(cwd, sliceResult.trajectoryPath), "utf8")
+      : null;
+    const advisory = detectSelfRepairMissed(trajectoryText, workerResult?.output);
+    if (!advisory) return;
+    const advisoryEvent = {
+      sliceId: slice.number,
+      markers: advisory.matched,
+      suggestion: "Consider calling forge_meta_bug_file to record this Plan Forge defect for future prevention.",
+    };
+    sliceResult.selfRepairAdvisory = advisoryEvent;
+    if (eventBus) eventBus.emit("self-repair-missed", advisoryEvent);
+  } catch { /* non-fatal */ }
+}
+
+function _executeSliceAutoSkillBookkeeping({ sliceResult, injectedAutoSkills, slice, planName, cwd, eventBus }) {
+  if (sliceResult.status !== "passed") return;
+  try {
+    for (const injected of injectedAutoSkills) {
+      if (injected && injected.sha256Prefix) {
+        incrementAutoSkillReuse({ cwd, sha256Prefix: injected.sha256Prefix });
+      }
+    }
+  } catch { /* non-fatal */ }
+  try {
+    const record = extractAutoSkill({ slice, planBasename: planName, cwd });
+    if (!record) return;
+    const path = writeAutoSkill({ cwd, record });
+    sliceResult.autoSkillPath = relative(cwd, path);
+    sliceResult.autoSkillPrefix = record.sha256Prefix;
+    if (eventBus) {
+      eventBus.emit("auto-skill-captured", {
+        sliceNumber: slice.number,
+        prefix: record.sha256Prefix,
+        path: sliceResult.autoSkillPath,
+      });
+    }
+  } catch { /* non-fatal */ }
+}
+
+function _executeSliceRecordModelPerf({ sliceResult, cwd, planName, slice, costRecord }) {
+  try {
+    const sliceCost = costRecord || calculateSliceCost(sliceResult.tokens, sliceResult.worker);
     recordModelPerformance(cwd, {
       date: new Date().toISOString(),
       plan: planName,
@@ -2653,25 +2439,218 @@ async function executeSlice(slice, options) {
       duration_ms: sliceResult.duration,
       cost_usd: sliceCost.cost_usd,
     });
-  } catch {
-    // Non-fatal — don't fail the slice over a tracking write error
+  } catch { /* non-fatal */ }
+}
+
+function _executeSliceRecordQuorumHistory({ sliceResult, slice, quorumConfig, useQuorum, complexityScore, cwd }) {
+  if (!quorumConfig?.enabled) return;
+  try {
+    const initialFailed = sliceResult.attempts > 1;
+    appendForgeJsonl("quorum-history.jsonl", {
+      timestamp: new Date().toISOString(),
+      sliceNumber: slice.number,
+      sliceTitle: slice.title,
+      complexityScore: complexityScore || null,
+      quorumUsed: useQuorum,
+      quorumNeeded: useQuorum && !initialFailed,
+      status: sliceResult.status,
+    }, cwd);
+  } catch { /* non-fatal */ }
+}
+
+async function _executeSliceDispatchWorkerForAttempt({ mode, worker, slice, cwd, _dispatchSlice, _pollPullRequest, sliceInstructions, currentModel, networkAllowed, networkEnforce, runDir, eventBus }) {
+  if (mode === "assisted") {
+    return {
+      workerResult: {
+        output: "Assisted mode — human executes in VS Code",
+        tokens: { tokens_in: null, tokens_out: null, model: "human" },
+        exitCode: 0,
+        worker: "human",
+        model: "human",
+      },
+      copilotDispatchData: null,
+    };
+  }
+  if (worker === "copilot-coding-agent") {
+    const dispatched = await _executeSliceDispatchCopilot({ slice, cwd, _dispatchSlice, _pollPullRequest });
+    return { workerResult: dispatched.workerResult, copilotDispatchData: dispatched.copilotDispatchData };
+  }
+  const { proxy, proxyEnv } = await _executeSliceStartProxy({ networkAllowed, networkEnforce, runDir, slice });
+  try {
+    const workerResult = await spawnWorker(sliceInstructions, {
+      model: currentModel, cwd, runPlanActive: true,
+      timeout: resolveWorkerTimeoutMs({ sliceOverride: slice.workerTimeoutMs }),
+      eventBus, extraEnv: proxyEnv,
+    });
+    return { workerResult, copilotDispatchData: null };
+  } finally {
+    if (proxy) try { proxy.stop(); } catch { /* ignore */ }
+  }
+}
+
+async function _executeSliceAttemptLoop(ctx) {
+  const {
+    slice, cwd, mode, runDir, maxRetries, worker,
+    _dispatchSlice, _pollPullRequest, networkAllowed, networkEnforce,
+    eventBus, useQuorum, quorumResult, memoryEnabled, projectName, planName,
+    autoSkillContextBlock, teardownGuardConfig, escalationChain,
+    startTime, sliceStartHead, finalizeSliceResult,
+  } = ctx;
+  let attempt = 0;
+  let workerResult = null;
+  let gateResult = { success: true, output: "No validation gate defined" };
+  let lastError = null;
+  let lastFailureContext = null;
+  let currentModel = ctx.finalModel;
+  let copilotDispatchData = null;
+
+  while (attempt <= maxRetries) {
+    const attemptStartTime = Date.now();
+    currentModel = _executeSliceEscalateModel({ attempt, currentModel, escalationChain, slice, eventBus });
+    const sliceInstructions = _executeSliceBuildInstructions({
+      slice, useQuorum, quorumResult, memoryEnabled, projectName, planName,
+      autoSkillContextBlock, teardownGuardConfig, lastFailureContext,
+    });
+
+    try {
+      const dispatched = await _executeSliceDispatchWorkerForAttempt({
+        mode, worker, slice, cwd, _dispatchSlice, _pollPullRequest,
+        sliceInstructions, currentModel, networkAllowed, networkEnforce, runDir, eventBus,
+      });
+      workerResult = dispatched.workerResult;
+      if (dispatched.copilotDispatchData) copilotDispatchData = dispatched.copilotDispatchData;
+    } catch (err) {
+      return { earlyReturn: finalizeSliceResult({
+        status: "failed",
+        duration: Date.now() - startTime,
+        error: err.message,
+        attempts: attempt + 1,
+      }) };
+    }
+
+    const logFile = _executeSliceWriteLog({ runDir, slice, attempt, workerResult, startTime });
+    gateResult = _executeSliceRunGates(slice, cwd);
+
+    if (gateResult.success && workerResult.exitCode === 0) break;
+
+    if (workerResult.timedOut) {
+      if (_executeSliceHandleTimeoutCommit({ workerResult, sliceStartHead, cwd, slice, logFile, eventBus })) break;
+      lastError = `Worker timed out after ${Math.round((Date.now() - startTime) / 1000)}s. The task may be too complex for a single slice — consider splitting it.`;
+      lastFailureContext = {
+        previousAttempt: attempt + 1,
+        gateName: "(worker timed out before gate)",
+        model: workerResult.model || currentModel || "auto",
+        durationMs: Date.now() - attemptStartTime,
+        stderrTail: [lastError, workerResult.stderr].filter(Boolean).join("\n\n"),
+      };
+      attempt++;
+      if (attempt <= maxRetries) {
+        writeFileSync(logFile, `\n\n--- WORKER TIMED OUT, RETRYING (attempt ${attempt + 1}) ---\n${lastError}\n`, { flag: "a" });
+      }
+      continue;
+    }
+
+    if (workerResult.exitCode !== 0) break;
+
+    lastError = `Gate command '${gateResult.failedCommand || "unknown"}' failed:\n${gateResult.error || gateResult.output}`;
+    lastFailureContext = {
+      previousAttempt: attempt + 1,
+      gateName: gateResult.failedCommand || "unknown",
+      model: workerResult.model || currentModel || "auto",
+      durationMs: Date.now() - attemptStartTime,
+      stderrTail: [gateResult.error, gateResult.output, workerResult.stderr].filter(Boolean).join("\n\n"),
+    };
+    attempt++;
+    if (attempt <= maxRetries) {
+      writeFileSync(logFile, `\n\n--- GATE FAILED, RETRYING (attempt ${attempt + 1}) ---\n${lastError}\n`, { flag: "a" });
+    }
   }
 
-  // Record quorum outcome for adaptive threshold tuning
-  if (quorumConfig?.enabled) {
-    try {
-      const initialFailed = sliceResult.attempts > 1;
-      appendForgeJsonl("quorum-history.jsonl", { // G2.1: was .json
-        timestamp: new Date().toISOString(),
-        sliceNumber: slice.number,
-        sliceTitle: slice.title,
-        complexityScore: complexityScore || null,
-        quorumUsed: useQuorum,
-        quorumNeeded: useQuorum && !initialFailed, // Needed = quorum used AND initial model would have failed
-        status: sliceResult.status,
-      }, cwd);
-    } catch { /* non-fatal */ }
+  return { workerResult, gateResult, attempt, currentModel, copilotDispatchData, lastError };
+}
+
+async function executeSlice(slice, options) {
+  const { cwd, model, modelRouting = {}, mode, runDir, maxRetries = 1,
+    memoryEnabled = false, projectName = "", planName = "",
+    quorumConfig = null,
+    escalationChain = ["auto", "claude-opus-4.7", "gpt-5.3-codex"],
+    eventBus = null,
+    worker = null,
+    _dispatchSlice = _dispatchSliceDefault,
+    _pollPullRequest = _pollPullRequestDefault,
+    networkAllowed = null,
+    networkEnforce = false,
+    toolsDeny = null,
+  } = options;
+  void toolsDeny;
+  const startTime = Date.now();
+  const resolvedModel = resolveModel(model, modelRouting, slice);
+
+  const { sliceStartHead, snapshotStash } = _executeSliceCaptureBaseline({ cwd, slice });
+  const finalizeSliceResult = (result) => attachSliceSnapshotRestore({
+    sliceResult: result,
+    snapshotStash,
+    cwd,
+    sliceNumber: slice.number,
+    eventBus,
+  });
+
+  const { teardownBaseline, teardownGuardConfig } = _executeSliceCaptureTeardownBaseline({ cwd, slice });
+  const finalModel = _executeSliceRouteAgent({ resolvedModel, cwd, slice, eventBus });
+
+  const { quorumResult, useQuorum, complexityScore } = await _executeSliceSetupQuorum({
+    slice, cwd, mode, quorumConfig, memoryEnabled, projectName, runDir,
+  });
+
+  let injectedAutoSkills = [];
+  try {
+    injectedAutoSkills = retrieveAutoSkills({ cwd, slice, limit: 3 }) || [];
+  } catch {
+    injectedAutoSkills = [];
   }
+  const autoSkillContextBlock = buildAutoSkillContext(injectedAutoSkills);
+
+  await _executeSliceFoundryQuotaPreflight({ finalModel, slice, runDir, eventBus });
+
+  const loopResult = await _executeSliceAttemptLoop({
+    slice, cwd, mode, runDir, maxRetries, worker,
+    _dispatchSlice, _pollPullRequest, networkAllowed, networkEnforce,
+    eventBus, useQuorum, quorumResult, memoryEnabled, projectName, planName,
+    autoSkillContextBlock, teardownGuardConfig, escalationChain,
+    startTime, sliceStartHead, finalizeSliceResult, finalModel,
+  });
+  if (loopResult.earlyReturn) return loopResult.earlyReturn;
+  const { workerResult, gateResult, attempt, currentModel, copilotDispatchData } = loopResult;
+
+  const teardownEarly = _executeSlicePostTeardownVerify({
+    teardownBaseline, teardownGuardConfig, cwd, slice, planName, eventBus, finalizeSliceResult,
+  });
+  if (teardownEarly) return teardownEarly;
+
+  const duration = Date.now() - startTime;
+  const { status, statusReason, silentFailure, killedBySignal } = _executeSliceDetermineStatus({
+    workerResult, mode, slice, gateResult,
+  });
+
+  const sliceResult = _executeSliceBuildResult({
+    slice, status, statusReason, duration, workerResult, gateResult,
+    silentFailure, killedBySignal, attempt, currentModel, finalModel,
+    useQuorum, quorumResult, complexityScore, copilotDispatchData,
+  });
+
+  _executeSliceFilesModifiedCheck({ sliceResult, slice, cwd, sliceStartHead, eventBus });
+  const costRecord = _executeSliceStampCost(sliceResult);
+
+  writeFileSync(
+    resolve(runDir, `slice-${slice.number}.json`),
+    JSON.stringify(sliceResult, null, 2),
+  );
+
+  _executeSlicePersistTrajectory({ sliceResult, workerResult, planName, slice, cwd, eventBus });
+  _executeSliceSelfRepairAdvisory({ sliceResult, workerResult, cwd, slice, eventBus });
+  _executeSliceAutoSkillBookkeeping({ sliceResult, injectedAutoSkills, slice, planName, cwd, eventBus });
+  _executeSliceRecordModelPerf({ sliceResult, cwd, planName, slice, costRecord });
+  _executeSliceRecordQuorumHistory({ sliceResult, slice, quorumConfig, useQuorum, complexityScore, cwd });
 
   return finalizeSliceResult(sliceResult);
 }
@@ -2943,25 +2922,7 @@ function createRunDir(cwd, planPath) {
 
 // ─── Self-Test ────────────────────────────────────────────────────────
 
-export async function selfTest() {
-  console.log("╔══════════════════════════════════════════╗");
-  console.log("║  Plan Forge Orchestrator — Self Test     ║");
-  console.log("╚══════════════════════════════════════════╝\n");
-
-  let passed = 0;
-  let failed = 0;
-
-  function assert(label, condition) {
-    if (condition) {
-      console.log(`  ✅ ${label}`);
-      passed++;
-    } else {
-      console.log(`  ❌ ${label}`);
-      failed++;
-    }
-  }
-
-  // Test 1: Parse example plan
+function _selfTestPlanParser(assert) {
   console.log("─── Plan Parser ───");
   try {
     const examplePlan = resolve(process.cwd(), "docs/plans/examples/Phase-DOTNET-EXAMPLE.md");
@@ -2974,12 +2935,8 @@ export async function selfTest() {
       assert("DAG has execution order", plan.dag.order.length > 0);
       assert("DAG order matches slice count", plan.dag.order.length === plan.slices.length);
       assert("Meta title extracted", !!plan.meta.title);
-
-      // Check validation gate parsing
       const sliceWithGate = plan.slices.find((s) => s.validationGate);
       assert("At least one slice has validation gate", !!sliceWithGate);
-
-      // Check build command parsing
       const sliceWithBuild = plan.slices.find((s) => s.buildCommand);
       assert("At least one slice has build command", !!sliceWithBuild);
     } else {
@@ -2988,8 +2945,9 @@ export async function selfTest() {
   } catch (err) {
     assert(`Parse plan: ${err.message}`, false);
   }
+}
 
-  // Test 2: Parse Phase 1 plan (with tags)
+function _selfTestPhase1Plan(assert) {
   console.log("\n─── Phase 1 Plan (tags) ───");
   try {
     const phase1Plan = resolve(process.cwd(), "docs/plans/Phase-1-ORCHESTRATOR-RUN-PLAN-PLAN.md");
@@ -3003,8 +2961,9 @@ export async function selfTest() {
   } catch (err) {
     assert(`Parse Phase 1: ${err.message}`, false);
   }
+}
 
-  // Test 3: DAG with dependencies
+function _selfTestDagBuilder(assert) {
   console.log("\n─── DAG Builder ───");
   try {
     const testSlices = [
@@ -3023,8 +2982,9 @@ export async function selfTest() {
   } catch (err) {
     assert(`DAG builder: ${err.message}`, false);
   }
+}
 
-  // Test 4: Cycle detection
+function _selfTestCycleDetection(assert) {
   console.log("\n─── Cycle Detection ───");
   try {
     const cyclicSlices = [
@@ -3040,8 +3000,9 @@ export async function selfTest() {
   } catch (err) {
     assert(`Cycle test: ${err.message}`, false);
   }
+}
 
-  // Test 5: Event bus
+function _selfTestEventBus(assert) {
   console.log("\n─── Event Bus ───");
   try {
     const events = [];
@@ -3056,24 +3017,20 @@ export async function selfTest() {
   } catch (err) {
     assert(`Event bus: ${err.message}`, false);
   }
+}
 
-  // Test 6: Sequential scheduler with mock executor
+async function _selfTestSequentialScheduler(assert) {
   console.log("\n─── Sequential Scheduler ───");
   try {
     const events = [];
     const handler = { handle: (e) => events.push(e) };
     const bus = new OrchestratorEventBus(handler);
     const scheduler = new SequentialScheduler(bus);
-
     const nodes = new Map();
     nodes.set("1", { number: "1", title: "First", children: ["2"], inDegree: 0 });
     nodes.set("2", { number: "2", title: "Second", children: [], inDegree: 1 });
     const order = ["1", "2"];
-
-    const results = await scheduler.execute(nodes, order, async (slice) => {
-      return { status: "passed", duration: 100 };
-    });
-
+    const results = await scheduler.execute(nodes, order, async () => ({ status: "passed", duration: 100 }));
     assert("Scheduler executed 2 slices", results.length === 2);
     assert("Both passed", results.every((r) => r.status === "passed"));
     assert("Events fired for lifecycle",
@@ -3082,51 +3039,45 @@ export async function selfTest() {
   } catch (err) {
     assert(`Scheduler: ${err.message}`, false);
   }
+}
 
-  // Test 7: Worker detection
+function _selfTestWorkerDetection(assert) {
   console.log("\n─── Worker Detection ───");
   try {
     const workers = detectWorkers();
     assert("Detects workers array", Array.isArray(workers));
     assert(`Found ${workers.filter((w) => w.available).length} available worker(s)`,
       workers.some((w) => w.available));
-
     const ghCopilot = workers.find((w) => w.name === "gh-copilot");
     assert("gh-copilot in worker list", !!ghCopilot);
   } catch (err) {
     assert(`Worker detection: ${err.message}`, false);
   }
+}
 
-  // Test 8: Gate execution
+function _selfTestGateExecution(assert) {
   console.log("\n─── Gate Execution ───");
   try {
     const result = runGate("node --version", process.cwd());
     assert("Gate runs command", result.success);
     assert("Gate captures output", result.output.startsWith("v"));
-
     const failResult = runGate("exit 1", process.cwd());
     assert("Gate detects failure", !failResult.success);
-
-    // C1: Gate allowlist blocks unknown commands
     const blockedResult = runGate("wget http://example.com", process.cwd());
     assert("Gate blocks non-allowlisted commands", !blockedResult.success);
     assert("Gate error mentions allowlist", blockedResult.error.includes("allowlist"));
-
-    // C1: Gate allows common build tools
     const npmResult = runGate("node -e \"console.log('ok')\"", process.cwd());
     assert("Gate allows node commands", npmResult.success);
-
-    // C1: Gate allows curl (used in gate verification commands)
     const curlResult = runGate("curl --version", process.cwd());
     assert("Gate allows curl commands", curlResult.success);
   } catch (err) {
     assert(`Gate execution: ${err.message}`, false);
   }
+}
 
-  // Test 8b: Gate Lint
+function _selfTestGateLint(assert) {
   console.log("\n─── Gate Lint ───");
   try {
-    // Use a real plan file if available
     const lintPlan = resolve(process.cwd(), "docs/plans/Phase-LiveGuard-v2.27.0-PLAN.md");
     if (existsSync(lintPlan)) {
       const result = lintGateCommands(lintPlan);
@@ -3138,32 +3089,23 @@ export async function selfTest() {
     } else {
       console.log("  ⚠️  LiveGuard plan not found — skipping gate lint tests");
     }
-
-    // Test lint detection with synthetic bad commands
-    const origParse = parsePlan;
-    // Temporarily test the detection logic inline
     const testLines = [
       "# this is a comment",
       "node pforge-mcp/tests/foo.test.mjs",
       "curl http://localhost:3100/api/test",
       "wget http://example.com",
     ];
-    const commentLine = testLines[0];
-    assert("Detects comment lines", commentLine.startsWith("#"));
-
-    const vitestLine = testLines[1];
-    assert("Detects node *.test.mjs pattern", /^node\s+.*\.test\.(mjs|js|ts)/.test(vitestLine));
-
-    const curlLine = testLines[2];
-    assert("Detects curl localhost pattern", /curl\s.*localhost[:\s]/.test(curlLine));
-
+    assert("Detects comment lines", testLines[0].startsWith("#"));
+    assert("Detects node *.test.mjs pattern", /^node\s+.*\.test\.(mjs|js|ts)/.test(testLines[1]));
+    assert("Detects curl localhost pattern", /curl\s.*localhost[:\s]/.test(testLines[2]));
     const wgetCmd = testLines[3].split(/\s+/)[0].toLowerCase();
     assert("Detects blocked command", !GATE_ALLOWED_PREFIXES.some(p => wgetCmd === p));
   } catch (err) {
     assert(`Gate lint: ${err.message}`, false);
   }
+}
 
-  // Test 9: Estimate mode
+function _selfTestEstimateMode(assert) {
   console.log("\n─── Estimate Mode ───");
   try {
     const examplePlan = resolve(process.cwd(), "docs/plans/examples/Phase-DOTNET-EXAMPLE.md");
@@ -3180,8 +3122,9 @@ export async function selfTest() {
   } catch (err) {
     assert(`Estimate: ${err.message}`, false);
   }
+}
 
-  // Test 10: runPlan() dry-run mode (T1: end-to-end test)
+async function _selfTestDryRun(assert) {
   console.log("\n─── Full Run (Dry-Run) ───");
   try {
     const examplePlan = resolve(process.cwd(), "docs/plans/examples/Phase-DOTNET-EXAMPLE.md");
@@ -3194,15 +3137,14 @@ export async function selfTest() {
   } catch (err) {
     assert(`Dry-run: ${err.message}`, false);
   }
+}
 
-  // Test 11: Model routing (T2: loadModelRouting)
+function _selfTestModelRouting(assert) {
   console.log("\n─── Model Routing ───");
   try {
     const routing = loadModelRouting(process.cwd());
     assert("loadModelRouting returns object", typeof routing === "object");
     assert("Has default key", "default" in routing);
-
-    // resolveModel priority chain
     assert("CLI override wins", resolveModel("claude-sonnet-4.6", { default: "gpt-5" }, null) === "claude-sonnet-4.6");
     assert("Routing default when CLI is auto", resolveModel("auto", { default: "gpt-5" }, null) === "gpt-5");
     assert("Null when both auto", resolveModel(null, { default: "auto" }, null) === null);
@@ -3210,8 +3152,9 @@ export async function selfTest() {
   } catch (err) {
     assert(`Model routing: ${err.message}`, false);
   }
+}
 
-  // Test 12: Path traversal prevention (C4)
+function _selfTestSecurity(assert) {
   console.log("\n─── Security ───");
   try {
     try {
@@ -3223,8 +3166,9 @@ export async function selfTest() {
   } catch (err) {
     assert(`Security: ${err.message}`, false);
   }
+}
 
-  // Test 13: Error paths (T2: missing file)
+function _selfTestErrorPaths(assert) {
   console.log("\n─── Error Paths ───");
   try {
     try {
@@ -3233,40 +3177,30 @@ export async function selfTest() {
     } catch {
       assert("Missing file throws", true);
     }
-
-    // Token extraction with empty events
     const emptyTokens = extractTokens([]);
     assert("Empty events returns null tokens_in", emptyTokens.tokens_in === null);
     assert("Empty events returns 0 tokens_out", emptyTokens.tokens_out === 0);
   } catch (err) {
     assert(`Error paths: ${err.message}`, false);
   }
+}
 
-  // Test 14: Cost calculation (Phase 2)
+function _selfTestCostCalculation(assert) {
   console.log("\n─── Cost Calculation ───");
   try {
-    // Per-slice cost
     const cost1 = calculateSliceCost({ tokens_in: 1000, tokens_out: 500, model: "claude-sonnet-4.6" });
     assert("Cost calculated for Claude Sonnet", cost1.cost_usd > 0);
     assert("Cost has model", cost1.model === "claude-sonnet-4.6");
-    // 1000 * 3/1M + 500 * 15/1M = 0.003 + 0.0075 = 0.0105
     assert("Cost matches expected", Math.abs(cost1.cost_usd - 0.0105) < 0.0001);
-
     const cost2 = calculateSliceCost({ tokens_in: null, tokens_out: 100, model: "unknown-model" });
     assert("Unknown model uses default pricing", cost2.cost_usd > 0);
     assert("Null tokens_in treated as 0", cost2.tokens_in === 0);
-
-    // CLI worker uses premium request costing, not token pricing
     const cost3 = calculateSliceCost({ tokens_in: 500000, tokens_out: 5000, model: "claude-opus-4.6", premiumRequests: 3 }, "gh-copilot");
     assert("CLI worker uses premium request rate", cost3.cost_usd === 0.03);
     assert("CLI worker preserves token counts", cost3.tokens_in === 500000);
-
-    // API worker uses per-token pricing
     const cost4 = calculateSliceCost({ tokens_in: 1000, tokens_out: 500, model: "grok-4" }, "api-xai");
     assert("API worker uses token pricing", cost4.cost_usd > 0);
     assert("API worker cost matches expected", Math.abs(cost4.cost_usd - 0.0025) < 0.0001);
-
-    // Breakdown
     const mockResults = [
       { number: "1", tokens: { tokens_in: 500, tokens_out: 200, model: "claude-sonnet-4.6" }, status: "passed" },
       { number: "2", tokens: { tokens_in: 300, tokens_out: 100, model: "gpt-5-mini" }, status: "passed" },
@@ -3276,61 +3210,54 @@ export async function selfTest() {
     assert("Breakdown has total cost", breakdown.total_cost_usd >= 0);
     assert("Breakdown has 2 models", Object.keys(breakdown.by_model).length === 2);
     assert("Breakdown has 2 slices (skipped excluded)", breakdown.by_slice.length === 2);
-
-    // Cost report with no history
     const report = getCostReport(process.cwd());
     assert("Cost report works (may be empty)", report !== undefined);
   } catch (err) {
     assert(`Cost calculation: ${err.message}`, false);
   }
+}
 
-  // Test 15: Parallel scheduler (Phase 6)
+async function _selfTestParallelScheduler(assert) {
   console.log("\n─── Parallel Scheduler ───");
   try {
     const events = [];
     const handler = { handle: (e) => events.push(e) };
     const bus = new OrchestratorEventBus(handler);
     const pScheduler = new ParallelScheduler(bus, 2);
-
-    // Build a DAG with parallel slices
     const pNodes = new Map();
     pNodes.set("1", { number: "1", title: "Setup", depends: [], parallel: false, scope: [], children: ["2", "3"], inDegree: 0 });
     pNodes.set("2", { number: "2", title: "AuthModule", depends: ["1"], parallel: true, scope: ["src/auth/**"], children: ["4"], inDegree: 1 });
     pNodes.set("3", { number: "3", title: "UserModule", depends: ["1"], parallel: true, scope: ["src/user/**"], children: ["4"], inDegree: 1 });
     pNodes.set("4", { number: "4", title: "Integration", depends: ["2", "3"], parallel: false, scope: [], children: [], inDegree: 2 });
     const pOrder = ["1", "2", "3", "4"];
-
     let concurrentCount = 0;
     let maxConcurrent = 0;
-    const pResults = await pScheduler.execute(pNodes, pOrder, async (slice) => {
+    const pResults = await pScheduler.execute(pNodes, pOrder, async () => {
       concurrentCount++;
       maxConcurrent = Math.max(maxConcurrent, concurrentCount);
-      await new Promise((r) => setTimeout(r, 50)); // Simulate work
+      await new Promise((r) => setTimeout(r, 50));
       concurrentCount--;
       return { status: "passed", duration: 50 };
     });
-
     assert("Parallel scheduler executed all 4 slices", pResults.length === 4);
     assert("All slices passed", pResults.every((r) => r.status === "passed"));
     assert("Slices 2+3 ran in parallel", maxConcurrent >= 2);
     assert("Events fired for parallel slices", events.some((e) => e.type === "slice-completed"));
-
-    // Test conflict detection
     const conflictNodes = new Map();
     conflictNodes.set("1", { parallel: true, scope: ["src/auth/**"] });
-    conflictNodes.set("2", { parallel: true, scope: ["src/auth/login.js"] }); // Overlaps!
-    conflictNodes.set("3", { parallel: true, scope: ["src/user/**"] }); // No overlap
+    conflictNodes.set("2", { parallel: true, scope: ["src/auth/login.js"] });
+    conflictNodes.set("3", { parallel: true, scope: ["src/user/**"] });
     const conflicts = detectScopeConflicts(conflictNodes);
     assert("Conflict detection finds overlapping scopes", conflicts.has("1") && conflicts.has("2"));
     assert("Non-overlapping scope has no conflict", !conflicts.has("3"));
   } catch (err) {
     assert(`Parallel scheduler: ${err.message}`, false);
   }
+}
 
-  // Test 16: Quorum — Complexity scoring (v2.5)
+function _selfTestQuorumComplexity(assert) {
   console.log("\n─── Quorum: Complexity Scoring ───");
   try {
-    // Simple slice — low complexity
     const simpleSlice = {
       number: "1", title: "Add README",
       tasks: ["Create README.md"],
@@ -3340,8 +3267,6 @@ export async function selfTest() {
     assert("Simple slice scores low", simpleResult.score <= 3);
     assert("Score has signals object", typeof simpleResult.signals === "object");
     assert("Signals have scopeWeight", "scopeWeight" in simpleResult.signals);
-
-    // Complex slice — auth + migration + many deps + many tasks
     const complexSlice = {
       number: "2", title: "Auth migration with RBAC",
       tasks: [
@@ -3364,15 +3289,14 @@ export async function selfTest() {
     assert("Database keywords detected", complexResult.signals.databaseWeight > 0);
     assert("High task count detected", complexResult.signals.taskWeight > 0);
     assert("Multiple deps detected", complexResult.signals.dependencyWeight > 0);
-
-    // Score is always 1-10
     assert("Score >= 1", simpleResult.score >= 1);
     assert("Score <= 10", complexResult.score <= 10);
   } catch (err) {
     assert(`Complexity scoring: ${err.message}`, false);
   }
+}
 
-  // Test 17: Quorum — Config loading (v2.5)
+function _selfTestQuorumConfig(assert) {
   console.log("\n─── Quorum: Config ───");
   try {
     const config = loadQuorumConfig(process.cwd());
@@ -3387,8 +3311,9 @@ export async function selfTest() {
   } catch (err) {
     assert(`Quorum config: ${err.message}`, false);
   }
+}
 
-  // Test 18: CI config loading
+function _selfTestCiConfig(assert) {
   console.log("\n─── CI/CD Integration ───");
   try {
     const ciConfig = loadCiConfig(process.cwd());
@@ -3402,24 +3327,19 @@ export async function selfTest() {
   } catch (err) {
     assert(`CI config: ${err.message}`, false);
   }
+}
 
-  // Test 19: Agent-Per-Slice Routing (Slice 1)
+function _selfTestAgentRouting(assert) {
   console.log("\n─── Agent-Per-Slice Routing ───");
   try {
-    // inferSliceType detection
     const testSlice = { title: "Write unit tests for auth module", tasks: ["Add spec coverage"] };
     assert("Infers test type", inferSliceType(testSlice) === "test");
-
     const reviewSlice = { title: "Code review and audit", tasks: ["Review PR changes"] };
     assert("Infers review type", inferSliceType(reviewSlice) === "review");
-
     const migrationSlice = { title: "Database migration", tasks: ["Add schema migration for users table"] };
     assert("Infers migration type", inferSliceType(migrationSlice) === "migration");
-
     const executeSlice2 = { title: "Implement auth service", tasks: ["Add login endpoint"] };
     assert("Defaults to execute type", inferSliceType(executeSlice2) === "execute");
-
-    // recommendModel returns null when no performance data
     const noRec = recommendModel(process.cwd(), "execute");
     assert("recommendModel returns null or object", noRec === null || typeof noRec === "object");
     if (noRec !== null) {
@@ -3427,8 +3347,6 @@ export async function selfTest() {
       assert("Recommendation has success_rate", typeof noRec.success_rate === "number");
       assert("Recommendation has total_slices", typeof noRec.total_slices === "number");
     }
-
-    // slice-model-routed event is registered in the event bus
     const events2 = [];
     const handler2 = { handle: (e) => events2.push(e) };
     const bus2 = new OrchestratorEventBus(handler2);
@@ -3437,20 +3355,205 @@ export async function selfTest() {
   } catch (err) {
     assert(`Agent-per-slice routing: ${err.message}`, false);
   }
+}
 
-  // Summary
+export async function selfTest() {
+  console.log("╔══════════════════════════════════════════╗");
+  console.log("║  Plan Forge Orchestrator — Self Test     ║");
+  console.log("╚══════════════════════════════════════════╝\n");
+
+  const counters = { passed: 0, failed: 0 };
+  const assert = (label, condition) => {
+    if (condition) {
+      console.log(`  ✅ ${label}`);
+      counters.passed++;
+    } else {
+      console.log(`  ❌ ${label}`);
+      counters.failed++;
+    }
+  };
+
+  _selfTestPlanParser(assert);
+  _selfTestPhase1Plan(assert);
+  _selfTestDagBuilder(assert);
+  _selfTestCycleDetection(assert);
+  _selfTestEventBus(assert);
+  await _selfTestSequentialScheduler(assert);
+  _selfTestWorkerDetection(assert);
+  _selfTestGateExecution(assert);
+  _selfTestGateLint(assert);
+  _selfTestEstimateMode(assert);
+  await _selfTestDryRun(assert);
+  _selfTestModelRouting(assert);
+  _selfTestSecurity(assert);
+  _selfTestErrorPaths(assert);
+  _selfTestCostCalculation(assert);
+  await _selfTestParallelScheduler(assert);
+  _selfTestQuorumComplexity(assert);
+  _selfTestQuorumConfig(assert);
+  _selfTestCiConfig(assert);
+  _selfTestAgentRouting(assert);
+
   console.log(`\n═══════════════════════════════════════════`);
-  console.log(`  Results: ${passed} passed, ${failed} failed`);
+  console.log(`  Results: ${counters.passed} passed, ${counters.failed} failed`);
   console.log(`═══════════════════════════════════════════`);
 
-  process.exit(failed > 0 ? 1 : 0);
+  process.exit(counters.failed > 0 ? 1 : 0);
 }
+
 
 /**
  * Phase-53 S9 — Full CLI dispatch for direct `node orchestrator.mjs` invocation.
  * Called from the orchestrator.mjs shim. All sub-commands are handled here.
  * @param {string[]} args - process.argv.slice(2)
  */
+function _cliParseQuorumArgs(args) {
+  let quorum = QUORUM_MODE_AUTO;
+  let quorumPreset = null;
+  const quorumArg = args.find((a) => a.startsWith("--quorum") || a === "--no-quorum");
+  if (quorumArg) {
+    if (quorumArg === "--quorum=auto") quorum = QUORUM_MODE_AUTO;
+    else if (quorumArg === "--quorum=power") { quorum = true; quorumPreset = QUORUM_PRESET_POWER; }
+    else if (quorumArg === "--quorum=speed") { quorum = true; quorumPreset = QUORUM_PRESET_SPEED; }
+    else if (quorumArg === "--no-quorum" || quorumArg === "--quorum=false") quorum = false;
+    else quorum = true;
+  }
+  return { quorum, quorumPreset };
+}
+
+function _cliParseRunOptions(args, getArg) {
+  const resumeFrom = getArg("--resume-from") ? Number(getArg("--resume-from")) : null;
+  const { quorum, quorumPreset } = _cliParseQuorumArgs(args);
+  const onlySlicesRaw = getArg("--only-slices");
+  let onlySlices = null;
+  if (onlySlicesRaw) {
+    onlySlices = parseOnlySlicesExpr(onlySlicesRaw);
+  }
+  if (resumeFrom !== null && onlySlices !== null && onlySlices.length > 0) {
+    const err = new Error("--resume-from and --only-slices are mutually exclusive");
+    err.exitCode = 1;
+    throw err;
+  }
+  return {
+    cwd: process.cwd(),
+    mode: getArg("--mode") || "auto",
+    model: getArg("--model") || null,
+    worker: getArg("--worker") || null,
+    resumeFrom,
+    estimate: args.includes("--estimate"),
+    dryRun: args.includes("--dry-run"),
+    quorum,
+    quorumThreshold: getArg("--quorum-threshold") ? Number(getArg("--quorum-threshold")) : null,
+    quorumPreset,
+    manualImport: args.includes("--manual-import"),
+    manualImportSource: getArg("--manual-import-source") || "human",
+    manualImportReason: getArg("--manual-import-reason") || null,
+    strictGates: args.includes("--strict-gates"),
+    onlySlices,
+    noTempering: args.includes("--no-tempering"),
+    allowRetrograde: args.includes("--allow-retrograde"),
+  };
+}
+
+async function _cliCmdRun(args, getArg) {
+  const planPath = getArg("--run");
+  if (!planPath) {
+    console.error("Usage: node orchestrator.mjs --run <plan-path> [options]");
+    process.exit(1);
+  }
+  let runOpts;
+  try {
+    runOpts = _cliParseRunOptions(args, getArg);
+  } catch (err) {
+    console.error(`Orchestrator error: ${err.message}`);
+    process.exit(typeof err.exitCode === "number" ? err.exitCode : 1);
+  }
+  try {
+    const result = await runPlan(planPath, runOpts);
+    console.log(JSON.stringify(result, null, 2));
+    process.exit(result.status === "failed" ? 1 : 0);
+  } catch (err) {
+    console.error(`Orchestrator error: ${err.message}`);
+    process.exit(typeof err.exitCode === "number" ? err.exitCode : 1);
+  }
+}
+
+async function _cliCmdAnalyze(args, getArg) {
+  const target = getArg("--analyze");
+  if (!target) {
+    console.error("Usage: node orchestrator.mjs --analyze <plan-or-file> [--mode plan|file] [--models model1,model2,...]");
+    process.exit(1);
+  }
+  const mode = getArg("--mode") || (target.match(/plan/i) ? "plan" : "file");
+  const modelsArg = getArg("--models");
+  const models = modelsArg ? modelsArg.split(",").map((m) => m.trim()) : null;
+  try {
+    const result = await analyzeWithQuorum({ target, mode, models, cwd: process.cwd() });
+    if (result.synthesis) {
+      console.log("\n" + "═".repeat(60));
+      console.log("  QUORUM ANALYSIS — SYNTHESIZED REPORT");
+      console.log("═".repeat(60) + "\n");
+      console.log(result.synthesis);
+    }
+    console.log("\n" + "─".repeat(40));
+    console.log(`  Models: ${result.models.join(", ")}`);
+    console.log(`  Duration: ${Math.round(result.totalDuration / 1000)}s`);
+    console.log(`  Cost: $${result.totalCost.toFixed(2)}`);
+    console.log("─".repeat(40));
+    const reportDir = resolve(process.cwd(), ".forge", "analysis");
+    mkdirSync(reportDir, { recursive: true });
+    const reportFile = resolve(reportDir, `${basename(target, ".md")}-${Date.now()}.json`);
+    writeFileSync(reportFile, JSON.stringify(result, null, 2));
+    console.log(`\n  📄 Full report saved: ${reportFile}\n`);
+    process.exitCode = 0;
+  } catch (err) {
+    console.error(`Analysis error: ${err.message}`);
+    process.exit(1);
+  }
+}
+
+async function _cliCmdDiagnose(args, getArg) {
+  const target = getArg("--diagnose");
+  if (!target) {
+    console.error("Usage: node orchestrator.mjs --diagnose <file> [--models model1,model2,...]");
+    process.exit(1);
+  }
+  const modelsArg = getArg("--models");
+  const models = modelsArg ? modelsArg.split(",").map((m) => m.trim()) : null;
+  try {
+    const result = await analyzeWithQuorum({ target, mode: "diagnose", models, cwd: process.cwd() });
+    if (result.synthesis) {
+      console.log("\n" + "═".repeat(60));
+      console.log("  QUORUM DIAGNOSIS — BUG INVESTIGATION REPORT");
+      console.log("═".repeat(60) + "\n");
+      console.log(result.synthesis);
+    }
+    console.log("\n" + "─".repeat(40));
+    console.log(`  Models: ${result.models.join(", ")}`);
+    console.log(`  Duration: ${Math.round(result.totalDuration / 1000)}s`);
+    console.log(`  Cost: $${result.totalCost.toFixed(2)}`);
+    console.log("─".repeat(40));
+    const reportDir = resolve(process.cwd(), ".forge", "analysis");
+    mkdirSync(reportDir, { recursive: true });
+    const reportFile = resolve(reportDir, `diagnose-${basename(target)}-${Date.now()}.json`);
+    writeFileSync(reportFile, JSON.stringify(result, null, 2));
+    console.log(`\n  📄 Full report saved: ${reportFile}\n`);
+    process.exitCode = 0;
+  } catch (err) {
+    console.error(`Diagnosis error: ${err.message}`);
+    process.exit(1);
+  }
+}
+
+function _cliCmdParse(getArg) {
+  const planPath = getArg("--parse");
+  if (!planPath) {
+    console.error("Usage: node orchestrator.mjs --parse <plan-path>");
+    process.exit(1);
+  }
+  console.log(JSON.stringify(parsePlan(planPath), null, 2));
+}
+
 export async function runOrchestratorCli(args = []) {
   const getArg = (name) => {
     const idx = args.indexOf(name);
@@ -3460,161 +3563,13 @@ export async function runOrchestratorCli(args = []) {
   if (args.includes("--test")) {
     await selfTest();
   } else if (args.includes("--parse")) {
-    const planPath = getArg("--parse");
-    if (!planPath) {
-      console.error("Usage: node orchestrator.mjs --parse <plan-path>");
-      process.exit(1);
-    }
-    console.log(JSON.stringify(parsePlan(planPath), null, 2));
+    _cliCmdParse(getArg);
   } else if (args.includes("--run")) {
-    const planPath = getArg("--run");
-    if (!planPath) {
-      console.error("Usage: node orchestrator.mjs --run <plan-path> [options]");
-      process.exit(1);
-    }
-
-    const mode = getArg("--mode") || "auto";
-    const model = getArg("--model") || null;
-    const worker = getArg("--worker") || null;
-    const resumeFrom = getArg("--resume-from") ? Number(getArg("--resume-from")) : null;
-    const estimate = args.includes("--estimate");
-    const dryRun = args.includes("--dry-run");
-
-    let quorum = QUORUM_MODE_AUTO;
-    let quorumPreset = null;
-    const quorumArg = args.find((a) => a.startsWith("--quorum") || a === "--no-quorum");
-    if (quorumArg) {
-      if (quorumArg === "--quorum=auto") quorum = QUORUM_MODE_AUTO;
-      else if (quorumArg === "--quorum=power") { quorum = true; quorumPreset = QUORUM_PRESET_POWER; }
-      else if (quorumArg === "--quorum=speed") { quorum = true; quorumPreset = QUORUM_PRESET_SPEED; }
-      else if (quorumArg === "--no-quorum" || quorumArg === "--quorum=false") quorum = false;
-      else quorum = true;
-    }
-    const quorumThreshold = getArg("--quorum-threshold") ? Number(getArg("--quorum-threshold")) : null;
-
-    const manualImport = args.includes("--manual-import");
-    const manualImportSource = getArg("--manual-import-source") || "human";
-    const manualImportReason = getArg("--manual-import-reason") || null;
-    const strictGates = args.includes("--strict-gates");
-
-    const onlySlicesRaw = getArg("--only-slices");
-    let onlySlices = null;
-    if (onlySlicesRaw) {
-      try {
-        onlySlices = parseOnlySlicesExpr(onlySlicesRaw);
-      } catch (err) {
-        console.error(`Orchestrator error: ${err.message}`);
-        process.exit(1);
-      }
-    }
-    if (resumeFrom !== null && onlySlices !== null && onlySlices.length > 0) {
-      console.error("--resume-from and --only-slices are mutually exclusive");
-      process.exit(1);
-    }
-    const noTempering = args.includes("--no-tempering");
-    const allowRetrograde = args.includes("--allow-retrograde");
-
-    try {
-      const result = await runPlan(planPath, {
-        cwd: process.cwd(),
-        mode,
-        model,
-        worker,
-        resumeFrom,
-        estimate,
-        dryRun,
-        quorum,
-        quorumThreshold,
-        quorumPreset,
-        manualImport,
-        manualImportSource,
-        manualImportReason,
-        strictGates,
-        onlySlices,
-        noTempering,
-        allowRetrograde,
-      });
-      console.log(JSON.stringify(result, null, 2));
-      process.exit(result.status === "failed" ? 1 : 0);
-    } catch (err) {
-      console.error(`Orchestrator error: ${err.message}`);
-      process.exit(typeof err.exitCode === "number" ? err.exitCode : 1);
-    }
+    await _cliCmdRun(args, getArg);
   } else if (args.includes("--analyze")) {
-    const target = getArg("--analyze");
-    if (!target) {
-      console.error("Usage: node orchestrator.mjs --analyze <plan-or-file> [--mode plan|file] [--models model1,model2,...]");
-      process.exit(1);
-    }
-
-    const mode = getArg("--mode") || (target.match(/plan/i) ? "plan" : "file");
-    const modelsArg = getArg("--models");
-    const models = modelsArg ? modelsArg.split(",").map((m) => m.trim()) : null;
-
-    try {
-      const result = await analyzeWithQuorum({ target, mode, models, cwd: process.cwd() });
-
-      if (result.synthesis) {
-        console.log("\n" + "═".repeat(60));
-        console.log("  QUORUM ANALYSIS — SYNTHESIZED REPORT");
-        console.log("═".repeat(60) + "\n");
-        console.log(result.synthesis);
-      }
-
-      console.log("\n" + "─".repeat(40));
-      console.log(`  Models: ${result.models.join(", ")}`);
-      console.log(`  Duration: ${Math.round(result.totalDuration / 1000)}s`);
-      console.log(`  Cost: $${result.totalCost.toFixed(2)}`);
-      console.log("─".repeat(40));
-
-      const reportDir = resolve(process.cwd(), ".forge", "analysis");
-      mkdirSync(reportDir, { recursive: true });
-      const reportFile = resolve(reportDir, `${basename(target, ".md")}-${Date.now()}.json`);
-      writeFileSync(reportFile, JSON.stringify(result, null, 2));
-      console.log(`\n  📄 Full report saved: ${reportFile}\n`);
-
-      process.exitCode = 0;
-    } catch (err) {
-      console.error(`Analysis error: ${err.message}`);
-      process.exit(1);
-    }
+    await _cliCmdAnalyze(args, getArg);
   } else if (args.includes("--diagnose")) {
-    const target = getArg("--diagnose");
-    if (!target) {
-      console.error("Usage: node orchestrator.mjs --diagnose <file> [--models model1,model2,...]");
-      process.exit(1);
-    }
-
-    const modelsArg = getArg("--models");
-    const models = modelsArg ? modelsArg.split(",").map((m) => m.trim()) : null;
-
-    try {
-      const result = await analyzeWithQuorum({ target, mode: "diagnose", models, cwd: process.cwd() });
-
-      if (result.synthesis) {
-        console.log("\n" + "═".repeat(60));
-        console.log("  QUORUM DIAGNOSIS — BUG INVESTIGATION REPORT");
-        console.log("═".repeat(60) + "\n");
-        console.log(result.synthesis);
-      }
-
-      console.log("\n" + "─".repeat(40));
-      console.log(`  Models: ${result.models.join(", ")}`);
-      console.log(`  Duration: ${Math.round(result.totalDuration / 1000)}s`);
-      console.log(`  Cost: $${result.totalCost.toFixed(2)}`);
-      console.log("─".repeat(40));
-
-      const reportDir = resolve(process.cwd(), ".forge", "analysis");
-      mkdirSync(reportDir, { recursive: true });
-      const reportFile = resolve(reportDir, `diagnose-${basename(target)}-${Date.now()}.json`);
-      writeFileSync(reportFile, JSON.stringify(result, null, 2));
-      console.log(`\n  📄 Full report saved: ${reportFile}\n`);
-
-      process.exitCode = 0;
-    } catch (err) {
-      console.error(`Diagnosis error: ${err.message}`);
-      process.exit(1);
-    }
+    await _cliCmdDiagnose(args, getArg);
   }
 }
 

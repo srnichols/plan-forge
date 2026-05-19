@@ -5327,11 +5327,24 @@ const GATE_SYNTH_DOMAIN_PATTERNS = [
   { domain: "domain",      pattern: /\b(domain|service|aggregate|entity|repository|model|business|validation)\b/i },
 ];
 
-/** Vitest/jest-style suggested gate commands per domain, keyed for portability. */
+/**
+ * Vitest/jest-style suggested gate commands per domain, keyed for portability.
+ *
+ * Uses the per-line `node -e "process.chdir(); execSync()"` pattern proven by
+ * Phase 41 and Phase 51. This is dispatched by runGate() via the inline-node
+ * fast path (execFileSync with shell:false) — no PowerShell or cmd.exe
+ * parsing, so the script body survives Windows verbatim.
+ *
+ * Earlier versions emitted `bash -c "cd pforge-mcp && npx vitest run ..."`
+ * here. That pattern was mangled by the Windows cmd→bash quoting shim
+ * whenever it was combined with `&&` and a nested `node -e "..."` (Phase 51
+ * S0 hit this; recovery cost a partial worker run). See memory note
+ * /memories/repo/phase-51-gate-recovery.md.
+ */
 const GATE_SYNTH_TEMPLATES = {
-  domain:      "bash -c \"cd pforge-mcp && npx vitest run tests/<your-domain>.test.mjs\"",
-  integration: "bash -c \"cd pforge-mcp && npx vitest run tests/<your-integration>.test.mjs\"",
-  controller:  "bash -c \"cd pforge-mcp && npx vitest run tests/<your-controller>.test.mjs\"",
+  domain:      "node -e \"process.chdir('pforge-mcp'); require('child_process').execSync('npx vitest run tests/<your-domain>.test.mjs', {stdio:'inherit',shell:true});\"",
+  integration: "node -e \"process.chdir('pforge-mcp'); require('child_process').execSync('npx vitest run tests/<your-integration>.test.mjs', {stdio:'inherit',shell:true});\"",
+  controller:  "node -e \"process.chdir('pforge-mcp'); require('child_process').execSync('npx vitest run tests/<your-controller>.test.mjs', {stdio:'inherit',shell:true});\"",
 };
 
 /**
@@ -7019,6 +7032,33 @@ export function validateGatePortability(command) {
       pattern: "cmd-substitution-pipe",
       message: "Command substitution containing a pipe — complex nesting is error-prone cross-platform.",
       suggestion: "Break into separate commands or use a temporary variable.",
+    });
+  }
+
+  // 4. `bash -c "..."` chained with `&&` to another command — known broken on
+  // Windows when the second command is `node -e "..."` containing `(` from
+  // JSON.parse, regex literals, etc. The Windows cmd→bash shim mangles outer
+  // quoting and inner parens (Phase 51 S0 hit this exact pattern).
+  // The fix proven by Phase 41 and Phase 51 is to split each command onto
+  // its own line so runGate() dispatches them separately via the inline-node
+  // fast path (no shell involved).
+  if (/^\s*bash\s+-c\s+["'].*["']\s*&&\s+/.test(command)) {
+    warnings.push({
+      pattern: "bash-c-chained-with-and",
+      message: "`bash -c \"...\" && <cmd>` chains are mangled by the Windows cmd\u2192bash quoting shim when <cmd> contains nested quotes or parens (e.g. `node -e \"JSON.parse(...)\"`). Phase 51 S0 hit this.",
+      suggestion: "Split into one command per line. Each line is dispatched separately by runGate(); inline-`node -e` lines bypass the shell entirely. Pattern: `node -e \"process.chdir('pforge-mcp'); require('child_process').execSync('npx vitest run TESTS', {stdio:'inherit',shell:true});\"` on its own line.",
+    });
+  }
+
+  // 5. `bash -c "cd X && ..."` — cwd-changing wrapper. Same root cause as #4:
+  // the `&&` chain inside bash -c is fragile through the Windows shim and the
+  // `node -e "process.chdir(X); execSync(...)"` form is strictly better
+  // because it bypasses bash entirely.
+  if (/^\s*bash\s+-c\s+["']\s*cd\s+\S+\s*&&\s+/.test(command)) {
+    warnings.push({
+      pattern: "bash-c-cd-prefix",
+      message: "`bash -c \"cd X && ...\"` wraps a cwd change in bash, which is fragile through the Windows cmd\u2192bash shim and unnecessary.",
+      suggestion: "Use the per-line node pattern: `node -e \"process.chdir('X'); require('child_process').execSync('<cmd>', {stdio:'inherit',shell:true});\"`. This runs through runGate()'s inline-node fast path (no shell), so quoting survives Windows verbatim.",
     });
   }
 

@@ -1,0 +1,26 @@
+[
+  {
+    "sha": "aaa111bbbccc222ddd333eee444fff555ggg666h",
+    "commit": {
+      "message": "feat: add search functionality",
+      "author": {
+        "name": "octocat",
+        "email": "octocat@github.com",
+        "date": "2024-11-01T11:00:00Z"
+      }
+    },
+    "author": { "login": "octocat" }
+  },
+  {
+    "sha": "bbb222ccc333ddd444eee555fff666ggg777hhh8",
+    "commit": {
+      "message": "test: add unit tests for search",
+      "author": {
+        "name": "contributor",
+        "email": "contributor@example.com",
+        "date": "2024-11-02T16:00:00Z"
+      }
+    },
+    "author": { "login": "contributor" }
+  }
+]

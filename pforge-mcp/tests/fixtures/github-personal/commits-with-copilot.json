@@ -1,0 +1,38 @@
+[
+  {
+    "sha": "abc1234567890abcdef1234567890abcdef123456",
+    "commit": {
+      "message": "feat: add user authentication\n\nCo-authored-by: GitHub Copilot <copilot@github.com>",
+      "author": {
+        "name": "octocat",
+        "email": "octocat@github.com",
+        "date": "2024-11-01T10:00:00Z"
+      }
+    },
+    "author": { "login": "octocat" }
+  },
+  {
+    "sha": "def4567890abcdef1234567890abcdef12345678",
+    "commit": {
+      "message": "fix: resolve null pointer in login flow\n\nCo-authored-by: GitHub Copilot <copilot@github.com>",
+      "author": {
+        "name": "octocat",
+        "email": "octocat@github.com",
+        "date": "2024-11-02T14:30:00Z"
+      }
+    },
+    "author": { "login": "octocat" }
+  },
+  {
+    "sha": "ghi7890abcdef1234567890abcdef1234567890ab",
+    "commit": {
+      "message": "docs: update README with setup instructions",
+      "author": {
+        "name": "octocat",
+        "email": "octocat@github.com",
+        "date": "2024-11-03T09:15:00Z"
+      }
+    },
+    "author": { "login": "octocat" }
+  }
+]

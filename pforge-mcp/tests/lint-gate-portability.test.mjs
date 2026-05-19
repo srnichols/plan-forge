@@ -25,6 +25,54 @@ describe("validateGatePortability", () => {
     expect(result.warnings[0].pattern).toBe("cmd-substitution-pipe");
   });
 
+  // Phase 51 S0 regression: `bash -c "..." && node -e "JSON.parse(...)"`
+  // pattern is mangled by the Windows cmd→bash shim. The linter should warn
+  // AND its suggestion must point at the per-line `node -e` pattern, not the
+  // old broken pattern.
+  describe("bash -c chained-with-and (Phase 51 S0 regression)", () => {
+    it("detects `bash -c \"...\" && node -e \"...\"` chains", () => {
+      const cmd = 'bash -c "cd pforge-mcp && npx vitest run tests/foo.test.mjs" && node -e "const j=JSON.parse(require(\'fs\').readFileSync(\'x\'));"';
+      const result = validateGatePortability(cmd);
+      const patterns = result.warnings.map((w) => w.pattern);
+      expect(patterns).toContain("bash-c-chained-with-and");
+    });
+
+    it("detects `bash -c \"cd X && ...\"` cwd-changing wrappers", () => {
+      const cmd = 'bash -c "cd pforge-mcp && npx vitest run tests/foo.test.mjs"';
+      const result = validateGatePortability(cmd);
+      const patterns = result.warnings.map((w) => w.pattern);
+      expect(patterns).toContain("bash-c-cd-prefix");
+    });
+
+    it("suggestion for bash-c-chained-with-and points at the per-line node -e pattern", () => {
+      const cmd = 'bash -c "cd pforge-mcp && npx vitest run tests/foo.test.mjs" && node -e "console.log(1);"';
+      const result = validateGatePortability(cmd);
+      const w = result.warnings.find((x) => x.pattern === "bash-c-chained-with-and");
+      expect(w).toBeDefined();
+      expect(w.suggestion).toMatch(/process\.chdir/);
+      expect(w.suggestion).toMatch(/execSync/);
+      // suggestion must NOT recommend the broken pattern back to the user
+      expect(w.suggestion).not.toMatch(/bash\s+-c\s+"cd\s+\w+\s+&&/);
+    });
+
+    it("suggestion for bash-c-cd-prefix points at the per-line node -e pattern", () => {
+      const cmd = 'bash -c "cd pforge-mcp && npx vitest run tests/foo.test.mjs"';
+      const result = validateGatePortability(cmd);
+      const w = result.warnings.find((x) => x.pattern === "bash-c-cd-prefix");
+      expect(w).toBeDefined();
+      expect(w.suggestion).toMatch(/process\.chdir/);
+      expect(w.suggestion).toMatch(/execSync/);
+    });
+
+    it("clean per-line node -e pattern produces zero warnings", () => {
+      const clean = "node -e \"process.chdir('pforge-mcp'); require('child_process').execSync('npx vitest run tests/foo.test.mjs', {stdio:'inherit',shell:true});\"";
+      const result = validateGatePortability(clean);
+      const patterns = result.warnings.map((w) => w.pattern);
+      expect(patterns).not.toContain("bash-c-chained-with-and");
+      expect(patterns).not.toContain("bash-c-cd-prefix");
+    });
+  });
+
   it("returns zero warnings for clean portable commands", () => {
     const clean = [
       "npm test",

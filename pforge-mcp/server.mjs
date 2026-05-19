@@ -159,8 +159,6 @@ import { syncMemories } from "./sync-memories.mjs";
 import { syncInstructions } from "./sync-instructions.mjs";
 // Phase WORKER-GUARDRAILS A2 — forge_diff_classify: classify staged diff by category
 import { classifyDiff } from "./diff-classify.mjs";
-// Phase-40 — cross-run watcher snapshot builder
-import { buildCrossRunSnapshot } from "./watcher.mjs";
 import express from "express";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -9559,14 +9557,6 @@ export function createExpressApp() {
   import("./forge-master-routes.mjs").then(({ registerForgeMasterRoutes }) => {
     registerForgeMasterRoutes(app, invokeForgeTool);
   }).catch(err => console.warn(`[forge-master-routes] Skipped: ${err.message}`));
-
-  // Phase-40 — GET /api/watcher/cross-run: cross-run health aggregation snapshot
-  app.get("/api/watcher/cross-run", async (_req, res) => {
-    try {
-      const result = await buildCrossRunSnapshot(PROJECT_DIR);
-      res.json(result);
-    } catch (err) { res.status(500).json({ error: err.message }); }
-  });
 
   // Phase-40 — GET /api/auditor/latest: most recent auditor auto-invoke result
   app.get("/api/auditor/latest", (_req, res) => {

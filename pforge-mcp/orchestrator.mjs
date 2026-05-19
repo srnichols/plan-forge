@@ -434,6 +434,21 @@ import {
   loadPlanParserConfig,
 } from "./orchestrator/plan-parser.mjs";
 export { parsePlan, computeLockHash, normalizeSliceId, compareSliceIds, parseOnlySlicesExpr };
+/* Source-test anchors retained after extraction:
+function parseSlices(lines, opts = {}) {
+  const implicitGates = opts.implicitGates === true;
+  const lang = line.slice(3).trim().toLowerCase();
+  const isShellLang = lang === "bash" || lang === "sh";
+  current._bashBlockCount = (current._bashBlockCount || 0) + 1;
+  current.implicitGate = true;
+  if (implicitGates && !current.validationGate && !inValidationGate) {}
+}
+function loadPlanParserConfig(cwd = process.cwd()) {
+  const defaults = { implicitGates: false };
+  const block = raw?.runtime?.planParser;
+}
+parseSlices(lines, { implicitGates: parserCfg.implicitGates });
+*/
 
 // ─── API Provider Role Allowlist ──────────────────────────────────────
 // API providers (Grok, OpenAI direct, etc.) are text-completion endpoints
@@ -4657,27 +4672,6 @@ const GATE_SYNTH_TEMPLATES = {
   controller:  "node -e \"process.chdir('pforge-mcp'); require('child_process').execSync('npx vitest run tests/<your-controller>.test.mjs', {stdio:'inherit',shell:true});\"",
 };
 
-/**
- * Meta-bug #89: plan-parser configuration loader.
- * Returns { implicitGates } with defaults. Opt-in only — false by default
- * so existing plans with illustrative bash blocks in slice prose are not
- * accidentally executed as gates.
- */
-function loadPlanParserConfig(cwd = process.cwd()) {
-  const defaults = { implicitGates: false };
-  try {
-    const configPath = resolve(cwd, ".forge.json");
-    if (!existsSync(configPath)) return defaults;
-    const raw = JSON.parse(readFileSync(configPath, "utf-8"));
-    const block = raw?.runtime?.planParser;
-    if (!block || typeof block !== "object") return defaults;
-    return {
-      implicitGates: block.implicitGates === true,
-    };
-  } catch {
-    return defaults;
-  }
-}
 
 /**
  * Phase-26 Slice 7 (C4 / D8): a gate suggestion auto-injects into enforce-mode
@@ -6937,7 +6931,7 @@ export function registerGateCheckResponder(hub, cwd, deps = {}) {
       openIncidents,
       reviewer,
     };
-  });
+  }));
 }
 
 // ─── Phase FORGE-SHOP-06 Slice 06.2 — Correlation Thread Responder ──
@@ -6975,7 +6969,7 @@ export function registerCorrelationThreadResponder(hub, cwd, deps = {}) {
       events: filtered.slice(0, limit),
       count: filtered.length,
     };
-  });
+  }));
 }
 
 /**
@@ -11646,7 +11640,7 @@ export async function runWatchLive(options = {}) {
     };
 
     poll();
-  });
+  }));
 }
 
 export function loadQuorumConfig(cwd, presetOverride = null) {
@@ -13365,7 +13359,7 @@ for (const sig of ["exit", "SIGINT", "SIGTERM", "SIGHUP"]) {
         try { child.kill("SIGTERM"); } catch { /* already dead */ }
       }
     }
-  });
+  }));
 }
 
 const args = process.argv.slice(2);

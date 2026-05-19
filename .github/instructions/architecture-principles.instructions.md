@@ -171,6 +171,7 @@ Common shortcuts agents take that still produce compiling code but erode archite
 | "Adding an interface for one implementation is over-engineering" | Interfaces enable testing, future swaps, and dependency injection. The cost is one file — the benefit is permanent testability. |
 | "I'll skip the repository and query directly from the service" | Services with data access can't be unit tested without a database. The repository boundary exists to make testing fast and reliable. |
 | "Hardcoding a string from a stable-small-set in code?" | STOP — import from `pforge-mcp/enums.mjs`. Hook names, quorum modes, model tiers, cost sources, watcher modes, and error codes all have canonical frozen arrays there. Hand-typed literals drift silently; the frozen arrays are checked by CI guards. |
+| "It's only two copies — I'll deduplicate later if a third appears" | **DRY violation.** Two is already enough to drift. The Phase 41 enums-centralization had to chase the same string literals across 50+ files because two became four became fifty over time. If the same value, regex, or 3+ line block appears in two places, extract to a named constant or helper **now** — the cost is one symbol; the benefit is one place to fix bugs. Run `/clean-code-review` to surface duplicates via `jscpd`. |
 
 ### Tool-surface (ACI) temper guards
 

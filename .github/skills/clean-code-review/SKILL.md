@@ -80,7 +80,19 @@ Parse ESLint JSON output. Categorise violations:
 | `max-nested-callbacks` | Callback nesting | warn |
 | `no-magic-numbers` | Magic numbers | warn |
 
-### 5. (Optional) Run architecture scan
+### 5. Run duplication detection (DRY)
+
+```bash
+node scripts/audit/run-jscpd.mjs
+```
+
+Parse `docs/plans/cleanup-findings/raw/duplication-report.json`. For each `duplicates[]` entry report:
+- First file + line range, second file + line range, token count
+- Group by token-count descending; show top 10
+
+> **Why this matters**: The Phase 41 enums centralization existed because the same string literal had been copy-pasted across 50+ files. `jscpd` catches duplicated *code blocks* mechanically; the literal/symbol patterns documented in `clean-code.instructions.md` (DRY section) still require human eyes at review time.
+
+### 6. (Optional) Run architecture scan
 
 ```bash
 node scripts/audit/scan-architecture.mjs
@@ -92,7 +104,7 @@ Parse `docs/plans/cleanup-findings/raw/architecture-report.json`. Report:
 - High fan-in volatile modules
 - High fan-out unstable modules
 
-### 6. Aggregate and report
+### 7. Aggregate and report
 
 Merge all findings into a unified report grouped by category:
 
@@ -109,6 +121,7 @@ Merge all findings into a unified report grouped by category:
 │  Markers (TODO/etc) │   —    │    4         │
 │  Commented code     │   —    │    2         │
 │  console.log        │   —    │  bulk        │
+│  Duplication (DRY)  │   —    │    7         │
 │  Architecture       │   1    │    3         │
 ├─────────────────────────────────────────────┤
 │  Total: 14 errors, 56 warnings              │
@@ -117,7 +130,7 @@ Merge all findings into a unified report grouped by category:
 
 If `--out <path>` is provided, write the full JSON report. Otherwise print the summary table and the top 10 highest-severity findings with file paths and line numbers.
 
-### 7. (Optional) Generate fix suggestions (`--fix-suggestions`)
+### 8. (Optional) Generate fix suggestions (`--fix-suggestions`)
 
 When `--fix-suggestions` is present, append a concrete remediation for each finding:
 
@@ -131,6 +144,7 @@ When `--fix-suggestions` is present, append a concrete remediation for each find
 | Module >3,000 LOC | "Split by responsibility: extract `<cohesive-group>` into `<suggested-file>.mjs`" |
 | Magic number | "Extract `<value>` at line N to a named constant: `const <SUGGESTED_NAME> = <value>`" |
 | Dependency cycle | "Break cycle by extracting shared interface into a new module depended on by both sides" |
+| Duplicated block (jscpd) | "Extract the duplicated block at <file>:<line> into a shared helper in the nearest common module" |
 
 Fix suggestions are advisory — they do NOT modify code. The agent or user applies them in a follow-up step.
 
@@ -170,7 +184,7 @@ Fix suggestions are advisory — they do NOT modify code. The agent or user appl
 
 After completing this skill, confirm:
 
-- [ ] All available audit scripts were executed (measure-modules, grep-matrix, long-param-walker, ESLint)
+- [ ] All available audit scripts were executed (measure-modules, grep-matrix, long-param-walker, ESLint, run-jscpd)
 - [ ] Findings are grouped by category with error/warning counts
 - [ ] If `--fix-suggestions` was requested, each finding has a concrete remediation
 - [ ] If `--out` was specified, JSON report exists at the given path
@@ -184,4 +198,6 @@ After completing this skill, confirm:
 | `.github/instructions/architecture-principles.instructions.md` | Provides the architectural rules the architecture scan validates |
 | `scripts/audit/*.mjs` | The actual audit implementations this skill orchestrates |
 | `scripts/audit/eslint-clean-code.config.mjs` | Custom ESLint config with aliased clean-code rules |
+| `scripts/audit/run-jscpd.mjs` | Duplication detection (jscpd) — wired into Step 5 |
 | `forge_sweep` | Lighter-weight marker scan (TODO/FIXME only); this skill is the comprehensive version |
+| `/code-review` skill | **Run `/clean-code-review` FIRST, then `/code-review`.** This skill is the mechanical/quantitative pass (LOC, complexity, params, duplication, ESLint). `/code-review` is the qualitative/judgment pass (architecture, security, patterns, tests). Mechanical findings clear the noise so the human-judgment review can focus on what actually requires judgment. |

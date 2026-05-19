@@ -51,6 +51,24 @@ tags: [clean-code-review]
 
 ---
 
+## When you spot duplication (DRY)
+
+Two copies is already drift. Don't wait for a third.
+
+| Pattern | Action |
+|---------|--------|
+| Same string/numeric literal in ≥2 sites | Extract to a `const`. If it's from a stable small set (hook names, modes, tiers, error codes), import from `pforge-mcp/enums.mjs` — never re-type |
+| Same 3+ line code block in ≥2 sites | Extract to a helper function in the nearest shared module |
+| Same regex / format string in ≥2 sites | Extract to a named `const` so a fix lands in one place |
+| Same config shape constructed in ≥2 sites | Extract a factory function returning the shape |
+| Parallel switch/if chains over the same values in ≥2 functions | Extract a single mapping object or strategy table |
+
+**Why so strict?** The Phase 41 enums centralization had to chase the same hook-name string across 50+ files because "just two copies" became fifty over a year. Catching duplication at copy #2 is one extract; catching it at #50 is a multi-slice migration phase.
+
+`/clean-code-review` runs `jscpd` to surface inline duplicates mechanically — but the literal/symbol duplicates above won't trigger jscpd unless the surrounding code matches. Catch those by hand at review time.
+
+---
+
 ## Module size
 
 | Tier | LOC | Action |

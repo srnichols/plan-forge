@@ -117,7 +117,7 @@ describe("Schema/Contract (Slice 06.3)", () => {
   });
 
   it("LIVEGUARD_TOOLS contains forge_bug_validate_fix (size 24)", () => {
-    const match = orchestratorSrc.match(/const LIVEGUARD_TOOLS = new Set\(\[([\s\S]*?)\]\)/);
+    const match = forgeIoSrc.match(/const LIVEGUARD_TOOLS = new Set\(\[([\s\S]*?)\]\)/);
     expect(match).toBeTruthy();
     expect(match[1]).toContain("forge_bug_validate_fix");
     const entries = match[1].match(/"forge_\w+"/g);

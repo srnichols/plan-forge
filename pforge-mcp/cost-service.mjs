@@ -1178,10 +1178,7 @@ export function estimatePlan(plan, model, cwd, quorumConfig = null, resumeFrom =
     pricingMode,
     sliceCount,
     avgPremiumPerSlice,
-    costModel,
-    totalInputTokens,
-    totalOutputTokens,
-    pricing,
+    { costModel, totalInputTokens, totalOutputTokens, pricing },
   );
   const calibration = _estimatePlanCostCalibration(pricingMode, model, cwd);
   const costCalibration = calibration?.output || null;

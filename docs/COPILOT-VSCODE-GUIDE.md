@@ -281,6 +281,41 @@ Forge-Master ships with three reasoning tiers you can set from the dashboard dia
 
 Auto-escalation is on by default: turns classified into the `tempering`, `principle-judgment`, or `meta-bug-triage` lanes automatically bump one tier (Fast → Balanced, Balanced → Deep) regardless of your dial position. To opt out, set `forgeMaster.autoEscalate = false` in `.forge.json`. If the selected tier returns a rate-limit error, Forge-Master falls back one tier for that turn and logs the fallback in the turn trace — no turn is ever dropped.
 
+### Forge-Master Observer (v3.8+)
+
+The Observer is an optional background companion that monitors your Plan Forge hub in real time. It subscribes to the WebSocket event stream, batches events into 60-second windows, and narrates notable patterns in plain prose — think of it as a pair programmer watching your pipeline and calling out anything worth your attention.
+
+**Observer is mute-by-default.** To enable:
+
+```json
+// .forge.json
+{
+  "forgeMaster": {
+    "observer": {
+      "enabled": true,
+      "maxUsdPerDay": 0.10,
+      "maxNarrationsPerHour": 6
+    }
+  }
+}
+```
+
+Then start the daemon:
+
+```bash
+pforge master observe --start --detach
+pforge master observe --status
+pforge master observe --stop
+```
+
+Or use the MCP tool from Copilot chat:
+
+```
+@workspace Use forge_master_observe with action "start"
+```
+
+The observer writes narrations to the dashboard Observer tab and logs them to the hub. It will never call write tools or modify project files. Budget state persists in `.forge/forge-master-observer-state.json`; the daily cap resets at UTC midnight.
+
 ---
 
 ## Agent Mode vs Ask Mode vs Edit Mode

@@ -65,6 +65,8 @@ tags: [clean-code-review]
 
 ## Quick review checklist (`clean-code-review`)
 
+> **Skill**: Use `/clean-code-review` to run all checks mechanically. Add `--fix-suggestions` for concrete remediation guidance per finding. See `.github/skills/clean-code-review/SKILL.md`.
+
 Before approving any PR that touches `pforge-mcp/` or `pforge-master/`:
 
 - [ ] No new `complexity-error` or `max-lines-per-function-error` violations (`npm run lint`)

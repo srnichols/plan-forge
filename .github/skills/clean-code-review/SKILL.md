@@ -1,0 +1,187 @@
+---
+name: clean-code-review
+description: Run a comprehensive Clean Code audit against the codebase — module size, function complexity, long parameter lists, TODO/FIXME markers, commented-out code, and ESLint violations — then produce a structured findings report with optional fix suggestions.
+argument-hint: "[--scope <glob>] [--fix-suggestions] [--out <path>]"
+tools: [read_file, run_in_terminal, file_search, grep_search]
+tags: [clean-code-review]
+---
+
+# `/clean-code-review` Skill
+
+## Trigger
+
+"Run a clean code review" / "Audit the codebase for Clean Code violations" / "Check code quality" / `/clean-code-review`
+
+## Purpose
+
+Orchestrates the existing audit scripts in `scripts/audit/` plus the custom ESLint config (`scripts/audit/eslint-clean-code.config.mjs`) into a single pass. Produces a structured report covering all six Phase 42 finding categories, with an optional `--fix-suggestions` mode that emits concrete refactoring guidance for each violation.
+
+## Inputs
+
+| Flag | Required | Default | Description |
+|------|----------|---------|-------------|
+| `--scope <glob>` | No | `pforge-mcp/**/*.mjs,pforge-master/**/*.mjs` | Comma-separated globs limiting the audit scope |
+| `--fix-suggestions` | No | off | When present, each finding includes a concrete fix suggestion (extract helper, rename, wrap params in options object, etc.) |
+| `--out <path>` | No | stdout (formatted) | Write the full JSON report to this path instead of printing a summary |
+| `--severity <level>` | No | `warn` | Minimum severity to report: `error`, `warn`, or `info` |
+
+## Steps
+
+### 1. Run module-size audit
+
+```bash
+node scripts/audit/measure-modules.mjs
+```
+
+Parse `docs/plans/cleanup-findings/raw/module-metrics.json`. Flag files exceeding the G14 thresholds:
+
+| LOC | Severity | Action |
+|-----|----------|--------|
+| >3,000 | **error** | Blocking — extract sub-modules |
+| 1,000–3,000 | **warn** | Monitor — extract on next feature touch |
+| <1,000 | info | No action |
+
+### 2. Run grep-matrix scan
+
+```bash
+node scripts/audit/grep-matrix.mjs
+```
+
+Parse `docs/plans/cleanup-findings/raw/grep-matrix-report.json`. Report:
+- TODO / FIXME / HACK / XXX markers (each is a finding)
+- Commented-out code blocks (≥4 consecutive lines of commented code-like patterns)
+- `console.log` count (bulk advisory)
+
+### 3. Run long-parameter-list walker
+
+```bash
+node scripts/audit/long-param-walker.mjs
+```
+
+Parse `docs/plans/cleanup-findings/raw/long-param-report.json`. Flag call sites with >5 positional arguments.
+
+### 4. Run ESLint with clean-code config
+
+```bash
+npx eslint --no-eslintrc -c scripts/audit/eslint-clean-code.config.mjs --format json "pforge-mcp/**/*.mjs" "pforge-master/**/*.mjs"
+```
+
+Parse ESLint JSON output. Categorise violations:
+
+| Rule | Category | Severity |
+|------|----------|----------|
+| `complexity-error` | Cyclomatic complexity | error |
+| `complexity-warn` | Cyclomatic complexity | warn |
+| `max-lines-per-function-error` | Function length | error |
+| `max-lines-per-function-warn` | Function length | warn |
+| `max-params-error` | Parameter count | error |
+| `max-params-warn` | Parameter count | warn |
+| `max-depth` | Nesting depth | warn |
+| `max-nested-callbacks` | Callback nesting | warn |
+| `no-magic-numbers` | Magic numbers | warn |
+
+### 5. (Optional) Run architecture scan
+
+```bash
+node scripts/audit/scan-architecture.mjs
+```
+
+Parse `docs/plans/cleanup-findings/raw/architecture-report.json`. Report:
+- Dependency cycles (Tarjan SCC with ≥2 nodes)
+- Cross-layer imports (inner circle depending on outer)
+- High fan-in volatile modules
+- High fan-out unstable modules
+
+### 6. Aggregate and report
+
+Merge all findings into a unified report grouped by category:
+
+```
+┌─────────────────────────────────────────────┐
+│  Clean Code Review — <timestamp>            │
+├─────────────────────────────────────────────┤
+│  Category           │ Errors │ Warnings     │
+│  ───────────────────┼────────┼──────────    │
+│  Module size (G14)  │   3    │    5         │
+│  Function length    │   2    │   14         │
+│  Complexity         │   8    │   22         │
+│  Parameter count    │   0    │    6         │
+│  Markers (TODO/etc) │   —    │    4         │
+│  Commented code     │   —    │    2         │
+│  console.log        │   —    │  bulk        │
+│  Architecture       │   1    │    3         │
+├─────────────────────────────────────────────┤
+│  Total: 14 errors, 56 warnings              │
+└─────────────────────────────────────────────┘
+```
+
+If `--out <path>` is provided, write the full JSON report. Otherwise print the summary table and the top 10 highest-severity findings with file paths and line numbers.
+
+### 7. (Optional) Generate fix suggestions (`--fix-suggestions`)
+
+When `--fix-suggestions` is present, append a concrete remediation for each finding:
+
+| Finding type | Fix suggestion pattern |
+|-------------|----------------------|
+| Function >300 LOC | "Extract `<identified-block>` into a helper function `<suggested-name>` in the same module" |
+| Complexity >20 | "Replace nested conditionals at line N with early-return guard clauses" |
+| >6 positional params | "Wrap parameters into an `options` object: `{ paramA, paramB, ... }`" |
+| TODO/FIXME marker | "Convert to a tracked issue via `forge_bug_file` or remove if resolved" |
+| Commented-out code | "Delete lines N–M; the code is preserved in git history (`git log -p -- <file>`)" |
+| Module >3,000 LOC | "Split by responsibility: extract `<cohesive-group>` into `<suggested-file>.mjs`" |
+| Magic number | "Extract `<value>` at line N to a named constant: `const <SUGGESTED_NAME> = <value>`" |
+| Dependency cycle | "Break cycle by extracting shared interface into a new module depended on by both sides" |
+
+Fix suggestions are advisory — they do NOT modify code. The agent or user applies them in a follow-up step.
+
+## Conditional: No audit scripts found
+
+> If `scripts/audit/` does not exist or is empty, tell the user to run `setup.ps1` / `setup.sh` to install Plan Forge, then stop. Do **not** attempt to recreate the audit scripts from memory.
+
+## Conditional: ESLint not available
+
+> If `npx eslint` fails (not installed), skip Step 4 and note "ESLint scan skipped — install eslint to enable complexity/params/function-length checks" in the report. The remaining steps still produce useful output.
+
+## Safety Rules
+
+- **Read-only**: This skill analyses code. It MUST NOT modify any source files.
+- **No false positives invented**: Every finding must come from a script output or ESLint result. Do not add findings from general knowledge.
+- **Scope-bound**: Only scan files matching `--scope`. Do not expand scope silently.
+- **Deterministic**: Running the skill twice on the same codebase must produce the same findings.
+
+## Temper Guards
+
+| Shortcut | Why It Breaks |
+|----------|--------------|
+| "I'll eyeball the code instead of running the scripts" | Misses findings the scripts catch mechanically; inconsistent coverage between runs |
+| "Skip ESLint — the other scripts cover enough" | ESLint is the only tool that measures cyclomatic complexity and function length with AST precision; regex approximations miss edge cases |
+| "Report all console.log as individual findings" | There are hundreds; the grep-matrix intentionally bulk-triages them as one advisory. Individual reporting floods the report with noise |
+| "Generate fix suggestions without `--fix-suggestions` flag" | Unsolicited suggestions clutter the report and distract from triage. The user opts in when ready to remediate |
+| "Modify the source code to fix findings" | This is a review skill, not a fix skill. Modifying code without explicit user intent violates read-only safety |
+
+## Warning Signs
+
+- Report shows zero findings in a codebase with known high-severity files — script likely errored silently; check raw JSON outputs
+- ESLint reports only warnings but no errors on `orchestrator.mjs` — config may not have loaded; verify `--no-eslintrc -c` path
+- `--fix-suggestions` output recommends splitting a file that is <500 LOC — threshold miscalibrated; review against G14 thresholds
+- Architecture scan shows no cycles but `scan-architecture.mjs` had madge errors — report the errors, don't suppress them
+
+## Exit Proof
+
+After completing this skill, confirm:
+
+- [ ] All available audit scripts were executed (measure-modules, grep-matrix, long-param-walker, ESLint)
+- [ ] Findings are grouped by category with error/warning counts
+- [ ] If `--fix-suggestions` was requested, each finding has a concrete remediation
+- [ ] If `--out` was specified, JSON report exists at the given path
+- [ ] No source files were modified during the review
+
+## Relationship to Other Tools
+
+| Tool / Instruction | Relationship |
+|-------------------|-------------|
+| `.github/instructions/clean-code.instructions.md` | Defines the thresholds and checklist this skill enforces mechanically |
+| `.github/instructions/architecture-principles.instructions.md` | Provides the architectural rules the architecture scan validates |
+| `scripts/audit/*.mjs` | The actual audit implementations this skill orchestrates |
+| `scripts/audit/eslint-clean-code.config.mjs` | Custom ESLint config with aliased clean-code rules |
+| `forge_sweep` | Lighter-weight marker scan (TODO/FIXME only); this skill is the comprehensive version |

@@ -1,5 +1,14 @@
 {
   "hooks": {
+    "preCommit": {
+      "chain": [
+        {
+          "name": "master-reject",
+          "type": "builtin",
+          "description": "Reject direct commits to default branch during run-plan"
+        }
+      ]
+    },
     "SessionStart": [
       {
         "type": "command",

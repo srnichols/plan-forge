@@ -1,18 +1,25 @@
 /**
- * Plan Forge — PreCommit Hook (#74)
+ * Plan Forge — PreCommit Hook (#74, A3)
  *
- * Rejects direct commits to the default branch (master/main) when
- * PFORGE_RUN_PLAN_ACTIVE=1 is set in the environment (i.e., during
- * slice execution via `run-plan`).
+ * Runs a configurable chain of pre-commit checks. Each chain entry is
+ * either a builtin check (e.g. master-branch reject) or an external
+ * command whose stdout returns JSON `{ blocked, message?, advisory? }`.
  *
- * Human commits (env var absent) are never blocked.
- * Bypass: set PFORGE_ALLOW_MASTER_COMMIT=1.
+ * Chain config lives in `plan-forge.json` (adjacent to this file) under
+ * `hooks.preCommit.chain[]`. When no chain config is found, the hook
+ * falls back to the legacy master-reject behavior.
+ *
+ * Human commits (PFORGE_RUN_PLAN_ACTIVE absent) skip chain enforcement
+ * unless an entry explicitly opts in via `"always": true`.
+ *
  * Config: .forge.json → hooks.preCommit.rejectMasterDuringRun (default true).
+ * Bypass: set PFORGE_ALLOW_MASTER_COMMIT=1 (master-reject only).
  */
 
 import { execSync } from "node:child_process";
 import { existsSync, readFileSync } from "node:fs";
-import { resolve } from "node:path";
+import { resolve, dirname } from "node:path";
+import { fileURLToPath } from "node:url";
 
 /**
  * Detect the repository's default branch name.
@@ -67,7 +74,57 @@ export function loadPreCommitConfig(cwd = process.cwd()) {
 }
 
 /**
- * Check whether a commit should be blocked.
+ * Load the PreCommit chain from plan-forge.json.
+ *
+ * Resolution order:
+ *   1. Explicit `configPath` (for testing)
+ *   2. `plan-forge.json` adjacent to this file
+ *   3. `.forge.json` at `cwd` → `hooks.preCommit.chain`
+ *
+ * @param {{ cwd?: string, configPath?: string }} options
+ * @returns {Array<{ name: string, type: string, command?: string, windows?: string, timeout?: number, always?: boolean }>}
+ */
+export function loadChainConfig(options = {}) {
+  const cwd = options.cwd || process.cwd();
+
+  // Explicit config path (testing / override)
+  if (options.configPath) {
+    return readChainFromFile(options.configPath);
+  }
+
+  // Adjacent plan-forge.json (primary location when deployed)
+  const hookDir = dirname(fileURLToPath(import.meta.url));
+  const adjacentPath = resolve(hookDir, "plan-forge.json");
+  if (existsSync(adjacentPath)) {
+    const chain = readChainFromFile(adjacentPath);
+    if (chain.length > 0) return chain;
+  }
+
+  // Fallback: .forge.json at project root
+  const forgePath = resolve(cwd, ".forge.json");
+  if (existsSync(forgePath)) {
+    return readChainFromFile(forgePath);
+  }
+
+  return [];
+}
+
+/**
+ * Read chain[] from a JSON config file.
+ * @param {string} filePath
+ * @returns {Array}
+ */
+function readChainFromFile(filePath) {
+  try {
+    const raw = JSON.parse(readFileSync(filePath, "utf-8"));
+    const chain = raw?.hooks?.preCommit?.chain;
+    if (Array.isArray(chain)) return chain;
+  } catch { /* malformed or missing */ }
+  return [];
+}
+
+/**
+ * Check whether a commit should be blocked (master-reject builtin).
  *
  * @param {{ cwd?: string }} options
  * @returns {{ blocked: boolean, exitCode?: number, message?: string, advisory?: string }}
@@ -122,4 +179,136 @@ export function checkPreCommit(options = {}) {
       "Create a feature branch or set PFORGE_ALLOW_MASTER_COMMIT=1 to bypass.",
     ].join("\n"),
   };
+}
+
+/**
+ * Run an external command chain entry and parse its JSON result.
+ *
+ * @param {{ command: string, windows?: string, timeout?: number }} entry
+ * @param {{ cwd?: string }} options
+ * @returns {{ blocked: boolean, message?: string, advisory?: string }}
+ */
+export function runCommandEntry(entry, options = {}) {
+  const cwd = options.cwd || process.cwd();
+  const isWin = process.platform === "win32";
+  const cmd = (isWin && entry.windows) ? entry.windows : entry.command;
+
+  if (!cmd) {
+    return { blocked: false, advisory: `Chain entry '${entry.name}': no command for this platform.` };
+  }
+
+  const timeout = (entry.timeout || 30) * 1000;
+
+  try {
+    const stdout = execSync(cmd, {
+      cwd,
+      encoding: "utf-8",
+      timeout,
+      stdio: ["pipe", "pipe", "pipe"],
+    }).trim();
+
+    if (!stdout) {
+      return { blocked: false };
+    }
+
+    const result = JSON.parse(stdout);
+    return {
+      blocked: !!result.blocked,
+      message: result.message || undefined,
+      advisory: result.advisory || undefined,
+    };
+  } catch (err) {
+    // Non-zero exit = treat as deny (fail-closed for safety)
+    if (err.status != null && err.status !== 0) {
+      let parsed;
+      try { parsed = JSON.parse((err.stdout || "").trim()); } catch { /* ignore */ }
+      return {
+        blocked: true,
+        message: parsed?.message || `Chain entry '${entry.name}' exited with code ${err.status}.`,
+      };
+    }
+    // Timeout or other error — advisory, don't block
+    return {
+      blocked: false,
+      advisory: `Chain entry '${entry.name}' error: ${err.message || "unknown"}`,
+    };
+  }
+}
+
+/**
+ * Run the full PreCommit chain.
+ *
+ * Iterates `hooks.preCommit.chain[]` in order, aborts on first deny.
+ * When no chain config is found, falls back to legacy master-reject.
+ *
+ * @param {{ cwd?: string, configPath?: string }} options
+ * @returns {{ blocked: boolean, exitCode?: number, message?: string, advisory?: string, results?: Array }}
+ */
+export function runPreCommitChain(options = {}) {
+  const chain = loadChainConfig(options);
+
+  // No chain configured — fall back to legacy master-reject
+  if (chain.length === 0) {
+    return checkPreCommit(options);
+  }
+
+  const results = [];
+
+  for (const entry of chain) {
+    // Skip non-always entries when not inside run-plan
+    if (!entry.always && process.env.PFORGE_RUN_PLAN_ACTIVE !== "1") {
+      results.push({ name: entry.name, skipped: true, reason: "not in run-plan" });
+      continue;
+    }
+
+    let result;
+
+    if (entry.type === "builtin") {
+      result = runBuiltinEntry(entry, options);
+    } else if (entry.type === "command") {
+      result = runCommandEntry(entry, options);
+    } else {
+      results.push({ name: entry.name, skipped: true, reason: `unknown type '${entry.type}'` });
+      continue;
+    }
+
+    results.push({ name: entry.name, ...result });
+
+    // Abort on first deny
+    if (result.blocked) {
+      return {
+        blocked: true,
+        exitCode: result.exitCode || 1,
+        message: result.message,
+        results,
+      };
+    }
+  }
+
+  // All entries passed — collect advisories
+  const advisories = results
+    .filter((r) => r.advisory)
+    .map((r) => `[${r.name}] ${r.advisory}`);
+
+  return {
+    blocked: false,
+    results,
+    advisory: advisories.length > 0 ? advisories.join("\n") : undefined,
+  };
+}
+
+/**
+ * Dispatch a builtin chain entry by name.
+ *
+ * @param {{ name: string }} entry
+ * @param {{ cwd?: string }} options
+ * @returns {{ blocked: boolean, exitCode?: number, message?: string, advisory?: string }}
+ */
+function runBuiltinEntry(entry, options) {
+  switch (entry.name) {
+    case "master-reject":
+      return checkPreCommit(options);
+    default:
+      return { blocked: false, advisory: `Unknown builtin '${entry.name}' — skipped.` };
+  }
 }

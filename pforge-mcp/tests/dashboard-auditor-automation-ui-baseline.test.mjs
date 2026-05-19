@@ -1,8 +1,8 @@
 /**
  * Phase 40 — AUDITOR-AUTOMATION-UI baseline harness.
  *
- * Locks the pre-change dashboard/API state before Phase 40 lands.
- * Later slices intentionally update these surfaces.
+ * Confirms the current dashboard/API contract after S4 lands.
+ * Later slices intentionally update the remaining absent surfaces.
  */
 
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
@@ -68,44 +68,44 @@ afterAll(async () => {
 });
 
 describe("Phase 40 baseline — settings surfaces", () => {
-  it("keeps the current 10 settings sections and does not yet include Forge-Master", () => {
+  it("keeps the current 10 settings sections and now includes Forge-Master", () => {
     for (const id of EXPECTED_SETTINGS_SECTIONS) {
       expect(INDEX_HTML).toContain(`id="${id}"`);
     }
-    expect(INDEX_HTML).not.toContain('id="tab-settings-forgemaster"');
-    expect(APP_JS).not.toContain("settings-forgemaster");
+    expect(INDEX_HTML).toContain('id="tab-settings-forgemaster"');
+    expect(APP_JS).toContain("settings-forgemaster");
   });
 
-  it("does not yet declare observer or auditor cfg-* fields", () => {
+  it("now declares observer and auditor cfg-* fields", () => {
     for (const id of PHASE40_FIELD_IDS) {
-      expect(INDEX_HTML).not.toContain(`id="${id}"`);
+      expect(INDEX_HTML).toContain(`id="${id}"`);
     }
   });
 });
 
 describe("Phase 40 baseline — card and API surfaces", () => {
-  it("does not yet wire observer narrations, cross-run anomalies, or auditor report cards", () => {
-    expect(INDEX_HTML).not.toContain("observer:narration");
-    expect(INDEX_HTML).not.toContain("Observer Narrations");
+  it("wires observer narrations and still omits cross-run anomalies and auditor report cards", () => {
+    expect(APP_JS).toContain("observer:narration");
+    expect(INDEX_HTML).toContain("Observer Narrations");
+    expect(APP_JS).toContain("/api/brain/recall?source=observer&limit=20");
     expect(INDEX_HTML).not.toContain("Cross-Run Watcher Anomalies");
     expect(INDEX_HTML).not.toContain("Auditor Latest Report");
     expect(APP_JS).not.toContain("/api/watcher/cross-run");
     expect(APP_JS).not.toContain("/api/auditor/latest");
-    expect(APP_JS).not.toContain("/api/brain/recall?source=observer&limit=20");
   });
 
-  it("server source does not yet expose the Phase 40 read endpoints", () => {
-    expect(SERVER_SRC).not.toContain('/api/watcher/cross-run');
-    expect(SERVER_SRC).not.toContain('/api/auditor/latest');
+  it("server source exposes the current read endpoints", () => {
+    expect(SERVER_SRC).toContain('/api/watcher/cross-run');
+    expect(SERVER_SRC).toContain('/api/auditor/latest');
   });
 
-  it("GET /api/watcher/cross-run returns 404 before the feature lands", async () => {
+  it("GET /api/watcher/cross-run returns 200", async () => {
     const res = await fetch(`${baseUrl}/api/watcher/cross-run`);
-    expect(res.status).toBe(404);
+    expect(res.status).toBe(200);
   });
 
-  it("GET /api/auditor/latest returns 404 before the feature lands", async () => {
+  it("GET /api/auditor/latest returns 200", async () => {
     const res = await fetch(`${baseUrl}/api/auditor/latest`);
-    expect(res.status).toBe(404);
+    expect(res.status).toBe(200);
   });
 });

@@ -61,6 +61,10 @@ const state = {
     sources: ["hub-event", "run", "memory", "openbrain", "watch", "tempering", "bug", "incident", "forge-master"],
     window: "24h", autoRefresh: false, refreshTimer: null, lastError: null,
   },
+  // Phase-40 — Observer narrations (live feed from hub + brain recall)
+  observer: { narrations: [] },
+  // Phase-40 — Auditor auto-invoke latest result
+  auditor: { latest: null },
   // Phase FORGE-SHOP-02 Slice 02.2 — Review tab state.
   review: {
     items: [],
@@ -155,6 +159,24 @@ function switchGroup(group) {
     if (first) first.click();
   }
 }
+
+function activateTab(tabName) {
+  if (typeof tabName !== "string" || !tabName) return;
+  const group = tabName.startsWith("settings-")
+    ? "settings"
+    : tabName === "forge-master" || tabName.startsWith("forge-master")
+      ? "forge-master"
+      : tabName.startsWith("lg-")
+        ? "liveguard"
+        : tabName === "github-metrics"
+          ? "forge"
+          : "forge";
+  switchGroup(group);
+  const btn = document.querySelector(`.tab-btn[data-tab="${tabName}"]`);
+  if (btn) btn.click();
+}
+
+window.activateTab = activateTab;
 
 // ─── WebSocket Connection ─────────────────────────────────────────────
 function connectWebSocket() {
@@ -342,6 +364,17 @@ function handleEvent(event) {
     case "drain-auto-estimate":
       addNotification(`Auto-drain estimate: mode=${(event.data || event).mode}`, "amber");
       break;
+    // Phase-40 S4 — observer narration live updates
+    case "observer:narration": {
+      const list = document.getElementById("observer-narrations-list");
+      const empty = document.getElementById("observer-narrations-empty");
+      if (!list) break;
+      if (empty) empty.style.display = "none";
+      const el = renderObserverNarration(event.data || {});
+      list.prepend(el);
+      while (list.children.length > 20) list.removeChild(list.lastChild);
+      break;
+    }
     // Phase Hotfix-v2.90.8 Slice 3 — slice-output-stalled pill
     case "slice-output-stalled":
       handleSliceOutputStalled(event.data || event);
@@ -3893,6 +3926,7 @@ renderNotifications();
 
 // Load plan browser on init (Progress is default tab)
 loadPlans();
+loadObserverNarrations();
 
 // Apply saved theme
 (function initTheme() {
@@ -7352,3 +7386,39 @@ async function loadTeamDashboard() {
 }
 
 window.loadTeamDashboard = loadTeamDashboard;
+
+// Phase-40 S4 — Observer narrations card
+function renderObserverNarration(item) {
+  const el = document.createElement("div");
+  el.className = "border-b border-gray-700 pb-2 last:border-0";
+  el.innerHTML = `<div class="flex items-center justify-between text-gray-500 mb-0.5">
+    <span>${item.timestamp ? new Date(item.timestamp).toLocaleTimeString() : ""}</span>
+    <span>${item.cost_usd ? "$" + Number(item.cost_usd).toFixed(4) : ""}</span>
+  </div><div class="text-gray-300">${escapeHtml(item.content || item.text || "")}</div>`;
+  return el;
+}
+
+function loadObserverNarrations() {
+  fetch("/api/brain/recall?source=observer&limit=20")
+    .then(r => r.ok ? r.json() : null)
+    .then(data => {
+      const list = document.getElementById("observer-narrations-list");
+      const empty = document.getElementById("observer-narrations-empty");
+      if (!list) return;
+      const items = Array.isArray(data?.thoughts)
+        ? data.thoughts
+        : Array.isArray(data?.records)
+          ? data.records
+          : [];
+      if (items.length === 0) {
+        if (empty) empty.style.display = "";
+        return;
+      }
+      if (empty) empty.style.display = "none";
+      list.innerHTML = "";
+      for (const item of items) list.appendChild(renderObserverNarration(item));
+    })
+    .catch(() => {});
+}
+
+window.loadObserverNarrations = loadObserverNarrations;

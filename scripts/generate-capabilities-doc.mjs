@@ -65,17 +65,21 @@ const table = tableHeader + "\n" + rows.join("\n");
 // ─── Update docs/capabilities.md ──────────────────────────────────────
 
 const capPath = resolve(ROOT, "docs/capabilities.md");
-const capOrig = readFileSync(capPath, "utf-8");
+const capRaw = readFileSync(capPath, "utf-8");
+const useCRLF = capRaw.includes("\r\n");
+const capOrig = useCRLF ? capRaw.replace(/\r\n/g, "\n") : capRaw;
 
 // Replace from "## MCP Tools" through the last row before the next "## " heading
-const capUpdated = capOrig.replace(
+const capNormUpdated = capOrig.replace(
   /## MCP Tools \(\d+\)\n[\s\S]*?(?=\n## )/,
   table + "\n"
 );
 
-if (capUpdated === capOrig && dryRun) {
+const capUpdated = useCRLF ? capNormUpdated.replace(/\n/g, "\r\n") : capNormUpdated;
+
+if (capNormUpdated === capOrig && dryRun) {
   process.stdout.write("[generate-capabilities-doc] docs/capabilities.md: no changes needed\n");
-} else if (capUpdated !== capOrig) {
+} else if (capNormUpdated !== capOrig) {
   if (dryRun || checkMode) {
     process.stdout.write(`[generate-capabilities-doc] docs/capabilities.md: would update MCP Tools table (${mcpCount} tools)\n`);
   } else {
@@ -119,7 +123,7 @@ if (existsSync(llmsPath)) {
 // ─── Exit code for --check ────────────────────────────────────────────
 
 if (checkMode) {
-  const changed = capUpdated !== capOrig;
+  const changed = capNormUpdated !== capOrig;
   if (changed) {
     process.stderr.write("[generate-capabilities-doc] DRIFT DETECTED: docs/capabilities.md is out of sync with enums.mjs TOOL_NAMES.\nRun: node scripts/generate-capabilities-doc.mjs\n");
     process.exit(1);

@@ -4918,6 +4918,11 @@
     ],
     "sideEffects": [],
     "securityNote": "Read-only aggregator. No data leaves the server.",
+    "dashboardSurfaces": [
+      "observer-narrations",
+      "cross-run-anomalies",
+      "auditor-report"
+    ],
     "errors": {
       "IO_FAILURE": {
         "message": "Failed to read project state",

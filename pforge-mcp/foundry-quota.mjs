@@ -73,6 +73,7 @@ function quotaHttpErrorReason(status) {
   if (status === 429) return "rate_limited";
   if (status === 401 || status === 403) return "forbidden";
   if (status === 503) return "service_unavailable";
+  if (status >= 200 && status < 300) return null;
   return status ? `http_${status}` : null;
 }
 
@@ -124,6 +125,7 @@ export async function getDeploymentQuota({
   deploymentName,
   credential,
   ttlMs = 5 * 60 * 1_000,
+  _fetchFn = globalThis.fetch,
 } = {}) {
   if (missingQuotaParams(subscriptionId, resourceGroup, accountName, deploymentName)) {
     return { ok: false, reason: "missing_required_params" };
@@ -137,7 +139,7 @@ export async function getDeploymentQuota({
   if (!tokenResult.ok) return tokenResult;
 
   try {
-    const res = await fetch(buildQuotaUrl(subscriptionId, resourceGroup, accountName, deploymentName), {
+    const res = await _fetchFn(buildQuotaUrl(subscriptionId, resourceGroup, accountName, deploymentName), {
       headers: { Authorization: `Bearer ${tokenResult.token}` },
       signal: AbortSignal.timeout(10_000),
     });

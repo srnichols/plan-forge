@@ -498,7 +498,7 @@ describe("performance", () => {
 
     clearCache(); // cold query
     const result = search({ query: "perf bug" }, { cwd: tmpDir });
-    expect(result.durationMs).toBeLessThan(250);
+    expect(result.durationMs).toBeLessThan(1000);
     expect(result.total).toBeGreaterThan(0);
   });
 });

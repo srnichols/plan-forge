@@ -237,19 +237,9 @@ describe("getDeploymentQuota — HTTP error codes", () => {
 // ─── getDeploymentQuota — success path ───────────────────────────────────────
 
 describe("getDeploymentQuota — success path", () => {
-  let origFetch;
-
-  beforeEach(() => {
-    origFetch = global.fetch;
-  });
-
-  afterEach(() => {
-    global.fetch = origFetch;
-  });
-
   it("returns ok:true with parsed quota fields on 200", async () => {
     const depName = `dep-ok-${Date.now()}`;
-    global.fetch = vi.fn().mockResolvedValue({
+    const mockFetch = vi.fn().mockResolvedValue({
       ok: true,
       status: 200,
       json: async () => ({
@@ -269,6 +259,7 @@ describe("getDeploymentQuota — success path", () => {
       deploymentName: depName,
       credential: makeCredential(),
       ttlMs: 1, // short TTL so it doesn't pollute subsequent tests
+      _fetchFn: mockFetch,
     });
 
     expect(r.ok).toBe(true);
@@ -286,7 +277,7 @@ describe("getDeploymentQuota — success path", () => {
       sku: { name: "Standard" },
       properties: { model: { name: "gpt-4.1" }, capacity: { deploymentCapacity: 10_000 } },
     };
-    global.fetch = vi.fn().mockResolvedValue({
+    const mockFetch = vi.fn().mockResolvedValue({
       ok: true,
       status: 200,
       json: async () => body,
@@ -299,12 +290,13 @@ describe("getDeploymentQuota — success path", () => {
       deploymentName: depName,
       credential: makeCredential(),
       ttlMs: 60_000,
+      _fetchFn: mockFetch,
     };
 
     await getDeploymentQuota(opts);
     await getDeploymentQuota(opts);
 
-    expect(global.fetch).toHaveBeenCalledTimes(1);
+    expect(mockFetch).toHaveBeenCalledTimes(1);
   });
 });
 

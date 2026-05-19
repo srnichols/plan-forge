@@ -500,6 +500,19 @@ async function _handleOfftopicTurn({ isEphemeral, effectiveSessionId, message, c
   return { reply: OFFTOPIC_REDIRECT, toolCalls: [], tokensIn: 0, tokensOut: 0, totalCostUSD: 0, truncated: false, sessionId: effectiveSessionId, requestedTier, resolvedModel: currentModel, fallbackFromTier: null, escalated: false, autoEscalated: false, fromTier: null, toTier: null, reason: null, classification: classification ?? null, relatedTurns: [] };
 }
 
+function _formatCrossRunSnap(snap) {
+  if (!snap || snap.ok === false || snap.mode !== "cross-run") return;
+  const cr = snap.crossRun || snap.snapshot?.crossRun || {};
+  const hasAnomalies = Array.isArray(snap.anomalies) && snap.anomalies.length > 0;
+  const anomalyLines = hasAnomalies
+    ? snap.anomalies.slice(0, 4).map((a) => `  - ${a.code}: ${a.message || ""}`)
+    : ["  (none in window)"];
+  const retryFlag = cr.retryRateSpike ? " — ⚠" : "";
+  const costFlag = cr.costTrend === "up" ? " — ⚠ cost" : "";
+  // Build the string for parity; not injected into systemPrompt (already frozen above).
+  void (`${snap.totalRuns ?? 0} runs — ${snap.failedRuns ?? 0} failed${retryFlag}${costFlag}\n${anomalyLines.join("\n")}`);
+}
+
 async function _preFetchCrossRunContext({ classification, message, cwd, allowlist, deps }) {
   if (classification.lane !== LANES.OPERATIONAL) return;
   if (!/\b(health|audit|failure|retry|gate|slice|plan.health|watcher)\b/i.test(message)) return;
@@ -508,13 +521,7 @@ async function _preFetchCrossRunContext({ classification, message, cwd, allowlis
   // The fetch is preserved for side-effects (watcher cache warm-up); result is not injected.
   try {
     const watchResult = await invokeAllowlisted({ tool: "forge_watch", args: { targetPath: cwd || ".", mode: "cross-run" }, cwd }, { resolvedAllowlist: allowlist, dispatcher: deps.dispatcher, hub: deps.hub || null });
-    const snap = watchResult?.result ?? watchResult;
-    if (snap && snap.ok !== false && snap.mode === "cross-run") {
-      const cr = snap.crossRun || snap.snapshot?.crossRun || {};
-      const anomalyLines = Array.isArray(snap.anomalies) && snap.anomalies.length > 0 ? snap.anomalies.slice(0, 4).map((a) => `  - ${a.code}: ${a.message || ""}`) : ["  (none in window)"];
-      // Build the string for parity; not injected into systemPrompt (already frozen above).
-      void (`${snap.totalRuns ?? 0} runs — ${snap.failedRuns ?? 0} failed${cr.retryRateSpike ? " — ⚠" : ""}${cr.costTrend === "up" ? " — ⚠ cost" : ""}\n${anomalyLines.join("\n")}`);
-    }
+    _formatCrossRunSnap(watchResult?.result ?? watchResult);
   } catch { /* non-fatal */ }
 }
 

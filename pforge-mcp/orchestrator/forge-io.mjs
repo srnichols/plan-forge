@@ -264,6 +264,49 @@ export function aggregateModelStats(records) {
 
 // ─── Cost History ──────────────────────────────────────────────────────
 
+function _loadCostHistory(historyPath, modelStats) {
+  if (!existsSync(historyPath)) {
+    return { error: { runs: 0, message: "No cost history yet. Run `pforge run-plan` to start tracking.", forge_model_stats: modelStats } };
+  }
+  try {
+    const history = JSON.parse(readFileSync(historyPath, "utf-8"));
+    if (!Array.isArray(history)) {
+      return { error: { runs: 0, message: "Invalid cost history format.", forge_model_stats: modelStats } };
+    }
+    if (history.length === 0) {
+      return { error: { runs: 0, message: "Cost history is empty.", forge_model_stats: modelStats } };
+    }
+    return { history };
+  } catch {
+    return { error: { runs: 0, message: "Could not parse cost-history.json.", forge_model_stats: modelStats } };
+  }
+}
+
+function _accumulateCostByModel(modelTotals, entry) {
+  if (!entry.by_model) return;
+  for (const [model, data] of Object.entries(entry.by_model)) {
+    if (!modelTotals[model]) modelTotals[model] = { tokens_in: 0, tokens_out: 0, cost_usd: 0, runs: 0 };
+    modelTotals[model].tokens_in += data.tokens_in || 0;
+    modelTotals[model].tokens_out += data.tokens_out || 0;
+    modelTotals[model].cost_usd += data.cost_usd || 0;
+    modelTotals[model].runs += 1;
+  }
+}
+
+function _accumulateCostMonthly(monthly, entry) {
+  const month = (entry.date || "").substring(0, 7); // YYYY-MM
+  if (!month) return;
+  if (!monthly[month]) monthly[month] = { runs: 0, cost_usd: 0 };
+  monthly[month].runs += 1;
+  monthly[month].cost_usd += entry.total_cost_usd || 0;
+}
+
+function _roundCostUsd(map) {
+  for (const m of Object.values(map)) {
+    m.cost_usd = Math.round(m.cost_usd * 100) / 100;
+  }
+}
+
 /**
  * Generate a cost report from .forge/cost-history.json.
  * Returns formatted summary with totals, per-model breakdown, and monthly aggregation.
@@ -271,21 +314,9 @@ export function aggregateModelStats(records) {
 export function getCostReport(cwd) {
   const historyPath = resolve(cwd, ".forge", "cost-history.json");
   const modelStats = aggregateModelStats(loadModelPerformance(cwd));
-  if (!existsSync(historyPath)) {
-    return { runs: 0, message: "No cost history yet. Run `pforge run-plan` to start tracking.", forge_model_stats: modelStats };
-  }
-
-  let history;
-  try {
-    history = JSON.parse(readFileSync(historyPath, "utf-8"));
-    if (!Array.isArray(history)) return { runs: 0, message: "Invalid cost history format.", forge_model_stats: modelStats };
-  } catch {
-    return { runs: 0, message: "Could not parse cost-history.json.", forge_model_stats: modelStats };
-  }
-
-  if (history.length === 0) {
-    return { runs: 0, message: "Cost history is empty.", forge_model_stats: modelStats };
-  }
+  const loaded = _loadCostHistory(historyPath, modelStats);
+  if (loaded.error) return loaded.error;
+  const history = loaded.history;
 
   // Aggregate totals
   let totalCost = 0;
@@ -298,34 +329,12 @@ export function getCostReport(cwd) {
     totalCost += entry.total_cost_usd || 0;
     totalTokensIn += entry.total_tokens_in || 0;
     totalTokensOut += entry.total_tokens_out || 0;
-
-    // Per-model aggregation
-    if (entry.by_model) {
-      for (const [model, data] of Object.entries(entry.by_model)) {
-        if (!modelTotals[model]) modelTotals[model] = { tokens_in: 0, tokens_out: 0, cost_usd: 0, runs: 0 };
-        modelTotals[model].tokens_in += data.tokens_in || 0;
-        modelTotals[model].tokens_out += data.tokens_out || 0;
-        modelTotals[model].cost_usd += data.cost_usd || 0;
-        modelTotals[model].runs += 1;
-      }
-    }
-
-    // Monthly aggregation
-    const month = (entry.date || "").substring(0, 7); // YYYY-MM
-    if (month) {
-      if (!monthly[month]) monthly[month] = { runs: 0, cost_usd: 0 };
-      monthly[month].runs += 1;
-      monthly[month].cost_usd += entry.total_cost_usd || 0;
-    }
+    _accumulateCostByModel(modelTotals, entry);
+    _accumulateCostMonthly(monthly, entry);
   }
 
-  // Round model totals
-  for (const m of Object.values(modelTotals)) {
-    m.cost_usd = Math.round(m.cost_usd * 100) / 100;
-  }
-  for (const m of Object.values(monthly)) {
-    m.cost_usd = Math.round(m.cost_usd * 100) / 100;
-  }
+  _roundCostUsd(modelTotals);
+  _roundCostUsd(monthly);
 
   return {
     runs: history.length,
@@ -351,94 +360,92 @@ export function getCostReport(cwd) {
  * @param {string[]|null} [metrics=null] - Optional metric filter (e.g. ["drift","cost","incidents","models"])
  * @returns {object} Health trend report
  */
-export function getHealthTrend(cwd = process.cwd(), days = 30, metrics = null) {
-  const cutoff = new Date(Date.now() - days * 24 * 60 * 60 * 1000).toISOString();
-  const allMetrics = ["drift", "cost", "incidents", "models", "tests"];
-  const active = metrics && metrics.length ? metrics.filter(m => allMetrics.includes(m)) : allMetrics;
-
-  const result = { days, metricsIncluded: active, generatedAt: new Date().toISOString(), dataPoints: 0 };
-
-  // Drift trend
-  if (active.includes("drift")) {
-    const driftHistory = readForgeJsonl("drift-history.jsonl", [], cwd); // G2.1: was .json
-    const filtered = driftHistory.filter(r => r.timestamp >= cutoff);
-    const scores = filtered.map(r => r.score).filter(s => typeof s === "number");
-    result.drift = {
+function _trendDrift(cutoff, cwd) {
+  const driftHistory = readForgeJsonl("drift-history.jsonl", [], cwd); // G2.1: was .json
+  const filtered = driftHistory.filter(r => r.timestamp >= cutoff);
+  const scores = filtered.map(r => r.score).filter(s => typeof s === "number");
+  return {
+    drift: {
       snapshots: filtered.length,
       latest: scores.length ? scores[scores.length - 1] : null,
       avg: scores.length ? Math.round((scores.reduce((a, b) => a + b, 0) / scores.length) * 10) / 10 : null,
       min: scores.length ? Math.min(...scores) : null,
       max: scores.length ? Math.max(...scores) : null,
       trend: computeTrendDirection(scores),
-    };
-    result.dataPoints += filtered.length;
-  }
+    },
+    points: filtered.length,
+  };
+}
 
-  // Cost trend
-  if (active.includes("cost")) {
-    const costHistory = readForgeJson("cost-history.json", [], cwd);
-    const filtered = Array.isArray(costHistory) ? costHistory.filter(r => (r.date || "") >= cutoff) : [];
-    const costs = filtered.map(r => r.total_cost_usd || 0);
-    result.cost = {
+function _trendCost(cutoff, cwd) {
+  const costHistory = readForgeJson("cost-history.json", [], cwd);
+  const filtered = Array.isArray(costHistory) ? costHistory.filter(r => (r.date || "") >= cutoff) : [];
+  const costs = filtered.map(r => r.total_cost_usd || 0);
+  return {
+    cost: {
       runs: filtered.length,
       totalUsd: costs.length ? Math.round(costs.reduce((a, b) => a + b, 0) * 100) / 100 : 0,
       avgPerRun: costs.length ? Math.round((costs.reduce((a, b) => a + b, 0) / costs.length) * 100) / 100 : 0,
       trend: computeTrendDirection(costs),
-    };
-    result.dataPoints += filtered.length;
-  }
+    },
+    points: filtered.length,
+  };
+}
 
-  // Incident trend
-  if (active.includes("incidents")) {
-    const incidents = readForgeJsonl("incidents.jsonl", [], cwd);
-    const filtered = incidents.filter(r => (r.capturedAt || "") >= cutoff);
-    const resolved = filtered.filter(r => r.resolvedAt);
-    const mttrs = resolved.map(r => r.mttr).filter(m => typeof m === "number" && m > 0);
-    result.incidents = {
+function _trendIncidents(cutoff, cwd) {
+  const incidents = readForgeJsonl("incidents.jsonl", [], cwd);
+  const filtered = incidents.filter(r => (r.capturedAt || "") >= cutoff);
+  const resolved = filtered.filter(r => r.resolvedAt);
+  const mttrs = resolved.map(r => r.mttr).filter(m => typeof m === "number" && m > 0);
+  const bySeverity = {};
+  for (const inc of filtered) {
+    const sev = inc.severity || "unknown";
+    bySeverity[sev] = (bySeverity[sev] || 0) + 1;
+  }
+  return {
+    incidents: {
       total: filtered.length,
       resolved: resolved.length,
       open: filtered.length - resolved.length,
       avgMttrMs: mttrs.length ? Math.round(mttrs.reduce((a, b) => a + b, 0) / mttrs.length) : null,
-      bySeverity: {},
+      bySeverity,
+    },
+    points: filtered.length,
+  };
+}
+
+function _trendModels(cutoff, cwd) {
+  const perfRecords = loadModelPerformance(cwd);
+  const filtered = perfRecords.filter(r => (r.date || "") >= cutoff);
+  const stats = {};
+  for (const r of filtered) {
+    const m = r.model || "unknown";
+    if (!stats[m]) stats[m] = { slices: 0, passed: 0, failed: 0, totalCost: 0 };
+    stats[m].slices += 1;
+    if (r.status === "passed") stats[m].passed += 1;
+    else stats[m].failed += 1;
+    stats[m].totalCost += r.cost_usd || 0;
+  }
+  const models = {};
+  for (const [model, s] of Object.entries(stats)) {
+    models[model] = {
+      slices: s.slices,
+      successRate: s.slices > 0 ? Math.round((s.passed / s.slices) * 1000) / 1000 : 0,
+      avgCostUsd: s.slices > 0 ? Math.round((s.totalCost / s.slices) * 1_000_000) / 1_000_000 : 0,
     };
-    for (const inc of filtered) {
-      const sev = inc.severity || "unknown";
-      result.incidents.bySeverity[sev] = (result.incidents.bySeverity[sev] || 0) + 1;
-    }
-    result.dataPoints += filtered.length;
   }
+  return {
+    models: { totalSlices: filtered.length, byModel: models },
+    points: filtered.length,
+  };
+}
 
-  // Model performance trend
-  if (active.includes("models")) {
-    const perfRecords = loadModelPerformance(cwd);
-    const filtered = perfRecords.filter(r => (r.date || "") >= cutoff);
-    const stats = {};
-    for (const r of filtered) {
-      const m = r.model || "unknown";
-      if (!stats[m]) stats[m] = { slices: 0, passed: 0, failed: 0, totalCost: 0 };
-      stats[m].slices += 1;
-      if (r.status === "passed") stats[m].passed += 1;
-      else stats[m].failed += 1;
-      stats[m].totalCost += r.cost_usd || 0;
-    }
-    const models = {};
-    for (const [model, s] of Object.entries(stats)) {
-      models[model] = {
-        slices: s.slices,
-        successRate: s.slices > 0 ? Math.round((s.passed / s.slices) * 1000) / 1000 : 0,
-        avgCostUsd: s.slices > 0 ? Math.round((s.totalCost / s.slices) * 1_000_000) / 1_000_000 : 0,
-      };
-    }
-    result.models = { totalSlices: filtered.length, byModel: models };
-    result.dataPoints += filtered.length;
-  }
-
-  // Test/regression trend (E5)
-  if (active.includes("tests")) {
-    const regHistory = readForgeJsonl("regression-history.jsonl", [], cwd); // G2.1: was .json
-    const filtered = regHistory.filter(r => (r.timestamp || "") >= cutoff);
-    const passRates = filtered.map(r => r.gatesChecked > 0 ? r.passed / r.gatesChecked : 1);
-    result.tests = {
+function _trendTests(cutoff, cwd) {
+  const regHistory = readForgeJsonl("regression-history.jsonl", [], cwd); // G2.1: was .json
+  const filtered = regHistory.filter(r => (r.timestamp || "") >= cutoff);
+  const passRates = filtered.map(r => r.gatesChecked > 0 ? r.passed / r.gatesChecked : 1);
+  return {
+    tests: {
       runs: filtered.length,
       totalGates: filtered.reduce((sum, r) => sum + (r.gatesChecked || 0), 0),
       totalPassed: filtered.reduce((sum, r) => sum + (r.passed || 0), 0),
@@ -446,11 +453,12 @@ export function getHealthTrend(cwd = process.cwd(), days = 30, metrics = null) {
       passRate: passRates.length ? Math.round((passRates.reduce((a, b) => a + b, 0) / passRates.length) * 1000) / 1000 : null,
       lastFailure: filtered.filter(r => r.failed > 0).slice(-1)[0]?.timestamp || null,
       trend: computeTrendDirection(passRates.map(r => r * 100)),
-    };
-    result.dataPoints += filtered.length;
-  }
+    },
+    points: filtered.length,
+  };
+}
 
-  // Overall health summary
+function _computeHealthScore(result) {
   const scores = [];
   if (result.drift?.avg != null) scores.push(result.drift.avg);
   if (result.incidents) {
@@ -465,21 +473,50 @@ export function getHealthTrend(cwd = process.cwd(), days = 30, metrics = null) {
   if (result.tests?.passRate != null) {
     scores.push(Math.round(result.tests.passRate * 100));
   }
+  return scores.length ? Math.round(scores.reduce((a, b) => a + b, 0) / scores.length) : null;
+}
 
-  result.healthScore = scores.length ? Math.round(scores.reduce((a, b) => a + b, 0) / scores.length) : null;
-  result.trend = result.drift?.trend || (result.dataPoints === 0 ? "no-data" : "stable");
-
-  // Project Health DNA — composite fingerprint for decay detection
-  result.healthDNA = {
+function _buildHealthDNA(result, days) {
+  const modelSuccessRate = result.models?.totalSlices > 0
+    ? Math.round(Object.values(result.models.byModel).reduce((s, m) => s + m.successRate, 0) / Object.keys(result.models.byModel).length * 1000) / 1000
+    : null;
+  return {
     driftAvg: result.drift?.avg ?? null,
     incidentRate: result.incidents ? Math.round((result.incidents.total / Math.max(days, 1)) * 100) / 100 : null,
     testPassRate: result.tests?.passRate ?? null,
-    modelSuccessRate: result.models?.totalSlices > 0
-      ? Math.round(Object.values(result.models.byModel).reduce((s, m) => s + m.successRate, 0) / Object.keys(result.models.byModel).length * 1000) / 1000
-      : null,
+    modelSuccessRate,
     costPerSlice: result.cost?.avgPerRun ?? null,
     timestamp: new Date().toISOString(),
   };
+}
+
+export function getHealthTrend(cwd = process.cwd(), days = 30, metrics = null) {
+  const cutoff = new Date(Date.now() - days * 24 * 60 * 60 * 1000).toISOString();
+  const allMetrics = ["drift", "cost", "incidents", "models", "tests"];
+  const active = metrics && metrics.length ? metrics.filter(m => allMetrics.includes(m)) : allMetrics;
+
+  const result = { days, metricsIncluded: active, generatedAt: new Date().toISOString(), dataPoints: 0 };
+
+  const trendHandlers = {
+    drift: _trendDrift,
+    cost: _trendCost,
+    incidents: _trendIncidents,
+    models: _trendModels,
+    tests: _trendTests,
+  };
+  for (const name of allMetrics) {
+    if (!active.includes(name)) continue;
+    const out = trendHandlers[name](cutoff, cwd);
+    Object.assign(result, out);
+    result.dataPoints += out.points;
+    delete result.points;
+  }
+
+  result.healthScore = _computeHealthScore(result);
+  result.trend = result.drift?.trend || (result.dataPoints === 0 ? "no-data" : "stable");
+
+  // Project Health DNA — composite fingerprint for decay detection
+  result.healthDNA = _buildHealthDNA(result, days);
 
   // Persist health DNA snapshot for cross-session trend analysis
   try {
@@ -543,90 +580,88 @@ export function registerGateCheckResponder(hub, cwd, deps = {}) {
   const reviewerConfig = deps.reviewerConfig || loadReviewerConfig(cwd);
   const reviewerDeps = { quorumInvoke: deps.quorumInvoke };
 
+async function _gateCheckBlockingReviews(_recall, cwd, _readRQS) {
+  try {
+    const rqState = await _recall("project.review.counts", {}, { cwd, readReviewQueueState: _readRQS });
+    const count = rqState?.bySeverity?.blocker || 0;
+    return { count, reason: count > 0 ? `${count} blocker-severity review(s) open` : null };
+  } catch {
+    return { count: 0, reason: null };
+  }
+}
+
+async function _gateCheckCriticalIncidents(_recall, cwd, _readJsonl) {
+  try {
+    const incidents = await _recall("project.liveguard.incidents", {}, { cwd, readForgeJsonl: _readJsonl });
+    const count = Array.isArray(incidents)
+      ? incidents.filter(i => i.status === "open" && i.severity === "critical").length
+      : 0;
+    return { count, reason: count > 0 ? `${count} critical incident(s) open` : null };
+  } catch {
+    return { count: 0, reason: null };
+  }
+}
+
+async function _gateCheckDrift(_recall, cwd, _readJsonl, config) {
+  try {
+    const driftHistory = await _recall("project.liveguard.drift", {}, { cwd, readForgeJsonl: _readJsonl });
+    if (!Array.isArray(driftHistory) || driftHistory.length === 0) return { score: null, reason: null };
+    const latest = driftHistory[driftHistory.length - 1];
+    const oneHourAgo = Date.now() - 3_600_000;
+    const latestTs = new Date(latest.ts || latest.timestamp || 0).getTime();
+    if (latestTs < oneHourAgo || typeof latest.driftScore !== "number") return { score: null, reason: null };
+    const score = latest.driftScore;
+    const reason = score < config.driftThreshold
+      ? `drift score ${score} below threshold ${config.driftThreshold}`
+      : null;
+    return { score, reason };
+  } catch {
+    return { score: null, reason: null };
+  }
+}
+
+async function _gateCheckReviewer(payload, reviewerConfig, reviewerDeps, cwd) {
+  if (!reviewerConfig.enabled) return { verdict: null, reason: null };
+  try {
+    const verdict = await invokeReviewer({
+      sliceNumber: payload?.sliceNumber,
+      sliceTitle: payload?.sliceTitle,
+      diffSummary: payload?.diffSummary,
+      config: reviewerConfig,
+      cwd,
+    }, reviewerDeps);
+    const reason = verdict.ok && verdict.critical && reviewerConfig.blockOnCritical
+      ? `reviewer flagged critical: ${verdict.summary || "(no summary)"}`
+      : null;
+    return { verdict, reason };
+  } catch {
+    return { verdict: null, reason: null };
+  }
+}
+
   hub.onAsk("brain.gate-check", async (payload) => {
     const reasons = [];
-    let openBlockingReviews = 0;
-    let openIncidents = 0;
-    let driftScore = null;
-    let reviewer = null;
 
-    // 1. Check for blocker-severity open reviews
-    try {
-      const rqState = await _recall("project.review.counts", {}, {
-        cwd, readReviewQueueState: _readRQS,
-      });
-      if (rqState?.bySeverity?.blocker) {
-        openBlockingReviews = rqState.bySeverity.blocker;
-      }
-      if (openBlockingReviews > 0) {
-        reasons.push(`${openBlockingReviews} blocker-severity review(s) open`);
-      }
-    } catch { /* treat as no data — proceed */ }
+    const blocking = await _gateCheckBlockingReviews(_recall, cwd, _readRQS);
+    if (blocking.reason) reasons.push(blocking.reason);
 
-    // 2. Check for critical open incidents
-    try {
-      const incidents = await _recall("project.liveguard.incidents", {}, {
-        cwd, readForgeJsonl: _readJsonl,
-      });
-      if (Array.isArray(incidents)) {
-        openIncidents = incidents.filter(
-          (i) => i.status === "open" && i.severity === "critical",
-        ).length;
-      }
-      if (openIncidents > 0) {
-        reasons.push(`${openIncidents} critical incident(s) open`);
-      }
-    } catch { /* treat as no data — proceed */ }
+    const incidents = await _gateCheckCriticalIncidents(_recall, cwd, _readJsonl);
+    if (incidents.reason) reasons.push(incidents.reason);
 
-    // 3. Check drift score against threshold
-    try {
-      const driftHistory = await _recall("project.liveguard.drift", {}, {
-        cwd, readForgeJsonl: _readJsonl,
-      });
-      if (Array.isArray(driftHistory) && driftHistory.length > 0) {
-        const latest = driftHistory[driftHistory.length - 1];
-        const oneHourAgo = Date.now() - 3_600_000;
-        const latestTs = new Date(latest.ts || latest.timestamp || 0).getTime();
-        if (latestTs >= oneHourAgo && typeof latest.driftScore === "number") {
-          driftScore = latest.driftScore;
-          if (driftScore < config.driftThreshold) {
-            reasons.push(`drift score ${driftScore} below threshold ${config.driftThreshold}`);
-          }
-        }
-      }
-    } catch { /* treat as no data — proceed */ }
+    const drift = await _gateCheckDrift(_recall, cwd, _readJsonl, config);
+    if (drift.reason) reasons.push(drift.reason);
 
-    // 4. Opt-in reviewer-agent (Phase-25 Slice 7, MUST #7 + #8). Advisory
-    //    only in v2.57 per D6 — flags `critical` but `blockOnCritical`
-    //    defaults false so verdicts never stop slice progression here. When
-    //    blockOnCritical is true AND the reviewer ran AND flagged critical,
-    //    we append a blocking reason.
-    if (reviewerConfig.enabled) {
-      try {
-        const verdict = await invokeReviewer({
-          sliceNumber: payload?.sliceNumber,
-          sliceTitle: payload?.sliceTitle,
-          diffSummary: payload?.diffSummary,
-          config: reviewerConfig,
-          cwd,
-        }, reviewerDeps);
-        reviewer = verdict;
-        if (verdict.ok && verdict.critical && reviewerConfig.blockOnCritical) {
-          reasons.push(`reviewer flagged critical: ${verdict.summary || "(no summary)"}`);
-        }
-      } catch {
-        // Never block the gate on reviewer infrastructure failure — advisory only.
-      }
-    }
+    const reviewerOut = await _gateCheckReviewer(payload, reviewerConfig, reviewerDeps, cwd);
+    if (reviewerOut.reason) reasons.push(reviewerOut.reason);
 
     const proceed = reasons.length === 0;
     return {
       proceed,
       reason: proceed ? "all checks passed" : reasons.join("; "),
-      openBlockingReviews,
-      driftScore,
-      openIncidents,
-      reviewer,
+      openBlockingReviews: blocking.count,
+      driftScore: drift.score,
+      openIncidents: incidents.count,
+      reviewer: reviewerOut.verdict,
     };
   });
 }

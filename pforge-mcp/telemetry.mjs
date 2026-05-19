@@ -630,166 +630,168 @@ export function emitGateSpan(data) {
  * Plug this into the orchestrator via DI (eventHandler option).
  */
 export function createTelemetryHandler(trace, runDir) {
-  let rootSpan = null;
+  const state = { rootSpan: null };
+
+  function onRunStarted(data) {
+    state.rootSpan = startRootSpan(trace, "run-plan", {
+      plan: data?.plan,
+      mode: data?.mode,
+      model: data?.model,
+      sliceCount: data?.sliceCount,
+    });
+    _emitWorkflowSpan({ ...data, runId: trace.traceId }).catch(() => {});
+  }
+
+  function onSliceStarted(data) {
+    const parentId = state.rootSpan?.spanId || null;
+    startSpan(trace, `slice-${data?.sliceId}`, parentId, "INTERNAL", {
+      sliceId: data?.sliceId,
+      title: data?.title,
+      parallel: data?.parallel || false,
+      "pforge.actor.source": data?.source ?? null,
+      "pforge.action.security_risk": data?.security_risk ?? null,
+    });
+    _emitAgentSpan({ ...data, runId: trace.traceId }).catch(() => {});
+  }
+
+  function onSliceCompleted(data) {
+    const span = trace._activeSpans.get(`slice-${data?.sliceId}`);
+    if (!span) return;
+    addEvent(span, "completed", Severity.INFO, {
+      duration: data?.duration,
+      model: data?.model,
+      tokens_out: data?.tokens?.tokens_out,
+      cost_usd: data?.tokens?.cost_usd,
+      attempts: data?.attempts,
+    });
+    span.attributes.duration = data?.duration;
+    span.attributes.model = data?.model;
+    span.attributes.cost_usd = data?.cost_usd;
+    span.attributes.attempts = data?.attempts;
+    endSpan(span, "OK");
+  }
+
+  function onSliceFailed(data) {
+    const span = trace._activeSpans.get(`slice-${data?.sliceId}`);
+    if (!span) return;
+    addEvent(span, "failed", Severity.ERROR, {
+      error: data?.error,
+      failedCommand: data?.failedCommand,
+      gateError: data?.gateError,
+    });
+    endSpan(span, "ERROR");
+  }
+
+  function onRunCompleted(data) {
+    if (state.rootSpan) {
+      addEvent(state.rootSpan, "completed", Severity.INFO, {
+        status: data?.status,
+        passed: data?.results?.passed,
+        failed: data?.results?.failed,
+        report: data?.report,
+      });
+      endSpan(state.rootSpan, data?.status === "completed" ? "OK" : "ERROR");
+    }
+    writeTrace(trace, runDir);
+  }
+
+  function onRunAborted(data) {
+    if (state.rootSpan) {
+      addEvent(state.rootSpan, "aborted", Severity.WARN, { reason: data?.reason });
+      endSpan(state.rootSpan, "ERROR");
+    }
+    writeTrace(trace, runDir);
+  }
+
+  function onQuorumDispatchStarted(data) {
+    const parentSpan = trace._activeSpans.get(`slice-${data?.sliceId}`);
+    if (!parentSpan) return;
+    addEvent(parentSpan, "quorum-dispatch", Severity.INFO, {
+      models: data?.models,
+      score: data?.score,
+    });
+    for (let i = 0; i < (data?.models || []).length; i++) {
+      startSpan(trace, `slice-${data?.sliceId}-quorum-${i}`, parentSpan.spanId, "CLIENT", {
+        quorumLeg: i,
+        model: data.models[i],
+      });
+    }
+  }
+
+  function endQuorumLegByModel(data) {
+    for (const [key, span] of trace._activeSpans) {
+      if (key.startsWith(`slice-${data?.sliceId}-quorum-`) && span.attributes?.model === data?.model) {
+        addEvent(span, "leg-completed", data?.success ? Severity.INFO : Severity.WARN, {
+          model: data?.model,
+          duration: data?.duration,
+          tokens_out: data?.tokens?.tokens_out,
+        });
+        endSpan(span, data?.success ? "OK" : "ERROR");
+        break;
+      }
+    }
+  }
+
+  function onQuorumLegCompleted(data) {
+    const legSpan = trace._activeSpans.get(`slice-${data?.sliceId}-quorum-${data?.legIndex ?? ""}`);
+    if (!legSpan) {
+      endQuorumLegByModel(data);
+      return;
+    }
+    endSpan(legSpan, data?.success ? "OK" : "ERROR");
+  }
+
+  function onQuorumReviewCompleted(data) {
+    const parentSpan = trace._activeSpans.get(`slice-${data?.sliceId}`);
+    if (!parentSpan) return;
+    addEvent(parentSpan, "quorum-review", Severity.INFO, {
+      reviewerModel: data?.reviewerModel,
+      tokens_out: data?.tokens?.tokens_out,
+      modelCount: data?.modelCount,
+    });
+  }
+
+  function onGatePassed(data) {
+    const parentSpan = trace._activeSpans.get(`slice-${data?.sliceId}`);
+    if (parentSpan) {
+      addEvent(parentSpan, "gate-passed", Severity.INFO, {
+        failOpen: data?.failOpen ?? false,
+      });
+    }
+    _emitGateSpan({ ...data, runId: trace.traceId }).catch(() => {});
+  }
+
+  function onChatCompleted(data) {
+    const parentSpan = trace._activeSpans.get(`slice-${data?.sliceId}`);
+    if (parentSpan) {
+      addEvent(parentSpan, "chat-completed", Severity.INFO, {
+        model: data?.model,
+        tokens_in: data?.tokens?.tokens_in ?? data?.tokensIn,
+        tokens_out: data?.tokens?.tokens_out ?? data?.tokensOut,
+        cost_usd: data?.cost_usd ?? data?.costUsd,
+      });
+    }
+    _emitChatSpan({ ...data, runId: trace.traceId }).catch(() => {});
+  }
+
+  const dispatch = {
+    "run-started": onRunStarted,
+    "slice-started": onSliceStarted,
+    "slice-completed": onSliceCompleted,
+    "slice-failed": onSliceFailed,
+    "run-completed": onRunCompleted,
+    "run-aborted": onRunAborted,
+    "quorum-dispatch-started": onQuorumDispatchStarted,
+    "quorum-leg-completed": onQuorumLegCompleted,
+    "quorum-review-completed": onQuorumReviewCompleted,
+    "gate-passed": onGatePassed,
+    "chat-completed": onChatCompleted,
+  };
 
   return {
     handle(event) {
-      const { type, data } = event;
-
-      switch (type) {
-        case "run-started": {
-          rootSpan = startRootSpan(trace, "run-plan", {
-            plan: data?.plan,
-            mode: data?.mode,
-            model: data?.model,
-            sliceCount: data?.sliceCount,
-          });
-          // Fire-and-forget OTel workflow (plan) span emission.
-          _emitWorkflowSpan({ ...data, runId: trace.traceId }).catch(() => {});
-          break;
-        }
-        case "slice-started": {
-          const parentId = rootSpan?.spanId || null;
-          startSpan(trace, `slice-${data?.sliceId}`, parentId, "INTERNAL", {
-            sliceId: data?.sliceId,
-            title: data?.title,
-            parallel: data?.parallel || false,
-            "pforge.actor.source": data?.source ?? null,
-            "pforge.action.security_risk": data?.security_risk ?? null,
-          });
-          // Fire-and-forget OTel agent (slice) span emission.
-          _emitAgentSpan({ ...data, runId: trace.traceId }).catch(() => {});
-          break;
-        }
-        case "slice-completed": {
-          const span = trace._activeSpans.get(`slice-${data?.sliceId}`);
-          if (span) {
-            addEvent(span, "completed", Severity.INFO, {
-              duration: data?.duration,
-              model: data?.model,
-              tokens_out: data?.tokens?.tokens_out,
-              cost_usd: data?.tokens?.cost_usd,
-              attempts: data?.attempts,
-            });
-            span.attributes.duration = data?.duration;
-            span.attributes.model = data?.model;
-            span.attributes.cost_usd = data?.cost_usd;
-            span.attributes.attempts = data?.attempts;
-            endSpan(span, "OK");
-          }
-          break;
-        }
-        case "slice-failed": {
-          const span = trace._activeSpans.get(`slice-${data?.sliceId}`);
-          if (span) {
-            addEvent(span, "failed", Severity.ERROR, {
-              error: data?.error,
-              failedCommand: data?.failedCommand,
-              gateError: data?.gateError,
-            });
-            endSpan(span, "ERROR");
-          }
-          break;
-        }
-        case "run-completed": {
-          if (rootSpan) {
-            addEvent(rootSpan, "completed", Severity.INFO, {
-              status: data?.status,
-              passed: data?.results?.passed,
-              failed: data?.results?.failed,
-              report: data?.report,
-            });
-            endSpan(rootSpan, data?.status === "completed" ? "OK" : "ERROR");
-          }
-          // Write trace on completion
-          writeTrace(trace, runDir);
-          break;
-        }
-        case "run-aborted": {
-          if (rootSpan) {
-            addEvent(rootSpan, "aborted", Severity.WARN, { reason: data?.reason });
-            endSpan(rootSpan, "ERROR");
-          }
-          writeTrace(trace, runDir);
-          break;
-        }
-        // ─── Quorum Mode events (v2.5) ───
-        case "quorum-dispatch-started": {
-          const parentSpan = trace._activeSpans.get(`slice-${data?.sliceId}`);
-          if (parentSpan) {
-            addEvent(parentSpan, "quorum-dispatch", Severity.INFO, {
-              models: data?.models,
-              score: data?.score,
-            });
-            // Create child spans for each dry-run leg
-            for (let i = 0; i < (data?.models || []).length; i++) {
-              startSpan(trace, `slice-${data?.sliceId}-quorum-${i}`, parentSpan.spanId, "CLIENT", {
-                quorumLeg: i,
-                model: data.models[i],
-              });
-            }
-          }
-          break;
-        }
-        case "quorum-leg-completed": {
-          const legSpan = trace._activeSpans.get(`slice-${data?.sliceId}-quorum-${data?.legIndex ?? ""}`);
-          // Try to find by model if legIndex not provided
-          if (!legSpan) {
-            for (const [key, span] of trace._activeSpans) {
-              if (key.startsWith(`slice-${data?.sliceId}-quorum-`) && span.attributes?.model === data?.model) {
-                addEvent(span, "leg-completed", data?.success ? Severity.INFO : Severity.WARN, {
-                  model: data?.model,
-                  duration: data?.duration,
-                  tokens_out: data?.tokens?.tokens_out,
-                });
-                endSpan(span, data?.success ? "OK" : "ERROR");
-                break;
-              }
-            }
-          } else {
-            endSpan(legSpan, data?.success ? "OK" : "ERROR");
-          }
-          break;
-        }
-        case "quorum-review-completed": {
-          const parentSpan = trace._activeSpans.get(`slice-${data?.sliceId}`);
-          if (parentSpan) {
-            addEvent(parentSpan, "quorum-review", Severity.INFO, {
-              reviewerModel: data?.reviewerModel,
-              tokens_out: data?.tokens?.tokens_out,
-              modelCount: data?.modelCount,
-            });
-          }
-          break;
-        }
-        // ─── OTel gate span (Slice 5) ───
-        case "gate-passed": {
-          const parentSpan = trace._activeSpans.get(`slice-${data?.sliceId}`);
-          if (parentSpan) {
-            addEvent(parentSpan, "gate-passed", Severity.INFO, {
-              failOpen: data?.failOpen ?? false,
-            });
-          }
-          // Fire-and-forget OTel gate span emission — never blocks the event loop.
-          _emitGateSpan({ ...data, runId: trace.traceId }).catch(() => {});
-          break;
-        }
-        // ─── OTel chat span (Slice 2) ───
-        case "chat-completed": {
-          const parentSpan = trace._activeSpans.get(`slice-${data?.sliceId}`);
-          if (parentSpan) {
-            addEvent(parentSpan, "chat-completed", Severity.INFO, {
-              model: data?.model,
-              tokens_in: data?.tokens?.tokens_in ?? data?.tokensIn,
-              tokens_out: data?.tokens?.tokens_out ?? data?.tokensOut,
-              cost_usd: data?.cost_usd ?? data?.costUsd,
-            });
-          }
-          // Fire-and-forget OTel span emission — never blocks the event loop.
-          _emitChatSpan({ ...data, runId: trace.traceId }).catch(() => {});
-          break;
-        }
-      }
+      const handler = dispatch[event?.type];
+      if (handler) handler(event.data);
     },
   };
 }

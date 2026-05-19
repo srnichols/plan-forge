@@ -144,114 +144,97 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
   return { tools: [FORGE_MASTER_ASK_TOOL, FORGE_MASTER_OBSERVE_TOOL] };
 });
 
-server.setRequestHandler(CallToolRequestSchema, async (request) => {
-  const { name, arguments: args = {} } = request.params;
+function _textResult(obj, isError = false) {
+  const text = typeof obj === "string" ? obj : JSON.stringify(obj, null, 2);
+  return isError ? { content: [{ type: "text", text }], isError: true } : { content: [{ type: "text", text }] };
+}
 
-  // ─── forge_master_observe ──────────────────────────────────────────
-  if (name === "forge_master_observe") {
-    const { action, sessionId } = args;
-    const cwd = args.path || process.cwd();
-
-    if (!action || !["start", "stop", "status"].includes(action)) {
-      return {
-        content: [{ type: "text", text: "forge_master_observe: action must be 'start', 'stop', or 'status'" }],
-        isError: true,
-      };
-    }
-
-    if (action === "start") {
-      const fmConfig = getForgeMasterConfig({ cwd });
-      if (!fmConfig.observer.enabled) {
-        return {
-          content: [{ type: "text", text: JSON.stringify({
-            ok: false,
-            error: "observer-disabled",
-            message: "Observer is disabled. Set forgeMaster.observer.enabled: true in .forge.json to enable.",
-          }, null, 2) }],
-          isError: true,
-        };
-      }
-
-      if (_activeObserver && !_activeObserver.getStatus().stopped) {
-        return {
-          content: [{ type: "text", text: JSON.stringify({
-            ok: true,
-            message: "Observer already running.",
-            status: _activeObserver.getStatus(),
-          }, null, 2) }],
-        };
-      }
-      _observedBatches.length = 0;
-      _activeObserver = startObserver({
-        cwd,
-        onBatch: (batch) => {
-          _observedBatches.push({ receivedAt: new Date().toISOString(), events: batch });
-          if (_observedBatches.length > MAX_OBSERVED_BATCHES) _observedBatches.shift();
-          console.error(`[forge_master_observe] batch: ${batch.length} event(s)`);
-          // Slice 7 will call runObserverTurn here
-        },
-      });
-      console.error(`forge-master-server: observer started`);
-      return {
-        content: [{ type: "text", text: JSON.stringify({
-          ok: true,
-          message: "Observer started. Subscribing to hub events.",
-          status: _activeObserver.getStatus(),
-        }, null, 2) }],
-      };
-    }
-
-    if (action === "stop") {
-      if (!_activeObserver || _activeObserver.getStatus().stopped) {
-        return {
-          content: [{ type: "text", text: JSON.stringify({
-            ok: true,
-            message: "Observer is not running.",
-          }, null, 2) }],
-        };
-      }
-      _activeObserver.stop();
-      const finalStatus = _activeObserver.getStatus();
-      console.error(`forge-master-server: observer stopped`);
-      return {
-        content: [{ type: "text", text: JSON.stringify({
-          ok: true,
-          message: "Observer stopped.",
-          status: finalStatus,
-        }, null, 2) }],
-      };
-    }
-
-    // action === "status"
-    const status = _activeObserver
-      ? _activeObserver.getStatus()
-      : { connected: false, stopped: true, message: "Observer has not been started." };
-    return {
-      content: [{ type: "text", text: JSON.stringify({
-        ok: true,
-        status,
-        recentBatches: _observedBatches.slice(-5),
-      }, null, 2) }],
-    };
+function _handleObserveStart(cwd) {
+  const fmConfig = getForgeMasterConfig({ cwd });
+  if (!fmConfig.observer.enabled) {
+    return { response: _textResult({
+      ok: false,
+      error: "observer-disabled",
+      message: "Observer is disabled. Set forgeMaster.observer.enabled: true in .forge.json to enable.",
+    }, true) };
   }
 
-  // ─── forge_master_ask ─────────────────────────────────────────────
-  if (name !== "forge_master_ask") {
-    return {
-      content: [{ type: "text", text: `Unknown tool: ${name}` }],
-      isError: true,
-    };
+  if (_activeObserver && !_activeObserver.getStatus().stopped) {
+    return { response: _textResult({
+      ok: true,
+      message: "Observer already running.",
+      status: _activeObserver.getStatus(),
+    }) };
+  }
+  _observedBatches.length = 0;
+  const observer = startObserver({
+    cwd,
+    onBatch: (batch) => {
+      _observedBatches.push({ receivedAt: new Date().toISOString(), events: batch });
+      if (_observedBatches.length > MAX_OBSERVED_BATCHES) _observedBatches.shift();
+      console.error(`[forge_master_observe] batch: ${batch.length} event(s)`);
+      // Slice 7 will call runObserverTurn here
+    },
+  });
+  console.error(`forge-master-server: observer started`);
+  return {
+    observer,
+    response: _textResult({
+      ok: true,
+      message: "Observer started. Subscribing to hub events.",
+      status: observer.getStatus(),
+    }),
+  };
+}
+
+function _handleObserveStop() {
+  if (!_activeObserver || _activeObserver.getStatus().stopped) {
+    return _textResult({ ok: true, message: "Observer is not running." });
+  }
+  _activeObserver.stop();
+  const finalStatus = _activeObserver.getStatus();
+  console.error(`forge-master-server: observer stopped`);
+  return _textResult({ ok: true, message: "Observer stopped.", status: finalStatus });
+}
+
+function _handleObserveStatus() {
+  const status = _activeObserver
+    ? _activeObserver.getStatus()
+    : { connected: false, stopped: true, message: "Observer has not been started." };
+  return _textResult({
+    ok: true,
+    status,
+    recentBatches: _observedBatches.slice(-5),
+  });
+}
+
+function _handleObserve(args) {
+  const { action } = args;
+  const cwd = args.path || process.cwd();
+
+  if (!action || !["start", "stop", "status"].includes(action)) {
+    return _textResult("forge_master_observe: action must be 'start', 'stop', or 'status'", true);
+  }
+
+  if (action === "start") {
+    const { observer, response } = _handleObserveStart(cwd);
+    if (observer) _activeObserver = observer;
+    return response;
+  }
+
+  if (action === "stop") {
+    return _handleObserveStop();
+  }
+
+  return _handleObserveStatus();
+}
+
+async function _handleAsk(args) {
+  if (!args.message || typeof args.message !== "string") {
+    return _textResult("forge_master_ask: message (string) is required", true);
   }
 
   const t0 = Date.now();
-
-  if (!args.message || typeof args.message !== "string") {
-    return {
-      content: [{ type: "text", text: "forge_master_ask: message (string) is required" }],
-      isError: true,
-    };
-  }
-
   const cwd = args.path || process.cwd();
   const config = getForgeMasterConfig({ cwd });
 
@@ -282,16 +265,25 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
     const durationMs = Date.now() - t0;
     console.error(`forge-master-server: turn complete in ${durationMs}ms, ${result.toolCalls?.length ?? 0} tool calls`);
 
-    return {
-      content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
-    };
+    return _textResult(result);
   } catch (err) {
     console.error(`forge-master-server: error: ${err.message}`);
-    return {
-      content: [{ type: "text", text: `Forge-Master error: ${err.message}` }],
-      isError: true,
-    };
+    return _textResult(`Forge-Master error: ${err.message}`, true);
   }
+}
+
+server.setRequestHandler(CallToolRequestSchema, async (request) => {
+  const { name, arguments: args = {} } = request.params;
+
+  if (name === "forge_master_observe") {
+    return _handleObserve(args);
+  }
+
+  if (name === "forge_master_ask") {
+    return _handleAsk(args);
+  }
+
+  return _textResult(`Unknown tool: ${name}`, true);
 });
 
 // ─── Self-test ────────────────────────────────────────────────────────

@@ -193,10 +193,8 @@ export async function runPerformanceBudgetScan(ctx) {
   // TTI checks
   const ttiResults = [];
   if (ttiSettings.enabled) {
-    const timingPath = resolve(
-      projectDir, ".forge", "tempering", "artifacts", runId || "unknown",
-      "ui-playwright", "timing.json",
-    );
+    const artifactsRunDir = resolve(projectDir, ".forge", "tempering", "artifacts", runId || "unknown");
+    const timingPath = resolve(artifactsRunDir, "ui-playwright", "timing.json");
     if (existsSync(timingPath)) {
       try {
         const timing = JSON.parse(readFileSync(timingPath, "utf-8"));

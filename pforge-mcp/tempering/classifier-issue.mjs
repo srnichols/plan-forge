@@ -76,7 +76,7 @@ export function buildClassifierIssueBody(payload, hash) {
   }
   const evidenceKeys = Object.keys(payload.evidence || {});
   if (evidenceKeys.length > 0) {
-    lines.push(
+    lines.push(...[
       "",
       "<details>",
       "<summary>Evidence JSON</summary>",
@@ -86,7 +86,7 @@ export function buildClassifierIssueBody(payload, hash) {
       "```",
       "",
       "</details>",
-    );
+    ]);
   }
   lines.push(
     "",
@@ -189,7 +189,7 @@ function createViaGh(owner, repo, title, body, labels, { execSync: execSyncFn, c
   }
 }
 
-async function createViaRest(token, owner, repo, title, body, labels, { fetch: fetchFn }) {
+async function createViaRest({ token, owner, repo, title, body, labels, fetch: fetchFn }) {
   if (typeof fetchFn !== "function") return null;
   try {
     const res = await fetchFn(`https://api.github.com/repos/${owner}/${repo}/issues`, {
@@ -277,7 +277,15 @@ export async function fileClassifierIssue(payload, config, {
 
     let result = createViaGh(repoInfo.owner, repoInfo.repo, title, body, [...CLASSIFIER_ISSUE_LABELS], { execSync: execSyncFn, cwd });
     if (!result || result.error) {
-      result = await createViaRest(tokenResult.token, repoInfo.owner, repoInfo.repo, title, body, [...CLASSIFIER_ISSUE_LABELS], { fetch: fetchFn });
+      result = await createViaRest({
+        token: tokenResult.token,
+        owner: repoInfo.owner,
+        repo: repoInfo.repo,
+        title,
+        body,
+        labels: [...CLASSIFIER_ISSUE_LABELS],
+        fetch: fetchFn,
+      });
     }
 
     if (!result || result.error) {

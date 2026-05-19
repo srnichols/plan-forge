@@ -785,13 +785,6 @@
   },
   {
     "file": "pforge-mcp/tempering/bug-adapters/github.mjs",
-    "line": 167,
-    "col": 2,
-    "callee": "lines.push",
-    "argCount": 12
-  },
-  {
-    "file": "pforge-mcp/tempering/bug-adapters/github.mjs",
     "line": 329,
     "col": 17,
     "callee": "createIssueViaGh",
@@ -799,45 +792,31 @@
   },
   {
     "file": "pforge-mcp/tempering/bug-adapters/github.mjs",
-    "line": 332,
-    "col": 21,
-    "callee": "createIssueViaRest",
-    "argCount": 7
-  },
-  {
-    "file": "pforge-mcp/tempering/bug-adapters/github.mjs",
-    "line": 368,
+    "line": 376,
     "col": 25,
     "callee": "addComment",
     "argCount": 6
   },
   {
     "file": "pforge-mcp/tempering/bug-adapters/github.mjs",
-    "line": 404,
+    "line": 412,
     "col": 25,
     "callee": "addComment",
     "argCount": 6
   },
   {
     "file": "pforge-mcp/tempering/bug-adapters/github.mjs",
-    "line": 679,
+    "line": 687,
     "col": 34,
     "callee": "addComment",
     "argCount": 6
   },
   {
     "file": "pforge-mcp/tempering/bug-adapters/github.mjs",
-    "line": 696,
+    "line": 704,
     "col": 17,
     "callee": "createIssueViaGh",
     "argCount": 6
-  },
-  {
-    "file": "pforge-mcp/tempering/bug-adapters/github.mjs",
-    "line": 702,
-    "col": 21,
-    "callee": "createIssueViaRest",
-    "argCount": 7
   },
   {
     "file": "pforge-mcp/tempering/classifier-issue.mjs",
@@ -845,13 +824,6 @@
     "col": 2,
     "callee": "lines.push",
     "argCount": 6
-  },
-  {
-    "file": "pforge-mcp/tempering/classifier-issue.mjs",
-    "line": 79,
-    "col": 4,
-    "callee": "lines.push",
-    "argCount": 9
   },
   {
     "file": "pforge-mcp/tempering/classifier-issue.mjs",
@@ -866,33 +838,5 @@
     "col": 17,
     "callee": "createViaGh",
     "argCount": 6
-  },
-  {
-    "file": "pforge-mcp/tempering/classifier-issue.mjs",
-    "line": 280,
-    "col": 21,
-    "callee": "createViaRest",
-    "argCount": 7
-  },
-  {
-    "file": "pforge-mcp/tempering/scanners/performance-budget.mjs",
-    "line": 196,
-    "col": 23,
-    "callee": "resolve",
-    "argCount": 7
-  },
-  {
-    "file": "pforge-mcp/tempering/scanners/visual-diff.mjs",
-    "line": 147,
-    "col": 8,
-    "callee": "resolve",
-    "argCount": 7
-  },
-  {
-    "file": "pforge-mcp/tempering/scanners/visual-diff.mjs",
-    "line": 148,
-    "col": 8,
-    "callee": "resolve",
-    "argCount": 7
   }
 ]

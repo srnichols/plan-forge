@@ -105,7 +105,7 @@
   },
   {
     "file": "pforge-mcp/tempering/bug-adapters/github.mjs",
-    "loc": 716,
+    "loc": 730,
     "blank": 86,
     "comment": 27,
     "functions": 18,
@@ -121,7 +121,7 @@
   },
   {
     "file": "pforge-mcp/tempering/scanners/visual-diff.mjs",
-    "loc": 632,
+    "loc": 633,
     "blank": 65,
     "comment": 38,
     "functions": 11,
@@ -417,7 +417,7 @@
   },
   {
     "file": "pforge-mcp/tempering/classifier-issue.mjs",
-    "loc": 292,
+    "loc": 300,
     "blank": 29,
     "comment": 8,
     "functions": 10,
@@ -488,14 +488,6 @@
     "g14Severity": null
   },
   {
-    "file": "pforge-mcp/tempering/scanners/performance-budget.mjs",
-    "loc": 265,
-    "blank": 28,
-    "comment": 14,
-    "functions": 8,
-    "g14Severity": null
-  },
-  {
     "file": "pforge-master/src/planner.mjs",
     "loc": 265,
     "blank": 47,
@@ -508,6 +500,14 @@
     "loc": 264,
     "blank": 30,
     "comment": 6,
+    "functions": 8,
+    "g14Severity": null
+  },
+  {
+    "file": "pforge-mcp/tempering/scanners/performance-budget.mjs",
+    "loc": 263,
+    "blank": 28,
+    "comment": 14,
     "functions": 8,
     "g14Severity": null
   },

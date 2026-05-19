@@ -143,9 +143,10 @@ export async function runVisualDiffScan(ctx) {
     // exists and is newer than the manifest entry path (freshness fix).
     let currentBuf;
     try {
+      const artifactsRunDir = resolve(projectDir, ".forge", "tempering", "artifacts", runId);
       const currentRunCandidates = [
-        resolve(projectDir, ".forge", "tempering", "artifacts", runId, "ui-playwright", `${urlHash}.png`),
-        resolve(projectDir, ".forge", "tempering", "artifacts", runId, "visual-diff", `${urlHash}.png`),
+        resolve(artifactsRunDir, "ui-playwright", `${urlHash}.png`),
+        resolve(artifactsRunDir, "visual-diff", `${urlHash}.png`),
       ];
       let currentRunPath = null;
       for (const c of currentRunCandidates) {

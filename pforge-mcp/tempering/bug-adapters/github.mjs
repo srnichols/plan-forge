@@ -164,7 +164,7 @@ export function buildIssueBody(bug) {
   }
 
   // Full evidence in collapsed block
-  lines.push(
+  lines.push(...[
     "",
     "<details>",
     "<summary>Full evidence JSON</summary>",
@@ -177,7 +177,7 @@ export function buildIssueBody(bug) {
     "",
     "---",
     "*Filed automatically by [Plan Forge Tempering](https://github.com/srnichols/plan-forge)*",
-  );
+  ]);
 
   return lines.join("\n");
 }
@@ -202,7 +202,7 @@ export function buildLabels(bug, config) {
  * Create an issue via the GitHub REST API.
  * @returns {Promise<{ issueNumber: number, url: string } | null>}
  */
-async function createIssueViaRest(token, owner, repo, title, body, labels, { fetch: fetchFn }) {
+async function createIssueViaRest({ token, owner, repo, title, body, labels, fetch: fetchFn }) {
   try {
     const res = await fetchFn(`https://api.github.com/repos/${owner}/${repo}/issues`, {
       method: "POST",
@@ -329,7 +329,15 @@ export async function registerBug(bug, config, { fetch: fetchFn = globalThis.fet
     let result = createIssueViaGh(repoInfo.owner, repoInfo.repo, title, body, labels, { execSync: execSyncFn, cwd });
 
     if (!result) {
-      result = await createIssueViaRest(tokenResult.token, repoInfo.owner, repoInfo.repo, title, body, labels, { fetch: fetchFn });
+      result = await createIssueViaRest({
+        token: tokenResult.token,
+        owner: repoInfo.owner,
+        repo: repoInfo.repo,
+        title,
+        body,
+        labels,
+        fetch: fetchFn,
+      });
     }
 
     if (!result || result.error) {
@@ -699,7 +707,13 @@ export async function fileMetaBug(params, config, { execSync: execSyncFn, fetch:
     });
 
     if (!result) {
-      result = await createIssueViaRest(tokenResult.token, repoInfo.owner, repoInfo.repo, issueTitle, body, labels, {
+      result = await createIssueViaRest({
+        token: tokenResult.token,
+        owner: repoInfo.owner,
+        repo: repoInfo.repo,
+        title: issueTitle,
+        body,
+        labels,
         fetch: fetchFn,
       });
     }

@@ -1740,3 +1740,56 @@ Sessions auto-rotate: when a session reaches 200 turns, the oldest 100 are moved
 - Session files are stored in `.forge/` which is gitignored — sessions are never committed
 - Ephemeral sessions (no `x-pforge-session-id` header) write nothing to disk
 - Use `purge --all` to reclaim disk space when sessions accumulate
+
+---
+
+## `master observe` — Forge-Master Observer (v3.8+)
+
+Background hub subscriber that batches live Plan Forge events and narrates notable patterns. **Mute-by-default**: must be explicitly enabled in `.forge.json` or started via CLI.
+
+```
+pforge master observe --start [--detach]
+pforge master observe --stop
+pforge master observe --status
+```
+
+### Subcommands
+
+| Subcommand | Description |
+|------------|-------------|
+| `--start` | Connect the observer to the hub WebSocket. Events are batched per `batchWindowMs`. |
+| `--start --detach` | Start as a background daemon process; PID written to `.forge/forge-master-observer.pid`. |
+| `--stop` | Gracefully shut down the observer daemon (sends SIGTERM). |
+| `--status` | Print whether the observer daemon is running and, if so, its PID. |
+
+### Configuration (`.forge.json`)
+
+```json
+{
+  "forgeMaster": {
+    "observer": {
+      "enabled": true,
+      "maxUsdPerDay": 0.10,
+      "maxNarrationsPerHour": 6,
+      "batchWindowMs": 60000,
+      "modelTier": null
+    }
+  }
+}
+```
+
+Set `PFORGE_FORGE_MASTER_OBSERVE_DISABLE=1` to override `enabled` to `false` at the process level (useful in CI or non-interactive pipelines).
+
+### Budget Enforcement
+
+- The observer tracks spend in `.forge/forge-master-observer-state.json` (atomic write).
+- Once `maxUsdPerDay` is exhausted, LLM narrations are skipped and a budget-block event is logged.
+- Budget resets at midnight UTC.
+
+### Notes
+
+- Observer is read-only — it cannot call write tools or modify project files.
+- Observer tokens are attributed to `forge-master` in `forge_cost_report`, not to the active run.
+- The daemon reconnects on WebSocket disconnect with exponential backoff (3 retries, 1 s base).
+- MCP equivalent: `forge_master_observe` with `action: "start" | "stop" | "status"`.
+

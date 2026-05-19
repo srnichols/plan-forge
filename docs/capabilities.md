@@ -1,6 +1,6 @@
 # Plan Forge — Capabilities Reference
 
-> **Tools**: 89 MCP (35 core + 14 LiveGuard + 2 Watcher + 8 Crucible + 6 Tempering + 4 Bug Registry + 3 Testbed + 3 Review + 2 Notify + 5 Lattice + 2 Memory + 2 Sync + 1 Forge-Master + 1 Doctor + 1 Worker Guardrails) | **CLI-only families**: Hallmark (`pforge hallmark show|verify`), Anvil (`pforge anvil stat|clear|rebuild|dlq`) | **CLI**: 48+ commands | **Presets**: 9 | **Agents**: 20 | **Skills**: 14
+> **Tools**: 94 MCP (35 core + 14 LiveGuard + 2 Watcher + 8 Crucible + 6 Tempering + 4 Bug Registry + 3 Testbed + 3 Review + 2 Notify + 5 Lattice + 2 Memory + 2 Sync + 2 Forge-Master + 1 Doctor + 1 Worker Guardrails + 4 Auditor/Observer) | **CLI-only families**: Hallmark (`pforge hallmark show|verify`), Anvil (`pforge anvil stat|clear|rebuild|dlq`) | **CLI**: 48+ commands | **Presets**: 9 | **Agents**: 20 | **Skills**: 14
 >
 > Machine-readable version: call `forge_capabilities` MCP tool, `GET https://planforge.software/.well-known/plan-forge.json`, or read `pforge-mcp/tools.json` (auto-generated on every MCP server start).
 
@@ -86,6 +86,7 @@
 | `forge_doctor_quorum` | diagnostics | low | Health-check every quorum participant model — auth, latency, rate-limit headers, per-model availability. |
 | `forge_delegate_to_agent` | agent-routing | medium | Delegate a prompt/slice to a specialized reviewer agent (database, security, performance, etc.) and return the agent's report. |
 | `forge_master_ask` | reasoning | medium | **v2.63+** — Read-only reasoning orchestrator. Classifies intent, retrieves OpenBrain memory context, orchestrates allowlist-gated read-only tool calls. Purpose-built for multi-step troubleshooting without manual tool chaining. |
+| `forge_master_observe` | observe | low | **v3.8+** — Control the Forge-Master observer. Mute-by-default background hub subscriber that batches live Plan Forge events and narrates notable patterns via LLM (Slice 7+). Actions: `start`, `stop`, `status`. Observer is disabled unless `forgeMaster.observer.enabled: true` in `.forge.json`. Budget-capped via `maxUsdPerDay`. Read-only; cannot invoke write tools. |
 | `forge_self_update` | release | low | Check for the latest Plan Forge release, fetch release notes, and (optionally) trigger install. |
 | `forge_github_status` | diagnose | low | Check GitHub API connectivity, Copilot subscription status, and GitHub Models API availability. Returns auth state, rate limits, and per-service health. |
 | `forge_github_metrics` | github | low | Fetch live GitHub repository metrics via the `gh` CLI — stars, forks, open issues, PR counts, commit activity. Requires `gh` authenticated. |

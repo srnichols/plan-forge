@@ -37,9 +37,26 @@ Format follows [Keep a Changelog](https://keepachangelog.com/).
 - **[S3]** `runWatch(mode: "cross-run")`: new cross-run analysis mode in `watcher.mjs`. Aggregates `.forge/runs/*/summary.json` into a health snapshot, feeds it through `detectWatchAnomalies()` with four new anomaly codes — `cross-run.recurring-gate-failure`, `cross-run.retry-rate-spike`, `cross-run.cost-anomaly-trend`, `cross-run.slice-timeout-cluster`.
 - **[S4]** Cross-run watcher wired into A4 plan-health-auditor agent: the auditor now receives cross-run anomaly context alongside standard run history.
 - **[S5]** Observer loop (`pforge-master/src/observer-loop.mjs`): subscribes to the Plan Forge hub WebSocket, buffers incoming events in a 60-second batch window, and flushes to an `onBatch` callback. Handles disconnect with bounded exponential backoff (3 retries).
-- **[S6]** Observer budget caps (`pforge-master/src/observer-budget.mjs`): configurable daily USD spending cap and hourly narration frequency cap. Emits `observer:budget-blocked` hub event when limits are hit.
-- **[S7]** Observer reasoning loop (`pforge-master/src/observer-prompt.mjs`): on each batch flush, builds a compact LLM-friendly event description and runs it through `runObserverTurn()`. Returns 2–5 sentence narration or `"N routine events — nothing notable."` for low-signal batches. Max 200 words.
-- **[S8]** CLI surface: `pforge forge-master observe [--interval <ms>] [--dry-run]` — starts the observer loop, prints narrations to stdout, exits cleanly on SIGINT.
+- **[S6]** Observer budget caps (`pforge-master/src/observer-budget.mjs`): configurable daily USD spending cap and hourly narration frequency cap. Budget state persists in `.forge/forge-master-observer-state.json` via atomic write. Emits budget-block events when limits are hit.
+- **[S7]** Observer reasoning loop (`pforge-master/src/observer-prompt.mjs`): on each batch flush, builds a compact LLM-friendly event description and runs it through `runObserverTurn()`. Returns 2–5 sentence narration or `"N routine events — nothing notable."` for low-signal batches.
+- **[S8]** CLI surface: `pforge master observe --start [--detach] | --stop | --status`. Daemon writes PID to `.forge/forge-master-observer.pid`.
+- **[S9]** Full unit QA sweep: 6 new test files across both workspaces (observer-loop, observer-budget, observer-reasoning, observer-cli, watcher-cross-run-mode, plan-health-auditor). Zero regressions.
+- **[S10]** Testbed E2E scenarios: 9 fixture JSONs in `docs/plans/testbed-scenarios/`, 62 tests in `pforge-mcp/tests/testbed-auditor-automation.test.mjs`.
+- **[S11]** Docs sweep: `docs/capabilities.md` — added `forge_master_observe`; `docs/manual/forge-json-reference.html` — added `hooks.postRun.invokeAuditor`, `forgeMaster.observer`, `forgeMaster.auditor` config blocks; `docs/CLI-GUIDE.md` — added `master observe` subcommand reference.
+
+### New config keys
+
+| Key | Default | Description |
+|-----|---------|-------------|
+| `hooks.postRun.invokeAuditor.onFailure` | `false` | Trigger auditor on every failed run |
+| `hooks.postRun.invokeAuditor.everyNRuns` | `null` | Trigger auditor every N completed runs |
+| `forgeMaster.observer.enabled` | `false` | Enable background hub observer |
+| `forgeMaster.observer.maxUsdPerDay` | `0.10` | Daily narration budget cap |
+| `forgeMaster.observer.maxNarrationsPerHour` | `6` | Hourly narration frequency cap |
+| `forgeMaster.observer.batchWindowMs` | `60000` | Event batch flush interval (ms) |
+| `forgeMaster.observer.modelTier` | `null` | Model tier (`flagship`/`mid`/`fast`/`null`) |
+| `forgeMaster.auditor.modelTier` | `null` | Auditor model tier |
+| `forgeMaster.auditor.outputPath` | `".forge/health/latest.md"` | Auditor report output path |
 
 ### Distribution sync
 

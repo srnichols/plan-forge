@@ -317,6 +317,14 @@ export async function runScenario(scenario, deps) {
       } catch { /* teardown failure must not mask assertion results */ }
     }
 
+    // Restore any tracked files deleted by teardown so the next scenario's dirty-check passes
+    if (!dryRun && testbedPath) {
+      try {
+        const exec = spawnFn || execSync;
+        exec("git checkout -- .", { cwd: testbedPath, encoding: "utf-8", timeout: 15_000 });
+      } catch { /* best-effort — non-fatal if testbed has no tracked files to restore */ }
+    }
+
     releaseLock(projectRoot);
   }
 

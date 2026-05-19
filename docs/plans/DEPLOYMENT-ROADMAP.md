@@ -30,11 +30,17 @@ Listed in **execution order**. Each phase's Execution Hold gates on its predeces
 - **Status**: 📋 Planned (DRAFT, pending Step-2 harden)
 - **Depends on**: Phase 42 retro shipping ✅
 
+### Phase 51 — CAPABILITIES-SPLIT
+- **Goal**: Decompose `pforge-mcp/capabilities.mjs` (3,294 LOC, A3 finding) into 4 focused sub-modules under `pforge-mcp/capabilities/` (tool-metadata, schemas, reference + subsystems, surface). `capabilities.mjs` becomes a ≤50-line re-export shim — zero consumer imports modified. Validates the split pattern (re-export shim + snapshot-as-contract + circular-import gate + no-behavior-change) for inheritance by Phases 52 and 53.
+- **Plan**: [Phase-51-CAPABILITIES-SPLIT-PLAN.md](./Phase-51-CAPABILITIES-SPLIT-PLAN.md)
+- **Status**: 🔬 Hardened (cleared for `pforge run-plan` once Phase 43 retro ships)
+- **Depends on**: Phase 43 shipping (D-series ESLint errors resolved first — avoids compounding violations across new sub-modules)
+
 ### Phase 44 — CLEAN-CODE-MODULE-EXTRACTION
-- **Goal**: Extract the three high-oversized modules identified in A-series findings (A1 `orchestrator.mjs` 13,933 LOC, A2 `server.mjs` 9,812 LOC, A3 `capabilities.mjs` 3,294 LOC) into focused sub-modules. Pure responsibility moves — no behavioral or API surface changes.
-- **Plan**: _DRAFT — stub promoted from [`docs/plans/cleanup-findings/proposed-phases/Phase-PROPOSED-A-MODULE-SIZE-STUB.md`](../cleanup-findings/proposed-phases/Phase-PROPOSED-A-MODULE-SIZE-STUB.md). Run `step2-harden-plan.prompt.md` before executing._
-- **Status**: 📋 Planned (DRAFT, pending Step-2 harden)
-- **Depends on**: Phase 43 shipping (D-series errors resolved first)
+- **Goal**: ~~Extract all three high-oversized modules (A1 orchestrator.mjs 13,933 LOC, A2 server.mjs 9,812 LOC, A3 capabilities.mjs 3,294 LOC) into focused sub-modules.~~ **Superseded** — split into per-file phases for risk-graduated execution: Phase 51 (A3, lowest risk, pattern validation), Phase 52 (A2, medium risk), Phase 53 (A1, highest risk). Phase 51's S5 retro retires this entry and promotes the 52/53 stubs.
+- **Plan**: ~~`Phase-PROPOSED-A-MODULE-SIZE-STUB.md`~~ — split into Phase 51 (active above) and forthcoming Phase 52 + Phase 53 stubs (promoted by Phase 51's S5)
+- **Status**: ⏸️ Superseded by Phase 51 (this entry is retired by Phase 51's S5 retro)
+- **Depends on**: Phase 51 shipping (establishes the cross-cutting pattern that Phase 52/53 inherit)
 
 ---
 

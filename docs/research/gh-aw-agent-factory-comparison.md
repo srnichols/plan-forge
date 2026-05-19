@@ -45,7 +45,59 @@ They are **orthogonal**, not competitive. Could coexist in the same repo.
 
 ---
 
-## 3. Idea triage
+## 3. Action list (AGREED 2026-05-18)
+
+> **Status**: agreed scope. Sequencing in §4. Original brainstorm preserved
+> below in §3-archive for context.
+>
+> **Guiding rule**: enhance existing artifacts, don't invent new ones.
+> Backwards-compatible by default (every new field is opt-in).
+
+### Accepted actions
+
+| ID | Action | Extends | Net new artifacts |
+|----|--------|---------|------------------|
+| **A1** | Make PreToolUse Forbidden-Actions check a **hard** block (not advisory) | `.github/hooks/` PreToolUse | none |
+| **A2** | New tool `forge_diff_classify` — scores staged diff before commit | `forge_secret_scan` plumbing | 1 tool file |
+| **A3** | Add `PreCommit` hook chain that runs every slice (secret-scan + A2 + Forbidden Actions) | PreDeploy hook machinery | 1 hook config entry |
+| **A4** | New agent file `plan-health-auditor.agent.md` (meta-agent over run history) | `.github/agents/`, `forge_master_ask`, `/memories/repo/` | 1 agent file, `.forge/health/latest.md` |
+| **A5** | `network.allowed: [...]` in plan frontmatter — **log-only mode first** | Plan parser, worker spawn | 1 frontmatter field, ~50 LOC in-process proxy |
+| **A6** | `lockHash:` in plan frontmatter — block run if plan drifted post-harden | `step2-harden-plan.prompt.md`, plan parser | 1 frontmatter field |
+| **A7** | `--objective <cmd>` mode on existing `forge_tempering_run` (Autoloop pattern) | `forge_tempering_run` | none (flag on existing tool) |
+| **A8** | `tools.deny: [...]` in plan frontmatter — cost cap + tool hygiene (denylist, not allowlist) | Plan parser, MCP bridge | 1 frontmatter field |
+
+### Why this is the right cut
+
+- **A1+A3** = the gh-aw "safe-outputs" idea, without inventing a manifest
+  format. The git index already *is* the manifest.
+- **A2** = the gh-aw "threat detection" job, as one new MCP tool that reuses
+  secret-scan plumbing.
+- **A4** = the gh-aw "meta-agent" pattern, as one agent file that productizes
+  what we already do by hand in `/memories/repo/`.
+- **A5** = the gh-aw "network firewall" idea, log-only first so we collect
+  real data before deciding what to enforce.
+- **A6** = our own "we got hurt by brittle gates" lesson, captured as a
+  frontmatter hash instead of a separate `.lock.json` artifact.
+- **A7** = the Autoloop pattern, as a flag on an existing tool.
+- **A8** = the gh-aw `tools:` block idea, narrowed to a **denylist** so it
+  defaults to today's behavior and never breaks existing plans.
+
+### Deliberately rejected
+
+| Rejected | Reason |
+|----------|--------|
+| Separate `proposed.json` manifest format | Git index + diff already serve this role. A1+A3 deliver the gate without the schema. |
+| `pforge compile` CLI verb + `.lock.json` file | A6 gives the same drift protection with zero new artifacts. |
+| `bash:` command allowlist per plan | A2 + A3 catch the resulting damage. Fighting cross-shell command names isn't worth it. |
+| `permissions:` block as separate concept | A1 + A3 already cover write enforcement on paths. |
+| `safe-outputs:` block (gh-aw's GitHub-write gate) | We don't write to GitHub from the worker. Filesystem writes are gated by A1+A3. |
+| Allowlist (vs denylist) for `tools:` | Allowlist breaks every existing plan when we add a new tool. Denylist is opt-in. |
+| Dozens of single-purpose triage/style/poetry bots | Outside scope. Skills + agents already cover this. |
+| GitHub-web-UI plan authoring | Our value is the local dev loop. |
+
+---
+
+## 3-archive. Original brainstorm (kept for context)
 
 ### 3A. 🟢 Strong candidates — high leverage, contained surface
 
@@ -242,45 +294,64 @@ Possibly out of scope for what tempering is meant to be.
 
 ---
 
-## 4. Sequencing thoughts
+## 4. Sequencing
 
-If we do any of these, the dependency order is:
+### Dependency graph (agreed actions)
 
 ```
-Idea 1 (proposed-changes manifest)
-   ├─► Idea 2 (threat classifier)   [needs manifest as input]
-   ├─► Idea 4 (network allowlist)   [feeds hosts into manifest]
-   └─► Idea 5 (lock file)           [manifest schema informs lock schema]
+A1 (hard PreToolUse)          ── 1-line hook promotion, no deps
+   │
+A3 (PreCommit hook chain)     ── reuses PreDeploy machinery
+   │
+A2 (forge_diff_classify)      ── plugs into A3's chain
 
-Idea 3 (Plan Health Auditor)    [independent — can start any time]
-
-Idea 6 (objective tempering)    [independent — punt until needed]
+A5 (network log-only)         ── independent, gathers data for later enforcement
+A8 (tools.deny frontmatter)   ── independent, opt-in
+A6 (lockHash frontmatter)     ── independent, opt-in
+A4 (Plan Health Auditor)      ── independent, read-only
+A7 (--objective tempering)    ── independent, flag on existing tool
 ```
 
-**Smallest meaningful first step**: Idea 3 (Plan Health Auditor) — it's
-read-only, it productizes work you're already doing manually in
-`/memories/repo/`, and it gives you immediate signal on what's actually
-breaking before you invest in the bigger gate refactor.
+### Smallest meaningful first step
+**A1** — one-line promotion of an existing advisory check to a hard block.
+Highest ROI per LOC.
 
-**Highest-leverage first step**: Idea 1 (proposed-changes manifest) — unlocks
-2 and 4, formalizes the Scope Contract from a request into a boundary, gives
-review-gate a clean artifact to inspect.
+### Highest-leverage first step
+**A1 + A3 + A2** as a unit — gives us the gh-aw "safe-outputs + threat
+detection" pattern using only the git index and one new MCP tool. After this
+lands, A5/A8/A6/A4/A7 are independent and can land in any order.
+
+### Historical sequencing (original brainstorm — superseded)
+
+```
+Idea 1 (proposed-changes manifest) — REJECTED in favor of A1+A3
+   ├─► Idea 2 (threat classifier)   — now A2
+   ├─► Idea 4 (network allowlist)   — now A5
+   └─► Idea 5 (lock file)           — REJECTED in favor of A6
+Idea 3 (Plan Health Auditor)        — now A4
+Idea 6 (objective tempering)        — now A7
+```
 
 ---
 
-## 5. Things I'm uncertain about
+## 5. Things still uncertain (carried forward)
 
-- [ ] How does Idea 1's apply-gate interact with `--assisted` mode? Does the
-      gate run before or after the user review? (Probably **before** — user
-      reviews a pre-gated proposal, not a raw diff.)
-- [ ] Does the manifest format need to be stable enough for external tooling,
-      or is it purely internal? (Internal at first; stabilize only if Idea 3
-      or external integrations need it.)
-- [ ] Network allowlist on Windows — how do we proxy without breaking
-      enterprise corporate proxies users already have? (Chain proxies.
-      Need to test.)
-- [ ] Where does the Plan Health Auditor's output live? New top-level
-      `.forge/health/` dir? Or absorbed into the dashboard?
+- [ ] **A1 / A3 + `--assisted` mode**: gate runs **before** user review (user
+      reviews a pre-gated diff, not a raw one). Confirm in implementation plan.
+- [ ] **A5 on Windows**: how do we proxy without breaking enterprise corporate
+      proxies users already have? (Chain proxies. Need to test before flipping
+      from log-only to enforce.)
+- [ ] **A4 output location**: `.forge/health/latest.md`? Absorb into dashboard?
+      Both? Start with the markdown file; dashboard later if there's signal.
+- [ ] **A2 model tier**: cheap-tier (runs every slice — cost matters) or
+      structured-output-with-rubric on the default model? Project cost both
+      ways before committing.
+- [ ] **A6 hash scope**: what fields of the plan are inside the hash? Slices +
+      gates + scope contracts + forbidden actions for sure. Title? Frontmatter
+      other fields? Decide when we draft the plan.
+- [ ] **A8 default denylist**: start empty (purely opt-in) or ship a starter
+      list (e.g. deny `forge_lattice_blast` by default)? Probably empty —
+      surprises break trust.
 
 ---
 
@@ -297,6 +368,12 @@ review-gate a clean artifact to inspect.
 
 ## 7. Notes / running log
 
-- 2026-05-18: Initial scratchpad created. No decisions yet. Next pass: pick
-  one idea and pressure-test it against existing Plan-Forge architecture
-  before committing to anything.
+- 2026-05-18: Initial scratchpad created. Brainstormed 6 ideas (Ideas 1-6).
+- 2026-05-18: Re-framed under "enhance, don't create" rule. Original Idea 1
+  rejected in favor of A1+A3 (use git index as the manifest). Original Idea 5
+  rejected in favor of A6 (hash into existing frontmatter).
+- 2026-05-18: Added A8 (`tools.deny` frontmatter) after revisiting the
+  gh-aw `permissions/network/tools` block. Chose denylist over allowlist
+  for backwards compatibility.
+- 2026-05-18: **Action list A1–A8 agreed.** Next pass: draft a plan for the
+  A1 + A3 + A2 unit (highest-leverage first step). A4–A8 land independently.

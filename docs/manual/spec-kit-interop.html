@@ -45,7 +45,7 @@
 
         <figure class="manual-figure"><img src="assets/diagrams/speckit-import-field-mapping.svg" alt="Spec Kit Interop field-mapping diagram: four source files (spec.md, plan.md, tasks.md, constitution.md) feed into the SpecKit Import Field Mapper, which maps each field to its corresponding Crucible Smelt field. PROJECT-PRINCIPLES applies as a policy overlay. Missing required fields block the import with SPECKIT_IMPORT_MISSING_FIELD error." class="diagram-img diagram-img-md my-4" /><figcaption class="manual-figcaption"><!--cap:auto-->Spec Kit Interop field-mapping diagram<!--/cap--></figcaption></figure>
 
-        <p>The diagram above shows the full mapping surface. Source fields on the left feed into the field mapper (centre), which outputs a populated Crucible smelt (right). <code>PROJECT-PRINCIPLES.md</code>, if present, is applied as a policy overlay — tech-stack constraints and forbidden patterns are enforced pre-smelt so they don't need to be re-entered during hardening.</p>
+        <p>The diagram above shows the full mapping surface. Source fields on the left feed into the field mapper (center), which outputs a populated Crucible smelt (right). <code>PROJECT-PRINCIPLES.md</code>, if present, is applied as a policy overlay — tech-stack constraints and forbidden patterns are enforced pre-smelt so they don't need to be re-entered during hardening.</p>
 
         <h3>Source files</h3>
 
@@ -175,7 +175,7 @@ pforge crucible import --from=spec-kit --dry-run</code></pre>
             </tr>
             <tr>
               <td><code>tasks.md → status</code> import skipped</td>
-              <td>The Spec Kit <code>tasks.md</code> uses a status vocabulary Plan Forge doesn't recognise (e.g. <code>in-review</code>).</td>
+              <td>The Spec Kit <code>tasks.md</code> uses a status vocabulary Plan Forge doesn't recognize (e.g. <code>in-review</code>).</td>
               <td>The importer maps <code>done</code> → <code>done</code>, <code>in-progress</code> → <code>in_progress</code>, and everything else → <code>pending</code>. Status values in the smelt can be manually adjusted before hardening.</td>
             </tr>
           </tbody>

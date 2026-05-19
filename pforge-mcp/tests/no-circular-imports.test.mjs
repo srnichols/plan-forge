@@ -17,6 +17,7 @@ import madge from "madge";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const CAPABILITIES_PATH = resolve(HERE, "../capabilities.mjs");
+const SERVER_PATH = resolve(HERE, "../server.mjs");
 
 describe("no circular imports in capabilities.mjs (Phase-51 S0)", () => {
   it("capabilities.mjs has no circular import cycles", async () => {
@@ -36,4 +37,30 @@ describe("no circular imports in capabilities.mjs (Phase-51 S0)", () => {
 
     expect(circular).toHaveLength(0);
   }, 30_000);
+});
+
+describe("no circular imports in server.mjs (Phase-52 S0)", () => {
+  // Pre-existing cycle from Phase-52 S0 baseline — tracked as tech debt.
+  // The gate prevents NEW cycles; fix of this cycle is deferred to a later slice.
+  const KNOWN_CYCLES = new Set(["orchestrator.mjs → cost-service.mjs"]);
+
+  it("server.mjs has no circular import cycles beyond the known baseline", async () => {
+    const result = await madge(SERVER_PATH, {
+      fileExtensions: ["mjs", "js"],
+      detectiveOptions: {
+        esm: { mixedImports: true },
+      },
+    });
+
+    const circular = result.circular();
+    const newCycles = circular.filter(
+      (cycle) => !KNOWN_CYCLES.has(cycle.join(" → ")),
+    );
+    if (newCycles.length > 0) {
+      const formatted = newCycles.map((cycle) => cycle.join(" → ")).join("\n  ");
+      throw new Error(`New circular imports detected in server.mjs:\n  ${formatted}`);
+    }
+
+    expect(newCycles).toHaveLength(0);
+  }, 60_000);
 });

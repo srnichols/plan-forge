@@ -2690,6 +2690,10 @@
       "path": "/api/audit/config"
     },
     {
+      "method": "POST",
+      "path": "/api/audit/drain"
+    },
+    {
       "method": "GET",
       "path": "/api/auditor/latest"
     },
@@ -2698,11 +2702,23 @@
       "path": "/api/brain/recall"
     },
     {
+      "method": "POST",
+      "path": "/api/brain/replay"
+    },
+    {
       "method": "GET",
       "path": "/api/brain/stats"
     },
     {
+      "method": "POST",
+      "path": "/api/brain/test"
+    },
+    {
       "method": "GET",
+      "path": "/api/bridge/approve/:runId"
+    },
+    {
+      "method": "POST",
       "path": "/api/bridge/approve/:runId"
     },
     {
@@ -2722,16 +2738,44 @@
       "path": "/api/config"
     },
     {
+      "method": "POST",
+      "path": "/api/config"
+    },
+    {
       "method": "GET",
       "path": "/api/copilot-instructions"
+    },
+    {
+      "method": "POST",
+      "path": "/api/copilot-instructions/preview"
+    },
+    {
+      "method": "POST",
+      "path": "/api/copilot-instructions/sync"
     },
     {
       "method": "GET",
       "path": "/api/cost"
     },
     {
+      "method": "POST",
+      "path": "/api/crucible/abandon"
+    },
+    {
+      "method": "POST",
+      "path": "/api/crucible/ask"
+    },
+    {
       "method": "GET",
       "path": "/api/crucible/config"
+    },
+    {
+      "method": "POST",
+      "path": "/api/crucible/config"
+    },
+    {
+      "method": "POST",
+      "path": "/api/crucible/finalize"
     },
     {
       "method": "GET",
@@ -2750,7 +2794,15 @@
       "path": "/api/crucible/preview"
     },
     {
+      "method": "POST",
+      "path": "/api/crucible/submit"
+    },
+    {
       "method": "GET",
+      "path": "/api/dashboard-state"
+    },
+    {
+      "method": "POST",
       "path": "/api/dashboard-state"
     },
     {
@@ -2758,8 +2810,16 @@
       "path": "/api/deploy-journal"
     },
     {
+      "method": "POST",
+      "path": "/api/deploy-journal"
+    },
+    {
       "method": "GET",
       "path": "/api/deps/watch"
+    },
+    {
+      "method": "POST",
+      "path": "/api/deps/watch/run"
     },
     {
       "method": "GET",
@@ -2780,6 +2840,10 @@
     {
       "method": "GET",
       "path": "/api/fix/proposals"
+    },
+    {
+      "method": "POST",
+      "path": "/api/fix/propose"
     },
     {
       "method": "GET",
@@ -2806,6 +2870,14 @@
       "path": "/api/hub"
     },
     {
+      "method": "POST",
+      "path": "/api/image/generate"
+    },
+    {
+      "method": "POST",
+      "path": "/api/incident"
+    },
+    {
       "method": "GET",
       "path": "/api/incidents"
     },
@@ -2816,6 +2888,10 @@
     {
       "method": "GET",
       "path": "/api/innerloop/federation"
+    },
+    {
+      "method": "POST",
+      "path": "/api/innerloop/federation/toggle"
     },
     {
       "method": "GET",
@@ -2842,6 +2918,14 @@
       "path": "/api/memory"
     },
     {
+      "method": "POST",
+      "path": "/api/memory/capture"
+    },
+    {
+      "method": "POST",
+      "path": "/api/memory/drain"
+    },
+    {
       "method": "GET",
       "path": "/api/memory/presets"
     },
@@ -2850,12 +2934,24 @@
       "path": "/api/memory/report"
     },
     {
+      "method": "POST",
+      "path": "/api/memory/search"
+    },
+    {
       "method": "GET",
+      "path": "/api/notifications/config"
+    },
+    {
+      "method": "POST",
       "path": "/api/notifications/config"
     },
     {
       "method": "GET",
       "path": "/api/openclaw/config"
+    },
+    {
+      "method": "POST",
+      "path": "/api/openclaw/snapshot"
     },
     {
       "method": "GET",
@@ -2866,8 +2962,20 @@
       "path": "/api/quorum/prompt"
     },
     {
+      "method": "POST",
+      "path": "/api/quorum/prompt"
+    },
+    {
+      "method": "POST",
+      "path": "/api/regression-guard"
+    },
+    {
       "method": "GET",
       "path": "/api/replay/:runIdx/:sliceId"
+    },
+    {
+      "method": "POST",
+      "path": "/api/runbook"
     },
     {
       "method": "GET",
@@ -2882,8 +2990,16 @@
       "path": "/api/runs/:runIdx"
     },
     {
+      "method": "POST",
+      "path": "/api/runs/abort"
+    },
+    {
       "method": "GET",
       "path": "/api/runs/latest"
+    },
+    {
+      "method": "POST",
+      "path": "/api/runs/trigger"
     },
     {
       "method": "GET",
@@ -2894,16 +3010,44 @@
       "path": "/api/secret-scan"
     },
     {
+      "method": "POST",
+      "path": "/api/secret-scan/run"
+    },
+    {
       "method": "GET",
       "path": "/api/secrets"
+    },
+    {
+      "method": "POST",
+      "path": "/api/secrets"
+    },
+    {
+      "method": "POST",
+      "path": "/api/self-update"
+    },
+    {
+      "method": "POST",
+      "path": "/api/server/restart"
     },
     {
       "method": "GET",
       "path": "/api/skills"
     },
     {
+      "method": "POST",
+      "path": "/api/skills/accept"
+    },
+    {
+      "method": "POST",
+      "path": "/api/skills/defer"
+    },
+    {
       "method": "GET",
       "path": "/api/skills/pending"
+    },
+    {
+      "method": "POST",
+      "path": "/api/skills/reject"
     },
     {
       "method": "GET",
@@ -2922,8 +3066,24 @@
       "path": "/api/tempering/artifact"
     },
     {
+      "method": "POST",
+      "path": "/api/tempering/bug-stub"
+    },
+    {
       "method": "GET",
       "path": "/api/timeline"
+    },
+    {
+      "method": "POST",
+      "path": "/api/tool/:name"
+    },
+    {
+      "method": "POST",
+      "path": "/api/tool/org-rules"
+    },
+    {
+      "method": "POST",
+      "path": "/api/tool/run-plan"
     },
     {
       "method": "GET",
@@ -2952,170 +3112,6 @@
     {
       "method": "GET",
       "path": "/api/workers"
-    },
-    {
-      "method": "POST",
-      "path": "/api/audit/drain"
-    },
-    {
-      "method": "POST",
-      "path": "/api/brain/replay"
-    },
-    {
-      "method": "POST",
-      "path": "/api/brain/test"
-    },
-    {
-      "method": "POST",
-      "path": "/api/bridge/approve/:runId"
-    },
-    {
-      "method": "POST",
-      "path": "/api/config"
-    },
-    {
-      "method": "POST",
-      "path": "/api/copilot-instructions/preview"
-    },
-    {
-      "method": "POST",
-      "path": "/api/copilot-instructions/sync"
-    },
-    {
-      "method": "POST",
-      "path": "/api/crucible/abandon"
-    },
-    {
-      "method": "POST",
-      "path": "/api/crucible/ask"
-    },
-    {
-      "method": "POST",
-      "path": "/api/crucible/config"
-    },
-    {
-      "method": "POST",
-      "path": "/api/crucible/finalize"
-    },
-    {
-      "method": "POST",
-      "path": "/api/crucible/submit"
-    },
-    {
-      "method": "POST",
-      "path": "/api/dashboard-state"
-    },
-    {
-      "method": "POST",
-      "path": "/api/deploy-journal"
-    },
-    {
-      "method": "POST",
-      "path": "/api/deps/watch/run"
-    },
-    {
-      "method": "POST",
-      "path": "/api/fix/propose"
-    },
-    {
-      "method": "POST",
-      "path": "/api/image/generate"
-    },
-    {
-      "method": "POST",
-      "path": "/api/incident"
-    },
-    {
-      "method": "POST",
-      "path": "/api/innerloop/federation/toggle"
-    },
-    {
-      "method": "POST",
-      "path": "/api/memory/capture"
-    },
-    {
-      "method": "POST",
-      "path": "/api/memory/drain"
-    },
-    {
-      "method": "POST",
-      "path": "/api/memory/search"
-    },
-    {
-      "method": "POST",
-      "path": "/api/notifications/config"
-    },
-    {
-      "method": "POST",
-      "path": "/api/openclaw/snapshot"
-    },
-    {
-      "method": "POST",
-      "path": "/api/quorum/prompt"
-    },
-    {
-      "method": "POST",
-      "path": "/api/regression-guard"
-    },
-    {
-      "method": "POST",
-      "path": "/api/runbook"
-    },
-    {
-      "method": "POST",
-      "path": "/api/runs/abort"
-    },
-    {
-      "method": "POST",
-      "path": "/api/runs/trigger"
-    },
-    {
-      "method": "POST",
-      "path": "/api/secret-scan/run"
-    },
-    {
-      "method": "POST",
-      "path": "/api/secrets"
-    },
-    {
-      "method": "POST",
-      "path": "/api/self-update"
-    },
-    {
-      "method": "POST",
-      "path": "/api/server/restart"
-    },
-    {
-      "method": "POST",
-      "path": "/api/skills/accept"
-    },
-    {
-      "method": "POST",
-      "path": "/api/skills/defer"
-    },
-    {
-      "method": "POST",
-      "path": "/api/skills/reject"
-    },
-    {
-      "method": "POST",
-      "path": "/api/tempering/bug-stub"
-    },
-    {
-      "method": "POST",
-      "path": "/api/tool/:name"
-    },
-    {
-      "method": "POST",
-      "path": "/api/tool/org-rules"
-    },
-    {
-      "method": "POST",
-      "path": "/api/tool/run-plan"
-    },
-    {
-      "method": "PUT",
-      "path": "/api/audit/config"
     }
   ],
   "mcpOnlyTools": [

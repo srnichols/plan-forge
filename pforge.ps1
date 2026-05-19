@@ -3424,19 +3424,19 @@ function Invoke-Smith {
 
     if ($hasHookFiles -or $hookConfig -or $hooksJsonConfig) {
         Write-Host "Lifecycle Hooks:" -ForegroundColor Cyan
-        $coreHooks = @("SessionStart", "PreToolUse", "PostToolUse", "Stop")
-        $liveGuardHooks = @("PostSlice", "PreAgentHandoff", "PreDeploy")
-        $allExpectedHooks = $coreHooks + $liveGuardHooks
-
-        # camelCase mapping for .forge.json config keys
-        $configKeyMap = @{
-            "SessionStart"     = "sessionStart"
-            "PreToolUse"       = "preToolUse"
-            "PostToolUse"      = "postToolUse"
-            "Stop"             = "stop"
-            "PostSlice"        = "postSlice"
-            "PreAgentHandoff"  = "preAgentHandoff"
-            "PreDeploy"        = "preDeploy"
+        $enumsCli = Join-Path $RepoRoot "pforge-mcp/bin/enums-cli.mjs"
+        if (Test-Path $enumsCli) {
+            $allExpectedHooks = @(node $enumsCli --enum HOOK_PASCAL 2>$null)
+            $hookNamesJson = node $enumsCli --enum HOOK_NAMES --format json 2>$null
+            $hookNamesObj  = $hookNamesJson | ConvertFrom-Json
+            $configKeyMap  = @{}
+            foreach ($prop in $hookNamesObj.PSObject.Properties) {
+                $configKeyMap[$prop.Name] = $prop.Value
+            }
+        } else {
+            # Fallback when pforge-mcp/bin/enums-cli.mjs is not present
+            $allExpectedHooks = @("SessionStart","PreToolUse","PostToolUse","Stop","PreDeploy","PostSlice","PreAgentHandoff","PostRun")
+            $configKeyMap = @{ SessionStart="sessionStart"; PreToolUse="preToolUse"; PostToolUse="postToolUse"; Stop="stop"; PreDeploy="preDeploy"; PostSlice="postSlice"; PreAgentHandoff="preAgentHandoff"; PostRun="postRun" }
         }
 
         $hookFiles = @()

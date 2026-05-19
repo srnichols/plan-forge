@@ -2891,7 +2891,22 @@ cmd_doctor() {
     local hooks_dir="$REPO_ROOT/.github/hooks"
     if [ -d "$hooks_dir" ]; then
         echo "Lifecycle Hooks:"
-        local expected_hooks=("SessionStart" "PreToolUse" "PostToolUse" "Stop")
+        local enums_cli="$REPO_ROOT/pforge-mcp/bin/enums-cli.mjs"
+        local expected_hooks=()
+        if command -v node >/dev/null 2>&1 && [ -f "$enums_cli" ]; then
+            mapfile -t expected_hooks < <(node "$enums_cli" --enum HOOK_PASCAL 2>/dev/null)
+        fi
+        if [ ${#expected_hooks[@]} -eq 0 ]; then
+            expected_hooks=("SessionStart" "PreToolUse" "PostToolUse" "Stop" "PreDeploy" "PostSlice" "PreAgentHandoff" "PostRun")
+        fi
+        # Build PascalCase->camelCase map for .forge.json config key lookup
+        declare -A hook_cfg_keys
+        local forge_json="$REPO_ROOT/.forge.json"
+        if command -v node >/dev/null 2>&1 && [ -f "$enums_cli" ] && command -v jq >/dev/null 2>&1; then
+            while IFS='=' read -r key val; do
+                hook_cfg_keys["$key"]="$val"
+            done < <(node "$enums_cli" --enum HOOK_NAMES --format json 2>/dev/null | jq -r 'to_entries | .[] | .key + "=" + .value' 2>/dev/null)
+        fi
         local hook_count=0 hook_missing=""
         # plan-forge.json (shipped by `pforge update` from templates/) declares core hooks in PascalCase.
         local hooks_json="$hooks_dir/plan-forge.json"
@@ -2901,9 +2916,16 @@ cmd_doctor() {
             if ls "$hooks_dir"/*"$hook"* >/dev/null 2>&1; then
                 found=1
             fi
-            # Source 2: .github/hooks/plan-forge.json declares this hook
+            # Source 2: .github/hooks/plan-forge.json declares this hook (PascalCase key)
             if [ $found -eq 0 ] && [ -f "$hooks_json" ] && command -v jq >/dev/null 2>&1; then
                 if jq -e ".hooks.\"$hook\"" "$hooks_json" >/dev/null 2>&1; then
+                    found=1
+                fi
+            fi
+            # Source 3: .forge.json -> hooks.<camelCase> (config-based hooks)
+            local cfg_key="${hook_cfg_keys[$hook]:-}"
+            if [ $found -eq 0 ] && [ -n "$cfg_key" ] && [ -f "$forge_json" ] && command -v jq >/dev/null 2>&1; then
+                if jq -e ".hooks.\"$cfg_key\"" "$forge_json" >/dev/null 2>&1; then
                     found=1
                 fi
             fi

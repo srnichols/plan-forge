@@ -6869,6 +6869,29 @@ export function __shouldDrainOnInit() {
   return process.env.PFORGE_DRAIN_ON_INIT !== "false";
 }
 
+const CROSS_RUN_CACHE_TTL_MS = 60 * 60 * 1000;
+
+function writeJsonAtomically(filePath, payload) {
+  const dir = dirname(filePath);
+  if (!existsSync(dir)) mkdirSync(dir, { recursive: true });
+  const tmpPath = `${filePath}.${process.pid}.tmp`;
+  writeFileSync(tmpPath, JSON.stringify(payload, null, 2), "utf-8");
+  renameSync(tmpPath, filePath);
+}
+
+function readCrossRunCache(cachePath, now = Date.now()) {
+  if (!existsSync(cachePath)) return null;
+  try {
+    const raw = JSON.parse(readFileSync(cachePath, "utf-8"));
+    const cachedAtMs = new Date(raw.cachedAt).getTime();
+    if (!Number.isFinite(cachedAtMs)) return null;
+    if ((now - cachedAtMs) > CROSS_RUN_CACHE_TTL_MS) return null;
+    return raw;
+  } catch {
+    return null;
+  }
+}
+
 // ─── Express App + REST API  ─────────────────────────────
 export function createExpressApp() {
   const app = express();
@@ -7083,6 +7106,24 @@ export function createExpressApp() {
       } else {
         res.status(500).json({ error: err.message });
       }
+    }
+  });
+
+  // REST API: GET /api/watcher/cross-run — cached 14d cross-run anomaly view
+  app.get("/api/watcher/cross-run", async (_req, res) => {
+    try {
+      const cachePath = resolve(PROJECT_DIR, ".forge", "cross-run-cache.json");
+      const cached = readCrossRunCache(cachePath);
+      if (cached) {
+        return res.json({ ...cached.report, cachedAt: cached.cachedAt, fromCache: true });
+      }
+
+      const report = await runWatch({ targetPath: PROJECT_DIR, mode: "cross-run", crossRunWindow: "14d" });
+      const cachedAt = new Date().toISOString();
+      writeJsonAtomically(cachePath, { cachedAt, report });
+      return res.json({ ...report, cachedAt, fromCache: false });
+    } catch (err) {
+      return res.status(500).json({ error: err.message });
     }
   });
 

@@ -296,7 +296,6 @@ node -e "process.chdir('pforge-mcp'); require('child_process').execSync('npx vit
 node -e "const fs=require('fs');if(!fs.existsSync('pforge-mcp/server/tool-handlers.mjs'))throw new Error('tool-handlers.mjs missing');const sub=fs.readFileSync('pforge-mcp/server/tool-handlers.mjs','utf8');if(!sub.includes('export async function invokeForgeTool'))throw new Error('invokeForgeTool not exported');if(!sub.includes('MCP_ONLY_TOOLS')||!sub.includes('new Set'))throw new Error('MCP_ONLY_TOOLS not in tool-handlers.mjs');if(sub.length<100000)throw new Error('tool-handlers file suspiciously small');const shim=fs.readFileSync('pforge-mcp/server.mjs','utf8');if(!shim.includes(\"from './server/tool-handlers.mjs'\")&&!shim.includes('from \"./server/tool-handlers.mjs\"'))throw new Error('shim missing tool-handlers re-export');console.log('ok S5 structure');"
 node -e "process.chdir('pforge-mcp'); require('child_process').execSync('npx vitest run tests/server-surface-snapshot.test.mjs tests/no-circular-imports.test.mjs tests/drain-io-wrapper.test.mjs tests/drain-rest-endpoint.test.mjs', {stdio:'inherit',shell:true});"
 ```
-```
 
 ### Slice 6 — Extract `server/rest-api.mjs` + `server/openbrain-bridge.mjs` + `server/mcp-handler.mjs` + `server/main.mjs` + `server/surface.mjs` + convert `server.mjs` to shim
 
@@ -315,7 +314,6 @@ node -e "process.chdir('pforge-mcp'); require('child_process').execSync('npx vit
 ```bash
 node -e "const fs=require('fs');for(const f of ['pforge-mcp/server/rest-api.mjs','pforge-mcp/server/openbrain-bridge.mjs','pforge-mcp/server/mcp-handler.mjs','pforge-mcp/server/main.mjs','pforge-mcp/server/surface.mjs'])if(!fs.existsSync(f))throw new Error('missing: '+f);const rest=fs.readFileSync('pforge-mcp/server/rest-api.mjs','utf8');if(!rest.includes('export function createExpressApp'))throw new Error('createExpressApp not exported');const bridge=fs.readFileSync('pforge-mcp/server/openbrain-bridge.mjs','utf8');if(!bridge.includes('export async function runDrainPass'))throw new Error('runDrainPass not exported');const main=fs.readFileSync('pforge-mcp/server/main.mjs','utf8');if(!main.includes('export function runServerMain')&&!main.includes('export async function runServerMain'))throw new Error('runServerMain not exported');const surf=fs.readFileSync('pforge-mcp/server/surface.mjs','utf8');if(!surf.includes('export function buildServerSurface'))throw new Error('buildServerSurface not exported');const shim=fs.readFileSync('pforge-mcp/server.mjs','utf8');const lines=shim.split(/\r?\n/).length;if(lines>120)throw new Error('shim too large: '+lines+' lines (max 120)');if(!shim.includes('dotenv/config'))throw new Error('shim missing dotenv import');if(!shim.includes(\"from './server/main.mjs'\")&&!shim.includes('from \"./server/main.mjs\"'))throw new Error('shim missing main re-export');console.log('ok S6 shim is '+lines+' lines');"
 node -e "process.chdir('pforge-mcp'); require('child_process').execSync('npx vitest run', {stdio:'inherit',shell:true});"
-```
 ```
 
 ### Slice 7 — Retro + roadmap update + CHANGELOG

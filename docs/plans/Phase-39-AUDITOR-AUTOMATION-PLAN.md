@@ -587,3 +587,65 @@ If any of these grep'd values has changed since this appendix was written (e.g. 
 | `forge_master_ask:` line in capabilities.mjs | ~line 1605 | `grep -n "forge_master_ask: {" pforge-mcp/capabilities.mjs` |
 | Hook table row count in `customization.html` | 3 rows in "LiveGuard and orchestration hooks" | `grep -c "<tr>" docs/manual/customization.html` (note: includes other tables) |
 | Settings tab count in `dashboard-settings.html` (used by UI follow-up plan) | 9 `<h3 id="settings-">` | `grep -c "<h3 id=\"settings-" docs/manual/dashboard-settings.html` |
+
+---
+
+## What actually shipped
+
+> **Written**: 2026-05-19 — S12 Retro
+
+### Final commit SHAs per slice
+
+| Slice | Description | Commit SHA |
+|-------|-------------|------------|
+| S0 | Baseline test harness | `cd38cd7` |
+| S0 (updated) | S0 baseline updated to reflect S1–S8 shipped state | `c19e9f2` |
+| S1 | `hooks.postRun.invokeAuditor.onFailure` | `c0bba9b` |
+| S2 | `hooks.postRun.invokeAuditor.everyNRuns` | `8ccdc3c` |
+| S3 | `runWatch(mode: "cross-run")` | `7fd9a5c` |
+| S4 | Cross-run watcher wired into A4 auditor | `0de3918` |
+| S5 | Observer loop infra (hub subscription + event batching) | `b6e21aa` |
+| S6 | Observer budget caps + fail-closed enforcement | `81c901e` |
+| S7 | Observer reasoning loop with budgeted LLM call | `141dd38` |
+| S8 | CLI surface: `pforge forge-master observe` | `0b98b7a` |
+| S9 | Full unit QA sweep (both workspaces) | `2c3a9aa` |
+| S10 | Testbed E2E + chaos (9 scenarios, 62 tests) | `f9d1123` |
+| S11 | Docs sweep + auto-discovery (multi-commit) | `b4d3140`, `6f0f47d`, `f82531c`, `43b38d4`, `ec5e9e2` |
+| S12 | Retro | this commit |
+
+**v3.8.0 release commit**: `a38b0f3` — shipped before S10–S12 were complete (see Deviations below).
+
+### Deviations from draft
+
+1. **v3.8.0 released before S10–S12 completed.** The release slice ran at S9-complete. S10 (testbed E2E), S11 (docs sweep), and S12 (retro) were committed post-release on `planning/main`. No code changes occurred in S10–S12; only tests and docs. No consumer-facing regression risk.
+
+2. **S10 testbed approach shifted to in-process vitest imports.** The testbed at `E:\GitHub\plan-forge-testbed` was at template v3.7.0 and did not export `runPostRunAuditorHook` from its orchestrator.mjs. Rather than upgrading the testbed, S10 tests import Phase-39 modules directly from the main repo (`../../pforge-master/src/`, `../orchestrator.mjs`, `../watcher.mjs`) via vitest's Node resolution. This is correct per the slice metadata ("testbed E2E" = in-process behavioral tests, not CLI shell invocations). The 9 scenario JSON fixtures are minimal placeholders that test fixture-file existence and kind fields only.
+
+3. **S11 spread across 5 commits** (instead of the planned single `docs(auditor-automation): S11` commit). Multiple sessions contributed docs changes incrementally across `b4d3140 → 6f0f47d → f82531c → 43b38d4 → ec5e9e2`. All changes are correct; the 5-commit split is cosmetic only.
+
+4. **`recommendFromAnomalies` call site fixed in S10.** The original S10 test file called `recommendFromAnomalies(anomalies)` with 1 argument; the function requires 2 (`anomalies, snapshot`). Fixed at line 425 before committing `f9d1123`.
+
+5. **Tool count discrepancy resolved.** `capabilities.md` header read "89 tools" but `forge_capabilities` baseline reported 94. Updated to 94 during S11. The discrepancy predated Phase-39 (doc drift from multiple prior phases).
+
+### Known gaps and limitations
+
+1. **`runPostRunAuditorHook` does not actually spawn an auditor process.** The function in `pforge-mcp/orchestrator.mjs` records `{ triggered, reason, config, timestamp }` in auditor state and logs to the hub but does NOT spawn a child process or write `.forge/health/latest.md`. The spawn logic lives in Phase-40 (dashboard UI follow-up). MUST acceptance criteria #1 ("write `.forge/health/latest.md` within 60 s") is therefore not fully met by the orchestrator alone — it requires the Phase-40 UI worker to close the loop.
+
+2. **Observer allowlist verified by contract, not by integration test.** The DoD required a runtime integration test confirming bridge-filter rejects non-allowlisted tool calls. The unit tests (`observer-loop.test.mjs`) verify the allowlist logic exists; no live process-level rejection test was executed (would require a full hub + bridge + live MCP session). Carried forward to Phase-40 integration test suite.
+
+3. **`forge_cost_report` attribution test not executed.** MUST criterion #10 (auditor spawn tokens attribute to `forge-master`, not parent run) was not verified with a live `forge_cost_report` call — the actual spawn is a gap (see #1 above). Vitest tests verify the state-write path; real-money attribution verification is deferred.
+
+4. **`docs/llms.txt` and root `llms.txt` not updated.** S11 appendix target #9 called for adding `forge_master_observe` to the llms.txt tool inventories. These files were skipped in execution — the llms.txt files use a manually maintained format and were out of scope for automation. Carryover to S11 follow-up.
+
+5. **`environment-variables-reference.html` `PFORGE_FORGE_MASTER_OBSERVE_DISABLE` entry not added.** S11 appendix target #6. Deferred — env var kill switch documentation can land in Phase-40 docs sweep.
+
+### Carryover items (next phase gates on these)
+
+- **Dashboard UI** — Phase-40 covers: settings tab `forgeMaster.observer.*` + `forgeMaster.auditor.*`, observer narrations live card, cross-run anomalies card, auditor latest-report card
+- **A4 auditor process spawn** — close the gap: `runPostRunAuditorHook` must actually spawn the auditor and write `.forge/health/latest.md` (blocker for MUST #1)
+- **Runtime allowlist integration test** — live bridge-filter rejection test in the Phase-40 test suite
+- **A4 auditor opening PRs** — auditor stays read-only this phase; auto-PR mode is Phase-40+
+- **Cross-machine observer aggregation** — single-machine only this phase
+- **Watcher → auditor real-time escalation** — deferred per Carryover section above
+- **`docs/llms.txt` tool inventory** — append `forge_master_observe` (89 → 94 accurate count)
+- **`environment-variables-reference.html`** — `PFORGE_FORGE_MASTER_OBSERVE_DISABLE` kill switch entry

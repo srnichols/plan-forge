@@ -104,7 +104,22 @@ Parse `docs/plans/cleanup-findings/raw/architecture-report.json`. Report:
 - High fan-in volatile modules
 - High fan-out unstable modules
 
-### 7. Aggregate and report
+### 7. Run Boy Scout delta check
+
+```bash
+node scripts/audit/boyscout-delta.mjs
+node scripts/audit/boyscout-delta.mjs --base origin/master
+node scripts/audit/boyscout-delta.mjs --base HEAD~1 --include "pforge-mcp/**"
+```
+
+Parse `docs/plans/cleanup-findings/raw/boyscout-delta-report.json`. For every file changed since the merge-base, report:
+- `boy-scout-violation` — file was edited but ESLint violation count did **not** decrease
+- `regression` — file was edited and violation count **increased** (treat as error)
+- `improved` — violation count decreased (Boy Scout pass; surface as positive signal in summary)
+
+> **Why this matters**: The Boy Scout Rule in [architecture-principles.instructions.md](../../instructions/architecture-principles.instructions.md) says "every commit touching a file must leave it cleaner." Without a delta check the rule is aspirational. This step makes it enforceable — a PR that touches `orchestrator.mjs` for a feature fix must also clean up at least one existing warning in that file.
+
+### 8. Aggregate and report
 
 Merge all findings into a unified report grouped by category:
 
@@ -123,6 +138,7 @@ Merge all findings into a unified report grouped by category:
 │  console.log        │   —    │  bulk        │
 │  Duplication (DRY)  │   —    │    7         │
 │  Architecture       │   1    │    3         │
+│  Boy Scout delta    │   N    │    M         │
 ├─────────────────────────────────────────────┤
 │  Total: 14 errors, 56 warnings              │
 └─────────────────────────────────────────────┘
@@ -130,7 +146,7 @@ Merge all findings into a unified report grouped by category:
 
 If `--out <path>` is provided, write the full JSON report. Otherwise print the summary table and the top 10 highest-severity findings with file paths and line numbers.
 
-### 8. (Optional) Generate fix suggestions (`--fix-suggestions`)
+### 9. (Optional) Generate fix suggestions (`--fix-suggestions`)
 
 When `--fix-suggestions` is present, append a concrete remediation for each finding:
 
@@ -145,6 +161,7 @@ When `--fix-suggestions` is present, append a concrete remediation for each find
 | Magic number | "Extract `<value>` at line N to a named constant: `const <SUGGESTED_NAME> = <value>`" |
 | Dependency cycle | "Break cycle by extracting shared interface into a new module depended on by both sides" |
 | Duplicated block (jscpd) | "Extract the duplicated block at <file>:<line> into a shared helper in the nearest common module" |
+| Boy Scout violation | "You edited <file> without reducing violations. Either fix one existing warning in this file (preferred), or document why this PR explicitly avoids touching unrelated code" |
 
 Fix suggestions are advisory — they do NOT modify code. The agent or user applies them in a follow-up step.
 
@@ -184,7 +201,7 @@ Fix suggestions are advisory — they do NOT modify code. The agent or user appl
 
 After completing this skill, confirm:
 
-- [ ] All available audit scripts were executed (measure-modules, grep-matrix, long-param-walker, ESLint, run-jscpd)
+- [ ] All available audit scripts were executed (measure-modules, grep-matrix, long-param-walker, ESLint, run-jscpd, boyscout-delta)
 - [ ] Findings are grouped by category with error/warning counts
 - [ ] If `--fix-suggestions` was requested, each finding has a concrete remediation
 - [ ] If `--out` was specified, JSON report exists at the given path
@@ -199,5 +216,6 @@ After completing this skill, confirm:
 | `scripts/audit/*.mjs` | The actual audit implementations this skill orchestrates |
 | `scripts/audit/eslint-clean-code.config.mjs` | Custom ESLint config with aliased clean-code rules |
 | `scripts/audit/run-jscpd.mjs` | Duplication detection (jscpd) — wired into Step 5 |
+| `scripts/audit/boyscout-delta.mjs` | Boy Scout Rule enforcement — compares per-file violation counts at merge-base vs HEAD; wired into Step 7 |
 | `forge_sweep` | Lighter-weight marker scan (TODO/FIXME only); this skill is the comprehensive version |
 | `/code-review` skill | **Run `/clean-code-review` FIRST, then `/code-review`.** This skill is the mechanical/quantitative pass (LOC, complexity, params, duplication, ESLint). `/code-review` is the qualitative/judgment pass (architecture, security, patterns, tests). Mechanical findings clear the noise so the human-judgment review can focus on what actually requires judgment. |

@@ -5069,6 +5069,16 @@ export async function runPlan(planPath, options = {}) {
     } catch { /* non-fatal — never fail the run for audit activation */ }
   }
 
+  // Phase-39 Slice 1 — post-run auditor auto-invoke on failure
+  if (!estimate && !dryRun) {
+    try {
+      const auditorResult = runPostRunAuditorHook({ cwd, allPassed, eventBus });
+      if (auditorResult.triggered) {
+        summary._auditor = auditorResult;
+      }
+    } catch { /* never block the run on auditor hook failure */ }
+  }
+
   // Write summary
   writeFileSync(resolve(runDir, "summary.json"), JSON.stringify(summary, null, 2));
 
@@ -10315,6 +10325,54 @@ export function readCrucibleState(targetPath) {
     stallCutoffDays: CRUCIBLE_STALL_CUTOFF_DAYS,
     orphanHandoffs,
   };
+}
+
+// ─── PostRun Auditor Hook (Phase-39 Slice 1) ─────────────────────────
+
+/**
+ * Post-run auditor hook — reads hooks.postRun.invokeAuditor from .forge.json
+ * and fires when the configured condition is met.
+ *
+ * Currently supports:
+ *   onFailure: true  — fire when the run failed (!allPassed)
+ *
+ * @param {object} params
+ * @param {string} [params.cwd=process.cwd()] - Project root directory
+ * @param {boolean} [params.allPassed=true]   - Whether all slices passed
+ * @param {object|null} [params.eventBus=null] - EventEmitter for broadcasting
+ * @returns {{ triggered: boolean, reason?: string, config?: object, timestamp?: string }}
+ */
+export function runPostRunAuditorHook({ cwd = process.cwd(), allPassed = true, eventBus = null } = {}) {
+  let config = { onFailure: false, everyNRuns: null };
+  try {
+    const configPath = resolve(cwd, ".forge.json");
+    if (existsSync(configPath)) {
+      const raw = JSON.parse(readFileSync(configPath, "utf-8"));
+      if (raw?.hooks?.postRun?.invokeAuditor) {
+        config = { ...config, ...raw.hooks.postRun.invokeAuditor };
+      }
+    }
+  } catch { /* use defaults on any parse/read failure */ }
+
+  const shouldFire = config.onFailure === true && !allPassed;
+  if (!shouldFire) {
+    return { triggered: false };
+  }
+
+  const result = {
+    triggered: true,
+    reason: "onFailure",
+    config,
+    timestamp: new Date().toISOString(),
+  };
+
+  if (eventBus && typeof eventBus.emit === "function") {
+    try {
+      eventBus.emit("auditor-auto-invoke", { reason: "onFailure", config });
+    } catch { /* non-fatal */ }
+  }
+
+  return result;
 }
 
 // ─── Phase FORGE-SHOP-02 Slice 02.1 — Review Queue Storage ───────────

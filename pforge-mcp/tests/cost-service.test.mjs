@@ -453,6 +453,7 @@ describe("forge_estimate_slice registration (Phase-27.2 Slice 3)", () => {
     // Switch-case (case label on its own line)
     expect(serverSrc).toMatch(/case\s+"forge_estimate_slice"\s*:/);
     // Handler body
-    expect(serverSrc).toMatch(/if\s*\(\s*name\s*===\s*"forge_estimate_slice"\s*\)/);
+    // Handler body (Phase-52 SERVER-SPLIT: handlers use negated guard `if (!(name === ...))`)
+    expect(serverSrc).toContain(`name === "forge_estimate_slice"`);
   });
 });

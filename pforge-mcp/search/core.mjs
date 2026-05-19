@@ -238,7 +238,8 @@ function _mergeL3Records(allRecords, opts, query, tags, since) {
   }
 }
 
-function _buildEmptyMessage(query, tags, sinceDate, correlationId, sources, activeSources, since) {
+function _buildEmptyMessage(query, opts) {
+  const { tags, sinceDate, correlationId, sources, activeSources, since } = opts;
   const filterParts = [];
   if (tags && tags.length > 0) filterParts.push(`tags=[${tags.join(", ")}]`);
   if (sinceDate) filterParts.push(`since=${since}`);
@@ -279,7 +280,7 @@ export function search(params, opts = {}) {
   }));
 
   if (total === 0) {
-    return { hits, total, truncated, durationMs, message: _buildEmptyMessage(query, tags, sinceDate, correlationId, sources, activeSources, since) };
+    return { hits, total, truncated, durationMs, message: _buildEmptyMessage(query, { tags, sinceDate, correlationId, sources, activeSources, since }) };
   }
   return { hits, total, truncated, durationMs };
 }

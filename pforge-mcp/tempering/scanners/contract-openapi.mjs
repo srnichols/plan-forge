@@ -59,7 +59,11 @@ async function loadYamlOpenApiSpec(raw, importFn) {
   if (!loadFn) {
     return { error: parseSpecFailure("yaml-parser-not-installed", true) };
   }
-  return { spec: loadFn(raw) };
+  try {
+    return { spec: loadFn(raw) };
+  } catch (err) {
+    return { error: parseSpecFailure(`parse-error: ${err.message}`) };
+  }
 }
 
 function enumerateOpenApiOperations(spec, allowMutatingMethods) {

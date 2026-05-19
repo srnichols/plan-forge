@@ -1302,7 +1302,8 @@ async function _runSpawnBasedScanner(name, cwd, timeoutMs, started, now) {
   };
 }
 
-async function _runImportBasedScanner(name, modulePath, entryPoint, cwd, timeoutMs, started, now) {
+async function _runImportBasedScanner(name, opts) {
+  const { modulePath, entryPoint, cwd, timeoutMs, started, now } = opts;
   const mod = await import(modulePath);
   const runFn = mod[entryPoint];
   if (typeof runFn !== "function") {
@@ -1367,7 +1368,7 @@ export async function runSingleScanner(name, opts = {}) {
 
   const modulePath = SCANNER_IMPORT_MAP[name];
   const entryPoint = SCANNER_ENTRY_POINTS[name];
-  return _runImportBasedScanner(name, modulePath, entryPoint, cwd, timeoutMs, started, now);
+  return _runImportBasedScanner(name, { modulePath, entryPoint, cwd, timeoutMs, started, now });
 }
 
 /**

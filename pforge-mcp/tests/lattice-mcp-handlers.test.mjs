@@ -70,7 +70,8 @@ describe("Lattice MCP handlers — server.mjs wiring", () => {
     });
 
     it(`${toolName} has a handler in CallToolRequestSchema section`, () => {
-      expect(serverSrc).toContain(`if (name === "${toolName}")`);
+      // Phase-52 SERVER-SPLIT: handlers use negated guard `if (!(name === ...)) return _CALL_TOOL_NO_MATCH;`
+      expect(serverSrc).toContain(`name === "${toolName}"`);
     });
 
     it(`${toolName} is in MCP_ONLY_TOOLS set`, () => {

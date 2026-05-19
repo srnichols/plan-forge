@@ -1,12 +1,7 @@
 import { execSync } from "node:child_process";
 import { existsSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
-import { resolve, join, dirname, basename } from "node:path";
-import { fileURLToPath } from "node:url";
-import { PROJECT_DIR } from "./state.mjs";
-import { resolveFrameworkVersion } from "../update-check.mjs";
-
-const __dirname = dirname(fileURLToPath(import.meta.url));
-const FRAMEWORK_VERSION = resolveFrameworkVersion({ serverDir: resolve(__dirname, "..") });
+import { join, basename, resolve } from "node:path";
+import { PROJECT_DIR, FRAMEWORK_VERSION } from "./state.mjs";
 
 // ─── Org Rules Consolidation ──────────────────────────────────────────
 export function callOrgRules({ format = "github", output: outputFile = null } = {}, cwd = PROJECT_DIR) {

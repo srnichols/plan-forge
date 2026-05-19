@@ -2,6 +2,7 @@ import { existsSync, mkdirSync, appendFileSync } from "node:fs";
 import { resolve, join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import { captureMemory as _captureMemoryCore } from "../memory.mjs";
+import { resolveFrameworkVersion } from "../update-check.mjs";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
@@ -59,6 +60,8 @@ export const { resolved: PROJECT_DIR, source: PROJECT_DIR_SOURCE } = resolveProj
 export const HTTP_PORT = parseInt(process.env.PLAN_FORGE_HTTP_PORT || "3100", 10);
 export const IS_WINDOWS = process.platform === "win32";
 export const PFORGE = IS_WINDOWS ? "powershell.exe -NoProfile -ExecutionPolicy Bypass -File pforge.ps1" : "bash pforge.sh";
+export const FRAMEWORK_VERSION = resolveFrameworkVersion({ serverDir: resolve(__dirname, "..") });
+export const _SERVER_CODE_HASH = FRAMEWORK_VERSION || "server-unknown";
 
 export let activeAbortController = null;
 export let _planPathAliasWarned = false;

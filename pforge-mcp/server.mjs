@@ -133,7 +133,7 @@ import { routeFinding } from "./tempering/triage.mjs";
 import { fileClassifierIssue } from "./tempering/classifier-issue.mjs";
 // Phase-39 Slice 7 — audit-loop activation surface
 import { loadAuditConfig, saveAuditConfig, shouldAutoDrain } from "./tempering/auto-activate.mjs";
-import { checkForUpdate, detectCorruptInstall, resolveFrameworkVersion } from "./update-check.mjs";
+import { checkForUpdate, detectCorruptInstall } from "./update-check.mjs";
 // Phase GITHUB-A — GitHub stack introspection
 import { inspectGithubStack } from "./github-introspect.mjs";
 // Phase GITHUB-D Slice 5 — Copilot Metrics REST endpoint
@@ -186,22 +186,12 @@ import {
   setActiveBridge,
   setActiveEventWatcher,
   setStudioClient,
+  FRAMEWORK_VERSION,
+  _SERVER_CODE_HASH,
 } from "./server/state.mjs";
 
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
-
-// Issue #106: single source of truth for the framework's own version.
-// Reads `<install root>/VERSION` (independent of PROJECT_DIR / cwd) so the
-// MCP handshake, /api/version endpoint, capabilities digest, and boot-time
-// update-check all report the same number — and that number is always the
-// version of the running install, not a stale literal baked into source.
-const FRAMEWORK_VERSION = resolveFrameworkVersion({ serverDir: __dirname });
-
-// Anvil adoption — code-hash seed computed once at module load from version string.
-// Using FRAMEWORK_VERSION means the cache is invalidated on every release, which
-// is the right granularity for CLI-delegated read-only tools.
-const _SERVER_CODE_HASH = FRAMEWORK_VERSION || "server-unknown";
 
 console.error(`[pforge-mcp] PROJECT_DIR=${PROJECT_DIR} (source=${PROJECT_DIR_SOURCE})`);
 console.error(`[pforge-mcp] FRAMEWORK_VERSION=${FRAMEWORK_VERSION}`);

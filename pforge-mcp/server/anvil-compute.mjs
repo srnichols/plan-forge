@@ -1,29 +1,11 @@
 import { execSync } from "node:child_process";
-import { resolve, dirname } from "node:path";
-import { fileURLToPath } from "node:url";
+import { resolve } from "node:path";
+import { runPforge, findProjectRoot } from "./helpers.mjs";
 import { withAnvil } from "../anvil.mjs";
 import { handleScan as temperingHandleScan } from "../tempering.mjs";
-import { PROJECT_DIR } from "./state.mjs";
-import { findProjectRoot, runPforge } from "./helpers.mjs";
-import { resolveFrameworkVersion } from "../update-check.mjs";
-
-const __dirname = dirname(fileURLToPath(import.meta.url));
-
-// `codeHashSeed` defaults to `_SERVER_CODE_HASH` (FRAMEWORK_VERSION), so the
-// cache is automatically invalidated on every release.
-const _SERVER_CODE_HASH = resolveFrameworkVersion({ serverDir: resolve(__dirname, "..") }) || "server-unknown";
+import { PROJECT_DIR, _SERVER_CODE_HASH } from "./state.mjs";
 
 // ─── Anvil-wrapped compute helpers (Phase ANVIL Slice 5) ─────────────────────
-//
-// Each helper wraps a pure, read-only compute step in `withAnvil`, enabling
-// Δ-only memoization. `deps` provides injectable overrides for unit tests.
-
-/**
- * Runs `pforge sweep` wrapped in the Anvil cache.
- * @param {object} args - MCP tool arguments (`path`, etc.)
- * @param {object} [deps] - Injectable overrides: `_runPforge`, `_withAnvil`, `_codeHash`, `_cwd`
- * @returns {Promise<object>} Annotated sweep result with `anvil` metadata
- */
 export async function _sweepAnvilCompute(args = {}, deps = {}) {
   const {
     _runPforge = runPforge,
@@ -56,12 +38,6 @@ export async function _sweepAnvilCompute(args = {}, deps = {}) {
   return raw;
 }
 
-/**
- * Runs `pforge analyze` (non-quorum) wrapped in the Anvil cache.
- * @param {object} args - MCP tool arguments (`plan`, `path`, etc.)
- * @param {object} [deps] - Injectable overrides: `_runPforge`, `_withAnvil`, `_codeHash`, `_cwd`
- * @returns {Promise<object>} Analyze result with `anvil` metadata
- */
 export async function _analyzeAnvilCompute(args = {}, deps = {}) {
   const {
     _runPforge = runPforge,
@@ -76,12 +52,6 @@ export async function _analyzeAnvilCompute(args = {}, deps = {}) {
   );
 }
 
-/**
- * Runs `forge_tempering_scan` wrapped in the Anvil cache.
- * @param {object} args - MCP tool arguments (`path`, `correlationId`, etc.)
- * @param {object} [deps] - Injectable overrides: `_handleScan`, `_withAnvil`, `_codeHash`, `_cwd`, `_hub`
- * @returns {Promise<object>} Scan result with `anvil` metadata
- */
 export async function _temperingScanAnvilCompute(args = {}, deps = {}) {
   const {
     _handleScan = temperingHandleScan,
@@ -101,12 +71,6 @@ export async function _temperingScanAnvilCompute(args = {}, deps = {}) {
   );
 }
 
-/**
- * Runs `forge_hotspot` (git log analysis) wrapped in the Anvil cache.
- * @param {object} args - MCP tool arguments (`path`, `top`, `since`)
- * @param {object} [deps] - Injectable overrides: `_execSync`, `_withAnvil`, `_codeHash`, `_cwd`
- * @returns {Promise<object>} Hotspot result with `anvil` metadata
- */
 export async function _hotspotAnvilCompute(args = {}, deps = {}) {
   const {
     _execSync = execSync,

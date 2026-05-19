@@ -374,7 +374,7 @@ function buildVisualEventPayload({ entry, urlHash, diffPercent, llmVerdict, seve
   };
 }
 
-async function maybeQueueVisualReview(config, projectDir, entry, urlHash, diffPercent, llmVerdict, hub, captureMemory) {
+async function maybeQueueVisualReview(config, projectDir, entry, urlHash, diffPercent, { llmVerdict, hub, captureMemory }) {
   const vdConfig = config?.visualDiff || {};
   if (vdConfig.autoQueueReview !== true) return;
   try {
@@ -388,7 +388,7 @@ async function maybeQueueVisualReview(config, projectDir, entry, urlHash, diffPe
   } catch { /* review hook is advisory */ }
 }
 
-async function maybeQueueInconclusiveReview(projectDir, entry, urlHash, diffPercent, quorumData, explanation, hub, captureMemory) {
+async function maybeQueueInconclusiveReview(projectDir, entry, urlHash, diffPercent, quorumData, { explanation, hub, captureMemory }) {
   try {
     const { maybeAddTemperingReview } = await import("../../orchestrator.mjs");
     maybeAddTemperingReview(projectDir, {
@@ -467,12 +467,12 @@ async function handleInvestigateBand({ state, entry, urlHash, diffPercent, analy
 
   if (analysis.llmVerdict === "regression") {
     state.failCount++;
-    await maybeQueueVisualReview(config, projectDir, entry, urlHash, diffPercent, analysis.llmVerdict, hub, captureMemory);
+    await maybeQueueVisualReview(config, projectDir, entry, urlHash, diffPercent, { llmVerdict: analysis.llmVerdict, hub, captureMemory });
   } else if (analysis.llmVerdict === "acceptable") {
     state.passCount++;
   } else {
     state.skippedCount++;
-    await maybeQueueInconclusiveReview(projectDir, entry, urlHash, diffPercent, analysis.quorumData, analysis.explanation, hub, captureMemory);
+    await maybeQueueInconclusiveReview(projectDir, entry, urlHash, diffPercent, analysis.quorumData, { explanation: analysis.explanation, hub, captureMemory });
   }
 
   captureVisualAnalysis(captureMemory, analysis.llmVerdict, entry, diffPercent, analysis.quorumData, projectDir);

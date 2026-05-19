@@ -460,6 +460,46 @@ async function main() {
   console.log(`\n✅ Captured 9 screenshots to ${OUTPUT_DIR}`);
 }
 
+async function injectSkillsDemoEvents(page) {
+  await page.evaluate(() => {
+    if (typeof handleEvent === "function") {
+      handleEvent({
+        type: "skill-started",
+        data: { skillName: "code-review", stepCount: 5, timestamp: new Date().toISOString() },
+      });
+      handleEvent({
+        type: "skill-step-started",
+        data: { skillName: "code-review", stepNumber: 1, stepName: "Gather context", timestamp: new Date().toISOString() },
+      });
+      handleEvent({
+        type: "skill-step-completed",
+        data: { skillName: "code-review", stepNumber: 1, stepName: "Gather context", status: "passed", duration: 2300 },
+      });
+      handleEvent({
+        type: "skill-step-started",
+        data: { skillName: "code-review", stepNumber: 2, stepName: "Architecture review", timestamp: new Date().toISOString() },
+      });
+      handleEvent({
+        type: "skill-step-completed",
+        data: { skillName: "code-review", stepNumber: 2, stepName: "Architecture review", status: "passed", duration: 4100 },
+      });
+      handleEvent({
+        type: "skill-step-started",
+        data: { skillName: "code-review", stepNumber: 3, stepName: "Security scan", timestamp: new Date().toISOString() },
+      });
+      handleEvent({
+        type: "skill-step-completed",
+        data: { skillName: "code-review", stepNumber: 3, stepName: "Security scan", status: "passed", duration: 3200 },
+      });
+      handleEvent({
+        type: "skill-step-started",
+        data: { skillName: "code-review", stepNumber: 4, stepName: "Test coverage", timestamp: new Date().toISOString() },
+      });
+      // Step 4 still executing — screenshot captures this
+    }
+  });
+}
+
 async function clickTab(page, tabName) {
   // Switch to correct group first (LiveGuard tabs need the liveguard group visible)
   const isLG = tabName.startsWith("lg-");

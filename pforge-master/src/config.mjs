@@ -19,6 +19,7 @@
 
 import { existsSync, readFileSync } from "node:fs";
 import { resolve } from "node:path";
+import { FORGE_MASTER_MODES, MODEL_TIERS } from "../../pforge-mcp/enums.mjs";
 
 export const FORGE_MASTER_DEFAULTS = Object.freeze({
   reasoningModel: null,
@@ -48,6 +49,27 @@ export const FORGE_MASTER_DEFAULTS = Object.freeze({
 });
 
 const VALID_PROVIDERS = new Set(["githubCopilot", "anthropic", "openai", "xai"]);
+const VALID_MODEL_TIERS = new Set(MODEL_TIERS);
+const VALID_FORGE_MASTER_MODES = new Set(FORGE_MASTER_MODES);
+
+function formatValidValues(values) {
+  return [...values].join(", ");
+}
+
+function validateOptionalModelTier(kind, value) {
+  if (value == null) return null;
+  if (!VALID_MODEL_TIERS.has(value)) {
+    throw new RangeError(`Invalid ${kind} '${value}'. Valid: ${formatValidValues(MODEL_TIERS)} or null`);
+  }
+  return value;
+}
+
+function validateOptionalForgeMasterMode(value) {
+  if (typeof value !== "string" || value.length === 0) return;
+  if (!VALID_FORGE_MASTER_MODES.has(value)) {
+    throw new RangeError(`Invalid forgeMaster.mode '${value}'. Valid: ${formatValidValues(FORGE_MASTER_MODES)}`);
+  }
+}
 
 function resolveReasoningModel(forgeMasterBlock, forgeJson) {
   if (forgeMasterBlock?.reasoningModel && typeof forgeMasterBlock.reasoningModel === "string") {
@@ -157,6 +179,8 @@ export function getForgeMasterConfig({ cwd = process.cwd() } = {}) {
     ? block.autoEscalate
     : FORGE_MASTER_DEFAULTS.autoEscalate;
 
+  validateOptionalForgeMasterMode(block?.mode);
+
   // ── Observer budget config ────────────────────────────────────────
   const observerBlock = block?.observer ?? {};
 
@@ -180,20 +204,13 @@ export function getForgeMasterConfig({ cwd = process.cwd() } = {}) {
     ? Math.trunc(observerBlock.maxNarrationsPerHour)
     : FORGE_MASTER_DEFAULTS.observer.maxNarrationsPerHour;
 
-  const VALID_MODEL_TIERS = ["flagship", "mid", "fast"];
-  const observerModelTier = (
-    typeof observerBlock.modelTier === "string" &&
-    VALID_MODEL_TIERS.includes(observerBlock.modelTier)
-  )
-    ? observerBlock.modelTier
+  const observerModelTier = typeof observerBlock.modelTier === "string"
+    ? validateOptionalModelTier("forgeMaster.observer.modelTier", observerBlock.modelTier)
     : FORGE_MASTER_DEFAULTS.observer.modelTier;
 
   const auditorBlock = block?.auditor ?? {};
-  const auditorModelTier = (
-    typeof auditorBlock.modelTier === "string" &&
-    VALID_MODEL_TIERS.includes(auditorBlock.modelTier)
-  )
-    ? auditorBlock.modelTier
+  const auditorModelTier = typeof auditorBlock.modelTier === "string"
+    ? validateOptionalModelTier("forgeMaster.auditor.modelTier", auditorBlock.modelTier)
     : FORGE_MASTER_DEFAULTS.auditor.modelTier;
 
   return {

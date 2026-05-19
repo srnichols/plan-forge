@@ -26,6 +26,7 @@ import { EventEmitter } from "node:events";
 import { tmpdir } from "node:os";
 import { fileURLToPath } from "node:url";
 import { createHash } from "node:crypto";
+import { QUORUM_MODES, WATCHER_MODES } from "./enums.mjs";
 import { createTraceContext, createTelemetryHandler, writeManifest, appendRunIndex, pruneRunHistory, addLogSummary } from "./telemetry.mjs";
 import { recordActivity } from "./team-activity.mjs";
 import { isOpenBrainConfigured, buildMemorySearchBlock, buildMemoryCaptureBlock, buildReflexionBlock, buildTrajectorySuffix, extractTrajectory, writeTrajectory, retrieveAutoSkills, buildAutoSkillContext, extractAutoSkill, writeAutoSkill, incrementAutoSkillReuse, buildRunSummaryThought, buildCostAnomalyThought, loadProjectContext, buildPlanBootContext, computeGateSuggestionKey, getGateSuggestionCounter, captureMemory, autoDrainOpenBrainQueue } from "./memory.mjs";
@@ -68,6 +69,9 @@ export const shouldAutoDrain = _shouldAutoDrain;
 export const readTemperingState = _readTemperingState;
 export const readTemperingConfig = _readTemperingConfig;
 export { TEMPERING_SCAN_STALE_DAYS };
+
+const [QUORUM_MODE_AUTO, QUORUM_PRESET_POWER, QUORUM_PRESET_SPEED, QUORUM_MODE_FALSE] = QUORUM_MODES;
+const [WATCHER_MODE_SNAPSHOT, WATCHER_MODE_ANALYZE, WATCHER_MODE_CROSS_RUN] = WATCHER_MODES;
 
 // ─── Centralized Constants ────────────────────────────────────────────
 /** Canonical list of all supported agent adapters. Update here — consumed by dashboard, setup, and docs. */
@@ -4300,7 +4304,7 @@ export async function runPlan(planPath, options = {}) {
     dryRun = false,
     eventHandler = null,
     abortController = null,
-    quorum = "auto",       // false | true | "auto" — default: auto (threshold-based)
+    quorum = QUORUM_MODE_AUTO, // false | true | "auto" — default: auto (threshold-based)
     quorumThreshold = null, // override threshold from config
     quorumPreset = null,   // "power" | "speed" | null — selects model preset
     bridge = null,         // BridgeManager instance for approval gate
@@ -4482,7 +4486,7 @@ export async function runPlan(planPath, options = {}) {
     if (quorum) {
       estimateQuorumConfig = loadQuorumConfig(cwd, quorumPreset);
       estimateQuorumConfig.enabled = true;
-      if (quorum === "auto") estimateQuorumConfig.auto = true;
+      if (quorum === QUORUM_MODE_AUTO) estimateQuorumConfig.auto = true;
       else if (quorum === true) estimateQuorumConfig.auto = false;
       if (quorumThreshold !== null && typeof quorumThreshold === "number") {
         estimateQuorumConfig.threshold = quorumThreshold;
@@ -4682,9 +4686,9 @@ export async function runPlan(planPath, options = {}) {
     // (auto/assisted). Before this fix, summary.mode was "auto" both for
     // single-model auto runs and for --quorum=power runs, making cost
     // attribution and historical filtering impossible.
-    quorumMode: quorum === false ? "false"
+    quorumMode: quorum === false ? QUORUM_MODE_FALSE
               : quorumPreset // "power" | "speed"
-              || (quorum === true ? "all" : "auto"),
+              || (quorum === true ? "all" : QUORUM_MODE_AUTO),
     quorumPreset: quorumPreset || null,
     sliceCount: plan.slices.length,
     executionOrder: plan.dag.order,
@@ -4747,7 +4751,7 @@ export async function runPlan(planPath, options = {}) {
     }
     // else: quorum === "auto" AND .forge.json has explicit enabled — use the loaded value
 
-    if (quorum === "auto") {
+    if (quorum === QUORUM_MODE_AUTO) {
       quorumConfig.auto = true;
     } else if (quorum === true || quorum === "true") {
       quorumConfig.auto = false; // Force quorum on all slices
@@ -11964,7 +11968,7 @@ export async function runWatch(options = {}) {
   const {
     targetPath,
     runId = null,
-    mode = "snapshot",
+    mode = WATCHER_MODE_SNAPSHOT,
     crossRunWindow = "14d",
     model = DEFAULT_WATCHER_MODEL,
     timeout = 300_000,
@@ -11983,13 +11987,13 @@ export async function runWatch(options = {}) {
   }
 
   // Phase-39 Slice 3 — cross-run aggregation mode
-  if (mode === "cross-run") {
+  if (mode === WATCHER_MODE_CROSS_RUN) {
     const xSnap = await buildCrossRunSnapshot(resolved, { window: crossRunWindow });
     const xAnomalies = detectWatchAnomalies(xSnap);
     const xRecs = recommendFromAnomalies(xAnomalies, xSnap);
     return {
       ok: xSnap.ok,
-      mode: "cross-run",
+      mode: WATCHER_MODE_CROSS_RUN,
       targetPath: resolved,
       crossRunWindow,
       timestamp: new Date().toISOString(),
@@ -12012,7 +12016,7 @@ export async function runWatch(options = {}) {
   const report = {
     ok: true,
     mode,
-    watcherModel: mode === "analyze" ? model : null,
+    watcherModel: mode === WATCHER_MODE_ANALYZE ? model : null,
     targetPath: resolved,
     runId: snapshot.runId,
     runState: snapshot.runState,
@@ -12098,7 +12102,7 @@ export async function runWatch(options = {}) {
     } catch { /* never throw from event emission */ }
   }
 
-  if (mode === "snapshot") {
+  if (mode === WATCHER_MODE_SNAPSHOT) {
     if (recordHistory) appendWatchHistory(report);
     return report;
   }
@@ -13766,13 +13770,13 @@ if (args.includes("--test")) {
   const dryRun = args.includes("--dry-run");
 
   // Quorum mode: --quorum=auto (default), --quorum=power, --quorum=speed, --quorum (force all), --no-quorum / --quorum=false (disable)
-  let quorum = "auto";
+  let quorum = QUORUM_MODE_AUTO;
   let quorumPreset = null;
   const quorumArg = args.find((a) => a.startsWith("--quorum") || a === "--no-quorum");
   if (quorumArg) {
-    if (quorumArg === "--quorum=auto") quorum = "auto";
-    else if (quorumArg === "--quorum=power") { quorum = true; quorumPreset = "power"; }
-    else if (quorumArg === "--quorum=speed") { quorum = true; quorumPreset = "speed"; }
+    if (quorumArg === "--quorum=auto") quorum = QUORUM_MODE_AUTO;
+    else if (quorumArg === "--quorum=power") { quorum = true; quorumPreset = QUORUM_PRESET_POWER; }
+    else if (quorumArg === "--quorum=speed") { quorum = true; quorumPreset = QUORUM_PRESET_SPEED; }
     else if (quorumArg === "--no-quorum" || quorumArg === "--quorum=false") quorum = false;
     else quorum = true;
   }

@@ -17,7 +17,17 @@ import {
   isApiOnlyModel,
   QUORUM_PRESETS,
 } from "./orchestrator.mjs";
+import { COST_SOURCES } from "./enums.mjs";
 import { quotaCacheGet, compareSliceEstimate } from "./foundry-quota.mjs";
+
+const VALID_COST_SOURCE_LABELS = new Set(COST_SOURCES);
+
+function warnOnUnknownCostSourceLabel(source, context) {
+  if (typeof source !== "string" || source.length === 0) return;
+  if (!VALID_COST_SOURCE_LABELS.has(source)) {
+    console.warn(`[cost-service] Unknown cost source '${source}' at ${context}; expected one of ${COST_SOURCES.join(", ")}. Keeping record for backward compatibility.`);
+  }
+}
 
 // ─── Foundry Quota Preflight Helper ──────────────────────────────────
 // When PFORGE_FOUNDRY_QUOTA_PREFLIGHT=1 and provider is microsoft-foundry,
@@ -689,6 +699,7 @@ export function priceRun(sliceResults) {
   let totalOut = 0;
 
   for (const sr of sliceResults) {
+    warnOnUnknownCostSourceLabel(sr?.source ?? null, `slice ${sr?.number || sr?.sliceId || "?"}`);
     if (!sr.tokens || sr.status === "skipped") continue;
     const cost = priceSlice(sr.tokens, sr.worker);
     totalCost += cost.cost_usd;

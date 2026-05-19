@@ -1,4 +1,6 @@
 import { describe, it, expect } from "vitest";
+import { existsSync, readFileSync } from "fs";
+import { createRequire } from "module";
 import {
   COST_SOURCES,
   ERROR_CODES,
@@ -75,5 +77,18 @@ describe("enums.mjs", () => {
     expect([...TOOL_NAMES]).toEqual(sorted);
     const unique = new Set(TOOL_NAMES);
     expect(unique.size).toBe(TOOL_NAMES.length);
+  });
+
+  // RED BASELINE (S0) — passes after TOOL_NAMES is aligned with server.mjs TOOLS in S1/S3.
+  // Currently fails because enums.mjs TOOL_NAMES includes CLI-only tool families
+  // (forge_hallmark_*, forge_anvil_*) that are not registered as MCP tools in server.mjs.
+  it("TOOL_NAMES length matches the MCP TOOLS array in server.mjs (red until S3)", () => {
+    const req = createRequire(import.meta.url);
+    const src = readFileSync(new URL("../server.mjs", import.meta.url), "utf8");
+    const toolsStart = src.indexOf("const TOOLS = [");
+    const toolsEnd = src.indexOf("\n];", toolsStart) + 3;
+    const toolsBlock = src.slice(toolsStart, toolsEnd);
+    const serverToolCount = [...toolsBlock.matchAll(/name:\s*"forge_\w+"/g)].length;
+    expect(TOOL_NAMES.length).toBe(serverToolCount);
   });
 });

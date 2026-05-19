@@ -64,7 +64,7 @@
 
         <!-- ─── The Four Stations ─── -->
         <h2 id="four-stations">The Four Stations</h2>
-        <p>Every station handles one phase of the software lifecycle. Every station is AI-run and human-supervised.</p>
+        <p>Every station handles one phase of the software lifecycle. Every station is AI-run and product-owner-supervised &mdash; <em>you</em> own spec, direction, and final acceptance; the shop owns build, review, supervision, defense, and learning. See <a href="#virtual-engineering-team">The Virtual Engineering Team</a> below for the role-by-role map.</p>
 
         <div class="overflow-x-auto mb-6">
           <table class="manual-table">
@@ -100,6 +100,39 @@
 
         <div class="callout callout-info">
           <strong>🔗 Want the deep-dive tour?</strong> Each station has its own full walkthrough on the <a href="../shop-tour.html">Shop Tour page</a>. This chapter gives you the overview; Chapter 2 covers how the stations connect.
+        </div>
+
+        <!-- ─── The Virtual Engineering Team ─── -->
+        <h2 id="virtual-engineering-team">The Virtual Engineering Team</h2>
+        <p>Plan Forge isn't "AI plus a code-completion plugin." It's a full enterprise engineering shop where every traditional role is filled by a specialized agent or guardrail, governed by 40 years of software engineering practice encoded into 17+ auto-loading instruction files and 20 specialized reviewers.</p>
+
+        <div class="overflow-x-auto mb-6">
+          <table class="manual-table">
+            <thead><tr><th>Traditional engineering role</th><th>Plan Forge equivalent</th></tr></thead>
+            <tbody>
+              <tr><td><strong>Product Owner</strong> (spec, direction, acceptance)</td><td><strong class="text-amber-400">You — non-negotiable, non-replaceable</strong></td></tr>
+              <tr><td>IC engineers (architecture, security, performance, DB, deploy, API, accessibility, multi-tenancy, CI/CD, observability, dependency, compliance)</td><td>20 specialized agents + 17 auto-loading guardrail files</td></tr>
+              <tr><td>Tech lead / staff engineer</td><td>Quorum mode (multi-model consensus) + auto-escalation on slice failure</td></tr>
+              <tr><td><strong>Engineering manager</strong></td><td><a href="forge-master.html"><strong>Forge-Master</strong></a> Observer + Auditor — <em>agents supervising agents, not metaphorically, literally</em></td></tr>
+              <tr><td>QA team</td><td>Tempering harness + testbed + regression guard + slice gates</td></tr>
+              <tr><td>SRE / on-call</td><td>LiveGuard — secret scan, drift report, dep watch, env diff, incident capture, runbooks</td></tr>
+              <tr><td><strong>Continuous improvement / retros</strong></td><td><a href="audit-loop.html">Audit loop</a> + bug registry auto-smelt + Reflexion lessons + auto-skill promotion (loops that run unattended for weeks and learn from every pass)</td></tr>
+              <tr><td>Architecture review board</td><td>Independent Session-3 review gate (fresh AI session, full guardrail load)</td></tr>
+              <tr><td>Institutional knowledge / wiki</td><td><a href="memory-architecture.html">OpenBrain L3 memory</a> with Hallmark provenance</td></tr>
+              <tr><td>Release manager</td><td>Shipper agent + release-checklist + version.instructions.md</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <h3 id="your-three-jobs">Your three jobs as the human</h3>
+        <ol class="space-y-2">
+          <li><strong>Make a few technology choices once.</strong> Pick a preset (<code>dotnet</code>, <code>typescript</code>, <code>python</code>, etc.), declare Project Principles, set forbidden patterns. One-time, then locked.</li>
+          <li><strong>Own the spec and the direction.</strong> Product Owner duties. <a href="crucible.html">Crucible</a> interviews you; you decide what to build and why. The shop won't deviate from the Scope Contract you sign off on.</li>
+          <li><strong>Run manual acceptance testing.</strong> Agents don't read minds. They implement what the spec says, not what you intended. A green pipeline (all tests pass, no drift, no secrets, no regressions, Forge-Master independently audited) proves the code is <em>correct</em>. Only you can decide whether it's <em>what you actually wanted</em>. That's Product Owner UAT, same as it has been for 40 years.</li>
+        </ol>
+
+        <div class="callout callout-info">
+          <strong>Three closed loops, not one.</strong> The Forge builds, Forge-Master supervises, and the Learn station feeds every finding back into the next plan. The audit loop ran for two weeks unattended on a real production Next.js site and surfaced 30+ defects the maintainer didn't know existed (see <a href="day-in-the-forge.html">Day in the Forge</a>). For a skeptical CTO who has been burned by AI demos, this is the part that distinguishes Plan Forge from "an AI that writes code": <em>autonomous execution, autonomous supervision, and autonomous learning — three loops, not one.</em>
         </div>
 
         <!-- ─── The Problem ─── -->

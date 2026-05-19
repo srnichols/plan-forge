@@ -301,6 +301,43 @@
               <p>Copilot files are always installed. Additional agents layer on top — use one, some, or all. All 7 formats include all auto-loading guardrail files, all pipeline prompts, and all ~12 reviewer agents.</p>
             </div>
           </details>
+
+          <details class="faq-item group rounded-xl bg-slate-800/60 border border-slate-700/40 overflow-hidden">
+            <summary class="flex items-center justify-between px-6 py-4 cursor-pointer hover:bg-slate-800/80 transition-colors">
+              <span class="text-sm font-medium text-white pr-4">Do humans write any code with Plan Forge?</span>
+              <svg class="w-4 h-4 text-slate-500 group-open:rotate-180 transition-transform shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
+            </summary>
+            <div class="px-6 pb-5 text-sm text-slate-400 leading-relaxed border-t border-slate-700/30 pt-4">
+              <p class="mb-3"><strong class="text-amber-400">No — and that's the point.</strong> Plan Forge is the AI-Native SDLC. Humans own three things and three things only:</p>
+              <ol class="list-decimal list-inside space-y-2 mb-3">
+                <li><strong class="text-slate-200">A few technology choices, made once.</strong> Pick a preset (<code class="text-forge-400">dotnet</code>, <code class="text-forge-400">typescript</code>, <code class="text-forge-400">python</code>, etc.), declare Project Principles, set forbidden patterns. One-time setup, then locked.</li>
+                <li><strong class="text-slate-200">Spec and direction.</strong> You play Product Owner. <a href="manual/crucible.html" class="text-forge-400 hover:text-forge-300">Crucible</a> interviews you; you decide what to build and why. The shop will not deviate from the Scope Contract you sign off on.</li>
+                <li><strong class="text-slate-200">Manual acceptance testing.</strong> Agents do not read minds. They implement what the spec says, not what you intended. Only you can decide whether shipped code is <em>what you actually wanted</em> — that is UAT, same as it has been for 40 years.</li>
+              </ol>
+              <p>Everything else — architecture, security, performance, DB, deploy, API design, accessibility, multi-tenancy, CI/CD, observability, dependency audit, compliance, QA, SRE, engineering management, continuous improvement, release management — is handled by 20 specialized agents and 17+ auto-loading guardrail files. <em>Every discipline of a 20-person engineering team, governed by 40 years of software engineering practice.</em></p>
+              <p class="mt-3 text-xs text-slate-500 italic">If the answer to "do humans write any code?" is "yes, sometimes, when we feel like it," then it isn't an AI-Native SDLC — it's an AI-assisted IDE. Plan Forge is the former.</p>
+            </div>
+          </details>
+
+          <details class="faq-item group rounded-xl bg-slate-800/60 border border-slate-700/40 overflow-hidden">
+            <summary class="flex items-center justify-between px-6 py-4 cursor-pointer hover:bg-slate-800/80 transition-colors">
+              <span class="text-sm font-medium text-white pr-4">Who decides when a feature is done?</span>
+              <svg class="w-4 h-4 text-slate-500 group-open:rotate-180 transition-transform shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
+            </summary>
+            <div class="px-6 pb-5 text-sm text-slate-400 leading-relaxed border-t border-slate-700/30 pt-4">
+              <p class="mb-3"><strong class="text-amber-400">You do — always.</strong> A green pipeline is a strong signal, not a sign-off.</p>
+              <p class="mb-3">When a slice finishes, the shop has independently verified that:</p>
+              <ul class="list-disc list-inside space-y-1 mb-3">
+                <li>All tests pass (unit, integration, contract, regression)</li>
+                <li>No secrets leaked, no drift introduced, no dependencies poisoned</li>
+                <li>An independent fresh-session reviewer (Session 3) signed off against the Scope Contract</li>
+                <li><a href="manual/forge-master.html" class="text-forge-400 hover:text-forge-300">Forge-Master</a> Auditor independently graded the run against the plan and prior runs</li>
+                <li>LiveGuard post-deploy checks (env diff, regression guard) pass</li>
+              </ul>
+              <p class="mb-3">That proves the code is <em>correct against the spec</em>. It does not prove the spec is <em>what you actually wanted</em>. Only Product Owner UAT can answer that — and only you can run it. Push the build to staging, exercise the feature like a real user, and decide.</p>
+              <p>This separation is deliberate. Agents that grade their own homework are how AI demos lie. Plan Forge keeps the final yes-or-no with the human who owns the outcome. <a href="manual/audit-loop.html" class="text-forge-400 hover:text-forge-300">The audit loop</a> ran for two weeks unattended on a real production site and surfaced 30+ defects the maintainer didn't know existed — but the maintainer still had to decide which ones mattered enough to fix. That call is yours, by design.</p>
+            </div>
+          </details>
         </div>
       </div>
 

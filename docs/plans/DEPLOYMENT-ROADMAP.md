@@ -31,10 +31,10 @@ Listed in **execution order**. Each phase's Execution Hold gates on its predeces
 - **Depends on**: Phase 42 retro shipping ✅
 
 ### Phase 52 — SERVER-SPLIT
-- **Goal**: Decompose `pforge-mcp/server.mjs` (9,812 LOC, A2 finding) into focused sub-modules under `pforge-mcp/server/`. `server.mjs` becomes a ≤50-line re-export shim — zero consumer imports modified. Inherits Phase 51's four cross-cutting concerns: re-export shim, snapshot-as-contract, circular-import gate (`no-circular-imports.test.mjs` inherited unchanged), no-behavior-change rule.
-- **Plan**: _DRAFT — to be hardened. Run `step2-harden-plan.prompt.md` before executing. Pre-S0 recommended first step: grep all `from './server.mjs'` import sites. Expect 6–8 sub-modules. Snapshot proxy: route manifest or registered tool names if `buildServer()` output is env-dependent._
-- **Status**: 📋 Planned (DRAFT, pending Step-2 harden)
-- **Depends on**: Phase 51 shipping (establishes re-export shim + snapshot-as-contract pattern)
+- **Goal**: Decompose `pforge-mcp/server.mjs` (9,202 LOC, A2 finding) into focused sub-modules under `pforge-mcp/server/`. `server.mjs` becomes a ≤120-line entrypoint + re-export shim — zero consumer imports modified. Inherits Phase 51's four cross-cutting concerns: re-export shim (entrypoint-shim variant — file is also the executable entrypoint), snapshot-as-contract (new `buildServerSurface()` pure function returns tools + REST routes + MCP_ONLY_TOOLS), circular-import gate (`no-circular-imports.test.mjs` inherited unchanged), no-behavior-change rule.
+- **Plan**: [Phase-52-SERVER-SPLIT-PLAN.md](./Phase-52-SERVER-SPLIT-PLAN.md)
+- **Status**: 🔬 Hardened (lockHash `3b3c4de2…`, ready for `pforge run-plan`)
+- **Depends on**: Phase 51 shipping ✅ (establishes re-export shim + snapshot-as-contract pattern)
 
 ### Phase 53 — ORCHESTRATOR-SPLIT
 - **Goal**: Decompose `pforge-mcp/orchestrator.mjs` (13,933 LOC, A1 finding) into focused sub-modules under `pforge-mcp/orchestrator/`. `orchestrator.mjs` becomes a ≤50-line re-export shim — zero consumer imports modified. Inherits Phase 51's four cross-cutting concerns. **Adds architectural obligation**: resolve the pre-existing `orchestrator.mjs > cost-service.mjs` circular import (clearing the `KNOWN_CYCLES` allowlist to empty). Highest blast radius of the three splits — recommend `--quorum=power` and full test run before promotion.

@@ -179,34 +179,6 @@ export function resolveWorkerOutputIdleMs() {
 /** Default worker total-run timeout: 30 minutes. Override with PFORGE_WORKER_TIMEOUT_MS. */
 export const DEFAULT_WORKER_TIMEOUT_MS = 1_800_000;
 
-/**
- * Parse a workerTimeoutMs value from a plan body line.
- * Accepts plain numbers or shorthand strings like "30m", "1h", "90s".
- * Returns null if the value is invalid, zero, or negative (falls through to env/default).
- * @param {string|number} raw
- * @returns {number|null}
- */
-export function parseWorkerTimeoutValue(raw) {
-  if (raw == null) return null;
-  const str = String(raw).trim().replace(/^["']|["']$/g, ""); // strip optional quotes
-  // Shorthand: 30m, 1h, 90s
-  const shorthandMatch = str.match(/^(\d+(?:\.\d+)?)\s*(ms|s|m|h)$/i);
-  if (shorthandMatch) {
-    const n = parseFloat(shorthandMatch[1]);
-    const unit = shorthandMatch[2].toLowerCase();
-    const multipliers = { ms: 1, s: 1_000, m: 60_000, h: 3_600_000 };
-    const ms = Math.round(n * multipliers[unit]);
-    if (ms > 0) return ms;
-    console.warn(`[pforge] workerTimeoutMs shorthand "${str}" resolved to ≤0; ignoring.`);
-    return null;
-  }
-  const num = Number(str);
-  if (!Number.isFinite(num) || num <= 0) {
-    if (str !== "0") console.warn(`[pforge] workerTimeoutMs value "${str}" is invalid; ignoring.`);
-    return null;
-  }
-  return Math.round(num);
-}
 
 /**
  * Resolve the worker total-run timeout in milliseconds.
@@ -6931,7 +6903,7 @@ export function registerGateCheckResponder(hub, cwd, deps = {}) {
       openIncidents,
       reviewer,
     };
-  }));
+  });
 }
 
 // ─── Phase FORGE-SHOP-06 Slice 06.2 — Correlation Thread Responder ──
@@ -6969,7 +6941,7 @@ export function registerCorrelationThreadResponder(hub, cwd, deps = {}) {
       events: filtered.slice(0, limit),
       count: filtered.length,
     };
-  }));
+  });
 }
 
 /**
@@ -11640,7 +11612,7 @@ export async function runWatchLive(options = {}) {
     };
 
     poll();
-  }));
+  });
 }
 
 export function loadQuorumConfig(cwd, presetOverride = null) {
@@ -13359,7 +13331,7 @@ for (const sig of ["exit", "SIGINT", "SIGTERM", "SIGHUP"]) {
         try { child.kill("SIGTERM"); } catch { /* already dead */ }
       }
     }
-  }));
+  });
 }
 
 const args = process.argv.slice(2);

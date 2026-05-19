@@ -11,7 +11,7 @@ import { createHash } from "node:crypto";
  * @param {string|number} raw
  * @returns {number|null}
  */
-function parseWorkerTimeoutValue(raw) {
+export function parseWorkerTimeoutValue(raw) {
   if (raw == null) return null;
   const str = String(raw).trim().replace(/^["']|["']$/g, ""); // strip optional quotes
   // Shorthand: 30m, 1h, 90s

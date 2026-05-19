@@ -119,7 +119,46 @@ Parse `docs/plans/cleanup-findings/raw/boyscout-delta-report.json`. For every fi
 
 > **Why this matters**: The Boy Scout Rule in [architecture-principles.instructions.md](../../instructions/architecture-principles.instructions.md) says "every commit touching a file must leave it cleaner." Without a delta check the rule is aspirational. This step makes it enforceable — a PR that touches `orchestrator.mjs` for a feature fix must also clean up at least one existing warning in that file.
 
-### 8. Aggregate and report
+### 8. Dead-exports scan
+
+```bash
+node scripts/audit/dead-exports.mjs
+node scripts/audit/dead-exports.mjs --scope "pforge-mcp"
+```
+
+Parse `docs/plans/cleanup-findings/raw/dead-exports-report.json`. For every exported name that no other tracked file imports, report:
+- `file` — the module that exports the dead symbol(s)
+- `deadExports[]` — symbol names with no consumer
+- `totalExports` — how many exports the file has total (ratio dead/total signals refactor candidates)
+
+Entry-point modules (`server.mjs`, `*-cli.mjs`, `scripts/audit/*.mjs`) and files consumed via `import *` are skipped automatically. Dynamic `import()` and external-tool consumers are not tracked — apply judgment before deleting.
+
+> **Why this matters**: Dead exports widen the public surface (so `surface-diff` flags more "breaking" candidates to triage), obscure which symbols are real API, and keep dead code paths alive. A high dead-export ratio in a single file (e.g. 8/12) is a strong signal the module's responsibility has drifted — split it or prune.
+
+### 9. Test-smells scan
+
+```bash
+node scripts/audit/test-smells.mjs
+node scripts/audit/test-smells.mjs --severity error
+```
+
+Parse `docs/plans/cleanup-findings/raw/test-smells-report.json`. Findings are categorised by smell:
+
+| Smell | Severity | Meaning |
+|-------|----------|---------|
+| `FOCUS-LEAK` | error | `.only(` committed — would skip every other test in the file under vitest |
+| `TAUTOLOGY` | error | `expect(true).toBe(true)` and similar — asserts nothing |
+| `EMPTY-TEST` | error | `it("...", () => {})` empty body |
+| `SKIP-LEAK` | warn | `.skip(` / `xit(` / `xtest(` — silently disabled tests |
+| `TIME-FLAKE` | warn | `setTimeout` / `Math.random` / `Date.now` without `useFakeTimers` or `+Nms` tolerance comment |
+| `CONSOLE-LEAK` | warn | `console.log/error/warn` in tests — debug leftover |
+| `TODO-MARKER` | info | `it.todo(` — track in an issue |
+
+The script **exits non-zero** if any error-severity finding is present. Use this as a pre-merge gate.
+
+> **Why this matters**: Phase 41 S5 timeline-core flaked because a `+5ms` tolerance was too tight for the Windows scheduler. The fix was bumping to `+50ms`. `TIME-FLAKE` catches the class of bug — any time-sensitive test without an explicit tolerance comment is a future flake waiting for the worst possible PR to land on.
+
+### 10. Aggregate and report
 
 Merge all findings into a unified report grouped by category:
 
@@ -139,6 +178,8 @@ Merge all findings into a unified report grouped by category:
 │  Duplication (DRY)  │   —    │    7         │
 │  Architecture       │   1    │    3         │
 │  Boy Scout delta    │   N    │    M         │
+│  Dead exports       │   —    │    N         │
+│  Test smells        │   K    │    L         │
 ├─────────────────────────────────────────────┤
 │  Total: 14 errors, 56 warnings              │
 └─────────────────────────────────────────────┘
@@ -146,7 +187,7 @@ Merge all findings into a unified report grouped by category:
 
 If `--out <path>` is provided, write the full JSON report. Otherwise print the summary table and the top 10 highest-severity findings with file paths and line numbers.
 
-### 9. (Optional) Generate fix suggestions (`--fix-suggestions`)
+### 11. (Optional) Generate fix suggestions (`--fix-suggestions`)
 
 When `--fix-suggestions` is present, append a concrete remediation for each finding:
 
@@ -162,6 +203,10 @@ When `--fix-suggestions` is present, append a concrete remediation for each find
 | Dependency cycle | "Break cycle by extracting shared interface into a new module depended on by both sides" |
 | Duplicated block (jscpd) | "Extract the duplicated block at <file>:<line> into a shared helper in the nearest common module" |
 | Boy Scout violation | "You edited <file> without reducing violations. Either fix one existing warning in this file (preferred), or document why this PR explicitly avoids touching unrelated code" |
+| Dead export | "Either delete the unused export at <file>:<name> (preferred — git preserves history), or document why it's a public API (e.g. plugin contract) and add a `// @public` comment" |
+| Test smell FOCUS-LEAK | "Remove `.only` from <file>:<line> — focused tests skip every other test in the file when committed" |
+| Test smell TIME-FLAKE | "Wrap the test in `vi.useFakeTimers()` + `vi.advanceTimersByTime()`, or add an explicit tolerance assertion like `expect(elapsed).toBeLessThan(target + 50)`" |
+| Test smell CONSOLE-LEAK | "Remove `console.log/error/warn` at <file>:<line> — if you need debugging output, use `vi.spyOn(console, 'log')` and assert on it" |
 
 Fix suggestions are advisory — they do NOT modify code. The agent or user applies them in a follow-up step.
 
@@ -201,7 +246,7 @@ Fix suggestions are advisory — they do NOT modify code. The agent or user appl
 
 After completing this skill, confirm:
 
-- [ ] All available audit scripts were executed (measure-modules, grep-matrix, long-param-walker, ESLint, run-jscpd, boyscout-delta)
+- [ ] All available audit scripts were executed (measure-modules, grep-matrix, long-param-walker, ESLint, run-jscpd, boyscout-delta, dead-exports, test-smells)
 - [ ] Findings are grouped by category with error/warning counts
 - [ ] If `--fix-suggestions` was requested, each finding has a concrete remediation
 - [ ] If `--out` was specified, JSON report exists at the given path
@@ -217,5 +262,7 @@ After completing this skill, confirm:
 | `scripts/audit/eslint-clean-code.config.mjs` | Custom ESLint config with aliased clean-code rules |
 | `scripts/audit/run-jscpd.mjs` | Duplication detection (jscpd) — wired into Step 5 |
 | `scripts/audit/boyscout-delta.mjs` | Boy Scout Rule enforcement — compares per-file violation counts at merge-base vs HEAD; wired into Step 7 |
+| `scripts/audit/dead-exports.mjs` | Whole-codebase unused-export scan — wired into Step 8 |
+| `scripts/audit/test-smells.mjs` | Test-quality scan (focus leaks, time flakes, tautologies, console leaks) — wired into Step 9 |
 | `forge_sweep` | Lighter-weight marker scan (TODO/FIXME only); this skill is the comprehensive version |
 | `/code-review` skill | **Run `/clean-code-review` FIRST, then `/code-review`.** This skill is the mechanical/quantitative pass (LOC, complexity, params, duplication, ESLint). `/code-review` is the qualitative/judgment pass (architecture, security, patterns, tests). Mechanical findings clear the noise so the human-judgment review can focus on what actually requires judgment. |

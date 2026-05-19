@@ -1487,6 +1487,152 @@ export function buildCaptureTelemetry(ctx) {
   };
 }
 
+// ─── Issue #205 — Single capture pipeline shared by CLI + MCP paths ────
+
+/**
+ * Append a record as a `_v: 1`-stamped JSON line under `.forge/<relPath>`.
+ * Mirrors `orchestrator.appendForgeJsonl` but lives in memory.mjs so the
+ * capture pipeline doesn't pull orchestrator.mjs into a circular import.
+ *
+ * @param {string} cwd
+ * @param {string} relPath  — path relative to `.forge/` (e.g. "openbrain-queue.jsonl")
+ * @param {object} record
+ */
+function _appendForgeJsonl(cwd, relPath, record) {
+  const full = resolve(cwd, ".forge", relPath);
+  mkdirSync(resolve(full, ".."), { recursive: true });
+  const stamped = { _v: 1, ...record };
+  appendFileSync(full, JSON.stringify(stamped) + "\n");
+}
+
+/**
+ * Read up to the last `tail` records from a `.forge/<relPath>` JSONL.
+ * Returns [] on any error (missing file, parse failure).
+ *
+ * @param {string} cwd
+ * @param {string} relPath
+ * @param {number} [tail=50]
+ * @returns {object[]}
+ */
+function _readForgeJsonlTail(cwd, relPath, tail = 50) {
+  try {
+    const full = resolve(cwd, ".forge", relPath);
+    if (!existsSync(full)) return [];
+    const lines = readFileSync(full, "utf-8").split("\n").filter((l) => l.trim());
+    const slice = lines.length > tail ? lines.slice(-tail) : lines;
+    const out = [];
+    for (const line of slice) {
+      try { out.push(JSON.parse(line)); } catch { /* skip malformed */ }
+    }
+    return out;
+  } catch {
+    return [];
+  }
+}
+
+/**
+ * Issue #205 (May 2026): unified L2/L3 capture pipeline.
+ *
+ * Previously this function lived only in `server.mjs` and was wired only
+ * into the MCP `forge_run_plan` handler. CLI runs (`pforge run-plan`)
+ * spawn the orchestrator directly and bypassed it entirely — so every
+ * CLI-driven run silently dropped its memory capture. This is now the
+ * single source of truth, called from both surfaces.
+ *
+ * Effects:
+ *   1. Always appends to `.forge/liveguard-memories.jsonl` (L2)
+ *   2. Queues to `.forge/openbrain-queue.jsonl` (L3) if OpenBrain configured
+ *   3. Emits a `.forge/telemetry/memory-captures.jsonl` row
+ *   4. Calls `opts.onCapture(thought, deduped)` if provided (e.g., for hub broadcast)
+ *
+ * Best-effort: any internal error is swallowed — callers should never
+ * see capture failures break tool/orchestrator execution.
+ *
+ * @param {string} content - Human-readable description of the finding
+ * @param {string} type - Thought type ('decision'|'gotcha'|'lesson'|'pattern'|'convention')
+ * @param {string} source - Originating tool/subsystem (e.g. 'forge_run_plan')
+ * @param {string} cwd - Project root
+ * @param {{onCapture?: (thought: object, deduped: boolean) => void}} [opts]
+ * @returns {{captured: boolean, deduped: boolean, openBrainQueued: boolean, thought: object|null}}
+ */
+export function captureMemory(content, type, source, cwd, opts = {}) {
+  try {
+    // ── 1. Project name (from .forge.json) ───────────────────────────
+    let project = "plan-forge";
+    try {
+      const forgeConfig = JSON.parse(readFileSync(resolve(cwd, ".forge.json"), "utf-8"));
+      project = forgeConfig.projectName || "plan-forge";
+    } catch { /* use default */ }
+
+    // ── 2. Validate source format (warn but persist) ─────────────────
+    const sourceCheck = validateSourceFormat(source);
+    if (!sourceCheck.valid) {
+      console.error(`[memory] non-standard source '${source}': ${sourceCheck.reason}`);
+    }
+
+    // ── 3. Build + stamp the thought ─────────────────────────────────
+    let thought = {
+      content,
+      project,
+      type,
+      source,
+      created_by: "liveguard-auto",
+      captured_at: new Date().toISOString(),
+    };
+    thought = stampThoughtExpiry(thought);
+
+    // ── 4. Near-duplicate suppression (cosine similarity vs last 50) ─
+    let threshold = 0.9;
+    try {
+      const cfg = JSON.parse(readFileSync(resolve(cwd, ".forge.json"), "utf-8"));
+      if (typeof cfg?.openbrain?.dedupThreshold === "number") {
+        threshold = cfg.openbrain.dedupThreshold;
+      }
+    } catch { /* use default */ }
+
+    let deduped = false;
+    try {
+      const recent = _readForgeJsonlTail(cwd, "liveguard-memories.jsonl", 50);
+      const { dropped } = dedupeThoughtsBySimilarity([...recent, thought], { threshold });
+      deduped = dropped.some((d) => d.thought === thought);
+    } catch { /* best-effort */ }
+
+    let openBrainQueued = false;
+    if (!deduped) {
+      // ── 5. Always persist to L2 ─────────────────────────────────────
+      try {
+        _appendForgeJsonl(cwd, "liveguard-memories.jsonl", thought);
+      } catch { /* swallow */ }
+
+      // ── 6. Queue to L3 (OpenBrain) when configured ──────────────────
+      if (isOpenBrainConfigured(cwd)) {
+        try {
+          _appendForgeJsonl(cwd, "openbrain-queue.jsonl", shapeQueueRecord(thought));
+          openBrainQueued = true;
+        } catch { /* swallow */ }
+      }
+    }
+
+    // ── 7. Telemetry (always — even dedupes count) ───────────────────
+    try {
+      _appendForgeJsonl(
+        cwd,
+        "telemetry/memory-captures.jsonl",
+        buildCaptureTelemetry({ tool: source, type, source, content, project, deduped }),
+      );
+    } catch { /* swallow */ }
+
+    // ── 8. Optional broadcast hook (e.g., hub) ───────────────────────
+    if (typeof opts.onCapture === "function") {
+      try { opts.onCapture(thought, deduped); } catch { /* swallow */ }
+    }
+
+    return { captured: !deduped, deduped, openBrainQueued, thought };
+  } catch {
+    return { captured: false, deduped: false, openBrainQueued: false, thought: null };
+  }
+}
+
 // ─── G3.7 — Search-result caching ──────────────────────────────────────
 
 /**

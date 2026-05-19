@@ -82,6 +82,7 @@ import {
   deferAutoSkill,
   computeGateSuggestionKey,
   getGateSuggestionCounter,
+  captureMemory as _captureMemoryCore,
 } from "./memory.mjs";
 import {
   readOpenBrainConfig,
@@ -248,9 +249,11 @@ async function broadcastLiveGuard(tool, status, durationMs, summary = {}) {
 
 /**
  * Auto-capture a LiveGuard finding to persistent memory.
- * Writes to .forge/liveguard-memories.jsonl (always) and broadcasts a hub event.
- * If OpenBrain is configured, the thought is also queued for OpenBrain ingestion
- * via .forge/openbrain-queue.jsonl (read by SessionStart hook on next session).
+ *
+ * Issue #205 (May 2026): the actual capture pipeline now lives in
+ * `memory.mjs#captureMemory` so both the MCP server path and the CLI
+ * orchestrator path use a single implementation. This wrapper exists
+ * only to forward the dashboard hub broadcast via `onCapture`.
  *
  * @param {string} content - Human-readable description of the finding
  * @param {string} type - Thought type: 'decision', 'gotcha', 'lesson', 'pattern', 'convention'
@@ -258,82 +261,25 @@ async function broadcastLiveGuard(tool, status, durationMs, summary = {}) {
  * @param {string} cwd - Project directory
  */
 function captureMemory(content, type, source, cwd) {
-  try {
-    let project = "plan-forge";
-    try {
-      const forgeConfig = JSON.parse(readFileSync(resolve(cwd, ".forge.json"), "utf-8"));
-      project = forgeConfig.projectName || "plan-forge";
-    } catch { /* use default */ }
+  return _captureMemoryCore(content, type, source, cwd, {
+    onCapture: (thought, deduped) => {
+      try {
+        activeHub?.broadcast({
+          type: "memory-captured",
+          thought,
+          deduped,
+          timestamp: thought.captured_at,
+        });
+      } catch { /* never break capture on broadcast failure */ }
+    },
+  });
+}
 
-    // GX.4 (v2.36): standardise source attribution. Invalid sources are
-    // warn-logged but still persisted so callers see their mistake and
-    // capture is never dropped silently.
-    const sourceCheck = validateSourceFormat(source);
-    if (!sourceCheck.valid) {
-      console.error(`[memory] non-standard source '${source}': ${sourceCheck.reason}`);
-    }
-
-    let thought = {
-      content,
-      project,
-      type,
-      source,
-      created_by: "liveguard-auto",
-      captured_at: new Date().toISOString(),
-    };
-
-    // G3.5 (v2.36): stamp expiresAt based on thought type so short-lived
-    // observations don't dominate future searches.
-    thought = stampThoughtExpiry(thought);
-
-    // G3.2 (v2.36): suppress near-duplicates by cosine similarity against
-    // the last 50 captures. Threshold is configurable via .forge.json
-    // openbrain.dedupThreshold (default 0.9).
-    let deduped = false;
-    let threshold = 0.9;
-    try {
-      const cfg = JSON.parse(readFileSync(resolve(cwd, ".forge.json"), "utf-8"));
-      if (typeof cfg?.openbrain?.dedupThreshold === "number") {
-        threshold = cfg.openbrain.dedupThreshold;
-      }
-    } catch { /* use default */ }
-    try {
-      const recent = readForgeJsonl("liveguard-memories.jsonl", [], cwd);
-      const tail = recent.slice(-50);
-      const { dropped } = dedupeThoughtsBySimilarity([...tail, thought], { threshold });
-      deduped = dropped.some((d) => d.thought === thought);
-    } catch { /* best-effort */ }
-
-    if (!deduped) {
-      // Always persist locally
-      appendForgeJsonl("liveguard-memories.jsonl", thought, cwd);
-
-      // G2.6: queue records carry delivery state (_status / _attempts /
-      // _enqueuedAt / _nextAttemptAt) so a drain worker can apply
-      // exponential backoff and DLQ semantics.
-      if (isOpenBrainConfigured(cwd)) {
-        appendForgeJsonl("openbrain-queue.jsonl", shapeQueueRecord(thought), cwd);
-      }
-    }
-
-    // G3.6 (v2.36): emit a capture-telemetry record regardless — we want
-    // visibility into dedup rate, per-tool capture volume, etc.
-    try {
-      appendForgeJsonl(
-        "telemetry/memory-captures.jsonl",
-        buildCaptureTelemetry({ tool: source, type, source, content, project, deduped }),
-        cwd,
-      );
-    } catch { /* best-effort */ }
-
-    // Broadcast so dashboard/bridge can observe (include deduped flag)
-    activeHub?.broadcast({
-      type: "memory-captured",
-      thought,
-      deduped,
-      timestamp: thought.captured_at,
-    });
-  } catch { /* memory capture is best-effort — never break tool execution */ }
+// Legacy local body kept commented for reference — see Issue #205.
+function _legacyCaptureMemoryUnused(content, type, source, cwd) {
+  // Body removed — see memory.mjs#captureMemory for the canonical implementation.
+  // Retained as a named no-op only so any historical static references resolve.
+  void content; void type; void source; void cwd;
 }
 
 // ─── Audit artifact writer (Phase-39 Slice 4) ──────────────────────
@@ -2508,13 +2454,33 @@ server.setRequestHandler(CallToolRequestSchema, _wrapWithToolSpan(async (request
       });
       activeAbortController = null;
 
-      // Persist run summary + cost anomaly memories from orchestrator
-      if (result?._memoryCapture) {
+      // Persist run summary + cost anomaly memories from orchestrator.
+      // Issue #205 (May 2026): the orchestrator now captures inline before
+      // returning, so the receipt carries `_captured: true`. We only fall
+      // through to the legacy path when an older orchestrator (or a test
+      // double) returns a capture intent without a receipt.
+      if (result?._memoryCapture && !result._memoryCapture._captured) {
         if (result._memoryCapture.runSummary) {
           captureMemory(result._memoryCapture.runSummary, "decision", "forge_run_plan", cwd);
         }
         if (result._memoryCapture.costAnomaly) {
           captureMemory(result._memoryCapture.costAnomaly, "gotcha", "forge_run_plan/cost", cwd);
+        }
+      } else if (result?._memoryCapture?._captured && result._memoryCapture.receipts) {
+        // Forward hub broadcasts for the inline-captured thoughts so the
+        // dashboard sees the same `memory-captured` events as before.
+        for (const key of ["runSummary", "costAnomaly"]) {
+          const r = result._memoryCapture.receipts[key];
+          if (r?.thought && !r.deduped) {
+            try {
+              activeHub?.broadcast({
+                type: "memory-captured",
+                thought: r.thought,
+                deduped: false,
+                timestamp: r.thought.captured_at,
+              });
+            } catch { /* never break run on broadcast failure */ }
+          }
         }
       }
 

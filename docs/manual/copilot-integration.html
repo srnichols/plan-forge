@@ -12,7 +12,6 @@
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;600;700&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="../assets/shared.css" />
   <link rel="stylesheet" href="assets/manual.css" />
-  <script src="assets/mermaid-init.js" defer></script>
 </head>
 <body class="bg-slate-950 text-slate-300 min-h-screen">
 
@@ -92,39 +91,6 @@
         <h2 id="data-flow">The data flow</h2>
 
         <figure class="manual-figure" id="fig-26-1"><img src="assets/diagrams/copilot-trilogy-flow.svg" alt="Copilot Trilogy data flow: SOURCES column (.forge.json + profile, PROJECT-PRINCIPLES.md, trajectories + auto-skills, OpenBrain L3, SKILL.md catalog) feed into SYNC TOOLS column (forge_sync_instructions for the INSTRUCTIONS lane, forge_sync_memories for the MEMORIES lane, hand-authored SKILL.md for the SKILLS lane) which produce ARTIFACTS column (.github/copilot-instructions.md, .github/copilot-memory-hints.md, .github/skills/*.md). Three color-coded swimlanes — blue for instructions, amber for memories, green for skills — keep the trilogy roles visually separate." class="diagram-img diagram-img-md my-4" /><figcaption class="manual-figcaption"><!--fignum--><span class="manual-fignum">Figure 26-1.</span><!--/fignum--> <!--cap:auto-->Copilot Integration Trilogy — three sources, three tools, three artifacts<!--/cap--></figcaption></figure>
-
-        <div class="my-8 p-6 bg-slate-900/50 border border-slate-800/60 rounded-xl overflow-x-auto">
-          <pre class="mermaid">
-flowchart LR
-    subgraph SRC[Forge Sources]
-      PP[PROJECT-PRINCIPLES.md]
-      PR[Project Profile]
-      FJ[.forge.json]
-      II[.github/instructions/*.md]
-      TR[.forge/trajectories/]
-      AS[Auto-Skills]
-      BR[OpenBrain entries]
-    end
-
-    subgraph TOOLS[Sync Tools]
-      SI[forge_sync_instructions]
-      SM[forge_sync_memories]
-    end
-
-    subgraph OUT[Copilot Files]
-      CI[.github/copilot-instructions.md]
-      CM[.github/copilot-memory-hints.md]
-    end
-
-    subgraph CP[GitHub Copilot]
-      CTX[Auto-loaded conversation context]
-    end
-
-    PP & PR & FJ & II --> SI --> CI
-    TR & AS & BR --> SM --> CM
-    CI & CM --> CTX
-          </pre>
-        </div>
 
         <p>Both tools are <strong>idempotent and additive</strong>. They use content-hash deduplication, so running the same sync twice in a row produces zero file changes. They also use atomic write (temp file + rename), so a crash mid-write never leaves a half-baked file.</p>
 

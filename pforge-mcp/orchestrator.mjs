@@ -27,7 +27,7 @@ import { tmpdir } from "node:os";
 import { fileURLToPath } from "node:url";
 import { createTraceContext, createTelemetryHandler, writeManifest, appendRunIndex, pruneRunHistory, addLogSummary } from "./telemetry.mjs";
 import { recordActivity } from "./team-activity.mjs";
-import { isOpenBrainConfigured, buildMemorySearchBlock, buildMemoryCaptureBlock, buildReflexionBlock, buildTrajectorySuffix, extractTrajectory, writeTrajectory, retrieveAutoSkills, buildAutoSkillContext, extractAutoSkill, writeAutoSkill, incrementAutoSkillReuse, buildRunSummaryThought, buildCostAnomalyThought, loadProjectContext, buildPlanBootContext, computeGateSuggestionKey, getGateSuggestionCounter } from "./memory.mjs";
+import { isOpenBrainConfigured, buildMemorySearchBlock, buildMemoryCaptureBlock, buildReflexionBlock, buildTrajectorySuffix, extractTrajectory, writeTrajectory, retrieveAutoSkills, buildAutoSkillContext, extractAutoSkill, writeAutoSkill, incrementAutoSkillReuse, buildRunSummaryThought, buildCostAnomalyThought, loadProjectContext, buildPlanBootContext, computeGateSuggestionKey, getGateSuggestionCounter, captureMemory } from "./memory.mjs";
 import { enforceCrucibleId, CrucibleEnforcementError } from "./crucible-enforce.mjs";
 // Phase FORGE-SHOP-07 Slice 07.2 — brain facade for unified recall
 import { recall as brainRecall, loadReviewerConfig, invokeReviewer } from "./brain.mjs";
@@ -4916,11 +4916,27 @@ export async function runPlan(planPath, options = {}) {
   appendRunIndex(cwd, runId, manifest);
   pruneRunHistory(cwd, loadMaxRunHistory(cwd));
 
-  // OpenBrain: capture run summary + cost anomaly as thoughts
+  // OpenBrain: capture run summary + cost anomaly as thoughts.
+  // Issue #205 (May 2026): the capture now happens here in the orchestrator
+  // — previously it only fired from the MCP `forge_run_plan` handler in
+  // `server.mjs`, so CLI runs (`pforge run-plan`) silently dropped every
+  // capture. `_captured: true` on the receipt tells the server handler to
+  // skip its legacy re-capture path and avoid double-writing.
   if (memoryEnabled) {
+    const runSummary = buildRunSummaryThought(summary, projectName);
+    const costAnomaly = buildCostAnomalyThought(summary, getCostReport(cwd), projectName);
+    const receipts = { runSummary: null, costAnomaly: null };
+    if (runSummary) {
+      receipts.runSummary = captureMemory(runSummary, "decision", "forge_run_plan", cwd);
+    }
+    if (costAnomaly) {
+      receipts.costAnomaly = captureMemory(costAnomaly, "gotcha", "forge_run_plan/cost", cwd);
+    }
     summary._memoryCapture = {
-      runSummary: buildRunSummaryThought(summary, projectName),
-      costAnomaly: buildCostAnomalyThought(summary, getCostReport(cwd), projectName),
+      runSummary,
+      costAnomaly,
+      _captured: true,
+      receipts,
     };
   }
 

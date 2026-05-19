@@ -2910,7 +2910,6 @@ cmd_doctor() {
     if [ -d "$hooks_dir" ] || [ $hook_config_present -eq 1 ] || [ $hooks_json_present -eq 1 ]; then
         echo "Lifecycle Hooks:"
         local enums_cli="$REPO_ROOT/pforge-mcp/bin/enums-cli.mjs"
-<<<<<<< Updated upstream
         local expected_hooks=()
         if command -v node >/dev/null 2>&1 && [ -f "$enums_cli" ]; then
             mapfile -t expected_hooks < <(node "$enums_cli" --enum HOOK_PASCAL 2>/dev/null)
@@ -2926,13 +2925,6 @@ cmd_doctor() {
                 hook_cfg_keys["$key"]="$val"
             done < <(node "$enums_cli" --enum HOOK_NAMES --format json 2>/dev/null | jq -r 'to_entries | .[] | .key + "=" + .value' 2>/dev/null)
         fi
-=======
-        [ ! -f "$enums_cli" ] && enums_cli="$SCRIPT_DIR/pforge-mcp/bin/enums-cli.mjs"
-        local core_hooks=() liveguard_hooks=() expected_hooks=()
-        mapfile -t core_hooks < <(node "$enums_cli" --enum HOOK_CATEGORY.session 2>/dev/null)
-        mapfile -t liveguard_hooks < <(node "$enums_cli" --enum HOOK_CATEGORY.liveGuard 2>/dev/null)
-        mapfile -t expected_hooks < <(node "$enums_cli" --enum HOOK_PASCAL 2>/dev/null)
->>>>>>> Stashed changes
         local hook_count=0 hook_missing=""
         for hook in "${expected_hooks[@]}"; do
             local found=0 cfg_key cfg_val hook_json_val
@@ -2940,26 +2932,14 @@ cmd_doctor() {
             if [ -d "$hooks_dir" ] && find "$hooks_dir" -type f -name "*$hook*" -print -quit 2>/dev/null | grep -q .; then
                 found=1
             fi
-<<<<<<< Updated upstream
             # Source 2: .github/hooks/plan-forge.json declares this hook (PascalCase key)
             if [ $found -eq 0 ] && [ -f "$hooks_json" ] && command -v jq >/dev/null 2>&1; then
                 if jq -e ".hooks.\"$hook\"" "$hooks_json" >/dev/null 2>&1; then
-=======
-            if [ $found -eq 0 ] && [ $hook_config_present -eq 1 ]; then
-                cfg_val="$(_json_field "$forge_config" "hooks.$cfg_key")"
-                if [ -n "$cfg_val" ] && [ "$cfg_val" != "false" ] && [ "$cfg_val" != "null" ]; then
-                    found=1
-                fi
-            fi
-            if [ $found -eq 0 ] && [ $hooks_json_present -eq 1 ]; then
-                hook_json_val="$(_json_field "$hooks_json" "hooks.$hook")"
-                if [ -n "$hook_json_val" ] && [ "$hook_json_val" != "false" ] && [ "$hook_json_val" != "null" ]; then
->>>>>>> Stashed changes
                     found=1
                 fi
             fi
             # Source 3: .forge.json -> hooks.<camelCase> (config-based hooks)
-            local cfg_key="${hook_cfg_keys[$hook]:-}"
+            cfg_key="${hook_cfg_keys[$hook]:-$cfg_key}"
             if [ $found -eq 0 ] && [ -n "$cfg_key" ] && [ -f "$forge_json" ] && command -v jq >/dev/null 2>&1; then
                 if jq -e ".hooks.\"$cfg_key\"" "$forge_json" >/dev/null 2>&1; then
                     found=1

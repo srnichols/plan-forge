@@ -139,6 +139,8 @@ import { checkForUpdate, detectCorruptInstall, resolveFrameworkVersion } from ".
 import { inspectGithubStack } from "./github-introspect.mjs";
 // Phase GITHUB-D Slice 5 — Copilot Metrics REST endpoint
 import { loadMetrics } from "./github-metrics.mjs";
+// Phase-54 Slice 1 — GitHub Personal REST endpoint
+import { fetchUserProfile, fetchRepoSummary, scanCopilotCoauthors, PersonalAuthError, PersonalNotFoundError, PersonalRateLimitError } from "./github-personal.mjs";
 import { loadActivity } from "./team-activity.mjs";
 import { buildTeamDashboard } from "./dashboard/team-dashboard.mjs";
 // D6 — Agentic code review delegation
@@ -7645,6 +7647,52 @@ export function createExpressApp() {
         _meta: { storeDir, recordCount: metrics.length },
       });
     } catch (err) { res.status(500).json({ error: err.message }); }
+  });
+
+  // REST API: GET /api/github-personal — Phase-54 Slice 1
+  // Proxies the three github-personal.mjs operations over HTTP.
+  // Query params:
+  //   action  — "profile" (default) | "repo" | "coauthors"
+  //   owner   — repo owner (required for action=repo and action=coauthors)
+  //   repo    — repo name  (required for action=repo and action=coauthors)
+  //   since   — ISO lower bound (optional, coauthors only)
+  //   until   — ISO upper bound (optional, coauthors only)
+  //   perPage — commits per page, max 100 (optional, coauthors only)
+  app.get("/api/github-personal", (req, res) => {
+    const action = req.query.action || "profile";
+    const owner = req.query.owner || null;
+    const repo = req.query.repo || null;
+
+    try {
+      if (action === "profile") {
+        const data = fetchUserProfile();
+        return res.json({ action: "profile", data });
+      }
+
+      if (action === "repo") {
+        if (!owner) return res.status(400).json({ error: "owner query param required for action=repo" });
+        if (!repo)  return res.status(400).json({ error: "repo query param required for action=repo" });
+        const data = fetchRepoSummary({ owner, repo });
+        return res.json({ action: "repo", data });
+      }
+
+      if (action === "coauthors") {
+        if (!owner) return res.status(400).json({ error: "owner query param required for action=coauthors" });
+        if (!repo)  return res.status(400).json({ error: "repo query param required for action=coauthors" });
+        const since   = req.query.since   || undefined;
+        const until   = req.query.until   || undefined;
+        const perPage = req.query.perPage ? parseInt(req.query.perPage, 10) : 100;
+        const data = scanCopilotCoauthors({ owner, repo, since, until, perPage });
+        return res.json({ action: "coauthors", data });
+      }
+
+      return res.status(400).json({ error: `Unknown action: ${action}. Valid actions: profile, repo, coauthors` });
+    } catch (err) {
+      if (err instanceof PersonalAuthError)      return res.status(403).json({ error: err.message, code: "auth_error" });
+      if (err instanceof PersonalNotFoundError)  return res.status(404).json({ error: err.message, code: "not_found" });
+      if (err instanceof PersonalRateLimitError) return res.status(429).json({ error: err.message, code: "rate_limit" });
+      return res.status(500).json({ error: err.message });
+    }
   });
 
   // REST API: GET /api/github-readiness — Phase Hotfix-v2.90.8 Slice 4

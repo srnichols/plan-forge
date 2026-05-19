@@ -20,6 +20,9 @@ export default defineConfig({
   plugins: [stripShebang],
   test: {
     environment: "node",
+    // Use forked processes to avoid Windows libuv UV_HANDLE_CLOSING assertions
+    // and Rollup parallel-transform races that occur with the default threads pool.
+    pool: "forks",
     root: configDir,
     include: ["tests/**/*.test.mjs", "../pforge-sdk/tests/**/*.test.mjs"],
     exclude: ["**/.forge/**", "**/node_modules/**"],

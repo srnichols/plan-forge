@@ -38,6 +38,9 @@ import { resolveModel, VALID_TIERS } from "./reasoning-tier.mjs";
 import { computeTurnCost } from "./cost.mjs";
 import { dispatchQuorum } from "./quorum-dispatcher.mjs";
 import * as githubCopilotProvider from "./providers/github-copilot-tools.mjs";
+import { checkBudget, recordSpend, loadBudgetState, saveBudgetState } from "./observer-budget.mjs";
+import { buildObserverPrompt } from "./observer-prompt.mjs";
+import { OBSERVER_NARRATION_EVENT_TYPE } from "./observer-loop.mjs";
 
 // ─── Recall-eligible lanes ────────────────────────────────────────────
 
@@ -65,6 +68,17 @@ const QUORUM_BLOCKED_LANES = new Set([
 // ─── Constants ──────────────────────────────────────────────────────
 
 export const ABSOLUTE_CEILING = 10;
+
+/**
+ * Observer tool allowlist (RD #11) — exactly four read-only tools.
+ * Any model-requested tool call outside this list is rejected by the bridge filter.
+ */
+export const OBSERVER_TOOL_ALLOWLIST = [
+  "brain_recall",
+  "forge_search",
+  "forge_plan_status",
+  "forge_watch",
+];
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const SYSTEM_PROMPT_PATH = resolve(__dirname, "system-prompt.md");
@@ -926,4 +940,162 @@ export async function runTurn(input, deps = {}) {
     relatedTurns,
     quorumResult,
   };
+}
+
+// ─── Observer Reasoning Turn ────────────────────────────────────────
+
+/**
+ * Run a single observer narration turn: check budget → call model → capture → emit.
+ *
+ * Called by the observer loop's `onBatch` callback once per batch flush.
+ * The function is strictly fail-closed on budget: it MUST NOT make any LLM call
+ * when `checkBudget()` returns `{ ok: false }`.
+ *
+ * @param {object[]} batch  Hub events from observer-loop's batch flush.
+ * @param {{
+ *   config?: object,            Forge-Master config (getForgeMasterConfig() result).
+ *                               Reads: config.observer.{maxUsdPerDay, maxNarrationsPerHour,
+ *                                      modelTier, brainCapture}, config.reasoningModel.
+ *   provider?: object,          Pre-resolved provider adapter with sendTurn(). Auto-selected if absent.
+ *   hub?: object|null,          Hub for broadcasting observer:narration + observer:budget-blocked.
+ *   cwd?: string,               Working directory (for budget state I/O and provider auto-select).
+ *   remember?: Function,        brain.remember-compatible fn for L2 narration capture (optional).
+ *   budgetState?: object,       Pre-loaded budget state (test injection — skips loadBudgetState).
+ *   _checkBudget?: Function,    checkBudget override for testing.
+ *   _recordSpend?: Function,    recordSpend override for testing.
+ *   _loadBudgetState?: Function loadBudgetState override for testing.
+ *   _saveBudgetState?: Function saveBudgetState override for testing.
+ * }} [opts]
+ * @returns {Promise<{
+ *   ok: boolean,
+ *   skipped?: boolean,    true when budget blocked (no LLM call occurred)
+ *   reason?: string,      human-readable block/error reason
+ *   narration?: string|null,
+ *   tokensIn?: number,
+ *   tokensOut?: number,
+ *   usd?: number,
+ * }>}
+ */
+export async function runObserverTurn(batch, opts = {}) {
+  const {
+    config = {},
+    hub = null,
+    cwd = process.cwd(),
+    remember: _remember = null,
+  } = opts;
+
+  const checkBudgetFn = opts._checkBudget ?? checkBudget;
+  const recordSpendFn = opts._recordSpend ?? recordSpend;
+  const loadBudgetStateFn = opts._loadBudgetState ?? loadBudgetState;
+  const saveBudgetStateFn = opts._saveBudgetState ?? saveBudgetState;
+
+  // Support both getForgeMasterConfig() shape (config.observer.*) and
+  // flat observer-only shape (config.maxUsdPerDay etc.) for flexibility.
+  const observerConfig = config?.observer && typeof config.observer === "object"
+    ? config.observer
+    : config;
+
+  const caps = {
+    maxUsdPerDay: observerConfig.maxUsdPerDay ?? 1.0,
+    maxNarrationsPerHour: observerConfig.maxNarrationsPerHour ?? 6,
+  };
+
+  // ── 1. Check budget (MUST be first — fail closed) ─────────────────
+  const state = opts.budgetState ?? loadBudgetStateFn({ cwd });
+  const budgetCheck = checkBudgetFn(state, caps);
+  if (!budgetCheck.ok) {
+    console.error(`[observer] budget block: ${budgetCheck.reason}`);
+    if (hub && typeof hub.broadcast === "function") {
+      hub.broadcast({
+        type: "observer:budget-blocked",
+        reason: budgetCheck.reason,
+        timestamp: new Date().toISOString(),
+      });
+    }
+    return { ok: false, skipped: true, reason: budgetCheck.reason, narration: null };
+  }
+
+  // ── 2. Resolve provider ────────────────────────────────────────────
+  let provider = opts.provider ?? null;
+  if (!provider) {
+    provider = await autoSelectProvider(config, process.env, opts._providers ?? null);
+  }
+  if (!provider) {
+    return { ok: false, skipped: false, reason: "no provider available", narration: null };
+  }
+
+  // ── 3. Resolve model — tier override or inherit ask-mode default ──
+  const modelTier = observerConfig.modelTier ?? null;
+  const resolvedModel = (modelTier ? resolveModel(modelTier, config) : null)
+    ?? config?.reasoningModel
+    ?? null;
+
+  // ── 4. Build observer prompt ───────────────────────────────────────
+  const { systemPrompt, userMessage } = buildObserverPrompt(batch);
+
+  // ── 5. Build tool schemas limited to observer allowlist (RD #11) ─
+  const toolSchemas = buildToolSchemas(OBSERVER_TOOL_ALLOWLIST);
+
+  // ── 6. Call model ──────────────────────────────────────────────────
+  let response;
+  try {
+    response = await provider.sendTurn({
+      messages: [
+        { role: "system", content: systemPrompt },
+        { role: "user", content: userMessage },
+      ],
+      tools: toolSchemas,
+      model: resolvedModel,
+      apiKey: "",
+    });
+  } catch (err) {
+    return {
+      ok: false,
+      skipped: false,
+      reason: `model error: ${err?.message ?? String(err)}`,
+      narration: null,
+    };
+  }
+
+  const narration = response.content || "";
+  const tokensIn = response.tokensIn || 0;
+  const tokensOut = response.tokensOut || 0;
+  const usd = computeTurnCost(resolvedModel, tokensIn, tokensOut);
+
+  // ── 7. Record spend atomically (write-to-tmp + rename) ─────────────
+  const updatedState = recordSpendFn(state, { usd, timestamp: Date.now() });
+  try {
+    saveBudgetStateFn(updatedState, { cwd });
+  } catch (err) {
+    console.error(`[observer] budget state save failed (non-fatal): ${err?.message ?? err}`);
+  }
+
+  // ── 8. Brain capture (brainCapture defaults to true) ───────────────
+  if (observerConfig.brainCapture !== false && typeof _remember === "function") {
+    try {
+      const captureKey = `project.observer.narration-${Date.now()}`;
+      _remember(captureKey, {
+        timestamp: new Date().toISOString(),
+        narration,
+        batchEventCount: Array.isArray(batch) ? batch.length : 0,
+        usd,
+      });
+    } catch (err) {
+      console.error(`[observer] brain capture failed (non-fatal): ${err?.message ?? err}`);
+    }
+  }
+
+  // ── 9. Emit hub event ──────────────────────────────────────────────
+  if (hub && typeof hub.broadcast === "function") {
+    hub.broadcast({
+      type: OBSERVER_NARRATION_EVENT_TYPE,
+      timestamp: new Date().toISOString(),
+      batchEventCount: Array.isArray(batch) ? batch.length : 0,
+      narration,
+      usd,
+      modelTier: observerConfig.modelTier ?? null,
+    });
+  }
+
+  return { ok: true, narration, tokensIn, tokensOut, usd };
 }

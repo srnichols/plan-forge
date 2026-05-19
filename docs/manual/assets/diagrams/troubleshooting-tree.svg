@@ -57,7 +57,7 @@
   <rect x="20" y="225" width="220" height="55" class="node" fill="#0f172a" stroke="#34d399" />
   <text x="130" y="245" class="title" text-anchor="middle">Check server</text>
   <text x="130" y="260" class="cmd" text-anchor="middle">node pforge-mcp/server.mjs</text>
-  <text x="130" y="273" class="cmd" text-anchor="middle">cd pforge-mcp && npm install</text>
+  <text x="130" y="273" class="cmd" text-anchor="middle">cd pforge-mcp &amp;&amp; npm install</text>
   <!-- Q3: Costs -->
   <rect x="20" y="310" width="220" height="35" class="node" fill="#0f172a" stroke="#475569" />
   <text x="130" y="332" class="q" text-anchor="middle">Costs too high?</text>

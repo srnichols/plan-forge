@@ -1,4 +1,4 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 420" fill="none">
+<svg xmlns="http://www.w3.org/2000/svg" width="800" height="460" viewBox="0 0 800 460" fill="none">
   <title>Knowledge Graph Schema — node types (Phase, Slice, Commit, File, Bug, Run, Incident) and edge types connecting them</title>
   <style>
     text { font-family: 'Inter', sans-serif; }
@@ -99,25 +99,25 @@
   <path d="M610,184 L610,255" class="edge-found" />
   <text x="625" y="225" class="edge-lbl" fill="#fb7185">found</text>
 
-  <!-- bug → commit (fixed_by, dashed) -->
-  <path d="M540,290 L350,290" class="edge-fixed" />
-  <text x="430" y="285" class="edge-lbl" fill="#34d399">fixed_by</text>
+  <!-- bug → commit (fixed_by, dashed, routed below artifacts) -->
+  <path d="M570,310 Q445,340 320,310" class="edge-fixed" />
+  <text x="445" y="338" class="edge-lbl" fill="#34d399" text-anchor="middle">fixed_by</text>
 
   <!-- bug → incident (escalated_to) -->
-  <path d="M670,290 L700,290" class="edge-found" />
-  <text x="685" y="285" class="edge-lbl" fill="#fb7185">esc.</text>
+  <path d="M670,282 L700,282" class="edge-found" />
+  <text x="685" y="277" class="edge-lbl" fill="#fb7185" text-anchor="middle">esc.</text>
 
   <!-- ── Legend ── -->
-  <text x="60" y="350" class="phase">EDGE TYPES</text>
-  <line x1="60" y1="365" x2="100" y2="365" class="edge" /><text x="110" y="368" class="edge-lbl">contains · produced · executed_by · escalated_to</text>
-  <line x1="60" y1="380" x2="100" y2="380" class="edge-touched" /><text x="110" y="383" class="edge-lbl">touched (slice ↔ file)</text>
-  <line x1="60" y1="395" x2="100" y2="395" class="edge-found" /><text x="110" y="398" class="edge-lbl">found (slice → bug · bug → incident)</text>
-  <line x1="60" y1="410" x2="100" y2="410" class="edge-fixed" /><text x="110" y="413" class="edge-lbl">fixed_by (bug → commit, dashed = resolution)</text>
+  <text x="60" y="380" class="phase">EDGE TYPES</text>
+  <line x1="60" y1="395" x2="100" y2="395" class="edge" /><text x="110" y="398" class="edge-lbl">contains · produced · executed_by · escalated_to</text>
+  <line x1="60" y1="410" x2="100" y2="410" class="edge-touched" /><text x="110" y="413" class="edge-lbl">touched (slice ↔ file)</text>
+  <line x1="60" y1="425" x2="100" y2="425" class="edge-found" /><text x="110" y="428" class="edge-lbl">found (slice → bug · bug → incident)</text>
+  <line x1="60" y1="440" x2="100" y2="440" class="edge-fixed" /><text x="110" y="443" class="edge-lbl">fixed_by (bug → commit, dashed = resolution)</text>
 
   <!-- ── Right legend — what queries unlock ── -->
-  <rect x="450" y="340" width="330" height="78" rx="6" fill="#0f172a" stroke="#475569" />
-  <text x="615" y="358" class="title" text-anchor="middle">Queries the schema unlocks</text>
-  <text x="465" y="376" class="mono">Pattern detectors · churn-vs-cost · bug → file</text>
-  <text x="465" y="390" class="mono">blast-radius · phase → fix-time · pforge digest</text>
-  <text x="465" y="404" class="mono">forge_patterns_list · forge_hotspot · forge_graph_query</text>
+  <rect x="450" y="370" width="330" height="78" rx="6" fill="#0f172a" stroke="#475569" />
+  <text x="615" y="388" class="title" text-anchor="middle">Queries the schema unlocks</text>
+  <text x="465" y="406" class="mono">Pattern detectors · churn-vs-cost · bug → file</text>
+  <text x="465" y="420" class="mono">blast-radius · phase → fix-time · pforge digest</text>
+  <text x="465" y="434" class="mono">forge_patterns_list · forge_hotspot · forge_graph_query</text>
 </svg>

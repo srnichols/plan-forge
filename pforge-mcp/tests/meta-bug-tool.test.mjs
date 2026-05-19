@@ -294,12 +294,12 @@ describe("forge_meta_bug_file — registration", () => {
     expect(serverContent).toContain('name: "forge_meta_bug_file"');
   });
 
-  it("is registered in capabilities.mjs TOOL_METADATA", () => {
-    const capContent = readFileSync(
-      new URL("../capabilities.mjs", import.meta.url),
-      "utf-8",
-    );
-    expect(capContent).toContain("forge_meta_bug_file");
+  it("is registered in capabilities.mjs TOOL_METADATA", async () => {
+    // Phase-51 Slice 4: capabilities.mjs is a shim that re-exports
+    // TOOL_METADATA from ./capabilities/tool-metadata.mjs. Assert against
+    // the registry, not the shim file contents.
+    const { TOOL_METADATA } = await import("../capabilities.mjs");
+    expect(TOOL_METADATA).toHaveProperty("forge_meta_bug_file");
   });
 
   it("is in MCP_ONLY_TOOLS set in server.mjs", () => {

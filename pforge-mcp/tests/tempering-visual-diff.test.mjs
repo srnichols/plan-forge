@@ -544,10 +544,14 @@ describe("runner integration — visual-diff", () => {
     expect(serverMjs).toContain("forge_tempering_approve_baseline");
   });
 
-  it("capabilities.mjs has TOOL_METADATA for forge_tempering_approve_baseline", () => {
-    const capMjs = readFileSync(resolve(__dirname, "..", "capabilities.mjs"), "utf-8");
-    expect(capMjs).toContain("forge_tempering_approve_baseline");
-    expect(capMjs).toContain("addedIn: \"2.45.0\"");
+  it("capabilities.mjs has TOOL_METADATA for forge_tempering_approve_baseline", async () => {
+    // Phase-51 Slice 4: capabilities.mjs is a shim that re-exports
+    // TOOL_METADATA from ./capabilities/tool-metadata.mjs. Assert against
+    // the registry, not the shim file contents.
+    const { TOOL_METADATA } = await import("../capabilities.mjs");
+    const entry = TOOL_METADATA.forge_tempering_approve_baseline;
+    expect(entry).toBeDefined();
+    expect(entry.addedIn).toBe("2.45.0");
   });
 
   it("runner.mjs includes visual-diff scanner phase", () => {

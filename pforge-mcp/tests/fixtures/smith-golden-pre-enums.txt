@@ -44,7 +44,7 @@ Setup Health:
 
 Version Currency:
   ⚠️  Cannot determine installed version (.forge.json missing templateVersion)
-     (cached 126m ago)
+     (cached 174m ago)
 
 Auto-update:
   ✅ Auto-update: disabled (opt-in) | Cache age: no cache | Last tag: unknown | Last check: never
@@ -57,8 +57,8 @@ MCP Server:
 
 Image Generation:
   ✅ sharp installed (WebP, PNG, AVIF conversion)
-  ✅ XAI_API_KEY set (Grok Aurora)
-  ✅ OPENAI_API_KEY not set (DALL-E unavailable — optional)
+  ⚠️  No image API keys configured
+     FIX: Set XAI_API_KEY or OPENAI_API_KEY env var, or add to .forge/secrets.json
   ✅ Node.js v24.11.1 (sharp requires >= 18.17)
 
 MCP Runtime:
@@ -112,7 +112,7 @@ Timeline / Search sources:
   ✅ 0 of 6 L2 source(s) with indexable events
 
 ────────────────────────────────────────────────────
-  Results:  43 passed  |  2 failed  |  5 warnings
+  Results:  41 passed  |  2 failed  |  6 warnings
 ────────────────────────────────────────────────────
 
 Fix the 2 issue(s) above for the best Plan Forge experience.

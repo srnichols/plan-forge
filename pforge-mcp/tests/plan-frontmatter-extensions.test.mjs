@@ -268,6 +268,7 @@ describe("runPlan: lockHash enforcement", () => {
       cwd: dir,
       dryRunWorker: true,
       manualImport: true,
+      quorum: false, // lockHash tests don't exercise quorum; avoid model-probe failures in CI
     });
 
     expect(result.code).not.toBe("LOCK_HASH_MISMATCH");
@@ -283,6 +284,7 @@ describe("runPlan: lockHash enforcement", () => {
       cwd: dir,
       dryRunWorker: true,
       manualImport: true,
+      quorum: false, // lockHash tests don't exercise quorum; avoid model-probe failures in CI
     });
 
     expect(result.code).not.toBe("LOCK_HASH_MISMATCH");

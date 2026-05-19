@@ -167,6 +167,39 @@ If ANY need input: list them and WAIT.
 
 ---
 
+## lockHash — Drift Protection (A6)
+
+After all sections are finalized and the plan quality self-check passes, compute and insert the `lockHash` into the plan's frontmatter as the **final hardening action**:
+
+1. Compute the hash using `computeLockHash(planContent)` from `pforge-mcp/orchestrator.mjs`:
+   ```bash
+   node -e "import('./pforge-mcp/orchestrator.mjs').then(m=>require('fs').promises.readFile('<PLAN_PATH>','utf-8').then(c=>console.log(m.computeLockHash(c))))"
+   ```
+   Or invoke from the orchestrator:
+   ```bash
+   node --input-type=module -e "
+   import { computeLockHash } from './pforge-mcp/orchestrator.mjs';
+   import { readFileSync } from 'node:fs';
+   const c = readFileSync('<PLAN_PATH>', 'utf-8');
+   console.log(computeLockHash(c));
+   "
+   ```
+
+2. Add or replace the `lockHash:` field in the plan's YAML frontmatter (the `---` block at the top):
+   ```yaml
+   ---
+   lockHash: <computed-hex>
+   ---
+   ```
+
+3. **Do NOT re-compute the hash after inserting it.** The orchestrator strips frontmatter before hashing, so the `lockHash` field itself is excluded from the hash input. Inserting it does not change the computed value.
+
+4. **Template-only change**: this step does NOT retroactively re-harden plans that are already running. A plan without `lockHash` runs exactly as before (backwards-compatible).
+
+5. If any slice Scope, Validation Gate, or Forbidden Actions content changes after the lockHash is written, you MUST re-compute and update the lockHash before the plan can execute.
+
+---
+
 ## Release-Slice Hardening (when the plan ships a tag)
 
 If any slice contains `chore(release): vX.Y.Z` or creates a git tag, that slice

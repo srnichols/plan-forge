@@ -25,6 +25,7 @@ import { resolve, basename, dirname, join, relative, extname, isAbsolute } from 
 import { EventEmitter } from "node:events";
 import { tmpdir } from "node:os";
 import { fileURLToPath } from "node:url";
+import { createHash } from "node:crypto";
 import { createTraceContext, createTelemetryHandler, writeManifest, appendRunIndex, pruneRunHistory, addLogSummary } from "./telemetry.mjs";
 import { recordActivity } from "./team-activity.mjs";
 import { isOpenBrainConfigured, buildMemorySearchBlock, buildMemoryCaptureBlock, buildReflexionBlock, buildTrajectorySuffix, extractTrajectory, writeTrajectory, retrieveAutoSkills, buildAutoSkillContext, extractAutoSkill, writeAutoSkill, incrementAutoSkillReuse, buildRunSummaryThought, buildCostAnomalyThought, loadProjectContext, buildPlanBootContext, computeGateSuggestionKey, getGateSuggestionCounter, captureMemory, autoDrainOpenBrainQueue } from "./memory.mjs";
@@ -511,6 +512,10 @@ export function parsePlan(planPath, cwd = process.cwd()) {
       else if (kv[1] === "network.enforce") {
         meta.networkEnforce = v.toLowerCase() === "true";
       }
+      // Phase-WORKER-GUARDRAILS Slice 5 (A6): lockHash — sha256 of plan body anchors
+      else if (kv[1] === "lockHash") {
+        if (v.length > 0) meta.lockHash = v;
+      }
       else if (kv[1] === "model") {
         const rawValue = kv[2];
         const isQuotedValue =
@@ -532,6 +537,115 @@ export function parsePlan(planPath, cwd = process.cwd()) {
   }
 
   return { meta, scopeContract, slices, dag };
+}
+
+/**
+ * Compute the lockHash for a plan per decision #6 (Phase-WORKER-GUARDRAILS A6).
+ *
+ * Hash scope: sha256 over the concatenation of (per slice, in document order):
+ *   - `### Slice N:` header line
+ *   - `**Scope** (files in scope):` bullet list
+ *   - `**Validation Gate**:` code block content
+ * Plus the plan's top-level `### Forbidden Actions` (or `### Forbidden`) list.
+ *
+ * Frontmatter is stripped before hashing so editing only the frontmatter
+ * (e.g. updating the lockHash field itself) does not invalidate the hash.
+ *
+ * @param {string} planContent - raw plan file content
+ * @returns {string} sha256 hex digest
+ */
+export function computeLockHash(planContent) {
+  // Strip frontmatter so it does not participate in the hash
+  const body = planContent.replace(/^---\r?\n[\s\S]*?\r?\n---\r?\n/, "");
+  const lines = body.split(/\r?\n/);
+  const parts = [];
+
+  // ── Pass 1: Forbidden Actions bullet list ─────────────────────────────────
+  let inForbidden = false;
+  for (const line of lines) {
+    if (/^###\s+Forbidden(\s+Actions)?\b/i.test(line)) {
+      inForbidden = true;
+      continue;
+    }
+    if (inForbidden) {
+      if (/^##/.test(line)) { inForbidden = false; continue; }
+      parts.push(line);
+    }
+  }
+
+  // ── Pass 2: Per-slice Scope list + Validation Gate block ──────────────────
+  let inSlice = false;
+  let inScope = false;
+  let inGate = false;
+  let inFence = false;
+
+  for (const line of lines) {
+    // New slice header
+    if (/^#{2,4}\s+Slice\s+\d+\b/.test(line)) {
+      inSlice = true;
+      inScope = false;
+      inGate = false;
+      inFence = false;
+      parts.push(line);
+      continue;
+    }
+
+    if (!inSlice) continue;
+
+    // Code fence boundary
+    if (line.startsWith("```")) {
+      if (inFence) {
+        // Closing fence
+        if (inGate) { parts.push(line); inGate = false; }
+        inFence = false;
+      } else {
+        inFence = true;
+        if (inGate) parts.push(line);
+        inScope = false;
+      }
+      continue;
+    }
+
+    // Inside a code fence — capture if inside gate
+    if (inFence) {
+      if (inGate) parts.push(line);
+      continue;
+    }
+
+    // Scope marker
+    if (/^\*\*Scope\*\*\s*\(files in scope\)\s*:/i.test(line)) {
+      inScope = true;
+      inGate = false;
+      parts.push(line);
+      continue;
+    }
+
+    // Validation Gate marker
+    if (/^\*\*Validation Gate\*\*\s*:/i.test(line)) {
+      inScope = false;
+      inGate = true;
+      parts.push(line);
+      continue;
+    }
+
+    // Any bold section heading (not scope/gate) resets state
+    if (/^\*\*[A-Z][^*]*\*\*\s*:/.test(line)) {
+      inScope = false;
+      inGate = false;
+      continue;
+    }
+
+    // Capture scope bullet lines
+    if (inScope) {
+      if (/^\s*[-*]/.test(line)) {
+        parts.push(line);
+      } else if (line.trim() === "") {
+        inScope = false;
+      }
+    }
+  }
+
+  return createHash("sha256").update(parts.join("\n")).digest("hex");
 }
 
 function parseMeta(lines) {
@@ -4286,6 +4400,29 @@ export async function runPlan(planPath, options = {}) {
       code: "NO_SLICES",
       planPath,
     };
+  }
+
+  // Phase-WORKER-GUARDRAILS Slice 5 (A6): lockHash enforcement.
+  // If frontmatter has `lockHash`, verify plan body has not drifted since hardening.
+  // Absent lockHash → runs as today (backwards-compatible per decision #7).
+  if (plan.meta && typeof plan.meta.lockHash === "string") {
+    const planContent = readFileSync(planPath, "utf-8");
+    const computedHash = computeLockHash(planContent);
+    if (computedHash !== plan.meta.lockHash) {
+      return {
+        status: "failed",
+        error:
+          `Plan body has drifted since it was hardened — lockHash mismatch.\n` +
+          `  stored:   ${plan.meta.lockHash}\n` +
+          `  computed: ${computedHash}\n` +
+          `Re-run Step 2 hardening to regenerate the lockHash, then retry.`,
+        code: "LOCK_HASH_MISMATCH",
+        storedHash: plan.meta.lockHash,
+        computedHash,
+        planPath,
+        hint: "Re-run Step 2 (step2-harden-plan.prompt.md) to update the lockHash in frontmatter.",
+      };
+    }
   }
 
   // Meta-bug #129 preflight: refuse to run a plan whose target release version

@@ -601,7 +601,27 @@ export function formatGeneric(event) {
   };
 }
 
-// ─── Rate Limiter ─────────────────────────────────────────────────────
+// ─── Tool Deny Filter ─────────────────────────────────────────────────
+
+/**
+ * Determine whether a tool-call event should be blocked based on the plan's
+ * `tools.deny` list parsed from frontmatter.
+ *
+ * Phase-WORKER-GUARDRAILS Slice 6 (A8): MCP bridge filter for `tools.deny`.
+ * The orchestrator extracts `meta.toolsDeny` from plan frontmatter and passes it
+ * here; the bridge drops any `tool-call` / `tool-invoked` event whose `toolName`
+ * appears in the denied list before forwarding to external notification channels.
+ *
+ * @param {string}          toolName    - The MCP tool name being invoked
+ * @param {string[] | null} deniedTools - List from plan frontmatter `tools.deny`
+ * @returns {boolean} true when the tool is denied and must be blocked
+ */
+export function isDeniedTool(toolName, deniedTools) {
+  if (!deniedTools || !Array.isArray(deniedTools) || deniedTools.length === 0) return false;
+  return deniedTools.includes(toolName);
+}
+
+
 
 class RateLimiter {
   /**
@@ -641,14 +661,17 @@ class RateLimiter {
 export class BridgeManager {
   /**
    * @param {object} options
-   * @param {string} [options.cwd]    - Project directory (for .forge.json + server-ports.json)
-   * @param {object} [options.config] - Bridge config override (skips .forge.json lookup)
-   * @param {string} [options.logDir] - Run log directory for bridge-edit-* event recording
+   * @param {string} [options.cwd]         - Project directory (for .forge.json + server-ports.json)
+   * @param {object} [options.config]      - Bridge config override (skips .forge.json lookup)
+   * @param {string} [options.logDir]      - Run log directory for bridge-edit-* event recording
+   * @param {string[]} [options.deniedTools] - Tool names denied by plan frontmatter `tools.deny`
    */
   constructor(options = {}) {
     this.cwd = options.cwd ?? process.cwd();
     this.config = options.config ?? loadBridgeConfig(this.cwd);
     this._logDir = options.logDir ?? null;
+    /** Phase-WORKER-GUARDRAILS Slice 6 (A8): MCP tool names blocked by plan frontmatter `tools.deny`. */
+    this._deniedTools = options.deniedTools ?? null;
     this._ws = null;
     this._rateLimiter = new RateLimiter();
     this._reconnectTimer = null;
@@ -809,9 +832,20 @@ export class BridgeManager {
   /**
    * Handle an incoming hub event — apply level filter and dispatch to each channel.
    * Caches run-started context for use in per-slice message formatting.
+   * Drops `tool-call`/`tool-invoked` events whose `toolName` appears in
+   * `_deniedTools` (populated from plan frontmatter `tools.deny`).
    * @param {object} event
    */
   _onEvent(event) {
+    // Phase-WORKER-GUARDRAILS Slice 6 (A8): drop denied tool-call events before forwarding
+    if (
+      (event.type === "tool-call" || event.type === "tool-invoked") &&
+      isDeniedTool(event.toolName, this._deniedTools)
+    ) {
+      console.error(`[bridge] Blocked denied tool event: ${event.toolName}`);
+      return;
+    }
+
     // Cache run context so slice formatters can show "Slice N/Total"
     if (event.type === "run-started") {
       this._runContext = {

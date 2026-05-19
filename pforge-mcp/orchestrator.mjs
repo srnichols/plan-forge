@@ -516,6 +516,18 @@ export function parsePlan(planPath, cwd = process.cwd()) {
       else if (kv[1] === "lockHash") {
         if (v.length > 0) meta.lockHash = v;
       }
+      // Phase-WORKER-GUARDRAILS Slice 6 (A8): tools.deny — YAML flow sequence of MCP tool names the worker may not call
+      else if (kv[1] === "tools.deny") {
+        const rawV = kv[2].trim();
+        if (!rawV.startsWith("[") || !rawV.endsWith("]")) {
+          throw new Error(
+            `frontmatter tools.deny must be a YAML flow sequence (e.g. [tool1, tool2]) ` +
+            `at line ${fmIdx + 2} — got: ${kv[2]}`
+          );
+        }
+        const inner = rawV.slice(1, -1).trim();
+        meta.toolsDeny = inner ? inner.split(/\s*,\s*/).map((s) => s.trim()).filter(Boolean) : [];
+      }
       else if (kv[1] === "model") {
         const rawValue = kv[2];
         const isQuotedValue =
@@ -4918,6 +4930,7 @@ export async function runPlan(planPath, options = {}) {
           worker, _dispatchSlice, _pollPullRequest,
           networkAllowed: plan.meta?.networkAllowed ?? null,
           networkEnforce: plan.meta?.networkEnforce ?? false,
+          toolsDeny: plan.meta?.toolsDeny ?? null,
         });
         if (result.status === "passed") {
           result.autoCommit = autoCommitSliceIfDirty({ slice, cwd, mode, eventBus, startSha, preSliceState });
@@ -9089,6 +9102,7 @@ async function executeSlice(slice, options) {
     _pollPullRequest = _pollPullRequestDefault,
     networkAllowed = null,  // Phase-WORKER-GUARDRAILS Slice 4 (A5): string[] | null
     networkEnforce = false, // Phase-WORKER-GUARDRAILS Slice 4 (A5): default log-only
+    toolsDeny = null,       // Phase-WORKER-GUARDRAILS Slice 6 (A8): string[] | null — MCP tool names the worker may not invoke
   } = options;
   const startTime = Date.now();
   const resolvedModel = resolveModel(model, modelRouting, slice);

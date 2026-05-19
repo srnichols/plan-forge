@@ -70,6 +70,7 @@ export let activeHub = null;
 export let activeBridge = null;
 export let activeEventWatcher = null;
 export let _studioClient = null;
+export let server = null;
 export const _approvedRunIds = new Set();
 
 export function setActiveAbortController(value) {
@@ -105,6 +106,11 @@ export function setActiveEventWatcher(value) {
 export function setStudioClient(value) {
   _studioClient = value;
   return _studioClient;
+}
+
+export function setServer(value) {
+  server = value;
+  return server;
 }
 
 export async function getOrSpawnStudioChild() {

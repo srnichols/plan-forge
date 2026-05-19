@@ -124,6 +124,160 @@ export function parseValidationGates(planFilePath, cwd = process.cwd()) {
  * @param {string} planFilePath - Path to the plan Markdown file
  * @returns {{ warnings: Array, errors: Array, passed: boolean }}
  */
+function _parseDisableDirectivesAndComments(rawLines, slice, warnings) {
+  const disabledRules = new Set();
+  for (const raw of rawLines) {
+    const disableMatch = raw.match(/^#\s*pforge-lint-disable\s+(.+)$/i);
+    if (disableMatch) {
+      for (const rid of disableMatch[1].split(",").map(s => s.trim().toUpperCase()).filter(Boolean)) {
+        disabledRules.add(rid);
+      }
+    } else if (raw.startsWith("#")) {
+      const loc = `Slice ${slice.number} ("${slice.title}")`;
+      warnings.push({
+        slice: slice.number,
+        command: raw,
+        rule: "comment-line",
+        severity: "warn",
+        message: `${loc}: Standalone comment '${raw.slice(0, 60)}...' will be treated as a command. Remove or prefix with a real command.`,
+      });
+    }
+  }
+  return disabledRules;
+}
+
+function _resolveCmdToken(line) {
+  const tokens = line.split(/\s+/);
+  let cmdIdx = 0;
+  while (cmdIdx < tokens.length && /^[A-Za-z_][A-Za-z0-9_]*=/.test(tokens[cmdIdx])) {
+    cmdIdx++;
+  }
+  return (tokens[cmdIdx] || tokens[0]).toLowerCase();
+}
+
+function _pushWRule({ test, ruleId, rule, msg, line, slice, loc, strictMode, disabledRules, warnings, errors }) {
+  if (!test || disabledRules.has(ruleId)) return;
+  const _sev = strictMode ? "error" : "warn";
+  (_sev === "error" ? errors : warnings).push({
+    slice: slice.number,
+    command: line,
+    ruleId,
+    rule,
+    severity: _sev,
+    message: `${loc}: ${msg}`,
+  });
+}
+
+function _lintBasicRules(line, slice, loc, cmdToken, lastSliceNumber, warnings, errors) {
+  if (line.includes("/dev/stdin")) {
+    errors.push({
+      slice: slice.number, command: line, rule: "unix-only-path", severity: "error",
+      message: `${loc}: '/dev/stdin' is Unix-only — fails on Windows. Use readFileSync(0,'utf8') for cross-platform stdin.`,
+    });
+  }
+  const isAllowed = GATE_ALLOWED_PREFIXES.some(p => cmdToken === p || cmdToken.endsWith(`/${p}`));
+  if (!isAllowed) {
+    errors.push({
+      slice: slice.number, command: line, rule: "blocked-command", severity: "error",
+      message: `${loc}: '${cmdToken}' is not in the gate allowlist. Add it to GATE_ALLOWED_PREFIXES or rewrite the command.`,
+    });
+  }
+  if (/curl\s.*localhost[:\s]/.test(line) && slice.number !== lastSliceNumber) {
+    warnings.push({
+      slice: slice.number, command: line, rule: "runtime-gate", severity: "warn",
+      message: `${loc}: curl to localhost requires a running server. Move runtime API checks to vitest integration tests.`,
+    });
+  }
+  if (/^node\s+.*\.test\.(mjs|js|ts)/.test(line)) {
+    warnings.push({
+      slice: slice.number, command: line, rule: "vitest-direct-node", severity: "warn",
+      message: `${loc}: 'node *.test.*' fails for vitest test files. Use 'npx vitest run <file>' instead.`,
+    });
+  }
+  if (/\bpforge\s+analyze\b/.test(line)) {
+    warnings.push({
+      slice: slice.number, command: line, rule: "pforge-analyze-in-gate", severity: "warn",
+      message: `${loc}: 'pforge analyze' in a gate exits 1 on noisy text-match heuristics (false-negatived all Phase-38.1–38.8 Slice 5 gates). Omit it — the orchestrator auto-runs analyze post-execution. Use 'pforge regression-guard <plan>' for a doc-integrity check instead.`,
+    });
+  }
+  if (UNIX_TOOLS.includes(cmdToken) && !/^bash\s+-c/.test(line)) {
+    warnings.push({
+      slice: slice.number, command: line, rule: "windows-unavailable", severity: "warn",
+      message: `${loc}: '${cmdToken}' is not available in cmd.exe on Windows. Wrap in 'bash -c' or use a 'node -e' equivalent.`,
+    });
+  }
+  if (/\/tmp\/|\/dev\/null/.test(line)) {
+    warnings.push({
+      slice: slice.number, command: line, rule: "unix-only-path", severity: "warn",
+      message: `${loc}: Unix-only path (/tmp/ or /dev/null) — fails on Windows. Use os.tmpdir() or NUL.`,
+    });
+  }
+  if (/^pforge\s/.test(line)) {
+    warnings.push({
+      slice: slice.number, command: line, rule: "project-script", severity: "warn",
+      message: `${loc}: 'pforge' is a project script, not on PATH during gate execution. Use 'pwsh ./pforge.ps1' or rewrite as 'node -e'.`,
+    });
+  }
+  if (/^node\s+-e\s+".*\/\//.test(line) && !line.includes("http://") && !line.includes("https://")) {
+    warnings.push({
+      slice: slice.number, command: line, rule: "js-comment-in-eval", severity: "warn",
+      message: `${loc}: node -e contains '//' which acts as a line comment on a single line, breaking the code. Remove JS comments from gate commands.`,
+    });
+  }
+}
+
+function _lintWRules(line, slice, loc, cmdToken, strictMode, disabledRules, warnings, errors) {
+  _pushWRule({
+    test: /^bash\s+-c\b/.test(line),
+    ruleId: "W1", rule: "bash-prefix",
+    msg: `'bash -c' prefix detected — fails on Windows (bash not in PATH). Rewrite as a direct node/npx command or use 'pwsh -Command' instead.`,
+    line, slice, loc, strictMode, disabledRules, warnings, errors,
+  });
+  _pushWRule({
+    test: !/^bash\s+-c\b/.test(line) && /^(node|npx|pwsh)\b.*\|/.test(line),
+    ruleId: "W2", rule: "pipeline-node",
+    msg: `Shell pipeline with '${cmdToken}' as left operand — cmd.exe may handle this differently. Consider wrapping in a 'node -e' script that uses child_process for portability.`,
+    line, slice, loc, strictMode, disabledRules, warnings, errors,
+  });
+  _pushWRule({
+    test: /^node\s+-e\s+.*\\\\[sdwSDWbBntr]/.test(line),
+    ruleId: "W3", rule: "regex-escape",
+    msg: `node -e contains '\\\\<metachar>' — the double-backslash is likely an over-escape; cmd.exe strips one level, so the regex may not match as intended. Use a single '\\' for regex escapes inside node -e strings.`,
+    line, slice, loc, strictMode, disabledRules, warnings, errors,
+  });
+  _pushWRule({
+    test: /\bcd\s+\S+.*&&/.test(line),
+    ruleId: "W4", rule: "cd-chain",
+    msg: `'cd dir && command' chain — on Windows cmd.exe the directory change does not persist for the next command. Use a --cwd flag or run commands from the target directory directly.`,
+    line, slice, loc, strictMode, disabledRules, warnings, errors,
+  });
+  _pushWRule({
+    test: /^node\s+-e\s+".*\\"/.test(line),
+    ruleId: "W5", rule: "node-e-nested-double-quote",
+    msg: `node -e contains nested '\\"' (escaped double-quote) — mangled by PowerShell before reaching Node, produces runtime SyntaxError. Use single quotes inside the inline JS, or invoke a helper script via 'node script.mjs'.`,
+    line, slice, loc, strictMode, disabledRules, warnings, errors,
+  });
+}
+
+function _lintCommandLine(line, slice, lastSliceNumber, disabledRules, strictMode, warnings, errors, portabilityWarnings) {
+  const loc = `Slice ${slice.number} ("${slice.title}")`;
+  if (looksLikeProse(line)) {
+    warnings.push({
+      slice: slice.number, command: line, rule: "prose-detected", severity: "warn",
+      message: `${loc}: Line looks like prose, not a command: '${line.slice(0, 60)}...' — will be skipped at runtime.`,
+    });
+    return;
+  }
+  const cmdToken = _resolveCmdToken(line);
+  _lintBasicRules(line, slice, loc, cmdToken, lastSliceNumber, warnings, errors);
+  _lintWRules(line, slice, loc, cmdToken, strictMode, disabledRules, warnings, errors);
+
+  const portResult = validateGatePortability(line);
+  for (const pw of portResult.warnings) {
+    portabilityWarnings.push({ ...pw, slice: slice.number, command: line });
+  }
+}
+
 export function lintGateCommands(planFilePath, cwd = process.cwd()) {
   const plan = (planFilePath !== null && typeof planFilePath === "object")
     ? planFilePath
@@ -139,251 +293,11 @@ export function lintGateCommands(planFilePath, cwd = process.cwd()) {
 
   for (const slice of plan.slices) {
     if (!slice.validationGate) continue;
-
-    // Also lint raw lines for comment detection before coalescing
     const rawLines = slice.validationGate.split("\n").map(l => l.trim()).filter(l => l.length > 0);
-    // Parse per-gate suppression directives: # pforge-lint-disable W1 or # pforge-lint-disable W1,W2
-    const disabledRules = new Set();
-    for (const raw of rawLines) {
-      const disableMatch = raw.match(/^#\s*pforge-lint-disable\s+(.+)$/i);
-      if (disableMatch) {
-        for (const rid of disableMatch[1].split(",").map(s => s.trim().toUpperCase()).filter(Boolean)) {
-          disabledRules.add(rid);
-        }
-      } else if (raw.startsWith("#")) {
-        const loc = `Slice ${slice.number} ("${slice.title}")`;
-        warnings.push({
-          slice: slice.number,
-          command: raw,
-          rule: "comment-line",
-          severity: "warn",
-          message: `${loc}: Standalone comment '${raw.slice(0, 60)}...' will be treated as a command. Remove or prefix with a real command.`,
-        });
-      }
-    }
-
+    const disabledRules = _parseDisableDirectivesAndComments(rawLines, slice, warnings);
     const commands = coalesceGateLines(slice.validationGate);
-
     for (const line of commands) {
-      const loc = `Slice ${slice.number} ("${slice.title}")`;
-
-      // 1. /dev/stdin (not cross-platform)
-      if (line.includes("/dev/stdin")) {
-        errors.push({
-          slice: slice.number,
-          command: line,
-          rule: "unix-only-path",
-          severity: "error",
-          message: `${loc}: '/dev/stdin' is Unix-only — fails on Windows. Use readFileSync(0,'utf8') for cross-platform stdin.`,
-        });
-      }
-
-      // 3. Command not in allowlist
-      // Skip prose lines with a warning instead of an error
-      if (looksLikeProse(line)) {
-        warnings.push({
-          slice: slice.number,
-          command: line,
-          rule: "prose-detected",
-          severity: "warn",
-          message: `${loc}: Line looks like prose, not a command: '${line.slice(0, 60)}...' — will be skipped at runtime.`,
-        });
-        continue;
-      }
-      // Skip leading env var assignments (VAR=val command ...) to find the real command
-      const tokens = line.split(/\s+/);
-      let cmdIdx = 0;
-      while (cmdIdx < tokens.length && /^[A-Za-z_][A-Za-z0-9_]*=/.test(tokens[cmdIdx])) {
-        cmdIdx++;
-      }
-      const cmdToken = (tokens[cmdIdx] || tokens[0]).toLowerCase();
-      const isAllowed = GATE_ALLOWED_PREFIXES.some(p => cmdToken === p || cmdToken.endsWith(`/${p}`));
-      if (!isAllowed) {
-        errors.push({
-          slice: slice.number,
-          command: line,
-          rule: "blocked-command",
-          severity: "error",
-          message: `${loc}: '${cmdToken}' is not in the gate allowlist. Add it to GATE_ALLOWED_PREFIXES or rewrite the command.`,
-        });
-      }
-
-      // 4. curl localhost in non-final slices (requires running server)
-      if (/curl\s.*localhost[:\s]/.test(line) && slice.number !== lastSliceNumber) {
-        warnings.push({
-          slice: slice.number,
-          command: line,
-          rule: "runtime-gate",
-          severity: "warn",
-          message: `${loc}: curl to localhost requires a running server. Move runtime API checks to vitest integration tests.`,
-        });
-      }
-
-      // 5. node *.test.mjs for vitest files (should use npx vitest)
-      if (/^node\s+.*\.test\.(mjs|js|ts)/.test(line)) {
-        warnings.push({
-          slice: slice.number,
-          command: line,
-          rule: "vitest-direct-node",
-          severity: "warn",
-          message: `${loc}: 'node *.test.*' fails for vitest test files. Use 'npx vitest run <file>' instead.`,
-        });
-      }
-
-      // 6. `pforge analyze <plan>` in gates — reliably false-negatives on noisy
-      // text-match test-coverage heuristic. Observed Slice 5 failure on all 8
-      // Phase-38.x plans. Orchestrator auto-runs analyze post-execution, so the
-      // in-gate call is redundant. Use `pforge regression-guard` for doc checks.
-      if (/\bpforge\s+analyze\b/.test(line)) {
-        warnings.push({
-          slice: slice.number,
-          command: line,
-          rule: "pforge-analyze-in-gate",
-          severity: "warn",
-          message: `${loc}: 'pforge analyze' in a gate exits 1 on noisy text-match heuristics (false-negatived all Phase-38.1–38.8 Slice 5 gates). Omit it — the orchestrator auto-runs analyze post-execution. Use 'pforge regression-guard <plan>' for a doc-integrity check instead.`,
-        });
-      }
-
-      // 6. Unix-only commands (not available in cmd.exe on Windows)
-      if (UNIX_TOOLS.includes(cmdToken) && !/^bash\s+-c/.test(line)) {
-        warnings.push({
-          slice: slice.number,
-          command: line,
-          rule: "windows-unavailable",
-          severity: "warn",
-          message: `${loc}: '${cmdToken}' is not available in cmd.exe on Windows. Wrap in 'bash -c' or use a 'node -e' equivalent.`,
-        });
-      }
-
-      // 7. Unix-only paths (/tmp/, /dev/null)
-      if (/\/tmp\/|\/dev\/null/.test(line)) {
-        warnings.push({
-          slice: slice.number,
-          command: line,
-          rule: "unix-only-path",
-          severity: "warn",
-          message: `${loc}: Unix-only path (/tmp/ or /dev/null) — fails on Windows. Use os.tmpdir() or NUL.`,
-        });
-      }
-
-      // 8. Project scripts not on PATH (pforge is a .ps1/.sh script, not a global binary)
-      if (/^pforge\s/.test(line)) {
-        warnings.push({
-          slice: slice.number,
-          command: line,
-          rule: "project-script",
-          severity: "warn",
-          message: `${loc}: 'pforge' is a project script, not on PATH during gate execution. Use 'pwsh ./pforge.ps1' or rewrite as 'node -e'.`,
-        });
-      }
-
-      // 9. JS comments inside node -e one-liners (// swallows the rest of the line)
-      if (/^node\s+-e\s+".*\/\//.test(line) && !line.includes("http://") && !line.includes("https://")) {
-        warnings.push({
-          slice: slice.number,
-          command: line,
-          rule: "js-comment-in-eval",
-          severity: "warn",
-          message: `${loc}: node -e contains '//' which acts as a line comment on a single line, breaking the code. Remove JS comments from gate commands.`,
-        });
-      }
-
-      // W1. bash -c prefix pitfall — wrapping cross-platform commands in bash is
-      // unnecessary and fails on Windows where bash is not in PATH by default.
-      if (/^bash\s+-c\b/.test(line) && !disabledRules.has("W1")) {
-        const _sev = strictMode ? "error" : "warn";
-        (_sev === "error" ? errors : warnings).push({
-          slice: slice.number,
-          command: line,
-          ruleId: "W1",
-          rule: "bash-prefix",
-          severity: _sev,
-          message: `${loc}: 'bash -c' prefix detected — fails on Windows (bash not in PATH). Rewrite as a direct node/npx command or use 'pwsh -Command' instead.`,
-        });
-      }
-
-      // W2. Pipeline in node/npx/pwsh gate — shell pipe operator with a node-family
-      // left operand.  Shell pipelines still work when the orchestrator detects
-      // hasShellChain, but wrapping in a 'node -e' script that uses child_process
-      // is more portable and avoids cmd.exe quirks.  Skip lines already caught by
-      // W1 (bash -c prefix), which legitimately use pipes inside the bash string.
-      if (!/^bash\s+-c\b/.test(line) && /^(node|npx|pwsh)\b.*\|/.test(line) && !disabledRules.has("W2")) {
-        const _sev = strictMode ? "error" : "warn";
-        (_sev === "error" ? errors : warnings).push({
-          slice: slice.number,
-          command: line,
-          ruleId: "W2",
-          rule: "pipeline-node",
-          severity: _sev,
-          message: `${loc}: Shell pipeline with '${cmdToken}' as left operand — cmd.exe may handle this differently. Consider wrapping in a 'node -e' script that uses child_process for portability.`,
-        });
-      }
-
-      // W3. Regex-escape heuristic — double-escaped backslash before a common
-      // regex metachar (\\s, \\d, \\w, \\S, \\D, \\W, \\b, \\B, \\n, \\t, \\r)
-      // inside a 'node -e' command.  cmd.exe strips one backslash level when
-      // processing double-quoted strings, so '\\\\s' in plan source becomes '\\s'
-      // at the shell level — making the compiled regex match a literal backslash
-      // followed by 's' rather than the whitespace class.  The heuristic fires when
-      // two consecutive backslashes precede a metachar in the gate string as stored.
-      if (/^node\s+-e\s+.*\\\\[sdwSDWbBntr]/.test(line) && !disabledRules.has("W3")) {
-        const _sev = strictMode ? "error" : "warn";
-        (_sev === "error" ? errors : warnings).push({
-          slice: slice.number,
-          command: line,
-          ruleId: "W3",
-          rule: "regex-escape",
-          severity: _sev,
-          message: `${loc}: node -e contains '\\\\<metachar>' — the double-backslash is likely an over-escape; cmd.exe strips one level, so the regex may not match as intended. Use a single '\\' for regex escapes inside node -e strings.`,
-        });
-      }
-
-      // W4. cd-chain pitfall — 'cd dir && command' does not change the working
-      // directory for the subsequent command on Windows cmd.exe.  Use the
-      // command's own --cwd / --project flag, or spawn with { cwd: '...' }.
-      if (/\bcd\s+\S+.*&&/.test(line) && !disabledRules.has("W4")) {
-        const _sev = strictMode ? "error" : "warn";
-        (_sev === "error" ? errors : warnings).push({
-          slice: slice.number,
-          command: line,
-          ruleId: "W4",
-          rule: "cd-chain",
-          severity: _sev,
-          message: `${loc}: 'cd dir && command' chain — on Windows cmd.exe the directory change does not persist for the next command. Use a --cwd flag or run commands from the target directory directly.`,
-        });
-      }
-
-      // W5. Nested double-quote escapes inside `node -e "..."` — proven repeatable
-      // failure on Windows + PowerShell. The combination of `node -e "..."` outer
-      // quotes + Markdown's backslash rules + PowerShell's parser mangles embedded
-      // `\"` sequences BEFORE they reach Node's --input-type=module evaluator,
-      // producing `SyntaxError: Expected ')', got 'string literal'`. Even the
-      // orchestrator's execFileSync(shell:false) fast-path cannot help — the
-      // mangling happens at shell-parse time. See Phase 52 S3 (broke 3 attempts
-      // including auto-escalation). Fix: use only single quotes inside the inline
-      // JS, or replace dual-form path checks with a single substring check, or
-      // move the logic to a helper `.mjs` script invoked as `node script.mjs`.
-      if (/^node\s+-e\s+".*\\"/.test(line) && !disabledRules.has("W5")) {
-        const _sev = strictMode ? "error" : "warn";
-        (_sev === "error" ? errors : warnings).push({
-          slice: slice.number,
-          command: line,
-          ruleId: "W5",
-          rule: "node-e-nested-double-quote",
-          severity: _sev,
-          message: `${loc}: node -e contains nested '\\"' (escaped double-quote) — mangled by PowerShell before reaching Node, produces runtime SyntaxError. Use single quotes inside the inline JS, or invoke a helper script via 'node script.mjs'.`,
-        });
-      }
-
-      // 10. Cross-platform portability checks (non-blocking)
-      const portResult = validateGatePortability(line);
-      for (const pw of portResult.warnings) {
-        portabilityWarnings.push({
-          ...pw,
-          slice: slice.number,
-          command: line,
-        });
-      }
+      _lintCommandLine(line, slice, lastSliceNumber, disabledRules, strictMode, warnings, errors, portabilityWarnings);
     }
   }
 
@@ -540,24 +454,38 @@ export function isGateCommandAllowed(cmd) {
  * @param {string} [options.cwd=process.cwd()] - Project root
  * @returns {Promise<{files: string[], gatesChecked: number, passed: number, failed: number, blocked: number, skipped: number, success: boolean, results: object[]}>}
  */
-export async function regressionGuard(files, { plan, failFast = false, cwd = process.cwd() } = {}) {
-  // Resolve plan files to check
-  let planPaths = [];
+function _resolvePlanPaths(plan, cwd) {
   if (plan) {
     const resolved = resolve(cwd, plan);
-    if (existsSync(resolved)) {
-      planPaths = [resolved];
-    }
-  } else {
-    const plansDir = resolve(cwd, "docs", "plans");
-    if (existsSync(plansDir)) {
-      planPaths = readdirSync(plansDir)
-        .filter((f) => f.endsWith("-PLAN.md") || f.endsWith("-plan.md"))
-        .map((f) => resolve(plansDir, f));
+    return existsSync(resolved) ? [resolved] : [];
+  }
+  const plansDir = resolve(cwd, "docs", "plans");
+  if (!existsSync(plansDir)) return [];
+  return readdirSync(plansDir)
+    .filter((f) => f.endsWith("-PLAN.md") || f.endsWith("-plan.md"))
+    .map((f) => resolve(plansDir, f));
+}
+
+function _collectFallbackGates(parsed, planPath, gateItems) {
+  for (const s of parsed.slices) {
+    if (s.testCommand) {
+      gateItems.push({ planFile: basename(planPath), sliceNumber: s.number, sliceTitle: s.title, cmd: s.testCommand, source: "testCommand" });
+    } else if (s.buildCommand) {
+      gateItems.push({ planFile: basename(planPath), sliceNumber: s.number, sliceTitle: s.title, cmd: s.buildCommand, source: "buildCommand" });
+    } else if (s.validationGateDescription) {
+      const backtickRe = /`([^`]+)`/g;
+      let bm;
+      while ((bm = backtickRe.exec(s.validationGateDescription)) !== null) {
+        const candidate = bm[1].trim();
+        if (/^(dotnet|npm|npx|node|bash|pwsh|powershell|python|go|cargo|make|mvn|gradle)\b/i.test(candidate)) {
+          gateItems.push({ planFile: basename(planPath), sliceNumber: s.number, sliceTitle: s.title, cmd: candidate, source: "prose-gate" });
+        }
+      }
     }
   }
+}
 
-  // Collect gate commands from plans
+function _collectGateItemsFromPlans(planPaths, cwd) {
   const gateItems = [];
   for (const planPath of planPaths) {
     try {
@@ -580,82 +508,79 @@ export async function regressionGuard(files, { plan, failFast = false, cwd = pro
           foundGates = true;
         }
       }
-
-      // Fallback chain: testCommand → buildCommand → backtick commands from validationGateDescription
-      if (!foundGates) {
-        for (const s of parsed.slices) {
-          if (s.testCommand) {
-            gateItems.push({ planFile: basename(planPath), sliceNumber: s.number, sliceTitle: s.title, cmd: s.testCommand, source: "testCommand" });
-          } else if (s.buildCommand) {
-            gateItems.push({ planFile: basename(planPath), sliceNumber: s.number, sliceTitle: s.title, cmd: s.buildCommand, source: "buildCommand" });
-          } else if (s.validationGateDescription) {
-            // Extract backtick-wrapped commands from prose gate descriptions
-            const backtickRe = /`([^`]+)`/g;
-            let bm;
-            while ((bm = backtickRe.exec(s.validationGateDescription)) !== null) {
-              const candidate = bm[1].trim();
-              // Only treat as executable if it looks like a command (starts with a known tool)
-              if (/^(dotnet|npm|npx|node|bash|pwsh|powershell|python|go|cargo|make|mvn|gradle)\b/i.test(candidate)) {
-                gateItems.push({ planFile: basename(planPath), sliceNumber: s.number, sliceTitle: s.title, cmd: candidate, source: "prose-gate" });
-              }
-            }
-          }
-        }
-      }
+      if (!foundGates) _collectFallbackGates(parsed, planPath, gateItems);
     } catch { /* unreadable plan — skip */ }
   }
+  return gateItems;
+}
 
-  // Hotspot-aware gate prioritization: run gates for high-churn files first
+function _prioritizeByHotspots(gateItems, cwd) {
   try {
     const hotspotCache = resolve(cwd, ".forge", "hotspot-cache.json");
-    if (existsSync(hotspotCache)) {
-      const cached = JSON.parse(readFileSync(hotspotCache, "utf-8"));
-      const hotFiles = new Set((cached.hotspots || []).slice(0, 10).map(h => h.file));
-      if (hotFiles.size > 0) {
-        gateItems.sort((a, b) => {
-          const aHot = a.cmd && [...hotFiles].some(h => a.cmd.includes(h)) ? 1 : 0;
-          const bHot = b.cmd && [...hotFiles].some(h => b.cmd.includes(h)) ? 1 : 0;
-          return bHot - aHot; // Hot gates first
-        });
-      }
-    }
+    if (!existsSync(hotspotCache)) return;
+    const cached = JSON.parse(readFileSync(hotspotCache, "utf-8"));
+    const hotFiles = new Set((cached.hotspots || []).slice(0, 10).map(h => h.file));
+    if (hotFiles.size === 0) return;
+    gateItems.sort((a, b) => {
+      const aHot = a.cmd && [...hotFiles].some(h => a.cmd.includes(h)) ? 1 : 0;
+      const bHot = b.cmd && [...hotFiles].some(h => b.cmd.includes(h)) ? 1 : 0;
+      return bHot - aHot;
+    });
   } catch { /* best-effort prioritization */ }
+}
+
+function _classifyAndSkipGate(gate, cwd, results) {
+  if (looksLikeProse(gate.cmd) && !wouldPassAllowlist(gate.cmd)) {
+    results.push({ ...gate, status: "skipped", reason: "liveguard-prose-skipped" });
+    try {
+      appendForgeJsonl("liveguard-events.jsonl", {
+        timestamp: new Date().toISOString(),
+        type: "liveguard-prose-skipped",
+        severity: "info",
+        sliceNumber: gate.sliceNumber,
+        command: gate.cmd,
+      }, cwd);
+    } catch { /* best-effort telemetry */ }
+    return "skipped";
+  }
+  if (!isGateCommandAllowed(gate.cmd)) {
+    results.push({ ...gate, status: "blocked", reason: `'${gate.cmd.split(/\s+/)[0]}' not in gate allowlist` });
+    return "blocked";
+  }
+  return null;
+}
+
+function _runGate(gate, cwd, results) {
+  try {
+    const output = execSync(gate.cmd, { cwd, stdio: "pipe", timeout: resolveGateTimeoutMs(), encoding: "utf-8" });
+    results.push({ ...gate, status: "passed", output: (output || "").trim().slice(0, 500) });
+    return "passed";
+  } catch (err) {
+    const errOut = ((err.stderr || "") + (err.stdout || "")).trim().slice(0, 500) || err.message;
+    results.push({ ...gate, status: "failed", output: errOut });
+    return "failed";
+  }
+}
+
+export async function regressionGuard(files, { plan, failFast = false, cwd = process.cwd() } = {}) {
+  const planPaths = _resolvePlanPaths(plan, cwd);
+  const gateItems = _collectGateItemsFromPlans(planPaths, cwd);
+  _prioritizeByHotspots(gateItems, cwd);
 
   const results = [];
   let passed = 0, failed = 0, blocked = 0, skipped = 0;
 
   for (const gate of gateItems) {
-    // Prose lines are skipped unless they would pass the allowlist (command wins over heuristic)
-    if (looksLikeProse(gate.cmd) && !wouldPassAllowlist(gate.cmd)) {
-      results.push({ ...gate, status: "skipped", reason: "liveguard-prose-skipped" });
-      skipped++;
-      try {
-        appendForgeJsonl("liveguard-events.jsonl", {
-          timestamp: new Date().toISOString(),
-          type: "liveguard-prose-skipped",
-          severity: "info",
-          sliceNumber: gate.sliceNumber,
-          command: gate.cmd,
-        }, cwd);
-      } catch { /* best-effort telemetry */ }
-      continue;
-    }
-    if (!isGateCommandAllowed(gate.cmd)) {
-      results.push({ ...gate, status: "blocked", reason: `'${gate.cmd.split(/\s+/)[0]}' not in gate allowlist` });
-      blocked++;
-      continue;
-    }
+    const classification = _classifyAndSkipGate(gate, cwd, results);
+    if (classification === "skipped") { skipped++; continue; }
+    if (classification === "blocked") { blocked++; continue; }
 
-    try {
-      const output = execSync(gate.cmd, { cwd, stdio: "pipe", timeout: resolveGateTimeoutMs(), encoding: "utf-8" });
-      results.push({ ...gate, status: "passed", output: (output || "").trim().slice(0, 500) });
+    const outcome = _runGate(gate, cwd, results);
+    if (outcome === "passed") {
       passed++;
-    } catch (err) {
-      const errOut = ((err.stderr || "") + (err.stdout || "")).trim().slice(0, 500) || err.message;
-      results.push({ ...gate, status: "failed", output: errOut });
+    } else {
       failed++;
       if (failFast) {
-        // Mark remaining as skipped
         const remaining = gateItems.slice(gateItems.indexOf(gate) + 1);
         for (const rem of remaining) {
           results.push({ ...rem, status: "skipped", reason: "fail-fast: previous gate failed" });

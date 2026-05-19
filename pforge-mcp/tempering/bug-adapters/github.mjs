@@ -630,6 +630,56 @@ function buildMetaBugBody({ bugClass, symptom, workaround, filePaths, slice, pla
  * @param {object} [deps]
  * @returns {Promise<{ ok: boolean, issueNumber?: number, url?: string, deduped?: boolean, hash?: string, error?: string }>}
  */
+async function _handleExistingMetaBug({ existing, params, tokenResult, repoInfo, hash, fetchFn }) {
+  const commentParts = [];
+  if (params.workaround) commentParts.push(`## Workaround Applied\n\n${params.workaround}`);
+  if (params.slice || params.plan) {
+    const refs = [];
+    if (params.plan) refs.push(`**Plan**: ${params.plan}`);
+    if (params.slice) refs.push(`**Slice**: ${params.slice}`);
+    commentParts.push(`## Reference\n\n${refs.join("\n")}`);
+  }
+  commentParts.push(`_Duplicate occurrence detected at ${new Date().toISOString()}_`);
+
+  const commentResult = await addComment(
+    tokenResult.token,
+    repoInfo.owner,
+    repoInfo.repo,
+    existing.issueNumber,
+    commentParts.join("\n\n"),
+    { fetch: fetchFn },
+  );
+
+  if (commentResult?.error) {
+    return { ok: false, error: commentResult.error, hash };
+  }
+  return { ok: true, issueNumber: existing.issueNumber, url: existing.url, deduped: true, hash };
+}
+
+async function _createNewMetaBug({ repoInfo, issueTitle, body, labels, tokenResult, execSyncFn, fetchFn, cwd, hash }) {
+  let result = createIssueViaGh(repoInfo.owner, repoInfo.repo, issueTitle, body, labels, {
+    execSync: execSyncFn,
+    cwd,
+  });
+
+  if (!result) {
+    result = await createIssueViaRest({
+      token: tokenResult.token,
+      owner: repoInfo.owner,
+      repo: repoInfo.repo,
+      title: issueTitle,
+      body,
+      labels,
+      fetch: fetchFn,
+    });
+  }
+
+  if (!result || result.error) {
+    return { ok: false, error: result?.error || ERROR_CODES.CREATE_FAILED.code, hash };
+  }
+  return { ok: true, issueNumber: result.issueNumber, url: result.url, deduped: false, hash };
+}
+
 export async function fileMetaBug(params, config, { execSync: execSyncFn, fetch: fetchFn = globalThis.fetch, cwd } = {}) {
   try {
     const bugClass = params?.class;
@@ -640,13 +690,11 @@ export async function fileMetaBug(params, config, { execSync: execSyncFn, fetch:
       return { ok: false, error: ERROR_CODES.MISSING_REQUIRED_FIELDS.code };
     }
 
-    // Resolve token
     const tokenResult = resolveGitHubToken(config, { execSync: execSyncFn, cwd });
     if (!tokenResult.token) {
       return { ok: false, error: ERROR_CODES.NO_TOKEN.code };
     }
 
-    // Resolve repo
     const repoInfo = resolveSelfRepairRepo(config);
     if (!repoInfo?.owner || !repoInfo?.repo) {
       return { ok: false, error: ERROR_CODES.NO_REPO.code };
@@ -665,7 +713,6 @@ export async function fileMetaBug(params, config, { execSync: execSyncFn, fetch:
       trajectoryExcerpt: params.trajectoryExcerpt,
     });
 
-    // Dedupe: check for existing open issue with this hash
     const existing = await findExistingMetaBug(hash, repoInfo.owner, repoInfo.repo, tokenResult.token, {
       execSync: execSyncFn,
       fetch: fetchFn,
@@ -673,56 +720,10 @@ export async function fileMetaBug(params, config, { execSync: execSyncFn, fetch:
     });
 
     if (existing) {
-      // Append comment with new workaround + slice ref
-      const commentParts = [];
-      if (params.workaround) commentParts.push(`## Workaround Applied\n\n${params.workaround}`);
-      if (params.slice || params.plan) {
-        const refs = [];
-        if (params.plan) refs.push(`**Plan**: ${params.plan}`);
-        if (params.slice) refs.push(`**Slice**: ${params.slice}`);
-        commentParts.push(`## Reference\n\n${refs.join("\n")}`);
-      }
-      commentParts.push(`_Duplicate occurrence detected at ${new Date().toISOString()}_`);
-
-      const commentResult = await addComment(
-        tokenResult.token,
-        repoInfo.owner,
-        repoInfo.repo,
-        existing.issueNumber,
-        commentParts.join("\n\n"),
-        { fetch: fetchFn },
-      );
-
-      if (commentResult?.error) {
-        return { ok: false, error: commentResult.error, hash };
-      }
-
-      return { ok: true, issueNumber: existing.issueNumber, url: existing.url, deduped: true, hash };
+      return _handleExistingMetaBug({ existing, params, tokenResult, repoInfo, hash, fetchFn });
     }
 
-    // No existing issue — create new one
-    let result = createIssueViaGh(repoInfo.owner, repoInfo.repo, issueTitle, body, labels, {
-      execSync: execSyncFn,
-      cwd,
-    });
-
-    if (!result) {
-      result = await createIssueViaRest({
-        token: tokenResult.token,
-        owner: repoInfo.owner,
-        repo: repoInfo.repo,
-        title: issueTitle,
-        body,
-        labels,
-        fetch: fetchFn,
-      });
-    }
-
-    if (!result || result.error) {
-      return { ok: false, error: result?.error || ERROR_CODES.CREATE_FAILED.code, hash };
-    }
-
-    return { ok: true, issueNumber: result.issueNumber, url: result.url, deduped: false, hash };
+    return _createNewMetaBug({ repoInfo, issueTitle, body, labels, tokenResult, execSyncFn, fetchFn, cwd, hash });
   } catch {
     return { ok: false, error: ERROR_CODES.UNEXPECTED.code };
   }

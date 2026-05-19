@@ -202,6 +202,60 @@ export const CRUCIBLE_STALL_CUTOFF_DAYS = 7;
  * @param {string} targetPath
  * @returns {object|null}
  */
+function _classifyCrucibleEntry(entry, dir, counts, cutoffMs) {
+  // Returns { status, mtime } or null if file is unreadable (and counts.other was bumped).
+  const fullPath = resolve(dir, entry.name);
+  counts.total++;
+  try {
+    const raw = readFileSync(fullPath, "utf-8");
+    const smelt = JSON.parse(raw);
+    const status = typeof smelt.status === "string" ? smelt.status : "other";
+    const mtime = statSync(fullPath).mtimeMs;
+    return { status, mtime, stale: status === "in_progress" && mtime < cutoffMs };
+  } catch {
+    counts.other++;
+    return null;
+  }
+}
+
+function _bucketCrucibleStatus(info, counts) {
+  // Returns mtime when status is in_progress, otherwise null.
+  const { status, mtime } = info;
+  if (status === "in_progress") { counts.in_progress++; return mtime; }
+  if (status === "finalized") counts.finalized++;
+  else if (status === "abandoned") counts.abandoned++;
+  else counts.other++;
+  return null;
+}
+
+function _readCrucibleOrphanHandoffs(targetPath) {
+  const orphanHandoffs = [];
+  const hubEventsPath = resolve(targetPath, ".forge", "hub-events.jsonl");
+  if (!existsSync(hubEventsPath)) return orphanHandoffs;
+  try {
+    const lines = readFileSync(hubEventsPath, "utf-8").trim().split("\n");
+    for (const line of lines) {
+      if (!line || !line.includes("crucible-handoff-to-hardener")) continue;
+      try {
+        const ev = JSON.parse(line);
+        if (ev.type !== "crucible-handoff-to-hardener") continue;
+        const planPath = ev.data?.planPath;
+        if (!planPath) continue;
+        const abs = isAbsolute(planPath) ? planPath : resolve(targetPath, planPath);
+        if (!existsSync(abs)) {
+          orphanHandoffs.push({
+            crucibleId: ev.data?.id || null,
+            phaseName: ev.data?.phaseName || null,
+            planPath,
+            ts: ev.ts || null,
+          });
+        }
+      } catch { /* skip malformed line */ }
+    }
+  } catch { /* unreadable hub log */ }
+  return orphanHandoffs;
+}
+
 export function readCrucibleState(targetPath) {
   const dir = resolve(targetPath, ".forge", "crucible");
   if (!existsSync(dir)) return null;
@@ -220,60 +274,16 @@ export function readCrucibleState(targetPath) {
     if (!entry.isFile() || !entry.name.endsWith(".json")) continue;
     if (entry.name === "config.json" || entry.name === "phase-claims.json") continue;
 
-    const fullPath = resolve(dir, entry.name);
-    counts.total++;
-    let status = "other";
-    let mtime = 0;
-    try {
-      const raw = readFileSync(fullPath, "utf-8");
-      const smelt = JSON.parse(raw);
-      status = typeof smelt.status === "string" ? smelt.status : "other";
-      mtime = statSync(fullPath).mtimeMs;
-    } catch {
-      counts.other++;
-      continue;
-    }
+    const info = _classifyCrucibleEntry(entry, dir, counts, cutoffMs);
+    if (!info) continue;
 
-    if (status === "in_progress") {
-      counts.in_progress++;
+    const mtime = _bucketCrucibleStatus(info, counts);
+    if (mtime !== null) {
       if (oldestInProgressMs === null || mtime < oldestInProgressMs) {
         oldestInProgressMs = mtime;
       }
-      if (mtime < cutoffMs) staleInProgress++;
-    } else if (status === "finalized") {
-      counts.finalized++;
-    } else if (status === "abandoned") {
-      counts.abandoned++;
-    } else {
-      counts.other++;
+      if (info.stale) staleInProgress++;
     }
-  }
-
-  // Orphan-handoff detection
-  const orphanHandoffs = [];
-  const hubEventsPath = resolve(targetPath, ".forge", "hub-events.jsonl");
-  if (existsSync(hubEventsPath)) {
-    try {
-      const lines = readFileSync(hubEventsPath, "utf-8").trim().split("\n");
-      for (const line of lines) {
-        if (!line || !line.includes("crucible-handoff-to-hardener")) continue;
-        try {
-          const ev = JSON.parse(line);
-          if (ev.type !== "crucible-handoff-to-hardener") continue;
-          const planPath = ev.data?.planPath;
-          if (!planPath) continue;
-          const abs = isAbsolute(planPath) ? planPath : resolve(targetPath, planPath);
-          if (!existsSync(abs)) {
-            orphanHandoffs.push({
-              crucibleId: ev.data?.id || null,
-              phaseName: ev.data?.phaseName || null,
-              planPath,
-              ts: ev.ts || null,
-            });
-          }
-        } catch { /* skip malformed line */ }
-      }
-    } catch { /* unreadable hub log */ }
   }
 
   return {
@@ -281,7 +291,7 @@ export function readCrucibleState(targetPath) {
     oldestInProgressAgeMs: oldestInProgressMs !== null ? Date.now() - oldestInProgressMs : null,
     staleInProgress,
     stallCutoffDays: CRUCIBLE_STALL_CUTOFF_DAYS,
-    orphanHandoffs,
+    orphanHandoffs: _readCrucibleOrphanHandoffs(targetPath),
   };
 }
 
@@ -349,6 +359,95 @@ export function readReviewQueueState(targetPath) {
  * @param {string|null} [opts.sinceTimestamp=null] - ISO timestamp; only events strictly after this are included in diff fields
  * @returns {object} Snapshot object
  */
+function _readWatchSummary(runDir) {
+  const summaryPath = resolve(runDir, "summary.json");
+  if (!existsSync(summaryPath)) return null;
+  try { return JSON.parse(readFileSync(summaryPath, "utf-8")); } catch { return null; }
+}
+
+function _computeEventCounts(events) {
+  return {
+    runStarted: events.find((e) => e.type === "run-started"),
+    runCompleted: events.find((e) => e.type === "run-completed" || e.type === "run-aborted"),
+    sliceStarted: events.filter((e) => e.type === "slice-started"),
+    sliceCompleted: events.filter((e) => e.type === "slice-completed"),
+    sliceFailed: events.filter((e) => e.type === "slice-failed"),
+    sliceEscalated: events.filter((e) => e.type === "slice-escalated"),
+    quorumDispatched: events.filter((e) => e.type === "quorum-dispatch-started"),
+    quorumLegsCompleted: events.filter((e) => e.type === "quorum-leg-completed"),
+    quorumReviewed: events.filter((e) => e.type === "quorum-review-completed"),
+    skillsStarted: events.filter((e) => e.type === "skill-started"),
+    skillsCompleted: events.filter((e) => e.type === "skill-completed"),
+    skillStepsFailed: events.filter((e) =>
+      e.type === "skill-step-completed" && e.data?.status && e.data.status !== "passed" && e.data.status !== "completed"
+    ),
+  };
+}
+
+function _computeDiffEvents(events, sinceTimestamp) {
+  if (!sinceTimestamp) return { newEvents: [], hasNewEvents: false };
+  const cutoffMs = new Date(sinceTimestamp).getTime();
+  if (!Number.isFinite(cutoffMs)) return { newEvents: [], hasNewEvents: false };
+  const newEvents = events.filter((e) => new Date(e.ts).getTime() > cutoffMs);
+  return { newEvents, hasNewEvents: newEvents.length > 0 };
+}
+
+async function _buildHomeChip(targetPath) {
+  try {
+    const snap = await readHomeSnapshot(targetPath, { activityTail: 0 });
+    if (!snap.ok) return null;
+    const q = snap.quadrants;
+    const inFlightRuns    = q.activeRuns?.inFlight    ?? null;
+    const openIncidents   = q.liveguard?.openIncidents ?? null;
+    const openBugs        = q.tempering?.openBugs      ?? null;
+    if (inFlightRuns === null && openIncidents === null && openBugs === null) return null;
+    return { inFlightRuns, openIncidents, openBugs };
+  } catch { return null; }
+}
+
+function _buildReviewQueueChip(targetPath) {
+  try {
+    const rqState = readReviewQueueState(targetPath);
+    if (!rqState) return null;
+    const blockerItems = listReviewItems(targetPath, { status: "open", severity: "blocker", limit: 500 });
+    const oldestBlockerAge = blockerItems.reduce((max, it) => {
+      const age = Date.now() - new Date(it.createdAt).getTime();
+      return age > max ? age : max;
+    }, 0);
+    return { open: rqState.open ?? 0, blockerAgeMs: oldestBlockerAge || null };
+  } catch { return null; }
+}
+
+function _buildNotificationsChip(events) {
+  try {
+    const nowMs = Date.now();
+    const hourAgo = nowMs - 3_600_000;
+    const todayStr = new Date().toISOString().slice(0, 10);
+    let sentToday = 0, failedToday = 0, failedLastHour = 0;
+    let failingAdapter = null;
+    const adapterFailCounts = {};
+    for (const ev of events) {
+      if (!ev.ts) continue;
+      const evMs = new Date(ev.ts).getTime();
+      const evDate = ev.ts.slice(0, 10);
+      if (ev.type === "notification-sent" && evDate === todayStr) sentToday++;
+      if (ev.type === "notification-send-failed") {
+        if (evDate === todayStr) failedToday++;
+        if (evMs >= hourAgo) {
+          failedLastHour++;
+          const adName = ev.data?.adapter || "unknown";
+          adapterFailCounts[adName] = (adapterFailCounts[adName] || 0) + 1;
+        }
+      }
+    }
+    for (const [ad, count] of Object.entries(adapterFailCounts)) {
+      if (!failingAdapter || count > (adapterFailCounts[failingAdapter] || 0)) failingAdapter = ad;
+    }
+    if (sentToday === 0 && failedToday === 0 && failedLastHour === 0) return null;
+    return { sentToday, failedToday, failedLastHour, failingAdapter };
+  } catch { return null; }
+}
+
 export async function buildWatchSnapshot(targetPath, runId = null, opts = {}) {
   const tailEventsRaw = Number.isFinite(opts.tailEvents) ? opts.tailEvents : 25;
   const tailEvents = Math.min(200, Math.max(1, Math.floor(tailEventsRaw)));
@@ -361,43 +460,15 @@ export async function buildWatchSnapshot(targetPath, runId = null, opts = {}) {
   const events = parseEventsLog(located.runDir);
   const artifacts = readSliceArtifacts(located.runDir);
 
-  // Read summary.json if present (means run completed)
-  let summary = null;
-  const summaryPath = resolve(located.runDir, "summary.json");
-  if (existsSync(summaryPath)) {
-    try { summary = JSON.parse(readFileSync(summaryPath, "utf-8")); } catch { /* ignore */ }
-  }
+  const summary = _readWatchSummary(located.runDir);
 
-  // Compute live status from events
-  const runStarted = events.find((e) => e.type === "run-started");
-  const runCompleted = events.find((e) => e.type === "run-completed" || e.type === "run-aborted");
-  const sliceStarted = events.filter((e) => e.type === "slice-started");
-  const sliceCompleted = events.filter((e) => e.type === "slice-completed");
-  const sliceFailed = events.filter((e) => e.type === "slice-failed");
-  const sliceEscalated = events.filter((e) => e.type === "slice-escalated");
-  const quorumDispatched = events.filter((e) => e.type === "quorum-dispatch-started");
-  const quorumLegsCompleted = events.filter((e) => e.type === "quorum-leg-completed");
-  const quorumReviewed = events.filter((e) => e.type === "quorum-review-completed");
-  const skillsStarted = events.filter((e) => e.type === "skill-started");
-  const skillsCompleted = events.filter((e) => e.type === "skill-completed");
-  const skillStepsFailed = events.filter((e) =>
-    e.type === "skill-step-completed" && e.data?.status && e.data.status !== "passed" && e.data.status !== "completed"
-  );
+  const ec = _computeEventCounts(events);
 
   const lastEvent = events[events.length - 1] || null;
   const lastEventAgeMs = lastEvent ? Date.now() - new Date(lastEvent.ts).getTime() : null;
-  const runState = normalizeRunState(runCompleted?.type || null, Boolean(runStarted));
+  const runState = normalizeRunState(ec.runCompleted?.type || null, Boolean(ec.runStarted));
 
-  // v2.35 diff support: events strictly after sinceTimestamp
-  let newEvents = [];
-  let hasNewEvents = false;
-  if (sinceTimestamp) {
-    const cutoffMs = new Date(sinceTimestamp).getTime();
-    if (Number.isFinite(cutoffMs)) {
-      newEvents = events.filter((e) => new Date(e.ts).getTime() > cutoffMs);
-      hasNewEvents = newEvents.length > 0;
-    }
-  }
+  const { newEvents, hasNewEvents } = _computeDiffEvents(events, sinceTimestamp);
 
   return {
     ok: true,
@@ -405,21 +476,21 @@ export async function buildWatchSnapshot(targetPath, runId = null, opts = {}) {
     runId: located.runId,
     runDir: located.runDir,
     runState,
-    lastEventType: runCompleted?.type || (runStarted ? "run-started" : null),
-    plan: runStarted?.data?.plan || null,
-    model: runStarted?.data?.model || null,
-    sliceCount: runStarted?.data?.sliceCount || null,
+    lastEventType: ec.runCompleted?.type || (ec.runStarted ? "run-started" : null),
+    plan: ec.runStarted?.data?.plan || null,
+    model: ec.runStarted?.data?.model || null,
+    sliceCount: ec.runStarted?.data?.sliceCount || null,
     counts: {
-      started: sliceStarted.length,
-      completed: sliceCompleted.length,
-      failed: sliceFailed.length,
-      escalated: sliceEscalated.length,
-      quorumDispatched: quorumDispatched.length,
-      quorumLegsCompleted: quorumLegsCompleted.length,
-      quorumReviewed: quorumReviewed.length,
-      skillsStarted: skillsStarted.length,
-      skillsCompleted: skillsCompleted.length,
-      skillStepsFailed: skillStepsFailed.length,
+      started: ec.sliceStarted.length,
+      completed: ec.sliceCompleted.length,
+      failed: ec.sliceFailed.length,
+      escalated: ec.sliceEscalated.length,
+      quorumDispatched: ec.quorumDispatched.length,
+      quorumLegsCompleted: ec.quorumLegsCompleted.length,
+      quorumReviewed: ec.quorumReviewed.length,
+      skillsStarted: ec.skillsStarted.length,
+      skillsCompleted: ec.skillsCompleted.length,
+      skillStepsFailed: ec.skillStepsFailed.length,
       events: events.length,
       artifacts: artifacts.length,
     },
@@ -446,59 +517,9 @@ export async function buildWatchSnapshot(targetPath, runId = null, opts = {}) {
     events: events.slice(-tailEvents),
     crucible: readCrucibleState(targetPath),
     tempering: readTemperingState(targetPath),
-    home: await (async () => {
-      try {
-        const snap = await readHomeSnapshot(targetPath, { activityTail: 0 });
-        if (!snap.ok) return null;
-        const q = snap.quadrants;
-        const inFlightRuns    = q.activeRuns?.inFlight    ?? null;
-        const openIncidents   = q.liveguard?.openIncidents ?? null;
-        const openBugs        = q.tempering?.openBugs      ?? null;
-        if (inFlightRuns === null && openIncidents === null && openBugs === null) return null;
-        return { inFlightRuns, openIncidents, openBugs };
-      } catch { return null; }
-    })(),
-    reviewQueue: (() => {
-      try {
-        const rqState = readReviewQueueState(targetPath);
-        if (!rqState) return null;
-        const blockerItems = listReviewItems(targetPath, { status: "open", severity: "blocker", limit: 500 });
-        const oldestBlockerAge = blockerItems.reduce((max, it) => {
-          const age = Date.now() - new Date(it.createdAt).getTime();
-          return age > max ? age : max;
-        }, 0);
-        return { open: rqState.open ?? 0, blockerAgeMs: oldestBlockerAge || null };
-      } catch { return null; }
-    })(),
-    notifications: (() => {
-      try {
-        const nowMs = Date.now();
-        const hourAgo = nowMs - 3_600_000;
-        const todayStr = new Date().toISOString().slice(0, 10);
-        let sentToday = 0, failedToday = 0, failedLastHour = 0;
-        let failingAdapter = null;
-        const adapterFailCounts = {};
-        for (const ev of events) {
-          if (!ev.ts) continue;
-          const evMs = new Date(ev.ts).getTime();
-          const evDate = ev.ts.slice(0, 10);
-          if (ev.type === "notification-sent" && evDate === todayStr) sentToday++;
-          if (ev.type === "notification-send-failed") {
-            if (evDate === todayStr) failedToday++;
-            if (evMs >= hourAgo) {
-              failedLastHour++;
-              const adName = ev.data?.adapter || "unknown";
-              adapterFailCounts[adName] = (adapterFailCounts[adName] || 0) + 1;
-            }
-          }
-        }
-        for (const [ad, count] of Object.entries(adapterFailCounts)) {
-          if (!failingAdapter || count > (adapterFailCounts[failingAdapter] || 0)) failingAdapter = ad;
-        }
-        if (sentToday === 0 && failedToday === 0 && failedLastHour === 0) return null;
-        return { sentToday, failedToday, failedLastHour, failingAdapter };
-      } catch { return null; }
-    })(),
+    home: await _buildHomeChip(targetPath),
+    reviewQueue: _buildReviewQueueChip(targetPath),
+    notifications: _buildNotificationsChip(events),
   };
 }
 
@@ -747,35 +768,32 @@ export async function readHomeSnapshot(targetPath, opts = {}) {
  * @param {object} snapshot - Output of buildWatchSnapshot()
  * @returns {Array<{ severity: "info"|"warn"|"error", code: string, message: string }>}
  */
-export function detectWatchAnomalies(snapshot) {
+function _detectCrossRunAnomalies(snapshot) {
   const anomalies = [];
-  if (!snapshot.ok) return anomalies;
-
-  // Cross-run mode
-  if (snapshot.crossRun) {
-    const { recurringFailures, retryRateSpike, costTrend, costTrendPercent, sliceTimeoutClusters } = snapshot.crossRun;
-    if (recurringFailures.length > 0) {
-      const worst = recurringFailures[0];
-      anomalies.push({ severity: "error", code: "cross-run.recurring-gate-failure",
-        message: `Slice "${worst.sliceName}" failed in ${worst.failCount} of ${worst.totalCount} runs — recurring gate failure` });
-    }
-    if (retryRateSpike) {
-      anomalies.push({ severity: "warn", code: "cross-run.retry-rate-spike",
-        message: "One or more slices are averaging >2 retry attempts across runs — retry rate is spiking" });
-    }
-    if (costTrend === "up") {
-      anomalies.push({ severity: "warn", code: "cross-run.cost-anomaly-trend",
-        message: `Run costs have increased ~${costTrendPercent}% compared to earlier runs in the window` });
-    }
-    if (sliceTimeoutClusters.length > 0) {
-      const worst = sliceTimeoutClusters[0];
-      anomalies.push({ severity: "warn", code: "cross-run.slice-timeout-cluster",
-        message: `Slice "${worst.sliceName}" timed out in ${worst.timeoutCount} runs — likely needs a longer timeout or should be split` });
-    }
-    return anomalies;
+  const { recurringFailures, retryRateSpike, costTrend, costTrendPercent, sliceTimeoutClusters } = snapshot.crossRun;
+  if (recurringFailures.length > 0) {
+    const worst = recurringFailures[0];
+    anomalies.push({ severity: "error", code: "cross-run.recurring-gate-failure",
+      message: `Slice "${worst.sliceName}" failed in ${worst.failCount} of ${worst.totalCount} runs — recurring gate failure` });
   }
+  if (retryRateSpike) {
+    anomalies.push({ severity: "warn", code: "cross-run.retry-rate-spike",
+      message: "One or more slices are averaging >2 retry attempts across runs — retry rate is spiking" });
+  }
+  if (costTrend === "up") {
+    anomalies.push({ severity: "warn", code: "cross-run.cost-anomaly-trend",
+      message: `Run costs have increased ~${costTrendPercent}% compared to earlier runs in the window` });
+  }
+  if (sliceTimeoutClusters.length > 0) {
+    const worst = sliceTimeoutClusters[0];
+    anomalies.push({ severity: "warn", code: "cross-run.slice-timeout-cluster",
+      message: `Slice "${worst.sliceName}" timed out in ${worst.timeoutCount} runs — likely needs a longer timeout or should be split` });
+  }
+  return anomalies;
+}
 
-  // 1. Stalled run
+function _detectRunLevelAnomalies(snapshot) {
+  const anomalies = [];
   if (snapshot.runState === "in-progress" && snapshot.lastEventAgeMs && snapshot.lastEventAgeMs > 5 * 60_000) {
     anomalies.push({
       severity: "warn",
@@ -783,39 +801,9 @@ export function detectWatchAnomalies(snapshot) {
       message: `No events for ${Math.round(snapshot.lastEventAgeMs / 60_000)}min — run may be stalled`,
     });
   }
-
-  // 2. Token-parsing regression
-  for (const a of snapshot.artifacts) {
-    if (a.status === "passed" && (a.tokensOut === 0 || a.tokensOut === null) && a.duration && a.duration > 60_000) {
-      anomalies.push({
-        severity: "warn",
-        code: "tokens-zero",
-        message: `Slice ${a.sliceNumber} ran ${Math.round(a.duration / 1000)}s but reports 0 output tokens — parser may be broken`,
-      });
-    }
-  }
-
-  // 3. High retry attempts
-  for (const a of snapshot.artifacts) {
-    if (a.attempts && a.attempts >= 3) {
-      anomalies.push({
-        severity: "warn",
-        code: "high-retries",
-        message: `Slice ${a.sliceNumber} took ${a.attempts} attempts (close to retry limit)`,
-      });
-    }
-  }
-
-  // 4. Failed slice present
   if (snapshot.counts.failed > 0) {
-    anomalies.push({
-      severity: "error",
-      code: "slice-failed",
-      message: `${snapshot.counts.failed} slice(s) failed`,
-    });
+    anomalies.push({ severity: "error", code: "slice-failed", message: `${snapshot.counts.failed} slice(s) failed` });
   }
-
-  // 4b. Slice escalated
   if (snapshot.counts?.escalated > 0) {
     anomalies.push({
       severity: "warn",
@@ -823,8 +811,6 @@ export function detectWatchAnomalies(snapshot) {
       message: `${snapshot.counts.escalated} slice(s) were escalated to a stronger model — investigate why initial model failed`,
     });
   }
-
-  // 5. All slices skipped
   if (
     snapshot.runState === "completed" &&
     snapshot.summary?.results?.skipped === snapshot.summary?.results?.total &&
@@ -836,9 +822,26 @@ export function detectWatchAnomalies(snapshot) {
       message: "All slices were skipped — likely a no-op re-run of an already-executed plan",
     });
   }
+  return anomalies;
+}
 
-  // 6. Gate-on-prose failures
+function _detectArtifactAnomalies(snapshot) {
+  const anomalies = [];
   for (const a of snapshot.artifacts) {
+    if (a.status === "passed" && (a.tokensOut === 0 || a.tokensOut === null) && a.duration && a.duration > 60_000) {
+      anomalies.push({
+        severity: "warn",
+        code: "tokens-zero",
+        message: `Slice ${a.sliceNumber} ran ${Math.round(a.duration / 1000)}s but reports 0 output tokens — parser may be broken`,
+      });
+    }
+    if (a.attempts && a.attempts >= 3) {
+      anomalies.push({
+        severity: "warn",
+        code: "high-retries",
+        message: `Slice ${a.sliceNumber} took ${a.attempts} attempts (close to retry limit)`,
+      });
+    }
     if (a.gateError && /'[\d]+\.'/.test(a.gateError)) {
       anomalies.push({
         severity: "error",
@@ -847,8 +850,11 @@ export function detectWatchAnomalies(snapshot) {
       });
     }
   }
+  return anomalies;
+}
 
-  // 7. Quorum dissent
+function _detectQuorumSkillAnomalies(snapshot) {
+  const anomalies = [];
   if (snapshot.counts?.quorumReviewed > 0 && snapshot.counts?.failed > 0) {
     anomalies.push({
       severity: "warn",
@@ -856,8 +862,6 @@ export function detectWatchAnomalies(snapshot) {
       message: `Quorum review completed (${snapshot.counts.quorumReviewed}) but ${snapshot.counts.failed} slice(s) still failed — quorum legs may have disagreed or all proposed flawed plans`,
     });
   }
-
-  // 8. Quorum legs incomplete
   if (
     snapshot.counts?.quorumDispatched > 0 &&
     snapshot.counts?.quorumDispatched > snapshot.counts?.quorumReviewed &&
@@ -870,8 +874,6 @@ export function detectWatchAnomalies(snapshot) {
       message: `Quorum dispatched but review never completed (${snapshot.counts.quorumDispatched - snapshot.counts.quorumReviewed} pending, no events for ${Math.round(snapshot.lastEventAgeMs / 60_000)}min)`,
     });
   }
-
-  // 9. Skill steps failed
   if (snapshot.counts?.skillStepsFailed > 0) {
     anomalies.push({
       severity: "error",
@@ -879,8 +881,11 @@ export function detectWatchAnomalies(snapshot) {
       message: `${snapshot.counts.skillStepsFailed} skill step(s) failed — investigate skill execution log`,
     });
   }
+  return anomalies;
+}
 
-  // 10. Stalled Crucible smelt
+function _detectCrucibleAnomalies(snapshot) {
+  const anomalies = [];
   if (snapshot.crucible && snapshot.crucible.staleInProgress > 0) {
     const ageDays = snapshot.crucible.oldestInProgressAgeMs
       ? Math.floor(snapshot.crucible.oldestInProgressAgeMs / (24 * 60 * 60 * 1000))
@@ -891,8 +896,6 @@ export function detectWatchAnomalies(snapshot) {
       message: `${snapshot.crucible.staleInProgress} Crucible smelt(s) idle ≥ ${snapshot.crucible.stallCutoffDays} days (oldest: ${ageDays}d) — abandon via forge_crucible_abandon or resume the interview`,
     });
   }
-
-  // 11. Orphan handoff
   if (snapshot.crucible && snapshot.crucible.orphanHandoffs.length > 0) {
     anomalies.push({
       severity: "error",
@@ -900,85 +903,80 @@ export function detectWatchAnomalies(snapshot) {
       message: `${snapshot.crucible.orphanHandoffs.length} Crucible handoff(s) reference a plan file that no longer exists — Hardener chain is broken`,
     });
   }
+  return anomalies;
+}
 
-  // 12. Coverage below minimum
-  if (snapshot.tempering && snapshot.tempering.belowMinimum > 0) {
+function _detectTemperingAnomalies(snapshot) {
+  const anomalies = [];
+  const t = snapshot.tempering;
+  if (!t) return anomalies;
+
+  if (t.belowMinimum > 0) {
     anomalies.push({
       severity: "warn",
       code: "tempering-coverage-below-minimum",
-      message: `${snapshot.tempering.belowMinimum} coverage layer(s) below minimum by ≥ 5 points — run forge_tempering_scan for details`,
+      message: `${t.belowMinimum} coverage layer(s) below minimum by ≥ 5 points — run forge_tempering_scan for details`,
     });
   }
-
-  // 13. Scan stale
-  if (snapshot.tempering && snapshot.tempering.stale) {
-    const days = snapshot.tempering.latestScanAgeMs
-      ? Math.floor(snapshot.tempering.latestScanAgeMs / (24 * 60 * 60 * 1000))
-      : snapshot.tempering.staleCutoffDays;
+  if (t.stale) {
+    const days = t.latestScanAgeMs
+      ? Math.floor(t.latestScanAgeMs / (24 * 60 * 60 * 1000))
+      : t.staleCutoffDays;
     anomalies.push({
       severity: "warn",
       code: "tempering-scan-stale",
-      message: `Latest Tempering scan is ${days} days old (cutoff: ${snapshot.tempering.staleCutoffDays}d) — re-run forge_tempering_scan`,
+      message: `Latest Tempering scan is ${days} days old (cutoff: ${t.staleCutoffDays}d) — re-run forge_tempering_scan`,
     });
   }
-
-  // 14. Run failed
-  if (snapshot.tempering && snapshot.tempering.runFailed) {
+  if (t.runFailed) {
     anomalies.push({
       severity: "error",
       code: "tempering-run-failed",
-      message: `Latest Tempering run verdict=${snapshot.tempering.latestRunVerdict} on ${snapshot.tempering.latestRunStack || "unknown stack"} — investigate the run record before the next slice`,
+      message: `Latest Tempering run verdict=${t.latestRunVerdict} on ${t.latestRunStack || "unknown stack"} — investigate the run record before the next slice`,
     });
   }
-
-  // 15. Contract mismatch
-  if (snapshot.tempering && snapshot.tempering.contractMismatch > 0) {
+  if (t.contractMismatch > 0) {
     anomalies.push({
-      severity: snapshot.tempering.contractMismatch >= 5 ? "error" : "warn",
+      severity: t.contractMismatch >= 5 ? "error" : "warn",
       code: "tempering-contract-mismatch",
-      message: `${snapshot.tempering.contractMismatch} API contract mismatch(es) detected — run forge_tempering_run for details`,
+      message: `${t.contractMismatch} API contract mismatch(es) detected — run forge_tempering_run for details`,
     });
   }
-
-  // 16. Mutation score below minimum
-  if (snapshot.tempering && snapshot.tempering.mutationBelowMinimum > 0) {
+  if (t.mutationBelowMinimum > 0) {
     anomalies.push({
-      severity: snapshot.tempering.mutationBelowMinimum >= 3 ? "error" : "warn",
+      severity: t.mutationBelowMinimum >= 3 ? "error" : "warn",
       code: "tempering-mutation-below-minimum",
-      message: `${snapshot.tempering.mutationBelowMinimum} mutation layer(s) below minimum — run forge_tempering_run --full-mutation for details`,
+      message: `${t.mutationBelowMinimum} mutation layer(s) below minimum — run forge_tempering_run --full-mutation for details`,
     });
   }
-
-  // 17. Flaky tests detected
-  if (snapshot.tempering && snapshot.tempering.flakyCount > 0) {
+  if (t.flakyCount > 0) {
     anomalies.push({
       severity: "warn",
       code: "tempering-flake-detected",
-      message: `${snapshot.tempering.flakyCount} flaky test(s) detected — quarantine or fix to stabilize the suite`,
+      message: `${t.flakyCount} flaky test(s) detected — quarantine or fix to stabilize the suite`,
     });
   }
-
-  // 18. Performance regression
-  if (snapshot.tempering && snapshot.tempering.perfRegressionCount > 0) {
+  if (t.perfRegressionCount > 0) {
     anomalies.push({
-      severity: snapshot.tempering.perfRegressionCount >= 3 ? "error" : "warn",
+      severity: t.perfRegressionCount >= 3 ? "error" : "warn",
       code: "tempering-perf-regression",
-      message: `${snapshot.tempering.perfRegressionCount} performance regression(s) detected — investigate perf-budget scanner report`,
+      message: `${t.perfRegressionCount} performance regression(s) detected — investigate perf-budget scanner report`,
     });
   }
-
-  // 19. Unaddressed bugs
-  if (snapshot.tempering && snapshot.tempering.openBugCount?.unaddressed?.length > 0) {
+  if (t.openBugCount?.unaddressed?.length > 0) {
     anomalies.push({
       severity: "warn",
       code: "tempering-bug-unaddressed",
-      count: snapshot.tempering.openBugCount.unaddressed.length,
-      bugIds: snapshot.tempering.openBugCount.unaddressed.map(b => b.bugId),
-      message: `${snapshot.tempering.openBugCount.unaddressed.length} open bug(s) older than 14 days without a linked fix plan — generate a fix proposal or close them`,
+      count: t.openBugCount.unaddressed.length,
+      bugIds: t.openBugCount.unaddressed.map(b => b.bugId),
+      message: `${t.openBugCount.unaddressed.length} open bug(s) older than 14 days without a linked fix plan — generate a fix proposal or close them`,
     });
   }
+  return anomalies;
+}
 
-  // 20. Review queue backlog
+function _detectReviewNotificationAnomalies(snapshot) {
+  const anomalies = [];
   if (snapshot.reviewQueue) {
     const rq = snapshot.reviewQueue;
     if (rq.open > 10 || (rq.blockerAgeMs && rq.blockerAgeMs > 4 * 60 * 60 * 1000)) {
@@ -991,8 +989,6 @@ export function detectWatchAnomalies(snapshot) {
       });
     }
   }
-
-  // 21. Notification delivery failing
   if (snapshot.notifications && snapshot.notifications.failedLastHour >= 3) {
     anomalies.push({
       severity: "warn",
@@ -1000,8 +996,24 @@ export function detectWatchAnomalies(snapshot) {
       message: `${snapshot.notifications.failedLastHour} notification delivery failure(s)${snapshot.notifications.failingAdapter ? ` for adapter "${snapshot.notifications.failingAdapter}"` : ""} in the last hour`,
     });
   }
-
   return anomalies;
+}
+
+export function detectWatchAnomalies(snapshot) {
+  if (!snapshot.ok) return [];
+
+  if (snapshot.crossRun) {
+    return _detectCrossRunAnomalies(snapshot);
+  }
+
+  return [
+    ..._detectRunLevelAnomalies(snapshot),
+    ..._detectArtifactAnomalies(snapshot),
+    ..._detectQuorumSkillAnomalies(snapshot),
+    ..._detectCrucibleAnomalies(snapshot),
+    ..._detectTemperingAnomalies(snapshot),
+    ..._detectReviewNotificationAnomalies(snapshot),
+  ];
 }
 
 // ─── Recommendations ─────────────────────────────────────────────────
@@ -1012,6 +1024,144 @@ export function detectWatchAnomalies(snapshot) {
  * @param {object} snapshot - Output of buildWatchSnapshot
  * @returns {Array<{ code: string, action: string, command: string|null, severity: string }>}
  */
+// ─── Recommendation builders (per anomaly code) ──────────────────────
+// Each returns { action, command } given (anomaly, snapshot). The shared
+// dispatcher wraps with { code, severity }.
+
+const _RECO_BUILDERS = {
+  "stalled": () => ({
+    action: "Run appears stuck. Check the worker process and consider aborting if no progress resumes.",
+    command: "pforge abort",
+  }),
+  "tokens-zero": (_a, snapshot) => {
+    const slice = snapshot.artifacts?.find((a) => a.tokensOut === 0 && a.duration > 60_000);
+    return {
+      action: `Token parser may be broken for ${slice?.worker || "this worker"}. Verify CLI version and stderr encoding (Windows UTF-8 fix shipped in v2.33).`,
+      command: null,
+    };
+  },
+  "high-retries": (_a, snapshot) => {
+    const slice = snapshot.artifacts?.find((a) => a.attempts >= 3);
+    return {
+      action: `Slice ${slice?.sliceNumber ?? "?"} hit retry limit. Review the slice plan and consider splitting it or escalating to a stronger model.`,
+      command: slice ? `pforge fix-proposal slice-${slice.sliceNumber}` : null,
+    };
+  },
+  "slice-failed": (_a, snapshot) => {
+    const failed = snapshot.artifacts?.find((a) => a.status === "failed");
+    return {
+      action: `Slice ${failed?.sliceNumber ?? "?"} failed. Generate a fix proposal and resume from that slice.`,
+      command: failed ? `pforge run-plan --resume-from ${failed.sliceNumber} ${snapshot.plan ?? "<plan>"}` : null,
+    };
+  },
+  "model-escalated": () => ({
+    action: "Initial model failed and a stronger model was used. Consider promoting the stronger model in escalation chain or reviewing the slice for unstated complexity.",
+    command: null,
+  }),
+  "all-skipped": () => ({
+    action: "All slices were skipped — plan was already complete. No action required; this was a no-op re-run.",
+    command: null,
+  }),
+  "gate-on-prose": (_a, snapshot) => {
+    const slice = snapshot.artifacts?.find((a) => a.gateError && /'[\d]+\.'/.test(a.gateError));
+    return {
+      action: "Validation gate parsing rejected markdown prose as a shell command. Update Plan Forge to v2.33+ and re-run the slice.",
+      command: slice ? `pforge run-plan --resume-from ${slice.sliceNumber} ${snapshot.plan ?? "<plan>"}` : null,
+    };
+  },
+  "quorum-dissent": (_a, snapshot) => ({
+    action: "Quorum agreed on a plan but execution still failed. Review individual leg outputs in events.log and consider running quorum analyze for a deeper merge.",
+    command: snapshot.plan ? `pforge analyze --quorum=power ${snapshot.plan}` : null,
+  }),
+  "quorum-leg-stalled": () => ({
+    action: "Quorum review never completed. One or more legs may have hung. Check worker processes and consider aborting.",
+    command: "pforge abort",
+  }),
+  "skill-step-failed": () => ({
+    action: "A skill step failed. Inspect the skill execution log and re-run the affected skill manually.",
+    command: "pforge skill-status",
+  }),
+  "crucible-stalled": (_a, snapshot) => ({
+    action: `${snapshot.crucible?.staleInProgress ?? "One or more"} Crucible smelt(s) have been idle for 7+ days. Abandon them (if truly stuck) or resume the interview to keep the funnel clean.`,
+    command: "forge_crucible_list",
+  }),
+  "crucible-orphan-handoff": (_a, snapshot) => {
+    const orphan = snapshot.crucible?.orphanHandoffs?.[0];
+    return {
+      action: `Hardener handoff for ${orphan?.phaseName || "a finalized smelt"} points at a missing plan file (${orphan?.planPath || "unknown"}). Either restore the plan from git history or re-run the smelt (the crucibleId in .forge/crucible/ can be re-finalized).`,
+      command: orphan?.crucibleId ? `forge_crucible_preview ${orphan.crucibleId}` : null,
+    };
+  },
+  "tempering-coverage-below-minimum": (_a, snapshot) => ({
+    action: `${snapshot.tempering?.belowMinimum ?? "One or more"} coverage layer(s) fell below their configured minimum. Inspect the gap report and add targeted tests to the worst-first files listed in the latest scan record.`,
+    command: "forge_tempering_status",
+  }),
+  "tempering-scan-stale": () => ({
+    action: "The latest Tempering scan is older than the staleness cutoff. Re-run the scan so downstream dashboards and anomaly rules work against current coverage.",
+    command: "forge_tempering_scan",
+  }),
+  "tempering-run-failed": (_a, snapshot) => ({
+    action: `Latest Tempering run verdict=${snapshot.tempering?.latestRunVerdict ?? "unknown"}. Open the most recent .forge/tempering/run-*.json to see per-scanner stdout, then either fix the failing tests or (if this is an infra flake) re-run forge_tempering_run.`,
+    command: "forge_tempering_run",
+  }),
+  "tempering-contract-mismatch": (_a, snapshot) => ({
+    action: `${snapshot.tempering?.contractMismatch ?? "One or more"} API contract mismatch(es) detected. Inspect .forge/tempering/artifacts/<runId>/contract/report.json for violation details, then fix API response shapes or update the spec.`,
+    command: "forge_tempering_run",
+  }),
+  "tempering-mutation-below-minimum": (_a, snapshot) => ({
+    action: `${snapshot.tempering?.mutationBelowMinimum ?? "One or more"} mutation layer(s) scored below the configured minimum. Run a full mutation scan to identify survived mutants, then add targeted test cases for the weakest layers.`,
+    command: "pforge tempering run --full-mutation",
+  }),
+  "tempering-flake-detected": (_a, snapshot) => ({
+    action: `${snapshot.tempering?.flakyCount ?? "One or more"} flaky test(s) detected. Quarantine unreliable tests or fix their root cause (race conditions, shared state, network dependencies) to stabilize the suite.`,
+    command: "pforge tempering quarantine",
+  }),
+  "tempering-perf-regression": (_a, snapshot) => ({
+    action: `${snapshot.tempering?.perfRegressionCount ?? "One or more"} performance regression(s) detected. Compare p95 latencies against baselines in .forge/tempering/perf-history.jsonl and investigate the endpoints with the largest delta.`,
+    command: "forge_tempering_run",
+  }),
+  "tempering-bug-unaddressed": (anomaly) => {
+    const bugId = anomaly.bugIds?.[0] || "unknown";
+    return {
+      action: `Run forge_fix_proposal source=tempering-bug bugId=${bugId} to generate a fix plan, or forge_bug_update_status bugId=${bugId} status=wont-fix with rationale.`,
+      command: `forge_fix_proposal --source tempering-bug --bugId ${bugId}`,
+    };
+  },
+  "review-queue-backlog": () => ({
+    action: "Open the Review tab and clear open items, prioritizing blockers",
+    command: null,
+  }),
+  "notification-delivery-failing": () => ({
+    action: "Check adapter config and endpoint availability. Run forge_notify_test to validate.",
+    command: "forge_notify_test",
+  }),
+  "cross-run.recurring-gate-failure": (_a, snapshot) => {
+    const rf = snapshot.crossRun?.recurringFailures?.[0];
+    return {
+      action: `Investigate slice "${rf?.sliceName}" — it has failed in ${rf?.failCount} consecutive runs`,
+      command: null,
+    };
+  },
+  "cross-run.retry-rate-spike": () => ({
+    action: "Check worker reliability — high retry rates may indicate flaky tests or resource contention",
+    command: null,
+  }),
+  "cross-run.cost-anomaly-trend": (_a, snapshot) => {
+    const pct = snapshot.crossRun?.costTrendPercent;
+    return {
+      action: `Run costs are trending up ~${pct}% — review model selection and slice token budgets`,
+      command: null,
+    };
+  },
+  "cross-run.slice-timeout-cluster": (_a, snapshot) => {
+    const tc = snapshot.crossRun?.sliceTimeoutClusters?.[0];
+    return {
+      action: `Slice "${tc?.sliceName}" repeatedly times out — increase its timeout or split it into smaller slices`,
+      command: null,
+    };
+  },
+};
+
 export function recommendFromAnomalies(anomalies, snapshot) {
   const recs = [];
   if (!Array.isArray(anomalies) || anomalies.length === 0) return recs;
@@ -1022,251 +1172,11 @@ export function recommendFromAnomalies(anomalies, snapshot) {
   }
 
   for (const [code, anomaly] of byCode) {
-    switch (code) {
-      case "stalled":
-        recs.push({
-          code,
-          severity: anomaly.severity,
-          action: "Run appears stuck. Check the worker process and consider aborting if no progress resumes.",
-          command: "pforge abort",
-        });
-        break;
-
-      case "tokens-zero": {
-        const slice = snapshot.artifacts?.find((a) => a.tokensOut === 0 && a.duration > 60_000);
-        recs.push({
-          code,
-          severity: anomaly.severity,
-          action: `Token parser may be broken for ${slice?.worker || "this worker"}. Verify CLI version and stderr encoding (Windows UTF-8 fix shipped in v2.33).`,
-          command: null,
-        });
-        break;
-      }
-
-      case "high-retries": {
-        const slice = snapshot.artifacts?.find((a) => a.attempts >= 3);
-        recs.push({
-          code,
-          severity: anomaly.severity,
-          action: `Slice ${slice?.sliceNumber ?? "?"} hit retry limit. Review the slice plan and consider splitting it or escalating to a stronger model.`,
-          command: slice ? `pforge fix-proposal slice-${slice.sliceNumber}` : null,
-        });
-        break;
-      }
-
-      case "slice-failed": {
-        const failed = snapshot.artifacts?.find((a) => a.status === "failed");
-        recs.push({
-          code,
-          severity: anomaly.severity,
-          action: `Slice ${failed?.sliceNumber ?? "?"} failed. Generate a fix proposal and resume from that slice.`,
-          command: failed ? `pforge run-plan --resume-from ${failed.sliceNumber} ${snapshot.plan ?? "<plan>"}` : null,
-        });
-        break;
-      }
-
-      case "model-escalated":
-        recs.push({
-          code,
-          severity: anomaly.severity,
-          action: "Initial model failed and a stronger model was used. Consider promoting the stronger model in escalation chain or reviewing the slice for unstated complexity.",
-          command: null,
-        });
-        break;
-
-      case "all-skipped":
-        recs.push({
-          code,
-          severity: anomaly.severity,
-          action: "All slices were skipped — plan was already complete. No action required; this was a no-op re-run.",
-          command: null,
-        });
-        break;
-
-      case "gate-on-prose": {
-        const slice = snapshot.artifacts?.find((a) => a.gateError && /'[\d]+\.'/.test(a.gateError));
-        recs.push({
-          code,
-          severity: anomaly.severity,
-          action: "Validation gate parsing rejected markdown prose as a shell command. Update Plan Forge to v2.33+ and re-run the slice.",
-          command: slice ? `pforge run-plan --resume-from ${slice.sliceNumber} ${snapshot.plan ?? "<plan>"}` : null,
-        });
-        break;
-      }
-
-      case "quorum-dissent":
-        recs.push({
-          code,
-          severity: anomaly.severity,
-          action: "Quorum agreed on a plan but execution still failed. Review individual leg outputs in events.log and consider running quorum analyze for a deeper merge.",
-          command: snapshot.plan ? `pforge analyze --quorum=power ${snapshot.plan}` : null,
-        });
-        break;
-
-      case "quorum-leg-stalled":
-        recs.push({
-          code,
-          severity: anomaly.severity,
-          action: "Quorum review never completed. One or more legs may have hung. Check worker processes and consider aborting.",
-          command: "pforge abort",
-        });
-        break;
-
-      case "skill-step-failed":
-        recs.push({
-          code,
-          severity: anomaly.severity,
-          action: "A skill step failed. Inspect the skill execution log and re-run the affected skill manually.",
-          command: "pforge skill-status",
-        });
-        break;
-
-      case "crucible-stalled":
-        recs.push({
-          code,
-          severity: anomaly.severity,
-          action: `${snapshot.crucible?.staleInProgress ?? "One or more"} Crucible smelt(s) have been idle for 7+ days. Abandon them (if truly stuck) or resume the interview to keep the funnel clean.`,
-          command: "forge_crucible_list",
-        });
-        break;
-
-      case "crucible-orphan-handoff": {
-        const orphan = snapshot.crucible?.orphanHandoffs?.[0];
-        recs.push({
-          code,
-          severity: anomaly.severity,
-          action: `Hardener handoff for ${orphan?.phaseName || "a finalized smelt"} points at a missing plan file (${orphan?.planPath || "unknown"}). Either restore the plan from git history or re-run the smelt (the crucibleId in .forge/crucible/ can be re-finalized).`,
-          command: orphan?.crucibleId ? `forge_crucible_preview ${orphan.crucibleId}` : null,
-        });
-        break;
-      }
-
-      case "tempering-coverage-below-minimum":
-        recs.push({
-          code,
-          severity: anomaly.severity,
-          action: `${snapshot.tempering?.belowMinimum ?? "One or more"} coverage layer(s) fell below their configured minimum. Inspect the gap report and add targeted tests to the worst-first files listed in the latest scan record.`,
-          command: "forge_tempering_status",
-        });
-        break;
-
-      case "tempering-scan-stale":
-        recs.push({
-          code,
-          severity: anomaly.severity,
-          action: "The latest Tempering scan is older than the staleness cutoff. Re-run the scan so downstream dashboards and anomaly rules work against current coverage.",
-          command: "forge_tempering_scan",
-        });
-        break;
-
-      case "tempering-run-failed":
-        recs.push({
-          code,
-          severity: anomaly.severity,
-          action: `Latest Tempering run verdict=${snapshot.tempering?.latestRunVerdict ?? "unknown"}. Open the most recent .forge/tempering/run-*.json to see per-scanner stdout, then either fix the failing tests or (if this is an infra flake) re-run forge_tempering_run.`,
-          command: "forge_tempering_run",
-        });
-        break;
-
-      case "tempering-contract-mismatch":
-        recs.push({
-          code,
-          severity: anomaly.severity,
-          action: `${snapshot.tempering?.contractMismatch ?? "One or more"} API contract mismatch(es) detected. Inspect .forge/tempering/artifacts/<runId>/contract/report.json for violation details, then fix API response shapes or update the spec.`,
-          command: "forge_tempering_run",
-        });
-        break;
-
-      case "tempering-mutation-below-minimum":
-        recs.push({
-          code,
-          severity: anomaly.severity,
-          action: `${snapshot.tempering?.mutationBelowMinimum ?? "One or more"} mutation layer(s) scored below the configured minimum. Run a full mutation scan to identify survived mutants, then add targeted test cases for the weakest layers.`,
-          command: "pforge tempering run --full-mutation",
-        });
-        break;
-
-      case "tempering-flake-detected":
-        recs.push({
-          code,
-          severity: anomaly.severity,
-          action: `${snapshot.tempering?.flakyCount ?? "One or more"} flaky test(s) detected. Quarantine unreliable tests or fix their root cause (race conditions, shared state, network dependencies) to stabilize the suite.`,
-          command: "pforge tempering quarantine",
-        });
-        break;
-
-      case "tempering-perf-regression":
-        recs.push({
-          code,
-          severity: anomaly.severity,
-          action: `${snapshot.tempering?.perfRegressionCount ?? "One or more"} performance regression(s) detected. Compare p95 latencies against baselines in .forge/tempering/perf-history.jsonl and investigate the endpoints with the largest delta.`,
-          command: "forge_tempering_run",
-        });
-        break;
-
-      case "tempering-bug-unaddressed": {
-        const bugId = anomaly.bugIds?.[0] || "unknown";
-        recs.push({
-          code,
-          severity: anomaly.severity,
-          action: `Run forge_fix_proposal source=tempering-bug bugId=${bugId} to generate a fix plan, or forge_bug_update_status bugId=${bugId} status=wont-fix with rationale.`,
-          command: `forge_fix_proposal --source tempering-bug --bugId ${bugId}`,
-        });
-        break;
-      }
-
-      case "review-queue-backlog":
-        recs.push({
-          code,
-          severity: anomaly.severity,
-          action: "Open the Review tab and clear open items, prioritizing blockers",
-          command: null,
-        });
-        break;
-
-      case "notification-delivery-failing":
-        recs.push({
-          code,
-          severity: anomaly.severity,
-          action: "Check adapter config and endpoint availability. Run forge_notify_test to validate.",
-          command: "forge_notify_test",
-        });
-        break;
-
-      case "cross-run.recurring-gate-failure": {
-        const rf = snapshot.crossRun?.recurringFailures?.[0];
-        recs.push({ code, severity: anomaly.severity,
-          action: `Investigate slice "${rf?.sliceName}" — it has failed in ${rf?.failCount} consecutive runs`,
-          command: null });
-        break;
-      }
-      case "cross-run.retry-rate-spike":
-        recs.push({ code, severity: anomaly.severity,
-          action: "Check worker reliability — high retry rates may indicate flaky tests or resource contention",
-          command: null });
-        break;
-      case "cross-run.cost-anomaly-trend": {
-        const pct = snapshot.crossRun?.costTrendPercent;
-        recs.push({ code, severity: anomaly.severity,
-          action: `Run costs are trending up ~${pct}% — review model selection and slice token budgets`,
-          command: null });
-        break;
-      }
-      case "cross-run.slice-timeout-cluster": {
-        const tc = snapshot.crossRun?.sliceTimeoutClusters?.[0];
-        recs.push({ code, severity: anomaly.severity,
-          action: `Slice "${tc?.sliceName}" repeatedly times out — increase its timeout or split it into smaller slices`,
-          command: null });
-        break;
-      }
-      default:
-        recs.push({
-          code,
-          severity: anomaly.severity,
-          action: anomaly.message,
-          command: null,
-        });
-    }
+    const builder = _RECO_BUILDERS[code];
+    const built = builder
+      ? builder(anomaly, snapshot)
+      : { action: anomaly.message, command: null };
+    recs.push({ code, severity: anomaly.severity, ...built });
   }
 
   return recs;
@@ -1789,20 +1699,7 @@ export function appendWatchHistory(report, watcherCwd = process.cwd()) {
  * @param {object} [options.eventBus] - (v2.35) Optional event bus to emit watch-* events
  * @returns {Promise<object>} Watcher report
  */
-export async function runWatch(options = {}) {
-  const {
-    targetPath,
-    runId = null,
-    mode = WATCHER_MODE_SNAPSHOT,
-    crossRunWindow = "14d",
-    model = DEFAULT_WATCHER_MODEL,
-    timeout = 300_000,
-    tailEvents = 25,
-    sinceTimestamp = null,
-    recordHistory = true,
-    eventBus = null,
-  } = options;
-
+function _validateRunWatchTarget(targetPath) {
   if (!targetPath) {
     return { ok: false, error: "targetPath is required" };
   }
@@ -1810,39 +1707,35 @@ export async function runWatch(options = {}) {
   if (!existsSync(resolved)) {
     return { ok: false, error: `Target path does not exist: ${resolved}` };
   }
+  return { ok: true, resolved };
+}
 
-  // Phase-39 Slice 3 — cross-run aggregation mode
-  if (mode === WATCHER_MODE_CROSS_RUN) {
-    const xSnap = await buildCrossRunSnapshot(resolved, { window: crossRunWindow });
-    const xAnomalies = detectWatchAnomalies(xSnap);
-    const xRecs = recommendFromAnomalies(xAnomalies, xSnap);
-    return {
-      ok: xSnap.ok,
-      mode: WATCHER_MODE_CROSS_RUN,
-      targetPath: resolved,
-      crossRunWindow,
-      timestamp: new Date().toISOString(),
-      totalRuns: xSnap.totalRuns,
-      passedRuns: xSnap.passedRuns,
-      failedRuns: xSnap.failedRuns,
-      runs: xSnap.runs,
-      anomalies: xAnomalies,
-      recommendations: xRecs,
-      snapshot: xSnap,
-    };
-  }
+async function _runWatchCrossRun(resolved, crossRunWindow) {
+  const xSnap = await buildCrossRunSnapshot(resolved, { window: crossRunWindow });
+  const xAnomalies = detectWatchAnomalies(xSnap);
+  const xRecs = recommendFromAnomalies(xAnomalies, xSnap);
+  return {
+    ok: xSnap.ok,
+    mode: WATCHER_MODE_CROSS_RUN,
+    targetPath: resolved,
+    crossRunWindow,
+    timestamp: new Date().toISOString(),
+    totalRuns: xSnap.totalRuns,
+    passedRuns: xSnap.passedRuns,
+    failedRuns: xSnap.failedRuns,
+    runs: xSnap.runs,
+    anomalies: xAnomalies,
+    recommendations: xRecs,
+    snapshot: xSnap,
+  };
+}
 
-  const snapshot = await buildWatchSnapshot(resolved, runId, { tailEvents, sinceTimestamp });
-  if (!snapshot.ok) return snapshot;
-
-  const anomalies = detectWatchAnomalies(snapshot);
-  const recommendations = recommendFromAnomalies(anomalies, snapshot);
-
-  const report = {
+function _buildRunWatchReport(snapshot, anomalies, recommendations, mode, model) {
+  return {
     ok: true,
     mode,
     watcherModel: mode === WATCHER_MODE_ANALYZE ? model : null,
-    targetPath: resolved,
+    targetPath: snapshot.targetPath,
     runId: snapshot.runId,
     runState: snapshot.runState,
     lastEventType: snapshot.lastEventType,
@@ -1850,7 +1743,6 @@ export async function runWatch(options = {}) {
     counts: snapshot.counts,
     lastEventAgeMs: snapshot.lastEventAgeMs,
     tailEvents: snapshot.tailEvents,
-    // v2.35: cursor for stateful polling
     cursor: snapshot.cursor,
     sinceTimestamp: snapshot.sinceTimestamp,
     hasNewEvents: snapshot.hasNewEvents,
@@ -1867,76 +1759,65 @@ export async function runWatch(options = {}) {
     artifacts: snapshot.artifacts,
     anomalies,
     recommendations,
-    // Phase CRUCIBLE-03 Slice 03.1 — funnel health alongside run health
     crucible: snapshot.crucible,
-    // Phase TEMPER-01 Slice 01.2 — test-coverage health alongside run + funnel
     tempering: snapshot.tempering,
     timestamp: new Date().toISOString(),
   };
+}
 
-  // v2.35: emit hub events (when watcher's hub is active)
-  if (eventBus && typeof eventBus.emit === "function") {
-    try {
-      eventBus.emit("watch-snapshot-completed", {
+function _compactCrucible(crucible) {
+  if (!crucible) return null;
+  return {
+    total: crucible.counts.total,
+    finalized: crucible.counts.finalized,
+    in_progress: crucible.counts.in_progress,
+    abandoned: crucible.counts.abandoned,
+    staleInProgress: crucible.staleInProgress,
+    orphanHandoffs: crucible.orphanHandoffs.length,
+    stallCutoffDays: crucible.stallCutoffDays,
+  };
+}
+
+function _compactTempering(tempering) {
+  if (!tempering) return null;
+  return {
+    totalScans: tempering.totalScans,
+    latestStatus: tempering.latestStatus,
+    latestScanAgeMs: tempering.latestScanAgeMs,
+    latestScanTs: tempering.latestScanTs,
+    gaps: tempering.gaps,
+    belowMinimum: tempering.belowMinimum,
+    stale: tempering.stale,
+    staleCutoffDays: tempering.staleCutoffDays,
+  };
+}
+
+function _emitWatchSnapshotEvents(eventBus, report, anomalies, snapshot) {
+  if (!(eventBus && typeof eventBus.emit === "function")) return;
+  try {
+    eventBus.emit("watch-snapshot-completed", {
+      targetPath: report.targetPath,
+      runId: report.runId,
+      runState: report.runState,
+      anomalyCount: anomalies.length,
+      cursor: report.cursor,
+      crucible: _compactCrucible(report.crucible),
+      tempering: _compactTempering(report.tempering),
+      home: snapshot.home || null,
+    });
+    for (const anomaly of anomalies) {
+      eventBus.emit("watch-anomaly-detected", {
         targetPath: report.targetPath,
         runId: report.runId,
-        runState: report.runState,
-        anomalyCount: anomalies.length,
-        cursor: report.cursor,
-        // Phase CRUCIBLE-03 Slice 03.2 — compact Crucible summary so the
-        // dashboard Watcher tab can render the funnel row without a
-        // follow-up REST call. Kept to primitives so the WS payload
-        // stays small for clients on bandwidth-constrained links.
-        crucible: report.crucible
-          ? {
-              total: report.crucible.counts.total,
-              finalized: report.crucible.counts.finalized,
-              in_progress: report.crucible.counts.in_progress,
-              abandoned: report.crucible.counts.abandoned,
-              staleInProgress: report.crucible.staleInProgress,
-              orphanHandoffs: report.crucible.orphanHandoffs.length,
-              stallCutoffDays: report.crucible.stallCutoffDays,
-            }
-          : null,
-        // Phase TEMPER-01 Slice 01.2 — compact Tempering summary for the
-        // Watcher tab row. Already primitives (readTemperingState returns
-        // a flat shape), so we just forward a whitelist of fields.
-        tempering: report.tempering
-          ? {
-              totalScans: report.tempering.totalScans,
-              latestStatus: report.tempering.latestStatus,
-              latestScanAgeMs: report.tempering.latestScanAgeMs,
-              latestScanTs: report.tempering.latestScanTs,
-              gaps: report.tempering.gaps,
-              belowMinimum: report.tempering.belowMinimum,
-              stale: report.tempering.stale,
-              staleCutoffDays: report.tempering.staleCutoffDays,
-            }
-          : null,
-        // Phase FORGE-SHOP-01 Slice 01.2 — Home chip data for watcher tab.
-        // Already extracted by buildWatchSnapshot; forward as-is.
-        home: snapshot.home || null,
+        ...anomaly,
       });
-      for (const anomaly of anomalies) {
-        eventBus.emit("watch-anomaly-detected", {
-          targetPath: report.targetPath,
-          runId: report.runId,
-          ...anomaly,
-        });
-      }
-    } catch { /* never throw from event emission */ }
-  }
+    }
+  } catch { /* never throw from event emission */ }
+}
 
-  if (mode === WATCHER_MODE_SNAPSHOT) {
-    if (recordHistory) appendWatchHistory(report);
-    return report;
-  }
-
-  // Analyze mode: invoke frontier watcher model
-  // CRITICAL: spawn the worker with cwd = watcher's own directory, NEVER the target's,
-  // so any tool calls the watcher might make cannot touch the target project.
+async function _runWatcherAnalyzeMode(snapshot, anomalies, report, model, timeout, eventBus) {
   const prompt = buildWatcherPrompt(snapshot, anomalies);
-  const watcherCwd = process.cwd(); // watcher's own working directory
+  const watcherCwd = process.cwd();
   try {
     const result = await spawnWorker(prompt, { model, cwd: watcherCwd, timeout });
     report.advice = result.output || "(no advice returned)";
@@ -1955,6 +1836,52 @@ export async function runWatch(options = {}) {
   } catch (err) {
     report.adviceError = err.message;
   }
+}
+
+export async function runWatch(options = {}) {
+  const {
+    targetPath,
+    runId = null,
+    mode = WATCHER_MODE_SNAPSHOT,
+    crossRunWindow = "14d",
+    model = DEFAULT_WATCHER_MODEL,
+    timeout = 300_000,
+    tailEvents = 25,
+    sinceTimestamp = null,
+    recordHistory = true,
+    eventBus = null,
+  } = options;
+
+  const validated = _validateRunWatchTarget(targetPath);
+  if (!validated.ok) return validated;
+  const resolved = validated.resolved;
+
+  // Phase-39 Slice 3 — cross-run aggregation mode
+  if (mode === WATCHER_MODE_CROSS_RUN) {
+    return _runWatchCrossRun(resolved, crossRunWindow);
+  }
+
+  const snapshot = await buildWatchSnapshot(resolved, runId, { tailEvents, sinceTimestamp });
+  if (!snapshot.ok) return snapshot;
+  // attach for downstream helpers that read snapshot.targetPath
+  snapshot.targetPath = resolved;
+
+  const anomalies = detectWatchAnomalies(snapshot);
+  const recommendations = recommendFromAnomalies(anomalies, snapshot);
+
+  const report = _buildRunWatchReport(snapshot, anomalies, recommendations, mode, model);
+
+  _emitWatchSnapshotEvents(eventBus, report, anomalies, snapshot);
+
+  if (mode === WATCHER_MODE_SNAPSHOT) {
+    if (recordHistory) appendWatchHistory(report);
+    return report;
+  }
+
+  // Analyze mode: invoke frontier watcher model
+  // CRITICAL: spawn the worker with cwd = watcher's own directory, NEVER the target's,
+  // so any tool calls the watcher might make cannot touch the target project.
+  await _runWatcherAnalyzeMode(snapshot, anomalies, report, model, timeout, eventBus);
 
   if (recordHistory) appendWatchHistory(report);
   return report;

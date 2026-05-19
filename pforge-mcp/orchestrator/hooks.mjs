@@ -161,6 +161,380 @@ function isCacheStale(cache) {
   return age > CACHE_MAX_AGE_MINUTES * 60 * 1000;
 }
 
+function readRootForgeConfig(cwd) {
+  try {
+    const configPath = resolve(cwd, ".forge.json");
+    if (!existsSync(configPath)) return null;
+    return JSON.parse(readFileSync(configPath, "utf-8"));
+  } catch {
+    return null;
+  }
+}
+
+function loadHookSectionConfig(cwd, sectionName, defaults) {
+  const section = readRootForgeConfig(cwd)?.hooks?.[sectionName];
+  return section ? { ...defaults, ...section } : { ...defaults };
+}
+
+function appendHookAdvisory(result, message) {
+  result.advisory = result.advisory ? `${result.advisory}\n${message}` : message;
+}
+
+function collectEnvGapPairs(envDiffCache) {
+  return (envDiffCache?.pairs || []).filter(p =>
+    (p.missingInTarget?.length || 0) + (p.missingInBaseline?.length || 0) > 0
+  );
+}
+
+function formatEnvGapAdvisory(gapPairs) {
+  const lines = gapPairs.map(p => {
+    const missing = [...(p.missingInTarget || []), ...(p.missingInBaseline || [])];
+    return `${p.file || p.compareTo}: missing ${missing.join(", ")}`;
+  });
+  return `Environment key gaps detected:\n${lines.map(l => `• ${l}`).join("\n")}`;
+}
+
+function applyPreDeploySecretScan(result, secretCache, config) {
+  if (!(secretCache && !secretCache.clean && Array.isArray(secretCache.findings) && secretCache.findings.length > 0)) {
+    return;
+  }
+  result.secretFindings = secretCache.findings.map(f => ({
+    file: f.file,
+    line: f.line,
+    type: f.type,
+    entropyScore: f.entropyScore,
+    confidence: f.confidence,
+    masked: f.masked || "<REDACTED>",
+  }));
+  if (config.blockOnSecrets !== false) {
+    result.blocked = true;
+    result.reason = `secret-scan-found-${secretCache.findings.length}-findings`;
+  }
+}
+
+function applyPreDeployEnvDiff(result, envDiffCache, config) {
+  if (!(envDiffCache?.summary && (envDiffCache.summary.totalMissing > 0 || envDiffCache.summary.totalGaps > 0))) {
+    return;
+  }
+  const gapPairs = collectEnvGapPairs(envDiffCache);
+  if (gapPairs.length === 0) return;
+  result.envGaps = gapPairs;
+  if (config.warnOnEnvGaps !== false) {
+    appendHookAdvisory(result, formatEnvGapAdvisory(gapPairs));
+  }
+}
+
+function getPostSliceSkipReason(commitMessage) {
+  for (const pattern of POSTSLICE_SKIP_PATTERNS) {
+    if (pattern.test(commitMessage)) {
+      return `skip-pattern: ${pattern.source}`;
+    }
+  }
+  if (!POSTSLICE_COMMIT_PATTERN.test(commitMessage)) {
+    return "not-conventional-commit";
+  }
+  return null;
+}
+
+function readPostSliceDriftState(cwd) {
+  const driftHistory = readForgeJsonl("drift-history.jsonl", [], cwd);
+  if (driftHistory.length < 2) {
+    return { skippedReason: "insufficient-drift-history" };
+  }
+  const priorScore = driftHistory[driftHistory.length - 2]?.score;
+  const latest = driftHistory[driftHistory.length - 1] || {};
+  if (priorScore == null || latest.score == null) {
+    return { skippedReason: "missing-scores" };
+  }
+  return {
+    priorScore,
+    newScore: latest.score,
+    violations: latest.violations || [],
+    delta: priorScore - latest.score,
+  };
+}
+
+function formatPostSliceViolations(violations, limit) {
+  return violations.slice(0, limit).map(v => `• ${v.file}: ${v.rule} (${v.severity})`).join("\n");
+}
+
+function buildPostSliceWarningMessage({ priorScore, newScore, delta, violations, config }) {
+  const topViolations = formatPostSliceViolations(violations, 5);
+  const belowFloor = newScore < config.scoreFloor ? `Score is BELOW threshold (${config.scoreFloor}/${newScore}). ` : "";
+  return `🔴 PostSlice Hook — Drift Warning\n\nDrift score dropped ${delta} points after this commit (${priorScore} → ${newScore}).\n${belowFloor}Recommend resolving violations before starting the next slice.\n\nTop violations:\n${topViolations}\n\nOptions:\n1. Fix violations now and amend the commit\n2. Accept and continue — run \`pforge incident\` if this causes a prod issue later\n3. Run \`pforge runbook docs/plans/<current-plan>\` to update ops docs with new risk\n\nThe next slice will start with this reduced score as the new baseline.`;
+}
+
+function buildPostSliceAdvisoryMessage({ priorScore, newScore, delta, violations, config }) {
+  const topViolations = formatPostSliceViolations(violations, 3);
+  return `🟡 PostSlice Hook — Drift Advisory\n\nDrift score dropped ${delta} points after this commit (${priorScore} → ${newScore}).\nScore is still above threshold (${config.scoreFloor}) — proceeding is safe, but investigate before shipping.\n\nTop new violations:\n${topViolations}\n\nRun \`pforge drift\` to see the full report.`;
+}
+
+function buildPostSliceTemperingFireKey(sliceRef, commitMessage) {
+  return sliceRef
+    ? `${sliceRef.plan}::${sliceRef.slice}`
+    : `commit::${commitMessage.slice(0, 80)}`;
+}
+
+function getPostSliceTemperingSkipReason(commitMessage, runTemperingRun) {
+  if (!commitMessage) return "no-commit-message";
+  if (typeof runTemperingRun !== "function") return "no-runner-injected";
+  for (const pattern of POSTSLICE_SKIP_PATTERNS) {
+    if (pattern.test(commitMessage)) {
+      return `skip-pattern:${pattern.source}`;
+    }
+  }
+  if (!POSTSLICE_COMMIT_PATTERN.test(commitMessage)) {
+    return "not-conventional-commit";
+  }
+  return null;
+}
+
+function loadPostSliceTemperingExecutionConfig(cwd) {
+  let triggerMode = "post-slice";
+  try {
+    const configPath = resolve(cwd, ".forge", "tempering", "config.json");
+    if (!existsSync(configPath)) return { enabled: true, triggerMode };
+    const cfg = JSON.parse(readFileSync(configPath, "utf-8"));
+    if (cfg?.execution?.trigger) triggerMode = cfg.execution.trigger;
+    return { enabled: cfg?.enabled !== false, triggerMode };
+  } catch {
+    return { enabled: true, triggerMode };
+  }
+}
+
+async function invokePostSliceTemperingRun(runTemperingRun, args) {
+  try {
+    return { triggered: true, action: "ran", result: await runTemperingRun(args) };
+  } catch (err) {
+    return { triggered: true, action: "error", skippedReason: `runner-threw:${err.message}` };
+  }
+}
+
+function shouldTriggerPreAgentHandoff({ dirtyFiles, hasActivePlan, hasAutoFixPlan, isResumeSession }) {
+  return dirtyFiles.length > 0 || hasActivePlan || hasAutoFixPlan || isResumeSession;
+}
+
+function readPreAgentHandoffData(cwd) {
+  const triageCache = readForgeJson("alert-triage-cache.json", null, cwd);
+  const driftHistory = readForgeJsonl("drift-history.jsonl", [], cwd);
+  const incidents = readForgeJsonl("incidents.jsonl", [], cwd);
+  const secretScanCache = readForgeJson("secret-scan-cache.json", null, cwd);
+  const deployJournal = readForgeJsonl("deploy-journal.jsonl", [], cwd);
+  return {
+    triageCache,
+    driftHistory,
+    incidents,
+    secretScanCache,
+    deployJournal,
+    hasAnyData: Boolean(
+      triageCache || driftHistory.length > 0 || incidents.length > 0 || secretScanCache || deployJournal.length > 0
+    ),
+  };
+}
+
+function buildNoDataContextHeader() {
+  return "🛡️ LIVEGUARD CONTEXT — No data yet\nRun `pforge triage` after completing the first deploy to activate LiveGuard monitoring.\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━";
+}
+
+function getLiveGuardAlerts(triageCache, minAlertSeverity) {
+  const severityRank = { critical: 4, high: 3, medium: 2, low: 1 };
+  const minRank = severityRank[minAlertSeverity] || 2;
+  return (triageCache?.alerts || triageCache?.results || [])
+    .filter(a => (severityRank[a.severity] || 0) >= minRank);
+}
+
+function buildPreAgentHandoffContextHeader(data, config) {
+  const latestDrift = data.driftHistory.length > 0 ? data.driftHistory[data.driftHistory.length - 1] : null;
+  const score = latestDrift?.score ?? "N/A";
+  const trend = latestDrift?.trend ?? "unknown";
+  const violationCount = latestDrift?.violations?.length ?? 0;
+  const snapshotTs = latestDrift?.timestamp || data.triageCache?.scannedAt || new Date().toISOString();
+  const snapshotAge = formatSnapshotAge(snapshotTs);
+  const openIncidents = data.incidents.filter(i => !i.resolvedAt);
+  const lastDeploy = data.deployJournal.length > 0 ? data.deployJournal[data.deployJournal.length - 1] : null;
+  const secretScan = data.secretScanCache || { clean: true, findings: [] };
+  const secretScanAge = data.secretScanCache ? formatSnapshotAge(data.secretScanCache.scannedAt) : "never";
+  const alerts = getLiveGuardAlerts(data.triageCache, config.minAlertSeverity);
+  const lines = [
+    "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━",
+    "🛡️ LIVEGUARD CONTEXT — Session Start",
+    `(As of ${snapshotAge} ago — run \`pforge triage\` to refresh)`,
+    "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━",
+    "",
+    `Drift Score: ${score}/100 (${trend}) — ${violationCount} active violations`,
+    `Open Incidents: ${openIncidents.length}${openIncidents.length > 0 ? ` (${openIncidents.map(i => i.severity).join(", ")})` : ""}`,
+  ];
+
+  if (lastDeploy) {
+    const postHealth = lastDeploy.postHealthScore ?? "not yet recorded";
+    lines.push(`Last Deploy: ${lastDeploy.version || "unknown"} @ ${lastDeploy.timestamp || "unknown"} (pre: ${lastDeploy.preHealthScore ?? "N/A"}, post: ${postHealth})`);
+  } else {
+    lines.push("Last Deploy: none recorded");
+  }
+
+  lines.push(`Last Secret Scan: ${secretScan.clean !== false ? "✅ Clean" : `⛔ ${(secretScan.findings || []).length} finding(s)`} (${secretScanAge})`);
+  lines.push("");
+
+  if (alerts.length > 0) {
+    lines.push("Top Alerts (medium+):");
+    alerts.slice(0, 5).forEach((a, i) => {
+      lines.push(`${i + 1}. [${(a.severity || "unknown").toUpperCase()}] ${a.title || a.message || "untitled"} — ${a.recommendedAction || "investigate"}`);
+    });
+    if (alerts.length > 5) {
+      lines.push(`...and ${alerts.length - 5} more. Run \`pforge triage\` for full list.`);
+    }
+    lines.push("");
+  }
+
+  lines.push("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
+  return {
+    contextHeader: lines.join("\n"),
+    openIncidents,
+  };
+}
+
+async function maybeRunPreAgentRegressionGuard({ hasDirtyBranch, config, dirtyFiles, cwd, deps }) {
+  if (!hasDirtyBranch || config.runRegressionGuard === false) return null;
+  try {
+    const guard = deps._regressionGuard || regressionGuard;
+    if (!guard) return null;
+    return await guard(dirtyFiles, { cwd });
+  } catch (err) {
+    console.error(`[PreAgentHandoff] regression guard error: ${err.message}`);
+    return null;
+  }
+}
+
+function appendRegressionAlert(contextHeader, regressionResult) {
+  if (!(regressionResult && regressionResult.failed > 0)) {
+    return contextHeader;
+  }
+  const failedGates = (regressionResult.results || []).filter(r => r.status === "failed");
+  const regressionLines = [
+    "",
+    `⚠️ Regression Alert — ${regressionResult.failed} gate(s) failing on current branch changes`,
+    "",
+    ...failedGates.map(r => `• Slice ${r.sliceNumber} (${r.planFile}): ${r.cmd}`),
+    "",
+    "Resolve these before adding new code — the current branch has introduced regressions.",
+  ];
+  return `${contextHeader}\n${regressionLines.join("\n")}`;
+}
+
+function schedulePreAgentHandoffOpenClawSnapshot(cwd, dirtyFilesCount, openIncidentsCount) {
+  try {
+    const { endpoint } = loadOpenClawConfig(cwd);
+    if (!endpoint) return null;
+    const openClawPromise = postOpenClawSnapshot(cwd, {
+      trigger: "preAgentHandoff",
+      dirtyFiles: dirtyFilesCount,
+      openIncidents: openIncidentsCount,
+    });
+    let openClawResult = null;
+    openClawPromise.then(r => { openClawResult = r; }).catch(err => {
+      console.error(`[PreAgentHandoff] openclaw snapshot skipped: ${err.message}`);
+    });
+    return openClawResult;
+  } catch (err) {
+    console.error(`[PreAgentHandoff] openclaw snapshot skipped: ${err.message}`);
+    return null;
+  }
+}
+
+function buildOpenClawSnapshot(extraContext) {
+  return { timestamp: new Date().toISOString(), project: null, ...extraContext };
+}
+
+function enrichOpenClawProjectSnapshot(cwd, snapshot) {
+  try {
+    const config = JSON.parse(readFileSync(resolve(cwd, ".forge.json"), "utf-8"));
+    snapshot.project = config.projectName || null;
+  } catch { /* skip */ }
+}
+
+function enrichOpenClawDriftSnapshot(cwd, snapshot) {
+  try {
+    const history = readForgeJsonl("drift-history.jsonl", [], cwd);
+    const latest = history[history.length - 1];
+    snapshot.driftScore = latest?.score ?? null;
+    snapshot.driftViolations = latest?.violations ?? null;
+  } catch { /* skip */ }
+}
+
+function enrichOpenClawIncidentSnapshot(cwd, snapshot) {
+  const incidentsPath = resolve(cwd, ".forge/incidents.jsonl");
+  if (!existsSync(incidentsPath)) return;
+  try {
+    const lines = readFileSync(incidentsPath, "utf-8").trim().split("\n").filter(Boolean);
+    const incidents = lines.map((l) => { try { return JSON.parse(l); } catch { return null; } }).filter(Boolean);
+    snapshot.openIncidents = incidents.filter((i) => !i.resolvedAt).length;
+    snapshot.totalIncidents = incidents.length;
+  } catch { /* skip */ }
+}
+
+function enrichOpenClawDeploySnapshot(cwd, snapshot) {
+  const deployPath = resolve(cwd, ".forge/deploy-journal.jsonl");
+  if (!existsSync(deployPath)) return;
+  try {
+    const lines = readFileSync(deployPath, "utf-8").trim().split("\n").filter(Boolean);
+    const last = lines.length > 0 ? JSON.parse(lines[lines.length - 1]) : null;
+    if (!last) return;
+    snapshot.lastDeployVersion = last.version || null;
+    snapshot.lastDeployEnv = last.environment || null;
+    snapshot.lastDeployAt = last.timestamp || null;
+  } catch { /* skip */ }
+}
+
+function enrichOpenClawSecretScanSnapshot(cwd, snapshot) {
+  const scanPath = resolve(cwd, ".forge/secret-scan-cache.json");
+  if (!existsSync(scanPath)) return;
+  try {
+    const scan = JSON.parse(readFileSync(scanPath, "utf-8"));
+    snapshot.secretScanClean = scan.clean ?? null;
+    snapshot.secretScanFindings = scan.findings?.length ?? 0;
+  } catch { /* skip */ }
+}
+
+async function postOpenClawJson(endpoint, apiKey, snapshot) {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 5000);
+  const headers = { "Content-Type": "application/json" };
+  if (apiKey) headers.Authorization = `Bearer ${apiKey}`;
+  const response = await fetch(endpoint, {
+    method: "POST",
+    headers,
+    body: JSON.stringify(snapshot),
+    signal: controller.signal,
+  });
+  clearTimeout(timeout);
+  return response;
+}
+
+function loadPostRunAuditorConfig(cwd) {
+  const config = readRootForgeConfig(cwd)?.hooks?.postRun?.invokeAuditor;
+  return config ? { onFailure: false, everyNRuns: null, ...config } : { onFailure: false, everyNRuns: null };
+}
+
+function evaluatePostRunEveryNRuns(cwd, everyN) {
+  if (!(everyN !== null && typeof everyN === "number" && everyN > 0)) {
+    return false;
+  }
+  const state = readAuditorState(cwd);
+  const currentCount = typeof state.runsSinceLastAudit === "number"
+    ? state.runsSinceLastAudit + 1
+    : everyN;
+  const everyNRunsFires = currentCount >= everyN;
+  writeAuditorState(cwd, { runsSinceLastAudit: everyNRunsFires ? 0 : currentCount });
+  return everyNRunsFires;
+}
+
+function emitPostRunAuditorEvent(eventBus, reason, config) {
+  if (!(eventBus && typeof eventBus.emit === "function")) return;
+  try {
+    eventBus.emit("auditor-auto-invoke", { reason, config });
+  } catch { /* non-fatal */ }
+}
+
 /**
  * Run the PreDeploy hook logic. Reads secret-scan and env-diff caches,
  * evaluates them against the hook configuration, and returns a result
@@ -173,11 +547,7 @@ function isCacheStale(cache) {
  * @param {string} [params.cwd=process.cwd()] - Project root directory
  * @returns {{ triggered: boolean, blocked?: boolean, reason?: string, advisory?: string, secretFindings?: Array, envGaps?: Array }}
  */
-export function runPreDeployHook({ toolName, filePath = "", command = "", cwd = process.cwd() } = {}) {
-  if (!isDeployTrigger(toolName, filePath, command)) {
-    return { triggered: false };
-  }
-
+function _loadPreDeployConfig(cwd) {
   let config = { ...PRE_DEPLOY_DEFAULTS };
   try {
     const configPath = resolve(cwd, ".forge.json");
@@ -188,14 +558,10 @@ export function runPreDeployHook({ toolName, filePath = "", command = "", cwd = 
       }
     }
   } catch { /* use defaults */ }
+  return config;
+}
 
-  if (config.enabled === false) {
-    return { triggered: true, blocked: false, reason: null, advisory: null, secretFindings: [], envGaps: [] };
-  }
-
-  const result = { triggered: true, blocked: false, reason: null, advisory: null, secretFindings: [], envGaps: [] };
-
-  const secretCache = readForgeJson("secret-scan-cache.json", null, cwd);
+function _applyPreDeploySecretScan(result, secretCache, config) {
   if (secretCache && !secretCache.clean && Array.isArray(secretCache.findings) && secretCache.findings.length > 0) {
     result.secretFindings = secretCache.findings.map(f => ({
       file: f.file,
@@ -210,43 +576,67 @@ export function runPreDeployHook({ toolName, filePath = "", command = "", cwd = 
       result.reason = `secret-scan-found-${secretCache.findings.length}-findings`;
     }
   }
-
   if (isCacheStale(secretCache)) {
     const staleMsg = "Secret scan cache is stale or missing — run forge_secret_scan to refresh.";
     result.advisory = result.advisory ? `${result.advisory}\n${staleMsg}` : staleMsg;
   }
+}
 
-  const envDiffCache = readForgeJson("env-diff-cache.json", null, cwd);
-  if (envDiffCache && envDiffCache.summary && envDiffCache.summary.totalMissing > 0) {
-    const gapPairs = (envDiffCache.pairs || []).filter(p =>
-      (p.missingInTarget?.length || 0) + (p.missingInBaseline?.length || 0) > 0
-    );
+function _gapPairsFromDiff(envDiffCache) {
+  return (envDiffCache.pairs || []).filter(p =>
+    (p.missingInTarget?.length || 0) + (p.missingInBaseline?.length || 0) > 0
+  );
+}
+
+function _formatEnvGapsMessage(gapPairs) {
+  const lines = gapPairs.map(p => {
+    const missing = [...(p.missingInTarget || []), ...(p.missingInBaseline || [])];
+    return `${p.file || p.compareTo}: missing ${missing.join(", ")}`;
+  });
+  return `Environment key gaps detected:\n${lines.map(l => `• ${l}`).join("\n")}`;
+}
+
+function _applyPreDeployEnvDiff(result, envDiffCache, config) {
+  if (!envDiffCache || !envDiffCache.summary) return;
+
+  if (envDiffCache.summary.totalMissing > 0) {
+    const gapPairs = _gapPairsFromDiff(envDiffCache);
     result.envGaps = gapPairs;
     if (config.warnOnEnvGaps !== false && gapPairs.length > 0) {
-      const lines = gapPairs.map(p => {
-        const missing = [...(p.missingInTarget || []), ...(p.missingInBaseline || [])];
-        return `${p.file || p.compareTo}: missing ${missing.join(", ")}`;
-      });
-      const envMsg = `Environment key gaps detected:\n${lines.map(l => `• ${l}`).join("\n")}`;
+      const envMsg = _formatEnvGapsMessage(gapPairs);
       result.advisory = result.advisory ? `${result.advisory}\n${envMsg}` : envMsg;
     }
   }
-  if (!result.envGaps.length && envDiffCache && envDiffCache.summary && envDiffCache.summary.totalGaps > 0) {
-    const gapPairs = (envDiffCache.pairs || []).filter(p =>
-      (p.missingInTarget?.length || 0) + (p.missingInBaseline?.length || 0) > 0
-    );
+  if (!result.envGaps.length && envDiffCache.summary.totalGaps > 0) {
+    const gapPairs = _gapPairsFromDiff(envDiffCache);
     if (gapPairs.length > 0) {
       result.envGaps = gapPairs;
       if (config.warnOnEnvGaps !== false) {
-        const lines = gapPairs.map(p => {
-          const missing = [...(p.missingInTarget || []), ...(p.missingInBaseline || [])];
-          return `${p.file || p.compareTo}: missing ${missing.join(", ")}`;
-        });
-        const envMsg = `Environment key gaps detected:\n${lines.map(l => `• ${l}`).join("\n")}`;
+        const envMsg = _formatEnvGapsMessage(gapPairs);
         result.advisory = result.advisory ? `${result.advisory}\n${envMsg}` : envMsg;
       }
     }
   }
+}
+
+export function runPreDeployHook({ toolName, filePath = "", command = "", cwd = process.cwd() } = {}) {
+  if (!isDeployTrigger(toolName, filePath, command)) {
+    return { triggered: false };
+  }
+
+  const config = _loadPreDeployConfig(cwd);
+
+  if (config.enabled === false) {
+    return { triggered: true, blocked: false, reason: null, advisory: null, secretFindings: [], envGaps: [] };
+  }
+
+  const result = { triggered: true, blocked: false, reason: null, advisory: null, secretFindings: [], envGaps: [] };
+
+  const secretCache = readForgeJson("secret-scan-cache.json", null, cwd);
+  _applyPreDeploySecretScan(result, secretCache, config);
+
+  const envDiffCache = readForgeJson("env-diff-cache.json", null, cwd);
+  _applyPreDeployEnvDiff(result, envDiffCache, config);
 
   return result;
 }
@@ -336,23 +726,7 @@ export function parseShortstat(shortstat) {
  * @param {string} [params.cwd=process.cwd()] - Project root directory
  * @returns {{ triggered: boolean, action?: string, message?: string, priorScore?: number, newScore?: number, delta?: number, skippedReason?: string }}
  */
-export function runPostSliceHook({ commitMessage, cwd = process.cwd() } = {}) {
-  if (!commitMessage) return { triggered: false, skippedReason: "no-commit-message" };
-
-  if (getPostSliceHookFiredState()) {
-    return { triggered: false, skippedReason: "already-fired" };
-  }
-
-  for (const pattern of POSTSLICE_SKIP_PATTERNS) {
-    if (pattern.test(commitMessage)) {
-      return { triggered: false, skippedReason: `skip-pattern: ${pattern.source}` };
-    }
-  }
-
-  if (!POSTSLICE_COMMIT_PATTERN.test(commitMessage)) {
-    return { triggered: false, skippedReason: "not-conventional-commit" };
-  }
-
+function _loadPostSliceConfig(cwd) {
   let config = { ...POSTSLICE_DEFAULTS };
   try {
     const configPath = resolve(cwd, ".forge.json");
@@ -363,6 +737,36 @@ export function runPostSliceHook({ commitMessage, cwd = process.cwd() } = {}) {
       }
     }
   } catch { /* use defaults */ }
+  return config;
+}
+
+function _postSliceSkipReason(commitMessage) {
+  if (getPostSliceHookFiredState()) return "already-fired";
+  for (const pattern of POSTSLICE_SKIP_PATTERNS) {
+    if (pattern.test(commitMessage)) return `skip-pattern: ${pattern.source}`;
+  }
+  if (!POSTSLICE_COMMIT_PATTERN.test(commitMessage)) return "not-conventional-commit";
+  return null;
+}
+
+function _buildPostSliceWarning(priorScore, newScore, delta, config, violations) {
+  const topViolations = violations.slice(0, 5).map(v => `• ${v.file}: ${v.rule} (${v.severity})`).join("\n");
+  const belowFloor = newScore < config.scoreFloor ? `Score is BELOW threshold (${config.scoreFloor}/${newScore}). ` : "";
+  return `🔴 PostSlice Hook — Drift Warning\n\nDrift score dropped ${delta} points after this commit (${priorScore} → ${newScore}).\n${belowFloor}Recommend resolving violations before starting the next slice.\n\nTop violations:\n${topViolations}\n\nOptions:\n1. Fix violations now and amend the commit\n2. Accept and continue — run \`pforge incident\` if this causes a prod issue later\n3. Run \`pforge runbook docs/plans/<current-plan>\` to update ops docs with new risk\n\nThe next slice will start with this reduced score as the new baseline.`;
+}
+
+function _buildPostSliceAdvisory(priorScore, newScore, delta, config, violations) {
+  const topViolations = violations.slice(0, 3).map(v => `• ${v.file}: ${v.rule} (${v.severity})`).join("\n");
+  return `🟡 PostSlice Hook — Drift Advisory\n\nDrift score dropped ${delta} points after this commit (${priorScore} → ${newScore}).\nScore is still above threshold (${config.scoreFloor}) — proceeding is safe, but investigate before shipping.\n\nTop new violations:\n${topViolations}\n\nRun \`pforge drift\` to see the full report.`;
+}
+
+export function runPostSliceHook({ commitMessage, cwd = process.cwd() } = {}) {
+  if (!commitMessage) return { triggered: false, skippedReason: "no-commit-message" };
+
+  const skipReason = _postSliceSkipReason(commitMessage);
+  if (skipReason) return { triggered: false, skippedReason: skipReason };
+
+  const config = _loadPostSliceConfig(cwd);
 
   if (config.enabled === false) {
     return { triggered: true, action: "disabled", message: null };
@@ -393,14 +797,11 @@ export function runPostSliceHook({ commitMessage, cwd = process.cwd() } = {}) {
   }
 
   if (delta > config.warnDeltaThreshold || newScore < config.scoreFloor) {
-    const topViolations = violations.slice(0, 5).map(v => `• ${v.file}: ${v.rule} (${v.severity})`).join("\n");
-    const belowFloor = newScore < config.scoreFloor ? `Score is BELOW threshold (${config.scoreFloor}/${newScore}). ` : "";
-    const message = `🔴 PostSlice Hook — Drift Warning\n\nDrift score dropped ${delta} points after this commit (${priorScore} → ${newScore}).\n${belowFloor}Recommend resolving violations before starting the next slice.\n\nTop violations:\n${topViolations}\n\nOptions:\n1. Fix violations now and amend the commit\n2. Accept and continue — run \`pforge incident\` if this causes a prod issue later\n3. Run \`pforge runbook docs/plans/<current-plan>\` to update ops docs with new risk\n\nThe next slice will start with this reduced score as the new baseline.`;
+    const message = _buildPostSliceWarning(priorScore, newScore, delta, config, violations);
     return { triggered: true, action: "warning", message, priorScore, newScore, delta };
   }
 
-  const topViolations = violations.slice(0, 3).map(v => `• ${v.file}: ${v.rule} (${v.severity})`).join("\n");
-  const message = `🟡 PostSlice Hook — Drift Advisory\n\nDrift score dropped ${delta} points after this commit (${priorScore} → ${newScore}).\nScore is still above threshold (${config.scoreFloor}) — proceeding is safe, but investigate before shipping.\n\nTop new violations:\n${topViolations}\n\nRun \`pforge drift\` to see the full report.`;
+  const message = _buildPostSliceAdvisory(priorScore, newScore, delta, config, violations);
   return { triggered: true, action: "advisory", message, priorScore, newScore, delta };
 }
 
@@ -426,6 +827,31 @@ export function resetPostSliceTemperingFired() {
  * @param {string} [params.lastGreenSha]
  * @returns {Promise<{triggered:boolean, skippedReason?:string, result?:object}>}
  */
+function _temperingSkipReason(commitMessage, runTemperingRun) {
+  if (!commitMessage) return "no-commit-message";
+  if (typeof runTemperingRun !== "function") return "no-runner-injected";
+  for (const pattern of POSTSLICE_SKIP_PATTERNS) {
+    if (pattern.test(commitMessage)) return `skip-pattern:${pattern.source}`;
+  }
+  if (!POSTSLICE_COMMIT_PATTERN.test(commitMessage)) return "not-conventional-commit";
+  return null;
+}
+
+function _readTemperingTriggerConfig(cwd) {
+  // Returns { triggerMode, disabled } from the tempering config file.
+  let triggerMode = "post-slice";
+  let disabled = false;
+  try {
+    const configPath = resolve(cwd, ".forge", "tempering", "config.json");
+    if (existsSync(configPath)) {
+      const cfg = JSON.parse(readFileSync(configPath, "utf-8"));
+      if (cfg?.execution?.trigger) triggerMode = cfg.execution.trigger;
+      if (cfg?.enabled === false) disabled = true;
+    }
+  } catch { /* fall through to default */ }
+  return { triggerMode, disabled };
+}
+
 export async function runPostSliceTemperingHook({
   commitMessage,
   sliceRef = null,
@@ -439,19 +865,9 @@ export async function runPostSliceTemperingHook({
   if (process.env.PFORGE_DISABLE_TEMPERING === "1") {
     return { skipped: true, reason: "PFORGE_DISABLE_TEMPERING" };
   }
-  if (!commitMessage) return { triggered: false, skippedReason: "no-commit-message" };
-  if (typeof runTemperingRun !== "function") {
-    return { triggered: false, skippedReason: "no-runner-injected" };
-  }
 
-  for (const pattern of POSTSLICE_SKIP_PATTERNS) {
-    if (pattern.test(commitMessage)) {
-      return { triggered: false, skippedReason: `skip-pattern:${pattern.source}` };
-    }
-  }
-  if (!POSTSLICE_COMMIT_PATTERN.test(commitMessage)) {
-    return { triggered: false, skippedReason: "not-conventional-commit" };
-  }
+  const skipReason = _temperingSkipReason(commitMessage, runTemperingRun);
+  if (skipReason) return { triggered: false, skippedReason: skipReason };
 
   const fireKey = sliceRef
     ? `${sliceRef.plan}::${sliceRef.slice}`
@@ -460,18 +876,10 @@ export async function runPostSliceTemperingHook({
     return { triggered: false, skippedReason: "already-fired-for-slice" };
   }
 
-  let triggerMode = "post-slice";
-  try {
-    const configPath = resolve(cwd, ".forge", "tempering", "config.json");
-    if (existsSync(configPath)) {
-      const cfg = JSON.parse(readFileSync(configPath, "utf-8"));
-      if (cfg?.execution?.trigger) triggerMode = cfg.execution.trigger;
-      if (cfg?.enabled === false) {
-        return { triggered: false, skippedReason: "tempering-disabled" };
-      }
-    }
-  } catch { /* fall through to default */ }
-
+  const { triggerMode, disabled } = _readTemperingTriggerConfig(cwd);
+  if (disabled) {
+    return { triggered: false, skippedReason: "tempering-disabled" };
+  }
   if (triggerMode !== "post-slice") {
     return { triggered: false, skippedReason: `trigger-mode:${triggerMode}` };
   }
@@ -548,6 +956,131 @@ function formatSnapshotAge(isoTimestamp) {
  * @param {object} [params._deps={}] - Injectable dependencies
  * @returns {Promise<{ triggered: boolean, contextHeader?: string, regressionResult?: object, openClawResult?: object, skippedReason?: string }>}
  */
+function _loadPreAgentHandoffConfig(cwd) {
+  let config = { ...PRE_AGENT_HANDOFF_DEFAULTS };
+  try {
+    const configPath = resolve(cwd, ".forge.json");
+    if (existsSync(configPath)) {
+      const raw = JSON.parse(readFileSync(configPath, "utf-8"));
+      if (raw?.hooks?.preAgentHandoff) {
+        config = { ...PRE_AGENT_HANDOFF_DEFAULTS, ...raw.hooks.preAgentHandoff };
+      }
+    }
+  } catch { /* use defaults */ }
+  return config;
+}
+
+function _readLiveGuardCaches(cwd) {
+  return {
+    triageCache: readForgeJson("alert-triage-cache.json", null, cwd),
+    driftHistory: readForgeJsonl("drift-history.jsonl", [], cwd),
+    incidents: readForgeJsonl("incidents.jsonl", [], cwd),
+    secretScanCache: readForgeJson("secret-scan-cache.json", null, cwd),
+    deployJournal: readForgeJsonl("deploy-journal.jsonl", [], cwd),
+  };
+}
+
+function _filterAlertsBySeverity(triageCache, minAlertSeverity) {
+  const severityRank = { critical: 4, high: 3, medium: 2, low: 1 };
+  const minRank = severityRank[minAlertSeverity] || 2;
+  return (triageCache?.alerts || triageCache?.results || [])
+    .filter(a => (severityRank[a.severity] || 0) >= minRank);
+}
+
+function _buildLastDeployLine(lastDeploy) {
+  if (!lastDeploy) return "Last Deploy: none recorded";
+  const postHealth = lastDeploy.postHealthScore ?? "not yet recorded";
+  return `Last Deploy: ${lastDeploy.version || "unknown"} @ ${lastDeploy.timestamp || "unknown"} (pre: ${lastDeploy.preHealthScore ?? "N/A"}, post: ${postHealth})`;
+}
+
+function _buildContextHeaderLines(caches, alerts, snapshotAge) {
+  const { driftHistory, incidents, secretScanCache, deployJournal } = caches;
+  const latestDrift = driftHistory.length > 0 ? driftHistory[driftHistory.length - 1] : null;
+  const score = latestDrift?.score ?? "N/A";
+  const trend = latestDrift?.trend ?? "unknown";
+  const violationCount = latestDrift?.violations?.length ?? 0;
+
+  const openIncidents = incidents.filter(i => !i.resolvedAt);
+  const lastDeploy = deployJournal.length > 0 ? deployJournal[deployJournal.length - 1] : null;
+  const secretScan = secretScanCache || { clean: true, findings: [] };
+  const secretScanAge = secretScanCache ? formatSnapshotAge(secretScanCache.scannedAt) : "never";
+
+  const lines = [
+    "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━",
+    "🛡️ LIVEGUARD CONTEXT — Session Start",
+    `(As of ${snapshotAge} ago — run \`pforge triage\` to refresh)`,
+    "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━",
+    "",
+    `Drift Score: ${score}/100 (${trend}) — ${violationCount} active violations`,
+    `Open Incidents: ${openIncidents.length}${openIncidents.length > 0 ? ` (${openIncidents.map(i => i.severity).join(", ")})` : ""}`,
+    _buildLastDeployLine(lastDeploy),
+    `Last Secret Scan: ${secretScan.clean !== false ? "✅ Clean" : `⛔ ${(secretScan.findings || []).length} finding(s)`} (${secretScanAge})`,
+    "",
+  ];
+
+  if (alerts.length > 0) {
+    lines.push("Top Alerts (medium+):");
+    alerts.slice(0, 5).forEach((a, i) => {
+      lines.push(`${i + 1}. [${(a.severity || "unknown").toUpperCase()}] ${a.title || a.message || "untitled"} — ${a.recommendedAction || "investigate"}`);
+    });
+    if (alerts.length > 5) {
+      lines.push(`...and ${alerts.length - 5} more. Run \`pforge triage\` for full list.`);
+    }
+    lines.push("");
+  }
+
+  lines.push("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
+  return { lines, openIncidents };
+}
+
+async function _runRegressionGuardAndAppend(contextHeader, dirtyFiles, config, cwd, _deps) {
+  let regressionResult = null;
+  if (!(dirtyFiles.length > 0 && config.runRegressionGuard !== false)) {
+    return { contextHeader, regressionResult };
+  }
+  try {
+    const guard = _deps._regressionGuard || regressionGuard;
+    if (guard) {
+      regressionResult = await guard(dirtyFiles, { cwd });
+    }
+    if (regressionResult && regressionResult.failed > 0) {
+      const failedGates = (regressionResult.results || []).filter(r => r.status === "failed");
+      const regressionLines = [
+        "",
+        `⚠️ Regression Alert — ${regressionResult.failed} gate(s) failing on current branch changes`,
+        "",
+        ...failedGates.map(r => `• Slice ${r.sliceNumber} (${r.planFile}): ${r.cmd}`),
+        "",
+        "Resolve these before adding new code — the current branch has introduced regressions.",
+      ];
+      contextHeader += "\n" + regressionLines.join("\n");
+    }
+  } catch (err) {
+    console.error(`[PreAgentHandoff] regression guard error: ${err.message}`);
+  }
+  return { contextHeader, regressionResult };
+}
+
+function _kickOffOpenClawSnapshot(cwd, dirtyFiles, openIncidents) {
+  let openClawResult = null;
+  try {
+    const { endpoint } = loadOpenClawConfig(cwd);
+    if (endpoint) {
+      const openClawPromise = postOpenClawSnapshot(cwd, {
+        trigger: "preAgentHandoff",
+        dirtyFiles: dirtyFiles.length,
+        openIncidents: openIncidents.length,
+      });
+      openClawPromise.then(r => { openClawResult = r; }).catch(err => {
+        console.error(`[PreAgentHandoff] openclaw snapshot skipped: ${err.message}`);
+      });
+    }
+  } catch (err) {
+    console.error(`[PreAgentHandoff] openclaw snapshot skipped: ${err.message}`);
+  }
+  return openClawResult;
+}
+
 export async function runPreAgentHandoffHook({
   cwd = process.cwd(),
   dirtyFiles = [],
@@ -567,130 +1100,33 @@ export async function runPreAgentHandoffHook({
     return { triggered: false, skippedReason: "no-trigger-conditions" };
   }
 
-  let config = { ...PRE_AGENT_HANDOFF_DEFAULTS };
-  try {
-    const configPath = resolve(cwd, ".forge.json");
-    if (existsSync(configPath)) {
-      const raw = JSON.parse(readFileSync(configPath, "utf-8"));
-      if (raw?.hooks?.preAgentHandoff) {
-        config = { ...PRE_AGENT_HANDOFF_DEFAULTS, ...raw.hooks.preAgentHandoff };
-      }
-    }
-  } catch { /* use defaults */ }
-
+  const config = _loadPreAgentHandoffConfig(cwd);
   if (config.enabled === false) {
     return { triggered: true, contextHeader: null, skippedReason: "disabled" };
   }
 
-  const maxAge = config.cacheMaxAgeMinutes ?? 30;
-
-  const triageCache = readForgeJson("alert-triage-cache.json", null, cwd);
-  const driftHistory = readForgeJsonl("drift-history.jsonl", [], cwd);
-  const incidents = readForgeJsonl("incidents.jsonl", [], cwd);
-  const secretScanCache = readForgeJson("secret-scan-cache.json", null, cwd);
-  const deployJournal = readForgeJsonl("deploy-journal.jsonl", [], cwd);
+  const caches = _readLiveGuardCaches(cwd);
+  const { triageCache, driftHistory, incidents, secretScanCache, deployJournal } = caches;
 
   const hasAnyData = triageCache || driftHistory.length > 0 || incidents.length > 0 || secretScanCache || deployJournal.length > 0;
-
   if (!hasAnyData) {
     const contextHeader = "🛡️ LIVEGUARD CONTEXT — No data yet\nRun `pforge triage` after completing the first deploy to activate LiveGuard monitoring.\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━";
     return { triggered: true, contextHeader, regressionResult: null, openClawResult: null };
   }
 
   const latestDrift = driftHistory.length > 0 ? driftHistory[driftHistory.length - 1] : null;
-  const score = latestDrift?.score ?? "N/A";
-  const trend = latestDrift?.trend ?? "unknown";
-  const violationCount = latestDrift?.violations?.length ?? 0;
   const snapshotTs = latestDrift?.timestamp || triageCache?.scannedAt || new Date().toISOString();
   const snapshotAge = formatSnapshotAge(snapshotTs);
 
-  const openIncidents = incidents.filter(i => !i.resolvedAt);
-
-  const lastDeploy = deployJournal.length > 0 ? deployJournal[deployJournal.length - 1] : null;
-
-  const secretScan = secretScanCache || { clean: true, findings: [] };
-  const secretScanAge = secretScanCache ? formatSnapshotAge(secretScanCache.scannedAt) : "never";
-
-  const severityRank = { critical: 4, high: 3, medium: 2, low: 1 };
-  const minRank = severityRank[config.minAlertSeverity] || 2;
-  const alerts = (triageCache?.alerts || triageCache?.results || [])
-    .filter(a => (severityRank[a.severity] || 0) >= minRank);
-
-  const lines = [
-    "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━",
-    "🛡️ LIVEGUARD CONTEXT — Session Start",
-    `(As of ${snapshotAge} ago — run \`pforge triage\` to refresh)`,
-    "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━",
-    "",
-    `Drift Score: ${score}/100 (${trend}) — ${violationCount} active violations`,
-    `Open Incidents: ${openIncidents.length}${openIncidents.length > 0 ? ` (${openIncidents.map(i => i.severity).join(", ")})` : ""}`,
-  ];
-
-  if (lastDeploy) {
-    const postHealth = lastDeploy.postHealthScore ?? "not yet recorded";
-    lines.push(`Last Deploy: ${lastDeploy.version || "unknown"} @ ${lastDeploy.timestamp || "unknown"} (pre: ${lastDeploy.preHealthScore ?? "N/A"}, post: ${postHealth})`);
-  } else {
-    lines.push("Last Deploy: none recorded");
-  }
-
-  lines.push(`Last Secret Scan: ${secretScan.clean !== false ? "✅ Clean" : `⛔ ${(secretScan.findings || []).length} finding(s)`} (${secretScanAge})`);
-  lines.push("");
-
-  if (alerts.length > 0) {
-    lines.push("Top Alerts (medium+):");
-    alerts.slice(0, 5).forEach((a, i) => {
-      lines.push(`${i + 1}. [${(a.severity || "unknown").toUpperCase()}] ${a.title || a.message || "untitled"} — ${a.recommendedAction || "investigate"}`);
-    });
-    if (alerts.length > 5) {
-      lines.push(`...and ${alerts.length - 5} more. Run \`pforge triage\` for full list.`);
-    }
-    lines.push("");
-  }
-
-  lines.push("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
-
+  const alerts = _filterAlertsBySeverity(triageCache, config.minAlertSeverity);
+  const { lines, openIncidents } = _buildContextHeaderLines(caches, alerts, snapshotAge);
   let contextHeader = lines.join("\n");
 
-  let regressionResult = null;
-  if (hasDirtyBranch && config.runRegressionGuard !== false) {
-    try {
-      const guard = _deps._regressionGuard || regressionGuard;
-      if (guard) {
-        regressionResult = await guard(dirtyFiles, { cwd });
-      }
-      if (regressionResult && regressionResult.failed > 0) {
-        const failedGates = (regressionResult.results || []).filter(r => r.status === "failed");
-        const regressionLines = [
-          "",
-          `⚠️ Regression Alert — ${regressionResult.failed} gate(s) failing on current branch changes`,
-          "",
-          ...failedGates.map(r => `• Slice ${r.sliceNumber} (${r.planFile}): ${r.cmd}`),
-          "",
-          "Resolve these before adding new code — the current branch has introduced regressions.",
-        ];
-        contextHeader += "\n" + regressionLines.join("\n");
-      }
-    } catch (err) {
-      console.error(`[PreAgentHandoff] regression guard error: ${err.message}`);
-    }
-  }
+  const reg = await _runRegressionGuardAndAppend(contextHeader, dirtyFiles, config, cwd, _deps);
+  contextHeader = reg.contextHeader;
+  const regressionResult = reg.regressionResult;
 
-  let openClawResult = null;
-  try {
-    const { endpoint } = loadOpenClawConfig(cwd);
-    if (endpoint) {
-      const openClawPromise = postOpenClawSnapshot(cwd, {
-        trigger: "preAgentHandoff",
-        dirtyFiles: dirtyFiles.length,
-        openIncidents: openIncidents.length,
-      });
-      openClawPromise.then(r => { openClawResult = r; }).catch(err => {
-        console.error(`[PreAgentHandoff] openclaw snapshot skipped: ${err.message}`);
-      });
-    }
-  } catch (err) {
-    console.error(`[PreAgentHandoff] openclaw snapshot skipped: ${err.message}`);
-  }
+  const openClawResult = _kickOffOpenClawSnapshot(cwd, dirtyFiles, openIncidents);
 
   return { triggered: true, contextHeader, regressionResult, openClawResult };
 }
@@ -733,56 +1169,68 @@ export function loadOpenClawConfig(cwd) {
  * @param {object} [extraContext] - Additional context fields to include
  * @returns {Promise<{ sent: boolean, endpoint?: string, error?: string }>}
  */
+function _readSnapshotProject(cwd, snapshot) {
+  try {
+    const config = JSON.parse(readFileSync(resolve(cwd, ".forge.json"), "utf-8"));
+    snapshot.project = config.projectName || null;
+  } catch { /* skip */ }
+}
+
+function _readSnapshotDrift(cwd, snapshot) {
+  try {
+    const history = readForgeJsonl("drift-history.jsonl", [], cwd);
+    const latest = history[history.length - 1];
+    snapshot.driftScore = latest?.score ?? null;
+    snapshot.driftViolations = latest?.violations ?? null;
+  } catch { /* skip */ }
+}
+
+function _readSnapshotIncidents(cwd, snapshot) {
+  const incidentsPath = resolve(cwd, ".forge/incidents.jsonl");
+  if (!existsSync(incidentsPath)) return;
+  try {
+    const lines = readFileSync(incidentsPath, "utf-8").trim().split("\n").filter(Boolean);
+    const incidents = lines.map((l) => { try { return JSON.parse(l); } catch { return null; } }).filter(Boolean);
+    snapshot.openIncidents = incidents.filter((i) => !i.resolvedAt).length;
+    snapshot.totalIncidents = incidents.length;
+  } catch { /* skip */ }
+}
+
+function _readSnapshotLastDeploy(cwd, snapshot) {
+  const deployPath = resolve(cwd, ".forge/deploy-journal.jsonl");
+  if (!existsSync(deployPath)) return;
+  try {
+    const lines = readFileSync(deployPath, "utf-8").trim().split("\n").filter(Boolean);
+    const last = lines.length > 0 ? JSON.parse(lines[lines.length - 1]) : null;
+    if (last) {
+      snapshot.lastDeployVersion = last.version || null;
+      snapshot.lastDeployEnv = last.environment || null;
+      snapshot.lastDeployAt = last.timestamp || null;
+    }
+  } catch { /* skip */ }
+}
+
+function _readSnapshotSecretScan(cwd, snapshot) {
+  const scanPath = resolve(cwd, ".forge/secret-scan-cache.json");
+  if (!existsSync(scanPath)) return;
+  try {
+    const scan = JSON.parse(readFileSync(scanPath, "utf-8"));
+    snapshot.secretScanClean = scan.clean ?? null;
+    snapshot.secretScanFindings = scan.findings?.length ?? 0;
+  } catch { /* skip */ }
+}
+
 export async function postOpenClawSnapshot(cwd, extraContext = {}) {
   const { endpoint, apiKey } = loadOpenClawConfig(cwd);
   if (!endpoint) return { sent: false, error: "No openclaw.endpoint configured" };
 
   try {
     const snapshot = { timestamp: new Date().toISOString(), project: null, ...extraContext };
-
-    try {
-      const config = JSON.parse(readFileSync(resolve(cwd, ".forge.json"), "utf-8"));
-      snapshot.project = config.projectName || null;
-    } catch { /* skip */ }
-
-    try {
-      const history = readForgeJsonl("drift-history.jsonl", [], cwd);
-      const latest = history[history.length - 1];
-      snapshot.driftScore = latest?.score ?? null;
-      snapshot.driftViolations = latest?.violations ?? null;
-    } catch { /* skip */ }
-
-    const incidentsPath = resolve(cwd, ".forge/incidents.jsonl");
-    if (existsSync(incidentsPath)) {
-      try {
-        const lines = readFileSync(incidentsPath, "utf-8").trim().split("\n").filter(Boolean);
-        const incidents = lines.map((l) => { try { return JSON.parse(l); } catch { return null; } }).filter(Boolean);
-        snapshot.openIncidents = incidents.filter((i) => !i.resolvedAt).length;
-        snapshot.totalIncidents = incidents.length;
-      } catch { /* skip */ }
-    }
-
-    const deployPath = resolve(cwd, ".forge/deploy-journal.jsonl");
-    if (existsSync(deployPath)) {
-      try {
-        const lines = readFileSync(deployPath, "utf-8").trim().split("\n").filter(Boolean);
-        const last = lines.length > 0 ? JSON.parse(lines[lines.length - 1]) : null;
-        if (last) {
-          snapshot.lastDeployVersion = last.version || null;
-          snapshot.lastDeployEnv = last.environment || null;
-          snapshot.lastDeployAt = last.timestamp || null;
-        }
-      } catch { /* skip */ }
-    }
-
-    const scanPath = resolve(cwd, ".forge/secret-scan-cache.json");
-    if (existsSync(scanPath)) {
-      try {
-        const scan = JSON.parse(readFileSync(scanPath, "utf-8"));
-        snapshot.secretScanClean = scan.clean ?? null;
-        snapshot.secretScanFindings = scan.findings?.length ?? 0;
-      } catch { /* skip */ }
-    }
+    _readSnapshotProject(cwd, snapshot);
+    _readSnapshotDrift(cwd, snapshot);
+    _readSnapshotIncidents(cwd, snapshot);
+    _readSnapshotLastDeploy(cwd, snapshot);
+    _readSnapshotSecretScan(cwd, snapshot);
 
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), 5000);
@@ -864,7 +1312,7 @@ function writeAuditorState(cwd, state) {
  * @param {object|null} [params.eventBus=null] - EventEmitter for broadcasting
  * @returns {{ triggered: boolean, reason?: string, config?: object, timestamp?: string }}
  */
-export function runPostRunAuditorHook({ cwd = process.cwd(), allPassed = true, eventBus = null } = {}) {
+function _loadAuditorHookConfig(cwd) {
   let config = { onFailure: false, everyNRuns: null };
   try {
     const configPath = resolve(cwd, ".forge.json");
@@ -875,22 +1323,36 @@ export function runPostRunAuditorHook({ cwd = process.cwd(), allPassed = true, e
       }
     }
   } catch { /* use defaults on any parse/read failure */ }
+  return config;
+}
+
+function _checkEveryNRunsFires(everyN, cwd) {
+  if (!(everyN !== null && typeof everyN === "number" && everyN > 0)) return false;
+  const state = readAuditorState(cwd);
+  // Counter starts at everyN (absent file ≡ threshold already reached) so the
+  // first run after enabling always triggers.  Subsequent runs increment from 0.
+  const currentCount = typeof state.runsSinceLastAudit === "number"
+    ? state.runsSinceLastAudit + 1
+    : everyN;
+  const fires = currentCount >= everyN;
+  writeAuditorState(cwd, { runsSinceLastAudit: fires ? 0 : currentCount });
+  return fires;
+}
+
+function _emitAuditorEvent(eventBus, reason, config) {
+  if (!(eventBus && typeof eventBus.emit === "function")) return;
+  try {
+    eventBus.emit("auditor-auto-invoke", { reason, config });
+  } catch { /* non-fatal */ }
+}
+
+export function runPostRunAuditorHook({ cwd = process.cwd(), allPassed = true, eventBus = null } = {}) {
+  const config = _loadAuditorHookConfig(cwd);
 
   const onFailureFires = config.onFailure === true && !allPassed;
 
   // Phase-39 Slice 2 — everyNRuns counter
-  let everyNRunsFires = false;
-  const everyN = config.everyNRuns;
-  if (everyN !== null && typeof everyN === "number" && everyN > 0) {
-    const state = readAuditorState(cwd);
-    // Counter starts at everyN (absent file ≡ threshold already reached) so the
-    // first run after enabling always triggers.  Subsequent runs increment from 0.
-    const currentCount = typeof state.runsSinceLastAudit === "number"
-      ? state.runsSinceLastAudit + 1
-      : everyN;
-    everyNRunsFires = currentCount >= everyN;
-    writeAuditorState(cwd, { runsSinceLastAudit: everyNRunsFires ? 0 : currentCount });
-  }
+  const everyNRunsFires = _checkEveryNRunsFires(config.everyNRuns, cwd);
 
   const shouldFire = onFailureFires || everyNRunsFires;
   if (!shouldFire) {
@@ -908,11 +1370,7 @@ export function runPostRunAuditorHook({ cwd = process.cwd(), allPassed = true, e
     timestamp: new Date().toISOString(),
   };
 
-  if (eventBus && typeof eventBus.emit === "function") {
-    try {
-      eventBus.emit("auditor-auto-invoke", { reason, config });
-    } catch { /* non-fatal */ }
-  }
+  _emitAuditorEvent(eventBus, reason, config);
 
   return result;
 }

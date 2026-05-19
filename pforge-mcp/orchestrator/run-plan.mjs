@@ -571,14 +571,7 @@ function sanitizePlanBasenameForPath(s) {
  * @param {string} [args.now] - ISO timestamp override (testing only)
  * @returns {object}
  */
-export function buildPlanPostmortem({ summary, planBasename, priorPostmortems = [], now } = {}) {
-  if (!summary || !planBasename) {
-    throw new Error("buildPlanPostmortem: summary + planBasename required");
-  }
-
-  const sliceResults = Array.isArray(summary.sliceResults) ? summary.sliceResults : [];
-
-  // retriesPerSlice — { "<sliceNumber>": retryCount }; skip 0-retry successes
+function _computePostmortemSliceStats(sliceResults) {
   const retriesPerSlice = {};
   let gateFlaps = 0;
   const failureReasons = {};
@@ -596,26 +589,45 @@ export function buildPlanPostmortem({ summary, planBasename, priorPostmortems = 
       failureReasons[key] = (failureReasons[key] || 0) + 1;
     }
   }
+  return { retriesPerSlice, gateFlaps, failureReasons };
+}
 
+function _pickTopFailureReason(failureReasons) {
   let topFailureReason = null;
   let topCount = 0;
   for (const [k, v] of Object.entries(failureReasons)) {
     if (v > topCount) { topCount = v; topFailureReason = k; }
   }
+  return topFailureReason;
+}
+
+function _computeDelta(currentRaw, prevRaw, precision) {
+  const current = Number(currentRaw);
+  const prev = Number(prevRaw);
+  if (Number.isFinite(current) && Number.isFinite(prev)) {
+    return { before: prev, after: current, delta: Number((current - prev).toFixed(precision)) };
+  }
+  if (Number.isFinite(current)) {
+    return { before: null, after: current, delta: null };
+  }
+  return null;
+}
+
+export function buildPlanPostmortem({ summary, planBasename, priorPostmortems = [], now } = {}) {
+  if (!summary || !planBasename) {
+    throw new Error("buildPlanPostmortem: summary + planBasename required");
+  }
+
+  const sliceResults = Array.isArray(summary.sliceResults) ? summary.sliceResults : [];
+
+  // retriesPerSlice — { "<sliceNumber>": retryCount }; skip 0-retry successes
+  const { retriesPerSlice, gateFlaps, failureReasons } = _computePostmortemSliceStats(sliceResults);
+  const topFailureReason = _pickTopFailureReason(failureReasons);
 
   // Deltas vs. most-recent prior postmortem for same planBasename
   const prev = Array.isArray(priorPostmortems) && priorPostmortems.length > 0 ? priorPostmortems[0] : null;
-  const currentCost = Number(summary.cost?.total_cost_usd);
-  const prevCost = Number(prev?.costDelta?.after);
-  const costDelta = (Number.isFinite(currentCost) && Number.isFinite(prevCost))
-    ? { before: prevCost, after: currentCost, delta: Number((currentCost - prevCost).toFixed(4)) }
-    : (Number.isFinite(currentCost) ? { before: null, after: currentCost, delta: null } : null);
-
-  const currentScore = Number(summary.analyze?.score);
-  const prevScore = Number(prev?.driftDelta?.after);
-  const driftDelta = (Number.isFinite(currentScore) && Number.isFinite(prevScore))
-    ? { before: prevScore, after: currentScore, delta: Number((currentScore - prevScore).toFixed(2)) }
-    : (Number.isFinite(currentScore) ? { before: null, after: currentScore, delta: null } : null);
+  const costDelta = _computeDelta(summary.cost?.total_cost_usd, prev?.costDelta?.after, 4);
+  const driftDelta = _computeDelta(summary.analyze?.score, prev?.driftDelta?.after, 2);
 
   return {
     planBasename,
@@ -682,6 +694,120 @@ export function writePlanPostmortem({ cwd = process.cwd(), planBasename, record 
   } catch { /* non-fatal */ }
 
   return path;
+}
+
+const _PROGRESS_LINE_FORMATTERS = {
+  "run-started": (ts, d) => `[${ts}] ▶ Run started: ${d.sliceCount || "?"} slices, mode=${d.mode || "auto"}\n`,
+  "slice-started": (ts, d) => `[${ts}] ⏳ Slice ${d.sliceId || "?"}: ${d.title || ""} — executing...\n`,
+  "slice-completed": (ts, d) => `[${ts}] ✅ Slice ${d.sliceId || "?"}: ${d.title || ""} — ${d.status || "done"} (${Math.round((d.duration || 0) / 1000)}s)\n`,
+  "slice-failed": (ts, d) => `[${ts}] ❌ Slice ${d.sliceId || "?"}: ${d.title || ""} — FAILED\n`,
+  "slice-escalated": (ts, d) => `[${ts}] ⬆ Slice ${d.sliceId || "?"}: ${d.title || ""} — escalating to ${d.toModel} (attempt ${d.attempt})\n`,
+  "run-completed": (ts, d) => `[${ts}] 🏁 Run complete: ${d.results?.passed || 0} passed, ${d.results?.failed || 0} failed\n`,
+  "ci-triggered": (ts, d) => `[${ts}] 🚀 CI triggered: ${d.workflow} @ ${d.ref} — ${d.status}\n`,
+};
+
+function _emitRunPlanProgressLine(event) {
+  const fmt = _PROGRESS_LINE_FORMATTERS[event.type];
+  if (!fmt) return;
+  const ts = new Date().toISOString().slice(11, 19);
+  const d = event.data || event; // data is nested under event.data by the EventBus
+  process.stdout.write(fmt(ts, d));
+}
+
+function _buildDryRunSliceResult(slice) {
+  return {
+    sliceId: slice.id ?? String(slice.number),
+    number: slice.number,
+    title: slice.title,
+    status: "passed",
+    duration: 0,
+    exitCode: 0,
+    gateStatus: "passed",
+    gateOutput: "dry-run-worker",
+    gateError: null,
+    failedCommand: null,
+    tokens: { tokens_in: 0, tokens_out: 0, model: "dry-run", premiumRequests: 0, apiDurationMs: null, sessionDurationMs: null, codeChanges: null, vendor: "dry-run" },
+    worker: "dry-run",
+    model: "dry-run",
+    host: "dry-run",
+    billingSurface: "dry-run-worker (no spawn)",
+    attempts: 1,
+    cost_usd: 0,
+    autoCommit: { committed: false, reason: "dry-run-worker" },
+  };
+}
+
+function _bubbleAutoCommitCodeChanges(result) {
+  // #186 v2.96.2: bubble auto-commit codeChanges back into tokens when
+  // the worker's JSONL events didn't surface result.usage.codeChanges.
+  if (result.tokens && !result.tokens.codeChanges && result.autoCommit?.codeChanges) {
+    result.tokens.codeChanges = result.autoCommit.codeChanges;
+  }
+  // Issue #195: when the orchestrator's own commit was housekeeping
+  // only, the real product diffstat lives on the absorbed (external) commit.
+  if (result.tokens && !result.tokens.codeChanges
+      && result.autoCommit?.absorbedCommits?.length) {
+    const firstWithStat = result.autoCommit.absorbedCommits.find((c) => c.diffstat);
+    if (firstWithStat) result.tokens.codeChanges = firstWithStat.diffstat;
+  }
+}
+
+function _handlePassedSliceResult(result, slice, ctx) {
+  const { cwd, mode, eventBus, startSha, preSliceState, runDir } = ctx;
+  result.autoCommit = autoCommitSliceIfDirty({ slice, cwd, mode, eventBus, startSha, preSliceState });
+  _bubbleAutoCommitCodeChanges(result);
+  // Issue #195: re-persist slice-N.json so the on-disk record matches
+  // the slice-completed event.
+  try {
+    writeFileSync(
+      resolve(runDir, `slice-${slice.number}.json`),
+      JSON.stringify(result, null, 2),
+    );
+  } catch { /* non-fatal */ }
+}
+
+async function _runPlanSliceCallback(slice, ctx) {
+  const { cwd, dryRunWorker, effectiveModel, modelRouting, mode, runDir, maxRetries,
+    memoryEnabled, projectName, planPath, quorumConfig, escalationChain, eventBus,
+    worker, _dispatchSlice, _pollPullRequest, planMeta } = ctx;
+  // Bug #123: capture HEAD before the slice so we can deterministically
+  // detect commits made by the worker itself (gh-copilot, claude CLI).
+  let startSha = null;
+  try {
+    startSha = execSync("git rev-parse HEAD", { cwd, encoding: "utf-8", timeout: 5_000 }).trim();
+  } catch { /* not a git repo or detached \u2014 fall through */ }
+  // Issue #151: snapshot working-tree state so autoCommitSliceIfDirty
+  // can distinguish worker-owned paths from operator-owned paths that
+  // were already dirty when the slice began.
+  const preSliceState = snapshotPreSliceState({ cwd });
+  // Issue #176 — dryRunWorker short-circuits the executeSlice spawn so
+  // tests that exercise runPlan setup (probe, config, escalation chain)
+  // don't hand a real worker (gh-copilot, claude CLI) shell access in
+  // the operator's cwd. Synthesizes a passing slice result with the
+  // same shape executeSlice would have returned.
+  if (dryRunWorker) {
+    return _buildDryRunSliceResult(slice);
+  }
+  const result = await executeSlice(slice, {
+    cwd, model: effectiveModel, modelRouting, mode, runDir, maxRetries,
+    memoryEnabled, projectName, planName: basename(planPath, ".md"),
+    quorumConfig, escalationChain, eventBus,
+    worker, _dispatchSlice, _pollPullRequest,
+    networkAllowed: planMeta?.networkAllowed ?? null,
+    networkEnforce: planMeta?.networkEnforce ?? false,
+    toolsDeny: planMeta?.toolsDeny ?? null,
+  });
+  if (result.status === "passed") {
+    _handlePassedSliceResult(result, slice, { cwd, mode, eventBus, startSha, preSliceState, runDir });
+  } else if (result.status === "failed") {
+    // Issue #132 \u2014 the gate said no, but the worker may have written
+    // perfectly correct files. Stage them and warn.
+    const orphans = stageOrphansOnSliceFailure({ slice, cwd, runDir, mode, eventBus });
+    if (orphans) {
+      result.orphans = orphans;
+    }
+  }
+  return result;
 }
 
 export async function runPlan(planPath, options = {}) {
@@ -1008,31 +1134,7 @@ export async function runPlan(planPath, options = {}) {
       logHandler.handle(event);
       // Write progress to stdout so terminal stays alive (prevents VS Code "awaiting input" stall)
       if (isCliRun && event?.type) {
-        const ts = new Date().toISOString().slice(11, 19);
-        const d = event.data || event; // data is nested under event.data by the EventBus
-        switch (event.type) {
-          case "run-started":
-            process.stdout.write(`[${ts}] ▶ Run started: ${d.sliceCount || "?"} slices, mode=${d.mode || "auto"}\n`);
-            break;
-          case "slice-started":
-            process.stdout.write(`[${ts}] ⏳ Slice ${d.sliceId || "?"}: ${d.title || ""} — executing...\n`);
-            break;
-          case "slice-completed":
-            process.stdout.write(`[${ts}] ✅ Slice ${d.sliceId || "?"}: ${d.title || ""} — ${d.status || "done"} (${Math.round((d.duration || 0) / 1000)}s)\n`);
-            break;
-          case "slice-failed":
-            process.stdout.write(`[${ts}] ❌ Slice ${d.sliceId || "?"}: ${d.title || ""} — FAILED\n`);
-            break;
-          case "slice-escalated":
-            process.stdout.write(`[${ts}] ⬆ Slice ${d.sliceId || "?"}: ${d.title || ""} — escalating to ${d.toModel} (attempt ${d.attempt})\n`);
-            break;
-          case "run-completed":
-            process.stdout.write(`[${ts}] 🏁 Run complete: ${d.results?.passed || 0} passed, ${d.results?.failed || 0} failed\n`);
-            break;
-          case "ci-triggered":
-            process.stdout.write(`[${ts}] 🚀 CI triggered: ${d.workflow} @ ${d.ref} — ${d.status}\n`);
-            break;
-        }
+        _emitRunPlanProgressLine(event);
       }
     },
   };
@@ -1277,99 +1379,11 @@ export async function runPlan(planPath, options = {}) {
     results = await scheduler.execute(
       plan.dag.nodes,
       executionOrder,
-      async (slice) => {
-        // Bug #123: capture HEAD before the slice so we can deterministically
-        // detect commits made by the worker itself (gh-copilot, claude CLI).
-        // Without this, autoCommitSliceIfDirty saw a clean tree post-slice
-        // and reported "clean-tree" \u2014 even though the worker had committed
-        // multiple times \u2014 producing non-deterministic per-slice commit
-        // counts in run summaries.
-        let startSha = null;
-        try {
-          startSha = execSync("git rev-parse HEAD", { cwd, encoding: "utf-8", timeout: 5_000 }).trim();
-        } catch { /* not a git repo or detached \u2014 fall through */ }
-        // Issue #151: snapshot working-tree state so autoCommitSliceIfDirty
-        // can distinguish worker-owned paths from operator-owned paths that
-        // were already dirty when the slice began.
-        const preSliceState = snapshotPreSliceState({ cwd });
-        // Issue #176 — dryRunWorker short-circuits the executeSlice spawn so
-        // tests that exercise runPlan setup (probe, config, escalation chain)
-        // don't hand a real worker (gh-copilot, claude CLI) shell access in
-        // the operator's cwd. Synthesizes a passing slice result with the
-        // same shape executeSlice would have returned.
-        if (dryRunWorker) {
-          return {
-            sliceId: slice.id ?? String(slice.number),
-            number: slice.number,
-            title: slice.title,
-            status: "passed",
-            duration: 0,
-            exitCode: 0,
-            gateStatus: "passed",
-            gateOutput: "dry-run-worker",
-            gateError: null,
-            failedCommand: null,
-            tokens: { tokens_in: 0, tokens_out: 0, model: "dry-run", premiumRequests: 0, apiDurationMs: null, sessionDurationMs: null, codeChanges: null, vendor: "dry-run" },
-            worker: "dry-run",
-            model: "dry-run",
-            host: "dry-run",
-            billingSurface: "dry-run-worker (no spawn)",
-            attempts: 1,
-            cost_usd: 0,
-            autoCommit: { committed: false, reason: "dry-run-worker" },
-          };
-        }
-        const result = await executeSlice(slice, {
-          cwd, model: effectiveModel, modelRouting, mode, runDir, maxRetries,
-          memoryEnabled, projectName, planName: basename(planPath, ".md"),
-          quorumConfig, escalationChain, eventBus,
-          worker, _dispatchSlice, _pollPullRequest,
-          networkAllowed: plan.meta?.networkAllowed ?? null,
-          networkEnforce: plan.meta?.networkEnforce ?? false,
-          toolsDeny: plan.meta?.toolsDeny ?? null,
-        });
-        if (result.status === "passed") {
-          result.autoCommit = autoCommitSliceIfDirty({ slice, cwd, mode, eventBus, startSha, preSliceState });
-          // #186 v2.96.2: bubble auto-commit codeChanges back into tokens when
-          // the worker's JSONL events didn't surface result.usage.codeChanges.
-          // gh-copilot currently doesn't emit this field, so without the
-          // fallback every slice records codeChanges=null and downstream
-          // dashboards (forge_drift_report, forge_health_trend) plot zeros.
-          if (result.tokens && !result.tokens.codeChanges && result.autoCommit?.codeChanges) {
-            result.tokens.codeChanges = result.autoCommit.codeChanges;
-          }
-          // Issue #195: when the orchestrator's own commit was housekeeping
-          // only, the real product diffstat lives on the absorbed (external)
-          // commit. Fall back so tokens.codeChanges reflects actual work.
-          if (result.tokens && !result.tokens.codeChanges
-              && result.autoCommit?.absorbedCommits?.length) {
-            const firstWithStat = result.autoCommit.absorbedCommits.find((c) => c.diffstat);
-            if (firstWithStat) result.tokens.codeChanges = firstWithStat.diffstat;
-          }
-          // Issue #195: re-persist slice-N.json so the on-disk record matches
-          // the slice-completed event. Without this, autoCommit, raceDetected,
-          // absorbedCommits, and the bubbled codeChanges are only visible in
-          // events.log — every consumer reading slice-N.json (dashboards,
-          // reviewers, postmortems) sees `autoCommit: {}` and
-          // `codeChanges: null` even on slices that committed real work.
-          try {
-            writeFileSync(
-              resolve(runDir, `slice-${slice.number}.json`),
-              JSON.stringify(result, null, 2),
-            );
-          } catch { /* non-fatal */ }
-        } else if (result.status === "failed") {
-          // Issue #132 \u2014 the gate said no, but the worker may have written
-          // perfectly correct files (typical when the gate script itself is
-          // buggy). Stage them and warn so the operator can triage instead of
-          // losing work to a clean-tree on the next resume.
-          const orphans = stageOrphansOnSliceFailure({ slice, cwd, runDir, mode, eventBus });
-          if (orphans) {
-            result.orphans = orphans;
-          }
-        }
-        return result;
-      },
+      (slice) => _runPlanSliceCallback(slice, {
+        cwd, dryRunWorker, effectiveModel, modelRouting, mode, runDir, maxRetries,
+        memoryEnabled, projectName, planPath, quorumConfig, escalationChain, eventBus,
+        worker, _dispatchSlice, _pollPullRequest, planMeta: plan.meta,
+      }),
       { abortSignal, resumeFrom: resumeFrom ? String(resumeFrom) : null, hub, gateCheckConfig },
     );
   } finally {
@@ -3374,6 +3388,178 @@ export async function selfTest() {
   console.log(`═══════════════════════════════════════════`);
 
   process.exit(failed > 0 ? 1 : 0);
+}
+
+/**
+ * Phase-53 S9 — Full CLI dispatch for direct `node orchestrator.mjs` invocation.
+ * Called from the orchestrator.mjs shim. All sub-commands are handled here.
+ * @param {string[]} args - process.argv.slice(2)
+ */
+export async function runOrchestratorCli(args = []) {
+  const getArg = (name) => {
+    const idx = args.indexOf(name);
+    return idx >= 0 && idx + 1 < args.length ? args[idx + 1] : null;
+  };
+
+  if (args.includes("--test")) {
+    await selfTest();
+  } else if (args.includes("--parse")) {
+    const planPath = getArg("--parse");
+    if (!planPath) {
+      console.error("Usage: node orchestrator.mjs --parse <plan-path>");
+      process.exit(1);
+    }
+    console.log(JSON.stringify(parsePlan(planPath), null, 2));
+  } else if (args.includes("--run")) {
+    const planPath = getArg("--run");
+    if (!planPath) {
+      console.error("Usage: node orchestrator.mjs --run <plan-path> [options]");
+      process.exit(1);
+    }
+
+    const mode = getArg("--mode") || "auto";
+    const model = getArg("--model") || null;
+    const worker = getArg("--worker") || null;
+    const resumeFrom = getArg("--resume-from") ? Number(getArg("--resume-from")) : null;
+    const estimate = args.includes("--estimate");
+    const dryRun = args.includes("--dry-run");
+
+    let quorum = QUORUM_MODE_AUTO;
+    let quorumPreset = null;
+    const quorumArg = args.find((a) => a.startsWith("--quorum") || a === "--no-quorum");
+    if (quorumArg) {
+      if (quorumArg === "--quorum=auto") quorum = QUORUM_MODE_AUTO;
+      else if (quorumArg === "--quorum=power") { quorum = true; quorumPreset = QUORUM_PRESET_POWER; }
+      else if (quorumArg === "--quorum=speed") { quorum = true; quorumPreset = QUORUM_PRESET_SPEED; }
+      else if (quorumArg === "--no-quorum" || quorumArg === "--quorum=false") quorum = false;
+      else quorum = true;
+    }
+    const quorumThreshold = getArg("--quorum-threshold") ? Number(getArg("--quorum-threshold")) : null;
+
+    const manualImport = args.includes("--manual-import");
+    const manualImportSource = getArg("--manual-import-source") || "human";
+    const manualImportReason = getArg("--manual-import-reason") || null;
+    const strictGates = args.includes("--strict-gates");
+
+    const onlySlicesRaw = getArg("--only-slices");
+    let onlySlices = null;
+    if (onlySlicesRaw) {
+      try {
+        onlySlices = parseOnlySlicesExpr(onlySlicesRaw);
+      } catch (err) {
+        console.error(`Orchestrator error: ${err.message}`);
+        process.exit(1);
+      }
+    }
+    if (resumeFrom !== null && onlySlices !== null && onlySlices.length > 0) {
+      console.error("--resume-from and --only-slices are mutually exclusive");
+      process.exit(1);
+    }
+    const noTempering = args.includes("--no-tempering");
+    const allowRetrograde = args.includes("--allow-retrograde");
+
+    try {
+      const result = await runPlan(planPath, {
+        cwd: process.cwd(),
+        mode,
+        model,
+        worker,
+        resumeFrom,
+        estimate,
+        dryRun,
+        quorum,
+        quorumThreshold,
+        quorumPreset,
+        manualImport,
+        manualImportSource,
+        manualImportReason,
+        strictGates,
+        onlySlices,
+        noTempering,
+        allowRetrograde,
+      });
+      console.log(JSON.stringify(result, null, 2));
+      process.exit(result.status === "failed" ? 1 : 0);
+    } catch (err) {
+      console.error(`Orchestrator error: ${err.message}`);
+      process.exit(typeof err.exitCode === "number" ? err.exitCode : 1);
+    }
+  } else if (args.includes("--analyze")) {
+    const target = getArg("--analyze");
+    if (!target) {
+      console.error("Usage: node orchestrator.mjs --analyze <plan-or-file> [--mode plan|file] [--models model1,model2,...]");
+      process.exit(1);
+    }
+
+    const mode = getArg("--mode") || (target.match(/plan/i) ? "plan" : "file");
+    const modelsArg = getArg("--models");
+    const models = modelsArg ? modelsArg.split(",").map((m) => m.trim()) : null;
+
+    try {
+      const result = await analyzeWithQuorum({ target, mode, models, cwd: process.cwd() });
+
+      if (result.synthesis) {
+        console.log("\n" + "═".repeat(60));
+        console.log("  QUORUM ANALYSIS — SYNTHESIZED REPORT");
+        console.log("═".repeat(60) + "\n");
+        console.log(result.synthesis);
+      }
+
+      console.log("\n" + "─".repeat(40));
+      console.log(`  Models: ${result.models.join(", ")}`);
+      console.log(`  Duration: ${Math.round(result.totalDuration / 1000)}s`);
+      console.log(`  Cost: $${result.totalCost.toFixed(2)}`);
+      console.log("─".repeat(40));
+
+      const reportDir = resolve(process.cwd(), ".forge", "analysis");
+      mkdirSync(reportDir, { recursive: true });
+      const reportFile = resolve(reportDir, `${basename(target, ".md")}-${Date.now()}.json`);
+      writeFileSync(reportFile, JSON.stringify(result, null, 2));
+      console.log(`\n  📄 Full report saved: ${reportFile}\n`);
+
+      process.exitCode = 0;
+    } catch (err) {
+      console.error(`Analysis error: ${err.message}`);
+      process.exit(1);
+    }
+  } else if (args.includes("--diagnose")) {
+    const target = getArg("--diagnose");
+    if (!target) {
+      console.error("Usage: node orchestrator.mjs --diagnose <file> [--models model1,model2,...]");
+      process.exit(1);
+    }
+
+    const modelsArg = getArg("--models");
+    const models = modelsArg ? modelsArg.split(",").map((m) => m.trim()) : null;
+
+    try {
+      const result = await analyzeWithQuorum({ target, mode: "diagnose", models, cwd: process.cwd() });
+
+      if (result.synthesis) {
+        console.log("\n" + "═".repeat(60));
+        console.log("  QUORUM DIAGNOSIS — BUG INVESTIGATION REPORT");
+        console.log("═".repeat(60) + "\n");
+        console.log(result.synthesis);
+      }
+
+      console.log("\n" + "─".repeat(40));
+      console.log(`  Models: ${result.models.join(", ")}`);
+      console.log(`  Duration: ${Math.round(result.totalDuration / 1000)}s`);
+      console.log(`  Cost: $${result.totalCost.toFixed(2)}`);
+      console.log("─".repeat(40));
+
+      const reportDir = resolve(process.cwd(), ".forge", "analysis");
+      mkdirSync(reportDir, { recursive: true });
+      const reportFile = resolve(reportDir, `diagnose-${basename(target)}-${Date.now()}.json`);
+      writeFileSync(reportFile, JSON.stringify(result, null, 2));
+      console.log(`\n  📄 Full report saved: ${reportFile}\n`);
+
+      process.exitCode = 0;
+    } catch (err) {
+      console.error(`Diagnosis error: ${err.message}`);
+      process.exit(1);
+    }
+  }
 }
 
 /**

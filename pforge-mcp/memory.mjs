@@ -636,6 +636,37 @@ export function renderAutoSkillMarkdown(record) {
  * Parse an auto-skill record from its Markdown-on-disk form. Tolerant of
  * hand-edits — returns `null` on clearly malformed files.
  */
+function _parseAutoSkillContextSignature(fm) {
+  const cs = {
+    sliceType: (/^\s*sliceType:\s*(\S+)$/m.exec(fm) || [])[1] || "execute",
+    titleHash: (/^\s*titleHash:\s*(\S+)$/m.exec(fm) || [])[1] || "",
+    planBasename: (/^\s*planBasename:\s*(\S+)$/m.exec(fm) || [])[1] || "",
+    domainKeywords: [],
+  };
+  const kwMatch = /^\s*domainKeywords:\s*\[([^\]]*)\]$/m.exec(fm);
+  if (kwMatch) {
+    try {
+      const parsed = JSON.parse("[" + kwMatch[1] + "]");
+      if (Array.isArray(parsed)) cs.domainKeywords = parsed.filter((s) => typeof s === "string");
+    } catch { /* leave empty */ }
+  }
+  return cs;
+}
+
+function _parseAutoSkillCommands(fm) {
+  const commands = [];
+  const cmdSectionMatch = /\ncommands:\n([\s\S]*)$/.exec(fm);
+  if (!cmdSectionMatch) return commands;
+  for (const raw of cmdSectionMatch[1].split("\n")) {
+    const m = /^\s*-\s*(.+)$/.exec(raw);
+    if (!m) continue;
+    let v = m[1].trim();
+    try { v = JSON.parse(v); } catch { /* keep raw */ }
+    if (typeof v === "string" && v.length > 0) commands.push(v);
+  }
+  return commands;
+}
+
 export function parseAutoSkillMarkdown(text) {
   if (typeof text !== "string") return null;
   const fmMatch = /^---\n([\s\S]*?)\n---/.exec(text);
@@ -652,36 +683,10 @@ export function parseAutoSkillMarkdown(text) {
   const createdAt = (/^createdAt:\s*(\S+)$/m.exec(fm) || [])[1] || "";
   const reuseCount = Number((/^reuseCount:\s*(\S+)$/m.exec(fm) || [])[1] || 0) || 0;
 
-  const cs = {
-    sliceType: (/^\s*sliceType:\s*(\S+)$/m.exec(fm) || [])[1] || "execute",
-    titleHash: (/^\s*titleHash:\s*(\S+)$/m.exec(fm) || [])[1] || "",
-    planBasename: (/^\s*planBasename:\s*(\S+)$/m.exec(fm) || [])[1] || "",
-    domainKeywords: [],
-  };
-  const kwMatch = /^\s*domainKeywords:\s*\[([^\]]*)\]$/m.exec(fm);
-  if (kwMatch) {
-    try {
-      const parsed = JSON.parse("[" + kwMatch[1] + "]");
-      if (Array.isArray(parsed)) cs.domainKeywords = parsed.filter((s) => typeof s === "string");
-    } catch { /* leave empty */ }
-  }
+  const contextSignature = _parseAutoSkillContextSignature(fm);
+  const commands = _parseAutoSkillCommands(fm);
 
-  const commands = [];
-  // `commands` is always serialized as the last frontmatter key (see
-  // renderAutoSkillMarkdown), so we can safely read from the `commands:` line
-  // through the end of the frontmatter block.
-  const cmdSectionMatch = /\ncommands:\n([\s\S]*)$/.exec(fm);
-  if (cmdSectionMatch) {
-    for (const raw of cmdSectionMatch[1].split("\n")) {
-      const m = /^\s*-\s*(.+)$/.exec(raw);
-      if (!m) continue;
-      let v = m[1].trim();
-      try { v = JSON.parse(v); } catch { /* keep raw */ }
-      if (typeof v === "string" && v.length > 0) commands.push(v);
-    }
-  }
-
-  return { sha256Prefix, summary, commands, contextSignature: cs, reuseCount, createdAt };
+  return { sha256Prefix, summary, commands, contextSignature, reuseCount, createdAt };
 }
 
 /**
@@ -1664,6 +1669,69 @@ export function captureMemory(content, type, source, cwd, opts = {}) {
  *   attempted?: number, delivered?: number, deferred?: number, dlq?: number, durationMs?: number
  * }>}
  */
+async function _buildOpenBrainDispatcher(cwd, opts, t0, timeoutMs) {
+  if (opts.dispatcher) {
+    return { dispatcher: opts.dispatcher, closeClient: async () => {} };
+  }
+  const { createSseClient, readOpenBrainConfig, normalizeQueueRecord } =
+    await import("./openbrain-replay.mjs");
+
+  const cfg = readOpenBrainConfig(cwd);
+  if (!cfg || !cfg.url || !cfg.key) {
+    return { skipped: "no-config", durationMs: Date.now() - t0 };
+  }
+
+  const timeoutErr = new Error("autoDrainOpenBrainQueue: SSE timeout");
+  const withTimeout = (p) => Promise.race([
+    p,
+    new Promise((_, reject) => setTimeout(() => reject(timeoutErr), timeoutMs)),
+  ]);
+
+  let client;
+  try {
+    client = await withTimeout(createSseClient(cfg));
+  } catch (err) {
+    return { error: `connect: ${err.message}`, durationMs: Date.now() - t0 };
+  }
+  const closeClient = async () => { try { await client.close(); } catch { /* best-effort */ } };
+
+  const dispatcher = async (record) => {
+    const payload = normalizeQueueRecord(record);
+    if (!payload) return { ok: true };
+    try {
+      await withTimeout(client.capture(payload));
+      return { ok: true };
+    } catch (err) {
+      return { ok: false, error: String(err?.message || err) };
+    }
+  };
+  return { dispatcher, closeClient };
+}
+
+function _writeOpenBrainSurvivors(forgeDir, queuePath, survivors, t0) {
+  const tmpPath = queuePath + ".tmp";
+  try {
+    mkdirSync(forgeDir, { recursive: true });
+    const survivorLines = survivors.map((r) => JSON.stringify(r)).join("\n");
+    writeFileSync(tmpPath, survivorLines ? survivorLines + "\n" : "", "utf-8");
+    renameSync(tmpPath, queuePath);
+    return null;
+  } catch (err) {
+    try { if (existsSync(tmpPath)) unlinkSync(tmpPath); } catch { /* cleanup */ }
+    return { error: `atomic-write: ${err.message}`, durationMs: Date.now() - t0 };
+  }
+}
+
+function _appendOpenBrainSideEffects(cwd, result) {
+  for (const rec of result.archive) {
+    try { _appendForgeJsonl(cwd, "openbrain-queue.archive.jsonl", rec); } catch { /* swallow */ }
+  }
+  for (const rec of result.dlq) {
+    try { _appendForgeJsonl(cwd, "openbrain-dlq.jsonl", rec); } catch { /* swallow */ }
+  }
+  try { _appendForgeJsonl(cwd, "openbrain-stats.jsonl", result.stats); } catch { /* swallow */ }
+}
+
 export async function autoDrainOpenBrainQueue(cwd, opts = {}) {
   const { source = "cli-drain", maxBatch = 50, maxAttempts = 5, timeoutMs = 10_000 } = opts;
   const t0 = Date.now();
@@ -1683,49 +1751,9 @@ export async function autoDrainOpenBrainQueue(cwd, opts = {}) {
       return { skipped: "empty" };
     }
 
-    let dispatcher;
-    let client = null;
-    let closeClient = async () => {};
-
-    if (opts.dispatcher) {
-      // Test/DI path — caller supplies the dispatcher directly.
-      dispatcher = opts.dispatcher;
-    } else {
-      // Production path — build a direct SSE dispatcher.
-      // Dynamic import keeps MCP SDK out of the hot startup path and
-      // avoids a hard dependency at module load time.
-      const { createSseClient, readOpenBrainConfig, normalizeQueueRecord } =
-        await import("./openbrain-replay.mjs");
-
-      const cfg = readOpenBrainConfig(cwd);
-      if (!cfg || !cfg.url || !cfg.key) {
-        return { skipped: "no-config", durationMs: Date.now() - t0 };
-      }
-
-      const timeoutErr = new Error("autoDrainOpenBrainQueue: SSE timeout");
-      const withTimeout = (p) => Promise.race([
-        p,
-        new Promise((_, reject) => setTimeout(() => reject(timeoutErr), timeoutMs)),
-      ]);
-
-      try {
-        client = await withTimeout(createSseClient(cfg));
-      } catch (err) {
-        return { error: `connect: ${err.message}`, durationMs: Date.now() - t0 };
-      }
-      closeClient = async () => { try { await client.close(); } catch { /* best-effort */ } };
-
-      dispatcher = async (record) => {
-        const payload = normalizeQueueRecord(record);
-        if (!payload) return { ok: true }; // tombstones / empty — count as delivered
-        try {
-          await withTimeout(client.capture(payload));
-          return { ok: true };
-        } catch (err) {
-          return { ok: false, error: String(err?.message || err) };
-        }
-      };
-    }
+    const built = await _buildOpenBrainDispatcher(cwd, opts, t0, timeoutMs);
+    if (built.skipped || built.error) return built;
+    const { dispatcher, closeClient } = built;
 
     let result;
     try {
@@ -1736,26 +1764,10 @@ export async function autoDrainOpenBrainQueue(cwd, opts = {}) {
       await closeClient();
     }
 
-    // Atomic rewrite of queue with survivors
-    const tmpPath = queuePath + ".tmp";
-    try {
-      mkdirSync(forgeDir, { recursive: true });
-      const survivorLines = result.deferred.map((r) => JSON.stringify(r)).join("\n");
-      writeFileSync(tmpPath, survivorLines ? survivorLines + "\n" : "", "utf-8");
-      renameSync(tmpPath, queuePath);
-    } catch (err) {
-      try { if (existsSync(tmpPath)) unlinkSync(tmpPath); } catch { /* cleanup */ }
-      return { error: `atomic-write: ${err.message}`, durationMs: Date.now() - t0 };
-    }
+    const writeErr = _writeOpenBrainSurvivors(forgeDir, queuePath, result.deferred, t0);
+    if (writeErr) return writeErr;
 
-    // Append archive + DLQ + stats
-    for (const rec of result.archive) {
-      try { _appendForgeJsonl(cwd, "openbrain-queue.archive.jsonl", rec); } catch { /* swallow */ }
-    }
-    for (const rec of result.dlq) {
-      try { _appendForgeJsonl(cwd, "openbrain-dlq.jsonl", rec); } catch { /* swallow */ }
-    }
-    try { _appendForgeJsonl(cwd, "openbrain-stats.jsonl", result.stats); } catch { /* swallow */ }
+    _appendOpenBrainSideEffects(cwd, result);
 
     return {
       ok: true,

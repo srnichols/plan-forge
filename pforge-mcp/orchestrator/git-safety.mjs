@@ -520,28 +520,39 @@ function shellQuotePath(p) {
  * @param {{ rawLines?: string[] }} slice
  * @returns {string[]}
  */
+function _isTableCloseLine(trimmed) {
+  return trimmed === "" || /^#{1,6}\s/.test(trimmed) || /^\*\*[^*]+\*\*\s*:?\s*$/.test(trimmed);
+}
+
+function _isTableSeparator(line) {
+  return /^\s*\|?[\s:|-]+\|?\s*$/.test(line) && line.includes("-");
+}
+
+function _extractDeclaredPathsFromCell(firstCell, declared) {
+  const backticks = firstCell.match(/`([^`]+)`/g);
+  if (backticks && backticks.length > 0) {
+    for (const b of backticks) {
+      const p = b.replace(/`/g, "").trim();
+      if (p && !declared.includes(p)) declared.push(p);
+    }
+    return;
+  }
+  if (/[/.]/.test(firstCell) && !/\s/.test(firstCell)) {
+    if (!declared.includes(firstCell)) declared.push(firstCell);
+  }
+}
+
 export function extractFilesModifiedExhaustive(slice) {
   const lines = slice?.rawLines || [];
   if (lines.length === 0) return [];
 
-  // Look for a heading or bold marker that opens the table window.
-  // Accepts "Files Modified", "Files Modified (Exhaustive)", "Files Touched",
-  // optionally as bold (`**`), optionally followed by a colon. The bold
-  // close `**` always precedes the optional `:` in markdown:
-  //   **Files Modified (Exhaustive)**:  ← bold close, then colon
-  //   **Files Modified**:
-  //   **Files Modified**
-  //   Files Modified:
-  // Case-insensitive.
   const headerRe = /^\s*\*{0,2}files\s+(?:modified|touched)(?:\s*\([^)]*\))?\*{0,2}\s*:?\s*$/i;
 
   const declared = [];
   let inTable = false;
   let sawSeparator = false;
 
-  for (let i = 0; i < lines.length; i++) {
-    const line = lines[i];
-
+  for (const line of lines) {
     if (!inTable) {
       if (headerRe.test(line.trim())) {
         inTable = true;
@@ -550,43 +561,24 @@ export function extractFilesModifiedExhaustive(slice) {
       continue;
     }
 
-    // Inside the table window. A blank line, a markdown heading, or another
-    // bold-section marker closes the window.
     const trimmed = line.trim();
-    if (trimmed === "" || /^#{1,6}\s/.test(trimmed) || /^\*\*[^*]+\*\*\s*:?\s*$/.test(trimmed)) {
-      // Allow a single blank line right after the header before the table starts;
-      // otherwise close.
+    if (_isTableCloseLine(trimmed)) {
+      // Allow a single blank line right after the header before the table starts
       if (declared.length === 0 && trimmed === "" && !sawSeparator) continue;
       break;
     }
 
-    // Markdown table separator: |---|---|
-    if (/^\s*\|?[\s:|-]+\|?\s*$/.test(line) && line.includes("-")) {
+    if (_isTableSeparator(line)) {
       sawSeparator = true;
       continue;
     }
 
-    // Table row: leading "|" + cells. Skip the header row ("File | Change").
     if (line.includes("|")) {
       const cells = line.split("|").map((c) => c.trim()).filter((c) => c.length > 0);
       if (cells.length === 0) continue;
       const firstCell = cells[0];
-
-      // Skip the header row. Detect by exact match against common header
-      // labels (case-insensitive, no trailing punctuation).
       if (!sawSeparator && /^(file|path|filename)$/i.test(firstCell)) continue;
-
-      // Prefer backtick-wrapped paths; fall back to bare tokens that look
-      // like a path.
-      const backticks = firstCell.match(/`([^`]+)`/g);
-      if (backticks && backticks.length > 0) {
-        for (const b of backticks) {
-          const p = b.replace(/`/g, "").trim();
-          if (p && !declared.includes(p)) declared.push(p);
-        }
-      } else if (/[/.]/.test(firstCell) && !/\s/.test(firstCell)) {
-        if (!declared.includes(firstCell)) declared.push(firstCell);
-      }
+      _extractDeclaredPathsFromCell(firstCell, declared);
     }
   }
 
@@ -674,6 +666,73 @@ export function verifyFilesModified({ slice, cwd = process.cwd(), startSha = nul
  * @param {Map<string, string>|null} [params.preSliceState] — porcelain snapshot from {@link snapshotPreSliceState}
  * @returns {{ committed: boolean, reason?: string, sha?: string, message?: string, error?: string, foreignFiles?: string[] }}
  */
+function _handleCleanTreeMaybeWorkerCommit({ slice, cwd, startSha, eventBus }) {
+  if (!startSha) return { committed: false, reason: "clean-tree" };
+  try {
+    const currentSha = execSync("git rev-parse HEAD", { cwd, encoding: "utf-8", timeout: 5_000 }).trim();
+    if (!currentSha || currentSha === startSha) return { committed: false, reason: "clean-tree" };
+    const absorbedCommits = captureAbsorbedCommits({ cwd, fromSha: startSha, toSha: currentSha });
+    let codeChanges = null;
+    try {
+      const shortstat = execSync(`git show --shortstat --format= ${currentSha}`, { cwd, encoding: "utf-8", timeout: 5_000 });
+      codeChanges = parseShortstat(shortstat);
+    } catch { /* ignore */ }
+    const evt = { sliceNumber: slice.number, sha: currentSha, message: "(worker-committed)", source: "worker" };
+    if (absorbedCommits.length > 0) evt.absorbedCommits = absorbedCommits;
+    if (codeChanges) evt.codeChanges = codeChanges;
+    eventBus?.emit("slice-auto-committed", evt);
+    const out = { committed: true, sha: currentSha, message: "(worker-committed)", source: "worker", raceDetected: absorbedCommits.length > 1 };
+    if (absorbedCommits.length > 0) out.absorbedCommits = absorbedCommits;
+    if (codeChanges) out.codeChanges = codeChanges;
+    return out;
+  } catch {
+    return { committed: false, reason: "clean-tree" };
+  }
+}
+
+function _partitionDirtyPaths(currentState, preSliceState) {
+  const workerPaths = [];
+  const foreignFiles = [];
+  for (const [path, line] of currentState) {
+    const priorLine = preSliceState.get(path);
+    if (priorLine === undefined || priorLine !== line) workerPaths.push(path);
+    else foreignFiles.push(path);
+  }
+  return { workerPaths, foreignFiles };
+}
+
+function _buildCommitMessage(slice, workerPaths, raceDetected, absorbedCommits) {
+  const allHousekeeping = workerPaths && workerPaths.length > 0
+    && workerPaths.every((p) => p.replace(/\\/g, "/").startsWith(".forge/"));
+  const conventionalType = /^(bug\s*#?\d+|fix)/i.test(slice.title) ? "fix" : "feat";
+  const subject = slice.title.replace(/^bug\s*#?\d+[:\s]*/i, "").slice(0, 72).trim() || slice.title.slice(0, 72);
+  let commitMessage = `${conventionalType}(slice-${slice.number}): ${subject}`;
+  if (allHousekeeping && raceDetected) {
+    const absorbedRef = absorbedCommits.map((c) => c.sha.slice(0, 7)).join(", ");
+    commitMessage = `chore(slice-${slice.number}): housekeeping (source absorbed by ${absorbedRef})`;
+  }
+  return { commitMessage, allHousekeeping };
+}
+
+function _stageWorkerOrAll(workerPaths, cwd) {
+  if (workerPaths) {
+    const CHUNK = 50;
+    for (let i = 0; i < workerPaths.length; i += CHUNK) {
+      const batch = workerPaths.slice(i, i + CHUNK).map(shellQuotePath).join(" ");
+      execSync(`git add -- ${batch}`, { cwd, encoding: "utf-8", timeout: 10_000 });
+    }
+  } else {
+    execSync("git add -A", { cwd, encoding: "utf-8", timeout: 10_000 });
+  }
+}
+
+function _captureCommitStats(sha, cwd) {
+  try {
+    const shortstat = execSync(`git show --shortstat --format= ${sha}`, { cwd, encoding: "utf-8", timeout: 5_000 });
+    return parseShortstat(shortstat);
+  } catch { return null; }
+}
+
 export function autoCommitSliceIfDirty({
   slice,
   cwd = process.cwd(),
@@ -686,7 +745,6 @@ export function autoCommitSliceIfDirty({
     return { committed: false, reason: "assisted-mode" };
   }
 
-  // Check working tree
   let statusOut;
   try {
     statusOut = execSync("git status --porcelain", { cwd, encoding: "utf-8", timeout: 5_000 });
@@ -696,129 +754,40 @@ export function autoCommitSliceIfDirty({
   }
 
   if (!statusOut || !statusOut.trim()) {
-    // Bug #123: tree is clean \u2014 but did the worker advance HEAD itself?
-    // If startSha was captured and HEAD now differs, the worker (gh-copilot
-    // or claude CLI) committed during execution. Report deterministically.
-    if (startSha) {
-      try {
-        const currentSha = execSync("git rev-parse HEAD", { cwd, encoding: "utf-8", timeout: 5_000 }).trim();
-        if (currentSha && currentSha !== startSha) {
-          // Issue #195: capture absorbed commits + diffstat so codeChanges
-          // is populated even when the worker self-committed.
-          const absorbedCommits = captureAbsorbedCommits({ cwd, fromSha: startSha, toSha: currentSha });
-          let codeChanges = null;
-          try {
-            const shortstat = execSync(`git show --shortstat --format= ${currentSha}`, { cwd, encoding: "utf-8", timeout: 5_000 });
-            codeChanges = parseShortstat(shortstat);
-          } catch { /* ignore */ }
-          const evt = { sliceNumber: slice.number, sha: currentSha, message: "(worker-committed)", source: "worker" };
-          if (absorbedCommits.length > 0) evt.absorbedCommits = absorbedCommits;
-          if (codeChanges) evt.codeChanges = codeChanges;
-          eventBus?.emit("slice-auto-committed", evt);
-          const out = { committed: true, sha: currentSha, message: "(worker-committed)", source: "worker", raceDetected: absorbedCommits.length > 1 };
-          if (absorbedCommits.length > 0) out.absorbedCommits = absorbedCommits;
-          if (codeChanges) out.codeChanges = codeChanges;
-          return out;
-        }
-      } catch { /* fall through */ }
-    }
-    return { committed: false, reason: "clean-tree" };
+    return _handleCleanTreeMaybeWorkerCommit({ slice, cwd, startSha, eventBus });
   }
 
-  // Issue #151 — split current dirty paths into worker-owned vs foreign.
-  // A path is worker-owned when:
-  //   (a) it didn't exist in the pre-slice snapshot (newly created/modified), OR
-  //   (b) its porcelain status line changed (worker further modified it).
-  // A path is foreign when it appears identically in pre and post snapshots
-  // (the operator/parallel-process touched it before the slice and the
-  // worker never touched it again).
   const currentState = parseGitPorcelain(statusOut);
   let workerPaths;
   let foreignFiles = [];
 
   if (preSliceState) {
-    workerPaths = [];
-    for (const [path, line] of currentState) {
-      const priorLine = preSliceState.get(path);
-      if (priorLine === undefined || priorLine !== line) {
-        workerPaths.push(path);
-      } else {
-        foreignFiles.push(path);
-      }
-    }
+    const parts = _partitionDirtyPaths(currentState, preSliceState);
+    workerPaths = parts.workerPaths;
+    foreignFiles = parts.foreignFiles;
 
     if (foreignFiles.length > 0) {
-      eventBus?.emit("slice-foreign-files-detected", {
-        sliceNumber: slice?.number,
-        foreignFiles,
-      });
+      eventBus?.emit("slice-foreign-files-detected", { sliceNumber: slice?.number, foreignFiles });
     }
-
     if (workerPaths.length === 0) {
-      // Worker didn't touch the working tree (only operator-owned dirt remains).
       return { committed: false, reason: "no-worker-changes", foreignFiles };
     }
   } else {
-    workerPaths = null; // signal: legacy `git add -A` path
+    workerPaths = null; // legacy `git add -A`
   }
 
-  // Issue #195: detect commits absorbed during the slice window (e.g. the
-  // VS Code Copilot extension auto-committing the worker's real edits).
-  // Capture BEFORE we add our own commit so HEAD still points at the last
-  // absorbed commit.
   const absorbedCommits = startSha
     ? captureAbsorbedCommits({ cwd, fromSha: startSha, toSha: "HEAD" })
     : [];
   const raceDetected = absorbedCommits.length > 0;
 
-  // Housekeeping detection: when every worker-owned path is inside `.forge/`,
-  // the orchestrator's own commit carries no product deliverables. Combined
-  // with raceDetected, relabel so log readers don't see "feat(slice-N): …"
-  // on a commit that only touched housekeeping artifacts.
-  const allHousekeeping = workerPaths && workerPaths.length > 0
-    && workerPaths.every((p) => p.replace(/\\/g, "/").startsWith(".forge/"));
-
-  // Infer conventional commit type from title
-  const conventionalType = /^(bug\s*#?\d+|fix)/i.test(slice.title) ? "fix" : "feat";
-
-  // Strip only "Bug #N: " prefix (not "Fix"), truncate to 72 chars
-  const subject = slice.title.replace(/^bug\s*#?\d+[:\s]*/i, "").slice(0, 72).trim() || slice.title.slice(0, 72);
-  let commitMessage = `${conventionalType}(slice-${slice.number}): ${subject}`;
-  if (allHousekeeping && raceDetected) {
-    const absorbedRef = absorbedCommits.map((c) => c.sha.slice(0, 7)).join(", ");
-    commitMessage = `chore(slice-${slice.number}): housekeeping (source absorbed by ${absorbedRef})`;
-  }
+  const { commitMessage, allHousekeeping } = _buildCommitMessage(slice, workerPaths, raceDetected, absorbedCommits);
 
   try {
-    if (workerPaths) {
-      // Stage worker-owned paths individually so foreign files stay un-staged.
-      // Chunk to avoid blowing past Windows command-line length limits when a
-      // slice touches a very large number of files.
-      const CHUNK = 50;
-      for (let i = 0; i < workerPaths.length; i += CHUNK) {
-        const batch = workerPaths.slice(i, i + CHUNK).map(shellQuotePath).join(" ");
-        execSync(`git add -- ${batch}`, { cwd, encoding: "utf-8", timeout: 10_000 });
-      }
-    } else {
-      execSync("git add -A", { cwd, encoding: "utf-8", timeout: 10_000 });
-    }
-    // Issue #162: use execFileSync with array args so the shell never sees the
-    // commit message — prevents breakage when slice titles contain ", ', `, $().
-    // windowsHide: suppress per-slice git.exe console flash (spawn-storm fix).
+    _stageWorkerOrAll(workerPaths, cwd);
     execFileSync("git", ["commit", "-m", commitMessage], { cwd, encoding: "utf-8", timeout: 15_000, windowsHide: true });
     const sha = execSync("git rev-parse HEAD", { cwd, encoding: "utf-8", timeout: 5_000 }).trim();
-
-    // #186 v2.96.2: capture commit stats so the orchestrator can populate
-    // tokens.codeChanges (used by forge_drift_report + forge_health_trend).
-    // Best-effort: any error leaves codeChanges null so we never block the
-    // commit-success path on a stat parse.
-    let codeChanges = null;
-    try {
-      const shortstat = execSync(`git show --shortstat --format= ${sha}`, {
-        cwd, encoding: "utf-8", timeout: 5_000,
-      });
-      codeChanges = parseShortstat(shortstat);
-    } catch { /* ignore — codeChanges stays null */ }
+    const codeChanges = _captureCommitStats(sha, cwd);
 
     const evt = { sliceNumber: slice.number, sha, message: commitMessage };
     if (foreignFiles.length > 0) evt.foreignFiles = foreignFiles;
@@ -826,6 +795,7 @@ export function autoCommitSliceIfDirty({
     if (absorbedCommits.length > 0) evt.absorbedCommits = absorbedCommits;
     if (raceDetected) evt.raceDetected = true;
     eventBus?.emit("slice-auto-committed", evt);
+
     const out = { committed: true, sha, message: commitMessage };
     if (foreignFiles.length > 0) out.foreignFiles = foreignFiles;
     if (codeChanges) out.codeChanges = codeChanges;

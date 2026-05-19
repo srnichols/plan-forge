@@ -78,6 +78,96 @@ const DEFAULT_SCAN_DIRS = [
  * @param {string}  [opts.name]           Override the slugified plan name
  * @returns {ImportResult}
  */
+function _validateSpeckitArtifacts({ spec, plan, tasks, constitution, result }) {
+  if (!spec || !plan) {
+    if (!spec)
+      result.missingFields.push({ file: "spec.md", field: "<file>", severity: "error" });
+    if (!plan)
+      result.missingFields.push({ file: "plan.md", field: "<file>", severity: "error" });
+    result.error = ERROR_CODES.SPECKIT_IMPORT_MISSING_REQUIRED.code;
+    result.warnings.push(
+      "Both spec.md and plan.md are required. Re-run after creating them."
+    );
+    return false;
+  }
+  if (!spec.title) {
+    result.missingFields.push({ file: "spec.md", field: "title", severity: "error" });
+    result.error = ERROR_CODES.SPECKIT_IMPORT_MISSING_FIELD.code;
+    result.warnings.push(
+      "spec.md is missing a top-level `# Title` heading; import blocked."
+    );
+    return false;
+  }
+  if (!plan.scope) {
+    result.missingFields.push({ file: "plan.md", field: "scope", severity: "error" });
+    result.error = ERROR_CODES.SPECKIT_IMPORT_MISSING_FIELD.code;
+    result.warnings.push(
+      "plan.md is missing a `## Scope` section; import blocked."
+    );
+    return false;
+  }
+  if (!tasks)
+    result.missingFields.push({ file: "tasks.md", field: "<file>", severity: "warn" });
+  if (!constitution)
+    result.missingFields.push({ file: "constitution.md", field: "<file>", severity: "warn" });
+  return true;
+}
+
+function _checkSyncPrinciplesGuard({ syncPrinciples, constitution, principlesPath, result }) {
+  if (!syncPrinciples) return true;
+  if (!constitution) {
+    result.error = ERROR_CODES.PROJECT_PRINCIPLES_NO_SOURCE.code;
+    result.warnings.push(
+      "--sync-principles requested but constitution.md is absent."
+    );
+    return false;
+  }
+  if (existsSync(principlesPath)) {
+    result.error = ERROR_CODES.PROJECT_PRINCIPLES_EXISTS.code;
+    result.warnings.push(
+      `${principlesPath} already exists; refusing to overwrite. Remove it first or omit --sync-principles.`
+    );
+    return false;
+  }
+  return true;
+}
+
+function _writeSpeckitOutputs(ctx) {
+  const {
+    smeltDir, planFilePath, smeltPath, smelt, projectRoot, phaseName, planMarkdown,
+    syncPrinciples, constitution, principlesPath, auditPath, crucibleId, mapped, result,
+  } = ctx;
+  mkdirSync(smeltDir, { recursive: true });
+  mkdirSync(dirname(planFilePath), { recursive: true });
+  writeFileSync(smeltPath, JSON.stringify(smelt, null, 2));
+
+  let finalPlanPath = planFilePath;
+  let n = 2;
+  while (existsSync(finalPlanPath)) {
+    finalPlanPath = join(projectRoot, "docs", "plans", `${phaseName}-${n}-PLAN.md`);
+    n++;
+  }
+  writeFileSync(finalPlanPath, planMarkdown);
+  result.planPath = finalPlanPath;
+
+  if (syncPrinciples && constitution) {
+    writeFileSync(principlesPath, renderPrinciples(constitution));
+  }
+
+  appendFileSync(
+    auditPath,
+    JSON.stringify({
+      timestamp: new Date().toISOString(),
+      planPath: finalPlanPath,
+      source: "speckit",
+      reason: "auto-import via pforge crucible import",
+      crucibleId,
+      mappedFieldCount: mapped.length,
+      missingFieldCount: result.missingFields.length,
+    }) + "\n"
+  );
+}
+
 export function importSpeckit(opts) {
   const projectRoot = resolve(opts.projectRoot || process.cwd());
   const dryRun = !!opts.dryRun;
@@ -114,37 +204,9 @@ export function importSpeckit(opts) {
     : null;
 
   // ── 3. Validate required fields ─────────────────────────────────────────
-  if (!spec || !plan) {
-    if (!spec)
-      result.missingFields.push({ file: "spec.md", field: "<file>", severity: "error" });
-    if (!plan)
-      result.missingFields.push({ file: "plan.md", field: "<file>", severity: "error" });
-    result.error = ERROR_CODES.SPECKIT_IMPORT_MISSING_REQUIRED.code;
-    result.warnings.push(
-      "Both spec.md and plan.md are required. Re-run after creating them."
-    );
+  if (!_validateSpeckitArtifacts({ spec, plan, tasks, constitution, result })) {
     return result;
   }
-  if (!spec.title) {
-    result.missingFields.push({ file: "spec.md", field: "title", severity: "error" });
-    result.error = ERROR_CODES.SPECKIT_IMPORT_MISSING_FIELD.code;
-    result.warnings.push(
-      "spec.md is missing a top-level `# Title` heading; import blocked."
-    );
-    return result;
-  }
-  if (!plan.scope) {
-    result.missingFields.push({ file: "plan.md", field: "scope", severity: "error" });
-    result.error = ERROR_CODES.SPECKIT_IMPORT_MISSING_FIELD.code;
-    result.warnings.push(
-      "plan.md is missing a `## Scope` section; import blocked."
-    );
-    return result;
-  }
-  if (!tasks)
-    result.missingFields.push({ file: "tasks.md", field: "<file>", severity: "warn" });
-  if (!constitution)
-    result.missingFields.push({ file: "constitution.md", field: "<file>", severity: "warn" });
 
   // ── 4. Build the smelt ──────────────────────────────────────────────────
   const smeltId = randomUUID();
@@ -218,21 +280,8 @@ export function importSpeckit(opts) {
   result.planPath = planFilePath;
 
   // ── 5. Sync-principles guard (must run before any write) ────────────────
-  if (syncPrinciples) {
-    if (!constitution) {
-      result.error = ERROR_CODES.PROJECT_PRINCIPLES_NO_SOURCE.code;
-      result.warnings.push(
-        "--sync-principles requested but constitution.md is absent."
-      );
-      return result;
-    }
-    if (existsSync(principlesPath)) {
-      result.error = ERROR_CODES.PROJECT_PRINCIPLES_EXISTS.code;
-      result.warnings.push(
-        `${principlesPath} already exists; refusing to overwrite. Remove it first or omit --sync-principles.`
-      );
-      return result;
-    }
+  if (!_checkSyncPrinciplesGuard({ syncPrinciples, constitution, principlesPath, result })) {
+    return result;
   }
 
   // ── 6. Dry-run short-circuit ────────────────────────────────────────────
@@ -242,36 +291,10 @@ export function importSpeckit(opts) {
   }
 
   // ── 7. Write outputs ────────────────────────────────────────────────────
-  mkdirSync(smeltDir, { recursive: true });
-  mkdirSync(dirname(planFilePath), { recursive: true });
-  writeFileSync(smeltPath, JSON.stringify(smelt, null, 2));
-
-  // Plan-file collision: append -2, -3, … rather than clobber
-  let finalPlanPath = planFilePath;
-  let n = 2;
-  while (existsSync(finalPlanPath)) {
-    finalPlanPath = join(projectRoot, "docs", "plans", `${phaseName}-${n}-PLAN.md`);
-    n++;
-  }
-  writeFileSync(finalPlanPath, planMarkdown);
-  result.planPath = finalPlanPath;
-
-  if (syncPrinciples && constitution) {
-    writeFileSync(principlesPath, renderPrinciples(constitution));
-  }
-
-  appendFileSync(
-    auditPath,
-    JSON.stringify({
-      timestamp: new Date().toISOString(),
-      planPath: finalPlanPath,
-      source: "speckit",
-      reason: "auto-import via pforge crucible import",
-      crucibleId,
-      mappedFieldCount: mapped.length,
-      missingFieldCount: result.missingFields.length,
-    }) + "\n"
-  );
+  _writeSpeckitOutputs({
+    smeltDir, planFilePath, smeltPath, smelt, projectRoot, phaseName, planMarkdown,
+    syncPrinciples, constitution, principlesPath, auditPath, crucibleId, mapped, result,
+  });
 
   result.ok = true;
   return result;
@@ -596,6 +619,95 @@ function matchSliceIndex(sliceCell, slices) {
 
 // ─── Renderers ──────────────────────────────────────────────────────────────
 
+function _renderBulletList(lines, items) {
+  for (const item of items) lines.push(`- ${item}`);
+}
+
+function _renderSpecSections(lines, spec) {
+  if (spec.goals && spec.goals.length) {
+    lines.push("## Goals");
+    lines.push("");
+    _renderBulletList(lines, spec.goals);
+    lines.push("");
+  }
+  if (spec.acceptance && spec.acceptance.length) {
+    lines.push("## Acceptance Criteria");
+    lines.push("");
+    _renderBulletList(lines, spec.acceptance);
+    lines.push("");
+  }
+  if (spec.outOfScope && spec.outOfScope.length) {
+    lines.push("## Out of Scope");
+    lines.push("");
+    _renderBulletList(lines, spec.outOfScope);
+    lines.push("");
+  }
+}
+
+function _renderSliceBlock(lines, s) {
+  lines.push(`### Slice ${s.id} — ${s.title}`);
+  if (s.description && s.description !== s.title) {
+    lines.push("");
+    lines.push(s.description);
+  }
+  if (s.tasks && s.tasks.length) {
+    lines.push("");
+    lines.push("**Tasks**:");
+    lines.push("");
+    for (const t of s.tasks) {
+      const mark = t.status === "done" ? "[x]" : t.status === "in_progress" ? "[~]" : "[ ]";
+      lines.push(`- ${mark} \`${t.taskId}\` ${t.description}`);
+    }
+  }
+  lines.push("");
+  lines.push("**Validation gate** (placeholder — Hardener must replace):");
+  lines.push("");
+  lines.push("```bash");
+  lines.push(`bash -c "echo 'TODO: gate for slice ${s.id}'"`);
+  lines.push("```");
+  lines.push("");
+}
+
+function _renderSlicePlan(lines, slicesMerged) {
+  lines.push("## Slice Plan");
+  lines.push("");
+  lines.push("> **Note for Hardener**: Each slice below was imported from a Spec Kit `plan.md` entry. Validation gates are placeholders — Step 2 must replace them with real gates that match Plan Forge gate-portability rules.");
+  lines.push("");
+  if (!slicesMerged.length) {
+    lines.push("_(no slices in source plan.md — Hardener must define them)_");
+    lines.push("");
+    return;
+  }
+  for (const s of slicesMerged) _renderSliceBlock(lines, s);
+}
+
+function _renderConstitutionSection(lines, constitution) {
+  if (!constitution) return;
+  if (!(constitution.rules.length || constitution.commitments.length || constitution.boundaries.length)) return;
+  lines.push("## Imported Agent Constraints (from constitution.md)");
+  lines.push("");
+  if (constitution.rules.length) {
+    lines.push("### Rules");
+    lines.push("");
+    _renderBulletList(lines, constitution.rules);
+    lines.push("");
+  }
+  if (constitution.commitments.length) {
+    lines.push("### Commitments");
+    lines.push("");
+    _renderBulletList(lines, constitution.commitments);
+    lines.push("");
+  }
+  if (constitution.boundaries.length) {
+    lines.push("### Boundaries");
+    lines.push("");
+    _renderBulletList(lines, constitution.boundaries);
+    lines.push("");
+  }
+  lines.push("> If you also have `docs/plans/PROJECT-PRINCIPLES.md`, the rules above are advisory and PROJECT-PRINCIPLES wins on conflict.");
+  lines.push("");
+}
+
 function renderPhasePlan({ crucibleId, phaseName, spec, plan, slicesMerged, constitution }) {
   const lines = [];
   lines.push("---");
@@ -616,24 +728,7 @@ function renderPhasePlan({ crucibleId, phaseName, spec, plan, slicesMerged, cons
   lines.push(`- Importer: pforge crucible import (Phase CRUCIBLE-IMPORT-CLI)`);
   lines.push("");
 
-  if (spec.goals && spec.goals.length) {
-    lines.push("## Goals");
-    lines.push("");
-    for (const g of spec.goals) lines.push(`- ${g}`);
-    lines.push("");
-  }
-  if (spec.acceptance && spec.acceptance.length) {
-    lines.push("## Acceptance Criteria");
-    lines.push("");
-    for (const a of spec.acceptance) lines.push(`- ${a}`);
-    lines.push("");
-  }
-  if (spec.outOfScope && spec.outOfScope.length) {
-    lines.push("## Out of Scope");
-    lines.push("");
-    for (const o of spec.outOfScope) lines.push(`- ${o}`);
-    lines.push("");
-  }
+  _renderSpecSections(lines, spec);
 
   lines.push("## Scope Contract");
   lines.push("");
@@ -647,63 +742,8 @@ function renderPhasePlan({ crucibleId, phaseName, spec, plan, slicesMerged, cons
     lines.push("");
   }
 
-  lines.push("## Slice Plan");
-  lines.push("");
-  lines.push("> **Note for Hardener**: Each slice below was imported from a Spec Kit `plan.md` entry. Validation gates are placeholders — Step 2 must replace them with real gates that match Plan Forge gate-portability rules.");
-  lines.push("");
-  if (slicesMerged.length) {
-    for (const s of slicesMerged) {
-      lines.push(`### Slice ${s.id} — ${s.title}`);
-      if (s.description && s.description !== s.title) {
-        lines.push("");
-        lines.push(s.description);
-      }
-      if (s.tasks && s.tasks.length) {
-        lines.push("");
-        lines.push("**Tasks**:");
-        lines.push("");
-        for (const t of s.tasks) {
-          const mark = t.status === "done" ? "[x]" : t.status === "in_progress" ? "[~]" : "[ ]";
-          lines.push(`- ${mark} \`${t.taskId}\` ${t.description}`);
-        }
-      }
-      lines.push("");
-      lines.push("**Validation gate** (placeholder — Hardener must replace):");
-      lines.push("");
-      lines.push("```bash");
-      lines.push(`bash -c "echo 'TODO: gate for slice ${s.id}'"`);
-      lines.push("```");
-      lines.push("");
-    }
-  } else {
-    lines.push("_(no slices in source plan.md — Hardener must define them)_");
-    lines.push("");
-  }
-
-  if (constitution && (constitution.rules.length || constitution.commitments.length || constitution.boundaries.length)) {
-    lines.push("## Imported Agent Constraints (from constitution.md)");
-    lines.push("");
-    if (constitution.rules.length) {
-      lines.push("### Rules");
-      lines.push("");
-      for (const r of constitution.rules) lines.push(`- ${r}`);
-      lines.push("");
-    }
-    if (constitution.commitments.length) {
-      lines.push("### Commitments");
-      lines.push("");
-      for (const c of constitution.commitments) lines.push(`- ${c}`);
-      lines.push("");
-    }
-    if (constitution.boundaries.length) {
-      lines.push("### Boundaries");
-      lines.push("");
-      for (const b of constitution.boundaries) lines.push(`- ${b}`);
-      lines.push("");
-    }
-    lines.push("> If you also have `docs/plans/PROJECT-PRINCIPLES.md`, the rules above are advisory and PROJECT-PRINCIPLES wins on conflict.");
-    lines.push("");
-  }
+  _renderSlicePlan(lines, slicesMerged);
+  _renderConstitutionSection(lines, constitution);
 
   return lines.join("\n");
 }

@@ -208,146 +208,123 @@ export function suggestAllowedCommand(token) {
  *   non-empty stderr as failure even when exit code is 0.
  * @returns {{ success: boolean, output: string, error: string, stderr: string, exitCode: number }}
  */
-export function runGate(command, cwd, opts = {}) {
-  const failOnStderr = opts.failOnStderr === true;
-  // C1: Validate gate commands against allowlist to prevent arbitrary execution
+function _validateGateAllowlist(command) {
   const cmdBase = command.trim().split(/\s+/)[0].toLowerCase();
   const isAllowed = GATE_ALLOWED_PREFIXES.some((p) => cmdBase === p || cmdBase.endsWith(`/${p}`));
-  if (!isAllowed) {
-    const hints = [];
-    if (isPlaceholderToken(cmdBase)) {
-      hints.push(`'${cmdBase}' looks like an unfilled template placeholder \u2014 edit your plan file and replace it with a real build/test command.`);
-    }
-    const suggestion = suggestAllowedCommand(cmdBase);
-    if (suggestion) hints.push(`Did you mean '${suggestion}'?`);
-    const hintSuffix = hints.length ? ` ${hints.join(" ")}` : "";
-    return {
+  if (isAllowed) return { cmdBase, blocked: null };
+  const hints = [];
+  if (isPlaceholderToken(cmdBase)) {
+    hints.push(`'${cmdBase}' looks like an unfilled template placeholder \u2014 edit your plan file and replace it with a real build/test command.`);
+  }
+  const suggestion = suggestAllowedCommand(cmdBase);
+  if (suggestion) hints.push(`Did you mean '${suggestion}'?`);
+  const hintSuffix = hints.length ? ` ${hints.join(" ")}` : "";
+  return {
+    cmdBase,
+    blocked: {
       success: false,
       output: "",
       stderr: "",
       error: `Validation gate blocked: '${cmdBase}' not in allowlist.${hintSuffix} Allowed: ${GATE_ALLOWED_PREFIXES.join(", ")}`,
       exitCode: -1,
+    },
+  };
+}
+
+function _runInlineNodeGate(command, cwd, gateTimeout, failOnStderr) {
+  const m = command.match(/^\s*node\s+(-e|-p|--eval|--print)\s+(.+)$/i);
+  if (!m) return null;
+  const flag = m[1].startsWith("--") ? m[1] : (m[1] === "-p" ? "--print" : "--eval");
+  let script = m[2].trim();
+  if ((script.startsWith('"') && script.endsWith('"')) || (script.startsWith("'") && script.endsWith("'"))) {
+    script = script.slice(1, -1);
+  }
+  try {
+    const stdoutBuf = execFileSync("node", [flag, script], {
+      cwd,
+      encoding: "utf-8",
+      timeout: gateTimeout,
+      maxBuffer: 16 * 1024 * 1024,
+      env: { ...process.env, NO_COLOR: "1" },
+      stdio: ["ignore", "pipe", "pipe"],
+      shell: false,
+      windowsHide: true,
+    });
+    return { success: true, output: (stdoutBuf || "").trim(), stderr: "", error: "", exitCode: 0 };
+  } catch (err) {
+    const exitCode = typeof err.status === "number" ? err.status : 1;
+    const stderrText = (err.stderr || "").toString();
+    const stdoutText = (err.stdout || "").toString();
+    if (exitCode === 0 && !failOnStderr) {
+      return { success: true, output: stdoutText.trim(), stderr: stderrText.trim(), error: "", exitCode };
+    }
+    return {
+      success: false,
+      output: stdoutText.trim(),
+      stderr: stderrText.trim(),
+      error: stderrText.trim() || err.message || "node -e gate failed",
+      exitCode,
+    };
+  }
+}
+
+function _resolveBashArgs(command, isBashWrapped) {
+  if (!isBashWrapped) return ["-c", command];
+  const m = command.match(/^bash(?:\.exe)?\s+-c\s+(.+)$/i);
+  if (!m) return ["-c", command];
+  let body = m[1].trim();
+  if ((body.startsWith('"') && body.endsWith('"')) || (body.startsWith("'") && body.endsWith("'"))) {
+    body = body.slice(1, -1);
+  }
+  return ["-c", body];
+}
+
+function _runWindowsBashGate(command, cwd, cmdBase, gateTimeout, failOnStderr) {
+  if (process.platform !== "win32") return null;
+  const cmdName = cmdBase.split("/").pop().split("\\").pop().replace(/\.(exe|cmd|bat)$/i, "");
+  const hasShellChain = /(^|[^&|])(\s;\s|\s&&\s|\s\|\|\s)/.test(command);
+  const isBashWrapped = cmdName === "bash";
+  if (!(UNIX_TOOLS.includes(cmdName) || hasShellChain || isBashWrapped)) return null;
+
+  const bashPath = resolveBashPath();
+  if (bashPath === null) {
+    return {
+      success: false,
+      output: "",
+      stderr: "",
+      error: `gate requires bash but none found on Windows. Install Git for Windows or set PFORGE_BASH_PATH to a bash.exe path. Detected Unix tool: '${cmdName}'.`,
+      exitCode: -1,
     };
   }
 
-  const gateTimeout = resolveGateTimeoutMs();
-
-  // Issue #131 \u2014 inline-script node invocations (`node -e "..."` / `node -p "..."`).
-  // Run via execFileSync with shell:false so PowerShell never parses `$var`
-  // or strips `\b`/`\s`/`\d` regex escapes from the script body.
-  const inlineNodeMatch = command.match(/^\s*node\s+(-e|-p|--eval|--print)\s+(.+)$/i);
-  if (inlineNodeMatch) {
-    const flag = inlineNodeMatch[1].startsWith("--") ? inlineNodeMatch[1] : (inlineNodeMatch[1] === "-p" ? "--print" : "--eval");
-    let script = inlineNodeMatch[2].trim();
-    // Strip a single matching pair of outer quotes (single or double) the
-    // shell would normally consume. Inner quotes survive because we never
-    // round-trip through a shell.
-    if ((script.startsWith('"') && script.endsWith('"')) || (script.startsWith("'") && script.endsWith("'"))) {
-      script = script.slice(1, -1);
+  const bashArgs = _resolveBashArgs(command, isBashWrapped);
+  try {
+    const output = execFileSync(bashPath, bashArgs, {
+      cwd,
+      encoding: "utf-8",
+      timeout: gateTimeout,
+      maxBuffer: 16 * 1024 * 1024,
+      env: {
+        ...process.env,
+        NO_COLOR: "1",
+        PATH: `${cwd}${process.platform === "win32" ? ";" : ":"}${process.env.PATH || ""}`,
+      },
+      stdio: ["ignore", "pipe", "pipe"],
+      windowsHide: true,
+    });
+    return { success: true, output: (output || "").trim(), stderr: "", error: "", exitCode: 0 };
+  } catch (err) {
+    const exitCode = typeof err.status === "number" ? err.status : 1;
+    const stdoutText = (err.stdout || "").toString().trim();
+    const stderrText = (err.stderr || err.message || "").toString().trim();
+    if (exitCode === 0 && !failOnStderr) {
+      return { success: true, output: stdoutText, stderr: stderrText, error: "", exitCode };
     }
-    try {
-      const stdoutBuf = execFileSync("node", [flag, script], {
-        cwd,
-        encoding: "utf-8",
-        timeout: gateTimeout,
-        maxBuffer: 16 * 1024 * 1024,
-        env: { ...process.env, NO_COLOR: "1" },
-        stdio: ["ignore", "pipe", "pipe"],
-        shell: false,
-        // Bug #121 / spawn-storm fix: suppress the console window flash that
-        // appears on every gate execution when running under a piped-stdio host.
-        windowsHide: true,
-      });
-      return { success: true, output: (stdoutBuf || "").trim(), stderr: "", error: "", exitCode: 0 };
-    } catch (err) {
-      const exitCode = typeof err.status === "number" ? err.status : 1;
-      const stderrText = (err.stderr || "").toString();
-      const stdoutText = (err.stdout || "").toString();
-      // Issue #133 \u2014 if exit was zero (signal etc.), still treat as success
-      // unless caller opted in to failOnStderr.
-      if (exitCode === 0 && !failOnStderr) {
-        return { success: true, output: stdoutText.trim(), stderr: stderrText.trim(), error: "", exitCode };
-      }
-      return {
-        success: false,
-        output: stdoutText.trim(),
-        stderr: stderrText.trim(),
-        error: stderrText.trim() || err.message || "node -e gate failed",
-        exitCode,
-      };
-    }
+    return { success: false, output: stdoutText, stderr: stderrText, error: stderrText, exitCode };
   }
+}
 
-  // Windows bash dispatch: route Unix tools through bash so plans that use
-  // grep/sed/awk/etc. work on Windows without manual wrapping.
-  // Also route shell-chained commands (`cmd1 ; cmd2`, `cmd1 && cmd2`) through bash,
-  // because cmd.exe treats `;` as a literal character (not a separator) and would
-  // pass the remainder as argv to the first tool \u2014 a common false-failure source.
-  if (process.platform === "win32") {
-    // Strip any path prefix and .exe/.cmd extension to get the bare tool name.
-    const cmdName = cmdBase.split("/").pop().split("\\").pop().replace(/\.(exe|cmd|bat)$/i, "");
-    const hasShellChain = /(^|[^&|])(\s;\s|\s&&\s|\s\|\|\s)/.test(command);
-    // Issue #172 — also route literal `bash -c "..."` gates through resolveBashPath().
-    // Without this, `where bash` lookup picks WSL bash on modern Windows (which has
-    // no Windows PATH), and `pwsh`/`node`/`npx` calls inside the wrapped command fail
-    // with `command not found`. Empirically observed twice (Phase GITHUB-B,
-    // Phase CRUCIBLE-IMPORT-CLI). See memory note plan-gate-command-rules.md L52-73.
-    const isBashWrapped = cmdName === "bash";
-    if (UNIX_TOOLS.includes(cmdName) || hasShellChain || isBashWrapped) {
-      const bashPath = resolveBashPath();
-      if (bashPath === null) {
-        return {
-          success: false,
-          output: "",
-          stderr: "",
-          error: `gate requires bash but none found on Windows. Install Git for Windows or set PFORGE_BASH_PATH to a bash.exe path. Detected Unix tool: '${cmdName}'.`,
-          exitCode: -1,
-        };
-      }
-      // When the gate already starts with `bash -c "..."`, strip the redundant
-      // `bash` token and pass only the body to execFileSync (which spawns
-      // bashPath itself). Otherwise we'd double-wrap and confuse quoting.
-      let bashArgs = ["-c", command];
-      if (isBashWrapped) {
-        const m = command.match(/^bash(?:\.exe)?\s+-c\s+(.+)$/i);
-        if (m) {
-          let body = m[1].trim();
-          if ((body.startsWith('"') && body.endsWith('"')) || (body.startsWith("'") && body.endsWith("'"))) {
-            body = body.slice(1, -1);
-          }
-          bashArgs = ["-c", body];
-        }
-      }
-      try {
-        const output = execFileSync(bashPath, bashArgs, {
-          cwd,
-          encoding: "utf-8",
-          timeout: gateTimeout,
-          maxBuffer: 16 * 1024 * 1024,
-          env: {
-            ...process.env,
-            NO_COLOR: "1",
-            // Prepend repo root so bash shims (e.g. `pforge`) are on PATH.
-            PATH: `${cwd}${process.platform === "win32" ? ";" : ":"}${process.env.PATH || ""}`,
-          },
-          stdio: ["ignore", "pipe", "pipe"],
-          // Bug #121 / spawn-storm fix: suppress the bash console window flash
-          // on Windows for every bash-dispatched gate.
-          windowsHide: true,
-        });
-        return { success: true, output: (output || "").trim(), stderr: "", error: "", exitCode: 0 };
-      } catch (err) {
-        const exitCode = typeof err.status === "number" ? err.status : 1;
-        const stdoutText = (err.stdout || "").toString().trim();
-        const stderrText = (err.stderr || err.message || "").toString().trim();
-        if (exitCode === 0 && !failOnStderr) {
-          return { success: true, output: stdoutText, stderr: stderrText, error: "", exitCode };
-        }
-        return { success: false, output: stdoutText, stderr: stderrText, error: stderrText, exitCode };
-      }
-    }
-  }
-
+function _runDefaultGate(command, cwd, gateTimeout, failOnStderr) {
   try {
     const output = execSync(command, {
       cwd,
@@ -362,14 +339,27 @@ export function runGate(command, cwd, opts = {}) {
     const exitCode = typeof err.status === "number" ? err.status : 1;
     const stdoutText = (err.stdout || "").toString().trim();
     const stderrText = (err.stderr || err.message || "").toString().trim();
-    // Issue #133 \u2014 some shells (notably cmd.exe wrapping `pnpm`) will throw
-    // even with exit 0 in unusual signal/timeout cases. Honour exit code as
-    // the source of truth and only surface stderr as `error` on failure.
     if (exitCode === 0 && !failOnStderr) {
       return { success: true, output: stdoutText, stderr: stderrText, error: "", exitCode };
     }
     return { success: false, output: stdoutText, stderr: stderrText, error: stderrText, exitCode };
   }
+}
+
+export function runGate(command, cwd, opts = {}) {
+  const failOnStderr = opts.failOnStderr === true;
+  const { cmdBase, blocked } = _validateGateAllowlist(command);
+  if (blocked) return blocked;
+
+  const gateTimeout = resolveGateTimeoutMs();
+
+  const inlineRes = _runInlineNodeGate(command, cwd, gateTimeout, failOnStderr);
+  if (inlineRes) return inlineRes;
+
+  const winRes = _runWindowsBashGate(command, cwd, cmdBase, gateTimeout, failOnStderr);
+  if (winRes) return winRes;
+
+  return _runDefaultGate(command, cwd, gateTimeout, failOnStderr);
 }
 
 /**
@@ -487,13 +477,37 @@ export class SequentialScheduler {
    * @param {Function} executeFn - async (slice) => result
    * @param {object} options - { abortSignal, resumeFrom, hub, gateCheckConfig }
    */
+  async _handlePostSliceGate({ id, hub, gateCheckConfig, abortSignal }) {
+    if (!(hub && gateCheckConfig?.enabled)) return { block: false };
+    try {
+      const gateResult = await hub.ask("brain.gate-check", { sliceId: id }, { timeoutMs: gateCheckConfig.timeoutMs || 5000 });
+      if (gateResult.ok && gateResult.payload?.proceed === false) {
+        this.eventBus.emit("gate-blocked", {
+          sliceId: id,
+          reason: gateResult.payload.reason,
+          openBlockingReviews: gateResult.payload.openBlockingReviews,
+          driftScore: gateResult.payload.driftScore,
+          openIncidents: gateResult.payload.openIncidents,
+        });
+        return { block: true };
+      }
+      this.eventBus.emit("gate-passed", { sliceId: id });
+    } catch {
+      this.eventBus.emit("gate-passed", { sliceId: id, failOpen: true });
+    }
+    if (abortSignal?.aborted) {
+      this.eventBus.emit("run-aborted", { sliceId: id, reason: "User abort" });
+      return { block: true };
+    }
+    return { block: false };
+  }
+
   async execute(nodes, order, executeFn, options = {}) {
     const { abortSignal, resumeFrom = null, hub = null, gateCheckConfig = null } = options;
     const results = [];
     let skipping = resumeFrom !== null;
 
     for (const id of order) {
-      // Check abort
       if (abortSignal?.aborted) {
         this.eventBus.emit("run-aborted", { sliceId: id, reason: "User abort" });
         break;
@@ -501,7 +515,6 @@ export class SequentialScheduler {
 
       const slice = nodes.get(id);
 
-      // Resume support — skip completed slices
       if (skipping) {
         if (id === String(resumeFrom)) {
           skipping = false;
@@ -511,7 +524,6 @@ export class SequentialScheduler {
         }
       }
 
-      // Skip already-completed slices (marked ✅ in plan)
       if (slice.status === "completed") {
         results.push({ sliceId: id, status: "skipped" });
         continue;
@@ -525,43 +537,8 @@ export class SequentialScheduler {
 
         if (result.status === "passed") {
           this.eventBus.emit("slice-completed", { sliceId: id, complexityScore: slice.complexityScore, ...result });
-
-          // Phase FORGE-SHOP-06 Slice 06.2 — Executor gate wire-in.
-          // After a slice passes, ask the gate-check responder whether to proceed.
-          // Config-guarded: OFF by default (gateCheckConfig.enabled === false).
-          // Fail-open: on timeout or error, proceed to next slice.
-          if (hub && gateCheckConfig?.enabled) {
-            try {
-              const gateResult = await hub.ask("brain.gate-check", {
-                sliceId: id,
-              }, { timeoutMs: gateCheckConfig.timeoutMs || 5000 });
-
-              if (gateResult.ok && gateResult.payload?.proceed === false) {
-                this.eventBus.emit("gate-blocked", {
-                  sliceId: id,
-                  reason: gateResult.payload.reason,
-                  openBlockingReviews: gateResult.payload.openBlockingReviews,
-                  driftScore: gateResult.payload.driftScore,
-                  openIncidents: gateResult.payload.openIncidents,
-                });
-                // Pause — stop sequential execution, caller can resume later
-                break;
-              }
-
-              // Emit gate-passed for dashboard telemetry
-              this.eventBus.emit("gate-passed", { sliceId: id });
-            } catch {
-              // Fail-open: timeout or responder error → continue to next slice.
-              // This is intentional — gate-check is advisory, not blocking on errors.
-              this.eventBus.emit("gate-passed", { sliceId: id, failOpen: true });
-            }
-
-            // Re-check abort signal after gate-check completes
-            if (abortSignal?.aborted) {
-              this.eventBus.emit("run-aborted", { sliceId: id, reason: "User abort" });
-              break;
-            }
-          }
+          const gateOutcome = await this._handlePostSliceGate({ id, hub, gateCheckConfig, abortSignal });
+          if (gateOutcome.block) break;
         } else {
           this.eventBus.emit("slice-failed", { sliceId: id, complexityScore: slice.complexityScore, ...result });
           break; // Sequential: stop on first failure

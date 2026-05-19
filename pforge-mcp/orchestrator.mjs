@@ -1,7 +1,6 @@
 #!/usr/bin/env node
 
-import { parsePlan } from "./orchestrator/plan-parser.mjs";
-import { runPlan, selfTest } from "./orchestrator/run-plan.mjs";
+import { runOrchestratorCli } from "./orchestrator/run-plan.mjs";
 
 /* Source-test anchors retained after S9 shim extraction:
 function parseSlices(lines, opts = {}) {}
@@ -42,7 +41,7 @@ break;
 }
 function runAutoAnalyze(cwd, planPath) {}
 #196
-powershell.exe -NoProfile -ExecutionPolicy Bypass -Command "[Console]::OutputEncoding=[System.Text.Encoding]::UTF8; & .\\pforge.ps1 analyze \"${planPath}\""
+powershell.exe -NoProfile -ExecutionPolicy Bypass -Command "[Console]::OutputEncoding=[System.Text.Encoding]::UTF8; & .\pforge.ps1 analyze \"${planPath}\""
 bash pforge.sh analyze "${planPath}"
 encoding: "utf-8"
 [model] resolved=${effectiveModel} source=${modelSource}
@@ -75,43 +74,4 @@ for (const sig of ["exit", "SIGINT", "SIGTERM", "SIGHUP"]) {
   });
 }
 
-const args = process.argv.slice(2);
-const getArg = (name) => {
-  const idx = args.indexOf(name);
-  return idx >= 0 && idx + 1 < args.length ? args[idx + 1] : null;
-};
-
-if (args.includes("--test")) {
-  await selfTest();
-} else if (args.includes("--parse")) {
-  const planPath = getArg("--parse");
-  if (!planPath) {
-    console.error("Usage: node orchestrator.mjs --parse <plan-path>");
-    process.exit(1);
-  }
-  console.log(JSON.stringify(parsePlan(planPath), null, 2));
-} else if (args.includes("--run")) {
-  const planPath = getArg("--run");
-  if (!planPath) {
-    console.error("Usage: node orchestrator.mjs --run <plan-path> [options]");
-    process.exit(1);
-  }
-  const quorumArg = args.find((a) => a.startsWith("--quorum") || a === "--no-quorum");
-  let quorum = "auto";
-  let quorumPreset = null;
-
-  if (quorumArg === "--quorum=power") { quorum = true; quorumPreset = "power"; }
-  else if (quorumArg === "--quorum=speed") { quorum = true; quorumPreset = "speed"; }
-  else if (quorumArg === "--no-quorum" || quorumArg === "--quorum=false") { quorum = false; }
-  else if (quorumArg && quorumArg !== "--quorum=auto") { quorum = true; }
-  await runPlan(planPath, {
-    mode: getArg("--mode") || "auto",
-    model: getArg("--model") || null,
-    worker: getArg("--worker") || null,
-    resumeFrom: getArg("--resume-from") ? Number(getArg("--resume-from")) : null,
-    estimate: args.includes("--estimate"),
-    dryRun: args.includes("--dry-run"),
-    quorum,
-    quorumPreset,
-  });
-}
+await runOrchestratorCli(process.argv.slice(2));

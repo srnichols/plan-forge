@@ -239,7 +239,8 @@ function buildAssertionContext(result, { testbedPath, startTime, correlationId, 
   };
 }
 
-function recordAssertionFailure(result, assertion, assertionResult, scenario, correlationId, hub, projectRoot) {
+function recordAssertionFailure(result, assertion, assertionResult, scenario, context = {}) {
+  const { correlationId = result.correlationId, hub, projectRoot } = context;
   result.status = "failed";
   const finding = {
     findingId: `${scenario.scenarioId}-${assertion.kind}-${correlationId.slice(0, 8)}`,
@@ -268,7 +269,11 @@ function runScenarioAssertions(result, scenario, assertionContext, { hub, projec
     const assertionResult = handler(assertion, assertionContext);
     result.assertions.push(assertionResult);
     if (!assertionResult.passed) {
-      recordAssertionFailure(result, assertion, assertionResult, scenario, result.correlationId, hub, projectRoot);
+      recordAssertionFailure(result, assertion, assertionResult, scenario, {
+        correlationId: result.correlationId,
+        hub,
+        projectRoot,
+      });
     }
   }
 }

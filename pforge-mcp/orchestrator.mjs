@@ -27,7 +27,7 @@ import { tmpdir } from "node:os";
 import { fileURLToPath } from "node:url";
 import { createTraceContext, createTelemetryHandler, writeManifest, appendRunIndex, pruneRunHistory, addLogSummary } from "./telemetry.mjs";
 import { recordActivity } from "./team-activity.mjs";
-import { isOpenBrainConfigured, buildMemorySearchBlock, buildMemoryCaptureBlock, buildReflexionBlock, buildTrajectorySuffix, extractTrajectory, writeTrajectory, retrieveAutoSkills, buildAutoSkillContext, extractAutoSkill, writeAutoSkill, incrementAutoSkillReuse, buildRunSummaryThought, buildCostAnomalyThought, loadProjectContext, buildPlanBootContext, computeGateSuggestionKey, getGateSuggestionCounter, captureMemory } from "./memory.mjs";
+import { isOpenBrainConfigured, buildMemorySearchBlock, buildMemoryCaptureBlock, buildReflexionBlock, buildTrajectorySuffix, extractTrajectory, writeTrajectory, retrieveAutoSkills, buildAutoSkillContext, extractAutoSkill, writeAutoSkill, incrementAutoSkillReuse, buildRunSummaryThought, buildCostAnomalyThought, loadProjectContext, buildPlanBootContext, computeGateSuggestionKey, getGateSuggestionCounter, captureMemory, autoDrainOpenBrainQueue } from "./memory.mjs";
 import { enforceCrucibleId, CrucibleEnforcementError } from "./crucible-enforce.mjs";
 // Phase FORGE-SHOP-07 Slice 07.2 — brain facade for unified recall
 import { recall as brainRecall, loadReviewerConfig, invokeReviewer } from "./brain.mjs";
@@ -4938,6 +4938,21 @@ export async function runPlan(planPath, options = {}) {
       _captured: true,
       receipts,
     };
+
+    // Issue #205 fix #3: auto-drain the OpenBrain queue so newly-captured
+    // thoughts land in L3 without requiring a manual `pforge brain replay`.
+    // Best-effort with 10s timeout — never blocks the run. Previously the
+    // queue file grew forever until a human ran `pforge brain replay`, so
+    // L3 search returned stale results for days after a successful run.
+    try {
+      const drainResult = await autoDrainOpenBrainQueue(cwd, {
+        source: "cli-drain",
+        timeoutMs: 10_000,
+      });
+      summary._memoryCapture.drain = drainResult;
+    } catch (err) {
+      summary._memoryCapture.drain = { error: String(err?.message || err) };
+    }
   }
 
   // Phase-25 Slice 5 (L5 closed loop): write a plan postmortem after every

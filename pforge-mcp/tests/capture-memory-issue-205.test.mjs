@@ -21,10 +21,10 @@
  */
 
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
-import { mkdtempSync, rmSync, existsSync, readFileSync, writeFileSync, mkdirSync } from "node:fs";
+import { mkdtempSync, rmSync, existsSync, readFileSync, writeFileSync, mkdirSync, appendFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
-import { captureMemory } from "../memory.mjs";
+import { captureMemory, autoDrainOpenBrainQueue, shapeQueueRecord } from "../memory.mjs";
 
 let cwd;
 
@@ -137,5 +137,163 @@ describe("captureMemory — Issue #205 hotfix", () => {
     const telemetry = readJsonl(resolve(cwd, ".forge", "telemetry", "memory-captures.jsonl"));
     expect(telemetry).toHaveLength(2);
     expect(telemetry[1].deduped).toBe(true);
+  });
+});
+
+/**
+ * Issue #205 fix #3 — autoDrainOpenBrainQueue. Previously the queue file
+ * grew forever until a human ran `pforge brain replay`, so L3 search
+ * returned stale results for days after a successful run. The orchestrator
+ * end-of-run path now invokes autoDrainOpenBrainQueue best-effort.
+ */
+describe("autoDrainOpenBrainQueue — Issue #205 fix #3", () => {
+  function seedOpenBrain(cwd) {
+    mkdirSync(resolve(cwd, ".vscode"), { recursive: true });
+    writeFileSync(
+      resolve(cwd, ".vscode", "mcp.json"),
+      JSON.stringify({
+        servers: {
+          openbrain: { type: "sse", url: "https://example/sse", headers: { "x-brain-key": "test-key" } },
+        },
+      }),
+    );
+  }
+
+  function seedQueue(cwd, count) {
+    mkdirSync(resolve(cwd, ".forge"), { recursive: true });
+    const queuePath = resolve(cwd, ".forge", "openbrain-queue.jsonl");
+    const lines = [];
+    for (let i = 0; i < count; i++) {
+      const thought = {
+        content: `Queue probe ${i}`,
+        project: "plan-forge",
+        type: "decision",
+        source: "test",
+        created_by: "test",
+        captured_at: new Date().toISOString(),
+      };
+      lines.push(JSON.stringify(shapeQueueRecord(thought)));
+    }
+    writeFileSync(queuePath, lines.join("\n") + "\n", "utf-8");
+  }
+
+  it("returns skipped:not-configured when OpenBrain is absent", async () => {
+    const result = await autoDrainOpenBrainQueue(cwd);
+    expect(result.skipped).toBe("not-configured");
+  });
+
+  it("returns skipped:empty when queue file is missing", async () => {
+    seedOpenBrain(cwd);
+    const result = await autoDrainOpenBrainQueue(cwd);
+    expect(result.skipped).toBe("empty");
+  });
+
+  it("returns skipped:empty when queue file is present but has no records", async () => {
+    seedOpenBrain(cwd);
+    mkdirSync(resolve(cwd, ".forge"), { recursive: true });
+    writeFileSync(resolve(cwd, ".forge", "openbrain-queue.jsonl"), "", "utf-8");
+    const result = await autoDrainOpenBrainQueue(cwd);
+    expect(result.skipped).toBe("empty");
+  });
+
+  it("delivers queued records via dispatcher and clears the queue", async () => {
+    seedOpenBrain(cwd);
+    seedQueue(cwd, 3);
+    const delivered = [];
+    const dispatcher = async (rec) => {
+      delivered.push(rec);
+      return { ok: true };
+    };
+
+    const result = await autoDrainOpenBrainQueue(cwd, { dispatcher });
+
+    expect(result.ok).toBe(true);
+    expect(result.attempted).toBe(3);
+    expect(result.delivered).toBe(3);
+    expect(result.dlq).toBe(0);
+    expect(delivered).toHaveLength(3);
+
+    // Queue file should now be empty
+    const queueAfter = readJsonl(resolve(cwd, ".forge", "openbrain-queue.jsonl"));
+    expect(queueAfter).toHaveLength(0);
+
+    // Archive should contain the 3 delivered records
+    const archive = readJsonl(resolve(cwd, ".forge", "openbrain-queue.archive.jsonl"));
+    expect(archive).toHaveLength(3);
+    expect(archive[0]._status).toBe("delivered");
+    expect(archive[0]._deliveredAt).toBeTruthy();
+
+    // Stats row should be appended
+    const stats = readJsonl(resolve(cwd, ".forge", "openbrain-stats.jsonl"));
+    expect(stats).toHaveLength(1);
+    expect(stats[0].attempted).toBe(3);
+    expect(stats[0].delivered).toBe(3);
+    expect(stats[0].source).toBe("cli-drain");
+  });
+
+  it("retries failed records and keeps them in the queue until DLQ threshold", async () => {
+    seedOpenBrain(cwd);
+    seedQueue(cwd, 1);
+    const dispatcher = async () => ({ ok: false, error: "simulated-failure" });
+
+    const result = await autoDrainOpenBrainQueue(cwd, { dispatcher, maxAttempts: 5 });
+
+    expect(result.ok).toBe(true);
+    expect(result.attempted).toBe(1);
+    expect(result.delivered).toBe(0);
+    expect(result.deferred).toBe(1);
+    expect(result.dlq).toBe(0);
+
+    // Queue should still hold the record with an incremented attempt counter
+    const queueAfter = readJsonl(resolve(cwd, ".forge", "openbrain-queue.jsonl"));
+    expect(queueAfter).toHaveLength(1);
+    expect(queueAfter[0]._attempts).toBe(1);
+    expect(queueAfter[0]._lastError).toBe("simulated-failure");
+  });
+
+  it("moves records to DLQ after exceeding maxAttempts", async () => {
+    seedOpenBrain(cwd);
+    // Pre-stamp a record at attempts=4 so one more failure pushes to DLQ
+    mkdirSync(resolve(cwd, ".forge"), { recursive: true });
+    const rec = shapeQueueRecord({
+      content: "DLQ probe",
+      project: "plan-forge",
+      type: "decision",
+      source: "test",
+      created_by: "test",
+      captured_at: new Date().toISOString(),
+    });
+    rec._attempts = 4;
+    writeFileSync(resolve(cwd, ".forge", "openbrain-queue.jsonl"), JSON.stringify(rec) + "\n");
+
+    const dispatcher = async () => ({ ok: false, error: "permanent-failure" });
+    const result = await autoDrainOpenBrainQueue(cwd, { dispatcher, maxAttempts: 5 });
+
+    expect(result.dlq).toBe(1);
+    expect(result.delivered).toBe(0);
+
+    // Queue should be empty (record was moved to DLQ)
+    const queueAfter = readJsonl(resolve(cwd, ".forge", "openbrain-queue.jsonl"));
+    expect(queueAfter).toHaveLength(0);
+
+    const dlq = readJsonl(resolve(cwd, ".forge", "openbrain-dlq.jsonl"));
+    expect(dlq).toHaveLength(1);
+    expect(dlq[0].content).toBe("DLQ probe");
+  });
+
+  it("never throws when dispatcher itself throws — error contained in result", async () => {
+    seedOpenBrain(cwd);
+    seedQueue(cwd, 1);
+    const dispatcher = async () => { throw new Error("kaboom"); };
+
+    // autoDrainOpenBrainQueue must swallow dispatcher exceptions and
+    // return a structured result — never propagate the throw.
+    const result = await autoDrainOpenBrainQueue(cwd, { dispatcher });
+
+    // Pure drain function catches dispatcher throws and treats them as failures
+    expect(result).toBeDefined();
+    expect(result.ok).toBe(true);
+    expect(result.delivered).toBe(0);
+    expect(result.deferred).toBeGreaterThan(0);
   });
 });

@@ -5421,12 +5421,26 @@ server.setRequestHandler(CallToolRequestSchema, _wrapWithToolSpan(async (request
   }
 
   // ─── forge_search — cross-artifact search with L2/L3 merge ───
+  // Issue #205 fix #2 (May 2026): previously the L3 hook was hard-coded to
+  // `null` with a comment "no direct call available yet" — so search NEVER
+  // returned OpenBrain hits, only stale L2 file scans. Now we pre-fetch L3
+  // semantic hits via SSE and pass a sync closure to the ranker, so L3
+  // results land in the merged + ranked output exactly as designed.
   if (name === "forge_search") {
     const t0 = Date.now();
     try {
       const cwd = args.path ? findProjectRoot(resolve(args.path)) : findProjectRoot(PROJECT_DIR);
-      const openBrainSearchFn = isOpenBrainConfigured(cwd) ? null : null; // L3 merge is opt-in via OpenBrain MCP; no direct call available yet
+      const sourcesArg = Array.isArray(args.sources) ? args.sources : null;
+      const wantsMemory = !sourcesArg || sourcesArg.includes("memory");
+      let l3Hits = [];
+      if (wantsMemory && isOpenBrainConfigured(cwd)) {
+        l3Hits = await searchOpenBrainL3(cwd, args);
+      }
+      const openBrainSearchFn = l3Hits.length > 0 ? () => l3Hits : null;
       const result = forgeSearch(args, { cwd, openBrainSearchFn });
+      if (l3Hits.length > 0) {
+        result.l3Hits = l3Hits.length;
+      }
       emitToolTelemetry("forge_search", args, result, Date.now() - t0, "OK", cwd);
       return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
     } catch (err) {
@@ -6609,6 +6623,63 @@ server.setRequestHandler(CallToolRequestSchema, _wrapWithToolSpan(async (request
   };
 }));
 
+// ─── Issue #205 — OpenBrain L3 semantic-search bridge ───────────────────
+
+/**
+ * Pre-fetch L3 (OpenBrain) hits for `forge_search`. The synchronous L2
+ * search engine in `search/core.mjs` accepts an `openBrainSearchFn` hook
+ * that must be sync — so we await the SSE call here and return a closure
+ * that hands back the resolved array.
+ *
+ * Best-effort: any failure (config missing, key invalid, SSE timeout)
+ * returns `[]` so the L2 search still serves results. The 5s timeout
+ * bounds wall-clock impact when OpenBrain is unreachable.
+ *
+ * @param {string} cwd
+ * @param {{query: string, limit?: number}} args
+ * @returns {Promise<Array>} normalized L3 hits ready for ranker merge
+ */
+async function searchOpenBrainL3(cwd, args) {
+  if (!isOpenBrainConfigured(cwd)) return [];
+  const cfg = readOpenBrainConfig(cwd);
+  if (!cfg || !cfg.url || !cfg.key) return [];
+
+  let project = "plan-forge";
+  try {
+    const forgeCfg = JSON.parse(readFileSync(resolve(cwd, ".forge.json"), "utf-8"));
+    project = forgeCfg.projectName || project;
+  } catch { /* default */ }
+
+  const TIMEOUT_MS = 5_000;
+  let client = null;
+  try {
+    const sseLimit = Math.min(Math.max((args.limit || 50) * 2, 25), 100);
+    const timeoutPromise = new Promise((_, reject) =>
+      setTimeout(() => reject(new Error("L3 search timeout")), TIMEOUT_MS)
+    );
+    client = await Promise.race([createOpenBrainClient(cfg), timeoutPromise]);
+    const searchRes = await Promise.race([
+      client.search({ query: String(args.query || ""), project, limit: sseLimit }),
+      timeoutPromise,
+    ]);
+    const raw = searchRes?.results ?? searchRes?.thoughts ?? searchRes?.hits ?? [];
+    if (!Array.isArray(raw)) return [];
+
+    return raw.map((h) => ({
+      source: "openbrain",
+      recordRef: String(h.id || h.recordRef || h.thought_id || ""),
+      text: String(h.content || h.text || ""),
+      timestamp: h.captured_at || h.timestamp || h.created_at || new Date().toISOString(),
+      tags: Array.isArray(h.tags) ? h.tags : [],
+      correlationId: h.correlationId || h.correlation_id || "",
+    })).filter((h) => h.text);
+  } catch {
+    return [];
+  } finally {
+    if (client) { try { await client.close(); } catch { /* best-effort */ } }
+  }
+}
+
 // ─── Phase-28.4 — OpenBrain queue drain I/O wrapper ──────────────────────
 
 /**
@@ -6735,7 +6806,8 @@ export function createExpressApp() {
   app.use("/dashboard", express.static(resolve(__dirname, "dashboard")));
 
   // Phase FORGE-SHOP-04 Slice 04.2 — search API for dashboard
-  app.get("/api/search", (req, res) => {
+  // Issue #205 fix #2: parity with MCP forge_search — also merges L3 hits.
+  app.get("/api/search", async (req, res) => {
     try {
       const params = {
         query: req.query.query || "",
@@ -6746,7 +6818,14 @@ export function createExpressApp() {
         limit: req.query.limit ? parseInt(req.query.limit, 10) : undefined,
       };
       const cwd = findProjectRoot(PROJECT_DIR);
-      const result = forgeSearch(params, { cwd });
+      const wantsMemory = !params.sources || params.sources.includes("memory");
+      let l3Hits = [];
+      if (wantsMemory && isOpenBrainConfigured(cwd)) {
+        l3Hits = await searchOpenBrainL3(cwd, params);
+      }
+      const openBrainSearchFn = l3Hits.length > 0 ? () => l3Hits : null;
+      const result = forgeSearch(params, { cwd, openBrainSearchFn });
+      if (l3Hits.length > 0) result.l3Hits = l3Hits.length;
       res.json(result);
     } catch (err) {
       res.status(500).json({ error: err.message });

@@ -13,7 +13,7 @@
  * @module memory
  */
 
-import { readFileSync, writeFileSync, appendFileSync, mkdirSync, existsSync, statSync, readdirSync, unlinkSync } from "node:fs";
+import { readFileSync, writeFileSync, appendFileSync, mkdirSync, existsSync, statSync, readdirSync, unlinkSync, renameSync } from "node:fs";
 import { resolve, join } from "node:path";
 import { createHash } from "node:crypto";
 
@@ -1630,6 +1630,144 @@ export function captureMemory(content, type, source, cwd, opts = {}) {
     return { captured: !deduped, deduped, openBrainQueued, thought };
   } catch {
     return { captured: false, deduped: false, openBrainQueued: false, thought: null };
+  }
+}
+
+// ─── Issue #205 fix #3 — Auto-drain OpenBrain queue ───────────────────
+
+/**
+ * Drain the OpenBrain queue via a direct SSE dispatcher. Designed for
+ * CLI/orchestrator use where the MCP server (and its dashboard HTTP
+ * dispatcher) may not be running. Best-effort: any failure is contained
+ * and returned in the result; the caller never sees a throw.
+ *
+ * Pipeline:
+ *   1. If OpenBrain not configured → `{ skipped: "not-configured" }`
+ *   2. Read `.forge/openbrain-queue.jsonl`; empty → `{ skipped: "empty" }`
+ *   3. Build SSE client via `createSseClient` (dynamic import from
+ *      `openbrain-replay.mjs` to avoid eager SDK load)
+ *   4. Call `drainOpenBrainQueue` with a dispatcher wrapping
+ *      `client.capture(normalizeQueueRecord(record))`
+ *   5. Atomically rewrite queue with `deferred` survivors
+ *   6. Append delivered → `openbrain-queue.archive.jsonl`
+ *   7. Append DLQ rows  → `openbrain-dlq.jsonl`
+ *   8. Append stats row → `openbrain-stats.jsonl`
+ *   9. Close client
+ *
+ * @param {string} cwd  — project root
+ * @param {{source?: string, maxBatch?: number, maxAttempts?: number, timeoutMs?: number, dispatcher?: Function}} [opts]
+ *   `dispatcher` — DI override for testing: `(record) => Promise<{ok, error?}>`.
+ *   When provided, skips SSE client creation entirely. Production callers
+ *   should omit it so the live SSE dispatcher is used.
+ * @returns {Promise<{
+ *   ok?: boolean, skipped?: string, error?: string,
+ *   attempted?: number, delivered?: number, deferred?: number, dlq?: number, durationMs?: number
+ * }>}
+ */
+export async function autoDrainOpenBrainQueue(cwd, opts = {}) {
+  const { source = "cli-drain", maxBatch = 50, maxAttempts = 5, timeoutMs = 10_000 } = opts;
+  const t0 = Date.now();
+
+  try {
+    if (!isOpenBrainConfigured(cwd) && !opts.dispatcher) {
+      return { skipped: "not-configured" };
+    }
+
+    const forgeDir = resolve(cwd, ".forge");
+    const queuePath = join(forgeDir, "openbrain-queue.jsonl");
+    if (!existsSync(queuePath)) {
+      return { skipped: "empty" };
+    }
+    const records = _readJsonl(queuePath);
+    if (records.length === 0) {
+      return { skipped: "empty" };
+    }
+
+    let dispatcher;
+    let client = null;
+    let closeClient = async () => {};
+
+    if (opts.dispatcher) {
+      // Test/DI path — caller supplies the dispatcher directly.
+      dispatcher = opts.dispatcher;
+    } else {
+      // Production path — build a direct SSE dispatcher.
+      // Dynamic import keeps MCP SDK out of the hot startup path and
+      // avoids a hard dependency at module load time.
+      const { createSseClient, readOpenBrainConfig, normalizeQueueRecord } =
+        await import("./openbrain-replay.mjs");
+
+      const cfg = readOpenBrainConfig(cwd);
+      if (!cfg || !cfg.url || !cfg.key) {
+        return { skipped: "no-config", durationMs: Date.now() - t0 };
+      }
+
+      const timeoutErr = new Error("autoDrainOpenBrainQueue: SSE timeout");
+      const withTimeout = (p) => Promise.race([
+        p,
+        new Promise((_, reject) => setTimeout(() => reject(timeoutErr), timeoutMs)),
+      ]);
+
+      try {
+        client = await withTimeout(createSseClient(cfg));
+      } catch (err) {
+        return { error: `connect: ${err.message}`, durationMs: Date.now() - t0 };
+      }
+      closeClient = async () => { try { await client.close(); } catch { /* best-effort */ } };
+
+      dispatcher = async (record) => {
+        const payload = normalizeQueueRecord(record);
+        if (!payload) return { ok: true }; // tombstones / empty — count as delivered
+        try {
+          await withTimeout(client.capture(payload));
+          return { ok: true };
+        } catch (err) {
+          return { ok: false, error: String(err?.message || err) };
+        }
+      };
+    }
+
+    let result;
+    try {
+      result = await drainOpenBrainQueue(records, dispatcher, {
+        maxBatch, maxAttempts, source,
+      });
+    } finally {
+      await closeClient();
+    }
+
+    // Atomic rewrite of queue with survivors
+    const tmpPath = queuePath + ".tmp";
+    try {
+      mkdirSync(forgeDir, { recursive: true });
+      const survivorLines = result.deferred.map((r) => JSON.stringify(r)).join("\n");
+      writeFileSync(tmpPath, survivorLines ? survivorLines + "\n" : "", "utf-8");
+      renameSync(tmpPath, queuePath);
+    } catch (err) {
+      try { if (existsSync(tmpPath)) unlinkSync(tmpPath); } catch { /* cleanup */ }
+      return { error: `atomic-write: ${err.message}`, durationMs: Date.now() - t0 };
+    }
+
+    // Append archive + DLQ + stats
+    for (const rec of result.archive) {
+      try { _appendForgeJsonl(cwd, "openbrain-queue.archive.jsonl", rec); } catch { /* swallow */ }
+    }
+    for (const rec of result.dlq) {
+      try { _appendForgeJsonl(cwd, "openbrain-dlq.jsonl", rec); } catch { /* swallow */ }
+    }
+    try { _appendForgeJsonl(cwd, "openbrain-stats.jsonl", result.stats); } catch { /* swallow */ }
+
+    return {
+      ok: true,
+      attempted: result.stats.attempted,
+      delivered: result.stats.delivered,
+      deferred: result.stats.deferred,
+      dlq: result.stats.dlq,
+      durationMs: result.stats.durationMs,
+      source,
+    };
+  } catch (err) {
+    return { error: String(err?.message || err), durationMs: Date.now() - t0 };
   }
 }
 

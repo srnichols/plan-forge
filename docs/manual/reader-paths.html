@@ -116,15 +116,16 @@
         <ol class="ladder-list space-y-3 mb-6 ml-6 list-decimal">
           <li><a href="github-stack-alignment.html"><strong>Appendix H &mdash; GitHub Stack Alignment</strong></a>. Eight-primitive map showing exactly which GitHub-native surfaces Plan Forge consumes and which it complements.</li>
           <li><a href="plan-forge-on-the-github-stack.html"><strong>Appendix I &mdash; Plan Forge on the GitHub Stack</strong></a>. The surface-by-surface layering: what runs in Actions, what runs in MCP, what writes to Issues and PRs.</li>
-          <li><a href="what-is-plan-forge.html"><strong>Chapter 1 &mdash; What Is Plan Forge?</strong></a>. Especially the <a href="what-is-plan-forge.html#what-this-is-not">IS / IS NOT table</a>. This is the chapter that answers the &ldquo;why not just Copilot?&rdquo; question without hand-waving.</li>
+          <li><a href="what-is-plan-forge.html"><strong>Chapter 1 &mdash; What Is Plan Forge?</strong></a>. Especially the <a href="what-is-plan-forge.html#what-this-is-not">IS / IS NOT table</a> and <a href="what-is-plan-forge.html#virtual-engineering-team">The Virtual Engineering Team</a> section (role map for every traditional engineering function, plus the three jobs that stay with the human). This is the chapter that answers the &ldquo;why not just Copilot?&rdquo; and &ldquo;who decides when it&rsquo;s done?&rdquo; questions without hand-waving.</li>
           <li><a href="how-it-works.html"><strong>Chapter 2 &mdash; How It Works</strong></a>. The seven-step pipeline. Read this to verify the architecture is what it claims to be.</li>
+          <li><a href="forge-master.html"><strong>Chapter &mdash; Forge-Master</strong></a> + <a href="audit-loop.html">the audit loop</a>. <em>Agents supervising agents</em>: live Observer commentary during runs, Auditor post-run grading against the plan, and the unattended audit loop that ran for two weeks on a real production Next.js site and surfaced 30+ defects. For the skeptical reviewer who has been burned by AI demos that grade their own homework, this is the part to verify.</li>
           <li><a href="memory-system.html"><strong>Chapter 22 &mdash; How the Shop Remembers</strong></a>. OpenBrain, the user-owned memory layer. This is the lock-in answer: your institutional memory lives in a service you run, not in any AI vendor's cloud.</li>
           <li><a href="enterprise-reference-architecture.html"><strong>Appendix K &mdash; Enterprise Reference Architecture</strong></a>. The deployment topology that will be relevant when you write up your recommendation.</li>
           <li><a href="compliance-and-data-residency.html"><strong>Appendix N &mdash; Compliance &amp; Data Residency</strong></a>. The shortest paragraph in your write-up that says &ldquo;here is where the data lives.&rdquo;</li>
         </ol>
 
         <div class="callout callout-success">
-          <strong>Ship-it moment.</strong> You can write a one-page adoption recommendation that names the substrate (GitHub + Copilot), the harness (Plan Forge), the memory layer (OpenBrain, self-hosted), the cost levers, and the lock-in story, with chapter citations for every claim.
+          <strong>Ship-it moment.</strong> You can write a one-page adoption recommendation that names the substrate (GitHub + Copilot), the harness (Plan Forge), the virtual engineering team (20 reviewer agents + Forge-Master supervision + the human's three jobs), the memory layer (OpenBrain, self-hosted), the cost levers, and the lock-in story, with chapter citations for every claim.
         </div>
 
         <!-- ─── Ladder 4: Enterprise architect ─── -->

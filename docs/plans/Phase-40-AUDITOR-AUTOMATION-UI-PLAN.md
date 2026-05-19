@@ -1,7 +1,7 @@
 # Phase AUDITOR-AUTOMATION-UI — Dashboard surfaces for observer, watcher cross-run, and auditor
 
 > **Status**: **DRAFT — gated on Phase-AUDITOR-AUTOMATION shipping first**. Do NOT execute (or even Step-2 harden) until the parent phase ships. Many fields and capabilities this plan surfaces don't exist yet.
-> **Parent phase**: [docs/plans/Phase-AUDITOR-AUTOMATION-PLAN.md](Phase-AUDITOR-AUTOMATION-PLAN.md). The parent ships the *capability* (config blocks, observer process, cross-run watcher mode, auditor auto-invoke). This phase ships the *discoverability* (settings UI to configure them, observability cards to see them work).
+> **Parent phase**: [docs/plans/Phase-39-AUDITOR-AUTOMATION-PLAN.md](Phase-39-AUDITOR-AUTOMATION-PLAN.md). The parent ships the *capability* (config blocks, observer process, cross-run watcher mode, auditor auto-invoke). This phase ships the *discoverability* (settings UI to configure them, observability cards to see them work).
 > **Tracks**: `pforge-mcp/ui/index.html` + `pforge-mcp/ui/app.js` (new settings tab, three new dashboard cards), `pforge-mcp/server.mjs` (any new `/api/*` endpoints needed for the cards), `pforge-mcp/tests/dashboard-*.test.mjs` (mapping invariants + behavior), docs sweep with new screenshots.
 > **Estimated cost**: low-to-medium. All mechanical UI work on an established pattern (Phase-30 settings decomposition). Zero new backend capabilities, zero new MCP tools. The only `/api/*` additions are read endpoints to feed the cards.
 > **Pipeline**: Specify ✅ → Harden ⏳ (HELD until parent ships) → Execute → S7 unit QA → S8 testbed E2E + browser → S9 docs → S10 retro.
@@ -14,7 +14,7 @@
 
 Hardened plan MUST NOT execute until:
 
-- [ ] Parent phase [Phase-AUDITOR-AUTOMATION-PLAN.md](Phase-AUDITOR-AUTOMATION-PLAN.md) has shipped (S11 retro complete; CHANGELOG entry promoted; tag pushed)
+- [ ] Parent phase [Phase-39-AUDITOR-AUTOMATION-PLAN.md](Phase-39-AUDITOR-AUTOMATION-PLAN.md) has shipped (S11 retro complete; CHANGELOG entry promoted; tag pushed)
 - [ ] `.forge.json` schema actually contains `hooks.postRun.invokeAuditor` and `forgeMaster.observer` + `forgeMaster.auditor` blocks (verify by reading `templates/.forge.json`)
 - [ ] `forge_master_observe` tool actually appears in `forge_capabilities` output
 - [ ] `forge_watch({ mode: "cross-run" })` returns valid output against this repo's `.forge/runs/` directory
@@ -23,7 +23,7 @@ Hardened plan MUST NOT execute until:
 - [ ] `master` is clean
 - [ ] `lockHash` (added in Step-2 harden) matches plan body at run time
 
-**To resume**: change Status to `HARDENED — cleared for execution YYYY-MM-DD` and run `pforge run-plan docs/plans/Phase-AUDITOR-AUTOMATION-UI-PLAN.md`.
+**To resume**: change Status to `HARDENED — cleared for execution YYYY-MM-DD` and run `pforge run-plan docs/plans/Phase-40-AUDITOR-AUTOMATION-UI-PLAN.md`.
 
 ---
 
@@ -250,7 +250,7 @@ Append §"What actually shipped" to this plan file:
 - Known gotchas surfaced during execution (especially any testbed-only failures caught in S8)
 - Carryover for next phase (e.g., per-run drill-down on cross-run anomalies, auditor PR-opening UI, mobile-responsive cards)
 
-**Gate**: `bash -c "grep -q '## What actually shipped' docs/plans/Phase-AUDITOR-AUTOMATION-UI-PLAN.md"` returns 0.
+**Gate**: `bash -c "grep -q '## What actually shipped' docs/plans/Phase-40-AUDITOR-AUTOMATION-UI-PLAN.md"` returns 0.
 
 ---
 
@@ -328,7 +328,7 @@ All commits land on `master`. PreCommit chain runs on each.
 
 | Date | Action | By |
 |---|---|---|
-| 2026-05-18 | Draft created as planned follow-up to [Phase-AUDITOR-AUTOMATION-PLAN.md](Phase-AUDITOR-AUTOMATION-PLAN.md). Held until parent phase ships. | Copilot session |
+| 2026-05-18 | Draft created as planned follow-up to [Phase-39-AUDITOR-AUTOMATION-PLAN.md](Phase-39-AUDITOR-AUTOMATION-PLAN.md). Held until parent phase ships. | Copilot session |
 | _pending_ | Parent phase shipped — verify dependencies before lifting Execution Hold | _pending_ |
 | _pending_ | Step-2 harden: lockHash, tightened acceptance criteria, screenshot capture script confirmed | _pending_ |
 | _pending_ | Execution Hold lifted | _pending_ |

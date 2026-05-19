@@ -14,14 +14,14 @@
 
 Hardened plan MUST NOT execute until:
 
-- [ ] **Phase-AUDITOR-AUTOMATION has shipped** ([docs/plans/Phase-AUDITOR-AUTOMATION-PLAN.md](Phase-AUDITOR-AUTOMATION-PLAN.md)). This phase touches the same surfaces (smith hook list, capabilities.mjs tool list, error catalog) and would create merge hell if run in parallel. Seeding the enums file with the final post-AUDITOR shape (including `PostRun` hook, `forge_master_observe` tool, `observer-budget-exceeded` + `auditor-spawn-failed` error codes) is the right design moment.
-- [ ] **Phase-AUDITOR-AUTOMATION-UI has shipped** ([docs/plans/Phase-AUDITOR-AUTOMATION-UI-PLAN.md](Phase-AUDITOR-AUTOMATION-UI-PLAN.md)). Same rationale — UI follow-up adds dashboard settings fields that map to `MODEL_TIERS`; better to seed the enum after the UI naming is locked.
+- [ ] **Phase-39-AUDITOR-AUTOMATION has shipped** ([docs/plans/Phase-39-AUDITOR-AUTOMATION-PLAN.md](Phase-39-AUDITOR-AUTOMATION-PLAN.md)). This phase touches the same surfaces (smith hook list, capabilities.mjs tool list, error catalog) and would create merge hell if run in parallel. Seeding the enums file with the final post-AUDITOR shape (including `PostRun` hook, `forge_master_observe` tool, `observer-budget-exceeded` + `auditor-spawn-failed` error codes) is the right design moment.
+- [ ] **Phase-40-AUDITOR-AUTOMATION-UI has shipped** ([docs/plans/Phase-40-AUDITOR-AUTOMATION-UI-PLAN.md](Phase-40-AUDITOR-AUTOMATION-UI-PLAN.md)). Same rationale — UI follow-up adds dashboard settings fields that map to `MODEL_TIERS`; better to seed the enum after the UI naming is locked.
 - [ ] No competing in-flight plan is modifying `pforge.ps1`, `pforge.sh`, `pforge-mcp/capabilities.mjs`, or `pforge-mcp/cost-service.mjs` (this phase touches all four)
 - [ ] `master` is clean
 - [ ] `lockHash` (added in Step-2 harden) matches plan body at run time
 - [ ] All new hooks, tools, error codes, and modes from prior phases are settled — no in-flight `feat:` commits that would add another stable-set identifier between Execution Hold lift and S1 commit
 
-**To resume**: change Status to `HARDENED — cleared for execution YYYY-MM-DD` and run `pforge run-plan docs/plans/Phase-ENUMS-CENTRALIZATION-PLAN.md`.
+**To resume**: change Status to `HARDENED — cleared for execution YYYY-MM-DD` and run `pforge run-plan docs/plans/Phase-41-ENUMS-CENTRALIZATION-PLAN.md`.
 
 ---
 

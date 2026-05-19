@@ -20,7 +20,7 @@ Hardened plan MUST NOT execute until:
 - [ ] `lockHash` (added in Step-2 harden) matches plan body at run time
 - [ ] OpenBrain is configured (`brain_recall` works) — auditor's data sources depend on it for cross-session memory
 
-**To resume**: change Status to `HARDENED — cleared for execution YYYY-MM-DD` and run `pforge run-plan docs/plans/Phase-AUDITOR-AUTOMATION-PLAN.md`.
+**To resume**: change Status to `HARDENED — cleared for execution YYYY-MM-DD` and run `pforge run-plan docs/plans/Phase-39-AUDITOR-AUTOMATION-PLAN.md`.
 
 ---
 
@@ -126,7 +126,7 @@ Each piece is opt-in. No existing plan, hook, or config needs editing for the ph
 - Replacing or deprecating `forge_master_ask` — observer is a sibling, not a successor
 - Changing the **default** model Forge-Master uses for reasoning — defaults inherit ask mode. (`modelTier` knob lets operators override, but the shipped default does not change current behavior.)
 - Adding new entries to the model registry — `modelTier` resolves against whatever models the existing registry already exposes
-- **Dashboard settings form fields** for the new `forgeMaster.observer.*` and `forgeMaster.auditor.*` knobs (CLI + `.forge.json` only this phase; dashboard surface is the explicit scope of the follow-up [docs/plans/Phase-AUDITOR-AUTOMATION-UI-PLAN.md](Phase-AUDITOR-AUTOMATION-UI-PLAN.md))
+- **Dashboard settings form fields** for the new `forgeMaster.observer.*` and `forgeMaster.auditor.*` knobs (CLI + `.forge.json` only this phase; dashboard surface is the explicit scope of the follow-up [docs/plans/Phase-40-AUDITOR-AUTOMATION-UI-PLAN.md](Phase-40-AUDITOR-AUTOMATION-UI-PLAN.md))
 - **Dashboard cards** for observer narrations, cross-run watcher anomalies, or auditor latest report (also deferred to the UI follow-up phase)
 - Migrating any existing plan or `.forge.json` to use the new opt-in blocks
 - Touching `pforge-sdk/`, `extensions/`, `presets/`, `pforge-mcp/cost-service.mjs` (universal tripwire)
@@ -305,7 +305,7 @@ Append §"What actually shipped" to this plan file:
 - Known gotchas surfaced during execution (including any testbed-only failures caught in S10)
 - Carryover for next phase (e.g., dashboard card UI for observer, A4 auto-PR mode, observer cross-machine aggregation)
 
-**Gate**: `bash -c "grep -q '## What actually shipped' docs/plans/Phase-AUDITOR-AUTOMATION-PLAN.md"` returns 0.
+**Gate**: `bash -c "grep -q '## What actually shipped' docs/plans/Phase-39-AUDITOR-AUTOMATION-PLAN.md"` returns 0.
 
 ---
 
@@ -393,8 +393,8 @@ All commits land on `master`. PreCommit chain (shipped in WORKER-GUARDRAILS A3) 
 
 ## Carryover (explicitly out of this phase)
 
-- **Stable-enum centralization** — [docs/plans/Phase-ENUMS-CENTRALIZATION-PLAN.md](Phase-ENUMS-CENTRALIZATION-PLAN.md) drafted from this phase's planning friction. The 4 hardcoded-surface updates locked into this plan's Scope Contract (smith hook arrays, capabilities.mjs tool list, server.mjs self-test) are exactly the pattern that drove the enums phase. Execution Hold gates on **this** phase + the UI follow-up shipping first, so enums.mjs seeds with the final post-AUDITOR shape.
-- **Dashboard UI follow-up** — [docs/plans/Phase-AUDITOR-AUTOMATION-UI-PLAN.md](Phase-AUDITOR-AUTOMATION-UI-PLAN.md) covers: settings tab for Forge-Master roles (`tab-settings-forgemaster` with `observer.*` and `auditor.*` `cfg-*` fields), observer narrations live card, cross-run watcher anomalies card, auditor latest-report card. Drafted but explicitly gated on this phase shipping first — the UI surfaces depend on the config fields and capabilities this phase creates.
+- **Stable-enum centralization** — [docs/plans/Phase-41-ENUMS-CENTRALIZATION-PLAN.md](Phase-41-ENUMS-CENTRALIZATION-PLAN.md) drafted from this phase's planning friction. The 4 hardcoded-surface updates locked into this plan's Scope Contract (smith hook arrays, capabilities.mjs tool list, server.mjs self-test) are exactly the pattern that drove the enums phase. Execution Hold gates on **this** phase + the UI follow-up shipping first, so enums.mjs seeds with the final post-AUDITOR shape.
+- **Dashboard UI follow-up** — [docs/plans/Phase-40-AUDITOR-AUTOMATION-UI-PLAN.md](Phase-40-AUDITOR-AUTOMATION-UI-PLAN.md) covers: settings tab for Forge-Master roles (`tab-settings-forgemaster` with `observer.*` and `auditor.*` `cfg-*` fields), observer narrations live card, cross-run watcher anomalies card, auditor latest-report card. Drafted but explicitly gated on this phase shipping first — the UI surfaces depend on the config fields and capabilities this phase creates.
 - A4 auditor opening PRs with proposed patches (auditor stays read-only this phase)
 - Cross-machine observer aggregation (single-machine only this phase)
 - Watcher → auditor real-time escalation (when watcher fires a critical anomaly mid-run, auto-invoke auditor with that anomaly as a hint — needs Cluster A + Cluster B to ship first to evaluate signal quality)

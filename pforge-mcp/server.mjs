@@ -159,6 +159,8 @@ import { syncMemories } from "./sync-memories.mjs";
 import { syncInstructions } from "./sync-instructions.mjs";
 // Phase WORKER-GUARDRAILS A2 — forge_diff_classify: classify staged diff by category
 import { classifyDiff } from "./diff-classify.mjs";
+// Phase-40 — cross-run watcher snapshot builder
+import { buildCrossRunSnapshot } from "./watcher.mjs";
 import express from "express";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -9557,6 +9559,55 @@ export function createExpressApp() {
   import("./forge-master-routes.mjs").then(({ registerForgeMasterRoutes }) => {
     registerForgeMasterRoutes(app, invokeForgeTool);
   }).catch(err => console.warn(`[forge-master-routes] Skipped: ${err.message}`));
+
+  // Phase-40 — GET /api/watcher/cross-run: cross-run health aggregation snapshot
+  app.get("/api/watcher/cross-run", async (_req, res) => {
+    try {
+      const result = await buildCrossRunSnapshot(PROJECT_DIR);
+      res.json(result);
+    } catch (err) { res.status(500).json({ error: err.message }); }
+  });
+
+  // Phase-40 — GET /api/auditor/latest: most recent auditor auto-invoke result
+  app.get("/api/auditor/latest", (_req, res) => {
+    try {
+      const runsDir = resolve(PROJECT_DIR, ".forge", "runs");
+      if (!existsSync(runsDir)) return res.json({ triggered: false, message: "No runs found." });
+      const dirs = readdirSync(runsDir, { withFileTypes: true })
+        .filter((e) => e.isDirectory()).map((e) => e.name).sort().reverse();
+      for (const runId of dirs) {
+        const summaryPath = resolve(runsDir, runId, "summary.json");
+        if (!existsSync(summaryPath)) continue;
+        try {
+          const summary = JSON.parse(readFileSync(summaryPath, "utf-8"));
+          if (summary._auditor?.triggered) return res.json({ runId, ...summary._auditor });
+        } catch { continue; }
+      }
+      return res.json({ triggered: false, message: "No auditor invocations found in recent runs." });
+    } catch (err) { res.status(500).json({ error: err.message }); }
+  });
+
+  // Phase-40 — GET /api/brain/recall: list brain records by source (entity) key
+  app.get("/api/brain/recall", (req, res) => {
+    try {
+      const source = req.query.source || "";
+      const limit = Math.max(1, Math.min(100, parseInt(req.query.limit) || 20));
+      if (!source) return res.status(400).json({ error: "source query parameter is required" });
+      const brainDir = resolve(PROJECT_DIR, ".forge", "brain", source);
+      if (!existsSync(brainDir)) {
+        return res.json({ records: [], total: 0, message: `No brain records found for source=${source}. Run the observer first.` });
+      }
+      const files = readdirSync(brainDir).filter((f) => f.endsWith(".json")).sort().reverse();
+      const records = [];
+      for (const file of files.slice(0, limit)) {
+        try {
+          const raw = JSON.parse(readFileSync(resolve(brainDir, file), "utf-8"));
+          records.push({ id: file.replace(/\.json$/, ""), ...raw });
+        } catch { continue; }
+      }
+      return res.json({ records, total: files.length, showing: records.length });
+    } catch (err) { res.status(500).json({ error: err.message }); }
+  });
 
   return app;
 }

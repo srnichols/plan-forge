@@ -458,3 +458,63 @@ If any of these has drifted since this appendix was written, update the row abov
 | Dashboard main-view `<h2>` count | ~15 sections (Progress, Runs, Cost, Actions, Replay, Extensions, Traces, Skills, Watcher, Audit-Loop, Timeline, Ports …) | `grep -c '<h2 id=' docs/manual/dashboard.html` |
 | Screenshots folder file count | 13 PNGs | `ls docs/manual/assets/screenshots/*.png \| wc -l` (this phase adds 4 → 17) |
 | Parent phase's CHANGELOG entry state | Either still in `[Unreleased]` or already promoted to a `[X.Y.Z]` heading | `head -20 CHANGELOG.md` |
+
+---
+
+## What actually shipped
+
+> **Written**: 2026-05-19 — S10 Retro
+
+### Final commit SHAs per slice
+
+| Slice | Description | Commit SHA |
+|-------|-------------|------------|
+| S0 | Baseline test harness | `a1e4acb` |
+| S0 (updated) | S0 baseline updated to reflect S4 shipped state (tab count + narrations card) | `c71c585` |
+| S1 | `tab-settings-forgemaster` section + observer fields | `3a83da2` |
+| S1 (addl) | Auditor settings wired alongside observer in same tab (advance commit labelled slice-2) | `1ddeda6` |
+| S2 | Auditor fields completed in `tab-settings-forgemaster` | `3d54459` |
+| S3 | `GET /api/watcher/cross-run` read endpoint + cache | `b537a02` |
+| S4 | Observer narrations card | `c71c585` |
+| S5 | Cross-run watcher anomalies card | `e5a420d` |
+| S4–S6 (consolidated) | Observer narrations + cross-run + auditor report cards — app.js + index.html final wiring | `78d34e3` |
+| S7 (fix) | Tab-count assertions updated for `tab-settings-forgemaster` | `049de75` |
+| S7 (fix) | Remove duplicate `/api/watcher/cross-run` route; update tab count to 38 | `32b2a0a` |
+| S8 | Testbed E2E + real-browser scenarios (first pass) | `698cdbe` |
+| S8 (complete) | Testbed E2E + real-browser validation (all 8 scenarios passing) | `702f797` |
+| S9 | Screenshots + manual documentation updates (first pass) | `646fb1c` |
+| S9 (complete) | Docs sweep + screenshots (all four screenshots committed) | `7155811` |
+| S10 | Retro | this commit |
+
+### Deviations from draft
+
+1. **S4–S6 cards were delivered via two parallel session tracks then consolidated.** Individual commits for S4 (`c71c585`) and S5 (`e5a420d`) landed first; then a consolidated commit (`78d34e3 feat(slice-4-6)`) added the S6 auditor-report card and reconciled the S4/S5 wiring in `app.js` and `index.html`. The plan called for three separate slice commits; the final state is correct but the SHA sequence is multi-commit across two sessions rather than three clean individual slices.
+
+2. **Duplicate route bug required a post-S7 fix commit.** The `/api/watcher/cross-run` route was registered twice after the S3 and S4-6 sessions both touched `server.mjs`. Caught at S7 QA time; fixed in `32b2a0a` before S8 ran. No observable behavior change — first registered handler wins in Express — but test assertions on route-count failed. Fix is clean.
+
+3. **S7 had no single standalone commit.** The S7 QA sweep produced two fix commits (`049de75`, `32b2a0a`) rather than a single `test(dashboard-ui): S7 — full unit QA sweep` commit. The Commit Convention was not followed for S7. All tests pass; only the commit message convention is off.
+
+4. **S8 and S9 each produced two commits (two sessions each).** Both slices started in one session and completed in a second. The four resulting commits are all correctly labelled; the 2-commit-per-slice split is cosmetic only.
+
+5. **`1ddeda6` commit subject reads `feat(slice-2)` but its content is S1 work.** The commit adds auditor settings to the same tab section that S1 introduced. This was a mislabelling during execution; the net content and test coverage are correct.
+
+### Known gaps and limitations
+
+1. **Real-browser XSS scenario relied on JSDOM assertions for the DOM check.** The S8 testbed `dashboard-xss-injection` scenario was executed but the Playwright real-browser step could not be verified end-to-end without a live running dashboard server. The JSDOM-level sanitization tests in `dashboard-auditor-report-card.test.mjs` confirm the server-side sanitizer strips `<script>`, `<iframe>`, and `javascript:` URLs before the markdown reaches the client; the `window.__pwned` check was included in the test fixture. This partially satisfies the S8 MUST criterion; a live-server browser run is the recommended follow-up.
+
+2. **`/api/auditor/latest` empty-state relies on fixture availability.** The auditor latest-report card empty state (no `.forge/health/latest.md`) was validated via unit test fixtures. Testbed at `E:\GitHub\plan-forge-testbed` may or may not have a `.forge/health/latest.md` present depending on whether Phase-39's auditor hook was triggered before S8 ran. The `dashboard-auditor-no-reports.json` scenario guards against this, but its execution was in-process rather than against a live testbed directory.
+
+3. **`docs/llms.txt` not updated.** The S9 docs sweep did not add the three new dashboard surfaces (observer narrations, cross-run anomalies, auditor report card) to `docs/llms.txt` or root `llms.txt`. These files use a manually-maintained format and were out of scope for automation. Carryover.
+
+4. **`capabilities.mjs` `dashboardSurfaces` field not confirmed present.** Appendix A row 5 called for verifying or adding the three surface names to `TOOL_METADATA` for `forge_home_snapshot`. The docs sweep updated `docs/capabilities.md` text but did not verify the `capabilities.mjs` array field existed. May need follow-up if `forge_capabilities` agent discovery does not surface the new cards.
+
+### Carryover items (next phase gates on these)
+
+- **Per-run drill-down on cross-run anomalies** — this phase shows aggregate; per-run views need a new card with run-selector (separate phase)
+- **Auditor PR-opening UI** — auditor stays read-only this phase; auto-PR mode deferred per Carryover section
+- **Mobile-responsive card layouts** — global dashboard concern; not specific to this phase
+- **Real-time narration cost meter** — requires observer to emit cost-per-narration events; deferred
+- **`docs/llms.txt` update** — append three new dashboard surfaces to both `docs/llms.txt` and root `llms.txt`
+- **Live-server XSS browser validation** — re-run `dashboard-xss-injection` scenario against a live dashboard server with real Playwright browser to close the JSDOM-only gap (see Known gaps #1)
+- **Export auditor report as PDF / share link** — deferred per Carryover section
+- **Notification integration** — observer narrations → Slack/Teams/email routing via existing notification system

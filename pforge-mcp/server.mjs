@@ -156,6 +156,8 @@ import { exportPlan, exportPlanFromFile } from "./export-plan.mjs";
 import { syncMemories } from "./sync-memories.mjs";
 // v3.0.0 — forge_sync_instructions: generate .github/copilot-instructions.md from forge project context
 import { syncInstructions } from "./sync-instructions.mjs";
+// Phase WORKER-GUARDRAILS A2 — forge_diff_classify: classify staged diff by category
+import { classifyDiff } from "./diff-classify.mjs";
 import express from "express";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -749,6 +751,17 @@ const TOOLS = [
         path: { type: "string", description: "Project directory (default: current)" },
       },
       required: ["plan"],
+    },
+  },
+  {
+    name: "forge_diff_classify",
+    description: "Classify staged git diff changes by category (plan, test, docs, config, chore, scope, unknown). Advisory-only — never blocks. Returns a per-file classification and summary counts. Also available as a preCommit chain entry in plan-forge.json.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        since: { type: "string", description: "Git ref to diff against instead of --staged (e.g., HEAD~1)" },
+        path: { type: "string", description: "Project directory (default: current)" },
+      },
     },
   },
   {
@@ -2194,6 +2207,8 @@ function executeTool(name, args) {
       return runPforge("status", cwd);
     case "forge_diff":
       return runPforge(`diff "${args.plan}"`, cwd);
+    case "forge_diff_classify":
+      return null; // Handled async in CallToolRequestSchema handler
     case "forge_ext_search":
       return runPforge(`ext search ${args.query || ""}`.trim(), cwd);
     case "forge_ext_info":
@@ -2335,7 +2350,7 @@ function _wrapWithToolSpan(handler) {
 const _READ_ONLY_TOOLS = new Set([
   "forge_capabilities", "forge_status", "forge_search", "forge_timeline",
   "forge_watch_live", "forge_home_snapshot", "forge_cost_report",
-  "forge_plan_status", "forge_diff",
+  "forge_plan_status", "forge_diff", "forge_diff_classify",
 ]);
 
 let _rbacConfigCache; // undefined = not yet loaded; null = absent
@@ -2548,6 +2563,16 @@ server.setRequestHandler(CallToolRequestSchema, _wrapWithToolSpan(async (request
       return { content: [{ type: "text", text: `Run directory exists but no data: ${targetDir}` }] };
     } catch (err) {
       return { content: [{ type: "text", text: `Status error: ${err.message}` }], isError: true };
+    }
+  }
+
+  if (name === "forge_diff_classify") {
+    try {
+      const cwd = args.path ? findProjectRoot(resolve(args.path)) : findProjectRoot(PROJECT_DIR);
+      const result = classifyDiff({ cwd, since: args.since || undefined });
+      return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
+    } catch (err) {
+      return { content: [{ type: "text", text: `diff-classify error: ${err.message}` }], isError: true };
     }
   }
 

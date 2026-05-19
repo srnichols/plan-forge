@@ -6,6 +6,14 @@
           "name": "master-reject",
           "type": "builtin",
           "description": "Reject direct commits to default branch during run-plan"
+        },
+        {
+          "name": "diff-classify",
+          "type": "command",
+          "command": ".github/hooks/scripts/check-diff-classify.sh",
+          "windows": "powershell -ExecutionPolicy Bypass -File .github/hooks/scripts/check-diff-classify.ps1",
+          "timeout": 15,
+          "description": "Classify staged diff by category (plan, test, docs, config, chore, scope) — advisory only"
         }
       ]
     },

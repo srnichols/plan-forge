@@ -30,17 +30,23 @@ Listed in **execution order**. Each phase's Execution Hold gates on its predeces
 - **Status**: 📋 Planned (DRAFT, pending Step-2 harden)
 - **Depends on**: Phase 42 retro shipping ✅
 
-### Phase 51 — CAPABILITIES-SPLIT
-- **Goal**: Decompose `pforge-mcp/capabilities.mjs` (3,294 LOC, A3 finding) into 4 focused sub-modules under `pforge-mcp/capabilities/` (tool-metadata, schemas, reference + subsystems, surface). `capabilities.mjs` becomes a ≤50-line re-export shim — zero consumer imports modified. Validates the split pattern (re-export shim + snapshot-as-contract + circular-import gate + no-behavior-change) for inheritance by Phases 52 and 53.
-- **Plan**: [Phase-51-CAPABILITIES-SPLIT-PLAN.md](./Phase-51-CAPABILITIES-SPLIT-PLAN.md)
-- **Status**: 🔬 Hardened (cleared for `pforge run-plan` once Phase 43 retro ships)
-- **Depends on**: Phase 43 shipping (D-series ESLint errors resolved first — avoids compounding violations across new sub-modules)
+### Phase 52 — SERVER-SPLIT
+- **Goal**: Decompose `pforge-mcp/server.mjs` (9,812 LOC, A2 finding) into focused sub-modules under `pforge-mcp/server/`. `server.mjs` becomes a ≤50-line re-export shim — zero consumer imports modified. Inherits Phase 51's four cross-cutting concerns: re-export shim, snapshot-as-contract, circular-import gate (`no-circular-imports.test.mjs` inherited unchanged), no-behavior-change rule.
+- **Plan**: _DRAFT — to be hardened. Run `step2-harden-plan.prompt.md` before executing. Pre-S0 recommended first step: grep all `from './server.mjs'` import sites. Expect 6–8 sub-modules. Snapshot proxy: route manifest or registered tool names if `buildServer()` output is env-dependent._
+- **Status**: 📋 Planned (DRAFT, pending Step-2 harden)
+- **Depends on**: Phase 51 shipping (establishes re-export shim + snapshot-as-contract pattern)
 
-### Phase 44 — CLEAN-CODE-MODULE-EXTRACTION
-- **Goal**: ~~Extract all three high-oversized modules (A1 orchestrator.mjs 13,933 LOC, A2 server.mjs 9,812 LOC, A3 capabilities.mjs 3,294 LOC) into focused sub-modules.~~ **Superseded** — split into per-file phases for risk-graduated execution: Phase 51 (A3, lowest risk, pattern validation), Phase 52 (A2, medium risk), Phase 53 (A1, highest risk). Phase 51's S5 retro retires this entry and promotes the 52/53 stubs.
-- **Plan**: ~~`Phase-PROPOSED-A-MODULE-SIZE-STUB.md`~~ — split into Phase 51 (active above) and forthcoming Phase 52 + Phase 53 stubs (promoted by Phase 51's S5)
-- **Status**: ⏸️ Superseded by Phase 51 (this entry is retired by Phase 51's S5 retro)
-- **Depends on**: Phase 51 shipping (establishes the cross-cutting pattern that Phase 52/53 inherit)
+### Phase 53 — ORCHESTRATOR-SPLIT
+- **Goal**: Decompose `pforge-mcp/orchestrator.mjs` (13,933 LOC, A1 finding) into focused sub-modules under `pforge-mcp/orchestrator/`. `orchestrator.mjs` becomes a ≤50-line re-export shim — zero consumer imports modified. Inherits Phase 51's four cross-cutting concerns. **Adds architectural obligation**: resolve the pre-existing `orchestrator.mjs > cost-service.mjs` circular import (clearing the `KNOWN_CYCLES` allowlist to empty). Highest blast radius of the three splits — recommend `--quorum=power` and full test run before promotion.
+- **Plan**: _DRAFT — to be hardened. Run `step2-harden-plan.prompt.md` before executing. Expect 8–12 sub-modules. Snapshot approach may require mocking more runtime state; a dry-run plan-execution fixture test is the recommended analog._
+- **Status**: 📋 Planned (DRAFT, pending Step-2 harden)
+- **Depends on**: Phase 52 shipping (risk-graduated progression — server split must validate the pattern at medium scale before tackling orchestrator)
+
+### Phase 54 — GH-METRICS-PERSONAL
+- **Goal**: Personal-account fallback for the "GitHub × Plan-Forge" dashboard tab. Today the tab is hard-wired to `/orgs/{org}/copilot/metrics` which 404s for personal Copilot accounts. Phase 54 adds a `GET /api/github-personal` endpoint backed by a new `pforge-mcp/github-personal.mjs` module that returns user profile + repo activity + Copilot-coauthor commit % (heuristic AI-assist signal). Dashboard auto-detects mode and renders three new cards in personal mode while preserving the org-mode path verbatim.
+- **Plan**: [Phase-54-GH-METRICS-PERSONAL-PLAN.md](./Phase-54-GH-METRICS-PERSONAL-PLAN.md)
+- **Status**: 🔬 Hardened (lockHash `44a28f3b…`, ready for `pforge run-plan`)
+- **Depends on**: nothing — independent of the Phase 43/51/52/53 dependency chain. May run concurrently.
 
 ---
 
@@ -53,6 +59,7 @@ Listed in **execution order**. Each phase's Execution Hold gates on its predeces
 | 41 — ENUMS-CENTRALIZATION | Single source of truth for stable small-set identifiers (`pforge-mcp/enums.mjs`) — zero hardcoded-array drift | 2026-05-19 | [Phase-41-ENUMS-CENTRALIZATION-PLAN.md](./Phase-41-ENUMS-CENTRALIZATION-PLAN.md) |
 | 42 — CLEAN-CODE-AUDIT | Read-only Clean Code audit — 27 findings across 6 categories, catalog + two phase stubs promoted | 2026-05-19 | [Phase-42-CLEAN-CODE-AUDIT-PLAN.md](./Phase-42-CLEAN-CODE-AUDIT-PLAN.md) |
 | 50 — CLEAN-CODE-GUIDANCE | Clean-code agent guidance — instruction file, `/clean-code-review` skill, architecture-principles expansion | 2026-05-19 | [Phase-50-CLEAN-CODE-GUIDANCE-PLAN.md](./Phase-50-CLEAN-CODE-GUIDANCE-PLAN.md) |
+| 51 — CAPABILITIES-SPLIT | Decomposed `pforge-mcp/capabilities.mjs` (3,294 LOC) into 4 focused sub-modules under `pforge-mcp/capabilities/`; `capabilities.mjs` is a ≤50-line re-export shim. Validated re-export shim + snapshot-as-contract + circular-import gate pattern for Phases 52 and 53. | 2026-05-19 | [Phase-51-CAPABILITIES-SPLIT-PLAN.md](./Phase-51-CAPABILITIES-SPLIT-PLAN.md) |
 | — | All shipped phases predating Phase 39 | See [CHANGELOG.md](../../CHANGELOG.md) and root [ROADMAP.md](../../ROADMAP.md) | — |
 
 > Future shipped phases promote from the Active table above with their actual ship date and any retro notes.

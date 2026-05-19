@@ -1,7 +1,7 @@
 /**
- * Phase 40 — Settings > Forge-Master observer tab.
+ * Phase 40 — Settings > Forge-Master observer + auditor tab.
  *
- * Source + DOM contract tests for S1.
+ * Source + DOM contract tests for S1 (observer) and S2 (auditor).
  */
 
 import { describe, it, expect } from "vitest";

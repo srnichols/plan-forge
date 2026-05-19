@@ -711,13 +711,26 @@ export const TOOL_METADATA = {
       "broadcasts tempering-run-started / tempering-run-scanner-started / tempering-run-scanner-completed / tempering-run-completed hub events",
       "captures an L3 memory entry on completion",
     ],
+    inputSchema: {
+      objective: {
+        type: "object",
+        description: "Optional objective guard (A7 — Worker Guardrails). When provided, the harness runs `command` before and after the scanner suite and accepts the candidate only if the metric moves in the `acceptIf` direction. Non-zero exit or non-numeric stdout fails fast. Worker never sees the baseline number.",
+        properties: {
+          command: { type: "string", description: "Shell command that prints a single numeric value on stdout. Non-zero exit = rejected." },
+          acceptIf: { type: "string", enum: ["greater", "less"], description: "Accept when post-run metric is greater (default) or less than the baseline." },
+        },
+        required: ["command"],
+      },
+    },
     errors: {
       MISSING_PROJECTDIR: { message: "projectDir required", recovery: "Pass `path` or invoke from a project directory" },
       NO_ADAPTER: { message: "No preset adapter for detected stack", recovery: "Install the matching preset or extend presets/<stack>/tempering-adapter.mjs" },
+      OBJECTIVE_BASELINE_FAILED: { message: "Objective command failed at baseline capture", recovery: "Ensure command exits 0 and prints a single numeric line" },
+      OBJECTIVE_BASELINE_NON_NUMERIC: { message: "Objective command stdout was not a number", recovery: "Command must print exactly one numeric value (e.g., 87.5)" },
     },
     example: {
-      input: { sliceRef: { plan: "Phase-FOO.md", slice: "04.1" } },
-      output: { ok: true, runId: "run-2026-04-19T...", stack: "typescript", verdict: "pass", scanners: [{ scanner: "unit", pass: 412, fail: 0, skipped: 1 }, { scanner: "contract", pass: 8, fail: 0, violations: [] }, { scanner: "visual-diff", verdict: "pass", pass: 3, fail: 0 }] },
+      input: { sliceRef: { plan: "Phase-FOO.md", slice: "04.1" }, objective: { command: "node coverage-pct.js", acceptIf: "greater" } },
+      output: { ok: true, runId: "run-2026-04-19T...", stack: "typescript", verdict: "pass", scanners: [{ scanner: "unit", pass: 412, fail: 0, skipped: 1 }], objective: { accepted: true, blocked: false, reason: "objective-met", acceptIf: "greater" } },
     },
   },
   forge_tempering_approve_baseline: {

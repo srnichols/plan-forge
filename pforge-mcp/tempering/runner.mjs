@@ -424,6 +424,13 @@ export async function runTemperingRun(opts = {}) {
     env = process.env,
     // Phase-28.5 Slice 1 — DI hook for LLM visual-diff analyzer.
     spawnWorker = null,
+    // Phase-WORKER-GUARDRAILS Slice 7 — A7 objective mode.
+    // `objective.command` runs before/after scanners; result only accepted
+    // if metric moves in the direction specified by `objective.acceptIf`
+    // ("greater" or "less"). Worker never sees the baseline number.
+    objective = null,
+    // DI override for objective command execution (tests only).
+    objectiveSpawn = null,
   } = opts;
 
   const corr = correlationId || `temper-run-${randomUUID()}`;
@@ -472,6 +479,48 @@ export async function runTemperingRun(opts = {}) {
   let changedFiles = [];
   if (config.execution && config.execution.regressionFirst && lastGreenSha) {
     changedFiles = await pickChangedFiles({ cwd: projectDir, lastGreenSha, gitSpawn: spawnFn });
+  }
+
+  // ── A7 Objective — capture baseline BEFORE scanners run ──
+  // Worker MUST NOT see the baseline number (decision #10).
+  // Non-zero exit or non-numeric stdout → fail fast, never run scanners.
+  let objectiveBaseline = null;
+  if (objective && objective.command && typeof objective.command === "string") {
+    const objSpawn = objectiveSpawn || spawnFn;
+    const cmdParts = objective.command.trim().split(/\s+/);
+    const baselineProc = await runSubprocess(cmdParts, {
+      cwd: projectDir,
+      budgetMs: 30000,
+      spawn: objSpawn,
+    });
+    if (baselineProc.exitCode !== 0 || baselineProc.timedOut) {
+      return {
+        ok: false,
+        error: "objective-baseline-failed",
+        code: "objective-baseline-failed",
+        correlationId: corr,
+        objective: {
+          accepted: false,
+          blocked: true,
+          reason: baselineProc.timedOut ? "objective-baseline-timed-out" : "objective-baseline-non-zero-exit",
+        },
+      };
+    }
+    const baselineNum = parseFloat(baselineProc.stdout.trim());
+    if (!isFinite(baselineNum)) {
+      return {
+        ok: false,
+        error: "objective-baseline-non-numeric",
+        code: "objective-baseline-non-numeric",
+        correlationId: corr,
+        objective: {
+          accepted: false,
+          blocked: true,
+          reason: "objective-baseline-non-numeric",
+        },
+      };
+    }
+    objectiveBaseline = baselineNum;
   }
 
   // ── Unit scanner ──
@@ -1043,7 +1092,51 @@ export async function runTemperingRun(opts = {}) {
 
   // Overall verdict: worst of the scanner verdicts
   const scanners = [unitResult, integrationResult, uiResult, contractResult, visualDiffResult, flakinessResult, perfBudgetResult, loadStressResult, mutationResult, contentAuditResult];
-  const overallVerdict = deriveOverallVerdict(scanners);
+  let overallVerdict = deriveOverallVerdict(scanners);
+
+  // ── A7 Objective — compare post-scanner metric against baseline ──
+  // Run the objective command again after scanners complete, compare vs
+  // baseline. Worker never sees the baseline number.
+  let objectiveResult = null;
+  if (objective && objective.command && typeof objective.command === "string" && objectiveBaseline !== null) {
+    const acceptIf = (objective.acceptIf === "less") ? "less" : "greater";
+    const objSpawn = objectiveSpawn || spawnFn;
+    const cmdParts = objective.command.trim().split(/\s+/);
+    const postProc = await runSubprocess(cmdParts, {
+      cwd: projectDir,
+      budgetMs: 30000,
+      spawn: objSpawn,
+    });
+    if (postProc.exitCode !== 0 || postProc.timedOut) {
+      objectiveResult = {
+        accepted: false,
+        blocked: true,
+        reason: postProc.timedOut ? "objective-post-timed-out" : "objective-post-non-zero-exit",
+        acceptIf,
+      };
+      overallVerdict = "fail";
+    } else {
+      const postNum = parseFloat(postProc.stdout.trim());
+      if (!isFinite(postNum)) {
+        objectiveResult = {
+          accepted: false,
+          blocked: true,
+          reason: "objective-post-non-numeric",
+          acceptIf,
+        };
+        overallVerdict = "fail";
+      } else {
+        const accepted = acceptIf === "greater" ? postNum > objectiveBaseline : postNum < objectiveBaseline;
+        objectiveResult = {
+          accepted,
+          blocked: !accepted,
+          reason: accepted ? "objective-met" : "objective-not-met",
+          acceptIf,
+        };
+        if (!accepted) overallVerdict = "fail";
+      }
+    }
+  }
 
   // ── TEMPER-06 Slice 06.1 — Bug registration hook ──
   // Iterate scanner failures, classify, and register bugs.
@@ -1104,6 +1197,7 @@ export async function runTemperingRun(opts = {}) {
     verdict: overallVerdict,
     infraFixes,
     registeredBugs,
+    ...(objectiveResult !== null ? { objective: objectiveResult } : {}),
     phase: "TEMPER-06",
     slice: "06.1",
   };
@@ -1148,6 +1242,7 @@ export async function runTemperingRun(opts = {}) {
     runRecordPath: outPath,
     configWritten,
     changedFilesCount: changedFiles.length,
+    ...(objectiveResult !== null ? { objective: objectiveResult } : {}),
   };
 }
 

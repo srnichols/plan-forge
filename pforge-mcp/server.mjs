@@ -1142,6 +1142,15 @@ const TOOLS = [
         lastGreenSha: { type: "string", description: "Git SHA of the most recent green run; when present and config.execution.regressionFirst is true, the adapter is hinted to run tests covering changed files first." },
         fullMutation: { type: "boolean", description: "Force mutation scanner regardless of scheduling gate. Default: false." },
         trigger: { type: "string", enum: ["post-slice", "nightly", "manual"], description: "Trigger context for scheduling decisions (mutation scanner gating). Default: manual." },
+        objective: {
+          type: "object",
+          description: "Optional objective guard (A7). If provided, the harness runs `command` before and after the scanner suite and accepts the candidate only if the metric moves in the `acceptIf` direction. Worker never sees the baseline number.",
+          properties: {
+            command: { type: "string", description: "Shell command (run in projectDir) that prints a single numeric value on stdout. Non-zero exit = rejected." },
+            acceptIf: { type: "string", enum: ["greater", "less"], description: "Accept the candidate when the post-run metric is greater (default) or less than the baseline." },
+          },
+          required: ["command"],
+        },
       },
     },
   },
@@ -3293,6 +3302,7 @@ server.setRequestHandler(CallToolRequestSchema, _wrapWithToolSpan(async (request
         correlationId: args.correlationId || null,
         sliceRef: args.sliceRef || null,
         lastGreenSha: typeof args.lastGreenSha === "string" ? args.lastGreenSha : null,
+        objective: args.objective && typeof args.objective === "object" ? args.objective : null,
         spawnWorker,
       });
       emitToolTelemetry("forge_tempering_run", args, result, Date.now() - t0, result.ok ? "OK" : "ERROR", cwd);

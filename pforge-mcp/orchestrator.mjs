@@ -49,6 +49,8 @@ import {
 } from "./tempering/auto-activate.mjs";
 // Phase-FOUNDRY-QUOTA-PREFLIGHT Slice 3 — quota pre-flight for Foundry deployments
 import { getDeploymentQuota, compareSliceEstimate } from "./foundry-quota.mjs";
+// Phase-WORKER-GUARDRAILS Slice 4 (A5) — network egress proxy logger
+import { startProxyLogger } from "./proxy-logger.mjs";
 // Phase GITHUB-B Slice 3 — Copilot Coding Agent dispatch routing
 import { inspectGithubStack as _inspectGithubStackDefault } from "./github-introspect.mjs";
 import {
@@ -479,8 +481,12 @@ export function parsePlan(planPath, cwd = process.cwd()) {
   // advisory console.warn for invalid frontmatter values (e.g. Bug #127).
   const fmMatch = content.match(/^---\r?\n([\s\S]*?)\r?\n---\r?\n/);
   if (fmMatch) {
-    for (const fmLine of fmMatch[1].split(/\r?\n/)) {
-      const kv = fmLine.match(/^\s*([A-Za-z_][A-Za-z0-9_-]*)\s*:\s*(.*?)\s*$/);
+    // fmIdx + 2 gives the 1-based file line number (line 1 is "---", line 2 is first fm key)
+    const fmLines = fmMatch[1].split(/\r?\n/);
+    for (let fmIdx = 0; fmIdx < fmLines.length; fmIdx++) {
+      const fmLine = fmLines[fmIdx];
+      // Phase-WORKER-GUARDRAILS Slice 4: key pattern extended to allow dots (network.allowed, network.enforce)
+      const kv = fmLine.match(/^\s*([A-Za-z_][A-Za-z0-9_.-]*)\s*:\s*(.*?)\s*$/);
       if (!kv) continue;
       let v = kv[2];
       if ((v.startsWith('"') && v.endsWith('"')) || (v.startsWith("'") && v.endsWith("'"))) {
@@ -489,6 +495,22 @@ export function parsePlan(planPath, cwd = process.cwd()) {
       if (kv[1] === "crucibleId") meta.crucibleId = v;
       else if (kv[1] === "lane") meta.lane = v;
       else if (kv[1] === "source") meta.crucibleSource = v;
+      // Phase-WORKER-GUARDRAILS Slice 4 (A5): network.allowed — YAML flow sequence of allowed hostnames
+      else if (kv[1] === "network.allowed") {
+        const rawV = kv[2].trim();
+        if (!rawV.startsWith("[") || !rawV.endsWith("]")) {
+          throw new Error(
+            `frontmatter network.allowed must be a YAML flow sequence (e.g. [host1, host2]) ` +
+            `at line ${fmIdx + 2} — got: ${kv[2]}`
+          );
+        }
+        const inner = rawV.slice(1, -1).trim();
+        meta.networkAllowed = inner ? inner.split(/\s*,\s*/).map((s) => s.trim()).filter(Boolean) : [];
+      }
+      // Phase-WORKER-GUARDRAILS Slice 4 (A5): network.enforce — default false (log-only)
+      else if (kv[1] === "network.enforce") {
+        meta.networkEnforce = v.toLowerCase() === "true";
+      }
       else if (kv[1] === "model") {
         const rawValue = kv[2];
         const isQuotedValue =
@@ -2504,6 +2526,7 @@ export function spawnWorker(prompt, options = {}) {
                        // "reviewer", "analysis") — drives API-path prompt
                        // shaping and telemetry.
     eventBus = null,   // Issue #162: probe-result event logging
+    extraEnv = null,   // Phase-WORKER-GUARDRAILS Slice 4 (A5): additional env vars (e.g. proxy)
   } = options;
 
   // Routing decision (fixed in meta-bug #103):
@@ -2672,6 +2695,7 @@ export function spawnWorker(prompt, options = {}) {
         GIT_TERMINAL_PROMPT: "0",
         GIT_SEQUENCE_EDITOR: "true",
         ...(runPlanActive ? { PFORGE_RUN_PLAN_ACTIVE: "1" } : {}),
+        ...(extraEnv || {}),
       },
       stdio: ["pipe", "pipe", "pipe"],
       // Bug #121: suppress the console flash on Windows when spawning CLI workers.
@@ -4755,6 +4779,8 @@ export async function runPlan(planPath, options = {}) {
           memoryEnabled, projectName, planName: basename(planPath, ".md"),
           quorumConfig, escalationChain, eventBus,
           worker, _dispatchSlice, _pollPullRequest,
+          networkAllowed: plan.meta?.networkAllowed ?? null,
+          networkEnforce: plan.meta?.networkEnforce ?? false,
         });
         if (result.status === "passed") {
           result.autoCommit = autoCommitSliceIfDirty({ slice, cwd, mode, eventBus, startSha, preSliceState });
@@ -8924,6 +8950,8 @@ async function executeSlice(slice, options) {
     worker = null,
     _dispatchSlice = _dispatchSliceDefault,
     _pollPullRequest = _pollPullRequestDefault,
+    networkAllowed = null,  // Phase-WORKER-GUARDRAILS Slice 4 (A5): string[] | null
+    networkEnforce = false, // Phase-WORKER-GUARDRAILS Slice 4 (A5): default log-only
   } = options;
   const startTime = Date.now();
   const resolvedModel = resolveModel(model, modelRouting, slice);
@@ -9245,8 +9273,29 @@ async function executeSlice(slice, options) {
         });
       }
     } else {
+      // Phase-WORKER-GUARDRAILS Slice 4 (A5): start network proxy when plan declares network.allowed.
+      // Proxy is active only during the worker's execution and stopped in all exit paths via finally.
+      let _attemptProxy = null;
+      let _attemptProxyEnv = null;
+      if (networkAllowed && Array.isArray(networkAllowed) && networkAllowed.length >= 0) {
+        const _nLogPath = resolve(runDir, "slices", String(slice.number), "network.log");
+        try {
+          _attemptProxy = await startProxyLogger({
+            allowlist: networkAllowed,
+            networkLogPath: _nLogPath,
+            enforce: networkEnforce,
+          });
+          _attemptProxyEnv = {
+            HTTPS_PROXY: _attemptProxy.proxyUrl,
+            HTTP_PROXY: _attemptProxy.proxyUrl,
+            PFORGE_NETWORK_LOG_ONLY: "1",
+          };
+        } catch (pErr) {
+          console.warn(`[pforge] network proxy start failed: ${pErr.message}`);
+        }
+      }
       try {
-        workerResult = await spawnWorker(sliceInstructions, { model: currentModel, cwd, runPlanActive: true, timeout: resolveWorkerTimeoutMs({ sliceOverride: slice.workerTimeoutMs }), eventBus });
+        workerResult = await spawnWorker(sliceInstructions, { model: currentModel, cwd, runPlanActive: true, timeout: resolveWorkerTimeoutMs({ sliceOverride: slice.workerTimeoutMs }), eventBus, extraEnv: _attemptProxyEnv });
       } catch (err) {
         return finalizeSliceResult({
           status: "failed",
@@ -9254,6 +9303,8 @@ async function executeSlice(slice, options) {
           error: err.message,
           attempts: attempt + 1,
         });
+      } finally {
+        if (_attemptProxy) try { _attemptProxy.stop(); } catch { /* ignore */ }
       }
     }
 

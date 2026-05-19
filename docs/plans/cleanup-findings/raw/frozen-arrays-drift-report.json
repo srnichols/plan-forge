@@ -1,0 +1,317 @@
+{
+  "generatedAt": "2026-05-19T16:35:42.911Z",
+  "enumsSource": "pforge-mcp/enums.mjs",
+  "enumsScanned": {
+    "HOOK_PASCAL": {
+      "literalCount": 8
+    },
+    "ERROR_CODES": {
+      "literalCount": 55
+    }
+  },
+  "extendedScan": false,
+  "includeTests": false,
+  "counts": {
+    "filesScanned": 208,
+    "filesWithDrift": 11,
+    "warnings": 6,
+    "info": 23,
+    "byEnum": {
+      "ERROR_CODES": 27,
+      "HOOK_PASCAL": 2
+    },
+    "byKind": {
+      "SOFT-DRIFT": 23,
+      "HARD-DRIFT": 6
+    }
+  },
+  "findings": [
+    {
+      "file": "pforge-mcp/notifications/core.mjs",
+      "findings": [
+        {
+          "enum": "ERROR_CODES",
+          "literal": "TIMEOUT",
+          "line": 389,
+          "severity": "info",
+          "kind": "SOFT-DRIFT",
+          "why": "File hand-types \"TIMEOUT\" without importing ERROR_CODES — review whether to migrate"
+        },
+        {
+          "enum": "ERROR_CODES",
+          "literal": "TIMEOUT",
+          "line": 403,
+          "severity": "info",
+          "kind": "SOFT-DRIFT",
+          "why": "File hand-types \"TIMEOUT\" without importing ERROR_CODES — review whether to migrate"
+        },
+        {
+          "enum": "ERROR_CODES",
+          "literal": "TIMEOUT",
+          "line": 403,
+          "severity": "info",
+          "kind": "SOFT-DRIFT",
+          "why": "File hand-types \"TIMEOUT\" without importing ERROR_CODES — review whether to migrate"
+        },
+        {
+          "enum": "ERROR_CODES",
+          "literal": "TIMEOUT",
+          "line": 449,
+          "severity": "info",
+          "kind": "SOFT-DRIFT",
+          "why": "File hand-types \"TIMEOUT\" without importing ERROR_CODES — review whether to migrate"
+        },
+        {
+          "enum": "ERROR_CODES",
+          "literal": "TIMEOUT",
+          "line": 455,
+          "severity": "info",
+          "kind": "SOFT-DRIFT",
+          "why": "File hand-types \"TIMEOUT\" without importing ERROR_CODES — review whether to migrate"
+        },
+        {
+          "enum": "ERROR_CODES",
+          "literal": "TIMEOUT",
+          "line": 455,
+          "severity": "info",
+          "kind": "SOFT-DRIFT",
+          "why": "File hand-types \"TIMEOUT\" without importing ERROR_CODES — review whether to migrate"
+        }
+      ]
+    },
+    {
+      "file": "scripts/generate-error-catalog.mjs",
+      "findings": [
+        {
+          "enum": "ERROR_CODES",
+          "literal": "auditor-spawn-failed",
+          "line": 33,
+          "severity": "info",
+          "kind": "SOFT-DRIFT",
+          "why": "File hand-types \"auditor-spawn-failed\" without importing ERROR_CODES — review whether to migrate"
+        },
+        {
+          "enum": "ERROR_CODES",
+          "literal": "observer-budget-exceeded",
+          "line": 34,
+          "severity": "info",
+          "kind": "SOFT-DRIFT",
+          "why": "File hand-types \"observer-budget-exceeded\" without importing ERROR_CODES — review whether to migrate"
+        },
+        {
+          "enum": "ERROR_CODES",
+          "literal": "diff-classify-blocked",
+          "line": 35,
+          "severity": "info",
+          "kind": "SOFT-DRIFT",
+          "why": "File hand-types \"diff-classify-blocked\" without importing ERROR_CODES — review whether to migrate"
+        },
+        {
+          "enum": "ERROR_CODES",
+          "literal": "lock-hash-mismatch",
+          "line": 36,
+          "severity": "info",
+          "kind": "SOFT-DRIFT",
+          "why": "File hand-types \"lock-hash-mismatch\" without importing ERROR_CODES — review whether to migrate"
+        },
+        {
+          "enum": "ERROR_CODES",
+          "literal": "network-allowlist-violation",
+          "line": 37,
+          "severity": "info",
+          "kind": "SOFT-DRIFT",
+          "why": "File hand-types \"network-allowlist-violation\" without importing ERROR_CODES — review whether to migrate"
+        },
+        {
+          "enum": "ERROR_CODES",
+          "literal": "tool-denied",
+          "line": 38,
+          "severity": "info",
+          "kind": "SOFT-DRIFT",
+          "why": "File hand-types \"tool-denied\" without importing ERROR_CODES — review whether to migrate"
+        }
+      ]
+    },
+    {
+      "file": "pforge-mcp/tempering/runner.mjs",
+      "findings": [
+        {
+          "enum": "ERROR_CODES",
+          "literal": "SCANNER_UNAVAILABLE",
+          "line": 1300,
+          "severity": "info",
+          "kind": "SOFT-DRIFT",
+          "why": "File hand-types \"SCANNER_UNAVAILABLE\" without importing ERROR_CODES — review whether to migrate"
+        },
+        {
+          "enum": "ERROR_CODES",
+          "literal": "SCANNER_UNAVAILABLE",
+          "line": 1328,
+          "severity": "info",
+          "kind": "SOFT-DRIFT",
+          "why": "File hand-types \"SCANNER_UNAVAILABLE\" without importing ERROR_CODES — review whether to migrate"
+        },
+        {
+          "enum": "ERROR_CODES",
+          "literal": "SCANNER_UNAVAILABLE",
+          "line": 1336,
+          "severity": "info",
+          "kind": "SOFT-DRIFT",
+          "why": "File hand-types \"SCANNER_UNAVAILABLE\" without importing ERROR_CODES — review whether to migrate"
+        },
+        {
+          "enum": "ERROR_CODES",
+          "literal": "SCANNER_UNAVAILABLE",
+          "line": 1380,
+          "severity": "info",
+          "kind": "SOFT-DRIFT",
+          "why": "File hand-types \"SCANNER_UNAVAILABLE\" without importing ERROR_CODES — review whether to migrate"
+        }
+      ]
+    },
+    {
+      "file": "pforge-mcp/crucible-import.mjs",
+      "findings": [
+        {
+          "enum": "ERROR_CODES",
+          "literal": "SPECKIT_IMPORT_DIR_NOT_FOUND",
+          "line": 289,
+          "severity": "warn",
+          "kind": "HARD-DRIFT",
+          "why": "File imports ERROR_CODES but still uses hand-typed \"SPECKIT_IMPORT_DIR_NOT_FOUND\" — replace with the constant"
+        },
+        {
+          "enum": "ERROR_CODES",
+          "literal": "SPECKIT_IMPORT_NOT_FOUND",
+          "line": 334,
+          "severity": "warn",
+          "kind": "HARD-DRIFT",
+          "why": "File imports ERROR_CODES but still uses hand-typed \"SPECKIT_IMPORT_NOT_FOUND\" — replace with the constant"
+        },
+        {
+          "enum": "ERROR_CODES",
+          "literal": "SMELT_NOT_FOUND",
+          "line": 854,
+          "severity": "warn",
+          "kind": "HARD-DRIFT",
+          "why": "File imports ERROR_CODES but still uses hand-typed \"SMELT_NOT_FOUND\" — replace with the constant"
+        }
+      ]
+    },
+    {
+      "file": "pforge-mcp/server.mjs",
+      "findings": [
+        {
+          "enum": "ERROR_CODES",
+          "literal": "SCANNER_UNAVAILABLE",
+          "line": 3551,
+          "severity": "warn",
+          "kind": "HARD-DRIFT",
+          "why": "File imports ERROR_CODES but still uses hand-typed \"SCANNER_UNAVAILABLE\" — replace with the constant"
+        },
+        {
+          "enum": "ERROR_CODES",
+          "literal": "ASK_QUESTION_MISMATCH",
+          "line": 7989,
+          "severity": "warn",
+          "kind": "HARD-DRIFT",
+          "why": "File imports ERROR_CODES but still uses hand-typed \"ASK_QUESTION_MISMATCH\" — replace with the constant"
+        },
+        {
+          "enum": "ERROR_CODES",
+          "literal": "PLAN_ALREADY_EXISTS",
+          "line": 8049,
+          "severity": "warn",
+          "kind": "HARD-DRIFT",
+          "why": "File imports ERROR_CODES but still uses hand-typed \"PLAN_ALREADY_EXISTS\" — replace with the constant"
+        }
+      ]
+    },
+    {
+      "file": "pforge-mcp/tempering/bug-adapters/jsonl-fallback.mjs",
+      "findings": [
+        {
+          "enum": "ERROR_CODES",
+          "literal": "BUG_NOT_FOUND",
+          "line": 47,
+          "severity": "info",
+          "kind": "SOFT-DRIFT",
+          "why": "File hand-types \"BUG_NOT_FOUND\" without importing ERROR_CODES — review whether to migrate"
+        },
+        {
+          "enum": "ERROR_CODES",
+          "literal": "BUG_NOT_FOUND",
+          "line": 86,
+          "severity": "info",
+          "kind": "SOFT-DRIFT",
+          "why": "File hand-types \"BUG_NOT_FOUND\" without importing ERROR_CODES — review whether to migrate"
+        }
+      ]
+    },
+    {
+      "file": "pforge-mcp/capabilities.mjs",
+      "findings": [
+        {
+          "enum": "ERROR_CODES",
+          "literal": "observer-budget-exceeded",
+          "line": 1672,
+          "severity": "info",
+          "kind": "SOFT-DRIFT",
+          "why": "File hand-types \"observer-budget-exceeded\" without importing ERROR_CODES — review whether to migrate"
+        }
+      ]
+    },
+    {
+      "file": "pforge-mcp/forbidden-matcher.mjs",
+      "findings": [
+        {
+          "enum": "HOOK_PASCAL",
+          "literal": "PreToolUse",
+          "line": 114,
+          "severity": "info",
+          "kind": "SOFT-DRIFT",
+          "why": "File hand-types \"PreToolUse\" without importing HOOK_PASCAL — review whether to migrate"
+        }
+      ]
+    },
+    {
+      "file": "pforge-mcp/notifications/webhook-adapter.mjs",
+      "findings": [
+        {
+          "enum": "ERROR_CODES",
+          "literal": "NETWORK_ERROR",
+          "line": 68,
+          "severity": "info",
+          "kind": "SOFT-DRIFT",
+          "why": "File hand-types \"NETWORK_ERROR\" without importing ERROR_CODES — review whether to migrate"
+        }
+      ]
+    },
+    {
+      "file": "pforge-mcp/orchestrator.mjs",
+      "findings": [
+        {
+          "enum": "ERROR_CODES",
+          "literal": "LOCK_HASH_MISMATCH",
+          "line": 4445,
+          "severity": "info",
+          "kind": "SOFT-DRIFT",
+          "why": "File hand-types \"LOCK_HASH_MISMATCH\" without importing ERROR_CODES — review whether to migrate"
+        }
+      ]
+    },
+    {
+      "file": "pforge-mcp/skill-runner.mjs",
+      "findings": [
+        {
+          "enum": "HOOK_PASCAL",
+          "literal": "Stop",
+          "line": 438,
+          "severity": "info",
+          "kind": "SOFT-DRIFT",
+          "why": "File hand-types \"Stop\" without importing HOOK_PASCAL — review whether to migrate"
+        }
+      ]
+    }
+  ]
+}

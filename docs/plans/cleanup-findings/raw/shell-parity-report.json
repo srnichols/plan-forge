@@ -1,0 +1,82 @@
+{
+  "generatedAt": "2026-05-19T16:35:42.698Z",
+  "strict": false,
+  "sizeDeltaThreshold": 0.4,
+  "counts": {
+    "filesScanned": 37,
+    "groupsScanned": 21,
+    "pairedHealthy": 16,
+    "missingTwin": 5,
+    "sizeMismatch": 0,
+    "errors": 0,
+    "warnings": 5,
+    "info": 16
+  },
+  "findings": [
+    {
+      "base": "scripts/backfill-missing-releases",
+      "kind": "MISSING-TWIN",
+      "severity": "warn",
+      "missing": "sh",
+      "present": {
+        "ext": "ps1",
+        "file": "scripts/backfill-missing-releases.ps1",
+        "lines": 167
+      },
+      "requiredPair": false,
+      "why": "Dev-internal script missing its .sh twin — non-blocking but harms cross-platform parity"
+    },
+    {
+      "base": "scripts/check-metrics",
+      "kind": "MISSING-TWIN",
+      "severity": "warn",
+      "missing": "sh",
+      "present": {
+        "ext": "ps1",
+        "file": "scripts/check-metrics.ps1",
+        "lines": 140
+      },
+      "requiredPair": false,
+      "why": "Dev-internal script missing its .sh twin — non-blocking but harms cross-platform parity"
+    },
+    {
+      "base": "scripts/tests/sequence-plans.tests",
+      "kind": "MISSING-TWIN",
+      "severity": "warn",
+      "missing": "sh",
+      "present": {
+        "ext": "ps1",
+        "file": "scripts/tests/sequence-plans.tests.ps1",
+        "lines": 266
+      },
+      "requiredPair": false,
+      "why": "Dev-internal script missing its .sh twin — non-blocking but harms cross-platform parity"
+    },
+    {
+      "base": "scripts/update-hero-refs",
+      "kind": "MISSING-TWIN",
+      "severity": "warn",
+      "missing": "sh",
+      "present": {
+        "ext": "ps1",
+        "file": "scripts/update-hero-refs.ps1",
+        "lines": 24
+      },
+      "requiredPair": false,
+      "why": "Dev-internal script missing its .sh twin — non-blocking but harms cross-platform parity"
+    },
+    {
+      "base": "scripts/validate-action",
+      "kind": "MISSING-TWIN",
+      "severity": "warn",
+      "missing": "ps1",
+      "present": {
+        "ext": "sh",
+        "file": "scripts/validate-action.sh",
+        "lines": 335
+      },
+      "requiredPair": false,
+      "why": "Dev-internal script missing its .ps1 twin — non-blocking but harms cross-platform parity"
+    }
+  ]
+}

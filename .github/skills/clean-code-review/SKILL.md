@@ -1,6 +1,6 @@
 ---
 name: clean-code-review
-description: Run a comprehensive Clean Code audit against the codebase — module size, function complexity, long parameter lists, TODO/FIXME markers, commented-out code, duplication (DRY), Boy Scout delta, dead exports, test smells, and ESLint violations — then produce a structured findings report with optional fix suggestions.
+description: Run a comprehensive Clean Code audit against the codebase — module size, function complexity, long parameter lists, TODO/FIXME markers, commented-out code, duplication (DRY), Boy Scout delta, dead exports, test smells, shell-parity (PS/Bash twins), dep boundaries (cross-package imports), frozen-arrays drift (enums.mjs), and ESLint violations — then produce a structured findings report with optional fix suggestions.
 argument-hint: "[--scope <glob>] [--fix-suggestions] [--out <path>]"
 tools: [read_file, run_in_terminal, file_search, grep_search]
 tags: [clean-code-review]

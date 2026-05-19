@@ -1,0 +1,91 @@
+{
+  "generatedAt": "2026-05-19T16:35:42.798Z",
+  "includeTests": false,
+  "packages": [
+    "pforge-mcp",
+    "pforge-master",
+    "pforge-sdk",
+    "scripts",
+    "extensions"
+  ],
+  "counts": {
+    "filesScanned": 214,
+    "errors": 5,
+    "warnings": 1,
+    "infoAllowed": 10,
+    "byKind": {
+      "ALLOWED": 9,
+      "BLOCKED": 5,
+      "WHITELISTED": 1,
+      "NEEDS-WHITELIST": 1
+    }
+  },
+  "findings": [
+    {
+      "source": "extensions/notify-email/index.mjs",
+      "line": 16,
+      "target": "pforge-mcp/notifications/adapter-contract.mjs",
+      "sourcePackage": "extensions",
+      "targetPackage": "pforge-mcp",
+      "specifier": "../../pforge-mcp/notifications/adapter-contract.mjs",
+      "kind": "BLOCKED",
+      "severity": "error",
+      "why": "extensions must not depend on pforge-mcp (PACKAGE_RULES policy)"
+    },
+    {
+      "source": "extensions/notify-pagerduty/index.mjs",
+      "line": 11,
+      "target": "pforge-mcp/notifications/adapter-contract.mjs",
+      "sourcePackage": "extensions",
+      "targetPackage": "pforge-mcp",
+      "specifier": "../../pforge-mcp/notifications/adapter-contract.mjs",
+      "kind": "BLOCKED",
+      "severity": "error",
+      "why": "extensions must not depend on pforge-mcp (PACKAGE_RULES policy)"
+    },
+    {
+      "source": "extensions/notify-slack/index.mjs",
+      "line": 11,
+      "target": "pforge-mcp/notifications/adapter-contract.mjs",
+      "sourcePackage": "extensions",
+      "targetPackage": "pforge-mcp",
+      "specifier": "../../pforge-mcp/notifications/adapter-contract.mjs",
+      "kind": "BLOCKED",
+      "severity": "error",
+      "why": "extensions must not depend on pforge-mcp (PACKAGE_RULES policy)"
+    },
+    {
+      "source": "extensions/notify-teams/index.mjs",
+      "line": 11,
+      "target": "pforge-mcp/notifications/adapter-contract.mjs",
+      "sourcePackage": "extensions",
+      "targetPackage": "pforge-mcp",
+      "specifier": "../../pforge-mcp/notifications/adapter-contract.mjs",
+      "kind": "BLOCKED",
+      "severity": "error",
+      "why": "extensions must not depend on pforge-mcp (PACKAGE_RULES policy)"
+    },
+    {
+      "source": "pforge-mcp/server.mjs",
+      "line": 209,
+      "target": "pforge-master/src/mcp-client.mjs",
+      "sourcePackage": "pforge-mcp",
+      "targetPackage": "pforge-master",
+      "specifier": "../pforge-master/src/mcp-client.mjs",
+      "kind": "BLOCKED",
+      "severity": "error",
+      "why": "pforge-mcp must not depend on pforge-master (PACKAGE_RULES policy)"
+    },
+    {
+      "source": "pforge-master/src/retrieval.mjs",
+      "line": 13,
+      "target": "pforge-mcp/brain.mjs",
+      "sourcePackage": "pforge-master",
+      "targetPackage": "pforge-mcp",
+      "specifier": "../../pforge-mcp/brain.mjs",
+      "kind": "NEEDS-WHITELIST",
+      "severity": "warn",
+      "why": "pforge-master -> pforge-mcp requires explicit entry in layer-policy.json#crossPackageWhitelist"
+    }
+  ]
+}

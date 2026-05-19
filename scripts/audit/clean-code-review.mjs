@@ -61,10 +61,45 @@ function suggestCommentedCodeFix(block) {
   return `Delete lines ${block.startLine}–${block.endLine} in ${block.file} — code is preserved in git history`;
 }
 
+function suggestDeadExportFix(finding) {
+  return `Delete unused export \`${finding.name}\` in ${finding.file}:${finding.line} or wire a consumer`;
+}
+
+function suggestTestSmellFix(finding) {
+  const smell = finding.smell;
+  if (smell === 'FOCUS-LEAK') return `Remove \`.only\` in ${finding.file}:${finding.line} — would skip every other test in the file`;
+  if (smell === 'TIME-FLAKE') return `Wrap with vi.useFakeTimers() or add an explicit tolerance comment in ${finding.file}:${finding.line}`;
+  if (smell === 'TAUTOLOGY' || smell === 'EMPTY-TEST') return `Replace the placeholder assertion in ${finding.file}:${finding.line} with a real one (or convert to .todo)`;
+  return `Review and remove the smell in ${finding.file}:${finding.line}`;
+}
+
+function suggestShellParityFix(finding) {
+  if (finding.kind === 'MISSING-TWIN') {
+    return `Add ${finding.base}.${finding.missing} (twin of ${finding.present.file})`;
+  }
+  return `Re-align ${finding.base} — ${finding.ps1.lines} vs ${finding.sh.lines} lines suggests one shell is a stub`;
+}
+
+function suggestDepBoundaryFix(finding) {
+  if (finding.kind === 'BLOCKED') return `Remove or relocate import at ${finding.source}:${finding.line} — ${finding.sourcePackage} must not depend on ${finding.targetPackage}`;
+  if (finding.kind === 'NEEDS-WHITELIST') return `Add "${finding.source} -> ${finding.target}" to layer-policy.json#crossPackageWhitelist or refactor the dependency away`;
+  return `Review cross-package import at ${finding.source}:${finding.line}`;
+}
+
+function suggestFrozenArraysFix(finding, file) {
+  if (finding.kind === 'HARD-DRIFT') return `Replace hand-typed "${finding.literal}" with the ${finding.enum} constant in ${file}:${finding.line}`;
+  return `Consider importing ${finding.enum} and replacing hand-typed "${finding.literal}" in ${file}:${finding.line}`;
+}
+
 const scripts = [
   { name: 'measure-modules', path: path.join(root, 'scripts', 'audit', 'measure-modules.mjs') },
   { name: 'grep-matrix', path: path.join(root, 'scripts', 'audit', 'grep-matrix.mjs') },
-  { name: 'long-param-walker', path: path.join(root, 'scripts', 'audit', 'long-param-walker.mjs') }
+  { name: 'long-param-walker', path: path.join(root, 'scripts', 'audit', 'long-param-walker.mjs') },
+  { name: 'dead-exports', path: path.join(root, 'scripts', 'audit', 'dead-exports.mjs') },
+  { name: 'test-smells', path: path.join(root, 'scripts', 'audit', 'test-smells.mjs') },
+  { name: 'shell-parity', path: path.join(root, 'scripts', 'audit', 'shell-parity.mjs') },
+  { name: 'dep-boundaries', path: path.join(root, 'scripts', 'audit', 'dep-boundaries.mjs') },
+  { name: 'frozen-arrays-drift', path: path.join(root, 'scripts', 'audit', 'frozen-arrays-drift.mjs') }
 ];
 
 const report = {
@@ -152,6 +187,97 @@ if (Array.isArray(longParams)) {
   const warnCount = findings.filter((f) => f.severity === 'warn').length;
   report.categories['long-params'] = { errorCount, warnCount, findings };
   report.summary.totalErrors += errorCount;
+  report.summary.totalWarnings += warnCount;
+}
+
+const deadExports = loadJson(path.join(rawDir, 'dead-exports-report.json'));
+if (deadExports && Array.isArray(deadExports.findings)) {
+  const findings = deadExports.findings.flatMap((file) =>
+    (file.deadExports ?? []).map((exp) => ({
+      file: file.file,
+      name: exp.name,
+      line: exp.line,
+      severity: 'warn',
+      ...(fixSuggestions ? { fix: suggestDeadExportFix({ file: file.file, name: exp.name, line: exp.line }) } : {})
+    }))
+  );
+  report.categories['dead-exports'] = { errorCount: 0, warnCount: findings.length, findings };
+  report.summary.totalWarnings += findings.length;
+}
+
+const testSmells = loadJson(path.join(rawDir, 'test-smells-report.json'));
+if (testSmells && Array.isArray(testSmells.findings)) {
+  const findings = testSmells.findings.flatMap((file) =>
+    file.findings.map((s) => ({
+      file: file.file,
+      smell: s.smell,
+      line: s.line,
+      snippet: s.snippet,
+      severity: s.severity,
+      ...(fixSuggestions ? { fix: suggestTestSmellFix({ file: file.file, smell: s.smell, line: s.line }) } : {})
+    }))
+  );
+  const errorCount = findings.filter((f) => f.severity === 'error').length;
+  const warnCount = findings.filter((f) => f.severity === 'warn').length;
+  report.categories['test-smells'] = { errorCount, warnCount, findings };
+  report.summary.totalErrors += errorCount;
+  report.summary.totalWarnings += warnCount;
+}
+
+const shellParity = loadJson(path.join(rawDir, 'shell-parity-report.json'));
+if (shellParity && Array.isArray(shellParity.findings)) {
+  const findings = shellParity.findings.map((f) => ({
+    base: f.base,
+    kind: f.kind,
+    severity: f.severity,
+    requiredPair: f.requiredPair,
+    ...(fixSuggestions ? { fix: suggestShellParityFix(f) } : {})
+  }));
+  const errorCount = findings.filter((f) => f.severity === 'error').length;
+  const warnCount = findings.filter((f) => f.severity === 'warn').length;
+  report.categories['shell-parity'] = { errorCount, warnCount, findings };
+  report.summary.totalErrors += errorCount;
+  report.summary.totalWarnings += warnCount;
+}
+
+const depBoundaries = loadJson(path.join(rawDir, 'dep-boundaries-report.json'));
+if (depBoundaries && Array.isArray(depBoundaries.findings)) {
+  const findings = depBoundaries.findings.map((f) => ({
+    source: f.source,
+    line: f.line,
+    target: f.target,
+    kind: f.kind,
+    severity: f.severity,
+    ...(fixSuggestions ? { fix: suggestDepBoundaryFix(f) } : {})
+  }));
+  const errorCount = findings.filter((f) => f.severity === 'error').length;
+  const warnCount = findings.filter((f) => f.severity === 'warn').length;
+  report.categories['dep-boundaries'] = { errorCount, warnCount, findings };
+  report.summary.totalErrors += errorCount;
+  report.summary.totalWarnings += warnCount;
+}
+
+const frozenArrays = loadJson(path.join(rawDir, 'frozen-arrays-drift-report.json'));
+if (frozenArrays && Array.isArray(frozenArrays.findings)) {
+  const findings = frozenArrays.findings.flatMap((file) =>
+    file.findings.map((d) => ({
+      file: file.file,
+      enum: d.enum,
+      literal: d.literal,
+      line: d.line,
+      kind: d.kind,
+      severity: d.severity,
+      ...(fixSuggestions ? { fix: suggestFrozenArraysFix(d, file.file) } : {})
+    }))
+  );
+  const warnCount = findings.filter((f) => f.severity === 'warn').length;
+  const infoCount = findings.filter((f) => f.severity === 'info').length;
+  report.categories['frozen-arrays-drift'] = {
+    errorCount: 0,
+    warnCount,
+    infoCount,
+    findings
+  };
   report.summary.totalWarnings += warnCount;
 }
 

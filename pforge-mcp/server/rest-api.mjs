@@ -289,6 +289,226 @@ export const REST_ROUTES = [
   { method: "GET", path: "/api/brain/recall" },
 ];
 
+// ─── REST handler sub-helpers (Phase ESLINT-D1 — extracted from arrow handlers) ──
+
+function _validateObserverConfig(obs) {
+  if (obs.maxUsdPerDay !== undefined) {
+    if (typeof obs.maxUsdPerDay !== "number" || !Number.isFinite(obs.maxUsdPerDay) || obs.maxUsdPerDay < 0) {
+      return { ok: false, status: 400, error: "forgeMaster.observer.maxUsdPerDay must be a finite number >= 0" };
+    }
+  }
+  if (obs.maxNarrationsPerHour !== undefined) {
+    if (typeof obs.maxNarrationsPerHour !== "number" || !Number.isFinite(obs.maxNarrationsPerHour) || obs.maxNarrationsPerHour < 0) {
+      return { ok: false, status: 400, error: "forgeMaster.observer.maxNarrationsPerHour must be a finite number >= 0" };
+    }
+  }
+  return null;
+}
+
+function _validateAuditorConfig(aud) {
+  if (!Number.isFinite(aud.everyNRuns) || aud.everyNRuns <= 0 || aud.everyNRuns !== Math.trunc(aud.everyNRuns)) {
+    return { ok: false, status: 400, error: "forgeMaster.auditor.everyNRuns must be a positive integer or null" };
+  }
+  if (aud.everyNRuns >= 1 && aud.everyNRuns <= 4) {
+    return { ok: false, status: 400, error: "forgeMaster.auditor.everyNRuns must be null/blank or at least 5" };
+  }
+  return null;
+}
+
+function _validateConfigPayload(config) {
+  if (!config || typeof config !== "object") {
+    return { ok: false, status: 400, error: "Request body must be a JSON object" };
+  }
+  if (config.preset && typeof config.preset !== "string") {
+    return { ok: false, status: 400, error: "preset must be a string" };
+  }
+  if (config.updateSource !== undefined) {
+    const allowed = ["auto", "github-tags", "local-sibling"];
+    if (typeof config.updateSource !== "string" || !allowed.includes(config.updateSource)) {
+      return { ok: false, status: 400, error: `updateSource must be one of: ${allowed.join(", ")}` };
+    }
+  }
+  const obs = config.forgeMaster?.observer;
+  if (obs && typeof obs === "object") {
+    const obsErr = _validateObserverConfig(obs);
+    if (obsErr) return obsErr;
+  }
+  const aud = config.forgeMaster?.auditor;
+  if (aud && typeof aud === "object" && aud.everyNRuns !== undefined && aud.everyNRuns !== null) {
+    const audErr = _validateAuditorConfig(aud);
+    if (audErr) return audErr;
+  }
+  return { ok: true };
+}
+
+function _shannonEntropy(str) {
+  if (!str || str.length === 0) return 0;
+  const freq = {};
+  for (const char of str) freq[char] = (freq[char] || 0) + 1;
+  let entropy = 0;
+  for (const count of Object.values(freq)) {
+    const p = count / str.length;
+    entropy -= p * Math.log2(p);
+  }
+  return entropy;
+}
+
+const _SECRET_KEY_PATTERNS_RE = /(?:key|secret|token|password|api_key|auth|credential|private)/i;
+
+function _scoreSecretConfidence(entropy, keyMatch) {
+  if (entropy >= 4.5 && keyMatch) return "high";
+  if ((entropy >= 4.0 && keyMatch) || entropy >= 4.8) return "medium";
+  return "low";
+}
+
+function _scanSecretsInDiffLine(added, currentFile, lineNumber, threshold, findings) {
+  const tokens = added.match(/["']([^"']{8,})["']|(?:=|:|=>)\s*["']?([^\s"',;]{8,})["']?/g) || [];
+  for (const raw of tokens) {
+    const cleaned = raw.replace(/^[=:>]\s*["']?|["']$/g, "").replace(/^["']/, "");
+    if (cleaned.length < 8) continue;
+    const entropy = _shannonEntropy(cleaned);
+    if (entropy < threshold) continue;
+    const keyMatch = _SECRET_KEY_PATTERNS_RE.test(added);
+    findings.push({
+      file: currentFile,
+      line: lineNumber,
+      type: "unknown",
+      entropyScore: Math.round(entropy * 100) / 100,
+      masked: "<REDACTED>",
+      confidence: _scoreSecretConfidence(entropy, keyMatch),
+    });
+  }
+}
+
+function _scanDiffForSecrets(diffOutput, threshold) {
+  const findings = [];
+  const scannedFiles = new Set();
+  let currentFile = null;
+  let lineNumber = 0;
+  for (const line of diffOutput.split("\n")) {
+    if (line.startsWith("+++ b/")) {
+      currentFile = line.slice(6);
+      scannedFiles.add(currentFile);
+      continue;
+    }
+    if (line.startsWith("@@ ")) {
+      const m = line.match(/@@ -\d+(?:,\d+)? \+(\d+)/);
+      lineNumber = m ? parseInt(m[1], 10) - 1 : 0;
+      continue;
+    }
+    if (line.startsWith("+") && !line.startsWith("+++")) {
+      lineNumber++;
+      _scanSecretsInDiffLine(line.slice(1), currentFile, lineNumber, threshold, findings);
+    } else if (!line.startsWith("-")) {
+      lineNumber++;
+    }
+  }
+  return { findings, scannedFiles };
+}
+
+function _validateBrainReplayRequest(body, cfg) {
+  if (!cfg) {
+    return { ok: false, status: 503, error: "OpenBrain SSE endpoint not found in .vscode/mcp.json or .claude/mcp.json." };
+  }
+  if (!cfg.key && !body?.dryRun) {
+    return { ok: false, status: 503, error: "OpenBrain auth key not resolved. Set OPENBRAIN_KEY env var or check the mcp.json headers entry." };
+  }
+  const sourceArg = String(body?.source || "").trim();
+  if (!sourceArg) {
+    return { ok: false, status: 400, error: "source is required: pass a queue jsonl path, a markdown file path, or a directory of .md files." };
+  }
+  return { ok: true, sourceArg };
+}
+
+function _collectReplayRecords(sourcePath, { project, maxRecords }) {
+  if (!existsSync(sourcePath)) {
+    return { ok: false, status: 404, error: `source not found: ${sourcePath}` };
+  }
+  const st = statSync(sourcePath);
+  let records = [];
+  let sourceType = "unknown";
+  if (st.isDirectory()) {
+    sourceType = "markdown-dir";
+    for (const f of listMarkdownFiles(sourcePath, { recursive: false })) {
+      records.push(...normalizeMarkdownFile(f, { project, source: `replay:${basename(f)}` }));
+    }
+  } else if (/\.md$/i.test(sourcePath)) {
+    sourceType = "markdown-file";
+    records = normalizeMarkdownFile(sourcePath, { project, source: `replay:${basename(sourcePath)}` });
+  } else if (/\.jsonl?$/i.test(sourcePath)) {
+    sourceType = "queue-jsonl";
+    const raw = readFileSync(sourcePath, "utf-8");
+    for (const line of raw.split(/\r?\n/)) {
+      const s = line.trim();
+      if (!s) continue;
+      try { records.push(normalizeQueueRecord(JSON.parse(s))); } catch { /* skip malformed line */ }
+    }
+  } else {
+    return { ok: false, status: 400, error: `unsupported source type for ${sourcePath} — expected .jsonl, .md, or a directory.` };
+  }
+  if (records.length > maxRecords) records = records.slice(0, maxRecords);
+  return { ok: true, sourceType, records };
+}
+
+const _QUORUM_GOAL_PRESETS = {
+  "root-cause": "Identify the root cause of the issues shown in the data. Trace the causal chain from symptoms to underlying problems.",
+  "risk-assess": "Assess the risk level of the current project state. Identify the highest-impact risks and their likelihood.",
+  "fix-review": "Review the proposed fixes and assess whether they adequately address the underlying issues. Identify gaps or risks in the remediation approach.",
+  "runbook-validate": "Validate the operational runbook against the current data. Identify any gaps, outdated steps, or missing escalation paths.",
+};
+
+function _validateQuorumQuestion(question, fieldName) {
+  if (!question) return null;
+  if (question.length > 500) return { status: 400, error: `${fieldName} exceeds 500 character limit` };
+  if (/<script|javascript:|on\w+=/i.test(question)) return { status: 400, error: `${fieldName} contains disallowed content` };
+  return null;
+}
+
+function _collectQuorumContextBySource(source) {
+  const context = {};
+  let oldestTimestamp = null;
+  const trackAge = (ts) => { if (ts && (!oldestTimestamp || ts < oldestTimestamp)) oldestTimestamp = ts; };
+  if (source === "all" || source === "drift") {
+    const driftHistory = readForgeJsonl("drift-history.json", [], PROJECT_DIR);
+    if (driftHistory.length) { context.drift = driftHistory.slice(-5); trackAge(driftHistory[0]?.timestamp); }
+  }
+  if (source === "all" || source === "incident") {
+    const incidents = readForgeJsonl("incidents.jsonl", [], PROJECT_DIR).slice(-10);
+    if (incidents.length) { context.incidents = incidents; trackAge(incidents[0]?.capturedAt); }
+  }
+  if (source === "all" || source === "triage") {
+    const triageCache = readForgeJson("alert-triage-cache.json", null, PROJECT_DIR);
+    if (triageCache) { context.triage = triageCache; trackAge(triageCache.generatedAt); }
+  }
+  if (source === "all" || source === "fix-proposal") {
+    const proposals = readForgeJsonl("fix-proposals.json", [], PROJECT_DIR).slice(-5);
+    if (proposals.length) { context.fixProposals = proposals; trackAge(proposals[0]?.generatedAt); }
+  }
+  return { context, oldestTimestamp };
+}
+
+function _pickQuorumQuestion(customQuestion, analysisGoal) {
+  if (customQuestion) return customQuestion;
+  if (analysisGoal && _QUORUM_GOAL_PRESETS[analysisGoal]) return _QUORUM_GOAL_PRESETS[analysisGoal];
+  return _QUORUM_GOAL_PRESETS["risk-assess"];
+}
+
+function _formatQuorumResponse({ context, oldestTimestamp, customQuestion, analysisGoal, quorumSize }) {
+  const questionUsed = _pickQuorumQuestion(customQuestion, analysisGoal);
+  const votingInstruction = `Each model must respond with: (1) a confidence score 0-100, (2) a one-paragraph answer, (3) one concrete recommendation. The aggregator accepts answers with confidence >= 60 and majority consensus. Quorum size: ${quorumSize} models.`;
+  const contextStr = JSON.stringify(context, null, 2);
+  const quorumPrompt = `## Context\n${contextStr}\n\n## Question\n${questionUsed}\n\n## Voting Instruction\n${votingInstruction}`;
+  const qConfig = loadQuorumConfig(PROJECT_DIR);
+  const suggestedModels = (qConfig.models || ["claude-opus-4.7", "grok-4.20", "gemini-3-pro-preview"]).slice(0, quorumSize);
+  const promptTokenEstimate = Math.ceil(quorumPrompt.length / 4);
+  let dataSnapshotAge = "unknown";
+  if (oldestTimestamp) {
+    const ageMins = Math.round((Date.now() - new Date(oldestTimestamp).getTime()) / 60000);
+    dataSnapshotAge = ageMins < 60 ? `${ageMins}m ago` : `${Math.round(ageMins / 60)}h ago`;
+  }
+  return { quorumPrompt, promptTokenEstimate, suggestedModels, dataSnapshotAge, questionUsed };
+}
+
 // ─── Express App + REST API  ─────────────────────────────
 export function createExpressApp() {
   const app = express();
@@ -906,44 +1126,9 @@ export function createExpressApp() {
   app.post("/api/config", (req, res) => {
     try {
       const configPath = resolve(PROJECT_DIR, ".forge.json");
-      if (!req.body || typeof req.body !== "object") {
-        return res.status(400).json({ error: "Request body must be a JSON object" });
-      }
-      // Validate required fields
-      const config = req.body;
-      if (config.preset && typeof config.preset !== "string") {
-        return res.status(400).json({ error: "preset must be a string" });
-      }
-      // v2.56.0 — validate updateSource enum
-      if (config.updateSource !== undefined) {
-        const allowed = ["auto", "github-tags", "local-sibling"];
-        if (typeof config.updateSource !== "string" || !allowed.includes(config.updateSource)) {
-          return res.status(400).json({ error: `updateSource must be one of: ${allowed.join(", ")}` });
-        }
-      }
-      const observerConfig = config.forgeMaster?.observer;
-      if (observerConfig && typeof observerConfig === "object") {
-        if (observerConfig.maxUsdPerDay !== undefined) {
-          if (typeof observerConfig.maxUsdPerDay !== "number" || !Number.isFinite(observerConfig.maxUsdPerDay) || observerConfig.maxUsdPerDay < 0) {
-            return res.status(400).json({ error: "forgeMaster.observer.maxUsdPerDay must be a finite number >= 0" });
-          }
-        }
-        if (observerConfig.maxNarrationsPerHour !== undefined) {
-          if (typeof observerConfig.maxNarrationsPerHour !== "number" || !Number.isFinite(observerConfig.maxNarrationsPerHour) || observerConfig.maxNarrationsPerHour < 0) {
-            return res.status(400).json({ error: "forgeMaster.observer.maxNarrationsPerHour must be a finite number >= 0" });
-          }
-        }
-      }
-      const auditorConfig = config.forgeMaster?.auditor;
-      if (auditorConfig && typeof auditorConfig === "object" && auditorConfig.everyNRuns !== undefined && auditorConfig.everyNRuns !== null) {
-        if (!Number.isFinite(auditorConfig.everyNRuns) || auditorConfig.everyNRuns <= 0 || auditorConfig.everyNRuns !== Math.trunc(auditorConfig.everyNRuns)) {
-          return res.status(400).json({ error: "forgeMaster.auditor.everyNRuns must be a positive integer or null" });
-        }
-        if (auditorConfig.everyNRuns >= 1 && auditorConfig.everyNRuns <= 4) {
-          return res.status(400).json({ error: "forgeMaster.auditor.everyNRuns must be null/blank or at least 5" });
-        }
-      }
-      writeFileSync(configPath, JSON.stringify(config, null, 2));
+      const v = _validateConfigPayload(req.body);
+      if (!v.ok) return res.status(v.status).json({ error: v.error });
+      writeFileSync(configPath, JSON.stringify(req.body, null, 2));
       res.json({ success: true });
     } catch (err) { res.status(500).json({ error: err.message }); }
   });
@@ -1696,53 +1881,13 @@ export function createExpressApp() {
       if (!checkApprovalSecret(req, res)) return;
       const since = req.body?.since || "HEAD~1";
       const threshold = Math.max(3.5, Math.min(5.0, parseFloat(req.body?.threshold) || 4.0));
-
-      function shannonEntropy(str) {
-        if (!str || str.length === 0) return 0;
-        const freq = {};
-        for (const char of str) freq[char] = (freq[char] || 0) + 1;
-        let entropy = 0;
-        for (const count of Object.values(freq)) {
-          const p = count / str.length;
-          entropy -= p * Math.log2(p);
-        }
-        return entropy;
-      }
-
-      const KEY_PATTERNS = /(?:key|secret|token|password|api_key|auth|credential|private)/i;
       let diffOutput;
       try {
         diffOutput = execSync(`git diff ${since}`, { cwd: PROJECT_DIR, encoding: "utf-8", timeout: 30_000 });
       } catch {
         return res.json({ clean: null, scannedFiles: 0, findings: [], error: "git unavailable" });
       }
-
-      const findings = [];
-      const scannedFiles = new Set();
-      let currentFile = null;
-      let lineNumber = 0;
-      for (const line of diffOutput.split("\n")) {
-        if (line.startsWith("+++ b/")) { currentFile = line.slice(6); scannedFiles.add(currentFile); continue; }
-        if (line.startsWith("@@ ")) { const m = line.match(/@@ -\d+(?:,\d+)? \+(\d+)/); lineNumber = m ? parseInt(m[1], 10) - 1 : 0; continue; }
-        if (line.startsWith("+") && !line.startsWith("+++")) {
-          lineNumber++;
-          const added = line.slice(1);
-          const tokens = added.match(/["']([^"']{8,})["']|(?:=|:|=>)\s*["']?([^\s"',;]{8,})["']?/g) || [];
-          for (const raw of tokens) {
-            const cleaned = raw.replace(/^[=:>]\s*["']?|["']$/g, "").replace(/^["']/, "");
-            if (cleaned.length < 8) continue;
-            const entropy = shannonEntropy(cleaned);
-            if (entropy < threshold) continue;
-            const keyMatch = KEY_PATTERNS.test(added);
-            let confidence;
-            if (entropy >= 4.5 && keyMatch) confidence = "high";
-            else if ((entropy >= 4.0 && keyMatch) || entropy >= 4.8) confidence = "medium";
-            else confidence = "low";
-            findings.push({ file: currentFile, line: lineNumber, type: "unknown", entropyScore: Math.round(entropy * 100) / 100, masked: "<REDACTED>", confidence });
-          }
-        } else if (!line.startsWith("-")) { lineNumber++; }
-      }
-
+      const { findings, scannedFiles } = _scanDiffForSecrets(diffOutput, threshold);
       const result = { scannedAt: new Date().toISOString(), since, threshold, scannedFiles: scannedFiles.size, clean: findings.length === 0, findings };
       mkdirSync(resolve(PROJECT_DIR, ".forge"), { recursive: true });
       writeFileSync(resolve(PROJECT_DIR, ".forge", "secret-scan-cache.json"), JSON.stringify(result, null, 2), "utf-8");
@@ -2304,16 +2449,9 @@ export function createExpressApp() {
   app.post("/api/brain/replay", async (req, res) => {
     if (!checkApprovalSecret(req, res)) return;
     const cfg = readOpenBrainConfig(PROJECT_DIR);
-    if (!cfg) {
-      return res.status(503).json({ ok: false, error: "OpenBrain SSE endpoint not found in .vscode/mcp.json or .claude/mcp.json." });
-    }
-    if (!cfg.key && !req.body?.dryRun) {
-      return res.status(503).json({ ok: false, error: "OpenBrain auth key not resolved. Set OPENBRAIN_KEY env var or check the mcp.json headers entry." });
-    }
-    const sourceArg = String(req.body?.source || "").trim();
-    if (!sourceArg) {
-      return res.status(400).json({ ok: false, error: "source is required: pass a queue jsonl path, a markdown file path, or a directory of .md files." });
-    }
+    const v = _validateBrainReplayRequest(req.body, cfg);
+    if (!v.ok) return res.status(v.status).json({ ok: false, error: v.error });
+    const sourceArg = v.sourceArg;
     const dryRun = Boolean(req.body?.dryRun);
     const project = req.body?.project || "plan-forge";
     const maxRecords = Number(req.body?.maxRecords ?? 500);
@@ -2321,42 +2459,11 @@ export function createExpressApp() {
     let client = null;
     try {
       const sourcePath = isAbsolute(sourceArg) ? sourceArg : resolve(PROJECT_DIR, sourceArg);
-      if (!existsSync(sourcePath)) {
-        return res.status(404).json({ ok: false, error: `source not found: ${sourcePath}` });
-      }
-      const st = statSync(sourcePath);
+      const collected = _collectReplayRecords(sourcePath, { project, maxRecords });
+      if (!collected.ok) return res.status(collected.status).json({ ok: false, error: collected.error });
 
-      // Build the record list based on source shape.
-      let records = [];
-      let sourceType = "unknown";
-      if (st.isDirectory()) {
-        sourceType = "markdown-dir";
-        for (const f of listMarkdownFiles(sourcePath, { recursive: false })) {
-          records.push(...normalizeMarkdownFile(f, { project, source: `replay:${basename(f)}` }));
-        }
-      } else if (/\.md$/i.test(sourcePath)) {
-        sourceType = "markdown-file";
-        records = normalizeMarkdownFile(sourcePath, { project, source: `replay:${basename(sourcePath)}` });
-      } else if (/\.jsonl?$/i.test(sourcePath)) {
-        sourceType = "queue-jsonl";
-        const raw = readFileSync(sourcePath, "utf-8");
-        for (const line of raw.split(/\r?\n/)) {
-          const s = line.trim();
-          if (!s) continue;
-          try { records.push(normalizeQueueRecord(JSON.parse(s))); } catch { /* skip malformed line */ }
-        }
-      } else {
-        return res.status(400).json({ ok: false, error: `unsupported source type for ${sourcePath} — expected .jsonl, .md, or a directory.` });
-      }
-
-      if (records.length > maxRecords) {
-        records = records.slice(0, maxRecords);
-      }
-
-      // Build live client only if not dry-running.
       if (!dryRun) client = await createOpenBrainClient(cfg);
 
-      // Open a receipt log under .forge/ — paginate samples via this file.
       const receiptPath = resolve(PROJECT_DIR, ".forge", `openbrain-replay-${Date.now()}.jsonl`);
       let receiptStream = null;
       try {
@@ -2364,7 +2471,7 @@ export function createExpressApp() {
         receiptStream = createWriteStream(receiptPath, { flags: "a" });
       } catch { /* receipt log is best-effort */ }
 
-      const result = await brainReplayRecords(dryRun ? { capture: async () => ({}) } : client, records, {
+      const result = await brainReplayRecords(dryRun ? { capture: async () => ({}) } : client, collected.records, {
         rate: Number(req.body?.rate ?? 50),
         maxRetries: Number(req.body?.maxRetries ?? 3),
         retryDelayMs: Number(req.body?.retryDelayMs ?? 250),
@@ -2380,7 +2487,7 @@ export function createExpressApp() {
 
       res.json({
         ok: result.failed === 0,
-        sourceType,
+        sourceType: collected.sourceType,
         source: sourcePath,
         receiptLog: receiptStream ? receiptPath : null,
         endpoint: cfg.url,
@@ -2694,65 +2801,16 @@ export function createExpressApp() {
       const customQuestion = req.query.question || null;
       const analysisGoal = req.query.goal || null;
       const quorumSize = Math.max(1, Math.min(10, parseInt(req.query.quorumSize) || 3));
-      if (customQuestion && customQuestion.length > 500) {
-        return res.status(400).json({ quorumPrompt: null, error: "question exceeds 500 character limit" });
-      }
-      if (customQuestion && /<script|javascript:|on\w+=/i.test(customQuestion)) {
-        return res.status(400).json({ quorumPrompt: null, error: "question contains disallowed content" });
-      }
+      const qErr = _validateQuorumQuestion(customQuestion, "question");
+      if (qErr) return res.status(qErr.status).json({ quorumPrompt: null, error: qErr.error });
 
-      const GOAL_PRESETS = {
-        "root-cause": "Identify the root cause of the issues shown in the data. Trace the causal chain from symptoms to underlying problems.",
-        "risk-assess": "Assess the risk level of the current project state. Identify the highest-impact risks and their likelihood.",
-        "fix-review": "Review the proposed fixes and assess whether they adequately address the underlying issues. Identify gaps or risks in the remediation approach.",
-        "runbook-validate": "Validate the operational runbook against the current data. Identify any gaps, outdated steps, or missing escalation paths.",
-      };
-
-      const context = {};
-      let oldestTimestamp = null;
-      const trackAge = (ts) => { if (ts && (!oldestTimestamp || ts < oldestTimestamp)) oldestTimestamp = ts; };
-
-      if (source === "all" || source === "drift") {
-        const driftHistory = readForgeJsonl("drift-history.json", [], PROJECT_DIR);
-        if (driftHistory.length) { context.drift = driftHistory.slice(-5); trackAge(driftHistory[0]?.timestamp); }
-      }
-      if (source === "all" || source === "incident") {
-        const incidents = readForgeJsonl("incidents.jsonl", [], PROJECT_DIR).slice(-10);
-        if (incidents.length) { context.incidents = incidents; trackAge(incidents[0]?.capturedAt); }
-      }
-      if (source === "all" || source === "triage") {
-        const triageCache = readForgeJson("alert-triage-cache.json", null, PROJECT_DIR);
-        if (triageCache) { context.triage = triageCache; trackAge(triageCache.generatedAt); }
-      }
-      if (source === "all" || source === "fix-proposal") {
-        const proposals = readForgeJsonl("fix-proposals.json", [], PROJECT_DIR).slice(-5);
-        if (proposals.length) { context.fixProposals = proposals; trackAge(proposals[0]?.generatedAt); }
-      }
+      const { context, oldestTimestamp } = _collectQuorumContextBySource(source);
 
       if (source !== "all" && Object.keys(context).length === 0) {
         return res.json({ quorumPrompt: null, error: `no ${source} data available — run the corresponding LiveGuard tool first` });
       }
 
-      let questionUsed;
-      if (customQuestion) { questionUsed = customQuestion; }
-      else if (analysisGoal && GOAL_PRESETS[analysisGoal]) { questionUsed = GOAL_PRESETS[analysisGoal]; }
-      else { questionUsed = GOAL_PRESETS["risk-assess"]; }
-
-      const votingInstruction = `Each model must respond with: (1) a confidence score 0-100, (2) a one-paragraph answer, (3) one concrete recommendation. The aggregator accepts answers with confidence >= 60 and majority consensus. Quorum size: ${quorumSize} models.`;
-      const contextStr = JSON.stringify(context, null, 2);
-      const quorumPrompt = `## Context\n${contextStr}\n\n## Question\n${questionUsed}\n\n## Voting Instruction\n${votingInstruction}`;
-
-      const qConfig = loadQuorumConfig(PROJECT_DIR);
-      const suggestedModels = (qConfig.models || ["claude-opus-4.7", "grok-4.20", "gemini-3-pro-preview"]).slice(0, quorumSize);
-      const promptTokenEstimate = Math.ceil(quorumPrompt.length / 4);
-
-      let dataSnapshotAge = "unknown";
-      if (oldestTimestamp) {
-        const ageMins = Math.round((Date.now() - new Date(oldestTimestamp).getTime()) / 60000);
-        dataSnapshotAge = ageMins < 60 ? `${ageMins}m ago` : `${Math.round(ageMins / 60)}h ago`;
-      }
-
-      res.json({ quorumPrompt, promptTokenEstimate, suggestedModels, dataSnapshotAge, questionUsed });
+      res.json(_formatQuorumResponse({ context, oldestTimestamp, customQuestion, analysisGoal, quorumSize }));
     } catch (err) {
       res.status(500).json({ quorumPrompt: null, error: err.message });
     }
@@ -2764,70 +2822,27 @@ export function createExpressApp() {
       const { source: reqSource, customQuestion, analysisGoal, quorumSize: reqQuorumSize, targetFile } = req.body || {};
       const source = reqSource || "all";
       const quorumSize = Math.max(1, Math.min(10, parseInt(reqQuorumSize) || 3));
-      if (customQuestion && customQuestion.length > 500) {
-        return res.status(400).json({ quorumPrompt: null, error: "customQuestion exceeds 500 character limit" });
-      }
-      if (customQuestion && /<script|javascript:|on\w+=/i.test(customQuestion)) {
-        return res.status(400).json({ quorumPrompt: null, error: "customQuestion contains disallowed content" });
-      }
+      const qErr = _validateQuorumQuestion(customQuestion, "customQuestion");
+      if (qErr) return res.status(qErr.status).json({ quorumPrompt: null, error: qErr.error });
 
-      const GOAL_PRESETS = {
-        "root-cause": "Identify the root cause of the issues shown in the data. Trace the causal chain from symptoms to underlying problems.",
-        "risk-assess": "Assess the risk level of the current project state. Identify the highest-impact risks and their likelihood.",
-        "fix-review": "Review the proposed fixes and assess whether they adequately address the underlying issues. Identify gaps or risks in the remediation approach.",
-        "runbook-validate": "Validate the operational runbook against the current data. Identify any gaps, outdated steps, or missing escalation paths.",
-      };
-
-      const context = {};
+      let context;
       let oldestTimestamp = null;
-      const trackAge = (ts) => { if (ts && (!oldestTimestamp || ts < oldestTimestamp)) oldestTimestamp = ts; };
-
       if (targetFile) {
+        context = {};
         const data = readForgeJson(targetFile, null, PROJECT_DIR);
-        if (data) { context.targetFile = data; if (data.timestamp) trackAge(data.timestamp); }
+        if (data) {
+          context.targetFile = data;
+          if (data.timestamp) oldestTimestamp = data.timestamp;
+        }
       } else {
-        if (source === "all" || source === "drift") {
-          const driftHistory = readForgeJsonl("drift-history.json", [], PROJECT_DIR);
-          if (driftHistory.length) { context.drift = driftHistory.slice(-5); trackAge(driftHistory[0]?.timestamp); }
-        }
-        if (source === "all" || source === "incident") {
-          const incidents = readForgeJsonl("incidents.jsonl", [], PROJECT_DIR).slice(-10);
-          if (incidents.length) { context.incidents = incidents; trackAge(incidents[0]?.capturedAt); }
-        }
-        if (source === "all" || source === "triage") {
-          const triageCache = readForgeJson("alert-triage-cache.json", null, PROJECT_DIR);
-          if (triageCache) { context.triage = triageCache; trackAge(triageCache.generatedAt); }
-        }
-        if (source === "all" || source === "fix-proposal") {
-          const proposals = readForgeJsonl("fix-proposals.json", [], PROJECT_DIR).slice(-5);
-          if (proposals.length) { context.fixProposals = proposals; trackAge(proposals[0]?.generatedAt); }
-        }
+        ({ context, oldestTimestamp } = _collectQuorumContextBySource(source));
       }
 
       if (source !== "all" && !targetFile && Object.keys(context).length === 0) {
         return res.json({ quorumPrompt: null, error: `no ${source} data available — run the corresponding LiveGuard tool first` });
       }
 
-      let questionUsed;
-      if (customQuestion) { questionUsed = customQuestion; }
-      else if (analysisGoal && GOAL_PRESETS[analysisGoal]) { questionUsed = GOAL_PRESETS[analysisGoal]; }
-      else { questionUsed = GOAL_PRESETS["risk-assess"]; }
-
-      const votingInstruction = `Each model must respond with: (1) a confidence score 0-100, (2) a one-paragraph answer, (3) one concrete recommendation. The aggregator accepts answers with confidence >= 60 and majority consensus. Quorum size: ${quorumSize} models.`;
-      const contextStr = JSON.stringify(context, null, 2);
-      const quorumPrompt = `## Context\n${contextStr}\n\n## Question\n${questionUsed}\n\n## Voting Instruction\n${votingInstruction}`;
-
-      const qConfig = loadQuorumConfig(PROJECT_DIR);
-      const suggestedModels = (qConfig.models || ["claude-opus-4.7", "grok-4.20", "gemini-3-pro-preview"]).slice(0, quorumSize);
-      const promptTokenEstimate = Math.ceil(quorumPrompt.length / 4);
-
-      let dataSnapshotAge = "unknown";
-      if (oldestTimestamp) {
-        const ageMins = Math.round((Date.now() - new Date(oldestTimestamp).getTime()) / 60000);
-        dataSnapshotAge = ageMins < 60 ? `${ageMins}m ago` : `${Math.round(ageMins / 60)}h ago`;
-      }
-
-      res.json({ quorumPrompt, promptTokenEstimate, suggestedModels, dataSnapshotAge, questionUsed });
+      res.json(_formatQuorumResponse({ context, oldestTimestamp, customQuestion, analysisGoal, quorumSize }));
     } catch (err) {
       res.status(500).json({ quorumPrompt: null, error: err.message });
     }

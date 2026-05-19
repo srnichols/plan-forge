@@ -410,66 +410,81 @@ export function buildApiMessages(prompt, role) {
  * @param {object} options - { timeout, role }
  * @returns {Promise<{ output, stderr, jsonlEvents, exitCode, timedOut, tokens, worker, model }>}
  */
+async function _resolveApiAuthHeaders(provider, model) {
+  if (provider.entraAuth) {
+    const entraToken = await resolveAzureEntraToken();
+    if (!entraToken) {
+      return {
+        error: {
+          output: "",
+          stderr:
+            "Azure Entra auth failed: unable to acquire token via @azure/identity. " +
+            "Ensure AZURE_AUTH_MODE=entra and managed identity or service principal " +
+            "credentials are configured in the environment.",
+          jsonlEvents: [],
+          exitCode: 1,
+          timedOut: false,
+          tokens: { tokens_in: 0, tokens_out: 0, model },
+          worker: `api-${provider.name}`,
+          model,
+        },
+      };
+    }
+    return { headers: { Authorization: `Bearer ${entraToken}`, "Content-Type": "application/json" } };
+  }
+  const headers = provider.apiKeyHeader
+    ? { [provider.apiKeyHeader]: provider.apiKey, "Content-Type": "application/json" }
+    : { Authorization: `Bearer ${provider.apiKey}`, "Content-Type": "application/json" };
+  return { headers };
+}
+
+function _buildApiSuccess({ data, choice, usage, completionDetails, model, provider, apiDurationMs }) {
+  return {
+    output: choice?.message?.content || "",
+    stderr: "",
+    jsonlEvents: [],
+    exitCode: 0,
+    timedOut: false,
+    tokens: {
+      tokens_in: usage.prompt_tokens || 0,
+      tokens_out: usage.completion_tokens || 0,
+      model: data.model || model,
+      premiumRequests: 0,
+      apiDurationMs,
+      sessionDurationMs: apiDurationMs,
+      codeChanges: null,
+      reasoning_tokens: completionDetails.reasoning_tokens || 0,
+    },
+    worker: `api-${provider.name}`,
+    model: data.model || model,
+  };
+}
+
 async function callApiWorker(prompt, model, provider, options = {}) {
   const { timeout = 300_000, role = null } = options;
 
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeout);
 
-  // Bug #80: some API providers (notably xAI Grok) refuse prompts that read
-  // like "simulate pforge running slice N" as "core-instruction overrides".
-  // Reframing the same prompt via a system message as an analysis task
-  // (no instruction-override semantics) lets the provider engage normally.
-  // Role-aware wrapping is opt-in per call site; null role = legacy behaviour.
   const messages = buildApiMessages(prompt, role);
 
-  // Resolve auth headers. Entra path (AZURE_AUTH_MODE=entra|managed-identity) acquires a
-  // Bearer token via @azure/identity; standard paths use the static api-key or Bearer key.
-  let authHeaders;
-  if (provider.entraAuth) {
-    const entraToken = await resolveAzureEntraToken();
-    if (!entraToken) {
-      clearTimeout(timer);
-      return {
-        output: "",
-        stderr:
-          "Azure Entra auth failed: unable to acquire token via @azure/identity. " +
-          "Ensure AZURE_AUTH_MODE=entra and managed identity or service principal " +
-          "credentials are configured in the environment.",
-        jsonlEvents: [],
-        exitCode: 1,
-        timedOut: false,
-        tokens: { tokens_in: 0, tokens_out: 0, model },
-        worker: `api-${provider.name}`,
-        model,
-      };
-    }
-    // Entra tokens are always Bearer; Azure OpenAI accepts them on the standard
-    // Authorization header even though the api-key path uses "api-key" instead.
-    authHeaders = { Authorization: `Bearer ${entraToken}`, "Content-Type": "application/json" };
-  } else {
-    // Azure AI Foundry uses "api-key" header; all other providers use "Authorization: Bearer".
-    authHeaders = provider.apiKeyHeader
-      ? { [provider.apiKeyHeader]: provider.apiKey, "Content-Type": "application/json" }
-      : { Authorization: `Bearer ${provider.apiKey}`, "Content-Type": "application/json" };
+  const auth = await _resolveApiAuthHeaders(provider, model);
+  if (auth.error) {
+    clearTimeout(timer);
+    return auth.error;
   }
-  // Strip the routing prefix (e.g., "azure/") to get the bare deployment name for the body.
+  const authHeaders = auth.headers;
+
   const resolvedModel = provider.name === "microsoft-foundry"
     ? model.replace(/^azure\//, "")
     : model;
 
   try {
-    // Issue #193 (v3.0.1) Defect D: measure actual API duration instead of
-    // hardcoding 0. Single-request API path — sessionDurationMs and
-    // apiDurationMs collapse to the same value (one round trip).
     const _apiStartMs = Date.now();
     const response = await fetch(`${provider.baseUrl}/chat/completions`, {
       method: "POST",
       headers: authHeaders,
-      body: JSON.stringify({
-        model: resolvedModel,
-        messages,
-      }),
+      body: JSON.stringify({ model: resolvedModel, messages }),
       signal: controller.signal,
     });
 
@@ -485,27 +500,7 @@ async function callApiWorker(prompt, model, provider, options = {}) {
     const choice = data.choices?.[0];
     const usage = data.usage || {};
     const completionDetails = usage.completion_tokens_details || {};
-
-    return {
-      output: choice?.message?.content || "",
-      stderr: "",
-      jsonlEvents: [],
-      exitCode: 0,
-      timedOut: false,
-      tokens: {
-        tokens_in: usage.prompt_tokens || 0,
-        tokens_out: usage.completion_tokens || 0,
-        model: data.model || model,
-        premiumRequests: 0,
-        // Issue #193 Defect D: real measurement (was hardcoded 0).
-        apiDurationMs: _apiDurationMs,
-        sessionDurationMs: _apiDurationMs,
-        codeChanges: null,
-        reasoning_tokens: completionDetails.reasoning_tokens || 0,
-      },
-      worker: `api-${provider.name}`,
-      model: data.model || model,
-    };
+    return _buildApiSuccess({ data, choice, usage, completionDetails, model, provider, apiDurationMs: _apiDurationMs });
   } catch (err) {
     clearTimeout(timer);
     if (err.name === "AbortError") {
@@ -613,6 +608,103 @@ async function convertImageFormat(buffer, targetFormat, options = {}) {
  * @param {object} options - { model, size, format, outputPath, cwd }
  * @returns {Promise<{ success, url, localPath, mimeType, model, revisedPrompt }>}
  */
+async function _decodeImageBytes(imageData) {
+  if (imageData.b64_json) {
+    return { buffer: Buffer.from(imageData.b64_json, "base64"), error: null };
+  }
+  if (imageData.url) {
+    const imgRes = await fetch(imageData.url);
+    if (!imgRes.ok) {
+      return { buffer: null, error: `Failed to download image from URL: ${imgRes.status}` };
+    }
+    return { buffer: Buffer.from(await imgRes.arrayBuffer()), error: null };
+  }
+  return { buffer: null, error: "No image data in response (neither b64_json nor url)" };
+}
+
+async function _saveImageToOutputPath({ outputPath, cwd, finalBuffer, result }) {
+  const { writeFileSync, mkdirSync } = await import("node:fs");
+  const { dirname, resolve: pathResolve } = await import("node:path");
+
+  const finalDetected = detectImageFormat(finalBuffer);
+
+  let resolvedPath = outputPath;
+  const { extname: getExtForSave } = await import("node:path");
+  const pathExt = getExtForSave(outputPath).toLowerCase().replace(".", "");
+  const pathMeta = FORMAT_META[pathExt];
+  const bytesMeta = FORMAT_META[finalDetected.ext];
+  const extensionMatchesBytes = pathMeta?.aliases?.some((a) => bytesMeta?.aliases?.includes(a));
+
+  if (!extensionMatchesBytes) {
+    resolvedPath = outputPath.replace(/\.[^.]+$/, `.${finalDetected.ext}`);
+    result.extensionCorrected = true;
+    result.requestedPath = outputPath;
+    result.mimeType = finalDetected.mimeType;
+  }
+
+  const fullPath = pathResolve(cwd, resolvedPath);
+  mkdirSync(dirname(fullPath), { recursive: true });
+  writeFileSync(fullPath, finalBuffer);
+  result.localPath = fullPath;
+}
+
+function _resolveImageGenerationProvider(model) {
+  return detectApiProvider(model) || detectApiProvider("grok-imagine-image") || detectApiProvider("dall-e-3");
+}
+
+async function _requestGeneratedImage(prompt, model, size, provider) {
+  const reqBody = { model, prompt, n: 1, response_format: "b64_json" };
+  if (provider.name !== "xai" && size) reqBody.size = size;
+  const response = await fetch(`${provider.baseUrl}/images/generations`, {
+    method: "POST",
+    headers: { Authorization: `Bearer ${provider.apiKey}`, "Content-Type": "application/json" },
+    body: JSON.stringify(reqBody),
+  });
+  if (!response.ok) {
+    const errBody = await response.text();
+    return { error: `Image generation failed (${response.status}): ${errBody}` };
+  }
+  const data = await response.json();
+  const imageData = data.data?.[0];
+  if (!imageData?.b64_json && !imageData?.url) {
+    return { error: "No image data in response (neither b64_json nor url)" };
+  }
+  return { data, imageData };
+}
+
+async function _prepareGeneratedImageOutput(imageData, { outputPath, format, quality, cwd }) {
+  const decoded = await _decodeImageBytes(imageData);
+  if (decoded.error) return { error: decoded.error };
+  const rawBuffer = decoded.buffer;
+  const detected = detectImageFormat(rawBuffer);
+  const { extname: getExt } = await import("node:path");
+  const requestedExt = outputPath ? getExt(outputPath).toLowerCase().replace(".", "") : format;
+  const targetFormat = requestedExt || detected.ext;
+  const conversion = await convertImageFormat(rawBuffer, targetFormat, { quality });
+  const result = {
+    finalBuffer: conversion.buffer,
+    finalFormat: conversion.format,
+    detected,
+    conversion,
+  };
+  if (outputPath) {
+    const saveResult = { mimeType: conversion.format.mimeType };
+    if (conversion.warning) saveResult.warning = conversion.warning;
+    await _saveImageToOutputPath({ outputPath, cwd, finalBuffer: conversion.buffer, result: saveResult });
+    result.saveResult = saveResult;
+  }
+  return result;
+}
+
+function _attachImageSourceMeta(imageData, result) {
+  if (imageData.b64_json) {
+    result.base64 = imageData.b64_json.substring(0, 100) + "...";
+    result.fullBase64Length = imageData.b64_json.length;
+  } else if (imageData.url) {
+    result.sourceUrl = imageData.url;
+  }
+}
+
 export async function generateImage(prompt, options = {}) {
   const {
     model = "grok-imagine-image",
@@ -623,115 +715,30 @@ export async function generateImage(prompt, options = {}) {
     cwd = process.cwd(),
   } = options;
 
-  // Resolve provider — try the model's provider, then fall back to xAI, then OpenAI
-  const provider = detectApiProvider(model) || detectApiProvider("grok-imagine-image") || detectApiProvider("dall-e-3");
+  const provider = _resolveImageGenerationProvider(model);
   if (!provider) {
     return { success: false, error: "No image API key configured. Set XAI_API_KEY or OPENAI_API_KEY environment variable." };
   }
 
   try {
-    // Build request body — xAI doesn't support 'size', OpenAI does
-    const reqBody = { model, prompt, n: 1, response_format: "b64_json" };
-    if (provider.name !== "xai" && size) reqBody.size = size;
+    const imageResponse = await _requestGeneratedImage(prompt, model, size, provider);
+    if (imageResponse.error) return { success: false, error: imageResponse.error };
 
-    const response = await fetch(`${provider.baseUrl}/images/generations`, {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${provider.apiKey}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify(reqBody),
-    });
-
-    if (!response.ok) {
-      const errBody = await response.text();
-      return { success: false, error: `Image generation failed (${response.status}): ${errBody}` };
-    }
-
-    const data = await response.json();
-    const imageData = data.data?.[0];
-    if (!imageData?.b64_json && !imageData?.url) {
-      return { success: false, error: "No image data in response (neither b64_json nor url)" };
-    }
-
-    // Decode bytes — handle both b64_json and url response formats
-    let rawBuffer;
-    if (imageData.b64_json) {
-      rawBuffer = Buffer.from(imageData.b64_json, "base64");
-    } else if (imageData.url) {
-      const imgRes = await fetch(imageData.url);
-      if (!imgRes.ok) {
-        return { success: false, error: `Failed to download image from URL: ${imgRes.status}` };
-      }
-      rawBuffer = Buffer.from(await imgRes.arrayBuffer());
-    }
-    const detected = detectImageFormat(rawBuffer);
-
-    // Determine the desired output format from the outputPath extension or format option
-    const { extname: getExt } = await import("node:path");
-    const requestedExt = outputPath ? getExt(outputPath).toLowerCase().replace(".", "") : format;
-    const targetFormat = requestedExt || detected.ext;
-
-    // Convert to the requested format if different from what the API returned
-    const conversion = await convertImageFormat(rawBuffer, targetFormat, { quality });
-    const finalBuffer = conversion.buffer;
-    const finalFormat = conversion.format;
+    const prepared = await _prepareGeneratedImageOutput(imageResponse.imageData, { outputPath, format, quality, cwd });
+    if (prepared.error) return { success: false, error: prepared.error };
 
     const result = {
       success: true,
-      model: data.model || model,
-      revisedPrompt: imageData.revised_prompt || prompt,
-      mimeType: finalFormat.mimeType,
-      originalFormat: detected.mimeType,
-      converted: conversion.converted,
+      model: imageResponse.data.model || model,
+      revisedPrompt: imageResponse.imageData.revised_prompt || prompt,
+      mimeType: prepared.finalFormat.mimeType,
+      originalFormat: prepared.detected.mimeType,
+      converted: prepared.conversion.converted,
+      ...(prepared.conversion.warning ? { warning: prepared.conversion.warning } : {}),
+      ...(prepared.saveResult || {}),
     };
 
-    if (conversion.warning) {
-      result.warning = conversion.warning;
-    }
-
-    // Save to file if outputPath specified
-    if (outputPath) {
-      const { writeFileSync, mkdirSync } = await import("node:fs");
-      const { dirname, resolve: pathResolve } = await import("node:path");
-
-      // Final safety: re-detect format from the actual output bytes to prevent
-      // MIME mismatches (e.g. xAI Grok Aurora returns JPEG even when PNG requested).
-      // This catches cases where conversion claims success but bytes don't match.
-      const finalDetected = detectImageFormat(finalBuffer);
-
-      // Correct extension if the final bytes don't match the requested format
-      let resolvedPath = outputPath;
-      const { extname: getExtForSave } = await import("node:path");
-      const pathExt = getExtForSave(outputPath).toLowerCase().replace(".", "");
-      const pathMeta = FORMAT_META[pathExt];
-      const bytesMeta = FORMAT_META[finalDetected.ext];
-      const extensionMatchesBytes = pathMeta?.aliases?.some((a) => bytesMeta?.aliases?.includes(a));
-
-      if (!extensionMatchesBytes) {
-        resolvedPath = outputPath.replace(/\.[^.]+$/, `.${finalDetected.ext}`);
-        result.extensionCorrected = true;
-        result.requestedPath = outputPath;
-        // Update mimeType to reflect actual saved bytes
-        result.mimeType = finalDetected.mimeType;
-      }
-
-      const fullPath = pathResolve(cwd, resolvedPath);
-      mkdirSync(dirname(fullPath), { recursive: true });
-      writeFileSync(fullPath, finalBuffer);
-      result.localPath = fullPath;
-    }
-
-    // Return truncated base64 for logging only — never return full base64 inline,
-    // as passing raw image bytes through MCP tool results causes MIME type mismatch
-    // errors in the Claude API when the declared media_type doesn't match the bytes.
-    if (imageData.b64_json) {
-      result.base64 = imageData.b64_json.substring(0, 100) + "..."; // Truncated for logging
-      result.fullBase64Length = imageData.b64_json.length;
-    } else if (imageData.url) {
-      result.sourceUrl = imageData.url; // URL-based response — no base64 to truncate
-    }
-
+    _attachImageSourceMeta(imageResponse.imageData, result);
     return result;
   } catch (err) {
     return { success: false, error: `Image generation error: ${err.message}` };
@@ -1271,11 +1278,82 @@ export function resolveRequiredCli(model) {
  * @param {{ hostPreference?: string, host?: string }} [opts]
  * @returns {{ model: string, available: boolean, via: "api"|"cli", provider?: string, worker?: string, reason?: string, install?: string }}
  */
+function _probeDirectApiOnly(model, host) {
+  const apiProvider = detectApiProvider(model);
+  if (apiProvider) {
+    const billing = describeBillingSurface("direct-api", host);
+    return { model, available: true, via: "api", provider: apiProvider.name, host, billing: billing.label };
+  }
+  for (const [name, provider] of Object.entries(DIRECT_API_ONLY)) {
+    if (provider.pattern.test(model)) {
+      return {
+        model, available: false, via: "api", provider: name, host,
+        reason: `${provider.envKey} not set`,
+        install: `Set ${provider.envKey} in env or .forge/secrets.json`,
+      };
+    }
+  }
+  return null;
+}
+
+function _probeCopilotServable(model, host, hostPreference, ghCopilot) {
+  const { order, dropIfNoDirectApi } = getRoutingPreference(host, hostPreference);
+  const apiProvider = detectApiProvider(model);
+
+  const buildGhCopilotResult = () => {
+    const billing = describeBillingSurface("gh-copilot", host);
+    return {
+      model, available: true, via: "cli", worker: "gh-copilot",
+      provider: "copilot-subscription", host,
+      billing: billing.label,
+      billingWarning: billing.warning,
+      routingPreference: hostPreference,
+    };
+  };
+  const buildDirectApiResult = (fallback) => {
+    const billing = describeBillingSurface("direct-api", host);
+    return {
+      model, available: true, via: "api", provider: apiProvider.name,
+      host, billing: billing.label,
+      ...(fallback ? { fallback: true } : {}),
+      routingPreference: hostPreference,
+    };
+  };
+
+  for (let i = 0; i < order.length; i++) {
+    const transport = order[i];
+    const isFallback = i > 0;
+    if (transport === "gh-copilot" && ghCopilot) return buildGhCopilotResult();
+    if (transport === "direct-api" && apiProvider) return buildDirectApiResult(isFallback);
+  }
+
+  if (dropIfNoDirectApi && !apiProvider) {
+    for (const [name, provider] of Object.entries(COPILOT_SERVABLE)) {
+      if (provider.pattern.test(model)) {
+        return {
+          model, available: false, via: "api", provider: name, host,
+          routingPreference: hostPreference,
+          reason: `routing.hostPreference="drop" under host=${host} requires ${provider.envKey}`,
+          install: `Set ${provider.envKey} in env or .forge/secrets.json, or change routing.hostPreference in .forge.json`,
+        };
+      }
+    }
+  }
+  for (const [name, provider] of Object.entries(COPILOT_SERVABLE)) {
+    if (provider.pattern.test(model)) {
+      return {
+        model, available: false, via: "cli", provider: name, host,
+        routingPreference: hostPreference,
+        reason: `gh-copilot CLI not installed and ${provider.envKey} not set`,
+        install: `Install gh-copilot (preferred) or set ${provider.envKey} in env or .forge/secrets.json`,
+      };
+    }
+  }
+  return null;
+}
+
 export function probeQuorumModelAvailability(model, opts = {}) {
   const workers = detectWorkers();
-  // Use the injectable probe so tests can simulate "gh-copilot not installed".
-  // The real probe (default) resolves through loadWorkerCapabilities →
-  // probeWorker("gh-copilot", ...), matching detectWorkers().
   const ghCopilotAvailable = isGhCopilotAvailable();
   const ghCopilot = ghCopilotAvailable
     ? workers.find((w) => w.name === "gh-copilot") || { name: "gh-copilot", available: true }
@@ -1283,92 +1361,17 @@ export function probeQuorumModelAvailability(model, opts = {}) {
   const host = opts.host || detectClientHost();
   const hostPreference = opts.hostPreference || "auto";
 
-  // Path 1: Direct-API-only models (grok-*, dall-e-*) — no CLI proxy exists.
   if (isDirectApiOnlyModel(model)) {
-    const apiProvider = detectApiProvider(model);
-    if (apiProvider) {
-      const billing = describeBillingSurface("direct-api", host);
-      return { model, available: true, via: "api", provider: apiProvider.name, host, billing: billing.label };
-    }
-    for (const [name, provider] of Object.entries(DIRECT_API_ONLY)) {
-      if (provider.pattern.test(model)) {
-        return {
-          model, available: false, via: "api", provider: name, host,
-          reason: `${provider.envKey} not set`,
-          install: `Set ${provider.envKey} in env or .forge/secrets.json`,
-        };
-      }
-    }
+    const directRes = _probeDirectApiOnly(model, host);
+    if (directRes) return directRes;
   }
 
-  // Path 2: Copilot-servable models (gpt-*, chatgpt-*).
-  // #104: routing order is host-aware and user-overridable. Default ("auto"):
-  // VS Code + Copilot users prefer gh-copilot (subscription they already pay
-  // for); Claude Code / Cursor / Windsurf / Zed users prefer direct API
-  // (so they don't silently double-pay by using their Copilot seat too).
-  // The "drop" preference forces gpt-* to be unavailable on non-Copilot
-  // hosts when no direct API key is present.
   if (isCopilotServableModel(model)) {
-    const { order, dropIfNoDirectApi } = getRoutingPreference(host, hostPreference);
-    const apiProvider = detectApiProvider(model);
-
-    const buildGhCopilotResult = () => {
-      const billing = describeBillingSurface("gh-copilot", host);
-      return {
-        model, available: true, via: "cli", worker: "gh-copilot",
-        provider: "copilot-subscription", host,
-        billing: billing.label,
-        billingWarning: billing.warning,
-        routingPreference: hostPreference,
-      };
-    };
-    const buildDirectApiResult = (fallback) => {
-      const billing = describeBillingSurface("direct-api", host);
-      return {
-        model, available: true, via: "api", provider: apiProvider.name,
-        host, billing: billing.label,
-        ...(fallback ? { fallback: true } : {}),
-        routingPreference: hostPreference,
-      };
-    };
-
-    for (let i = 0; i < order.length; i++) {
-      const transport = order[i];
-      const isFallback = i > 0;
-      if (transport === "gh-copilot" && ghCopilot) return buildGhCopilotResult();
-      if (transport === "direct-api" && apiProvider) return buildDirectApiResult(isFallback);
-    }
-
-    // Neither preferred transport available — produce a host-aware reason.
-    if (dropIfNoDirectApi && !apiProvider) {
-      for (const [name, provider] of Object.entries(COPILOT_SERVABLE)) {
-        if (provider.pattern.test(model)) {
-          return {
-            model, available: false, via: "api", provider: name, host,
-            routingPreference: hostPreference,
-            reason: `routing.hostPreference="drop" under host=${host} requires ${provider.envKey}`,
-            install: `Set ${provider.envKey} in env or .forge/secrets.json, or change routing.hostPreference in .forge.json`,
-          };
-        }
-      }
-    }
-    for (const [name, provider] of Object.entries(COPILOT_SERVABLE)) {
-      if (provider.pattern.test(model)) {
-        return {
-          model, available: false, via: "cli", provider: name, host,
-          routingPreference: hostPreference,
-          reason: `gh-copilot CLI not installed and ${provider.envKey} not set`,
-          install: `Install gh-copilot (preferred) or set ${provider.envKey} in env or .forge/secrets.json`,
-        };
-      }
-    }
+    const copilotRes = _probeCopilotServable(model, host, hostPreference, ghCopilot);
+    if (copilotRes) return copilotRes;
   }
 
-  // Path 3: CLI-routed models (claude-*, codex-*, default) — mirror
-  // spawnWorker()'s actual behavior, which picks the FIRST available
-  // non-API worker and passes --model to it. Prefer the model-specific
-  // CLI (claude, codex) when present, but fall back to gh-copilot (which
-  // accepts --model for any model) to match real spawn behavior.
+  // Path 3: CLI-routed models — pick first available non-API worker; gh-copilot fallback.
   const preferredCli = resolveRequiredCli(model);
   const preferred = workers.find((w) => w.name === preferredCli && w.available);
   if (preferred) return { model, available: true, via: "cli", worker: preferred.name, host };
@@ -1570,120 +1573,150 @@ export function detectRuntimes() {
  * Test helpers: use `withSandboxRepo()` from `tests/helpers/sandbox-repo.mjs`
  * to get a properly isolated tmpdir with `git init` + initial commit.
  */
+function _resolveApiProviderForRouting(model, worker) {
+  if (worker || !model) return { apiProvider: null };
+  if (isDirectApiOnlyModel(model)) {
+    const apiProvider = detectApiProvider(model);
+    if (!apiProvider) {
+      const matched = Object.values(DIRECT_API_ONLY).find((p) => p.pattern.test(model));
+      const envKey = matched?.envKey || "the provider's API key";
+      const label = matched?.label || "the provider";
+      throw new Error(
+        `Model "${model}" requires ${label} direct API access — ${envKey} is not set ` +
+        `and gh-copilot does not proxy this model. ` +
+        `Set ${envKey} in env or .forge/secrets.json.`
+      );
+    }
+    return { apiProvider };
+  }
+  if (isCopilotServableModel(model)) {
+    if (!isGhCopilotAvailable()) {
+      const apiProvider = detectApiProvider(model);
+      if (!apiProvider) {
+        const matched = Object.values(COPILOT_SERVABLE).find((p) => p.pattern.test(model));
+        const envKey = matched?.envKey || "OPENAI_API_KEY";
+        throw new Error(
+          `Model "${model}" is Copilot-servable but gh-copilot CLI is not installed ` +
+          `and ${envKey} is not set. Install gh-copilot (preferred) or set ${envKey}.`
+        );
+      }
+      return { apiProvider };
+    }
+  }
+  return { apiProvider: null };
+}
+
+function _enforceApiRoleGuard(apiProvider, role, model) {
+  const effectiveRole = role || "code";
+  if (!API_ALLOWED_ROLES.has(effectiveRole)) {
+    throw new Error(
+      `Model "${model}" is routed through the ${apiProvider.label} API which cannot execute ` +
+      `tool calls or edit files. ${apiProvider.label} models are valid for reviewer, analysis, ` +
+      `and quorum roles — not as a primary code-writing worker. ` +
+      `For code, use claude-sonnet-4.6 (via gh-copilot) or claude-opus-4.7 (via claude CLI).`
+    );
+  }
+}
+
+function _buildWorkerInvocation(chosen, promptFile, prompt, model) {
+  const matrix = loadWorkerCapabilities();
+  const spec = matrix.workers?.[chosen.name];
+  const invocation = (chosen.usingFallback && spec?.invocation?.fallback)
+    ? spec.invocation.fallback
+    : spec?.invocation;
+  if (invocation?.cmd) {
+    const cmd = invocation.cmd;
+    const args = (invocation.baseArgs || []).map((a) =>
+      String(a).replace("{PROMPT_FILE}", promptFile).replace("{PROMPT}", prompt)
+    );
+    if (model) args.push("--model", model);
+    return { cmd, args, spec };
+  }
+  if (chosen.name === "claude" || chosen.name === "codex") {
+    const cmd = chosen.name;
+    const args = ["-p", prompt];
+    if (model) args.push("--model", model);
+    return { cmd, args, spec };
+  }
+  return { cmd: null, args: null, spec, error: new Error(`Unknown worker: ${chosen.name}`) };
+}
+
+function _enrichWorkerTokens({ tokens, stdout, stderr, code, timedOut, spec, spawnStartMs }) {
+  if (!tokens.model || tokens.tokens_out === 0) {
+    const stderrStats = parseStderrStats(stderr);
+    if (stderrStats.model) tokens.model = stderrStats.model;
+    if (stderrStats.tokens_out > 0) tokens.tokens_out = stderrStats.tokens_out;
+    if (stderrStats.tokens_in > 0) tokens.tokens_in = stderrStats.tokens_in;
+    if (stderrStats.premiumRequests > 0) tokens.premiumRequests = stderrStats.premiumRequests;
+  }
+  if (!tokens.model) tokens.model = spec?.defaultModel || null;
+  if (shouldDefaultPremiumRequestsToOne({ tokens, stdout, stderr, code, timedOut })) {
+    tokens.premiumRequests = 1;
+  }
+  if ((!tokens.vendor || tokens.vendor === "unknown") && tokens.model) {
+    const inferred = deriveVendorFromModel(tokens.model);
+    if (inferred) tokens.vendor = inferred;
+  }
+  if (!tokens.sessionDurationMs || tokens.sessionDurationMs === 0) {
+    tokens.sessionDurationMs = Date.now() - spawnStartMs;
+  }
+  return tokens;
+}
+
+function _probeWorkersWithEvents(worker, eventBus) {
+  const probeResults = worker
+    ? [{ name: worker }]
+    : detectWorkers().filter((w) => w.available && w.type !== "api");
+  if (!worker) {
+    for (const w of detectWorkers()) {
+      if (w.type !== "api") {
+        eventBus?.emit("probe-result", {
+          worker: w.name,
+          available: w.available,
+          reason: w.reason || null,
+          version: w.version || null,
+        });
+      }
+    }
+  }
+  return probeResults;
+}
+
+function _pickChosenWorker(workers, worker, model) {
+  let chosen = workers[0];
+  if (!worker && model && isCopilotServableModel(model)) {
+    const gh = workers.find((w) => w.name === "gh-copilot");
+    if (gh) chosen = gh;
+  }
+  return chosen;
+}
+
 export function spawnWorker(prompt, options = {}) {
   const {
     model = null,
     cwd = process.cwd(),
     timeout = 1_200_000, // 20 min default
-    worker = null,     // override worker choice
-    runPlanActive = false, // propagate PFORGE_RUN_PLAN_ACTIVE to child (#74)
-    role = null,       // bug #78/#80: call-site role (e.g. "quorum-dry-run",
-                       // "reviewer", "analysis") — drives API-path prompt
-                       // shaping and telemetry.
-    eventBus = null,   // Issue #162: probe-result event logging
-    extraEnv = null,   // Phase-WORKER-GUARDRAILS Slice 4 (A5): additional env vars (e.g. proxy)
+    worker = null,
+    runPlanActive = false,
+    role = null,
+    eventBus = null,
+    extraEnv = null,
   } = options;
 
-  // Routing decision (fixed in meta-bug #103):
-  //   - Direct-API-only models (grok-*, dall-e-*): HTTP required, no CLI
-  //     alternative exists. If key is missing, throw.
-  //   - Copilot-servable models (gpt-*, chatgpt-*): prefer gh-copilot CLI
-  //     (subscription) when installed; fall back to direct HTTP only if the
-  //     user set OPENAI_API_KEY. gh-copilot proxies these models and avoids
-  //     charging the user twice.
-  //   - Everything else: CLI (existing behavior).
-  //
-  // Bug #78: honor an explicit `worker` override — some call sites need to
-  // force a specific CLI even when the model name would normally match an
-  // API provider (tests, fallback paths). If the caller passes `worker`,
-  // we respect that choice and skip auto-API-routing.
-  let apiProvider = null;
-  if (!worker && model) {
-    if (isDirectApiOnlyModel(model)) {
-      apiProvider = detectApiProvider(model);
-      if (!apiProvider) {
-        // Look up the envKey for a clearer error
-        const matched = Object.values(DIRECT_API_ONLY).find((p) => p.pattern.test(model));
-        const envKey = matched?.envKey || "the provider's API key";
-        const label = matched?.label || "the provider";
-        throw new Error(
-          `Model "${model}" requires ${label} direct API access — ${envKey} is not set ` +
-          `and gh-copilot does not proxy this model. ` +
-          `Set ${envKey} in env or .forge/secrets.json.`
-        );
-      }
-    } else if (isCopilotServableModel(model)) {
-      // Prefer CLI path (Copilot subscription). Only route to HTTP if
-      // gh-copilot is unavailable AND the user explicitly set a direct key.
-      if (!isGhCopilotAvailable()) {
-        apiProvider = detectApiProvider(model);
-        if (!apiProvider) {
-          const matched = Object.values(COPILOT_SERVABLE).find((p) => p.pattern.test(model));
-          const envKey = matched?.envKey || "OPENAI_API_KEY";
-          throw new Error(
-            `Model "${model}" is Copilot-servable but gh-copilot CLI is not installed ` +
-            `and ${envKey} is not set. Install gh-copilot (preferred) or set ${envKey}.`
-          );
-        }
-      }
-      // else: fall through to CLI path below — gh-copilot will handle it
-    }
-  }
-
+  const { apiProvider } = _resolveApiProviderForRouting(model, worker);
   if (apiProvider) {
-    // Block API providers from code-writing roles. API endpoints are
-    // text-completion only — no tool calls, no filesystem access.
-    const effectiveRole = role || "code";
-    if (!API_ALLOWED_ROLES.has(effectiveRole)) {
-      throw new Error(
-        `Model "${model}" is routed through the ${apiProvider.label} API which cannot execute ` +
-        `tool calls or edit files. ${apiProvider.label} models are valid for reviewer, analysis, ` +
-        `and quorum roles — not as a primary code-writing worker. ` +
-        `For code, use claude-sonnet-4.6 (via gh-copilot) or claude-opus-4.7 (via claude CLI).`
-      );
-    }
+    _enforceApiRoleGuard(apiProvider, role, model);
     return callApiWorker(prompt, model, apiProvider, { timeout, role });
   }
 
   return new Promise(async (workerResolve, workerReject) => {
-    // Issue #162: run the probe and emit a probe-result event for every attempt
-    // so events.log captures whether each slice triggered a fresh probe.
-    const runProbe = () => {
-      const probeResults = worker
-        ? [{ name: worker }]
-        : detectWorkers().filter((w) => w.available && w.type !== "api");
-      if (!worker) {
-        for (const w of detectWorkers()) {
-          if (w.type !== "api") {
-            eventBus?.emit("probe-result", {
-              worker: w.name,
-              available: w.available,
-              reason: w.reason || null,
-              version: w.version || null,
-            });
-          }
-        }
-      }
-      return probeResults;
-    };
+    let workers = _probeWorkersWithEvents(worker, eventBus);
 
-    let workers = runProbe();
-
-    // Issue #162: retry with backoff before giving up — handles transient
-    // race conditions where the previous slice's worker subprocess hadn't
-    // fully released handles (e.g. token-cache write lock).
-    //
-    // P50 follow-up (2026-05-19): bust the 60s probe cache between retries.
-    // Without this, the first failed runProbe() poisons orchestratorState.cliWorkersCache and
-    // every back-off retry returns the same stale empty result — defeating
-    // the retry's purpose. Symptom: after 4+ minute slices, the next probe
-    // would fail in ~9s and stay failed for a full minute, forcing manual
-    // `--only-slices` recovery from a fresh shell.
     if (workers.length === 0 && !worker) {
       for (const delay of [1_000, 3_000, 5_000]) {
         await new Promise((r) => setTimeout(r, delay));
         resetCliWorkersCache();
-        workers = runProbe();
+        workers = _probeWorkersWithEvents(worker, eventBus);
         if (workers.length > 0) break;
       }
     }
@@ -1693,57 +1726,19 @@ export function spawnWorker(prompt, options = {}) {
       return;
     }
 
-    // For Copilot-servable models (gpt-*, chatgpt-*), prefer gh-copilot
-    // specifically — claude / codex CLIs do not accept `--model gpt-*`.
-    // Fixed in meta-bug #103. If gh-copilot is not in the worker list
-    // we fall through to workers[0] and let the CLI report the error.
-    let chosen = workers[0];
-    if (!worker && model && isCopilotServableModel(model)) {
-      const gh = workers.find((w) => w.name === "gh-copilot");
-      if (gh) chosen = gh;
-    }
-    let args;
-    let cmd;
+    const chosen = _pickChosenWorker(workers, worker, model);
 
-    // Write prompt to temp file to avoid CLI arg length/escaping issues
-    // Use random suffix to prevent collisions when spawning multiple workers in parallel (quorum)
     const suffix = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
     const promptFile = resolve(tmpdir(), `pforge-prompt-${suffix}.txt`);
     writeFileSync(promptFile, prompt);
 
-    // Build invocation from the capability matrix (single source of truth — issue #28).
-    // Supports {PROMPT_FILE} and {PROMPT} placeholders in worker-capabilities.json.
-    // Issue #157: when probeWorker chose the legacy fallback (e.g. `gh copilot`
-    // because the standalone `copilot` CLI wasn't found), use the matching
-    // `invocation.fallback` block so flag surfaces don't mismatch the binary.
-    const matrix = loadWorkerCapabilities();
-    const spec = matrix.workers?.[chosen.name];
-    const invocation = (chosen.usingFallback && spec?.invocation?.fallback)
-      ? spec.invocation.fallback
-      : spec?.invocation;
-    if (invocation?.cmd) {
-      cmd = invocation.cmd;
-      args = (invocation.baseArgs || []).map((a) =>
-        String(a).replace("{PROMPT_FILE}", promptFile).replace("{PROMPT}", prompt)
-      );
-      if (model) args.push("--model", model);
-    } else if (chosen.name === "claude" || chosen.name === "codex") {
-      // Fallback if matrix missing entry (defensive)
-      cmd = chosen.name;
-      args = ["-p", prompt];
-      if (model) args.push("--model", model);
-    } else {
-      workerReject(new Error(`Unknown worker: ${chosen.name}`));
+    const invocationResult = _buildWorkerInvocation(chosen, promptFile, prompt, model);
+    if (invocationResult.error) {
+      workerReject(invocationResult.error);
       return;
     }
+    const { cmd, args, spec } = invocationResult;
 
-    // Bug #192 (v2.99.1): on Windows, route through cmd.exe explicitly instead
-    // of using `shell: true` with array args. The legacy `shell:true + array
-    // args` pattern triggers Node's DEP0190 deprecation (will throw in a future
-    // major) because Node concatenates the args into a shell command line
-    // without escaping. Routing through cmd /d /s /c <bin> resolves .cmd shims
-    // the same way (original Bug #82 fix intent) without DEP0190 and without
-    // the unsafe arg-concat behavior.
     const _isWin    = process.platform === "win32";
     const _spawnBin = _isWin ? "cmd" : cmd;
     const _spawnArg = _isWin ? ["/d", "/s", "/c", cmd, ...args] : args;
@@ -1752,8 +1747,6 @@ export function spawnWorker(prompt, options = {}) {
       env: {
         ...process.env,
         NO_COLOR: "1",
-        // Prevent git commit / rebase from opening an interactive editor.
-        // Bug #121: without these, autonomous loops can hang indefinitely.
         GIT_EDITOR: "true",
         GIT_TERMINAL_PROMPT: "0",
         GIT_SEQUENCE_EDITOR: "true",
@@ -1761,36 +1754,23 @@ export function spawnWorker(prompt, options = {}) {
         ...(extraEnv || {}),
       },
       stdio: ["pipe", "pipe", "pipe"],
-      // Bug #121: suppress the console flash on Windows when spawning CLI workers.
       windowsHide: true,
     });
 
-    // #186 v2.96.2: wall-clock anchor for sessionDurationMs fallback when the
-    // CLI worker's `result` event omits usage.sessionDurationMs (gh-copilot
-    // currently does). Captured immediately AFTER spawn() so we measure the
-    // child's lifetime rather than including our own setup overhead.
     const _spawnStartMs = Date.now();
 
-    // Track child for cleanup on parent exit
     if (!global.__pforgeChildren) global.__pforgeChildren = new Set();
     global.__pforgeChildren.add(child);
     child.on("close", () => global.__pforgeChildren?.delete(child));
 
-    // Force UTF-8 decoding on both streams. On Windows, the default encoding
-    // is platform-dependent and can mangle Unicode chars (↑ ↓ •) that appear
-    // in gh copilot's token summary line — which silently breaks parseStderrStats.
     child.stdout.setEncoding("utf8");
     child.stderr.setEncoding("utf8");
-
-    // Close stdin immediately (no interactive input needed)
     child.stdin.end();
 
     let stdout = "";
     let stderr = "";
     let timedOut = false;
 
-    // Fix A: Heartbeat — write a dot to stdout every 15s so VS Code terminal stays alive
-    // This prevents "The terminal is awaiting input" notification
     const heartbeat = setInterval(() => {
       process.stdout.write(".");
     }, 15_000);
@@ -1804,12 +1784,9 @@ export function spawnWorker(prompt, options = {}) {
     child.stderr.on("data", (chunk) => {
       const text = chunk.toString();
       stderr += text;
-      // Fix B: Stream worker stderr to our stdout so terminal shows live progress
-      // gh copilot writes model selection, token counting, and timing to stderr
       for (const line of text.split("\n")) {
         const trimmed = line.trim();
         if (trimmed && !trimmed.startsWith("{")) {
-          // Skip JSONL lines, show human-readable progress
           process.stdout.write(`    ${trimmed}\n`);
         }
       }
@@ -1819,13 +1796,8 @@ export function spawnWorker(prompt, options = {}) {
       clearInterval(heartbeat);
       clearTimeout(timer);
 
-      // Clean up temp prompt file
       try { unlinkSync(promptFile); } catch { /* ignore */ }
 
-      // Issue #197: if the worker produced zero output (both stdout and stderr empty)
-      // and exited non-zero, it most likely failed to start due to a missing console
-      // (TTY). Annotate stderr so the diagnostic log and detectSilentWorkerFailure
-      // callers receive a human-readable reason rather than an empty string.
       if (!stdout && !stderr && code !== 0 && !timedOut) {
         stderr = `[pforge] worker '${chosen.name}' exited ${code} with no stdout or stderr — ` +
           `likely failed to start (console/TTY required). Run with --foreground for debugging.`;
@@ -1833,49 +1805,8 @@ export function spawnWorker(prompt, options = {}) {
 
       const jsonlEvents = parseJSONL(stdout);
       let tokens = extractTokens(jsonlEvents);
+      tokens = _enrichWorkerTokens({ tokens, stdout, stderr, code, timedOut, spec, spawnStartMs: _spawnStartMs });
 
-      // Fallback: parse stderr stats (gh copilot outputs stats to stderr in non-TTY mode)
-      // Called inside "close" handler so `stderr` is the fully-accumulated string — not a partial stream.
-      if (!tokens.model || tokens.tokens_out === 0) {
-        const stderrStats = parseStderrStats(stderr);
-        if (stderrStats.model) tokens.model = stderrStats.model;
-        if (stderrStats.tokens_out > 0) tokens.tokens_out = stderrStats.tokens_out;
-        if (stderrStats.tokens_in > 0) tokens.tokens_in = stderrStats.tokens_in;
-        if (stderrStats.premiumRequests > 0) tokens.premiumRequests = stderrStats.premiumRequests;
-      }
-
-      // Issue #63: When both extractTokens and parseStderrStats fail to find a model,
-      // infer a reasonable default from the worker's capability matrix instead of "unknown".
-      if (!tokens.model) {
-        tokens.model = spec?.defaultModel || null;
-      }
-
-      // Issue #63 + Issue #180: When the CLI exits 0 and we have ANY evidence
-      // a request was made (long stdout, parsed token counts from stderr, or a
-      // recognizable "Tokens" stat line), default premiumRequests to 1. Before
-      // #180 this only fired on `stdout.length > 200`, but gh-copilot writes
-      // most of its output to STDERR — leaving slices with short stdout
-      // showing cost_usd === 0 even though stderr clearly reported tokens.
-      if (shouldDefaultPremiumRequestsToOne({ tokens, stdout, stderr, code, timedOut })) {
-        tokens.premiumRequests = 1;
-      }
-
-      // #186 v2.96.2: populate observability fields when the worker telemetry
-      // didn't surface them. None of these affect the priceSlice() cost path
-      // for CLI workers — that branch is selected purely by `worker` (line
-      // ~541 of cost-service.mjs) and short-circuits before vendor is read,
-      // so the v2.83.0 Forbidden Action #1 invariant is preserved.
-      if ((!tokens.vendor || tokens.vendor === "unknown") && tokens.model) {
-        const inferred = deriveVendorFromModel(tokens.model);
-        if (inferred) tokens.vendor = inferred;
-      }
-      if (!tokens.sessionDurationMs || tokens.sessionDurationMs === 0) {
-        tokens.sessionDurationMs = Date.now() - _spawnStartMs;
-      }
-
-      // Issue #28 guard: detect silent-failure where worker printed help text and exited 0.
-      // When the CLI doesn't understand our flags it often emits usage/help and succeeds —
-      // orchestrator then records "passed" with zero code changes. Surface it loudly instead.
       const looksLikeHelpText = detectHelpTextOutput(stdout, stderr, chosen.name);
 
       workerResolve({

@@ -792,53 +792,96 @@ export class CompetitiveScheduler {
     return results;
   }
 
+  _createCompetitiveWorktrees(slice, n) {
+    const created = [];
+    const manager = this.worktreeManager;
+    if (!(manager && this.projectDir && this.planBasename)) return { created, error: null };
+    for (let v = 1; v <= n; v++) {
+      try {
+        const wt = manager.createWorktree({
+          projectDir: this.projectDir,
+          planBasename: this.planBasename,
+          sliceId: slice.number,
+          variant: v,
+        });
+        created.push({ variant: v, path: wt.path });
+      } catch (err) {
+        for (const c of created) {
+          try {
+            manager.archiveWorktree({
+              projectDir: this.projectDir,
+              planBasename: this.planBasename,
+              sliceId: slice.number,
+              variant: c.variant,
+            });
+          } catch { /* swallow */ }
+        }
+        return { created, error: `competitive: worktree creation failed for variant ${v}: ${err.message}` };
+      }
+    }
+    return { created, error: null };
+  }
+
+  _archiveCompetitiveVariants(slice, variantsToArchive) {
+    const manager = this.worktreeManager;
+    if (!(manager && this.projectDir && this.planBasename)) return;
+    for (const v of variantsToArchive) {
+      try {
+        manager.archiveWorktree({
+          projectDir: this.projectDir,
+          planBasename: this.planBasename,
+          sliceId: slice.number,
+          variant: v.variant,
+        });
+      } catch { /* swallow */ }
+    }
+  }
+
+  async _runCompetitiveVariant(slice, executeFn, variant, path) {
+    const startedAt = Date.now();
+    this.eventBus.emit("variant-started", { sliceId: slice.number, variant, worktreePath: path });
+    try {
+      const variantSlice = { ...slice, variantContext: { variant, worktreePath: path } };
+      const r = await executeFn(variantSlice);
+      const durationMs = Date.now() - startedAt;
+      this.eventBus.emit("variant-completed", { sliceId: slice.number, variant, status: r.status, durationMs });
+      return { variant, worktreePath: path, durationMs, ...r };
+    } catch (err) {
+      const durationMs = Date.now() - startedAt;
+      this.eventBus.emit("variant-completed", { sliceId: slice.number, variant, status: "error", durationMs });
+      return { variant, worktreePath: path, durationMs, status: "error", error: err.message };
+    }
+  }
+
+  _promoteWinner(slice, winner) {
+    const manager = this.worktreeManager;
+    let promotion = { promoted: false };
+    if (manager && this.projectDir && this.planBasename && typeof manager.promoteWinner === "function") {
+      try {
+        promotion = manager.promoteWinner({
+          projectDir: this.projectDir,
+          planBasename: this.planBasename,
+          sliceId: slice.number,
+          variant: winner.variant,
+        });
+      } catch (err) {
+        promotion = { promoted: false, error: err.message };
+      }
+    }
+    return promotion;
+  }
+
   async _executeCompetitiveSlice(slice, executeFn, abortSignal) {
     const declaredVariants = Number.isInteger(slice.competitiveVariants)
       ? slice.competitiveVariants
       : this.maxVariants;
-    // Clamp to [2, 5] at the scheduler boundary too (defense-in-depth).
     const n = Math.min(5, Math.max(2, declaredVariants));
 
-    this.eventBus.emit("competitive-slice-started", {
-      sliceId: slice.number,
-      title: slice.title,
-      variants: n,
-    });
+    this.eventBus.emit("competitive-slice-started", { sliceId: slice.number, title: slice.title, variants: n });
 
-    const created = [];
-    const manager = this.worktreeManager;
-    // Create N worktrees up front (best-effort — failures abort the whole slice).
-    if (manager && this.projectDir && this.planBasename) {
-      for (let v = 1; v <= n; v++) {
-        try {
-          const wt = manager.createWorktree({
-            projectDir: this.projectDir,
-            planBasename: this.planBasename,
-            sliceId: slice.number,
-            variant: v,
-          });
-          created.push({ variant: v, path: wt.path });
-        } catch (err) {
-          // Tear down anything we already created so we don't leak variants.
-          for (const c of created) {
-            try {
-              manager.archiveWorktree({
-                projectDir: this.projectDir,
-                planBasename: this.planBasename,
-                sliceId: slice.number,
-                variant: c.variant,
-              });
-            } catch { /* swallow */ }
-          }
-          return {
-            sliceId: slice.number,
-            status: "error",
-            error: `competitive: worktree creation failed for variant ${v}: ${err.message}`,
-            variants: [],
-            winningVariant: null,
-          };
-        }
-      }
+    const wt = this._createCompetitiveWorktrees(slice, n);
+    if (wt.error) {
+      return { sliceId: slice.number, status: "error", error: wt.error, variants: [], winningVariant: null };
     }
 
     if (abortSignal?.aborted) {
@@ -851,75 +894,23 @@ export class CompetitiveScheduler {
       };
     }
 
-    // Execute all variants in parallel. Each gets a cloned slice with
-    // variantContext so executeFn knows which worktree to operate in.
-    const runs = created.length > 0
-      ? created
+    const runs = wt.created.length > 0
+      ? wt.created
       : Array.from({ length: n }, (_, i) => ({ variant: i + 1, path: null }));
 
-    const promises = runs.map(async ({ variant, path }) => {
-      const startedAt = Date.now();
-      this.eventBus.emit("variant-started", {
-        sliceId: slice.number,
-        variant,
-        worktreePath: path,
-      });
-      try {
-        const variantSlice = {
-          ...slice,
-          variantContext: { variant, worktreePath: path },
-        };
-        const r = await executeFn(variantSlice);
-        const durationMs = Date.now() - startedAt;
-        this.eventBus.emit("variant-completed", {
-          sliceId: slice.number,
-          variant,
-          status: r.status,
-          durationMs,
-        });
-        return { variant, worktreePath: path, durationMs, ...r };
-      } catch (err) {
-        const durationMs = Date.now() - startedAt;
-        this.eventBus.emit("variant-completed", {
-          sliceId: slice.number,
-          variant,
-          status: "error",
-          durationMs,
-        });
-        return {
-          variant,
-          worktreePath: path,
-          durationMs,
-          status: "error",
-          error: err.message,
-        };
-      }
-    });
-
-    const variants = await Promise.all(promises);
+    const variants = await Promise.all(
+      runs.map(({ variant, path }) => this._runCompetitiveVariant(slice, executeFn, variant, path)),
+    );
 
     this.eventBus.emit("competitive-slice-variants-completed", {
       sliceId: slice.number,
       variants: variants.map((v) => ({ variant: v.variant, status: v.status })),
     });
 
-    // Phase-26 Slice 3 — winner selection + loser archival + fast-forward.
     const selection = selectWinner(variants);
 
     if (!selection.winner) {
-      // No variant passed gates. Archive all; slice fails.
-      if (manager && this.projectDir && this.planBasename) {
-        for (const v of variants) {
-          try {
-            manager.archiveWorktree({
-              projectDir: this.projectDir,
-              planBasename: this.planBasename,
-              sliceId: slice.number,
-              variant: v.variant,
-            });
-          } catch { /* swallow — archive best-effort */ }
-        }
-      }
+      this._archiveCompetitiveVariants(slice, variants);
       this.eventBus.emit("competitive-slice-failed", {
         sliceId: slice.number,
         reason: "no variant passed all gates",
@@ -934,35 +925,8 @@ export class CompetitiveScheduler {
       };
     }
 
-    // Winner found. Promote it and archive losers.
-    let promotion = { promoted: false };
-    if (manager && this.projectDir && this.planBasename && typeof manager.promoteWinner === "function") {
-      try {
-        promotion = manager.promoteWinner({
-          projectDir: this.projectDir,
-          planBasename: this.planBasename,
-          sliceId: slice.number,
-          variant: selection.winner.variant,
-        });
-      } catch (err) {
-        // Promotion failed — fall through; Slice 5's e2e test covers this.
-        promotion = { promoted: false, error: err.message };
-      }
-    }
-
-    if (manager && this.projectDir && this.planBasename) {
-      for (const v of variants) {
-        if (v.variant === selection.winner.variant) continue;
-        try {
-          manager.archiveWorktree({
-            projectDir: this.projectDir,
-            planBasename: this.planBasename,
-            sliceId: slice.number,
-            variant: v.variant,
-          });
-        } catch { /* swallow */ }
-      }
-    }
+    const promotion = this._promoteWinner(slice, selection.winner);
+    this._archiveCompetitiveVariants(slice, variants.filter((v) => v.variant !== selection.winner.variant));
 
     this.eventBus.emit("competitive-slice-won", {
       sliceId: slice.number,

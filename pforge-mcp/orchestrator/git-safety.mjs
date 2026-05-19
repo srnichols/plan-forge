@@ -733,6 +733,64 @@ function _captureCommitStats(sha, cwd) {
   } catch { return null; }
 }
 
+function _buildGitFailureResult(slice, eventBus, err) {
+  eventBus?.emit("slice-dirty-tree-warning", { sliceNumber: slice?.number, error: err.message });
+  return { committed: false, reason: "git-failed", error: err.message };
+}
+
+function _readSliceDirtyStatus(slice, cwd, eventBus) {
+  try {
+    return { statusOut: execSync("git status --porcelain", { cwd, encoding: "utf-8", timeout: 5_000 }) };
+  } catch (err) {
+    return { result: _buildGitFailureResult(slice, eventBus, err) };
+  }
+}
+
+function _resolveWorkerPathsForCommit({ statusOut, preSliceState, slice, eventBus }) {
+  if (!statusOut || !statusOut.trim()) {
+    return { cleanTree: true };
+  }
+  if (!preSliceState) {
+    return { cleanTree: false, workerPaths: null, foreignFiles: [] };
+  }
+  const currentState = parseGitPorcelain(statusOut);
+  const { workerPaths, foreignFiles } = _partitionDirtyPaths(currentState, preSliceState);
+  if (foreignFiles.length > 0) {
+    eventBus?.emit("slice-foreign-files-detected", { sliceNumber: slice?.number, foreignFiles });
+  }
+  if (workerPaths.length === 0) {
+    return { result: { committed: false, reason: "no-worker-changes", foreignFiles } };
+  }
+  return { cleanTree: false, workerPaths, foreignFiles };
+}
+
+function _buildAutoCommitSuccess({
+  slice,
+  eventBus,
+  sha,
+  commitMessage,
+  foreignFiles,
+  codeChanges,
+  absorbedCommits,
+  raceDetected,
+  allHousekeeping,
+}) {
+  const evt = { sliceNumber: slice.number, sha, message: commitMessage };
+  if (foreignFiles.length > 0) evt.foreignFiles = foreignFiles;
+  if (codeChanges) evt.codeChanges = codeChanges;
+  if (absorbedCommits.length > 0) evt.absorbedCommits = absorbedCommits;
+  if (raceDetected) evt.raceDetected = true;
+  eventBus?.emit("slice-auto-committed", evt);
+
+  const out = { committed: true, sha, message: commitMessage };
+  if (foreignFiles.length > 0) out.foreignFiles = foreignFiles;
+  if (codeChanges) out.codeChanges = codeChanges;
+  if (absorbedCommits.length > 0) out.absorbedCommits = absorbedCommits;
+  if (raceDetected) out.raceDetected = true;
+  if (allHousekeeping) out.housekeepingOnly = true;
+  return out;
+}
+
 export function autoCommitSliceIfDirty({
   slice,
   cwd = process.cwd(),
@@ -745,42 +803,29 @@ export function autoCommitSliceIfDirty({
     return { committed: false, reason: "assisted-mode" };
   }
 
-  let statusOut;
-  try {
-    statusOut = execSync("git status --porcelain", { cwd, encoding: "utf-8", timeout: 5_000 });
-  } catch (err) {
-    eventBus?.emit("slice-dirty-tree-warning", { sliceNumber: slice?.number, error: err.message });
-    return { committed: false, reason: "git-failed", error: err.message };
+  const statusResult = _readSliceDirtyStatus(slice, cwd, eventBus);
+  if (statusResult.result) {
+    return statusResult.result;
   }
 
-  if (!statusOut || !statusOut.trim()) {
+  const dirtyState = _resolveWorkerPathsForCommit({
+    statusOut: statusResult.statusOut,
+    preSliceState,
+    slice,
+    eventBus,
+  });
+  if (dirtyState.cleanTree) {
     return _handleCleanTreeMaybeWorkerCommit({ slice, cwd, startSha, eventBus });
   }
-
-  const currentState = parseGitPorcelain(statusOut);
-  let workerPaths;
-  let foreignFiles = [];
-
-  if (preSliceState) {
-    const parts = _partitionDirtyPaths(currentState, preSliceState);
-    workerPaths = parts.workerPaths;
-    foreignFiles = parts.foreignFiles;
-
-    if (foreignFiles.length > 0) {
-      eventBus?.emit("slice-foreign-files-detected", { sliceNumber: slice?.number, foreignFiles });
-    }
-    if (workerPaths.length === 0) {
-      return { committed: false, reason: "no-worker-changes", foreignFiles };
-    }
-  } else {
-    workerPaths = null; // legacy `git add -A`
+  if (dirtyState.result) {
+    return dirtyState.result;
   }
 
+  const { workerPaths, foreignFiles } = dirtyState;
   const absorbedCommits = startSha
     ? captureAbsorbedCommits({ cwd, fromSha: startSha, toSha: "HEAD" })
     : [];
   const raceDetected = absorbedCommits.length > 0;
-
   const { commitMessage, allHousekeeping } = _buildCommitMessage(slice, workerPaths, raceDetected, absorbedCommits);
 
   try {
@@ -788,24 +833,19 @@ export function autoCommitSliceIfDirty({
     execFileSync("git", ["commit", "-m", commitMessage], { cwd, encoding: "utf-8", timeout: 15_000, windowsHide: true });
     const sha = execSync("git rev-parse HEAD", { cwd, encoding: "utf-8", timeout: 5_000 }).trim();
     const codeChanges = _captureCommitStats(sha, cwd);
-
-    const evt = { sliceNumber: slice.number, sha, message: commitMessage };
-    if (foreignFiles.length > 0) evt.foreignFiles = foreignFiles;
-    if (codeChanges) evt.codeChanges = codeChanges;
-    if (absorbedCommits.length > 0) evt.absorbedCommits = absorbedCommits;
-    if (raceDetected) evt.raceDetected = true;
-    eventBus?.emit("slice-auto-committed", evt);
-
-    const out = { committed: true, sha, message: commitMessage };
-    if (foreignFiles.length > 0) out.foreignFiles = foreignFiles;
-    if (codeChanges) out.codeChanges = codeChanges;
-    if (absorbedCommits.length > 0) out.absorbedCommits = absorbedCommits;
-    if (raceDetected) out.raceDetected = true;
-    if (allHousekeeping) out.housekeepingOnly = true;
-    return out;
+    return _buildAutoCommitSuccess({
+      slice,
+      eventBus,
+      sha,
+      commitMessage,
+      foreignFiles,
+      codeChanges,
+      absorbedCommits,
+      raceDetected,
+      allHousekeeping,
+    });
   } catch (err) {
-    eventBus?.emit("slice-dirty-tree-warning", { sliceNumber: slice?.number, error: err.message });
-    return { committed: false, reason: "git-failed", error: err.message };
+    return _buildGitFailureResult(slice, eventBus, err);
   }
 }
 

@@ -168,7 +168,7 @@ function _pushWRule({ test, ruleId, rule, msg, line, slice, loc, strictMode, dis
   });
 }
 
-function _lintBasicRules(line, slice, loc, cmdToken, lastSliceNumber, warnings, errors) {
+function _lintBasicRules(line, slice, loc, cmdToken, { lastSliceNumber, warnings, errors }) {
   if (line.includes("/dev/stdin")) {
     errors.push({
       slice: slice.number, command: line, rule: "unix-only-path", severity: "error",
@@ -226,7 +226,7 @@ function _lintBasicRules(line, slice, loc, cmdToken, lastSliceNumber, warnings, 
   }
 }
 
-function _lintWRules(line, slice, loc, cmdToken, strictMode, disabledRules, warnings, errors) {
+function _lintWRules(line, slice, loc, cmdToken, { strictMode, disabledRules, warnings, errors }) {
   _pushWRule({
     test: /^bash\s+-c\b/.test(line),
     ruleId: "W1", rule: "bash-prefix",
@@ -259,7 +259,14 @@ function _lintWRules(line, slice, loc, cmdToken, strictMode, disabledRules, warn
   });
 }
 
-function _lintCommandLine(line, slice, lastSliceNumber, disabledRules, strictMode, warnings, errors, portabilityWarnings) {
+function _lintCommandLine(line, slice, {
+  lastSliceNumber,
+  disabledRules,
+  strictMode,
+  warnings,
+  errors,
+  portabilityWarnings,
+}) {
   const loc = `Slice ${slice.number} ("${slice.title}")`;
   if (looksLikeProse(line)) {
     warnings.push({
@@ -269,8 +276,8 @@ function _lintCommandLine(line, slice, lastSliceNumber, disabledRules, strictMod
     return;
   }
   const cmdToken = _resolveCmdToken(line);
-  _lintBasicRules(line, slice, loc, cmdToken, lastSliceNumber, warnings, errors);
-  _lintWRules(line, slice, loc, cmdToken, strictMode, disabledRules, warnings, errors);
+  _lintBasicRules(line, slice, loc, cmdToken, { lastSliceNumber, warnings, errors });
+  _lintWRules(line, slice, loc, cmdToken, { strictMode, disabledRules, warnings, errors });
 
   const portResult = validateGatePortability(line);
   for (const pw of portResult.warnings) {
@@ -297,7 +304,14 @@ export function lintGateCommands(planFilePath, cwd = process.cwd()) {
     const disabledRules = _parseDisableDirectivesAndComments(rawLines, slice, warnings);
     const commands = coalesceGateLines(slice.validationGate);
     for (const line of commands) {
-      _lintCommandLine(line, slice, lastSliceNumber, disabledRules, strictMode, warnings, errors, portabilityWarnings);
+      _lintCommandLine(line, slice, {
+        lastSliceNumber,
+        disabledRules,
+        strictMode,
+        warnings,
+        errors,
+        portabilityWarnings,
+      });
     }
   }
 

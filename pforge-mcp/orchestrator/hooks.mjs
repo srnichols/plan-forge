@@ -343,19 +343,12 @@ function getLiveGuardAlerts(triageCache, minAlertSeverity) {
     .filter(a => (severityRank[a.severity] || 0) >= minRank);
 }
 
-function buildPreAgentHandoffContextHeader(data, config) {
+function _buildPreAgentHandoffSummaryLines(data, snapshotAge, openIncidents) {
   const latestDrift = data.driftHistory.length > 0 ? data.driftHistory[data.driftHistory.length - 1] : null;
   const score = latestDrift?.score ?? "N/A";
   const trend = latestDrift?.trend ?? "unknown";
   const violationCount = latestDrift?.violations?.length ?? 0;
-  const snapshotTs = latestDrift?.timestamp || data.triageCache?.scannedAt || new Date().toISOString();
-  const snapshotAge = formatSnapshotAge(snapshotTs);
-  const openIncidents = data.incidents.filter(i => !i.resolvedAt);
-  const lastDeploy = data.deployJournal.length > 0 ? data.deployJournal[data.deployJournal.length - 1] : null;
-  const secretScan = data.secretScanCache || { clean: true, findings: [] };
-  const secretScanAge = data.secretScanCache ? formatSnapshotAge(data.secretScanCache.scannedAt) : "never";
-  const alerts = getLiveGuardAlerts(data.triageCache, config.minAlertSeverity);
-  const lines = [
+  return [
     "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━",
     "🛡️ LIVEGUARD CONTEXT — Session Start",
     `(As of ${snapshotAge} ago — run \`pforge triage\` to refresh)`,
@@ -364,28 +357,38 @@ function buildPreAgentHandoffContextHeader(data, config) {
     `Drift Score: ${score}/100 (${trend}) — ${violationCount} active violations`,
     `Open Incidents: ${openIncidents.length}${openIncidents.length > 0 ? ` (${openIncidents.map(i => i.severity).join(", ")})` : ""}`,
   ];
+}
 
-  if (lastDeploy) {
-    const postHealth = lastDeploy.postHealthScore ?? "not yet recorded";
-    lines.push(`Last Deploy: ${lastDeploy.version || "unknown"} @ ${lastDeploy.timestamp || "unknown"} (pre: ${lastDeploy.preHealthScore ?? "N/A"}, post: ${postHealth})`);
-  } else {
-    lines.push("Last Deploy: none recorded");
-  }
-
+function _appendPreAgentHandoffSecretScanLine(lines, secretScanCache) {
+  const secretScan = secretScanCache || { clean: true, findings: [] };
+  const secretScanAge = secretScanCache ? formatSnapshotAge(secretScanCache.scannedAt) : "never";
   lines.push(`Last Secret Scan: ${secretScan.clean !== false ? "✅ Clean" : `⛔ ${(secretScan.findings || []).length} finding(s)`} (${secretScanAge})`);
   lines.push("");
+}
 
-  if (alerts.length > 0) {
-    lines.push("Top Alerts (medium+):");
-    alerts.slice(0, 5).forEach((a, i) => {
-      lines.push(`${i + 1}. [${(a.severity || "unknown").toUpperCase()}] ${a.title || a.message || "untitled"} — ${a.recommendedAction || "investigate"}`);
-    });
-    if (alerts.length > 5) {
-      lines.push(`...and ${alerts.length - 5} more. Run \`pforge triage\` for full list.`);
-    }
-    lines.push("");
+function _appendPreAgentHandoffAlertLines(lines, alerts) {
+  if (alerts.length === 0) return;
+  lines.push("Top Alerts (medium+):");
+  alerts.slice(0, 5).forEach((a, i) => {
+    lines.push(`${i + 1}. [${(a.severity || "unknown").toUpperCase()}] ${a.title || a.message || "untitled"} — ${a.recommendedAction || "investigate"}`);
+  });
+  if (alerts.length > 5) {
+    lines.push(`...and ${alerts.length - 5} more. Run \`pforge triage\` for full list.`);
   }
+  lines.push("");
+}
 
+function buildPreAgentHandoffContextHeader(data, config) {
+  const latestDrift = data.driftHistory.length > 0 ? data.driftHistory[data.driftHistory.length - 1] : null;
+  const snapshotTs = latestDrift?.timestamp || data.triageCache?.scannedAt || new Date().toISOString();
+  const snapshotAge = formatSnapshotAge(snapshotTs);
+  const openIncidents = data.incidents.filter(i => !i.resolvedAt);
+  const lastDeploy = data.deployJournal.length > 0 ? data.deployJournal[data.deployJournal.length - 1] : null;
+  const alerts = getLiveGuardAlerts(data.triageCache, config.minAlertSeverity);
+  const lines = _buildPreAgentHandoffSummaryLines(data, snapshotAge, openIncidents);
+  lines.push(_buildLastDeployLine(lastDeploy));
+  _appendPreAgentHandoffSecretScanLine(lines, data.secretScanCache);
+  _appendPreAgentHandoffAlertLines(lines, alerts);
   lines.push("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
   return {
     contextHeader: lines.join("\n"),
@@ -1081,6 +1084,26 @@ function _kickOffOpenClawSnapshot(cwd, dirtyFiles, openIncidents) {
   return openClawResult;
 }
 
+function _getPreAgentHandoffSkipResult({ dirtyFiles, hasActivePlan, hasAutoFixPlan, isResumeSession }) {
+  if (process.env.PFORGE_QUORUM_TURN) {
+    console.error("[PreAgentHandoff] skipping context injection — PFORGE_QUORUM_TURN active");
+    return { triggered: false, skippedReason: "PFORGE_QUORUM_TURN active" };
+  }
+  if (!shouldTriggerPreAgentHandoff({ dirtyFiles, hasActivePlan, hasAutoFixPlan, isResumeSession })) {
+    return { triggered: false, skippedReason: "no-trigger-conditions" };
+  }
+  return null;
+}
+
+function _buildPreAgentHandoffHeaderPayload(caches, config) {
+  const { triageCache, driftHistory } = caches;
+  const latestDrift = driftHistory.length > 0 ? driftHistory[driftHistory.length - 1] : null;
+  const snapshotTs = latestDrift?.timestamp || triageCache?.scannedAt || new Date().toISOString();
+  const snapshotAge = formatSnapshotAge(snapshotTs);
+  const alerts = _filterAlertsBySeverity(triageCache, config.minAlertSeverity);
+  return _buildContextHeaderLines(caches, alerts, snapshotAge);
+}
+
 export async function runPreAgentHandoffHook({
   cwd = process.cwd(),
   dirtyFiles = [],
@@ -1089,15 +1112,9 @@ export async function runPreAgentHandoffHook({
   isResumeSession = false,
   _deps = {},
 } = {}) {
-  if (process.env.PFORGE_QUORUM_TURN) {
-    console.error("[PreAgentHandoff] skipping context injection — PFORGE_QUORUM_TURN active");
-    return { triggered: false, skippedReason: "PFORGE_QUORUM_TURN active" };
-  }
-
-  const hasDirtyBranch = dirtyFiles.length > 0;
-  const shouldFire = hasDirtyBranch || hasActivePlan || hasAutoFixPlan || isResumeSession;
-  if (!shouldFire) {
-    return { triggered: false, skippedReason: "no-trigger-conditions" };
+  const skipped = _getPreAgentHandoffSkipResult({ dirtyFiles, hasActivePlan, hasAutoFixPlan, isResumeSession });
+  if (skipped) {
+    return skipped;
   }
 
   const config = _loadPreAgentHandoffConfig(cwd);
@@ -1106,27 +1123,21 @@ export async function runPreAgentHandoffHook({
   }
 
   const caches = _readLiveGuardCaches(cwd);
-  const { triageCache, driftHistory, incidents, secretScanCache, deployJournal } = caches;
-
-  const hasAnyData = triageCache || driftHistory.length > 0 || incidents.length > 0 || secretScanCache || deployJournal.length > 0;
+  const { hasAnyData } = readPreAgentHandoffData(cwd);
   if (!hasAnyData) {
-    const contextHeader = "🛡️ LIVEGUARD CONTEXT — No data yet\nRun `pforge triage` after completing the first deploy to activate LiveGuard monitoring.\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━";
-    return { triggered: true, contextHeader, regressionResult: null, openClawResult: null };
+    return { triggered: true, contextHeader: buildNoDataContextHeader(), regressionResult: null, openClawResult: null };
   }
 
-  const latestDrift = driftHistory.length > 0 ? driftHistory[driftHistory.length - 1] : null;
-  const snapshotTs = latestDrift?.timestamp || triageCache?.scannedAt || new Date().toISOString();
-  const snapshotAge = formatSnapshotAge(snapshotTs);
-
-  const alerts = _filterAlertsBySeverity(triageCache, config.minAlertSeverity);
-  const { lines, openIncidents } = _buildContextHeaderLines(caches, alerts, snapshotAge);
-  let contextHeader = lines.join("\n");
-
-  const reg = await _runRegressionGuardAndAppend(contextHeader, dirtyFiles, config, cwd, _deps);
-  contextHeader = reg.contextHeader;
-  const regressionResult = reg.regressionResult;
-
-  const openClawResult = _kickOffOpenClawSnapshot(cwd, dirtyFiles, openIncidents);
+  const { lines, openIncidents } = _buildPreAgentHandoffHeaderPayload(caches, config);
+  const regressionResult = await maybeRunPreAgentRegressionGuard({
+    hasDirtyBranch: dirtyFiles.length > 0,
+    config,
+    dirtyFiles,
+    cwd,
+    deps: _deps,
+  });
+  const contextHeader = appendRegressionAlert(lines.join("\n"), regressionResult);
+  const openClawResult = schedulePreAgentHandoffOpenClawSnapshot(cwd, dirtyFiles.length, openIncidents.length);
 
   return { triggered: true, contextHeader, regressionResult, openClawResult };
 }

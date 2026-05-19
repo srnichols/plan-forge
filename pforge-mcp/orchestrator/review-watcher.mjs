@@ -448,28 +448,46 @@ function _buildNotificationsChip(events) {
   } catch { return null; }
 }
 
-export async function buildWatchSnapshot(targetPath, runId = null, opts = {}) {
+function _normalizeWatchSnapshotOptions(opts = {}) {
   const tailEventsRaw = Number.isFinite(opts.tailEvents) ? opts.tailEvents : 25;
-  const tailEvents = Math.min(200, Math.max(1, Math.floor(tailEventsRaw)));
-  const sinceTimestamp = opts.sinceTimestamp || null;
+  return {
+    tailEvents: Math.min(200, Math.max(1, Math.floor(tailEventsRaw))),
+    sinceTimestamp: opts.sinceTimestamp || null,
+  };
+}
 
+function _readWatchSnapshotRun(targetPath, runId) {
   const located = findLatestRun(targetPath, runId);
   if (!located) {
     return { ok: false, error: `No run directory found under ${targetPath}/.forge/runs/`, targetPath };
   }
   const events = parseEventsLog(located.runDir);
   const artifacts = readSliceArtifacts(located.runDir);
-
-  const summary = _readWatchSummary(located.runDir);
-
   const ec = _computeEventCounts(events);
-
   const lastEvent = events[events.length - 1] || null;
+  return { located, events, artifacts, ec, lastEvent, summary: _readWatchSummary(located.runDir) };
+}
+
+function _buildWatchSnapshotArtifacts(artifacts) {
+  return artifacts.map((a) => ({
+    sliceNumber: a.sliceNumber,
+    title: a.title || a.slice?.title || null,
+    status: a.status || null,
+    attempts: a.attempts || null,
+    duration: a.duration || null,
+    worker: a.worker || null,
+    model: a.model || null,
+    tokensIn: a.tokens?.tokens_in ?? null,
+    tokensOut: a.tokens?.tokens_out ?? null,
+    gateError: a.gateError || null,
+  }));
+}
+
+async function _assembleWatchSnapshot({ targetPath, tailEvents, sinceTimestamp, runData }) {
+  const { located, events, artifacts, ec, lastEvent, summary } = runData;
   const lastEventAgeMs = lastEvent ? Date.now() - new Date(lastEvent.ts).getTime() : null;
   const runState = normalizeRunState(ec.runCompleted?.type || null, Boolean(ec.runStarted));
-
   const { newEvents, hasNewEvents } = _computeDiffEvents(events, sinceTimestamp);
-
   return {
     ok: true,
     targetPath,
@@ -501,18 +519,7 @@ export async function buildWatchSnapshot(targetPath, runId = null, opts = {}) {
     hasNewEvents,
     newEventsCount: newEvents.length,
     summary,
-    artifacts: artifacts.map((a) => ({
-      sliceNumber: a.sliceNumber,
-      title: a.title || a.slice?.title || null,
-      status: a.status || null,
-      attempts: a.attempts || null,
-      duration: a.duration || null,
-      worker: a.worker || null,
-      model: a.model || null,
-      tokensIn: a.tokens?.tokens_in ?? null,
-      tokensOut: a.tokens?.tokens_out ?? null,
-      gateError: a.gateError || null,
-    })),
+    artifacts: _buildWatchSnapshotArtifacts(artifacts),
     tailEvents,
     events: events.slice(-tailEvents),
     crucible: readCrucibleState(targetPath),
@@ -521,6 +528,15 @@ export async function buildWatchSnapshot(targetPath, runId = null, opts = {}) {
     reviewQueue: _buildReviewQueueChip(targetPath),
     notifications: _buildNotificationsChip(events),
   };
+}
+
+export async function buildWatchSnapshot(targetPath, runId = null, opts = {}) {
+  const { tailEvents, sinceTimestamp } = _normalizeWatchSnapshotOptions(opts);
+  const runData = _readWatchSnapshotRun(targetPath, runId);
+  if (runData.ok === false) {
+    return runData;
+  }
+  return _assembleWatchSnapshot({ targetPath, tailEvents, sinceTimestamp, runData });
 }
 
 // ─── Home Snapshot ────────────────────────────────────────────────────
@@ -1838,6 +1854,21 @@ async function _runWatcherAnalyzeMode(snapshot, anomalies, report, model, timeou
   }
 }
 
+function _recordWatchHistoryIfEnabled(report, recordHistory) {
+  if (recordHistory) appendWatchHistory(report);
+}
+
+async function _buildRunWatchSnapshotReport({ resolved, runId, tailEvents, sinceTimestamp, mode, model, eventBus }) {
+  const snapshot = await buildWatchSnapshot(resolved, runId, { tailEvents, sinceTimestamp });
+  if (!snapshot.ok) return { snapshot };
+  snapshot.targetPath = resolved;
+  const anomalies = detectWatchAnomalies(snapshot);
+  const recommendations = recommendFromAnomalies(anomalies, snapshot);
+  const report = _buildRunWatchReport(snapshot, anomalies, recommendations, mode, model);
+  _emitWatchSnapshotEvents(eventBus, report, anomalies, snapshot);
+  return { snapshot, anomalies, report };
+}
+
 export async function runWatch(options = {}) {
   const {
     targetPath,
@@ -1855,36 +1886,32 @@ export async function runWatch(options = {}) {
   const validated = _validateRunWatchTarget(targetPath);
   if (!validated.ok) return validated;
   const resolved = validated.resolved;
-
-  // Phase-39 Slice 3 — cross-run aggregation mode
   if (mode === WATCHER_MODE_CROSS_RUN) {
     return _runWatchCrossRun(resolved, crossRunWindow);
   }
 
-  const snapshot = await buildWatchSnapshot(resolved, runId, { tailEvents, sinceTimestamp });
-  if (!snapshot.ok) return snapshot;
-  // attach for downstream helpers that read snapshot.targetPath
-  snapshot.targetPath = resolved;
-
-  const anomalies = detectWatchAnomalies(snapshot);
-  const recommendations = recommendFromAnomalies(anomalies, snapshot);
-
-  const report = _buildRunWatchReport(snapshot, anomalies, recommendations, mode, model);
-
-  _emitWatchSnapshotEvents(eventBus, report, anomalies, snapshot);
-
-  if (mode === WATCHER_MODE_SNAPSHOT) {
-    if (recordHistory) appendWatchHistory(report);
-    return report;
+  const snapshotResult = await _buildRunWatchSnapshotReport({
+    resolved,
+    runId,
+    tailEvents,
+    sinceTimestamp,
+    mode,
+    model,
+    eventBus,
+  });
+  if (!snapshotResult.snapshot.ok) return snapshotResult.snapshot;
+  if (mode === WATCHER_MODE_ANALYZE) {
+    await _runWatcherAnalyzeMode(
+      snapshotResult.snapshot,
+      snapshotResult.anomalies,
+      snapshotResult.report,
+      model,
+      timeout,
+      eventBus,
+    );
   }
-
-  // Analyze mode: invoke frontier watcher model
-  // CRITICAL: spawn the worker with cwd = watcher's own directory, NEVER the target's,
-  // so any tool calls the watcher might make cannot touch the target project.
-  await _runWatcherAnalyzeMode(snapshot, anomalies, report, model, timeout, eventBus);
-
-  if (recordHistory) appendWatchHistory(report);
-  return report;
+  _recordWatchHistoryIfEnabled(snapshotResult.report, recordHistory);
+  return snapshotResult.report;
 }
 
 /**

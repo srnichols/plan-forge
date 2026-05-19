@@ -810,6 +810,712 @@ async function _runPlanSliceCallback(slice, ctx) {
   return result;
 }
 
+async function _runDlqBootDrain(anvilDlqDrain, cwd) {
+  try {
+    const DRAIN_BUDGET_MS = 5000;
+    const drainResult = await Promise.race([
+      Promise.resolve(anvilDlqDrain({}, { cwd })),
+      new Promise((resolve) => setTimeout(() => resolve({ drained: 0, timedOut: true }), DRAIN_BUDGET_MS)),
+    ]);
+    if (drainResult && typeof drainResult.drained === "number" && drainResult.drained > 0) {
+      console.info(`[orchestrator] DLQ boot drain: removed ${drainResult.drained} stale record(s).`);
+    }
+  } catch {
+    // Boot-time drain is best-effort — never block the plan run
+  }
+}
+
+function _resolveEffectiveModel(model, plan, modelRouting) {
+  // Bug #127: Precedence: options.model > frontmatter model: > .forge.json default > null
+  const fmModel = (plan.meta && typeof plan.meta.model === "string" && plan.meta.model.trim().length > 0)
+    ? plan.meta.model.trim() : null;
+  if (model) return { effectiveModel: model, modelSource: "options" };
+  if (fmModel) return { effectiveModel: fmModel, modelSource: "frontmatter" };
+  if (modelRouting.default) return { effectiveModel: modelRouting.default, modelSource: "config" };
+  return { effectiveModel: null, modelSource: "default" };
+}
+
+function _checkLockHash(plan, planPath) {
+  if (!(plan.meta && typeof plan.meta.lockHash === "string")) return null;
+  const planContent = readFileSync(planPath, "utf-8");
+  const computedHash = computeLockHash(planContent);
+  if (computedHash === plan.meta.lockHash) return null;
+  return {
+    status: "failed",
+    error:
+      `Plan body has drifted since it was hardened — lockHash mismatch.\n` +
+      `  stored:   ${plan.meta.lockHash}\n` +
+      `  computed: ${computedHash}\n` +
+      `Re-run Step 2 hardening to regenerate the lockHash, then retry.`,
+    code: "LOCK_HASH_MISMATCH",
+    storedHash: plan.meta.lockHash,
+    computedHash,
+    planPath,
+    hint: "Re-run Step 2 (step2-harden-plan.prompt.md) to update the lockHash in frontmatter.",
+  };
+}
+
+function _checkVersionCollision(planPath, cwd) {
+  const collision = detectVersionCollision(planPath, cwd);
+  if (collision.collision) {
+    return {
+      status: "failed",
+      error:
+        `Refusing to run plan: target version v${collision.version} ` +
+        `already exists on origin (sha=${collision.originSha?.slice(0, 12) || "?"}). ` +
+        `Re-running this plan would overwrite a shipped release.`,
+      code: "VERSION_COLLISION",
+      version: collision.version,
+      originSha: collision.originSha,
+      planPath,
+      hint:
+        "Either bump the plan to a fresh version (recommended), " +
+        "or pass --allow-retrograde if you intentionally want to re-tag " +
+        "(this is almost never what you want — see meta-bug #129).",
+    };
+  }
+  if (collision.error) {
+    // eslint-disable-next-line no-console
+    console.error(
+      `[preflight] Could not check origin for v${collision.version} ` +
+      `tag collision (advisory): ${collision.error}`,
+    );
+  }
+  return null;
+}
+
+function _buildEstimateQuorumConfig(quorum, cwd, quorumPreset, quorumThreshold) {
+  if (!quorum) return null;
+  const estimateQuorumConfig = loadQuorumConfig(cwd, quorumPreset);
+  estimateQuorumConfig.enabled = true;
+  if (quorum === QUORUM_MODE_AUTO) estimateQuorumConfig.auto = true;
+  else if (quorum === true) estimateQuorumConfig.auto = false;
+  if (quorumThreshold !== null && typeof quorumThreshold === "number") {
+    estimateQuorumConfig.threshold = quorumThreshold;
+  }
+  return estimateQuorumConfig;
+}
+
+function _buildDryRunResult(plan, worker) {
+  // Phase GITHUB-B Slice 5: copilot-coding-agent dry-run prints issue body previews
+  if (worker === "copilot-coding-agent") {
+    const issuePreviews = plan.slices.map((s) => ({
+      number: s.number,
+      title: s.title || "Untitled slice",
+      issueBody: _buildIssueBodyDefault({
+        goal: s.goal || (Array.isArray(s.tasks) ? s.tasks.join("\n") : s.tasks),
+        scope: s.scope,
+        gate: s.validationGate,
+      }),
+    }));
+    return { status: "dry-run", plan, issuePreviews };
+  }
+  return { status: "dry-run", plan };
+}
+
+function _runCopilotPreflight(_inspectGithubStack, cwd, planPath) {
+  const inspection = _inspectGithubStack(cwd, { ghToken: true });
+  const githubRemote = inspection.checks.find((c) => c.id === "github-remote");
+  const ghCli = inspection.checks.find((c) => c.id === "gh-cli");
+  const copilotAssignable = inspection.checks.find((c) => c.id === "copilot-coding-agent-assignable");
+  const failed = [];
+  if (!githubRemote || githubRemote.status !== "pass") {
+    const detail = githubRemote?.detail ?? "check unavailable";
+    const hint = githubRemote?.fixHint ? ` — ${githubRemote.fixHint}` : "";
+    failed.push(`github-remote: ${detail}${hint}`);
+  }
+  if (!ghCli || ghCli.status !== "pass") {
+    const detail = ghCli?.detail ?? "check unavailable";
+    const hint = ghCli?.fixHint ? ` — ${ghCli.fixHint}` : "";
+    failed.push(`gh-cli: ${detail}${hint}`);
+  }
+  // warn = Copilot Coding Agent not enabled; fail = API error. Both block dispatch.
+  // na = check was skipped (token not available or check deferred) — not blocking.
+  if (copilotAssignable && (copilotAssignable.status === "warn" || copilotAssignable.status === "fail")) {
+    const detail = copilotAssignable.detail ?? "check unavailable";
+    const hint = copilotAssignable.fixHint ? ` — ${copilotAssignable.fixHint}` : "";
+    failed.push(`copilot-coding-agent-assignable: ${detail}${hint}`);
+  }
+  if (failed.length === 0) return null;
+  return {
+    status: "failed",
+    error:
+      "copilot-coding-agent worker requires a GitHub repo. " +
+      "Run 'pforge github status' for diagnostics.\n" +
+      failed.join("\n"),
+    code: "COPILOT_AGENT_PREFLIGHT_FAILED",
+    planPath,
+  };
+}
+
+function _checkGateLintPreflight(planPath, cwd) {
+  const gateLint = lintGateCommands(planPath, cwd);
+  if (gateLint.passed) return null;
+  const errorSummary = gateLint.errors.map(e => `  ❌ ${e.message}`).join("\n");
+  const warnSummary = gateLint.warnings.map(w => `  ⚠️ ${w.message}`).join("\n");
+  return {
+    status: "failed",
+    error: "Gate lint pre-flight failed — fix these before executing:",
+    gateLint: {
+      errors: gateLint.errors,
+      warnings: gateLint.warnings,
+      summary: gateLint.summary,
+    },
+    detail: [errorSummary, warnSummary].filter(Boolean).join("\n"),
+  };
+}
+
+function _runGateSynthesisPreflight(plan, cwd, strictGates) {
+  try {
+    const baseCfg = loadGateSynthesisConfig(cwd);
+    const synthConfig = strictGates ? { ...baseCfg, mode: "enforce" } : undefined;
+    const synthResult = synthesizeGateSuggestions({ slices: plan.slices, cwd, config: synthConfig });
+    if (strictGates && synthResult.suggestions.length > 0) {
+      return {
+        status: "failed",
+        error: "--strict-gates: pre-flight failed — the following slices lack a domain-matched validation gate:",
+        code: "STRICT_GATES_PREFLIGHT",
+        offendingSlices: synthResult.suggestions.map((s) => ({
+          sliceNumber: s.sliceNumber,
+          sliceTitle: s.sliceTitle,
+          domain: s.domain,
+          reason: s.reason,
+          suggestedCommand: s.suggestedCommand,
+        })),
+      };
+    }
+    const formatted = formatGateSuggestions(synthResult);
+    if (formatted) {
+      // eslint-disable-next-line no-console
+      console.log(formatted);
+    }
+  } catch { /* advisory must never fail a run */ }
+  return null;
+}
+
+function _setupSilentDeathGuard(eventBus, runDir) {
+  let _guardSliceId = null;
+  let _guardSliceTitle = null;
+  const _silentDeathGuard = () => {
+    writeSilentExitRecord(_guardSliceId, _guardSliceTitle, runDir);
+  };
+  process.once("exit", _silentDeathGuard);
+  eventBus.on("slice-started", (d) => {
+    _guardSliceId = d.sliceId ?? null;
+    _guardSliceTitle = d.title || "";
+  });
+  eventBus.on("slice-completed", () => { _guardSliceId = null; _guardSliceTitle = null; });
+  eventBus.on("slice-failed",    () => { _guardSliceId = null; _guardSliceTitle = null; });
+  eventBus.on("run-completed",   () => { _guardSliceId = null; process.off("exit", _silentDeathGuard); });
+  eventBus.on("run-aborted",     () => { _guardSliceId = null; process.off("exit", _silentDeathGuard); });
+}
+
+async function _selectScheduler(plan, eventBus, cwd, planPath, maxParallelism) {
+  const hasParallelSlices = plan.slices.some((s) => s.parallel);
+  const hasCompetitiveSlices = plan.slices.some((s) => s.competitive);
+  if (hasCompetitiveSlices) {
+    const compConfig = loadCompetitiveConfig(cwd);
+    const worktreeManager = await import("./worktree-manager.mjs");
+    return new CompetitiveScheduler(eventBus, {
+      maxVariants: compConfig.maxVariants,
+      projectDir: resolve(cwd),
+      planBasename: basename(planPath, ".md"),
+      worktreeManager,
+    });
+  }
+  if (hasParallelSlices) {
+    return new ParallelScheduler(eventBus, maxParallelism);
+  }
+  return new SequentialScheduler(eventBus);
+}
+
+function _readConfigQuorumExplicit(cwd) {
+  try {
+    const fp = resolve(cwd, ".forge.json");
+    if (existsSync(fp)) {
+      const raw = JSON.parse(readFileSync(fp, "utf-8"));
+      return raw.quorum != null && typeof raw.quorum === "object" && "enabled" in raw.quorum;
+    }
+  } catch { /* ignore — use legacy default */ }
+  return false;
+}
+
+function _probeQuorumAvailability(quorumConfig) {
+  const { available: availableModels, dropped: droppedModels } = filterQuorumModels(quorumConfig);
+  if (availableModels.length === 0) {
+    const err = new Error(
+      `[quorum] no available models. Dropped: ${droppedModels.map((d) => `${d.model} (${d.reason})`).join(", ")}. ` +
+      `Install hints: ${droppedModels.map((d) => d.install).filter(Boolean).join(" | ")}`,
+    );
+    err.exitCode = 2;
+    throw err;
+  }
+  if (quorumConfig.strictAvailability && droppedModels.length > 0) {
+    const err = new Error(
+      `[quorum] strictAvailability=true and ${droppedModels.length} model(s) unavailable: ` +
+      droppedModels.map((d) => `${d.model} (${d.reason})`).join(", "),
+    );
+    err.exitCode = 2;
+    throw err;
+  }
+  if (availableModels.length === 1) {
+    console.error(
+      `[quorum] only 1 of ${quorumConfig.models.length} models available — degrading to single-model ` +
+      `(no multi-perspective synthesis benefit); set quorum.strictAvailability=true to fail instead`,
+    );
+  }
+  quorumConfig.models = availableModels;
+  quorumConfig.droppedModels = droppedModels;
+  // Probe reviewerModel separately — warn but do not block (existing fallback handles it)
+  if (quorumConfig.reviewerModel) {
+    const reviewerResult = probeQuorumModelAvailability(quorumConfig.reviewerModel);
+    if (!reviewerResult.available) {
+      console.error(
+        `[quorum] reviewer model ${quorumConfig.reviewerModel} unavailable: ${reviewerResult.reason} — ` +
+        `existing reviewer fallback will be used`,
+      );
+    }
+  }
+}
+
+function _buildRunPlanQuorumConfig({ quorum, cwd, quorumPreset, quorumThreshold }) {
+  if (!quorum) return null;
+  const quorumConfig = loadQuorumConfig(cwd, quorumPreset);
+  // "auto" (CLI default): preserve quorumConfig.enabled from .forge.json.
+  // true / "true" / preset: caller explicitly requested quorum — force enabled regardless of config.
+  const callerExplicit = quorum === true || quorum === "true" || quorumPreset !== null;
+  const configHasExplicitEnabled = callerExplicit ? false : _readConfigQuorumExplicit(cwd);
+
+  if (callerExplicit) {
+    quorumConfig.enabled = true;
+  } else if (!configHasExplicitEnabled) {
+    // Legacy default: absence of quorum.enabled in .forge.json means enabled
+    quorumConfig.enabled = true;
+  }
+  // else: quorum === "auto" AND .forge.json has explicit enabled — use the loaded value
+
+  if (quorum === QUORUM_MODE_AUTO) {
+    quorumConfig.auto = true;
+  } else if (quorum === true || quorum === "true") {
+    quorumConfig.auto = false; // Force quorum on all slices
+  }
+  if (quorumThreshold !== null && typeof quorumThreshold === "number") {
+    quorumConfig.threshold = quorumThreshold;
+  }
+
+  const quorumSource = callerExplicit ? "cli" : (configHasExplicitEnabled ? "config" : "default");
+  console.error(`[quorum] enabled=${quorumConfig.enabled} auto=${quorumConfig.auto} source=${quorumSource}`);
+
+  if (quorumConfig.enabled) {
+    _probeQuorumAvailability(quorumConfig);
+  }
+  return quorumConfig;
+}
+
+function _resolveExecutionOrder(plan, onlySlices) {
+  if (onlySlices === null || onlySlices.length === 0) return plan.dag.order;
+  const onlySet = new Set(onlySlices.map(String));
+  for (const id of plan.dag.order) {
+    if (!onlySet.has(id)) {
+      console.log(`[orchestrator] Slice ${id} skipped (not in --only-slices)`);
+    }
+  }
+  for (const id of onlySlices) {
+    if (!plan.dag.nodes.has(String(id))) {
+      console.warn(`[orchestrator] Slice ${id} requested via --only-slices was not found in plan`);
+    }
+  }
+  return plan.dag.order.filter((id) => onlySet.has(id));
+}
+
+async function _runApprovalGate(bridge, runId, summary) {
+  try {
+    const approvalResult = await bridge.requestApproval(runId, { ...summary, runId });
+    if (!approvalResult.approved) {
+      summary.status = "approval-rejected";
+      summary.approval = {
+        status: "rejected",
+        approver: approvalResult.approver ?? null,
+        timedOut: approvalResult.timedOut ?? false,
+        timestamp: new Date().toISOString(),
+      };
+    } else {
+      summary.approval = {
+        status: "approved",
+        approver: approvalResult.approver ?? null,
+        timestamp: new Date().toISOString(),
+      };
+    }
+  } catch (err) {
+    // Non-fatal — log and continue without blocking the run
+    console.error(`[orchestrator] Approval gate error: ${err.message}`);
+  }
+}
+
+function _runAuditDrainHook(summary, cwd, results, eventBus) {
+  try {
+    const auditConfig = _loadAuditConfig(cwd);
+    const evaluation = _shouldAutoDrain({
+      cwd,
+      config: auditConfig,
+      filesChanged: results.length,
+      env: process.env.PFORGE_ENV || "dev",
+    });
+    if (evaluation.fire) {
+      eventBus.emit("drain-auto-estimate", {
+        mode: auditConfig.mode,
+        maxRounds: auditConfig.maxRounds,
+        signals: evaluation.signals,
+      });
+      summary.auditDrain = { dispatched: true, mode: auditConfig.mode, signals: evaluation.signals };
+    }
+  } catch { /* non-fatal — never fail the run for audit activation */ }
+}
+
+async function _captureRunMemoryAndDrain(summary, cwd, projectName) {
+  const runSummary = buildRunSummaryThought(summary, projectName);
+  const costAnomaly = buildCostAnomalyThought(summary, getCostReport(cwd), projectName);
+  const receipts = { runSummary: null, costAnomaly: null };
+  if (runSummary) {
+    receipts.runSummary = captureMemory(runSummary, "decision", "forge_run_plan", cwd);
+  }
+  if (costAnomaly) {
+    receipts.costAnomaly = captureMemory(costAnomaly, "gotcha", "forge_run_plan/cost", cwd);
+  }
+  summary._memoryCapture = {
+    runSummary,
+    costAnomaly,
+    _captured: true,
+    receipts,
+  };
+  try {
+    const drainResult = await autoDrainOpenBrainQueue(cwd, {
+      source: "cli-drain",
+      timeoutMs: 10_000,
+    });
+    summary._memoryCapture.drain = drainResult;
+  } catch (err) {
+    summary._memoryCapture.drain = { error: String(err?.message || err) };
+  }
+}
+
+function _writePostmortemSafe(summary, planPath, cwd) {
+  try {
+    const planBasename = basename(planPath, ".md");
+    const prior = listPlanPostmortems({ cwd, planBasename }).map((e) => e.record);
+    const record = buildPlanPostmortem({ summary, planBasename, priorPostmortems: prior });
+    const path = writePlanPostmortem({ cwd, planBasename, record });
+    summary.postmortem = { path, record };
+  } catch (err) {
+    // Never block the run on postmortem failure.
+    summary.postmortem = { error: err?.message || String(err) };
+  }
+}
+
+function _recordActivitySafe(activitySummary, status, cwd) {
+  try {
+    recordActivity({ ...activitySummary, status }, { storeDir: join(cwd, ".forge") });
+  } catch {
+    // Never block the run on team activity write failure.
+  }
+}
+
+function _emitMemoryPreload(plan, planPath, projectName, eventBus) {
+  try {
+    const boot = buildPlanBootContext(
+      { name: basename(planPath, ".md"), slices: plan.slices },
+      projectName,
+    );
+    if (boot.hints.length > 0) {
+      eventBus.emit("memory-preload", boot);
+    }
+  } catch { /* best-effort — never break run start */ }
+}
+
+function _emitSnapshotJanitor(cwd, eventBus) {
+  try {
+    const cleanup = cleanupStaleSnapshots({ cwd });
+    if (cleanup.dropped.length > 0) {
+      eventBus.emit("snapshot-janitor", {
+        scanned: cleanup.scanned,
+        dropped: cleanup.dropped.length,
+        errors: cleanup.errors.length,
+      });
+    }
+  } catch { /* best-effort — never break run start */ }
+}
+
+function _precomputeSliceComplexity(plan, cwd) {
+  for (const [_sliceId, sliceNode] of plan.dag.nodes) {
+    try {
+      const { score } = scoreSliceComplexity(sliceNode, cwd);
+      sliceNode.complexityScore = score;
+    } catch { /* leave undefined — UI will render a neutral '—' */ }
+  }
+}
+
+function _enforceCruciblePreflight(planPath, cwd, manualImport, manualImportSource, manualImportReason) {
+  try {
+    enforceCrucibleId(planPath, {
+      cwd,
+      manualImport,
+      source: manualImportSource,
+      reason: manualImportReason,
+    });
+    return null;
+  } catch (err) {
+    if (err instanceof CrucibleEnforcementError) {
+      return {
+        status: "failed",
+        error: err.message,
+        code: err.code,
+        planPath: err.planPath,
+        hint:
+          "Run `forge_crucible_submit` to start a smelt, or re-invoke with " +
+          "--manual-import to bypass (audited in .forge/crucible/manual-imports.jsonl).",
+      };
+    }
+    throw err;
+  }
+}
+
+function _runPlanPostExecutionPreflight({ plan, planPath, cwd, worker, _inspectGithubStack, strictGates }) {
+  // Phase GITHUB-B Slice 3 — Copilot Coding Agent pre-flight (skipped for estimate/dryRun)
+  if (worker === "copilot-coding-agent") {
+    const copilotFail = _runCopilotPreflight(_inspectGithubStack, cwd, planPath);
+    if (copilotFail) return copilotFail;
+  }
+  // Pre-flight: lint gate commands before burning time on execution
+  const gateLintFail = _checkGateLintPreflight(planPath, cwd);
+  if (gateLintFail) return gateLintFail;
+  // Phase-25 Slice 4 (L6 adaptive gate synthesis)
+  const gateSynthFail = _runGateSynthesisPreflight(plan, cwd, strictGates);
+  if (gateSynthFail) return gateSynthFail;
+  return null;
+}
+
+function _buildRunMeta({ planPath, trace, effectiveModel, modelRouting, mode, quorum, quorumPreset, plan }) {
+  return {
+    plan: planPath,
+    traceId: trace.traceId,
+    startTime: new Date().toISOString(),
+    model: effectiveModel || "auto",
+    modelRouting,
+    mode,
+    // Issue #182: surface the quorum *mode* separately from the worker `mode`.
+    quorumMode: quorum === false ? QUORUM_MODE_FALSE
+              : quorumPreset // "power" | "speed"
+              || (quorum === true ? "all" : QUORUM_MODE_AUTO),
+    quorumPreset: quorumPreset || null,
+    sliceCount: plan.slices.length,
+    executionOrder: plan.dag.order,
+  };
+}
+
+function _buildCombinedEventHandler(telemetryHandler, eventHandler, logHandler, isCliRun) {
+  return {
+    handle(event) {
+      telemetryHandler.handle(event);
+      if (eventHandler) eventHandler.handle(event);
+      logHandler.handle(event);
+      // Write progress to stdout so terminal stays alive (prevents VS Code "awaiting input" stall)
+      if (isCliRun && event?.type) {
+        _emitRunPlanProgressLine(event);
+      }
+    },
+  };
+}
+
+function _restoreDisableTempering(priorValue) {
+  if (priorValue === undefined) {
+    delete process.env.PFORGE_DISABLE_TEMPERING;
+  } else {
+    process.env.PFORGE_DISABLE_TEMPERING = priorValue;
+  }
+}
+
+function _runPostAuditorHook(summary, cwd, allPassed, eventBus) {
+  try {
+    const auditorResult = runPostRunAuditorHook({ cwd, allPassed, eventBus });
+    if (auditorResult.triggered) {
+      summary._auditor = auditorResult;
+    }
+  } catch { /* never block the run on auditor hook failure */ }
+}
+
+async function _finalizeRunPlan({
+  results, plan, runMeta, runDir, planPath, cwd,
+  abortSignal, bridge, eventBus, estimate, dryRun, memoryEnabled, projectName,
+  trace,
+}) {
+  const allPassed = results.every((r) => r.status === "passed" || r.status === "skipped");
+  let sweepResult = null;
+  let analyzeResult = null;
+  if (allPassed && !estimate && !dryRun) {
+    sweepResult = runAutoSweep(cwd);
+    analyzeResult = runAutoAnalyze(cwd, planPath);
+  }
+
+  const runId = basename(runDir);
+  const summary = buildSummary(plan, results, runMeta, { sweepResult, analyzeResult });
+  const activitySummary = {
+    runId,
+    plan: summary.plan,
+    sliceCount: summary.sliceCount,
+    duration_ms: summary.totalDuration,
+    cost_usd: summary.cost?.total_cost_usd ?? null,
+    timestamp: summary.endTime,
+  };
+
+  if (abortSignal?.aborted) {
+    _recordActivitySafe(activitySummary, "aborted", cwd);
+  }
+
+  // Approval gate (Phase 16) — pause and await human approval before finalising
+  if (allPassed && bridge?.hasApprovalChannels) {
+    await _runApprovalGate(bridge, runId, summary);
+  }
+
+  // CI/CD Integration Hook — trigger workflow after successful run
+  if (allPassed && summary.status !== "approval-rejected") {
+    const ciConfig = loadCiConfig(cwd);
+    if (ciConfig.enabled && ciConfig.workflow) {
+      summary.ci = triggerCiWorkflow(ciConfig, eventBus);
+    }
+  }
+
+  // Phase-39 Slice 7 — audit-loop activation hook (end-of-plan)
+  if (allPassed && !estimate && !dryRun) {
+    _runAuditDrainHook(summary, cwd, results, eventBus);
+  }
+
+  // Phase-39 Slice 1 — post-run auditor auto-invoke on failure
+  if (!estimate && !dryRun) {
+    _runPostAuditorHook(summary, cwd, allPassed, eventBus);
+  }
+
+  // Write summary
+  writeFileSync(resolve(runDir, "summary.json"), JSON.stringify(summary, null, 2));
+
+  // Phase 2: Append to cost history
+  if (summary.cost && summary.status !== "estimate" && summary.status !== "approval-rejected") {
+    appendCostHistory(cwd, summary);
+  }
+
+  // Emit run-completed — telemetry handler writes trace.json during this emit
+  eventBus.emit("run-completed", summary);
+  if (!abortSignal?.aborted) {
+    _recordActivitySafe(activitySummary, summary.status, cwd);
+  }
+
+  // v2.4: Write manifest + index + prune (AFTER trace.json is written by emit)
+  const manifest = writeManifest(runDir, runId, { ...summary, traceId: trace.traceId });
+  appendRunIndex(cwd, runId, manifest);
+  pruneRunHistory(cwd, loadMaxRunHistory(cwd));
+
+  // OpenBrain: capture run summary + cost anomaly as thoughts.
+  if (memoryEnabled) {
+    await _captureRunMemoryAndDrain(summary, cwd, projectName);
+  }
+
+  // Phase-25 Slice 5 (L5 closed loop): write a plan postmortem after every run.
+  _writePostmortemSafe(summary, planPath, cwd);
+
+  // Phase-31 Slice 6: promote recurring tempering suppressions to bug files.
+  try {
+    _promoteSuppressions({ cwd });
+  } catch { /* never block the run on promoter failure */ }
+
+  return summary;
+}
+
+function _runPlanPrePlanPreflight({ plan, planPath, cwd, allowRetrograde }) {
+  if (plan.slices.length === 0) {
+    return {
+      status: "failed",
+      error: "No slices found in plan — expected '### Slice N: …' headers (h2/h3/h4 accepted)",
+      code: "NO_SLICES",
+      planPath,
+    };
+  }
+  const lockHashFail = _checkLockHash(plan, planPath);
+  if (lockHashFail) return lockHashFail;
+  if (!allowRetrograde) {
+    const collisionFail = _checkVersionCollision(planPath, cwd);
+    if (collisionFail) return collisionFail;
+  }
+  return null;
+}
+
+function _setupRunInfrastructure({ planPath, cwd, mode, effectiveModel, plan, eventHandler }) {
+  const runDir = createRunDir(cwd, planPath);
+  const logHandler = new LogEventHandler(runDir);
+  const trace = createTraceContext(planPath, { mode, model: effectiveModel, sliceCount: plan.slices.length });
+  const telemetryHandler = createTelemetryHandler(trace, runDir);
+  const isCliRun = !eventHandler;
+  const combinedHandler = _buildCombinedEventHandler(telemetryHandler, eventHandler, logHandler, isCliRun);
+  const eventBus = new OrchestratorEventBus(combinedHandler);
+  _setupSilentDeathGuard(eventBus, runDir);
+  return { runDir, trace, eventBus };
+}
+
+async function _executeSlicesWithTempering({
+  plan, executionOrder, noTempering, scheduler, abortSignal, resumeFrom, hub, gateCheckConfig, sliceCtx,
+}) {
+  const _priorDisableTempering = process.env.PFORGE_DISABLE_TEMPERING;
+  if (noTempering) {
+    process.env.PFORGE_DISABLE_TEMPERING = "1";
+  }
+  try {
+    return await scheduler.execute(
+      plan.dag.nodes,
+      executionOrder,
+      (slice) => _runPlanSliceCallback(slice, sliceCtx),
+      { abortSignal, resumeFrom: resumeFrom ? String(resumeFrom) : null, hub, gateCheckConfig },
+    );
+  } finally {
+    _restoreDisableTempering(_priorDisableTempering);
+  }
+}
+
+function _runPostRunHooks({ summary, allPassed, estimate, dryRun, results, cwd, bridge, eventBus, runId }) {
+  // Approval gate (Phase 16) — pause and await human approval before finalising
+  // (approval is async and handled by caller; this only handles sync post-hooks)
+  // CI/CD Integration Hook — trigger workflow after successful run
+  if (allPassed && summary.status !== "approval-rejected") {
+    const ciConfig = loadCiConfig(cwd);
+    if (ciConfig.enabled && ciConfig.workflow) {
+      summary.ci = triggerCiWorkflow(ciConfig, eventBus);
+    }
+  }
+  // Phase-39 Slice 7 — audit-loop activation hook (end-of-plan)
+  if (allPassed && !estimate && !dryRun) {
+    _runAuditDrainHook(summary, cwd, results, eventBus);
+  }
+  // Phase-39 Slice 1 — post-run auditor auto-invoke on failure
+  if (!estimate && !dryRun) {
+    _runPostAuditorHook(summary, cwd, allPassed, eventBus);
+  }
+}
+
+function _writeFinalRunArtifacts({ summary, runDir, runId, cwd, trace, eventBus, activitySummary, abortSignal }) {
+  // Write summary
+  writeFileSync(resolve(runDir, "summary.json"), JSON.stringify(summary, null, 2));
+  // Phase 2: Append to cost history
+  if (summary.cost && summary.status !== "estimate" && summary.status !== "approval-rejected") {
+    appendCostHistory(cwd, summary);
+  }
+  // Emit run-completed — telemetry handler writes trace.json during this emit
+  eventBus.emit("run-completed", summary);
+  if (!abortSignal?.aborted) {
+    _recordActivitySafe(activitySummary, summary.status, cwd);
+  }
+  // v2.4: Write manifest + index + prune (AFTER trace.json is written by emit)
+  const manifest = writeManifest(runDir, runId, { ...summary, traceId: trace.traceId });
+  appendRunIndex(cwd, runId, manifest);
+  pruneRunHistory(cwd, loadMaxRunHistory(cwd));
+}
+
 export async function runPlan(planPath, options = {}) {
   const {
     cwd = process.cwd(),
@@ -852,18 +1558,7 @@ export async function runPlan(planPath, options = {}) {
   // Phase-ANVIL Slice 4 — DLQ boot-time drain (5-second budget, best-effort).
   // Runs before any slice work so stale L3-deferred records can be recovered.
   // Does NOT block the run: errors are silently swallowed.
-  try {
-    const DRAIN_BUDGET_MS = 5000;
-    const drainResult = await Promise.race([
-      Promise.resolve(anvilDlqDrain({}, { cwd })),
-      new Promise((resolve) => setTimeout(() => resolve({ drained: 0, timedOut: true }), DRAIN_BUDGET_MS)),
-    ]);
-    if (drainResult && typeof drainResult.drained === "number" && drainResult.drained > 0) {
-      console.info(`[orchestrator] DLQ boot drain: removed ${drainResult.drained} stale record(s).`);
-    }
-  } catch {
-    // Boot-time drain is best-effort — never block the plan run
-  }
+  await _runDlqBootDrain(anvilDlqDrain, cwd);
 
   // Mutual exclusion: --resume-from and --only-slices cannot both be active
   if (resumeFrom !== null && onlySlices !== null && onlySlices.length > 0) {
@@ -874,55 +1569,16 @@ export async function runPlan(planPath, options = {}) {
   const modelRouting = loadModelRouting(cwd);
 
   // v2.37 Crucible (Slice 01.4) — enforce that the plan was smelted
-  // through the Crucible funnel or an explicit `--manual-import` bypass
-  // was provided. Runs BEFORE parsePlan / estimate / dryRun so nobody
-  // can sneak a plan in by claiming "I'm only estimating."
-  try {
-    enforceCrucibleId(planPath, {
-      cwd,
-      manualImport,
-      source: manualImportSource,
-      reason: manualImportReason,
-    });
-  } catch (err) {
-    if (err instanceof CrucibleEnforcementError) {
-      return {
-        status: "failed",
-        error: err.message,
-        code: err.code,
-        planPath: err.planPath,
-        hint:
-          "Run `forge_crucible_submit` to start a smelt, or re-invoke with " +
-          "--manual-import to bypass (audited in .forge/crucible/manual-imports.jsonl).",
-      };
-    }
-    throw err;
-  }
+  // through the Crucible funnel or an explicit `--manual-import` bypass.
+  const crucibleFail = _enforceCruciblePreflight(planPath, cwd, manualImport, manualImportSource, manualImportReason);
+  if (crucibleFail) return crucibleFail;
 
   // Parse plan
   const plan = parsePlan(planPath, cwd);
 
   // Bug #127: Precedence: options.model > frontmatter model: > .forge.json default > null
-  const fmModel = (plan.meta && typeof plan.meta.model === "string" && plan.meta.model.trim().length > 0)
-    ? plan.meta.model.trim() : null;
-  let effectiveModel, modelSource;
-  if (model) {
-    effectiveModel = model;
-    modelSource = "options";
-  } else if (fmModel) {
-    effectiveModel = fmModel;
-    modelSource = "frontmatter";
-  } else if (modelRouting.default) {
-    effectiveModel = modelRouting.default;
-    modelSource = "config";
-  } else {
-    effectiveModel = null;
-    modelSource = "default";
-  }
+  const { effectiveModel, modelSource } = _resolveEffectiveModel(model, plan, modelRouting);
   // Bug #127: emit resolution log so users can trace which source won.
-  // Uses `resolved=` to match the Bug #127 contract. Note: CLI workers
-  // (gh-copilot, claude-cli, codex-cli) may select their own model regardless
-  // of what is resolved here; they emit their own `[model]` line when they do.
   // eslint-disable-next-line no-console
   console.error(`[model] resolved=${effectiveModel} source=${modelSource}`);
 
@@ -937,185 +1593,32 @@ export async function runPlan(planPath, options = {}) {
   }
 
   // Phase-WORKER-GUARDRAILS Slice 5 (A6): lockHash enforcement.
-  // If frontmatter has `lockHash`, verify plan body has not drifted since hardening.
-  // Absent lockHash → runs as today (backwards-compatible per decision #7).
-  if (plan.meta && typeof plan.meta.lockHash === "string") {
-    const planContent = readFileSync(planPath, "utf-8");
-    const computedHash = computeLockHash(planContent);
-    if (computedHash !== plan.meta.lockHash) {
-      return {
-        status: "failed",
-        error:
-          `Plan body has drifted since it was hardened — lockHash mismatch.\n` +
-          `  stored:   ${plan.meta.lockHash}\n` +
-          `  computed: ${computedHash}\n` +
-          `Re-run Step 2 hardening to regenerate the lockHash, then retry.`,
-        code: "LOCK_HASH_MISMATCH",
-        storedHash: plan.meta.lockHash,
-        computedHash,
-        planPath,
-        hint: "Re-run Step 2 (step2-harden-plan.prompt.md) to update the lockHash in frontmatter.",
-      };
-    }
-  }
+  const lockHashFail = _checkLockHash(plan, planPath);
+  if (lockHashFail) return lockHashFail;
 
   // Meta-bug #129 preflight: refuse to run a plan whose target release version
-  // already exists as a tag on origin. Prevents the "retrograde release" class
-  // of disaster (re-running an old plan against newer master, producing a
-  // chore(release): commit + tag that overwrites a shipped release). Runs
-  // BEFORE estimate / dryRun so estimating a doomed plan also surfaces the
-  // problem early. Bypass with `--allow-retrograde` if intentional (e.g.
-  // patch release on a hotfix branch). Network / git errors degrade to
-  // advisory — offline runs are not blocked.
+  // already exists as a tag on origin.
   if (!allowRetrograde) {
-    const collision = detectVersionCollision(planPath, cwd);
-    if (collision.collision) {
-      return {
-        status: "failed",
-        error:
-          `Refusing to run plan: target version v${collision.version} ` +
-          `already exists on origin (sha=${collision.originSha?.slice(0, 12) || "?"}). ` +
-          `Re-running this plan would overwrite a shipped release.`,
-        code: "VERSION_COLLISION",
-        version: collision.version,
-        originSha: collision.originSha,
-        planPath,
-        hint:
-          "Either bump the plan to a fresh version (recommended), " +
-          "or pass --allow-retrograde if you intentionally want to re-tag " +
-          "(this is almost never what you want — see meta-bug #129).",
-      };
-    }
-    if (collision.error) {
-      // eslint-disable-next-line no-console
-      console.error(
-        `[preflight] Could not check origin for v${collision.version} ` +
-        `tag collision (advisory): ${collision.error}`,
-      );
-    }
+    const collisionFail = _checkVersionCollision(planPath, cwd);
+    if (collisionFail) return collisionFail;
   }
 
   // Estimation mode — return without executing
   if (estimate) {
-    // Build quorum config for estimate even though we're not running
-    let estimateQuorumConfig = null;
-    if (quorum) {
-      estimateQuorumConfig = loadQuorumConfig(cwd, quorumPreset);
-      estimateQuorumConfig.enabled = true;
-      if (quorum === QUORUM_MODE_AUTO) estimateQuorumConfig.auto = true;
-      else if (quorum === true) estimateQuorumConfig.auto = false;
-      if (quorumThreshold !== null && typeof quorumThreshold === "number") {
-        estimateQuorumConfig.threshold = quorumThreshold;
-      }
-    }
+    const estimateQuorumConfig = _buildEstimateQuorumConfig(quorum, cwd, quorumPreset, quorumThreshold);
     return buildEstimate(plan, effectiveModel, cwd, estimateQuorumConfig, resumeFrom, worker);
   }
 
   // Dry run — parse and validate only
   if (dryRun) {
-    // Phase GITHUB-B Slice 5: copilot-coding-agent dry-run prints issue body previews
-    // without requiring `gh` to be installed.
-    if (worker === "copilot-coding-agent") {
-      const issuePreviews = plan.slices.map((s) => ({
-        number: s.number,
-        title: s.title || "Untitled slice",
-        issueBody: _buildIssueBodyDefault({
-          goal: s.goal || (Array.isArray(s.tasks) ? s.tasks.join("\n") : s.tasks),
-          scope: s.scope,
-          gate: s.validationGate,
-        }),
-      }));
-      return { status: "dry-run", plan, issuePreviews };
-    }
-    return { status: "dry-run", plan };
+    return _buildDryRunResult(plan, worker);
   }
 
-  // Phase GITHUB-B Slice 3 — Copilot Coding Agent pre-flight (skipped for estimate/dryRun)
-  // Hotfix v2.90.4: always probe copilot-coding-agent-assignable (ghToken:true) so a
-  // missing Copilot Coding Agent enablement is caught before any issue is created.
-  if (worker === "copilot-coding-agent") {
-    const inspection = _inspectGithubStack(cwd, { ghToken: true });
-    const githubRemote = inspection.checks.find((c) => c.id === "github-remote");
-    const ghCli = inspection.checks.find((c) => c.id === "gh-cli");
-    const copilotAssignable = inspection.checks.find((c) => c.id === "copilot-coding-agent-assignable");
-    const failed = [];
-    if (!githubRemote || githubRemote.status !== "pass") {
-      const detail = githubRemote?.detail ?? "check unavailable";
-      const hint = githubRemote?.fixHint ? ` — ${githubRemote.fixHint}` : "";
-      failed.push(`github-remote: ${detail}${hint}`);
-    }
-    if (!ghCli || ghCli.status !== "pass") {
-      const detail = ghCli?.detail ?? "check unavailable";
-      const hint = ghCli?.fixHint ? ` — ${ghCli.fixHint}` : "";
-      failed.push(`gh-cli: ${detail}${hint}`);
-    }
-    // warn = Copilot Coding Agent not enabled; fail = API error. Both block dispatch.
-    // na = check was skipped (token not available or check deferred) — not blocking.
-    if (copilotAssignable && (copilotAssignable.status === "warn" || copilotAssignable.status === "fail")) {
-      const detail = copilotAssignable.detail ?? "check unavailable";
-      const hint = copilotAssignable.fixHint ? ` — ${copilotAssignable.fixHint}` : "";
-      failed.push(`copilot-coding-agent-assignable: ${detail}${hint}`);
-    }
-    if (failed.length > 0) {
-      return {
-        status: "failed",
-        error:
-          "copilot-coding-agent worker requires a GitHub repo. " +
-          "Run 'pforge github status' for diagnostics.\n" +
-          failed.join("\n"),
-        code: "COPILOT_AGENT_PREFLIGHT_FAILED",
-        planPath,
-      };
-    }
-  }
-
-  // Pre-flight: lint gate commands before burning time on execution
-  const gateLint = lintGateCommands(planPath, cwd);
-  if (!gateLint.passed) {
-    const errorSummary = gateLint.errors.map(e => `  ❌ ${e.message}`).join("\n");
-    const warnSummary = gateLint.warnings.map(w => `  ⚠️ ${w.message}`).join("\n");
-    return {
-      status: "failed",
-      error: "Gate lint pre-flight failed — fix these before executing:",
-      gateLint: {
-        errors: gateLint.errors,
-        warnings: gateLint.warnings,
-        summary: gateLint.summary,
-      },
-      detail: [errorSummary, warnSummary].filter(Boolean).join("\n"),
-    };
-  }
-
-  // Phase-25 Slice 4 (L6 adaptive gate synthesis): scan plan slices for
-  // domain-matched slices that lack a validation gate and print suggestions.
-  // Advisory-only by default (D8 mode="suggest"). When strictGates=true the
-  // mode is overridden to "enforce" for this run only (never written to
-  // .forge.json) and pre-flight fails with a structured error listing each
-  // offending slice. (Phase-31 Slice 4.)
-  try {
-    const baseCfg = loadGateSynthesisConfig(cwd);
-    const synthConfig = strictGates ? { ...baseCfg, mode: "enforce" } : undefined;
-    const synthResult = synthesizeGateSuggestions({ slices: plan.slices, cwd, config: synthConfig });
-    if (strictGates && synthResult.suggestions.length > 0) {
-      return {
-        status: "failed",
-        error: "--strict-gates: pre-flight failed — the following slices lack a domain-matched validation gate:",
-        code: "STRICT_GATES_PREFLIGHT",
-        offendingSlices: synthResult.suggestions.map((s) => ({
-          sliceNumber: s.sliceNumber,
-          sliceTitle: s.sliceTitle,
-          domain: s.domain,
-          reason: s.reason,
-          suggestedCommand: s.suggestedCommand,
-        })),
-      };
-    }
-    const formatted = formatGateSuggestions(synthResult);
-    if (formatted) {
-      // eslint-disable-next-line no-console
-      console.log(formatted);
-    }
-  } catch { /* advisory must never fail a run */ }
+  // Phase GITHUB-B Slice 3 + gate lint + gate synthesis pre-flight
+  const postExecFail = _runPlanPostExecutionPreflight({
+    plan, planPath, cwd, worker, _inspectGithubStack, strictGates,
+  });
+  if (postExecFail) return postExecFail;
 
   // Set up event bus with DI handler
   const runDir = createRunDir(cwd, planPath);
@@ -1127,87 +1630,22 @@ export async function runPlan(planPath, options = {}) {
 
   // Chain handlers: user-provided → telemetry → log → console progress
   const isCliRun = !eventHandler; // If no custom handler, we're running from CLI — show progress on stdout
-  const combinedHandler = {
-    handle(event) {
-      telemetryHandler.handle(event);
-      if (eventHandler) eventHandler.handle(event);
-      logHandler.handle(event);
-      // Write progress to stdout so terminal stays alive (prevents VS Code "awaiting input" stall)
-      if (isCliRun && event?.type) {
-        _emitRunPlanProgressLine(event);
-      }
-    },
-  };
+  const combinedHandler = _buildCombinedEventHandler(telemetryHandler, eventHandler, logHandler, isCliRun);
   const eventBus = new OrchestratorEventBus(combinedHandler);
 
   // Issue #197 — Silent-death guard.
   // When Node is launched in background mode on Windows without an attached
   // console (Start-Process -FilePath 'node' -WindowStyle Hidden), the gh
   // copilot CLI worker needs a console to initialize its progress reporter.
-  // Without one, it exits immediately with no output, the worker promise
-  // resolves with an empty result, and the orchestrator's event loop drains
-  // cleanly — leaving the run log with slice-started but no slice-failed.
-  //
-  // This guard registers a synchronous `process.on('exit')` listener that
-  // writes a slice-failed event whenever the process exits while a slice is
-  // still in-progress, making the silent death detectable and retriable.
-  let _guardSliceId = null;
-  let _guardSliceTitle = null;
-  const _silentDeathGuard = () => {
-    writeSilentExitRecord(_guardSliceId, _guardSliceTitle, runDir);
-  };
-  process.once("exit", _silentDeathGuard);
-  eventBus.on("slice-started", (d) => {
-    _guardSliceId = d.sliceId ?? null;
-    _guardSliceTitle = d.title || "";
-  });
-  eventBus.on("slice-completed", () => { _guardSliceId = null; _guardSliceTitle = null; });
-  eventBus.on("slice-failed",    () => { _guardSliceId = null; _guardSliceTitle = null; });
-  eventBus.on("run-completed",   () => { _guardSliceId = null; process.off("exit", _silentDeathGuard); });
-  eventBus.on("run-aborted",     () => { _guardSliceId = null; process.off("exit", _silentDeathGuard); });
+  _setupSilentDeathGuard(eventBus, runDir);
 
   // Write run.json metadata
-  const runMeta = {
-    plan: planPath,
-    traceId: trace.traceId,
-    startTime: new Date().toISOString(),
-    model: effectiveModel || "auto",
-    modelRouting,
-    mode,
-    // Issue #182: surface the quorum *mode* separately from the worker `mode`
-    // (auto/assisted). Before this fix, summary.mode was "auto" both for
-    // single-model auto runs and for --quorum=power runs, making cost
-    // attribution and historical filtering impossible.
-    quorumMode: quorum === false ? QUORUM_MODE_FALSE
-              : quorumPreset // "power" | "speed"
-              || (quorum === true ? "all" : QUORUM_MODE_AUTO),
-    quorumPreset: quorumPreset || null,
-    sliceCount: plan.slices.length,
-    executionOrder: plan.dag.order,
-  };
+  const runMeta = _buildRunMeta({ planPath, trace, effectiveModel, modelRouting, mode, quorum, quorumPreset, plan });
   writeFileSync(resolve(runDir, "run.json"), JSON.stringify(runMeta, null, 2));
 
   // Select scheduler — use ParallelScheduler if plan has [P] tags
-  const hasParallelSlices = plan.slices.some((s) => s.parallel);
-  const hasCompetitiveSlices = plan.slices.some((s) => s.competitive);
   const maxParallelism = loadMaxParallelism(cwd);
-  let scheduler;
-  if (hasCompetitiveSlices) {
-    const compConfig = loadCompetitiveConfig(cwd);
-    // Lazy-load worktree manager so projects without competitive slices don't
-    // pay the import cost.
-    const worktreeManager = await import("./worktree-manager.mjs");
-    scheduler = new CompetitiveScheduler(eventBus, {
-      maxVariants: compConfig.maxVariants,
-      projectDir: resolve(cwd),
-      planBasename: basename(planPath, ".md"),
-      worktreeManager,
-    });
-  } else if (hasParallelSlices) {
-    scheduler = new ParallelScheduler(eventBus, maxParallelism);
-  } else {
-    scheduler = new SequentialScheduler(eventBus);
-  }
+  const scheduler = await _selectScheduler(plan, eventBus, cwd, planPath, maxParallelism);
   const abortSignal = abortController?.signal || null;
 
   // OpenBrain memory integration
@@ -1215,136 +1653,26 @@ export async function runPlan(planPath, options = {}) {
   const projectName = loadProjectName(cwd);
 
   // Quorum mode (v2.5) — fix #122: respect .forge.json quorum.enabled when quorum==="auto"
-  let quorumConfig = null;
-  if (quorum) {
-    quorumConfig = loadQuorumConfig(cwd, quorumPreset);
-
-    // "auto" (CLI default): preserve quorumConfig.enabled from .forge.json.
-    // Absence of .forge.json quorum.enabled ≙ legacy default ≙ enabled=true.
-    // true / "true" / preset: caller explicitly requested quorum — force enabled regardless of config.
-    const callerExplicit = quorum === true || quorum === "true" || quorumPreset !== null;
-
-    let configHasExplicitEnabled = false;
-    if (!callerExplicit) {
-      try {
-        const fp = resolve(cwd, ".forge.json");
-        if (existsSync(fp)) {
-          const raw = JSON.parse(readFileSync(fp, "utf-8"));
-          configHasExplicitEnabled = raw.quorum != null && typeof raw.quorum === "object" && "enabled" in raw.quorum;
-        }
-      } catch { /* ignore — use legacy default */ }
-    }
-
-    if (callerExplicit) {
-      quorumConfig.enabled = true;
-    } else if (!configHasExplicitEnabled) {
-      // Legacy default: absence of quorum.enabled in .forge.json means enabled
-      quorumConfig.enabled = true;
-    }
-    // else: quorum === "auto" AND .forge.json has explicit enabled — use the loaded value
-
-    if (quorum === QUORUM_MODE_AUTO) {
-      quorumConfig.auto = true;
-    } else if (quorum === true || quorum === "true") {
-      quorumConfig.auto = false; // Force quorum on all slices
-    }
-    if (quorumThreshold !== null && typeof quorumThreshold === "number") {
-      quorumConfig.threshold = quorumThreshold;
-    }
-
-    const quorumSource = callerExplicit ? "cli" : (configHasExplicitEnabled ? "config" : "default");
-    console.error(`[quorum] enabled=${quorumConfig.enabled} auto=${quorumConfig.auto} source=${quorumSource}`);
-
-    // H.3: Probe model availability — only when quorum is actually enabled
-    if (quorumConfig.enabled) {
-      const { available: availableModels, dropped: droppedModels } = filterQuorumModels(quorumConfig);
-
-      if (availableModels.length === 0) {
-        const err = new Error(
-          `[quorum] no available models. Dropped: ${droppedModels.map((d) => `${d.model} (${d.reason})`).join(", ")}. ` +
-          `Install hints: ${droppedModels.map((d) => d.install).filter(Boolean).join(" | ")}`,
-        );
-        err.exitCode = 2;
-        throw err;
-      }
-
-      if (quorumConfig.strictAvailability && droppedModels.length > 0) {
-        const err = new Error(
-          `[quorum] strictAvailability=true and ${droppedModels.length} model(s) unavailable: ` +
-          droppedModels.map((d) => `${d.model} (${d.reason})`).join(", "),
-        );
-        err.exitCode = 2;
-        throw err;
-      }
-
-      if (availableModels.length === 1) {
-        console.error(
-          `[quorum] only 1 of ${quorumConfig.models.length} models available — degrading to single-model ` +
-          `(no multi-perspective synthesis benefit); set quorum.strictAvailability=true to fail instead`,
-        );
-      }
-
-      quorumConfig.models = availableModels;
-      quorumConfig.droppedModels = droppedModels;
-
-      // Probe reviewerModel separately — warn but do not block (existing fallback handles it)
-      if (quorumConfig.reviewerModel) {
-        const reviewerResult = probeQuorumModelAvailability(quorumConfig.reviewerModel);
-        if (!reviewerResult.available) {
-          console.error(
-            `[quorum] reviewer model ${quorumConfig.reviewerModel} unavailable: ${reviewerResult.reason} — ` +
-            `existing reviewer fallback will be used`,
-          );
-        }
-      }
-    }
-  }
+  const quorumConfig = _buildRunPlanQuorumConfig({ quorum, cwd, quorumPreset, quorumThreshold });
 
   eventBus.emit("run-started", { ...runMeta, quorum: quorumConfig ? { enabled: quorumConfig.enabled, auto: quorumConfig.auto, threshold: quorumConfig.threshold } : null });
 
   // Issue #201 — janitor pass: drop any pforge-slice-N-snapshot stashes older
-  // than 7 days. Prevents accumulation of orphaned snapshots from conflicted
-  // pops in prior runs (testbed observed 60+ orphans). Best-effort.
-  try {
-    const cleanup = cleanupStaleSnapshots({ cwd });
-    if (cleanup.dropped.length > 0) {
-      eventBus.emit("snapshot-janitor", {
-        scanned: cleanup.scanned,
-        dropped: cleanup.dropped.length,
-        errors: cleanup.errors.length,
-      });
-    }
-  } catch { /* best-effort — never break run start */ }
+  // than 7 days. Best-effort.
+  _emitSnapshotJanitor(cwd, eventBus);
 
   // GX.2 (v2.36): L3 → L1 preload. Emit a `memory-preload` event right after
   // run-started carrying the deterministic search-hints derived from the plan.
-  // The dashboard, watchers, and the first worker pick this up via hub history
-  // *before* the first slice runs — closing the "no semantic context at boot" gap.
   if (memoryEnabled && projectName) {
-    try {
-      const boot = buildPlanBootContext(
-        { name: basename(planPath, ".md"), slices: plan.slices },
-        projectName,
-      );
-      if (boot.hints.length > 0) {
-        eventBus.emit("memory-preload", boot);
-      }
-    } catch { /* best-effort — never break run start */ }
+    _emitMemoryPreload(plan, planPath, projectName, eventBus);
   }
 
   // Execute slices
   const maxRetries = loadMaxRetries(cwd);
   const escalationChain = loadEscalationChain(cwd);
 
-  // Phase CRUCIBLE-02 Slice 02.1 — pre-compute complexity for every slice so
-  // slice-started events (emitted by the scheduler) can carry the score.
-  // Best-effort: a scoring failure on one slice should not block the run.
-  for (const [sliceId, sliceNode] of plan.dag.nodes) {
-    try {
-      const { score } = scoreSliceComplexity(sliceNode, cwd);
-      sliceNode.complexityScore = score;
-    } catch { /* leave undefined — UI will render a neutral '—' */ }
-  }
+  // Phase CRUCIBLE-02 Slice 02.1 — pre-compute complexity for every slice
+  _precomputeSliceComplexity(plan, cwd);
 
   // Phase FORGE-SHOP-06 Slice 06.2 — Gate check config for inter-slice validation
   const gateCheckConfig = hub ? loadGateCheckConfig(cwd) : null;
@@ -1357,22 +1685,7 @@ export async function runPlan(planPath, options = {}) {
   }
 
   // Phase-33.1: Pre-filter execution order for --only-slices.
-  // Filtering here (before scheduler dispatch) ensures all scheduler types respect it.
-  let executionOrder = plan.dag.order;
-  if (onlySlices !== null && onlySlices.length > 0) {
-    const onlySet = new Set(onlySlices.map(String));
-    for (const id of plan.dag.order) {
-      if (!onlySet.has(id)) {
-        console.log(`[orchestrator] Slice ${id} skipped (not in --only-slices)`);
-      }
-    }
-    for (const id of onlySlices) {
-      if (!plan.dag.nodes.has(String(id))) {
-        console.warn(`[orchestrator] Slice ${id} requested via --only-slices was not found in plan`);
-      }
-    }
-    executionOrder = plan.dag.order.filter((id) => onlySet.has(id));
-  }
+  const executionOrder = _resolveExecutionOrder(plan, onlySlices);
 
   let results;
   try {
@@ -1388,191 +1701,13 @@ export async function runPlan(planPath, options = {}) {
     );
   } finally {
     // Restore the prior value of PFORGE_DISABLE_TEMPERING regardless of outcome
-    if (_priorDisableTempering === undefined) {
-      delete process.env.PFORGE_DISABLE_TEMPERING;
-    } else {
-      process.env.PFORGE_DISABLE_TEMPERING = _priorDisableTempering;
-    }
+    _restoreDisableTempering(_priorDisableTempering);
   }
 
-  // Auto-sweep + auto-analyze after all slices (Slice 6)
-  const allPassed = results.every((r) => r.status === "passed" || r.status === "skipped");
-  let sweepResult = null;
-  let analyzeResult = null;
-
-  if (allPassed && !estimate && !dryRun) {
-    sweepResult = runAutoSweep(cwd);
-    analyzeResult = runAutoAnalyze(cwd, planPath);
-  }
-
-  // Build summary in memory (needed for approval message content)
-  const runId = basename(runDir);
-  const summary = buildSummary(plan, results, runMeta, { sweepResult, analyzeResult });
-  const activitySummary = {
-    runId,
-    plan: summary.plan,
-    sliceCount: summary.sliceCount,
-    duration_ms: summary.totalDuration,
-    cost_usd: summary.cost?.total_cost_usd ?? null,
-    timestamp: summary.endTime,
-  };
-
-  if (abortSignal?.aborted) {
-    try {
-      recordActivity({ ...activitySummary, status: "aborted" }, { storeDir: join(cwd, ".forge") });
-    } catch {
-      // Never block the run on team activity write failure.
-    }
-  }
-
-  // Approval gate (Phase 16) — pause and await human approval before finalising
-  if (allPassed && bridge?.hasApprovalChannels) {
-    try {
-      const approvalResult = await bridge.requestApproval(runId, { ...summary, runId });
-      if (!approvalResult.approved) {
-        summary.status = "approval-rejected";
-        summary.approval = {
-          status: "rejected",
-          approver: approvalResult.approver ?? null,
-          timedOut: approvalResult.timedOut ?? false,
-          timestamp: new Date().toISOString(),
-        };
-      } else {
-        summary.approval = {
-          status: "approved",
-          approver: approvalResult.approver ?? null,
-          timestamp: new Date().toISOString(),
-        };
-      }
-    } catch (err) {
-      // Non-fatal — log and continue without blocking the run
-      console.error(`[orchestrator] Approval gate error: ${err.message}`);
-    }
-  }
-
-  // CI/CD Integration Hook — trigger workflow after successful run
-  if (allPassed && summary.status !== "approval-rejected") {
-    const ciConfig = loadCiConfig(cwd);
-    if (ciConfig.enabled && ciConfig.workflow) {
-      summary.ci = triggerCiWorkflow(ciConfig, eventBus);
-    }
-  }
-
-  // Phase-39 Slice 7 — audit-loop activation hook (end-of-plan)
-  if (allPassed && !estimate && !dryRun) {
-    try {
-      const auditConfig = _loadAuditConfig(cwd);
-      const evaluation = _shouldAutoDrain({
-        cwd,
-        config: auditConfig,
-        filesChanged: results.length,
-        env: process.env.PFORGE_ENV || "dev",
-      });
-      if (evaluation.fire) {
-        eventBus.emit("drain-auto-estimate", {
-          mode: auditConfig.mode,
-          maxRounds: auditConfig.maxRounds,
-          signals: evaluation.signals,
-        });
-        summary.auditDrain = { dispatched: true, mode: auditConfig.mode, signals: evaluation.signals };
-      }
-    } catch { /* non-fatal — never fail the run for audit activation */ }
-  }
-
-  // Phase-39 Slice 1 — post-run auditor auto-invoke on failure
-  if (!estimate && !dryRun) {
-    try {
-      const auditorResult = runPostRunAuditorHook({ cwd, allPassed, eventBus });
-      if (auditorResult.triggered) {
-        summary._auditor = auditorResult;
-      }
-    } catch { /* never block the run on auditor hook failure */ }
-  }
-
-  // Write summary
-  writeFileSync(resolve(runDir, "summary.json"), JSON.stringify(summary, null, 2));
-
-  // Phase 2: Append to cost history
-  if (summary.cost && summary.status !== "estimate" && summary.status !== "approval-rejected") {
-    appendCostHistory(cwd, summary);
-  }
-
-  // Emit run-completed — telemetry handler writes trace.json during this emit
-  eventBus.emit("run-completed", summary);
-  if (!abortSignal?.aborted) {
-    try {
-      recordActivity({ ...activitySummary, status: summary.status }, { storeDir: join(cwd, ".forge") });
-    } catch {
-      // Never block the run on team activity write failure.
-    }
-  }
-
-  // v2.4: Write manifest + index + prune (AFTER trace.json is written by emit)
-  const manifest = writeManifest(runDir, runId, { ...summary, traceId: trace.traceId });
-  appendRunIndex(cwd, runId, manifest);
-  pruneRunHistory(cwd, loadMaxRunHistory(cwd));
-
-  // OpenBrain: capture run summary + cost anomaly as thoughts.
-  // Issue #205 (May 2026): the capture now happens here in the orchestrator
-  // — previously it only fired from the MCP `forge_run_plan` handler in
-  // `server.mjs`, so CLI runs (`pforge run-plan`) silently dropped every
-  // capture. `_captured: true` on the receipt tells the server handler to
-  // skip its legacy re-capture path and avoid double-writing.
-  if (memoryEnabled) {
-    const runSummary = buildRunSummaryThought(summary, projectName);
-    const costAnomaly = buildCostAnomalyThought(summary, getCostReport(cwd), projectName);
-    const receipts = { runSummary: null, costAnomaly: null };
-    if (runSummary) {
-      receipts.runSummary = captureMemory(runSummary, "decision", "forge_run_plan", cwd);
-    }
-    if (costAnomaly) {
-      receipts.costAnomaly = captureMemory(costAnomaly, "gotcha", "forge_run_plan/cost", cwd);
-    }
-    summary._memoryCapture = {
-      runSummary,
-      costAnomaly,
-      _captured: true,
-      receipts,
-    };
-
-    // Issue #205 fix #3: auto-drain the OpenBrain queue so newly-captured
-    // thoughts land in L3 without requiring a manual `pforge brain replay`.
-    // Best-effort with 10s timeout — never blocks the run. Previously the
-    // queue file grew forever until a human ran `pforge brain replay`, so
-    // L3 search returned stale results for days after a successful run.
-    try {
-      const drainResult = await autoDrainOpenBrainQueue(cwd, {
-        source: "cli-drain",
-        timeoutMs: 10_000,
-      });
-      summary._memoryCapture.drain = drainResult;
-    } catch (err) {
-      summary._memoryCapture.drain = { error: String(err?.message || err) };
-    }
-  }
-
-  // Phase-25 Slice 5 (L5 closed loop): write a plan postmortem after every
-  // run regardless of pass/fail, bounded by retention count (D7). Delta
-  // fields compare against the most-recent prior postmortem for the same
-  // plan basename. Never fails the run.
-  try {
-    const planBasename = basename(planPath, ".md");
-    const prior = listPlanPostmortems({ cwd, planBasename }).map((e) => e.record);
-    const record = buildPlanPostmortem({ summary, planBasename, priorPostmortems: prior });
-    const path = writePlanPostmortem({ cwd, planBasename, record });
-    summary.postmortem = { path, record };
-  } catch (err) {
-    // Never block the run on postmortem failure.
-    summary.postmortem = { error: err?.message || String(err) };
-  }
-
-  // Phase-31 Slice 6: promote recurring tempering suppressions to bug files.
-  // Runs after postmortem so suppression data from this run is fully written.
-  try {
-    _promoteSuppressions({ cwd });
-  } catch { /* never block the run on promoter failure */ }
-
-  return summary;
+  return _finalizeRunPlan({
+    results, plan, runMeta, runDir, planPath, cwd,
+    abortSignal, bridge, eventBus, estimate, dryRun, memoryEnabled, projectName, trace,
+  });
 }
 
 /**

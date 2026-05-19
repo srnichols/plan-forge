@@ -4,9 +4,9 @@
 > **Parent phase**: [docs/plans/Phase-AUDITOR-AUTOMATION-PLAN.md](Phase-AUDITOR-AUTOMATION-PLAN.md). The parent ships the *capability* (config blocks, observer process, cross-run watcher mode, auditor auto-invoke). This phase ships the *discoverability* (settings UI to configure them, observability cards to see them work).
 > **Tracks**: `pforge-mcp/ui/index.html` + `pforge-mcp/ui/app.js` (new settings tab, three new dashboard cards), `pforge-mcp/server.mjs` (any new `/api/*` endpoints needed for the cards), `pforge-mcp/tests/dashboard-*.test.mjs` (mapping invariants + behavior), docs sweep with new screenshots.
 > **Estimated cost**: low-to-medium. All mechanical UI work on an established pattern (Phase-30 settings decomposition). Zero new backend capabilities, zero new MCP tools. The only `/api/*` additions are read endpoints to feed the cards.
-> **Pipeline**: Specify ✅ → Harden ⏳ (HELD until parent ships) → Execute → S7 QA → S8 docs → S9 retro.
+> **Pipeline**: Specify ✅ → Harden ⏳ (HELD until parent ships) → Execute → S7 unit QA → S8 testbed E2E + browser → S9 docs → S10 retro.
 > **Recommended starting cluster**: **Cluster A — Settings tab** (S0 → S1 → S2) because settings UI is the highest-leverage discoverability gain; cards are progressive enhancement.
-> **Session budget**: 9 slices. Recommended break point: **commit + new session after S2** (settings tab complete; cards are independent work).
+> **Session budget**: 10 slices. Recommended break points: **commit + new session after S2** (settings tab complete; cards are independent work) and **after S7** (unit QA green; fresh session for browser-based E2E which has different failure modes).
 
 ---
 
@@ -79,12 +79,22 @@ Each card and field is read-from-existing-source — no new backend capabilities
   - "View history" link opens `.forge/health/` archive listing
   - Backend: new read endpoint `GET /api/auditor/latest` (returns `{ markdown, timestamp, archive: [...] }`)
 
-**Tests** (per slice + S7):
+**Tests** (per slice + S7 + S8):
 - `pforge-mcp/tests/dashboard-settings-forgemaster.test.mjs` (new — covers S1 + S2: section existence, field-id mapping invariants, write-roundtrip)
 - `pforge-mcp/tests/dashboard-observer-narrations-card.test.mjs` (new — S4: render, empty state, live update)
 - `pforge-mcp/tests/dashboard-cross-run-card.test.mjs` (new — S5: refresh action, cache load, table render)
 - `pforge-mcp/tests/dashboard-auditor-report-card.test.mjs` (new — S6: markdown render, sanitization, archive link)
 - Phase-30 decomposition mapping tests in `dashboard-settings.test.mjs` extended to include `tab-settings-forgemaster`
+
+**Testbed scenarios + browser tests** (S8 deliverables, executed against `E:\GitHub\plan-forge-testbed` running a live dashboard server; uses existing `forge_testbed_run` framework + `run_playwright_code` for real-browser interactions):
+- `docs/plans/testbed-scenarios/dashboard-settings-roundtrip.json` — launch dashboard against testbed; open settings tab in real browser; toggle `cfg-observer-enabled`; save; assert testbed's `.forge.json` has `forgeMaster.observer.enabled: true` AND no other field mutated (atomic write)
+- `docs/plans/testbed-scenarios/dashboard-settings-concurrent-save.json` — two browser contexts open settings simultaneously; both save different values; assert final `.forge.json` reflects last-write-wins atomically, no partial JSON, no corrupted file
+- `docs/plans/testbed-scenarios/dashboard-xss-injection.json` — write a malicious `.forge/health/latest.md` to testbed containing `<script>window.__pwned=true</script>`, `<img src=x onerror=alert(1)>`, `<iframe src=javascript:alert(1)>`, and a markdown-link with `javascript:` URL; load auditor-report card in real browser; assert `window.__pwned` is undefined; assert no script, iframe, or `javascript:` URL exists in rendered DOM; assert other safe markdown elements (headings, lists, code blocks) still render
+- `docs/plans/testbed-scenarios/dashboard-observer-empty-state.json` — testbed with observer disabled; load page; assert empty-state message visible; click deep-link to settings tab; assert settings tab now active and `cfg-observer-enabled` focused
+- `docs/plans/testbed-scenarios/dashboard-narrations-live-update.json` — enable observer on testbed; inject a synthetic `observer:narration` event into the hub; assert card renders new narration within 2 s without page reload
+- `docs/plans/testbed-scenarios/dashboard-cross-run-real-data.json` — cross-run card against testbed's real 30+ run history; click Refresh; assert response renders within 2 s; assert at least one anomaly row present (testbed has historical failures); assert cached result loads on page reload without API call (verify via Network panel)
+- `docs/plans/testbed-scenarios/dashboard-auditor-no-reports.json` — testbed with `.forge/health/` empty; assert report card renders the explicit empty state ("No reports yet —…"), not a broken card or spinner stuck
+- `docs/plans/testbed-scenarios/dashboard-field-validation-server-side.json` — bypass client validation (submit form via `fetch()` from devtools); send `cfg-auditor-every-n-runs: 2`; assert HTTP 400 with structured error; assert testbed's `.forge.json` unchanged
 
 **Docs sweep** (S8):
 - New screenshots: `docs/manual/assets/screenshots/dashboard-settings-forgemaster.png`, `dashboard-observer-narrations.png`, `dashboard-cross-run-anomalies.png`, `dashboard-auditor-report.png`
@@ -119,8 +129,10 @@ Each card and field is read-from-existing-source — no new backend capabilities
 - **Do NOT** change the existing settings tab ordering. Append `tab-settings-forgemaster` at the end (it's new and opt-in).
 - **Do NOT** introduce a new frontend framework or build step. Existing dashboard is plain HTML + vanilla JS — keep it that way.
 - **Do NOT** bundle slices into one commit. Each slice = one commit. S0 / S7 / S8 / S9 also each = one commit.
-- **Do NOT** ship without screenshots in S8. UI changes without screenshots make docs regression-prone.
+- **Do NOT** ship without screenshots in S9. UI changes without screenshots make docs regression-prone.
 - **Do NOT** modify the parent phase's plan file or any file the parent phase declared in its own Scope Contract (parent ships first, then this phase touches only UI surfaces).
+- **Do NOT** push commits, tags, or branches to the testbed repository at `E:\GitHub\plan-forge-testbed` during S8. Browser scenarios MUST be self-contained: open a fresh page state, make assertions, restore any testbed file mutations in `teardown`.
+- **Do NOT** skip the XSS regression scenario or weaken its assertions. Sanitization tests in S6 (JSDOM) are necessary but not sufficient — real-browser execution semantics differ.
 
 ---
 
@@ -138,6 +150,7 @@ Decisions locked at draft time; Step-2 hardener may sharpen but should not re-li
 8. **Field validation is client + server** — client gives instant feedback; server enforces the actual constraints. Both reject negative budgets, `everyNRuns` in [1–4], non-finite caps.
 9. **Empty states are explicit, not silent** — if observer is disabled, narrations card says "Observer disabled — enable in Settings" with a deep-link. If no auditor reports yet, report card says "No reports yet — runs trigger reports when `everyNRuns` is set or auto-invoke fires on failure." Silent empty UI is a Plan Forge anti-pattern (see ACI temper guards).
 10. **Model tier dropdown shows human labels** — `Inherit ask mode (default)` / `Flagship (best quality)` / `Mid (balanced)` / `Fast (cheapest)`. Backend stores the canonical token; UI shows the label. Vendor model names never appear in the dropdown (per parent phase's Forbidden Action #14).
+11. **Testbed E2E + real-browser validation is a release gate, not optional** — unit tests (S7, using vitest + JSDOM) prove HTML/JS shape but cannot prove that the rendered UI is XSS-safe, that concurrent saves don't corrupt `.forge.json`, that empty-state UX flows correctly, or that the cross-run card renders against a realistic 30+ run history. S8 runs 8 testbed scenarios against `E:\GitHub\plan-forge-testbed` using `forge_testbed_run` + Playwright (`run_playwright_code`) for genuine browser interactions. XSS scenario specifically MUST run in a real browser — JSDOM sanitization tests don't catch every payload class.
 
 ---
 
@@ -206,7 +219,21 @@ Run ALL new test suites together; verify they don't regress each other, existing
 
 **Gate**: `bash -c "cd pforge-mcp && npx vitest run"` returns 0; **zero** failed tests across the workspace.
 
-### S8 — Docs sweep + screenshots
+### S8 — Testbed E2E + real-browser validation
+
+Exercises the dashboard against the real testbed at `E:\GitHub\plan-forge-testbed`. Launches a dashboard server pointed at the testbed, then runs 8 scenarios via `forge_testbed_run` + Playwright (`run_playwright_code`) for browser interactions. Catches what JSDOM and vitest cannot: real-browser XSS evaluation, concurrent-save race conditions, deep-link focus behavior, real-network performance, cross-run card under realistic data volumes.
+
+For each scenario in §"Testbed scenarios + browser tests" list (under Scope Contract):
+1. Create the scenario fixture JSON file (8 fixtures total)
+2. Add corresponding test in `pforge-mcp/tests/testbed-dashboard-ui.test.mjs` that calls `forge_testbed_run({ scenarioId })`
+3. For browser scenarios, fixture `execute` step invokes Playwright via `run_playwright_code` with the scenario's specific actions + assertions
+4. Verify all fixture assertions pass; XSS scenario MUST verify `window.__pwned` undefined AND zero `<script>` / `<iframe>` / `javascript:` in rendered DOM
+
+Also re-runs the existing `forge_testbed_happypath` suite to verify this phase did not regress any pre-existing scenario.
+
+**Gate**: `bash -c "cd pforge-mcp && npx vitest run tests/testbed-dashboard-ui.test.mjs"` returns 0; `forge_testbed_findings --severity blocker` AND `--severity high` both return zero findings for this phase.
+
+### S9 — Docs sweep + screenshots
 
 - Capture screenshots per §"Docs sweep" list using existing `capture-screenshots.mjs` infrastructure
 - Update manual pages per §"Docs sweep" list
@@ -215,12 +242,12 @@ Run ALL new test suites together; verify they don't regress each other, existing
 
 **Gate**: `bash -c "ls docs/manual/assets/screenshots/dashboard-settings-forgemaster.png docs/manual/assets/screenshots/dashboard-observer-narrations.png docs/manual/assets/screenshots/dashboard-cross-run-anomalies.png docs/manual/assets/screenshots/dashboard-auditor-report.png"` returns 0.
 
-### S9 — Retro
+### S10 — Retro
 
 Append §"What actually shipped" to this plan file:
 - Final commit SHAs per slice
 - Any deviations from the draft (sliced added/removed/reordered, scope drift)
-- Known gotchas surfaced during execution
+- Known gotchas surfaced during execution (especially any testbed-only failures caught in S8)
 - Carryover for next phase (e.g., per-run drill-down on cross-run anomalies, auditor PR-opening UI, mobile-responsive cards)
 
 **Gate**: `bash -c "grep -q '## What actually shipped' docs/plans/Phase-AUDITOR-AUTOMATION-UI-PLAN.md"` returns 0.
@@ -238,6 +265,9 @@ Append §"What actually shipped" to this plan file:
 5. After Cluster B: clicking "Refresh" on the cross-run anomalies card MUST invoke `forge_watch({ mode: "cross-run" })` server-side and render the response within 2 s for `.forge/runs/` directories with ≤ 50 runs.
 6. After Cluster B: the auditor latest-report card MUST sanitize any `<script>` or raw HTML tags in `.forge/health/latest.md` before rendering — verified by feeding a fixture report with injected `<script>alert(1)</script>` and asserting no script tag in rendered DOM.
 7. Across the whole phase: every test from S0 through S7 MUST pass. Pre-existing dashboard suites MUST NOT regress. Parent phase's tests MUST NOT regress.
+8. After S8: all 8 testbed scenarios MUST exit `passed`. XSS scenario specifically MUST verify `window.__pwned` is undefined AND assert zero `<script>`, `<iframe>`, or `javascript:` URLs present in the rendered DOM — not just "sanitization function returned cleaned string".
+9. After S8: `forge_testbed_findings --severity blocker` and `--severity high` MUST both return zero findings attributable to this phase.
+10. After S8: dashboard-settings-concurrent-save scenario MUST NOT produce a partially-written or syntactically-invalid `.forge.json`. Last-write-wins atomicity is mandatory.
 
 ### SHOULD
 
@@ -250,9 +280,11 @@ Append §"What actually shipped" to this plan file:
 
 ## Definition of Done
 
-- [ ] All 9 slices' gates green; S7 full QA green; S8 screenshots present
+- [ ] All 10 slices' gates green; S7 unit QA green; S8 testbed E2E + browser green; S9 screenshots present
 - [ ] Reviewer-Gate sign-off (Session 3): no Scope Contract drift, no Forbidden Action triggered, all MUST criteria met
+- [ ] All 8 testbed scenario fixtures committed to `docs/plans/testbed-scenarios/`
 - [ ] All four screenshots captured and committed under `docs/manual/assets/screenshots/`
+- [ ] `forge_testbed_findings --severity blocker` and `--severity high` both return zero findings for this phase
 - [ ] `forge_capabilities` output mentions dashboard surfaces for observer/auditor/cross-run
 - [ ] `CHANGELOG.md` entry promoted from `[Unreleased]` → `[<next-MINOR>] — YYYY-MM-DD — Forge-Master Dashboard Surfaces` per the release checklist
 
@@ -267,6 +299,9 @@ Halt execution and request human review if any of these fire:
 - Observer narrations card displays narrations that are NOT in Brain (means event fired but capture failed — bug in parent phase, escalate to parent's authors)
 - Cross-run watcher endpoint times out >5 s consistently for ≤50-run repos — performance regression vs. parent phase's SHOULD criterion #2
 - Any new `cfg-*` field accidentally collides with an existing field ID (Phase-30 mapping test catches this — do not rename around it)
+- S8 `dashboard-xss-injection` scenario shows ANY of: `window.__pwned` set, `<script>` in DOM, `<iframe>` in DOM, `javascript:` URL in any href/src — XSS bug; do not ship until fixed AND a regression test added to lock the payload class
+- S8 `dashboard-settings-concurrent-save` scenario produces invalid JSON in testbed's `.forge.json` — atomic-write race bug; the existing `POST /api/config` write path needs review, not just this phase's new fields
+- S8 modifies the testbed's git tree without complete teardown — testbed isolation breach
 
 ---
 
@@ -280,9 +315,10 @@ Halt execution and request human review if any of these fire:
 - S4: `feat(dashboard): observer narrations card`
 - S5: `feat(dashboard): cross-run watcher anomalies card`
 - S6: `feat(dashboard): auditor latest-report card with sanitized markdown render`
-- S7: `test(dashboard-ui): S7 — full QA sweep`
-- S8: `docs(dashboard-ui): S8 — screenshots + manual updates`
-- S9: `docs(plans): S9 — retro for Phase-AUDITOR-AUTOMATION-UI`
+- S7: `test(dashboard-ui): S7 — full unit QA sweep`
+- S8: `test(dashboard-ui): S8 — testbed E2E + real-browser scenarios`
+- S9: `docs(dashboard-ui): S9 — screenshots + manual updates`
+- S10: `docs(plans): S10 — retro for Phase-AUDITOR-AUTOMATION-UI`
 
 All commits land on `master`. PreCommit chain runs on each.
 

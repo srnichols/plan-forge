@@ -4,9 +4,9 @@
 > **Source**: [docs/research/gh-aw-agent-factory-comparison.md](../research/gh-aw-agent-factory-comparison.md) §3 A4 (meta-agent) + carryover from Phase-WORKER-GUARDRAILS retro.
 > **Tracks**: `pforge-mcp/orchestrator.mjs` (end-of-run hook + watcher cross-run mode), `pforge-master/` (new observer tool + budget + prompt), `.github/agents/plan-health-auditor.agent.md` (data-source widening), `.forge.json` schema (3 new opt-in blocks), CLI surface (`pforge master observe`), docs sweep.
 > **Estimated cost**: medium. Most work is wiring on existing infra. Cluster C is the only LLM-cost-additive slice and is gated behind opt-in + per-day budget cap.
-> **Pipeline**: Specify ✅ → Harden ⏳ → HOLD → Execute → S9 QA → S10 docs → S11 retro.
+> **Pipeline**: Specify ✅ → Harden ⏳ → HOLD → Execute → S9 unit QA → S10 testbed E2E + chaos → S11 docs → S12 retro.
 > **Recommended starting cluster**: **Cluster A — Auditor auto-invoke** (S0 → S1 → S2) because it validates that the A4 auditor produces useful output before we invest in Clusters B and C.
-> **Session budget**: 12 slices. Recommended break points: **commit + new session after S2** (end of Cluster A — gives time to evaluate auditor signal quality before B/C build on it) and **after S6** (end of Cluster C infra slices, before reasoning prompt work).
+> **Session budget**: 13 slices. Recommended break points: **commit + new session after S2** (end of Cluster A — gives time to evaluate auditor signal quality before B/C build on it), **after S6** (end of Cluster C infra slices, before reasoning prompt work), and **after S9** (unit QA green; fresh session for testbed E2E which has different failure modes than unit tests).
 
 ---
 
@@ -68,7 +68,7 @@ Each piece is opt-in. No existing plan, hook, or config needs editing for the ph
 - `pforge-master/src/allowlist.mjs` — register `forge_master_observe` description for the tool catalog
 - `pforge.ps1` + `pforge.sh` — `pforge master observe --start | --stop | --status` subcommand wrapping the MCP tool
 
-**Tests** (every slice + S9):
+**Tests** (every slice + S9 + S10):
 - `pforge-mcp/tests/auditor-auto-invoke.test.mjs` (new — covers S1 + S2)
 - `pforge-mcp/tests/watcher-cross-run-mode.test.mjs` (new — covers S3 + S4)
 - `pforge-master/tests/observer-loop.test.mjs` (new — S5)
@@ -77,7 +77,18 @@ Each piece is opt-in. No existing plan, hook, or config needs editing for the ph
 - `pforge-master/tests/observer-cli.test.mjs` (new — S8)
 - Updates to any existing test that asserts the old "Forge-Master has 1 tool only" invariant (search.test.mjs, self-test, etc.)
 
-**Docs sweep** (S10):
+**Testbed scenarios** (S10 deliverables, executed via existing `forge_testbed_run` framework against `E:\GitHub\plan-forge-testbed` per `.forge.json` `testbed.path`):
+- `docs/plans/testbed-scenarios/auditor-auto-invoke-on-failure.json` — trigger a deliberate plan failure on the testbed, assert `.forge/health/latest.md` appears within 90 s; assert auditor tokens attribute to `forge-master` source (not parent run) via `forge_cost_report`
+- `docs/plans/testbed-scenarios/auditor-auto-invoke-every-n.json` — run 5 small plans on testbed with `everyNRuns: 5`, assert exactly 1 auditor report generated; counter resets to 0
+- `docs/plans/testbed-scenarios/auditor-no-double-fire.json` — run a plan that both fails AND hits `everyNRuns` threshold; assert single auditor invocation
+- `docs/plans/testbed-scenarios/watcher-cross-run-anomalies.json` — run `forge_watch({ mode: "cross-run" })` against testbed's real `.forge/runs/` (has 30+ historical runs); assert `cross-run.*` codes present and `recommendFromAnomalies()` returns non-empty
+- `docs/plans/testbed-scenarios/observer-mute-by-default.json` — fresh testbed config; invoke `forge_master_observe`; assert refusal with "observer disabled" error and zero LLM cost in `cost-history.json`
+- `docs/plans/testbed-scenarios/observer-budget-fail-closed.json` — enable observer with `maxUsdPerDay: 0.01`; replay 100 events from `hub-events.jsonl`; assert spend never exceeds cap, exactly the right number of narrations happen before budget block, block event logged
+- `docs/plans/testbed-scenarios/observer-process-lifecycle.json` — `pforge master observe --start --detach` → verify pid file → send SIGTERM → `--stop` graceful exit → verify pid file removed; restart, send 50 hub events, verify all consumed
+- `docs/plans/testbed-scenarios/observer-chaos-kill-mid-narration.json` — start observer; send batch that triggers narration; SIGKILL observer mid-LLM-call; verify (a) Brain has no half-written narration, (b) budget state shows no phantom spend, (c) ask-mode Forge-Master still responds normally
+- `docs/plans/testbed-scenarios/auditor-spawn-isolation.json` — force auditor auto-invoke 3 times; assert each spawn appears as separate child process in process tree; assert tokens land in `forge-master` source, never in parent run's slice budgets
+
+**Docs sweep** (S11):
 - `docs/capabilities.md` + `pforge-mcp/capabilities.mjs` `TOOL_METADATA` — register `forge_master_observe`; document watcher `mode: "cross-run"`
 - `docs/llms.txt` + root `llms.txt` — auto-discovery payload
 - `docs/manual/customization.html` — Lifecycle Hooks section (`hooks.postRun.invokeAuditor` block)
@@ -124,6 +135,8 @@ Each piece is opt-in. No existing plan, hook, or config needs editing for the ph
 - **Do NOT** change `pforge-master/`'s startup banner from "1 tool: forge_master_ask" without updating the corresponding self-test (`--self-test` path at `pforge-master/server.mjs:183-186`).
 - **Do NOT** hardcode any specific vendor model identifier (e.g., `"claude-opus-4.7"`, `"gpt-5"`, `"grok-4"`) in `observer-*.mjs`, `model-resolver.mjs`, the auditor agent file, or the system prompts. Model selection MUST flow through `modelTier` → registry resolution. Vendor IDs age out; capability tiers don't.
 - **Do NOT** make `modelTier` default to anything other than `null` (inherit). Picking a non-inherit default would change Forge-Master's effective model behind the user's back.
+- **Do NOT** push commits, tags, or branches to the testbed repository at `E:\GitHub\plan-forge-testbed` during S10. Testbed scenarios MUST be self-contained (setup → execute → teardown) and leave the testbed git tree exactly as found. If a scenario needs to mutate testbed files, restore them in `teardown`.
+- **Do NOT** skip the `teardown` step in any testbed fixture. Skipping teardown poisons later scenarios and breaks the suite's idempotency guarantee.
 
 ---
 
@@ -145,6 +158,7 @@ Decisions locked at draft time; Step-2 hardener may sharpen but should not re-li
 12. **Naming** — tool is `forge_master_observe` (verb-final, mirrors `forge_master_ask`). CLI is `pforge master observe`. Config block is `forgeMaster.observer`. Internal modules are `observer-*.mjs` under `pforge-master/src/`.
 13. **Configurable model per role, sensible inherit-default** — observer and auditor each expose a `modelTier` knob (`"flagship" | "mid" | "fast" | null`) under `forgeMaster.observer.modelTier` and `forgeMaster.auditor.modelTier`. Default for both is `null` = inherit ask mode's model — so out-of-the-box behavior is unchanged. Operators who care can dial each role independently: observer often wants `mid` or `fast` (high frequency, batch latency budget), auditor often wants `flagship` (infrequent, deep retrospective synthesis). Knob exists for both roles even though only observer is built this phase, because auditor benefits from the same plumbing and adding it later would require schema churn.
 14. **Capability tier, not vendor model ID** — `modelTier` is `"flagship" | "mid" | "fast" | null`, NOT `"claude-opus-4.7"` or `"gpt-5"`. The existing model registry resolves tiers to concrete vendor models. Rationale: vendor IDs (Opus 4.7, GPT-5, Grok-4) age out in months; capability tiers are stable. Operators who need vendor-specific selection still have it via the existing provider/model fields elsewhere in the registry — this knob is the *role-scoped* layer on top.
+15. **Testbed E2E + chaos validation is a release gate, not optional** — unit tests (S9) are necessary but insufficient for this phase because all three capabilities (auditor auto-invoke, cross-run watcher, observer) interact with real processes, real hub events, real LLM calls, and real budget state on disk. S10 runs against `E:\GitHub\plan-forge-testbed` via the existing `forge_testbed_run` framework (no new framework). Includes chaos scenarios (kill mid-narration, force race conditions) because budget atomicity and process isolation cannot be unit-tested credibly.
 
 ---
 
@@ -249,18 +263,32 @@ Run ALL new test suites together; verify they don't regress each other or existi
 
 **Gate**: `bash -c "cd pforge-mcp && npx vitest run && cd ../pforge-master && npx vitest run"` returns 0; **zero** failed tests across both workspaces.
 
-### S10 — Docs sweep + auto-discovery
+### S10 — Testbed E2E + chaos validation
+
+Exercises every capability against the real testbed at `E:\GitHub\plan-forge-testbed` (path resolved via `.forge.json` `testbed.path`). Catches failure modes unit tests cannot: real process lifecycle, real hub events, real budget-state atomicity under SIGKILL, real cost attribution.
+
+For each scenario in §"Testbed scenarios" list (under Scope Contract):
+1. Create the scenario fixture JSON file (8 fixtures total)
+2. Add corresponding test in `pforge-mcp/tests/testbed-auditor-automation.test.mjs` that calls `forge_testbed_run({ scenarioId })`
+3. Verify assertions in fixture all pass
+4. For chaos scenarios specifically: verify the system reaches a clean state after the chaos event (no orphaned processes, no half-written state files, no budget phantom spend)
+
+Also runs the existing `forge_testbed_happypath` suite to verify this phase did not regress any pre-existing testbed scenario.
+
+**Gate**: `bash -c "cd pforge-mcp && npx vitest run tests/testbed-auditor-automation.test.mjs && node -e 'const r=require(\"./server.mjs\").forge_testbed_happypath({dryRun:false}); process.exit(r.then?0:1)'"` returns 0; defect-log shows zero new findings at severity `blocker` or `high`.
+
+### S11 — Docs sweep + auto-discovery
 
 Per the §"Docs sweep" list in Scope Contract. Plus regenerate `forge_capabilities` output and verify all new tools/flags/configs appear.
 
 **Gate**: `bash -c "node pforge-mcp/capabilities.mjs --check && grep -q 'forge_master_observe' docs/capabilities.md && grep -q 'hooks.postRun.invokeAuditor' docs/manual/forge-json-reference.html"` returns 0.
 
-### S11 — Retro
+### S12 — Retro
 
 Append §"What actually shipped" to this plan file:
 - Final commit SHAs per slice
 - Any deviations from the draft (sliced added/removed/reordered, scope drift)
-- Known gotchas surfaced during execution
+- Known gotchas surfaced during execution (including any testbed-only failures caught in S10)
 - Carryover for next phase (e.g., dashboard card UI for observer, A4 auto-PR mode, observer cross-machine aggregation)
 
 **Gate**: `bash -c "grep -q '## What actually shipped' docs/plans/Phase-AUDITOR-AUTOMATION-PLAN.md"` returns 0.
@@ -278,6 +306,9 @@ Append §"What actually shipped" to this plan file:
 5. After Cluster C: with `observer.enabled: true` and a `maxUsdPerDay: 0.01` budget exhausted in the current day, the observer MUST skip narration generation and log a budget-block event. No LLM call may occur.
 6. After Cluster C: `pforge-master/server.mjs --self-test` MUST report exactly 2 tools (`forge_master_ask`, `forge_master_observe`) and exit 0.
 7. Across the whole phase: every test from S0 through S9 MUST pass. Existing suites MUST NOT regress.
+8. After S10: all 8 testbed scenarios MUST exit `passed`. Any `blocker`- or `high`-severity finding in `forge_testbed_findings` output is a release-stop.
+9. After S10: `observer-chaos-kill-mid-narration` and `observer-budget-fail-closed` scenarios MUST pass without modification or retry. Flaky behavior on either is a release-stop — budget atomicity and process isolation cannot be "good enough".
+10. After S10: `forge_cost_report` MUST show auditor spawn tokens attributed to `forge-master` source. Zero auditor tokens may attribute to the parent run.
 
 ### SHOULD
 
@@ -290,8 +321,10 @@ Append §"What actually shipped" to this plan file:
 
 ## Definition of Done
 
-- [ ] All 12 slices' gates green; S9 full QA green; S10 docs gate green
+- [ ] All 13 slices' gates green; S9 unit QA green; S10 testbed E2E + chaos green; S11 docs gate green
 - [ ] Reviewer-Gate sign-off (Session 3): no Scope Contract drift, no Forbidden Action triggered, all MUST criteria met
+- [ ] All 8 testbed scenario fixtures committed to `docs/plans/testbed-scenarios/`
+- [ ] `forge_testbed_findings --severity blocker` and `--severity high` both return zero findings for this phase
 - [ ] Postmortem written; cost ≤ projected band; analyze score ≥ 90
 - [ ] Auto-discovery (`forge_capabilities`) lists new tool, new config blocks, new anomaly codes
 - [ ] `CHANGELOG.md` entry promoted from `[Unreleased]` → `[<next-MINOR>] — YYYY-MM-DD — Auditor Automation (Observer + Cross-Run Watcher)` per the release checklist (this phase = MINOR, multiple `feat:` commits)
@@ -307,6 +340,9 @@ Halt execution and request human review if any of these fire:
 - Cross-run watcher returns anomalies that contradict the auditor's findings on the same data (means rule classifier and LLM disagree — needs human triage before continuing)
 - Auditor auto-invoke creates an infinite loop (auditor's own LLM call triggers a "completed run" event that re-triggers auditor) — must add re-entrancy guard before proceeding
 - Hub WebSocket disconnect rate >5% during S5 testing — symptoms of port contention; needs investigation before observer can be relied on
+- S10 chaos scenario `observer-chaos-kill-mid-narration` shows phantom spend in budget state or orphaned narration in Brain — atomicity bug; do not ship until fixed
+- S10 scenario `auditor-spawn-isolation` shows ANY auditor tokens attributing to parent run — cost-attribution bug; violates Resolved Decision #9
+- S10 testbed dirties or commits to its own git tree without explicit fixture teardown — testbed isolation breach; this phase MUST NOT push commits to the testbed repo
 
 ---
 
@@ -322,9 +358,10 @@ Halt execution and request human review if any of these fire:
 - S6: `feat(forge-master): observer budget caps + fail-closed enforcement`
 - S7: `feat(forge-master): observer reasoning loop with budgeted LLM call`
 - S8: `feat(cli): pforge master observe subcommand`
-- S9: `test(auditor-automation): S9 — full QA sweep across both workspaces`
-- S10: `docs(auditor-automation): S10 — docs sweep + auto-discovery`
-- S11: `docs(plans): S11 — retro for Phase-AUDITOR-AUTOMATION`
+- S9: `test(auditor-automation): S9 — full unit QA sweep across both workspaces`
+- S10: `test(auditor-automation): S10 — testbed E2E + chaos scenarios`
+- S11: `docs(auditor-automation): S11 — docs sweep + auto-discovery`
+- S12: `docs(plans): S12 — retro for Phase-AUDITOR-AUTOMATION`
 
 All commits land on `master`. PreCommit chain (shipped in WORKER-GUARDRAILS A3) runs on each.
 

@@ -261,6 +261,7 @@ export function resolveBashPath() {
       encoding: "utf-8",
       timeout: 5000,
       stdio: ["ignore", "pipe", "ignore"],
+      windowsHide: true,
     }).trim();
     for (const candidate of raw.split(/\r?\n/)) {
       const line = candidate.trim();
@@ -694,6 +695,9 @@ export function runGate(command, cwd, opts = {}) {
         env: { ...process.env, NO_COLOR: "1" },
         stdio: ["ignore", "pipe", "pipe"],
         shell: false,
+        // Bug #121 / spawn-storm fix: suppress the console window flash that
+        // appears on every gate execution when running under a piped-stdio host.
+        windowsHide: true,
       });
       return { success: true, output: (stdoutBuf || "").trim(), stderr: "", error: "", exitCode: 0 };
     } catch (err) {
@@ -768,6 +772,9 @@ export function runGate(command, cwd, opts = {}) {
             PATH: `${cwd}${process.platform === "win32" ? ";" : ":"}${process.env.PATH || ""}`,
           },
           stdio: ["ignore", "pipe", "pipe"],
+          // Bug #121 / spawn-storm fix: suppress the bash console window flash
+          // on Windows for every bash-dispatched gate.
+          windowsHide: true,
         });
         return { success: true, output: (output || "").trim(), stderr: "", error: "", exitCode: 0 };
       } catch (err) {
@@ -5702,7 +5709,8 @@ export function autoCommitSliceIfDirty({
     }
     // Issue #162: use execFileSync with array args so the shell never sees the
     // commit message — prevents breakage when slice titles contain ", ', `, $().
-    execFileSync("git", ["commit", "-m", commitMessage], { cwd, encoding: "utf-8", timeout: 15_000 });
+    // windowsHide: suppress per-slice git.exe console flash (spawn-storm fix).
+    execFileSync("git", ["commit", "-m", commitMessage], { cwd, encoding: "utf-8", timeout: 15_000, windowsHide: true });
     const sha = execSync("git rev-parse HEAD", { cwd, encoding: "utf-8", timeout: 5_000 }).trim();
 
     // #186 v2.96.2: capture commit stats so the orchestrator can populate

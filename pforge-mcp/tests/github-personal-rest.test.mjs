@@ -104,51 +104,51 @@ function get(path) {
 }
 
 // ─── 1. Full happy-path ────────────────────────────────────────────────────────
+// One request shared across all assertions in this describe block.
 
 describe("GET /api/github-personal — full happy path (owner+repo via query)", () => {
-  beforeAll(() => mock.updateScenarios(HAPPY_SCENARIOS));
+  let res;
+  let body;
 
-  it("returns HTTP 200", async () => {
-    const res = await get("/api/github-personal?owner=octocat&repo=Hello-World");
+  beforeAll(async () => {
+    mock.updateScenarios(HAPPY_SCENARIOS);
+    res  = await get("/api/github-personal?owner=octocat&repo=Hello-World");
+    body = await res.json();
+  }, 20_000);
+
+  it("returns HTTP 200", () => {
     expect(res.status).toBe(200);
   });
 
-  it("response has ok=true", async () => {
-    const body = await get("/api/github-personal?owner=octocat&repo=Hello-World").then((r) => r.json());
+  it("response has ok=true", () => {
     expect(body.ok).toBe(true);
   });
 
-  it("user is populated with the expected login", async () => {
-    const body = await get("/api/github-personal?owner=octocat&repo=Hello-World").then((r) => r.json());
+  it("user is populated with the expected login", () => {
     expect(body.user).not.toBeNull();
     expect(body.user.login).toBe("octocat");
   });
 
-  it("repo is populated with the expected name", async () => {
-    const body = await get("/api/github-personal?owner=octocat&repo=Hello-World").then((r) => r.json());
+  it("repo is populated with the expected name", () => {
     expect(body.repo).not.toBeNull();
     expect(body.repo.name).toBe("Hello-World");
   });
 
-  it("copilotSignal is populated with total and withCopilot", async () => {
-    const body = await get("/api/github-personal?owner=octocat&repo=Hello-World").then((r) => r.json());
+  it("copilotSignal is populated with total and withCopilot", () => {
     expect(body.copilotSignal).not.toBeNull();
     expect(typeof body.copilotSignal.total).toBe("number");
     expect(typeof body.copilotSignal.withCopilot).toBe("number");
   });
 
-  it("errors object is empty on happy path", async () => {
-    const body = await get("/api/github-personal?owner=octocat&repo=Hello-World").then((r) => r.json());
+  it("errors object is empty on happy path", () => {
     expect(Object.keys(body.errors)).toHaveLength(0);
   });
 
-  it("_meta.ghAuthDetected is true", async () => {
-    const body = await get("/api/github-personal?owner=octocat&repo=Hello-World").then((r) => r.json());
+  it("_meta.ghAuthDetected is true", () => {
     expect(body._meta.ghAuthDetected).toBe(true);
   });
 
-  it("_meta.defaultsFrom is 'query'", async () => {
-    const body = await get("/api/github-personal?owner=octocat&repo=Hello-World").then((r) => r.json());
+  it("_meta.defaultsFrom is 'query'", () => {
     expect(body._meta.defaultsFrom).toBe("query");
   });
 });
@@ -156,21 +156,25 @@ describe("GET /api/github-personal — full happy path (owner+repo via query)", 
 // ─── 2. Missing gh auth ────────────────────────────────────────────────────────
 
 describe("GET /api/github-personal — gh auth failure", () => {
-  beforeAll(() => mock.updateScenarios(AUTH_FAIL_SCENARIOS));
+  let res;
+  let body;
 
-  it("still returns HTTP 200 (never 403 or 500)", async () => {
-    const res = await get("/api/github-personal?owner=octocat&repo=Hello-World");
+  beforeAll(async () => {
+    mock.updateScenarios(AUTH_FAIL_SCENARIOS);
+    res  = await get("/api/github-personal?owner=octocat&repo=Hello-World");
+    body = await res.json();
+  }, 20_000);
+
+  it("still returns HTTP 200 (never 403 or 500)", () => {
     expect(res.status).toBe(200);
   });
 
-  it("user is null and errors.user is 'auth'", async () => {
-    const body = await get("/api/github-personal?owner=octocat&repo=Hello-World").then((r) => r.json());
+  it("user is null and errors.user is 'auth'", () => {
     expect(body.user).toBeNull();
     expect(body.errors.user).toBe("auth");
   });
 
-  it("_meta.ghAuthDetected is false", async () => {
-    const body = await get("/api/github-personal?owner=octocat&repo=Hello-World").then((r) => r.json());
+  it("_meta.ghAuthDetected is false", () => {
     expect(body._meta.ghAuthDetected).toBe(false);
   });
 });
@@ -178,21 +182,25 @@ describe("GET /api/github-personal — gh auth failure", () => {
 // ─── 3. Bad owner/repo (repo 404) ─────────────────────────────────────────────
 
 describe("GET /api/github-personal — bad repo (404)", () => {
-  beforeAll(() => mock.updateScenarios(BAD_REPO_SCENARIOS));
+  let res;
+  let body;
 
-  it("still returns HTTP 200 (never 404)", async () => {
-    const res = await get("/api/github-personal?owner=octocat&repo=nonexistent");
+  beforeAll(async () => {
+    mock.updateScenarios(BAD_REPO_SCENARIOS);
+    res  = await get("/api/github-personal?owner=octocat&repo=nonexistent");
+    body = await res.json();
+  }, 20_000);
+
+  it("still returns HTTP 200 (never 404)", () => {
     expect(res.status).toBe(200);
   });
 
-  it("user is populated (user call succeeded independently)", async () => {
-    const body = await get("/api/github-personal?owner=octocat&repo=nonexistent").then((r) => r.json());
+  it("user is populated (user call succeeded independently)", () => {
     expect(body.user).not.toBeNull();
     expect(body.user.login).toBe("octocat");
   });
 
-  it("repo is null and errors.repo is 'not-found'", async () => {
-    const body = await get("/api/github-personal?owner=octocat&repo=nonexistent").then((r) => r.json());
+  it("repo is null and errors.repo is 'not-found'", () => {
     expect(body.repo).toBeNull();
     expect(body.errors.repo).toBe("not-found");
   });
@@ -201,30 +209,26 @@ describe("GET /api/github-personal — bad repo (404)", () => {
 // ─── 4. Defaults from git remote ──────────────────────────────────────────────
 
 describe("GET /api/github-personal — defaults from git remote", () => {
-  beforeAll(() => mock.updateScenarios(HAPPY_SCENARIOS));
-
   it("returns 200 with valid response shape when owner/repo absent", async () => {
-    const res = await get("/api/github-personal");
-    expect(res.status).toBe(200);
-    const body = await res.json();
-    expect(body.ok).toBe(true);
+    mock.updateScenarios(HAPPY_SCENARIOS);
+    const r    = await get("/api/github-personal");
+    const b = await r.json();
+    expect(r.status).toBe(200);
+    expect(b.ok).toBe(true);
     // _meta.defaultsFrom must be either 'origin' (git available) or 'query'
-    expect(["origin", "query"]).toContain(body._meta.defaultsFrom);
-  });
+    expect(["origin", "query"]).toContain(b._meta.defaultsFrom);
+  }, 20_000);
 });
 
 // ─── 5. perPage cap ───────────────────────────────────────────────────────────
 
 describe("GET /api/github-personal — perPage cap at 200", () => {
-  beforeAll(() => mock.updateScenarios(HAPPY_SCENARIOS));
-
   it("returns 200 when perPage=999 (cap applied silently)", async () => {
-    const res = await get(
-      "/api/github-personal?owner=octocat&repo=Hello-World&perPage=999"
-    );
-    expect(res.status).toBe(200);
-    const body = await res.json();
-    expect(body.ok).toBe(true);
-    expect(body.copilotSignal).not.toBeNull();
-  });
+    mock.updateScenarios(HAPPY_SCENARIOS);
+    const r    = await get("/api/github-personal?owner=octocat&repo=Hello-World&perPage=999");
+    const b = await r.json();
+    expect(r.status).toBe(200);
+    expect(b.ok).toBe(true);
+    expect(b.copilotSignal).not.toBeNull();
+  }, 20_000);
 });

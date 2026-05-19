@@ -36,6 +36,12 @@ export const FORGE_MASTER_DEFAULTS = Object.freeze({
   reasoningTiers: Object.freeze({ low: null, medium: null, high: null }),
   defaultTier: null,
   autoEscalate: true,
+  observer: Object.freeze({
+    enabled: false,
+    maxUsdPerDay: 1.0,
+    maxNarrationsPerHour: 6,
+    modelTier: null,
+  }),
 });
 
 const VALID_PROVIDERS = new Set(["githubCopilot", "anthropic", "openai", "xai"]);
@@ -83,6 +89,7 @@ function resolveReasoningProvider(forgeMasterBlock, resolvedModel) {
  *   reasoningTiers: { low: string|null, medium: string|null, high: string|null },
  *   defaultTier: "low"|"medium"|"high"|null,
  *   autoEscalate: boolean,
+ *   observer: { enabled: boolean, maxUsdPerDay: number, maxNarrationsPerHour: number, modelTier: string|null },
  * }}
  */
 export function getForgeMasterConfig({ cwd = process.cwd() } = {}) {
@@ -146,6 +153,37 @@ export function getForgeMasterConfig({ cwd = process.cwd() } = {}) {
     ? block.autoEscalate
     : FORGE_MASTER_DEFAULTS.autoEscalate;
 
+  // ── Observer budget config ────────────────────────────────────────
+  const observerBlock = block?.observer ?? {};
+
+  const observerEnabled = typeof observerBlock.enabled === "boolean"
+    ? observerBlock.enabled
+    : FORGE_MASTER_DEFAULTS.observer.enabled;
+
+  const observerMaxUsdPerDay = (
+    typeof observerBlock.maxUsdPerDay === "number" &&
+    Number.isFinite(observerBlock.maxUsdPerDay) &&
+    observerBlock.maxUsdPerDay >= 0
+  )
+    ? observerBlock.maxUsdPerDay
+    : FORGE_MASTER_DEFAULTS.observer.maxUsdPerDay;
+
+  const observerMaxNarrationsPerHour = (
+    typeof observerBlock.maxNarrationsPerHour === "number" &&
+    Number.isFinite(observerBlock.maxNarrationsPerHour) &&
+    observerBlock.maxNarrationsPerHour >= 0
+  )
+    ? Math.trunc(observerBlock.maxNarrationsPerHour)
+    : FORGE_MASTER_DEFAULTS.observer.maxNarrationsPerHour;
+
+  const VALID_MODEL_TIERS = ["flagship", "mid", "fast"];
+  const observerModelTier = (
+    typeof observerBlock.modelTier === "string" &&
+    VALID_MODEL_TIERS.includes(observerBlock.modelTier)
+  )
+    ? observerBlock.modelTier
+    : FORGE_MASTER_DEFAULTS.observer.modelTier;
+
   return {
     reasoningModel,
     reasoningProvider,
@@ -159,5 +197,11 @@ export function getForgeMasterConfig({ cwd = process.cwd() } = {}) {
     reasoningTiers,
     defaultTier,
     autoEscalate,
+    observer: {
+      enabled: observerEnabled,
+      maxUsdPerDay: observerMaxUsdPerDay,
+      maxNarrationsPerHour: observerMaxNarrationsPerHour,
+      modelTier: observerModelTier,
+    },
   };
 }

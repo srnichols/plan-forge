@@ -7,7 +7,17 @@
 
 ## Current Release
 
-**v3.8.2** (2026-05-20) — CLI-GUIDE Documentation Refresh. Added full CLI-GUIDE entries for 14 commands that existed in `pforge.ps1`/`pforge.sh` but lacked documentation: `digest`, `fm-recall`, `plan-from-sarif`, `sync-spaces`, `forge-home-cleanup`, `timeline`, `patterns`, `graph`, `sync-memories`, `sync-instructions`, `github`, `crucible`, `skills`, and `mcp-call`. Completes v3.6 Documentation Candidate #3.
+**v3.12.0** (2026-05-20) — `pforge-sdk/session-reader` (v0.10.0). New `session-reader` sub-path provides offline access to `.forge/fm-sessions/*.jsonl` Forge-Master conversation session files without a running MCP server. `listSessions`, `readSession`, `readAllSessionTurns` (archive + active, deduped and sorted), `parseSessionLine`, `getLane`, `summarizeSession`. 76 tests.
+
+Previous: **v3.11.0** (2026-05-20) — Anvil, Hallmark, and pipeline tools published on MCP surface. Eight MCP tools now discoverable and callable: `forge_anvil_stat`, `forge_anvil_clear`, `forge_anvil_rebuild`, `forge_anvil_dlq_list`, `forge_anvil_dlq_drain`, `forge_hallmark_show`, `forge_hallmark_verify`, `forge_pipelines_list`. Added `TOOL_NAMES` coverage for `forge_embedding_status`, `forge_local_recall_status`, `forge_local_search`. Refreshed tool-surface fixtures and `docs/manual/api-surface-index.html`.
+
+Previous: **v3.10.2** (2026-05-20) — Phase 55 CLEAN-CODE-SWEEP: eliminated all 4 residual clean-code blocking errors. Split `orchestrator/run-plan.mjs` and `server/rest-api.mjs`, decomposed two `complexity-error` functions, cleared frozen-arrays drift, triaged SKIP-LEAK sites. Final audit: 0 errors.
+
+Previous: **v3.10.1** (2026-05-20) — `forge_audit_export` MCP tool (#098), ACI-paginated audit event export. `GET /api/audit/export` REST endpoint. 12 tests.
+
+Previous: **v3.9.1** (2026-05-19) — `forge_local_recall_status` MCP tool (#097) — diagnostic surface for the local TF-IDF / neural-embedding recall index. `pforge local-recall status` CLI.
+
+Previous: **v3.8.2** (2026-05-20) — CLI-GUIDE Documentation Refresh. Added full CLI-GUIDE entries for 14 commands: `digest`, `fm-recall`, `plan-from-sarif`, `sync-spaces`, `forge-home-cleanup`, `timeline`, `patterns`, `graph`, `sync-memories`, `sync-instructions`, `github`, `crucible`, `skills`, and `mcp-call`. Completes v3.6 Documentation Candidate #3.
 
 Previous: **v3.8.1** `forge_memory_report` now silences 115+ false-positive orphan reports by recognizing 20+ legitimate state files and 20+ known subdirectories, plus ephemeral-pattern exclusions for logs, tmp files, and meta-bug drafts. New `pforge forge-home-cleanup` CLI dispatches to `scripts/forge-home-cleanup.mjs` — moves stale ephemeral files to `.forge/archive/<YYYY-MM>/` and prunes archive slots older than `--max-age-days` (default 90). `.forge/.gitignore` template added. 12 new tests.
 
@@ -62,7 +72,7 @@ See [CHANGELOG.md](CHANGELOG.md) for full release notes.
 | 1 | ~~**Typed REST `client` sub-path for `pforge-sdk@0.4.0`**~~ **DONE (v3.10.3-dev)** — `PForgeClient`, `createClient`, `PForgeClientError`; method groups for runs / memory / crucible / liveguard; generic `tool()` dispatcher. 38 tests. | M | ✅ Shipped as `pforge-sdk@0.4.0` |
 | 2 | **Lattice + Hallmark as standalone catalog extensions** — extract to standalone packages so projects can adopt code-graph or provenance stamping without the full forge. | L | Demand signal from at least 3 external repos. |
 | 3 | ~~**CLI-GUIDE refresh** covering `pforge digest`, `plan-from-sarif`, `sync-spaces`, `hammer-fm`, `fm-session`, `fm-recall` — these commands exist but their CLI-GUIDE entries are stubs.~~ **DONE (v3.8.2)** — Added full entries for `digest`, `fm-recall`, `plan-from-sarif`, `sync-spaces`, `forge-home-cleanup`, `timeline`, `patterns`, `graph`, `sync-memories`, `sync-instructions`, `github`, `crucible`, `skills`, and `mcp-call`. | S | ✅ Triggered by `forge-home-cleanup` CLI addition (v3.8.1) |
-| 4 | **Manual Appendix G — "Unified API Surface Index"** — single appendix tabulating every MCP tool + CLI command + REST endpoint + SDK export with cross-links. | M | After Appendix F stabilizes; or when SDK 0.4.0 lands. |
+| 4 | ~~**Manual Appendix G — "Unified API Surface Index"**~~ **DONE (v3.12.0)** — `docs/manual/api-surface-index.html` (Appendix Q) updated: resolved 3 merge conflicts, added 15 missing MCP tools across 2 new domains (Anvil, Semantic recall), corrected all tool counts (88 listed → 103 total), added `digest-reader` SDK sub-path, expanded REST prefix table. | M | ✅ Shipped — SDK 0.4.0+ landed |
 | 5 | **Landing-page screenshot refresh** — several screenshots on [docs/index.html](docs/index.html), [docs/dashboard.html](docs/dashboard.html), and [docs/shop-tour.html](docs/shop-tour.html) predate the 37-tab dashboard taxonomy. | S | Next visible UI change to the dashboard chrome. |
 | 6 | **L3 retrofit** — wire `forge_diagnose`, `forge_sweep`, `forge_run_skill` through `captureMemory()` and add an `l3Writes` field to `tools.json` for auditable coverage. | M | After v3.6 ships; pre-requisite for "L4 shared tenant" experiment. |
 

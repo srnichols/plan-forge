@@ -9,6 +9,30 @@ Format follows [Keep a Changelog](https://keepachangelog.com/).
 
 ---
 
+## [3.12.0] — 2026-05-20
+
+### Added — `pforge-sdk/session-reader` — offline Forge-Master session access (v0.10.0)
+
+New `pforge-sdk/session-reader` sub-path provides offline access to
+`.forge/fm-sessions/*.jsonl` Forge-Master conversation session files without
+requiring a running MCP server.
+
+- **`src/session-reader.mjs`** — zero-dependency reader module:
+  - `listSessions({ cwd? })` — lists session IDs in `.forge/fm-sessions/`, newest-modified first. Includes only sessions with an active (non-archive) JSONL file.
+  - `readSession({ sessionId, cwd?, max? })` — reads active turn records for a session from `<sessionId>.jsonl`. Respects `max` (most-recent N turns).
+  - `readAllSessionTurns({ sessionId, cwd?, max? })` — reads both archive (`<sessionId>.archive.jsonl`) and active turns, deduplicates by turn number, sorts chronologically. Useful when a session has rotated.
+  - `parseSessionLine(line)` — pure parser for a single JSONL line; returns `null` on blank lines or invalid JSON (no I/O).
+  - `getLane(turn)` — pure helper that extracts the lane string from a turn's `classification` field, handling both string (`"advisory"`) and object (`{ lane: "advisory", score: 0.9 }`) forms.
+  - `summarizeSession(turns)` — pure summary of a loaded turns array: `{ turnCount, lanes[], latestTimestamp, latestUserMessage }`.
+  - Path helpers: `fmSessionsDir`, `sessionFilePath`, `sessionArchivePath`.
+  - Constants: `FM_SESSIONS_DIR_RELATIVE`, `ACTIVE_FILE_SUFFIX`, `ARCHIVE_FILE_SUFFIX`.
+- **`pforge-sdk/package.json`** — new `"./session-reader"` export map entry; version bumped to `0.10.0`.
+- **`src/index.mjs`** — re-exports all `session-reader` symbols from the main entry point.
+- **`tests/session-reader.test.mjs`** — 76 tests covering constants, path helpers, `parseSessionLine` (pure), `listSessions` (empty/populated/archive-only/ignores-non-jsonl), `readSession` (missing/malformed/max/excludes-archive), `readAllSessionTurns` (archive+active combine/dedup/sort/max), `getLane` (string/object/absent/null/edge cases), `summarizeSession` (counts/lanes/timestamps/dedup/empty-message), and 4 round-trip integration tests.
+- **`README.md`** — new `## pforge-sdk/session-reader` section with usage examples, turn record shape table, `summarizeSession` return shape table, and path helpers table. Version bumped to `0.10.0`. Roadmap row added.
+
+---
+
 ## [3.11.0] — 2026-05-20
 
 ### Added — Anvil, Hallmark, and pipeline tools are now published on the MCP surface

@@ -1,6 +1,6 @@
 {
   "name": "pforge-sdk",
-  "version": "0.9.0",
+  "version": "0.10.0",
   "description": "Plan Forge SDK — programmatic access to Plan Forge MCP tool metadata, Hallmark provenance, and the Lattice chunker contract",
   "type": "module",
   "main": "src/index.mjs",
@@ -16,7 +16,8 @@
     "./run-reader": "./src/run-reader.mjs",
     "./plan-reader": "./src/plan-reader.mjs",
     "./thought-reader": "./src/thought-reader.mjs",
-    "./digest-reader": "./src/digest-reader.mjs"
+    "./digest-reader": "./src/digest-reader.mjs",
+    "./session-reader": "./src/session-reader.mjs"
   },
   "scripts": {
     "test": "npx vitest run"

@@ -1,6 +1,6 @@
 # pforge-sdk
 
-**Version**: `0.9.0` · **License**: MIT · **Engines**: Node ≥ 20
+**Version**: `0.10.0` · **License**: MIT · **Engines**: Node ≥ 20
 
 Programmatic SDK for Plan Forge — load MCP tool metadata, build Hallmark provenance envelopes, and validate Lattice code-chunk records from your own Node.js code. Zero runtime dependencies.
 
@@ -38,6 +38,7 @@ npm install file:./pforge-sdk
 | `pforge-sdk/plan-reader` | `src/plan-reader.mjs` | Plan file reader — `listPlans`, `readPlan`, `getPlanStatus`, `getPlanSlices`, path helpers |
 | `pforge-sdk/thought-reader` | `src/thought-reader.mjs` | Thought store reader — `readThoughts`, `readAllThoughts`, `listThoughtSources`, `parseThoughtLine`, path helpers |
 | `pforge-sdk/digest-reader` | `src/digest-reader.mjs` | Digest reader — `listDigests`, `readDigest`, `readLatestDigest`, `overallSeverity`, `getSectionsByMinSeverity`, path helpers |
+| `pforge-sdk/session-reader` | `src/session-reader.mjs` | Forge-Master session reader — `listSessions`, `readSession`, `readAllSessionTurns`, `parseSessionLine`, `getLane`, `summarizeSession`, path helpers |
 
 > **Note**: `pforge-sdk/client` is new in `0.4.0`. It requires a running Plan Forge MCP server (`pforge-mcp/server.mjs`) to be useful. Zero runtime dependencies — uses the global `fetch` (Node ≥ 18).
 > **Note**: `pforge-sdk/anvil` and `pforge-sdk/lattice-query` are new in `0.5.0`. Both are pure and dependency-free.
@@ -46,6 +47,7 @@ npm install file:./pforge-sdk
 > **Note**: `pforge-sdk/plan-reader` is new in `0.7.0`. Provides offline access to plan files in `docs/plans/` without requiring a running MCP server. Zero dependencies beyond `node:fs` / `node:path`.
 > **Note**: `pforge-sdk/thought-reader` is new in `0.8.0`. Provides offline access to `.forge/*.jsonl` thought stores (OpenBrain queue, archive, DLQ, LiveGuard memories) without requiring a running MCP server. Zero dependencies beyond `node:fs` / `node:path`.
 > **Note**: `pforge-sdk/digest-reader` is new in `0.9.0`. Provides offline access to `.forge/digests/*.json` daily digest files without requiring a running MCP server. Includes analysis helpers (`overallSeverity`, `getSectionsByMinSeverity`) that work on in-memory digest objects. Zero dependencies beyond `node:fs` / `node:path`.
+> **Note**: `pforge-sdk/session-reader` is new in `0.10.0`. Provides offline access to `.forge/fm-sessions/*.jsonl` Forge-Master conversation session files without requiring a running MCP server. Includes analysis helpers (`getLane`, `summarizeSession`) that work on in-memory turn arrays. Zero dependencies beyond `node:fs` / `node:path`.
 
 ---
 
@@ -724,7 +726,89 @@ const alertSections = getSectionsByMinSeverity(latest, 'alert');
 
 ---
 
-## Risk levels (auto-approve guidance)
+## `pforge-sdk/session-reader` — Forge-Master session reader
+
+Offline access to `.forge/fm-sessions/*.jsonl` Forge-Master conversation session files
+written by the `pforge-master` session store. Useful for CI scripts, external dashboards,
+or any tool that needs to inspect Forge-Master conversation history without a running
+MCP server. Pure — zero runtime dependencies.
+
+```js
+import {
+  listSessions,
+  readSession,
+  readAllSessionTurns,
+  parseSessionLine,
+  getLane,
+  summarizeSession,
+  fmSessionsDir,
+  sessionFilePath,
+  sessionArchivePath,
+  FM_SESSIONS_DIR_RELATIVE,
+} from 'pforge-sdk/session-reader';
+
+// List all session IDs in .forge/fm-sessions/, newest-modified first
+const ids = listSessions();
+// → ['abc-123', 'def-456', ...]
+
+// Read active turns for a session (excludes archived turns)
+const turns = readSession({ sessionId: ids[0] });
+console.log(turns[0].userMessage);  // → 'What is the plan status?'
+
+// Read all turns including archived (archive + active, sorted by turn number)
+const all = readAllSessionTurns({ sessionId: ids[0] });
+console.log(all.length);  // total turns across archive and active file
+
+// Limit to the 10 most-recent turns:
+const recent = readAllSessionTurns({ sessionId: ids[0], max: 10 });
+
+// Summarize an array of turns
+const summary = summarizeSession(all);
+// → { turnCount: 12, lanes: ['advisory', 'operational'], latestTimestamp: '...', latestUserMessage: '...' }
+
+// Extract the lane from a single turn record (pure helper)
+const lane = getLane(turns[0]);
+// → 'operational'  or  'advisory'  (from string or { lane: '...' } classification)
+
+// Parse a single JSONL line (pure helper, no I/O)
+const record = parseSessionLine('{"turn":1,"userMessage":"hello","classification":"advisory"}');
+// → { turn: 1, userMessage: 'hello', classification: 'advisory' }
+```
+
+All readers are **graceful** — they return `null` or `[]` on missing files rather than throwing.
+
+All functions accept an optional `cwd` parameter (defaults to `process.cwd()`).
+
+### Turn record shape
+
+| Field | Type | Description |
+|---|---|---|
+| `turn` | `number` | 1-based monotonically increasing turn number |
+| `timestamp` | `string` | ISO-8601 UTC timestamp of when the turn was recorded |
+| `userMessage` | `string` | The raw user message text |
+| `classification` | `string \| object` | Forge-Master lane classification — either a lane string or `{ lane, score?, ... }` |
+| `replyHash` | `string` | First 16 hex characters of sha256 of the assistant reply |
+| `toolCalls` | `object[]` | MCP tool calls made during this turn |
+
+### `summarizeSession(turns)` return shape
+
+| Field | Type | Description |
+|---|---|---|
+| `turnCount` | `number` | Total number of turns in the array |
+| `lanes` | `string[]` | Unique classification lanes, sorted alphabetically |
+| `latestTimestamp` | `string \| null` | ISO-8601 timestamp of the most-recent turn with a timestamp |
+| `latestUserMessage` | `string \| null` | The last non-empty user message across all turns |
+
+### Path helpers
+
+| Export | Description |
+|---|---|
+| `fmSessionsDir({ cwd? })` | Absolute path to `<cwd>/.forge/fm-sessions/` |
+| `sessionFilePath({ sessionId, cwd? })` | Absolute path to `<cwd>/.forge/fm-sessions/<sessionId>.jsonl` |
+| `sessionArchivePath({ sessionId, cwd? })` | Absolute path to `<cwd>/.forge/fm-sessions/<sessionId>.archive.jsonl` |
+| `FM_SESSIONS_DIR_RELATIVE` | Platform-native relative path `.forge/fm-sessions` |
+| `ACTIVE_FILE_SUFFIX` | `'.jsonl'` |
+| `ARCHIVE_FILE_SUFFIX` | `'.archive.jsonl'` |
 
 When you write a host that lets agents call Plan Forge tools, use the tool's `riskLevel` to decide what to gate on:
 
@@ -759,7 +843,8 @@ The SDK is intentionally narrow — it covers the artifact contracts (`tools.jso
 | **0.6.0** | `run-reader` sub-path — `listRuns`, `readRunMeta`, `readRunSummary`, `readRunIndex`, `parseEventLine`, path helpers for offline access to `.forge/runs/` artifacts |
 | **0.7.0** | `plan-reader` sub-path — `listPlans`, `readPlan`, `getPlanStatus`, `getPlanSlices`, `plansDir`, `PLANS_DIR_RELATIVE` for offline access to `docs/plans/*.md` plan files |
 | **0.8.0** | `thought-reader` sub-path — `readThoughts`, `readAllThoughts`, `listThoughtSources`, `parseThoughtLine`, `forgeDir`, `thoughtFilePath`, `THOUGHT_SOURCES`, `FORGE_DIR_RELATIVE` for offline access to `.forge/*.jsonl` thought stores |
-| **0.9.0** (current) | `digest-reader` sub-path — `listDigests`, `readDigest`, `readLatestDigest`, `overallSeverity`, `getSectionsByMinSeverity`, `digestsDir`, `digestFilePath`, `DIGESTS_DIR_RELATIVE`, `SEVERITY_LEVELS` for offline access to `.forge/digests/*.json` daily digest files |
+| **0.9.0** | `digest-reader` sub-path — `listDigests`, `readDigest`, `readLatestDigest`, `overallSeverity`, `getSectionsByMinSeverity`, `digestsDir`, `digestFilePath`, `DIGESTS_DIR_RELATIVE`, `SEVERITY_LEVELS` for offline access to `.forge/digests/*.json` daily digest files |
+| **0.10.0** (current) | `session-reader` sub-path — `listSessions`, `readSession`, `readAllSessionTurns`, `parseSessionLine`, `getLane`, `summarizeSession`, `fmSessionsDir`, `sessionFilePath`, `sessionArchivePath`, `FM_SESSIONS_DIR_RELATIVE`, `ACTIVE_FILE_SUFFIX`, `ARCHIVE_FILE_SUFFIX` for offline access to `.forge/fm-sessions/*.jsonl` Forge-Master conversation session files |
 
 Track progress in [docs/V3-CAPABILITY-AUDIT.md](../docs/V3-CAPABILITY-AUDIT.md).
 

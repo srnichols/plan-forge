@@ -95,9 +95,11 @@ log(`   ✓ Parsed ${CHAPTERS.length} chapters, ${SEARCH_SECTIONS.length} indexe
 
 // ─── Step 2: Scan HTML files ───
 log("\n2. Scanning docs/manual/*.html…");
+// plan-forge-manual.html is a generated offline export — not a manual chapter
+const GENERATED_EXPORTS = new Set(["plan-forge-manual.html"]);
 const allHtml = fs
   .readdirSync(MANUAL_DIR)
-  .filter((f) => f.endsWith(".html"))
+  .filter((f) => f.endsWith(".html") && !GENERATED_EXPORTS.has(f))
   .sort();
 log(`   Found ${allHtml.length} HTML files`);
 

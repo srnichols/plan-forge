@@ -30,6 +30,8 @@ The CLI `pforge audit export` continues to stream unbounded output to stdout.
 
 ---
 
+## [3.10.0] — 2026-05-20
+
 ### Added — Offline single-source HTML export for the manual
 
 Closes the last deferred item from the manual-ebook-completion-audit: "Single-source export (PDF / single HTML) — deferred (tooling concern)."

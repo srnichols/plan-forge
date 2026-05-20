@@ -9,6 +9,30 @@ Format follows [Keep a Changelog](https://keepachangelog.com/).
 
 ---
 
+## [3.9.2] — 2026-05-19
+
+### Fixed — Distribution enumeration gap (release-checklist §1b)
+
+The §1b distribution-sync gate (`release-checklist.instructions.md`) had been silently failing for several releases — four shared instruction files existed in the dev repo under `.github/instructions/` but were never copied to consumer projects by `setup.{ps1,sh}` or `pforge update`. Consumers running setup or self-update therefore missed these guardrails until they cloned the dev repo directly.
+
+- **`setup.ps1`** — added 4 entries to `$sharedFiles`
+- **`setup.sh`** — added 4 entries to `SHARED_FILES`
+- **`pforge.ps1`** — added 4 entries to `$sharedInstructions`
+- **`pforge.sh`** — added 4 entries to the `for instr_name in …` loop
+
+Newly enumerated instruction files (now reach consumers):
+
+| File | Auto-loads when editing |
+|---|---|
+| `aci-design.instructions.md` | `pforge-mcp/server.mjs`, tool surfaces |
+| `clean-code.instructions.md` | all files (clean-code review guardrails) |
+| `security.instructions.md` | all files (input validation, command-injection avoidance) |
+| `testing.instructions.md` | `**/*.test.mjs`, `tests/**` |
+
+`release-checklist.instructions.md` remains intentionally excluded (maintainer-only per its own preamble).
+
+---
+
 ## [3.9.1] — 2026-05-19
 
 ### Added — Local recall index status surface (Phase 58)

@@ -2111,6 +2111,42 @@ export const TOOL_METADATA = {
       },
     },
   },
+  forge_embedding_status: {
+    intent: ["embedding", "status", "neural", "tfidf", "local-recall", "diagnostic"],
+    aliases: ["embedding-status", "embeddings-status", "check-embeddings"],
+    cost: "low",
+    maxConcurrent: 10,
+    addedIn: "3.9.0",
+    prerequisites: [],
+    produces: [],
+    consumes: [
+      ".forge/openbrain-queue.jsonl",
+      ".forge/openbrain-queue.archive.jsonl",
+      ".forge/openbrain-dlq.jsonl",
+      ".forge/liveguard-memories.jsonl",
+      ".forge.json",
+    ],
+    sideEffects: [],
+    writesFiles: false,
+    network: false,
+    risk: "low",
+    errors: {},
+    example: {
+      input: {},
+      output: {
+        ok: true,
+        backend: "tfidf",
+        neuralAvailable: false,
+        neuralPackage: "@xenova/transformers",
+        neuralVersion: null,
+        model: "Xenova/all-MiniLM-L6-v2",
+        corpusSize: 42,
+        configuredBackend: "auto",
+        installHint: "npm install --save-optional @xenova/transformers",
+        message: "Active backend: tfidf (neural not installed). neural unavailable — install with: npm install --save-optional @xenova/transformers. Corpus: 42 thoughts in .forge/.",
+      },
+    },
+  },
 };
 
 export const WORKFLOWS = {

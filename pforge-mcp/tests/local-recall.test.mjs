@@ -8,10 +8,14 @@
  *   - vecCosineSimilarity: empty vectors, identical, orthogonal
  *   - isNeuralEmbeddingAvailable: returns boolean (false in test env)
  *   - searchLocalThoughts: empty corpus, no match, ranked results, limit
+ *   - buildCorpusIndex: serialisable shape, round-trip
+ *   - persistIndex / loadCachedIndex: write + reload + staleness detection
+ *   - clearPersistedIndex: deletes cache file
+ *   - getIndexStatus: diagnostic shape
  */
 
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
-import { mkdirSync, writeFileSync, rmSync } from "node:fs";
+import { mkdirSync, writeFileSync, readFileSync, rmSync, existsSync, utimesSync } from "node:fs";
 import { resolve } from "node:path";
 import { tmpdir } from "node:os";
 import { randomUUID } from "node:crypto";
@@ -24,6 +28,11 @@ import {
   isNeuralEmbeddingAvailable,
   searchLocalThoughts,
   _resetNeuralProbeCache,
+  buildCorpusIndex,
+  persistIndex,
+  loadCachedIndex,
+  clearPersistedIndex,
+  getIndexStatus,
 } from "../local-recall.mjs";
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -44,6 +53,12 @@ function writeThoughts(tmpDir, fileName, thoughts) {
   const lines = thoughts.map((t) => JSON.stringify(t)).join("\n");
   writeFileSync(resolve(forgeDir, fileName), lines, "utf-8");
 }
+
+const SAMPLE_THOUGHTS = [
+  { content: "Decision: use JWT authentication token for API security", source: "slice-1" },
+  { content: "Decision: implement database migration strategy", source: "slice-2" },
+  { content: "Decision: add retry logic for network calls", source: "slice-3" },
+];
 
 // ─── readLocalThoughts ───────────────────────────────────────────────────────
 
@@ -230,6 +245,178 @@ describe("isNeuralEmbeddingAvailable", () => {
   });
 });
 
+// ─── buildCorpusIndex ────────────────────────────────────────────────────────
+
+describe("buildCorpusIndex", () => {
+  it("returns serialisable shape with tokenMaps and idf arrays", () => {
+    const idx = buildCorpusIndex(SAMPLE_THOUGHTS);
+    expect(Array.isArray(idx.tokenMaps)).toBe(true);
+    expect(Array.isArray(idx.idf)).toBe(true);
+    expect(idx.tokenMaps).toHaveLength(SAMPLE_THOUGHTS.length);
+    // Each tokenMap is an array of [token, count] pairs
+    for (const tMap of idx.tokenMaps) {
+      expect(Array.isArray(tMap)).toBe(true);
+    }
+  });
+
+  it("round-trips through JSON serialization", () => {
+    const idx = buildCorpusIndex(SAMPLE_THOUGHTS);
+    const json = JSON.stringify(idx);
+    const parsed = JSON.parse(json);
+    expect(parsed.tokenMaps).toHaveLength(SAMPLE_THOUGHTS.length);
+    expect(Array.isArray(parsed.idf)).toBe(true);
+  });
+
+  it("returns empty arrays for empty thought list", () => {
+    const idx = buildCorpusIndex([]);
+    expect(idx.tokenMaps).toHaveLength(0);
+    expect(idx.idf).toHaveLength(0);
+  });
+});
+
+// ─── persistIndex / loadCachedIndex ──────────────────────────────────────────
+
+describe("persistIndex + loadCachedIndex", () => {
+  let tmpDir;
+
+  beforeEach(() => { tmpDir = makeTmpDir(); });
+  afterEach(() => cleanup(tmpDir));
+
+  it("persistIndex is non-fatal when .forge/ does not exist", () => {
+    const idx = buildCorpusIndex(SAMPLE_THOUGHTS);
+    expect(() => persistIndex(tmpDir, idx)).not.toThrow();
+  });
+
+  it("round-trips: persist then load returns hydrated Maps", () => {
+    writeThoughts(tmpDir, "openbrain-queue.jsonl", SAMPLE_THOUGHTS);
+    const idx = buildCorpusIndex(SAMPLE_THOUGHTS);
+    persistIndex(tmpDir, idx, { corpusSize: SAMPLE_THOUGHTS.length });
+
+    const loaded = loadCachedIndex(tmpDir);
+    expect(loaded).not.toBeNull();
+    expect(Array.isArray(loaded.tokenMaps)).toBe(true);
+    expect(loaded.tokenMaps[0]).toBeInstanceOf(Map);
+    expect(loaded.idf).toBeInstanceOf(Map);
+    expect(loaded.idf.size).toBeGreaterThan(0);
+  });
+
+  it("returns null when cache file does not exist", () => {
+    mkdirSync(resolve(tmpDir, ".forge"), { recursive: true });
+    expect(loadCachedIndex(tmpDir)).toBeNull();
+  });
+
+  it("returns null for version mismatch", () => {
+    const forgeDir = resolve(tmpDir, ".forge");
+    mkdirSync(forgeDir, { recursive: true });
+    writeFileSync(
+      resolve(forgeDir, "local-recall-index.json"),
+      JSON.stringify({ version: 999, builtAt: Date.now(), corpusSize: 0, sourceMtimes: {}, index: { tokenMaps: [], idf: [] } }),
+      "utf-8"
+    );
+    expect(loadCachedIndex(tmpDir)).toBeNull();
+  });
+
+  it("returns null for malformed cache file", () => {
+    const forgeDir = resolve(tmpDir, ".forge");
+    mkdirSync(forgeDir, { recursive: true });
+    writeFileSync(resolve(forgeDir, "local-recall-index.json"), "not json", "utf-8");
+    expect(loadCachedIndex(tmpDir)).toBeNull();
+  });
+
+  it("detects stale index when source JSONL is modified after build", async () => {
+    writeThoughts(tmpDir, "openbrain-queue.jsonl", SAMPLE_THOUGHTS);
+
+    // Build and persist with a past builtAt
+    const forgeDir = resolve(tmpDir, ".forge");
+    const srcPath = resolve(forgeDir, "openbrain-queue.jsonl");
+    const idx = buildCorpusIndex(SAMPLE_THOUGHTS);
+
+    // Write index with builtAt in the distant past
+    const record = {
+      version: 1,
+      builtAt: 1000, // epoch + 1 second — guaranteed older than any real file
+      corpusSize: SAMPLE_THOUGHTS.length,
+      sourceMtimes: { "openbrain-queue.jsonl": 1000 },
+      index: idx,
+    };
+    writeFileSync(resolve(forgeDir, "local-recall-index.json"), JSON.stringify(record), "utf-8");
+
+    // Touch the source file to make it newer than builtAt
+    const now = new Date();
+    utimesSync(srcPath, now, now);
+
+    // Should detect stale
+    expect(loadCachedIndex(tmpDir)).toBeNull();
+  });
+});
+
+// ─── clearPersistedIndex ─────────────────────────────────────────────────────
+
+describe("clearPersistedIndex", () => {
+  let tmpDir;
+
+  beforeEach(() => { tmpDir = makeTmpDir(); });
+  afterEach(() => cleanup(tmpDir));
+
+  it("is non-fatal when cache does not exist", () => {
+    mkdirSync(resolve(tmpDir, ".forge"), { recursive: true });
+    expect(() => clearPersistedIndex(tmpDir)).not.toThrow();
+  });
+
+  it("deletes the cache file when it exists", () => {
+    writeThoughts(tmpDir, "openbrain-queue.jsonl", SAMPLE_THOUGHTS);
+    const idx = buildCorpusIndex(SAMPLE_THOUGHTS);
+    persistIndex(tmpDir, idx, { corpusSize: SAMPLE_THOUGHTS.length });
+
+    const cachePath = resolve(tmpDir, ".forge", "local-recall-index.json");
+    expect(existsSync(cachePath)).toBe(true);
+
+    clearPersistedIndex(tmpDir);
+    expect(existsSync(cachePath)).toBe(false);
+  });
+});
+
+// ─── getIndexStatus ──────────────────────────────────────────────────────────
+
+describe("getIndexStatus", () => {
+  let tmpDir;
+
+  beforeEach(() => { tmpDir = makeTmpDir(); });
+  afterEach(() => cleanup(tmpDir));
+
+  it("returns exists:false when .forge/ has no cache", () => {
+    mkdirSync(resolve(tmpDir, ".forge"), { recursive: true });
+    const status = getIndexStatus(tmpDir);
+    expect(status.exists).toBe(false);
+    expect(status.version).toBeNull();
+    expect(status.builtAt).toBeNull();
+  });
+
+  it("returns exists:true with metadata after persist", () => {
+    writeThoughts(tmpDir, "openbrain-queue.jsonl", SAMPLE_THOUGHTS);
+    const idx = buildCorpusIndex(SAMPLE_THOUGHTS);
+    persistIndex(tmpDir, idx, { corpusSize: SAMPLE_THOUGHTS.length });
+
+    const status = getIndexStatus(tmpDir);
+    expect(status.exists).toBe(true);
+    expect(status.version).toBe(1);
+    expect(typeof status.builtAt).toBe("string");
+    expect(status.corpusSize).toBe(SAMPLE_THOUGHTS.length);
+    expect(typeof status.stale).toBe("boolean");
+    expect(typeof status.cacheFile).toBe("string");
+  });
+
+  it("reports stale:false for a fresh index with no source files newer", () => {
+    const forgeDir = resolve(tmpDir, ".forge");
+    mkdirSync(forgeDir, { recursive: true });
+    const idx = buildCorpusIndex([]);
+    persistIndex(tmpDir, idx, { corpusSize: 0 });
+
+    const status = getIndexStatus(tmpDir);
+    expect(status.stale).toBe(false);
+  });
+});
+
 // ─── searchLocalThoughts ────────────────────────────────────────────────────
 
 describe("searchLocalThoughts", () => {
@@ -265,11 +452,7 @@ describe("searchLocalThoughts", () => {
   });
 
   it("returns ranked hits for matching query", async () => {
-    writeThoughts(tmpDir, "openbrain-queue.jsonl", [
-      { content: "Decision: use JWT authentication token for API security", source: "slice-1" },
-      { content: "Decision: implement database migration strategy", source: "slice-2" },
-      { content: "Decision: add retry logic for network calls", source: "slice-3" },
-    ]);
+    writeThoughts(tmpDir, "openbrain-queue.jsonl", SAMPLE_THOUGHTS);
     const result = await searchLocalThoughts("JWT authentication API security", {
       cwd: tmpDir,
       forceBackend: "tfidf",
@@ -351,5 +534,57 @@ describe("searchLocalThoughts", () => {
       forceBackend: "tfidf",
     });
     expect(result.corpusSize).toBeGreaterThan(0);
+  });
+
+  it("builds and caches index on first call, reuses on second call", async () => {
+    writeThoughts(tmpDir, "openbrain-queue.jsonl", SAMPLE_THOUGHTS);
+
+    // First call should build and persist the cache
+    const r1 = await searchLocalThoughts("authentication", { cwd: tmpDir, forceBackend: "tfidf" });
+
+    const cachePath = resolve(tmpDir, ".forge", "local-recall-index.json");
+    expect(existsSync(cachePath)).toBe(true);
+
+    // Second call should use the cached index (same results)
+    const r2 = await searchLocalThoughts("authentication", { cwd: tmpDir, forceBackend: "tfidf" });
+    expect(r1.hits.length).toBe(r2.hits.length);
+    if (r1.hits.length > 0) {
+      expect(r1.hits[0].source).toBe(r2.hits[0].source);
+    }
+  });
+
+  it("noCache:true skips the persisted index", async () => {
+    writeThoughts(tmpDir, "openbrain-queue.jsonl", SAMPLE_THOUGHTS);
+
+    // First call caches
+    await searchLocalThoughts("authentication", { cwd: tmpDir, forceBackend: "tfidf" });
+    // Second call with noCache bypasses it
+    const result = await searchLocalThoughts("authentication", {
+      cwd: tmpDir,
+      forceBackend: "tfidf",
+      noCache: true,
+    });
+    expect(result.hits.length).toBeGreaterThan(0);
+  });
+
+  it("invalidates stale index and rebuilds after corpus changes", async () => {
+    writeThoughts(tmpDir, "openbrain-queue.jsonl", SAMPLE_THOUGHTS);
+    // First search primes the cache
+    await searchLocalThoughts("JWT", { cwd: tmpDir, forceBackend: "tfidf" });
+
+    // Forcibly set builtAt=1 in the cache to simulate staleness
+    const cachePath = resolve(tmpDir, ".forge", "local-recall-index.json");
+    const record = JSON.parse(readFileSync(cachePath, "utf-8"));
+    record.builtAt = 1;
+    writeFileSync(cachePath, JSON.stringify(record), "utf-8");
+
+    // Touch the source file so it is newer than builtAt=1
+    const srcPath = resolve(tmpDir, ".forge", "openbrain-queue.jsonl");
+    const now = new Date();
+    utimesSync(srcPath, now, now);
+
+    // Next search should rebuild (no error, results still come back)
+    const result = await searchLocalThoughts("JWT", { cwd: tmpDir, forceBackend: "tfidf" });
+    expect(result.hits.length).toBeGreaterThan(0);
   });
 });

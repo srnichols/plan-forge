@@ -471,6 +471,16 @@
           <p class="text-gray-500 text-center py-3">Click Refresh to scan the last 14 days of run history.</p>
         </div>
       </div>
+      <!-- Phase-56 — Embedding Backend Status card -->
+      <div id="card-embedding-status" class="mt-4 bg-gray-800 rounded-lg p-4" data-testid="embedding-status-card">
+        <div class="flex items-center justify-between mb-2">
+          <h3 class="text-sm font-semibold text-teal-400">🧠 Embedding Backend</h3>
+          <button onclick="loadEmbeddingStatus()" class="text-xs text-gray-500 hover:text-white px-2 py-0.5 rounded border border-gray-700">↺ Refresh</button>
+        </div>
+        <div id="embedding-status-content" class="text-xs text-gray-500 space-y-1">
+          <p class="text-center py-2">Click Refresh to check embedding backend status.</p>
+        </div>
+      </div>
     </section>
 
     <!-- Review Tab (Phase FORGE-SHOP-02 Slice 02.2) — review queue UI -->

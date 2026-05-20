@@ -124,11 +124,11 @@
     "forge_watch_live"
   ],
   "skills": [
+    "/api-doc-gen",
     "/audit-loop",
     "/code-review",
     "/database-migration",
     "/dependency-audit",
-    "/api-doc-gen",
     "/forge-execute",
     "/forge-quench",
     "/forge-troubleshoot",

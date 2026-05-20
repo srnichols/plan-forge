@@ -1335,4 +1335,14 @@ export const TOOLS = [
       required: ["query"],
     },
   },
+  {
+    name: "forge_embedding_status",
+    description: "Report the current embedding backend status for local semantic search — whether @xenova/transformers (neural, all-MiniLM-L6-v2) or TF-IDF is active, how many thoughts are in the local corpus, and the configured backend override in .forge.json. USE FOR: diagnosing which search backend is active; checking whether to run 'pforge embeddings install'; monitoring embedding health in the dashboard. Returns: { ok, backend, neuralAvailable, neuralVersion, model, corpusSize, configuredBackend, installHint, message }.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        path: { type: "string", description: "Project directory (default: current)" },
+      },
+    },
+  },
 ];

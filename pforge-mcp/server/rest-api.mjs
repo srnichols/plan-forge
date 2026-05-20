@@ -105,6 +105,8 @@ import { exportPlan, exportPlanFromFile } from "../export-plan.mjs";
 import { syncMemories } from "../sync-memories.mjs";
 // v3.0.0 — forge_sync_instructions: generate .github/copilot-instructions.md from forge project context
 import { syncInstructions } from "../sync-instructions.mjs";
+// Phase 55/56 — Local semantic recall + embedding status
+import { isNeuralEmbeddingAvailable, readLocalThoughts } from "../local-recall.mjs";
 // Phase WORKER-GUARDRAILS A2 — forge_diff_classify: classify staged diff by category
 import { classifyDiff } from "../diff-classify.mjs";
 import { ERROR_CODES } from "../enums.mjs";
@@ -287,6 +289,7 @@ export const REST_ROUTES = [
   { method: "POST", path: "/api/copilot-instructions/sync" },
   { method: "GET", path: "/api/auditor/latest" },
   { method: "GET", path: "/api/brain/recall" },
+  { method: "GET", path: "/api/embedding/status" },
 ];
 
 // ─── REST handler sub-helpers (Phase ESLINT-D1 — extracted from arrow handlers) ──
@@ -3086,6 +3089,43 @@ function _registerQuorumMiscRoutes(app) {
         } catch { continue; }
       }
       return res.json({ records, total: files.length, showing: records.length });
+    } catch (err) { res.status(500).json({ error: err.message }); }
+  });
+
+  // Phase-56 — GET /api/embedding/status: embedding backend health
+  app.get("/api/embedding/status", async (req, res) => {
+    try {
+      const cwd = req.query.path ? resolve(req.query.path) : PROJECT_DIR;
+      const neuralAvailable = await isNeuralEmbeddingAvailable();
+      let neuralVersion = null;
+      if (neuralAvailable) {
+        try {
+          const pkgPath = join(cwd, "node_modules", "@xenova", "transformers", "package.json");
+          if (existsSync(pkgPath)) neuralVersion = JSON.parse(readFileSync(pkgPath, "utf-8")).version ?? null;
+        } catch { /* non-fatal */ }
+      }
+      const thoughts = readLocalThoughts(cwd);
+      let configuredBackend = "auto";
+      try {
+        const fj = readForgeJson(cwd);
+        if (fj?.embeddingBackend) configuredBackend = fj.embeddingBackend;
+      } catch { /* .forge.json absent */ }
+      const effectiveBackend = configuredBackend === "tfidf" ? "tfidf"
+        : configuredBackend === "neural" ? (neuralAvailable ? "neural" : "tfidf")
+        : (neuralAvailable ? "neural" : "tfidf");
+      const installHint = neuralAvailable ? null : "npm install --save-optional @xenova/transformers";
+      return res.json({
+        ok: true,
+        backend: effectiveBackend,
+        neuralAvailable,
+        neuralPackage: "@xenova/transformers",
+        neuralVersion,
+        model: "Xenova/all-MiniLM-L6-v2",
+        corpusSize: thoughts.length,
+        configuredBackend,
+        installHint,
+        message: `Active backend: ${effectiveBackend}. Neural: ${neuralAvailable ? "available (v" + (neuralVersion ?? "unknown") + ")" : "unavailable"}. Corpus: ${thoughts.length} thoughts.`,
+      });
     } catch (err) { res.status(500).json({ error: err.message }); }
   });
 }

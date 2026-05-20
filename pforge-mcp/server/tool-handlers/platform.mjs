@@ -84,7 +84,7 @@ import { exportPlan, exportPlanFromFile } from "../../export-plan.mjs";
 import { syncMemories } from "../../sync-memories.mjs";
 import { syncInstructions } from "../../sync-instructions.mjs";
 import { classifyDiff } from "../../diff-classify.mjs";
-import { searchLocalThoughts, isNeuralEmbeddingAvailable } from "../../local-recall.mjs";
+import { searchLocalThoughts, isNeuralEmbeddingAvailable, readLocalThoughts } from "../../local-recall.mjs";
 import { ERROR_CODES } from "../../enums.mjs";
 import {
   PROJECT_DIR,
@@ -1049,6 +1049,74 @@ async function _callToolHandler_095_forge_local_search(request, args) {
   }
 }
 
+async function _callToolHandler_096_forge_embedding_status(request, args) {
+  const { name } = request.params;
+  if (!(name === "forge_embedding_status")) return _CALL_TOOL_NO_MATCH;
+
+  const t0 = Date.now();
+  try {
+    const cwd = args.path ? findProjectRoot(resolve(args.path)) : findProjectRoot(PROJECT_DIR);
+
+    // Probe neural availability
+    const neuralAvailable = await isNeuralEmbeddingAvailable();
+
+    // Detect installed version of @xenova/transformers if available
+    let neuralVersion = null;
+    if (neuralAvailable) {
+      try {
+        const pkgPath = join(cwd, "node_modules", "@xenova", "transformers", "package.json");
+        if (existsSync(pkgPath)) {
+          neuralVersion = JSON.parse(readFileSync(pkgPath, "utf-8")).version ?? null;
+        }
+      } catch { /* version undetectable — non-fatal */ }
+    }
+
+    // Read corpus size from local .forge/ JSONL stores
+    const thoughts = readLocalThoughts(cwd);
+    const corpusSize = thoughts.length;
+
+    // Determine configured backend override from .forge.json
+    let configuredBackend = "auto";
+    try {
+      const forgeJson = readForgeJson(cwd);
+      if (forgeJson?.embeddingBackend) configuredBackend = forgeJson.embeddingBackend;
+    } catch { /* .forge.json absent or unreadable — auto */ }
+
+    // Effective backend: configured override wins; otherwise auto-detect
+    const effectiveBackend = configuredBackend === "tfidf" ? "tfidf"
+      : configuredBackend === "neural" ? (neuralAvailable ? "neural" : "tfidf")
+      : (neuralAvailable ? "neural" : "tfidf"); // "auto"
+
+    const installHint = "npm install --save-optional @xenova/transformers";
+    const neuralStatus = neuralAvailable
+      ? `neural available (v${neuralVersion ?? "unknown"})`
+      : `neural unavailable — install with: ${installHint}`;
+    const backendNote = effectiveBackend === "neural"
+      ? "Active backend: neural (all-MiniLM-L6-v2)"
+      : `Active backend: tfidf${neuralAvailable ? "" : " (neural not installed)"}`;
+    const message = `${backendNote}. ${neuralStatus}. Corpus: ${corpusSize} thought${corpusSize === 1 ? "" : "s"} in .forge/.`;
+
+    const result = {
+      ok: true,
+      backend: effectiveBackend,
+      neuralAvailable,
+      neuralPackage: "@xenova/transformers",
+      neuralVersion,
+      model: "Xenova/all-MiniLM-L6-v2",
+      corpusSize,
+      configuredBackend,
+      installHint: neuralAvailable ? null : installHint,
+      message,
+    };
+
+    emitToolTelemetry({ toolName: "forge_embedding_status", inputs: args, result: { backend: effectiveBackend, neuralAvailable, corpusSize }, durationMs: Date.now() - t0, status: "OK", cwd });
+    return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
+  } catch (err) {
+    emitToolTelemetry({ toolName: "forge_embedding_status", inputs: args, result: { error: err.message }, durationMs: Date.now() - t0, status: "ERROR", cwd: findProjectRoot(PROJECT_DIR) });
+    return { content: [{ type: "text", text: `forge_embedding_status error: ${err.message}` }], isError: true };
+  }
+}
+
 export {
   _callToolHandler_074_forge_master_ask,
   _callToolHandler_075_forge_meta_bug_file,
@@ -1072,4 +1140,5 @@ export {
   _callToolHandler_093_forge_lattice_callers,
   _callToolHandler_094_forge_lattice_blast,
   _callToolHandler_095_forge_local_search,
+  _callToolHandler_096_forge_embedding_status,
 };

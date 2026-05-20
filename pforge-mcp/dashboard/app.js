@@ -7533,3 +7533,41 @@ function loadAuditorLatest() {
 window.loadCrossRunAnomalies = loadCrossRunAnomalies;
 window.loadAuditorLatest = loadAuditorLatest;
 
+// Phase-56 — Embedding backend status tile
+function loadEmbeddingStatus() {
+  const el = document.getElementById("embedding-status-content");
+  if (!el) return;
+  el.innerHTML = '<p class="text-gray-600 text-center py-2">Loading…</p>';
+  fetch("/api/embedding/status")
+    .then(r => r.ok ? r.json() : null)
+    .then(data => {
+      if (!data || !data.ok) {
+        el.innerHTML = `<p class="text-gray-500 text-center py-2">${escapeHtml(data?.error || "Unable to fetch embedding status.")}</p>`;
+        return;
+      }
+      const backendColor = data.backend === "neural" ? "text-teal-300" : "text-yellow-300";
+      const neuralBadge = data.neuralAvailable
+        ? `<span class="px-1.5 py-0.5 rounded bg-teal-900/40 text-teal-300">✓ neural v${escapeHtml(data.neuralVersion ?? "?")}  </span>`
+        : `<span class="px-1.5 py-0.5 rounded bg-gray-700 text-gray-400">✗ neural</span>`;
+      el.innerHTML = `
+        <div class="space-y-1.5">
+          <div class="flex items-center gap-2">
+            <span class="text-gray-400">Backend:</span>
+            <span class="font-semibold ${backendColor}">${escapeHtml(data.backend)}</span>
+            ${neuralBadge}
+          </div>
+          <div class="flex items-center gap-2">
+            <span class="text-gray-400">Model:</span>
+            <code class="text-gray-300 text-xs">${escapeHtml(data.model)}</code>
+          </div>
+          <div class="flex items-center gap-2">
+            <span class="text-gray-400">Corpus:</span>
+            <span class="text-gray-300">${data.corpusSize} thought${data.corpusSize === 1 ? "" : "s"}</span>
+          </div>
+          ${data.installHint ? `<p class="text-xs text-amber-400 mt-1 border-t border-gray-700 pt-1">To enable neural: <code class="text-gray-300">${escapeHtml(data.installHint)}</code></p>` : ""}
+        </div>`;
+    })
+    .catch(err => { el.innerHTML = `<p class="text-red-400 text-xs">Error: ${escapeHtml(err.message)}</p>`; });
+}
+window.loadEmbeddingStatus = loadEmbeddingStatus;
+

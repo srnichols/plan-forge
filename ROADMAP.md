@@ -47,7 +47,7 @@ Previous: **v2.90.10** (2026-05-05) — Forge-Master Cross-Session Recall (Phase
 
 Previous: **v2.90.10** (2026-05-05) — Forge-Master Conversation Memory (Phase-38.1). Adds file-based JSONL session persistence to the Forge-Master reasoning engine. `runTurn` loads prior conversation turns before classification and persists each turn to disk. Per-tab session IDs flow from the dashboard (`sessionStorage` UUID) through `x-pforge-session-id` HTTP header to `deps.sessionId` in `runTurn`. Sessions auto-rotate at 200 turns. New CLI: `pforge fm-session list|purge`.
 
-**In flight (next)**: CLI-GUIDE refresh ✅ complete (v3.8.2). Next phase TBD — candidates: embedding fallback hardening (first-class WASM model), enterprise hardening track (OTel exporter, BYO Azure OpenAI first-class, auth/RBAC scaffolding).
+**In flight (next)**: Persistent local recall index ✅ complete (Phase 56). Next phase TBD — candidates: `forge_local_recall_status` MCP tool + `pforge local-recall` CLI subcommands (warm/status/clear), enterprise hardening track (OTel exporter, BYO Azure OpenAI first-class, auth/RBAC scaffolding).
 
 See [CHANGELOG.md](CHANGELOG.md) for full release notes.
 

@@ -115,6 +115,7 @@ import {
   _callToolHandler_093_forge_lattice_callers,
   _callToolHandler_094_forge_lattice_blast,
   _callToolHandler_095_forge_local_search,
+  _callToolHandler_096_forge_embedding_status,
 } from "./tool-handlers/platform.mjs";
 export {
   planNameToRunbookName,
@@ -305,6 +306,7 @@ const _CALL_TOOL_HANDLERS = [
   _callToolHandler_093_forge_lattice_callers,
   _callToolHandler_094_forge_lattice_blast,
   _callToolHandler_095_forge_local_search,
+  _callToolHandler_096_forge_embedding_status,
 ];
 
 export const callToolRequestHandler = _wrapWithToolSpan(async (request) => {
@@ -434,4 +436,8 @@ export const MCP_ONLY_TOOLS = new Set([
   "forge_sync_memories",
   // v3.0.0 — forge_sync_instructions is MCP-native (CLI also available via pforge sync-instructions).
   "forge_sync_instructions",
+  // Phase 55/56 — Embedding tools are MCP-native. forge_local_search has a CLI path
+  // via pforge mcp-call, but forge_embedding_status is read-only and MCP-native.
+  "forge_local_search",
+  "forge_embedding_status",
 ]);

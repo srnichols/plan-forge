@@ -1939,6 +1939,7 @@ function _findForgeOrphans(forgeDir, exists) {
     "liveguard-events.jsonl", "fix-proposals.json",
     "team-activity.jsonl",
     "health-dna.jsonl",
+    "local-recall-index.json",
   ]);
   const knownDirs = new Set([
     "telemetry", "runs", "traces", "plans", "digests", "trajectories",

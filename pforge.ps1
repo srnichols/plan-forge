@@ -5503,7 +5503,130 @@ function Invoke-ForgeHomeCleanup {
     exit $LASTEXITCODE
 }
 
-# ─── Command: mcp-call ─────────────────────────────────────────────────
+# ─── Command: embeddings ────────────────────────────────────────────────
+# Manage and inspect the local semantic-search embedding backend.
+#
+# Usage:
+#   pforge embeddings status [--path=<dir>]
+#   pforge embeddings install
+#
+# Subcommands:
+#   status   Report which backend (tfidf or neural) is active, whether
+#            @xenova/transformers is installed, and local corpus size.
+#   install  Install @xenova/transformers as an optional dependency and
+#            pre-download the all-MiniLM-L6-v2 model.
+function Invoke-Embeddings {
+    $sub = if ($Arguments.Count -gt 0) { $Arguments[0] } else { "status" }
+    $rest = @($Arguments | Select-Object -Skip 1)
+
+    switch ($sub) {
+        'status' {
+            # Resolve optional --path arg
+            $pathArg = ""
+            foreach ($a in $rest) {
+                if ($a -match '^--path=(.+)$') { $pathArg = $Matches[1]; break }
+            }
+            $scriptDir = Join-Path $PSScriptRoot "pforge-mcp"
+            $statusScript = @"
+import { isNeuralEmbeddingAvailable, readLocalThoughts } from './local-recall.mjs';
+import { readFileSync, existsSync } from 'node:fs';
+import { resolve, join } from 'node:path';
+const cwd = process.argv[2] || process.cwd();
+const neural = await isNeuralEmbeddingAvailable();
+let version = null;
+if (neural) {
+  try {
+    const p = join(cwd, 'node_modules', '@xenova', 'transformers', 'package.json');
+    if (existsSync(p)) version = JSON.parse(readFileSync(p,'utf-8')).version ?? null;
+  } catch {}
+}
+const thoughts = readLocalThoughts(cwd);
+let configured = 'auto';
+try {
+  const fj = JSON.parse(readFileSync(resolve(cwd,'.forge','forge.json'),'utf-8'));
+  if (fj?.embeddingBackend) configured = fj.embeddingBackend;
+} catch {}
+const effective = configured === 'tfidf' ? 'tfidf'
+  : configured === 'neural' ? (neural ? 'neural' : 'tfidf')
+  : (neural ? 'neural' : 'tfidf');
+console.log('');
+console.log('Embedding Backend Status');
+console.log('========================');
+console.log('Active backend : ' + effective);
+console.log('Neural avail.  : ' + (neural ? 'yes (v' + (version ?? 'unknown') + ')' : 'no'));
+console.log('Model          : Xenova/all-MiniLM-L6-v2');
+console.log('Corpus size    : ' + thoughts.length + ' thoughts in .forge/');
+console.log('Configured     : ' + configured + ' (in .forge.json embeddingBackend)');
+if (!neural) {
+  console.log('');
+  console.log('To enable neural embeddings:');
+  console.log('  cd pforge-mcp && npm install --save-optional @xenova/transformers');
+}
+console.log('');
+"@
+            $tmpFile = [System.IO.Path]::GetTempFileName() -replace '\.tmp$', '.mjs'
+            Set-Content -Path $tmpFile -Value $statusScript -Encoding UTF8
+            try {
+                $nodeArgs = @("--input-type=module")
+                if ($pathArg) { $nodeArgs += $pathArg }
+                Push-Location $scriptDir
+                $env:NODE_PATH = Join-Path $scriptDir "node_modules"
+                & node $tmpFile $pathArg
+                $exitCode = $LASTEXITCODE
+                Pop-Location
+            } finally {
+                Remove-Item $tmpFile -Force -ErrorAction SilentlyContinue
+            }
+            exit $exitCode
+        }
+        'install' {
+            Write-Host "Installing @xenova/transformers as optional dependency..." -ForegroundColor Cyan
+            $mcpDir = Join-Path $PSScriptRoot "pforge-mcp"
+            Push-Location $mcpDir
+            & npm install --save-optional @xenova/transformers
+            $exitCode = $LASTEXITCODE
+            Pop-Location
+            if ($exitCode -ne 0) {
+                Write-Host "ERROR: npm install failed (exit $exitCode)" -ForegroundColor Red
+                exit $exitCode
+            }
+            Write-Host "" 
+            Write-Host "Pre-downloading all-MiniLM-L6-v2 model..." -ForegroundColor Cyan
+            $warmupScript = @"
+import { pipeline } from '@xenova/transformers';
+const embedder = await pipeline('feature-extraction', 'Xenova/all-MiniLM-L6-v2', { quantized: true });
+const out = await embedder('test', { pooling: 'mean', normalize: true });
+console.log('Model ready. Embedding dim: ' + out.data.length);
+"@
+            $tmpFile2 = [System.IO.Path]::GetTempFileName() -replace '\.tmp$', '.mjs'
+            Set-Content -Path $tmpFile2 -Value $warmupScript -Encoding UTF8
+            try {
+                Push-Location $mcpDir
+                & node $tmpFile2
+                $exitCode = $LASTEXITCODE
+                Pop-Location
+            } finally {
+                Remove-Item $tmpFile2 -Force -ErrorAction SilentlyContinue
+            }
+            if ($exitCode -eq 0) {
+                Write-Host "Neural embeddings installed and ready." -ForegroundColor Green
+                Write-Host "Run 'pforge embeddings status' to verify."
+            } else {
+                Write-Host "WARNING: Model warmup failed — embeddings may still work on first use." -ForegroundColor Yellow
+            }
+            exit 0
+        }
+        default {
+            Write-Host "Usage: pforge embeddings <subcommand>" -ForegroundColor Yellow
+            Write-Host ""
+            Write-Host "Subcommands:"
+            Write-Host "  status   Show active embedding backend and corpus size"
+            Write-Host "  install  Install @xenova/transformers for neural embeddings"
+            Write-Host ""
+            exit 1
+        }
+    }
+}
 # Generic proxy for any MCP tool exposed by the running pforge-mcp server
 # on :3100. Covers crucible-*, tempering-*, bug-*, generate-image,
 # run-skill, skill-status, and every future tool without needing a
@@ -7432,6 +7555,7 @@ switch ($Command) {
     'smith'        { Invoke-Smith }
     'testbed-happypath' { Invoke-TestbedHappypath }
     'forge-home-cleanup' { Invoke-ForgeHomeCleanup }
+    'embeddings'   { Invoke-Embeddings }
     'migrate-memory' { Invoke-MigrateMemory }
     'drain-memory' { Invoke-DrainMemory }
     'brain'        { Invoke-Brain }

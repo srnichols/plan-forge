@@ -823,6 +823,19 @@
       }
     },
     {
+      "name": "forge_embedding_status",
+      "description": "Report the current embedding backend status for local semantic search — whether @xenova/transformers (neural, all-MiniLM-L6-v2) or TF-IDF is active, how many thoughts are in the local corpus, and the configured backend override in .forge.json. USE FOR: diagnosing which search backend is active; checking whether to run 'pforge embeddings install'; monitoring embedding health in the dashboard. Returns: { ok, backend, neuralAvailable, neuralVersion, model, corpusSize, configuredBackend, installHint, message }.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "path": {
+            "type": "string",
+            "description": "Project directory (default: current)"
+          }
+        }
+      }
+    },
+    {
       "name": "forge_env_diff",
       "description": "Compare environment variable keys across .env files — detect missing keys between baseline and target environments. Compares key names only (never values). Caches results in .forge/env-diff-cache.json. Integrates with forge_runbook to surface environment key gaps.",
       "inputSchema": {
@@ -2875,6 +2888,10 @@
     },
     {
       "method": "GET",
+      "path": "/api/embedding/status"
+    },
+    {
+      "method": "GET",
       "path": "/api/env/diff"
     },
     {
@@ -3187,6 +3204,7 @@
     "forge_diff_classify",
     "forge_doctor_quorum",
     "forge_drift_report",
+    "forge_embedding_status",
     "forge_env_diff",
     "forge_estimate_quorum",
     "forge_estimate_slice",
@@ -3206,6 +3224,7 @@
     "forge_lattice_query",
     "forge_lattice_stat",
     "forge_liveguard_run",
+    "forge_local_search",
     "forge_memory_capture",
     "forge_meta_bug_file",
     "forge_notify_send",

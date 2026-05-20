@@ -4969,7 +4969,110 @@ cmd_forge_home_cleanup() {
     exit $?
 }
 
-# ─── Command: mcp-call ─────────────────────────────────────────────────
+# ─── Command: embeddings ────────────────────────────────────────────────
+# Manage and inspect the local semantic-search embedding backend.
+# Mirrors Invoke-Embeddings in pforge.ps1.
+#
+# Usage:
+#   pforge embeddings status [--path=<dir>]
+#   pforge embeddings install
+cmd_embeddings() {
+    local sub="${1:-status}"
+    shift 2>/dev/null || true
+
+    case "$sub" in
+        status)
+            local path_arg=""
+            for a in "$@"; do
+                case "$a" in --path=*) path_arg="${a#--path=}";; esac
+            done
+            local mcp_dir
+            mcp_dir="$(dirname "$0")/pforge-mcp"
+            local status_script
+            status_script="$(mktemp /tmp/pforge-emb-XXXXXX.mjs)"
+            cat > "$status_script" <<'EOJS'
+import { isNeuralEmbeddingAvailable, readLocalThoughts } from './local-recall.mjs';
+import { readFileSync, existsSync } from 'node:fs';
+import { resolve, join } from 'node:path';
+const cwd = process.argv[2] || process.cwd();
+const neural = await isNeuralEmbeddingAvailable();
+let version = null;
+if (neural) {
+  try {
+    const p = join(cwd, 'node_modules', '@xenova', 'transformers', 'package.json');
+    if (existsSync(p)) version = JSON.parse(readFileSync(p,'utf-8')).version ?? null;
+  } catch {}
+}
+const thoughts = readLocalThoughts(cwd);
+let configured = 'auto';
+try {
+  const fj = JSON.parse(readFileSync(resolve(cwd,'.forge','forge.json'),'utf-8'));
+  if (fj?.embeddingBackend) configured = fj.embeddingBackend;
+} catch {}
+const effective = configured === 'tfidf' ? 'tfidf'
+  : configured === 'neural' ? (neural ? 'neural' : 'tfidf')
+  : (neural ? 'neural' : 'tfidf');
+console.log('');
+console.log('Embedding Backend Status');
+console.log('========================');
+console.log('Active backend : ' + effective);
+console.log('Neural avail.  : ' + (neural ? 'yes (v' + (version ?? 'unknown') + ')' : 'no'));
+console.log('Model          : Xenova/all-MiniLM-L6-v2');
+console.log('Corpus size    : ' + thoughts.length + ' thoughts in .forge/');
+console.log('Configured     : ' + configured + ' (in .forge.json embeddingBackend)');
+if (!neural) {
+  console.log('');
+  console.log('To enable neural embeddings:');
+  console.log('  cd pforge-mcp && npm install --save-optional @xenova/transformers');
+}
+console.log('');
+EOJS
+            (cd "$mcp_dir" && node "$status_script" "$path_arg")
+            local rc=$?
+            rm -f "$status_script"
+            exit $rc
+            ;;
+        install)
+            printf "\033[36mInstalling @xenova/transformers as optional dependency...\033[0m\n"
+            local mcp_dir
+            mcp_dir="$(dirname "$0")/pforge-mcp"
+            (cd "$mcp_dir" && npm install --save-optional @xenova/transformers)
+            local rc=$?
+            if [ $rc -ne 0 ]; then
+                printf "\033[31mERROR: npm install failed (exit %d)\033[0m\n" "$rc" >&2
+                exit $rc
+            fi
+            printf "\n\033[36mPre-downloading all-MiniLM-L6-v2 model...\033[0m\n"
+            local warmup_script
+            warmup_script="$(mktemp /tmp/pforge-emb-warm-XXXXXX.mjs)"
+            cat > "$warmup_script" <<'EOJS'
+import { pipeline } from '@xenova/transformers';
+const embedder = await pipeline('feature-extraction', 'Xenova/all-MiniLM-L6-v2', { quantized: true });
+const out = await embedder('test', { pooling: 'mean', normalize: true });
+console.log('Model ready. Embedding dim: ' + out.data.length);
+EOJS
+            (cd "$mcp_dir" && node "$warmup_script")
+            local rc2=$?
+            rm -f "$warmup_script"
+            if [ $rc2 -eq 0 ]; then
+                printf "\033[32mNeural embeddings installed and ready.\033[0m\n"
+                printf "Run 'pforge embeddings status' to verify.\n"
+            else
+                printf "\033[33mWARNING: Model warmup failed — embeddings may still work on first use.\033[0m\n"
+            fi
+            exit 0
+            ;;
+        *)
+            printf "\033[33mUsage: pforge embeddings <subcommand>\033[0m\n"
+            printf "\n"
+            printf "Subcommands:\n"
+            printf "  status   Show active embedding backend and corpus size\n"
+            printf "  install  Install @xenova/transformers for neural embeddings\n"
+            printf "\n"
+            exit 1
+            ;;
+    esac
+}
 # Generic proxy for any MCP tool exposed by the running pforge-mcp server
 # on :3100. Covers crucible-*, tempering-*, bug-*, generate-image,
 # run-skill, skill-status, and every future tool without needing a
@@ -6688,6 +6791,7 @@ case "$COMMAND" in
     migrate-memory) cmd_migrate_memory "$@" ;;
     drain-memory) cmd_drain_memory "$@" ;;
     forge-home-cleanup) cmd_forge_home_cleanup "$@" ;;
+    embeddings)   cmd_embeddings "$@" ;;
     brain)        cmd_brain "$@" ;;
     mcp-call)     cmd_mcp_call "$@" ;;
     tour)         cmd_tour ;;

@@ -7,7 +7,38 @@ Format follows [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
-### Fixed — F-series console.log audit (Phase 42 F1)
+### Added — Persistent TF-IDF index cache for `forge_local_search` (Phase 56)
+
+Eliminates per-query corpus rebuild cost for `forge_local_search`. On the first
+TF-IDF search the token maps + IDF weights are serialised to
+`.forge/local-recall-index.json`; subsequent searches reload the cached index
+without re-tokenizing the corpus. Staleness is detected by comparing each source
+JSONL file's mtime against the stored snapshot — any file addition, modification,
+or removal triggers a transparent rebuild.
+
+- **`pforge-mcp/local-recall.mjs`**:
+  - `buildCorpusIndex(thoughts)` — builds a serialisable `{ tokenMaps, idf }` index from a thought array (Maps converted to arrays for JSON round-trip).
+  - `persistIndex(cwd, index, meta)` — writes the corpus index to `.forge/local-recall-index.json` with `version`, `builtAt`, `corpusSize`, and per-source `sourceMtimes`. Non-fatal on I/O error.
+  - `loadCachedIndex(cwd, opts)` — loads and validates the cached index; returns hydrated `Map` objects or `null` on cache miss, version mismatch, or stale sources (mtime changed).
+  - `clearPersistedIndex(cwd)` — deletes the cache file. Non-fatal.
+  - `getIndexStatus(cwd)` — returns `{ exists, version, builtAt, corpusSize, stale, cacheFile }` for diagnostics.
+  - `searchLocalThoughts` updated: TF-IDF path checks `loadCachedIndex` first; on miss it calls `buildCorpusIndex` + `persistIndex` before returning results. New `noCache: true` opt bypasses the cache.
+  - `_tfidfSearchWithIndex` private helper performs the cosine-similarity ranking against pre-built token maps without re-tokenizing.
+  - `INDEX_CACHE_FILE = "local-recall-index.json"`, `INDEX_VERSION = 1` constants.
+- **`pforge-mcp/tests/local-recall.test.mjs`**: 18 new tests across 4 suites (`buildCorpusIndex`, `persistIndex + loadCachedIndex`, `clearPersistedIndex`, `getIndexStatus`); 4 new `searchLocalThoughts` tests covering cache prime, cache reuse, `noCache` bypass, and staleness-triggered rebuild. Total: 46 tests (up from 28).
+
+### Added — Local semantic recall fallback (Phase 55)
+
+New `forge_local_search` MCP tool (#89) provides zero-dependency semantic search
+over local `.forge/` thought stores when OpenBrain (L3 Postgres + pgvector) is
+not configured.
+
+- **`pforge-mcp/local-recall.mjs`** (NEW): TF-IDF + IDF-weighted cosine-similarity engine. Optional upgrade: if `@xenova/transformers` is installed at runtime, the tool transparently switches to all-MiniLM-L6-v2 neural embeddings (384-dim) for substantially better recall.
+  - `readLocalThoughts(cwd, opts)` — loads up to 500 records from `openbrain-queue.jsonl`, `openbrain-queue.archive.jsonl`, `openbrain-dlq.jsonl`, and `liveguard-memories.jsonl`.
+  - `searchLocalThoughts(query, opts)` — ACI-compliant output `{ hits, total, corpusSize, backend, query, truncated, message }`. `forceBackend: 'tfidf'|'neural'` for explicit override.
+  - `isNeuralEmbeddingAvailable()` — lazy probe with result caching.
+
+
 
 Completed the final Phase 42 clean-code audit item. Audited all 136 `console.log` occurrences codebase-wide — no debug leakage found; all calls are intentional CLI output or self-test blocks. One library-level stdout fix:
 

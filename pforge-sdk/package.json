@@ -15,7 +15,6 @@
     "./notifications/adapter-contract": "./src/notifications/adapter-contract.mjs",
     "./run-reader": "./src/run-reader.mjs",
     "./plan-reader": "./src/plan-reader.mjs",
-    "./thought-reader": "./src/thought-reader.mjs",
     "./thought-reader": "./src/thought-reader.mjs"
   },
   "scripts": {

@@ -48,7 +48,7 @@
           <li><a href="#mcp-tools">MCP tools (88, grouped by domain)</a></li>
           <li><a href="#cli-commands">CLI commands (57, grouped by use)</a></li>
           <li><a href="#rest-endpoints">REST endpoints (103, grouped by prefix)</a></li>
-          <li><a href="#sdk">SDK exports (8 sub-paths)</a></li>
+          <li><a href="#sdk">SDK exports (10 sub-paths)</a></li>
           <li><a href="#coverage-matrix">Surface coverage matrix</a></li>
         </ul>
 
@@ -87,7 +87,7 @@
               </tr>
               <tr>
                 <td class="py-2 px-3"><strong>SDK</strong> (<code>pforge-sdk</code>)</td>
-                <td class="py-2 px-3">8 sub-paths</td>
+                <td class="py-2 px-3">10 sub-paths</td>
                 <td class="py-2 px-3">Bearer token via <code>createClient</code></td>
                 <td class="py-2 px-3">Node.js / TypeScript callers wanting typed responses</td>
               </tr>
@@ -558,6 +558,11 @@ pforge ext add/remove/...       Extension management</code></pre>
                 <td class="py-2 px-3"><code>listPlans</code>, <code>readPlan</code>, <code>getPlanStatus</code>, <code>getPlanSlices</code>, <code>plansDir</code></td>
                 <td class="py-2 px-3">Offline access to <code>docs/plans/</code> plan files — read status, slices, and frontmatter without a server</td>
               </tr>
+              <tr>
+                <td class="py-2 px-3"><code>pforge-sdk/thought-reader</code> <span class="text-amber-400 text-xs font-semibold">v0.8.0</span></td>
+                <td class="py-2 px-3"><code>readThoughts</code>, <code>readAllThoughts</code>, <code>listThoughtSources</code>, <code>parseThoughtLine</code>, <code>thoughtFilePath</code></td>
+                <td class="py-2 px-3">Offline access to <code>.forge/*.jsonl</code> thought stores — OpenBrain queue, archive, DLQ, and LiveGuard memories</td>
+              </tr>
             </tbody>
           </table>
         </div>
@@ -597,6 +602,7 @@ pforge ext add/remove/...       Extension management</code></pre>
               <tr class="border-b border-slate-800/40"><td class="py-2 px-3">Notification adapter contract validation</td><td class="text-center py-2 px-3 text-slate-500">—</td><td class="text-center py-2 px-3 text-slate-500">—</td><td class="text-center py-2 px-3 text-slate-500">—</td><td class="text-center py-2 px-3 text-emerald-400">✓</td></tr>
               <tr class="border-b border-slate-800/40"><td class="py-2 px-3">Offline run artifact access (<code>run-reader</code>)</td><td class="text-center py-2 px-3 text-slate-500">—</td><td class="text-center py-2 px-3 text-slate-500">—</td><td class="text-center py-2 px-3 text-slate-500">—</td><td class="text-center py-2 px-3 text-emerald-400">✓</td></tr>
               <tr class="border-b border-slate-800/40"><td class="py-2 px-3">Offline plan file access (<code>plan-reader</code>)</td><td class="text-center py-2 px-3 text-slate-500">—</td><td class="text-center py-2 px-3 text-slate-500">—</td><td class="text-center py-2 px-3 text-slate-500">—</td><td class="text-center py-2 px-3 text-emerald-400">✓</td></tr>
+              <tr class="border-b border-slate-800/40"><td class="py-2 px-3">Offline thought store access (<code>thought-reader</code>)</td><td class="text-center py-2 px-3 text-slate-500">—</td><td class="text-center py-2 px-3 text-slate-500">—</td><td class="text-center py-2 px-3 text-slate-500">—</td><td class="text-center py-2 px-3 text-emerald-400">✓</td></tr>
               <tr><td class="py-2 px-3">Extension marketplace</td><td class="text-center py-2 px-3 text-emerald-400">✓</td><td class="text-center py-2 px-3 text-emerald-400">✓</td><td class="text-center py-2 px-3 text-emerald-400">✓</td><td class="text-center py-2 px-3 text-slate-500">—</td></tr>
             </tbody>
           </table>

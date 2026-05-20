@@ -289,8 +289,8 @@ async function _callToolHandler_006_forge_estimate_quorum(request, args) {
       if (!existsSync(planFullPath)) {
         return { content: [{ type: "text", text: `${ERROR_CODES.PLAN_NOT_FOUND.code}: ${args.planPath}` }], isError: true };
       }
-      const { parsePlan } = await import("./orchestrator.mjs");
-      const { estimateQuorum } = await import("./cost-service.mjs");
+      const { parsePlan } = await import("../../orchestrator.mjs");
+      const { estimateQuorum } = await import("../../cost-service.mjs");
       let plan;
       try {
         plan = parsePlan(planFullPath, cwd);
@@ -330,8 +330,8 @@ async function _callToolHandler_007_forge_estimate_slice(request, args) {
       if (!existsSync(planFullPath)) {
         return { content: [{ type: "text", text: `${ERROR_CODES.PLAN_NOT_FOUND.code}: ${args.planPath}` }], isError: true };
       }
-      const { parsePlan } = await import("./orchestrator.mjs");
-      const { estimateSlice } = await import("./cost-service.mjs");
+      const { parsePlan } = await import("../../orchestrator.mjs");
+      const { estimateSlice } = await import("../../cost-service.mjs");
       let plan;
       try {
         plan = parsePlan(planFullPath, cwd);

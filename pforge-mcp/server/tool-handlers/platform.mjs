@@ -163,8 +163,8 @@ async function _callToolHandler_074_forge_master_ask(request, args) {
       }
 
       // ── Fallback: in-process reasoning ──
-      const { runTurn, loadPrefs } = await import("./forge-master/index.mjs");
-      const { TOOL_METADATA } = await import("./capabilities.mjs");
+      const { runTurn, loadPrefs } = await import("../../forge-master/index.mjs");
+      const { TOOL_METADATA } = await import("../../capabilities.mjs");
       const prefs = loadPrefs(cwd);
       const result = await runTurn(
         {
@@ -204,7 +204,7 @@ async function _callToolHandler_075_forge_meta_bug_file(request, args) {
     const t0 = Date.now();
     try {
       const cwd = args.path ? findProjectRoot(resolve(args.path)) : findProjectRoot(PROJECT_DIR);
-      const { fileMetaBug, META_BUG_CLASSES } = await import("./tempering/bug-adapters/github.mjs");
+      const { fileMetaBug, META_BUG_CLASSES } = await import("../../tempering/bug-adapters/github.mjs");
 
       // Validate class enum
       if (!args.class || !META_BUG_CLASSES.includes(args.class)) {
@@ -277,7 +277,7 @@ async function _callToolHandler_076_forge_graph_query(request, args) {
     const t0 = Date.now();
     try {
       const cwd = args.path ? findProjectRoot(resolve(args.path)) : findProjectRoot(PROJECT_DIR);
-      const { queryByPhase, queryByFile, queryRecentChanges, neighbors } = await import("./graph/query.mjs");
+      const { queryByPhase, queryByFile, queryRecentChanges, neighbors } = await import("../../graph/query.mjs");
       const queryType = args.type || "recent-changes";
       let result;
       if (queryType === "phase") {
@@ -306,7 +306,7 @@ async function _callToolHandler_077_forge_patterns_list(request, args) {
     const t0 = Date.now();
     try {
       const cwd = args.path ? findProjectRoot(resolve(args.path)) : findProjectRoot(PROJECT_DIR);
-      const { runDetectors } = await import("./patterns/registry.mjs");
+      const { runDetectors } = await import("../../patterns/registry.mjs");
       let patterns = await runDetectors({ cwd });
       if (args.since) {
         const sinceDate = new Date(args.since);

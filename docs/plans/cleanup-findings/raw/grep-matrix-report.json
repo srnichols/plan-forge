@@ -1,6 +1,6 @@
 {
   "consoleLogs": {
-    "count": 139,
+    "count": 138,
     "bulkNote": "All console.log hits are bulk-triaged as one CLI-output advisory rather than individual findings."
   },
   "todos": [],

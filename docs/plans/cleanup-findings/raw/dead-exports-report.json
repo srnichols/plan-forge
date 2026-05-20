@@ -1,16 +1,16 @@
 {
-  "generatedAt": "2026-05-20T00:23:32.892Z",
+  "generatedAt": "2026-05-20T01:32:41.173Z",
   "scopes": [
     "pforge-mcp",
     "pforge-master",
     "scripts"
   ],
   "counts": {
-    "filesScanned": 245,
-    "filesWithDeadExports": 102,
-    "totalExports": 1405,
-    "deadExports": 672,
-    "namespaceConsumedFiles": 47
+    "filesScanned": 256,
+    "filesWithDeadExports": 103,
+    "totalExports": 1518,
+    "deadExports": 676,
+    "namespaceConsumedFiles": 48
   },
   "findings": [
     {
@@ -317,8 +317,7 @@
         "readTrajectory",
         "recordGateAccept",
         "renderAutoSkillMarkdown",
-        "shouldPromoteAutoSkill",
-        "tokenize"
+        "shouldPromoteAutoSkill"
       ],
       "totalExports": 61
     },
@@ -697,6 +696,17 @@
         "version"
       ],
       "totalExports": 5
+    },
+    {
+      "file": "pforge-mcp/local-recall.mjs",
+      "deadExports": [
+        "_resetNeuralProbeCache",
+        "buildIdf",
+        "readLocalThoughts",
+        "tfIdfVector",
+        "vecCosineSimilarity"
+      ],
+      "totalExports": 7
     },
     {
       "file": "pforge-mcp/telemetry.mjs",

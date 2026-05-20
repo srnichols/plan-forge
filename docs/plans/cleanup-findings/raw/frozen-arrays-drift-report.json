@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-05-20T00:23:33.452Z",
+  "generatedAt": "2026-05-20T01:32:42.672Z",
   "enumsSource": "pforge-mcp/enums.mjs",
   "enumsScanned": {
     "HOOK_PASCAL": {
@@ -12,7 +12,7 @@
   "extendedScan": false,
   "includeTests": false,
   "counts": {
-    "filesScanned": 245,
+    "filesScanned": 256,
     "filesWithDrift": 12,
     "warnings": 6,
     "info": 23,
@@ -32,7 +32,7 @@
         {
           "enum": "ERROR_CODES",
           "literal": "TIMEOUT",
-          "line": 403,
+          "line": 415,
           "severity": "info",
           "kind": "SOFT-DRIFT",
           "why": "File hand-types \"TIMEOUT\" without importing ERROR_CODES — review whether to migrate"
@@ -40,7 +40,7 @@
         {
           "enum": "ERROR_CODES",
           "literal": "TIMEOUT",
-          "line": 403,
+          "line": 415,
           "severity": "info",
           "kind": "SOFT-DRIFT",
           "why": "File hand-types \"TIMEOUT\" without importing ERROR_CODES — review whether to migrate"
@@ -48,7 +48,7 @@
         {
           "enum": "ERROR_CODES",
           "literal": "TIMEOUT",
-          "line": 424,
+          "line": 463,
           "severity": "info",
           "kind": "SOFT-DRIFT",
           "why": "File hand-types \"TIMEOUT\" without importing ERROR_CODES — review whether to migrate"
@@ -56,7 +56,7 @@
         {
           "enum": "ERROR_CODES",
           "literal": "TIMEOUT",
-          "line": 471,
+          "line": 508,
           "severity": "info",
           "kind": "SOFT-DRIFT",
           "why": "File hand-types \"TIMEOUT\" without importing ERROR_CODES — review whether to migrate"
@@ -64,7 +64,7 @@
         {
           "enum": "ERROR_CODES",
           "literal": "TIMEOUT",
-          "line": 477,
+          "line": 515,
           "severity": "info",
           "kind": "SOFT-DRIFT",
           "why": "File hand-types \"TIMEOUT\" without importing ERROR_CODES — review whether to migrate"
@@ -72,7 +72,7 @@
         {
           "enum": "ERROR_CODES",
           "literal": "TIMEOUT",
-          "line": 477,
+          "line": 515,
           "severity": "info",
           "kind": "SOFT-DRIFT",
           "why": "File hand-types \"TIMEOUT\" without importing ERROR_CODES — review whether to migrate"
@@ -175,7 +175,7 @@
         {
           "enum": "ERROR_CODES",
           "literal": "SPECKIT_IMPORT_DIR_NOT_FOUND",
-          "line": 312,
+          "line": 360,
           "severity": "warn",
           "kind": "HARD-DRIFT",
           "why": "File imports ERROR_CODES but still uses hand-typed \"SPECKIT_IMPORT_DIR_NOT_FOUND\" — replace with the constant"
@@ -183,7 +183,7 @@
         {
           "enum": "ERROR_CODES",
           "literal": "SPECKIT_IMPORT_NOT_FOUND",
-          "line": 357,
+          "line": 405,
           "severity": "warn",
           "kind": "HARD-DRIFT",
           "why": "File imports ERROR_CODES but still uses hand-typed \"SPECKIT_IMPORT_NOT_FOUND\" — replace with the constant"
@@ -191,7 +191,7 @@
         {
           "enum": "ERROR_CODES",
           "literal": "SMELT_NOT_FOUND",
-          "line": 894,
+          "line": 942,
           "severity": "warn",
           "kind": "HARD-DRIFT",
           "why": "File imports ERROR_CODES but still uses hand-typed \"SMELT_NOT_FOUND\" — replace with the constant"
@@ -293,12 +293,12 @@
       ]
     },
     {
-      "file": "pforge-mcp/server/tool-handlers.mjs",
+      "file": "pforge-mcp/server/tool-handlers/tempering.mjs",
       "findings": [
         {
           "enum": "ERROR_CODES",
           "literal": "SCANNER_UNAVAILABLE",
-          "line": 1692,
+          "line": 456,
           "severity": "warn",
           "kind": "HARD-DRIFT",
           "why": "File imports ERROR_CODES but still uses hand-typed \"SCANNER_UNAVAILABLE\" — replace with the constant"
@@ -311,7 +311,7 @@
         {
           "enum": "HOOK_PASCAL",
           "literal": "Stop",
-          "line": 438,
+          "line": 413,
           "severity": "info",
           "kind": "SOFT-DRIFT",
           "why": "File hand-types \"Stop\" without importing HOOK_PASCAL — review whether to migrate"

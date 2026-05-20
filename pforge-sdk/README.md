@@ -34,10 +34,12 @@ npm install file:./pforge-sdk
 | `pforge-sdk/anvil` | `src/anvil.mjs` | Anvil cache-key helpers — `computeAnvilKey`, path helpers |
 | `pforge-sdk/lattice-query` | `src/lattice-query.mjs` | Lattice query builder — `LatticeQueryBuilder`, `tokenizeForSearch`, `scoreChunk` |
 | `pforge-sdk/notifications/adapter-contract` | `src/notifications/adapter-contract.mjs` | Notification adapter contract — `validateAdapterShape`, `ERR_NOT_IMPLEMENTED` |
+| `pforge-sdk/run-reader` | `src/run-reader.mjs` | Run artifact reader — `listRuns`, `readRunMeta`, `readRunSummary`, `readRunIndex`, `parseEventLine`, path helpers |
 
 > **Note**: `pforge-sdk/client` is new in `0.4.0`. It requires a running Plan Forge MCP server (`pforge-mcp/server.mjs`) to be useful. Zero runtime dependencies — uses the global `fetch` (Node ≥ 18).
 > **Note**: `pforge-sdk/anvil` and `pforge-sdk/lattice-query` are new in `0.5.0`. Both are pure and dependency-free.
 > **Note**: `pforge-sdk/notifications/adapter-contract` is new in `0.5.0`. Defines the shape every notification adapter must implement — pure validation, no runtime base class.
+> **Note**: `pforge-sdk/run-reader` is new in `0.6.0`. Provides offline access to `.forge/runs/` artifacts without requiring a running MCP server. Zero dependencies beyond `node:fs` / `node:path`.
 
 ---
 
@@ -418,7 +420,105 @@ const score = scoreChunk('user', { name: 'getUserById', filePath: 'src/user.mjs'
 
 ---
 
-## Risk levels (auto-approve guidance)
+## `pforge-sdk/run-reader` — Run artifact reader
+
+Read Plan Forge run artifacts from `.forge/runs/` without a running MCP server. Useful for CI scripts, external dashboards, or any tool that needs to inspect run history offline.
+
+```js
+import {
+  listRuns,
+  readRunMeta,
+  readRunSummary,
+  readRunIndex,
+  parseEventLine,
+  runsDir,
+  runDir,
+  runIndexPath,
+  RUNS_DIR_RELATIVE,
+  INDEX_FILE_RELATIVE,
+} from 'pforge-sdk/run-reader';
+
+// List all run IDs in .forge/runs/, newest-first
+const ids = listRuns();
+// → ['20260519-183001', '20260518-102233', ...]
+
+// Read metadata for a specific run (from run.json)
+const meta = readRunMeta({ runId: ids[0] });
+// → { plan: 'docs/plans/Phase-55-PLAN.md', sliceCount: 3, model: 'gpt-4.1', ... }
+
+// Read the post-run summary (from summary.json)
+const summary = readRunSummary({ runId: ids[0] });
+// → { status: 'completed', results: { passed: 3, failed: 0, total: 3 }, ... }
+
+// Read the global run index (from index.jsonl)
+const index = readRunIndex();
+// → [{ runId: '...', plan: '...', status: 'completed' }, ...]
+
+// Parse a single events.log line (pure, no I/O)
+const event = parseEventLine('[2026-05-19T18:30:01.000Z] slice-started: {"sliceId":1}');
+// → { ts: '2026-05-19T18:30:01.000Z', type: 'slice-started', data: { sliceId: 1 } }
+```
+
+All readers are **graceful** — they return `null` or `[]` on missing files rather than throwing.
+
+All functions accept an optional `cwd` parameter (defaults to `process.cwd()`).
+
+### Path helpers
+
+| Export | Description |
+|---|---|
+| `runsDir({ cwd? })` | Absolute path to `<cwd>/.forge/runs/` |
+| `runDir({ runId, cwd? })` | Absolute path to `<cwd>/.forge/runs/<runId>/` |
+| `runIndexPath({ cwd? })` | Absolute path to `<cwd>/.forge/runs/index.jsonl` |
+| `RUNS_DIR_RELATIVE` | Platform-native relative path `.forge/runs` |
+| `INDEX_FILE_RELATIVE` | Platform-native relative path `.forge/runs/index.jsonl` |
+
+### Artifact readers
+
+| Export | Returns | Source file |
+|---|---|---|
+| `listRuns({ cwd? })` | `string[]` run IDs, newest-first | `.forge/runs/` directory listing |
+| `readRunMeta({ runId, cwd? })` | `object \| null` | `.forge/runs/<runId>/run.json` |
+| `readRunSummary({ runId, cwd? })` | `object \| null` | `.forge/runs/<runId>/summary.json` |
+| `readRunIndex({ cwd? })` | `object[]` | `.forge/runs/index.jsonl` |
+
+### `parseEventLine(line)`
+
+Pure parser for a single `events.log` line. No I/O.
+
+| Format | `[<ISO 8601 timestamp>] <event-type>: <JSON data>` |
+|---|---|
+| Returns | `{ ts: string, type: string, data: object }` or `null` (no match) |
+| Pure | Yes — same input always produces the same output |
+
+### `run.json` fields
+
+| Field | Type | Description |
+|---|---|---|
+| `plan` | `string` | Absolute or relative path to the plan file |
+| `traceId` | `string` | OTEL trace ID for this run |
+| `startTime` | `string` | ISO 8601 UTC start time |
+| `model` | `string` | Primary model used |
+| `mode` | `string` | Execution mode (`auto`, `assisted`) |
+| `quorumMode` | `string` | Quorum mode (`auto`, `power`, `speed`, `false`) |
+| `sliceCount` | `number` | Number of slices in the plan |
+| `executionOrder` | `number[]` | DAG-sorted slice execution order |
+
+### `summary.json` fields
+
+| Field | Type | Description |
+|---|---|---|
+| `plan` | `string` | Plan path |
+| `phase` | `string` | Plan basename without `.md` |
+| `status` | `string` | `completed` or `failed` |
+| `results` | `object` | `{ passed, failed, skipped, total }` |
+| `totalDuration` | `number` | Wall-clock ms for the entire run |
+| `cost` | `object` | `{ total: number }` in USD |
+| `sliceResults` | `object[]` | Per-slice result records |
+
+---
+
+
 
 When you write a host that lets agents call Plan Forge tools, use the tool's `riskLevel` to decide what to gate on:
 
@@ -449,7 +549,8 @@ The SDK is intentionally narrow — it covers the artifact contracts (`tools.jso
 |---|---|
 | **0.3.0** | `chunker` sub-path; dropped broken `client` declaration; bumped to match v3.x memory architecture |
 | **0.4.0** | `client` sub-path — `PForgeClient` typed REST client, `createClient` factory, `PForgeClientError`, method groups for runs/memory/crucible/liveguard, generic `tool()` dispatcher |
-| **0.5.0** (current) | `anvil` sub-path — `computeAnvilKey`, path helpers; `lattice-query` sub-path — `LatticeQueryBuilder`, `tokenizeForSearch`, `scoreChunk`; `notifications/adapter-contract` sub-path — `validateAdapterShape`, `ERR_NOT_IMPLEMENTED` |
+| **0.5.0** | `anvil` sub-path — `computeAnvilKey`, path helpers; `lattice-query` sub-path — `LatticeQueryBuilder`, `tokenizeForSearch`, `scoreChunk`; `notifications/adapter-contract` sub-path — `validateAdapterShape`, `ERR_NOT_IMPLEMENTED` |
+| **0.6.0** (current) | `run-reader` sub-path — `listRuns`, `readRunMeta`, `readRunSummary`, `readRunIndex`, `parseEventLine`, path helpers for offline access to `.forge/runs/` artifacts |
 
 Track progress in [docs/V3-CAPABILITY-AUDIT.md](../docs/V3-CAPABILITY-AUDIT.md).
 

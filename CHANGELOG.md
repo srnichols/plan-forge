@@ -9,6 +9,29 @@ Format follows [Keep a Changelog](https://keepachangelog.com/).
 
 ---
 
+## [3.14.0] — 2026-05-20
+
+### Phase-ENTRA-SSO — Entra ID / Azure AD OIDC provider
+
+> **One-liner**: Implements the `entra-oidc` auth provider defined in Phase-AUTH-RBAC-SCAFFOLD, replacing the `sso-stub.mjs` placeholder with RS256 JWT validation via Entra ID JWKS discovery. Makes `authenticate()` async (backward-compatible — bearer and none providers resolve immediately). 22 new tests.
+
+#### Added
+- `pforge-mcp/auth/providers/entra-oidc.mjs` — Entra ID OIDC provider. Exports `authenticateEntraOidc(req, opts)` (async) and `healthCheck(tenantId?)`. Validates RS256-signed JWTs: extracts `Authorization: Bearer <jwt>`, fetches the Entra ID JWKS from `https://login.microsoftonline.com/{tenantId}/discovery/v2.0/keys`, verifies the RS256 signature using Node.js `crypto.createVerify`, and validates `exp`, `nbf`, `iss` (v2.0 and v1.0 Entra formats), and `aud` claims. Returns `token: claims.sub ?? claims.oid` as the RBAC principal key. No new required dependencies — uses `@azure/identity` (already an optional dep) indirectly via Node.js built-in `crypto`.
+- `pforge-mcp/tests/auth-entra-oidc.test.mjs` — 22 tests: valid JWT happy path, `oid` fallback when `sub` absent, no token, expired, `nbf` in future, wrong audience, untrusted issuer, v1.0 issuer format, JWKS network error, JWKS HTTP error, unknown `kid`, wrong signing key, missing `tenantId`, non-RS256 algorithm, explicit `audience` override, JWKS cache hit (fetch called once for two requests), `healthCheck` reachable/non-OK/network-error/default-tenant, and `authenticate` dispatch with `entra-oidc` provider tag.
+
+#### Changed
+- `pforge-mcp/auth/index.mjs` — `authenticate()` is now `async`. All three existing providers (bearer, sso, none) resolve synchronously; the async path is only taken for `entra-oidc`. Added `case "entra-oidc"` dispatch branch. Updated JSDoc typedefs to include `entraOidc` options and the new provider name.
+- `pforge-mcp/auth/middleware.mjs` — `await authenticate(req, opts)` (was synchronous call; `authGuard` was already `async` so this is a no-op for non-async providers).
+- `pforge-mcp/tests/auth-rbac.test.mjs` — five `authenticate()` dispatch tests updated to `async it` callbacks with `await authenticate(...)`.
+
+#### Notes
+- Backward-compatible: `bearer`, `sso`, and `none` providers are unchanged. No existing workflow is affected.
+- JWKS keys are cached in-process for 5 minutes per tenant to avoid per-request IdP calls.
+- `@azure/identity` is NOT required for this provider — only Node.js built-in `crypto` is used for RS256 verification. `@azure/identity` remains available for Foundry provider Entra/Managed Identity auth (Phase-FOUNDRY-PROVIDER).
+- `sso-stub.mjs` is retained for backward compatibility; selecting `provider: "sso"` still returns the stub result. Operators should migrate to `provider: "entra-oidc"`.
+
+---
+
 ## [3.13.0] — 2026-05-20
 
 ### Added — `pforge-sdk/bug-reader` + `run-reader` events — v0.11.0

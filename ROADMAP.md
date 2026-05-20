@@ -9,7 +9,9 @@
 
 **v3.13.0** (2026-05-20) — `pforge-sdk/bug-reader` (v0.11.0). New `bug-reader` sub-path provides offline access to `.forge/bugs/*.json` tempering bug registry files without a running MCP server. `listBugs` (with status/severity/scanner/since/until filters), `readBug`, `parseBugId`, `summarizeBugs`. 57 tests.
 
-Previous: **v3.12.1** (2026-05-20) — `forge_diff_stats` tool-surface cleanup. Added `forge_diff_stats` to `TOOL_NAMES` frozen array in `enums.mjs` and to `_READ_ONLY_TOOLS` in `server/tool-handlers.mjs`. Updated Appendix Q (`api-surface-index.html`) with both tools correctly placed. Resolves the handler-name collision introduced by Phase WORKER-GUARDRAILS A2.
+Previous: **v3.14.0** (2026-05-20) — Phase-ENTRA-SSO: Entra ID / Azure AD OIDC provider. Implements `entra-oidc` auth provider replacing the `sso-stub.mjs` placeholder — RS256 JWT validation via JWKS discovery, `exp`/`nbf`/`iss`/`aud` claim checks, JWKS in-process cache (5 min TTL), `healthCheck()` for startup probing, `sub`/`oid` claim as RBAC principal key. `authenticate()` made async (backward-compatible). 22 new tests.
+
+Previous: **v3.13.0** Added `forge_diff_stats` to `TOOL_NAMES` frozen array in `enums.mjs` and to `_READ_ONLY_TOOLS` in `server/tool-handlers.mjs`. Updated Appendix Q (`api-surface-index.html`) with both tools correctly placed. Resolves the handler-name collision introduced by Phase WORKER-GUARDRAILS A2.
 
 Previous: **v3.12.0** (2026-05-20) — `pforge-sdk/session-reader` (v0.10.0). New `session-reader` sub-path provides offline access to `.forge/fm-sessions/*.jsonl` Forge-Master conversation session files without a running MCP server. `listSessions`, `readSession`, `readAllSessionTurns` (archive + active, deduped and sorted), `parseSessionLine`, `getLane`, `summarizeSession`. 76 tests.
 
@@ -61,7 +63,7 @@ Previous: **v2.90.10** (2026-05-05) — Forge-Master Cross-Session Recall (Phase
 
 Previous: **v2.90.10** (2026-05-05) — Forge-Master Conversation Memory (Phase-38.1). Adds file-based JSONL session persistence to the Forge-Master reasoning engine. `runTurn` loads prior conversation turns before classification and persists each turn to disk. Per-tab session IDs flow from the dashboard (`sessionStorage` UUID) through `x-pforge-session-id` HTTP header to `deps.sessionId` in `runTurn`. Sessions auto-rotate at 200 turns. New CLI: `pforge fm-session list|purge`.
 
-**In flight (next)**: Auth/RBAC scaffold ✅ complete (Phase-AUTH-RBAC-SCAFFOLD). Next phase TBD — candidates: enterprise hardening track (Entra ID SSO first provider, multi-tenancy productization, fleet dashboard cross-team view).
+**In flight (next)**: Phase-ENTRA-SSO ✅ complete. Next phase TBD — candidates: enterprise hardening track (multi-tenancy productization, fleet dashboard cross-team view, Okta OIDC second provider).
 
 See [CHANGELOG.md](CHANGELOG.md) for full release notes.
 

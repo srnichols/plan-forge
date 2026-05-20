@@ -249,8 +249,8 @@ describe("authenticate", () => {
     }
   });
 
-  it("uses bearer provider by default", () => {
-    const result = authenticate(
+  it("uses bearer provider by default", async () => {
+    const result = await authenticate(
       { headers: { authorization: "Bearer tok" } },
       {}
     );
@@ -258,20 +258,20 @@ describe("authenticate", () => {
     expect(result.ok).toBe(true);
   });
 
-  it("provider='none' always returns ok:true", () => {
-    const result = authenticate({}, { provider: "none" });
+  it("provider='none' always returns ok:true", async () => {
+    const result = await authenticate({}, { provider: "none" });
     expect(result.ok).toBe(true);
     expect(result.provider).toBe("none");
   });
 
-  it("provider='sso' returns ok:false (stub)", () => {
-    const result = authenticate({}, { provider: "sso" });
+  it("provider='sso' returns ok:false (stub)", async () => {
+    const result = await authenticate({}, { provider: "sso" });
     expect(result.ok).toBe(false);
     expect(result.provider).toBe("sso");
   });
 
-  it("provider='bearer' with valid header returns ok:true", () => {
-    const result = authenticate(
+  it("provider='bearer' with valid header returns ok:true", async () => {
+    const result = await authenticate(
       { headers: { authorization: "Bearer good-token" } },
       { provider: "bearer" }
     );
@@ -279,8 +279,8 @@ describe("authenticate", () => {
     expect(result.provider).toBe("bearer");
   });
 
-  it("provider='bearer' with no token returns ok:false", () => {
-    const result = authenticate({ headers: {} }, { provider: "bearer" });
+  it("provider='bearer' with no token returns ok:false", async () => {
+    const result = await authenticate({ headers: {} }, { provider: "bearer" });
     expect(result.ok).toBe(false);
   });
 });

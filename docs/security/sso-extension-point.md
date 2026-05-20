@@ -49,9 +49,22 @@ The `token` field on a successful SSO result carries the subject identifier that
 
 ---
 
-## Current Stub
+## Current Provider
 
-`pforge-mcp/auth/providers/sso-stub.mjs` ships an intentionally non-functional placeholder:
+`pforge-mcp/auth/providers/entra-oidc.mjs` ships a full Entra ID OIDC implementation (Phase-ENTRA-SSO):
+
+```js
+export async function authenticateEntraOidc(req, opts = {}) { ... }
+export async function healthCheck(tenantId = "common") { ... }
+```
+
+The legacy `sso-stub.mjs` remains for backward compatibility but is deprecated. Operators using `provider: "sso"` should migrate to `provider: "entra-oidc"`.
+
+---
+
+## Legacy Stub
+
+`pforge-mcp/auth/providers/sso-stub.mjs` is a retained placeholder:
 
 ```js
 export function authenticateSso(_req, _opts = {}) {
@@ -63,7 +76,7 @@ export function authenticateSso(_req, _opts = {}) {
 }
 ```
 
-Requesting `provider: "sso"` with the stub active returns `ok: false` and a clear message. This is intentional — the stub surfaces a predictable error rather than crashing so callers can detect the misconfiguration early.
+Requesting `provider: "sso"` still returns `ok: false`. Migrate to `provider: "entra-oidc"`.
 
 ---
 
@@ -219,6 +232,6 @@ Token values are never logged. Use `redactSecrets` from `pforge-mcp/secrets.mjs`
 
 | Phase | Provider | Notes |
 |---|---|---|
-| Phase-ENTRA-SSO | Entra ID / Azure AD OIDC | JWT validation via `@azure/identity` (already optional dep) |
+| Phase-ENTRA-SSO | Entra ID / Azure AD OIDC | ✅ Shipped — `pforge-mcp/auth/providers/entra-oidc.mjs` |
 | Phase-OKTA-SSO | Okta OIDC | Standard OIDC discovery doc |
 | Phase-GITHUB-OIDC | GitHub Actions OIDC | Validates `sub` claim for CI/CD automation |

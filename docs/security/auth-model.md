@@ -17,7 +17,8 @@ Out of the box, Plan Forge ships with one active provider:
 | Provider | Status | Source |
 |---|---|---|
 | `bearer` | ✅ Active | `pforge-mcp/auth/providers/bearer.mjs` |
-| `sso` | 🔲 Stub only | `pforge-mcp/auth/providers/sso-stub.mjs` |
+| `entra-oidc` | ✅ Active | `pforge-mcp/auth/providers/entra-oidc.mjs` |
+| `sso` | 🔲 Stub (deprecated alias) | `pforge-mcp/auth/providers/sso-stub.mjs` |
 | `none` | ✅ Local bypass | `pforge-mcp/auth/index.mjs` |
 
 The **bearer** provider validates a secret token via `Authorization: Bearer <token>` or the `PFORGE_AUTH_TOKEN` environment variable. It is backward-compatible with the pre-Phase-AUTH-RBAC-SCAFFOLD `bridge.approvalSecret` flow.

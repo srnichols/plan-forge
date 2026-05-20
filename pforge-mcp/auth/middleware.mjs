@@ -33,7 +33,7 @@ import { resolveRoles, hasScope } from "./rbac.mjs";
 export function withAuth(handler, opts = {}) {
   return async function authGuard(req, res, ...rest) {
     // ── Step 1: Authentication ──────────────────────────────────────────
-    const authResult = authenticate(req, opts);
+    const authResult = await authenticate(req, opts);
 
     if (!authResult.ok) {
       return sendAuthError(res, 401, authResult.error ?? "Unauthorized");

@@ -193,7 +193,7 @@ function recordPageResult(state, currentUrl, pageResult) {
   }
 }
 
-function enqueueAllowedLinks(state, pageResult, depth, url, settings) {
+function enqueueAllowedLinks({ state, pageResult, depth, url, settings }) {
   if (!pageResult.links || depth >= settings.maxDepth) return;
   for (const link of pageResult.links) {
     if (!isAllowedOrigin(link, url, settings.extraAllowedOrigins)) continue;
@@ -221,7 +221,7 @@ async function crawlUiPages({ playwright, context, url, settings, artifactDir, a
       axeInjector,
     });
     recordPageResult(state, currentUrl, pageResult);
-    enqueueAllowedLinks(state, pageResult, depth, url, settings);
+    enqueueAllowedLinks({ state: state, pageResult: pageResult, depth: depth, url: url, settings: settings });
   }
   return state;
 }
@@ -273,7 +273,7 @@ function writeUiReport(artifactDir, { startedAt, url, pagesVisited, brokenLinks,
   } catch { /* best-effort */ }
 }
 
-function writeUiScreenshotManifest(artifactDir, settings, visited, projectDir, runId) {
+function writeUiScreenshotManifest({ artifactDir, settings, visited, projectDir, runId }) {
   if (!artifactDir || !settings.captureScreenshots) return;
   try {
     const manifestEntries = [];
@@ -338,7 +338,7 @@ function buildUiSweepResult({ base, now, t0, url, settings, artifactDir, project
     settings,
     verdict,
   });
-  writeUiScreenshotManifest(artifactDir, settings, visited, projectDir, runId);
+  writeUiScreenshotManifest({ artifactDir: artifactDir, settings: settings, visited: visited, projectDir: projectDir, runId: runId });
 
   return {
     ...base,

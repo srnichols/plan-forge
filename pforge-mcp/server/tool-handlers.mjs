@@ -5092,7 +5092,7 @@ async function _callToolHandler_060_forge_delegate_to_agent(request, args) {
       let reviewItemId = null;
 
       if (!args.dryRun) {
-        recordDelegation(cwd, args.bugId, route, args.mode, null);
+        recordDelegation({ targetPath: cwd, bugId: args.bugId, route, mode: args.mode, reviewItemId: null });
         if (args.mode === "review-queue-item") {
           const reviewResult = addReviewItem(cwd, {
             source: "fix-plan-approval",

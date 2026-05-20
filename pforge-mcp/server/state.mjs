@@ -155,7 +155,7 @@ export async function broadcastLiveGuard(tool, status, durationMs, summary = {})
 }
 
 export function captureMemory(content, type, source, cwd) {
-  return _captureMemoryCore(content, type, source, cwd, {
+  return _captureMemoryCore({ content, type, source, cwd, opts: {
     onCapture: (thought, deduped) => {
       try {
         activeHub?.broadcast({
@@ -166,7 +166,7 @@ export function captureMemory(content, type, source, cwd) {
         });
       } catch {}
     },
-  });
+  } });
 }
 
 export function _legacyCaptureMemoryUnused(content, type, source, cwd) {

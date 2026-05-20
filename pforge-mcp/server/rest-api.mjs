@@ -361,7 +361,7 @@ function _scoreSecretConfidence(entropy, keyMatch) {
   return "low";
 }
 
-function _scanSecretsInDiffLine(added, currentFile, lineNumber, threshold, findings) {
+function _scanSecretsInDiffLine({ added, currentFile, lineNumber, threshold, findings }) {
   const tokens = added.match(/["']([^"']{8,})["']|(?:=|:|=>)\s*["']?([^\s"',;]{8,})["']?/g) || [];
   for (const raw of tokens) {
     const cleaned = raw.replace(/^[=:>]\s*["']?|["']$/g, "").replace(/^["']/, "");
@@ -398,7 +398,7 @@ function _scanDiffForSecrets(diffOutput, threshold) {
     }
     if (line.startsWith("+") && !line.startsWith("+++")) {
       lineNumber++;
-      _scanSecretsInDiffLine(line.slice(1), currentFile, lineNumber, threshold, findings);
+      _scanSecretsInDiffLine({ added: line.slice(1), currentFile: currentFile, lineNumber: lineNumber, threshold: threshold, findings: findings });
     } else if (!line.startsWith("-")) {
       lineNumber++;
     }

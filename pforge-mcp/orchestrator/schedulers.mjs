@@ -279,7 +279,7 @@ function _resolveBashArgs(command, isBashWrapped) {
   return ["-c", body];
 }
 
-function _runWindowsBashGate(command, cwd, cmdBase, gateTimeout, failOnStderr) {
+function _runWindowsBashGate({ command, cwd, cmdBase, gateTimeout, failOnStderr }) {
   if (process.platform !== "win32") return null;
   const cmdName = cmdBase.split("/").pop().split("\\").pop().replace(/\.(exe|cmd|bat)$/i, "");
   const hasShellChain = /(^|[^&|])(\s;\s|\s&&\s|\s\|\|\s)/.test(command);
@@ -356,7 +356,7 @@ export function runGate(command, cwd, opts = {}) {
   const inlineRes = _runInlineNodeGate(command, cwd, gateTimeout, failOnStderr);
   if (inlineRes) return inlineRes;
 
-  const winRes = _runWindowsBashGate(command, cwd, cmdBase, gateTimeout, failOnStderr);
+  const winRes = _runWindowsBashGate({ command: command, cwd: cwd, cmdBase: cmdBase, gateTimeout: gateTimeout, failOnStderr: failOnStderr });
   if (winRes) return winRes;
 
   return _runDefaultGate(command, cwd, gateTimeout, failOnStderr);

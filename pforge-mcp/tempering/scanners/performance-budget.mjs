@@ -116,13 +116,13 @@ function evaluateEndpointRegression({ endpoint, method, budgetP95, currentP95, b
     return { pass: true, regression: null };
   }
   const deltaPercent = (currentP95 - baselineP95) / baselineP95;
-  const isRegression = isConsecutiveRegression(
+  const isRegression = isConsecutiveRegression({
     endpoint,
     method,
-    settings.regressionThreshold,
-    projectDir,
-    { requiredConsecutive: settings.consecutiveRunsRequired },
-  );
+    threshold: settings.regressionThreshold,
+    cwd: projectDir,
+    requiredConsecutive: settings.consecutiveRunsRequired,
+  });
   if (!isRegression) {
     return { pass: true, regression: null };
   }

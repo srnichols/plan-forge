@@ -544,7 +544,7 @@ function debugCostLog(message) {
  *   cost_breakdown: object,
  * }}
  */
-function _priceSliceSubscription(tokens, model, tokensIn, tokensOut, breakdown) {
+function _priceSliceSubscription({ tokens, model, tokensIn, tokensOut, breakdown }) {
   const premiumRequests = tokens?.premiumRequests || 0;
   const cost = premiumRequests * CLI_PER_REQUEST_USD;
   breakdown.subscription_cost = roundUsd(cost);
@@ -557,7 +557,7 @@ function _priceSliceSubscription(tokens, model, tokensIn, tokensOut, breakdown) 
   };
 }
 
-function _priceSliceXaiTicks(tokens, model, tokensIn, tokensOut, breakdown) {
+function _priceSliceXaiTicks({ tokens, model, tokensIn, tokensOut, breakdown }) {
   const costFromTicks = tokens.cost_in_usd_ticks * 1e-10;
   const reasoning = tokens?.reasoning_tokens || 0;
   breakdown.input_uncached = roundUsd(costFromTicks);
@@ -572,7 +572,7 @@ function _priceSliceXaiTicks(tokens, model, tokensIn, tokensOut, breakdown) {
   };
 }
 
-function _priceSliceAnthropic(tokens, model, tokensIn, tokensOut, pricing, breakdown) {
+function _priceSliceAnthropic({ tokens, model, tokensIn, tokensOut, pricing, breakdown }) {
   const cacheRead = tokens?.cache_read_tokens || 0;
   let cache5m = tokens?.cache_creation_5m_tokens || 0;
   let cache1h = tokens?.cache_creation_1h_tokens || 0;
@@ -602,7 +602,7 @@ function _priceSliceAnthropic(tokens, model, tokensIn, tokensOut, pricing, break
   };
 }
 
-function _priceSliceOpenAiXai(tokens, model, tokensIn, tokensOut, pricing, breakdown) {
+function _priceSliceOpenAiXai({ tokens, model, tokensIn, tokensOut, pricing, breakdown }) {
   const cacheRead = tokens?.cache_read_tokens || 0;
   const uncachedIn = Math.max(0, tokensIn - cacheRead);
   const tier = resolveTierMultipliers(pricing, tokens?.service_tier);
@@ -626,7 +626,7 @@ function _priceSliceOpenAiXai(tokens, model, tokensIn, tokensOut, pricing, break
   };
 }
 
-function _priceSliceDefault(tokensIn, tokensOut, model, pricing, breakdown, isFoundry) {
+function _priceSliceDefault({ tokensIn, tokensOut, model, pricing, breakdown, isFoundry }) {
   const baseCost = (tokensIn * pricing.input) + (tokensOut * pricing.output);
   let foundryMultiplier = 1.0;
   if (isFoundry && pricing.aoai_deployment_type_multiplier) {
@@ -684,23 +684,23 @@ export function priceSlice(tokens, worker) {
   const { model, tokensIn, tokensOut, breakdown, isFoundry } = _priceSliceContext(tokens, worker);
 
   if (_priceSliceUsesSubscriptionPricing(worker)) {
-    return _priceSliceSubscription(tokens, model, tokensIn, tokensOut, breakdown);
+    return _priceSliceSubscription({ tokens: tokens, model: model, tokensIn: tokensIn, tokensOut: tokensOut, breakdown: breakdown });
   }
   if (_priceSliceUsesXaiTicks(tokens)) {
-    return _priceSliceXaiTicks(tokens, model, tokensIn, tokensOut, breakdown);
+    return _priceSliceXaiTicks({ tokens: tokens, model: model, tokensIn: tokensIn, tokensOut: tokensOut, breakdown: breakdown });
   }
 
   const pricing = getPricing(model);
   breakdown.reasoning_tokens = tokens?.reasoning_tokens || 0;
 
   if (tokens?.vendor === "anthropic") {
-    return _priceSliceAnthropic(tokens, model, tokensIn, tokensOut, pricing, breakdown);
+    return _priceSliceAnthropic({ tokens: tokens, model: model, tokensIn: tokensIn, tokensOut: tokensOut, pricing: pricing, breakdown: breakdown });
   }
   if (_priceSliceUsesComputedVendorPricing(tokens)) {
-    return _priceSliceOpenAiXai(tokens, model, tokensIn, tokensOut, pricing, breakdown);
+    return _priceSliceOpenAiXai({ tokens: tokens, model: model, tokensIn: tokensIn, tokensOut: tokensOut, pricing: pricing, breakdown: breakdown });
   }
 
-  return _priceSliceDefault(tokensIn, tokensOut, model, pricing, breakdown, isFoundry);
+  return _priceSliceDefault({ tokensIn: tokensIn, tokensOut: tokensOut, model: model, pricing: pricing, breakdown: breakdown, isFoundry: isFoundry });
 }
 
 /**
@@ -709,7 +709,7 @@ export function priceSlice(tokens, worker) {
  * @param {Array} sliceResults
  * @returns {{ total_cost_usd, by_model, by_slice }}
  */
-function _apportionReviewerCostToModels(byModel, reviewerModels, reviewerCost, reviewerTokensIn, reviewerTokensOut) {
+function _apportionReviewerCostToModels({ byModel, reviewerModels, reviewerCost, reviewerTokensIn, reviewerTokensOut }) {
   if (reviewerModels.length === 0) return;
   if (reviewerCost <= 0 && reviewerTokensIn <= 0 && reviewerTokensOut <= 0) return;
 
@@ -777,7 +777,7 @@ export function priceRun(sliceResults) {
     });
 
     _priceRunAccumulateModel(byModel, cost);
-    _apportionReviewerCostToModels(byModel, reviewerModels, reviewerCost, reviewerTokensIn, reviewerTokensOut);
+    _apportionReviewerCostToModels({ byModel: byModel, reviewerModels: reviewerModels, reviewerCost: reviewerCost, reviewerTokensIn: reviewerTokensIn, reviewerTokensOut: reviewerTokensOut });
   }
 
   for (const m of Object.values(byModel)) {
@@ -989,7 +989,7 @@ function _estimatePlanResumeFields(plan, resumeFrom) {
     : {};
 }
 
-function _buildCopilotCodingAgentEstimate(plan, effectiveSlices, effectiveOrder, resumeFrom, model, tokensPerSlice) {
+function _buildCopilotCodingAgentEstimate({ plan, effectiveSlices, effectiveOrder, resumeFrom, model, tokensPerSlice }) {
   const sliceCount = effectiveSlices.length;
   const totalInputTokens = sliceCount * tokensPerSlice.input;
   const totalOutputTokens = sliceCount * tokensPerSlice.output;
@@ -1171,7 +1171,7 @@ export function estimatePlan({ plan, model, cwd, quorumConfig = null, resumeFrom
   const totalOutputTokens = sliceCount * tokensPerSlice.output;
 
   if (worker === "copilot-coding-agent") {
-    return _buildCopilotCodingAgentEstimate(plan, effectiveSlices, effectiveOrder, resumeFrom, model, tokensPerSlice);
+    return _buildCopilotCodingAgentEstimate({ plan: plan, effectiveSlices: effectiveSlices, effectiveOrder: effectiveOrder, resumeFrom: resumeFrom, model: model, tokensPerSlice: tokensPerSlice });
   }
 
   let estimatedCost = _estimatePlanBaseCost({

@@ -92,11 +92,7 @@ export function getBaselineP95(endpoint, method, cwd = process.cwd()) {
  * @returns {boolean}
  */
 export function isConsecutiveRegression(
-  endpoint,
-  method,
-  threshold,
-  cwd = process.cwd(),
-  { requiredConsecutive = 2 } = {},
+  { endpoint, method, threshold, cwd = process.cwd(), requiredConsecutive = 2 } = {},
 ) {
   const history = readPerfHistory(cwd);
   // Filter to this endpoint+method, newest last

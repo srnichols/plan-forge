@@ -79,7 +79,7 @@ export function startRootSpan(trace, name, attributes = {}) {
 /**
  * Start a child span (slice, worker, gate).
  */
-export function startSpan(trace, name, parentSpanId, kind = "INTERNAL", attributes = {}) {
+export function startSpan({ trace, name, parentSpanId, kind = "INTERNAL", attributes = {} }) {
   const span = {
     spanId: randomUUID().replace(/-/g, "").substring(0, 16),
     parentSpanId,
@@ -644,13 +644,13 @@ export function createTelemetryHandler(trace, runDir) {
 
   function onSliceStarted(data) {
     const parentId = state.rootSpan?.spanId || null;
-    startSpan(trace, `slice-${data?.sliceId}`, parentId, "INTERNAL", {
+    startSpan({ trace: trace, name: `slice-${data?.sliceId}`, parentSpanId: parentId, kind: "INTERNAL", attributes: {
       sliceId: data?.sliceId,
       title: data?.title,
       parallel: data?.parallel || false,
       "pforge.actor.source": data?.source ?? null,
       "pforge.action.security_risk": data?.security_risk ?? null,
-    });
+    } });
     _emitAgentSpan({ ...data, runId: trace.traceId }).catch(() => {});
   }
 
@@ -711,10 +711,10 @@ export function createTelemetryHandler(trace, runDir) {
       score: data?.score,
     });
     for (let i = 0; i < (data?.models || []).length; i++) {
-      startSpan(trace, `slice-${data?.sliceId}-quorum-${i}`, parentSpan.spanId, "CLIENT", {
+      startSpan({ trace: trace, name: `slice-${data?.sliceId}-quorum-${i}`, parentSpanId: parentSpan.spanId, kind: "CLIENT", attributes: {
         quorumLeg: i,
         model: data.models[i],
-      });
+      } });
     }
   }
 

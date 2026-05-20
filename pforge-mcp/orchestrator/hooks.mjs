@@ -752,13 +752,13 @@ function _postSliceSkipReason(commitMessage) {
   return null;
 }
 
-function _buildPostSliceWarning(priorScore, newScore, delta, config, violations) {
+function _buildPostSliceWarning({ priorScore, newScore, delta, config, violations }) {
   const topViolations = violations.slice(0, 5).map(v => `• ${v.file}: ${v.rule} (${v.severity})`).join("\n");
   const belowFloor = newScore < config.scoreFloor ? `Score is BELOW threshold (${config.scoreFloor}/${newScore}). ` : "";
   return `🔴 PostSlice Hook — Drift Warning\n\nDrift score dropped ${delta} points after this commit (${priorScore} → ${newScore}).\n${belowFloor}Recommend resolving violations before starting the next slice.\n\nTop violations:\n${topViolations}\n\nOptions:\n1. Fix violations now and amend the commit\n2. Accept and continue — run \`pforge incident\` if this causes a prod issue later\n3. Run \`pforge runbook docs/plans/<current-plan>\` to update ops docs with new risk\n\nThe next slice will start with this reduced score as the new baseline.`;
 }
 
-function _buildPostSliceAdvisory(priorScore, newScore, delta, config, violations) {
+function _buildPostSliceAdvisory({ priorScore, newScore, delta, config, violations }) {
   const topViolations = violations.slice(0, 3).map(v => `• ${v.file}: ${v.rule} (${v.severity})`).join("\n");
   return `🟡 PostSlice Hook — Drift Advisory\n\nDrift score dropped ${delta} points after this commit (${priorScore} → ${newScore}).\nScore is still above threshold (${config.scoreFloor}) — proceeding is safe, but investigate before shipping.\n\nTop new violations:\n${topViolations}\n\nRun \`pforge drift\` to see the full report.`;
 }
@@ -800,11 +800,11 @@ export function runPostSliceHook({ commitMessage, cwd = process.cwd() } = {}) {
   }
 
   if (delta > config.warnDeltaThreshold || newScore < config.scoreFloor) {
-    const message = _buildPostSliceWarning(priorScore, newScore, delta, config, violations);
+    const message = _buildPostSliceWarning({ priorScore: priorScore, newScore: newScore, delta: delta, config: config, violations: violations });
     return { triggered: true, action: "warning", message, priorScore, newScore, delta };
   }
 
-  const message = _buildPostSliceAdvisory(priorScore, newScore, delta, config, violations);
+  const message = _buildPostSliceAdvisory({ priorScore: priorScore, newScore: newScore, delta: delta, config: config, violations: violations });
   return { triggered: true, action: "advisory", message, priorScore, newScore, delta };
 }
 
@@ -1036,7 +1036,7 @@ function _buildContextHeaderLines(caches, alerts, snapshotAge) {
   return { lines, openIncidents };
 }
 
-async function _runRegressionGuardAndAppend(contextHeader, dirtyFiles, config, cwd, _deps) {
+async function _runRegressionGuardAndAppend({ contextHeader, dirtyFiles, config, cwd, _deps }) {
   let regressionResult = null;
   if (!(dirtyFiles.length > 0 && config.runRegressionGuard !== false)) {
     return { contextHeader, regressionResult };

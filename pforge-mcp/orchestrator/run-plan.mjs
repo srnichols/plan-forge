@@ -1010,7 +1010,7 @@ function _setupSilentDeathGuard(eventBus, runDir) {
   eventBus.on("run-aborted",     () => { _guardSliceId = null; process.off("exit", _silentDeathGuard); });
 }
 
-async function _selectScheduler(plan, eventBus, cwd, planPath, maxParallelism) {
+async function _selectScheduler({ plan, eventBus, cwd, planPath, maxParallelism }) {
   const hasParallelSlices = plan.slices.some((s) => s.parallel);
   const hasCompetitiveSlices = plan.slices.some((s) => s.competitive);
   if (hasCompetitiveSlices) {
@@ -1177,10 +1177,10 @@ async function _captureRunMemoryAndDrain(summary, cwd, projectName) {
   const costAnomaly = buildCostAnomalyThought(summary, getCostReport(cwd), projectName);
   const receipts = { runSummary: null, costAnomaly: null };
   if (runSummary) {
-    receipts.runSummary = captureMemory(runSummary, "decision", "forge_run_plan", cwd);
+    receipts.runSummary = captureMemory({ content: runSummary, type: "decision", source: "forge_run_plan", cwd });
   }
   if (costAnomaly) {
-    receipts.costAnomaly = captureMemory(costAnomaly, "gotcha", "forge_run_plan/cost", cwd);
+    receipts.costAnomaly = captureMemory({ content: costAnomaly, type: "gotcha", source: "forge_run_plan/cost", cwd });
   }
   summary._memoryCapture = {
     runSummary,
@@ -1254,7 +1254,7 @@ function _precomputeSliceComplexity(plan, cwd) {
   }
 }
 
-function _enforceCruciblePreflight(planPath, cwd, manualImport, manualImportSource, manualImportReason) {
+function _enforceCruciblePreflight({ planPath, cwd, manualImport, manualImportSource, manualImportReason }) {
   try {
     enforceCrucibleId(planPath, {
       cwd,
@@ -1552,7 +1552,7 @@ export async function runPlan(planPath, options = {}) {
 
   // v2.37 Crucible (Slice 01.4) — enforce that the plan was smelted
   // through the Crucible funnel or an explicit `--manual-import` bypass.
-  const crucibleFail = _enforceCruciblePreflight(planPath, cwd, manualImport, manualImportSource, manualImportReason);
+  const crucibleFail = _enforceCruciblePreflight({ planPath: planPath, cwd: cwd, manualImport: manualImport, manualImportSource: manualImportSource, manualImportReason: manualImportReason });
   if (crucibleFail) return crucibleFail;
 
   // Parse plan
@@ -1596,7 +1596,7 @@ export async function runPlan(planPath, options = {}) {
 
   // Select scheduler — use ParallelScheduler if plan has [P] tags
   const maxParallelism = loadMaxParallelism(cwd);
-  const scheduler = await _selectScheduler(plan, eventBus, cwd, planPath, maxParallelism);
+  const scheduler = await _selectScheduler({ plan: plan, eventBus: eventBus, cwd: cwd, planPath: planPath, maxParallelism: maxParallelism });
   const abortSignal = abortController?.signal || null;
 
   // OpenBrain memory integration

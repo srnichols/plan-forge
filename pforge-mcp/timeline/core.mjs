@@ -111,7 +111,7 @@ function _groupEventsByCorrelation(allEvents, limit) {
   return { threads: threads.slice(0, limit), truncated };
 }
 
-function _buildTimelineEmptyMessage(windowFrom, windowTo, correlationId, eventFilters, params) {
+function _buildTimelineEmptyMessage({ windowFrom, windowTo, correlationId, eventFilters, params }) {
   const fromHuman = windowFrom || "unset";
   const toHuman = windowTo || "now";
   const filterParts = [];
@@ -191,7 +191,7 @@ function applyTimelineEmptyMessage(result, { windowFrom, windowTo, correlationId
   if (result.total !== 0) return result;
   return {
     ...result,
-    message: _buildTimelineEmptyMessage(windowFrom, windowTo, correlationId, eventFilters, params),
+    message: _buildTimelineEmptyMessage({ windowFrom: windowFrom, windowTo: windowTo, correlationId: correlationId, eventFilters: eventFilters, params: params }),
   };
 }
 

@@ -226,7 +226,7 @@ describe("recordDelegation", () => {
 
   it("appends JSONL line with correct shape", () => {
     const route = { agent: "security", skill: "security-audit" };
-    recordDelegation(dir, "BUG-001", route, "analyst", null);
+    recordDelegation({ targetPath: dir, bugId: "BUG-001", route, mode: "analyst", reviewItemId: null });
 
     const filePath = resolve(dir, ".forge", "tempering", "delegations.jsonl");
     expect(existsSync(filePath)).toBe(true);
@@ -244,8 +244,8 @@ describe("recordDelegation", () => {
 
   it("appends multiple records without overwriting", () => {
     const route = { agent: "test-runner", skill: null };
-    recordDelegation(dir, "BUG-001", route, "analyst", null);
-    recordDelegation(dir, "BUG-002", route, "review-queue-item", "review-123");
+    recordDelegation({ targetPath: dir, bugId: "BUG-001", route, mode: "analyst", reviewItemId: null });
+    recordDelegation({ targetPath: dir, bugId: "BUG-002", route, mode: "review-queue-item", reviewItemId: "review-123" });
 
     const filePath = resolve(dir, ".forge", "tempering", "delegations.jsonl");
     const lines = readFileSync(filePath, "utf-8").trim().split("\n");

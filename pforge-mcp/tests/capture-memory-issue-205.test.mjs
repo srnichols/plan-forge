@@ -46,7 +46,7 @@ function readJsonl(absPath) {
 
 describe("captureMemory — Issue #205 hotfix", () => {
   it("appends to liveguard-memories.jsonl on first capture", () => {
-    const res = captureMemory("First capture test", "decision", "forge_run_plan", cwd);
+    const res = captureMemory({ content: "First capture test", type: "decision", source: "forge_run_plan", cwd });
 
     expect(res.captured).toBe(true);
     expect(res.deduped).toBe(false);
@@ -64,7 +64,7 @@ describe("captureMemory — Issue #205 hotfix", () => {
   });
 
   it("writes a telemetry row on every capture (even dedupes)", () => {
-    captureMemory("Telemetry probe", "decision", "forge_run_plan", cwd);
+    captureMemory({ content: "Telemetry probe", type: "decision", source: "forge_run_plan", cwd });
     const telemetry = readJsonl(resolve(cwd, ".forge", "telemetry", "memory-captures.jsonl"));
     expect(telemetry).toHaveLength(1);
     expect(telemetry[0].tool).toBe("forge_run_plan");
@@ -72,7 +72,7 @@ describe("captureMemory — Issue #205 hotfix", () => {
   });
 
   it("does NOT queue to openbrain-queue.jsonl when OpenBrain is not configured", () => {
-    captureMemory("No-OB project", "decision", "forge_run_plan", cwd);
+    captureMemory({ content: "No-OB project", type: "decision", source: "forge_run_plan", cwd });
     expect(existsSync(resolve(cwd, ".forge", "openbrain-queue.jsonl"))).toBe(false);
   });
 
@@ -83,7 +83,7 @@ describe("captureMemory — Issue #205 hotfix", () => {
       JSON.stringify({ servers: { openbrain: { type: "sse", url: "https://example/sse" } } }),
     );
 
-    const res = captureMemory("With OpenBrain", "decision", "forge_run_plan", cwd);
+    const res = captureMemory({ content: "With OpenBrain", type: "decision", source: "forge_run_plan", cwd });
     expect(res.openBrainQueued).toBe(true);
 
     const queue = readJsonl(resolve(cwd, ".forge", "openbrain-queue.jsonl"));
@@ -100,33 +100,33 @@ describe("captureMemory — Issue #205 hotfix", () => {
 
   it("invokes the onCapture callback with the thought and deduped flag", () => {
     const calls = [];
-    captureMemory(
-      "Callback probe",
-      "decision",
-      "forge_run_plan",
+    captureMemory({
+      content: "Callback probe",
+      type: "decision",
+      source: "forge_run_plan",
       cwd,
-      { onCapture: (thought, deduped) => calls.push({ content: thought.content, deduped }) },
-    );
+      opts: { onCapture: (thought, deduped) => calls.push({ content: thought.content, deduped }) },
+    });
     expect(calls).toHaveLength(1);
     expect(calls[0]).toEqual({ content: "Callback probe", deduped: false });
   });
 
   it("respects projectName from .forge.json", () => {
     writeFileSync(resolve(cwd, ".forge.json"), JSON.stringify({ projectName: "my-app" }));
-    captureMemory("Project-scoped capture", "decision", "forge_run_plan", cwd);
+    captureMemory({ content: "Project-scoped capture", type: "decision", source: "forge_run_plan", cwd });
     const records = readJsonl(resolve(cwd, ".forge", "liveguard-memories.jsonl"));
     expect(records[0].project).toBe("my-app");
   });
 
   it("never throws on missing cwd or bad input — capture is best-effort", () => {
-    expect(() => captureMemory(null, null, null, "/nonexistent/path/that/does/not/exist")).not.toThrow();
-    expect(() => captureMemory("ok", "decision", "forge_x", undefined)).not.toThrow();
+    expect(() => captureMemory({ content: null, type: null, source: null, cwd: "/nonexistent/path/that/does/not/exist" })).not.toThrow();
+    expect(() => captureMemory({ content: "ok", type: "decision", source: "forge_x", cwd: undefined })).not.toThrow();
   });
 
   it("dedupes near-identical captures so we don't dominate L2 with repeats", () => {
     const content = "Plan execution completed: Phase-X. Status: completed. Slices: 7 passed.";
-    captureMemory(content, "decision", "forge_run_plan", cwd);
-    const second = captureMemory(content, "decision", "forge_run_plan", cwd);
+    captureMemory({ content, type: "decision", source: "forge_run_plan", cwd });
+    const second = captureMemory({ content, type: "decision", source: "forge_run_plan", cwd });
 
     // Second capture should be deduped (identical content → cosine 1.0 ≥ 0.9 threshold)
     expect(second.deduped).toBe(true);

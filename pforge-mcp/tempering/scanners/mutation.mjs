@@ -216,7 +216,7 @@ function buildScheduleSkippedFrame(sliceRef, now, schedule) {
   };
 }
 
-function buildMutationSuccessResult(sliceRef, startedAt, now, parsed, evaluation) {
+function buildMutationSuccessResult({ sliceRef, startedAt, now, parsed, evaluation }) {
   const completedAt = new Date(now()).toISOString();
   return {
     scanner: "mutation",
@@ -319,5 +319,5 @@ export async function runMutationScan(ctx) {
   }
 
   handleMutationFailureEffects(mutationCtx, evaluation);
-  return buildMutationSuccessResult(mutationCtx.sliceRef, startedAt, mutationCtx.now, parsed, evaluation);
+  return buildMutationSuccessResult({ sliceRef: mutationCtx.sliceRef, startedAt: startedAt, now: mutationCtx.now, parsed: parsed, evaluation: evaluation });
 }

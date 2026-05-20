@@ -1746,7 +1746,7 @@ async function _runWatchCrossRun(resolved, crossRunWindow) {
   };
 }
 
-function _buildRunWatchReport(snapshot, anomalies, recommendations, mode, model) {
+function _buildRunWatchReport({ snapshot, anomalies, recommendations, mode, model }) {
   return {
     ok: true,
     mode,
@@ -1831,7 +1831,7 @@ function _emitWatchSnapshotEvents(eventBus, report, anomalies, snapshot) {
   } catch { /* never throw from event emission */ }
 }
 
-async function _runWatcherAnalyzeMode(snapshot, anomalies, report, model, timeout, eventBus) {
+async function _runWatcherAnalyzeMode({ snapshot, anomalies, report, model, timeout, eventBus }) {
   const prompt = buildWatcherPrompt(snapshot, anomalies);
   const watcherCwd = process.cwd();
   try {
@@ -1864,7 +1864,7 @@ async function _buildRunWatchSnapshotReport({ resolved, runId, tailEvents, since
   snapshot.targetPath = resolved;
   const anomalies = detectWatchAnomalies(snapshot);
   const recommendations = recommendFromAnomalies(anomalies, snapshot);
-  const report = _buildRunWatchReport(snapshot, anomalies, recommendations, mode, model);
+  const report = _buildRunWatchReport({ snapshot: snapshot, anomalies: anomalies, recommendations: recommendations, mode: mode, model: model });
   _emitWatchSnapshotEvents(eventBus, report, anomalies, snapshot);
   return { snapshot, anomalies, report };
 }
@@ -1902,12 +1902,7 @@ export async function runWatch(options = {}) {
   if (!snapshotResult.snapshot.ok) return snapshotResult.snapshot;
   if (mode === WATCHER_MODE_ANALYZE) {
     await _runWatcherAnalyzeMode(
-      snapshotResult.snapshot,
-      snapshotResult.anomalies,
-      snapshotResult.report,
-      model,
-      timeout,
-      eventBus,
+      { snapshot: snapshotResult.snapshot, anomalies: snapshotResult.anomalies, report: snapshotResult.report, model: model, timeout: timeout, eventBus: eventBus },
     );
   }
   _recordWatchHistoryIfEnabled(snapshotResult.report, recordHistory);

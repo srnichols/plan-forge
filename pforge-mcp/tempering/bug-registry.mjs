@@ -295,7 +295,7 @@ async function maybeDelegateRegisteredBug({ classification, severity, cwd, bugId
     if (!routingCfg.enabled) return;
     const route = resolveRoute({ ...record, type: deriveBugType(record) });
     if (!route) return;
-    recordDelegation(cwd, bugId, route, "review-queue-item", null);
+    recordDelegation({ targetPath: cwd, bugId, route, mode: "review-queue-item", reviewItemId: null });
     const { addReviewItem } = await import("../orchestrator.mjs");
     const reviewResult = addReviewItem(cwd, {
       source: "fix-plan-approval",

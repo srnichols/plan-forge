@@ -55,7 +55,7 @@ function buildFlakinessResult({ sliceRef, startedAt, completedAt, verdict, pass 
   return result;
 }
 
-function maybeCaptureConfirmedFlake(captureMemory, settings, testId, outcomes, classification) {
+function maybeCaptureConfirmedFlake({ captureMemory, settings, testId, outcomes, classification }) {
   const failureCount = outcomes.filter((o) => o !== "pass").length;
   if (!captureMemory || failureCount < settings.confirmedFlakeMinFailures) return failureCount;
   try {
@@ -148,7 +148,7 @@ export async function runFlakinessScan(ctx) {
       failureRate: classification.failureRate,
       window: classification.window,
     });
-    maybeCaptureConfirmedFlake(captureMemory, settings, testId, outcomes, classification);
+    maybeCaptureConfirmedFlake({ captureMemory: captureMemory, settings: settings, testId: testId, outcomes: outcomes, classification: classification });
   }
 
   const completedAt = new Date(now()).toISOString();

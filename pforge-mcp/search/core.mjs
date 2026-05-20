@@ -215,7 +215,7 @@ function _collectL2Records(activeSources, cwd, sinceDate, tags) {
   return allRecords;
 }
 
-function _mergeL3Records(allRecords, opts, query, tags, since) {
+function _mergeL3Records({ allRecords, opts, query, tags, since }) {
   if (!opts.openBrainSearchFn || Date.now() - openBrainFailedAt <= OPENBRAIN_COOLDOWN_MS) return;
   try {
     const l3Hits = opts.openBrainSearchFn({ query, tags, since });
@@ -260,7 +260,7 @@ export function search(params, opts = {}) {
 
   const activeSources = sources ? L2_SOURCES.filter((s) => sources.includes(s.source)) : L2_SOURCES;
   const allRecords = _collectL2Records(activeSources, cwd, sinceDate, tags);
-  _mergeL3Records(allRecords, opts, query, tags, since);
+  _mergeL3Records({ allRecords: allRecords, opts: opts, query: query, tags: tags, since: since });
 
   const scored = allRecords
     .map((rec) => ({ ...rec, score: scoreRecord(rec, tokens, tags, correlationId) }))

@@ -239,7 +239,7 @@ function buildAssertionContext(result, { testbedPath, startTime, correlationId, 
   };
 }
 
-function recordAssertionFailure(result, assertion, assertionResult, scenario, context = {}) {
+function recordAssertionFailure({ result, assertion, assertionResult, scenario, context = {} }) {
   const { correlationId = result.correlationId, hub, projectRoot } = context;
   result.status = "failed";
   const finding = {
@@ -269,11 +269,11 @@ function runScenarioAssertions(result, scenario, assertionContext, { hub, projec
     const assertionResult = handler(assertion, assertionContext);
     result.assertions.push(assertionResult);
     if (!assertionResult.passed) {
-      recordAssertionFailure(result, assertion, assertionResult, scenario, {
+      recordAssertionFailure({ result: result, assertion: assertion, assertionResult: assertionResult, scenario: scenario, context: {
         correlationId: result.correlationId,
         hub,
         projectRoot,
-      });
+      } });
     }
   }
 }
@@ -293,7 +293,7 @@ function captureScenarioFindings(result, captureMemoryFn, scenarioId, projectRoo
   }
 }
 
-function finalizeScenarioRun(result, startTime, hub, scenarioId, correlationId) {
+function finalizeScenarioRun({ result, startTime, hub, scenarioId, correlationId }) {
   result.durationMs = Date.now() - startTime;
   hub?.broadcast({
     type: "testbed-scenario-completed",
@@ -364,5 +364,5 @@ export async function runScenario(scenario, deps) {
     cleanupScenarioRun({ result, dryRun, scenario, testbedPath, spawnFn, projectRoot });
   }
 
-  return finalizeScenarioRun(result, startTime, hub, scenario.scenarioId, correlationId);
+  return finalizeScenarioRun({ result: result, startTime: startTime, hub: hub, scenarioId: scenario.scenarioId, correlationId: correlationId });
 }

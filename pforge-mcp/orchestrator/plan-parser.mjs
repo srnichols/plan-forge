@@ -127,7 +127,7 @@ function maybeApplyModelFrontmatter(meta, rawValue, value) {
   if (value.length > 0) meta.model = value;
 }
 
-function applyPlanFrontmatter(meta, key, rawValue, value, lineNumber) {
+function applyPlanFrontmatter({ meta, key, rawValue, value, lineNumber }) {
   if (key === "crucibleId") {
     meta.crucibleId = value;
     return;
@@ -173,7 +173,7 @@ function parsePlanFrontmatter(meta, content) {
     if ((value.startsWith('"') && value.endsWith('"')) || (value.startsWith("'") && value.endsWith("'"))) {
       value = value.slice(1, -1);
     }
-    applyPlanFrontmatter(meta, kv[1], kv[2], value, fmIdx + 2);
+    applyPlanFrontmatter({ meta: meta, key: kv[1], rawValue: kv[2], value: value, lineNumber: fmIdx + 2 });
   }
 }
 

@@ -142,7 +142,7 @@ function resolveRepo(config, { execSync: execSyncFn, cwd } = {}) {
 
 // ─── Dedup check ─────────────────────────────────────────────────────────────
 
-async function findExisting(hash, owner, repo, token, { execSync: execSyncFn, fetch: fetchFn, cwd }) {
+async function findExisting({ hash, owner, repo, token, execSync: execSyncFn, fetch: fetchFn, cwd }) {
   if (typeof execSyncFn === "function") {
     try {
       const cmd = `gh issue list --repo "${owner}/${repo}" --label "classifier-noise" --state open --search "${hash}" --json number,url,title --limit 10`;
@@ -265,7 +265,7 @@ export async function fileClassifierIssue(payload, config, {
     }
 
     // Dedup: check for existing open issue with same hash
-    const existing = await findExisting(hash, repoInfo.owner, repoInfo.repo, tokenResult.token, { execSync: execSyncFn, fetch: fetchFn, cwd });
+    const existing = await findExisting({ hash: hash, owner: repoInfo.owner, repo: repoInfo.repo, token: tokenResult.token, ...{ execSync: execSyncFn, fetch: fetchFn, cwd } });
     if (existing) {
       const commentBody = `## Recurrence\n\nThis classifier noise pattern was observed again.\n\n**Finding:** \`${payload.findingClass || "unknown"}\`\n**Route:** \`${payload.route || ""}\`\n\n*Reported by Plan Forge Tempering — hash \`${hash}\`*`;
       await addComment({ token: tokenResult.token, owner: repoInfo.owner, repo: repoInfo.repo, issueNumber: existing.issueNumber, body: commentBody, fetch: fetchFn });

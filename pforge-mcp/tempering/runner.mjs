@@ -929,7 +929,7 @@ const SCANNER_ENTRY_POINTS = {
  * @param {Function} [opts.scannerImpl] - DI override for tests
  * @returns {Promise<{ scanner: string, startedAt: string, completedAt: string, failures: number, findings: Array, raw: object }>}
  */
-async function _runSpawnBasedScanner(name, cwd, timeoutMs, started, now) {
+async function _runSpawnBasedScanner({ name, cwd, timeoutMs, started, now }) {
   const config = await readTemperingConfig(cwd);
   const stack = detectStack(cwd);
   const adapter = loadAdapter(stack);
@@ -1034,7 +1034,7 @@ export async function runSingleScanner(name, opts = {}) {
   }
 
   if (name === "unit" || name === "integration") {
-    return _runSpawnBasedScanner(name, cwd, timeoutMs, started, now);
+    return _runSpawnBasedScanner({ name: name, cwd: cwd, timeoutMs: timeoutMs, started: started, now: now });
   }
 
   const modulePath = SCANNER_IMPORT_MAP[name];

@@ -1560,7 +1560,7 @@ function _readForgeJsonlTail(cwd, relPath, tail = 50) {
  * @param {{onCapture?: (thought: object, deduped: boolean) => void}} [opts]
  * @returns {{captured: boolean, deduped: boolean, openBrainQueued: boolean, thought: object|null}}
  */
-export function captureMemory(content, type, source, cwd, opts = {}) {
+export function captureMemory({ content, type, source, cwd, opts = {} }) {
   try {
     // ── 1. Project name (from .forge.json) ───────────────────────────
     let project = "plan-forge";

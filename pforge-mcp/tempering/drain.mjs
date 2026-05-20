@@ -130,7 +130,7 @@ function noWorkDrainRound(round, runResult, now) {
   };
 }
 
-function completedDrainRound(round, runResult, now, prevRealFindings, prevPatterns) {
+function completedDrainRound({ round, runResult, now, prevRealFindings, prevPatterns }) {
   const { realFindings, patterns, findings } = extractCounts(runResult);
   return {
     ...makeDrainRoundBase(round, runResult, now),
@@ -143,7 +143,7 @@ function completedDrainRound(round, runResult, now, prevRealFindings, prevPatter
   };
 }
 
-function finalizeDrainSummary(corr, rounds, terminated, historyPath, fsErrors) {
+function finalizeDrainSummary({ corr, rounds, terminated, historyPath, fsErrors }) {
   const summary = {
     correlationId: corr,
     totalRounds: rounds.length,
@@ -199,7 +199,7 @@ async function executeDrainLoop({ project, maxRounds, convergenceRule, spawnWork
       break;
     }
 
-    const roundData = completedDrainRound(round, runResult, now, prevRealFindings, prevPatterns);
+    const roundData = completedDrainRound({ round: round, runResult: runResult, now: now, prevRealFindings: prevRealFindings, prevPatterns: prevPatterns });
     rounds.push(roundData);
     appendHistoryLine(historyPath, roundData, fsErrors);
     emit(hub, "drain-round-completed", { correlationId: corr, ...roundData });
@@ -212,7 +212,7 @@ async function executeDrainLoop({ project, maxRounds, convergenceRule, spawnWork
     prevPatterns = roundData.patterns;
   }
 
-  const summary = finalizeDrainSummary(corr, rounds, terminated, historyPath, fsErrors);
+  const summary = finalizeDrainSummary({ corr: corr, rounds: rounds, terminated: terminated, historyPath: historyPath, fsErrors: fsErrors });
   emit(hub, "drain-completed", { correlationId: corr, ...summary });
   return { rounds, terminated, summary };
 }

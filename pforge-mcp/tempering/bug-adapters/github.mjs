@@ -539,7 +539,7 @@ export function computeMetaBugHash(bugClass, title) {
  *
  * @returns {Promise<{ issueNumber: number, url: string } | null>}
  */
-async function findExistingMetaBug(hash, owner, repo, token, { execSync: execSyncFn, fetch: fetchFn, cwd }) {
+async function findExistingMetaBug({ hash, owner, repo, token, execSync: execSyncFn, fetch: fetchFn, cwd }) {
   // 1. Try gh CLI
   if (typeof execSyncFn === "function") {
     try {
@@ -710,11 +710,11 @@ export async function fileMetaBug(params, config, { execSync: execSyncFn, fetch:
       trajectoryExcerpt: params.trajectoryExcerpt,
     });
 
-    const existing = await findExistingMetaBug(hash, repoInfo.owner, repoInfo.repo, tokenResult.token, {
+    const existing = await findExistingMetaBug({ hash: hash, owner: repoInfo.owner, repo: repoInfo.repo, token: tokenResult.token, ...{
       execSync: execSyncFn,
       fetch: fetchFn,
       cwd,
-    });
+    } });
 
     if (existing) {
       return _handleExistingMetaBug({ existing, params, tokenResult, repoInfo, hash, fetchFn });

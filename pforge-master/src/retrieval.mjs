@@ -121,7 +121,7 @@ function truncateSections(l1Section, l2Section, l3Section) {
 
 // ─── Public API ─────────────────────────────────────────────────────
 
-async function collectContextEntries(keys, doRecall, recallArgs, cwd, sourceBucket) {
+async function collectContextEntries({ keys, doRecall, recallArgs, cwd, sourceBucket }) {
   const entries = [];
 
   for (const key of keys) {
@@ -170,21 +170,13 @@ export async function fetchContext(opts = {}, deps = {}) {
   const sources = { l1: [], l2: [], l3: [] };
 
   const l1Entries = await collectContextEntries(
-    L1_KEYS,
-    doRecall,
-    () => ({ runId: sessionId }),
-    cwd,
-    sources.l1,
+    { keys: L1_KEYS, doRecall: doRecall, recallArgs: () => ({ runId: sessionId }), cwd: cwd, sourceBucket: sources.l1 },
   );
   const l2Entries = await collectContextEntries(
-    L2_KEYS_BY_LANE[lane] || L2_KEYS_DEFAULT,
-    doRecall,
-    () => ({}),
-    cwd,
-    sources.l2,
+    { keys: L2_KEYS_BY_LANE[lane] || L2_KEYS_DEFAULT, doRecall: doRecall, recallArgs: () => ({}), cwd: cwd, sourceBucket: sources.l2 },
   );
   const l3Entries = config.l3Enabled
-    ? await collectContextEntries(L3_KEYS, doRecall, () => ({ scope: "cross" }), cwd, sources.l3)
+    ? await collectContextEntries({ keys: L3_KEYS, doRecall: doRecall, recallArgs: () => ({ scope: "cross" }), cwd: cwd, sourceBucket: sources.l3 })
     : [];
 
   let contextBlock = truncateSections(

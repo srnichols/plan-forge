@@ -180,7 +180,7 @@ export function writeAnalystFinding(targetPath, bug, route, finding) {
  * @param {string} mode - "analyst" | "review-queue-item"
  * @param {string|null} reviewItemId
  */
-export function recordDelegation(targetPath, bugId, route, mode, reviewItemId) {
+export function recordDelegation({ targetPath, bugId, route, mode, reviewItemId }) {
   const dir = resolve(targetPath, ".forge", "tempering");
   mkdirSync(dir, { recursive: true });
 
@@ -264,7 +264,7 @@ export function registerDelegateSyncResponder(hub, cwd, deps = {}) {
     }
 
     const prompt = buildAnalystPrompt(bug, route);
-    recordDelegation(cwd, bugId, route, "sync-ask", null);
+    recordDelegation({ targetPath: cwd, bugId: bugId, route: route, mode: "sync-ask", reviewItemId: null });
 
     return {
       ok: true,

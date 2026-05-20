@@ -386,7 +386,7 @@ export function createNotificationCore({ hub = null, projectRoot, adapters = {},
     return !digestTracker.track(routeKey, event);
   }
 
-  function handleDispatchSuccess(adapterName, event, correlationId, deliveryMs, result) {
+  function handleDispatchSuccess({ adapterName, event, correlationId, deliveryMs, result }) {
     if (result?.ok) {
       sentCount++;
       broadcastNotification({ type: "notification-sent", adapter: adapterName, event: event.type, correlationId, deliveryMs });
@@ -399,7 +399,7 @@ export function createNotificationCore({ hub = null, projectRoot, adapters = {},
     captureNotificationFailure(adapterName, errorCode);
   }
 
-  function handleDispatchError(adapterName, event, correlationId, deliveryMs, err) {
+  function handleDispatchError({ adapterName, event, correlationId, deliveryMs, err }) {
     const errorCode = err.message === "TIMEOUT" ? "TIMEOUT" : (err.code || "SEND_FAILED");
     failedCount++;
     broadcastNotification({ type: "notification-send-failed", adapter: adapterName, event: event.type, errorCode, correlationId, deliveryMs });
@@ -423,9 +423,9 @@ export function createNotificationCore({ hub = null, projectRoot, adapters = {},
         context.adapter.send({ event, route: adapterName, formattedMessage, correlationId, config: context.resolvedConfig }),
         new Promise((_, reject) => setTimeout(() => reject(new Error("TIMEOUT")), SEND_TIMEOUT_MS)),
       ]);
-      handleDispatchSuccess(adapterName, event, correlationId, nowFn() - t0, result);
+      handleDispatchSuccess({ adapterName: adapterName, event: event, correlationId: correlationId, deliveryMs: nowFn() - t0, result: result });
     } catch (err) {
-      handleDispatchError(adapterName, event, correlationId, nowFn() - t0, err);
+      handleDispatchError({ adapterName: adapterName, event: event, correlationId: correlationId, deliveryMs: nowFn() - t0, err: err });
     }
   }
 

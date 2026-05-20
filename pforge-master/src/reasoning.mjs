@@ -243,7 +243,7 @@ function _resolveTierState(input, config) {
   };
 }
 
-function _applyAutoEscalation(inputModel, currentTier, currentModel, config, classification) {
+function _applyAutoEscalation({ inputModel, currentTier, currentModel, config, classification }) {
   if (inputModel || !currentTier || !config.autoEscalate) {
     return { applied: false, autoEscalated: false, autoFromTier: null, autoToTier: null, autoEscalationReason: null, currentTier, currentModel };
   }
@@ -604,7 +604,7 @@ export async function runTurn(input, deps = {}) {
   }
 
   // ── Auto-escalation ───────────────────────────────────────────────
-  const esc = _applyAutoEscalation(inputModel, currentTier, currentModel, config, classification);
+  const esc = _applyAutoEscalation({ inputModel: inputModel, currentTier: currentTier, currentModel: currentModel, config: config, classification: classification });
   currentTier = esc.currentTier;
   currentModel = esc.currentModel;
   const { autoEscalated, autoFromTier, autoToTier, autoEscalationReason } = esc;
@@ -711,7 +711,7 @@ function blockObserverBudget(hub, budgetCheck) {
   return { ok: false, skipped: true, reason: budgetCheck.reason, narration: null };
 }
 
-function checkObserverBudgetGate(opts, cwd, loadBudgetStateFn, checkBudgetFn, caps, hub) {
+function checkObserverBudgetGate({ opts, cwd, loadBudgetStateFn, checkBudgetFn, caps, hub }) {
   const state = opts.budgetState ?? loadBudgetStateFn({ cwd });
   const budgetCheck = checkBudgetFn(state, caps);
   if (!budgetCheck.ok) {
@@ -752,7 +752,7 @@ function saveObserverBudgetState(saveBudgetStateFn, updatedState, cwd) {
   }
 }
 
-function captureObserverNarration(observerConfig, rememberFn, batch, narration, usd) {
+function captureObserverNarration({ observerConfig, rememberFn, batch, narration, usd }) {
   if (observerConfig.brainCapture === false || typeof rememberFn !== "function") return;
 
   try {
@@ -768,7 +768,7 @@ function captureObserverNarration(observerConfig, rememberFn, batch, narration, 
   }
 }
 
-function emitObserverNarration(hub, batch, narration, usd, observerConfig) {
+function emitObserverNarration({ hub, batch, narration, usd, observerConfig }) {
   if (!hub || typeof hub.broadcast !== "function") return;
 
   hub.broadcast({
@@ -823,12 +823,7 @@ export async function runObserverTurn(batch, opts = {}) {
   const { checkBudgetFn, recordSpendFn, loadBudgetStateFn, saveBudgetStateFn } = getObserverBudgetFns(opts);
   const observerConfig = resolveObserverConfigBlock(config);
   const budgetGate = checkObserverBudgetGate(
-    opts,
-    cwd,
-    loadBudgetStateFn,
-    checkBudgetFn,
-    buildObserverCaps(observerConfig),
-    hub,
+    { opts: opts, cwd: cwd, loadBudgetStateFn: loadBudgetStateFn, checkBudgetFn: checkBudgetFn, caps: buildObserverCaps(observerConfig), hub: hub },
   );
 
   if (budgetGate.blocked) {
@@ -861,8 +856,8 @@ export async function runObserverTurn(batch, opts = {}) {
   const updatedState = recordSpendFn(budgetGate.state, { usd, timestamp: Date.now() });
 
   saveObserverBudgetState(saveBudgetStateFn, updatedState, cwd);
-  captureObserverNarration(observerConfig, _remember, batch, narration, usd);
-  emitObserverNarration(hub, batch, narration, usd, observerConfig);
+  captureObserverNarration({ observerConfig: observerConfig, rememberFn: _remember, batch: batch, narration: narration, usd: usd });
+  emitObserverNarration({ hub: hub, batch: batch, narration: narration, usd: usd, observerConfig: observerConfig });
 
   return { ok: true, narration, tokensIn, tokensOut, usd };
 }

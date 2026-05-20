@@ -821,10 +821,10 @@ export async function recall(key, opts = {}, deps = {}) {
   const t0 = Date.now();
   let span = null;
   if (trace) {
-    span = startSpan(trace, "brain.recall", trace.spans[0]?.spanId || null, "INTERNAL", {
+    span = startSpan({ trace, name: "brain.recall", parentSpanId: trace.spans[0]?.spanId || null, kind: "INTERNAL", attributes: {
       key,
       "tier-attempted": readTiers.join(","),
-    });
+    } });
   }
 
   let { result, servedFrom } = await recallFromTiers(key, opts, d, readTiers);
@@ -870,10 +870,10 @@ export function remember(key, value, opts = {}, deps = {}) {
   const t0 = Date.now();
   let span = null;
   if (trace) {
-    span = startSpan(trace, "brain.remember", trace.spans[0]?.spanId || null, "INTERNAL", {
+    span = startSpan({ trace, name: "brain.remember", parentSpanId: trace.spans[0]?.spanId || null, kind: "INTERNAL", attributes: {
       key,
       "tier-attempted": writeTier,
-    });
+    } });
   }
 
   let result;
@@ -929,9 +929,9 @@ export function forget(key, opts = {}, deps = {}) {
   const t0 = Date.now();
   let span = null;
   if (trace) {
-    span = startSpan(trace, "brain.forget", trace.spans[0]?.spanId || null, "INTERNAL", {
+    span = startSpan({ trace, name: "brain.forget", parentSpanId: trace.spans[0]?.spanId || null, kind: "INTERNAL", attributes: {
       key,
-    });
+    } });
   }
 
   const allRemoved = [];

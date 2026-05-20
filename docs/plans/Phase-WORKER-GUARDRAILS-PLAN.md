@@ -1,10 +1,10 @@
 # Phase WORKER-GUARDRAILS — Apply A1–A8 enhancements from the gh-aw comparison
 
-> **Status**: HARDENED — cleared for execution 2026-05-18. Other agents' parallel work confirmed complete; Execution Hold lifted.
+> **Status**: ✅ Complete. All 12 slices shipped. See [What actually shipped](#what-actually-shipped) for the retro.
 > **Source**: [docs/research/gh-aw-agent-factory-comparison.md](../research/gh-aw-agent-factory-comparison.md) §3 "Action list (AGREED 2026-05-18)".
 > **Tracks**: `pforge-mcp/` (new tool + bridge filter + plan-parser fields), `.github/hooks/` + `templates/.github/hooks/` (PreCommit chain + Forbidden-Actions tightening), plan frontmatter schema (3 new optional fields), one new agent file, docs + auto-discovery sweep.
 > **Estimated cost**: medium — most changes are mechanical with explicit tests; one new MCP tool (A2) uses cheap-tier model and is exercised once per slice in QA.
-> **Pipeline**: Specify ✅ → Harden ✅ → **HOLD** → Execute (slice at a time, each slice has a vitest gate + behavior gate) → S9 full QA → S10 docs sweep → S11 retro.
+> **Pipeline**: Specify ✅ → Harden ✅ → Execute ✅ → S9 full QA ✅ → S10 docs sweep ✅ → S11 retro ✅.
 > **Recommended starting cluster**: **Cluster A — Foundation** (S0) so every later slice has a baseline to regress against.
 > **Session budget**: 12 slices total. Recommended break points: **commit + new session after S3** (end of Safe-Outputs unit) and **after S6** (end of Frontmatter Cluster). Resume each new session with `pforge run-plan --resume-from <slice>`.
 

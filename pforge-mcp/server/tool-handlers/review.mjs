@@ -155,7 +155,7 @@ async function _callToolHandler_057_forge_review_add(request, args) {
     } catch (err) {
       return { content: [{ type: "text", text: JSON.stringify({ error: err.code || "ERR_UNKNOWN", message: err.message }) }], isError: true };
     }
-  
+
 }
 
 async function _callToolHandler_058_forge_review_list(request, args) {
@@ -178,7 +178,7 @@ async function _callToolHandler_058_forge_review_list(request, args) {
     } catch (err) {
       return { content: [{ type: "text", text: JSON.stringify({ error: err.code || "ERR_UNKNOWN", message: err.message }) }], isError: true };
     }
-  
+
 }
 
 async function _callToolHandler_059_forge_review_resolve(request, args) {
@@ -199,7 +199,7 @@ async function _callToolHandler_059_forge_review_resolve(request, args) {
     } catch (err) {
       return { content: [{ type: "text", text: JSON.stringify({ error: err.code || "ERR_UNKNOWN", message: err.message }) }], isError: true };
     }
-  
+
 }
 
 async function _callToolHandler_060_forge_delegate_to_agent(request, args) {
@@ -209,8 +209,8 @@ async function _callToolHandler_060_forge_delegate_to_agent(request, args) {
     const t0 = Date.now();
     try {
       const cwd = args.targetPath ? findProjectRoot(resolve(args.targetPath)) : findProjectRoot(PROJECT_DIR);
-      const { loadBug } = await import("./tempering/bug-registry.mjs");
-      const { resolveRoute, buildAnalystPrompt, recordDelegation, deriveBugType } = await import("./tempering/agent-router.mjs");
+      const { loadBug } = await import("../../tempering/bug-registry.mjs");
+      const { resolveRoute, buildAnalystPrompt, recordDelegation, deriveBugType } = await import("../../tempering/agent-router.mjs");
 
       const bug = loadBug(cwd, args.bugId);
       if (!bug) {
@@ -253,7 +253,7 @@ async function _callToolHandler_060_forge_delegate_to_agent(request, args) {
     } catch (err) {
       return { content: [{ type: "text", text: JSON.stringify({ error: err.code || "ERR_DELEGATE", message: err.message }) }], isError: true };
     }
-  
+
 }
 
 async function _callToolHandler_061_forge_notify_send(request, args) {
@@ -263,8 +263,8 @@ async function _callToolHandler_061_forge_notify_send(request, args) {
     const t0 = Date.now();
     try {
       const cwd = args.path ? findProjectRoot(resolve(args.path)) : findProjectRoot(PROJECT_DIR);
-      const { createNotificationCore } = await import("./notifications/core.mjs");
-      const { webhookAdapter } = await import("./notifications/webhook-adapter.mjs");
+      const { createNotificationCore } = await import("../../notifications/core.mjs");
+      const { webhookAdapter } = await import("../../notifications/webhook-adapter.mjs");
       const core = createNotificationCore({ hub: activeHub, projectRoot: cwd, adapters: { webhook: webhookAdapter }, captureMemoryFn: captureMemory });
       const result = await core.directSend({ via: args.via, payload: args.payload, formattedMessage: args.formattedMessage });
       core.shutdown();
@@ -273,7 +273,7 @@ async function _callToolHandler_061_forge_notify_send(request, args) {
     } catch (err) {
       return { content: [{ type: "text", text: JSON.stringify({ error: err.code || "ERR_NOTIFY", message: err.message }) }], isError: true };
     }
-  
+
 }
 
 async function _callToolHandler_062_forge_notify_test(request, args) {
@@ -283,8 +283,8 @@ async function _callToolHandler_062_forge_notify_test(request, args) {
     const t0 = Date.now();
     try {
       const cwd = args.path ? findProjectRoot(resolve(args.path)) : findProjectRoot(PROJECT_DIR);
-      const { createNotificationCore } = await import("./notifications/core.mjs");
-      const { webhookAdapter } = await import("./notifications/webhook-adapter.mjs");
+      const { createNotificationCore } = await import("../../notifications/core.mjs");
+      const { webhookAdapter } = await import("../../notifications/webhook-adapter.mjs");
       const core = createNotificationCore({ hub: activeHub, projectRoot: cwd, adapters: { webhook: webhookAdapter }, captureMemoryFn: captureMemory });
       const result = core.testAdapter({ adapter: args.adapter });
       core.shutdown();
@@ -293,7 +293,7 @@ async function _callToolHandler_062_forge_notify_test(request, args) {
     } catch (err) {
       return { content: [{ type: "text", text: JSON.stringify({ error: err.code || "ERR_NOTIFY_TEST", message: err.message }) }], isError: true };
     }
-  
+
 }
 
 export {

@@ -9,6 +9,37 @@ Format follows [Keep a Changelog](https://keepachangelog.com/).
 
 ---
 
+## [3.11.0] — 2026-05-20
+
+### Added — Anvil, Hallmark, and pipeline tools are now published on the MCP surface
+
+The implementations for the Anvil cache, Hallmark provenance, and pipeline-health tools were already present in the codebase; this release completes the public surface so agents and users can discover and call them normally.
+
+- Registered 8 MCP tools in `pforge-mcp/server/tool-definitions.mjs` and `pforge-mcp/tools.json`:
+  `forge_anvil_stat`, `forge_anvil_clear`, `forge_anvil_rebuild`, `forge_anvil_dlq_list`,
+  `forge_anvil_dlq_drain`, `forge_hallmark_show`, `forge_hallmark_verify`, and
+  `forge_pipelines_list`.
+- Refreshed the generated tool-surface fixtures and `docs/manual/api-surface-index.html` so the published API inventory matches the live MCP surface.
+- Added `TOOL_NAMES` coverage for the previously shipped diagnostic/recall tools
+  `forge_embedding_status`, `forge_local_recall_status`, and `forge_local_search`,
+  so discovery, review, and platform summaries enumerate them consistently.
+
+### Fixed — Post-split import drift and shell-safe staging hardening (#208, #162)
+
+- Fixed dynamic `await import()` paths in split tool-handler modules
+  (`pforge-mcp/server/tool-handlers/discovery.mjs`, `orch.mjs`, `platform.mjs`, `review.mjs`)
+  so Smith, notifications, and testbed helpers resolve correctly after the handler split.
+  Closes meta-bug #208.
+- Replaced the remaining hard-coded error-code string literals in Crucible import,
+  tempering, and the inner-loop restart route with `ERROR_CODES.*.code`, including the new
+  `ERR_RESTART_DURING_RUN` catalog entry.
+- Hardened worker-path staging in `pforge-mcp/orchestrator/git-safety.mjs` by replacing
+  shell-string `git add -- <paths>` execution with `execFileSync("git", ["add", "--", ...paths])`,
+  so filenames with spaces or shell metacharacters are passed verbatim to Git.
+  Updated the Issue #162 auto-commit/race tests to match the new execution path.
+
+---
+
 ## [3.10.2] — 2026-05-20
 
 ### Changed — Phase 55 — CLEAN-CODE-SWEEP: eliminated all 4 clean-code blocking errors

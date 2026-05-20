@@ -1376,4 +1376,96 @@ export const TOOLS = [
       },
     },
   },
+  // Phase-ANVIL Slice 6 — Anvil cache + Hallmark provenance + Pipelines tools
+  {
+    name: "forge_anvil_stat",
+    description: "Inspect the Anvil memoization cache — reports total entries, total bytes, oldest modification time, and per-tool hit/miss counters. USE FOR: diagnosing cache health; monitoring cache size before running forge_anvil_clear; answering 'is the cache warm?'. Returns: { entries, totalBytes, oldestMtime, perTool }.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        path: { type: "string", description: "Project directory (default: current)" },
+      },
+    },
+  },
+  {
+    name: "forge_anvil_clear",
+    description: "Delete Anvil cache entries — scope by tool name, by age (olderThanMs), or both. At least one filter is required to prevent accidental full-cache wipes. USE FOR: freeing disk space; invalidating stale memoized results for a specific tool after a code change. Returns: { deleted }.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        tool: { type: "string", description: "Delete only entries for this tool name (e.g. 'forge_sweep')." },
+        olderThanMs: { type: "number", description: "Delete entries whose mtime is older than this many milliseconds." },
+        path: { type: "string", description: "Project directory (default: current)" },
+      },
+    },
+  },
+  {
+    name: "forge_anvil_rebuild",
+    description: "Invalidate Anvil cache entries for files changed since a git commit SHA. Runs git diff --name-only <since> and removes cache entries whose cache-key depends on the changed files. USE FOR: after a significant refactor, ensuring stale memoized results are evicted before the next tool call. Returns: { invalidated, changedFiles[] }.",
+    inputSchema: {
+      type: "object",
+      required: ["since"],
+      properties: {
+        since: { type: "string", description: "Git commit SHA to diff against (e.g. 'abc1234'). Required." },
+        path: { type: "string", description: "Project directory (default: current)" },
+      },
+    },
+  },
+  {
+    name: "forge_anvil_dlq_list",
+    description: "List dead-letter queue entries for the Anvil memoization cache — records of cache writes that failed and were quarantined. USE FOR: diagnosing persistent cache failure patterns; identifying tools with high error rates. Returns: { items[], total, truncated, message }.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        tool: { type: "string", description: "Filter to DLQ entries for this tool name only." },
+        limit: { type: "number", description: "Maximum DLQ entries to return (default: 50)." },
+        path: { type: "string", description: "Project directory (default: current)" },
+      },
+    },
+  },
+  {
+    name: "forge_anvil_dlq_drain",
+    description: "Drain (purge) dead-letter queue entries from the Anvil memoization cache. Without filters, drains all DLQ entries; scope to a specific entry id or tool name to be selective. USE FOR: clearing the DLQ after fixing an underlying error that caused cache writes to fail. Returns: { drained }.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        id: { type: "string", description: "Drain only the DLQ entry with this id." },
+        tool: { type: "string", description: "Drain only DLQ entries for this tool name." },
+        path: { type: "string", description: "Project directory (default: current)" },
+      },
+    },
+  },
+  {
+    name: "forge_hallmark_show",
+    description: "Show Hallmark provenance records — immutable milestone stamps written by the orchestrator at key execution points (slice completions, gate passes, phase closures). Without an id, lists all hallmarks. With an id, returns the full record. USE FOR: auditing execution milestones; answering 'was this slice completed?'; surfacing provenance context in review sessions. Returns: { hallmarks[], count } or a single hallmark record.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        id: { type: "string", description: "Return only the hallmark with this id. Omit to list all hallmarks." },
+        path: { type: "string", description: "Project directory (default: current)" },
+      },
+    },
+  },
+  {
+    name: "forge_hallmark_verify",
+    description: "Verify a Hallmark record has not drifted — re-hashes the source file (if any) referenced by the hallmark and compares against the stored hash. USE FOR: detecting whether a file has changed since a hallmark was written; pre-deploy integrity checks. Returns: { ok, id, drift, message, writtenAt }.",
+    inputSchema: {
+      type: "object",
+      required: ["id"],
+      properties: {
+        id: { type: "string", description: "Hallmark id to verify. Required." },
+        path: { type: "string", description: "Project directory (default: current)" },
+      },
+    },
+  },
+  {
+    name: "forge_pipelines_list",
+    description: "List the four standing capture pipelines and report their last-write timestamps plus Anvil hit rates. The four pipelines are: orchestrator-memory, watcher-drift, crucible, and run-slice. USE FOR: monitoring data-capture pipeline health; checking whether memory and event capture are active; diagnosing gaps in the L2 memory tier. Returns: { pipelines[], anvil }.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        path: { type: "string", description: "Project directory (default: current)" },
+      },
+    },
+  },
 ];

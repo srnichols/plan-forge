@@ -24,6 +24,7 @@ import { spawn as realSpawn } from "node:child_process";
 import { existsSync, mkdirSync, writeFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { randomUUID } from "node:crypto";
+import { ERROR_CODES } from "../enums.mjs";
 
 import {
   readTemperingConfig,
@@ -935,7 +936,7 @@ async function _runSpawnBasedScanner({ name, cwd, timeoutMs, started, now }) {
   const adapter = loadAdapter(stack);
   if (!adapter) {
     const err = new Error(`No adapter for stack "${stack}" — scanner "${name}" unavailable`);
-    err.code = "SCANNER_UNAVAILABLE";
+    err.code = ERROR_CODES.SCANNER_UNAVAILABLE.code;
     throw err;
   }
   const cmd = name === "unit"
@@ -943,7 +944,7 @@ async function _runSpawnBasedScanner({ name, cwd, timeoutMs, started, now }) {
     : adapter.integrationTestCommand?.(config, cwd) ?? adapter.unitTestCommand(config, cwd);
   if (!cmd) {
     const err = new Error(`Adapter does not provide a ${name} command for stack "${stack}"`);
-    err.code = "SCANNER_UNAVAILABLE";
+    err.code = ERROR_CODES.SCANNER_UNAVAILABLE.code;
     throw err;
   }
 
@@ -979,7 +980,7 @@ async function _runImportBasedScanner(name, opts) {
   const runFn = mod[entryPoint];
   if (typeof runFn !== "function") {
     const err = new Error(`Scanner "${name}" module missing entry point "${entryPoint}"`);
-    err.code = "SCANNER_UNAVAILABLE";
+    err.code = ERROR_CODES.SCANNER_UNAVAILABLE.code;
     throw err;
   }
 
@@ -1014,7 +1015,7 @@ export async function runSingleScanner(name, opts = {}) {
 
   if (!name || !(name in SCANNER_IMPORT_MAP)) {
     const err = new Error(`Scanner "${name}" is not registered`);
-    err.code = "SCANNER_UNAVAILABLE";
+    err.code = ERROR_CODES.SCANNER_UNAVAILABLE.code;
     throw err;
   }
 

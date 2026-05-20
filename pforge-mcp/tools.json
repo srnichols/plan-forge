@@ -6866,5 +6866,800 @@
         "message": "No chunk found for \"handleAuth\"."
       }
     }
+  },
+  {
+    "name": "forge_local_search",
+    "description": "Semantic search over local .forge/ thought stores — searches openbrain-queue.jsonl, openbrain-queue.archive.jsonl, openbrain-dlq.jsonl, and liveguard-memories.jsonl using TF-IDF cosine similarity. Automatically upgrades to neural embeddings (all-MiniLM-L6-v2) when @xenova/transformers is installed. USE FOR: recalling prior decisions and patterns when OpenBrain (L3 Postgres) is not configured; offline semantic memory search; auditing what thoughts have been captured locally. DO NOT USE FOR: querying a live OpenBrain/Postgres instance (use forge_search with memory source); searching code (use forge_search or forge_lattice_query).",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "query": {
+          "type": "string",
+          "description": "Semantic search query (required)"
+        },
+        "limit": {
+          "type": "number",
+          "description": "Max hits to return (default: 5, max: 20)"
+        },
+        "threshold": {
+          "type": "number",
+          "description": "Minimum similarity score 0..1 (default: 0.02)"
+        },
+        "backend": {
+          "type": "string",
+          "enum": [
+            "auto",
+            "tfidf",
+            "neural"
+          ],
+          "description": "Embedding backend: auto (neural if available, else tfidf), tfidf (always), neural (always — returns error if @xenova/transformers not installed). Default: auto."
+        },
+        "sources": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Which .forge/ JSONL files to scan (default: all four stores). Allowed: openbrain-queue.jsonl, openbrain-queue.archive.jsonl, openbrain-dlq.jsonl, liveguard-memories.jsonl."
+        },
+        "path": {
+          "type": "string",
+          "description": "Project directory (default: current)"
+        }
+      },
+      "required": [
+        "query"
+      ]
+    },
+    "intent": [
+      "semantic-search",
+      "local-recall",
+      "memory",
+      "embedding",
+      "fallback"
+    ],
+    "aliases": [
+      "local-recall",
+      "embedding-search",
+      "offline-search"
+    ],
+    "cost": "low",
+    "maxConcurrent": 5,
+    "addedIn": "3.9.0",
+    "prerequisites": [],
+    "produces": [],
+    "consumes": [
+      ".forge/openbrain-queue.jsonl",
+      ".forge/openbrain-queue.archive.jsonl",
+      ".forge/openbrain-dlq.jsonl",
+      ".forge/liveguard-memories.jsonl"
+    ],
+    "sideEffects": [],
+    "writesFiles": false,
+    "network": false,
+    "risk": "low",
+    "errors": {
+      "NEURAL_UNAVAILABLE": {
+        "message": "@xenova/transformers not installed — cannot use neural backend",
+        "recovery": "Use backend: 'tfidf' or install @xenova/transformers (npm install --save-optional @xenova/transformers)"
+      },
+      "EMPTY_CORPUS": {
+        "message": "No local thoughts found in .forge/",
+        "recovery": "Capture thoughts first via forge_capture_thought or run a plan"
+      }
+    },
+    "example": {
+      "input": {
+        "query": "authentication patterns",
+        "limit": 3
+      },
+      "output": {
+        "hits": [
+          {
+            "source": "plan-forge-orchestrator/my-plan/slice-3",
+            "snippet": "Decision: used JWT with 24h expiry…",
+            "score": 0.72,
+            "createdAt": "2026-05-19T12:00:00.000Z"
+          }
+        ],
+        "total": 1,
+        "corpusSize": 42,
+        "backend": "tfidf",
+        "query": "authentication patterns",
+        "truncated": false,
+        "message": "Found 1 matching thought (tfidf backend, corpus: 42)."
+      }
+    }
+  },
+  {
+    "name": "forge_embedding_status",
+    "description": "Report the current embedding backend status for local semantic search — whether @xenova/transformers (neural, all-MiniLM-L6-v2) or TF-IDF is active, how many thoughts are in the local corpus, and the configured backend override in .forge.json. USE FOR: diagnosing which search backend is active; checking whether to run 'pforge embeddings install'; monitoring embedding health in the dashboard. Returns: { ok, backend, neuralAvailable, neuralVersion, model, corpusSize, configuredBackend, installHint, message }.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "path": {
+          "type": "string",
+          "description": "Project directory (default: current)"
+        }
+      }
+    },
+    "intent": [
+      "embedding",
+      "status",
+      "neural",
+      "tfidf",
+      "local-recall",
+      "diagnostic"
+    ],
+    "aliases": [
+      "embedding-status",
+      "embeddings-status",
+      "check-embeddings"
+    ],
+    "cost": "low",
+    "maxConcurrent": 10,
+    "addedIn": "3.9.0",
+    "prerequisites": [],
+    "produces": [],
+    "consumes": [
+      ".forge/openbrain-queue.jsonl",
+      ".forge/openbrain-queue.archive.jsonl",
+      ".forge/openbrain-dlq.jsonl",
+      ".forge/liveguard-memories.jsonl",
+      ".forge.json"
+    ],
+    "sideEffects": [],
+    "writesFiles": false,
+    "network": false,
+    "risk": "low",
+    "errors": {},
+    "example": {
+      "input": {},
+      "output": {
+        "ok": true,
+        "backend": "tfidf",
+        "neuralAvailable": false,
+        "neuralPackage": "@xenova/transformers",
+        "neuralVersion": null,
+        "model": "Xenova/all-MiniLM-L6-v2",
+        "corpusSize": 42,
+        "configuredBackend": "auto",
+        "installHint": "npm install --save-optional @xenova/transformers",
+        "message": "Active backend: tfidf (neural not installed). neural unavailable — install with: npm install --save-optional @xenova/transformers. Corpus: 42 thoughts in .forge/."
+      }
+    }
+  },
+  {
+    "name": "forge_local_recall_status",
+    "description": "Inspect and manage the persistent TF-IDF index cache used by forge_local_search. Reports cache existence, corpus size, freshness (stale vs fresh), and build timestamp. Supports three subcommands: 'status' (default) — return cache diagnostics; 'warm' — pre-build the index so the first forge_local_search call has zero rebuild cost; 'clear' — delete the cache file to force a fresh rebuild. USE FOR: diagnosing why forge_local_search is slow; pre-warming the cache in CI; clearing a corrupt index. Returns: { ok, indexExists, version, builtAt, corpusSize, staleness, cacheFile, message } for status; { ok, action, ... } for warm/clear.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "subcommand": {
+          "type": "string",
+          "enum": [
+            "status",
+            "warm",
+            "clear"
+          ],
+          "description": "Operation: 'status' (default) — show cache info; 'warm' — pre-build index; 'clear' — delete cache."
+        },
+        "path": {
+          "type": "string",
+          "description": "Project directory (default: current)"
+        }
+      }
+    },
+    "intent": [
+      "local-recall",
+      "index",
+      "cache",
+      "tfidf",
+      "status",
+      "warm",
+      "clear",
+      "diagnostic"
+    ],
+    "aliases": [
+      "local-recall-status",
+      "recall-index-status",
+      "tfidf-index-status"
+    ],
+    "cost": "low",
+    "maxConcurrent": 10,
+    "addedIn": "3.9.1",
+    "prerequisites": [],
+    "produces": [],
+    "consumes": [
+      ".forge/local-recall-index.json",
+      ".forge/openbrain-queue.jsonl",
+      ".forge/openbrain-queue.archive.jsonl",
+      ".forge/openbrain-dlq.jsonl",
+      ".forge/liveguard-memories.jsonl"
+    ],
+    "sideEffects": [
+      "Subcommand 'clear' deletes .forge/local-recall-index.json. Subcommand 'warm' builds and persists the index."
+    ],
+    "writesFiles": false,
+    "network": false,
+    "risk": "low",
+    "errors": {},
+    "example": {
+      "input": {
+        "subcommand": "status"
+      },
+      "output": {
+        "ok": true,
+        "indexExists": true,
+        "version": 1,
+        "builtAt": "2026-05-20T03:00:00.000Z",
+        "corpusSize": 42,
+        "staleness": "fresh",
+        "cacheFile": "/path/to/project/.forge/local-recall-index.json",
+        "message": "Index is fresh. 42 thoughts indexed, built at 2026-05-20T03:00:00.000Z."
+      }
+    }
+  },
+  {
+    "name": "forge_audit_export",
+    "description": "Export audit events from .forge/runs/ as structured records. Reads events.log files written by the orchestrator — streaming, never loads all events into memory. Returns up to `limit` records with pagination metadata. USE FOR: compliance audits, feeding events into Splunk/Datadog/Grafana, answering 'what happened during run X?', exporting gate-pass/gate-fail timelines. Returns: { ok, records[], total, truncated, format, filters, message }. Use the CLI `pforge audit export` for unbounded streaming to stdout.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "since": {
+          "type": "string",
+          "description": "ISO date lower bound (inclusive). e.g. '2026-05-01' or '2026-05-01T12:00:00Z'"
+        },
+        "until": {
+          "type": "string",
+          "description": "ISO date upper bound (inclusive)."
+        },
+        "type": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Event types to include (repeatable). e.g. ['gate-pass','gate-fail','slice-start','slice-complete']. Default: all types."
+        },
+        "run": {
+          "type": "string",
+          "description": "Scope to a single run directory ID (e.g. '2026-05-07T18-24-13-482Z_Phase-53')."
+        },
+        "format": {
+          "type": "string",
+          "enum": [
+            "json",
+            "csv"
+          ],
+          "description": "Output format: 'json' (default) returns array of record objects; 'csv' returns array of CSV row strings with a header row first."
+        },
+        "limit": {
+          "type": "number",
+          "description": "Maximum records to return (default: 100, max: 500)."
+        },
+        "path": {
+          "type": "string",
+          "description": "Project directory (default: current)"
+        }
+      }
+    },
+    "intent": [
+      "audit",
+      "export",
+      "compliance",
+      "events",
+      "runs",
+      "forensics",
+      "cost-attribution"
+    ],
+    "aliases": [
+      "audit-export",
+      "export-audit",
+      "audit-log-export"
+    ],
+    "cost": "low",
+    "maxConcurrent": 10,
+    "addedIn": "3.10.1",
+    "prerequisites": [],
+    "produces": [],
+    "consumes": [
+      ".forge/runs/*/events.log"
+    ],
+    "sideEffects": [],
+    "writesFiles": false,
+    "network": false,
+    "risk": "low",
+    "errors": {
+      "run not found": "The specified run ID does not exist in .forge/runs/."
+    },
+    "example": {
+      "input": {
+        "since": "2026-05-01",
+        "type": [
+          "gate-fail",
+          "slice-complete"
+        ],
+        "limit": 10
+      },
+      "output": {
+        "ok": true,
+        "records": [
+          {
+            "ts": "2026-05-07T18:24:13.482Z",
+            "type": "gate-fail",
+            "run": "2026-05-07T18-24-13-482Z_Phase-53",
+            "slice": "3",
+            "message": "grep gate returned exit 1"
+          }
+        ],
+        "total": 1,
+        "truncated": false,
+        "format": "json",
+        "filters": {
+          "since": "2026-05-01",
+          "until": null,
+          "type": [
+            "gate-fail",
+            "slice-complete"
+          ],
+          "run": null,
+          "format": "json"
+        },
+        "message": "Returned 1 event record."
+      }
+    }
+  },
+  {
+    "name": "forge_anvil_stat",
+    "description": "Inspect the Anvil memoization cache — reports total entries, total bytes, oldest modification time, and per-tool hit/miss counters. USE FOR: diagnosing cache health; monitoring cache size before running forge_anvil_clear; answering 'is the cache warm?'. Returns: { entries, totalBytes, oldestMtime, perTool }.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "path": {
+          "type": "string",
+          "description": "Project directory (default: current)"
+        }
+      }
+    },
+    "intent": [
+      "anvil",
+      "cache",
+      "stat",
+      "memoization"
+    ],
+    "aliases": [
+      "anvil-stat",
+      "cache-stat"
+    ],
+    "cost": "low",
+    "maxConcurrent": 10,
+    "addedIn": "2.95.0",
+    "prerequisites": [],
+    "produces": [],
+    "consumes": [
+      ".forge/anvil/"
+    ],
+    "sideEffects": [],
+    "writesFiles": false,
+    "network": false,
+    "risk": "low",
+    "errors": {},
+    "example": {
+      "input": {},
+      "output": {
+        "entries": 12,
+        "totalBytes": 40960,
+        "oldestMtime": 1716000000000,
+        "perTool": {
+          "forge_analyze": {
+            "hits": 5,
+            "misses": 3,
+            "count": 3
+          }
+        }
+      }
+    }
+  },
+  {
+    "name": "forge_anvil_clear",
+    "description": "Delete Anvil cache entries — scope by tool name, by age (olderThanMs), or both. At least one filter is required to prevent accidental full-cache wipes. USE FOR: freeing disk space; invalidating stale memoized results for a specific tool after a code change. Returns: { deleted }.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "tool": {
+          "type": "string",
+          "description": "Delete only entries for this tool name (e.g. 'forge_sweep')."
+        },
+        "olderThanMs": {
+          "type": "number",
+          "description": "Delete entries whose mtime is older than this many milliseconds."
+        },
+        "path": {
+          "type": "string",
+          "description": "Project directory (default: current)"
+        }
+      }
+    },
+    "intent": [
+      "anvil",
+      "cache",
+      "clear",
+      "invalidate"
+    ],
+    "aliases": [
+      "anvil-clear",
+      "cache-clear"
+    ],
+    "cost": "low",
+    "maxConcurrent": 1,
+    "addedIn": "2.95.0",
+    "prerequisites": [],
+    "produces": [],
+    "consumes": [
+      ".forge/anvil/"
+    ],
+    "sideEffects": [
+      "deletes cache entries from .forge/anvil/"
+    ],
+    "writesFiles": true,
+    "network": false,
+    "risk": "medium",
+    "errors": {
+      "ERR_ANVIL_NO_FILTER": {
+        "message": "At least one filter (tool or olderThanMs) is required",
+        "recovery": "Pass tool or olderThanMs to scope the deletion"
+      }
+    },
+    "example": {
+      "input": {
+        "tool": "forge_sweep"
+      },
+      "output": {
+        "deleted": 3
+      }
+    }
+  },
+  {
+    "name": "forge_anvil_rebuild",
+    "description": "Invalidate Anvil cache entries for files changed since a git commit SHA. Runs git diff --name-only <since> and removes cache entries whose cache-key depends on the changed files. USE FOR: after a significant refactor, ensuring stale memoized results are evicted before the next tool call. Returns: { invalidated, changedFiles[] }.",
+    "inputSchema": {
+      "type": "object",
+      "required": [
+        "since"
+      ],
+      "properties": {
+        "since": {
+          "type": "string",
+          "description": "Git commit SHA to diff against (e.g. 'abc1234'). Required."
+        },
+        "path": {
+          "type": "string",
+          "description": "Project directory (default: current)"
+        }
+      }
+    },
+    "intent": [
+      "anvil",
+      "cache",
+      "rebuild",
+      "invalidate",
+      "git"
+    ],
+    "aliases": [
+      "anvil-rebuild",
+      "cache-rebuild"
+    ],
+    "cost": "low",
+    "maxConcurrent": 1,
+    "addedIn": "2.95.0",
+    "prerequisites": [
+      "git repository"
+    ],
+    "produces": [],
+    "consumes": [
+      ".forge/anvil/"
+    ],
+    "sideEffects": [
+      "deletes stale cache entries from .forge/anvil/"
+    ],
+    "writesFiles": true,
+    "network": false,
+    "risk": "medium",
+    "errors": {
+      "ERR_NO_SINCE": {
+        "message": "since parameter is required",
+        "recovery": "Pass since: <sha> to specify the base commit"
+      }
+    },
+    "example": {
+      "input": {
+        "since": "abc1234"
+      },
+      "output": {
+        "invalidated": 2,
+        "changedFiles": [
+          "pforge-mcp/orchestrator.mjs"
+        ]
+      }
+    }
+  },
+  {
+    "name": "forge_anvil_dlq_list",
+    "description": "List dead-letter queue entries for the Anvil memoization cache — records of cache writes that failed and were quarantined. USE FOR: diagnosing persistent cache failure patterns; identifying tools with high error rates. Returns: { items[], total, truncated, message }.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "tool": {
+          "type": "string",
+          "description": "Filter to DLQ entries for this tool name only."
+        },
+        "limit": {
+          "type": "number",
+          "description": "Maximum DLQ entries to return (default: 50)."
+        },
+        "path": {
+          "type": "string",
+          "description": "Project directory (default: current)"
+        }
+      }
+    },
+    "intent": [
+      "anvil",
+      "dlq",
+      "dead-letter-queue",
+      "failures"
+    ],
+    "aliases": [
+      "anvil-dlq-list",
+      "dlq-list"
+    ],
+    "cost": "low",
+    "maxConcurrent": 10,
+    "addedIn": "2.95.0",
+    "prerequisites": [],
+    "produces": [],
+    "consumes": [
+      ".forge/anvil/dlq/"
+    ],
+    "sideEffects": [],
+    "writesFiles": false,
+    "network": false,
+    "risk": "low",
+    "errors": {},
+    "example": {
+      "input": {
+        "limit": 10
+      },
+      "output": {
+        "items": [],
+        "total": 0
+      }
+    }
+  },
+  {
+    "name": "forge_anvil_dlq_drain",
+    "description": "Drain (purge) dead-letter queue entries from the Anvil memoization cache. Without filters, drains all DLQ entries; scope to a specific entry id or tool name to be selective. USE FOR: clearing the DLQ after fixing an underlying error that caused cache writes to fail. Returns: { drained }.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Drain only the DLQ entry with this id."
+        },
+        "tool": {
+          "type": "string",
+          "description": "Drain only DLQ entries for this tool name."
+        },
+        "path": {
+          "type": "string",
+          "description": "Project directory (default: current)"
+        }
+      }
+    },
+    "intent": [
+      "anvil",
+      "dlq",
+      "drain",
+      "retry",
+      "failures"
+    ],
+    "aliases": [
+      "anvil-dlq-drain",
+      "dlq-drain"
+    ],
+    "cost": "medium",
+    "maxConcurrent": 1,
+    "addedIn": "2.95.0",
+    "prerequisites": [],
+    "produces": [],
+    "consumes": [
+      ".forge/anvil/dlq/"
+    ],
+    "sideEffects": [
+      "removes successfully re-driven records from .forge/anvil/dlq/"
+    ],
+    "writesFiles": true,
+    "network": false,
+    "risk": "low",
+    "errors": {},
+    "example": {
+      "input": {},
+      "output": {
+        "drained": 1
+      }
+    }
+  },
+  {
+    "name": "forge_hallmark_show",
+    "description": "Show Hallmark provenance records — immutable milestone stamps written by the orchestrator at key execution points (slice completions, gate passes, phase closures). Without an id, lists all hallmarks. With an id, returns the full record. USE FOR: auditing execution milestones; answering 'was this slice completed?'; surfacing provenance context in review sessions. Returns: { hallmarks[], count } or a single hallmark record.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Return only the hallmark with this id. Omit to list all hallmarks."
+        },
+        "path": {
+          "type": "string",
+          "description": "Project directory (default: current)"
+        }
+      }
+    },
+    "intent": [
+      "hallmark",
+      "show",
+      "provenance",
+      "milestone"
+    ],
+    "aliases": [
+      "hallmark-show"
+    ],
+    "cost": "low",
+    "maxConcurrent": 10,
+    "addedIn": "2.95.0",
+    "prerequisites": [],
+    "produces": [],
+    "consumes": [
+      ".forge/hallmarks/"
+    ],
+    "sideEffects": [],
+    "writesFiles": false,
+    "network": false,
+    "risk": "low",
+    "errors": {
+      "ERR_NOT_FOUND": {
+        "message": "Hallmark not found",
+        "recovery": "Check id spelling; list hallmarks with forge_hallmark_show without an id"
+      },
+      "ERR_INVALID_ID": {
+        "message": "Invalid hallmark id",
+        "recovery": "Use only alphanumeric, dash, dot, or underscore characters"
+      }
+    },
+    "example": {
+      "input": {
+        "id": "slice-3"
+      },
+      "output": {
+        "id": "slice-3",
+        "payload": {
+          "status": "done"
+        },
+        "writtenAt": "2026-05-16T00:00:00.000Z"
+      }
+    }
+  },
+  {
+    "name": "forge_hallmark_verify",
+    "description": "Verify a Hallmark record has not drifted — re-hashes the source file (if any) referenced by the hallmark and compares against the stored hash. USE FOR: detecting whether a file has changed since a hallmark was written; pre-deploy integrity checks. Returns: { ok, id, drift, message, writtenAt }.",
+    "inputSchema": {
+      "type": "object",
+      "required": [
+        "id"
+      ],
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Hallmark id to verify. Required."
+        },
+        "path": {
+          "type": "string",
+          "description": "Project directory (default: current)"
+        }
+      }
+    },
+    "intent": [
+      "hallmark",
+      "verify",
+      "drift",
+      "provenance"
+    ],
+    "aliases": [
+      "hallmark-verify"
+    ],
+    "cost": "low",
+    "maxConcurrent": 10,
+    "addedIn": "2.95.0",
+    "prerequisites": [],
+    "produces": [],
+    "consumes": [
+      ".forge/hallmarks/"
+    ],
+    "sideEffects": [],
+    "writesFiles": false,
+    "network": false,
+    "risk": "low",
+    "errors": {
+      "ERR_NOT_FOUND": {
+        "message": "Hallmark not found",
+        "recovery": "Verify the id with forge_hallmark_show"
+      }
+    },
+    "example": {
+      "input": {
+        "id": "slice-3"
+      },
+      "output": {
+        "ok": true,
+        "id": "slice-3",
+        "drift": false,
+        "message": "Hallmark present; no source file to verify."
+      }
+    }
+  },
+  {
+    "name": "forge_pipelines_list",
+    "description": "List the four standing capture pipelines and report their last-write timestamps plus Anvil hit rates. The four pipelines are: orchestrator-memory, watcher-drift, crucible, and run-slice. USE FOR: monitoring data-capture pipeline health; checking whether memory and event capture are active; diagnosing gaps in the L2 memory tier. Returns: { pipelines[], anvil }.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "path": {
+          "type": "string",
+          "description": "Project directory (default: current)"
+        }
+      }
+    },
+    "intent": [
+      "pipelines",
+      "list",
+      "capture",
+      "memory"
+    ],
+    "aliases": [
+      "pipelines-list"
+    ],
+    "cost": "low",
+    "maxConcurrent": 10,
+    "addedIn": "2.95.0",
+    "prerequisites": [],
+    "produces": [],
+    "consumes": [
+      ".forge/openbrain-queue.jsonl",
+      ".forge/events.log",
+      ".forge/runs",
+      ".forge/crucible"
+    ],
+    "sideEffects": [],
+    "writesFiles": false,
+    "network": false,
+    "risk": "low",
+    "errors": {},
+    "example": {
+      "input": {},
+      "output": {
+        "pipelines": [
+          {
+            "id": "orchestrator-memory",
+            "label": "Orchestrator → Memory",
+            "artifactExists": true,
+            "lastWriteAt": "2026-05-16T00:00:00.000Z"
+          }
+        ],
+        "anvil": {
+          "entries": 0,
+          "totalBytes": 0,
+          "perTool": {}
+        }
+      }
+    }
   }
 ]

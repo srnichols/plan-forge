@@ -180,7 +180,7 @@ async function _callToolHandler_002_forge_abort(request, args) {
       return { content: [{ type: "text", text: "Abort signal sent. Current slice will finish, then execution stops." }] };
     }
     return { content: [{ type: "text", text: "No active plan execution to abort." }] };
-  
+
 }
 
 async function _callToolHandler_003_forge_plan_status(request, args) {
@@ -231,7 +231,7 @@ async function _callToolHandler_003_forge_plan_status(request, args) {
     } catch (err) {
       return { content: [{ type: "text", text: `Status error: ${err.message}` }], isError: true };
     }
-  
+
 }
 
 async function _callToolHandler_004_forge_diff_classify(request, args) {
@@ -245,7 +245,7 @@ async function _callToolHandler_004_forge_diff_classify(request, args) {
     } catch (err) {
       return { content: [{ type: "text", text: `diff-classify error: ${err.message}` }], isError: true };
     }
-  
+
 }
 
 async function _callToolHandler_005_forge_cost_report(request, args) {
@@ -272,7 +272,7 @@ async function _callToolHandler_005_forge_cost_report(request, args) {
     } catch (err) {
       return { content: [{ type: "text", text: `Cost report error: ${err.message}` }], isError: true };
     }
-  
+
 }
 
 async function _callToolHandler_006_forge_estimate_quorum(request, args) {
@@ -289,8 +289,8 @@ async function _callToolHandler_006_forge_estimate_quorum(request, args) {
       if (!existsSync(planFullPath)) {
         return { content: [{ type: "text", text: `${ERROR_CODES.PLAN_NOT_FOUND.code}: ${args.planPath}` }], isError: true };
       }
-      const { parsePlan } = await import("./orchestrator.mjs");
-      const { estimateQuorum } = await import("./cost-service.mjs");
+      const { parsePlan } = await import("../../orchestrator.mjs");
+      const { estimateQuorum } = await import("../../cost-service.mjs");
       let plan;
       try {
         plan = parsePlan(planFullPath, cwd);
@@ -310,7 +310,7 @@ async function _callToolHandler_006_forge_estimate_quorum(request, args) {
     } catch (err) {
       return { content: [{ type: "text", text: `Estimate error: ${err.message}` }], isError: true };
     }
-  
+
 }
 
 async function _callToolHandler_007_forge_estimate_slice(request, args) {
@@ -330,8 +330,8 @@ async function _callToolHandler_007_forge_estimate_slice(request, args) {
       if (!existsSync(planFullPath)) {
         return { content: [{ type: "text", text: `${ERROR_CODES.PLAN_NOT_FOUND.code}: ${args.planPath}` }], isError: true };
       }
-      const { parsePlan } = await import("./orchestrator.mjs");
-      const { estimateSlice } = await import("./cost-service.mjs");
+      const { parsePlan } = await import("../../orchestrator.mjs");
+      const { estimateSlice } = await import("../../cost-service.mjs");
       let plan;
       try {
         plan = parsePlan(planFullPath, cwd);
@@ -363,7 +363,7 @@ async function _callToolHandler_007_forge_estimate_slice(request, args) {
     } catch (err) {
       return { content: [{ type: "text", text: `Estimate error: ${err.message}` }], isError: true };
     }
-  
+
 }
 
 async function _callToolHandler_008_forge_health_trend(request, args) {
@@ -390,7 +390,7 @@ async function _callToolHandler_008_forge_health_trend(request, args) {
     } catch (err) {
       return { content: [{ type: "text", text: `Health trend error: ${err.message}` }], isError: true };
     }
-  
+
 }
 
 async function _callToolHandler_009_forge_alert_triage(request, args) {
@@ -461,7 +461,7 @@ async function _callToolHandler_009_forge_alert_triage(request, args) {
     } catch (err) {
       return { content: [{ type: "text", text: `Alert triage error: ${err.message}` }], isError: true };
     }
-  
+
 }
 
 async function _callToolHandler_010_forge_sweep(request, args) {
@@ -478,7 +478,7 @@ async function _callToolHandler_010_forge_sweep(request, args) {
     } catch (err) {
       return { content: [{ type: "text", text: `Sweep error: ${err.message}` }], isError: true };
     }
-  
+
 }
 
 async function _callToolHandler_011_forge_analyze(request, args) {
@@ -495,7 +495,7 @@ async function _callToolHandler_011_forge_analyze(request, args) {
     } catch (err) {
       return { content: [{ type: "text", text: `Analyze error: ${err.message}` }], isError: true };
     }
-  
+
 }
 
 async function _callToolHandler_012_forge_analyze(request, args) {
@@ -521,7 +521,7 @@ async function _callToolHandler_012_forge_analyze(request, args) {
     } catch (err) {
       return { content: [{ type: "text", text: `Quorum analysis error: ${err.message}` }], isError: true };
     }
-  
+
 }
 
 async function _callToolHandler_013_forge_diagnose(request, args) {
@@ -546,7 +546,7 @@ async function _callToolHandler_013_forge_diagnose(request, args) {
     } catch (err) {
       return { content: [{ type: "text", text: `Diagnosis error: ${err.message}` }], isError: true };
     }
-  
+
 }
 
 async function _callToolHandler_014_forge_capabilities(request, args) {
@@ -560,7 +560,7 @@ async function _callToolHandler_014_forge_capabilities(request, args) {
     } catch (err) {
       return { content: [{ type: "text", text: `Capabilities error: ${err.message}` }], isError: true };
     }
-  
+
 }
 
 async function _callToolHandler_015_forge_watch(request, args) {
@@ -617,7 +617,7 @@ async function _callToolHandler_015_forge_watch(request, args) {
     } catch (err) {
       return { content: [{ type: "text", text: `Watcher error: ${err.message}` }], isError: true };
     }
-  
+
 }
 
 async function _callToolHandler_016_forge_watch_live(request, args) {
@@ -704,7 +704,7 @@ async function _callToolHandler_016_forge_watch_live(request, args) {
     } catch (err) {
       return { content: [{ type: "text", text: `Watcher live error: ${err.message}` }], isError: true };
     }
-  
+
 }
 
 export {

@@ -161,7 +161,7 @@ async function _callToolHandler_063_forge_search(request, args) {
       emitToolTelemetry({ toolName: "forge_search", inputs: args, result: { error: err.message }, durationMs: durationMs, status: "ERROR", cwd: findProjectRoot(PROJECT_DIR) });
       return { content: [{ type: "text", text: `Search error: ${err.message}` }], isError: true };
     }
-  
+
 }
 
 async function _callToolHandler_064_forge_timeline(request, args) {
@@ -179,7 +179,7 @@ async function _callToolHandler_064_forge_timeline(request, args) {
       emitToolTelemetry({ toolName: "forge_timeline", inputs: args, result: { error: err.message }, durationMs: durationMs, status: "ERROR", cwd: findProjectRoot(PROJECT_DIR) });
       return { content: [{ type: "text", text: `Timeline error: ${err.message}` }], isError: true };
     }
-  
+
 }
 
 async function _callToolHandler_065_forge_doctor_quorum(request, args) {
@@ -199,7 +199,7 @@ async function _callToolHandler_065_forge_doctor_quorum(request, args) {
       emitToolTelemetry({ toolName: "forge_doctor_quorum", inputs: args, result: { error: err.message }, durationMs: durationMs, status: "ERROR", cwd: findProjectRoot(PROJECT_DIR) });
       return { content: [{ type: "text", text: `Doctor quorum error: ${err.message}` }], isError: true };
     }
-  
+
 }
 
 const _FORGE_QUORUM_GOAL_PRESETS = {
@@ -443,7 +443,7 @@ async function _callToolHandler_066_forge_quorum_analyze(request, args) {
     } catch (err) {
       return { content: [{ type: "text", text: JSON.stringify({ quorumPrompt: null, error: `Quorum analyze error: ${err.message}` }) }], isError: true };
     }
-  
+
 }
 
 function _th_067_resolveSmithCwd(args) {
@@ -493,8 +493,8 @@ function _th_067_appendReviewQueue(output, cwd) {
 }
 
 async function _th_067_appendNotifications(output, cwd) {
-  const { loadNotificationsConfig } = await import("./notifications/core.mjs");
-  const { parseEventsLog, findLatestRun } = await import("./orchestrator.mjs");
+  const { loadNotificationsConfig } = await import("../../notifications/core.mjs");
+  const { parseEventsLog, findLatestRun } = await import("../../orchestrator.mjs");
   const config = loadNotificationsConfig(cwd);
   const enabledAdapters = Object.entries(config.adapters || {}).filter(([, value]) => value.enabled).map(([key]) => key);
   const routeCount = (config.routes || []).length;
@@ -590,8 +590,8 @@ function _th_067_appendMemory(output, cwd) {
 }
 
 async function _th_067_appendTestbed(output, cwd) {
-  const { listScenarios } = await import("./testbed/scenarios.mjs");
-  const { listFindings } = await import("./testbed/defect-log.mjs");
+  const { listScenarios } = await import("../../testbed/scenarios.mjs");
+  const { listFindings } = await import("../../testbed/defect-log.mjs");
   let scenarioCount = 0;
   try {
     scenarioCount = listScenarios({ projectRoot: cwd }).length;
@@ -656,8 +656,8 @@ function _067_forge_smith_appendReviewQueue(output, cwd) {
 
 async function _067_forge_smith_appendNotifications(output, cwd) {
   try {
-    const { loadNotificationsConfig } = await import("./notifications/core.mjs");
-    const { parseEventsLog, findLatestRun } = await import("./orchestrator.mjs");
+    const { loadNotificationsConfig } = await import("../../notifications/core.mjs");
+    const { parseEventsLog, findLatestRun } = await import("../../orchestrator.mjs");
     const nCfg = loadNotificationsConfig(cwd);
     const enabledAdapters = Object.entries(nCfg.adapters || {}).filter(([, value]) => value.enabled).map(([key]) => key);
     const routeCount = (nCfg.routes || []).length;
@@ -768,8 +768,8 @@ function _067_forge_smith_appendMemory(output, cwd) {
 
 async function _067_forge_smith_appendTestbed(output, cwd) {
   try {
-    const { listScenarios } = await import("./testbed/scenarios.mjs");
-    const { listFindings } = await import("./testbed/defect-log.mjs");
+    const { listScenarios } = await import("../../testbed/scenarios.mjs");
+    const { listFindings } = await import("../../testbed/defect-log.mjs");
     let scenarioCount = 0;
     let openFindings = [];
     try {
@@ -800,7 +800,7 @@ async function _callToolHandler_067_forge_smith(request, args) {
     output = _067_forge_smith_appendMemory(output, cwd);
     output = await _067_forge_smith_appendTestbed(output, cwd);
     return { content: [{ type: "text", text: output }], isError: !result.success };
-  
+
 }
 
 async function _callToolHandler_068_forge_testbed_run(request, args) {
@@ -810,8 +810,8 @@ async function _callToolHandler_068_forge_testbed_run(request, args) {
     const t0 = Date.now();
     try {
       const cwd = args.path ? findProjectRoot(resolve(args.path)) : findProjectRoot(PROJECT_DIR);
-      const { loadScenario, resolveTestbedPath } = await import("./testbed/scenarios.mjs");
-      const { runScenario } = await import("./testbed/runner.mjs");
+      const { loadScenario, resolveTestbedPath } = await import("../../testbed/scenarios.mjs");
+      const { runScenario } = await import("../../testbed/runner.mjs");
       const scenario = loadScenario(args.scenarioId, { projectRoot: cwd });
       const testbedPath = resolveTestbedPath({ testbedPath: args.testbedPath }, { projectRoot: cwd });
       const result = await runScenario(scenario, {
@@ -828,7 +828,7 @@ async function _callToolHandler_068_forge_testbed_run(request, args) {
       emitToolTelemetry({ toolName: "forge_testbed_run", inputs: args, result: { error: err.message, code: err.code }, durationMs: durationMs, status: "ERROR", cwd: findProjectRoot(PROJECT_DIR) });
       return { content: [{ type: "text", text: JSON.stringify({ error: err.code || "ERR_TESTBED", message: err.message }) }], isError: true };
     }
-  
+
 }
 
 async function _callToolHandler_069_forge_testbed_findings(request, args) {
@@ -838,7 +838,7 @@ async function _callToolHandler_069_forge_testbed_findings(request, args) {
     const t0 = Date.now();
     try {
       const cwd = args.path ? findProjectRoot(resolve(args.path)) : findProjectRoot(PROJECT_DIR);
-      const { listFindings } = await import("./testbed/defect-log.mjs");
+      const { listFindings } = await import("../../testbed/defect-log.mjs");
       const filter = {};
       if (args.status) filter.status = args.status;
       if (args.severity) filter.severity = args.severity;
@@ -853,7 +853,7 @@ async function _callToolHandler_069_forge_testbed_findings(request, args) {
       emitToolTelemetry({ toolName: "forge_testbed_findings", inputs: args, result: { error: err.message }, durationMs: Date.now() - t0, status: "ERROR", cwd: findProjectRoot(PROJECT_DIR) });
       return { content: [{ type: "text", text: `Tool error: ${err.message}` }], isError: true };
     }
-  
+
 }
 
 async function _callToolHandler_070_forge_export_plan(request, args) {
@@ -875,7 +875,7 @@ async function _callToolHandler_070_forge_export_plan(request, args) {
       emitToolTelemetry({ toolName: "forge_export_plan", inputs: args, result: { error: err.message }, durationMs: Date.now() - t0, status: "ERROR", cwd: findProjectRoot(PROJECT_DIR) });
       return { content: [{ type: "text", text: `Tool error: ${err.message}` }], isError: true };
     }
-  
+
 }
 
 async function _callToolHandler_071_forge_sync_memories(request, args) {
@@ -899,7 +899,7 @@ async function _callToolHandler_071_forge_sync_memories(request, args) {
       emitToolTelemetry({ toolName: "forge_sync_memories", inputs: args, result: { error: err.message }, durationMs: Date.now() - t0, status: "ERROR", cwd: findProjectRoot(PROJECT_DIR) });
       return { content: [{ type: "text", text: `Tool error: ${err.message}` }], isError: true };
     }
-  
+
 }
 
 async function _callToolHandler_072_forge_sync_instructions(request, args) {
@@ -924,7 +924,7 @@ async function _callToolHandler_072_forge_sync_instructions(request, args) {
       emitToolTelemetry({ toolName: "forge_sync_instructions", inputs: args, result: { error: err.message }, durationMs: Date.now() - t0, status: "ERROR", cwd: findProjectRoot(PROJECT_DIR) });
       return { content: [{ type: "text", text: `Tool error: ${err.message}` }], isError: true };
     }
-  
+
 }
 
 async function _callToolHandler_073_forge_testbed_happypath(request, args) {
@@ -934,8 +934,8 @@ async function _callToolHandler_073_forge_testbed_happypath(request, args) {
     const t0 = Date.now();
     try {
       const cwd = args.path ? findProjectRoot(resolve(args.path)) : findProjectRoot(PROJECT_DIR);
-      const { listScenarios, loadScenario, resolveTestbedPath } = await import("./testbed/scenarios.mjs");
-      const { runScenario } = await import("./testbed/runner.mjs");
+      const { listScenarios, loadScenario, resolveTestbedPath } = await import("../../testbed/scenarios.mjs");
+      const { runScenario } = await import("../../testbed/runner.mjs");
       const allScenarios = listScenarios({ projectRoot: cwd });
       const happyPathIds = allScenarios.filter(s => s.kind === "happy-path").map(s => s.scenarioId);
 
@@ -973,7 +973,7 @@ async function _callToolHandler_073_forge_testbed_happypath(request, args) {
       // ── Module-based in-process scenarios (Phase-MEMORY-QA-PLAN Slice 6) ──
       let moduleScenarios = [];
       try {
-        const { REGISTERED_SCENARIOS } = await import("./testbed/scenarios/index.mjs");
+        const { REGISTERED_SCENARIOS } = await import("../../testbed/scenarios/index.mjs");
         moduleScenarios = Array.isArray(REGISTERED_SCENARIOS)
           ? REGISTERED_SCENARIOS.filter(s => s.kind === "happy-path")
           : [];
@@ -1001,7 +1001,7 @@ async function _callToolHandler_073_forge_testbed_happypath(request, args) {
       emitToolTelemetry({ toolName: "forge_testbed_happypath", inputs: args, result: { error: err.message, code: err.code }, durationMs: durationMs, status: "ERROR", cwd: findProjectRoot(PROJECT_DIR) });
       return { content: [{ type: "text", text: JSON.stringify({ error: err.code || "ERR_TESTBED", message: err.message }) }], isError: true };
     }
-  
+
 }
 
 export {

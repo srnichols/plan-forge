@@ -15,7 +15,7 @@
     "./notifications/adapter-contract": "./src/notifications/adapter-contract.mjs"
   },
   "scripts": {
-    "test": "node --test src/*.test.mjs 2>/dev/null || echo 'No tests yet'"
+    "test": "npx vitest run"
   },
   "keywords": ["plan-forge", "mcp", "sdk", "ai-agent", "hallmark", "lattice"],
   "license": "MIT",

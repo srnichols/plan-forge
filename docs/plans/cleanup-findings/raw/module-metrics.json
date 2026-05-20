@@ -121,7 +121,7 @@
   },
   {
     "file": "pforge-mcp/tempering/runner.mjs",
-    "loc": 1059,
+    "loc": 1060,
     "blank": 104,
     "comment": 13,
     "functions": 38,
@@ -145,10 +145,10 @@
   },
   {
     "file": "pforge-mcp/orchestrator/git-safety.mjs",
-    "loc": 957,
-    "blank": 72,
-    "comment": 51,
-    "functions": 32,
+    "loc": 952,
+    "blank": 71,
+    "comment": 55,
+    "functions": 31,
     "g14Severity": null
   },
   {
@@ -825,7 +825,7 @@
   },
   {
     "file": "pforge-mcp/server/rest-api/innerloop-routes.mjs",
-    "loc": 234,
+    "loc": 235,
     "blank": 12,
     "comment": 27,
     "functions": 1,
@@ -857,7 +857,7 @@
   },
   {
     "file": "pforge-mcp/enums.mjs",
-    "loc": 226,
+    "loc": 227,
     "blank": 16,
     "comment": 3,
     "functions": 10,

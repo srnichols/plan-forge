@@ -1,12 +1,12 @@
 {
-  "base": "HEAD~3",
-  "head": "7dc7d4afe4769086b7e5591f124493b3f83f2b39",
-  "timestamp": "2026-05-19T15:45:58.469Z",
-  "changedFileCount": 15,
+  "base": "origin/master",
+  "head": "b60247160cc118efa9d6acd7560127b54b324fc6",
+  "timestamp": "2026-05-20T08:28:00.864Z",
+  "changedFileCount": 126,
   "counts": {
     "exports": {
       "breaking": 0,
-      "additive": 0
+      "additive": 4
     },
     "tools": {
       "breaking": 0,
@@ -17,7 +17,57 @@
       "additive": 0
     }
   },
-  "exports": [],
+  "exports": [
+    {
+      "file": "pforge-sdk/src/anvil.mjs",
+      "added": [
+        "ANVIL_STATS_RELATIVE",
+        "anvilCacheDir",
+        "anvilEntryPath",
+        "anvilStatsPath",
+        "computeAnvilKey"
+      ],
+      "removed": [],
+      "category": "additive"
+    },
+    {
+      "file": "pforge-sdk/src/client.mjs",
+      "added": [
+        "PForgeClient",
+        "PForgeClientError",
+        "createClient"
+      ],
+      "removed": [],
+      "category": "additive"
+    },
+    {
+      "file": "pforge-sdk/src/lattice-query.mjs",
+      "added": [
+        "LatticeQueryBuilder",
+        "scoreChunk",
+        "tokenizeForSearch"
+      ],
+      "removed": [],
+      "category": "additive"
+    },
+    {
+      "file": "pforge-sdk/src/run-reader.mjs",
+      "added": [
+        "INDEX_FILE_RELATIVE",
+        "RUNS_DIR_RELATIVE",
+        "listRuns",
+        "parseEventLine",
+        "readRunIndex",
+        "readRunMeta",
+        "readRunSummary",
+        "runDir",
+        "runIndexPath",
+        "runsDir"
+      ],
+      "removed": [],
+      "category": "additive"
+    }
+  ],
   "tools": [],
   "cli": []
 }

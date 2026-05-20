@@ -453,7 +453,7 @@ async function _runBugScanners(scanners, testFilter, cwd) {
       const r = await runSingleScanner(s, { cwd, testNameFilter: testFilter, timeoutMs: 120_000, now: () => new Date() });
       results.push({ scanner: s, passed: r.failures === 0, details: r });
     } catch (e) {
-      if (e.code === "SCANNER_UNAVAILABLE") {
+      if (e.code === ERROR_CODES.SCANNER_UNAVAILABLE.code) {
         return { results, scannerUnavailable: { scanner: s, message: e.message } };
       }
       results.push({ scanner: s, passed: false, error: e.message });

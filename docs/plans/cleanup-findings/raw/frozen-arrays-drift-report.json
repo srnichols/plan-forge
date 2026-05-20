@@ -1,28 +1,27 @@
 {
-  "generatedAt": "2026-05-20T08:19:12.252Z",
+  "generatedAt": "2026-05-20T08:43:00.921Z",
   "enumsSource": "pforge-mcp/enums.mjs",
   "enumsScanned": {
     "HOOK_PASCAL": {
       "literalCount": 8
     },
     "ERROR_CODES": {
-      "literalCount": 55
+      "literalCount": 56
     }
   },
   "extendedScan": false,
   "includeTests": false,
   "counts": {
     "filesScanned": 262,
-    "filesWithDrift": 11,
-    "warnings": 4,
-    "info": 19,
+    "filesWithDrift": 8,
+    "warnings": 0,
+    "info": 15,
     "byEnum": {
-      "ERROR_CODES": 21,
+      "ERROR_CODES": 13,
       "HOOK_PASCAL": 2
     },
     "byKind": {
-      "SOFT-DRIFT": 19,
-      "HARD-DRIFT": 4
+      "SOFT-DRIFT": 15
     }
   },
   "findings": [
@@ -76,72 +75,6 @@
           "severity": "info",
           "kind": "SOFT-DRIFT",
           "why": "File hand-types \"tool-denied\" without importing ERROR_CODES — review whether to migrate"
-        }
-      ]
-    },
-    {
-      "file": "pforge-mcp/tempering/runner.mjs",
-      "findings": [
-        {
-          "enum": "ERROR_CODES",
-          "literal": "SCANNER_UNAVAILABLE",
-          "line": 938,
-          "severity": "info",
-          "kind": "SOFT-DRIFT",
-          "why": "File hand-types \"SCANNER_UNAVAILABLE\" without importing ERROR_CODES — review whether to migrate"
-        },
-        {
-          "enum": "ERROR_CODES",
-          "literal": "SCANNER_UNAVAILABLE",
-          "line": 946,
-          "severity": "info",
-          "kind": "SOFT-DRIFT",
-          "why": "File hand-types \"SCANNER_UNAVAILABLE\" without importing ERROR_CODES — review whether to migrate"
-        },
-        {
-          "enum": "ERROR_CODES",
-          "literal": "SCANNER_UNAVAILABLE",
-          "line": 982,
-          "severity": "info",
-          "kind": "SOFT-DRIFT",
-          "why": "File hand-types \"SCANNER_UNAVAILABLE\" without importing ERROR_CODES — review whether to migrate"
-        },
-        {
-          "enum": "ERROR_CODES",
-          "literal": "SCANNER_UNAVAILABLE",
-          "line": 1017,
-          "severity": "info",
-          "kind": "SOFT-DRIFT",
-          "why": "File hand-types \"SCANNER_UNAVAILABLE\" without importing ERROR_CODES — review whether to migrate"
-        }
-      ]
-    },
-    {
-      "file": "pforge-mcp/crucible-import.mjs",
-      "findings": [
-        {
-          "enum": "ERROR_CODES",
-          "literal": "SPECKIT_IMPORT_DIR_NOT_FOUND",
-          "line": 360,
-          "severity": "warn",
-          "kind": "HARD-DRIFT",
-          "why": "File imports ERROR_CODES but still uses hand-typed \"SPECKIT_IMPORT_DIR_NOT_FOUND\" — replace with the constant"
-        },
-        {
-          "enum": "ERROR_CODES",
-          "literal": "SPECKIT_IMPORT_NOT_FOUND",
-          "line": 405,
-          "severity": "warn",
-          "kind": "HARD-DRIFT",
-          "why": "File imports ERROR_CODES but still uses hand-typed \"SPECKIT_IMPORT_NOT_FOUND\" — replace with the constant"
-        },
-        {
-          "enum": "ERROR_CODES",
-          "literal": "SMELT_NOT_FOUND",
-          "line": 942,
-          "severity": "warn",
-          "kind": "HARD-DRIFT",
-          "why": "File imports ERROR_CODES but still uses hand-typed \"SMELT_NOT_FOUND\" — replace with the constant"
         }
       ]
     },
@@ -236,19 +169,6 @@
           "severity": "info",
           "kind": "SOFT-DRIFT",
           "why": "File hand-types \"LOCK_HASH_MISMATCH\" without importing ERROR_CODES — review whether to migrate"
-        }
-      ]
-    },
-    {
-      "file": "pforge-mcp/server/tool-handlers/tempering.mjs",
-      "findings": [
-        {
-          "enum": "ERROR_CODES",
-          "literal": "SCANNER_UNAVAILABLE",
-          "line": 456,
-          "severity": "warn",
-          "kind": "HARD-DRIFT",
-          "why": "File imports ERROR_CODES but still uses hand-typed \"SCANNER_UNAVAILABLE\" — replace with the constant"
         }
       ]
     },

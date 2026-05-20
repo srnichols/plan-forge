@@ -357,7 +357,7 @@ function locateArtifacts(projectRoot, overrideDir) {
     if (!existsSync(abs)) {
       return {
         ok: false,
-        error: "SPECKIT_IMPORT_DIR_NOT_FOUND",
+        error: ERROR_CODES.SPECKIT_IMPORT_DIR_NOT_FOUND.code,
         message: `Directory not found: ${abs}`,
       };
     }
@@ -402,7 +402,7 @@ function locateArtifacts(projectRoot, overrideDir) {
 
   return {
     ok: false,
-    error: "SPECKIT_IMPORT_NOT_FOUND",
+    error: ERROR_CODES.SPECKIT_IMPORT_NOT_FOUND.code,
     message:
       "No Spec Kit artifacts found. Tried: " +
       DEFAULT_SCAN_DIRS.map((d) => `${d}/`).join(", ") +
@@ -939,7 +939,7 @@ function cliStatus(argv) {
   if (args.smeltId) {
     const smelt = getSmelt(args.project, args.smeltId);
     if (!smelt) {
-      if (args.json) process.stdout.write(JSON.stringify({ ok: false, error: "SMELT_NOT_FOUND", smeltId: args.smeltId }) + "\n");
+      if (args.json) process.stdout.write(JSON.stringify({ ok: false, error: ERROR_CODES.SMELT_NOT_FOUND.code, smeltId: args.smeltId }) + "\n");
       else process.stderr.write(`pforge crucible status: smelt not found: ${args.smeltId}\n`);
       return 1;
     }

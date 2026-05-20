@@ -4,6 +4,7 @@ import { getReviewerCalibration, federationReadTrajectories, loadFederationConfi
 import { listPendingAutoSkills } from "../../memory.mjs";
 import { readForgeJsonl, PROPOSED_FIX_DIR } from "../../orchestrator.mjs";
 import { PROJECT_DIR, activeAbortController } from "../state.mjs";
+import { ERROR_CODES } from "../../enums.mjs";
 
 export function _registerInnerloopServerRoutes(app) {
   app.get("/api/innerloop/status", (_req, res) => {
@@ -178,7 +179,7 @@ export function _registerInnerloopServerRoutes(app) {
   app.post("/api/server/restart", (_req, res) => {
     try {
       if (activeAbortController) {
-        return res.status(409).json({ error: "Cannot restart during active plan run", code: "ERR_RESTART_DURING_RUN" }); // TODO: enum migration
+        return res.status(409).json({ error: "Cannot restart during active plan run", code: ERROR_CODES.ERR_RESTART_DURING_RUN.code });
       }
       const now = Date.now();
       if (now - _lastRestartTs < _RESTART_COOLDOWN_MS) {

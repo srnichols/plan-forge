@@ -48,6 +48,7 @@ export const ERROR_CODES = Object.freeze({
   DIFF_CLASSIFY_BLOCKED: freezeErrorCode("diff-classify-blocked", "high", "The diff classifier returned blocked for one or more files. Revert or move out-of-scope changes, then retry the commit."),
   DRIFT_DETECTED: freezeErrorCode("DRIFT_DETECTED", "high", "Worker tried to edit a file listed in the plan's Forbidden Actions. Revert the change, then re-run the slice."),
   DUPLICATE_BUG: freezeErrorCode("DUPLICATE_BUG", "low", "Bug fingerprint already exists in the registry. Reuse the existing bug record instead of filing a duplicate."),
+  ERR_RESTART_DURING_RUN: freezeErrorCode("ERR_RESTART_DURING_RUN", "medium", "POST /api/server/restart was rejected because a plan is currently running. Abort the run or wait for it to finish."),
   ERR_UPDATE_DURING_RUN: freezeErrorCode("ERR_UPDATE_DURING_RUN", "medium", "POST /api/self-update was rejected because a plan is currently running. Abort the run or wait for it to finish."),
   GATE_COMMAND_FAILED: freezeErrorCode("GATE_COMMAND_FAILED", "high", "Slice validation gate exited non-zero. Fix the build or test failure, then resume from the failed slice."),
   INVALID_CLASS: freezeErrorCode("INVALID_CLASS", "low", "Requested meta-bug class is not valid. Use one of the allowed classifier classes."),

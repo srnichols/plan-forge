@@ -491,15 +491,6 @@ export function cleanupStaleSnapshots({
 }
 
 /**
- * Shell-quote a single path for use after `git add --`. Wraps in double
- * quotes and escapes embedded quotes/backslashes. Safe on POSIX and Windows
- * because git accepts forward-slash quoted paths on both.
- */
-function shellQuotePath(p) {
-  return `"${String(p).replace(/\\/g, "\\\\").replace(/"/g, '\\"')}"`;
-}
-
-/**
  * Issue #152 — extract the file paths declared in a slice's
  * **Files Modified (Exhaustive)** table (or the more permissive
  * **Files Modified** label many plans use).
@@ -718,8 +709,12 @@ function _stageWorkerOrAll(workerPaths, cwd) {
   if (workerPaths) {
     const CHUNK = 50;
     for (let i = 0; i < workerPaths.length; i += CHUNK) {
-      const batch = workerPaths.slice(i, i + CHUNK).map(shellQuotePath).join(" ");
-      execSync(`git add -- ${batch}`, { cwd, encoding: "utf-8", timeout: 10_000 });
+      const batch = workerPaths.slice(i, i + CHUNK);
+      // Use execFileSync with an args array (shell:false) so paths with
+      // spaces, quotes, $(...), or backticks are passed verbatim instead
+      // of being re-parsed by the shell. The `--` separator stops git
+      // from interpreting any path that starts with `-` as a flag.
+      execFileSync("git", ["add", "--", ...batch], { cwd, encoding: "utf-8", timeout: 10_000, windowsHide: true });
     }
   } else {
     execSync("git add -A", { cwd, encoding: "utf-8", timeout: 10_000 });

@@ -2181,6 +2181,37 @@ export const TOOL_METADATA = {
       },
     },
   },
+  forge_audit_export: {
+    intent: ["audit", "export", "compliance", "events", "runs", "forensics", "cost-attribution"],
+    aliases: ["audit-export", "export-audit", "audit-log-export"],
+    cost: "low",
+    maxConcurrent: 10,
+    addedIn: "3.10.0",
+    prerequisites: [],
+    produces: [],
+    consumes: [".forge/runs/*/events.log"],
+    sideEffects: [],
+    writesFiles: false,
+    network: false,
+    risk: "low",
+    errors: {
+      "run not found": "The specified run ID does not exist in .forge/runs/.",
+    },
+    example: {
+      input: { since: "2026-05-01", type: ["gate-fail", "slice-complete"], limit: 10 },
+      output: {
+        ok: true,
+        records: [
+          { ts: "2026-05-07T18:24:13.482Z", type: "gate-fail", run: "2026-05-07T18-24-13-482Z_Phase-53", slice: "3", message: "grep gate returned exit 1" },
+        ],
+        total: 1,
+        truncated: false,
+        format: "json",
+        filters: { since: "2026-05-01", until: null, type: ["gate-fail", "slice-complete"], run: null, format: "json" },
+        message: "Returned 1 event record.",
+      },
+    },
+  },
 };
 
 export const WORKFLOWS = {

@@ -85,6 +85,7 @@ import { syncMemories } from "../../sync-memories.mjs";
 import { syncInstructions } from "../../sync-instructions.mjs";
 import { classifyDiff } from "../../diff-classify.mjs";
 import { searchLocalThoughts, isNeuralEmbeddingAvailable, readLocalThoughts, getIndexStatus, clearPersistedIndex } from "../../local-recall.mjs";
+import { exportAudit } from "../../audit-export.mjs";
 import { ERROR_CODES } from "../../enums.mjs";
 import {
   PROJECT_DIR,
@@ -1184,6 +1185,61 @@ async function _callToolHandler_097_forge_local_recall_status(request, args) {
   }
 }
 
+// #098 — forge_audit_export: ACI-paginated export of orchestrator audit events from .forge/runs/
+async function _callToolHandler_098_forge_audit_export(args) {
+  const t0 = Date.now();
+  const cwd = args.path ? resolve(args.path) : findProjectRoot(PROJECT_DIR);
+  const format = (args.format === "csv") ? "csv" : "json";
+  const rawLimit = typeof args.limit === "number" ? args.limit : 100;
+  const limit = Math.min(Math.max(1, rawLimit), 500);
+
+  const filters = {
+    since: args.since ?? null,
+    until: args.until ?? null,
+    type: Array.isArray(args.type) && args.type.length > 0 ? args.type : null,
+    run: args.run ?? null,
+    format,
+  };
+
+  try {
+    const gen = exportAudit({ cwd, since: filters.since, until: filters.until, type: filters.type, run: filters.run, format });
+    const collected = [];
+    for await (const line of gen) {
+      collected.push(line);
+      if (collected.length > limit) break;
+    }
+
+    const truncated = collected.length > limit;
+    if (truncated) collected.pop();
+
+    const total = collected.length;
+
+    let records;
+    if (format === "json") {
+      records = collected.map(line => {
+        try { return JSON.parse(line); } catch { return { raw: line }; }
+      });
+    } else {
+      records = collected;
+    }
+
+    let message;
+    if (total === 0) {
+      const runsDir = resolve(cwd, ".forge", "runs");
+      message = `No audit events found in ${runsDir}. Run a plan first to generate events, or broaden your filters (since, until, type, run).`;
+    } else {
+      message = `Returned ${total} ${format === "csv" ? "CSV row" : "event record"}${total === 1 ? "" : "s"}${truncated ? ` (truncated at limit ${limit})` : ""}.`;
+    }
+
+    const result = { ok: true, records, total, truncated, format, filters, message };
+    emitToolTelemetry({ toolName: "forge_audit_export", inputs: args, result: { total, truncated, format }, durationMs: Date.now() - t0, status: "OK", cwd });
+    return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
+  } catch (err) {
+    emitToolTelemetry({ toolName: "forge_audit_export", inputs: args, result: { error: err.message }, durationMs: Date.now() - t0, status: "ERROR", cwd });
+    return { content: [{ type: "text", text: `forge_audit_export error: ${err.message}` }], isError: true };
+  }
+}
+
 
 export {
   _callToolHandler_074_forge_master_ask,
@@ -1210,4 +1266,5 @@ export {
   _callToolHandler_095_forge_local_search,
   _callToolHandler_096_forge_embedding_status,
   _callToolHandler_097_forge_local_recall_status,
+  _callToolHandler_098_forge_audit_export,
 };

@@ -107,6 +107,7 @@ import { syncMemories } from "../sync-memories.mjs";
 import { syncInstructions } from "../sync-instructions.mjs";
 // Phase 55/56 — Local semantic recall + embedding status
 import { isNeuralEmbeddingAvailable, readLocalThoughts, getIndexStatus, clearPersistedIndex } from "../local-recall.mjs";
+import { exportAudit } from "../audit-export.mjs";
 // Phase WORKER-GUARDRAILS A2 — forge_diff_classify: classify staged diff by category
 import { classifyDiff } from "../diff-classify.mjs";
 import { ERROR_CODES } from "../enums.mjs";
@@ -291,6 +292,7 @@ export const REST_ROUTES = [
   { method: "GET", path: "/api/brain/recall" },
   { method: "GET", path: "/api/embedding/status" },
   { method: "GET", path: "/api/local-recall/status" },
+  { method: "GET", path: "/api/audit/export" },
 ];
 
 // ─── REST handler sub-helpers (Phase ESLINT-D1 — extracted from arrow handlers) ──
@@ -3145,6 +3147,50 @@ function _registerQuorumMiscRoutes(app) {
           : `Index is fresh. ${status.corpusSize ?? 0} thought${(status.corpusSize ?? 0) === 1 ? "" : "s"} indexed, built at ${status.builtAt}.`;
       return res.json({ ok: true, indexExists: status.exists, version: status.version, builtAt: status.builtAt, corpusSize: status.corpusSize, staleness, cacheFile: status.cacheFile, message });
     } catch (err) { res.status(500).json({ error: err.message }); }
+  });
+
+  // Phase OTEL-AUDIT-EXPORT — GET /api/audit/export: ACI-paginated audit event export
+  app.get("/api/audit/export", async (req, res) => {
+    try {
+      const cwd = req.query.path ? resolve(req.query.path) : PROJECT_DIR;
+      const format = req.query.format === "csv" ? "csv" : "json";
+      const rawLimit = req.query.limit ? parseInt(req.query.limit, 10) : 100;
+      const limit = Math.min(Math.max(1, isNaN(rawLimit) ? 100 : rawLimit), 500);
+      const typeFilter = req.query.type
+        ? (Array.isArray(req.query.type) ? req.query.type : [req.query.type])
+        : null;
+      const filters = {
+        since: req.query.since ?? null,
+        until: req.query.until ?? null,
+        type: typeFilter,
+        run: req.query.run ?? null,
+        format,
+      };
+
+      const gen = exportAudit({ cwd, since: filters.since, until: filters.until, type: filters.type, run: filters.run, format });
+      const collected = [];
+      for await (const line of gen) {
+        collected.push(line);
+        if (collected.length > limit) break;
+      }
+
+      const truncated = collected.length > limit;
+      if (truncated) collected.pop();
+      const total = collected.length;
+
+      let records;
+      if (format === "json") {
+        records = collected.map(line => { try { return JSON.parse(line); } catch { return { raw: line }; } });
+      } else {
+        records = collected;
+      }
+
+      const message = total === 0
+        ? `No audit events found in ${resolve(cwd, ".forge", "runs")}. Run a plan first to generate events, or broaden your filters.`
+        : `Returned ${total} ${format === "csv" ? "CSV row" : "event record"}${total === 1 ? "" : "s"}${truncated ? ` (truncated at limit ${limit})` : ""}.`;
+
+      return res.json({ ok: true, records, total, truncated, format, filters, message });
+    } catch (err) { res.status(500).json({ ok: false, error: err.message }); }
   });
 }
 

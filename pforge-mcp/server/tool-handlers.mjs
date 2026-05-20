@@ -117,6 +117,7 @@ import {
   _callToolHandler_095_forge_local_search,
   _callToolHandler_096_forge_embedding_status,
   _callToolHandler_097_forge_local_recall_status,
+  _callToolHandler_098_forge_audit_export,
 } from "./tool-handlers/platform.mjs";
 export {
   planNameToRunbookName,
@@ -309,6 +310,7 @@ const _CALL_TOOL_HANDLERS = [
   _callToolHandler_095_forge_local_search,
   _callToolHandler_096_forge_embedding_status,
   _callToolHandler_097_forge_local_recall_status,
+  _callToolHandler_098_forge_audit_export,
 ];
 
 export const callToolRequestHandler = _wrapWithToolSpan(async (request) => {
@@ -445,4 +447,8 @@ export const MCP_ONLY_TOOLS = new Set([
   // Phase 58 — forge_local_recall_status is MCP-native (status/warm/clear subcommands
   // also available via pforge local-recall CLI).
   "forge_local_recall_status",
+  // Phase OTEL-AUDIT-EXPORT — forge_audit_export is MCP-native; the handler
+  // collects streaming JSONL into an ACI-paginated payload (limit, truncated).
+  // The unbounded streaming form stays in the CLI (pforge audit export).
+  "forge_audit_export",
 ]);

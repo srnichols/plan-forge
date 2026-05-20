@@ -1356,4 +1356,24 @@ export const TOOLS = [
       },
     },
   },
+  {
+    name: "forge_audit_export",
+    description: "Export audit events from .forge/runs/ as structured records. Reads events.log files written by the orchestrator — streaming, never loads all events into memory. Returns up to `limit` records with pagination metadata. USE FOR: compliance audits, feeding events into Splunk/Datadog/Grafana, answering 'what happened during run X?', exporting gate-pass/gate-fail timelines. Returns: { ok, records[], total, truncated, format, filters, message }. Use the CLI `pforge audit export` for unbounded streaming to stdout.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        since: { type: "string", description: "ISO date lower bound (inclusive). e.g. '2026-05-01' or '2026-05-01T12:00:00Z'" },
+        until: { type: "string", description: "ISO date upper bound (inclusive)." },
+        type: {
+          type: "array",
+          items: { type: "string" },
+          description: "Event types to include (repeatable). e.g. ['gate-pass','gate-fail','slice-start','slice-complete']. Default: all types.",
+        },
+        run: { type: "string", description: "Scope to a single run directory ID (e.g. '2026-05-07T18-24-13-482Z_Phase-53')." },
+        format: { type: "string", enum: ["json", "csv"], description: "Output format: 'json' (default) returns array of record objects; 'csv' returns array of CSV row strings with a header row first." },
+        limit: { type: "number", description: "Maximum records to return (default: 100, max: 500)." },
+        path: { type: "string", description: "Project directory (default: current)" },
+      },
+    },
+  },
 ];

@@ -80,6 +80,7 @@ const REST_API_ENDPOINTS = [
   { method: "POST", path: "/api/deps/watch/run", description: "Trigger a new dependency vulnerability scan. Auth: bridge.approvalSecret Bearer token. Body: { path?, notify? }" },
   { method: "POST", path: "/api/tool/org-rules", description: "Generate org-rules instruction file via REST" },
   { method: "POST", path: "/api/image/generate", description: "Generate an image via xAI Aurora or OpenAI DALL-E. Body: { prompt, outputPath, model?, size?, format?, quality? }" },
+  { method: "GET", path: "/api/audit/export", description: "Export paginated audit events from .forge/runs/*/events.log. Query: since, until, type (repeatable), run, format (json|csv), limit (max 500), path." },
 ];
 
 const MEMORY_COMPANION_TOOLS = {

@@ -125,6 +125,7 @@ export const TOOL_NAMES = freezeArray([
   "forge_anvil_dlq_list",
   "forge_anvil_rebuild",
   "forge_anvil_stat",
+  "forge_audit_export",
   "forge_brain_replay",
   "forge_brain_test",
   "forge_bug_list",

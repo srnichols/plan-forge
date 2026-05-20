@@ -48,7 +48,7 @@
           <li><a href="#mcp-tools">MCP tools (88, grouped by domain)</a></li>
           <li><a href="#cli-commands">CLI commands (57, grouped by use)</a></li>
           <li><a href="#rest-endpoints">REST endpoints (103, grouped by prefix)</a></li>
-          <li><a href="#sdk">SDK exports (6 sub-paths)</a></li>
+          <li><a href="#sdk">SDK exports (8 sub-paths)</a></li>
           <li><a href="#coverage-matrix">Surface coverage matrix</a></li>
         </ul>
 
@@ -87,7 +87,7 @@
               </tr>
               <tr>
                 <td class="py-2 px-3"><strong>SDK</strong> (<code>pforge-sdk</code>)</td>
-                <td class="py-2 px-3">6 sub-paths</td>
+                <td class="py-2 px-3">8 sub-paths</td>
                 <td class="py-2 px-3">Bearer token via <code>createClient</code></td>
                 <td class="py-2 px-3">Node.js / TypeScript callers wanting typed responses</td>
               </tr>
@@ -496,7 +496,7 @@ pforge ext add/remove/...       Extension management</code></pre>
 
         <!-- ─── SDK ─── -->
         <h2 id="sdk">SDK — <code>pforge-sdk</code></h2>
-        <p>Six sub-paths, all pure Node.js (zero runtime dependencies). Full reference: <a href="https://github.com/srnichols/plan-forge/blob/master/pforge-sdk/README.md" rel="noopener">pforge-sdk/README.md on GitHub</a>.</p>
+        <p>Eight sub-paths, all pure Node.js (zero runtime dependencies). Full reference: <a href="https://github.com/srnichols/plan-forge/blob/master/pforge-sdk/README.md" rel="noopener">pforge-sdk/README.md on GitHub</a>.</p>
 
         <div class="overflow-x-auto my-6">
           <table class="text-sm w-full border-collapse">
@@ -538,10 +538,20 @@ pforge ext add/remove/...       Extension management</code></pre>
                 <td class="py-2 px-3"><code>computeAnvilKey</code>, <code>anvilEntryPath</code>, <code>anvilCacheDir</code>, <code>anvilStatsPath</code></td>
                 <td class="py-2 px-3">Computing Anvil cache keys + paths without running the server</td>
               </tr>
-              <tr>
+              <tr class="border-b border-slate-800/40">
                 <td class="py-2 px-3"><code>pforge-sdk/lattice-query</code> <span class="text-amber-400 text-xs font-semibold">v0.5.0</span></td>
                 <td class="py-2 px-3"><code>LatticeQueryBuilder</code>, <code>tokenizeForSearch</code>, <code>scoreChunk</code></td>
                 <td class="py-2 px-3">Building fluent Lattice queries + scoring chunks without the server</td>
+              </tr>
+              <tr class="border-b border-slate-800/40">
+                <td class="py-2 px-3"><code>pforge-sdk/notifications/adapter-contract</code> <span class="text-amber-400 text-xs font-semibold">v0.5.0</span></td>
+                <td class="py-2 px-3"><code>validateAdapterShape</code>, <code>ERR_NOT_IMPLEMENTED</code></td>
+                <td class="py-2 px-3">Validating a custom notification adapter shape before registering it</td>
+              </tr>
+              <tr>
+                <td class="py-2 px-3"><code>pforge-sdk/run-reader</code> <span class="text-amber-400 text-xs font-semibold">v0.6.0</span></td>
+                <td class="py-2 px-3"><code>listRuns</code>, <code>readRunMeta</code>, <code>readRunSummary</code>, <code>readRunIndex</code>, <code>parseEventLine</code></td>
+                <td class="py-2 px-3">Offline access to <code>.forge/runs/</code> artifacts — no running server required</td>
               </tr>
             </tbody>
           </table>
@@ -575,10 +585,11 @@ pforge ext add/remove/...       Extension management</code></pre>
               <tr class="border-b border-slate-800/40"><td class="py-2 px-3">Forge-Master (read-only reasoning)</td><td class="text-center py-2 px-3 text-emerald-400">✓</td><td class="text-center py-2 px-3 text-emerald-400">✓</td><td class="text-center py-2 px-3 text-emerald-400">✓</td><td class="text-center py-2 px-3 text-emerald-400">✓</td></tr>
               <tr class="border-b border-slate-800/40"><td class="py-2 px-3">Lattice code graph</td><td class="text-center py-2 px-3 text-emerald-400">✓</td><td class="text-center py-2 px-3 text-emerald-400">✓</td><td class="text-center py-2 px-3 text-emerald-400">✓</td><td class="text-center py-2 px-3 text-emerald-400">✓</td></tr>
               <tr class="border-b border-slate-800/40"><td class="py-2 px-3">Hallmark stamp / verify</td><td class="text-center py-2 px-3 text-slate-500">—</td><td class="text-center py-2 px-3 text-emerald-400">✓</td><td class="text-center py-2 px-3 text-slate-500">—</td><td class="text-center py-2 px-3 text-emerald-400">✓</td></tr>
-              <tr class="border-b border-slate-800/40"><td class="py-2 px-3">Anvil purge / stat</td><td class="text-center py-2 px-3 text-slate-500">—</td><td class="text-center py-2 px-3 text-emerald-400">✓</td><td class="text-center py-2 px-3 text-emerald-400">✓</td><td class="text-center py-2 px-3 text-slate-500">—</td></tr>
+              <tr class="border-b border-slate-800/40"><td class="py-2 px-3">Anvil purge / stat</td><td class="text-center py-2 px-3 text-slate-500">—</td><td class="text-center py-2 px-3 text-emerald-400">✓</td><td class="text-center py-2 px-3 text-emerald-400">✓</td><td class="text-center py-2 px-3 text-emerald-400">✓</td></tr>
               <tr class="border-b border-slate-800/40"><td class="py-2 px-3">Bug registry CRUD</td><td class="text-center py-2 px-3 text-emerald-400">✓</td><td class="text-center py-2 px-3 text-slate-500">—</td><td class="text-center py-2 px-3 text-emerald-400">✓</td><td class="text-center py-2 px-3 text-emerald-400">✓</td></tr>
               <tr class="border-b border-slate-800/40"><td class="py-2 px-3">WebSocket live events</td><td class="text-center py-2 px-3 text-slate-500">—</td><td class="text-center py-2 px-3 text-slate-500">—</td><td class="text-center py-2 px-3 text-emerald-400">✓</td><td class="text-center py-2 px-3 text-emerald-400">✓</td></tr>
               <tr class="border-b border-slate-800/40"><td class="py-2 px-3">Self-update / install</td><td class="text-center py-2 px-3 text-slate-500">—</td><td class="text-center py-2 px-3 text-emerald-400">✓</td><td class="text-center py-2 px-3 text-slate-500">—</td><td class="text-center py-2 px-3 text-slate-500">—</td></tr>
+              <tr class="border-b border-slate-800/40"><td class="py-2 px-3">Notification adapter contract validation</td><td class="text-center py-2 px-3 text-slate-500">—</td><td class="text-center py-2 px-3 text-slate-500">—</td><td class="text-center py-2 px-3 text-slate-500">—</td><td class="text-center py-2 px-3 text-emerald-400">✓</td></tr>
               <tr><td class="py-2 px-3">Extension marketplace</td><td class="text-center py-2 px-3 text-emerald-400">✓</td><td class="text-center py-2 px-3 text-emerald-400">✓</td><td class="text-center py-2 px-3 text-emerald-400">✓</td><td class="text-center py-2 px-3 text-slate-500">—</td></tr>
             </tbody>
           </table>

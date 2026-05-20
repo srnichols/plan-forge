@@ -1,6 +1,6 @@
 # pforge-sdk
 
-**Version**: `0.5.0` · **License**: MIT · **Engines**: Node ≥ 20
+**Version**: `0.6.0` · **License**: MIT · **Engines**: Node ≥ 20
 
 Programmatic SDK for Plan Forge — load MCP tool metadata, build Hallmark provenance envelopes, and validate Lattice code-chunk records from your own Node.js code. Zero runtime dependencies.
 
@@ -518,7 +518,7 @@ Pure parser for a single `events.log` line. No I/O.
 
 ---
 
-
+## Risk levels (auto-approve guidance)
 
 When you write a host that lets agents call Plan Forge tools, use the tool's `riskLevel` to decide what to gate on:
 

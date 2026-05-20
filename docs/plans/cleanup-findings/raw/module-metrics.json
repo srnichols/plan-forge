@@ -856,6 +856,14 @@
     "g14Severity": null
   },
   {
+    "file": "pforge-mcp/enums.mjs",
+    "loc": 226,
+    "blank": 16,
+    "comment": 3,
+    "functions": 10,
+    "g14Severity": null
+  },
+  {
     "file": "pforge-mcp/tempering/auto-activate.mjs",
     "loc": 225,
     "blank": 19,
@@ -869,14 +877,6 @@
     "blank": 16,
     "comment": 8,
     "functions": 6,
-    "g14Severity": null
-  },
-  {
-    "file": "pforge-mcp/enums.mjs",
-    "loc": 223,
-    "blank": 16,
-    "comment": 3,
-    "functions": 10,
     "g14Severity": null
   },
   {

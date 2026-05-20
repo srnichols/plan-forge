@@ -6,12 +6,39 @@
  *
  * Uses a temporary directory for cwd on each test to avoid touching the
  * real .forge/ directory.
+ *
+ * v3.8.2 hotfix: mocks node:child_process so startObserverDaemon does NOT
+ * spawn real detached daemons during tests. Each unmocked run leaked 2 orphan
+ * `node observer-loop.mjs daemon` processes that survived vitest teardown
+ * (PID file lived in the tmpDir that vitest deleted, leaving no way to
+ * reap the daemon). Mocking at the system boundary (spawn) is the
+ * architecturally correct fix — tests assert the contract via the mock
+ * rather than punching through to the real OS subprocess layer.
  */
 
-import { describe, it, expect, beforeEach, afterEach } from "vitest";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { mkdtempSync, rmSync, mkdirSync, writeFileSync, existsSync, readFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+
+// ─── Mock child_process BEFORE importing observer-loop ───────────────
+// startObserverDaemon calls spawn(detached: true) → without this mock,
+// every test run leaks a real long-lived node process.
+//
+// vi.hoisted() runs BEFORE vi.mock factories, so _mockSpawn / MOCK_CHILD_PID
+// are safe to reference inside the factory (vi.mock itself is hoisted above
+// all imports — a plain top-level const would not be initialised yet).
+const { _mockSpawn, MOCK_CHILD_PID } = vi.hoisted(() => {
+  const pid = 12345;
+  return {
+    MOCK_CHILD_PID: pid,
+    _mockSpawn: vi.fn(() => ({ pid, unref: vi.fn() })),
+  };
+});
+vi.mock("node:child_process", () => ({
+  spawn: _mockSpawn,
+}));
+
 import {
   OBSERVER_PID_FILE,
   getObserverPidPath,
@@ -148,36 +175,47 @@ describe("stopObserverDaemon", () => {
 });
 
 // ─── startObserverDaemon ──────────────────────────────────────────────
+//
+// child_process.spawn is mocked at module scope (top of file). The mock returns
+// { pid: MOCK_CHILD_PID, unref: fn() } so startObserverDaemon completes without
+// launching a real OS subprocess. Tests assert the contract via the mock + PID
+// file rather than against a live daemon.
 
 describe("startObserverDaemon", () => {
+  beforeEach(() => { _mockSpawn.mockClear(); });
+
   it("creates the .forge directory if it does not exist", async () => {
-    // Intercept the spawn so we don't actually launch a real process
-    // We'll verify the .forge dir was created even if spawn succeeds/fails.
-    // We rely on the fact that spawn will work since node exists.
-    try {
-      await startObserverDaemon({ cwd: tmpDir });
-    } catch { /* spawn may or may not fail in test env — dir creation is what we check */ }
+    await startObserverDaemon({ cwd: tmpDir });
     expect(existsSync(join(tmpDir, ".forge"))).toBe(true);
   });
 
-  it("writes a numeric PID to the PID file on start", async () => {
+  it("invokes child_process.spawn with the daemon arg and detached:true", async () => {
+    await startObserverDaemon({ cwd: tmpDir });
+    expect(_mockSpawn).toHaveBeenCalledTimes(1);
+    const [cmd, args, opts] = _mockSpawn.mock.calls[0];
+    expect(cmd).toBe(process.execPath);
+    expect(Array.isArray(args)).toBe(true);
+    expect(args).toContain("daemon");
+    expect(opts).toMatchObject({ detached: true, cwd: tmpDir });
+  });
+
+  it("writes the spawned PID to the PID file on start", async () => {
     await startObserverDaemon({ cwd: tmpDir });
     const pidPath = forgePidPath(tmpDir);
     expect(existsSync(pidPath)).toBe(true);
     const pid = parseInt(readFileSync(pidPath, "utf-8").trim(), 10);
-    expect(Number.isFinite(pid)).toBe(true);
-    expect(pid).toBeGreaterThan(0);
-    // Clean up: kill the spawned daemon if it's still alive
-    try { process.kill(pid, "SIGTERM"); } catch { /* already gone */ }
+    expect(pid).toBe(MOCK_CHILD_PID);
   });
 
   it("does not spawn a second daemon if already running", async () => {
     // Write our own PID as if we're the daemon — getObserverStatus returns running: true
     writePid(tmpDir, process.pid);
     // startObserverDaemon should bail early; PID file should remain unchanged
+    // and spawn must NOT be called.
     await startObserverDaemon({ cwd: tmpDir });
     const pid = parseInt(readFileSync(forgePidPath(tmpDir), "utf-8").trim(), 10);
     expect(pid).toBe(process.pid);
+    expect(_mockSpawn).not.toHaveBeenCalled();
   });
 });
 

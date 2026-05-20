@@ -126,19 +126,19 @@ export function createHttpRoutes(app, { mcpCall = invokeForgeTool } = {}) {
 
 // ─── Express-mode registration ───────────────────────────────────────
 
-function _registerExpress(app, dispatcher) {
+function registerForgeMasterCatalogRoutes(app) {
   app.get("/api/forge-master/prompts", (req, res) => {
     res.json(getPromptCatalog());
   });
 
   app.get("/api/forge-master/sessions", (req, res) => {
-    res.json(Array.from(sessions.entries()).map(([id, s]) => ({ id, ...s })));
+    res.json(Array.from(sessions.entries()).map(([id, session]) => ({ id, ...session })));
   });
 
   app.get("/api/forge-master/capabilities", (req, res) => {
     const config = getForgeMasterConfig();
     const catalog = getPromptCatalog();
-    const promptCount = catalog.categories.reduce((n, c) => n + c.prompts.length, 0);
+    const promptCount = catalog.categories.reduce((count, category) => count + category.prompts.length, 0);
     res.json({
       reasoningModel: config.reasoningModel,
       routerModel: config.routerModel,
@@ -149,12 +149,14 @@ function _registerExpress(app, dispatcher) {
     });
   });
 
-  app.get("/api/forge-master/prefs", (req, res) => {
-    res.json(loadPrefs(process.cwd()));
-  });
-
   app.get("/api/forge-master/cache-stats", (req, res) => {
     res.json(getCacheStats());
+  });
+}
+
+function registerForgeMasterPreferenceRoutes(app) {
+  app.get("/api/forge-master/prefs", (req, res) => {
+    res.json(loadPrefs(process.cwd()));
   });
 
   app.put("/api/forge-master/prefs", (req, res) => {
@@ -168,7 +170,9 @@ function _registerExpress(app, dispatcher) {
     savePrefs(normalized, process.cwd());
     res.json(normalized);
   });
+}
 
+function registerForgeMasterChatRoutes(app, dispatcher) {
   app.post("/api/forge-master/chat", (req, res) => {
     const { message, sessionId: reqSessionId } = req.body || {};
     if (!message) return res.status(400).json({ error: "message required" });
@@ -206,7 +210,7 @@ function _registerExpress(app, dispatcher) {
         sse.send("error", { error: result.error, sessionId, tokensIn: result.tokensIn, tokensOut: result.tokensOut, totalCostUSD: result.totalCostUSD || 0 });
       } else {
         sse.send("reply", { content: result.reply, sessionId });
-        for (const tc of result.toolCalls || []) sse.send("tool-call", tc);
+        for (const toolCall of result.toolCalls || []) sse.send("tool-call", toolCall);
         sse.send("done", { sessionId, tokensIn: result.tokensIn, tokensOut: result.tokensOut, totalCostUSD: result.totalCostUSD || 0, resolvedModel: result.resolvedModel || null, relatedTurns: result.relatedTurns || [], quorumResult: result.quorumResult || null });
       }
     } catch (err) {
@@ -216,8 +220,7 @@ function _registerExpress(app, dispatcher) {
     }
   });
 
-  app.post("/api/forge-master/chat/:sessionId/approve",(req, res) => {
-    const { sessionId } = req.params;
+  app.post("/api/forge-master/chat/:sessionId/approve", (req, res) => {
     const { approvalId, decision, editedArgs } = req.body || {};
     const gate = pendingApprovals.get(approvalId);
     if (!gate) return res.status(404).json({ error: "approval not found" });
@@ -225,7 +228,9 @@ function _registerExpress(app, dispatcher) {
     pendingApprovals.delete(approvalId);
     res.json({ ok: true, approvalId, decision });
   });
+}
 
+function registerForgeMasterSessionRoutes(app) {
   app.get("/api/forge-master/session/:id", async (req, res) => {
     const { id } = req.params;
     try {
@@ -239,6 +244,13 @@ function _registerExpress(app, dispatcher) {
   app.use("/api/forge-master", (req, res) => {
     res.status(404).json({ error: "not found" });
   });
+}
+
+function _registerExpress(app, dispatcher) {
+  registerForgeMasterCatalogRoutes(app);
+  registerForgeMasterPreferenceRoutes(app);
+  registerForgeMasterChatRoutes(app, dispatcher);
+  registerForgeMasterSessionRoutes(app);
 }
 
 // ─── Built-in http handler (no express) ─────────────────────────────

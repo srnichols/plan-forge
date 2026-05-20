@@ -174,46 +174,34 @@ function readHubPort(cwd) {
  *                                                Signature: (url: string) → WebSocket-like object.
  * @returns {{ stop: Function, getStatus: Function }}
  */
-export function startObserver(opts = {}) {
-  const {
-    batchWindowMs = DEFAULT_BATCH_WINDOW_MS,
-    onBatch,
-    cwd = process.cwd(),
-    wsPort = null,
-    _wsFactory = (url) => new WebSocket(url),
-  } = opts;
+function createObserverState(batchWindowMs) {
+  return {
+    stopped: false,
+    connected: false,
+    ws: null,
+    retryCount: 0,
+    retryTimer: null,
+    flushTimer: null,
+    buffer: [],
+    lastError: null,
+    lastFlushAt: null,
+    totalEventsReceived: 0,
+    totalBatchesFlushed: 0,
+    batchWindowMs,
+  };
+}
 
-  if (typeof onBatch !== "function") {
-    throw new Error("startObserver: onBatch must be a function");
-  }
+function resolveObserverPort({ cwd, wsPort }) {
+  if (typeof wsPort === "number") return wsPort;
+  return readHubPort(cwd);
+}
 
-  // ── Mutable state ──────────────────────────────────────────────────
-  let stopped = false;
-  let connected = false;
-  let ws = null;
-  let retryCount = 0;
-  let retryTimer = null;
-  let flushTimer = null;
-  const buffer = [];
-  let lastError = null;
-  let lastFlushAt = null;
-  let totalEventsReceived = 0;
-  let totalBatchesFlushed = 0;
-
-  // ── Port resolution ───────────────────────────────────────────────
-
-  function getPort() {
-    if (typeof wsPort === "number") return wsPort;
-    return readHubPort(cwd);
-  }
-
-  // ── Event batching ────────────────────────────────────────────────
-
+function createBatchController({ state, onBatch }) {
   function flushBuffer() {
-    lastFlushAt = new Date().toISOString();
-    if (buffer.length === 0) return;
-    const batch = buffer.splice(0);
-    totalBatchesFlushed++;
+    state.lastFlushAt = new Date().toISOString();
+    if (state.buffer.length === 0) return;
+    const batch = state.buffer.splice(0);
+    state.totalBatchesFlushed++;
     try {
       const result = onBatch(batch);
       if (result && typeof result.catch === "function") {
@@ -227,133 +215,140 @@ export function startObserver(opts = {}) {
   }
 
   function scheduleFlush() {
-    if (flushTimer) clearInterval(flushTimer);
-    flushTimer = setInterval(() => {
-      if (!stopped) flushBuffer();
-    }, batchWindowMs);
+    if (state.flushTimer) clearInterval(state.flushTimer);
+    state.flushTimer = setInterval(() => {
+      if (!state.stopped) flushBuffer();
+    }, state.batchWindowMs);
   }
 
-  // ── WebSocket lifecycle ───────────────────────────────────────────
+  return { flushBuffer, scheduleFlush };
+}
+
+function createConnectionController({ state, cwd, wsPort, wsFactory }) {
+  function scheduleReconnect() {
+    if (state.stopped) return;
+    if (state.retryCount >= MAX_RECONNECT_RETRIES) {
+      state.lastError = `max retries (${MAX_RECONNECT_RETRIES}) exceeded — observer halted`;
+      console.error(`[observer-loop] ${state.lastError}`);
+      return;
+    }
+    const delay = RECONNECT_BASE_MS * Math.pow(2, state.retryCount);
+    state.retryCount++;
+    state.retryTimer = setTimeout(() => {
+      if (!state.stopped) connect();
+    }, delay);
+  }
 
   function connect() {
-    if (stopped) return;
-    const port = getPort();
+    if (state.stopped) return;
+    const port = resolveObserverPort({ cwd, wsPort });
     if (!port) {
-      lastError = "hub port not found — hub may not be running";
-      console.error(`[observer-loop] ${lastError}`);
+      state.lastError = "hub port not found — hub may not be running";
+      console.error(`[observer-loop] ${state.lastError}`);
       scheduleReconnect();
       return;
     }
 
     const url = `ws://127.0.0.1:${port}`;
     try {
-      ws = _wsFactory(url);
-
-      ws.on("open", () => {
-        connected = true;
-        retryCount = 0;
-        lastError = null;
+      state.ws = wsFactory(url);
+      state.ws.on("open", () => {
+        state.connected = true;
+        state.retryCount = 0;
+        state.lastError = null;
         console.error(`[observer-loop] connected to hub at ${url}`);
       });
-
-      ws.on("message", (data) => {
+      state.ws.on("message", (data) => {
         try {
           const event = JSON.parse(data.toString());
-          if (event.type === "connected") return; // skip handshake
+          if (event.type === "connected") return;
           if (OBSERVER_SUBSCRIBED_EVENTS.has(event.type)) {
-            buffer.push(event);
-            totalEventsReceived++;
+            state.buffer.push(event);
+            state.totalEventsReceived++;
           }
         } catch { /* ignore malformed messages */ }
       });
-
-      ws.on("error", (err) => {
-        connected = false;
-        lastError = err?.message ?? String(err);
-        if (!stopped) {
-          console.error(`[observer-loop] WS error: ${lastError}`);
+      state.ws.on("error", (err) => {
+        state.connected = false;
+        state.lastError = err?.message ?? String(err);
+        if (!state.stopped) {
+          console.error(`[observer-loop] WS error: ${state.lastError}`);
           scheduleReconnect();
         }
       });
-
-      ws.on("close", () => {
-        connected = false;
-        if (!stopped) {
-          scheduleReconnect();
-        }
+      state.ws.on("close", () => {
+        state.connected = false;
+        if (!state.stopped) scheduleReconnect();
       });
     } catch (err) {
-      lastError = err.message;
+      state.lastError = err.message;
       console.error(`[observer-loop] connect failed: ${err.message}`);
       scheduleReconnect();
     }
   }
 
-  function scheduleReconnect() {
-    if (stopped) return;
-    if (retryCount >= MAX_RECONNECT_RETRIES) {
-      lastError = `max retries (${MAX_RECONNECT_RETRIES}) exceeded — observer halted`;
-      console.error(`[observer-loop] ${lastError}`);
-      return;
-    }
-    const delay = RECONNECT_BASE_MS * Math.pow(2, retryCount);
-    retryCount++;
-    retryTimer = setTimeout(() => {
-      if (!stopped) connect();
-    }, delay);
-  }
+  return { connect };
+}
 
-  // ── Boot ──────────────────────────────────────────────────────────
-  connect();
-  scheduleFlush();
-
-  // ── Public API ────────────────────────────────────────────────────
-
+function createObserverApi({ state, flushBuffer }) {
   return {
-    /**
-     * Stop the observer. Flushes any buffered events synchronously before
-     * closing the WebSocket and clearing all timers.
-     */
     stop() {
-      stopped = true;
-      if (retryTimer) { clearTimeout(retryTimer); retryTimer = null; }
-      if (flushTimer) { clearInterval(flushTimer); flushTimer = null; }
-      flushBuffer(); // final flush
-      if (ws) {
-        try { ws.close(); } catch { /* best-effort */ }
+      state.stopped = true;
+      if (state.retryTimer) {
+        clearTimeout(state.retryTimer);
+        state.retryTimer = null;
       }
-      connected = false;
+      if (state.flushTimer) {
+        clearInterval(state.flushTimer);
+        state.flushTimer = null;
+      }
+      flushBuffer();
+      if (state.ws) {
+        try { state.ws.close(); } catch { /* best-effort */ }
+      }
+      state.connected = false;
     },
-
-    /**
-     * Return a point-in-time status snapshot.
-     *
-     * @returns {{
-     *   connected: boolean,
-     *   stopped: boolean,
-     *   retryCount: number,
-     *   bufferSize: number,
-     *   lastError: string|null,
-     *   lastFlushAt: string|null,
-     *   totalEventsReceived: number,
-     *   totalBatchesFlushed: number,
-     *   batchWindowMs: number,
-     * }}
-     */
     getStatus() {
       return {
-        connected,
-        stopped,
-        retryCount,
-        bufferSize: buffer.length,
-        lastError,
-        lastFlushAt,
-        totalEventsReceived,
-        totalBatchesFlushed,
-        batchWindowMs,
+        connected: state.connected,
+        stopped: state.stopped,
+        retryCount: state.retryCount,
+        bufferSize: state.buffer.length,
+        lastError: state.lastError,
+        lastFlushAt: state.lastFlushAt,
+        totalEventsReceived: state.totalEventsReceived,
+        totalBatchesFlushed: state.totalBatchesFlushed,
+        batchWindowMs: state.batchWindowMs,
       };
     },
   };
+}
+
+export function startObserver(opts = {}) {
+  const {
+    batchWindowMs = DEFAULT_BATCH_WINDOW_MS,
+    onBatch,
+    cwd = process.cwd(),
+    wsPort = null,
+    _wsFactory = (url) => new WebSocket(url),
+  } = opts;
+
+  if (typeof onBatch !== "function") {
+    throw new Error("startObserver: onBatch must be a function");
+  }
+
+  const state = createObserverState(batchWindowMs);
+  const { flushBuffer, scheduleFlush } = createBatchController({ state, onBatch });
+  const { connect } = createConnectionController({
+    state,
+    cwd,
+    wsPort,
+    wsFactory: _wsFactory,
+  });
+
+  connect();
+  scheduleFlush();
+  return createObserverApi({ state, flushBuffer });
 }
 
 // ─── CLI entry point ─────────────────────────────────────────────────

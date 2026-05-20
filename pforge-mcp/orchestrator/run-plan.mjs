@@ -2359,7 +2359,8 @@ export function runAutoSweep(cwd) {
   }
 }
 
-export { runAnalyze, parseAnalyzeScore } from "./run-plan/architecture-guardrails.mjs";
+import { runAnalyze, parseAnalyzeScore } from "./run-plan/architecture-guardrails.mjs";
+export { runAnalyze, parseAnalyzeScore };
 
 /**
  * Run auto-analyze after all slices pass.

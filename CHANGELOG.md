@@ -7,6 +7,30 @@ Format follows [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
+### Added — CLI-GUIDE documentation refresh (v3.8.2)
+
+Added full CLI-GUIDE entries for 14 commands that existed in `pforge.ps1` / `pforge.sh` but lacked documentation. Completes v3.6 Documentation Candidate #3.
+
+| Command | Added in | What it does |
+|---------|----------|-------------|
+| `pforge digest` | v2.90.10 | Generate daily digest of probe deltas, meta-bugs, cost anomalies |
+| `pforge fm-recall` | v2.90.10 | Query / rebuild BM25 recall index over Forge-Master sessions |
+| `pforge patterns list` | v2.90.10 | Surface recurring failure patterns across run history |
+| `pforge graph rebuild\|stats\|query` | v2.90.10 | Knowledge graph CLI (Phase, Slice, Commit, File, Bug, Run) |
+| `pforge plan-from-sarif` | v3.x | Convert CodeQL SARIF findings into a Plan Forge plan |
+| `pforge sync-spaces` | v3.x | Upload active plan + instructions to a GitHub Copilot Space |
+| `pforge sync-memories` | v3.0 | Generate `.github/copilot-memory-hints.md` from forge decisions |
+| `pforge sync-instructions` | v3.0 | Generate `.github/copilot-instructions.md` from forge context |
+| `pforge github status\|doctor\|metrics` | v3.1.2 | Inspect GitHub-native AI surface checklist |
+| `pforge timeline` | v3.x | Unified offline-first chronological event view |
+| `pforge crucible` | v3.x | Crucible smelt pipeline — ideas → hardened plan slices |
+| `pforge skills pending\|accept\|reject\|defer` | v3.x | Auto-skill promotion queue management |
+| `pforge mcp-call` | v3.x | Generic proxy for any MCP tool on `:3100` |
+| `pforge forge-home-cleanup` | v3.8.1 | Archive ephemeral `.forge/` files and prune old archive slots |
+
+- **`docs/CLI-GUIDE.md`**: 14 new command sections with PowerShell + Bash syntax, flags tables, notes, and MCP equivalents.
+- **`ROADMAP.md`**: Marked v3.6 Documentation Candidate #3 as done; bumped Current Release to v3.8.2.
+
 ### Fixed — ESLint D-series tooling integration (Phase 43 S0)
 
 - **`scripts/audit/run-eslint-clean-code.mjs`** (NEW): CJS-safe ESLint runner that invokes `node_modules/eslint/bin/eslint.js` via `spawnSync` instead of ESM import, bypassing the `@eslint/eslintrc`/ajv incompatibility under Node.js 24+. Saves structured JSON to `docs/plans/cleanup-findings/raw/eslint-report.json`.

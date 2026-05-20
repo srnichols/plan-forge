@@ -1055,8 +1055,80 @@
     initMobileSidebar();
     initBackToTop();
     initSearch();
+    initDiagramZoom();
     loadGlossaryTooltips();
   });
+
+  // ─── Diagram zoom (click-to-zoom modal + "View full size" caption link) ───
+  // Wires up every .diagram-img inside .chapter-content so readers can pop a
+  // diagram open at native resolution. Many SVGs (especially the deep-dive
+  // callback graphs) render too small to read inline because the
+  // .chapter-content column is capped at 52rem. This restores legibility
+  // without forcing every diagram to be a wide-figure breakout.
+  function initDiagramZoom() {
+    const imgs = document.querySelectorAll(".chapter-content .diagram-img");
+    if (!imgs.length) return;
+
+    const modal = document.createElement("div");
+    modal.className = "diagram-modal";
+    modal.setAttribute("role", "dialog");
+    modal.setAttribute("aria-modal", "true");
+    modal.setAttribute("aria-label", "Diagram. Click outside or press Escape to close.");
+    modal.innerHTML = '<button type="button" class="diagram-modal-close" aria-label="Close diagram">\u00d7</button><img alt="" />';
+    document.body.appendChild(modal);
+
+    const modalImg = modal.querySelector("img");
+    const closeBtn = modal.querySelector(".diagram-modal-close");
+    let lastFocus = null;
+
+    function open(src, alt) {
+      lastFocus = document.activeElement;
+      modalImg.src = src;
+      modalImg.alt = alt || "";
+      modal.classList.add("open");
+      document.documentElement.style.overflow = "hidden";
+      closeBtn.focus();
+    }
+    function close() {
+      modal.classList.remove("open");
+      modalImg.removeAttribute("src");
+      document.documentElement.style.overflow = "";
+      if (lastFocus && typeof lastFocus.focus === "function") lastFocus.focus();
+    }
+
+    imgs.forEach(function (img) {
+      img.classList.add("zoomable");
+      img.tabIndex = 0;
+      img.setAttribute("role", "button");
+      img.setAttribute("aria-label", (img.alt ? img.alt + " — " : "") + "click to view full size");
+      img.addEventListener("click", function () { open(img.src, img.alt); });
+      img.addEventListener("keydown", function (e) {
+        if (e.key === "Enter" || e.key === " ") { e.preventDefault(); open(img.src, img.alt); }
+      });
+
+      // Inject a "View full size ↗" link into the figcaption, if present.
+      const fig = img.closest(".manual-figure");
+      if (!fig) return;
+      const cap = fig.querySelector(".manual-figcaption");
+      if (!cap || cap.querySelector(".diagram-fullsize-link")) return;
+      const a = document.createElement("a");
+      a.href = img.src;
+      a.target = "_blank";
+      a.rel = "noopener";
+      a.className = "diagram-fullsize-link";
+      a.textContent = "View full size \u2197";
+      cap.appendChild(document.createTextNode(" "));
+      cap.appendChild(a);
+    });
+
+    modal.addEventListener("click", function (e) {
+      if (e.target === modal || e.target === modalImg) close();
+    });
+    closeBtn.addEventListener("click", close);
+    document.addEventListener("keydown", function (e) {
+      if (e.key === "Escape" && modal.classList.contains("open")) close();
+    });
+  }
 
   // ─── Glossary tooltips bootstrap ───
   // Loads the auto-generated terms dictionary (assets/glossary-terms.js) and

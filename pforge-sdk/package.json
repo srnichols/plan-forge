@@ -1,6 +1,6 @@
 {
   "name": "pforge-sdk",
-  "version": "0.3.0",
+  "version": "0.4.0",
   "description": "Plan Forge SDK — programmatic access to Plan Forge MCP tool metadata, Hallmark provenance, and the Lattice chunker contract",
   "type": "module",
   "main": "src/index.mjs",
@@ -9,6 +9,7 @@
     "./tools": "./src/tools.mjs",
     "./hallmark": "./src/hallmark.mjs",
     "./chunker": "./src/chunker.mjs",
+    "./client": "./src/client.mjs",
     "./notifications/adapter-contract": "./src/notifications/adapter-contract.mjs"
   },
   "scripts": {

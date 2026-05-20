@@ -30,6 +30,7 @@ npm install file:./pforge-sdk
 | `pforge-sdk/tools` | `src/tools.mjs` | Tool registry helpers (load + filter the 88 MCP tools) |
 | `pforge-sdk/hallmark` | `src/hallmark.mjs` | `buildProvenance` / `validateProvenance` / `mergeProvenance` + `hallmark/v1` schema |
 | `pforge-sdk/chunker` | `src/chunker.mjs` | `validateChunk` + `CHUNK_KINDS` for Lattice code-graph records |
+| `pforge-sdk/client` | `src/client.mjs` | `PForgeClient` — typed REST client for the Plan Forge MCP server |
 
 > **Note**: There is no `pforge-sdk/client` sub-path yet. To call REST endpoints from code, see [docs/REST-API.md](../docs/REST-API.md) — `fetch` is sufficient. A typed client is planned for `0.4.0`.
 
@@ -74,6 +75,118 @@ Each entry in `tools` is a JSON object with at least:
 | `inputSchema` | `object` | JSON Schema for the tool's input |
 
 The full registry is regenerated from `pforge-mcp/capabilities.mjs` every time the MCP server boots — `tools.json` is the source of truth the SDK reads from.
+
+---
+
+## `pforge-sdk/client` — REST Client
+
+`PForgeClient` is a zero-dependency typed REST client for the Plan Forge MCP server. It wraps every major `/api/*` endpoint family and exposes a generic `tool()` dispatcher for calling any of the 88+ `forge_*` tools over HTTP.
+
+```js
+import { PForgeClient, createClient } from 'pforge-sdk/client';
+
+// Connect to the default server (http://localhost:3100)
+const client = new PForgeClient();
+
+// Or pass options
+const client = createClient({
+  baseUrl:   'http://my-server:3100',
+  timeoutMs: 10_000,
+  apiKey:    process.env.PFORGE_API_KEY,   // → Authorization: Bearer <key>
+});
+```
+
+### Discovery
+
+```js
+const { version }  = await client.version();       // GET /api/version
+const status       = await client.status();         // GET /api/status
+const capabilities = await client.capabilities();   // GET /api/capabilities
+const manifest     = await client.discover();       // GET /.well-known/plan-forge.json
+```
+
+### Plan Runs
+
+```js
+const runs    = await client.runs.list();
+const latest  = await client.runs.latest();
+const run3    = await client.runs.get(3);
+const started = await client.runs.trigger({ plan: 'docs/plans/Phase-55-PLAN.md', mode: 'auto' });
+const aborted = await client.runs.abort();
+const events  = await client.runs.replay(3, 'slice-2');
+```
+
+### Cost & Search
+
+```js
+const cost     = await client.cost();                               // GET /api/cost
+const results  = await client.search('drift');                      // GET /api/search?q=drift
+const paged    = await client.search({ q: 'gate', limit: 10 });
+const timeline = await client.timeline({ cursor: 'abc', limit: 25 });
+```
+
+### Memory
+
+```js
+const report = await client.memory.report();
+const hits   = await client.memory.search({ q: 'OTEL', limit: 5 });
+await client.memory.capture({ content: 'orchestrator now exports slice-gate helpers' });
+```
+
+### LiveGuard
+
+```js
+const drift    = await client.liveguard.drift();
+const history  = await client.liveguard.driftHistory();
+const incidents = await client.liveguard.incidents();
+const health   = await client.liveguard.healthTrend();
+```
+
+### Crucible (Idea Smelting)
+
+```js
+const smelts  = await client.crucible.list();
+const smelt   = await client.crucible.submit({ idea: 'Add typed client to pforge-sdk' });
+const preview = await client.crucible.preview();
+```
+
+### Generic MCP Tool Dispatcher
+
+Call any `forge_*` tool by name. The input must match that tool's `inputSchema`.
+
+```js
+// Equivalent to calling the forge_run_plan MCP tool
+const result = await client.tool('forge_run_plan', {
+  plan: 'docs/plans/Phase-55-PLAN.md',
+  mode: 'auto',
+});
+
+// Read-only tools work too
+const caps = await client.tool('forge_capabilities');
+```
+
+### Error handling
+
+Non-2xx responses and network failures both throw `PForgeClientError`:
+
+```js
+import { PForgeClientError } from 'pforge-sdk/client';
+
+try {
+  await client.runs.trigger({ plan: 'missing.md' });
+} catch (err) {
+  if (err instanceof PForgeClientError) {
+    console.error(err.statusCode); // e.g. 404
+    console.error(err.body);       // parsed response body
+  }
+}
+```
+
+| Property | Type | Description |
+|---|---|---|
+| `statusCode` | `number` | HTTP status code (0 = network-level failure) |
+| `body` | `unknown` | Parsed JSON body, or raw text if not JSON |
+| `message` | `string` | Human-readable summary |
 
 ---
 
@@ -179,8 +292,8 @@ The SDK is intentionally narrow — it covers the artifact contracts (`tools.jso
 
 | Version | Adds |
 |---|---|
-| **0.3.0** (current) | `chunker` sub-path; dropped broken `client` declaration; bumped to match v3.x memory architecture |
-| **0.4.0** (planned) | Typed REST `client` sub-path; convenience wrappers for `/api/tool/:name` dispatch |
+| **0.3.0** | `chunker` sub-path; dropped broken `client` declaration; bumped to match v3.x memory architecture |
+| **0.4.0** (current) | `client` sub-path — `PForgeClient` typed REST client, `createClient` factory, `PForgeClientError`, method groups for runs/memory/crucible/liveguard, generic `tool()` dispatcher |
 | **0.5.0** (planned) | Anvil cache-key helpers; Lattice query builder |
 
 Track progress in [docs/V3-CAPABILITY-AUDIT.md](../docs/V3-CAPABILITY-AUDIT.md).

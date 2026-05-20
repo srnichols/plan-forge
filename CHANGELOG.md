@@ -7,6 +7,31 @@ Format follows [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
+### Added — Embedding status diagnostic surface (Phase 56 — EMBEDDING-HARDENING)
+
+Promotes the Phase 55 neural-embedding backend from an implementation detail into a
+first-class diagnostic surface: agents, operators, and users can now inspect embedding
+health without reading source code or grepping log files.
+
+- **`forge_embedding_status` MCP tool (#096)** (`pforge-mcp/server/tool-handlers/platform.mjs`):
+  Returns `{ backend, configured, neuralAvailable, corpusSize, cacheStatus, recommendations, timestamp }`.
+  - `backend` — effective backend in use: `"tfidf"`, `"neural"`, or `"none"` (empty corpus).
+  - `configured` — raw `.forge.json` `embeddingBackend` field (`"auto"`/`"tfidf"`/`"neural"` or default `"auto"`).
+  - `neuralAvailable` — `true` if `@xenova/transformers` is resolvable at runtime.
+  - `corpusSize` — number of local thought records loaded from `.forge/` JSONL stores.
+  - `cacheStatus` — TF-IDF index cache state from `getIndexStatus()` (`exists`, `stale`, `corpusSize`, `builtAt`).
+  - `recommendations` — actionable strings surfaced when neural is not available or corpus is empty.
+  - ACI-compliant: bounded payload, explicit empty-state `message`, all fields documented.
+- **REST endpoint** `GET /api/embedding/status` (`pforge-mcp/server/rest-api.mjs`): same payload as MCP tool.
+- **CLI commands** (`pforge.ps1` / `pforge.sh`):
+  - `pforge embeddings status` — prints backend, corpus size, cache state, recommendations.
+  - `pforge embeddings install` — installs `@xenova/transformers` for neural upgrade path.
+- **Dashboard tile** — Embedding Status card in the Forge-Master tab (`dashboard/index.html` + `dashboard/app.js`).
+- **20 tests** (`pforge-mcp/tests/embedding-status.test.mjs`) covering handler export, tool definition shape,
+  MCP_ONLY_TOOLS membership, metadata shape, REST route registration, corpus count, `isNeuralEmbeddingAvailable`,
+  and all 5 effective-backend logic branches.
+- Updated golden snapshot fixtures (`tests/fixtures/server-surface.golden.json`, `tests/fixtures/capabilities-surface.golden.json`) to reflect 101-tool surface.
+
 ### Added — Persistent TF-IDF index cache for `forge_local_search` (Phase 56)
 
 Eliminates per-query corpus rebuild cost for `forge_local_search`. On the first

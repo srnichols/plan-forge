@@ -1050,6 +1050,26 @@ async function _callToolHandler_095_forge_local_search(request, args) {
   }
 }
 
+/** Resolve the effective embedding backend given the configured preference and neural availability. */
+function _resolveEmbeddingBackend(configuredBackend, neuralAvailable) {
+  if (configuredBackend === "tfidf") return "tfidf";
+  if (configuredBackend === "neural") return neuralAvailable ? "neural" : "tfidf";
+  // "auto": prefer neural when available
+  return neuralAvailable ? "neural" : "tfidf";
+}
+
+/** Build the human-readable status message for forge_embedding_status. */
+function _buildEmbeddingStatusMessage(effectiveBackend, neuralAvailable, neuralVersion, corpusSize) {
+  const installHint = "npm install --save-optional @xenova/transformers";
+  const neuralStatus = neuralAvailable
+    ? `neural available (v${neuralVersion ?? "unknown"})`
+    : `neural unavailable — install with: ${installHint}`;
+  const backendNote = effectiveBackend === "neural"
+    ? "Active backend: neural (all-MiniLM-L6-v2)"
+    : `Active backend: tfidf${neuralAvailable ? "" : " (neural not installed)"}`;
+  return `${backendNote}. ${neuralStatus}. Corpus: ${corpusSize} thought${corpusSize === 1 ? "" : "s"} in .forge/.`;
+}
+
 async function _callToolHandler_096_forge_embedding_status(request, args) {
   const { name } = request.params;
   if (!(name === "forge_embedding_status")) return _CALL_TOOL_NO_MATCH;
@@ -1083,19 +1103,9 @@ async function _callToolHandler_096_forge_embedding_status(request, args) {
       if (forgeJson?.embeddingBackend) configuredBackend = forgeJson.embeddingBackend;
     } catch { /* .forge.json absent or unreadable — auto */ }
 
-    // Effective backend: configured override wins; otherwise auto-detect
-    const effectiveBackend = configuredBackend === "tfidf" ? "tfidf"
-      : configuredBackend === "neural" ? (neuralAvailable ? "neural" : "tfidf")
-      : (neuralAvailable ? "neural" : "tfidf"); // "auto"
-
+    const effectiveBackend = _resolveEmbeddingBackend(configuredBackend, neuralAvailable);
     const installHint = "npm install --save-optional @xenova/transformers";
-    const neuralStatus = neuralAvailable
-      ? `neural available (v${neuralVersion ?? "unknown"})`
-      : `neural unavailable — install with: ${installHint}`;
-    const backendNote = effectiveBackend === "neural"
-      ? "Active backend: neural (all-MiniLM-L6-v2)"
-      : `Active backend: tfidf${neuralAvailable ? "" : " (neural not installed)"}`;
-    const message = `${backendNote}. ${neuralStatus}. Corpus: ${corpusSize} thought${corpusSize === 1 ? "" : "s"} in .forge/.`;
+    const message = _buildEmbeddingStatusMessage(effectiveBackend, neuralAvailable, neuralVersion, corpusSize);
 
     const result = {
       ok: true,

@@ -394,6 +394,61 @@ function thoughtSnippet(thought) {
 }
 
 /**
+ * Normalize and default the raw opts bag for searchLocalThoughts.
+ *
+ * @param {object} opts
+ * @returns {{ cwd: string, limit: number, threshold: number, sources: string[]|undefined, forceBackend: string|undefined, noCache: boolean }}
+ */
+function _buildSearchOptions(opts) {
+  return {
+    cwd: opts.cwd ?? process.cwd(),
+    limit: opts.limit ?? DEFAULT_LIMIT,
+    threshold: opts.threshold ?? DEFAULT_THRESHOLD,
+    sources: opts.sources,
+    forceBackend: opts.forceBackend,
+    noCache: opts.noCache ?? false,
+  };
+}
+
+/**
+ * Determine which search backend to use.
+ * Returns 'neural' when @xenova/transformers is available (and not overridden),
+ * otherwise 'tfidf'.
+ *
+ * @param {string|undefined} forceBackend
+ * @returns {Promise<'neural'|'tfidf'>}
+ */
+async function _chooseBackend(forceBackend) {
+  if (forceBackend === "neural") return "neural";
+  if (forceBackend === "tfidf") return "tfidf";
+  return (await isNeuralEmbeddingAvailable()) ? "neural" : "tfidf";
+}
+
+/**
+ * Run the TF-IDF search path, using and updating the persisted index cache.
+ *
+ * @param {string} query
+ * @param {Array<object>} thoughts
+ * @param {string} cwd
+ * @param {{ sources?: string[], noCache?: boolean, limit: number, threshold: number }} tfidfOpts
+ * @returns {Array<object>}
+ */
+function _runTfidfPath(query, thoughts, cwd, tfidfOpts) {
+  const { sources, noCache, limit, threshold } = tfidfOpts;
+  const resolvedSources = sources ?? [...THOUGHT_SOURCES];
+  const cachedIdx = noCache ? null : loadCachedIndex(cwd, { sources: resolvedSources });
+  if (cachedIdx) {
+    return _tfidfSearchWithIndex(query, thoughts, cachedIdx.tokenMaps, cachedIdx.idf, limit, threshold);
+  }
+  const hits = _tfidfSearch(query, thoughts, limit, threshold);
+  if (!noCache) {
+    const built = buildCorpusIndex(thoughts);
+    persistIndex(cwd, built, { sources: resolvedSources, corpusSize: thoughts.length });
+  }
+  return hits;
+}
+
+/**
  * Search local .forge/ thoughts by semantic similarity.
  *
  * TF-IDF path uses a disk-persisted corpus index (Phase 56). On the first call
@@ -416,45 +471,22 @@ function thoughtSnippet(thought) {
  * }>}
  */
 export async function searchLocalThoughts(query, opts = {}) {
-  const {
-    cwd = process.cwd(),
-    limit = DEFAULT_LIMIT,
-    threshold = DEFAULT_THRESHOLD,
-    sources,
-    forceBackend,
-    noCache = false,
-  } = opts;
-
   if (!query || typeof query !== "string" || !query.trim()) {
     return _emptyResult(query || "", "Query must be a non-empty string.");
   }
+
+  const { cwd, limit, threshold, sources, forceBackend, noCache } = _buildSearchOptions(opts);
 
   const thoughts = readLocalThoughts(cwd, { sources });
   if (thoughts.length === 0) {
     return _emptyResult(query, "No local thoughts found in .forge/ — capture some with forge_capture_thought or run a plan to build memory.");
   }
 
-  const useNeural =
-    forceBackend === "neural" ||
-    (forceBackend !== "tfidf" && (await isNeuralEmbeddingAvailable()));
+  const backend = await _chooseBackend(forceBackend);
+  const hits = backend === "neural"
+    ? await _neuralSearch(query, thoughts, limit, threshold)
+    : _runTfidfPath(query, thoughts, cwd, { sources, noCache, limit, threshold });
 
-  let hits;
-  if (useNeural) {
-    hits = await _neuralSearch(query, thoughts, limit, threshold);
-  } else {
-    const cachedIdx = noCache ? null : loadCachedIndex(cwd, { sources: sources ?? [...THOUGHT_SOURCES] });
-    if (cachedIdx) {
-      hits = _tfidfSearchWithIndex(query, thoughts, cachedIdx.tokenMaps, cachedIdx.idf, limit, threshold);
-    } else {
-      hits = _tfidfSearch(query, thoughts, limit, threshold);
-      if (!noCache) {
-        const built = buildCorpusIndex(thoughts);
-        persistIndex(cwd, built, { sources: sources ?? [...THOUGHT_SOURCES], corpusSize: thoughts.length });
-      }
-    }
-  }
-
-  const backend = useNeural ? "neural" : "tfidf";
   const truncated = thoughts.length >= MAX_CORPUS;
 
   return {

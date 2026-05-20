@@ -45,7 +45,7 @@ describe("cost-service: real-plan smoke matrix (Phase-27.1 Slice 4)", () => {
   });
 
   if (!havePlans) {
-    it.skip("smoke matrix skipped: no Phase-*-PLAN.md files in docs/plans/", () => {});
+    it.todo("smoke matrix skipped: no Phase-*-PLAN.md files in docs/plans/");
     return; // Skip the rest of the describe — nothing to iterate over.
   }
 

@@ -18,6 +18,7 @@
 import { randomUUID } from "node:crypto";
 import { readForgeJson } from "../orchestrator.mjs";
 import { validateAdapterShape } from "../../pforge-sdk/src/notifications/adapter-contract.mjs";
+import { ERROR_CODES } from "../enums.mjs";
 
 // ─── Constants ────────────────────────────────────────────────────────
 const SEND_TIMEOUT_MS = 5_000;
@@ -412,7 +413,7 @@ function handleDispatchSuccess({ result, adapterName, event, correlationId, deli
 }
 
 function handleDispatchError({ adapterName, event, correlationId, deliveryMs, err, broadcastNotification, captureNotificationFailure, stats }) {
-  const errorCode = err.message === "TIMEOUT" ? "TIMEOUT" : (err.code || "SEND_FAILED");
+  const errorCode = err.message === ERROR_CODES.TIMEOUT.code ? ERROR_CODES.TIMEOUT.code : (err.code || "SEND_FAILED");
   stats.failed++;
   broadcastNotification({
     type: "notification-send-failed",
@@ -460,7 +461,7 @@ async function dispatchNotificationEvent({ adapterName, event, adapters, config,
         correlationId,
         config: context.resolvedConfig,
       }),
-      new Promise((_, reject) => setTimeout(() => reject(new Error("TIMEOUT")), SEND_TIMEOUT_MS)),
+      new Promise((_, reject) => setTimeout(() => reject(new Error(ERROR_CODES.TIMEOUT.code)), SEND_TIMEOUT_MS)),
     ]);
     handleDispatchSuccess({
       result,
@@ -505,14 +506,14 @@ async function directSendNotification({ via, payload, formattedMessage, adapters
   try {
     const result = await Promise.race([
       adapter.send({ event: payload, route: via, formattedMessage: message, correlationId, config: resolvedConfig }),
-      new Promise((_, reject) => setTimeout(() => reject(new Error("TIMEOUT")), SEND_TIMEOUT_MS)),
+      new Promise((_, reject) => setTimeout(() => reject(new Error(ERROR_CODES.TIMEOUT.code)), SEND_TIMEOUT_MS)),
     ]);
     return { ...result, adapter: via, deliveryMs: nowFn() - t0 };
   } catch (err) {
     return {
       ok: false,
       adapter: via,
-      errorCode: err.message === "TIMEOUT" ? "TIMEOUT" : "SEND_FAILED",
+      errorCode: err.message === ERROR_CODES.TIMEOUT.code ? ERROR_CODES.TIMEOUT.code : "SEND_FAILED",
       error: err.message,
       deliveryMs: nowFn() - t0,
     };

@@ -8,7 +8,7 @@
   "crossPackageWhitelist": [
     "pforge-master/src/config.mjs -> pforge-mcp/enums.mjs",
     "pforge-master/src/retrieval.mjs -> pforge-mcp/brain.mjs",
-    "pforge-mcp/server.mjs -> pforge-master/src/mcp-client.mjs"
+    "pforge-mcp/server/state.mjs -> pforge-master/src/mcp-client.mjs"
   ],
   "flagCrossPackage": true
 }

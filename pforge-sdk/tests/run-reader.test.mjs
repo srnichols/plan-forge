@@ -13,13 +13,16 @@ import { join, resolve } from 'node:path';
 import {
   RUNS_DIR_RELATIVE,
   INDEX_FILE_RELATIVE,
+  EVENTS_LOG_FILE,
   runsDir,
   runDir,
   runIndexPath,
+  eventsLogPath,
   listRuns,
   readRunMeta,
   readRunSummary,
   readRunIndex,
+  readEvents,
   parseEventLine,
 } from '../src/run-reader.mjs';
 
@@ -441,5 +444,164 @@ describe('round-trip: write then read', () => {
 
     expect(meta.plan).toBe(summary.plan);
     expect(summary.status).toBe('completed');
+  });
+});
+
+// ─── EVENTS_LOG_FILE ──────────────────────────────────────────────────────────
+
+describe('EVENTS_LOG_FILE', () => {
+  it('is a non-empty string', () => {
+    expect(typeof EVENTS_LOG_FILE).toBe('string');
+    expect(EVENTS_LOG_FILE.length).toBeGreaterThan(0);
+  });
+
+  it('equals "events.log"', () => {
+    expect(EVENTS_LOG_FILE).toBe('events.log');
+  });
+});
+
+// ─── eventsLogPath ────────────────────────────────────────────────────────────
+
+describe('eventsLogPath', () => {
+  it('returns an absolute path ending with events.log', () => {
+    const p = eventsLogPath({ runId: '20260519-183001', cwd: '/workspace' });
+    expect(p.replace(/\\/g, '/')).toMatch(/events\.log$/);
+  });
+
+  it('includes the runId in the path', () => {
+    const p = eventsLogPath({ runId: '20260519-183001', cwd: '/workspace' });
+    expect(p.replace(/\\/g, '/')).toContain('20260519-183001');
+  });
+
+  it('includes .forge/runs/ in the path', () => {
+    const p = eventsLogPath({ runId: 'my-run', cwd: '/workspace' });
+    expect(p.replace(/\\/g, '/')).toContain('.forge/runs/my-run');
+  });
+
+  it('uses process.cwd() when cwd is omitted', () => {
+    const p = eventsLogPath({ runId: 'my-run' });
+    expect(p.replace(/\\/g, '/')).toContain('.forge/runs/my-run/events.log');
+  });
+
+  it('is consistent with runDir + EVENTS_LOG_FILE', () => {
+    const dir = runDir({ runId: '20260519-183001', cwd: '/workspace' });
+    const log = eventsLogPath({ runId: '20260519-183001', cwd: '/workspace' });
+    expect(log).toBe(resolve(dir, EVENTS_LOG_FILE));
+  });
+});
+
+// ─── readEvents ───────────────────────────────────────────────────────────────
+
+describe('readEvents', () => {
+  let cwd;
+  let runsPath;
+
+  beforeEach(() => {
+    ({ cwd, runsPath } = makeTmpWorkspace());
+  });
+
+  afterEach(() => {
+    rmSync(cwd, { recursive: true, force: true });
+  });
+
+  it('returns empty array when run directory does not exist', () => {
+    expect(readEvents({ runId: 'nonexistent', cwd })).toEqual([]);
+  });
+
+  it('returns empty array when events.log does not exist', () => {
+    mkdirSync(join(runsPath, '20260519-183001'));
+    expect(readEvents({ runId: '20260519-183001', cwd })).toEqual([]);
+  });
+
+  it('returns empty array when events.log is empty', () => {
+    const dir = makeRunDir(runsPath, '20260519-183001');
+    writeFileSync(join(dir, 'events.log'), '');
+    expect(readEvents({ runId: '20260519-183001', cwd })).toEqual([]);
+  });
+
+  it('returns empty array when events.log contains only blank lines', () => {
+    const dir = makeRunDir(runsPath, '20260519-183001');
+    writeFileSync(join(dir, 'events.log'), '\n\n\n');
+    expect(readEvents({ runId: '20260519-183001', cwd })).toEqual([]);
+  });
+
+  it('parses a single valid event line', () => {
+    const dir = makeRunDir(runsPath, '20260519-183001');
+    writeFileSync(join(dir, 'events.log'),
+      '[2026-05-19T18:30:01.000Z] slice-started: {"sliceId":1}\n');
+    const events = readEvents({ runId: '20260519-183001', cwd });
+    expect(events).toHaveLength(1);
+    expect(events[0].type).toBe('slice-started');
+    expect(events[0].ts).toBe('2026-05-19T18:30:01.000Z');
+    expect(events[0].data.sliceId).toBe(1);
+  });
+
+  it('parses multiple event lines in order', () => {
+    const dir = makeRunDir(runsPath, '20260519-183001');
+    const lines = [
+      '[2026-05-19T18:30:01.000Z] run-started: {}',
+      '[2026-05-19T18:30:02.000Z] slice-started: {"sliceId":1}',
+      '[2026-05-19T18:30:03.000Z] gate-passed: {"gate":"npm test"}',
+      '[2026-05-19T18:30:04.000Z] slice-completed: {"sliceId":1}',
+      '[2026-05-19T18:30:05.000Z] run-completed: {}',
+    ].join('\n');
+    writeFileSync(join(dir, 'events.log'), lines);
+    const events = readEvents({ runId: '20260519-183001', cwd });
+    expect(events).toHaveLength(5);
+    expect(events[0].type).toBe('run-started');
+    expect(events[4].type).toBe('run-completed');
+  });
+
+  it('silently skips malformed lines', () => {
+    const dir = makeRunDir(runsPath, '20260519-183001');
+    const lines = [
+      '[2026-05-19T18:30:01.000Z] run-started: {}',
+      'this is not a valid event line',
+      '[2026-05-19T18:30:02.000Z] slice-started: {"sliceId":1}',
+    ].join('\n');
+    writeFileSync(join(dir, 'events.log'), lines);
+    const events = readEvents({ runId: '20260519-183001', cwd });
+    expect(events).toHaveLength(2);
+    expect(events[0].type).toBe('run-started');
+    expect(events[1].type).toBe('slice-started');
+  });
+
+  it('returns { ts, type, data } shaped objects', () => {
+    const dir = makeRunDir(runsPath, '20260519-183001');
+    writeFileSync(join(dir, 'events.log'),
+      '[2026-05-19T18:30:01.000Z] gate-passed: {"gate":"npm test"}\n');
+    const events = readEvents({ runId: '20260519-183001', cwd });
+    expect(events[0]).toHaveProperty('ts');
+    expect(events[0]).toHaveProperty('type');
+    expect(events[0]).toHaveProperty('data');
+  });
+
+  it('respects max — returns only the last N events', () => {
+    const dir = makeRunDir(runsPath, '20260519-183001');
+    const lines = Array.from({ length: 10 }, (_, i) =>
+      `[2026-05-19T18:30:0${i}.000Z] step-${i}: {}`
+    ).join('\n');
+    writeFileSync(join(dir, 'events.log'), lines);
+    const events = readEvents({ runId: '20260519-183001', cwd, max: 3 });
+    expect(events).toHaveLength(3);
+    expect(events[0].type).toBe('step-7');
+    expect(events[2].type).toBe('step-9');
+  });
+
+  it('max larger than total returns all events', () => {
+    const dir = makeRunDir(runsPath, '20260519-183001');
+    writeFileSync(join(dir, 'events.log'),
+      '[2026-05-19T18:30:01.000Z] run-started: {}\n' +
+      '[2026-05-19T18:30:02.000Z] run-completed: {}\n');
+    const events = readEvents({ runId: '20260519-183001', cwd, max: 100 });
+    expect(events).toHaveLength(2);
+  });
+
+  it('max: 0 is ignored — returns all events', () => {
+    const dir = makeRunDir(runsPath, '20260519-183001');
+    writeFileSync(join(dir, 'events.log'),
+      '[2026-05-19T18:30:01.000Z] run-started: {}\n');
+    const events = readEvents({ runId: '20260519-183001', cwd, max: 0 });
+    expect(events).toHaveLength(1);
   });
 });

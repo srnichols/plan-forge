@@ -12,3 +12,5 @@ export * from './plan-reader.mjs';
 export * from './thought-reader.mjs';
 export * from './digest-reader.mjs';
 export * from './session-reader.mjs';
+export * from './bug-reader.mjs';
+export * from './bug-reader.mjs';

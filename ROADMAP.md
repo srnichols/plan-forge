@@ -7,7 +7,9 @@
 
 ## Current Release
 
-**v3.12.1** (2026-05-20) — `forge_diff_stats` tool-surface cleanup. Added `forge_diff_stats` to `TOOL_NAMES` frozen array in `enums.mjs` and to `_READ_ONLY_TOOLS` in `server/tool-handlers.mjs`. Updated Appendix Q (`api-surface-index.html`) with both tools correctly placed. Resolves the handler-name collision introduced by Phase WORKER-GUARDRAILS A2.
+**v3.13.0** (2026-05-20) — `pforge-sdk/bug-reader` (v0.11.0). New `bug-reader` sub-path provides offline access to `.forge/bugs/*.json` tempering bug registry files without a running MCP server. `listBugs` (with status/severity/scanner/since/until filters), `readBug`, `parseBugId`, `summarizeBugs`. 57 tests.
+
+Previous: **v3.12.1** (2026-05-20) — `forge_diff_stats` tool-surface cleanup. Added `forge_diff_stats` to `TOOL_NAMES` frozen array in `enums.mjs` and to `_READ_ONLY_TOOLS` in `server/tool-handlers.mjs`. Updated Appendix Q (`api-surface-index.html`) with both tools correctly placed. Resolves the handler-name collision introduced by Phase WORKER-GUARDRAILS A2.
 
 Previous: **v3.12.0** (2026-05-20) — `pforge-sdk/session-reader` (v0.10.0). New `session-reader` sub-path provides offline access to `.forge/fm-sessions/*.jsonl` Forge-Master conversation session files without a running MCP server. `listSessions`, `readSession`, `readAllSessionTurns` (archive + active, deduped and sorted), `parseSessionLine`, `getLane`, `summarizeSession`. 76 tests.
 

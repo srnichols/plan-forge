@@ -9,6 +9,70 @@ Format follows [Keep a Changelog](https://keepachangelog.com/).
 
 ---
 
+## [3.13.0] — 2026-05-20
+
+### Added — `pforge-sdk/bug-reader` + `run-reader` events — v0.11.0
+
+Two additions to the pforge-sdk, shipped together as v0.11.0:
+
+**`pforge-sdk/bug-reader`** (new sub-path):
+
+Offline access to the Plan Forge bug registry (`.forge/bugs/*.json`) without requiring a running MCP server.
+
+- **`src/bug-reader.mjs`** — zero-dependency reader module:
+  - `listBugs({ cwd?, status?, severity?, scanner?, since?, until? })` — lists bug records from `.forge/bugs/`, newest-discovered first. Supports filtering by any combination of status, severity, scanner, or date range.
+  - `readBug({ bugId, cwd? })` — reads a single bug record by ID. Returns `null` for missing, malformed, or path-traversal-attempted IDs.
+  - `summarizeBugs(bugs)` — pure summary of a bug array: `{ total, byStatus, bySeverity, scanners[] }`. Works on in-memory arrays — no I/O.
+  - `parseBugId(filename)` — extracts `'bug-YYYY-MM-DD-NNN'` from a filename string; returns `null` for non-matching inputs.
+  - Path helpers: `bugsDir`, `bugFilePath`.
+  - Constants: `BUGS_DIR_RELATIVE`, `BUG_STATUSES`, `BUG_SEVERITIES`.
+- **`pforge-sdk/package.json`** — new `"./bug-reader"` export map entry; version bumped to `0.11.0`.
+- **`src/index.mjs`** — re-exports all `bug-reader` symbols from the main entry point.
+- **57 tests** in `tests/bug-reader.test.mjs` covering constants, path helpers, `parseBugId`, `bugsDir`, `bugFilePath`, `listBugs` (empty/populated/filters/sort/malformed), `readBug` (missing/invalid-id/path-traversal/malformed/valid), and `summarizeBugs` (empty/single/multi/mixed).
+
+**`pforge-sdk/run-reader`** — `readEvents` + `eventsLogPath` + `EVENTS_LOG_FILE` (new in v0.11.0):
+
+Completes the `.forge/runs/<runId>/` reader surface. The `run-reader` already had `readRunMeta` and `readRunSummary` but lacked an I/O reader for `events.log`.
+
+- **`readEvents({ runId, cwd?, max? })`** — reads and parses all events from a run's `events.log` file. Silently skips malformed lines. When `max` is provided, returns only the last N events (useful for tailing large logs).
+- **`eventsLogPath({ runId, cwd? })`** — path helper that resolves the absolute path to a run's `events.log` file.
+- **`EVENTS_LOG_FILE`** — constant `'events.log'`.
+- **18 new tests** added to `tests/run-reader.test.mjs` (63 total, was 45).
+
+---
+
+## [3.13.0] — 2026-05-20
+
+### Added — `pforge-sdk/bug-reader` — offline bug registry access (v0.11.0)
+
+New `pforge-sdk/bug-reader` sub-path provides offline access to `.forge/bugs/*.json`
+tempering bug registry files written by `pforge-mcp/tempering/bug-registry.mjs`,
+without requiring a running MCP server.
+
+- **`src/bug-reader.mjs`** — zero-dependency reader module:
+  - `listBugs({ cwd?, status?, severity?, scanner?, since?, until? })` — lists all bug records
+    from `.forge/bugs/`, sorted newest-discovered first. All filters are optional and
+    combined with AND semantics.
+  - `readBug({ bugId, cwd? })` — reads a single bug record by ID. Includes path-traversal
+    guard (only `bug-YYYY-MM-DD-NNN` patterns accepted). Returns `null` on missing/malformed files.
+  - `parseBugId(filename)` — pure helper: extracts a bug ID from a `.json` filename;
+    returns `null` for non-matching names (no I/O).
+  - `summarizeBugs(bugs)` — pure summary of a loaded bugs array:
+    `{ total, byStatus: {}, bySeverity: {}, scanners: string[] }`.
+  - Path helpers: `bugsDir`, `bugFilePath`.
+  - Constants: `BUGS_DIR_RELATIVE`, `BUG_STATUSES`, `BUG_SEVERITIES`.
+- **`pforge-sdk/package.json`** — new `"./bug-reader"` export map entry; version bumped to `0.11.0`.
+- **`src/index.mjs`** — re-exports all `bug-reader` symbols from the main entry point.
+- **`tests/bug-reader.test.mjs`** — 57 tests covering constants, path helpers, `parseBugId`
+  (pure), `listBugs` (empty/populated/all-filters/skip-malformed), `readBug`
+  (missing/malformed/path-traversal/valid), `summarizeBugs` (counts/scanners/dedup/empty),
+  and 4 round-trip integration tests.
+- **`README.md`** — new `## pforge-sdk/bug-reader` section with usage examples, bug record
+  shape table, `summarizeBugs` return shape table, and path helpers table. Version bumped
+  to `0.11.0`. Roadmap row added.
+
+---
+
 ## [3.12.1] — 2026-05-20
 
 ### Fixed — `forge_diff_stats` tool-surface cleanup

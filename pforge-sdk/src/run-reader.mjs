@@ -14,6 +14,12 @@
  *   .forge/runs/<runId>/summary.json — post-run summary (results, cost, status)
  *   .forge/runs/<runId>/events.log — line-by-line event log
  *
+ * Exports:
+ *   Constants:     RUNS_DIR_RELATIVE, INDEX_FILE_RELATIVE, EVENTS_LOG_FILE
+ *   Path helpers:  runsDir, runDir, runIndexPath, eventsLogPath
+ *   Readers:       listRuns, readRunMeta, readRunSummary, readRunIndex, readEvents
+ *   Pure parsers:  parseEventLine
+ *
  * Events.log line format (written by the orchestrator):
  *   [<ISO 8601 timestamp>] <event-type>: <JSON-encoded data>
  *
@@ -36,6 +42,12 @@ export const RUNS_DIR_RELATIVE = join('.forge', 'runs');
  * @type {string}
  */
 export const INDEX_FILE_RELATIVE = join('.forge', 'runs', 'index.jsonl');
+
+/**
+ * Filename of the per-run event log (relative to a run directory).
+ * @type {string}
+ */
+export const EVENTS_LOG_FILE = 'events.log';
 
 // ─── Internal helpers ─────────────────────────────────────────────────────────
 
@@ -99,6 +111,20 @@ export function runDir({ runId, cwd }) {
  */
 export function runIndexPath(opts) {
   return resolve(rootOf(opts), '.forge', 'runs', 'index.jsonl');
+}
+
+/**
+ * Resolve the absolute path to a specific run's `events.log` file.
+ *
+ * @param {{ runId: string, cwd?: string }} opts
+ * @returns {string}
+ *
+ * @example
+ * eventsLogPath({ runId: '20260519-183001' });
+ * // → '/workspace/.forge/runs/20260519-183001/events.log'
+ */
+export function eventsLogPath({ runId, cwd } = {}) {
+  return resolve(rootOf({ cwd }), '.forge', 'runs', runId, 'events.log');
 }
 
 // ─── Run discovery ────────────────────────────────────────────────────────────
@@ -199,6 +225,47 @@ export function readRunIndex(opts) {
       .flatMap((l) => {
         try { return [JSON.parse(l)]; } catch { return []; }
       });
+  } catch {
+    return [];
+  }
+}
+
+// ─── Events.log reader ────────────────────────────────────────────────────────
+
+/**
+ * Read and parse all events from a run's `events.log` file.
+ *
+ * Lines that do not match the `[<timestamp>] <type>: <data>` format are
+ * silently skipped. When `max` is provided, only the **last** N events are
+ * returned (useful for tailing large logs without loading them fully into
+ * a context window).
+ *
+ * Returns an empty array when the file does not exist or cannot be read.
+ *
+ * @param {{ runId: string, cwd?: string, max?: number }} opts
+ * @returns {Array<{ ts: string, type: string, data: object }>}
+ *
+ * @example
+ * const events = readEvents({ runId: '20260519-183001' });
+ * const failures = events.filter(e => e.type === 'gate-failed');
+ *
+ * @example
+ * // Last 20 events only
+ * const tail = readEvents({ runId: '20260519-183001', max: 20 });
+ */
+export function readEvents({ runId, cwd, max } = {}) {
+  const filePath = eventsLogPath({ runId, cwd });
+  if (!existsSync(filePath)) return [];
+  try {
+    const text = readFileSync(filePath, 'utf8');
+    const events = text
+      .split('\n')
+      .flatMap((line) => {
+        const parsed = parseEventLine(line);
+        return parsed ? [parsed] : [];
+      });
+    if (typeof max === 'number' && max > 0) return events.slice(-max);
+    return events;
   } catch {
     return [];
   }

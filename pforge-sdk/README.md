@@ -1,6 +1,6 @@
 # pforge-sdk
 
-**Version**: `0.10.0` · **License**: MIT · **Engines**: Node ≥ 20
+**Version**: `0.11.0` · **License**: MIT · **Engines**: Node ≥ 20
 
 Programmatic SDK for Plan Forge — load MCP tool metadata, build Hallmark provenance envelopes, and validate Lattice code-chunk records from your own Node.js code. Zero runtime dependencies.
 
@@ -34,11 +34,13 @@ npm install file:./pforge-sdk
 | `pforge-sdk/anvil` | `src/anvil.mjs` | Anvil cache-key helpers — `computeAnvilKey`, path helpers |
 | `pforge-sdk/lattice-query` | `src/lattice-query.mjs` | Lattice query builder — `LatticeQueryBuilder`, `tokenizeForSearch`, `scoreChunk` |
 | `pforge-sdk/notifications/adapter-contract` | `src/notifications/adapter-contract.mjs` | Notification adapter contract — `validateAdapterShape`, `ERR_NOT_IMPLEMENTED` |
-| `pforge-sdk/run-reader` | `src/run-reader.mjs` | Run artifact reader — `listRuns`, `readRunMeta`, `readRunSummary`, `readRunIndex`, `parseEventLine`, path helpers |
+| `pforge-sdk/run-reader` | `src/run-reader.mjs` | Run artifact reader — `listRuns`, `readRunMeta`, `readRunSummary`, `readRunIndex`, `readEvents`, `parseEventLine`, `eventsLogPath`, path helpers |
 | `pforge-sdk/plan-reader` | `src/plan-reader.mjs` | Plan file reader — `listPlans`, `readPlan`, `getPlanStatus`, `getPlanSlices`, path helpers |
 | `pforge-sdk/thought-reader` | `src/thought-reader.mjs` | Thought store reader — `readThoughts`, `readAllThoughts`, `listThoughtSources`, `parseThoughtLine`, path helpers |
 | `pforge-sdk/digest-reader` | `src/digest-reader.mjs` | Digest reader — `listDigests`, `readDigest`, `readLatestDigest`, `overallSeverity`, `getSectionsByMinSeverity`, path helpers |
 | `pforge-sdk/session-reader` | `src/session-reader.mjs` | Forge-Master session reader — `listSessions`, `readSession`, `readAllSessionTurns`, `parseSessionLine`, `getLane`, `summarizeSession`, path helpers |
+| `pforge-sdk/bug-reader` | `src/bug-reader.mjs` | Bug registry reader — `listBugs`, `readBug`, `summarizeBugs`, `parseBugId`, `bugFilePath`, `bugsDir`, `BUGS_DIR_RELATIVE`, `BUG_STATUSES`, `BUG_SEVERITIES` |
+| `pforge-sdk/bug-reader` | `src/bug-reader.mjs` | Bug registry reader — `listBugs`, `readBug`, `parseBugId`, `summarizeBugs`, path helpers |
 
 > **Note**: `pforge-sdk/client` is new in `0.4.0`. It requires a running Plan Forge MCP server (`pforge-mcp/server.mjs`) to be useful. Zero runtime dependencies — uses the global `fetch` (Node ≥ 18).
 > **Note**: `pforge-sdk/anvil` and `pforge-sdk/lattice-query` are new in `0.5.0`. Both are pure and dependency-free.
@@ -48,6 +50,9 @@ npm install file:./pforge-sdk
 > **Note**: `pforge-sdk/thought-reader` is new in `0.8.0`. Provides offline access to `.forge/*.jsonl` thought stores (OpenBrain queue, archive, DLQ, LiveGuard memories) without requiring a running MCP server. Zero dependencies beyond `node:fs` / `node:path`.
 > **Note**: `pforge-sdk/digest-reader` is new in `0.9.0`. Provides offline access to `.forge/digests/*.json` daily digest files without requiring a running MCP server. Includes analysis helpers (`overallSeverity`, `getSectionsByMinSeverity`) that work on in-memory digest objects. Zero dependencies beyond `node:fs` / `node:path`.
 > **Note**: `pforge-sdk/session-reader` is new in `0.10.0`. Provides offline access to `.forge/fm-sessions/*.jsonl` Forge-Master conversation session files without requiring a running MCP server. Includes analysis helpers (`getLane`, `summarizeSession`) that work on in-memory turn arrays. Zero dependencies beyond `node:fs` / `node:path`.
+> **Note**: `pforge-sdk/run-reader` gained `readEvents`, `eventsLogPath`, and `EVENTS_LOG_FILE` in `0.11.0` — offline access to a run's `events.log` with optional tail (`max`).
+> **Note**: `pforge-sdk/bug-reader` is new in `0.11.0`. Provides offline access to `.forge/bugs/*.json` bug registry files without requiring a running MCP server. Includes filtering (`listBugs` with `status`, `severity`, `scanner`, `since`, `until`) and analysis helpers (`summarizeBugs`). Zero dependencies beyond `node:fs` / `node:path`.
+> **Note**: `pforge-sdk/bug-reader` is new in `0.11.0`. Provides offline access to `.forge/bugs/*.json` tempering bug registry files without requiring a running MCP server. Includes analysis helpers (`parseBugId`, `summarizeBugs`) and filter support in `listBugs` (status, severity, scanner, since, until). Zero dependencies beyond `node:fs` / `node:path`.
 
 ---
 
@@ -810,7 +815,93 @@ All functions accept an optional `cwd` parameter (defaults to `process.cwd()`).
 | `ACTIVE_FILE_SUFFIX` | `'.jsonl'` |
 | `ARCHIVE_FILE_SUFFIX` | `'.archive.jsonl'` |
 
-When you write a host that lets agents call Plan Forge tools, use the tool's `riskLevel` to decide what to gate on:
+---
+
+## `pforge-sdk/bug-reader` — Bug registry
+
+The bug-reader module provides offline access to `.forge/bugs/*.json` tempering bug registry files written by the Plan Forge tempering sub-system (`pforge-mcp/tempering/bug-registry.mjs`).
+
+```js
+import {
+  listBugs,
+  readBug,
+  parseBugId,
+  summarizeBugs,
+} from 'pforge-sdk/bug-reader';
+
+// List all open bugs
+const openBugs = listBugs({ status: 'open' });
+
+// List critical bugs from a specific scanner
+const critical = listBugs({ severity: 'critical', scanner: 'vitest' });
+
+// Read a specific bug by ID
+const bug = readBug({ bugId: 'bug-2026-05-20-001' });
+if (bug) {
+  console.log(bug.status);      // → 'open'
+  console.log(bug.severity);    // → 'critical'
+  console.log(bug.scanner);     // → 'vitest'
+}
+
+// Summarise a set of bugs
+const summary = summarizeBugs(openBugs);
+// → { total: 3, byStatus: { open: 3 }, bySeverity: { critical: 1, high: 2 }, scanners: ['vitest'] }
+```
+
+### `listBugs(opts?)` — filter and list bugs
+
+Returns an array of bug record objects, sorted newest-discovered first.
+
+| Option | Type | Description |
+|---|---|---|
+| `cwd` | `string` | Workspace root (defaults to `process.cwd()`) |
+| `status` | `string` | Filter by status — `'open'`, `'in-fix'`, `'fixed'`, `'wont-fix'`, `'duplicate'` |
+| `severity` | `string` | Filter by severity — `'info'`, `'low'`, `'medium'`, `'high'`, `'critical'` |
+| `scanner` | `string` | Filter by originating scanner name |
+| `since` | `string` | ISO-8601 timestamp — exclude bugs discovered before this time |
+| `until` | `string` | ISO-8601 timestamp — exclude bugs discovered after this time |
+
+All filters are optional and combined with AND semantics.
+
+### Bug record shape
+
+| Field | Type | Description |
+|---|---|---|
+| `bugId` | `string` | Unique identifier (`bug-YYYY-MM-DD-NNN`) |
+| `fingerprint` | `string` | SHA-1 dedup fingerprint |
+| `scanner` | `string` | Scanner that discovered the bug |
+| `severity` | `string` | `'info'` \| `'low'` \| `'medium'` \| `'high'` \| `'critical'` |
+| `status` | `string` | `'open'` \| `'in-fix'` \| `'fixed'` \| `'wont-fix'` \| `'duplicate'` |
+| `classification` | `string` | `'real-bug'`, `'infra'`, or custom |
+| `classifierMeta` | `object \| null` | Classifier metadata (confidence score, etc.) |
+| `evidence` | `object` | `{ testName?, assertionMessage?, stackTrace? }` |
+| `affectedFiles` | `string[]` | Files impacted |
+| `reproSteps` | `string \| null` | Reproduction steps |
+| `correlationId` | `string \| null` | Correlation ID from the originating run |
+| `sliceRef` | `string \| null` | Plan slice reference |
+| `discoveredAt` | `string` | ISO-8601 timestamp |
+| `updatedAt` | `string` | ISO-8601 timestamp of last status change |
+
+### `summarizeBugs(bugs)` return shape
+
+| Field | Type | Description |
+|---|---|---|
+| `total` | `number` | Total bug count in the input array |
+| `byStatus` | `Record<string, number>` | Counts grouped by `status` |
+| `bySeverity` | `Record<string, number>` | Counts grouped by `severity` |
+| `scanners` | `string[]` | Unique scanner names, sorted alphabetically |
+
+### Path helpers
+
+| Export | Description |
+|---|---|
+| `bugsDir({ cwd? })` | Absolute path to `<cwd>/.forge/bugs/` |
+| `bugFilePath({ bugId, cwd? })` | Absolute path to `<cwd>/.forge/bugs/<bugId>.json` |
+| `BUGS_DIR_RELATIVE` | Platform-native relative path `.forge/bugs` |
+| `BUG_STATUSES` | Frozen array of valid status strings |
+| `BUG_SEVERITIES` | Frozen array of severity levels in ascending order |
+
+
 
 | Level | Description | Safe to auto-approve? |
 |---|---|:-:|
@@ -844,7 +935,8 @@ The SDK is intentionally narrow — it covers the artifact contracts (`tools.jso
 | **0.7.0** | `plan-reader` sub-path — `listPlans`, `readPlan`, `getPlanStatus`, `getPlanSlices`, `plansDir`, `PLANS_DIR_RELATIVE` for offline access to `docs/plans/*.md` plan files |
 | **0.8.0** | `thought-reader` sub-path — `readThoughts`, `readAllThoughts`, `listThoughtSources`, `parseThoughtLine`, `forgeDir`, `thoughtFilePath`, `THOUGHT_SOURCES`, `FORGE_DIR_RELATIVE` for offline access to `.forge/*.jsonl` thought stores |
 | **0.9.0** | `digest-reader` sub-path — `listDigests`, `readDigest`, `readLatestDigest`, `overallSeverity`, `getSectionsByMinSeverity`, `digestsDir`, `digestFilePath`, `DIGESTS_DIR_RELATIVE`, `SEVERITY_LEVELS` for offline access to `.forge/digests/*.json` daily digest files |
-| **0.10.0** (current) | `session-reader` sub-path — `listSessions`, `readSession`, `readAllSessionTurns`, `parseSessionLine`, `getLane`, `summarizeSession`, `fmSessionsDir`, `sessionFilePath`, `sessionArchivePath`, `FM_SESSIONS_DIR_RELATIVE`, `ACTIVE_FILE_SUFFIX`, `ARCHIVE_FILE_SUFFIX` for offline access to `.forge/fm-sessions/*.jsonl` Forge-Master conversation session files |
+| **0.10.0** | `session-reader` sub-path — `listSessions`, `readSession`, `readAllSessionTurns`, `parseSessionLine`, `getLane`, `summarizeSession`, `fmSessionsDir`, `sessionFilePath`, `sessionArchivePath`, `FM_SESSIONS_DIR_RELATIVE`, `ACTIVE_FILE_SUFFIX`, `ARCHIVE_FILE_SUFFIX` for offline access to `.forge/fm-sessions/*.jsonl` Forge-Master conversation session files |
+| **0.11.0** (current) | `bug-reader` sub-path — `listBugs`, `readBug`, `parseBugId`, `summarizeBugs`, `bugsDir`, `bugFilePath`, `BUGS_DIR_RELATIVE`, `BUG_STATUSES`, `BUG_SEVERITIES` for offline access to `.forge/bugs/*.json` tempering bug registry files |
 
 Track progress in [docs/V3-CAPABILITY-AUDIT.md](../docs/V3-CAPABILITY-AUDIT.md).
 

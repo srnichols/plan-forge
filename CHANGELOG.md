@@ -7,6 +7,10 @@ Format follows [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
+---
+
+## [3.9.1] — 2026-05-19
+
 ### Added — Local recall index status surface (Phase 58)
 
 Exposes the Phase 56 TF-IDF index cache as a first-class diagnostic and management

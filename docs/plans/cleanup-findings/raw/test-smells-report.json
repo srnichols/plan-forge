@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-05-20T06:12:31.074Z",
+  "generatedAt": "2026-05-20T06:17:46.951Z",
   "scopes": [
     "pforge-mcp/tests",
     "pforge-master/tests",
@@ -10,12 +10,12 @@
     "filesScanned": 341,
     "filesWithSmells": 107,
     "errors": 0,
-    "warnings": 434,
-    "info": 0,
+    "warnings": 428,
+    "info": 6,
     "bySmell": {
       "TIME-FLAKE": 403,
       "CONSOLE-LEAK": 25,
-      "SKIP-LEAK": 6
+      "TODO-MARKER": 6
     }
   },
   "findings": [
@@ -2087,32 +2087,32 @@
       "file": "pforge-mcp/tests/forge-master.advisory.test.mjs",
       "findings": [
         {
-          "smell": "SKIP-LEAK",
-          "severity": "warn",
-          "line": 31,
-          "snippet": "describe.skip(",
-          "why": "Silently disabled test — either re-enable, delete, or convert to .todo with a tracked issue"
+          "smell": "TODO-MARKER",
+          "severity": "info",
+          "line": 26,
+          "snippet": "it.todo(",
+          "why": "Pending test — track in an issue and remove the .todo when implemented"
         },
         {
-          "smell": "SKIP-LEAK",
-          "severity": "warn",
-          "line": 54,
-          "snippet": "describe.skip(",
-          "why": "Silently disabled test — either re-enable, delete, or convert to .todo with a tracked issue"
+          "smell": "TODO-MARKER",
+          "severity": "info",
+          "line": 27,
+          "snippet": "it.todo(",
+          "why": "Pending test — track in an issue and remove the .todo when implemented"
         },
         {
-          "smell": "SKIP-LEAK",
-          "severity": "warn",
-          "line": 120,
-          "snippet": "describe.skip(",
-          "why": "Silently disabled test — either re-enable, delete, or convert to .todo with a tracked issue"
+          "smell": "TODO-MARKER",
+          "severity": "info",
+          "line": 80,
+          "snippet": "it.todo(",
+          "why": "Pending test — track in an issue and remove the .todo when implemented"
         },
         {
-          "smell": "SKIP-LEAK",
-          "severity": "warn",
-          "line": 150,
-          "snippet": "describe.skip(",
-          "why": "Silently disabled test — either re-enable, delete, or convert to .todo with a tracked issue"
+          "smell": "TODO-MARKER",
+          "severity": "info",
+          "line": 81,
+          "snippet": "it.todo(",
+          "why": "Pending test — track in an issue and remove the .todo when implemented"
         }
       ]
     },
@@ -3224,11 +3224,11 @@
       "file": "pforge-mcp/tests/cost-service-real-plans.test.mjs",
       "findings": [
         {
-          "smell": "SKIP-LEAK",
-          "severity": "warn",
+          "smell": "TODO-MARKER",
+          "severity": "info",
           "line": 48,
-          "snippet": "it.skip(",
-          "why": "Silently disabled test — either re-enable, delete, or convert to .todo with a tracked issue"
+          "snippet": "it.todo(",
+          "why": "Pending test — track in an issue and remove the .todo when implemented"
         }
       ]
     },
@@ -3344,11 +3344,11 @@
       "file": "pforge-mcp/tests/enums.test.mjs",
       "findings": [
         {
-          "smell": "SKIP-LEAK",
-          "severity": "warn",
-          "line": 86,
-          "snippet": "it.skip(",
-          "why": "Silently disabled test — either re-enable, delete, or convert to .todo with a tracked issue"
+          "smell": "TODO-MARKER",
+          "severity": "info",
+          "line": 83,
+          "snippet": "it.todo(",
+          "why": "Pending test — track in an issue and remove the .todo when implemented"
         }
       ]
     },

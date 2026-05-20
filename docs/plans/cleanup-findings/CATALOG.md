@@ -37,7 +37,7 @@
 | E4 | ESLint Warning | 36 files | clean-code/max-lines-per-function-warn | Function length exceeds warn threshold (>100 lines); 62 occurrences | warn |
 | E5 | ESLint Warning | 10 files | clean-code/max-params-warn | Parameter count exceeds warn threshold (>4); 17 occurrences | warn |
 | E6 | ESLint Warning | 6 files | (parse error / no rule) | Files that could not be fully parsed by ESLint; 9 messages | warn |
-| F1 | Console.log Advisory | codebase-wide | grep-matrix | 136 `console.log` occurrences bulk-triaged; acceptable for CLI tool output but should be audited for debug leakage | info |
+| F1 | Console.log Advisory | codebase-wide | grep-matrix | 136 `console.log` occurrences audited (2026-05-19); **no debug leakage found** — all calls are intentional CLI/self-test output. One library-level stdout pollution fixed: `orchestrator/forge-io.mjs:229` → `process.stderr.write` to avoid MCP stdio corruption. | info ✅ |
 
 ---
 

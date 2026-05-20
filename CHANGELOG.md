@@ -7,6 +7,15 @@ Format follows [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
+### Fixed — F-series console.log audit (Phase 42 F1)
+
+Completed the final Phase 42 clean-code audit item. Audited all 136 `console.log` occurrences codebase-wide — no debug leakage found; all calls are intentional CLI output or self-test blocks. One library-level stdout fix:
+
+- **`pforge-mcp/orchestrator/forge-io.mjs`**: `loadModelPerformance()` advisory scrub log changed from `console.log` → `process.stderr.write` to avoid MCP stdio corruption (stdout is the JSON-RPC channel in stdio transport). All 313/314 test files remain green.
+
+- **`docs/plans/cleanup-findings/CATALOG.md`**: F1 finding marked audited ✅ with outcome.
+- **`docs/plans/cleanup-findings/CATEGORIES-SUMMARY.md`**: F-series remediation note updated.
+
 ### Added — CLI-GUIDE documentation refresh (v3.8.2)
 
 Added full CLI-GUIDE entries for 14 commands that existed in `pforge.ps1` / `pforge.sh` but lacked documentation. Completes v3.6 Documentation Candidate #3.

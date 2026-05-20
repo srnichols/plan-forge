@@ -40,6 +40,6 @@
 3. **C-series (long params)** — medium effort; options-object refactor per function.
 4. **E-series (ESLint warnings)** — high volume; batch-fix rule by rule starting with complexity-warn.
 5. **B-series (medium module size)** — monitor; no immediate action required.
-6. **F-series (console.log)** — audit for debug leakage in a single pass.
+6. **F-series (console.log)** — ✅ audited (2026-05-19); no debug leakage. One library-level stdout fix in `forge-io.mjs`.
 
 > **Active guardrails**: see `.github/instructions/clean-code.instructions.md` for actionable per-function, naming, and commenting rules derived from this catalog.

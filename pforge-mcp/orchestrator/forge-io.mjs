@@ -226,7 +226,7 @@ export function loadModelPerformance(cwd) {
     const clean = data.filter(r => !isApiOnlyModel(r.model));
     if (clean.length < data.length) {
       writeFileSync(perfPath, JSON.stringify(clean, null, 2));
-      console.log(`[perf] scrubbed ${data.length - clean.length} API-worker entries from model-performance.json`);
+      process.stderr.write(`[perf] scrubbed ${data.length - clean.length} API-worker entries from model-performance.json\n`);
     }
     return clean;
   } catch {

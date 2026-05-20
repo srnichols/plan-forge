@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Plan Forge Manual — Complete Offline Edition</title>
-  <meta name="description" content="Plan Forge Manual — complete single-page offline edition. 79 chapters and appendices. Generated 2026-05-20 18:19:00 UTC." />
+  <meta name="description" content="Plan Forge Manual — complete single-page offline edition. 79 chapters and appendices. Generated 2026-05-20 18:31:27 UTC." />
   <meta name="generator" content="Plan Forge export.mjs" />
   <link rel="icon" type="image/svg+xml" href="../assets/plan-forge-logo.svg" />
   <link rel="stylesheet" href="../assets/tailwind.built.css" />
@@ -124,8 +124,8 @@
   <h1>📚 Plan Forge Manual</h1>
   <p class="export-subtitle">Complete offline edition &mdash; 79 chapters &amp; appendices</p>
   <p class="export-meta">
-    Generated 2026-05-20 18:19:00 UTC
-    &middot; content hash <code>5401f2c7d60fa1c3</code>
+    Generated 2026-05-20 18:31:27 UTC
+    &middot; content hash <code>ab11db9306bbcc27</code>
     &middot; vv3.6.2
     &middot; <a href="https://planforge.software/" rel="noopener">Main site ↗</a>
     &middot; <a href="index.html">Online version ↗</a>
@@ -15330,6 +15330,11 @@ applyTo: '**/auth/**,**/middleware/**'
         </div>
       </div>
 
+      <div class="callout callout-info">
+        <p><strong>Brand new here?</strong> Start with <a href="what-is-plan-forge.html">What Is Plan Forge</a> for the 60-second overview, then come back.</p>
+        <p style="margin-top:0.5rem;"><strong>About the Microsoft title.</strong> I mention it because being close to the source of these models (Copilot, Azure OpenAI, MCP) is part of why Plan Forge looks the way it does. I see how the primitives are built and where they break, and that shapes what gets built on top of them. Plan Forge itself is a personal project, not a Microsoft product. The code, the opinions, and any breakage are mine.</p>
+      </div>
+
       <!-- Why I Built This -->
       <h2 id="why">Why I Built This</h2>
 
@@ -15339,7 +15344,7 @@ applyTo: '**/auth/**,**/middleware/**'
 
       <p>When AI coding agents arrived, I was excited. Here was a tool that could generate code faster than any team I'd ever managed. But the excitement wore off fast. The agents were brilliant at greenfield work, scaffolding, boilerplate, CRUD endpoints, but they had no concept of architectural discipline. They made decisions I didn't ask for, expanded scope without warning, and produced code that compiled but couldn't be maintained.</p>
 
-      <p>Sound familiar? If you've hit the <a href="what-is-plan-forge.html#the-wall">80/20 wall</a>, you know exactly what I mean.</p>
+      <p>Sound familiar? If you've hit the <a href="what-is-plan-forge.html#the-wall">80/20 wall</a> (the point where AI-built code stops scaling), you know exactly what I mean.</p>
 
       <p>I realized the problem wasn't the models. The models were capable. The problem was that nobody was giving them <em>structure</em>. No <a href="writing-plans.html">scope contracts</a>. No <a href="writing-plans.html">validation gates</a>. No separation between building and reviewing. We'd spent decades learning that human dev teams need guardrails, code reviews, and architectural governance, then handed AI agents a blank prompt and said "build me an app."</p>
 
@@ -15384,13 +15389,18 @@ applyTo: '**/auth/**,**/middleware/**'
 
       <p>My work at Microsoft focuses on Azure enterprise architecture, helping organizations design cloud systems that scale, stay secure, and remain maintainable over years. Before that, I built distributed systems, designed multi-tenant SaaS platforms, and ran engineering teams where architecture governance was a daily concern.</p>
 
-      <p>That background shapes Plan Forge in specific ways:</p>
+      <p>That background shapes Plan Forge in specific ways. Three threads from my day-job work show up directly in the framework:</p>
 
       <ul>
         <li><strong>Stamps pattern architecture</strong>, my open-source <a href="https://github.com/srnichols/StampsPattern" rel="noopener">StampsPattern</a> project brings Azure enterprise cell isolation to infrastructure-as-code. The same boundary-thinking shows up in every Plan Forge <a href="writing-plans.html">scope contract</a> and in the <a href="enterprise-reference-architecture.html">enterprise reference architecture</a>.</li>
         <li><strong>Multi-tenant isolation</strong>, years of building SaaS platforms taught me that "works for one tenant" is not the same as "works for all tenants." Plan Forge's <a href="instructions-agents-reference.html">multi-tenancy reviewer agent</a> comes from real production incidents.</li>
-        <li><strong>Guardrails as culture</strong>, I've never seen a great team that didn't have standards. The guardrails aren't about distrust, they're about consistency. The <a href="instructions-agents.html">instruction files</a> exist so the same rules apply whether your team member is a junior dev, a senior engineer, or an AI model.</li>
+        <li><strong>Guardrails as culture</strong>, every great team I've worked on had non-negotiable standards. The bad ones always thought they were "agile" enough to skip them. The guardrails aren't about distrust, they're about consistency. The <a href="instructions-agents.html">instruction files</a> exist so the same rules apply whether your team member is a junior dev, a senior engineer, or an AI model.</li>
       </ul>
+
+      <!-- Where I am today -->
+      <h2 id="today">Where I Am With It Today</h2>
+
+      <p>I use Plan Forge daily. It builds itself (the version of the manual you're reading was generated by the version of the pipeline before it), it builds my homelab tooling, and it's the way I onboard every new client project. When I find a rough edge, I file the bug into my own queue and the next phase fixes it. That feedback loop, me eating my own dog food, is the only reason the framework has survived past v1.</p>
 
       <!-- The Community -->
       <h2 id="community">A Passion Project, Built in the Open</h2>
@@ -15401,8 +15411,11 @@ applyTo: '**/auth/**,**/middleware/**'
 
       <p>So if you try it and it stumbles, please tell me. File an issue. Open a PR. Comment on a blog post. Build an <a href="extensions.html">extension</a> for a niche your team cares about. The best version of Plan Forge is the one shaped by the people who actually have to ship software with it. If you're stuck before you even get there, the <a href="troubleshooting.html">troubleshooting chapter</a> and <a href="failure-mode-catalog.html">failure-mode catalog</a> usually have a head start on the answer.</p>
 
+      <p>If you're looking for something specific to dig into, the highest-impact contributions right now are: <a href="customization.html">language presets</a> beyond .NET, Node, and Python (Rust, Go, and Java are mapped but under-tested), <a href="extensions.html">notification extensions</a> for Slack / Teams / PagerDuty / email, new entries for the <a href="failure-mode-catalog.html">failure-mode catalog</a>, and <a href="instructions-agents-reference.html">reviewer agents</a> for domains I don't work in daily (ML pipelines, mobile, embedded). If you ship something in one of those areas, I will absolutely talk about it.</p>
+
       <ul>
         <li><strong>GitHub</strong>: <a href="https://github.com/srnichols/plan-forge" rel="noopener">srnichols/plan-forge</a>. Issues, discussions, PRs all welcome.</li>
+        <li><strong>Blog</strong>: <a href="../blog/">planforge.software/blog</a>. Long-form posts on what's working, what isn't, and why.</li>
         <li><strong>Contributing</strong>: <a href="https://github.com/srnichols/plan-forge/blob/master/CONTRIBUTING.md" rel="noopener">View contributing guide on GitHub</a></li>
         <li><strong>Extensions</strong>: Build and publish your own domain guardrails. See <a href="extensions.html">Chapter 12</a>.</li>
         <li><strong>Customizing the framework</strong>: <a href="customization.html">Chapter on customization</a> walks through tweaking presets, skills, and hooks.</li>
@@ -15410,7 +15423,7 @@ applyTo: '**/auth/**,**/middleware/**'
       </ul>
 
       <div class="callout callout-tip">
-        <strong>Plan Forge builds Plan Forge.</strong> Every feature in this framework was developed using the same pipeline it ships to users: 55+ phases, 7,500+ self-tests, v1.0 through v3.11 with zero manual rollbacks. If the pipeline can build itself without drift, it can build your project too. And when it can't, that's where you come in.
+        <strong>Plan Forge builds Plan Forge.</strong> Every feature in this framework was developed using the same pipeline it ships to users: <a href="project-history.html">55+ phases</a>, 7,500+ self-tests, v1.0 through v3.11 with zero manual rollbacks. If the pipeline can build itself without drift, it can build your project too. And when it can't, that's where you come in.
       </div>
 
       <div id="chapter-prev-next" class="chapter-nav"></div>
@@ -17691,7 +17704,7 @@ applyTo: '**/auth/**,**/middleware/**'
       <div class="chapter-content">
         <div class="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">Appendix Q · Reference</div>
         <h1>Unified API Surface Index</h1>
-        <p class="text-lg text-slate-400 mb-8">One index, four surfaces. Every <!--c:tools-->102<!--/c--> MCP tool, every <!--c:cli-commands-->97<!--/c--> CLI command, every REST endpoint domain, and every SDK export, alphabetized, grouped, and cross-linked. If you can't remember whether <code>forge_secret_scan</code> has a CLI wrapper, this is the page.</p>
+        <p class="text-lg text-slate-400 mb-8">One index, four surfaces. Every <!--c:tools-->104<!--/c--> MCP tool, every <!--c:cli-commands-->97<!--/c--> CLI command, every REST endpoint domain, and every SDK export, alphabetized, grouped, and cross-linked. If you can't remember whether <code>forge_secret_scan</code> has a CLI wrapper, this is the page.</p>
 
         <div class="callout callout-info">
           <strong>The source of truth.</strong> This appendix is a navigable index, not a reference manual. For deep usage:
@@ -17707,7 +17720,7 @@ applyTo: '**/auth/**,**/middleware/**'
         <h2 id="on-this-page">On this page</h2>
         <ul>
           <li><a href="#surfaces">The four surfaces</a></li>
-          <li><a href="#mcp-tools">MCP tools (88, grouped by domain)</a></li>
+          <li><a href="#mcp-tools">MCP tools (104, grouped by domain)</a></li>
           <li><a href="#cli-commands">CLI commands (57, grouped by use)</a></li>
           <li><a href="#rest-endpoints">REST endpoints (103, grouped by prefix)</a></li>
           <li><a href="#sdk">SDK exports (11 sub-paths)</a></li>
@@ -17731,7 +17744,7 @@ applyTo: '**/auth/**,**/middleware/**'
             <tbody class="text-slate-300">
               <tr class="border-b border-slate-800/40">
                 <td class="py-2 px-3"><strong>MCP</strong> (stdio + WebSocket)</td>
-                <td class="py-2 px-3"><!--c:tools-->102<!--/c--> tools</td>
+                <td class="py-2 px-3"><!--c:tools-->104<!--/c--> tools</td>
                 <td class="py-2 px-3">Transport-bound (stdio = inherited trust; WS = bearer)</td>
                 <td class="py-2 px-3">Copilot, Claude, Cursor, Codex, anything speaking MCP</td>
               </tr>
@@ -17749,7 +17762,7 @@ applyTo: '**/auth/**,**/middleware/**'
               </tr>
               <tr>
                 <td class="py-2 px-3"><strong>SDK</strong> (<code>pforge-sdk</code>)</td>
-                <td class="py-2 px-3">11 sub-paths</td>
+                <td class="py-2 px-3">12 sub-paths</td>
                 <td class="py-2 px-3">Bearer token via <code>createClient</code></td>
                 <td class="py-2 px-3">Node.js / TypeScript callers wanting typed responses</td>
               </tr>
@@ -17763,7 +17776,7 @@ applyTo: '**/auth/**,**/middleware/**'
         <h2 id="mcp-tools">MCP tools — by domain</h2>
         <p>Canonical source: <code>pforge-mcp/tools.json</code>. The full description, input schema, error map, and example for each tool is exposed via <code>forge_capabilities</code>. The table below is the one-line index.</p>
 
-        <h3 id="mcp-diagnostics">Diagnostics &amp; setup (5)</h3>
+        <h3 id="mcp-diagnostics">Diagnostics &amp; setup (7)</h3>
         <div class="overflow-x-auto my-4">
           <table class="text-sm w-full border-collapse">
             <thead><tr class="border-b border-slate-700/60"><th class="text-left py-2 px-3 text-slate-400 font-semibold">Tool</th><th class="text-left py-2 px-3 text-slate-400 font-semibold">Purpose</th></tr></thead>
@@ -17772,7 +17785,9 @@ applyTo: '**/auth/**,**/middleware/**'
               <tr class="border-b border-slate-800/40"><td class="py-2 px-3"><code>forge_validate</code></td><td class="py-2 px-3">Validate Plan Forge setup, required files, counts, unresolved placeholders</td></tr>
               <tr class="border-b border-slate-800/40"><td class="py-2 px-3"><code>forge_status</code></td><td class="py-2 px-3">All phases from DEPLOYMENT-ROADMAP.md with current status</td></tr>
               <tr class="border-b border-slate-800/40"><td class="py-2 px-3"><code>forge_diff</code></td><td class="py-2 px-3">Compare changes against a plan's Scope Contract, drift + forbidden edits</td></tr>
-              <tr><td class="py-2 px-3"><code>forge_sweep</code></td><td class="py-2 px-3">Completeness sweep, scan for TODO/FIXME/HACK/stub/placeholder/mock markers</td></tr>
+              <tr class="border-b border-slate-800/40"><td class="py-2 px-3"><code>forge_sweep</code></td><td class="py-2 px-3">Completeness sweep, scan for TODO/FIXME/HACK/stub/placeholder/mock markers</td></tr>
+              <tr class="border-b border-slate-800/40"><td class="py-2 px-3"><code>forge_audit_export</code></td><td class="py-2 px-3">Export audit events from <code>.forge/runs/*/events.log</code> — ACI-paginated, filterable by date/type/run</td></tr>
+              <tr><td class="py-2 px-3"><code>forge_diff_stats</code></td><td class="py-2 px-3">Classify staged git diff changes by category (plan, test, docs, config, chore, scope) — advisory only, never blocks</td></tr>
             </tbody>
           </table>
         </div>
@@ -17798,7 +17813,7 @@ applyTo: '**/auth/**,**/middleware/**'
           </table>
         </div>
 
-        <h3 id="mcp-plan">Plan execution (7)</h3>
+        <h3 id="mcp-plan">Plan execution (8)</h3>
         <div class="overflow-x-auto my-4">
           <table class="text-sm w-full border-collapse">
             <tbody class="text-slate-300">
@@ -17808,7 +17823,8 @@ applyTo: '**/auth/**,**/middleware/**'
               <tr class="border-b border-slate-800/40"><td class="py-2 px-3"><code>forge_abort</code></td><td class="py-2 px-3">Abort the currently running plan execution</td></tr>
               <tr class="border-b border-slate-800/40"><td class="py-2 px-3"><code>forge_plan_status</code></td><td class="py-2 px-3">Status of the latest plan execution run</td></tr>
               <tr class="border-b border-slate-800/40"><td class="py-2 px-3"><code>forge_regression_guard</code></td><td class="py-2 px-3">Run gate commands from plan files against the current codebase</td></tr>
-              <tr><td class="py-2 px-3"><code>forge_export_plan</code></td><td class="py-2 px-3">Convert a Copilot cloud agent session plan into a hardened Phase-X-PLAN.md</td></tr>
+              <tr class="border-b border-slate-800/40"><td class="py-2 px-3"><code>forge_export_plan</code></td><td class="py-2 px-3">Convert a Copilot cloud agent session plan into a hardened Phase-X-PLAN.md</td></tr>
+              <tr><td class="py-2 px-3"><code>forge_pipelines_list</code></td><td class="py-2 px-3">List the four standing capture pipelines and report their last-write timestamps plus Anvil hit rates</td></tr>
             </tbody>
           </table>
         </div>
@@ -17869,13 +17885,17 @@ applyTo: '**/auth/**,**/middleware/**'
           </table>
         </div>
 
-        <h3 id="mcp-memory">Memory &amp; provenance (3)</h3>
+        <h3 id="mcp-memory">Memory, provenance &amp; brain (9)</h3>
         <div class="overflow-x-auto my-4">
           <table class="text-sm w-full border-collapse">
             <tbody class="text-slate-300">
               <tr class="border-b border-slate-800/40"><td class="py-2 px-3"><code>forge_memory_capture</code></td><td class="py-2 px-3">Capture a thought, decision, or lesson into OpenBrain persistent memory</td></tr>
               <tr class="border-b border-slate-800/40"><td class="py-2 px-3"><code>forge_memory_report</code></td><td class="py-2 px-3">Aggregate health of every memory surface (L2 jsonl, OpenBrain queue, search cache, orphans)</td></tr>
-              <tr><td class="py-2 px-3"><code>forge_sync_memories</code></td><td class="py-2 px-3">Generate <code>.github/copilot-memory-hints.md</code> from trajectories + auto-skills + brain</td></tr>
+              <tr class="border-b border-slate-800/40"><td class="py-2 px-3"><code>forge_sync_memories</code></td><td class="py-2 px-3">Generate <code>.github/copilot-memory-hints.md</code> from trajectories + auto-skills + brain</td></tr>
+              <tr class="border-b border-slate-800/40"><td class="py-2 px-3"><code>forge_brain_replay</code></td><td class="py-2 px-3">Bulk-load records into OpenBrain via <code>capture_thought</code> from a local source file</td></tr>
+              <tr class="border-b border-slate-800/40"><td class="py-2 px-3"><code>forge_brain_test</code></td><td class="py-2 px-3">Round-trip test against OpenBrain (L3 memory) — write a test thought and read it back</td></tr>
+              <tr class="border-b border-slate-800/40"><td class="py-2 px-3"><code>forge_hallmark_show</code></td><td class="py-2 px-3">Show Hallmark provenance records — immutable milestone stamps written at slice completions, gate passes, phase closures</td></tr>
+              <tr><td class="py-2 px-3"><code>forge_hallmark_verify</code></td><td class="py-2 px-3">Verify a Hallmark record has not drifted — re-hashes the referenced source file and compares against the stored hash</td></tr>
             </tbody>
           </table>
         </div>
@@ -17912,6 +17932,30 @@ applyTo: '**/auth/**,**/middleware/**'
           </table>
         </div>
 
+        <h3 id="mcp-anvil">Anvil — memoization cache (5)</h3>
+        <div class="overflow-x-auto my-4">
+          <table class="text-sm w-full border-collapse">
+            <tbody class="text-slate-300">
+              <tr class="border-b border-slate-800/40"><td class="py-2 px-3"><code>forge_anvil_stat</code></td><td class="py-2 px-3">Inspect the Anvil memoization cache — entries, bytes, oldest entry, per-tool hit/miss counters</td></tr>
+              <tr class="border-b border-slate-800/40"><td class="py-2 px-3"><code>forge_anvil_clear</code></td><td class="py-2 px-3">Delete Anvil cache entries — scope by tool name, by age (<code>olderThanMs</code>), or both</td></tr>
+              <tr class="border-b border-slate-800/40"><td class="py-2 px-3"><code>forge_anvil_rebuild</code></td><td class="py-2 px-3">Invalidate Anvil cache entries for files changed since a git commit SHA</td></tr>
+              <tr class="border-b border-slate-800/40"><td class="py-2 px-3"><code>forge_anvil_dlq_list</code></td><td class="py-2 px-3">List dead-letter queue entries — records of cache writes that failed and were quarantined</td></tr>
+              <tr><td class="py-2 px-3"><code>forge_anvil_dlq_drain</code></td><td class="py-2 px-3">Drain (purge) dead-letter queue entries from the Anvil memoization cache</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <h3 id="mcp-recall">Semantic recall &amp; embeddings (3)</h3>
+        <div class="overflow-x-auto my-4">
+          <table class="text-sm w-full border-collapse">
+            <tbody class="text-slate-300">
+              <tr class="border-b border-slate-800/40"><td class="py-2 px-3"><code>forge_local_search</code></td><td class="py-2 px-3">Semantic search over local <code>.forge/</code> thought stores — TF-IDF or neural embeddings backend</td></tr>
+              <tr class="border-b border-slate-800/40"><td class="py-2 px-3"><code>forge_local_recall_status</code></td><td class="py-2 px-3">Inspect and manage the persistent TF-IDF index cache used by <code>forge_local_search</code></td></tr>
+              <tr><td class="py-2 px-3"><code>forge_embedding_status</code></td><td class="py-2 px-3">Report embedding backend status — whether <code>@xenova/transformers</code> (neural) or TF-IDF is active, corpus size, configured backend override</td></tr>
+            </tbody>
+          </table>
+        </div>
+
         <h3 id="mcp-health">Health, trends &amp; hotspots (4)</h3>
         <div class="overflow-x-auto my-4">
           <table class="text-sm w-full border-collapse">
@@ -17935,13 +17979,14 @@ applyTo: '**/auth/**,**/middleware/**'
           </table>
         </div>
 
-        <h3 id="mcp-liveguard">LiveGuard — deploy safety (3)</h3>
+        <h3 id="mcp-liveguard">LiveGuard — deploy safety (4)</h3>
         <div class="overflow-x-auto my-4">
           <table class="text-sm w-full border-collapse">
             <tbody class="text-slate-300">
               <tr class="border-b border-slate-800/40"><td class="py-2 px-3"><code>forge_secret_scan</code></td><td class="py-2 px-3">Post-commit entropy analysis, scan git diff for likely leaked secrets</td></tr>
               <tr class="border-b border-slate-800/40"><td class="py-2 px-3"><code>forge_env_diff</code></td><td class="py-2 px-3">Compare env var keys across .env files, detect missing keys</td></tr>
-              <tr><td class="py-2 px-3"><code>forge_liveguard_run</code></td><td class="py-2 px-3">Run all applicable LiveGuard checks in a single call, return unified report</td></tr>
+              <tr class="border-b border-slate-800/40"><td class="py-2 px-3"><code>forge_liveguard_run</code></td><td class="py-2 px-3">Run all applicable LiveGuard checks in a single call, return unified report</td></tr>
+              <tr><td class="py-2 px-3"><code>forge_diff_classify</code></td><td class="py-2 px-3">Classify staged git diff against 6 safety categories: leaked-secret, prompt-injection, eval/exec introduction, license-incompatible paste, scope-undeclared change, and test-only change</td></tr>
             </tbody>
           </table>
         </div>
@@ -18037,7 +18082,7 @@ applyTo: '**/auth/**,**/middleware/**'
         </div>
 
         <div class="callout callout-tip">
-          <strong>Total: <!--c:tools-->102<!--/c--> MCP tools across 22 domains.</strong> Run <code>forge_capabilities</code> for the machine-readable manifest with full schemas, cost tiers, intent tags, and error maps.
+          <strong>Total: <!--c:tools-->104<!--/c--> MCP tools across 24 domains.</strong> Run <code>forge_capabilities</code> for the machine-readable manifest with full schemas, cost tiers, intent tags, and error maps.
         </div>
 
         <!-- ─── CLI ─── -->
@@ -18121,7 +18166,7 @@ pforge ext add/remove/...       Extension management</code></pre>
         <h2 id="rest-endpoints">REST endpoints — <code>/api/*</code></h2>
         <p>Canonical source: handlers in <code>pforge-mcp/server.mjs</code> + <code>pforge-mcp/dashboard/</code>. Full per-endpoint reference: <a href="rest-api-reference.html"><strong>Appendix W &mdash; REST API Reference</strong></a>; raw dump in <a href="https://github.com/srnichols/plan-forge/blob/master/docs/REST-API.md" rel="noopener">docs/REST-API.md on GitHub</a>. OpenAPI spec: <code>GET /api/openapi.json</code>.</p>
 
-        <p>113 endpoints organize into these prefixes (one-line summary each, see <a href="rest-api-reference.html">Appendix W</a> for verbs, query params, request/response shapes, and error codes):</p>
+        <p>116 endpoints organize into these prefixes (one-line summary each, see <a href="rest-api-reference.html">Appendix W</a> for verbs, query params, request/response shapes, and error codes):</p>
 
         <div class="overflow-x-auto my-6">
           <table class="text-sm w-full border-collapse">
@@ -18150,6 +18195,9 @@ pforge ext add/remove/...       Extension management</code></pre>
               <tr class="border-b border-slate-800/40"><td class="py-2 px-3"><code>/api/search</code></td><td class="py-2 px-3">~3</td><td class="py-2 px-3">Cross-artifact search, timeline, home snapshot</td></tr>
               <tr class="border-b border-slate-800/40"><td class="py-2 px-3"><code>/api/notify</code></td><td class="py-2 px-3">2</td><td class="py-2 px-3">Send / test notification adapters</td></tr>
               <tr class="border-b border-slate-800/40"><td class="py-2 px-3"><code>/api/ext</code></td><td class="py-2 px-3">~4</td><td class="py-2 px-3">Extension search, info, install, remove</td></tr>
+              <tr class="border-b border-slate-800/40"><td class="py-2 px-3"><code>/api/anvil</code></td><td class="py-2 px-3">~5</td><td class="py-2 px-3">Cache stat, clear, rebuild, DLQ list, DLQ drain</td></tr>
+              <tr class="border-b border-slate-800/40"><td class="py-2 px-3"><code>/api/embedding</code></td><td class="py-2 px-3">~2</td><td class="py-2 px-3">Embedding backend status, local-recall index status</td></tr>
+              <tr class="border-b border-slate-800/40"><td class="py-2 px-3"><code>/api/audit</code></td><td class="py-2 px-3">1</td><td class="py-2 px-3">Audit event export (paginated, filterable by date / type / run)</td></tr>
               <tr class="border-b border-slate-800/40"><td class="py-2 px-3"><code>/api/hub</code></td><td class="py-2 px-3">1 (WS)</td><td class="py-2 px-3">WebSocket event stream, 60+ event types</td></tr>
               <tr><td class="py-2 px-3"><code>/api/openapi.json</code></td><td class="py-2 px-3">1</td><td class="py-2 px-3">OpenAPI 3 spec for the entire surface (codegen-ready)</td></tr>
             </tbody>
@@ -18158,11 +18206,7 @@ pforge ext add/remove/...       Extension management</code></pre>
 
         <!-- ─── SDK ─── -->
         <h2 id="sdk">SDK — <code>pforge-sdk</code></h2>
-<<<<<<< HEAD
-        <p>Eleven sub-paths, all pure Node.js (zero runtime dependencies). Full reference: <a href="https://github.com/srnichols/plan-forge/blob/master/pforge-sdk/README.md" rel="noopener">pforge-sdk/README.md on GitHub</a>.</p>
-=======
-        <p>Ten sub-paths, all pure Node.js (zero runtime dependencies). Full reference: <a href="https://github.com/srnichols/plan-forge/blob/master/pforge-sdk/README.md" rel="noopener">pforge-sdk/README.md on GitHub</a>.</p>
->>>>>>> master
+        <p>Twelve sub-paths, all pure Node.js (zero runtime dependencies). Full reference: <a href="https://github.com/srnichols/plan-forge/blob/master/pforge-sdk/README.md" rel="noopener">pforge-sdk/README.md on GitHub</a>.</p>
 
         <div class="overflow-x-auto my-6">
           <table class="text-sm w-full border-collapse">
@@ -18228,14 +18272,11 @@ pforge ext add/remove/...       Extension management</code></pre>
                 <td class="py-2 px-3"><code>pforge-sdk/thought-reader</code> <span class="text-amber-400 text-xs font-semibold">v0.8.0</span></td>
                 <td class="py-2 px-3"><code>readThoughts</code>, <code>readAllThoughts</code>, <code>listThoughtSources</code>, <code>parseThoughtLine</code>, <code>thoughtFilePath</code></td>
                 <td class="py-2 px-3">Offline access to <code>.forge/*.jsonl</code> thought stores — OpenBrain queue, archive, DLQ, and LiveGuard memories</td>
-<<<<<<< HEAD
               </tr>
               <tr>
                 <td class="py-2 px-3"><code>pforge-sdk/digest-reader</code> <span class="text-amber-400 text-xs font-semibold">v0.9.0</span></td>
                 <td class="py-2 px-3"><code>listDigests</code>, <code>readDigest</code>, <code>readLatestDigest</code>, <code>overallSeverity</code>, <code>getSectionsByMinSeverity</code>, <code>digestFilePath</code></td>
                 <td class="py-2 px-3">Offline access to <code>.forge/digests/*.json</code> daily digest files — list, read, and compute severity</td>
-=======
->>>>>>> master
               </tr>
             </tbody>
           </table>
@@ -18277,10 +18318,9 @@ pforge ext add/remove/...       Extension management</code></pre>
               <tr class="border-b border-slate-800/40"><td class="py-2 px-3">Offline run artifact access (<code>run-reader</code>)</td><td class="text-center py-2 px-3 text-slate-500">—</td><td class="text-center py-2 px-3 text-slate-500">—</td><td class="text-center py-2 px-3 text-slate-500">—</td><td class="text-center py-2 px-3 text-emerald-400">✓</td></tr>
               <tr class="border-b border-slate-800/40"><td class="py-2 px-3">Offline plan file access (<code>plan-reader</code>)</td><td class="text-center py-2 px-3 text-slate-500">—</td><td class="text-center py-2 px-3 text-slate-500">—</td><td class="text-center py-2 px-3 text-slate-500">—</td><td class="text-center py-2 px-3 text-emerald-400">✓</td></tr>
               <tr class="border-b border-slate-800/40"><td class="py-2 px-3">Offline thought store access (<code>thought-reader</code>)</td><td class="text-center py-2 px-3 text-slate-500">—</td><td class="text-center py-2 px-3 text-slate-500">—</td><td class="text-center py-2 px-3 text-slate-500">—</td><td class="text-center py-2 px-3 text-emerald-400">✓</td></tr>
-<<<<<<< HEAD
               <tr class="border-b border-slate-800/40"><td class="py-2 px-3">Offline digest file access (<code>digest-reader</code>)</td><td class="text-center py-2 px-3 text-slate-500">—</td><td class="text-center py-2 px-3 text-slate-500">—</td><td class="text-center py-2 px-3 text-slate-500">—</td><td class="text-center py-2 px-3 text-emerald-400">✓</td></tr>
-=======
->>>>>>> master
+              <tr class="border-b border-slate-800/40"><td class="py-2 px-3">Anvil cache management</td><td class="text-center py-2 px-3 text-emerald-400">✓</td><td class="text-center py-2 px-3 text-emerald-400">✓</td><td class="text-center py-2 px-3 text-emerald-400">✓</td><td class="text-center py-2 px-3 text-emerald-400">✓</td></tr>
+              <tr class="border-b border-slate-800/40"><td class="py-2 px-3">Semantic recall / local search</td><td class="text-center py-2 px-3 text-emerald-400">✓</td><td class="text-center py-2 px-3 text-slate-500">—</td><td class="text-center py-2 px-3 text-slate-500">—</td><td class="text-center py-2 px-3 text-slate-500">—</td></tr>
               <tr><td class="py-2 px-3">Extension marketplace</td><td class="text-center py-2 px-3 text-emerald-400">✓</td><td class="text-center py-2 px-3 text-emerald-400">✓</td><td class="text-center py-2 px-3 text-emerald-400">✓</td><td class="text-center py-2 px-3 text-slate-500">—</td></tr>
             </tbody>
           </table>
@@ -20809,7 +20849,7 @@ switch ($LASTEXITCODE) {
 
 <!-- Footer -->
 <footer style="max-width:56rem;margin:3rem auto;padding:1.5rem;font-size:0.75rem;color:#475569;border-top:1px solid #1e293b;font-family:'JetBrains Mono',monospace;">
-  <p>Plan Forge Manual &mdash; offline edition &mdash; generated 2026-05-20 18:19:00 UTC &mdash; hash <code>5401f2c7d60fa1c3</code></p>
+  <p>Plan Forge Manual &mdash; offline edition &mdash; generated 2026-05-20 18:31:27 UTC &mdash; hash <code>ab11db9306bbcc27</code></p>
   <p>Regenerate with: <code>node docs/manual/export.mjs</code> &mdash; <a href="https://planforge.software/" style="color:#f59e0b;" rel="noopener">Main site</a> &mdash; <a href="index.html" style="color:#f59e0b;">Online version</a> &mdash; <a href="https://github.com/srnichols/plan-forge" style="color:#f59e0b;" rel="noopener">GitHub</a></p>
 </footer>
 

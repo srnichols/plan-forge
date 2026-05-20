@@ -31,8 +31,11 @@ npm install file:./pforge-sdk
 | `pforge-sdk/hallmark` | `src/hallmark.mjs` | `buildProvenance` / `validateProvenance` / `mergeProvenance` + `hallmark/v1` schema |
 | `pforge-sdk/chunker` | `src/chunker.mjs` | `validateChunk` + `CHUNK_KINDS` for Lattice code-graph records |
 | `pforge-sdk/client` | `src/client.mjs` | `PForgeClient` — typed REST client for the Plan Forge MCP server |
+| `pforge-sdk/anvil` | `src/anvil.mjs` | Anvil cache-key helpers — `computeAnvilKey`, path helpers |
+| `pforge-sdk/lattice-query` | `src/lattice-query.mjs` | Lattice query builder — `LatticeQueryBuilder`, `tokenizeForSearch`, `scoreChunk` |
 
 > **Note**: `pforge-sdk/client` is new in `0.4.0`. It requires a running Plan Forge MCP server (`pforge-mcp/server.mjs`) to be useful. Zero runtime dependencies — uses the global `fetch` (Node ≥ 18).
+> **Note**: `pforge-sdk/anvil` and `pforge-sdk/lattice-query` are new in `0.5.0`. Both are pure and dependency-free.
 
 ---
 
@@ -263,6 +266,91 @@ const result = validateChunk(record);
 
 ---
 
+## `pforge-sdk/anvil` — Anvil cache-key helpers
+
+Exposes the canonical Anvil cache-key algorithm and path helpers so external code can predict, inspect, and audit Anvil entries without depending on the full MCP server package.
+
+```js
+import {
+  computeAnvilKey,
+  anvilEntryPath,
+  anvilCacheDir,
+  anvilStatsPath,
+  ANVIL_STATS_RELATIVE,
+} from 'pforge-sdk/anvil';
+
+// Compute the same cache key that withAnvil() would compute on the server
+const key = computeAnvilKey('forge_search', { q: 'drift' }, 'v1.2.3');
+// → '3f8a…' (64-char hex)
+
+// Resolve the absolute path to the entry on disk
+const entryFile = anvilEntryPath({ toolName: 'forge_search', key });
+// → '/workspace/.forge/anvil/forge_search/3f8a….json'
+
+// Resolve the tool-scoped cache directory
+const cacheDir = anvilCacheDir({ toolName: 'forge_search' });
+// → '/workspace/.forge/anvil/forge_search'
+
+// Resolve the stats file
+const stats = anvilStatsPath();
+// → '/workspace/.forge/anvil/stats.json'
+```
+
+All functions accept an optional `cwd` parameter (defaults to `process.cwd()`).
+
+| Export | Description |
+|---|---|
+| `computeAnvilKey(toolName, inputs, codeHashSeed)` | Returns a 64-char hex cache key matching the server's algorithm |
+| `anvilEntryPath({ toolName, key, cwd? })` | Absolute path to `<cwd>/.forge/anvil/<toolName>/<key>.json` |
+| `anvilCacheDir({ toolName, cwd? })` | Absolute path to `<cwd>/.forge/anvil/<toolName>/` |
+| `anvilStatsPath({ cwd? })` | Absolute path to `<cwd>/.forge/anvil/stats.json` |
+| `ANVIL_STATS_RELATIVE` | Relative path constant `.forge/anvil/stats.json` (platform-native separator) |
+
+---
+
+## `pforge-sdk/lattice-query` — Lattice query builder
+
+Fluent builder for `latticeQuery` parameters plus pure scoring utilities extracted from `pforge-mcp/lattice.mjs`. Zero dependencies.
+
+```js
+import {
+  LatticeQueryBuilder,
+  tokenizeForSearch,
+  scoreChunk,
+} from 'pforge-sdk/lattice-query';
+
+// Build query params for forge_lattice_query / latticeQuery
+const params = new LatticeQueryBuilder()
+  .query('getUserById')
+  .language('javascript')
+  .kind('function')
+  .limit(10)
+  .build();
+// → { query: 'getUserById', language: 'javascript', kind: 'function', limit: 10 }
+
+// Tokenise text with camelCase splitting
+const tokens = tokenizeForSearch('getUserById');
+// Map { 'get' => 1, 'user' => 1, 'by' => 1, 'id' => 1 }
+
+// Score a chunk [0, 1] — name tokens weighted 2× over path tokens
+const score = scoreChunk('user', { name: 'getUserById', filePath: 'src/user.mjs' });
+// → 1
+```
+
+### `LatticeQueryBuilder` API
+
+| Method | Description |
+|---|---|
+| `.query(text)` | Token + substring match against chunk name and filePath |
+| `.language(lang)` | Exact match against `chunk.language` (e.g. `'javascript'`) |
+| `.kind(k)` | Exact match against `chunk.kind` (e.g. `'function'`) |
+| `.filePath(path)` | Substring match against `chunk.filePath` (case-insensitive) |
+| `.limit(n)` | Max results to return (default 25; must be a positive integer) |
+| `.build()` | Returns params object — spread into `latticeQuery(...)` or `client.tool(...)` |
+| `.describe()` | Human-readable description of current filters (for logging) |
+
+---
+
 ## Risk levels (auto-approve guidance)
 
 When you write a host that lets agents call Plan Forge tools, use the tool's `riskLevel` to decide what to gate on:
@@ -293,8 +381,8 @@ The SDK is intentionally narrow — it covers the artifact contracts (`tools.jso
 | Version | Adds |
 |---|---|
 | **0.3.0** | `chunker` sub-path; dropped broken `client` declaration; bumped to match v3.x memory architecture |
-| **0.4.0** (current) | `client` sub-path — `PForgeClient` typed REST client, `createClient` factory, `PForgeClientError`, method groups for runs/memory/crucible/liveguard, generic `tool()` dispatcher |
-| **0.5.0** (planned) | Anvil cache-key helpers; Lattice query builder |
+| **0.4.0** | `client` sub-path — `PForgeClient` typed REST client, `createClient` factory, `PForgeClientError`, method groups for runs/memory/crucible/liveguard, generic `tool()` dispatcher |
+| **0.5.0** (current) | `anvil` sub-path — `computeAnvilKey`, path helpers; `lattice-query` sub-path — `LatticeQueryBuilder`, `tokenizeForSearch`, `scoreChunk` |
 
 Track progress in [docs/V3-CAPABILITY-AUDIT.md](../docs/V3-CAPABILITY-AUDIT.md).
 

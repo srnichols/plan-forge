@@ -1,6 +1,6 @@
 # pforge-sdk
 
-**Version**: `0.6.0` · **License**: MIT · **Engines**: Node ≥ 20
+**Version**: `0.8.0` · **License**: MIT · **Engines**: Node ≥ 20
 
 Programmatic SDK for Plan Forge — load MCP tool metadata, build Hallmark provenance envelopes, and validate Lattice code-chunk records from your own Node.js code. Zero runtime dependencies.
 
@@ -36,12 +36,14 @@ npm install file:./pforge-sdk
 | `pforge-sdk/notifications/adapter-contract` | `src/notifications/adapter-contract.mjs` | Notification adapter contract — `validateAdapterShape`, `ERR_NOT_IMPLEMENTED` |
 | `pforge-sdk/run-reader` | `src/run-reader.mjs` | Run artifact reader — `listRuns`, `readRunMeta`, `readRunSummary`, `readRunIndex`, `parseEventLine`, path helpers |
 | `pforge-sdk/plan-reader` | `src/plan-reader.mjs` | Plan file reader — `listPlans`, `readPlan`, `getPlanStatus`, `getPlanSlices`, path helpers |
+| `pforge-sdk/thought-reader` | `src/thought-reader.mjs` | Thought store reader — `readThoughts`, `readAllThoughts`, `listThoughtSources`, `parseThoughtLine`, path helpers |
 
 > **Note**: `pforge-sdk/client` is new in `0.4.0`. It requires a running Plan Forge MCP server (`pforge-mcp/server.mjs`) to be useful. Zero runtime dependencies — uses the global `fetch` (Node ≥ 18).
 > **Note**: `pforge-sdk/anvil` and `pforge-sdk/lattice-query` are new in `0.5.0`. Both are pure and dependency-free.
 > **Note**: `pforge-sdk/notifications/adapter-contract` is new in `0.5.0`. Defines the shape every notification adapter must implement — pure validation, no runtime base class.
 > **Note**: `pforge-sdk/run-reader` is new in `0.6.0`. Provides offline access to `.forge/runs/` artifacts without requiring a running MCP server. Zero dependencies beyond `node:fs` / `node:path`.
 > **Note**: `pforge-sdk/plan-reader` is new in `0.7.0`. Provides offline access to plan files in `docs/plans/` without requiring a running MCP server. Zero dependencies beyond `node:fs` / `node:path`.
+> **Note**: `pforge-sdk/thought-reader` is new in `0.8.0`. Provides offline access to `.forge/*.jsonl` thought stores (OpenBrain queue, archive, DLQ, LiveGuard memories) without requiring a running MCP server. Zero dependencies beyond `node:fs` / `node:path`.
 
 ---
 
@@ -595,6 +597,60 @@ All functions accept an optional `cwd` parameter (defaults to `process.cwd()`).
 
 ---
 
+## `pforge-sdk/thought-reader` — Thought store reader
+
+Offline access to `.forge/*.jsonl` thought stores written by the OpenBrain
+queue, LiveGuard, and other Plan Forge sub-systems. Pure — no semantic
+search, no TF-IDF, just file I/O. Zero runtime dependencies.
+
+```js
+import {
+  THOUGHT_SOURCES,
+  listThoughtSources,
+  readThoughts,
+  readAllThoughts,
+  parseThoughtLine,
+} from 'pforge-sdk/thought-reader';
+
+// Which thought files exist in this workspace?
+const present = listThoughtSources();
+// → ['openbrain-queue.archive.jsonl', 'liveguard-memories.jsonl']
+
+// Read records from one source (most-recent 20):
+const memories = readThoughts({ source: 'liveguard-memories.jsonl', max: 20 });
+console.log(memories[0].content);
+
+// Read and combine all default sources:
+const all = readAllThoughts({ max: 100 });
+console.log(all.length); // total records from all present sources
+
+// Parse a single JSONL line (pure helper):
+const record = parseThoughtLine('{"_v":1,"content":"gate passed"}');
+// → { _v: 1, content: 'gate passed' }
+```
+
+### Thought record shapes
+
+Records from different sources have different shapes. All include `_v` and `content`:
+
+| Source | Extra fields |
+|---|---|
+| `openbrain-queue.jsonl` | `project?` |
+| `openbrain-queue.archive.jsonl` | `_status`, `_attempts`, `_enqueuedAt`, `_nextAttemptAt`, `project?` |
+| `openbrain-dlq.jsonl` | `_status`, `_attempts`, `project?` |
+| `liveguard-memories.jsonl` | `project?` |
+
+### Path helpers
+
+| Export | Description |
+|---|---|
+| `forgeDir({ cwd? })` | Absolute path to `<cwd>/.forge/` |
+| `thoughtFilePath({ source, cwd? })` | Absolute path to `<cwd>/.forge/<source>` |
+| `FORGE_DIR_RELATIVE` | `".forge"` |
+| `THOUGHT_SOURCES` | Frozen array of the four default source filenames |
+
+---
+
 ## Risk levels (auto-approve guidance)
 
 When you write a host that lets agents call Plan Forge tools, use the tool's `riskLevel` to decide what to gate on:
@@ -628,7 +684,8 @@ The SDK is intentionally narrow — it covers the artifact contracts (`tools.jso
 | **0.4.0** | `client` sub-path — `PForgeClient` typed REST client, `createClient` factory, `PForgeClientError`, method groups for runs/memory/crucible/liveguard, generic `tool()` dispatcher |
 | **0.5.0** | `anvil` sub-path — `computeAnvilKey`, path helpers; `lattice-query` sub-path — `LatticeQueryBuilder`, `tokenizeForSearch`, `scoreChunk`; `notifications/adapter-contract` sub-path — `validateAdapterShape`, `ERR_NOT_IMPLEMENTED` |
 | **0.6.0** | `run-reader` sub-path — `listRuns`, `readRunMeta`, `readRunSummary`, `readRunIndex`, `parseEventLine`, path helpers for offline access to `.forge/runs/` artifacts |
-| **0.7.0** (current) | `plan-reader` sub-path — `listPlans`, `readPlan`, `getPlanStatus`, `getPlanSlices`, `plansDir`, `PLANS_DIR_RELATIVE` for offline access to `docs/plans/*.md` plan files |
+| **0.7.0** | `plan-reader` sub-path — `listPlans`, `readPlan`, `getPlanStatus`, `getPlanSlices`, `plansDir`, `PLANS_DIR_RELATIVE` for offline access to `docs/plans/*.md` plan files |
+| **0.8.0** (current) | `thought-reader` sub-path — `readThoughts`, `readAllThoughts`, `listThoughtSources`, `parseThoughtLine`, `forgeDir`, `thoughtFilePath`, `THOUGHT_SOURCES`, `FORGE_DIR_RELATIVE` for offline access to `.forge/*.jsonl` thought stores |
 
 Track progress in [docs/V3-CAPABILITY-AUDIT.md](../docs/V3-CAPABILITY-AUDIT.md).
 

@@ -9,3 +9,4 @@ export * from './anvil.mjs';
 export * from './lattice-query.mjs';
 export * from './run-reader.mjs';
 export * from './plan-reader.mjs';
+export * from './thought-reader.mjs';

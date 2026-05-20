@@ -1186,7 +1186,10 @@ async function _callToolHandler_097_forge_local_recall_status(request, args) {
 }
 
 // #098 — forge_audit_export: ACI-paginated export of orchestrator audit events from .forge/runs/
-async function _callToolHandler_098_forge_audit_export(args) {
+async function _callToolHandler_098_forge_audit_export(request, args) {
+  const { name } = request.params;
+  if (!(name === "forge_audit_export")) return _CALL_TOOL_NO_MATCH;
+
   const t0 = Date.now();
   const cwd = args.path ? resolve(args.path) : findProjectRoot(PROJECT_DIR);
   const format = (args.format === "csv") ? "csv" : "json";

@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-05-19T23:53:36.381Z",
+  "generatedAt": "2026-05-20T00:05:13.163Z",
   "enumsSource": "pforge-mcp/enums.mjs",
   "enumsScanned": {
     "HOOK_PASCAL": {
@@ -298,7 +298,7 @@
         {
           "enum": "ERROR_CODES",
           "literal": "SCANNER_UNAVAILABLE",
-          "line": 1701,
+          "line": 1689,
           "severity": "warn",
           "kind": "HARD-DRIFT",
           "why": "File imports ERROR_CODES but still uses hand-typed \"SCANNER_UNAVAILABLE\" — replace with the constant"

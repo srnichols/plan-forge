@@ -452,30 +452,30 @@ function _resolveToolCwd(args, key = "path") {
   return args[key] ? findProjectRoot(resolve(args[key])) : findProjectRoot(PROJECT_DIR);
 }
 
-function _getForgeRunPlanArg(args) {
+function _parsePlanArg(args) {
   let planArg = args.plan;
-  const useAlias = (typeof planArg !== "string" || planArg === "")
-    && typeof args.planPath === "string"
-    && args.planPath !== "";
-  if (!useAlias) return planArg;
-  if (!_planPathAliasWarned) {
-    setPlanPathAliasWarned(true);
-    console.warn("[forge_run_plan] 'planPath' is an alias; prefer 'plan'");
+  if ((typeof planArg !== "string" || planArg === "") && typeof args.planPath === "string" && args.planPath !== "") {
+    if (!_planPathAliasWarned) {
+      setPlanPathAliasWarned(true);
+      console.warn("[forge_run_plan] 'planPath' is an alias; prefer 'plan'");
+    }
+    planArg = args.planPath;
   }
-  planArg = args.planPath;
   return planArg;
 }
 
-function _resolveForgeRunPlanQuorum(quorumArg) {
-  if (quorumArg === "power") return { quorum: true, quorumPreset: "power" };
-  if (quorumArg === "speed") return { quorum: true, quorumPreset: "speed" };
-  if (quorumArg === "true" || quorumArg === true) return { quorum: true, quorumPreset: null };
-  if (quorumArg === "false" || quorumArg === false) return { quorum: false, quorumPreset: null };
-  return { quorum: "auto", quorumPreset: null };
+function _parseQuorumMode(quorumArg) {
+  let quorum = "auto";
+  let quorumPreset = null;
+  if (quorumArg === "power") { quorum = true; quorumPreset = "power"; }
+  else if (quorumArg === "speed") { quorum = true; quorumPreset = "speed"; }
+  else if (quorumArg === "true" || quorumArg === true) quorum = true;
+  else if (quorumArg === "false" || quorumArg === false) quorum = false;
+  return { quorum, quorumPreset };
 }
 
-function _buildForgeRunPlanOptions(args, cwd, abortController, eventHandler) {
-  const { quorum, quorumPreset } = _resolveForgeRunPlanQuorum(args.quorum);
+function _buildRunPlanOptions(args, cwd, eventHandler) {
+  const { quorum, quorumPreset } = _parseQuorumMode(args.quorum);
   return {
     cwd,
     model: args.model || null,
@@ -486,7 +486,7 @@ function _buildForgeRunPlanOptions(args, cwd, abortController, eventHandler) {
     quorum,
     quorumPreset,
     quorumThreshold: args.quorumThreshold != null ? Number(args.quorumThreshold) : null,
-    abortController,
+    abortController: activeAbortController,
     eventHandler,
     manualImport: args.manualImport === true || args.manualImport === "true",
     manualImportSource: args.manualImportSource || "human",
@@ -494,8 +494,9 @@ function _buildForgeRunPlanOptions(args, cwd, abortController, eventHandler) {
   };
 }
 
-function _forwardForgeRunPlanMemoryCapture(result, cwd) {
-  if (result?._memoryCapture && !result._memoryCapture._captured) {
+function _handleRunPlanMemoryCapture(result, cwd) {
+  if (!result?._memoryCapture) return;
+  if (!result._memoryCapture._captured) {
     if (result._memoryCapture.runSummary) {
       captureMemory(result._memoryCapture.runSummary, "decision", "forge_run_plan", cwd);
     }
@@ -504,18 +505,19 @@ function _forwardForgeRunPlanMemoryCapture(result, cwd) {
     }
     return;
   }
-  if (!result?._memoryCapture?._captured || !result._memoryCapture.receipts) return;
+  if (!result._memoryCapture.receipts) return;
   for (const key of ["runSummary", "costAnomaly"]) {
-    const receipt = result._memoryCapture.receipts[key];
-    if (!receipt?.thought || receipt.deduped) continue;
-    try {
-      activeHub?.broadcast({
-        type: "memory-captured",
-        thought: receipt.thought,
-        deduped: false,
-        timestamp: receipt.thought.captured_at,
-      });
-    } catch { /* never break run on broadcast failure */ }
+    const r = result._memoryCapture.receipts[key];
+    if (r?.thought && !r.deduped) {
+      try {
+        activeHub?.broadcast({
+          type: "memory-captured",
+          thought: r.thought,
+          deduped: false,
+          timestamp: r.thought.captured_at,
+        });
+      } catch { /* never break run on broadcast failure */ }
+    }
   }
 }
 
@@ -524,31 +526,33 @@ async function _callToolHandler_001_forge_run_plan(request, args) {
   if (!(name === "forge_run_plan")) return _CALL_TOOL_NO_MATCH;
 
   try {
-    const planArg = _getForgeRunPlanArg(args);
+    const planArg = _parsePlanArg(args);
     if (typeof planArg !== "string" || planArg === "") {
       return { content: [{ type: "text", text: "forge_run_plan: 'plan' is required (string path to plan markdown)" }], isError: true };
     }
 
     const cwd = _resolveToolCwd(args);
     const planPath = resolve(cwd, planArg);
+
     if (!existsSync(planPath)) {
       return { content: [{ type: "text", text: `Plan file not found: ${planArg}` }], isError: true };
     }
 
-    const abortController = new AbortController();
-    setActiveAbortController(abortController);
+    setActiveAbortController(new AbortController());
     const eventHandler = activeHub ? { handle: (event) => activeHub.broadcast(event) } : null;
-    const result = await runPlan(planPath, _buildForgeRunPlanOptions(args, cwd, abortController, eventHandler));
-    _forwardForgeRunPlanMemoryCapture(result, cwd);
+    const result = await runPlan(planPath, _buildRunPlanOptions(args, cwd, eventHandler));
+    setActiveAbortController(null);
 
+    _handleRunPlanMemoryCapture(result, cwd);
+
+    const isError = !result || result.status === "failed" || (result.results?.failed > 0);
     return {
       content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
-      isError: !result || result.status === "failed" || (result.results?.failed > 0),
+      isError,
     };
   } catch (err) {
-    return { content: [{ type: "text", text: `Orchestrator error: ${err.message}` }], isError: true };
-  } finally {
     setActiveAbortController(null);
+    return { content: [{ type: "text", text: `Orchestrator error: ${err.message}` }], isError: true };
   }
 }
 
@@ -1678,47 +1682,23 @@ function _getForgeBugValidationAdvisory(bug) {
     : null;
 }
 
-function _getForgeBugValidationScanners(args, bug) {
-  return args.scannerOverride ?? (Array.isArray(bug.scanner) ? bug.scanner : [bug.scanner]);
-}
-
-function _createForgeBugValidationAttempt(scanners, nowFn) {
-  return { at: nowFn().toISOString(), scanners, result: null, details: null };
-}
-
-async function _runForgeBugValidationScanners(scanners, { cwd, testFilter, nowFn }) {
+async function _runBugScanners(scanners, testFilter, cwd) {
   const results = [];
-  for (const scanner of scanners) {
+  for (const s of scanners) {
     try {
-      const runResult = await runSingleScanner(scanner, {
-        cwd,
-        testNameFilter: testFilter,
-        timeoutMs: 120_000,
-        now: nowFn,
-      });
-      results.push({ scanner, passed: runResult.failures === 0, details: runResult });
-    } catch (err) {
-      if (err?.code === "SCANNER_UNAVAILABLE") {
-        return { unavailable: { scanner, message: err.message } };
+      const r = await runSingleScanner(s, { cwd, testNameFilter: testFilter, timeoutMs: 120_000, now: () => new Date() });
+      results.push({ scanner: s, passed: r.failures === 0, details: r });
+    } catch (e) {
+      if (e.code === "SCANNER_UNAVAILABLE") {
+        return { results, scannerUnavailable: { scanner: s, message: e.message } };
       }
-      results.push({ scanner, passed: false, error: err.message });
+      results.push({ scanner: s, passed: false, error: e.message });
     }
   }
-  return { results };
+  return { results, scannerUnavailable: null };
 }
 
-async function _finalizeForgeBugValidationSuccess({ cwd, bugId, bug, scanners, attempt }) {
-  await updateBugStatus(cwd, bugId, "fixed", {
-    note: "Validated by forge_bug_validate_fix",
-    validatedAt: new Date().toISOString(),
-    validationMethod: "scanner-rerun",
-  });
-
-  try {
-    const updatedBug = loadBug(cwd, bugId);
-    await dispatchBugAdapter("commentValidatedFix", updatedBug || bug, {}, { cwd });
-  } catch { /* adapter dispatch is advisory */ }
-
+async function _onBugValidatedFixed(bugId, bug, scanners, attempt, cwd) {
   if (activeHub) {
     try {
       activeHub.broadcast({
@@ -1728,17 +1708,83 @@ async function _finalizeForgeBugValidationSuccess({ cwd, bugId, bug, scanners, a
       });
     } catch { /* best-effort */ }
   }
-
   try {
     if (isOpenBrainConfigured(cwd)) {
       captureMemory(
         `Bug ${bugId} validated fixed by scanner rerun (${scanners.join(", ")}). Classification: ${bug.classification}. Fix plan: ${bug.linkedFixPlan || "manual"}.`,
-        "decision",
-        "forge_bug_validate_fix",
-        cwd
+        "decision", "forge_bug_validate_fix", cwd
       );
     }
   } catch { /* silent */ }
+}
+
+function _getBugValidationAdvisoryMessage(bug) {
+  return (bug.status === "open" && !bug.linkedFixPlan)
+    ? "Bug is 'open' with no linked fix plan — proceeding with validation (manual fix assumed)"
+    : null;
+}
+
+function _createBugValidationAttemptData(args, bug) {
+  const scanners = args.scannerOverride ?? (Array.isArray(bug.scanner) ? bug.scanner : [bug.scanner]);
+  const testFilter = args.testNameOverride ?? bug.evidence?.testName ?? null;
+  return {
+    scanners,
+    testFilter,
+    attempt: { at: new Date().toISOString(), scanners, result: null, details: null },
+  };
+}
+
+async function _finalizeBugValidationPass(cwd, bugId, bug, scanners, attempt) {
+  await updateBugStatus(cwd, bugId, "fixed", {
+    note: "Validated by forge_bug_validate_fix",
+    validatedAt: new Date().toISOString(),
+    validationMethod: "scanner-rerun",
+  });
+  try {
+    const updatedBug = loadBug(cwd, bugId);
+    await dispatchBugAdapter("commentValidatedFix", updatedBug || bug, {}, { cwd });
+  } catch { /* adapter dispatch is advisory */ }
+  await _onBugValidatedFixed(bugId, bug, scanners, attempt, cwd);
+}
+
+function _039_forge_bug_validate_fix_loadContext(cwd, args) {
+  const bug = loadBug(cwd, args.bugId);
+  if (!bug) {
+    return {
+      response: { content: [{ type: "text", text: JSON.stringify({ error: ERROR_CODES.BUG_NOT_FOUND.code, bugId: args.bugId }) }], isError: true },
+    };
+  }
+  if (["fixed", "wont-fix", "duplicate"].includes(bug.status)) {
+    return {
+      response: {
+        content: [{ type: "text", text: JSON.stringify({ error: ERROR_CODES.ALREADY_FIXED.code, bugId: args.bugId, currentStatus: bug.status }) }],
+        isError: true,
+      },
+    };
+  }
+  return {
+    bug,
+    advisory: _getBugValidationAdvisoryMessage(bug),
+    ..._createBugValidationAttemptData(args, bug),
+  };
+}
+
+function _039_forge_bug_validate_fix_finalizeAttempt(cwd, bugId, advisory, scanners, attempt, results) {
+  const allPassed = results.every((result) => result.passed);
+  attempt.result = allPassed ? "pass" : "fail";
+  attempt.details = results;
+  appendValidationAttempt(cwd, bugId, attempt);
+  return {
+    allPassed,
+    result: {
+      bugId,
+      verdict: allPassed ? "fixed" : "still-failing",
+      scanners,
+      attempt,
+      validationDetails: results,
+      ...(advisory ? { advisory } : {}),
+    },
+  };
 }
 
 async function _callToolHandler_039_forge_bug_validate_fix(request, args) {
@@ -1747,44 +1793,18 @@ async function _callToolHandler_039_forge_bug_validate_fix(request, args) {
 
   const t0 = Date.now();
   try {
-    const cwd = _resolveToolCwd(args);
-    const bug = loadBug(cwd, args.bugId);
-    if (!bug) {
-      return { content: [{ type: "text", text: JSON.stringify({ error: ERROR_CODES.BUG_NOT_FOUND.code, bugId: args.bugId }) }], isError: true };
+    const cwd = args.path ? findProjectRoot(resolve(args.path)) : findProjectRoot(PROJECT_DIR);
+    const context = _039_forge_bug_validate_fix_loadContext(cwd, args);
+    if (context.response) return context.response;
+    const { bug, advisory, scanners, testFilter, attempt } = context;
+    const { results, scannerUnavailable } = await _runBugScanners(scanners, testFilter, cwd);
+    if (scannerUnavailable) {
+      return { content: [{ type: "text", text: JSON.stringify({ error: ERROR_CODES.SCANNER_UNAVAILABLE.code, scanner: scannerUnavailable.scanner, message: scannerUnavailable.message }) }], isError: true };
     }
-    if (["fixed", "wont-fix", "duplicate"].includes(bug.status)) {
-      return { content: [{ type: "text", text: JSON.stringify({ error: ERROR_CODES.ALREADY_FIXED.code, bugId: args.bugId, currentStatus: bug.status }) }], isError: true };
-    }
-
-    const scanners = _getForgeBugValidationScanners(args, bug);
-    const testFilter = args.testNameOverride ?? bug.evidence?.testName ?? null;
-    const nowFn = () => new Date();
-    const attempt = _createForgeBugValidationAttempt(scanners, nowFn);
-    const validation = await _runForgeBugValidationScanners(scanners, { cwd, testFilter, nowFn });
-    if (validation.unavailable) {
-      return { content: [{ type: "text", text: JSON.stringify({ error: ERROR_CODES.SCANNER_UNAVAILABLE.code, scanner: validation.unavailable.scanner, message: validation.unavailable.message }) }], isError: true };
-    }
-
-    const results = validation.results;
-    const allPassed = results.every((result) => result.passed);
-    attempt.result = allPassed ? "pass" : "fail";
-    attempt.details = results;
-    appendValidationAttempt(cwd, args.bugId, attempt);
-
-    if (allPassed) {
-      await _finalizeForgeBugValidationSuccess({ cwd, bugId: args.bugId, bug, scanners, attempt });
-    }
-
-    const result = {
-      bugId: args.bugId,
-      verdict: allPassed ? "fixed" : "still-failing",
-      scanners,
-      attempt,
-      validationDetails: results,
-      ...(_getForgeBugValidationAdvisory(bug) ? { advisory: _getForgeBugValidationAdvisory(bug) } : {}),
-    };
-    emitToolTelemetry("forge_bug_validate_fix", args, result, Date.now() - t0, "OK", cwd);
-    return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }], isError: false };
+    const finalized = _039_forge_bug_validate_fix_finalizeAttempt(cwd, args.bugId, advisory, scanners, attempt, results);
+    if (finalized.allPassed) await _finalizeBugValidationPass(cwd, args.bugId, bug, scanners, attempt);
+    emitToolTelemetry("forge_bug_validate_fix", args, finalized.result, Date.now() - t0, "OK", cwd);
+    return { content: [{ type: "text", text: JSON.stringify(finalized.result, null, 2) }], isError: false };
   } catch (err) {
     return { content: [{ type: "text", text: `Bug validation error: ${err.message}` }], isError: true };
   }
@@ -1868,43 +1888,45 @@ async function _callToolHandler_041_forge_brain_test(request, args) {
   
 }
 
-function _loadForgeBrainReplayJsonlRecords(sourcePath) {
-  const records = [];
-  const raw = readFileSync(sourcePath, "utf-8");
-  for (const line of raw.split(/\r?\n/)) {
-    const trimmed = line.trim();
-    if (!trimmed) continue;
-    try {
-      records.push(normalizeQueueRecord(JSON.parse(trimmed)));
-    } catch { /* skip malformed */ }
-  }
-  return records;
-}
-
-function _loadForgeBrainReplayRecords(sourcePath, project) {
-  const st = statSync(sourcePath);
+function _loadBrainReplayRecordsFromSource(sourcePath, st, project) {
   if (st.isDirectory()) {
     const records = [];
-    for (const file of listMarkdownFiles(sourcePath, { recursive: false })) {
-      records.push(...normalizeMarkdownFile(file, { project, source: `replay:${basename(file)}` }));
+    for (const f of listMarkdownFiles(sourcePath, { recursive: false })) {
+      records.push(...normalizeMarkdownFile(f, { project, source: `replay:${basename(f)}` }));
     }
-    return { sourceType: "markdown-dir", records };
+    return { records, sourceType: "markdown-dir" };
   }
   if (/\.md$/i.test(sourcePath)) {
     return {
-      sourceType: "markdown-file",
       records: normalizeMarkdownFile(sourcePath, { project, source: `replay:${basename(sourcePath)}` }),
+      sourceType: "markdown-file",
     };
   }
   if (/\.jsonl?$/i.test(sourcePath)) {
-    return { sourceType: "queue-jsonl", records: _loadForgeBrainReplayJsonlRecords(sourcePath) };
+    const records = [];
+    const raw = readFileSync(sourcePath, "utf-8");
+    for (const line of raw.split(/\r?\n/)) {
+      const s = line.trim();
+      if (!s) continue;
+      try { records.push(normalizeQueueRecord(JSON.parse(s))); } catch { /* skip malformed */ }
+    }
+    return { records, sourceType: "queue-jsonl" };
   }
-  return {
-    error: `unsupported source type for ${sourcePath} — expected .jsonl, .md, or directory of .md files.`,
-  };
+  return { records: null, sourceType: null };
 }
 
-function _buildForgeBrainReplaySummary(args, cfg, sourceType, sourcePath, result) {
+function _resolveBrainReplaySource(args, cwd) {
+  const sourcePath = isAbsolute(args.source) ? args.source : resolve(cwd, args.source);
+  if (!existsSync(sourcePath)) {
+    return {
+      errorResponse: { content: [{ type: "text", text: `source not found: ${sourcePath}` }], isError: true },
+      sourcePath,
+    };
+  }
+  return { sourcePath, st: statSync(sourcePath) };
+}
+
+function _buildBrainReplaySummary(args, cfg, sourceType, sourcePath, result) {
   return [
     `Brain replay — ${args.dryRun ? "DRY RUN" : "sent"}`,
     `  source:     ${sourceType} (${sourcePath})`,
@@ -1914,59 +1936,83 @@ function _buildForgeBrainReplaySummary(args, cfg, sourceType, sourcePath, result
     `  failed:     ${result.failed}`,
     `  skipped:    ${result.skipped}`,
     `  duration:   ${result.durationMs}ms`,
-    result.samples.length > 0 ? `  samples:    ${result.samples.map((sample) => `[${sample.index}] ${sample.content}`).join(" · ")}` : "",
+    result.samples.length > 0 ? `  samples:    ${result.samples.map(s => `[${s.index}] ${s.content}`).join(" · ")}` : "",
   ].filter(Boolean).join("\n");
+}
+
+function _042_forge_brain_replay_validateRequest(args, cwd) {
+  if (!args.source || typeof args.source !== "string") {
+    return {
+      response: { content: [{ type: "text", text: "source is required: pass a queue jsonl path, a markdown file, or a directory of .md files." }], isError: true },
+    };
+  }
+  const cfg = readOpenBrainConfig(cwd);
+  if (!cfg) {
+    return {
+      response: { content: [{ type: "text", text: "OpenBrain SSE endpoint not found in mcp.json (stdio-mode entries do not support brain_replay)." }], isError: true },
+    };
+  }
+  if (!cfg.key && !args.dryRun) {
+    return {
+      response: { content: [{ type: "text", text: "OpenBrain auth key not resolved. Set OPENBRAIN_KEY env var or pass dryRun=true to preview without sending." }], isError: true },
+    };
+  }
+  return { cfg };
+}
+
+function _042_forge_brain_replay_loadRecords(args, cwd) {
+  const resolvedSource = _resolveBrainReplaySource(args, cwd);
+  if (resolvedSource.errorResponse) return { response: resolvedSource.errorResponse };
+  const { sourcePath, st } = resolvedSource;
+  const project = args.project || "plan-forge";
+  const { records: rawRecords, sourceType } = _loadBrainReplayRecordsFromSource(sourcePath, st, project);
+  if (!rawRecords) {
+    return {
+      response: {
+        content: [{ type: "text", text: `unsupported source type for ${sourcePath} — expected .jsonl, .md, or directory of .md files.` }],
+        isError: true,
+      },
+    };
+  }
+  const maxRecords = Number(args.maxRecords ?? 500);
+  return {
+    sourcePath,
+    sourceType,
+    records: rawRecords.length > maxRecords ? rawRecords.slice(0, maxRecords) : rawRecords,
+  };
+}
+
+async function _042_forge_brain_replay_runClient(args, cfg, records) {
+  const replayClient = args.dryRun ? { capture: async () => ({}) } : await createOpenBrainClient(cfg);
+  const client = args.dryRun ? null : replayClient;
+  const result = await brainReplayRecords(replayClient, records, {
+    rate: Number(args.rate ?? 50),
+    maxRetries: Number(args.maxRetries ?? 3),
+    dryRun: Boolean(args.dryRun),
+    sampleSize: 3,
+  });
+  return { client, result };
 }
 
 async function _callToolHandler_042_forge_brain_replay(request, args) {
   const { name } = request.params;
   if (!(name === "forge_brain_replay")) return _CALL_TOOL_NO_MATCH;
 
-  if (!args.source || typeof args.source !== "string") {
-    return { content: [{ type: "text", text: "source is required: pass a queue jsonl path, a markdown file, or a directory of .md files." }], isError: true };
-  }
-
-  const cwd = _resolveToolCwd(args);
-  const cfg = readOpenBrainConfig(cwd);
-  if (!cfg) {
-    return { content: [{ type: "text", text: "OpenBrain SSE endpoint not found in mcp.json (stdio-mode entries do not support brain_replay)." }], isError: true };
-  }
-  if (!cfg.key && !args.dryRun) {
-    return { content: [{ type: "text", text: "OpenBrain auth key not resolved. Set OPENBRAIN_KEY env var or pass dryRun=true to preview without sending." }], isError: true };
-  }
-
+  const cwd = args.path ? findProjectRoot(resolve(args.path)) : findProjectRoot(PROJECT_DIR);
+  const validation = _042_forge_brain_replay_validateRequest(args, cwd);
+  if (validation.response) return validation.response;
   let client = null;
   try {
-    const sourcePath = isAbsolute(args.source) ? args.source : resolve(cwd, args.source);
-    if (!existsSync(sourcePath)) {
-      return { content: [{ type: "text", text: `source not found: ${sourcePath}` }], isError: true };
-    }
-
-    const project = args.project || "plan-forge";
-    const loaded = _loadForgeBrainReplayRecords(sourcePath, project);
-    if (loaded.error) {
-      return { content: [{ type: "text", text: loaded.error }], isError: true };
-    }
-
-    const maxRecords = Number(args.maxRecords ?? 500);
-    const records = loaded.records.length > maxRecords ? loaded.records.slice(0, maxRecords) : loaded.records;
-    if (!args.dryRun) client = await createOpenBrainClient(cfg);
-    const replayClient = args.dryRun ? { capture: async () => ({}) } : client;
-    const result = await brainReplayRecords(replayClient, records, {
-      rate: Number(args.rate ?? 50),
-      maxRetries: Number(args.maxRetries ?? 3),
-      dryRun: Boolean(args.dryRun),
-      sampleSize: 3,
-    });
-
-    const summary = _buildForgeBrainReplaySummary(args, cfg, loaded.sourceType, sourcePath, result);
-    return { content: [{ type: "text", text: summary }], isError: result.failed > 0 };
+    const loaded = _042_forge_brain_replay_loadRecords(args, cwd);
+    if (loaded.response) return loaded.response;
+    const executed = await _042_forge_brain_replay_runClient(args, validation.cfg, loaded.records);
+    client = executed.client;
+    const summary = _buildBrainReplaySummary(args, validation.cfg, loaded.sourceType, loaded.sourcePath, executed.result);
+    return { content: [{ type: "text", text: summary }], isError: executed.result.failed > 0 };
   } catch (err) {
     return { content: [{ type: "text", text: `Brain replay error: ${err.message}` }], isError: true };
   } finally {
-    if (client) {
-      try { await client.close(); } catch { /* best-effort */ }
-    }
+    if (client) { try { await client.close(); } catch { /* best-effort */ } }
   }
 }
 
@@ -2015,72 +2061,113 @@ async function _callToolHandler_043_forge_generate_image(request, args) {
   
 }
 
-const _INCIDENT_SEVERITIES = ["low", "medium", "high", "critical"];
-
-function _validateForgeIncidentSeverity(severity) {
-  return _INCIDENT_SEVERITIES.includes(severity)
-    ? null
-    : `Invalid severity '${severity}'. Must be one of: ${_INCIDENT_SEVERITIES.join(", ")}`;
-}
-
-function _resolveForgeIncidentTiming(capturedAt, resolvedAt) {
-  if (!resolvedAt) return { resolvedAt: null, mttr: null };
+function _resolveIncidentMttr(capturedAt, resolvedAt) {
+  if (!resolvedAt) return { mttr: null, error: null };
   const resolvedMs = new Date(resolvedAt).getTime();
   const capturedMs = new Date(capturedAt).getTime();
   if (isNaN(resolvedMs)) {
-    return { error: `Invalid resolvedAt timestamp: '${resolvedAt}'. Must be ISO 8601 (e.g., 2024-01-01T02:30:00Z)` };
+    return { mttr: null, error: `Invalid resolvedAt timestamp: '${resolvedAt}'. Must be ISO 8601 (e.g., 2024-01-01T02:30:00Z)` };
   }
   if (resolvedMs < capturedMs) {
-    return { error: `resolvedAt (${resolvedAt}) is earlier than capturedAt (${capturedAt}). Check the timestamp.` };
+    return { mttr: null, error: `resolvedAt (${resolvedAt}) is earlier than capturedAt (${capturedAt}). Check the timestamp.` };
   }
-  return { resolvedAt, mttr: resolvedMs - capturedMs };
+  return { mttr: resolvedMs - capturedMs, error: null };
 }
 
-function _attachForgeIncidentDeploy(record, capturedAt, cwd) {
+function _correlateIncidentDeploy(capturedAt, cwd) {
   try {
     const deploys = readForgeJsonl("deploy-journal.jsonl", [], cwd);
     const capturedMs = new Date(capturedAt).getTime();
     for (let i = deploys.length - 1; i >= 0; i--) {
-      const deploy = deploys[i];
-      if (deploy.deployedAt && new Date(deploy.deployedAt).getTime() <= capturedMs) {
-        record.precedingDeploy = { journalId: deploy.id, version: deploy.version };
-        break;
+      const d = deploys[i];
+      if (d.deployedAt && new Date(d.deployedAt).getTime() <= capturedMs) {
+        return { journalId: d.id, version: d.version };
       }
     }
   } catch { /* no deploy journal — skip */ }
+  return null;
 }
 
-function _applyForgeRecurringIncidentInfo(record, files, severity, cwd) {
-  let recurring = null;
+function _detectRecurringIncident(record, incFiles, cwd) {
+  if (!incFiles.length) return null;
   try {
-    if (files.length === 0) return recurring;
     const allIncidents = readForgeJsonl("incidents.jsonl", [], cwd);
     const thirtyDaysAgo = Date.now() - 30 * 24 * 60 * 60 * 1000;
-    const priorOnSameFiles = allIncidents.filter((incident) => (
-      incident.id !== record.id
-      && new Date(incident.capturedAt || 0).getTime() > thirtyDaysAgo
-      && (incident.files || []).some((file) => files.some((candidate) => file.includes(candidate) || candidate.includes(file)))
-    ));
-    if (priorOnSameFiles.length < 2) return recurring;
-    recurring = { count: priorOnSameFiles.length + 1, files, pattern: "systemic" };
-    record.recurring = recurring;
-    if (severity === "medium" || severity === "low") {
+    const priorOnSameFiles = allIncidents.filter(i =>
+      i.id !== record.id &&
+      new Date(i.capturedAt || 0).getTime() > thirtyDaysAgo &&
+      (i.files || []).some(f => incFiles.some(cf => f.includes(cf) || cf.includes(f)))
+    );
+    if (priorOnSameFiles.length < 2) return null;
+    const recurring = { count: priorOnSameFiles.length + 1, files: incFiles, pattern: "systemic" };
+    if (record.severity === "medium" || record.severity === "low") {
       record.severity = "high";
       record.autoEscalated = true;
       record.escalationReason = `Recurring: ${priorOnSameFiles.length + 1} incidents on same file(s) in 30 days`;
     }
+    return recurring;
   } catch { /* best-effort recurring detection */ }
-  return recurring;
+  return null;
 }
 
-function _readForgeIncidentOnCall(cwd) {
+function _validateIncidentSeverityValue(severity) {
+  const validSeverities = ["low", "medium", "high", "critical"];
+  return validSeverities.includes(severity)
+    ? null
+    : `Invalid severity '${severity}'. Must be one of: ${validSeverities.join(", ")}`;
+}
+
+function _loadIncidentOnCall(cwd) {
   try {
     const forgeConfigPath = resolve(cwd, ".forge.json");
     if (!existsSync(forgeConfigPath)) return null;
     const forgeConfig = JSON.parse(readFileSync(forgeConfigPath, "utf-8"));
     return forgeConfig.onCall || null;
-  } catch {
-    return null;
+  } catch { /* ignore */ }
+  return null;
+}
+
+function _createIncidentRecord(args, severity, capturedAt, mttr) {
+  return {
+    id: `inc-${Date.now()}`,
+    description: args.description,
+    severity,
+    files: args.files || [],
+    capturedAt,
+    resolvedAt: args.resolvedAt || null,
+    mttr,
+  };
+}
+
+function _044_forge_incident_capture_validateArgs(args) {
+  const severity = args.severity || "medium";
+  const severityError = _validateIncidentSeverityValue(severity);
+  if (severityError) {
+    return { response: { content: [{ type: "text", text: severityError }], isError: true } };
+  }
+  const capturedAt = new Date().toISOString();
+  const { mttr, error: mttrError } = _resolveIncidentMttr(capturedAt, args.resolvedAt || null);
+  if (mttrError) {
+    return { response: { content: [{ type: "text", text: mttrError }], isError: true } };
+  }
+  return { severity, capturedAt, mttr };
+}
+
+function _044_forge_incident_capture_buildRecord(args, cwd, severity, capturedAt, mttr) {
+  const record = _createIncidentRecord(args, severity, capturedAt, mttr);
+  const precedingDeploy = _correlateIncidentDeploy(capturedAt, cwd);
+  if (precedingDeploy) record.precedingDeploy = precedingDeploy;
+  appendForgeJsonl("incidents.jsonl", record, cwd);
+  const recurring = _detectRecurringIncident(record, args.files || [], cwd);
+  if (recurring) record.recurring = recurring;
+  return record;
+}
+
+function _044_forge_incident_capture_notify(args, cwd, severity, capturedAt, record) {
+  activeHub?.broadcast({ type: "incident-captured", data: record, timestamp: capturedAt });
+  const onCall = _loadIncidentOnCall(cwd);
+  if (onCall) {
+    activeBridge?.dispatch?.({ type: "incident-captured", severity, description: args.description, onCall });
   }
 }
 
@@ -2090,48 +2177,18 @@ async function _callToolHandler_044_forge_incident_capture(request, args) {
 
   try {
     const t0 = Date.now();
-    const cwd = _resolveToolCwd(args);
-    const severity = args.severity || "medium";
-    const severityError = _validateForgeIncidentSeverity(severity);
-    if (severityError) {
-      return { content: [{ type: "text", text: severityError }], isError: true };
-    }
-
-    const capturedAt = new Date().toISOString();
-    const timing = _resolveForgeIncidentTiming(capturedAt, args.resolvedAt || null);
-    if (timing.error) {
-      return { content: [{ type: "text", text: timing.error }], isError: true };
-    }
-
-    const record = {
-      id: `inc-${Date.now()}`,
-      description: args.description,
-      severity,
-      files: args.files || [],
-      capturedAt,
-      resolvedAt: timing.resolvedAt,
-      mttr: timing.mttr,
-    };
-
-    _attachForgeIncidentDeploy(record, capturedAt, cwd);
-    appendForgeJsonl("incidents.jsonl", record, cwd);
-    _applyForgeRecurringIncidentInfo(record, args.files || [], severity, cwd);
-    activeHub?.broadcast({ type: "incident-captured", data: record, timestamp: capturedAt });
-
-    const onCall = _readForgeIncidentOnCall(cwd);
-    if (onCall) {
-      activeBridge?.dispatch?.({ type: "incident-captured", severity, description: args.description, onCall });
-    }
-
+    const cwd = args.path ? findProjectRoot(resolve(args.path)) : findProjectRoot(PROJECT_DIR);
+    const validation = _044_forge_incident_capture_validateArgs(args);
+    if (validation.response) return validation.response;
+    const { severity, capturedAt, mttr } = validation;
+    const record = _044_forge_incident_capture_buildRecord(args, cwd, severity, capturedAt, mttr);
+    _044_forge_incident_capture_notify(args, cwd, severity, capturedAt, record);
     emitToolTelemetry("forge_incident_capture", args, record, Date.now() - t0, "OK", cwd);
     await broadcastLiveGuard("forge_incident_capture", "OK", Date.now() - t0);
     captureMemory(
       `Incident ${record.id}: ${args.description}. Severity: ${severity}. Files: ${(args.files || []).join(", ") || "none"}.`,
-      "gotcha",
-      "forge_incident_capture",
-      cwd
+      "gotcha", "forge_incident_capture", cwd
     );
-
     return { content: [{ type: "text", text: JSON.stringify(record, null, 2) }], isError: false };
   } catch (err) {
     return { content: [{ type: "text", text: `Incident capture error: ${err.message}` }], isError: true };
@@ -3757,6 +3814,7 @@ function _th_054_tryExplicitCrucibleTarget(cwd, smeltIdArg) {
   }
 }
 
+// Phase CRUCIBLE-04 — Crucible-aware fix proposals.
 function _th_054_findStalledCrucibleTarget(cwd, crucible) {
   if (crucible.staleInProgress <= 0) return null;
   const crucibleDir = resolve(cwd, ".forge", "crucible");
@@ -4142,6 +4200,473 @@ function _th_054_maybeQueueReview(cwd, slices, fixId, planName, sourceData) {
   }
 }
 
+function _054_forge_fix_proposal_textError(text) {
+  return { content: [{ type: "text", text }], isError: true };
+}
+
+function _054_forge_fix_proposal_jsonResult(payload, isError = false) {
+  return { content: [{ type: "text", text: JSON.stringify(payload) }], isError };
+}
+
+function _054_forge_fix_proposal_noData(message, extras = {}) {
+  return _054_forge_fix_proposal_jsonResult({ error: message, planFile: null, ...extras });
+}
+
+function _054_forge_fix_proposal_readJsonFile(filePath) {
+  return JSON.parse(readFileSync(filePath, "utf-8"));
+}
+
+function _054_forge_fix_proposal_resolveIncidentSource({ args, cwd, source }) {
+  const incidentId = args.incidentId || null;
+  if (!(source === "incident" || (source === "auto" && incidentId))) return null;
+  if (!incidentId) return { response: _054_forge_fix_proposal_textError("incidentId required for incident source") };
+  const incidents = readForgeJsonl("incidents.jsonl", [], cwd);
+  if (!incidents.length) return { response: _054_forge_fix_proposal_noData("no incident data — run pforge incident first") };
+  const incident = incidents.find((item) => item.id === incidentId || item.incidentId === incidentId);
+  if (!incident) return { response: _054_forge_fix_proposal_textError(`Incident not found: ${incidentId}`) };
+  return { sourceData: { type: "incident", incident }, fixId: incidentId };
+}
+
+function _054_forge_fix_proposal_resolveRegressionSource({ cwd, source }) {
+  if (source !== "regression") return null;
+  const regPath = resolve(cwd, ".forge", "regression-gates.json");
+  if (!existsSync(regPath)) return { response: _054_forge_fix_proposal_noData("no regression data — run pforge regression-guard first") };
+  try {
+    const regression = _054_forge_fix_proposal_readJsonFile(regPath);
+    if (!regression || (Array.isArray(regression) && regression.length === 0)) {
+      return { response: _054_forge_fix_proposal_noData("no regression data — run pforge regression-guard first") };
+    }
+    return { sourceData: { type: "regression", regression }, fixId: `regression-${Date.now()}` };
+  } catch {
+    return { response: _054_forge_fix_proposal_noData("no regression data — run pforge regression-guard first") };
+  }
+}
+
+function _054_forge_fix_proposal_resolveDriftSource({ cwd, source }) {
+  if (!(source === "drift" || source === "auto")) return null;
+  const driftHistory = readForgeJsonl("drift-history.json", [], cwd);
+  if (!driftHistory.length) {
+    return source === "drift"
+      ? { response: _054_forge_fix_proposal_noData("no drift data — run pforge drift first") }
+      : null;
+  }
+  const latest = driftHistory[driftHistory.length - 1];
+  return { sourceData: { type: "drift", drift: latest }, fixId: `drift-${Date.now()}` };
+}
+
+function _054_forge_fix_proposal_resolveSecretSource({ cwd, source }) {
+  if (!(source === "secret" || source === "auto")) return null;
+  const scanPath = resolve(cwd, ".forge", "secret-scan-cache.json");
+  if (!existsSync(scanPath)) {
+    return source === "secret"
+      ? { response: _054_forge_fix_proposal_noData("no secret scan data — run pforge secret-scan first") }
+      : null;
+  }
+  try {
+    const scan = _054_forge_fix_proposal_readJsonFile(scanPath);
+    return { sourceData: { type: "secret", scan }, fixId: `secret-${Date.now()}` };
+  } catch {
+    return source === "secret"
+      ? { response: _054_forge_fix_proposal_noData("no secret scan data — run pforge secret-scan first") }
+      : null;
+  }
+}
+
+function _054_forge_fix_proposal_pickExplicitCrucibleTarget(cwd, smeltIdArg, source) {
+  if (!smeltIdArg) return { target: null };
+  const smeltPath = resolve(cwd, ".forge", "crucible", `${smeltIdArg}.json`);
+  if (!existsSync(smeltPath)) {
+    return source === "crucible"
+      ? { response: _054_forge_fix_proposal_noData(`smelt ${smeltIdArg} not found in .forge/crucible/`) }
+      : { target: null };
+  }
+  try {
+    const smelt = _054_forge_fix_proposal_readJsonFile(smeltPath);
+    return { targetKind: "explicit", target: { id: smeltIdArg, smelt } };
+  } catch {
+    return source === "crucible"
+      ? { response: _054_forge_fix_proposal_noData(`smelt ${smeltIdArg} is unreadable`) }
+      : { target: null };
+  }
+}
+
+function _054_forge_fix_proposal_pickStalledCrucibleTarget(cwd, crucible) {
+  if (!(crucible.staleInProgress > 0)) return null;
+  const crucibleDir = resolve(cwd, ".forge", "crucible");
+  const cutoffMs = Date.now() - crucible.stallCutoffDays * 24 * 60 * 60 * 1000;
+  let oldest = null;
+  try {
+    for (const entry of readdirSync(crucibleDir, { withFileTypes: true })) {
+      if (!entry.isFile() || !entry.name.endsWith(".json")) continue;
+      if (entry.name === "config.json" || entry.name === "phase-claims.json") continue;
+      const fullPath = resolve(crucibleDir, entry.name);
+      let smelt;
+      try {
+        smelt = _054_forge_fix_proposal_readJsonFile(fullPath);
+      } catch {
+        continue;
+      }
+      if (smelt.status !== "in_progress") continue;
+      const mtime = statSync(fullPath).mtimeMs;
+      if (mtime >= cutoffMs) continue;
+      if (!oldest || mtime < oldest.mtime) oldest = { id: basename(entry.name, ".json"), smelt, mtime };
+    }
+  } catch { /* unreadable dir — fall through */ }
+  return oldest ? { targetKind: "stalled", target: { id: oldest.id, smelt: oldest.smelt } } : null;
+}
+
+function _054_forge_fix_proposal_pickCrucibleTarget({ args, cwd, source, crucible }) {
+  const explicit = _054_forge_fix_proposal_pickExplicitCrucibleTarget(cwd, args.smeltId || null, source);
+  if (explicit?.response || explicit?.target) return explicit;
+  const stalled = _054_forge_fix_proposal_pickStalledCrucibleTarget(cwd, crucible);
+  if (stalled) return stalled;
+  if (crucible.orphanHandoffs.length > 0) {
+    const orphan = crucible.orphanHandoffs[0];
+    return { targetKind: "orphan", target: { id: orphan.crucibleId || `orphan-${Date.now()}`, orphan } };
+  }
+  return { target: null };
+}
+
+function _054_forge_fix_proposal_resolveCrucibleSource(context) {
+  const { cwd, source } = context;
+  if (!(source === "crucible" || source === "auto")) return null;
+  const crucible = readCrucibleState(cwd);
+  if (!crucible) {
+    return source === "crucible"
+      ? { response: _054_forge_fix_proposal_noData("no Crucible data — .forge/crucible/ does not exist") }
+      : null;
+  }
+  const targetState = _054_forge_fix_proposal_pickCrucibleTarget({ ...context, crucible });
+  if (targetState?.response) return targetState;
+  if (!targetState?.target) {
+    return source === "crucible"
+      ? { response: _054_forge_fix_proposal_noData("Crucible funnel is healthy — no stalled or orphan smelts to fix", { counts: crucible.counts }) }
+      : null;
+  }
+  return {
+    sourceData: { type: "crucible", kind: targetState.targetKind, target: targetState.target, cutoffDays: crucible.stallCutoffDays },
+    fixId: `crucible-${targetState.target.id}`,
+  };
+}
+
+function _054_forge_fix_proposal_isTerminalBugStatus(status) {
+  return status === "fixed" || status === "wont-fix" || status === "duplicate";
+}
+
+function _054_forge_fix_proposal_resolveTemperingBugSource({ args, cwd, source }) {
+  if (!(source === "tempering-bug" || source === "auto")) return null;
+  const bugId = args.bugId || null;
+  if (source === "tempering-bug" && !bugId) {
+    return {
+      response: _054_forge_fix_proposal_jsonResult({
+        error: ERROR_CODES.MISSING_BUG_ID.code,
+        message: "bugId is required when source is tempering-bug",
+      }, true),
+    };
+  }
+  if (bugId) {
+    const bug = loadBug(cwd, bugId);
+    if (!bug) {
+      return source === "tempering-bug"
+        ? { response: _054_forge_fix_proposal_jsonResult({ error: ERROR_CODES.BUG_NOT_FOUND.code, bugId }, true) }
+        : null;
+    }
+    if (_054_forge_fix_proposal_isTerminalBugStatus(bug.status)) {
+      return source === "tempering-bug"
+        ? { response: _054_forge_fix_proposal_jsonResult({ error: ERROR_CODES.BUG_TERMINAL_STATUS.code, bugId, currentStatus: bug.status }, true) }
+        : null;
+    }
+    return { sourceData: { type: "tempering-bug", bug }, fixId: `tempering-bug-${bugId}` };
+  }
+  const openBug = listBugs(cwd, { status: "open" }).find((bug) => bug.classification === "real-bug" && !bug.linkedFixPlan);
+  return openBug ? { sourceData: { type: "tempering-bug", bug: openBug }, fixId: `tempering-bug-${openBug.bugId}` } : null;
+}
+
+function _054_forge_fix_proposal_resolveSource(context) {
+  const resolvers = [
+    _054_forge_fix_proposal_resolveIncidentSource,
+    _054_forge_fix_proposal_resolveRegressionSource,
+    _054_forge_fix_proposal_resolveDriftSource,
+    _054_forge_fix_proposal_resolveSecretSource,
+    _054_forge_fix_proposal_resolveCrucibleSource,
+    _054_forge_fix_proposal_resolveTemperingBugSource,
+  ];
+  for (const resolver of resolvers) {
+    const outcome = resolver(context);
+    if (outcome?.response || outcome?.fixId) return outcome;
+  }
+  return { sourceData: {}, fixId: "" };
+}
+
+function _054_forge_fix_proposal_getPlanDetails(cwd, fixId) {
+  const autoDir = resolve(cwd, "docs/plans/auto");
+  mkdirSync(autoDir, { recursive: true });
+  const planName = `LIVEGUARD-FIX-${fixId}.md`;
+  return { autoDir, planName, planPath: resolve(autoDir, planName) };
+}
+
+function _054_forge_fix_proposal_collectIncidentLines(cwd, incident, file) {
+  const lines = (incident.violations || []).filter((violation) => violation.file === file).map((violation) => violation.line);
+  if (lines.length > 0) return lines;
+  const driftHistory = readForgeJsonl("drift-history.json", [], cwd);
+  if (!driftHistory.length) return lines;
+  const latest = driftHistory[driftHistory.length - 1];
+  for (const violation of (latest.violations || [])) {
+    if (violation.file === file) lines.push(violation.line);
+  }
+  return lines;
+}
+
+function _054_forge_fix_proposal_buildCodeSnippet(lines, lineNum) {
+  const start = Math.max(0, lineNum - 6);
+  const end = Math.min(lines.length, lineNum + 5);
+  return lines.slice(start, end).map((line, index) => {
+    const num = start + index + 1;
+    const marker = num === lineNum ? " >>>" : "    ";
+    return `${marker} ${String(num).padStart(4)}| ${line}`;
+  }).join("\n");
+}
+
+function _054_forge_fix_proposal_collectIncidentSnippets(cwd, incident, affectedFiles) {
+  const snippets = [];
+  for (const file of affectedFiles) {
+    try {
+      const filePath = resolve(cwd, file);
+      if (!existsSync(filePath)) continue;
+      const lines = readFileSync(filePath, "utf-8").split("\n");
+      for (const lineNum of _054_forge_fix_proposal_collectIncidentLines(cwd, incident, file).slice(0, 3)) {
+        snippets.push({ file, line: lineNum, snippet: _054_forge_fix_proposal_buildCodeSnippet(lines, lineNum) });
+      }
+    } catch { /* file read error — skip snippet */ }
+  }
+  return snippets;
+}
+
+function _054_forge_fix_proposal_getIncidentGateCommand(cwd, affectedFiles) {
+  const hasCsproj = existsSync(resolve(cwd, "*.csproj")) || readdirSync(cwd).some((file) => file.endsWith(".csproj") || file.endsWith(".sln"));
+  if (hasCsproj) {
+    const testFilters = affectedFiles
+      .map((file) => basename(file, extname(file)).replace(/\.(cs|fs|vb)$/, ""))
+      .filter((name) => name.length > 0);
+    return testFilters.length > 0
+      ? `dotnet test --filter "${testFilters.map((name) => `FullyQualifiedName~${name}`).join("|")}"`
+      : "dotnet test";
+  }
+  return existsSync(resolve(cwd, "package.json")) ? "npm test" : "pforge regression-guard";
+}
+
+function _054_forge_fix_proposal_buildIncidentSlices(cwd, sourceData, fixId) {
+  const incident = sourceData.incident;
+  const affectedFiles = incident.files || incident.affectedFiles || [];
+  const description = incident.description || incident.title || fixId;
+  const severity = incident.severity || "medium";
+  const investigateTasks = [`Review incident: ${description}`];
+  if (affectedFiles.length > 0) investigateTasks.push(`Inspect affected file(s): ${affectedFiles.join(", ")}`);
+  investigateTasks.push("Identify root cause — check for: empty catch blocks, inverted logic, missing validation, null references");
+  investigateTasks.push("Document the exact code location and failure mechanism");
+  const fixTasks = [
+    "Implement the fix in the identified file(s)",
+    ...(affectedFiles.length > 0 ? ["Add or update unit tests covering the fix in affected file(s)"] : []),
+    "Run regression guard to verify no side effects",
+    "Verify incident resolution by reproducing the original failure scenario",
+  ];
+  return [
+    {
+      title: `Investigate: ${description}`,
+      tasks: investigateTasks,
+      scope: affectedFiles,
+      codeSnippets: _054_forge_fix_proposal_collectIncidentSnippets(cwd, incident, affectedFiles),
+    },
+    {
+      title: `Apply Fix + Verify (${severity})`,
+      tasks: fixTasks,
+      scope: affectedFiles,
+      gate: _054_forge_fix_proposal_getIncidentGateCommand(cwd, affectedFiles),
+    },
+  ];
+}
+
+function _054_forge_fix_proposal_buildCrucibleSlices(sourceData) {
+  const { kind, target } = sourceData;
+  const cutoff = sourceData.cutoffDays || 7;
+  const smeltId = target.id;
+  const smeltPathRel = `.forge/crucible/${smeltId}.json`;
+  if (kind === "orphan") {
+    const orphan = target.orphan;
+    const planPath = orphan?.planPath || "(unknown)";
+    const phaseName = orphan?.phaseName || "(unnamed phase)";
+    return [
+      {
+        title: `Triage orphan handoff: ${phaseName}`,
+        tasks: [
+          `Inspect hub-events.jsonl entry for smelt ${smeltId}`,
+          `Check whether the hardener plan file ever existed: ${planPath}`,
+          "Decide: (a) re-generate the plan from the smelt journal, OR (b) record the handoff as abandoned and move on",
+          "Document the decision rationale in the smelt's `notes` field",
+        ],
+        scope: [smeltPathRel, ".forge/hub-events.jsonl"],
+      },
+      {
+        title: "Resolve orphan: regenerate or archive",
+        tasks: [
+          `If regenerating: run the hardener workflow against smelt ${smeltId} to produce ${planPath}`,
+          'If archiving: set smelt status to "abandoned" with reason "orphan handoff — plan unrecoverable"',
+          "Verify: re-run forge_watch or pforge smith — orphan count should drop to 0",
+        ],
+        scope: [smeltPathRel, planPath],
+        gate: "pforge smith",
+      },
+    ];
+  }
+  const phaseName = target.smelt?.phaseName || target.smelt?.title || "(untitled smelt)";
+  const status = target.smelt?.status || "unknown";
+  return [
+    {
+      title: `Triage stalled smelt: ${phaseName}`,
+      tasks: [
+        `Read the smelt journal at ${smeltPathRel} (current status: ${status})`,
+        `Check mtime — flagged stalled when idle ≥ ${cutoff} days`,
+        "Review the smelt's last recorded action and any open questions",
+        "Decide: (a) RESUME if the work is still relevant, OR (b) ABANDON if superseded / no longer needed",
+        "Document the decision rationale in the smelt's `notes` field",
+      ],
+      scope: [smeltPathRel],
+    },
+    {
+      title: "Execute decision: resume or abandon",
+      tasks: [
+        'If RESUMING: touch the smelt journal, set a concrete "nextAction" field, resume normal Crucible workflow',
+        'If ABANDONING: set smelt status to "abandoned" with reason and supersededBy (if applicable)',
+        "Verify: re-run forge_watch or pforge smith — staleInProgress should drop by at least 1",
+      ],
+      scope: [smeltPathRel],
+      gate: "pforge smith",
+    },
+  ];
+}
+
+function _054_forge_fix_proposal_getBugAffectedFiles(bug) {
+  if (bug.affectedFiles?.length > 0) return bug.affectedFiles;
+  if (!bug.evidence?.stackTrace) return [];
+  return [...bug.evidence.stackTrace.matchAll(/(?:at\s+\S+\s+\(?|\/)([\w./-]+\.[a-z]{1,5})/gi)]
+    .map((match) => match[1])
+    .filter((file) => !file.includes("node_modules"))
+    .slice(0, 5);
+}
+
+async function _054_forge_fix_proposal_buildTemperingBugSlices(cwd, bug) {
+  const bugId = bug.bugId;
+  const severity = bug.severity || "medium";
+  const affectedFiles = _054_forge_fix_proposal_getBugAffectedFiles(bug);
+  const slices = [
+    {
+      title: `Triage: ${bug.evidence?.testName || bug.evidence?.assertionMessage?.slice(0, 50) || bugId}`,
+      tasks: [
+        `Review bug ${bugId} (${bug.scanner} scanner, ${severity} severity)`,
+        bug.evidence?.assertionMessage ? `Assertion: ${bug.evidence.assertionMessage.slice(0, 200)}` : "Investigate the failure evidence",
+        bug.evidence?.stackTrace ? `Stack trace starts at: ${bug.evidence.stackTrace.split("\\n")[0]?.slice(0, 120)}` : "Reproduce the failure",
+        `Classification: ${bug.classification || "unknown"}`,
+        ...(bug.reproSteps?.length ? [`Repro steps: ${bug.reproSteps.join(" → ")}`] : []),
+        "Identify root cause and document the fix approach",
+      ],
+      scope: affectedFiles.length > 0 ? affectedFiles : [".forge/bugs/"],
+    },
+    {
+      title: `Apply fix for ${bugId}`,
+      tasks: [
+        "Implement the fix in the identified file(s)",
+        ...(affectedFiles.length > 0 ? [`Affected files: ${affectedFiles.join(", ")}`] : []),
+        "Add or update tests covering the fixed behavior",
+        `Validate: run forge_bug_validate_fix --bugId ${bugId}`,
+      ],
+      scope: affectedFiles,
+      gate: `forge_bug_validate_fix --bugId ${bugId}`,
+    },
+  ];
+  if (severity === "critical" || severity === "high") {
+    slices.push({
+      title: `Regression guard (${severity} severity)`,
+      tasks: ["Run full regression guard to verify no side effects", "Verify no new tempering findings introduced"],
+      gate: "forge_regression_guard",
+    });
+  }
+  const relPlanPath = `docs/plans/auto/LIVEGUARD-FIX-tempering-bug-${bugId}.md`;
+  await updateBugStatus(cwd, bugId, "in-fix", { note: `Linked fix plan: ${relPlanPath}` });
+  setLinkedFixPlan(cwd, bugId, relPlanPath);
+  return slices;
+}
+
+async function _054_forge_fix_proposal_buildSlices(cwd, sourceData, source, fixId) {
+  if (sourceData.type === "incident") return _054_forge_fix_proposal_buildIncidentSlices(cwd, sourceData, fixId);
+  if (sourceData.type === "drift") {
+    return [{
+      title: `Resolve Drift Violations (score: ${sourceData.drift?.score || "unknown"})`,
+      tasks: ["Review drift violations", "Fix architectural deviations", "Re-run drift report to verify score improvement"],
+      gate: "pforge drift",
+    }];
+  }
+  if (sourceData.type === "secret") {
+    return [{
+      title: "Credential Rotation",
+      tasks: ["Rotate any exposed credentials", "Update secret references to use environment variables or secret manager", "Remove hardcoded values from source"],
+      gate: "pforge secret-scan --since HEAD~1",
+    }];
+  }
+  if (sourceData.type === "crucible") return _054_forge_fix_proposal_buildCrucibleSlices(sourceData);
+  if (sourceData.type === "tempering-bug") return _054_forge_fix_proposal_buildTemperingBugSlices(cwd, sourceData.bug);
+  return [{ title: `Fix: ${source}`, tasks: ["Investigate the issue", "Apply fix", "Validate"], gate: "pforge regression-guard" }];
+}
+
+function _054_forge_fix_proposal_renderPlan(fixId, sourceType, slices) {
+  let planContent = `# LiveGuard Auto-Fix: ${fixId}\n\n`;
+  planContent += `> Generated: ${new Date().toISOString()}\n`;
+  planContent += `> Source: ${sourceType}\n\n`;
+  planContent += "## Scope Contract\n\n";
+  planContent += `This plan addresses a ${sourceType} finding detected by LiveGuard.\n\n`;
+  slices.forEach((slice, index) => {
+    planContent += `## Slice ${index + 1} — ${slice.title}\n\n`;
+    planContent += "**Tasks:**\n";
+    for (const task of slice.tasks) planContent += `- [ ] ${task}\n`;
+    if (slice.codeSnippets?.length > 0) {
+      planContent += "\n**Code Context:**\n";
+      for (const snippet of slice.codeSnippets) {
+        planContent += `\n\`${snippet.file}\` line ${snippet.line}:\n\`\`\`\n${snippet.snippet}\n\`\`\`\n`;
+      }
+    }
+    if (slice.scope?.length > 0) planContent += `\n**Scope:** ${slice.scope.join(", ")}\n`;
+    if (slice.gate) planContent += `\n**Validation Gate:**\n\`\`\`bash\n${slice.gate}\n\`\`\`\n`;
+    planContent += "\n";
+  });
+  return planContent;
+}
+
+function _054_forge_fix_proposal_maybeQueueReview(cwd, fixId, planName, sourceType, slices) {
+  if (!(Array.isArray(slices) && slices.some((slice) => (slice.codeSnippets?.length > 0) || (slice.scope?.length > 0)))) return;
+  try {
+    maybeAddFixPlanReview(cwd, {
+      title: `Fix proposal ${fixId} pending approval`,
+      severity: sourceType === "incident" ? "high" : "medium",
+      context: { proposalId: fixId, planPath: `docs/plans/auto/${planName}`, slices: slices.length },
+      correlationId: fixId,
+    }, activeHub, captureMemory);
+  } catch (err) {
+    console.warn?.(`Fix-plan review hook failed: ${err.message}`);
+  }
+}
+
+function _054_forge_fix_proposal_persistArtifacts(opts) {
+  const { cwd, fixId, planName, planPath, sourceType, slices, planContent } = opts;
+  writeFileSync(planPath, planContent, "utf-8");
+  appendForgeJsonl("fix-proposals.json", {
+    fixId,
+    plan: `docs/plans/auto/${planName}`,
+    source: sourceType,
+    sliceCount: slices.length,
+    generatedAt: new Date().toISOString(),
+  }, cwd);
+  _054_forge_fix_proposal_maybeQueueReview(cwd, fixId, planName, sourceType, slices);
+}
+
 async function _callToolHandler_054_forge_fix_proposal(request, args) {
   const { name } = request.params;
   if (!(name === "forge_fix_proposal")) return _CALL_TOOL_NO_MATCH;
@@ -4150,39 +4675,20 @@ async function _callToolHandler_054_forge_fix_proposal(request, args) {
     try {
       const cwd = args.path ? findProjectRoot(resolve(args.path)) : PROJECT_DIR;
       const source = args.source || "auto";
-      const resolved = _th_054_resolveSourceData(args, cwd);
-      if (resolved.response) return resolved.response;
-
-      const { sourceData, fixId } = resolved;
-      const autoDir = resolve(cwd, "docs/plans/auto");
-      mkdirSync(autoDir, { recursive: true });
-      const planName = `LIVEGUARD-FIX-${fixId}.md`;
-      const planPath = resolve(autoDir, planName);
-      if (existsSync(planPath)) {
-        return _th_054_response({ alreadyExists: true, plan: `docs/plans/auto/${planName}`, fixId }, false);
+      const resolvedSource = _054_forge_fix_proposal_resolveSource({ args, cwd, source });
+      if (resolvedSource.response) return resolvedSource.response;
+      const { sourceData, fixId } = resolvedSource;
+      if (!fixId) {
+        return _054_forge_fix_proposal_noData("no LiveGuard data found — run drift, incident-capture, regression-guard, secret-scan, start a Crucible smelt, or register a tempering bug first");
       }
-
-      const slices = await _th_054_buildSlices(sourceData, fixId, cwd, source);
-      const planContent = _th_054_renderPlanContent(fixId, sourceData, slices);
-      writeFileSync(planPath, planContent, "utf-8");
-
-      const proposalRecord = {
-        fixId,
-        plan: `docs/plans/auto/${planName}`,
-        source: sourceData.type,
-        sliceCount: slices.length,
-        generatedAt: new Date().toISOString(),
-      };
-      appendForgeJsonl("fix-proposals.json", proposalRecord, cwd);
-      _th_054_maybeQueueReview(cwd, slices, fixId, planName, sourceData);
-
-      const result = {
-        fixId,
-        plan: `docs/plans/auto/${planName}`,
-        source: sourceData.type,
-        sliceCount: slices.length,
-        alreadyExists: false,
-      };
+      const { planName, planPath } = _054_forge_fix_proposal_getPlanDetails(cwd, fixId);
+      if (existsSync(planPath)) {
+        return _054_forge_fix_proposal_jsonResult({ alreadyExists: true, plan: `docs/plans/auto/${planName}`, fixId });
+      }
+      const slices = await _054_forge_fix_proposal_buildSlices(cwd, sourceData, source, fixId);
+      const planContent = _054_forge_fix_proposal_renderPlan(fixId, sourceData.type, slices);
+      _054_forge_fix_proposal_persistArtifacts({ cwd, fixId, planName, planPath, sourceType: sourceData.type, slices, planContent });
+      const result = { fixId, plan: `docs/plans/auto/${planName}`, source: sourceData.type, sliceCount: slices.length, alreadyExists: false };
       emitToolTelemetry("forge_fix_proposal", args, result, Date.now() - t0, "OK", cwd);
       activeHub?.broadcast({ type: "fix-proposal-ready", data: result });
       await broadcastLiveGuard("forge_fix_proposal", "OK", Date.now() - t0);
@@ -4197,31 +4703,30 @@ async function _callToolHandler_054_forge_fix_proposal(request, args) {
   
 }
 
-async function _th_055_assignReportSection(report, key, loader) {
+function _055_forge_liveguard_run_entropy(str) {
+  const charSet = new Set(str);
+  return [...charSet].reduce((sum, char) => {
+    const p = (str.split(char).length - 1) / str.length;
+    return sum - p * Math.log2(p);
+  }, 0);
+}
+
+async function _055_forge_liveguard_run_checkDrift(cwd, penaltyPerViolation) {
   try {
-    report[key] = await loader();
+    const analysis = await runAnalyze({ mode: "file", path: ".", cwd });
+    const score = Math.max(0, 100 - (analysis.violations.length * penaltyPerViolation));
+    return { score, appViolations: analysis.violations.length, frameworkViolations: (analysis.frameworkViolations || []).length, filesScanned: analysis.filesScanned };
   } catch (err) {
-    report[key] = { error: err.message };
+    return { error: err.message };
   }
 }
 
-async function _th_055_collectDriftReport(cwd, penaltyPerViolation) {
-  const analysis = await runAnalyze({ mode: "file", path: ".", cwd });
-  const score = Math.max(0, 100 - (analysis.violations.length * penaltyPerViolation));
-  return {
-    score,
-    appViolations: analysis.violations.length,
-    frameworkViolations: (analysis.frameworkViolations || []).length,
-    filesScanned: analysis.filesScanned,
-  };
-}
-
-function _th_055_collectSweepReport(cwd) {
+function _055_forge_liveguard_run_checkSweep(cwd) {
   try {
     const sweepResult = JSON.parse(execSync(
       process.platform === "win32"
-        ? `powershell.exe -NoProfile -ExecutionPolicy Bypass -File pforge.ps1 sweep`
-        : `bash pforge.sh sweep`,
+        ? "powershell.exe -NoProfile -ExecutionPolicy Bypass -File pforge.ps1 sweep"
+        : "bash pforge.sh sweep",
       { cwd, encoding: "utf-8", timeout: 30_000, env: { ...process.env, NO_COLOR: "1" } }
     ).trim() || "{}");
     const sweepText = typeof sweepResult === "string" ? sweepResult : "";
@@ -4230,101 +4735,141 @@ function _th_055_collectSweepReport(cwd) {
   } catch (err) {
     const output = (err.stdout || err.stderr || "").trim();
     const appMatch = output.match(/FOUND (\d+)/);
-    return { appMarkers: output.includes("SWEEP CLEAN") ? 0 : (appMatch ? parseInt(appMatch[1], 10) : 0), ran: true };
+    const appMarkers = output.includes("SWEEP CLEAN") ? 0 : (appMatch ? parseInt(appMatch[1], 10) : 0);
+    return { appMarkers, ran: true };
   }
 }
 
-function _th_055_collectSecretReport(cwd) {
-  const since = "HEAD~1";
-  const scanThreshold = 4.5;
-  let diff;
+function _055_forge_liveguard_run_shouldFlagSecretLine(content, threshold, keyPattern) {
+  if (content.length < 8 || content.length > 200) return false;
+  if (/^[a-f0-9]{40,}$/i.test(content.trim())) return false;
+  if (/^[A-Za-z0-9+/=]{50,}$/.test(content.trim())) return false;
+  if (content.includes("integrity") && content.includes("sha")) return false;
+  return _055_forge_liveguard_run_entropy(content) >= threshold && keyPattern.test(content);
+}
+
+function _055_forge_liveguard_run_checkSecrets(cwd) {
   try {
-    diff = execSync(`git diff ${since} -p -- . ":!package-lock.json" ":!*.min.js" ":!*.min.css" ":!*.map" ":!*.svg" ":!pforge-mcp/" ":!.github/" ":!pforge.ps1" ":!pforge.sh"`, {
-      cwd,
-      encoding: "utf-8",
-      timeout: 30_000,
-    });
-  } catch {
-    diff = "";
-  }
-  const findings = [];
-  const secretKeyPattern = /(?:password|secret|token|api[_-]?key|auth|credential|private[_-]?key|connection[_-]?string|bearer)\s*[:=]/i;
-  for (const line of diff.split("\n")) {
-    if (!line.startsWith("+") || line.startsWith("+++")) continue;
-    const content = line.slice(1);
-    if (content.length < 8 || content.length > 200) continue;
-    if (/^[a-f0-9]{40,}$/i.test(content.trim())) continue;
-    if (/^[A-Za-z0-9+/=]{50,}$/.test(content.trim())) continue;
-    if (content.includes("integrity") && content.includes("sha")) continue;
-    const charSet = new Set(content);
-    const entropy = [...charSet].reduce((sum, char) => {
-      const p = (content.split(char).length - 1) / content.length;
-      return sum - p * Math.log2(p);
-    }, 0);
-    if (entropy >= scanThreshold && secretKeyPattern.test(content)) {
-      findings.push({ line: content.slice(0, 80), entropy: Math.round(entropy * 100) / 100 });
+    let diff = "";
+    try {
+      diff = execSync('git diff HEAD~1 -p -- . ":!package-lock.json" ":!*.min.js" ":!*.min.css" ":!*.map" ":!*.svg" ":!pforge-mcp/" ":!.github/" ":!pforge.ps1" ":!pforge.sh"', { cwd, encoding: "utf-8", timeout: 30_000 });
+    } catch { /* ignore */ }
+    const findings = [];
+    const secretKeyPattern = /(?:password|secret|token|api[_-]?key|auth|credential|private[_-]?key|connection[_-]?string|bearer)\s*[:=]/i;
+    for (const line of diff.split("\n")) {
+      if (!line.startsWith("+") || line.startsWith("+++")) continue;
+      const content = line.slice(1);
+      if (_055_forge_liveguard_run_shouldFlagSecretLine(content, 4.5, secretKeyPattern)) {
+        findings.push({ line: content.slice(0, 80), entropy: Math.round(_055_forge_liveguard_run_entropy(content) * 100) / 100 });
+      }
     }
+    return { findings: findings.length };
+  } catch (err) {
+    return { error: err.message };
   }
-  return { findings: findings.length };
 }
 
-async function _th_055_collectRegressionReport(cwd) {
-  const regResult = await regressionGuard([], { cwd });
-  return { gates: regResult.gatesChecked, passed: regResult.passed, failed: regResult.failed };
-}
-
-function _th_055_collectDepReport(cwd) {
-  const project = _th_050_detectDependencyProject(cwd);
-  if (project.hasPkgJson) {
-    const auditResult = _th_050_collectNpmVulnerabilities(cwd);
-    return { vulnerabilities: auditResult.length };
+async function _055_forge_liveguard_run_checkRegression(cwd) {
+  try {
+    const regResult = await regressionGuard([], { cwd });
+    return { gates: regResult.gatesChecked, passed: regResult.passed, failed: regResult.failed };
+  } catch (err) {
+    return { error: err.message };
   }
-  if (project.isDotnet) {
-    const vulnerabilities = _th_050_collectDotnetVulnerabilities(cwd);
-    return { vulnerabilities: vulnerabilities.length };
+}
+
+function _055_forge_liveguard_run_checkDeps(cwd) {
+  try {
+    const hasPkgJson = existsSync(resolve(cwd, "package.json"));
+    const hasDotnet = !hasPkgJson && readdirSync(cwd).some((file) => file.endsWith(".csproj") || file.endsWith(".sln") || file.endsWith(".slnx"));
+    if (hasPkgJson) {
+      let auditResult = null;
+      try {
+        auditResult = JSON.parse(execSync("npm audit --json 2>&1", { cwd, encoding: "utf-8", timeout: 60_000 }));
+      } catch (err) {
+        if (err.stdout) {
+          try {
+            auditResult = JSON.parse(err.stdout);
+          } catch {
+            auditResult = null;
+          }
+        }
+      }
+      return { vulnerabilities: auditResult ? Object.keys(auditResult.vulnerabilities || {}).length : 0 };
+    }
+    if (hasDotnet) {
+      let vulnCount = 0;
+      try {
+        const parsed = JSON.parse(execSync("dotnet list package --vulnerable --format json 2>&1", { cwd, encoding: "utf-8", timeout: 120_000 }));
+        for (const project of (parsed.projects || [])) {
+          for (const framework of (project.frameworks || [])) {
+            vulnCount += (framework.topLevelPackages || []).filter((pkg) => pkg.vulnerabilities?.length).length;
+            vulnCount += (framework.transitivePackages || []).filter((pkg) => pkg.vulnerabilities?.length).length;
+          }
+        }
+      } catch { /* parse error — skip */ }
+      return { vulnerabilities: vulnCount };
+    }
+    return { skipped: true, reason: "no package.json or .csproj/.sln/.slnx" };
+  } catch (err) {
+    return { error: err.message };
   }
-  return { skipped: true, reason: "no package.json or .csproj/.sln/.slnx" };
 }
 
-async function _th_055_collectAlertReport(cwd) {
-  const brainDeps = { cwd, readForgeJsonl };
-  const incidents = ((await brainRecall("project.liveguard.incidents", { freshnessMs: 60_000 }, brainDeps)) || []).filter((incident) => !incident.resolvedAt);
-  const driftHistory = (await brainRecall("project.liveguard.drift", { freshnessMs: 60_000 }, brainDeps)) || [];
-  const latestViolations = driftHistory.length ? (driftHistory[driftHistory.length - 1].violations || []) : [];
-  const criticalAlerts = [
-    ...incidents.filter((incident) => incident.severity === "critical" || incident.severity === "high"),
-    ...latestViolations.filter((violation) => violation.severity === "critical" || violation.severity === "high"),
-  ];
-  return {
-    critical: criticalAlerts.filter((alert) => alert.severity === "critical").length,
-    high: criticalAlerts.filter((alert) => alert.severity === "high").length,
-    openIncidents: incidents.length,
-  };
+async function _055_forge_liveguard_run_checkAlerts(cwd) {
+  try {
+    const brainDeps = { cwd, readForgeJsonl };
+    const incidents = ((await brainRecall("project.liveguard.incidents", { freshnessMs: 60_000 }, brainDeps)) || []).filter((incident) => !incident.resolvedAt);
+    const driftHistory = (await brainRecall("project.liveguard.drift", { freshnessMs: 60_000 }, brainDeps)) || [];
+    const latestViolations = driftHistory.length ? (driftHistory[driftHistory.length - 1].violations || []) : [];
+    const criticalAlerts = [
+      ...incidents.filter((incident) => incident.severity === "critical" || incident.severity === "high"),
+      ...latestViolations.filter((violation) => violation.severity === "critical" || violation.severity === "high"),
+    ];
+    return {
+      critical: criticalAlerts.filter((alert) => alert.severity === "critical").length,
+      high: criticalAlerts.filter((alert) => alert.severity === "high").length,
+      openIncidents: incidents.length,
+    };
+  } catch (err) {
+    return { error: err.message };
+  }
 }
 
-async function _th_055_collectHealthReport(cwd) {
-  const brainDeps = { cwd, readForgeJsonl };
-  const driftHistory = (await brainRecall("project.liveguard.drift", { freshnessMs: 60_000 }, brainDeps)) || [];
-  const recentScores = driftHistory.slice(-5).map((entry) => entry.score).filter((score) => typeof score === "number");
-  const avgScore = recentScores.length ? Math.round(recentScores.reduce((sum, score) => sum + score, 0) / recentScores.length) : null;
-  const trend = recentScores.length >= 2
-    ? (recentScores[recentScores.length - 1] > recentScores[0] ? "improving" : recentScores[recentScores.length - 1] < recentScores[0] ? "degrading" : "stable")
-    : "stable";
-  return { avgScore, trend, dataPoints: driftHistory.length };
+async function _055_forge_liveguard_run_checkHealth(cwd) {
+  try {
+    const brainDeps = { cwd, readForgeJsonl };
+    const driftHistory = (await brainRecall("project.liveguard.drift", { freshnessMs: 60_000 }, brainDeps)) || [];
+    const recentScores = driftHistory.slice(-5).map((entry) => entry.score).filter((score) => typeof score === "number");
+    const avgScore = recentScores.length ? Math.round(recentScores.reduce((sum, score) => sum + score, 0) / recentScores.length) : null;
+    const trend = recentScores.length >= 2
+      ? (recentScores[recentScores.length - 1] > recentScores[0] ? "improving" : recentScores[recentScores.length - 1] < recentScores[0] ? "degrading" : "stable")
+      : "stable";
+    return { avgScore, trend, dataPoints: driftHistory.length };
+  } catch (err) {
+    return { error: err.message };
+  }
 }
 
-function _th_055_collectDiffReport(cwd, planArg) {
-  const planPath = resolve(cwd, planArg);
-  if (!existsSync(planPath)) return { error: `Plan not found: ${planArg}` };
-  const plan = parsePlan(planPath, cwd);
-  const forbidden = plan.scopeContract?.forbidden || [];
-  return { plan: planArg, forbiddenPaths: forbidden.length, checked: true };
+function _055_forge_liveguard_run_checkDiff(cwd, planArg) {
+  if (!planArg) return undefined;
+  try {
+    const planPath = resolve(cwd, planArg);
+    if (!existsSync(planPath)) return { error: `Plan not found: ${planArg}` };
+    const plan = parsePlan(planPath, cwd);
+    const forbidden = plan.scopeContract?.forbidden || [];
+    return { plan: planArg, forbiddenPaths: forbidden.length, checked: true };
+  } catch (err) {
+    return { error: err.message };
+  }
 }
 
-function _th_055_collectCoverageVsMinima(lastRun, coverageMinima) {
+function _055_forge_liveguard_run_getCoverageVsMinima(lastRun, temperingConfig) {
+  const coverageMinima = temperingConfig?.coverageMinima || {};
   const coverageVsMinima = { met: 0, total: 0 };
-  if (!(lastRun?.scanners && Object.keys(coverageMinima).length > 0)) return coverageVsMinima;
-  for (const [layer] of Object.entries(coverageMinima)) {
+  if (!(lastRun && lastRun.scanners && Object.keys(coverageMinima).length > 0)) return coverageVsMinima;
+  for (const [layer, min] of Object.entries(coverageMinima)) {
+    void min;
     coverageVsMinima.total++;
     const scannerResult = lastRun.scanners.find((scanner) => scanner.scanner === layer);
     if (scannerResult && (scannerResult.pass > 0 || scannerResult.verdict === "pass")) coverageVsMinima.met++;
@@ -4332,64 +4877,70 @@ function _th_055_collectCoverageVsMinima(lastRun, coverageMinima) {
   return coverageVsMinima;
 }
 
-function _th_055_resolveTemperingStatus(openBugs, criticalOrHigh, coverageVsMinima) {
-  if (criticalOrHigh.length > 0) return "red";
-  if (openBugs.length > 0) return "yellow";
-  if (coverageVsMinima.total > 0 && coverageVsMinima.met < coverageVsMinima.total) return "yellow";
-  return "green";
+function _055_forge_liveguard_run_checkTempering(cwd) {
+  try {
+    const openBugs = listBugs(cwd, { status: "open" });
+    const criticalOrHigh = openBugs.filter((bug) => bug.severity === "critical" || bug.severity === "high");
+    const temperingConfig = readTemperingConfigForLg(cwd);
+    const runRecords = listRunRecords(cwd);
+    const lastRun = runRecords.length > 0 ? runRecords[runRecords.length - 1] : null;
+    const coverageVsMinima = _055_forge_liveguard_run_getCoverageVsMinima(lastRun, temperingConfig);
+    const mutationScore = lastRun?.scanners?.find((scanner) => scanner.scanner === "mutation")?.score ?? null;
+    let temperingStatus = "green";
+    if (criticalOrHigh.length > 0) temperingStatus = "red";
+    else if (openBugs.length > 0 || (coverageVsMinima.total > 0 && coverageVsMinima.met < coverageVsMinima.total)) temperingStatus = "yellow";
+    return {
+      openBugs: openBugs.length,
+      criticalOrHighOpen: criticalOrHigh.length,
+      coverageVsMinima,
+      mutationScore,
+      lastRunAt: lastRun?.completedAt ?? null,
+      status: temperingStatus,
+    };
+  } catch (err) {
+    return { openBugs: 0, criticalOrHighOpen: 0, coverageVsMinima: { met: 0, total: 0 }, mutationScore: null, lastRunAt: null, status: "unknown", error: err.message };
+  }
 }
 
-function _th_055_collectTemperingReport(cwd) {
-  const openBugs = listBugs(cwd, { status: "open" });
-  const criticalOrHigh = openBugs.filter((bug) => bug.severity === "critical" || bug.severity === "high");
-  const lastRun = listRunRecords(cwd).at(-1) || null;
-  const coverageVsMinima = _th_055_collectCoverageVsMinima(lastRun, readTemperingConfigForLg(cwd)?.coverageMinima || {});
-  return {
-    openBugs: openBugs.length,
-    criticalOrHighOpen: criticalOrHigh.length,
-    coverageVsMinima,
-    mutationScore: lastRun?.scanners?.find((scanner) => scanner.scanner === "mutation")?.score ?? null,
-    lastRunAt: lastRun?.completedAt ?? null,
-    status: _th_055_resolveTemperingStatus(openBugs, criticalOrHigh, coverageVsMinima),
-  };
-}
-
-function _th_055_driftHealthy(report, threshold) {
+function _055_forge_liveguard_run_isDriftOk(report, threshold) {
   return !report.drift.error && (report.drift.score ?? 0) >= threshold;
 }
 
-function _th_055_secretsHealthy(report) {
+function _055_forge_liveguard_run_isSecretsOk(report) {
   return !report.secrets?.error && (report.secrets?.findings ?? 0) === 0;
 }
 
-function _th_055_regressionHealthy(report) {
+function _055_forge_liveguard_run_isRegressionOk(report) {
   return !report.regression?.error && (report.regression?.failed ?? 0) === 0;
 }
 
-function _th_055_depsHealthy(report) {
+function _055_forge_liveguard_run_isDepsOk(report) {
   return !report.deps?.error && (report.deps?.vulnerabilities ?? 0) === 0;
 }
 
-function _th_055_alertsHealthy(report) {
+function _055_forge_liveguard_run_isAlertsOk(report) {
   return !report.alerts?.error && (report.alerts?.critical ?? 0) === 0;
 }
 
-function _th_055_temperingHealthy(report) {
+function _055_forge_liveguard_run_isTemperingOk(report) {
   return !report.tempering?.error && report.tempering?.status !== "red";
 }
 
-function _th_055_computeOverallStatus(report, threshold) {
-  const checks = [
-    _th_055_driftHealthy(report, threshold),
-    _th_055_secretsHealthy(report),
-    _th_055_regressionHealthy(report),
-    _th_055_depsHealthy(report),
-    _th_055_alertsHealthy(report),
-    _th_055_temperingHealthy(report),
-  ];
-  if (checks.every(Boolean)) return "green";
-  if (!checks[1] || !checks[2] || !checks[5]) return "red";
-  return "yellow";
+function _055_forge_liveguard_run_getStatusChecks(report, threshold) {
+  return {
+    driftOk: _055_forge_liveguard_run_isDriftOk(report, threshold),
+    secretsOk: _055_forge_liveguard_run_isSecretsOk(report),
+    regressionOk: _055_forge_liveguard_run_isRegressionOk(report),
+    depsOk: _055_forge_liveguard_run_isDepsOk(report),
+    alertsOk: _055_forge_liveguard_run_isAlertsOk(report),
+    temperingOk: _055_forge_liveguard_run_isTemperingOk(report),
+  };
+}
+
+function _055_forge_liveguard_run_computeOverallStatus(report, threshold) {
+  const { driftOk, secretsOk, regressionOk, depsOk, alertsOk, temperingOk } = _055_forge_liveguard_run_getStatusChecks(report, threshold);
+  if (driftOk && secretsOk && regressionOk && depsOk && alertsOk && temperingOk) return "green";
+  return (!regressionOk || !secretsOk || !temperingOk) ? "red" : "yellow";
 }
 
 async function _callToolHandler_055_forge_liveguard_run(request, args) {
@@ -4400,27 +4951,20 @@ async function _callToolHandler_055_forge_liveguard_run(request, args) {
     try {
       const cwd = args.path ? findProjectRoot(resolve(args.path)) : findProjectRoot(PROJECT_DIR);
       const threshold = Math.max(0, Math.min(100, args.threshold ?? 70));
-      const penaltyPerViolation = 2;
       const report = {};
-
-      await _th_055_assignReportSection(report, "drift", () => _th_055_collectDriftReport(cwd, penaltyPerViolation));
-      await _th_055_assignReportSection(report, "sweep", () => _th_055_collectSweepReport(cwd));
-      await _th_055_assignReportSection(report, "secrets", () => _th_055_collectSecretReport(cwd));
-      await _th_055_assignReportSection(report, "regression", () => _th_055_collectRegressionReport(cwd));
-      await _th_055_assignReportSection(report, "deps", () => _th_055_collectDepReport(cwd));
-      await _th_055_assignReportSection(report, "alerts", () => _th_055_collectAlertReport(cwd));
-      await _th_055_assignReportSection(report, "health", () => _th_055_collectHealthReport(cwd));
-      if (args.plan) await _th_055_assignReportSection(report, "diff", () => _th_055_collectDiffReport(cwd, args.plan));
-      await _th_055_assignReportSection(report, "tempering", () => _th_055_collectTemperingReport(cwd));
-
-      report.overallStatus = _th_055_computeOverallStatus(report, threshold);
+      report.drift = await _055_forge_liveguard_run_checkDrift(cwd, 2);
+      report.sweep = _055_forge_liveguard_run_checkSweep(cwd);
+      report.secrets = _055_forge_liveguard_run_checkSecrets(cwd);
+      report.regression = await _055_forge_liveguard_run_checkRegression(cwd);
+      report.deps = _055_forge_liveguard_run_checkDeps(cwd);
+      report.alerts = await _055_forge_liveguard_run_checkAlerts(cwd);
+      report.health = await _055_forge_liveguard_run_checkHealth(cwd);
+      const diffResult = _055_forge_liveguard_run_checkDiff(cwd, args.plan);
+      if (diffResult) report.diff = diffResult;
+      report.tempering = _055_forge_liveguard_run_checkTempering(cwd);
+      report.overallStatus = _055_forge_liveguard_run_computeOverallStatus(report, threshold);
       emitToolTelemetry("forge_liveguard_run", args, report, Date.now() - t0, "OK", cwd);
-      await broadcastLiveGuard("forge_liveguard_run", "OK", Date.now() - t0, {
-        overallStatus: report.overallStatus,
-        driftScore: report.drift?.score,
-        gates: report.regression?.gates,
-        secrets: report.secrets?.findings,
-      });
+      await broadcastLiveGuard("forge_liveguard_run", "OK", Date.now() - t0, { overallStatus: report.overallStatus, driftScore: report.drift?.score, gates: report.regression?.gates, secrets: report.secrets?.findings });
       captureMemory(
         `LiveGuard health: drift ${report.drift?.score ?? "?"}/100, ${report.regression?.passed ?? 0}/${report.regression?.gates ?? 0} gates, ${report.alerts?.openIncidents ?? 0} open incidents, ${report.deps?.vulnerabilities ?? 0} vulnerabilities. Status: ${report.overallStatus}.`,
         "decision", "forge_liveguard_run", cwd
@@ -5088,18 +5632,197 @@ async function _th_067_appendTestbed(output, cwd) {
   return `${output}\n\nTestbed:\n  Scenarios:       ${scenarioCount}\n  Open findings:   ${openFindings.length} (${sevStr})`;
 }
 
+function _067_forge_smith_resolveCwd(args) {
+  return args.path ? findProjectRoot(resolve(args.path)) : PROJECT_DIR;
+}
+
+function _067_forge_smith_appendOnCallWarning(output, cwd) {
+  try {
+    const forgeJsonPath = resolve(cwd, ".forge.json");
+    if (!existsSync(forgeJsonPath)) return output;
+    const config = JSON.parse(readFileSync(forgeJsonPath, "utf-8"));
+    if (!config.onCall) return output;
+    const missing = [];
+    if (!config.onCall.name) missing.push("name");
+    if (!config.onCall.channel) missing.push("channel");
+    return missing.length > 0
+      ? `${output}\n\n⚠️  .forge.json: onCall is configured but missing required field(s): ${missing.join(", ")}. Incident notifications may not route correctly.`
+      : output;
+  } catch {
+    return output;
+  }
+}
+
+function _067_forge_smith_formatAge(ageMs) {
+  if (!(ageMs > 0)) return "—";
+  if (ageMs > 86400000) return `${Math.round(ageMs / 86400000)}d`;
+  if (ageMs > 3600000) return `${Math.round(ageMs / 3600000)}h`;
+  return `${Math.round(ageMs / 60000)}m`;
+}
+
+function _067_forge_smith_appendReviewQueue(output, cwd) {
+  try {
+    const rqState = readReviewQueueState(cwd);
+    if (!rqState) return output;
+    const allItems = listReviewItems(cwd, { limit: 500 });
+    const today = new Date().toISOString().slice(0, 10);
+    const resolvedToday = allItems.filter((item) => item.resolvedAt?.startsWith(today)).length;
+    const openItems = allItems.filter((item) => item.status === "open");
+    const oldestOpen = openItems.reduce((maxAge, item) => {
+      const age = Date.now() - new Date(item.createdAt).getTime();
+      return age > maxAge ? age : maxAge;
+    }, 0);
+    return `${output}\n\nReview queue:\n  Open:            ${rqState.open}\n  Resolved today:  ${resolvedToday}\n  Oldest open age: ${_067_forge_smith_formatAge(oldestOpen)}`;
+  } catch {
+    return output;
+  }
+}
+
+async function _067_forge_smith_appendNotifications(output, cwd) {
+  try {
+    const { loadNotificationsConfig } = await import("./notifications/core.mjs");
+    const { parseEventsLog, findLatestRun } = await import("./orchestrator.mjs");
+    const nCfg = loadNotificationsConfig(cwd);
+    const enabledAdapters = Object.entries(nCfg.adapters || {}).filter(([, value]) => value.enabled).map(([key]) => key);
+    const routeCount = (nCfg.routes || []).length;
+    let sentToday = 0;
+    let failedToday = 0;
+    try {
+      const located = findLatestRun(cwd);
+      if (located) {
+        const today = new Date().toISOString().slice(0, 10);
+        for (const event of parseEventsLog(located.runDir)) {
+          if (!event.ts?.startsWith(today)) continue;
+          if (event.type === "notification-sent") sentToday++;
+          if (event.type === "notification-send-failed") failedToday++;
+        }
+      }
+    } catch { /* events read error — skip */ }
+    return `${output}\n\nNotifications:\n  Enabled adapters: ${enabledAdapters.length}${enabledAdapters.length ? ` (${enabledAdapters.join(", ")})` : ""}\n  Routes configured: ${routeCount}\n  Events sent today: ${sentToday}\n  Failures today:    ${failedToday}`;
+  } catch {
+    return output;
+  }
+}
+
+function _067_forge_smith_getL2DirCount(forgeDir) {
+  try {
+    if (!existsSync(forgeDir)) return 0;
+    return readdirSync(forgeDir, { withFileTypes: true }).filter((entry) => entry.isDirectory()).length;
+  } catch {
+    return 0;
+  }
+}
+
+function _067_forge_smith_getPendingQueueRecords(forgeDir) {
+  const queuePath = resolve(forgeDir, "openbrain-queue.jsonl");
+  if (!existsSync(queuePath)) return [];
+  const records = [];
+  for (const line of readFileSync(queuePath, "utf-8").split("\n").filter(Boolean)) {
+    try {
+      const record = JSON.parse(line);
+      if (record._status === "pending") records.push(record);
+    } catch { /* skip */ }
+  }
+  return records;
+}
+
+function _067_forge_smith_getL3LastSync(forgeDir) {
+  try {
+    const hubPath = resolve(forgeDir, "hub-events.jsonl");
+    if (!existsSync(hubPath)) return "—";
+    const hubLines = readFileSync(hubPath, "utf-8").split("\n").filter(Boolean).reverse();
+    for (const line of hubLines) {
+      try {
+        const event = JSON.parse(line);
+        if (event.type === "openbrain-sync" || event.type === "openbrain-flush") {
+          return `${_067_forge_smith_formatAge(Date.now() - new Date(event.ts).getTime())} ago`;
+        }
+      } catch { /* skip line */ }
+    }
+  } catch { /* best-effort */ }
+  return "—";
+}
+
+function _067_forge_smith_getL3StatusLine(cwd) {
+  try {
+    return isOpenBrainConfigured(cwd)
+      ? "L3 OpenBrain:    ✓ configured (Reflexion + Federation active)"
+      : "L3 OpenBrain:    ⚠ not configured — run 'pforge brain hint' or see https://srnichols.github.io/OpenBrain";
+  } catch {
+    return "L3 OpenBrain:    (status check failed)";
+  }
+}
+
+function _067_forge_smith_getDrainWarnConfig(cwd) {
+  const config = { count: 10, ageHours: 24 };
+  try {
+    const forgeJsonPath = resolve(cwd, ".forge.json");
+    if (!existsSync(forgeJsonPath)) return config;
+    const parsed = JSON.parse(readFileSync(forgeJsonPath, "utf-8"));
+    if (typeof parsed?.openbrain?.drainWarn?.count === "number") config.count = parsed.openbrain.drainWarn.count;
+    if (typeof parsed?.openbrain?.drainWarn?.ageHours === "number") config.ageHours = parsed.openbrain.drainWarn.ageHours;
+  } catch { /* use defaults */ }
+  return config;
+}
+
+function _067_forge_smith_getDrainWarning(cwd, forgeDir, pendingRecords) {
+  if (pendingRecords.length === 0) return "";
+  const drainWarnCfg = _067_forge_smith_getDrainWarnConfig(cwd);
+  const oldestAgeMs = pendingRecords.reduce((maxAge, record) => {
+    if (!record._enqueuedAt) return maxAge;
+    const age = Date.now() - new Date(record._enqueuedAt).getTime();
+    return age > maxAge ? age : maxAge;
+  }, 0);
+  const pendingTooMany = pendingRecords.length > drainWarnCfg.count;
+  const pendingTooOld = oldestAgeMs / 3600000 > drainWarnCfg.ageHours;
+  if (!(pendingTooMany || pendingTooOld)) return "";
+  return `\n  ⚠ Drain:         ${pendingRecords.length} pending (oldest: ${_067_forge_smith_formatAge(oldestAgeMs)}). Run 'pforge drain-memory' or restart MCP.`;
+}
+
+function _067_forge_smith_appendMemory(output, cwd) {
+  try {
+    const forgeDir = resolve(cwd, ".forge");
+    const pendingRecords = _067_forge_smith_getPendingQueueRecords(forgeDir);
+    const memoryBlock = `\n\nMemory:\n  L1 keys:         (session-scoped)\n  L2 store size:   ${_067_forge_smith_getL2DirCount(forgeDir)} dirs\n  ${_067_forge_smith_getL3StatusLine(cwd)}\n  L3 queue depth:  ${pendingRecords.length}\n  L3 last sync:    ${_067_forge_smith_getL3LastSync(forgeDir)}`;
+    return `${output}${memoryBlock}${_067_forge_smith_getDrainWarning(cwd, forgeDir, pendingRecords)}`;
+  } catch {
+    return output;
+  }
+}
+
+async function _067_forge_smith_appendTestbed(output, cwd) {
+  try {
+    const { listScenarios } = await import("./testbed/scenarios.mjs");
+    const { listFindings } = await import("./testbed/defect-log.mjs");
+    let scenarioCount = 0;
+    let openFindings = [];
+    try {
+      scenarioCount = listScenarios({ projectRoot: cwd }).length;
+    } catch { /* no scenarios dir */ }
+    try {
+      openFindings = listFindings({ status: "open" }, { projectRoot: cwd });
+    } catch { /* no findings dir */ }
+    const bySev = {};
+    for (const finding of openFindings) bySev[finding.severity] = (bySev[finding.severity] || 0) + 1;
+    const sevStr = Object.keys(bySev).length ? Object.entries(bySev).map(([key, value]) => `${value} ${key}`).join(", ") : "none";
+    return `${output}\n\nTestbed:\n  Scenarios:       ${scenarioCount}\n  Open findings:   ${openFindings.length} (${sevStr})`;
+  } catch {
+    return output;
+  }
+}
+
 async function _callToolHandler_067_forge_smith(request, args) {
   const { name } = request.params;
   if (!(name === "forge_smith")) return _CALL_TOOL_NO_MATCH;
 
     const result = executeTool(name, args || {});
+    const cwd = _067_forge_smith_resolveCwd(args);
     let output = result.success ? result.output : `Error (exit code ${result.exitCode}):\n${result.output}\n${result.error}`;
-    const cwd = _th_067_resolveSmithCwd(args);
-    output = await _th_067_tryAppend(output, (value) => _th_067_appendOnCallWarning(value, cwd));
-    output = await _th_067_tryAppend(output, (value) => _th_067_appendReviewQueue(value, cwd));
-    output = await _th_067_tryAppend(output, (value) => _th_067_appendNotifications(value, cwd));
-    output = await _th_067_tryAppend(output, (value) => _th_067_appendMemory(value, cwd));
-    output = await _th_067_tryAppend(output, (value) => _th_067_appendTestbed(value, cwd));
+    output = _067_forge_smith_appendOnCallWarning(output, cwd);
+    output = _067_forge_smith_appendReviewQueue(output, cwd);
+    output = await _067_forge_smith_appendNotifications(output, cwd);
+    output = _067_forge_smith_appendMemory(output, cwd);
+    output = await _067_forge_smith_appendTestbed(output, cwd);
     return { content: [{ type: "text", text: output }], isError: !result.success };
   
 }

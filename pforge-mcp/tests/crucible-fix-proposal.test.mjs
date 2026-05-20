@@ -86,12 +86,14 @@ describe("forge_fix_proposal — Crucible handler branches (Slice 04.1)", () => 
 
   it("handler picks stalled-in-progress smelts before orphans", () => {
     // The Crucible branch (anchored by its `Phase CRUCIBLE-04 — Crucible-aware
-    // fix proposals` comment) checks stalled in-progress smelts (`staleInProgress`)
-    // before falling back to orphan handoffs (`orphanHandoffs`).
+    // fix proposals` comment) calls _th_054_findStalledCrucibleTarget (which
+    // internally checks `staleInProgress`) before falling back to orphan
+    // handoffs (`orphanHandoffs`).  After Phase-43 D2 extraction the
+    // staleInProgress check lives in the extracted helper rather than inline.
     const blockStart = serverSrc.indexOf("Phase CRUCIBLE-04 — Crucible-aware fix proposals");
     expect(blockStart).toBeGreaterThan(-1);
     const block = serverSrc.slice(blockStart, blockStart + 4000);
-    const stalledIdx = block.indexOf("staleInProgress");
+    const stalledIdx = block.indexOf("_th_054_findStalledCrucibleTarget");
     const orphanIdx = block.indexOf("orphanHandoffs");
     expect(stalledIdx).toBeGreaterThan(-1);
     expect(orphanIdx).toBeGreaterThan(-1);

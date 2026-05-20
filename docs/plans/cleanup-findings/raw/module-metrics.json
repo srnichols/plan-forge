@@ -1,10 +1,10 @@
 [
   {
     "file": "pforge-mcp/server/tool-handlers.mjs",
-    "loc": 5352,
-    "blank": 570,
-    "comment": 254,
-    "functions": 149,
+    "loc": 7126,
+    "blank": 690,
+    "comment": 133,
+    "functions": 357,
     "g14Severity": "high-severity"
   },
   {

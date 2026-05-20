@@ -295,6 +295,7 @@ const document = `<!DOCTYPE html>
     Generated ${generatedDate}
     &middot; content hash <code>${contentHash}</code>
     &middot; v${version}
+    &middot; <a href="https://planforge.software/" rel="noopener">Main site ↗</a>
     &middot; <a href="index.html">Online version ↗</a>
     &middot; <a href="https://github.com/srnichols/plan-forge" rel="noopener">GitHub ↗</a>
   </p>
@@ -311,7 +312,7 @@ ${parts.join("\n\n")}
 <!-- Footer -->
 <footer style="max-width:56rem;margin:3rem auto;padding:1.5rem;font-size:0.75rem;color:#475569;border-top:1px solid #1e293b;font-family:'JetBrains Mono',monospace;">
   <p>Plan Forge Manual &mdash; offline edition &mdash; generated ${generatedDate} &mdash; hash <code>${contentHash}</code></p>
-  <p>Regenerate with: <code>node docs/manual/export.mjs</code> &mdash; <a href="index.html" style="color:#f59e0b;">Online version</a> &mdash; <a href="https://github.com/srnichols/plan-forge" style="color:#f59e0b;" rel="noopener">GitHub</a></p>
+  <p>Regenerate with: <code>node docs/manual/export.mjs</code> &mdash; <a href="https://planforge.software/" style="color:#f59e0b;" rel="noopener">Main site</a> &mdash; <a href="index.html" style="color:#f59e0b;">Online version</a> &mdash; <a href="https://github.com/srnichols/plan-forge" style="color:#f59e0b;" rel="noopener">GitHub</a></p>
 </footer>
 
 </body>

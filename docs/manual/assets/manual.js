@@ -227,6 +227,11 @@
     titleRow.appendChild(sidebarCloseBtn);
     frag.appendChild(titleRow);
 
+    const siteLinkRow = document.createElement("div");
+    siteLinkRow.className = "px-5 pb-2 pt-1 border-b border-slate-800/40";
+    siteLinkRow.innerHTML = '<a href="https://planforge.software/" target="_blank" rel="noopener noreferrer" class="text-xs font-medium text-slate-400 hover:text-amber-400 transition-colors">↗ Main Site</a>';
+    frag.appendChild(siteLinkRow);
+
     // Sidebar controls (Collapse All / Expand All / Theme toggle)
     const controls = document.createElement("div");
     controls.className = "sidebar-controls";

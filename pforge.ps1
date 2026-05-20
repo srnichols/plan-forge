@@ -5503,7 +5503,128 @@ function Invoke-ForgeHomeCleanup {
     exit $LASTEXITCODE
 }
 
-# ─── Command: embeddings ────────────────────────────────────────────────
+# ─── Command: local-recall ──────────────────────────────────────────────
+# Manage and inspect the persistent TF-IDF index cache for forge_local_search.
+#
+# Usage:
+#   pforge local-recall status [--path=<dir>]
+#   pforge local-recall warm [--path=<dir>]
+#   pforge local-recall clear [--path=<dir>]
+#
+# Subcommands:
+#   status  Show TF-IDF index cache existence, corpus size, and freshness.
+#   warm    Pre-build the index so the first forge_local_search call has zero rebuild cost.
+#   clear   Delete the cache file to force a fresh rebuild on next search.
+function Invoke-LocalRecall {
+    $sub = if ($Arguments.Count -gt 0) { $Arguments[0] } else { "status" }
+    $rest = @($Arguments | Select-Object -Skip 1)
+
+    $pathArg = ""
+    foreach ($a in $rest) {
+        if ($a -match '^--path=(.+)$') { $pathArg = $Matches[1]; break }
+    }
+
+    $scriptDir = Join-Path $PSScriptRoot "pforge-mcp"
+
+    switch ($sub) {
+        'status' {
+            $statusScript = @"
+import { getIndexStatus } from './local-recall.mjs';
+const cwd = process.argv[2] || process.cwd();
+const s = getIndexStatus(cwd);
+const staleness = s.exists ? (s.stale === true ? 'stale' : s.stale === false ? 'fresh' : 'unknown') : 'n/a';
+console.log('');
+console.log('Local Recall Index Status');
+console.log('=========================');
+console.log('Index exists : ' + (s.exists ? 'yes' : 'no'));
+if (s.exists) {
+  console.log('Version      : ' + (s.version ?? 'unknown'));
+  console.log('Built at     : ' + (s.builtAt ?? 'unknown'));
+  console.log('Corpus size  : ' + (s.corpusSize ?? 0) + ' thoughts');
+  console.log('Freshness    : ' + staleness);
+  console.log('Cache file   : ' + s.cacheFile);
+} else {
+  console.log('');
+  console.log('Run "pforge local-recall warm" to pre-build the index,');
+  console.log('or run "pforge local-recall search <query>" to build it on demand.');
+}
+console.log('');
+"@
+            $tmpFile = [System.IO.Path]::GetTempFileName() -replace '\.tmp$', '.mjs'
+            Set-Content -Path $tmpFile -Value $statusScript -Encoding UTF8
+            try {
+                Push-Location $scriptDir
+                & node $tmpFile $pathArg
+                $exitCode = $LASTEXITCODE
+                Pop-Location
+            } finally {
+                Remove-Item $tmpFile -Force -ErrorAction SilentlyContinue
+            }
+            exit $exitCode
+        }
+        'warm' {
+            $warmScript = @"
+import { searchLocalThoughts, getIndexStatus } from './local-recall.mjs';
+const cwd = process.argv[2] || process.cwd();
+console.log('');
+console.log('Warming TF-IDF index cache...');
+await searchLocalThoughts('_warm_', { cwd, limit: 1, noCache: false });
+const s = getIndexStatus(cwd);
+if (s.exists) {
+  console.log('Index built. ' + (s.corpusSize ?? 0) + ' thought' + ((s.corpusSize ?? 0) === 1 ? '' : 's') + ' indexed.');
+  console.log('Cache file: ' + s.cacheFile);
+} else {
+  console.log('No thoughts found in .forge/ — index not built (empty corpus).');
+}
+console.log('');
+"@
+            $tmpFile = [System.IO.Path]::GetTempFileName() -replace '\.tmp$', '.mjs'
+            Set-Content -Path $tmpFile -Value $warmScript -Encoding UTF8
+            try {
+                Push-Location $scriptDir
+                & node $tmpFile $pathArg
+                $exitCode = $LASTEXITCODE
+                Pop-Location
+            } finally {
+                Remove-Item $tmpFile -Force -ErrorAction SilentlyContinue
+            }
+            exit $exitCode
+        }
+        'clear' {
+            $clearScript = @"
+import { clearPersistedIndex } from './local-recall.mjs';
+const cwd = process.argv[2] || process.cwd();
+clearPersistedIndex(cwd);
+console.log('');
+console.log('TF-IDF index cache cleared.');
+console.log('It will be rebuilt on the next forge_local_search call.');
+console.log('');
+"@
+            $tmpFile = [System.IO.Path]::GetTempFileName() -replace '\.tmp$', '.mjs'
+            Set-Content -Path $tmpFile -Value $clearScript -Encoding UTF8
+            try {
+                Push-Location $scriptDir
+                & node $tmpFile $pathArg
+                $exitCode = $LASTEXITCODE
+                Pop-Location
+            } finally {
+                Remove-Item $tmpFile -Force -ErrorAction SilentlyContinue
+            }
+            exit $exitCode
+        }
+        default {
+            Write-Host "Usage: pforge local-recall <subcommand>" -ForegroundColor Yellow
+            Write-Host ""
+            Write-Host "Subcommands:"
+            Write-Host "  status  Show TF-IDF index cache info (default)"
+            Write-Host "  warm    Pre-build the index for zero-cost first search"
+            Write-Host "  clear   Delete the cache to force a fresh rebuild"
+            Write-Host ""
+            exit 1
+        }
+    }
+}
+
 # Manage and inspect the local semantic-search embedding backend.
 #
 # Usage:
@@ -7556,6 +7677,7 @@ switch ($Command) {
     'testbed-happypath' { Invoke-TestbedHappypath }
     'forge-home-cleanup' { Invoke-ForgeHomeCleanup }
     'embeddings'   { Invoke-Embeddings }
+    'local-recall' { Invoke-LocalRecall }
     'migrate-memory' { Invoke-MigrateMemory }
     'drain-memory' { Invoke-DrainMemory }
     'brain'        { Invoke-Brain }

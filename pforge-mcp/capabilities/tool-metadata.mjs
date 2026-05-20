@@ -2147,6 +2147,40 @@ export const TOOL_METADATA = {
       },
     },
   },
+  forge_local_recall_status: {
+    intent: ["local-recall", "index", "cache", "tfidf", "status", "warm", "clear", "diagnostic"],
+    aliases: ["local-recall-status", "recall-index-status", "tfidf-index-status"],
+    cost: "low",
+    maxConcurrent: 10,
+    addedIn: "3.9.1",
+    prerequisites: [],
+    produces: [],
+    consumes: [
+      ".forge/local-recall-index.json",
+      ".forge/openbrain-queue.jsonl",
+      ".forge/openbrain-queue.archive.jsonl",
+      ".forge/openbrain-dlq.jsonl",
+      ".forge/liveguard-memories.jsonl",
+    ],
+    sideEffects: ["Subcommand 'clear' deletes .forge/local-recall-index.json. Subcommand 'warm' builds and persists the index."],
+    writesFiles: false,
+    network: false,
+    risk: "low",
+    errors: {},
+    example: {
+      input: { subcommand: "status" },
+      output: {
+        ok: true,
+        indexExists: true,
+        version: 1,
+        builtAt: "2026-05-20T03:00:00.000Z",
+        corpusSize: 42,
+        staleness: "fresh",
+        cacheFile: "/path/to/project/.forge/local-recall-index.json",
+        message: "Index is fresh. 42 thoughts indexed, built at 2026-05-20T03:00:00.000Z.",
+      },
+    },
+  },
 };
 
 export const WORKFLOWS = {

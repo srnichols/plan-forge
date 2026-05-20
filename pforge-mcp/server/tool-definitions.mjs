@@ -1345,4 +1345,15 @@ export const TOOLS = [
       },
     },
   },
+  {
+    name: "forge_local_recall_status",
+    description: "Inspect and manage the persistent TF-IDF index cache used by forge_local_search. Reports cache existence, corpus size, freshness (stale vs fresh), and build timestamp. Supports three subcommands: 'status' (default) — return cache diagnostics; 'warm' — pre-build the index so the first forge_local_search call has zero rebuild cost; 'clear' — delete the cache file to force a fresh rebuild. USE FOR: diagnosing why forge_local_search is slow; pre-warming the cache in CI; clearing a corrupt index. Returns: { ok, indexExists, version, builtAt, corpusSize, staleness, cacheFile, message } for status; { ok, action, ... } for warm/clear.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        subcommand: { type: "string", enum: ["status", "warm", "clear"], description: "Operation: 'status' (default) — show cache info; 'warm' — pre-build index; 'clear' — delete cache." },
+        path: { type: "string", description: "Project directory (default: current)" },
+      },
+    },
+  },
 ];

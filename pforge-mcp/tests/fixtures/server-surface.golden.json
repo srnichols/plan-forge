@@ -1433,6 +1433,28 @@
       }
     },
     {
+      "name": "forge_local_recall_status",
+      "description": "Inspect and manage the persistent TF-IDF index cache used by forge_local_search. Reports cache existence, corpus size, freshness (stale vs fresh), and build timestamp. Supports three subcommands: 'status' (default) — return cache diagnostics; 'warm' — pre-build the index so the first forge_local_search call has zero rebuild cost; 'clear' — delete the cache file to force a fresh rebuild. USE FOR: diagnosing why forge_local_search is slow; pre-warming the cache in CI; clearing a corrupt index. Returns: { ok, indexExists, version, builtAt, corpusSize, staleness, cacheFile, message } for status; { ok, action, ... } for warm/clear.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "subcommand": {
+            "type": "string",
+            "enum": [
+              "status",
+              "warm",
+              "clear"
+            ],
+            "description": "Operation: 'status' (default) — show cache info; 'warm' — pre-build index; 'clear' — delete cache."
+          },
+          "path": {
+            "type": "string",
+            "description": "Project directory (default: current)"
+          }
+        }
+      }
+    },
+    {
       "name": "forge_local_search",
       "description": "Semantic search over local .forge/ thought stores — searches openbrain-queue.jsonl, openbrain-queue.archive.jsonl, openbrain-dlq.jsonl, and liveguard-memories.jsonl using TF-IDF cosine similarity. Automatically upgrades to neural embeddings (all-MiniLM-L6-v2) when @xenova/transformers is installed. USE FOR: recalling prior decisions and patterns when OpenBrain (L3 Postgres) is not configured; offline semantic memory search; auditing what thoughts have been captured locally. DO NOT USE FOR: querying a live OpenBrain/Postgres instance (use forge_search with memory source); searching code (use forge_search or forge_lattice_query).",
       "inputSchema": {
@@ -2976,6 +2998,10 @@
     },
     {
       "method": "GET",
+      "path": "/api/local-recall/status"
+    },
+    {
+      "method": "GET",
       "path": "/api/memory"
     },
     {
@@ -3224,6 +3250,7 @@
     "forge_lattice_query",
     "forge_lattice_stat",
     "forge_liveguard_run",
+    "forge_local_recall_status",
     "forge_local_search",
     "forge_memory_capture",
     "forge_meta_bug_file",

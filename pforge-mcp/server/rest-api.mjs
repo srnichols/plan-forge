@@ -106,7 +106,7 @@ import { syncMemories } from "../sync-memories.mjs";
 // v3.0.0 — forge_sync_instructions: generate .github/copilot-instructions.md from forge project context
 import { syncInstructions } from "../sync-instructions.mjs";
 // Phase 55/56 — Local semantic recall + embedding status
-import { isNeuralEmbeddingAvailable, readLocalThoughts } from "../local-recall.mjs";
+import { isNeuralEmbeddingAvailable, readLocalThoughts, getIndexStatus, clearPersistedIndex } from "../local-recall.mjs";
 // Phase WORKER-GUARDRAILS A2 — forge_diff_classify: classify staged diff by category
 import { classifyDiff } from "../diff-classify.mjs";
 import { ERROR_CODES } from "../enums.mjs";
@@ -290,6 +290,7 @@ export const REST_ROUTES = [
   { method: "GET", path: "/api/auditor/latest" },
   { method: "GET", path: "/api/brain/recall" },
   { method: "GET", path: "/api/embedding/status" },
+  { method: "GET", path: "/api/local-recall/status" },
 ];
 
 // ─── REST handler sub-helpers (Phase ESLINT-D1 — extracted from arrow handlers) ──
@@ -3126,6 +3127,23 @@ function _registerQuorumMiscRoutes(app) {
         installHint,
         message: `Active backend: ${effectiveBackend}. Neural: ${neuralAvailable ? "available (v" + (neuralVersion ?? "unknown") + ")" : "unavailable"}. Corpus: ${thoughts.length} thoughts.`,
       });
+    } catch (err) { res.status(500).json({ error: err.message }); }
+  });
+
+  // Phase-58 — GET /api/local-recall/status: TF-IDF index cache diagnostics
+  app.get("/api/local-recall/status", (req, res) => {
+    try {
+      const cwd = req.query.path ? resolve(req.query.path) : PROJECT_DIR;
+      const status = getIndexStatus(cwd);
+      const staleness = status.exists
+        ? (status.stale === true ? "stale" : status.stale === false ? "fresh" : "unknown")
+        : "n/a";
+      const message = !status.exists
+        ? "No TF-IDF index cache found. Run forge_local_search or 'pforge local-recall warm' to build it."
+        : status.stale
+          ? "Index exists but is stale. It will be rebuilt on the next forge_local_search call."
+          : `Index is fresh. ${status.corpusSize ?? 0} thought${(status.corpusSize ?? 0) === 1 ? "" : "s"} indexed, built at ${status.builtAt}.`;
+      return res.json({ ok: true, indexExists: status.exists, version: status.version, builtAt: status.builtAt, corpusSize: status.corpusSize, staleness, cacheFile: status.cacheFile, message });
     } catch (err) { res.status(500).json({ error: err.message }); }
   });
 }

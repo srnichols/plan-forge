@@ -7,6 +7,31 @@ Format follows [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
+### Added — Local recall index status surface (Phase 58)
+
+Exposes the Phase 56 TF-IDF index cache as a first-class diagnostic and management
+surface — agents and operators can now inspect, pre-warm, or clear the index without
+reading source files or writing ad-hoc scripts.
+
+- **`forge_local_recall_status` MCP tool (#097)** (`pforge-mcp/server/tool-handlers/platform.mjs`):
+  Returns `{ ok, indexExists, version, builtAt, corpusSize, staleness, cacheFile, message }`.
+  - Subcommand `status` (default) — reports cache existence, corpus size, version, and freshness.
+  - Subcommand `warm` — pre-builds and persists the index so the first `forge_local_search` call has zero rebuild cost.
+  - Subcommand `clear` — deletes `.forge/local-recall-index.json` to force a fresh rebuild.
+  - ACI-compliant: bounded payload, explicit empty-state `message`, `staleness` field (`"fresh"` / `"stale"` / `"n/a"`).
+- **REST endpoint** `GET /api/local-recall/status` (`pforge-mcp/server/rest-api.mjs`): same payload as the status subcommand.
+- **CLI commands** (`pforge.ps1` / `pforge.sh`):
+  - `pforge local-recall status` — prints index info table.
+  - `pforge local-recall warm` — pre-builds the index.
+  - `pforge local-recall clear` — deletes the cache file.
+- **TOOL_METADATA entry** (`pforge-mcp/capabilities/tool-metadata.mjs`): `addedIn: "3.9.1"`, intent tags `["local-recall", "index", "cache", "tfidf", "status", "warm", "clear", "diagnostic"]`.
+- **17 tests** (`pforge-mcp/tests/local-recall-status.test.mjs`) covering handler export, tool definition shape, subcommand enum, MCP_ONLY_TOOLS membership, metadata shape, REST route registration, `getIndexStatus` empty/fresh paths, `clearPersistedIndex` behavior, and status/clear handler integration.
+- Updated golden snapshot fixture (`tests/fixtures/server-surface.golden.json`).
+
+---
+
+## [3.9.0] — 2026-05-20
+
 ### Added — Embedding status diagnostic surface (Phase 56 — EMBEDDING-HARDENING)
 
 Promotes the Phase 55 neural-embedding backend from an implementation detail into a

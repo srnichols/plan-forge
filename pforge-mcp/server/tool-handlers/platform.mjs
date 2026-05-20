@@ -84,7 +84,7 @@ import { exportPlan, exportPlanFromFile } from "../../export-plan.mjs";
 import { syncMemories } from "../../sync-memories.mjs";
 import { syncInstructions } from "../../sync-instructions.mjs";
 import { classifyDiff } from "../../diff-classify.mjs";
-import { searchLocalThoughts, isNeuralEmbeddingAvailable, readLocalThoughts } from "../../local-recall.mjs";
+import { searchLocalThoughts, isNeuralEmbeddingAvailable, readLocalThoughts, getIndexStatus, clearPersistedIndex } from "../../local-recall.mjs";
 import { ERROR_CODES } from "../../enums.mjs";
 import {
   PROJECT_DIR,
@@ -1117,6 +1117,74 @@ async function _callToolHandler_096_forge_embedding_status(request, args) {
   }
 }
 
+async function _callToolHandler_097_forge_local_recall_status(request, args) {
+  const { name } = request.params;
+  if (!(name === "forge_local_recall_status")) return _CALL_TOOL_NO_MATCH;
+
+  const t0 = Date.now();
+  try {
+    const cwd = args.path ? findProjectRoot(resolve(args.path)) : findProjectRoot(PROJECT_DIR);
+    const sub = (args.subcommand ?? "status").toLowerCase();
+
+    if (sub === "clear") {
+      clearPersistedIndex(cwd);
+      const result = {
+        ok: true,
+        action: "cleared",
+        message: "TF-IDF index cache cleared. It will be rebuilt on the next forge_local_search call.",
+      };
+      emitToolTelemetry({ toolName: "forge_local_recall_status", inputs: args, result, durationMs: Date.now() - t0, status: "OK", cwd });
+      return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
+    }
+
+    if (sub === "warm") {
+      await searchLocalThoughts("_warm_", { cwd, limit: 1, noCache: false });
+      const status = getIndexStatus(cwd);
+      const result = {
+        ok: true,
+        action: "warmed",
+        indexExists: status.exists,
+        corpusSize: status.corpusSize,
+        builtAt: status.builtAt,
+        message: status.exists
+          ? `Index warmed. ${status.corpusSize ?? 0} thought${(status.corpusSize ?? 0) === 1 ? "" : "s"} indexed.`
+          : "No thoughts found in .forge/ — index not built (empty corpus).",
+      };
+      emitToolTelemetry({ toolName: "forge_local_recall_status", inputs: args, result, durationMs: Date.now() - t0, status: "OK", cwd });
+      return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
+    }
+
+    // default: "status"
+    const status = getIndexStatus(cwd);
+    const staleness = status.exists
+      ? (status.stale === true ? "stale" : status.stale === false ? "fresh" : "unknown")
+      : "n/a";
+    const message = !status.exists
+      ? "No TF-IDF index cache found. Run forge_local_search or 'pforge local-recall warm' to build it."
+      : status.stale
+        ? `Index exists but is stale (a source JSONL has changed). It will be rebuilt on the next forge_local_search call.`
+        : `Index is fresh. ${status.corpusSize ?? 0} thought${(status.corpusSize ?? 0) === 1 ? "" : "s"} indexed, built at ${status.builtAt}.`;
+
+    const result = {
+      ok: true,
+      indexExists: status.exists,
+      version: status.version,
+      builtAt: status.builtAt,
+      corpusSize: status.corpusSize,
+      staleness,
+      cacheFile: status.cacheFile,
+      message,
+    };
+
+    emitToolTelemetry({ toolName: "forge_local_recall_status", inputs: args, result: { indexExists: status.exists, corpusSize: status.corpusSize, staleness }, durationMs: Date.now() - t0, status: "OK", cwd });
+    return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
+  } catch (err) {
+    emitToolTelemetry({ toolName: "forge_local_recall_status", inputs: args, result: { error: err.message }, durationMs: Date.now() - t0, status: "ERROR", cwd: findProjectRoot(PROJECT_DIR) });
+    return { content: [{ type: "text", text: `forge_local_recall_status error: ${err.message}` }], isError: true };
+  }
+}
+
+
 export {
   _callToolHandler_074_forge_master_ask,
   _callToolHandler_075_forge_meta_bug_file,
@@ -1141,4 +1209,5 @@ export {
   _callToolHandler_094_forge_lattice_blast,
   _callToolHandler_095_forge_local_search,
   _callToolHandler_096_forge_embedding_status,
+  _callToolHandler_097_forge_local_recall_status,
 };

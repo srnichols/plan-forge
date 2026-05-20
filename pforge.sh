@@ -4976,7 +4976,102 @@ cmd_forge_home_cleanup() {
 # Usage:
 #   pforge embeddings status [--path=<dir>]
 #   pforge embeddings install
-cmd_embeddings() {
+cmd_local_recall() {
+    local sub="${1:-status}"
+    shift 2>/dev/null || true
+
+    local path_arg=""
+    for a in "$@"; do
+        case "$a" in --path=*) path_arg="${a#--path=}";; esac
+    done
+
+    local mcp_dir
+    mcp_dir="$(dirname "$0")/pforge-mcp"
+
+    case "$sub" in
+        status)
+            local status_script
+            status_script="$(mktemp /tmp/pforge-lr-XXXXXX.mjs)"
+            cat > "$status_script" <<'EOJS'
+import { getIndexStatus } from './local-recall.mjs';
+const cwd = process.argv[2] || process.cwd();
+const s = getIndexStatus(cwd);
+const staleness = s.exists ? (s.stale === true ? 'stale' : s.stale === false ? 'fresh' : 'unknown') : 'n/a';
+console.log('');
+console.log('Local Recall Index Status');
+console.log('=========================');
+console.log('Index exists : ' + (s.exists ? 'yes' : 'no'));
+if (s.exists) {
+  console.log('Version      : ' + (s.version ?? 'unknown'));
+  console.log('Built at     : ' + (s.builtAt ?? 'unknown'));
+  console.log('Corpus size  : ' + (s.corpusSize ?? 0) + ' thoughts');
+  console.log('Freshness    : ' + staleness);
+  console.log('Cache file   : ' + s.cacheFile);
+} else {
+  console.log('');
+  console.log('Run "pforge local-recall warm" to pre-build the index,');
+  console.log('or run forge_local_search to build it on demand.');
+}
+console.log('');
+EOJS
+            (cd "$mcp_dir" && node "$status_script" "$path_arg")
+            local rc=$?
+            rm -f "$status_script"
+            exit $rc
+            ;;
+        warm)
+            local warm_script
+            warm_script="$(mktemp /tmp/pforge-lr-warm-XXXXXX.mjs)"
+            cat > "$warm_script" <<'EOJS'
+import { searchLocalThoughts, getIndexStatus } from './local-recall.mjs';
+const cwd = process.argv[2] || process.cwd();
+console.log('');
+console.log('Warming TF-IDF index cache...');
+await searchLocalThoughts('_warm_', { cwd, limit: 1, noCache: false });
+const s = getIndexStatus(cwd);
+if (s.exists) {
+  console.log('Index built. ' + (s.corpusSize ?? 0) + ' thought' + ((s.corpusSize ?? 0) === 1 ? '' : 's') + ' indexed.');
+  console.log('Cache file: ' + s.cacheFile);
+} else {
+  console.log('No thoughts found in .forge/ — index not built (empty corpus).');
+}
+console.log('');
+EOJS
+            (cd "$mcp_dir" && node "$warm_script" "$path_arg")
+            local rc=$?
+            rm -f "$warm_script"
+            exit $rc
+            ;;
+        clear)
+            local clear_script
+            clear_script="$(mktemp /tmp/pforge-lr-clear-XXXXXX.mjs)"
+            cat > "$clear_script" <<'EOJS'
+import { clearPersistedIndex } from './local-recall.mjs';
+const cwd = process.argv[2] || process.cwd();
+clearPersistedIndex(cwd);
+console.log('');
+console.log('TF-IDF index cache cleared.');
+console.log('It will be rebuilt on the next forge_local_search call.');
+console.log('');
+EOJS
+            (cd "$mcp_dir" && node "$clear_script" "$path_arg")
+            local rc=$?
+            rm -f "$clear_script"
+            exit $rc
+            ;;
+        *)
+            printf "\033[33mUsage: pforge local-recall <subcommand>\033[0m\n"
+            printf "\n"
+            printf "Subcommands:\n"
+            printf "  status  Show TF-IDF index cache info (default)\n"
+            printf "  warm    Pre-build the index for zero-cost first search\n"
+            printf "  clear   Delete the cache to force a fresh rebuild\n"
+            printf "\n"
+            exit 1
+            ;;
+    esac
+}
+
     local sub="${1:-status}"
     shift 2>/dev/null || true
 
@@ -6792,6 +6887,7 @@ case "$COMMAND" in
     drain-memory) cmd_drain_memory "$@" ;;
     forge-home-cleanup) cmd_forge_home_cleanup "$@" ;;
     embeddings)   cmd_embeddings "$@" ;;
+    local-recall) cmd_local_recall "$@" ;;
     brain)        cmd_brain "$@" ;;
     mcp-call)     cmd_mcp_call "$@" ;;
     tour)         cmd_tour ;;

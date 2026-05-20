@@ -161,7 +161,7 @@ async function _callToolHandler_063_forge_search(request, args) {
       emitToolTelemetry({ toolName: "forge_search", inputs: args, result: { error: err.message }, durationMs: durationMs, status: "ERROR", cwd: findProjectRoot(PROJECT_DIR) });
       return { content: [{ type: "text", text: `Search error: ${err.message}` }], isError: true };
     }
-  
+
 }
 
 async function _callToolHandler_064_forge_timeline(request, args) {
@@ -179,7 +179,7 @@ async function _callToolHandler_064_forge_timeline(request, args) {
       emitToolTelemetry({ toolName: "forge_timeline", inputs: args, result: { error: err.message }, durationMs: durationMs, status: "ERROR", cwd: findProjectRoot(PROJECT_DIR) });
       return { content: [{ type: "text", text: `Timeline error: ${err.message}` }], isError: true };
     }
-  
+
 }
 
 async function _callToolHandler_065_forge_doctor_quorum(request, args) {
@@ -199,7 +199,7 @@ async function _callToolHandler_065_forge_doctor_quorum(request, args) {
       emitToolTelemetry({ toolName: "forge_doctor_quorum", inputs: args, result: { error: err.message }, durationMs: durationMs, status: "ERROR", cwd: findProjectRoot(PROJECT_DIR) });
       return { content: [{ type: "text", text: `Doctor quorum error: ${err.message}` }], isError: true };
     }
-  
+
 }
 
 const _FORGE_QUORUM_GOAL_PRESETS = {
@@ -443,7 +443,7 @@ async function _callToolHandler_066_forge_quorum_analyze(request, args) {
     } catch (err) {
       return { content: [{ type: "text", text: JSON.stringify({ quorumPrompt: null, error: `Quorum analyze error: ${err.message}` }) }], isError: true };
     }
-  
+
 }
 
 function _th_067_resolveSmithCwd(args) {
@@ -800,7 +800,7 @@ async function _callToolHandler_067_forge_smith(request, args) {
     output = _067_forge_smith_appendMemory(output, cwd);
     output = await _067_forge_smith_appendTestbed(output, cwd);
     return { content: [{ type: "text", text: output }], isError: !result.success };
-  
+
 }
 
 async function _callToolHandler_068_forge_testbed_run(request, args) {
@@ -828,7 +828,7 @@ async function _callToolHandler_068_forge_testbed_run(request, args) {
       emitToolTelemetry({ toolName: "forge_testbed_run", inputs: args, result: { error: err.message, code: err.code }, durationMs: durationMs, status: "ERROR", cwd: findProjectRoot(PROJECT_DIR) });
       return { content: [{ type: "text", text: JSON.stringify({ error: err.code || "ERR_TESTBED", message: err.message }) }], isError: true };
     }
-  
+
 }
 
 async function _callToolHandler_069_forge_testbed_findings(request, args) {
@@ -853,7 +853,7 @@ async function _callToolHandler_069_forge_testbed_findings(request, args) {
       emitToolTelemetry({ toolName: "forge_testbed_findings", inputs: args, result: { error: err.message }, durationMs: Date.now() - t0, status: "ERROR", cwd: findProjectRoot(PROJECT_DIR) });
       return { content: [{ type: "text", text: `Tool error: ${err.message}` }], isError: true };
     }
-  
+
 }
 
 async function _callToolHandler_070_forge_export_plan(request, args) {
@@ -875,7 +875,7 @@ async function _callToolHandler_070_forge_export_plan(request, args) {
       emitToolTelemetry({ toolName: "forge_export_plan", inputs: args, result: { error: err.message }, durationMs: Date.now() - t0, status: "ERROR", cwd: findProjectRoot(PROJECT_DIR) });
       return { content: [{ type: "text", text: `Tool error: ${err.message}` }], isError: true };
     }
-  
+
 }
 
 async function _callToolHandler_071_forge_sync_memories(request, args) {
@@ -899,7 +899,7 @@ async function _callToolHandler_071_forge_sync_memories(request, args) {
       emitToolTelemetry({ toolName: "forge_sync_memories", inputs: args, result: { error: err.message }, durationMs: Date.now() - t0, status: "ERROR", cwd: findProjectRoot(PROJECT_DIR) });
       return { content: [{ type: "text", text: `Tool error: ${err.message}` }], isError: true };
     }
-  
+
 }
 
 async function _callToolHandler_072_forge_sync_instructions(request, args) {
@@ -924,7 +924,7 @@ async function _callToolHandler_072_forge_sync_instructions(request, args) {
       emitToolTelemetry({ toolName: "forge_sync_instructions", inputs: args, result: { error: err.message }, durationMs: Date.now() - t0, status: "ERROR", cwd: findProjectRoot(PROJECT_DIR) });
       return { content: [{ type: "text", text: `Tool error: ${err.message}` }], isError: true };
     }
-  
+
 }
 
 async function _callToolHandler_073_forge_testbed_happypath(request, args) {
@@ -1001,7 +1001,7 @@ async function _callToolHandler_073_forge_testbed_happypath(request, args) {
       emitToolTelemetry({ toolName: "forge_testbed_happypath", inputs: args, result: { error: err.message, code: err.code }, durationMs: durationMs, status: "ERROR", cwd: findProjectRoot(PROJECT_DIR) });
       return { content: [{ type: "text", text: JSON.stringify({ error: err.code || "ERR_TESTBED", message: err.message }) }], isError: true };
     }
-  
+
 }
 
 export {

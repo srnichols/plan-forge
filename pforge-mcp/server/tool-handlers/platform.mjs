@@ -194,7 +194,7 @@ async function _callToolHandler_074_forge_master_ask(request, args) {
       emitToolTelemetry({ toolName: "forge_master_ask", inputs: args, result: { error: err.message }, durationMs: Date.now() - t0, status: "ERROR", cwd: findProjectRoot(PROJECT_DIR) });
       return { content: [{ type: "text", text: `Forge-Master error: ${err.message}` }], isError: true };
     }
-  
+
 }
 
 async function _callToolHandler_075_forge_meta_bug_file(request, args) {
@@ -267,7 +267,7 @@ async function _callToolHandler_075_forge_meta_bug_file(request, args) {
       emitToolTelemetry({ toolName: "forge_meta_bug_file", inputs: args, result: { error: err.message }, durationMs: Date.now() - t0, status: "ERROR", cwd: findProjectRoot(PROJECT_DIR) });
       return { content: [{ type: "text", text: `Meta-bug filing error: ${err.message}` }], isError: true };
     }
-  
+
 }
 
 async function _callToolHandler_076_forge_graph_query(request, args) {
@@ -296,7 +296,7 @@ async function _callToolHandler_076_forge_graph_query(request, args) {
       emitToolTelemetry({ toolName: "forge_graph_query", inputs: args, result: { error: err.message }, durationMs: durationMs, status: "ERROR", cwd: findProjectRoot(PROJECT_DIR) });
       return { content: [{ type: "text", text: `Graph query error: ${err.message}` }], isError: true };
     }
-  
+
 }
 
 async function _callToolHandler_077_forge_patterns_list(request, args) {
@@ -324,7 +324,7 @@ async function _callToolHandler_077_forge_patterns_list(request, args) {
       emitToolTelemetry({ toolName: "forge_patterns_list", inputs: args, result: { error: err.message }, durationMs: durationMs, status: "ERROR", cwd: findProjectRoot(PROJECT_DIR) });
       return { content: [{ type: "text", text: `Pattern list error: ${err.message}` }], isError: true };
     }
-  
+
 }
 
 async function _callToolHandler_078_forge_delegate_review(request, args) {
@@ -345,7 +345,7 @@ async function _callToolHandler_078_forge_delegate_review(request, args) {
       emitToolTelemetry({ toolName: "forge_delegate_review", inputs: args, result: response, durationMs: Date.now() - t0, status: "ERROR", cwd: "" });
       return { content: [{ type: "text", text: JSON.stringify(response, null, 2) }] };
     }
-  
+
 }
 
 async function _callToolHandler_079_forge_team_dashboard(request, args) {
@@ -362,7 +362,7 @@ async function _callToolHandler_079_forge_team_dashboard(request, args) {
     } catch (err) {
       return { content: [{ type: "text", text: JSON.stringify({ ok: false, error: err.message }) }] };
     }
-  
+
 }
 
 async function _callToolHandler_080_forge_team_activity(request, args) {
@@ -387,7 +387,7 @@ async function _callToolHandler_080_forge_team_activity(request, args) {
     } catch (err) {
       return { content: [{ type: "text", text: JSON.stringify({ ok: false, error: err.message }) }] };
     }
-  
+
 }
 
 function _resolveForgeGithubMetricsRepoSlug(args, cwd) {
@@ -701,7 +701,7 @@ async function _callToolHandler_081_forge_github_metrics(request, args) {
       emitToolTelemetry({ toolName: "forge_github_metrics", inputs: args, result: { error: err.message }, durationMs: Date.now() - t0, status: "ERROR", cwd: findProjectRoot(PROJECT_DIR) });
       return { content: [{ type: "text", text: `GitHub metrics error: ${err.message}` }], isError: true };
     }
-  
+
 }
 
 async function _callToolHandler_082_forge_anvil_stat(request, args) {
@@ -718,7 +718,7 @@ async function _callToolHandler_082_forge_anvil_stat(request, args) {
       emitToolTelemetry({ toolName: "forge_anvil_stat", inputs: args, result: { error: err.message }, durationMs: Date.now() - t0, status: "ERROR", cwd: findProjectRoot(PROJECT_DIR) });
       return { content: [{ type: "text", text: `forge_anvil_stat error: ${err.message}` }], isError: true };
     }
-  
+
 }
 
 async function _callToolHandler_083_forge_anvil_clear(request, args) {
@@ -739,7 +739,7 @@ async function _callToolHandler_083_forge_anvil_clear(request, args) {
       emitToolTelemetry({ toolName: "forge_anvil_clear", inputs: args, result: errPayload, durationMs: Date.now() - t0, status: "ERROR", cwd: findProjectRoot(PROJECT_DIR) });
       return { content: [{ type: "text", text: JSON.stringify(errPayload, null, 2) }], isError: true };
     }
-  
+
 }
 
 async function _callToolHandler_084_forge_anvil_rebuild(request, args) {
@@ -760,7 +760,7 @@ async function _callToolHandler_084_forge_anvil_rebuild(request, args) {
       emitToolTelemetry({ toolName: "forge_anvil_rebuild", inputs: args, result: { error: err.message }, durationMs: Date.now() - t0, status: "ERROR", cwd: findProjectRoot(PROJECT_DIR) });
       return { content: [{ type: "text", text: `forge_anvil_rebuild error: ${err.message}` }], isError: true };
     }
-  
+
 }
 
 async function _callToolHandler_085_forge_anvil_dlq_list(request, args) {
@@ -780,7 +780,7 @@ async function _callToolHandler_085_forge_anvil_dlq_list(request, args) {
       emitToolTelemetry({ toolName: "forge_anvil_dlq_list", inputs: args, result: { error: err.message }, durationMs: Date.now() - t0, status: "ERROR", cwd: findProjectRoot(PROJECT_DIR) });
       return { content: [{ type: "text", text: `forge_anvil_dlq_list error: ${err.message}` }], isError: true };
     }
-  
+
 }
 
 async function _callToolHandler_086_forge_anvil_dlq_drain(request, args) {
@@ -800,7 +800,7 @@ async function _callToolHandler_086_forge_anvil_dlq_drain(request, args) {
       emitToolTelemetry({ toolName: "forge_anvil_dlq_drain", inputs: args, result: { error: err.message }, durationMs: Date.now() - t0, status: "ERROR", cwd: findProjectRoot(PROJECT_DIR) });
       return { content: [{ type: "text", text: `forge_anvil_dlq_drain error: ${err.message}` }], isError: true };
     }
-  
+
 }
 
 async function _callToolHandler_087_forge_hallmark_show(request, args) {
@@ -831,7 +831,7 @@ async function _callToolHandler_087_forge_hallmark_show(request, args) {
       emitToolTelemetry({ toolName: "forge_hallmark_show", inputs: args, result: errPayload, durationMs: Date.now() - t0, status: "ERROR", cwd: findProjectRoot(PROJECT_DIR) });
       return { content: [{ type: "text", text: JSON.stringify(errPayload, null, 2) }], isError: true };
     }
-  
+
 }
 
 async function _callToolHandler_088_forge_hallmark_verify(request, args) {
@@ -887,7 +887,7 @@ async function _callToolHandler_088_forge_hallmark_verify(request, args) {
       emitToolTelemetry({ toolName: "forge_hallmark_verify", inputs: args, result: errPayload, durationMs: Date.now() - t0, status: "ERROR", cwd: findProjectRoot(PROJECT_DIR) });
       return { content: [{ type: "text", text: JSON.stringify(errPayload, null, 2) }], isError: true };
     }
-  
+
 }
 
 async function _callToolHandler_089_forge_pipelines_list(request, args) {
@@ -904,7 +904,7 @@ async function _callToolHandler_089_forge_pipelines_list(request, args) {
       emitToolTelemetry({ toolName: "forge_pipelines_list", inputs: args, result: { error: err.message }, durationMs: Date.now() - t0, status: "ERROR", cwd: findProjectRoot(PROJECT_DIR) });
       return { content: [{ type: "text", text: `forge_pipelines_list error: ${err.message}` }], isError: true };
     }
-  
+
 }
 
 async function _callToolHandler_090_forge_lattice_index(request, args) {
@@ -923,7 +923,7 @@ async function _callToolHandler_090_forge_lattice_index(request, args) {
       emitToolTelemetry({ toolName: "forge_lattice_index", inputs: args, result: { error: err.message }, durationMs: Date.now() - t0, status: "ERROR", cwd: findProjectRoot(PROJECT_DIR) });
       return { content: [{ type: "text", text: `forge_lattice_index error: ${err.message}` }], isError: true };
     }
-  
+
 }
 
 async function _callToolHandler_091_forge_lattice_stat(request, args) {
@@ -940,7 +940,7 @@ async function _callToolHandler_091_forge_lattice_stat(request, args) {
       emitToolTelemetry({ toolName: "forge_lattice_stat", inputs: args, result: { error: err.message }, durationMs: Date.now() - t0, status: "ERROR", cwd: findProjectRoot(PROJECT_DIR) });
       return { content: [{ type: "text", text: `forge_lattice_stat error: ${err.message}` }], isError: true };
     }
-  
+
 }
 
 async function _callToolHandler_092_forge_lattice_query(request, args) {
@@ -964,7 +964,7 @@ async function _callToolHandler_092_forge_lattice_query(request, args) {
       emitToolTelemetry({ toolName: "forge_lattice_query", inputs: args, result: { error: err.message }, durationMs: Date.now() - t0, status: "ERROR", cwd: findProjectRoot(PROJECT_DIR) });
       return { content: [{ type: "text", text: `forge_lattice_query error: ${err.message}` }], isError: true };
     }
-  
+
 }
 
 async function _callToolHandler_093_forge_lattice_callers(request, args) {
@@ -985,7 +985,7 @@ async function _callToolHandler_093_forge_lattice_callers(request, args) {
       emitToolTelemetry({ toolName: "forge_lattice_callers", inputs: args, result: { error: err.message }, durationMs: Date.now() - t0, status: "ERROR", cwd: findProjectRoot(PROJECT_DIR) });
       return { content: [{ type: "text", text: `forge_lattice_callers error: ${err.message}` }], isError: true };
     }
-  
+
 }
 
 async function _callToolHandler_094_forge_lattice_blast(request, args) {
@@ -1009,7 +1009,7 @@ async function _callToolHandler_094_forge_lattice_blast(request, args) {
       emitToolTelemetry({ toolName: "forge_lattice_blast", inputs: args, result: { error: err.message }, durationMs: Date.now() - t0, status: "ERROR", cwd: findProjectRoot(PROJECT_DIR) });
       return { content: [{ type: "text", text: `forge_lattice_blast error: ${err.message}` }], isError: true };
     }
-  
+
 }
 /* eslint-enable complexity */
 

@@ -155,7 +155,7 @@ async function _callToolHandler_057_forge_review_add(request, args) {
     } catch (err) {
       return { content: [{ type: "text", text: JSON.stringify({ error: err.code || "ERR_UNKNOWN", message: err.message }) }], isError: true };
     }
-  
+
 }
 
 async function _callToolHandler_058_forge_review_list(request, args) {
@@ -178,7 +178,7 @@ async function _callToolHandler_058_forge_review_list(request, args) {
     } catch (err) {
       return { content: [{ type: "text", text: JSON.stringify({ error: err.code || "ERR_UNKNOWN", message: err.message }) }], isError: true };
     }
-  
+
 }
 
 async function _callToolHandler_059_forge_review_resolve(request, args) {
@@ -199,7 +199,7 @@ async function _callToolHandler_059_forge_review_resolve(request, args) {
     } catch (err) {
       return { content: [{ type: "text", text: JSON.stringify({ error: err.code || "ERR_UNKNOWN", message: err.message }) }], isError: true };
     }
-  
+
 }
 
 async function _callToolHandler_060_forge_delegate_to_agent(request, args) {
@@ -253,7 +253,7 @@ async function _callToolHandler_060_forge_delegate_to_agent(request, args) {
     } catch (err) {
       return { content: [{ type: "text", text: JSON.stringify({ error: err.code || "ERR_DELEGATE", message: err.message }) }], isError: true };
     }
-  
+
 }
 
 async function _callToolHandler_061_forge_notify_send(request, args) {
@@ -273,7 +273,7 @@ async function _callToolHandler_061_forge_notify_send(request, args) {
     } catch (err) {
       return { content: [{ type: "text", text: JSON.stringify({ error: err.code || "ERR_NOTIFY", message: err.message }) }], isError: true };
     }
-  
+
 }
 
 async function _callToolHandler_062_forge_notify_test(request, args) {
@@ -293,7 +293,7 @@ async function _callToolHandler_062_forge_notify_test(request, args) {
     } catch (err) {
       return { content: [{ type: "text", text: JSON.stringify({ error: err.code || "ERR_NOTIFY_TEST", message: err.message }) }], isError: true };
     }
-  
+
 }
 
 export {

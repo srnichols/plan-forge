@@ -358,120 +358,144 @@ export async function quorumReview(dispatchResult, slice, config, options = {}) 
  * @param {object} options - { target, mode, models, cwd }
  * @returns {Promise<{ results, synthesis, cost }>}
  */
+function readAnalysisTargetContent({ cwd, target }) {
+  try {
+    return readFileSync(resolve(cwd, target), "utf-8");
+  } catch (err) {
+    throw new Error(`Cannot read analysis target: ${target} — ${err.message}`);
+  }
+}
+
+function buildAnalysisPromptForMode({ mode, content, target }) {
+  if (mode === "plan") return buildPlanAnalysisPrompt(content, target);
+  if (mode === "diagnose") return buildDiagnosePrompt(content, target);
+  return buildFileAnalysisPrompt(content, target);
+}
+
+async function analyzeWithModel({ model, prompt, cwd, timeoutMs }) {
+  const legStart = Date.now();
+  console.log(`   ⏳ ${model} — analyzing...`);
+  try {
+    const result = await spawnWorker(prompt, {
+      model,
+      cwd,
+      timeout: timeoutMs,
+      role: "analysis",
+    });
+    const duration = Date.now() - legStart;
+    console.log(`   ✅ ${model} — done (${Math.round(duration / 1000)}s)`);
+    return {
+      model,
+      output: result.output || "",
+      tokens: result.tokens,
+      duration,
+      success: (result.output || "").trim().length > 50,
+      worker: result.worker,
+    };
+  } catch (err) {
+    const duration = Date.now() - legStart;
+    console.log(`   ❌ ${model} — failed: ${err.message}`);
+    return {
+      model,
+      output: "",
+      tokens: { tokens_in: 0, tokens_out: 0, model },
+      duration,
+      success: false,
+      error: err.message,
+      worker: "failed",
+    };
+  }
+}
+
+async function synthesizeAnalysisResults({ successful, target, mode, cwd, config }) {
+  if (successful.length < 2) {
+    return { synthesis: successful.length === 1 ? successful[0].output : null, synthesisCost: 0 };
+  }
+
+  console.log(`   🔄 Synthesizing with ${config.reviewerModel}...`);
+  const synthPrompt = buildAnalysisSynthesisPrompt(successful, target, mode);
+  try {
+    const synthResult = await spawnWorker(synthPrompt, {
+      model: config.reviewerModel,
+      cwd,
+      timeout: config.dryRunTimeout || 300_000,
+      role: "reviewer",
+    });
+    console.log("   ✅ Synthesis complete");
+    return {
+      synthesis: synthResult.output || "",
+      synthesisCost: calculateSliceCost(synthResult.tokens).cost_usd,
+    };
+  } catch (err) {
+    console.log(`   ⚠️  Synthesis failed: ${err.message} — returning raw results`);
+    return { synthesis: null, synthesisCost: 0 };
+  }
+}
+
+function summarizeAnalysisResults({ results, synthesisCost }) {
+  let totalCost = synthesisCost;
+  for (const result of results) {
+    totalCost += calculateSliceCost(result.tokens).cost_usd;
+  }
+
+  return {
+    totalCost,
+    mappedResults: results.map((result) => ({
+      model: result.model,
+      output: result.output,
+      duration: result.duration,
+      success: result.success,
+      worker: result.worker,
+      cost: calculateSliceCost(result.tokens).cost_usd,
+      error: result.error,
+    })),
+  };
+}
+
 export async function analyzeWithQuorum(options = {}) {
   const {
     target,
-    mode = "plan",   // "plan" | "file" | "diagnose"
+    mode = "plan",
     models = null,
     cwd = process.cwd(),
   } = options;
 
   const config = loadQuorumConfig(cwd);
   const analyzeModels = models || config.models;
+  const content = readAnalysisTargetContent({ cwd, target });
+  const prompt = buildAnalysisPromptForMode({ mode, content, target });
 
-  // Build analysis prompt based on mode
-  let content;
-  try {
-    content = readFileSync(resolve(cwd, target), "utf-8");
-  } catch (err) {
-    throw new Error(`Cannot read analysis target: ${target} — ${err.message}`);
-  }
-
-  const prompt = mode === "plan"
-    ? buildPlanAnalysisPrompt(content, target)
-    : mode === "diagnose"
-      ? buildDiagnosePrompt(content, target)
-      : buildFileAnalysisPrompt(content, target);
-
-  console.log(`\n🗳️  Quorum Analysis — dispatching to ${analyzeModels.length} models...`);
+  console.log(`
+🗳️  Quorum Analysis — dispatching to ${analyzeModels.length} models...`);
   console.log(`   Target: ${target} (${mode} mode)`);
-  console.log(`   Models: ${analyzeModels.join(", ")}\n`);
+  console.log(`   Models: ${analyzeModels.join(", ")}
+`);
 
-  // Dispatch to all models in parallel
   const startTime = Date.now();
-  const promises = analyzeModels.map(async (model) => {
-    const legStart = Date.now();
-    console.log(`   ⏳ ${model} — analyzing...`);
-    try {
-      const result = await spawnWorker(prompt, {
-        model,
-        cwd,
-        timeout: config.dryRunTimeout || 300_000,
-        role: "analysis", // bug #80: API providers see system-framed prompt
-      });
-      const duration = Date.now() - legStart;
-      console.log(`   ✅ ${model} — done (${Math.round(duration / 1000)}s)`);
-      return {
-        model,
-        output: result.output || "",
-        tokens: result.tokens,
-        duration,
-        success: (result.output || "").trim().length > 50,
-        worker: result.worker,
-      };
-    } catch (err) {
-      const duration = Date.now() - legStart;
-      console.log(`   ❌ ${model} — failed: ${err.message}`);
-      return {
-        model,
-        output: "",
-        tokens: { tokens_in: 0, tokens_out: 0, model },
-        duration,
-        success: false,
-        error: err.message,
-        worker: "failed",
-      };
-    }
-  });
-
-  const results = await Promise.all(promises);
-  const successful = results.filter((r) => r.success);
+  const timeoutMs = config.dryRunTimeout || 300_000;
+  const results = await Promise.all(
+    analyzeModels.map((model) => analyzeWithModel({ model, prompt, cwd, timeoutMs })),
+  );
+  const successful = results.filter((result) => result.success);
   const totalDuration = Date.now() - startTime;
 
-  console.log(`\n   📊 ${successful.length}/${results.length} models returned results (${Math.round(totalDuration / 1000)}s total)`);
+  console.log(`
+   📊 ${successful.length}/${results.length} models returned results (${Math.round(totalDuration / 1000)}s total)`);
 
-  // Synthesize findings if we have 2+ responses
-  let synthesis = null;
-  let synthesisCost = 0;
-  if (successful.length >= 2) {
-    console.log(`   🔄 Synthesizing with ${config.reviewerModel}...`);
-    const synthPrompt = buildAnalysisSynthesisPrompt(successful, target, mode);
-    try {
-      const synthResult = await spawnWorker(synthPrompt, {
-        model: config.reviewerModel,
-        cwd,
-        timeout: config.dryRunTimeout || 300_000,
-        role: "reviewer", // bug #80: API providers see system-framed prompt
-      });
-      synthesis = synthResult.output || "";
-      synthesisCost = calculateSliceCost(synthResult.tokens).cost_usd;
-      console.log(`   ✅ Synthesis complete`);
-    } catch (err) {
-      console.log(`   ⚠️  Synthesis failed: ${err.message} — returning raw results`);
-    }
-  } else if (successful.length === 1) {
-    synthesis = successful[0].output;
-  }
-
-  // Calculate total cost
-  let totalCost = synthesisCost;
-  for (const r of results) {
-    totalCost += calculateSliceCost(r.tokens).cost_usd;
-  }
+  const { synthesis, synthesisCost } = await synthesizeAnalysisResults({
+    successful,
+    target,
+    mode,
+    cwd,
+    config,
+  });
+  const { totalCost, mappedResults } = summarizeAnalysisResults({ results, synthesisCost });
 
   return {
     target,
     mode,
     models: analyzeModels,
-    results: results.map((r) => ({
-      model: r.model,
-      output: r.output,
-      duration: r.duration,
-      success: r.success,
-      worker: r.worker,
-      cost: calculateSliceCost(r.tokens).cost_usd,
-      error: r.error,
-    })),
+    results: mappedResults,
     synthesis,
     totalDuration,
     totalCost: Math.round(totalCost * 100) / 100,

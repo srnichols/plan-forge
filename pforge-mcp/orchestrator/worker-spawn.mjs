@@ -1691,11 +1691,166 @@ function _pickChosenWorker(workers, worker, model) {
   return chosen;
 }
 
+async function resolveSpawnWorkers({ worker, eventBus }) {
+  let workers = _probeWorkersWithEvents(worker, eventBus);
+  if (workers.length > 0 || worker) return workers;
+
+  for (const delay of [1_000, 3_000, 5_000]) {
+    await new Promise((resolveDelay) => setTimeout(resolveDelay, delay));
+    resetCliWorkersCache();
+    workers = _probeWorkersWithEvents(worker, eventBus);
+    if (workers.length > 0) break;
+  }
+
+  return workers;
+}
+
+function writeWorkerPromptFile(prompt) {
+  const suffix = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+  const promptFile = resolve(tmpdir(), `pforge-prompt-${suffix}.txt`);
+  writeFileSync(promptFile, prompt);
+  return promptFile;
+}
+
+function spawnCliWorkerProcess({ cmd, args, cwd, runPlanActive, extraEnv }) {
+  const isWindows = process.platform === "win32";
+  const spawnBin = isWindows ? "cmd" : cmd;
+  const spawnArgs = isWindows ? ["/d", "/s", "/c", cmd, ...args] : args
+;
+  return spawn(spawnBin, spawnArgs, {
+    cwd,
+    env: {
+      ...process.env,
+      NO_COLOR: "1",
+      GIT_EDITOR: "true",
+      GIT_TERMINAL_PROMPT: "0",
+      GIT_SEQUENCE_EDITOR: "true",
+      ...(runPlanActive ? { PFORGE_RUN_PLAN_ACTIVE: "1" } : {}),
+      ...(extraEnv || {}),
+    },
+    stdio: ["pipe", "pipe", "pipe"],
+    windowsHide: true,
+  });
+}
+
+function registerSpawnedChild(child) {
+  if (!global.__pforgeChildren) global.__pforgeChildren = new Set();
+  global.__pforgeChildren.add(child);
+  child.on("close", () => global.__pforgeChildren?.delete(child));
+}
+
+function attachWorkerStreamHandlers(child, state) {
+  child.stdout.setEncoding("utf8");
+  child.stderr.setEncoding("utf8");
+  child.stdin.end();
+
+  child.stdout.on("data", (chunk) => {
+    state.stdout += chunk.toString();
+  });
+
+  child.stderr.on("data", (chunk) => {
+    const text = chunk.toString();
+    state.stderr += text;
+    for (const line of text.split("\n")) {
+      const trimmed = line.trim();
+      if (trimmed && !trimmed.startsWith("{")) {
+        process.stdout.write(`    ${trimmed}\n`);
+      }
+    }
+  });
+}
+
+function finalizeWorkerResult({ code, state, chosen, promptFile, spec, model, spawnStartMs }) {
+  try { unlinkSync(promptFile); } catch { /* ignore */ }
+
+  if (!state.stdout && !state.stderr && code != 0 && !state.timedOut) {
+    state.stderr = `[pforge] worker '${chosen.name}' exited ${code} with no stdout or stderr — ` +
+      `likely failed to start (console/TTY required). Run with --foreground for debugging.`;
+  }
+
+  const jsonlEvents = parseJSONL(state.stdout);
+  let tokens = extractTokens(jsonlEvents);
+  tokens = _enrichWorkerTokens({
+    tokens,
+    stdout: state.stdout,
+    stderr: state.stderr,
+    code,
+    timedOut: state.timedOut,
+    spec,
+    spawnStartMs,
+  });
+
+  return {
+    output: state.stdout,
+    stderr: state.stderr,
+    jsonlEvents,
+    exitCode: state.timedOut ? -1 : code,
+    timedOut: state.timedOut,
+    tokens,
+    worker: chosen.name,
+    model: tokens.model || model || "unknown",
+    looksLikeHelpText: detectHelpTextOutput(state.stdout, state.stderr, chosen.name),
+  };
+}
+
+function spawnCliWorkerExecution({ prompt, model, cwd, timeout, worker, runPlanActive, eventBus, extraEnv }) {
+  return new Promise(async (workerResolve, workerReject) => {
+    const workers = await resolveSpawnWorkers({ worker, eventBus });
+    if (workers.length === 0) {
+      workerReject(new Error("No CLI workers available. Install gh copilot, claude, or codex CLI."));
+      return;
+    }
+
+    const chosen = _pickChosenWorker(workers, worker, model);
+    const promptFile = writeWorkerPromptFile(prompt);
+    const invocationResult = _buildWorkerInvocation(chosen, promptFile, prompt, model);
+    if (invocationResult.error) {
+      workerReject(invocationResult.error);
+      return;
+    }
+
+    const { cmd, args, spec } = invocationResult;
+    const child = spawnCliWorkerProcess({ cmd, args, cwd, runPlanActive, extraEnv });
+    const spawnStartMs = Date.now();
+    const state = { stdout: "", stderr: "", timedOut: false };
+
+    registerSpawnedChild(child);
+    attachWorkerStreamHandlers(child, state);
+
+    const heartbeat = setInterval(() => {
+      process.stdout.write(".");
+    }, 15_000);
+    const timer = setTimeout(() => {
+      state.timedOut = true;
+      child.kill("SIGTERM");
+    }, timeout);
+
+    child.on("close", (code) => {
+      clearInterval(heartbeat);
+      clearTimeout(timer);
+      workerResolve(finalizeWorkerResult({
+        code,
+        state,
+        chosen,
+        promptFile,
+        spec,
+        model,
+        spawnStartMs,
+      }));
+    });
+
+    child.on("error", (err) => {
+      clearTimeout(timer);
+      workerReject(new Error(`Failed to spawn ${cmd}: ${err.message} (code: ${err.code || "unknown"})`));
+    });
+  });
+}
+
 export function spawnWorker(prompt, options = {}) {
   const {
     model = null,
     cwd = process.cwd(),
-    timeout = 1_200_000, // 20 min default
+    timeout = 1_200_000,
     worker = null,
     runPlanActive = false,
     role = null,
@@ -1709,123 +1864,15 @@ export function spawnWorker(prompt, options = {}) {
     return callApiWorker(prompt, model, apiProvider, { timeout, role });
   }
 
-  return new Promise(async (workerResolve, workerReject) => {
-    let workers = _probeWorkersWithEvents(worker, eventBus);
-
-    if (workers.length === 0 && !worker) {
-      for (const delay of [1_000, 3_000, 5_000]) {
-        await new Promise((r) => setTimeout(r, delay));
-        resetCliWorkersCache();
-        workers = _probeWorkersWithEvents(worker, eventBus);
-        if (workers.length > 0) break;
-      }
-    }
-
-    if (workers.length === 0) {
-      workerReject(new Error("No CLI workers available. Install gh copilot, claude, or codex CLI."));
-      return;
-    }
-
-    const chosen = _pickChosenWorker(workers, worker, model);
-
-    const suffix = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
-    const promptFile = resolve(tmpdir(), `pforge-prompt-${suffix}.txt`);
-    writeFileSync(promptFile, prompt);
-
-    const invocationResult = _buildWorkerInvocation(chosen, promptFile, prompt, model);
-    if (invocationResult.error) {
-      workerReject(invocationResult.error);
-      return;
-    }
-    const { cmd, args, spec } = invocationResult;
-
-    const _isWin    = process.platform === "win32";
-    const _spawnBin = _isWin ? "cmd" : cmd;
-    const _spawnArg = _isWin ? ["/d", "/s", "/c", cmd, ...args] : args;
-    const child = spawn(_spawnBin, _spawnArg, {
-      cwd,
-      env: {
-        ...process.env,
-        NO_COLOR: "1",
-        GIT_EDITOR: "true",
-        GIT_TERMINAL_PROMPT: "0",
-        GIT_SEQUENCE_EDITOR: "true",
-        ...(runPlanActive ? { PFORGE_RUN_PLAN_ACTIVE: "1" } : {}),
-        ...(extraEnv || {}),
-      },
-      stdio: ["pipe", "pipe", "pipe"],
-      windowsHide: true,
-    });
-
-    const _spawnStartMs = Date.now();
-
-    if (!global.__pforgeChildren) global.__pforgeChildren = new Set();
-    global.__pforgeChildren.add(child);
-    child.on("close", () => global.__pforgeChildren?.delete(child));
-
-    child.stdout.setEncoding("utf8");
-    child.stderr.setEncoding("utf8");
-    child.stdin.end();
-
-    let stdout = "";
-    let stderr = "";
-    let timedOut = false;
-
-    const heartbeat = setInterval(() => {
-      process.stdout.write(".");
-    }, 15_000);
-
-    const timer = setTimeout(() => {
-      timedOut = true;
-      child.kill("SIGTERM");
-    }, timeout);
-
-    child.stdout.on("data", (chunk) => { stdout += chunk.toString(); });
-    child.stderr.on("data", (chunk) => {
-      const text = chunk.toString();
-      stderr += text;
-      for (const line of text.split("\n")) {
-        const trimmed = line.trim();
-        if (trimmed && !trimmed.startsWith("{")) {
-          process.stdout.write(`    ${trimmed}\n`);
-        }
-      }
-    });
-
-    child.on("close", (code) => {
-      clearInterval(heartbeat);
-      clearTimeout(timer);
-
-      try { unlinkSync(promptFile); } catch { /* ignore */ }
-
-      if (!stdout && !stderr && code !== 0 && !timedOut) {
-        stderr = `[pforge] worker '${chosen.name}' exited ${code} with no stdout or stderr — ` +
-          `likely failed to start (console/TTY required). Run with --foreground for debugging.`;
-      }
-
-      const jsonlEvents = parseJSONL(stdout);
-      let tokens = extractTokens(jsonlEvents);
-      tokens = _enrichWorkerTokens({ tokens, stdout, stderr, code, timedOut, spec, spawnStartMs: _spawnStartMs });
-
-      const looksLikeHelpText = detectHelpTextOutput(stdout, stderr, chosen.name);
-
-      workerResolve({
-        output: stdout,
-        stderr,
-        jsonlEvents,
-        exitCode: timedOut ? -1 : code,
-        timedOut,
-        tokens,
-        worker: chosen.name,
-        model: tokens.model || model || "unknown",
-        looksLikeHelpText,
-      });
-    });
-
-    child.on("error", (err) => {
-      clearTimeout(timer);
-      workerReject(new Error(`Failed to spawn ${cmd}: ${err.message} (code: ${err.code || "unknown"})`));
-    });
+  return spawnCliWorkerExecution({
+    prompt,
+    model,
+    cwd,
+    timeout,
+    worker,
+    runPlanActive,
+    eventBus,
+    extraEnv,
   });
 }
 

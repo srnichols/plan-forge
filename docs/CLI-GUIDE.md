@@ -989,6 +989,99 @@ Without `--auto`, runs a manual one-shot drain (ignores `.forge.json#audit` conf
 
 ---
 
+### `pforge audit export`
+
+Export audit events from `.forge/runs/` as JSONL or CSV. Streams `events.log` files written by the orchestrator — reads line-by-line without loading all events into memory. Useful for compliance exports, cost analysis, and piping into spreadsheets or SIEM tools.
+
+```powershell
+# PowerShell — all events as JSONL (one JSON object per line)
+.\pforge.ps1 audit export
+
+# PowerShell — events from a date onwards
+.\pforge.ps1 audit export --since 2026-05-01
+
+# PowerShell — CSV export to file
+.\pforge.ps1 audit export --format csv > audit.csv
+
+# PowerShell — filter by event type (repeatable)
+.\pforge.ps1 audit export --type gate-pass --type gate-fail
+
+# PowerShell — scope to a single run
+.\pforge.ps1 audit export --run 20260507T120000Z
+
+# PowerShell — date window
+.\pforge.ps1 audit export --since 2026-05-01 --until 2026-05-31
+```
+
+```bash
+# Bash — all events as JSONL
+./pforge.sh audit export
+
+# Bash — events from a date onwards
+./pforge.sh audit export --since 2026-05-01
+
+# Bash — CSV export to file
+./pforge.sh audit export --format csv > audit.csv
+
+# Bash — filter by event type
+./pforge.sh audit export --type gate-pass --type gate-fail
+
+# Bash — scope to a single run
+./pforge.sh audit export --run 20260507T120000Z
+```
+
+**Flags:**
+
+| Flag | Default | Description |
+|------|---------|-------------|
+| `--since <ISO>` | *(all)* | Only events on or after this timestamp (ISO 8601, inclusive) |
+| `--until <ISO>` | *(all)* | Only events on or before this timestamp (ISO 8601, inclusive) |
+| `--type <name>` | *(all)* | Filter by event type; repeatable (e.g. `--type gate-pass --type slice-start`) |
+| `--run <id>` | *(all runs)* | Scope to a single run directory ID |
+| `--format <fmt>` | `json` | Output format: `json` (JSONL, one object per line) or `csv` |
+
+**JSONL output fields** (one object per event):
+
+| Field | Description |
+|-------|-------------|
+| `timestamp` | ISO 8601 event timestamp |
+| `run_id` | Run directory ID (e.g. `20260507T120000Z`) |
+| `plan` | Plan file path associated with the run |
+| `slice_id` | Slice identifier within the plan |
+| `event_type` | Event type string (see common types below) |
+| `source` | Originating worker or component |
+| `security_risk` | Security risk flag (from pre-deploy scans) |
+| `gate_result` | Gate pass/fail result |
+| `cost_usd` | Cost in USD for this event |
+| `tokens_in` | Input token count |
+| `tokens_out` | Output token count |
+| `model` | Model used for this event |
+| `worker` | Worker identifier |
+
+**CSV output** has the same columns as the JSONL fields above, with a header row.
+
+**Common event types** for `--type` filtering:
+
+| Type | Meaning |
+|------|---------|
+| `slice-start` | A plan slice began execution |
+| `slice-end` | A plan slice completed |
+| `gate-pass` | A validation gate passed |
+| `gate-fail` | A validation gate failed |
+| `llm-invoke` | An LLM was called (includes token/cost fields) |
+| `pre-deploy` | A pre-deploy LiveGuard scan ran |
+| `secret-scan` | A secret scan ran |
+| `quorum-vote` | A quorum model cast a vote |
+
+**When to use:**
+- Export the last month of gate results: `pforge audit export --since 2026-05-01 --type gate-pass --type gate-fail --format csv > gates.csv`
+- Pull cost data for a single run: `pforge audit export --run <runId> --type llm-invoke`
+- Feed into a SIEM or compliance tool: `pforge audit export --since 2026-01-01 | jq .`
+
+**Related MCP tool:** `forge_audit_export` (ACI-paginated, adds `limit` / `truncated` / `total` pagination for agent use)
+
+---
+
 ## Memory Subsystem Commands (v2.95.0)
 
 Anvil, Hallmark, and Lattice operations. Requires MCP server running (`node pforge-mcp/server.mjs`).

@@ -84,6 +84,7 @@ import { exportPlan, exportPlanFromFile } from "../export-plan.mjs";
 import { syncMemories } from "../sync-memories.mjs";
 import { syncInstructions } from "../sync-instructions.mjs";
 import { classifyDiff } from "../diff-classify.mjs";
+import { searchLocalThoughts, isNeuralEmbeddingAvailable } from "../local-recall.mjs";
 import { ERROR_CODES } from "../enums.mjs";
 import {
   PROJECT_DIR,
@@ -1698,7 +1699,7 @@ async function _runBugScanners(scanners, testFilter, cwd) {
   return { results, scannerUnavailable: null };
 }
 
-async function _onBugValidatedFixed(bugId, bug, scanners, attempt, cwd) {
+async function _onBugValidatedFixed({ bugId, bug, scanners, attempt, cwd }) {
   if (activeHub) {
     try {
       activeHub.broadcast({
@@ -1734,7 +1735,7 @@ function _createBugValidationAttemptData(args, bug) {
   };
 }
 
-async function _finalizeBugValidationPass(cwd, bugId, bug, scanners, attempt) {
+async function _finalizeBugValidationPass({ cwd, bugId, bug, scanners, attempt }) {
   await updateBugStatus(cwd, bugId, "fixed", {
     note: "Validated by forge_bug_validate_fix",
     validatedAt: new Date().toISOString(),
@@ -1744,7 +1745,7 @@ async function _finalizeBugValidationPass(cwd, bugId, bug, scanners, attempt) {
     const updatedBug = loadBug(cwd, bugId);
     await dispatchBugAdapter("commentValidatedFix", updatedBug || bug, {}, { cwd });
   } catch { /* adapter dispatch is advisory */ }
-  await _onBugValidatedFixed(bugId, bug, scanners, attempt, cwd);
+  await _onBugValidatedFixed({ bugId: bugId, bug: bug, scanners: scanners, attempt: attempt, cwd: cwd });
 }
 
 function _039_forge_bug_validate_fix_loadContext(cwd, args) {
@@ -1769,7 +1770,7 @@ function _039_forge_bug_validate_fix_loadContext(cwd, args) {
   };
 }
 
-function _039_forge_bug_validate_fix_finalizeAttempt(cwd, bugId, advisory, scanners, attempt, results) {
+function _039_forge_bug_validate_fix_finalizeAttempt({ cwd, bugId, advisory, scanners, attempt, results }) {
   const allPassed = results.every((result) => result.passed);
   attempt.result = allPassed ? "pass" : "fail";
   attempt.details = results;
@@ -1801,8 +1802,8 @@ async function _callToolHandler_039_forge_bug_validate_fix(request, args) {
     if (scannerUnavailable) {
       return { content: [{ type: "text", text: JSON.stringify({ error: ERROR_CODES.SCANNER_UNAVAILABLE.code, scanner: scannerUnavailable.scanner, message: scannerUnavailable.message }) }], isError: true };
     }
-    const finalized = _039_forge_bug_validate_fix_finalizeAttempt(cwd, args.bugId, advisory, scanners, attempt, results);
-    if (finalized.allPassed) await _finalizeBugValidationPass(cwd, args.bugId, bug, scanners, attempt);
+    const finalized = _039_forge_bug_validate_fix_finalizeAttempt({ cwd: cwd, bugId: args.bugId, advisory: advisory, scanners: scanners, attempt: attempt, results: results });
+    if (finalized.allPassed) await _finalizeBugValidationPass({ cwd: cwd, bugId: args.bugId, bug: bug, scanners: scanners, attempt: attempt });
     emitToolTelemetry({ toolName: "forge_bug_validate_fix", inputs: args, result: finalized.result, durationMs: Date.now() - t0, status: "OK", cwd: cwd });
     return { content: [{ type: "text", text: JSON.stringify(finalized.result, null, 2) }], isError: false };
   } catch (err) {
@@ -1926,7 +1927,7 @@ function _resolveBrainReplaySource(args, cwd) {
   return { sourcePath, st: statSync(sourcePath) };
 }
 
-function _buildBrainReplaySummary(args, cfg, sourceType, sourcePath, result) {
+function _buildBrainReplaySummary({ args, cfg, sourceType, sourcePath, result }) {
   return [
     `Brain replay — ${args.dryRun ? "DRY RUN" : "sent"}`,
     `  source:     ${sourceType} (${sourcePath})`,
@@ -2007,7 +2008,7 @@ async function _callToolHandler_042_forge_brain_replay(request, args) {
     if (loaded.response) return loaded.response;
     const executed = await _042_forge_brain_replay_runClient(args, validation.cfg, loaded.records);
     client = executed.client;
-    const summary = _buildBrainReplaySummary(args, validation.cfg, loaded.sourceType, loaded.sourcePath, executed.result);
+    const summary = _buildBrainReplaySummary({ args: args, cfg: validation.cfg, sourceType: loaded.sourceType, sourcePath: loaded.sourcePath, result: executed.result });
     return { content: [{ type: "text", text: summary }], isError: executed.result.failed > 0 };
   } catch (err) {
     return { content: [{ type: "text", text: `Brain replay error: ${err.message}` }], isError: true };
@@ -2153,7 +2154,7 @@ function _044_forge_incident_capture_validateArgs(args) {
   return { severity, capturedAt, mttr };
 }
 
-function _044_forge_incident_capture_buildRecord(args, cwd, severity, capturedAt, mttr) {
+function _044_forge_incident_capture_buildRecord({ args, cwd, severity, capturedAt, mttr }) {
   const record = _createIncidentRecord(args, severity, capturedAt, mttr);
   const precedingDeploy = _correlateIncidentDeploy(capturedAt, cwd);
   if (precedingDeploy) record.precedingDeploy = precedingDeploy;
@@ -2163,7 +2164,7 @@ function _044_forge_incident_capture_buildRecord(args, cwd, severity, capturedAt
   return record;
 }
 
-function _044_forge_incident_capture_notify(args, cwd, severity, capturedAt, record) {
+function _044_forge_incident_capture_notify({ args, cwd, severity, capturedAt, record }) {
   activeHub?.broadcast({ type: "incident-captured", data: record, timestamp: capturedAt });
   const onCall = _loadIncidentOnCall(cwd);
   if (onCall) {
@@ -2181,8 +2182,8 @@ async function _callToolHandler_044_forge_incident_capture(request, args) {
     const validation = _044_forge_incident_capture_validateArgs(args);
     if (validation.response) return validation.response;
     const { severity, capturedAt, mttr } = validation;
-    const record = _044_forge_incident_capture_buildRecord(args, cwd, severity, capturedAt, mttr);
-    _044_forge_incident_capture_notify(args, cwd, severity, capturedAt, record);
+    const record = _044_forge_incident_capture_buildRecord({ args: args, cwd: cwd, severity: severity, capturedAt: capturedAt, mttr: mttr });
+    _044_forge_incident_capture_notify({ args: args, cwd: cwd, severity: severity, capturedAt: capturedAt, record: record });
     emitToolTelemetry({ toolName: "forge_incident_capture", inputs: args, result: record, durationMs: Date.now() - t0, status: "OK", cwd: cwd });
     await broadcastLiveGuard("forge_incident_capture", "OK", Date.now() - t0);
     captureMemory(
@@ -4186,7 +4187,7 @@ function _th_054_renderPlanContent(fixId, sourceData, slices) {
   return planContent;
 }
 
-function _th_054_maybeQueueReview(cwd, slices, fixId, planName, sourceData) {
+function _th_054_maybeQueueReview({ cwd, slices, fixId, planName, sourceData }) {
   if (!(Array.isArray(slices) && slices.some((slice) => (slice.codeSnippets?.length > 0) || (slice.scope?.length > 0)))) return;
   try {
     maybeAddFixPlanReview(cwd, {
@@ -4640,7 +4641,7 @@ function _054_forge_fix_proposal_renderPlan(fixId, sourceType, slices) {
   return planContent;
 }
 
-function _054_forge_fix_proposal_maybeQueueReview(cwd, fixId, planName, sourceType, slices) {
+function _054_forge_fix_proposal_maybeQueueReview({ cwd, fixId, planName, sourceType, slices }) {
   if (!(Array.isArray(slices) && slices.some((slice) => (slice.codeSnippets?.length > 0) || (slice.scope?.length > 0)))) return;
   try {
     maybeAddFixPlanReview(cwd, {
@@ -4664,7 +4665,7 @@ function _054_forge_fix_proposal_persistArtifacts(opts) {
     sliceCount: slices.length,
     generatedAt: new Date().toISOString(),
   }, cwd);
-  _054_forge_fix_proposal_maybeQueueReview(cwd, fixId, planName, sourceType, slices);
+  _054_forge_fix_proposal_maybeQueueReview({ cwd: cwd, fixId: fixId, planName: planName, sourceType: sourceType, slices: slices });
 }
 
 async function _callToolHandler_054_forge_fix_proposal(request, args) {
@@ -6901,6 +6902,43 @@ async function _callToolHandler_094_forge_lattice_blast(request, args) {
 }
 /* eslint-enable complexity */
 
+async function _callToolHandler_095_forge_local_search(request, args) {
+  const { name } = request.params;
+  if (!(name === "forge_local_search")) return _CALL_TOOL_NO_MATCH;
+
+  const t0 = Date.now();
+  try {
+    const cwd = args.path ? findProjectRoot(resolve(args.path)) : findProjectRoot(PROJECT_DIR);
+    const query = typeof args.query === "string" ? args.query.trim() : "";
+    if (!query) {
+      return { content: [{ type: "text", text: JSON.stringify({ ok: false, error: "query is required" }) }], isError: true };
+    }
+    const limit = Math.min(Math.max(1, Number(args.limit) || 5), 20);
+    const threshold = typeof args.threshold === "number" ? args.threshold : 0.02;
+    const backendArg = args.backend === "tfidf" ? "tfidf" : args.backend === "neural" ? "neural" : "auto";
+    const sources = Array.isArray(args.sources) && args.sources.length > 0 ? args.sources : undefined;
+
+    if (backendArg === "neural" && !(await isNeuralEmbeddingAvailable())) {
+      const hint = "Install @xenova/transformers: npm install --save-optional @xenova/transformers";
+      return { content: [{ type: "text", text: JSON.stringify({ ok: false, error: `neural backend requested but @xenova/transformers is not installed. ${hint}` }) }], isError: true };
+    }
+
+    const result = await searchLocalThoughts(query, {
+      cwd,
+      limit,
+      threshold,
+      sources,
+      forceBackend: backendArg === "auto" ? undefined : backendArg,
+    });
+
+    emitToolTelemetry({ toolName: "forge_local_search", inputs: args, result: { total: result.total, backend: result.backend }, durationMs: Date.now() - t0, status: "OK", cwd });
+    return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
+  } catch (err) {
+    emitToolTelemetry({ toolName: "forge_local_search", inputs: args, result: { error: err.message }, durationMs: Date.now() - t0, status: "ERROR", cwd: findProjectRoot(PROJECT_DIR) });
+    return { content: [{ type: "text", text: `forge_local_search error: ${err.message}` }], isError: true };
+  }
+}
+
 const _CALL_TOOL_HANDLERS = [
   _callToolHandler_001_forge_run_plan,
   _callToolHandler_002_forge_abort,
@@ -6957,7 +6995,6 @@ const _CALL_TOOL_HANDLERS = [
   _callToolHandler_053_forge_env_diff,
   _callToolHandler_054_forge_fix_proposal,
   _callToolHandler_055_forge_liveguard_run,
-  _callToolHandler_056_forge_home_snapshot,
   _callToolHandler_057_forge_review_add,
   _callToolHandler_058_forge_review_list,
   _callToolHandler_059_forge_review_resolve,
@@ -6996,6 +7033,7 @@ const _CALL_TOOL_HANDLERS = [
   _callToolHandler_092_forge_lattice_query,
   _callToolHandler_093_forge_lattice_callers,
   _callToolHandler_094_forge_lattice_blast,
+  _callToolHandler_095_forge_local_search,
 ];
 
 export const callToolRequestHandler = _wrapWithToolSpan(async (request) => {

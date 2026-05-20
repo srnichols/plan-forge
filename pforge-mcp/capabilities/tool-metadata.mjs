@@ -2040,6 +2040,43 @@ export const TOOL_METADATA = {
       output: { nodes: [], edges: [], unresolvedNames: [], total: 0, truncated: false, message: "No chunk found for \"handleAuth\"." },
     },
   },
+  forge_local_search: {
+    intent: ["semantic-search", "local-recall", "memory", "embedding", "fallback"],
+    aliases: ["local-recall", "embedding-search", "offline-search"],
+    cost: "low",
+    maxConcurrent: 5,
+    addedIn: "3.9.0",
+    prerequisites: [],
+    produces: [],
+    consumes: [
+      ".forge/openbrain-queue.jsonl",
+      ".forge/openbrain-queue.archive.jsonl",
+      ".forge/openbrain-dlq.jsonl",
+      ".forge/liveguard-memories.jsonl",
+    ],
+    sideEffects: [],
+    writesFiles: false,
+    network: false,
+    risk: "low",
+    errors: {
+      NEURAL_UNAVAILABLE: { message: "@xenova/transformers not installed — cannot use neural backend", recovery: "Use backend: 'tfidf' or install @xenova/transformers (npm install --save-optional @xenova/transformers)" },
+      EMPTY_CORPUS: { message: "No local thoughts found in .forge/", recovery: "Capture thoughts first via forge_capture_thought or run a plan" },
+    },
+    example: {
+      input: { query: "authentication patterns", limit: 3 },
+      output: {
+        hits: [
+          { source: "plan-forge-orchestrator/my-plan/slice-3", snippet: "Decision: used JWT with 24h expiry…", score: 0.72, createdAt: "2026-05-19T12:00:00.000Z" },
+        ],
+        total: 1,
+        corpusSize: 42,
+        backend: "tfidf",
+        query: "authentication patterns",
+        truncated: false,
+        message: "Found 1 matching thought (tfidf backend, corpus: 42).",
+      },
+    },
+  },
   forge_sync_instructions: {
     intent: ["sync", "copilot", "instructions", "generate", "project-context"],
     aliases: ["sync-instructions", "copilot-instructions"],

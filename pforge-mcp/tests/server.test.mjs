@@ -1723,46 +1723,46 @@ describe("emitToolTelemetry LIVEGUARD_TOOLS membership", () => {
   ];
 
   it("writes liveguard-events.jsonl for forge_secret_scan", () => {
-    emitToolTelemetry("forge_secret_scan", { since: "HEAD~1" }, { clean: true }, 42, "OK", tempDir);
+    emitToolTelemetry({ toolName: "forge_secret_scan", inputs: { since: "HEAD~1" }, result: { clean: true }, durationMs: 42, status: "OK", cwd: tempDir });
     const events = readForgeJsonl("liveguard-events.jsonl", [], tempDir);
     expect(events.length).toBeGreaterThanOrEqual(1);
     expect(events.some(e => e.tool === "forge_secret_scan")).toBe(true);
   });
 
   it("writes liveguard-events.jsonl for forge_env_diff", () => {
-    emitToolTelemetry("forge_env_diff", { baseline: ".env" }, { clean: true }, 30, "OK", tempDir);
+    emitToolTelemetry({ toolName: "forge_env_diff", inputs: { baseline: ".env" }, result: { clean: true }, durationMs: 30, status: "OK", cwd: tempDir });
     const events = readForgeJsonl("liveguard-events.jsonl", [], tempDir);
     expect(events.some(e => e.tool === "forge_env_diff")).toBe(true);
   });
 
   it("does NOT write liveguard-events.jsonl for non-LiveGuard tools", () => {
-    emitToolTelemetry("forge_smith", {}, "ok", 10, "OK", tempDir);
+    emitToolTelemetry({ toolName: "forge_smith", inputs: {}, result: "ok", durationMs: 10, status: "OK", cwd: tempDir });
     const events = readForgeJsonl("liveguard-events.jsonl", [], tempDir);
     expect(events.filter(e => e.tool === "forge_smith")).toHaveLength(0);
   });
 
   it("always writes to telemetry/tool-calls.jsonl", () => {
-    emitToolTelemetry("forge_secret_scan", {}, { clean: true }, 50, "OK", tempDir);
+    emitToolTelemetry({ toolName: "forge_secret_scan", inputs: {}, result: { clean: true }, durationMs: 50, status: "OK", cwd: tempDir });
     const calls = readForgeJsonl("telemetry/tool-calls.jsonl", [], tempDir);
     expect(calls.length).toBeGreaterThanOrEqual(1);
     expect(calls.some(c => c.tool === "forge_secret_scan")).toBe(true);
   });
 
   it("writes liveguard-events.jsonl for forge_fix_proposal", () => {
-    emitToolTelemetry("forge_fix_proposal", { source: "drift" }, { fixId: "test" }, 25, "OK", tempDir);
+    emitToolTelemetry({ toolName: "forge_fix_proposal", inputs: { source: "drift" }, result: { fixId: "test" }, durationMs: 25, status: "OK", cwd: tempDir });
     const events = readForgeJsonl("liveguard-events.jsonl", [], tempDir);
     expect(events.some(e => e.tool === "forge_fix_proposal")).toBe(true);
   });
 
   it("writes liveguard-events.jsonl for forge_quorum_analyze", () => {
-    emitToolTelemetry("forge_quorum_analyze", { source: "drift" }, { questionLength: 42 }, 15, "OK", tempDir);
+    emitToolTelemetry({ toolName: "forge_quorum_analyze", inputs: { source: "drift" }, result: { questionLength: 42 }, durationMs: 15, status: "OK", cwd: tempDir });
     const events = readForgeJsonl("liveguard-events.jsonl", [], tempDir);
     expect(events.some(e => e.tool === "forge_quorum_analyze")).toBe(true);
   });
 
   it("LIVEGUARD_TOOLS set has exactly 13 entries", () => {
     for (const tool of EXPECTED_LIVEGUARD_TOOLS) {
-      emitToolTelemetry(tool, {}, "test", 1, "OK", tempDir);
+      emitToolTelemetry({ toolName: tool, inputs: {}, result: "test", durationMs: 1, status: "OK", cwd: tempDir });
     }
     const events = readForgeJsonl("liveguard-events.jsonl", [], tempDir);
     const uniqueTools = [...new Set(events.map(e => e.tool))];
@@ -1773,7 +1773,7 @@ describe("emitToolTelemetry LIVEGUARD_TOOLS membership", () => {
 
 describe("emitToolTelemetry record shape", () => {
   it("returns record with expected fields", () => {
-    const record = emitToolTelemetry("forge_secret_scan", { since: "HEAD~1" }, { clean: true, findings: 0 }, 42, "OK", tempDir);
+    const record = emitToolTelemetry({ toolName: "forge_secret_scan", inputs: { since: "HEAD~1" }, result: { clean: true, findings: 0 }, durationMs: 42, status: "OK", cwd: tempDir });
     expect(record).toHaveProperty("timestamp");
     expect(record).toHaveProperty("tool", "forge_secret_scan");
     expect(record).toHaveProperty("inputs");
@@ -1784,23 +1784,23 @@ describe("emitToolTelemetry record shape", () => {
 
   it("truncates result to 2000 chars", () => {
     const longResult = "x".repeat(3000);
-    const record = emitToolTelemetry("forge_env_diff", {}, longResult, 10, "OK", tempDir);
+    const record = emitToolTelemetry({ toolName: "forge_env_diff", inputs: {}, result: longResult, durationMs: 10, status: "OK", cwd: tempDir });
     expect(record.result.length).toBeLessThanOrEqual(2000);
   });
 
   it("wraps non-object inputs", () => {
-    const record = emitToolTelemetry("forge_secret_scan", "raw-string", "ok", 5, "OK", tempDir);
+    const record = emitToolTelemetry({ toolName: "forge_secret_scan", inputs: "raw-string", result: "ok", durationMs: 5, status: "OK", cwd: tempDir });
     expect(record.inputs).toEqual({ raw: "raw-string" });
   });
 
   it("never throws on telemetry failure", () => {
     expect(() => {
-      emitToolTelemetry("forge_secret_scan", {}, "ok", 5, "OK", "/nonexistent/path/that/does/not/exist");
+      emitToolTelemetry({ toolName: "forge_secret_scan", inputs: {}, result: "ok", durationMs: 5, status: "OK", cwd: "/nonexistent/path/that/does/not/exist" });
     }).not.toThrow();
   });
 
   it("records DEGRADED status for graceful degradation", () => {
-    const record = emitToolTelemetry("forge_secret_scan", {}, { clean: null, error: "git unavailable" }, 5, "DEGRADED", tempDir);
+    const record = emitToolTelemetry({ toolName: "forge_secret_scan", inputs: {}, result: { clean: null, error: "git unavailable" }, durationMs: 5, status: "DEGRADED", cwd: tempDir });
     expect(record.status).toBe("DEGRADED");
   });
 });
@@ -3279,14 +3279,14 @@ describe("loadOpenClawConfig", () => {
 
 describe("emitToolTelemetry LIVEGUARD_TOOLS v2.29 count", () => {
   it("writes liveguard-events.jsonl for forge_fix_proposal", () => {
-    emitToolTelemetry("forge_fix_proposal", {}, { ok: true }, 100, "OK", tempDir);
+    emitToolTelemetry({ toolName: "forge_fix_proposal", inputs: {}, result: { ok: true }, durationMs: 100, status: "OK", cwd: tempDir });
     const events = readForgeJsonl("liveguard-events.jsonl", [], tempDir);
     expect(events.length).toBeGreaterThanOrEqual(1);
     expect(events[0].tool).toBe("forge_fix_proposal");
   });
 
   it("writes liveguard-events.jsonl for forge_quorum_analyze", () => {
-    emitToolTelemetry("forge_quorum_analyze", {}, { ok: true }, 50, "OK", tempDir);
+    emitToolTelemetry({ toolName: "forge_quorum_analyze", inputs: {}, result: { ok: true }, durationMs: 50, status: "OK", cwd: tempDir });
     const events = readForgeJsonl("liveguard-events.jsonl", [], tempDir);
     expect(events.length).toBeGreaterThanOrEqual(1);
     expect(events[0].tool).toBe("forge_quorum_analyze");
@@ -3301,7 +3301,7 @@ describe("emitToolTelemetry LIVEGUARD_TOOLS v2.29 count", () => {
       "forge_quorum_analyze", "forge_liveguard_run",
     ];
     for (const tool of lgTools) {
-      emitToolTelemetry(tool, {}, {}, 10, "OK", tempDir);
+      emitToolTelemetry({ toolName: tool, inputs: {}, result: {}, durationMs: 10, status: "OK", cwd: tempDir });
     }
     const events = readForgeJsonl("liveguard-events.jsonl", [], tempDir);
     expect(events).toHaveLength(14);

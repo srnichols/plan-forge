@@ -761,7 +761,7 @@ async function _callToolHandler_008_forge_health_trend(request, args) {
       const days = Math.max(1, Math.min(365, parseInt(args.days) || 30));
       const metrics = args.metrics ? args.metrics.split(",").map(m => m.trim()) : null;
       const report = getHealthTrend(cwd, days, metrics);
-      emitToolTelemetry("forge_health_trend", args, report, Date.now() - t0, "OK", cwd);
+      emitToolTelemetry({ toolName: "forge_health_trend", inputs: args, result: report, durationMs: Date.now() - t0, status: "OK", cwd: cwd });
       await broadcastLiveGuard("forge_health_trend", "OK", Date.now() - t0);
 
       // Auto-capture significant health changes
@@ -831,7 +831,7 @@ async function _callToolHandler_009_forge_alert_triage(request, args) {
       alerts.sort((a, b) => b.priority - a.priority || new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
 
       const result = { total: alerts.length, showing: Math.min(maxResults, alerts.length), minSeverity, alerts: alerts.slice(0, maxResults), generatedAt: new Date().toISOString() };
-      emitToolTelemetry("forge_alert_triage", args, result, Date.now() - t0, "OK", cwd);
+      emitToolTelemetry({ toolName: "forge_alert_triage", inputs: args, result: result, durationMs: Date.now() - t0, status: "OK", cwd: cwd });
       await broadcastLiveGuard("forge_alert_triage", "OK", Date.now() - t0, { total: result.total, showing: result.showing });
 
       // Auto-capture when critical/high alerts exist
@@ -1380,7 +1380,7 @@ async function _callToolHandler_029_forge_tempering_scan(request, args) {
     try {
       const cwd = args.path ? findProjectRoot(resolve(args.path)) : findProjectRoot(PROJECT_DIR);
       const result = await _temperingScanAnvilCompute(args, { _cwd: cwd, _hub: activeHub });
-      emitToolTelemetry("forge_tempering_scan", args, result, Date.now() - t0, result.ok ? "OK" : "ERROR", cwd);
+      emitToolTelemetry({ toolName: "forge_tempering_scan", inputs: args, result: result, durationMs: Date.now() - t0, status: result.ok ? "OK" : "ERROR", cwd: cwd });
 
       // L3 capture on completion — tags `tempering`, `scan`, `<stack>`,
       // `<status>`; payload is the gap summary only (never source
@@ -1417,7 +1417,7 @@ async function _callToolHandler_030_forge_tempering_status(request, args) {
         projectDir: cwd,
         limit: typeof args.limit === "number" ? args.limit : 10,
       });
-      emitToolTelemetry("forge_tempering_status", args, result, Date.now() - t0, "OK", cwd);
+      emitToolTelemetry({ toolName: "forge_tempering_status", inputs: args, result: result, durationMs: Date.now() - t0, status: "OK", cwd: cwd });
       return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
     } catch (err) {
       return { content: [{ type: "text", text: `Tempering status error: ${err.message}` }], isError: true };
@@ -1441,7 +1441,7 @@ async function _callToolHandler_031_forge_tempering_run(request, args) {
         objective: args.objective && typeof args.objective === "object" ? args.objective : null,
         spawnWorker,
       });
-      emitToolTelemetry("forge_tempering_run", args, result, Date.now() - t0, result.ok ? "OK" : "ERROR", cwd);
+      emitToolTelemetry({ toolName: "forge_tempering_run", inputs: args, result: result, durationMs: Date.now() - t0, status: result.ok ? "OK" : "ERROR", cwd: cwd });
 
       // L3 capture on completion — tags `tempering`, `run`, `<stack>`,
       // `<verdict>`; payload is scanner mix + verdict + pass/fail count.
@@ -1490,7 +1490,7 @@ async function _callToolHandler_032_forge_tempering_approve_baseline(request, ar
         } catch { /* best-effort */ }
       }
 
-      emitToolTelemetry("forge_tempering_approve_baseline", args, result, Date.now() - t0, "OK", cwd);
+      emitToolTelemetry({ toolName: "forge_tempering_approve_baseline", inputs: args, result: result, durationMs: Date.now() - t0, status: "OK", cwd: cwd });
       return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
     } catch (err) {
       return { content: [{ type: "text", text: `Baseline approval error: ${err.message}` }], isError: true };
@@ -1524,7 +1524,7 @@ async function _callToolHandler_033_forge_tempering_drain(request, args) {
         auditArtifact: auditArtifactPath,
       };
 
-      emitToolTelemetry("forge_tempering_drain", args, response, Date.now() - t0, response.ok ? "OK" : "ERROR", cwd);
+      emitToolTelemetry({ toolName: "forge_tempering_drain", inputs: args, result: response, durationMs: Date.now() - t0, status: response.ok ? "OK" : "ERROR", cwd: cwd });
 
       // L3 capture on completion
       try {
@@ -1554,7 +1554,7 @@ async function _callToolHandler_034_forge_triage_route(request, args) {
         return { content: [{ type: "text", text: JSON.stringify({ ok: false, error: "finding object required" }, null, 2) }], isError: true };
       }
       const result = routeFinding(args.finding, args.classifierResult || null);
-      emitToolTelemetry("forge_triage_route", args, result, Date.now() - t0, "OK", PROJECT_DIR);
+      emitToolTelemetry({ toolName: "forge_triage_route", inputs: args, result: result, durationMs: Date.now() - t0, status: "OK", cwd: PROJECT_DIR });
       return { content: [{ type: "text", text: JSON.stringify({ ok: true, ...result }, null, 2) }] };
     } catch (err) {
       return { content: [{ type: "text", text: `Triage route error: ${err.message}` }], isError: true };
@@ -1571,16 +1571,16 @@ async function _callToolHandler_035_forge_classifier_issue(request, args) {
       const cwd = args.path ? findProjectRoot(resolve(args.path)) : findProjectRoot(PROJECT_DIR);
       if (!args.payload || typeof args.payload !== "object") {
         const result = { ok: false, error: ERROR_CODES.MISSING_PAYLOAD.code, message: "payload object is required" };
-        emitToolTelemetry("forge_classifier_issue", args, result, Date.now() - t0, "ERROR", cwd);
+        emitToolTelemetry({ toolName: "forge_classifier_issue", inputs: args, result: result, durationMs: Date.now() - t0, status: "ERROR", cwd: cwd });
         return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }], isError: true };
       }
       let config = {};
       try { config = JSON.parse(readFileSync(resolve(cwd, ".forge.json"), "utf-8")); } catch { /* proceed without config */ }
       const result = await fileClassifierIssue(args.payload, config, { execSync, cwd, fetch: globalThis.fetch });
-      emitToolTelemetry("forge_classifier_issue", args, result, Date.now() - t0, result.ok ? "OK" : "ERROR", cwd);
+      emitToolTelemetry({ toolName: "forge_classifier_issue", inputs: args, result: result, durationMs: Date.now() - t0, status: result.ok ? "OK" : "ERROR", cwd: cwd });
       return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
     } catch (err) {
-      emitToolTelemetry("forge_classifier_issue", args, { error: err.message }, Date.now() - t0, "ERROR", findProjectRoot(PROJECT_DIR));
+      emitToolTelemetry({ toolName: "forge_classifier_issue", inputs: args, result: { error: err.message }, durationMs: Date.now() - t0, status: "ERROR", cwd: findProjectRoot(PROJECT_DIR) });
       return { content: [{ type: "text", text: `Classifier issue error: ${err.message}` }], isError: true };
     }
   
@@ -1612,7 +1612,7 @@ async function _callToolHandler_036_forge_bug_register(request, args) {
         hub: activeHub,
         captureMemory,
       });
-      emitToolTelemetry("forge_bug_register", args, result, Date.now() - t0, result.ok ? "OK" : "ERROR", cwd);
+      emitToolTelemetry({ toolName: "forge_bug_register", inputs: args, result: result, durationMs: Date.now() - t0, status: result.ok ? "OK" : "ERROR", cwd: cwd });
       return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
     } catch (err) {
       return { content: [{ type: "text", text: `Bug registration error: ${err.message}` }], isError: true };
@@ -1634,7 +1634,7 @@ async function _callToolHandler_037_forge_bug_list(request, args) {
       if (args.since) filters.since = args.since;
       if (args.until) filters.until = args.until;
       const bugs = listBugs(cwd, filters);
-      emitToolTelemetry("forge_bug_list", args, { count: bugs.length }, Date.now() - t0, "OK", cwd);
+      emitToolTelemetry({ toolName: "forge_bug_list", inputs: args, result: { count: bugs.length }, durationMs: Date.now() - t0, status: "OK", cwd: cwd });
       return { content: [{ type: "text", text: JSON.stringify({ ok: true, count: bugs.length, bugs }, null, 2) }] };
     } catch (err) {
       return { content: [{ type: "text", text: `Bug list error: ${err.message}` }], isError: true };
@@ -1668,7 +1668,7 @@ async function _callToolHandler_038_forge_bug_update_status(request, args) {
           });
         } catch { /* best-effort */ }
       }
-      emitToolTelemetry("forge_bug_update_status", args, result, Date.now() - t0, result.ok ? "OK" : "ERROR", cwd);
+      emitToolTelemetry({ toolName: "forge_bug_update_status", inputs: args, result: result, durationMs: Date.now() - t0, status: result.ok ? "OK" : "ERROR", cwd: cwd });
       return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
     } catch (err) {
       return { content: [{ type: "text", text: `Bug status update error: ${err.message}` }], isError: true };
@@ -1803,7 +1803,7 @@ async function _callToolHandler_039_forge_bug_validate_fix(request, args) {
     }
     const finalized = _039_forge_bug_validate_fix_finalizeAttempt(cwd, args.bugId, advisory, scanners, attempt, results);
     if (finalized.allPassed) await _finalizeBugValidationPass(cwd, args.bugId, bug, scanners, attempt);
-    emitToolTelemetry("forge_bug_validate_fix", args, finalized.result, Date.now() - t0, "OK", cwd);
+    emitToolTelemetry({ toolName: "forge_bug_validate_fix", inputs: args, result: finalized.result, durationMs: Date.now() - t0, status: "OK", cwd: cwd });
     return { content: [{ type: "text", text: JSON.stringify(finalized.result, null, 2) }], isError: false };
   } catch (err) {
     return { content: [{ type: "text", text: `Bug validation error: ${err.message}` }], isError: true };
@@ -2183,7 +2183,7 @@ async function _callToolHandler_044_forge_incident_capture(request, args) {
     const { severity, capturedAt, mttr } = validation;
     const record = _044_forge_incident_capture_buildRecord(args, cwd, severity, capturedAt, mttr);
     _044_forge_incident_capture_notify(args, cwd, severity, capturedAt, record);
-    emitToolTelemetry("forge_incident_capture", args, record, Date.now() - t0, "OK", cwd);
+    emitToolTelemetry({ toolName: "forge_incident_capture", inputs: args, result: record, durationMs: Date.now() - t0, status: "OK", cwd: cwd });
     await broadcastLiveGuard("forge_incident_capture", "OK", Date.now() - t0);
     captureMemory(
       `Incident ${record.id}: ${args.description}. Severity: ${severity}. Files: ${(args.files || []).join(", ") || "none"}.`,
@@ -2220,7 +2220,7 @@ async function _callToolHandler_045_forge_deploy_journal(request, args) {
 
       activeHub?.broadcast({ type: "deploy-recorded", data: record, timestamp: record.deployedAt });
 
-      emitToolTelemetry("forge_deploy_journal", args, record, Date.now() - t0, "OK", cwd);
+      emitToolTelemetry({ toolName: "forge_deploy_journal", inputs: args, result: record, durationMs: Date.now() - t0, status: "OK", cwd: cwd });
       await broadcastLiveGuard("forge_deploy_journal", "OK", Date.now() - t0);
 
       // Auto-capture deploy decision
@@ -2534,7 +2534,7 @@ async function _callToolHandler_046_forge_regression_guard(request, args) {
       const resolvedIncidents = _th_046_autoResolveIncidents({ args, cwd, files, result });
       if (resolvedIncidents.length > 0) result.resolvedIncidents = resolvedIncidents;
 
-      emitToolTelemetry("forge_regression_guard", args, result, Date.now() - t0, result.success ? "ok" : "error", cwd);
+      emitToolTelemetry({ toolName: "forge_regression_guard", inputs: args, result: result, durationMs: Date.now() - t0, status: result.success ? "ok" : "error", cwd: cwd });
       await broadcastLiveGuard("forge_regression_guard", result.success ? "ok" : "error", Date.now() - t0, {
         gates: result.gatesChecked,
         passed: result.passed,
@@ -2724,7 +2724,7 @@ async function _callToolHandler_047_forge_drift_report(request, args) {
       };
 
       _th_047_addAutoIncidents(args, analysis, result, cwd);
-      emitToolTelemetry("forge_drift_report", args, result, Date.now() - t0, "OK", cwd);
+      emitToolTelemetry({ toolName: "forge_drift_report", inputs: args, result: result, durationMs: Date.now() - t0, status: "OK", cwd: cwd });
       await broadcastLiveGuard("forge_drift_report", "OK", Date.now() - t0, {
         score,
         appViolations: analysis.violations.length,
@@ -2762,7 +2762,7 @@ async function _callToolHandler_048_forge_runbook(request, args) {
       writeFileSync(resolve(runbooksDir, runbookName), content, "utf-8");
 
       const result = { runbook: `.forge/runbooks/${runbookName}`, slices: plan.slices.length, generatedAt: new Date().toISOString() };
-      emitToolTelemetry("forge_runbook", args, result, Date.now() - t0, "OK", cwd);
+      emitToolTelemetry({ toolName: "forge_runbook", inputs: args, result: result, durationMs: Date.now() - t0, status: "OK", cwd: cwd });
       await broadcastLiveGuard("forge_runbook", "OK", Date.now() - t0);
 
       return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }], isError: false };
@@ -2780,7 +2780,7 @@ async function _callToolHandler_049_forge_hotspot(request, args) {
       const t0 = Date.now();
       const cwd = args.path ? findProjectRoot(resolve(args.path)) : findProjectRoot(PROJECT_DIR);
       const result = await _hotspotAnvilCompute(args, { _cwd: cwd });
-      emitToolTelemetry("forge_hotspot", args, result, Date.now() - t0, "OK", cwd);
+      emitToolTelemetry({ toolName: "forge_hotspot", inputs: args, result: result, durationMs: Date.now() - t0, status: "OK", cwd: cwd });
       await broadcastLiveGuard("forge_hotspot", "OK", Date.now() - t0);
 
       // Auto-capture hotspot patterns
@@ -3166,7 +3166,7 @@ async function _callToolHandler_050_forge_dep_watch(request, args) {
         unchanged: comparison.unchanged,
         snapshot: { capturedAt: snapshot.capturedAt, depCount: snapshot.depCount },
       };
-      emitToolTelemetry("forge_dep_watch", args, result, Date.now() - t0, "OK", cwd);
+      emitToolTelemetry({ toolName: "forge_dep_watch", inputs: args, result: result, durationMs: Date.now() - t0, status: "OK", cwd: cwd });
       await broadcastLiveGuard("forge_dep_watch", "OK", Date.now() - t0);
       return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }], isError: false };
     } catch (err) {
@@ -3193,10 +3193,10 @@ async function _callToolHandler_051_forge_diff_classify(request, args) {
       const opts = {};
       if (args.maxLines) opts.maxLines = args.maxLines;
       const result = diffClassify(diff, opts);
-      emitToolTelemetry("forge_diff_classify", args, result, Date.now() - t0, "OK", cwd);
+      emitToolTelemetry({ toolName: "forge_diff_classify", inputs: args, result: result, durationMs: Date.now() - t0, status: "OK", cwd: cwd });
       return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
     } catch (err) {
-      emitToolTelemetry("forge_diff_classify", args, { error: err.message }, Date.now() - t0, "ERROR", findProjectRoot(PROJECT_DIR));
+      emitToolTelemetry({ toolName: "forge_diff_classify", inputs: args, result: { error: err.message }, durationMs: Date.now() - t0, status: "ERROR", cwd: findProjectRoot(PROJECT_DIR) });
       return { content: [{ type: "text", text: `Diff classify error: ${err.message}` }], isError: true };
     }
   
@@ -3386,7 +3386,7 @@ function _052_forge_secret_scan_readDiff(cwd, since, args, t0) {
   } catch (err) {
     if (err.status === 128 || (err.message && err.message.includes("not a git repository"))) {
       const graceful = { clean: null, scannedFiles: 0, findings: [], error: "git unavailable" };
-      emitToolTelemetry("forge_secret_scan", args, graceful, Date.now() - t0, "DEGRADED", cwd);
+      emitToolTelemetry({ toolName: "forge_secret_scan", inputs: args, result: graceful, durationMs: Date.now() - t0, status: "DEGRADED", cwd: cwd });
       return { gracefulResponse: { content: [{ type: "text", text: JSON.stringify(graceful, null, 2) }], isError: false } };
     }
     throw err;
@@ -3593,7 +3593,7 @@ async function _callToolHandler_052_forge_secret_scan(request, args) {
       const threshold = Math.max(3.5, Math.min(5.0, args.threshold ?? 4.0));
       const diffResult = _th_052_readSecretDiff(cwd, since);
       if (diffResult.graceful) {
-        emitToolTelemetry("forge_secret_scan", args, diffResult.graceful, Date.now() - t0, "DEGRADED", cwd);
+        emitToolTelemetry({ toolName: "forge_secret_scan", inputs: args, result: diffResult.graceful, durationMs: Date.now() - t0, status: "DEGRADED", cwd: cwd });
         return { content: [{ type: "text", text: JSON.stringify(diffResult.graceful, null, 2) }], isError: false };
       }
 
@@ -3611,11 +3611,11 @@ async function _callToolHandler_052_forge_secret_scan(request, args) {
       writeFileSync(resolve(cwd, ".forge", "secret-scan-cache.json"), JSON.stringify(result, null, 2), "utf-8");
       _th_052_annotateDeployJournal(cwd, result.clean, result.scannedAt);
 
-      emitToolTelemetry("forge_secret_scan", args, {
+      emitToolTelemetry({ toolName: "forge_secret_scan", inputs: args, result: {
         clean: result.clean,
         findings: findings.length,
         scannedFiles: scannedFiles.size,
-      }, Date.now() - t0, "OK", cwd);
+      }, durationMs: Date.now() - t0, status: "OK", cwd });
       await broadcastLiveGuard("forge_secret_scan", "OK", Date.now() - t0);
 
       if (!result.clean) {
@@ -3643,7 +3643,7 @@ async function _callToolHandler_053_forge_env_diff(request, args) {
       // Stop condition: baseline not found → return error object, no throw
       if (!existsSync(baselinePath)) {
         const graceful = { pairs: [], summary: { clean: null, error: `baseline file not found: ${args.baseline || ".env"}` } };
-        emitToolTelemetry("forge_env_diff", args, graceful, Date.now() - t0, "DEGRADED", cwd);
+        emitToolTelemetry({ toolName: "forge_env_diff", inputs: args, result: graceful, durationMs: Date.now() - t0, status: "DEGRADED", cwd: cwd });
         return { content: [{ type: "text", text: JSON.stringify(graceful, null, 2) }], isError: false };
       }
 
@@ -3721,7 +3721,7 @@ async function _callToolHandler_053_forge_env_diff(request, args) {
         }, cwd);
       } catch { /* best-effort history */ }
 
-      emitToolTelemetry("forge_env_diff", args, { clean, totalGaps, filesCompared: targetFiles.length }, Date.now() - t0, "OK", cwd);
+      emitToolTelemetry({ toolName: "forge_env_diff", inputs: args, result: { clean, totalGaps, filesCompared: targetFiles.length }, durationMs: Date.now() - t0, status: "OK", cwd: cwd });
       await broadcastLiveGuard("forge_env_diff", "OK", Date.now() - t0);
 
       // Auto-capture env gaps
@@ -4689,7 +4689,7 @@ async function _callToolHandler_054_forge_fix_proposal(request, args) {
       const planContent = _054_forge_fix_proposal_renderPlan(fixId, sourceData.type, slices);
       _054_forge_fix_proposal_persistArtifacts({ cwd, fixId, planName, planPath, sourceType: sourceData.type, slices, planContent });
       const result = { fixId, plan: `docs/plans/auto/${planName}`, source: sourceData.type, sliceCount: slices.length, alreadyExists: false };
-      emitToolTelemetry("forge_fix_proposal", args, result, Date.now() - t0, "OK", cwd);
+      emitToolTelemetry({ toolName: "forge_fix_proposal", inputs: args, result: result, durationMs: Date.now() - t0, status: "OK", cwd: cwd });
       activeHub?.broadcast({ type: "fix-proposal-ready", data: result });
       await broadcastLiveGuard("forge_fix_proposal", "OK", Date.now() - t0);
       captureMemory(
@@ -4963,7 +4963,7 @@ async function _callToolHandler_055_forge_liveguard_run(request, args) {
       if (diffResult) report.diff = diffResult;
       report.tempering = _055_forge_liveguard_run_checkTempering(cwd);
       report.overallStatus = _055_forge_liveguard_run_computeOverallStatus(report, threshold);
-      emitToolTelemetry("forge_liveguard_run", args, report, Date.now() - t0, "OK", cwd);
+      emitToolTelemetry({ toolName: "forge_liveguard_run", inputs: args, result: report, durationMs: Date.now() - t0, status: "OK", cwd: cwd });
       await broadcastLiveGuard("forge_liveguard_run", "OK", Date.now() - t0, { overallStatus: report.overallStatus, driftScore: report.drift?.score, gates: report.regression?.gates, secrets: report.secrets?.findings });
       captureMemory(
         `LiveGuard health: drift ${report.drift?.score ?? "?"}/100, ${report.regression?.passed ?? 0}/${report.regression?.gates ?? 0} gates, ${report.alerts?.openIncidents ?? 0} open incidents, ${report.deps?.vulnerabilities ?? 0} vulnerabilities. Status: ${report.overallStatus}.`,
@@ -4989,10 +4989,7 @@ async function _callToolHandler_056_forge_home_snapshot(request, args) {
       drill: args.drill,
       activityCursor: args.activityCursor,
     });
-    emitToolTelemetry(
-      "forge_home_snapshot", args, result, Date.now() - t0,
-      result.ok ? "OK" : "ERROR", cwd
-    );
+    emitToolTelemetry({ toolName: "forge_home_snapshot", inputs: args, result, durationMs: Date.now() - t0, status: result.ok ? "OK" : "ERROR", cwd });
     return {
       content: [{ type: "text", text: JSON.stringify(result) }],
       isError: !result.ok,
@@ -5014,7 +5011,7 @@ async function _callToolHandler_057_forge_review_add(request, args) {
         context: args.context || null,
         correlationId: args.correlationId || null,
       }, activeHub, captureMemory);
-      emitToolTelemetry("forge_review_add", args, result, Date.now() - t0, "OK", cwd);
+      emitToolTelemetry({ toolName: "forge_review_add", inputs: args, result: result, durationMs: Date.now() - t0, status: "OK", cwd: cwd });
       return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
     } catch (err) {
       return { content: [{ type: "text", text: JSON.stringify({ error: err.code || "ERR_UNKNOWN", message: err.message }) }], isError: true };
@@ -5037,7 +5034,7 @@ async function _callToolHandler_058_forge_review_list(request, args) {
       if (args.limit !== undefined) filters.limit = args.limit;
       if (args.cursor !== undefined) filters.cursor = args.cursor;
       const items = listReviewItems(cwd, filters);
-      emitToolTelemetry("forge_review_list", args, { count: items.length }, Date.now() - t0, "OK", cwd);
+      emitToolTelemetry({ toolName: "forge_review_list", inputs: args, result: { count: items.length }, durationMs: Date.now() - t0, status: "OK", cwd: cwd });
       return { content: [{ type: "text", text: JSON.stringify({ ok: true, count: items.length, items }, null, 2) }] };
     } catch (err) {
       return { content: [{ type: "text", text: JSON.stringify({ error: err.code || "ERR_UNKNOWN", message: err.message }) }], isError: true };
@@ -5058,7 +5055,7 @@ async function _callToolHandler_059_forge_review_resolve(request, args) {
         resolvedBy: args.resolvedBy,
         note: args.note || null,
       }, activeHub, captureMemory);
-      emitToolTelemetry("forge_review_resolve", args, result, Date.now() - t0, "OK", cwd);
+      emitToolTelemetry({ toolName: "forge_review_resolve", inputs: args, result: result, durationMs: Date.now() - t0, status: "OK", cwd: cwd });
       return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
     } catch (err) {
       return { content: [{ type: "text", text: JSON.stringify({ error: err.code || "ERR_UNKNOWN", message: err.message }) }], isError: true };
@@ -5079,14 +5076,14 @@ async function _callToolHandler_060_forge_delegate_to_agent(request, args) {
       const bug = loadBug(cwd, args.bugId);
       if (!bug) {
         const result = { ok: false, error: ERROR_CODES.BUG_NOT_FOUND.code, bugId: args.bugId };
-        emitToolTelemetry("forge_delegate_to_agent", args, result, Date.now() - t0, "ERROR", cwd);
+        emitToolTelemetry({ toolName: "forge_delegate_to_agent", inputs: args, result: result, durationMs: Date.now() - t0, status: "ERROR", cwd: cwd });
         return { content: [{ type: "text", text: JSON.stringify(result) }], isError: true };
       }
 
       const route = resolveRoute({ ...bug, type: deriveBugType(bug) });
       if (!route) {
         const result = { ok: true, routed: false, reason: "no-rule-matches", bugId: args.bugId };
-        emitToolTelemetry("forge_delegate_to_agent", args, result, Date.now() - t0, "OK", cwd);
+        emitToolTelemetry({ toolName: "forge_delegate_to_agent", inputs: args, result: result, durationMs: Date.now() - t0, status: "OK", cwd: cwd });
         return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
       }
 
@@ -5112,7 +5109,7 @@ async function _callToolHandler_060_forge_delegate_to_agent(request, args) {
       }
 
       const result = { ok: true, routed: true, bugId: args.bugId, agent: route.agent, skill: route.skill, mode: args.mode, dryRun: !!args.dryRun, reviewItemId, analystPrompt: prompt };
-      emitToolTelemetry("forge_delegate_to_agent", args, result, Date.now() - t0, "OK", cwd);
+      emitToolTelemetry({ toolName: "forge_delegate_to_agent", inputs: args, result: result, durationMs: Date.now() - t0, status: "OK", cwd: cwd });
       return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
     } catch (err) {
       return { content: [{ type: "text", text: JSON.stringify({ error: err.code || "ERR_DELEGATE", message: err.message }) }], isError: true };
@@ -5132,7 +5129,7 @@ async function _callToolHandler_061_forge_notify_send(request, args) {
       const core = createNotificationCore({ hub: activeHub, projectRoot: cwd, adapters: { webhook: webhookAdapter }, captureMemoryFn: captureMemory });
       const result = await core.directSend({ via: args.via, payload: args.payload, formattedMessage: args.formattedMessage });
       core.shutdown();
-      emitToolTelemetry("forge_notify_send", args, result, Date.now() - t0, result.ok ? "OK" : "ERROR", cwd);
+      emitToolTelemetry({ toolName: "forge_notify_send", inputs: args, result: result, durationMs: Date.now() - t0, status: result.ok ? "OK" : "ERROR", cwd: cwd });
       return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }], isError: !result.ok };
     } catch (err) {
       return { content: [{ type: "text", text: JSON.stringify({ error: err.code || "ERR_NOTIFY", message: err.message }) }], isError: true };
@@ -5152,7 +5149,7 @@ async function _callToolHandler_062_forge_notify_test(request, args) {
       const core = createNotificationCore({ hub: activeHub, projectRoot: cwd, adapters: { webhook: webhookAdapter }, captureMemoryFn: captureMemory });
       const result = core.testAdapter({ adapter: args.adapter });
       core.shutdown();
-      emitToolTelemetry("forge_notify_test", args, result, Date.now() - t0, "OK", cwd);
+      emitToolTelemetry({ toolName: "forge_notify_test", inputs: args, result: result, durationMs: Date.now() - t0, status: "OK", cwd: cwd });
       return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
     } catch (err) {
       return { content: [{ type: "text", text: JSON.stringify({ error: err.code || "ERR_NOTIFY_TEST", message: err.message }) }], isError: true };
@@ -5178,11 +5175,11 @@ async function _callToolHandler_063_forge_search(request, args) {
       if (l3Hits.length > 0) {
         result.l3Hits = l3Hits.length;
       }
-      emitToolTelemetry("forge_search", args, result, Date.now() - t0, "OK", cwd);
+      emitToolTelemetry({ toolName: "forge_search", inputs: args, result: result, durationMs: Date.now() - t0, status: "OK", cwd: cwd });
       return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
     } catch (err) {
       const durationMs = Date.now() - t0;
-      emitToolTelemetry("forge_search", args, { error: err.message }, durationMs, "ERROR", findProjectRoot(PROJECT_DIR));
+      emitToolTelemetry({ toolName: "forge_search", inputs: args, result: { error: err.message }, durationMs: durationMs, status: "ERROR", cwd: findProjectRoot(PROJECT_DIR) });
       return { content: [{ type: "text", text: `Search error: ${err.message}` }], isError: true };
     }
   
@@ -5196,11 +5193,11 @@ async function _callToolHandler_064_forge_timeline(request, args) {
     try {
       const cwd = findProjectRoot(PROJECT_DIR);
       const result = await forgeTimeline(args, { cwd });
-      emitToolTelemetry("forge_timeline", args, result, Date.now() - t0, "OK", cwd);
+      emitToolTelemetry({ toolName: "forge_timeline", inputs: args, result: result, durationMs: Date.now() - t0, status: "OK", cwd: cwd });
       return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
     } catch (err) {
       const durationMs = Date.now() - t0;
-      emitToolTelemetry("forge_timeline", args, { error: err.message }, durationMs, "ERROR", findProjectRoot(PROJECT_DIR));
+      emitToolTelemetry({ toolName: "forge_timeline", inputs: args, result: { error: err.message }, durationMs: durationMs, status: "ERROR", cwd: findProjectRoot(PROJECT_DIR) });
       return { content: [{ type: "text", text: `Timeline error: ${err.message}` }], isError: true };
     }
   
@@ -5216,11 +5213,11 @@ async function _callToolHandler_065_forge_doctor_quorum(request, args) {
       const presets = presetArg === "all" ? ["power", "speed"] : [presetArg];
       const results = presets.map((p) => assessQuorumViability(p));
       const result = { runtime: detectExecutionRuntime(), presets: results };
-      emitToolTelemetry("forge_doctor_quorum", args, result, Date.now() - t0, "OK", findProjectRoot(PROJECT_DIR));
+      emitToolTelemetry({ toolName: "forge_doctor_quorum", inputs: args, result: result, durationMs: Date.now() - t0, status: "OK", cwd: findProjectRoot(PROJECT_DIR) });
       return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
     } catch (err) {
       const durationMs = Date.now() - t0;
-      emitToolTelemetry("forge_doctor_quorum", args, { error: err.message }, durationMs, "ERROR", findProjectRoot(PROJECT_DIR));
+      emitToolTelemetry({ toolName: "forge_doctor_quorum", inputs: args, result: { error: err.message }, durationMs: durationMs, status: "ERROR", cwd: findProjectRoot(PROJECT_DIR) });
       return { content: [{ type: "text", text: `Doctor quorum error: ${err.message}` }], isError: true };
     }
   
@@ -5461,7 +5458,7 @@ async function _callToolHandler_066_forge_quorum_analyze(request, args) {
         questionUsed,
       };
 
-      emitToolTelemetry("forge_quorum_analyze", args, { source, questionLength: questionUsed.length }, Date.now() - t0, "OK", cwd);
+      emitToolTelemetry({ toolName: "forge_quorum_analyze", inputs: args, result: { source, questionLength: questionUsed.length }, durationMs: Date.now() - t0, status: "OK", cwd: cwd });
       await broadcastLiveGuard("forge_quorum_analyze", "OK", Date.now() - t0);
       return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }], isError: false };
     } catch (err) {
@@ -5845,11 +5842,11 @@ async function _callToolHandler_068_forge_testbed_run(request, args) {
         testbedPath,
         dryRun: args.dryRun || false,
       });
-      emitToolTelemetry("forge_testbed_run", args, result, Date.now() - t0, result.status === "passed" ? "OK" : "FAIL", cwd);
+      emitToolTelemetry({ toolName: "forge_testbed_run", inputs: args, result: result, durationMs: Date.now() - t0, status: result.status === "passed" ? "OK" : "FAIL", cwd: cwd });
       return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }], isError: result.status !== "passed" };
     } catch (err) {
       const durationMs = Date.now() - t0;
-      emitToolTelemetry("forge_testbed_run", args, { error: err.message, code: err.code }, durationMs, "ERROR", findProjectRoot(PROJECT_DIR));
+      emitToolTelemetry({ toolName: "forge_testbed_run", inputs: args, result: { error: err.message, code: err.code }, durationMs: durationMs, status: "ERROR", cwd: findProjectRoot(PROJECT_DIR) });
       return { content: [{ type: "text", text: JSON.stringify({ error: err.code || "ERR_TESTBED", message: err.message }) }], isError: true };
     }
   
@@ -5871,10 +5868,10 @@ async function _callToolHandler_069_forge_testbed_findings(request, args) {
       const limit = Math.max(1, args.limit || 50);
       const findings = all.slice(0, limit);
       const result = { findings, total: all.length, truncated: all.length > limit };
-      emitToolTelemetry("forge_testbed_findings", args, result, Date.now() - t0, "OK", cwd);
+      emitToolTelemetry({ toolName: "forge_testbed_findings", inputs: args, result: result, durationMs: Date.now() - t0, status: "OK", cwd: cwd });
       return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
     } catch (err) {
-      emitToolTelemetry("forge_testbed_findings", args, { error: err.message }, Date.now() - t0, "ERROR", findProjectRoot(PROJECT_DIR));
+      emitToolTelemetry({ toolName: "forge_testbed_findings", inputs: args, result: { error: err.message }, durationMs: Date.now() - t0, status: "ERROR", cwd: findProjectRoot(PROJECT_DIR) });
       return { content: [{ type: "text", text: `Tool error: ${err.message}` }], isError: true };
     }
   
@@ -5893,10 +5890,10 @@ async function _callToolHandler_070_forge_export_plan(request, args) {
         sourceNote: args.sourceNote,
         cwd,
       });
-      emitToolTelemetry("forge_export_plan", args, result, Date.now() - t0, result.ok ? "OK" : "ERROR", cwd);
+      emitToolTelemetry({ toolName: "forge_export_plan", inputs: args, result: result, durationMs: Date.now() - t0, status: result.ok ? "OK" : "ERROR", cwd: cwd });
       return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
     } catch (err) {
-      emitToolTelemetry("forge_export_plan", args, { error: err.message }, Date.now() - t0, "ERROR", findProjectRoot(PROJECT_DIR));
+      emitToolTelemetry({ toolName: "forge_export_plan", inputs: args, result: { error: err.message }, durationMs: Date.now() - t0, status: "ERROR", cwd: findProjectRoot(PROJECT_DIR) });
       return { content: [{ type: "text", text: `Tool error: ${err.message}` }], isError: true };
     }
   
@@ -5917,10 +5914,10 @@ async function _callToolHandler_071_forge_sync_memories(request, args) {
         since:   args.since,
         output:  args.output,
       });
-      emitToolTelemetry("forge_sync_memories", args, result, Date.now() - t0, result.ok ? "OK" : "ERROR", cwd);
+      emitToolTelemetry({ toolName: "forge_sync_memories", inputs: args, result: result, durationMs: Date.now() - t0, status: result.ok ? "OK" : "ERROR", cwd: cwd });
       return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
     } catch (err) {
-      emitToolTelemetry("forge_sync_memories", args, { error: err.message }, Date.now() - t0, "ERROR", findProjectRoot(PROJECT_DIR));
+      emitToolTelemetry({ toolName: "forge_sync_memories", inputs: args, result: { error: err.message }, durationMs: Date.now() - t0, status: "ERROR", cwd: findProjectRoot(PROJECT_DIR) });
       return { content: [{ type: "text", text: `Tool error: ${err.message}` }], isError: true };
     }
   
@@ -5942,10 +5939,10 @@ async function _callToolHandler_072_forge_sync_instructions(request, args) {
         noExtras:      args.noExtras      ?? false,
         output:        args.output,
       });
-      emitToolTelemetry("forge_sync_instructions", args, result, Date.now() - t0, result.ok ? "OK" : "ERROR", cwd);
+      emitToolTelemetry({ toolName: "forge_sync_instructions", inputs: args, result: result, durationMs: Date.now() - t0, status: result.ok ? "OK" : "ERROR", cwd: cwd });
       return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
     } catch (err) {
-      emitToolTelemetry("forge_sync_instructions", args, { error: err.message }, Date.now() - t0, "ERROR", findProjectRoot(PROJECT_DIR));
+      emitToolTelemetry({ toolName: "forge_sync_instructions", inputs: args, result: { error: err.message }, durationMs: Date.now() - t0, status: "ERROR", cwd: findProjectRoot(PROJECT_DIR) });
       return { content: [{ type: "text", text: `Tool error: ${err.message}` }], isError: true };
     }
   
@@ -6018,11 +6015,11 @@ async function _callToolHandler_073_forge_testbed_happypath(request, args) {
       const total = happyPathIds.length + moduleScenarios.length;
       const summary = { passed, failed, total, results };
       const status = failed === 0 && total > 0 ? "OK" : "FAIL";
-      emitToolTelemetry("forge_testbed_happypath", args, summary, Date.now() - t0, status, cwd);
+      emitToolTelemetry({ toolName: "forge_testbed_happypath", inputs: args, result: summary, durationMs: Date.now() - t0, status: status, cwd: cwd });
       return { content: [{ type: "text", text: JSON.stringify(summary, null, 2) }], isError: failed > 0 };
     } catch (err) {
       const durationMs = Date.now() - t0;
-      emitToolTelemetry("forge_testbed_happypath", args, { error: err.message, code: err.code }, durationMs, "ERROR", findProjectRoot(PROJECT_DIR));
+      emitToolTelemetry({ toolName: "forge_testbed_happypath", inputs: args, result: { error: err.message, code: err.code }, durationMs: durationMs, status: "ERROR", cwd: findProjectRoot(PROJECT_DIR) });
       return { content: [{ type: "text", text: JSON.stringify({ error: err.code || "ERR_TESTBED", message: err.message }) }], isError: true };
     }
   
@@ -6045,7 +6042,7 @@ async function _callToolHandler_074_forge_master_ask(request, args) {
         try {
           const proxyResult = await studio.invoke("forge_master_ask", args);
           const text = typeof proxyResult === "string" ? proxyResult : JSON.stringify(proxyResult, null, 2);
-          emitToolTelemetry("forge_master_ask", args, { proxied: true }, Date.now() - t0, "OK", cwd);
+          emitToolTelemetry({ toolName: "forge_master_ask", inputs: args, result: { proxied: true }, durationMs: Date.now() - t0, status: "OK", cwd: cwd });
           return { content: [{ type: "text", text }] };
         } catch (proxyErr) {
           console.error(`forge-master: proxy error, falling back in-process: ${proxyErr.message}`);
@@ -6073,16 +6070,16 @@ async function _callToolHandler_074_forge_master_ask(request, args) {
           toolMetadata: TOOL_METADATA,
         },
       );
-      emitToolTelemetry("forge_master_ask", args, {
+      emitToolTelemetry({ toolName: "forge_master_ask", inputs: args, result: {
         sessionId: result.sessionId,
         tokensIn: result.tokensIn,
         tokensOut: result.tokensOut,
         toolCallCount: result.toolCalls?.length ?? 0,
         truncated: result.truncated,
-      }, Date.now() - t0, result.error ? "ERROR" : "OK", cwd);
+      }, durationMs: Date.now() - t0, status: result.error ? "ERROR" : "OK", cwd });
       return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
     } catch (err) {
-      emitToolTelemetry("forge_master_ask", args, { error: err.message }, Date.now() - t0, "ERROR", findProjectRoot(PROJECT_DIR));
+      emitToolTelemetry({ toolName: "forge_master_ask", inputs: args, result: { error: err.message }, durationMs: Date.now() - t0, status: "ERROR", cwd: findProjectRoot(PROJECT_DIR) });
       return { content: [{ type: "text", text: `Forge-Master error: ${err.message}` }], isError: true };
     }
   
@@ -6100,12 +6097,12 @@ async function _callToolHandler_075_forge_meta_bug_file(request, args) {
       // Validate class enum
       if (!args.class || !META_BUG_CLASSES.includes(args.class)) {
         const result = { ok: false, error: ERROR_CODES.INVALID_CLASS.code, validClasses: [...META_BUG_CLASSES] };
-        emitToolTelemetry("forge_meta_bug_file", args, result, Date.now() - t0, "ERROR", cwd);
+        emitToolTelemetry({ toolName: "forge_meta_bug_file", inputs: args, result: result, durationMs: Date.now() - t0, status: "ERROR", cwd: cwd });
         return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
       }
       if (!args.title || !args.symptom) {
         const result = { ok: false, error: ERROR_CODES.MISSING_REQUIRED_FIELDS.code };
-        emitToolTelemetry("forge_meta_bug_file", args, result, Date.now() - t0, "ERROR", cwd);
+        emitToolTelemetry({ toolName: "forge_meta_bug_file", inputs: args, result: result, durationMs: Date.now() - t0, status: "ERROR", cwd: cwd });
         return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
       }
 
@@ -6152,10 +6149,10 @@ async function _callToolHandler_075_forge_meta_bug_file(request, args) {
         { execSync, cwd },
       );
 
-      emitToolTelemetry("forge_meta_bug_file", args, filerResult, Date.now() - t0, filerResult.ok ? "OK" : "ERROR", cwd);
+      emitToolTelemetry({ toolName: "forge_meta_bug_file", inputs: args, result: filerResult, durationMs: Date.now() - t0, status: filerResult.ok ? "OK" : "ERROR", cwd: cwd });
       return { content: [{ type: "text", text: JSON.stringify(filerResult, null, 2) }] };
     } catch (err) {
-      emitToolTelemetry("forge_meta_bug_file", args, { error: err.message }, Date.now() - t0, "ERROR", findProjectRoot(PROJECT_DIR));
+      emitToolTelemetry({ toolName: "forge_meta_bug_file", inputs: args, result: { error: err.message }, durationMs: Date.now() - t0, status: "ERROR", cwd: findProjectRoot(PROJECT_DIR) });
       return { content: [{ type: "text", text: `Meta-bug filing error: ${err.message}` }], isError: true };
     }
   
@@ -6180,11 +6177,11 @@ async function _callToolHandler_076_forge_graph_query(request, args) {
       } else {
         result = queryRecentChanges({ since: args.since, type: args.filter }, { projectDir: cwd });
       }
-      emitToolTelemetry("forge_graph_query", args, result, Date.now() - t0, "OK", cwd);
+      emitToolTelemetry({ toolName: "forge_graph_query", inputs: args, result: result, durationMs: Date.now() - t0, status: "OK", cwd: cwd });
       return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
     } catch (err) {
       const durationMs = Date.now() - t0;
-      emitToolTelemetry("forge_graph_query", args, { error: err.message }, durationMs, "ERROR", findProjectRoot(PROJECT_DIR));
+      emitToolTelemetry({ toolName: "forge_graph_query", inputs: args, result: { error: err.message }, durationMs: durationMs, status: "ERROR", cwd: findProjectRoot(PROJECT_DIR) });
       return { content: [{ type: "text", text: `Graph query error: ${err.message}` }], isError: true };
     }
   
@@ -6208,11 +6205,11 @@ async function _callToolHandler_077_forge_patterns_list(request, args) {
           });
         }
       }
-      emitToolTelemetry("forge_patterns_list", args, { count: patterns.length }, Date.now() - t0, "OK", cwd);
+      emitToolTelemetry({ toolName: "forge_patterns_list", inputs: args, result: { count: patterns.length }, durationMs: Date.now() - t0, status: "OK", cwd: cwd });
       return { content: [{ type: "text", text: JSON.stringify(patterns, null, 2) }] };
     } catch (err) {
       const durationMs = Date.now() - t0;
-      emitToolTelemetry("forge_patterns_list", args, { error: err.message }, durationMs, "ERROR", findProjectRoot(PROJECT_DIR));
+      emitToolTelemetry({ toolName: "forge_patterns_list", inputs: args, result: { error: err.message }, durationMs: durationMs, status: "ERROR", cwd: findProjectRoot(PROJECT_DIR) });
       return { content: [{ type: "text", text: `Pattern list error: ${err.message}` }], isError: true };
     }
   
@@ -6226,14 +6223,14 @@ async function _callToolHandler_078_forge_delegate_review(request, args) {
     try {
       const cwd = args.path ? resolve(args.path) : findProjectRoot(PROJECT_DIR);
       const result = delegateReview({ criteria: args.criteria, cwd });
-      emitToolTelemetry("forge_delegate_review", args, result, Date.now() - t0, "OK", cwd);
+      emitToolTelemetry({ toolName: "forge_delegate_review", inputs: args, result: result, durationMs: Date.now() - t0, status: "OK", cwd: cwd });
       return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
     } catch (err) {
       const isNoPr = err instanceof ReviewDelegateNoPrError;
       const isAuth = err instanceof ReviewDelegateAuthError;
       const code = isNoPr ? "NO_PR" : isAuth ? "AUTH_ERROR" : "DELEGATE_ERROR";
       const response = { ok: false, error: err.message, code };
-      emitToolTelemetry("forge_delegate_review", args, response, Date.now() - t0, "ERROR", "");
+      emitToolTelemetry({ toolName: "forge_delegate_review", inputs: args, result: response, durationMs: Date.now() - t0, status: "ERROR", cwd: "" });
       return { content: [{ type: "text", text: JSON.stringify(response, null, 2) }] };
     }
   
@@ -6248,7 +6245,7 @@ async function _callToolHandler_079_forge_team_dashboard(request, args) {
       const cwd = args.path ? resolve(args.path) : findProjectRoot(PROJECT_DIR);
       const limit = Math.min(args.limit ?? 50, 200);
       const result = buildTeamDashboard({ storeDir: join(cwd, ".forge"), limit, since: args.since });
-      emitToolTelemetry("forge_team_dashboard", args, result, Date.now() - t0, "OK", cwd);
+      emitToolTelemetry({ toolName: "forge_team_dashboard", inputs: args, result: result, durationMs: Date.now() - t0, status: "OK", cwd: cwd });
       return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
     } catch (err) {
       return { content: [{ type: "text", text: JSON.stringify({ ok: false, error: err.message }) }] };
@@ -6273,7 +6270,7 @@ async function _callToolHandler_080_forge_team_activity(request, args) {
           ? `${activities.length} recent team activity entries`
           : "No team activity recorded yet. Team activity is recorded after each plan run.",
       };
-      emitToolTelemetry("forge_team_activity", args, result, Date.now() - t0, "OK", cwd);
+      emitToolTelemetry({ toolName: "forge_team_activity", inputs: args, result: result, durationMs: Date.now() - t0, status: "OK", cwd: cwd });
       return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
     } catch (err) {
       return { content: [{ type: "text", text: JSON.stringify({ ok: false, error: err.message }) }] };
@@ -6560,7 +6557,7 @@ async function _callToolHandler_081_forge_github_metrics(request, args) {
       const repoSlug = _th_081_resolveRepoSlug(args, cwd);
       if (!repoSlug) {
         const notDetected = { ok: false, error: "REPO_NOT_DETECTED", hint: "Pass repo: 'owner/repo' or add a github.com remote." };
-        emitToolTelemetry("forge_github_metrics", args, notDetected, Date.now() - t0, "ERROR", cwd);
+        emitToolTelemetry({ toolName: "forge_github_metrics", inputs: args, result: notDetected, durationMs: Date.now() - t0, status: "ERROR", cwd: cwd });
         return { content: [{ type: "text", text: JSON.stringify(notDetected, null, 2) }], isError: true };
       }
 
@@ -6586,10 +6583,10 @@ async function _callToolHandler_081_forge_github_metrics(request, args) {
         contributors: _th_081_getContributorCount(cwd, repoSlug),
       };
 
-      emitToolTelemetry("forge_github_metrics", args, { ok: true, repo: repoSlug }, Date.now() - t0, "OK", cwd);
+      emitToolTelemetry({ toolName: "forge_github_metrics", inputs: args, result: { ok: true, repo: repoSlug }, durationMs: Date.now() - t0, status: "OK", cwd: cwd });
       return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
     } catch (err) {
-      emitToolTelemetry("forge_github_metrics", args, { error: err.message }, Date.now() - t0, "ERROR", findProjectRoot(PROJECT_DIR));
+      emitToolTelemetry({ toolName: "forge_github_metrics", inputs: args, result: { error: err.message }, durationMs: Date.now() - t0, status: "ERROR", cwd: findProjectRoot(PROJECT_DIR) });
       return { content: [{ type: "text", text: `GitHub metrics error: ${err.message}` }], isError: true };
     }
   
@@ -6603,10 +6600,10 @@ async function _callToolHandler_082_forge_anvil_stat(request, args) {
     try {
       const cwd = args.path ? findProjectRoot(resolve(args.path)) : findProjectRoot(PROJECT_DIR);
       const result = anvilStat({ cwd });
-      emitToolTelemetry("forge_anvil_stat", args, result, Date.now() - t0, "OK", cwd);
+      emitToolTelemetry({ toolName: "forge_anvil_stat", inputs: args, result: result, durationMs: Date.now() - t0, status: "OK", cwd: cwd });
       return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
     } catch (err) {
-      emitToolTelemetry("forge_anvil_stat", args, { error: err.message }, Date.now() - t0, "ERROR", findProjectRoot(PROJECT_DIR));
+      emitToolTelemetry({ toolName: "forge_anvil_stat", inputs: args, result: { error: err.message }, durationMs: Date.now() - t0, status: "ERROR", cwd: findProjectRoot(PROJECT_DIR) });
       return { content: [{ type: "text", text: `forge_anvil_stat error: ${err.message}` }], isError: true };
     }
   
@@ -6623,11 +6620,11 @@ async function _callToolHandler_083_forge_anvil_clear(request, args) {
       if (args.tool != null) opts.tool = String(args.tool);
       if (args.olderThanMs != null) opts.olderThanMs = Number(args.olderThanMs);
       const result = anvilClear(opts, { cwd });
-      emitToolTelemetry("forge_anvil_clear", args, result, Date.now() - t0, "OK", cwd);
+      emitToolTelemetry({ toolName: "forge_anvil_clear", inputs: args, result: result, durationMs: Date.now() - t0, status: "OK", cwd: cwd });
       return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
     } catch (err) {
       const errPayload = { error: err.message, code: err.code || undefined };
-      emitToolTelemetry("forge_anvil_clear", args, errPayload, Date.now() - t0, "ERROR", findProjectRoot(PROJECT_DIR));
+      emitToolTelemetry({ toolName: "forge_anvil_clear", inputs: args, result: errPayload, durationMs: Date.now() - t0, status: "ERROR", cwd: findProjectRoot(PROJECT_DIR) });
       return { content: [{ type: "text", text: JSON.stringify(errPayload, null, 2) }], isError: true };
     }
   
@@ -6645,10 +6642,10 @@ async function _callToolHandler_084_forge_anvil_rebuild(request, args) {
         return { content: [{ type: "text", text: JSON.stringify(errPayload, null, 2) }], isError: true };
       }
       const result = anvilRebuild({ since: String(args.since) }, { cwd });
-      emitToolTelemetry("forge_anvil_rebuild", args, result, Date.now() - t0, "OK", cwd);
+      emitToolTelemetry({ toolName: "forge_anvil_rebuild", inputs: args, result: result, durationMs: Date.now() - t0, status: "OK", cwd: cwd });
       return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
     } catch (err) {
-      emitToolTelemetry("forge_anvil_rebuild", args, { error: err.message }, Date.now() - t0, "ERROR", findProjectRoot(PROJECT_DIR));
+      emitToolTelemetry({ toolName: "forge_anvil_rebuild", inputs: args, result: { error: err.message }, durationMs: Date.now() - t0, status: "ERROR", cwd: findProjectRoot(PROJECT_DIR) });
       return { content: [{ type: "text", text: `forge_anvil_rebuild error: ${err.message}` }], isError: true };
     }
   
@@ -6665,10 +6662,10 @@ async function _callToolHandler_085_forge_anvil_dlq_list(request, args) {
       if (args.tool != null) opts.tool = String(args.tool);
       if (args.limit != null) opts.limit = Number(args.limit);
       const result = anvilDlqList(opts, { cwd });
-      emitToolTelemetry("forge_anvil_dlq_list", args, { total: result.total }, Date.now() - t0, "OK", cwd);
+      emitToolTelemetry({ toolName: "forge_anvil_dlq_list", inputs: args, result: { total: result.total }, durationMs: Date.now() - t0, status: "OK", cwd: cwd });
       return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
     } catch (err) {
-      emitToolTelemetry("forge_anvil_dlq_list", args, { error: err.message }, Date.now() - t0, "ERROR", findProjectRoot(PROJECT_DIR));
+      emitToolTelemetry({ toolName: "forge_anvil_dlq_list", inputs: args, result: { error: err.message }, durationMs: Date.now() - t0, status: "ERROR", cwd: findProjectRoot(PROJECT_DIR) });
       return { content: [{ type: "text", text: `forge_anvil_dlq_list error: ${err.message}` }], isError: true };
     }
   
@@ -6685,10 +6682,10 @@ async function _callToolHandler_086_forge_anvil_dlq_drain(request, args) {
       if (args.id != null) opts.id = String(args.id);
       if (args.tool != null) opts.tool = String(args.tool);
       const result = anvilDlqDrain(opts, { cwd });
-      emitToolTelemetry("forge_anvil_dlq_drain", args, result, Date.now() - t0, "OK", cwd);
+      emitToolTelemetry({ toolName: "forge_anvil_dlq_drain", inputs: args, result: result, durationMs: Date.now() - t0, status: "OK", cwd: cwd });
       return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
     } catch (err) {
-      emitToolTelemetry("forge_anvil_dlq_drain", args, { error: err.message }, Date.now() - t0, "ERROR", findProjectRoot(PROJECT_DIR));
+      emitToolTelemetry({ toolName: "forge_anvil_dlq_drain", inputs: args, result: { error: err.message }, durationMs: Date.now() - t0, status: "ERROR", cwd: findProjectRoot(PROJECT_DIR) });
       return { content: [{ type: "text", text: `forge_anvil_dlq_drain error: ${err.message}` }], isError: true };
     }
   
@@ -6705,21 +6702,21 @@ async function _callToolHandler_087_forge_hallmark_show(request, args) {
         const record = readHallmark(String(args.id), { cwd });
         if (!record) {
           const notFound = { ok: false, error: "ERR_NOT_FOUND", id: args.id, message: `Hallmark '${args.id}' not found` };
-          emitToolTelemetry("forge_hallmark_show", args, notFound, Date.now() - t0, "ERROR", cwd);
+          emitToolTelemetry({ toolName: "forge_hallmark_show", inputs: args, result: notFound, durationMs: Date.now() - t0, status: "ERROR", cwd: cwd });
           return { content: [{ type: "text", text: JSON.stringify(notFound, null, 2) }], isError: true };
         }
-        emitToolTelemetry("forge_hallmark_show", args, { ok: true, id: args.id }, Date.now() - t0, "OK", cwd);
+        emitToolTelemetry({ toolName: "forge_hallmark_show", inputs: args, result: { ok: true, id: args.id }, durationMs: Date.now() - t0, status: "OK", cwd: cwd });
         return { content: [{ type: "text", text: JSON.stringify(record, null, 2) }] };
       } else {
         // No id — list all
         const list = listHallmarks({}, { cwd });
-        emitToolTelemetry("forge_hallmark_show", args, { ok: true, count: list.length }, Date.now() - t0, "OK", cwd);
+        emitToolTelemetry({ toolName: "forge_hallmark_show", inputs: args, result: { ok: true, count: list.length }, durationMs: Date.now() - t0, status: "OK", cwd: cwd });
         return { content: [{ type: "text", text: JSON.stringify({ hallmarks: list, count: list.length }, null, 2) }] };
       }
     } catch (err) {
       const isHallmarkErr = err instanceof HallmarkError;
       const errPayload = { ok: false, error: isHallmarkErr ? "ERR_INVALID_ID" : "ERR_UNEXPECTED", message: err.message };
-      emitToolTelemetry("forge_hallmark_show", args, errPayload, Date.now() - t0, "ERROR", findProjectRoot(PROJECT_DIR));
+      emitToolTelemetry({ toolName: "forge_hallmark_show", inputs: args, result: errPayload, durationMs: Date.now() - t0, status: "ERROR", cwd: findProjectRoot(PROJECT_DIR) });
       return { content: [{ type: "text", text: JSON.stringify(errPayload, null, 2) }], isError: true };
     }
   
@@ -6738,7 +6735,7 @@ async function _callToolHandler_088_forge_hallmark_verify(request, args) {
       const record = readHallmark(String(args.id), { cwd });
       if (!record) {
         const notFound = { ok: false, error: "ERR_NOT_FOUND", id: args.id, drift: null, message: `Hallmark '${args.id}' not found` };
-        emitToolTelemetry("forge_hallmark_verify", args, notFound, Date.now() - t0, "ERROR", cwd);
+        emitToolTelemetry({ toolName: "forge_hallmark_verify", inputs: args, result: notFound, durationMs: Date.now() - t0, status: "ERROR", cwd: cwd });
         return { content: [{ type: "text", text: JSON.stringify(notFound, null, 2) }], isError: true };
       }
       // If the hallmark has a source field pointing to an existing file, re-hash and report drift
@@ -6770,12 +6767,12 @@ async function _callToolHandler_088_forge_hallmark_verify(request, args) {
         writtenAt: record.writtenAt,
         ...(driftDetail ? { driftDetail } : {}),
       };
-      emitToolTelemetry("forge_hallmark_verify", args, { ok: true, id: record.id, drift }, Date.now() - t0, "OK", cwd);
+      emitToolTelemetry({ toolName: "forge_hallmark_verify", inputs: args, result: { ok: true, id: record.id, drift }, durationMs: Date.now() - t0, status: "OK", cwd: cwd });
       return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
     } catch (err) {
       const isHallmarkErr = err instanceof HallmarkError;
       const errPayload = { ok: false, error: isHallmarkErr ? "ERR_INVALID_ID" : "ERR_UNEXPECTED", message: err.message };
-      emitToolTelemetry("forge_hallmark_verify", args, errPayload, Date.now() - t0, "ERROR", findProjectRoot(PROJECT_DIR));
+      emitToolTelemetry({ toolName: "forge_hallmark_verify", inputs: args, result: errPayload, durationMs: Date.now() - t0, status: "ERROR", cwd: findProjectRoot(PROJECT_DIR) });
       return { content: [{ type: "text", text: JSON.stringify(errPayload, null, 2) }], isError: true };
     }
   
@@ -6789,10 +6786,10 @@ async function _callToolHandler_089_forge_pipelines_list(request, args) {
     try {
       const cwd = args.path ? findProjectRoot(resolve(args.path)) : findProjectRoot(PROJECT_DIR);
       const result = pipelinesStats({ cwd });
-      emitToolTelemetry("forge_pipelines_list", args, { count: result.pipelines.length }, Date.now() - t0, "OK", cwd);
+      emitToolTelemetry({ toolName: "forge_pipelines_list", inputs: args, result: { count: result.pipelines.length }, durationMs: Date.now() - t0, status: "OK", cwd: cwd });
       return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
     } catch (err) {
-      emitToolTelemetry("forge_pipelines_list", args, { error: err.message }, Date.now() - t0, "ERROR", findProjectRoot(PROJECT_DIR));
+      emitToolTelemetry({ toolName: "forge_pipelines_list", inputs: args, result: { error: err.message }, durationMs: Date.now() - t0, status: "ERROR", cwd: findProjectRoot(PROJECT_DIR) });
       return { content: [{ type: "text", text: `forge_pipelines_list error: ${err.message}` }], isError: true };
     }
   
@@ -6808,10 +6805,10 @@ async function _callToolHandler_090_forge_lattice_index(request, args) {
       const paths = Array.isArray(args.paths) ? args.paths : ['.'];
       const since = typeof args.since === "string" && args.since ? args.since : undefined;
       const result = await latticeIndex({ paths, since, deps: { cwd } });
-      emitToolTelemetry("forge_lattice_index", args, result, Date.now() - t0, "OK", cwd);
+      emitToolTelemetry({ toolName: "forge_lattice_index", inputs: args, result: result, durationMs: Date.now() - t0, status: "OK", cwd: cwd });
       return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
     } catch (err) {
-      emitToolTelemetry("forge_lattice_index", args, { error: err.message }, Date.now() - t0, "ERROR", findProjectRoot(PROJECT_DIR));
+      emitToolTelemetry({ toolName: "forge_lattice_index", inputs: args, result: { error: err.message }, durationMs: Date.now() - t0, status: "ERROR", cwd: findProjectRoot(PROJECT_DIR) });
       return { content: [{ type: "text", text: `forge_lattice_index error: ${err.message}` }], isError: true };
     }
   
@@ -6825,10 +6822,10 @@ async function _callToolHandler_091_forge_lattice_stat(request, args) {
     try {
       const cwd = args.path ? findProjectRoot(resolve(args.path)) : findProjectRoot(PROJECT_DIR);
       const result = latticeStat({ deps: { cwd } });
-      emitToolTelemetry("forge_lattice_stat", args, { chunks: result.chunks, edges: result.edges }, Date.now() - t0, "OK", cwd);
+      emitToolTelemetry({ toolName: "forge_lattice_stat", inputs: args, result: { chunks: result.chunks, edges: result.edges }, durationMs: Date.now() - t0, status: "OK", cwd: cwd });
       return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
     } catch (err) {
-      emitToolTelemetry("forge_lattice_stat", args, { error: err.message }, Date.now() - t0, "ERROR", findProjectRoot(PROJECT_DIR));
+      emitToolTelemetry({ toolName: "forge_lattice_stat", inputs: args, result: { error: err.message }, durationMs: Date.now() - t0, status: "ERROR", cwd: findProjectRoot(PROJECT_DIR) });
       return { content: [{ type: "text", text: `forge_lattice_stat error: ${err.message}` }], isError: true };
     }
   
@@ -6849,10 +6846,10 @@ async function _callToolHandler_092_forge_lattice_query(request, args) {
         limit: args.limit != null ? Number(args.limit) : 25,
         deps: { cwd },
       });
-      emitToolTelemetry("forge_lattice_query", args, { total: result.total }, Date.now() - t0, "OK", cwd);
+      emitToolTelemetry({ toolName: "forge_lattice_query", inputs: args, result: { total: result.total }, durationMs: Date.now() - t0, status: "OK", cwd: cwd });
       return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
     } catch (err) {
-      emitToolTelemetry("forge_lattice_query", args, { error: err.message }, Date.now() - t0, "ERROR", findProjectRoot(PROJECT_DIR));
+      emitToolTelemetry({ toolName: "forge_lattice_query", inputs: args, result: { error: err.message }, durationMs: Date.now() - t0, status: "ERROR", cwd: findProjectRoot(PROJECT_DIR) });
       return { content: [{ type: "text", text: `forge_lattice_query error: ${err.message}` }], isError: true };
     }
   
@@ -6870,10 +6867,10 @@ async function _callToolHandler_093_forge_lattice_callers(request, args) {
         limit: args.limit != null ? Number(args.limit) : 25,
         deps: { cwd },
       });
-      emitToolTelemetry("forge_lattice_callers", args, { total: result.total }, Date.now() - t0, "OK", cwd);
+      emitToolTelemetry({ toolName: "forge_lattice_callers", inputs: args, result: { total: result.total }, durationMs: Date.now() - t0, status: "OK", cwd: cwd });
       return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
     } catch (err) {
-      emitToolTelemetry("forge_lattice_callers", args, { error: err.message }, Date.now() - t0, "ERROR", findProjectRoot(PROJECT_DIR));
+      emitToolTelemetry({ toolName: "forge_lattice_callers", inputs: args, result: { error: err.message }, durationMs: Date.now() - t0, status: "ERROR", cwd: findProjectRoot(PROJECT_DIR) });
       return { content: [{ type: "text", text: `forge_lattice_callers error: ${err.message}` }], isError: true };
     }
   
@@ -6894,10 +6891,10 @@ async function _callToolHandler_094_forge_lattice_blast(request, args) {
         limit: args.limit != null ? Number(args.limit) : 50,
         deps: { cwd },
       });
-      emitToolTelemetry("forge_lattice_blast", args, { total: result.total }, Date.now() - t0, "OK", cwd);
+      emitToolTelemetry({ toolName: "forge_lattice_blast", inputs: args, result: { total: result.total }, durationMs: Date.now() - t0, status: "OK", cwd: cwd });
       return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
     } catch (err) {
-      emitToolTelemetry("forge_lattice_blast", args, { error: err.message }, Date.now() - t0, "ERROR", findProjectRoot(PROJECT_DIR));
+      emitToolTelemetry({ toolName: "forge_lattice_blast", inputs: args, result: { error: err.message }, durationMs: Date.now() - t0, status: "ERROR", cwd: findProjectRoot(PROJECT_DIR) });
       return { content: [{ type: "text", text: `forge_lattice_blast error: ${err.message}` }], isError: true };
     }
   

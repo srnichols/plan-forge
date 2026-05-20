@@ -1571,7 +1571,7 @@ export async function runPlan(planPath, options = {}) {
   // Estimation mode — return without executing
   if (estimate) {
     const estimateQuorumConfig = _buildEstimateQuorumConfig(quorum, cwd, quorumPreset, quorumThreshold);
-    return buildEstimate(plan, effectiveModel, cwd, estimateQuorumConfig, resumeFrom, worker);
+    return buildEstimate({ plan, model: effectiveModel, cwd, quorumConfig: estimateQuorumConfig, resumeFrom, worker });
   }
 
   // Dry run — parse and validate only
@@ -2656,8 +2656,8 @@ async function executeSlice(slice, options) {
 }
 
 
-export function buildEstimate(plan, model, cwd, quorumConfig = null, resumeFrom = null, worker = null) {
-  return _estimatePlan(plan, model, cwd, quorumConfig, resumeFrom, worker);
+export function buildEstimate({ plan, model, cwd, quorumConfig = null, resumeFrom = null, worker = null }) {
+  return _estimatePlan({ plan, model, cwd, quorumConfig, resumeFrom, worker });
 }
 
 /**
@@ -3111,7 +3111,7 @@ function _selfTestEstimateMode(assert) {
     const examplePlan = resolve(process.cwd(), "docs/plans/examples/Phase-DOTNET-EXAMPLE.md");
     if (existsSync(examplePlan)) {
       const plan = parsePlan(examplePlan);
-      const est = buildEstimate(plan, "claude-sonnet-4.6", process.cwd());
+      const est = buildEstimate({ plan, model: "claude-sonnet-4.6", cwd: process.cwd() });
       assert("Estimate has slice count", est.sliceCount > 0);
       assert("Estimate has cost", est.estimatedCostUSD >= 0);
       assert("Estimate has tokens", est.tokens.estimatedInput > 0);

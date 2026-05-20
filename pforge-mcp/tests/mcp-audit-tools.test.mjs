@@ -129,10 +129,10 @@ describe("server.mjs — tool wiring", () => {
   });
 
   it("forge_tempering_drain handler emits telemetry", () => {
-    expect(serverSrc).toContain('emitToolTelemetry("forge_tempering_drain"');
+    expect(serverSrc).toContain('emitToolTelemetry({ toolName: "forge_tempering_drain"');
   });
 
   it("forge_triage_route handler emits telemetry", () => {
-    expect(serverSrc).toContain('emitToolTelemetry("forge_triage_route"');
+    expect(serverSrc).toContain('emitToolTelemetry({ toolName: "forge_triage_route"');
   });
 });

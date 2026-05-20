@@ -240,7 +240,7 @@ async function createIssueViaRest({ token, owner, repo, title, body, labels, fet
 /**
  * Create an issue via `gh issue create`. Returns null on any failure.
  */
-function createIssueViaGh(owner, repo, title, body, labels, { execSync: execSyncFn, cwd }) {
+function createIssueViaGh({ owner, repo, title, body, labels, execSync: execSyncFn, cwd }) {
   if (typeof execSyncFn !== "function") return null;
   try {
     const labelArg = labels.map((l) => `--label "${l}"`).join(" ");
@@ -266,7 +266,7 @@ function createIssueViaGh(owner, repo, title, body, labels, { execSync: execSync
 /**
  * Add a comment to an existing issue via REST API.
  */
-async function addComment(token, owner, repo, issueNumber, body, { fetch: fetchFn }) {
+async function addComment({ token, owner, repo, issueNumber, body, fetch: fetchFn }) {
   try {
     const res = await fetchFn(`https://api.github.com/repos/${owner}/${repo}/issues/${issueNumber}/comments`, {
       method: "POST",
@@ -326,7 +326,7 @@ export async function registerBug(bug, config, { fetch: fetchFn = globalThis.fet
     const labels = buildLabels(bug, config);
 
     // Try gh CLI first, fall back to REST
-    let result = createIssueViaGh(repoInfo.owner, repoInfo.repo, title, body, labels, { execSync: execSyncFn, cwd });
+    let result = createIssueViaGh({ owner: repoInfo.owner, repo: repoInfo.repo, title, body, labels, execSync: execSyncFn, cwd });
 
     if (!result) {
       result = await createIssueViaRest({
@@ -373,7 +373,7 @@ export async function updateBugStatus(bug, config, { fetch: fetchFn = globalThis
 
     const body = `## Status Update\n\n**New Status:** \`${bug.status}\`\n**Updated:** ${bug.updatedAt || new Date().toISOString()}\n\n${bug.statusHistory?.at(-1)?.note ? `**Note:** ${bug.statusHistory.at(-1).note}` : ""}`;
 
-    const result = await addComment(tokenResult.token, repoInfo.owner, repoInfo.repo, issueNumber, body, { fetch: fetchFn });
+    const result = await addComment({ token: tokenResult.token, owner: repoInfo.owner, repo: repoInfo.repo, issueNumber, body, fetch: fetchFn });
 
     if (result.error) {
       return { provider: "github", ok: false, error: result.error };
@@ -409,7 +409,7 @@ export async function commentValidatedFix(bug, config, { fetch: fetchFn = global
     const scanRef = bug.validationHistory?.at(-1)?.scanRef || "";
     const body = `## 🔥 Tempering validated this fix\n\n**Bug ID:** \`${bug.bugId}\`\n**Scanner:** ${bug.scanner}\n**Validated at:** ${new Date().toISOString()}\n${scanRef ? `**Scan Reference:** \`${scanRef}\`` : ""}\n\nThe tempering subsystem has confirmed this bug is fixed. The issue remains open for human review.`;
 
-    const result = await addComment(tokenResult.token, repoInfo.owner, repoInfo.repo, issueNumber, body, { fetch: fetchFn });
+    const result = await addComment({ token: tokenResult.token, owner: repoInfo.owner, repo: repoInfo.repo, issueNumber, body, fetch: fetchFn });
 
     if (result.error) {
       return { provider: "github", ok: false, error: result.error };
@@ -641,14 +641,14 @@ async function _handleExistingMetaBug({ existing, params, tokenResult, repoInfo,
   }
   commentParts.push(`_Duplicate occurrence detected at ${new Date().toISOString()}_`);
 
-  const commentResult = await addComment(
-    tokenResult.token,
-    repoInfo.owner,
-    repoInfo.repo,
-    existing.issueNumber,
-    commentParts.join("\n\n"),
-    { fetch: fetchFn },
-  );
+  const commentResult = await addComment({
+    token: tokenResult.token,
+    owner: repoInfo.owner,
+    repo: repoInfo.repo,
+    issueNumber: existing.issueNumber,
+    body: commentParts.join("\n\n"),
+    fetch: fetchFn,
+  });
 
   if (commentResult?.error) {
     return { ok: false, error: commentResult.error, hash };
@@ -657,10 +657,7 @@ async function _handleExistingMetaBug({ existing, params, tokenResult, repoInfo,
 }
 
 async function _createNewMetaBug({ repoInfo, issueTitle, body, labels, tokenResult, execSyncFn, fetchFn, cwd, hash }) {
-  let result = createIssueViaGh(repoInfo.owner, repoInfo.repo, issueTitle, body, labels, {
-    execSync: execSyncFn,
-    cwd,
-  });
+  let result = createIssueViaGh({ owner: repoInfo.owner, repo: repoInfo.repo, title: issueTitle, body, labels, execSync: execSyncFn, cwd });
 
   if (!result) {
     result = await createIssueViaRest({

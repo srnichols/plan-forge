@@ -129,7 +129,7 @@ describe("cost-service: estimateSlice parity with estimatePlan (Phase-27.2 Slice
           return acc + est.estimatedCostUSD;
         }, 0);
 
-        const planEst = estimatePlan(plan, "claude-sonnet-4.5", CLEAN_CWD, quorumConfig, null);
+        const planEst = estimatePlan({ plan, model: "claude-sonnet-4.5", cwd: CLEAN_CWD, quorumConfig });
         const planTotal = planEst.totalCostWithQuorumUSD ?? planEst.estimatedCostUSD;
 
         // estimatePlan rounds to 2 decimals; estimateSlice to 6. Allow 1 cent tolerance.

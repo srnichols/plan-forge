@@ -173,7 +173,7 @@ async function findExisting(hash, owner, repo, token, { execSync: execSyncFn, fe
 
 // ─── Issue creation helpers ──────────────────────────────────────────────────
 
-function createViaGh(owner, repo, title, body, labels, { execSync: execSyncFn, cwd }) {
+function createViaGh({ owner, repo, title, body, labels, execSync: execSyncFn, cwd }) {
   if (typeof execSyncFn !== "function") return null;
   try {
     const labelArg = labels.map((l) => `--label "${l}"`).join(" ");
@@ -211,7 +211,7 @@ async function createViaRest({ token, owner, repo, title, body, labels, fetch: f
   }
 }
 
-async function addComment(token, owner, repo, issueNumber, body, { fetch: fetchFn }) {
+async function addComment({ token, owner, repo, issueNumber, body, fetch: fetchFn }) {
   if (typeof fetchFn !== "function") return null;
   try {
     const res = await fetchFn(`https://api.github.com/repos/${owner}/${repo}/issues/${issueNumber}/comments`, {
@@ -268,14 +268,14 @@ export async function fileClassifierIssue(payload, config, {
     const existing = await findExisting(hash, repoInfo.owner, repoInfo.repo, tokenResult.token, { execSync: execSyncFn, fetch: fetchFn, cwd });
     if (existing) {
       const commentBody = `## Recurrence\n\nThis classifier noise pattern was observed again.\n\n**Finding:** \`${payload.findingClass || "unknown"}\`\n**Route:** \`${payload.route || ""}\`\n\n*Reported by Plan Forge Tempering — hash \`${hash}\`*`;
-      await addComment(tokenResult.token, repoInfo.owner, repoInfo.repo, existing.issueNumber, commentBody, { fetch: fetchFn });
+      await addComment({ token: tokenResult.token, owner: repoInfo.owner, repo: repoInfo.repo, issueNumber: existing.issueNumber, body: commentBody, fetch: fetchFn });
       return { ok: true, issueNumber: existing.issueNumber, url: existing.url, deduped: true, message: `Commented on existing issue #${existing.issueNumber} (hash ${hash} already open).` };
     }
 
     const title = `[classifier-noise:${hash}] ${payload.findingClass || "unknown"}: ${(payload.reason || "noise pattern").slice(0, 80)}`;
     const body = buildClassifierIssueBody(payload, hash);
 
-    let result = createViaGh(repoInfo.owner, repoInfo.repo, title, body, [...CLASSIFIER_ISSUE_LABELS], { execSync: execSyncFn, cwd });
+    let result = createViaGh({ owner: repoInfo.owner, repo: repoInfo.repo, title, body, labels: [...CLASSIFIER_ISSUE_LABELS], execSync: execSyncFn, cwd });
     if (!result || result.error) {
       result = await createViaRest({
         token: tokenResult.token,

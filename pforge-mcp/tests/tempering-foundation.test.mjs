@@ -654,7 +654,7 @@ describe("forge_tempering_scan + forge_tempering_status schema + wiring", () => 
   });
 
   it("server.mjs wires emitToolTelemetry on both tools", () => {
-    expect(serverSrc).toMatch(/emitToolTelemetry\(\s*"forge_tempering_scan"/);
-    expect(serverSrc).toMatch(/emitToolTelemetry\(\s*"forge_tempering_status"/);
+    expect(serverSrc).toMatch(/emitToolTelemetry\(\s*\{\s*toolName:\s*"forge_tempering_scan"/);
+    expect(serverSrc).toMatch(/emitToolTelemetry\(\s*\{\s*toolName:\s*"forge_tempering_status"/);
   });
 });

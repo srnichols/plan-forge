@@ -256,7 +256,7 @@ describe("Hub ask/respond transport — Slice 06.1", () => {
     expect(result.ok).toBe(true);
 
     // Manually attempt a second deliver — should be dropped
-    hub._deliverResponse("req-nonexistent", "second", true, Date.now(), "double", undefined);
+    hub._deliverResponse({ requestId: "req-nonexistent", result: "second", ok: true, askStartTime: Date.now(), topic: "double", correlationId: undefined });
     expect(warnSpy).toHaveBeenCalledWith(
       expect.stringContaining("late respond dropped"),
     );

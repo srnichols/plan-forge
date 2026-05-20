@@ -760,7 +760,7 @@ const LIVEGUARD_TOOLS = new Set([
   "forge_notify_send", "forge_notify_test",
 ]);
 
-export function emitToolTelemetry(toolName, inputs, result, durationMs, status, cwd = process.cwd()) {
+export function emitToolTelemetry({ toolName, inputs, result, durationMs, status, cwd = process.cwd() }) {
   const normalizedResult = typeof result === "string"
     ? result.slice(0, 2000)
     : JSON.stringify(result ?? "").slice(0, 2000);

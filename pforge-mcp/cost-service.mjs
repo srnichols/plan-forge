@@ -1158,7 +1158,7 @@ function _buildEstimatePlanResult({
   };
 }
 
-export function estimatePlan(plan, model, cwd, quorumConfig = null, resumeFrom = null, worker = null) {
+export function estimatePlan({ plan, model, cwd, quorumConfig = null, resumeFrom = null, worker = null }) {
   const { effectiveSlices, effectiveOrder } = _resolveEffectiveSlices(plan, resumeFrom);
   const forgeConfig = _loadForgeConfig(cwd);
   const costModel = detectCostModel({ env: process.env, forgeConfig, model });
@@ -1429,10 +1429,10 @@ export function estimateQuorum({ plan, cwd, resumeFrom = null, defaultModel = "c
   const powerConfig = buildQuorumConfigForMode("power");
   const speedConfig = buildQuorumConfigForMode("speed");
 
-  const estAuto = estimatePlan(plan, defaultModel, resolvedCwd, autoConfig, resumeFrom);
-  const estPower = estimatePlan(plan, defaultModel, resolvedCwd, powerConfig, resumeFrom);
-  const estSpeed = estimatePlan(plan, defaultModel, resolvedCwd, speedConfig, resumeFrom);
-  const estNone = estimatePlan(plan, defaultModel, resolvedCwd, null, resumeFrom);
+  const estAuto = estimatePlan({ plan, model: defaultModel, cwd: resolvedCwd, quorumConfig: autoConfig, resumeFrom });
+  const estPower = estimatePlan({ plan, model: defaultModel, cwd: resolvedCwd, quorumConfig: powerConfig, resumeFrom });
+  const estSpeed = estimatePlan({ plan, model: defaultModel, cwd: resolvedCwd, quorumConfig: speedConfig, resumeFrom });
+  const estNone = estimatePlan({ plan, model: defaultModel, cwd: resolvedCwd, resumeFrom });
 
   // Per-mode, per-slice breakdown (additive — does not alter existing keys).
   // Uses estimateSlice for parity with the single-slice MCP tool. Un-calibrated

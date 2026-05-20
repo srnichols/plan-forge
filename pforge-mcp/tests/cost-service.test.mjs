@@ -162,15 +162,15 @@ function makePlan(sliceCount, opts = {}) {
 describe("cost-service: estimatePlan parity (Slice 3)", () => {
   it("estimatePlan matches buildEstimate — simple 3-slice plan, no quorum, no cwd", () => {
     const plan = makePlan(3);
-    const a = costService.estimatePlan(plan, "claude-sonnet-4.5", null, null, null);
-    const b = buildEstimate(plan, "claude-sonnet-4.5", null, null, null);
+    const a = costService.estimatePlan({ plan, model: "claude-sonnet-4.5", cwd: null });
+    const b = buildEstimate({ plan, model: "claude-sonnet-4.5", cwd: null });
     expect(a).toEqual(b);
   });
 
   it("estimatePlan matches buildEstimate — 5-slice plan with resumeFrom=3", () => {
     const plan = makePlan(5);
-    const a = costService.estimatePlan(plan, "claude-opus-4.6", null, null, "3");
-    const b = buildEstimate(plan, "claude-opus-4.6", null, null, "3");
+    const a = costService.estimatePlan({ plan, model: "claude-opus-4.6", cwd: null, resumeFrom: "3" });
+    const b = buildEstimate({ plan, model: "claude-opus-4.6", cwd: null, resumeFrom: "3" });
     expect(a).toEqual(b);
   });
 
@@ -187,8 +187,8 @@ describe("cost-service: estimatePlan parity (Slice 3)", () => {
     // Note: quorum paths call scoreSliceComplexity → requires non-null cwd.
     // Use process.cwd() since buildEstimate has the same constraint.
     const cwd = process.cwd();
-    const a = costService.estimatePlan(plan, "claude-sonnet-4.5", cwd, quorumConfig, null);
-    const b = buildEstimate(plan, "claude-sonnet-4.5", cwd, quorumConfig, null);
+    const a = costService.estimatePlan({ plan, model: "claude-sonnet-4.5", cwd, quorumConfig });
+    const b = buildEstimate({ plan, model: "claude-sonnet-4.5", cwd, quorumConfig });
     expect(a).toEqual(b);
   });
 });

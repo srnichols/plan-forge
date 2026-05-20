@@ -14,56 +14,17 @@ import { describe, expect, it } from "vitest";
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 
-import { TOOL_METADATA } from "../capabilities.mjs";
 import { classify, LANES, LANE_TOOLS } from "../../pforge-master/src/intent-router.mjs";
 import { UNIVERSAL_BASELINE } from "../../pforge-master/src/principles.mjs";
-import { getPromptCatalog } from "../../pforge-master/src/prompts.mjs";
-import { getForgeMasterCapabilitiesSummary } from "../forge-master-routes.mjs";
 
 const __dirname = new URL(".", import.meta.url).pathname.replace(/^\/([A-Z]:)/, "$1").replace(/\/$/, "");
 
-// ─── 1. capabilities.mjs contract ──────────────────────────────────────────
-
-// Issue #149 Bucket A: capabilities.mjs/tools.json advisory contract was
-// scoped (Phase-32 Slice 4) but the agentGuidance / intent fields were never
-// updated to reference 'advisory' / 'cto-in-a-box'. Skipped pending product
-// decision: ship the advisory lane (and update these strings) or delete the spec.
-describe.skip("forge-master advisory — capabilities.mjs contract", () => {
-  it("TOOL_METADATA.forge_master_ask.intent includes 'advisory'", () => {
-    expect(TOOL_METADATA.forge_master_ask.intent).toContain("advisory");
-  });
-
-  it("TOOL_METADATA.forge_master_ask.agentGuidance mentions 'cto-in-a-box'", () => {
-    expect(TOOL_METADATA.forge_master_ask.agentGuidance).toContain("cto-in-a-box");
-  });
-
-  it("TOOL_METADATA.forge_master_ask.agentGuidance mentions 'advisory'", () => {
-    expect(TOOL_METADATA.forge_master_ask.agentGuidance).toContain("advisory");
-  });
-
-  it("addedIn is still '2.61.0' (advisory contract is documented in CHANGELOG, not a new version)", () => {
-    expect(TOOL_METADATA.forge_master_ask.addedIn).toBe("2.61.0");
-  });
-});
-
-// ─── 2. getForgeMasterCapabilitiesSummary ──────────────────────────────────
-
-// Issue #149 Bucket A: getForgeMasterCapabilitiesSummary doesn't return an
-// `advisoryLaneAvailable` field; promptCategories count is 7 (advisory category
-// was never added). Skipped pending product decision (see Bucket A).
-describe.skip("forge-master advisory — getForgeMasterCapabilitiesSummary", () => {
-  it("returns advisoryLaneAvailable: true when prompts module is present", async () => {
-    const summary = await getForgeMasterCapabilitiesSummary();
-    expect(summary).not.toBeNull();
-    expect(summary.available).toBe(true);
-    expect(summary.advisoryLaneAvailable).toBe(true);
-  });
-
-  it("promptCategories count is at least 8 (7 original + advisory)", async () => {
-    const summary = await getForgeMasterCapabilitiesSummary();
-    expect(summary.promptCategories).toBeGreaterThanOrEqual(8);
-  });
-});
+// ─── 1 & 2. capabilities.mjs + getForgeMasterCapabilitiesSummary ──────────
+// Issue #149 Bucket A: advisory contract fields (intent, agentGuidance,
+// advisoryLaneAvailable, advisory prompt category) were never implemented.
+// Tracked in issue #149; implement when product decision is made.
+it.todo("forge-master advisory — capabilities.mjs contract: intent/agentGuidance advisory fields (#149 Bucket A)");
+it.todo("forge-master advisory — getForgeMasterCapabilitiesSummary: advisoryLaneAvailable field (#149 Bucket A)");
 
 // ─── 3. Intent router — ADVISORY lane ──────────────────────────────────────
 
@@ -113,53 +74,8 @@ describe("forge-master advisory — Architecture-First in system prompt", () => 
   });
 });
 
-// ─── 5. Prompt catalog advisory category ──────────────────────────────────
-
-// Issue #149 Bucket A: getPromptCatalog has no 'advisory' category. Skipped
-// pending product decision (see Bucket A).
-describe.skip("forge-master advisory — prompt catalog", () => {
-  it("getPromptCatalog includes 'advisory' category", () => {
-    const catalog = getPromptCatalog();
-    const advisory = catalog.categories.find((c) => c.id === "advisory");
-    expect(advisory).toBeDefined();
-  });
-
-  it("advisory category has at least 2 prompts", () => {
-    const catalog = getPromptCatalog();
-    const advisory = catalog.categories.find((c) => c.id === "advisory");
-    expect(advisory.prompts.length).toBeGreaterThanOrEqual(2);
-  });
-
-  it("advisory prompts all have required shape (id, title, template, category)", () => {
-    const catalog = getPromptCatalog();
-    const advisory = catalog.categories.find((c) => c.id === "advisory");
-    for (const prompt of advisory.prompts) {
-      expect(prompt.id).toBeTruthy();
-      expect(prompt.title).toBeTruthy();
-      expect(prompt.template).toBeTruthy();
-      expect(prompt.category).toBe("advisory");
-    }
-  });
-});
-
-// ─── 6. tools.json mirrors advisory intent ────────────────────────────────
-
-// Issue #149 Bucket A: tools.json forge_master_ask intent + agentGuidance
-// mirror capabilities.mjs which doesn't carry the advisory contract. Skipped
-// pending product decision.
-describe.skip("forge-master advisory — tools.json", () => {
-  const toolsJson = JSON.parse(readFileSync(resolve(__dirname, "../tools.json"), "utf-8"));
-  const entry = toolsJson.find((t) => t.name === "forge_master_ask");
-
-  it("tools.json forge_master_ask entry exists", () => {
-    expect(entry).toBeDefined();
-  });
-
-  it("tools.json forge_master_ask intent includes 'advisory'", () => {
-    expect(entry.intent).toContain("advisory");
-  });
-
-  it("tools.json forge_master_ask agentGuidance mentions 'cto-in-a-box'", () => {
-    expect(entry.agentGuidance).toContain("cto-in-a-box");
-  });
-});
+// ─── 5 & 6. Prompt catalog + tools.json advisory fields ──────────────────
+// Issue #149 Bucket A: advisory category not in prompt catalog; tools.json
+// advisory fields not updated. Tracked in issue #149.
+it.todo("forge-master advisory — prompt catalog: advisory category (#149 Bucket A)");
+it.todo("forge-master advisory — tools.json: advisory intent/agentGuidance fields (#149 Bucket A)");

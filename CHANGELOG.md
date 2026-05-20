@@ -29,6 +29,7 @@ phase start); warnings reduced from 1,469 to 1,463 as a Boy-Scout side-effect.
   tracked issues. SKIP-LEAK test-smell count dropped to 0.
 - **S7** — Whitelisted intentional cross-package import `server/state.mjs → pforge-master/src/mcp-client.mjs`
   in `scripts/audit/layer-policy.json`. Dep-boundary finding cleared.
+<<<<<<< Updated upstream
 - **S8** — Triaged `update-from-github-shell.test.mjs:92`; confirmed test passes on current HEAD
   (no code change required).
 - **S9** — Retro, roadmap update, this CHANGELOG entry. Details: `docs/plans/testbed-findings/Phase-55-CLEAN-CODE-SWEEP-retro.md`.
@@ -59,6 +60,12 @@ module-split series. Final `node scripts/audit/clean-code-review.mjs` now report
   required.
 - Full details: `docs/plans/testbed-findings/Phase-55-CLEAN-CODE-SWEEP-retro.md`.
 
+=======
+- **S8** — Diagnosed preexisting `update-from-github-shell.test.mjs:92` Windows/libuv failure;
+  added `SKIP_WIN_LIBUV` conditional skip with tracked issue. Test suite stable.
+- **S9** — Retro, roadmap update, this CHANGELOG entry. Details: `docs/plans/testbed-findings/Phase-55-CLEAN-CODE-SWEEP-retro.md`.
+
+>>>>>>> Stashed changes
 ---
 
 ## [3.10.1] — 2026-05-20

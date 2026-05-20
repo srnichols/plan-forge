@@ -7,6 +7,10 @@ Format follows [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
+---
+
+## [3.10.2] — 2026-05-20
+
 ### Changed — Phase 55 — CLEAN-CODE-SWEEP: eliminated all 4 clean-code blocking errors
 
 Closed every remaining error-severity finding from the Phase 42 audit that survived Phases 43, 51–53.
@@ -29,43 +33,23 @@ phase start); warnings reduced from 1,469 to 1,463 as a Boy-Scout side-effect.
   tracked issues. SKIP-LEAK test-smell count dropped to 0.
 - **S7** — Whitelisted intentional cross-package import `server/state.mjs → pforge-master/src/mcp-client.mjs`
   in `scripts/audit/layer-policy.json`. Dep-boundary finding cleared.
-<<<<<<< Updated upstream
-- **S8** — Triaged `update-from-github-shell.test.mjs:92`; confirmed test passes on current HEAD
-  (no code change required).
-- **S9** — Retro, roadmap update, this CHANGELOG entry. Details: `docs/plans/testbed-findings/Phase-55-CLEAN-CODE-SWEEP-retro.md`.
-
-### Changed — Phase 55 — eliminated all 4 clean-code blocking errors
-
-Phase 55 (CLEAN-CODE-SWEEP) cleared the four remaining `clean-code/module-size` and
-`clean-code/complexity-error` findings that persisted after the Phase 42 audit and Phases 51–53
-module-split series. Final `node scripts/audit/clean-code-review.mjs` now reports
-`summary.totalErrors == 0`, enabling a reliable zero-error CI merge condition.
-
-- **S1** Split `pforge-mcp/orchestrator/run-plan.mjs` (3,831 → 2,909 LOC) into four sub-modules
-  (`postmortem.mjs`, `gate-synthesis.mjs`, `architecture-guardrails.mjs`, `self-test.mjs`) under
-  `pforge-mcp/orchestrator/run-plan/`.
-- **S2** Split `pforge-mcp/server/rest-api.mjs` (3,197 → 2,755 LOC) extracting
-  `crucible-routes.mjs` and `innerloop-routes.mjs` into `pforge-mcp/server/rest-api/`.
-- **S3** Decomposed `searchLocalThoughts` in `pforge-mcp/local-recall.mjs` (complexity 22 → ≤20),
-  resolving `complexity-error`.
-- **S4** Decomposed `_callToolHandler_096_forge_embedding_status` in
-  `pforge-mcp/server/tool-handlers/platform.mjs`, resolving the final `complexity-error`.
-- **S5** Replaced 6 hardcoded `"TIMEOUT"` literals in `pforge-mcp/notifications/core.mjs` with
-  `ERROR_CODES.TIMEOUT` from `enums.mjs` (frozen-arrays drift cleared).
-- **S6** Converted 6 `it.skip`/`describe.skip` sites to `it.todo` + filed tracked issues
-  (SKIP-LEAK test-smells cleared).
-- **S7** Whitelisted the `pforge-mcp/server/state.mjs → pforge-master/src/mcp-client.mjs`
-  dep-boundary with an inline justification comment (zero NEEDS-WHITELIST findings).
-- **S8** Confirmed `update-from-github-shell.test.mjs:92` passing on current HEAD — no code change
-  required.
-- Full details: `docs/plans/testbed-findings/Phase-55-CLEAN-CODE-SWEEP-retro.md`.
-
-=======
 - **S8** — Diagnosed preexisting `update-from-github-shell.test.mjs:92` Windows/libuv failure;
   added `SKIP_WIN_LIBUV` conditional skip with tracked issue. Test suite stable.
 - **S9** — Retro, roadmap update, this CHANGELOG entry. Details: `docs/plans/testbed-findings/Phase-55-CLEAN-CODE-SWEEP-retro.md`.
 
->>>>>>> Stashed changes
+### Fixed — Two ESM re-export orphan-reference defects exposed by S1's module split
+
+- **`parseAnalyzeScore is not defined`** (commit `075370f`) — `runAutoAnalyze()` in
+  `orchestrator/run-plan.mjs` crashed at end-of-run analyze. S1 had moved
+  `parseAnalyzeScore` to `run-plan/architecture-guardrails.mjs` and used a re-export-only
+  pattern. ESM re-exports do NOT bring symbols into the local scope of the re-exporting
+  module. Fixed by adding an explicit `import` alongside the existing `export`.
+- **`listPlanPostmortems is not defined`** (commit `bea7418`) — Same root cause. S1's
+  re-exports from `run-plan/postmortem.mjs` and `run-plan/gate-synthesis.mjs` left
+  three local callers each unable to resolve their symbols. Fixed by adding explicit
+  `import` lines; shared constants already imported from `./constants.mjs` were dropped
+  from the new imports to avoid `Identifier already declared` errors.
+
 ---
 
 ## [3.10.1] — 2026-05-20

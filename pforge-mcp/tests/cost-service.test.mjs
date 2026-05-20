@@ -450,10 +450,8 @@ describe("forge_estimate_slice registration (Phase-27.2 Slice 3)", () => {
     const serverSrc = SERVER_COMBINED_SRC;
     // Tool list entry
     expect(serverSrc).toMatch(/name:\s*"forge_estimate_slice"/);
-    // Switch-case (case label on its own line)
-    expect(serverSrc).toMatch(/case\s+"forge_estimate_slice"\s*:/);
-    // Handler body
-    // Handler body (Phase-52 SERVER-SPLIT: handlers use negated guard `if (!(name === ...))`)
+    // Phase-52 SERVER-SPLIT: single switch replaced by individual handler functions
+    // with negated guard `if (!(name === ...))` — no case label in source
     expect(serverSrc).toContain(`name === "forge_estimate_slice"`);
   });
 });

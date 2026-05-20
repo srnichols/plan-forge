@@ -1,42 +1,42 @@
 [
   {
     "file": "pforge-mcp/server/tool-handlers.mjs",
-    "loc": 5307,
-    "blank": 567,
-    "comment": 282,
-    "functions": 124,
+    "loc": 5352,
+    "blank": 570,
+    "comment": 254,
+    "functions": 149,
     "g14Severity": "high-severity"
   },
   {
     "file": "pforge-mcp/orchestrator/run-plan.mjs",
-    "loc": 3802,
-    "blank": 283,
-    "comment": 400,
-    "functions": 55,
+    "loc": 3827,
+    "blank": 263,
+    "comment": 153,
+    "functions": 150,
     "g14Severity": "high-severity"
   },
   {
     "file": "pforge-mcp/server/rest-api.mjs",
-    "loc": 2977,
-    "blank": 227,
-    "comment": 282,
-    "functions": 17,
+    "loc": 3093,
+    "blank": 241,
+    "comment": 275,
+    "functions": 48,
+    "g14Severity": "high-severity"
+  },
+  {
+    "file": "pforge-mcp/memory.mjs",
+    "loc": 2193,
+    "blank": 180,
+    "comment": 43,
+    "functions": 85,
     "g14Severity": "medium"
   },
   {
     "file": "pforge-mcp/orchestrator/worker-spawn.mjs",
-    "loc": 2223,
-    "blank": 159,
-    "comment": 286,
-    "functions": 61,
-    "g14Severity": "medium"
-  },
-  {
-    "file": "pforge-mcp/memory.mjs",
-    "loc": 2181,
-    "blank": 177,
-    "comment": 52,
-    "functions": 81,
+    "loc": 2154,
+    "blank": 160,
+    "comment": 149,
+    "functions": 76,
     "g14Severity": "medium"
   },
   {
@@ -49,26 +49,26 @@
   },
   {
     "file": "pforge-mcp/orchestrator/review-watcher.mjs",
-    "loc": 2097,
-    "blank": 202,
-    "comment": 72,
-    "functions": 49,
+    "loc": 2051,
+    "blank": 176,
+    "comment": 33,
+    "functions": 78,
     "g14Severity": "medium"
   },
   {
     "file": "pforge-mcp/cost-service.mjs",
-    "loc": 1505,
+    "loc": 1508,
     "blank": 126,
     "comment": 69,
     "functions": 63,
     "g14Severity": "medium"
   },
   {
-    "file": "pforge-mcp/tempering/runner.mjs",
-    "loc": 1388,
-    "blank": 104,
-    "comment": 84,
-    "functions": 25,
+    "file": "pforge-mcp/orchestrator/hooks.mjs",
+    "loc": 1391,
+    "blank": 154,
+    "comment": 20,
+    "functions": 87,
     "g14Severity": "medium"
   },
   {
@@ -81,66 +81,66 @@
   },
   {
     "file": "pforge-mcp/tempering.mjs",
-    "loc": 1258,
-    "blank": 79,
-    "comment": 83,
-    "functions": 35,
+    "loc": 1297,
+    "blank": 90,
+    "comment": 55,
+    "functions": 45,
     "g14Severity": "medium"
   },
   {
     "file": "pforge-mcp/brain.mjs",
-    "loc": 1244,
-    "blank": 104,
-    "comment": 42,
-    "functions": 34,
+    "loc": 1269,
+    "blank": 112,
+    "comment": 36,
+    "functions": 41,
     "g14Severity": "medium"
   },
   {
     "file": "pforge-mcp/bridge.mjs",
-    "loc": 1201,
-    "blank": 119,
+    "loc": 1251,
+    "blank": 125,
     "comment": 27,
-    "functions": 27,
-    "g14Severity": "medium"
-  },
-  {
-    "file": "pforge-master/src/reasoning.mjs",
-    "loc": 1136,
-    "blank": 103,
-    "comment": 97,
-    "functions": 21,
-    "g14Severity": "medium"
-  },
-  {
-    "file": "pforge-mcp/orchestrator/schedulers.mjs",
-    "loc": 1111,
-    "blank": 95,
-    "comment": 93,
-    "functions": 26,
+    "functions": 52,
     "g14Severity": "medium"
   },
   {
     "file": "pforge-mcp/crucible-import.mjs",
-    "loc": 1049,
-    "blank": 77,
-    "comment": 29,
+    "loc": 1089,
+    "blank": 84,
+    "comment": 28,
+    "functions": 39,
+    "g14Severity": "medium"
+  },
+  {
+    "file": "pforge-mcp/tempering/runner.mjs",
+    "loc": 1059,
+    "blank": 104,
+    "comment": 13,
+    "functions": 38,
+    "g14Severity": "medium"
+  },
+  {
+    "file": "pforge-mcp/orchestrator/schedulers.mjs",
+    "loc": 1052,
+    "blank": 101,
+    "comment": 41,
     "functions": 31,
     "g14Severity": "medium"
   },
   {
     "file": "pforge-mcp/orchestrator/git-safety.mjs",
-    "loc": 947,
-    "blank": 71,
-    "comment": 103,
-    "functions": 20,
+    "loc": 957,
+    "blank": 72,
+    "comment": 51,
+    "functions": 32,
     "g14Severity": null
   },
   {
-    "file": "pforge-mcp/orchestrator/hooks.mjs",
-    "loc": 922,
-    "blank": 110,
-    "comment": 19,
-    "functions": 24,
+    "file": "pforge-master/src/reasoning.mjs",
+    "loc": 869,
+    "blank": 97,
+    "comment": 30,
+    "functions": 41,
     "g14Severity": null
   },
   {
@@ -153,18 +153,26 @@
   },
   {
     "file": "pforge-mcp/telemetry.mjs",
-    "loc": 796,
-    "blank": 77,
-    "comment": 34,
-    "functions": 31,
+    "loc": 798,
+    "blank": 89,
+    "comment": 24,
+    "functions": 43,
     "g14Severity": null
   },
   {
     "file": "pforge-mcp/orchestrator/forge-io.mjs",
-    "loc": 750,
-    "blank": 69,
-    "comment": 49,
-    "functions": 17,
+    "loc": 785,
+    "blank": 75,
+    "comment": 31,
+    "functions": 32,
+    "g14Severity": null
+  },
+  {
+    "file": "pforge-mcp/tempering/bug-adapters/github.mjs",
+    "loc": 731,
+    "blank": 86,
+    "comment": 22,
+    "functions": 20,
     "g14Severity": null
   },
   {
@@ -173,14 +181,6 @@
     "blank": 73,
     "comment": 20,
     "functions": 40,
-    "g14Severity": null
-  },
-  {
-    "file": "pforge-mcp/tempering/bug-adapters/github.mjs",
-    "loc": 730,
-    "blank": 86,
-    "comment": 27,
-    "functions": 18,
     "g14Severity": null
   },
   {
@@ -193,10 +193,10 @@
   },
   {
     "file": "pforge-mcp/orchestrator/gate-helpers.mjs",
-    "loc": 709,
-    "blank": 56,
-    "comment": 80,
-    "functions": 14,
+    "loc": 648,
+    "blank": 48,
+    "comment": 28,
+    "functions": 25,
     "g14Severity": null
   },
   {
@@ -205,6 +205,14 @@
     "blank": 39,
     "comment": 11,
     "functions": 20,
+    "g14Severity": null
+  },
+  {
+    "file": "pforge-mcp/orchestrator/quorum.mjs",
+    "loc": 604,
+    "blank": 54,
+    "comment": 33,
+    "functions": 19,
     "g14Severity": null
   },
   {
@@ -232,14 +240,6 @@
     "g14Severity": null
   },
   {
-    "file": "pforge-mcp/orchestrator/quorum.mjs",
-    "loc": 586,
-    "blank": 50,
-    "comment": 35,
-    "functions": 15,
-    "g14Severity": null
-  },
-  {
     "file": "pforge-master/src/intent-router.mjs",
     "loc": 572,
     "blank": 59,
@@ -264,6 +264,14 @@
     "g14Severity": null
   },
   {
+    "file": "pforge-mcp/tempering/scanners/ui-playwright.mjs",
+    "loc": 531,
+    "blank": 46,
+    "comment": 17,
+    "functions": 26,
+    "g14Severity": null
+  },
+  {
     "file": "pforge-mcp/hub.mjs",
     "loc": 525,
     "blank": 57,
@@ -272,27 +280,27 @@
     "g14Severity": null
   },
   {
-    "file": "pforge-mcp/tempering/scanners/ui-playwright.mjs",
-    "loc": 511,
-    "blank": 45,
-    "comment": 17,
-    "functions": 21,
-    "g14Severity": null
-  },
-  {
     "file": "pforge-mcp/notifications/core.mjs",
-    "loc": 501,
-    "blank": 60,
-    "comment": 22,
-    "functions": 19,
+    "loc": 523,
+    "blank": 65,
+    "comment": 18,
+    "functions": 25,
     "g14Severity": null
   },
   {
     "file": "pforge-mcp/openbrain-replay.mjs",
-    "loc": 500,
-    "blank": 55,
+    "loc": 504,
+    "blank": 56,
     "comment": 21,
-    "functions": 22,
+    "functions": 23,
+    "g14Severity": null
+  },
+  {
+    "file": "pforge-mcp/capture-screenshots.mjs",
+    "loc": 502,
+    "blank": 32,
+    "comment": 33,
+    "functions": 10,
     "g14Severity": null
   },
   {
@@ -301,14 +309,6 @@
     "blank": 67,
     "comment": 18,
     "functions": 14,
-    "g14Severity": null
-  },
-  {
-    "file": "pforge-mcp/capture-screenshots.mjs",
-    "loc": 489,
-    "blank": 30,
-    "comment": 37,
-    "functions": 5,
     "g14Severity": null
   },
   {
@@ -325,6 +325,14 @@
     "blank": 61,
     "comment": 13,
     "functions": 14,
+    "g14Severity": null
+  },
+  {
+    "file": "pforge-mcp/tempering/scanners/content-audit.mjs",
+    "loc": 467,
+    "blank": 47,
+    "comment": 15,
+    "functions": 23,
     "g14Severity": null
   },
   {
@@ -357,14 +365,6 @@
     "blank": 67,
     "comment": 24,
     "functions": 2,
-    "g14Severity": null
-  },
-  {
-    "file": "pforge-mcp/tempering/scanners/content-audit.mjs",
-    "loc": 406,
-    "blank": 43,
-    "comment": 15,
-    "functions": 18,
     "g14Severity": null
   },
   {
@@ -408,6 +408,14 @@
     "g14Severity": null
   },
   {
+    "file": "pforge-mcp/testbed/runner.mjs",
+    "loc": 369,
+    "blank": 43,
+    "comment": 10,
+    "functions": 19,
+    "g14Severity": null
+  },
+  {
     "file": "pforge-mcp/capabilities/surface.mjs",
     "loc": 368,
     "blank": 23,
@@ -416,19 +424,19 @@
     "g14Severity": null
   },
   {
-    "file": "pforge-mcp/testbed/runner.mjs",
-    "loc": 346,
-    "blank": 44,
-    "comment": 19,
-    "functions": 10,
+    "file": "pforge-mcp/tempering/scanners/load-stress.mjs",
+    "loc": 348,
+    "blank": 35,
+    "comment": 4,
+    "functions": 21,
     "g14Severity": null
   },
   {
-    "file": "pforge-master/server.mjs",
-    "loc": 346,
-    "blank": 41,
-    "comment": 13,
-    "functions": 3,
+    "file": "pforge-mcp/tempering/scanners/performance-budget.mjs",
+    "loc": 347,
+    "blank": 33,
+    "comment": 5,
+    "functions": 19,
     "g14Severity": null
   },
   {
@@ -445,6 +453,14 @@
     "blank": 47,
     "comment": 26,
     "functions": 11,
+    "g14Severity": null
+  },
+  {
+    "file": "pforge-master/server.mjs",
+    "loc": 338,
+    "blank": 46,
+    "comment": 10,
+    "functions": 9,
     "g14Severity": null
   },
   {
@@ -480,6 +496,14 @@
     "g14Severity": null
   },
   {
+    "file": "pforge-mcp/tempering/scanners/mutation.mjs",
+    "loc": 324,
+    "blank": 29,
+    "comment": 4,
+    "functions": 20,
+    "g14Severity": null
+  },
+  {
     "file": "pforge-mcp/github-metrics.mjs",
     "loc": 321,
     "blank": 46,
@@ -504,14 +528,6 @@
     "g14Severity": null
   },
   {
-    "file": "pforge-mcp/tempering/scanners/performance-budget.mjs",
-    "loc": 306,
-    "blank": 31,
-    "comment": 5,
-    "functions": 17,
-    "g14Severity": null
-  },
-  {
     "file": "pforge-master/src/__tests__/embedding-cache.test.mjs",
     "loc": 306,
     "blank": 48,
@@ -525,14 +541,6 @@
     "blank": 44,
     "comment": 10,
     "functions": 13,
-    "g14Severity": null
-  },
-  {
-    "file": "pforge-mcp/tempering/scanners/load-stress.mjs",
-    "loc": 302,
-    "blank": 30,
-    "comment": 4,
-    "functions": 15,
     "g14Severity": null
   },
   {
@@ -557,14 +565,6 @@
     "blank": 32,
     "comment": 3,
     "functions": 19,
-    "g14Severity": null
-  },
-  {
-    "file": "pforge-mcp/tempering/scanners/mutation.mjs",
-    "loc": 295,
-    "blank": 28,
-    "comment": 4,
-    "functions": 15,
     "g14Severity": null
   },
   {
@@ -648,6 +648,14 @@
     "g14Severity": null
   },
   {
+    "file": "pforge-mcp/tempering/scanners/contract.mjs",
+    "loc": 253,
+    "blank": 19,
+    "comment": 1,
+    "functions": 14,
+    "g14Severity": null
+  },
+  {
     "file": "pforge-master/src/mcp-client.mjs",
     "loc": 250,
     "blank": 38,
@@ -661,6 +669,14 @@
     "blank": 9,
     "comment": 3,
     "functions": 1,
+    "g14Severity": null
+  },
+  {
+    "file": "pforge-mcp/timeline/core.mjs",
+    "loc": 248,
+    "blank": 24,
+    "comment": 5,
+    "functions": 15,
     "g14Severity": null
   },
   {
@@ -704,11 +720,11 @@
     "g14Severity": null
   },
   {
-    "file": "pforge-mcp/timeline/core.mjs",
-    "loc": 236,
-    "blank": 31,
-    "comment": 15,
-    "functions": 8,
+    "file": "scripts/forge-home-cleanup.mjs",
+    "loc": 237,
+    "blank": 33,
+    "comment": 8,
+    "functions": 13,
     "g14Severity": null
   },
   {
@@ -736,6 +752,14 @@
     "g14Severity": null
   },
   {
+    "file": "pforge-mcp/tempering/auto-activate.mjs",
+    "loc": 225,
+    "blank": 19,
+    "comment": 6,
+    "functions": 9,
+    "g14Severity": null
+  },
+  {
     "file": "pforge-mcp/crucible-enforce.mjs",
     "loc": 224,
     "blank": 16,
@@ -744,19 +768,19 @@
     "g14Severity": null
   },
   {
-    "file": "pforge-mcp/tempering/scanners/contract.mjs",
-    "loc": 224,
-    "blank": 18,
-    "comment": 1,
-    "functions": 10,
-    "g14Severity": null
-  },
-  {
     "file": "pforge-mcp/enums.mjs",
     "loc": 222,
     "blank": 16,
     "comment": 3,
     "functions": 10,
+    "g14Severity": null
+  },
+  {
+    "file": "pforge-mcp/server/main.mjs",
+    "loc": 222,
+    "blank": 22,
+    "comment": 18,
+    "functions": 11,
     "g14Severity": null
   },
   {
@@ -792,14 +816,6 @@
     "g14Severity": null
   },
   {
-    "file": "pforge-mcp/tempering/auto-activate.mjs",
-    "loc": 216,
-    "blank": 18,
-    "comment": 6,
-    "functions": 8,
-    "g14Severity": null
-  },
-  {
     "file": "pforge-master/src/providers/anthropic-tools.mjs",
     "loc": 215,
     "blank": 20,
@@ -813,6 +829,14 @@
     "blank": 18,
     "comment": 1,
     "functions": 13,
+    "g14Severity": null
+  },
+  {
+    "file": "scripts/digest.mjs",
+    "loc": 212,
+    "blank": 33,
+    "comment": 14,
+    "functions": 9,
     "g14Severity": null
   },
   {
@@ -848,14 +872,6 @@
     "g14Severity": null
   },
   {
-    "file": "scripts/forge-home-cleanup.mjs",
-    "loc": 209,
-    "blank": 27,
-    "comment": 8,
-    "functions": 6,
-    "g14Severity": null
-  },
-  {
     "file": "pforge-master/src/providers/openai-tools.mjs",
     "loc": 206,
     "blank": 23,
@@ -869,6 +885,14 @@
     "blank": 32,
     "comment": 14,
     "functions": 7,
+    "g14Severity": null
+  },
+  {
+    "file": "pforge-mcp/foundry-quota.mjs",
+    "loc": 205,
+    "blank": 26,
+    "comment": 5,
+    "functions": 13,
     "g14Severity": null
   },
   {
@@ -888,14 +912,6 @@
     "g14Severity": null
   },
   {
-    "file": "pforge-mcp/foundry-quota.mjs",
-    "loc": 203,
-    "blank": 26,
-    "comment": 5,
-    "functions": 13,
-    "g14Severity": null
-  },
-  {
     "file": "pforge-master/src/principles.mjs",
     "loc": 203,
     "blank": 39,
@@ -909,22 +925,6 @@
     "blank": 20,
     "comment": 21,
     "functions": 8,
-    "g14Severity": null
-  },
-  {
-    "file": "scripts/digest.mjs",
-    "loc": 202,
-    "blank": 33,
-    "comment": 14,
-    "functions": 6,
-    "g14Severity": null
-  },
-  {
-    "file": "pforge-mcp/server/main.mjs",
-    "loc": 193,
-    "blank": 15,
-    "comment": 19,
-    "functions": 3,
     "g14Severity": null
   },
   {
@@ -1504,6 +1504,14 @@
     "g14Severity": null
   },
   {
+    "file": "pforge-mcp/orchestrator.mjs",
+    "loc": 78,
+    "blank": 6,
+    "comment": 0,
+    "functions": 4,
+    "g14Severity": null
+  },
+  {
     "file": "pforge-mcp/forge-master-routes.mjs",
     "loc": 76,
     "blank": 6,
@@ -1717,14 +1725,6 @@
     "blank": 2,
     "comment": 1,
     "functions": 1,
-    "g14Severity": null
-  },
-  {
-    "file": "pforge-mcp/orchestrator.mjs",
-    "loc": 31,
-    "blank": 5,
-    "comment": 0,
-    "functions": 0,
     "g14Severity": null
   },
   {

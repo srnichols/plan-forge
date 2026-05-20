@@ -9,7 +9,7 @@
   },
   {
     "file": "pforge-mcp/orchestrator/run-plan.mjs",
-    "loc": 2906,
+    "loc": 2907,
     "blank": 207,
     "comment": 134,
     "functions": 114,
@@ -288,19 +288,19 @@
     "g14Severity": null
   },
   {
+    "file": "pforge-mcp/local-recall.mjs",
+    "loc": 584,
+    "blank": 56,
+    "comment": 8,
+    "functions": 26,
+    "g14Severity": null
+  },
+  {
     "file": "pforge-master/src/intent-router.mjs",
     "loc": 572,
     "blank": 59,
     "comment": 67,
     "functions": 6,
-    "g14Severity": null
-  },
-  {
-    "file": "pforge-mcp/local-recall.mjs",
-    "loc": 552,
-    "blank": 54,
-    "comment": 8,
-    "functions": 23,
     "g14Severity": null
   },
   {

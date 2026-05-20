@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-05-20T05:57:21.355Z",
+  "generatedAt": "2026-05-20T06:07:30.916Z",
   "scopes": [
     "pforge-mcp",
     "pforge-master",
@@ -10,7 +10,7 @@
     "filesWithDeadExports": 103,
     "totalExports": 1543,
     "deadExports": 678,
-    "namespaceConsumedFiles": 51
+    "namespaceConsumedFiles": 50
   },
   "findings": [
     {

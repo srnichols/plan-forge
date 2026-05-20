@@ -1,14 +1,14 @@
 [
   {
     "file": "pforge-mcp/local-recall.mjs",
-    "line": 447,
-    "col": 13,
+    "line": 441,
+    "col": 11,
     "callee": "_tfidfSearchWithIndex",
     "argCount": 6
   },
   {
     "file": "pforge-mcp/local-recall.mjs",
-    "line": 481,
+    "line": 513,
     "col": 9,
     "callee": "_tfidfSearchWithIndex",
     "argCount": 6

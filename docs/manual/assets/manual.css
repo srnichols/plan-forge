@@ -327,7 +327,7 @@ button.sidebar-act-toggle.expanded .sidebar-act-chevron { transform: rotate(90de
 .diagram-img { width: 100%; margin: 1rem 0 1.5rem; }
 .diagram-img-sm { max-width: 700px; }
 .diagram-img-md { max-width: 750px; }
-.diagram-img-lg { max-width: 800px; }
+.diagram-img-lg { max-width: 1100px; }   /* bumped from 800 → 1100 (still capped by chapter-content) */
 
 /* ─── Figures (auto-wrapped diagrams + hand-authored figure blocks) ─── */
 /* Apress-style centred figure with a one-line italic caption underneath. */
@@ -339,6 +339,116 @@ button.sidebar-act-toggle.expanded .sidebar-act-chevron { transform: rotate(90de
   margin: 0 auto;       /* let the figure own the outer spacing */
   display: block;
 }
+
+/* ─── Wide figure breakout ───
+   Breaks a figure out of .chapter-content's 52rem (832px) cap so very wide
+   diagrams (e.g. the Phase-25/26 callback graph at 2080px native) can render
+   closer to their natural size. Centres on the main pane, accounting for the
+   260px sidebar on desktop and the collapsed sidebar when toggled.
+   Used by adding `manual-figure-wide` to the <figure>. */
+.manual-figure-wide {
+  width: 95%;
+  max-width: 1300px;
+  position: relative;
+  left: 50%;
+  transform: translateX(-50%);
+}
+@media (min-width: 1024px) {
+  .manual-figure-wide {
+    width: calc(100vw - 260px - 4rem);   /* viewport minus sidebar minus gutter */
+    max-width: 1300px;
+  }
+}
+body.sidebar-collapsed .manual-figure-wide {
+  width: calc(100vw - 4rem);
+}
+.manual-figure-wide .diagram-img {
+  width: 100%;
+  max-width: 100%;                       /* override .diagram-img-md/-lg cap */
+}
+.manual-figure-wide .manual-figcaption {
+  max-width: 100%;
+}
+
+/* ─── Diagram zoom (click-to-zoom modal) ───
+   Wired by initDiagramZoom() in manual.js. Any .diagram-img inside
+   .chapter-content becomes click/Enter/Space activated. */
+.diagram-img.zoomable {
+  cursor: zoom-in;
+  transition: opacity 0.15s ease;
+}
+.diagram-img.zoomable:hover,
+.diagram-img.zoomable:focus-visible {
+  opacity: 0.9;
+  outline: 2px solid rgba(245, 158, 11, 0.5);
+  outline-offset: 4px;
+}
+.diagram-modal {
+  position: fixed;
+  inset: 0;
+  display: none;
+  z-index: 200;
+  background: rgba(2, 6, 23, 0.94);
+  align-items: center;
+  justify-content: center;
+  padding: 2rem;
+  overflow: auto;
+}
+.diagram-modal.open { display: flex; }
+.diagram-modal img {
+  max-width: 95vw;
+  max-height: 95vh;
+  background: #0f172a;
+  border-radius: 0.5rem;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.6);
+  cursor: zoom-out;
+}
+.diagram-modal-close {
+  position: fixed;
+  top: 1rem;
+  right: 1rem;
+  width: 2.5rem;
+  height: 2.5rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(15, 23, 42, 0.9);
+  border: 1px solid rgba(148, 163, 184, 0.3);
+  border-radius: 50%;
+  color: #cbd5e1;
+  cursor: pointer;
+  font-size: 1.5rem;
+  line-height: 1;
+  z-index: 201;
+  font-family: inherit;
+}
+.diagram-modal-close:hover,
+.diagram-modal-close:focus-visible {
+  color: #f1f5f9;
+  border-color: rgba(148, 163, 184, 0.6);
+  outline: none;
+}
+
+/* "View full size" link injected by initDiagramZoom() into figcaptions. */
+.diagram-fullsize-link {
+  margin-left: 0.4rem;
+  font-style: normal;
+  font-size: 0.72rem;
+  color: #94a3b8;
+  text-decoration: underline dotted;
+  text-underline-offset: 2px;
+  white-space: nowrap;
+}
+.diagram-fullsize-link:hover { color: #f59e0b; }
+
+html.light-mode .diagram-modal { background: rgba(248, 250, 252, 0.96); }
+html.light-mode .diagram-modal img { background: #ffffff; box-shadow: 0 20px 60px rgba(15, 23, 42, 0.2); }
+html.light-mode .diagram-modal-close {
+  background: #ffffff;
+  color: #475569;
+  border-color: #cbd5e1;
+}
+html.light-mode .diagram-fullsize-link { color: #64748b; }
 .manual-figcaption {
   font-size: 0.78rem;
   color: #94a3b8;       /* slate-400 */

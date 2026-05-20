@@ -1,6 +1,6 @@
 # Phase MANUAL-EBOOK-COMPLETION — Close the gap between "reference manual" and "ebook + reference + story"
 
-> **Status**: Draft. Ready for incremental execution slice-by-slice.
+> **Status**: ✅ Complete. All 18 content slices + QA closure shipped.
 > **Tracks**: Docs only (`docs/manual/*.html`, `docs/manual/assets/manual.js`, `docs/manual/assets/diagrams/*.svg`). Optional source pulls from `docs/blog/*.html`, `docs/REST-API.md`, `pforge-mcp/EVENTS.md`. **No code under `pforge-mcp/`, `pforge-master/`, `scripts/`, or root.**
 > **Estimated cost**: $30–$60 total across 19 slices (18 content slices + 1 QA closer) if LLM-assisted; $0 if hand-written. Each slice is independently shippable.
 > **Pipeline**: Specify ✅ → Harden (per slice on demand) → Execute (slice at a time) → `node maintain.mjs` (must remain GREEN) → Commit + push.

@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-05-20T06:10:30.417Z",
+  "generatedAt": "2026-05-20T06:12:31.404Z",
   "enumsSource": "pforge-mcp/enums.mjs",
   "enumsScanned": {
     "HOOK_PASCAL": {
@@ -13,72 +13,19 @@
   "includeTests": false,
   "counts": {
     "filesScanned": 262,
-    "filesWithDrift": 12,
+    "filesWithDrift": 11,
     "warnings": 4,
-    "info": 25,
+    "info": 19,
     "byEnum": {
-      "ERROR_CODES": 27,
+      "ERROR_CODES": 21,
       "HOOK_PASCAL": 2
     },
     "byKind": {
-      "SOFT-DRIFT": 25,
+      "SOFT-DRIFT": 19,
       "HARD-DRIFT": 4
     }
   },
   "findings": [
-    {
-      "file": "pforge-mcp/notifications/core.mjs",
-      "findings": [
-        {
-          "enum": "ERROR_CODES",
-          "literal": "TIMEOUT",
-          "line": 415,
-          "severity": "info",
-          "kind": "SOFT-DRIFT",
-          "why": "File hand-types \"TIMEOUT\" without importing ERROR_CODES — review whether to migrate"
-        },
-        {
-          "enum": "ERROR_CODES",
-          "literal": "TIMEOUT",
-          "line": 415,
-          "severity": "info",
-          "kind": "SOFT-DRIFT",
-          "why": "File hand-types \"TIMEOUT\" without importing ERROR_CODES — review whether to migrate"
-        },
-        {
-          "enum": "ERROR_CODES",
-          "literal": "TIMEOUT",
-          "line": 463,
-          "severity": "info",
-          "kind": "SOFT-DRIFT",
-          "why": "File hand-types \"TIMEOUT\" without importing ERROR_CODES — review whether to migrate"
-        },
-        {
-          "enum": "ERROR_CODES",
-          "literal": "TIMEOUT",
-          "line": 508,
-          "severity": "info",
-          "kind": "SOFT-DRIFT",
-          "why": "File hand-types \"TIMEOUT\" without importing ERROR_CODES — review whether to migrate"
-        },
-        {
-          "enum": "ERROR_CODES",
-          "literal": "TIMEOUT",
-          "line": 515,
-          "severity": "info",
-          "kind": "SOFT-DRIFT",
-          "why": "File hand-types \"TIMEOUT\" without importing ERROR_CODES — review whether to migrate"
-        },
-        {
-          "enum": "ERROR_CODES",
-          "literal": "TIMEOUT",
-          "line": 515,
-          "severity": "info",
-          "kind": "SOFT-DRIFT",
-          "why": "File hand-types \"TIMEOUT\" without importing ERROR_CODES — review whether to migrate"
-        }
-      ]
-    },
     {
       "file": "scripts/generate-error-catalog.mjs",
       "findings": [

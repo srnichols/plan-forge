@@ -32,8 +32,8 @@
   <text x="680" y="92" class="q" text-anchor="middle">Execution or guardrails?</text>
   <path d="M680,110 L680,150" class="arrow" />
   <text x="652" y="135" class="label">execution</text>
-  <path d="M780,92 L780,200" class="arrow" />
-  <text x="755" y="140" class="label">guardrails</text>
+  <path d="M780,92 L780,222" class="arrow" />
+  <text x="755" y="150" class="label">guardrails</text>
   <!-- Smith failures -->
   <rect x="280" y="145" width="240" height="45" class="node" fill="#0f172a" stroke="#f87171" />
   <text x="400" y="165" class="title" text-anchor="middle">Smith has failures</text>
@@ -44,10 +44,10 @@
   <text x="680" y="190" class="cmd" text-anchor="middle">Fix code → --resume-from N</text>
   <text x="680" y="203" class="cmd" text-anchor="middle">pforge diagnose &lt;file&gt;</text>
   <!-- Guardrails branch -->
-  <rect x="680" y="205" width="110" height="55" class="node" fill="#0f172a" stroke="#a78bfa" />
-  <text x="735" y="225" class="title" text-anchor="middle">applyTo</text>
-  <text x="735" y="240" class="fix" text-anchor="middle">Check glob</text>
-  <text x="735" y="253" class="fix" text-anchor="middle">patterns</text>
+  <rect x="680" y="225" width="110" height="55" class="node" fill="#0f172a" stroke="#a78bfa" />
+  <text x="735" y="245" class="title" text-anchor="middle">applyTo</text>
+  <text x="735" y="260" class="fix" text-anchor="middle">Check glob</text>
+  <text x="735" y="273" class="fix" text-anchor="middle">patterns</text>
   <!-- Q2: Dashboard -->
   <rect x="20" y="145" width="220" height="35" class="node" fill="#0f172a" stroke="#475569" />
   <text x="130" y="167" class="q" text-anchor="middle">Dashboard won't load?</text>

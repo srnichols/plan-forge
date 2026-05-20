@@ -59,7 +59,7 @@ See [CHANGELOG.md](CHANGELOG.md) for full release notes.
 
 | # | Item | Effort | Trigger to start |
 |---|------|--------|-----------------|
-| 1 | **Typed REST `client` sub-path for `pforge-sdk@0.4.0`** — generated TypeScript-style typed wrappers for each `/api/*` family, replacing hand-rolled `fetch` boilerplate. Tracked in [pforge-sdk/README.md#roadmap](pforge-sdk/README.md#roadmap). | M | First external SDK consumer asks for it, or a v3.6 enterprise customer needs typed bindings. |
+| 1 | ~~**Typed REST `client` sub-path for `pforge-sdk@0.4.0`**~~ **DONE (v3.10.3-dev)** — `PForgeClient`, `createClient`, `PForgeClientError`; method groups for runs / memory / crucible / liveguard; generic `tool()` dispatcher. 38 tests. | M | ✅ Shipped as `pforge-sdk@0.4.0` |
 | 2 | **Lattice + Hallmark as standalone catalog extensions** — extract to standalone packages so projects can adopt code-graph or provenance stamping without the full forge. | L | Demand signal from at least 3 external repos. |
 | 3 | ~~**CLI-GUIDE refresh** covering `pforge digest`, `plan-from-sarif`, `sync-spaces`, `hammer-fm`, `fm-session`, `fm-recall` — these commands exist but their CLI-GUIDE entries are stubs.~~ **DONE (v3.8.2)** — Added full entries for `digest`, `fm-recall`, `plan-from-sarif`, `sync-spaces`, `forge-home-cleanup`, `timeline`, `patterns`, `graph`, `sync-memories`, `sync-instructions`, `github`, `crucible`, `skills`, and `mcp-call`. | S | ✅ Triggered by `forge-home-cleanup` CLI addition (v3.8.1) |
 | 4 | **Manual Appendix G — "Unified API Surface Index"** — single appendix tabulating every MCP tool + CLI command + REST endpoint + SDK export with cross-links. | M | After Appendix F stabilizes; or when SDK 0.4.0 lands. |

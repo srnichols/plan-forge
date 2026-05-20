@@ -1,6 +1,6 @@
 # pforge-sdk
 
-**Version**: `0.3.0` · **License**: MIT · **Engines**: Node ≥ 20
+**Version**: `0.4.0` · **License**: MIT · **Engines**: Node ≥ 20
 
 Programmatic SDK for Plan Forge — load MCP tool metadata, build Hallmark provenance envelopes, and validate Lattice code-chunk records from your own Node.js code. Zero runtime dependencies.
 
@@ -32,7 +32,7 @@ npm install file:./pforge-sdk
 | `pforge-sdk/chunker` | `src/chunker.mjs` | `validateChunk` + `CHUNK_KINDS` for Lattice code-graph records |
 | `pforge-sdk/client` | `src/client.mjs` | `PForgeClient` — typed REST client for the Plan Forge MCP server |
 
-> **Note**: There is no `pforge-sdk/client` sub-path yet. To call REST endpoints from code, see [docs/REST-API.md](../docs/REST-API.md) — `fetch` is sufficient. A typed client is planned for `0.4.0`.
+> **Note**: `pforge-sdk/client` is new in `0.4.0`. It requires a running Plan Forge MCP server (`pforge-mcp/server.mjs`) to be useful. Zero runtime dependencies — uses the global `fetch` (Node ≥ 18).
 
 ---
 

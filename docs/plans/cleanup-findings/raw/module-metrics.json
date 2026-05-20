@@ -89,10 +89,10 @@
   },
   {
     "file": "pforge-mcp/server/tool-handlers/platform.mjs",
-    "loc": 1274,
-    "blank": 126,
+    "loc": 1284,
+    "blank": 127,
     "comment": 16,
-    "functions": 46,
+    "functions": 48,
     "g14Severity": "medium"
   },
   {

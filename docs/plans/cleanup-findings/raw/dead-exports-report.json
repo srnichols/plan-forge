@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-05-20T06:20:06.313Z",
+  "generatedAt": "2026-05-20T06:27:17.037Z",
   "scopes": [
     "pforge-mcp",
     "pforge-master",
@@ -7,10 +7,10 @@
   ],
   "counts": {
     "filesScanned": 262,
-    "filesWithDeadExports": 103,
+    "filesWithDeadExports": 105,
     "totalExports": 1543,
-    "deadExports": 678,
-    "namespaceConsumedFiles": 50
+    "deadExports": 680,
+    "namespaceConsumedFiles": 48
   },
   "findings": [
     {
@@ -1217,6 +1217,20 @@
         "ROUND_TRIP_PROBE_PHRASE"
       ],
       "totalExports": 8
+    },
+    {
+      "file": "pforge-mcp/orchestrator/run-plan/gate-synthesis.mjs",
+      "deadExports": [
+        "GATE_SUGGESTION_AUTO_INJECT_THRESHOLD"
+      ],
+      "totalExports": 5
+    },
+    {
+      "file": "pforge-mcp/orchestrator/run-plan/postmortem.mjs",
+      "deadExports": [
+        "POSTMORTEM_RETENTION_COUNT"
+      ],
+      "totalExports": 4
     },
     {
       "file": "pforge-mcp/patterns/registry.mjs",

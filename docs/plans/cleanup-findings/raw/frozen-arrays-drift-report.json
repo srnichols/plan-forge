@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-05-20T06:20:06.775Z",
+  "generatedAt": "2026-05-20T06:27:17.754Z",
   "enumsSource": "pforge-mcp/enums.mjs",
   "enumsScanned": {
     "HOOK_PASCAL": {
@@ -232,7 +232,7 @@
         {
           "enum": "ERROR_CODES",
           "literal": "LOCK_HASH_MISMATCH",
-          "line": 528,
+          "line": 530,
           "severity": "info",
           "kind": "SOFT-DRIFT",
           "why": "File hand-types \"LOCK_HASH_MISMATCH\" without importing ERROR_CODES — review whether to migrate"

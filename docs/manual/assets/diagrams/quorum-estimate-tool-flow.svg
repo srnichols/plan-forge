@@ -1,4 +1,4 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 820 380" fill="none" role="img" aria-labelledby="qet-title qet-desc">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 820 405" fill="none" role="img" aria-labelledby="qet-title qet-desc">
   <title id="qet-title">forge_estimate_quorum tool flow</title>
   <desc id="qet-desc">The forge_estimate_quorum MCP tool takes a planPath, parses the plan into slices, then runs estimatePlan four times — once per quorum mode (false/auto/power/speed). Each pass scores every slice for complexity, computes per-leg dry-run cost across the mode's model set, and returns a side-by-side comparison so the agent can pick a mode without hand-computing dollar amounts.</desc>
   <style>
@@ -85,11 +85,11 @@
   <text x="750" y="174" class="label" text-anchor="middle">confidence</text>
 
   <!-- Footer: example response -->
-  <rect x="20" y="240" width="780" height="125" class="node" fill="#1e293b" stroke="#334155" />
-  <text x="34" y="262" class="title">📋 Example response (7-slice fixture, see capabilities.mjs#L220):</text>
-  <text x="34" y="284" class="mono">{ "false": { totalCostUSD: 0.28, quorumSliceCount: 0, totalSliceCount: 7, confidence: "historical" },</text>
-  <text x="34" y="300" class="mono">  "auto":  { totalCostUSD: 0.42, quorumSliceCount: 1, totalSliceCount: 7, confidence: "historical" },</text>
-  <text x="34" y="316" class="mono">  "power": { totalCostUSD: 12.50, quorumSliceCount: 3, totalSliceCount: 7, confidence: "historical" },</text>
-  <text x="34" y="332" class="mono">  "speed": { totalCostUSD: 1.20, quorumSliceCount: 1, totalSliceCount: 7, confidence: "historical" } }</text>
-  <text x="34" y="354" class="micro">⚠ Always call this tool before showing dollar amounts in chat — hand-computed quorum estimates have been observed to overshoot by ~10×.</text>
+  <rect x="20" y="275" width="780" height="125" class="node" fill="#1e293b" stroke="#334155" />
+  <text x="34" y="297" class="title">📋 Example response (7-slice fixture, see capabilities.mjs#L220):</text>
+  <text x="34" y="319" class="mono">{ "false": { totalCostUSD: 0.28, quorumSliceCount: 0, totalSliceCount: 7, confidence: "historical" },</text>
+  <text x="34" y="335" class="mono">  "auto":  { totalCostUSD: 0.42, quorumSliceCount: 1, totalSliceCount: 7, confidence: "historical" },</text>
+  <text x="34" y="351" class="mono">  "power": { totalCostUSD: 12.50, quorumSliceCount: 3, totalSliceCount: 7, confidence: "historical" },</text>
+  <text x="34" y="367" class="mono">  "speed": { totalCostUSD: 1.20, quorumSliceCount: 1, totalSliceCount: 7, confidence: "historical" } }</text>
+  <text x="34" y="389" class="micro">⚠ Always call this tool before showing dollar amounts in chat — hand-computed quorum estimates have been observed to overshoot by ~10×.</text>
 </svg>

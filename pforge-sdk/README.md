@@ -1,6 +1,6 @@
 # pforge-sdk
 
-**Version**: `0.4.0` · **License**: MIT · **Engines**: Node ≥ 20
+**Version**: `0.5.0` · **License**: MIT · **Engines**: Node ≥ 20
 
 Programmatic SDK for Plan Forge — load MCP tool metadata, build Hallmark provenance envelopes, and validate Lattice code-chunk records from your own Node.js code. Zero runtime dependencies.
 
@@ -27,21 +27,23 @@ npm install file:./pforge-sdk
 | Sub-path | Module | What it gives you |
 |---|---|---|
 | `pforge-sdk` | `src/index.mjs` | Re-exports everything below |
-| `pforge-sdk/tools` | `src/tools.mjs` | Tool registry helpers (load + filter the 88 MCP tools) |
+| `pforge-sdk/tools` | `src/tools.mjs` | Tool registry helpers (load + filter MCP tools) |
 | `pforge-sdk/hallmark` | `src/hallmark.mjs` | `buildProvenance` / `validateProvenance` / `mergeProvenance` + `hallmark/v1` schema |
 | `pforge-sdk/chunker` | `src/chunker.mjs` | `validateChunk` + `CHUNK_KINDS` for Lattice code-graph records |
 | `pforge-sdk/client` | `src/client.mjs` | `PForgeClient` — typed REST client for the Plan Forge MCP server |
 | `pforge-sdk/anvil` | `src/anvil.mjs` | Anvil cache-key helpers — `computeAnvilKey`, path helpers |
 | `pforge-sdk/lattice-query` | `src/lattice-query.mjs` | Lattice query builder — `LatticeQueryBuilder`, `tokenizeForSearch`, `scoreChunk` |
+| `pforge-sdk/notifications/adapter-contract` | `src/notifications/adapter-contract.mjs` | Notification adapter contract — `validateAdapterShape`, `ERR_NOT_IMPLEMENTED` |
 
 > **Note**: `pforge-sdk/client` is new in `0.4.0`. It requires a running Plan Forge MCP server (`pforge-mcp/server.mjs`) to be useful. Zero runtime dependencies — uses the global `fetch` (Node ≥ 18).
 > **Note**: `pforge-sdk/anvil` and `pforge-sdk/lattice-query` are new in `0.5.0`. Both are pure and dependency-free.
+> **Note**: `pforge-sdk/notifications/adapter-contract` is new in `0.5.0`. Defines the shape every notification adapter must implement — pure validation, no runtime base class.
 
 ---
 
 ## `pforge-sdk/tools` — Tool registry
 
-The tools module loads `pforge-mcp/tools.json` (the canonical registry of all 88 MCP tools) and exposes helpers for filtering by risk, intent, or name.
+The tools module loads `pforge-mcp/tools.json` (the canonical registry of all MCP tools) and exposes helpers for filtering by risk, intent, or name.
 
 ```js
 import {
@@ -51,8 +53,8 @@ import {
   getToolsByIntent,
 } from 'pforge-sdk/tools';
 
-// All 88 tools
-console.log(tools.length); // → 88
+// All tools
+console.log(tools.length); // → count depends on installed version
 
 // Find a single tool
 const runPlan = getTool('forge_run_plan');
@@ -81,9 +83,74 @@ The full registry is regenerated from `pforge-mcp/capabilities.mjs` every time t
 
 ---
 
+## `pforge-sdk/notifications/adapter-contract` — Notification adapter contract
+
+Defines the shape every Plan Forge notification adapter must implement. No runtime base class — pure validation via `validateAdapterShape`. Import this when writing a custom adapter or host that dispatches notifications.
+
+```js
+import {
+  validateAdapterShape,
+  ERR_NOT_IMPLEMENTED,
+} from 'pforge-sdk/notifications/adapter-contract';
+
+// Validate a custom adapter before registering it
+const myAdapter = {
+  name: 'slack',
+  send: async ({ formattedMessage, config }) => {
+    const res = await fetch(config.webhookUrl, {
+      method: 'POST',
+      body: JSON.stringify({ text: formattedMessage }),
+    });
+    return { ok: res.ok, statusCode: res.status };
+  },
+  validate: (config) => {
+    if (!config.webhookUrl) return { ok: false, reason: 'webhookUrl required' };
+    return { ok: true };
+  },
+};
+
+const check = validateAdapterShape(myAdapter);
+if (!check.valid) {
+  throw new Error(`Adapter missing: ${check.missing.join(', ')}`);
+}
+```
+
+### `AdapterSendArgs` shape
+
+| Field | Type | Description |
+|---|---|---|
+| `event` | `object` | Hub event (`type`, `data`, `timestamp`, …) |
+| `route` | `string` | Adapter name that matched the route |
+| `formattedMessage` | `string` | Human-readable message text |
+| `correlationId` | `string` | Trace ID for this delivery |
+| `config` | `object` | Resolved adapter config (env vars expanded) |
+
+### `AdapterSendResult` shape
+
+| Field | Type | Description |
+|---|---|---|
+| `ok` | `boolean` | `true` if delivery succeeded |
+| `statusCode` | `number?` | HTTP status code (for HTTP-based adapters) |
+| `deliveryMs` | `number?` | Round-trip time in ms |
+| `errorCode` | `string?` | Machine-readable error (`TIMEOUT`, `HTTP_500`, `NETWORK_ERROR`, …) |
+| `error` | `string?` | Human-readable error message |
+
+### `validateAdapterShape(adapter)`
+
+| Returns | Type | Description |
+|---|---|---|
+| `valid` | `boolean` | `true` if adapter has `name` (string), `send` (function), `validate` (function) |
+| `missing` | `string[]` | Names of missing or wrong-typed members |
+
+### `ERR_NOT_IMPLEMENTED`
+
+String constant `"ERR_NOT_IMPLEMENTED"` — use as the `errorCode` value in `AdapterSendResult` when a send path is a stub.
+
+---
+
 ## `pforge-sdk/client` — REST Client
 
-`PForgeClient` is a zero-dependency typed REST client for the Plan Forge MCP server. It wraps every major `/api/*` endpoint family and exposes a generic `tool()` dispatcher for calling any of the 88+ `forge_*` tools over HTTP.
+`PForgeClient` is a zero-dependency typed REST client for the Plan Forge MCP server. It wraps every major `/api/*` endpoint family and exposes a generic `tool()` dispatcher for calling any `forge_*` tool over HTTP.
 
 ```js
 import { PForgeClient, createClient } from 'pforge-sdk/client';
@@ -382,7 +449,7 @@ The SDK is intentionally narrow — it covers the artifact contracts (`tools.jso
 |---|---|
 | **0.3.0** | `chunker` sub-path; dropped broken `client` declaration; bumped to match v3.x memory architecture |
 | **0.4.0** | `client` sub-path — `PForgeClient` typed REST client, `createClient` factory, `PForgeClientError`, method groups for runs/memory/crucible/liveguard, generic `tool()` dispatcher |
-| **0.5.0** (current) | `anvil` sub-path — `computeAnvilKey`, path helpers; `lattice-query` sub-path — `LatticeQueryBuilder`, `tokenizeForSearch`, `scoreChunk` |
+| **0.5.0** (current) | `anvil` sub-path — `computeAnvilKey`, path helpers; `lattice-query` sub-path — `LatticeQueryBuilder`, `tokenizeForSearch`, `scoreChunk`; `notifications/adapter-contract` sub-path — `validateAdapterShape`, `ERR_NOT_IMPLEMENTED` |
 
 Track progress in [docs/V3-CAPABILITY-AUDIT.md](../docs/V3-CAPABILITY-AUDIT.md).
 
@@ -390,7 +457,7 @@ Track progress in [docs/V3-CAPABILITY-AUDIT.md](../docs/V3-CAPABILITY-AUDIT.md).
 
 ## See also
 
-- [docs/REST-API.md](../docs/REST-API.md) — all 103 REST endpoints
-- [docs/capabilities.md](../docs/capabilities.md) — all 88 MCP tools
+- [docs/REST-API.md](../docs/REST-API.md) — all REST endpoints
+- [docs/capabilities.md](../docs/capabilities.md) — all MCP tools
 - [pforge-mcp/tools.json](../pforge-mcp/tools.json) — canonical tool registry (what `pforge-sdk/tools` reads)
 - [pforge-sdk/schemas/](schemas/) — JSON Schemas (`hallmark-provenance.v1.json`, etc.)

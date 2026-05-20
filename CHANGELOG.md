@@ -9,6 +9,25 @@ Format follows [Keep a Changelog](https://keepachangelog.com/).
 
 ---
 
+## [3.10.0] — 2026-05-20
+
+### Added — Offline single-source HTML export for the manual
+
+Closes the last deferred item from the manual-ebook-completion-audit: "Single-source export (PDF / single HTML) — deferred (tooling concern)."
+
+- **`docs/manual/export.mjs`** — new standalone export script. Reads all chapters registered in `assets/manual.js`→`CHAPTERS`, extracts `<main>` content from each, strips sidebar/navigation chrome, and assembles a single `plan-forge-manual.html` with:
+  - Auto-generated, multi-column table of contents
+  - All 79 chapters and appendices in canonical order
+  - Content hash + generation timestamp in the header and footer
+  - Inline layout overrides so the document is readable without the sidebar scripts
+- **`docs/manual/plan-forge-manual.html`** — pre-generated offline edition (79 chapters, ~1.7 MB). Regenerate at any time with `node docs/manual/export.mjs`.
+- **`docs/manual/index.html`** — new "📥 Download / Single-page HTML" bar above the front-matter pointer. Links to `plan-forge-manual.html` and shows the regeneration command.
+- **`docs/manual/maintain.mjs`** — `GENERATED_EXPORTS` set excludes `plan-forge-manual.html` from the NAV and SHELL checks; the file is a generated artifact, not a registered chapter.
+
+**Enterprise / air-gapped use case**: teams that cannot browse the live docs site can distribute `plan-forge-manual.html` as a single self-contained file. The content hash confirms the edition and enables version pinning.
+
+---
+
 ## [3.9.2] — 2026-05-19
 
 ### Fixed — Distribution enumeration gap (release-checklist §1b)

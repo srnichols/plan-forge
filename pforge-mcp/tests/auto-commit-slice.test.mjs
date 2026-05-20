@@ -197,7 +197,7 @@ describe("autoCommitSliceIfDirty — Issue #151 pre-slice snapshot", () => {
     // Post-slice: operator dirt still there + worker created worker-new.ts
     execSync
       .mockReturnValueOnce("?? foreign.md\n M scratch.ts\n?? worker-new.ts\n") // git status --porcelain
-      .mockReturnValueOnce(undefined)                                            // git add -- "worker-new.ts"
+      // git add -- <paths> now goes through execFileSync (returns undefined by default)
       .mockReturnValueOnce(FAKE_SHA + "\n");                                     // git rev-parse HEAD
 
     const eventBus = { emit: vi.fn() };
@@ -210,11 +210,14 @@ describe("autoCommitSliceIfDirty — Issue #151 pre-slice snapshot", () => {
     expect(result.foreignFiles).toEqual(["foreign.md", "scratch.ts"]);
 
     // git add must target worker-new.ts only (NOT foreign.md or scratch.ts)
-    const addCall = execSync.mock.calls[1][0];
-    expect(addCall).toMatch(/git add -- /);
-    expect(addCall).toContain("worker-new.ts");
-    expect(addCall).not.toContain("foreign.md");
-    expect(addCall).not.toContain("scratch.ts");
+    const addCall = execFileSync.mock.calls.find(
+      (c) => c[0] === "git" && c[1]?.[0] === "add"
+    );
+    expect(addCall).toBeDefined();
+    const addedPaths = addCall[1].slice(2); // skip ["add", "--"]
+    expect(addedPaths).toContain("worker-new.ts");
+    expect(addedPaths).not.toContain("foreign.md");
+    expect(addedPaths).not.toContain("scratch.ts");
 
     // Foreign-files event fired
     expect(eventBus.emit).toHaveBeenCalledWith(
@@ -229,7 +232,7 @@ describe("autoCommitSliceIfDirty — Issue #151 pre-slice snapshot", () => {
 
     execSync
       .mockReturnValueOnce("MM file.ts\n")
-      .mockReturnValueOnce(undefined)
+      // git add -- now goes through execFileSync
       .mockReturnValueOnce(FAKE_SHA + "\n");
 
     const slice = { number: 2, title: "tweak file" };
@@ -239,7 +242,11 @@ describe("autoCommitSliceIfDirty — Issue #151 pre-slice snapshot", () => {
 
     expect(result.committed).toBe(true);
     expect(result.foreignFiles).toBeUndefined();
-    expect(execSync.mock.calls[1][0]).toContain("file.ts");
+    const addCall = execFileSync.mock.calls.find(
+      (c) => c[0] === "git" && c[1]?.[0] === "add"
+    );
+    expect(addCall).toBeDefined();
+    expect(addCall[1].slice(2)).toContain("file.ts");
   });
 
   it("(151-C) returns no-worker-changes when only foreign files are dirty", () => {
@@ -286,14 +293,15 @@ describe("autoCommitSliceIfDirty — Issue #151 pre-slice snapshot", () => {
     const lines = Array.from({ length: 75 }, (_, i) => `?? new-${i}.ts`);
     execSync
       .mockReturnValueOnce(lines.join("\n") + "\n")
-      .mockReturnValueOnce(undefined) // git add batch 1
-      .mockReturnValueOnce(undefined) // git add batch 2
+      // git add calls now go through execFileSync (returns undefined by default)
       .mockReturnValueOnce(FAKE_SHA + "\n");
 
     const slice = { number: 9, title: "big slice" };
     autoCommitSliceIfDirty({ slice, cwd: "/fake/cwd", mode: "auto", preSliceState });
 
-    const addCalls = execSync.mock.calls.filter((c) => /git add -- /.test(c[0]));
+    const addCalls = execFileSync.mock.calls.filter(
+      (c) => c[0] === "git" && c[1]?.[0] === "add"
+    );
     expect(addCalls.length).toBe(2);
   });
 });

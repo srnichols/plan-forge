@@ -132,7 +132,7 @@ describe("autoCommitSliceIfDirty — Issue #195 race & housekeeping detection", 
       .mockReturnValueOnce(dirtyForge)                                       // git status --porcelain
       .mockReturnValueOnce(`${ABSORBED_SHA}\tCopilot\tfeat: implement endpoints\n`) // git log startSha..HEAD
       .mockReturnValueOnce(" 5 files changed, 84 insertions(+), 2 deletions(-)\n") // shortstat for absorbed
-      .mockReturnValueOnce(undefined)                                        // git add -- <paths>
+      // git add -- <paths> now goes through execFileSync (returns undefined by default)
       .mockReturnValueOnce(`${OUR_SHA}\n`)                                   // git rev-parse HEAD
       .mockReturnValueOnce(" 2 files changed, 3 insertions(+)\n");           // git show --shortstat OUR_SHA
 
@@ -168,7 +168,7 @@ describe("autoCommitSliceIfDirty — Issue #195 race & housekeeping detection", 
     execSync
       .mockReturnValueOnce(dirtySource)        // git status --porcelain
       .mockReturnValueOnce("")                 // git log startSha..HEAD → no absorbed commits
-      .mockReturnValueOnce(undefined)          // git add --
+      // git add -- now goes through execFileSync
       .mockReturnValueOnce(`${OUR_SHA}\n`)     // git rev-parse HEAD
       .mockReturnValueOnce(" 1 file changed, 50 insertions(+)\n"); // shortstat
 
@@ -193,7 +193,7 @@ describe("autoCommitSliceIfDirty — Issue #195 race & housekeeping detection", 
       .mockReturnValueOnce(dirtySource)                                       // git status --porcelain
       .mockReturnValueOnce(`${ABSORBED_SHA}\tCopilot\tfix: tiny patch\n`)     // git log
       .mockReturnValueOnce(" 1 file changed, 2 insertions(+)\n")              // shortstat for absorbed
-      .mockReturnValueOnce(undefined)                                          // git add --
+      // git add -- now goes through execFileSync
       .mockReturnValueOnce(`${OUR_SHA}\n`)                                     // git rev-parse HEAD
       .mockReturnValueOnce(" 1 file changed, 50 insertions(+)\n");             // shortstat OUR_SHA
 

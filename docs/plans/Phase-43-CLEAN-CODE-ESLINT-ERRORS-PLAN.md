@@ -1,13 +1,13 @@
 ---
 phase: 43
 name: CLEAN-CODE-ESLINT-ERRORS
-status: IN_PROGRESS
+status: COMPLETE
 lockHash: TBD
 ---
 
 # Phase 43 — CLEAN-CODE-ESLINT-ERRORS — resolve all ESLint error-severity clean-code violations
 
-> **Status**: **IN PROGRESS — S0 shipped 2026-05-19**
+> **Status**: **COMPLETE — all S0–S6 shipped 2026-05-19**
 > **Source**: Promoted from the Phase 42 Clean Code audit D-series findings. This phase is limited to behavior-preserving refactors that clear all ESLint error-severity violations: `clean-code/complexity-error`, `clean-code/max-lines-per-function-error`, and any residual `clean-code/max-params-error` drift.
 > **Tracks**: `pforge-mcp/**`, `pforge-master/src/reasoning.mjs`, `docs/plans/DEPLOYMENT-ROADMAP.md`.
 > **Primary proof**: zero ESLint error-severity findings from `node scripts/audit/run-eslint-clean-code.mjs` plus full green `vitest` suites in both `pforge-mcp` and `pforge-master`.

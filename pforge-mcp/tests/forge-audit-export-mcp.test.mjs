@@ -73,7 +73,7 @@ describe("forge_audit_export — handler registration", () => {
     const { TOOL_METADATA } = await import("../capabilities/tool-metadata.mjs");
     const meta = TOOL_METADATA["forge_audit_export"];
     expect(meta).toBeDefined();
-    expect(meta.addedIn).toBe("3.10.0");
+    expect(meta.addedIn).toBe("3.10.1");
     expect(Array.isArray(meta.intent)).toBe(true);
     expect(meta.intent).toContain("audit");
     expect(meta.cost).toBe("low");
@@ -97,9 +97,11 @@ describe("forge_audit_export — handler behaviour", () => {
   beforeEach(() => { cwd = makeTmpDir(); });
   afterEach(() => cleanup(cwd));
 
+  const fakeReq = { params: { name: "forge_audit_export" } };
+
   it("returns empty-state with message when .forge/runs/ does not exist", async () => {
     const { _callToolHandler_098_forge_audit_export } = await import("../server/tool-handlers/platform.mjs");
-    const res = await _callToolHandler_098_forge_audit_export({ path: cwd });
+    const res = await _callToolHandler_098_forge_audit_export(fakeReq, { path: cwd });
     const payload = JSON.parse(res.content[0].text);
     expect(payload.ok).toBe(true);
     expect(payload.records).toEqual([]);
@@ -115,7 +117,7 @@ describe("forge_audit_export — handler behaviour", () => {
       makeEvent("gate-pass",   "2026-05-01T10:01:00.000Z", { slice: "1" }),
     ]);
     const { _callToolHandler_098_forge_audit_export } = await import("../server/tool-handlers/platform.mjs");
-    const res = await _callToolHandler_098_forge_audit_export({ path: cwd, format: "json" });
+    const res = await _callToolHandler_098_forge_audit_export(fakeReq, { path: cwd, format: "json" });
     const payload = JSON.parse(res.content[0].text);
     expect(payload.ok).toBe(true);
     expect(payload.format).toBe("json");
@@ -132,7 +134,7 @@ describe("forge_audit_export — handler behaviour", () => {
       makeEvent("slice-complete", "2026-05-01T10:02:00.000Z"),
     ]);
     const { _callToolHandler_098_forge_audit_export } = await import("../server/tool-handlers/platform.mjs");
-    const res = await _callToolHandler_098_forge_audit_export({ path: cwd, type: ["gate-fail"] });
+    const res = await _callToolHandler_098_forge_audit_export(fakeReq, { path: cwd, type: ["gate-fail"] });
     const payload = JSON.parse(res.content[0].text);
     expect(payload.ok).toBe(true);
     expect(payload.total).toBe(1);
@@ -145,7 +147,7 @@ describe("forge_audit_export — handler behaviour", () => {
     );
     setupRun(cwd, "run-003", events);
     const { _callToolHandler_098_forge_audit_export } = await import("../server/tool-handlers/platform.mjs");
-    const res = await _callToolHandler_098_forge_audit_export({ path: cwd, limit: 3 });
+    const res = await _callToolHandler_098_forge_audit_export(fakeReq, { path: cwd, limit: 3 });
     const payload = JSON.parse(res.content[0].text);
     expect(payload.ok).toBe(true);
     expect(payload.total).toBe(3);
@@ -156,7 +158,7 @@ describe("forge_audit_export — handler behaviour", () => {
   it("caps limit at 500", async () => {
     const { _callToolHandler_098_forge_audit_export } = await import("../server/tool-handlers/platform.mjs");
     // No runs, just verify it doesn't blow up with a huge limit
-    const res = await _callToolHandler_098_forge_audit_export({ path: cwd, limit: 9999 });
+    const res = await _callToolHandler_098_forge_audit_export(fakeReq, { path: cwd, limit: 9999 });
     const payload = JSON.parse(res.content[0].text);
     expect(payload.ok).toBe(true);
     expect(payload.total).toBe(0);
@@ -167,7 +169,7 @@ describe("forge_audit_export — handler behaviour", () => {
       makeEvent("gate-pass", "2026-05-01T10:00:00.000Z", { slice: "1" }),
     ]);
     const { _callToolHandler_098_forge_audit_export } = await import("../server/tool-handlers/platform.mjs");
-    const res = await _callToolHandler_098_forge_audit_export({ path: cwd, format: "csv" });
+    const res = await _callToolHandler_098_forge_audit_export(fakeReq, { path: cwd, format: "csv" });
     const payload = JSON.parse(res.content[0].text);
     expect(payload.ok).toBe(true);
     expect(payload.format).toBe("csv");
@@ -179,7 +181,7 @@ describe("forge_audit_export — handler behaviour", () => {
 
   it("returns filters object in payload", async () => {
     const { _callToolHandler_098_forge_audit_export } = await import("../server/tool-handlers/platform.mjs");
-    const res = await _callToolHandler_098_forge_audit_export({
+    const res = await _callToolHandler_098_forge_audit_export(fakeReq, {
       path: cwd, since: "2026-01-01", type: ["gate-pass"], format: "json", limit: 50,
     });
     const payload = JSON.parse(res.content[0].text);

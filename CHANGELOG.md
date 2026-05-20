@@ -9,7 +9,26 @@ Format follows [Keep a Changelog](https://keepachangelog.com/).
 
 ---
 
-## [3.10.0] — 2026-05-20
+## [3.10.1] — 2026-05-20
+
+### Added — `forge_audit_export` MCP tool (#098) — ACI-paginated audit event export
+
+Exposes `audit-export.mjs` as a proper MCP tool with ACI-compliant pagination.
+The CLI `pforge audit export` continues to stream unbounded output to stdout.
+
+- **`forge_audit_export` MCP tool (#098)** (`pforge-mcp/server/tool-handlers/platform.mjs`):
+  Returns `{ ok, records[], total, truncated, format, filters, message }`.
+  - Reads `.forge/runs/*/events.log` via the `exportAudit()` async generator — streaming, never loads all events into memory.
+  - Filters: `since` (ISO date), `until` (ISO date), `type[]` (event types), `run` (single run ID).
+  - Formats: `"json"` (default — array of parsed record objects) or `"csv"` (array of CSV row strings with header first).
+  - Pagination: `limit` (default 100, max 500) with `truncated` flag and ACI-compliant `message` on the empty path.
+  - Added to `MCP_ONLY_TOOLS` — the unbounded streaming form stays in the CLI.
+- **REST endpoint** `GET /api/audit/export` (`pforge-mcp/server/rest-api.mjs`): same filters and format options via query parameters.
+- **TOOL_METADATA entry** (`pforge-mcp/capabilities/tool-metadata.mjs`): `addedIn: "3.10.0"`, intent tags `["audit", "export", "compliance", "events", "runs", "forensics", "cost-attribution"]`.
+- **12 tests** (`pforge-mcp/tests/forge-audit-export-mcp.test.mjs`) covering handler export, tool definition shape, `MCP_ONLY_TOOLS` membership, metadata shape, REST route registration, empty-corpus message, JSON/CSV format, type filter, pagination/truncation, and filters payload.
+- Updated golden snapshot fixtures to reflect 102-tool surface.
+
+---
 
 ### Added — Offline single-source HTML export for the manual
 

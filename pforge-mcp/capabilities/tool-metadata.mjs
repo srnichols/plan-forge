@@ -2186,7 +2186,7 @@ export const TOOL_METADATA = {
     aliases: ["audit-export", "export-audit", "audit-log-export"],
     cost: "low",
     maxConcurrent: 10,
-    addedIn: "3.10.0",
+    addedIn: "3.10.1",
     prerequisites: [],
     produces: [],
     consumes: [".forge/runs/*/events.log"],

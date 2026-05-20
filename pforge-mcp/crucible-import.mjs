@@ -168,13 +168,8 @@ function _writeSpeckitOutputs(ctx) {
   );
 }
 
-export function importSpeckit(opts) {
-  const projectRoot = resolve(opts.projectRoot || process.cwd());
-  const dryRun = !!opts.dryRun;
-  const syncPrinciples = !!opts.syncPrinciples;
-
-  /** @type {ImportResult} */
-  const result = {
+function createImportResult(dryRun) {
+  return {
     ok: false,
     smeltId: null,
     planPath: null,
@@ -184,47 +179,31 @@ export function importSpeckit(opts) {
     warnings: [],
     dryRun,
   };
+}
 
-  // ── 1. Locate the artifact directory ────────────────────────────────────
-  const scanResult = locateArtifacts(projectRoot, opts.dir);
-  if (!scanResult.ok) {
-    result.error = scanResult.error;
-    result.warnings.push(scanResult.message);
-    return result;
-  }
+function parseSpeckitArtifacts({ specPath, planPath, tasksPath, constitutionPath }) {
+  return {
+    spec: specPath ? parseSpec(readFileSync(specPath, "utf-8")) : null,
+    plan: planPath ? parsePlan(readFileSync(planPath, "utf-8")) : null,
+    tasks: tasksPath ? parseTasks(readFileSync(tasksPath, "utf-8")) : null,
+    constitution: constitutionPath
+      ? parseConstitution(readFileSync(constitutionPath, "utf-8"))
+      : null,
+  };
+}
 
-  const { specPath, planPath, tasksPath, constitutionPath, sourceDir } = scanResult;
-
-  // ── 2. Parse the four artifacts ─────────────────────────────────────────
-  const spec = specPath ? parseSpec(readFileSync(specPath, "utf-8")) : null;
-  const plan = planPath ? parsePlan(readFileSync(planPath, "utf-8")) : null;
-  const tasks = tasksPath ? parseTasks(readFileSync(tasksPath, "utf-8")) : null;
-  const constitution = constitutionPath
-    ? parseConstitution(readFileSync(constitutionPath, "utf-8"))
-    : null;
-
-  // ── 3. Validate required fields ─────────────────────────────────────────
-  if (!_validateSpeckitArtifacts({ spec, plan, tasks, constitution, result })) {
-    return result;
-  }
-
-  // ── 4. Build the smelt ──────────────────────────────────────────────────
-  const smeltId = randomUUID();
-  const crucibleId = `imported-speckit-${smeltId}`;
-  const slices = mergeSlicesWithTasks(plan.slices || [], tasks ? tasks.rows : []);
-  for (const w of slices.warnings) result.warnings.push(w);
-
-  /** @type {MappedField[]} */
-  const mapped = [];
-  mapped.push({ source: "spec.md#title", target: "plan-title", value: spec.title });
-  mapped.push({ source: "spec.md#goals", target: "objectives[]", value: spec.goals });
-  mapped.push({ source: "plan.md#scope", target: "scope", value: plan.scope });
-  mapped.push({ source: "plan.md#slices", target: "slices[]", value: slices.merged });
-  mapped.push({
-    source: "plan.md#forbidden-actions",
-    target: "forbidden-actions",
-    value: plan.forbiddenActions,
-  });
+function buildSpeckitMappedFields({ spec, plan, slicesMerged, constitution }) {
+  const mapped = [
+    { source: "spec.md#title", target: "plan-title", value: spec.title },
+    { source: "spec.md#goals", target: "objectives[]", value: spec.goals },
+    { source: "plan.md#scope", target: "scope", value: plan.scope },
+    { source: "plan.md#slices", target: "slices[]", value: slicesMerged },
+    {
+      source: "plan.md#forbidden-actions",
+      target: "forbidden-actions",
+      value: plan.forbiddenActions,
+    },
+  ];
   if (constitution) {
     mapped.push({
       source: "constitution.md#rules",
@@ -232,68 +211,137 @@ export function importSpeckit(opts) {
       value: constitution.rules,
     });
   }
+  return mapped;
+}
+
+function prepareSpeckitImportArtifacts({ opts, projectRoot, result, scanResult, parsed }) {
+  const smeltId = randomUUID();
+  const crucibleId = `imported-speckit-${smeltId}`;
+  const slices = mergeSlicesWithTasks(parsed.plan.slices || [], parsed.tasks ? parsed.tasks.rows : []);
+  for (const warning of slices.warnings) result.warnings.push(warning);
+
+  const mapped = buildSpeckitMappedFields({
+    spec: parsed.spec,
+    plan: parsed.plan,
+    slicesMerged: slices.merged,
+    constitution: parsed.constitution,
+  });
   result.mappedFields = mapped;
 
-  const slug = (opts.name || slugify(spec.title) || `speckit-import-${smeltId.slice(0, 8)}`);
+  const slug = opts.name || slugify(parsed.spec.title) || `speckit-import-${smeltId.slice(0, 8)}`;
   const phaseName = `Phase-${slug.toUpperCase()}`;
-
-  const smelt = {
-    id: smeltId,
-    crucibleId,
-    source: "speckit",
-    sourceDir,
-    status: "imported",
-    createdAt: new Date().toISOString(),
-    "plan-title": spec.title,
-    "objectives": spec.goals,
-    "scope": plan.scope,
-    "slices": slices.merged,
-    "forbidden-actions": plan.forbiddenActions,
-    "agent-constraints": constitution ? constitution.rules : [],
-    "agent-commitments": constitution ? constitution.commitments : [],
-    "agent-boundaries": constitution ? constitution.boundaries : [],
-    sourceFiles: {
-      spec: specPath,
-      plan: planPath,
-      tasks: tasksPath,
-      constitution: constitutionPath,
-    },
-  };
-
-  const planMarkdown = renderPhasePlan({
-    crucibleId,
-    phaseName,
-    spec,
-    plan,
-    slicesMerged: slices.merged,
-    constitution,
-  });
-
   const smeltDir = join(projectRoot, ".forge", "crucible");
   const smeltPath = join(smeltDir, `${smeltId}.json`);
   const planFilePath = join(projectRoot, "docs", "plans", `${phaseName}-PLAN.md`);
   const auditPath = join(smeltDir, "manual-imports.jsonl");
   const principlesPath = join(projectRoot, "docs", "plans", "PROJECT-PRINCIPLES.md");
 
+  const smelt = {
+    id: smeltId,
+    crucibleId,
+    source: "speckit",
+    sourceDir: scanResult.sourceDir,
+    status: "imported",
+    createdAt: new Date().toISOString(),
+    "plan-title": parsed.spec.title,
+    objectives: parsed.spec.goals,
+    scope: parsed.plan.scope,
+    slices: slices.merged,
+    "forbidden-actions": parsed.plan.forbiddenActions,
+    "agent-constraints": parsed.constitution ? parsed.constitution.rules : [],
+    "agent-commitments": parsed.constitution ? parsed.constitution.commitments : [],
+    "agent-boundaries": parsed.constitution ? parsed.constitution.boundaries : [],
+    sourceFiles: {
+      spec: scanResult.specPath,
+      plan: scanResult.planPath,
+      tasks: scanResult.tasksPath,
+      constitution: scanResult.constitutionPath,
+    },
+  };
+
+  const planMarkdown = renderPhasePlan({
+    crucibleId,
+    phaseName,
+    spec: parsed.spec,
+    plan: parsed.plan,
+    slicesMerged: slices.merged,
+    constitution: parsed.constitution,
+  });
+
   result.smeltId = smeltId;
   result.smeltPath = smeltPath;
   result.planPath = planFilePath;
 
-  // ── 5. Sync-principles guard (must run before any write) ────────────────
-  if (!_checkSyncPrinciplesGuard({ syncPrinciples, constitution, principlesPath, result })) {
+  return {
+    smelt,
+    smeltDir,
+    smeltId,
+    smeltPath,
+    planFilePath,
+    auditPath,
+    principlesPath,
+    mapped,
+    planMarkdown,
+    phaseName,
+    crucibleId,
+  };
+}
+
+export function importSpeckit(opts) {
+  const projectRoot = resolve(opts.projectRoot || process.cwd());
+  const dryRun = !!opts.dryRun;
+  const syncPrinciples = !!opts.syncPrinciples;
+  const result = createImportResult(dryRun);
+
+  const scanResult = locateArtifacts(projectRoot, opts.dir);
+  if (!scanResult.ok) {
+    result.error = scanResult.error;
+    result.warnings.push(scanResult.message);
     return result;
   }
 
-  // ── 6. Dry-run short-circuit ────────────────────────────────────────────
+  const parsed = parseSpeckitArtifacts(scanResult);
+  if (!_validateSpeckitArtifacts({ ...parsed, result })) {
+    return result;
+  }
+
+  const artifacts = prepareSpeckitImportArtifacts({
+    opts,
+    projectRoot,
+    result,
+    scanResult,
+    parsed,
+  });
+
+  if (!_checkSyncPrinciplesGuard({
+    syncPrinciples,
+    constitution: parsed.constitution,
+    principlesPath: artifacts.principlesPath,
+    result,
+  })) {
+    return result;
+  }
+
   if (dryRun) {
     result.ok = true;
     return result;
   }
 
-  // ── 7. Write outputs ────────────────────────────────────────────────────
   _writeSpeckitOutputs({
-    smeltDir, planFilePath, smeltPath, smelt, projectRoot, phaseName, planMarkdown,
-    syncPrinciples, constitution, principlesPath, auditPath, crucibleId, mapped, result,
+    smeltDir: artifacts.smeltDir,
+    planFilePath: artifacts.planFilePath,
+    smeltPath: artifacts.smeltPath,
+    smelt: artifacts.smelt,
+    projectRoot,
+    phaseName: artifacts.phaseName,
+    planMarkdown: artifacts.planMarkdown,
+    syncPrinciples,
+    constitution: parsed.constitution,
+    principlesPath: artifacts.principlesPath,
+    auditPath: artifacts.auditPath,
+    crucibleId: artifacts.crucibleId,
+    mapped: artifacts.mapped,
+    result,
   });
 
   result.ok = true;

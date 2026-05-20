@@ -305,25 +305,259 @@ function formatMessage(event) {
  * @param {() => number} [options.nowFn]      - Injectable clock for testing
  * @returns {{ ingest: Function, directSend: Function, testAdapter: Function, getStats: Function, shutdown: Function }}
  */
-export function createNotificationCore({ hub = null, projectRoot, adapters = {}, captureMemoryFn = null, nowFn = () => Date.now() } = {}) {
-  const config = loadNotificationsConfig(projectRoot);
+function createDisabledNotificationCore() {
+  return {
+    ingest: () => {},
+    directSend: () => ({ ok: false, error: "Notifications disabled" }),
+    testAdapter: () => ({ ok: true, adapters: [], note: "Notifications disabled" }),
+    getStats: () => ({ sent: 0, failed: 0 }),
+    shutdown: () => {},
+  };
+}
 
-  // Disabled → return no-op core
-  if (!config.enabled) {
-    return {
-      ingest: () => {},
-      directSend: () => ({ ok: false, error: "Notifications disabled" }),
-      testAdapter: () => ({ ok: true, adapters: [], note: "Notifications disabled" }),
-      getStats: () => ({ sent: 0, failed: 0 }),
-      shutdown: () => {},
-    };
+function createNotificationBroadcaster(hub) {
+  return function broadcastNotification(metaEvent) {
+    try {
+      hub?.broadcast({ ...metaEvent, timestamp: new Date().toISOString() });
+    } catch { /* best-effort */ }
+  };
+}
+
+function createNotificationFailureCapture({ captureMemoryFn, projectRoot }) {
+  return function captureNotificationFailure(adapterName, errorCode) {
+    try {
+      captureMemoryFn?.(
+        `Notification delivery failed: ${adapterName} → ${errorCode}`,
+        "gotcha",
+        `notification/${adapterName}`,
+        projectRoot,
+      );
+    } catch { /* best-effort */ }
+  };
+}
+
+function resolveDispatchContext({ adapterName, event, adapters, config, broadcastNotification, stats }) {
+  const adapter = adapters[adapterName];
+  if (!adapter) return { skip: true };
+
+  const adapterConfig = config.adapters?.[adapterName] || {};
+  if (adapterConfig.enabled === false) return { skip: true };
+
+  try {
+    const resolvedConfig = resolveAdapterConfig(adapterConfig);
+    return { adapter, resolvedConfig };
+  } catch (err) {
+    if (err.code === "ERR_LITERAL_SECRET") {
+      broadcastNotification({
+        type: "notification-send-failed",
+        adapter: adapterName,
+        event: event.type,
+        errorCode: "ERR_LITERAL_SECRET",
+      });
+      stats.failed++;
+      return { skip: true };
+    }
+    throw err;
+  }
+}
+
+function shouldSkipResolvedAdapter({ adapterName, event, resolvedConfig, warnedNullUrls, rateLimiter, digestTracker, broadcastNotification }) {
+  if (resolvedConfig.url === "" || resolvedConfig.url === undefined || resolvedConfig.url === null) {
+    if (!warnedNullUrls.has(adapterName)) {
+      console.warn(`[notifications] ${adapterName} enabled but URL is null or empty`);
+      warnedNullUrls.add(adapterName);
+    }
+    return true;
   }
 
+  const allowed = rateLimiter.tryConsume(adapterName);
+  if (!allowed.ok) {
+    broadcastNotification({
+      type: "notification-rate-limited",
+      adapter: adapterName,
+      event: event.type,
+      reason: allowed.reason,
+    });
+    return true;
+  }
+
+  const routeKey = `${adapterName}:${event.type}`;
+  return !digestTracker.track(routeKey, event);
+}
+
+function handleDispatchSuccess({ result, adapterName, event, correlationId, deliveryMs, broadcastNotification, captureNotificationFailure, stats }) {
+  if (result?.ok) {
+    stats.sent++;
+    broadcastNotification({
+      type: "notification-sent",
+      adapter: adapterName,
+      event: event.type,
+      correlationId,
+      deliveryMs,
+    });
+    return;
+  }
+
+  const errorCode = result?.errorCode || "SEND_FAILED";
+  stats.failed++;
+  broadcastNotification({
+    type: "notification-send-failed",
+    adapter: adapterName,
+    event: event.type,
+    errorCode,
+    correlationId,
+    deliveryMs,
+  });
+  captureNotificationFailure(adapterName, errorCode);
+}
+
+function handleDispatchError({ adapterName, event, correlationId, deliveryMs, err, broadcastNotification, captureNotificationFailure, stats }) {
+  const errorCode = err.message === "TIMEOUT" ? "TIMEOUT" : (err.code || "SEND_FAILED");
+  stats.failed++;
+  broadcastNotification({
+    type: "notification-send-failed",
+    adapter: adapterName,
+    event: event.type,
+    errorCode,
+    correlationId,
+    deliveryMs,
+  });
+  captureNotificationFailure(adapterName, errorCode);
+}
+
+async function dispatchNotificationEvent({ adapterName, event, adapters, config, warnedNullUrls, rateLimiter, digestTracker, broadcastNotification, captureNotificationFailure, nowFn, stats }) {
+  const context = resolveDispatchContext({
+    adapterName,
+    event,
+    adapters,
+    config,
+    broadcastNotification,
+    stats,
+  });
+  if (context.skip) return;
+  if (shouldSkipResolvedAdapter({
+    adapterName,
+    event,
+    resolvedConfig: context.resolvedConfig,
+    warnedNullUrls,
+    rateLimiter,
+    digestTracker,
+    broadcastNotification,
+  })) {
+    return;
+  }
+
+  const correlationId = event.correlationId || randomUUID();
+  const formattedMessage = formatMessage(event);
+  const t0 = nowFn();
+
+  try {
+    const result = await Promise.race([
+      context.adapter.send({
+        event,
+        route: adapterName,
+        formattedMessage,
+        correlationId,
+        config: context.resolvedConfig,
+      }),
+      new Promise((_, reject) => setTimeout(() => reject(new Error("TIMEOUT")), SEND_TIMEOUT_MS)),
+    ]);
+    handleDispatchSuccess({
+      result,
+      adapterName,
+      event,
+      correlationId,
+      deliveryMs: nowFn() - t0,
+      broadcastNotification,
+      captureNotificationFailure,
+      stats,
+    });
+  } catch (err) {
+    handleDispatchError({
+      adapterName,
+      event,
+      correlationId,
+      deliveryMs: nowFn() - t0,
+      err,
+      broadcastNotification,
+      captureNotificationFailure,
+      stats,
+    });
+  }
+}
+
+async function directSendNotification({ via, payload, formattedMessage, adapters, config, nowFn }) {
+  const adapter = adapters[via];
+  if (!adapter) return { ok: false, error: "ERR_ADAPTER_NOT_FOUND", adapter: via };
+
+  const adapterConfig = config.adapters?.[via] || {};
+  let resolvedConfig;
+  try {
+    resolvedConfig = resolveAdapterConfig(adapterConfig);
+  } catch (err) {
+    return { ok: false, error: err.code || "ERR_CONFIG", message: err.message };
+  }
+
+  const correlationId = randomUUID();
+  const message = formattedMessage || formatMessage(payload);
+  const t0 = nowFn();
+
+  try {
+    const result = await Promise.race([
+      adapter.send({ event: payload, route: via, formattedMessage: message, correlationId, config: resolvedConfig }),
+      new Promise((_, reject) => setTimeout(() => reject(new Error("TIMEOUT")), SEND_TIMEOUT_MS)),
+    ]);
+    return { ...result, adapter: via, deliveryMs: nowFn() - t0 };
+  } catch (err) {
+    return {
+      ok: false,
+      adapter: via,
+      errorCode: err.message === "TIMEOUT" ? "TIMEOUT" : "SEND_FAILED",
+      error: err.message,
+      deliveryMs: nowFn() - t0,
+    };
+  }
+}
+
+function validateNotificationAdapters({ adapterName, adapters, config }) {
+  const names = adapterName ? [adapterName] : Object.keys(adapters);
+  const results = [];
+
+  for (const name of names) {
+    const adapter = adapters[name];
+    if (!adapter) {
+      results.push({ name, configValid: false, reason: "adapter-not-registered" });
+      continue;
+    }
+
+    const shape = validateAdapterShape(adapter);
+    if (!shape.valid) {
+      results.push({ name, configValid: false, reason: `missing: ${shape.missing.join(", ")}` });
+      continue;
+    }
+
+    const adapterConfig = config.adapters?.[name] || {};
+    let resolvedConfig;
+    try {
+      resolvedConfig = resolveAdapterConfig(adapterConfig);
+    } catch (err) {
+      results.push({ name, configValid: false, reason: err.code || err.message });
+      continue;
+    }
+
+    const validation = adapter.validate(resolvedConfig);
+    results.push({ name, configValid: validation.ok, reason: validation.reason || undefined });
+  }
+
+  return { ok: true, adapters: results };
+}
+
+function createNotificationCoreRuntime({ hub, projectRoot, adapters, captureMemoryFn, nowFn, config }) {
   const rateLimiter = new TokenBucket(config.rateLimit, nowFn);
   const warnedNullUrls = new Set();
-  let sentCount = 0;
-  let failedCount = 0;
-
+  const stats = { sent: 0, failed: 0 };
+  const broadcastNotification = createNotificationBroadcaster(hub);
+  const captureNotificationFailure = createNotificationFailureCapture({ captureMemoryFn, projectRoot });
   const digestTracker = new DigestTracker(config.rateLimit, (digest) => {
     try {
       hub?.broadcast({
@@ -335,188 +569,57 @@ export function createNotificationCore({ hub = null, projectRoot, adapters = {},
     } catch { /* best-effort */ }
   });
 
-  function broadcastNotification(metaEvent) {
-    try {
-      hub?.broadcast({ ...metaEvent, timestamp: new Date().toISOString() });
-    } catch { /* best-effort */ }
-  }
-
-  function captureNotificationFailure(adapterName, errorCode) {
-    try {
-      captureMemoryFn?.(`Notification delivery failed: ${adapterName} → ${errorCode}`, "gotcha", `notification/${adapterName}`, projectRoot);
-    } catch { /* best-effort */ }
-  }
-
-  function resolveDispatchContext(adapterName, event) {
-    const adapter = adapters[adapterName];
-    if (!adapter) return { skip: true };
-
-    const adapterConfig = config.adapters?.[adapterName] || {};
-    if (adapterConfig.enabled === false) return { skip: true };
-
-    try {
-      const resolvedConfig = resolveAdapterConfig(adapterConfig);
-      return { adapter, resolvedConfig };
-    } catch (err) {
-      if (err.code === "ERR_LITERAL_SECRET") {
-        broadcastNotification({ type: "notification-send-failed", adapter: adapterName, event: event.type, errorCode: "ERR_LITERAL_SECRET" });
-        failedCount++;
-        return { skip: true };
-      }
-      throw err;
-    }
-  }
-
-  function shouldSkipResolvedAdapter(adapterName, event, resolvedConfig) {
-    if (resolvedConfig.url === "" || resolvedConfig.url === undefined || resolvedConfig.url === null) {
-      if (!warnedNullUrls.has(adapterName)) {
-        console.warn(`[notifications] ${adapterName} enabled but URL is null or empty`);
-        warnedNullUrls.add(adapterName);
-      }
-      return true;
-    }
-
-    const allowed = rateLimiter.tryConsume(adapterName);
-    if (!allowed.ok) {
-      broadcastNotification({ type: "notification-rate-limited", adapter: adapterName, event: event.type, reason: allowed.reason });
-      return true;
-    }
-
-    const routeKey = `${adapterName}:${event.type}`;
-    return !digestTracker.track(routeKey, event);
-  }
-
-  function handleDispatchSuccess({ adapterName, event, correlationId, deliveryMs, result }) {
-    if (result?.ok) {
-      sentCount++;
-      broadcastNotification({ type: "notification-sent", adapter: adapterName, event: event.type, correlationId, deliveryMs });
-      return;
-    }
-
-    const errorCode = result?.errorCode || "SEND_FAILED";
-    failedCount++;
-    broadcastNotification({ type: "notification-send-failed", adapter: adapterName, event: event.type, errorCode, correlationId, deliveryMs });
-    captureNotificationFailure(adapterName, errorCode);
-  }
-
-  function handleDispatchError({ adapterName, event, correlationId, deliveryMs, err }) {
-    const errorCode = err.message === "TIMEOUT" ? "TIMEOUT" : (err.code || "SEND_FAILED");
-    failedCount++;
-    broadcastNotification({ type: "notification-send-failed", adapter: adapterName, event: event.type, errorCode, correlationId, deliveryMs });
-    captureNotificationFailure(adapterName, errorCode);
-  }
-
-  /**
-   * Dispatch a single event to a single adapter.
-   */
-  async function dispatchToAdapter(adapterName, event) {
-    const context = resolveDispatchContext(adapterName, event);
-    if (context.skip) return;
-    if (shouldSkipResolvedAdapter(adapterName, event, context.resolvedConfig)) return;
-
-    const correlationId = event.correlationId || randomUUID();
-    const formattedMessage = formatMessage(event);
-    const t0 = nowFn();
-
-    try {
-      const result = await Promise.race([
-        context.adapter.send({ event, route: adapterName, formattedMessage, correlationId, config: context.resolvedConfig }),
-        new Promise((_, reject) => setTimeout(() => reject(new Error("TIMEOUT")), SEND_TIMEOUT_MS)),
-      ]);
-      handleDispatchSuccess({ adapterName: adapterName, event: event, correlationId: correlationId, deliveryMs: nowFn() - t0, result: result });
-    } catch (err) {
-      handleDispatchError({ adapterName: adapterName, event: event, correlationId: correlationId, deliveryMs: nowFn() - t0, err: err });
-    }
-  }
-
-  /**
-   * Main entry point — ingests hub events, matches routes, dispatches.
-   * @param {Object} event
-   */
   function ingest(event) {
-    // Meta-event cascade guard
     if (event?.type?.startsWith("notification-")) return;
-
-    // NODE_ENV guard — no side-effects during tests
     if (process.env.NODE_ENV === "test") return;
 
     const matched = matchRoutes(event, config.routes);
     for (const adapterName of matched) {
-      dispatchToAdapter(adapterName, event).catch(() => { /* best-effort */ });
+      dispatchNotificationEvent({
+        adapterName,
+        event,
+        adapters,
+        config,
+        warnedNullUrls,
+        rateLimiter,
+        digestTracker,
+        broadcastNotification,
+        captureNotificationFailure,
+        nowFn,
+        stats,
+      }).catch(() => { /* best-effort */ });
     }
   }
 
-  /**
-   * Direct send — bypasses routing rules (for forge_notify_send tool).
-   */
-  async function directSend({ via, payload, formattedMessage }) {
-    const adapter = adapters[via];
-    if (!adapter) return { ok: false, error: "ERR_ADAPTER_NOT_FOUND", adapter: via };
+  return {
+    ingest,
+    directSend({ via, payload, formattedMessage }) {
+      return directSendNotification({ via, payload, formattedMessage, adapters, config, nowFn });
+    },
+    testAdapter({ adapter: adapterName } = {}) {
+      return validateNotificationAdapters({ adapterName, adapters, config });
+    },
+    getStats() {
+      return { sent: stats.sent, failed: stats.failed };
+    },
+    shutdown() {
+      rateLimiter.shutdown();
+      digestTracker.shutdown();
+    },
+  };
+}
 
-    const adapterConfig = config.adapters?.[via] || {};
-    let resolvedConfig;
-    try {
-      resolvedConfig = resolveAdapterConfig(adapterConfig);
-    } catch (err) {
-      return { ok: false, error: err.code || "ERR_CONFIG", message: err.message };
-    }
-
-    const correlationId = randomUUID();
-    const message = formattedMessage || formatMessage(payload);
-    const t0 = nowFn();
-
-    try {
-      const result = await Promise.race([
-        adapter.send({ event: payload, route: via, formattedMessage: message, correlationId, config: resolvedConfig }),
-        new Promise((_, reject) => setTimeout(() => reject(new Error("TIMEOUT")), SEND_TIMEOUT_MS)),
-      ]);
-      const deliveryMs = nowFn() - t0;
-      return { ...result, adapter: via, deliveryMs };
-    } catch (err) {
-      const deliveryMs = nowFn() - t0;
-      return { ok: false, adapter: via, errorCode: err.message === "TIMEOUT" ? "TIMEOUT" : "SEND_FAILED", error: err.message, deliveryMs };
-    }
+export function createNotificationCore({ hub = null, projectRoot, adapters = {}, captureMemoryFn = null, nowFn = () => Date.now() } = {}) {
+  const config = loadNotificationsConfig(projectRoot);
+  if (!config.enabled) {
+    return createDisabledNotificationCore();
   }
-
-  /**
-   * Test adapter configuration (for forge_notify_test tool).
-   */
-  function testAdapter({ adapter: adapterName } = {}) {
-    const names = adapterName ? [adapterName] : Object.keys(adapters);
-    const results = [];
-    for (const name of names) {
-      const adptr = adapters[name];
-      if (!adptr) {
-        results.push({ name, configValid: false, reason: "adapter-not-registered" });
-        continue;
-      }
-      const shape = validateAdapterShape(adptr);
-      if (!shape.valid) {
-        results.push({ name, configValid: false, reason: `missing: ${shape.missing.join(", ")}` });
-        continue;
-      }
-      const adapterConfig = config.adapters?.[name] || {};
-      let resolvedConfig;
-      try {
-        resolvedConfig = resolveAdapterConfig(adapterConfig);
-      } catch (err) {
-        results.push({ name, configValid: false, reason: err.code || err.message });
-        continue;
-      }
-      const validation = adptr.validate(resolvedConfig);
-      results.push({ name, configValid: validation.ok, reason: validation.reason || undefined });
-    }
-    return { ok: true, adapters: results };
-  }
-
-  function getStats() {
-    return { sent: sentCount, failed: failedCount };
-  }
-
-  function shutdown() {
-    rateLimiter.shutdown();
-    digestTracker.shutdown();
-  }
-
-  return { ingest, directSend, testAdapter, getStats, shutdown };
+  return createNotificationCoreRuntime({
+    hub,
+    projectRoot,
+    adapters,
+    captureMemoryFn,
+    nowFn,
+    config,
+  });
 }

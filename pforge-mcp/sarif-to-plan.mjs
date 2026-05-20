@@ -180,11 +180,14 @@ function buildSeverityHistogram(findings) {
 }
 
 function pushSarifHeader(lines, { planName, source, now, hist }) {
-  lines.push(`# ${planName}`, "", `Source: ${source}`, `Generated: ${now}`, "", "## Severity Summary", "", "| Severity | Count |", "|----------|-------|");
+  lines.push(`# ${planName}`, "");
+  lines.push(`Source: ${source}`, `Generated: ${now}`, "");
+  lines.push("## Severity Summary", "", "| Severity | Count |", "|----------|-------|");
   for (const [sev, count] of Object.entries(hist)) {
     lines.push(`| ${sev} | ${count} |`);
   }
-  lines.push("", "## Scope Contract", "", "Remediate all SARIF findings in severity order.", "");
+  lines.push("", "## Scope Contract", "");
+  lines.push("Remediate all SARIF findings in severity order.", "");
 }
 
 function pushSarifFinding(lines, finding, index) {

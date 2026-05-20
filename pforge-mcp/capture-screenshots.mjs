@@ -99,14 +99,7 @@ const SIMULATED_EVENTS = [
   // Slice 4 is "executing" — screenshot captures this state
 ];
 
-async function captureProgressTab(page) {
-  console.log("Capturing Progress tab (plan browser + simulated live run)...");
-
-  // Dashboard now defaults to Home — click Progress first so injection targets exist.
-  await clickTab(page, "progress");
-  await page.waitForTimeout(500);
-
-  // Inject plan browser data (v2.7)
+async function injectProgressPlanBrowser(page) {
   await page.evaluate(() => {
     const listEl = document.getElementById("plan-list");
     const countEl = document.getElementById("plan-count");
@@ -131,10 +124,9 @@ async function captureProgressTab(page) {
       { title: "WebSocket Hub", file: "Phase-3-WEBSOCKET-HUB-PLAN.md", status: "✅", sliceCount: 4, branch: "" },
       { title: "Dashboard v2.9", file: "Phase-11-DASHBOARD-V2.9-PLAN.md", status: "🚧", sliceCount: 8, branch: "feature/v2.9-dashboard-power-ux" },
     ];
-    function escH(s) { return s.replace(/&/g,"&amp;").replace(/</g,"&lt;"); }
+    function escH(s) { return s.replace(/&/g, "&amp;").replace(/</g, "&lt;"); }
     listEl.innerHTML = plans.map((p, pi) => {
       const icon = p.status;
-      // v2.9: Scope contract
       let scopeHtml = "";
       if (p.scope) {
         scopeHtml = `<details class="mt-1 ml-7" ${pi === 0 ? 'open' : ''}>
@@ -146,7 +138,6 @@ async function captureProgressTab(page) {
           </div>
         </details>`;
       }
-      // v2.9: DAG view
       let dagHtml = "";
       if (p.slices && p.slices.some(s => s.depends?.length > 0 || s.parallel)) {
         const lines = p.slices.map(s => {
@@ -178,8 +169,9 @@ async function captureProgressTab(page) {
     }).join("");
   });
   await page.waitForTimeout(300);
+}
 
-  // Inject simulated run events
+async function replaySimulatedProgressEvents(page) {
   for (const event of SIMULATED_EVENTS) {
     await page.evaluate((evt) => {
       if (typeof handleEvent === "function") handleEvent(evt);
@@ -187,8 +179,9 @@ async function captureProgressTab(page) {
     await page.waitForTimeout(100);
   }
   await page.waitForTimeout(500);
+}
 
-  // v2.9: Inject event log entries
+async function injectProgressEventLog(page) {
   await page.evaluate(() => {
     const logEl = document.getElementById("event-log");
     const countEl = document.getElementById("event-log-count");
@@ -205,19 +198,30 @@ async function captureProgressTab(page) {
     ];
     logEl.innerHTML = events.map(e => `<div class="${e.color} py-0.5">[${e.time}] ${e.type}${e.detail || ""}</div>`).join("");
     if (countEl) countEl.textContent = `(${events.length})`;
-    // Open the event log details
     const details = logEl.closest("details");
     if (details) details.open = true;
   });
+}
 
-  // v2.9: Show hub clients badge — leave footer version alone so the
-  // dashboard's real /api/capabilities fetch populates it from VERSION.
+async function showProgressHubClients(page) {
   await page.evaluate(() => {
     const hubEl = document.getElementById("hub-clients");
-    if (hubEl) { hubEl.textContent = "2 clients"; hubEl.classList.remove("hidden"); }
+    if (hubEl) {
+      hubEl.textContent = "2 clients";
+      hubEl.classList.remove("hidden");
+    }
   });
   await page.waitForTimeout(300);
+}
 
+async function captureProgressTab(page) {
+  console.log("Capturing Progress tab (plan browser + simulated live run)...");
+  await clickTab(page, "progress");
+  await page.waitForTimeout(500);
+  await injectProgressPlanBrowser(page);
+  await replaySimulatedProgressEvents(page);
+  await injectProgressEventLog(page);
+  await showProgressHubClients(page);
   await page.screenshot({ path: resolve(OUTPUT_DIR, "progress.png"), fullPage: true });
 }
 

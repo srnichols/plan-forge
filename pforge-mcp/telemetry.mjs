@@ -629,163 +629,167 @@ export function emitGateSpan(data) {
  * Create a telemetry event handler that builds trace.json from orchestrator events.
  * Plug this into the orchestrator via DI (eventHandler option).
  */
+function createRunTelemetryHandlers({ trace, state, runDir }) {
+  return {
+    "run-started": (data) => {
+      state.rootSpan = startRootSpan(trace, "run-plan", {
+        plan: data?.plan,
+        mode: data?.mode,
+        model: data?.model,
+        sliceCount: data?.sliceCount,
+      });
+      _emitWorkflowSpan({ ...data, runId: trace.traceId }).catch(() => {});
+    },
+    "slice-started": (data) => {
+      const parentId = state.rootSpan?.spanId || null;
+      startSpan({
+        trace,
+        name: `slice-${data?.sliceId}`,
+        parentSpanId: parentId,
+        kind: "INTERNAL",
+        attributes: {
+          sliceId: data?.sliceId,
+          title: data?.title,
+          parallel: data?.parallel || false,
+          "pforge.actor.source": data?.source ?? null,
+          "pforge.action.security_risk": data?.security_risk ?? null,
+        },
+      });
+      _emitAgentSpan({ ...data, runId: trace.traceId }).catch(() => {});
+    },
+    "slice-completed": (data) => {
+      const span = trace._activeSpans.get(`slice-${data?.sliceId}`);
+      if (!span) return;
+      addEvent(span, "completed", Severity.INFO, {
+        duration: data?.duration,
+        model: data?.model,
+        tokens_out: data?.tokens?.tokens_out,
+        cost_usd: data?.tokens?.cost_usd,
+        attempts: data?.attempts,
+      });
+      span.attributes.duration = data?.duration;
+      span.attributes.model = data?.model;
+      span.attributes.cost_usd = data?.cost_usd;
+      span.attributes.attempts = data?.attempts;
+      endSpan(span, "OK");
+    },
+    "slice-failed": (data) => {
+      const span = trace._activeSpans.get(`slice-${data?.sliceId}`);
+      if (!span) return;
+      addEvent(span, "failed", Severity.ERROR, {
+        error: data?.error,
+        failedCommand: data?.failedCommand,
+        gateError: data?.gateError,
+      });
+      endSpan(span, "ERROR");
+    },
+    "run-completed": (data) => {
+      if (state.rootSpan) {
+        addEvent(state.rootSpan, "completed", Severity.INFO, {
+          status: data?.status,
+          passed: data?.results?.passed,
+          failed: data?.results?.failed,
+          report: data?.report,
+        });
+        endSpan(state.rootSpan, data?.status === "completed" ? "OK" : "ERROR");
+      }
+      writeTrace(trace, runDir);
+    },
+    "run-aborted": (data) => {
+      if (state.rootSpan) {
+        addEvent(state.rootSpan, "aborted", Severity.WARN, { reason: data?.reason });
+        endSpan(state.rootSpan, "ERROR");
+      }
+      writeTrace(trace, runDir);
+    },
+  };
+}
+
+function endQuorumLegByModel(trace, data) {
+  for (const [key, span] of trace._activeSpans) {
+    if (key.startsWith(`slice-${data?.sliceId}-quorum-`) && span.attributes?.model === data?.model) {
+      addEvent(span, "leg-completed", data?.success ? Severity.INFO : Severity.WARN, {
+        model: data?.model,
+        duration: data?.duration,
+        tokens_out: data?.tokens?.tokens_out,
+      });
+      endSpan(span, data?.success ? "OK" : "ERROR");
+      break;
+    }
+  }
+}
+
+function createQuorumTelemetryHandlers(trace) {
+  return {
+    "quorum-dispatch-started": (data) => {
+      const parentSpan = trace._activeSpans.get(`slice-${data?.sliceId}`);
+      if (!parentSpan) return;
+      addEvent(parentSpan, "quorum-dispatch", Severity.INFO, {
+        models: data?.models,
+        score: data?.score,
+      });
+      for (let i = 0; i < (data?.models || []).length; i++) {
+        startSpan({
+          trace,
+          name: `slice-${data?.sliceId}-quorum-${i}`,
+          parentSpanId: parentSpan.spanId,
+          kind: "CLIENT",
+          attributes: { quorumLeg: i, model: data.models[i] },
+        });
+      }
+    },
+    "quorum-leg-completed": (data) => {
+      const legSpan = trace._activeSpans.get(`slice-${data?.sliceId}-quorum-${data?.legIndex ?? ""}`);
+      if (!legSpan) {
+        endQuorumLegByModel(trace, data);
+        return;
+      }
+      endSpan(legSpan, data?.success ? "OK" : "ERROR");
+    },
+    "quorum-review-completed": (data) => {
+      const parentSpan = trace._activeSpans.get(`slice-${data?.sliceId}`);
+      if (!parentSpan) return;
+      addEvent(parentSpan, "quorum-review", Severity.INFO, {
+        reviewerModel: data?.reviewerModel,
+        tokens_out: data?.tokens?.tokens_out,
+        modelCount: data?.modelCount,
+      });
+    },
+  };
+}
+
+function createSupplementalTelemetryHandlers(trace) {
+  return {
+    "gate-passed": (data) => {
+      const parentSpan = trace._activeSpans.get(`slice-${data?.sliceId}`);
+      if (parentSpan) {
+        addEvent(parentSpan, "gate-passed", Severity.INFO, {
+          failOpen: data?.failOpen ?? false,
+        });
+      }
+      _emitGateSpan({ ...data, runId: trace.traceId }).catch(() => {});
+    },
+    "chat-completed": (data) => {
+      const parentSpan = trace._activeSpans.get(`slice-${data?.sliceId}`);
+      if (parentSpan) {
+        addEvent(parentSpan, "chat-completed", Severity.INFO, {
+          model: data?.model,
+          tokens_in: data?.tokens?.tokens_in ?? data?.tokensIn,
+          tokens_out: data?.tokens?.tokens_out ?? data?.tokensOut,
+          cost_usd: data?.cost_usd ?? data?.costUsd,
+        });
+      }
+      _emitChatSpan({ ...data, runId: trace.traceId }).catch(() => {});
+    },
+  };
+}
+
 export function createTelemetryHandler(trace, runDir) {
   const state = { rootSpan: null };
-
-  function onRunStarted(data) {
-    state.rootSpan = startRootSpan(trace, "run-plan", {
-      plan: data?.plan,
-      mode: data?.mode,
-      model: data?.model,
-      sliceCount: data?.sliceCount,
-    });
-    _emitWorkflowSpan({ ...data, runId: trace.traceId }).catch(() => {});
-  }
-
-  function onSliceStarted(data) {
-    const parentId = state.rootSpan?.spanId || null;
-    startSpan({ trace: trace, name: `slice-${data?.sliceId}`, parentSpanId: parentId, kind: "INTERNAL", attributes: {
-      sliceId: data?.sliceId,
-      title: data?.title,
-      parallel: data?.parallel || false,
-      "pforge.actor.source": data?.source ?? null,
-      "pforge.action.security_risk": data?.security_risk ?? null,
-    } });
-    _emitAgentSpan({ ...data, runId: trace.traceId }).catch(() => {});
-  }
-
-  function onSliceCompleted(data) {
-    const span = trace._activeSpans.get(`slice-${data?.sliceId}`);
-    if (!span) return;
-    addEvent(span, "completed", Severity.INFO, {
-      duration: data?.duration,
-      model: data?.model,
-      tokens_out: data?.tokens?.tokens_out,
-      cost_usd: data?.tokens?.cost_usd,
-      attempts: data?.attempts,
-    });
-    span.attributes.duration = data?.duration;
-    span.attributes.model = data?.model;
-    span.attributes.cost_usd = data?.cost_usd;
-    span.attributes.attempts = data?.attempts;
-    endSpan(span, "OK");
-  }
-
-  function onSliceFailed(data) {
-    const span = trace._activeSpans.get(`slice-${data?.sliceId}`);
-    if (!span) return;
-    addEvent(span, "failed", Severity.ERROR, {
-      error: data?.error,
-      failedCommand: data?.failedCommand,
-      gateError: data?.gateError,
-    });
-    endSpan(span, "ERROR");
-  }
-
-  function onRunCompleted(data) {
-    if (state.rootSpan) {
-      addEvent(state.rootSpan, "completed", Severity.INFO, {
-        status: data?.status,
-        passed: data?.results?.passed,
-        failed: data?.results?.failed,
-        report: data?.report,
-      });
-      endSpan(state.rootSpan, data?.status === "completed" ? "OK" : "ERROR");
-    }
-    writeTrace(trace, runDir);
-  }
-
-  function onRunAborted(data) {
-    if (state.rootSpan) {
-      addEvent(state.rootSpan, "aborted", Severity.WARN, { reason: data?.reason });
-      endSpan(state.rootSpan, "ERROR");
-    }
-    writeTrace(trace, runDir);
-  }
-
-  function onQuorumDispatchStarted(data) {
-    const parentSpan = trace._activeSpans.get(`slice-${data?.sliceId}`);
-    if (!parentSpan) return;
-    addEvent(parentSpan, "quorum-dispatch", Severity.INFO, {
-      models: data?.models,
-      score: data?.score,
-    });
-    for (let i = 0; i < (data?.models || []).length; i++) {
-      startSpan({ trace: trace, name: `slice-${data?.sliceId}-quorum-${i}`, parentSpanId: parentSpan.spanId, kind: "CLIENT", attributes: {
-        quorumLeg: i,
-        model: data.models[i],
-      } });
-    }
-  }
-
-  function endQuorumLegByModel(data) {
-    for (const [key, span] of trace._activeSpans) {
-      if (key.startsWith(`slice-${data?.sliceId}-quorum-`) && span.attributes?.model === data?.model) {
-        addEvent(span, "leg-completed", data?.success ? Severity.INFO : Severity.WARN, {
-          model: data?.model,
-          duration: data?.duration,
-          tokens_out: data?.tokens?.tokens_out,
-        });
-        endSpan(span, data?.success ? "OK" : "ERROR");
-        break;
-      }
-    }
-  }
-
-  function onQuorumLegCompleted(data) {
-    const legSpan = trace._activeSpans.get(`slice-${data?.sliceId}-quorum-${data?.legIndex ?? ""}`);
-    if (!legSpan) {
-      endQuorumLegByModel(data);
-      return;
-    }
-    endSpan(legSpan, data?.success ? "OK" : "ERROR");
-  }
-
-  function onQuorumReviewCompleted(data) {
-    const parentSpan = trace._activeSpans.get(`slice-${data?.sliceId}`);
-    if (!parentSpan) return;
-    addEvent(parentSpan, "quorum-review", Severity.INFO, {
-      reviewerModel: data?.reviewerModel,
-      tokens_out: data?.tokens?.tokens_out,
-      modelCount: data?.modelCount,
-    });
-  }
-
-  function onGatePassed(data) {
-    const parentSpan = trace._activeSpans.get(`slice-${data?.sliceId}`);
-    if (parentSpan) {
-      addEvent(parentSpan, "gate-passed", Severity.INFO, {
-        failOpen: data?.failOpen ?? false,
-      });
-    }
-    _emitGateSpan({ ...data, runId: trace.traceId }).catch(() => {});
-  }
-
-  function onChatCompleted(data) {
-    const parentSpan = trace._activeSpans.get(`slice-${data?.sliceId}`);
-    if (parentSpan) {
-      addEvent(parentSpan, "chat-completed", Severity.INFO, {
-        model: data?.model,
-        tokens_in: data?.tokens?.tokens_in ?? data?.tokensIn,
-        tokens_out: data?.tokens?.tokens_out ?? data?.tokensOut,
-        cost_usd: data?.cost_usd ?? data?.costUsd,
-      });
-    }
-    _emitChatSpan({ ...data, runId: trace.traceId }).catch(() => {});
-  }
-
   const dispatch = {
-    "run-started": onRunStarted,
-    "slice-started": onSliceStarted,
-    "slice-completed": onSliceCompleted,
-    "slice-failed": onSliceFailed,
-    "run-completed": onRunCompleted,
-    "run-aborted": onRunAborted,
-    "quorum-dispatch-started": onQuorumDispatchStarted,
-    "quorum-leg-completed": onQuorumLegCompleted,
-    "quorum-review-completed": onQuorumReviewCompleted,
-    "gate-passed": onGatePassed,
-    "chat-completed": onChatCompleted,
+    ...createRunTelemetryHandlers({ trace, state, runDir }),
+    ...createQuorumTelemetryHandlers(trace),
+    ...createSupplementalTelemetryHandlers(trace),
   };
 
   return {

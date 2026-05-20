@@ -48,7 +48,7 @@
           <li><a href="#mcp-tools">MCP tools (88, grouped by domain)</a></li>
           <li><a href="#cli-commands">CLI commands (57, grouped by use)</a></li>
           <li><a href="#rest-endpoints">REST endpoints (103, grouped by prefix)</a></li>
-          <li><a href="#sdk">SDK exports (4 sub-paths)</a></li>
+          <li><a href="#sdk">SDK exports (6 sub-paths)</a></li>
           <li><a href="#coverage-matrix">Surface coverage matrix</a></li>
         </ul>
 
@@ -87,7 +87,7 @@
               </tr>
               <tr>
                 <td class="py-2 px-3"><strong>SDK</strong> (<code>pforge-sdk</code>)</td>
-                <td class="py-2 px-3">4 sub-paths</td>
+                <td class="py-2 px-3">6 sub-paths</td>
                 <td class="py-2 px-3">Bearer token via <code>createClient</code></td>
                 <td class="py-2 px-3">Node.js / TypeScript callers wanting typed responses</td>
               </tr>
@@ -496,7 +496,7 @@ pforge ext add/remove/...       Extension management</code></pre>
 
         <!-- ─── SDK ─── -->
         <h2 id="sdk">SDK — <code>pforge-sdk</code></h2>
-        <p>Four sub-paths, all backed by typed TypeScript declarations. Full reference: <a href="https://github.com/srnichols/plan-forge/blob/master/pforge-sdk/README.md" rel="noopener">pforge-sdk/README.md on GitHub</a>.</p>
+        <p>Six sub-paths, all pure Node.js (zero runtime dependencies). Full reference: <a href="https://github.com/srnichols/plan-forge/blob/master/pforge-sdk/README.md" rel="noopener">pforge-sdk/README.md on GitHub</a>.</p>
 
         <div class="overflow-x-auto my-6">
           <table class="text-sm w-full border-collapse">
@@ -510,23 +510,38 @@ pforge ext add/remove/...       Extension management</code></pre>
             <tbody class="text-slate-300">
               <tr class="border-b border-slate-800/40">
                 <td class="py-2 px-3"><code>pforge-sdk</code></td>
-                <td class="py-2 px-3"><code>createClient</code>, <code>Client</code>, <code>SubscribeStream</code>, <code>HubEvent</code> types</td>
-                <td class="py-2 px-3">Core REST + WebSocket access from Node.js</td>
+                <td class="py-2 px-3">Re-exports all sub-paths below</td>
+                <td class="py-2 px-3">Single import for all SDK utilities</td>
               </tr>
               <tr class="border-b border-slate-800/40">
                 <td class="py-2 px-3"><code>pforge-sdk/tools</code></td>
-                <td class="py-2 px-3">Typed wrappers for every <code>forge_*</code> tool (e.g. <code>forgeRunPlan</code>, <code>forgeEstimateQuorum</code>)</td>
-                <td class="py-2 px-3">Calling MCP tool handlers from Node.js without MCP transport</td>
+                <td class="py-2 px-3"><code>tools</code>, <code>getTool</code>, <code>getToolsByRisk</code>, <code>getToolsByIntent</code></td>
+                <td class="py-2 px-3">Loading + filtering the MCP tool registry from Node.js</td>
               </tr>
               <tr class="border-b border-slate-800/40">
                 <td class="py-2 px-3"><code>pforge-sdk/hallmark</code></td>
-                <td class="py-2 px-3"><code>stamp</code>, <code>verify</code>, <code>HallmarkEnvelope</code>, schema validators</td>
-                <td class="py-2 px-3">Signing / verifying provenance envelopes on generated artifacts</td>
+                <td class="py-2 px-3"><code>buildProvenance</code>, <code>validateProvenance</code>, <code>mergeProvenance</code></td>
+                <td class="py-2 px-3">Stamping / validating Hallmark provenance envelopes</td>
+              </tr>
+              <tr class="border-b border-slate-800/40">
+                <td class="py-2 px-3"><code>pforge-sdk/chunker</code></td>
+                <td class="py-2 px-3"><code>validateChunk</code>, <code>CHUNK_KINDS</code></td>
+                <td class="py-2 px-3">Validating Lattice code-graph chunk records</td>
+              </tr>
+              <tr class="border-b border-slate-800/40">
+                <td class="py-2 px-3"><code>pforge-sdk/client</code> <span class="text-amber-400 text-xs font-semibold">v0.4.0</span></td>
+                <td class="py-2 px-3"><code>PForgeClient</code>, <code>createClient</code>, <code>PForgeClientError</code></td>
+                <td class="py-2 px-3">Calling the Plan Forge REST API from Node.js without raw fetch</td>
+              </tr>
+              <tr class="border-b border-slate-800/40">
+                <td class="py-2 px-3"><code>pforge-sdk/anvil</code> <span class="text-amber-400 text-xs font-semibold">v0.5.0</span></td>
+                <td class="py-2 px-3"><code>computeAnvilKey</code>, <code>anvilEntryPath</code>, <code>anvilCacheDir</code>, <code>anvilStatsPath</code></td>
+                <td class="py-2 px-3">Computing Anvil cache keys + paths without running the server</td>
               </tr>
               <tr>
-                <td class="py-2 px-3"><code>pforge-sdk/chunker</code></td>
-                <td class="py-2 px-3"><code>chunkPlan</code>, <code>extractScopeContract</code>, slice-alignment helpers</td>
-                <td class="py-2 px-3">Splitting long plans into Scope-Contract-aligned slices</td>
+                <td class="py-2 px-3"><code>pforge-sdk/lattice-query</code> <span class="text-amber-400 text-xs font-semibold">v0.5.0</span></td>
+                <td class="py-2 px-3"><code>LatticeQueryBuilder</code>, <code>tokenizeForSearch</code>, <code>scoreChunk</code></td>
+                <td class="py-2 px-3">Building fluent Lattice queries + scoring chunks without the server</td>
               </tr>
             </tbody>
           </table>

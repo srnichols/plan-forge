@@ -876,23 +876,6 @@
     },
     {
       "name": "forge_diff_classify",
-      "description": "Classify staged git diff changes by category (plan, test, docs, config, chore, scope, unknown). Advisory-only — never blocks. Returns a per-file classification and summary counts. Also available as a preCommit chain entry in plan-forge.json.",
-      "inputSchema": {
-        "type": "object",
-        "properties": {
-          "since": {
-            "type": "string",
-            "description": "Git ref to diff against instead of --staged (e.g., HEAD~1)"
-          },
-          "path": {
-            "type": "string",
-            "description": "Project directory (default: current)"
-          }
-        }
-      }
-    },
-    {
-      "name": "forge_diff_classify",
       "description": "Classify staged git diff against 6 safety categories: leaked-secret (critical), prompt-injection-echo (high), license-incompatible-paste (high), eval-exec-introduced (medium), unexpected-network-call (low), large-binary-dump (medium). Returns { severity, findings[], totalAdded, truncated }. Blocking threshold: severity >= high. USE FOR: PreCommit chain gate, post-worker diff review, CI gate. DO NOT USE FOR: static analysis (use a linter), deep code review (use forge_delegate_review).",
       "inputSchema": {
         "type": "object",
@@ -908,6 +891,23 @@
           "path": {
             "type": "string",
             "description": "Project directory (default: current)."
+          }
+        }
+      }
+    },
+    {
+      "name": "forge_diff_stats",
+      "description": "Classify staged git diff changes by category (plan, test, docs, config, chore, scope, unknown). Advisory-only — never blocks. Returns a per-file classification and summary counts. Also available as a preCommit chain entry in plan-forge.json.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "since": {
+            "type": "string",
+            "description": "Git ref to diff against instead of --staged (e.g., HEAD~1)"
+          },
+          "path": {
+            "type": "string",
+            "description": "Project directory (default: current)"
           }
         }
       }

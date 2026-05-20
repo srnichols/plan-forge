@@ -1,6 +1,6 @@
 {
   "schemaVersion": "2.3.0",
-  "toolCount": 105,
+  "toolCount": 106,
   "toolNames": [
     "forge_abort",
     "forge_alert_triage",
@@ -35,6 +35,7 @@
     "forge_diagnose",
     "forge_diff",
     "forge_diff_classify",
+    "forge_diff_stats",
     "forge_doctor_quorum",
     "forge_drift_report",
     "forge_embedding_status",

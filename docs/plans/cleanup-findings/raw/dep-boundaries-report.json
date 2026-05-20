@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-05-20T18:26:58.844Z",
+  "generatedAt": "2026-05-20T18:37:21.671Z",
   "includeTests": false,
   "packages": [
     "pforge-mcp",
@@ -9,7 +9,7 @@
     "extensions"
   ],
   "counts": {
-    "filesScanned": 278,
+    "filesScanned": 280,
     "errors": 0,
     "warnings": 0,
     "infoAllowed": 20,

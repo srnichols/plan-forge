@@ -848,18 +848,18 @@
     "g14Severity": null
   },
   {
-    "file": "pforge-mcp/tempering/scanners/contract-graphql.mjs",
+    "file": "pforge-mcp/enums.mjs",
     "loc": 228,
-    "blank": 20,
-    "comment": 2,
+    "blank": 16,
+    "comment": 3,
     "functions": 10,
     "g14Severity": null
   },
   {
-    "file": "pforge-mcp/enums.mjs",
-    "loc": 227,
-    "blank": 16,
-    "comment": 3,
+    "file": "pforge-mcp/tempering/scanners/contract-graphql.mjs",
+    "loc": 228,
+    "blank": 20,
+    "comment": 2,
     "functions": 10,
     "g14Severity": null
   },
@@ -1876,6 +1876,14 @@
     "loc": 28,
     "blank": 5,
     "comment": 0,
+    "functions": 0,
+    "g14Severity": null
+  },
+  {
+    "file": "pforge-mcp/regen-golden.mjs",
+    "loc": 27,
+    "blank": 4,
+    "comment": 3,
     "functions": 0,
     "g14Severity": null
   },

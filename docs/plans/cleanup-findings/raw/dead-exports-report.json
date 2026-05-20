@@ -1,12 +1,12 @@
 {
-  "generatedAt": "2026-05-20T18:26:57.995Z",
+  "generatedAt": "2026-05-20T18:37:20.858Z",
   "scopes": [
     "pforge-mcp",
     "pforge-master",
     "scripts"
   ],
   "counts": {
-    "filesScanned": 262,
+    "filesScanned": 263,
     "filesWithDeadExports": 105,
     "totalExports": 1543,
     "deadExports": 680,

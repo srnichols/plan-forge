@@ -1,0 +1,32 @@
+{
+  "_comment": "Copy this file to .forge/rbac.json to activate RBAC enforcement.",
+  "_comment2": "Without .forge/rbac.json, all tool calls are open-by-default (backward-compat).",
+  "roles": {
+    "admin": {
+      "_comment": "Full access — all scopes via global wildcard",
+      "scopes": ["*"]
+    },
+    "developer": {
+      "_comment": "Run plans, read everything, edit plan files",
+      "scopes": ["forge:run", "forge:read", "bridge:edit:plan-files"],
+      "inherits": ["reader"]
+    },
+    "reader": {
+      "_comment": "Read-only access to forge tools and audit export",
+      "scopes": ["forge:read", "audit:export"]
+    },
+    "ci": {
+      "_comment": "CI/CD token — can run plans and export audit logs",
+      "scopes": ["forge:run", "audit:export"],
+      "inherits": ["reader"]
+    }
+  },
+  "assignments": {
+    "_comment": "Map bearer token values to role arrays.",
+    "_comment2": "Tokens are matched literally. Use long random secrets (e.g. openssl rand -hex 32).",
+    "REPLACE-WITH-YOUR-ADMIN-TOKEN": ["admin"],
+    "REPLACE-WITH-YOUR-DEV-TOKEN":   ["developer"],
+    "REPLACE-WITH-YOUR-CI-TOKEN":    ["ci"],
+    "REPLACE-WITH-READONLY-TOKEN":   ["reader"]
+  }
+}

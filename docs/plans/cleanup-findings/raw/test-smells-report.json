@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-05-20T01:32:41.727Z",
+  "generatedAt": "2026-05-20T05:47:28.315Z",
   "scopes": [
     "pforge-mcp/tests",
     "pforge-master/tests",
@@ -7,13 +7,13 @@
   ],
   "severityFilter": "info",
   "counts": {
-    "filesScanned": 337,
-    "filesWithSmells": 103,
+    "filesScanned": 341,
+    "filesWithSmells": 107,
     "errors": 0,
-    "warnings": 428,
+    "warnings": 434,
     "info": 0,
     "bySmell": {
-      "TIME-FLAKE": 397,
+      "TIME-FLAKE": 403,
       "CONSOLE-LEAK": 25,
       "SKIP-LEAK": 6
     }
@@ -2445,6 +2445,32 @@
       ]
     },
     {
+      "file": "pforge-mcp/tests/local-recall.test.mjs",
+      "findings": [
+        {
+          "smell": "TIME-FLAKE",
+          "severity": "warn",
+          "line": 313,
+          "snippet": "Date.now without tolerance guard",
+          "why": "Time-sensitive code in tests without explicit tolerance or fake timers — Windows scheduler drift can flake the test (see Phase 41 S5 timeline-core +5ms→+50ms fix)"
+        },
+        {
+          "smell": "TIME-FLAKE",
+          "severity": "warn",
+          "line": 345,
+          "snippet": "new Date() without tolerance guard",
+          "why": "Time-sensitive code in tests without explicit tolerance or fake timers — Windows scheduler drift can flake the test (see Phase 41 S5 timeline-core +5ms→+50ms fix)"
+        },
+        {
+          "smell": "TIME-FLAKE",
+          "severity": "warn",
+          "line": 583,
+          "snippet": "new Date() without tolerance guard",
+          "why": "Time-sensitive code in tests without explicit tolerance or fake timers — Windows scheduler drift can flake the test (see Phase 41 S5 timeline-core +5ms→+50ms fix)"
+        }
+      ]
+    },
+    {
       "file": "pforge-mcp/tests/network-allowlist.test.mjs",
       "findings": [
         {
@@ -3171,6 +3197,18 @@
       ]
     },
     {
+      "file": "pforge-mcp/tests/clean-code-no-regression.test.mjs",
+      "findings": [
+        {
+          "smell": "TIME-FLAKE",
+          "severity": "warn",
+          "line": 45,
+          "snippet": "Date.now without tolerance guard",
+          "why": "Time-sensitive code in tests without explicit tolerance or fake timers — Windows scheduler drift can flake the test (see Phase 41 S5 timeline-core +5ms→+50ms fix)"
+        }
+      ]
+    },
+    {
       "file": "pforge-mcp/tests/correlation-thread.test.mjs",
       "findings": [
         {
@@ -3291,6 +3329,18 @@
       ]
     },
     {
+      "file": "pforge-mcp/tests/embedding-status.test.mjs",
+      "findings": [
+        {
+          "smell": "TIME-FLAKE",
+          "severity": "warn",
+          "line": 33,
+          "snippet": "new Date() without tolerance guard",
+          "why": "Time-sensitive code in tests without explicit tolerance or fake timers — Windows scheduler drift can flake the test (see Phase 41 S5 timeline-core +5ms→+50ms fix)"
+        }
+      ]
+    },
+    {
       "file": "pforge-mcp/tests/enums.test.mjs",
       "findings": [
         {
@@ -3345,6 +3395,18 @@
           "smell": "TIME-FLAKE",
           "severity": "warn",
           "line": 159,
+          "snippet": "new Date() without tolerance guard",
+          "why": "Time-sensitive code in tests without explicit tolerance or fake timers — Windows scheduler drift can flake the test (see Phase 41 S5 timeline-core +5ms→+50ms fix)"
+        }
+      ]
+    },
+    {
+      "file": "pforge-mcp/tests/local-recall-status.test.mjs",
+      "findings": [
+        {
+          "smell": "TIME-FLAKE",
+          "severity": "warn",
+          "line": 35,
           "snippet": "new Date() without tolerance guard",
           "why": "Time-sensitive code in tests without explicit tolerance or fake timers — Windows scheduler drift can flake the test (see Phase 41 S5 timeline-core +5ms→+50ms fix)"
         }

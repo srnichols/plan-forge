@@ -1,16 +1,16 @@
 {
-  "generatedAt": "2026-05-20T01:32:41.173Z",
+  "generatedAt": "2026-05-20T05:47:28.186Z",
   "scopes": [
     "pforge-mcp",
     "pforge-master",
     "scripts"
   ],
   "counts": {
-    "filesScanned": 256,
+    "filesScanned": 260,
     "filesWithDeadExports": 103,
-    "totalExports": 1518,
-    "deadExports": 676,
-    "namespaceConsumedFiles": 48
+    "totalExports": 1541,
+    "deadExports": 678,
+    "namespaceConsumedFiles": 51
   },
   "findings": [
     {
@@ -578,6 +578,19 @@
       "totalExports": 8
     },
     {
+      "file": "pforge-mcp/local-recall.mjs",
+      "deadExports": [
+        "_resetNeuralProbeCache",
+        "buildCorpusIndex",
+        "buildIdf",
+        "loadCachedIndex",
+        "persistIndex",
+        "tfIdfVector",
+        "vecCosineSimilarity"
+      ],
+      "totalExports": 12
+    },
+    {
       "file": "pforge-mcp/sync-memories.mjs",
       "deadExports": [
         "SyncMemoriesError",
@@ -696,17 +709,6 @@
         "version"
       ],
       "totalExports": 5
-    },
-    {
-      "file": "pforge-mcp/local-recall.mjs",
-      "deadExports": [
-        "_resetNeuralProbeCache",
-        "buildIdf",
-        "readLocalThoughts",
-        "tfIdfVector",
-        "vecCosineSimilarity"
-      ],
-      "totalExports": 7
     },
     {
       "file": "pforge-mcp/telemetry.mjs",

@@ -1,5 +1,19 @@
 [
   {
+    "file": "pforge-mcp/local-recall.mjs",
+    "line": 447,
+    "col": 13,
+    "callee": "_tfidfSearchWithIndex",
+    "argCount": 6
+  },
+  {
+    "file": "pforge-mcp/local-recall.mjs",
+    "line": 481,
+    "col": 9,
+    "callee": "_tfidfSearchWithIndex",
+    "argCount": 6
+  },
+  {
     "file": "pforge-mcp/server/tool-handlers/memory.mjs",
     "line": 191,
     "col": 10,

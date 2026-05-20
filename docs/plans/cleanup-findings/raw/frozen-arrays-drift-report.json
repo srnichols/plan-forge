@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-05-20T01:32:42.672Z",
+  "generatedAt": "2026-05-20T05:47:28.634Z",
   "enumsSource": "pforge-mcp/enums.mjs",
   "enumsScanned": {
     "HOOK_PASCAL": {
@@ -12,7 +12,7 @@
   "extendedScan": false,
   "includeTests": false,
   "counts": {
-    "filesScanned": 256,
+    "filesScanned": 260,
     "filesWithDrift": 12,
     "warnings": 6,
     "info": 23,
@@ -204,7 +204,7 @@
         {
           "enum": "ERROR_CODES",
           "literal": "ASK_QUESTION_MISMATCH",
-          "line": 1769,
+          "line": 1775,
           "severity": "warn",
           "kind": "HARD-DRIFT",
           "why": "File imports ERROR_CODES but still uses hand-typed \"ASK_QUESTION_MISMATCH\" — replace with the constant"
@@ -212,7 +212,7 @@
         {
           "enum": "ERROR_CODES",
           "literal": "PLAN_ALREADY_EXISTS",
-          "line": 1829,
+          "line": 1835,
           "severity": "warn",
           "kind": "HARD-DRIFT",
           "why": "File imports ERROR_CODES but still uses hand-typed \"PLAN_ALREADY_EXISTS\" — replace with the constant"
@@ -285,7 +285,7 @@
         {
           "enum": "ERROR_CODES",
           "literal": "LOCK_HASH_MISMATCH",
-          "line": 850,
+          "line": 528,
           "severity": "info",
           "kind": "SOFT-DRIFT",
           "why": "File hand-types \"LOCK_HASH_MISMATCH\" without importing ERROR_CODES — review whether to migrate"

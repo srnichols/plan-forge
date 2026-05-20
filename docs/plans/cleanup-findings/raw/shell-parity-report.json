@@ -1,15 +1,15 @@
 {
-  "generatedAt": "2026-05-20T01:32:42.183Z",
+  "generatedAt": "2026-05-20T05:47:28.410Z",
   "strict": false,
   "sizeDeltaThreshold": 0.4,
   "counts": {
-    "filesScanned": 37,
-    "groupsScanned": 21,
+    "filesScanned": 40,
+    "groupsScanned": 24,
     "pairedHealthy": 16,
-    "missingTwin": 5,
+    "missingTwin": 8,
     "sizeMismatch": 0,
     "errors": 0,
-    "warnings": 5,
+    "warnings": 8,
     "info": 16
   },
   "findings": [
@@ -35,6 +35,45 @@
         "ext": "ps1",
         "file": "scripts/check-metrics.ps1",
         "lines": 140
+      },
+      "requiredPair": false,
+      "why": "Dev-internal script missing its .sh twin — non-blocking but harms cross-platform parity"
+    },
+    {
+      "base": "scripts/cut-backfill-releases",
+      "kind": "MISSING-TWIN",
+      "severity": "warn",
+      "missing": "sh",
+      "present": {
+        "ext": "ps1",
+        "file": "scripts/cut-backfill-releases.ps1",
+        "lines": 28
+      },
+      "requiredPair": false,
+      "why": "Dev-internal script missing its .sh twin — non-blocking but harms cross-platform parity"
+    },
+    {
+      "base": "scripts/extract-changelog-section",
+      "kind": "MISSING-TWIN",
+      "severity": "warn",
+      "missing": "sh",
+      "present": {
+        "ext": "ps1",
+        "file": "scripts/extract-changelog-section.ps1",
+        "lines": 17
+      },
+      "requiredPair": false,
+      "why": "Dev-internal script missing its .sh twin — non-blocking but harms cross-platform parity"
+    },
+    {
+      "base": "scripts/sync-planning-to-master",
+      "kind": "MISSING-TWIN",
+      "severity": "warn",
+      "missing": "sh",
+      "present": {
+        "ext": "ps1",
+        "file": "scripts/sync-planning-to-master.ps1",
+        "lines": 144
       },
       "requiredPair": false,
       "why": "Dev-internal script missing its .sh twin — non-blocking but harms cross-platform parity"

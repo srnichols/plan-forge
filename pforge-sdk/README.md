@@ -1,6 +1,6 @@
 # pforge-sdk
 
-**Version**: `0.8.0` · **License**: MIT · **Engines**: Node ≥ 20
+**Version**: `0.9.0` · **License**: MIT · **Engines**: Node ≥ 20
 
 Programmatic SDK for Plan Forge — load MCP tool metadata, build Hallmark provenance envelopes, and validate Lattice code-chunk records from your own Node.js code. Zero runtime dependencies.
 
@@ -37,6 +37,7 @@ npm install file:./pforge-sdk
 | `pforge-sdk/run-reader` | `src/run-reader.mjs` | Run artifact reader — `listRuns`, `readRunMeta`, `readRunSummary`, `readRunIndex`, `parseEventLine`, path helpers |
 | `pforge-sdk/plan-reader` | `src/plan-reader.mjs` | Plan file reader — `listPlans`, `readPlan`, `getPlanStatus`, `getPlanSlices`, path helpers |
 | `pforge-sdk/thought-reader` | `src/thought-reader.mjs` | Thought store reader — `readThoughts`, `readAllThoughts`, `listThoughtSources`, `parseThoughtLine`, path helpers |
+| `pforge-sdk/digest-reader` | `src/digest-reader.mjs` | Digest reader — `listDigests`, `readDigest`, `readLatestDigest`, `overallSeverity`, `getSectionsByMinSeverity`, path helpers |
 
 > **Note**: `pforge-sdk/client` is new in `0.4.0`. It requires a running Plan Forge MCP server (`pforge-mcp/server.mjs`) to be useful. Zero runtime dependencies — uses the global `fetch` (Node ≥ 18).
 > **Note**: `pforge-sdk/anvil` and `pforge-sdk/lattice-query` are new in `0.5.0`. Both are pure and dependency-free.
@@ -44,6 +45,7 @@ npm install file:./pforge-sdk
 > **Note**: `pforge-sdk/run-reader` is new in `0.6.0`. Provides offline access to `.forge/runs/` artifacts without requiring a running MCP server. Zero dependencies beyond `node:fs` / `node:path`.
 > **Note**: `pforge-sdk/plan-reader` is new in `0.7.0`. Provides offline access to plan files in `docs/plans/` without requiring a running MCP server. Zero dependencies beyond `node:fs` / `node:path`.
 > **Note**: `pforge-sdk/thought-reader` is new in `0.8.0`. Provides offline access to `.forge/*.jsonl` thought stores (OpenBrain queue, archive, DLQ, LiveGuard memories) without requiring a running MCP server. Zero dependencies beyond `node:fs` / `node:path`.
+> **Note**: `pforge-sdk/digest-reader` is new in `0.9.0`. Provides offline access to `.forge/digests/*.json` daily digest files without requiring a running MCP server. Includes analysis helpers (`overallSeverity`, `getSectionsByMinSeverity`) that work on in-memory digest objects. Zero dependencies beyond `node:fs` / `node:path`.
 
 ---
 
@@ -651,6 +653,77 @@ Records from different sources have different shapes. All include `_v` and `cont
 
 ---
 
+## `pforge-sdk/digest-reader` — Digest reader
+
+Offline access to `.forge/digests/*.json` daily digest files written by
+`pforge digest`. Includes analysis helpers for computing severity from an
+in-memory digest. Pure — no external network calls. Zero runtime dependencies.
+
+```js
+import {
+  listDigests,
+  readDigest,
+  readLatestDigest,
+  overallSeverity,
+  getSectionsByMinSeverity,
+} from 'pforge-sdk/digest-reader';
+
+// List available digest dates (newest first):
+const dates = listDigests();
+// → ['2026-05-20', '2026-05-19', '2026-05-18']
+
+// Read a specific date:
+const digest = readDigest({ date: '2026-05-20' });
+if (digest) {
+  console.log(digest.generatedAt);    // → '2026-05-20T06:00:00.000Z'
+  console.log(digest.sections.length); // → 5
+}
+
+// Read the most recent digest:
+const latest = readLatestDigest();
+
+// Compute the overall severity (highest severity across all sections):
+if (latest) {
+  console.log(overallSeverity(latest)); // → 'warn'
+}
+
+// Filter for sections at or above a threshold:
+const alertSections = getSectionsByMinSeverity(latest, 'alert');
+```
+
+### Digest record shape
+
+```json
+{
+  "sections": [
+    {
+      "id": "probe-deltas",
+      "title": "Probe Lane-Match Deltas",
+      "severity": "info",
+      "items": []
+    },
+    {
+      "id": "aging-bugs",
+      "title": "Aging Meta-Bugs",
+      "severity": "warn",
+      "items": [{ "id": "bug-001", "title": "...", "ageDays": 10, "severity": "medium" }]
+    }
+  ],
+  "generatedAt": "2026-05-20T06:00:00.000Z"
+}
+```
+
+### Path helpers
+
+| Export | Description |
+|---|---|
+| `digestsDir({ cwd? })` | Absolute path to `<cwd>/.forge/digests/` |
+| `digestFilePath({ date, cwd? })` | Absolute path to `<cwd>/.forge/digests/<date>.json` |
+| `DIGESTS_DIR_RELATIVE` | `".forge/digests"` (OS-normalised) |
+| `SEVERITY_LEVELS` | Frozen array `['info', 'warn', 'alert']` in ascending order |
+
+---
+
 ## Risk levels (auto-approve guidance)
 
 When you write a host that lets agents call Plan Forge tools, use the tool's `riskLevel` to decide what to gate on:
@@ -685,7 +758,8 @@ The SDK is intentionally narrow — it covers the artifact contracts (`tools.jso
 | **0.5.0** | `anvil` sub-path — `computeAnvilKey`, path helpers; `lattice-query` sub-path — `LatticeQueryBuilder`, `tokenizeForSearch`, `scoreChunk`; `notifications/adapter-contract` sub-path — `validateAdapterShape`, `ERR_NOT_IMPLEMENTED` |
 | **0.6.0** | `run-reader` sub-path — `listRuns`, `readRunMeta`, `readRunSummary`, `readRunIndex`, `parseEventLine`, path helpers for offline access to `.forge/runs/` artifacts |
 | **0.7.0** | `plan-reader` sub-path — `listPlans`, `readPlan`, `getPlanStatus`, `getPlanSlices`, `plansDir`, `PLANS_DIR_RELATIVE` for offline access to `docs/plans/*.md` plan files |
-| **0.8.0** (current) | `thought-reader` sub-path — `readThoughts`, `readAllThoughts`, `listThoughtSources`, `parseThoughtLine`, `forgeDir`, `thoughtFilePath`, `THOUGHT_SOURCES`, `FORGE_DIR_RELATIVE` for offline access to `.forge/*.jsonl` thought stores |
+| **0.8.0** | `thought-reader` sub-path — `readThoughts`, `readAllThoughts`, `listThoughtSources`, `parseThoughtLine`, `forgeDir`, `thoughtFilePath`, `THOUGHT_SOURCES`, `FORGE_DIR_RELATIVE` for offline access to `.forge/*.jsonl` thought stores |
+| **0.9.0** (current) | `digest-reader` sub-path — `listDigests`, `readDigest`, `readLatestDigest`, `overallSeverity`, `getSectionsByMinSeverity`, `digestsDir`, `digestFilePath`, `DIGESTS_DIR_RELATIVE`, `SEVERITY_LEVELS` for offline access to `.forge/digests/*.json` daily digest files |
 
 Track progress in [docs/V3-CAPABILITY-AUDIT.md](../docs/V3-CAPABILITY-AUDIT.md).
 

@@ -234,16 +234,16 @@ async function _callToolHandler_003_forge_plan_status(request, args) {
 
 }
 
-async function _callToolHandler_004_forge_diff_classify(request, args) {
+async function _callToolHandler_004_forge_diff_stats(request, args) {
   const { name } = request.params;
-  if (!(name === "forge_diff_classify")) return _CALL_TOOL_NO_MATCH;
+  if (!(name === "forge_diff_stats")) return _CALL_TOOL_NO_MATCH;
 
     try {
       const cwd = args.path ? findProjectRoot(resolve(args.path)) : findProjectRoot(PROJECT_DIR);
       const result = classifyDiff({ cwd, since: args.since || undefined });
       return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
     } catch (err) {
-      return { content: [{ type: "text", text: `diff-classify error: ${err.message}` }], isError: true };
+      return { content: [{ type: "text", text: `diff-stats error: ${err.message}` }], isError: true };
     }
 
 }
@@ -711,7 +711,7 @@ export {
   _callToolHandler_001_forge_run_plan,
   _callToolHandler_002_forge_abort,
   _callToolHandler_003_forge_plan_status,
-  _callToolHandler_004_forge_diff_classify,
+  _callToolHandler_004_forge_diff_stats,
   _callToolHandler_005_forge_cost_report,
   _callToolHandler_006_forge_estimate_quorum,
   _callToolHandler_007_forge_estimate_slice,

@@ -417,8 +417,8 @@
   },
   {
     "file": "pforge-mcp/server/tool-handlers.mjs",
-    "loc": 455,
-    "blank": 18,
+    "loc": 456,
+    "blank": 19,
     "comment": 56,
     "functions": 3,
     "g14Severity": null

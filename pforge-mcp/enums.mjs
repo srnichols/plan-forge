@@ -151,6 +151,7 @@ export const TOOL_NAMES = freezeArray([
   "forge_diagnose",
   "forge_diff",
   "forge_diff_classify",
+  "forge_diff_stats",
   "forge_doctor_quorum",
   "forge_drift_report",
   "forge_embedding_status",

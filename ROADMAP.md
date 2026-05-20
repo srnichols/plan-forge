@@ -7,7 +7,9 @@
 
 ## Current Release
 
-**v3.12.0** (2026-05-20) — `pforge-sdk/session-reader` (v0.10.0). New `session-reader` sub-path provides offline access to `.forge/fm-sessions/*.jsonl` Forge-Master conversation session files without a running MCP server. `listSessions`, `readSession`, `readAllSessionTurns` (archive + active, deduped and sorted), `parseSessionLine`, `getLane`, `summarizeSession`. 76 tests.
+**v3.12.1** (2026-05-20) — `forge_diff_stats` tool-surface cleanup. Added `forge_diff_stats` to `TOOL_NAMES` frozen array in `enums.mjs` and to `_READ_ONLY_TOOLS` in `server/tool-handlers.mjs`. Updated Appendix Q (`api-surface-index.html`) with both tools correctly placed. Resolves the handler-name collision introduced by Phase WORKER-GUARDRAILS A2.
+
+Previous: **v3.12.0** (2026-05-20) — `pforge-sdk/session-reader` (v0.10.0). New `session-reader` sub-path provides offline access to `.forge/fm-sessions/*.jsonl` Forge-Master conversation session files without a running MCP server. `listSessions`, `readSession`, `readAllSessionTurns` (archive + active, deduped and sorted), `parseSessionLine`, `getLane`, `summarizeSession`. 76 tests.
 
 Previous: **v3.11.0** (2026-05-20) — Anvil, Hallmark, and pipeline tools published on MCP surface. Eight MCP tools now discoverable and callable: `forge_anvil_stat`, `forge_anvil_clear`, `forge_anvil_rebuild`, `forge_anvil_dlq_list`, `forge_anvil_dlq_drain`, `forge_hallmark_show`, `forge_hallmark_verify`, `forge_pipelines_list`. Added `TOOL_NAMES` coverage for `forge_embedding_status`, `forge_local_recall_status`, `forge_local_search`. Refreshed tool-surface fixtures and `docs/manual/api-surface-index.html`.
 

@@ -81,9 +81,9 @@ export const TOOL_METADATA = {
     },
     example: { input: { plan: "docs/plans/Phase-1.md" }, output: { drift: false, forbidden: 0 } },
   },
-  forge_diff_classify: {
+  forge_diff_stats: {
     intent: ["classify", "diff-audit", "scope-check", "precommit"],
-    aliases: ["diff-classify", "classify-diff", "diff-categories"],
+    aliases: ["diff-stats", "diff-categories", "diff-categorize"],
     cost: "low",
     maxConcurrent: 10,
     addedIn: "3.6.5",

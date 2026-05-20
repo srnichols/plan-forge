@@ -29,7 +29,7 @@
       <div class="chapter-content">
         <div class="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">Appendix Q · Reference</div>
         <h1>Unified API Surface Index</h1>
-        <p class="text-lg text-slate-400 mb-8">One index, four surfaces. Every <!--c:tools-->102<!--/c--> MCP tool, every <!--c:cli-commands-->97<!--/c--> CLI command, every REST endpoint domain, and every SDK export, alphabetized, grouped, and cross-linked. If you can't remember whether <code>forge_secret_scan</code> has a CLI wrapper, this is the page.</p>
+        <p class="text-lg text-slate-400 mb-8">One index, four surfaces. Every <!--c:tools-->104<!--/c--> MCP tool, every <!--c:cli-commands-->97<!--/c--> CLI command, every REST endpoint domain, and every SDK export, alphabetized, grouped, and cross-linked. If you can't remember whether <code>forge_secret_scan</code> has a CLI wrapper, this is the page.</p>
 
         <div class="callout callout-info">
           <strong>The source of truth.</strong> This appendix is a navigable index, not a reference manual. For deep usage:
@@ -45,7 +45,7 @@
         <h2 id="on-this-page">On this page</h2>
         <ul>
           <li><a href="#surfaces">The four surfaces</a></li>
-          <li><a href="#mcp-tools">MCP tools (88, grouped by domain)</a></li>
+          <li><a href="#mcp-tools">MCP tools (104, grouped by domain)</a></li>
           <li><a href="#cli-commands">CLI commands (57, grouped by use)</a></li>
           <li><a href="#rest-endpoints">REST endpoints (103, grouped by prefix)</a></li>
           <li><a href="#sdk">SDK exports (11 sub-paths)</a></li>
@@ -69,7 +69,7 @@
             <tbody class="text-slate-300">
               <tr class="border-b border-slate-800/40">
                 <td class="py-2 px-3"><strong>MCP</strong> (stdio + WebSocket)</td>
-                <td class="py-2 px-3"><!--c:tools-->102<!--/c--> tools</td>
+                <td class="py-2 px-3"><!--c:tools-->104<!--/c--> tools</td>
                 <td class="py-2 px-3">Transport-bound (stdio = inherited trust; WS = bearer)</td>
                 <td class="py-2 px-3">Copilot, Claude, Cursor, Codex, anything speaking MCP</td>
               </tr>
@@ -87,7 +87,7 @@
               </tr>
               <tr>
                 <td class="py-2 px-3"><strong>SDK</strong> (<code>pforge-sdk</code>)</td>
-                <td class="py-2 px-3">11 sub-paths</td>
+                <td class="py-2 px-3">12 sub-paths</td>
                 <td class="py-2 px-3">Bearer token via <code>createClient</code></td>
                 <td class="py-2 px-3">Node.js / TypeScript callers wanting typed responses</td>
               </tr>
@@ -101,7 +101,7 @@
         <h2 id="mcp-tools">MCP tools — by domain</h2>
         <p>Canonical source: <code>pforge-mcp/tools.json</code>. The full description, input schema, error map, and example for each tool is exposed via <code>forge_capabilities</code>. The table below is the one-line index.</p>
 
-        <h3 id="mcp-diagnostics">Diagnostics &amp; setup (5)</h3>
+        <h3 id="mcp-diagnostics">Diagnostics &amp; setup (7)</h3>
         <div class="overflow-x-auto my-4">
           <table class="text-sm w-full border-collapse">
             <thead><tr class="border-b border-slate-700/60"><th class="text-left py-2 px-3 text-slate-400 font-semibold">Tool</th><th class="text-left py-2 px-3 text-slate-400 font-semibold">Purpose</th></tr></thead>
@@ -110,7 +110,9 @@
               <tr class="border-b border-slate-800/40"><td class="py-2 px-3"><code>forge_validate</code></td><td class="py-2 px-3">Validate Plan Forge setup, required files, counts, unresolved placeholders</td></tr>
               <tr class="border-b border-slate-800/40"><td class="py-2 px-3"><code>forge_status</code></td><td class="py-2 px-3">All phases from DEPLOYMENT-ROADMAP.md with current status</td></tr>
               <tr class="border-b border-slate-800/40"><td class="py-2 px-3"><code>forge_diff</code></td><td class="py-2 px-3">Compare changes against a plan's Scope Contract, drift + forbidden edits</td></tr>
-              <tr><td class="py-2 px-3"><code>forge_sweep</code></td><td class="py-2 px-3">Completeness sweep, scan for TODO/FIXME/HACK/stub/placeholder/mock markers</td></tr>
+              <tr class="border-b border-slate-800/40"><td class="py-2 px-3"><code>forge_sweep</code></td><td class="py-2 px-3">Completeness sweep, scan for TODO/FIXME/HACK/stub/placeholder/mock markers</td></tr>
+              <tr class="border-b border-slate-800/40"><td class="py-2 px-3"><code>forge_audit_export</code></td><td class="py-2 px-3">Export audit events from <code>.forge/runs/*/events.log</code> — ACI-paginated, filterable by date/type/run</td></tr>
+              <tr><td class="py-2 px-3"><code>forge_diff_stats</code></td><td class="py-2 px-3">Classify staged git diff changes by category (plan, test, docs, config, chore, scope) — advisory only, never blocks</td></tr>
             </tbody>
           </table>
         </div>
@@ -136,7 +138,7 @@
           </table>
         </div>
 
-        <h3 id="mcp-plan">Plan execution (7)</h3>
+        <h3 id="mcp-plan">Plan execution (8)</h3>
         <div class="overflow-x-auto my-4">
           <table class="text-sm w-full border-collapse">
             <tbody class="text-slate-300">
@@ -146,7 +148,8 @@
               <tr class="border-b border-slate-800/40"><td class="py-2 px-3"><code>forge_abort</code></td><td class="py-2 px-3">Abort the currently running plan execution</td></tr>
               <tr class="border-b border-slate-800/40"><td class="py-2 px-3"><code>forge_plan_status</code></td><td class="py-2 px-3">Status of the latest plan execution run</td></tr>
               <tr class="border-b border-slate-800/40"><td class="py-2 px-3"><code>forge_regression_guard</code></td><td class="py-2 px-3">Run gate commands from plan files against the current codebase</td></tr>
-              <tr><td class="py-2 px-3"><code>forge_export_plan</code></td><td class="py-2 px-3">Convert a Copilot cloud agent session plan into a hardened Phase-X-PLAN.md</td></tr>
+              <tr class="border-b border-slate-800/40"><td class="py-2 px-3"><code>forge_export_plan</code></td><td class="py-2 px-3">Convert a Copilot cloud agent session plan into a hardened Phase-X-PLAN.md</td></tr>
+              <tr><td class="py-2 px-3"><code>forge_pipelines_list</code></td><td class="py-2 px-3">List the four standing capture pipelines and report their last-write timestamps plus Anvil hit rates</td></tr>
             </tbody>
           </table>
         </div>
@@ -207,13 +210,17 @@
           </table>
         </div>
 
-        <h3 id="mcp-memory">Memory &amp; provenance (3)</h3>
+        <h3 id="mcp-memory">Memory, provenance &amp; brain (9)</h3>
         <div class="overflow-x-auto my-4">
           <table class="text-sm w-full border-collapse">
             <tbody class="text-slate-300">
               <tr class="border-b border-slate-800/40"><td class="py-2 px-3"><code>forge_memory_capture</code></td><td class="py-2 px-3">Capture a thought, decision, or lesson into OpenBrain persistent memory</td></tr>
               <tr class="border-b border-slate-800/40"><td class="py-2 px-3"><code>forge_memory_report</code></td><td class="py-2 px-3">Aggregate health of every memory surface (L2 jsonl, OpenBrain queue, search cache, orphans)</td></tr>
-              <tr><td class="py-2 px-3"><code>forge_sync_memories</code></td><td class="py-2 px-3">Generate <code>.github/copilot-memory-hints.md</code> from trajectories + auto-skills + brain</td></tr>
+              <tr class="border-b border-slate-800/40"><td class="py-2 px-3"><code>forge_sync_memories</code></td><td class="py-2 px-3">Generate <code>.github/copilot-memory-hints.md</code> from trajectories + auto-skills + brain</td></tr>
+              <tr class="border-b border-slate-800/40"><td class="py-2 px-3"><code>forge_brain_replay</code></td><td class="py-2 px-3">Bulk-load records into OpenBrain via <code>capture_thought</code> from a local source file</td></tr>
+              <tr class="border-b border-slate-800/40"><td class="py-2 px-3"><code>forge_brain_test</code></td><td class="py-2 px-3">Round-trip test against OpenBrain (L3 memory) — write a test thought and read it back</td></tr>
+              <tr class="border-b border-slate-800/40"><td class="py-2 px-3"><code>forge_hallmark_show</code></td><td class="py-2 px-3">Show Hallmark provenance records — immutable milestone stamps written at slice completions, gate passes, phase closures</td></tr>
+              <tr><td class="py-2 px-3"><code>forge_hallmark_verify</code></td><td class="py-2 px-3">Verify a Hallmark record has not drifted — re-hashes the referenced source file and compares against the stored hash</td></tr>
             </tbody>
           </table>
         </div>
@@ -250,6 +257,30 @@
           </table>
         </div>
 
+        <h3 id="mcp-anvil">Anvil — memoization cache (5)</h3>
+        <div class="overflow-x-auto my-4">
+          <table class="text-sm w-full border-collapse">
+            <tbody class="text-slate-300">
+              <tr class="border-b border-slate-800/40"><td class="py-2 px-3"><code>forge_anvil_stat</code></td><td class="py-2 px-3">Inspect the Anvil memoization cache — entries, bytes, oldest entry, per-tool hit/miss counters</td></tr>
+              <tr class="border-b border-slate-800/40"><td class="py-2 px-3"><code>forge_anvil_clear</code></td><td class="py-2 px-3">Delete Anvil cache entries — scope by tool name, by age (<code>olderThanMs</code>), or both</td></tr>
+              <tr class="border-b border-slate-800/40"><td class="py-2 px-3"><code>forge_anvil_rebuild</code></td><td class="py-2 px-3">Invalidate Anvil cache entries for files changed since a git commit SHA</td></tr>
+              <tr class="border-b border-slate-800/40"><td class="py-2 px-3"><code>forge_anvil_dlq_list</code></td><td class="py-2 px-3">List dead-letter queue entries — records of cache writes that failed and were quarantined</td></tr>
+              <tr><td class="py-2 px-3"><code>forge_anvil_dlq_drain</code></td><td class="py-2 px-3">Drain (purge) dead-letter queue entries from the Anvil memoization cache</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <h3 id="mcp-recall">Semantic recall &amp; embeddings (3)</h3>
+        <div class="overflow-x-auto my-4">
+          <table class="text-sm w-full border-collapse">
+            <tbody class="text-slate-300">
+              <tr class="border-b border-slate-800/40"><td class="py-2 px-3"><code>forge_local_search</code></td><td class="py-2 px-3">Semantic search over local <code>.forge/</code> thought stores — TF-IDF or neural embeddings backend</td></tr>
+              <tr class="border-b border-slate-800/40"><td class="py-2 px-3"><code>forge_local_recall_status</code></td><td class="py-2 px-3">Inspect and manage the persistent TF-IDF index cache used by <code>forge_local_search</code></td></tr>
+              <tr><td class="py-2 px-3"><code>forge_embedding_status</code></td><td class="py-2 px-3">Report embedding backend status — whether <code>@xenova/transformers</code> (neural) or TF-IDF is active, corpus size, configured backend override</td></tr>
+            </tbody>
+          </table>
+        </div>
+
         <h3 id="mcp-health">Health, trends &amp; hotspots (4)</h3>
         <div class="overflow-x-auto my-4">
           <table class="text-sm w-full border-collapse">
@@ -273,13 +304,14 @@
           </table>
         </div>
 
-        <h3 id="mcp-liveguard">LiveGuard — deploy safety (3)</h3>
+        <h3 id="mcp-liveguard">LiveGuard — deploy safety (4)</h3>
         <div class="overflow-x-auto my-4">
           <table class="text-sm w-full border-collapse">
             <tbody class="text-slate-300">
               <tr class="border-b border-slate-800/40"><td class="py-2 px-3"><code>forge_secret_scan</code></td><td class="py-2 px-3">Post-commit entropy analysis, scan git diff for likely leaked secrets</td></tr>
               <tr class="border-b border-slate-800/40"><td class="py-2 px-3"><code>forge_env_diff</code></td><td class="py-2 px-3">Compare env var keys across .env files, detect missing keys</td></tr>
-              <tr><td class="py-2 px-3"><code>forge_liveguard_run</code></td><td class="py-2 px-3">Run all applicable LiveGuard checks in a single call, return unified report</td></tr>
+              <tr class="border-b border-slate-800/40"><td class="py-2 px-3"><code>forge_liveguard_run</code></td><td class="py-2 px-3">Run all applicable LiveGuard checks in a single call, return unified report</td></tr>
+              <tr><td class="py-2 px-3"><code>forge_diff_classify</code></td><td class="py-2 px-3">Classify staged git diff against 6 safety categories: leaked-secret, prompt-injection, eval/exec introduction, license-incompatible paste, scope-undeclared change, and test-only change</td></tr>
             </tbody>
           </table>
         </div>
@@ -375,7 +407,7 @@
         </div>
 
         <div class="callout callout-tip">
-          <strong>Total: <!--c:tools-->102<!--/c--> MCP tools across 22 domains.</strong> Run <code>forge_capabilities</code> for the machine-readable manifest with full schemas, cost tiers, intent tags, and error maps.
+          <strong>Total: <!--c:tools-->104<!--/c--> MCP tools across 24 domains.</strong> Run <code>forge_capabilities</code> for the machine-readable manifest with full schemas, cost tiers, intent tags, and error maps.
         </div>
 
         <!-- ─── CLI ─── -->
@@ -459,7 +491,7 @@ pforge ext add/remove/...       Extension management</code></pre>
         <h2 id="rest-endpoints">REST endpoints — <code>/api/*</code></h2>
         <p>Canonical source: handlers in <code>pforge-mcp/server.mjs</code> + <code>pforge-mcp/dashboard/</code>. Full per-endpoint reference: <a href="rest-api-reference.html"><strong>Appendix W &mdash; REST API Reference</strong></a>; raw dump in <a href="https://github.com/srnichols/plan-forge/blob/master/docs/REST-API.md" rel="noopener">docs/REST-API.md on GitHub</a>. OpenAPI spec: <code>GET /api/openapi.json</code>.</p>
 
-        <p>113 endpoints organize into these prefixes (one-line summary each, see <a href="rest-api-reference.html">Appendix W</a> for verbs, query params, request/response shapes, and error codes):</p>
+        <p>116 endpoints organize into these prefixes (one-line summary each, see <a href="rest-api-reference.html">Appendix W</a> for verbs, query params, request/response shapes, and error codes):</p>
 
         <div class="overflow-x-auto my-6">
           <table class="text-sm w-full border-collapse">
@@ -488,6 +520,9 @@ pforge ext add/remove/...       Extension management</code></pre>
               <tr class="border-b border-slate-800/40"><td class="py-2 px-3"><code>/api/search</code></td><td class="py-2 px-3">~3</td><td class="py-2 px-3">Cross-artifact search, timeline, home snapshot</td></tr>
               <tr class="border-b border-slate-800/40"><td class="py-2 px-3"><code>/api/notify</code></td><td class="py-2 px-3">2</td><td class="py-2 px-3">Send / test notification adapters</td></tr>
               <tr class="border-b border-slate-800/40"><td class="py-2 px-3"><code>/api/ext</code></td><td class="py-2 px-3">~4</td><td class="py-2 px-3">Extension search, info, install, remove</td></tr>
+              <tr class="border-b border-slate-800/40"><td class="py-2 px-3"><code>/api/anvil</code></td><td class="py-2 px-3">~5</td><td class="py-2 px-3">Cache stat, clear, rebuild, DLQ list, DLQ drain</td></tr>
+              <tr class="border-b border-slate-800/40"><td class="py-2 px-3"><code>/api/embedding</code></td><td class="py-2 px-3">~2</td><td class="py-2 px-3">Embedding backend status, local-recall index status</td></tr>
+              <tr class="border-b border-slate-800/40"><td class="py-2 px-3"><code>/api/audit</code></td><td class="py-2 px-3">1</td><td class="py-2 px-3">Audit event export (paginated, filterable by date / type / run)</td></tr>
               <tr class="border-b border-slate-800/40"><td class="py-2 px-3"><code>/api/hub</code></td><td class="py-2 px-3">1 (WS)</td><td class="py-2 px-3">WebSocket event stream, 60+ event types</td></tr>
               <tr><td class="py-2 px-3"><code>/api/openapi.json</code></td><td class="py-2 px-3">1</td><td class="py-2 px-3">OpenAPI 3 spec for the entire surface (codegen-ready)</td></tr>
             </tbody>
@@ -496,11 +531,7 @@ pforge ext add/remove/...       Extension management</code></pre>
 
         <!-- ─── SDK ─── -->
         <h2 id="sdk">SDK — <code>pforge-sdk</code></h2>
-<<<<<<< HEAD
-        <p>Eleven sub-paths, all pure Node.js (zero runtime dependencies). Full reference: <a href="https://github.com/srnichols/plan-forge/blob/master/pforge-sdk/README.md" rel="noopener">pforge-sdk/README.md on GitHub</a>.</p>
-=======
-        <p>Ten sub-paths, all pure Node.js (zero runtime dependencies). Full reference: <a href="https://github.com/srnichols/plan-forge/blob/master/pforge-sdk/README.md" rel="noopener">pforge-sdk/README.md on GitHub</a>.</p>
->>>>>>> master
+        <p>Twelve sub-paths, all pure Node.js (zero runtime dependencies). Full reference: <a href="https://github.com/srnichols/plan-forge/blob/master/pforge-sdk/README.md" rel="noopener">pforge-sdk/README.md on GitHub</a>.</p>
 
         <div class="overflow-x-auto my-6">
           <table class="text-sm w-full border-collapse">
@@ -566,14 +597,11 @@ pforge ext add/remove/...       Extension management</code></pre>
                 <td class="py-2 px-3"><code>pforge-sdk/thought-reader</code> <span class="text-amber-400 text-xs font-semibold">v0.8.0</span></td>
                 <td class="py-2 px-3"><code>readThoughts</code>, <code>readAllThoughts</code>, <code>listThoughtSources</code>, <code>parseThoughtLine</code>, <code>thoughtFilePath</code></td>
                 <td class="py-2 px-3">Offline access to <code>.forge/*.jsonl</code> thought stores — OpenBrain queue, archive, DLQ, and LiveGuard memories</td>
-<<<<<<< HEAD
               </tr>
               <tr>
                 <td class="py-2 px-3"><code>pforge-sdk/digest-reader</code> <span class="text-amber-400 text-xs font-semibold">v0.9.0</span></td>
                 <td class="py-2 px-3"><code>listDigests</code>, <code>readDigest</code>, <code>readLatestDigest</code>, <code>overallSeverity</code>, <code>getSectionsByMinSeverity</code>, <code>digestFilePath</code></td>
                 <td class="py-2 px-3">Offline access to <code>.forge/digests/*.json</code> daily digest files — list, read, and compute severity</td>
-=======
->>>>>>> master
               </tr>
             </tbody>
           </table>
@@ -615,10 +643,9 @@ pforge ext add/remove/...       Extension management</code></pre>
               <tr class="border-b border-slate-800/40"><td class="py-2 px-3">Offline run artifact access (<code>run-reader</code>)</td><td class="text-center py-2 px-3 text-slate-500">—</td><td class="text-center py-2 px-3 text-slate-500">—</td><td class="text-center py-2 px-3 text-slate-500">—</td><td class="text-center py-2 px-3 text-emerald-400">✓</td></tr>
               <tr class="border-b border-slate-800/40"><td class="py-2 px-3">Offline plan file access (<code>plan-reader</code>)</td><td class="text-center py-2 px-3 text-slate-500">—</td><td class="text-center py-2 px-3 text-slate-500">—</td><td class="text-center py-2 px-3 text-slate-500">—</td><td class="text-center py-2 px-3 text-emerald-400">✓</td></tr>
               <tr class="border-b border-slate-800/40"><td class="py-2 px-3">Offline thought store access (<code>thought-reader</code>)</td><td class="text-center py-2 px-3 text-slate-500">—</td><td class="text-center py-2 px-3 text-slate-500">—</td><td class="text-center py-2 px-3 text-slate-500">—</td><td class="text-center py-2 px-3 text-emerald-400">✓</td></tr>
-<<<<<<< HEAD
               <tr class="border-b border-slate-800/40"><td class="py-2 px-3">Offline digest file access (<code>digest-reader</code>)</td><td class="text-center py-2 px-3 text-slate-500">—</td><td class="text-center py-2 px-3 text-slate-500">—</td><td class="text-center py-2 px-3 text-slate-500">—</td><td class="text-center py-2 px-3 text-emerald-400">✓</td></tr>
-=======
->>>>>>> master
+              <tr class="border-b border-slate-800/40"><td class="py-2 px-3">Anvil cache management</td><td class="text-center py-2 px-3 text-emerald-400">✓</td><td class="text-center py-2 px-3 text-emerald-400">✓</td><td class="text-center py-2 px-3 text-emerald-400">✓</td><td class="text-center py-2 px-3 text-emerald-400">✓</td></tr>
+              <tr class="border-b border-slate-800/40"><td class="py-2 px-3">Semantic recall / local search</td><td class="text-center py-2 px-3 text-emerald-400">✓</td><td class="text-center py-2 px-3 text-slate-500">—</td><td class="text-center py-2 px-3 text-slate-500">—</td><td class="text-center py-2 px-3 text-slate-500">—</td></tr>
               <tr><td class="py-2 px-3">Extension marketplace</td><td class="text-center py-2 px-3 text-emerald-400">✓</td><td class="text-center py-2 px-3 text-emerald-400">✓</td><td class="text-center py-2 px-3 text-emerald-400">✓</td><td class="text-center py-2 px-3 text-slate-500">—</td></tr>
             </tbody>
           </table>

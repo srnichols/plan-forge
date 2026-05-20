@@ -9,6 +9,18 @@ Format follows [Keep a Changelog](https://keepachangelog.com/).
 
 ---
 
+## [3.12.1] — 2026-05-20
+
+### Fixed — `forge_diff_stats` tool-surface cleanup
+
+Completed the `forge_diff_stats` rename that resolved the handler name collision introduced when Phase WORKER-GUARDRAILS added `forge_diff_classify` (security scanner, A2). The general-categorizer tool was renamed from `forge_diff_classify` to `forge_diff_stats` to avoid ambiguity:
+
+- **`pforge-mcp/enums.mjs`** — added `forge_diff_stats` to the `TOOL_NAMES` frozen array (alphabetical, after `forge_diff_classify`)
+- **`pforge-mcp/server/tool-handlers.mjs`** — added `forge_diff_stats` to `_READ_ONLY_TOOLS` (both tools are analysis-only and open by default)
+- **`docs/manual/api-surface-index.html`** — Appendix Q updated: `forge_diff_stats` row added to the Diagnostics section; `forge_diff_classify` (security scanner) listed under LiveGuard
+
+---
+
 ## [3.12.0] — 2026-05-20
 
 ### Added — `pforge-sdk/session-reader` — offline Forge-Master session access (v0.10.0)

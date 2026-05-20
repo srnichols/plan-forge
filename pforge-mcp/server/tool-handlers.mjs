@@ -9,7 +9,7 @@ import {
   _callToolHandler_001_forge_run_plan,
   _callToolHandler_002_forge_abort,
   _callToolHandler_003_forge_plan_status,
-  _callToolHandler_004_forge_diff_classify,
+  _callToolHandler_004_forge_diff_stats,
   _callToolHandler_005_forge_cost_report,
   _callToolHandler_006_forge_estimate_quorum,
   _callToolHandler_007_forge_estimate_slice,
@@ -23,6 +23,7 @@ import {
   _callToolHandler_015_forge_watch,
   _callToolHandler_016_forge_watch_live,
 } from "./tool-handlers/orch.mjs";
+
 import {
   _callToolHandler_017_forge_memory_report,
   _callToolHandler_018_forge_skill_status,
@@ -155,7 +156,7 @@ function _wrapWithToolSpan(handler) {
 const _READ_ONLY_TOOLS = new Set([
   "forge_capabilities", "forge_status", "forge_search", "forge_timeline",
   "forge_watch_live", "forge_home_snapshot", "forge_cost_report",
-  "forge_plan_status", "forge_diff", "forge_diff_classify",
+  "forge_plan_status", "forge_diff", "forge_diff_classify", "forge_diff_stats",
 ]);
 
 let _rbacConfigCache; // undefined = not yet loaded; null = absent
@@ -217,7 +218,7 @@ const _CALL_TOOL_HANDLERS = [
   _callToolHandler_001_forge_run_plan,
   _callToolHandler_002_forge_abort,
   _callToolHandler_003_forge_plan_status,
-  _callToolHandler_004_forge_diff_classify,
+  _callToolHandler_004_forge_diff_stats,
   _callToolHandler_005_forge_cost_report,
   _callToolHandler_006_forge_estimate_quorum,
   _callToolHandler_007_forge_estimate_slice,

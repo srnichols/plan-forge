@@ -51,24 +51,8 @@ const SPEC_SEARCH_PATHS = [
  * @param {object}   [ctx.env]        — process.env-shaped map
  * @returns {Promise<object>} scanner result record
  */
-export async function runContractScan(ctx) {
-  const {
-    config = {},
-    projectDir,
-    runId,
-    sliceRef = null,
-    importFn = (spec) => import(spec),
-    now = () => Date.now(),
-    env = process.env,
-  } = ctx || {};
-
-  const t0 = now();
-  const base = {
-    scanner: "contract",
-    sliceRef,
-    startedAt: new Date(t0).toISOString(),
-  };
-  const skippedFrame = (reason) => ({
+function createContractSkippedFrame(base, now, reason) {
+  return {
     ...base,
     skipped: true,
     reason,
@@ -77,16 +61,11 @@ export async function runContractScan(ctx) {
     fail: 0,
     durationMs: 0,
     completedAt: new Date(now()).toISOString(),
-  });
+  };
+}
 
-  // Scanner disabled
-  const scannerConfig = config.scanners?.contract;
-  if (scannerConfig === false || (scannerConfig && scannerConfig.enabled === false)) {
-    return skippedFrame("scanner-disabled");
-  }
-
-  // Merge settings with defaults
-  const settings = {
+function resolveContractSettings(scannerConfig) {
+  return {
     enabled: true,
     specPath: null,
     baseUrl: null,
@@ -96,113 +75,165 @@ export async function runContractScan(ctx) {
     graphqlEndpoint: null,
     ...(typeof scannerConfig === "object" ? scannerConfig : {}),
   };
+}
 
-  // Resolve spec path
-  const specPath = findSpec(projectDir, settings.specPath);
-  if (!specPath) return skippedFrame("no-spec-found");
+function resolveContractBaseUrl(settings, config, env) {
+  return settings.baseUrl || (env && env.PFORGE_TEMPERING_CONTRACT_URL) || resolveAppUrl(config, env);
+}
 
-  // Resolve base URL
-  const baseUrl = settings.baseUrl
-    || (env && env.PFORGE_TEMPERING_CONTRACT_URL)
-    || resolveAppUrl(config, env);
-  if (!baseUrl) return skippedFrame("url-not-configured");
-
-  // Production guard
-  if (looksLikeProduction(baseUrl) && !settings.allowProduction) {
-    return skippedFrame("production-url-without-opt-in");
+async function runContractValidator({ specPath, baseUrl, settings, importFn, now, hardDeadline }) {
+  if (/\.graphql$/i.test(specPath)) {
+    return validateGraphqlSchema(specPath, baseUrl, {
+      graphqlEndpoint: settings.graphqlEndpoint || "/graphql",
+      timeoutMs: settings.timeoutMs,
+      now,
+      hardDeadline,
+    });
   }
+  return validateOpenApiSpec(specPath, baseUrl, {
+    allowMutatingMethods: settings.allowMutatingMethods,
+    maxOperations: settings.maxOperations,
+    timeoutMs: settings.timeoutMs,
+    importFn,
+    now,
+    hardDeadline,
+  });
+}
 
-  // Budget
-  const budgetMs = (config.runtimeBudgets && config.runtimeBudgets.contractMaxMs) || 300000;
-  const hardDeadline = t0 + budgetMs;
+function resolveContractVerdict(result, fail) {
+  if (result.budgetExceeded) return "budget-exceeded";
+  if (result.error) return "error";
+  if (fail > 0) return "fail";
+  if (result.skipped) return "skipped";
+  return "pass";
+}
 
-  // ── Dispatch to sub-validator ──────────────────────────────────
-  const isGraphql = /\.graphql$/i.test(specPath);
-  let result;
+function writeContractArtifact(projectDir, runId, report) {
+  const artifactDir = ensureScannerArtifactDir(projectDir, runId, "contract");
+  if (!artifactDir) return artifactDir;
+  seedArtifactsGitignore(projectDir);
   try {
-    if (isGraphql) {
-      result = await validateGraphqlSchema(specPath, baseUrl, {
-        graphqlEndpoint: settings.graphqlEndpoint || "/graphql",
-        timeoutMs: settings.timeoutMs,
-        now,
-        hardDeadline,
-      });
-    } else {
-      result = await validateOpenApiSpec(specPath, baseUrl, {
-        allowMutatingMethods: settings.allowMutatingMethods,
-        maxOperations: settings.maxOperations,
-        timeoutMs: settings.timeoutMs,
-        importFn,
-        now,
-        hardDeadline,
-      });
-    }
-  } catch (err) {
-    const durationMs = now() - t0;
-    return {
-      ...base,
-      verdict: "error",
-      error: err.message || String(err),
-      pass: 0,
-      fail: 0,
-      durationMs,
-      completedAt: new Date(now()).toISOString(),
-    };
-  }
+    writeFileSync(
+      pathResolve(artifactDir, "report.json"),
+      JSON.stringify(report, null, 2) + "\n",
+      "utf-8",
+    );
+  } catch { /* best-effort */ }
+  return artifactDir;
+}
 
-  // ── Build result frame ─────────────────────────────────────────
+function resolveContractContext(ctx) {
+  const {
+    config = {},
+    projectDir,
+    runId,
+    sliceRef = null,
+    importFn = (spec) => import(spec),
+    now = () => Date.now(),
+    env = process.env,
+  } = ctx || {};
+  return { config, projectDir, runId, sliceRef, importFn, now, env };
+}
+
+function isContractDisabled(scannerConfig) {
+  return scannerConfig === false || (scannerConfig && scannerConfig.enabled === false);
+}
+
+function buildContractErrorFrame(base, now, t0, err) {
+  return {
+    ...base,
+    verdict: "error",
+    error: err.message || String(err),
+    pass: 0,
+    fail: 0,
+    durationMs: now() - t0,
+    completedAt: new Date(now()).toISOString(),
+  };
+}
+
+function buildContractResult({ base, now, t0, projectDir, runId, specPath, baseUrl, result }) {
+  const isGraphql = /\.graphql$/i.test(specPath);
   const violations = result.violations || [];
   const pass = result.passed || 0;
   const fail = result.failed || 0;
-
-  let verdict;
-  if (result.budgetExceeded) verdict = "budget-exceeded";
-  else if (result.error) verdict = "error";
-  else if (fail > 0) verdict = "fail";
-  else if (result.skipped) verdict = "skipped";
-  else verdict = "pass";
-
-  const durationMs = now() - t0;
-
-  // Write artifact
-  const artifactDir = ensureScannerArtifactDir(projectDir, runId, "contract");
-  if (artifactDir) {
-    seedArtifactsGitignore(projectDir);
-    try {
-      writeFileSync(
-        pathResolve(artifactDir, "report.json"),
-        JSON.stringify({
-          scanner: "contract",
-          startedAt: base.startedAt,
-          specPath,
-          specType: isGraphql ? "graphql" : "openapi",
-          baseUrl,
-          violations,
-          verdict,
-          pass,
-          fail,
-        }, null, 2) + "\n",
-        "utf-8",
-      );
-    } catch { /* best-effort */ }
-  }
+  const verdict = resolveContractVerdict(result, fail);
+  const specType = isGraphql ? "graphql" : "openapi";
+  const artifactDir = writeContractArtifact(projectDir, runId, {
+    scanner: "contract",
+    startedAt: base.startedAt,
+    specPath,
+    specType,
+    baseUrl,
+    violations,
+    verdict,
+    pass,
+    fail,
+  });
 
   return {
     ...base,
     verdict,
     specPath,
-    specType: isGraphql ? "graphql" : "openapi",
+    specType,
     pass,
     fail,
     skipped: 0,
     violations,
     violationCount: violations.length,
-    durationMs,
+    durationMs: now() - t0,
     artifactDir,
     completedAt: new Date(now()).toISOString(),
     ...(result.truncated ? { details: { truncated: true } } : {}),
     ...(result.reason ? { reason: result.reason } : {}),
   };
+}
+
+export async function runContractScan(ctx) {
+  const contractCtx = resolveContractContext(ctx);
+  const t0 = contractCtx.now();
+  const base = {
+    scanner: "contract",
+    sliceRef: contractCtx.sliceRef,
+    startedAt: new Date(t0).toISOString(),
+  };
+  const scannerConfig = contractCtx.config.scanners?.contract;
+  if (isContractDisabled(scannerConfig)) {
+    return createContractSkippedFrame(base, contractCtx.now, "scanner-disabled");
+  }
+
+  const settings = resolveContractSettings(scannerConfig);
+  const specPath = findSpec(contractCtx.projectDir, settings.specPath);
+  if (!specPath) return createContractSkippedFrame(base, contractCtx.now, "no-spec-found");
+
+  const baseUrl = resolveContractBaseUrl(settings, contractCtx.config, contractCtx.env);
+  if (!baseUrl) return createContractSkippedFrame(base, contractCtx.now, "url-not-configured");
+  if (looksLikeProduction(baseUrl) && !settings.allowProduction) {
+    return createContractSkippedFrame(base, contractCtx.now, "production-url-without-opt-in");
+  }
+
+  const hardDeadline = t0 + ((contractCtx.config.runtimeBudgets && contractCtx.config.runtimeBudgets.contractMaxMs) || 300000);
+  try {
+    const result = await runContractValidator({
+      specPath,
+      baseUrl,
+      settings,
+      importFn: contractCtx.importFn,
+      now: contractCtx.now,
+      hardDeadline,
+    });
+    return buildContractResult({
+      base,
+      now: contractCtx.now,
+      t0,
+      projectDir: contractCtx.projectDir,
+      runId: contractCtx.runId,
+      specPath,
+      baseUrl,
+      result,
+    });
+  } catch (err) {
+    return buildContractErrorFrame(base, contractCtx.now, t0, err);
+  }
 }
 
 /**

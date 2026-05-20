@@ -46,9 +46,10 @@ import {
   handleStatus,
 } from "../tempering.mjs";
 import { TOOL_METADATA } from "../capabilities.mjs";
+import { SERVER_COMBINED_SRC } from "./helpers/server-combined-src.mjs";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
-const serverSrc = readFileSync(resolve(__dirname, "..", "server.mjs"), "utf-8");
+const serverSrc = SERVER_COMBINED_SRC;
 const toolsJson = JSON.parse(readFileSync(resolve(__dirname, "..", "tools.json"), "utf-8"));
 
 function makeTempProject() {
@@ -653,7 +654,7 @@ describe("forge_tempering_scan + forge_tempering_status schema + wiring", () => 
   });
 
   it("server.mjs wires emitToolTelemetry on both tools", () => {
-    expect(serverSrc).toMatch(/emitToolTelemetry\(\s*"forge_tempering_scan"/);
-    expect(serverSrc).toMatch(/emitToolTelemetry\(\s*"forge_tempering_status"/);
+    expect(serverSrc).toMatch(/emitToolTelemetry\(\s*\{\s*toolName:\s*"forge_tempering_scan"/);
+    expect(serverSrc).toMatch(/emitToolTelemetry\(\s*\{\s*toolName:\s*"forge_tempering_status"/);
   });
 });

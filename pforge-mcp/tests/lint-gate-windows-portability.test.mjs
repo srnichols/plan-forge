@@ -83,6 +83,28 @@ describe("lintGateCommands — W-rule detection", () => {
     expect(w4).toBeDefined();
   });
 
+  it("W5: detects nested \\\" inside node -e command", () => {
+    // Pattern proven to break on Windows: node -e "if(!shim.includes(\"./X.mjs\"))..."
+    const result = lintGateCommands(makePlan('node -e "if(!s.includes(\\"./X.mjs\\"))throw 0"'));
+    const w5 = [...result.warnings, ...result.errors].find(f => f.ruleId === "W5");
+    expect(w5).toBeDefined();
+    expect(w5.ruleId).toBe("W5");
+    expect(w5.severity).toBe("warn");
+    expect(w5.rule).toBe("node-e-nested-double-quote");
+  });
+
+  it("W5: does not fire on node -e with only single quotes inside", () => {
+    const result = lintGateCommands(makePlan("node -e \"if(!s.includes('./X.mjs'))throw 0\""));
+    const w5 = [...result.warnings, ...result.errors].find(f => f.ruleId === "W5");
+    expect(w5).toBeUndefined();
+  });
+
+  it("W5: does not fire on plain npx/node commands without -e", () => {
+    const result = lintGateCommands(makePlan('npx vitest run tests/foo.test.mjs'));
+    const w5 = [...result.warnings, ...result.errors].find(f => f.ruleId === "W5");
+    expect(w5).toBeUndefined();
+  });
+
   it("clean gate emits no W-rule findings", () => {
     const result = lintGateCommands(makePlan('npx --prefix pforge-mcp vitest run pforge-mcp/tests/example.test.mjs'));
     expect(wFindings(result)).toHaveLength(0);
@@ -210,6 +232,13 @@ describe("lintGateCommands — strict mode (PFORGE_GATE_LINT_STRICT=1)", () => {
     const w2 = result.errors.find(f => f.ruleId === "W2");
     expect(w2).toBeDefined();
     expect(w2.severity).toBe("error");
+  });
+
+  it("W5 is promoted to error in strict mode", () => {
+    const result = lintGateCommands(makePlan('node -e "if(!s.includes(\\"./X.mjs\\"))throw 0"'));
+    const w5 = result.errors.find(f => f.ruleId === "W5");
+    expect(w5).toBeDefined();
+    expect(w5.severity).toBe("error");
   });
 
   it("strict mode W-rule error causes passed=false", () => {

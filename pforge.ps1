@@ -105,6 +105,7 @@ function Show-Help {
     Write-Host "  testbed-happypath Run all happy-path testbed scenarios sequentially with aggregated pass/fail summary"
     Write-Host "  migrate-memory    Migrate legacy .forge/memory/ entries into the L2 brain store"
     Write-Host "  drain-memory      Drain pending OpenBrain queue records to the configured OpenBrain server"
+    Write-Host "  forge-home-cleanup Archive ephemeral .forge/ files (logs, tmp, release notes) and prune old archive slots"
     Write-Host "  mcp-call <tool>   Invoke any MCP tool by name (e.g. forge_crucible_list) via the local MCP server"
     Write-Host "  tour              Guided walkthrough of your installed Plan Forge files"
     Write-Host "  hammer-fm         Run Forge-Master hammer harness against a live dashboard (see: pforge hammer-fm --help)"
@@ -1603,7 +1604,7 @@ function Invoke-Update {
     # Update shared instruction files
     $srcSharedInstr = Join-Path $sourcePath ".github/instructions"
     $dstInstr = Join-Path $RepoRoot ".github/instructions"
-    $sharedInstructions = @("architecture-principles.instructions.md", "git-workflow.instructions.md", "ai-plan-hardening-runbook.instructions.md", "self-repair-reporting.instructions.md", "status-reporting.instructions.md", "context-fuel.instructions.md")
+    $sharedInstructions = @("aci-design.instructions.md", "architecture-principles.instructions.md", "clean-code.instructions.md", "git-workflow.instructions.md", "ai-plan-hardening-runbook.instructions.md", "security.instructions.md", "self-repair-reporting.instructions.md", "status-reporting.instructions.md", "testing.instructions.md", "context-fuel.instructions.md")
     if (Test-Path $srcSharedInstr) {
         foreach ($instrName in $sharedInstructions) {
             $srcFile = Join-Path $srcSharedInstr $instrName
@@ -3423,19 +3424,19 @@ function Invoke-Smith {
 
     if ($hasHookFiles -or $hookConfig -or $hooksJsonConfig) {
         Write-Host "Lifecycle Hooks:" -ForegroundColor Cyan
-        $coreHooks = @("SessionStart", "PreToolUse", "PostToolUse", "Stop")
-        $liveGuardHooks = @("PostSlice", "PreAgentHandoff", "PreDeploy")
-        $allExpectedHooks = $coreHooks + $liveGuardHooks
-
-        # camelCase mapping for .forge.json config keys
-        $configKeyMap = @{
-            "SessionStart"     = "sessionStart"
-            "PreToolUse"       = "preToolUse"
-            "PostToolUse"      = "postToolUse"
-            "Stop"             = "stop"
-            "PostSlice"        = "postSlice"
-            "PreAgentHandoff"  = "preAgentHandoff"
-            "PreDeploy"        = "preDeploy"
+        $enumsCli = Join-Path $RepoRoot "pforge-mcp/bin/enums-cli.mjs"
+        if (Test-Path $enumsCli) {
+            $allExpectedHooks = @(node $enumsCli --enum HOOK_PASCAL 2>$null)
+            $hookNamesJson = node $enumsCli --enum HOOK_NAMES --format json 2>$null
+            $hookNamesObj  = $hookNamesJson | ConvertFrom-Json
+            $configKeyMap  = @{}
+            foreach ($prop in $hookNamesObj.PSObject.Properties) {
+                $configKeyMap[$prop.Name] = $prop.Value
+            }
+        } else {
+            # Fallback when pforge-mcp/bin/enums-cli.mjs is not present
+            $allExpectedHooks = @("SessionStart","PreToolUse","PostToolUse","Stop","PreDeploy","PostSlice","PreAgentHandoff","PostRun")
+            $configKeyMap = @{ SessionStart="sessionStart"; PreToolUse="preToolUse"; PostToolUse="postToolUse"; Stop="stop"; PreDeploy="preDeploy"; PostSlice="postSlice"; PreAgentHandoff="preAgentHandoff"; PostRun="postRun" }
         }
 
         $hookFiles = @()
@@ -4159,6 +4160,18 @@ function Invoke-RunPlan {
         }
         if ($Arguments[$i] -eq '--only-slices' -and ($i + 1) -lt $Arguments.Count) {
             $onlySlices = $Arguments[$i + 1]
+        }
+    }
+
+    if ($quorumArg -like '--quorum=*') {
+        $quorumVal = $quorumArg.Substring(9)
+        $enumsCli = Join-Path $RepoRoot "pforge-mcp/bin/enums-cli.mjs"
+        if (Test-Path $enumsCli) {
+            $validModes = @(node $enumsCli --enum QUORUM_MODES 2>$null)
+            if ($validModes.Count -gt 0 -and $quorumVal -notin $validModes) {
+                Write-Host "ERROR: Invalid --quorum mode '$quorumVal'. Valid: $($validModes -join ', ')" -ForegroundColor Red
+                exit 1
+            }
         }
     }
 
@@ -5473,7 +5486,268 @@ function Invoke-MigrateMemory {
     }
 }
 
-# ─── Command: mcp-call ─────────────────────────────────────────────────
+# ─── Command: forge-home-cleanup (Issue #203) ──────────────────────────
+# Moves ephemeral .forge/ files (logs, tmp, release-notes, meta-bug drafts)
+# to .forge/archive/<YYYY-MM>/ and optionally prunes old archive slots.
+#
+# Usage:
+#   pforge forge-home-cleanup [--dry-run] [--no-confirm] [--max-age-days=90]
+function Invoke-ForgeHomeCleanup {
+    $scriptPath = Join-Path $PSScriptRoot "scripts\forge-home-cleanup.mjs"
+    if (-not (Test-Path $scriptPath)) {
+        Write-Host "ERROR: forge-home-cleanup.mjs not found at $scriptPath" -ForegroundColor Red
+        exit 1
+    }
+    $nodeArgs = @($scriptPath) + $Arguments
+    & node @nodeArgs
+    exit $LASTEXITCODE
+}
+
+# ─── Command: local-recall ──────────────────────────────────────────────
+# Manage and inspect the persistent TF-IDF index cache for forge_local_search.
+#
+# Usage:
+#   pforge local-recall status [--path=<dir>]
+#   pforge local-recall warm [--path=<dir>]
+#   pforge local-recall clear [--path=<dir>]
+#
+# Subcommands:
+#   status  Show TF-IDF index cache existence, corpus size, and freshness.
+#   warm    Pre-build the index so the first forge_local_search call has zero rebuild cost.
+#   clear   Delete the cache file to force a fresh rebuild on next search.
+function Invoke-LocalRecall {
+    $sub = if ($Arguments.Count -gt 0) { $Arguments[0] } else { "status" }
+    $rest = @($Arguments | Select-Object -Skip 1)
+
+    $pathArg = ""
+    foreach ($a in $rest) {
+        if ($a -match '^--path=(.+)$') { $pathArg = $Matches[1]; break }
+    }
+
+    $scriptDir = Join-Path $PSScriptRoot "pforge-mcp"
+
+    switch ($sub) {
+        'status' {
+            $statusScript = @"
+import { getIndexStatus } from './local-recall.mjs';
+const cwd = process.argv[2] || process.cwd();
+const s = getIndexStatus(cwd);
+const staleness = s.exists ? (s.stale === true ? 'stale' : s.stale === false ? 'fresh' : 'unknown') : 'n/a';
+console.log('');
+console.log('Local Recall Index Status');
+console.log('=========================');
+console.log('Index exists : ' + (s.exists ? 'yes' : 'no'));
+if (s.exists) {
+  console.log('Version      : ' + (s.version ?? 'unknown'));
+  console.log('Built at     : ' + (s.builtAt ?? 'unknown'));
+  console.log('Corpus size  : ' + (s.corpusSize ?? 0) + ' thoughts');
+  console.log('Freshness    : ' + staleness);
+  console.log('Cache file   : ' + s.cacheFile);
+} else {
+  console.log('');
+  console.log('Run "pforge local-recall warm" to pre-build the index,');
+  console.log('or run "pforge local-recall search <query>" to build it on demand.');
+}
+console.log('');
+"@
+            $tmpFile = [System.IO.Path]::GetTempFileName() -replace '\.tmp$', '.mjs'
+            Set-Content -Path $tmpFile -Value $statusScript -Encoding UTF8
+            try {
+                Push-Location $scriptDir
+                & node $tmpFile $pathArg
+                $exitCode = $LASTEXITCODE
+                Pop-Location
+            } finally {
+                Remove-Item $tmpFile -Force -ErrorAction SilentlyContinue
+            }
+            exit $exitCode
+        }
+        'warm' {
+            $warmScript = @"
+import { searchLocalThoughts, getIndexStatus } from './local-recall.mjs';
+const cwd = process.argv[2] || process.cwd();
+console.log('');
+console.log('Warming TF-IDF index cache...');
+await searchLocalThoughts('_warm_', { cwd, limit: 1, noCache: false });
+const s = getIndexStatus(cwd);
+if (s.exists) {
+  console.log('Index built. ' + (s.corpusSize ?? 0) + ' thought' + ((s.corpusSize ?? 0) === 1 ? '' : 's') + ' indexed.');
+  console.log('Cache file: ' + s.cacheFile);
+} else {
+  console.log('No thoughts found in .forge/ — index not built (empty corpus).');
+}
+console.log('');
+"@
+            $tmpFile = [System.IO.Path]::GetTempFileName() -replace '\.tmp$', '.mjs'
+            Set-Content -Path $tmpFile -Value $warmScript -Encoding UTF8
+            try {
+                Push-Location $scriptDir
+                & node $tmpFile $pathArg
+                $exitCode = $LASTEXITCODE
+                Pop-Location
+            } finally {
+                Remove-Item $tmpFile -Force -ErrorAction SilentlyContinue
+            }
+            exit $exitCode
+        }
+        'clear' {
+            $clearScript = @"
+import { clearPersistedIndex } from './local-recall.mjs';
+const cwd = process.argv[2] || process.cwd();
+clearPersistedIndex(cwd);
+console.log('');
+console.log('TF-IDF index cache cleared.');
+console.log('It will be rebuilt on the next forge_local_search call.');
+console.log('');
+"@
+            $tmpFile = [System.IO.Path]::GetTempFileName() -replace '\.tmp$', '.mjs'
+            Set-Content -Path $tmpFile -Value $clearScript -Encoding UTF8
+            try {
+                Push-Location $scriptDir
+                & node $tmpFile $pathArg
+                $exitCode = $LASTEXITCODE
+                Pop-Location
+            } finally {
+                Remove-Item $tmpFile -Force -ErrorAction SilentlyContinue
+            }
+            exit $exitCode
+        }
+        default {
+            Write-Host "Usage: pforge local-recall <subcommand>" -ForegroundColor Yellow
+            Write-Host ""
+            Write-Host "Subcommands:"
+            Write-Host "  status  Show TF-IDF index cache info (default)"
+            Write-Host "  warm    Pre-build the index for zero-cost first search"
+            Write-Host "  clear   Delete the cache to force a fresh rebuild"
+            Write-Host ""
+            exit 1
+        }
+    }
+}
+
+# Manage and inspect the local semantic-search embedding backend.
+#
+# Usage:
+#   pforge embeddings status [--path=<dir>]
+#   pforge embeddings install
+#
+# Subcommands:
+#   status   Report which backend (tfidf or neural) is active, whether
+#            @xenova/transformers is installed, and local corpus size.
+#   install  Install @xenova/transformers as an optional dependency and
+#            pre-download the all-MiniLM-L6-v2 model.
+function Invoke-Embeddings {
+    $sub = if ($Arguments.Count -gt 0) { $Arguments[0] } else { "status" }
+    $rest = @($Arguments | Select-Object -Skip 1)
+
+    switch ($sub) {
+        'status' {
+            # Resolve optional --path arg
+            $pathArg = ""
+            foreach ($a in $rest) {
+                if ($a -match '^--path=(.+)$') { $pathArg = $Matches[1]; break }
+            }
+            $scriptDir = Join-Path $PSScriptRoot "pforge-mcp"
+            $statusScript = @"
+import { isNeuralEmbeddingAvailable, readLocalThoughts } from './local-recall.mjs';
+import { readFileSync, existsSync } from 'node:fs';
+import { resolve, join } from 'node:path';
+const cwd = process.argv[2] || process.cwd();
+const neural = await isNeuralEmbeddingAvailable();
+let version = null;
+if (neural) {
+  try {
+    const p = join(cwd, 'node_modules', '@xenova', 'transformers', 'package.json');
+    if (existsSync(p)) version = JSON.parse(readFileSync(p,'utf-8')).version ?? null;
+  } catch {}
+}
+const thoughts = readLocalThoughts(cwd);
+let configured = 'auto';
+try {
+  const fj = JSON.parse(readFileSync(resolve(cwd,'.forge','forge.json'),'utf-8'));
+  if (fj?.embeddingBackend) configured = fj.embeddingBackend;
+} catch {}
+const effective = configured === 'tfidf' ? 'tfidf'
+  : configured === 'neural' ? (neural ? 'neural' : 'tfidf')
+  : (neural ? 'neural' : 'tfidf');
+console.log('');
+console.log('Embedding Backend Status');
+console.log('========================');
+console.log('Active backend : ' + effective);
+console.log('Neural avail.  : ' + (neural ? 'yes (v' + (version ?? 'unknown') + ')' : 'no'));
+console.log('Model          : Xenova/all-MiniLM-L6-v2');
+console.log('Corpus size    : ' + thoughts.length + ' thoughts in .forge/');
+console.log('Configured     : ' + configured + ' (in .forge.json embeddingBackend)');
+if (!neural) {
+  console.log('');
+  console.log('To enable neural embeddings:');
+  console.log('  cd pforge-mcp && npm install --save-optional @xenova/transformers');
+}
+console.log('');
+"@
+            $tmpFile = [System.IO.Path]::GetTempFileName() -replace '\.tmp$', '.mjs'
+            Set-Content -Path $tmpFile -Value $statusScript -Encoding UTF8
+            try {
+                $nodeArgs = @("--input-type=module")
+                if ($pathArg) { $nodeArgs += $pathArg }
+                Push-Location $scriptDir
+                $env:NODE_PATH = Join-Path $scriptDir "node_modules"
+                & node $tmpFile $pathArg
+                $exitCode = $LASTEXITCODE
+                Pop-Location
+            } finally {
+                Remove-Item $tmpFile -Force -ErrorAction SilentlyContinue
+            }
+            exit $exitCode
+        }
+        'install' {
+            Write-Host "Installing @xenova/transformers as optional dependency..." -ForegroundColor Cyan
+            $mcpDir = Join-Path $PSScriptRoot "pforge-mcp"
+            Push-Location $mcpDir
+            & npm install --save-optional @xenova/transformers
+            $exitCode = $LASTEXITCODE
+            Pop-Location
+            if ($exitCode -ne 0) {
+                Write-Host "ERROR: npm install failed (exit $exitCode)" -ForegroundColor Red
+                exit $exitCode
+            }
+            Write-Host ""
+            Write-Host "Pre-downloading all-MiniLM-L6-v2 model..." -ForegroundColor Cyan
+            $warmupScript = @"
+import { pipeline } from '@xenova/transformers';
+const embedder = await pipeline('feature-extraction', 'Xenova/all-MiniLM-L6-v2', { quantized: true });
+const out = await embedder('test', { pooling: 'mean', normalize: true });
+console.log('Model ready. Embedding dim: ' + out.data.length);
+"@
+            $tmpFile2 = [System.IO.Path]::GetTempFileName() -replace '\.tmp$', '.mjs'
+            Set-Content -Path $tmpFile2 -Value $warmupScript -Encoding UTF8
+            try {
+                Push-Location $mcpDir
+                & node $tmpFile2
+                $exitCode = $LASTEXITCODE
+                Pop-Location
+            } finally {
+                Remove-Item $tmpFile2 -Force -ErrorAction SilentlyContinue
+            }
+            if ($exitCode -eq 0) {
+                Write-Host "Neural embeddings installed and ready." -ForegroundColor Green
+                Write-Host "Run 'pforge embeddings status' to verify."
+            } else {
+                Write-Host "WARNING: Model warmup failed — embeddings may still work on first use." -ForegroundColor Yellow
+            }
+            exit 0
+        }
+        default {
+            Write-Host "Usage: pforge embeddings <subcommand>" -ForegroundColor Yellow
+            Write-Host ""
+            Write-Host "Subcommands:"
+            Write-Host "  status   Show active embedding backend and corpus size"
+            Write-Host "  install  Install @xenova/transformers for neural embeddings"
+            Write-Host ""
+            exit 1
+        }
+    }
+}
 # Generic proxy for any MCP tool exposed by the running pforge-mcp server
 # on :3100. Covers crucible-*, tempering-*, bug-*, generate-image,
 # run-skill, skill-status, and every future tool without needing a
@@ -6116,8 +6390,25 @@ function Invoke-ForgeMaster {
     switch ($sub) {
         'status' { node $lifecyclePath status }
         'logs'   { node $lifecyclePath logs }
+        'observe' {
+            $observeSub = if ($Arguments.Count -gt 1) { $Arguments[1] } else { "" }
+            $observerPath = Join-Path $RepoRoot "pforge-master/src/observer-loop.mjs"
+            if (-not (Test-Path $observerPath)) {
+                Write-Host "ERROR: observer-loop.mjs not found at $observerPath" -ForegroundColor Red
+                exit 1
+            }
+            switch ($observeSub) {
+                'start'  { node $observerPath start }
+                'stop'   { node $observerPath stop }
+                'status' { node $observerPath status }
+                default  {
+                    Write-Host "Usage: pforge forge-master observe <start|stop|status>" -ForegroundColor Yellow
+                    exit 1
+                }
+            }
+        }
         default  {
-            Write-Host "Usage: pforge forge-master <status|logs>" -ForegroundColor Yellow
+            Write-Host "Usage: pforge forge-master <status|logs|observe>" -ForegroundColor Yellow
             exit 1
         }
     }
@@ -7384,6 +7675,9 @@ switch ($Command) {
     'version-bump' { Invoke-VersionBump }
     'smith'        { Invoke-Smith }
     'testbed-happypath' { Invoke-TestbedHappypath }
+    'forge-home-cleanup' { Invoke-ForgeHomeCleanup }
+    'embeddings'   { Invoke-Embeddings }
+    'local-recall' { Invoke-LocalRecall }
     'migrate-memory' { Invoke-MigrateMemory }
     'drain-memory' { Invoke-DrainMemory }
     'brain'        { Invoke-Brain }

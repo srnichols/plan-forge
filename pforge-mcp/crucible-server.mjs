@@ -17,6 +17,7 @@ import { existsSync, mkdirSync, readdirSync, statSync, writeFileSync } from "nod
 import { resolve, join } from "node:path";
 
 import { loadCrucibleConfig } from "./crucible-config.mjs";
+import { ERROR_CODES } from "./enums.mjs";
 import { inferRepoCommands } from "./crucible-infer.mjs";
 
 import {
@@ -107,7 +108,7 @@ export class CruciblePlanExistsError extends Error {
   constructor({ phaseName, planPath, draftPath }) {
     super(`Plan already exists at ${planPath}. Pass overwrite:true to replace, or use the side-by-side draft at ${draftPath}.`);
     this.name = "CruciblePlanExistsError";
-    this.code = "PLAN_ALREADY_EXISTS";
+    this.code = ERROR_CODES.PLAN_ALREADY_EXISTS.code;
     this.phaseName = phaseName;
     this.planPath = planPath;
     this.draftPath = draftPath;
@@ -123,7 +124,7 @@ export class CrucibleAskMismatchError extends Error {
   constructor({ expected, got }) {
     super(`Question id mismatch: server expected '${expected}' but client sent '${got}'. Re-fetch the next question and retry.`);
     this.name = "CrucibleAskMismatchError";
-    this.code = "ASK_QUESTION_MISMATCH";
+    this.code = ERROR_CODES.ASK_QUESTION_MISMATCH.code;
     this.expected = expected;
     this.got = got;
   }

@@ -77,6 +77,23 @@ describe("synthesizeGateSuggestions — strict-gates enforce override", () => {
     expect(result.suggestions[0].domain).toBe("domain");
   });
 
+  // Phase 51 S0 regression: the synthesised suggestion must NOT use the
+  // broken `bash -c "cd X && ..."` pattern that loses outer quoting through
+  // the Windows cmd→bash shim. It must use the per-line `node -e` pattern
+  // proven by Phase 41 and Phase 51.
+  it("suggested command uses per-line `node -e \"process.chdir(); execSync()\"` pattern, not the broken bash -c chain", () => {
+    const result = synthesizeGateSuggestions({
+      slices: [{ number: 1, title: "Invoice domain service", validationGate: "" }],
+      cwd,
+      config: { mode: "enforce", domains: ["domain", "integration", "controller"] },
+    });
+    const cmd = result.suggestions[0].suggestedCommand;
+    expect(cmd).toMatch(/^node\s+-e\s+/);
+    expect(cmd).toMatch(/process\.chdir/);
+    expect(cmd).toMatch(/execSync/);
+    expect(cmd).not.toMatch(/^bash\s+-c\s+["']cd\s/);
+  });
+
   it("default remains suggest: synthesize without config override uses 'suggest'", () => {
     const result = synthesizeGateSuggestions({
       slices: [{ number: 1, title: "Invoice domain service", validationGate: "" }],

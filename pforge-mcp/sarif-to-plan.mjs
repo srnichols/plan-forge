@@ -166,78 +166,60 @@ function dedupeLocations(result) {
  * @throws {NoFindingsError} when SARIF has no results
  * @throws {ParseError}      when JSON is malformed
  */
-export function sarifToPlan(sarifInput, opts = {}) {
-  const doc = parseSarif(sarifInput);
-  const findings = extractFindings(doc);
-
-  if (findings.length === 0) throw new NoFindingsError();
-
-  // Sort: highest severity score first; tie-break by file path (deterministic output)
+function sortSarifFindings(findings) {
   findings.sort((a, b) => {
     if (b.score !== a.score) return b.score - a.score;
-    const aPath = firstUri(a.result) ?? "";
-    const bPath = firstUri(b.result) ?? "";
-    return aPath.localeCompare(bPath);
+    return (firstUri(a.result) ?? "").localeCompare(firstUri(b.result) ?? "");
   });
+}
 
-  // Severity histogram
+function buildSeverityHistogram(findings) {
   const hist = { critical: 0, high: 0, medium: 0, low: 0 };
-  for (const f of findings) hist[scoreToLabel(f.score)]++;
+  for (const finding of findings) hist[scoreToLabel(finding.score)]++;
+  return hist;
+}
 
-  const now = new Date().toISOString();
-  const source = opts.source ?? "(unknown)";
-  const ts = Date.now();
-  const planName = opts.planName ?? `Phase-SARIF-${ts}-REMEDIATION`;
-
-  const lines = [];
-
-  // ─── Front-matter / header ─────────────────────────────────────────────────
-  lines.push(`# ${planName}`);
-  lines.push("");
-  lines.push(`Source: ${source}`);
-  lines.push(`Generated: ${now}`);
-  lines.push("");
-  lines.push("## Severity Summary");
-  lines.push("");
-  lines.push("| Severity | Count |");
-  lines.push("|----------|-------|");
+function pushSarifHeader(lines, { planName, source, now, hist }) {
+  lines.push(`# ${planName}`, "");
+  lines.push(`Source: ${source}`, `Generated: ${now}`, "");
+  lines.push("## Severity Summary", "", "| Severity | Count |", "|----------|-------|");
   for (const [sev, count] of Object.entries(hist)) {
     lines.push(`| ${sev} | ${count} |`);
   }
+  lines.push("", "## Scope Contract", "");
+  lines.push("Remediate all SARIF findings in severity order.", "");
+}
+
+function pushSarifFinding(lines, finding, index) {
+  const { result, rule, ruleId, score } = finding;
+  const uris = dedupeLocations(result);
+  const firstLoc = result?.locations?.[0]?.physicalLocation;
+  const region = firstLoc?.region;
+  const regionStr = region ? ` line ${region.startLine ?? "?"}` : "";
+  const firstUriStr = firstLoc?.artifactLocation?.uri ?? "(no location in SARIF)";
+  const filesInScope = uris.length > 0 ? uris : ["(no location in SARIF)"];
+  lines.push(`## Slice ${index + 1} — [${ruleId}] ${result?.message?.text ?? "(no message)"}`);
   lines.push("");
-  lines.push("## Scope Contract");
-  lines.push("");
-  lines.push("Remediate all SARIF findings in severity order.");
-  lines.push("");
+  lines.push(`**Severity**: ${scoreToLabel(score)} (score: ${score})`);
+  lines.push(`**Files in scope**: ${filesInScope.join(", ")}`);
+  lines.push(`**Goal**: ${(rule?.shortDescription?.text ?? "(no description)")} — see ${firstUriStr}${regionStr}`);
+  lines.push("**Validation gate**:", "```bash", `echo "TODO: add validation gate for ${ruleId}"`, "```", "");
+}
 
-  // ─── One slice per finding ─────────────────────────────────────────────────
-  for (let i = 0; i < findings.length; i++) {
-    const { result, rule, ruleId, score } = findings[i];
-    const sliceNum = i + 1;
-    const sevLabel = scoreToLabel(score);
-    const msgText = result?.message?.text ?? "(no message)";
-    const shortDesc = rule?.shortDescription?.text ?? "(no description)";
+export function sarifToPlan(sarifInput, opts = {}) {
+  const doc = parseSarif(sarifInput);
+  const findings = extractFindings(doc);
+  if (findings.length === 0) throw new NoFindingsError();
 
-    // Location details
-    const uris = dedupeLocations(result);
-    const firstLoc = result?.locations?.[0]?.physicalLocation;
-    const region = firstLoc?.region;
-    const regionStr = region ? ` line ${region.startLine ?? "?"}` : "";
-    const firstUriStr = firstLoc?.artifactLocation?.uri ?? "(no location in SARIF)";
-    const filesInScope = uris.length > 0 ? uris : ["(no location in SARIF)"];
-
-    lines.push(`## Slice ${sliceNum} — [${ruleId}] ${msgText}`);
-    lines.push("");
-    lines.push(`**Severity**: ${sevLabel} (score: ${score})`);
-    lines.push(`**Files in scope**: ${filesInScope.join(", ")}`);
-    lines.push(`**Goal**: ${shortDesc} — see ${firstUriStr}${regionStr}`);
-    lines.push("**Validation gate**:");
-    lines.push("```bash");
-    lines.push(`echo "TODO: add validation gate for ${ruleId}"`);
-    lines.push("```");
-    lines.push("");
-  }
-
+  sortSarifFindings(findings);
+  const lines = [];
+  pushSarifHeader(lines, {
+    planName: opts.planName ?? `Phase-SARIF-${Date.now()}-REMEDIATION`,
+    source: opts.source ?? "(unknown)",
+    now: new Date().toISOString(),
+    hist: buildSeverityHistogram(findings),
+  });
+  findings.forEach((finding, index) => pushSarifFinding(lines, finding, index));
   return lines.join("\n");
 }
 

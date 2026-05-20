@@ -189,21 +189,7 @@ const OPENBRAIN_COOLDOWN_MS = 300_000;
  * @param {{ cwd: string, openBrainSearchFn?: Function }} opts
  * @returns {{ hits: Array, total: number, truncated: boolean, durationMs: number }}
  */
-export function search(params, opts = {}) {
-  const start = performance.now();
-  const { query, tags = null, since = null, correlationId = null, sources = null } = params;
-  const limit = Math.min(Math.max(params.limit || 50, 1), 200);
-  const cwd = opts.cwd || process.cwd();
-
-  const { tokens } = parseQuery(query);
-  const sinceDate = parseSince(since);
-
-  // Filter L2 sources by requested types
-  const activeSources = sources
-    ? L2_SOURCES.filter((s) => sources.includes(s.source))
-    : L2_SOURCES;
-
-  // Collect all L2 records
+function _collectL2Records(activeSources, cwd, sinceDate, tags) {
   const allRecords = [];
   for (const src of activeSources) {
     const filePaths = src.resolve(cwd);
@@ -214,69 +200,77 @@ export function search(params, opts = {}) {
         try {
           const stat = statSync(fp);
           cacheSet(fp, stat.mtimeMs, records);
-        } catch {
-          // file may have been deleted between resolve and here — skip
-        }
+        } catch { /* file may have been deleted — skip */ }
       }
       for (const rec of records) {
-        // Apply since filter
-        if (sinceDate && rec.timestamp) {
-          const recDate = new Date(rec.timestamp);
-          if (recDate < sinceDate) continue;
-        }
-        // Apply tags filter (ALL must match)
+        if (sinceDate && rec.timestamp && new Date(rec.timestamp) < sinceDate) continue;
         if (tags && tags.length > 0) {
           const recTagsLower = (rec.tags || []).map((t) => String(t).toLowerCase());
-          const allMatch = tags.every((t) => recTagsLower.includes(t.toLowerCase()));
-          if (!allMatch) continue;
+          if (!tags.every((t) => recTagsLower.includes(t.toLowerCase()))) continue;
         }
         allRecords.push(rec);
       }
     }
   }
+  return allRecords;
+}
 
-  // Attempt L3 OpenBrain merge
-  if (opts.openBrainSearchFn && (Date.now() - openBrainFailedAt > OPENBRAIN_COOLDOWN_MS)) {
-    try {
-      const l3Hits = opts.openBrainSearchFn({ query, tags, since });
-      if (Array.isArray(l3Hits)) {
-        const existingCorrelations = new Set(
-          allRecords.filter((r) => r.correlationId).map((r) => r.correlationId)
-        );
-        for (const hit of l3Hits) {
-          // Dedupe by correlationId
-          if (hit.correlationId && existingCorrelations.has(hit.correlationId)) continue;
-          allRecords.push({
-            source: hit.source || "openbrain",
-            recordRef: hit.recordRef || hit.id || "",
-            text: hit.text || hit.content || "",
-            timestamp: hit.timestamp || new Date().toISOString(),
-            tags: hit.tags || [],
-            correlationId: hit.correlationId || "",
-          });
-          if (hit.correlationId) existingCorrelations.add(hit.correlationId);
-        }
-      }
-    } catch {
-      openBrainFailedAt = Date.now();
+function _mergeL3Records({ allRecords, opts, query, tags, since }) {
+  if (!opts.openBrainSearchFn || Date.now() - openBrainFailedAt <= OPENBRAIN_COOLDOWN_MS) return;
+  try {
+    const l3Hits = opts.openBrainSearchFn({ query, tags, since });
+    if (!Array.isArray(l3Hits)) return;
+    const existingCorrelations = new Set(allRecords.filter((r) => r.correlationId).map((r) => r.correlationId));
+    for (const hit of l3Hits) {
+      if (hit.correlationId && existingCorrelations.has(hit.correlationId)) continue;
+      allRecords.push({
+        source: hit.source || "openbrain",
+        recordRef: hit.recordRef || hit.id || "",
+        text: hit.text || hit.content || "",
+        timestamp: hit.timestamp || new Date().toISOString(),
+        tags: hit.tags || [],
+        correlationId: hit.correlationId || "",
+      });
+      if (hit.correlationId) existingCorrelations.add(hit.correlationId);
     }
+  } catch {
+    openBrainFailedAt = Date.now();
   }
+}
 
-  // Score all records
-  const scored = allRecords.map((rec) => ({
-    ...rec,
-    score: scoreRecord(rec, tokens, tags, correlationId),
-  }));
+function _buildEmptyMessage(query, opts) {
+  const { tags, sinceDate, correlationId, sources, activeSources, since } = opts;
+  const filterParts = [];
+  if (tags && tags.length > 0) filterParts.push(`tags=[${tags.join(", ")}]`);
+  if (sinceDate) filterParts.push(`since=${since}`);
+  if (correlationId) filterParts.push(`correlationId=${correlationId}`);
+  if (sources && sources.length > 0) filterParts.push(`sources=[${sources.join(", ")}]`);
+  const filterDesc = filterParts.length > 0 ? ` with filters ${filterParts.join(", ")}` : "";
+  return `No matches for "${query}"${filterDesc}. Try broadening tags, removing the since filter, or omitting correlationId. Searched ${activeSources.length} source type(s).`;
+}
 
-  // Sort by score descending
-  scored.sort((a, b) => b.score - a.score);
+export function search(params, opts = {}) {
+  const start = performance.now();
+  const { query, tags = null, since = null, correlationId = null, sources = null } = params;
+  const limit = Math.min(Math.max(params.limit || 50, 1), 200);
+  const cwd = opts.cwd || process.cwd();
+
+  const { tokens } = parseQuery(query);
+  const sinceDate = parseSince(since);
+
+  const activeSources = sources ? L2_SOURCES.filter((s) => sources.includes(s.source)) : L2_SOURCES;
+  const allRecords = _collectL2Records(activeSources, cwd, sinceDate, tags);
+  _mergeL3Records({ allRecords: allRecords, opts: opts, query: query, tags: tags, since: since });
+
+  const scored = allRecords
+    .map((rec) => ({ ...rec, score: scoreRecord(rec, tokens, tags, correlationId) }))
+    .sort((a, b) => b.score - a.score);
 
   const total = scored.length;
   const truncated = total > limit;
-  const topHits = scored.slice(0, limit);
+  const durationMs = Math.round(performance.now() - start);
 
-  // Build output with snippets
-  const hits = topHits.map((rec) => ({
+  const hits = scored.slice(0, limit).map((rec) => ({
     source: rec.source,
     recordRef: rec.recordRef,
     snippet: buildSnippet(rec.text, tokens),
@@ -285,26 +279,9 @@ export function search(params, opts = {}) {
     timestamp: rec.timestamp,
   }));
 
-  const durationMs = Math.round(performance.now() - start);
-
-  // Phase ACI-HARDENING (Section 13 fix #2): friendly empty-result message
-  // so the agent doesn't confuse "no hits" with "search failed silently".
   if (total === 0) {
-    const filterParts = [];
-    if (tags && tags.length > 0) filterParts.push(`tags=[${tags.join(", ")}]`);
-    if (sinceDate) filterParts.push(`since=${since}`);
-    if (correlationId) filterParts.push(`correlationId=${correlationId}`);
-    if (sources && sources.length > 0) filterParts.push(`sources=[${sources.join(", ")}]`);
-    const filterDesc = filterParts.length > 0 ? ` with filters ${filterParts.join(", ")}` : "";
-    return {
-      hits,
-      total,
-      truncated,
-      durationMs,
-      message: `No matches for "${query}"${filterDesc}. Try broadening tags, removing the since filter, or omitting correlationId. Searched ${activeSources.length} source type(s).`,
-    };
+    return { hits, total, truncated, durationMs, message: _buildEmptyMessage(query, { tags, sinceDate, correlationId, sources, activeSources, since }) };
   }
-
   return { hits, total, truncated, durationMs };
 }
 

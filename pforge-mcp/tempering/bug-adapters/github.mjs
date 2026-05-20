@@ -13,6 +13,7 @@
 import { resolve } from "node:path";
 import { existsSync, readFileSync } from "node:fs";
 import { createHash } from "node:crypto";
+import { ERROR_CODES } from "../../enums.mjs";
 
 // ─── Helpers (exported for tests) ─────────────────────────────────────
 
@@ -61,7 +62,7 @@ export function resolveGitHubToken(config, { execSync, cwd } = {}) {
     } catch { /* gh not installed or not logged in */ }
   }
 
-  return { token: null, error: "NO_TOKEN" };
+  return { token: null, error: ERROR_CODES.NO_TOKEN.code };
 }
 
 /**
@@ -163,7 +164,7 @@ export function buildIssueBody(bug) {
   }
 
   // Full evidence in collapsed block
-  lines.push(
+  lines.push(...[
     "",
     "<details>",
     "<summary>Full evidence JSON</summary>",
@@ -176,7 +177,7 @@ export function buildIssueBody(bug) {
     "",
     "---",
     "*Filed automatically by [Plan Forge Tempering](https://github.com/srnichols/plan-forge)*",
-  );
+  ]);
 
   return lines.join("\n");
 }
@@ -201,7 +202,7 @@ export function buildLabels(bug, config) {
  * Create an issue via the GitHub REST API.
  * @returns {Promise<{ issueNumber: number, url: string } | null>}
  */
-async function createIssueViaRest(token, owner, repo, title, body, labels, { fetch: fetchFn }) {
+async function createIssueViaRest({ token, owner, repo, title, body, labels, fetch: fetchFn }) {
   try {
     const res = await fetchFn(`https://api.github.com/repos/${owner}/${repo}/issues`, {
       method: "POST",
@@ -219,7 +220,7 @@ async function createIssueViaRest(token, owner, repo, title, body, labels, { fet
     const remaining = res.headers?.get?.("x-ratelimit-remaining");
     const resetAt = res.headers?.get?.("x-ratelimit-reset");
     if (res.status === 403 && remaining === "0") {
-      return { error: "RATE_LIMITED", resetAt: resetAt ? new Date(Number(resetAt) * 1000).toISOString() : null };
+      return { error: ERROR_CODES.RATE_LIMITED.code, resetAt: resetAt ? new Date(Number(resetAt) * 1000).toISOString() : null };
     }
 
     if (!res.ok) {
@@ -230,16 +231,16 @@ async function createIssueViaRest(token, owner, repo, title, body, labels, { fet
     return { issueNumber: data.number, url: data.html_url };
   } catch (err) {
     if (err.name === "TimeoutError" || err.name === "AbortError") {
-      return { error: "TIMEOUT" };
+      return { error: ERROR_CODES.TIMEOUT.code };
     }
-    return { error: "NETWORK_ERROR" };
+    return { error: ERROR_CODES.NETWORK_ERROR.code };
   }
 }
 
 /**
  * Create an issue via `gh issue create`. Returns null on any failure.
  */
-function createIssueViaGh(owner, repo, title, body, labels, { execSync: execSyncFn, cwd }) {
+function createIssueViaGh({ owner, repo, title, body, labels, execSync: execSyncFn, cwd }) {
   if (typeof execSyncFn !== "function") return null;
   try {
     const labelArg = labels.map((l) => `--label "${l}"`).join(" ");
@@ -265,7 +266,7 @@ function createIssueViaGh(owner, repo, title, body, labels, { execSync: execSync
 /**
  * Add a comment to an existing issue via REST API.
  */
-async function addComment(token, owner, repo, issueNumber, body, { fetch: fetchFn }) {
+async function addComment({ token, owner, repo, issueNumber, body, fetch: fetchFn }) {
   try {
     const res = await fetchFn(`https://api.github.com/repos/${owner}/${repo}/issues/${issueNumber}/comments`, {
       method: "POST",
@@ -287,9 +288,9 @@ async function addComment(token, owner, repo, issueNumber, body, { fetch: fetchF
     return { commentId: data.id, url: data.html_url };
   } catch (err) {
     if (err.name === "TimeoutError" || err.name === "AbortError") {
-      return { error: "TIMEOUT" };
+      return { error: ERROR_CODES.TIMEOUT.code };
     }
-    return { error: "NETWORK_ERROR" };
+    return { error: ERROR_CODES.NETWORK_ERROR.code };
   }
 }
 
@@ -312,12 +313,12 @@ export async function registerBug(bug, config, { fetch: fetchFn = globalThis.fet
 
     const tokenResult = resolveGitHubToken(config, { execSync: execSyncFn, cwd });
     if (!tokenResult.token) {
-      return { provider: "github", ok: false, error: tokenResult.error || "NO_TOKEN" };
+      return { provider: "github", ok: false, error: tokenResult.error || ERROR_CODES.NO_TOKEN.code };
     }
 
     const repoInfo = resolveGitHubRepo(config, { execSync: execSyncFn, cwd });
     if (!repoInfo) {
-      return { provider: "github", ok: false, error: "NO_REPO" };
+      return { provider: "github", ok: false, error: ERROR_CODES.NO_REPO.code };
     }
 
     const title = `[Tempering] ${bug.scanner}: ${bug.evidence?.testName || bug.bugId}`;
@@ -325,19 +326,27 @@ export async function registerBug(bug, config, { fetch: fetchFn = globalThis.fet
     const labels = buildLabels(bug, config);
 
     // Try gh CLI first, fall back to REST
-    let result = createIssueViaGh(repoInfo.owner, repoInfo.repo, title, body, labels, { execSync: execSyncFn, cwd });
+    let result = createIssueViaGh({ owner: repoInfo.owner, repo: repoInfo.repo, title, body, labels, execSync: execSyncFn, cwd });
 
     if (!result) {
-      result = await createIssueViaRest(tokenResult.token, repoInfo.owner, repoInfo.repo, title, body, labels, { fetch: fetchFn });
+      result = await createIssueViaRest({
+        token: tokenResult.token,
+        owner: repoInfo.owner,
+        repo: repoInfo.repo,
+        title,
+        body,
+        labels,
+        fetch: fetchFn,
+      });
     }
 
     if (!result || result.error) {
-      return { provider: "github", ok: false, error: result?.error || "CREATE_FAILED" };
+      return { provider: "github", ok: false, error: result?.error || ERROR_CODES.CREATE_FAILED.code };
     }
 
     return { provider: "github", ok: true, issueNumber: result.issueNumber, url: result.url };
   } catch {
-    return { provider: "github", ok: false, error: "UNEXPECTED" };
+    return { provider: "github", ok: false, error: ERROR_CODES.UNEXPECTED.code };
   }
 }
 
@@ -349,22 +358,22 @@ export async function updateBugStatus(bug, config, { fetch: fetchFn = globalThis
   try {
     const issueNumber = bug.externalRef?.issueNumber;
     if (!issueNumber) {
-      return { provider: "github", ok: false, error: "NO_ISSUE_NUMBER" };
+      return { provider: "github", ok: false, error: ERROR_CODES.NO_ISSUE_NUMBER.code };
     }
 
     const tokenResult = resolveGitHubToken(config, { execSync: execSyncFn, cwd });
     if (!tokenResult.token) {
-      return { provider: "github", ok: false, error: tokenResult.error || "NO_TOKEN" };
+      return { provider: "github", ok: false, error: tokenResult.error || ERROR_CODES.NO_TOKEN.code };
     }
 
     const repoInfo = resolveGitHubRepo(config, { execSync: execSyncFn, cwd });
     if (!repoInfo) {
-      return { provider: "github", ok: false, error: "NO_REPO" };
+      return { provider: "github", ok: false, error: ERROR_CODES.NO_REPO.code };
     }
 
     const body = `## Status Update\n\n**New Status:** \`${bug.status}\`\n**Updated:** ${bug.updatedAt || new Date().toISOString()}\n\n${bug.statusHistory?.at(-1)?.note ? `**Note:** ${bug.statusHistory.at(-1).note}` : ""}`;
 
-    const result = await addComment(tokenResult.token, repoInfo.owner, repoInfo.repo, issueNumber, body, { fetch: fetchFn });
+    const result = await addComment({ token: tokenResult.token, owner: repoInfo.owner, repo: repoInfo.repo, issueNumber, body, fetch: fetchFn });
 
     if (result.error) {
       return { provider: "github", ok: false, error: result.error };
@@ -372,7 +381,7 @@ export async function updateBugStatus(bug, config, { fetch: fetchFn = globalThis
 
     return { provider: "github", ok: true, commentId: result.commentId, url: result.url };
   } catch {
-    return { provider: "github", ok: false, error: "UNEXPECTED" };
+    return { provider: "github", ok: false, error: ERROR_CODES.UNEXPECTED.code };
   }
 }
 
@@ -384,23 +393,23 @@ export async function commentValidatedFix(bug, config, { fetch: fetchFn = global
   try {
     const issueNumber = bug.externalRef?.issueNumber;
     if (!issueNumber) {
-      return { provider: "github", ok: false, error: "NO_ISSUE_NUMBER" };
+      return { provider: "github", ok: false, error: ERROR_CODES.NO_ISSUE_NUMBER.code };
     }
 
     const tokenResult = resolveGitHubToken(config, { execSync: execSyncFn, cwd });
     if (!tokenResult.token) {
-      return { provider: "github", ok: false, error: tokenResult.error || "NO_TOKEN" };
+      return { provider: "github", ok: false, error: tokenResult.error || ERROR_CODES.NO_TOKEN.code };
     }
 
     const repoInfo = resolveGitHubRepo(config, { execSync: execSyncFn, cwd });
     if (!repoInfo) {
-      return { provider: "github", ok: false, error: "NO_REPO" };
+      return { provider: "github", ok: false, error: ERROR_CODES.NO_REPO.code };
     }
 
     const scanRef = bug.validationHistory?.at(-1)?.scanRef || "";
     const body = `## 🔥 Tempering validated this fix\n\n**Bug ID:** \`${bug.bugId}\`\n**Scanner:** ${bug.scanner}\n**Validated at:** ${new Date().toISOString()}\n${scanRef ? `**Scan Reference:** \`${scanRef}\`` : ""}\n\nThe tempering subsystem has confirmed this bug is fixed. The issue remains open for human review.`;
 
-    const result = await addComment(tokenResult.token, repoInfo.owner, repoInfo.repo, issueNumber, body, { fetch: fetchFn });
+    const result = await addComment({ token: tokenResult.token, owner: repoInfo.owner, repo: repoInfo.repo, issueNumber, body, fetch: fetchFn });
 
     if (result.error) {
       return { provider: "github", ok: false, error: result.error };
@@ -408,7 +417,7 @@ export async function commentValidatedFix(bug, config, { fetch: fetchFn = global
 
     return { provider: "github", ok: true, commentId: result.commentId, url: result.url };
   } catch {
-    return { provider: "github", ok: false, error: "UNEXPECTED" };
+    return { provider: "github", ok: false, error: ERROR_CODES.UNEXPECTED.code };
   }
 }
 
@@ -422,17 +431,17 @@ export async function syncStatusFromProvider(bugId, config, { fetch: fetchFn = g
     const bug = typeof bugId === "object" ? bugId : { bugId };
     const issueNumber = bug.externalRef?.issueNumber;
     if (!issueNumber) {
-      return { provider: "github", ok: false, error: "NO_ISSUE_NUMBER" };
+      return { provider: "github", ok: false, error: ERROR_CODES.NO_ISSUE_NUMBER.code };
     }
 
     const tokenResult = resolveGitHubToken(config, { execSync: execSyncFn, cwd });
     if (!tokenResult.token) {
-      return { provider: "github", ok: false, error: tokenResult.error || "NO_TOKEN" };
+      return { provider: "github", ok: false, error: tokenResult.error || ERROR_CODES.NO_TOKEN.code };
     }
 
     const repoInfo = resolveGitHubRepo(config, { execSync: execSyncFn, cwd });
     if (!repoInfo) {
-      return { provider: "github", ok: false, error: "NO_REPO" };
+      return { provider: "github", ok: false, error: ERROR_CODES.NO_REPO.code };
     }
 
     const res = await fetchFn(`https://api.github.com/repos/${repoInfo.owner}/${repoInfo.repo}/issues/${issueNumber}`, {
@@ -458,9 +467,9 @@ export async function syncStatusFromProvider(bugId, config, { fetch: fetchFn = g
     };
   } catch (err) {
     if (err.name === "TimeoutError" || err.name === "AbortError") {
-      return { provider: "github", ok: false, error: "TIMEOUT" };
+      return { provider: "github", ok: false, error: ERROR_CODES.TIMEOUT.code };
     }
-    return { provider: "github", ok: false, error: "NETWORK_ERROR" };
+    return { provider: "github", ok: false, error: ERROR_CODES.NETWORK_ERROR.code };
   }
 }
 
@@ -530,7 +539,7 @@ export function computeMetaBugHash(bugClass, title) {
  *
  * @returns {Promise<{ issueNumber: number, url: string } | null>}
  */
-async function findExistingMetaBug(hash, owner, repo, token, { execSync: execSyncFn, fetch: fetchFn, cwd }) {
+async function findExistingMetaBug({ hash, owner, repo, token, execSync: execSyncFn, fetch: fetchFn, cwd }) {
   // 1. Try gh CLI
   if (typeof execSyncFn === "function") {
     try {
@@ -621,6 +630,53 @@ function buildMetaBugBody({ bugClass, symptom, workaround, filePaths, slice, pla
  * @param {object} [deps]
  * @returns {Promise<{ ok: boolean, issueNumber?: number, url?: string, deduped?: boolean, hash?: string, error?: string }>}
  */
+async function _handleExistingMetaBug({ existing, params, tokenResult, repoInfo, hash, fetchFn }) {
+  const commentParts = [];
+  if (params.workaround) commentParts.push(`## Workaround Applied\n\n${params.workaround}`);
+  if (params.slice || params.plan) {
+    const refs = [];
+    if (params.plan) refs.push(`**Plan**: ${params.plan}`);
+    if (params.slice) refs.push(`**Slice**: ${params.slice}`);
+    commentParts.push(`## Reference\n\n${refs.join("\n")}`);
+  }
+  commentParts.push(`_Duplicate occurrence detected at ${new Date().toISOString()}_`);
+
+  const commentResult = await addComment({
+    token: tokenResult.token,
+    owner: repoInfo.owner,
+    repo: repoInfo.repo,
+    issueNumber: existing.issueNumber,
+    body: commentParts.join("\n\n"),
+    fetch: fetchFn,
+  });
+
+  if (commentResult?.error) {
+    return { ok: false, error: commentResult.error, hash };
+  }
+  return { ok: true, issueNumber: existing.issueNumber, url: existing.url, deduped: true, hash };
+}
+
+async function _createNewMetaBug({ repoInfo, issueTitle, body, labels, tokenResult, execSyncFn, fetchFn, cwd, hash }) {
+  let result = createIssueViaGh({ owner: repoInfo.owner, repo: repoInfo.repo, title: issueTitle, body, labels, execSync: execSyncFn, cwd });
+
+  if (!result) {
+    result = await createIssueViaRest({
+      token: tokenResult.token,
+      owner: repoInfo.owner,
+      repo: repoInfo.repo,
+      title: issueTitle,
+      body,
+      labels,
+      fetch: fetchFn,
+    });
+  }
+
+  if (!result || result.error) {
+    return { ok: false, error: result?.error || ERROR_CODES.CREATE_FAILED.code, hash };
+  }
+  return { ok: true, issueNumber: result.issueNumber, url: result.url, deduped: false, hash };
+}
+
 export async function fileMetaBug(params, config, { execSync: execSyncFn, fetch: fetchFn = globalThis.fetch, cwd } = {}) {
   try {
     const bugClass = params?.class;
@@ -628,19 +684,17 @@ export async function fileMetaBug(params, config, { execSync: execSyncFn, fetch:
     const symptom = params?.symptom;
 
     if (!bugClass || !title || !symptom) {
-      return { ok: false, error: "MISSING_REQUIRED_FIELDS" };
+      return { ok: false, error: ERROR_CODES.MISSING_REQUIRED_FIELDS.code };
     }
 
-    // Resolve token
     const tokenResult = resolveGitHubToken(config, { execSync: execSyncFn, cwd });
     if (!tokenResult.token) {
-      return { ok: false, error: "NO_TOKEN" };
+      return { ok: false, error: ERROR_CODES.NO_TOKEN.code };
     }
 
-    // Resolve repo
     const repoInfo = resolveSelfRepairRepo(config);
     if (!repoInfo?.owner || !repoInfo?.repo) {
-      return { ok: false, error: "NO_REPO" };
+      return { ok: false, error: ERROR_CODES.NO_REPO.code };
     }
 
     const hash = computeMetaBugHash(bugClass, title);
@@ -656,59 +710,18 @@ export async function fileMetaBug(params, config, { execSync: execSyncFn, fetch:
       trajectoryExcerpt: params.trajectoryExcerpt,
     });
 
-    // Dedupe: check for existing open issue with this hash
-    const existing = await findExistingMetaBug(hash, repoInfo.owner, repoInfo.repo, tokenResult.token, {
+    const existing = await findExistingMetaBug({ hash: hash, owner: repoInfo.owner, repo: repoInfo.repo, token: tokenResult.token, ...{
       execSync: execSyncFn,
       fetch: fetchFn,
       cwd,
-    });
+    } });
 
     if (existing) {
-      // Append comment with new workaround + slice ref
-      const commentParts = [];
-      if (params.workaround) commentParts.push(`## Workaround Applied\n\n${params.workaround}`);
-      if (params.slice || params.plan) {
-        const refs = [];
-        if (params.plan) refs.push(`**Plan**: ${params.plan}`);
-        if (params.slice) refs.push(`**Slice**: ${params.slice}`);
-        commentParts.push(`## Reference\n\n${refs.join("\n")}`);
-      }
-      commentParts.push(`_Duplicate occurrence detected at ${new Date().toISOString()}_`);
-
-      const commentResult = await addComment(
-        tokenResult.token,
-        repoInfo.owner,
-        repoInfo.repo,
-        existing.issueNumber,
-        commentParts.join("\n\n"),
-        { fetch: fetchFn },
-      );
-
-      if (commentResult?.error) {
-        return { ok: false, error: commentResult.error, hash };
-      }
-
-      return { ok: true, issueNumber: existing.issueNumber, url: existing.url, deduped: true, hash };
+      return _handleExistingMetaBug({ existing, params, tokenResult, repoInfo, hash, fetchFn });
     }
 
-    // No existing issue — create new one
-    let result = createIssueViaGh(repoInfo.owner, repoInfo.repo, issueTitle, body, labels, {
-      execSync: execSyncFn,
-      cwd,
-    });
-
-    if (!result) {
-      result = await createIssueViaRest(tokenResult.token, repoInfo.owner, repoInfo.repo, issueTitle, body, labels, {
-        fetch: fetchFn,
-      });
-    }
-
-    if (!result || result.error) {
-      return { ok: false, error: result?.error || "CREATE_FAILED", hash };
-    }
-
-    return { ok: true, issueNumber: result.issueNumber, url: result.url, deduped: false, hash };
+    return _createNewMetaBug({ repoInfo, issueTitle, body, labels, tokenResult, execSyncFn, fetchFn, cwd, hash });
   } catch {
-    return { ok: false, error: "UNEXPECTED" };
+    return { ok: false, error: ERROR_CODES.UNEXPECTED.code };
   }
 }

@@ -123,6 +123,56 @@ export function saveAuditConfig(cwd, patch) {
  * @param {Function} [planContext.now] — injectable clock
  * @returns {{ fire: boolean, signals: object }}
  */
+function autoDrainModeResponse(mode, fire, extra = {}) {
+  return { fire, signals: { mode, ...extra } };
+}
+
+function isProductionBlocked(config, env) {
+  return config.forbidProduction && env === "production";
+}
+
+function evaluateAutoDrainSignals({ filesChanged, lastDrainTs, lastVerdict, recentFindingCount, thresholds, now }) {
+  const currentMs = now();
+  const daysSinceLastDrain = lastDrainTs > 0
+    ? (currentMs - lastDrainTs) / (1000 * 60 * 60 * 24)
+    : Infinity;
+  const filesSignal = filesChanged >= thresholds.minFilesChanged;
+  const daysSignal = daysSinceLastDrain >= thresholds.minDaysSinceLastDrain;
+  const findingsSignal = !thresholds.requireFindings || recentFindingCount > 0;
+  const verdictSignal = lastVerdict !== "converged";
+  return {
+    filesSignal,
+    daysSignal,
+    findingsSignal,
+    verdictSignal,
+    signals: {
+      filesChanged,
+      filesThreshold: thresholds.minFilesChanged,
+      daysSinceLastDrain: Math.round(daysSinceLastDrain * 10) / 10,
+      daysThreshold: thresholds.minDaysSinceLastDrain,
+      recentFindingCount,
+      requireFindings: thresholds.requireFindings,
+      lastVerdict,
+    },
+  };
+}
+
+function buildAutoDrainDecision(evaluated) {
+  const fire = (evaluated.filesSignal || evaluated.daysSignal)
+    && evaluated.findingsSignal
+    && evaluated.verdictSignal;
+  return {
+    fire,
+    decision: {
+      filesSignal: evaluated.filesSignal,
+      daysSignal: evaluated.daysSignal,
+      findingsSignal: evaluated.findingsSignal,
+      verdictSignal: evaluated.verdictSignal,
+    },
+    reason: fire ? "threshold signals tripped" : "no drain signals tripped",
+  };
+}
+
 export function shouldAutoDrain(planContext = {}) {
   const {
     cwd = process.cwd(),
@@ -136,66 +186,39 @@ export function shouldAutoDrain(planContext = {}) {
   } = planContext;
 
   const config = preloadedConfig || loadAuditConfig(cwd);
-  const signals = {};
-
-  // Mode: "off" → never fire
   if (config.mode === "off") {
-    return { fire: false, signals: { mode: "off", reason: "audit-loop disabled" } };
+    return autoDrainModeResponse("off", false, { reason: "audit-loop disabled" });
   }
-
-  // Mode: "always" → always fire (unless production)
   if (config.mode === "always") {
-    if (config.forbidProduction && env === "production") {
-      return { fire: false, signals: { mode: "always", blocked: true, reason: "production-forbidden" } };
+    if (isProductionBlocked(config, env)) {
+      return autoDrainModeResponse("always", false, { blocked: true, reason: "production-forbidden" });
     }
-    return { fire: true, signals: { mode: "always", reason: "always-mode active" } };
+    return autoDrainModeResponse("always", true, { reason: "always-mode active" });
   }
 
-  // Mode: "auto" → evaluate thresholds
   const thresholds = config.autoThresholds || AUDIT_DEFAULTS.autoThresholds;
-
-  // Production guard
-  if (config.forbidProduction && env === "production") {
-    return { fire: false, signals: { mode: "auto", blocked: true, reason: "production-forbidden" } };
+  if (isProductionBlocked(config, env)) {
+    return autoDrainModeResponse("auto", false, { blocked: true, reason: "production-forbidden" });
   }
 
-  // Environment guard
   const allowedEnvs = config.environments || AUDIT_DEFAULTS.environments;
   if (!allowedEnvs.includes(env)) {
-    signals.envBlocked = true;
-    return { fire: false, signals: { ...signals, mode: "auto", reason: `env '${env}' not in allowed list` } };
+    return autoDrainModeResponse("auto", false, { envBlocked: true, reason: `env '${env}' not in allowed list` });
   }
 
-  // Signal: files changed
-  signals.filesChanged = filesChanged;
-  signals.filesThreshold = thresholds.minFilesChanged;
-  const filesSignal = filesChanged >= thresholds.minFilesChanged;
+  const evaluated = evaluateAutoDrainSignals({
+    filesChanged,
+    lastDrainTs,
+    lastVerdict,
+    recentFindingCount,
+    thresholds,
+    now,
+  });
+  const decision = buildAutoDrainDecision(evaluated);
 
-  // Signal: days since last drain
-  const currentMs = now();
-  const daysSinceLastDrain = lastDrainTs > 0
-    ? (currentMs - lastDrainTs) / (1000 * 60 * 60 * 24)
-    : Infinity;
-  signals.daysSinceLastDrain = Math.round(daysSinceLastDrain * 10) / 10;
-  signals.daysThreshold = thresholds.minDaysSinceLastDrain;
-  const daysSignal = daysSinceLastDrain >= thresholds.minDaysSinceLastDrain;
-
-  // Signal: recent findings exist
-  signals.recentFindingCount = recentFindingCount;
-  signals.requireFindings = thresholds.requireFindings;
-  const findingsSignal = !thresholds.requireFindings || recentFindingCount > 0;
-
-  // Signal: last drain did not converge (still work to do)
-  signals.lastVerdict = lastVerdict;
-  const verdictSignal = lastVerdict !== "converged";
-
-  // Decision: fire if enough signals trip
-  // Require: (files OR days) AND (findings if required) AND (not recently converged)
-  const fire = (filesSignal || daysSignal) && findingsSignal && verdictSignal;
-
-  signals.mode = "auto";
-  signals.decision = { filesSignal, daysSignal, findingsSignal, verdictSignal };
-  signals.reason = fire ? "threshold signals tripped" : "no drain signals tripped";
-
-  return { fire, signals };
+  return autoDrainModeResponse("auto", decision.fire, {
+    ...evaluated.signals,
+    decision: decision.decision,
+    reason: decision.reason,
+  });
 }

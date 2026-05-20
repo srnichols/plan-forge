@@ -12,6 +12,7 @@ import { resolve, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import { tmpdir } from "node:os";
 import { randomUUID } from "node:crypto";
+import { SERVER_COMBINED_SRC } from "./helpers/server-combined-src.mjs";
 
 import {
   runSubprocess,
@@ -610,11 +611,10 @@ describe("deriveOverallVerdict", () => {
 // ─── Server tool wiring (capabilities + tools.json + server.mjs) ─────
 
 describe("tempering-runner — MCP wiring", () => {
-  const serverSrc = readFileSync(resolve(MCP_ROOT, "server.mjs"), "utf-8");
-  const capSrc = readFileSync(resolve(MCP_ROOT, "capabilities.mjs"), "utf-8");
+  const serverSrc = SERVER_COMBINED_SRC;
 
   it("server.mjs imports runTemperingRun from tempering/runner.mjs", () => {
-    expect(serverSrc).toMatch(/import\s*\{[^}]*runTemperingRun[^}]*\}\s*from\s*"\.\/tempering\/runner\.mjs"/);
+    expect(serverSrc).toMatch(/import\s*\{[^}]*runTemperingRun[^}]*\}\s*from\s*"\.\.?\/tempering\/runner\.mjs"/);
   });
 
   it("server.mjs registers forge_tempering_run handler", () => {
@@ -628,13 +628,15 @@ describe("tempering-runner — MCP wiring", () => {
     expect(after.indexOf('"forge_tempering_run"')).toBeGreaterThan(0);
   });
 
-  it("capabilities.mjs registers forge_tempering_run with addedIn 2.43.0", () => {
-    // capabilities.mjs is the authoritative source; tools.json is
-    // generated from it via `node server.mjs --validate` and is
-    // gitignored, so we assert against capabilities.mjs only.
-    expect(capSrc).toMatch(/forge_tempering_run:\s*\{/);
-    expect(capSrc).toMatch(/addedIn:\s*"2\.43\.0"/);
-    expect(capSrc).toMatch(/intent:\s*\[[^\]]*"tempering"/);
+  it("capabilities.mjs registers forge_tempering_run with addedIn 2.43.0", async () => {
+    // Phase-51 Slice 4: capabilities.mjs is a shim that re-exports
+    // TOOL_METADATA from ./capabilities/tool-metadata.mjs. Assert against
+    // the registry, not the shim file contents.
+    const { TOOL_METADATA } = await import("../capabilities.mjs");
+    const entry = TOOL_METADATA.forge_tempering_run;
+    expect(entry).toBeDefined();
+    expect(entry.addedIn).toBe("2.43.0");
+    expect(entry.intent).toContain("tempering");
   });
 });
 

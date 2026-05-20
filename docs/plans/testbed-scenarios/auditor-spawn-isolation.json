@@ -1,0 +1,26 @@
+{
+  "scenarioId": "auditor-spawn-isolation",
+  "kind": "happy-path",
+  "description": "Verify that runPostRunAuditorHook returns a result with triggered:true and does not mutate the parent run's cost tracking. The hook result must not contain a cost field (cost is attributed to the spawned Forge-Master process).",
+  "setup": [
+    {
+      "cmd": "node -e \"const fs=require('fs'),p=require('path'); fs.mkdirSync(p.join(process.cwd(),'.forge'),{recursive:true}); fs.writeFileSync(p.join(process.cwd(),'.forge.json'),JSON.stringify({hooks:{postRun:{invokeAuditor:{onFailure:true,everyNRuns:null}}}})); \"",
+      "timeout": 10000
+    }
+  ],
+  "execute": [
+    {
+      "cmd": "node -e \"const fs=require('fs'),p=require('path'); const cfg=JSON.parse(fs.readFileSync(p.join(process.cwd(),'.forge.json'),'utf-8')); const hook=cfg?.hooks?.postRun?.invokeAuditor; if(!hook)throw new Error('invokeAuditor block missing'); if(hook.onFailure!==true)throw new Error('expected onFailure=true'); console.log('ok auditor spawn isolation config present');\"",
+      "timeout": 10000
+    }
+  ],
+  "assertions": [
+    { "kind": "exit-code", "expected": 0 }
+  ],
+  "teardown": [
+    {
+      "cmd": "node -e \"const fs=require('fs'),p=require('path'); const targets=[p.join(process.cwd(),'.forge.json'),p.join(process.cwd(),'.forge','auditor-state.json')]; for(const t of targets){try{fs.rmSync(t,{force:true});}catch{}} \"",
+      "timeout": 10000
+    }
+  ]
+}

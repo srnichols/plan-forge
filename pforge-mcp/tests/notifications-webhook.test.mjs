@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach, afterEach, beforeAll, afterAll } from "vitest";
 import { createServer } from "node:http";
 import { webhookAdapter } from "../notifications/webhook-adapter.mjs";
-import { validateAdapterShape } from "../notifications/adapter-contract.mjs";
+import { validateAdapterShape } from "../../pforge-sdk/src/notifications/adapter-contract.mjs";
 
 // ─── Mock HTTP Server ────────────────────────────────────────────────
 

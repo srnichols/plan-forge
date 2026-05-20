@@ -20,6 +20,7 @@
 import { createHash } from "node:crypto";
 import { existsSync, readFileSync } from "node:fs";
 import { resolve } from "node:path";
+import { ERROR_CODES } from "../enums.mjs";
 
 // ─── Labels ──────────────────────────────────────────────────────────────────
 
@@ -75,7 +76,7 @@ export function buildClassifierIssueBody(payload, hash) {
   }
   const evidenceKeys = Object.keys(payload.evidence || {});
   if (evidenceKeys.length > 0) {
-    lines.push(
+    lines.push(...[
       "",
       "<details>",
       "<summary>Evidence JSON</summary>",
@@ -85,7 +86,7 @@ export function buildClassifierIssueBody(payload, hash) {
       "```",
       "",
       "</details>",
-    );
+    ]);
   }
   lines.push(
     "",
@@ -118,7 +119,7 @@ function resolveToken(config, { execSync: execSyncFn, cwd } = {}) {
     } catch { /* gh not available */ }
   }
 
-  return { token: null, error: "NO_TOKEN" };
+  return { token: null, error: ERROR_CODES.NO_TOKEN.code };
 }
 
 function resolveRepo(config, { execSync: execSyncFn, cwd } = {}) {
@@ -141,7 +142,7 @@ function resolveRepo(config, { execSync: execSyncFn, cwd } = {}) {
 
 // ─── Dedup check ─────────────────────────────────────────────────────────────
 
-async function findExisting(hash, owner, repo, token, { execSync: execSyncFn, fetch: fetchFn, cwd }) {
+async function findExisting({ hash, owner, repo, token, execSync: execSyncFn, fetch: fetchFn, cwd }) {
   if (typeof execSyncFn === "function") {
     try {
       const cmd = `gh issue list --repo "${owner}/${repo}" --label "classifier-noise" --state open --search "${hash}" --json number,url,title --limit 10`;
@@ -172,7 +173,7 @@ async function findExisting(hash, owner, repo, token, { execSync: execSyncFn, fe
 
 // ─── Issue creation helpers ──────────────────────────────────────────────────
 
-function createViaGh(owner, repo, title, body, labels, { execSync: execSyncFn, cwd }) {
+function createViaGh({ owner, repo, title, body, labels, execSync: execSyncFn, cwd }) {
   if (typeof execSyncFn !== "function") return null;
   try {
     const labelArg = labels.map((l) => `--label "${l}"`).join(" ");
@@ -188,7 +189,7 @@ function createViaGh(owner, repo, title, body, labels, { execSync: execSyncFn, c
   }
 }
 
-async function createViaRest(token, owner, repo, title, body, labels, { fetch: fetchFn }) {
+async function createViaRest({ token, owner, repo, title, body, labels, fetch: fetchFn }) {
   if (typeof fetchFn !== "function") return null;
   try {
     const res = await fetchFn(`https://api.github.com/repos/${owner}/${repo}/issues`, {
@@ -206,11 +207,11 @@ async function createViaRest(token, owner, repo, title, body, labels, { fetch: f
     const data = await res.json();
     return { issueNumber: data.number, url: data.html_url };
   } catch (err) {
-    return { error: err.name === "TimeoutError" ? "TIMEOUT" : "NETWORK_ERROR" };
+    return { error: err.name === "TimeoutError" ? ERROR_CODES.TIMEOUT.code : ERROR_CODES.NETWORK_ERROR.code };
   }
 }
 
-async function addComment(token, owner, repo, issueNumber, body, { fetch: fetchFn }) {
+async function addComment({ token, owner, repo, issueNumber, body, fetch: fetchFn }) {
   if (typeof fetchFn !== "function") return null;
   try {
     const res = await fetchFn(`https://api.github.com/repos/${owner}/${repo}/issues/${issueNumber}/comments`, {
@@ -255,36 +256,44 @@ export async function fileClassifierIssue(payload, config, {
 
     const tokenResult = resolveToken(config, { execSync: execSyncFn, cwd });
     if (!tokenResult.token) {
-      return { ok: false, error: "NO_TOKEN", message: "No GitHub token — set GITHUB_TOKEN, .forge/secrets.json#github.token, or run `gh auth login`." };
+      return { ok: false, error: ERROR_CODES.NO_TOKEN.code, message: "No GitHub token — set GITHUB_TOKEN, .forge/secrets.json#github.token, or run `gh auth login`." };
     }
 
     const repoInfo = resolveRepo(config, { execSync: execSyncFn, cwd });
     if (!repoInfo) {
-      return { ok: false, error: "NO_REPO", message: "Could not resolve GitHub repository. Set bugRegistry.githubRepo in .forge.json." };
+      return { ok: false, error: ERROR_CODES.NO_REPO.code, message: "Could not resolve GitHub repository. Set bugRegistry.githubRepo in .forge.json." };
     }
 
     // Dedup: check for existing open issue with same hash
-    const existing = await findExisting(hash, repoInfo.owner, repoInfo.repo, tokenResult.token, { execSync: execSyncFn, fetch: fetchFn, cwd });
+    const existing = await findExisting({ hash: hash, owner: repoInfo.owner, repo: repoInfo.repo, token: tokenResult.token, ...{ execSync: execSyncFn, fetch: fetchFn, cwd } });
     if (existing) {
       const commentBody = `## Recurrence\n\nThis classifier noise pattern was observed again.\n\n**Finding:** \`${payload.findingClass || "unknown"}\`\n**Route:** \`${payload.route || ""}\`\n\n*Reported by Plan Forge Tempering — hash \`${hash}\`*`;
-      await addComment(tokenResult.token, repoInfo.owner, repoInfo.repo, existing.issueNumber, commentBody, { fetch: fetchFn });
+      await addComment({ token: tokenResult.token, owner: repoInfo.owner, repo: repoInfo.repo, issueNumber: existing.issueNumber, body: commentBody, fetch: fetchFn });
       return { ok: true, issueNumber: existing.issueNumber, url: existing.url, deduped: true, message: `Commented on existing issue #${existing.issueNumber} (hash ${hash} already open).` };
     }
 
     const title = `[classifier-noise:${hash}] ${payload.findingClass || "unknown"}: ${(payload.reason || "noise pattern").slice(0, 80)}`;
     const body = buildClassifierIssueBody(payload, hash);
 
-    let result = createViaGh(repoInfo.owner, repoInfo.repo, title, body, [...CLASSIFIER_ISSUE_LABELS], { execSync: execSyncFn, cwd });
+    let result = createViaGh({ owner: repoInfo.owner, repo: repoInfo.repo, title, body, labels: [...CLASSIFIER_ISSUE_LABELS], execSync: execSyncFn, cwd });
     if (!result || result.error) {
-      result = await createViaRest(tokenResult.token, repoInfo.owner, repoInfo.repo, title, body, [...CLASSIFIER_ISSUE_LABELS], { fetch: fetchFn });
+      result = await createViaRest({
+        token: tokenResult.token,
+        owner: repoInfo.owner,
+        repo: repoInfo.repo,
+        title,
+        body,
+        labels: [...CLASSIFIER_ISSUE_LABELS],
+        fetch: fetchFn,
+      });
     }
 
     if (!result || result.error) {
-      return { ok: false, error: result?.error || "CREATE_FAILED", message: "GitHub issue creation failed. Check token permissions and repository access." };
+      return { ok: false, error: result?.error || ERROR_CODES.CREATE_FAILED.code, message: "GitHub issue creation failed. Check token permissions and repository access." };
     }
 
     return { ok: true, issueNumber: result.issueNumber, url: result.url, deduped: false, message: `Classifier-noise issue #${result.issueNumber} created.` };
   } catch (err) {
-    return { ok: false, error: "UNEXPECTED", message: err?.message || "Unexpected error in fileClassifierIssue." };
+    return { ok: false, error: ERROR_CODES.UNEXPECTED.code, message: err?.message || "Unexpected error in fileClassifierIssue." };
   }
 }

@@ -1,0 +1,14 @@
+{
+  "comment": "Layer policy for A1 cross-layer import detection. inner dependencies on outer = violation.",
+  "layers": [
+    { "name": "tools", "paths": ["pforge-mcp/forge-tools/**", "pforge-mcp/workers/**"], "level": 1 },
+    { "name": "orchestrator", "paths": ["pforge-mcp/orchestrator.mjs"], "level": 2 },
+    { "name": "server", "paths": ["pforge-mcp/server.mjs"], "level": 3 }
+  ],
+  "crossPackageWhitelist": [
+    "pforge-master/src/config.mjs -> pforge-mcp/enums.mjs",
+    "pforge-master/src/retrieval.mjs -> pforge-mcp/brain.mjs",
+    "pforge-mcp/server.mjs -> pforge-master/src/mcp-client.mjs"
+  ],
+  "flagCrossPackage": true
+}

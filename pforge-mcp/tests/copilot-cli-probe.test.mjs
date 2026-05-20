@@ -229,3 +229,58 @@ describe("detectWorkers — issue #157 honours probe.fallback for gh-copilot", (
     expect(fallbackCalls.length).toBe(0);
   });
 });
+
+// ─── Cache-bust regression (Phase-50 follow-up, 2026-05-19) ──────────────────
+//
+// Symptom that motivated this test:
+//   After a 4+ minute slice completed, the next slice's back-off retry loop
+//   (1s/3s/5s) all returned "No CLI workers available" — even though `gh`
+//   itself was healthy. Root cause: the first failed probe poisoned the
+//   60-second _cliWorkersCache, and the retry loop re-read the cache instead
+//   of re-probing. Fix: orchestrator.mjs calls resetCliWorkersCache() before
+//   each runProbe() inside the back-off loop.
+//
+// These tests pin the cache contract so a future "optimisation" can't
+// silently break the retry-recovery path again.
+
+describe("detectWorkers — _cliWorkersCache TTL & resetCliWorkersCache() contract", () => {
+  beforeEach(() => { vi.clearAllMocks(); resetCliWorkersCache(); });
+  afterEach(() => { vi.restoreAllMocks(); resetCliWorkersCache(); });
+
+  it("(cache-A) failed probe is cached — second call within TTL does NOT re-spawn execSync", () => {
+    mockProbes({ primary: "enoent", fallback: "enoent" });
+    const first = detectWorkers();
+    expect(first.find((w) => w.name === "gh-copilot").available).toBe(false);
+    const callCountAfterFirst = execSync.mock.calls.length;
+    expect(callCountAfterFirst).toBeGreaterThan(0); // probed at least once
+
+    // Second call (no reset) should hit the cache — zero new execSync calls.
+    const second = detectWorkers();
+    expect(second.find((w) => w.name === "gh-copilot").available).toBe(false);
+    expect(execSync.mock.calls.length).toBe(callCountAfterFirst);
+  });
+
+  it("(cache-B) resetCliWorkersCache() forces re-probe — recovers when binary becomes available", () => {
+    // First call: gh-copilot is missing. Result gets cached.
+    mockProbes({ primary: "enoent", fallback: "enoent" });
+    const first = detectWorkers();
+    expect(first.find((w) => w.name === "gh-copilot").available).toBe(false);
+    const callsAfterFirst = execSync.mock.calls.length;
+
+    // Now the binary becomes available (simulates: stale handle released,
+    // transient PATH issue resolved, etc.). Without the reset, the cache
+    // would keep returning "unavailable" for 60 seconds.
+    mockProbes({ primary: "success" });
+
+    // Without reset → cached failure persists, no new execSync calls.
+    const stillCached = detectWorkers();
+    expect(stillCached.find((w) => w.name === "gh-copilot").available).toBe(false);
+    expect(execSync.mock.calls.length).toBe(callsAfterFirst);
+
+    // With reset → re-probes and now sees the binary.
+    resetCliWorkersCache();
+    const recovered = detectWorkers();
+    expect(recovered.find((w) => w.name === "gh-copilot").available).toBe(true);
+    expect(execSync.mock.calls.length).toBeGreaterThan(callsAfterFirst);
+  });
+});

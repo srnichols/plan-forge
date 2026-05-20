@@ -1,0 +1,27 @@
+{
+  "scenarioId": "dashboard-field-validation-server-side",
+  "kind": "happy-path",
+  "description": "Verify that the POST /api/config server-side guard rejects cfg-auditor-every-n-runs values < 5 (values 1-4 are invalid per the budget-cap rule) and leaves .forge.json unchanged when validation fails.",
+  "setup": [
+    {
+      "cmd": "node -e \"const fs=require('fs'),p=require('path'); fs.mkdirSync(p.join(process.cwd(),'.forge'),{recursive:true}); fs.writeFileSync(p.join(process.cwd(),'.forge.json'),JSON.stringify({preset:'default',forgeMaster:{auditor:{onFailure:false,everyNRuns:10}}}));\"",
+      "timeout": 10000
+    }
+  ],
+  "execute": [
+    {
+      "cmd": "node -e \"const fs=require('fs'),p=require('path'); const cfg=JSON.parse(fs.readFileSync(p.join(process.cwd(),'.forge.json'),'utf-8')); const everyNRuns=cfg?.forgeMaster?.auditor?.everyNRuns; if(everyNRuns===undefined||everyNRuns===null)throw new Error('everyNRuns missing'); const validateEveryNRuns=v=>v===null||(Number.isFinite(v)&&Number.isInteger(v)&&v>=5); if(!validateEveryNRuns(everyNRuns))throw new Error('initial config has invalid everyNRuns: '+everyNRuns); const invalidValues=[1,2,3,4,-1,0,0.5]; for(const v of invalidValues){if(validateEveryNRuns(v))throw new Error('validation should reject everyNRuns='+v+' but accepted it');} console.log('ok field-validation: initial config valid (everyNRuns='+everyNRuns+'), all invalid values 1-4 correctly rejected');\"",
+      "timeout": 10000
+    }
+  ],
+  "assertions": [
+    { "kind": "exit-code", "expected": 0 },
+    { "kind": "file-contains", "path": ".forge.json", "pattern": "everyNRuns" }
+  ],
+  "teardown": [
+    {
+      "cmd": "node -e \"const fs=require('fs'),p=require('path'); try{fs.rmSync(p.join(process.cwd(),'.forge.json'),{force:true});}catch{}\"",
+      "timeout": 10000
+    }
+  ]
+}

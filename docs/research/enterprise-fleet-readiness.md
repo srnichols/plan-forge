@@ -748,7 +748,7 @@ This is a phase-worthy item. Recommend creating a Crucible smelt → plan, runni
 
 ### 12.5 Plan drafted (2026-05-06)
 
-Hardened phase plan: **[docs/plans/archive/Phase-COST-TOKEN-COVERAGE-PLAN.md](https://github.com/srnichols/plan-forge/blob/planning/main/docs/plans/archive/Phase-COST-TOKEN-COVERAGE-PLAN.md)** (lives on `planning/main`).
+Hardened phase plan: **[docs/plans/archive/Phase-COST-TOKEN-COVERAGE-PLAN.md](../plans/archive/Phase-COST-TOKEN-COVERAGE-PLAN.md)**.
 
 7 slices, ~$1.00–$2.50 estimated cost, all small code + tests, no docs-heavy work, fully backward-compatible (additive schema, defaulting strategy, positional `priceSlice()` signature preserved). Awaiting hardening (Step 2) and execution. Ready for the Plan Forge pipeline.
 
@@ -770,7 +770,7 @@ Combined effect: cost reports for Anthropic-Opus + OpenAI-with-caching workloads
 - **Direct vendor API keys** (Anthropic, OpenAI, xAI): full benefit from both the missing token classes and the stale-base-rate corrections. Cost-report numbers should now align with vendor invoices.
 - **Azure OpenAI**: cache + reasoning + service_tier fields apply via the OpenAI-compatible parser; AOAI deployment-type uplift (+10% for Data Zone / Regional vs. Global) deferred to the BYO-Azure-OpenAI phase per §11.5.A.
 
-**Plan executed**: [docs/plans/archive/Phase-COST-TOKEN-COVERAGE-PLAN.md](https://github.com/srnichols/plan-forge/blob/planning/main/docs/plans/archive/Phase-COST-TOKEN-COVERAGE-PLAN.md) (lives on `planning/main`). 10 slices in 6 commits (`d123fd3` → Slices 1+2, `a91c211` → Slice 3, then Slices 4–10 in subsequent commits). All validation gates passed. Subscription-CLI regression guard verified ($0.05 unchanged). Mirror-opposite vendor invariant verified (Anthropic excludes cached from `tokens_in`; OpenAI/xAI include cached and subtract before billing). Reasoning tokens verified NOT double-counted.
+**Plan executed**: [docs/plans/archive/Phase-COST-TOKEN-COVERAGE-PLAN.md](../plans/archive/Phase-COST-TOKEN-COVERAGE-PLAN.md). 10 slices in 6 commits (`d123fd3` → Slices 1+2, `a91c211` → Slice 3, then Slices 4–10 in subsequent commits). All validation gates passed. Subscription-CLI regression guard verified ($0.05 unchanged). Mirror-opposite vendor invariant verified (Anthropic excludes cached from `tokens_in`; OpenAI/xAI include cached and subtract before billing). Reasoning tokens verified NOT double-counted.
 
 See [CHANGELOG.md](../../CHANGELOG.md) `[Unreleased]` section "Phase-COST-TOKEN-COVERAGE — Cost-Service Token Coverage" for the full release-note narrative.
 
@@ -860,10 +860,10 @@ Execution order was determined by code-dependency analysis (search subagent, 202
 
 | # | Phase | Slices | Cost | Status | Plan |
 |---|---|---|---|---|---|
-| 1 | Phase-TRAJECTORY-SCHEMA-HARDENING | 6/6 | $0.06 | ✅ on master | [Phase-TRAJECTORY-SCHEMA-HARDENING-PLAN.md](https://github.com/srnichols/plan-forge/blob/planning/main/docs/plans/archive/Phase-TRAJECTORY-SCHEMA-HARDENING-PLAN.md) |
-| 2 | Phase-OTEL-AUDIT-EXPORT | 12/12 | $0.11 | ✅ on master | [Phase-OTEL-AUDIT-EXPORT-PLAN.md](https://github.com/srnichols/plan-forge/blob/planning/main/docs/plans/archive/Phase-OTEL-AUDIT-EXPORT-PLAN.md) |
-| 3 | Phase-FOUNDRY-PROVIDER | 8/8 | $0.08 | ✅ on master | [Phase-FOUNDRY-PROVIDER-PLAN.md](https://github.com/srnichols/plan-forge/blob/planning/main/docs/plans/archive/Phase-FOUNDRY-PROVIDER-PLAN.md) |
-| 4 | Phase-AUTH-RBAC-SCAFFOLD | 8/8 | $0.07 | ✅ on master (slices 1-7 direct, slice 8 via PR #169) | [Phase-AUTH-RBAC-SCAFFOLD-PLAN.md](https://github.com/srnichols/plan-forge/blob/planning/main/docs/plans/archive/Phase-AUTH-RBAC-SCAFFOLD-PLAN.md) |
+| 1 | Phase-TRAJECTORY-SCHEMA-HARDENING | 6/6 | $0.06 | ✅ on master | [docs/plans/archive/Phase-TRAJECTORY-SCHEMA-HARDENING-PLAN.md](../plans/archive/Phase-TRAJECTORY-SCHEMA-HARDENING-PLAN.md) |
+| 2 | Phase-OTEL-AUDIT-EXPORT | 12/12 | $0.11 | ✅ on master | [docs/plans/archive/Phase-OTEL-AUDIT-EXPORT-PLAN.md](../plans/archive/Phase-OTEL-AUDIT-EXPORT-PLAN.md) |
+| 3 | Phase-FOUNDRY-PROVIDER | 8/8 | $0.08 | ✅ on master | [docs/plans/archive/Phase-FOUNDRY-PROVIDER-PLAN.md](../plans/archive/Phase-FOUNDRY-PROVIDER-PLAN.md) |
+| 4 | Phase-AUTH-RBAC-SCAFFOLD | 8/8 | $0.07 | ✅ on master (slices 1-7 direct, slice 8 via PR #169) | [docs/plans/archive/Phase-AUTH-RBAC-SCAFFOLD-PLAN.md](../plans/archive/Phase-AUTH-RBAC-SCAFFOLD-PLAN.md) |
 
 **What each phase shipped:**
 
@@ -902,7 +902,7 @@ Execution order was determined by code-dependency analysis (search subagent, 202
   - **PR #160** (squash `ee378e3`) — Phase-MANUAL-EVIDENCE Phase 1: A/B test evidence diagram, evolution timeline, lessons-learned reference chapter, project-history reference chapter, expansions to what-is-plan-forge.html and how-it-works.html.
 
   **Net result**: Priority A (cost fix + ACI hardening) and Priority B (Week 1 docs) from §14 are now both complete on master. Priority C (OTel exporter, audit log formalization, auth scaffolding, BYO Azure OpenAI) and Priority D (Foundry-informed backlog) are unstarted and remain the natural next chapter of work.
-- **2026-05-06 (Phase-MANUAL-DISCOVERY-LOOP and Phase-MANUAL-INTEGRATIONS plans drafted)** — Two follow-up plans authored in parallel sessions. They now live on the `planning/main` branch at [Phase-MANUAL-DISCOVERY-LOOP-PLAN.md](https://github.com/srnichols/plan-forge/blob/planning/main/docs/plans/archive/Phase-MANUAL-DISCOVERY-LOOP-PLAN.md) and [Phase-MANUAL-INTEGRATIONS-PLAN.md](https://github.com/srnichols/plan-forge/blob/planning/main/docs/plans/archive/Phase-MANUAL-INTEGRATIONS-PLAN.md). Neither has been executed yet. Both extend the manual coverage further.
+- **2026-05-06 (Phase-MANUAL-DISCOVERY-LOOP and Phase-MANUAL-INTEGRATIONS plans drafted)** — Two follow-up plans authored in parallel sessions and now committed to master at [docs/plans/archive/Phase-MANUAL-DISCOVERY-LOOP-PLAN.md](../plans/archive/Phase-MANUAL-DISCOVERY-LOOP-PLAN.md) and [docs/plans/archive/Phase-MANUAL-INTEGRATIONS-PLAN.md](../plans/archive/Phase-MANUAL-INTEGRATIONS-PLAN.md). Neither has been executed yet. Both extend the manual coverage further.
 - **2026-05-07 (Priority C shipped)** — All four §14 Priority-C items plus the §9 Week-4 trajectory-schema item shipped via the Priority-C chain (4 phases, 34 slices, ~3 hours wall time, $0.32 declared / $0.00 wall on gh-copilot subscription). See §14.5 above for per-phase narrative, commits, and operational lessons. Net result: §14 Priority C is complete; §14 Priority D is partially complete (4 of 5 items landed via Phase-FOUNDRY-PROVIDER; only Foundry quota preflight remains open).
 - **2026-05-08 (Priority D fully complete)** — The last open Priority-D item shipped via Phase-FOUNDRY-QUOTA-PREFLIGHT (5 slices, 35.6 min, `$0.05` declared / `$0.00` wall). Adds opt-in AOAI quota preflight via `PFORGE_FOUNDRY_QUOTA_PREFLIGHT=1` env var; reads Cognitive Services control-plane API; compares against slice token estimate; emits warning at slice-start when headroom < 30%; fail-open invariant (control-plane outages never block execution). 34 tests, costForLeg byte-identical, priceSlice signature unchanged. Audit ran clean per the post-DOCS-UX-LIFT discipline (verified each MUST against actual artifacts, not just gate output). **Net result: every §14 line item across Priority A, B, C, and D is shipped.**
 

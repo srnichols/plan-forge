@@ -168,7 +168,7 @@ function readEntry(toolName, key, deps = {}) {
  * @param {string} codeHashSeed
  * @param {{ cwd?: string }} deps
  */
-function writeEntry(toolName, key, payload, codeHashSeed, deps = {}) {
+function writeEntry({ toolName, key, payload, codeHashSeed, deps = {} }) {
   const p = entryPath(toolName, key, deps);
   mkdirSync(resolve(p, ".."), { recursive: true });
   const record = {
@@ -209,7 +209,7 @@ export async function withAnvil(toolFn, opts = {}, deps = {}) {
 
   const result = await toolFn();
 
-  writeEntry(toolName, key, result, codeHashSeed, deps);
+  writeEntry({ toolName: toolName, key: key, payload: result, codeHashSeed: codeHashSeed, deps: deps });
   recordStat(toolName, "miss", deps);
 
   return { ...result, anvil: { hit: false, key } };

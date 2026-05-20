@@ -19,11 +19,13 @@ import { resolve } from "path";
 import { fileURLToPath } from "url";
 
 const __dirname = resolve(fileURLToPath(import.meta.url), "..");
-const src = readFileSync(resolve(__dirname, "..", "orchestrator.mjs"), "utf8");
+// Phase-53 S2: spawnWorker was extracted to orchestrator/worker-spawn.mjs
+// Phase-43 C-series: vars renamed _isWin/_spawnBin/_spawnArg → isWindows/spawnBin/spawnArgs
+//   and extracted into spawnCliWorkerProcess() helper.
+const src = readFileSync(resolve(__dirname, "..", "orchestrator", "worker-spawn.mjs"), "utf8");
 
-// Bug #192 (v2.99.1): the spawn call now uses _spawnBin / _spawnArg locals
-// (Windows routes through cmd.exe instead of shell:true). Extract THAT block.
-const spawnBlock = src.match(/spawn\(_spawnBin, _spawnArg, \{[\s\S]*?\}\);/)?.[0] ?? "";
+// Phase-43: spawn call now uses spawnBin / spawnArgs inside spawnCliWorkerProcess().
+const spawnBlock = src.match(/return spawn\(spawnBin, spawnArgs, \{[\s\S]*?\}\);/)?.[0] ?? "";
 
 describe("spawnWorker — Bug #121 windowsHide + git editor prevention", () => {
   it("(a) spawn options include windowsHide: true", () => {

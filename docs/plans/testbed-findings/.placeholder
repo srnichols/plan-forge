@@ -1,0 +1,6 @@
+# Testbed Findings
+
+This directory stores defect findings produced by `forge_testbed_run`.
+
+Files are JSON, named `<date>-<slug>.json`, and gitignored.
+This placeholder keeps the directory tracked.

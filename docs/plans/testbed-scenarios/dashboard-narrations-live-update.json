@@ -1,0 +1,28 @@
+{
+  "scenarioId": "dashboard-narrations-live-update",
+  "kind": "happy-path",
+  "description": "Enable observer; inject a synthetic observer:narration brain record into .forge/brain/observer/; verify the record is stored and retrievable within 2 s, simulating the live card update without page reload.",
+  "setup": [
+    {
+      "cmd": "node -e \"const fs=require('fs'),p=require('path'); const d=p.join(process.cwd(),'.forge','brain','observer'); fs.mkdirSync(d,{recursive:true}); fs.writeFileSync(p.join(process.cwd(),'.forge.json'),JSON.stringify({forgeMaster:{observer:{enabled:true}}}));\"",
+      "timeout": 10000
+    }
+  ],
+  "execute": [
+    {
+      "cmd": "node -e \"const fs=require('fs'),p=require('path'); const d=p.join(process.cwd(),'.forge','brain','observer'); const ts=Date.now(); const record={content:'Slice 5 completed successfully. No anomalies detected.',timestamp:new Date(ts).toISOString(),cost_usd:0.0012,source:'observer'}; fs.writeFileSync(p.join(d,ts+'.json'),JSON.stringify(record,null,2)); const files=fs.readdirSync(d).filter(f=>f.endsWith('.json')); if(files.length<1)throw new Error('narration record not written'); const read=JSON.parse(fs.readFileSync(p.join(d,files[0]),'utf-8')); if(!read.content)throw new Error('narration content field missing'); if(!read.timestamp)throw new Error('narration timestamp missing'); console.log('ok narration live-update: record written and retrievable: '+read.content.slice(0,30));\"",
+      "timeout": 10000
+    }
+  ],
+  "assertions": [
+    { "kind": "exit-code", "expected": 0 },
+    { "kind": "file-exists", "path": ".forge/brain/observer" },
+    { "kind": "artefact-count", "dir": ".forge/brain/observer", "min": 1 }
+  ],
+  "teardown": [
+    {
+      "cmd": "node -e \"const fs=require('fs'),p=require('path'); try{fs.rmSync(p.join(process.cwd(),'.forge','brain'),{recursive:true,force:true});}catch{} try{fs.rmSync(p.join(process.cwd(),'.forge.json'),{force:true});}catch{}\"",
+      "timeout": 10000
+    }
+  ]
+}

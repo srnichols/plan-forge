@@ -89,43 +89,76 @@ const MAX_LIMIT = 2000;
  * @param {{ cwd: string }} opts
  * @returns {Promise<{ events?: Array, threads?: Array, total: number, truncated: boolean, durationMs: number, windowFrom: string, windowTo: string, sourcesQueried: string[] }>}
  */
-export async function timeline(params = {}, opts = {}) {
-  const start = performance.now();
-  const cwd = opts.cwd || process.cwd();
-  const forgeDir = resolve(cwd, ".forge");
-
-  // Parse time window
-  const now = new Date();
-  const fromDate = params.from ? parseSince(params.from) : new Date(now.getTime() - 86_400_000);
-  const toDate = params.to ? parseSince(params.to) : now;
-  const limit = Math.min(Math.max(params.limit != null ? params.limit : DEFAULT_LIMIT, 0), MAX_LIMIT);
-  const groupBy = params.groupBy || "time";
-  const correlationId = params.correlationId || null;
-  const eventFilters = params.events || [];
-
-  // Determine active sources
-  const allSourceNames = Object.keys(TIMELINE_SOURCES);
-  const sourcesQueried = params.sources
-    ? params.sources.filter((s) => allSourceNames.includes(s))
-    : allSourceNames;
-
-  // Check cache
-  const ck = cacheKey({ ...params, from: fromDate?.toISOString(), to: toDate?.toISOString() });
-  const cached = cacheGet(ck, forgeDir);
-  if (cached) {
-    return { ...cached, durationMs: Math.round(performance.now() - start) };
+function _groupEventsByCorrelation(allEvents, limit) {
+  const threadMap = new Map();
+  for (const evt of allEvents) {
+    const cid = evt.correlationId || "__ungrouped__";
+    if (!threadMap.has(cid)) threadMap.set(cid, []);
+    threadMap.get(cid).push(evt);
   }
+  let threads = [];
+  for (const [cid, events] of threadMap) {
+    threads.push({
+      correlationId: cid,
+      events,
+      firstTs: events[0].ts,
+      lastTs: events[events.length - 1].ts,
+      sources: [...new Set(events.map((e) => e.source))],
+    });
+  }
+  threads.sort((a, b) => (new Date(b.lastTs).getTime() || 0) - (new Date(a.lastTs).getTime() || 0));
+  const truncated = threads.length > limit;
+  return { threads: threads.slice(0, limit), truncated };
+}
 
-  // Read sources in parallel
-  const filters = { from: fromDate, to: toDate, events: eventFilters, correlationId };
-  const sourcePromises = sourcesQueried.map((name) => {
-    const src = TIMELINE_SOURCES[name];
-    if (!src) return Promise.resolve([]);
-    return src.read(cwd, filters).catch(() => []);
-  });
-  const sourceResults = await Promise.all(sourcePromises);
+function _buildTimelineEmptyMessage({ windowFrom, windowTo, correlationId, eventFilters, params }) {
+  const fromHuman = windowFrom || "unset";
+  const toHuman = windowTo || "now";
+  const filterParts = [];
+  if (correlationId) filterParts.push(`correlationId=${correlationId}`);
+  if (eventFilters && eventFilters.length > 0) filterParts.push(`events=[${eventFilters.join(", ")}]`);
+  if (params.sources) filterParts.push(`sources=[${(params.sources || []).join(", ")}]`);
+  const filterDesc = filterParts.length > 0 ? ` with filters ${filterParts.join(", ")}` : "";
+  return `No events in window ${fromHuman} → ${toHuman}${filterDesc}. Try widening the from/to range (default is last 24h), removing event filters, or checking that the project has activity in .forge/.`;
+}
 
-  // Concat + sort by ts ascending (stable)
+function resolveTimelineWindow(params) {
+  const now = new Date();
+  return {
+    fromDate: params.from ? parseSince(params.from) : new Date(now.getTime() - 86_400_000),
+    toDate: params.to ? parseSince(params.to) : now,
+  };
+}
+
+function resolveTimelineSources(params) {
+  const allSourceNames = Object.keys(TIMELINE_SOURCES);
+  return params.sources
+    ? params.sources.filter((source) => allSourceNames.includes(source))
+    : allSourceNames;
+}
+
+function resolveTimelineQuery(params) {
+  const { fromDate, toDate } = resolveTimelineWindow(params);
+  return {
+    fromDate,
+    toDate,
+    limit: Math.min(Math.max(params.limit != null ? params.limit : DEFAULT_LIMIT, 0), MAX_LIMIT),
+    groupBy: params.groupBy || "time",
+    correlationId: params.correlationId || null,
+    eventFilters: params.events || [],
+    sourcesQueried: resolveTimelineSources(params),
+  };
+}
+
+async function readTimelineSourceResults(cwd, sourcesQueried, filters) {
+  return Promise.all(sourcesQueried.map((name) => {
+    const source = TIMELINE_SOURCES[name];
+    if (!source) return Promise.resolve([]);
+    return source.read(cwd, filters).catch(() => []);
+  }));
+}
+
+function flattenTimelineEvents(sourceResults) {
   const allEvents = [];
   for (const events of sourceResults) {
     allEvents.push(...events);
@@ -135,67 +168,79 @@ export async function timeline(params = {}, opts = {}) {
     const tb = new Date(b.ts).getTime() || 0;
     return ta - tb;
   });
+  return allEvents;
+}
 
-  const total = allEvents.length;
-  const windowFrom = fromDate ? fromDate.toISOString() : "";
-  const windowTo = toDate ? toDate.toISOString() : "";
-
-  let result;
-
+function buildTimelinePayload({ groupBy, allEvents, limit, total, windowFrom, windowTo, sourcesQueried }) {
   if (groupBy === "correlation") {
-    // Group by correlationId
-    const threadMap = new Map();
-    for (const evt of allEvents) {
-      const cid = evt.correlationId || "__ungrouped__";
-      if (!threadMap.has(cid)) {
-        threadMap.set(cid, []);
-      }
-      threadMap.get(cid).push(evt);
-    }
-
-    let threads = [];
-    for (const [cid, events] of threadMap) {
-      const firstTs = events[0].ts;
-      const lastTs = events[events.length - 1].ts;
-      const sources = [...new Set(events.map((e) => e.source))];
-      threads.push({ correlationId: cid, events, firstTs, lastTs, sources });
-    }
-
-    // Sort threads by most-recent-event descending
-    threads.sort((a, b) => {
-      const ta = new Date(a.lastTs).getTime() || 0;
-      const tb = new Date(b.lastTs).getTime() || 0;
-      return tb - ta;
-    });
-
-    const truncated = threads.length > limit;
-    threads = threads.slice(0, limit);
-
-    result = { threads, total, truncated, durationMs: 0, windowFrom, windowTo, sourcesQueried };
-  } else {
-    // Flat mode
-    const truncated = total > limit;
-    const events = allEvents.slice(0, limit);
-    result = { events, total, truncated, durationMs: 0, windowFrom, windowTo, sourcesQueried };
+    const { threads, truncated } = _groupEventsByCorrelation(allEvents, limit);
+    return { threads, total, truncated, durationMs: 0, windowFrom, windowTo, sourcesQueried };
   }
+  return {
+    events: allEvents.slice(0, limit),
+    total,
+    truncated: total > limit,
+    durationMs: 0,
+    windowFrom,
+    windowTo,
+    sourcesQueried,
+  };
+}
+
+function applyTimelineEmptyMessage(result, { windowFrom, windowTo, correlationId, eventFilters, params }) {
+  if (result.total !== 0) return result;
+  return {
+    ...result,
+    message: _buildTimelineEmptyMessage({ windowFrom: windowFrom, windowTo: windowTo, correlationId: correlationId, eventFilters: eventFilters, params: params }),
+  };
+}
+
+export async function timeline(params = {}, opts = {}) {
+  const start = performance.now();
+  const cwd = opts.cwd || process.cwd();
+  const forgeDir = resolve(cwd, ".forge");
+  const query = resolveTimelineQuery(params);
+  const cacheEntryKey = cacheKey({
+    ...params,
+    from: query.fromDate?.toISOString(),
+    to: query.toDate?.toISOString(),
+  });
+  const cached = cacheGet(cacheEntryKey, forgeDir);
+  if (cached) {
+    return { ...cached, durationMs: Math.round(performance.now() - start) };
+  }
+
+  const filters = {
+    from: query.fromDate,
+    to: query.toDate,
+    events: query.eventFilters,
+    correlationId: query.correlationId,
+  };
+  const sourceResults = await readTimelineSourceResults(cwd, query.sourcesQueried, filters);
+  const allEvents = flattenTimelineEvents(sourceResults);
+  const windowFrom = query.fromDate ? query.fromDate.toISOString() : "";
+  const windowTo = query.toDate ? query.toDate.toISOString() : "";
+  const result = applyTimelineEmptyMessage(
+    buildTimelinePayload({
+      groupBy: query.groupBy,
+      allEvents,
+      limit: query.limit,
+      total: allEvents.length,
+      windowFrom,
+      windowTo,
+      sourcesQueried: query.sourcesQueried,
+    }),
+    {
+      windowFrom,
+      windowTo,
+      correlationId: query.correlationId,
+      eventFilters: query.eventFilters,
+      params,
+    },
+  );
 
   result.durationMs = Math.round(performance.now() - start);
-
-  // Phase ACI-HARDENING (Section 13 fix #2): friendly empty-result message
-  // so the agent doesn't confuse "no events" with "timeline failed silently".
-  if (total === 0) {
-    const fromHuman = windowFrom || "unset";
-    const toHuman = windowTo || "now";
-    const filterParts = [];
-    if (correlationId) filterParts.push(`correlationId=${correlationId}`);
-    if (eventFilters && eventFilters.length > 0) filterParts.push(`events=[${eventFilters.join(", ")}]`);
-    if (params.sources) filterParts.push(`sources=[${(params.sources || []).join(", ")}]`);
-    const filterDesc = filterParts.length > 0 ? ` with filters ${filterParts.join(", ")}` : "";
-    result.message = `No events in window ${fromHuman} → ${toHuman}${filterDesc}. Try widening the from/to range (default is last 24h), removing event filters, or checking that the project has activity in .forge/.`;
-  }
-
-  cacheSet(ck, forgeDir, result);
-
+  cacheSet(cacheEntryKey, forgeDir, result);
   return result;
 }
 

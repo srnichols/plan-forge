@@ -224,7 +224,92 @@ export function expandRoute(route, seeds) {
  * @param {object}   [ctx.seeds]    — seed values for parameterized routes
  * @returns {Promise<object>} scanner result record
  */
-export async function runContentAudit(ctx) {
+function createContentAuditSkippedFrame(base, now, reason) {
+  return {
+    ...base,
+    skipped: true,
+    reason,
+    verdict: "skipped",
+    pass: 0,
+    fail: 0,
+    durationMs: 0,
+    findings: [],
+    completedAt: new Date(now()).toISOString(),
+  };
+}
+
+function resolveContentAuditSettings(scannerConfig) {
+  return {
+    ...CONTENT_AUDIT_DEFAULTS,
+    ...(typeof scannerConfig === "object" ? scannerConfig : {}),
+  };
+}
+
+function resolveContentAuditBaseUrl(settings, config, env) {
+  return settings.baseUrl || (env && env.PFORGE_TEMPERING_URL) || resolveAppUrl(config, env);
+}
+
+function buildAuditUrl(baseUrl, expandedRoute) {
+  return baseUrl.replace(/\/+$/, "") + (expandedRoute.startsWith("/") ? expandedRoute : `/${expandedRoute}`);
+}
+
+async function auditRoute({ route, seeds, baseUrl, fetcher, settings }) {
+  const { expanded, seed } = expandRoute(route, seeds);
+  const url = buildAuditUrl(baseUrl, expanded);
+  const response = await fetcher(url, {
+    userAgent: settings.userAgent,
+    timeoutMs: settings.timeoutMs,
+  });
+  const body = response.body ?? "";
+  const title = extractTag(body, "title");
+  const h1 = extractTag(body, "h1");
+  const words = wordCount(cleanBodyText(body));
+  const placeholders = findPlaceholders(body);
+  const verdict = classifyRoute({
+    status: response.status,
+    location: response.location,
+    body,
+    title,
+    h1,
+    words,
+    placeholders,
+  });
+  return {
+    verdict,
+    finding: verdict.severity === "ok"
+      ? null
+      : {
+          class: verdict.class,
+          route,
+          severity: verdict.severity,
+          evidence: { ...verdict.evidence, url, status: response.status, title, h1, words },
+          ...(seed ? { seed } : {}),
+        },
+  };
+}
+
+function resolveContentAuditVerdict(findings, budgetTripped) {
+  if (budgetTripped) return "budget-exceeded";
+  if (findings.some((finding) => finding.severity === "blocker" || finding.severity === "high")) return "fail";
+  if (findings.length > 0) return "warn";
+  return "pass";
+}
+
+function writeContentAuditArtifact(projectDir, runId, report) {
+  const artifactDir = ensureScannerArtifactDir(projectDir, runId, "content-audit");
+  if (!artifactDir) return artifactDir;
+  seedArtifactsGitignore(projectDir);
+  try {
+    writeFileSync(
+      pathResolve(artifactDir, "report.json"),
+      JSON.stringify(report, null, 2) + "\n",
+      "utf-8",
+    );
+  } catch { /* best-effort */ }
+  return artifactDir;
+}
+
+function resolveContentAuditContext(ctx) {
   const {
     config = {},
     projectDir,
@@ -236,142 +321,77 @@ export async function runContentAudit(ctx) {
     routes: explicitRoutes = null,
     seeds = null,
   } = ctx || {};
-
-  const t0 = now();
-  const base = {
-    scanner: "content-audit",
+  return {
+    config,
+    projectDir,
+    runId,
     sliceRef,
-    startedAt: new Date(t0).toISOString(),
+    now,
+    env,
+    fetcher,
+    explicitRoutes,
+    seeds,
   };
-  const skippedFrame = (reason) => ({
-    ...base,
-    skipped: true,
-    reason,
-    verdict: "skipped",
-    pass: 0,
-    fail: 0,
-    durationMs: 0,
-    findings: [],
-    completedAt: new Date(now()).toISOString(),
-  });
+}
 
-  // Scanner disabled
-  const scannerConfig = config.scanners?.["content-audit"];
-  if (scannerConfig === false || (scannerConfig && scannerConfig.enabled === false)) {
-    return skippedFrame("scanner-disabled");
-  }
+function isContentAuditDisabled(scannerConfig) {
+  return scannerConfig === false || (scannerConfig && scannerConfig.enabled === false);
+}
 
-  const settings = {
-    ...CONTENT_AUDIT_DEFAULTS,
-    ...(typeof scannerConfig === "object" ? scannerConfig : {}),
-  };
-
-  // Resolve base URL
-  const baseUrl = settings.baseUrl
-    || (env && env.PFORGE_TEMPERING_URL)
-    || resolveAppUrl(config, env);
-  if (!baseUrl) return skippedFrame("url-not-configured");
-
-  // Production guard
-  if (looksLikeProduction(baseUrl) && !settings.allowProduction) {
-    return skippedFrame("production-url-without-opt-in");
-  }
-
-  // Load routes
-  const routeList = loadRoutes({
+function resolveContentAuditRouteList(projectDir, explicitRoutes, settings) {
+  return loadRoutes({
     routes: explicitRoutes,
     projectDir: projectDir || ".",
     settings,
-  });
-  if (routeList.length === 0) return skippedFrame("no-routes");
+  }).slice(0, settings.maxRoutes);
+}
 
-  // Cap routes to prevent runaway
-  const capped = routeList.slice(0, settings.maxRoutes);
-
-  // Budget
-  const budgetMs = (config.runtimeBudgets && config.runtimeBudgets.contentAuditMaxMs) || 300000;
-  const hardDeadline = t0 + budgetMs;
-
-  // ── Probe each route ─────────────────────────────────────────────
+async function processContentAuditRoutes({ routes, now, hardDeadline, seeds, baseUrl, fetcher, settings }) {
   const findings = [];
   let passCount = 0;
   let failCount = 0;
   let budgetTripped = false;
 
-  for (const route of capped) {
+  for (const route of routes) {
     if (now() >= hardDeadline) {
       budgetTripped = true;
       break;
     }
-
-    const { expanded, seed } = expandRoute(route, seeds);
-    const url = baseUrl.replace(/\/+$/, "") + (expanded.startsWith("/") ? expanded : `/${expanded}`);
-
-    const r = await fetcher(url, {
-      userAgent: settings.userAgent,
-      timeoutMs: settings.timeoutMs,
-    });
-
-    const body = r.body ?? "";
-    const title = extractTag(body, "title");
-    const h1 = extractTag(body, "h1");
-    const mainText = cleanBodyText(body);
-    const words = wordCount(mainText);
-    const placeholders = findPlaceholders(body);
-
-    const verdict = classifyRoute({
-      status: r.status,
-      location: r.location,
-      body,
-      title,
-      h1,
-      words,
-      placeholders,
-    });
-
-    if (verdict.severity === "ok") {
+    const result = await auditRoute({ route, seeds, baseUrl, fetcher, settings });
+    if (!result.finding) {
       passCount++;
-    } else {
-      failCount++;
-      findings.push({
-        class: verdict.class,
-        route,
-        severity: verdict.severity,
-        evidence: { ...verdict.evidence, url, status: r.status, title, h1, words },
-        ...(seed ? { seed } : {}),
-      });
+      continue;
     }
+    failCount++;
+    findings.push(result.finding);
   }
 
-  // ── Verdict ──────────────────────────────────────────────────────
-  let overallVerdict;
-  if (budgetTripped) overallVerdict = "budget-exceeded";
-  else if (findings.some((f) => f.severity === "blocker" || f.severity === "high")) overallVerdict = "fail";
-  else if (findings.length > 0) overallVerdict = "warn";
-  else overallVerdict = "pass";
+  return { findings, passCount, failCount, budgetTripped };
+}
 
-  const durationMs = now() - t0;
-
-  // ── Artifact ─────────────────────────────────────────────────────
-  const artifactDir = ensureScannerArtifactDir(projectDir, runId, "content-audit");
-  if (artifactDir) {
-    seedArtifactsGitignore(projectDir);
-    try {
-      writeFileSync(
-        pathResolve(artifactDir, "report.json"),
-        JSON.stringify({
-          scanner: "content-audit",
-          startedAt: base.startedAt,
-          baseUrl,
-          routeCount: capped.length,
-          verdict: overallVerdict,
-          findings,
-          summary: { pass: passCount, fail: failCount },
-        }, null, 2) + "\n",
-        "utf-8",
-      );
-    } catch { /* best-effort */ }
-  }
+function buildContentAuditResult({
+  base,
+  now,
+  t0,
+  projectDir,
+  runId,
+  baseUrl,
+  routes,
+  findings,
+  passCount,
+  failCount,
+  budgetTripped,
+}) {
+  const overallVerdict = resolveContentAuditVerdict(findings, budgetTripped);
+  const artifactDir = writeContentAuditArtifact(projectDir, runId, {
+    scanner: "content-audit",
+    startedAt: base.startedAt,
+    baseUrl,
+    routeCount: routes.length,
+    verdict: overallVerdict,
+    findings,
+    summary: { pass: passCount, fail: failCount },
+  });
 
   return {
     ...base,
@@ -381,12 +401,61 @@ export async function runContentAudit(ctx) {
     skipped: 0,
     findings,
     findingCount: findings.length,
-    routesProbed: Math.min(capped.length, passCount + failCount),
+    routesProbed: Math.min(routes.length, passCount + failCount),
     budgetTripped,
-    durationMs,
+    durationMs: now() - t0,
     artifactDir,
     completedAt: new Date(now()).toISOString(),
   };
+}
+
+export async function runContentAudit(ctx) {
+  const auditCtx = resolveContentAuditContext(ctx);
+  const t0 = auditCtx.now();
+  const base = {
+    scanner: "content-audit",
+    sliceRef: auditCtx.sliceRef,
+    startedAt: new Date(t0).toISOString(),
+  };
+  const scannerConfig = auditCtx.config.scanners?.["content-audit"];
+  if (isContentAuditDisabled(scannerConfig)) {
+    return createContentAuditSkippedFrame(base, auditCtx.now, "scanner-disabled");
+  }
+
+  const settings = resolveContentAuditSettings(scannerConfig);
+  const baseUrl = resolveContentAuditBaseUrl(settings, auditCtx.config, auditCtx.env);
+  if (!baseUrl) return createContentAuditSkippedFrame(base, auditCtx.now, "url-not-configured");
+  if (looksLikeProduction(baseUrl) && !settings.allowProduction) {
+    return createContentAuditSkippedFrame(base, auditCtx.now, "production-url-without-opt-in");
+  }
+
+  const routes = resolveContentAuditRouteList(auditCtx.projectDir, auditCtx.explicitRoutes, settings);
+  if (routes.length === 0) return createContentAuditSkippedFrame(base, auditCtx.now, "no-routes");
+
+  const hardDeadline = t0 + ((auditCtx.config.runtimeBudgets && auditCtx.config.runtimeBudgets.contentAuditMaxMs) || 300000);
+  const scanResult = await processContentAuditRoutes({
+    routes,
+    now: auditCtx.now,
+    hardDeadline,
+    seeds: auditCtx.seeds,
+    baseUrl,
+    fetcher: auditCtx.fetcher,
+    settings,
+  });
+
+  return buildContentAuditResult({
+    base,
+    now: auditCtx.now,
+    t0,
+    projectDir: auditCtx.projectDir,
+    runId: auditCtx.runId,
+    baseUrl,
+    routes,
+    findings: scanResult.findings,
+    passCount: scanResult.passCount,
+    failCount: scanResult.failCount,
+    budgetTripped: scanResult.budgetTripped,
+  });
 }
 
 // ─── Default export (scanner module interface) ───────────────────────

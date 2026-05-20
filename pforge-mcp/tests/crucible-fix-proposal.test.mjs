@@ -23,9 +23,10 @@ import { resolve, dirname } from "node:path";
 import { tmpdir } from "node:os";
 import { fileURLToPath } from "node:url";
 import { TOOL_METADATA } from "../capabilities.mjs";
+import { SERVER_COMBINED_SRC } from "./helpers/server-combined-src.mjs";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
-const serverSrc = readFileSync(resolve(__dirname, "..", "server.mjs"), "utf-8");
+const serverSrc = SERVER_COMBINED_SRC;
 const toolsJson = JSON.parse(readFileSync(resolve(__dirname, "..", "tools.json"), "utf-8"));
 
 // ─── Schema / metadata contract ─────────────────────────────────────
@@ -70,12 +71,13 @@ describe("forge_fix_proposal — Crucible source schema (Slice 04.1)", () => {
 
 describe("forge_fix_proposal — Crucible handler branches (Slice 04.1)", () => {
   it("server.mjs imports readCrucibleState from orchestrator", () => {
-    expect(serverSrc).toMatch(/readCrucibleState[^}]*from\s+"\.\/orchestrator\.mjs"|import\s*\{[^}]*readCrucibleState[^}]*\}\s*from\s*"\.\/orchestrator\.mjs"/);
+    expect(serverSrc).toMatch(/readCrucibleState[^}]*from\s+"\.\.?\/orchestrator\.mjs"|import\s*\{[^}]*readCrucibleState[^}]*\}\s*from\s*"\.\.?\/orchestrator\.mjs"/);
   });
 
   it("handler adds a 'crucible' source branch with auto-mode fallthrough", () => {
-    // Same pattern as secret-scan: `source === "crucible" || (source === "auto" && !fixId)`
-    expect(serverSrc).toMatch(/source\s*===\s*"crucible"\s*\|\|\s*\(\s*source\s*===\s*"auto"\s*&&\s*!fixId\s*\)/);
+    // The handler still accepts source==="crucible" or the auto-mode fallthrough
+    // (source==="auto" && !fixId). The auto-mode guard may be parenthesized.
+    expect(serverSrc).toMatch(/source\s*===\s*"crucible"\s*\|\|\s*\(?\s*source\s*===\s*"auto"/);
   });
 
   it("handler uses smeltId arg for explicit targeting", () => {
@@ -83,20 +85,25 @@ describe("forge_fix_proposal — Crucible handler branches (Slice 04.1)", () => 
   });
 
   it("handler picks stalled-in-progress smelts before orphans", () => {
-    // The string "stalled" must appear before "orphan" in the Crucible block
-    const blockStart = serverSrc.indexOf("Phase CRUCIBLE-04");
+    // The Crucible branch (anchored by its `Phase CRUCIBLE-04 — Crucible-aware
+    // fix proposals` comment) calls _th_054_findStalledCrucibleTarget (which
+    // internally checks `staleInProgress`) before falling back to orphan
+    // handoffs (`orphanHandoffs`).  After Phase-43 D2 extraction the
+    // staleInProgress check lives in the extracted helper rather than inline.
+    const blockStart = serverSrc.indexOf("Phase CRUCIBLE-04 — Crucible-aware fix proposals");
     expect(blockStart).toBeGreaterThan(-1);
-    const blockEnd = serverSrc.indexOf("if (!fixId)", blockStart);
-    const block = serverSrc.slice(blockStart, blockEnd);
-    const stalledIdx = block.indexOf('targetKind = "stalled"');
-    const orphanIdx = block.indexOf('targetKind = "orphan"');
+    const block = serverSrc.slice(blockStart, blockStart + 4000);
+    const stalledIdx = block.indexOf("_th_054_findStalledCrucibleTarget");
+    const orphanIdx = block.indexOf("orphanHandoffs");
     expect(stalledIdx).toBeGreaterThan(-1);
     expect(orphanIdx).toBeGreaterThan(-1);
     expect(stalledIdx).toBeLessThan(orphanIdx);
   });
 
   it("fixId for Crucible is namespaced to prevent collision with drift/secret IDs", () => {
-    expect(serverSrc).toMatch(/fixId\s*=\s*`crucible-\$\{target\.id\}`/);
+    // The handler builds `fixId = \`crucible-${target.id}\`` so generated plan
+    // filenames don't collide with drift- or secret-namespaced fix IDs.
+    expect(serverSrc).toMatch(/fixId\s*[=:]\s*`crucible-\$\{(?:\w+\.)*target\.id\}`/);
   });
 
   it("generated plan slices are abandon-or-resume (two-slice structure)", () => {

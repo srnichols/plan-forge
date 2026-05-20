@@ -391,17 +391,17 @@ export class Hub {
       Promise.resolve()
         .then(() => handler(payload, { requestId, topic, correlationId, ts }))
         .then((result) => {
-          this._deliverResponse(requestId, result, true, askStartTime, topic, correlationId);
+          this._deliverResponse({ requestId, result, ok: true, askStartTime, topic, correlationId });
         })
         .catch((err) => {
-          this._deliverResponse(
+          this._deliverResponse({
             requestId,
-            { code: "responder-error", message: err.message },
-            false,
+            result: { code: "responder-error", message: err.message },
+            ok: false,
             askStartTime,
             topic,
             correlationId,
-          );
+          });
         });
     });
   }
@@ -440,7 +440,7 @@ export class Hub {
    * Late responses (after timeout eviction) are dropped with a warn log.
    * @private
    */
-  _deliverResponse(requestId, result, ok, askStartTime, topic, correlationId) {
+  _deliverResponse({ requestId, result, ok, askStartTime, topic, correlationId }) {
     const pending = this._pendingAsks.get(requestId);
     if (!pending) {
       console.warn(`[hub] late respond dropped for requestId=${requestId}`);

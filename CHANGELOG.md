@@ -9,6 +9,352 @@ Format follows [Keep a Changelog](https://keepachangelog.com/).
 
 ---
 
+## [3.10.1] — 2026-05-20
+
+### Added — `forge_audit_export` MCP tool (#098) — ACI-paginated audit event export
+
+Exposes `audit-export.mjs` as a proper MCP tool with ACI-compliant pagination.
+The CLI `pforge audit export` continues to stream unbounded output to stdout.
+
+- **`forge_audit_export` MCP tool (#098)** (`pforge-mcp/server/tool-handlers/platform.mjs`):
+  Returns `{ ok, records[], total, truncated, format, filters, message }`.
+  - Reads `.forge/runs/*/events.log` via the `exportAudit()` async generator — streaming, never loads all events into memory.
+  - Filters: `since` (ISO date), `until` (ISO date), `type[]` (event types), `run` (single run ID).
+  - Formats: `"json"` (default — array of parsed record objects) or `"csv"` (array of CSV row strings with header first).
+  - Pagination: `limit` (default 100, max 500) with `truncated` flag and ACI-compliant `message` on the empty path.
+  - Added to `MCP_ONLY_TOOLS` — the unbounded streaming form stays in the CLI.
+- **REST endpoint** `GET /api/audit/export` (`pforge-mcp/server/rest-api.mjs`): same filters and format options via query parameters.
+- **TOOL_METADATA entry** (`pforge-mcp/capabilities/tool-metadata.mjs`): `addedIn: "3.10.0"`, intent tags `["audit", "export", "compliance", "events", "runs", "forensics", "cost-attribution"]`.
+- **12 tests** (`pforge-mcp/tests/forge-audit-export-mcp.test.mjs`) covering handler export, tool definition shape, `MCP_ONLY_TOOLS` membership, metadata shape, REST route registration, empty-corpus message, JSON/CSV format, type filter, pagination/truncation, and filters payload.
+- Updated golden snapshot fixtures to reflect 102-tool surface.
+
+---
+
+## [3.10.0] — 2026-05-20
+
+### Added — Offline single-source HTML export for the manual
+
+Closes the last deferred item from the manual-ebook-completion-audit: "Single-source export (PDF / single HTML) — deferred (tooling concern)."
+
+- **`docs/manual/export.mjs`** — new standalone export script. Reads all chapters registered in `assets/manual.js`→`CHAPTERS`, extracts `<main>` content from each, strips sidebar/navigation chrome, and assembles a single `plan-forge-manual.html` with:
+  - Auto-generated, multi-column table of contents
+  - All 79 chapters and appendices in canonical order
+  - Content hash + generation timestamp in the header and footer
+  - Inline layout overrides so the document is readable without the sidebar scripts
+- **`docs/manual/plan-forge-manual.html`** — pre-generated offline edition (79 chapters, ~1.7 MB). Regenerate at any time with `node docs/manual/export.mjs`.
+- **`docs/manual/index.html`** — new "📥 Download / Single-page HTML" bar above the front-matter pointer. Links to `plan-forge-manual.html` and shows the regeneration command.
+- **`docs/manual/maintain.mjs`** — `GENERATED_EXPORTS` set excludes `plan-forge-manual.html` from the NAV and SHELL checks; the file is a generated artifact, not a registered chapter.
+
+**Enterprise / air-gapped use case**: teams that cannot browse the live docs site can distribute `plan-forge-manual.html` as a single self-contained file. The content hash confirms the edition and enables version pinning.
+
+---
+
+## [3.9.2] — 2026-05-19
+
+### Fixed — Distribution enumeration gap (release-checklist §1b)
+
+The §1b distribution-sync gate (`release-checklist.instructions.md`) had been silently failing for several releases — four shared instruction files existed in the dev repo under `.github/instructions/` but were never copied to consumer projects by `setup.{ps1,sh}` or `pforge update`. Consumers running setup or self-update therefore missed these guardrails until they cloned the dev repo directly.
+
+- **`setup.ps1`** — added 4 entries to `$sharedFiles`
+- **`setup.sh`** — added 4 entries to `SHARED_FILES`
+- **`pforge.ps1`** — added 4 entries to `$sharedInstructions`
+- **`pforge.sh`** — added 4 entries to the `for instr_name in …` loop
+
+Newly enumerated instruction files (now reach consumers):
+
+| File | Auto-loads when editing |
+|---|---|
+| `aci-design.instructions.md` | `pforge-mcp/server.mjs`, tool surfaces |
+| `clean-code.instructions.md` | all files (clean-code review guardrails) |
+| `security.instructions.md` | all files (input validation, command-injection avoidance) |
+| `testing.instructions.md` | `**/*.test.mjs`, `tests/**` |
+
+`release-checklist.instructions.md` remains intentionally excluded (maintainer-only per its own preamble).
+
+---
+
+## [3.9.1] — 2026-05-19
+
+### Added — Local recall index status surface (Phase 58)
+
+Exposes the Phase 56 TF-IDF index cache as a first-class diagnostic and management
+surface — agents and operators can now inspect, pre-warm, or clear the index without
+reading source files or writing ad-hoc scripts.
+
+- **`forge_local_recall_status` MCP tool (#097)** (`pforge-mcp/server/tool-handlers/platform.mjs`):
+  Returns `{ ok, indexExists, version, builtAt, corpusSize, staleness, cacheFile, message }`.
+  - Subcommand `status` (default) — reports cache existence, corpus size, version, and freshness.
+  - Subcommand `warm` — pre-builds and persists the index so the first `forge_local_search` call has zero rebuild cost.
+  - Subcommand `clear` — deletes `.forge/local-recall-index.json` to force a fresh rebuild.
+  - ACI-compliant: bounded payload, explicit empty-state `message`, `staleness` field (`"fresh"` / `"stale"` / `"n/a"`).
+- **REST endpoint** `GET /api/local-recall/status` (`pforge-mcp/server/rest-api.mjs`): same payload as the status subcommand.
+- **CLI commands** (`pforge.ps1` / `pforge.sh`):
+  - `pforge local-recall status` — prints index info table.
+  - `pforge local-recall warm` — pre-builds the index.
+  - `pforge local-recall clear` — deletes the cache file.
+- **TOOL_METADATA entry** (`pforge-mcp/capabilities/tool-metadata.mjs`): `addedIn: "3.9.1"`, intent tags `["local-recall", "index", "cache", "tfidf", "status", "warm", "clear", "diagnostic"]`.
+- **17 tests** (`pforge-mcp/tests/local-recall-status.test.mjs`) covering handler export, tool definition shape, subcommand enum, MCP_ONLY_TOOLS membership, metadata shape, REST route registration, `getIndexStatus` empty/fresh paths, `clearPersistedIndex` behavior, and status/clear handler integration.
+- Updated golden snapshot fixture (`tests/fixtures/server-surface.golden.json`).
+
+---
+
+## [3.9.0] — 2026-05-20
+
+### Added — Embedding status diagnostic surface (Phase 56 — EMBEDDING-HARDENING)
+
+Promotes the Phase 55 neural-embedding backend from an implementation detail into a
+first-class diagnostic surface: agents, operators, and users can now inspect embedding
+health without reading source code or grepping log files.
+
+- **`forge_embedding_status` MCP tool (#096)** (`pforge-mcp/server/tool-handlers/platform.mjs`):
+  Returns `{ backend, configured, neuralAvailable, corpusSize, cacheStatus, recommendations, timestamp }`.
+  - `backend` — effective backend in use: `"tfidf"`, `"neural"`, or `"none"` (empty corpus).
+  - `configured` — raw `.forge.json` `embeddingBackend` field (`"auto"`/`"tfidf"`/`"neural"` or default `"auto"`).
+  - `neuralAvailable` — `true` if `@xenova/transformers` is resolvable at runtime.
+  - `corpusSize` — number of local thought records loaded from `.forge/` JSONL stores.
+  - `cacheStatus` — TF-IDF index cache state from `getIndexStatus()` (`exists`, `stale`, `corpusSize`, `builtAt`).
+  - `recommendations` — actionable strings surfaced when neural is not available or corpus is empty.
+  - ACI-compliant: bounded payload, explicit empty-state `message`, all fields documented.
+- **REST endpoint** `GET /api/embedding/status` (`pforge-mcp/server/rest-api.mjs`): same payload as MCP tool.
+- **CLI commands** (`pforge.ps1` / `pforge.sh`):
+  - `pforge embeddings status` — prints backend, corpus size, cache state, recommendations.
+  - `pforge embeddings install` — installs `@xenova/transformers` for neural upgrade path.
+- **Dashboard tile** — Embedding Status card in the Forge-Master tab (`dashboard/index.html` + `dashboard/app.js`).
+- **20 tests** (`pforge-mcp/tests/embedding-status.test.mjs`) covering handler export, tool definition shape,
+  MCP_ONLY_TOOLS membership, metadata shape, REST route registration, corpus count, `isNeuralEmbeddingAvailable`,
+  and all 5 effective-backend logic branches.
+- Updated golden snapshot fixtures (`tests/fixtures/server-surface.golden.json`, `tests/fixtures/capabilities-surface.golden.json`) to reflect 101-tool surface.
+
+### Added — Persistent TF-IDF index cache for `forge_local_search` (Phase 56)
+
+Eliminates per-query corpus rebuild cost for `forge_local_search`. On the first
+TF-IDF search the token maps + IDF weights are serialised to
+`.forge/local-recall-index.json`; subsequent searches reload the cached index
+without re-tokenizing the corpus. Staleness is detected by comparing each source
+JSONL file's mtime against the stored snapshot — any file addition, modification,
+or removal triggers a transparent rebuild.
+
+- **`pforge-mcp/local-recall.mjs`**:
+  - `buildCorpusIndex(thoughts)` — builds a serialisable `{ tokenMaps, idf }` index from a thought array (Maps converted to arrays for JSON round-trip).
+  - `persistIndex(cwd, index, meta)` — writes the corpus index to `.forge/local-recall-index.json` with `version`, `builtAt`, `corpusSize`, and per-source `sourceMtimes`. Non-fatal on I/O error.
+  - `loadCachedIndex(cwd, opts)` — loads and validates the cached index; returns hydrated `Map` objects or `null` on cache miss, version mismatch, or stale sources (mtime changed).
+  - `clearPersistedIndex(cwd)` — deletes the cache file. Non-fatal.
+  - `getIndexStatus(cwd)` — returns `{ exists, version, builtAt, corpusSize, stale, cacheFile }` for diagnostics.
+  - `searchLocalThoughts` updated: TF-IDF path checks `loadCachedIndex` first; on miss it calls `buildCorpusIndex` + `persistIndex` before returning results. New `noCache: true` opt bypasses the cache.
+  - `_tfidfSearchWithIndex` private helper performs the cosine-similarity ranking against pre-built token maps without re-tokenizing.
+  - `INDEX_CACHE_FILE = "local-recall-index.json"`, `INDEX_VERSION = 1` constants.
+- **`pforge-mcp/tests/local-recall.test.mjs`**: 18 new tests across 4 suites (`buildCorpusIndex`, `persistIndex + loadCachedIndex`, `clearPersistedIndex`, `getIndexStatus`); 4 new `searchLocalThoughts` tests covering cache prime, cache reuse, `noCache` bypass, and staleness-triggered rebuild. Total: 46 tests (up from 28).
+
+### Added — Local semantic recall fallback (Phase 55)
+
+New `forge_local_search` MCP tool (#89) provides zero-dependency semantic search
+over local `.forge/` thought stores when OpenBrain (L3 Postgres + pgvector) is
+not configured.
+
+- **`pforge-mcp/local-recall.mjs`** (NEW): TF-IDF + IDF-weighted cosine-similarity engine. Optional upgrade: if `@xenova/transformers` is installed at runtime, the tool transparently switches to all-MiniLM-L6-v2 neural embeddings (384-dim) for substantially better recall.
+  - `readLocalThoughts(cwd, opts)` — loads up to 500 records from `openbrain-queue.jsonl`, `openbrain-queue.archive.jsonl`, `openbrain-dlq.jsonl`, and `liveguard-memories.jsonl`.
+  - `searchLocalThoughts(query, opts)` — ACI-compliant output `{ hits, total, corpusSize, backend, query, truncated, message }`. `forceBackend: 'tfidf'|'neural'` for explicit override.
+  - `isNeuralEmbeddingAvailable()` — lazy probe with result caching.
+
+
+
+Completed the final Phase 42 clean-code audit item. Audited all 136 `console.log` occurrences codebase-wide — no debug leakage found; all calls are intentional CLI output or self-test blocks. One library-level stdout fix:
+
+- **`pforge-mcp/orchestrator/forge-io.mjs`**: `loadModelPerformance()` advisory scrub log changed from `console.log` → `process.stderr.write` to avoid MCP stdio corruption (stdout is the JSON-RPC channel in stdio transport). All 313/314 test files remain green.
+
+- **`docs/plans/cleanup-findings/CATALOG.md`**: F1 finding marked audited ✅ with outcome.
+- **`docs/plans/cleanup-findings/CATEGORIES-SUMMARY.md`**: F-series remediation note updated.
+
+### Added — CLI-GUIDE documentation refresh (v3.8.2)
+
+Added full CLI-GUIDE entries for 14 commands that existed in `pforge.ps1` / `pforge.sh` but lacked documentation. Completes v3.6 Documentation Candidate #3.
+
+| Command | Added in | What it does |
+|---------|----------|-------------|
+| `pforge digest` | v2.90.10 | Generate daily digest of probe deltas, meta-bugs, cost anomalies |
+| `pforge fm-recall` | v2.90.10 | Query / rebuild BM25 recall index over Forge-Master sessions |
+| `pforge patterns list` | v2.90.10 | Surface recurring failure patterns across run history |
+| `pforge graph rebuild\|stats\|query` | v2.90.10 | Knowledge graph CLI (Phase, Slice, Commit, File, Bug, Run) |
+| `pforge plan-from-sarif` | v3.x | Convert CodeQL SARIF findings into a Plan Forge plan |
+| `pforge sync-spaces` | v3.x | Upload active plan + instructions to a GitHub Copilot Space |
+| `pforge sync-memories` | v3.0 | Generate `.github/copilot-memory-hints.md` from forge decisions |
+| `pforge sync-instructions` | v3.0 | Generate `.github/copilot-instructions.md` from forge context |
+| `pforge github status\|doctor\|metrics` | v3.1.2 | Inspect GitHub-native AI surface checklist |
+| `pforge timeline` | v3.x | Unified offline-first chronological event view |
+| `pforge crucible` | v3.x | Crucible smelt pipeline — ideas → hardened plan slices |
+| `pforge skills pending\|accept\|reject\|defer` | v3.x | Auto-skill promotion queue management |
+| `pforge mcp-call` | v3.x | Generic proxy for any MCP tool on `:3100` |
+| `pforge forge-home-cleanup` | v3.8.1 | Archive ephemeral `.forge/` files and prune old archive slots |
+
+- **`docs/CLI-GUIDE.md`**: 14 new command sections with PowerShell + Bash syntax, flags tables, notes, and MCP equivalents.
+- **`ROADMAP.md`**: Marked v3.6 Documentation Candidate #3 as done; bumped Current Release to v3.8.2.
+
+### Fixed — ESLint D-series tooling integration (Phase 43 S0)
+
+- **`scripts/audit/run-eslint-clean-code.mjs`** (NEW): CJS-safe ESLint runner that invokes `node_modules/eslint/bin/eslint.js` via `spawnSync` instead of ESM import, bypassing the `@eslint/eslintrc`/ajv incompatibility under Node.js 24+. Saves structured JSON to `docs/plans/cleanup-findings/raw/eslint-report.json`.
+- **`scripts/audit/clean-code-review.mjs`**: Added `run-eslint-clean-code` to the audit scripts array; added `eslint-d-series` category that parses `eslint-report.json` for D1 (`complexity-error`), D2 (`max-lines-per-function-error`), and D3 (`max-params-error`) violations. `npm run audit:full` now reports all D-series errors inline. Current baseline: **127 errors** (119 D1, 8 D2, 0 D3 — D3 resolved by Phase 51/52 splits).
+
+### Added — Personal Mode for the GitHub × Plan-Forge dashboard tab (Phase 54)
+
+**Personal Mode** auto-engages when no org slug is configured or the Copilot Metrics API returns no data. Org Mode is preserved verbatim; Personal Mode is purely additive.
+
+- **`pforge-mcp/github-personal.mjs`** (NEW): Core module — `fetchUserProfile`, `fetchRepoSummary`, `scanCopilotCoauthors` (scans Co-Authored-By trailer + `copilot-swe-agent[bot]` author), 4 typed error classes. Zero new npm dependencies.
+- **`pforge-mcp/server.mjs`**: New unified `GET /api/github-personal` endpoint — always returns HTTP 200 with `{ ok, user, repo, copilotSignal, errors, _meta }`. All three sub-calls are independent try/catch. Repo owner/name resolved from `git remote get-url origin` or `?owner=&repo=` query params. `perPage` capped at 200.
+- **`pforge-mcp/dashboard/github-personal-tab.mjs`** (NEW): Four render helpers — `renderAccountCard`, `renderRepoActivityCard`, `renderAiAssistCard`, `renderPersonalEmptyState`. All attached to `window` for app.js access.
+- **`pforge-mcp/dashboard/app.js`**: `loadGithubMetrics` extended with personal-mode fallback branch — fires when org metrics array is empty, populates the three new hidden container divs.
+- **`pforge-mcp/dashboard/index.html`**: Subtitle updated to mention personal mode; three hidden container divs added; script tag for `github-personal-tab.mjs` added.
+- **Dogfood result** (`srnichols/plan-forge`): 16/100 commits carry Copilot co-author signal (16%) — generated by Copilot coding-agent sessions using the `Co-authored-by: Copilot` trailer.
+
+### Changed — Decomposed pforge-mcp/orchestrator.mjs into focused sub-modules (Phase 53)
+
+- **`pforge-mcp/orchestrator.mjs`**: Converted from ~13,933-LOC monolith (A1 audit finding) to a 117-line CLI-entrypoint + re-export shim. All existing consumer imports preserved byte-for-byte — zero import-site modifications outside `cost-service.mjs` (S8). Zero behavioral changes: `buildOrchestratorSurface()` output is byte-identical before and after the split (enforced by golden-fixture snapshot gate). `node orchestrator.mjs --test` passes 88/88 self-test assertions.
+- **`pforge-mcp/orchestrator/constants.mjs`** (NEW, ~164 LOC): Shared constants (timeouts, limits, config defaults, enum arrays).
+- **`pforge-mcp/orchestrator/state.mjs`** (NEW, ~41 LOC): Module-level mutable state (per-run maps, retry counters, gate failure records).
+- **`pforge-mcp/orchestrator/event-bus.mjs`** (NEW, ~116 LOC): `appendEvent`, `writeSilentExitRecord`.
+- **`pforge-mcp/orchestrator/plan-parser.mjs`** (NEW, ~729 LOC): `parsePlan`, `computeLockHash`, `normalizeSliceId`, `compareSliceIds`, `parseOnlySlicesExpr`, and slice-normalisation helpers.
+- **`pforge-mcp/orchestrator/worker-spawn.mjs`** (NEW, ~2,222 LOC): Worker detection, execution-runtime detection, client-host detection, quorum model availability probing, `spawnWorker`, `detectWorkers`.
+- **`pforge-mcp/orchestrator/schedulers.mjs`** (NEW, ~1,110 LOC): `SequentialScheduler`, `ParallelScheduler`, `CompetitiveScheduler`, `selectWinner`, gate runner (`runGate`), and portability helpers.
+- **`pforge-mcp/orchestrator/gate-helpers.mjs`** (NEW, ~708 LOC): Gate portability validation, gate lint, `regressionGuard`, version-collision detection.
+- **`pforge-mcp/orchestrator/run-plan.mjs`** (NEW, ~3,629 LOC): `runPlan`, `buildEstimate`, `runAnalyze`, `runAutoSweep`, adaptive gate synthesis, incident fix-proposal retry, cost-anomaly detection, plan postmortem, `buildOrchestratorSurface`.
+- **`pforge-mcp/orchestrator/forge-io.mjs`** (NEW, ~749 LOC): Cost history, model-performance tracking, run pruning, orphan audit, health trend analysis, gate-check config/responder.
+- **`pforge-mcp/orchestrator/hooks.mjs`** (NEW, ~921 LOC): Lifecycle hooks — PreDeploy, PostSlice, PostSlice Tempering, PreAgentHandoff, PostRun Auditor; OpenClaw integration.
+- **`pforge-mcp/orchestrator/git-safety.mjs`** (NEW, ~946 LOC): Branch safety, slice snapshot (push/pop/restore), absorbed-commit capture, auto-commit, exhaustive file-modification verification.
+- **`pforge-mcp/orchestrator/quorum.mjs`** (NEW, ~585 LOC): `quorumDispatch`, `quorumReview`, `analyzeWithQuorum`, `calculateSliceCost`, `buildCostBreakdown`.
+- **`pforge-mcp/orchestrator/review-watcher.mjs`** (NEW, ~2,096 LOC): Watcher, review queue storage/producer, shop-floor home snapshot, quorum analysis, `scoreSliceComplexity`.
+- **`pforge-mcp/orchestrator/model-scoring.mjs`** (NEW, ~83 LOC): `inferSliceType`, `recommendModel` + re-exports of model-scoring symbols; breaks the circular `cost-service.mjs → orchestrator.mjs` dependency.
+- **`pforge-mcp/cost-service.mjs`**: Updated to import `scoreSliceComplexity`, `loadModelPerformance`, `aggregateModelStats`, `isApiOnlyModel`, `assessQuorumViability`, `QUORUM_PRESETS` from `./orchestrator/model-scoring.mjs` instead of `./orchestrator.mjs` — eliminates the last known circular import in `pforge-mcp/`.
+- **`pforge-mcp/tests/no-circular-imports.test.mjs`**: `KNOWN_CYCLES` allowlist cleared to `new Set()` in S8; `madge --circular --extensions mjs pforge-mcp/` reports zero cycles.
+- **`pforge-mcp/tests/orchestrator-surface-snapshot.test.mjs`** (NEW): Golden-fixture snapshot test asserting byte-identical `buildOrchestratorSurface()` output. Sole "no behavior change" acceptance criterion for Phase 53.
+- **`pforge-mcp/tests/fixtures/orchestrator-surface.golden.json`** (NEW): Checked-in golden fixture for the orchestrator surface contract (exports array + sectionBanners array).
+
+### Changed — Decomposed pforge-mcp/server.mjs into focused sub-modules (Phase 52)
+
+- **`pforge-mcp/server.mjs`**: Converted from ~9,202-LOC monolith (A2 audit finding) to a ≤40-line entrypoint + re-export shim. All existing consumer imports preserved byte-for-byte — zero import-site modifications. Zero behavioral changes: `buildServerSurface()` output is byte-identical before and after the split (enforced by golden-fixture snapshot gate).
+- **`pforge-mcp/server/state.mjs`** (NEW, ~183 LOC): Module-level mutable state — orchestrator run map, cost estimate cache, hub reference, and MCP server reference (`_mcpServerRef`).
+- **`pforge-mcp/server/audit-writer.mjs`** (NEW, ~40 LOC): Audit artifact writer (Phase-39 Slice 4 logic).
+- **`pforge-mcp/server/helpers.mjs`** (NEW, ~201 LOC): `resolveProjectRoot` and related helpers. `resolveProjectRoot` re-exported from `server.mjs`.
+- **`pforge-mcp/server/org-rules.mjs`** (NEW, ~118 LOC): `callOrgRules` — Org Rules Consolidation logic.
+- **`pforge-mcp/server/anvil-compute.mjs`** (NEW, ~107 LOC): `_sweepAnvilCompute`, `_analyzeAnvilCompute`, `_temperingScanAnvilCompute`, `_hotspotAnvilCompute`. All four re-exported from `server.mjs`.
+- **`pforge-mcp/server/tool-definitions.mjs`** (NEW, ~1,318 LOC): `TOOLS` array — all MCP tool `{name, description, inputSchema}` entries.
+- **`pforge-mcp/server/tool-handlers.mjs`** (NEW, ~4,881 LOC): `invokeForgeTool` dispatcher + `MCP_ONLY_TOOLS` Set + all per-tool handler bodies. `invokeForgeTool` re-exported from `server.mjs`.
+- **`pforge-mcp/server/openbrain-bridge.mjs`** (NEW, ~110 LOC): `runDrainPass`, `__resetPlanPathAliasWarned`, `__shouldDrainOnInit`. All re-exported from `server.mjs`.
+- **`pforge-mcp/server/rest-api.mjs`** (NEW, ~2,976 LOC): `createExpressApp` + all REST API routes. Re-exported from `server.mjs`.
+- **`pforge-mcp/server/mcp-handler.mjs`** (NEW, ~19 LOC): MCP `Server` construction + `setRequestHandler` wiring.
+- **`pforge-mcp/server/main.mjs`** (NEW, ~200 LOC): `runServerMain` startup sequence (hub, bridge, MCP transport, Express listen).
+- **`pforge-mcp/server/surface.mjs`** (NEW, ~23 LOC): `buildServerSurface` pure contract function.
+- **`pforge-mcp/tests/server-surface-snapshot.test.mjs`** (NEW): Golden-fixture snapshot test asserting byte-identical `buildServerSurface()` output. The sole "no behavior change" acceptance criterion for MCP tool names/schemas, REST routes, and `MCP_ONLY_TOOLS` membership.
+
+### Changed — Decomposed pforge-mcp/capabilities.mjs into focused sub-modules (Phase 51)
+
+- **`pforge-mcp/capabilities.mjs`**: Converted from 3,294-LOC monolith (A3 audit finding) to a ≤50-line re-export shim. All existing consumer imports preserved byte-for-byte — zero import-site modifications. Zero behavioral changes: `buildCapabilitySurface()` output is byte-identical before and after the split (enforced by golden-fixture snapshot gate).
+- **`pforge-mcp/capabilities/tool-metadata.mjs`** (NEW, ~2,114 LOC): `TOOL_METADATA` and `WORKFLOWS` — the 62% data-table majority of the original file.
+- **`pforge-mcp/capabilities/schemas.mjs`** (NEW, ~444 LOC): `CLI_SCHEMA` and `CONFIG_SCHEMA` — the toolkit's external interface definitions.
+- **`pforge-mcp/capabilities/reference.mjs`** (NEW, ~212 LOC): `SYSTEM_REFERENCE` and `APP_VERSION` resolution helper.
+- **`pforge-mcp/capabilities/subsystems.mjs`** (NEW, ~118 LOC): `INNER_LOOP_SURFACE`.
+- **`pforge-mcp/capabilities/surface.mjs`** (NEW, ~340 LOC): `buildCapabilitySurface`, `writeToolsJson`, `writeCliSchema`, and all private builder helpers.
+- **`pforge-mcp/tests/capabilities-snapshot.test.mjs`** (NEW): Golden-fixture snapshot test asserting byte-identical `buildCapabilitySurface()` output. The sole "no behavior change" acceptance criterion.
+- **`pforge-mcp/tests/no-circular-imports.test.mjs`** (NEW): Whole-tree `madge --circular` gate covering all of `pforge-mcp/`. Includes `KNOWN_CYCLES` allowlist with the one pre-existing `orchestrator.mjs > cost-service.mjs` cycle; Phase 53 has the obligation to clear it. Inherited unchanged by Phases 52 and 53.
+- **`pforge-mcp/tests/fixtures/capabilities-surface.golden.json`** (NEW): Checked-in snapshot fixture; must be updated deliberately (not regenerated by CI) when behavioral changes are intentionally accepted.
+- **`pforge-mcp/package.json`**: `madge@^7` added as the only new `devDependency`.
+
+---
+
+### Added — Clean-code agent guidance (Phase 50)
+
+- **`.github/instructions/clean-code.instructions.md`**: New ~98-line instruction file organized by agent decision point — function rules (length, complexity, params, nesting), naming conventions, commenting guidelines, module-size thresholds, quick review checklist, and Boy Scout Rule reminder. Ships to all 9 preset directories and `templates/.github/instructions/`. References the Phase 42 audit catalog and links to `/clean-code-review` skill.
+- **`.github/skills/clean-code-review/SKILL.md`**: Invoke-only skill definition for the `/clean-code-review` slash command. Reuses Phase 42 devDeps (`@babel/parser`, audit scripts) — zero new packages added.
+- **`.github/instructions/architecture-principles.instructions.md`**: Expanded with Clean Architecture Principles section (~80 lines net-add): Dependency Rule, SOLID per-letter table, Component Cohesion (REP/CCP/CRP), Stable Dependencies Principle, Boy Scout Rule with corollaries, and Professional Refusal (Clean Coder). Plan Forge–specific annotations in each subsection.
+
+---
+
+### Added — Phase 42 Clean Code audit catalog
+
+- **`docs/plans/cleanup-findings/`**: Audited Plan Forge's own codebase against *Clean Code* 2nd ed (Robert C. Martin, 2025). Clean Code audit catalog contains 27 actionable findings across 6 categories (A–F): module size (high and medium), long parameter lists, ESLint errors, ESLint warnings, and console.log advisory. Categories summary pivot at `CATEGORIES-SUMMARY.md`; two phase stubs promoted — Phase 43 (ESLint errors, blocking) and Phase 44 (module extraction, architectural debt). No production code changed — read-only audit output only.
+- **`.github/instructions/architecture-principles.instructions.md`**: Temper Guards section updated with three entries derived from the catalog — module size threshold (A-series), long parameter lists (C-series), and ESLint error-severity violations (D-series).
+- **`scripts/audit/`**: Five audit tooling scripts (`eslint-audit.mjs`, `duplication-audit.mjs`, `module-metrics.mjs`, `grep-matrix.mjs`, `long-param-walker.mjs`) and a `README.md`. All runnable independently or via `pforge audit`.
+
+---
+
+### Changed — Centralized stable enums (no behavior change)
+
+- New `pforge-mcp/enums.mjs` — single source of truth for 8 stable small-set identifier arrays: `HOOK_NAMES`, `HOOK_PASCAL`, `HOOK_CATEGORY`, `MODEL_TIERS`, `QUORUM_MODES`, `FORGE_MASTER_MODES`, `WATCHER_MODES`, `COST_SOURCES`, `ERROR_CODES`, `TOOL_NAMES`. All `Object.freeze`'d with runtime assert helpers.
+- `pforge.ps1` + `pforge.sh` smith: hook lists read from `enums.mjs` via new `pforge-mcp/bin/enums-cli.mjs` helper — zero hardcoded hook arrays remain in shell scripts. `pforge.sh` now enumerates LiveGuard hooks (parity fix).
+- `pforge-mcp/capabilities.mjs`: uses `TOOL_NAMES` constant — no hardcoded tool-name literals in `buildForgeMasterCapabilities()`.
+- `docs/capabilities.md` tool table auto-generated by `scripts/generate-capabilities-doc.mjs`; CI guard `scripts/check-capabilities-doc.mjs` added to preCommit chain.
+- `docs/manual/errors-and-exit-codes.html` named-error table auto-generated by `scripts/generate-error-catalog.mjs`; CI guard `scripts/check-error-catalog.mjs` added to preCommit chain.
+- `pforge-mcp/orchestrator.mjs`, `pforge-mcp/cost-service.mjs`, `pforge-master/src/config.mjs`: quorum/cost-source/mode string comparisons replaced with enum references.
+- Architecture Principles Temper Guards updated with enum-import rule.
+
+---
+
+### Added — Forge-Master Dashboard Surfaces
+
+- New settings tab `tab-settings-forgemaster` for observer + auditor configuration: six `cfg-observer-*` fields (enabled, model tier, daily USD cap, hourly narration cap, batch window, Brain capture toggle) and three `cfg-auditor-*` fields (model tier, on-failure invocation, periodic every-N-runs). Validates `everyNRuns` ≥ 5 client-side and server-side (400 if bypassed). Wired to existing `GET/POST /api/config` atomic-merge pattern.
+- Observer narrations live card on main dashboard view: renders last 20 narrations from Brain, live-updates via `observer:narration` WebSocket events, per-narration display includes timestamp + batch-event-count badge + narration text + cost in $. Empty state links to Settings → Forge-Master.
+- Cross-run watcher anomalies card with manual Refresh + 1 h cache (`GET /api/watcher/cross-run`): aggregates `.forge/runs/*/summary.json` for `cross-run.*` anomaly codes; caches result in `.forge/cross-run-cache.json`; table columns code / severity / recommendation.
+- Auditor latest-report card with sanitized markdown render + archive link (`GET /api/auditor/latest`): renders `.forge/health/latest.md` server-side with `<script>`, `<iframe>`, and `javascript:` URL stripping; shows timestamp + "N reports since…" counter + "View history" archive link.
+- New read endpoints `GET /api/watcher/cross-run` and `GET /api/auditor/latest`.
+
+---
+
+## [3.8.1] — 2026-05-19 — Forge-Home Cleanup (Issue #203)
+
+> **One-liner**: Silences 115+ false-positive orphan reports from `forge_memory_report` by expanding its known-file/dir whitelist and ephemeral-pattern exclusions; ships `pforge forge-home-cleanup` CLI + `scripts/forge-home-cleanup.mjs` to archive and prune stale `.forge/` files; adds `.forge/.gitignore` template to keep ephemeral files out of source control. 12 new tests.
+
+### What's new
+
+- **`pforge-mcp/memory.mjs` — `buildMemoryReport` whitelist expanded**: Added ~20 known state files (`cost-history.json`, `drift-history.json`, `model-performance.json`, `quorum-history.jsonl`, `watch-history.jsonl`, `dashboard-state.json`, `secrets.json`, `update-check.json`, `version-check.json`, `secret-scan-cache.json`, `fm-prefs.json`, `forge-master-observer-state.json`, `liveguard-events.jsonl`, `fix-proposals.json`, `team-activity.jsonl`, `health-dna.jsonl`, `last-orch.pid`, `server-ports.json`, `openbrain-queue.archive.jsonl`, `rbac.example.json`) and ~20 known subdirs (`plans/`, `digests/`, `trajectories/`, `crucible/`, `tempering/`, `runbooks/`, `graph/`, `bugs/`, `analysis/`, `fm-sessions/`, `skills-auto/`, `cache/`, `validation/`, `chain-logs/`, `health/`, `archive/`, `network-logs/`, `hammer-forge-master/`, `load-sim/`, `orchestrator-logs/`). Added `ephemeralPatterns` regex array so release-note files, chain-runner/harden/fm/mcp/sequencer logs, meta-bug drafts, tmp files, PID files, and liveguard broadcast logs are excluded from orphan reporting.
+- **`scripts/forge-home-cleanup.mjs`**: New standalone script. Scans `.forge/` for ephemeral files matching the same pattern list, moves them to `.forge/archive/<YYYY-MM>/` (reversible), and optionally deletes archive slots older than `--max-age-days` (default 90). Flags: `--dry-run`, `--no-confirm`, `--max-age-days=N`, `--cwd=<path>`.
+- **`pforge forge-home-cleanup` / `pforge.sh forge-home-cleanup`**: Both shells dispatch to `scripts/forge-home-cleanup.mjs` with all forwarded arguments.
+- **`.forge/.gitignore`**: Template file that keeps release-note archives, chain/harden/fm/mcp logs, meta-bug drafts, and tmp files out of source control.
+
+### Tests
+
+- **`pforge-mcp/tests/forge-home-cleanup.test.mjs`** — 12 tests: whitelist covers all known L2 files (7 known files), state files (18), subdirs (20), ephemeral patterns (14); unknown files still reported as orphans; cleanup script dry-run keeps files in place; cleanup script moves ephemeral files to archive; non-ephemeral files are untouched; `--max-age-days=0` disables pruning. All 12 pass.
+
+---
+
+## [3.8.0] — 2026-05-19 — Auditor Automation & Observer (Phase-39)
+
+> **One-liner**: Ships automated post-run auditing hooks and a live-pipeline Observer that subscribes to the hub WebSocket, batches events, and narrates notable patterns in plain prose via the Forge-Master reasoning loop.
+
+### What's new
+
+- **[S1]** `hooks.postRun.invokeAuditor.onFailure`: orchestrator automatically invokes the plan-health auditor when a run ends in failure. Writes auditor report to `.forge/health/latest.md`. No configuration required — enable via `.forge.json`.
+- **[S2]** `hooks.postRun.invokeAuditor.everyNRuns`: periodic auditor invocation every N runs (configurable). Keeps health reports fresh without manual triggers.
+- **[S3]** `runWatch(mode: "cross-run")`: new cross-run analysis mode in `watcher.mjs`. Aggregates `.forge/runs/*/summary.json` into a health snapshot, feeds it through `detectWatchAnomalies()` with four new anomaly codes — `cross-run.recurring-gate-failure`, `cross-run.retry-rate-spike`, `cross-run.cost-anomaly-trend`, `cross-run.slice-timeout-cluster`.
+- **[S4]** Cross-run watcher wired into A4 plan-health-auditor agent: the auditor now receives cross-run anomaly context alongside standard run history.
+- **[S5]** Observer loop (`pforge-master/src/observer-loop.mjs`): subscribes to the Plan Forge hub WebSocket, buffers incoming events in a 60-second batch window, and flushes to an `onBatch` callback. Handles disconnect with bounded exponential backoff (3 retries).
+- **[S6]** Observer budget caps (`pforge-master/src/observer-budget.mjs`): configurable daily USD spending cap and hourly narration frequency cap. Budget state persists in `.forge/forge-master-observer-state.json` via atomic write. Emits budget-block events when limits are hit.
+- **[S7]** Observer reasoning loop (`pforge-master/src/observer-prompt.mjs`): on each batch flush, builds a compact LLM-friendly event description and runs it through `runObserverTurn()`. Returns 2–5 sentence narration or `"N routine events — nothing notable."` for low-signal batches.
+- **[S8]** CLI surface: `pforge master observe --start [--detach] | --stop | --status`. Daemon writes PID to `.forge/forge-master-observer.pid`.
+- **[S9]** Full unit QA sweep: 6 new test files across both workspaces (observer-loop, observer-budget, observer-reasoning, observer-cli, watcher-cross-run-mode, plan-health-auditor). Zero regressions.
+- **[S10]** Testbed E2E scenarios: 9 fixture JSONs in `docs/plans/testbed-scenarios/`, 62 tests in `pforge-mcp/tests/testbed-auditor-automation.test.mjs`.
+- **[S11]** Docs sweep: `docs/capabilities.md` — added `forge_master_observe`; `docs/manual/forge-json-reference.html` — added `hooks.postRun.invokeAuditor`, `forgeMaster.observer`, `forgeMaster.auditor` config blocks; `docs/CLI-GUIDE.md` — added `master observe` subcommand reference.
+
+### New config keys
+
+| Key | Default | Description |
+|-----|---------|-------------|
+| `hooks.postRun.invokeAuditor.onFailure` | `false` | Trigger auditor on every failed run |
+| `hooks.postRun.invokeAuditor.everyNRuns` | `null` | Trigger auditor every N completed runs |
+| `forgeMaster.observer.enabled` | `false` | Enable background hub observer |
+| `forgeMaster.observer.maxUsdPerDay` | `0.10` | Daily narration budget cap |
+| `forgeMaster.observer.maxNarrationsPerHour` | `6` | Hourly narration frequency cap |
+| `forgeMaster.observer.batchWindowMs` | `60000` | Event batch flush interval (ms) |
+| `forgeMaster.observer.modelTier` | `null` | Model tier (`flagship`/`mid`/`fast`/`null`) |
+| `forgeMaster.auditor.modelTier` | `null` | Auditor model tier |
+| `forgeMaster.auditor.outputPath` | `".forge/health/latest.md"` | Auditor report output path |
+
+### Distribution sync
+
+- **VERSION** — 3.8.0-dev → 3.8.0.
+- **[pforge-mcp/package.json](pforge-mcp/package.json)** — version bumped 3.8.0-dev → 3.8.0.
+- **[pforge-master/package.json](pforge-master/package.json)** — version bumped 3.8.0-dev → 3.8.0.
+- **[package.json](package.json)** — root workspace version bumped 3.8.0-dev → 3.8.0.
+
+---
+
 ## [3.7.0] — 2026-05-18 — Worker Guardrails (A1–A8)
 
 > **One-liner**: Ships the Worker Guardrails sweep: hardened Forbidden Actions matching, diff classification in the PreCommit chain, plan-health auditing, plan/body lock hashes, log-only network allowlists, objective-gated tempering runs, and worker-session tool denylists.
@@ -149,7 +495,7 @@ The plan's Forbidden Actions invariants were preserved throughout:
 
 ### Plan
 
-Built from [docs/plans/archive/Phase-OPENBRAIN-PROMOTION-PLAN.md](https://github.com/srnichols/plan-forge/blob/planning/main/docs/plans/archive/Phase-OPENBRAIN-PROMOTION-PLAN.md) — 6 slices, hardened with scope contract, forbidden actions, per-slice validation gates, and explicit decisions D1–D5.
+Built from [docs/plans/archive/Phase-OPENBRAIN-PROMOTION-PLAN.md](docs/plans/archive/Phase-OPENBRAIN-PROMOTION-PLAN.md) — 6 slices, hardened with scope contract, forbidden actions, per-slice validation gates, and explicit decisions D1–D5.
 
 ---
 

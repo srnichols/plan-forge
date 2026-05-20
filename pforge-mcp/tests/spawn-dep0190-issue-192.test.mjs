@@ -24,12 +24,16 @@ import { fileURLToPath } from "url";
 
 const __dirname = resolve(fileURLToPath(import.meta.url), "..");
 const orchSrc    = readFileSync(resolve(__dirname, "..", "orchestrator.mjs"),   "utf8");
+// Phase-53 S2: spawnWorker was extracted to orchestrator/worker-spawn.mjs
+const workerSpawnSrc = readFileSync(resolve(__dirname, "..", "orchestrator", "worker-spawn.mjs"), "utf8");
 const spacesSrc  = readFileSync(resolve(__dirname, "..", "spaces-sync.mjs"),    "utf8");
 const metricsSrc = readFileSync(resolve(__dirname, "..", "github-metrics.mjs"), "utf8");
 
 describe("Bug #192 — no DEP0190 spawn pattern", () => {
   it("orchestrator.mjs: no `shell: process.platform === \"win32\"` remains", () => {
     expect(orchSrc).not.toContain('shell: process.platform === "win32"');
+    // Also check the extracted sub-module
+    expect(workerSpawnSrc).not.toContain('shell: process.platform === "win32"');
   });
 
   it("spaces-sync.mjs: no `shell: process.platform === \"win32\"` remains", () => {
@@ -41,8 +45,9 @@ describe("Bug #192 — no DEP0190 spawn pattern", () => {
   });
 
   it("orchestrator.mjs: cmd-routing pattern present near the worker spawn", () => {
-    // Block-level check: the cmd-routing prelude appears within ~30 lines of the spawn call.
-    const m = orchSrc.match(/_spawnBin = _isWin \? "cmd" : cmd[\s\S]{0,1200}spawn\(_spawnBin/);
+    // Phase-53 S2: spawnWorker extracted to orchestrator/worker-spawn.mjs
+    // Phase-43 C-series: vars renamed _spawnBin/_isWin → spawnBin/isWindows
+    const m = workerSpawnSrc.match(/spawnBin = isWindows \? "cmd" : cmd[\s\S]{0,1200}return spawn\(spawnBin/);
     expect(m).not.toBeNull();
   });
 
@@ -57,14 +62,18 @@ describe("Bug #192 — no DEP0190 spawn pattern", () => {
   });
 
   it("orchestrator.mjs: worker spawn still pipes stdio and sets windowsHide", () => {
-    const block = orchSrc.match(/spawn\(_spawnBin, _spawnArg, \{[\s\S]*?\}\);/);
+    // Phase-53 S2: spawnWorker extracted to orchestrator/worker-spawn.mjs
+    // Phase-43 C-series: spawn call now uses spawnBin/spawnArgs inside spawnCliWorkerProcess()
+    const block = workerSpawnSrc.match(/return spawn\(spawnBin, spawnArgs, \{[\s\S]*?\}\);/);
     expect(block).not.toBeNull();
     expect(block[0]).toContain("stdio:");
     expect(block[0]).toContain("windowsHide: true");
   });
 
   it("orchestrator.mjs: worker spawn no longer passes a shell option", () => {
-    const block = orchSrc.match(/spawn\(_spawnBin, _spawnArg, \{[\s\S]*?\}\);/);
+    // Phase-53 S2: spawnWorker extracted to orchestrator/worker-spawn.mjs
+    // Phase-43 C-series: spawn call now uses spawnBin/spawnArgs inside spawnCliWorkerProcess()
+    const block = workerSpawnSrc.match(/return spawn\(spawnBin, spawnArgs, \{[\s\S]*?\}\);/);
     expect(block).not.toBeNull();
     expect(block[0]).not.toMatch(/\bshell\s*:/);
   });

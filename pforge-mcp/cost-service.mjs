@@ -16,8 +16,18 @@ import {
   aggregateModelStats,
   isApiOnlyModel,
   QUORUM_PRESETS,
-} from "./orchestrator.mjs";
+} from "./orchestrator/model-scoring.mjs";
+import { COST_SOURCES } from "./enums.mjs";
 import { quotaCacheGet, compareSliceEstimate } from "./foundry-quota.mjs";
+
+const VALID_COST_SOURCE_LABELS = new Set(COST_SOURCES);
+
+function warnOnUnknownCostSourceLabel(source, context) {
+  if (typeof source !== "string" || source.length === 0) return;
+  if (!VALID_COST_SOURCE_LABELS.has(source)) {
+    console.warn(`[cost-service] Unknown cost source '${source}' at ${context}; expected one of ${COST_SOURCES.join(", ")}. Keeping record for backward compatibility.`);
+  }
+}
 
 // ─── Foundry Quota Preflight Helper ──────────────────────────────────
 // When PFORGE_FOUNDRY_QUOTA_PREFLIGHT=1 and provider is microsoft-foundry,
@@ -375,6 +385,31 @@ export const COPILOT_AGENT_MINUTES_PER_SLICE = 30;
  * @param {{ env?: Record<string,string>, forgeConfig?: object, model?: string }} opts
  * @returns {{ provider: string, perRequestUsd: number|null, source: string }}
  */
+function _detectProviderFromModelPrefix(m, env) {
+  if (m.startsWith("gpt-") || m.startsWith("chatgpt-")) {
+    return {
+      provider: Boolean(env.OPENAI_API_KEY) ? "openai-api" : "gh-copilot",
+      source: "model-prefix",
+    };
+  }
+  if (m.startsWith("grok-")) {
+    return { provider: "xai-api", source: "model-prefix" };
+  }
+  if (m.startsWith("claude-")) {
+    return {
+      provider: Boolean(env.ANTHROPIC_API_KEY) ? "anthropic-api" : "claude-cli",
+      source: "model-prefix",
+    };
+  }
+  if (m === "gh-copilot" || m.includes("copilot")) {
+    return { provider: "gh-copilot", source: "model-prefix" };
+  }
+  if (m === "codex-cli" || m.startsWith("codex-")) {
+    return { provider: "codex-cli", source: "model-prefix" };
+  }
+  return null;
+}
+
 export function detectCostModel({ env = {}, forgeConfig = {}, model = "" } = {}) {
   const knownProviders = new Set([
     "gh-copilot", "claude-cli", "codex-cli",
@@ -412,23 +447,9 @@ export function detectCostModel({ env = {}, forgeConfig = {}, model = "" } = {})
   // present, prefer the local CLI (gh-copilot for gpt-*, claude-cli for
   // claude-*) which is subscription-priced.
   const m = typeof model === "string" ? model : "";
-  if (m.startsWith("gpt-") || m.startsWith("chatgpt-")) {
-    const hasKey = Boolean(env.OPENAI_API_KEY);
-    return toResult(hasKey ? "openai-api" : "gh-copilot", "model-prefix");
-  }
-  if (m.startsWith("grok-")) {
-    // Grok has no Copilot host today — direct API only.
-    return toResult("xai-api", "model-prefix");
-  }
-  if (m.startsWith("claude-")) {
-    const hasKey = Boolean(env.ANTHROPIC_API_KEY);
-    return toResult(hasKey ? "anthropic-api" : "claude-cli", "model-prefix");
-  }
-  if (m === "gh-copilot" || m.includes("copilot")) {
-    return toResult("gh-copilot", "model-prefix");
-  }
-  if (m === "codex-cli" || m.startsWith("codex-")) {
-    return toResult("codex-cli", "model-prefix");
+  const prefixResult = _detectProviderFromModelPrefix(m, env);
+  if (prefixResult) {
+    return toResult(prefixResult.provider, prefixResult.source);
   }
 
   // 4. Default
@@ -523,136 +544,89 @@ function debugCostLog(message) {
  *   cost_breakdown: object,
  * }}
  */
-export function priceSlice(tokens, worker) {
-  // ─── Microsoft Foundry: deployment-name → canonical model-key ────────
-  // Detect: explicit provider field OR worker produced by the foundry dispatch.
-  // Resolve the deployment field via .forge/foundry-deployments.json before
-  // the getPricing() lookup. Falls back to deployment name as a literal key.
-  const _rawModel = tokens?.model || "unknown";
-  const isFoundry = (tokens?.provider === "microsoft-foundry") ||
-                    (worker === "api-microsoft-foundry");
-  const model = isFoundry
-    ? resolveFoundryModel(tokens?.deployment || _rawModel)
-    : _rawModel;
-  const tokensIn = typeof tokens?.tokens_in === "number" ? tokens.tokens_in : 0;
-  const tokensOut = typeof tokens?.tokens_out === "number" ? tokens.tokens_out : 0;
-  const breakdown = emptyBreakdown();
+function _priceSliceSubscription({ tokens, model, tokensIn, tokensOut, breakdown }) {
+  const premiumRequests = tokens?.premiumRequests || 0;
+  const cost = premiumRequests * CLI_PER_REQUEST_USD;
+  breakdown.subscription_cost = roundUsd(cost);
+  return {
+    cost_usd: roundUsd(cost),
+    model,
+    tokens_in: tokensIn,
+    tokens_out: tokensOut,
+    cost_breakdown: breakdown,
+  };
+}
 
-  // ─── Subscription CLI path (UNCHANGED — v2.83.0 Forbidden Action) ───
-  if (worker && !worker.startsWith("api-")) {
-    const premiumRequests = tokens?.premiumRequests || 0;
-    const PREMIUM_REQUEST_RATE = 0.01; // ~$0.01 per premium request
-    const cost = premiumRequests * PREMIUM_REQUEST_RATE;
-    breakdown.subscription_cost = roundUsd(cost);
-    return {
-      cost_usd: roundUsd(cost),
-      model,
-      tokens_in: tokensIn,
-      tokens_out: tokensOut,
-      cost_breakdown: breakdown,
-    };
+function _priceSliceXaiTicks({ tokens, model, tokensIn, tokensOut, breakdown }) {
+  const costFromTicks = tokens.cost_in_usd_ticks * 1e-10;
+  const reasoning = tokens?.reasoning_tokens || 0;
+  breakdown.input_uncached = roundUsd(costFromTicks);
+  breakdown.reasoning_tokens = reasoning;
+  breakdown.authoritative_source = "cost_in_usd_ticks";
+  return {
+    cost_usd: roundUsd(costFromTicks),
+    model,
+    tokens_in: tokensIn,
+    tokens_out: tokensOut,
+    cost_breakdown: breakdown,
+  };
+}
+
+function _priceSliceAnthropic({ tokens, model, tokensIn, tokensOut, pricing, breakdown }) {
+  const cacheRead = tokens?.cache_read_tokens || 0;
+  let cache5m = tokens?.cache_creation_5m_tokens || 0;
+  let cache1h = tokens?.cache_creation_1h_tokens || 0;
+  const cacheCombined = tokens?.cache_creation_input_tokens || 0;
+
+  if (cacheCombined > 0 && cache5m === 0 && cache1h === 0) {
+    cache5m = cacheCombined;
+    debugCostLog(`Anthropic cache_creation_input_tokens lacked 5m/1h split for ${model}; defaulted ${cacheCombined} tokens to 5m pricing.`);
   }
 
-  // ─── xAI authoritative override: cost_in_usd_ticks wins ───
-  // Per xAI cost-tracking docs: usage.cost_in_usd_ticks is the authoritative
-  // billed amount per response (1 tick = 1e-10 USD). When present, multiplier
-  // math is bypassed so estimates exactly match the xAI invoice.
-  if (tokens?.vendor === "xai" && typeof tokens?.cost_in_usd_ticks === "number") {
-    const costFromTicks = tokens.cost_in_usd_ticks * 1e-10;
-    const reasoning = tokens?.reasoning_tokens || 0;
-    breakdown.input_uncached = roundUsd(costFromTicks); // attributed for sum invariant
-    breakdown.reasoning_tokens = reasoning;
-    breakdown.authoritative_source = "cost_in_usd_ticks";
-    return {
-      cost_usd: roundUsd(costFromTicks),
-      model,
-      tokens_in: tokensIn,
-      tokens_out: tokensOut,
-      cost_breakdown: breakdown,
-    };
-  }
+  breakdown.input_uncached = roundUsd(tokensIn * pricing.input);
+  breakdown.input_cache_read = roundUsd(cacheRead * pricing.input * pricing.cache_read_multiplier);
+  breakdown.input_cache_write_5m = roundUsd(cache5m * pricing.input * pricing.cache_write_5m_multiplier);
+  breakdown.input_cache_write_1h = roundUsd(cache1h * pricing.input * pricing.cache_write_1h_multiplier);
+  breakdown.output_total = roundUsd(tokensOut * pricing.output);
+  breakdown.tier_adjustment = 0;
 
-  const pricing = getPricing(model);
-  const reasoningTokens = tokens?.reasoning_tokens || 0;
-  breakdown.reasoning_tokens = reasoningTokens; // informational subset of tokens_out
+  const cost = breakdown.input_uncached + breakdown.input_cache_read +
+               breakdown.input_cache_write_5m + breakdown.input_cache_write_1h +
+               breakdown.output_total;
+  return {
+    cost_usd: roundUsd(cost),
+    model,
+    tokens_in: tokensIn,
+    tokens_out: tokensOut,
+    cost_breakdown: breakdown,
+  };
+}
 
-  // ─── Anthropic path: input_tokens EXCLUDES cached + creation ───
-  // Bill each component independently. Per Anthropic prompt caching docs,
-  // total billable input = uncached + cache_read + cache_creation (5m + 1h).
-  if (tokens?.vendor === "anthropic") {
-    const cacheRead = tokens?.cache_read_tokens || 0;
-    let cache5m = tokens?.cache_creation_5m_tokens || 0;
-    let cache1h = tokens?.cache_creation_1h_tokens || 0;
-    const cacheCombined = tokens?.cache_creation_input_tokens || 0;
+function _priceSliceOpenAiXai({ tokens, model, tokensIn, tokensOut, pricing, breakdown }) {
+  const cacheRead = tokens?.cache_read_tokens || 0;
+  const uncachedIn = Math.max(0, tokensIn - cacheRead);
+  const tier = resolveTierMultipliers(pricing, tokens?.service_tier);
+  const inputUncachedCost = uncachedIn * pricing.input * tier.input;
+  const inputCacheReadCost = cacheRead * pricing.input * pricing.cache_read_multiplier * tier.input;
+  const outputCost = tokensOut * pricing.output * tier.output;
+  const standardCost = (uncachedIn * pricing.input) +
+                       (cacheRead * pricing.input * pricing.cache_read_multiplier) +
+                       (tokensOut * pricing.output);
+  const activeCost = inputUncachedCost + inputCacheReadCost + outputCost;
+  breakdown.input_uncached = roundUsd(inputUncachedCost);
+  breakdown.input_cache_read = roundUsd(inputCacheReadCost);
+  breakdown.output_total = roundUsd(outputCost);
+  breakdown.tier_adjustment = roundUsd(activeCost - standardCost);
+  return {
+    cost_usd: roundUsd(activeCost),
+    model,
+    tokens_in: tokensIn,
+    tokens_out: tokensOut,
+    cost_breakdown: breakdown,
+  };
+}
 
-    // If only the combined cache_creation_input_tokens is set (no 5m/1h split),
-    // default the entire amount to 5m rate. Per plan Required Decision #4:
-    // when split is unavailable, 5m rate is the conservative-correct default.
-    if (cacheCombined > 0 && cache5m === 0 && cache1h === 0) {
-      cache5m = cacheCombined;
-      debugCostLog(`Anthropic cache_creation_input_tokens lacked 5m/1h split for ${model}; defaulted ${cacheCombined} tokens to 5m pricing.`);
-    }
-
-    breakdown.input_uncached = roundUsd(tokensIn * pricing.input);
-    breakdown.input_cache_read = roundUsd(cacheRead * pricing.input * pricing.cache_read_multiplier);
-    breakdown.input_cache_write_5m = roundUsd(cache5m * pricing.input * pricing.cache_write_5m_multiplier);
-    breakdown.input_cache_write_1h = roundUsd(cache1h * pricing.input * pricing.cache_write_1h_multiplier);
-    breakdown.output_total = roundUsd(tokensOut * pricing.output);
-    breakdown.tier_adjustment = 0; // Anthropic has no flex/priority tier today
-
-    const cost = breakdown.input_uncached + breakdown.input_cache_read +
-                 breakdown.input_cache_write_5m + breakdown.input_cache_write_1h +
-                 breakdown.output_total;
-    return {
-      cost_usd: roundUsd(cost),
-      model,
-      tokens_in: tokensIn,
-      tokens_out: tokensOut,
-      cost_breakdown: breakdown,
-    };
-  }
-
-  // ─── OpenAI / xAI (computed) path: prompt_tokens INCLUDES cached ───
-  // Subtract cached from input before billing the uncached portion.
-  // Apply service-tier multipliers (flex 0.5×, priority 2.0/1.5× asymmetric).
-  if (tokens?.vendor === "openai" || tokens?.vendor === "xai") {
-    const cacheRead = tokens?.cache_read_tokens || 0;
-    const uncachedIn = Math.max(0, tokensIn - cacheRead);
-    const tier = resolveTierMultipliers(pricing, tokens?.service_tier);
-
-    const inputUncachedCost = uncachedIn * pricing.input * tier.input;
-    const inputCacheReadCost = cacheRead * pricing.input * pricing.cache_read_multiplier * tier.input;
-    const outputCost = tokensOut * pricing.output * tier.output;
-
-    // Tier adjustment = (computed cost at active tier) − (cost at standard tier)
-    // Negative for flex savings, positive for priority surcharge, 0 for standard.
-    const standardCost = (uncachedIn * pricing.input) +
-                         (cacheRead * pricing.input * pricing.cache_read_multiplier) +
-                         (tokensOut * pricing.output);
-    const activeCost = inputUncachedCost + inputCacheReadCost + outputCost;
-    const tierAdjustment = activeCost - standardCost;
-
-    breakdown.input_uncached = roundUsd(inputUncachedCost);
-    breakdown.input_cache_read = roundUsd(inputCacheReadCost);
-    breakdown.output_total = roundUsd(outputCost);
-    breakdown.tier_adjustment = roundUsd(tierAdjustment);
-
-    return {
-      cost_usd: roundUsd(activeCost),
-      model,
-      tokens_in: tokensIn,
-      tokens_out: tokensOut,
-      cost_breakdown: breakdown,
-    };
-  }
-
-  // ─── Unknown / legacy / azure-openai path: backward-compatible math ───
-  // Vendor absent or unrecognized. Existing callers that construct
-  // { tokens_in, tokens_out, model } see identical cost as before. New
-  // optional fields are ignored on this path so cache + reasoning are not
-  // applied without a positive vendor identification (avoids surprise costs).
-  // Phase-FOUNDRY-PROVIDER Slice 5: when isFoundry, apply AOAI deployment-type
-  // multiplier (data-zone / regional = 1.1×; global / provisioned = 1.0×).
+function _priceSliceDefault({ tokensIn, tokensOut, model, pricing, breakdown, isFoundry }) {
   const baseCost = (tokensIn * pricing.input) + (tokensOut * pricing.output);
   let foundryMultiplier = 1.0;
   if (isFoundry && pricing.aoai_deployment_type_multiplier) {
@@ -674,12 +648,108 @@ export function priceSlice(tokens, worker) {
   };
 }
 
+function _priceSliceIsFoundry(tokens, worker) {
+  return tokens?.provider === "microsoft-foundry" || worker === "api-microsoft-foundry";
+}
+
+function _priceSliceNumber(value) {
+  return typeof value === "number" ? value : 0;
+}
+
+function _priceSliceContext(tokens, worker) {
+  const rawModel = tokens?.model || "unknown";
+  const isFoundry = _priceSliceIsFoundry(tokens, worker);
+  return {
+    model: isFoundry ? resolveFoundryModel(tokens?.deployment || rawModel) : rawModel,
+    tokensIn: _priceSliceNumber(tokens?.tokens_in),
+    tokensOut: _priceSliceNumber(tokens?.tokens_out),
+    breakdown: emptyBreakdown(),
+    isFoundry,
+  };
+}
+
+function _priceSliceUsesSubscriptionPricing(worker) {
+  return Boolean(worker) && !worker.startsWith("api-");
+}
+
+function _priceSliceUsesXaiTicks(tokens) {
+  return tokens?.vendor === "xai" && typeof tokens?.cost_in_usd_ticks === "number";
+}
+
+function _priceSliceUsesComputedVendorPricing(tokens) {
+  return tokens?.vendor === "openai" || tokens?.vendor === "xai";
+}
+
+export function priceSlice(tokens, worker) {
+  const { model, tokensIn, tokensOut, breakdown, isFoundry } = _priceSliceContext(tokens, worker);
+
+  if (_priceSliceUsesSubscriptionPricing(worker)) {
+    return _priceSliceSubscription({ tokens: tokens, model: model, tokensIn: tokensIn, tokensOut: tokensOut, breakdown: breakdown });
+  }
+  if (_priceSliceUsesXaiTicks(tokens)) {
+    return _priceSliceXaiTicks({ tokens: tokens, model: model, tokensIn: tokensIn, tokensOut: tokensOut, breakdown: breakdown });
+  }
+
+  const pricing = getPricing(model);
+  breakdown.reasoning_tokens = tokens?.reasoning_tokens || 0;
+
+  if (tokens?.vendor === "anthropic") {
+    return _priceSliceAnthropic({ tokens: tokens, model: model, tokensIn: tokensIn, tokensOut: tokensOut, pricing: pricing, breakdown: breakdown });
+  }
+  if (_priceSliceUsesComputedVendorPricing(tokens)) {
+    return _priceSliceOpenAiXai({ tokens: tokens, model: model, tokensIn: tokensIn, tokensOut: tokensOut, pricing: pricing, breakdown: breakdown });
+  }
+
+  return _priceSliceDefault({ tokensIn: tokensIn, tokensOut: tokensOut, model: model, pricing: pricing, breakdown: breakdown, isFoundry: isFoundry });
+}
+
 /**
  * Build cost breakdown from all slice results.
  * Drop-in replacement for orchestrator.buildCostBreakdown.
  * @param {Array} sliceResults
  * @returns {{ total_cost_usd, by_model, by_slice }}
  */
+function _apportionReviewerCostToModels({ byModel, reviewerModels, reviewerCost, reviewerTokensIn, reviewerTokensOut }) {
+  if (reviewerModels.length === 0) return;
+  if (reviewerCost <= 0 && reviewerTokensIn <= 0 && reviewerTokensOut <= 0) return;
+
+  const share = 1 / reviewerModels.length;
+  for (const rm of reviewerModels) {
+    if (!byModel[rm]) {
+      byModel[rm] = { tokens_in: 0, tokens_out: 0, cost_usd: 0, slices: 0, role: "reviewer" };
+    } else if (!byModel[rm].role) {
+      byModel[rm].role = byModel[rm].cost_usd > 0 ? "mixed" : "reviewer";
+    }
+    byModel[rm].tokens_in += reviewerTokensIn * share;
+    byModel[rm].tokens_out += reviewerTokensOut * share;
+    byModel[rm].cost_usd += reviewerCost * share;
+    byModel[rm].slices += 1;
+  }
+}
+
+function _priceRunContextLabel(sliceResult) {
+  return `slice ${sliceResult?.number || sliceResult?.sliceId || "?"}`;
+}
+
+function _priceRunReviewerTelemetry(sliceResult) {
+  return {
+    reviewerCost: Number(sliceResult.quorum?.reviewerCost) || 0,
+    reviewerModels: Array.isArray(sliceResult.quorum?.models) ? sliceResult.quorum.models : [],
+    reviewerTokensIn: Number(sliceResult.quorum?.dryRunTokens?.tokens_in) || 0,
+    reviewerTokensOut: Number(sliceResult.quorum?.dryRunTokens?.tokens_out) || 0,
+  };
+}
+
+function _priceRunAccumulateModel(byModel, cost) {
+  if (!byModel[cost.model]) {
+    byModel[cost.model] = { tokens_in: 0, tokens_out: 0, cost_usd: 0, slices: 0 };
+  }
+  byModel[cost.model].tokens_in += cost.tokens_in;
+  byModel[cost.model].tokens_out += cost.tokens_out;
+  byModel[cost.model].cost_usd += cost.cost_usd;
+  byModel[cost.model].slices += 1;
+}
+
 export function priceRun(sliceResults) {
   const byModel = {};
   const bySlice = [];
@@ -689,68 +759,27 @@ export function priceRun(sliceResults) {
   let totalOut = 0;
 
   for (const sr of sliceResults) {
+    warnOnUnknownCostSourceLabel(sr?.source ?? null, _priceRunContextLabel(sr));
     if (!sr.tokens || sr.status === "skipped") continue;
-    const cost = priceSlice(sr.tokens, sr.worker);
-    totalCost += cost.cost_usd;
-    totalIn += cost.tokens_in;
-    totalOut += cost.tokens_out;
 
-    // Issue #194 (v3.0.2): aggregate quorum reviewer cost + dry-run tokens.
-    // `sr.quorum` is shaped by orchestrator.runPlan at slice persistence:
-    //   { score, models[], reviewerFallback, reviewerCost, dryRunTokens }
-    // Each reviewer leg consumes ~equal token volume, so we apportion
-    // dryRunTokens and reviewerCost evenly across `models`. `reviewerCost`
-    // joins `total_cost_usd` so the dashboard stops under-reporting the
-    // actual spend by an order of magnitude on quorum-power runs.
-    const reviewerCost = Number(sr.quorum?.reviewerCost) || 0;
-    const reviewerModels = Array.isArray(sr.quorum?.models) ? sr.quorum.models : [];
-    const reviewerTokensIn = Number(sr.quorum?.dryRunTokens?.tokens_in) || 0;
-    const reviewerTokensOut = Number(sr.quorum?.dryRunTokens?.tokens_out) || 0;
+    const cost = priceSlice(sr.tokens, sr.worker);
+    const { reviewerCost, reviewerModels, reviewerTokensIn, reviewerTokensOut } = _priceRunReviewerTelemetry(sr);
+    totalCost += cost.cost_usd;
     totalReviewerCost += reviewerCost;
-    totalIn += reviewerTokensIn;
-    totalOut += reviewerTokensOut;
+    totalIn += cost.tokens_in + reviewerTokensIn;
+    totalOut += cost.tokens_out + reviewerTokensOut;
 
     bySlice.push({
       slice: sr.number || sr.sliceId,
       ...cost,
-      // `cost_usd` stays executor-only for backward compat (existing dashboard
-      // code aggregates it). Reviewer cost is exposed as a sibling field.
       reviewer_cost_usd: Math.round(reviewerCost * 1_000_000) / 1_000_000,
       reviewer_models: reviewerModels,
     });
 
-    if (!byModel[cost.model]) {
-      byModel[cost.model] = { tokens_in: 0, tokens_out: 0, cost_usd: 0, slices: 0 };
-    }
-    byModel[cost.model].tokens_in += cost.tokens_in;
-    byModel[cost.model].tokens_out += cost.tokens_out;
-    byModel[cost.model].cost_usd += cost.cost_usd;
-    byModel[cost.model].slices += 1;
-
-    // Apportion reviewer telemetry evenly across reviewer models.
-    // Skip when all reviewer signals are zero (no reviewer actually ran).
-    if (reviewerModels.length > 0 && (reviewerCost > 0 || reviewerTokensIn > 0 || reviewerTokensOut > 0)) {
-      const share = 1 / reviewerModels.length;
-      const sharedIn = reviewerTokensIn * share;
-      const sharedOut = reviewerTokensOut * share;
-      const sharedCost = reviewerCost * share;
-      for (const rm of reviewerModels) {
-        if (!byModel[rm]) {
-          byModel[rm] = { tokens_in: 0, tokens_out: 0, cost_usd: 0, slices: 0, role: "reviewer" };
-        } else if (!byModel[rm].role) {
-          // Same model appears as both executor and reviewer — mark mixed
-          // so dashboards render an honest tag.
-          byModel[rm].role = byModel[rm].cost_usd > 0 ? "mixed" : "reviewer";
-        }
-        byModel[rm].tokens_in += sharedIn;
-        byModel[rm].tokens_out += sharedOut;
-        byModel[rm].cost_usd += sharedCost;
-        byModel[rm].slices += 1;
-      }
-    }
+    _priceRunAccumulateModel(byModel, cost);
+    _apportionReviewerCostToModels({ byModel: byModel, reviewerModels: reviewerModels, reviewerCost: reviewerCost, reviewerTokensIn: reviewerTokensIn, reviewerTokensOut: reviewerTokensOut });
   }
 
-  // Round model totals
   for (const m of Object.values(byModel)) {
     m.cost_usd = Math.round(m.cost_usd * 1_000_000) / 1_000_000;
     m.tokens_in = Math.round(m.tokens_in);
@@ -776,12 +805,58 @@ export function priceRun(sliceResults) {
  * correction factor to [0.5, 3.0]. Quorum overhead computed when quorumConfig.enabled.
  * Per-plan model recommendation from .forge/model-performance.json.
  */
-export function estimatePlan(plan, model, cwd, quorumConfig = null, resumeFrom = null, worker = null) {
-  // Bug #81: When --resume-from is specified, exclude shipped slices from
-  // the estimate. Mirror SequentialScheduler.execute() skip logic: walk the
-  // topological execution order, start including once we hit resumeFrom.
-  // If resumeFrom is null or doesn't match any slice, we fall through to the
-  // full plan (existing behaviour).
+function _readJsonIfExists(path, fallback = null) {
+  try {
+    if (path && existsSync(path)) {
+      return JSON.parse(readFileSync(path, "utf-8"));
+    }
+  } catch {
+    return fallback;
+  }
+  return fallback;
+}
+
+function _loadForgeConfig(cwd) {
+  const forgeConfig = _readJsonIfExists(cwd ? resolve(cwd, ".forge.json") : null, {});
+  return forgeConfig && typeof forgeConfig === "object" ? forgeConfig : {};
+}
+
+function _loadCostHistory(cwd) {
+  const history = _readJsonIfExists(cwd ? resolve(cwd, ".forge", "cost-history.json") : null, []);
+  return Array.isArray(history) ? history : [];
+}
+
+function _computeAverageTokensPerSlice(history, source = null) {
+  if (!Array.isArray(history) || history.length === 0) return null;
+
+  const totalIn = history.reduce((sum, entry) => sum + (entry.total_tokens_in || 0), 0);
+  const totalOut = history.reduce((sum, entry) => sum + (entry.total_tokens_out || 0), 0);
+  const totalSlices = history.reduce((sum, entry) => sum + (entry.sliceCount || 1), 0);
+  if (totalSlices <= 0) return null;
+
+  return {
+    input: Math.round(totalIn / totalSlices),
+    output: Math.round(totalOut / totalSlices),
+    ...(source && { source }),
+  };
+}
+
+function _computeAveragePremiumPerSlice(history) {
+  if (!Array.isArray(history) || history.length === 0) return null;
+
+  const valid = history.filter(
+    (entry) => typeof entry.total_premium_requests === "number" && (entry.sliceCount || 1) > 0
+  );
+  if (valid.length === 0) return null;
+
+  const sum = valid.reduce(
+    (total, entry) => total + entry.total_premium_requests / (entry.sliceCount || 1),
+    0
+  );
+  return Math.max(0.5, Math.min(5.0, sum / valid.length));
+}
+
+function _resolveEffectiveSlices(plan, resumeFrom) {
   let effectiveSlices = plan.slices;
   let effectiveOrder = plan.dag.order;
   if (resumeFrom !== null && resumeFrom !== undefined) {
@@ -790,245 +865,109 @@ export function estimatePlan(plan, model, cwd, quorumConfig = null, resumeFrom =
     if (startIdx >= 0) {
       effectiveOrder = plan.dag.order.slice(startIdx);
       const includeIds = new Set(effectiveOrder);
-      effectiveSlices = plan.slices.filter((s) => includeIds.has(String(s.number)));
+      effectiveSlices = plan.slices.filter((slice) => includeIds.has(String(slice.number)));
     }
   }
+  return { effectiveSlices, effectiveOrder };
+}
 
-  // Phase-34 Slice 2: Provider-aware cost model detection
-  let forgeConfig = {};
-  try {
-    const forgePath = cwd ? resolve(cwd, ".forge.json") : null;
-    if (forgePath && existsSync(forgePath)) {
-      forgeConfig = JSON.parse(readFileSync(forgePath, "utf-8"));
-    }
-  } catch { /* default to {} */ }
-  const costModel = detectCostModel({ env: process.env, forgeConfig, model });
-  const pricingMode = SUBSCRIPTION_PROVIDERS.has(costModel.provider) ? "subscription" : "token";
+function _calibrateCorrectionFactor(modelKey, cwd) {
+  const history = _loadCostHistory(cwd);
+  const withEstimates = history.filter((entry) => entry.estimated_cost_usd > 0 && entry.total_cost_usd > 0);
+  if (withEstimates.length < 3) return null;
 
-  // Phase 2 Slice 4: Use historical data if available
-  const historyPath = cwd ? resolve(cwd, ".forge", "cost-history.json") : null;
-  let avgTokensPerSlice = null;
+  const ratios = withEstimates.slice(-10).map((entry) => entry.total_cost_usd / entry.estimated_cost_usd);
+  const avgRatio = ratios.reduce((sum, ratio) => sum + ratio, 0) / ratios.length;
+  const correctionFactor = Math.max(0.5, Math.min(3.0, avgRatio));
+  return {
+    correctionFactor,
+    samplesUsed: withEstimates.length,
+    source: "historical",
+    model: modelKey,
+  };
+}
 
-  try {
-    if (historyPath && existsSync(historyPath)) {
-      const history = JSON.parse(readFileSync(historyPath, "utf-8"));
-      if (Array.isArray(history) && history.length > 0) {
-        const totalIn = history.reduce((s, e) => s + (e.total_tokens_in || 0), 0);
-        const totalOut = history.reduce((s, e) => s + (e.total_tokens_out || 0), 0);
-        const totalSlices = history.reduce((s, e) => s + (e.sliceCount || 1), 0);
-        if (totalSlices > 0) {
-          avgTokensPerSlice = {
-            input: Math.round(totalIn / totalSlices),
-            output: Math.round(totalOut / totalSlices),
-            source: `${history.length} prior run(s)`,
-          };
-        }
-      }
-    }
-  } catch {
-    // Fall back to heuristic
-  }
+function _computeQuorumOverhead(quorumConfig, _modelKey, sliceEstimates) {
+  if (!(quorumConfig && quorumConfig.enabled)) return null;
 
-  // Subscription path: calibrate avg premium requests per slice from history
-  let avgPremiumPerSlice = null;
-  if (pricingMode === "subscription") {
-    try {
-      if (historyPath && existsSync(historyPath)) {
-        const history = JSON.parse(readFileSync(historyPath, "utf-8"));
-        if (Array.isArray(history) && history.length > 0) {
-          const valid = history.filter(
-            (e) => typeof e.total_premium_requests === "number" && (e.sliceCount || 1) > 0
-          );
-          if (valid.length > 0) {
-            const sum = valid.reduce(
-              (s, e) => s + e.total_premium_requests / (e.sliceCount || 1),
-              0
-            );
-            avgPremiumPerSlice = Math.max(0.5, Math.min(5.0, sum / valid.length));
-          }
-        }
-      }
-    } catch { /* fall through to default 1.5 */ }
-  }
+  const { effectiveSlices, sliceCount, tokensPerSlice, cwd, costForLeg } = sliceEstimates;
+  const quorumSlices = quorumConfig.auto
+    ? effectiveSlices.filter((slice) => scoreSliceComplexity(slice, cwd).score >= quorumConfig.threshold)
+    : effectiveSlices;
+  const modelCount = quorumConfig.models.length;
+  const dryRunInputPerLeg = tokensPerSlice.input * 1.5;
+  const dryRunOutputPerLeg = tokensPerSlice.output * 0.8;
+  const reviewerInput = dryRunOutputPerLeg * modelCount + tokensPerSlice.input;
+  const reviewerOutput = tokensPerSlice.output * 0.6;
+  const dryRunCostPerSlice = quorumConfig.models.reduce(
+    (sum, legModel) => sum + costForLeg(legModel, dryRunInputPerLeg, dryRunOutputPerLeg),
+    0
+  );
+  const reviewerCostPerSlice = costForLeg(quorumConfig.reviewerModel, reviewerInput, reviewerOutput);
 
-  const tokensPerSlice = avgTokensPerSlice || { input: 2000, output: 5000, source: "heuristic" };
-  const pricing = getPricing(model);
-  const sliceCount = effectiveSlices.length;
-  const totalInputTokens = sliceCount * tokensPerSlice.input;
-  const totalOutputTokens = sliceCount * tokensPerSlice.output;
+  return {
+    quorumSliceCount: quorumSlices.length,
+    totalSliceCount: sliceCount,
+    dryRunCostPerSlice: Math.round(dryRunCostPerSlice * 100) / 100,
+    reviewerCostPerSlice: Math.round(reviewerCostPerSlice * 100) / 100,
+    totalOverheadUSD: Math.round((dryRunCostPerSlice + reviewerCostPerSlice) * quorumSlices.length * 100) / 100,
+    models: quorumConfig.models,
+    reviewerModel: quorumConfig.reviewerModel,
+    slices: quorumSlices.map((slice) => ({
+      number: slice.number,
+      title: slice.title,
+      complexityScore: scoreSliceComplexity(slice, cwd).score,
+    })),
+  };
+}
 
-  // Phase GITHUB-B Slice 5: copilot-coding-agent dispatches GitHub Issues to the
-  // cloud agent — no API token billing and no CLI premium requests. Cost is $0.
-  // Wall-clock time is estimated as sliceCount × COPILOT_AGENT_MINUTES_PER_SLICE.
-  if (worker === "copilot-coding-agent") {
-    return {
-      status: "estimate",
-      sliceCount,
-      executionOrder: effectiveOrder,
-      ...(resumeFrom !== null && resumeFrom !== undefined && { resumeFrom: String(resumeFrom), fullSliceCount: plan.slices.length }),
-      worker: "copilot-coding-agent",
-      model: model || "copilot-coding-agent",
-      tokens: {
-        estimatedInput: totalInputTokens,
-        estimatedOutput: totalOutputTokens,
-        source: tokensPerSlice.source,
-      },
-      estimatedCostUSD: 0,
-      estimated_cost_usd: 0,
-      provider: "copilot-coding-agent",
-      pricingMode: "subscription",
-      wallClockEstimateMinutes: sliceCount * COPILOT_AGENT_MINUTES_PER_SLICE,
-      confidence: "heuristic",
-      slices: effectiveSlices.map((s) => ({
-        number: s.number,
-        title: s.title,
-        depends: s.depends,
-        parallel: s.parallel,
-        scope: s.scope,
-      })),
-    };
-  }
+function _loadModelRecommendation(modelKey, cwd) {
+  if (!cwd) return null;
 
-  let estimatedCost;
-  if (pricingMode === "subscription") {
-    const reqPerSlice = avgPremiumPerSlice !== null ? avgPremiumPerSlice : 1.5;
-    estimatedCost = sliceCount * reqPerSlice * costModel.perRequestUsd;
-  } else {
-    estimatedCost = (totalInputTokens * pricing.input) + (totalOutputTokens * pricing.output);
-  }
-
-  // Cost calibration: compare prior estimates vs actuals to compute correction factor.
-  // Subscription providers are calibrated via avgPremiumPerSlice; skip token-based correction.
-  let costCalibration = null;
-  if (pricingMode === "token") {
-    try {
-      if (historyPath && existsSync(historyPath)) {
-        const history = JSON.parse(readFileSync(historyPath, "utf-8"));
-        const withEstimates = Array.isArray(history) ? history.filter(h => h.estimated_cost_usd > 0 && h.total_cost_usd > 0) : [];
-        if (withEstimates.length >= 3) {
-          const ratios = withEstimates.slice(-10).map(h => h.total_cost_usd / h.estimated_cost_usd);
-          const avgRatio = ratios.reduce((a, b) => a + b, 0) / ratios.length;
-          const correctionFactor = Math.max(0.5, Math.min(3.0, avgRatio)); // Clamp to 0.5x–3x
-          estimatedCost *= correctionFactor;
-          costCalibration = { correctionFactor: Math.round(correctionFactor * 100) / 100, samplesUsed: withEstimates.length, source: "historical" };
-        }
-      }
-    } catch { /* fall through to uncalibrated estimate */ }
-  }
-
-  // Quorum overhead estimation (v2.5)
-  let quorumOverhead = null;
-  if (quorumConfig && quorumConfig.enabled) {
-    const quorumSlices = quorumConfig.auto
-      ? effectiveSlices.filter((s) => scoreSliceComplexity(s, cwd).score >= quorumConfig.threshold)
-      : effectiveSlices;
-    const modelCount = quorumConfig.models.length;
-    // Each quorum slice: N dry-run prompt+response + 1 reviewer
-    const dryRunInputPerLeg = tokensPerSlice.input * 1.5; // Dry-run prompt is larger
-    const dryRunOutputPerLeg = tokensPerSlice.output * 0.8; // Plan output is shorter than code
-    const reviewerInput = dryRunOutputPerLeg * modelCount + tokensPerSlice.input; // All outputs + original
-    const reviewerOutput = tokensPerSlice.output * 0.6;
-
-    // Phase-27.1 Slice 1: price each leg using that model's rate, not the
-    // default model's rate. Without this, power and speed return identical
-    // numbers because both multiply by the same default pricing.
-    //
-    // Phase-29 (v2.83.0): provider-aware per-leg pricing. The base estimate
-    // already routes gpt-* / claude-* to gh-copilot / claude-cli when no API
-    // key is set (issue #120 fix). The quorum overhead block had NOT been
-    // updated, so it still priced every leg via raw API token rates — which
-    // produced ~250× over-estimates for users on gh-copilot. Re-detect the
-    // provider per leg and bill subscription legs as 1 premium request.
-    const costForLeg = (legModel, inTokens, outTokens) => {
-      const legCost = detectCostModel({ env: process.env, forgeConfig, model: legModel });
-      if (SUBSCRIPTION_PROVIDERS.has(legCost.provider)) {
-        // Subscription provider — flat per-request charge regardless of token volume.
-        return legCost.perRequestUsd;
-      }
-      const mPricing = getPricing(legModel);
-      return (inTokens * mPricing.input) + (outTokens * mPricing.output);
-    };
-    const dryRunCostPerSlice = quorumConfig.models.reduce(
-      (sum, m) => sum + costForLeg(m, dryRunInputPerLeg, dryRunOutputPerLeg),
-      0
-    );
-    const reviewerCostPerSlice = costForLeg(quorumConfig.reviewerModel, reviewerInput, reviewerOutput);
-
-    quorumOverhead = {
-      quorumSliceCount: quorumSlices.length,
-      totalSliceCount: sliceCount,
-      dryRunCostPerSlice: Math.round(dryRunCostPerSlice * 100) / 100,
-      reviewerCostPerSlice: Math.round(reviewerCostPerSlice * 100) / 100,
-      totalOverheadUSD: Math.round((dryRunCostPerSlice + reviewerCostPerSlice) * quorumSlices.length * 100) / 100,
-      models: quorumConfig.models,
-      reviewerModel: quorumConfig.reviewerModel,
-      slices: quorumSlices.map((s) => ({
-        number: s.number,
-        title: s.title,
-        complexityScore: scoreSliceComplexity(s, cwd).score,
-      })),
-    };
-  }
-
-  // Quorum viability assessment — runtime-aware validation (#73)
-  let quorumViability = null;
-  if (quorumConfig && quorumConfig.enabled) {
-    const presetName = quorumConfig.preset || null;
-    if (presetName && QUORUM_PRESETS[presetName]) {
-      quorumViability = assessQuorumViability(presetName);
-    }
-  }
-
-  // Phase 3: Recommend cheapest model with >80% success rate from performance history
-  let modelRecommendation = null;
-  if (cwd) {
-    try {
-      const perfRecords = loadModelPerformance(cwd);
-      if (perfRecords.length > 0) {
-        const stats = aggregateModelStats(perfRecords);
-        // Minimum 3 slices of data before trusting a model's success rate
-        const MIN_SAMPLE = 3;
-        const qualified = Object.entries(stats)
-          .filter(([m, s]) => !isApiOnlyModel(m) && s.total_slices >= MIN_SAMPLE && s.success_rate > 0.8)
-          .map(([m, s]) => ({
-            model: m,
-            success_rate: s.success_rate,
-            total_slices: s.total_slices,
-            avg_cost_usd: s.avg_cost_usd,
-          }))
-          .sort((a, b) => a.avg_cost_usd - b.avg_cost_usd);
-
-        if (qualified.length > 0) {
-          const best = qualified[0];
-          modelRecommendation = {
-            model: best.model,
-            reason: `Cheapest model with >${(0.8 * 100).toFixed(0)}% success rate`,
-            success_rate: best.success_rate,
-            avg_cost_usd_per_slice: best.avg_cost_usd,
-            based_on_slices: best.total_slices,
-            all_qualified: qualified,
-          };
-        }
-      }
-    } catch {
-      // Non-fatal — skip recommendation if performance data unavailable
-    }
-  }
-
-  // Slice auto-split advisory: flag slices that have timed out or exceeded task count thresholds
-  let splitAdvisories = [];
   try {
     const perfRecords = loadModelPerformance(cwd);
-    for (const s of effectiveSlices) {
-      const priorFailures = perfRecords.filter(p =>
-        p.sliceTitle && s.title && p.sliceTitle.toLowerCase() === s.title.toLowerCase() && p.status !== "passed"
+    if (perfRecords.length === 0) return null;
+
+    const stats = aggregateModelStats(perfRecords);
+    const MIN_SAMPLE = 3;
+    const qualified = Object.entries(stats)
+      .filter(([candidate, stat]) => !isApiOnlyModel(candidate) && stat.total_slices >= MIN_SAMPLE && stat.success_rate > 0.8)
+      .map(([candidate, stat]) => ({
+        model: candidate,
+        success_rate: stat.success_rate,
+        total_slices: stat.total_slices,
+        avg_cost_usd: stat.avg_cost_usd,
+      }))
+      .sort((a, b) => a.avg_cost_usd - b.avg_cost_usd);
+    if (qualified.length === 0) return null;
+
+    const best = qualified[0];
+    return {
+      model: best.model,
+      reason: `Cheapest model with >${(0.8 * 100).toFixed(0)}% success rate`,
+      success_rate: best.success_rate,
+      avg_cost_usd_per_slice: best.avg_cost_usd,
+      based_on_slices: best.total_slices,
+      all_qualified: qualified,
+    };
+  } catch {
+    return null;
+  }
+}
+
+function _loadSplitAdvisories(effectiveSlices, cwd) {
+  try {
+    const perfRecords = loadModelPerformance(cwd);
+    return effectiveSlices.reduce((items, slice) => {
+      const priorFailures = perfRecords.filter((record) =>
+        record.sliceTitle && slice.title && record.sliceTitle.toLowerCase() === slice.title.toLowerCase() && record.status !== "passed"
       );
-      const taskCount = s.tasks?.length || 0;
-      const scopeCount = s.scope?.length || 0;
+      const taskCount = slice.tasks?.length || 0;
+      const scopeCount = slice.scope?.length || 0;
       if (priorFailures.length >= 2 || (taskCount > 6 && scopeCount > 4)) {
-        splitAdvisories.push({
-          sliceNumber: s.number,
-          sliceTitle: s.title,
+        items.push({
+          sliceNumber: slice.number,
+          sliceTitle: slice.title,
           reason: priorFailures.length >= 2
             ? `Failed ${priorFailures.length} time(s) historically — consider splitting`
             : `${taskCount} tasks + ${scopeCount} scope files — may be too large`,
@@ -1037,14 +976,164 @@ export function estimatePlan(plan, model, cwd, quorumConfig = null, resumeFrom =
           priorFailures: priorFailures.length,
         });
       }
-    }
-  } catch { /* best-effort */ }
+      return items;
+    }, []);
+  } catch {
+    return [];
+  }
+}
 
+function _estimatePlanResumeFields(plan, resumeFrom) {
+  return resumeFrom !== null && resumeFrom !== undefined
+    ? { resumeFrom: String(resumeFrom), fullSliceCount: plan.slices.length }
+    : {};
+}
+
+function _buildCopilotCodingAgentEstimate({ plan, effectiveSlices, effectiveOrder, resumeFrom, model, tokensPerSlice }) {
+  const sliceCount = effectiveSlices.length;
+  const totalInputTokens = sliceCount * tokensPerSlice.input;
+  const totalOutputTokens = sliceCount * tokensPerSlice.output;
   return {
     status: "estimate",
     sliceCount,
     executionOrder: effectiveOrder,
-    ...(resumeFrom !== null && resumeFrom !== undefined && { resumeFrom: String(resumeFrom), fullSliceCount: plan.slices.length }),
+    ..._estimatePlanResumeFields(plan, resumeFrom),
+    worker: "copilot-coding-agent",
+    model: model || "copilot-coding-agent",
+    tokens: {
+      estimatedInput: totalInputTokens,
+      estimatedOutput: totalOutputTokens,
+      source: tokensPerSlice.source,
+    },
+    estimatedCostUSD: 0,
+    estimated_cost_usd: 0,
+    provider: "copilot-coding-agent",
+    pricingMode: "subscription",
+    wallClockEstimateMinutes: sliceCount * COPILOT_AGENT_MINUTES_PER_SLICE,
+    confidence: "heuristic",
+    slices: effectiveSlices.map((slice) => ({
+      number: slice.number,
+      title: slice.title,
+      depends: slice.depends,
+      parallel: slice.parallel,
+      scope: slice.scope,
+    })),
+  };
+}
+
+function _buildEstimatePlanSlices(effectiveSlices, cwd, quorumConfig) {
+  return effectiveSlices.map((slice) => {
+    const sliceType = inferSliceType(slice);
+    const recommendation = cwd ? recommendModel(cwd, sliceType) : null;
+    const complexityScore = quorumConfig && quorumConfig.enabled
+      ? scoreSliceComplexity(slice, cwd).score
+      : null;
+    return {
+      number: slice.number,
+      title: slice.title,
+      depends: slice.depends,
+      parallel: slice.parallel,
+      scope: slice.scope,
+      sliceType,
+      ...(recommendation && {
+        recommendedModel: {
+          model: recommendation.model,
+          success_rate: recommendation.success_rate,
+          based_on_slices: recommendation.total_slices,
+        },
+      }),
+      ...(quorumConfig && quorumConfig.enabled && {
+        complexityScore,
+        quorumEligible: quorumConfig.auto
+          ? complexityScore >= quorumConfig.threshold
+          : true,
+      }),
+    };
+  });
+}
+
+function _estimatePlanHistoryContext(cwd, pricingMode) {
+  const history = _loadCostHistory(cwd);
+  return {
+    avgTokensPerSlice: _computeAverageTokensPerSlice(
+      history,
+      history.length > 0 ? `${history.length} prior run(s)` : null
+    ),
+    avgPremiumPerSlice: pricingMode === "subscription"
+      ? _computeAveragePremiumPerSlice(history)
+      : null,
+  };
+}
+
+function _estimatePlanBaseCost({ pricingMode, sliceCount, avgPremiumPerSlice, costModel, totalInputTokens, totalOutputTokens, pricing }) {
+  if (pricingMode === "subscription") {
+    const reqPerSlice = avgPremiumPerSlice !== null ? avgPremiumPerSlice : 1.5;
+    return sliceCount * reqPerSlice * costModel.perRequestUsd;
+  }
+  return (totalInputTokens * pricing.input) + (totalOutputTokens * pricing.output);
+}
+
+function _estimatePlanCostCalibration(pricingMode, model, cwd) {
+  if (pricingMode !== "token") return null;
+
+  const correction = _calibrateCorrectionFactor(model, cwd);
+  if (!correction) return null;
+
+  return {
+    appliedFactor: correction.correctionFactor,
+    output: {
+      correctionFactor: Math.round(correction.correctionFactor * 100) / 100,
+      samplesUsed: correction.samplesUsed,
+      source: correction.source,
+    },
+  };
+}
+
+function _estimatePlanQuorumViability(quorumConfig) {
+  if (!(quorumConfig && quorumConfig.enabled)) return null;
+
+  const presetName = quorumConfig.preset || null;
+  if (!(presetName && QUORUM_PRESETS[presetName])) return null;
+  return assessQuorumViability(presetName);
+}
+
+function _estimatePlanFoundryQuota(totalInputTokens, totalOutputTokens, provider, cwd) {
+  return _computeFoundryQuota({
+    estimatedTokensIn: totalInputTokens,
+    estimatedTokensOut: totalOutputTokens,
+    provider,
+    cwd,
+  });
+}
+
+function _buildEstimatePlanResult({
+  plan,
+  resumeFrom,
+  model,
+  costModel,
+  pricingMode,
+  avgTokensPerSlice,
+  splitAdvisories,
+  modelRecommendation,
+  estimatedCost,
+  totalInputTokens,
+  totalOutputTokens,
+  tokensPerSlice,
+  effectiveOrder,
+  effectiveSlices,
+  sliceCount,
+  quorumOverhead,
+  quorumViability,
+  costCalibration,
+  cwd,
+  quorumConfig,
+}) {
+  const foundryQuota = _estimatePlanFoundryQuota(totalInputTokens, totalOutputTokens, costModel.provider, cwd);
+  return {
+    status: "estimate",
+    sliceCount,
+    executionOrder: effectiveOrder,
+    ..._estimatePlanResumeFields(plan, resumeFrom),
     model: model || "auto",
     ...(modelRecommendation && { modelRecommendation }),
     ...(splitAdvisories.length > 0 && { splitAdvisories }),
@@ -1064,41 +1153,80 @@ export function estimatePlan(plan, model, cwd, quorumConfig = null, resumeFrom =
     }),
     ...(quorumViability && { quorumViability }),
     confidence: avgTokensPerSlice ? "historical" : "heuristic",
-    ...(() => {
-      const _fq = _computeFoundryQuota({
-        estimatedTokensIn: totalInputTokens,
-        estimatedTokensOut: totalOutputTokens,
-        provider: costModel.provider,
-        cwd,
-      });
-      return _fq ? { foundryQuota: _fq } : {};
-    })(),
-    slices: effectiveSlices.map((s) => {
-      const sliceType = inferSliceType(s);
-      const rec = cwd ? recommendModel(cwd, sliceType) : null;
-      return {
-        number: s.number,
-        title: s.title,
-        depends: s.depends,
-        parallel: s.parallel,
-        scope: s.scope,
-        sliceType,
-        ...(rec && {
-          recommendedModel: {
-            model: rec.model,
-            success_rate: rec.success_rate,
-            based_on_slices: rec.total_slices,
-          },
-        }),
-        ...(quorumConfig && quorumConfig.enabled && {
-          complexityScore: scoreSliceComplexity(s, cwd).score,
-          quorumEligible: quorumConfig.auto
-            ? scoreSliceComplexity(s, cwd).score >= quorumConfig.threshold
-            : true,
-        }),
-      };
-    }),
+    ...(foundryQuota && { foundryQuota }),
+    slices: _buildEstimatePlanSlices(effectiveSlices, cwd, quorumConfig),
   };
+}
+
+export function estimatePlan({ plan, model, cwd, quorumConfig = null, resumeFrom = null, worker = null }) {
+  const { effectiveSlices, effectiveOrder } = _resolveEffectiveSlices(plan, resumeFrom);
+  const forgeConfig = _loadForgeConfig(cwd);
+  const costModel = detectCostModel({ env: process.env, forgeConfig, model });
+  const pricingMode = SUBSCRIPTION_PROVIDERS.has(costModel.provider) ? "subscription" : "token";
+  const { avgTokensPerSlice, avgPremiumPerSlice } = _estimatePlanHistoryContext(cwd, pricingMode);
+  const tokensPerSlice = avgTokensPerSlice || { input: 2000, output: 5000, source: "heuristic" };
+  const pricing = getPricing(model);
+  const sliceCount = effectiveSlices.length;
+  const totalInputTokens = sliceCount * tokensPerSlice.input;
+  const totalOutputTokens = sliceCount * tokensPerSlice.output;
+
+  if (worker === "copilot-coding-agent") {
+    return _buildCopilotCodingAgentEstimate({ plan: plan, effectiveSlices: effectiveSlices, effectiveOrder: effectiveOrder, resumeFrom: resumeFrom, model: model, tokensPerSlice: tokensPerSlice });
+  }
+
+  let estimatedCost = _estimatePlanBaseCost({
+    pricingMode,
+    sliceCount,
+    avgPremiumPerSlice,
+    costModel,
+    totalInputTokens,
+    totalOutputTokens,
+    pricing,
+  });
+  const calibration = _estimatePlanCostCalibration(pricingMode, model, cwd);
+  const costCalibration = calibration?.output || null;
+  if (calibration) {
+    estimatedCost *= calibration.appliedFactor;
+  }
+
+  const costForLeg = (legModel, inTokens, outTokens) => {
+    const legCost = detectCostModel({ env: process.env, forgeConfig, model: legModel });
+    if (SUBSCRIPTION_PROVIDERS.has(legCost.provider)) {
+      // Subscription provider — flat per-request charge regardless of token volume.
+      return legCost.perRequestUsd;
+    }
+    const mPricing = getPricing(legModel);
+    return (inTokens * mPricing.input) + (outTokens * mPricing.output);
+  };
+
+  return _buildEstimatePlanResult({
+    plan,
+    resumeFrom,
+    model,
+    costModel,
+    pricingMode,
+    avgTokensPerSlice,
+    splitAdvisories: _loadSplitAdvisories(effectiveSlices, cwd),
+    modelRecommendation: _loadModelRecommendation(model, cwd),
+    estimatedCost,
+    totalInputTokens,
+    totalOutputTokens,
+    tokensPerSlice,
+    effectiveOrder,
+    effectiveSlices,
+    sliceCount,
+    quorumOverhead: _computeQuorumOverhead(quorumConfig, model, {
+      effectiveSlices,
+      sliceCount,
+      tokensPerSlice,
+      cwd,
+      costForLeg,
+    }),
+    quorumViability: _estimatePlanQuorumViability(quorumConfig),
+    costCalibration,
+    cwd,
+    quorumConfig,
+  });
 }
 
 /**
@@ -1109,40 +1237,39 @@ export function estimatePlan(plan, model, cwd, quorumConfig = null, resumeFrom =
  * @param {"auto"|"power"|"speed"|"false"} mode
  * @returns {object|null} quorumConfig for estimatePlan, or null for mode "false".
  */
+function _buildQuorumAutoConfig() {
+  return {
+    enabled: true,
+    auto: true,
+    threshold: 5,
+    models: QUORUM_PRESETS.speed?.models || ["claude-sonnet-4.6"],
+    reviewerModel: QUORUM_PRESETS.speed?.reviewerModel || "claude-sonnet-4.6",
+    preset: "speed",
+  };
+}
+
+function _buildQuorumPresetConfig(presetName, fallbackThreshold, fallbackReviewerModel) {
+  return {
+    enabled: true,
+    auto: false,
+    threshold: QUORUM_PRESETS[presetName]?.threshold ?? fallbackThreshold,
+    models: QUORUM_PRESETS[presetName]?.models || [],
+    reviewerModel: QUORUM_PRESETS[presetName]?.reviewerModel || fallbackReviewerModel,
+    preset: presetName,
+  };
+}
+
 export function buildQuorumConfigForMode(mode) {
   if (mode === "false" || mode === false) return null;
-  if (mode === "auto") {
-    return {
-      enabled: true,
-      auto: true,
-      // Phase-27.1 Slice 3: threshold lowered from 7 → 5 to match
-      // QUORUM_PRESETS.power.threshold. `5` restores the "auto picks
-      // what power would force" semantic.
-      threshold: 5,
-      models: QUORUM_PRESETS.speed?.models || ["claude-sonnet-4.6"],
-      reviewerModel: QUORUM_PRESETS.speed?.reviewerModel || "claude-sonnet-4.6",
-      preset: "speed",
-    };
-  }
-  if (mode === "power") {
-    return {
-      enabled: true,
-      auto: false,
-      threshold: QUORUM_PRESETS.power?.threshold ?? 5,
-      models: QUORUM_PRESETS.power?.models || [],
-      reviewerModel: QUORUM_PRESETS.power?.reviewerModel || "claude-opus-4.7",
-      preset: "power",
-    };
-  }
-  if (mode === "speed") {
-    return {
-      enabled: true,
-      auto: false,
-      threshold: QUORUM_PRESETS.speed?.threshold ?? 7,
-      models: QUORUM_PRESETS.speed?.models || [],
-      reviewerModel: QUORUM_PRESETS.speed?.reviewerModel || "claude-sonnet-4.6",
-      preset: "speed",
-    };
+
+  const builders = {
+    auto: _buildQuorumAutoConfig,
+    power: () => _buildQuorumPresetConfig("power", 5, "claude-opus-4.7"),
+    speed: () => _buildQuorumPresetConfig("speed", 7, "claude-sonnet-4.6"),
+  };
+  const builder = builders[mode];
+  if (builder) {
+    return builder();
   }
   throw new Error(`buildQuorumConfigForMode: unknown mode "${mode}" — expected auto | power | speed | false`);
 }
@@ -1172,6 +1299,46 @@ export function buildQuorumConfigForMode(mode) {
  *   generatedAt: string
  * }}
  */
+const VALID_ESTIMATE_SLICE_MODES = new Set(["auto", "power", "speed", "false"]);
+
+function _estimateSliceTokensPerSlice(resolvedCwd) {
+  return _computeAverageTokensPerSlice(_loadCostHistory(resolvedCwd)) || { input: 2000, output: 5000 };
+}
+
+function _estimateSliceQuorumDecision(quorumConfig, complexityScore, mode) {
+  if (!quorumConfig) {
+    return { quorumEligible: false, rationale: "mode false: quorum disabled" };
+  }
+  if (quorumConfig.auto) {
+    const quorumEligible = complexityScore >= quorumConfig.threshold;
+    return {
+      quorumEligible,
+      rationale: quorumEligible
+        ? `threshold ${quorumConfig.threshold} met: complexity ${complexityScore}`
+        : `threshold ${quorumConfig.threshold} not met: complexity ${complexityScore}`,
+    };
+  }
+  return {
+    quorumEligible: true,
+    rationale: `mode ${mode}: all slices quorum-eligible`,
+  };
+}
+
+function _estimateSliceOverhead(quorumEligible, quorumConfig, tokensPerSlice, costForLeg) {
+  if (!(quorumEligible && quorumConfig)) return 0;
+
+  const dryRunInput = tokensPerSlice.input * 1.5;
+  const dryRunOutput = tokensPerSlice.output * 0.8;
+  const dryRunCost = quorumConfig.models.reduce(
+    (sum, legModel) => sum + costForLeg(legModel, dryRunInput, dryRunOutput),
+    0
+  );
+  const reviewerInput = dryRunOutput * quorumConfig.models.length + tokensPerSlice.input;
+  const reviewerOutput = tokensPerSlice.output * 0.6;
+  const reviewerCost = costForLeg(quorumConfig.reviewerModel, reviewerInput, reviewerOutput);
+  return dryRunCost + reviewerCost;
+}
+
 export function estimateSlice({ plan, sliceNumber, mode = "auto", model = "claude-sonnet-4.5", cwd, env = process.env } = {}) {
   if (!plan || !plan.slices) {
     throw new Error("estimateSlice: plan object with slices is required");
@@ -1181,46 +1348,13 @@ export function estimateSlice({ plan, sliceNumber, mode = "auto", model = "claud
   if (!slice) {
     throw new Error(`estimateSlice: sliceNumber "${target}" not found in plan (available: ${plan.slices.map((s) => s.number).join(", ")})`);
   }
-
-  // Validate mode before use
-  const VALID_MODES = ["auto", "power", "speed", "false"];
-  if (!VALID_MODES.includes(mode)) {
+  if (!VALID_ESTIMATE_SLICE_MODES.has(mode)) {
     throw new Error(`estimateSlice: unknown mode "${mode}" — expected auto | power | speed | false`);
   }
 
   const resolvedCwd = cwd === null ? null : (cwd || process.cwd());
-
-  // Historical avg tokens (same logic as estimatePlan, but no correction factor)
-  const historyPath = resolvedCwd ? resolve(resolvedCwd, ".forge", "cost-history.json") : null;
-  let avgTokensPerSlice = null;
-  try {
-    if (historyPath && existsSync(historyPath)) {
-      const history = JSON.parse(readFileSync(historyPath, "utf-8"));
-      if (Array.isArray(history) && history.length > 0) {
-        const totalIn = history.reduce((s, e) => s + (e.total_tokens_in || 0), 0);
-        const totalOut = history.reduce((s, e) => s + (e.total_tokens_out || 0), 0);
-        const totalSlices = history.reduce((s, e) => s + (e.sliceCount || 1), 0);
-        if (totalSlices > 0) {
-          avgTokensPerSlice = { input: Math.round(totalIn / totalSlices), output: Math.round(totalOut / totalSlices) };
-        }
-      }
-    }
-  } catch { /* fall back to heuristic */ }
-  const tokensPerSlice = avgTokensPerSlice || { input: 2000, output: 5000 };
-
-  // Phase-29 (v2.83.0): provider-aware base + overhead. estimateSlice was
-  // unconditionally using token-based MODEL_PRICING for both base and
-  // quorum overhead, which over-estimated by ~250× for users on
-  // subscription CLIs (gh-copilot, claude-cli). Mirror estimatePlan's
-  // detection logic so the per-slice picker numbers agree with the
-  // run-level estimate.
-  let forgeConfig = {};
-  try {
-    const forgePath = resolvedCwd ? resolve(resolvedCwd, ".forge.json") : null;
-    if (forgePath && existsSync(forgePath)) {
-      forgeConfig = JSON.parse(readFileSync(forgePath, "utf-8"));
-    }
-  } catch { /* default to {} */ }
+  const tokensPerSlice = _estimateSliceTokensPerSlice(resolvedCwd);
+  const forgeConfig = _loadForgeConfig(resolvedCwd);
   const costForLeg = (legModel, inTokens, outTokens) => {
     const legCost = detectCostModel({ env, forgeConfig, model: legModel });
     if (SUBSCRIPTION_PROVIDERS.has(legCost.provider)) {
@@ -1230,48 +1364,12 @@ export function estimateSlice({ plan, sliceNumber, mode = "auto", model = "claud
     return (inTokens * mPricing.input) + (outTokens * mPricing.output);
   };
 
-  // Base cost respects the active provider (subscription vs API)
   const baseCostUSD = costForLeg(model, tokensPerSlice.input, tokensPerSlice.output);
-
-  // Complexity scoring
   const { score: complexityScore } = scoreSliceComplexity(slice, resolvedCwd);
-
-  // Quorum config for the requested mode
   const quorumConfig = buildQuorumConfigForMode(mode);
-
-  // Determine quorum eligibility
-  let quorumEligible = false;
-  let rationale;
-  if (!quorumConfig) {
-    rationale = "mode false: quorum disabled";
-  } else if (quorumConfig.auto) {
-    quorumEligible = complexityScore >= quorumConfig.threshold;
-    rationale = quorumEligible
-      ? `threshold ${quorumConfig.threshold} met: complexity ${complexityScore}`
-      : `threshold ${quorumConfig.threshold} not met: complexity ${complexityScore}`;
-  } else {
-    // power / speed: force all slices into quorum
-    quorumEligible = true;
-    rationale = `mode ${mode}: all slices quorum-eligible`;
-  }
-
-  // Compute quorum overhead if eligible (same per-leg loop as estimatePlan)
-  let overheadUSD = 0;
-  if (quorumEligible && quorumConfig) {
-    const dryRunInput = tokensPerSlice.input * 1.5;
-    const dryRunOutput = tokensPerSlice.output * 0.8;
-    const dryRunCost = quorumConfig.models.reduce(
-      (sum, m) => sum + costForLeg(m, dryRunInput, dryRunOutput),
-      0
-    );
-    const reviewerInput = dryRunOutput * quorumConfig.models.length + tokensPerSlice.input;
-    const reviewerOutput = tokensPerSlice.output * 0.6;
-    const reviewerCost = costForLeg(quorumConfig.reviewerModel, reviewerInput, reviewerOutput);
-    overheadUSD = dryRunCost + reviewerCost;
-  }
-
+  const { quorumEligible, rationale } = _estimateSliceQuorumDecision(quorumConfig, complexityScore, mode);
+  const overheadUSD = _estimateSliceOverhead(quorumEligible, quorumConfig, tokensPerSlice, costForLeg);
   const estimatedCostUSD = baseCostUSD + overheadUSD;
-
   const _sliceProvider = detectCostModel({ env, forgeConfig, model }).provider;
   const _sliceFq = _computeFoundryQuota({
     estimatedTokensIn: tokensPerSlice.input,
@@ -1331,10 +1429,10 @@ export function estimateQuorum({ plan, cwd, resumeFrom = null, defaultModel = "c
   const powerConfig = buildQuorumConfigForMode("power");
   const speedConfig = buildQuorumConfigForMode("speed");
 
-  const estAuto = estimatePlan(plan, defaultModel, resolvedCwd, autoConfig, resumeFrom);
-  const estPower = estimatePlan(plan, defaultModel, resolvedCwd, powerConfig, resumeFrom);
-  const estSpeed = estimatePlan(plan, defaultModel, resolvedCwd, speedConfig, resumeFrom);
-  const estNone = estimatePlan(plan, defaultModel, resolvedCwd, null, resumeFrom);
+  const estAuto = estimatePlan({ plan, model: defaultModel, cwd: resolvedCwd, quorumConfig: autoConfig, resumeFrom });
+  const estPower = estimatePlan({ plan, model: defaultModel, cwd: resolvedCwd, quorumConfig: powerConfig, resumeFrom });
+  const estSpeed = estimatePlan({ plan, model: defaultModel, cwd: resolvedCwd, quorumConfig: speedConfig, resumeFrom });
+  const estNone = estimatePlan({ plan, model: defaultModel, cwd: resolvedCwd, resumeFrom });
 
   // Per-mode, per-slice breakdown (additive — does not alter existing keys).
   // Uses estimateSlice for parity with the single-slice MCP tool. Un-calibrated

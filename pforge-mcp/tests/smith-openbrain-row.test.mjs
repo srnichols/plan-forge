@@ -17,6 +17,7 @@ import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, rmSync, existsSync
 import { resolve, join, dirname } from "node:path";
 import { tmpdir } from "node:os";
 import { fileURLToPath } from "node:url";
+import { SERVER_COMBINED_SRC } from "./helpers/server-combined-src.mjs";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
@@ -138,7 +139,7 @@ describe("forge_smith L3 OpenBrain status row (Phase-OPENBRAIN-PROMOTION Slice 3
   // used by smith-drain-warning.test.mjs.
 
   it("server.mjs imports isOpenBrainConfigured at module scope", () => {
-    const serverSrc = readFileSync(resolve(__dirname, "..", "server.mjs"), "utf-8");
+    const serverSrc = SERVER_COMBINED_SRC;
     expect(serverSrc).toContain("isOpenBrainConfigured,");
   });
 
@@ -146,7 +147,7 @@ describe("forge_smith L3 OpenBrain status row (Phase-OPENBRAIN-PROMOTION Slice 3
     // Note: server.mjs uses \u2713 / \u26A0 escape sequences in the source,
     // so readFileSync returns the six-byte ASCII escape, not the rendered glyph.
     // Match the ASCII-safe portion of each line plus the literal escape strings.
-    const serverSrc = readFileSync(resolve(__dirname, "..", "server.mjs"), "utf-8");
+    const serverSrc = SERVER_COMBINED_SRC;
     expect(serverSrc).toContain("L3 OpenBrain:");
     expect(serverSrc).toContain("configured (Reflexion + Federation active)");
     expect(serverSrc).toContain("not configured");
@@ -155,12 +156,12 @@ describe("forge_smith L3 OpenBrain status row (Phase-OPENBRAIN-PROMOTION Slice 3
   });
 
   it("server.mjs references pforge brain hint in the not-configured row", () => {
-    const serverSrc = readFileSync(resolve(__dirname, "..", "server.mjs"), "utf-8");
+    const serverSrc = SERVER_COMBINED_SRC;
     expect(serverSrc).toContain("pforge brain hint");
   });
 
   it("server.mjs references the OpenBrain install URL", () => {
-    const serverSrc = readFileSync(resolve(__dirname, "..", "server.mjs"), "utf-8");
+    const serverSrc = SERVER_COMBINED_SRC;
     expect(serverSrc).toContain("https://srnichols.github.io/OpenBrain");
   });
 });

@@ -41,6 +41,62 @@ export function quotaCacheSet(key, value, ttlMs = 5 * 60 * 1_000) {
   _cache.set(key, { value, expiresAt: Date.now() + ttlMs });
 }
 
+function buildQuotaCacheKey(subscriptionId, resourceGroup, accountName, deploymentName) {
+  return `${subscriptionId}/${resourceGroup}/${accountName}/${deploymentName}`;
+}
+
+function missingQuotaParams(subscriptionId, resourceGroup, accountName, deploymentName) {
+  return !subscriptionId || !resourceGroup || !accountName || !deploymentName;
+}
+
+async function resolveQuotaToken(credential) {
+  try {
+    if (!credential) return { ok: false, reason: "no_credential" };
+    const tokenResult = await credential.getToken("https://management.azure.com/.default");
+    const token = tokenResult?.token;
+    return token ? { ok: true, token } : { ok: false, reason: "no_token" };
+  } catch {
+    return { ok: false, reason: "token_error" };
+  }
+}
+
+function buildQuotaUrl(subscriptionId, resourceGroup, accountName, deploymentName) {
+  return (
+    `https://management.azure.com/subscriptions/${subscriptionId}` +
+    `/resourceGroups/${resourceGroup}` +
+    `/providers/Microsoft.CognitiveServices/accounts/${accountName}` +
+    `/deployments/${deploymentName}?api-version=2023-05-01`
+  );
+}
+
+function quotaHttpErrorReason(status) {
+  if (status === 429) return "rate_limited";
+  if (status === 401 || status === 403) return "forbidden";
+  if (status === 503) return "service_unavailable";
+  if (status >= 200 && status < 300) return null;
+  return status ? `http_${status}` : null;
+}
+
+function buildQuotaResult(data, deploymentName) {
+  const props = data.properties || {};
+  const cap = props.capacity || {};
+  return {
+    ok: true,
+    deploymentName: data.name || deploymentName,
+    model: props.model?.name ?? "unknown",
+    tpmCapacity: typeof cap.deploymentCapacity === "number" ? cap.deploymentCapacity : null,
+    tpmUsage: null,
+    ptuCapacity: null,
+    ptuUsage: null,
+    sku: data.sku?.name ?? null,
+    fetchedAt: new Date().toISOString(),
+  };
+}
+
+function isQuotaTimeout(err) {
+  return err?.name === "TimeoutError" || err?.code === "ABORT_ERR";
+}
+
 // ─── REST quota fetch ──────────────────────────────────────────────────────────
 
 /**
@@ -69,66 +125,34 @@ export async function getDeploymentQuota({
   deploymentName,
   credential,
   ttlMs = 5 * 60 * 1_000,
+  _fetchFn = globalThis.fetch,
 } = {}) {
-  if (!subscriptionId || !resourceGroup || !accountName || !deploymentName) {
+  if (missingQuotaParams(subscriptionId, resourceGroup, accountName, deploymentName)) {
     return { ok: false, reason: "missing_required_params" };
   }
 
-  const cacheKey = `${subscriptionId}/${resourceGroup}/${accountName}/${deploymentName}`;
+  const cacheKey = buildQuotaCacheKey(subscriptionId, resourceGroup, accountName, deploymentName);
   const cached = quotaCacheGet(cacheKey);
   if (cached) return cached;
 
-  // Acquire bearer token from credential (Phase-FOUNDRY-PROVIDER Slice 3 pattern).
-  let token;
-  try {
-    if (!credential) return { ok: false, reason: "no_credential" };
-    const tokenResult = await credential.getToken("https://management.azure.com/.default");
-    token = tokenResult?.token;
-    if (!token) return { ok: false, reason: "no_token" };
-  } catch {
-    return { ok: false, reason: "token_error" };
-  }
-
-  const url =
-    `https://management.azure.com/subscriptions/${subscriptionId}` +
-    `/resourceGroups/${resourceGroup}` +
-    `/providers/Microsoft.CognitiveServices/accounts/${accountName}` +
-    `/deployments/${deploymentName}?api-version=2023-05-01`;
+  const tokenResult = await resolveQuotaToken(credential);
+  if (!tokenResult.ok) return tokenResult;
 
   try {
-    const res = await fetch(url, {
-      headers: { Authorization: `Bearer ${token}` },
+    const res = await _fetchFn(buildQuotaUrl(subscriptionId, resourceGroup, accountName, deploymentName), {
+      headers: { Authorization: `Bearer ${tokenResult.token}` },
       signal: AbortSignal.timeout(10_000),
     });
 
-    if (res.status === 429) return { ok: false, reason: "rate_limited" };
-    if (res.status === 401 || res.status === 403) return { ok: false, reason: "forbidden" };
-    if (res.status === 503) return { ok: false, reason: "service_unavailable" };
+    const reason = quotaHttpErrorReason(res.status);
+    if (reason) return { ok: false, reason };
     if (!res.ok) return { ok: false, reason: `http_${res.status}` };
 
-    const data = await res.json();
-    const props = data.properties || {};
-    const cap = props.capacity || {};
-
-    const result = {
-      ok: true,
-      deploymentName: data.name || deploymentName,
-      model: props.model?.name ?? "unknown",
-      tpmCapacity: typeof cap.deploymentCapacity === "number" ? cap.deploymentCapacity : null,
-      tpmUsage: null,   // Usage endpoint is separate; orchestrator may populate via quota usage API
-      ptuCapacity: null,
-      ptuUsage: null,
-      sku: data.sku?.name ?? null,
-      fetchedAt: new Date().toISOString(),
-    };
-
+    const result = buildQuotaResult(await res.json(), deploymentName);
     quotaCacheSet(cacheKey, result, ttlMs);
     return result;
   } catch (err) {
-    if (err?.name === "TimeoutError" || err?.code === "ABORT_ERR") {
-      return { ok: false, reason: "timeout" };
-    }
-    return { ok: false, reason: "network_error" };
+    return { ok: false, reason: isQuotaTimeout(err) ? "timeout" : "network_error" };
   }
 }
 

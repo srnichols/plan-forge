@@ -208,7 +208,7 @@ import { emitToolTelemetry } from "../orchestrator.mjs";
 
 describe("Review Queue telemetry", () => {
   it("emitToolTelemetry writes to tool-calls.jsonl for review tools", () => {
-    emitToolTelemetry("forge_review_add", { source: "crucible-stall" }, { ok: true }, 42, "OK", tempDir);
+    emitToolTelemetry({ toolName: "forge_review_add", inputs: { source: "crucible-stall" }, result: { ok: true }, durationMs: 42, status: "OK", cwd: tempDir });
     const telPath = resolve(tempDir, ".forge", "telemetry", "tool-calls.jsonl");
     expect(existsSync(telPath)).toBe(true);
     const line = readFileSync(telPath, "utf-8").trim();
@@ -218,7 +218,7 @@ describe("Review Queue telemetry", () => {
   });
 
   it("emitToolTelemetry writes to liveguard-events.jsonl for review tools", () => {
-    emitToolTelemetry("forge_review_list", {}, { count: 0 }, 10, "OK", tempDir);
+    emitToolTelemetry({ toolName: "forge_review_list", inputs: {}, result: { count: 0 }, durationMs: 10, status: "OK", cwd: tempDir });
     const lgPath = resolve(tempDir, ".forge", "liveguard-events.jsonl");
     expect(existsSync(lgPath)).toBe(true);
     const line = readFileSync(lgPath, "utf-8").trim();
@@ -227,7 +227,7 @@ describe("Review Queue telemetry", () => {
   });
 
   it("emitToolTelemetry writes liveguard events for forge_review_resolve", () => {
-    emitToolTelemetry("forge_review_resolve", {}, {}, 5, "OK", tempDir);
+    emitToolTelemetry({ toolName: "forge_review_resolve", inputs: {}, result: {}, durationMs: 5, status: "OK", cwd: tempDir });
     const lgPath = resolve(tempDir, ".forge", "liveguard-events.jsonl");
     expect(existsSync(lgPath)).toBe(true);
     const lines = readFileSync(lgPath, "utf-8").trim().split("\n");

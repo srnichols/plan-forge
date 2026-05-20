@@ -14,6 +14,7 @@ import { existsSync, mkdtempSync, mkdirSync, writeFileSync, readFileSync, rmSync
 import { resolve, join, dirname } from "node:path";
 import { tmpdir } from "node:os";
 import { fileURLToPath } from "node:url";
+import { SERVER_COMBINED_SRC } from "./helpers/server-combined-src.mjs";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
@@ -190,12 +191,12 @@ describe("forge_smith drain warning row (Phase-28.4 Slice 4)", () => {
   });
 
   it("server.mjs contains drainWarn config key", () => {
-    const serverSrc = readFileSync(resolve(__dirname, "..", "server.mjs"), "utf-8");
+    const serverSrc = SERVER_COMBINED_SRC;
     expect(serverSrc).toContain("drainWarn");
   });
 
   it("server.mjs references pforge drain-memory in warning text", () => {
-    const serverSrc = readFileSync(resolve(__dirname, "..", "server.mjs"), "utf-8");
+    const serverSrc = SERVER_COMBINED_SRC;
     expect(serverSrc).toContain("pforge drain-memory");
   });
 });

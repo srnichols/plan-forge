@@ -5,6 +5,7 @@
 
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { readFileSync, existsSync } from "node:fs";
+import { SERVER_COMBINED_SRC } from "./helpers/server-combined-src.mjs";
 
 // We test the handler logic by importing server internals indirectly.
 // Since the handler is inside the MCP request handler closure, we test by
@@ -286,27 +287,21 @@ describe("forge_meta_bug_file — error paths", () => {
 
 describe("forge_meta_bug_file — registration", () => {
   it("is registered in server.mjs TOOLS array", () => {
-    const serverContent = readFileSync(
-      new URL("../server.mjs", import.meta.url),
-      "utf-8",
-    );
+    const serverContent = SERVER_COMBINED_SRC;
     expect(serverContent).toContain('"forge_meta_bug_file"');
     expect(serverContent).toContain('name: "forge_meta_bug_file"');
   });
 
-  it("is registered in capabilities.mjs TOOL_METADATA", () => {
-    const capContent = readFileSync(
-      new URL("../capabilities.mjs", import.meta.url),
-      "utf-8",
-    );
-    expect(capContent).toContain("forge_meta_bug_file");
+  it("is registered in capabilities.mjs TOOL_METADATA", async () => {
+    // Phase-51 Slice 4: capabilities.mjs is a shim that re-exports
+    // TOOL_METADATA from ./capabilities/tool-metadata.mjs. Assert against
+    // the registry, not the shim file contents.
+    const { TOOL_METADATA } = await import("../capabilities.mjs");
+    expect(TOOL_METADATA).toHaveProperty("forge_meta_bug_file");
   });
 
   it("is in MCP_ONLY_TOOLS set in server.mjs", () => {
-    const serverContent = readFileSync(
-      new URL("../server.mjs", import.meta.url),
-      "utf-8",
-    );
+    const serverContent = SERVER_COMBINED_SRC;
     // Should appear in the MCP_ONLY_TOOLS Set constructor
     expect(serverContent).toContain('"forge_meta_bug_file"');
   });

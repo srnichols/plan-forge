@@ -73,6 +73,9 @@ docs/plans/testbed-findings/*.json
 # Temporary scratch files
 .tmp-*
 
+# Vitest output (runtime artifact, not source-controlled)
+pforge-mcp/.vitest-results.json
+
 # Validation harness runtime artifacts (probes.json + per-session results live
 # under .forge/validation/ which is already gitignored via **/.forge/, but
 # call out here to make the intent explicit if anyone moves them).

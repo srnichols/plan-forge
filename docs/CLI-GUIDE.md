@@ -797,6 +797,13 @@ Setup Health:
 4. Check version currency against Plan Forge source
 5. Scan for common problems (duplicates, orphans, broken references)
 
+> **Internal note**: `pforge smith` reads hook names from `pforge-mcp/bin/enums-cli.mjs` rather than a hardcoded array. If you're writing a custom diagnostic script that needs the canonical list of hooks, run:
+> ```bash
+> node pforge-mcp/bin/enums-cli.mjs --enum HOOK_PASCAL
+> # → one hook name per line: SessionStart PreToolUse PostToolUse Stop PreDeploy PostSlice PreAgentHandoff PostRun
+> ```
+> Other available enums: `HOOK_NAMES`, `MODEL_TIERS`, `QUORUM_MODES`, `FORGE_MASTER_MODES`, `WATCHER_MODES`, `COST_SOURCES`, `TOOL_NAMES`. Source of truth: `pforge-mcp/enums.mjs`.
+
 ---
 
 ### `pforge help`
@@ -979,6 +986,99 @@ Without `--auto`, runs a manual one-shot drain (ignores `.forge.json#audit` conf
 - Use `--dry-run` to preview findings before committing to triage
 
 **Related MCP tools:** `forge_tempering_drain`, `forge_triage_route`
+
+---
+
+### `pforge audit export`
+
+Export audit events from `.forge/runs/` as JSONL or CSV. Streams `events.log` files written by the orchestrator — reads line-by-line without loading all events into memory. Useful for compliance exports, cost analysis, and piping into spreadsheets or SIEM tools.
+
+```powershell
+# PowerShell — all events as JSONL (one JSON object per line)
+.\pforge.ps1 audit export
+
+# PowerShell — events from a date onwards
+.\pforge.ps1 audit export --since 2026-05-01
+
+# PowerShell — CSV export to file
+.\pforge.ps1 audit export --format csv > audit.csv
+
+# PowerShell — filter by event type (repeatable)
+.\pforge.ps1 audit export --type gate-pass --type gate-fail
+
+# PowerShell — scope to a single run
+.\pforge.ps1 audit export --run 20260507T120000Z
+
+# PowerShell — date window
+.\pforge.ps1 audit export --since 2026-05-01 --until 2026-05-31
+```
+
+```bash
+# Bash — all events as JSONL
+./pforge.sh audit export
+
+# Bash — events from a date onwards
+./pforge.sh audit export --since 2026-05-01
+
+# Bash — CSV export to file
+./pforge.sh audit export --format csv > audit.csv
+
+# Bash — filter by event type
+./pforge.sh audit export --type gate-pass --type gate-fail
+
+# Bash — scope to a single run
+./pforge.sh audit export --run 20260507T120000Z
+```
+
+**Flags:**
+
+| Flag | Default | Description |
+|------|---------|-------------|
+| `--since <ISO>` | *(all)* | Only events on or after this timestamp (ISO 8601, inclusive) |
+| `--until <ISO>` | *(all)* | Only events on or before this timestamp (ISO 8601, inclusive) |
+| `--type <name>` | *(all)* | Filter by event type; repeatable (e.g. `--type gate-pass --type slice-start`) |
+| `--run <id>` | *(all runs)* | Scope to a single run directory ID |
+| `--format <fmt>` | `json` | Output format: `json` (JSONL, one object per line) or `csv` |
+
+**JSONL output fields** (one object per event):
+
+| Field | Description |
+|-------|-------------|
+| `timestamp` | ISO 8601 event timestamp |
+| `run_id` | Run directory ID (e.g. `20260507T120000Z`) |
+| `plan` | Plan file path associated with the run |
+| `slice_id` | Slice identifier within the plan |
+| `event_type` | Event type string (see common types below) |
+| `source` | Originating worker or component |
+| `security_risk` | Security risk flag (from pre-deploy scans) |
+| `gate_result` | Gate pass/fail result |
+| `cost_usd` | Cost in USD for this event |
+| `tokens_in` | Input token count |
+| `tokens_out` | Output token count |
+| `model` | Model used for this event |
+| `worker` | Worker identifier |
+
+**CSV output** has the same columns as the JSONL fields above, with a header row.
+
+**Common event types** for `--type` filtering:
+
+| Type | Meaning |
+|------|---------|
+| `slice-start` | A plan slice began execution |
+| `slice-end` | A plan slice completed |
+| `gate-pass` | A validation gate passed |
+| `gate-fail` | A validation gate failed |
+| `llm-invoke` | An LLM was called (includes token/cost fields) |
+| `pre-deploy` | A pre-deploy LiveGuard scan ran |
+| `secret-scan` | A secret scan ran |
+| `quorum-vote` | A quorum model cast a vote |
+
+**When to use:**
+- Export the last month of gate results: `pforge audit export --since 2026-05-01 --type gate-pass --type gate-fail --format csv > gates.csv`
+- Pull cost data for a single run: `pforge audit export --run <runId> --type llm-invoke`
+- Feed into a SIEM or compliance tool: `pforge audit export --since 2026-01-01 | jq .`
+
+**Related MCP tool:** `forge_audit_export` (ACI-paginated, adds `limit` / `truncated` / `total` pagination for agent use)
 
 ---
 
@@ -1740,3 +1840,625 @@ Sessions auto-rotate: when a session reaches 200 turns, the oldest 100 are moved
 - Session files are stored in `.forge/` which is gitignored — sessions are never committed
 - Ephemeral sessions (no `x-pforge-session-id` header) write nothing to disk
 - Use `purge --all` to reclaim disk space when sessions accumulate
+
+---
+
+## `pforge digest` — Daily Digest (v2.90.10+)
+
+Generates a structured daily digest covering probe lane-match deltas, aging meta-bugs, stalled phases, drift trend, and cost anomalies. Writes to `.forge/digests/<date>.json` and prints Markdown to stdout.
+
+```powershell
+# PowerShell
+.\pforge.ps1 digest
+.\pforge.ps1 digest --date 2026-05-19
+.\pforge.ps1 digest --force
+.\pforge.ps1 digest --notify
+```
+
+```bash
+# Bash
+./pforge.sh digest
+./pforge.sh digest --date 2026-05-19
+./pforge.sh digest --force
+./pforge.sh digest --notify
+```
+
+### Flags
+
+| Flag | Description |
+|------|-------------|
+| `--date <YYYY-MM-DD>` | Generate digest for a specific date (default: today) |
+| `--force` | Regenerate even if a digest for that date already exists |
+| `--notify` | Dispatch the digest to configured `extensions/notify-*` adapters |
+
+### Notes
+
+- Output is idempotent — running twice on the same day writes the same file unless `--force` is used
+- Digest files accumulate in `.forge/digests/` (gitignored); use `forge-home-cleanup` to prune old entries
+- MCP equivalent: `forge_digest_generate`
+
+---
+
+## `pforge fm-recall` — Cross-Session Recall (v2.90.10+)
+
+Query the BM25 recall index built from all past Forge-Master conversation sessions stored in `.forge/fm-sessions/`. Used by `forge_master_ask` to inject prior-turn context into new queries.
+
+```powershell
+# PowerShell
+.\pforge.ps1 fm-recall query "why did phase 27 fail"
+.\pforge.ps1 fm-recall rebuild
+```
+
+```bash
+# Bash
+./pforge.sh fm-recall query "why did phase 27 fail"
+./pforge.sh fm-recall rebuild
+```
+
+### Subcommands
+
+| Subcommand | Description |
+|------------|-------------|
+| `query "<text>"` | Search all prior sessions; returns top-3 matching turns with date, lane, and session ID |
+| `rebuild` | Rebuild the recall index from all `.forge/fm-sessions/*.jsonl` files |
+
+### Notes
+
+- Index is stored at `.forge/fm-sessions/recall-index.json` and refreshes lazily once per day
+- Run `rebuild` manually after importing a bulk set of session files or after `purge --all`
+- Results are shown as `[date · lane · sessionId] userMessage` — use the session ID with `fm-session` to inspect further
+
+---
+
+## `pforge plan-from-sarif` — SARIF to Plan Forge Plan
+
+Convert a CodeQL SARIF result file into a Plan Forge hardened-plan Markdown document. Each SARIF finding becomes a slice with a validation gate.
+
+```powershell
+# PowerShell
+.\pforge.ps1 plan-from-sarif results.sarif
+.\pforge.ps1 plan-from-sarif results.sarif --output docs/plans/Phase-99-SECURITY-PLAN.md
+.\pforge.ps1 plan-from-sarif - < results.sarif         # read from stdin
+```
+
+```bash
+# Bash
+./pforge.sh plan-from-sarif results.sarif
+./pforge.sh plan-from-sarif results.sarif --output docs/plans/Phase-99-SECURITY-PLAN.md
+./pforge.sh plan-from-sarif - < results.sarif           # read from stdin
+```
+
+### Arguments
+
+| Argument | Description |
+|----------|-------------|
+| `<sarif-file>` | Path to a SARIF JSON file (CodeQL output). Use `-` to read from stdin. |
+| `--output <file>` | Write the generated plan to this path (default: stdout) |
+
+### Exit Codes
+
+| Code | Meaning |
+|------|---------|
+| `0` | Plan generated successfully |
+| `1` | SARIF has no findings — nothing to convert |
+| `2` | Invalid arguments or SARIF parse error |
+
+### Notes
+
+- Pairs naturally with GitHub Advanced Security: `gh code-scanning alerts list --json | pforge plan-from-sarif -`
+- The generated plan is a DRAFT — run it through `step2-harden-plan.prompt.md` before executing
+
+---
+
+## `pforge sync-spaces` — Push to GitHub Copilot Space
+
+Uploads the active plan, instruction files, tool catalog, and project profile into a designated GitHub Copilot Space. Unchanged files (matching SHA-256) are skipped to stay within API rate limits.
+
+```powershell
+# PowerShell
+.\pforge.ps1 sync-spaces --space myorg/forge-context
+.\pforge.ps1 sync-spaces --space myorg/forge-context --dry-run
+.\pforge.ps1 sync-spaces --space myorg/forge-context --force
+.\pforge.ps1 sync-spaces --space myorg/forge-context --no-instructions
+.\pforge.ps1 sync-spaces --org myorg
+```
+
+```bash
+# Bash
+./pforge.sh sync-spaces --space myorg/forge-context
+./pforge.sh sync-spaces --space myorg/forge-context --dry-run
+./pforge.sh sync-spaces --space myorg/forge-context --force
+./pforge.sh sync-spaces --space myorg/forge-context --no-instructions
+./pforge.sh sync-spaces --org myorg
+```
+
+### Flags
+
+| Flag | Description |
+|------|-------------|
+| `--space <owner/name>` | Target Copilot Space (required unless `--org` resolves one) |
+| `--org <slug>` | Resolve space from org listing instead of explicit `--space` ref |
+| `--dry-run` | Print what would be uploaded; make no API calls |
+| `--force` | Upload all files even if SHA-256 matches (bypasses skip logic) |
+| `--no-instructions` | Skip uploading `.github/instructions/` files |
+
+### What Gets Uploaded
+
+| Source | Space path |
+|--------|-----------|
+| `.forge/active-plan` pointer | `plan-forge/active-plan.md` |
+| `.github/instructions/*.instructions.md` | `plan-forge/instructions/<name>.md` |
+| `pforge-mcp/tools.json` | `plan-forge/tool-catalog.md` |
+| `.github/instructions/project-profile.instructions.md` | `plan-forge/project-profile.md` |
+
+### Notes
+
+- Requires `gh` CLI authenticated: `gh auth login`
+- GitHub Copilot Spaces REST API is in beta — check `gh api` access before large syncs
+- MCP equivalent: `forge_sync_spaces`
+
+---
+
+## `pforge forge-home-cleanup` — Clean Up Ephemeral `.forge/` Files (v3.8.1+)
+
+Archives ephemeral files from `.forge/` to `.forge/archive/<YYYY-MM>/` and optionally prunes archive slots older than a configurable age. Recognises logs, tmp files, release notes, meta-bug drafts, and `.pid` files as ephemeral.
+
+```powershell
+# PowerShell
+.\pforge.ps1 forge-home-cleanup
+.\pforge.ps1 forge-home-cleanup --dry-run
+.\pforge.ps1 forge-home-cleanup --no-confirm
+.\pforge.ps1 forge-home-cleanup --max-age-days=30
+.\pforge.ps1 forge-home-cleanup --max-age-days=0     # archive only — never prune
+```
+
+```bash
+# Bash
+./pforge.sh forge-home-cleanup
+./pforge.sh forge-home-cleanup --dry-run
+./pforge.sh forge-home-cleanup --no-confirm
+./pforge.sh forge-home-cleanup --max-age-days=30
+./pforge.sh forge-home-cleanup --max-age-days=0      # archive only — never prune
+```
+
+### Flags
+
+| Flag | Description |
+|------|-------------|
+| `--dry-run` | Print what would be moved or deleted; make no changes |
+| `--no-confirm` | Skip interactive confirmation prompts |
+| `--max-age-days=<N>` | Delete archive slots older than N days (default: 90). Pass 0 to disable deletion. |
+| `--cwd <path>` | Project root to scan (default: current directory) |
+
+### Notes
+
+- Only top-level files in `.forge/` are archived — subdirectories are left in place
+- The `.forge/archive/` directory is gitignored by default (added by `setup.ps1`/`setup.sh`)
+- `forge_memory_report` surfaces orphan reports; run this command to resolve them
+- MCP equivalent: `forge_forge_home_cleanup`
+
+---
+
+## `pforge timeline` — Unified Event Timeline
+
+Offline-first chronological view across all Plan Forge event sources. Reads directly from `.forge/` files — no running server required.
+
+```powershell
+# PowerShell
+.\pforge.ps1 timeline
+.\pforge.ps1 timeline --window 6h
+.\pforge.ps1 timeline --from 2026-05-18T00:00:00Z --to 2026-05-19T00:00:00Z
+.\pforge.ps1 timeline --source run,bug
+.\pforge.ps1 timeline --correlation abc123
+.\pforge.ps1 timeline --group-by correlation --limit 50
+.\pforge.ps1 timeline --json
+```
+
+```bash
+# Bash
+./pforge.sh timeline
+./pforge.sh timeline --window 6h
+./pforge.sh timeline --from 2026-05-18T00:00:00Z --to 2026-05-19T00:00:00Z
+./pforge.sh timeline --source run,bug
+./pforge.sh timeline --correlation abc123
+./pforge.sh timeline --group-by correlation --limit 50
+./pforge.sh timeline --json
+```
+
+### Flags
+
+| Flag | Description |
+|------|-------------|
+| `--window <15m\|1h\|6h\|24h\|7d\|30d>` | Time window relative to now (default: `24h`) |
+| `--from <iso>` | Start of window (ISO timestamp) |
+| `--to <iso>` | End of window (ISO timestamp) |
+| `--source <name,...>` | Comma-separated source filter |
+| `--correlation <id>` | Filter to a single correlationId thread |
+| `--group-by <time\|correlation>` | Group mode (default: `time`) |
+| `--limit <n>` | Max events returned (default: 100, max: 2000) |
+| `--json` | Output raw JSON instead of human-readable table |
+
+### Sources
+
+`hub-event`, `run`, `memory`, `openbrain`, `watch`, `tempering`, `bug`, `incident`, `forge-master`
+
+### Notes
+
+- `--group-by correlation` groups related events (e.g. all events from one slice run) into threads
+- Pairs with `pforge incident` — supply the incident ID as `--correlation` to trace root cause
+- MCP equivalent: `forge_timeline`
+
+---
+
+## `pforge patterns` — Recurring Pattern Surfacing (v2.90.10+)
+
+Runs all registered pattern detectors against plan run history and surfaces recurring failure patterns grouped by severity. Useful for spotting systematic issues before they cause regressions.
+
+```powershell
+# PowerShell
+.\pforge.ps1 patterns list
+.\pforge.ps1 patterns list --since 2026-05-01
+```
+
+```bash
+# Bash
+./pforge.sh patterns list
+./pforge.sh patterns list --since 2026-05-01
+```
+
+### Subcommands
+
+| Subcommand | Description |
+|------------|-------------|
+| `list` | Run all detectors and print findings grouped by severity (🔴 error / 🟡 warning / ℹ️ info) |
+| `list --since <iso>` | Restrict to patterns whose `lastSeen` is on or after the ISO timestamp |
+
+### Detectors
+
+| Detector | What It Finds |
+|----------|--------------|
+| `gate-failure-recurrence` | Same gate failing across multiple runs |
+| `model-failure-rate-by-complexity` | Models with high failure rates on complex slices |
+| `slice-flap-pattern` | Slices that repeatedly pass then fail (flakey gates) |
+| `cost-anomaly` | Runs whose cost is an outlier relative to the rolling baseline |
+
+### Notes
+
+- Patterns are advisory — they don't block execution
+- MCP equivalent: `forge_patterns_list`
+
+---
+
+## `pforge graph` — Knowledge Graph (v2.90.10+)
+
+Builds and queries an in-memory knowledge graph over Plan Forge artifacts. Nodes: Phase, Slice, Commit, File, Bug, Run. Edges capture dependencies and authorship.
+
+```powershell
+# PowerShell
+.\pforge.ps1 graph rebuild
+.\pforge.ps1 graph stats
+.\pforge.ps1 graph query phase
+.\pforge.ps1 graph query file src/auth.mjs
+.\pforge.ps1 graph query neighbors Phase-42
+.\pforge.ps1 graph query recent-changes
+```
+
+```bash
+# Bash
+./pforge.sh graph rebuild
+./pforge.sh graph stats
+./pforge.sh graph query phase
+./pforge.sh graph query file src/auth.mjs
+./pforge.sh graph query neighbors Phase-42
+./pforge.sh graph query recent-changes
+```
+
+### Subcommands
+
+| Subcommand | Description |
+|------------|-------------|
+| `rebuild` | Rebuild the knowledge graph snapshot; writes to `.forge/graph/snapshot.json` |
+| `stats` | Print node count by type from the snapshot |
+| `query <type>` | Query the graph. Types: `phase`, `file`, `recent-changes`, `neighbors <id>` |
+
+### Notes
+
+- Snapshot is rebuilt automatically by `forge_run_plan` at the start of each plan execution
+- MCP equivalent: `forge_graph_query`
+
+---
+
+## `pforge sync-memories` — Generate Copilot Memory Hints (v3.0+)
+
+Generates `.github/copilot-memory-hints.md` from forge decisions — trajectory notes, auto-skill promotions, and OpenBrain entries. Gives GitHub Copilot project-specific decision context without manual maintenance.
+
+```powershell
+# PowerShell
+.\pforge.ps1 sync-memories
+.\pforge.ps1 sync-memories --dry-run
+.\pforge.ps1 sync-memories --force
+.\pforge.ps1 sync-memories --limit 50
+.\pforge.ps1 sync-memories --since 2026-05-01
+.\pforge.ps1 sync-memories --output .github/copilot-memory-hints.md
+```
+
+```bash
+# Bash
+./pforge.sh sync-memories
+./pforge.sh sync-memories --dry-run
+./pforge.sh sync-memories --force
+./pforge.sh sync-memories --limit 50
+./pforge.sh sync-memories --since 2026-05-01
+./pforge.sh sync-memories --output .github/copilot-memory-hints.md
+```
+
+### Flags
+
+| Flag | Description |
+|------|-------------|
+| `--dry-run` | Print the generated content; don't write the file |
+| `--force` | Overwrite even if content is unchanged |
+| `--limit <N>` | Maximum number of memory entries to include |
+| `--since <iso>` | Only include entries created on or after this ISO timestamp |
+| `--output <path>` | Write to a custom path (default: `.github/copilot-memory-hints.md`) |
+
+### Notes
+
+- Complements `sync-instructions` — instructions define *how* to code; memory hints carry *what was decided*
+- MCP equivalent: `forge_sync_memories`
+
+---
+
+## `pforge sync-instructions` — Generate Copilot Instructions (v3.0+)
+
+Generates `.github/copilot-instructions.md` from forge project context (project profile, project principles, extra instruction files, `.forge.json` config). GitHub Copilot reads this file automatically, giving every conversation project-specific guidance without manual setup.
+
+```powershell
+# PowerShell
+.\pforge.ps1 sync-instructions
+.\pforge.ps1 sync-instructions --dry-run
+.\pforge.ps1 sync-instructions --force
+.\pforge.ps1 sync-instructions --no-principles
+.\pforge.ps1 sync-instructions --no-profile
+.\pforge.ps1 sync-instructions --no-extras
+.\pforge.ps1 sync-instructions --output .github/copilot-instructions.md
+```
+
+```bash
+# Bash
+./pforge.sh sync-instructions
+./pforge.sh sync-instructions --dry-run
+./pforge.sh sync-instructions --force
+./pforge.sh sync-instructions --no-principles
+./pforge.sh sync-instructions --no-profile
+./pforge.sh sync-instructions --no-extras
+./pforge.sh sync-instructions --output .github/copilot-instructions.md
+```
+
+### Flags
+
+| Flag | Description |
+|------|-------------|
+| `--dry-run` | Print the generated content; don't write the file |
+| `--force` | Overwrite even if content is unchanged |
+| `--no-principles` | Exclude `docs/plans/PROJECT-PRINCIPLES.md` from the output |
+| `--no-profile` | Exclude `project-profile.instructions.md` from the output |
+| `--no-extras` | Exclude extra instruction files beyond profile and principles |
+| `--output <path>` | Write to a custom path (default: `.github/copilot-instructions.md`) |
+
+### Notes
+
+- Run after editing `project-profile.instructions.md` or `PROJECT-PRINCIPLES.md` to keep Copilot in sync
+- The dashboard Settings → Copilot tab provides a browser-based preview before writing
+- MCP equivalent: `forge_sync_instructions`
+
+---
+
+## `pforge github` — GitHub AI Surface Inspector (v3.1.2+)
+
+Inspect and validate the GitHub-native AI features that Plan Forge integrates with — cloud agent validation stack, Copilot metrics, and GitHub Actions health.
+
+```powershell
+# PowerShell
+.\pforge.ps1 github status
+.\pforge.ps1 github doctor
+.\pforge.ps1 github metrics
+```
+
+```bash
+# Bash
+./pforge.sh github status
+./pforge.sh github doctor
+./pforge.sh github metrics
+```
+
+### Subcommands
+
+| Subcommand | Description |
+|------------|-------------|
+| `status` | Print a checklist of GitHub-native primitives Plan Forge integrates with (CodeQL, secret scanning, dependency review, Copilot code review) |
+| `doctor` | Run diagnostic checks; surface misconfigurations and missing permissions |
+| `metrics` | Fetch Copilot usage metrics (org mode) or personal commit activity (personal mode) |
+
+### Notes
+
+- `status` reads from `cloudAgentValidation` in `.forge.json` — configure it with `pforge check`
+- `doctor` requires `gh` CLI auth with `admin:org` scope for org-level checks
+- MCP equivalents: `forge_github_status`, `forge_github_metrics`
+
+---
+
+## `pforge crucible` — Crucible Smelt System
+
+Submit ideas, requirements, and feature proposals to the Crucible — Plan Forge's structured smelt pipeline that converts raw ideas into hardened plan slices.
+
+```powershell
+# PowerShell
+.\pforge.ps1 crucible list
+.\pforge.ps1 crucible submit --title "Add pagination" --description "REST endpoints need cursor-based pagination"
+.\pforge.ps1 crucible smelt <id>
+.\pforge.ps1 crucible status <id>
+.\pforge.ps1 crucible export <id>
+```
+
+```bash
+# Bash
+./pforge.sh crucible list
+./pforge.sh crucible submit --title "Add pagination" --description "REST endpoints need cursor-based pagination"
+./pforge.sh crucible smelt <id>
+./pforge.sh crucible status <id>
+./pforge.sh crucible export <id>
+```
+
+### Subcommands
+
+| Subcommand | Description |
+|------------|-------------|
+| `list` | List all pending and in-progress crucible submissions |
+| `submit` | Create a new submission with `--title` and `--description` |
+| `smelt <id>` | Run the smelt pipeline on a submission — generates structured slices |
+| `status <id>` | Show the current status and output of a submission |
+| `export <id>` | Export a smelted submission as a Plan Forge plan Markdown |
+
+### Notes
+
+- The smelt pipeline uses `forge_master_ask` under the hood to decompose ideas into actionable slices
+- Submissions are stored in `.forge/crucible/` and are gitignored
+- MCP equivalents: `forge_crucible_list`, `forge_crucible_submit`, `forge_crucible_smelt`, `forge_crucible_status`, `forge_crucible_export`
+
+---
+
+## `pforge skills` — Auto-Skill Promotion
+
+Manage the auto-skill promotion queue. Plan Forge detects repeated workflow patterns in run history and proposes them as reusable skills. Use this command to review, accept, reject, or defer promotion candidates.
+
+```powershell
+# PowerShell
+.\pforge.ps1 skills pending
+.\pforge.ps1 skills pending --threshold 3
+.\pforge.ps1 skills pending --json
+.\pforge.ps1 skills accept <sha256Prefix>
+.\pforge.ps1 skills reject <sha256Prefix> --reason "Too narrow scope"
+.\pforge.ps1 skills defer  <sha256Prefix>
+.\pforge.ps1 skills promote <sha256Prefix>
+```
+
+```bash
+# Bash
+./pforge.sh skills pending
+./pforge.sh skills pending --threshold 3
+./pforge.sh skills pending --json
+./pforge.sh skills accept <sha256Prefix>
+./pforge.sh skills reject <sha256Prefix> --reason "Too narrow scope"
+./pforge.sh skills defer  <sha256Prefix>
+./pforge.sh skills promote <sha256Prefix>
+```
+
+### Subcommands
+
+| Subcommand | Description |
+|------------|-------------|
+| `pending [--threshold N]` | List skill candidates with ≥ N occurrences (default: 2). `--json` for machine-readable output |
+| `accept <prefix>` | Accept a candidate — moves it to `.github/skills/` as a new skill file |
+| `reject <prefix>` | Reject a candidate permanently. Optionally supply `--reason` |
+| `defer <prefix>` | Defer a candidate — keeps it in queue for review next run |
+| `promote <prefix>` | Manually promote a candidate even if below threshold |
+
+### Notes
+
+- Candidate IDs are stable SHA-256 hashes of the skill fingerprint — safe to use in scripts
+- Accepted skills are immediately available for `pforge run-skill` and `/slash` invocation
+- MCP equivalents: `forge_skills_pending`, `forge_skills_accept`, `forge_skills_reject`, `forge_skills_defer`
+
+---
+
+## `pforge mcp-call` — Generic MCP Tool Proxy
+
+Invoke any MCP tool exposed by the running `pforge-mcp` server on `:3100` without needing a bespoke CLI wrapper. Covers crucible-*, tempering-*, bug-*, `generate-image`, `run-skill`, `skill-status`, and any future tool.
+
+```powershell
+# PowerShell
+.\pforge.ps1 mcp-call forge_crucible_list
+.\pforge.ps1 mcp-call forge_crucible_submit --title="Add pagination" --description="..."
+.\pforge.ps1 mcp-call forge_bug_register --json '{"severity":"high","title":"x"}'
+.\pforge.ps1 mcp-call forge_cost_report
+```
+
+```bash
+# Bash
+./pforge.sh mcp-call forge_crucible_list
+./pforge.sh mcp-call forge_crucible_submit --title="Add pagination" --description="..."
+./pforge.sh mcp-call forge_bug_register --json '{"severity":"high","title":"x"}'
+./pforge.sh mcp-call forge_cost_report
+```
+
+### Usage
+
+```
+pforge mcp-call <tool_name> [--arg=value ...] [--json '{"key":"val"}']
+```
+
+| Argument | Description |
+|----------|-------------|
+| `<tool_name>` | The MCP tool name (e.g. `forge_crucible_list`) — required |
+| `--arg=value` | Pass individual key-value args to the tool |
+| `--json <payload>` | Pass a raw JSON object as the tool's full argument payload |
+
+### Notes
+
+- Requires the MCP server to be running (`node pforge-mcp/server.mjs` or `pforge run-plan` in background mode)
+- Server must be accessible at `http://localhost:3100` (default port; configurable in `.forge.json`)
+- Use `forge_capabilities` to discover all available tool names and their argument schemas
+
+---
+
+## `master observe` — Forge-Master Observer (v3.8+)
+
+Background hub subscriber that batches live Plan Forge events and narrates notable patterns. **Mute-by-default**: must be explicitly enabled in `.forge.json` or started via CLI.
+
+```
+pforge master observe --start [--detach]
+pforge master observe --stop
+pforge master observe --status
+```
+
+### Subcommands
+
+| Subcommand | Description |
+|------------|-------------|
+| `--start` | Connect the observer to the hub WebSocket. Events are batched per `batchWindowMs`. |
+| `--start --detach` | Start as a background daemon process; PID written to `.forge/forge-master-observer.pid`. |
+| `--stop` | Gracefully shut down the observer daemon (sends SIGTERM). |
+| `--status` | Print whether the observer daemon is running and, if so, its PID. |
+
+### Configuration (`.forge.json`)
+
+```json
+{
+  "forgeMaster": {
+    "observer": {
+      "enabled": true,
+      "maxUsdPerDay": 0.10,
+      "maxNarrationsPerHour": 6,
+      "batchWindowMs": 60000,
+      "modelTier": null
+    }
+  }
+}
+```
+
+Set `PFORGE_FORGE_MASTER_OBSERVE_DISABLE=1` to override `enabled` to `false` at the process level (useful in CI or non-interactive pipelines).
+
+### Budget Enforcement
+
+- The observer tracks spend in `.forge/forge-master-observer-state.json` (atomic write).
+- Once `maxUsdPerDay` is exhausted, LLM narrations are skipped and a budget-block event is logged.
+- Budget resets at midnight UTC.
+
+### Notes
+
+- Observer is read-only — it cannot call write tools or modify project files.
+- Observer tokens are attributed to `forge-master` in `forge_cost_report`, not to the active run.
+- The daemon reconnects on WebSocket disconnect with exponential backoff (3 retries, 1 s base).
+- MCP equivalent: `forge_master_observe` with `action: "start" | "stop" | "status"`.
+

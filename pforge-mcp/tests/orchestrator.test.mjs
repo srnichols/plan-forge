@@ -390,7 +390,7 @@ describe("lintGateCommands", () => {
 
 describe("emitToolTelemetry", () => {
   it("returns a record with timestamp, tool, inputs, result, durationMs, status", () => {
-    const record = emitToolTelemetry("forge_smith", { plan: "test.md" }, "ok", 150, "ok", tempDir);
+    const record = emitToolTelemetry({ toolName: "forge_smith", inputs: { plan: "test.md" }, result: "ok", durationMs: 150, status: "ok", cwd: tempDir });
     expect(record).toHaveProperty("timestamp");
     expect(record.tool).toBe("forge_smith");
     expect(record.inputs).toEqual({ plan: "test.md" });
@@ -400,7 +400,7 @@ describe("emitToolTelemetry", () => {
   });
 
   it("writes record to .forge/telemetry/tool-calls.jsonl", () => {
-    emitToolTelemetry("forge_validate", {}, "passed", 50, "ok", tempDir);
+    emitToolTelemetry({ toolName: "forge_validate", inputs: {}, result: "passed", durationMs: 50, status: "ok", cwd: tempDir });
     const content = readFileSync(
       resolve(tempDir, ".forge", "telemetry", "tool-calls.jsonl"), "utf-8"
     );
@@ -410,19 +410,19 @@ describe("emitToolTelemetry", () => {
 
   it("truncates long string results to 2000 chars", () => {
     const longResult = "x".repeat(5000);
-    const record = emitToolTelemetry("forge_sweep", {}, longResult, 10, "ok", tempDir);
+    const record = emitToolTelemetry({ toolName: "forge_sweep", inputs: {}, result: longResult, durationMs: 10, status: "ok", cwd: tempDir });
     expect(record.result.length).toBe(2000);
   });
 
   it("truncates large object results to 2000 chars", () => {
     const bigObj = { data: "y".repeat(5000) };
-    const record = emitToolTelemetry("forge_sweep", {}, bigObj, 10, "ok", tempDir);
+    const record = emitToolTelemetry({ toolName: "forge_sweep", inputs: {}, result: bigObj, durationMs: 10, status: "ok", cwd: tempDir });
     expect(record.result.length).toBeLessThanOrEqual(2000);
   });
 
   it("does not throw on FS error (best-effort)", () => {
     expect(() => {
-      emitToolTelemetry("forge_status", {}, "test", 5, "ok", "/nonexistent/Z:/impossible/path");
+      emitToolTelemetry({ toolName: "forge_status", inputs: {}, result: "test", durationMs: 5, status: "ok", cwd: "/nonexistent/Z:/impossible/path" });
     }).not.toThrow();
   });
 });

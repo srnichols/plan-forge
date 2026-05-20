@@ -37,49 +37,11 @@ export function readOpenBrainConfig(cwd) {
 
   for (const path of candidates) {
     if (!existsSync(path)) continue;
-    let config;
-    try {
-      config = JSON.parse(readFileSync(path, "utf-8"));
-    } catch {
-      continue;
-    }
-    const servers = config?.servers ?? config?.mcpServers ?? {};
-    for (const name of Object.keys(servers)) {
-      if (!/openbrain|open-brain/i.test(name)) continue;
-      const entry = servers[name];
-      // SSE-mode requires a URL. Stdio mode has command/args — skip; we cannot
-      // round-trip via stdio from a one-shot CLI without spawning the server.
-      const url = typeof entry?.url === "string" ? entry.url : null;
-      if (!url) continue;
-
-      let key = null;
-
-      // Header-form: prefer over query-form because it's the documented setup.
-      const headers = entry?.headers ?? {};
-      for (const h of Object.keys(headers)) {
-        if (/^x-brain-key$/i.test(h)) {
-          key = resolveEnvPlaceholder(headers[h]);
-          break;
-        }
-      }
-
-      // Query-form: `?key=...` in the SSE URL.
-      if (!key) {
-        try {
-          const u = new URL(url);
-          const qk = u.searchParams.get("key");
-          if (qk) key = qk;
-        } catch { /* malformed URL — leave key null */ }
-      }
-
-      // Final fallback: OPENBRAIN_KEY env var (matches the existing convention
-      // used by mcp.json's `${env:OPENBRAIN_KEY}` interpolation).
-      if (!key && process.env.OPENBRAIN_KEY) {
-        key = process.env.OPENBRAIN_KEY;
-      }
-
-      return { url, key, source: path };
-    }
+    const config = readJsonFile(path);
+    if (!config) continue;
+    const entry = findOpenBrainServer(config);
+    const parsed = entry ? parseOpenBrainConfigEntry(entry, path) : null;
+    if (parsed) return parsed;
   }
   return null;
 }
@@ -91,6 +53,50 @@ function resolveEnvPlaceholder(value) {
   if (!m) return value;
   const envName = m[1];
   return process.env[envName] ?? null;
+}
+
+function readJsonFile(path) {
+  try {
+    return JSON.parse(readFileSync(path, "utf-8"));
+  } catch {
+    return null;
+  }
+}
+
+function findOpenBrainServer(config) {
+  const servers = config?.servers ?? config?.mcpServers ?? {};
+  for (const name of Object.keys(servers)) {
+    if (/openbrain|open-brain/i.test(name)) return servers[name];
+  }
+  return null;
+}
+
+function openBrainHeaderKey(entry) {
+  const headers = entry?.headers ?? {};
+  for (const headerName of Object.keys(headers)) {
+    if (/^x-brain-key$/i.test(headerName)) {
+      return resolveEnvPlaceholder(headers[headerName]);
+    }
+  }
+  return null;
+}
+
+function openBrainQueryKey(url) {
+  try {
+    return new URL(url).searchParams.get("key");
+  } catch {
+    return null;
+  }
+}
+
+function parseOpenBrainConfigEntry(entry, source) {
+  const url = typeof entry?.url === "string" ? entry.url : null;
+  if (!url) return null;
+  const key = openBrainHeaderKey(entry)
+    || openBrainQueryKey(url)
+    || process.env.OPENBRAIN_KEY
+    || null;
+  return { url, key, source };
 }
 
 // ─── Normalizers ───────────────────────────────────────────────────────
@@ -312,6 +318,35 @@ export async function roundTrip(client, opts = {}) {
  *   onProgress?: (event: {index, total, status, error?}) => void,
  * }} opts
  */
+function isReplayableRecord(rec) {
+  return rec && typeof rec === "object" && typeof rec.content === "string" && rec.content.trim();
+}
+
+function recordPreview(rec) {
+  return rec.content.slice(0, 80);
+}
+
+async function captureReplayRecord(client, rec, maxRetries, retryDelayMs) {
+  let attempt = 0;
+  let lastErr = null;
+  while (attempt < maxRetries) {
+    attempt += 1;
+    try {
+      return { ok: true, response: await client.capture(rec) };
+    } catch (e) {
+      lastErr = String(e?.message || e);
+      if (attempt < maxRetries) {
+        await delay(retryDelayMs * Math.pow(2, attempt - 1));
+      }
+    }
+  }
+  return { ok: false, error: lastErr };
+}
+
+function shouldDelayReplay(rate, index, total) {
+  return rate > 0 && index < total - 1;
+}
+
 export async function replayRecords(client, records, opts = {}) {
   const {
     rate = 50,
@@ -332,7 +367,7 @@ export async function replayRecords(client, records, opts = {}) {
 
   for (let i = 0; i < records.length; i++) {
     const rec = records[i];
-    if (!rec || typeof rec !== "object" || typeof rec.content !== "string" || !rec.content.trim()) {
+    if (!isReplayableRecord(rec)) {
       skipped += 1;
       onProgress?.({ index: i, total, status: "skipped" });
       continue;
@@ -342,36 +377,20 @@ export async function replayRecords(client, records, opts = {}) {
       continue;
     }
 
-    let attempt = 0;
-    let lastErr = null;
-    while (attempt < maxRetries) {
-      attempt += 1;
-      try {
-        const res = await client.capture(rec);
-        sent += 1;
-        if (samples.length < sampleSize) {
-          samples.push({
-            index: i,
-            id: res?.id ?? null,
-            content: rec.content.slice(0, 80),
-          });
-        }
-        lastErr = null;
-        onProgress?.({ index: i, total, status: "sent" });
-        break;
-      } catch (e) {
-        lastErr = String(e?.message || e);
-        if (attempt < maxRetries) {
-          await delay(retryDelayMs * Math.pow(2, attempt - 1));
-        }
+    const outcome = await captureReplayRecord(client, rec, maxRetries, retryDelayMs);
+    if (outcome.ok) {
+      sent += 1;
+      if (samples.length < sampleSize) {
+        samples.push({ index: i, id: outcome.response?.id ?? null, content: recordPreview(rec) });
       }
-    }
-    if (lastErr) {
+      onProgress?.({ index: i, total, status: "sent" });
+    } else {
       failed += 1;
-      failures.push({ index: i, error: lastErr, contentPreview: rec.content.slice(0, 80) });
-      onProgress?.({ index: i, total, status: "failed", error: lastErr });
+      failures.push({ index: i, error: outcome.error, contentPreview: recordPreview(rec) });
+      onProgress?.({ index: i, total, status: "failed", error: outcome.error });
     }
-    if (rate > 0 && i < records.length - 1) await delay(rate);
+
+    if (shouldDelayReplay(rate, i, records.length)) await delay(rate);
   }
 
   return {

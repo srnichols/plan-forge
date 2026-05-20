@@ -342,55 +342,58 @@ export async function latticeIndex({ paths = ['.'], since, deps = {} } = {}) {
  *   indexBytes:    number,
  * }}
  */
-export function latticeStat({ deps = {} } = {}) {
-  const dir = latticeDir(deps);
-  const meta = readMeta(deps);
-
-  // Count chunks and tally language distribution
+function readChunkLanguageStats(dir) {
   const chunksPath = join(dir, CHUNKS_FILE);
-  let chunks = 0;
   const languages = {};
-  if (existsSync(chunksPath)) {
-    const lines = readFileSync(chunksPath, 'utf8').split('\n').filter(Boolean);
-    chunks = lines.length;
-    for (const line of lines) {
-      try {
-        const rec = JSON.parse(line);
-        const lang = rec.language ?? 'unknown';
-        languages[lang] = (languages[lang] ?? 0) + 1;
-      } catch { /* skip malformed lines */ }
-    }
-  }
+  if (!existsSync(chunksPath)) return { chunks: 0, languages };
 
-  // Count edges
-  const edgesPath = join(dir, EDGES_FILE);
-  let edges = 0;
-  if (existsSync(edgesPath)) {
-    edges = readFileSync(edgesPath, 'utf8').split('\n').filter(Boolean).length;
+  const lines = readFileSync(chunksPath, 'utf8').split('\n').filter(Boolean);
+  for (const line of lines) {
+    try {
+      const rec = JSON.parse(line);
+      const lang = rec.language ?? 'unknown';
+      languages[lang] = (languages[lang] ?? 0) + 1;
+    } catch { /* skip malformed lines */ }
   }
+  return { chunks: lines.length, languages };
+}
 
-  // Total index byte size across all three files
+function countJsonlRecords(filePath) {
+  if (!existsSync(filePath)) return 0;
+  return readFileSync(filePath, 'utf8').split('\n').filter(Boolean).length;
+}
+
+function computeIndexBytes(dir) {
   let indexBytes = 0;
   for (const fname of [CHUNKS_FILE, EDGES_FILE, META_FILE]) {
     const p = join(dir, fname);
-    if (existsSync(p)) {
-      try { indexBytes += statSync(p).size; } catch { /* best-effort */ }
-    }
+    if (!existsSync(p)) continue;
+    try {
+      indexBytes += statSync(p).size;
+    } catch { /* best-effort */ }
   }
+  return indexBytes;
+}
 
-  // Anvil hit rate for lattice_file_chunk operations
-  let anvilHitRate = 0;
+function readLatticeAnvilHitRate(deps) {
   try {
     const statsFile = resolve(workspaceRoot(deps), '.forge', 'anvil', 'stats.json');
-    if (existsSync(statsFile)) {
-      const stats = JSON.parse(readFileSync(statsFile, 'utf8'));
-      const ts = stats.perTool?.lattice_file_chunk;
-      if (ts) {
-        const total = (ts.hits ?? 0) + (ts.misses ?? 0);
-        anvilHitRate = total > 0 ? ts.hits / total : 0;
-      }
-    }
-  } catch { /* best-effort */ }
+    if (!existsSync(statsFile)) return 0;
+    const stats = JSON.parse(readFileSync(statsFile, 'utf8'));
+    const ts = stats.perTool?.lattice_file_chunk;
+    if (!ts) return 0;
+    const total = (ts.hits ?? 0) + (ts.misses ?? 0);
+    return total > 0 ? ts.hits / total : 0;
+  } catch {
+    return 0;
+  }
+}
+
+export function latticeStat({ deps = {} } = {}) {
+  const dir = latticeDir(deps);
+  const meta = readMeta(deps);
+  const { chunks, languages } = readChunkLanguageStats(dir);
+  const edges = countJsonlRecords(join(dir, EDGES_FILE));
 
   return {
     chunks,
@@ -399,8 +402,8 @@ export function latticeStat({ deps = {} } = {}) {
     lastIndexedAt: meta.lastIndexedAt ?? null,
     chunkerImpl: meta.chunkerImpl ?? null,
     chunkerVersion: meta.chunkerVersion ?? null,
-    anvilHitRate,
-    indexBytes,
+    anvilHitRate: readLatticeAnvilHitRate(deps),
+    indexBytes: computeIndexBytes(dir),
   };
 }
 
@@ -617,6 +620,105 @@ export function latticeCallers({ name, limit = 25, deps = {} } = {}) {
  *   message:         string,
  * }}
  */
+function buildChunksByName(allChunks) {
+  const chunksByName = new Map();
+  for (const chunk of allChunks) {
+    if (!chunk.name) continue;
+    if (!chunksByName.has(chunk.name)) chunksByName.set(chunk.name, []);
+    chunksByName.get(chunk.name).push(chunk);
+  }
+  return chunksByName;
+}
+
+function buildBlastEdgeMaps(allEdges) {
+  const outEdges = new Map();
+  const inEdges = new Map();
+  for (const edge of allEdges) {
+    if (!outEdges.has(edge.callerChunkId)) outEdges.set(edge.callerChunkId, []);
+    outEdges.get(edge.callerChunkId).push(edge.calleeName);
+    if (!inEdges.has(edge.calleeName)) inEdges.set(edge.calleeName, []);
+    inEdges.get(edge.calleeName).push(edge.callerChunkId);
+  }
+  return { outEdges, inEdges };
+}
+
+function resolveBlastSeedIds(chunkId, name, chunkById, chunksByName) {
+  if (chunkId) return chunkById.has(chunkId) ? [chunkId] : [];
+  return (chunksByName.get(name) ?? []).map((chunk) => chunk.id);
+}
+
+function enqueueBlastNode(queue, visited, id, dist) {
+  if (visited.has(id)) return;
+  visited.set(id, dist);
+  queue.push({ id, dist });
+}
+
+function expandBlastCallees({ curId, dist, outEdges, chunksByName, traversedEdges, unresolvedNames, queue, visited }) {
+  for (const calleeName of outEdges.get(curId) ?? []) {
+    const calleeChunks = chunksByName.get(calleeName) ?? [];
+    if (calleeChunks.length === 0) {
+      unresolvedNames.add(calleeName);
+      continue;
+    }
+    for (const calleeChunk of calleeChunks) {
+      traversedEdges.push({ from: curId, to: calleeChunk.id });
+      enqueueBlastNode(queue, visited, calleeChunk.id, dist + 1);
+    }
+  }
+}
+
+function expandBlastCallers({ curId, dist, chunkById, inEdges, traversedEdges, queue, visited }) {
+  const curChunk = chunkById.get(curId);
+  if (!curChunk?.name) return;
+  for (const callerChunkId of inEdges.get(curChunk.name) ?? []) {
+    traversedEdges.push({ from: callerChunkId, to: curId });
+    enqueueBlastNode(queue, visited, callerChunkId, dist + 1);
+  }
+}
+
+function traverseBlastGraph({ seedIds, depth, direction, chunkById, chunksByName, outEdges, inEdges }) {
+  const visited = new Map();
+  const traversedEdges = [];
+  const unresolvedNames = new Set();
+  const queue = [];
+
+  for (const id of seedIds) enqueueBlastNode(queue, visited, id, 0);
+
+  let head = 0;
+  while (head < queue.length) {
+    const { id: curId, dist } = queue[head++];
+    if (dist >= depth) continue;
+    if (direction === 'callees' || direction === 'both') {
+      expandBlastCallees({ curId, dist, outEdges, chunksByName, traversedEdges, unresolvedNames, queue, visited });
+    }
+    if (direction === 'callers' || direction === 'both') {
+      expandBlastCallers({ curId, dist, chunkById, inEdges, traversedEdges, queue, visited });
+    }
+  }
+
+  return { visited, traversedEdges, unresolvedNames };
+}
+
+function buildBlastNodes(visited, chunkById) {
+  const allNodes = [];
+  for (const [id, distance] of visited) {
+    const chunk = chunkById.get(id);
+    if (chunk) allNodes.push({ ...chunk, distance });
+  }
+  allNodes.sort((a, b) => a.distance - b.distance || a.id.localeCompare(b.id));
+  return allNodes;
+}
+
+function dedupeBlastEdges(traversedEdges) {
+  const seenEdges = new Set();
+  return traversedEdges.filter((edge) => {
+    const key = `${edge.from}→${edge.to}`;
+    if (seenEdges.has(key)) return false;
+    seenEdges.add(key);
+    return true;
+  });
+}
+
 export function latticeBlast({
   chunkId,
   name,
@@ -637,37 +739,10 @@ export function latticeBlast({
   }
 
   const allChunks = readAllChunks(deps);
-  const allEdges = readAllEdges(deps);
-
-  // Build lookup maps for efficient traversal
-  const chunkById = new Map(allChunks.map((c) => [c.id, c]));
-  const chunksByName = new Map();
-  for (const c of allChunks) {
-    if (c.name) {
-      if (!chunksByName.has(c.name)) chunksByName.set(c.name, []);
-      chunksByName.get(c.name).push(c);
-    }
-  }
-
-  // callee direction: chunkId → Set<calleeName>
-  const outEdges = new Map(); // callerChunkId → [calleeName]
-  // caller direction: calleeName → [callerChunkId]
-  const inEdges = new Map();  // calleeName → [callerChunkId]
-  for (const e of allEdges) {
-    if (!outEdges.has(e.callerChunkId)) outEdges.set(e.callerChunkId, []);
-    outEdges.get(e.callerChunkId).push(e.calleeName);
-    if (!inEdges.has(e.calleeName)) inEdges.set(e.calleeName, []);
-    inEdges.get(e.calleeName).push(e.callerChunkId);
-  }
-
-  // Resolve seed chunk(s)
-  let seedIds;
-  if (chunkId) {
-    seedIds = chunkById.has(chunkId) ? [chunkId] : [];
-  } else {
-    seedIds = (chunksByName.get(name) ?? []).map((c) => c.id);
-  }
-
+  const chunkById = new Map(allChunks.map((chunk) => [chunk.id, chunk]));
+  const chunksByName = buildChunksByName(allChunks);
+  const { outEdges, inEdges } = buildBlastEdgeMaps(readAllEdges(deps));
+  const seedIds = resolveBlastSeedIds(chunkId, name, chunkById, chunksByName);
   const desc = chunkId ? `chunk "${chunkId}"` : `"${name}"`;
 
   if (seedIds.length === 0) {
@@ -681,88 +756,26 @@ export function latticeBlast({
     };
   }
 
-  // BFS
-  const visited = new Map();    // chunkId → distance
-  const traversedEdges = [];    // { from: chunkId, to: chunkId }
-  const unresolvedNames = new Set();
-  const queue = [];             // { id: string, dist: number }
-
-  for (const id of seedIds) {
-    if (!visited.has(id)) {
-      visited.set(id, 0);
-      queue.push({ id, dist: 0 });
-    }
-  }
-
-  let head = 0;
-  while (head < queue.length) {
-    const { id: curId, dist } = queue[head++];
-    if (dist >= depth) continue;
-
-    // Expand callees (outgoing)
-    if (direction === 'callees' || direction === 'both') {
-      for (const calleeName of outEdges.get(curId) ?? []) {
-        const calleeChunks = chunksByName.get(calleeName) ?? [];
-        if (calleeChunks.length === 0) {
-          unresolvedNames.add(calleeName);
-        } else {
-          for (const cc of calleeChunks) {
-            traversedEdges.push({ from: curId, to: cc.id });
-            if (!visited.has(cc.id)) {
-              visited.set(cc.id, dist + 1);
-              queue.push({ id: cc.id, dist: dist + 1 });
-            }
-          }
-        }
-      }
-    }
-
-    // Expand callers (incoming)
-    if (direction === 'callers' || direction === 'both') {
-      const curChunk = chunkById.get(curId);
-      if (curChunk?.name) {
-        for (const callerChunkId of inEdges.get(curChunk.name) ?? []) {
-          traversedEdges.push({ from: callerChunkId, to: curId });
-          if (!visited.has(callerChunkId)) {
-            visited.set(callerChunkId, dist + 1);
-            queue.push({ id: callerChunkId, dist: dist + 1 });
-          }
-        }
-      }
-    }
-  }
-
-  // Build ordered node list (BFS order, distance annotated)
-  const allNodes = [];
-  for (const [id, distance] of visited) {
-    const chunk = chunkById.get(id);
-    if (chunk) allNodes.push({ ...chunk, distance });
-  }
-  // Sort by distance then id for determinism
-  allNodes.sort((a, b) => a.distance - b.distance || a.id.localeCompare(b.id));
-
+  const { visited, traversedEdges, unresolvedNames } = traverseBlastGraph({
+    seedIds,
+    depth,
+    direction,
+    chunkById,
+    chunksByName,
+    outEdges,
+    inEdges,
+  });
+  const allNodes = buildBlastNodes(visited, chunkById);
   const total = allNodes.length;
   const truncated = total > limit;
-  const nodes = allNodes.slice(0, limit);
-
-  // Deduplicate traversed edges
-  const edgeKey = (e) => `${e.from}→${e.to}`;
-  const seenEdges = new Set();
-  const uniqueEdges = traversedEdges.filter((e) => {
-    const k = edgeKey(e);
-    if (seenEdges.has(k)) return false;
-    seenEdges.add(k);
-    return true;
-  });
-
   const dirLabel = direction === 'callees' ? 'callee' : direction === 'callers' ? 'caller' : 'call-graph';
   const message = total === 0
     ? `No ${dirLabel} neighbors found for ${desc} within depth ${depth}.`
     : `Traversed ${total} node${total !== 1 ? 's' : ''} from ${desc} (direction: ${direction}, depth: ${depth})${truncated ? `; returning first ${limit}` : ''}.`;
 
   return {
-    nodes,
-    edges: uniqueEdges,
+    nodes: allNodes.slice(0, limit),
+    edges: dedupeBlastEdges(traversedEdges),
     unresolvedNames: [...unresolvedNames],
     total,
     truncated,

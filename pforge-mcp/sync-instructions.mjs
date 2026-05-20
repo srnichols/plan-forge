@@ -340,6 +340,38 @@ export function renderInstructions({
  * @param {Date}    [opts.now]           - Timestamp override for tests
  * @returns {SyncInstructionsResult}
  */
+function collectInstructionSections(projectRoot, noExtras) {
+  const profile = collectProjectProfile(projectRoot);
+  const principles = collectProjectPrinciples(projectRoot);
+  const forgeConfig = collectForgeConfig(projectRoot);
+  const extraInstructions = noExtras ? [] : collectInstructionFiles(projectRoot);
+  return { profile, principles, forgeConfig, extraInstructions };
+}
+
+function resolveInstructionsOutputPath(projectRoot, output) {
+  return output
+    ? resolve(projectRoot, output)
+    : resolve(projectRoot, ".github", "copilot-instructions.md");
+}
+
+function shouldWriteInstructions(outputPath, content, force) {
+  if (force || !existsSync(outputPath)) return true;
+  try {
+    return sha256(readFileSync(outputPath, "utf-8")) !== sha256(content);
+  } catch {
+    return true;
+  }
+}
+
+function writeInstructionsFile(outputPath, content) {
+  try {
+    mkdirSync(dirname(outputPath), { recursive: true });
+    writeFileSync(outputPath, content, "utf-8");
+  } catch (err) {
+    throw new SyncInstructionsError(`Failed to write ${outputPath}: ${err.message}`);
+  }
+}
+
 export function syncInstructions({
   projectRoot,
   dryRun = false,
@@ -352,11 +384,7 @@ export function syncInstructions({
 } = {}) {
   if (!projectRoot) throw new SyncInstructionsError("projectRoot is required");
 
-  const profile         = collectProjectProfile(projectRoot);
-  const principles      = collectProjectPrinciples(projectRoot);
-  const forgeConfig     = collectForgeConfig(projectRoot);
-  const extraInstructions = noExtras ? [] : collectInstructionFiles(projectRoot);
-
+  const { profile, principles, forgeConfig, extraInstructions } = collectInstructionSections(projectRoot, noExtras);
   const { markdown: content, sectionsCount } = renderInstructions({
     profile,
     principles,
@@ -369,7 +397,7 @@ export function syncInstructions({
   });
 
   const sections = {
-    profile:    !noProfile    && profile.found,
+    profile: !noProfile && profile.found,
     principles: !noPrinciples && principles.found,
     forgeConfig: forgeConfig.found,
     extraCount: noExtras ? 0 : extraInstructions.length,
@@ -387,29 +415,9 @@ export function syncInstructions({
     };
   }
 
-  const outputPath = output
-    ? resolve(projectRoot, output)
-    : resolve(projectRoot, ".github", "copilot-instructions.md");
-
-  // Skip write when content is unchanged (unless --force)
-  let changed = true;
-  if (!force && existsSync(outputPath)) {
-    try {
-      const existing = readFileSync(outputPath, "utf-8");
-      if (sha256(existing) === sha256(content)) {
-        changed = false;
-      }
-    } catch { /* treat as changed */ }
-  }
-
-  if (changed) {
-    try {
-      mkdirSync(dirname(outputPath), { recursive: true });
-      writeFileSync(outputPath, content, "utf-8");
-    } catch (err) {
-      throw new SyncInstructionsError(`Failed to write ${outputPath}: ${err.message}`);
-    }
-  }
+  const outputPath = resolveInstructionsOutputPath(projectRoot, output);
+  const changed = shouldWriteInstructions(outputPath, content, force);
+  if (changed) writeInstructionsFile(outputPath, content);
 
   return {
     ok: true,

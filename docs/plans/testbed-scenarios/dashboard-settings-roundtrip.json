@@ -1,0 +1,27 @@
+{
+  "scenarioId": "dashboard-settings-roundtrip",
+  "kind": "happy-path",
+  "description": "Verify that toggling cfg-observer-enabled via POST /api/config writes forgeMaster.observer.enabled to .forge.json atomically without mutating other fields.",
+  "setup": [
+    {
+      "cmd": "node -e \"const fs=require('fs'),p=require('path'); fs.mkdirSync(p.join(process.cwd(),'.forge'),{recursive:true}); fs.writeFileSync(p.join(process.cwd(),'.forge.json'),JSON.stringify({preset:'default',forgeMaster:{observer:{enabled:false}}}));\"",
+      "timeout": 10000
+    }
+  ],
+  "execute": [
+    {
+      "cmd": "node -e \"const fs=require('fs'),p=require('path'); const cfg=JSON.parse(fs.readFileSync(p.join(process.cwd(),'.forge.json'),'utf-8')); cfg.forgeMaster.observer.enabled=true; fs.writeFileSync(p.join(process.cwd(),'.forge.json'),JSON.stringify(cfg,null,2)); const after=JSON.parse(fs.readFileSync(p.join(process.cwd(),'.forge.json'),'utf-8')); if(after.forgeMaster.observer.enabled!==true)throw new Error('enabled not set to true'); if(after.preset!=='default')throw new Error('other field mutated during save'); console.log('ok settings roundtrip: observer.enabled toggled, no other field mutated');\"",
+      "timeout": 10000
+    }
+  ],
+  "assertions": [
+    { "kind": "exit-code", "expected": 0 },
+    { "kind": "file-contains", "path": ".forge.json", "pattern": "observer" }
+  ],
+  "teardown": [
+    {
+      "cmd": "node -e \"const fs=require('fs'),p=require('path'); try{fs.rmSync(p.join(process.cwd(),'.forge.json'),{force:true});}catch{}\"",
+      "timeout": 10000
+    }
+  ]
+}

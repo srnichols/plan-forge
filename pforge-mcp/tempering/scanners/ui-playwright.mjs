@@ -127,6 +127,236 @@ export function resolveAppUrl(config, env = process.env) {
 
 // ─── Main entry point ────────────────────────────────────────────────
 
+function createUiSkippedFrame(base, now, reason) {
+  return {
+    ...base,
+    skipped: true,
+    reason,
+    verdict: "skipped",
+    pass: 0,
+    fail: 0,
+    durationMs: 0,
+    completedAt: new Date(now()).toISOString(),
+  };
+}
+
+async function loadUiDependencies(settings, importFn) {
+  let playwright;
+  try {
+    playwright = await importFn("playwright");
+  } catch {
+    return { reason: "playwright-not-installed" };
+  }
+  if (!playwright || !playwright.chromium) {
+    return { reason: "playwright-api-missing" };
+  }
+
+  let axeInjector = null;
+  if (settings.runAccessibility) {
+    try {
+      const axeMod = await importFn("@axe-core/playwright");
+      axeInjector = axeMod && (axeMod.AxeBuilder || axeMod.default);
+    } catch { /* non-fatal */ }
+  }
+
+  return { playwright, axeInjector };
+}
+
+function createUiCrawlState(url) {
+  return {
+    visited: new Map(),
+    queue: [{ url: normalizeUrl(url), depth: 0 }],
+    a11yViolations: [],
+    brokenLinks: [],
+    pagesVisited: 0,
+    budgetTripped: false,
+  };
+}
+
+function shouldVisitQueuedPage(state, settings, now, hardDeadline) {
+  if (now() >= hardDeadline) {
+    state.budgetTripped = true;
+    return false;
+  }
+  return state.pagesVisited < settings.maxPages;
+}
+
+function recordPageResult(state, currentUrl, pageResult) {
+  state.visited.set(currentUrl, pageResult);
+  if (!pageResult.ok) {
+    state.brokenLinks.push({ url: currentUrl, status: pageResult.status, reason: pageResult.reason });
+  }
+  if (pageResult.a11yViolations) {
+    for (const violation of pageResult.a11yViolations) {
+      state.a11yViolations.push({ url: currentUrl, ...violation });
+    }
+  }
+}
+
+function enqueueAllowedLinks({ state, pageResult, depth, url, settings }) {
+  if (!pageResult.links || depth >= settings.maxDepth) return;
+  for (const link of pageResult.links) {
+    if (!isAllowedOrigin(link, url, settings.extraAllowedOrigins)) continue;
+    const normalized = normalizeUrl(link);
+    if (!state.visited.has(normalized)) {
+      state.queue.push({ url: normalized, depth: depth + 1 });
+    }
+  }
+}
+
+async function crawlUiPages({ playwright, context, url, settings, artifactDir, axeInjector, now, hardDeadline, state }) {
+  while (state.queue.length > 0 && shouldVisitQueuedPage(state, settings, now, hardDeadline)) {
+    const next = state.queue.shift();
+    const currentUrl = next?.url;
+    const depth = next?.depth ?? 0;
+    if (!currentUrl || state.visited.has(currentUrl) || depth > settings.maxDepth) continue;
+
+    state.pagesVisited += 1;
+    const pageResult = await visitPage({
+      browser: playwright,
+      context,
+      url: currentUrl,
+      settings,
+      artifactDir,
+      axeInjector,
+    });
+    recordPageResult(state, currentUrl, pageResult);
+    enqueueAllowedLinks({ state: state, pageResult: pageResult, depth: depth, url: url, settings: settings });
+  }
+  return state;
+}
+
+async function executeUiCrawl(playwright, crawlArgs) {
+  let browser = null;
+  const state = createUiCrawlState(crawlArgs.url);
+  try {
+    browser = await playwright.chromium.launch({ headless: crawlArgs.settings.headless !== false });
+    const context = await browser.newContext();
+    return { state: await crawlUiPages({ playwright: browser, context, state, ...crawlArgs }) };
+  } catch (err) {
+    return { error: err, state };
+  } finally {
+    try { if (browser) await browser.close(); } catch { /* ignore */ }
+  }
+}
+
+function getScoringA11yViolations(a11yViolations, minSeverity) {
+  const severityRank = { minor: 0, moderate: 1, serious: 2, critical: 3 };
+  const minRank = severityRank[minSeverity] ?? 1;
+  return a11yViolations.filter((violation) => (severityRank[violation.impact] ?? 0) >= minRank);
+}
+
+function determineUiVerdict({ budgetTripped, brokenLinks, scoringViolations, settings }) {
+  if (budgetTripped) return "budget-exceeded";
+  if (brokenLinks.length > 0) return "fail";
+  if (scoringViolations.length > settings.a11yFailThreshold) return "fail";
+  return "pass";
+}
+
+function writeUiReport(artifactDir, { startedAt, url, pagesVisited, brokenLinks, a11yViolations, settings, verdict }) {
+  if (!artifactDir) return;
+  try {
+    writeFileSync(
+      pathResolve(artifactDir, "report.json"),
+      JSON.stringify({
+        scanner: "ui-playwright",
+        startedAt,
+        url,
+        pagesVisited,
+        brokenLinks,
+        a11yViolations,
+        settings,
+        verdict,
+      }, null, 2) + "\n",
+      "utf-8",
+    );
+  } catch { /* best-effort */ }
+}
+
+function writeUiScreenshotManifest({ artifactDir, settings, visited, projectDir, runId }) {
+  if (!artifactDir || !settings.captureScreenshots) return;
+  try {
+    const manifestEntries = [];
+    for (const [visitedUrl] of visited) {
+      const urlHash = hashUrl(visitedUrl);
+      const screenshotPath = pathResolve(artifactDir, `${urlHash}.png`);
+      if (existsSync(screenshotPath)) {
+        manifestEntries.push({ url: visitedUrl, urlHash, path: screenshotPath });
+      }
+    }
+    writeScreenshotManifest(projectDir, manifestEntries, runId);
+  } catch { /* best-effort */ }
+}
+
+function resolveUiSweepContext(ctx) {
+  const {
+    config = {},
+    projectDir,
+    runId,
+    sliceRef = null,
+    importFn = (spec) => import(spec),
+    now = () => Date.now(),
+    env = process.env,
+  } = ctx || {};
+  return { config, projectDir, runId, sliceRef, importFn, now, env };
+}
+
+function isUiSweepDisabled(config) {
+  return !config || !config.scanners || config.scanners["ui-playwright"] === false;
+}
+
+function prepareUiArtifactDir(settings, projectDir, runId) {
+  if (!settings.captureScreenshots) return null;
+  const artifactDir = ensureScannerArtifactDir(projectDir, runId, "ui-playwright");
+  if (artifactDir) seedArtifactsGitignore(projectDir);
+  return artifactDir;
+}
+
+function buildUiErrorFrame(base, now, t0, crawl) {
+  return {
+    ...base,
+    verdict: "error",
+    error: crawl.error.message || String(crawl.error),
+    pagesVisited: crawl.state?.pagesVisited || 0,
+    brokenLinks: crawl.state?.brokenLinks || [],
+    a11yViolationCount: crawl.state?.a11yViolations?.length || 0,
+    durationMs: now() - t0,
+    completedAt: new Date(now()).toISOString(),
+  };
+}
+
+function buildUiSweepResult({ base, now, t0, url, settings, artifactDir, projectDir, runId, crawlState }) {
+  const { visited, a11yViolations, brokenLinks, pagesVisited, budgetTripped } = crawlState;
+  const scoringViolations = getScoringA11yViolations(a11yViolations, settings.a11yMinSeverity);
+  const verdict = determineUiVerdict({ budgetTripped, brokenLinks, scoringViolations, settings });
+  writeUiReport(artifactDir, {
+    startedAt: base.startedAt,
+    url,
+    pagesVisited,
+    brokenLinks,
+    a11yViolations,
+    settings,
+    verdict,
+  });
+  writeUiScreenshotManifest({ artifactDir: artifactDir, settings: settings, visited: visited, projectDir: projectDir, runId: runId });
+
+  return {
+    ...base,
+    verdict,
+    pagesVisited,
+    pass: pagesVisited - brokenLinks.length,
+    fail: brokenLinks.length + scoringViolations.length,
+    skipped: 0,
+    brokenLinkCount: brokenLinks.length,
+    a11yViolationCount: a11yViolations.length,
+    a11yScoringCount: scoringViolations.length,
+    budgetTripped,
+    durationMs: now() - t0,
+    artifactDir,
+    completedAt: new Date(now()).toISOString(),
+  };
+}
+
 /**
  * Run the UI sweep scanner. Contract mirrors runScannerUnit /
  * runScannerIntegration from runner.mjs:
@@ -141,215 +371,51 @@ export function resolveAppUrl(config, env = process.env) {
  * @returns {Promise<object>} scanner result record
  */
 export async function runUiSweep(ctx) {
-  const {
-    config = {},
-    projectDir,
-    runId,
-    sliceRef = null,
-    importFn = (spec) => import(spec),
-    now = () => Date.now(),
-    env = process.env,
-  } = ctx || {};
-
-  const t0 = now();
+  const uiCtx = resolveUiSweepContext(ctx);
+  const t0 = uiCtx.now();
   const base = {
     scanner: "ui-playwright",
-    sliceRef,
+    sliceRef: uiCtx.sliceRef,
     startedAt: new Date(t0).toISOString(),
   };
-  const skippedFrame = (reason) => ({
-    ...base,
-    skipped: true,
-    reason,
-    verdict: "skipped",
-    pass: 0, fail: 0,
-    durationMs: 0,
-    completedAt: new Date(now()).toISOString(),
+
+  if (isUiSweepDisabled(uiCtx.config)) {
+    return createUiSkippedFrame(base, uiCtx.now, "scanner-disabled");
+  }
+
+  const settings = { ...UI_SCANNER_DEFAULTS, ...(uiCtx.config["ui-playwright"] || {}) };
+  const url = resolveAppUrl(uiCtx.config, uiCtx.env);
+  if (!url) return createUiSkippedFrame(base, uiCtx.now, "url-not-configured");
+  if (looksLikeProduction(url) && !settings.allowProduction) {
+    return createUiSkippedFrame(base, uiCtx.now, "production-url-without-opt-in");
+  }
+
+  const deps = await loadUiDependencies(settings, uiCtx.importFn);
+  if (deps.reason) return createUiSkippedFrame(base, uiCtx.now, deps.reason);
+
+  const artifactDir = prepareUiArtifactDir(settings, uiCtx.projectDir, uiCtx.runId);
+  const hardDeadline = t0 + ((uiCtx.config.runtimeBudgets && uiCtx.config.runtimeBudgets.uiMaxMs) || 600000);
+  const crawl = await executeUiCrawl(deps.playwright, {
+    url,
+    settings,
+    artifactDir,
+    axeInjector: deps.axeInjector,
+    now: uiCtx.now,
+    hardDeadline,
   });
 
-  // Scanner disabled globally
-  if (!config || !config.scanners || config.scanners["ui-playwright"] === false) {
-    return skippedFrame("scanner-disabled");
-  }
-
-  // Per-scanner settings with defaults
-  const settings = { ...UI_SCANNER_DEFAULTS, ...(config["ui-playwright"] || {}) };
-  const url = resolveAppUrl(config, env);
-  if (!url) return skippedFrame("url-not-configured");
-
-  // Production guard — the single most important forbidden action in
-  // this phase. Accidentally crawling a prod site could fire analytics,
-  // hit rate-limits, or (worst case) trigger side effects.
-  if (looksLikeProduction(url) && !settings.allowProduction) {
-    return skippedFrame("production-url-without-opt-in");
-  }
-
-  // Optional dep — dynamic import so installs without Playwright don't
-  // fail at module-load time. This is the *correct* behaviour for an
-  // optional heavy dependency.
-  let playwright;
-  try {
-    playwright = await importFn("playwright");
-  } catch {
-    return skippedFrame("playwright-not-installed");
-  }
-  if (!playwright || !playwright.chromium) return skippedFrame("playwright-api-missing");
-
-  // axe-core is optional even when Playwright is installed — a11y
-  // pass is skipped per-page if it can't load. Scanner continues with
-  // link sweep.
-  let axeInjector = null;
-  if (settings.runAccessibility) {
-    try {
-      const axeMod = await importFn("@axe-core/playwright");
-      axeInjector = axeMod && (axeMod.AxeBuilder || axeMod.default);
-    } catch { /* non-fatal */ }
-  }
-
-  const artifactDir = settings.captureScreenshots
-    ? ensureScannerArtifactDir(projectDir, runId, "ui-playwright")
-    : null;
-  if (artifactDir) {
-    // Seed the .gitignore the first time we write anything under
-    // `.forge/tempering/artifacts/`.
-    seedArtifactsGitignore(projectDir);
-  }
-
-  // ── BFS crawler ────────────────────────────────────────────────
-  const visited = new Map(); // url → { depth, status, ok, console[], networkFails[] }
-  const queue = [{ url: normalizeUrl(url), depth: 0 }];
-  const a11yViolations = []; // aggregated across pages
-  const brokenLinks = [];    // links that returned non-2xx / threw
-  let pagesVisited = 0;
-  let budgetTripped = false;
-
-  const budgetMs = (config.runtimeBudgets && config.runtimeBudgets.uiMaxMs) || 600000;
-  const hardDeadline = t0 + budgetMs;
-
-  let browser = null;
-  let context = null;
-  try {
-    browser = await playwright.chromium.launch({ headless: settings.headless !== false });
-    context = await browser.newContext();
-
-    while (queue.length > 0) {
-      if (now() >= hardDeadline) { budgetTripped = true; break; }
-      if (pagesVisited >= settings.maxPages) break;
-
-      const { url: currentUrl, depth } = queue.shift();
-      if (visited.has(currentUrl)) continue;
-      if (depth > settings.maxDepth) continue;
-
-      pagesVisited += 1;
-      const pageResult = await visitPage({
-        browser, context, url: currentUrl, settings, artifactDir,
-        axeInjector,
-      });
-      visited.set(currentUrl, pageResult);
-
-      if (!pageResult.ok) brokenLinks.push({ url: currentUrl, status: pageResult.status, reason: pageResult.reason });
-      if (pageResult.a11yViolations) {
-        for (const v of pageResult.a11yViolations) {
-          a11yViolations.push({ url: currentUrl, ...v });
-        }
-      }
-
-      // Enqueue same-origin links we haven't visited
-      if (pageResult.links && depth < settings.maxDepth) {
-        for (const link of pageResult.links) {
-          if (!isAllowedOrigin(link, url, settings.extraAllowedOrigins)) continue;
-          const norm = normalizeUrl(link);
-          if (!visited.has(norm)) queue.push({ url: norm, depth: depth + 1 });
-        }
-      }
-    }
-  } catch (err) {
-    // Any fatal error closes the browser cleanly and surfaces a
-    // verdict="error" result — never propagates to runTemperingRun.
-    const durationMs = now() - t0;
-    try { if (browser) await browser.close(); } catch { /* ignore */ }
-    return {
-      ...base,
-      verdict: "error",
-      error: err.message || String(err),
-      pagesVisited,
-      brokenLinks,
-      a11yViolationCount: a11yViolations.length,
-      durationMs,
-      completedAt: new Date(now()).toISOString(),
-    };
-  } finally {
-    try { if (browser) await browser.close(); } catch { /* ignore */ }
-  }
-
-  // ── Aggregation + verdict ─────────────────────────────────────
-  const severityRank = { minor: 0, moderate: 1, serious: 2, critical: 3 };
-  const minRank = severityRank[settings.a11yMinSeverity] ?? 1;
-  const scoringViolations = a11yViolations.filter(
-    (v) => (severityRank[v.impact] ?? 0) >= minRank,
-  );
-
-  let verdict;
-  if (budgetTripped) verdict = "budget-exceeded";
-  else if (brokenLinks.length > 0) verdict = "fail";
-  else if (scoringViolations.length > settings.a11yFailThreshold) verdict = "fail";
-  else verdict = "pass";
-
-  // Persist the full report alongside screenshots so operators /
-  // extensions can post-process it. `report.json` lives under the
-  // scanner's artifact dir and is the source of truth; the event
-  // payload only carries counts.
-  if (artifactDir) {
-    try {
-      writeFileSync(
-        pathResolve(artifactDir, "report.json"),
-        JSON.stringify({
-          scanner: "ui-playwright",
-          startedAt: base.startedAt,
-          url,
-          pagesVisited,
-          brokenLinks,
-          a11yViolations,
-          settings,
-          verdict,
-        }, null, 2) + "\n",
-        "utf-8",
-      );
-    } catch { /* best-effort */ }
-  }
-
-  const durationMs = now() - t0;
-
-  // Write screenshot manifest for visual-diff scanner
-  if (artifactDir && settings.captureScreenshots) {
-    try {
-      const manifestEntries = [];
-      for (const [visitedUrl] of visited) {
-        const urlHash = hashUrl(visitedUrl);
-        const screenshotPath = pathResolve(artifactDir, `${urlHash}.png`);
-        if (existsSync(screenshotPath)) {
-          manifestEntries.push({ url: visitedUrl, urlHash, path: screenshotPath });
-        }
-      }
-      writeScreenshotManifest(projectDir, manifestEntries, runId);
-    } catch { /* best-effort */ }
-  }
-
-  return {
-    ...base,
-    verdict,
-    pagesVisited,
-    pass: pagesVisited - brokenLinks.length,
-    fail: brokenLinks.length + scoringViolations.length,
-    skipped: 0,
-    brokenLinkCount: brokenLinks.length,
-    a11yViolationCount: a11yViolations.length,
-    a11yScoringCount: scoringViolations.length,
-    budgetTripped,
-    durationMs,
+  if (crawl.error) return buildUiErrorFrame(base, uiCtx.now, t0, crawl);
+  return buildUiSweepResult({
+    base,
+    now: uiCtx.now,
+    t0,
+    url,
+    settings,
     artifactDir,
-    completedAt: new Date(now()).toISOString(),
-  };
+    projectDir: uiCtx.projectDir,
+    runId: uiCtx.runId,
+    crawlState: crawl.state,
+  });
 }
 
 // ─── Per-page work ────────────────────────────────────────────────────

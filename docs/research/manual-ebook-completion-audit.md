@@ -6,8 +6,7 @@
 > chapters and references that an ebook reader expects to find but that the manual doesn't yet provide.
 >
 > **Status**: Discussion document. Drives the execution plan at
-> [`docs/plans/Phase-MANUAL-EBOOK-COMPLETION-PLAN.md`](https://github.com/srnichols/plan-forge/blob/planning/main/docs/plans/Phase-MANUAL-EBOOK-COMPLETION-PLAN.md)
-> (lives on `planning/main`).
+> [`docs/plans/Phase-MANUAL-EBOOK-COMPLETION-PLAN.md`](../plans/Phase-MANUAL-EBOOK-COMPLETION-PLAN.md).
 > **Scope reviewed**: Full TOC of `docs/manual/` (29 chapters across 5 Parts + 17 appendices),
 > the blog inventory under `docs/blog/`, and the source surfaces (`pforge-mcp/EVENTS.md`,
 > `docs/REST-API.md`, `pforge-mcp/capabilities.mjs`, `pforge.ps1`, `extensions/catalog.json`).
@@ -30,7 +29,7 @@ If we only do **three things** from this list, do these:
 2. **Foreword** absorbing the existing blog posts into ebook voice ("From Impossible to Seven Minutes") **and** explicitly volunteering the positioning disclaimer in a paragraph titled *"What this book is **not**"*. The book has no origin story; the blog does.
 3. **Cost & Economics chapter** — Plan Forge's biggest commercial question is *"how much will this cost me?"* and the manual doesn't answer it directly. The data is in the dashboard's Cost tab and in `forge_cost_report`; the narrative is missing. Lead with the **four levers** documented in §2 below (quality-at-constant-time, quality-per-extra-dollar, rework-avoidance, memory-as-subsidy) and the **compounding flywheel** observation — the cost curve bends downward over the life of a project, which is the opposite of what most engineering managers default-assume.
 
-The full execution plan ([`Phase-MANUAL-EBOOK-COMPLETION-PLAN.md`](https://github.com/srnichols/plan-forge/blob/planning/main/docs/plans/Phase-MANUAL-EBOOK-COMPLETION-PLAN.md))
+The full execution plan ([`Phase-MANUAL-EBOOK-COMPLETION-PLAN.md`](../plans/Phase-MANUAL-EBOOK-COMPLETION-PLAN.md))
 breaks the gap-closure into **18 independently shippable content slices + 1 QA closer = 19 slices total** across 4 clusters
 (Story · Reference · Domain · Closure).
 
@@ -225,7 +224,7 @@ Result: the positioning is correct but invisible to the audience most at risk of
 **Why this matters for the plan.** Item #6 should not be a standalone slice; it should be
 **baked into Slices A1 (Foreword) and A2 (Reader-Journey Ladders) plus a small standalone edit
 to `index.html` / `README.md` / `what-is-plan-forge.html`**. The execution plan
-([`Phase-MANUAL-EBOOK-COMPLETION-PLAN.md`](https://github.com/srnichols/plan-forge/blob/planning/main/docs/plans/Phase-MANUAL-EBOOK-COMPLETION-PLAN.md))
+([`Phase-MANUAL-EBOOK-COMPLETION-PLAN.md`](../plans/Phase-MANUAL-EBOOK-COMPLETION-PLAN.md))
 should grow a small new slice — call it **A6 — Above-the-fold positioning** — between A5 and
 Cluster B. Cost: roughly one focused commit. Impact: prevents the wrong frame from forming in
 the first thirty seconds of contact with the book.
@@ -311,7 +310,7 @@ briefing carries a STATUS pill with the version stamp, identical to other chapte
 briefing is visually obvious.
 
 **Slice in the plan.** This is **Slice A7 — Stakeholder Briefing** in
-[`Phase-MANUAL-EBOOK-COMPLETION-PLAN.md`](https://github.com/srnichols/plan-forge/blob/planning/main/docs/plans/Phase-MANUAL-EBOOK-COMPLETION-PLAN.md).
+[`Phase-MANUAL-EBOOK-COMPLETION-PLAN.md`](../plans/Phase-MANUAL-EBOOK-COMPLETION-PLAN.md).
 Depends on A6 (positioning sentence locked) and the cost-levers table from Cluster C
 (reusable). Lower-priority than A6 (which fixes the upstream "wrong-frame" problem), but the
 single most leveraged slice for the maintainer who is actively pitching prospects.
@@ -455,7 +454,7 @@ Not blocking, not in the execution plan; recorded here so it isn't forgotten:
 
 ## 4 · Why this round picks the slices it picks
 
-The execution plan ([`Phase-MANUAL-EBOOK-COMPLETION-PLAN.md`](https://github.com/srnichols/plan-forge/blob/planning/main/docs/plans/Phase-MANUAL-EBOOK-COMPLETION-PLAN.md))
+The execution plan ([`Phase-MANUAL-EBOOK-COMPLETION-PLAN.md`](../plans/Phase-MANUAL-EBOOK-COMPLETION-PLAN.md))
 orders work as **Cluster A (Story) → B (Reference) → C (Domain chapters)** even though the gap
 analysis above is presented in the opposite order. The reasoning:
 
@@ -572,7 +571,7 @@ above, plus a short narrative of any deferred or follow-up items.
 
 **Order in the slice plan**: Slice QA runs **last**. It depends on every content slice having
 shipped (or being explicitly deferred with a recorded reason). Captured as Cluster D — Phase
-Closure in [`Phase-MANUAL-EBOOK-COMPLETION-PLAN.md`](https://github.com/srnichols/plan-forge/blob/planning/main/docs/plans/Phase-MANUAL-EBOOK-COMPLETION-PLAN.md).
+Closure in [`Phase-MANUAL-EBOOK-COMPLETION-PLAN.md`](../plans/Phase-MANUAL-EBOOK-COMPLETION-PLAN.md).
 
 ## 4c · Diagram requirements per slice
 
@@ -673,7 +672,7 @@ These weren't resolved in the audit chat and want a thumbs-up before slice execu
 ## 6 · Cross-references
 
 - **Round 1 review** (Apress scaffolding focus): [`manual-apress-publisher-review.md`](manual-apress-publisher-review.md)
-- **Execution plan** (slice-by-slice playbook): [`Phase-MANUAL-EBOOK-COMPLETION-PLAN.md`](https://github.com/srnichols/plan-forge/blob/planning/main/docs/plans/Phase-MANUAL-EBOOK-COMPLETION-PLAN.md) (lives on `planning/main`)
+- **Execution plan** (slice-by-slice playbook): [`../plans/Phase-MANUAL-EBOOK-COMPLETION-PLAN.md`](../plans/Phase-MANUAL-EBOOK-COMPLETION-PLAN.md)
 - **Source surfaces**:
   - Blog inventory: [`../blog/`](../blog/)
   - Tools manifest: `pforge-mcp/tools.json` (canonical tool count)
@@ -684,3 +683,182 @@ These weren't resolved in the audit chat and want a thumbs-up before slice execu
   tools, 57 → 97 CLI commands) and fixed `maintain.mjs` regex bug that had silently skipped
   hyphenated count keys for several releases. That sweep cleaned the *numbers*; this round
   addresses the *content*.
+
+
+---
+
+## 7 · What actually shipped — QA Closure Sweep (Slice D/QA)
+
+> **Sweep date**: 2026-05-20
+> **Sweep executor**: Copilot agent (planning/main)
+> **Validator**: 
+ode docs/manual/maintain.mjs — 80 chapters, 426 indexed sections, 1480 internal links checked.
+> **Plan reference**: [Phase-MANUAL-EBOOK-COMPLETION-PLAN.md](../plans/Phase-MANUAL-EBOOK-COMPLETION-PLAN.md)
+
+---
+
+### Check 1 — All shipped-slice files exist at named paths
+
+| File | Status |
+|------|--------|
+| oreword.html (A1) | ✅ PASS |
+| eader-paths.html (A2) | ✅ PASS |
+| day-in-the-forge.html (A3 / Appendix R) | ✅ PASS |
+| how-do-i.html (A4 / Appendix S) | ✅ PASS |
+| index.html What's-new banner (A5, inline edit) | ✅ PASS |
+| what-is-plan-forge.html above-the-fold (A6, inline edit) | ✅ PASS |
+| stakeholder-briefing.html (A7) | ✅ PASS |
+| orge-json-reference.html (B1 / Appendix T) | ✅ PASS |
+| nvironment-variables-reference.html (B2 / Appendix U) | ✅ PASS |
+| Lifecycle Hooks section in customization.html (B3, inline edit) | ✅ PASS |
+| vent-catalog.html (B4 / Appendix V) | ✅ PASS |
+| est-api-reference.html (B5 / Appendix W) | ✅ PASS |
+| Skills section in instructions-agents-reference.html (B6, inline edit) | ✅ PASS |
+| rrors-and-exit-codes.html (B7 / Appendix X) | ✅ PASS |
+| security-threat-model.html (C1 / Ch 30) | ✅ PASS |
+| cost-and-economics.html (C2 / Ch 31) | ✅ PASS |
+| plan-pattern-library.html (C3 / Appendix Y) | ✅ PASS |
+| ailure-mode-catalog.html (C4 / Appendix Z) | ✅ PASS |
+
+**Check 1 result: 18/18 PASS**
+
+---
+
+### Check 2 — manual.js registry entries (CHAPTERS + SEARCH_SECTIONS + STATUS) for each new file
+
+All 14 new HTML pages (A1–A7, B1–B7 new files, C1–C4) confirmed present in CHAPTERS array, STATUS registry, and SEARCH_SECTIONS with ≥3 anchors each. All inline-edit slices (A5, A6, B3, B6) added STATUS pills to the modified pages.
+
+**Check 2 result: PASS** (all 14 new files + all 4 inline-edit STATUS pills confirmed)
+
+---
+
+### Check 3 — Required forward cross-refs present in new chapters (sample of critical paths from §4a map)
+
+| Chapter | Forward cross-ref | Status |
+|---------|-------------------|--------|
+| oreword.html (A1) | Links to eader-paths.html (A2) | ✅ PASS |
+| oreword.html (A1) | Links to stakeholder-briefing.html (A7) | ✅ PASS |
+| oreword.html (A1) | Links to github-stack-alignment.html (App H) | ✅ PASS |
+| oreword.html (A1) | Links to cost-and-economics.html (C2) | ✅ PASS (added this sweep) |
+| eader-paths.html (A2) | Links to per-persona deep-dive chapters | ✅ PASS |
+| day-in-the-forge.html (A3) | Links to C2 cost-economics for vignette #2 | ✅ PASS |
+| stakeholder-briefing.html (A7) | Links to A1 Foreword, C2, App H | ✅ PASS |
+
+**Check 3 result: PASS** (all sampled critical forward links present)
+
+---
+
+### Check 4 — Required backward cross-refs present in named earlier files (§4a map)
+
+| Earlier file | New chapter linked | Status |
+|-------------|-------------------|--------|
+| index.html → oreword.html (A1) | ✅ PASS |
+| oreword.html → eader-paths.html (A2) | ✅ PASS |
+| oreword.html → day-in-the-forge.html (A3) | ✅ PASS |
+| 	roubleshooting.html → how-do-i.html (A4) | ✅ PASS |
+| oreword.html → stakeholder-briefing.html (A7) | ✅ PASS |
+| eader-paths.html → stakeholder-briefing.html (A7) | ✅ PASS |
+| customization.html → orge-json-reference.html (B1) | ✅ PASS |
+| pi-surface-index.html → vent-catalog.html (B4) | ✅ PASS (added this sweep) |
+| 	roubleshooting.html → rrors-and-exit-codes.html (B7) | ✅ PASS |
+| writing-plans.html → plan-pattern-library.html (C3) | ✅ PASS (added this sweep) |
+| 	roubleshooting.html → ailure-mode-catalog.html (C4) | ✅ PASS (added this sweep) |
+
+Four backward cross-refs were missing at sweep start and were added inline as part of this QA slice commit:
+1. oreword.html → cost-and-economics.html — paragraph added in "How to read this book" section
+2. pi-surface-index.html → vent-catalog.html — sentence added to WebSocket events paragraph
+3. writing-plans.html → plan-pattern-library.html — paragraph added after plan examples table
+4. 	roubleshooting.html → ailure-mode-catalog.html — callout-tip box added before "Getting Help"
+
+**Check 4 result: PASS** (all minimum backward cross-refs now present; 4 added this sweep)
+
+---
+
+### Check 5 — Required diagrams present and referenced in chapter HTML
+
+| Diagram | Required for | SVG exists | Chapter references it | Status |
+|---------|-------------|------------|----------------------|--------|
+| github-stack-architecture.svg | A1, A6, A7 | ✅ | ✅ | ✅ PASS |
+| vidence-ab-test-bars.svg | A3, C2 | ✅ | ✅ (A3) | ✅ PASS |
+| eader-journey-ladders.svg | A2 (optional) | ❌ not authored | N/A | ⚠️ DEFERRED (optional per §4c) |
+| 	hreat-model-trust-boundaries.svg | C1 (required) | ❌ not authored | ❌ | ❌ FAIL — follow-up |
+| cost-four-levers.svg | C2 (required) | ❌ not authored | ❌ | ❌ FAIL — follow-up |
+| cost-compounding-flywheel.svg | C2 (required) | ❌ not authored | ❌ | ❌ FAIL — follow-up |
+| 	roubleshooting-tree.svg | C4 (re-use existing) | ✅ | ✅ (added this sweep) | ✅ PASS |
+
+**Check 5 result: PARTIAL** — 3 required new SVGs not authored; recorded as follow-up items below.
+The existing-SVG re-uses are all present. The optional eader-journey-ladders.svg is deferred.
+
+---
+
+### Check 6 — All internal ../manual/*.html#anchor links resolve
+
+
+ode docs/manual/maintain.mjs validates 1480 internal links. Both sweep runs returned:
+> ✓ All internal links resolve
+
+**Check 6 result: PASS** (1480/1480 links resolve)
+
+---
+
+### Check 7 — 
+ode maintain.mjs GREEN twice consecutively
+
+Run 1 (after cross-ref and diagram additions): All checks passed — manual is in sync
+Run 2 (idempotency): All checks passed — manual is in sync
+
+**Check 7 result: PASS**
+
+---
+
+### Check 8 — EDITION constant bumped when ≥10 slices shipped
+
+EDITION = "3.6.2" (Fifth Edition). Bumped from 3.5.1 → 3.6.2 in commit 4798c58
+(slice B3, which was content slice 10 of 18, crossing the ≥10 threshold prescribed in plan note 9).
+conventions.html edition-history updated to "Fifth Edition (in progress) (v3.6.2+)".
+
+**Check 8 result: PASS**
+
+---
+
+### Summary
+
+| Check | Result |
+|-------|--------|
+| 1 — All files exist | ✅ 18/18 PASS |
+| 2 — manual.js registry complete | ✅ PASS |
+| 3 — Forward cross-refs present | ✅ PASS |
+| 4 — Backward cross-refs present | ✅ PASS (4 added this sweep) |
+| 5 — Diagrams present and referenced | ⚠️ PARTIAL (3 required SVGs deferred) |
+| 6 — Internal links resolve (1480/1480) | ✅ PASS |
+| 7 — maintain.mjs GREEN ×2 | ✅ PASS |
+| 8 — EDITION bumped | ✅ PASS |
+
+**Phase MANUAL-EBOOK-COMPLETION: 7/8 checks PASS, 1 PARTIAL.**
+
+---
+
+### Follow-up items (not blocking phase closure)
+
+The following items were identified as gaps and recorded here. They do not block marking the phase complete but should be tracked as follow-up commits:
+
+| # | Item | Priority | Notes |
+|---|------|----------|-------|
+| FU-1 | Author 	hreat-model-trust-boundaries.svg for security-threat-model.html (C1) | High | Required per §4c. SVG should show workspace ↔ MCP host ↔ LLM ↔ extension catalog ↔ memory ↔ Git remote trust boundaries. Style: dark #0f172a bg, Inter sans-serif, Plan Forge palette. viewBox ~900×500. |
+| FU-2 | Author cost-four-levers.svg for cost-and-economics.html (C2) | High | Required per §4c. Four-levers stacked total-cost-of-feature visual. The manager-pitch artifact. |
+| FU-3 | Author cost-compounding-flywheel.svg for cost-and-economics.html (C2) | High | Required per §4c. Cost-per-feature curve bending downward over project lifetime (distinct from openbrain-cross-agent-compounding.svg). |
+| FU-4 | Author eader-journey-ladders.svg for eader-paths.html (A2) | Low | Optional per §4c. 5-persona path visualization. Could fall back to the existing table if SVG authoring cost is too high. |
+| FU-5 | Bump EDITION from 3.6.2 to a Fifth Edition release version once the 3 required SVGs ship | Low | When FU-1 through FU-3 land, update EDITION and conventions.html edition-history entry from "in progress" to the actual release version. |
+
+---
+
+### Deferred items from original plan open questions
+
+| OQ | Decision | Status |
+|----|----------|--------|
+| #1 | Single-source export (PDF / single HTML) | ✅ Shipped as xport.mjs + plan-forge-manual.html (v3.10.0), separate from this phase |
+| #2 | Errata page | Deferred — lightweight; fold into Project History in a future maintenance pass |
+| #3 | End-of-Part wrap-ups | Deferred — Tier 3 audit item |
+| #4 | "Try it yourself" exercises | Deferred — sample-project carries the load for now |
+| #5 | Pull quotes / epigraphs | Deferred — stylistic, not a content gap |
+| #6 | Skill (A7.1) scope | Resolved: skill shipped with A7 as recommended (single commit) |

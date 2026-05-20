@@ -1,0 +1,27 @@
+{
+  "scenarioId": "observer-mute-by-default",
+  "kind": "happy-path",
+  "description": "Verify that the observer is disabled by default: write a .forge.json with no forgeMaster.observer block and assert observer state file is absent (no LLM cost incurred).",
+  "setup": [
+    {
+      "cmd": "node -e \"const fs=require('fs'),p=require('path'); fs.mkdirSync(p.join(process.cwd(),'.forge'),{recursive:true}); fs.writeFileSync(p.join(process.cwd(),'.forge.json'),JSON.stringify({forgeMaster:{}})); \"",
+      "timeout": 10000
+    }
+  ],
+  "execute": [
+    {
+      "cmd": "node -e \"const fs=require('fs'),p=require('path'); const cfg=JSON.parse(fs.readFileSync(p.join(process.cwd(),'.forge.json'),'utf-8')); const enabled=cfg?.forgeMaster?.observer?.enabled; if(enabled===true)throw new Error('observer must not be enabled by default, got '+enabled); const stateFile=p.join(process.cwd(),'.forge','forge-master-observer-state.json'); if(fs.existsSync(stateFile))throw new Error('observer state file must not exist when observer has never run'); console.log('ok observer mute by default');\"",
+      "timeout": 10000
+    }
+  ],
+  "assertions": [
+    { "kind": "exit-code", "expected": 0 },
+    { "kind": "file-exists", "path": ".forge.json" }
+  ],
+  "teardown": [
+    {
+      "cmd": "node -e \"const fs=require('fs'),p=require('path'); try{fs.rmSync(p.join(process.cwd(),'.forge.json'),{force:true});}catch{} \"",
+      "timeout": 10000
+    }
+  ]
+}

@@ -1,0 +1,8 @@
+{
+  "capturedAt": "2026-05-19T12:54:08.867Z",
+  "phase": "pre-enums-centralization",
+  "capabilitiesMdToolCount": 91,
+  "glossaryHtmlToolCount": 91,
+  "llmsTxtToolInventoryLine": "- 91 MCP tools — core orchestration + LiveGuard + Watcher + Crucible + Tempering + Bug Registry + Testbed + Lattice (code-graph, 5 tools) + Copilot Memory Sync (`forge_sync_memories`, `forge_sync_instructions`) + Worker Guardrails (`forge_diff_classify`). Start with `forge_capabilities` for full discovery; call `mcp-call <tool>` from the CLI for any tool without a dedicated wrapper.",
+  "note": "S0 baseline — captured before Phase-41 ENUMS-CENTRALIZATION migration"
+}

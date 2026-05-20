@@ -1,0 +1,26 @@
+{
+  "scenarioId": "observer-process-lifecycle",
+  "kind": "happy-path",
+  "description": "Verify the observer PID file lifecycle: when no observer is running, the PID file is absent; after writing a PID file it exists; after cleanup it is removed.",
+  "setup": [
+    {
+      "cmd": "node -e \"const fs=require('fs'),p=require('path'); fs.mkdirSync(p.join(process.cwd(),'.forge'),{recursive:true}); \"",
+      "timeout": 10000
+    }
+  ],
+  "execute": [
+    {
+      "cmd": "node -e \"const fs=require('fs'),p=require('path'); const pidFile=p.join(process.cwd(),'.forge','forge-master-observer.pid'); if(fs.existsSync(pidFile))throw new Error('pid file must not exist before start'); fs.writeFileSync(pidFile,String(process.pid)); if(!fs.existsSync(pidFile))throw new Error('pid file must exist after write'); fs.rmSync(pidFile,{force:true}); if(fs.existsSync(pidFile))throw new Error('pid file must be gone after stop'); console.log('ok observer pid lifecycle: absent before, present during, absent after');\"",
+      "timeout": 15000
+    }
+  ],
+  "assertions": [
+    { "kind": "exit-code", "expected": 0 }
+  ],
+  "teardown": [
+    {
+      "cmd": "node -e \"const fs=require('fs'),p=require('path'); const pid=p.join(process.cwd(),'.forge','forge-master-observer.pid'); try{fs.rmSync(pid,{force:true});}catch{} \"",
+      "timeout": 10000
+    }
+  ]
+}

@@ -7,9 +7,15 @@
 
 ## Current Release
 
-**v3.5.1** (2026-05-17) — Lattice Query Relevance Scoring. `forge_lattice_query` now ranks results by camelCase-aware token overlap — name tokens weighted 2×, file path 1×. Searching for "user" returns `getUserById` before less-relevant matches. New exported helpers `scoreChunk` and `tokenizeForSearch` for downstream consumers. 18 new tests.
+**v3.8.2** (2026-05-20) — CLI-GUIDE Documentation Refresh. Added full CLI-GUIDE entries for 14 commands that existed in `pforge.ps1`/`pforge.sh` but lacked documentation: `digest`, `fm-recall`, `plan-from-sarif`, `sync-spaces`, `forge-home-cleanup`, `timeline`, `patterns`, `graph`, `sync-memories`, `sync-instructions`, `github`, `crucible`, `skills`, and `mcp-call`. Completes v3.6 Documentation Candidate #3.
 
-Previous: **v3.5.0** (2026-05-17) — Classifier-Lane GitHub Issue Creation (Phase CLASSIFIER-ISSUE). New `forge_classifier_issue` MCP tool closes the tempering audit loop: when `routeFinding` returns `lane: "classifier"` (infra noise), the tool creates a GitHub issue labelled `classifier-noise` proposing a classifier rule update. Hash-based deduplication prevents spam — repeated patterns add a comment on the existing issue instead of creating a duplicate.
+Previous: **v3.8.1** `forge_memory_report` now silences 115+ false-positive orphan reports by recognizing 20+ legitimate state files and 20+ known subdirectories, plus ephemeral-pattern exclusions for logs, tmp files, and meta-bug drafts. New `pforge forge-home-cleanup` CLI dispatches to `scripts/forge-home-cleanup.mjs` — moves stale ephemeral files to `.forge/archive/<YYYY-MM>/` and prunes archive slots older than `--max-age-days` (default 90). `.forge/.gitignore` template added. 12 new tests.
+
+Previous: **v3.8.0** (2026-05-19) — Auditor Automation & Observer (Phase-39). Automated post-run auditing hooks (`hooks.postRun.invokeAuditor.onFailure` + `everyNRuns`), cross-run watcher mode with four new anomaly codes, and a live-pipeline Observer that subscribes to the hub WebSocket, batches events, and narrates notable patterns via the Forge-Master reasoning loop. CLI: `pforge forge-master observe`.
+
+Previous: **v3.7.0** (2026-05-18) — Worker Guardrails (A1–A8). Hardened Forbidden Actions matching, diff classification, PreCommit chain, plan-health auditor agent, network allowlists, lockHash, objective-gated tempering, and tool denylists.
+
+Previous: **v3.5.1** (2026-05-17) — Classifier-Lane GitHub Issue Creation (Phase CLASSIFIER-ISSUE). New `forge_classifier_issue` MCP tool closes the tempering audit loop: when `routeFinding` returns `lane: "classifier"` (infra noise), the tool creates a GitHub issue labelled `classifier-noise` proposing a classifier rule update. Hash-based deduplication prevents spam — repeated patterns add a comment on the existing issue instead of creating a duplicate.
 
 Previous: **v3.4.1** (2026-05-17) — Snapshot Pop Hotfix (Issue #201). `popSliceSnapshot` now uses `git stash apply` + explicit drop instead of blind `git stash pop`. Startup janitor drops orphaned `pforge-slice-N-snapshot` stashes older than 7 days.
 
@@ -41,7 +47,7 @@ Previous: **v2.90.10** (2026-05-05) — Forge-Master Cross-Session Recall (Phase
 
 Previous: **v2.90.10** (2026-05-05) — Forge-Master Conversation Memory (Phase-38.1). Adds file-based JSONL session persistence to the Forge-Master reasoning engine. `runTurn` loads prior conversation turns before classification and persists each turn to disk. Per-tab session IDs flow from the dashboard (`sessionStorage` UUID) through `x-pforge-session-id` HTTP header to `deps.sessionId` in `runTurn`. Sessions auto-rotate at 200 turns. New CLI: `pforge fm-session list|purge`.
 
-**In flight (next)**: Phase CLASSIFIER-ISSUE ✅ complete (v3.5.0). Next phase TBD — candidates: embedding fallback hardening (first-class WASM model), enterprise hardening track (OTel exporter, BYO Azure OpenAI first-class, auth/RBAC scaffolding), Issue #198 fix (vitest output parser for subagent hallucination).
+**In flight (next)**: `forge_local_recall_status` MCP tool + `pforge local-recall` CLI subcommands ✅ complete (Phase 58). Next phase TBD — candidates: enterprise hardening track (OTel exporter, BYO Azure OpenAI first-class, auth/RBAC scaffolding).
 
 See [CHANGELOG.md](CHANGELOG.md) for full release notes.
 
@@ -55,7 +61,7 @@ See [CHANGELOG.md](CHANGELOG.md) for full release notes.
 |---|------|--------|-----------------|
 | 1 | **Typed REST `client` sub-path for `pforge-sdk@0.4.0`** — generated TypeScript-style typed wrappers for each `/api/*` family, replacing hand-rolled `fetch` boilerplate. Tracked in [pforge-sdk/README.md#roadmap](pforge-sdk/README.md#roadmap). | M | First external SDK consumer asks for it, or a v3.6 enterprise customer needs typed bindings. |
 | 2 | **Lattice + Hallmark as standalone catalog extensions** — extract to standalone packages so projects can adopt code-graph or provenance stamping without the full forge. | L | Demand signal from at least 3 external repos. |
-| 3 | **CLI-GUIDE refresh** covering `pforge digest`, `plan-from-sarif`, `sync-spaces`, `hammer-fm`, `fm-session`, `fm-recall` — these commands exist but their CLI-GUIDE entries are stubs. | S | Next CLI release that adds or removes top-level commands. |
+| 3 | ~~**CLI-GUIDE refresh** covering `pforge digest`, `plan-from-sarif`, `sync-spaces`, `hammer-fm`, `fm-session`, `fm-recall` — these commands exist but their CLI-GUIDE entries are stubs.~~ **DONE (v3.8.2)** — Added full entries for `digest`, `fm-recall`, `plan-from-sarif`, `sync-spaces`, `forge-home-cleanup`, `timeline`, `patterns`, `graph`, `sync-memories`, `sync-instructions`, `github`, `crucible`, `skills`, and `mcp-call`. | S | ✅ Triggered by `forge-home-cleanup` CLI addition (v3.8.1) |
 | 4 | **Manual Appendix G — "Unified API Surface Index"** — single appendix tabulating every MCP tool + CLI command + REST endpoint + SDK export with cross-links. | M | After Appendix F stabilizes; or when SDK 0.4.0 lands. |
 | 5 | **Landing-page screenshot refresh** — several screenshots on [docs/index.html](docs/index.html), [docs/dashboard.html](docs/dashboard.html), and [docs/shop-tour.html](docs/shop-tour.html) predate the 37-tab dashboard taxonomy. | S | Next visible UI change to the dashboard chrome. |
 | 6 | **L3 retrofit** — wire `forge_diagnose`, `forge_sweep`, `forge_run_skill` through `captureMemory()` and add an `l3Writes` field to `tools.json` for auditable coverage. | M | After v3.6 ships; pre-requisite for "L4 shared tenant" experiment. |

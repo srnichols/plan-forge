@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { adapter } from "../index.mjs";
-import { validateAdapterShape, ERR_NOT_IMPLEMENTED } from "../../../pforge-mcp/notifications/adapter-contract.mjs";
+import { validateAdapterShape, ERR_NOT_IMPLEMENTED } from "../../../pforge-sdk/src/notifications/adapter-contract.mjs";
 
 describe("notify-teams stub", () => {
   it("conforms to the adapter contract shape", () => {

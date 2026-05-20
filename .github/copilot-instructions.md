@@ -188,6 +188,7 @@ This project uses the **Plan Forge Pipeline** for feature development.
 | `testing.instructions.md` | Unit tests, integration tests, test containers |
 | `version.instructions.md` | Semantic versioning, commit-driven bumps |
 | `status-reporting.instructions.md` | Standard output templates for orchestration updates, progress, blockers, handoffs |
+| `clean-code.instructions.md` | Function design, naming, commenting, module-size guardrails (Clean Code audit) |
 
 > **Note**: Instruction files auto-load via their `applyTo` frontmatter when you edit matching files.
 
@@ -208,6 +209,7 @@ Skills are multi-step procedures invoked by typing `/` in chat. They also auto-l
 | `/onboarding` | Walk a new developer through project setup, architecture, and first task |
 | `/health-check` | Forge diagnostic: forge_smith → forge_validate → forge_sweep |
 | `/forge-execute` | Guided plan execution: list plans → estimate cost → execute → report |
+| `/clean-code-review` | Audit module size, function complexity, parameter lists, TODO/FIXME markers, ESLint violations |
 
 ### Agent Definitions (`.github/agents/`)
 

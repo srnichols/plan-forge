@@ -56,7 +56,7 @@
               <tr><td><a href="#execution"><code>maxParallelism</code>, <code>maxRetries</code>, <code>maxRunHistory</code></a></td><td>Execution limits</td><td>Orchestrator DAG scheduling and retention</td></tr>
               <tr><td><a href="#quorum"><code>quorum</code></a></td><td>Multi-model consensus</td><td><code>--quorum=...</code> flag, <code>forge_estimate_quorum</code></td></tr>
               <tr><td><a href="#extensions"><code>extensions</code></a></td><td>Installed extensions</td><td><code>pforge ext</code>, Extensions tab</td></tr>
-              <tr><td><a href="#hooks"><code>hooks</code></a></td><td>LiveGuard lifecycle hooks</td><td>PreDeploy, PostSlice, PreAgentHandoff</td></tr>
+              <tr><td><a href="#hooks"><code>hooks</code></a></td><td>LiveGuard lifecycle hooks</td><td>PreDeploy, PostSlice, PreAgentHandoff, PostRun</td></tr>
               <tr><td><a href="#openclaw"><code>openclaw</code></a></td><td>OpenClaw analytics bridge</td><td>PreAgentHandoff snapshot push (optional)</td></tr>
               <tr><td><a href="#runtime"><code>runtime</code></a></td><td>Inner-loop subsystems</td><td>Phase-25 gate synthesis and quorum reviewer</td></tr>
               <tr><td><a href="#brain"><code>brain</code></a></td><td>Memory and federation</td><td>OpenBrain federation across local repos</td></tr>
@@ -153,6 +153,33 @@
           </table>
         </div>
 
+        <h3 id="forgeMaster-observer"><code>forgeMaster.observer</code></h3>
+        <p><strong>v3.8+</strong> — Background hub subscriber that batches live Plan Forge events and narrates notable patterns. <strong>Mute-by-default</strong>: <code>enabled</code> must be explicitly set to <code>true</code>. Control via <code>forge_master_observe</code> MCP tool or <code>pforge master observe</code> CLI. Observer is strictly read-only; it cannot invoke write tools or create PRs.</p>
+        <div class="overflow-x-auto mb-6">
+          <table class="manual-table">
+            <thead><tr><th>Key</th><th>Type</th><th>Default</th><th>Example</th><th>Change impact</th></tr></thead>
+            <tbody>
+              <tr><td><code>forgeMaster.observer.enabled</code></td><td>boolean</td><td><code>false</code></td><td><code>true</code></td><td>Master switch. Must be <code>true</code> for any observation to occur. <code>forge_master_observe</code> returns an "observer disabled" error when this is false. Set env var <code>PFORGE_FORGE_MASTER_OBSERVE_DISABLE=1</code> to override to false at process level regardless of this setting.</td></tr>
+              <tr><td><code>forgeMaster.observer.maxUsdPerDay</code></td><td>number</td><td><code>0.10</code></td><td><code>0.25</code></td><td>Daily USD budget cap. Once the day's narration spend reaches this cap the observer skips LLM calls and logs a budget-block event. Cap is finite; <code>null</code> or <code>Infinity</code> means no cap (not recommended).</td></tr>
+              <tr><td><code>forgeMaster.observer.maxNarrationsPerHour</code></td><td>number</td><td><code>6</code></td><td><code>12</code></td><td>Max narration LLM calls per clock hour. Rate-limits the observer during burst activity.</td></tr>
+              <tr><td><code>forgeMaster.observer.batchWindowMs</code></td><td>number</td><td><code>60000</code></td><td><code>30000</code></td><td>Event batch flush interval in milliseconds. Lower = more responsive narrations; higher = fewer LLM calls.</td></tr>
+              <tr><td><code>forgeMaster.observer.modelTier</code></td><td>string | null</td><td><code>null</code></td><td><code>"fast"</code></td><td>Model capability tier for narrations: <code>flagship</code> (quality), <code>mid</code> (balance), <code>fast</code> (cheap, high-volume), or <code>null</code> to inherit ask-mode model. Tier resolves against the existing model registry; no vendor IDs are hardcoded. Valid values are the <code>MODEL_TIERS</code> array in <a href="https://github.com/srnichols/plan-forge/blob/planning/main/pforge-mcp/enums.mjs"><code>pforge-mcp/enums.mjs</code></a>.</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <h3 id="forgeMaster-auditor"><code>forgeMaster.auditor</code></h3>
+        <p><strong>v3.8+</strong> — Configuration for the A4 plan-health-auditor auto-invocation. The auditor is triggered via <a href="#hooks-postRun-invokeAuditor"><code>hooks.postRun.invokeAuditor</code></a>. Tokens are attributed to a separate <code>forge-master</code> cost entry; the parent run's budget is never charged.</p>
+        <div class="overflow-x-auto mb-6">
+          <table class="manual-table">
+            <thead><tr><th>Key</th><th>Type</th><th>Default</th><th>Example</th><th>Change impact</th></tr></thead>
+            <tbody>
+              <tr><td><code>forgeMaster.auditor.modelTier</code></td><td>string | null</td><td><code>null</code></td><td><code>"flagship"</code></td><td>Model tier for auditor reasoning: <code>flagship</code>, <code>mid</code>, <code>fast</code>, or <code>null</code> to inherit ask-mode model. Use <code>flagship</code> for highest-quality health analysis; use <code>fast</code> for high-frequency auto-invocation. Valid values are the <code>MODEL_TIERS</code> array in <a href="https://github.com/srnichols/plan-forge/blob/planning/main/pforge-mcp/enums.mjs"><code>pforge-mcp/enums.mjs</code></a>.</td></tr>
+              <tr><td><code>forgeMaster.auditor.outputPath</code></td><td>string</td><td><code>".forge/health/latest.md"</code></td><td><code>".forge/health/weekly.md"</code></td><td>Path where the auditor writes its health report, relative to project root.</td></tr>
+            </tbody>
+          </table>
+        </div>
+
         <!-- ============================================================ -->
         <h2 id="execution">Execution limits</h2>
         <p>Three numeric caps the orchestrator enforces during <code>pforge run-plan</code>.</p>
@@ -170,7 +197,7 @@
 
         <!-- ============================================================ -->
         <h2 id="quorum"><code>quorum</code> &mdash; multi-model consensus</h2>
-        <p>Configuration for quorum mode. Master switch is <code>enabled</code>; with <code>auto: true</code> the orchestrator only quorums slices whose complexity score crosses <code>threshold</code>. See <a href="advanced-execution.html#quorum">Advanced Execution &mdash; Quorum Mode</a> for the scoring rubric and worked examples, and <a href="advanced-execution.html#quorum-complexity">Complexity Scoring Rubric</a> for the seven signals that drive the score.</p>
+        <p>Configuration for quorum mode. Master switch is <code>enabled</code>; with <code>auto: true</code> the orchestrator only quorums slices whose complexity score crosses <code>threshold</code>. See <a href="advanced-execution.html#quorum">Advanced Execution &mdash; Quorum Mode</a> for the scoring rubric and worked examples, and <a href="advanced-execution.html#quorum-complexity">Complexity Scoring Rubric</a> for the seven signals that drive the score. The CLI <code>--quorum=</code> flag accepts values from the <code>QUORUM_MODES</code> array in <a href="https://github.com/srnichols/plan-forge/blob/planning/main/pforge-mcp/enums.mjs"><code>pforge-mcp/enums.mjs</code></a>.</p>
 
         <div class="overflow-x-auto mb-6">
           <table class="manual-table">
@@ -202,7 +229,7 @@
 
         <!-- ============================================================ -->
         <h2 id="hooks"><code>hooks</code> &mdash; LiveGuard lifecycle hooks</h2>
-        <p>Four hook configurations live under this object: <code>preDeploy</code> (before deploy slices), <code>postSlice</code> (after every slice), <code>preAgentHandoff</code> (multi-agent turn), and <code>preCommit</code> (ordered commit-time guard chain). Each section is independent; omit any subsection to accept its defaults.</p>
+        <p>Five hook configurations live under this object: <code>preDeploy</code> (before deploy slices), <code>postSlice</code> (after every slice), <code>preAgentHandoff</code> (multi-agent turn), <code>preCommit</code> (ordered commit-time guard chain), and <code>postRun</code> (after a run completes — auditor auto-invoke). Each section is independent; omit any subsection to accept its defaults.</p>
 
         <p class="text-sm text-slate-400 mb-6">For the full eight-hook picture, including the Copilot session hooks (<code>SessionStart</code>, <code>PreToolUse</code>, <code>PostToolUse</code>, <code>Stop</code>) configured separately in <code>.github/hooks/plan-forge.json</code> and the <code>PreCommit</code> chain runner, see <a href="customization.html#lifecycle-hooks"><strong>Customization &mdash; Lifecycle Hooks Reference</strong></a>.</p>
 
@@ -256,6 +283,19 @@
             </tbody>
           </table>
         </div>
+
+        <h3 id="hooks-postRun-invokeAuditor"><code>hooks.postRun.invokeAuditor</code></h3>
+        <p><strong>v3.8+</strong> — Automatically invoke the <a href="#forgeMaster-auditor">A4 plan-health-auditor</a> after a run completes. Two trigger modes: fire on every failure (<code>onFailure</code>), or fire periodically after N runs (<code>everyNRuns</code>). Both are off by default. When both conditions fire on the same run, the auditor is invoked exactly once.</p>
+        <div class="overflow-x-auto mb-6">
+          <table class="manual-table">
+            <thead><tr><th>Key</th><th>Type</th><th>Default</th><th>Example</th><th>Change impact</th></tr></thead>
+            <tbody>
+              <tr><td><code>hooks.postRun.invokeAuditor.onFailure</code></td><td>boolean</td><td><code>false</code></td><td><code>true</code></td><td>When true, automatically invokes the A4 auditor whenever a plan run ends with at least one failed slice. The auditor's tokens are attributed to a separate <code>forge-master</code> cost entry, never to the parent run's budget.</td></tr>
+              <tr><td><code>hooks.postRun.invokeAuditor.everyNRuns</code></td><td>number | null</td><td><code>null</code></td><td><code>5</code></td><td>Invoke the auditor after every N completed runs (pass or fail). Counter persists in <code>.forge/auditor-state.json</code>. When the state file is absent the first run always triggers. Set to <code>null</code> to disable. Reasonable values: 5–25.</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <p class="text-sm text-slate-400 mb-6">The auditor is spawned as its own Forge-Master process so its token costs land in <code>forge_cost_report</code> under the <code>forge-master</code> source. Use <code>forge_testbed_findings</code> to query any defects the auditor surfaces. For the full auditor configuration (model tier, output path), see <a href="#forgeMaster-auditor"><code>forgeMaster.auditor</code></a>.</p>
 
         <!-- ============================================================ -->
         <h2 id="openclaw"><code>openclaw</code> &mdash; OpenClaw analytics bridge (optional)</h2>
@@ -352,7 +392,18 @@
     "reasoningModel": "gpt-4o-mini",
     "reasoningProvider": "githubCopilot",
     "routerModel": "gpt-4o-mini",
-    "defaultProvider": "githubCopilot"
+    "defaultProvider": "githubCopilot",
+    "observer": {
+      "enabled": false,
+      "maxUsdPerDay": 0.10,
+      "maxNarrationsPerHour": 6,
+      "batchWindowMs": 60000,
+      "modelTier": null
+    },
+    "auditor": {
+      "modelTier": null,
+      "outputPath": ".forge/health/latest.md"
+    }
   },
 
   "maxParallelism": 3,
@@ -374,7 +425,8 @@
   "hooks": {
     "preDeploy": { "enabled": true, "blockOnSecrets": true, "warnOnEnvGaps": true, "scanSince": "HEAD~1" },
     "postSlice": { "silentDeltaThreshold": 5, "warnDeltaThreshold": 10, "scoreFloor": 70 },
-    "preAgentHandoff": { "injectContext": true, "runRegressionGuard": true, "cacheMaxAgeMinutes": 30, "minAlertSeverity": "medium" }
+    "preAgentHandoff": { "injectContext": true, "runRegressionGuard": true, "cacheMaxAgeMinutes": 30, "minAlertSeverity": "medium" },
+    "postRun": { "invokeAuditor": { "onFailure": true, "everyNRuns": null } }
   },
 
   "brain": {

@@ -99,6 +99,124 @@ function defaultConvergenceRule(roundData) {
   return roundData.realFindings === 0 && roundData.patterns === 0;
 }
 
+function makeDrainRoundBase(round, runResult, now) {
+  return {
+    round,
+    runId: runResult?.runId || null,
+    ts: new Date(now()).toISOString(),
+    verdict: runResult?.verdict || null,
+  };
+}
+
+function failedDrainRound(round, runResult, now) {
+  return {
+    ...makeDrainRoundBase(round, runResult, now),
+    realFindings: 0,
+    patterns: 0,
+    deltas: null,
+    error: runResult?.error || "run-failed",
+  };
+}
+
+function noWorkDrainRound(round, runResult, now) {
+  return {
+    ...makeDrainRoundBase(round, runResult, now),
+    realFindings: 0,
+    patterns: 0,
+    deltas: null,
+    findingCount: 0,
+    noWork: true,
+    reason: runResult.skipped ? (runResult.reason || "tempering-skipped") : "no-scanners-executed",
+  };
+}
+
+function completedDrainRound({ round, runResult, now, prevRealFindings, prevPatterns }) {
+  const { realFindings, patterns, findings } = extractCounts(runResult);
+  return {
+    ...makeDrainRoundBase(round, runResult, now),
+    realFindings,
+    patterns,
+    deltas: prevRealFindings !== null
+      ? { realFindings: realFindings - prevRealFindings, patterns: patterns - prevPatterns }
+      : null,
+    findingCount: findings.length,
+  };
+}
+
+function finalizeDrainSummary({ corr, rounds, terminated, historyPath, fsErrors }) {
+  const summary = {
+    correlationId: corr,
+    totalRounds: rounds.length,
+    terminated,
+    drainCurve: rounds.map((r) => r.realFindings),
+    finalRealFindings: rounds.length > 0 ? rounds[rounds.length - 1].realFindings : 0,
+    finalPatterns: rounds.length > 0 ? rounds[rounds.length - 1].patterns : 0,
+    historyPath,
+  };
+  if (fsErrors.length > 0) summary.fsErrors = fsErrors;
+  if (terminated === "no-work" && rounds.length > 0) summary.reason = rounds[rounds.length - 1].reason;
+  return summary;
+}
+
+async function executeDrainLoop({ project, maxRounds, convergenceRule, spawnWorker, hub, abortSignal, runTemperingRunFn, now, corr, historyPath, fsErrors }) {
+  emit(hub, "drain-started", {
+    correlationId: corr,
+    project,
+    maxRounds,
+    ts: new Date(now()).toISOString(),
+  });
+
+  const rounds = [];
+  let terminated = "max-rounds";
+  let prevRealFindings = null;
+  let prevPatterns = null;
+
+  for (let round = 1; round <= maxRounds; round++) {
+    if (abortSignal && abortSignal.aborted) {
+      terminated = "aborted";
+      break;
+    }
+
+    const runResult = await runTemperingRunFn({
+      projectDir: project,
+      hub,
+      correlationId: `${corr}-round-${round}`,
+      spawnWorker,
+      now,
+    });
+
+    if (!runResult || !runResult.ok) {
+      rounds.push(failedDrainRound(round, runResult, now));
+      appendHistoryLine(historyPath, rounds[rounds.length - 1], fsErrors);
+      terminated = "aborted";
+      break;
+    }
+
+    if (runResult.skipped === true || !Array.isArray(runResult.scanners) || runResult.scanners.length === 0) {
+      rounds.push(noWorkDrainRound(round, runResult, now));
+      appendHistoryLine(historyPath, rounds[rounds.length - 1], fsErrors);
+      terminated = "no-work";
+      break;
+    }
+
+    const roundData = completedDrainRound({ round: round, runResult: runResult, now: now, prevRealFindings: prevRealFindings, prevPatterns: prevPatterns });
+    rounds.push(roundData);
+    appendHistoryLine(historyPath, roundData, fsErrors);
+    emit(hub, "drain-round-completed", { correlationId: corr, ...roundData });
+
+    if (convergenceRule(roundData)) {
+      terminated = "converged";
+      break;
+    }
+    prevRealFindings = roundData.realFindings;
+    prevPatterns = roundData.patterns;
+  }
+
+  const summary = finalizeDrainSummary({ corr: corr, rounds: rounds, terminated: terminated, historyPath: historyPath, fsErrors: fsErrors });
+  emit(hub, "drain-completed", { correlationId: corr, ...summary });
+  return { rounds, terminated, summary };
+}
+
 // ─── Main entry point ────────────────────────────────────────────────
 
 /**
@@ -145,137 +263,17 @@ export function runTemperingDrain(opts = {}) {
   const historyPath = historyFs.historyPath;
   const fsErrors = [...historyFs.errors];
 
-  return (async () => {
-    emit(hub, "drain-started", {
-      correlationId: corr,
-      project,
-      maxRounds,
-      ts: new Date(now()).toISOString(),
-    });
-
-    const rounds = [];
-    let terminated = "max-rounds";
-    let prevRealFindings = null;
-    let prevPatterns = null;
-
-    for (let round = 1; round <= maxRounds; round++) {
-      // Check abort between rounds
-      if (abortSignal && abortSignal.aborted) {
-        terminated = "aborted";
-        break;
-      }
-
-      const runResult = await runTemperingRunFn({
-        projectDir: project,
-        hub,
-        correlationId: `${corr}-round-${round}`,
-        spawnWorker,
-        now,
-      });
-
-      // If the run failed or was skipped, abort the drain
-      if (!runResult || !runResult.ok) {
-        const errorRound = {
-          round,
-          runId: runResult?.runId || null,
-          realFindings: 0,
-          patterns: 0,
-          ts: new Date(now()).toISOString(),
-          deltas: null,
-          error: runResult?.error || "run-failed",
-          verdict: runResult?.verdict || null,
-        };
-        rounds.push(errorRound);
-        appendHistoryLine(historyPath, errorRound, fsErrors);
-        terminated = "aborted";
-        break;
-      }
-
-      // Tempering runner returned ok:true but nothing actually executed
-      // (e.g., `enabled: false` in tempering config, or no scanner
-      // adapters loaded for the detected stack). Without this guard the
-      // default convergence rule sees 0 findings and declares success,
-      // producing a misleading "converged, curve [0]" result with no
-      // real verification. See meta-bug #101.
-      if (runResult.skipped === true || !Array.isArray(runResult.scanners) || runResult.scanners.length === 0) {
-        const noWorkRound = {
-          round,
-          runId: runResult.runId || null,
-          realFindings: 0,
-          patterns: 0,
-          ts: new Date(now()).toISOString(),
-          deltas: null,
-          verdict: runResult.verdict || null,
-          findingCount: 0,
-          noWork: true,
-          reason: runResult.skipped
-            ? (runResult.reason || "tempering-skipped")
-            : "no-scanners-executed",
-        };
-        rounds.push(noWorkRound);
-        appendHistoryLine(historyPath, noWorkRound, fsErrors);
-        terminated = "no-work";
-        break;
-      }
-
-      const { realFindings, patterns, findings } = extractCounts(runResult);
-
-      const deltas = prevRealFindings !== null
-        ? { realFindings: realFindings - prevRealFindings, patterns: patterns - prevPatterns }
-        : null;
-
-      const roundData = {
-        round,
-        runId: runResult.runId,
-        realFindings,
-        patterns,
-        ts: new Date(now()).toISOString(),
-        deltas,
-        verdict: runResult.verdict,
-        findingCount: findings.length,
-      };
-
-      rounds.push(roundData);
-      appendHistoryLine(historyPath, roundData, fsErrors);
-
-      emit(hub, "drain-round-completed", {
-        correlationId: corr,
-        ...roundData,
-      });
-
-      // Evaluate convergence
-      if (convergenceRule(roundData)) {
-        terminated = "converged";
-        break;
-      }
-
-      prevRealFindings = realFindings;
-      prevPatterns = patterns;
-    }
-
-    const summary = {
-      correlationId: corr,
-      totalRounds: rounds.length,
-      terminated,
-      drainCurve: rounds.map((r) => r.realFindings),
-      finalRealFindings: rounds.length > 0 ? rounds[rounds.length - 1].realFindings : 0,
-      finalPatterns: rounds.length > 0 ? rounds[rounds.length - 1].patterns : 0,
-      historyPath,
-    };
-    if (fsErrors.length > 0) {
-      summary.fsErrors = fsErrors;
-    }
-    // Propagate no-work reason so the CLI/REST layer can surface it
-    // instead of printing a false "converged" checkmark.
-    if (terminated === "no-work" && rounds.length > 0) {
-      summary.reason = rounds[rounds.length - 1].reason;
-    }
-
-    emit(hub, "drain-completed", {
-      correlationId: corr,
-      ...summary,
-    });
-
-    return { rounds, terminated, summary };
-  })();
+  return executeDrainLoop({
+    project,
+    maxRounds,
+    convergenceRule,
+    spawnWorker,
+    hub,
+    abortSignal,
+    runTemperingRunFn,
+    now,
+    corr,
+    historyPath,
+    fsErrors,
+  });
 }

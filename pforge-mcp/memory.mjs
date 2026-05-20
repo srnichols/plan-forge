@@ -636,6 +636,37 @@ export function renderAutoSkillMarkdown(record) {
  * Parse an auto-skill record from its Markdown-on-disk form. Tolerant of
  * hand-edits — returns `null` on clearly malformed files.
  */
+function _parseAutoSkillContextSignature(fm) {
+  const cs = {
+    sliceType: (/^\s*sliceType:\s*(\S+)$/m.exec(fm) || [])[1] || "execute",
+    titleHash: (/^\s*titleHash:\s*(\S+)$/m.exec(fm) || [])[1] || "",
+    planBasename: (/^\s*planBasename:\s*(\S+)$/m.exec(fm) || [])[1] || "",
+    domainKeywords: [],
+  };
+  const kwMatch = /^\s*domainKeywords:\s*\[([^\]]*)\]$/m.exec(fm);
+  if (kwMatch) {
+    try {
+      const parsed = JSON.parse("[" + kwMatch[1] + "]");
+      if (Array.isArray(parsed)) cs.domainKeywords = parsed.filter((s) => typeof s === "string");
+    } catch { /* leave empty */ }
+  }
+  return cs;
+}
+
+function _parseAutoSkillCommands(fm) {
+  const commands = [];
+  const cmdSectionMatch = /\ncommands:\n([\s\S]*)$/.exec(fm);
+  if (!cmdSectionMatch) return commands;
+  for (const raw of cmdSectionMatch[1].split("\n")) {
+    const m = /^\s*-\s*(.+)$/.exec(raw);
+    if (!m) continue;
+    let v = m[1].trim();
+    try { v = JSON.parse(v); } catch { /* keep raw */ }
+    if (typeof v === "string" && v.length > 0) commands.push(v);
+  }
+  return commands;
+}
+
 export function parseAutoSkillMarkdown(text) {
   if (typeof text !== "string") return null;
   const fmMatch = /^---\n([\s\S]*?)\n---/.exec(text);
@@ -652,36 +683,10 @@ export function parseAutoSkillMarkdown(text) {
   const createdAt = (/^createdAt:\s*(\S+)$/m.exec(fm) || [])[1] || "";
   const reuseCount = Number((/^reuseCount:\s*(\S+)$/m.exec(fm) || [])[1] || 0) || 0;
 
-  const cs = {
-    sliceType: (/^\s*sliceType:\s*(\S+)$/m.exec(fm) || [])[1] || "execute",
-    titleHash: (/^\s*titleHash:\s*(\S+)$/m.exec(fm) || [])[1] || "",
-    planBasename: (/^\s*planBasename:\s*(\S+)$/m.exec(fm) || [])[1] || "",
-    domainKeywords: [],
-  };
-  const kwMatch = /^\s*domainKeywords:\s*\[([^\]]*)\]$/m.exec(fm);
-  if (kwMatch) {
-    try {
-      const parsed = JSON.parse("[" + kwMatch[1] + "]");
-      if (Array.isArray(parsed)) cs.domainKeywords = parsed.filter((s) => typeof s === "string");
-    } catch { /* leave empty */ }
-  }
+  const contextSignature = _parseAutoSkillContextSignature(fm);
+  const commands = _parseAutoSkillCommands(fm);
 
-  const commands = [];
-  // `commands` is always serialized as the last frontmatter key (see
-  // renderAutoSkillMarkdown), so we can safely read from the `commands:` line
-  // through the end of the frontmatter block.
-  const cmdSectionMatch = /\ncommands:\n([\s\S]*)$/.exec(fm);
-  if (cmdSectionMatch) {
-    for (const raw of cmdSectionMatch[1].split("\n")) {
-      const m = /^\s*-\s*(.+)$/.exec(raw);
-      if (!m) continue;
-      let v = m[1].trim();
-      try { v = JSON.parse(v); } catch { /* keep raw */ }
-      if (typeof v === "string" && v.length > 0) commands.push(v);
-    }
-  }
-
-  return { sha256Prefix, summary, commands, contextSignature: cs, reuseCount, createdAt };
+  return { sha256Prefix, summary, commands, contextSignature, reuseCount, createdAt };
 }
 
 /**
@@ -1555,7 +1560,7 @@ function _readForgeJsonlTail(cwd, relPath, tail = 50) {
  * @param {{onCapture?: (thought: object, deduped: boolean) => void}} [opts]
  * @returns {{captured: boolean, deduped: boolean, openBrainQueued: boolean, thought: object|null}}
  */
-export function captureMemory(content, type, source, cwd, opts = {}) {
+export function captureMemory({ content, type, source, cwd, opts = {} }) {
   try {
     // ── 1. Project name (from .forge.json) ───────────────────────────
     let project = "plan-forge";
@@ -1664,6 +1669,69 @@ export function captureMemory(content, type, source, cwd, opts = {}) {
  *   attempted?: number, delivered?: number, deferred?: number, dlq?: number, durationMs?: number
  * }>}
  */
+async function _buildOpenBrainDispatcher(cwd, opts, t0, timeoutMs) {
+  if (opts.dispatcher) {
+    return { dispatcher: opts.dispatcher, closeClient: async () => {} };
+  }
+  const { createSseClient, readOpenBrainConfig, normalizeQueueRecord } =
+    await import("./openbrain-replay.mjs");
+
+  const cfg = readOpenBrainConfig(cwd);
+  if (!cfg || !cfg.url || !cfg.key) {
+    return { skipped: "no-config", durationMs: Date.now() - t0 };
+  }
+
+  const timeoutErr = new Error("autoDrainOpenBrainQueue: SSE timeout");
+  const withTimeout = (p) => Promise.race([
+    p,
+    new Promise((_, reject) => setTimeout(() => reject(timeoutErr), timeoutMs)),
+  ]);
+
+  let client;
+  try {
+    client = await withTimeout(createSseClient(cfg));
+  } catch (err) {
+    return { error: `connect: ${err.message}`, durationMs: Date.now() - t0 };
+  }
+  const closeClient = async () => { try { await client.close(); } catch { /* best-effort */ } };
+
+  const dispatcher = async (record) => {
+    const payload = normalizeQueueRecord(record);
+    if (!payload) return { ok: true };
+    try {
+      await withTimeout(client.capture(payload));
+      return { ok: true };
+    } catch (err) {
+      return { ok: false, error: String(err?.message || err) };
+    }
+  };
+  return { dispatcher, closeClient };
+}
+
+function _writeOpenBrainSurvivors(forgeDir, queuePath, survivors, t0) {
+  const tmpPath = queuePath + ".tmp";
+  try {
+    mkdirSync(forgeDir, { recursive: true });
+    const survivorLines = survivors.map((r) => JSON.stringify(r)).join("\n");
+    writeFileSync(tmpPath, survivorLines ? survivorLines + "\n" : "", "utf-8");
+    renameSync(tmpPath, queuePath);
+    return null;
+  } catch (err) {
+    try { if (existsSync(tmpPath)) unlinkSync(tmpPath); } catch { /* cleanup */ }
+    return { error: `atomic-write: ${err.message}`, durationMs: Date.now() - t0 };
+  }
+}
+
+function _appendOpenBrainSideEffects(cwd, result) {
+  for (const rec of result.archive) {
+    try { _appendForgeJsonl(cwd, "openbrain-queue.archive.jsonl", rec); } catch { /* swallow */ }
+  }
+  for (const rec of result.dlq) {
+    try { _appendForgeJsonl(cwd, "openbrain-dlq.jsonl", rec); } catch { /* swallow */ }
+  }
+  try { _appendForgeJsonl(cwd, "openbrain-stats.jsonl", result.stats); } catch { /* swallow */ }
+}
+
 export async function autoDrainOpenBrainQueue(cwd, opts = {}) {
   const { source = "cli-drain", maxBatch = 50, maxAttempts = 5, timeoutMs = 10_000 } = opts;
   const t0 = Date.now();
@@ -1683,49 +1751,9 @@ export async function autoDrainOpenBrainQueue(cwd, opts = {}) {
       return { skipped: "empty" };
     }
 
-    let dispatcher;
-    let client = null;
-    let closeClient = async () => {};
-
-    if (opts.dispatcher) {
-      // Test/DI path — caller supplies the dispatcher directly.
-      dispatcher = opts.dispatcher;
-    } else {
-      // Production path — build a direct SSE dispatcher.
-      // Dynamic import keeps MCP SDK out of the hot startup path and
-      // avoids a hard dependency at module load time.
-      const { createSseClient, readOpenBrainConfig, normalizeQueueRecord } =
-        await import("./openbrain-replay.mjs");
-
-      const cfg = readOpenBrainConfig(cwd);
-      if (!cfg || !cfg.url || !cfg.key) {
-        return { skipped: "no-config", durationMs: Date.now() - t0 };
-      }
-
-      const timeoutErr = new Error("autoDrainOpenBrainQueue: SSE timeout");
-      const withTimeout = (p) => Promise.race([
-        p,
-        new Promise((_, reject) => setTimeout(() => reject(timeoutErr), timeoutMs)),
-      ]);
-
-      try {
-        client = await withTimeout(createSseClient(cfg));
-      } catch (err) {
-        return { error: `connect: ${err.message}`, durationMs: Date.now() - t0 };
-      }
-      closeClient = async () => { try { await client.close(); } catch { /* best-effort */ } };
-
-      dispatcher = async (record) => {
-        const payload = normalizeQueueRecord(record);
-        if (!payload) return { ok: true }; // tombstones / empty — count as delivered
-        try {
-          await withTimeout(client.capture(payload));
-          return { ok: true };
-        } catch (err) {
-          return { ok: false, error: String(err?.message || err) };
-        }
-      };
-    }
+    const built = await _buildOpenBrainDispatcher(cwd, opts, t0, timeoutMs);
+    if (built.skipped || built.error) return built;
+    const { dispatcher, closeClient } = built;
 
     let result;
     try {
@@ -1736,26 +1764,10 @@ export async function autoDrainOpenBrainQueue(cwd, opts = {}) {
       await closeClient();
     }
 
-    // Atomic rewrite of queue with survivors
-    const tmpPath = queuePath + ".tmp";
-    try {
-      mkdirSync(forgeDir, { recursive: true });
-      const survivorLines = result.deferred.map((r) => JSON.stringify(r)).join("\n");
-      writeFileSync(tmpPath, survivorLines ? survivorLines + "\n" : "", "utf-8");
-      renameSync(tmpPath, queuePath);
-    } catch (err) {
-      try { if (existsSync(tmpPath)) unlinkSync(tmpPath); } catch { /* cleanup */ }
-      return { error: `atomic-write: ${err.message}`, durationMs: Date.now() - t0 };
-    }
+    const writeErr = _writeOpenBrainSurvivors(forgeDir, queuePath, result.deferred, t0);
+    if (writeErr) return writeErr;
 
-    // Append archive + DLQ + stats
-    for (const rec of result.archive) {
-      try { _appendForgeJsonl(cwd, "openbrain-queue.archive.jsonl", rec); } catch { /* swallow */ }
-    }
-    for (const rec of result.dlq) {
-      try { _appendForgeJsonl(cwd, "openbrain-dlq.jsonl", rec); } catch { /* swallow */ }
-    }
-    try { _appendForgeJsonl(cwd, "openbrain-stats.jsonl", result.stats); } catch { /* swallow */ }
+    _appendOpenBrainSideEffects(cwd, result);
 
     return {
       ok: true,
@@ -1881,6 +1893,85 @@ function _summariseFile(forgeDir, name) {
 }
 
 /**
+ * Bucket openbrain-queue.jsonl records by status (pending / delivered /
+ * failed / deferred). Extracted helper so buildMemoryReport stays readable.
+ *
+ * @param {object[]} records
+ * @param {number} now - Date.now()
+ * @returns {{ pending: number, delivered: number, failed: number, deferred: number }}
+ */
+function _computeQueueHealth(records, now) {
+  const buckets = { pending: 0, delivered: 0, failed: 0, deferred: 0 };
+  for (const r of records) {
+    const status = r?._status || "pending";
+    if (status === "delivered") buckets.delivered++;
+    else if (status === "failed") buckets.failed++;
+    else {
+      const next = r?._nextAttemptAt ? Date.parse(r._nextAttemptAt) : 0;
+      if (Number.isFinite(next) && next > now) buckets.deferred++;
+      else buckets.pending++;
+    }
+  }
+  return buckets;
+}
+
+/**
+ * Scan `.forge/` for files/dirs not in the known registry.
+ *
+ * @param {string} forgeDir - Absolute path to the .forge/ directory
+ * @param {boolean} exists - Whether forgeDir exists on disk
+ * @returns {string[]}
+ */
+function _findForgeOrphans(forgeDir, exists) {
+  const knownFiles = new Set([
+    "liveguard-memories.jsonl", "openbrain-queue.jsonl", "openbrain-dlq.jsonl",
+    "openbrain-stats.jsonl", "hub-events.jsonl", "drift-history.jsonl",
+    "incidents.jsonl", "regression-history.jsonl", "env-diff-history.jsonl",
+    "memory-search-cache.jsonl", "openbrain-queue.archive.jsonl",
+    "runs", "traces", "last-orch.pid", "server-ports.json",
+    "cost-history.json", "drift-history.json", "model-performance.json",
+    "quorum-history.jsonl", "watch-history.jsonl",
+    "dashboard-state.json",
+    "secrets.json", "rbac.example.json",
+    "update-check.json", "version-check.json",
+    "secret-scan-cache.json",
+    "fm-prefs.json", "forge-master-observer-state.json",
+    "liveguard-events.jsonl", "fix-proposals.json",
+    "team-activity.jsonl",
+    "health-dna.jsonl",
+    "local-recall-index.json",
+  ]);
+  const knownDirs = new Set([
+    "telemetry", "runs", "traces", "plans", "digests", "trajectories",
+    "crucible", "tempering", "runbooks", "graph", "bugs", "analysis",
+    "fm-sessions", "skills-auto", "cache", "validation", "chain-logs",
+    "health", "archive", "network-logs", "notifications",
+    "hammer-forge-master", "load-sim", "orchestrator-logs",
+  ]);
+  const ephemeralPatterns = [
+    /^release-notes-v[\d.]+.*\.(md|txt)$/,
+    /^chain-runner.*\.log$/, /^run-phase-.*\.log$/, /^harden-.*\.log$/,
+    /^fm-.*\.(log|json|txt)$/, /^mcp-.*\.log$/, /^sequencer-.*\.log$/,
+    /^load-sim.*\.(log|json)$/, /^meta-bug-.*\.(md|txt|json)$/,
+    /^gate-tmp\./, /^tmp[-_]/, /\.pid$/, /\.log$/,
+  ];
+  const orphans = [];
+  if (exists) {
+    try {
+      for (const entry of readdirSync(forgeDir)) {
+        if (entry.startsWith(".")) continue;
+        if (knownFiles.has(entry)) continue;
+        if (knownDirs.has(entry)) continue;
+        if (entry.endsWith(".bak") || /\.bak-\d{4}-\d{2}-\d{2}$/.test(entry)) continue;
+        if (ephemeralPatterns.some((re) => re.test(entry))) continue;
+        orphans.push(entry);
+      }
+    } catch { /* ignore unreadable dirs */ }
+  }
+  return orphans;
+}
+
+/**
  * GX.3 (v2.36): aggregate the health of every memory surface into a
  * single report — L2 files, OpenBrain queue state, drain stats trend,
  * capture telemetry, search cache. Consumed by the `forge_memory_report`
@@ -1911,18 +2002,8 @@ export function buildMemoryReport(cwd = process.cwd()) {
 
   // Queue health (derived from openbrain-queue.jsonl)
   const queueRecords = exists ? _readJsonl(join(forgeDir, "openbrain-queue.jsonl")) : [];
-  const queueBuckets = { pending: 0, delivered: 0, failed: 0, deferred: 0 };
   const now = Date.now();
-  for (const r of queueRecords) {
-    const status = r?._status || "pending";
-    if (status === "delivered") queueBuckets.delivered++;
-    else if (status === "failed") queueBuckets.failed++;
-    else {
-      const next = r?._nextAttemptAt ? Date.parse(r._nextAttemptAt) : 0;
-      if (Number.isFinite(next) && next > now) queueBuckets.deferred++;
-      else queueBuckets.pending++;
-    }
-  }
+  const queueBuckets = _computeQueueHealth(queueRecords, now);
   const dlq = exists ? _readJsonl(join(forgeDir, "openbrain-dlq.jsonl")).length : 0;
 
   // Drain trend — last 20 drain passes
@@ -1959,26 +2040,7 @@ export function buildMemoryReport(cwd = process.cwd()) {
     freshEntries,
   };
 
-  // Orphan audit — files in .forge/ not listed in the known registry
-  const knownFiles = new Set([
-    "liveguard-memories.jsonl", "openbrain-queue.jsonl", "openbrain-dlq.jsonl",
-    "openbrain-stats.jsonl", "hub-events.jsonl", "drift-history.jsonl",
-    "incidents.jsonl", "regression-history.jsonl", "env-diff-history.jsonl",
-    "memory-search-cache.jsonl", "runs",
-  ]);
-  const orphans = [];
-  if (exists) {
-    try {
-      for (const entry of readdirSync(forgeDir)) {
-        if (entry.startsWith(".")) continue;
-        if (knownFiles.has(entry)) continue;
-        if (entry === "telemetry") continue;
-        // Tolerate .bak files (from migrate-memory) and directories
-        if (entry.endsWith(".bak") || /\.bak-\d{4}-\d{2}-\d{2}$/.test(entry)) continue;
-        orphans.push(entry);
-      }
-    } catch { /* ignore */ }
-  }
+  const orphans = _findForgeOrphans(forgeDir, exists);
 
   return {
     _v: 1,

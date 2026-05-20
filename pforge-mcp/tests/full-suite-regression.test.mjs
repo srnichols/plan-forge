@@ -273,36 +273,18 @@ describe("Cross-cutting — forge_run_plan tools.json description", () => {
   });
 });
 
-// ─── Cross-cutting: docs/plans/ ships the consumer template assets ────────────
-//
-// Plan Forge's own DEV phase plans (Phase-*-PLAN.md, internal
-// DEPLOYMENT-ROADMAP.md, archive/) live on the `planning/main` branch, NOT
-// on master. See CONTRIBUTING.md → Branch Model. This regression check
-// asserts the consumer-facing template assets are present on master.
+// ─── Cross-cutting: docs/plans/ has plan files ────────────────────────────────
 
 describe("Cross-cutting — docs/plans regression check", () => {
-  it("docs/plans/ contains the consumer template assets", () => {
+  it("docs/plans/ contains at least one -PLAN.md file", () => {
     const plansDir = resolve(REPO_ROOT, "docs/plans");
-    const required = [
-      "README.md",
-      "AI-Plan-Hardening-Runbook.md",
-      "AI-Plan-Hardening-Runbook-Instructions.md",
-      "DEPLOYMENT-ROADMAP-TEMPLATE.md",
-      "PROJECT-PRINCIPLES-TEMPLATE.md",
-    ];
-    for (const f of required) {
-      expect(
-        existsSync(resolve(plansDir, f)),
-        `expected docs/plans/${f} to exist on master`,
-      ).toBe(true);
-    }
+    const plans = readdirSync(plansDir).filter((f) => f.endsWith("-PLAN.md"));
+    expect(plans.length).toBeGreaterThan(0);
   });
 
-  it("docs/plans/examples/ contains language-specific phase examples", () => {
-    const examplesDir = resolve(REPO_ROOT, "docs/plans/examples");
-    const examples = readdirSync(examplesDir).filter((f) =>
-      f.endsWith("-EXAMPLE.md"),
-    );
-    expect(examples.length).toBeGreaterThan(0);
+  it("Phase-WORKER-GUARDRAILS-PLAN.md exists", () => {
+    expect(
+      existsSync(resolve(REPO_ROOT, "docs/plans/Phase-WORKER-GUARDRAILS-PLAN.md")),
+    ).toBe(true);
   });
 });

@@ -91,6 +91,87 @@ function mtimesMatch(cached, current) {
 
 // ─── Public API ─────────────────────────────────────────────────────
 
+function getPrinciplesPaths(cwd) {
+  return {
+    projectPrinciplesPath: resolve(cwd, "docs/plans/PROJECT-PRINCIPLES.md"),
+    copilotInstructionsPath: resolve(cwd, ".github/copilot-instructions.md"),
+    forgeJsonPath: resolve(cwd, ".forge.json"),
+  };
+}
+
+function getCurrentMtimes(paths) {
+  const currentMtimes = {};
+  for (const path of Object.values(paths)) {
+    currentMtimes[path] = safeStat(path);
+  }
+  return currentMtimes;
+}
+
+function extractArchitecturePrinciples(content) {
+  const match = content?.match(/## Architecture Principles\n([\s\S]*?)(?=\n##|$)/);
+  return match?.[1]?.trim() || "";
+}
+
+function loadFilePrinciples(paths) {
+  const projectPrinciplesContent = safeReadFile(paths.projectPrinciplesPath);
+  if (projectPrinciplesContent && projectPrinciplesContent.trim()) {
+    return {
+      fileBlock: projectPrinciplesContent.trim(),
+      fileSources: ["docs/plans/PROJECT-PRINCIPLES.md"],
+    };
+  }
+
+  const architecturePrinciples = extractArchitecturePrinciples(safeReadFile(paths.copilotInstructionsPath));
+  if (architecturePrinciples) {
+    return {
+      fileBlock: architecturePrinciples,
+      fileSources: [".github/copilot-instructions.md (Architecture Principles)"],
+    };
+  }
+
+  return { fileBlock: "", fileSources: [] };
+}
+
+function loadPhilosophy(paths) {
+  const forgeJsonContent = safeReadFile(paths.forgeJsonPath);
+  if (!forgeJsonContent) return null;
+
+  try {
+    const parsed = JSON.parse(forgeJsonContent);
+    const raw = parsed?.forgeMaster?.philosophy;
+    return raw && typeof raw === "string" ? raw : null;
+  } catch {
+    return null;
+  }
+}
+
+function resolvePrinciplesBlock(fileBlock, fileSources, philosophy) {
+  if (philosophy !== null) {
+    if (philosophy.startsWith("+ ")) {
+      const base = fileBlock || UNIVERSAL_BASELINE;
+      const appendedSources = fileBlock ? [...fileSources] : ["universal-baseline"];
+      return {
+        block: `${base}\n\n---\n\n${philosophy.slice(2).trim()}`,
+        sources: [...appendedSources, ".forge.json#forgeMaster.philosophy (append)"],
+      };
+    }
+
+    return {
+      block: philosophy,
+      sources: [".forge.json#forgeMaster.philosophy"],
+    };
+  }
+
+  if (fileBlock) {
+    return { block: fileBlock, sources: [...fileSources] };
+  }
+
+  return {
+    block: UNIVERSAL_BASELINE,
+    sources: ["universal-baseline"],
+  };
+}
+
 /**
  * Load the active principles block for a given project root.
  *
@@ -104,86 +185,18 @@ function mtimesMatch(cached, current) {
  * @returns {{ block: string, sources: string[] }}
  */
 export function loadPrinciples({ cwd = process.cwd() } = {}) {
-  const projectPrinciplesPath = resolve(cwd, "docs/plans/PROJECT-PRINCIPLES.md");
-  const copilotInstructionsPath = resolve(cwd, ".github/copilot-instructions.md");
-  const forgeJsonPath = resolve(cwd, ".forge.json");
-
-  const sourcePaths = [projectPrinciplesPath, copilotInstructionsPath, forgeJsonPath];
-
-  const currentMtimes = {};
-  for (const p of sourcePaths) {
-    currentMtimes[p] = safeStat(p);
-  }
-
-  // Return cached if all mtimes match
+  const paths = getPrinciplesPaths(cwd);
+  const currentMtimes = getCurrentMtimes(paths);
   const cached = _cache.get(cwd);
+
   if (cached && mtimesMatch(cached.mtimes, currentMtimes)) {
     return { block: cached.block, sources: cached.sources };
   }
 
-  // ── Load file-based sources ─────────────────────────────────────
+  const { fileBlock, fileSources } = loadFilePrinciples(paths);
+  const philosophy = loadPhilosophy(paths);
+  const resolved = resolvePrinciplesBlock(fileBlock, fileSources, philosophy);
 
-  let fileBlock = "";
-  const fileSources = [];
-
-  // 1. PROJECT-PRINCIPLES.md
-  const projectPrinciplesContent = safeReadFile(projectPrinciplesPath);
-  if (projectPrinciplesContent && projectPrinciplesContent.trim()) {
-    fileBlock = projectPrinciplesContent.trim();
-    fileSources.push("docs/plans/PROJECT-PRINCIPLES.md");
-  }
-
-  // 2. .github/copilot-instructions.md — extract ## Architecture Principles section
-  if (!fileBlock) {
-    const copilotContent = safeReadFile(copilotInstructionsPath);
-    if (copilotContent) {
-      const match = copilotContent.match(/## Architecture Principles\n([\s\S]*?)(?=\n##|$)/);
-      if (match && match[1].trim()) {
-        fileBlock = match[1].trim();
-        fileSources.push(".github/copilot-instructions.md (Architecture Principles)");
-      }
-    }
-  }
-
-  // 3. .forge.json — extract forgeMaster.philosophy
-  let philosophy = null;
-  const forgeJsonContent = safeReadFile(forgeJsonPath);
-  if (forgeJsonContent) {
-    try {
-      const parsed = JSON.parse(forgeJsonContent);
-      const raw = parsed?.forgeMaster?.philosophy;
-      if (raw && typeof raw === "string") philosophy = raw;
-    } catch { /* malformed JSON — skip */ }
-  }
-
-  // ── Apply override semantics ────────────────────────────────────
-
-  let block = "";
-  const sources = [];
-
-  if (philosophy !== null) {
-    if (philosophy.startsWith("+ ")) {
-      // Append mode: file-based (or universal) + separator + philosophy remainder
-      const base = fileBlock || UNIVERSAL_BASELINE;
-      const appendedSources = fileBlock
-        ? [...fileSources]
-        : ["universal-baseline"];
-      block = base + "\n\n---\n\n" + philosophy.slice(2).trim();
-      sources.push(...appendedSources, ".forge.json#forgeMaster.philosophy (append)");
-    } else {
-      // Replace mode: philosophy string entirely replaces file-based content
-      block = philosophy;
-      sources.push(".forge.json#forgeMaster.philosophy");
-    }
-  } else if (fileBlock) {
-    block = fileBlock;
-    sources.push(...fileSources);
-  } else {
-    block = UNIVERSAL_BASELINE;
-    sources.push("universal-baseline");
-  }
-
-  _cache.set(cwd, { block, sources, mtimes: currentMtimes });
-
-  return { block, sources };
+  _cache.set(cwd, { ...resolved, mtimes: currentMtimes });
+  return resolved;
 }

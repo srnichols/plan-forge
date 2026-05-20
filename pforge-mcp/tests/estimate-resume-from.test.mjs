@@ -50,7 +50,7 @@ describe("buildEstimate — bug #81 resumeFrom", () => {
   });
 
   it("without resumeFrom, estimate covers the full plan", () => {
-    const est = buildEstimate(plan, null, cwd);
+    const est = buildEstimate({ plan, model: null, cwd });
     expect(est.sliceCount).toBe(4);
     expect(est.executionOrder).toEqual(["1", "2", "3", "4"]);
     expect(est.slices.map((s) => s.number)).toEqual(["1", "2", "3", "4"]);
@@ -59,7 +59,7 @@ describe("buildEstimate — bug #81 resumeFrom", () => {
   });
 
   it("with resumeFrom=3, estimate only covers slices 3 and 4", () => {
-    const est = buildEstimate(plan, null, cwd, null, 3);
+    const est = buildEstimate({ plan, model: null, cwd, resumeFrom: 3 });
     expect(est.sliceCount).toBe(2);
     expect(est.executionOrder).toEqual(["3", "4"]);
     expect(est.slices.map((s) => s.number)).toEqual(["3", "4"]);
@@ -68,22 +68,22 @@ describe("buildEstimate — bug #81 resumeFrom", () => {
   });
 
   it("estimated tokens/cost scale with effective slice count", () => {
-    const fullEst = buildEstimate(plan, null, cwd);
-    const partialEst = buildEstimate(plan, null, cwd, null, 3);
+    const fullEst = buildEstimate({ plan, model: null, cwd });
+    const partialEst = buildEstimate({ plan, model: null, cwd, resumeFrom: 3 });
     // Partial should be half the full estimate (2 of 4 slices).
     expect(partialEst.tokens.estimatedInput).toBe(fullEst.tokens.estimatedInput / 2);
     expect(partialEst.tokens.estimatedOutput).toBe(fullEst.tokens.estimatedOutput / 2);
   });
 
   it("accepts numeric or string resumeFrom", () => {
-    const byNum = buildEstimate(plan, null, cwd, null, 2);
-    const byStr = buildEstimate(plan, null, cwd, null, "2");
+    const byNum = buildEstimate({ plan, model: null, cwd, resumeFrom: 2 });
+    const byStr = buildEstimate({ plan, model: null, cwd, resumeFrom: "2" });
     expect(byNum.sliceCount).toBe(byStr.sliceCount);
     expect(byNum.executionOrder).toEqual(byStr.executionOrder);
   });
 
   it("when resumeFrom does not match any slice, falls back to full plan", () => {
-    const est = buildEstimate(plan, null, cwd, null, 99);
+    const est = buildEstimate({ plan, model: null, cwd, resumeFrom: 99 });
     expect(est.sliceCount).toBe(4);
     expect(est.executionOrder).toEqual(["1", "2", "3", "4"]);
   });

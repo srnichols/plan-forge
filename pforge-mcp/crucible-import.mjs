@@ -29,6 +29,7 @@ import {
 } from "node:fs";
 import { dirname, join, resolve, basename } from "node:path";
 import { randomUUID } from "node:crypto";
+import { ERROR_CODES } from "./enums.mjs";
 
 // ─── Public API ─────────────────────────────────────────────────────────────
 
@@ -77,175 +78,69 @@ const DEFAULT_SCAN_DIRS = [
  * @param {string}  [opts.name]           Override the slugified plan name
  * @returns {ImportResult}
  */
-export function importSpeckit(opts) {
-  const projectRoot = resolve(opts.projectRoot || process.cwd());
-  const dryRun = !!opts.dryRun;
-  const syncPrinciples = !!opts.syncPrinciples;
-
-  /** @type {ImportResult} */
-  const result = {
-    ok: false,
-    smeltId: null,
-    planPath: null,
-    smeltPath: null,
-    mappedFields: [],
-    missingFields: [],
-    warnings: [],
-    dryRun,
-  };
-
-  // ── 1. Locate the artifact directory ────────────────────────────────────
-  const scanResult = locateArtifacts(projectRoot, opts.dir);
-  if (!scanResult.ok) {
-    result.error = scanResult.error;
-    result.warnings.push(scanResult.message);
-    return result;
-  }
-
-  const { specPath, planPath, tasksPath, constitutionPath, sourceDir } = scanResult;
-
-  // ── 2. Parse the four artifacts ─────────────────────────────────────────
-  const spec = specPath ? parseSpec(readFileSync(specPath, "utf-8")) : null;
-  const plan = planPath ? parsePlan(readFileSync(planPath, "utf-8")) : null;
-  const tasks = tasksPath ? parseTasks(readFileSync(tasksPath, "utf-8")) : null;
-  const constitution = constitutionPath
-    ? parseConstitution(readFileSync(constitutionPath, "utf-8"))
-    : null;
-
-  // ── 3. Validate required fields ─────────────────────────────────────────
+function _validateSpeckitArtifacts({ spec, plan, tasks, constitution, result }) {
   if (!spec || !plan) {
     if (!spec)
       result.missingFields.push({ file: "spec.md", field: "<file>", severity: "error" });
     if (!plan)
       result.missingFields.push({ file: "plan.md", field: "<file>", severity: "error" });
-    result.error = "SPECKIT_IMPORT_MISSING_REQUIRED";
+    result.error = ERROR_CODES.SPECKIT_IMPORT_MISSING_REQUIRED.code;
     result.warnings.push(
       "Both spec.md and plan.md are required. Re-run after creating them."
     );
-    return result;
+    return false;
   }
   if (!spec.title) {
     result.missingFields.push({ file: "spec.md", field: "title", severity: "error" });
-    result.error = "SPECKIT_IMPORT_MISSING_FIELD";
+    result.error = ERROR_CODES.SPECKIT_IMPORT_MISSING_FIELD.code;
     result.warnings.push(
       "spec.md is missing a top-level `# Title` heading; import blocked."
     );
-    return result;
+    return false;
   }
   if (!plan.scope) {
     result.missingFields.push({ file: "plan.md", field: "scope", severity: "error" });
-    result.error = "SPECKIT_IMPORT_MISSING_FIELD";
+    result.error = ERROR_CODES.SPECKIT_IMPORT_MISSING_FIELD.code;
     result.warnings.push(
       "plan.md is missing a `## Scope` section; import blocked."
     );
-    return result;
+    return false;
   }
   if (!tasks)
     result.missingFields.push({ file: "tasks.md", field: "<file>", severity: "warn" });
   if (!constitution)
     result.missingFields.push({ file: "constitution.md", field: "<file>", severity: "warn" });
+  return true;
+}
 
-  // ── 4. Build the smelt ──────────────────────────────────────────────────
-  const smeltId = randomUUID();
-  const crucibleId = `imported-speckit-${smeltId}`;
-  const slices = mergeSlicesWithTasks(plan.slices || [], tasks ? tasks.rows : []);
-  for (const w of slices.warnings) result.warnings.push(w);
-
-  /** @type {MappedField[]} */
-  const mapped = [];
-  mapped.push({ source: "spec.md#title", target: "plan-title", value: spec.title });
-  mapped.push({ source: "spec.md#goals", target: "objectives[]", value: spec.goals });
-  mapped.push({ source: "plan.md#scope", target: "scope", value: plan.scope });
-  mapped.push({ source: "plan.md#slices", target: "slices[]", value: slices.merged });
-  mapped.push({
-    source: "plan.md#forbidden-actions",
-    target: "forbidden-actions",
-    value: plan.forbiddenActions,
-  });
-  if (constitution) {
-    mapped.push({
-      source: "constitution.md#rules",
-      target: "agent-constraints",
-      value: constitution.rules,
-    });
+function _checkSyncPrinciplesGuard({ syncPrinciples, constitution, principlesPath, result }) {
+  if (!syncPrinciples) return true;
+  if (!constitution) {
+    result.error = ERROR_CODES.PROJECT_PRINCIPLES_NO_SOURCE.code;
+    result.warnings.push(
+      "--sync-principles requested but constitution.md is absent."
+    );
+    return false;
   }
-  result.mappedFields = mapped;
-
-  const slug = (opts.name || slugify(spec.title) || `speckit-import-${smeltId.slice(0, 8)}`);
-  const phaseName = `Phase-${slug.toUpperCase()}`;
-
-  const smelt = {
-    id: smeltId,
-    crucibleId,
-    source: "speckit",
-    sourceDir,
-    status: "imported",
-    createdAt: new Date().toISOString(),
-    "plan-title": spec.title,
-    "objectives": spec.goals,
-    "scope": plan.scope,
-    "slices": slices.merged,
-    "forbidden-actions": plan.forbiddenActions,
-    "agent-constraints": constitution ? constitution.rules : [],
-    "agent-commitments": constitution ? constitution.commitments : [],
-    "agent-boundaries": constitution ? constitution.boundaries : [],
-    sourceFiles: {
-      spec: specPath,
-      plan: planPath,
-      tasks: tasksPath,
-      constitution: constitutionPath,
-    },
-  };
-
-  const planMarkdown = renderPhasePlan({
-    crucibleId,
-    phaseName,
-    spec,
-    plan,
-    slicesMerged: slices.merged,
-    constitution,
-  });
-
-  const smeltDir = join(projectRoot, ".forge", "crucible");
-  const smeltPath = join(smeltDir, `${smeltId}.json`);
-  const planFilePath = join(projectRoot, "docs", "plans", `${phaseName}-PLAN.md`);
-  const auditPath = join(smeltDir, "manual-imports.jsonl");
-  const principlesPath = join(projectRoot, "docs", "plans", "PROJECT-PRINCIPLES.md");
-
-  result.smeltId = smeltId;
-  result.smeltPath = smeltPath;
-  result.planPath = planFilePath;
-
-  // ── 5. Sync-principles guard (must run before any write) ────────────────
-  if (syncPrinciples) {
-    if (!constitution) {
-      result.error = "PROJECT_PRINCIPLES_NO_SOURCE";
-      result.warnings.push(
-        "--sync-principles requested but constitution.md is absent."
-      );
-      return result;
-    }
-    if (existsSync(principlesPath)) {
-      result.error = "PROJECT_PRINCIPLES_EXISTS";
-      result.warnings.push(
-        `${principlesPath} already exists; refusing to overwrite. Remove it first or omit --sync-principles.`
-      );
-      return result;
-    }
+  if (existsSync(principlesPath)) {
+    result.error = ERROR_CODES.PROJECT_PRINCIPLES_EXISTS.code;
+    result.warnings.push(
+      `${principlesPath} already exists; refusing to overwrite. Remove it first or omit --sync-principles.`
+    );
+    return false;
   }
+  return true;
+}
 
-  // ── 6. Dry-run short-circuit ────────────────────────────────────────────
-  if (dryRun) {
-    result.ok = true;
-    return result;
-  }
-
-  // ── 7. Write outputs ────────────────────────────────────────────────────
+function _writeSpeckitOutputs(ctx) {
+  const {
+    smeltDir, planFilePath, smeltPath, smelt, projectRoot, phaseName, planMarkdown,
+    syncPrinciples, constitution, principlesPath, auditPath, crucibleId, mapped, result,
+  } = ctx;
   mkdirSync(smeltDir, { recursive: true });
   mkdirSync(dirname(planFilePath), { recursive: true });
   writeFileSync(smeltPath, JSON.stringify(smelt, null, 2));
 
-  // Plan-file collision: append -2, -3, … rather than clobber
   let finalPlanPath = planFilePath;
   let n = 2;
   while (existsSync(finalPlanPath)) {
@@ -271,6 +166,183 @@ export function importSpeckit(opts) {
       missingFieldCount: result.missingFields.length,
     }) + "\n"
   );
+}
+
+function createImportResult(dryRun) {
+  return {
+    ok: false,
+    smeltId: null,
+    planPath: null,
+    smeltPath: null,
+    mappedFields: [],
+    missingFields: [],
+    warnings: [],
+    dryRun,
+  };
+}
+
+function parseSpeckitArtifacts({ specPath, planPath, tasksPath, constitutionPath }) {
+  return {
+    spec: specPath ? parseSpec(readFileSync(specPath, "utf-8")) : null,
+    plan: planPath ? parsePlan(readFileSync(planPath, "utf-8")) : null,
+    tasks: tasksPath ? parseTasks(readFileSync(tasksPath, "utf-8")) : null,
+    constitution: constitutionPath
+      ? parseConstitution(readFileSync(constitutionPath, "utf-8"))
+      : null,
+  };
+}
+
+function buildSpeckitMappedFields({ spec, plan, slicesMerged, constitution }) {
+  const mapped = [
+    { source: "spec.md#title", target: "plan-title", value: spec.title },
+    { source: "spec.md#goals", target: "objectives[]", value: spec.goals },
+    { source: "plan.md#scope", target: "scope", value: plan.scope },
+    { source: "plan.md#slices", target: "slices[]", value: slicesMerged },
+    {
+      source: "plan.md#forbidden-actions",
+      target: "forbidden-actions",
+      value: plan.forbiddenActions,
+    },
+  ];
+  if (constitution) {
+    mapped.push({
+      source: "constitution.md#rules",
+      target: "agent-constraints",
+      value: constitution.rules,
+    });
+  }
+  return mapped;
+}
+
+function prepareSpeckitImportArtifacts({ opts, projectRoot, result, scanResult, parsed }) {
+  const smeltId = randomUUID();
+  const crucibleId = `imported-speckit-${smeltId}`;
+  const slices = mergeSlicesWithTasks(parsed.plan.slices || [], parsed.tasks ? parsed.tasks.rows : []);
+  for (const warning of slices.warnings) result.warnings.push(warning);
+
+  const mapped = buildSpeckitMappedFields({
+    spec: parsed.spec,
+    plan: parsed.plan,
+    slicesMerged: slices.merged,
+    constitution: parsed.constitution,
+  });
+  result.mappedFields = mapped;
+
+  const slug = opts.name || slugify(parsed.spec.title) || `speckit-import-${smeltId.slice(0, 8)}`;
+  const phaseName = `Phase-${slug.toUpperCase()}`;
+  const smeltDir = join(projectRoot, ".forge", "crucible");
+  const smeltPath = join(smeltDir, `${smeltId}.json`);
+  const planFilePath = join(projectRoot, "docs", "plans", `${phaseName}-PLAN.md`);
+  const auditPath = join(smeltDir, "manual-imports.jsonl");
+  const principlesPath = join(projectRoot, "docs", "plans", "PROJECT-PRINCIPLES.md");
+
+  const smelt = {
+    id: smeltId,
+    crucibleId,
+    source: "speckit",
+    sourceDir: scanResult.sourceDir,
+    status: "imported",
+    createdAt: new Date().toISOString(),
+    "plan-title": parsed.spec.title,
+    objectives: parsed.spec.goals,
+    scope: parsed.plan.scope,
+    slices: slices.merged,
+    "forbidden-actions": parsed.plan.forbiddenActions,
+    "agent-constraints": parsed.constitution ? parsed.constitution.rules : [],
+    "agent-commitments": parsed.constitution ? parsed.constitution.commitments : [],
+    "agent-boundaries": parsed.constitution ? parsed.constitution.boundaries : [],
+    sourceFiles: {
+      spec: scanResult.specPath,
+      plan: scanResult.planPath,
+      tasks: scanResult.tasksPath,
+      constitution: scanResult.constitutionPath,
+    },
+  };
+
+  const planMarkdown = renderPhasePlan({
+    crucibleId,
+    phaseName,
+    spec: parsed.spec,
+    plan: parsed.plan,
+    slicesMerged: slices.merged,
+    constitution: parsed.constitution,
+  });
+
+  result.smeltId = smeltId;
+  result.smeltPath = smeltPath;
+  result.planPath = planFilePath;
+
+  return {
+    smelt,
+    smeltDir,
+    smeltId,
+    smeltPath,
+    planFilePath,
+    auditPath,
+    principlesPath,
+    mapped,
+    planMarkdown,
+    phaseName,
+    crucibleId,
+  };
+}
+
+export function importSpeckit(opts) {
+  const projectRoot = resolve(opts.projectRoot || process.cwd());
+  const dryRun = !!opts.dryRun;
+  const syncPrinciples = !!opts.syncPrinciples;
+  const result = createImportResult(dryRun);
+
+  const scanResult = locateArtifacts(projectRoot, opts.dir);
+  if (!scanResult.ok) {
+    result.error = scanResult.error;
+    result.warnings.push(scanResult.message);
+    return result;
+  }
+
+  const parsed = parseSpeckitArtifacts(scanResult);
+  if (!_validateSpeckitArtifacts({ ...parsed, result })) {
+    return result;
+  }
+
+  const artifacts = prepareSpeckitImportArtifacts({
+    opts,
+    projectRoot,
+    result,
+    scanResult,
+    parsed,
+  });
+
+  if (!_checkSyncPrinciplesGuard({
+    syncPrinciples,
+    constitution: parsed.constitution,
+    principlesPath: artifacts.principlesPath,
+    result,
+  })) {
+    return result;
+  }
+
+  if (dryRun) {
+    result.ok = true;
+    return result;
+  }
+
+  _writeSpeckitOutputs({
+    smeltDir: artifacts.smeltDir,
+    planFilePath: artifacts.planFilePath,
+    smeltPath: artifacts.smeltPath,
+    smelt: artifacts.smelt,
+    projectRoot,
+    phaseName: artifacts.phaseName,
+    planMarkdown: artifacts.planMarkdown,
+    syncPrinciples,
+    constitution: parsed.constitution,
+    principlesPath: artifacts.principlesPath,
+    auditPath: artifacts.auditPath,
+    crucibleId: artifacts.crucibleId,
+    mapped: artifacts.mapped,
+    result,
+  });
 
   result.ok = true;
   return result;
@@ -595,6 +667,95 @@ function matchSliceIndex(sliceCell, slices) {
 
 // ─── Renderers ──────────────────────────────────────────────────────────────
 
+function _renderBulletList(lines, items) {
+  for (const item of items) lines.push(`- ${item}`);
+}
+
+function _renderSpecSections(lines, spec) {
+  if (spec.goals && spec.goals.length) {
+    lines.push("## Goals");
+    lines.push("");
+    _renderBulletList(lines, spec.goals);
+    lines.push("");
+  }
+  if (spec.acceptance && spec.acceptance.length) {
+    lines.push("## Acceptance Criteria");
+    lines.push("");
+    _renderBulletList(lines, spec.acceptance);
+    lines.push("");
+  }
+  if (spec.outOfScope && spec.outOfScope.length) {
+    lines.push("## Out of Scope");
+    lines.push("");
+    _renderBulletList(lines, spec.outOfScope);
+    lines.push("");
+  }
+}
+
+function _renderSliceBlock(lines, s) {
+  lines.push(`### Slice ${s.id} — ${s.title}`);
+  if (s.description && s.description !== s.title) {
+    lines.push("");
+    lines.push(s.description);
+  }
+  if (s.tasks && s.tasks.length) {
+    lines.push("");
+    lines.push("**Tasks**:");
+    lines.push("");
+    for (const t of s.tasks) {
+      const mark = t.status === "done" ? "[x]" : t.status === "in_progress" ? "[~]" : "[ ]";
+      lines.push(`- ${mark} \`${t.taskId}\` ${t.description}`);
+    }
+  }
+  lines.push("");
+  lines.push("**Validation gate** (placeholder — Hardener must replace):");
+  lines.push("");
+  lines.push("```bash");
+  lines.push(`bash -c "echo 'TODO: gate for slice ${s.id}'"`);
+  lines.push("```");
+  lines.push("");
+}
+
+function _renderSlicePlan(lines, slicesMerged) {
+  lines.push("## Slice Plan");
+  lines.push("");
+  lines.push("> **Note for Hardener**: Each slice below was imported from a Spec Kit `plan.md` entry. Validation gates are placeholders — Step 2 must replace them with real gates that match Plan Forge gate-portability rules.");
+  lines.push("");
+  if (!slicesMerged.length) {
+    lines.push("_(no slices in source plan.md — Hardener must define them)_");
+    lines.push("");
+    return;
+  }
+  for (const s of slicesMerged) _renderSliceBlock(lines, s);
+}
+
+function _renderConstitutionSection(lines, constitution) {
+  if (!constitution) return;
+  if (!(constitution.rules.length || constitution.commitments.length || constitution.boundaries.length)) return;
+  lines.push("## Imported Agent Constraints (from constitution.md)");
+  lines.push("");
+  if (constitution.rules.length) {
+    lines.push("### Rules");
+    lines.push("");
+    _renderBulletList(lines, constitution.rules);
+    lines.push("");
+  }
+  if (constitution.commitments.length) {
+    lines.push("### Commitments");
+    lines.push("");
+    _renderBulletList(lines, constitution.commitments);
+    lines.push("");
+  }
+  if (constitution.boundaries.length) {
+    lines.push("### Boundaries");
+    lines.push("");
+    _renderBulletList(lines, constitution.boundaries);
+    lines.push("");
+  }
+  lines.push("> If you also have `docs/plans/PROJECT-PRINCIPLES.md`, the rules above are advisory and PROJECT-PRINCIPLES wins on conflict.");
+  lines.push("");
+}
+
 function renderPhasePlan({ crucibleId, phaseName, spec, plan, slicesMerged, constitution }) {
   const lines = [];
   lines.push("---");
@@ -615,24 +776,7 @@ function renderPhasePlan({ crucibleId, phaseName, spec, plan, slicesMerged, cons
   lines.push(`- Importer: pforge crucible import (Phase CRUCIBLE-IMPORT-CLI)`);
   lines.push("");
 
-  if (spec.goals && spec.goals.length) {
-    lines.push("## Goals");
-    lines.push("");
-    for (const g of spec.goals) lines.push(`- ${g}`);
-    lines.push("");
-  }
-  if (spec.acceptance && spec.acceptance.length) {
-    lines.push("## Acceptance Criteria");
-    lines.push("");
-    for (const a of spec.acceptance) lines.push(`- ${a}`);
-    lines.push("");
-  }
-  if (spec.outOfScope && spec.outOfScope.length) {
-    lines.push("## Out of Scope");
-    lines.push("");
-    for (const o of spec.outOfScope) lines.push(`- ${o}`);
-    lines.push("");
-  }
+  _renderSpecSections(lines, spec);
 
   lines.push("## Scope Contract");
   lines.push("");
@@ -646,63 +790,8 @@ function renderPhasePlan({ crucibleId, phaseName, spec, plan, slicesMerged, cons
     lines.push("");
   }
 
-  lines.push("## Slice Plan");
-  lines.push("");
-  lines.push("> **Note for Hardener**: Each slice below was imported from a Spec Kit `plan.md` entry. Validation gates are placeholders — Step 2 must replace them with real gates that match Plan Forge gate-portability rules.");
-  lines.push("");
-  if (slicesMerged.length) {
-    for (const s of slicesMerged) {
-      lines.push(`### Slice ${s.id} — ${s.title}`);
-      if (s.description && s.description !== s.title) {
-        lines.push("");
-        lines.push(s.description);
-      }
-      if (s.tasks && s.tasks.length) {
-        lines.push("");
-        lines.push("**Tasks**:");
-        lines.push("");
-        for (const t of s.tasks) {
-          const mark = t.status === "done" ? "[x]" : t.status === "in_progress" ? "[~]" : "[ ]";
-          lines.push(`- ${mark} \`${t.taskId}\` ${t.description}`);
-        }
-      }
-      lines.push("");
-      lines.push("**Validation gate** (placeholder — Hardener must replace):");
-      lines.push("");
-      lines.push("```bash");
-      lines.push(`bash -c "echo 'TODO: gate for slice ${s.id}'"`);
-      lines.push("```");
-      lines.push("");
-    }
-  } else {
-    lines.push("_(no slices in source plan.md — Hardener must define them)_");
-    lines.push("");
-  }
-
-  if (constitution && (constitution.rules.length || constitution.commitments.length || constitution.boundaries.length)) {
-    lines.push("## Imported Agent Constraints (from constitution.md)");
-    lines.push("");
-    if (constitution.rules.length) {
-      lines.push("### Rules");
-      lines.push("");
-      for (const r of constitution.rules) lines.push(`- ${r}`);
-      lines.push("");
-    }
-    if (constitution.commitments.length) {
-      lines.push("### Commitments");
-      lines.push("");
-      for (const c of constitution.commitments) lines.push(`- ${c}`);
-      lines.push("");
-    }
-    if (constitution.boundaries.length) {
-      lines.push("### Boundaries");
-      lines.push("");
-      for (const b of constitution.boundaries) lines.push(`- ${b}`);
-      lines.push("");
-    }
-    lines.push("> If you also have `docs/plans/PROJECT-PRINCIPLES.md`, the rules above are advisory and PROJECT-PRINCIPLES wins on conflict.");
-    lines.push("");
-  }
+  _renderSlicePlan(lines, slicesMerged);
+  _renderConstitutionSection(lines, constitution);
 
   return lines.join("\n");
 }

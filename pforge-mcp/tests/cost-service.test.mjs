@@ -1,6 +1,7 @@
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import * as costService from "../cost-service.mjs";
 import { calculateSliceCost, buildCostBreakdown, buildEstimate, QUORUM_PRESETS } from "../orchestrator.mjs";
+import { SERVER_COMBINED_SRC } from "./helpers/server-combined-src.mjs";
 
 describe("cost-service: MODEL_PRICING + getPricing (Slice 1)", () => {
   it("exports MODEL_PRICING as an object with a default rate", () => {
@@ -161,15 +162,15 @@ function makePlan(sliceCount, opts = {}) {
 describe("cost-service: estimatePlan parity (Slice 3)", () => {
   it("estimatePlan matches buildEstimate — simple 3-slice plan, no quorum, no cwd", () => {
     const plan = makePlan(3);
-    const a = costService.estimatePlan(plan, "claude-sonnet-4.5", null, null, null);
-    const b = buildEstimate(plan, "claude-sonnet-4.5", null, null, null);
+    const a = costService.estimatePlan({ plan, model: "claude-sonnet-4.5", cwd: null });
+    const b = buildEstimate({ plan, model: "claude-sonnet-4.5", cwd: null });
     expect(a).toEqual(b);
   });
 
   it("estimatePlan matches buildEstimate — 5-slice plan with resumeFrom=3", () => {
     const plan = makePlan(5);
-    const a = costService.estimatePlan(plan, "claude-opus-4.6", null, null, "3");
-    const b = buildEstimate(plan, "claude-opus-4.6", null, null, "3");
+    const a = costService.estimatePlan({ plan, model: "claude-opus-4.6", cwd: null, resumeFrom: "3" });
+    const b = buildEstimate({ plan, model: "claude-opus-4.6", cwd: null, resumeFrom: "3" });
     expect(a).toEqual(b);
   });
 
@@ -186,8 +187,8 @@ describe("cost-service: estimatePlan parity (Slice 3)", () => {
     // Note: quorum paths call scoreSliceComplexity → requires non-null cwd.
     // Use process.cwd() since buildEstimate has the same constraint.
     const cwd = process.cwd();
-    const a = costService.estimatePlan(plan, "claude-sonnet-4.5", cwd, quorumConfig, null);
-    const b = buildEstimate(plan, "claude-sonnet-4.5", cwd, quorumConfig, null);
+    const a = costService.estimatePlan({ plan, model: "claude-sonnet-4.5", cwd, quorumConfig });
+    const b = buildEstimate({ plan, model: "claude-sonnet-4.5", cwd, quorumConfig });
     expect(a).toEqual(b);
   });
 });
@@ -396,10 +397,7 @@ describe("http-bridge coverage: every MCP-handled tool is in MCP_ONLY_TOOLS (Pha
   it("every tool with a dedicated switch-case handler is listed in MCP_ONLY_TOOLS", async () => {
     const { readFileSync } = await import("node:fs");
     const { resolve } = await import("node:path");
-    const serverSrc = readFileSync(
-      resolve(import.meta.dirname, "..", "server.mjs"),
-      "utf-8"
-    );
+    const serverSrc = SERVER_COMBINED_SRC;
 
     // Extract the MCP_ONLY_TOOLS Set literal
     const setMatch = serverSrc.match(/const\s+MCP_ONLY_TOOLS\s*=\s*new\s+Set\(\[([\s\S]*?)\]\)/);
@@ -449,14 +447,11 @@ describe("forge_estimate_slice registration (Phase-27.2 Slice 3)", () => {
   });
 
   it("server.mjs registers forge_estimate_slice in tool list and dispatcher switch", async () => {
-    const { readFileSync } = await import("node:fs");
-    const { resolve } = await import("node:path");
-    const serverSrc = readFileSync(resolve(import.meta.dirname, "..", "server.mjs"), "utf-8");
+    const serverSrc = SERVER_COMBINED_SRC;
     // Tool list entry
     expect(serverSrc).toMatch(/name:\s*"forge_estimate_slice"/);
-    // Switch-case (case label on its own line)
-    expect(serverSrc).toMatch(/case\s+"forge_estimate_slice"\s*:/);
-    // Handler body
-    expect(serverSrc).toMatch(/if\s*\(\s*name\s*===\s*"forge_estimate_slice"\s*\)/);
+    // Phase-52 SERVER-SPLIT: single switch replaced by individual handler functions
+    // with negated guard `if (!(name === ...))` — no case label in source
+    expect(serverSrc).toContain(`name === "forge_estimate_slice"`);
   });
 });

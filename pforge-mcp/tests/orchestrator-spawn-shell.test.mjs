@@ -14,17 +14,19 @@ import { resolve } from "path";
 import { fileURLToPath } from "url";
 
 const __dirname = resolve(fileURLToPath(import.meta.url), "..");
-const src = readFileSync(resolve(__dirname, "..", "orchestrator.mjs"), "utf8");
+// Phase-53 S2: spawnWorker moved to orchestrator/worker-spawn.mjs
+// Phase-43 C-series: vars renamed _isWin/_spawnBin/_spawnArg → isWindows/spawnBin/spawnArgs
+//   and extracted into spawnCliWorkerProcess() helper.
+const src = readFileSync(resolve(__dirname, "..", "orchestrator", "worker-spawn.mjs"), "utf8");
 
-// The new spawn call uses the local names _spawnBin / _spawnArg created by the
-// Bug #192 prelude. Extract THAT block (not the old `spawn(cmd, args, …)`).
-const spawnBlock = src.match(/spawn\(_spawnBin, _spawnArg, \{[\s\S]*?\}\);/)?.[0] ?? "";
+// Phase-43: spawn call now uses spawnBin / spawnArgs inside spawnCliWorkerProcess().
+const spawnBlock = src.match(/return spawn\(spawnBin, spawnArgs, \{[\s\S]*?\}\);/)?.[0] ?? "";
 
 describe("spawnWorker — Bug #82 .cmd shim resolution (post Bug #192)", () => {
   it("Bug #192 cmd-routing prelude is present", () => {
-    expect(src).toContain('_isWin    = process.platform === "win32"');
-    expect(src).toContain('_spawnBin = _isWin ? "cmd" : cmd');
-    expect(src).toContain('_spawnArg = _isWin ? ["/d", "/s", "/c", cmd, ...args] : args');
+    expect(src).toContain('isWindows = process.platform === "win32"');
+    expect(src).toContain('spawnBin = isWindows ? "cmd" : cmd');
+    expect(src).toContain('spawnArgs = isWindows ? ["/d", "/s", "/c", cmd, ...args] : args');
   });
 
   it("worker spawn no longer uses the deprecated shell:true pattern", () => {
@@ -41,8 +43,8 @@ describe("spawnWorker — Bug #82 .cmd shim resolution (post Bug #192)", () => {
     expect(spawnBlock).toContain("cwd");
   });
 
-  it("only one spawn(_spawnBin, _spawnArg, …) call-site exists in orchestrator.mjs", () => {
-    const all = src.match(/spawn\(_spawnBin, _spawnArg,/g) ?? [];
+  it("only one spawn(spawnBin, spawnArgs, …) call-site exists in worker-spawn.mjs", () => {
+    const all = src.match(/return spawn\(spawnBin, spawnArgs,/g) ?? [];
     expect(all.length).toBe(1);
   });
 });

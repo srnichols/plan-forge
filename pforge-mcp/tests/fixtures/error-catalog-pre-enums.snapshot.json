@@ -1,0 +1,31 @@
+{
+  "capturedAt": "2026-05-19T12:54:31.901Z",
+  "phase": "pre-enums-centralization",
+  "namedErrorCatalogRowCount": 22,
+  "catalogCodes": [
+    "ASK_QUESTION_MISMATCH",
+    "auditor-spawn-failed",
+    "CRITICAL_FIELDS_MISSING",
+    "diff-classify-blocked",
+    "DRIFT_DETECTED",
+    "ERR_UPDATE_DURING_RUN",
+    "GATE_COMMAND_FAILED",
+    "lock-hash-mismatch",
+    "network-allowlist-violation",
+    "NO_API_KEY",
+    "NO_REASONING_MODEL",
+    "observer-budget-exceeded",
+    "PLAN_ALREADY_EXISTS",
+    "PLAN_NOT_FOUND",
+    "PLAN_PARSE_ERROR",
+    "QUORUM_ALL_FAILED",
+    "RATE_LIMITED",
+    "REVIEW_REJECTED",
+    "SCOPE_VIOLATION",
+    "STRICT_GATES_REJECTED",
+    "tool-denied",
+    "WORKER_TIMEOUT"
+  ],
+  "errorCodesInEnumsMjs": 49,
+  "note": "S0 baseline — captured before Phase-41 ENUMS-CENTRALIZATION migration. namedErrorCatalogRowCount should match errorCodesInEnumsMjs after S4."
+}

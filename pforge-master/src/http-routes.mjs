@@ -126,19 +126,19 @@ export function createHttpRoutes(app, { mcpCall = invokeForgeTool } = {}) {
 
 // ─── Express-mode registration ───────────────────────────────────────
 
-function _registerExpress(app, dispatcher) {
+function registerForgeMasterCatalogRoutes(app) {
   app.get("/api/forge-master/prompts", (req, res) => {
     res.json(getPromptCatalog());
   });
 
   app.get("/api/forge-master/sessions", (req, res) => {
-    res.json(Array.from(sessions.entries()).map(([id, s]) => ({ id, ...s })));
+    res.json(Array.from(sessions.entries()).map(([id, session]) => ({ id, ...session })));
   });
 
   app.get("/api/forge-master/capabilities", (req, res) => {
     const config = getForgeMasterConfig();
     const catalog = getPromptCatalog();
-    const promptCount = catalog.categories.reduce((n, c) => n + c.prompts.length, 0);
+    const promptCount = catalog.categories.reduce((count, category) => count + category.prompts.length, 0);
     res.json({
       reasoningModel: config.reasoningModel,
       routerModel: config.routerModel,
@@ -149,12 +149,14 @@ function _registerExpress(app, dispatcher) {
     });
   });
 
-  app.get("/api/forge-master/prefs", (req, res) => {
-    res.json(loadPrefs(process.cwd()));
-  });
-
   app.get("/api/forge-master/cache-stats", (req, res) => {
     res.json(getCacheStats());
+  });
+}
+
+function registerForgeMasterPreferenceRoutes(app) {
+  app.get("/api/forge-master/prefs", (req, res) => {
+    res.json(loadPrefs(process.cwd()));
   });
 
   app.put("/api/forge-master/prefs", (req, res) => {
@@ -168,7 +170,9 @@ function _registerExpress(app, dispatcher) {
     savePrefs(normalized, process.cwd());
     res.json(normalized);
   });
+}
 
+function registerForgeMasterChatRoutes(app, dispatcher) {
   app.post("/api/forge-master/chat", (req, res) => {
     const { message, sessionId: reqSessionId } = req.body || {};
     if (!message) return res.status(400).json({ error: "message required" });
@@ -206,7 +210,7 @@ function _registerExpress(app, dispatcher) {
         sse.send("error", { error: result.error, sessionId, tokensIn: result.tokensIn, tokensOut: result.tokensOut, totalCostUSD: result.totalCostUSD || 0 });
       } else {
         sse.send("reply", { content: result.reply, sessionId });
-        for (const tc of result.toolCalls || []) sse.send("tool-call", tc);
+        for (const toolCall of result.toolCalls || []) sse.send("tool-call", toolCall);
         sse.send("done", { sessionId, tokensIn: result.tokensIn, tokensOut: result.tokensOut, totalCostUSD: result.totalCostUSD || 0, resolvedModel: result.resolvedModel || null, relatedTurns: result.relatedTurns || [], quorumResult: result.quorumResult || null });
       }
     } catch (err) {
@@ -216,8 +220,7 @@ function _registerExpress(app, dispatcher) {
     }
   });
 
-  app.post("/api/forge-master/chat/:sessionId/approve",(req, res) => {
-    const { sessionId } = req.params;
+  app.post("/api/forge-master/chat/:sessionId/approve", (req, res) => {
     const { approvalId, decision, editedArgs } = req.body || {};
     const gate = pendingApprovals.get(approvalId);
     if (!gate) return res.status(404).json({ error: "approval not found" });
@@ -225,7 +228,9 @@ function _registerExpress(app, dispatcher) {
     pendingApprovals.delete(approvalId);
     res.json({ ok: true, approvalId, decision });
   });
+}
 
+function registerForgeMasterSessionRoutes(app) {
   app.get("/api/forge-master/session/:id", async (req, res) => {
     const { id } = req.params;
     try {
@@ -241,148 +246,221 @@ function _registerExpress(app, dispatcher) {
   });
 }
 
+function _registerExpress(app, dispatcher) {
+  registerForgeMasterCatalogRoutes(app);
+  registerForgeMasterPreferenceRoutes(app);
+  registerForgeMasterChatRoutes(app, dispatcher);
+  registerForgeMasterSessionRoutes(app);
+}
+
 // ─── Built-in http handler (no express) ─────────────────────────────
+
+function json(res, code, data) {
+  const body = JSON.stringify(data);
+  res.writeHead(code, { "Content-Type": "application/json" });
+  res.end(body);
+}
+
+async function readBody(req) {
+  return new Promise((resolve) => {
+    let data = "";
+    req.on("data", (c) => { data += c; });
+    req.on("end", () => {
+      try { resolve(JSON.parse(data)); } catch { resolve({}); }
+    });
+  });
+}
+
+function buildCapabilitiesResponse() {
+  const config = getForgeMasterConfig();
+  const catalog = getPromptCatalog();
+  const promptCount = catalog.categories.reduce((n, c) => n + c.prompts.length, 0);
+  return {
+    reasoningModel: config.reasoningModel,
+    routerModel: config.routerModel,
+    allowlistedTools: BASE_ALLOWLIST.length,
+    writeAllowlist: WRITE_ALLOWLIST.length,
+    promptCategories: catalog.categories.length,
+    promptCount,
+  };
+}
+
+function normalizePrefs(body) {
+  const { tier, autoEscalate, quorumAdvisory, embeddingFallback } = body;
+  return {
+    tier: tier && VALID_TIERS.includes(tier) ? tier : null,
+    autoEscalate: typeof autoEscalate === "boolean" ? autoEscalate : false,
+    quorumAdvisory: VALID_QUORUM_MODES.includes(quorumAdvisory) ? quorumAdvisory : "off",
+    embeddingFallback: typeof embeddingFallback === "boolean" ? embeddingFallback : true,
+  };
+}
+
+function sendStreamResult(sse, result, sessionId) {
+  if (result.error) {
+    sse.send("error", { error: result.error, sessionId, tokensIn: result.tokensIn, tokensOut: result.tokensOut, totalCostUSD: result.totalCostUSD || 0 });
+    return;
+  }
+
+  sse.send("reply", { content: result.reply, sessionId });
+  for (const tc of result.toolCalls || []) sse.send("tool-call", tc);
+  sse.send("done", { sessionId, tokensIn: result.tokensIn, tokensOut: result.tokensOut, totalCostUSD: result.totalCostUSD || 0, resolvedModel: result.resolvedModel || null, relatedTurns: result.relatedTurns || [], quorumResult: result.quorumResult || null });
+}
+
+async function handleNodePromptsRoute({ method, path, res }) {
+  if (method !== "GET" || path !== "/api/forge-master/prompts") return false;
+  json(res, 200, getPromptCatalog());
+  return true;
+}
+
+async function handleNodeSessionsRoute({ method, path, res }) {
+  if (method !== "GET" || path !== "/api/forge-master/sessions") return false;
+  json(res, 200, Array.from(sessions.entries()).map(([id, s]) => ({ id, ...s })));
+  return true;
+}
+
+async function handleNodeCapabilitiesRoute({ method, path, res }) {
+  if (method !== "GET" || path !== "/api/forge-master/capabilities") return false;
+  json(res, 200, buildCapabilitiesResponse());
+  return true;
+}
+
+async function handleNodePrefsGetRoute({ method, path, res }) {
+  if (method !== "GET" || path !== "/api/forge-master/prefs") return false;
+  json(res, 200, loadPrefs(process.cwd()));
+  return true;
+}
+
+async function handleNodeCacheStatsRoute({ method, path, res }) {
+  if (method !== "GET" || path !== "/api/forge-master/cache-stats") return false;
+  json(res, 200, getCacheStats());
+  return true;
+}
+
+async function handleNodePrefsPutRoute({ method, path, req, res }) {
+  if (method !== "PUT" || path !== "/api/forge-master/prefs") return false;
+  const normalized = normalizePrefs(await readBody(req));
+  savePrefs(normalized, process.cwd());
+  json(res, 200, normalized);
+  return true;
+}
+
+async function handleNodeChatRoute({ method, path, req, res }) {
+  if (method !== "POST" || path !== "/api/forge-master/chat") return false;
+
+  const { message, sessionId: reqSessionId } = await readBody(req);
+  if (!message) {
+    json(res, 400, { error: "message required" });
+    return true;
+  }
+
+  const sessionId = reqSessionId || randomUUID();
+  const keywordOnly = req.headers["x-pforge-keyword-only"] === "1";
+  const fmSessionId = req.headers["x-pforge-session-id"] || null;
+  sessions.set(sessionId, { createdAt: new Date().toISOString(), lastMessage: message, keywordOnly, fmSessionId });
+  json(res, 200, {
+    sessionId,
+    streamUrl: `/api/forge-master/chat/${sessionId}/stream?message=${encodeURIComponent(message)}`,
+  });
+  return true;
+}
+
+async function handleNodeStreamRoute({ method, path, url, res, dispatcher }) {
+  const streamMatch = path.match(/^\/api\/forge-master\/chat\/([^/]+)\/stream$/);
+  if (method !== "GET" || !streamMatch) return false;
+
+  const sessionId = streamMatch[1];
+  const message = url.searchParams.get("message") || "";
+  const session = sessions.get(sessionId) || {};
+  const prefs = loadPrefs(process.cwd());
+  const sse = createSseStream(res);
+
+  try {
+    sse.send("start", { sessionId });
+    const result = await runTurn(
+      { message, sessionId },
+      {
+        dispatcher,
+        sessionId: session.fmSessionId || null,
+        forceKeywordOnly: session.keywordOnly || false,
+        quorumAdvisory: prefs.quorumAdvisory || "off",
+        onClassification: (data) => { sse.send("classification", data); },
+        onPlan: (data) => { sse.send("plan", data); },
+        onQuorumEstimate: (data) => { sse.send("quorum-estimate", data); },
+      },
+    );
+    sendStreamResult(sse, result, sessionId);
+  } catch (err) {
+    sse.send("error", { error: err.message });
+  } finally {
+    sse.close();
+  }
+
+  return true;
+}
+
+async function handleNodeApproveRoute({ method, path, req, res }) {
+  const approveMatch = path.match(/^\/api\/forge-master\/chat\/([^/]+)\/approve$/);
+  if (method !== "POST" || !approveMatch) return false;
+
+  const { approvalId, decision, editedArgs } = await readBody(req);
+  const gate = pendingApprovals.get(approvalId);
+  if (!gate) {
+    json(res, 404, { error: "approval not found" });
+    return true;
+  }
+
+  gate({ decision, editedArgs });
+  pendingApprovals.delete(approvalId);
+  json(res, 200, { ok: true, approvalId, decision });
+  return true;
+}
+
+async function handleNodeSessionRoute({ method, path, res }) {
+  const sessionMatch = path.match(/^\/api\/forge-master\/session\/([^/]+)$/);
+  if (method !== "GET" || !sessionMatch) return false;
+
+  const id = sessionMatch[1];
+  try {
+    const turns = await loadSession(id, process.cwd());
+    json(res, 200, { sessionId: id, turns: turns.slice(-10) });
+  } catch {
+    json(res, 200, { sessionId: id, turns: [] });
+  }
+
+  return true;
+}
+
+const NODE_ROUTE_HANDLERS = [
+  handleNodePromptsRoute,
+  handleNodeSessionsRoute,
+  handleNodeCapabilitiesRoute,
+  handleNodePrefsGetRoute,
+  handleNodeCacheStatsRoute,
+  handleNodePrefsPutRoute,
+  handleNodeChatRoute,
+  handleNodeStreamRoute,
+  handleNodeApproveRoute,
+  handleNodeSessionRoute,
+];
 
 function _buildNodeHandler(dispatcher) {
   return async function handler(req, res) {
     const url = new URL(req.url, `http://${req.headers.host || "localhost"}`);
     const path = url.pathname;
-    const method = req.method;
 
-    function json(res, code, data) {
-      const body = JSON.stringify(data);
-      res.writeHead(code, { "Content-Type": "application/json" });
-      res.end(body);
-    }
+    if (!path.startsWith("/api/forge-master")) return null;
 
-    async function readBody(req) {
-      return new Promise((resolve) => {
-        let data = "";
-        req.on("data", (c) => { data += c; });
-        req.on("end", () => {
-          try { resolve(JSON.parse(data)); } catch { resolve({}); }
-        });
-      });
-    }
+    const context = {
+      req,
+      res,
+      url,
+      path,
+      method: req.method,
+      dispatcher,
+    };
 
-    if (!path.startsWith("/api/forge-master")) return null; // not handled
-
-    if (method === "GET" && path === "/api/forge-master/prompts") {
-      return json(res, 200, getPromptCatalog());
-    }
-
-    if (method === "GET" && path === "/api/forge-master/sessions") {
-      return json(res, 200, Array.from(sessions.entries()).map(([id, s]) => ({ id, ...s })));
-    }
-
-    if (method === "GET" && path === "/api/forge-master/capabilities") {
-      const config = getForgeMasterConfig();
-      const catalog = getPromptCatalog();
-      const promptCount = catalog.categories.reduce((n, c) => n + c.prompts.length, 0);
-      return json(res, 200, {
-        reasoningModel: config.reasoningModel,
-        routerModel: config.routerModel,
-        allowlistedTools: BASE_ALLOWLIST.length,
-        writeAllowlist: WRITE_ALLOWLIST.length,
-        promptCategories: catalog.categories.length,
-        promptCount,
-      });
-    }
-
-    if (method === "GET" && path === "/api/forge-master/prefs") {
-      return json(res, 200, loadPrefs(process.cwd()));
-    }
-
-    if (method === "GET" && path === "/api/forge-master/cache-stats") {
-      return json(res, 200, getCacheStats());
-    }
-
-    if (method === "PUT" && path === "/api/forge-master/prefs") {
-      const body = await readBody(req);
-      const { tier, autoEscalate, quorumAdvisory, embeddingFallback } = body;
-      const normalized = {
-        tier: tier && VALID_TIERS.includes(tier) ? tier : null,
-        autoEscalate: typeof autoEscalate === "boolean" ? autoEscalate : false,
-        quorumAdvisory: VALID_QUORUM_MODES.includes(quorumAdvisory) ? quorumAdvisory : "off",
-        embeddingFallback: typeof embeddingFallback === "boolean" ? embeddingFallback : true,
-      };
-      savePrefs(normalized, process.cwd());
-      return json(res, 200, normalized);
-    }
-
-    if (method === "POST" && path === "/api/forge-master/chat") {
-      const body = await readBody(req);
-      const { message, sessionId: reqSessionId } = body;
-      if (!message) return json(res, 400, { error: "message required" });
-      const sessionId = reqSessionId || randomUUID();
-      const keywordOnly = req.headers["x-pforge-keyword-only"] === "1";
-      const fmSessionId = req.headers["x-pforge-session-id"] || null;
-      sessions.set(sessionId, { createdAt: new Date().toISOString(), lastMessage: message, keywordOnly, fmSessionId });
-      return json(res, 200, {
-        sessionId,
-        streamUrl: `/api/forge-master/chat/${sessionId}/stream?message=${encodeURIComponent(message)}`,
-      });
-    }
-
-    // GET /api/forge-master/chat/:sessionId/stream
-    const streamMatch = path.match(/^\/api\/forge-master\/chat\/([^/]+)\/stream$/);
-    if (method === "GET" && streamMatch) {
-      const sessionId = streamMatch[1];
-      const message = url.searchParams.get("message") || "";
-      const session = sessions.get(sessionId) || {};
-      const prefs = loadPrefs(process.cwd());
-      const sse = createSseStream(res);
-      try {
-        sse.send("start", { sessionId });
-        const result = await runTurn(
-          { message, sessionId },
-          {
-            dispatcher,
-            sessionId: session.fmSessionId || null,
-            forceKeywordOnly: session.keywordOnly || false,
-            quorumAdvisory: prefs.quorumAdvisory || "off",
-            onClassification: (data) => { sse.send("classification", data); },
-            onPlan: (data) => { sse.send("plan", data); },
-            onQuorumEstimate: (data) => { sse.send("quorum-estimate", data); },
-          },
-        );
-        if (result.error) {
-          sse.send("error", { error: result.error, sessionId, tokensIn: result.tokensIn, tokensOut: result.tokensOut, totalCostUSD: result.totalCostUSD || 0 });
-        } else {
-          sse.send("reply", { content: result.reply, sessionId });
-          for (const tc of result.toolCalls || []) sse.send("tool-call", tc);
-          sse.send("done", { sessionId, tokensIn: result.tokensIn, tokensOut: result.tokensOut, totalCostUSD: result.totalCostUSD || 0, resolvedModel: result.resolvedModel || null, relatedTurns: result.relatedTurns || [], quorumResult: result.quorumResult || null });
-        }
-      } catch (err) {
-        sse.send("error", { error: err.message });
-      } finally {
-        sse.close();
-      }
-      return;
-    }
-
-    // POST /api/forge-master/chat/:sessionId/approve
-    const approveMatch = path.match(/^\/api\/forge-master\/chat\/([^/]+)\/approve$/);
-    if (method === "POST" && approveMatch) {
-      const body = await readBody(req);
-      const { approvalId, decision, editedArgs } = body;
-      const gate = pendingApprovals.get(approvalId);
-      if (!gate) return json(res, 404, { error: "approval not found" });
-      gate({ decision, editedArgs });
-      pendingApprovals.delete(approvalId);
-      return json(res, 200, { ok: true, approvalId, decision });
-    }
-
-    // GET /api/forge-master/session/:id
-    const sessionMatch = path.match(/^\/api\/forge-master\/session\/([^/]+)$/);
-    if (method === "GET" && sessionMatch) {
-      const id = sessionMatch[1];
-      try {
-        const turns = await loadSession(id, process.cwd());
-        return json(res, 200, { sessionId: id, turns: turns.slice(-10) });
-      } catch {
-        return json(res, 200, { sessionId: id, turns: [] });
-      }
+    for (const route of NODE_ROUTE_HANDLERS) {
+      if (await route(context)) return;
     }
 
     return json(res, 404, { error: "not found" });

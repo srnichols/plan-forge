@@ -13,6 +13,7 @@
 import { describe, it, expect } from "vitest";
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
+import { SERVER_COMBINED_SRC } from "./helpers/server-combined-src.mjs";
 
 // ─── tools.json contract ─────────────────────────────────────────────
 
@@ -103,10 +104,7 @@ describe("tools.json — forge_triage_route", () => {
 // ─── Server TOOLS array contract ─────────────────────────────────────
 
 describe("server.mjs — tool wiring", () => {
-  const serverSrc = readFileSync(
-    resolve(import.meta.dirname, "..", "server.mjs"),
-    "utf-8",
-  );
+  const serverSrc = SERVER_COMBINED_SRC;
 
   it("contains forge_tempering_drain handler", () => {
     expect(serverSrc).toContain('name === "forge_tempering_drain"');
@@ -131,10 +129,10 @@ describe("server.mjs — tool wiring", () => {
   });
 
   it("forge_tempering_drain handler emits telemetry", () => {
-    expect(serverSrc).toContain('emitToolTelemetry("forge_tempering_drain"');
+    expect(serverSrc).toContain('emitToolTelemetry({ toolName: "forge_tempering_drain"');
   });
 
   it("forge_triage_route handler emits telemetry", () => {
-    expect(serverSrc).toContain('emitToolTelemetry("forge_triage_route"');
+    expect(serverSrc).toContain('emitToolTelemetry({ toolName: "forge_triage_route"');
   });
 });

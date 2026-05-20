@@ -194,6 +194,24 @@ const SCANNER_BUDGET_KEYS = Object.freeze({
  * @param {Function} [ctx.now]
  * @returns {Promise<object>} scanner result record
  */
+function _checkScannerSkipReason(scanner, config, adapter) {
+  if (!scanner) return "missing-scanner-id";
+  if (!config || !config.scanners || config.scanners[scanner] === false) return "scanner-disabled";
+  if (!adapter || !adapter[scanner]) return "no-adapter";
+  const check = validateAdapterEntry(adapter[scanner]);
+  if (!check.ok) return `invalid-adapter:${check.reason}`;
+  if (adapter[scanner].supported === false) return adapter[scanner].reason || "stack-not-supported";
+  return null;
+}
+
+function _computeScannerVerdict(proc, parsed) {
+  if (proc.timedOut) return "budget-exceeded";
+  if (proc.error && proc.exitCode === -1) return "error";
+  if ((parsed.fail || 0) > 0) return "fail";
+  if (proc.exitCode !== 0) return "fail";
+  return "pass";
+}
+
 export async function runScanner(ctx) {
   const {
     scanner,
@@ -207,40 +225,14 @@ export async function runScanner(ctx) {
   } = ctx || {};
 
   const t0 = now();
-  const base = {
-    scanner,
-    stack,
-    sliceRef,
-    startedAt: new Date(t0).toISOString(),
-  };
+  const base = { scanner, stack, sliceRef, startedAt: new Date(t0).toISOString() };
   const skippedFrame = (reason) => ({
-    ...base,
-    skipped: true,
-    reason,
-    verdict: "skipped",
-    durationMs: 0,
+    ...base, skipped: true, reason, verdict: "skipped", durationMs: 0,
     completedAt: new Date(now()).toISOString(),
   });
 
-  if (!scanner) return skippedFrame("missing-scanner-id");
-
-  // Scanner globally disabled
-  if (!config || !config.scanners || config.scanners[scanner] === false) {
-    return skippedFrame("scanner-disabled");
-  }
-
-  // No adapter for this stack
-  if (!adapter || !adapter[scanner]) {
-    return skippedFrame("no-adapter");
-  }
-
-  const check = validateAdapterEntry(adapter[scanner]);
-  if (!check.ok) return skippedFrame(`invalid-adapter:${check.reason}`);
-
-  // Explicit unsupported stub
-  if (adapter[scanner].supported === false) {
-    return skippedFrame(adapter[scanner].reason || "stack-not-supported");
-  }
+  const skipReason = _checkScannerSkipReason(scanner, config, adapter);
+  if (skipReason) return skippedFrame(skipReason);
 
   const budgetKey = SCANNER_BUDGET_KEYS[scanner] || `${scanner}MaxMs`;
   const budgetMs = (config.runtimeBudgets && config.runtimeBudgets[budgetKey]) || DEFAULT_UNIT_BUDGET_MS;
@@ -254,15 +246,6 @@ export async function runScanner(ctx) {
     parsed = { pass: 0, fail: 0, skipped: 0, coverage: null, parseError: err.message };
   }
 
-  const durationMs = now() - t0;
-
-  let verdict;
-  if (proc.timedOut) verdict = "budget-exceeded";
-  else if (proc.error && proc.exitCode === -1) verdict = "error";
-  else if ((parsed.fail || 0) > 0) verdict = "fail";
-  else if (proc.exitCode !== 0) verdict = "fail";
-  else verdict = "pass";
-
   return {
     ...base,
     completedAt: new Date(now()).toISOString(),
@@ -275,8 +258,8 @@ export async function runScanner(ctx) {
     skipped: parsed.skipped || 0,
     coverage: parsed.coverage || null,
     parseError: parsed.parseError || null,
-    durationMs,
-    verdict,
+    durationMs: now() - t0,
+    verdict: _computeScannerVerdict(proc, parsed),
   };
 }
 
@@ -303,240 +286,62 @@ export function runScannerIntegration(ctx) {
 // TEMPER-06 Slice 06.1 — Extract failures from a scanner result.
 // Per-scanner normalizer: each scanner shape may encode failures
 // differently. This function returns a uniform `{ evidence, severity }` array.
-function extractFailures(scannerResult) {
-  if (!scannerResult || scannerResult.skipped || scannerResult.verdict === "skipped" || scannerResult.verdict === "pass") return [];
-  const failures = [];
-
-  // If scanner already has a `failures` array, use it directly
-  if (Array.isArray(scannerResult.failures)) {
-    for (const f of scannerResult.failures) {
-      failures.push({
-        evidence: f.evidence || f,
-        severity: f.severity || (scannerResult.verdict === "error" ? "high" : "medium"),
-      });
-    }
-    return failures;
-  }
-
-  // Regressions array (visual-diff, perf-budget)
-  if (Array.isArray(scannerResult.regressions)) {
-    for (const r of scannerResult.regressions) {
-      failures.push({
-        evidence: {
-          testName: r.url || r.urlHash || r.name || `${scannerResult.scanner}-regression`,
-          assertionMessage: r.explanation || r.verdict || "regression detected",
-          visualDiffScore: r.diffScore || r.score || null,
-          quorumVerdict: r.quorumVerdict || null,
-        },
-        severity: r.severity || "medium",
-      });
-    }
-    return failures;
-  }
-
-  // Violations array (contract scanner)
-  if (Array.isArray(scannerResult.violations)) {
-    for (const v of scannerResult.violations) {
-      failures.push({
-        evidence: {
-          testName: v.path || v.endpoint || `${scannerResult.scanner}-violation`,
-          assertionMessage: v.message || v.description || "contract violation",
-          violation: true,
-        },
-        severity: v.severity || "medium",
-      });
-    }
-    return failures;
-  }
-
-  // Generic: scanner failed but no structured failures — synthesize one
-  if (scannerResult.fail > 0 || scannerResult.verdict === "fail" || scannerResult.verdict === "error") {
-    failures.push({
-      evidence: {
-        testName: `${scannerResult.scanner}-failure`,
-        assertionMessage: scannerResult.error || scannerResult.reason || `${scannerResult.scanner} ${scannerResult.verdict}`,
-        stackTrace: scannerResult.stderr || null,
-      },
-      severity: scannerResult.verdict === "error" ? "high" : "medium",
-    });
-  }
-
-  return failures;
+function _extractFromFailuresArray(scannerResult) {
+  return scannerResult.failures.map((f) => ({
+    evidence: f.evidence || f,
+    severity: f.severity || (scannerResult.verdict === "error" ? "high" : "medium"),
+  }));
 }
 
-/**
- * forge_tempering_run — execute enabled scanners, write a run record,
- * emit hub events per scanner. Slice 02.1 runs the **unit** scanner
- * only; Slice 02.2 adds integration; later phases add UI/visual/load.
- *
- * Writes `.forge/tempering/run-<ts>.json`. Never throws.
- *
- * @param {object} opts
- * @param {string} opts.projectDir
- * @param {object} [opts.hub]
- * @param {string} [opts.correlationId]
- * @param {{plan:string, slice:string}} [opts.sliceRef]
- * @param {string|null} [opts.lastGreenSha]   - for regression-first ordering
- * @param {Function} [opts.spawn]
- * @param {Function} [opts.importFn]          - for loadAdapter injection
- * @param {object}   [opts.adapter]           - direct override (tests)
- * @param {Function} [opts.now]
- * @returns {Promise<object>}
- */
-export async function runTemperingRun(opts = {}) {
-  const {
-    projectDir,
-    hub = null,
-    correlationId = null,
-    sliceRef = null,
-    lastGreenSha = null,
-    spawn: spawnFn = realSpawn,
-    importFn,
-    adapter: adapterOverride = null,
-    now = () => Date.now(),
-    // TEMPER-03 Slice 03.1 — UI scanner dependency injection.
-    // Lets tests mock Playwright + axe-core without installing them.
-    // `uiScannerImpl` overrides the real scanner entirely, used in
-    // the tests that need to exercise runTemperingRun wiring without
-    // going through the full crawler logic.
-    uiImportFn = null,
-    uiScannerImpl = null,
-    // TEMPER-03 Slice 03.2 — Contract scanner dependency injection.
-    contractScannerImpl = null,
-    // TEMPER-04 Slice 04.1 — Visual-diff scanner dependency injection.
-    visualDiffScannerImpl = null,
-    // TEMPER-04 Slice 04.2 — L3 capture callback for visual-diff quorum.
-    captureMemory = null,
-    // TEMPER-05 Slice 05.1 — Flakiness, perf-budget, load-stress DI.
-    flakinessScannerImpl = null,
-    perfBudgetScannerImpl = null,
-    loadStressScannerImpl = null,
-    // TEMPER-05 Slice 05.2 — Mutation scanner dependency injection.
-    mutationScannerImpl = null,
-    // Meta-bug #102 — Content-audit scanner dependency injection.
-    contentAuditScannerImpl = null,
-    // TEMPER-06 Slice 06.1 — Bug registry + classifier DI.
-    // `classifyFn` and `registerBugFn` override the real classify/registerBug
-    // for tests. `callModel` is threaded to the classifier's LLM layer.
-    classifyFn = null,
-    registerBugFn = null,
-    callModel = null,
-    env = process.env,
-    // Phase-28.5 Slice 1 — DI hook for LLM visual-diff analyzer.
-    spawnWorker = null,
-    // Phase-WORKER-GUARDRAILS Slice 7 — A7 objective mode.
-    // `objective.command` runs before/after scanners; result only accepted
-    // if metric moves in the direction specified by `objective.acceptIf`
-    // ("greater" or "less"). Worker never sees the baseline number.
-    objective = null,
-    // DI override for objective command execution (tests only).
-    objectiveSpawn = null,
-  } = opts;
+function _extractFromRegressionsArray(scannerResult) {
+  return scannerResult.regressions.map((r) => ({
+    evidence: {
+      testName: r.url || r.urlHash || r.name || `${scannerResult.scanner}-regression`,
+      assertionMessage: r.explanation || r.verdict || "regression detected",
+      visualDiffScore: r.diffScore || r.score || null,
+      quorumVerdict: r.quorumVerdict || null,
+    },
+    severity: r.severity || "medium",
+  }));
+}
 
-  const corr = correlationId || `temper-run-${randomUUID()}`;
-  const startedAt = new Date(now()).toISOString();
-  // Hoisted early so artifact-producing scanners can write under a
-  // stable `<runId>/` directory before the final record is persisted.
-  const runId = `run-${startedAt.replace(/[:.]/g, "-")}`;
+function _extractFromViolationsArray(scannerResult) {
+  return scannerResult.violations.map((v) => ({
+    evidence: {
+      testName: v.path || v.endpoint || `${scannerResult.scanner}-violation`,
+      assertionMessage: v.message || v.description || "contract violation",
+      violation: true,
+    },
+    severity: v.severity || "medium",
+  }));
+}
 
-  if (!projectDir || typeof projectDir !== "string") {
-    return { ok: false, error: "projectDir required", code: "missing-projectDir", correlationId: corr };
-  }
+function _extractGenericFailure(scannerResult) {
+  if (scannerResult.fail <= 0 && scannerResult.verdict !== "fail" && scannerResult.verdict !== "error") return [];
+  return [{
+    evidence: {
+      testName: `${scannerResult.scanner}-failure`,
+      assertionMessage: scannerResult.error || scannerResult.reason || `${scannerResult.scanner} ${scannerResult.verdict}`,
+      stackTrace: scannerResult.stderr || null,
+    },
+    severity: scannerResult.verdict === "error" ? "high" : "medium",
+  }];
+}
 
-  // Seed dirs + config if first run (TEMPER-01 contract)
-  const { dir: temperingDir, configWritten } = ensureTemperingDirs(projectDir);
-  const config = readTemperingConfig(projectDir);
+function extractFailures(scannerResult) {
+  if (!scannerResult || scannerResult.skipped || scannerResult.verdict === "skipped" || scannerResult.verdict === "pass") return [];
+  if (Array.isArray(scannerResult.failures)) return _extractFromFailuresArray(scannerResult);
+  if (Array.isArray(scannerResult.regressions)) return _extractFromRegressionsArray(scannerResult);
+  if (Array.isArray(scannerResult.violations)) return _extractFromViolationsArray(scannerResult);
+  return _extractGenericFailure(scannerResult);
+}
 
-  // Global disable — respect `enabled: false`
-  if (config.enabled === false) {
-    emit(hub, "tempering-run-skipped", { correlationId: corr, reason: "disabled" });
-    return {
-      ok: true,
-      skipped: true,
-      reason: "tempering-disabled",
-      correlationId: corr,
-      configWritten,
-    };
-  }
-
-  const stack = detectStack(projectDir);
-
-  emit(hub, "tempering-run-started", {
-    correlationId: corr,
-    projectDir,
-    stack,
-    sliceRef,
-    configWritten,
-  });
-
-  // Load adapter (or honour override)
-  let adapter = adapterOverride;
-  if (!adapter) {
-    adapter = await loadAdapter(stack, { importFn });
-  }
-
-  // Regression-first hint (best-effort; adapter decides whether to use it)
-  let changedFiles = [];
-  if (config.execution && config.execution.regressionFirst && lastGreenSha) {
-    changedFiles = await pickChangedFiles({ cwd: projectDir, lastGreenSha, gitSpawn: spawnFn });
-  }
-
-  // ── A7 Objective — capture baseline BEFORE scanners run ──
-  // Worker MUST NOT see the baseline number (decision #10).
-  // Non-zero exit or non-numeric stdout → fail fast, never run scanners.
-  let objectiveBaseline = null;
-  if (objective && objective.command && typeof objective.command === "string") {
-    const objSpawn = objectiveSpawn || spawnFn;
-    const cmdParts = objective.command.trim().split(/\s+/);
-    const baselineProc = await runSubprocess(cmdParts, {
-      cwd: projectDir,
-      budgetMs: 30000,
-      spawn: objSpawn,
-    });
-    if (baselineProc.exitCode !== 0 || baselineProc.timedOut) {
-      return {
-        ok: false,
-        error: "objective-baseline-failed",
-        code: "objective-baseline-failed",
-        correlationId: corr,
-        objective: {
-          accepted: false,
-          blocked: true,
-          reason: baselineProc.timedOut ? "objective-baseline-timed-out" : "objective-baseline-non-zero-exit",
-        },
-      };
-    }
-    const baselineNum = parseFloat(baselineProc.stdout.trim());
-    if (!isFinite(baselineNum)) {
-      return {
-        ok: false,
-        error: "objective-baseline-non-numeric",
-        code: "objective-baseline-non-numeric",
-        correlationId: corr,
-        objective: {
-          accepted: false,
-          blocked: true,
-          reason: "objective-baseline-non-numeric",
-        },
-      };
-    }
-    objectiveBaseline = baselineNum;
-  }
-
-  // ── Unit scanner ──
+async function _runUnitScanner({ config, stack, adapter, sliceRef, projectDir, spawnFn, now, hub, corr }) {
   emit(hub, "tempering-run-scanner-started", { correlationId: corr, scanner: "unit", stack });
-
   const unitResult = await runScanner({
-    scanner: "unit",
-    config,
-    stack,
-    adapter,
-    sliceRef,
-    cwd: projectDir,
-    spawn: spawnFn,
-    now,
+    scanner: "unit", config, stack, adapter, sliceRef,
+    cwd: projectDir, spawn: spawnFn, now,
   });
-
   emit(hub, "tempering-run-scanner-completed", {
     correlationId: corr,
     scanner: "unit",
@@ -547,13 +352,11 @@ export async function runTemperingRun(opts = {}) {
     skipped: unitResult.skipped,
     durationMs: unitResult.durationMs,
   });
+  return unitResult;
+}
 
-  // ── Integration scanner (TEMPER-02 Slice 02.2) ──
-  // Ordered after unit so a failing unit suite short-circuits the
-  // budget: if unit already blew the runtime budget, integration is
-  // skipped with reason "prior-budget-exceeded" rather than compounding.
+async function _runIntegrationScanner({ unitResult, config, stack, adapter, sliceRef, projectDir, spawnFn, now, hub, corr }) {
   emit(hub, "tempering-run-scanner-started", { correlationId: corr, scanner: "integration", stack });
-
   let integrationResult;
   if (unitResult.verdict === "budget-exceeded") {
     integrationResult = {
@@ -569,17 +372,10 @@ export async function runTemperingRun(opts = {}) {
     };
   } else {
     integrationResult = await runScanner({
-      scanner: "integration",
-      config,
-      stack,
-      adapter,
-      sliceRef,
-      cwd: projectDir,
-      spawn: spawnFn,
-      now,
+      scanner: "integration", config, stack, adapter, sliceRef,
+      cwd: projectDir, spawn: spawnFn, now,
     });
   }
-
   emit(hub, "tempering-run-scanner-completed", {
     correlationId: corr,
     scanner: "integration",
@@ -590,557 +386,297 @@ export async function runTemperingRun(opts = {}) {
     skipped: integrationResult.skipped || 0,
     durationMs: integrationResult.durationMs || 0,
   });
+  return integrationResult;
+}
 
-  // ── UI sweep scanner (TEMPER-03 Slice 03.1) ──
-  // Cross-stack scanner — runs against a deployed app URL rather
-  // than source code. Loaded lazily so missing Playwright / axe-core
-  // installs don't force the unit+integration path to fail.
-  emit(hub, "tempering-run-scanner-started", { correlationId: corr, scanner: "ui-playwright", stack });
+async function _runCrossStackScanners(opts) {
+  const {
+    unitResult, integrationResult,
+    config, projectDir, runId, sliceRef, now, hub, corr, stack, env,
+    importFn, uiImportFn, captureMemory, spawnWorker,
+    uiScannerImpl, contractScannerImpl, visualDiffScannerImpl,
+    flakinessScannerImpl, perfBudgetScannerImpl, loadStressScannerImpl,
+    mutationScannerImpl, contentAuditScannerImpl,
+  } = opts;
 
-  let uiResult;
-  try {
-    // Short-circuit when prior scanner exhausted the overall budget.
-    const priorBudgetExceeded = unitResult.verdict === "budget-exceeded"
-      || integrationResult.verdict === "budget-exceeded";
-    if (priorBudgetExceeded) {
-      uiResult = {
-        scanner: "ui-playwright",
-        sliceRef,
-        startedAt: new Date(now()).toISOString(),
-        completedAt: new Date(now()).toISOString(),
-        skipped: true,
-        reason: "prior-budget-exceeded",
-        verdict: "skipped",
-        pass: 0, fail: 0,
-        durationMs: 0,
-      };
-    } else if (uiScannerImpl) {
-      uiResult = await uiScannerImpl({
-        config, projectDir, runId, sliceRef, now, env, importFn: uiImportFn,
-      });
-    } else {
+  const stepCommon = { sliceRef, now, hub, corr, stack };
+  const importFnSafe = importFn || ((spec) => import(spec));
+  const uiImportFnSafe = uiImportFn || ((spec) => import(spec));
+
+  const uiResult = await _runCrossStackScannerStep({
+    ...stepCommon,
+    name: "ui-playwright",
+    priorScanners: [unitResult, integrationResult],
+    invokeInjected: _maybeInvoke(uiScannerImpl, { config, projectDir, runId, sliceRef, now, env, importFn: uiImportFn }),
+    invokeDefault: async () => {
       const { runUiSweep } = await import("./scanners/ui-playwright.mjs");
-      uiResult = await runUiSweep({
-        config, projectDir, runId, sliceRef, now, env,
-        importFn: uiImportFn || ((spec) => import(spec)),
-      });
-    }
-  } catch (err) {
-    // Absolute last-resort — the scanner module itself failed to load
-    // or blew up before returning its own error frame. Keep the run
-    // alive and surface the failure in the record.
-    uiResult = {
-      scanner: "ui-playwright",
-      sliceRef,
-      startedAt: new Date(now()).toISOString(),
-      completedAt: new Date(now()).toISOString(),
-      skipped: true,
-      reason: `scanner-load-failed:${err.message || err}`,
-      verdict: "skipped",
-      pass: 0, fail: 0,
-      durationMs: 0,
-    };
-  }
-
-  emit(hub, "tempering-run-scanner-completed", {
-    correlationId: corr,
-    scanner: "ui-playwright",
-    stack,
-    verdict: uiResult.verdict,
-    pass: uiResult.pass || 0,
-    fail: uiResult.fail || 0,
-    skipped: uiResult.skipped ? 1 : 0,
-    durationMs: uiResult.durationMs || 0,
+      return runUiSweep({ config, projectDir, runId, sliceRef, now, env, importFn: uiImportFnSafe });
+    },
   });
 
-  // ── Contract scanner (TEMPER-03 Slice 03.2) ──
-  // Cross-stack scanner — validates live API against OpenAPI / GraphQL
-  // specs. Loaded lazily so missing js-yaml doesn't affect the other
-  // scanners. Modeled exactly on the UI phase above.
-  emit(hub, "tempering-run-scanner-started", { correlationId: corr, scanner: "contract", stack });
-
-  let contractResult;
-  try {
-    const priorBudgetExceeded = unitResult.verdict === "budget-exceeded"
-      || integrationResult.verdict === "budget-exceeded"
-      || uiResult.verdict === "budget-exceeded";
-    if (priorBudgetExceeded) {
-      contractResult = {
-        scanner: "contract",
-        sliceRef,
-        startedAt: new Date(now()).toISOString(),
-        completedAt: new Date(now()).toISOString(),
-        skipped: true,
-        reason: "prior-budget-exceeded",
-        verdict: "skipped",
-        pass: 0, fail: 0,
-        durationMs: 0,
-      };
-    } else if (contractScannerImpl) {
-      contractResult = await contractScannerImpl({
-        config, projectDir, runId, sliceRef, now, env, importFn,
-      });
-    } else {
+  const contractResult = await _runCrossStackScannerStep({
+    ...stepCommon,
+    name: "contract",
+    priorScanners: [unitResult, integrationResult, uiResult],
+    invokeInjected: _maybeInvoke(contractScannerImpl, { config, projectDir, runId, sliceRef, now, env, importFn }),
+    invokeDefault: async () => {
       const { runContractScan } = await import("./scanners/contract.mjs");
-      contractResult = await runContractScan({
-        config, projectDir, runId, sliceRef, now, env,
-        importFn: importFn || ((spec) => import(spec)),
-      });
-    }
-  } catch (err) {
-    contractResult = {
-      scanner: "contract",
-      sliceRef,
-      startedAt: new Date(now()).toISOString(),
-      completedAt: new Date(now()).toISOString(),
-      skipped: true,
-      reason: `scanner-load-failed:${err.message || err}`,
-      verdict: "skipped",
-      pass: 0, fail: 0,
-      durationMs: 0,
-    };
-  }
-
-  emit(hub, "tempering-run-scanner-completed", {
-    correlationId: corr,
-    scanner: "contract",
-    stack,
-    verdict: contractResult.verdict,
-    pass: contractResult.pass || 0,
-    fail: contractResult.fail || 0,
-    skipped: contractResult.skipped ? 1 : 0,
-    durationMs: contractResult.durationMs || 0,
+      return runContractScan({ config, projectDir, runId, sliceRef, now, env, importFn: importFnSafe });
+    },
   });
 
-  // ── Visual-diff scanner (TEMPER-04 Slice 04.1) ──
-  // Cross-stack scanner — pixel-diffs screenshots against baselines.
-  // Loaded lazily so missing pixelmatch/pngjs doesn't affect other scanners.
-  emit(hub, "tempering-run-scanner-started", { correlationId: corr, scanner: "visual-diff", stack });
-
-  let visualDiffResult;
-  try {
-    const priorBudgetExceeded = unitResult.verdict === "budget-exceeded"
-      || integrationResult.verdict === "budget-exceeded"
-      || uiResult.verdict === "budget-exceeded"
-      || contractResult.verdict === "budget-exceeded";
-    const visualDiffEnabled = config.scanners?.["visual-diff"] !== false
-      && config.visualAnalyzer?.enabled !== false;
-    if (priorBudgetExceeded) {
-      visualDiffResult = {
-        scanner: "visual-diff",
-        sliceRef,
-        startedAt: new Date(now()).toISOString(),
-        completedAt: new Date(now()).toISOString(),
-        skipped: true,
-        reason: "prior-budget-exceeded",
-        verdict: "skipped",
-        pass: 0, fail: 0,
-        durationMs: 0,
-      };
-    } else if (!visualDiffEnabled) {
-      visualDiffResult = {
-        scanner: "visual-diff",
-        sliceRef,
-        startedAt: new Date(now()).toISOString(),
-        completedAt: new Date(now()).toISOString(),
-        skipped: true,
-        reason: "scanner-disabled",
-        verdict: "skipped",
-        pass: 0, fail: 0,
-        durationMs: 0,
-      };
-    } else if (visualDiffScannerImpl) {
-      visualDiffResult = await visualDiffScannerImpl({
-        config, projectDir, runId, sliceRef, now, env, hub, captureMemory, spawnWorker,
-      });
-    } else {
+  const visualDiffEnabled = config.scanners?.["visual-diff"] !== false
+    && config.visualAnalyzer?.enabled !== false;
+  const visualDiffResult = await _runCrossStackScannerStep({
+    ...stepCommon,
+    name: "visual-diff",
+    priorScanners: [unitResult, integrationResult, uiResult, contractResult],
+    enabled: visualDiffEnabled,
+    invokeInjected: _maybeInvoke(visualDiffScannerImpl, { config, projectDir, runId, sliceRef, now, env, hub, captureMemory, spawnWorker }),
+    invokeDefault: async () => {
       const { runVisualDiffScan } = await import("./scanners/visual-diff.mjs");
-      visualDiffResult = await runVisualDiffScan({
-        config, projectDir, runId, sliceRef, now, env, hub, captureMemory, spawnWorker,
-      });
-    }
-  } catch (err) {
-    visualDiffResult = {
-      scanner: "visual-diff",
-      sliceRef,
-      startedAt: new Date(now()).toISOString(),
-      completedAt: new Date(now()).toISOString(),
-      skipped: true,
-      reason: `scanner-load-failed:${err.message || err}`,
-      verdict: "skipped",
-      pass: 0, fail: 0,
-      durationMs: 0,
-    };
-  }
-
-  emit(hub, "tempering-run-scanner-completed", {
-    correlationId: corr,
-    scanner: "visual-diff",
-    stack,
-    verdict: visualDiffResult.verdict,
-    pass: visualDiffResult.pass || 0,
-    fail: visualDiffResult.fail || 0,
-    skipped: visualDiffResult.skipped ? 1 : 0,
-    durationMs: visualDiffResult.durationMs || 0,
+      return runVisualDiffScan({ config, projectDir, runId, sliceRef, now, env, hub, captureMemory, spawnWorker });
+    },
   });
 
-  // ── Flakiness scanner (TEMPER-05 Slice 05.1) ──
-  // Cross-stack scanner — analyzes run history for flaky tests.
-  emit(hub, "tempering-run-scanner-started", { correlationId: corr, scanner: "flakiness", stack });
-
-  let flakinessResult;
-  try {
-    const priorBudgetExceeded = unitResult.verdict === "budget-exceeded"
-      || integrationResult.verdict === "budget-exceeded"
-      || uiResult.verdict === "budget-exceeded"
-      || contractResult.verdict === "budget-exceeded"
-      || visualDiffResult.verdict === "budget-exceeded";
-    if (priorBudgetExceeded) {
-      flakinessResult = {
-        scanner: "flakiness",
-        sliceRef,
-        startedAt: new Date(now()).toISOString(),
-        completedAt: new Date(now()).toISOString(),
-        skipped: true,
-        reason: "prior-budget-exceeded",
-        verdict: "skipped",
-        pass: 0, fail: 0,
-        durationMs: 0,
-      };
-    } else if (flakinessScannerImpl) {
-      flakinessResult = await flakinessScannerImpl({
-        config, projectDir, runId, sliceRef, now, env, hub, captureMemory,
-      });
-    } else {
+  const flakinessResult = await _runCrossStackScannerStep({
+    ...stepCommon,
+    name: "flakiness",
+    priorScanners: [unitResult, integrationResult, uiResult, contractResult, visualDiffResult],
+    invokeInjected: _maybeInvoke(flakinessScannerImpl, { config, projectDir, runId, sliceRef, now, env, hub, captureMemory }),
+    invokeDefault: async () => {
       const { runFlakinessScan } = await import("./scanners/flakiness.mjs");
-      flakinessResult = await runFlakinessScan({
-        config, projectDir, runId, sliceRef, now, env, hub, captureMemory,
-      });
-    }
-  } catch (err) {
-    flakinessResult = {
-      scanner: "flakiness",
-      sliceRef,
-      startedAt: new Date(now()).toISOString(),
-      completedAt: new Date(now()).toISOString(),
-      skipped: true,
-      reason: `scanner-load-failed:${err.message || err}`,
-      verdict: "skipped",
-      pass: 0, fail: 0,
-      durationMs: 0,
-    };
-  }
-
-  emit(hub, "tempering-run-scanner-completed", {
-    correlationId: corr,
-    scanner: "flakiness",
-    stack,
-    verdict: flakinessResult.verdict,
-    pass: flakinessResult.pass || 0,
-    fail: flakinessResult.fail || 0,
-    skipped: flakinessResult.skipped ? 1 : 0,
-    durationMs: flakinessResult.durationMs || 0,
+      return runFlakinessScan({ config, projectDir, runId, sliceRef, now, env, hub, captureMemory });
+    },
   });
 
-  // ── Performance Budget scanner (TEMPER-05 Slice 05.1) ──
-  // Cross-stack scanner — compares p95 latencies against baselines.
-  emit(hub, "tempering-run-scanner-started", { correlationId: corr, scanner: "performance-budget", stack });
-
-  let perfBudgetResult;
-  try {
-    const priorBudgetExceeded = unitResult.verdict === "budget-exceeded"
-      || integrationResult.verdict === "budget-exceeded"
-      || uiResult.verdict === "budget-exceeded"
-      || contractResult.verdict === "budget-exceeded"
-      || visualDiffResult.verdict === "budget-exceeded"
-      || flakinessResult.verdict === "budget-exceeded";
-    if (priorBudgetExceeded) {
-      perfBudgetResult = {
-        scanner: "performance-budget",
-        sliceRef,
-        startedAt: new Date(now()).toISOString(),
-        completedAt: new Date(now()).toISOString(),
-        skipped: true,
-        reason: "prior-budget-exceeded",
-        verdict: "skipped",
-        pass: 0, fail: 0,
-        durationMs: 0,
-      };
-    } else if (perfBudgetScannerImpl) {
-      perfBudgetResult = await perfBudgetScannerImpl({
-        config, projectDir, runId, sliceRef, now, env, hub, captureMemory,
-        importFn: importFn || ((spec) => import(spec)),
-      });
-    } else {
+  const perfBudgetResult = await _runCrossStackScannerStep({
+    ...stepCommon,
+    name: "performance-budget",
+    priorScanners: [unitResult, integrationResult, uiResult, contractResult, visualDiffResult, flakinessResult],
+    invokeInjected: _maybeInvoke(perfBudgetScannerImpl, { config, projectDir, runId, sliceRef, now, env, hub, captureMemory, importFn: importFnSafe }),
+    invokeDefault: async () => {
       const { runPerformanceBudgetScan } = await import("./scanners/performance-budget.mjs");
-      perfBudgetResult = await runPerformanceBudgetScan({
-        config, projectDir, runId, sliceRef, now, env, hub, captureMemory,
-        importFn: importFn || ((spec) => import(spec)),
-      });
-    }
-  } catch (err) {
-    perfBudgetResult = {
-      scanner: "performance-budget",
-      sliceRef,
-      startedAt: new Date(now()).toISOString(),
-      completedAt: new Date(now()).toISOString(),
-      skipped: true,
-      reason: `scanner-load-failed:${err.message || err}`,
-      verdict: "skipped",
-      pass: 0, fail: 0,
-      durationMs: 0,
-    };
-  }
-
-  emit(hub, "tempering-run-scanner-completed", {
-    correlationId: corr,
-    scanner: "performance-budget",
-    stack,
-    verdict: perfBudgetResult.verdict,
-    pass: perfBudgetResult.pass || 0,
-    fail: perfBudgetResult.fail || 0,
-    skipped: perfBudgetResult.skipped ? 1 : 0,
-    durationMs: perfBudgetResult.durationMs || 0,
+      return runPerformanceBudgetScan({ config, projectDir, runId, sliceRef, now, env, hub, captureMemory, importFn: importFnSafe });
+    },
   });
 
-  // ── Load / Stress scanner (TEMPER-05 Slice 05.1) ──
-  // Cross-stack scanner — drives HTTP load via autocannon.
-  emit(hub, "tempering-run-scanner-started", { correlationId: corr, scanner: "load-stress", stack });
-
-  let loadStressResult;
-  try {
-    const priorBudgetExceeded = unitResult.verdict === "budget-exceeded"
-      || integrationResult.verdict === "budget-exceeded"
-      || uiResult.verdict === "budget-exceeded"
-      || contractResult.verdict === "budget-exceeded"
-      || visualDiffResult.verdict === "budget-exceeded"
-      || flakinessResult.verdict === "budget-exceeded"
-      || perfBudgetResult.verdict === "budget-exceeded";
-    if (priorBudgetExceeded) {
-      loadStressResult = {
-        scanner: "load-stress",
-        sliceRef,
-        startedAt: new Date(now()).toISOString(),
-        completedAt: new Date(now()).toISOString(),
-        skipped: true,
-        reason: "prior-budget-exceeded",
-        verdict: "skipped",
-        pass: 0, fail: 0,
-        durationMs: 0,
-      };
-    } else if (loadStressScannerImpl) {
-      loadStressResult = await loadStressScannerImpl({
-        config, projectDir, runId, sliceRef, now, env, hub,
-        importFn: importFn || ((spec) => import(spec)),
-      });
-    } else {
+  const loadStressResult = await _runCrossStackScannerStep({
+    ...stepCommon,
+    name: "load-stress",
+    priorScanners: [unitResult, integrationResult, uiResult, contractResult, visualDiffResult, flakinessResult, perfBudgetResult],
+    invokeInjected: _maybeInvoke(loadStressScannerImpl, { config, projectDir, runId, sliceRef, now, env, hub, importFn: importFnSafe }),
+    invokeDefault: async () => {
       const { runLoadStressScan } = await import("./scanners/load-stress.mjs");
-      loadStressResult = await runLoadStressScan({
-        config, projectDir, runId, sliceRef, now, env, hub,
-        importFn: importFn || ((spec) => import(spec)),
-      });
-    }
-  } catch (err) {
-    loadStressResult = {
-      scanner: "load-stress",
-      sliceRef,
-      startedAt: new Date(now()).toISOString(),
-      completedAt: new Date(now()).toISOString(),
-      skipped: true,
-      reason: `scanner-load-failed:${err.message || err}`,
-      verdict: "skipped",
-      pass: 0, fail: 0,
-      durationMs: 0,
-    };
-  }
-
-  emit(hub, "tempering-run-scanner-completed", {
-    correlationId: corr,
-    scanner: "load-stress",
-    stack,
-    verdict: loadStressResult.verdict,
-    pass: loadStressResult.pass || 0,
-    fail: loadStressResult.fail || 0,
-    skipped: loadStressResult.skipped ? 1 : 0,
-    durationMs: loadStressResult.durationMs || 0,
+      return runLoadStressScan({ config, projectDir, runId, sliceRef, now, env, hub, importFn: importFnSafe });
+    },
   });
 
-  // ── Mutation scanner (TEMPER-05 Slice 05.2) ──
-  // 9th scanner — drives mutation testing via stack adapter.
-  emit(hub, "tempering-run-scanner-started", { correlationId: corr, scanner: "mutation", stack });
-
-  let mutationResult;
-  try {
-    const priorBudgetExceeded = unitResult.verdict === "budget-exceeded"
-      || integrationResult.verdict === "budget-exceeded"
-      || uiResult.verdict === "budget-exceeded"
-      || contractResult.verdict === "budget-exceeded"
-      || visualDiffResult.verdict === "budget-exceeded"
-      || flakinessResult.verdict === "budget-exceeded"
-      || perfBudgetResult.verdict === "budget-exceeded"
-      || loadStressResult.verdict === "budget-exceeded";
-    if (priorBudgetExceeded) {
-      mutationResult = {
-        scanner: "mutation",
-        sliceRef,
-        startedAt: new Date(now()).toISOString(),
-        completedAt: new Date(now()).toISOString(),
-        skipped: true,
-        reason: "prior-budget-exceeded",
-        verdict: "skipped",
-        pass: 0, fail: 0,
-        durationMs: 0,
-      };
-    } else if (mutationScannerImpl) {
-      mutationResult = await mutationScannerImpl({
-        config, projectDir, runId, sliceRef, now, env, hub, captureMemory,
-      });
-    } else {
+  const mutationResult = await _runCrossStackScannerStep({
+    ...stepCommon,
+    name: "mutation",
+    priorScanners: [unitResult, integrationResult, uiResult, contractResult, visualDiffResult, flakinessResult, perfBudgetResult, loadStressResult],
+    invokeInjected: _maybeInvoke(mutationScannerImpl, { config, projectDir, runId, sliceRef, now, env, hub, captureMemory }),
+    invokeDefault: async () => {
       const { runMutationScan } = await import("./scanners/mutation.mjs");
-      mutationResult = await runMutationScan({
-        config, projectDir, runId, sliceRef, now, env, hub, captureMemory,
-      });
-    }
-  } catch (err) {
-    mutationResult = {
-      scanner: "mutation",
-      sliceRef,
-      startedAt: new Date(now()).toISOString(),
-      completedAt: new Date(now()).toISOString(),
-      skipped: true,
-      reason: `scanner-load-failed:${err.message || err}`,
-      verdict: "skipped",
-      pass: 0, fail: 0,
-      durationMs: 0,
-    };
-  }
-
-  emit(hub, "tempering-run-scanner-completed", {
-    correlationId: corr,
-    scanner: "mutation",
-    stack,
-    verdict: mutationResult.verdict,
-    pass: mutationResult.pass || 0,
-    fail: mutationResult.fail || 0,
-    skipped: mutationResult.skipped ? 1 : 0,
-    durationMs: mutationResult.durationMs || 0,
+      return runMutationScan({ config, projectDir, runId, sliceRef, now, env, hub, captureMemory });
+    },
   });
 
-  // ── Content-audit scanner (meta-bug #102) ──
-  // Cross-stack scanner — probes a running app's routes for HTTP
-  // status, placeholders, and empty-shell SPA markers. Skips cleanly
-  // when no base URL is configured so CI on bare repos stays green.
-  emit(hub, "tempering-run-scanner-started", { correlationId: corr, scanner: "content-audit", stack });
-
-  let contentAuditResult;
-  try {
-    const priorBudgetExceeded = unitResult.verdict === "budget-exceeded"
-      || integrationResult.verdict === "budget-exceeded"
-      || uiResult.verdict === "budget-exceeded"
-      || contractResult.verdict === "budget-exceeded"
-      || visualDiffResult.verdict === "budget-exceeded"
-      || flakinessResult.verdict === "budget-exceeded"
-      || perfBudgetResult.verdict === "budget-exceeded"
-      || loadStressResult.verdict === "budget-exceeded"
-      || mutationResult.verdict === "budget-exceeded";
-    if (priorBudgetExceeded) {
-      contentAuditResult = {
-        scanner: "content-audit",
-        sliceRef,
-        startedAt: new Date(now()).toISOString(),
-        completedAt: new Date(now()).toISOString(),
-        skipped: true,
-        reason: "prior-budget-exceeded",
-        verdict: "skipped",
-        pass: 0, fail: 0,
-        durationMs: 0,
-      };
-    } else if (contentAuditScannerImpl) {
-      contentAuditResult = await contentAuditScannerImpl({
-        config, projectDir, runId, sliceRef, now, env,
-      });
-    } else {
+  const contentAuditResult = await _runCrossStackScannerStep({
+    ...stepCommon,
+    name: "content-audit",
+    priorScanners: [unitResult, integrationResult, uiResult, contractResult, visualDiffResult, flakinessResult, perfBudgetResult, loadStressResult, mutationResult],
+    invokeInjected: _maybeInvoke(contentAuditScannerImpl, { config, projectDir, runId, sliceRef, now, env }),
+    invokeDefault: async () => {
       const { runContentAudit } = await import("./scanners/content-audit.mjs");
-      contentAuditResult = await runContentAudit({
-        config, projectDir, runId, sliceRef, now, env,
-      });
+      return runContentAudit({ config, projectDir, runId, sliceRef, now, env });
+    },
+  });
+
+  return [uiResult, contractResult, visualDiffResult, flakinessResult, perfBudgetResult, loadStressResult, mutationResult, contentAuditResult];
+}
+
+function _maybeInvoke(impl, args) {
+  if (!impl) return null;
+  return () => impl(args);
+}
+
+async function _maybeRunObjectivePost(opts) {
+  const { objective, objectiveBaseline, objectiveSpawn, spawnFn, projectDir } = opts;
+  const enabled = objective && objective.command && typeof objective.command === "string" && objectiveBaseline !== null;
+  if (!enabled) return { objectiveResult: null, failed: false };
+  return _runObjectivePost({
+    objective, baseline: objectiveBaseline, objectiveSpawn, spawnFn, projectDir,
+  });
+}
+
+async function _maybeFetchChangedFiles({ config, lastGreenSha, projectDir, spawnFn }) {
+  if (!(config.execution && config.execution.regressionFirst && lastGreenSha)) return [];
+  return pickChangedFiles({ cwd: projectDir, lastGreenSha, gitSpawn: spawnFn });
+}
+
+// ─── Tempering run sub-helpers (Phase ESLINT-D1/D2 — extracted) ───────
+
+function _crossStackSkippedResult(name, sliceRef, now, reason) {
+  const ts = new Date(now()).toISOString();
+  return {
+    scanner: name,
+    sliceRef,
+    startedAt: ts,
+    completedAt: ts,
+    skipped: true,
+    reason,
+    verdict: "skipped",
+    pass: 0,
+    fail: 0,
+    durationMs: 0,
+  };
+}
+
+async function _runCrossStackScannerStep(opts) {
+  const {
+    name,
+    sliceRef,
+    now,
+    hub,
+    corr,
+    stack,
+    priorScanners,
+    enabled = true,
+    disabledReason = "scanner-disabled",
+    invokeInjected = null,
+    invokeDefault,
+  } = opts;
+
+  emit(hub, "tempering-run-scanner-started", { correlationId: corr, scanner: name, stack });
+
+  let result;
+  const priorBudgetExceeded = priorScanners.some((s) => s && s.verdict === "budget-exceeded");
+  try {
+    if (priorBudgetExceeded) {
+      result = _crossStackSkippedResult(name, sliceRef, now, "prior-budget-exceeded");
+    } else if (!enabled) {
+      result = _crossStackSkippedResult(name, sliceRef, now, disabledReason);
+    } else if (invokeInjected) {
+      result = await invokeInjected();
+    } else {
+      result = await invokeDefault();
     }
   } catch (err) {
-    contentAuditResult = {
-      scanner: "content-audit",
-      sliceRef,
-      startedAt: new Date(now()).toISOString(),
-      completedAt: new Date(now()).toISOString(),
-      skipped: true,
-      reason: `scanner-load-failed:${err.message || err}`,
-      verdict: "skipped",
-      pass: 0, fail: 0,
-      durationMs: 0,
-    };
+    result = _crossStackSkippedResult(name, sliceRef, now, `scanner-load-failed:${err.message || err}`);
   }
 
   emit(hub, "tempering-run-scanner-completed", {
     correlationId: corr,
-    scanner: "content-audit",
+    scanner: name,
     stack,
-    verdict: contentAuditResult.verdict,
-    pass: contentAuditResult.pass || 0,
-    fail: contentAuditResult.fail || 0,
-    skipped: contentAuditResult.skipped ? 1 : 0,
-    durationMs: contentAuditResult.durationMs || 0,
+    verdict: result.verdict,
+    pass: result.pass || 0,
+    fail: result.fail || 0,
+    skipped: result.skipped ? 1 : 0,
+    durationMs: result.durationMs || 0,
   });
 
-  // Overall verdict: worst of the scanner verdicts
-  const scanners = [unitResult, integrationResult, uiResult, contractResult, visualDiffResult, flakinessResult, perfBudgetResult, loadStressResult, mutationResult, contentAuditResult];
-  let overallVerdict = deriveOverallVerdict(scanners);
+  return result;
+}
 
-  // ── A7 Objective — compare post-scanner metric against baseline ──
-  // Run the objective command again after scanners complete, compare vs
-  // baseline. Worker never sees the baseline number.
-  let objectiveResult = null;
-  if (objective && objective.command && typeof objective.command === "string" && objectiveBaseline !== null) {
-    const acceptIf = (objective.acceptIf === "less") ? "less" : "greater";
-    const objSpawn = objectiveSpawn || spawnFn;
-    const cmdParts = objective.command.trim().split(/\s+/);
-    const postProc = await runSubprocess(cmdParts, {
-      cwd: projectDir,
-      budgetMs: 30000,
-      spawn: objSpawn,
-    });
-    if (postProc.exitCode !== 0 || postProc.timedOut) {
-      objectiveResult = {
+async function _runObjectiveBaseline({ objective, objectiveSpawn, spawnFn, projectDir, corr }) {
+  if (!objective || !objective.command || typeof objective.command !== "string") {
+    return { ok: true, baseline: null };
+  }
+  const objSpawn = objectiveSpawn || spawnFn;
+  const cmdParts = objective.command.trim().split(/\s+/);
+  const baselineProc = await runSubprocess(cmdParts, {
+    cwd: projectDir,
+    budgetMs: 30000,
+    spawn: objSpawn,
+  });
+  if (baselineProc.exitCode !== 0 || baselineProc.timedOut) {
+    return {
+      ok: false,
+      response: {
+        ok: false,
+        error: "objective-baseline-failed",
+        code: "objective-baseline-failed",
+        correlationId: corr,
+        objective: {
+          accepted: false,
+          blocked: true,
+          reason: baselineProc.timedOut ? "objective-baseline-timed-out" : "objective-baseline-non-zero-exit",
+        },
+      },
+    };
+  }
+  const baselineNum = parseFloat(baselineProc.stdout.trim());
+  if (!isFinite(baselineNum)) {
+    return {
+      ok: false,
+      response: {
+        ok: false,
+        error: "objective-baseline-non-numeric",
+        code: "objective-baseline-non-numeric",
+        correlationId: corr,
+        objective: {
+          accepted: false,
+          blocked: true,
+          reason: "objective-baseline-non-numeric",
+        },
+      },
+    };
+  }
+  return { ok: true, baseline: baselineNum };
+}
+
+async function _runObjectivePost({ objective, baseline, objectiveSpawn, spawnFn, projectDir }) {
+  const acceptIf = (objective.acceptIf === "less") ? "less" : "greater";
+  const objSpawn = objectiveSpawn || spawnFn;
+  const cmdParts = objective.command.trim().split(/\s+/);
+  const postProc = await runSubprocess(cmdParts, {
+    cwd: projectDir,
+    budgetMs: 30000,
+    spawn: objSpawn,
+  });
+  if (postProc.exitCode !== 0 || postProc.timedOut) {
+    return {
+      objectiveResult: {
         accepted: false,
         blocked: true,
         reason: postProc.timedOut ? "objective-post-timed-out" : "objective-post-non-zero-exit",
         acceptIf,
-      };
-      overallVerdict = "fail";
-    } else {
-      const postNum = parseFloat(postProc.stdout.trim());
-      if (!isFinite(postNum)) {
-        objectiveResult = {
-          accepted: false,
-          blocked: true,
-          reason: "objective-post-non-numeric",
-          acceptIf,
-        };
-        overallVerdict = "fail";
-      } else {
-        const accepted = acceptIf === "greater" ? postNum > objectiveBaseline : postNum < objectiveBaseline;
-        objectiveResult = {
-          accepted,
-          blocked: !accepted,
-          reason: accepted ? "objective-met" : "objective-not-met",
-          acceptIf,
-        };
-        if (!accepted) overallVerdict = "fail";
-      }
-    }
+      },
+      failed: true,
+    };
   }
+  const postNum = parseFloat(postProc.stdout.trim());
+  if (!isFinite(postNum)) {
+    return {
+      objectiveResult: {
+        accepted: false,
+        blocked: true,
+        reason: "objective-post-non-numeric",
+        acceptIf,
+      },
+      failed: true,
+    };
+  }
+  const accepted = acceptIf === "greater" ? postNum > baseline : postNum < baseline;
+  return {
+    objectiveResult: {
+      accepted,
+      blocked: !accepted,
+      reason: accepted ? "objective-met" : "objective-not-met",
+      acceptIf,
+    },
+    failed: !accepted,
+  };
+}
 
-  // ── TEMPER-06 Slice 06.1 — Bug registration hook ──
-  // Iterate scanner failures, classify, and register bugs.
-  // DI: classifyFn/registerBugFn let tests bypass real classifier/registry.
+async function _registerScannerBugs(opts) {
+  const {
+    scanners, projectDir, corr, sliceRef, hub, captureMemory, config, callModel,
+    classifyFn, registerBugFn,
+  } = opts;
   const _classify = classifyFn || realClassify;
   const _registerBug = registerBugFn || realRegisterBug;
   const registeredBugs = [];
@@ -1153,7 +689,7 @@ export async function runTemperingRun(opts = {}) {
         const classification = await _classify({
           scanner: scannerResult.scanner,
           evidence: failure.evidence,
-          flakinessData: null,  // loadFlakinessData called by higher-level caller when needed
+          flakinessData: null,
           callModel,
           config,
         });
@@ -1182,67 +718,174 @@ export async function runTemperingRun(opts = {}) {
     }
   }
 
-  const completedAt = new Date(now()).toISOString();
+  return { registeredBugs, infraFixes };
+}
 
-  const runRecord = {
-    runId,
-    correlationId: corr,
-    startedAt,
-    completedAt,
-    stack,
-    sliceRef,
-    changedFilesCount: changedFiles.length,
-    lastGreenSha,
-    scanners,
-    verdict: overallVerdict,
-    infraFixes,
-    registeredBugs,
-    ...(objectiveResult !== null ? { objective: objectiveResult } : {}),
-    phase: "TEMPER-06",
-    slice: "06.1",
-  };
-
-  // Persist — best-effort
-  const outPath = resolve(temperingDir, `${runId}.json`);
+function _persistRunRecord(runRecord, temperingDir, outPath) {
   try {
     if (!existsSync(temperingDir)) mkdirSync(temperingDir, { recursive: true });
     writeFileSync(outPath, JSON.stringify(runRecord, null, 2) + "\n", "utf-8");
   } catch { /* best-effort */ }
+}
 
-  // Compact completion event — primitives only, mirrors tempering-scan-completed.
-  // `pass`/`fail`/`skipped` are cross-scanner totals so dashboards can
-  // render a single summary chip per run without loading the record.
-  const totals = scanners.reduce((acc, s) => ({
+/**
+ * forge_tempering_run — execute enabled scanners, write a run record,
+ * emit hub events per scanner. Slice 02.1 runs the **unit** scanner
+ * only; Slice 02.2 adds integration; later phases add UI/visual/load.
+ *
+ * Writes `.forge/tempering/run-<ts>.json`. Never throws.
+ *
+ * @param {object} opts
+ * @param {string} opts.projectDir
+ * @param {object} [opts.hub]
+ * @param {string} [opts.correlationId]
+ * @param {{plan:string, slice:string}} [opts.sliceRef]
+ * @param {string|null} [opts.lastGreenSha]   - for regression-first ordering
+ * @param {Function} [opts.spawn]
+ * @param {Function} [opts.importFn]          - for loadAdapter injection
+ * @param {object}   [opts.adapter]           - direct override (tests)
+ * @param {Function} [opts.now]
+ * @returns {Promise<object>}
+ */
+const _RUN_OPTS_DEFAULTS = Object.freeze({
+  projectDir: undefined,
+  hub: null,
+  correlationId: null,
+  sliceRef: null,
+  lastGreenSha: null,
+  importFn: undefined,
+  now: undefined,
+  uiImportFn: null,
+  uiScannerImpl: null,
+  contractScannerImpl: null,
+  visualDiffScannerImpl: null,
+  captureMemory: null,
+  flakinessScannerImpl: null,
+  perfBudgetScannerImpl: null,
+  loadStressScannerImpl: null,
+  mutationScannerImpl: null,
+  contentAuditScannerImpl: null,
+  classifyFn: null,
+  registerBugFn: null,
+  callModel: null,
+  spawnWorker: null,
+  objective: null,
+  objectiveSpawn: null,
+});
+
+function _normalizeRunOpts(opts) {
+  const merged = { ..._RUN_OPTS_DEFAULTS, ...opts };
+  merged.spawnFn = opts.spawn || realSpawn;
+  merged.adapterOverride = opts.adapter || null;
+  merged.now = opts.now || (() => Date.now());
+  merged.env = opts.env || process.env;
+  return merged;
+}
+
+function _sumScannerTotals(scanners) {
+  return scanners.reduce((acc, s) => ({
     pass: acc.pass + (s.pass || 0),
     fail: acc.fail + (s.fail || 0),
     skipped: acc.skipped + (s.skipped || 0),
     durationMs: acc.durationMs + (s.durationMs || 0),
   }), { pass: 0, fail: 0, skipped: 0, durationMs: 0 });
+}
+
+export async function runTemperingRun(opts = {}) {
+  const o = _normalizeRunOpts(opts);
+  const {
+    projectDir, hub, sliceRef, lastGreenSha, spawnFn, importFn, now,
+    uiImportFn, captureMemory, env, spawnWorker, objective, objectiveSpawn,
+  } = o;
+
+  const corr = o.correlationId || `temper-run-${randomUUID()}`;
+  const startedAt = new Date(now()).toISOString();
+  const runId = `run-${startedAt.replace(/[:.]/g, "-")}`;
+
+  if (!projectDir || typeof projectDir !== "string") {
+    return { ok: false, error: "projectDir required", code: "missing-projectDir", correlationId: corr };
+  }
+
+  const { dir: temperingDir, configWritten } = ensureTemperingDirs(projectDir);
+  const config = readTemperingConfig(projectDir);
+
+  if (config.enabled === false) {
+    emit(hub, "tempering-run-skipped", { correlationId: corr, reason: "disabled" });
+    return { ok: true, skipped: true, reason: "tempering-disabled", correlationId: corr, configWritten };
+  }
+
+  const stack = detectStack(projectDir);
+  emit(hub, "tempering-run-started", { correlationId: corr, projectDir, stack, sliceRef, configWritten });
+
+  const adapter = o.adapterOverride || await loadAdapter(stack, { importFn });
+  const changedFiles = await _maybeFetchChangedFiles({ config, lastGreenSha, projectDir, spawnFn });
+
+  const baselineGate = await _runObjectiveBaseline({ objective, objectiveSpawn, spawnFn, projectDir, corr });
+  if (!baselineGate.ok) return baselineGate.response;
+  const objectiveBaseline = baselineGate.baseline;
+
+  const unitResult = await _runUnitScanner({
+    config, stack, adapter, sliceRef, projectDir, spawnFn, now, hub, corr,
+  });
+  const integrationResult = await _runIntegrationScanner({
+    unitResult, config, stack, adapter, sliceRef, projectDir, spawnFn, now, hub, corr,
+  });
+
+  const crossStack = await _runCrossStackScanners({
+    unitResult, integrationResult,
+    config, projectDir, runId, sliceRef, now, hub, corr, stack, env,
+    importFn, uiImportFn, captureMemory, spawnWorker,
+    uiScannerImpl: o.uiScannerImpl,
+    contractScannerImpl: o.contractScannerImpl,
+    visualDiffScannerImpl: o.visualDiffScannerImpl,
+    flakinessScannerImpl: o.flakinessScannerImpl,
+    perfBudgetScannerImpl: o.perfBudgetScannerImpl,
+    loadStressScannerImpl: o.loadStressScannerImpl,
+    mutationScannerImpl: o.mutationScannerImpl,
+    contentAuditScannerImpl: o.contentAuditScannerImpl,
+  });
+
+  const scanners = [unitResult, integrationResult, ...crossStack];
+  let overallVerdict = deriveOverallVerdict(scanners);
+
+  const postOut = await _maybeRunObjectivePost({
+    objective, objectiveBaseline, objectiveSpawn, spawnFn, projectDir,
+  });
+  const objectiveResult = postOut.objectiveResult;
+  if (postOut.failed) overallVerdict = "fail";
+
+  const { registeredBugs, infraFixes } = await _registerScannerBugs({
+    scanners, projectDir, corr, sliceRef, hub, captureMemory, config, callModel: o.callModel,
+    classifyFn: o.classifyFn, registerBugFn: o.registerBugFn,
+  });
+
+  const completedAt = new Date(now()).toISOString();
+  const objectiveFields = objectiveResult !== null ? { objective: objectiveResult } : {};
+  const runRecord = {
+    runId, correlationId: corr, startedAt, completedAt, stack, sliceRef,
+    changedFilesCount: changedFiles.length, lastGreenSha,
+    scanners, verdict: overallVerdict, infraFixes, registeredBugs,
+    ...objectiveFields,
+    phase: "TEMPER-06", slice: "06.1",
+  };
+
+  const outPath = resolve(temperingDir, `${runId}.json`);
+  _persistRunRecord(runRecord, temperingDir, outPath);
+
+  const totals = _sumScannerTotals(scanners);
 
   emit(hub, "tempering-run-completed", {
-    correlationId: corr,
-    runId,
-    stack,
-    verdict: overallVerdict,
+    correlationId: corr, runId, stack, verdict: overallVerdict,
     scannerCount: scanners.length,
-    pass: totals.pass,
-    fail: totals.fail,
-    skipped: totals.skipped,
-    durationMs: totals.durationMs,
+    pass: totals.pass, fail: totals.fail, skipped: totals.skipped, durationMs: totals.durationMs,
     sliceRef,
   });
 
   return {
-    ok: true,
-    runId,
-    correlationId: corr,
-    stack,
-    verdict: overallVerdict,
-    scanners,
-    runRecordPath: outPath,
-    configWritten,
+    ok: true, runId, correlationId: corr, stack, verdict: overallVerdict,
+    scanners, runRecordPath: outPath, configWritten,
     changedFilesCount: changedFiles.length,
-    ...(objectiveResult !== null ? { objective: objectiveResult } : {}),
+    ...objectiveFields,
   };
 }
 
@@ -1286,93 +929,52 @@ const SCANNER_ENTRY_POINTS = {
  * @param {Function} [opts.scannerImpl] - DI override for tests
  * @returns {Promise<{ scanner: string, startedAt: string, completedAt: string, failures: number, findings: Array, raw: object }>}
  */
-export async function runSingleScanner(name, opts = {}) {
-  const {
-    cwd = process.cwd(),
-    testNameFilter = null,
-    timeoutMs = 120_000,
-    now = () => new Date(),
-    scannerImpl = null,
-  } = opts;
-
-  if (!name || !(name in SCANNER_IMPORT_MAP)) {
-    const err = new Error(`Scanner "${name}" is not registered`);
+async function _runSpawnBasedScanner({ name, cwd, timeoutMs, started, now }) {
+  const config = await readTemperingConfig(cwd);
+  const stack = detectStack(cwd);
+  const adapter = loadAdapter(stack);
+  if (!adapter) {
+    const err = new Error(`No adapter for stack "${stack}" — scanner "${name}" unavailable`);
+    err.code = "SCANNER_UNAVAILABLE";
+    throw err;
+  }
+  const cmd = name === "unit"
+    ? adapter.unitTestCommand(config, cwd)
+    : adapter.integrationTestCommand?.(config, cwd) ?? adapter.unitTestCommand(config, cwd);
+  if (!cmd) {
+    const err = new Error(`Adapter does not provide a ${name} command for stack "${stack}"`);
     err.code = "SCANNER_UNAVAILABLE";
     throw err;
   }
 
-  const started = now();
+  const result = await new Promise((resolve, reject) => {
+    const timer = setTimeout(() => {
+      try { child.kill("SIGTERM"); } catch { /* ignore */ }
+      setTimeout(() => { try { child.kill("SIGKILL"); } catch { /* ignore */ } }, KILL_GRACE_MS);
+      reject(Object.assign(new Error(`Scanner "${name}" timed out after ${timeoutMs}ms`), { code: "SCANNER_TIMEOUT" }));
+    }, timeoutMs);
 
-  // Allow DI override for tests
-  if (scannerImpl) {
-    const result = await scannerImpl({ cwd, filter: { testName: testNameFilter } });
-    const completed = now();
-    return {
-      scanner: name,
-      startedAt: started.toISOString(),
-      completedAt: completed.toISOString(),
-      failures: result.failures?.length ?? (result.fail ?? 0),
-      findings: result.findings ?? [],
-      raw: result,
-    };
-  }
+    let stdout = "", stderr = "";
+    const child = realSpawn(cmd.bin, cmd.args || [], { cwd, shell: true, env: { ...process.env, CI: "1" } });
+    child.stdout?.on("data", (d) => { stdout += d; });
+    child.stderr?.on("data", (d) => { stderr += d; });
+    child.on("close", (code) => { clearTimeout(timer); resolve({ code, stdout, stderr }); });
+    child.on("error", (err) => { clearTimeout(timer); reject(err); });
+  });
 
-  // Unit/integration scanners are spawn-based; re-run via a minimal
-  // adapter-driven approach matching runTemperingRun's inline logic.
-  if (name === "unit" || name === "integration") {
-    const config = await readTemperingConfig(cwd);
-    const stack = detectStack(cwd);
-    const adapter = loadAdapter(stack);
-    if (!adapter) {
-      const err = new Error(`No adapter for stack "${stack}" — scanner "${name}" unavailable`);
-      err.code = "SCANNER_UNAVAILABLE";
-      throw err;
-    }
-    const cmd = name === "unit"
-      ? adapter.unitTestCommand(config, cwd)
-      : adapter.integrationTestCommand?.(config, cwd) ?? adapter.unitTestCommand(config, cwd);
-    if (!cmd) {
-      const err = new Error(`Adapter does not provide a ${name} command for stack "${stack}"`);
-      err.code = "SCANNER_UNAVAILABLE";
-      throw err;
-    }
+  const completed = now();
+  return {
+    scanner: name,
+    startedAt: started.toISOString(),
+    completedAt: completed.toISOString(),
+    failures: result.code !== 0 ? 1 : 0,
+    findings: [],
+    raw: { exitCode: result.code, stdout: result.stdout.slice(0, 2000), stderr: result.stderr.slice(0, 2000) },
+  };
+}
 
-    const result = await new Promise((resolve, reject) => {
-      const timer = setTimeout(() => {
-        try { child.kill("SIGTERM"); } catch { /* ignore */ }
-        setTimeout(() => { try { child.kill("SIGKILL"); } catch { /* ignore */ } }, KILL_GRACE_MS);
-        reject(Object.assign(new Error(`Scanner "${name}" timed out after ${timeoutMs}ms`), { code: "SCANNER_TIMEOUT" }));
-      }, timeoutMs);
-
-      let stdout = "", stderr = "";
-      const child = realSpawn(cmd.bin, cmd.args || [], { cwd, shell: true, env: { ...process.env, CI: "1" } });
-      child.stdout?.on("data", (d) => { stdout += d; });
-      child.stderr?.on("data", (d) => { stderr += d; });
-      child.on("close", (code) => {
-        clearTimeout(timer);
-        resolve({ code, stdout, stderr });
-      });
-      child.on("error", (err) => {
-        clearTimeout(timer);
-        reject(err);
-      });
-    });
-
-    const completed = now();
-    const failures = result.code !== 0 ? 1 : 0;
-    return {
-      scanner: name,
-      startedAt: started.toISOString(),
-      completedAt: completed.toISOString(),
-      failures,
-      findings: [],
-      raw: { exitCode: result.code, stdout: result.stdout.slice(0, 2000), stderr: result.stderr.slice(0, 2000) },
-    };
-  }
-
-  // Dynamic import-based scanners
-  const modulePath = SCANNER_IMPORT_MAP[name];
-  const entryPoint = SCANNER_ENTRY_POINTS[name];
+async function _runImportBasedScanner(name, opts) {
+  const { modulePath, entryPoint, cwd, timeoutMs, started, now } = opts;
   const mod = await import(modulePath);
   const runFn = mod[entryPoint];
   if (typeof runFn !== "function") {
@@ -1399,6 +1001,45 @@ export async function runSingleScanner(name, opts = {}) {
     findings: result.findings ?? [],
     raw: result,
   };
+}
+
+export async function runSingleScanner(name, opts = {}) {
+  const {
+    cwd = process.cwd(),
+    testNameFilter = null,
+    timeoutMs = 120_000,
+    now = () => new Date(),
+    scannerImpl = null,
+  } = opts;
+
+  if (!name || !(name in SCANNER_IMPORT_MAP)) {
+    const err = new Error(`Scanner "${name}" is not registered`);
+    err.code = "SCANNER_UNAVAILABLE";
+    throw err;
+  }
+
+  const started = now();
+
+  if (scannerImpl) {
+    const result = await scannerImpl({ cwd, filter: { testName: testNameFilter } });
+    const completed = now();
+    return {
+      scanner: name,
+      startedAt: started.toISOString(),
+      completedAt: completed.toISOString(),
+      failures: result.failures?.length ?? (result.fail ?? 0),
+      findings: result.findings ?? [],
+      raw: result,
+    };
+  }
+
+  if (name === "unit" || name === "integration") {
+    return _runSpawnBasedScanner({ name: name, cwd: cwd, timeoutMs: timeoutMs, started: started, now: now });
+  }
+
+  const modulePath = SCANNER_IMPORT_MAP[name];
+  const entryPoint = SCANNER_ENTRY_POINTS[name];
+  return _runImportBasedScanner(name, { modulePath, entryPoint, cwd, timeoutMs, started, now });
 }
 
 /**

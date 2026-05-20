@@ -61,6 +61,10 @@ const state = {
     sources: ["hub-event", "run", "memory", "openbrain", "watch", "tempering", "bug", "incident", "forge-master"],
     window: "24h", autoRefresh: false, refreshTimer: null, lastError: null,
   },
+  // Phase-40 — Observer narrations (live feed from hub + brain recall)
+  observer: { narrations: [] },
+  // Phase-40 — Auditor auto-invoke latest result
+  auditor: { latest: null },
   // Phase FORGE-SHOP-02 Slice 02.2 — Review tab state.
   review: {
     items: [],
@@ -155,6 +159,24 @@ function switchGroup(group) {
     if (first) first.click();
   }
 }
+
+function activateTab(tabName) {
+  if (typeof tabName !== "string" || !tabName) return;
+  const group = tabName.startsWith("settings-")
+    ? "settings"
+    : tabName === "forge-master" || tabName.startsWith("forge-master")
+      ? "forge-master"
+      : tabName.startsWith("lg-")
+        ? "liveguard"
+        : tabName === "github-metrics"
+          ? "forge"
+          : "forge";
+  switchGroup(group);
+  const btn = document.querySelector(`.tab-btn[data-tab="${tabName}"]`);
+  if (btn) btn.click();
+}
+
+window.activateTab = activateTab;
 
 // ─── WebSocket Connection ─────────────────────────────────────────────
 function connectWebSocket() {
@@ -342,6 +364,21 @@ function handleEvent(event) {
     case "drain-auto-estimate":
       addNotification(`Auto-drain estimate: mode=${(event.data || event).mode}`, "amber");
       break;
+    // Phase-40 S4 — observer narration live updates
+    case "observer:narration": {
+      const targets = [
+        [document.getElementById("observer-narrations-list"), document.getElementById("observer-narrations-empty")],
+        [document.getElementById("home-observer-narrations-list"), document.getElementById("home-observer-narrations-empty")],
+      ].filter(([list]) => !!list);
+      if (targets.length === 0) break;
+      for (const [list, empty] of targets) {
+        if (empty) empty.style.display = "none";
+        const el = renderObserverNarration(event.data || {});
+        list.prepend(el);
+        while (list.children.length > 20) list.removeChild(list.lastChild);
+      }
+      break;
+    }
     // Phase Hotfix-v2.90.8 Slice 3 — slice-output-stalled pill
     case "slice-output-stalled":
       handleSliceOutputStalled(event.data || event);
@@ -2663,6 +2700,28 @@ async function loadConfig() {
       }
     }
 
+    const observerCfg = currentConfig.forgeMaster?.observer || {};
+    const observerEnabledEl = document.getElementById("cfg-observer-enabled");
+    const observerModelTierEl = document.getElementById("cfg-observer-modeltier");
+    const observerBudgetUsdEl = document.getElementById("cfg-observer-budget-usd");
+    const observerBudgetNarrationsEl = document.getElementById("cfg-observer-budget-narrations");
+    const observerBatchWindowEl = document.getElementById("cfg-observer-batch-window-ms");
+    const observerBrainCaptureEl = document.getElementById("cfg-observer-brain-capture");
+    if (observerEnabledEl) observerEnabledEl.checked = observerCfg.enabled === true;
+    if (observerModelTierEl) observerModelTierEl.value = observerCfg.modelTier || "";
+    if (observerBudgetUsdEl) observerBudgetUsdEl.value = observerCfg.maxUsdPerDay ?? 1;
+    if (observerBudgetNarrationsEl) observerBudgetNarrationsEl.value = observerCfg.maxNarrationsPerHour ?? 6;
+    if (observerBatchWindowEl) observerBatchWindowEl.value = observerCfg.batchWindowMs ?? 60000;
+    if (observerBrainCaptureEl) observerBrainCaptureEl.checked = observerCfg.brainCapture !== false;
+
+    const auditorCfg = currentConfig.forgeMaster?.auditor || {};
+    const auditorModelTierEl = document.getElementById("cfg-auditor-modeltier");
+    const auditorOnFailureEl = document.getElementById("cfg-auditor-on-failure");
+    const auditorEveryNRunsEl = document.getElementById("cfg-auditor-every-n-runs");
+    if (auditorModelTierEl) auditorModelTierEl.value = auditorCfg.modelTier || "";
+    if (auditorOnFailureEl) auditorOnFailureEl.checked = auditorCfg.onFailure === true;
+    if (auditorEveryNRunsEl) auditorEveryNRunsEl.value = Number.isFinite(auditorCfg.everyNRuns) ? auditorCfg.everyNRuns : "";
+
     // Check API provider availability
     loadApiProviderStatus();
     loadApiKeys();
@@ -2859,6 +2918,7 @@ async function loadOpenBrainStatus() {
 async function saveConfig() {
   if (!confirm("Save configuration changes to .forge.json?")) return;
   try {
+    const statusEl = document.getElementById("cfg-status");
     const agents = [...document.querySelectorAll(".cfg-agent-checkbox:checked")].map((c) => c.value);
     const modelDefault = document.getElementById("cfg-model-default").value;
     const modelImage = document.getElementById("cfg-model-image")?.value || "";
@@ -2871,6 +2931,33 @@ async function saveConfig() {
     const qModelsStr = document.getElementById("cfg-quorum-models")?.value || "";
     const qModels = qModelsStr ? qModelsStr.split(",").map((m) => m.trim()).filter(Boolean) : [];
     const qPreset = document.getElementById("cfg-quorum-preset")?.value || "";
+    const observerEnabled = document.getElementById("cfg-observer-enabled")?.checked || false;
+    const observerModelTier = document.getElementById("cfg-observer-modeltier")?.value || "";
+    const observerBudgetUsd = parseFloat(document.getElementById("cfg-observer-budget-usd")?.value ?? "1");
+    const observerBudgetNarrations = parseInt(document.getElementById("cfg-observer-budget-narrations")?.value ?? "6", 10);
+    const observerBatchWindowMs = parseInt(document.getElementById("cfg-observer-batch-window-ms")?.value ?? "60000", 10);
+    const observerBrainCapture = document.getElementById("cfg-observer-brain-capture")?.checked ?? true;
+    const auditorModelTier = document.getElementById("cfg-auditor-modeltier")?.value || "";
+    const auditorOnFailure = document.getElementById("cfg-auditor-on-failure")?.checked || false;
+    const auditorEveryNRunsRaw = document.getElementById("cfg-auditor-every-n-runs")?.value?.trim() || "";
+    const auditorEveryNRuns = auditorEveryNRunsRaw === "" ? null : parseInt(auditorEveryNRunsRaw, 10);
+
+    if (Number.isFinite(observerBudgetUsd) && observerBudgetUsd < 0) {
+      if (statusEl) statusEl.textContent = "Error: Observer daily budget cannot be negative.";
+      return;
+    }
+    if (Number.isFinite(observerBudgetNarrations) && observerBudgetNarrations < 0) {
+      if (statusEl) statusEl.textContent = "Error: Observer narration budget cannot be negative.";
+      return;
+    }
+    if (auditorEveryNRunsRaw !== "" && (!Number.isFinite(auditorEveryNRuns) || auditorEveryNRuns <= 0)) {
+      if (statusEl) statusEl.textContent = "Error: Auditor run cadence must be a positive integer or blank.";
+      return;
+    }
+    if (auditorEveryNRuns !== null && auditorEveryNRuns >= 1 && auditorEveryNRuns <= 4) {
+      if (statusEl) statusEl.textContent = "Error: Auditor run cadence must be blank or at least 5.";
+      return;
+    }
 
     const updated = {
       ...currentConfig,
@@ -2885,6 +2972,24 @@ async function saveConfig() {
         threshold: isNaN(qThresh) ? 7 : qThresh,
         models: qModels.length > 0 ? qModels : (currentConfig.quorum?.models || []),
         ...(qPreset ? { preset: qPreset } : {}),
+      },
+      forgeMaster: {
+        ...(currentConfig.forgeMaster || {}),
+        observer: {
+          ...(currentConfig.forgeMaster?.observer || {}),
+          enabled: observerEnabled,
+          modelTier: observerModelTier || null,
+          maxUsdPerDay: Number.isFinite(observerBudgetUsd) ? observerBudgetUsd : 1,
+          maxNarrationsPerHour: Number.isFinite(observerBudgetNarrations) ? observerBudgetNarrations : 6,
+          batchWindowMs: Number.isFinite(observerBatchWindowMs) ? observerBatchWindowMs : 60000,
+          brainCapture: observerBrainCapture,
+        },
+        auditor: {
+          ...(currentConfig.forgeMaster?.auditor || {}),
+          modelTier: auditorModelTier || null,
+          onFailure: auditorOnFailure,
+          everyNRuns: auditorEveryNRuns,
+        },
       },
     };
     const res = await fetch(`${API_BASE}/api/config`, {
@@ -3825,6 +3930,7 @@ renderNotifications();
 
 // Load plan browser on init (Progress is default tab)
 loadPlans();
+loadObserverNarrations();
 
 // Apply saved theme
 (function initTheme() {
@@ -4098,6 +4204,7 @@ const tabLoadHooks = {
   'settings-crucible': () => { loadCrucibleConfigUI(); },
   'settings-brain': () => { loadBrainSubtab(); },
   'settings-copilot': () => { loadCopilotInstrStatus(); },
+  'settings-forgemaster': () => { loadConfig(); },
 };
 
 // ─── Theme Toggle ─────────────────────────────────────────────
@@ -7042,6 +7149,42 @@ async function loadGithubMetrics() {
       teamEl.innerHTML = window.githubMetricsRenderPerTeamTable?.([]) ?? "";
     }
 
+    // Personal Mode: engage when org mode produced no metrics data
+    if (!metrics.length) {
+      try {
+        const personalBody = await fetch(`${API_BASE}/api/github-personal`).then((r) => r.json());
+        const { user = null, repo = null, copilotSignal = null } = personalBody;
+
+        // Show personal cards, hide org-mode panels
+        const orgContainers = ["gm-adoption-panel", "gm-orchestration-panel", "gm-per-team-panel"];
+        const personalContainers = ["gm-personal-account-card", "gm-personal-repo-card", "gm-personal-ai-card"];
+        orgContainers.forEach((id) => document.getElementById(id)?.classList.add("hidden"));
+        personalContainers.forEach((id) => document.getElementById(id)?.classList.remove("hidden"));
+
+        const accountEl = document.getElementById("gm-personal-account-card");
+        if (accountEl) {
+          accountEl.innerHTML = window.githubPersonalRenderAccountCard?.(user) ?? "";
+        }
+
+        const repoEl = document.getElementById("gm-personal-repo-card");
+        if (repoEl) {
+          repoEl.innerHTML = window.githubPersonalRenderRepoActivityCard?.(repo) ?? "";
+        }
+
+        const aiEl = document.getElementById("gm-personal-ai-card");
+        if (aiEl) {
+          aiEl.innerHTML = window.githubPersonalRenderAiAssistCard?.(copilotSignal) ?? "";
+        }
+
+        if (!user && !repo && !copilotSignal) {
+          const reason = personalBody.errors?.user === "auth" ? "auth" : "no-remote";
+          if (accountEl) {
+            accountEl.innerHTML = window.githubPersonalRenderPersonalEmptyState?.({ reason }) ?? "";
+          }
+        }
+      } catch { /* personal-mode fetch failure — suppress silently */ }
+    }
+
     state.githubMetrics.lastFetch = Date.now();
   } catch (e) {
     if (errEl) {
@@ -7283,3 +7426,148 @@ async function loadTeamDashboard() {
 }
 
 window.loadTeamDashboard = loadTeamDashboard;
+
+// Phase-40 S4 — Observer narrations card
+function renderObserverNarration(item) {
+  const el = document.createElement("div");
+  el.className = "border-b border-gray-700 pb-2 last:border-0";
+  el.innerHTML = `<div class="flex items-center justify-between text-gray-500 mb-0.5">
+    <span>${item.timestamp ? new Date(item.timestamp).toLocaleTimeString() : ""}</span>
+    <span>${item.cost_usd ? "$" + Number(item.cost_usd).toFixed(4) : ""}</span>
+  </div><div class="text-gray-300">${escapeHtml(item.content || item.text || "")}</div>`;
+  return el;
+}
+
+function loadObserverNarrations() {
+  fetch("/api/brain/recall?source=observer&limit=20")
+    .then(r => r.ok ? r.json() : null)
+    .then(data => {
+      const targets = [
+        [document.getElementById("observer-narrations-list"), document.getElementById("observer-narrations-empty")],
+        [document.getElementById("home-observer-narrations-list"), document.getElementById("home-observer-narrations-empty")],
+      ].filter(([list]) => !!list);
+      if (targets.length === 0) return;
+      const items = Array.isArray(data?.thoughts)
+        ? data.thoughts
+        : Array.isArray(data?.records)
+          ? data.records
+          : [];
+      if (items.length === 0) {
+        for (const [, empty] of targets) {
+          if (empty) empty.style.display = "";
+        }
+        return;
+      }
+      for (const [list, empty] of targets) {
+        if (empty) empty.style.display = "none";
+        list.innerHTML = "";
+        for (const item of items) list.appendChild(renderObserverNarration(item));
+      }
+    })
+    .catch(() => {});
+}
+
+window.loadObserverNarrations = loadObserverNarrations;
+
+// Phase-40 S5 — Cross-run watcher anomalies card
+function loadCrossRunAnomalies() {
+  const els = [
+    document.getElementById("cross-run-anomalies-list"),
+    document.getElementById("home-cross-run-anomalies-list"),
+  ].filter(Boolean);
+  if (els.length === 0) return;
+  for (const el of els) el.innerHTML = '<p class="text-gray-600 text-center py-2">Loading…</p>';
+  fetch("/api/watcher/cross-run")
+    .then(r => r.ok ? r.json() : null)
+    .then(data => {
+      if (!data || (!data.ok && data.error)) {
+        for (const el of els) el.innerHTML = `<p class="text-gray-600 text-center py-4">${escapeHtml(data?.error || "No data available.")}</p>`;
+        return;
+      }
+      const anomalies = data.anomalies || [];
+      if (anomalies.length === 0) {
+        for (const el of els) el.innerHTML = `<p class="text-gray-600 text-center py-4">No anomalies detected in the last ${escapeHtml(data.window || "14d")} (${data.totalRuns ?? 0} runs).</p>`;
+        return;
+      }
+      const content = anomalies.slice(0, 10).map(a => {
+        const col = a.severity === "error" ? "text-red-400" : "text-amber-400";
+        return `<div class="border-b border-gray-700/50 pb-2 last:border-0">
+          <p class="${col} font-medium">${escapeHtml(a.code || "anomaly")}</p>
+          <p class="text-gray-400">${escapeHtml(a.message || a.recommendation || "")}</p>
+        </div>`;
+      }).join("");
+      for (const el of els) el.innerHTML = content;
+    })
+    .catch(err => {
+      for (const el of els) el.innerHTML = `<p class="text-red-400 text-xs">Error: ${escapeHtml(err.message)}</p>`;
+    });
+}
+
+// Phase-40 S6 — Auditor latest report card
+function loadAuditorLatest() {
+  const el = document.getElementById("auditor-latest-report");
+  if (!el) return;
+  el.innerHTML = '<p class="text-gray-600 text-center py-4">Loading…</p>';
+  fetch("/api/auditor/latest")
+    .then(r => r.ok ? r.json() : null)
+    .then(data => {
+      if (!data || !data.triggered) {
+        el.innerHTML = `<p class="text-gray-600 text-center py-4">${escapeHtml(data?.message || "No auditor invocations recorded.")}</p>`;
+        return;
+      }
+      const reason = data.reason === "onFailure" ? "🔴 on-failure" : "🔵 every-N-runs";
+      const ts = data.timestamp ? new Date(data.timestamp).toLocaleString() : "unknown";
+      el.innerHTML = `<div class="space-y-2">
+        <div class="flex items-center gap-2">
+          <span class="text-xs font-semibold px-2 py-0.5 rounded-full bg-purple-900/50 text-purple-300">triggered</span>
+          <span class="text-xs text-gray-400">${reason}</span>
+        </div>
+        <p class="text-xs text-gray-500">Run: <code class="text-gray-400">${escapeHtml(data.runId || "—")}</code></p>
+        <p class="text-xs text-gray-500">At: ${ts}</p>
+        ${data.config ? `<p class="text-xs text-gray-600">onFailure: ${data.config.onFailure}, everyNRuns: ${data.config.everyNRuns ?? "off"}</p>` : ""}
+      </div>`;
+    })
+    .catch(err => { el.innerHTML = `<p class="text-red-400 text-xs">Error: ${escapeHtml(err.message)}</p>`; });
+}
+
+window.loadCrossRunAnomalies = loadCrossRunAnomalies;
+window.loadAuditorLatest = loadAuditorLatest;
+
+// Phase-56 — Embedding backend status tile
+function loadEmbeddingStatus() {
+  const el = document.getElementById("embedding-status-content");
+  if (!el) return;
+  el.innerHTML = '<p class="text-gray-600 text-center py-2">Loading…</p>';
+  fetch("/api/embedding/status")
+    .then(r => r.ok ? r.json() : null)
+    .then(data => {
+      if (!data || !data.ok) {
+        el.innerHTML = `<p class="text-gray-500 text-center py-2">${escapeHtml(data?.error || "Unable to fetch embedding status.")}</p>`;
+        return;
+      }
+      const backendColor = data.backend === "neural" ? "text-teal-300" : "text-yellow-300";
+      const neuralBadge = data.neuralAvailable
+        ? `<span class="px-1.5 py-0.5 rounded bg-teal-900/40 text-teal-300">✓ neural v${escapeHtml(data.neuralVersion ?? "?")}  </span>`
+        : `<span class="px-1.5 py-0.5 rounded bg-gray-700 text-gray-400">✗ neural</span>`;
+      el.innerHTML = `
+        <div class="space-y-1.5">
+          <div class="flex items-center gap-2">
+            <span class="text-gray-400">Backend:</span>
+            <span class="font-semibold ${backendColor}">${escapeHtml(data.backend)}</span>
+            ${neuralBadge}
+          </div>
+          <div class="flex items-center gap-2">
+            <span class="text-gray-400">Model:</span>
+            <code class="text-gray-300 text-xs">${escapeHtml(data.model)}</code>
+          </div>
+          <div class="flex items-center gap-2">
+            <span class="text-gray-400">Corpus:</span>
+            <span class="text-gray-300">${data.corpusSize} thought${data.corpusSize === 1 ? "" : "s"}</span>
+          </div>
+          ${data.installHint ? `<p class="text-xs text-amber-400 mt-1 border-t border-gray-700 pt-1">To enable neural: <code class="text-gray-300">${escapeHtml(data.installHint)}</code></p>` : ""}
+        </div>`;
+    })
+    .catch(err => { el.innerHTML = `<p class="text-red-400 text-xs">Error: ${escapeHtml(err.message)}</p>`; });
+}
+window.loadEmbeddingStatus = loadEmbeddingStatus;
+

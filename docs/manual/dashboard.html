@@ -63,7 +63,7 @@ node pforge-mcp/server.mjs --dashboard-only</code></pre>
               <tr class="border-b border-slate-800/60"><td class="py-2 font-semibold text-blue-400">Forge (19)</td><td class="py-2 text-xs">Home, Review, Progress, Crucible, Governance, Runs, Cost, Actions, Replay, Traces, Skills, Tempering, Memory, Timeline, Inner Loop, Extensions, Anvil/Lattice, GitHub Metrics, Team Dashboard</td><td class="py-2 text-xs">Build, execute, ship; active-run monitoring</td></tr>
               <tr class="border-b border-slate-800/60"><td class="py-2 font-semibold text-amber-400">LiveGuard (7)</td><td class="py-2 text-xs">Health, Incidents, Triage, Security, Env, Watcher, Bug Registry</td><td class="py-2 text-xs">Post-deploy defense</td></tr>
               <tr class="border-b border-slate-800/60"><td class="py-2 font-semibold text-cyan-400">Forge-Master (1)</td><td class="py-2 text-xs">Studio</td><td class="py-2 text-xs">Read-only reasoning orchestrator</td></tr>
-              <tr><td class="py-2 font-semibold text-purple-400">Settings (10)</td><td class="py-2 text-xs">General, Models, Execution, API Keys, Updates, Memory, Bridge, Crucible, Brain, Copilot</td><td class="py-2 text-xs">Platform-wide config (safe-write to <code>.forge.json</code>)</td></tr>
+              <tr><td class="py-2 font-semibold text-purple-400">Settings (10)</td><td class="py-2 text-xs">General, Models, Execution, API Keys, Updates, Memory, Bridge, Crucible, Brain, Forge-Master</td><td class="py-2 text-xs">Platform-wide config (safe-write to <code>.forge.json</code>)</td></tr>
             </tbody>
           </table>
         </div>
@@ -248,6 +248,39 @@ node pforge-mcp/server.mjs --dashboard-only</code></pre>
         <div class="callout callout-info" id="studio">
           <strong>📋 Forge-Master Studio Tab</strong>, The Studio tab provides the reasoning orchestrator's chat interface with prompt gallery, streaming replies, embedding cache tile, and quorum advisory. Full reference: <a href="dashboard-forge-master.html">Dashboard — Forge-Master Studio →</a>
         </div>
+
+        <!-- ─── Observer Narrations Card (Phase-40) ─── -->
+        <h2 id="observer-narrations">Observer Narrations Card</h2>
+        <p>Live feed of narrations produced by the <a href="dashboard-settings.html#settings-forgemaster">Forge-Master Observer</a> — the background hub subscriber that batches live plan events and narrates notable patterns in plain prose. The card renders the last 20 narrations, updating in real time via the existing dashboard WebSocket (<code>observer:narration</code> event type).</p>
+        <ul>
+          <li><strong>Per-narration display</strong>: timestamp, batch event count badge, narration text (markdown), cost in $</li>
+          <li><strong>Live updates</strong>: new narrations push instantly without a page refresh</li>
+          <li><strong>Empty state</strong>: when the observer is disabled, the card shows "Observer disabled — enable in Settings" with a deep-link to <a href="dashboard-settings.html#settings-forgemaster">Settings → Forge-Master</a> so you can turn it on without navigating away</li>
+          <li><strong>Source</strong>: driven by <code>observer:narration</code> hub events emitted from <code>pforge-master/src/observer-loop.mjs</code>; narrations are also stored in Brain via <code>brain_capture</code> if <code>cfg-observer-brain-capture</code> is enabled</li>
+        </ul>
+        <img src="assets/screenshots/dashboard-observer-narrations.png" alt="Observer Narrations card showing three recent narrations with timestamps, batch-event-count badges, and per-narration cost" class="rounded-xl border border-slate-700/40 mb-6" loading="lazy" />
+
+        <!-- ─── Cross-Run Watcher Anomalies Card (Phase-40) ─── -->
+        <h2 id="cross-run-anomalies">Cross-Run Watcher Anomalies Card</h2>
+        <p>Retrospective health view powered by <code>forge_watch({ mode: "cross-run" })</code>. Aggregates <code>.forge/runs/*/summary.json</code> files into a health snapshot and surfaces recurring failure patterns across your run history — useful for diagnosing systemic issues that individual-run views miss.</p>
+        <ul>
+          <li><strong>Refresh button</strong>: triggers <code>GET /api/watcher/cross-run</code> server-side (wraps the cross-run watcher), rendering fresh results within 2 s for repos with ≤ 50 runs</li>
+          <li><strong>Cache</strong>: last result is cached in <code>.forge/cross-run-cache.json</code> with a 1-hour TTL; the cached result loads automatically on page load so the card is never blank</li>
+          <li><strong>Anomaly table columns</strong>: code (e.g., <code>cross-run.recurring-gate-failure</code>, <code>cross-run.retry-rate-spike</code>, <code>cross-run.cost-anomaly-trend</code>, <code>cross-run.slice-timeout-cluster</code>), severity, recommendation</li>
+          <li><strong>Severity color coding</strong>: matches the existing per-run anomaly display for visual consistency</li>
+        </ul>
+        <img src="assets/screenshots/dashboard-cross-run-anomalies.png" alt="Cross-Run Watcher Anomalies card showing a table of anomaly codes with severity and recommendation columns after clicking Refresh" class="rounded-xl border border-slate-700/40 mb-6" loading="lazy" />
+
+        <!-- ─── Auditor Latest Report Card (Phase-40) ─── -->
+        <h2 id="auditor-report">Auditor Latest Report Card</h2>
+        <p>Renders the most recent Plan-Health Auditor report from <code>.forge/health/latest.md</code> directly on the dashboard. The auditor is invoked automatically after failed runs or every N runs (configurable in <a href="dashboard-settings.html#settings-forgemaster">Settings → Forge-Master</a>).</p>
+        <ul>
+          <li><strong>Report header</strong>: timestamp of the latest report and a "N reports since YYYY-MM-DD" counter showing how many historical reports are archived</li>
+          <li><strong>Sanitized markdown</strong>: the report body is rendered as sanitized HTML — <code>&lt;script&gt;</code> tags, raw HTML injection, <code>&lt;iframe&gt;</code>, and <code>javascript:</code> URLs are all stripped server-side before the response leaves <code>GET /api/auditor/latest</code>; safe elements (headings, lists, code blocks, bold/italic) render normally</li>
+          <li><strong>Archive link</strong>: "View history" opens the <code>.forge/health/</code> archive listing so you can browse older reports</li>
+          <li><strong>Backend endpoint</strong>: <code>GET /api/auditor/latest</code> returns <code>{ markdown, timestamp, archive: [...] }</code></li>
+        </ul>
+        <img src="assets/screenshots/dashboard-auditor-report.png" alt="Auditor Latest Report card showing timestamp header, reports counter, first half of sanitized markdown report with headings and lists, and View history archive link" class="rounded-xl border border-slate-700/40 mb-6" loading="lazy" />
 
         <!-- ─── Audit-Loop activation surfaces ─── -->
         <h2 id="audit-loop">Audit-Loop Activation</h2>

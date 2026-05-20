@@ -236,44 +236,48 @@ export function getMinimaForDomain(projectDir, domain = "domain") {
  * @param {string} projectDir
  * @returns {string} stack id
  */
-export function detectStack(projectDir) {
-  const has = (p) => existsSync(resolve(projectDir, p));
+function _hasDotnetMarker(dirPath) {
+  try {
+    return readdirSync(dirPath).some((f) =>
+      f.endsWith(".csproj") || f.endsWith(".sln") || f.endsWith(".slnx") || f.endsWith(".fsproj") || f.endsWith(".vbproj")
+    );
+  } catch { return false; }
+}
 
-  // Order matters: dotnet detection before typescript since some .NET
-  // projects ship a package.json for tooling. We check .csproj first.
-  const dirEntries = (() => {
-    try { return readdirSync(projectDir); } catch { return []; }
-  })();
-  // Issue #183: include .slnx (XML solution format from VS 17.10+) and also
-  // scan src/ + tests/ one level deep, since modern .NET solutions
-  // routinely keep .csproj files under src/Project/Project.csproj rather
-  // than at the repo root.
-  const isDotnetMarker = (f) =>
-    f.endsWith(".csproj") || f.endsWith(".sln") || f.endsWith(".slnx") || f.endsWith(".fsproj") || f.endsWith(".vbproj");
-  if (dirEntries.some(isDotnetMarker)) {
-    return "dotnet";
-  }
-  // One-level-deep scan: <root>/<subdir>/*.csproj (typical for src/, tests/, ProjectA/).
+function _isSkipSubdir(name) {
+  return name.startsWith(".") || name === "node_modules" || name === "bin" || name === "obj";
+}
+
+function _scanForDotnet(projectDir, dirEntries) {
+  if (_hasDotnetMarker(projectDir)) return true;
   for (const sub of dirEntries) {
     try {
       const subPath = resolve(projectDir, sub);
-      const stat = statSync(subPath);
-      if (!stat.isDirectory()) continue;
-      if (sub.startsWith(".") || sub === "node_modules" || sub === "bin" || sub === "obj") continue;
+      if (!statSync(subPath).isDirectory()) continue;
+      if (_isSkipSubdir(sub)) continue;
+      if (_hasDotnetMarker(subPath)) return true;
       const subEntries = readdirSync(subPath);
-      if (subEntries.some(isDotnetMarker)) return "dotnet";
-      // Two-levels deep is common too: <root>/src/<ProjectName>/Project.csproj
       for (const subSub of subEntries) {
         try {
           const subSubPath = resolve(subPath, subSub);
           if (!statSync(subSubPath).isDirectory()) continue;
-          if (subSub.startsWith(".") || subSub === "node_modules" || subSub === "bin" || subSub === "obj") continue;
-          const inner = readdirSync(subSubPath);
-          if (inner.some(isDotnetMarker)) return "dotnet";
+          if (_isSkipSubdir(subSub)) continue;
+          if (_hasDotnetMarker(subSubPath)) return true;
         } catch { /* not a directory or unreadable */ }
       }
     } catch { /* not a directory or unreadable */ }
   }
+  return false;
+}
+
+export function detectStack(projectDir) {
+  const has = (p) => existsSync(resolve(projectDir, p));
+
+  const dirEntries = (() => {
+    try { return readdirSync(projectDir); } catch { return []; }
+  })();
+
+  if (_scanForDotnet(projectDir, dirEntries)) return "dotnet";
   if (has("package.json") || has("tsconfig.json")) return "typescript";
   if (has("pyproject.toml") || has("setup.py") || has("setup.cfg") || has("requirements.txt")) {
     return "python";
@@ -734,17 +738,12 @@ export function readRunRecord(absPath) {
  * @param {string} targetPath - Absolute path to project being watched
  * @returns {object|null}
  */
-export function readTemperingState(targetPath) {
-  const dir = resolve(targetPath, ".forge", "tempering");
-  if (!existsSync(dir)) return null;
-
+function _readTemperingScanSummary(targetPath) {
   const records = listScanRecords(targetPath);
-  const totalScans = records.length;
   const latest = records[0] || null;
   const latestScan = latest ? readScanRecord(latest.absPath) : null;
   const latestScanAgeMs = latest ? Date.now() - latest.mtimeMs : null;
 
-  // Gaps from latest scan (primitives-only for compact WS payloads)
   const latestStatus = latestScan?.status || null;
   const gaps = Array.isArray(latestScan?.coverageVsMinima)
     ? latestScan.coverageVsMinima.length
@@ -756,9 +755,18 @@ export function readTemperingState(targetPath) {
     ? latestScanAgeMs > TEMPERING_SCAN_STALE_DAYS * 24 * 60 * 60 * 1000
     : false;
 
-  // Run records (TEMPER-02) — primitives only, no scanner detail.
-  // Exposed so watcher anomalies + dashboard slice-card pill can read
-  // the single most recent run without touching the full record.
+  return {
+    totalScans: records.length,
+    latest,
+    latestScanAgeMs,
+    latestStatus,
+    gaps,
+    belowMinimum,
+    stale,
+  };
+}
+
+function _readTemperingRunSummary(targetPath) {
   const runRecords = listRunRecords(targetPath);
   const latestRunFile = runRecords[0] || null;
   const latestRun = latestRunFile ? readRunRecord(latestRunFile.absPath) : null;
@@ -767,81 +775,99 @@ export function readTemperingState(targetPath) {
   const latestRunStack = latestRun?.stack || null;
   const runFailed = latestRunVerdict === "fail" || latestRunVerdict === "budget-exceeded" || latestRunVerdict === "error";
 
-  // TEMPER-03 Slice 03.2 — contract mismatch count from latest run.
-  // Counts violations from the contract scanner frame so the watcher
-  // anomaly can fire without reading the full artifact report.
-  let contractMismatch = 0;
-  // TEMPER-05 Slice 05.1 — per-scanner summary map for dashboard.
-  const latestScanners = {};
-  if (latestRun && Array.isArray(latestRun.scanners)) {
-    const contractFrame = latestRun.scanners.find((s) => s && s.scanner === "contract");
-    if (contractFrame) {
-      contractMismatch = Array.isArray(contractFrame.violations)
-        ? contractFrame.violations.length
-        : (contractFrame.violationCount || 0);
-    }
-    for (const frame of latestRun.scanners) {
-      if (frame && frame.scanner) {
-        latestScanners[frame.scanner] = {
-          verdict: frame.verdict || "skipped",
-          pass: frame.pass || 0,
-          fail: frame.fail || 0,
-          durationMs: frame.durationMs || 0,
-          violationCount: frame.violationCount || 0,
-          reason: frame.reason || null,
-        };
-      }
-    }
-  }
-
-  // TEMPER-05 Slice 05.2 — watcher state derivations for mutation,
-  // flakiness, and performance regression counts.
-  let mutationBelowMinimum = 0;
-  let flakyCount = 0;
-  let perfRegressionCount = 0;
-  if (latestRun && Array.isArray(latestRun.scanners)) {
-    const mutationFrame = latestRun.scanners.find((s) => s && s.scanner === "mutation");
-    if (mutationFrame && mutationFrame.verdict === "fail") {
-      mutationBelowMinimum = Array.isArray(mutationFrame.layers)
-        ? mutationFrame.layers.filter((l) => !l.pass).length
-        : 1;
-    }
-    const flakinessFrame = latestRun.scanners.find((s) => s && s.scanner === "flakiness");
-    if (flakinessFrame && flakinessFrame.fail > 0) {
-      flakyCount = flakinessFrame.fail;
-    }
-    const perfFrame = latestRun.scanners.find((s) => s && s.scanner === "performance-budget");
-    if (perfFrame && perfFrame.verdict === "fail") {
-      perfRegressionCount = perfFrame.fail || 1;
-    }
-  }
-
   return {
-    initialized: true,
-    totalScans,
-    latestScanTs: latest ? new Date(latest.mtimeMs).toISOString() : null,
-    latestScanAgeMs,
-    latestStatus,
-    gaps,
-    belowMinimum,
-    stale,
-    staleCutoffDays: TEMPERING_SCAN_STALE_DAYS,
-    // TEMPER-02 Slice 02.2 — run-record summary (primitives only).
     totalRuns: runRecords.length,
-    latestRunTs: latestRunFile ? new Date(latestRunFile.mtimeMs).toISOString() : null,
+    latestRunFile,
+    latestRun,
     latestRunAgeMs,
     latestRunVerdict,
     latestRunStack,
     runFailed,
-    // TEMPER-03 Slice 03.2 — contract violations from latest run.
-    contractMismatch,
-    // TEMPER-05 Slice 05.1 — per-scanner summary for dashboard.
-    latestScanners,
-    // TEMPER-05 Slice 05.2 — mutation + scheduling watcher fields.
-    mutationBelowMinimum,
-    flakyCount,
-    perfRegressionCount,
-    // TEMPER-06 Slice 06.3 — open bug counts for watcher anomalies.
+  };
+}
+
+function _collectContractAndScanners(latestRun) {
+  let contractMismatch = 0;
+  const latestScanners = {};
+  const contractFrame = latestRun.scanners.find((s) => s && s.scanner === "contract");
+  if (contractFrame) {
+    contractMismatch = Array.isArray(contractFrame.violations)
+      ? contractFrame.violations.length
+      : (contractFrame.violationCount || 0);
+  }
+  for (const frame of latestRun.scanners) {
+    if (frame && frame.scanner) {
+      latestScanners[frame.scanner] = {
+        verdict: frame.verdict || "skipped",
+        pass: frame.pass || 0,
+        fail: frame.fail || 0,
+        durationMs: frame.durationMs || 0,
+        violationCount: frame.violationCount || 0,
+        reason: frame.reason || null,
+      };
+    }
+  }
+  return { contractMismatch, latestScanners };
+}
+
+function _collectMutationFlakyPerf(latestRun) {
+  let mutationBelowMinimum = 0;
+  let flakyCount = 0;
+  let perfRegressionCount = 0;
+  const mutationFrame = latestRun.scanners.find((s) => s && s.scanner === "mutation");
+  if (mutationFrame && mutationFrame.verdict === "fail") {
+    mutationBelowMinimum = Array.isArray(mutationFrame.layers)
+      ? mutationFrame.layers.filter((l) => !l.pass).length
+      : 1;
+  }
+  const flakinessFrame = latestRun.scanners.find((s) => s && s.scanner === "flakiness");
+  if (flakinessFrame && flakinessFrame.fail > 0) {
+    flakyCount = flakinessFrame.fail;
+  }
+  const perfFrame = latestRun.scanners.find((s) => s && s.scanner === "performance-budget");
+  if (perfFrame && perfFrame.verdict === "fail") {
+    perfRegressionCount = perfFrame.fail || 1;
+  }
+  return { mutationBelowMinimum, flakyCount, perfRegressionCount };
+}
+
+function _collectScannerMetrics(latestRun) {
+  const empty = { contractMismatch: 0, latestScanners: {}, mutationBelowMinimum: 0, flakyCount: 0, perfRegressionCount: 0 };
+  if (!latestRun || !Array.isArray(latestRun.scanners)) return empty;
+  const a = _collectContractAndScanners(latestRun);
+  const b = _collectMutationFlakyPerf(latestRun);
+  return { ...a, ...b };
+}
+
+export function readTemperingState(targetPath) {
+  const dir = resolve(targetPath, ".forge", "tempering");
+  if (!existsSync(dir)) return null;
+
+  const scanSummary = _readTemperingScanSummary(targetPath);
+  const runSummary = _readTemperingRunSummary(targetPath);
+  const scannerMetrics = _collectScannerMetrics(runSummary.latestRun);
+
+  return {
+    initialized: true,
+    totalScans: scanSummary.totalScans,
+    latestScanTs: scanSummary.latest ? new Date(scanSummary.latest.mtimeMs).toISOString() : null,
+    latestScanAgeMs: scanSummary.latestScanAgeMs,
+    latestStatus: scanSummary.latestStatus,
+    gaps: scanSummary.gaps,
+    belowMinimum: scanSummary.belowMinimum,
+    stale: scanSummary.stale,
+    staleCutoffDays: TEMPERING_SCAN_STALE_DAYS,
+    totalRuns: runSummary.totalRuns,
+    latestRunTs: runSummary.latestRunFile ? new Date(runSummary.latestRunFile.mtimeMs).toISOString() : null,
+    latestRunAgeMs: runSummary.latestRunAgeMs,
+    latestRunVerdict: runSummary.latestRunVerdict,
+    latestRunStack: runSummary.latestRunStack,
+    runFailed: runSummary.runFailed,
+    contractMismatch: scannerMetrics.contractMismatch,
+    latestScanners: scannerMetrics.latestScanners,
+    mutationBelowMinimum: scannerMetrics.mutationBelowMinimum,
+    flakyCount: scannerMetrics.flakyCount,
+    perfRegressionCount: scannerMetrics.perfRegressionCount,
     openBugCount: readOpenBugCount(targetPath),
   };
 }
@@ -1173,36 +1199,76 @@ function nextBugId(bugsDir, datePart) {
  * @param {number} [opts.threshold=3] - Default threshold (overridden by .forge.json)
  * @returns {{ ok: boolean, promoted: object[], skipped: object[] }}
  */
-export function promoteSuppressions({ cwd, threshold = PROMOTE_THRESHOLD_DEFAULT } = {}) {
-  const effectiveThreshold = readPromoteThreshold(cwd, threshold);
-  const records = readSuppressions(cwd);
-
-  // Group by fingerprint.
+function _groupSuppressionsByFingerprint(records) {
   const groups = new Map();
   for (const rec of records) {
     if (!rec.fingerprint) continue;
     if (!groups.has(rec.fingerprint)) groups.set(rec.fingerprint, []);
     groups.get(rec.fingerprint).push(rec);
   }
+  return groups;
+}
+
+function _loadExistingBugFingerprints(bugsDir) {
+  const map = new Map();
+  if (!existsSync(bugsDir)) return map;
+  for (const f of readdirSync(bugsDir)) {
+    if (!f.endsWith(".json") || f.startsWith(".")) continue;
+    try {
+      const data = JSON.parse(readFileSync(resolve(bugsDir, f), "utf-8"));
+      if (data.fingerprint) map.set(data.fingerprint, data.bugId || f.replace(/\.json$/, ""));
+    } catch { /* skip unreadable */ }
+  }
+  return map;
+}
+
+function _promoteSingleSuppression({ fingerprint, recs, bugsDir, datePart, now }) {
+  const last = recs[recs.length - 1];
+  const first = recs[0];
+
+  mkdirSync(bugsDir, { recursive: true });
+  const bugId = nextBugId(bugsDir, datePart);
+  const bug = {
+    bugId,
+    fingerprint,
+    source: "suppression-promoter",
+    scanner: last.scanner || "unit",
+    evidence: last.evidence || {},
+    suppressionCount: recs.length,
+    firstSeenAt: first.suppressedAt || now,
+    lastSeenAt: last.suppressedAt || now,
+    status: "open",
+    promotedAt: now,
+    classification: "real-bug",
+    classifierMeta: { rule: "suppression-promoter" },
+    severity: "medium",
+    discoveredAt: first.suppressedAt || now,
+    updatedAt: now,
+  };
+
+  const bugPath = resolve(bugsDir, `${bugId}.json`);
+  try {
+    writeFileSync(bugPath, JSON.stringify(bug, null, 2) + "\n", { flag: "wx", encoding: "utf-8" });
+    return { ok: true, bugId };
+  } catch {
+    return { ok: false, bugId };
+  }
+}
+
+export function promoteSuppressions({ cwd, threshold = PROMOTE_THRESHOLD_DEFAULT } = {}) {
+  const effectiveThreshold = readPromoteThreshold(cwd, threshold);
+  const records = readSuppressions(cwd);
+
+  const groups = _groupSuppressionsByFingerprint(records);
 
   const bugsDir = resolve(cwd, BUGS_DIR);
   const promoted = [];
   const skipped = [];
 
-  // Build a fingerprint → existing bugId lookup from disk.
-  const existingByFingerprint = new Map();
-  if (existsSync(bugsDir)) {
-    for (const f of readdirSync(bugsDir)) {
-      if (!f.endsWith(".json") || f.startsWith(".")) continue;
-      try {
-        const data = JSON.parse(readFileSync(resolve(bugsDir, f), "utf-8"));
-        if (data.fingerprint) existingByFingerprint.set(data.fingerprint, data.bugId || f.replace(/\.json$/, ""));
-      } catch { /* skip unreadable */ }
-    }
-  }
+  const existingByFingerprint = _loadExistingBugFingerprints(bugsDir);
 
   const now = new Date().toISOString();
-  const datePart = now.slice(0, 10); // YYYY-MM-DD
+  const datePart = now.slice(0, 10);
 
   for (const [fingerprint, recs] of groups) {
     const count = recs.length;
@@ -1211,44 +1277,17 @@ export function promoteSuppressions({ cwd, threshold = PROMOTE_THRESHOLD_DEFAULT
       continue;
     }
 
-    // Idempotency: skip if a bug file for this fingerprint already exists.
     if (existingByFingerprint.has(fingerprint)) {
       skipped.push({ fingerprint, count, reason: "already-exists", bugId: existingByFingerprint.get(fingerprint) });
       continue;
     }
 
-    // Choose last record as the most recent occurrence for evidence.
-    const last = recs[recs.length - 1];
-    const first = recs[0];
-
-    mkdirSync(bugsDir, { recursive: true });
-    const bugId = nextBugId(bugsDir, datePart);
-    const bug = {
-      bugId,
-      fingerprint,
-      source: "suppression-promoter",
-      scanner: last.scanner || "unit",
-      evidence: last.evidence || {},
-      suppressionCount: count,
-      firstSeenAt: first.suppressedAt || now,
-      lastSeenAt: last.suppressedAt || now,
-      status: "open",
-      promotedAt: now,
-      classification: "real-bug",
-      classifierMeta: { rule: "suppression-promoter" },
-      severity: "medium",
-      discoveredAt: first.suppressedAt || now,
-      updatedAt: now,
-    };
-
-    const bugPath = resolve(bugsDir, `${bugId}.json`);
-    try {
-      writeFileSync(bugPath, JSON.stringify(bug, null, 2) + "\n", { flag: "wx", encoding: "utf-8" });
-      promoted.push({ fingerprint, bugId, count });
-      existingByFingerprint.set(fingerprint, bugId);
-    } catch (err) {
-      // Exclusive-create failed (concurrent write or race) — treat as already-exists.
-      skipped.push({ fingerprint, count, reason: "already-exists", bugId });
+    const res = _promoteSingleSuppression({ fingerprint, recs, bugsDir, datePart, now });
+    if (res.ok) {
+      promoted.push({ fingerprint, bugId: res.bugId, count });
+      existingByFingerprint.set(fingerprint, res.bugId);
+    } else {
+      skipped.push({ fingerprint, count, reason: "already-exists", bugId: res.bugId });
     }
   }
 

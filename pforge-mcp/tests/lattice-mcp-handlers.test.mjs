@@ -6,6 +6,7 @@ import { describe, it, expect } from "vitest";
 import { readFileSync } from "fs";
 import { join, dirname } from "path";
 import { fileURLToPath } from "url";
+import { SERVER_COMBINED_SRC } from "./helpers/server-combined-src.mjs";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const ROOT = join(__dirname, "..");
@@ -25,7 +26,7 @@ try {
   toolsJson = [];
 }
 
-const serverSrc = readFileSync(join(ROOT, "server.mjs"), "utf8");
+const serverSrc = SERVER_COMBINED_SRC;
 
 describe("Lattice MCP handlers — tools.json registration", () => {
   for (const toolName of LATTICE_TOOLS) {
@@ -69,7 +70,8 @@ describe("Lattice MCP handlers — server.mjs wiring", () => {
     });
 
     it(`${toolName} has a handler in CallToolRequestSchema section`, () => {
-      expect(serverSrc).toContain(`if (name === "${toolName}")`);
+      // Phase-52 SERVER-SPLIT: handlers use negated guard `if (!(name === ...)) return _CALL_TOOL_NO_MATCH;`
+      expect(serverSrc).toContain(`name === "${toolName}"`);
     });
 
     it(`${toolName} is in MCP_ONLY_TOOLS set`, () => {
@@ -78,7 +80,7 @@ describe("Lattice MCP handlers — server.mjs wiring", () => {
   }
 
   it("lattice functions are imported in server.mjs", () => {
-    expect(serverSrc).toContain('from "./lattice.mjs"');
+    expect(serverSrc).toMatch(/from "\.{1,2}\/lattice\.mjs"/);
     expect(serverSrc).toContain("latticeIndex");
     expect(serverSrc).toContain("latticeStat");
     expect(serverSrc).toContain("latticeQuery");

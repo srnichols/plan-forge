@@ -21,6 +21,7 @@ find_repo_root() {
 }
 
 REPO_ROOT="$(find_repo_root)"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 # ─── Helpers ───────────────────────────────────────────────────────────
 print_manual_steps() {
@@ -113,6 +114,7 @@ COMMANDS:
   version-bump <v>  Update VERSION, package.json, docs/README/ROADMAP version badges to v<version>
   migrate-memory    Merge legacy *-history.json ledgers into canonical .jsonl siblings (idempotent)
   drain-memory      Drain pending OpenBrain queue records to the configured OpenBrain server
+  forge-home-cleanup Archive ephemeral .forge/ files (logs, tmp, release notes) and prune old archive slots
   mcp-call <tool>   Invoke any MCP tool by name (e.g. forge_crucible_list) via the local MCP server
   tour              Guided walkthrough of your installed Plan Forge files
   help              Show this help message
@@ -1486,7 +1488,7 @@ print(v if isinstance(v, str) else ','.join(v))
     local src_instr="$source_path/.github/instructions"
     if [ -d "$src_instr" ]; then
         local instr_name
-        for instr_name in "architecture-principles.instructions.md" "git-workflow.instructions.md" "ai-plan-hardening-runbook.instructions.md" "self-repair-reporting.instructions.md" "status-reporting.instructions.md" "context-fuel.instructions.md"; do
+        for instr_name in "aci-design.instructions.md" "architecture-principles.instructions.md" "clean-code.instructions.md" "git-workflow.instructions.md" "ai-plan-hardening-runbook.instructions.md" "security.instructions.md" "self-repair-reporting.instructions.md" "status-reporting.instructions.md" "testing.instructions.md" "context-fuel.instructions.md"; do
             _pf_check "$src_instr/$instr_name" "$REPO_ROOT/.github/instructions/$instr_name" ".github/instructions/$instr_name"
         done
     fi
@@ -2888,21 +2890,58 @@ cmd_doctor() {
     # 4f. LIFECYCLE HOOKS
     # ═══════════════════════════════════════════════════════════════
     local hooks_dir="$REPO_ROOT/.github/hooks"
-    if [ -d "$hooks_dir" ]; then
+    local hooks_json="$hooks_dir/plan-forge.json"
+    local forge_config="$REPO_ROOT/.forge.json"
+    local hook_config_present=0 hooks_json_present=0
+    if [ -f "$forge_config" ]; then
+        local hooks_cfg_raw
+        hooks_cfg_raw="$(_json_field "$forge_config" "hooks")"
+        if [ -n "$hooks_cfg_raw" ] && [ "$hooks_cfg_raw" != "false" ] && [ "$hooks_cfg_raw" != "null" ]; then
+            hook_config_present=1
+        fi
+    fi
+    if [ -f "$hooks_json" ]; then
+        local hooks_json_raw
+        hooks_json_raw="$(_json_field "$hooks_json" "hooks")"
+        if [ -n "$hooks_json_raw" ] && [ "$hooks_json_raw" != "false" ] && [ "$hooks_json_raw" != "null" ]; then
+            hooks_json_present=1
+        fi
+    fi
+    if [ -d "$hooks_dir" ] || [ $hook_config_present -eq 1 ] || [ $hooks_json_present -eq 1 ]; then
         echo "Lifecycle Hooks:"
-        local expected_hooks=("SessionStart" "PreToolUse" "PostToolUse" "Stop")
+        local enums_cli="$REPO_ROOT/pforge-mcp/bin/enums-cli.mjs"
+        local expected_hooks=()
+        if command -v node >/dev/null 2>&1 && [ -f "$enums_cli" ]; then
+            mapfile -t expected_hooks < <(node "$enums_cli" --enum HOOK_PASCAL 2>/dev/null)
+        fi
+        if [ ${#expected_hooks[@]} -eq 0 ]; then
+            expected_hooks=("SessionStart" "PreToolUse" "PostToolUse" "Stop" "PreDeploy" "PostSlice" "PreAgentHandoff" "PostRun")
+        fi
+        # Build PascalCase->camelCase map for .forge.json config key lookup
+        declare -A hook_cfg_keys
+        local forge_json="$REPO_ROOT/.forge.json"
+        if command -v node >/dev/null 2>&1 && [ -f "$enums_cli" ] && command -v jq >/dev/null 2>&1; then
+            while IFS='=' read -r key val; do
+                hook_cfg_keys["$key"]="$val"
+            done < <(node "$enums_cli" --enum HOOK_NAMES --format json 2>/dev/null | jq -r 'to_entries | .[] | .key + "=" + .value' 2>/dev/null)
+        fi
         local hook_count=0 hook_missing=""
-        # plan-forge.json (shipped by `pforge update` from templates/) declares core hooks in PascalCase.
-        local hooks_json="$hooks_dir/plan-forge.json"
         for hook in "${expected_hooks[@]}"; do
-            local found=0
-            # Source 1: hook file matching the name (e.g. SessionStart.md, SessionStart.ps1)
-            if ls "$hooks_dir"/*"$hook"* >/dev/null 2>&1; then
+            local found=0 cfg_key cfg_val hook_json_val
+            cfg_key="${hook,}${hook:1}"
+            if [ -d "$hooks_dir" ] && find "$hooks_dir" -type f -name "*$hook*" -print -quit 2>/dev/null | grep -q .; then
                 found=1
             fi
-            # Source 2: .github/hooks/plan-forge.json declares this hook
+            # Source 2: .github/hooks/plan-forge.json declares this hook (PascalCase key)
             if [ $found -eq 0 ] && [ -f "$hooks_json" ] && command -v jq >/dev/null 2>&1; then
                 if jq -e ".hooks.\"$hook\"" "$hooks_json" >/dev/null 2>&1; then
+                    found=1
+                fi
+            fi
+            # Source 3: .forge.json -> hooks.<camelCase> (config-based hooks)
+            cfg_key="${hook_cfg_keys[$hook]:-$cfg_key}"
+            if [ $found -eq 0 ] && [ -n "$cfg_key" ] && [ -f "$forge_json" ] && command -v jq >/dev/null 2>&1; then
+                if jq -e ".hooks.\"$cfg_key\"" "$forge_json" >/dev/null 2>&1; then
                     found=1
                 fi
             fi
@@ -3464,6 +3503,25 @@ cmd_run_plan() {
         esac
         shift
     done
+
+    if [[ "$quorum_arg" == --quorum=* ]]; then
+        local quorum_val="${quorum_arg#--quorum=}"
+        local enums_cli_qm="$REPO_ROOT/pforge-mcp/bin/enums-cli.mjs"
+        if command -v node >/dev/null 2>&1 && [ -f "$enums_cli_qm" ]; then
+            local valid_qmodes=()
+            mapfile -t valid_qmodes < <(node "$enums_cli_qm" --enum QUORUM_MODES 2>/dev/null)
+            if [ ${#valid_qmodes[@]} -gt 0 ]; then
+                local qm_valid=false
+                for qm in "${valid_qmodes[@]}"; do
+                    if [ "$quorum_val" = "$qm" ]; then qm_valid=true; break; fi
+                done
+                if [ "$qm_valid" = false ]; then
+                    printf "ERROR: Invalid --quorum mode '%s'. Valid: %s\n" "$quorum_val" "$(IFS=', '; echo "${valid_qmodes[*]}")" >&2
+                    exit 1
+                fi
+            fi
+        fi
+    fi
 
     local mode="auto"
     if [ "$assisted" = true ]; then mode="assisted"; fi
@@ -4894,7 +4952,222 @@ else console.log(`\x1b[36m─── migrate-memory complete: ${migrated} migrate
 '
 }
 
-# ─── Command: mcp-call ─────────────────────────────────────────────────
+# ─── Command: forge-home-cleanup (Issue #203) ──────────────────────────
+# Moves ephemeral .forge/ files to .forge/archive/<YYYY-MM>/ and optionally
+# prunes old archive slots. Mirrors Invoke-ForgeHomeCleanup in pforge.ps1.
+#
+# Usage:
+#   pforge forge-home-cleanup [--dry-run] [--no-confirm] [--max-age-days=90]
+cmd_forge_home_cleanup() {
+    local script_path
+    script_path="$(dirname "$0")/scripts/forge-home-cleanup.mjs"
+    if [ ! -f "$script_path" ]; then
+        printf "\033[31mERROR: forge-home-cleanup.mjs not found at %s\033[0m\n" "$script_path" >&2
+        exit 1
+    fi
+    node "$script_path" "$@"
+    exit $?
+}
+
+# ─── Command: embeddings ────────────────────────────────────────────────
+# Manage and inspect the local semantic-search embedding backend.
+# Mirrors Invoke-Embeddings in pforge.ps1.
+#
+# Usage:
+#   pforge embeddings status [--path=<dir>]
+#   pforge embeddings install
+cmd_local_recall() {
+    local sub="${1:-status}"
+    shift 2>/dev/null || true
+
+    local path_arg=""
+    for a in "$@"; do
+        case "$a" in --path=*) path_arg="${a#--path=}";; esac
+    done
+
+    local mcp_dir
+    mcp_dir="$(dirname "$0")/pforge-mcp"
+
+    case "$sub" in
+        status)
+            local status_script
+            status_script="$(mktemp /tmp/pforge-lr-XXXXXX.mjs)"
+            cat > "$status_script" <<'EOJS'
+import { getIndexStatus } from './local-recall.mjs';
+const cwd = process.argv[2] || process.cwd();
+const s = getIndexStatus(cwd);
+const staleness = s.exists ? (s.stale === true ? 'stale' : s.stale === false ? 'fresh' : 'unknown') : 'n/a';
+console.log('');
+console.log('Local Recall Index Status');
+console.log('=========================');
+console.log('Index exists : ' + (s.exists ? 'yes' : 'no'));
+if (s.exists) {
+  console.log('Version      : ' + (s.version ?? 'unknown'));
+  console.log('Built at     : ' + (s.builtAt ?? 'unknown'));
+  console.log('Corpus size  : ' + (s.corpusSize ?? 0) + ' thoughts');
+  console.log('Freshness    : ' + staleness);
+  console.log('Cache file   : ' + s.cacheFile);
+} else {
+  console.log('');
+  console.log('Run "pforge local-recall warm" to pre-build the index,');
+  console.log('or run forge_local_search to build it on demand.');
+}
+console.log('');
+EOJS
+            (cd "$mcp_dir" && node "$status_script" "$path_arg")
+            local rc=$?
+            rm -f "$status_script"
+            exit $rc
+            ;;
+        warm)
+            local warm_script
+            warm_script="$(mktemp /tmp/pforge-lr-warm-XXXXXX.mjs)"
+            cat > "$warm_script" <<'EOJS'
+import { searchLocalThoughts, getIndexStatus } from './local-recall.mjs';
+const cwd = process.argv[2] || process.cwd();
+console.log('');
+console.log('Warming TF-IDF index cache...');
+await searchLocalThoughts('_warm_', { cwd, limit: 1, noCache: false });
+const s = getIndexStatus(cwd);
+if (s.exists) {
+  console.log('Index built. ' + (s.corpusSize ?? 0) + ' thought' + ((s.corpusSize ?? 0) === 1 ? '' : 's') + ' indexed.');
+  console.log('Cache file: ' + s.cacheFile);
+} else {
+  console.log('No thoughts found in .forge/ — index not built (empty corpus).');
+}
+console.log('');
+EOJS
+            (cd "$mcp_dir" && node "$warm_script" "$path_arg")
+            local rc=$?
+            rm -f "$warm_script"
+            exit $rc
+            ;;
+        clear)
+            local clear_script
+            clear_script="$(mktemp /tmp/pforge-lr-clear-XXXXXX.mjs)"
+            cat > "$clear_script" <<'EOJS'
+import { clearPersistedIndex } from './local-recall.mjs';
+const cwd = process.argv[2] || process.cwd();
+clearPersistedIndex(cwd);
+console.log('');
+console.log('TF-IDF index cache cleared.');
+console.log('It will be rebuilt on the next forge_local_search call.');
+console.log('');
+EOJS
+            (cd "$mcp_dir" && node "$clear_script" "$path_arg")
+            local rc=$?
+            rm -f "$clear_script"
+            exit $rc
+            ;;
+        *)
+            printf "\033[33mUsage: pforge local-recall <subcommand>\033[0m\n"
+            printf "\n"
+            printf "Subcommands:\n"
+            printf "  status  Show TF-IDF index cache info (default)\n"
+            printf "  warm    Pre-build the index for zero-cost first search\n"
+            printf "  clear   Delete the cache to force a fresh rebuild\n"
+            printf "\n"
+            exit 1
+            ;;
+    esac
+}
+
+    local sub="${1:-status}"
+    shift 2>/dev/null || true
+
+    case "$sub" in
+        status)
+            local path_arg=""
+            for a in "$@"; do
+                case "$a" in --path=*) path_arg="${a#--path=}";; esac
+            done
+            local mcp_dir
+            mcp_dir="$(dirname "$0")/pforge-mcp"
+            local status_script
+            status_script="$(mktemp /tmp/pforge-emb-XXXXXX.mjs)"
+            cat > "$status_script" <<'EOJS'
+import { isNeuralEmbeddingAvailable, readLocalThoughts } from './local-recall.mjs';
+import { readFileSync, existsSync } from 'node:fs';
+import { resolve, join } from 'node:path';
+const cwd = process.argv[2] || process.cwd();
+const neural = await isNeuralEmbeddingAvailable();
+let version = null;
+if (neural) {
+  try {
+    const p = join(cwd, 'node_modules', '@xenova', 'transformers', 'package.json');
+    if (existsSync(p)) version = JSON.parse(readFileSync(p,'utf-8')).version ?? null;
+  } catch {}
+}
+const thoughts = readLocalThoughts(cwd);
+let configured = 'auto';
+try {
+  const fj = JSON.parse(readFileSync(resolve(cwd,'.forge','forge.json'),'utf-8'));
+  if (fj?.embeddingBackend) configured = fj.embeddingBackend;
+} catch {}
+const effective = configured === 'tfidf' ? 'tfidf'
+  : configured === 'neural' ? (neural ? 'neural' : 'tfidf')
+  : (neural ? 'neural' : 'tfidf');
+console.log('');
+console.log('Embedding Backend Status');
+console.log('========================');
+console.log('Active backend : ' + effective);
+console.log('Neural avail.  : ' + (neural ? 'yes (v' + (version ?? 'unknown') + ')' : 'no'));
+console.log('Model          : Xenova/all-MiniLM-L6-v2');
+console.log('Corpus size    : ' + thoughts.length + ' thoughts in .forge/');
+console.log('Configured     : ' + configured + ' (in .forge.json embeddingBackend)');
+if (!neural) {
+  console.log('');
+  console.log('To enable neural embeddings:');
+  console.log('  cd pforge-mcp && npm install --save-optional @xenova/transformers');
+}
+console.log('');
+EOJS
+            (cd "$mcp_dir" && node "$status_script" "$path_arg")
+            local rc=$?
+            rm -f "$status_script"
+            exit $rc
+            ;;
+        install)
+            printf "\033[36mInstalling @xenova/transformers as optional dependency...\033[0m\n"
+            local mcp_dir
+            mcp_dir="$(dirname "$0")/pforge-mcp"
+            (cd "$mcp_dir" && npm install --save-optional @xenova/transformers)
+            local rc=$?
+            if [ $rc -ne 0 ]; then
+                printf "\033[31mERROR: npm install failed (exit %d)\033[0m\n" "$rc" >&2
+                exit $rc
+            fi
+            printf "\n\033[36mPre-downloading all-MiniLM-L6-v2 model...\033[0m\n"
+            local warmup_script
+            warmup_script="$(mktemp /tmp/pforge-emb-warm-XXXXXX.mjs)"
+            cat > "$warmup_script" <<'EOJS'
+import { pipeline } from '@xenova/transformers';
+const embedder = await pipeline('feature-extraction', 'Xenova/all-MiniLM-L6-v2', { quantized: true });
+const out = await embedder('test', { pooling: 'mean', normalize: true });
+console.log('Model ready. Embedding dim: ' + out.data.length);
+EOJS
+            (cd "$mcp_dir" && node "$warmup_script")
+            local rc2=$?
+            rm -f "$warmup_script"
+            if [ $rc2 -eq 0 ]; then
+                printf "\033[32mNeural embeddings installed and ready.\033[0m\n"
+                printf "Run 'pforge embeddings status' to verify.\n"
+            else
+                printf "\033[33mWARNING: Model warmup failed — embeddings may still work on first use.\033[0m\n"
+            fi
+            exit 0
+            ;;
+        *)
+            printf "\033[33mUsage: pforge embeddings <subcommand>\033[0m\n"
+            printf "\n"
+            printf "Subcommands:\n"
+            printf "  status   Show active embedding backend and corpus size\n"
+            printf "  install  Install @xenova/transformers for neural embeddings\n"
+            printf "\n"
+            exit 1
+            ;;
+    esac
+}
 # Generic proxy for any MCP tool exposed by the running pforge-mcp server
 # on :3100. Covers crucible-*, tempering-*, bug-*, generate-image,
 # run-skill, skill-status, and every future tool without needing a
@@ -5286,8 +5559,25 @@ cmd_forge_master() {
     case "$sub" in
         status) node "$lifecycle_path" status ;;
         logs)   node "$lifecycle_path" logs ;;
+        observe)
+            local observe_sub="${2:-}"
+            local observer_path="$REPO_ROOT/pforge-master/src/observer-loop.mjs"
+            if [[ ! -f "$observer_path" ]]; then
+                echo "ERROR: observer-loop.mjs not found at $observer_path" >&2
+                exit 1
+            fi
+            case "$observe_sub" in
+                start)  node "$observer_path" start ;;
+                stop)   node "$observer_path" stop ;;
+                status) node "$observer_path" status ;;
+                *)
+                    echo "Usage: pforge forge-master observe <start|stop|status>" >&2
+                    exit 1
+                    ;;
+            esac
+            ;;
         *)
-            echo "Usage: pforge forge-master <status|logs>" >&2
+            echo "Usage: pforge forge-master <status|logs|observe>" >&2
             exit 1
             ;;
     esac
@@ -6595,6 +6885,9 @@ case "$COMMAND" in
     version-bump) cmd_version_bump "$@" ;;
     migrate-memory) cmd_migrate_memory "$@" ;;
     drain-memory) cmd_drain_memory "$@" ;;
+    forge-home-cleanup) cmd_forge_home_cleanup "$@" ;;
+    embeddings)   cmd_embeddings "$@" ;;
+    local-recall) cmd_local_recall "$@" ;;
     brain)        cmd_brain "$@" ;;
     mcp-call)     cmd_mcp_call "$@" ;;
     tour)         cmd_tour ;;

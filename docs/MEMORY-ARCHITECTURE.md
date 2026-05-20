@@ -4,7 +4,7 @@
 > **Since**: v2.35  
 > **Audience**: contributors adding new MCP tools, skills, or storage surfaces
 
-> **v3.x Memory Architecture** — This document reflects the v3.x memory subsystem, which builds on the L1/L2/L3 tier model with four major additions: **Hallmark provenance envelopes** (every L3 write is tagged with source, hash, and capability negotiation result — originally landed in v2.95.0), **Anvil Δ-only memoization** (write-through cache layer between tools and L1/L2 — v2.95.0), the **Lattice code index** (parallel structural index for call-graph and cross-reference queries — v2.95.0), and **`forge_sync_memories` / `forge_sync_instructions`** (the Copilot Memory bridge that pushes decisions and lessons upward into `.github/copilot-memory-hints.md` and regenerates `copilot-instructions.md` — v2.99/v3.0). See the plan files for design rationale: [Phase-HALLMARK-CONTRACT](https://github.com/srnichols/plan-forge/blob/planning/main/docs/plans/archive/Phase-HALLMARK-CONTRACT-PLAN.md) · [Phase-ANVIL](https://github.com/srnichols/plan-forge/blob/planning/main/docs/plans/archive/Phase-ANVIL-PLAN.md) · [Phase-LATTICE](https://github.com/srnichols/plan-forge/blob/planning/main/docs/plans/archive/Phase-LATTICE-PLAN.md) (all live on `planning/main`). The Hallmark schema is defined in [`pforge-sdk/schemas/hallmark-provenance.v1.json`](../pforge-sdk/schemas/hallmark-provenance.v1.json).
+> **v3.x Memory Architecture** — This document reflects the v3.x memory subsystem, which builds on the L1/L2/L3 tier model with four major additions: **Hallmark provenance envelopes** (every L3 write is tagged with source, hash, and capability negotiation result — originally landed in v2.95.0), **Anvil Δ-only memoization** (write-through cache layer between tools and L1/L2 — v2.95.0), the **Lattice code index** (parallel structural index for call-graph and cross-reference queries — v2.95.0), and **`forge_sync_memories` / `forge_sync_instructions`** (the Copilot Memory bridge that pushes decisions and lessons upward into `.github/copilot-memory-hints.md` and regenerates `copilot-instructions.md` — v2.99/v3.0). See the plan files for design rationale: [Phase-HALLMARK-CONTRACT](plans/archive/Phase-HALLMARK-CONTRACT-PLAN.md) · [Phase-ANVIL](plans/archive/Phase-ANVIL-PLAN.md) · [Phase-LATTICE](plans/archive/Phase-LATTICE-PLAN.md) · [Phase-PROVENANCE](plans/Phase-PROVENANCE-PLAN.md). The Hallmark schema is defined in [`pforge-sdk/schemas/hallmark-provenance.v1.json`](../pforge-sdk/schemas/hallmark-provenance.v1.json).
 
 ---
 
@@ -449,9 +449,9 @@ Three concrete items drop out of this architecture:
 - [`pforge-mcp/tools.json`](../pforge-mcp/tools.json) — tool manifest.
 - [`pforge-sdk/schemas/hallmark-provenance.v1.json`](../pforge-sdk/schemas/hallmark-provenance.v1.json) — Hallmark envelope schema.
 - [`docs/UNIFIED-SYSTEM-ARCHITECTURE.md`](UNIFIED-SYSTEM-ARCHITECTURE.md) — broader system context.
-- [`docs/plans/archive/Phase-HALLMARK-CONTRACT-PLAN.md`](https://github.com/srnichols/plan-forge/blob/planning/main/docs/plans/archive/Phase-HALLMARK-CONTRACT-PLAN.md) — Hallmark design rationale (lives on `planning/main`).
-- [`docs/plans/archive/Phase-ANVIL-PLAN.md`](https://github.com/srnichols/plan-forge/blob/planning/main/docs/plans/archive/Phase-ANVIL-PLAN.md) — Anvil design rationale (lives on `planning/main`).
-- [`docs/plans/archive/Phase-LATTICE-PLAN.md`](https://github.com/srnichols/plan-forge/blob/planning/main/docs/plans/archive/Phase-LATTICE-PLAN.md) — Lattice design rationale (lives on `planning/main`).
+- [`docs/plans/archive/Phase-HALLMARK-CONTRACT-PLAN.md`](plans/archive/Phase-HALLMARK-CONTRACT-PLAN.md) — Hallmark design rationale.
+- [`docs/plans/archive/Phase-ANVIL-PLAN.md`](plans/archive/Phase-ANVIL-PLAN.md) — Anvil design rationale.
+- [`docs/plans/archive/Phase-LATTICE-PLAN.md`](plans/archive/Phase-LATTICE-PLAN.md) — Lattice design rationale.
 
 ---
 

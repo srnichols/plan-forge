@@ -348,32 +348,9 @@ function emit(handler, event) {
 
 // ─── Self-Tests ───────────────────────────────────────────────────────
 
-async function selfTest() {
-  const IS_WINDOWS = process.platform === "win32";
-  const box = IS_WINDOWS ? ["=", "|"] : ["═", "║"];
-
-  console.log(`╔${"═".repeat(42)}╗`);
-  console.log(`║  Plan Forge Skill Runner — Self Test    ║`);
-  console.log(`╚${"═".repeat(42)}╝`);
-  console.log();
-
-  let passed = 0;
-  let failed = 0;
-
-  function assert(condition, label) {
-    if (condition) {
-      console.log(`  ✓ ${label}`);
-      passed++;
-    } else {
-      console.log(`  ✗ ${label}`);
-      failed++;
-    }
-  }
-
-  // ─── Frontmatter Parser ───
+function runFrontmatterSelfTest(assert) {
   console.log("─── Frontmatter Parser ───");
-  {
-    const content = `---
+  const content = `---
 name: test-skill
 description: A test skill
 argument-hint: "[test]"
@@ -383,31 +360,29 @@ tools:
   - forge_sweep
 ---
 # Test`;
-    const meta = parseFrontmatter(content);
-    assert(meta.name === "test-skill", "Parses name");
-    assert(meta.description === "A test skill", "Parses description");
-    assert(meta.tools.length === 3, "Parses 3 tools");
-    assert(meta.tools[0] === "run_in_terminal", "First tool correct");
-    assert(meta.tools[2] === "forge_sweep", "Third tool correct");
-  }
+  const meta = parseFrontmatter(content);
+  assert(meta.name === "test-skill", "Parses name");
+  assert(meta.description === "A test skill", "Parses description");
+  assert(meta.tools.length === 3, "Parses 3 tools");
+  assert(meta.tools[0] === "run_in_terminal", "First tool correct");
+  assert(meta.tools[2] === "forge_sweep", "Third tool correct");
+}
 
-  // ─── Inline tools format ───
+function runInlineToolsSelfTest(assert) {
   console.log("\n─── Inline Tools Format ───");
-  {
-    const content = `---
+  const content = `---
 name: inline-test
 description: Test
 tools: [read_file, forge_analyze, forge_diff]
 ---`;
-    const meta = parseFrontmatter(content);
-    assert(meta.tools.length === 3, "Parses inline tools array");
-    assert(meta.tools[1] === "forge_analyze", "Inline tool correct");
-  }
+  const meta = parseFrontmatter(content);
+  assert(meta.tools.length === 3, "Parses inline tools array");
+  assert(meta.tools[1] === "forge_analyze", "Inline tool correct");
+}
 
-  // ─── Step Parser ───
+function runStepParserSelfTest(assert) {
   console.log("\n─── Step Parser ───");
-  {
-    const content = `---
+  const content = `---
 name: test
 description: test
 ---
@@ -430,101 +405,126 @@ Do something manually.
 echo done
 \`\`\`
 `;
-    const steps = parseSteps(content);
-    assert(steps.length === 3, "Parses 3 steps");
-    assert(steps[0].number === 1, "First step number correct");
-    assert(steps[0].name === "First Step", "First step name correct");
-    assert(steps[1].conditional !== null, "Second step has conditional");
-    assert(steps[1].conditional?.action.includes("Stop"), "Conditional action parsed");
-  }
+  const steps = parseSteps(content);
+  assert(steps.length === 3, "Parses 3 steps");
+  assert(steps[0].number === 1, "First step number correct");
+  assert(steps[0].name === "First Step", "First step name correct");
+  assert(steps[1].conditional !== null, "Second step has conditional");
+  assert(steps[1].conditional?.action.includes("Stop"), "Conditional action parsed");
+}
 
-  // ─── Command Extraction ───
+function runCommandExtractionSelfTest(assert) {
   console.log("\n─── Command Extraction ───");
-  {
-    const rawLines = [
-      "Some text",
-      "```bash",
-      "echo hello",
-      "# this is a comment",
-      "echo world",
-      "```",
-      "More text",
-    ];
-    const cmds = extractCommands(rawLines);
-    assert(cmds.length === 2, "Extracts 2 commands (skips comment)");
-    assert(cmds[0] === "echo hello", "First command correct");
-    assert(cmds[1] === "echo world", "Second command correct");
-  }
+  const rawLines = [
+    "Some text",
+    "```bash",
+    "echo hello",
+    "# this is a comment",
+    "echo world",
+    "```",
+    "More text",
+  ];
+  const cmds = extractCommands(rawLines);
+  assert(cmds.length === 2, "Extracts 2 commands (skips comment)");
+  assert(cmds[0] === "echo hello", "First command correct");
+  assert(cmds[1] === "echo world", "Second command correct");
+}
 
-  // ─── Safety Rules Parser ───
+function runSafetyRulesSelfTest(assert) {
   console.log("\n─── Safety Rules ───");
-  {
-    const content = `## Safety Rules
+  const content = `## Safety Rules
 - NEVER do bad things
 - ALWAYS do good things
 - Check your work
 
 ## Other`;
-    const rules = parseSafetyRules(content);
-    assert(rules.length === 3, "Parses 3 safety rules");
-    assert(rules[0].includes("NEVER"), "First rule parsed");
-  }
+  const rules = parseSafetyRules(content);
+  assert(rules.length === 3, "Parses 3 safety rules");
+  assert(rules[0].includes("NEVER"), "First rule parsed");
+}
 
-  // ─── Full Parse (real file if available) ───
+function runFullSkillParseSelfTest(assert) {
   console.log("\n─── Full Skill Parse ───");
-  {
-    const testSkillPath = resolve(process.cwd(), "presets/shared/skills/health-check/SKILL.md");
-    if (existsSync(testSkillPath)) {
-      const skill = parseSkill(testSkillPath);
-      assert(skill.meta.name === "health-check", "Health-check skill name");
-      assert(skill.meta.tools.length >= 3, "Health-check has 3+ tools");
-      assert(skill.steps.length >= 3, "Health-check has 3+ steps");
-      assert(skill.safetyRules.length >= 1, "Has safety rules");
-      assert(skill.stepCount === skill.steps.length, "stepCount matches");
-    } else {
-      assert(true, "Health-check skill not found — skipping (OK in non-root dir)");
-    }
+  const testSkillPath = resolve(process.cwd(), "presets/shared/skills/health-check/SKILL.md");
+  if (existsSync(testSkillPath)) {
+    const skill = parseSkill(testSkillPath);
+    assert(skill.meta.name === "health-check", "Health-check skill name");
+    assert(skill.meta.tools.length >= 3, "Health-check has 3+ tools");
+    assert(skill.steps.length >= 3, "Health-check has 3+ steps");
+    assert(skill.safetyRules.length >= 1, "Has safety rules");
+    assert(skill.stepCount === skill.steps.length, "stepCount matches");
+    return;
   }
+  assert(true, "Health-check skill not found — skipping (OK in non-root dir)");
+}
 
-  // ─── Missing file error ───
+function runErrorPathSelfTest(assert) {
   console.log("\n─── Error Paths ───");
-  {
-    let threw = false;
-    try { parseSkill("/nonexistent/SKILL.md"); } catch { threw = true; }
-    assert(threw, "Missing file throws error");
+  let threw = false;
+  try {
+    parseSkill("/nonexistent/SKILL.md");
+  } catch {
+    threw = true;
   }
+  assert(threw, "Missing file throws error");
+}
 
-  // ─── Execute with mock ───
+async function runMockExecutionSelfTest(assert) {
   console.log("\n─── Skill Execution (mock) ───");
-  {
-    const mockSkill = {
-      meta: { name: "mock-skill" },
-      steps: [
-        { number: 1, name: "Echo Test", rawLines: ["```bash", "echo ok", "```"], conditional: null },
-        { number: 2, name: "Info Step", rawLines: ["Just informational text"], conditional: null },
-      ],
-      safetyRules: [],
-      memoryBlock: null,
-      stepCount: 2,
-    };
+  const mockSkill = {
+    meta: { name: "mock-skill" },
+    steps: [
+      { number: 1, name: "Echo Test", rawLines: ["```bash", "echo ok", "```"], conditional: null },
+      { number: 2, name: "Info Step", rawLines: ["Just informational text"], conditional: null },
+    ],
+    safetyRules: [],
+    memoryBlock: null,
+    stepCount: 2,
+  };
 
-    const events = [];
-    const handler = { handle: (e) => events.push(e) };
-    const result = await executeSkill(mockSkill, { eventHandler: handler });
+  const events = [];
+  const handler = { handle: (event) => events.push(event) };
+  const result = await executeSkill(mockSkill, { eventHandler: handler });
 
-    assert(result.status === "completed", "Mock skill completes");
-    assert(result.stepsPassed === 2, "Both steps passed");
-    assert(result.stepsFailed === 0, "No failures");
-    assert(events.length >= 4, "Events emitted (start + 2 step-starts + 2 step-completes + done)");
-    assert(events[0].type === "skill-started", "First event is skill-started");
-    assert(events[events.length - 1].type === "skill-completed", "Last event is skill-completed");
-  }
+  assert(result.status === "completed", "Mock skill completes");
+  assert(result.stepsPassed === 2, "Both steps passed");
+  assert(result.stepsFailed === 0, "No failures");
+  assert(events.length >= 4, "Events emitted (start + 2 step-starts + 2 step-completes + done)");
+  assert(events[0].type === "skill-started", "First event is skill-started");
+  assert(events[events.length - 1].type === "skill-completed", "Last event is skill-completed");
+}
+
+async function selfTest() {
+  console.log(`╔${"═".repeat(42)}╗`);
+  console.log("║  Plan Forge Skill Runner — Self Test    ║");
+  console.log(`╚${"═".repeat(42)}╝`);
+  console.log();
+
+  let passed = 0;
+  let failed = 0;
+  const assert = (condition, label) => {
+    if (condition) {
+      console.log(`  ✓ ${label}`);
+      passed++;
+      return;
+    }
+    console.log(`  ✗ ${label}`);
+    failed++;
+  };
+
+  runFrontmatterSelfTest(assert);
+  runInlineToolsSelfTest(assert);
+  runStepParserSelfTest(assert);
+  runCommandExtractionSelfTest(assert);
+  runSafetyRulesSelfTest(assert);
+  runFullSkillParseSelfTest(assert);
+  runErrorPathSelfTest(assert);
+  await runMockExecutionSelfTest(assert);
 
   console.log();
   console.log(`${"═".repeat(43)}`);
   console.log(`  Results: ${passed} passed, ${failed} failed`);
   console.log(`${"═".repeat(43)}`);
-
   process.exit(failed > 0 ? 1 : 0);
 }
 

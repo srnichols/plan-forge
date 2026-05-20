@@ -30,17 +30,3 @@ pforge text eol=lf
 
 # Generated artifact — suppress from GitHub diffs
 docs/assets/tailwind.built.css linguist-generated=true
-
-# ---------------------------------------------------------------------------
-# Plan Forge maintainer hygiene — exclude internal dev artifacts from
-# `git archive` tarballs and "Download ZIP" so consumers cloning master never
-# get Plan Forge's own dev planning artifacts. These paths should never land
-# on master (they live on `planning/main`); these are belt-and-suspenders
-# rules in case anything leaks back.
-# ---------------------------------------------------------------------------
-docs/plans/archive/                  export-ignore
-docs/plans/Phase-*-PLAN.md           export-ignore
-docs/plans/PHASE-*-RUNBOOK.md        export-ignore
-docs/plans/DEPLOYMENT-ROADMAP.md     export-ignore
-docs/plans/cleanup-findings/         export-ignore
-docs/plans/testbed-findings/         export-ignore

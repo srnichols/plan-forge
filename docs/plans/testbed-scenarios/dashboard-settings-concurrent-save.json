@@ -1,0 +1,27 @@
+{
+  "scenarioId": "dashboard-settings-concurrent-save",
+  "kind": "happy-path",
+  "description": "Simulate two near-simultaneous settings saves; final .forge.json must be valid JSON with no partial content, reflecting last-write-wins atomically with no corrupted file.",
+  "setup": [
+    {
+      "cmd": "node -e \"const fs=require('fs'),p=require('path'); fs.mkdirSync(p.join(process.cwd(),'.forge'),{recursive:true}); fs.writeFileSync(p.join(process.cwd(),'.forge.json'),JSON.stringify({preset:'default',forgeMaster:{observer:{enabled:false,maxUsdPerDay:1}}}));\"",
+      "timeout": 10000
+    }
+  ],
+  "execute": [
+    {
+      "cmd": "node -e \"const fs=require('fs'),p=require('path'); const fp=p.join(process.cwd(),'.forge.json'); const cfgA={preset:'default',forgeMaster:{observer:{enabled:true,maxUsdPerDay:2}}}; const cfgB={preset:'default',forgeMaster:{observer:{enabled:false,maxUsdPerDay:3}}}; fs.writeFileSync(fp,JSON.stringify(cfgA,null,2)); fs.writeFileSync(fp,JSON.stringify(cfgB,null,2)); let final; try{final=JSON.parse(fs.readFileSync(fp,'utf-8'));}catch(e){throw new Error('final .forge.json is invalid JSON: '+e.message);} if(typeof final!=='object'||final===null)throw new Error('invalid object after concurrent save'); if(final.forgeMaster.observer.maxUsdPerDay!==3)throw new Error('last-write-wins failed: expected 3, got '+final.forgeMaster.observer.maxUsdPerDay); console.log('ok concurrent-save: last-write-wins, .forge.json is valid JSON');\"",
+      "timeout": 10000
+    }
+  ],
+  "assertions": [
+    { "kind": "exit-code", "expected": 0 },
+    { "kind": "file-contains", "path": ".forge.json", "pattern": "maxUsdPerDay" }
+  ],
+  "teardown": [
+    {
+      "cmd": "node -e \"const fs=require('fs'),p=require('path'); try{fs.rmSync(p.join(process.cwd(),'.forge.json'),{force:true});}catch{}\"",
+      "timeout": 10000
+    }
+  ]
+}

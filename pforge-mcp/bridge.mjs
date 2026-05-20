@@ -125,55 +125,65 @@ function getEventColor(event) {
  * @param {"plain"|"markdown"} style - Text style
  * @returns {string}
  */
+function _fmtRunStarted(event, fmt) {
+  const plan = event.plan ? fmt.code(basename(event.plan)) : "plan";
+  const count = event.sliceCount ?? "?";
+  const mode = event.mode ?? "auto";
+  return `🚀 ${fmt.bold("Plan Forge")} — Executing ${plan} (${count} slices, ${mode} mode)`;
+}
+
+function _fmtSliceStarted(event) {
+  return `▶️ Slice ${event.sliceId} started${event.title ? `: ${event.title}` : ""}`;
+}
+
+function _fmtSliceCompleted(event) {
+  const dur = event.duration != null ? `${Math.round(event.duration / 1000)}s` : null;
+  const cost = event.cost_usd != null ? `$${event.cost_usd.toFixed(2)}` : null;
+  const detail = [dur, cost].filter(Boolean).join(", ");
+  return `✅ Slice ${event.sliceId} passed${detail ? ` (${detail})` : ""}`;
+}
+
+function _fmtSliceFailed(event, fmt) {
+  const cmd = event.failedCommand ? fmt.code(event.failedCommand) : null;
+  const err = !cmd && event.error ? event.error.slice(0, 120) : null;
+  const detail = cmd ?? err ?? "";
+  return `❌ Slice ${event.sliceId} FAILED${detail ? ` — ${detail}` : ""}`;
+}
+
+function _fmtRunCompleted(event, fmt) {
+  const r = event.results ?? {};
+  const passed = r.passed ?? 0;
+  const failed = r.failed ?? 0;
+  const total = passed + failed;
+  const plan = event.plan ? fmt.code(basename(event.plan)) : null;
+  const score = event.analyze?.score != null ? ` Score: ${event.analyze.score}.` : "";
+  const cost = event.cost?.total_cost_usd != null
+    ? ` Cost: $${Number(event.cost.total_cost_usd).toFixed(2)}.`
+    : "";
+  const summary = total > 0 ? `${passed}/${total} passed.` : "Complete.";
+  return `🏁 ${fmt.bold("Plan Forge")}${plan ? ` — ${plan}` : ""} ${summary}${score}${cost}`;
+}
+
+function _fmtRunAborted(event) {
+  return `🛑 Execution aborted at slice ${event.sliceId ?? "?"}${event.reason ? `: ${event.reason}` : ""}`;
+}
+
+const _FORMAT_EVENT_HANDLERS = {
+  "run-started": _fmtRunStarted,
+  "slice-started": _fmtSliceStarted,
+  "slice-completed": _fmtSliceCompleted,
+  "slice-failed": _fmtSliceFailed,
+  "run-completed": _fmtRunCompleted,
+  "run-aborted": _fmtRunAborted,
+};
+
 function formatEventText(event, style = "plain") {
-  const bold = (s) => style === "markdown" ? `*${s}*` : s;
-  const code = (s) => style === "markdown" ? `\`${s}\`` : s;
-
-  switch (event.type) {
-    case "run-started": {
-      const plan = event.plan ? code(basename(event.plan)) : "plan";
-      const count = event.sliceCount ?? "?";
-      const mode = event.mode ?? "auto";
-      return `🚀 ${bold("Plan Forge")} — Executing ${plan} (${count} slices, ${mode} mode)`;
-    }
-
-    case "slice-started":
-      return `▶️ Slice ${event.sliceId} started${event.title ? `: ${event.title}` : ""}`;
-
-    case "slice-completed": {
-      const dur = event.duration != null ? `${Math.round(event.duration / 1000)}s` : null;
-      const cost = event.cost_usd != null ? `$${event.cost_usd.toFixed(2)}` : null;
-      const detail = [dur, cost].filter(Boolean).join(", ");
-      return `✅ Slice ${event.sliceId} passed${detail ? ` (${detail})` : ""}`;
-    }
-
-    case "slice-failed": {
-      const cmd = event.failedCommand ? code(event.failedCommand) : null;
-      const err = !cmd && event.error ? event.error.slice(0, 120) : null;
-      const detail = cmd ?? err ?? "";
-      return `❌ Slice ${event.sliceId} FAILED${detail ? ` — ${detail}` : ""}`;
-    }
-
-    case "run-completed": {
-      const r = event.results ?? {};
-      const passed = r.passed ?? 0;
-      const failed = r.failed ?? 0;
-      const total = passed + failed;
-      const plan = event.plan ? code(basename(event.plan)) : null;
-      const score = event.analyze?.score != null ? ` Score: ${event.analyze.score}.` : "";
-      const cost = event.cost?.total_cost_usd != null
-        ? ` Cost: $${Number(event.cost.total_cost_usd).toFixed(2)}.`
-        : "";
-      const summary = total > 0 ? `${passed}/${total} passed.` : "Complete.";
-      return `🏁 ${bold("Plan Forge")}${plan ? ` — ${plan}` : ""} ${summary}${score}${cost}`;
-    }
-
-    case "run-aborted":
-      return `🛑 Execution aborted at slice ${event.sliceId ?? "?"}${event.reason ? `: ${event.reason}` : ""}`;
-
-    default:
-      return `${event.type}: ${JSON.stringify(event)}`;
-  }
+  const fmt = {
+    bold: (s) => style === "markdown" ? `*${s}*` : s,
+    code: (s) => style === "markdown" ? `\`${s}\`` : s,
+  };
+  const fn = _FORMAT_EVENT_HANDLERS[event.type];
+  return fn ? fn(event, fmt) : `${event.type}: ${JSON.stringify(event)}`;
 }
 
 // ─── Telegram MarkdownV2 Helpers ─────────────────────────────────────
@@ -201,65 +211,76 @@ function tgCode(text) { return `\`${text}\``; }
  * @param {{ sliceCount?: number, plan?: string, model?: string }} [context] - Cached run context
  * @returns {string}
  */
+function _tgRunStarted(event) {
+  const plan = event.plan ? tgCode(basename(event.plan)) : escapeMdV2("plan");
+  const count = escapeMdV2(event.sliceCount ?? "?");
+  const mode = escapeMdV2(event.mode ?? "auto");
+  return `🚀 ${tgBold("Plan Forge")} — Executing ${plan} \\(${count} slices, ${mode} mode\\)`;
+}
+
+function _tgSliceStarted(event, sliceRef) {
+  const id = sliceRef(event.sliceId);
+  const title = event.title ? ` \\— ${escapeMdV2(event.title)}` : "";
+  return `▶️ Slice ${id} started${title}`;
+}
+
+function _tgSliceCompleted(event, sliceRef) {
+  const id = sliceRef(event.sliceId);
+  const dur = event.duration != null ? escapeMdV2(`${Math.round(event.duration / 1000)}s`) : null;
+  const cost = event.cost_usd != null ? escapeMdV2(`$${event.cost_usd.toFixed(2)}`) : null;
+  const detail = [dur, cost].filter(Boolean).join(", ");
+  return `✅ Slice ${id} passed${detail ? ` \\(${detail}\\)` : ""}`;
+}
+
+function _tgSliceFailed(event, sliceRef) {
+  const id = sliceRef(event.sliceId);
+  const cmd = event.failedCommand ? tgCode(event.failedCommand) : null;
+  const err = !cmd && event.error ? escapeMdV2(event.error.slice(0, 120)) : null;
+  const detail = cmd ?? err ?? "";
+  return `❌ Slice ${id} FAILED${detail ? ` — ${detail}` : ""}`;
+}
+
+function _tgRunCompleted(event) {
+  const r = event.results ?? {};
+  const passed = r.passed ?? 0;
+  const failed = r.failed ?? 0;
+  const total = passed + failed;
+  const plan = event.plan ? ` — ${tgCode(basename(event.plan))}` : "";
+  const summary = escapeMdV2(total > 0 ? `${passed}/${total} passed` : "Complete");
+  const score = event.analyze?.score != null
+    ? ` Score: ${escapeMdV2(String(event.analyze.score))}\\.`
+    : "";
+  const cost = event.cost?.total_cost_usd != null
+    ? ` Cost: ${escapeMdV2(`$${Number(event.cost.total_cost_usd).toFixed(2)}`)}\\.`
+    : "";
+  const icon = failed === 0 ? "🏁" : "⚠️";
+  return `${icon} ${tgBold("Plan Forge")}${plan} ${summary}\\.${score}${cost}`;
+}
+
+function _tgRunAborted(event) {
+  const id = escapeMdV2(event.sliceId ?? "?");
+  const reason = event.reason ? `: ${escapeMdV2(event.reason)}` : "";
+  return `🛑 Execution aborted at slice ${id}${reason}`;
+}
+
+const _TELEGRAM_HANDLERS = {
+  "run-started": _tgRunStarted,
+  "slice-started": _tgSliceStarted,
+  "slice-completed": _tgSliceCompleted,
+  "slice-failed": _tgSliceFailed,
+  "run-completed": _tgRunCompleted,
+  "run-aborted": _tgRunAborted,
+};
+
 function buildTelegramText(event, context) {
-  /** Format sliceId as "N" or "N/Total" when total is known. */
   const sliceRef = (id) => {
     const total = context?.sliceCount;
     return total != null
       ? `${escapeMdV2(id ?? "?")}/${escapeMdV2(total)}`
       : escapeMdV2(id ?? "?");
   };
-
-  switch (event.type) {
-    case "run-started": {
-      const plan = event.plan ? tgCode(basename(event.plan)) : escapeMdV2("plan");
-      const count = escapeMdV2(event.sliceCount ?? "?");
-      const mode = escapeMdV2(event.mode ?? "auto");
-      return `🚀 ${tgBold("Plan Forge")} — Executing ${plan} \\(${count} slices, ${mode} mode\\)`;
-    }
-    case "slice-started": {
-      const id = sliceRef(event.sliceId);
-      const title = event.title ? ` \\— ${escapeMdV2(event.title)}` : "";
-      return `▶️ Slice ${id} started${title}`;
-    }
-    case "slice-completed": {
-      const id = sliceRef(event.sliceId);
-      const dur = event.duration != null ? escapeMdV2(`${Math.round(event.duration / 1000)}s`) : null;
-      const cost = event.cost_usd != null ? escapeMdV2(`$${event.cost_usd.toFixed(2)}`) : null;
-      const detail = [dur, cost].filter(Boolean).join(", ");
-      return `✅ Slice ${id} passed${detail ? ` \\(${detail}\\)` : ""}`;
-    }
-    case "slice-failed": {
-      const id = sliceRef(event.sliceId);
-      const cmd = event.failedCommand ? tgCode(event.failedCommand) : null;
-      const err = !cmd && event.error ? escapeMdV2(event.error.slice(0, 120)) : null;
-      const detail = cmd ?? err ?? "";
-      return `❌ Slice ${id} FAILED${detail ? ` — ${detail}` : ""}`;
-    }
-    case "run-completed": {
-      const r = event.results ?? {};
-      const passed = r.passed ?? 0;
-      const failed = r.failed ?? 0;
-      const total = passed + failed;
-      const plan = event.plan ? ` — ${tgCode(basename(event.plan))}` : "";
-      const summary = escapeMdV2(total > 0 ? `${passed}/${total} passed` : "Complete");
-      const score = event.analyze?.score != null
-        ? ` Score: ${escapeMdV2(String(event.analyze.score))}\\.`
-        : "";
-      const cost = event.cost?.total_cost_usd != null
-        ? ` Cost: ${escapeMdV2(`$${Number(event.cost.total_cost_usd).toFixed(2)}`)}\\.`
-        : "";
-      const icon = failed === 0 ? "🏁" : "⚠️";
-      return `${icon} ${tgBold("Plan Forge")}${plan} ${summary}\\.${score}${cost}`;
-    }
-    case "run-aborted": {
-      const id = escapeMdV2(event.sliceId ?? "?");
-      const reason = event.reason ? `: ${escapeMdV2(event.reason)}` : "";
-      return `🛑 Execution aborted at slice ${id}${reason}`;
-    }
-    default:
-      return escapeMdV2(`${event.type}: ${JSON.stringify(event)}`);
-  }
+  const fn = _TELEGRAM_HANDLERS[event.type];
+  return fn ? fn(event, sliceRef) : escapeMdV2(`${event.type}: ${JSON.stringify(event)}`);
 }
 
 // ─── Slack Block Kit Helpers ──────────────────────────────────────────
@@ -294,146 +315,162 @@ function slackProgressBar(current, total) {
  * @param {{ sliceCount?: number, plan?: string, model?: string }} [context] - Cached run context
  * @returns {Array}
  */
-function buildSlackBlocks(event, channel, context) {
+function _slackSliceLabel(event, context) {
+  return context?.sliceCount
+    ? `*Slice ${event.sliceId ?? "?"}/${context.sliceCount}*`
+    : `*Slice ${event.sliceId ?? "?"}*`;
+}
+
+function _slackProgressContext(event, context) {
+  if (!context?.sliceCount) return null;
+  return {
+    type: "context",
+    elements: [{ type: "mrkdwn", text: slackProgressBar(event.sliceId ?? 0, context.sliceCount) }],
+  };
+}
+
+function _slackRunStarted(event) {
   const blocks = [];
-
-  switch (event.type) {
-    case "run-started": {
-      const planName = event.plan ? basename(event.plan) : null;
-      const header = planName
-        ? `🚀 *Plan Forge* — Executing \`${planName}\``
-        : "🚀 *Plan Forge* — Execution Started";
-      blocks.push({ type: "section", text: { type: "mrkdwn", text: header } });
-      const ctx = [
-        event.sliceCount != null && `${event.sliceCount} slices`,
-        event.mode && `${event.mode} mode`,
-        event.model,
-      ].filter(Boolean);
-      if (ctx.length) {
-        blocks.push({ type: "context", elements: [{ type: "mrkdwn", text: ctx.join(" · ") }] });
-      }
-      break;
-    }
-
-    case "slice-started": {
-      const title = event.title ? `: ${event.title}` : "";
-      const sliceLabel = context?.sliceCount
-        ? `*Slice ${event.sliceId ?? "?"}/${context.sliceCount}*`
-        : `*Slice ${event.sliceId ?? "?"}*`;
-      blocks.push({
-        type: "section",
-        text: { type: "mrkdwn", text: `▶️ ${sliceLabel} started${title}` },
-      });
-      if (context?.sliceCount) {
-        blocks.push({
-          type: "context",
-          elements: [{ type: "mrkdwn", text: slackProgressBar(event.sliceId ?? 0, context.sliceCount) }],
-        });
-      }
-      break;
-    }
-
-    case "slice-completed": {
-      const sliceLabel = context?.sliceCount
-        ? `*Slice ${event.sliceId ?? "?"}/${context.sliceCount}*`
-        : `*Slice ${event.sliceId ?? "?"}*`;
-      blocks.push({
-        type: "section",
-        text: { type: "mrkdwn", text: `✅ ${sliceLabel} passed` },
-      });
-      const ctx = [
-        context?.sliceCount && slackProgressBar(event.sliceId ?? 0, context.sliceCount),
-        event.duration != null && `${Math.round(event.duration / 1000)}s`,
-        event.cost_usd != null && `$${event.cost_usd.toFixed(2)}`,
-        event.tokens?.model,
-      ].filter(Boolean);
-      if (ctx.length) {
-        blocks.push({ type: "context", elements: [{ type: "mrkdwn", text: ctx.join(" · ") }] });
-      }
-      break;
-    }
-
-    case "slice-failed": {
-      const sliceLabel = context?.sliceCount
-        ? `*Slice ${event.sliceId ?? "?"}/${context.sliceCount}*`
-        : `*Slice ${event.sliceId ?? "?"}*`;
-      const cmd = event.failedCommand ? ` — \`${event.failedCommand}\`` : "";
-      const err = !event.failedCommand && event.error ? ` — ${event.error.slice(0, 200)}` : "";
-      blocks.push({
-        type: "section",
-        text: { type: "mrkdwn", text: `❌ ${sliceLabel} FAILED${cmd || err}` },
-      });
-      if (context?.sliceCount) {
-        blocks.push({
-          type: "context",
-          elements: [{ type: "mrkdwn", text: slackProgressBar(event.sliceId ?? 0, context.sliceCount) }],
-        });
-      }
-      break;
-    }
-
-    case "run-completed": {
-      const r = event.results ?? {};
-      const passed = r.passed ?? 0;
-      const failed = r.failed ?? 0;
-      const total = passed + failed;
-      const planName = event.plan ? basename(event.plan) : null;
-      const icon = failed === 0 ? "🏁" : "⚠️";
-      const summary = total > 0 ? `${passed}/${total} passed` : "Complete";
-      const header = planName
-        ? `${icon} *${planName}* — ${summary}`
-        : `${icon} *Plan Forge* — ${summary}`;
-      blocks.push({ type: "section", text: { type: "mrkdwn", text: header } });
-      const ctx = [
-        event.analyze?.score != null && `Score: ${event.analyze.score}/100`,
-        event.cost?.total_cost_usd != null && `$${Number(event.cost.total_cost_usd).toFixed(2)}`,
-        event.model,
-      ].filter(Boolean);
-      if (ctx.length) {
-        blocks.push({ type: "context", elements: [{ type: "mrkdwn", text: ctx.join(" · ") }] });
-      }
-      if (channel?.approvalRequired && failed === 0 && event.runId) {
-        const serverUrl = (channel.serverUrl ?? "").replace(/\/$/, "");
-        blocks.push({ type: "divider" });
-        blocks.push({
-          type: "actions",
-          elements: [
-            {
-              type: "button",
-              text: { type: "plain_text", text: "✅ Approve", emoji: true },
-              style: "primary",
-              ...(serverUrl && { url: `${serverUrl}/api/bridge/approve/${event.runId}?action=approve` }),
-              value: `approve:${event.runId}`,
-            },
-            {
-              type: "button",
-              text: { type: "plain_text", text: "❌ Reject", emoji: true },
-              style: "danger",
-              ...(serverUrl && { url: `${serverUrl}/api/bridge/approve/${event.runId}?action=reject` }),
-              value: `reject:${event.runId}`,
-            },
-          ],
-        });
-      }
-      break;
-    }
-
-    case "run-aborted": {
-      const reason = event.reason ? `: ${event.reason}` : "";
-      blocks.push({
-        type: "section",
-        text: {
-          type: "mrkdwn",
-          text: `🛑 *Plan Forge* — Aborted at Slice ${event.sliceId ?? "?"}${reason}`,
-        },
-      });
-      break;
-    }
-
-    default:
-      blocks.push({ type: "section", text: { type: "mrkdwn", text: `Plan Forge — \`${event.type}\`` } });
+  const planName = event.plan ? basename(event.plan) : null;
+  const header = planName
+    ? `🚀 *Plan Forge* — Executing \`${planName}\``
+    : "🚀 *Plan Forge* — Execution Started";
+  blocks.push({ type: "section", text: { type: "mrkdwn", text: header } });
+  const ctx = [
+    event.sliceCount != null && `${event.sliceCount} slices`,
+    event.mode && `${event.mode} mode`,
+    event.model,
+  ].filter(Boolean);
+  if (ctx.length) {
+    blocks.push({ type: "context", elements: [{ type: "mrkdwn", text: ctx.join(" · ") }] });
   }
+  return blocks;
+}
 
+function _slackSliceStarted(event, context) {
+  const blocks = [];
+  const title = event.title ? `: ${event.title}` : "";
+  const sliceLabel = _slackSliceLabel(event, context);
+  blocks.push({
+    type: "section",
+    text: { type: "mrkdwn", text: `▶️ ${sliceLabel} started${title}` },
+  });
+  const progress = _slackProgressContext(event, context);
+  if (progress) blocks.push(progress);
+  return blocks;
+}
+
+function _slackSliceCompleted(event, context) {
+  const blocks = [];
+  const sliceLabel = _slackSliceLabel(event, context);
+  blocks.push({
+    type: "section",
+    text: { type: "mrkdwn", text: `✅ ${sliceLabel} passed` },
+  });
+  const ctx = [
+    context?.sliceCount && slackProgressBar(event.sliceId ?? 0, context.sliceCount),
+    event.duration != null && `${Math.round(event.duration / 1000)}s`,
+    event.cost_usd != null && `$${event.cost_usd.toFixed(2)}`,
+    event.tokens?.model,
+  ].filter(Boolean);
+  if (ctx.length) {
+    blocks.push({ type: "context", elements: [{ type: "mrkdwn", text: ctx.join(" · ") }] });
+  }
+  return blocks;
+}
+
+function _slackSliceFailed(event, context) {
+  const blocks = [];
+  const sliceLabel = _slackSliceLabel(event, context);
+  const cmd = event.failedCommand ? ` — \`${event.failedCommand}\`` : "";
+  const err = !event.failedCommand && event.error ? ` — ${event.error.slice(0, 200)}` : "";
+  blocks.push({
+    type: "section",
+    text: { type: "mrkdwn", text: `❌ ${sliceLabel} FAILED${cmd || err}` },
+  });
+  const progress = _slackProgressContext(event, context);
+  if (progress) blocks.push(progress);
+  return blocks;
+}
+
+function _slackApprovalActions(event, channel) {
+  const serverUrl = (channel.serverUrl ?? "").replace(/\/$/, "");
+  return [
+    { type: "divider" },
+    {
+      type: "actions",
+      elements: [
+        {
+          type: "button",
+          text: { type: "plain_text", text: "✅ Approve", emoji: true },
+          style: "primary",
+          ...(serverUrl && { url: `${serverUrl}/api/bridge/approve/${event.runId}?action=approve` }),
+          value: `approve:${event.runId}`,
+        },
+        {
+          type: "button",
+          text: { type: "plain_text", text: "❌ Reject", emoji: true },
+          style: "danger",
+          ...(serverUrl && { url: `${serverUrl}/api/bridge/approve/${event.runId}?action=reject` }),
+          value: `reject:${event.runId}`,
+        },
+      ],
+    },
+  ];
+}
+
+function _slackRunCompleted(event, _context, channel) {
+  const blocks = [];
+  const r = event.results ?? {};
+  const passed = r.passed ?? 0;
+  const failed = r.failed ?? 0;
+  const total = passed + failed;
+  const planName = event.plan ? basename(event.plan) : null;
+  const icon = failed === 0 ? "🏁" : "⚠️";
+  const summary = total > 0 ? `${passed}/${total} passed` : "Complete";
+  const header = planName
+    ? `${icon} *${planName}* — ${summary}`
+    : `${icon} *Plan Forge* — ${summary}`;
+  blocks.push({ type: "section", text: { type: "mrkdwn", text: header } });
+  const ctx = [
+    event.analyze?.score != null && `Score: ${event.analyze.score}/100`,
+    event.cost?.total_cost_usd != null && `$${Number(event.cost.total_cost_usd).toFixed(2)}`,
+    event.model,
+  ].filter(Boolean);
+  if (ctx.length) {
+    blocks.push({ type: "context", elements: [{ type: "mrkdwn", text: ctx.join(" · ") }] });
+  }
+  if (channel?.approvalRequired && failed === 0 && event.runId) {
+    blocks.push(..._slackApprovalActions(event, channel));
+  }
+  return blocks;
+}
+
+function _slackRunAborted(event) {
+  const reason = event.reason ? `: ${event.reason}` : "";
+  return [{
+    type: "section",
+    text: {
+      type: "mrkdwn",
+      text: `🛑 *Plan Forge* — Aborted at Slice ${event.sliceId ?? "?"}${reason}`,
+    },
+  }];
+}
+
+const _SLACK_BLOCK_HANDLERS = {
+  "run-started": _slackRunStarted,
+  "slice-started": _slackSliceStarted,
+  "slice-completed": _slackSliceCompleted,
+  "slice-failed": _slackSliceFailed,
+  "run-completed": _slackRunCompleted,
+  "run-aborted": _slackRunAborted,
+};
+
+function buildSlackBlocks(event, channel, context) {
+  const fn = _SLACK_BLOCK_HANDLERS[event.type];
+  const blocks = fn
+    ? fn(event, context, channel)
+    : [{ type: "section", text: { type: "mrkdwn", text: `Plan Forge — \`${event.type}\`` } }];
   blocks.push({ type: "divider" });
   return blocks;
 }
@@ -448,64 +485,77 @@ function buildSlackBlocks(event, channel, context) {
  * @param {{ sliceCount?: number, plan?: string, model?: string }} [context] - Cached run context
  * @returns {Array<{ name: string, value: string, inline: boolean }>}
  */
-function buildDiscordFields(event, context) {
+function _discordRunStarted(event) {
   const fields = [];
+  if (event.plan) fields.push({ name: "Plan", value: basename(event.plan), inline: true });
+  if (event.mode) fields.push({ name: "Mode", value: event.mode, inline: true });
+  if (event.sliceCount != null) fields.push({ name: "Slices", value: String(event.sliceCount), inline: true });
+  if (event.model) fields.push({ name: "Model", value: event.model, inline: true });
+  return fields;
+}
 
-  /** Format sliceId as "N" or "N/Total" when total is known. */
+function _discordSliceStarted(event, sliceRef) {
+  const fields = [{ name: "Slice", value: sliceRef(event.sliceId), inline: true }];
+  if (event.title) fields.push({ name: "Title", value: event.title, inline: true });
+  return fields;
+}
+
+function _discordSliceCompleted(event, sliceRef) {
+  const fields = [
+    { name: "Slice", value: sliceRef(event.sliceId), inline: true },
+    { name: "Status", value: "✅ Passed", inline: true },
+  ];
+  if (event.duration != null) fields.push({ name: "Duration", value: `${Math.round(event.duration / 1000)}s`, inline: true });
+  if (event.cost_usd != null) fields.push({ name: "Cost", value: `$${event.cost_usd.toFixed(2)}`, inline: true });
+  if (event.tokens?.model) fields.push({ name: "Model", value: event.tokens.model, inline: true });
+  return fields;
+}
+
+function _discordSliceFailed(event, sliceRef) {
+  const fields = [
+    { name: "Slice", value: sliceRef(event.sliceId), inline: true },
+    { name: "Status", value: "❌ Failed", inline: true },
+  ];
+  if (event.failedCommand) fields.push({ name: "Failed Command", value: `\`${event.failedCommand}\``, inline: false });
+  else if (event.error) fields.push({ name: "Error", value: event.error.slice(0, 1024), inline: false });
+  return fields;
+}
+
+function _discordRunCompleted(event) {
+  const fields = [];
+  const r = event.results ?? {};
+  const passed = r.passed ?? 0;
+  const failed = r.failed ?? 0;
+  const total = passed + failed;
+  if (event.plan) fields.push({ name: "Plan", value: basename(event.plan), inline: true });
+  if (total > 0) fields.push({ name: "Results", value: `${passed}/${total} passed`, inline: true });
+  if (event.analyze?.score != null) fields.push({ name: "Score", value: `${event.analyze.score}/100`, inline: true });
+  if (event.cost?.total_cost_usd != null) fields.push({ name: "Cost", value: `$${Number(event.cost.total_cost_usd).toFixed(2)}`, inline: true });
+  if (event.totalDuration != null) fields.push({ name: "Duration", value: `${Math.round(event.totalDuration / 60000)}m`, inline: true });
+  return fields;
+}
+
+function _discordRunAborted(event, sliceRef) {
+  const fields = [];
+  if (event.sliceId) fields.push({ name: "Aborted at Slice", value: sliceRef(event.sliceId), inline: true });
+  if (event.reason) fields.push({ name: "Reason", value: event.reason, inline: false });
+  return fields;
+}
+
+const _DISCORD_FIELD_HANDLERS = {
+  "run-started": _discordRunStarted,
+  "slice-started": _discordSliceStarted,
+  "slice-completed": _discordSliceCompleted,
+  "slice-failed": _discordSliceFailed,
+  "run-completed": _discordRunCompleted,
+  "run-aborted": _discordRunAborted,
+};
+
+function buildDiscordFields(event, context) {
   const sliceRef = (id) =>
     context?.sliceCount != null ? `${id ?? "?"}/${context.sliceCount}` : String(id ?? "?");
-
-  switch (event.type) {
-    case "run-started":
-      if (event.plan) fields.push({ name: "Plan", value: basename(event.plan), inline: true });
-      if (event.mode) fields.push({ name: "Mode", value: event.mode, inline: true });
-      if (event.sliceCount != null) fields.push({ name: "Slices", value: String(event.sliceCount), inline: true });
-      if (event.model) fields.push({ name: "Model", value: event.model, inline: true });
-      break;
-
-    case "slice-started":
-      fields.push({ name: "Slice", value: sliceRef(event.sliceId), inline: true });
-      if (event.title) fields.push({ name: "Title", value: event.title, inline: true });
-      break;
-
-    case "slice-completed":
-      fields.push({ name: "Slice", value: sliceRef(event.sliceId), inline: true });
-      fields.push({ name: "Status", value: "✅ Passed", inline: true });
-      if (event.duration != null) fields.push({ name: "Duration", value: `${Math.round(event.duration / 1000)}s`, inline: true });
-      if (event.cost_usd != null) fields.push({ name: "Cost", value: `$${event.cost_usd.toFixed(2)}`, inline: true });
-      if (event.tokens?.model) fields.push({ name: "Model", value: event.tokens.model, inline: true });
-      break;
-
-    case "slice-failed":
-      fields.push({ name: "Slice", value: sliceRef(event.sliceId), inline: true });
-      fields.push({ name: "Status", value: "❌ Failed", inline: true });
-      if (event.failedCommand) fields.push({ name: "Failed Command", value: `\`${event.failedCommand}\``, inline: false });
-      else if (event.error) fields.push({ name: "Error", value: event.error.slice(0, 1024), inline: false });
-      break;
-
-    case "run-completed": {
-      const r = event.results ?? {};
-      const passed = r.passed ?? 0;
-      const failed = r.failed ?? 0;
-      const total = passed + failed;
-      if (event.plan) fields.push({ name: "Plan", value: basename(event.plan), inline: true });
-      if (total > 0) fields.push({ name: "Results", value: `${passed}/${total} passed`, inline: true });
-      if (event.analyze?.score != null) fields.push({ name: "Score", value: `${event.analyze.score}/100`, inline: true });
-      if (event.cost?.total_cost_usd != null) fields.push({ name: "Cost", value: `$${Number(event.cost.total_cost_usd).toFixed(2)}`, inline: true });
-      if (event.totalDuration != null) fields.push({ name: "Duration", value: `${Math.round(event.totalDuration / 60000)}m`, inline: true });
-      break;
-    }
-
-    case "run-aborted":
-      if (event.sliceId) fields.push({ name: "Aborted at Slice", value: sliceRef(event.sliceId), inline: true });
-      if (event.reason) fields.push({ name: "Reason", value: event.reason, inline: false });
-      break;
-
-    default:
-      break;
-  }
-
-  return fields;
+  const fn = _DISCORD_FIELD_HANDLERS[event.type];
+  return fn ? fn(event, sliceRef) : [];
 }
 
 // ─── Platform Formatters ──────────────────────────────────────────────

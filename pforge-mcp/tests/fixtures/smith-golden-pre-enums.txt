@@ -1,0 +1,118 @@
+
+Equivalent manual steps (smith):
+  1. Check that required tools are installed (git, VS Code, PowerShell)
+  2. Verify VS Code settings for Copilot agent mode
+  3. Validate .forge.json and file counts per preset
+  4. Check version currency against Plan Forge source
+  5. Scan for common problems (duplicates, orphans, broken references)
+
+
+╔══════════════════════════════════════════════════════════════╗
+║       Plan Forge — The Smith                                  ║
+╚══════════════════════════════════════════════════════════════╝
+
+Environment:
+  ✅ git 2.53.0.windows.3
+  ✅ code (VS Code CLI) found
+  ✅ PowerShell 7.6.1 (pwsh)
+  ✅ gh (GitHub CLI) 2.92.0
+
+Runtime & Worker Readiness:
+  ✅ git v2.53.0
+  ✅ gh v2.92.0
+  ✅ node v24.11.1
+  ✅ pwsh v7.6.1
+  ✅ gh-copilot v1.0.49 (agentic capable)
+  ⚠️  claude not found on PATH (agent worker)
+     FIX: winget install Anthropic.Claude   (or npm install -g @anthropic-ai/claude-code)
+  ❌ copilot-coding-agent v lacks agentic flags: Logged in to github.com (issue #28)
+     FIX: winget upgrade --id GitHub.cli && gh auth login
+  ⚠️  codex not found on PATH (agent worker)
+     FIX: npm install -g @openai/codex
+
+VS Code Configuration:
+  ✅ chat.agent.enabled (default — OK)
+  ⚠️  chat.useCustomizationsInParentRepositories not set
+     FIX: Add "chat.useCustomizationsInParentRepositories": true to .vscode/settings.json
+  ⚠️  chat.promptFiles not set
+     FIX: Add "chat.promptFiles": true to .vscode/settings.json
+
+Setup Health:
+  ❌ .forge.json not found
+     FIX: Run 'pforge init' to bootstrap your project
+  ✅ .github/copilot-instructions.md exists
+
+Version Currency:
+  ⚠️  Cannot determine installed version (.forge.json missing templateVersion)
+     (cached 627m ago)
+
+Auto-update:
+  ✅ Auto-update: disabled (opt-in) | Cache age: no cache | Last tag: unknown | Last check: never
+     Tip: Run 'pforge self-update' to check + install, or 'pforge smith --refresh-version-cache' to clear cache
+
+MCP Server:
+  ✅ pforge-mcp/server.mjs exists
+  ✅ MCP dependencies installed
+  ✅ .vscode/mcp.json has 'plan-forge' server entry
+
+Image Generation:
+  ✅ sharp installed (WebP, PNG, AVIF conversion)
+  ⚠️  No image API keys configured
+     FIX: Set XAI_API_KEY or OPENAI_API_KEY env var, or add to .forge/secrets.json
+  ✅ Node.js v24.11.1 (sharp requires >= 18.17)
+
+MCP Runtime:
+  ✅ MCP SDK (protocol layer) v1.29.0
+  ✅ Express (dashboard + REST API) v5.2.1
+  ✅ ws (WebSocket hub for real-time events) v8.20.0
+  ✅ Playwright (screenshot capture)
+  ✅ MCP server version v3.7.0 matches VERSION file
+  ✅ forge-master-routes.mjs (Phase-29 route wiring)
+  ✅ tools.json + cli-schema.json (92 MCP tools registered)
+
+Dashboard:
+  ✅ dashboard/index.html
+  ✅ dashboard/app.js
+  ✅ dashboard/forge-master.js (Forge-Master Studio tab)
+
+Lifecycle Hooks:
+  ✅ 8/8 lifecycle hooks present (core + LiveGuard)
+
+Extensions:
+  ✅ Extension catalog valid (1 extension(s))
+  ✅ Spec Kit compatible
+
+Version & Changelog:
+  ✅ VERSION: 3.7.0
+  ✅ CHANGELOG.md present (framework v3.7.0 — downstream CHANGELOG tracks your app, not pforge)
+
+Common Problems:
+  ✅ No common problems detected
+
+Orchestrator:
+  ✅ Orchestrator ready — use 'pforge run-plan <plan>' to execute a plan
+  ✅ pforge-mcp/orchestrator.mjs present
+
+Intelligence:
+  ✅ 92 MCP tools (14 LiveGuard) in tools.json
+
+Crucible:
+  ✅ Crucible inactive — no .forge/crucible/ directory yet
+
+Tempering:
+  ✅ Tempering inactive — no .forge/tempering/ directory yet
+
+Bug Registry:
+  ✅ Bug registry inactive — no .forge/bugs/ directory yet
+
+Notifications:
+  ✅ No .forge.json — notifications inactive (optional)
+
+Timeline / Search sources:
+  ✅ 0 of 6 L2 source(s) with indexable events
+
+────────────────────────────────────────────────────
+  Results:  41 passed  |  2 failed  |  6 warnings
+────────────────────────────────────────────────────
+
+Fix the 2 issue(s) above for the best Plan Forge experience.

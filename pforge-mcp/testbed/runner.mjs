@@ -189,6 +189,142 @@ function executeSteps(steps, cwd, spawnFn) {
   return results;
 }
 
+function createScenarioResult(scenarioId, correlationId) {
+  return {
+    scenarioId,
+    correlationId,
+    status: "passed",
+    durationMs: 0,
+    assertions: [],
+    findings: [],
+    setupResults: [],
+    executeResults: [],
+    teardownResults: [],
+  };
+}
+
+function buildSetupFailureFinding(scenario, correlationId, lastSetup) {
+  return {
+    findingId: `${scenario.scenarioId}-setup-${correlationId.slice(0, 8)}`,
+    date: new Date().toISOString().slice(0, 10),
+    scenario: scenario.scenarioId,
+    severity: "high",
+    surface: "cli",
+    title: `Setup step failed: ${lastSetup.cmd}`,
+    expected: "exit code 0",
+    observed: `exit code ${lastSetup.exitCode}`,
+    status: "open",
+  };
+}
+
+function runScenarioSetup(result, scenario, testbedPath, spawnFn) {
+  if (!scenario.setup || scenario.setup.length === 0) return;
+  result.setupResults = executeSteps(scenario.setup, testbedPath, spawnFn);
+  const lastSetup = result.setupResults[result.setupResults.length - 1];
+  if (!lastSetup || lastSetup.exitCode === 0) return;
+  result.status = "setup-failed";
+  result.findings.push(buildSetupFailureFinding(scenario, result.correlationId, lastSetup));
+}
+
+function buildAssertionContext(result, { testbedPath, startTime, correlationId, hub }) {
+  const hubEvents = hub?.eventHistory || [];
+  const lastExec = result.executeResults[result.executeResults.length - 1];
+  return {
+    testbedPath,
+    startTime,
+    correlationId,
+    hubEvents,
+    lastExitCode: lastExec?.exitCode ?? 0,
+    lastDurationMs: lastExec?.durationMs ?? 0,
+  };
+}
+
+function recordAssertionFailure({ result, assertion, assertionResult, scenario, context = {} }) {
+  const { correlationId = result.correlationId, hub, projectRoot } = context;
+  result.status = "failed";
+  const finding = {
+    findingId: `${scenario.scenarioId}-${assertion.kind}-${correlationId.slice(0, 8)}`,
+    date: new Date().toISOString().slice(0, 10),
+    scenario: scenario.scenarioId,
+    severity: assertion.severity || "medium",
+    surface: assertion.surface || "cli",
+    title: `Assertion failed: ${assertion.kind}`,
+    expected: assertion.expected || assertionResult.detail,
+    observed: assertionResult.detail,
+    status: "open",
+  };
+  result.findings.push(finding);
+  try {
+    logFinding(finding, { hub, projectRoot });
+  } catch { /* defect-log write is best-effort during runs */ }
+}
+
+function runScenarioAssertions(result, scenario, assertionContext, { hub, projectRoot }) {
+  for (const assertion of scenario.assertions) {
+    const handler = ASSERTION_HANDLERS[assertion.kind];
+    if (!handler) {
+      result.assertions.push({ passed: false, kind: assertion.kind, detail: `Unknown assertion kind: ${assertion.kind}` });
+      continue;
+    }
+    const assertionResult = handler(assertion, assertionContext);
+    result.assertions.push(assertionResult);
+    if (!assertionResult.passed) {
+      recordAssertionFailure({ result: result, assertion: assertion, assertionResult: assertionResult, scenario: scenario, context: {
+        correlationId: result.correlationId,
+        hub,
+        projectRoot,
+      } });
+    }
+  }
+}
+
+function captureScenarioFindings(result, captureMemoryFn, scenarioId, projectRoot) {
+  if (!captureMemoryFn) return;
+  for (const finding of result.findings) {
+    if (finding.severity !== "blocker" && finding.severity !== "high") continue;
+    try {
+      captureMemoryFn(
+        `Testbed finding [${finding.severity}]: ${finding.title} — expected: ${finding.expected}, observed: ${finding.observed}`,
+        "testbed-finding",
+        `testbed/${scenarioId}`,
+        projectRoot,
+      );
+    } catch { /* best-effort */ }
+  }
+}
+
+function finalizeScenarioRun({ result, startTime, hub, scenarioId, correlationId }) {
+  result.durationMs = Date.now() - startTime;
+  hub?.broadcast({
+    type: "testbed-scenario-completed",
+    data: {
+      scenarioId,
+      correlationId,
+      status: result.status,
+      failedAssertions: result.assertions.filter((assertion) => !assertion.passed).length,
+      durationMs: result.durationMs,
+    },
+  });
+  return result;
+}
+
+function cleanupScenarioRun({ result, dryRun, scenario, testbedPath, spawnFn, projectRoot }) {
+  if (!dryRun && scenario.teardown && scenario.teardown.length > 0) {
+    try {
+      result.teardownResults = executeSteps(scenario.teardown, testbedPath, spawnFn);
+    } catch { /* teardown failure must not mask assertion results */ }
+  }
+
+  if (!dryRun && testbedPath) {
+    try {
+      const exec = spawnFn || execSync;
+      exec("git checkout -- .", { cwd: testbedPath, encoding: "utf-8", timeout: 15_000 });
+    } catch { /* best-effort — non-fatal if testbed has no tracked files to restore */ }
+  }
+
+  releaseLock(projectRoot);
+}
+
 // ─── Main Runner ──────────────────────────────────────────────────────
 
 /**
@@ -206,132 +342,27 @@ export async function runScenario(scenario, deps) {
   const dryRun = deps.dryRun || false;
 
   hub?.broadcast({ type: "testbed-scenario-started", data: { scenarioId: scenario.scenarioId, correlationId, testbedPath } });
-
-  // Preflight
   preflight(testbedPath, scenario.expectedHead, spawnFn);
-
-  // Lock
   acquireLock(projectRoot, hub);
 
-  const result = {
-    scenarioId: scenario.scenarioId,
-    correlationId,
-    status: "passed",
-    durationMs: 0,
-    assertions: [],
-    findings: [],
-    setupResults: [],
-    executeResults: [],
-    teardownResults: [],
-  };
-
+  const result = createScenarioResult(scenario.scenarioId, correlationId);
   try {
-    // Setup
-    if (scenario.setup && scenario.setup.length > 0) {
-      result.setupResults = executeSteps(scenario.setup, testbedPath, spawnFn);
-      const lastSetup = result.setupResults[result.setupResults.length - 1];
-      if (lastSetup && lastSetup.exitCode !== 0) {
-        result.status = "setup-failed";
-        result.findings.push({
-          findingId: `${scenario.scenarioId}-setup-${correlationId.slice(0, 8)}`,
-          date: new Date().toISOString().slice(0, 10),
-          scenario: scenario.scenarioId,
-          severity: "high",
-          surface: "cli",
-          title: `Setup step failed: ${lastSetup.cmd}`,
-          expected: "exit code 0",
-          observed: `exit code ${lastSetup.exitCode}`,
-          status: "open",
-        });
-      }
-    }
-
-    // Execute (skip in dry-run or if setup failed)
+    runScenarioSetup(result, scenario, testbedPath, spawnFn);
     if (result.status === "passed" && !dryRun) {
       result.executeResults = executeSteps(scenario.execute, testbedPath, spawnFn);
     }
 
-    // Collect hub events for assertion context
-    const hubEvents = hub?.eventHistory || [];
-    const lastExec = result.executeResults[result.executeResults.length - 1];
-
-    const ctx = {
+    const assertionContext = buildAssertionContext(result, {
       testbedPath,
       startTime,
       correlationId,
-      hubEvents,
-      lastExitCode: lastExec?.exitCode ?? 0,
-      lastDurationMs: lastExec?.durationMs ?? 0,
-    };
-
-    // Assertions
-    for (const assertion of scenario.assertions) {
-      const handler = ASSERTION_HANDLERS[assertion.kind];
-      if (!handler) {
-        result.assertions.push({ passed: false, kind: assertion.kind, detail: `Unknown assertion kind: ${assertion.kind}` });
-        continue;
-      }
-      const ar = handler(assertion, ctx);
-      result.assertions.push(ar);
-
-      if (!ar.passed) {
-        result.status = "failed";
-        const finding = {
-          findingId: `${scenario.scenarioId}-${assertion.kind}-${correlationId.slice(0, 8)}`,
-          date: new Date().toISOString().slice(0, 10),
-          scenario: scenario.scenarioId,
-          severity: assertion.severity || "medium",
-          surface: assertion.surface || "cli",
-          title: `Assertion failed: ${assertion.kind}`,
-          expected: assertion.expected || ar.detail,
-          observed: ar.detail,
-          status: "open",
-        };
-        result.findings.push(finding);
-        try {
-          logFinding(finding, { hub, projectRoot });
-        } catch { /* defect-log write is best-effort during runs */ }
-      }
-    }
-
-    // L3 memory capture for high/blocker findings
-    if (captureMemoryFn) {
-      for (const f of result.findings) {
-        if (f.severity === "blocker" || f.severity === "high") {
-          try {
-            captureMemoryFn(
-              `Testbed finding [${f.severity}]: ${f.title} — expected: ${f.expected}, observed: ${f.observed}`,
-              "testbed-finding",
-              `testbed/${scenario.scenarioId}`,
-              projectRoot,
-            );
-          } catch { /* best-effort */ }
-        }
-      }
-    }
+      hub,
+    });
+    runScenarioAssertions(result, scenario, assertionContext, { hub, projectRoot });
+    captureScenarioFindings(result, captureMemoryFn, scenario.scenarioId, projectRoot);
   } finally {
-    // Teardown (always runs, skip in dry-run)
-    if (!dryRun && scenario.teardown && scenario.teardown.length > 0) {
-      try {
-        result.teardownResults = executeSteps(scenario.teardown, testbedPath, spawnFn);
-      } catch { /* teardown failure must not mask assertion results */ }
-    }
-
-    releaseLock(projectRoot);
+    cleanupScenarioRun({ result, dryRun, scenario, testbedPath, spawnFn, projectRoot });
   }
 
-  result.durationMs = Date.now() - startTime;
-
-  hub?.broadcast({
-    type: "testbed-scenario-completed",
-    data: {
-      scenarioId: scenario.scenarioId,
-      correlationId,
-      status: result.status,
-      failedAssertions: result.assertions.filter(a => !a.passed).length,
-      durationMs: result.durationMs,
-    },
-  });
-
-  return result;
+  return finalizeScenarioRun({ result: result, startTime: startTime, hub: hub, scenarioId: scenario.scenarioId, correlationId: correlationId });
 }

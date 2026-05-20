@@ -1,12 +1,12 @@
 # Plan Forge — Capabilities Reference
 
-> **Tools**: 91 MCP (35 core + 14 LiveGuard + 2 Watcher + 8 Crucible + 6 Tempering + 4 Bug Registry + 3 Testbed + 3 Review + 2 Notify + 5 Lattice + 2 Memory + 2 Sync + 2 Forge-Master + 1 Doctor + 1 Worker Guardrails + 4 Auditor/Observer) | **CLI-only families**: Hallmark (`pforge hallmark show|verify`), Anvil (`pforge anvil stat|clear|rebuild|dlq`) | **CLI**: 48+ commands | **Presets**: 9 | **Agents**: 20 | **Skills**: 14
+> **Tools**: 106 MCP (35 core + 14 LiveGuard + 2 Watcher + 8 Crucible + 6 Tempering + 4 Bug Registry + 3 Testbed + 3 Review + 2 Notify + 5 Lattice + 2 Memory + 2 Sync + 2 Forge-Master + 1 Doctor + 1 Worker Guardrails + 4 Auditor/Observer + ~13 newer tools) | **CLI-only families**: Hallmark (`pforge hallmark show|verify`), Anvil (`pforge anvil stat|clear|rebuild|dlq`) | **CLI**: 48+ commands | **Presets**: 9 | **Agents**: ~21 | **Skills**: ~12
 >
 > Machine-readable version: call `forge_capabilities` MCP tool, `GET https://planforge.software/.well-known/plan-forge.json`, or read `pforge-mcp/tools.json` (auto-generated on every MCP server start).
 
 ---
 
-## MCP Tools (91)
+## MCP Tools (106)
 
 | Tool | Intent | Cost | Description |
 |------|--------|------|-------------|

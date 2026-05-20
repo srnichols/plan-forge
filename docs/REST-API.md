@@ -3,7 +3,7 @@
 > **Server**: `pforge-mcp/server.mjs`
 > **Default port**: `3100` (configurable via `PFORGE_PORT`)
 > **Base URL**: `http://localhost:3100`
-> **Endpoint count**: **103** (as of v3.5.1)
+> **Endpoint count**: **~91** (as of v3.12.0)
 > **Generated from**: `scripts/dump-rest-routes.mjs`
 
 All endpoints accept and return JSON unless otherwise noted. Every MCP tool can also be invoked over REST through the generic dispatcher (`POST /api/tool/:name`) — the prefixed endpoints below are the "first-class" surfaces used by the dashboard and CLI.
@@ -197,7 +197,7 @@ All endpoints accept and return JSON unless otherwise noted. Every MCP tool can 
 
 | Method | Path | Purpose |
 |---|---|---|
-| `POST` | `/api/tool/:name` | **Invoke any of the 88 MCP tools over REST.** Body is the tool's input contract. |
+| `POST` | `/api/tool/:name` | **Invoke any of the 106 MCP tools over REST.** Body is the tool's input contract. |
 | `POST` | `/api/tool/org-rules` | Aliased convenience — `forge_org_rules` |
 | `POST` | `/api/tool/run-plan` | Aliased convenience — `forge_run_plan` |
 

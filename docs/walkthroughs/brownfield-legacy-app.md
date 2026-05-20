@@ -1,8 +1,8 @@
 # Walkthrough: Add Plan Forge to a Legacy Express App
 
-> **Time**: ~30 minutes  
-> **Stack**: TypeScript / Node.js / Express (brownfield)  
-> **What you'll fix**: SQL injection, hardcoded secrets, missing tests in an existing app  
+> **Time**: ~30 minutes
+> **Stack**: TypeScript / Node.js / Express (brownfield)
+> **What you'll fix**: SQL injection, hardcoded secrets, missing tests in an existing app
 > **What you'll learn**: How Plan Forge improves existing codebases incrementally
 
 ---
@@ -108,8 +108,8 @@ Environment:
   ✅ Node.js 22.4.0
 
 Setup Health:
-  ✅ 17 instruction files installed
-  ✅ 13 agents installed
+  ✅ 22 instruction files installed
+  ✅ 14 agents installed
   ⚠️  No tsconfig.json found (JavaScript project — TypeScript guardrails may not fully apply)
 
 Version & Changelog:
@@ -211,8 +211,8 @@ SUMMARY
 
 Now create a hardening plan. Open Copilot Chat, attach `step0-specify-feature.prompt.md`:
 
-> **Feature**: "Legacy Security Hardening"  
-> **Problem**: "The app has SQL injection vulnerabilities, hardcoded secrets, and no authentication on sensitive routes."  
+> **Feature**: "Legacy Security Hardening"
+> **Problem**: "The app has SQL injection vulnerabilities, hardcoded secrets, and no authentication on sensitive routes."
 > **Acceptance Criteria**: "Zero SQL injection. All secrets in .env (gitignored). Auth middleware on all routes. Basic test coverage."
 
 Then harden it (Step 2). The agent creates 3 slices:

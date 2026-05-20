@@ -1,7 +1,7 @@
 # Plan Forge Memory Architecture
 
-> **Status**: Design reference  
-> **Since**: v2.35  
+> **Status**: Design reference
+> **Since**: v2.35
 > **Audience**: contributors adding new MCP tools, skills, or storage surfaces
 
 > **v3.x Memory Architecture** — This document reflects the v3.x memory subsystem, which builds on the L1/L2/L3 tier model with four major additions: **Hallmark provenance envelopes** (every L3 write is tagged with source, hash, and capability negotiation result — originally landed in v2.95.0), **Anvil Δ-only memoization** (write-through cache layer between tools and L1/L2 — v2.95.0), the **Lattice code index** (parallel structural index for call-graph and cross-reference queries — v2.95.0), and **`forge_sync_memories` / `forge_sync_instructions`** (the Copilot Memory bridge that pushes decisions and lessons upward into `.github/copilot-memory-hints.md` and regenerates `copilot-instructions.md` — v2.99/v3.0). See the plan files for design rationale: [Phase-HALLMARK-CONTRACT](plans/archive/Phase-HALLMARK-CONTRACT-PLAN.md) · [Phase-ANVIL](plans/archive/Phase-ANVIL-PLAN.md) · [Phase-LATTICE](plans/archive/Phase-LATTICE-PLAN.md) · [Phase-PROVENANCE](plans/Phase-PROVENANCE-PLAN.md). The Hallmark schema is defined in [`pforge-sdk/schemas/hallmark-provenance.v1.json`](../pforge-sdk/schemas/hallmark-provenance.v1.json).
@@ -45,9 +45,9 @@ That split is clean: files vs embeddings. But once you trace the data path of a 
 
 ## L1 — Hub (volatile)
 
-**Backing**: `activeHub.history` — a bounded ring buffer in the MCP server process.  
-**Lifetime**: until the server restarts.  
-**Query model**: "give me the last N events" on WebSocket connect; live stream thereafter.  
+**Backing**: `activeHub.history` — a bounded ring buffer in the MCP server process.
+**Lifetime**: until the server restarts.
+**Query model**: "give me the last N events" on WebSocket connect; live stream thereafter.
 **Consumers**: dashboard tabs, `forge_watch_live`, external WS subscribers.
 
 **Writers**: every tool that publishes a hub event. Examples:
@@ -69,9 +69,9 @@ That split is clean: files vs embeddings. But once you trace the data path of a 
 
 ## L2 — Structured (left brain)
 
-**Backing**: files on disk. Known schemas. Append-only (`.jsonl`) or overwrite (`.json`).  
-**Lifetime**: repo lifetime. Version-controlled where appropriate, gitignored where volatile.  
-**Query model**: exact lookup — you know the path, you read the file.  
+**Backing**: files on disk. Known schemas. Append-only (`.jsonl`) or overwrite (`.json`).
+**Lifetime**: repo lifetime. Version-controlled where appropriate, gitignored where volatile.
+**Query model**: exact lookup — you know the path, you read the file.
 **Consumers**: every MCP tool, every agent, every skill, every hook, every CI job.
 
 ### The L2 map
@@ -129,9 +129,9 @@ That split is clean: files vs embeddings. But once you trace the data path of a 
 
 ## L3 — Semantic (right brain)
 
-**Backing**: [OpenBrain](https://github.com/srnichols/openbrain) — Postgres + pgvector with an HTTP API.  
-**Lifetime**: cross-project, cross-session, indefinite (subject to OpenBrain retention policy).  
-**Query model**: semantic search via `search_thoughts`. Returns by meaning, not by path.  
+**Backing**: [OpenBrain](https://github.com/srnichols/openbrain) — Postgres + pgvector with an HTTP API.
+**Lifetime**: cross-project, cross-session, indefinite (subject to OpenBrain retention policy).
+**Query model**: semantic search via `search_thoughts`. Returns by meaning, not by path.
 **Consumers**: four pipeline prompts (step0/1/3/5) via `buildMemorySearchBlock`; any agent calling `search_thoughts` directly.
 
 ### What lives in L3
@@ -372,7 +372,7 @@ The **Slag-Heap** is the dead-letter queue (DLQ) for failed or rejected L3 write
 
 ## Tool audit — where we are today
 
-As of v3.5.1, dual-write coverage across 88 MCP tools:
+As of v3.12.0, dual-write coverage across 106 MCP tools:
 
 | Bucket | Count | Status |
 |--------|-------|--------|

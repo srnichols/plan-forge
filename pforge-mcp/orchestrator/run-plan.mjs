@@ -79,7 +79,8 @@ export function loadCompetitiveConfig(cwd) {
   }
 }
 
-export { GATE_SUGGESTION_AUTO_INJECT_THRESHOLD, loadGateSynthesisConfig, classifySliceDomain, synthesizeGateSuggestions, formatGateSuggestions } from "./run-plan/gate-synthesis.mjs";
+import { loadGateSynthesisConfig, classifySliceDomain, synthesizeGateSuggestions, formatGateSuggestions } from "./run-plan/gate-synthesis.mjs";
+export { GATE_SUGGESTION_AUTO_INJECT_THRESHOLD, loadGateSynthesisConfig, classifySliceDomain, synthesizeGateSuggestions, formatGateSuggestions };
 
 // ─── Phase-26 Slice 9: Incident → fix-proposal auto-retry (C5) ────────
 //
@@ -372,7 +373,8 @@ export function rerankEscalationChain({
   ];
 }
 
-export { POSTMORTEM_RETENTION_COUNT, buildPlanPostmortem, listPlanPostmortems, writePlanPostmortem } from "./run-plan/postmortem.mjs";
+import { buildPlanPostmortem, listPlanPostmortems, writePlanPostmortem } from "./run-plan/postmortem.mjs";
+export { POSTMORTEM_RETENTION_COUNT, buildPlanPostmortem, listPlanPostmortems, writePlanPostmortem };
 
 const _PROGRESS_LINE_FORMATTERS = {
   "run-started": (ts, d) => `[${ts}] ▶ Run started: ${d.sliceCount || "?"} slices, mode=${d.mode || "auto"}\n`,

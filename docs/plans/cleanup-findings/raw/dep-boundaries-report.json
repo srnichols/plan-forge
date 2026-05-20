@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-05-20T06:17:47.154Z",
+  "generatedAt": "2026-05-20T06:20:06.643Z",
   "includeTests": false,
   "packages": [
     "pforge-mcp",
@@ -11,25 +11,12 @@
   "counts": {
     "filesScanned": 269,
     "errors": 0,
-    "warnings": 1,
-    "infoAllowed": 19,
+    "warnings": 0,
+    "infoAllowed": 20,
     "byKind": {
       "ALLOWED": 17,
-      "NEEDS-WHITELIST": 1,
-      "WHITELISTED": 2
+      "WHITELISTED": 3
     }
   },
-  "findings": [
-    {
-      "source": "pforge-mcp/server/state.mjs",
-      "line": 121,
-      "target": "pforge-master/src/mcp-client.mjs",
-      "sourcePackage": "pforge-mcp",
-      "targetPackage": "pforge-master",
-      "specifier": "../../pforge-master/src/mcp-client.mjs",
-      "kind": "NEEDS-WHITELIST",
-      "severity": "warn",
-      "why": "pforge-mcp -> pforge-master requires explicit entry in layer-policy.json#crossPackageWhitelist"
-    }
-  ]
+  "findings": []
 }

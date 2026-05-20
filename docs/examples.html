@@ -464,6 +464,217 @@ grep -rn 'fmt.Sprintf.*SELECT' --include="*.go"          # zero hits</code></pre
         </p>
       </div>
 
+      <!-- PHP -->
+      <div id="tab-php" class="tab-content hidden">
+        <div class="mb-10">
+          <h2 class="text-2xl font-bold text-white mb-2">Phase 4: Multi-Tenant API Authentication</h2>
+          <div class="flex flex-wrap gap-3 mb-6">
+            <span class="px-3 py-1 rounded-full bg-amber-900/40 text-amber-400 text-xs border border-amber-800/40">🟡 HARDENED</span>
+            <span class="px-3 py-1 rounded-full bg-slate-700/60 text-xs text-slate-300">2 days · 7 slices</span>
+            <span class="px-3 py-1 rounded-full bg-slate-700/60 text-xs text-slate-300">Risk: Medium</span>
+          </div>
+          <p class="text-slate-400">Add API authentication using Laravel Sanctum with role-based access control. Multi-tenant scoped tokens, rate limiting per tenant, token revocation with audit trail, and a comprehensive PHPUnit test suite.</p>
+        </div>
+
+        <div class="space-y-6">
+          <div class="p-6 rounded-2xl bg-slate-800/60 border border-slate-700/40">
+            <h3 class="text-sm font-bold text-white uppercase tracking-wider mb-4">Acceptance Criteria</h3>
+            <ul class="space-y-2 text-sm text-slate-400">
+              <li class="flex gap-2"><span class="text-slate-600">☐</span> API tokens scoped to tenant via Sanctum abilities</li>
+              <li class="flex gap-2"><span class="text-slate-600">☐</span> Role-based middleware: <code class="text-forge-400">admin</code>, <code class="text-forge-400">editor</code>, <code class="text-forge-400">viewer</code></li>
+              <li class="flex gap-2"><span class="text-slate-600">☐</span> Rate limiting per tenant (60/min default, configurable)</li>
+              <li class="flex gap-2"><span class="text-slate-600">☐</span> Token revocation endpoint with audit trail</li>
+              <li class="flex gap-2"><span class="text-slate-600">☐</span> 90%+ test coverage on auth middleware</li>
+              <li class="flex gap-2"><span class="text-slate-600">☐</span> <code class="text-forge-400">phpstan analyse --level=8</code> passes with zero errors</li>
+            </ul>
+          </div>
+
+          <div class="p-6 rounded-2xl bg-slate-800/60 border border-emerald-700/30">
+            <div class="flex items-center gap-3 mb-4">
+              <span class="w-8 h-8 rounded-full bg-emerald-500/20 border border-emerald-500/40 flex items-center justify-center text-emerald-400 text-xs font-bold">1</span>
+              <h3 class="text-sm font-bold text-white">Slice 4.1 — Database: Migration for <code class="text-forge-400">personal_access_tokens</code></h3>
+            </div>
+            <div class="rounded-xl bg-slate-950/80 border border-slate-700/40 overflow-hidden mb-4">
+              <div class="px-4 py-2 bg-slate-800/50 border-b border-slate-700/40 text-xs text-slate-500">Laravel Migration</div>
+              <pre class="p-4 text-xs text-slate-300 overflow-x-auto"><code>Schema::create('personal_access_tokens', function (Blueprint $table) {
+    $table-&gt;id();
+    $table-&gt;string('tenant_id', 50)-&gt;index();
+    $table-&gt;morphs('tokenable');
+    $table-&gt;string('name');
+    $table-&gt;string('token', 64)-&gt;unique();
+    $table-&gt;json('abilities')-&gt;nullable();
+    $table-&gt;timestamp('last_used_at')-&gt;nullable();
+    $table-&gt;timestamp('expires_at')-&gt;nullable();
+    $table-&gt;timestamps();
+
+    $table-&gt;index(['tenant_id', 'tokenable_type', 'tokenable_id']);
+});</code></pre>
+            </div>
+            <div class="rounded-xl bg-slate-950/80 border border-slate-700/40 overflow-hidden mb-4">
+              <div class="px-4 py-2 bg-slate-800/50 border-b border-slate-700/40 text-xs text-slate-500">Validation Gate</div>
+              <pre class="p-4 text-xs text-emerald-300 overflow-x-auto"><code>php artisan migrate --force                              # zero errors
+php artisan test --filter="AuthMigrationTest"            # all pass
+grep -rn 'DB::raw\|DB::select' --include="*.php" app/    # zero hits in new files</code></pre>
+            </div>
+            <div class="px-3 py-2 rounded-lg bg-red-950/30 border border-red-800/30 text-xs text-red-400">
+              <strong>Stop Condition:</strong> If migration fails or tenant isolation test fails → STOP, do not proceed.
+            </div>
+          </div>
+        </div>
+        <p class="mt-8 text-sm text-slate-500 text-center">
+          <a href="https://github.com/srnichols/plan-forge/blob/master/docs/plans/examples/Phase-PHP-EXAMPLE.md" class="text-forge-400 hover:underline">View full PHP example on GitHub →</a>
+        </p>
+      </div>
+
+      <!-- Rust -->
+      <div id="tab-rust" class="tab-content hidden">
+        <div class="mb-10">
+          <h2 class="text-2xl font-bold text-white mb-2">Phase 3: CLI Tool & Configuration Parser</h2>
+          <div class="flex flex-wrap gap-3 mb-6">
+            <span class="px-3 py-1 rounded-full bg-amber-900/40 text-amber-400 text-xs border border-amber-800/40">🟡 HARDENED</span>
+            <span class="px-3 py-1 rounded-full bg-slate-700/60 text-xs text-slate-300">2 days · 6 slices</span>
+            <span class="px-3 py-1 rounded-full bg-slate-700/60 text-xs text-slate-300">Risk: Low-Medium</span>
+          </div>
+          <p class="text-slate-400">Build a CLI tool with Clap for argument parsing and TOML config support. Layered configuration (defaults → file → env → flags), structured error reporting with <code class="text-forge-400">thiserror</code>, and zero <code class="text-forge-400">unwrap()</code> in library code.</p>
+        </div>
+
+        <div class="space-y-6">
+          <div class="p-6 rounded-2xl bg-slate-800/60 border border-slate-700/40">
+            <h3 class="text-sm font-bold text-white uppercase tracking-wider mb-4">Acceptance Criteria</h3>
+            <ul class="space-y-2 text-sm text-slate-400">
+              <li class="flex gap-2"><span class="text-slate-600">☐</span> CLI parses subcommands: <code class="text-forge-400">init</code>, <code class="text-forge-400">run</code>, <code class="text-forge-400">validate</code>, <code class="text-forge-400">status</code></li>
+              <li class="flex gap-2"><span class="text-slate-600">☐</span> Config loaded from TOML with env var overrides</li>
+              <li class="flex gap-2"><span class="text-slate-600">☐</span> Structured error types with <code class="text-forge-400">thiserror</code> — no <code class="text-forge-400">unwrap()</code> in library code</li>
+              <li class="flex gap-2"><span class="text-slate-600">☐</span> All public functions documented with <code class="text-forge-400">///</code> doc comments</li>
+              <li class="flex gap-2"><span class="text-slate-600">☐</span> <code class="text-forge-400">cargo clippy -- -D warnings</code> passes with zero warnings</li>
+              <li class="flex gap-2"><span class="text-slate-600">☐</span> <code class="text-forge-400">cargo doc --no-deps</code> builds cleanly</li>
+            </ul>
+          </div>
+
+          <div class="p-6 rounded-2xl bg-slate-800/60 border border-emerald-700/30">
+            <div class="flex items-center gap-3 mb-4">
+              <span class="w-8 h-8 rounded-full bg-emerald-500/20 border border-emerald-500/40 flex items-center justify-center text-emerald-400 text-xs font-bold">1</span>
+              <h3 class="text-sm font-bold text-white">Slice 3.1 — CLI Scaffold: Clap Derive + Config Types</h3>
+            </div>
+            <div class="rounded-xl bg-slate-950/80 border border-slate-700/40 overflow-hidden mb-4">
+              <div class="px-4 py-2 bg-slate-800/50 border-b border-slate-700/40 text-xs text-slate-500">Cli + Config (Rust)</div>
+              <pre class="p-4 text-xs text-slate-300 overflow-x-auto"><code>use clap::{Parser, Subcommand};
+use serde::Deserialize;
+
+#[derive(Parser)]
+#[command(name = "forge", about = "Plan execution CLI")]
+pub struct Cli {
+    #[command(subcommand)]
+    pub command: Commands,
+
+    /// Path to config file
+    #[arg(short, long, default_value = "forge.toml")]
+    pub config: PathBuf,
+}
+
+#[derive(Subcommand)]
+pub enum Commands {
+    Init { name: String },
+    Run { plan: PathBuf, #[arg(long)] dry_run: bool },
+    Validate { plan: PathBuf },
+    Status,
+}
+
+#[derive(Deserialize)]
+pub struct Config {
+    pub project_name: String,
+    pub default_preset: String,
+    pub parallel_slices: usize,
+}</code></pre>
+            </div>
+            <div class="rounded-xl bg-slate-950/80 border border-slate-700/40 overflow-hidden mb-4">
+              <div class="px-4 py-2 bg-slate-800/50 border-b border-slate-700/40 text-xs text-slate-500">Validation Gate</div>
+              <pre class="p-4 text-xs text-emerald-300 overflow-x-auto"><code>cargo build                                              # zero errors
+cargo clippy -- -D warnings                              # zero warnings
+cargo test                                               # all pass
+grep -rn 'unwrap()' --include="*.rs" src/                # zero in lib code</code></pre>
+            </div>
+            <div class="px-3 py-2 rounded-lg bg-red-950/30 border border-red-800/30 text-xs text-red-400">
+              <strong>Stop Condition:</strong> If clippy emits warnings or any <code class="text-forge-400">unwrap()</code> found in library code → STOP.
+            </div>
+          </div>
+        </div>
+        <p class="mt-8 text-sm text-slate-500 text-center">
+          <a href="https://github.com/srnichols/plan-forge/blob/master/docs/plans/examples/Phase-RUST-EXAMPLE.md" class="text-forge-400 hover:underline">View full Rust example on GitHub →</a>
+        </p>
+      </div>
+
+      <!-- Swift -->
+      <div id="tab-swift" class="tab-content hidden">
+        <div class="mb-10">
+          <h2 class="text-2xl font-bold text-white mb-2">Phase 5: Offline-First Data Sync</h2>
+          <div class="flex flex-wrap gap-3 mb-6">
+            <span class="px-3 py-1 rounded-full bg-amber-900/40 text-amber-400 text-xs border border-amber-800/40">🟡 HARDENED</span>
+            <span class="px-3 py-1 rounded-full bg-slate-700/60 text-xs text-slate-300">3 days · 8 slices</span>
+            <span class="px-3 py-1 rounded-full bg-slate-700/60 text-xs text-slate-300">Risk: Medium</span>
+          </div>
+          <p class="text-slate-400">Implement offline-first data synchronization using SwiftData with background sync via URLSession. Conflict resolution with last-write-wins strategy, queue persistence, sync status UI indicator, and XCTest coverage.</p>
+        </div>
+
+        <div class="space-y-6">
+          <div class="p-6 rounded-2xl bg-slate-800/60 border border-slate-700/40">
+            <h3 class="text-sm font-bold text-white uppercase tracking-wider mb-4">Acceptance Criteria</h3>
+            <ul class="space-y-2 text-sm text-slate-400">
+              <li class="flex gap-2"><span class="text-slate-600">☐</span> Local changes queued in SwiftData when offline</li>
+              <li class="flex gap-2"><span class="text-slate-600">☐</span> Background sync resumes when connectivity restored</li>
+              <li class="flex gap-2"><span class="text-slate-600">☐</span> Conflict resolution: last-write-wins with server timestamp</li>
+              <li class="flex gap-2"><span class="text-slate-600">☐</span> Sync status indicator in UI (synced / pending / error)</li>
+              <li class="flex gap-2"><span class="text-slate-600">☐</span> XCTest suite covers sync queue, conflict resolution, retry</li>
+              <li class="flex gap-2"><span class="text-slate-600">☐</span> <code class="text-forge-400">swiftlint lint --strict</code> passes cleanly</li>
+            </ul>
+          </div>
+
+          <div class="p-6 rounded-2xl bg-slate-800/60 border border-emerald-700/30">
+            <div class="flex items-center gap-3 mb-4">
+              <span class="w-8 h-8 rounded-full bg-emerald-500/20 border border-emerald-500/40 flex items-center justify-center text-emerald-400 text-xs font-bold">1</span>
+              <h3 class="text-sm font-bold text-white">Slice 5.1 — Model: <code class="text-forge-400">SyncQueueItem</code> + SwiftData Schema</h3>
+            </div>
+            <div class="rounded-xl bg-slate-950/80 border border-slate-700/40 overflow-hidden mb-4">
+              <div class="px-4 py-2 bg-slate-800/50 border-b border-slate-700/40 text-xs text-slate-500">SwiftData Model</div>
+              <pre class="p-4 text-xs text-slate-300 overflow-x-auto"><code>import SwiftData
+
+@Model
+final class SyncQueueItem {
+    var id: UUID
+    var entityType: String
+    var entityId: String
+    var operation: SyncOperation
+    var payload: Data
+    var status: SyncStatus
+    var retryCount: Int
+    var createdAt: Date
+    var lastAttemptAt: Date?
+
+    enum SyncOperation: String, Codable {
+        case create, update, delete
+    }
+
+    enum SyncStatus: String, Codable {
+        case pending, inProgress, failed, completed
+    }
+}</code></pre>
+            </div>
+            <div class="rounded-xl bg-slate-950/80 border border-slate-700/40 overflow-hidden mb-4">
+              <div class="px-4 py-2 bg-slate-800/50 border-b border-slate-700/40 text-xs text-slate-500">Validation Gate</div>
+              <pre class="p-4 text-xs text-emerald-300 overflow-x-auto"><code>xcodebuild build -scheme App -destination 'generic/platform=iOS'   # zero errors
+xcodebuild test -scheme App -destination 'platform=iOS Simulator'  # all pass
+swiftlint lint --strict                                             # zero violations</code></pre>
+            </div>
+            <div class="px-3 py-2 rounded-lg bg-red-950/30 border border-red-800/30 text-xs text-red-400">
+              <strong>Stop Condition:</strong> If SwiftData schema validation fails or model test fails → STOP.
+            </div>
+          </div>
+        </div>
+        <p class="mt-8 text-sm text-slate-500 text-center">
+          <a href="https://github.com/srnichols/plan-forge/blob/master/docs/plans/examples/Phase-SWIFT-EXAMPLE.md" class="text-forge-400 hover:underline">View full Swift example on GitHub →</a>
+        </p>
+      </div>
+
       <!-- Azure IaC -->
       <div id="tab-azure" class="tab-content hidden">
         <div class="mb-10">

@@ -35,11 +35,13 @@ npm install file:./pforge-sdk
 | `pforge-sdk/lattice-query` | `src/lattice-query.mjs` | Lattice query builder — `LatticeQueryBuilder`, `tokenizeForSearch`, `scoreChunk` |
 | `pforge-sdk/notifications/adapter-contract` | `src/notifications/adapter-contract.mjs` | Notification adapter contract — `validateAdapterShape`, `ERR_NOT_IMPLEMENTED` |
 | `pforge-sdk/run-reader` | `src/run-reader.mjs` | Run artifact reader — `listRuns`, `readRunMeta`, `readRunSummary`, `readRunIndex`, `parseEventLine`, path helpers |
+| `pforge-sdk/plan-reader` | `src/plan-reader.mjs` | Plan file reader — `listPlans`, `readPlan`, `getPlanStatus`, `getPlanSlices`, path helpers |
 
 > **Note**: `pforge-sdk/client` is new in `0.4.0`. It requires a running Plan Forge MCP server (`pforge-mcp/server.mjs`) to be useful. Zero runtime dependencies — uses the global `fetch` (Node ≥ 18).
 > **Note**: `pforge-sdk/anvil` and `pforge-sdk/lattice-query` are new in `0.5.0`. Both are pure and dependency-free.
 > **Note**: `pforge-sdk/notifications/adapter-contract` is new in `0.5.0`. Defines the shape every notification adapter must implement — pure validation, no runtime base class.
 > **Note**: `pforge-sdk/run-reader` is new in `0.6.0`. Provides offline access to `.forge/runs/` artifacts without requiring a running MCP server. Zero dependencies beyond `node:fs` / `node:path`.
+> **Note**: `pforge-sdk/plan-reader` is new in `0.7.0`. Provides offline access to plan files in `docs/plans/` without requiring a running MCP server. Zero dependencies beyond `node:fs` / `node:path`.
 
 ---
 
@@ -518,6 +520,81 @@ Pure parser for a single `events.log` line. No I/O.
 
 ---
 
+## `pforge-sdk/plan-reader` — Plan file reader
+
+Read Plan Forge plan files from `docs/plans/` without a running MCP server. Useful for CI scripts, status checks, or any tool that needs to inspect plan structure and slice dependencies offline.
+
+```js
+import {
+  listPlans,
+  readPlan,
+  getPlanStatus,
+  getPlanSlices,
+  plansDir,
+  PLANS_DIR_RELATIVE,
+} from 'pforge-sdk/plan-reader';
+
+// List all *-PLAN.md files in docs/plans/, sorted alphabetically
+const plans = listPlans();
+// → ['docs/plans/Phase-53-ORCHESTRATOR-SPLIT-PLAN.md', ...]
+
+// Parse a plan into a structured summary
+const plan = readPlan({ planPath: 'docs/plans/Phase-55-CLEAN-CODE-SWEEP-PLAN.md' });
+// → { title, status, statusLine, executionHold, slices, frontmatter, planPath }
+
+// Quick status check
+const status = getPlanStatus({ planPath: 'docs/plans/Phase-55-CLEAN-CODE-SWEEP-PLAN.md' });
+// → 'hardened' | 'complete' | 'in-progress' | 'paused' | 'draft' | 'unknown' | null
+
+// Just the slices
+const slices = getPlanSlices({ planPath: 'docs/plans/Phase-55-CLEAN-CODE-SWEEP-PLAN.md' });
+// → [{ number: 1, title: 'Baseline audit fixture', dependencies: [] }, ...]
+```
+
+All readers are **graceful** — they return `null` on missing files rather than throwing.
+
+All functions accept an optional `cwd` parameter (defaults to `process.cwd()`).
+
+### `PlanSummary` shape
+
+| Field | Type | Description |
+|---|---|---|
+| `planPath` | `string` | Resolved absolute path to the plan file |
+| `title` | `string\|null` | Full title from the `# ` heading |
+| `statusLine` | `string\|null` | Raw status blockquote text (`> **Status**: ...`) |
+| `status` | `string` | Canonical token: `"hardened"`, `"complete"`, `"in-progress"`, `"paused"`, `"draft"`, `"unknown"` |
+| `executionHold` | `boolean` | `true` if any `- [ ]` checkbox remains in the Execution Hold section |
+| `slices` | `SliceSummary[]` | Ordered list of slice summaries |
+| `frontmatter` | `Record<string,string>` | Parsed YAML frontmatter fields (e.g. `phase`, `name`, `lockHash`, `model`) |
+
+### `SliceSummary` shape
+
+| Field | Type | Description |
+|---|---|---|
+| `number` | `number` | Slice number (supports decimals like `2.1`) |
+| `title` | `string` | Slice title with annotations stripped |
+| `dependencies` | `string[]` | Declared dependencies (e.g. `["Slice 1", "Slice 2"]`) |
+
+### Status token reference
+
+| Token | Matches |
+|---|---|
+| `complete` | `✅`, `COMPLETE`, `COMPLETE` in status line |
+| `hardened` | `HARDENED` in status line |
+| `in-progress` | `IN PROGRESS`, `🚧` in status line |
+| `paused` | `PAUSED`, `BLOCKED`, `⏸` in status line |
+| `draft` | `DRAFT`, `📋`, `PLANNED` in status line |
+| `unknown` | No `> **Status**:` line found |
+
+### Path helpers
+
+| Export | Description |
+|---|---|
+| `plansDir({ cwd? })` | Absolute path to `<cwd>/docs/plans/` |
+| `PLANS_DIR_RELATIVE` | Platform-native relative path `docs/plans` |
+
+---
+
 ## Risk levels (auto-approve guidance)
 
 When you write a host that lets agents call Plan Forge tools, use the tool's `riskLevel` to decide what to gate on:
@@ -550,7 +627,8 @@ The SDK is intentionally narrow — it covers the artifact contracts (`tools.jso
 | **0.3.0** | `chunker` sub-path; dropped broken `client` declaration; bumped to match v3.x memory architecture |
 | **0.4.0** | `client` sub-path — `PForgeClient` typed REST client, `createClient` factory, `PForgeClientError`, method groups for runs/memory/crucible/liveguard, generic `tool()` dispatcher |
 | **0.5.0** | `anvil` sub-path — `computeAnvilKey`, path helpers; `lattice-query` sub-path — `LatticeQueryBuilder`, `tokenizeForSearch`, `scoreChunk`; `notifications/adapter-contract` sub-path — `validateAdapterShape`, `ERR_NOT_IMPLEMENTED` |
-| **0.6.0** (current) | `run-reader` sub-path — `listRuns`, `readRunMeta`, `readRunSummary`, `readRunIndex`, `parseEventLine`, path helpers for offline access to `.forge/runs/` artifacts |
+| **0.6.0** | `run-reader` sub-path — `listRuns`, `readRunMeta`, `readRunSummary`, `readRunIndex`, `parseEventLine`, path helpers for offline access to `.forge/runs/` artifacts |
+| **0.7.0** (current) | `plan-reader` sub-path — `listPlans`, `readPlan`, `getPlanStatus`, `getPlanSlices`, `plansDir`, `PLANS_DIR_RELATIVE` for offline access to `docs/plans/*.md` plan files |
 
 Track progress in [docs/V3-CAPABILITY-AUDIT.md](../docs/V3-CAPABILITY-AUDIT.md).
 

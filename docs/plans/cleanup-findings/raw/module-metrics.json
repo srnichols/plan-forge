@@ -1,13 +1,5 @@
 [
   {
-    "file": "pforge-mcp/server/rest-api.mjs",
-    "loc": 3197,
-    "blank": 249,
-    "comment": 279,
-    "functions": 48,
-    "g14Severity": "high-severity"
-  },
-  {
     "file": "pforge-mcp/server/tool-handlers/safety.mjs",
     "loc": 2980,
     "blank": 242,
@@ -21,6 +13,14 @@
     "blank": 207,
     "comment": 134,
     "functions": 114,
+    "g14Severity": "medium"
+  },
+  {
+    "file": "pforge-mcp/server/rest-api.mjs",
+    "loc": 2755,
+    "blank": 225,
+    "comment": 231,
+    "functions": 46,
     "g14Severity": "medium"
   },
   {
@@ -776,6 +776,14 @@
     "g14Severity": null
   },
   {
+    "file": "pforge-mcp/server/rest-api/crucible-routes.mjs",
+    "loc": 241,
+    "blank": 17,
+    "comment": 22,
+    "functions": 1,
+    "g14Severity": null
+  },
+  {
     "file": "pforge-mcp/tempering/baselines.mjs",
     "loc": 240,
     "blank": 27,
@@ -813,6 +821,14 @@
     "blank": 33,
     "comment": 8,
     "functions": 13,
+    "g14Severity": null
+  },
+  {
+    "file": "pforge-mcp/server/rest-api/innerloop-routes.mjs",
+    "loc": 234,
+    "blank": 12,
+    "comment": 27,
+    "functions": 1,
     "g14Severity": null
   },
   {

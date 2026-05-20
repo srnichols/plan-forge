@@ -1,14 +1,14 @@
 {
-  "generatedAt": "2026-05-20T05:47:28.186Z",
+  "generatedAt": "2026-05-20T05:57:21.355Z",
   "scopes": [
     "pforge-mcp",
     "pforge-master",
     "scripts"
   ],
   "counts": {
-    "filesScanned": 260,
+    "filesScanned": 262,
     "filesWithDeadExports": 103,
-    "totalExports": 1541,
+    "totalExports": 1543,
     "deadExports": 678,
     "namespaceConsumedFiles": 51
   },

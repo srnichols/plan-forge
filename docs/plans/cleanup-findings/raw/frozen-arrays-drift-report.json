@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-05-20T05:47:28.634Z",
+  "generatedAt": "2026-05-20T05:57:21.929Z",
   "enumsSource": "pforge-mcp/enums.mjs",
   "enumsScanned": {
     "HOOK_PASCAL": {
@@ -12,17 +12,17 @@
   "extendedScan": false,
   "includeTests": false,
   "counts": {
-    "filesScanned": 260,
+    "filesScanned": 262,
     "filesWithDrift": 12,
-    "warnings": 6,
-    "info": 23,
+    "warnings": 4,
+    "info": 25,
     "byEnum": {
       "ERROR_CODES": 27,
       "HOOK_PASCAL": 2
     },
     "byKind": {
-      "SOFT-DRIFT": 23,
-      "HARD-DRIFT": 6
+      "SOFT-DRIFT": 25,
+      "HARD-DRIFT": 4
     }
   },
   "findings": [
@@ -199,23 +199,23 @@
       ]
     },
     {
-      "file": "pforge-mcp/server/rest-api.mjs",
+      "file": "pforge-mcp/server/rest-api/crucible-routes.mjs",
       "findings": [
         {
           "enum": "ERROR_CODES",
           "literal": "ASK_QUESTION_MISMATCH",
-          "line": 1775,
-          "severity": "warn",
-          "kind": "HARD-DRIFT",
-          "why": "File imports ERROR_CODES but still uses hand-typed \"ASK_QUESTION_MISMATCH\" — replace with the constant"
+          "line": 50,
+          "severity": "info",
+          "kind": "SOFT-DRIFT",
+          "why": "File hand-types \"ASK_QUESTION_MISMATCH\" without importing ERROR_CODES — review whether to migrate"
         },
         {
           "enum": "ERROR_CODES",
           "literal": "PLAN_ALREADY_EXISTS",
-          "line": 1835,
-          "severity": "warn",
-          "kind": "HARD-DRIFT",
-          "why": "File imports ERROR_CODES but still uses hand-typed \"PLAN_ALREADY_EXISTS\" — replace with the constant"
+          "line": 110,
+          "severity": "info",
+          "kind": "SOFT-DRIFT",
+          "why": "File hand-types \"PLAN_ALREADY_EXISTS\" without importing ERROR_CODES — review whether to migrate"
         }
       ]
     },

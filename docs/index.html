@@ -241,7 +241,7 @@
           Plan Forge is the orchestration harness that sits <strong class="text-amber-300">on top of</strong> GitHub Copilot (and other AI coding tools). It does not replace your model or your IDE — it adds the SDLC layer GitHub deliberately leaves to the ecosystem: <span class="text-slate-200">planning, validation gates, memory, cost control, and reviewer separation</span>.
         </p>
         <p class="text-base text-slate-300 leading-relaxed mb-3">
-          It is also licensed MIT because your SDLC is yours, and your institutional memory lives in <strong class="text-amber-300">OpenBrain</strong> — a user-owned service — because your accumulated decisions should not be trapped inside any one AI vendor.
+          It is also licensed MIT because your SDLC is yours, and your institutional memory lives in <strong class="text-amber-300"><a href="https://srnichols.github.io/OpenBrain" rel="noopener" class="hover:underline">OpenBrain</a></strong>&nbsp;<a href="https://github.com/srnichols/OpenBrain" rel="noopener" aria-label="OpenBrain on GitHub" title="OpenBrain on GitHub" class="inline-flex items-center align-middle text-slate-500 hover:text-slate-200"><svg class="w-4 h-4" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path fill-rule="evenodd" d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"/></svg></a>, a user-owned service, because your accumulated decisions should not be trapped inside any one AI vendor.
         </p>
         <p class="text-base text-slate-300 leading-relaxed">
           <strong class="text-amber-300">Three closed loops, not one.</strong> The Forge builds, <a href="manual/forge-master.html" class="text-amber-400 hover:underline">Forge-Master</a> supervises, and the Learn station feeds every finding back into the next plan — agents supervising agents, loops that run unattended for weeks and learn from every pass. Every discipline of a 20-person engineering team (architecture, security, QA, SRE, engineering management, continuous improvement) is encoded as agents and guardrails governed by <span class="text-slate-200">40 years of software engineering practice</span>. <strong class="text-slate-100">You own the spec, the direction, and the final acceptance test.</strong> The shop owns everything in between.
@@ -1414,15 +1414,21 @@
           </div>
         </div>
 
-        <div class="p-8 rounded-2xl bg-gradient-to-br from-blue-950/40 to-slate-800/60 border border-blue-700/30">
+        <div class="p-8 rounded-2xl bg-gradient-to-br from-blue-950/40 to-slate-800/60 border border-blue-700/30 flex flex-col">
           <div class="text-3xl mb-4">🧠</div>
-          <h3 class="text-lg font-bold text-white mb-1">OpenBrain</h3>
+          <h3 class="text-lg font-bold text-white mb-1"><a href="https://srnichols.github.io/OpenBrain" rel="noopener" class="hover:text-blue-300 transition-colors">OpenBrain</a></h3>
           <p class="text-xs text-blue-400 font-semibold uppercase tracking-wide mb-3">The Memory</p>
           <p class="text-sm text-slate-400 mb-5">Why we decided, what we learned, what failed. Persistent semantic memory across every session and every tool.</p>
-          <div class="space-y-1.5 text-xs text-slate-500">
+          <div class="space-y-1.5 text-xs text-slate-500 mb-5 flex-grow">
             <div class="flex items-center gap-2"><span class="text-blue-400">+</span> Decisions survive across sessions</div>
             <div class="flex items-center gap-2"><span class="text-blue-400">+</span> pgvector semantic search</div>
             <div class="flex items-center gap-2"><span class="text-blue-400">+</span> 9 AI clients via MCP protocol</div>
+          </div>
+          <div class="flex items-center gap-3 pt-4 border-t border-blue-800/30">
+            <a href="https://srnichols.github.io/OpenBrain" rel="noopener" class="text-xs font-semibold text-blue-300 hover:text-blue-200 inline-flex items-center gap-1">Docs <span aria-hidden="true">→</span></a>
+            <a href="https://github.com/srnichols/OpenBrain" rel="noopener" aria-label="OpenBrain on GitHub" title="OpenBrain on GitHub" class="inline-flex items-center text-slate-500 hover:text-white"><svg class="w-4 h-4" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path fill-rule="evenodd" d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"/></svg></a>
+            <span class="text-xs text-slate-600">·</span>
+            <a href="manual/quickstart-install.html#prerequisites" class="text-xs text-slate-500 hover:text-slate-300">Wire it up</a>
           </div>
         </div>
 

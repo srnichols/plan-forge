@@ -119,14 +119,14 @@ The following example extensions are included in `docs/plans/examples/extensions
 | `azure-infrastructure` | Bicep, Terraform, azd, CAF naming, security guardrails | Any app repo with an `infra/` folder |
 | `plan-forge-memory` | Persistent decision capture, project history search, cross-session context | Any project — especially long-running or team-based |
 
-> For pure Azure infrastructure repos (no application code), use the `azure-iac` preset instead of the extension.  
+> For pure Azure infrastructure repos (no application code), use the `azure-iac` preset instead of the extension.
 > See `presets/azure-iac/` for the full standalone preset.
 
 ### Featured: `plan-forge-memory` — Persistent Memory via OpenBrain
 
 Plan Forge's 4-session isolation model prevents self-review bias but creates a side effect: **each session starts from zero context**. The agent that spent 45 minutes resolving a CQRS decision forgets it when the session ends. The next session re-discovers the same answer — or silently contradicts it.
 
-The `plan-forge-memory` extension connects Plan Forge to [OpenBrain](https://github.com/srnichols/OpenBrain) — a self-hosted semantic memory server. Once installed, **106 files** across the pipeline automatically search OpenBrain for prior context before acting and capture decisions after completing. Knowledge compounds across phases instead of evaporating between sessions.
+The `plan-forge-memory` extension connects Plan Forge to [OpenBrain](https://github.com/srnichols/OpenBrain) — a self-hosted semantic memory server. Once installed, **150+ files** across the pipeline automatically search OpenBrain for prior context before acting and capture decisions after completing. Knowledge compounds across phases instead of evaporating between sessions.
 
 **What this means in practice:**
 

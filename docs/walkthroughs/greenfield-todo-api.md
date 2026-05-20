@@ -1,8 +1,8 @@
 # Walkthrough: Build a Todo API from Scratch
 
-> **Time**: ~45 minutes  
-> **Stack**: TypeScript / Node.js / Express / Prisma  
-> **What you'll build**: A full CRUD Todo API with authentication, validation, and tests  
+> **Time**: ~45 minutes
+> **Stack**: TypeScript / Node.js / Express / Prisma
+> **What you'll build**: A full CRUD Todo API with authentication, validation, and tests
 > **What you'll learn**: The complete Plan Forge pipeline — from specification to shipped feature
 
 ---
@@ -47,7 +47,7 @@ Step 1: Core template files
 
 Step 3: typescript preset files
   CREATE .github/agents/architecture-reviewer.agent.md
-  ...6 agents, 15 prompts, 9 skills...
+  ...14 agents, 22 prompts, 12 skills...
 
 Step 3b: Shared agents + skills
   CREATE .github/skills/security-audit/SKILL.md
@@ -83,9 +83,9 @@ VS Code Config:
   ✅ Instructions auto-attach enabled
 
 Setup Health:
-  ✅ 17 instruction files
-  ✅ 13 agent files
-  ✅ 15 prompt files
+  ✅ 22 instruction files
+  ✅ 14 agent files
+  ✅ 22 prompt files
   ✅ 12 skill files
 
   Summary: 24 passed, 0 failed, 0 warnings

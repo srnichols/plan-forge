@@ -496,7 +496,7 @@ pforge ext add/remove/...       Extension management</code></pre>
 
         <!-- ─── SDK ─── -->
         <h2 id="sdk">SDK — <code>pforge-sdk</code></h2>
-        <p>Eight sub-paths, all pure Node.js (zero runtime dependencies). Full reference: <a href="https://github.com/srnichols/plan-forge/blob/master/pforge-sdk/README.md" rel="noopener">pforge-sdk/README.md on GitHub</a>.</p>
+        <p>Ten sub-paths, all pure Node.js (zero runtime dependencies). Full reference: <a href="https://github.com/srnichols/plan-forge/blob/master/pforge-sdk/README.md" rel="noopener">pforge-sdk/README.md on GitHub</a>.</p>
 
         <div class="overflow-x-auto my-6">
           <table class="text-sm w-full border-collapse">
@@ -548,15 +548,15 @@ pforge ext add/remove/...       Extension management</code></pre>
                 <td class="py-2 px-3"><code>validateAdapterShape</code>, <code>ERR_NOT_IMPLEMENTED</code></td>
                 <td class="py-2 px-3">Validating a custom notification adapter shape before registering it</td>
               </tr>
-              <tr>
+              <tr class="border-b border-slate-800/40">
                 <td class="py-2 px-3"><code>pforge-sdk/run-reader</code> <span class="text-amber-400 text-xs font-semibold">v0.6.0</span></td>
                 <td class="py-2 px-3"><code>listRuns</code>, <code>readRunMeta</code>, <code>readRunSummary</code>, <code>readRunIndex</code>, <code>parseEventLine</code></td>
                 <td class="py-2 px-3">Offline access to <code>.forge/runs/</code> artifacts — no running server required</td>
               </tr>
               <tr>
                 <td class="py-2 px-3"><code>pforge-sdk/plan-reader</code> <span class="text-amber-400 text-xs font-semibold">v0.7.0</span></td>
-                <td class="py-2 px-3"><code>listPlans</code>, <code>readPlan</code>, <code>getPlanStatus</code>, <code>getPlanSlices</code></td>
-                <td class="py-2 px-3">Offline access to <code>docs/plans/</code> plan files — parse status, slices, and frontmatter without a server</td>
+                <td class="py-2 px-3"><code>listPlans</code>, <code>readPlan</code>, <code>getPlanStatus</code>, <code>getPlanSlices</code>, <code>plansDir</code></td>
+                <td class="py-2 px-3">Offline access to <code>docs/plans/</code> plan files — read status, slices, and frontmatter without a server</td>
               </tr>
             </tbody>
           </table>

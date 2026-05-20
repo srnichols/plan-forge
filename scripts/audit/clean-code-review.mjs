@@ -19,6 +19,8 @@ const args = process.argv.slice(2);
 const fixSuggestions = args.includes('--fix-suggestions');
 const outIndex = args.indexOf('--out');
 const outPath = outIndex !== -1 ? args[outIndex + 1] : null;
+const compareBaselineIndex = args.indexOf('--compare-baseline');
+const compareBaselinePath = compareBaselineIndex !== -1 ? args[compareBaselineIndex + 1] : null;
 
 function runScript(scriptPath) {
   try {
@@ -366,6 +368,33 @@ if (outPath) {
     console.log('Script errors:');
     for (const err of report.errors) {
       console.log(`  ⚠ ${err.script}: ${err.message}`);
+    }
+  }
+}
+
+if (compareBaselinePath) {
+  const baseline = loadJson(path.resolve(compareBaselinePath));
+  if (!baseline) {
+    console.error(`ERROR: Cannot load baseline from ${compareBaselinePath}`);
+    process.exitCode = 1;
+  } else {
+    const baselineErrors = baseline.summary.totalErrors;
+    const currentErrors = report.summary.totalErrors;
+    if (currentErrors > baselineErrors) {
+      const delta = currentErrors - baselineErrors;
+      const errorEntries = Object.entries(report.categories)
+        .filter(([, v]) => (v.errorCount ?? 0) > 0)
+        .map(([k, v]) => `  ${k}: ${v.errorCount} error(s)`)
+        .join('\n');
+      console.error(
+        `\nREGRESSION: ${delta} new error(s) introduced.\n` +
+        `Baseline: ${baselineErrors} errors\n` +
+        `Current:  ${currentErrors} errors\n` +
+        (errorEntries ? `Error categories:\n${errorEntries}` : '')
+      );
+      process.exitCode = 1;
+    } else {
+      console.log(`\nNo regression: ${currentErrors} errors (baseline: ${baselineErrors}) ✓`);
     }
   }
 }

@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-05-21T04:38:40.061Z",
+  "generatedAt": "2026-05-21T06:21:52.767Z",
   "enumsSource": "pforge-mcp/enums.mjs",
   "enumsScanned": {
     "HOOK_PASCAL": {
@@ -12,7 +12,7 @@
   "extendedScan": false,
   "includeTests": false,
   "counts": {
-    "filesScanned": 263,
+    "filesScanned": 266,
     "filesWithDrift": 8,
     "warnings": 0,
     "info": 15,
@@ -126,7 +126,7 @@
         {
           "enum": "ERROR_CODES",
           "literal": "observer-budget-exceeded",
-          "line": 1642,
+          "line": 1614,
           "severity": "info",
           "kind": "SOFT-DRIFT",
           "why": "File hand-types \"observer-budget-exceeded\" without importing ERROR_CODES — review whether to migrate"

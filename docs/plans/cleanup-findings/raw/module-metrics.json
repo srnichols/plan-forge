@@ -17,7 +17,7 @@
   },
   {
     "file": "pforge-mcp/server/rest-api.mjs",
-    "loc": 2758,
+    "loc": 2760,
     "blank": 225,
     "comment": 234,
     "functions": 46,
@@ -25,9 +25,9 @@
   },
   {
     "file": "pforge-mcp/capabilities/tool-metadata.mjs",
-    "loc": 2263,
+    "loc": 2235,
     "blank": 4,
-    "comment": 27,
+    "comment": 28,
     "functions": 0,
     "g14Severity": "medium"
   },
@@ -424,6 +424,22 @@
     "g14Severity": null
   },
   {
+    "file": "pforge-master/src/prompts.mjs",
+    "loc": 432,
+    "blank": 5,
+    "comment": 4,
+    "functions": 2,
+    "g14Severity": null
+  },
+  {
+    "file": "pforge-mcp/auth/scim-store.mjs",
+    "loc": 421,
+    "blank": 46,
+    "comment": 10,
+    "functions": 10,
+    "g14Severity": null
+  },
+  {
     "file": "pforge-mcp/server/tool-handlers/core.mjs",
     "loc": 420,
     "blank": 22,
@@ -461,14 +477,6 @@
     "blank": 30,
     "comment": 3,
     "functions": 13,
-    "g14Severity": null
-  },
-  {
-    "file": "pforge-master/src/prompts.mjs",
-    "loc": 381,
-    "blank": 5,
-    "comment": 0,
-    "functions": 2,
     "g14Severity": null
   },
   {
@@ -557,6 +565,14 @@
     "blank": 42,
     "comment": 7,
     "functions": 9,
+    "g14Severity": null
+  },
+  {
+    "file": "pforge-mcp/server/rest-api/scim-routes.mjs",
+    "loc": 327,
+    "blank": 33,
+    "comment": 10,
+    "functions": 10,
     "g14Severity": null
   },
   {
@@ -661,6 +677,14 @@
     "blank": 33,
     "comment": 14,
     "functions": 14,
+    "g14Severity": null
+  },
+  {
+    "file": "pforge-mcp/auth/providers/okta-oidc.mjs",
+    "loc": 288,
+    "blank": 32,
+    "comment": 8,
+    "functions": 10,
     "g14Severity": null
   },
   {
@@ -856,18 +880,18 @@
     "g14Severity": null
   },
   {
-    "file": "pforge-mcp/enums.mjs",
-    "loc": 228,
-    "blank": 16,
-    "comment": 3,
-    "functions": 10,
-    "g14Severity": null
-  },
-  {
     "file": "pforge-mcp/tempering/scanners/contract-graphql.mjs",
     "loc": 228,
     "blank": 20,
     "comment": 2,
+    "functions": 10,
+    "g14Severity": null
+  },
+  {
+    "file": "pforge-mcp/enums.mjs",
+    "loc": 227,
+    "blank": 16,
+    "comment": 3,
     "functions": 10,
     "g14Severity": null
   },
@@ -1544,6 +1568,14 @@
     "g14Severity": null
   },
   {
+    "file": "pforge-mcp/forge-master-routes.mjs",
+    "loc": 90,
+    "blank": 6,
+    "comment": 10,
+    "functions": 2,
+    "g14Severity": null
+  },
+  {
     "file": "pforge-master/src/__fixtures__/MockReasoningClient.mjs",
     "loc": 90,
     "blank": 9,
@@ -1640,6 +1672,14 @@
     "g14Severity": null
   },
   {
+    "file": "pforge-mcp/auth/index.mjs",
+    "loc": 78,
+    "blank": 10,
+    "comment": 0,
+    "functions": 1,
+    "g14Severity": null
+  },
+  {
     "file": "pforge-mcp/notifications/webhook-adapter.mjs",
     "loc": 78,
     "blank": 8,
@@ -1653,14 +1693,6 @@
     "blank": 6,
     "comment": 0,
     "functions": 4,
-    "g14Severity": null
-  },
-  {
-    "file": "pforge-mcp/forge-master-routes.mjs",
-    "loc": 76,
-    "blank": 6,
-    "comment": 5,
-    "functions": 2,
     "g14Severity": null
   },
   {
@@ -1700,14 +1732,6 @@
     "loc": 71,
     "blank": 10,
     "comment": 3,
-    "functions": 1,
-    "g14Severity": null
-  },
-  {
-    "file": "pforge-mcp/auth/index.mjs",
-    "loc": 70,
-    "blank": 9,
-    "comment": 0,
     "functions": 1,
     "g14Severity": null
   },

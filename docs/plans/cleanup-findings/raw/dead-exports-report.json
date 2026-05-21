@@ -1,15 +1,15 @@
 {
-  "generatedAt": "2026-05-21T04:38:38.620Z",
+  "generatedAt": "2026-05-21T06:21:51.765Z",
   "scopes": [
     "pforge-mcp",
     "pforge-master",
     "scripts"
   ],
   "counts": {
-    "filesScanned": 263,
-    "filesWithDeadExports": 106,
-    "totalExports": 1546,
-    "deadExports": 682,
+    "filesScanned": 266,
+    "filesWithDeadExports": 108,
+    "totalExports": 1558,
+    "deadExports": 686,
     "namespaceConsumedFiles": 48
   },
   "findings": [
@@ -991,6 +991,22 @@
         "healthCheck"
       ],
       "totalExports": 3
+    },
+    {
+      "file": "pforge-mcp/auth/providers/okta-oidc.mjs",
+      "deadExports": [
+        "_testHooks",
+        "healthCheck"
+      ],
+      "totalExports": 3
+    },
+    {
+      "file": "pforge-mcp/auth/scim-store.mjs",
+      "deadExports": [
+        "_resetDefaultStore",
+        "getDefaultStore"
+      ],
+      "totalExports": 8
     },
     {
       "file": "pforge-mcp/crucible-draft.mjs",

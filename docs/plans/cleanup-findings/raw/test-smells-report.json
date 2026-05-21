@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-05-21T04:38:38.872Z",
+  "generatedAt": "2026-05-21T06:21:51.938Z",
   "scopes": [
     "pforge-mcp/tests",
     "pforge-master/tests",
@@ -7,15 +7,15 @@
   ],
   "severityFilter": "info",
   "counts": {
-    "filesScanned": 342,
-    "filesWithSmells": 108,
+    "filesScanned": 344,
+    "filesWithSmells": 107,
     "errors": 0,
-    "warnings": 429,
-    "info": 6,
+    "warnings": 430,
+    "info": 1,
     "bySmell": {
-      "TIME-FLAKE": 404,
+      "TIME-FLAKE": 405,
       "CONSOLE-LEAK": 25,
-      "TODO-MARKER": 6
+      "TODO-MARKER": 1
     }
   },
   "findings": [
@@ -2084,39 +2084,6 @@
       ]
     },
     {
-      "file": "pforge-mcp/tests/forge-master.advisory.test.mjs",
-      "findings": [
-        {
-          "smell": "TODO-MARKER",
-          "severity": "info",
-          "line": 26,
-          "snippet": "it.todo(",
-          "why": "Pending test — track in an issue and remove the .todo when implemented"
-        },
-        {
-          "smell": "TODO-MARKER",
-          "severity": "info",
-          "line": 27,
-          "snippet": "it.todo(",
-          "why": "Pending test — track in an issue and remove the .todo when implemented"
-        },
-        {
-          "smell": "TODO-MARKER",
-          "severity": "info",
-          "line": 80,
-          "snippet": "it.todo(",
-          "why": "Pending test — track in an issue and remove the .todo when implemented"
-        },
-        {
-          "smell": "TODO-MARKER",
-          "severity": "info",
-          "line": 81,
-          "snippet": "it.todo(",
-          "why": "Pending test — track in an issue and remove the .todo when implemented"
-        }
-      ]
-    },
-    {
       "file": "pforge-mcp/tests/hub-ask.test.mjs",
       "findings": [
         {
@@ -3197,6 +3164,18 @@
       ]
     },
     {
+      "file": "pforge-mcp/tests/auth-okta-oidc.test.mjs",
+      "findings": [
+        {
+          "smell": "TIME-FLAKE",
+          "severity": "warn",
+          "line": 62,
+          "snippet": "Date.now without tolerance guard",
+          "why": "Time-sensitive code in tests without explicit tolerance or fake timers — Windows scheduler drift can flake the test (see Phase 41 S5 timeline-core +5ms→+50ms fix)"
+        }
+      ]
+    },
+    {
       "file": "pforge-mcp/tests/brain-capability-negotiation.test.mjs",
       "findings": [
         {
@@ -3349,18 +3328,6 @@
           "line": 33,
           "snippet": "new Date() without tolerance guard",
           "why": "Time-sensitive code in tests without explicit tolerance or fake timers — Windows scheduler drift can flake the test (see Phase 41 S5 timeline-core +5ms→+50ms fix)"
-        }
-      ]
-    },
-    {
-      "file": "pforge-mcp/tests/enums.test.mjs",
-      "findings": [
-        {
-          "smell": "TODO-MARKER",
-          "severity": "info",
-          "line": 83,
-          "snippet": "it.todo(",
-          "why": "Pending test — track in an issue and remove the .todo when implemented"
         }
       ]
     },

@@ -179,14 +179,19 @@ function _applyQuestionDefaults(smelt, question, projectDir) {
 
 /**
  * forge_crucible_submit
+ *
+ * Phase-59 S4: accepts optional `mode` (takes precedence over `lane`).
+ * Enables `mode: "bug-batch"` without changing the existing `lane` enum.
  */
-export function handleSubmit({ rawIdea, lane, source, parentSmeltId, bugId, projectDir, hub }) {
+export function handleSubmit({ rawIdea, lane, mode, source, parentSmeltId, bugId, projectDir, hub }) {
   if (typeof rawIdea !== "string" || !rawIdea.trim()) {
     throw new Error("rawIdea is required");
   }
   const recommendedLane = inferLane(rawIdea);
+  // mode takes precedence over lane; both fall back to heuristic.
+  const resolvedLane = mode || lane || recommendedLane;
   const smelt = createSmelt({
-    lane: lane || recommendedLane,
+    lane: resolvedLane,
     rawIdea,
     source: source || "human",
     parentSmeltId: parentSmeltId || null,

@@ -202,7 +202,6 @@ export const TOOL_NAMES = freezeArray([
   "forge_runbook",
   "forge_search",
   "forge_secret_scan",
-  "forge_self_update",
   "forge_skill_status",
   "forge_smith",
   "forge_status",

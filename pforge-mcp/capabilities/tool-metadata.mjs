@@ -1506,39 +1506,11 @@ export const TOOL_METADATA = {
       output: { runtime: "cli-gh", presets: [{ preset: "power", declared: 3, effective: 1, synthesisViable: false, recommendation: { preset: "speed", reason: "..." } }] },
     },
   },
-  // Phase AUTO-UPDATE-01 Slice 2 — self-update from CLI/dashboard
-  forge_self_update: {
-    intent: ["update", "upgrade", "self-update", "install-latest"],
-    aliases: ["auto-update", "update-now", "self-update"],
-    cost: "high",
-    maxConcurrent: 1,
-    addedIn: "2.55.0",
-    // v2.56.0 — explicit agent guidance. Was surfaced in capabilities but
-    // agents were still reaching for `git clone` because neither the intent
-    // field nor the description told them NOT to.
-    whenToUse: "Preferred path for upgrading an existing Plan Forge install. Always pulls the latest tagged release from GitHub and overwrites framework files (pforge.ps1, pforge.sh, pforge-mcp/, .github/prompts, etc.). Does NOT touch .forge.json, copilot-instructions.md, project principles, or plan files.",
-    preferOver: [
-      "git clone https://github.com/srnichols/plan-forge.git  (that's the FIRST-TIME install path, not the update path)",
-      "git pull in a sibling ../plan-forge clone  (master carries -dev suffix; self-update pulls clean release tags)",
-      "Manually downloading a tarball",
-    ],
-    agentGuidance: "If a user asks you to 'update Plan Forge' or 'upgrade to v<X.Y.Z>', run `pforge self-update --force` from the project root. Do not clone the repo. Do not use `git pull` on any sibling clone. After it runs: (1) verify VERSION with `Get-Content VERSION`; (2) run `pforge smith` to confirm all expected framework files landed — smith will name-check pipeline prompts, hooks, and instructions and tell you exactly what (if anything) is still missing. If smith reports missing pipeline prompts, run `pforge update` a second time (self-update's first pass uses the in-progress CLI's older copy logic; the second pass uses the just-installed v2.59.1+ logic that handles `project-profile.prompt.md`).",
-    prerequisites: ["network connectivity", "VERSION file"],
-    produces: ["updated framework files", ".forge/update-audit.log entry"],
-    consumes: ["VERSION", ".forge.json", ".forge/update-check.json"],
-    sideEffects: ["modifies framework files", "writes audit log"],
-    writesFiles: true,
-    network: true,
-    risk: "high",
-    errors: {
-      ERR_UPDATE_DURING_RUN: { message: "Cannot update during active plan run", recovery: "Wait for run to finish" },
-      ERR_RATE_LIMITED: { message: "Update rate limited (1 per 5 min)", recovery: "Wait and retry" },
-    },
-    example: {
-      input: {},
-      output: { state: "done", detail: "Updated to v2.56.0" },
-    },
-  },
+  // NOTE: forge_self_update was removed in v3.15.2. It was never an MCP tool —
+  // it documented the `pforge self-update` CLI command. Agents should invoke
+  // the CLI directly (the command name is self-documenting and surfaced via
+  // `pforge --help`). Removing the phantom entry prevents agents from attempting
+  // to call it as a tool (which would fail with "unknown tool").
   forge_testbed_run: {
     intent: ["test", "validate", "testbed", "scenario", "end-to-end"],
     aliases: ["run-testbed", "testbed-scenario", "testbed-run"],

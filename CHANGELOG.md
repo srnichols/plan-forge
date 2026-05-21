@@ -7,12 +7,21 @@ Format follows [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
+---
+
+## [3.18.1] — 2026-05-21
+
+> **One-liner**: Patch release rolling up Phase 59 Crucible multi-mode substrate, quorum calibration (threshold 3 → 5, refreshed model list), three self-repair fixes from the post-v3.18.0 sweep (#212, #213, #214), and a new orchestrator sub-module that auto-rewrites plan-file status headers on successful `run-plan` so plans stop showing stale `HARDENED` status after they've shipped.
+
+### Added
+- **`pforge-mcp/orchestrator/run-plan/plan-status-update.mjs`** — New 102-line sub-module exporting `rewritePlanStatusOnSuccess({ planPath, cwd, shippedAt, version })`. On a successful `forge_run_plan` finalization (`allPassed && !estimate && !dryRun`), the orchestrator now atomically rewrites the plan's YAML frontmatter (`status: HARDENED` → `status: COMPLETE`) and the `> **Status**:` quote-block line. Idempotent (no-op if already complete or no HARDENED markers present), non-blocking (any failure is suppressed so the run result is never affected), and reads `VERSION` from disk when not provided. 211-line test suite at `pforge-mcp/tests/plan-status-update.test.mjs` (10 tests). Wired into `_finalizeRunPlan` in `pforge-mcp/orchestrator/run-plan.mjs`. Complements the new retro-slice template guidance in `step2-harden-plan.prompt.md` (below) — `run-plan` now self-corrects automatically, and the prompt rule still applies to human/AI-driven retro slices that close out sub-phases without invoking `run-plan`. Closes [#212](https://github.com/srnichols/plan-forge/issues/212).
+
 ### Fixed
 - **`pforge smith` MCP runtime check** — falsely reported `@modelcontextprotocol/sdk`, `express`, and `ws` as missing when run from a dev clone where npm workspaces hoist dependencies to root `node_modules/`. Smith now probes both `pforge-mcp/node_modules/<name>` and `<root>/node_modules/<name>`, so the same diagnostic works for both consumer installs (deps in `pforge-mcp/node_modules`) and workspace-hoisted dev clones. Same fix applied symmetrically to `pforge.sh`. Closes [#213](https://github.com/srnichols/plan-forge/issues/213).
 - **`pforge check` preset-dependent files** — falsely failed with `FAIL .github/instructions/database.instructions.md` on projects whose `.forge.json` omits or empty-strings the `preset` field. Validator now treats missing/empty preset as `custom` (the no-stack-preset case) and skips stack-specific file checks, printing `INFO No preset declared in .forge.json — treating as 'custom'`. Same fix applied symmetrically to `validate-setup.sh`. Closes [#214](https://github.com/srnichols/plan-forge/issues/214).
 
 ### Changed
-- **`step2-harden-plan.prompt.md`** — Added a new "Retro / Closure Slice — Status-Header Rewrite" section that requires every retro / closure slice to rewrite the plan's top-of-file status header (YAML frontmatter `status:` + the quote-block `> **Status**:` line) in the same commit that appends the `## What actually shipped` section. Stops plans from showing stale `HARDENED — awaiting Execution Hold lift` status after they've already shipped. Includes a recommended dual-check validation gate snippet. Closes [#212](https://github.com/srnichols/plan-forge/issues/212).
+- **`step2-harden-plan.prompt.md`** — Added a new "Retro / Closure Slice — Status-Header Rewrite" section that requires every retro / closure slice to rewrite the plan's top-of-file status header (YAML frontmatter `status:` + the quote-block `> **Status**:` line) in the same commit that appends the `## What actually shipped` section. Stops plans from showing stale `HARDENED — awaiting Execution Hold lift` status after they've already shipped. Includes a recommended dual-check validation gate snippet. Companion guidance to the new orchestrator auto-rewrite above. Closes [#212](https://github.com/srnichols/plan-forge/issues/212).
 - Phase 59 — Crucible multi-mode substrate: new `bug-batch` mode with Root Cause Hypothesis section and multi-slice synthesizer; per-mode `criticalFields` replacing global set; renderer/parser alignment (`### In Scope`, `### Out of Scope`, `### Forbidden` under `## Scope Contract`; `[scope: <paths>]` clause in synthesized slice headers); `crucible.legacy.tbdPlaceholders` config knob gating pre-S2 `{{TBD:}}` marker behavior (deprecated, removed major-after-next); `docs/crucible-modes.md` operator guide added. Closes #140, #142, #145, #146, #147.
 
 ---

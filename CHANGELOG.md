@@ -9,6 +9,26 @@ Format follows [Keep a Changelog](https://keepachangelog.com/).
 
 ---
 
+## [3.18.0] — 2026-05-21
+
+### Phase-SCIM-RBAC-BRIDGE — SCIM Group → RBAC Role mapping
+
+> **One-liner**: Adds a `scim-rbac-bridge` module that maps SCIM group memberships to RBAC roles, closing the provisioning loop between IdP group sync (SCIM 2.0) and authorization (RBAC). 22 new tests.
+
+#### Added
+- `pforge-mcp/auth/scim-rbac-bridge.mjs` — Two exports:
+  - `resolveRolesFromScim(userId, scimStore, groupRoleMappings)` — given a SCIM user ID, iterates all SCIM groups to find memberships and maps each matching group's `displayName` to RBAC role names via a `groupRoleMappings` config object (`Record<string, string[]>`). Returns a deduplicated role list.
+  - `buildScimAssignments(scimStore, groupRoleMappings)` — builds a full RBAC `assignments` map for all users currently in the SCIM store. The returned `{ assignments }` object can be merged with an existing `RbacConfig` (`{ roles: myRoleDefs, ...buildScimAssignments(store, mappings) }`) and passed directly to `resolveRoles` / `hasScope` from `auth/rbac.mjs`.
+- `pforge-mcp/tests/auth-scim-rbac-bridge.test.mjs` — 22 tests: null-guard paths (userId/store/mappings), user-not-in-group, single-group membership, multi-group membership, deduplication of same role from multiple groups, unmapped group ignored, other-user isolation, empty store, multi-role group mapping, empty-store buildScimAssignments, multi-user assignments, and 4 end-to-end integration tests confirming `resolveRolesFromScim` output is consumable by `resolveRoles` + `hasScope`.
+
+#### Notes
+- Zero new runtime dependencies.
+- The bridge is purely read-only — it does not modify the SCIM store or the RBAC config.
+- Configure group-role mappings in `.forge.json` under `auth.scimGroupRoles`: `{ "engineers": ["developer"], "admins": ["admin"] }`.
+- Compatible with any SCIM 2.0 IdP (Okta, Entra ID, etc.) that provisions users into groups via the `/scim/v2/Groups` endpoints shipped in v3.17.0.
+
+---
+
 ## [3.17.0] — 2026-05-20
 
 ### Phase-OKTA-SCIM — Okta Enterprise SCIM 2.0 provisioning

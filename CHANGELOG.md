@@ -9,6 +9,22 @@ Format follows [Keep a Changelog](https://keepachangelog.com/).
 
 ---
 
+## [3.15.1] — 2026-05-20
+
+### Fixed — three downstream-consumer bugs from the v3.11.0 → v3.15.0 upgrade window (Issues #210, #211)
+
+A hotfix bundling three bugs surfaced by a downstream consumer after `pforge self-update`. Two from #210, one from #211. No new features; no breaking changes; no schema or config migrations.
+
+#### Fixed
+- **`pforge-mcp/server/rest-api.mjs`** — `checkApprovalSecret` was defined nested inside `_registerImageBridgeFixRoutes(app)` but referenced from seven other `_register*Routes()` helpers (memory, brain, secrets, deps, secret-scan, fix, runs). Function hoisting did not bridge the helpers, so every approval-gated POST (`/api/memory/capture`, `/api/memory/drain`, `/api/brain/test`, `/api/brain/replay`, `/api/secrets`, `/api/deps/watch/run`, `/api/secret-scan/run`, `/api/fix/propose`, `/api/runs/trigger`, `/api/runs/abort`) crashed with `ReferenceError: checkApprovalSecret is not defined`, flood-spamming MCP server stderr on every dashboard poll. Lifted the helper to module scope so every route registrar can call it. (Issue #210, Bug 1)
+- **`pforge.ps1`** and **`pforge-mcp/orchestrator/worker-spawn.mjs`** — the `copilot-coding-agent` capability-marker probe in `worker-capabilities.json` declares `versionArgs: ["auth","status"]` and `capabilityMarkers: ["Logged in to github.com"]` with no separate `helpArgs`. Both probe paths (PowerShell `Probe-MatrixTool` in `pforge smith` and JS `attemptProbe` in the orchestrator's `detectWorkers()`) checked the markers against `helpArgs` output — which is empty for this spec, causing `gh` to be invoked with no args and producing the generic help banner. Result: false-failure `❌ copilot-coding-agent v lacks agentic flags: Logged in to github.com` even when `gh auth status` clearly shows the user authenticated. Both probes now fall back to the `versionArgs` output when `helpArgs` is absent. Also fixed the empty `v ` in the failure message — now renders `(version unknown)` when the version regex doesn't match. (Issue #210, Bug 2)
+- **`setup.ps1`**, **`setup.sh`**, **`pforge.ps1`**, **`pforge.sh`** — consumer `.gitignore` was never seeded or refreshed by `init` or `pforge self-update`, so long-lived consumer repos accumulated ~350 MB of tracked `.forge/cache/**` content and noisy `git status` output from every runtime telemetry write. A new marker-delimited managed block is now written and refreshed idempotently at both lifecycle points, listing `**/.forge/`, `.forge/secrets.json`, `pforge-mcp/node_modules/`, `pforge-mcp/cli-schema.json`, and `pforge-mcp/.vitest-results.json`. User content outside the markers is preserved. When the operator already has `.forge/` content tracked, a one-time cleanup hint is printed (`git rm -r --cached .forge && git commit ...`). Implemented as `Update-PlanForgeGitignore` (PowerShell) / `pf_update_gitignore` (Bash), twinned across both shells. (Issue #211)
+
+#### Tests
+- `pforge-mcp/tests/smith-golden.test.mjs` — normalizer regex for the `copilot-coding-agent` line now matches both `v<semver>` and `(version unknown)` forms so the golden fixture is unaffected by the message-format fix.
+
+---
+
 ## [3.15.0] — 2026-05-20
 
 ### pforge-sdk `trajectory-reader` sub-path — v0.12.0
@@ -31,22 +47,6 @@ Offline access to the Plan Forge trajectory notes (`.forge/trajectories/`) witho
 - `pforge-sdk/package.json` — new `"./trajectory-reader"` export map entry; version bumped to `0.12.0`.
 - `pforge-sdk/src/index.mjs` — re-exports all `trajectory-reader` symbols from the main entry point. Fixed duplicate `bug-reader` export.
 - **58 tests** in `pforge-sdk/tests/trajectory-reader.test.mjs` covering constants, path helpers, `parseSliceId`, `countWords`, `listPlans`, `listTrajectories`, `readTrajectory`, `readAllTrajectories`, and `summarizeTrajectories` (empty/single/multi/filtering/path-traversal).
-
----
-
-## [3.14.1] — 2026-05-20
-
-### Fixed — three downstream-consumer bugs from v3.11.0 → v3.14.0 upgrade window (Issues #210, #211)
-
-A hotfix bundling three bugs surfaced by a downstream consumer after `pforge self-update`. Two from #210, one from #211. No new features; no breaking changes; no schema or config migrations.
-
-#### Fixed
-- **`pforge-mcp/server/rest-api.mjs`** — `checkApprovalSecret` was defined nested inside `_registerImageBridgeFixRoutes(app)` but referenced from seven other `_register*Routes()` helpers (memory, brain, secrets, deps, secret-scan, fix, runs). Function hoisting did not bridge the helpers, so every approval-gated POST (`/api/memory/capture`, `/api/memory/drain`, `/api/brain/test`, `/api/brain/replay`, `/api/secrets`, `/api/deps/watch/run`, `/api/secret-scan/run`, `/api/fix/propose`, `/api/runs/trigger`, `/api/runs/abort`) crashed with `ReferenceError: checkApprovalSecret is not defined`, flood-spamming MCP server stderr on every dashboard poll. Lifted the helper to module scope so every route registrar can call it. (Issue #210, Bug 1)
-- **`pforge.ps1`** and **`pforge-mcp/orchestrator/worker-spawn.mjs`** — the `copilot-coding-agent` capability-marker probe in `worker-capabilities.json` declares `versionArgs: ["auth","status"]` and `capabilityMarkers: ["Logged in to github.com"]` with no separate `helpArgs`. Both probe paths (PowerShell `Probe-MatrixTool` in `pforge smith` and JS `attemptProbe` in the orchestrator's `detectWorkers()`) checked the markers against `helpArgs` output — which is empty for this spec, causing `gh` to be invoked with no args and producing the generic help banner. Result: false-failure `❌ copilot-coding-agent v lacks agentic flags: Logged in to github.com` even when `gh auth status` clearly shows the user authenticated. Both probes now fall back to the `versionArgs` output when `helpArgs` is absent. Also fixed the empty `v ` in the failure message — now renders `(version unknown)` when the version regex doesn't match. (Issue #210, Bug 2)
-- **`setup.ps1`**, **`setup.sh`**, **`pforge.ps1`**, **`pforge.sh`** — consumer `.gitignore` was never seeded or refreshed by `init` or `pforge self-update`, so long-lived consumer repos accumulated ~350 MB of tracked `.forge/cache/**` content and noisy `git status` output from every runtime telemetry write. A new marker-delimited managed block is now written and refreshed idempotently at both lifecycle points, listing `**/.forge/`, `.forge/secrets.json`, `pforge-mcp/node_modules/`, `pforge-mcp/cli-schema.json`, and `pforge-mcp/.vitest-results.json`. User content outside the markers is preserved. When the operator already has `.forge/` content tracked, a one-time cleanup hint is printed (`git rm -r --cached .forge && git commit ...`). Implemented as `Update-PlanForgeGitignore` (PowerShell) / `pf_update_gitignore` (Bash), twinned across both shells. (Issue #211)
-
-#### Tests
-- `pforge-mcp/tests/smith-golden.test.mjs` — normalizer regex for the `copilot-coding-agent` line now matches both `v<semver>` and `(version unknown)` forms so the golden fixture is unaffected by the message-format fix.
 
 ---
 

@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-05-21T06:21:51.938Z",
+  "generatedAt": "2026-05-21T19:34:32.067Z",
   "scopes": [
     "pforge-mcp/tests",
     "pforge-master/tests",
@@ -7,13 +7,13 @@
   ],
   "severityFilter": "info",
   "counts": {
-    "filesScanned": 344,
-    "filesWithSmells": 107,
+    "filesScanned": 351,
+    "filesWithSmells": 108,
     "errors": 0,
-    "warnings": 430,
+    "warnings": 433,
     "info": 1,
     "bySmell": {
-      "TIME-FLAKE": 405,
+      "TIME-FLAKE": 408,
       "CONSOLE-LEAK": 25,
       "TODO-MARKER": 1
     }
@@ -2303,6 +2303,32 @@
           "severity": "warn",
           "line": 136,
           "snippet": "Date.now without tolerance guard",
+          "why": "Time-sensitive code in tests without explicit tolerance or fake timers — Windows scheduler drift can flake the test (see Phase 41 S5 timeline-core +5ms→+50ms fix)"
+        }
+      ]
+    },
+    {
+      "file": "pforge-mcp/tests/crucible-modes/bug-batch.test.mjs",
+      "findings": [
+        {
+          "smell": "TIME-FLAKE",
+          "severity": "warn",
+          "line": 166,
+          "snippet": "new Date() without tolerance guard",
+          "why": "Time-sensitive code in tests without explicit tolerance or fake timers — Windows scheduler drift can flake the test (see Phase 41 S5 timeline-core +5ms→+50ms fix)"
+        },
+        {
+          "smell": "TIME-FLAKE",
+          "severity": "warn",
+          "line": 167,
+          "snippet": "new Date() without tolerance guard",
+          "why": "Time-sensitive code in tests without explicit tolerance or fake timers — Windows scheduler drift can flake the test (see Phase 41 S5 timeline-core +5ms→+50ms fix)"
+        },
+        {
+          "smell": "TIME-FLAKE",
+          "severity": "warn",
+          "line": 168,
+          "snippet": "new Date() without tolerance guard",
           "why": "Time-sensitive code in tests without explicit tolerance or fake timers — Windows scheduler drift can flake the test (see Phase 41 S5 timeline-core +5ms→+50ms fix)"
         }
       ]

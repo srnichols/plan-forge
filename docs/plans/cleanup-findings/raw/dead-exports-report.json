@@ -1,16 +1,16 @@
 {
-  "generatedAt": "2026-05-21T06:21:51.765Z",
+  "generatedAt": "2026-05-21T19:34:31.878Z",
   "scopes": [
     "pforge-mcp",
     "pforge-master",
     "scripts"
   ],
   "counts": {
-    "filesScanned": 266,
-    "filesWithDeadExports": 108,
-    "totalExports": 1558,
-    "deadExports": 686,
-    "namespaceConsumedFiles": 48
+    "filesScanned": 276,
+    "filesWithDeadExports": 113,
+    "totalExports": 1596,
+    "deadExports": 702,
+    "namespaceConsumedFiles": 49
   },
   "findings": [
     {
@@ -424,6 +424,22 @@
       "totalExports": 14
     },
     {
+      "file": "pforge-mcp/crucible-server.mjs",
+      "deadExports": [
+        "CRITICAL_FIELDS",
+        "buildFrontmatter",
+        "collectExistingPhaseNames",
+        "computeStaleDefaultsWarnings",
+        "extractUnresolvedFields",
+        "getNextQuestion",
+        "inferLane",
+        "renderDraft",
+        "renderDraftStub",
+        "resolveCriticalFields"
+      ],
+      "totalExports": 19
+    },
+    {
       "file": "pforge-mcp/tempering/scanners/content-audit.mjs",
       "deadExports": [
         "CONTENT_AUDIT_DEFAULTS",
@@ -468,6 +484,20 @@
         "getPricing"
       ],
       "totalExports": 11
+    },
+    {
+      "file": "pforge-mcp/crucible/core/interview-protocol.mjs",
+      "deadExports": [
+        "FEATURE_QUESTIONS",
+        "FULL_QUESTIONS",
+        "TWEAK_QUESTIONS",
+        "buildRecommendedDefault",
+        "getNextQuestion",
+        "getQuestionBank",
+        "recordAnswer",
+        "totalQuestions"
+      ],
+      "totalExports": 8
     },
     {
       "file": "pforge-mcp/sync-instructions.mjs",
@@ -552,19 +582,6 @@
       "totalExports": 10
     },
     {
-      "file": "pforge-mcp/crucible-server.mjs",
-      "deadExports": [
-        "collectExistingPhaseNames",
-        "computeStaleDefaultsWarnings",
-        "extractUnresolvedFields",
-        "getNextQuestion",
-        "inferLane",
-        "renderDraft",
-        "renderDraftStub"
-      ],
-      "totalExports": 16
-    },
-    {
       "file": "pforge-mcp/github-metrics.mjs",
       "deadExports": [
         "MetricsAuthError",
@@ -615,18 +632,6 @@
         "setExternalRef"
       ],
       "totalExports": 13
-    },
-    {
-      "file": "pforge-mcp/crucible-interview.mjs",
-      "deadExports": [
-        "FEATURE_QUESTIONS",
-        "FULL_QUESTIONS",
-        "TWEAK_QUESTIONS",
-        "buildRecommendedDefault",
-        "getQuestionBank",
-        "recordAnswer"
-      ],
-      "totalExports": 8
     },
     {
       "file": "pforge-mcp/enums.mjs",
@@ -687,6 +692,17 @@
         "runSubprocess"
       ],
       "totalExports": 8
+    },
+    {
+      "file": "pforge-mcp/crucible/core/render-shell.mjs",
+      "deadExports": [
+        "MANDATORY_BLOCKS",
+        "SCOPE_CONTRACT_HEADINGS",
+        "extractUnresolvedFields",
+        "renderDraft",
+        "synthesizeSliceBlock"
+      ],
+      "totalExports": 5
     },
     {
       "file": "pforge-mcp/graph/query.mjs",
@@ -773,7 +789,7 @@
         "configPath",
         "sanitize"
       ],
-      "totalExports": 6
+      "totalExports": 7
     },
     {
       "file": "pforge-mcp/crucible-import.mjs",
@@ -1001,6 +1017,14 @@
       "totalExports": 3
     },
     {
+      "file": "pforge-mcp/auth/scim-rbac-bridge.mjs",
+      "deadExports": [
+        "buildScimAssignments",
+        "resolveRolesFromScim"
+      ],
+      "totalExports": 2
+    },
+    {
       "file": "pforge-mcp/auth/scim-store.mjs",
       "deadExports": [
         "_resetDefaultStore",
@@ -1009,10 +1033,18 @@
       "totalExports": 8
     },
     {
-      "file": "pforge-mcp/crucible-draft.mjs",
+      "file": "pforge-mcp/crucible/modes/bug-batch.mjs",
       "deadExports": [
-        "MANDATORY_BLOCKS",
-        "synthesizeSliceBlock"
+        "parseSliceBreakdown",
+        "renderBody"
+      ],
+      "totalExports": 2
+    },
+    {
+      "file": "pforge-mcp/crucible/registry.mjs",
+      "deadExports": [
+        "_resetRegistry",
+        "listModes"
       ],
       "totalExports": 4
     },
@@ -1143,6 +1175,20 @@
         "sendTurn"
       ],
       "totalExports": 5
+    },
+    {
+      "file": "pforge-mcp/crucible/core/finalize.mjs",
+      "deadExports": [
+        "buildFinalizeFrontmatter"
+      ],
+      "totalExports": 9
+    },
+    {
+      "file": "pforge-mcp/crucible/mode.mjs",
+      "deadExports": [
+        "MODE_INTERFACE_KEYS"
+      ],
+      "totalExports": 3
     },
     {
       "file": "pforge-mcp/crucible-enforce.mjs",

@@ -212,7 +212,7 @@ export function totalQuestions(lane) {
  */
 export function getNextQuestion(smelt, context = {}) {
   if (!smelt || smelt.status && smelt.status !== "in-progress") return null;
-  const bank = getQuestionBank(smelt.lane);
+  const bank = context.questionBank || getQuestionBank(smelt.lane);
   const answered = new Set((smelt.answers || []).map((a) => a.questionId));
   const idx = bank.findIndex((q) => !answered.has(q.id));
   if (idx === -1) return null;

@@ -3656,16 +3656,16 @@ function Invoke-Smith {
                     Doctor-Warn "Quorum models not configured" "Add models array to .forge.json quorum block"
                 }
 
-                # Threshold sanity check
+                # Threshold sanity check (default raised to 5 on 2026-05-21)
                 if ($q.threshold -and ($q.threshold -lt 3 -or $q.threshold -gt 9)) {
-                    Doctor-Warn "Quorum threshold $($q.threshold) is unusual (recommended: 5-8)" "Most projects use threshold 6-8 for balanced cost/quality"
+                    Doctor-Warn "Quorum threshold $($q.threshold) is unusual (recommended: 5-8)" "Most projects use threshold 5-8 for balanced cost/quality"
                 }
 
                 # Reviewer model
                 if ($q.reviewerModel) {
                     Doctor-Pass "Reviewer model: $($q.reviewerModel)"
                 } else {
-                    Doctor-Pass "Reviewer model: default (claude-opus-4.6)"
+                    Doctor-Pass "Reviewer model: default (claude-opus-4.7)"
                 }
 
                 Write-Host ""

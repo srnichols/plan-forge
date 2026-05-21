@@ -121,7 +121,10 @@ export const QUORUM_PRESETS = {
     },
   },
   speed: {
-    models: ["claude-sonnet-4.6", "gpt-5.4-mini", "grok-4-1-fast-reasoning"],
+    // 2026-05-21 model refresh: grok-4-1-fast-reasoning was retired by xAI on
+    // 2026-05-15. Swapped to grok-4.20-0309-non-reasoning (live, same family
+    // as the power preset's grok, non-reasoning variant for speed-tier latency).
+    models: ["claude-sonnet-4.6", "gpt-5.4-mini", "grok-4.20-0309-non-reasoning"],
     reviewerModel: "claude-sonnet-4.6",
     dryRunTimeout: 120_000,
     threshold: 7,
@@ -130,7 +133,7 @@ export const QUORUM_PRESETS = {
       "cli-claude": ["claude-sonnet-4.6"],
       "cli-codex": ["gpt-5.4-mini"],
       "vs-code-copilot-chat": ["claude-sonnet-4.6", "gpt-5.4-mini"],
-      "vs-code-agents-enterprise": ["claude-sonnet-4.6", "gpt-5.4-mini", "grok-4-1-fast-reasoning"],
+      "vs-code-agents-enterprise": ["claude-sonnet-4.6", "gpt-5.4-mini", "grok-4.20-0309-non-reasoning"],
     },
     fallbacks: {},
   },

@@ -65,7 +65,7 @@
   },
   {
     "file": "pforge-mcp/server/tool-definitions.mjs",
-    "loc": 1472,
+    "loc": 1474,
     "blank": 2,
     "comment": 20,
     "functions": 0,
@@ -233,9 +233,9 @@
   },
   {
     "file": "pforge-mcp/orchestrator/quorum.mjs",
-    "loc": 628,
+    "loc": 630,
     "blank": 57,
-    "comment": 29,
+    "comment": 31,
     "functions": 24,
     "g14Severity": null
   },
@@ -401,18 +401,10 @@
   },
   {
     "file": "pforge-mcp/capabilities/schemas.mjs",
-    "loc": 460,
+    "loc": 461,
     "blank": 5,
     "comment": 8,
     "functions": 0,
-    "g14Severity": null
-  },
-  {
-    "file": "pforge-mcp/crucible-server.mjs",
-    "loc": 459,
-    "blank": 46,
-    "comment": 30,
-    "functions": 12,
     "g14Severity": null
   },
   {
@@ -504,6 +496,14 @@
     "g14Severity": null
   },
   {
+    "file": "pforge-mcp/crucible-draft.mjs",
+    "loc": 351,
+    "blank": 31,
+    "comment": 1,
+    "functions": 18,
+    "g14Severity": null
+  },
+  {
     "file": "pforge-mcp/tempering/scanners/load-stress.mjs",
     "loc": 348,
     "blank": 35,
@@ -541,14 +541,6 @@
     "blank": 46,
     "comment": 10,
     "functions": 9,
-    "g14Severity": null
-  },
-  {
-    "file": "pforge-mcp/crucible-draft.mjs",
-    "loc": 329,
-    "blank": 27,
-    "comment": 0,
-    "functions": 17,
     "g14Severity": null
   },
   {
@@ -601,7 +593,7 @@
   },
   {
     "file": "pforge-mcp/server/tool-handlers/crucible.mjs",
-    "loc": 315,
+    "loc": 317,
     "blank": 27,
     "comment": 4,
     "functions": 8,
@@ -672,6 +664,14 @@
     "g14Severity": null
   },
   {
+    "file": "pforge-mcp/crucible-server.mjs",
+    "loc": 295,
+    "blank": 25,
+    "comment": 1,
+    "functions": 13,
+    "g14Severity": null
+  },
+  {
     "file": "pforge-mcp/search/core.mjs",
     "loc": 292,
     "blank": 33,
@@ -717,6 +717,14 @@
     "blank": 48,
     "comment": 11,
     "functions": 2,
+    "g14Severity": null
+  },
+  {
+    "file": "pforge-mcp/crucible/core/finalize.mjs",
+    "loc": 272,
+    "blank": 33,
+    "comment": 9,
+    "functions": 6,
     "g14Severity": null
   },
   {
@@ -896,6 +904,14 @@
     "g14Severity": null
   },
   {
+    "file": "pforge-mcp/crucible/modes/bug-batch.mjs",
+    "loc": 226,
+    "blank": 28,
+    "comment": 17,
+    "functions": 7,
+    "g14Severity": null
+  },
+  {
     "file": "pforge-mcp/tempering/auto-activate.mjs",
     "loc": 225,
     "blank": 19,
@@ -937,7 +953,7 @@
   },
   {
     "file": "pforge-mcp/crucible-store.mjs",
-    "loc": 217,
+    "loc": 218,
     "blank": 14,
     "comment": 0,
     "functions": 10,
@@ -1168,19 +1184,19 @@
     "g14Severity": null
   },
   {
+    "file": "pforge-mcp/orchestrator/constants.mjs",
+    "loc": 168,
+    "blank": 18,
+    "comment": 11,
+    "functions": 0,
+    "g14Severity": null
+  },
+  {
     "file": "pforge-mcp/dashboard/github-personal-tab.mjs",
     "loc": 167,
     "blank": 16,
     "comment": 3,
     "functions": 6,
-    "g14Severity": null
-  },
-  {
-    "file": "pforge-mcp/orchestrator/constants.mjs",
-    "loc": 165,
-    "blank": 18,
-    "comment": 8,
-    "functions": 0,
     "g14Severity": null
   },
   {
@@ -1277,6 +1293,14 @@
     "blank": 10,
     "comment": 8,
     "functions": 3,
+    "g14Severity": null
+  },
+  {
+    "file": "pforge-mcp/crucible-config.mjs",
+    "loc": 138,
+    "blank": 13,
+    "comment": 3,
+    "functions": 5,
     "g14Severity": null
   },
   {
@@ -1405,14 +1429,6 @@
     "blank": 10,
     "comment": 7,
     "functions": 5,
-    "g14Severity": null
-  },
-  {
-    "file": "pforge-mcp/crucible-config.mjs",
-    "loc": 114,
-    "blank": 12,
-    "comment": 2,
-    "functions": 4,
     "g14Severity": null
   },
   {
@@ -1600,6 +1616,14 @@
     "g14Severity": null
   },
   {
+    "file": "pforge-mcp/auth/scim-rbac-bridge.mjs",
+    "loc": 87,
+    "blank": 11,
+    "comment": 0,
+    "functions": 2,
+    "g14Severity": null
+  },
+  {
     "file": "pforge-mcp/server/tool-handlers/shared.mjs",
     "loc": 87,
     "blank": 7,
@@ -1744,11 +1768,27 @@
     "g14Severity": null
   },
   {
+    "file": "pforge-mcp/crucible/core/render-shell.mjs",
+    "loc": 68,
+    "blank": 6,
+    "comment": 0,
+    "functions": 1,
+    "g14Severity": null
+  },
+  {
     "file": "pforge-master/src/embedding/hash-bag.mjs",
     "loc": 66,
     "blank": 6,
     "comment": 0,
     "functions": 4,
+    "g14Severity": null
+  },
+  {
+    "file": "pforge-mcp/crucible/mode.mjs",
+    "loc": 65,
+    "blank": 5,
+    "comment": 0,
+    "functions": 1,
     "g14Severity": null
   },
   {
@@ -1765,6 +1805,14 @@
     "blank": 6,
     "comment": 1,
     "functions": 3,
+    "g14Severity": null
+  },
+  {
+    "file": "pforge-mcp/crucible/registry.mjs",
+    "loc": 58,
+    "blank": 7,
+    "comment": 0,
+    "functions": 4,
     "g14Severity": null
   },
   {
@@ -1956,6 +2004,38 @@
     "loc": 20,
     "blank": 4,
     "comment": 2,
+    "functions": 0,
+    "g14Severity": null
+  },
+  {
+    "file": "pforge-mcp/crucible/modes/feature.mjs",
+    "loc": 19,
+    "blank": 4,
+    "comment": 0,
+    "functions": 0,
+    "g14Severity": null
+  },
+  {
+    "file": "pforge-mcp/crucible/modes/full.mjs",
+    "loc": 19,
+    "blank": 4,
+    "comment": 0,
+    "functions": 0,
+    "g14Severity": null
+  },
+  {
+    "file": "pforge-mcp/crucible/modes/tweak.mjs",
+    "loc": 19,
+    "blank": 4,
+    "comment": 0,
+    "functions": 0,
+    "g14Severity": null
+  },
+  {
+    "file": "pforge-mcp/crucible/core/interview-protocol.mjs",
+    "loc": 18,
+    "blank": 2,
+    "comment": 0,
     "functions": 0,
     "g14Severity": null
   },

@@ -3106,7 +3106,7 @@ cmd_doctor() {
             echo "Quorum Mode:"
             quorum_enabled=$(jq -r '.quorum.enabled // false' "$config_path" 2>/dev/null || echo false)
             quorum_auto=$(jq -r '.quorum.auto // true' "$config_path" 2>/dev/null || echo true)
-            quorum_threshold=$(jq -r '.quorum.threshold // 7' "$config_path" 2>/dev/null || echo 7)
+            quorum_threshold=$(jq -r '.quorum.threshold // 5' "$config_path" 2>/dev/null || echo 5)
             quorum_models=$(jq -r '.quorum.models // [] | join(", ")' "$config_path" 2>/dev/null || echo "")
             quorum_reviewer=$(jq -r '.quorum.reviewerModel // "claude-opus-4.6"' "$config_path" 2>/dev/null || echo "claude-opus-4.6")
 

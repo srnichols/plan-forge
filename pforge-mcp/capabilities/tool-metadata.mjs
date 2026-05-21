@@ -144,10 +144,10 @@ export const TOOL_METADATA = {
       addedIn: "2.5.0",
       description: "Multi-model consensus: dispatch to 3+ models for dry-run analysis, synthesize best approach, then execute",
       parameters: {
-        quorum: { type: "string", enum: ["false", "true", "auto"], default: "auto", description: "Quorum mode (default: 'auto' — threshold-based; 'true' forces all slices; 'false' disables)" },
-        quorumThreshold: { type: "number", description: "Complexity score threshold for auto mode (1-10, default: 6)" },
+        quorum: { type: "string", enum: ["auto", "power", "speed", "false"], default: "auto", description: "Quorum mode. 'auto' = threshold-based with default models; 'power' = flagship preset (claude-opus-4.7 + gpt-5.3-codex + grok-4.20-0309-reasoning, threshold 5); 'speed' = fast preset (claude-sonnet-4.6 + gpt-5.4-mini + grok-4.20-0309-non-reasoning, threshold 7); 'false' = disabled. Note: 'power-gov' preset exists for Microsoft Foundry / gov-cloud workloads and is selectable via .forge.json `quorum.preset`." },
+        quorumThreshold: { type: "number", description: "Complexity score threshold for auto mode (1-10, default: 5)" },
       },
-      config: ".forge.json → quorum { enabled, auto, threshold, models[], reviewerModel, dryRunTimeout }",
+      config: ".forge.json → quorum { enabled, auto, threshold, models[], reviewerModel, dryRunTimeout, preset }",
     },
     guardrails: {
       preCommitChain: "Before each slice commit, PreCommit.mjs runs hooks.preCommit.chain entries in order. Built-ins start with master-branch-reject and diff-classify; the first non-zero exit aborts the commit.",

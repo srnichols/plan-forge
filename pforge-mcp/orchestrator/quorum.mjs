@@ -14,11 +14,12 @@ export function loadQuorumConfig(cwd, presetOverride = null) {
   const defaults = {
     enabled: false,
     auto: true,
-    // Phase-31 Slice 5: recalibrated from 6 → 3 based on empirical distribution
-    // across Phase-25–30 plans (63 slices). At threshold=6 only 1/63 slices
-    // triggered quorum. At threshold=3 (60th-percentile score), 56/63 slices
-    // qualify — matching the intent of "complex slices get multi-model review".
-    threshold: 3,
+    // 2026-05-21: default raised from 3 → 5. Phase-31 Slice 5 had recalibrated
+    // 6 → 3 because at threshold=6 only 1/63 historical slices triggered quorum,
+    // but threshold=3 swung the other way and qualified 56/63 (~89%) which is
+    // effectively "always quorum". Threshold=5 matches the power preset and
+    // restricts auto-quorum to genuinely complex slices.
+    threshold: 5,
     // Bug #107: default uses the standard tier (opus-4.6). Users who want
     // the premium tier (opus-4.7) opt in via --quorum=power. Reviewer stays
     // on 4.7 since it only runs once per slice and the spend is bounded.
@@ -28,7 +29,8 @@ export function loadQuorumConfig(cwd, presetOverride = null) {
     strictAvailability: false, // H.3: true = fast-fail if any model unavailable
   };
 
-  // Adaptive threshold: learn from quorum history which slices actually need quorum
+  // Adaptive threshold: learn from quorum history which slices actually need quorum.
+  // Floor is 5 (matches the static default); ceiling is 9 (Math.min(9, ...)).
   try {
     const qHistory = readForgeJsonl("quorum-history.jsonl", [], cwd); // G2.1
     if (qHistory.length >= 5) {
@@ -38,7 +40,7 @@ export function loadQuorumConfig(cwd, presetOverride = null) {
       // If <20% of slices needed quorum, raise threshold (fewer get quorum)
       // If >60% needed quorum, lower threshold (more get quorum)
       if (neededRate < 0.2 && defaults.threshold < 9) defaults.threshold = Math.min(9, defaults.threshold + 1);
-      else if (neededRate > 0.6 && defaults.threshold > 3) defaults.threshold = Math.max(3, defaults.threshold - 1);
+      else if (neededRate > 0.6 && defaults.threshold > 5) defaults.threshold = Math.max(5, defaults.threshold - 1);
     }
   } catch { /* use static default */ }
   const configPath = resolve(cwd, ".forge.json");

@@ -364,12 +364,13 @@ export const CONFIG_SCHEMA = {
     maxRunHistory: { type: "number", default: 50, minimum: 1, description: "Max run directories to retain" },
     quorum: {
       type: "object",
-      description: "Multi-model consensus configuration (v2.5)",
+      description: "Multi-model consensus configuration (v2.5; defaults refreshed 2026-05-21)",
       properties: {
         enabled: { type: "boolean", default: false, description: "Master switch for quorum mode" },
         auto: { type: "boolean", default: true, description: "When enabled, only quorum high-complexity slices" },
-        threshold: { type: "number", default: 6, minimum: 1, maximum: 10, description: "Complexity score threshold for auto mode" },
-        models: { type: "array", items: { type: "string" }, default: ["claude-opus-4.7", "gpt-5.3-codex", "gemini-3.1-pro"], description: "Models for dry-run fan-out" },
+        threshold: { type: "number", default: 5, minimum: 1, maximum: 10, description: "Complexity score threshold for auto mode (raised 3→5 on 2026-05-21 — threshold=3 was triggering quorum on ~89% of slices)" },
+        preset: { type: "string", enum: ["speed", "power", "power-gov", "false"], description: "Optional named preset (overrides models/threshold/reviewerModel). Equivalent to CLI --quorum=<name>." },
+        models: { type: "array", items: { type: "string" }, default: ["claude-opus-4.6", "gpt-5.3-codex", "grok-4.20-0309-reasoning"], description: "Models for dry-run fan-out (used when no preset is selected)" },
         reviewerModel: { type: "string", default: "claude-opus-4.7", description: "Model for synthesis review" },
         dryRunTimeout: { type: "number", default: 300000, description: "Timeout per dry-run worker (ms)" },
         strictAvailability: { type: "boolean", default: false, description: "When true, fast-fail (exit 2) if any configured model is unavailable. When false (default), drop unavailable models and continue if ≥1 remain" },

@@ -23,6 +23,13 @@ export const MODE_INTERFACE_KEYS = Object.freeze([
   "finalize",
 ]);
 
+export const LINKED_BUGS_QUESTION = Object.freeze({
+  id: "linked-bugs",
+  prompt: 'Link related bug IDs (comma-separated, e.g. "RMG-0035, RMG-0041"). Leave blank to skip.',
+  required: false,
+  defaultSource: null,
+});
+
 /**
  * Validate that a mode descriptor satisfies the CrucibleMode interface.
  * Throws TypeError with a descriptive message on the first violation.

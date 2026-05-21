@@ -125,8 +125,11 @@ Anvil and Hallmark expose CLI commands (and SDK exports) instead of MCP tools �
 | **Full Auto** | *(default)* | `gh copilot` CLI | Agent executes each slice with full project context |
 | **Assisted** | `--assisted` | Human in VS Code | Orchestrator prompts, human codes, gates validate |
 | **Cloud Agent** | *(via `copilot-setup-steps.yml`)* | Copilot cloud agent | Cloud agent provisions environment, guardrails auto-load, MCP tools available |
-| **Quorum** | `--quorum` | 3 models + reviewer | All slices: 3 dry-run analyses → synthesis → execute |
-| **Quorum Auto** | `--quorum=auto` | 3 models (selective) | Only high-complexity slices (score ≥ threshold) get quorum |
+| **Quorum Auto** | `--quorum=auto` *(default when enabled)* | claude-opus-4.6 + gpt-5.3-codex + grok-4.20-0309-reasoning | Default threshold **5** (raised from 3 on 2026-05-21). Only slices with complexity score ≥ 5 get quorum. Adaptive — floor 5, ceiling 9. |
+| **Quorum Power** | `--quorum=power` | claude-opus-4.7 + gpt-5.3-codex + grok-4.20-0309-reasoning | Flagship preset. Threshold 5, 5-min dry-run timeout. Reviewer: claude-opus-4.7. Falls back to `speed` on `cli-gh` host where opus-4.7 is the only servable flagship. |
+| **Quorum Speed** | `--quorum=speed` | claude-sonnet-4.6 + gpt-5.4-mini + grok-4.20-0309-non-reasoning | Fast preset. Threshold 7, 2-min dry-run timeout. Reviewer: claude-sonnet-4.6. *(2026-05-21: grok-4-1-fast-reasoning was retired by xAI on 2026-05-15; replaced with grok-4.20-0309-non-reasoning.)* |
+| **Quorum Disabled** | `--quorum=false` or `--no-quorum` | Single model | Force-disable quorum even when `.forge.json → quorum.enabled = true`. |
+| **Quorum Gov** | *(no CLI flag — `.forge.json → quorum.preset = "power-gov"`)* | gpt-5.1 + gpt-4.1 + gpt-4.1-mini + o3-mini + gpt-4o | Microsoft Foundry / government-cloud preset (OpenAI-only). Threshold 5, 5-min dry-run timeout. Reviewer: gpt-4.1. |
 | **Estimate** | `--estimate` | None | Returns cost prediction without executing |
 | **Dry Run** | `--dry-run` | None | Parses and validates plan structure |
 | **Resume** | `--resume-from N` | Same as auto | Skips completed slices |

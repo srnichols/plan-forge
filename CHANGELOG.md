@@ -7,6 +7,9 @@ Format follows [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
+### Changed
+- Phase 59 — Crucible multi-mode substrate: new `bug-batch` mode with Root Cause Hypothesis section and multi-slice synthesizer; per-mode `criticalFields` replacing global set; renderer/parser alignment (`### In Scope`, `### Out of Scope`, `### Forbidden` under `## Scope Contract`; `[scope: <paths>]` clause in synthesized slice headers); `crucible.legacy.tbdPlaceholders` config knob gating pre-S2 `{{TBD:}}` marker behavior (deprecated, removed major-after-next); `docs/crucible-modes.md` operator guide added. Closes #140, #142, #145, #146, #147.
+
 ---
 
 ## [3.18.0] — 2026-05-21

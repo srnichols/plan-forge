@@ -26,7 +26,6 @@ Listed in **execution order**. Each phase's Execution Hold gates on its predeces
 
 | Phase | Status | Goal | Reference |
 |-------|--------|------|-----------|
-| 59 — CRUCIBLE-MODES | 📋 DRAFT | Multi-mode Crucible intake substrate: extract mode interface + core (refusal contract, file-write guard, render shell), migrate existing tweak/feature/full lanes to mode files with per-mode `criticalFields`, drop `{{TBD:}}` markers in favor of truthful refusal, add `bug-batch` mode (root-cause + multi-slice synthesizer) with RMG-0035 as the regression target, align renderer to `parseScopeContract` / `parseSlices` expectations, ship legacy-flag deprecation gate. Closes #140/#142/#145/#146/#147 (reopened twins of v2.82.1's #118/#135/#137). | [Phase-59-CRUCIBLE-MODES-PLAN.md](./Phase-59-CRUCIBLE-MODES-PLAN.md) |
 
 ---
 
@@ -34,6 +33,7 @@ Listed in **execution order**. Each phase's Execution Hold gates on its predeces
 
 | Phase | Goal | Shipped | Reference |
 |-------|------|---------|-----------|
+| 59 — CRUCIBLE-MODES | Multi-mode Crucible intake substrate: extracted mode interface + registry, migrated tweak/feature/full lanes to mode files with per-mode `criticalFields`, added `bug-batch` mode (Root Cause Hypothesis + multi-slice synthesizer), renderer/parser alignment (`### Forbidden`, `[scope:]` headers), `crucible.legacy.tbdPlaceholders` deprecation gate. 88 new tests. Closes #140/#142/#145/#146/#147. | 2026-05-21 | [Phase-59-CRUCIBLE-MODES-PLAN.md](./Phase-59-CRUCIBLE-MODES-PLAN.md) |
 | OKTA-SCIM — SCIM 2.0 provisioning | SCIM 2.0 user/group provisioning endpoints (`/scim/v2/`), `ScimStore` with `.forge/` persistence, bearer-token auth, 14 routes, 39 tests. | 2026-05-20 | — |
 | 55 — CLEAN-CODE-SWEEP | Eliminated all 4 residual clean-code blocking errors from the post-Phase-53 audit: split `orchestrator/run-plan.mjs` (3,831 → 2,906 LOC) and `server/rest-api.mjs` (3,197 → 2,755 LOC), decomposed two `complexity-error` functions (`searchLocalThoughts`, `_callToolHandler_096_forge_embedding_status`), cleared frozen-arrays drift in `notifications/core.mjs`, triaged 6 SKIP-LEAK sites, whitelisted dep-boundary violation, replaced `"TIMEOUT"` literals with `ERROR_CODES.TIMEOUT`, and skipped preexisting Windows/libuv test failure with tracked issue. Final audit: **0 errors**. | 2026-05-20 | [Phase-55-CLEAN-CODE-SWEEP-PLAN.md](./Phase-55-CLEAN-CODE-SWEEP-PLAN.md) |
 | 43 — CLEAN-CODE-ESLINT-ERRORS | Resolved all 127 ESLint error-severity violations (D1 complexity-error ×119, D2 max-lines-per-function-error ×8) surfaced by Phase 42 audit. Zero `clean-code/complexity-error`, `max-lines-per-function-error`, `max-params-error` remain. | 2026-05-19 | [Phase-43-CLEAN-CODE-ESLINT-ERRORS-PLAN.md](./Phase-43-CLEAN-CODE-ESLINT-ERRORS-PLAN.md) |

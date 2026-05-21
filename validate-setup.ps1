@@ -93,9 +93,17 @@ $configPath = Join-Path $ProjectPath ".forge.json"
 if (Test-Path $configPath) {
     $config = Get-Content $configPath -Raw | ConvertFrom-Json
     $preset = $config.preset
-    Write-Host "  INFO  Detected preset: $preset" -ForegroundColor Cyan
+    # Treat missing/empty preset the same as 'custom' — projects that haven't
+    # declared a stack preset shouldn't trigger stack-specific file checks
+    # (e.g. requiring database.instructions.md on a tooling-only repo).
+    if (-not $preset) {
+        Write-Host "  INFO  No preset declared in .forge.json — treating as 'custom'" -ForegroundColor Cyan
+    }
+    else {
+        Write-Host "  INFO  Detected preset: $preset" -ForegroundColor Cyan
+    }
 
-    if ($preset -ne 'custom') {
+    if ($preset -and $preset -ne 'custom') {
         Check-FileExists "AGENTS.md"
         Check-FileExists ".github/instructions/testing.instructions.md"
         Check-FileExists ".github/instructions/security.instructions.md"
@@ -116,7 +124,7 @@ if (Test-Path $configPath) {
     Write-Host ""
     Write-Host "Agentic files (prompts, agents, skills):" -ForegroundColor Cyan
 
-    if ($preset -ne 'custom') {
+    if ($preset -and $preset -ne 'custom') {
         $promptsDir = Join-Path $ProjectPath ".github/prompts"
         $agentsDir  = Join-Path $ProjectPath ".github/agents"
         $skillsDir  = Join-Path $ProjectPath ".github/skills"

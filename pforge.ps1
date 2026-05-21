@@ -3315,16 +3315,28 @@ function Invoke-Smith {
         Write-Host "MCP Runtime:" -ForegroundColor Cyan
 
         # Granular dependency checks
+        # npm workspaces (root package.json declares pforge-mcp as a workspace) HOIST
+        # dependencies to <repo>/node_modules. Standalone installs (cd pforge-mcp && npm i)
+        # land them in pforge-mcp/node_modules. Probe both so smith works in either layout.
         $mcpDepsDir = Join-Path $RepoRoot "pforge-mcp/node_modules"
-        if (Test-Path $mcpDepsDir) {
+        $rootDepsDir = Join-Path $RepoRoot "node_modules"
+        $resolveDep = {
+            param($depName)
+            $local = Join-Path $mcpDepsDir $depName
+            if (Test-Path $local) { return $local }
+            $hoisted = Join-Path $rootDepsDir $depName
+            if (Test-Path $hoisted) { return $hoisted }
+            return $null
+        }
+        if ((Test-Path $mcpDepsDir) -or (Test-Path $rootDepsDir)) {
             $criticalDeps = @(
                 @{ Name = "@modelcontextprotocol/sdk"; Label = "MCP SDK (protocol layer)" },
                 @{ Name = "express"; Label = "Express (dashboard + REST API)" },
                 @{ Name = "ws"; Label = "ws (WebSocket hub for real-time events)" }
             )
             foreach ($dep in $criticalDeps) {
-                $depPath = Join-Path $mcpDepsDir $dep.Name
-                if (Test-Path $depPath) {
+                $depPath = & $resolveDep $dep.Name
+                if ($depPath) {
                     # Try to read version
                     $depPkgPath = Join-Path $depPath "package.json"
                     if (Test-Path $depPkgPath) {
@@ -3334,7 +3346,7 @@ function Invoke-Smith {
                         } catch { Doctor-Pass "$($dep.Label) installed" }
                     } else { Doctor-Pass "$($dep.Label) installed" }
                 } else {
-                    Doctor-Fail "$($dep.Label) missing" "Run: cd pforge-mcp && npm install"
+                    Doctor-Fail "$($dep.Label) missing" "Run: npm install (root) or cd pforge-mcp && npm install"
                 }
             }
 
@@ -3343,8 +3355,8 @@ function Invoke-Smith {
                 @{ Name = "playwright"; Label = "Playwright (screenshot capture)" }
             )
             foreach ($dep in $optionalDeps) {
-                $depPath = Join-Path $mcpDepsDir $dep.Name
-                if (Test-Path $depPath) {
+                $depPath = & $resolveDep $dep.Name
+                if ($depPath) {
                     Doctor-Pass "$($dep.Label)"
                 } else {
                     Doctor-Warn "$($dep.Label) not installed (optional)" "Run: cd pforge-mcp && npm install playwright"

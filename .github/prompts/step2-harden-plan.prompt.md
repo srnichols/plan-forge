@@ -200,6 +200,48 @@ After all sections are finalized and the plan quality self-check passes, compute
 
 ---
 
+## Retro / Closure Slice — Status-Header Rewrite (meta-bug [#212](https://github.com/srnichols/plan-forge/issues/212))
+
+The final slice of a hardened plan (typically `S<N>` named "Retro", "Closure", or "Phase closure")
+appends a `## What actually shipped` section to the plan file. That section alone is **not enough**
+— the plan's top-of-file status block stays stale (`status: HARDENED — awaiting Execution Hold lift`,
+or `> **Status**: in-progress`) and misleads anyone scanning the directory for what's done versus
+what's still running.
+
+The retro slice MUST also rewrite the plan's status header in the same commit:
+
+1. **YAML frontmatter** (if present): change `status:` from `HARDENED` / `in-progress` / `running`
+   to `complete` (or `shipped`). Example:
+   ```yaml
+   ---
+   status: complete
+   shippedAt: 2026-MM-DD
+   shippedIn: vX.Y.Z
+   lockHash: <unchanged>
+   ---
+   ```
+
+2. **Quote-block status line** (first line after the title): rewrite from
+   `> **Status**: HARDENED — awaiting Execution Hold lift` (or similar)
+   to
+   `> **Status**: ✅ Complete. All <N> slices shipped. See [What actually shipped](#what-actually-shipped) for the retro.`
+
+3. **Validation gate for the retro slice MUST include both checks**, not just the retro-section check:
+   ```bash
+   node -e "const c=require('fs').readFileSync('docs/plans/<YOUR-PLAN>.md','utf8'); if(!c.includes('## What actually shipped'))throw new Error('retro section missing'); if(!/^>\\s*\\*\\*Status\\*\\*:\\s*(✅|Complete)/m.test(c))throw new Error('status header not rewritten to Complete'); console.log('ok retro+status');"
+   ```
+
+4. Do NOT change `lockHash` during the retro — the retro slice runs AFTER all gated work and is
+   permitted to mutate only the status header, the `## What actually shipped` section, and the
+   `Progress tracker` checkboxes. Re-hashing here would break the orchestrator's drift detection
+   for any in-flight retries.
+
+This rule applies to every hardened plan with a retro/closure slice. If a plan has no explicit
+retro slice, the shipper (`pforge ship` / `step6-ship.prompt.md`) is responsible for the same
+status-header rewrite at tag time.
+
+---
+
 ## Release-Slice Hardening (when the plan ships a tag)
 
 If any slice contains `chore(release): vX.Y.Z` or creates a git tag, that slice

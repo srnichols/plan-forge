@@ -2804,15 +2804,29 @@ cmd_doctor() {
         echo "MCP Runtime:"
 
         # Granular dependency checks
+        # npm workspaces (root package.json declares pforge-mcp as a workspace) HOIST
+        # dependencies to <repo>/node_modules. Standalone installs (cd pforge-mcp && npm i)
+        # land them in pforge-mcp/node_modules. Probe both so smith works in either layout.
         local mcp_deps_dir="$REPO_ROOT/pforge-mcp/node_modules"
-        if [ -d "$mcp_deps_dir" ]; then
+        local root_deps_dir="$REPO_ROOT/node_modules"
+        _resolve_mcp_dep() {
+            # echoes resolved path or nothing
+            local dep_name="$1"
+            if [ -d "$mcp_deps_dir/$dep_name" ]; then
+                echo "$mcp_deps_dir/$dep_name"
+            elif [ -d "$root_deps_dir/$dep_name" ]; then
+                echo "$root_deps_dir/$dep_name"
+            fi
+        }
+        if [ -d "$mcp_deps_dir" ] || [ -d "$root_deps_dir" ]; then
             # Critical deps
             local critical_deps=("@modelcontextprotocol/sdk:MCP SDK (protocol layer)" "express:Express (dashboard + REST API)" "ws:ws (WebSocket hub for real-time events)")
             for entry in "${critical_deps[@]}"; do
                 local dep_name="${entry%%:*}"
                 local dep_label="${entry#*:}"
-                local dep_path="$mcp_deps_dir/$dep_name"
-                if [ -d "$dep_path" ]; then
+                local dep_path
+                dep_path=$(_resolve_mcp_dep "$dep_name")
+                if [ -n "$dep_path" ]; then
                     local dep_pkg="$dep_path/package.json"
                     if [ -f "$dep_pkg" ]; then
                         local dep_ver
@@ -2823,12 +2837,14 @@ cmd_doctor() {
                         doctor_pass "$dep_label installed"
                     fi
                 else
-                    doctor_fail "$dep_label missing" "Run: cd pforge-mcp && npm install"
+                    doctor_fail "$dep_label missing" "Run: npm install (root) or cd pforge-mcp && npm install"
                 fi
             done
 
             # Optional deps
-            if [ -d "$mcp_deps_dir/playwright" ]; then
+            local pw_path
+            pw_path=$(_resolve_mcp_dep "playwright")
+            if [ -n "$pw_path" ]; then
                 doctor_pass "Playwright (screenshot capture)"
             else
                 doctor_warn "Playwright (screenshot capture) not installed (optional)" "Run: cd pforge-mcp && npm install playwright"

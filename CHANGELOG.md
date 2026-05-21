@@ -7,7 +7,12 @@ Format follows [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
+### Fixed
+- **`pforge smith` MCP runtime check** — falsely reported `@modelcontextprotocol/sdk`, `express`, and `ws` as missing when run from a dev clone where npm workspaces hoist dependencies to root `node_modules/`. Smith now probes both `pforge-mcp/node_modules/<name>` and `<root>/node_modules/<name>`, so the same diagnostic works for both consumer installs (deps in `pforge-mcp/node_modules`) and workspace-hoisted dev clones. Same fix applied symmetrically to `pforge.sh`. Closes [#213](https://github.com/srnichols/plan-forge/issues/213).
+- **`pforge check` preset-dependent files** — falsely failed with `FAIL .github/instructions/database.instructions.md` on projects whose `.forge.json` omits or empty-strings the `preset` field. Validator now treats missing/empty preset as `custom` (the no-stack-preset case) and skips stack-specific file checks, printing `INFO No preset declared in .forge.json — treating as 'custom'`. Same fix applied symmetrically to `validate-setup.sh`. Closes [#214](https://github.com/srnichols/plan-forge/issues/214).
+
 ### Changed
+- **`step2-harden-plan.prompt.md`** — Added a new "Retro / Closure Slice — Status-Header Rewrite" section that requires every retro / closure slice to rewrite the plan's top-of-file status header (YAML frontmatter `status:` + the quote-block `> **Status**:` line) in the same commit that appends the `## What actually shipped` section. Stops plans from showing stale `HARDENED — awaiting Execution Hold lift` status after they've already shipped. Includes a recommended dual-check validation gate snippet. Closes [#212](https://github.com/srnichols/plan-forge/issues/212).
 - Phase 59 — Crucible multi-mode substrate: new `bug-batch` mode with Root Cause Hypothesis section and multi-slice synthesizer; per-mode `criticalFields` replacing global set; renderer/parser alignment (`### In Scope`, `### Out of Scope`, `### Forbidden` under `## Scope Contract`; `[scope: <paths>]` clause in synthesized slice headers); `crucible.legacy.tbdPlaceholders` config knob gating pre-S2 `{{TBD:}}` marker behavior (deprecated, removed major-after-next); `docs/crucible-modes.md` operator guide added. Closes #140, #142, #145, #146, #147.
 
 ---

@@ -108,9 +108,16 @@ CONFIG_PATH="$PROJECT_PATH/.forge.json"
 if [[ -f "$CONFIG_PATH" ]]; then
     # Simple JSON parse — extract preset value
     PRESET="$(grep '"preset"' "$CONFIG_PATH" | sed 's/.*: *"\([^"]*\)".*/\1/')"
-    cyan "  INFO  Detected preset: $PRESET"
+    # Treat missing/empty preset the same as 'custom' — projects that haven't
+    # declared a stack preset shouldn't trigger stack-specific file checks
+    # (e.g. requiring database.instructions.md on a tooling-only repo).
+    if [[ -z "$PRESET" ]]; then
+        cyan "  INFO  No preset declared in .forge.json — treating as 'custom'"
+    else
+        cyan "  INFO  Detected preset: $PRESET"
+    fi
 
-    if [[ "$PRESET" != "custom" ]]; then
+    if [[ -n "$PRESET" && "$PRESET" != "custom" ]]; then
         check_file "AGENTS.md" || true
         check_file ".github/instructions/testing.instructions.md" || true
         check_file ".github/instructions/security.instructions.md" || true
@@ -130,7 +137,7 @@ if [[ -f "$CONFIG_PATH" ]]; then
     echo ""
     cyan "Agentic files (prompts, agents, skills):"
 
-    if [[ "$PRESET" != "custom" ]]; then
+    if [[ -n "$PRESET" && "$PRESET" != "custom" ]]; then
         PROMPTS_DIR="$PROJECT_PATH/.github/prompts"
         AGENTS_DIR="$PROJECT_PATH/.github/agents"
         SKILLS_DIR="$PROJECT_PATH/.github/skills"

@@ -144,7 +144,9 @@ async function _callToolHandler_021_forge_crucible_submit(request, args) {
       const cwd = args.path ? findProjectRoot(resolve(args.path)) : findProjectRoot(PROJECT_DIR);
       const result = crucibleHandleSubmit({
         rawIdea: args.rawIdea,
+        mode: args.mode,
         lane: args.lane,
+        bugId: args.bugId,
         source: args.source,
         parentSmeltId: args.parentSmeltId,
         projectDir: cwd,

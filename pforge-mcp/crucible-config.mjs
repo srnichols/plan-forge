@@ -12,6 +12,8 @@
  *   - sourceWeights: { memory, principles, plans }  (sum ~= 100)
  *   - staleDefaultsHours: 1..168  (warning threshold)
  *   - quorumPreset: "speed" | "power" | "power-gov" | "false"  (Phase-FOUNDRY-PROVIDER)
+ *   - legacy.tbdPlaceholders: boolean  (Phase-59 S6 — restore {{TBD:}} markers for
+ *       non-critical unanswered fields; default false; deprecated, removed major-after-next)
  */
 
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
@@ -24,6 +26,7 @@ export const DEFAULT_CRUCIBLE_CONFIG = Object.freeze({
   sourceWeights: { memory: 34, principles: 33, plans: 33 },
   staleDefaultsHours: 24,
   quorumPreset: "speed",
+  legacy: Object.freeze({ tbdPlaceholders: false }),
 });
 
 const VALID_LANES = new Set(["tweak", "feature", "full"]);
@@ -82,6 +85,13 @@ export function sanitize(input) {
   if (typeof input.quorumPreset === "string" && VALID_QUORUM_PRESETS.has(input.quorumPreset)) {
     out.quorumPreset = input.quorumPreset;
   }
+  // Phase-59 S6: legacy.tbdPlaceholders opt-in (deprecated knob)
+  out.legacy = { tbdPlaceholders: false };
+  if (input.legacy && typeof input.legacy === "object") {
+    if (typeof input.legacy.tbdPlaceholders === "boolean") {
+      out.legacy.tbdPlaceholders = input.legacy.tbdPlaceholders;
+    }
+  }
   if (Number.isFinite(input.staleDefaultsHours)) {
     out.staleDefaultsHours = Math.max(1, Math.min(168, Math.trunc(input.staleDefaultsHours)));
   }
@@ -110,4 +120,18 @@ export function sanitize(input) {
   }
 
   return out;
+}
+
+/**
+ * Return true if the legacy TBD-placeholder behavior is enabled for this project.
+ * When true, renderDraft emits {{TBD: <id>}} for non-critical unanswered fields.
+ * When false (default), unanswered non-critical fields are omitted.
+ *
+ * Deprecated — this knob will be removed in the major-after-next release.
+ * @param {string} projectDir
+ * @returns {boolean}
+ */
+export function isLegacyTbdEnabled(projectDir) {
+  const cfg = loadCrucibleConfig(projectDir);
+  return cfg.legacy && cfg.legacy.tbdPlaceholders === true;
 }

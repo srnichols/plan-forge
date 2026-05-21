@@ -112,6 +112,74 @@ replace_placeholders() {
     fi
 }
 
+# ─── .gitignore Manager (Issue #211) ───────────────────────────────────
+# Seed/refresh a marker-delimited managed block in the consumer's .gitignore
+# so runtime artifacts under .forge/ never get committed. Idempotent — user
+# content outside the markers is preserved. Twin of setup.ps1's
+# Update-PlanForgeGitignore. Used by setup.sh + pforge.sh self-update.
+pf_update_gitignore() {
+    local repo_root="$1"
+    local gitignore="$repo_root/.gitignore"
+    local begin="# >>> plan-forge managed (do not edit between markers) >>>"
+    local end="# <<< plan-forge managed <<<"
+    local body
+    body="${begin}
+# Runtime / cache / telemetry produced by pforge — never commit.
+# This block is refreshed by setup + 'pforge self-update'. Issue #211.
+**/.forge/
+.forge/secrets.json
+pforge-mcp/node_modules/
+pforge-mcp/cli-schema.json
+pforge-mcp/.vitest-results.json
+${end}"
+
+    if [[ -f "$gitignore" ]]; then
+        if grep -qF "$begin" "$gitignore"; then
+            local tmp
+            tmp="$(mktemp)"
+            awk -v begin="$begin" -v end="$end" -v body="$body" '
+              BEGIN { in_block = 0 }
+              {
+                if (index($0, begin) == 1 && !in_block) { in_block = 1; print body; next }
+                if (index($0, end) == 1 && in_block) { in_block = 0; next }
+                if (!in_block) print
+              }
+            ' "$gitignore" > "$tmp"
+            if ! cmp -s "$gitignore" "$tmp"; then
+                mv "$tmp" "$gitignore"
+                green "  ✅ Refreshed plan-forge managed block in .gitignore"
+            else
+                rm -f "$tmp"
+                echo "  ✓ .gitignore plan-forge block already current"
+            fi
+        else
+            # Ensure trailing newline before appending
+            if [[ -s "$gitignore" ]] && [[ -n "$(tail -c 1 "$gitignore")" ]]; then
+                echo "" >> "$gitignore"
+            fi
+            echo "" >> "$gitignore"
+            printf "%s\n" "$body" >> "$gitignore"
+            green "  ✅ Appended plan-forge managed block to .gitignore"
+        fi
+    else
+        printf "%s\n" "$body" > "$gitignore"
+        green "  ✅ Created .gitignore with plan-forge managed block"
+    fi
+
+    if [[ -d "$repo_root/.git" ]]; then
+        local tracked
+        tracked="$(cd "$repo_root" && git ls-files .forge 2>/dev/null | head -1)"
+        if [[ -n "$tracked" ]]; then
+            echo ""
+            yellow "⚠  Files under .forge/ are currently tracked by git but the managed"
+            yellow "   .gitignore now excludes them. Clean up with:"
+            cyan   "     git rm -r --cached .forge"
+            cyan   "     git commit -m \"chore(pforge): untrack .forge/ runtime artifacts\""
+            echo ""
+        fi
+    fi
+}
+
 # ─── Agent Adapter: Claude Code ────────────────────────────────────────
 install_claude_agent() {
     local target="$1"
@@ -1527,6 +1595,11 @@ for cli_file in "pforge.ps1" "pforge.sh" "VERSION"; do
         green "  COPY  $cli_file"
     fi
 done
+
+# ─── Step 7d: Manage consumer .gitignore (Issue #211) ─────────────────
+echo ""
+cyan "Step 7d: .gitignore managed block"
+pf_update_gitignore "$PROJECT_PATH"
 
 # ─── Done ──────────────────────────────────────────────────────────────
 echo ""

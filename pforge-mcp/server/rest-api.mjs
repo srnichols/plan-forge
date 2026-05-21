@@ -160,6 +160,23 @@ const __dirname = resolve(fileURLToPath(new URL("..", import.meta.url)));
 
 const CROSS_RUN_CACHE_TTL_MS = 60 * 60 * 1000;
 
+// Helper: validate the optional bridge approval secret.
+// Module-level so every _register*Routes() helper can call it (Issue #210).
+// If bridge.approvalSecret is set, the request must supply it via
+//   Authorization: Bearer <secret>  OR  ?token=<secret>
+function checkApprovalSecret(req, res) {
+  const secret = activeBridge?.config?.approvalSecret;
+  if (!secret) return true; // No secret configured — open access
+  const authHeader = req.headers?.authorization ?? "";
+  const bearerToken = authHeader.startsWith("Bearer ")
+    ? authHeader.slice(7).trim()
+    : null;
+  const queryToken = req.query?.token ?? null;
+  if (bearerToken === secret || queryToken === secret) return true;
+  res.status(401).json({ error: "Unauthorized — invalid or missing approval secret" });
+  return false;
+}
+
 function writeJsonAtomically(filePath, payload) {
   const dir = dirname(filePath);
   if (!existsSync(dir)) mkdirSync(dir, { recursive: true });
@@ -2235,22 +2252,8 @@ function _registerImageBridgeFixRoutes(app) {
   });
 
   // ─── Bridge REST API ─────────────────────────────────────────────────
-
-  // Helper: validate the optional bridge approval secret.
-  // If bridge.approvalSecret is set, the request must supply it via
-  //   Authorization: Bearer <secret>  OR  ?token=<secret>
-  function checkApprovalSecret(req, res) {
-    const secret = activeBridge?.config?.approvalSecret;
-    if (!secret) return true; // No secret configured — open access
-    const authHeader = req.headers?.authorization ?? "";
-    const bearerToken = authHeader.startsWith("Bearer ")
-      ? authHeader.slice(7).trim()
-      : null;
-    const queryToken = req.query?.token ?? null;
-    if (bearerToken === secret || queryToken === secret) return true;
-    res.status(401).json({ error: "Unauthorized — invalid or missing approval secret" });
-    return false;
-  }
+  // (checkApprovalSecret is defined at module scope above so every
+  // _register*Routes() helper can use it — see Issue #210.)
 
   // GET /api/bridge/status — connected channels, pending approvals, stats
   app.get("/api/bridge/status", (_req, res) => {

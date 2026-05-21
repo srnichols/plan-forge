@@ -49,8 +49,12 @@ function normalize(text) {
       .replace(/\(cached \d+[smhd]+ ago\)/g, "(cached <age>)")
       // gh-copilot agentic status: varies by environment (login session, flags)
       .replace(/gh-copilot v<version>[^\n]*/g, "gh-copilot v<version> <copilot-agent-status>")
-      // copilot-coding-agent: check result changes with gh auth state
-      .replace(/copilot-coding-agent v[^\n]*/g, "copilot-coding-agent <coding-agent-status>")
+      // copilot-coding-agent: check result changes with gh auth state.
+      // Issue #210 fix: message may render either "v<semver>", a bare "v" (the
+      // pre-fix bug where $version was null), or "(version unknown)" (post-fix
+      // graceful fallback). All three normalize to the same placeholder so the
+      // golden fixture is forward- and backward-compatible.
+      .replace(/copilot-coding-agent (?:v\S*|\(version unknown\))[^\n]*/g, "copilot-coding-agent <coding-agent-status>")
       // Image API key presence: XAI_API_KEY / OPENAI_API_KEY vary by environment
       .replace(/[^\S\n]*(?:✓|✅|Γ£à)[^\n]*API_KEY[^\n]*/g, "  <api-key-present>")
       .replace(/[^\S\n]*(?:✓|✅|Γ£à)[^\n]*Grok Aurora[^\n]*/g, "  <api-key-present>")

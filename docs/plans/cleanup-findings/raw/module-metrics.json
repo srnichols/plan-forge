@@ -17,9 +17,9 @@
   },
   {
     "file": "pforge-mcp/server/rest-api.mjs",
-    "loc": 2755,
+    "loc": 2758,
     "blank": 225,
-    "comment": 231,
+    "comment": 234,
     "functions": 46,
     "g14Severity": "medium"
   },
@@ -33,9 +33,9 @@
   },
   {
     "file": "pforge-mcp/orchestrator/worker-spawn.mjs",
-    "loc": 2201,
+    "loc": 2208,
     "blank": 160,
-    "comment": 149,
+    "comment": 151,
     "functions": 83,
     "g14Severity": "medium"
   },
@@ -716,6 +716,14 @@
     "loc": 264,
     "blank": 30,
     "comment": 6,
+    "functions": 8,
+    "g14Severity": null
+  },
+  {
+    "file": "pforge-mcp/auth/providers/entra-oidc.mjs",
+    "loc": 262,
+    "blank": 29,
+    "comment": 5,
     "functions": 8,
     "g14Severity": null
   },
@@ -1696,6 +1704,14 @@
     "g14Severity": null
   },
   {
+    "file": "pforge-mcp/auth/index.mjs",
+    "loc": 70,
+    "blank": 9,
+    "comment": 0,
+    "functions": 1,
+    "g14Severity": null
+  },
+  {
     "file": "scripts/patterns.mjs",
     "loc": 69,
     "blank": 11,
@@ -1725,14 +1741,6 @@
     "blank": 6,
     "comment": 1,
     "functions": 3,
-    "g14Severity": null
-  },
-  {
-    "file": "pforge-mcp/auth/index.mjs",
-    "loc": 58,
-    "blank": 8,
-    "comment": 0,
-    "functions": 1,
     "g14Severity": null
   },
   {
@@ -1876,14 +1884,6 @@
     "loc": 28,
     "blank": 5,
     "comment": 0,
-    "functions": 0,
-    "g14Severity": null
-  },
-  {
-    "file": "pforge-mcp/regen-golden.mjs",
-    "loc": 27,
-    "blank": 4,
-    "comment": 3,
     "functions": 0,
     "g14Severity": null
   },

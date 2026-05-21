@@ -67,6 +67,67 @@ function Write-ManualSteps([string]$Title, [string[]]$Steps) {
     Write-Host ""
 }
 
+# ─── .gitignore Manager (Issue #211) ───────────────────────────────────
+# Seed/refresh a marker-delimited managed block in the consumer's .gitignore
+# so runtime artifacts under .forge/ never get committed. Idempotent — user
+# content outside the markers is preserved. Twin of setup.ps1's function.
+function Update-PlanForgeGitignore([string]$RepoRoot) {
+    $gitignorePath = Join-Path $RepoRoot ".gitignore"
+    $beginMarker = "# >>> plan-forge managed (do not edit between markers) >>>"
+    $endMarker   = "# <<< plan-forge managed <<<"
+    $nl = [Environment]::NewLine
+    $managedBody = @(
+        $beginMarker,
+        "# Runtime / cache / telemetry produced by pforge — never commit.",
+        "# This block is refreshed by setup + 'pforge self-update'. Issue #211.",
+        "**/.forge/",
+        ".forge/secrets.json",
+        "pforge-mcp/node_modules/",
+        "pforge-mcp/cli-schema.json",
+        "pforge-mcp/.vitest-results.json",
+        $endMarker
+    ) -join $nl
+
+    if (Test-Path $gitignorePath) {
+        $content = Get-Content $gitignorePath -Raw
+        if ($null -eq $content) { $content = '' }
+        if ($content -match [regex]::Escape($beginMarker)) {
+            $pattern = [regex]::Escape($beginMarker) + "[\s\S]*?" + [regex]::Escape($endMarker)
+            $updated = [regex]::Replace($content, $pattern, { param($m) $managedBody })
+            if ($updated -ne $content) {
+                Set-Content -Path $gitignorePath -Value $updated -NoNewline
+                Write-Host "  ✅ Refreshed plan-forge managed block in .gitignore" -ForegroundColor Green
+            } else {
+                Write-Host "  ✓ .gitignore plan-forge block already current" -ForegroundColor DarkGray
+            }
+        } else {
+            $separator = if ($content.Length -eq 0 -or $content.EndsWith("`n")) { "" } else { $nl }
+            Add-Content -Path $gitignorePath -Value ($separator + $nl + $managedBody)
+            Write-Host "  ✅ Appended plan-forge managed block to .gitignore" -ForegroundColor Green
+        }
+    } else {
+        Set-Content -Path $gitignorePath -Value $managedBody
+        Write-Host "  ✅ Created .gitignore with plan-forge managed block" -ForegroundColor Green
+    }
+
+    $gitDir = Join-Path $RepoRoot ".git"
+    if (Test-Path $gitDir) {
+        Push-Location $RepoRoot
+        try {
+            $tracked = & git ls-files .forge 2>$null | Select-Object -First 1
+            if ($tracked) {
+                Write-Host ""
+                Write-Host "⚠  Files under .forge/ are currently tracked by git but the managed" -ForegroundColor Yellow
+                Write-Host "   .gitignore now excludes them. Clean up with:" -ForegroundColor Yellow
+                Write-Host "     git rm -r --cached .forge" -ForegroundColor Cyan
+                Write-Host "     git commit -m `"chore(pforge): untrack .forge/ runtime artifacts`"" -ForegroundColor Cyan
+                Write-Host ""
+            }
+        } catch { }
+        finally { Pop-Location }
+    }
+}
+
 function Show-Help {
     Write-Host ""
     Write-Host "pforge — Plan Forge Pipeline CLI" -ForegroundColor Cyan
@@ -1932,6 +1993,9 @@ Files in this directory (except this README) are gitignored — they are runtime
         Write-Host "  ✅ Created docs/plans/auto/" -ForegroundColor Green
     }
 
+    # ─── Refresh consumer .gitignore managed block (Issue #211) ───────
+    Update-PlanForgeGitignore -RepoRoot $RepoRoot
+
     Write-Host ""
     Write-Host "Update complete: v$currentVersion → v$sourceVersion" -ForegroundColor Green
     Write-Host "Run 'pforge check' to validate the updated setup." -ForegroundColor DarkGray
@@ -2707,13 +2771,20 @@ function Invoke-Smith {
                 # Capability marker probe (workers only)
                 if (-not $isRuntime -and $spec.probe.capabilityMarkers -and $spec.probe.capabilityMarkers.Count -gt 0) {
                     $helpArgs = @($spec.probe.helpArgs)
-                    $helpOut = try { & $cmdName @helpArgs 2>&1 | Out-String } catch { '' }
+                    # Issue #210: when helpArgs is omitted, reuse the versionArgs output so
+                    # auth-style probes (e.g. `gh auth status`) work without an extra exec.
+                    $helpOut = if ($helpArgs.Count -gt 0) {
+                        try { & $cmdName @helpArgs 2>&1 | Out-String } catch { '' }
+                    } else {
+                        $versionOut
+                    }
                     $missing = @()
                     foreach ($marker in $spec.probe.capabilityMarkers) {
                         if ($helpOut -notmatch [regex]::Escape($marker)) { $missing += $marker }
                     }
                     if ($missing.Count -gt 0) {
-                        Doctor-Fail "$name v$version lacks agentic flags: $($missing -join ', ') (issue #28)" $installHint
+                        $verLabel = if ($version) { "v$version" } else { "(version unknown)" }
+                        Doctor-Fail "$name $verLabel lacks agentic flags: $($missing -join ', ') (issue #28)" $installHint
                         return
                     }
                 }

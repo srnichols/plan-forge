@@ -112,6 +112,70 @@ function Update-Placeholders([string]$FilePath, [string]$Name, [string]$Stack) {
     Set-Content -Path $FilePath -Value $content -NoNewline
 }
 
+# ─── .gitignore Manager (Issue #211) ───────────────────────────────────
+# Seed/refresh a marker-delimited managed block in the consumer's .gitignore
+# so runtime artifacts under .forge/ never get committed. Idempotent — user
+# content outside the markers is preserved. Used by both setup.ps1 (init)
+# and pforge.ps1 self-update.
+function Update-PlanForgeGitignore([string]$RepoRoot) {
+    $gitignorePath = Join-Path $RepoRoot ".gitignore"
+    $beginMarker = "# >>> plan-forge managed (do not edit between markers) >>>"
+    $endMarker   = "# <<< plan-forge managed <<<"
+    $nl = [Environment]::NewLine
+    $managedBody = @(
+        $beginMarker,
+        "# Runtime / cache / telemetry produced by pforge — never commit.",
+        "# This block is refreshed by setup + 'pforge self-update'. Issue #211.",
+        "**/.forge/",
+        ".forge/secrets.json",
+        "pforge-mcp/node_modules/",
+        "pforge-mcp/cli-schema.json",
+        "pforge-mcp/.vitest-results.json",
+        $endMarker
+    ) -join $nl
+
+    if (Test-Path $gitignorePath) {
+        $content = Get-Content $gitignorePath -Raw
+        if ($null -eq $content) { $content = '' }
+        if ($content -match [regex]::Escape($beginMarker)) {
+            $pattern = [regex]::Escape($beginMarker) + "[\s\S]*?" + [regex]::Escape($endMarker)
+            # Script-block replacement avoids needing to escape $ / \ in $managedBody.
+            $updated = [regex]::Replace($content, $pattern, { param($m) $managedBody })
+            if ($updated -ne $content) {
+                Set-Content -Path $gitignorePath -Value $updated -NoNewline
+                Write-Host "  ✅ Refreshed plan-forge managed block in .gitignore" -ForegroundColor Green
+            } else {
+                Write-Host "  ✓ .gitignore plan-forge block already current" -ForegroundColor DarkGray
+            }
+        } else {
+            $separator = if ($content.Length -eq 0 -or $content.EndsWith("`n")) { "" } else { $nl }
+            Add-Content -Path $gitignorePath -Value ($separator + $nl + $managedBody)
+            Write-Host "  ✅ Appended plan-forge managed block to .gitignore" -ForegroundColor Green
+        }
+    } else {
+        Set-Content -Path $gitignorePath -Value $managedBody
+        Write-Host "  ✅ Created .gitignore with plan-forge managed block" -ForegroundColor Green
+    }
+
+    # Warn if .forge content is currently tracked by git
+    $gitDir = Join-Path $RepoRoot ".git"
+    if (Test-Path $gitDir) {
+        Push-Location $RepoRoot
+        try {
+            $tracked = & git ls-files .forge 2>$null | Select-Object -First 1
+            if ($tracked) {
+                Write-Host ""
+                Write-Host "⚠  Files under .forge/ are currently tracked by git but the managed" -ForegroundColor Yellow
+                Write-Host "   .gitignore now excludes them. Clean up with:" -ForegroundColor Yellow
+                Write-Host "     git rm -r --cached .forge" -ForegroundColor Cyan
+                Write-Host "     git commit -m `"chore(pforge): untrack .forge/ runtime artifacts`"" -ForegroundColor Cyan
+                Write-Host ""
+            }
+        } catch { }
+        finally { Pop-Location }
+    }
+}
+
 # ─── Agent Adapter: Claude Code ────────────────────────────────────────
 function Install-ClaudeAgent([string]$TargetPath) {
     Write-Host "  Installing Claude Code files..." -ForegroundColor DarkCyan
@@ -1652,6 +1716,15 @@ foreach ($cliFile in @("pforge.ps1", "pforge.sh", "VERSION")) {
         Write-Host "  COPY  $cliFile" -ForegroundColor Green
     }
 }
+
+# ─── Step 7d: Manage consumer .gitignore (Issue #211) ─────────────────
+# Seed or refresh a marker-delimited managed block in the consumer's
+# .gitignore so runtime artifacts under .forge/ are never accidentally
+# committed. Safe to re-run — block is bracketed so user edits outside
+# the markers are preserved.
+Write-Host ""
+Write-Host "Step 7d: .gitignore managed block" -ForegroundColor Cyan
+Update-PlanForgeGitignore -RepoRoot $ProjectPath
 
 # ─── Done ──────────────────────────────────────────────────────────────
 Write-Host ""

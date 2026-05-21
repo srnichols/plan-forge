@@ -981,15 +981,22 @@ function attemptProbe(name, spec, probe, result) {
 
   if (probe.capabilityMarkers && probe.capabilityMarkers.length > 0) {
     let helpOut = "";
-    try {
-      helpOut = execSync(`${probe.command} ${(probe.helpArgs || []).join(" ")}`, {
-        encoding: "utf-8", timeout: 10_000, stdio: "pipe",
-      });
-    } catch (err) {
-      const cls = classifyProbeFailure(err, probe.command);
-      result.reason = `${name} help probe failed — ${cls.hint}`;
-      result.failureCategory = cls.category;
-      return { terminal: true, value: result };
+    const helpArgs = probe.helpArgs || [];
+    if (helpArgs.length > 0) {
+      try {
+        helpOut = execSync(`${probe.command} ${helpArgs.join(" ")}`, {
+          encoding: "utf-8", timeout: 10_000, stdio: "pipe",
+        });
+      } catch (err) {
+        const cls = classifyProbeFailure(err, probe.command);
+        result.reason = `${name} help probe failed — ${cls.hint}`;
+        result.failureCategory = cls.category;
+        return { terminal: true, value: result };
+      }
+    } else {
+      // Issue #210: when helpArgs is omitted, reuse the version-probe output
+      // so auth-style probes (e.g. `gh auth status`) work without an extra exec.
+      helpOut = versionOut;
     }
     const missing = probe.capabilityMarkers.filter((m) => !helpOut.includes(m));
     if (missing.length === 0) {

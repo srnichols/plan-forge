@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-05-20T18:37:21.399Z",
+  "generatedAt": "2026-05-21T04:38:38.872Z",
   "scopes": [
     "pforge-mcp/tests",
     "pforge-master/tests",
@@ -7,13 +7,13 @@
   ],
   "severityFilter": "info",
   "counts": {
-    "filesScanned": 341,
-    "filesWithSmells": 107,
+    "filesScanned": 342,
+    "filesWithSmells": 108,
     "errors": 0,
-    "warnings": 428,
+    "warnings": 429,
     "info": 6,
     "bySmell": {
-      "TIME-FLAKE": 403,
+      "TIME-FLAKE": 404,
       "CONSOLE-LEAK": 25,
       "TODO-MARKER": 6
     }
@@ -3185,6 +3185,18 @@
       ]
     },
     {
+      "file": "pforge-mcp/tests/auth-entra-oidc.test.mjs",
+      "findings": [
+        {
+          "smell": "TIME-FLAKE",
+          "severity": "warn",
+          "line": 62,
+          "snippet": "Date.now without tolerance guard",
+          "why": "Time-sensitive code in tests without explicit tolerance or fake timers — Windows scheduler drift can flake the test (see Phase 41 S5 timeline-core +5ms→+50ms fix)"
+        }
+      ]
+    },
+    {
       "file": "pforge-mcp/tests/brain-capability-negotiation.test.mjs",
       "findings": [
         {
@@ -3454,7 +3466,7 @@
         {
           "smell": "CONSOLE-LEAK",
           "severity": "warn",
-          "line": 121,
+          "line": 125,
           "snippet": "console.warn(",
           "why": "Debug leftover — adds noise to test output and obscures real failures"
         }

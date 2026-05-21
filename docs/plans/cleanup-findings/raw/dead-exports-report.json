@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-05-20T18:37:20.858Z",
+  "generatedAt": "2026-05-21T04:38:38.620Z",
   "scopes": [
     "pforge-mcp",
     "pforge-master",
@@ -7,9 +7,9 @@
   ],
   "counts": {
     "filesScanned": 263,
-    "filesWithDeadExports": 105,
-    "totalExports": 1543,
-    "deadExports": 680,
+    "filesWithDeadExports": 106,
+    "totalExports": 1546,
+    "deadExports": 682,
     "namespaceConsumedFiles": 48
   },
   "findings": [
@@ -983,6 +983,14 @@
         "writeFreshCache"
       ],
       "totalExports": 6
+    },
+    {
+      "file": "pforge-mcp/auth/providers/entra-oidc.mjs",
+      "deadExports": [
+        "_testHooks",
+        "healthCheck"
+      ],
+      "totalExports": 3
     },
     {
       "file": "pforge-mcp/crucible-draft.mjs",

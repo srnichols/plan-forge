@@ -1,0 +1,16 @@
+{
+  "id": "baseline-tweak-001",
+  "lane": "tweak",
+  "rawIdea": "Fix off-by-one error in pagination helper",
+  "source": "human",
+  "status": "finalized",
+  "phaseName": null,
+  "createdAt": "2025-01-01T00:00:00.000Z",
+  "updatedAt": "2025-01-01T00:00:00.000Z",
+  "answers": [
+    { "questionId": "scope-file", "answer": "pforge-mcp/pagination.mjs" },
+    { "questionId": "validation", "answer": "cd pforge-mcp && npx vitest run tests/pagination.test.mjs" },
+    { "questionId": "forbidden-actions", "answer": "no schema changes, no edits outside scope-file" },
+    { "questionId": "rollback", "answer": "git revert HEAD" }
+  ]
+}

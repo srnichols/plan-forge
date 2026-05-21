@@ -1,0 +1,19 @@
+{
+  "id": "baseline-feature-001",
+  "lane": "feature",
+  "rawIdea": "Add export-to-CSV capability to cost report",
+  "source": "human",
+  "status": "finalized",
+  "phaseName": null,
+  "createdAt": "2025-01-01T00:00:00.000Z",
+  "updatedAt": "2025-01-01T00:00:00.000Z",
+  "answers": [
+    { "questionId": "goal", "answer": "Users can download cost reports as CSV files" },
+    { "questionId": "scope-files", "answer": "pforge-mcp/cost-service.mjs\npforge-mcp/server.mjs" },
+    { "questionId": "out-of-scope", "answer": "PDF export, email delivery" },
+    { "questionId": "tests", "answer": "pforge-mcp/tests/cost-csv.test.mjs" },
+    { "questionId": "validation-gates", "answer": "cd pforge-mcp && npx vitest run tests/cost-csv.test.mjs" },
+    { "questionId": "forbidden-actions", "answer": "no destructive migrations, no API contract changes" },
+    { "questionId": "rollback", "answer": "git revert HEAD && npm install" }
+  ]
+}

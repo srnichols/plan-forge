@@ -1,0 +1,24 @@
+{
+  "id": "baseline-full-001",
+  "lane": "full",
+  "rawIdea": "Multi-session Crucible Interview",
+  "source": "human",
+  "status": "finalized",
+  "phaseName": "Phase-59",
+  "createdAt": "2025-01-01T00:00:00.000Z",
+  "updatedAt": "2025-01-01T00:00:00.000Z",
+  "answers": [
+    { "questionId": "feature-name", "answer": "Multi-session Crucible Interview" },
+    { "questionId": "user-problem", "answer": "Agents lose smelt context when the tab closes; restoring the interview is manual" },
+    { "questionId": "success-metric", "answer": "Smelt state persists across sessions; interview resumes from last question" },
+    { "questionId": "stack-boundary", "answer": "Node.js 18+ ESM; no TypeScript build step; PowerShell 7+ and Bash 4+ for entry points" },
+    { "questionId": "data-model", "answer": "No new tables; smelt state serialised to .forge/crucible/*.json" },
+    { "questionId": "api-surface", "answer": "forge_crucible_resume MCP tool; crucible_session_load CLI flag" },
+    { "questionId": "security-posture", "answer": "No new secrets or permissions; smelt files are local only" },
+    { "questionId": "scope-in", "answer": "crucible-store.mjs\ncrucible-server.mjs\ncrucible-interview.mjs" },
+    { "questionId": "scope-out", "answer": "Dashboard UI changes, OpenBrain sync" },
+    { "questionId": "forbidden-actions", "answer": "no TypeScript build step, no direct writes to .forge/runs/ from a tool" },
+    { "questionId": "slice-count", "answer": "4" },
+    { "questionId": "rollback-plan", "answer": "git revert HEAD~4..HEAD && rm -rf .forge/crucible/" }
+  ]
+}

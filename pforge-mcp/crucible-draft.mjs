@@ -19,6 +19,7 @@
  */
 
 import { inferRepoCommands } from "./crucible-infer.mjs";
+import { getQuestionBank } from "./crucible-interview.mjs";
 
 const TBD_REGEX = /\{\{TBD:\s*([a-z0-9-]+)\s*\}\}/gi;
 
@@ -132,14 +133,22 @@ function fallbackField(value, tbdId) {
 }
 
 function buildDraftContent(ans, lane) {
+  const bankIds = new Set(getQuestionBank(lane).map((q) => q.id));
+
+  function maybeField(value, tbdId, ...altIds) {
+    const inBank = bankIds.has(tbdId) || altIds.some((id) => bankIds.has(id));
+    if (!inBank) return value || null;
+    return fallbackField(value, tbdId);
+  }
+
   const scopeInRaw = firstAnswer(ans, "scope-in", "scope-files", "scope-file", "goal");
   return {
     scopeIn: fallbackField(asBulletList(scopeInRaw), lane === "full" ? "scope-in" : "scope-files"),
-    outOfScope: fallbackField(asBulletList(firstAnswer(ans, "scope-out", "out-of-scope")), lane === "full" ? "scope-out" : "out-of-scope"),
-    validationGates: fallbackField(firstAnswer(ans, "validation-gates", "validation"), lane === "tweak" ? "validation" : "validation-gates"),
+    outOfScope: maybeField(asBulletList(firstAnswer(ans, "scope-out", "out-of-scope")), "out-of-scope", "scope-out"),
+    validationGates: maybeField(firstAnswer(ans, "validation-gates", "validation"), "validation-gates", "validation"),
     rollback: fallbackField(firstAnswer(ans, "rollback-plan", "rollback"), lane === "full" ? "rollback-plan" : "rollback"),
     forbidden: fallbackField(asBulletList(firstAnswer(ans, "forbidden-actions")), "forbidden-actions"),
-    tests: fallbackField(firstAnswer(ans, "tests"), "tests"),
+    tests: maybeField(firstAnswer(ans, "tests"), "tests"),
     changeManifest: fallbackField(asBulletList(firstAnswer(ans, "scope-files", "scope-file", "scope-in")), "change-manifest"),
     sliceCount: firstAnswer(ans, "slice-count"),
   };
@@ -197,10 +206,12 @@ function appendScopeContract(lines, content) {
   lines.push("");
   lines.push(content.scopeIn);
   lines.push("");
-  lines.push("**Out of scope**:");
-  lines.push("");
-  lines.push(content.outOfScope);
-  lines.push("");
+  if (content.outOfScope !== null && content.outOfScope !== undefined) {
+    lines.push("**Out of scope**:");
+    lines.push("");
+    lines.push(content.outOfScope);
+    lines.push("");
+  }
 }
 
 function appendSliceTemplate(lines) {
@@ -232,10 +243,14 @@ function appendSlicesSection(lines, sliceCount, synthesized) {
 function appendStandardBlocks(lines, content) {
   lines.push("## Validation Gates");
   lines.push("");
-  lines.push(content.validationGates);
-  lines.push("");
-  lines.push(`**Tests**: ${content.tests}`);
-  lines.push("");
+  if (content.validationGates) {
+    lines.push(content.validationGates);
+    lines.push("");
+  }
+  if (content.tests) {
+    lines.push(`**Tests**: ${content.tests}`);
+    lines.push("");
+  }
   lines.push("## Stop Conditions");
   lines.push("");
   lines.push("- Validation gate fails and root cause is not identified within 30 minutes");

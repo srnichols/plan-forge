@@ -43,14 +43,9 @@ describe("crucible-modes no-regression (Phase-59 baseline)", () => {
     });
   }
 
-  it("tweak fixture contains {{TBD: out-of-scope}} (truthful refusal of unanswered)", () => {
+  it("tweak fixture does not contain TBD markers (mode omits fields not in its question bank)", () => {
     const md = readFileSync(renderedFixturePath("tweak"), "utf8");
-    expect(md).toContain("{{TBD: out-of-scope}}");
-  });
-
-  it("tweak fixture contains {{TBD: tests}} (truthful refusal of unanswered tests field)", () => {
-    const md = readFileSync(renderedFixturePath("tweak"), "utf8");
-    expect(md).toContain("{{TBD: tests}}");
+    expect(md).not.toContain("{{TBD:");
   });
 
   it("full fixture contains all MANDATORY_BLOCKS", () => {

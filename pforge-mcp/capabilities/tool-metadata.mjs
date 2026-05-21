@@ -1556,7 +1556,7 @@ export const TOOL_METADATA = {
     },
   },
   forge_master_ask: {
-    intent: ["ask", "reason", "ideate", "forge-master", "crucible"],
+    intent: ["ask", "reason", "ideate", "forge-master", "crucible", "advisory", "cto-in-a-box"],
     aliases: ["ask_forge", "forge_ask"],
     cost: "high",
     maxConcurrent: 1,
@@ -1568,7 +1568,7 @@ export const TOOL_METADATA = {
     writesFiles: false,
     network: true,
     risk: "low",
-    agentGuidance: "Use forge_master_ask for multi-step reasoning about Plan Forge workflows — ideating features, troubleshooting failures, querying run status, or funneling ideas into Crucible smelts. Forge-Master classifies intent, fetches memory context, and orchestrates tool calls on your behalf. Prefer this over manually calling individual forge tools when the task is open-ended or involves multiple steps. Do NOT use for direct file edits or code generation — Forge-Master is read-only.",
+    agentGuidance: "Use forge_master_ask for multi-step reasoning about Plan Forge workflows — ideating features, troubleshooting failures, querying run status, or funneling ideas into Crucible smelts. Also serves as the advisory / CTO-in-a-box lane for architectural guidance: ask 'should I refactor or ship X?', 'what is the right approach for Y?', 'architecture advice on Z' — the intent router classifies these to the advisory lane and the system prompt injects project principles. Forge-Master classifies intent, fetches memory context, and orchestrates tool calls on your behalf. Prefer this over manually calling individual forge tools when the task is open-ended or involves multiple steps. Do NOT use for direct file edits or code generation — Forge-Master is read-only.",
     errors: {
       reasoning_model_unavailable: {
         message: "No reasoning provider configured",

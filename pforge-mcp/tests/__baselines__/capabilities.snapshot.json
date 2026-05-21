@@ -1,6 +1,6 @@
 {
   "schemaVersion": "2.3.0",
-  "toolCount": 106,
+  "toolCount": 105,
   "toolNames": [
     "forge_abort",
     "forge_alert_triage",
@@ -86,7 +86,6 @@
     "forge_runbook",
     "forge_search",
     "forge_secret_scan",
-    "forge_self_update",
     "forge_skill_status",
     "forge_smith",
     "forge_status",

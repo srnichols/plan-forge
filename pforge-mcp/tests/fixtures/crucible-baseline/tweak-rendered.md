@@ -14,10 +14,6 @@ Fix off-by-one error in pagination helper
 
 - pforge-mcp/pagination.mjs
 
-**Out of scope**:
-
-{{TBD: out-of-scope}}
-
 ## Slices
 
 _Slice breakdown is authored during the Plan Hardener step (Session 1, Step 2)._
@@ -35,8 +31,6 @@ _Slice breakdown is authored during the Plan Hardener step (Session 1, Step 2)._
 ## Validation Gates
 
 cd pforge-mcp && npx vitest run tests/pagination.test.mjs
-
-**Tests**: {{TBD: tests}}
 
 ## Stop Conditions
 

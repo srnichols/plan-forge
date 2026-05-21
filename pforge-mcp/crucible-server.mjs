@@ -41,6 +41,12 @@ import {
   renderDraft,
   extractUnresolvedFields,
 } from "./crucible-draft.mjs";
+import { getMode } from "./crucible/registry.mjs";
+
+// Phase-59 Slice 2 — register the three canonical lanes as CrucibleMode descriptors.
+import "./crucible/modes/tweak.mjs";
+import "./crucible/modes/feature.mjs";
+import "./crucible/modes/full.mjs";
 
 /**
  * Compute "stale defaults" warnings for a smelt. Fires when the files
@@ -351,7 +357,9 @@ export function handleFinalize({ id, projectDir, hub, overwrite = false }) {
   // before committing to a phase number or writing any file.
   const previewBody = renderDraft(smelt, { cwd: projectDir });
   const allUnresolved = extractUnresolvedFields(previewBody);
-  const criticalGaps = allUnresolved.filter((f) => CRITICAL_FIELDS.has(f));
+  let modeCriticalFields = CRITICAL_FIELDS;
+  try { modeCriticalFields = getMode(smelt.lane).criticalFields || CRITICAL_FIELDS; } catch { /* unregistered lane */ }
+  const criticalGaps = allUnresolved.filter((f) => modeCriticalFields.has(f));
 
   if (criticalGaps.length > 0) {
     throw new CrucibleFinalizeRefusedError({
@@ -427,7 +435,7 @@ export function handleFinalize({ id, projectDir, hub, overwrite = false }) {
   });
 
   const inferred = inferRepoCommands(projectDir);
-  const unresolvedFields = allUnresolved.filter((f) => !CRITICAL_FIELDS.has(f));
+  const unresolvedFields = allUnresolved.filter((f) => !modeCriticalFields.has(f));
 
   return {
     phaseName,

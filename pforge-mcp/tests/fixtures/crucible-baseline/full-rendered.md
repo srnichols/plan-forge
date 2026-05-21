@@ -59,10 +59,6 @@ _Estimated: 4 slices. Expand each below during Plan Hardener step._
 
 ## Validation Gates
 
-{{TBD: validation-gates}}
-
-**Tests**: {{TBD: tests}}
-
 ## Stop Conditions
 
 - Validation gate fails and root cause is not identified within 30 minutes

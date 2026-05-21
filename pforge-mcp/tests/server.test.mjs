@@ -3175,7 +3175,7 @@ describe("loadQuorumConfig", () => {
     const config = loadQuorumConfig(tempDir);
     expect(config.enabled).toBe(false);
     expect(config.auto).toBe(true);
-    expect(config.threshold).toBe(3);
+    expect(config.threshold).toBe(5);
   });
 
   it("merges user config from .forge.json quorum section", () => {
@@ -3194,7 +3194,7 @@ describe("loadQuorumConfig", () => {
     writeFileSync(resolve(tempDir, ".forge.json"), "NOT JSON!!!");
 
     const config = loadQuorumConfig(tempDir);
-    expect(config.threshold).toBe(3);
+    expect(config.threshold).toBe(5);
   });
 
   it("applies preset override when provided", () => {

@@ -30,8 +30,11 @@ import { getMode } from "../registry.mjs";
 /**
  * Global fallback critical fields. Per-mode mode.criticalFields takes
  * precedence when a mode is registered for the smelt's lane.
+ *
+ * Exposed as a frozen Set so external callers can inspect the default set.
+ * Per-mode overrides are accessed via resolveCriticalFields(mode).
  */
-export const CRITICAL_FIELDS = new Set([
+const _CRITICAL_FIELDS_DEFAULTS = Object.freeze([
   "scope-in",
   "scope-files",
   "validation-gates",
@@ -41,6 +44,7 @@ export const CRITICAL_FIELDS = new Set([
   "build-command",
   "test-command",
 ]);
+export const CRITICAL_FIELDS = Object.freeze(new Set(_CRITICAL_FIELDS_DEFAULTS));
 
 /**
  * Resolve critical fields for a mode. Per-mode mode.criticalFields takes
@@ -103,51 +107,42 @@ export class CrucibleAskMismatchError extends Error {
 
 /**
  * Build the YAML frontmatter block for a finalized plan.
+ * Emits: crucibleId, lane, source, phaseId (always)
+ *        plus optional linkedBugs and bugId when present on the smelt.
  *
- * Keys always emitted: crucibleId, lane, source, phaseId.
- * Keys emitted when present: linkedBugs (array), bugId (string).
- *
- * linkedBugs is assembled from:
- *   1. smelt.bugId (the submit-time bug id, if any)
- *   2. the smelt's 'linked-bugs' answer (comma- or newline-separated)
- *   Values are deduplicated, preserving order.
- *
- * @param {object} smelt
- * @param {string} phaseName
- * @returns {string} YAML frontmatter block (ends with two newlines)
+ * @param {object} smelt - smelt record (may contain bugId, answers with linked-bugs)
+ * @param {string} phaseName - the phase name assigned at finalize time (becomes phaseId)
+ * @returns {string} YAML frontmatter with trailing blank line
  */
-export function buildFrontmatter(smelt, phaseName) {
-  const lines = [
-    `crucibleId: ${smelt.id}`,
-    `lane: ${smelt.lane}`,
-    `source: ${smelt.source}`,
-    `phaseId: ${phaseName}`,
-  ];
-
-  const linkedBugs = [];
-  if (smelt.bugId && typeof smelt.bugId === "string") {
-    linkedBugs.push(smelt.bugId.trim());
-  }
-  const linkedBugsAnswer = (smelt.answers || []).find((a) => a.questionId === "linked-bugs");
-  if (linkedBugsAnswer && typeof linkedBugsAnswer.answer === "string") {
-    const extra = linkedBugsAnswer.answer
-      .split(/[,\n]/)
+export function buildFinalizeFrontmatter(smelt, phaseName) {
+  const linkedBugsAnswer = (smelt.answers || []).find((answer) => answer.questionId === "linked-bugs")?.answer;
+  let linkedBugs;
+  if (linkedBugsAnswer && linkedBugsAnswer.trim()) {
+    linkedBugs = linkedBugsAnswer
+      .split(/[\r\n,]+/)
       .map((s) => s.trim())
       .filter(Boolean);
-    for (const b of extra) {
-      if (!linkedBugs.includes(b)) linkedBugs.push(b);
-    }
+  } else if (smelt.bugId) {
+    linkedBugs = [smelt.bugId];
   }
 
-  if (linkedBugs.length > 0) {
+  const lines = ["---"];
+  lines.push(`crucibleId: ${smelt.id}`);
+  lines.push(`lane: ${smelt.lane}`);
+  lines.push(`source: ${smelt.source}`);
+  lines.push(`phaseId: ${phaseName}`);
+  if (linkedBugs && linkedBugs.length > 0) {
     lines.push(`linkedBugs: [${linkedBugs.join(", ")}]`);
   }
-  if (smelt.bugId && typeof smelt.bugId === "string") {
-    lines.push(`bugId: ${smelt.bugId.trim()}`);
+  if (smelt.bugId) {
+    lines.push(`bugId: ${smelt.bugId}`);
   }
-
-  return `---\n${lines.join("\n")}\n---\n\n`;
+  lines.push("---");
+  lines.push("");
+  return lines.join("\n");
 }
+
+export const buildFrontmatter = buildFinalizeFrontmatter;
 
 // ─── Phase-number discovery ──────────────────────────────────────────
 
@@ -202,8 +197,9 @@ export function handleFinalize({ id, projectDir, hub, overwrite = false }) {
 
   const previewBody = renderDraft(smelt, { cwd: projectDir });
   const allUnresolved = extractUnresolvedFields(previewBody);
-  let modeCriticalFields = CRITICAL_FIELDS;
-  try { modeCriticalFields = getMode(smelt.lane).criticalFields || CRITICAL_FIELDS; } catch { /* unregistered lane */ }
+  let mode = null;
+  try { mode = getMode(smelt.lane); } catch { /* unregistered lane — use global fallback */ }
+  const modeCriticalFields = resolveCriticalFields(mode);
   const criticalGaps = allUnresolved.filter((f) => modeCriticalFields.has(f));
 
   if (criticalGaps.length > 0) {
@@ -222,7 +218,7 @@ export function handleFinalize({ id, projectDir, hub, overwrite = false }) {
   const planPath = join(planDir, `${phaseName}.md`);
 
   const bodySmelt = { ...smelt, phaseName };
-  const frontmatter = buildFrontmatter(bodySmelt, phaseName);
+  const frontmatter = buildFinalizeFrontmatter(bodySmelt, phaseName);
   const body = renderDraft(bodySmelt, { cwd: projectDir });
   const markdown = frontmatter + body;
 

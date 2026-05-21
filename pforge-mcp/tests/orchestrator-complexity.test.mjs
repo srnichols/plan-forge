@@ -1,16 +1,19 @@
 /**
- * Plan Forge — Phase-31 Slice 5 (Complexity threshold recalibration) unit tests
+ * Plan Forge — quorum complexity / threshold unit tests
  *
  * Covers:
- *   - loadQuorumConfig default threshold is 3 (recalibrated from 6 in Phase-31 Slice 5)
+ *   - loadQuorumConfig default threshold is 5 (raised from 3 on 2026-05-21)
  *   - scoreSliceComplexity distribution properties (real-plan observed range 1–6)
- *   - Threshold=3 correctly selects slices with score ≥ 3 and excludes score < 3
- *   - Adaptive threshold mechanism still respects floor/ceiling bounds
+ *   - Threshold=5 correctly selects slices with score ≥ 5 and excludes score < 5
+ *   - Adaptive threshold mechanism still respects floor (5) / ceiling (9) bounds
  *
- * Research basis (Phase-31 Slice 5 calibration):
- *   - 63 slices across Phase-25–30: mean=3.24, median=3, 60th-pct=3
- *   - threshold=6 selected 1/63 slices (1.6%) — effectively inert
- *   - threshold=3 selected 56/63 slices (88.9%) — correct auto-quorum coverage
+ * History:
+ *   - Phase-31 Slice 5 (2025): recalibrated 6 → 3 because threshold=6 only
+ *     selected 1/63 historical slices.
+ *   - 2026-05-21: raised back to 5 because threshold=3 swung too far and
+ *     selected 56/63 (~89%) slices — effectively "always quorum". Threshold=5
+ *     matches the power-preset threshold and restricts auto-quorum to
+ *     genuinely complex slices.
  */
 
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
@@ -32,18 +35,18 @@ function writeForgeJson(cwd, obj) {
   writeFileSync(resolve(cwd, ".forge.json"), JSON.stringify(obj), "utf-8");
 }
 
-// ─── loadQuorumConfig — default threshold = 3 ────────────────────────────────
+// ─── loadQuorumConfig — default threshold = 5 ────────────────────────────────
 
 describe("loadQuorumConfig — Phase-31 recalibrated default threshold", () => {
   let cwd;
   beforeEach(() => { cwd = makeTmpDir(); });
   afterEach(() => { rmSync(cwd, { recursive: true, force: true }); });
 
-  it("default threshold is 3 (recalibrated from 6 in Phase-31 Slice 5)", () => {
-    // Phase-31 Slice 5: empirical 60th-percentile across 63 real slices is 3.
-    // Prior default of 6 selected only 1/63 slices; 3 selects 56/63.
+  it("default threshold is 5 (raised from 3 on 2026-05-21)", () => {
+    // 2026-05-21: raised from 3 → 5 because threshold=3 qualified ~89% of
+    // slices (effectively always-quorum). Threshold=5 matches the power preset.
     const config = loadQuorumConfig(cwd);
-    expect(config.threshold).toBe(3);
+    expect(config.threshold).toBe(5);
   });
 
   it("user config can override the default threshold", () => {
@@ -62,10 +65,10 @@ describe("loadQuorumConfig — Phase-31 recalibrated default threshold", () => {
     expect(config.threshold).toBe(7);
   });
 
-  it("corrupt .forge.json falls back to default threshold 3", () => {
+  it("corrupt .forge.json falls back to default threshold 5", () => {
     writeFileSync(resolve(cwd, ".forge.json"), "CORRUPT JSON", "utf-8");
     const config = loadQuorumConfig(cwd);
-    expect(config.threshold).toBe(3);
+    expect(config.threshold).toBe(5);
   });
 });
 
@@ -78,7 +81,7 @@ describe("scoreSliceComplexity — score range and relative ordering", () => {
 
   it("simple doc slice scores in the observed low range (1–3)", () => {
     // Phase-30 slices with no tasks/deps scored 1. Scores 1–3 should not
-    // trigger auto-quorum at threshold=3 only if score < 3.
+    // trigger auto-quorum at threshold=5 only if score >= 5.
     const { score } = scoreSliceComplexity(
       { title: "Update CHANGELOG and VERSION", tasks: ["Edit CHANGELOG.md"], scope: ["CHANGELOG.md", "VERSION"] },
       cwd
@@ -149,16 +152,16 @@ describe("scoreSliceComplexity — score range and relative ordering", () => {
   });
 });
 
-// ─── threshold=3 selection semantics ─────────────────────────────────────────
+// ─── threshold=5 selection semantics ─────────────────────────────────────────
 
-describe("threshold=3 quorum selection semantics", () => {
+describe("threshold=5 quorum selection semantics", () => {
   let cwd;
   beforeEach(() => { cwd = makeTmpDir(); });
   afterEach(() => { rmSync(cwd, { recursive: true, force: true }); });
 
-  it("score=1 slice does NOT qualify for auto-quorum at threshold=3", () => {
+  it("score=1 slice does NOT qualify for auto-quorum at threshold=5", () => {
     // A minimal slice with 0 scope files, 0 tasks, no gate will score 1.
-    // It should not trigger quorum when threshold=3.
+    // It should not trigger quorum when threshold=5.
     const { score } = scoreSliceComplexity(
       { title: "Sub-tab frame", tasks: [], scope: [], validationGate: "" },
       cwd
@@ -167,9 +170,9 @@ describe("threshold=3 quorum selection semantics", () => {
     expect(score).toBeLessThan(config.threshold);
   });
 
-  it("score=3 slice DOES qualify for auto-quorum at threshold=3", () => {
-    // 5 scope files → scopeWeight = 1.0 → raw contribution = 0.20
-    // score = Math.round(0.20 * 9) + 1 = Math.round(1.80) + 1 = 3 ✓
+  it("low-complexity slice (score < 5) does NOT qualify at the new default", () => {
+    // A 5-scope-file slice with no tasks/deps/gate scores ~3 (60th-percentile
+    // historical median). Under the new default (5) it should NOT trigger quorum.
     const { score } = scoreSliceComplexity(
       {
         title: "Register forge_estimate_quorum MCP tool",
@@ -187,17 +190,43 @@ describe("threshold=3 quorum selection semantics", () => {
       cwd
     );
     const config = loadQuorumConfig(cwd);
+    expect(score).toBeLessThan(config.threshold);
+  });
+
+  it("high-complexity multi-file security slice DOES qualify at threshold=5", () => {
+    // Many files + security keywords + multi-task + multi-line gate → score ≥ 5.
+    const { score } = scoreSliceComplexity(
+      {
+        title: "Fix auth security vulnerability across middleware and DB",
+        tasks: [
+          "Patch SQL injection in user lookup",
+          "Update RBAC middleware",
+          "Add auth regression tests",
+          "Rotate CSRF token generation",
+          "Audit session store for leaks",
+          "Document new threat model",
+        ],
+        scope: [
+          "src/auth.ts", "src/middleware.ts", "src/db.ts",
+          "src/routes.ts", "src/tests/auth.test.ts",
+        ],
+        depends: ["auth-service", "rbac-policy", "session-store"],
+        validationGate: "npx vitest run tests/auth.test.ts\nnpm run lint\nnpm run security:scan",
+      },
+      cwd
+    );
+    const config = loadQuorumConfig(cwd);
     expect(score).toBeGreaterThanOrEqual(config.threshold);
   });
 
-  it("quorum config threshold default (3) is below the power preset threshold (5)", () => {
-    // Auto-quorum should be more permissive than power-preset quorum.
+  it("quorum config threshold default (5) matches the power preset threshold (5)", () => {
+    // Auto-quorum default and power preset agree on the threshold floor.
     const autoConfig = loadQuorumConfig(cwd);
     const powerConfig = loadQuorumConfig(cwd, "power");
-    expect(autoConfig.threshold).toBeLessThan(powerConfig.threshold);
+    expect(autoConfig.threshold).toBe(powerConfig.threshold);
   });
 
-  it("quorum config threshold default (3) is below the speed preset threshold (7)", () => {
+  it("quorum config threshold default (5) is below the speed preset threshold (7)", () => {
     const autoConfig = loadQuorumConfig(cwd);
     const speedConfig = loadQuorumConfig(cwd, "speed");
     expect(autoConfig.threshold).toBeLessThan(speedConfig.threshold);
@@ -214,15 +243,16 @@ describe("loadQuorumConfig adaptive threshold — floor/ceiling invariants", () 
   });
   afterEach(() => { rmSync(cwd, { recursive: true, force: true }); });
 
-  it("adaptive does not lower threshold below 3 even with 100% quorum-needed history", () => {
+  it("adaptive does not lower threshold below 5 even with 100% quorum-needed history", () => {
     // Simulate quorum history where every slice needed quorum (neededRate = 1.0 > 0.6).
-    // The adaptive logic may lower the threshold, but the floor remains 3.
+    // The adaptive logic may lower the threshold, but the floor remains 5
+    // (raised from 3 on 2026-05-21 to match the static default).
     const history = Array.from({ length: 10 }, (_, i) => JSON.stringify({
       sliceId: `slice-${i}`, quorumNeeded: true,
     })).join("\n");
     writeFileSync(resolve(cwd, ".forge", "quorum-history.jsonl"), history, "utf-8");
     const config = loadQuorumConfig(cwd);
-    expect(config.threshold).toBeGreaterThanOrEqual(3);
+    expect(config.threshold).toBeGreaterThanOrEqual(5);
   });
 
   it("adaptive does not raise threshold above 9 with all-unneeded history", () => {

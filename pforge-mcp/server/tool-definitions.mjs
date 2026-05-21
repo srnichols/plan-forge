@@ -363,12 +363,14 @@ export const TOOLS = [
   },
   {
     name: "forge_crucible_submit",
-    description: "Submit a raw idea to the Crucible — starts a new smelt (idea → spec workflow). Returns a smelt id, a recommended lane (tweak / feature / full), and the first interview question. USE FOR: kicking off Crucible from an AI agent or CLI with a one-line description of a change, bug, or feature. Agent-submitted smelts are subject to the recursion guardrail (default depth=1, set source='agent').",
+    description: "Submit a raw idea to the Crucible — starts a new smelt (idea → spec workflow). Returns a smelt id, a recommended lane (tweak / feature / full / bug-batch), and the first interview question. USE FOR: kicking off Crucible from an AI agent or CLI with a one-line description of a change, bug, or feature. Agent-submitted smelts are subject to the recursion guardrail (default depth=1, set source='agent'). For bug-fix smelts use mode='bug-batch' and supply bugId.",
     inputSchema: {
       type: "object",
       properties: {
         rawIdea: { type: "string", description: "The raw idea text — a sentence or short paragraph describing the change." },
-        lane: { type: "string", enum: ["tweak", "feature", "full"], description: "Override the recommended lane. Omit to accept the heuristic's choice." },
+        mode: { type: "string", enum: ["tweak", "feature", "full", "bug-batch"], description: "Intake mode. Takes precedence over lane when both are supplied. Use 'bug-batch' for bug-fix smelts that need multi-slice plans." },
+        lane: { type: "string", enum: ["tweak", "feature", "full"], description: "Override the recommended lane (legacy; prefer mode). Omit to accept the heuristic's choice." },
+        bugId: { type: "string", description: "Optional bug identifier (e.g. RMG-0035). Stored on the smelt and emitted in finalized plan frontmatter as bugId + linkedBugs." },
         source: { type: "string", enum: ["human", "agent"], description: "Who submitted the smelt. Default: human." },
         parentSmeltId: { type: "string", description: "Parent smelt id if this was spawned from another smelt (used for recursion depth tracking)." },
         path: { type: "string", description: "Project directory (default: current)" },

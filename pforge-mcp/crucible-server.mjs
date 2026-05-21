@@ -11,8 +11,6 @@
  *                   Slice-2 stubs `getNextQuestion`/`renderDraftStub` are
  *                   replaced with real implementations re-exported here
  *                   for backwards-compatible imports in tests.
- * Phase-59 S3: handleFinalize, error classes, CRITICAL_FIELDS extracted to
- *              crucible/core/finalize.mjs. Re-exported here for backwards compat.
  */
 
 import { existsSync, statSync } from "node:fs";
@@ -27,6 +25,7 @@ import {
   updateSmelt,
 } from "./crucible-store.mjs";
 import {
+  buildRecommendedDefault,
   getNextQuestion as interviewGetNextQuestion,
   totalQuestions as interviewTotalQuestions,
 } from "./crucible-interview.mjs";
@@ -34,9 +33,6 @@ import {
   renderDraft,
   extractUnresolvedFields,
 } from "./crucible-draft.mjs";
-
-// Phase-59 Slice 3 — finalization logic lives in crucible/core/finalize.mjs.
-// Re-export for backwards compat; crucible-server callers continue to work.
 import {
   CRITICAL_FIELDS,
   CrucibleFinalizeRefusedError,
@@ -47,6 +43,8 @@ import {
   collectExistingPhaseNames,
   resolveCriticalFields,
 } from "./crucible/core/finalize.mjs";
+import { getMode } from "./crucible/registry.mjs";
+
 export {
   CRITICAL_FIELDS,
   CrucibleFinalizeRefusedError,
@@ -58,7 +56,6 @@ export {
   resolveCriticalFields,
 };
 
-// Phase-59 Slice 2+4 — register the canonical lanes as CrucibleMode descriptors.
 import "./crucible/modes/tweak.mjs";
 import "./crucible/modes/feature.mjs";
 import "./crucible/modes/full.mjs";
@@ -105,11 +102,6 @@ export function computeStaleDefaultsWarnings(smelt, projectDir) {
   return warnings;
 }
 
-// ─── Lane inference ──────────────────────────────────────────────────
-
-// Keyword order: FULL wins over FEATURE wins over TWEAK so that a phrase
-// like "add new phase" (contains both "add" and "new phase") routes to
-// "full" instead of "feature".
 const FULL_PATTERNS = /\b(new phase|major (rewrite|overhaul|redesign)|redesign|overhaul|rearchitect|migrate (to|from))\b/i;
 const FEATURE_PATTERNS = /\b(add|implement|support|enable|introduce)\b/i;
 const TWEAK_PATTERNS = /\b(typo|rename|bump|config|hotfix|tweak|adjust|patch)\b/i;
@@ -129,13 +121,11 @@ export function inferLane(rawIdea) {
   return "feature";
 }
 
-// ─── Interview (Slice 01.3 — real engine) ────────────────────────────
-
 /**
  * Return the next unanswered question for a smelt, or null if done.
  * Thin wrapper so existing callers keep importing from crucible-server.
  * @param {object} smelt
- * @param {{projectDir?: string}} [context]
+ * @param {{projectDir?: string, questionBank?: Array<object>}} [context]
  */
 export function getNextQuestion(smelt, context = {}) {
   return interviewGetNextQuestion(smelt, context);
@@ -151,10 +141,7 @@ export function renderDraftStub(smelt) {
   return renderDraft(smelt);
 }
 
-// Re-export the real renderer for convenience.
 export { renderDraft, extractUnresolvedFields };
-
-// ─── Hub event helper ────────────────────────────────────────────────
 
 function emit(hub, type, data) {
   if (!hub || typeof hub.broadcast !== "function") return;
@@ -163,29 +150,49 @@ function emit(hub, type, data) {
   } catch { /* best-effort */ }
 }
 
-// ─── Handlers ────────────────────────────────────────────────────────
+function _getModeBank(smelt) {
+  try {
+    const mode = getMode(smelt.lane);
+    return mode && typeof mode.questionBank === "function" ? mode.questionBank() : null;
+  } catch {
+    return null;
+  }
+}
+
+function _questionContext(smelt, projectDir) {
+  const questionBank = _getModeBank(smelt);
+  return questionBank ? { projectDir, questionBank } : { projectDir };
+}
+
+function _applyQuestionDefaults(smelt, question, projectDir) {
+  if (!question) return null;
+  if (question.id !== "linked-bugs") return question;
+  const bugDefault = typeof smelt.bugId === "string" && smelt.bugId.trim() ? smelt.bugId.trim() : null;
+  return {
+    ...question,
+    recommendedDefault: bugDefault
+      || buildRecommendedDefault(question.id, { projectDir, defaultSource: null })
+      || question.recommendedDefault
+      || null,
+  };
+}
 
 /**
  * forge_crucible_submit
- *
- * Phase-59 S3: accepts optional `bugId` — stored on the smelt for use in
- * frontmatter (linkedBugs/bugId fields) and as the linked-bugs question default.
  */
 export function handleSubmit({ rawIdea, lane, source, parentSmeltId, bugId, projectDir, hub }) {
   if (typeof rawIdea !== "string" || !rawIdea.trim()) {
     throw new Error("rawIdea is required");
   }
   const recommendedLane = inferLane(rawIdea);
-  let smelt = createSmelt({
+  const smelt = createSmelt({
     lane: lane || recommendedLane,
     rawIdea,
     source: source || "human",
     parentSmeltId: parentSmeltId || null,
+    bugId: bugId || null,
     projectDir,
   });
-  if (bugId && typeof bugId === "string" && bugId.trim()) {
-    smelt = updateSmelt(smelt.id, { bugId: bugId.trim() }, projectDir);
-  }
   emit(hub, "crucible-smelt-started", {
     id: smelt.id,
     lane: smelt.lane,
@@ -195,18 +202,16 @@ export function handleSubmit({ rawIdea, lane, source, parentSmeltId, bugId, proj
   return {
     id: smelt.id,
     recommendedLane,
-    firstQuestion: interviewGetNextQuestion(smelt, { projectDir }),
+    firstQuestion: _applyQuestionDefaults(
+      smelt,
+      interviewGetNextQuestion(smelt, _questionContext(smelt, projectDir)),
+      projectDir,
+    ),
   };
 }
 
 /**
  * forge_crucible_ask
- *
- * The caller sends the answer to whatever question was last returned by
- * getNextQuestion. We look up that "pending" question on the server so
- * the questionId recorded in the smelt matches the bank id exactly —
- * not a client-supplied string — and so the interview cannot record
- * answers for nonexistent questions.
  */
 export function handleAsk({ id, answer, questionId, projectDir, hub }) {
   const smelt = loadSmelt(id, projectDir);
@@ -216,12 +221,12 @@ export function handleAsk({ id, answer, questionId, projectDir, hub }) {
   }
 
   let current = smelt;
-  const pending = interviewGetNextQuestion(smelt, { projectDir });
+  const pending = _applyQuestionDefaults(
+    smelt,
+    interviewGetNextQuestion(smelt, _questionContext(smelt, projectDir)),
+    projectDir,
+  );
 
-  // Issue #138 — if the caller supplied a `questionId` (the schema field
-  // formerly mistaken for the smelt `id`), validate it matches the pending
-  // question. Refuse mismatched answers so a confused client can't silently
-  // record the wrong answer against the wrong question.
   if (typeof questionId === "string" && questionId.length > 0 && pending && questionId !== pending.id) {
     throw new CrucibleAskMismatchError({ expected: pending.id, got: questionId });
   }
@@ -241,7 +246,11 @@ export function handleAsk({ id, answer, questionId, projectDir, hub }) {
     });
   }
 
-  const nextQuestion = interviewGetNextQuestion(current, { projectDir });
+  const nextQuestion = _applyQuestionDefaults(
+    current,
+    interviewGetNextQuestion(current, _questionContext(current, projectDir)),
+    projectDir,
+  );
   const markdown = renderDraft(current);
   return {
     done: nextQuestion === null,

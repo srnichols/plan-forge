@@ -1,10 +1,12 @@
 /**
- * Plan Forge — Phase-59 S2 baseline: crucible three-lane no-regression gate.
+ * Plan Forge — Phase-59 S2/S4 baseline: crucible four-lane no-regression gate.
  *
  * Captures the exact renderDraft() output for tweak / feature / full smelts
  * at the start of Phase-59 Slice 2. Any change to crucible-draft.mjs that
  * alters rendered output will fail this test, requiring a deliberate fixture
  * regen (see regeneration note below).
+ *
+ * Phase-59 S4: bug-batch mode added to the loop (renders via its own renderBody).
  *
  * "Truthful refusal" principle (from crucible-draft.mjs comment): TBD markers
  * must NEVER be replaced with plausible-sounding filler. The tweak and feature
@@ -20,6 +22,9 @@ import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { join, dirname } from "node:path";
 
+// S4: import side-effectful mode registration via crucible-server (all 4 modes).
+import "../crucible-server.mjs";
+
 import { renderDraft, MANDATORY_BLOCKS } from "../crucible-draft.mjs";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -34,7 +39,7 @@ function renderedFixturePath(lane) {
 }
 
 describe("crucible-modes no-regression (Phase-59 baseline)", () => {
-  for (const lane of ["tweak", "feature", "full"]) {
+  for (const lane of ["tweak", "feature", "full", "bug-batch"]) {
     it(`${lane} lane renderDraft matches baseline fixture`, () => {
       const smelt = JSON.parse(readFileSync(smeltFixturePath(lane), "utf8"));
       const expected = readFileSync(renderedFixturePath(lane), "utf8").replace(/\r\n/g, "\n");
@@ -59,7 +64,7 @@ describe("crucible-modes no-regression (Phase-59 baseline)", () => {
   });
 
   it("rendered fixtures are non-trivially long (>= 200 bytes each)", () => {
-    for (const lane of ["tweak", "feature", "full"]) {
+    for (const lane of ["tweak", "feature", "full", "bug-batch"]) {
       const md = readFileSync(renderedFixturePath(lane), "utf8");
       expect(md.length).toBeGreaterThanOrEqual(200);
     }

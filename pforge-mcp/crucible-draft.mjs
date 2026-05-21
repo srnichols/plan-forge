@@ -101,16 +101,13 @@ export function synthesizeSliceBlock({ smelt, repoCommands }) {
   const title = titleBase.slice(0, 60);
 
   return [
-    `### Slice 1 — ${title}`,
+    `### Slice 1 — ${title} [scope: ${scopeRaw.split(/[\r\n,]/).map((s) => s.trim()).filter(Boolean).join(", ")}]`,
     "",
     `Build command: ${repoCommands.buildCommand}`,
     `Test command:  ${repoCommands.testCommand}`,
     "",
     "**Files**:",
     filesBullet,
-    "",
-    "**Acceptance Criteria**:",
-    gatesLines.join("\n"),
   ].join("\n");
 }
 
@@ -203,16 +200,20 @@ function appendFullLaneSections(lines, ans) {
 function appendScopeContract(lines, content) {
   lines.push("## Scope Contract");
   lines.push("");
-  lines.push("**In scope**:");
+  lines.push("### In Scope");
   lines.push("");
   lines.push(content.scopeIn);
   lines.push("");
   if (content.outOfScope !== null && content.outOfScope !== undefined) {
-    lines.push("**Out of scope**:");
+    lines.push("### Out of Scope");
     lines.push("");
     lines.push(content.outOfScope);
     lines.push("");
   }
+  lines.push("### Forbidden");
+  lines.push("");
+  lines.push(content.forbidden);
+  lines.push("");
 }
 
 function appendSliceTemplate(lines) {
@@ -256,16 +257,12 @@ function appendStandardBlocks(lines, content) {
   lines.push("");
   lines.push("- Validation gate fails and root cause is not identified within 30 minutes");
   lines.push("- A slice drifts past its declared Scope Contract");
-  lines.push("- A forbidden action (see Anti-patterns) is about to be introduced");
+  lines.push("- A forbidden action (see Scope Contract → Forbidden) is about to be introduced");
   lines.push("- Token budget for this phase is exceeded by more than 25%");
   lines.push("");
   lines.push("## Rollback");
   lines.push("");
   lines.push(content.rollback);
-  lines.push("");
-  lines.push("## Anti-patterns & Forbidden Actions");
-  lines.push("");
-  lines.push(content.forbidden);
   lines.push("");
   lines.push("## Change Manifest");
   lines.push("");
@@ -344,10 +341,10 @@ export function extractUnresolvedFields(markdown) {
  */
 export const MANDATORY_BLOCKS = Object.freeze([
   "## Scope Contract",
+  "### Forbidden",
   "## Slices",
   "## Validation Gates",
   "## Stop Conditions",
   "## Rollback",
-  "## Anti-patterns & Forbidden Actions",
   "## Change Manifest",
 ]);

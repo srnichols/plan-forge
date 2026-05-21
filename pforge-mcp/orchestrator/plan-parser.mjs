@@ -318,7 +318,7 @@ function parseMeta(lines) {
   return meta;
 }
 
-function parseScopeContract(lines) {
+export function parseScopeContract(lines) {
   const contract = { inScope: [], outOfScope: [], forbidden: [] };
   let section = null;
 

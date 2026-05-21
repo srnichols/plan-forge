@@ -18,10 +18,15 @@ Fix null pointer crash in plan parser when scope-files line is empty
 
 ## Scope Contract
 
-**In scope**:
+### In Scope
 
 - pforge-mcp/orchestrator/plan-parser.mjs
 - pforge-mcp/tests/plan-parser.test.mjs
+
+### Forbidden
+
+- do not alter the public parseScopeContract API signature
+- do not change unrelated plan-parser functions
 
 ## Slices
 
@@ -50,17 +55,12 @@ no new TypeError in plan-parser.mjs
 
 - Validation gate fails and root cause is not identified within 30 minutes
 - A slice drifts past its declared Scope Contract
-- A forbidden action (see Anti-patterns) is about to be introduced
+- A forbidden action (see Scope Contract → Forbidden) is about to be introduced
 - Token budget for this phase is exceeded by more than 25%
 
 ## Rollback
 
 git revert the guard commit; orchestrator falls back to skipping scope-files
-
-## Anti-patterns & Forbidden Actions
-
-- do not alter the public parseScopeContract API signature
-- do not change unrelated plan-parser functions
 
 ## Change Manifest
 

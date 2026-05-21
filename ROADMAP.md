@@ -7,7 +7,7 @@
 
 ## Current Release
 
-**v3.13.0** (2026-05-20) — `pforge-sdk/bug-reader` (v0.11.0). New `bug-reader` sub-path provides offline access to `.forge/bugs/*.json` tempering bug registry files without a running MCP server. `listBugs` (with status/severity/scanner/since/until filters), `readBug`, `parseBugId`, `summarizeBugs`. 57 tests.
+**v3.15.0** (2026-05-20) — `pforge-sdk/trajectory-reader` (v0.12.0). New `trajectory-reader` sub-path provides offline access to `.forge/trajectories/` plan execution notes without a running MCP server. `listPlans`, `listTrajectories` (sorted numerically), `readTrajectory`, `readAllTrajectories`, `summarizeTrajectories`, `countWords`, path helpers with path-traversal guards. 58 tests.
 
 Previous: **v3.14.0** (2026-05-20) — Phase-ENTRA-SSO: Entra ID / Azure AD OIDC provider. Implements `entra-oidc` auth provider replacing the `sso-stub.mjs` placeholder — RS256 JWT validation via JWKS discovery, `exp`/`nbf`/`iss`/`aud` claim checks, JWKS in-process cache (5 min TTL), `healthCheck()` for startup probing, `sub`/`oid` claim as RBAC principal key. `authenticate()` made async (backward-compatible). 22 new tests.
 

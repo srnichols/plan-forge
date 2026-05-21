@@ -13,4 +13,4 @@ export * from './thought-reader.mjs';
 export * from './digest-reader.mjs';
 export * from './session-reader.mjs';
 export * from './bug-reader.mjs';
-export * from './bug-reader.mjs';
+export * from './trajectory-reader.mjs';

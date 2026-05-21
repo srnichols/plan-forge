@@ -134,7 +134,7 @@ export class CrucibleAskMismatchError extends Error {
  * Fields whose absence blocks finalization entirely. A plan that still has
  * {{TBD: <any of these>}} cannot be executed by the orchestrator.
  */
-const CRITICAL_FIELDS = new Set([
+export const CRITICAL_FIELDS = new Set([
   "scope-in",
   "scope-files",
   "validation-gates",

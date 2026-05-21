@@ -7,7 +7,9 @@
 
 ## Current Release
 
-**v3.16.0** (2026-05-20) — Phase-OKTA-OIDC: Okta OIDC authentication provider. Adds `okta-oidc` as a second production auth provider — RS256 JWT validation via Okta JWKS discovery, custom and Org authorization server support, `aud`/`cid` claim checks, JWKS in-process cache (5 min TTL per `domain::authServerId`), `healthCheck()`. 26 new tests.
+**v3.17.0** (2026-05-20) — Phase-OKTA-SCIM: Okta Enterprise SCIM 2.0 provisioning. Adds `/scim/v2/` endpoints (14 routes) for user and group provisioning, `ScimStore` with optional `.forge/` persistence, bearer-token auth via `PFORGE_SCIM_TOKEN`, disabled-by-default safety. Compatible with Okta, Entra ID, and any SCIM 2.0 IdP. 39 new tests.
+
+Previous: **v3.16.0** (2026-05-20) — Phase-OKTA-OIDC: Okta OIDC authentication provider. Adds `okta-oidc` as a second production auth provider — RS256 JWT validation via Okta JWKS discovery, custom and Org authorization server support, `aud`/`cid` claim checks, JWKS in-process cache (5 min TTL per `domain::authServerId`), `healthCheck()`. 26 new tests.
 
 Previous: **v3.15.1** (2026-05-20) — Hotfix: three downstream-consumer bugs (Issues #210, #211). `checkApprovalSecret` lifted to module scope in `rest-api.mjs`; `copilot-coding-agent` probe false-negative fixed in `worker-spawn.mjs` and `pforge.ps1/sh`; `.gitignore` manager (`Update-PlanForgeGitignore` / `pf_update_gitignore`) added to `setup.ps1/sh` and `pforge.ps1/sh`.
 
@@ -67,7 +69,7 @@ Previous: **v2.90.10** (2026-05-05) — Forge-Master Cross-Session Recall (Phase
 
 Previous: **v2.90.10** (2026-05-05) — Forge-Master Conversation Memory (Phase-38.1). Adds file-based JSONL session persistence to the Forge-Master reasoning engine. `runTurn` loads prior conversation turns before classification and persists each turn to disk. Per-tab session IDs flow from the dashboard (`sessionStorage` UUID) through `x-pforge-session-id` HTTP header to `deps.sessionId` in `runTurn`. Sessions auto-rotate at 200 turns. New CLI: `pforge fm-session list|purge`.
 
-**In flight (next)**: Phase-OKTA-OIDC ✅ complete. Next phase TBD — candidates: enterprise hardening track (multi-tenancy productization, fleet dashboard cross-team view, Okta Enterprise SCIM provisioning).
+**In flight (next)**: Phase-OKTA-SCIM ✅ complete. Next phase TBD — candidates: enterprise hardening track (multi-tenancy productization, fleet dashboard cross-team view).
 
 See [CHANGELOG.md](CHANGELOG.md) for full release notes.
 

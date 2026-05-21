@@ -155,6 +155,7 @@ import { server } from "./mcp-handler.mjs";
 import { runDrainPass, __shouldDrainOnInit } from "./openbrain-bridge.mjs";
 import { _registerInnerloopServerRoutes } from "./rest-api/innerloop-routes.mjs";
 import { _registerCrucibleHotspotRoutes } from "./rest-api/crucible-routes.mjs";
+import { _registerScimRoutes } from "./rest-api/scim-routes.mjs";
 
 const __dirname = resolve(fileURLToPath(new URL("..", import.meta.url)));
 
@@ -569,6 +570,7 @@ const _EXPRESS_ROUTE_REGISTRARS = [
   _registerMemoryBrainRoutes,
   _registerImageBridgeFixRoutes,
   _registerQuorumMiscRoutes,
+  (app) => _registerScimRoutes(app),
 ];
 
 function _registerExpressRouteGroups(app) {

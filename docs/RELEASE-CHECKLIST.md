@@ -48,8 +48,13 @@ Every `.github/instructions/*.instructions.md` MUST be enumerated in **all four*
 
 Verification:
 ```pwsh
+# Maintainer-only instruction files that intentionally do NOT ship to consumers
+# (their own frontmatter says so). Skip them when checking enumeration.
+$maintainerOnly = @('release-checklist.instructions.md')
+
 $repo = Get-ChildItem .github/instructions -Filter "*.instructions.md" | Select-Object -ExpandProperty Name
 foreach ($f in $repo) {
+  if ($maintainerOnly -contains $f) { continue }
   $name = $f
   $hits = @(
     (Select-String -Path setup.ps1   -Pattern $name -Quiet),
@@ -61,7 +66,7 @@ foreach ($f in $repo) {
 }
 ```
 
-`project-principles.instructions.md` is the one exception — it ships from `templates/.github/instructions/` (user-editable). Everything else ships from `.github/instructions/`.
+`project-principles.instructions.md` is the one exception — it ships from `templates/.github/instructions/` (user-editable). Everything else ships from `.github/instructions/`. `release-checklist.instructions.md` is maintainer-only and excluded above.
 
 ### 1c. Pipeline prompts ship via glob — but smith name-checks them
 

@@ -30,3 +30,16 @@ pforge text eol=lf
 
 # Generated artifact — suppress from GitHub diffs
 docs/assets/tailwind.built.css linguist-generated=true
+
+# ─── Release tarball hygiene (`git archive` / GitHub Release tarball) ──────────
+# Dev-internal artifacts that must NEVER ship in a consumer release tarball,
+# even when the release tag happens to live on `planning/main` (the dev superset
+# branch). See AGENTS.md "Branch Model" for rationale.
+#
+# Verify after a release:
+#   git archive --format=tar v<X.Y.Z> | tar -tf - | grep -E 'Phase-.*-PLAN\.md|^[^/]+/AGENTS\.md$'
+# Should print nothing.
+docs/plans/Phase-*-PLAN.md  export-ignore
+docs/plans/archive/         export-ignore
+docs/plans/cleanup-findings/ export-ignore
+AGENTS.md                   export-ignore

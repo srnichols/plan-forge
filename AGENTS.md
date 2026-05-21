@@ -38,9 +38,9 @@ When in doubt, call [`forge_master_ask`](pforge-master/) for open-ended reasonin
 | `planning/main` | Dev superset | Everything from `master` PLUS phase plans, dev artifacts, this `AGENTS.md`, `PROJECT-PRINCIPLES.md` |
 
 **Rules:**
-- Phase plans (`Phase-*-PLAN.md`) NEVER land on `master`. The PreCommit hook + `.gitattributes` enforce this; you must respect it proactively.
-- Sync is automated: `master` → `planning/main` via [`.github/workflows/sync-master-to-planning.yml`](.github/workflows/sync-master-to-planning.yml). The `planning/main` branch carries a `-s ours` guard merge so the sync is a no-op for tree contents but valid for ancestry.
-- New work begins on a feature branch off `planning/main`, gets reviewed, merges to `planning/main`. Consumer-visible code then cherry-picks to `master` (or lands via a planned shipper slice).
+- Phase plans (`Phase-*-PLAN.md`) NEVER land on `master`. There is **no** automated commit-time guard; it's a proactive maintainer responsibility. Tarball pollution is mitigated by `.gitattributes` `export-ignore` rules (Phase plans, `docs/plans/archive/`, `docs/plans/cleanup-findings/`, and `AGENTS.md` itself are stripped from `git archive` output even when a release tag happens to live on `planning/main`).
+- Sync `master` → `planning/main` is **manual** today (typically a merge or cherry-pick). An automated workflow is on the wishlist but does not currently exist.
+- New work begins on a feature branch off `planning/main`, gets reviewed, merges to `planning/main`. Consumer-visible code then cherry-picks to `master` (or lands via a planned shipper slice). The release checklist (`docs/RELEASE-CHECKLIST.md` §3.4) assumes the release tag is created from `master`; tagging from `planning/main` works for `pforge self-update` (because the consumer copy step uses an allow-list) but bypasses the canonical procedure.
 
 ---
 

@@ -1,13 +1,13 @@
 ---
 phase: 41
 name: ENUMS-CENTRALIZATION
-status: HARDENED
+status: COMPLETE
 lockHash: 1bcce75c5863776ca802e9258d74969a663575b635b00ddfc4d7d4aef119095f
 ---
 
 # Phase ENUMS-CENTRALIZATION — Single source of truth for stable small-set identifiers
 
-> **Status**: **HARDENED — awaiting Execution Hold lift**. Cleared for `pforge run-plan` once Execution Hold checklist is satisfied. Step-2 harden completed 2026-05-19.
+> **Status**: **✅ Complete — shipped 2026-05-19 in v3.9.0** (retro commit `970ef6b`). Retro at [docs/plans/testbed-findings/Phase-ENUMS-CENTRALIZATION-retro.md](testbed-findings/Phase-ENUMS-CENTRALIZATION-retro.md).
 > **Source**: Carryover from Phase-AUDITOR-AUTOMATION planning session (2026-05-18) where four hardcoded-array surfaces had to be hand-scoped into the parent plan because no enum existed to enumerate against.
 > **Tracks**: `pforge-mcp/enums.mjs` (new), `pforge-mcp/capabilities.mjs`, `pforge-mcp/cost-service.mjs`, `pforge.ps1` + `pforge.sh` (`smith`), `docs/capabilities.md` (auto-gen target), `docs/manual/errors-and-exit-codes.html` (auto-gen target), `docs/manual/forge-json-reference.html` (cross-link target).
 > **Estimated cost**: low–medium. Zero new LLM-cost surfaces. Most slices are mechanical migration with CI guards. The doc auto-gen in S3/S4 is the only creative work.

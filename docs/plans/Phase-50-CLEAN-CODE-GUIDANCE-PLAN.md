@@ -1,13 +1,13 @@
 ---
 phase: 50
 name: CLEAN-CODE-GUIDANCE
-status: HARDENED
+status: COMPLETE
 lockHash: 8c4c48362a5972f915edec64f0c3e8ed0e3148ae1c8cf30ecdcbeb216fe1751e
 ---
 
 # Phase 50 — CLEAN-CODE-GUIDANCE — Agent guidance for engineering best practices
 
-> **Status**: **HARDENED — awaiting Execution Hold lift** (Phase 42 retro must ship first). Cleared for `pforge run-plan` once Execution Hold checklist is satisfied. Step-2 harden completed 2026-05-19.
+> **Status**: **✅ Complete — shipped 2026-05-19 in v3.9.0** (retro commit `31baf70`). Retro at [docs/plans/testbed-findings/Phase-50-CLEAN-CODE-GUIDANCE-retro.md](testbed-findings/Phase-50-CLEAN-CODE-GUIDANCE-retro.md).
 > **Source**: Carryover from Phase 42 (CLEAN-CODE-AUDIT) planning. Phase 42 builds a read-only audit catalog; Phase 50 turns the empirical findings into **guidance surfaces** so agents stop introducing the same patterns at write-time. Conversation captured: the abstract engineering ideas (small functions, descriptive names, SOLID, dependency direction, TDD) are decades-old, universally-taught practices popularized by Robert C. Martin and others — Plan Forge applies them with appropriate attribution but without paraphrase-hedging.
 > **Tracks**: `.github/instructions/clean-code.instructions.md` (NEW), `.github/instructions/architecture-principles.instructions.md` (expansion), `/clean-code-review` skill (NEW), rollout to `presets/*/.github/instructions/` and `templates/.github/instructions/`, `.github/copilot-instructions.md` + `AGENTS.md` cross-references. No production code touched.
 > **Estimated cost**: low. Zero LLM-cost surfaces beyond the skill's invocation cost. Mostly markdown + skill wrapper.

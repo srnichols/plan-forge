@@ -1,13 +1,13 @@
 ---
 phase: 39
 name: AUDITOR-AUTOMATION
-status: HARDENED
+status: COMPLETE
 lockHash: 1e2ea8eed46935a6000420f2bc1fe9f14f06d4f18c0cc02839f799809a20477e
 ---
 
 # Phase AUDITOR-AUTOMATION — Tier the sense-making layer (Watcher / Forge-Master observer / Auditor)
 
-> **Status**: **HARDENED — awaiting Execution Hold lift**. Cleared for `pforge run-plan` once Execution Hold checklist is satisfied. Step-2 harden completed 2026-05-19.
+> **Status**: **✅ Complete — shipped 2026-05-19 in v3.8.0** (release commit `a38b0f3`, retro commit `f40c1e1`). All 13 slices passed; see `## What actually shipped` section below for the retro.
 > **Source**: [docs/research/gh-aw-agent-factory-comparison.md](../research/gh-aw-agent-factory-comparison.md) §3 A4 (meta-agent) + carryover from Phase-WORKER-GUARDRAILS retro.
 > **Tracks**: `pforge-mcp/orchestrator.mjs` (end-of-run hook + watcher cross-run mode), `pforge-master/` (new observer tool + budget + prompt), `.github/agents/plan-health-auditor.agent.md` (data-source widening), `.forge.json` schema (3 new opt-in blocks), CLI surface (`pforge master observe`), docs sweep.
 > **Estimated cost**: medium. Most work is wiring on existing infra. Cluster C is the only LLM-cost-additive slice and is gated behind opt-in + per-day budget cap.

@@ -1,13 +1,13 @@
 ---
 phase: 40
 name: AUDITOR-AUTOMATION-UI
-status: HARDENED
+status: COMPLETE
 lockHash: 31cd06481bc699c0ef8df95b7e4233952bd674bf3c9b538a2bb260270e806185
 ---
 
 # Phase AUDITOR-AUTOMATION-UI — Dashboard surfaces for observer, watcher cross-run, and auditor
 
-> **Status**: **HARDENED — awaiting Execution Hold lift**. Cleared for `pforge run-plan` once Execution Hold checklist is satisfied. Step-2 harden completed 2026-05-19. Parent phase Phase-39 shipped on 2026-05-19 (commit 9945c3bd).
+> **Status**: **✅ Complete — shipped 2026-05-19 in v3.9.0** (retro commit `3603fea`). All 11 slices passed. Parent phase Phase-39 shipped 2026-05-19 in v3.8.0. See `## What actually shipped` section below for the retro.
 > **Parent phase**: [docs/plans/Phase-39-AUDITOR-AUTOMATION-PLAN.md](Phase-39-AUDITOR-AUTOMATION-PLAN.md). The parent ships the *capability* (config blocks, observer process, cross-run watcher mode, auditor auto-invoke). This phase ships the *discoverability* (settings UI to configure them, observability cards to see them work).
 > **Tracks**: `pforge-mcp/ui/index.html` + `pforge-mcp/ui/app.js` (new settings tab, three new dashboard cards), `pforge-mcp/server.mjs` (any new `/api/*` endpoints needed for the cards), `pforge-mcp/tests/dashboard-*.test.mjs` (mapping invariants + behavior), docs sweep with new screenshots.
 > **Estimated cost**: low-to-medium. All mechanical UI work on an established pattern (Phase-30 settings decomposition). Zero new backend capabilities, zero new MCP tools. The only `/api/*` additions are read endpoints to feed the cards.

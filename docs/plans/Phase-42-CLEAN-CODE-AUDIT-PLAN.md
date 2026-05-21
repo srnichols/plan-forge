@@ -1,13 +1,13 @@
 ---
 phase: 42
 name: CLEAN-CODE-AUDIT
-status: HARDENED
+status: COMPLETE
 lockHash: 88e251f785e454bc84b404a16a15db11da17b9cab01cda83c8676488c7058adb
 ---
 
 # Phase 42 — CLEAN-CODE-AUDIT — Read-only Clean Code audit + cleanup queue
 
-> **Status**: **HARDENED — awaiting Execution Hold lift** (Phase 41 ENUMS-CENTRALIZATION must ship first). Cleared for `pforge run-plan` once Execution Hold checklist is satisfied. Step-2 harden completed 2026-05-19.
+> **Status**: **✅ Complete — shipped 2026-05-19 in v3.9.0** (retro commit `3436c2c`). Retro at [docs/plans/testbed-findings/Phase-42-CLEAN-CODE-AUDIT-retro.md](testbed-findings/Phase-42-CLEAN-CODE-AUDIT-retro.md).
 > **Source**: Carryover from Phase 41 (ENUMS-CENTRALIZATION) planning. User asked whether the cleanup phase should look for more things like those covered in Clean Code (Robert C. "Uncle Bob" Martin, 2nd Edition, 2025). The answer was "audit, then targeted fix phases" — this is the audit.
 > **Tracks**: `docs/plans/cleanup-findings/` (NEW directory — only output), tooling-only changes to `scripts/audit/`, no production code touched.
 > **Estimated cost**: low. Zero LLM-cost surfaces. Mostly ESLint rule pack + grep + cloc + jscpd + madge (dependency-graph analysis).

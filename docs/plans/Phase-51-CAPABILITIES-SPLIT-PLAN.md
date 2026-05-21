@@ -1,13 +1,13 @@
 ---
 phase: 51
 name: CAPABILITIES-SPLIT
-status: HARDENED
+status: COMPLETE
 lockHash: b758ab23fd7baafb75edd8cb67404001e5e778fb5a3b3834ee101062858690b8
 ---
 
 # Phase 51 — CAPABILITIES-SPLIT — Decompose `pforge-mcp/capabilities.mjs` into focused sub-modules
 
-> **Status**: **HARDENED — awaiting Execution Hold lift** (Phase 43 retro must ship first). Cleared for `pforge run-plan` once Execution Hold checklist is satisfied. Step-2 harden completed 2026-05-19.
+> **Status**: **✅ Complete — shipped 2026-05-19 in v3.9.0** (retro commit `a0442c5`). Retro at [docs/plans/testbed-findings/Phase-51-CAPABILITIES-SPLIT-retro.md](testbed-findings/Phase-51-CAPABILITIES-SPLIT-retro.md).
 > **Source**: Promoted from the A-series module-size findings in Phase 42's audit catalog. `capabilities.mjs` was the marginal case (3,294 LOC — only 10% over the 3,000-LOC threshold), which makes it the **right place to validate the split pattern** before tackling the 9.8 k LOC `server.mjs` (Phase 52) and the 13.9 k LOC `orchestrator.mjs` (Phase 53).
 > **Tracks**: `pforge-mcp/capabilities.mjs` (becomes thin re-export shim), `pforge-mcp/capabilities/*.mjs` (NEW directory of 4 focused sub-modules), `pforge-mcp/tests/capabilities*.test.mjs` (unchanged; snapshot test added), `docs/plans/DEPLOYMENT-ROADMAP.md`, `CHANGELOG.md`.
 > **Estimated cost**: low. Zero LLM-cost surfaces. Pure mechanical extraction with snapshot-as-contract validation.

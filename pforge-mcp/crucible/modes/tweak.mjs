@@ -12,13 +12,20 @@ import { TWEAK_QUESTIONS } from "../../crucible-interview.mjs";
 import { renderDraft } from "../../crucible-draft.mjs";
 import { registerMode } from "../registry.mjs";
 
+const LINKED_BUGS_Q = Object.freeze({
+  id: "linked-bugs",
+  prompt: "Any related bug IDs or issues to link? (comma-separated, or press Enter to skip)",
+  required: false,
+  defaultSource: null,
+});
+
 const tweak = {
   id: "tweak",
   label: "Tweak",
   criticalFields: new Set(["scope-file", "validation", "forbidden-actions"]),
-  questionBank: () => TWEAK_QUESTIONS,
+  questionBank: () => Object.freeze([...TWEAK_QUESTIONS, LINKED_BUGS_Q]),
   renderDraft: (smelt, opts) => renderDraft(smelt, opts),
-  // Finalization is handled by handleFinalize in crucible-server.mjs.
+  // Finalization is handled by handleFinalize in crucible/core/finalize.mjs.
   finalize: () => { throw new Error("use handleFinalize via forge_crucible_finalize"); },
 };
 

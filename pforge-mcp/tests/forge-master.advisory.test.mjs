@@ -16,15 +16,33 @@ import { resolve } from "node:path";
 
 import { classify, LANES, LANE_TOOLS } from "../../pforge-master/src/intent-router.mjs";
 import { UNIVERSAL_BASELINE } from "../../pforge-master/src/principles.mjs";
+import { TOOL_METADATA } from "../capabilities/tool-metadata.mjs";
+import { getForgeMasterCapabilitiesSummary } from "../forge-master-routes.mjs";
+import { getPromptCatalog } from "../../pforge-master/src/prompts.mjs";
 
 const __dirname = new URL(".", import.meta.url).pathname.replace(/^\/([A-Z]:)/, "$1").replace(/\/$/, "");
 
 // ─── 1 & 2. capabilities.mjs + getForgeMasterCapabilitiesSummary ──────────
-// Issue #149 Bucket A: advisory contract fields (intent, agentGuidance,
-// advisoryLaneAvailable, advisory prompt category) were never implemented.
-// Tracked in issue #149; implement when product decision is made.
-it.todo("forge-master advisory — capabilities.mjs contract: intent/agentGuidance advisory fields (#149 Bucket A)");
-it.todo("forge-master advisory — getForgeMasterCapabilitiesSummary: advisoryLaneAvailable field (#149 Bucket A)");
+
+describe("forge-master advisory — capabilities surface", () => {
+  it("TOOL_METADATA.forge_master_ask declares advisory + cto-in-a-box intent", () => {
+    const entry = TOOL_METADATA.forge_master_ask;
+    expect(entry, "forge_master_ask entry must exist").toBeTruthy();
+    expect(entry.intent).toContain("advisory");
+    expect(entry.intent).toContain("cto-in-a-box");
+  });
+
+  it("TOOL_METADATA.forge_master_ask.agentGuidance mentions the advisory lane", () => {
+    const guidance = TOOL_METADATA.forge_master_ask?.agentGuidance ?? "";
+    expect(guidance.toLowerCase()).toMatch(/advisory|cto-in-a-box/);
+  });
+
+  it("getForgeMasterCapabilitiesSummary exposes advisoryLaneAvailable: true", async () => {
+    const caps = await getForgeMasterCapabilitiesSummary();
+    expect(caps, "summary must not be null when pforge-master is present").not.toBeNull();
+    expect(caps.advisoryLaneAvailable).toBe(true);
+  });
+});
 
 // ─── 3. Intent router — ADVISORY lane ──────────────────────────────────────
 
@@ -75,7 +93,25 @@ describe("forge-master advisory — Architecture-First in system prompt", () => 
 });
 
 // ─── 5 & 6. Prompt catalog + tools.json advisory fields ──────────────────
-// Issue #149 Bucket A: advisory category not in prompt catalog; tools.json
-// advisory fields not updated. Tracked in issue #149.
-it.todo("forge-master advisory — prompt catalog: advisory category (#149 Bucket A)");
-it.todo("forge-master advisory — tools.json: advisory intent/agentGuidance fields (#149 Bucket A)");
+
+describe("forge-master advisory — prompt catalog & tools.json", () => {
+  it("prompt catalog has an advisory category with ≥1 prompt", () => {
+    const catalog = getPromptCatalog();
+    const advisory = catalog.categories.find((c) => c.id === "advisory");
+    expect(advisory, "advisory category must exist").toBeTruthy();
+    expect(advisory.prompts.length).toBeGreaterThanOrEqual(1);
+    for (const p of advisory.prompts) {
+      expect(p.category).toBe("advisory");
+    }
+  });
+
+  it("tools.json mirrors advisory intent + agentGuidance from TOOL_METADATA", () => {
+    const toolsJsonPath = resolve(__dirname, "../tools.json");
+    const tools = JSON.parse(readFileSync(toolsJsonPath, "utf-8"));
+    const ask = tools.find((t) => t.name === "forge_master_ask");
+    expect(ask, "forge_master_ask must appear in tools.json").toBeTruthy();
+    expect(ask.intent).toContain("advisory");
+    expect(ask.intent).toContain("cto-in-a-box");
+    expect((ask.agentGuidance || "").toLowerCase()).toMatch(/advisory|cto-in-a-box/);
+  });
+});

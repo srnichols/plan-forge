@@ -351,6 +351,57 @@ const CATEGORIES = [
       },
     ],
   },
+  // Issue #149 Bucket A: Advisory / CTO-in-a-box lane prompts. The intent
+  // router already routes "should I refactor or ship", "what is the right
+  // approach for X", "architecture advice on Y" to LANES.ADVISORY \u2014 these
+  // canned prompts expose that lane through the Forge-Master Studio UI.
+  {
+    id: "advisory",
+    label: "Advisory / CTO-in-a-box",
+    description: "Architecture, design, and principled-decision guidance using project principles",
+    prompts: [
+      {
+        id: "adv-refactor-or-ship",
+        title: "Refactor or Ship?",
+        description: "Get principled guidance on whether to refactor now or ship and iterate",
+        template: "Should I refactor {{component}} now or ship and iterate? Walk me through the trade-offs given our current phase and project principles.",
+        placeholders: [{ key: "component", label: "Component / module name", example: "the auth service" }],
+        suggestedTools: ["forge_diff", "forge_search"],
+        category: "advisory",
+      },
+      {
+        id: "adv-right-approach",
+        title: "Right Approach Check",
+        description: "Ask for the architecturally-sound approach to a specific problem",
+        template: "What is the right approach for {{problem}}? Apply our project principles and architecture rules, and cite which principle drives the recommendation.",
+        placeholders: [{ key: "problem", label: "Problem statement", example: "caching read-heavy queries" }],
+        suggestedTools: ["forge_capabilities", "forge_search"],
+        category: "advisory",
+      },
+      {
+        id: "adv-architecture-review",
+        title: "Architecture Review",
+        description: "Get an independent architectural review of a module or layer",
+        template: "I need architecture advice on {{area}}. Review it against our project principles and flag any violations, layering breaks, or design red flags.",
+        placeholders: [{ key: "area", label: "Module / layer / area", example: "the database access layer" }],
+        suggestedTools: ["forge_analyze", "forge_graph_query", "forge_search"],
+        category: "advisory",
+      },
+      {
+        id: "adv-help-decide",
+        title: "Help Me Decide",
+        description: "Frame a decision matrix between two options",
+        template: "Help me decide between {{optionA}} and {{optionB}} for {{context}}. Lay out the trade-offs, apply our project principles, and recommend the choice with reasoning.",
+        placeholders: [
+          { key: "optionA", label: "Option A", example: "Postgres" },
+          { key: "optionB", label: "Option B", example: "DynamoDB" },
+          { key: "context", label: "Context", example: "our session store" },
+        ],
+        suggestedTools: ["forge_capabilities", "forge_search"],
+        category: "advisory",
+      },
+    ],
+  },
 ];
 
 /**

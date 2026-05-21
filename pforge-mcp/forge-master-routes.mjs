@@ -64,10 +64,24 @@ export async function getForgeMasterCapabilitiesSummary() {
   try {
     const { getPromptCatalog } = await import(FORGE_MASTER_PROMPTS_URL);
     const catalog = getPromptCatalog();
+    // Issue #149 Bucket A: surface whether the advisory (CTO-in-a-box) lane is
+    // wired up. We check the intent-router's exported LANES rather than
+    // hardcoding `true` so the field follows the source of truth: if the lane
+    // is ever renamed or removed, this flips automatically.
+    let advisoryLaneAvailable = false;
+    try {
+      const { LANES } = await import(
+        pathToFileURL(resolve(__dirname, "../pforge-master/src/intent-router.mjs")).href
+      );
+      advisoryLaneAvailable = typeof LANES?.ADVISORY === "string" && LANES.ADVISORY.length > 0;
+    } catch {
+      // intent-router unavailable \u2014 lane is reported as unavailable.
+    }
     return {
       available: true,
       promptCategories: catalog.categories.length,
       promptCount: catalog.categories.reduce((n, c) => n + c.prompts.length, 0),
+      advisoryLaneAvailable,
     };
   } catch {
     return { available: false };

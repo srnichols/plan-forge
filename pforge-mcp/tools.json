@@ -428,51 +428,67 @@
       }
     },
     "intent": [
-      "diff-classify",
-      "commit-guard",
-      "diff-security-scan"
+      "classify",
+      "diff-audit",
+      "scope-check",
+      "precommit"
     ],
     "aliases": [
-      "classify-diff",
-      "diff-scan",
-      "commit-safety-check"
+      "diff-stats",
+      "diff-categories",
+      "diff-categorize"
     ],
     "cost": "low",
     "maxConcurrent": 10,
-    "addedIn": "3.6.3",
+    "addedIn": "3.6.5",
     "prerequisites": [
       "git initialized"
     ],
     "produces": [],
     "consumes": [
-      "git diff output"
+      "git diff --staged output"
     ],
     "sideEffects": [],
+    "writesFiles": false,
+    "network": false,
+    "risk": "low",
     "errors": {
-      "NO_DIFF": {
-        "message": "No diff provided — pass diff directly or run in a git repo with staged changes",
-        "recovery": "Stage changes with git add before calling, or pass the diff string directly"
-      },
-      "TRUNCATED": {
-        "message": "Diff exceeded maxLines and was truncated",
-        "recovery": "Use a smaller diff range"
+      "GIT_UNAVAILABLE": {
+        "message": "git is not available or not a git repository",
+        "recovery": "Ensure you are inside a git repository"
       }
     },
+    "agentGuidance": "Advisory-only — never blocks commits. Returns a breakdown of staged changes by category (plan, test, docs, config, chore, scope, unknown). Use to understand what type of changes are staged before a commit. Also available as a preCommit chain entry in plan-forge.json.",
     "example": {
-      "input": {
-        "diff": "+const key = 'AKIAIOSFODNN7EXAMPLE';"
-      },
+      "input": {},
       "output": {
-        "severity": "critical",
-        "findings": [
+        "ok": true,
+        "total": 4,
+        "files": [
           {
-            "category": "leaked-secret",
-            "severity": "critical",
-            "detail": "AWS access key pattern detected"
+            "file": "src/api.ts",
+            "category": "scope"
+          },
+          {
+            "file": "src/auth.test.ts",
+            "category": "test"
+          },
+          {
+            "file": "docs/plans/Phase-1-PLAN.md",
+            "category": "plan"
+          },
+          {
+            "file": "README.md",
+            "category": "docs"
           }
         ],
-        "totalAdded": 1,
-        "truncated": false
+        "summary": {
+          "scope": 1,
+          "test": 1,
+          "plan": 1,
+          "docs": 1
+        },
+        "advisory": "Staged diff: 4 file(s) — docs: 1, plan: 1, scope: 1, test: 1"
       }
     }
   },
@@ -5877,7 +5893,9 @@
       "reason",
       "ideate",
       "forge-master",
-      "crucible"
+      "crucible",
+      "advisory",
+      "cto-in-a-box"
     ],
     "aliases": [
       "ask_forge",
@@ -5902,7 +5920,7 @@
     "writesFiles": false,
     "network": true,
     "risk": "low",
-    "agentGuidance": "Use forge_master_ask for multi-step reasoning about Plan Forge workflows — ideating features, troubleshooting failures, querying run status, or funneling ideas into Crucible smelts. Forge-Master classifies intent, fetches memory context, and orchestrates tool calls on your behalf. Prefer this over manually calling individual forge tools when the task is open-ended or involves multiple steps. Do NOT use for direct file edits or code generation — Forge-Master is read-only.",
+    "agentGuidance": "Use forge_master_ask for multi-step reasoning about Plan Forge workflows — ideating features, troubleshooting failures, querying run status, or funneling ideas into Crucible smelts. Also serves as the advisory / CTO-in-a-box lane for architectural guidance: ask 'should I refactor or ship X?', 'what is the right approach for Y?', 'architecture advice on Z' — the intent router classifies these to the advisory lane and the system prompt injects project principles. Forge-Master classifies intent, fetches memory context, and orchestrates tool calls on your behalf. Prefer this over manually calling individual forge tools when the task is open-ended or involves multiple steps. Do NOT use for direct file edits or code generation — Forge-Master is read-only.",
     "errors": {
       "reasoning_model_unavailable": {
         "message": "No reasoning provider configured",

@@ -1027,7 +1027,7 @@ describe("loadQuorumConfig", () => {
     const config = loadQuorumConfig(tempDir);
     expect(config.enabled).toBe(false);
     expect(config.auto).toBe(true);
-    expect(config.threshold).toBe(3);
+    expect(config.threshold).toBe(5);
     expect(config.reviewerModel).toBe("claude-opus-4.7");
     expect(config.dryRunTimeout).toBe(300_000);
   });
@@ -1047,13 +1047,13 @@ describe("loadQuorumConfig", () => {
       hooks: { preDeploy: { enabled: false } }
     }));
     const config = loadQuorumConfig(tempDir);
-    expect(config.threshold).toBe(3);
+    expect(config.threshold).toBe(5);
   });
 
   it("handles corrupt .forge.json with defaults", () => {
     writeFileSync(resolve(tempDir, ".forge.json"), "CORRUPT");
     const config = loadQuorumConfig(tempDir);
-    expect(config.threshold).toBe(3);
+    expect(config.threshold).toBe(5);
     expect(config.models).toHaveLength(3);
   });
 

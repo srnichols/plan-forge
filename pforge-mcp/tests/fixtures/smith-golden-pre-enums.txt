@@ -27,8 +27,7 @@ Runtime & Worker Readiness:
      FIX: winget install Anthropic.Claude   (or npm install -g @anthropic-ai/claude-code)
   ❌ copilot-coding-agent v lacks agentic flags: Logged in to github.com (issue #28)
      FIX: winget upgrade --id GitHub.cli && gh auth login
-  ⚠️  codex not found on PATH (agent worker)
-     FIX: npm install -g @openai/codex
+  ✅ codex v0.132.0 (agentic capable)
 
 VS Code Configuration:
   ✅ chat.agent.enabled (default — OK)

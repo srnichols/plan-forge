@@ -7,7 +7,11 @@
 
 ## Current Release
 
-**v3.15.0** (2026-05-20) — `pforge-sdk/trajectory-reader` (v0.12.0). New `trajectory-reader` sub-path provides offline access to `.forge/trajectories/` plan execution notes without a running MCP server. `listPlans`, `listTrajectories` (sorted numerically), `readTrajectory`, `readAllTrajectories`, `summarizeTrajectories`, `countWords`, path helpers with path-traversal guards. 58 tests.
+**v3.16.0** (2026-05-20) — Phase-OKTA-OIDC: Okta OIDC authentication provider. Adds `okta-oidc` as a second production auth provider — RS256 JWT validation via Okta JWKS discovery, custom and Org authorization server support, `aud`/`cid` claim checks, JWKS in-process cache (5 min TTL per `domain::authServerId`), `healthCheck()`. 26 new tests.
+
+Previous: **v3.15.1** (2026-05-20) — Hotfix: three downstream-consumer bugs (Issues #210, #211). `checkApprovalSecret` lifted to module scope in `rest-api.mjs`; `copilot-coding-agent` probe false-negative fixed in `worker-spawn.mjs` and `pforge.ps1/sh`; `.gitignore` manager (`Update-PlanForgeGitignore` / `pf_update_gitignore`) added to `setup.ps1/sh` and `pforge.ps1/sh`.
+
+Previous: **v3.15.0** (2026-05-20) — `pforge-sdk/trajectory-reader` (v0.12.0). New `trajectory-reader` sub-path provides offline access to `.forge/trajectories/` plan execution notes without a running MCP server. `listPlans`, `listTrajectories` (sorted numerically), `readTrajectory`, `readAllTrajectories`, `summarizeTrajectories`, `countWords`, path helpers with path-traversal guards. 58 tests.
 
 Previous: **v3.14.0** (2026-05-20) — Phase-ENTRA-SSO: Entra ID / Azure AD OIDC provider. Implements `entra-oidc` auth provider replacing the `sso-stub.mjs` placeholder — RS256 JWT validation via JWKS discovery, `exp`/`nbf`/`iss`/`aud` claim checks, JWKS in-process cache (5 min TTL), `healthCheck()` for startup probing, `sub`/`oid` claim as RBAC principal key. `authenticate()` made async (backward-compatible). 22 new tests.
 
@@ -63,7 +67,7 @@ Previous: **v2.90.10** (2026-05-05) — Forge-Master Cross-Session Recall (Phase
 
 Previous: **v2.90.10** (2026-05-05) — Forge-Master Conversation Memory (Phase-38.1). Adds file-based JSONL session persistence to the Forge-Master reasoning engine. `runTurn` loads prior conversation turns before classification and persists each turn to disk. Per-tab session IDs flow from the dashboard (`sessionStorage` UUID) through `x-pforge-session-id` HTTP header to `deps.sessionId` in `runTurn`. Sessions auto-rotate at 200 turns. New CLI: `pforge fm-session list|purge`.
 
-**In flight (next)**: Phase-ENTRA-SSO ✅ complete. Next phase TBD — candidates: enterprise hardening track (multi-tenancy productization, fleet dashboard cross-team view, Okta OIDC second provider).
+**In flight (next)**: Phase-OKTA-OIDC ✅ complete. Next phase TBD — candidates: enterprise hardening track (multi-tenancy productization, fleet dashboard cross-team view, Okta Enterprise SCIM provisioning).
 
 See [CHANGELOG.md](CHANGELOG.md) for full release notes.
 

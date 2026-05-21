@@ -7,6 +7,7 @@
  * Supported providers:
  *   - "bearer" (default)  — Authorization: Bearer <token> or PFORGE_AUTH_TOKEN env var
  *   - "entra-oidc"        — Entra ID / Azure AD OIDC JWT validation via JWKS
+ *   - "okta-oidc"         — Okta OIDC JWT validation via JWKS (custom and Org auth servers)
  *   - "sso"               — Legacy SSO stub alias (not yet a real provider)
  *   - "none"              — Bypass auth (local / trusted environments only)
  *
@@ -16,6 +17,7 @@
 import { authenticateBearer } from "./providers/bearer.mjs";
 import { authenticateSso } from "./providers/sso-stub.mjs";
 import { authenticateEntraOidc } from "./providers/entra-oidc.mjs";
+import { authenticateOktaOidc } from "./providers/okta-oidc.mjs";
 
 /**
  * @typedef {Object} AuthResult
@@ -27,9 +29,10 @@ import { authenticateEntraOidc } from "./providers/entra-oidc.mjs";
 
 /**
  * @typedef {Object} AuthOptions
- * @property {"bearer"|"entra-oidc"|"sso"|"none"} [provider="bearer"] - Auth provider to use
+ * @property {"bearer"|"entra-oidc"|"okta-oidc"|"sso"|"none"} [provider="bearer"] - Auth provider to use
  * @property {string}  [token]      - Expected token (bearer only)
  * @property {Object}  [entraOidc]  - Entra OIDC options (entra-oidc provider only)
+ * @property {Object}  [oktaOidc]   - Okta OIDC options (okta-oidc provider only)
  */
 
 /**
@@ -53,6 +56,11 @@ export async function authenticate(req, opts = {}) {
     case "entra-oidc": {
       const result = await authenticateEntraOidc(req, opts);
       return { ...result, provider: "entra-oidc" };
+    }
+
+    case "okta-oidc": {
+      const result = await authenticateOktaOidc(req, opts);
+      return { ...result, provider: "okta-oidc" };
     }
 
     case "sso": {

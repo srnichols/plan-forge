@@ -9,6 +9,28 @@ Format follows [Keep a Changelog](https://keepachangelog.com/).
 
 ---
 
+## [3.16.0] — 2026-05-20
+
+### Phase-OKTA-OIDC — Okta OIDC authentication provider
+
+> **One-liner**: Adds `okta-oidc` as a second production auth provider alongside `entra-oidc`, with support for Okta custom authorization servers and the Org authorization server. 26 new tests.
+
+#### Added
+- `pforge-mcp/auth/providers/okta-oidc.mjs` — Okta OIDC provider. Exports `authenticateOktaOidc(req, opts)` (async) and `healthCheck(domain?, authServerId?)`. Validates RS256-signed JWTs: extracts `Authorization: Bearer <jwt>`, fetches the Okta JWKS from `https://{domain}/oauth2/{authServerId}/v1/keys` (custom) or `https://{domain}/oauth2/v1/keys` (Org), verifies the RS256 signature using Node.js `crypto.createVerify`, and validates `exp`, `nbf`, `iss`, `aud` (custom server), and `cid` (Org server) claims. Returns `token: payload.sub` as the RBAC principal key. No new required dependencies.
+- `pforge-mcp/tests/auth-okta-oidc.test.mjs` — 26 tests: valid JWT happy path, no token, expired, `nbf` in future, wrong audience, untrusted issuer, JWKS network error, JWKS HTTP error, unknown `kid`, wrong signing key, missing `domain`, non-RS256 algorithm, explicit `audience` override, Org auth server issuer format, `cid` claim validation (Org tokens), `cid` mismatch, JWKS cache hit (one fetch for two requests), domain::authServerId cache key isolation, `healthCheck` custom-server/org-server/unreachable/no-domain, and `authenticate` dispatch with `okta-oidc` tag.
+
+#### Changed
+- `pforge-mcp/auth/index.mjs` — Added `case "okta-oidc"` dispatch branch and imported `authenticateOktaOidc`. Updated JSDoc typedefs to include `oktaOidc` options and the new provider name.
+
+#### Notes
+- Backward-compatible: `bearer`, `entra-oidc`, `sso`, and `none` providers are unchanged.
+- Okta Org auth server tokens may use `cid` instead of `aud` for client identification — both are validated.
+- JWKS keys are cached in-process for 5 minutes per `domain::authServerId` pair.
+- `authServerId` defaults to `"default"` (Okta's default custom authorization server). Use `"org"` for the Okta Org authorization server.
+- `healthCheck()` probes `/.well-known/openid-configuration` — same convention as Entra's health check.
+
+---
+
 ## [3.15.1] — 2026-05-20
 
 ### Fixed — three downstream-consumer bugs from the v3.11.0 → v3.15.0 upgrade window (Issues #210, #211)

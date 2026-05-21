@@ -77,8 +77,20 @@ describe("enums.mjs", () => {
     expect(unique.size).toBe(TOOL_NAMES.length);
   });
 
-  // Alignment check: TOOL_NAMES should match the MCP TOOLS array in server.mjs.
-  // Passes after forge_hallmark_* / forge_anvil_* families are de-registered or
-  // removed from TOOL_NAMES as part of the S3 capabilities.mjs migration.
-  it.todo("TOOL_NAMES length matches the MCP TOOLS array in server.mjs (verify after S3 migration)");
+  // Alignment check: TOOL_NAMES is the cross-server superset — it includes
+  // tools registered by pforge-mcp/server/tool-definitions.mjs AND tools
+  // registered by the pforge-master sidecar (forge_master_ask, forge_master_observe).
+  // Every name in TOOL_NAMES MUST be registered in one of the two servers; otherwise
+  // agents calling the name will see "unknown tool".
+  it("every TOOL_NAMES entry is registered by pforge-mcp or pforge-master", async () => {
+    const { TOOLS } = await import("../server/tool-definitions.mjs");
+    const pforgeMcpNames = new Set(TOOLS.map((t) => t.name));
+    // pforge-master tool names (kept inline rather than importing the sidecar's
+    // server.mjs, which has top-level side effects). If pforge-master grows tools,
+    // add them here.
+    const pforgeMasterNames = new Set(["forge_master_ask", "forge_master_observe"]);
+    const registered = new Set([...pforgeMcpNames, ...pforgeMasterNames]);
+    const orphans = TOOL_NAMES.filter((n) => !registered.has(n));
+    expect(orphans, `TOOL_NAMES contains unregistered ("phantom") tool names: ${orphans.join(", ")}`).toEqual([]);
+  });
 });

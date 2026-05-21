@@ -37,7 +37,7 @@ import { randomUUID } from "node:crypto";
 
 import { releaseClaim } from "./crucible.mjs";
 
-const VALID_LANES = new Set(["tweak", "feature", "full"]);
+const VALID_LANES = new Set(["tweak", "feature", "full", "bug-batch"]);
 const VALID_SOURCES = new Set(["human", "agent"]);
 const VALID_STATUSES = new Set(["in-progress", "finalized", "abandoned"]);
 

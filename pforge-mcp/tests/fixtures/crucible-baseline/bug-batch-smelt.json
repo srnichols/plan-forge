@@ -1,0 +1,50 @@
+{
+  "id": "smelt-bb-fixture-001",
+  "lane": "bug-batch",
+  "source": "human",
+  "status": "in-progress",
+  "rawIdea": "Fix null pointer crash in plan parser when scope-files line is empty",
+  "phaseName": null,
+  "answers": [
+    {
+      "questionId": "symptom-observed",
+      "answer": "plan-parser.mjs throws TypeError: Cannot read properties of null when scope-files answer is empty string",
+      "recordedAt": "2025-01-01T00:00:00.000Z"
+    },
+    {
+      "questionId": "expected-behavior",
+      "answer": "parseScopeContract returns empty scope array instead of crashing",
+      "recordedAt": "2025-01-01T00:00:00.000Z"
+    },
+    {
+      "questionId": "suspected-component",
+      "answer": "pforge-mcp/orchestrator/plan-parser.mjs handleFilesHeading (L525)",
+      "recordedAt": "2025-01-01T00:00:00.000Z"
+    },
+    {
+      "questionId": "scope-files",
+      "answer": "pforge-mcp/orchestrator/plan-parser.mjs, pforge-mcp/tests/plan-parser.test.mjs",
+      "recordedAt": "2025-01-01T00:00:00.000Z"
+    },
+    {
+      "questionId": "slice-breakdown",
+      "answer": "Guard empty scope-files | pforge-mcp/orchestrator/plan-parser.mjs | npm run test:parser\nAdd regression test | pforge-mcp/tests/plan-parser.test.mjs | npm run test:parser",
+      "recordedAt": "2025-01-01T00:00:00.000Z"
+    },
+    {
+      "questionId": "validation-gates",
+      "answer": "npm run test:parser passes\nno new TypeError in plan-parser.mjs",
+      "recordedAt": "2025-01-01T00:00:00.000Z"
+    },
+    {
+      "questionId": "forbidden-actions",
+      "answer": "do not alter the public parseScopeContract API signature\ndo not change unrelated plan-parser functions",
+      "recordedAt": "2025-01-01T00:00:00.000Z"
+    },
+    {
+      "questionId": "rollback",
+      "answer": "git revert the guard commit; orchestrator falls back to skipping scope-files",
+      "recordedAt": "2025-01-01T00:00:00.000Z"
+    }
+  ]
+}

@@ -58,10 +58,11 @@ export {
   resolveCriticalFields,
 };
 
-// Phase-59 Slice 2 — register the three canonical lanes as CrucibleMode descriptors.
+// Phase-59 Slice 2+4 — register the canonical lanes as CrucibleMode descriptors.
 import "./crucible/modes/tweak.mjs";
 import "./crucible/modes/feature.mjs";
 import "./crucible/modes/full.mjs";
+import "./crucible/modes/bug-batch.mjs";
 
 /**
  * Compute "stale defaults" warnings for a smelt. Fires when the files

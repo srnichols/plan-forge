@@ -9,6 +9,7 @@ Format follows [Keep a Changelog](https://keepachangelog.com/).
 
 ### Changed
 - Phase 59 — Crucible multi-mode substrate: new `bug-batch` mode with Root Cause Hypothesis section and multi-slice synthesizer; per-mode `criticalFields` replacing global set; renderer/parser alignment (`### In Scope`, `### Out of Scope`, `### Forbidden` under `## Scope Contract`; `[scope: <paths>]` clause in synthesized slice headers); `crucible.legacy.tbdPlaceholders` config knob gating pre-S2 `{{TBD:}}` marker behavior (deprecated, removed major-after-next); `docs/crucible-modes.md` operator guide added. Closes #140, #142, #145, #146, #147.
+- Quorum calibration — default `quorum.threshold` raised 3 → 5 (autopilot was over-quorumming low-complexity slices); adaptive floor raised to `max(5, defaults.threshold - 1)`; `forge_run_plan` quorum enum now exposes the four-mode picker (`auto | power | speed | false`) with threshold default 5; `.forge.json` JSON schema default model list refreshed to `claude-opus-4.7`, `gpt-5.3-codex`, `grok-4.20-0309-reasoning`; `grok-4-1-fast-reasoning` (retired 2026-05-15) swapped to `grok-4.20-0309-non-reasoning` in the `speed` preset; `LINKED_BUGS_QUESTION` centralized to one source of truth across crucible modes (`feature`, `full`, `tweak`); both shell launchers (`pforge.ps1`, `pforge.sh`) and reviewer-note copy updated to match. Tests aligned to threshold 5 baseline (`orchestrator-complexity.test.mjs`, `foundry-provider.test.mjs`).
 
 ---
 

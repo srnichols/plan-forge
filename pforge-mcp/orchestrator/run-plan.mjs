@@ -40,6 +40,7 @@ import { findLatestRun, parseEventLine, parseEventsLog, readSliceArtifacts, norm
 import { inferSliceType, recommendModel } from "./model-scoring.mjs";
 import { loadQuorumConfig, classifyLegError, quorumDispatch, quorumReview, analyzeWithQuorum, calculateSliceCost, buildCostBreakdown } from "./quorum.mjs";
 import { estimatePlan as _estimatePlan } from "../cost-service.mjs";
+import { rewritePlanStatusOnSuccess as _rewritePlanStatusOnSuccess } from "./run-plan/plan-status-update.mjs";
 
 const [QUORUM_MODE_AUTO, QUORUM_PRESET_POWER, QUORUM_PRESET_SPEED, QUORUM_MODE_FALSE] = QUORUM_MODES;
 export const loadAuditConfig = _loadAuditConfig;
@@ -375,6 +376,7 @@ export function rerankEscalationChain({
 
 import { buildPlanPostmortem, listPlanPostmortems, writePlanPostmortem } from "./run-plan/postmortem.mjs";
 export { POSTMORTEM_RETENTION_COUNT, buildPlanPostmortem, listPlanPostmortems, writePlanPostmortem };
+export { rewritePlanStatusOnSuccess } from "./run-plan/plan-status-update.mjs";
 
 const _PROGRESS_LINE_FORMATTERS = {
   "run-started": (ts, d) => `[${ts}] ▶ Run started: ${d.sliceCount || "?"} slices, mode=${d.mode || "auto"}\n`,
@@ -1067,6 +1069,16 @@ async function _finalizeRunPlan({
 
   // Phase-25 Slice 5 (L5 closed loop): write a plan postmortem after every run.
   _writePostmortemSafe(summary, planPath, cwd);
+
+  // Issue #212: rewrite plan-file status header on a fully successful run so the
+  // plan file reflects COMPLETE instead of remaining pinned at HARDENED.
+  if (allPassed && !estimate && !dryRun) {
+    _rewritePlanStatusOnSuccess({
+      planPath,
+      cwd,
+      shippedAt: summary.endTime || new Date().toISOString(),
+    });
+  }
 
   // Phase-31 Slice 6: promote recurring tempering suppressions to bug files.
   try {

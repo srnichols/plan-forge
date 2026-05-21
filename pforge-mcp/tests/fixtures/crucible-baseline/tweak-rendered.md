@@ -10,9 +10,14 @@ Fix off-by-one error in pagination helper
 
 ## Scope Contract
 
-**In scope**:
+### In Scope
 
 - pforge-mcp/pagination.mjs
+
+### Forbidden
+
+- no schema changes
+- no edits outside scope-file
 
 ## Slices
 
@@ -36,17 +41,12 @@ cd pforge-mcp && npx vitest run tests/pagination.test.mjs
 
 - Validation gate fails and root cause is not identified within 30 minutes
 - A slice drifts past its declared Scope Contract
-- A forbidden action (see Anti-patterns) is about to be introduced
+- A forbidden action (see Scope Contract → Forbidden) is about to be introduced
 - Token budget for this phase is exceeded by more than 25%
 
 ## Rollback
 
 git revert HEAD
-
-## Anti-patterns & Forbidden Actions
-
-- no schema changes
-- no edits outside scope-file
 
 ## Change Manifest
 

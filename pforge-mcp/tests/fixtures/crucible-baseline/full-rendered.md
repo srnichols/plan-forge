@@ -32,16 +32,21 @@ No new secrets or permissions; smelt files are local only
 
 ## Scope Contract
 
-**In scope**:
+### In Scope
 
 - crucible-store.mjs
 - crucible-server.mjs
 - crucible-interview.mjs
 
-**Out of scope**:
+### Out of Scope
 
 - Dashboard UI changes
 - OpenBrain sync
+
+### Forbidden
+
+- no TypeScript build step
+- no direct writes to .forge/runs/ from a tool
 
 ## Slices
 
@@ -63,17 +68,12 @@ _Estimated: 4 slices. Expand each below during Plan Hardener step._
 
 - Validation gate fails and root cause is not identified within 30 minutes
 - A slice drifts past its declared Scope Contract
-- A forbidden action (see Anti-patterns) is about to be introduced
+- A forbidden action (see Scope Contract → Forbidden) is about to be introduced
 - Token budget for this phase is exceeded by more than 25%
 
 ## Rollback
 
 git revert HEAD~4..HEAD && rm -rf .forge/crucible/
-
-## Anti-patterns & Forbidden Actions
-
-- no TypeScript build step
-- no direct writes to .forge/runs/ from a tool
 
 ## Change Manifest
 

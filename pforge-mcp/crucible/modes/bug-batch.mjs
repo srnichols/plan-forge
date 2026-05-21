@@ -122,9 +122,13 @@ export function renderBody(smelt, options = {}) {
   // ── Scope Contract ──
   lines.push("## Scope Contract");
   lines.push("");
-  lines.push("**In scope**:");
+  lines.push("### In Scope");
   lines.push("");
   lines.push(asBullets(ans.scopeFiles) || tbd("scope-files"));
+  lines.push("");
+  lines.push("### Forbidden");
+  lines.push("");
+  lines.push(asBullets(ans.forbidden) || tbd("forbidden-actions"));
   lines.push("");
 
   // ── Slices ──
@@ -173,7 +177,7 @@ export function renderBody(smelt, options = {}) {
   lines.push("");
   lines.push("- Validation gate fails and root cause is not identified within 30 minutes");
   lines.push("- A slice drifts past its declared Scope Contract");
-  lines.push("- A forbidden action (see Anti-patterns) is about to be introduced");
+  lines.push("- A forbidden action (see Scope Contract → Forbidden) is about to be introduced");
   lines.push("- Token budget for this phase is exceeded by more than 25%");
   lines.push("");
 
@@ -181,12 +185,6 @@ export function renderBody(smelt, options = {}) {
   lines.push("## Rollback");
   lines.push("");
   lines.push(ans.rollback || tbd("rollback"));
-  lines.push("");
-
-  // ── Anti-patterns & Forbidden Actions ──
-  lines.push("## Anti-patterns & Forbidden Actions");
-  lines.push("");
-  lines.push(asBullets(ans.forbidden) || tbd("forbidden-actions"));
   lines.push("");
 
   // ── Change Manifest ──

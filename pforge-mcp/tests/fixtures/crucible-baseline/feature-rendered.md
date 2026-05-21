@@ -10,15 +10,20 @@ Add export-to-CSV capability to cost report
 
 ## Scope Contract
 
-**In scope**:
+### In Scope
 
 - pforge-mcp/cost-service.mjs
 - pforge-mcp/server.mjs
 
-**Out of scope**:
+### Out of Scope
 
 - PDF export
 - email delivery
+
+### Forbidden
+
+- no destructive migrations
+- no API contract changes
 
 ## Slices
 
@@ -44,17 +49,12 @@ cd pforge-mcp && npx vitest run tests/cost-csv.test.mjs
 
 - Validation gate fails and root cause is not identified within 30 minutes
 - A slice drifts past its declared Scope Contract
-- A forbidden action (see Anti-patterns) is about to be introduced
+- A forbidden action (see Scope Contract → Forbidden) is about to be introduced
 - Token budget for this phase is exceeded by more than 25%
 
 ## Rollback
 
 git revert HEAD && npm install
-
-## Anti-patterns & Forbidden Actions
-
-- no destructive migrations
-- no API contract changes
 
 ## Change Manifest
 

@@ -9,6 +9,34 @@ Format follows [Keep a Changelog](https://keepachangelog.com/).
 
 ---
 
+## [3.17.0] — 2026-05-20
+
+### Phase-OKTA-SCIM — Okta Enterprise SCIM 2.0 provisioning
+
+> **One-liner**: Adds SCIM 2.0 user and group provisioning endpoints so Okta (and any SCIM-compatible IdP) can automatically provision and deprovision Plan Forge users. 39 new tests.
+
+#### Added
+- `pforge-mcp/auth/scim-store.mjs` — `ScimStore` class: in-memory user/group CRUD with optional `.forge/scim-users.json` / `.forge/scim-groups.json` persistence. Supports `createUser`, `getUser`, `findUserBy`, `replaceUser`, `patchUser`, `deleteUser`, `listUsers` (filter + pagination) and the group equivalents. Simple SCIM `eq` filter expressions are evaluated in-process. SCIM PatchOp `add`, `replace`, and `remove` operations are applied to plain attribute objects.
+- `pforge-mcp/server/rest-api/scim-routes.mjs` — SCIM 2.0 route module. Registers 14 endpoints at `/scim/v2/`:
+  - `GET /scim/v2/ServiceProviderConfig` (unauthenticated)
+  - `GET /scim/v2/Schemas` (unauthenticated)
+  - `GET|POST /scim/v2/Users`, `GET|PUT|PATCH|DELETE /scim/v2/Users/:id`
+  - `GET|POST /scim/v2/Groups`, `GET|PUT|PATCH|DELETE /scim/v2/Groups/:id`
+  - Bearer token validated against `PFORGE_SCIM_TOKEN` env var or `.forge/secrets.json#scimBearerToken`. Returns HTTP 503 when no token is configured (SCIM disabled by default).
+- `pforge-mcp/tests/auth-scim.test.mjs` — 39 tests: ScimStore user/group CRUD, `findUserBy`, `eq` filter, pagination, PatchOp `add`/`replace`/`remove`, `HTTP 401/503` auth gates, `201` create with Location header, `409` duplicate userName, `400` missing required field, `404` unknown id, `204` delete, `ListResponse` shape.
+
+#### Changed
+- `pforge-mcp/server/rest-api.mjs` — Added `_registerScimRoutes` import and registered it in `_EXPRESS_ROUTE_REGISTRARS`.
+
+#### Notes
+- SCIM is **disabled by default**. Set `PFORGE_SCIM_TOKEN` or `scimBearerToken` in `.forge/secrets.json` to enable.
+- Discovery endpoints (`ServiceProviderConfig`, `Schemas`) are unauthenticated per the SCIM spec — IdPs probe them before presenting credentials.
+- Users and groups are stored in-memory and optionally persisted to `.forge/scim-users.json` / `.forge/scim-groups.json`. No external database required.
+- Compatible with Okta SCIM 2.0 provisioning, Microsoft Entra provisioning, and any SCIM 2.0-compliant IdP.
+- `ScimStore` is injected into routes for testability; production uses a new instance per server start with `.forge/` persistence.
+
+---
+
 ## [3.16.0] — 2026-05-20
 
 ### Phase-OKTA-OIDC — Okta OIDC authentication provider

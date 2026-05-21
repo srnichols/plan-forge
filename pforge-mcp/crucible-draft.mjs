@@ -20,6 +20,7 @@
 
 import { inferRepoCommands } from "./crucible-infer.mjs";
 import { getQuestionBank } from "./crucible-interview.mjs";
+import { getMode } from "./crucible/registry.mjs";
 
 const TBD_REGEX = /\{\{TBD:\s*([a-z0-9-]+)\s*\}\}/gi;
 
@@ -284,6 +285,15 @@ function appendInterviewLog(lines, answers) {
 
 export function renderDraft(smelt, options = {}) {
   if (!smelt) throw new Error("smelt required");
+
+  // Phase-59 S4: delegate to mode-specific renderer when available.
+  try {
+    const mode = getMode(smelt.lane);
+    if (mode && typeof mode.renderBody === "function") {
+      return mode.renderBody(smelt, options);
+    }
+  } catch { /* unregistered lane — fall through to standard renderer */ }
+
   const cwd = options && options.cwd;
   const ans = indexAnswers(smelt);
   const lane = smelt.lane || "feature";

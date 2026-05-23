@@ -3323,6 +3323,17 @@ function Invoke-Smith {
             } else {
                 Doctor-Warn ".vscode/mcp.json missing 'plan-forge' entry" "Re-run setup or add manually"
             }
+            # forge-master-chat is the second MCP server entry (Phase-29 chat
+            # bridge). It's only needed when pforge-master/server.mjs is
+            # present, so only warn if both conditions disagree.
+            $fmServerForMcpCheck = Join-Path $RepoRoot "pforge-master/server.mjs"
+            if (Test-Path $fmServerForMcpCheck) {
+                if ($mcpContent -match '"forge-master-chat"') {
+                    Doctor-Pass ".vscode/mcp.json has 'forge-master-chat' server entry"
+                } else {
+                    Doctor-Warn ".vscode/mcp.json missing 'forge-master-chat' entry" "Re-run setup or add manually — Forge-Master chat tab won't connect without it"
+                }
+            }
         } else {
             Doctor-Warn ".vscode/mcp.json not found" "Run setup to generate MCP config"
         }
@@ -3528,6 +3539,40 @@ function Invoke-Smith {
         if (Test-Path $forgeMasterLifecycle) { Doctor-Pass "pforge-master/src/lifecycle.mjs (status/logs backend)" }
         else { Doctor-Warn "pforge-master/src/lifecycle.mjs missing" "'pforge forge-master status|logs' will fail" }
 
+        # pforge-master declares @modelcontextprotocol/sdk + ws as RUNTIME deps
+        # (not just dev). setup.ps1/pforge.ps1 self-update both auto-run
+        # `npm install` here, but verify post-hoc — a stale install or skipped
+        # update will silently fail at server start.
+        $forgeMasterModules = Join-Path $forgeMasterDir "node_modules"
+        $forgeMasterPkg = Join-Path $forgeMasterDir "package.json"
+        if (Test-Path $forgeMasterPkg) {
+            if (Test-Path $forgeMasterModules) {
+                Doctor-Pass "pforge-master dependencies installed"
+            } else {
+                Doctor-Warn "pforge-master/node_modules missing" "Run: cd pforge-master && npm install"
+            }
+        }
+
+        Write-Host ""
+    }
+
+    # ═══════════════════════════════════════════════════════════════
+    # 4d-iii. PFORGE-SDK (shared helper library)
+    # ═══════════════════════════════════════════════════════════════
+    # pforge-sdk is a helper library shipped alongside pforge-mcp. It has
+    # NO runtime deps (intentional) — code in pforge-mcp imports it via
+    # relative paths like '../../pforge-sdk/src/...'. Missing files here
+    # crash opt-in features (lattice, notifications, hallmark, memory-upgrade,
+    # forge-master chat). Validation is presence-only.
+    $forgeSdkDir = Join-Path $RepoRoot "pforge-sdk"
+    $forgeSdkClient = Join-Path $forgeSdkDir "src/client.mjs"
+    if (Test-Path $forgeSdkDir) {
+        Write-Host "pforge-sdk:" -ForegroundColor Cyan
+        if (Test-Path $forgeSdkClient) {
+            Doctor-Pass "pforge-sdk/src/client.mjs"
+        } else {
+            Doctor-Warn "pforge-sdk/src/client.mjs missing" "Re-run 'pforge update' to restore — deep imports from pforge-mcp will fail"
+        }
         Write-Host ""
     }
 

@@ -384,6 +384,38 @@ else {
     $warn++
 }
 
+# Forge-Master Studio (Phase-29 chat bridge — imported by pforge-mcp via
+# relative paths and registered as second MCP server in .vscode/mcp.json)
+$fmServerPath = Join-Path $ProjectPath "pforge-master/server.mjs"
+$fmPackagePath = Join-Path $ProjectPath "pforge-master/package.json"
+if ((Test-Path $fmServerPath) -and (Test-Path $fmPackagePath)) {
+    $fmPkg = Get-Content $fmPackagePath -Raw | ConvertFrom-Json
+    $fmModules = Join-Path $ProjectPath "pforge-master/node_modules"
+    if (Test-Path $fmModules) {
+        Write-Host "  PASS  Forge-Master: pforge-master v$($fmPkg.version) (deps installed)" -ForegroundColor Green
+    } else {
+        Write-Host "  WARN  Forge-Master: pforge-master v$($fmPkg.version) — run 'npm install' in pforge-master/" -ForegroundColor Yellow
+        $warn++
+    }
+    $pass++
+}
+else {
+    Write-Host "  WARN  Forge-Master: pforge-master/ not found (optional — chat bridge unavailable)" -ForegroundColor Yellow
+    $warn++
+}
+
+# pforge-sdk (shared helper library — NO runtime deps, imported via
+# relative paths from pforge-mcp; missing files crash opt-in features)
+$sdkClientPath = Join-Path $ProjectPath "pforge-sdk/src/client.mjs"
+if (Test-Path $sdkClientPath) {
+    Write-Host "  PASS  pforge-sdk: src/client.mjs found" -ForegroundColor Green
+    $pass++
+}
+else {
+    Write-Host "  WARN  pforge-sdk: src/client.mjs not found (deep imports from pforge-mcp will fail)" -ForegroundColor Yellow
+    $warn++
+}
+
 # .vscode/mcp.json with plan-forge entry
 $vscodeMcpPath = Join-Path $ProjectPath ".vscode/mcp.json"
 if (Test-Path $vscodeMcpPath) {

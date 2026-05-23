@@ -7,7 +7,7 @@ tools: [read_file, forge_analyze, forge_diagnose, forge_diff]
 
 # Code Review Skill — Plan Forge
 
-> **Run `/clean-code-review` FIRST.** That skill is the mechanical/quantitative pass (LOC, complexity, params, duplication, ESLint, Boy Scout delta). This skill is the qualitative/judgment pass. Mechanical findings clear the noise so this review can focus on what actually requires judgment.
+> **Run `/clean-code-review` FIRST.** That skill is the mechanical/quantitative pass: 44 CHECKS across 11 languages (JS/TS, Python, .NET, Java/Kotlin, Go, Rust, PHP, Swift, Ruby, PowerShell, Bicep) — module size, function complexity, parameter counts, duplication (jscpd + literal/regex scanners), engineering hygiene (empty catches, magic numbers, dead imports, TODO/FIXME, hardcoded secrets, SQL-injection, command-injection patterns), shell-parity (PS/Bash twins), enums-drift (`pforge-mcp/enums.mjs`), cross-package dependency boundaries, and ESLint. This skill is the qualitative/judgment pass. Mechanical findings clear the noise so this review can focus on what actually requires judgment.
 
 ## Trigger
 "Review my code" / "Run code review" / "Check before merge" / "Code review --quorum"
@@ -168,7 +168,7 @@ After completing this skill, confirm:
 
 | Tool / Instruction | Relationship |
 |-------------------|-------------|
-| `/clean-code-review` | **Prerequisite.** Run mechanical pass first; this skill handles qualitative review only |
+| `/clean-code-review` | **Prerequisite — always run first.** Mechanical pass covering 44 CHECKS across 11 languages (incl. PowerShell + Bicep), DRY scanners (jscpd + literal/regex), engineering hygiene (empty catches, magic numbers, exec/SQL injection patterns, hardcoded secrets, dead imports), shell-parity for PS/Bash twins, enums-drift against `pforge-mcp/enums.mjs`, and cross-package dependency boundaries. Skipping it means complexity/dup/hygiene violations resurface as qualitative-review noise. |
 | `scripts/audit/surface-diff.mjs` | Generates the consumer-impact report this skill consumes in Step 2 |
 | `.github/instructions/architecture-principles.instructions.md` | Defines the architectural rules Step 3 checks |
 | `.github/instructions/security.instructions.md` | Defines the security rules Step 4 checks |

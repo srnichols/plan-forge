@@ -1151,17 +1151,21 @@ done
 echo ""
 cyan "Step 2: Shared instruction files"
 
+# Source paths:
+#   .github/instructions/                  — Plan-Forge-internal files that are universal & ship as-is to consumers
+#   presets/shared/.github/instructions/   — consumer-facing genericized versions (no Plan-Forge-internal references)
+#   templates/.github/instructions/        — pure templates
+# aci-design.instructions.md intentionally NOT shipped — it governs MCP tool authoring, which consumers don't typically do.
 SHARED_FILES=(
-    ".github/instructions/aci-design.instructions.md"
     ".github/instructions/ai-plan-hardening-runbook.instructions.md"
-    ".github/instructions/architecture-principles.instructions.md"
-    ".github/instructions/clean-code.instructions.md"
+    "presets/shared/.github/instructions/architecture-principles.instructions.md:.github/instructions/architecture-principles.instructions.md"
+    "presets/shared/.github/instructions/clean-code.instructions.md:.github/instructions/clean-code.instructions.md"
     ".github/instructions/context-fuel.instructions.md"
     ".github/instructions/git-workflow.instructions.md"
     ".github/instructions/security.instructions.md"
-    ".github/instructions/self-repair-reporting.instructions.md"
-    ".github/instructions/status-reporting.instructions.md"
-    ".github/instructions/testing.instructions.md"
+    "presets/shared/.github/instructions/self-repair-reporting.instructions.md:.github/instructions/self-repair-reporting.instructions.md"
+    "presets/shared/.github/instructions/status-reporting.instructions.md:.github/instructions/status-reporting.instructions.md"
+    "presets/shared/.github/instructions/testing.instructions.md:.github/instructions/testing.instructions.md"
     "templates/.github/instructions/project-principles.instructions.md:.github/instructions/project-principles.instructions.md"
 )
 

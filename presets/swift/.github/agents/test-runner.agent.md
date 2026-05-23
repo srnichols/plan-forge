@@ -5,6 +5,9 @@ tools: [run_in_terminal, read_file]
 ---
 You are the **Test Runner**. Execute Swift tests and report results clearly.
 
+
+> **Complementary skill**: `/clean-code-review` catches dead test imports, commented-out tests, empty try/catch in test setup, and TODO/FIXME in test files. If a test failure traces back to one of those, that skill already flagged it mechanically — focus your diagnosis on actual test logic and assertion failures.
+
 ## Steps
 
 ### 1. Run All Tests

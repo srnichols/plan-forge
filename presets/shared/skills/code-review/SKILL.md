@@ -9,6 +9,8 @@ tools: [read_file, forge_analyze, forge_diagnose, forge_diff]
 
 > **Run `/clean-code-review` first.** That skill is the mechanical/quantitative pass — module size, function complexity, parameter counts, duplication (jscpd + literal/regex scanners), engineering hygiene (empty catches, magic numbers, dead imports, TODO/FIXME markers, hardcoded secrets, SQL-injection patterns), shell-parity (PS/Bash twins), and ESLint/linter violations. This skill is the qualitative/judgment pass — architecture, security model, test design, patterns. Running them in order means mechanical findings clear the noise so the qualitative review can focus on what actually needs judgment.
 
+> **Stack-neutral fallback.** This file ships from `presets/shared/` and applies to any project. Stacks that have a preset (typescript, python, dotnet, java, go, rust, php, swift) ship a preset-specific override of this skill — the preset version always wins. If you're seeing this content, your project either chose a custom preset or uses a stack we don't yet have first-class support for.
+
 ## Trigger
 "Review my code" / "Run code review" / "Check before merge" / "Code review --quorum"
 
@@ -30,32 +32,35 @@ git diff --name-only HEAD~1
 
 ### 2. Architecture Review
 Run the architecture reviewer checklist:
-- Layer separation (Controller → Service → Repository)
-- No business logic in controllers
-- No data access in services
-- Dependencies flow inward only
-- Proper use of dependency injection
+- Layer separation respected (Controller → Service → Repository, or equivalent for your stack)
+- No business logic in controllers / routes / handlers
+- No data access in service / domain layers
+- Dependencies flow inward only (Dependency Rule)
+- Proper use of dependency injection or composition root
 
 ### 3. Security Review
 Run the security reviewer checklist:
-- SQL injection (parameterized queries only)
-- Authorization on all sensitive endpoints
-- No secrets in code
-- Input validation at boundaries
-- CORS properly configured
+- SQL injection (parameterized queries only — never string interpolation into SQL)
+- Authorization on all sensitive endpoints / commands
+- No secrets in code (use environment variables, secret manager, or gitignored config)
+- Input validation at system boundaries (HTTP handlers, CLI args, message consumers)
+- CORS / CSRF / clickjacking headers properly configured (web stacks)
+- No `eval` / dynamic code execution of untrusted input
+- Shell-out uses argument arrays, not constructed strings (command-injection)
 
 ### 4. Testing Review
 - New features have corresponding tests
 - Test names describe behavior, not implementation
 - No commented-out tests
-- Mocks are for external dependencies, not internal classes
-- Edge cases and error paths covered
+- Mocks are for external dependencies (network, DB, file system at edge), NOT for internal classes
+- Edge cases AND error paths covered, not just the happy path
+- Time-sensitive tests use fake timers or explicit tolerance (no bare `setTimeout` / `Date.now()` racing)
 
 ### 5. Code Quality
 - Naming follows project conventions
-- No `any`/`dynamic`/`object` when type is known
-- Error handling comprehensive (no empty catch blocks)
-- No TODO/FIXME without linked issue
+- Types are explicit where the language supports it (no untyped escape hatches when the type is known)
+- Error handling comprehensive (no empty catch blocks — `/clean-code-review` should have caught these mechanically)
+- No TODO/FIXME/HACK without a tracked issue
 - No dead code or unused imports
 
 ### 6. Patterns & Consistency
@@ -63,6 +68,7 @@ Run the security reviewer checklist:
 - Matches coding style of adjacent code
 - No reinvented patterns when existing ones apply
 - Configuration via DI/environment, not hardcoded
+- Project Principles (`docs/plans/PROJECT-PRINCIPLES.md` if it exists) respected — no forbidden patterns introduced
 
 ### 7. Report
 ```
@@ -88,7 +94,6 @@ Scope Drift: N files outside scope
 - Acknowledge what's done well, not just problems
 - Flag anything that needs human judgment rather than prescribing a fix
 
-
 ## Temper Guards
 
 | Shortcut | Why It Breaks |
@@ -97,6 +102,7 @@ Scope Drift: N files outside scope
 | "This change is too small to review" | Small changes accumulate. A "tiny" shortcut in one PR establishes a pattern that scales into a systemic problem. |
 | "I wrote it, I can review it" | Self-review has blind spots. The author's mental model fills gaps that a reviewer would catch. |
 | "No findings means the review is thorough" | A clean review with zero findings is suspicious — it usually means the review was superficial, not perfect. |
+| "Skip `/clean-code-review` since this is a small change" | The mechanical pass takes <60s. Skipping it means complexity, duplication, and hygiene violations slip through and resurface as production bugs or review noise. |
 
 ## Warning Signs
 
@@ -104,16 +110,19 @@ Scope Drift: N files outside scope
 - No findings reported at all — suspiciously clean review with zero suggestions
 - Findings lack specific rule citations — vague comments like "looks off" without referencing a convention
 - Review completed in under 2 minutes — insufficient time for meaningful review
-- `forge_analyze` score not included — consistency analysis was skipped
+- `forge_analyze` score not included — consistency analysis was skipped
+- `/clean-code-review` was skipped — mechanical findings will surface as qualitative noise
 
 ## Exit Proof
 
 After completing this skill, confirm:
+- [ ] `/clean-code-review` was run first (mechanical findings reviewed)
 - [ ] All 6 review sections completed (architecture, security, testing, code quality, patterns, consistency)
 - [ ] Findings table generated with severity levels (critical / warning / info)
-- [ ] `forge_analyze` score included (if plan exists)
-- [ ] `forge_diff` scope drift check completed (if plan exists)
+- [ ] `forge_analyze` score included (if plan exists)
+- [ ] `forge_diff` scope drift check completed (if plan exists)
 - [ ] Every finding cites a specific rule or convention
+
 ## Persistent Memory (if OpenBrain is configured)
 
 - **Before reviewing**: `search_thoughts("code review findings", project: "<YOUR PROJECT NAME>", created_by: "copilot-vscode", type: "bug")` — load prior review findings and recurring violation patterns to check proactively

@@ -7,6 +7,8 @@ tools: [read_file, forge_analyze, forge_diagnose, forge_diff]
 
 # Code Review Skill
 
+> **Run `/clean-code-review` first.** That skill is the mechanical/quantitative pass — module size, function complexity, parameter counts, duplication (jscpd + literal/regex scanners), engineering hygiene (empty catches, magic numbers, dead imports, TODO/FIXME markers, hardcoded secrets, SQL-injection patterns), shell-parity (PS/Bash twins), and ESLint/linter violations. This skill is the qualitative/judgment pass — architecture, security model, test design, patterns. Running them in order means mechanical findings clear the noise so the qualitative review can focus on what actually needs judgment.
+
 ## Trigger
 "Review my code" / "Run code review" / "Check before merge" / "Code review --quorum"
 

@@ -9,7 +9,7 @@
  * Config fields:
  *   integrationKey: "${env:PAGERDUTY_INTEGRATION_KEY}"
  */
-import { ERR_NOT_IMPLEMENTED } from "../../pforge-sdk/src/notifications/adapter-contract.mjs";
+import { ERR_NOT_IMPLEMENTED } from "../../pforge-sdk/notifications/adapter-contract.mjs";
 
 export const adapter = {
   name: "pagerduty",

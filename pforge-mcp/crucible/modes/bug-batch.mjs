@@ -171,6 +171,14 @@ export function renderBody(smelt, options = {}) {
   lines.push("");
   lines.push(ans.gates || tbd("validation-gates"));
   lines.push("");
+  // Advisory skill gates — appended after the user-declared gates so the
+  // executor has a clear "what to run alongside the gates" line. These do
+  // NOT replace the user's gates; they sit beside them.
+  lines.push("### Recommended skill gates (advisory)");
+  lines.push("");
+  lines.push("- **Pre-implementation**: `/code-review` scoped to the slice's files — surfaces collateral issues before patching");
+  lines.push("- **Post-implementation**: `/test-sweep` over the full project — catches regressions outside the bug's original scanner");
+  lines.push("");
 
   // ── Stop Conditions ──
   lines.push("## Stop Conditions");

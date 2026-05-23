@@ -51,6 +51,11 @@ Test command:  npm run test:parser
 npm run test:parser passes
 no new TypeError in plan-parser.mjs
 
+### Recommended skill gates (advisory)
+
+- **Pre-implementation**: `/code-review` scoped to the slice's files — surfaces collateral issues before patching
+- **Post-implementation**: `/test-sweep` over the full project — catches regressions outside the bug's original scanner
+
 ## Stop Conditions
 
 - Validation gate fails and root cause is not identified within 30 minutes

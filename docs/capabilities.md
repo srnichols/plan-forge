@@ -263,7 +263,7 @@ pforge fix-proposal <finding-id>      # Generate scoped fix plan for drift / inc
 pforge quorum-analyze                 # Assemble quorum prompt from LiveGuard data
 
 # Release + version CLI (v2.33+)
-pforge self-update [--force|--dry-run] # Install latest Plan Forge release
+pforge self-update [--force|--dry-run|--verify|--yes] # Install latest Plan Forge release (--verify chains check + smith)
 pforge version-bump <version>          # Update VERSION, package.json, docs
 pforge migrate-memory [--dry-run]      # Merge legacy *-history.json into .jsonl siblings
 

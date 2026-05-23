@@ -151,6 +151,7 @@ function Show-Help {
     Write-Host "  ext remove <name> Remove an installed extension"
     Write-Host "  update [source]   Update framework files from Plan Forge source (preserves customizations)"
     Write-Host "  self-update       Check for and install the latest Plan Forge release from GitHub"
+    Write-Host "                      Flags: --force (heal), --downgrade (with --force), --yes/-y, --dry-run, --verify (run check + smith after)"
     Write-Host "  analyze <plan>    Cross-artifact analysis — requirement traceability, test coverage, scope compliance"
     Write-Host "  run-plan <plan>   Execute a hardened plan — spawn CLI workers, validate at every boundary, track tokens"
     Write-Host "  version-bump <v>  Update version across all files (VERSION, package.json, docs, README)"
@@ -6071,11 +6072,13 @@ function Invoke-SelfUpdate {
         "Force-refresh the update check (bypass 24h cache)"
         "If a newer version exists, prompt for confirmation"
         "Delegate to 'pforge update --from-github --tag <latest>'"
+        "With --verify: run 'pforge check' + 'pforge smith' in subprocesses after a successful update"
     )
 
     $autoYes = $Arguments -contains '--yes' -or $Arguments -contains '-y'
     $dryRun = $Arguments -contains '--dry-run'
     $forceUpdate = $Arguments -contains '--force'
+    $verify = $Arguments -contains '--verify'
 
     # Read autoUpdate.enabled from .forge.json (default false)
     $autoUpdateEnabled = $false
@@ -6206,6 +6209,43 @@ console.log(JSON.stringify(r === null ? { checkFailed: true } : r));
     if ($forceUpdate) { $updateArgs += '--force' }
     $script:Arguments = $updateArgs
     Invoke-Update
+
+    # --verify: run 'pforge check' + 'pforge smith' in subprocesses so the
+    # just-updated wrapper code is exercised (the running session still has
+    # the OLD wrapper loaded in memory — see Issue #177 self-update note).
+    # Exits non-zero if either check or smith fail, so the verify request
+    # is honored end-to-end.
+    if ($verify) {
+        Write-Host ""
+        Write-Host "──────────────────────────────────────────────────────────────" -ForegroundColor DarkCyan
+        Write-Host "--verify: running 'pforge check' + 'pforge smith' (subprocess)" -ForegroundColor Cyan
+        Write-Host "──────────────────────────────────────────────────────────────" -ForegroundColor DarkCyan
+
+        $pforgeScript = Join-Path $RepoRoot "pforge.ps1"
+        if (-not (Test-Path $pforgeScript)) {
+            Write-Host "  ⚠ Cannot run --verify: pforge.ps1 not found at $pforgeScript" -ForegroundColor Yellow
+            exit 1
+        }
+
+        Write-Host ""
+        Write-Host "▶ pforge check" -ForegroundColor Cyan
+        & pwsh -NoProfile -ExecutionPolicy Bypass -File $pforgeScript check
+        $checkExit = $LASTEXITCODE
+
+        Write-Host ""
+        Write-Host "▶ pforge smith" -ForegroundColor Cyan
+        & pwsh -NoProfile -ExecutionPolicy Bypass -File $pforgeScript smith
+        $smithExit = $LASTEXITCODE
+
+        Write-Host ""
+        if ($checkExit -eq 0 -and $smithExit -eq 0) {
+            Write-Host "  ✅ --verify: check + smith both passed" -ForegroundColor Green
+        } else {
+            Write-Host "  ⚠ --verify: check exit=$checkExit, smith exit=$smithExit" -ForegroundColor Yellow
+            Write-Host "    The update completed, but verification reported issues. Review output above." -ForegroundColor Yellow
+            exit 1
+        }
+    }
 }
 
 # ─── Command: testbed-happypath ────────────────────────────────────────

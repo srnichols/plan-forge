@@ -126,6 +126,7 @@ COMMANDS:
   ext publish <p>   Validate and generate catalog entry for publishing
   update [source]   Update framework files from Plan Forge source (preserves customizations)
   self-update       Check for and install the latest Plan Forge release from GitHub
+                      Flags: --force (heal), --downgrade (with --force), --yes/-y, --dry-run, --verify (run check + smith after)
   analyze <plan>    Cross-artifact analysis — requirement traceability, test coverage, scope compliance
   run-plan <plan>   Execute a hardened plan — spawn CLI workers, validate at every boundary, track tokens
   org-rules export  Export org custom instructions from .github/instructions/ for GitHub org settings
@@ -2138,14 +2139,16 @@ cmd_self_update() {
     print_manual_steps "self-update" \
         "Force-refresh the update check (bypass 24h cache)" \
         "If a newer version exists, prompt for confirmation" \
-        "Delegate to 'pforge update --from-github --tag <latest>'"
+        "Delegate to 'pforge update --from-github --tag <latest>'" \
+        "With --verify: run 'pforge check' + 'pforge smith' in subprocesses after a successful update"
 
-    local auto_yes=false dry_run=false force_heal=false
+    local auto_yes=false dry_run=false force_heal=false verify=false
     for arg in "$@"; do
         case "$arg" in
             --yes|-y) auto_yes=true ;;
             --dry-run) dry_run=true ;;
             --force) force_heal=true ;;
+            --verify) verify=true ;;
         esac
     done
 
@@ -2278,6 +2281,39 @@ cmd_self_update() {
         cmd_update --from-github --tag "$latest_tag" --force
     else
         cmd_update --from-github --tag "$latest_tag"
+    fi
+
+    # --verify: run 'pforge check' + 'pforge smith' in subprocesses so the
+    # just-updated wrapper code is exercised. Exits non-zero if either fails.
+    if $verify; then
+        echo ""
+        echo "──────────────────────────────────────────────────────────────"
+        echo "--verify: running 'pforge check' + 'pforge smith' (subprocess)"
+        echo "──────────────────────────────────────────────────────────────"
+
+        local pforge_script="$REPO_ROOT/pforge.sh"
+        if [ ! -f "$pforge_script" ]; then
+            echo "  ⚠ Cannot run --verify: pforge.sh not found at $pforge_script" >&2
+            exit 1
+        fi
+
+        local check_exit=0 smith_exit=0
+        echo ""
+        echo "▶ pforge check"
+        bash "$pforge_script" check || check_exit=$?
+
+        echo ""
+        echo "▶ pforge smith"
+        bash "$pforge_script" smith || smith_exit=$?
+
+        echo ""
+        if [ "$check_exit" -eq 0 ] && [ "$smith_exit" -eq 0 ]; then
+            echo "  ✅ --verify: check + smith both passed"
+        else
+            echo "  ⚠ --verify: check exit=$check_exit, smith exit=$smith_exit" >&2
+            echo "    The update completed, but verification reported issues. Review output above." >&2
+            exit 1
+        fi
     fi
 }
 

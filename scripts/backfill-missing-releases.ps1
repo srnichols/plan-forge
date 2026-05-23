@@ -104,7 +104,9 @@ foreach ($entry in $plan) {
     try {
         $null = gh release view $tag --repo srnichols/plan-forge 2>$null
         if ($LASTEXITCODE -eq 0) { $releaseExists = $true }
-    } catch { }
+    } catch {
+        Write-Verbose "Could not query gh release view ${tag}: $($_.Exception.Message)"
+    }
     if ($releaseExists) {
         Write-Host "  Release $tag already exists on GitHub" -ForegroundColor Yellow
     } else {

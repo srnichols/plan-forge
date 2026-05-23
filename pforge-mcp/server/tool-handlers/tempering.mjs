@@ -167,7 +167,7 @@ async function _callToolHandler_029_forge_tempering_scan(request, args) {
     } catch (err) {
       return { content: [{ type: "text", text: `Tempering scan error: ${err.message}` }], isError: true };
     }
-  
+
 }
 
 async function _callToolHandler_030_forge_tempering_status(request, args) {
@@ -186,7 +186,7 @@ async function _callToolHandler_030_forge_tempering_status(request, args) {
     } catch (err) {
       return { content: [{ type: "text", text: `Tempering status error: ${err.message}` }], isError: true };
     }
-  
+
 }
 
 async function _callToolHandler_031_forge_tempering_run(request, args) {
@@ -227,7 +227,7 @@ async function _callToolHandler_031_forge_tempering_run(request, args) {
     } catch (err) {
       return { content: [{ type: "text", text: `Tempering run error: ${err.message}` }], isError: true };
     }
-  
+
 }
 
 async function _callToolHandler_032_forge_tempering_approve_baseline(request, args) {
@@ -259,7 +259,7 @@ async function _callToolHandler_032_forge_tempering_approve_baseline(request, ar
     } catch (err) {
       return { content: [{ type: "text", text: `Baseline approval error: ${err.message}` }], isError: true };
     }
-  
+
 }
 
 async function _callToolHandler_033_forge_tempering_drain(request, args) {
@@ -305,7 +305,7 @@ async function _callToolHandler_033_forge_tempering_drain(request, args) {
     } catch (err) {
       return { content: [{ type: "text", text: `Tempering drain error: ${err.message}` }], isError: true };
     }
-  
+
 }
 
 async function _callToolHandler_034_forge_triage_route(request, args) {
@@ -323,7 +323,7 @@ async function _callToolHandler_034_forge_triage_route(request, args) {
     } catch (err) {
       return { content: [{ type: "text", text: `Triage route error: ${err.message}` }], isError: true };
     }
-  
+
 }
 
 async function _callToolHandler_035_forge_classifier_issue(request, args) {
@@ -347,7 +347,55 @@ async function _callToolHandler_035_forge_classifier_issue(request, args) {
       emitToolTelemetry({ toolName: "forge_classifier_issue", inputs: args, result: { error: err.message }, durationMs: Date.now() - t0, status: "ERROR", cwd: findProjectRoot(PROJECT_DIR) });
       return { content: [{ type: "text", text: `Classifier issue error: ${err.message}` }], isError: true };
     }
-  
+
+}
+
+/**
+ * Build a short skill-routing advisory for the bug-fix path.
+ *
+ * Returns a one-line hint pointing the agent at the most useful skill for the
+ * next step in the bug lifecycle. Returns `null` when the bug shape doesn't
+ * warrant a skill suggestion (so callers can spread conditionally and keep
+ * the response payload sparse — ACI rule: no unsolicited fields).
+ *
+ * @param {object} input
+ * @param {"registered"|"in-fix"|"validated-pass"|"validated-fail"} input.stage
+ * @param {object} input.bug - the bug record (or a partial with scanner/classification)
+ * @returns {string|null}
+ */
+export function buildBugFixSkillAdvisory({ stage, bug }) {
+  if (!bug || typeof stage !== "string") return null;
+  const scanner = Array.isArray(bug.scanner) ? bug.scanner[0] : bug.scanner;
+  const cls = bug.classification;
+
+  // Non-real-bug classifications get their own concise routing.
+  if (cls === "flake") {
+    return stage === "validated-pass"
+      ? "Flake-class bug — keep /test-sweep on the suspect test for several runs to confirm stability"
+      : "Flake-class bug — /forge-troubleshoot before assuming a code-side fix is needed";
+  }
+  if (cls === "infra") {
+    return "Infra-class bug — the fix may live in CI / runner config rather than product code";
+  }
+
+  // real-bug (and unset classification — treat as real-bug for the advisory)
+  switch (stage) {
+    case "registered":
+      return "Run /code-review on the affected file(s) before transitioning to in-fix — surfaces collateral issues so they can be fixed together";
+    case "in-fix":
+      if (scanner === "mutation") return "Mutation-class bug — consider /forge-quench to clarify the logic before patching";
+      if (scanner === "visual-diff" || scanner === "ui-playwright") return "UI / visual bug — write the failing test first; /code-review the rendering path";
+      if (scanner === "load-stress" || scanner === "performance-budget") return "Performance-class bug — profile before patching; /code-review for hot-path allocations";
+      if (scanner === "contract") return "API contract bug — verify consumer-side impact before patching";
+      return "Run /code-review on the affected file(s) before implementing; write the failing test first (TDD)";
+    case "validated-pass":
+      return "Verdict 'fixed' covers only the original scanner. Run /test-sweep to catch regressions in unrelated tests";
+    case "validated-fail":
+      if (scanner === "mutation") return "Still failing — /forge-quench: the surviving mutant may indicate logic that needs clarification, not just a patch";
+      return "Still failing — re-read bug.evidence; consider /code-review on the patch to spot what was missed";
+    default:
+      return null;
+  }
 }
 
 async function _callToolHandler_036_forge_bug_register(request, args) {
@@ -376,12 +424,16 @@ async function _callToolHandler_036_forge_bug_register(request, args) {
         hub: activeHub,
         captureMemory,
       });
+      const skillAdvisory = result.ok
+        ? buildBugFixSkillAdvisory({ stage: "registered", bug: { scanner: args.scanner, classification: classification.classification } })
+        : null;
+      const response = skillAdvisory ? { ...result, skillAdvisory } : result;
       emitToolTelemetry({ toolName: "forge_bug_register", inputs: args, result: result, durationMs: Date.now() - t0, status: result.ok ? "OK" : "ERROR", cwd: cwd });
-      return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
+      return { content: [{ type: "text", text: JSON.stringify(response, null, 2) }] };
     } catch (err) {
       return { content: [{ type: "text", text: `Bug registration error: ${err.message}` }], isError: true };
     }
-  
+
 }
 
 async function _callToolHandler_037_forge_bug_list(request, args) {
@@ -403,7 +455,7 @@ async function _callToolHandler_037_forge_bug_list(request, args) {
     } catch (err) {
       return { content: [{ type: "text", text: `Bug list error: ${err.message}` }], isError: true };
     }
-  
+
 }
 
 async function _callToolHandler_038_forge_bug_update_status(request, args) {
@@ -432,12 +484,20 @@ async function _callToolHandler_038_forge_bug_update_status(request, args) {
           });
         } catch { /* best-effort */ }
       }
+      // Surface a skill-routing advisory when the agent is starting the fix
+      // (open → in-fix). Other transitions are mechanical and don't need a hint.
+      let skillAdvisory = null;
+      if (result.ok && newStatus === "in-fix") {
+        const bug = loadBug(cwd, args.bugId);
+        if (bug) skillAdvisory = buildBugFixSkillAdvisory({ stage: "in-fix", bug });
+      }
+      const response = skillAdvisory ? { ...result, skillAdvisory } : result;
       emitToolTelemetry({ toolName: "forge_bug_update_status", inputs: args, result: result, durationMs: Date.now() - t0, status: result.ok ? "OK" : "ERROR", cwd: cwd });
-      return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
+      return { content: [{ type: "text", text: JSON.stringify(response, null, 2) }] };
     } catch (err) {
       return { content: [{ type: "text", text: `Bug status update error: ${err.message}` }], isError: true };
     }
-  
+
 }
 
 function _getForgeBugValidationAdvisory(bug) {
@@ -533,11 +593,15 @@ function _039_forge_bug_validate_fix_loadContext(cwd, args) {
   };
 }
 
-function _039_forge_bug_validate_fix_finalizeAttempt({ cwd, bugId, advisory, scanners, attempt, results }) {
+function _039_forge_bug_validate_fix_finalizeAttempt({ cwd, bugId, bug, advisory, scanners, attempt, results }) {
   const allPassed = results.every((result) => result.passed);
   attempt.result = allPassed ? "pass" : "fail";
   attempt.details = results;
   appendValidationAttempt(cwd, bugId, attempt);
+  const skillAdvisory = buildBugFixSkillAdvisory({
+    stage: allPassed ? "validated-pass" : "validated-fail",
+    bug: bug || {},
+  });
   return {
     allPassed,
     result: {
@@ -547,6 +611,7 @@ function _039_forge_bug_validate_fix_finalizeAttempt({ cwd, bugId, advisory, sca
       attempt,
       validationDetails: results,
       ...(advisory ? { advisory } : {}),
+      ...(skillAdvisory ? { skillAdvisory } : {}),
     },
   };
 }
@@ -565,7 +630,7 @@ async function _callToolHandler_039_forge_bug_validate_fix(request, args) {
     if (scannerUnavailable) {
       return { content: [{ type: "text", text: JSON.stringify({ error: ERROR_CODES.SCANNER_UNAVAILABLE.code, scanner: scannerUnavailable.scanner, message: scannerUnavailable.message }) }], isError: true };
     }
-    const finalized = _039_forge_bug_validate_fix_finalizeAttempt({ cwd: cwd, bugId: args.bugId, advisory: advisory, scanners: scanners, attempt: attempt, results: results });
+    const finalized = _039_forge_bug_validate_fix_finalizeAttempt({ cwd: cwd, bugId: args.bugId, bug: bug, advisory: advisory, scanners: scanners, attempt: attempt, results: results });
     if (finalized.allPassed) await _finalizeBugValidationPass({ cwd: cwd, bugId: args.bugId, bug: bug, scanners: scanners, attempt: attempt });
     emitToolTelemetry({ toolName: "forge_bug_validate_fix", inputs: args, result: finalized.result, durationMs: Date.now() - t0, status: "OK", cwd: cwd });
     return { content: [{ type: "text", text: JSON.stringify(finalized.result, null, 2) }], isError: false };

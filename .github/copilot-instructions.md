@@ -1,7 +1,7 @@
 # Instructions for Copilot
 
-> **Project**: <YOUR PROJECT NAME>  
-> **Stack**: <YOUR TECH STACK>  
+> **Project**: <YOUR PROJECT NAME>
+> **Stack**: <YOUR TECH STACK>
 > **Last Updated**: <DATE>
 
 ---
@@ -210,6 +210,7 @@ Skills are multi-step procedures invoked by typing `/` in chat. They also auto-l
 | `/health-check` | Forge diagnostic: forge_smith → forge_validate → forge_sweep |
 | `/forge-execute` | Guided plan execution: list plans → estimate cost → execute → report |
 | `/clean-code-review` | Audit module size, function complexity, parameter lists, TODO/FIXME markers, ESLint violations |
+| `/bug-fix` | Guided bug-fix workflow: load bug → `/code-review` → TDD test → fix → `forge_bug_validate_fix` → `/test-sweep` → close |
 
 ### Agent Definitions (`.github/agents/`)
 

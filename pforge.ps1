@@ -85,6 +85,8 @@ function Update-PlanForgeGitignore([string]$RepoRoot) {
         "pforge-mcp/node_modules/",
         "pforge-mcp/cli-schema.json",
         "pforge-mcp/.vitest-results.json",
+        "pforge-master/node_modules/",
+        "pforge-sdk/node_modules/",
         $endMarker
     ) -join $nl
 
@@ -1185,7 +1187,7 @@ function Invoke-Sweep {
             ForEach-Object {
                 $findings = Select-String -Path $_.FullName -Pattern $patternRegex -CaseSensitive:$false
                 $relPath = $_.FullName.Substring($RepoRoot.Length + 1)
-                $isFramework = $relPath -match '^(pforge-mcp[/\\]|pforge\.(ps1|sh)$|setup\.(ps1|sh)$|validate-setup\.(ps1|sh)$)'
+                $isFramework = $relPath -match '^(pforge-(mcp|sdk|master)[/\\]|pforge\.(ps1|sh)$|setup\.(ps1|sh)$|validate-setup\.(ps1|sh)$)'
                 foreach ($m in $findings) {
                     $relDisplay = $m.Path.Substring($RepoRoot.Length + 1)
                     if ($isFramework) {
@@ -1798,6 +1800,34 @@ function Invoke-Update {
         }
     }
 
+    # ─── pforge-sdk (helper library) + pforge-master (Studio MCP) ──
+    # Same auto-discover loop, parameterized by package directory. Consumer
+    # installs that skipped these crashed at runtime for opt-in features
+    # (lattice, notifications, hallmark, forge-master-chat). Issue: installer
+    # coverage gap — see fix(installer) commit.
+    foreach ($pkg in @('pforge-sdk', 'pforge-master')) {
+        $srcPkg = Join-Path $sourcePath $pkg
+        $dstPkg = Join-Path $RepoRoot $pkg
+        if (-not (Test-Path $srcPkg)) { continue }
+        Get-ChildItem -Path $srcPkg -File -Recurse |
+            Where-Object { $_.FullName -notmatch '(node_modules|\.forge|coverage)' } |
+            ForEach-Object {
+                $relPath = $_.FullName.Substring($srcPkg.Length + 1)
+                $relName = "$pkg/$($relPath.Replace('\', '/'))"
+                $dstFile = Join-Path $dstPkg $relPath
+                if ($neverUpdate -contains $relName) { return }
+                if (Test-Path $dstFile) {
+                    $srcHash = (Get-FileHash $_.FullName -Algorithm SHA256).Hash
+                    $dstHash = (Get-FileHash $dstFile -Algorithm SHA256).Hash
+                    if ($srcHash -ne $dstHash) {
+                        $updates += @{ Src = $_.FullName; Dst = $dstFile; Name = $relName }
+                    }
+                } else {
+                    $newFiles += @{ Src = $_.FullName; Dst = $dstFile; Name = $relName }
+                }
+            }
+    }
+
     # ─── CLI scripts (pforge.ps1, pforge.sh) ─────────────────────
     foreach ($cliFile in @("pforge.ps1", "pforge.sh")) {
         $srcFile = Join-Path $sourcePath $cliFile
@@ -1855,6 +1885,29 @@ function Invoke-Update {
                 $relPath = $_.FullName.Substring($srcMcp.Length + 1)
                 $relName = "pforge-mcp/$($relPath.Replace('\', '/'))"
                 $dstFile = Join-Path $dstMcp $relPath
+                if (Test-Path $dstFile) {
+                    $srcHash = (Get-FileHash $_.FullName -Algorithm SHA256).Hash
+                    $dstHash = (Get-FileHash $dstFile -Algorithm SHA256).Hash
+                    if ($srcHash -ne $dstHash) {
+                        $updates += @{ Src = $_.FullName; Dst = $dstFile; Name = $relName }
+                    }
+                } else {
+                    $newFiles += @{ Src = $_.FullName; Dst = $dstFile; Name = $relName }
+                }
+            }
+    }
+
+    # ─── pforge-sdk + pforge-master (same scan, parameterized) ──
+    foreach ($pkg in @('pforge-sdk', 'pforge-master')) {
+        $srcPkg = Join-Path $sourcePath $pkg
+        $dstPkg = Join-Path $RepoRoot $pkg
+        if (-not (Test-Path $srcPkg)) { continue }
+        Get-ChildItem -Path $srcPkg -File -Recurse |
+            Where-Object { $_.FullName -notmatch '(node_modules|\.forge|coverage)' } |
+            ForEach-Object {
+                $relPath = $_.FullName.Substring($srcPkg.Length + 1)
+                $relName = "$pkg/$($relPath.Replace('\', '/'))"
+                $dstFile = Join-Path $dstPkg $relPath
                 if (Test-Path $dstFile) {
                     $srcHash = (Get-FileHash $_.FullName -Algorithm SHA256).Hash
                     $dstHash = (Get-FileHash $dstFile -Algorithm SHA256).Hash
@@ -2078,6 +2131,24 @@ writeFreshCache(process.argv[1], process.argv[2]);
             Write-Host "  Stop the current server, then: node pforge-mcp/server.mjs" -ForegroundColor Yellow
         } catch {
             # Not running — no action needed
+        }
+    }
+
+    # Auto-install pforge-master dependencies if its files were updated.
+    # pforge-master declares @modelcontextprotocol/sdk + ws as runtime deps,
+    # so missing node_modules breaks the forge-master-chat MCP stdio server.
+    $fmUpdated = @(@($updates) + @($newFiles) | Where-Object { $_.Name -like "pforge-master/*" })
+    if ($fmUpdated) {
+        $fmDir = Join-Path $RepoRoot "pforge-master"
+        if (Test-Path (Join-Path $fmDir "package.json")) {
+            Write-Host ""
+            Write-Host "Installing pforge-master dependencies..." -ForegroundColor DarkCyan
+            try {
+                $null = & npm install --prefix $fmDir 2>&1
+                Write-Host "  ✅ npm install complete" -ForegroundColor Green
+            } catch {
+                Write-Host "  ⚠️  npm install failed — run manually: cd pforge-master && npm install" -ForegroundColor Yellow
+            }
         }
     }
 
@@ -2486,7 +2557,7 @@ function Invoke-Drift {
     $filesScanned = 0
 
     $excludeFilter = "($($excludeDirs -join '|'))"
-    $frameworkFilter = '^(pforge-mcp[/\\]|pforge\.(ps1|sh)$|setup\.(ps1|sh)$|validate-setup\.(ps1|sh)$)'
+    $frameworkFilter = '^(pforge-(mcp|sdk|master)[/\\]|pforge\.(ps1|sh)$|setup\.(ps1|sh)$|validate-setup\.(ps1|sh)$)'
 
     foreach ($ext in $extensions) {
         $files = Get-ChildItem -Path $RepoRoot -Filter $ext -Recurse -File -ErrorAction SilentlyContinue |

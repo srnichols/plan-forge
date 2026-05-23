@@ -84,6 +84,8 @@
 5. Run .\pforge.ps1 smith to inspect the forge and confirm all checks pass.
 
 6. If pforge-mcp/server.mjs was installed, run: cd pforge-mcp &amp;&amp; npm install (activates the forge MCP tools).
+   - As of v3.19.0, setup.ps1 / setup.sh also ship pforge-sdk/ (zero-dependency programmatic clients) and pforge-master/ (Forge-Master Studio reasoning loop) into the target repo.
+   - Both directories are added to a managed block in .gitignore (Plan Forge marker, v3.15.1+) so they don't bloat the consumer's commits but remain available to pforge update.
 
 7. If specs/ or memory/constitution.md exist (Spec Kit project), note that Step 0 will auto-detect and offer to import them.
 

@@ -220,6 +220,33 @@ Slice 6, Documentation + cleanup                [30 min]</code></pre>
 
         <p>Without stop conditions, the AI may try to "fix" a build failure by removing code, or skip a failing test by commenting it out. Stop conditions force it to report the problem instead of hiding it.</p>
 
+        <!-- ─── Auto status rewrite ─── -->
+        <h2 id="auto-status">Plan Status Auto-Rewrite <span class="text-amber-400 text-base font-normal">v3.x+</span></h2>
+        <p>A hardened plan carries a <code>status: HARDENED</code> frontmatter field plus a matching <code>&gt; <strong>Status:</strong> HARDENED</code> quote-block line under the title. When <code>pforge run-plan</code> finishes a plan successfully, the orchestrator's <code>_finalizeRunPlan</code> step calls <code>rewritePlanStatusOnSuccess</code> from <a href="https://github.com/srnichols/plan-forge/blob/master/pforge-mcp/orchestrator/run-plan/plan-status-update.mjs" rel="noopener"><code>pforge-mcp/orchestrator/run-plan/plan-status-update.mjs</code></a> &mdash; atomically rewriting both surfaces to <code>COMPLETE</code> in a single file write.</p>
+
+        <p>What this means for plan authors:</p>
+        <ul>
+          <li>Don't hand-edit <code>status: COMPLETE</code> at the end of a successful run &mdash; the orchestrator does it. Hand-edits between successful slice runs and the final finalize step will be overwritten.</li>
+          <li>A failed or aborted run leaves the status at <code>HARDENED</code> so the next <code>pforge run-plan</code> resumes correctly. The auto-rewrite only fires on the success path.</li>
+          <li>If you want to mark a plan complete by hand (e.g. you finished the last slice outside of <code>pforge run-plan</code>), update both surfaces: the frontmatter field <em>and</em> the quote-block line. The auditor at <code>scripts/audit/plan-status-audit.mjs</code> flags any plan where the two are out of sync.</li>
+        </ul>
+
+        <h3 id="retro-slice">Retro-slice template</h3>
+        <p>The Step-2 plan hardener (<a href="https://github.com/srnichols/plan-forge/blob/master/.github/prompts/step2-harden-plan.prompt.md" rel="noopener"><code>step2-harden-plan.prompt.md</code></a>) requires every hardened plan to end with a <strong>retro slice</strong> &mdash; a final, no-op-by-default slice whose validation gates are the post-hoc record of what was actually shipped:</p>
+
+        <pre><code>### Slice N (final): Retro
+
+**Goal**: Capture the run's outcome in the plan itself.
+
+**Files in scope**: docs/plans/Phase-NN-PLAN.md
+
+**Validation Gates**:
+- All prior slices show ✅ in the "Slice status" table above
+- CHANGELOG.md has an entry for this phase
+- forge_diff_classify on the slice's commit range is "non-breaking" or has a documented rationale</code></pre>
+
+        <p>The retro slice is not optional. The plan hardener will inject one if missing. Its job is to give the auto-status-rewrite a stable terminal slice to land on, and to give the reviewer-gate persona a single section to read when assessing whether the plan delivered what it promised.</p>
+
         <!-- ─── Context Files ─── -->
         <h2 id="context">Context Files</h2>
         <p>Each slice can list which instruction files are relevant. Don't load all 18, load only what's needed:</p>

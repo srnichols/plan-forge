@@ -212,6 +212,33 @@
         <strong>Forge-Master chapter</strong>: The <a href="forge-master.html">Forge-Master chapter</a> covers the three-stage intent classifier (keyword &rarr; embedding cache &rarr; router LLM), quorum advisory mode for high-stakes decisions, and the <code>/api/forge-master/cache-stats</code> liveliness endpoint.
       </div>
 
+      <!-- Anvil (v3.11.0+) -->
+      <h3 id="tools-anvil">Anvil &mdash; Worker-Output Cache <span class="text-cyan-400 text-sm font-normal">(5 tools)</span></h3>
+      <p>The Anvil cache deduplicates worker-LLM output across slice retries and quorum dispatches. Identical prompt + model + temperature hits the cache instead of re-spending tokens. Includes a dead-letter queue (DLQ) for prompts that failed to cache. Published on the MCP surface in v3.11.0; the underlying cache was active in earlier versions but the read/maintenance tools were not exposed.</p>
+
+      <table class="manual-table">
+        <thead><tr><th>Tool</th><th>Description</th></tr></thead>
+        <tbody>
+          <tr><td><code>forge_anvil_stat</code></td><td>Cache statistics: hit rate, entry count, byte size, oldest/newest entries, hit/miss timeline</td></tr>
+          <tr><td><code>forge_anvil_clear</code></td><td>Evict entries by age, model, or key prefix. Returns a <code>dryRun</code> preview by default</td></tr>
+          <tr><td><code>forge_anvil_rebuild</code></td><td>Re-index the cache after a manual edit or corruption. Validates every entry and quarantines unreadable ones to the DLQ</td></tr>
+          <tr><td><code>forge_anvil_dlq_list</code></td><td>List dead-letter-queue entries (prompts that failed to cache). Returns <code>{ entries, total, message }</code></td></tr>
+          <tr><td><code>forge_anvil_dlq_drain</code></td><td>Replay DLQ entries against the live cache; drops entries that succeed and retains failures</td></tr>
+        </tbody>
+      </table>
+
+      <!-- Hallmark (v3.11.0+) -->
+      <h3 id="tools-hallmark">Hallmark &mdash; Memory Provenance <span class="text-cyan-400 text-sm font-normal">(2 tools)</span></h3>
+      <p>Hallmark stamps every memory record (L1 hub event, L2 file write, L3 OpenBrain row) with a content hash + signing key + timestamp so a downstream consumer can prove the record came from this Plan Forge install and hasn't been tampered with. See <a href="memory-architecture.html">the Memory Architecture chapter</a> for the stamping flow.</p>
+
+      <table class="manual-table">
+        <thead><tr><th>Tool</th><th>Description</th></tr></thead>
+        <tbody>
+          <tr><td><code>forge_hallmark_show</code></td><td>Inspect the Hallmark stamp on a record (hash, signing key id, timestamp, source tier)</td></tr>
+          <tr><td><code>forge_hallmark_verify</code></td><td>Recompute the content hash and verify the signature. Returns <code>{ ok, mismatchReason }</code></td></tr>
+        </tbody>
+      </table>
+
       <!-- ─── REST API ─── -->
       <h2 id="rest-api">REST API</h2>
       <p>The REST surface is documented in full in <a href="rest-api-reference.html"><strong>Appendix W &mdash; REST API Reference</strong></a>: every endpoint, request/response shape, status codes, authentication model, and worked examples. The summary below points at the most-used subsystems, click through to Appendix W for the per-endpoint detail.</p>

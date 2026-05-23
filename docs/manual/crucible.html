@@ -80,6 +80,59 @@
           </div>
         </div>
 
+        <h2 id="modes">Multi-Mode Substrate <span class="text-amber-400 text-base font-normal">Phase 59+</span></h2>
+
+        <p>Lanes scale the <em>interview depth</em> for greenfield work. <strong>Modes</strong> scale the <em>plan shape</em> for non-greenfield work &mdash; specifically, batches of related bug fixes that don't deserve a full feature-style phase. The substrate is mode-aware end to end: each mode declares its own <code>criticalFields</code>, its own scope-contract template, and its own retro-slice convention.</p>
+
+        <table class="manual-table my-4">
+          <thead><tr><th>Mode</th><th>When to use</th><th>Critical fields (per-mode)</th></tr></thead>
+          <tbody>
+            <tr><td><code>feature</code> (default)</td><td>Anything that adds capability. Same as the v3.x feature lane.</td><td>build, test, scope, validation-gates, forbidden-actions, rollback</td></tr>
+            <tr><td><code>bug-batch</code></td><td>A batch of bug fixes from <code>forge_bug_list</code> grouped by root cause. Each slice = one bug; each slice's scope is the bug's referenced files only.</td><td>build, test, root-cause-hypothesis, scope (per-slice), validation-gates, forbidden-actions</td></tr>
+          </tbody>
+        </table>
+
+        <p>Per-mode <code>criticalFields</code> replaced the single global <code>CRITICAL_FIELDS</code> set. The set selected at <code>forge_crucible_submit</code> time is locked in for the smelt's lifetime; finalize gates on the mode's set, not on a global one.</p>
+
+        <h3 id="modes-bug-batch">Mode: <code>bug-batch</code></h3>
+
+        <p>The <code>bug-batch</code> mode is purpose-built for the tempering loop. Workflow:</p>
+
+        <ol>
+          <li>Run <code>forge_bug_list</code> to see registered bugs grouped by classifier label</li>
+          <li>Call <code>forge_crucible_submit({ rawIdea: "Fix the 4 RBAC bugs from /security audit", mode: "bug-batch", bugIds: ["bug-7af3", "bug-9c01", ...] })</code></li>
+          <li>The interview asks for a <strong>Root Cause Hypothesis</strong> (free-form text, captured in plan frontmatter as <code>rootCauseHypothesis</code>). Each bug becomes one synthesized slice with header <code>### Slice N: Fix bug-XXXX [scope: path/to/file.mjs]</code></li>
+          <li>Per-slice <code>Scope Contract</code> sub-sections are injected from each bug's <code>filePaths</code>: <code>### In Scope</code> &harr; the bug's files, <code>### Out of Scope</code> &harr; everything else in the repo, <code>### Forbidden</code> &harr; cross-module edits</li>
+          <li>Finalize writes a multi-slice phase plan that <code>pforge run-plan</code> consumes normally. The executor uses the <code>[scope: ...]</code> clause to constrain agent edits per slice</li>
+        </ol>
+
+        <p>The <code>rootCauseHypothesis</code> frontmatter field is read by <code>forge_tempering_drain</code> &mdash; if the drain loop converges on a different root cause, the divergence surfaces as a tempering finding rather than silently re-classifying the bugs.</p>
+
+        <h3 id="modes-scope-contract">Scope Contract template</h3>
+
+        <p>Every mode now produces plan slices with an explicit <strong>Scope Contract</strong> sub-block under the slice's <code>## Scope Contract</code> heading:</p>
+
+        <pre><code>## Scope Contract
+
+### In Scope
+- pforge-mcp/auth/rbac.mjs
+- pforge-mcp/auth/scim-rbac-bridge.mjs
+
+### Out of Scope
+- everything else under pforge-mcp/ that doesn't import auth/
+
+### Forbidden
+- pforge-mcp/server.mjs (no controller-layer edits this slice)
+- docs/manual/** (docs land in a separate slice)</code></pre>
+
+        <p>The <code>PreToolUse</code> hook reads these sub-blocks to block file edits to <code>Forbidden</code> paths during agent sessions. <code>In Scope</code> + <code>Out of Scope</code> are advisory in the hook but enforced by the reviewer-gate persona.</p>
+
+        <h3 id="modes-legacy-tbd">Legacy TBD placeholders <span class="text-rose-400 text-xs font-normal">deprecated</span></h3>
+
+        <p>Pre-Phase-59 plans used <code>TBD: ...</code> placeholders in critical fields, with finalize-time prompting. That behavior is now <strong>opt-in</strong> via <code>crucible.legacy.tbdPlaceholders: true</code> in <code>.forge/crucible/config.json</code>, and the knob is scheduled for removal in the major version after next. New plans should use the per-mode <code>criticalFields</code> gate, which fails-fast on unresolved fields rather than papering over them.</p>
+
+        <p>See <a href="../crucible-modes.html">docs/crucible-modes.md</a> for the full mode catalog, synthesizer source, and the bug-batch worked example.</p>
+
         <h2 id="interview">The Interview Loop</h2>
         <p>Crucible streams one question at a time. You answer, it writes the answer to the smelt's JSONL record, then it computes the next question. Six MCP tools drive the loop:</p>
         <pre><code>forge_crucible_submit  { rawIdea, lane? source? }      → { id, firstQuestion }
@@ -95,8 +148,8 @@ forge_crucible_abandon { id, reason? }                   → { ok }</code></pre>
 
         <p>Finalize writes <code>docs/plans/&lt;phaseName&gt;.md</code> with the answer-derived draft and emits <code>crucible-handoff-to-hardener</code> on the hub so the dashboard (and downstream agents) can pick up the plan for Step 2.</p>
 
-        <h2 id="critical-fields">CRITICAL_FIELDS Gate <span class="text-amber-400 text-base font-normal">v2.82.1+</span></h2>
-        <p>Crucible refuses to finalize a smelt with placeholder TBDs. The gate checks six fields; <strong>any unresolved field is a hard block</strong>:</p>
+        <h2 id="critical-fields">CRITICAL_FIELDS Gate <span class="text-amber-400 text-base font-normal">v2.82.1+ &middot; per-mode Phase 59+</span></h2>
+        <p>Crucible refuses to finalize a smelt with placeholder TBDs. The gate checks the <strong>mode's</strong> required fields (see the <a href="#modes">Multi-Mode Substrate</a> table); <strong>any unresolved field is a hard block</strong>. The table below shows the default <code>feature</code> mode &mdash; <code>bug-batch</code> swaps <code>rollback</code> for <code>root-cause-hypothesis</code>:</p>
 
         <figure class="manual-figure" id="fig-5-1"><img src="assets/diagrams/crucible-critical-fields-gate.svg" alt="CRITICAL_FIELDS gate flow: forge_crucible_finalize call enters the gate which checks six required fields (build-command, test-command, scope, validation-gates, forbidden-actions, rollback). If any field is missing, returns 409 with CRITICAL_FIELDS_MISSING and criticalGaps[]. If plan file already exists, returns 409 with PLAN_ALREADY_EXISTS. Otherwise writes Phase-NN.md and emits crucible-handoff event." class="diagram-img diagram-img-md my-4" /><figcaption class="manual-figcaption"><!--fignum--><span class="manual-fignum">Figure 5-1.</span><!--/fignum--> <!--cap:auto-->CRITICAL_FIELDS gate flow<!--/cap--></figcaption></figure>
 

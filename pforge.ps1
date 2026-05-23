@@ -2738,7 +2738,14 @@ function Invoke-Smith {
 
                 # Capability marker probe (workers only)
                 if (-not $isRuntime -and $spec.probe.capabilityMarkers -and $spec.probe.capabilityMarkers.Count -gt 0) {
-                    $helpArgs = @($spec.probe.helpArgs)
+                    # Filter out $null and empty strings — when JSON omits the
+                    # helpArgs property, $spec.probe.helpArgs is $null and bare
+                    # @($null) has Count == 1 (PowerShell array-of-one-null),
+                    # which would invoke gh with no args (general help banner)
+                    # and silently break the Issue #210 fallback below. The
+                    # Where-Object filter collapses null/empty entries so the
+                    # Count test correctly detects "no helpArgs declared".
+                    $helpArgs = @($spec.probe.helpArgs | Where-Object { $_ })
                     # Issue #210: when helpArgs is omitted, reuse the versionArgs output so
                     # auth-style probes (e.g. `gh auth status`) work without an extra exec.
                     $helpOut = if ($helpArgs.Count -gt 0) {

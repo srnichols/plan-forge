@@ -131,6 +131,8 @@ pf_update_gitignore() {
 pforge-mcp/node_modules/
 pforge-mcp/cli-schema.json
 pforge-mcp/.vitest-results.json
+pforge-master/node_modules/
+pforge-sdk/node_modules/
 ${end}"
 
     if [[ -f "$gitignore" ]]; then
@@ -1487,6 +1489,58 @@ guide_src="$TEMPLATE_ROOT/docs/COPILOT-VSCODE-GUIDE.md"
 guide_dst="$PROJECT_PATH/docs/COPILOT-VSCODE-GUIDE.md"
 if [[ -f "$guide_src" ]]; then
     copy_with_create "$guide_src" "$guide_dst" || true
+fi
+
+# ─── Step 7b-pre-1: Copy pforge-sdk (helper library used by pforge-mcp) ───
+# pforge-sdk is NOT an npm workspace member but IS imported by pforge-mcp
+# via relative paths. Consumer installs that skipped this crashed at runtime
+# when opt-in features (lattice, notifications, hallmark, memory-upgrade,
+# forge-master-chat) tried to resolve those paths. SDK has no runtime deps.
+SDK_SRC_DIR="$TEMPLATE_ROOT/pforge-sdk"
+if [[ -d "$SDK_SRC_DIR" ]]; then
+    echo ""
+    cyan "Step 7b-pre-1: pforge-sdk (helper library)"
+    SDK_DST_DIR="$PROJECT_PATH/pforge-sdk"
+    mkdir -p "$SDK_DST_DIR"
+    sdk_count=0
+    while IFS= read -r -d '' f; do
+        rel_path="${f#"$SDK_SRC_DIR/"}"
+        dst_file="$SDK_DST_DIR/$rel_path"
+        mkdir -p "$(dirname "$dst_file")"
+        cp "$f" "$dst_file"
+        sdk_count=$((sdk_count + 1))
+    done < <(find "$SDK_SRC_DIR" -type f ! -path '*/node_modules/*' ! -path '*/.forge/*' ! -path '*/coverage/*' -print0 2>/dev/null)
+    green "  COPY  pforge-sdk/ ($sdk_count files: hallmark, lattice, chunker, notifications, readers)"
+fi
+
+# ─── Step 7b-pre-2: Copy pforge-master (Forge-Master Studio MCP server) ───
+# Must be copied BEFORE Step 7b so the .vscode/mcp.json merge below detects
+# pforge-master/server.mjs and registers the `forge-master-chat` entry.
+FM_SRC_DIR="$TEMPLATE_ROOT/pforge-master"
+if [[ -d "$FM_SRC_DIR" ]]; then
+    echo ""
+    cyan "Step 7b-pre-2: pforge-master (Forge-Master Studio)"
+    FM_DST_DIR="$PROJECT_PATH/pforge-master"
+    mkdir -p "$FM_DST_DIR"
+    fm_count=0
+    while IFS= read -r -d '' f; do
+        rel_path="${f#"$FM_SRC_DIR/"}"
+        dst_file="$FM_DST_DIR/$rel_path"
+        mkdir -p "$(dirname "$dst_file")"
+        cp "$f" "$dst_file"
+        fm_count=$((fm_count + 1))
+    done < <(find "$FM_SRC_DIR" -type f ! -path '*/node_modules/*' ! -path '*/.forge/*' ! -path '*/coverage/*' -print0 2>/dev/null)
+    green "  COPY  pforge-master/ ($fm_count files: server, observer-loop, planner, providers, ui)"
+
+    # Auto-install pforge-master dependencies (@modelcontextprotocol/sdk + ws)
+    if [[ -f "$FM_DST_DIR/package.json" ]]; then
+        echo "  Installing pforge-master dependencies..."
+        if (cd "$FM_DST_DIR" && npm install --silent 2>/dev/null); then
+            green "  ✅ npm install complete"
+        else
+            yellow "  ⚠️  npm install failed — run manually: cd pforge-master && npm install"
+        fi
+    fi
 fi
 
 # ─── Step 7b: Copy MCP Server + Generate Config ───────────────────────

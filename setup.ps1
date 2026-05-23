@@ -131,6 +131,8 @@ function Update-PlanForgeGitignore([string]$RepoRoot) {
         "pforge-mcp/node_modules/",
         "pforge-mcp/cli-schema.json",
         "pforge-mcp/.vitest-results.json",
+        "pforge-master/node_modules/",
+        "pforge-sdk/node_modules/",
         $endMarker
     ) -join $nl
 
@@ -1618,6 +1620,72 @@ if (Test-Path $guideSrc) {
     Copy-WithCreate $guideSrc $guideDst $Force.IsPresent
 }
 
+# ─── Step 7b-pre-1: Copy pforge-sdk (helper library used by pforge-mcp) ───
+# pforge-sdk is NOT an npm workspace member but IS imported by pforge-mcp
+# via relative paths (`../../pforge-sdk/src/...`). Consumer installs that
+# skipped this copy crashed at runtime when opt-in features (lattice,
+# notifications, hallmark, memory-upgrade, forge-master-chat) tried to
+# resolve those paths. Must ship together with pforge-mcp. (Issue: installer
+# coverage gap; SDK has no runtime deps so no npm install needed.)
+$sdkSrcDir = Join-Path $templateRoot "pforge-sdk"
+if (Test-Path $sdkSrcDir) {
+    Write-Host ""
+    Write-Host "Step 7b-pre-1: pforge-sdk (helper library)" -ForegroundColor Cyan
+    $sdkDstDir = Join-Path $ProjectPath "pforge-sdk"
+    if (-not (Test-Path $sdkDstDir)) {
+        New-Item -ItemType Directory -Path $sdkDstDir -Force | Out-Null
+    }
+    $sdkFileCount = 0
+    Get-ChildItem -Path $sdkSrcDir -File -Recurse |
+        Where-Object { $_.FullName -notmatch '(node_modules|\.forge|coverage)' } |
+        ForEach-Object {
+            $relPath = $_.FullName.Substring($sdkSrcDir.Length + 1)
+            $dstFile = Join-Path $sdkDstDir $relPath
+            $dstParent = Split-Path $dstFile -Parent
+            if (-not (Test-Path $dstParent)) { New-Item -ItemType Directory -Path $dstParent -Force | Out-Null }
+            Copy-Item -Path $_.FullName -Destination $dstFile -Force
+            $sdkFileCount++
+        }
+    Write-Host "  COPY  pforge-sdk/ ($sdkFileCount files: hallmark, lattice, chunker, notifications, readers)" -ForegroundColor Green
+}
+
+# ─── Step 7b-pre-2: Copy pforge-master (Forge-Master Studio MCP server) ───
+# Must be copied BEFORE Step 7b so the .vscode/mcp.json merge below detects
+# pforge-master/server.mjs and registers the `forge-master-chat` entry.
+$fmSrcDir = Join-Path $templateRoot "pforge-master"
+if (Test-Path $fmSrcDir) {
+    Write-Host ""
+    Write-Host "Step 7b-pre-2: pforge-master (Forge-Master Studio)" -ForegroundColor Cyan
+    $fmDstDir = Join-Path $ProjectPath "pforge-master"
+    if (-not (Test-Path $fmDstDir)) {
+        New-Item -ItemType Directory -Path $fmDstDir -Force | Out-Null
+    }
+    $fmFileCount = 0
+    Get-ChildItem -Path $fmSrcDir -File -Recurse |
+        Where-Object { $_.FullName -notmatch '(node_modules|\.forge|coverage)' } |
+        ForEach-Object {
+            $relPath = $_.FullName.Substring($fmSrcDir.Length + 1)
+            $dstFile = Join-Path $fmDstDir $relPath
+            $dstParent = Split-Path $dstFile -Parent
+            if (-not (Test-Path $dstParent)) { New-Item -ItemType Directory -Path $dstParent -Force | Out-Null }
+            Copy-Item -Path $_.FullName -Destination $dstFile -Force
+            $fmFileCount++
+        }
+    Write-Host "  COPY  pforge-master/ ($fmFileCount files: server, observer-loop, planner, providers, ui)" -ForegroundColor Green
+
+    # Auto-install pforge-master dependencies (declares @modelcontextprotocol/sdk + ws)
+    $fmPkgJson = Join-Path $fmDstDir "package.json"
+    if (Test-Path $fmPkgJson) {
+        Write-Host "  Installing pforge-master dependencies..." -ForegroundColor DarkCyan
+        try {
+            $null = & npm install --prefix $fmDstDir 2>&1
+            Write-Host "  ✅ npm install complete" -ForegroundColor Green
+        } catch {
+            Write-Host "  ⚠️  npm install failed — run manually: cd pforge-master && npm install" -ForegroundColor Yellow
+        }
+    }
+}
+
 # ─── Step 7b: Copy MCP Server + Generate Config ───────────────────────
 $mcpSrcDir = Join-Path $templateRoot "pforge-mcp"
 if (Test-Path $mcpSrcDir) {
@@ -1684,6 +1752,19 @@ if (Test-Path $mcpSrcDir) {
     else {
         $vscodeDir = Join-Path $ProjectPath ".vscode"
         if (-not (Test-Path $vscodeDir)) { New-Item -ItemType Directory -Path $vscodeDir -Force | Out-Null }
+        # Pre-register forge-master-chat in the same write when pforge-master ships.
+        # The MERGE branch above handles this for existing mcp.json files; the
+        # CREATE branch used to omit it which left fresh installs without the
+        # Studio entry even though pforge-master/server.mjs was on disk.
+        $fmServer = Join-Path $ProjectPath "pforge-master/server.mjs"
+        if (Test-Path $fmServer) {
+            $mcpEntry.servers["forge-master-chat"] = @{
+                type    = "stdio"
+                command = "node"
+                args    = @("pforge-master/server.mjs")
+                cwd     = '${workspaceFolder}'
+            }
+        }
         $mcpEntry | ConvertTo-Json -Depth 10 | Set-Content $vscodeMcp
         Write-Host "  CREATE .vscode/mcp.json (plan-forge MCP server)" -ForegroundColor Green
     }

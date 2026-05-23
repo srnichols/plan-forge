@@ -55,6 +55,8 @@ pf_update_gitignore() {
 pforge-mcp/node_modules/
 pforge-mcp/cli-schema.json
 pforge-mcp/.vitest-results.json
+pforge-master/node_modules/
+pforge-sdk/node_modules/
 ${end}"
 
     if [ -f "$gitignore" ]; then
@@ -553,7 +555,7 @@ cmd_sweep() {
     local framework_total=0
     local fw_todo=0 fw_fixme=0 fw_hack=0 fw_placeholder=0 fw_stub=0 fw_other=0
     local pattern='TODO|FIXME|HACK|will be replaced|placeholder|stub|mock data|Simulate|Seed with sample'
-    local framework_pattern='^(pforge-mcp/|pforge\.(ps1|sh)$|setup\.(ps1|sh)$|validate-setup\.(ps1|sh)$)'
+    local framework_pattern='^(pforge-(mcp|sdk|master)/|pforge\.(ps1|sh)$|setup\.(ps1|sh)$|validate-setup\.(ps1|sh)$)'
 
     while IFS= read -r -d '' file; do
         local results
@@ -1719,6 +1721,34 @@ print(v if isinstance(v, str) else ','.join(v))
         done < <(find "$src_mcp" -type f -not -path '*/node_modules/*' -print0 2>/dev/null)
     fi
 
+    # ─── pforge-sdk + pforge-master (same scan, parameterized) ──
+    # Consumer installs that skipped these crashed at runtime for opt-in
+    # features (lattice, notifications, hallmark, forge-master-chat).
+    local pkg src_pkg dst_pkg
+    for pkg in pforge-sdk pforge-master; do
+        src_pkg="$source_path/$pkg"
+        dst_pkg="$REPO_ROOT/$pkg"
+        [ -d "$src_pkg" ] || continue
+        while IFS= read -r -d '' f; do
+            local rel_path rel_name dst_f
+            rel_path="${f#"$src_pkg/"}"
+            rel_name="$pkg/$rel_path"
+            dst_f="$dst_pkg/$rel_path"
+            local _skip=false
+            for nu in "${_never_update[@]}"; do
+                [ "$nu" = "$rel_name" ] && _skip=true && break
+            done
+            $_skip && continue
+            if [ -f "$dst_f" ]; then
+                if [ "$(_pf_sha256 "$f")" != "$(_pf_sha256 "$dst_f")" ]; then
+                    _updates+=("$f|$dst_f|$rel_name")
+                fi
+            else
+                _new_files+=("$f|$dst_f|$rel_name")
+            fi
+        done < <(find "$src_pkg" -type f -not -path '*/node_modules/*' -not -path '*/.forge/*' -not -path '*/coverage/*' -print0 2>/dev/null)
+    done
+
     # ─── Report ───────────────────────────────────────────────────
     if [ "${#_updates[@]}" -eq 0 ] && [ "${#_new_files[@]}" -eq 0 ]; then
         echo "All framework files are up to date."
@@ -1834,6 +1864,30 @@ writeFreshCache(process.argv[1], process.argv[2]);
             echo ""
             echo "⚠️  MCP server is running on port 3100 — restart it to pick up changes."
             echo "  Stop the current server, then: node pforge-mcp/server.mjs"
+        fi
+    fi
+
+    # Auto-install pforge-master dependencies if its files were updated.
+    # pforge-master declares @modelcontextprotocol/sdk + ws as runtime deps,
+    # so missing node_modules breaks the forge-master-chat MCP stdio server.
+    local fm_updated=false
+    for entry in "${_updates[@]}" "${_new_files[@]}"; do
+        local entry_name="${entry##*|}"
+        if [[ "$entry_name" == pforge-master/* ]]; then
+            fm_updated=true
+            break
+        fi
+    done
+    if [ "$fm_updated" = true ]; then
+        local fm_dir="$REPO_ROOT/pforge-master"
+        if [ -f "$fm_dir/package.json" ]; then
+            echo ""
+            echo "Installing pforge-master dependencies..."
+            if (cd "$fm_dir" && npm install --silent 2>/dev/null); then
+                echo "  ✅ npm install complete"
+            else
+                echo "  ⚠️  npm install failed — run manually: cd pforge-master && npm install"
+            fi
         fi
     fi
 

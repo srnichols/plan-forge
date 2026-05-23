@@ -236,9 +236,10 @@ Hooks run automatically during agent sessions — no manual activation needed:
 |------|---------|----------|----------|
 | **PreDeploy** | Before `pforge run-plan` enters a deploy slice | Runs `forge_secret_scan` + `forge_env_diff` — blocks on severity ≥ high | Yes |
 | **PostSlice** | After every slice commit | Runs `forge_drift_report` — warns if drift score drops below threshold | No (advisory) |
+| **PostSliceCleanCode** | After every slice commit (git `post-commit`) | Runs `scripts/audit/clean-code-delta.mjs` — measures LOC / function count / TODOs / long-param-lists / modules-over-LOC-ceiling and emits an advisory when any metric regresses past the configured thresholds | No (advisory) |
 | **PreAgentHandoff** | Agent-to-agent turn in multi-agent mode | Injects LiveGuard context (drift, MTTR, open incidents) into next agent's prompt. Posts snapshot to OpenClaw if `openclaw.endpoint` configured. Skipped when `PFORGE_QUORUM_TURN` env var is set | No |
 
-Configure in `.forge.json` under `hooks.preDeploy`, `hooks.postSlice`, `hooks.preAgentHandoff`.
+Configure in `.forge.json` under `hooks.preDeploy`, `hooks.postSlice`, `hooks.postSliceCleanCode`, `hooks.preAgentHandoff`.
 
 ---
 

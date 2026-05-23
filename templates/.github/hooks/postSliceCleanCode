@@ -1,0 +1,40 @@
+#!/usr/bin/env sh
+#
+# Plan Forge — PostSliceCleanCode hook
+#
+# Advisory clean-code delta check that runs after each slice commit. Invokes
+# scripts/audit/clean-code-delta.mjs which measures cheap, fast signals on
+# the files touched by the commit and emits an advisory when any metric
+# regresses past the configured thresholds.
+#
+# Wiring (already handled by setup.ps1 / setup.sh):
+#   ln -s .github/hooks/postSliceCleanCode .git/hooks/post-commit
+#
+# Or, when both PostSlice and PostSliceCleanCode are enabled, dispatch from
+# a single .git/hooks/post-commit:
+#   #!/usr/bin/env sh
+#   .github/hooks/postSlice           || true
+#   .github/hooks/postSliceCleanCode  || true
+#
+# Configuration (in .forge.json):
+#   { "hooks": { "postSliceCleanCode": { "enabled": true } } }
+#
+# Disabled by default. Exit code 2 when skipped (config off, non-scoped commit,
+# non-conventional commit message). Never blocks the commit by design.
+
+set -e
+
+REPO_ROOT="$(git rev-parse --show-toplevel 2>/dev/null || pwd)"
+SCRIPT="$REPO_ROOT/scripts/audit/clean-code-delta.mjs"
+
+if [ ! -f "$SCRIPT" ]; then
+  exit 0
+fi
+
+if ! command -v node >/dev/null 2>&1; then
+  exit 0
+fi
+
+# Run the audit. The script handles its own exit codes; we never want this
+# advisory hook to block the commit, so we swallow non-zero from the runner.
+node "$SCRIPT" || true

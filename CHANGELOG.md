@@ -7,6 +7,9 @@ Format follows [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
+### Added
+- **`pforge self-update --verify` flag** — Composable post-update verification. After a successful update, spawns `pforge check` and `pforge smith` as subprocesses against the freshly-installed wrapper (Issue #177 self-replace constraint: the current shell still has the old wrapper loaded in memory). Composes cleanly with all existing flags — e.g. `pforge self-update --force --verify`, `pforge self-update --yes --verify`, `pforge self-update --force --downgrade --verify`. Exits non-zero if either `check` or `smith` fail, so the verification request is honored end-to-end. With `--dry-run`, verification is skipped (no update happened). Parity-tested across both shells (`pforge-mcp/tests/self-update-verify-flag.test.mjs`).
+
 ---
 
 ## [3.19.0] — 2026-05-23 — Bug-fix skill integration + PostSliceCleanCode hook + installer hardening

@@ -9,6 +9,32 @@ Format follows [Keep a Changelog](https://keepachangelog.com/).
 
 ---
 
+## [3.19.0] — 2026-05-23 — Bug-fix skill integration + PostSliceCleanCode hook + installer hardening
+
+> **One-liner**: Adds the `/bug-fix` skill (guided TDD-driven bug-fix workflow) and a `skillAdvisory` field on three `forge_bug_*` MCP tool responses so agents are nudged through the full review→test→fix→validate→sweep cycle. Adds a `PostSliceCleanCode` advisory hook that emits a delta report after each slice commit. Repairs five installer / CLI / setup gaps surfaced by consumer-side smoke tests (`pforge-sdk/` and `pforge-master/` not shipping, deep-import drift, empty-catch swallowing errors, preset-routing for shared instructions, smith MCP-runtime probe falling back to `--version`).
+
+### Added
+- **`/bug-fix` skill** (`.github/skills/bug-fix/SKILL.md` + `presets/shared/skills/bug-fix/SKILL.md`) — Guided end-to-end bug-fix workflow that composes `/code-review`, `/clean-code-review`, `/forge-quench`, and `/test-sweep` around the `forge_bug_*` tool surface so a fix never closes without a regression check. Wired into the consumer-side preset twins so `setup`/`pforge update` propagates it.
+- **`skillAdvisory` field on `forge_bug_register`, `forge_bug_update_status`, and `forge_bug_validate_fix`** — Each handler now returns a `skillAdvisory: { skill: "bug-fix", reason: "...", next: "..." }` block in its success payload pointing the calling agent at the `/bug-fix` skill at the right moment in the workflow. 18-test regression suite at `pforge-mcp/tests/bug-fix-skill-advisory.test.mjs` covers shape contract, opt-out via `skipAdvisory`, and per-status routing.
+- **PostSliceCleanCode advisory hook** (`.github/hooks/postSliceCleanCode` + `.github/hooks/PostSliceCleanCode.md`, mirrored to `templates/.github/hooks/`) — Runs after every slice commit via git `post-commit`, measures LOC / function count / TODO markers / long-param lists / modules-over-LOC-ceiling deltas, and emits an advisory when any metric regresses past the configured thresholds. Backed by `scripts/audit/clean-code-delta.mjs` (16-test suite at `pforge-mcp/tests/clean-code-delta.test.mjs`). Configurable under `.forge.json#hooks.postSliceCleanCode`. Advisory only — never blocks.
+- **`pforge-sdk/notifications/adapter-contract.mjs`** — New public re-export shim closing [#218](https://github.com/srnichols/plan-forge/issues/218). External callers now import from `pforge-sdk/notifications/adapter-contract.mjs` instead of reaching into `pforge-sdk/src/notifications/adapter-contract.mjs`.
+
+### Fixed
+- **Installer ships `pforge-sdk/` and `pforge-master/` to consumers** — `setup.{ps1,sh}` and `pforge update` previously only recursively copied `pforge-mcp/`. Consumer projects referencing `pforge-sdk` (e.g., the notifications adapter contract) or `pforge-master` (the chat orchestrator) saw missing files. Both workspaces now copy recursively (excluding `node_modules`, `coverage`, `.forge`), and `pforge check` / `pforge smith` verify their presence.
+- **Setup routes 5 consumer instruction files through `presets/shared/`** — `architecture-principles`, `clean-code`, `self-repair-reporting`, `status-reporting`, and `testing` instructions were duplicated across all 8 stack-preset directories. Consolidated under `presets/shared/.github/instructions/` and `presets/shared/skills/` so a single source ships to every stack. Closes [#222](https://github.com/srnichols/plan-forge/issues/222), supersedes [#221](https://github.com/srnichols/plan-forge/issues/221).
+- **35 empty `catch {}` blocks replaced with logged or rethrown exceptions** across `pforge-mcp/` and `pforge-master/`. Silent failures during plan execution now surface as structured warnings on the audit trail. Closes [#220](https://github.com/srnichols/plan-forge/issues/220).
+- **`pforge-sdk` deep imports replaced with public re-export shim** — Three internal modules reached into `pforge-sdk/src/notifications/adapter-contract.mjs`. Replaced with imports from the public path `pforge-sdk/notifications/adapter-contract.mjs`. Closes [#218](https://github.com/srnichols/plan-forge/issues/218).
+- **`pforge.sh` parse errors + `check`/`smith` parity for `pforge-sdk` + `pforge-master`** — Bash version had two unbalanced quote / heredoc issues that broke `pforge check` and `pforge smith` on Linux/macOS consumers. Both subcommands now validate `pforge-sdk/` and `pforge-master/` presence symmetrically with the PowerShell version.
+- **`pforge.sh` installer parity** — Bash installer now ships validator scripts (`validate-setup.{ps1,sh}`) and the `pforge` shim launcher, dedupes drift-detection handlers, and exposes `cmd_dep_watch` to match the PowerShell version.
+- **`pforge smith` MCP probe falls back to `versionOut`** — When an MCP entrypoint declares no `helpArgs`, smith now retries with `--version` before reporting the runtime as missing. Eliminates false-negative diagnostics for minimal MCP servers that don't implement `--help`.
+
+### Notes
+- All changes are backward-compatible. `skillAdvisory` is an additive response field; agents that ignore it see no behavior change. `skipAdvisory: true` on any `forge_bug_*` call suppresses it.
+- The PostSliceCleanCode hook is opt-in via `.forge.json#hooks.postSliceCleanCode.enabled: true` (default `false`).
+- Pre-existing master-only test failures (`clean-code-no-regression.test.mjs`, `full-suite-regression.test.mjs`) reference `docs/plans/` fixtures that have never shipped to master per the consumer-template branch model — unchanged from v3.18.1.
+
+---
+
 ## [3.18.1] — 2026-05-21
 
 > **One-liner**: Patch release rolling up Phase 59 Crucible multi-mode substrate, quorum calibration (threshold 3 → 5, refreshed model list), three self-repair fixes from the post-v3.18.0 sweep (#212, #213, #214), and a new orchestrator sub-module that auto-rewrites plan-file status headers on successful `run-plan` so plans stop showing stale `HARDENED` status after they've shipped.

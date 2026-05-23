@@ -2830,6 +2830,16 @@ cmd_doctor() {
             else
                 doctor_warn ".vscode/mcp.json missing 'plan-forge' entry" "Re-run setup or add manually"
             fi
+            # forge-master-chat is the second MCP server entry (Phase-29
+            # chat bridge). Only required when pforge-master/server.mjs is
+            # present — only warn if both conditions disagree.
+            if [ -f "$REPO_ROOT/pforge-master/server.mjs" ]; then
+                if grep -q '"forge-master-chat"' "$REPO_ROOT/.vscode/mcp.json" 2>/dev/null; then
+                    doctor_pass ".vscode/mcp.json has 'forge-master-chat' server entry"
+                else
+                    doctor_warn ".vscode/mcp.json missing 'forge-master-chat' entry" "Re-run setup or add manually — Forge-Master chat tab won't connect without it"
+                fi
+            fi
         else
             doctor_warn ".vscode/mcp.json not found" "Run setup to generate MCP config"
         fi
@@ -3007,6 +3017,37 @@ cmd_doctor() {
             doctor_warn "pforge-master/src/lifecycle.mjs missing" "'pforge forge-master status|logs' will fail"
         fi
 
+        # pforge-master declares @modelcontextprotocol/sdk + ws as RUNTIME
+        # deps. setup.sh + pforge.sh self-update both auto-run npm install
+        # here, but verify post-hoc — a stale install or skipped update will
+        # silently fail at server start.
+        if [ -f "$forge_master_dir/package.json" ]; then
+            if [ -d "$forge_master_dir/node_modules" ]; then
+                doctor_pass "pforge-master dependencies installed"
+            else
+                doctor_warn "pforge-master/node_modules missing" "Run: cd pforge-master && npm install"
+            fi
+        fi
+
+        echo ""
+    fi
+
+    # ═══════════════════════════════════════════════════════════════
+    # 4d-iii. PFORGE-SDK (shared helper library)
+    # ═══════════════════════════════════════════════════════════════
+    # pforge-sdk is a helper library shipped alongside pforge-mcp. It has
+    # NO runtime deps (intentional) — code in pforge-mcp imports it via
+    # relative paths like '../../pforge-sdk/src/...'. Missing files here
+    # crash opt-in features (lattice, notifications, hallmark, memory-upgrade,
+    # forge-master chat). Validation is presence-only.
+    local forge_sdk_dir="$REPO_ROOT/pforge-sdk"
+    if [ -d "$forge_sdk_dir" ]; then
+        echo "pforge-sdk:"
+        if [ -f "$forge_sdk_dir/src/client.mjs" ]; then
+            doctor_pass "pforge-sdk/src/client.mjs"
+        else
+            doctor_warn "pforge-sdk/src/client.mjs missing" "Re-run 'pforge update' to restore — deep imports from pforge-mcp will fail"
+        fi
         echo ""
     fi
 
@@ -5156,13 +5197,14 @@ cmd_forge_home_cleanup() {
     exit $?
 }
 
-# ─── Command: embeddings ────────────────────────────────────────────────
-# Manage and inspect the local semantic-search embedding backend.
-# Mirrors Invoke-Embeddings in pforge.ps1.
+# ─── Command: local-recall ──────────────────────────────────────────────
+# Manage and inspect the persisted TF-IDF index used by forge_local_search.
+# Mirrors Invoke-LocalRecall in pforge.ps1.
 #
 # Usage:
-#   pforge embeddings status [--path=<dir>]
-#   pforge embeddings install
+#   pforge local-recall status [--path=<dir>]
+#   pforge local-recall warm   [--path=<dir>]
+#   pforge local-recall clear  [--path=<dir>]
 cmd_local_recall() {
     local sub="${1:-status}"
     shift 2>/dev/null || true
@@ -5259,6 +5301,14 @@ EOJS
     esac
 }
 
+# ─── Command: embeddings ────────────────────────────────────────────────
+# Manage and inspect the local semantic-search embedding backend.
+# Mirrors Invoke-Embeddings in pforge.ps1.
+#
+# Usage:
+#   pforge embeddings status [--path=<dir>]
+#   pforge embeddings install
+cmd_embeddings() {
     local sub="${1:-status}"
     shift 2>/dev/null || true
 
@@ -6989,11 +7039,6 @@ try {
   process.exit(1);
 }"
         exit $node_exit
-    fi
-
-
-        echo "ERROR: unknown subcommand 'pforge github $sub'. Try 'pforge github --help'." >&2
-        exit 1
     fi
 
     local script="${REPO_ROOT}/pforge-mcp/github-introspect.mjs"

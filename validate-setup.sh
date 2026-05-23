@@ -367,6 +367,32 @@ else
     WARN=$((WARN+1))
 fi
 
+# Forge-Master Studio (Phase-29 chat bridge — imported by pforge-mcp via
+# relative paths and registered as second MCP server in .vscode/mcp.json)
+if [[ -f "$PROJECT_PATH/pforge-master/server.mjs" ]] && [[ -f "$PROJECT_PATH/pforge-master/package.json" ]]; then
+    FM_VER="$(grep -oE '"version"[[:space:]]*:[[:space:]]*"[^"]+"' "$PROJECT_PATH/pforge-master/package.json" | head -1 | sed -E 's/.*"([^"]+)"$/\1/')"
+    if [[ -d "$PROJECT_PATH/pforge-master/node_modules" ]]; then
+        green "  PASS  Forge-Master: pforge-master v${FM_VER} (deps installed)"
+    else
+        yellow "  WARN  Forge-Master: pforge-master v${FM_VER} — run 'npm install' in pforge-master/"
+        WARN=$((WARN+1))
+    fi
+    PASS=$((PASS+1))
+else
+    yellow "  WARN  Forge-Master: pforge-master/ not found (optional — chat bridge unavailable)"
+    WARN=$((WARN+1))
+fi
+
+# pforge-sdk (shared helper library — NO runtime deps, imported via
+# relative paths from pforge-mcp; missing files crash opt-in features)
+if [[ -f "$PROJECT_PATH/pforge-sdk/src/client.mjs" ]]; then
+    green "  PASS  pforge-sdk: src/client.mjs found"
+    PASS=$((PASS+1))
+else
+    yellow "  WARN  pforge-sdk: src/client.mjs not found (deep imports from pforge-mcp will fail)"
+    WARN=$((WARN+1))
+fi
+
 # .vscode/mcp.json with plan-forge entry
 if [[ -f "$PROJECT_PATH/.vscode/mcp.json" ]]; then
     if grep -qE '"(plan-forge|pforge)"' "$PROJECT_PATH/.vscode/mcp.json"; then

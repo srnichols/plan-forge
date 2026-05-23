@@ -1641,11 +1641,13 @@ MCPEOF
     fi
 fi
 
-# ─── Step 7c: Copy CLI Scripts + VERSION ──────────────────────────────
+# ─── Step 7c: Copy CLI Scripts + VERSION + validators ─────────────────
+# Ships root `pforge` shim + validate-setup.{ps1,sh} so the consumer can run
+# `pforge check` immediately post-install (parity with setup.ps1).
 echo ""
 cyan "Step 7c: CLI scripts"
 
-for cli_file in "pforge.ps1" "pforge.sh" "VERSION"; do
+for cli_file in "pforge.ps1" "pforge.sh" "pforge" "VERSION" "validate-setup.ps1" "validate-setup.sh"; do
     src_cli="$TEMPLATE_ROOT/$cli_file"
     dst_cli="$PROJECT_PATH/$cli_file"
     if [[ -f "$src_cli" ]]; then

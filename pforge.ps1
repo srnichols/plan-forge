@@ -1859,7 +1859,8 @@ function Invoke-Update {
     }
 
     # ─── Core CLI files (root level) ────────────────────────────
-    foreach ($cliFile in @("pforge.ps1", "pforge.sh", "VERSION")) {
+    # Includes root `pforge` bash shim so it self-heals on self-update.
+    foreach ($cliFile in @("pforge.ps1", "pforge.sh", "pforge", "VERSION")) {
         $srcFile = Join-Path $sourcePath $cliFile
         $dstFile = Join-Path $RepoRoot $cliFile
         if (Test-Path $srcFile) {
@@ -2520,135 +2521,6 @@ function Invoke-Analyze {
     else {
         Write-Host ""
         Write-Host "ANALYSIS PASSED — strong consistency." -ForegroundColor Green
-        exit 0
-    }
-}
-
-# ─── Command: drift ────────────────────────────────────────────────────
-function Invoke-Drift {
-    $threshold = 70
-    foreach ($arg in $Arguments) {
-        if ($arg -match '^--threshold[= ]?(\d+)$') { $threshold = [int]$Matches[1] }
-        elseif ($arg -match '^\d+$') { $threshold = [int]$arg }
-    }
-
-    Write-Host ""
-    Write-Host "╔══════════════════════════════════════════════════════════════╗" -ForegroundColor Cyan
-    Write-Host "║       Plan Forge — Drift Report                              ║" -ForegroundColor Cyan
-    Write-Host "╚══════════════════════════════════════════════════════════════╝" -ForegroundColor Cyan
-    Write-Host ""
-    Write-Host "Scanning source files for architecture guardrail violations..." -ForegroundColor Cyan
-    Write-Host "Threshold: $threshold/100" -ForegroundColor White
-    Write-Host ""
-
-    $extensions = @("*.js", "*.mjs", "*.ts", "*.tsx", "*.cs", "*.py")
-    $excludeDirs = @("node_modules", ".git", "bin", "obj", "dist", ".forge", "vendor", "coverage")
-
-    $rules = @(
-        @{ id = "empty-catch";     pattern = 'catch\s*(?:\([^)]*\))?\s*\{\s*(?://[^\n]*)?\s*\}|catch\s*(?:\([^)]*\))?\s*\{\s*/\*[^*]*\*/\s*\}'; severity = "high";     label = "Empty catch block" },
-        @{ id = "any-type";        pattern = ':\s*any\b|<any>|as\s+any\b';                                  severity = "medium";   label = "Avoid 'any' type" },
-        @{ id = "sync-over-async"; pattern = '\.(Result|Wait\(\))\b';                                       severity = "high";     label = "Sync-over-async (.Result/.Wait())" },
-        @{ id = "sql-injection";   pattern = '`[^`]*\b(SELECT|INSERT|UPDATE|DELETE|WHERE)\b[^`]*\$\{';      severity = "critical"; label = "SQL string interpolation" },
-        @{ id = "deferred-work";   pattern = '\b(TODO|FIXME|HACK)\b';                                       severity = "low";      label = "Deferred work marker" }
-    )
-
-    $violations = [System.Collections.Generic.List[object]]::new()
-    $frameworkViolations = [System.Collections.Generic.List[object]]::new()
-    $filesScanned = 0
-
-    $excludeFilter = "($($excludeDirs -join '|'))"
-    $frameworkFilter = '^(pforge-(mcp|sdk|master)[/\\]|pforge\.(ps1|sh)$|setup\.(ps1|sh)$|validate-setup\.(ps1|sh)$)'
-
-    foreach ($ext in $extensions) {
-        $files = Get-ChildItem -Path $RepoRoot -Filter $ext -Recurse -File -ErrorAction SilentlyContinue |
-            Where-Object { $_.FullName -notmatch $excludeFilter }
-        foreach ($file in $files) {
-            $filesScanned++
-            try {
-                $content = Get-Content -Path $file.FullName -Raw -ErrorAction Stop
-                $relPath = $file.FullName.Substring($RepoRoot.Length).TrimStart('\', '/')
-                $isFramework = $relPath -match $frameworkFilter
-                foreach ($rule in $rules) {
-                    # Skip SQL injection rule for framework/dashboard code
-                    if ($isFramework -and $rule.id -eq 'sql-injection') { continue }
-                    $matches = [regex]::Matches($content, $rule.pattern)
-                    foreach ($m in $matches) {
-                        $lineNum = ($content.Substring(0, $m.Index) -split "`n").Count
-                        $entry = [PSCustomObject]@{
-                            file        = $relPath
-                            rule        = $rule.id
-                            severity    = $rule.severity
-                            line        = $lineNum
-                            description = $rule.label
-                        }
-                        if ($isFramework) {
-                            $frameworkViolations.Add($entry)
-                        } else {
-                            $violations.Add($entry)
-                        }
-                    }
-                }
-            } catch {
-                Write-Verbose "Skipped file in code-quality scan: $($_.Exception.Message)"
-            }
-        }
-    }
-
-    $penaltyPerViolation = 2
-    $score = [Math]::Max(0, 100 - ($violations.Count * $penaltyPerViolation))
-
-    Write-Host "Files scanned:  $filesScanned" -ForegroundColor White
-    Write-Host "App violations: $($violations.Count)" -ForegroundColor $(if ($violations.Count -eq 0) { 'Green' } elseif ($violations.Count -le 5) { 'Yellow' } else { 'Red' })
-    if ($frameworkViolations.Count -gt 0) {
-        Write-Host "Framework:      $($frameworkViolations.Count) (informational, not scored)" -ForegroundColor DarkGray
-    }
-    Write-Host "Score:          $score/100" -ForegroundColor $(if ($score -ge 80) { 'Green' } elseif ($score -ge $threshold) { 'Yellow' } else { 'Red' })
-    Write-Host ""
-
-    if ($violations.Count -gt 0) {
-        Write-Host "Violations:" -ForegroundColor Cyan
-        foreach ($v in $violations | Select-Object -First 20) {
-            $color = switch ($v.severity) { 'critical' { 'Red' } 'high' { 'Red' } 'medium' { 'Yellow' } default { 'DarkYellow' } }
-            Write-Host "  [$($v.severity.ToUpper())] $($v.file):$($v.line) — $($v.description)" -ForegroundColor $color
-        }
-        if ($violations.Count -gt 20) {
-            Write-Host "  ... and $($violations.Count - 20) more violations" -ForegroundColor DarkYellow
-        }
-        Write-Host ""
-    }
-
-    # Load history and compute trend
-    $historyFile = Join-Path $RepoRoot ".forge\drift-history.json"
-    $history = @()
-    if (Test-Path $historyFile) {
-        try { $history = Get-Content $historyFile -Raw | ConvertFrom-Json } catch { Write-Verbose "Could not parse drift-history.json (treating as empty history): $($_.Exception.Message)" }
-    }
-    $prev = if ($history.Count -gt 0) { $history[-1] } else { $null }
-    $delta = if ($prev) { $score - $prev.score } else { 0 }
-    $trend = if (-not $prev) { "stable" } elseif ($delta -gt 0) { "improving" } elseif ($delta -lt 0) { "degrading" } else { "stable" }
-
-    $record = @{
-        timestamp    = (Get-Date -Format "o")
-        score        = $score
-        violations   = @($violations | ForEach-Object { @{ file = $_.file; rule = $_.rule; severity = $_.severity; line = $_.line } })
-        filesScanned = $filesScanned
-        delta        = $delta
-        trend        = $trend
-    }
-
-    $forgeDir = Join-Path $RepoRoot ".forge"
-    if (-not (Test-Path $forgeDir)) { New-Item -ItemType Directory -Path $forgeDir -Force | Out-Null }
-    $record | ConvertTo-Json -Depth 5 -Compress | Add-Content -Path $historyFile
-
-    Write-Host "Trend:          $trend" -ForegroundColor $(if ($trend -eq 'improving') { 'Green' } elseif ($trend -eq 'degrading') { 'Red' } else { 'White' })
-    Write-Host "History:        $($history.Count + 1) record(s) in .forge/drift-history.json" -ForegroundColor White
-    Write-Host ""
-
-    if ($score -lt $threshold) {
-        Write-Host "⚠  DRIFT ALERT — score $score is below threshold $threshold" -ForegroundColor Red
-        exit 1
-    } else {
-        Write-Host "✅ Drift score within threshold ($score >= $threshold)" -ForegroundColor Green
         exit 0
     }
 }

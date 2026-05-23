@@ -1681,9 +1681,12 @@ print(v if isinstance(v, str) else ','.join(v))
 
     unset -f _pf_check
 
-    # ─── Core root files (CLI scripts + VERSION) ─────────────────
+    # ─── Core root files (CLI + shim + VERSION + validators) ────
+    # Includes root `pforge` bash shim and validate-setup.{ps1,sh} so older
+    # installs that pre-date the installer-validators-and-shim fix can
+    # self-heal on `pforge self-update` (parity with pforge.ps1).
     local core_file
-    for core_file in "pforge.ps1" "pforge.sh" "VERSION"; do
+    for core_file in "pforge.ps1" "pforge.sh" "pforge" "VERSION" "validate-setup.ps1" "validate-setup.sh"; do
         local src_core="$source_path/$core_file"
         local dst_core="$REPO_ROOT/$core_file"
         if [ -f "$src_core" ]; then
@@ -2126,130 +2129,6 @@ cmd_analyze() {
     else
         echo ""
         echo "ANALYSIS PASSED — strong consistency."
-        exit 0
-    fi
-}
-
-# ─── Command: drift ────────────────────────────────────────────────────
-cmd_drift() {
-    local threshold=70
-    for arg in "$@"; do
-        case "$arg" in
-            --threshold=*) threshold="${arg#*=}" ;;
-            --threshold)   shift; threshold="$1" ;;
-            [0-9]*)        threshold="$arg" ;;
-        esac
-    done
-
-    echo ""
-    echo "╔══════════════════════════════════════════════════════════════╗"
-    echo "║       Plan Forge — Drift Report                              ║"
-    echo "╚══════════════════════════════════════════════════════════════╝"
-    echo ""
-    echo "Scanning source files for architecture guardrail violations..."
-    echo "Threshold: $threshold/100"
-    echo ""
-
-    local files_scanned=0
-    local violation_count=0
-    local violations_json="["
-    local first_violation=true
-    local penalty_per_violation=2
-
-    # Scan source files for guardrail violations
-    while IFS= read -r -d '' file; do
-        files_scanned=$((files_scanned + 1))
-        local rel="${file#$REPO_ROOT/}"
-        local content
-        content=$(cat "$file" 2>/dev/null) || continue
-
-        check_rule() {
-            local rule_id="$1" pattern="$2" severity="$3" label="$4"
-            local line_num=1 found=false
-            while IFS= read -r line; do
-                if echo "$line" | grep -qE "$pattern" 2>/dev/null; then
-                    violation_count=$((violation_count + 1))
-                    if [ "$first_violation" = "true" ]; then
-                        first_violation=false
-                    else
-                        violations_json="$violations_json,"
-                    fi
-                    local escaped_rel escaped_label
-                    escaped_rel=$(printf '%s' "$rel" | sed 's/\\/\\\\/g; s/"/\\"/g')
-                    escaped_label=$(printf '%s' "$label" | sed 's/"/\\"/g')
-                    violations_json="$violations_json{\"file\":\"$escaped_rel\",\"rule\":\"$rule_id\",\"severity\":\"$severity\",\"line\":$line_num,\"description\":\"$escaped_label\"}"
-                fi
-                line_num=$((line_num + 1))
-            done <<< "$content"
-        }
-
-        check_rule "empty-catch"     'catch[[:space:]]*(\([^)]*\))?[[:space:]]*\{[[:space:]]*(//[^}]*)?[[:space:]]*\}'   "high"     "Empty catch block"
-        check_rule "any-type"        ':[[:space:]]*any[[:space:];|,>]|<any>|as[[:space:]]+any'  "medium"   "Avoid 'any' type"
-        check_rule "sync-over-async" '\.(Result|Wait\(\))'                                      "high"     "Sync-over-async"
-        check_rule "sql-injection"   'SELECT|INSERT|UPDATE|DELETE.*\$\{'                        "critical" "SQL string interpolation"
-        check_rule "deferred-work"   '\b(TODO|FIXME|HACK)\b'                                    "low"      "Deferred work marker"
-
-    done < <(find "$REPO_ROOT" -type f \( -name "*.js" -o -name "*.mjs" -o -name "*.ts" -o -name "*.tsx" -o -name "*.cs" -o -name "*.py" \) \
-        ! -path '*/node_modules/*' ! -path '*/.git/*' ! -path '*/bin/*' ! -path '*/obj/*' \
-        ! -path '*/dist/*' ! -path '*/.forge/*' ! -path '*/vendor/*' ! -path '*/coverage/*' \
-        -print0 2>/dev/null)
-
-    violations_json="$violations_json]"
-
-    local score=$(( 100 - violation_count * penalty_per_violation ))
-    [ "$score" -lt 0 ] && score=0
-
-    printf "Files scanned:  %d\n" "$files_scanned"
-    if [ "$violation_count" -eq 0 ]; then
-        printf "Violations:     \033[32m%d\033[0m\n" "$violation_count"
-    elif [ "$violation_count" -le 5 ]; then
-        printf "Violations:     \033[33m%d\033[0m\n" "$violation_count"
-    else
-        printf "Violations:     \033[31m%d\033[0m\n" "$violation_count"
-    fi
-    if [ "$score" -ge 80 ]; then
-        printf "Score:          \033[32m%d/100\033[0m\n" "$score"
-    elif [ "$score" -ge "$threshold" ]; then
-        printf "Score:          \033[33m%d/100\033[0m\n" "$score"
-    else
-        printf "Score:          \033[31m%d/100\033[0m\n" "$score"
-    fi
-    echo ""
-
-    # Append to drift-history.json
-    local forge_dir="$REPO_ROOT/.forge"
-    mkdir -p "$forge_dir"
-    local history_file="$forge_dir/drift-history.json"
-    local prev_score=""
-    local history_count=0
-    if [ -f "$history_file" ]; then
-        history_count=$(grep -c '"score"' "$history_file" 2>/dev/null || echo 0)
-        prev_score=$(grep -o '"score":[0-9]*' "$history_file" 2>/dev/null | tail -1 | grep -o '[0-9]*$')
-    fi
-
-    local delta=0 trend="stable"
-    if [ -n "$prev_score" ]; then
-        delta=$((score - prev_score))
-        if [ "$delta" -gt 0 ]; then trend="improving"
-        elif [ "$delta" -lt 0 ]; then trend="degrading"
-        fi
-    fi
-
-    local ts
-    ts=$(date -u +"%Y-%m-%dT%H:%M:%SZ" 2>/dev/null || date -u +"%Y-%m-%dT%H:%M:%SZ")
-    local record="{\"timestamp\":\"$ts\",\"score\":$score,\"filesScanned\":$files_scanned,\"delta\":$delta,\"trend\":\"$trend\",\"violations\":$violations_json}"
-    echo "$record" >> "$history_file"
-
-    local history_length=$((history_count + 1))
-    printf "Trend:          %s\n" "$trend"
-    printf "History:        %d record(s) in .forge/drift-history.json\n" "$history_length"
-    echo ""
-
-    if [ "$score" -lt "$threshold" ]; then
-        printf "\033[31m⚠  DRIFT ALERT — score %d is below threshold %d\033[0m\n" "$score" "$threshold"
-        exit 1
-    else
-        printf "\033[32m✅ Drift score within threshold (%d >= %d)\033[0m\n" "$score" "$threshold"
         exit 0
     fi
 }
@@ -4475,6 +4354,45 @@ cmd_drift() {
         const vc = v.severity === 'critical' ? '\x1b[31m' : '\x1b[33m';
         console.log('   \u26A0 ' + vc + '[' + v.severity + '] ' + v.file + ':' + v.line + ' ' + v.rule + '\x1b[0m');
       });
+    "
+}
+
+# ─── Command: dep-watch ────────────────────────────────────────────────
+# Bash mirror of Invoke-DepWatch in pforge.ps1 (parity gap closed in Phase
+# `installer-validators-and-shim`). MCP API client — server must be running
+# on localhost:3100.
+cmd_dep_watch() {
+    print_manual_steps "dep-watch" \
+        "Run npm audit / pip-audit to scan dependencies" \
+        "Diff against previous snapshot (.forge/dep-watch.json)" \
+        "Report new and resolved vulnerabilities"
+
+    local port=3100
+    local response
+    response=$(curl -sf -X POST "http://localhost:${port}/api/deps/watch/run") || {
+        echo "ERROR: MCP server not running on port ${port}. Start with: node pforge-mcp/server.mjs" >&2
+        exit 1
+    }
+    echo "$response" | node -e "
+      const d=JSON.parse(require('fs').readFileSync('/dev/stdin','utf8'));
+      console.log('\n\u{1F50D} Dependency Watch');
+      console.log('   Total:    ' + d.total);
+      const newColor = d.new_count > 0 ? '\x1b[31m' : '\x1b[32m';
+      console.log('   New:      ' + newColor + d.new_count + '\x1b[0m');
+      console.log('   Resolved: \x1b[32m' + d.resolved_count + '\x1b[0m');
+      if (d.new_vulnerabilities && d.new_vulnerabilities.length > 0) {
+        console.log('\n   \x1b[31mNew Vulnerabilities:\x1b[0m');
+        d.new_vulnerabilities.forEach(v => {
+          console.log('   - ' + v.package + ' (' + v.severity + '): ' + v.title);
+        });
+      }
+      if (d.resolved && d.resolved.length > 0) {
+        console.log('\n   \x1b[32mResolved:\x1b[0m');
+        d.resolved.forEach(v => {
+          console.log('   - ' + v.package + ': ' + v.title);
+        });
+      }
+      console.log('\n   Snapshot: .forge/dep-watch.json');
     "
 }
 
@@ -7107,6 +7025,7 @@ case "$COMMAND" in
     runbook)      cmd_runbook "$@" ;;
     hotspot)      cmd_hotspot "$@" ;;
     secret-scan)  cmd_secret_scan "$@" ;;
+    dep-watch)    cmd_dep_watch "$@" ;;
     env-diff)     cmd_env_diff "$@" ;;
     fix-proposal)    cmd_fix_proposal "$@" ;;
     quorum-analyze)  cmd_quorum_analyze "$@" ;;

@@ -1793,11 +1793,15 @@ if (Test-Path $mcpSrcDir) {
     }
 }
 
-# ─── Step 7c: Copy CLI Scripts + VERSION ──────────────────────────────
+# ─── Step 7c: Copy CLI Scripts + VERSION + validators ─────────────────
+# Ships root `pforge` shim + validate-setup.{ps1,sh} so the consumer can run
+# `pforge check` immediately post-install (asymmetry caught in Phase
+# `installer-validators-and-shim` — older installs only got CLI scripts and
+# had to wait for `pforge self-update` to refresh validators).
 Write-Host ""
 Write-Host "Step 7c: CLI scripts" -ForegroundColor Cyan
 
-foreach ($cliFile in @("pforge.ps1", "pforge.sh", "VERSION")) {
+foreach ($cliFile in @("pforge.ps1", "pforge.sh", "pforge", "VERSION", "validate-setup.ps1", "validate-setup.sh")) {
     $cliSrc = Join-Path $templateRoot $cliFile
     $cliDst = Join-Path $ProjectPath $cliFile
     if (Test-Path $cliSrc) {

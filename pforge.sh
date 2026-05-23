@@ -1552,11 +1552,22 @@ print(v if isinstance(v, str) else ','.join(v))
     fi
 
     # ─── Shared instructions ──────────────────────────────────────
+    # Source convention mirrors setup.sh Step 2:
+    #   $source_path/.github/instructions/                — Plan-Forge-internal files that ship as-is (no leakage)
+    #   $source_path/presets/shared/.github/instructions/ — consumer-facing genericized versions
+    # aci-design.instructions.md intentionally NOT in either list — MCP-tool-author guidance, not consumer-relevant.
     local src_instr="$source_path/.github/instructions"
+    local src_shared_instr="$source_path/presets/shared/.github/instructions"
     if [ -d "$src_instr" ]; then
         local instr_name
-        for instr_name in "aci-design.instructions.md" "architecture-principles.instructions.md" "clean-code.instructions.md" "git-workflow.instructions.md" "ai-plan-hardening-runbook.instructions.md" "security.instructions.md" "self-repair-reporting.instructions.md" "status-reporting.instructions.md" "testing.instructions.md" "context-fuel.instructions.md"; do
+        for instr_name in "ai-plan-hardening-runbook.instructions.md" "context-fuel.instructions.md" "git-workflow.instructions.md" "security.instructions.md"; do
             _pf_check "$src_instr/$instr_name" "$REPO_ROOT/.github/instructions/$instr_name" ".github/instructions/$instr_name"
+        done
+    fi
+    if [ -d "$src_shared_instr" ]; then
+        local instr_name
+        for instr_name in "architecture-principles.instructions.md" "clean-code.instructions.md" "self-repair-reporting.instructions.md" "status-reporting.instructions.md" "testing.instructions.md"; do
+            _pf_check "$src_shared_instr/$instr_name" "$REPO_ROOT/.github/instructions/$instr_name" ".github/instructions/$instr_name"
         done
     fi
 
@@ -1629,6 +1640,42 @@ print(v if isinstance(v, str) else ','.join(v))
             done
         fi
     done
+
+    # ─── Shared skills (add new, update existing shared-only) ────
+    # Mirrors pforge.ps1 — parity gap fixed: previously only PowerShell
+    # users picked up shared skills like clean-code-review on self-update.
+    local src_shared_skills="$source_path/presets/shared/skills"
+    if [ -d "$src_shared_skills" ]; then
+        local shared_dir shared_name shared_src shared_dst
+        for shared_dir in "$src_shared_skills"/*/; do
+            [ -d "$shared_dir" ] || continue
+            shared_name="$(basename "$shared_dir")"
+            shared_src="$shared_dir/SKILL.md"
+            shared_dst="$REPO_ROOT/.github/skills/$shared_name/SKILL.md"
+            [ -f "$shared_src" ] || continue
+
+            # If any per-stack preset has its own version of this skill,
+            # let the preset loop above handle it — don't overwrite.
+            local has_preset_version=false
+            local p
+            for p in "${_presets[@]}"; do
+                [ "$p" = "custom" ] && continue
+                if [ -f "$source_path/presets/$p/.github/skills/$shared_name/SKILL.md" ]; then
+                    has_preset_version=true
+                    break
+                fi
+            done
+            $has_preset_version && continue
+
+            if [ -f "$shared_dst" ]; then
+                if [ "$(_pf_sha256 "$shared_src")" != "$(_pf_sha256 "$shared_dst")" ]; then
+                    _updates+=("$shared_src|$shared_dst|.github/skills/$shared_name/SKILL.md (shared)")
+                fi
+            else
+                _new_files+=("$shared_src|$shared_dst|.github/skills/$shared_name/SKILL.md (shared)")
+            fi
+        done
+    fi
 
     unset -f _pf_check
 

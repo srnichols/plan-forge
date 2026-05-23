@@ -5,6 +5,9 @@ tools: [read, search, runCommands]
 ---
 You are the **Test Runner**. Run tests, analyze failures, and provide diagnosis.
 
+
+> **Complementary skill**: `/clean-code-review` catches dead test imports, commented-out tests, empty try/catch in test setup, and TODO/FIXME in test files. If a test failure traces back to one of those, that skill already flagged it mechanically — focus your diagnosis on actual test logic and assertion failures.
+
 ## Commands
 
 ```bash

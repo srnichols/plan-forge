@@ -1662,10 +1662,29 @@ function Invoke-Update {
         }
     }
 
-    # Update shared instruction files
-    $srcSharedInstr = Join-Path $sourcePath ".github/instructions"
+    # Update shared instruction files.
+    # Source convention mirrors setup.ps1 Step 2:
+    #   $sourcePath/.github/instructions/             — Plan-Forge-internal files that ship as-is (no leakage)
+    #   $sourcePath/presets/shared/.github/instructions/ — consumer-facing genericized versions
+    # aci-design.instructions.md intentionally NOT in either list — MCP-tool-author guidance, not consumer-relevant.
+    $srcInternalInstr = Join-Path $sourcePath ".github/instructions"
+    $srcSharedInstr   = Join-Path $sourcePath "presets/shared/.github/instructions"
     $dstInstr = Join-Path $RepoRoot ".github/instructions"
-    $sharedInstructions = @("aci-design.instructions.md", "architecture-principles.instructions.md", "clean-code.instructions.md", "git-workflow.instructions.md", "ai-plan-hardening-runbook.instructions.md", "security.instructions.md", "self-repair-reporting.instructions.md", "status-reporting.instructions.md", "testing.instructions.md", "context-fuel.instructions.md")
+    $internalInstructions = @("ai-plan-hardening-runbook.instructions.md", "context-fuel.instructions.md", "git-workflow.instructions.md", "security.instructions.md")
+    $sharedInstructions   = @("architecture-principles.instructions.md", "clean-code.instructions.md", "self-repair-reporting.instructions.md", "status-reporting.instructions.md", "testing.instructions.md")
+    if (Test-Path $srcInternalInstr) {
+        foreach ($instrName in $internalInstructions) {
+            $srcFile = Join-Path $srcInternalInstr $instrName
+            $dstFile = Join-Path $dstInstr $instrName
+            if ((Test-Path $srcFile) -and (Test-Path $dstFile)) {
+                $srcHash = (Get-FileHash $srcFile -Algorithm SHA256).Hash
+                $dstHash = (Get-FileHash $dstFile -Algorithm SHA256).Hash
+                if ($srcHash -ne $dstHash) {
+                    $updates += @{ Src = $srcFile; Dst = $dstFile; Name = ".github/instructions/$instrName" }
+                }
+            }
+        }
+    }
     if (Test-Path $srcSharedInstr) {
         foreach ($instrName in $sharedInstructions) {
             $srcFile = Join-Path $srcSharedInstr $instrName

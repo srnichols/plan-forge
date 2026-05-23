@@ -1,6 +1,6 @@
 {
   "name": "plan-forge-mcp",
-  "version": "3.18.2-dev",
+  "version": "3.19.0",
   "main": "server.mjs",
   "type": "module",
   "scripts": {
@@ -39,4 +39,3 @@
     "url": "https://github.com/srnichols/plan-forge"
   }
 }
-

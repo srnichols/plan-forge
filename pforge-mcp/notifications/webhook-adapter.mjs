@@ -4,7 +4,7 @@
  * Phase FORGE-SHOP-03 Slice 03.1
  *
  * Sends notifications via HTTP POST (webhook). Uses native fetch() — no deps.
- * Conforms to the adapter contract defined in pforge-sdk/src/notifications/adapter-contract.mjs.
+ * Conforms to the adapter contract defined in pforge-sdk/notifications/adapter-contract.mjs.
  */
 
 /**
@@ -35,8 +35,8 @@ function maskUrl(url) {
 
 /**
  * Send a notification via HTTP POST.
- * @param {import('../../pforge-sdk/src/notifications/adapter-contract.mjs').AdapterSendArgs} args
- * @returns {Promise<import('../../pforge-sdk/src/notifications/adapter-contract.mjs').AdapterSendResult>}
+ * @param {import('../../pforge-sdk/notifications/adapter-contract.mjs').AdapterSendArgs} args
+ * @returns {Promise<import('../../pforge-sdk/notifications/adapter-contract.mjs').AdapterSendResult>}
  */
 async function send({ event, route, formattedMessage, correlationId, config }) {
   const url = config?.url;
@@ -69,7 +69,7 @@ async function send({ event, route, formattedMessage, correlationId, config }) {
   }
 }
 
-/** @type {import('../../pforge-sdk/src/notifications/adapter-contract.mjs').NotificationAdapter} */
+/** @type {import('../../pforge-sdk/notifications/adapter-contract.mjs').NotificationAdapter} */
 export const webhookAdapter = Object.freeze({
   name: "webhook",
   send,

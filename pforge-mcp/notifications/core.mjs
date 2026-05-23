@@ -17,7 +17,7 @@
 
 import { randomUUID } from "node:crypto";
 import { readForgeJson } from "../orchestrator.mjs";
-import { validateAdapterShape } from "../../pforge-sdk/src/notifications/adapter-contract.mjs";
+import { validateAdapterShape } from "../../pforge-sdk/notifications/adapter-contract.mjs";
 import { ERROR_CODES } from "../enums.mjs";
 
 // ─── Constants ────────────────────────────────────────────────────────

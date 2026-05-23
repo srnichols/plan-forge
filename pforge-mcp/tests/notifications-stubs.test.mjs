@@ -8,7 +8,7 @@
  * Also verifies catalog.json entries.
  */
 import { describe, it, expect } from "vitest";
-import { validateAdapterShape, ERR_NOT_IMPLEMENTED } from "../../pforge-sdk/src/notifications/adapter-contract.mjs";
+import { validateAdapterShape, ERR_NOT_IMPLEMENTED } from "../../pforge-sdk/notifications/adapter-contract.mjs";
 import { readFileSync } from "node:fs";
 import { resolve, dirname } from "node:path";
 import { fileURLToPath } from "node:url";

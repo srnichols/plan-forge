@@ -73,6 +73,29 @@ open → noise       (classifier ruled it a false positive)</code></pre>
           <strong>Scanner override.</strong> If the original scanner is no longer registered, pass <code>scannerOverride</code> to validate with an equivalent. The validation log preserves both scanner names for audit.
         </div>
 
+        <h2 id="skill-advisory">Skill Advisory</h2>
+        <p>Every successful <code>forge_bug_register</code>, <code>forge_bug_update_status</code>, and <code>forge_bug_validate_fix</code> response includes a <code>skillAdvisory</code> field that nudges the caller toward the <a href="instructions-agents-reference.html#skills-shared"><code>/bug-fix</code> skill</a> &mdash; the end-to-end TDD-first fix workflow. The advisory is purely informational; the tool itself returns its normal success payload alongside.</p>
+
+        <pre><code>{
+  "ok": true,
+  "bugId": "bug-7af3...",
+  "status": "open",
+  "skillAdvisory": {
+    "skill": "bug-fix",
+    "reason": "Bug registered. The /bug-fix skill composes /code-review, /clean-code-review, /test-sweep around forge_bug_validate_fix so a fix never closes without a regression check.",
+    "next": "Invoke /bug-fix bug-7af3 in chat to start the guided workflow."
+  }
+}</code></pre>
+
+        <p>The advisory field varies by tool:</p>
+        <ul>
+          <li><code>forge_bug_register</code> &mdash; advisory recommends <code>/bug-fix &lt;bugId&gt;</code> to start the TDD red-green cycle</li>
+          <li><code>forge_bug_update_status</code> &mdash; when transitioning to <code>in-fix</code>, advisory points at <code>/bug-fix</code>; when transitioning to <code>fixed</code> outside the skill, advisory warns that <code>forge_bug_validate_fix</code> should have been run first</li>
+          <li><code>forge_bug_validate_fix</code> &mdash; on success, advisory points at <code>/test-sweep</code> for regression confirmation; on failure, advisory points at <code>/code-review</code> + a re-run of <code>/bug-fix</code></li>
+        </ul>
+
+        <p>Pass <code>skipAdvisory: true</code> in the tool input to suppress the field entirely. Useful in CI / batched callers where the advisory adds noise without value.</p>
+
         <h2 id="ui">Where You See It</h2>
         <p>The dashboard's Triage tab shows open bugs by severity, with status chips and quick-transition buttons. The Watcher's Home chip includes an <em>open bugs</em> count. Cross-linked to incidents via <code>forge_incident_capture</code>.</p>
 

@@ -35,7 +35,7 @@
 
       <h2 id="tldr-for-security-review">TL;DR for security review</h2>
 
-      <p>Plan Forge is <strong class="text-slate-200">local-first</strong>. The orchestrator runs on the developer's machine or a CI runner inside the customer's network. There is no Plan Forge SaaS service. Source code does not leave the customer's network unless the customer chooses to call a hosted LLM (and even then, all logging stays local). The audit trail is structured, complete, and exportable. Identity is currently bearer-token only and is the largest gap on the roadmap.</p>
+      <p>Plan Forge is <strong class="text-slate-200">local-first</strong>. The orchestrator runs on the developer's machine or a CI runner inside the customer's network. There is no Plan Forge SaaS service. Source code does not leave the customer's network unless the customer chooses to call a hosted LLM (and even then, all logging stays local). The audit trail is structured, complete, and exportable. Identity supports bearer tokens, Entra ID OIDC (v3.14.0+), Okta OIDC (v3.16.0+), and SCIM 2.0 provisioning (v3.17.0+) with SCIM-group-to-RBAC-role mapping (v3.18.0+) &mdash; see the <a href="#identity">Identity providers</a> section below.</p>
 
       <table class="manual-table">
         <thead><tr><th>Concern</th><th>Status</th></tr></thead>
@@ -43,8 +43,8 @@
           <tr><td>Source code leaves network</td><td>Only when customer-configured LLM provider is hosted; all logging stays local</td></tr>
           <tr><td>Audit log of agent actions</td><td>Structured, complete, <strong class="text-emerald-400">production-grade</strong> today (<code>telemetry.mjs</code>, <code>EVENTS.md</code>)</td></tr>
           <tr><td>Audit log export</td><td>OTel exporter on roadmap (Week 2 of enterprise hardening); manual export available today</td></tr>
-          <tr><td>Identity / SSO</td><td><strong class="text-amber-400">Bearer token only today</strong>; Entra ID / SAML / SCIM on roadmap</td></tr>
-          <tr><td>RBAC</td><td><strong class="text-amber-400">None today</strong>; on roadmap</td></tr>
+          <tr><td>Identity / SSO</td><td><strong class="text-emerald-400">Bearer, Entra OIDC, Okta OIDC, SCIM 2.0 shipped</strong> (v3.14.0&ndash;v3.17.0); SAML on roadmap</td></tr>
+          <tr><td>RBAC</td><td><strong class="text-emerald-400">Role-based authz with SCIM group mapping shipped</strong> (v3.18.0)</td></tr>
           <tr><td>Data residency controls</td><td>Customer chooses LLM provider region; Plan Forge respects</td></tr>
           <tr><td>Air-gapped deployment</td><td>Architecturally supported; documentation gap (this doc)</td></tr>
           <tr><td>Encryption at rest</td><td>Customer's filesystem encryption (Plan Forge respects)</td></tr>
@@ -178,41 +178,76 @@ pforge search --since 2026-04-01 --sources run,liveguard,bug --output audit.json
 
       <h3 id="identity-today">Today</h3>
 
-      <p>Plan Forge supports:</p>
+      <p>Plan Forge ships four authentication providers (selected via <code>auth.provider</code> in <code>.forge.json</code>) plus role-based authorization with optional SCIM-driven group mapping. All providers feed the same <code>authenticate()</code> + <code>resolveRoles()</code> / <code>hasScope()</code> pipeline in <code>pforge-mcp/auth/</code>.</p>
+
+      <table class="manual-table">
+        <thead><tr><th>Provider</th><th>Since</th><th>Use case</th></tr></thead>
+        <tbody>
+          <tr><td><code>none</code></td><td>v2.x</td><td>Default. Local dev, single-user CI runs. No identity enforced.</td></tr>
+          <tr><td><code>bearer</code></td><td>v2.x</td><td>Dashboard / hub write operations. Token configured as <code>bridge.approvalSecret</code> in <code>.forge.json</code>.</td></tr>
+          <tr><td><code>entra-oidc</code></td><td>v3.14.0</td><td>Microsoft Entra ID / Azure AD. RS256-signed JWTs validated against <code>https://login.microsoftonline.com/{tenantId}/discovery/v2.0/keys</code>. Both v2.0 and v1.0 issuer formats accepted. JWKS cached 5 min per tenant. Returns <code>claims.sub ?? claims.oid</code> as the RBAC principal key.</td></tr>
+          <tr><td><code>okta-oidc</code></td><td>v3.16.0</td><td>Okta. Supports custom authorization servers (<code>https://{domain}/oauth2/{authServerId}/v1/keys</code>) and the Org authorization server (<code>https://{domain}/oauth2/v1/keys</code>). Org tokens may use <code>cid</code> instead of <code>aud</code> &mdash; both validated. JWKS cached 5 min per <code>domain::authServerId</code>.</td></tr>
+        </tbody>
+      </table>
+
+      <h3 id="identity-scim">SCIM 2.0 user / group provisioning (v3.17.0+)</h3>
+
+      <p>14 SCIM 2.0 endpoints are exposed under <code>/scim/v2/</code> when a bearer token is configured via <code>PFORGE_SCIM_TOKEN</code> env var or <code>.forge/secrets.json#scimBearerToken</code>. SCIM is <strong>disabled by default</strong> &mdash; absent token returns HTTP 503.</p>
+
       <ul>
-        <li><strong class="text-slate-200">Bearer token</strong> for write operations against the dashboard / hub (configured as <code>bridge.approvalSecret</code> in <code>.forge.json</code>)</li>
-        <li><strong class="text-slate-200">API keys</strong> loaded from environment variables or <code>.forge/secrets.json</code> for LLM providers (OpenAI, Anthropic, xAI, GitHub Copilot, Azure OpenAI when manually configured)</li>
+        <li>Discovery: <code>GET /scim/v2/ServiceProviderConfig</code>, <code>GET /scim/v2/Schemas</code> (both unauthenticated per spec; IdPs probe before presenting credentials)</li>
+        <li>Users: <code>GET|POST /scim/v2/Users</code>, <code>GET|PUT|PATCH|DELETE /scim/v2/Users/:id</code></li>
+        <li>Groups: <code>GET|POST /scim/v2/Groups</code>, <code>GET|PUT|PATCH|DELETE /scim/v2/Groups/:id</code></li>
       </ul>
 
-      <p>Known secrets recognized:</p>
+      <p>Users and groups persist to <code>.forge/scim-users.json</code> / <code>.forge/scim-groups.json</code>. SCIM <code>PatchOp</code> <code>add</code>, <code>replace</code>, and <code>remove</code> are supported. Compatible with Okta SCIM 2.0, Microsoft Entra provisioning, and any spec-compliant IdP.</p>
+
+      <h3 id="identity-rbac">RBAC + SCIM group mapping (v3.18.0+)</h3>
+
+      <p>Role definitions live in <code>.forge.json#auth.rbac</code> as <code>{ roles, assignments }</code>. The SCIM-RBAC bridge in <code>pforge-mcp/auth/scim-rbac-bridge.mjs</code> maps SCIM group <code>displayName</code> values to RBAC role names via <code>auth.scimGroupRoles</code>:</p>
+
+      <pre class="manual-code"><code>{
+  "auth": {
+    "provider": "entra-oidc",
+    "entraOidc": { "tenantId": "00000000-0000-0000-0000-000000000000" },
+    "rbac": {
+      "roles": {
+        "admin":     { "scopes": ["*"] },
+        "developer": { "scopes": ["run-plan", "read"] },
+        "reader":    { "scopes": ["read"] }
+      }
+    },
+    "scimGroupRoles": {
+      "Platform Admins":  ["admin"],
+      "Plan Forge Devs":  ["developer"],
+      "Plan Forge Users": ["reader"]
+    }
+  }
+}</code></pre>
+
+      <p>At authentication time, <code>buildScimAssignments(scimStore, mappings)</code> resolves the user's group memberships into role assignments, which then flow into <code>resolveRoles</code> + <code>hasScope</code>. The bridge is purely read-only &mdash; it never mutates the SCIM store or the RBAC config.</p>
+
+      <h3 id="identity-secrets">Recognized secret env vars</h3>
+
+      <p>Plan Forge looks for the following secrets in <code>process.env</code> first, falling back to <code>.forge/secrets.json</code>:</p>
       <ul>
         <li><code>GITHUB_TOKEN</code></li>
         <li><code>XAI_API_KEY</code></li>
         <li><code>OPENAI_API_KEY</code></li>
         <li><code>ANTHROPIC_API_KEY</code></li>
         <li><code>OPENCLAW_API_KEY</code></li>
-      </ul>
-
-      <p><strong class="text-slate-200">Not yet supported as first-class:</strong></p>
-      <ul>
-        <li><code>AZURE_OPENAI_API_KEY</code> + endpoint URL (works manually; first-class config on roadmap)</li>
-        <li>Entra ID / SAML / SCIM</li>
-        <li>OAuth flows</li>
+        <li><code>PFORGE_SCIM_TOKEN</code> (SCIM provisioning bearer)</li>
       </ul>
 
       <h3 id="identity-roadmap">Identity roadmap</h3>
 
-      <p>Order of priority based on enterprise requests:</p>
+      <p>What's still on the roadmap, in priority order:</p>
 
       <ol>
-        <li><strong class="text-slate-200">BYO Azure OpenAI first-class</strong> (Week 3 of enterprise hardening), <code>AZURE_OPENAI_API_KEY</code> and endpoint as recognized secrets, deployment-name vs model-name handled in config, Entra ID auth via <code>azure-identity</code> SDK</li>
-        <li><strong class="text-slate-200">Auth model documentation + extension point</strong> (Week 3), describes how Plan Forge thinks about identity today and the planned model. Adds a clear interface for plugging in SSO providers</li>
-        <li><strong class="text-slate-200">Config-driven RBAC scaffold</strong> (Week 3), roles, permissions, who can do what (enforcement basic; structure right)</li>
-        <li><strong class="text-slate-200">Entra ID SSO</strong> (post-Week-4), full implementation</li>
-        <li><strong class="text-slate-200">SAML / SCIM</strong> (later), driven by enterprise demand</li>
+        <li><strong class="text-slate-200">First-class Azure OpenAI BYO</strong> &mdash; <code>AZURE_OPENAI_API_KEY</code> + endpoint as recognized secrets; deployment-name vs model-name handled in config; Entra ID auth via <code>azure-identity</code> SDK</li>
+        <li><strong class="text-slate-200">SAML 2.0 provider</strong> &mdash; for IdPs that don't speak OIDC</li>
+        <li><strong class="text-slate-200">RBAC enforcement on the MCP tool surface</strong> &mdash; today RBAC is wired through <code>authenticate()</code> + <code>hasScope()</code>; per-tool scope declarations on every <code>forge_*</code> handler are still being rolled out</li>
       </ol>
-
-      <p>If your security review requires SSO/SCIM/RBAC today, Plan Forge is not a fit. The honest answer matters more than overpromising.</p>
 
       <h2 id="compliance-posture">Compliance posture</h2>
 

@@ -541,6 +541,39 @@ forge_diagnose({ file: "src/auth/token-validator.ts", models: "grok-3-mini,grok-
           </div>
         </div>
 
+        <!-- ─── self-update (v2.53+) ─── -->
+        <div class="cmd-ref" id="self-update">
+          <div class="cmd-ref-title">pforge self-update</div>
+          <div class="cmd-ref-desc">Check GitHub for the latest Plan Forge release and install it. Composes with <code>pforge update</code> under the hood; refreshes the consumer <code>.gitignore</code> managed block (v3.15.1+) and invalidates the version-check cache so the next <code>pforge smith</code> doesn't show a stale "update available" banner.</div>
+
+          <table class="manual-table">
+            <thead><tr><th>Flag</th><th>Type</th><th>Description</th></tr></thead>
+            <tbody>
+              <tr><td><code>--yes</code>, <code>-y</code></td><td>boolean</td><td>Skip the "Install vX.Y.Z now? [Y/n]" confirmation prompt</td></tr>
+              <tr><td><code>--dry-run</code></td><td>boolean</td><td>Print what would happen (target tag, downgrade detection) without writing anything</td></tr>
+              <tr><td><code>--force</code></td><td>boolean</td><td>Heal an already-current install — reinstalls the latest tagged release even when the local VERSION matches. Useful when a corrupt <code>-dev</code> tarball needs replacing</td></tr>
+              <tr><td><code>--downgrade</code></td><td>boolean</td><td>Required with <code>--force</code> when the latest release is OLDER than the local version (e.g. recovering from a manual VERSION edit). Without it, <code>self-update</code> refuses to silently downgrade.</td></tr>
+              <tr><td><code>--verify</code></td><td>boolean</td><td><strong>v3.20.0+</strong> — After a successful update, runs <code>pforge check</code> and <code>pforge smith</code> in subprocesses against the freshly-installed wrapper. Exits non-zero if either fails. Composes with every other flag.</td></tr>
+            </tbody>
+          </table>
+
+          <div class="cmd-block">
+            <div class="cmd-block-header"><span>Common combinations</span><button class="cmd-copy-btn">Copy</button></div>
+            <pre><code>pforge self-update                              # interactive — prompts before installing
+pforge self-update --yes                        # unattended (CI, scripts)
+pforge self-update --dry-run                    # preview only
+pforge self-update --force                      # heal a corrupt install
+pforge self-update --force --downgrade          # explicit roll-back (rare)
+pforge self-update --verify                     # update + check + smith
+pforge self-update --yes --verify               # unattended with verification
+pforge self-update --force --verify             # heal + verify</code></pre>
+          </div>
+
+          <div class="callout callout-info" class="callout-sm">
+            <strong>Why <code>--verify</code> spawns subprocesses</strong>: When <code>pforge.ps1</code> / <code>pforge.sh</code> are updated in-place, the running shell still has the OLD wrapper code loaded in memory (Issue #177). <code>--verify</code> shells out to <code>pwsh -File pforge.ps1 check</code> / <code>bash pforge.sh check</code> so the just-installed wrapper is the one that does the verification.
+          </div>
+        </div>
+
         <!-- ─── help ─── -->
         <div class="cmd-ref" id="help">
           <div class="cmd-ref-title">pforge help</div>

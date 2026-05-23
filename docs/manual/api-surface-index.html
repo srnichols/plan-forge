@@ -29,7 +29,7 @@
       <div class="chapter-content">
         <div class="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">Appendix Q · Reference</div>
         <h1>Unified API Surface Index</h1>
-        <p class="text-lg text-slate-400 mb-8">One index, four surfaces. Every <!--c:tools-->104<!--/c--> MCP tool, every <!--c:cli-commands-->97<!--/c--> CLI command, every REST endpoint domain, and every SDK export, alphabetized, grouped, and cross-linked. If you can't remember whether <code>forge_secret_scan</code> has a CLI wrapper, this is the page.</p>
+        <p class="text-lg text-slate-400 mb-8">One index, four surfaces. Every <!--c:tools-->102<!--/c--> MCP tool, every <!--c:cli-commands-->97<!--/c--> CLI command, every REST endpoint domain, and every SDK export, alphabetized, grouped, and cross-linked. If you can't remember whether <code>forge_secret_scan</code> has a CLI wrapper, this is the page.</p>
 
         <div class="callout callout-info">
           <strong>The source of truth.</strong> This appendix is a navigable index, not a reference manual. For deep usage:
@@ -69,7 +69,7 @@
             <tbody class="text-slate-300">
               <tr class="border-b border-slate-800/40">
                 <td class="py-2 px-3"><strong>MCP</strong> (stdio + WebSocket)</td>
-                <td class="py-2 px-3"><!--c:tools-->104<!--/c--> tools</td>
+                <td class="py-2 px-3"><!--c:tools-->102<!--/c--> tools</td>
                 <td class="py-2 px-3">Transport-bound (stdio = inherited trust; WS = bearer)</td>
                 <td class="py-2 px-3">Copilot, Claude, Cursor, Codex, anything speaking MCP</td>
               </tr>
@@ -407,7 +407,7 @@
         </div>
 
         <div class="callout callout-tip">
-          <strong>Total: <!--c:tools-->104<!--/c--> MCP tools across 24 domains.</strong> Run <code>forge_capabilities</code> for the machine-readable manifest with full schemas, cost tiers, intent tags, and error maps.
+          <strong>Total: <!--c:tools-->102<!--/c--> MCP tools across 24 domains.</strong> Run <code>forge_capabilities</code> for the machine-readable manifest with full schemas, cost tiers, intent tags, and error maps.
         </div>
 
         <!-- ─── CLI ─── -->
@@ -530,8 +530,8 @@ pforge ext add/remove/...       Extension management</code></pre>
         </div>
 
         <!-- ─── SDK ─── -->
-        <h2 id="sdk">SDK — <code>pforge-sdk</code></h2>
-        <p>Twelve sub-paths, all pure Node.js (zero runtime dependencies). Full reference: <a href="https://github.com/srnichols/plan-forge/blob/master/pforge-sdk/README.md" rel="noopener">pforge-sdk/README.md on GitHub</a>.</p>
+        <h2 id="sdk">SDK &mdash; <code>pforge-sdk</code></h2>
+        <p>Fifteen sub-paths, all pure Node.js (zero runtime dependencies). Full reference: <a href="https://github.com/srnichols/plan-forge/blob/master/pforge-sdk/README.md" rel="noopener">pforge-sdk/README.md on GitHub</a>.</p>
 
         <div class="overflow-x-auto my-6">
           <table class="text-sm w-full border-collapse">
@@ -585,23 +585,38 @@ pforge ext add/remove/...       Extension management</code></pre>
               </tr>
               <tr class="border-b border-slate-800/40">
                 <td class="py-2 px-3"><code>pforge-sdk/run-reader</code> <span class="text-amber-400 text-xs font-semibold">v0.6.0</span></td>
-                <td class="py-2 px-3"><code>listRuns</code>, <code>readRunMeta</code>, <code>readRunSummary</code>, <code>readRunIndex</code>, <code>parseEventLine</code></td>
-                <td class="py-2 px-3">Offline access to <code>.forge/runs/</code> artifacts — no running server required</td>
+                <td class="py-2 px-3"><code>listRuns</code>, <code>readRunMeta</code>, <code>readRunSummary</code>, <code>readRunIndex</code>, <code>readEvents</code>, <code>parseEventLine</code>, <code>eventsLogPath</code>, <code>EVENTS_LOG_FILE</code></td>
+                <td class="py-2 px-3">Offline access to <code>.forge/runs/</code> artifacts &mdash; including the per-run event log (<code>readEvents</code> + <code>eventsLogPath</code>, v3.13.0+) &mdash; no running server required</td>
               </tr>
-              <tr>
+              <tr class="border-b border-slate-800/40">
                 <td class="py-2 px-3"><code>pforge-sdk/plan-reader</code> <span class="text-amber-400 text-xs font-semibold">v0.7.0</span></td>
                 <td class="py-2 px-3"><code>listPlans</code>, <code>readPlan</code>, <code>getPlanStatus</code>, <code>getPlanSlices</code>, <code>plansDir</code></td>
-                <td class="py-2 px-3">Offline access to <code>docs/plans/</code> plan files — read status, slices, and frontmatter without a server</td>
+                <td class="py-2 px-3">Offline access to <code>docs/plans/</code> plan files &mdash; read status, slices, and frontmatter without a server</td>
               </tr>
-              <tr>
+              <tr class="border-b border-slate-800/40">
                 <td class="py-2 px-3"><code>pforge-sdk/thought-reader</code> <span class="text-amber-400 text-xs font-semibold">v0.8.0</span></td>
                 <td class="py-2 px-3"><code>readThoughts</code>, <code>readAllThoughts</code>, <code>listThoughtSources</code>, <code>parseThoughtLine</code>, <code>thoughtFilePath</code></td>
-                <td class="py-2 px-3">Offline access to <code>.forge/*.jsonl</code> thought stores — OpenBrain queue, archive, DLQ, and LiveGuard memories</td>
+                <td class="py-2 px-3">Offline access to <code>.forge/*.jsonl</code> thought stores &mdash; OpenBrain queue, archive, DLQ, and LiveGuard memories</td>
               </tr>
-              <tr>
+              <tr class="border-b border-slate-800/40">
                 <td class="py-2 px-3"><code>pforge-sdk/digest-reader</code> <span class="text-amber-400 text-xs font-semibold">v0.9.0</span></td>
                 <td class="py-2 px-3"><code>listDigests</code>, <code>readDigest</code>, <code>readLatestDigest</code>, <code>overallSeverity</code>, <code>getSectionsByMinSeverity</code>, <code>digestFilePath</code></td>
-                <td class="py-2 px-3">Offline access to <code>.forge/digests/*.json</code> daily digest files — list, read, and compute severity</td>
+                <td class="py-2 px-3">Offline access to <code>.forge/digests/*.json</code> daily digest files &mdash; list, read, and compute severity</td>
+              </tr>
+              <tr class="border-b border-slate-800/40">
+                <td class="py-2 px-3"><code>pforge-sdk/session-reader</code> <span class="text-amber-400 text-xs font-semibold">v0.10.0 (v3.12.0+)</span></td>
+                <td class="py-2 px-3"><code>listSessions</code>, <code>readSession</code>, <code>readAllSessionTurns</code>, <code>parseSessionLine</code>, <code>sessionFilePath</code>, <code>sessionArchivePath</code>, <code>fmSessionsDir</code></td>
+                <td class="py-2 px-3">Offline access to <code>.forge/fm-sessions/*.jsonl</code> Forge-Master session transcripts &mdash; iterate active or archived turns</td>
+              </tr>
+              <tr class="border-b border-slate-800/40">
+                <td class="py-2 px-3"><code>pforge-sdk/bug-reader</code> <span class="text-amber-400 text-xs font-semibold">v0.11.0 (v3.13.0+)</span></td>
+                <td class="py-2 px-3"><code>listBugs</code>, <code>readBug</code>, <code>bugFilePath</code>, <code>bugsDir</code>, <code>filterByStatus</code></td>
+                <td class="py-2 px-3">Offline access to <code>.forge/bugs/&lt;bugId&gt;.json</code> tempering records &mdash; query the registry from CI without spinning up the server</td>
+              </tr>
+              <tr>
+                <td class="py-2 px-3"><code>pforge-sdk/trajectory-reader</code> <span class="text-amber-400 text-xs font-semibold">v0.12.0 (v3.15.0+)</span></td>
+                <td class="py-2 px-3"><code>listTrajectories</code>, <code>readTrajectory</code>, <code>readAllTrajectories</code>, <code>summarizeTrajectories</code>, <code>trajectoryFilePath</code>, <code>planTrajectoriesDir</code>, <code>parseSliceId</code></td>
+                <td class="py-2 px-3">Offline access to <code>.forge/trajectories/&lt;plan&gt;/&lt;slice&gt;.md</code> &mdash; the per-slice agent trajectory captures used by self-repair reporting</td>
               </tr>
             </tbody>
           </table>

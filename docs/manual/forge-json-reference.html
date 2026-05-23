@@ -56,7 +56,7 @@
               <tr><td><a href="#execution"><code>maxParallelism</code>, <code>maxRetries</code>, <code>maxRunHistory</code></a></td><td>Execution limits</td><td>Orchestrator DAG scheduling and retention</td></tr>
               <tr><td><a href="#quorum"><code>quorum</code></a></td><td>Multi-model consensus</td><td><code>--quorum=...</code> flag, <code>forge_estimate_quorum</code></td></tr>
               <tr><td><a href="#extensions"><code>extensions</code></a></td><td>Installed extensions</td><td><code>pforge ext</code>, Extensions tab</td></tr>
-              <tr><td><a href="#hooks"><code>hooks</code></a></td><td>LiveGuard lifecycle hooks</td><td>PreDeploy, PostSlice, PreAgentHandoff, PostRun</td></tr>
+              <tr><td><a href="#hooks"><code>hooks</code></a></td><td>LiveGuard lifecycle hooks</td><td>PreDeploy, PostSlice, PostSliceCleanCode, PreAgentHandoff, PostRun</td></tr>
               <tr><td><a href="#openclaw"><code>openclaw</code></a></td><td>OpenClaw analytics bridge</td><td>PreAgentHandoff snapshot push (optional)</td></tr>
               <tr><td><a href="#runtime"><code>runtime</code></a></td><td>Inner-loop subsystems</td><td>Phase-25 gate synthesis and quorum reviewer</td></tr>
               <tr><td><a href="#brain"><code>brain</code></a></td><td>Memory and federation</td><td>OpenBrain federation across local repos</td></tr>
@@ -229,7 +229,7 @@
 
         <!-- ============================================================ -->
         <h2 id="hooks"><code>hooks</code> &mdash; LiveGuard lifecycle hooks</h2>
-        <p>Five hook configurations live under this object: <code>preDeploy</code> (before deploy slices), <code>postSlice</code> (after every slice), <code>preAgentHandoff</code> (multi-agent turn), <code>preCommit</code> (ordered commit-time guard chain), and <code>postRun</code> (after a run completes — auditor auto-invoke). Each section is independent; omit any subsection to accept its defaults.</p>
+        <p>Six hook configurations live under this object: <code>preDeploy</code> (before deploy slices), <code>postSlice</code> (after every slice), <code>postSliceCleanCode</code> (Clean Code delta after every slice commit, v3.19.0+), <code>preAgentHandoff</code> (multi-agent turn), <code>preCommit</code> (ordered commit-time guard chain), and <code>postRun</code> (after a run completes &mdash; auditor auto-invoke). Each section is independent; omit any subsection to accept its defaults.</p>
 
         <p class="text-sm text-slate-400 mb-6">For the full eight-hook picture, including the Copilot session hooks (<code>SessionStart</code>, <code>PreToolUse</code>, <code>PostToolUse</code>, <code>Stop</code>) configured separately in <code>.github/hooks/plan-forge.json</code> and the <code>PreCommit</code> chain runner, see <a href="customization.html#lifecycle-hooks"><strong>Customization &mdash; Lifecycle Hooks Reference</strong></a>.</p>
 
@@ -254,6 +254,22 @@
               <tr><td><code>hooks.postSlice.silentDeltaThreshold</code></td><td>number</td><td><code>5</code></td><td><code>3</code></td><td>Drift score delta below this is silent (no log line).</td></tr>
               <tr><td><code>hooks.postSlice.warnDeltaThreshold</code></td><td>number</td><td><code>10</code></td><td><code>15</code></td><td>Drift score delta at or above this prints a warning. Between silent and warn = info.</td></tr>
               <tr><td><code>hooks.postSlice.scoreFloor</code></td><td>number</td><td><code>70</code></td><td><code>80</code></td><td>Absolute drift score floor, below this triggers a red warning regardless of delta.</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <h3 id="hooks-postSliceCleanCode"><code>hooks.postSliceCleanCode</code> <span class="text-amber-400 text-sm font-normal">v3.19.0+</span></h3>
+        <p>Advisory-only Clean Code delta hook. Runs <code>scripts/audit/clean-code-delta.mjs</code> after every slice's git <code>post-commit</code> and emits a single advisory line when any tracked metric regresses past its threshold. <strong>Never blocks the commit</strong> &mdash; the hook is designed to surface gradual drift, not gate the slice. Defaults are <code>enabled: false</code>; flip <code>enabled: true</code> and tune the thresholds to your repo's baseline.</p>
+        <div class="overflow-x-auto mb-6">
+          <table class="manual-table">
+            <thead><tr><th>Key</th><th>Type</th><th>Default</th><th>Example</th><th>Change impact</th></tr></thead>
+            <tbody>
+              <tr><td><code>hooks.postSliceCleanCode.enabled</code></td><td>boolean</td><td><code>false</code></td><td><code>true</code></td><td>Master switch. When <code>false</code>, the post-commit hook exits 0 immediately without running the delta script.</td></tr>
+              <tr><td><code>hooks.postSliceCleanCode.locDelta</code></td><td>number</td><td><code>500</code></td><td><code>200</code></td><td>LOC growth in a single slice that triggers an advisory. Measured as total LOC across <code>pforge-mcp/**</code> + <code>pforge-master/**</code>.</td></tr>
+              <tr><td><code>hooks.postSliceCleanCode.functionCountDelta</code></td><td>number</td><td><code>20</code></td><td><code>10</code></td><td>New top-level function count in a single slice that triggers an advisory.</td></tr>
+              <tr><td><code>hooks.postSliceCleanCode.todoDelta</code></td><td>number</td><td><code>3</code></td><td><code>0</code></td><td>New TODO / FIXME / HACK markers in a single slice that triggers an advisory. Set <code>0</code> to enforce a hard no-new-TODO policy.</td></tr>
+              <tr><td><code>hooks.postSliceCleanCode.longParamListDelta</code></td><td>number</td><td><code>2</code></td><td><code>0</code></td><td>New functions with &ge;4 positional parameters in a single slice that triggers an advisory.</td></tr>
+              <tr><td><code>hooks.postSliceCleanCode.modulesOverLocCeilingDelta</code></td><td>number</td><td><code>0</code></td><td><code>0</code></td><td>New modules crossing the 3,000 LOC blocking ceiling. Default <code>0</code> means any new violation is advised.</td></tr>
             </tbody>
           </table>
         </div>
@@ -425,6 +441,7 @@
   "hooks": {
     "preDeploy": { "enabled": true, "blockOnSecrets": true, "warnOnEnvGaps": true, "scanSince": "HEAD~1" },
     "postSlice": { "silentDeltaThreshold": 5, "warnDeltaThreshold": 10, "scoreFloor": 70 },
+    "postSliceCleanCode": { "enabled": false, "locDelta": 500, "functionCountDelta": 20, "todoDelta": 3, "longParamListDelta": 2, "modulesOverLocCeilingDelta": 0 },
     "preAgentHandoff": { "injectContext": true, "runRegressionGuard": true, "cacheMaxAgeMinutes": 30, "minAlertSeverity": "medium" },
     "postRun": { "invokeAuditor": { "onFailure": true, "everyNRuns": null } }
   },

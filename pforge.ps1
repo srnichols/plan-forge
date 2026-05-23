@@ -123,7 +123,9 @@ function Update-PlanForgeGitignore([string]$RepoRoot) {
                 Write-Host "     git commit -m `"chore(pforge): untrack .forge/ runtime artifacts`"" -ForegroundColor Cyan
                 Write-Host ""
             }
-        } catch { }
+        } catch {
+            Write-Verbose "Skipped .forge git-tracking check: $($_.Exception.Message)"
+        }
         finally { Pop-Location }
     }
 }
@@ -1494,7 +1496,7 @@ function Invoke-Update {
                     # Auto mode — prefer the source with the newer STABLE release
                     if ($siblingPath) {
                         $siblingVer = $null
-                        try { $siblingVer = (Get-Content (Join-Path $siblingPath "VERSION") -Raw).Trim() } catch {}
+                        try { $siblingVer = (Get-Content (Join-Path $siblingPath "VERSION") -Raw).Trim() } catch { Write-Verbose "Could not read sibling VERSION at ${siblingPath}: $($_.Exception.Message)" }
                         $siblingIsDev = $siblingVer -match '-dev\b'
 
                         # Fetch latest tag via node helper (cached 24h in .forge/update-check.json)
@@ -2034,7 +2036,7 @@ Files in this directory (except this README) are gitignored — they are runtime
     foreach ($cacheFile in @(".forge/version-check.json", ".forge/install-health.json")) {
         $cachePath = Join-Path $RepoRoot $cacheFile
         if (Test-Path $cachePath) {
-            try { Remove-Item -Force $cachePath -ErrorAction SilentlyContinue } catch { }
+            try { Remove-Item -Force $cachePath -ErrorAction SilentlyContinue } catch { Write-Verbose "Could not remove stale cache ${cachePath}: $($_.Exception.Message)" }
         }
     }
     # Write a fresh update-check.json so the next check returns isNewer=false
@@ -2045,7 +2047,9 @@ import { writeFreshCache } from './pforge-mcp/update-check.mjs';
 writeFreshCache(process.argv[1], process.argv[2]);
 "@
         & node --input-type=module -e $freshCacheScript $RepoRoot $sourceVersion 2>&1 | Out-Null
-    } catch { }
+    } catch {
+        Write-Verbose "Could not write fresh update-check cache (best-effort): $($_.Exception.Message)"
+    }
 
     # Auto-install MCP dependencies if MCP files were updated.
     # Bugs B & C fix: wrap both in @() so a single-hashtable $updates or
@@ -2513,7 +2517,9 @@ function Invoke-Drift {
                         }
                     }
                 }
-            } catch { }
+            } catch {
+                Write-Verbose "Skipped file in code-quality scan: $($_.Exception.Message)"
+            }
         }
     }
 
@@ -2544,7 +2550,7 @@ function Invoke-Drift {
     $historyFile = Join-Path $RepoRoot ".forge\drift-history.json"
     $history = @()
     if (Test-Path $historyFile) {
-        try { $history = Get-Content $historyFile -Raw | ConvertFrom-Json } catch { }
+        try { $history = Get-Content $historyFile -Raw | ConvertFrom-Json } catch { Write-Verbose "Could not parse drift-history.json (treating as empty history): $($_.Exception.Message)" }
     }
     $prev = if ($history.Count -gt 0) { $history[-1] } else { $null }
     $delta = if ($prev) { $score - $prev.score } else { 0 }
@@ -3106,7 +3112,9 @@ function Invoke-Smith {
                 $cacheValid = $true
             }
         }
-        catch { }
+        catch {
+            Write-Verbose "Could not parse version-check cache (will refetch): $($_.Exception.Message)"
+        }
     }
 
     # Fetch from GitHub API if cache is stale or missing
@@ -3182,7 +3190,9 @@ function Invoke-Smith {
         try {
             $fj = Get-Content $forgeJsonPath -Raw | ConvertFrom-Json
             if ($fj.autoUpdate -and $fj.autoUpdate.enabled -eq $true) { $auEnabled = $true }
-        } catch { }
+        } catch {
+            Write-Verbose "Could not parse .forge.json for autoUpdate setting: $($_.Exception.Message)"
+        }
     }
 
     $updateCacheFile = Join-Path $RepoRoot ".forge/update-check.json"
@@ -3197,7 +3207,9 @@ function Invoke-Smith {
             if ($auCheckedAt) {
                 $auCacheAge = [math]::Round(((Get-Date) - [datetime]$auCheckedAt).TotalMinutes)
             }
-        } catch { }
+        } catch {
+            Write-Verbose "Could not parse update-check.json: $($_.Exception.Message)"
+        }
     }
 
     $enabledLabel = if ($auEnabled) { "enabled" } else { "disabled (opt-in)" }
@@ -3276,7 +3288,9 @@ function Invoke-Smith {
                     $secrets = Get-Content $secretsPath -Raw | ConvertFrom-Json
                     if (-not $hasXai -and $secrets.XAI_API_KEY) { $hasXai = $true; $secretsSrc = " (from .forge/secrets.json)" }
                     if (-not $hasOpenAi -and $secrets.OPENAI_API_KEY) { $hasOpenAi = $true; $secretsSrc = " (from .forge/secrets.json)" }
-                } catch { }
+                } catch {
+                    Write-Verbose "Could not parse .forge/secrets.json: $($_.Exception.Message)"
+                }
             }
         }
 
@@ -3294,7 +3308,9 @@ function Invoke-Smith {
                         if (-not $hasOpenAi -and $k -eq 'OPENAI_API_KEY' -and $v) { $script:_openAiFromEnv = $v; $hasOpenAi = $true; $secretsSrc = " (from .env)" }
                     }
                 }
-            } catch { }
+            } catch {
+                Write-Verbose "Could not parse .env file: $($_.Exception.Message)"
+            }
         }
 
         if ($hasXai -and $hasOpenAi) {
@@ -3396,7 +3412,9 @@ function Invoke-Smith {
                 } else {
                     Doctor-Warn "MCP server v$mcpVer but VERSION file says v$repoVer" "Update version in pforge-mcp/package.json"
                 }
-            } catch { }
+            } catch {
+                Write-Verbose "Could not compare MCP package.json with VERSION file: $($_.Exception.Message)"
+            }
         }
 
         # Phase-29: Forge-Master subsystem (routes + client bridge)
@@ -3511,7 +3529,9 @@ function Invoke-Smith {
         try {
             $cfgForHooks = Get-Content $configPath -Raw | ConvertFrom-Json
             if ($cfgForHooks.hooks) { $hookConfig = $cfgForHooks.hooks }
-        } catch { }
+        } catch {
+            Write-Verbose "Could not parse .forge.json for hook config: $($_.Exception.Message)"
+        }
     }
 
     # Source 3: .github/hooks/plan-forge.json (shipped by `pforge update` from templates/)
@@ -3521,7 +3541,9 @@ function Invoke-Smith {
         try {
             $hooksJsonRaw = Get-Content $hooksJsonPath -Raw | ConvertFrom-Json
             if ($hooksJsonRaw.hooks) { $hooksJsonConfig = $hooksJsonRaw.hooks }
-        } catch { }
+        } catch {
+            Write-Verbose "Could not parse .github/hooks/plan-forge.json: $($_.Exception.Message)"
+        }
     }
 
     if ($hasHookFiles -or $hookConfig -or $hooksJsonConfig) {
@@ -3701,7 +3723,9 @@ function Invoke-Smith {
 
                 Write-Host ""
             }
-        } catch { }
+        } catch {
+            Write-Verbose "Could not parse quorum config: $($_.Exception.Message)"
+        }
     }
 
     # ═══════════════════════════════════════════════════════════════
@@ -3898,7 +3922,9 @@ function Invoke-Smith {
                 $lgTools = $tools | Where-Object { $_.name -match 'drift|incident|dep_watch|regression|runbook|hotspot|health_trend|alert_triage|deploy_journal|secret_scan|env_diff|fix_proposal|quorum_analyze|liveguard_run' }
                 $lgCount = if ($lgTools) { @($lgTools).Count } else { 0 }
                 Doctor-Pass "$toolCount MCP tools ($lgCount LiveGuard) in tools.json"
-            } catch { }
+            } catch {
+                Write-Verbose "Could not parse .forge/tools.json: $($_.Exception.Message)"
+            }
         }
     }
 
@@ -3939,7 +3965,9 @@ function Invoke-Smith {
                     try {
                         $s = Get-Content $_.FullName -Raw | ConvertFrom-Json
                         if ($s.status -eq "in_progress") { $_ }
-                    } catch { }
+                    } catch {
+                        Write-Verbose "Could not parse smelt file $($_.FullName): $($_.Exception.Message)"
+                    }
                 })
             if ($stale.Count -gt 0) {
                 Doctor-Warn "$($stale.Count) in-progress smelt(s) idle for 7+ days" "Abandon them with 'forge_crucible_abandon' or resume via the dashboard"
@@ -3968,7 +3996,9 @@ function Invoke-Smith {
                 $claims = Get-Content $phaseClaims -Raw | ConvertFrom-Json
                 $claimCount = if ($claims.claims) { @($claims.claims).Count } else { 0 }
                 Doctor-Pass "$claimCount phase number(s) claimed atomically"
-            } catch { }
+            } catch {
+                Write-Verbose "Could not parse phase-claims.json: $($_.Exception.Message)"
+            }
         }
     } else {
         Doctor-Pass "Crucible inactive — no .forge/crucible/ directory yet"
@@ -4081,7 +4111,9 @@ function Invoke-Smith {
                     $sev = if ($bug.severity) { "$($bug.severity)".ToLower() } else { "" }
                     if ($sev -eq "critical") { $critical++ }
                     elseif ($sev -eq "high") { $high++ }
-                } catch { }
+                } catch {
+                    Write-Verbose "Could not parse bug file $($bf.FullName): $($_.Exception.Message)"
+                }
             }
             Doctor-Pass "$($bugFiles.Count) total; $open open, $resolved resolved ($critical critical, $high high)"
             if ($critical -gt 0) {
@@ -4365,7 +4397,9 @@ function Invoke-RunPlan {
         # can attach without scraping Write-Host output (which bypasses stdout).
         try {
             Set-Content -Path (Join-Path $pidDir 'last-orch.pid') -Value $proc.Id -NoNewline -Encoding ASCII
-        } catch {}
+        } catch {
+            Write-Verbose "Could not write .forge/last-orch.pid (non-fatal): $($_.Exception.Message)"
+        }
         Write-Host "Orchestrator running in background  PID: $($proc.Id)" -ForegroundColor Green
         Write-Host "Monitor : pforge status" -ForegroundColor DarkGray
         Write-Host "Logs    : .forge/runs/ (latest sub-directory)" -ForegroundColor DarkGray
@@ -5225,7 +5259,9 @@ function Test-OpenBrainConfigured([string]$cwd) {
                 if ($content -match 'openbrain' -or $content -match 'open-brain') {
                     return @{ Configured = $true; ConfigPath = $p }
                 }
-            } catch { }
+            } catch {
+                Write-Verbose "Could not read config file ${p} during OpenBrain detection: $($_.Exception.Message)"
+            }
         }
     }
     return @{ Configured = $false; ConfigPath = $null }
@@ -5344,7 +5380,9 @@ function Invoke-BrainTest {
         try {
             $cfg = Get-Content -LiteralPath $forgeConfig -Raw | ConvertFrom-Json
             if ($cfg.projectName) { $project = $cfg.projectName }
-        } catch { }
+        } catch {
+            Write-Verbose "Could not parse .forge.json for project name: $($_.Exception.Message)"
+        }
     }
 
     $body = @{ project = $project } | ConvertTo-Json -Compress
@@ -5432,7 +5470,9 @@ function Invoke-BrainReplay {
             try {
                 $cfg = Get-Content -LiteralPath $forgeConfig -Raw | ConvertFrom-Json
                 if ($cfg.projectName) { $project = $cfg.projectName }
-            } catch { }
+            } catch {
+                Write-Verbose "Could not parse .forge.json for project name: $($_.Exception.Message)"
+            }
         }
     }
 
@@ -5548,7 +5588,9 @@ function Invoke-MigrateMemory {
             try {
                 $canonicalLines = Get-Content -LiteralPath $canonicalPath -ErrorAction Stop |
                     Where-Object { $_ -and $_.Trim().Length -gt 0 }
-            } catch {}
+            } catch {
+                Write-Verbose "Could not read canonical thoughts file ${canonicalPath}: $($_.Exception.Message)"
+            }
         }
 
         # Dedupe by exact line text (records are JSON; equal text == equal record)
@@ -5761,14 +5803,14 @@ if (neural) {
   try {
     const p = join(cwd, 'node_modules', '@xenova', 'transformers', 'package.json');
     if (existsSync(p)) version = JSON.parse(readFileSync(p,'utf-8')).version ?? null;
-  } catch {}
+  } catch { /* optional dep — version stays null */ }
 }
 const thoughts = readLocalThoughts(cwd);
 let configured = 'auto';
 try {
   const fj = JSON.parse(readFileSync(resolve(cwd,'.forge','forge.json'),'utf-8'));
   if (fj?.embeddingBackend) configured = fj.embeddingBackend;
-} catch {}
+} catch { /* optional config — fall through to default 'auto' */ }
 const effective = configured === 'tfidf' ? 'tfidf'
   : configured === 'neural' ? (neural ? 'neural' : 'tfidf')
   : (neural ? 'neural' : 'tfidf');
@@ -5900,7 +5942,7 @@ function Invoke-McpCall {
         else { $response | ConvertTo-Json -Depth 10 }
     } catch {
         $status = $null
-        try { $status = $_.Exception.Response.StatusCode.value__ } catch { }
+        try { $status = $_.Exception.Response.StatusCode.value__ } catch { Write-Verbose "Could not extract HTTP status code from exception: $($_.Exception.Message)" }
         if ($status -eq 404) {
             Write-Host "ERROR: Unknown tool '$toolName'. The MCP server returned 404." -ForegroundColor Red
             Write-Host "  Tip: run 'pforge mcp-call forge_capabilities' to list available tools." -ForegroundColor Yellow
@@ -6049,7 +6091,9 @@ function Invoke-SelfUpdate {
             if ($cfg.autoUpdate -and $cfg.autoUpdate.enabled -eq $true) {
                 $autoUpdateEnabled = $true
             }
-        } catch { }
+        } catch {
+            Write-Verbose "Could not parse .forge.json for auto-update setting: $($_.Exception.Message)"
+        }
     }
     if (-not $autoUpdateEnabled) {
         Write-Host "  ℹ Auto-update is opt-in; this is a manual invocation." -ForegroundColor DarkGray
@@ -6133,7 +6177,7 @@ console.log(JSON.stringify(r === null ? { checkFailed: true } : r));
         if (-not ($currentVersion -match '-dev\b') -and $checkJson.latest) {
             $currentCore = ($currentVersion -split '-')[0]
             $latestCore  = ($checkJson.latest -split '-')[0]
-            try { $isRealDowngrade = [version]$currentCore -gt [version]$latestCore } catch { }
+            try { $isRealDowngrade = [version]$currentCore -gt [version]$latestCore } catch { Write-Verbose "Could not compare versions as [version] (treating as not-downgrade): $($_.Exception.Message)" }
         }
         if ($isRealDowngrade) {
             $allowDowngrade = $Arguments -contains '--downgrade'
@@ -6237,7 +6281,7 @@ function Invoke-Config {
     if ($action -eq 'list') {
         $current = @{}
         if (Test-Path $configPath) {
-            try { $current = Get-Content $configPath -Raw | ConvertFrom-Json } catch {}
+            try { $current = Get-Content $configPath -Raw | ConvertFrom-Json } catch { Write-Verbose "Could not parse .forge.json in 'config list': $($_.Exception.Message)" }
         }
         foreach ($k in $schema.Keys) {
             $jk = $schema[$k].jsonKey

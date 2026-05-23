@@ -64,7 +64,10 @@ if (Test-Path $forgeConfigPath) {
                 $hookEnabled = [bool]$forgeConfig.hooks.preDeploy.enabled
             }
         }
-    } catch { }
+    } catch {
+        # Malformed .forge.json — fall back to defaults but surface the parse error.
+        Write-Warning "PreDeploy: could not parse .forge.json ($($_.Exception.Message)); using default hook settings."
+    }
 }
 
 # Exit early if hook is explicitly disabled
@@ -85,7 +88,15 @@ if ((Test-Path $secretCachePath) -and $blockOnSecrets) {
             Write-Output "{`"hookSpecificOutput`":{`"hookEventName`":`"PreToolUse`",`"permissionDecision`":`"deny`",`"permissionDecisionReason`":`"$escaped`"}}"
             exit 0
         }
-    } catch { }
+    } catch {
+        # Fail-closed: a corrupt secret-scan cache must NOT silently allow deploy.
+        # We cannot prove the working tree is clean if the cache is unreadable,
+        # so block deploy and instruct the user to re-scan.
+        $reason = "PreDeploy BLOCKED: secret-scan cache is unreadable ($($_.Exception.Message | ForEach-Object { $_ -replace '"', "'" })). Re-run: pforge secret-scan --since HEAD~1"
+        $escaped = $reason -replace '"', '\"'
+        Write-Output "{`"hookSpecificOutput`":{`"hookEventName`":`"PreToolUse`",`"permissionDecision`":`"deny`",`"permissionDecisionReason`":`"$escaped`"}}"
+        exit 0
+    }
 }
 
 # ── Check env-diff cache (advisory only — never blocks) ──────────────
@@ -100,7 +111,11 @@ if ((Test-Path $envCachePath) -and $warnOnEnvGaps) {
         if ($totalMissing -gt 0) {
             Write-Warning "PreDeploy Advisory: $totalMissing missing env key(s) detected. Deploy will proceed, but target environment may be missing required config."
         }
-    } catch { }
+    } catch {
+        # env-diff is advisory-only — fail-open but surface the parse error so the
+        # user knows the advisory check did not actually run.
+        Write-Warning "PreDeploy: could not parse .forge/env-diff-cache.json ($($_.Exception.Message)); env-gap advisory skipped."
+    }
 }
 
 # Allow the deploy action

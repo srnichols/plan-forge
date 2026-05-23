@@ -171,7 +171,11 @@ function Update-PlanForgeGitignore([string]$RepoRoot) {
                 Write-Host "     git commit -m `"chore(pforge): untrack .forge/ runtime artifacts`"" -ForegroundColor Cyan
                 Write-Host ""
             }
-        } catch { }
+        } catch {
+            # Best-effort advisory only — git not on PATH or repo state is unusual.
+            # Don't fail setup over this, but surface the reason for traceability.
+            Write-Verbose "Skipped .forge git-tracking check: $($_.Exception.Message)"
+        }
         finally { Pop-Location }
     }
 }

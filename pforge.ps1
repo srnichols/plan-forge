@@ -1,4 +1,4 @@
-﻿<#
+<#
 .SYNOPSIS
     pforge — CLI wrapper for the Plan Forge Pipeline
 
@@ -2162,6 +2162,20 @@ writeFreshCache(process.argv[1], process.argv[2]);
         Write-Host "  The new version is already on disk. No restart needed." -ForegroundColor DarkGray
     }
 
+    # Bootstrap nudge: when SDK or Forge-Master files are NEW (not just updated)
+    # AND the wrapper was self-updated, the consumer was almost certainly on a
+    # pre-v3.19 wrapper that didn't know to copy these subpackages. The current
+    # run *did* copy them (the new loop is in the on-disk source we extracted),
+    # but in pathological cases (interrupted run, partial copy) a second invocation
+    # is the safest heal. Issue #177-style advisory, scoped to subpackage adds.
+    $newSubpkgFiles = @(@($newFiles) | Where-Object { $_.Name -like "pforge-sdk/*" -or $_.Name -like "pforge-master/*" })
+    if ($newSubpkgFiles -and $wrapperSelfUpdated) {
+        Write-Host ""
+        Write-Host "ℹ️  Newly added: pforge-sdk and/or pforge-master subpackages ($($newSubpkgFiles.Count) file(s))." -ForegroundColor Cyan
+        Write-Host "  These weren't shipped to consumers before v3.19.0. Run 'pforge smith' to confirm," -ForegroundColor DarkGray
+        Write-Host "  or 'pforge self-update' once more if anything still validates missing." -ForegroundColor DarkGray
+    }
+
     # ─── --from-github: audit log + cleanup ──────────────────────
     if ($fromGitHub -and -not $dryRun) {
         $filesChanged = ($updates.Count + $newFiles.Count)
@@ -2960,7 +2974,7 @@ function Invoke-Smith {
             Doctor-Pass "$instrCount instruction files (expected: >=$($expected.instructions) for $presetKey)"
         }
         else {
-            Doctor-Warn "$instrCount instruction files (expected: >=$($expected.instructions) for $presetKey)" "Run 'pforge update' to get missing files"
+            Doctor-Warn "$instrCount instruction files (expected: >=$($expected.instructions) for $presetKey)" "Run 'pforge self-update' to get missing files"
         }
 
         # Agents
@@ -2972,7 +2986,7 @@ function Invoke-Smith {
             Doctor-Pass "$agentCount agent definitions (expected: >=$($expected.agents) for $presetKey)"
         }
         else {
-            Doctor-Warn "$agentCount agent definitions (expected: >=$($expected.agents) for $presetKey)" "Run 'pforge update' to get missing agents"
+            Doctor-Warn "$agentCount agent definitions (expected: >=$($expected.agents) for $presetKey)" "Run 'pforge self-update' to get missing agents"
         }
 
         # Prompts
@@ -2984,7 +2998,7 @@ function Invoke-Smith {
             Doctor-Pass "$promptCount prompt templates (expected: >=$($expected.prompts) for $presetKey)"
         }
         else {
-            Doctor-Warn "$promptCount prompt templates (expected: >=$($expected.prompts) for $presetKey)" "Run 'pforge update' to get missing prompts"
+            Doctor-Warn "$promptCount prompt templates (expected: >=$($expected.prompts) for $presetKey)" "Run 'pforge self-update' to get missing prompts"
         }
 
         # Pipeline prompts — presence check by name (the count alone can pass with
@@ -3005,7 +3019,7 @@ function Invoke-Smith {
             if ($missingPipeline.Count -eq 0) {
                 Doctor-Pass "Pipeline prompts present (step0-step6 + project-profile)"
             } else {
-                Doctor-Warn "Missing pipeline prompts: $($missingPipeline -join ', ')" "Run 'pforge update' to install missing pipeline prompts"
+                Doctor-Warn "Missing pipeline prompts: $($missingPipeline -join ', ')" "Run 'pforge self-update' to install missing pipeline prompts"
             }
         }
 
@@ -3018,7 +3032,7 @@ function Invoke-Smith {
             Doctor-Pass "$skillCount skills (expected: >=$($expected.skills) for $presetKey)"
         }
         else {
-            Doctor-Warn "$skillCount skills (expected: >=$($expected.skills) for $presetKey)" "Run 'pforge update' to get missing skills"
+            Doctor-Warn "$skillCount skills (expected: >=$($expected.skills) for $presetKey)" "Run 'pforge self-update' to get missing skills"
         }
     }
 
@@ -3117,7 +3131,7 @@ function Invoke-Smith {
             Doctor-Pass "Framework dev repo (v$templateVersion ahead of last release v$sourceVersion)"
         }
         else {
-            Doctor-Warn "Installed v$templateVersion — latest is v$sourceVersion" "Run 'pforge update' to upgrade"
+            Doctor-Warn "Installed v$templateVersion — latest is v$sourceVersion" "Run 'pforge self-update' to upgrade"
         }
         if ($cacheValid) {
             $cacheAge = (Get-Date) - [datetime](Get-Content $versionCheckCacheFile -Raw | ConvertFrom-Json).checkedAt
@@ -3384,7 +3398,7 @@ function Invoke-Smith {
         if (Test-Path $forgeMasterRoutes) {
             Doctor-Pass "forge-master-routes.mjs (Phase-29 route wiring)"
         } else {
-            Doctor-Warn "pforge-mcp/forge-master-routes.mjs missing (Phase-29)" "Re-run 'pforge update' to restore Forge-Master routes"
+            Doctor-Warn "pforge-mcp/forge-master-routes.mjs missing (Phase-29)" "Re-run 'pforge self-update' to restore Forge-Master routes"
         }
 
         # Auto-generated capability surface (regenerated on server start)
@@ -3414,7 +3428,7 @@ function Invoke-Smith {
         Write-Host "Forge-Master Studio (Phase-29):" -ForegroundColor Cyan
 
         if (Test-Path $forgeMasterServer) { Doctor-Pass "pforge-master/server.mjs" }
-        else { Doctor-Warn "pforge-master/server.mjs missing" "Re-run 'pforge update' to restore" }
+        else { Doctor-Warn "pforge-master/server.mjs missing" "Re-run 'pforge self-update' to restore" }
 
         if (Test-Path $forgeMasterLifecycle) { Doctor-Pass "pforge-master/src/lifecycle.mjs (status/logs backend)" }
         else { Doctor-Warn "pforge-master/src/lifecycle.mjs missing" "'pforge forge-master status|logs' will fail" }
@@ -3451,7 +3465,7 @@ function Invoke-Smith {
         if (Test-Path $forgeSdkClient) {
             Doctor-Pass "pforge-sdk/src/client.mjs"
         } else {
-            Doctor-Warn "pforge-sdk/src/client.mjs missing" "Re-run 'pforge update' to restore — deep imports from pforge-mcp will fail"
+            Doctor-Warn "pforge-sdk/src/client.mjs missing" "Re-run 'pforge self-update' to restore — deep imports from pforge-mcp will fail"
         }
         Write-Host ""
     }
@@ -3473,7 +3487,7 @@ function Invoke-Smith {
         # Phase-29: Forge-Master Studio tab controller
         $dashboardForgeMasterJs = Join-Path $RepoRoot "pforge-mcp/dashboard/forge-master.js"
         if (Test-Path $dashboardForgeMasterJs) { Doctor-Pass "dashboard/forge-master.js (Forge-Master Studio tab)" }
-        else { Doctor-Warn "dashboard/forge-master.js missing (Phase-29)" "Re-run 'pforge update' to restore Forge-Master Studio tab" }
+        else { Doctor-Warn "dashboard/forge-master.js missing (Phase-29)" "Re-run 'pforge self-update' to restore Forge-Master Studio tab" }
 
         # Dashboard screenshots for docs — only inside the plan-forge dev repo.
         # Downstream consumers don't need to populate docs/assets/dashboard/.
@@ -3601,16 +3615,16 @@ function Invoke-Smith {
             if ($hookMissing.Count -gt 0) {
                 if ($isPlanForgeDevRepo) {
                     # Framework dev repo ships hooks via templates/.github/hooks/ — the dev repo itself doesn't consume them.
-                    Doctor-Pass "Hooks missing locally (expected in framework dev repo — consumers get them via 'pforge update'): $($hookMissing -join ', ')"
+                    Doctor-Pass "Hooks missing locally (expected in framework dev repo — consumers get them via 'pforge self-update'): $($hookMissing -join ', ')"
                 } else {
-                    Doctor-Warn "Missing hooks: $($hookMissing -join ', ')" "Run 'pforge update' to install missing hook files, or add entries under 'hooks' in .forge.json"
+                    Doctor-Warn "Missing hooks: $($hookMissing -join ', ')" "Run 'pforge self-update' to install missing hook files, or add entries under 'hooks' in .forge.json"
                 }
             }
         } else {
             if ($isPlanForgeDevRepo) {
-                Doctor-Pass "No lifecycle hooks in framework dev repo (consumers get them via 'pforge update')"
+                Doctor-Pass "No lifecycle hooks in framework dev repo (consumers get them via 'pforge self-update')"
             } else {
-                Doctor-Warn "No lifecycle hooks found" "Run 'pforge update' to install hooks, or define them under 'hooks' in .forge.json"
+                Doctor-Warn "No lifecycle hooks found" "Run 'pforge self-update' to install hooks, or define them under 'hooks' in .forge.json"
             }
         }
         Write-Host ""
@@ -3758,7 +3772,7 @@ function Invoke-Smith {
 
         foreach ($ref in $referencedAgents) {
             if ($ref -notin $actualAgents) {
-                Doctor-Warn "AGENTS.md references '$ref' but file not found in .github/agents/" "Remove from AGENTS.md or run 'pforge update'"
+                Doctor-Warn "AGENTS.md references '$ref' but file not found in .github/agents/" "Remove from AGENTS.md or run 'pforge self-update'"
                 $problemsFound = $true
             }
         }

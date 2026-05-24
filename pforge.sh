@@ -1910,6 +1910,25 @@ writeFreshCache(process.argv[1], process.argv[2]);
         echo "  The new version is already on disk. No restart needed."
     fi
 
+    # Bootstrap nudge: when SDK or Forge-Master files are NEW (not just updated)
+    # AND the wrapper was self-updated, the consumer was almost certainly on a
+    # pre-v3.19 wrapper that didn't know to copy these subpackages. The current
+    # run *did* copy them, but in pathological cases (interrupted run, partial
+    # copy) a second invocation is the safest heal. Scoped to subpackage adds.
+    local new_subpkg_count=0
+    for entry in "${_new_files[@]}"; do
+        local entry_name="${entry##*|}"
+        if [[ "$entry_name" == pforge-sdk/* || "$entry_name" == pforge-master/* ]]; then
+            new_subpkg_count=$((new_subpkg_count + 1))
+        fi
+    done
+    if [ "$new_subpkg_count" -gt 0 ] && [ "$cli_updated" = true ]; then
+        echo ""
+        echo "ℹ️  Newly added: pforge-sdk and/or pforge-master subpackages ($new_subpkg_count file(s))."
+        echo "  These weren't shipped to consumers before v3.19.0. Run 'pforge smith' to confirm,"
+        echo "  or 'pforge self-update' once more if anything still validates missing."
+    fi
+
     # ─── --from-github: audit log + cleanup ──────────────────────
     if $from_github && ! $dry_run; then
         local files_changed=$(( ${#_updates[@]} + ${#_new_files[@]} ))
@@ -2555,15 +2574,15 @@ cmd_doctor() {
 
         [ "$instr_count" -ge "$exp_instr" ] \
             && doctor_pass "$instr_count instruction files (expected: >=$exp_instr for $preset_key)" \
-            || doctor_warn "$instr_count instruction files (expected: >=$exp_instr for $preset_key)" "Run 'pforge update' to get missing files"
+            || doctor_warn "$instr_count instruction files (expected: >=$exp_instr for $preset_key)" "Run 'pforge self-update' to get missing files"
 
         [ "$agent_count" -ge "$exp_agents" ] \
             && doctor_pass "$agent_count agent definitions (expected: >=$exp_agents for $preset_key)" \
-            || doctor_warn "$agent_count agent definitions (expected: >=$exp_agents for $preset_key)" "Run 'pforge update' to get missing agents"
+            || doctor_warn "$agent_count agent definitions (expected: >=$exp_agents for $preset_key)" "Run 'pforge self-update' to get missing agents"
 
         [ "$prompt_count" -ge "$exp_prompts" ] \
             && doctor_pass "$prompt_count prompt templates (expected: >=$exp_prompts for $preset_key)" \
-            || doctor_warn "$prompt_count prompt templates (expected: >=$exp_prompts for $preset_key)" "Run 'pforge update' to get missing prompts"
+            || doctor_warn "$prompt_count prompt templates (expected: >=$exp_prompts for $preset_key)" "Run 'pforge self-update' to get missing prompts"
 
         # Pipeline prompts — presence check by name (count alone can pass with
         # only scaffolding prompts; pipeline prompts power the runbook).
@@ -2578,13 +2597,13 @@ cmd_doctor() {
             if [ -z "$missing_pipeline" ]; then
                 doctor_pass "Pipeline prompts present (step0-step6 + project-profile)"
             else
-                doctor_warn "Missing pipeline prompts: ${missing_pipeline}" "Run 'pforge update' to install missing pipeline prompts"
+                doctor_warn "Missing pipeline prompts: ${missing_pipeline}" "Run 'pforge self-update' to install missing pipeline prompts"
             fi
         fi
 
         [ "$skill_count" -ge "$exp_skills" ] \
             && doctor_pass "$skill_count skills (expected: >=$exp_skills for $preset_key)" \
-            || doctor_warn "$skill_count skills (expected: >=$exp_skills for $preset_key)" "Run 'pforge update' to get missing skills"
+            || doctor_warn "$skill_count skills (expected: >=$exp_skills for $preset_key)" "Run 'pforge self-update' to get missing skills"
     fi
 
     echo ""
@@ -2675,7 +2694,7 @@ cmd_doctor() {
         elif [ $is_planforge_dev -eq 1 ] && echo "$template_version" | grep -qE -- '-dev\b'; then
             doctor_pass "Framework dev repo (v$template_version ahead of last release v$source_version)"
         else
-            doctor_warn "Installed v$template_version — latest is v$source_version" "Run 'pforge update' to upgrade"
+            doctor_warn "Installed v$template_version — latest is v$source_version" "Run 'pforge self-update' to upgrade"
         fi
         if [ "$cache_valid" = true ]; then
             local cache_min=$(( cache_age_s / 60 ))
@@ -2896,7 +2915,7 @@ cmd_doctor() {
         if [ -f "$forge_master_routes" ]; then
             doctor_pass "forge-master-routes.mjs (Phase-29 route wiring)"
         else
-            doctor_warn "pforge-mcp/forge-master-routes.mjs missing (Phase-29)" "Re-run 'pforge update' to restore Forge-Master routes"
+            doctor_warn "pforge-mcp/forge-master-routes.mjs missing (Phase-29)" "Re-run 'pforge self-update' to restore Forge-Master routes"
         fi
 
         # Auto-generated capability surface (regenerated on server start)
@@ -2923,7 +2942,7 @@ cmd_doctor() {
         if [ -f "$forge_master_dir/server.mjs" ]; then
             doctor_pass "pforge-master/server.mjs"
         else
-            doctor_warn "pforge-master/server.mjs missing" "Re-run 'pforge update' to restore"
+            doctor_warn "pforge-master/server.mjs missing" "Re-run 'pforge self-update' to restore"
         fi
 
         if [ -f "$forge_master_dir/src/lifecycle.mjs" ]; then
@@ -2961,7 +2980,7 @@ cmd_doctor() {
         if [ -f "$forge_sdk_dir/src/client.mjs" ]; then
             doctor_pass "pforge-sdk/src/client.mjs"
         else
-            doctor_warn "pforge-sdk/src/client.mjs missing" "Re-run 'pforge update' to restore — deep imports from pforge-mcp will fail"
+            doctor_warn "pforge-sdk/src/client.mjs missing" "Re-run 'pforge self-update' to restore — deep imports from pforge-mcp will fail"
         fi
         echo ""
     fi
@@ -2983,7 +3002,7 @@ cmd_doctor() {
         # Phase-29: Forge-Master Studio tab controller
         local dashboard_forge_master_js="$REPO_ROOT/pforge-mcp/dashboard/forge-master.js"
         if [ -f "$dashboard_forge_master_js" ]; then doctor_pass "dashboard/forge-master.js (Forge-Master Studio tab)"
-        else doctor_warn "dashboard/forge-master.js missing (Phase-29)" "Re-run 'pforge update' to restore Forge-Master Studio tab"; fi
+        else doctor_warn "dashboard/forge-master.js missing (Phase-29)" "Re-run 'pforge self-update' to restore Forge-Master Studio tab"; fi
 
         # Dashboard screenshots for docs — only inside the plan-forge dev repo.
         if [ $is_planforge_dev -eq 1 ]; then
@@ -3099,15 +3118,15 @@ cmd_doctor() {
             doctor_pass "$hook_count/${#expected_hooks[@]} lifecycle hooks present"
         elif [ $hook_count -gt 0 ]; then
             if [ $is_planforge_dev -eq 1 ]; then
-                doctor_pass "Hooks missing locally (expected in framework dev repo — consumers get them via 'pforge update'): $hook_missing"
+                doctor_pass "Hooks missing locally (expected in framework dev repo — consumers get them via 'pforge self-update'): $hook_missing"
             else
-                doctor_warn "$hook_count/${#expected_hooks[@]} hooks — missing: $hook_missing" "Run 'pforge update' to install missing hooks"
+                doctor_warn "$hook_count/${#expected_hooks[@]} hooks — missing: $hook_missing" "Run 'pforge self-update' to install missing hooks"
             fi
         else
             if [ $is_planforge_dev -eq 1 ]; then
-                doctor_pass "No lifecycle hooks in framework dev repo (consumers get them via 'pforge update')"
+                doctor_pass "No lifecycle hooks in framework dev repo (consumers get them via 'pforge self-update')"
             else
-                doctor_warn "No lifecycle hooks found" "Run 'pforge update' to install hooks"
+                doctor_warn "No lifecycle hooks found" "Run 'pforge self-update' to install hooks"
             fi
         fi
         echo ""
@@ -3236,7 +3255,7 @@ cmd_doctor() {
         referenced="$(grep -oE '[a-z0-9-]+\.agent\.md' "$agents_md" 2>/dev/null | sort -u)"
         for ref in $referenced; do
             if [ ! -f "$agents_dir/$ref" ]; then
-                doctor_warn "AGENTS.md references '$ref' but file not found in .github/agents/" "Remove from AGENTS.md or run 'pforge update'"
+                doctor_warn "AGENTS.md references '$ref' but file not found in .github/agents/" "Remove from AGENTS.md or run 'pforge self-update'"
                 problems_found=true
             fi
         done

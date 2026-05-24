@@ -41,7 +41,8 @@ if (!existsSync(toolsJsonPath)) {
 const toolsJson = JSON.parse(readFileSync(toolsJsonPath, "utf-8"));
 const toolDescMap = Object.fromEntries(toolsJson.map((t) => [t.name, t.description ?? ""]));
 
-// MCP tools = those present in tools.json (CLI-only anvil/hallmark are excluded from the MCP table)
+// MCP tools = those present in tools.json. Anvil + Hallmark are exposed as
+// both MCP tools and CLI commands; their MCP forms are included here.
 const mcpToolNames = TOOL_NAMES.filter((n) => n in toolDescMap);
 const mcpCount = mcpToolNames.length;
 

@@ -7,6 +7,10 @@ Format follows [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
+---
+
+## [3.21.0] — 2026-05-23 — Forge-Master CTO defaults + audit tool
+
 ### Added — Phase-43: Forge-Master CTO defaults + audit tool
 
 - **`forge_master_audit` MCP tool** — new CTO-style audit lane that aggregates

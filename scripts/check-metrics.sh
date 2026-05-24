@@ -40,11 +40,14 @@ while IFS= read -r -d '' f; do
     fname="$(basename "$f")"
     [[ "$fname" == "_metrics.json" ]] && continue
     [[ "$fname" == "CHANGELOG.md" ]] && continue
+    # V3-CAPABILITY-AUDIT.md is a forensic snapshot that intentionally
+    # mentions old MCP-tool counts alongside corrected values.
+    [[ "$fname" == "V3-CAPABILITY-AUDIT.md" ]] && continue
     TARGETS+=("$f")
 done < <(find "$REPO_ROOT" \
     \( -path "$REPO_ROOT/docs/plans" -prune \) -o \
     \( -path "$REPO_ROOT/docs/blog" -o -path "$REPO_ROOT/docs/manual" -o -path "$REPO_ROOT/docs" \) \
-    \( -name "*.html" -o -name "*.md" \) -not -name "CHANGELOG.md" -not -name "_metrics.json" \
+    \( -name "*.html" -o -name "*.md" \) -not -name "CHANGELOG.md" -not -name "_metrics.json" -not -name "V3-CAPABILITY-AUDIT.md" \
     -type f -print0 2>/dev/null)
 
 # Also add root README.md

@@ -372,7 +372,7 @@ The **Slag-Heap** is the dead-letter queue (DLQ) for failed or rejected L3 write
 
 ## Tool audit — where we are today
 
-As of v3.12.0, dual-write coverage across 106 MCP tools:
+As of v3.12.0, dual-write coverage across 104 MCP tools:
 
 | Bucket | Count | Status |
 |--------|-------|--------|

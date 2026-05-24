@@ -143,7 +143,7 @@
         </table>
         </div>
 
-        <p>Every format includes <strong>all guardrail files</strong>, <strong>all pipeline prompts</strong>, and <strong>all 14 reviewer agents</strong> &mdash; transformed into the native format each tool expects. See the <a href="../manual/multi-agent.html" class="text-forge-400 hover:underline">multi-agent manual</a> for the full file-by-file breakdown.</p>
+        <p>Every format includes <strong>all guardrail files</strong>, <strong>all pipeline prompts</strong>, and <strong>all 21 reviewer agents</strong> &mdash; transformed into the native format each tool expects. See the <a href="../manual/multi-agent.html" class="text-forge-400 hover:underline">multi-agent manual</a> for the full file-by-file breakdown.</p>
 
         <h2>How the Adapters Work</h2>
 
@@ -185,7 +185,7 @@
 
         <ul>
           <li><strong>New hire on Cursor?</strong> — <code>-Agent cursor</code> and they have every guardrail from day one</li>
-          <li><strong>Senior dev on Claude?</strong> — <code>-Agent claude</code> and the same 19 reviewer agents are available</li>
+          <li><strong>Senior dev on Claude?</strong> — <code>-Agent claude</code> and the same 21 reviewer agents are available</li>
           <li><strong>Experimenting with Gemini?</strong> — <code>-Agent gemini</code> and MCP auto-configures</li>
           <li><strong>Using everything?</strong> — <code>-Agent all</code> and every format generates in one pass</li>
         </ul>
@@ -209,7 +209,7 @@
           </thead>
           <tbody>
             <tr><td>Guardrail files</td><td>✅ embedded in native format</td><td>✅ auto-loading by file type</td></tr>
-            <tr><td>14 reviewer agents</td><td>✅ as native commands/skills</td><td>✅ as agent picker entries</td></tr>
+            <tr><td>21 reviewer agents</td><td>✅ as native commands/skills</td><td>✅ as agent picker entries</td></tr>
             <tr><td>Pipeline prompts</td><td>✅ as native slash commands</td><td>✅ as prompt templates</td></tr>
             <tr><td>MCP tools (69)</td><td>✅ Claude + Gemini + Copilot</td><td>✅ via .vscode/mcp.json</td></tr>
             <tr><td>Auto-load by file type</td><td>❌ embedded instead</td><td>✅ via applyTo frontmatter</td></tr>

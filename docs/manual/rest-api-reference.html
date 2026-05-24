@@ -41,7 +41,7 @@
         </div>
 
         <h2 id="orientation">Orientation</h2>
-        <p>Plan Forge exposes <strong>~91 REST endpoints</strong> across 16 subsystems. Every one of the <a href="api-surface-index.html#mcp-tools">106 MCP tools</a> can also be invoked over REST through the generic dispatcher (<code>POST /api/tool/:name</code>), the explicit endpoints below are the "first-class" surfaces the dashboard and CLI use, with response shapes shaped for direct UI consumption rather than tool-call envelopes.</p>
+        <p>Plan Forge exposes <strong>~91 REST endpoints</strong> across 16 subsystems. Every one of the <a href="api-surface-index.html#mcp-tools">104 MCP tools</a> can also be invoked over REST through the generic dispatcher (<code>POST /api/tool/:name</code>), the explicit endpoints below are the "first-class" surfaces the dashboard and CLI use, with response shapes shaped for direct UI consumption rather than tool-call envelopes.</p>
 
         <div class="overflow-x-auto mb-8">
           <table class="manual-table">
@@ -62,7 +62,7 @@
               <tr><td><a href="#copilot-integration"><strong>Copilot integration</strong></a></td><td>5</td><td>copilot-instructions.md read/preview/sync, OpenClaw snapshot/config.</td></tr>
               <tr><td><a href="#github-team"><strong>GitHub &amp; team coordination</strong></a></td><td>4</td><td>GitHub metrics, readiness, team dashboard, team activity.</td></tr>
               <tr><td><a href="#notifications-audit"><strong>Notifications, audit, dashboard, settings</strong></a></td><td>13</td><td>Notification config, audit config/drain, dashboard state, config, secrets, extensions, update, server restart.</td></tr>
-              <tr><td><a href="#generic-dispatcher"><strong>Generic MCP dispatcher</strong></a></td><td>3</td><td>The <code>POST /api/tool/:name</code> escape hatch that exposes any of the 106 MCP tools over REST.</td></tr>
+              <tr><td><a href="#generic-dispatcher"><strong>Generic MCP dispatcher</strong></a></td><td>3</td><td>The <code>POST /api/tool/:name</code> escape hatch that exposes any of the 104 MCP tools over REST.</td></tr>
               <tr><td><a href="#forge-master"><strong>Forge-Master</strong></a></td><td>10</td><td>The conversational entrypoint, chat sessions, prompts, prefs, cache stats.</td></tr>
               <tr><td><a href="#image"><strong>Image generation</strong></a></td><td>1</td><td>Generate images via xAI Grok Aurora or OpenAI DALL-E.</td></tr>
             </tbody>
@@ -334,11 +334,11 @@
 
         <!-- ─── Generic Dispatcher ─── -->
         <h2 id="generic-dispatcher">Generic MCP dispatcher</h2>
-        <p>The escape hatch. Any of the 106 MCP tools can be invoked over REST through this surface, useful for SDK clients, CI scripts, and any external integration that needs richer tool semantics than the first-class endpoints expose.</p>
+        <p>The escape hatch. Any of the 104 MCP tools can be invoked over REST through this surface, useful for SDK clients, CI scripts, and any external integration that needs richer tool semantics than the first-class endpoints expose.</p>
         <table class="manual-table">
           <thead><tr><th>Method</th><th>Path</th><th>Purpose</th><th>Notes</th></tr></thead>
           <tbody>
-            <tr><td>POST</td><td><code>/api/tool/:name</code></td><td><strong>Invoke any of the 106 MCP tools over REST</strong></td><td>Body is the tool's input contract (see <a href="api-surface-index.html#mcp-tools">Appendix Q</a>). Response is the tool's output payload, unwrapped from the MCP envelope. Crucible and Forge-Master tools route through the MCP handler (v2.82.1 fix).</td></tr>
+            <tr><td>POST</td><td><code>/api/tool/:name</code></td><td><strong>Invoke any of the 104 MCP tools over REST</strong></td><td>Body is the tool's input contract (see <a href="api-surface-index.html#mcp-tools">Appendix Q</a>). Response is the tool's output payload, unwrapped from the MCP envelope. Crucible and Forge-Master tools route through the MCP handler (v2.82.1 fix).</td></tr>
             <tr><td>POST</td><td><code>/api/tool/org-rules</code></td><td>Aliased convenience, <code>forge_org_rules</code></td><td>Equivalent to <code>POST /api/tool/forge_org_rules</code>.</td></tr>
             <tr><td>POST</td><td><code>/api/tool/run-plan</code></td><td>Aliased convenience, <code>forge_run_plan</code></td><td>Equivalent to <code>POST /api/tool/forge_run_plan</code>; also surfaced as <code>/api/runs/trigger</code> with a friendlier shape.</td></tr>
           </tbody>

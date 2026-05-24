@@ -41,7 +41,15 @@ $targets = @()
 foreach ($pattern in $scanPatterns) {
     $full = Join-Path $repoRoot $pattern
     $targets += Get-ChildItem -Path $full -ErrorAction SilentlyContinue |
-        Where-Object { $_.Name -ne '_metrics.json' -and $_.Name -ne 'CHANGELOG.md' }
+        Where-Object {
+            $_.Name -ne '_metrics.json' -and
+            $_.Name -ne 'CHANGELOG.md' -and
+            # V3-CAPABILITY-AUDIT.md is a forensic snapshot that intentionally
+            # mentions old MCP-tool counts (67, 69, 88, etc.) alongside the
+            # corrected values, as part of its drift-log table. Excluding it
+            # avoids 20+ false positives every time the checker runs.
+            $_.Name -ne 'V3-CAPABILITY-AUDIT.md'
+        }
 }
 
 Write-Host "Scanning $($targets.Count) files for stale metric aliases..." -ForegroundColor Cyan

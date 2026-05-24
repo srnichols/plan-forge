@@ -7,17 +7,19 @@ name: Docs Metrics Drift
 
 on:
   push:
-    branches: [main, master]
+    branches: [main, master, planning/main]
     paths:
       - 'docs/**'
       - 'README.md'
       - 'scripts/check-metrics.ps1'
+      - 'scripts/check-metrics.sh'
   pull_request:
-    branches: [main, master]
+    branches: [main, master, planning/main]
     paths:
       - 'docs/**'
       - 'README.md'
       - 'scripts/check-metrics.ps1'
+      - 'scripts/check-metrics.sh'
 
 jobs:
   check-metrics:

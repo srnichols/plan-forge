@@ -23,7 +23,7 @@
 **[Website](https://planforge.software/)** · **[Shop Tour](https://planforge.software/shop-tour.html)** · **[Manual](https://planforge.software/manual/)** · **[Documentation](https://planforge.software/docs.html)** · **[FAQ](https://planforge.software/faq.html)** · **[Extensions](https://planforge.software/extensions.html)** · **[Spec Kit Interop](https://planforge.software/speckit-interop.html)**
 
 ```
-88 MCP Tools · 57 CLI Commands · 103+ REST Endpoints · ~12 Agents · 16+ Skills · 9 Presets · 7 Adapters · 8000+ Tests · v3.5.1
+104 MCP Tools · 48+ CLI Commands · 103+ REST Endpoints · ~21 Agents · 4 Reviewer Skills · 9 Presets · 7 Adapters · 7947 Tests · v3.20.0-dev
 ```
 
 ---
@@ -57,7 +57,7 @@ And the **control room** that ties them together: the [live dashboard](docs/manu
 
 ## Verified Results
 
-**Verified**: 38+ phases self-built, 3285 self-tests, 84 MCP tools, zero manual rollbacks. See [docs/capabilities.md](docs/capabilities.md).
+**Verified**: 38+ phases self-built, 7947 self-tests, 104 MCP tools, zero manual rollbacks. See [docs/capabilities.md](docs/capabilities.md).
 
 ### A/B Test Results (April 2026)
 
@@ -176,7 +176,7 @@ One setup command, every tool: `setup.ps1 -Agent all`
 
 GitHub Copilot (primary) · Claude Code · Cursor · Codex CLI · Gemini CLI · Windsurf · Generic
 
-### MCP Server (88 Tools)
+### MCP Server (104 Tools)
 
 `pforge-mcp/server.mjs` exposes core, LiveGuard, Watcher, Crucible, Tempering, Bug Registry, Testbed, Forge-Master, Hallmark, Anvil, Lattice, Sync, and Memory operations. Live dashboard at `localhost:3100/dashboard`. 103+ REST endpoints for external integrations.
 
@@ -205,9 +205,9 @@ Key tools: `forge_run_plan` · `forge_liveguard_run` · `forge_analyze` · `forg
 | **[docs/COPILOT-VSCODE-GUIDE.md](docs/COPILOT-VSCODE-GUIDE.md)** | VS Code + Copilot walkthrough |
 | **[docs/CLI-GUIDE.md](docs/CLI-GUIDE.md)** | `pforge` CLI reference |
 | **[docs/REST-API.md](docs/REST-API.md)** | All 103 REST endpoints, organized by domain |
-| **[docs/capabilities.md](docs/capabilities.md)** | Full feature reference — all 88 MCP tools, ~12 agents, 16+ skills, 103+ REST endpoints |
+| **[docs/capabilities.md](docs/capabilities.md)** | Full feature reference — all 104 MCP tools, ~21 agents, 4 reviewer skills, 103+ REST endpoints |
 | **[CUSTOMIZATION.md](CUSTOMIZATION.md)** | Adapt guardrails for your project |
-| **[planforge.software/manual/](https://planforge.software/manual/)** | Interactive web manual (24 chapters + 6 appendices) |
+| **[planforge.software/manual/](https://planforge.software/manual/)** | Interactive web manual (30 chapters + 14 appendices) |
 | **[planforge.software/faq.html](https://planforge.software/faq.html)** | FAQ |
 | **[AGENT-SETUP.md](AGENT-SETUP.md)** | AI agent entry point |
 | **[CONTRIBUTING.md](CONTRIBUTING.md)** · **[docs/RELEASE-CHECKLIST.md](docs/RELEASE-CHECKLIST.md)** | Maintainer guide · release & distribution-sync checklist |

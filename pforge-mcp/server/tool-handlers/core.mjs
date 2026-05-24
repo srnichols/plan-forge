@@ -279,6 +279,7 @@ const _NULL_RETURN_TOOLS = new Set([
   "forge_testbed_run",
   "forge_testbed_happypath",
   "forge_master_ask",
+  "forge_master_audit",
   "forge_meta_bug_file",
   "forge_graph_query",
   "forge_patterns_list",
@@ -297,6 +298,26 @@ const _NULL_RETURN_TOOLS = new Set([
   "forge_lattice_query",
   "forge_lattice_callers",
   "forge_lattice_blast",
+  // Phase-43 — Restored to Forge-Master allowlist; handlers live in
+  // tool-handlers/{crucible,tempering,safety,orch,review,memory,discovery}.mjs
+  // and dispatch via the MCP CallToolRequestSchema handler.
+  "forge_dep_watch",
+  "forge_drift_report",
+  "forge_hotspot",
+  "forge_regression_guard",
+  "forge_diagnose",
+  "forge_crucible_list",
+  "forge_crucible_submit",
+  "forge_crucible_ask",
+  "forge_crucible_preview",
+  "forge_timeline",
+  "forge_tempering_scan",
+  "forge_tempering_status",
+  "forge_bug_list",
+  "forge_review_list",
+  "forge_skill_status",
+  "forge_runbook",
+  "forge_deploy_journal",
 ]);
 
 const _SYNC_TOOL_EXECUTORS = {

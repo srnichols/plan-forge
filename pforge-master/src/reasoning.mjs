@@ -82,6 +82,23 @@ export const OBSERVER_TOOL_ALLOWLIST = [
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const SYSTEM_PROMPT_PATH = resolve(__dirname, "system-prompt.md");
+const LANE_OVERLAYS = Object.freeze({
+  [LANES.ADVISORY]: resolve(__dirname, "prompts", "advisory-cto.md"),
+  [LANES.BUILD]: resolve(__dirname, "prompts", "build-interviewer.md"),
+  [LANES.TROUBLESHOOT]: resolve(__dirname, "prompts", "troubleshoot-sre.md"),
+});
+
+/**
+ * Load lane-specific overlay text. Returns empty string if no overlay file
+ * exists for the lane — lanes without overlays fall through to the base prompt.
+ * @param {string} lane
+ * @returns {string}
+ */
+function loadLaneOverlay(lane) {
+  const path = LANE_OVERLAYS[lane];
+  if (!path) return "";
+  try { return readFileSync(path, "utf-8"); } catch { return ""; }
+}
 
 // Ordered from highest to lowest for tier fallback traversal
 const TIER_ORDER = ["high", "medium", "low"];
@@ -201,21 +218,26 @@ export function buildToolSchemas(allowlist, hints = USAGE_HINTS) {
 
 /**
  * Load and interpolate the system prompt.
- * Substitutes {principles_block} first (non-negotiable, never truncated),
- * then {context_block} (may have been pre-trimmed by retrieval.mjs).
+ * Composes base prompt + optional lane overlay, then substitutes
+ * {principles_block} (non-negotiable, never truncated) and {context_block}
+ * (may have been pre-trimmed by retrieval.mjs).
  *
- * @param {string} contextBlock   — pre-fetched and truncated memory context
- * @param {string} principlesBlock — active principles (from loadPrinciples or UNIVERSAL_BASELINE)
+ * @param {string} contextBlock     — pre-fetched and truncated memory context
+ * @param {string} principlesBlock  — active principles (loadPrinciples or UNIVERSAL_BASELINE)
+ * @param {string} [lane]           — classification lane; selects an overlay if matched
  * @returns {string}
  */
-function loadSystemPrompt(contextBlock, principlesBlock) {
+function loadSystemPrompt(contextBlock, principlesBlock, lane = null) {
+  const overlay = loadLaneOverlay(lane);
   try {
     const raw = readFileSync(SYSTEM_PROMPT_PATH, "utf-8");
-    return raw
+    const withOverlay = overlay ? `${raw}\n\n${overlay}` : raw;
+    return withOverlay
       .replace("{principles_block}", principlesBlock || UNIVERSAL_BASELINE)
       .replace("{context_block}", contextBlock || "(no context available)");
   } catch {
-    return `You are Forge-Master, a Plan Forge reasoning assistant.\n\n## Philosophy & Guardrails\n\n${principlesBlock || UNIVERSAL_BASELINE}\n\n## Current Context\n\n${contextBlock || "(no context available)"}`;
+    const overlayBlock = overlay ? `\n\n${overlay}` : "";
+    return `You are Forge-Master, a Plan Forge reasoning assistant.${overlayBlock}\n\n## Philosophy & Guardrails\n\n${principlesBlock || UNIVERSAL_BASELINE}\n\n## Current Context\n\n${contextBlock || "(no context available)"}`;
   }
 }
 
@@ -612,8 +634,8 @@ export async function runTurn(input, deps = {}) {
   // ── 2. Build context block (memory, recall, patterns, prior turns) ─
   const { contextBlock, relatedTurns } = await _buildContextBlock({ effectiveSessionId, isEphemeral, classification, message, cwd, priorTurns, deps });
 
-  // ── 3. Load system prompt ─────────────────────────────────────────
-  const systemPrompt = loadSystemPrompt(contextBlock, _loadPrinciplesBlock(cwd));
+  // ── 3. Load system prompt (with lane overlay) ─────────────────────
+  const systemPrompt = loadSystemPrompt(contextBlock, _loadPrinciplesBlock(cwd), classification?.lane);
 
   // ── 4. Resolve allowlist + tool schemas ───────────────────────────
   const allowlist = deps.resolvedAllowlist ?? resolveAllowlist({ toolMetadata: deps.toolMetadata || {}, discoverExtensionTools: config.discoverExtensionTools });

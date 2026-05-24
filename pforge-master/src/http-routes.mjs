@@ -51,7 +51,10 @@ export function getCacheStats() {
 
 const PREFS_FILE = ".forge/fm-prefs.json";
 const VALID_QUORUM_MODES = ["off", "auto", "always"];
-const PREFS_DEFAULTS = { tier: null, autoEscalate: false, quorumAdvisory: "off", embeddingFallback: true };
+// CTO defaults (Phase-43): quorumAdvisory "auto" — Forge-Master decides when a
+// second model opinion is worth the cost. autoEscalate also defaults true so
+// reasoning tier promotes itself when the router signals high complexity.
+const PREFS_DEFAULTS = { tier: null, autoEscalate: true, quorumAdvisory: "auto", embeddingFallback: true };
 
 /**
  * Load Forge-Master user prefs from `<cwd>/.forge/fm-prefs.json`.

@@ -71,8 +71,8 @@ describe("forge-master shim — loadPrefs stub behavior", () => {
     const prefs = loadPrefs(tmpDir);
     expect(prefs).toBeDefined();
     expect(typeof prefs).toBe("object");
-    // tier defaults to null, autoEscalate to false
-    expect(prefs.autoEscalate).toBe(false);
+    // tier defaults to null; Phase-43 flipped autoEscalate default → true
+    expect(prefs.autoEscalate).toBe(true);
     expect(prefs.tier === null || typeof prefs.tier === "string").toBe(true);
   });
 });

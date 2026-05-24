@@ -181,6 +181,7 @@ export const TOOL_NAMES = freezeArray([
   "forge_local_recall_status",
   "forge_local_search",
   "forge_master_ask",
+  "forge_master_audit",
   "forge_master_observe",
   "forge_memory_capture",
   "forge_memory_report",

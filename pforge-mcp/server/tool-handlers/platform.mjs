@@ -1253,6 +1253,168 @@ async function _callToolHandler_098_forge_audit_export(request, args) {
   }
 }
 
+// ─── Phase-43 — forge_master_audit ───────────────────────────────────────
+// Holistic CTO-style audit. Aggregates drift + cost + bugs + watcher +
+// deploy journal + open Crucibles via a structured Forge-Master reasoning
+// turn (lane=advisory, tier=high), then returns a structured report.
+//
+// Surface contract (ACI-compliant):
+//   ok:        boolean
+//   summary:   string         — one-paragraph health headline
+//   top_risks: Array<{ title: string, evidence: string }>  (max 3)
+//   actions:   Array<{ priority: "P0"|"P1"|"P2", action: string, why: string }>
+//   cost_note: string         — single-line spend trajectory
+//   raw:       string         — full reasoning trace (drill, optional)
+//   sources:   string[]       — tool names invoked during the audit
+//   message:   string         — human-readable status when payload is sparse
+
+const _AUDIT_PROMPT = [
+  "Perform a CTO-style audit of this project. You are an advisor, not a builder.",
+  "",
+  "Pull current state from these tools in order (skip any that fail, don't retry):",
+  "  1. forge_drift_report  → architecture drift score and top violations",
+  "  2. forge_cost_report   → recent token/$ trend",
+  "  3. forge_bug_list      → open bugs by severity",
+  "  4. forge_watch         → active watcher alerts",
+  "  5. forge_deploy_journal → recent ships and rollbacks",
+  "  6. forge_crucible_list  → open smelts / idea backlog",
+  "",
+  "Then return a MARKDOWN report with EXACTLY these four sections:",
+  "",
+  "## Summary",
+  "One paragraph. The headline. Is this project healthy right now?",
+  "",
+  "## Top Risks",
+  "Up to three. Each line: `- **<title>** — <evidence>`. Cite the tool the evidence came from.",
+  "",
+  "## Recommended Actions",
+  "Up to five. Each line: `- [P0|P1|P2] <action> — <why>`. P0 = ship today, P1 = this week, P2 = this month.",
+  "",
+  "## Cost Note",
+  "One line on spend trajectory and whether it's tracking under target.",
+  "",
+  "Be concrete. No platitudes. Cite tool output. Honor the project's principles.",
+].join("\n");
+
+function _parseAuditMarkdown(markdown) {
+  const out = { summary: "", top_risks: [], actions: [], cost_note: "" };
+  if (typeof markdown !== "string" || markdown.length === 0) return out;
+
+  const sections = {};
+  const re = /^##\s+(.+?)\s*$/gm;
+  const matches = [];
+  let m;
+  while ((m = re.exec(markdown)) !== null) {
+    matches.push({ name: m[1].trim().toLowerCase(), start: m.index, headerEnd: m.index + m[0].length });
+  }
+  for (let i = 0; i < matches.length; i++) {
+    const next = matches[i + 1]?.start ?? markdown.length;
+    sections[matches[i].name] = markdown.slice(matches[i].headerEnd, next).trim();
+  }
+
+  out.summary = sections["summary"] || "";
+  out.cost_note = sections["cost note"] || "";
+
+  const risksBlock = sections["top risks"] || sections["top 3 risks"] || "";
+  for (const line of risksBlock.split("\n")) {
+    const lm = line.match(/^\s*[-*]\s+\*\*(.+?)\*\*\s*[—-]\s*(.+)$/);
+    if (lm) out.top_risks.push({ title: lm[1].trim(), evidence: lm[2].trim() });
+    if (out.top_risks.length >= 3) break;
+  }
+
+  const actionsBlock = sections["recommended actions"] || sections["actions"] || "";
+  for (const line of actionsBlock.split("\n")) {
+    const am = line.match(/^\s*[-*]\s*\[?(P[012])\]?\s+(.+?)\s+[—-]\s+(.+)$/);
+    if (am) out.actions.push({ priority: am[1], action: am[2].trim(), why: am[3].trim() });
+    if (out.actions.length >= 5) break;
+  }
+
+  return out;
+}
+
+async function _callToolHandler_099_forge_master_audit(request, args) {
+  const { name } = request.params;
+  if (!(name === "forge_master_audit")) return _CALL_TOOL_NO_MATCH;
+
+  const t0 = Date.now();
+  const cwd = args?.path ? findProjectRoot(resolve(args.path)) : findProjectRoot(PROJECT_DIR);
+
+  try {
+    // ── Proxy path: route through pforge-master/server.mjs if available ──
+    const studio = await getOrSpawnStudioChild();
+    if (studio) {
+      try {
+        const proxyResult = await studio.invoke("forge_master_ask", {
+          message: _AUDIT_PROMPT,
+          tier: args?.tier || "high",
+          maxToolCalls: args?.maxToolCalls || 12,
+          path: cwd,
+        });
+        const text = typeof proxyResult === "string" ? proxyResult : (proxyResult?.text || JSON.stringify(proxyResult));
+        const parsed = _parseAuditMarkdown(text);
+        const sources = Array.isArray(proxyResult?.toolCalls)
+          ? [...new Set(proxyResult.toolCalls.map((tc) => tc.name).filter(Boolean))]
+          : [];
+        const result = {
+          ok: true,
+          ...parsed,
+          sources,
+          message: parsed.summary ? "Audit complete." : "Audit ran but produced no summary — see raw output.",
+          raw: args?.drill ? text : undefined,
+        };
+        emitToolTelemetry({ toolName: "forge_master_audit", inputs: args || {}, result: { sources, hasSummary: !!parsed.summary, proxied: true }, durationMs: Date.now() - t0, status: "OK", cwd });
+        return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
+      } catch (proxyErr) {
+        console.error(`forge-master: audit proxy error, falling back in-process: ${proxyErr.message}`);
+        setStudioClient(null);
+      }
+    }
+
+    // ── Fallback: in-process reasoning ──
+    const { runTurn, loadPrefs } = await import("../../forge-master/index.mjs");
+    const { TOOL_METADATA } = await import("../../capabilities.mjs");
+    const prefs = loadPrefs(cwd);
+    const turn = await runTurn(
+      {
+        message: _AUDIT_PROMPT,
+        sessionId: args?.sessionId || undefined,
+        maxToolCalls: args?.maxToolCalls || 12,
+        tier: args?.tier || prefs.tier || "high",
+        cwd,
+      },
+      {
+        dispatcher: async (toolName, toolArgs, toolCwd) => {
+          return invokeForgeTool(toolName, { ...toolArgs, path: toolCwd || cwd });
+        },
+        hub: activeHub || null,
+        toolMetadata: TOOL_METADATA,
+      },
+    );
+    const text = turn?.message || turn?.text || "";
+    const parsed = _parseAuditMarkdown(text);
+    const sources = Array.isArray(turn?.toolCalls)
+      ? [...new Set(turn.toolCalls.map((tc) => tc.name).filter(Boolean))]
+      : [];
+    const result = {
+      ok: !turn?.error,
+      ...parsed,
+      sources,
+      message: parsed.summary
+        ? "Audit complete."
+        : (turn?.error ? `Audit failed: ${turn.error}` : "Audit ran but produced no summary — see raw output."),
+      raw: args?.drill ? text : undefined,
+    };
+    emitToolTelemetry({ toolName: "forge_master_audit", inputs: args || {}, result: { sources, hasSummary: !!parsed.summary, tokensIn: turn?.tokensIn, tokensOut: turn?.tokensOut }, durationMs: Date.now() - t0, status: turn?.error ? "ERROR" : "OK", cwd });
+    return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
+  } catch (err) {
+    emitToolTelemetry({ toolName: "forge_master_audit", inputs: args || {}, result: { error: err.message }, durationMs: Date.now() - t0, status: "ERROR", cwd });
+    return {
+      content: [{ type: "text", text: JSON.stringify({ ok: false, error: err.message, message: "forge_master_audit failed before producing a report." }, null, 2) }],
+      isError: true,
+    };
+  }
+}
+
 
 export {
   _callToolHandler_074_forge_master_ask,
@@ -1280,4 +1442,6 @@ export {
   _callToolHandler_096_forge_embedding_status,
   _callToolHandler_097_forge_local_recall_status,
   _callToolHandler_098_forge_audit_export,
+  _callToolHandler_099_forge_master_audit,
+  _parseAuditMarkdown,  // exported for tests
 };

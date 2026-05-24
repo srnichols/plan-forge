@@ -37,7 +37,7 @@ afterEach(() => {
 describe("loadPrefs / savePrefs — persistence", () => {
   it("(1) loadPrefs returns defaults when .forge/fm-prefs.json is missing", () => {
     const prefs = loadPrefs(tmpDir);
-    expect(prefs).toEqual({ tier: null, autoEscalate: false, quorumAdvisory: "off", embeddingFallback: true });
+    expect(prefs).toEqual({ tier: null, autoEscalate: true, quorumAdvisory: "auto", embeddingFallback: true });
   });
 
   it("(2) savePrefs + loadPrefs round-trip preserves tier='high'", () => {

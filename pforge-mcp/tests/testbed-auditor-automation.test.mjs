@@ -445,25 +445,31 @@ describe("S10 — behavioral: watcher-cross-run-anomalies", () => {
   });
 });
 
-// ─── 3e. Behavioral: observer-mute-by-default ────────────────────────
+// ─── 3e. Behavioral: observer-unblocked-by-default (Phase-43 flip) ───
+//
+// Pre-Phase-43, observer.enabled defaulted to false so users had to opt in
+// via .forge.json. Phase-43 (CTO defaults) flipped the default to true to
+// reduce setup friction — the observer still requires an explicit
+// forge_master_observe(action:"start") call to actually run, so flipping the
+// flag does not change runtime cost or behavior on its own.
 
-describe("S10 — behavioral: observer-mute-by-default", () => {
-  it("FORGE_MASTER_DEFAULTS.observer.enabled is false", async () => {
+describe("S10 — behavioral: observer-unblocked-by-default (Phase-43)", () => {
+  it("FORGE_MASTER_DEFAULTS.observer.enabled is true (CTO default)", async () => {
     const { FORGE_MASTER_DEFAULTS } = await import("../../pforge-master/src/config.mjs");
-    expect(FORGE_MASTER_DEFAULTS.observer.enabled).toBe(false);
+    expect(FORGE_MASTER_DEFAULTS.observer.enabled).toBe(true);
   });
 
-  it("getForgeMasterConfig returns observer.enabled=false when not explicitly set", async () => {
+  it("getForgeMasterConfig returns observer.enabled=true when not explicitly set", async () => {
     const { getForgeMasterConfig } = await import("../../pforge-master/src/config.mjs");
     const cwd = makeTmpDir();
     mkdirSync(resolve(cwd, ".forge"), { recursive: true });
     // No .forge.json written — should get defaults
-    const cfg = getForgeMasterConfig(cwd);
-    expect(cfg.observer.enabled).toBe(false);
+    const cfg = getForgeMasterConfig({ cwd });
+    expect(cfg.observer.enabled).toBe(true);
     rmSync(cwd, { recursive: true, force: true });
   });
 
-  it("getForgeMasterConfig returns observer.enabled=false from explicit false", async () => {
+  it("getForgeMasterConfig still honors explicit observer.enabled=false override", async () => {
     const { getForgeMasterConfig } = await import("../../pforge-master/src/config.mjs");
     const cwd = makeTmpDir();
     mkdirSync(resolve(cwd, ".forge"), { recursive: true });
@@ -472,7 +478,7 @@ describe("S10 — behavioral: observer-mute-by-default", () => {
       JSON.stringify({ forgeMaster: { observer: { enabled: false } } }),
       "utf-8",
     );
-    const cfg = getForgeMasterConfig(cwd);
+    const cfg = getForgeMasterConfig({ cwd });
     expect(cfg.observer.enabled).toBe(false);
     rmSync(cwd, { recursive: true, force: true });
   });

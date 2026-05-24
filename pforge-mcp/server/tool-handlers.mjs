@@ -119,6 +119,7 @@ import {
   _callToolHandler_096_forge_embedding_status,
   _callToolHandler_097_forge_local_recall_status,
   _callToolHandler_098_forge_audit_export,
+  _callToolHandler_099_forge_master_audit,
 } from "./tool-handlers/platform.mjs";
 export {
   planNameToRunbookName,
@@ -312,6 +313,7 @@ const _CALL_TOOL_HANDLERS = [
   _callToolHandler_096_forge_embedding_status,
   _callToolHandler_097_forge_local_recall_status,
   _callToolHandler_098_forge_audit_export,
+  _callToolHandler_099_forge_master_audit,
 ];
 
 export const callToolRequestHandler = _wrapWithToolSpan(async (request) => {

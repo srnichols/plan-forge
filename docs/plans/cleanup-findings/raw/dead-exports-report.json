@@ -1,16 +1,16 @@
 {
-  "generatedAt": "2026-05-21T19:34:31.878Z",
+  "generatedAt": "2026-05-24T02:30:25.305Z",
   "scopes": [
     "pforge-mcp",
     "pforge-master",
     "scripts"
   ],
   "counts": {
-    "filesScanned": 276,
-    "filesWithDeadExports": 113,
-    "totalExports": 1596,
-    "deadExports": 702,
-    "namespaceConsumedFiles": 49
+    "filesScanned": 278,
+    "filesWithDeadExports": 115,
+    "totalExports": 1603,
+    "deadExports": 705,
+    "namespaceConsumedFiles": 50
   },
   "findings": [
     {
@@ -148,6 +148,7 @@
         "resolveRequiredCli",
         "resolveWorkerOutputIdleMs",
         "resolveWorkerTimeoutMs",
+        "rewritePlanStatusOnSuccess",
         "rollbackFixProposal",
         "runAutoSweep",
         "runGate",
@@ -173,7 +174,7 @@
         "writeProposedFixPatch",
         "writeSilentExitRecord"
       ],
-      "totalExports": 194
+      "totalExports": 195
     },
     {
       "file": "pforge-mcp/forge-master/index.mjs",
@@ -1322,6 +1323,20 @@
         "KNOWN_SECRETS"
       ],
       "totalExports": 2
+    },
+    {
+      "file": "pforge-mcp/server/tool-handlers/platform.mjs",
+      "deadExports": [
+        "_parseAuditMarkdown"
+      ],
+      "totalExports": 27
+    },
+    {
+      "file": "pforge-mcp/server/tool-handlers/tempering.mjs",
+      "deadExports": [
+        "buildBugFixSkillAdvisory"
+      ],
+      "totalExports": 12
     },
     {
       "file": "pforge-mcp/team-activity.mjs",

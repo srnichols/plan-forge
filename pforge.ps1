@@ -7877,13 +7877,61 @@ switch ($Command) {
                 Invoke-AuditExport
             }
             default {
-                Write-Host "Usage: pforge audit <subcommand>" -ForegroundColor Yellow
-                Write-Host ""
-                Write-Host "Subcommands:"
-                Write-Host "  export    Export audit events from .forge/runs/ as JSONL or CSV"
-                Write-Host ""
-                Write-Host "See also: pforge audit-loop"
-                exit 1
+                # Phase-43: `pforge audit` runs forge_master_audit.
+                # Flag forms (--since, --tier, --schedule, --on-incident) are
+                # parsed here; everything else falls through to old export help.
+                if ($sub -ne "" -and -not $sub.StartsWith("--")) {
+                    Write-Host "Usage: pforge audit [--since 7d] [--tier high|medium|low] [--schedule daily] [--on-incident]" -ForegroundColor Yellow
+                    Write-Host ""
+                    Write-Host "Subcommands:"
+                    Write-Host "  (default)  Run a Forge-Master audit (forge_master_audit)"
+                    Write-Host "  export     Export audit events from .forge/runs/ as JSONL or CSV"
+                    Write-Host ""
+                    Write-Host "Flags (default audit):"
+                    Write-Host "  --since <window>     Time window (e.g. 7d, 24h) — default: 7d"
+                    Write-Host "  --tier <tier>        Reasoning tier: high|medium|low — default: high"
+                    Write-Host "  --schedule <freq>    Print guidance for setting up a scheduled audit"
+                    Write-Host "  --on-incident        Print guidance for incident-triggered audits"
+                    Write-Host ""
+                    Write-Host "See also: pforge audit-loop, pforge audit export"
+                    exit 1
+                }
+                # Parse flags
+                $since = "7d"
+                $tier = "high"
+                $schedule = $null
+                $onIncident = $false
+                for ($i = 0; $i -lt $Arguments.Count; $i++) {
+                    $a = $Arguments[$i]
+                    if ($a -eq '--since' -and ($i + 1) -lt $Arguments.Count) { $since = $Arguments[$i + 1]; $i++ }
+                    elseif ($a -eq '--tier' -and ($i + 1) -lt $Arguments.Count) { $tier = $Arguments[$i + 1]; $i++ }
+                    elseif ($a -eq '--schedule' -and ($i + 1) -lt $Arguments.Count) { $schedule = $Arguments[$i + 1]; $i++ }
+                    elseif ($a -eq '--on-incident') { $onIncident = $true }
+                }
+                if ($schedule) {
+                    Write-Host ""
+                    Write-Host "To schedule '$schedule' audits, register a Windows scheduled task:" -ForegroundColor Cyan
+                    Write-Host "  schtasks /create /tn 'Plan Forge $schedule audit' /tr 'pforge audit --since 7d' /sc $schedule /st 09:00" -ForegroundColor Gray
+                    Write-Host "Or, on Linux/macOS, add to crontab:" -ForegroundColor Cyan
+                    Write-Host "  0 9 * * * cd $RepoRoot && pforge audit --since 7d >> .forge/audit.log 2>&1" -ForegroundColor Gray
+                    Write-Host ""
+                    exit 0
+                }
+                if ($onIncident) {
+                    Write-Host ""
+                    Write-Host "To trigger audits from incident channels, wire your alerting hook to:" -ForegroundColor Cyan
+                    Write-Host "  pforge audit --since 24h --tier high" -ForegroundColor Gray
+                    Write-Host "Examples:" -ForegroundColor Cyan
+                    Write-Host "  - PagerDuty webhook → pforge audit --since 24h"
+                    Write-Host "  - GitHub Actions on incident label → pforge audit --since 24h"
+                    Write-Host ""
+                    exit 0
+                }
+                # Run the audit via MCP
+                $script:Arguments = @("forge_master_audit",
+                                      "--tier=$tier",
+                                      "--since=$since")
+                Invoke-McpCall
             }
         }
     }

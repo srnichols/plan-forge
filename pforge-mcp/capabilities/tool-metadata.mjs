@@ -1588,6 +1588,45 @@ export const TOOL_METADATA = {
       },
     },
   },
+  forge_master_audit: {
+    intent: ["audit", "cto", "review", "health-check", "weekly-audit", "forge-master"],
+    aliases: ["audit_forge", "forge_audit"],
+    cost: "high",
+    maxConcurrent: 1,
+    addedIn: "3.21.0",
+    prerequisites: ["ANTHROPIC_API_KEY or OPENAI_API_KEY or XAI_API_KEY"],
+    produces: [".forge/brain/session.forgemaster.*.json"],
+    consumes: [".forge.json", ".forge/brain/**", ".forge/runs/**", ".forge/incidents.jsonl", ".forge/bug-registry/**"],
+    sideEffects: ["writes audit session memory via brain.remember"],
+    writesFiles: false,
+    network: true,
+    risk: "low",
+    agentGuidance: "Use forge_master_audit for end-of-week or end-of-run holistic health checks. Pulls drift + cost + bugs + watcher + deploy journal + open Crucibles, then returns a structured CTO report (summary, top 3 risks with evidence, prioritized P0/P1/P2 actions, cost note). Defaults to tier=high — gives the audit the strongest model. Wire into orchestrator end-of-run via hooks.postRun.invokeAuditor. Do NOT use for per-slice troubleshooting (use forge_master_ask) or for code edits (read-only).",
+    errors: {
+      reasoning_model_unavailable: {
+        message: "No reasoning provider configured",
+        recovery: "Set ANTHROPIC_API_KEY, OPENAI_API_KEY, or XAI_API_KEY, or configure forgeMaster.reasoningModel in .forge.json",
+      },
+    },
+    example: {
+      input: { tier: "high" },
+      output: {
+        ok: true,
+        summary: "Project is shipping but drift score dropped 8 points this week.",
+        top_risks: [
+          { title: "Drift in pforge-mcp/server.mjs", evidence: "forge_drift_report: 3 architecture violations introduced in Slice 4" },
+          { title: "Cost trending +12%", evidence: "forge_cost_report: $1.20/day baseline, $1.34/day current" },
+        ],
+        actions: [
+          { priority: "P0", action: "Refactor server.mjs ACI violations", why: "Drift score will keep falling" },
+          { priority: "P1", action: "Flip quorum to speed for non-blocking slices", why: "Reduces token spend ~20%" },
+        ],
+        cost_note: "$1.34/day current vs $1.20/day baseline — within budget but trending up",
+        sources: ["forge_drift_report", "forge_cost_report", "forge_bug_list", "forge_watch", "forge_deploy_journal", "forge_crucible_list"],
+        message: "Audit complete.",
+      },
+    },
+  },
   forge_master_observe: {
     intent: ["observe", "observer", "narrate", "forge-master", "start-observer", "stop-observer"],
     aliases: ["observe_forge", "forge_observe"],

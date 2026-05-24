@@ -409,7 +409,7 @@
         <ul>
           <li><strong>Fifth Edition (in progress)</strong> (v3.6.2+), Ebook-completion phase. <strong>Cluster A: Front Matter</strong> shipped so far: the new <a href="foreword.html">Foreword &mdash; From Impossible to Seven Minutes</a> framing the one-year journey from "impossible" to a 99/100 application in seven minutes; the <a href="stakeholder-briefing.html">Stakeholder Briefing</a> as the 10&ndash;15 minute white-paper version with a <a href="stakeholder-briefing.html#section-8">tailoring flow</a> for prospect-specific remixing; the <a href="reader-paths.html">Reader-Journey Ladders</a> with five persona ladders (solo developer, team lead, reviewer or architect, enterprise architect, extension author); and <a href="day-in-the-forge.html">Appendix R &mdash; A Day in the Forge</a> collecting three worked case studies absorbed from contemporary blog posts (the closed loop, the .NET 99-vs-44 A/B test, the three-model quorum run). Further story, reference, and domain-chapter slices land through this edition as the phase ships.</li>
           <li><strong>Fourth Edition</strong> (v3.6), OpenBrain promoted to the documented <a href="project-history.html#v3-6-openbrain-l3">L3 memory layer</a>; new <code>pforge brain {status, hint, test, replay}</code> subcommands; Team Dashboard tab added to the Forge group (now 19 tabs). Project History extended through v3.6 with v2.95 Lattice, v3.0 Copilot trilogy, v3.2&ndash;3.4 Team Mode. Refreshed counts (<!--c:tools-->102<!--/c--> MCP tools, <!--c:cli-commands-->97<!--/c--> CLI commands).</li>
-          <li><strong>Third Edition</strong> (v3.5.1), Added Part V &ldquo;Integrate&rdquo;: Copilot Integration Trilogy, Team Coordination, The Knowledge Graph, Integrating from Outside. Refreshed counts (88 MCP tools, 5 parts, 28 chapters).</li>
+          <li><strong>Third Edition</strong> (v3.5.1), Added Part V &ldquo;Integrate&rdquo;: Copilot Integration Trilogy, Team Coordination, The Knowledge Graph, Integrating from Outside. Refreshed counts (88 tools, 5 parts, 28 chapters).</li>
           <li><strong>Second Edition</strong> (v2.95.0), Added &ldquo;How the Shop Remembers&rdquo; (memory architecture: Hallmark, Anvil, Lattice, sync_memories), now <a href="memory-system.html">Chapter 22</a> after the Part IV memory-first reorder.</li>
           <li><strong>First Edition</strong> (v2.78.0), Initial public release: 24 chapters across Parts I&ndash;IV plus 14 appendices.</li>
         </ul>
@@ -1153,7 +1153,7 @@ chmod +x setup.sh && ./setup.sh --preset &lt;your-stack&gt;</code></pre>
 Setup Health:
   <span class="text-emerald-400 font-bold">✓</span> .forge.json valid
   <span class="text-emerald-400 font-bold">✓</span> 21 instruction files
-  <span class="text-emerald-400 font-bold">✓</span> 19 agent definitions
+  <span class="text-emerald-400 font-bold">✓</span> 21 agent definitions
 
   Results:  10 passed  |  0 failed  |  0 warnings</code></pre>
         </div>
@@ -2369,7 +2369,7 @@ VS Code Configuration:
 Setup Health:
   <span class="text-emerald-400 font-bold">✓</span> .forge.json valid (preset: dotnet, v2.17.0)
   <span class="text-emerald-400 font-bold">✓</span> 21 instruction files (expected: ≥17 for dotnet)
-  <span class="text-emerald-400 font-bold">✓</span> 19 agent definitions
+  <span class="text-emerald-400 font-bold">✓</span> 21 agent definitions
   <span class="text-emerald-400 font-bold">✓</span> copilot-instructions.md exists
 
 ────────────────────────────────────────────────────
@@ -5615,7 +5615,7 @@ applyTo: "**/auth/**,**/security/**,**/middleware/**"
 
       <div class="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">Chapter 10 · Reference</div>
       <h1>Agents, Skills &amp; Hooks</h1>
-      <p class="text-lg text-slate-400 mb-8">Complete reference for the 14 reviewer agents, 16 slash-command skills (6 shared + 10 per stack), and the lifecycle hook system.</p>
+      <p class="text-lg text-slate-400 mb-8">Complete reference for the 21 reviewer agents, 4 reviewer skills, and pipeline prompts, and the lifecycle hook system.</p>
 
       <div class="callout callout-tip">
         <strong>Instruction files catalog</strong>, looking for the auto-loading rules, universal files, and domain catalog? See
@@ -5624,7 +5624,7 @@ applyTo: "**/auth/**,**/security/**,**/middleware/**"
 
       <!-- ─── Agents ─── -->
       <h2 id="agents">Agents</h2>
-      <p>14 reviewer agents organized in three categories. Agents are <strong>read-only</strong>, they audit code but can't edit files.</p>
+      <p>21 reviewer agents organized in three categories. Agents are <strong>read-only</strong>, they audit code but can't edit files.</p>
 
       <h3 id="agents-stack">Stack-Specific Agents (6)</h3>
       <p>Vary by preset, examples for <code>dotnet</code>:</p>
@@ -6241,7 +6241,7 @@ forge_run_plan({ plan: "docs/plans/Phase-1.md", resumeFrom: 3 })</code></pre>
           <tr><td><a href="rest-api-reference.html#liveguard">LiveGuard</a></td><td>Drift, incidents, deploy journal, regression guard, runbooks, secret scan, dep watch.</td></tr>
           <tr><td><a href="rest-api-reference.html#bridge">Bridge &amp; approvals</a></td><td>The only cross-boundary auth surface (HMAC via <code>PFORGE_BRIDGE_SECRET</code>).</td></tr>
           <tr><td><a href="rest-api-reference.html#forge-master">Forge-Master</a></td><td>Conversational entrypoint, chat, prefs, cache stats.</td></tr>
-          <tr><td><a href="rest-api-reference.html#generic-dispatcher">Generic MCP dispatcher</a></td><td><code>POST /api/tool/:name</code>, invoke any of the 106 MCP tools over REST.</td></tr>
+          <tr><td><a href="rest-api-reference.html#generic-dispatcher">Generic MCP dispatcher</a></td><td><code>POST /api/tool/:name</code>, invoke any of the 104 MCP tools over REST.</td></tr>
         </tbody>
       </table>
 
@@ -6480,7 +6480,7 @@ pforge ext remove healthcare-compliance</code></pre>
 # Or pick specific agents
 .\setup.ps1 -Preset dotnet -Agent claude,cursor</code></pre>
       </div>
-      <p>Copilot files are always installed. The <code>-Agent</code> flag adds native files for other tools, each with all 16 guardrail files embedded, prompts as native skills/commands, and 19 reviewer agents as invocable procedures.</p>
+      <p>Copilot files are always installed. The <code>-Agent</code> flag adds native files for other tools, each with all 16 guardrail files embedded, prompts as native skills/commands, and 21 reviewer agents as invocable procedures.</p>
 
       <h2 id="comparison">Feature Parity Matrix</h2>
       <table class="manual-table">
@@ -19733,7 +19733,7 @@ ws.on("message", (raw) =&gt; {
         </div>
 
         <h2 id="orientation">Orientation</h2>
-        <p>Plan Forge exposes <strong>~91 REST endpoints</strong> across 16 subsystems. Every one of the <a href="api-surface-index.html#mcp-tools">106 MCP tools</a> can also be invoked over REST through the generic dispatcher (<code>POST /api/tool/:name</code>), the explicit endpoints below are the "first-class" surfaces the dashboard and CLI use, with response shapes shaped for direct UI consumption rather than tool-call envelopes.</p>
+        <p>Plan Forge exposes <strong>~91 REST endpoints</strong> across 16 subsystems. Every one of the <a href="api-surface-index.html#mcp-tools">104 MCP tools</a> can also be invoked over REST through the generic dispatcher (<code>POST /api/tool/:name</code>), the explicit endpoints below are the "first-class" surfaces the dashboard and CLI use, with response shapes shaped for direct UI consumption rather than tool-call envelopes.</p>
 
         <div class="overflow-x-auto mb-8">
           <table class="manual-table">
@@ -19754,7 +19754,7 @@ ws.on("message", (raw) =&gt; {
               <tr><td><a href="#copilot-integration"><strong>Copilot integration</strong></a></td><td>5</td><td>copilot-instructions.md read/preview/sync, OpenClaw snapshot/config.</td></tr>
               <tr><td><a href="#github-team"><strong>GitHub &amp; team coordination</strong></a></td><td>4</td><td>GitHub metrics, readiness, team dashboard, team activity.</td></tr>
               <tr><td><a href="#notifications-audit"><strong>Notifications, audit, dashboard, settings</strong></a></td><td>13</td><td>Notification config, audit config/drain, dashboard state, config, secrets, extensions, update, server restart.</td></tr>
-              <tr><td><a href="#generic-dispatcher"><strong>Generic MCP dispatcher</strong></a></td><td>3</td><td>The <code>POST /api/tool/:name</code> escape hatch that exposes any of the 106 MCP tools over REST.</td></tr>
+              <tr><td><a href="#generic-dispatcher"><strong>Generic MCP dispatcher</strong></a></td><td>3</td><td>The <code>POST /api/tool/:name</code> escape hatch that exposes any of the 104 MCP tools over REST.</td></tr>
               <tr><td><a href="#forge-master"><strong>Forge-Master</strong></a></td><td>10</td><td>The conversational entrypoint, chat sessions, prompts, prefs, cache stats.</td></tr>
               <tr><td><a href="#image"><strong>Image generation</strong></a></td><td>1</td><td>Generate images via xAI Grok Aurora or OpenAI DALL-E.</td></tr>
             </tbody>
@@ -20026,11 +20026,11 @@ ws.on("message", (raw) =&gt; {
 
         <!-- ─── Generic Dispatcher ─── -->
         <h2 id="generic-dispatcher">Generic MCP dispatcher</h2>
-        <p>The escape hatch. Any of the 106 MCP tools can be invoked over REST through this surface, useful for SDK clients, CI scripts, and any external integration that needs richer tool semantics than the first-class endpoints expose.</p>
+        <p>The escape hatch. Any of the 104 MCP tools can be invoked over REST through this surface, useful for SDK clients, CI scripts, and any external integration that needs richer tool semantics than the first-class endpoints expose.</p>
         <table class="manual-table">
           <thead><tr><th>Method</th><th>Path</th><th>Purpose</th><th>Notes</th></tr></thead>
           <tbody>
-            <tr><td>POST</td><td><code>/api/tool/:name</code></td><td><strong>Invoke any of the 106 MCP tools over REST</strong></td><td>Body is the tool's input contract (see <a href="api-surface-index.html#mcp-tools">Appendix Q</a>). Response is the tool's output payload, unwrapped from the MCP envelope. Crucible and Forge-Master tools route through the MCP handler (v2.82.1 fix).</td></tr>
+            <tr><td>POST</td><td><code>/api/tool/:name</code></td><td><strong>Invoke any of the 104 MCP tools over REST</strong></td><td>Body is the tool's input contract (see <a href="api-surface-index.html#mcp-tools">Appendix Q</a>). Response is the tool's output payload, unwrapped from the MCP envelope. Crucible and Forge-Master tools route through the MCP handler (v2.82.1 fix).</td></tr>
             <tr><td>POST</td><td><code>/api/tool/org-rules</code></td><td>Aliased convenience, <code>forge_org_rules</code></td><td>Equivalent to <code>POST /api/tool/forge_org_rules</code>.</td></tr>
             <tr><td>POST</td><td><code>/api/tool/run-plan</code></td><td>Aliased convenience, <code>forge_run_plan</code></td><td>Equivalent to <code>POST /api/tool/forge_run_plan</code>; also surfaced as <code>/api/runs/trigger</code> with a friendlier shape.</td></tr>
           </tbody>

@@ -33,11 +33,11 @@
         <p class="text-lg text-slate-400 mb-8">A read-only reasoning orchestrator with its own dashboard tab. Classifies intent, pulls OpenBrain memory, and chains read-only forge tools on your behalf, so you can ask open-ended questions instead of wiring tool calls by hand.</p>
 
         <div class="callout callout-info">
-          <strong>Introduced in the Phase-28 MVP series.</strong> Subsequent phases added quorum advisory mode (Phase-38.7), embedding cache fallback (Phase-38.8), and unified-timeline integration. Forge-Master is read-only by design, it never writes code or files. Use it to <em>think</em>; use the rest of the forge to <em>do</em>.
+          <strong>Introduced in the Phase-28 MVP series.</strong> Subsequent phases added quorum advisory mode (Phase-38.7), embedding cache fallback (Phase-38.8), unified-timeline integration, and — most recently — the <strong>Phase-43 "CTO loop"</strong> upgrade: 17 read-only tools restored to the allowlist, three lane-specific system-prompt overlays (advisory-CTO / build-interviewer / troubleshoot-SRE), opinionated defaults flipped on (observer enabled, L3 memory enabled, auto-escalate on, quorum advisory <code>auto</code>), the <code>+ @baseline</code> philosophy alias, and the new <code>forge_master_audit</code> tool + <code>pforge audit</code> CLI. Forge-Master is read-only by design, it never writes code or files. Use it to <em>think</em>; use the rest of the forge to <em>do</em>.
         </div>
 
         <h2 id="why">Why a Reasoning Orchestrator?</h2>
-        <p>Plan Forge has <!--c:tools-->104<!--/c--> MCP tools. Most of the time you know which one you need. But sometimes you don't, sometimes the question is open-ended:</p>
+        <p>Plan Forge has <!--c:tools-->105<!--/c--> MCP tools. Most of the time you know which one you need. But sometimes you don't, sometimes the question is open-ended:</p>
 
         <ul>
           <li><em>"Why did Phase-27 Slice 4 fail?"</em> &rarr; needs <code>forge_watch_live</code> + <code>brain_recall</code> + <code>forge_bug_list</code></li>
@@ -52,13 +52,14 @@
         </div>
 
         <!-- ─── Three Access Surfaces ─── -->
-        <h2 id="surfaces">Three Access Surfaces</h2>
+        <h2 id="surfaces">Four Access Surfaces</h2>
         <table class="manual-table my-4">
           <thead><tr><th>Surface</th><th>Best for</th><th>Where</th></tr></thead>
           <tbody>
             <tr><td><strong>Studio tab</strong></td><td>Interactive exploration with prompt gallery, streaming chat, live tool-call trace</td><td><code>localhost:3100/dashboard</code> &rarr; Studio</td></tr>
             <tr><td><strong><code>forge_master_ask</code> MCP tool</strong></td><td>Agents that want one-shot reasoning embedded in a larger conversation</td><td>Any MCP-compatible client (Copilot, Claude Code, Cursor, Codex, Windsurf)</td></tr>
-            <tr><td><strong><code>pforge forge-master status|logs</code></strong></td><td>Scripts, CI checks, health probes</td><td>CLI</td></tr>
+            <tr><td><strong><code>forge_master_audit</code> MCP tool</strong> <span class="text-amber-400">Phase-43</span></td><td>End-of-week health check, end-of-run hook, &ldquo;what should I worry about today?&rdquo; — returns bounded report with summary, top-3 risks, P0/P1/P2 actions, cost note</td><td>Any MCP-compatible client</td></tr>
+            <tr><td><strong><code>pforge forge-master status|logs</code></strong> &amp; <strong><code>pforge audit</code></strong></td><td>Scripts, CI checks, health probes, weekly digests, incident-triggered reviews</td><td>CLI</td></tr>
           </tbody>
         </table>
 
@@ -111,18 +112,29 @@
         <p>Each successful turn carries a <code>via</code> field telling you which stage answered: <code>"keyword"</code>, <code>"embedding-cache"</code>, or <code>"router-llm"</code>. The dashboard's Forge-Master tab summarizes the distribution as <code>{keyword, embedding, router}</code> percentages.</p>
 
         <h3 id="lanes">The Lanes</h3>
-        <p>Forge-Master classifies into one of these lanes. Each lane has a different default tool allowlist:</p>
+        <p>Forge-Master classifies into one of these lanes. Each lane has a different default tool allowlist; Phase-43 added a lane-specific <em>system-prompt overlay</em> for the three lanes where voice matters most (advisory, build, troubleshoot):</p>
 
         <table class="manual-table my-4">
-          <thead><tr><th>Lane</th><th>Use case</th><th>Quorum-eligible?</th></tr></thead>
+          <thead><tr><th>Lane</th><th>Use case</th><th>Overlay (Phase-43)</th><th>Quorum-eligible?</th></tr></thead>
           <tbody>
-            <tr><td><code>operational</code></td><td>Status queries, run lookups, "what's happening", reads runs, plan status, costs</td><td>No (hard-blocked)</td></tr>
-            <tr><td><code>troubleshoot</code></td><td>Failure diagnosis, reads logs, watch-live, bugs, traces</td><td>No (hard-blocked)</td></tr>
-            <tr><td><code>build</code></td><td>"How would I build X", reads patterns, runbooks, prior plans</td><td>No (hard-blocked)</td></tr>
-            <tr><td><code>advisory</code></td><td>Open-ended judgment calls, "should we…", "which approach…", "what's the trade-off…"</td><td><strong>Yes</strong> (default escalation target for quorum advisory)</td></tr>
-            <tr><td><code>offtopic</code></td><td>Catch-all when nothing else matches; routed to a polite fallback reply</td><td>No</td></tr>
+            <tr><td><code>operational</code></td><td>Status queries, run lookups, &ldquo;what&rsquo;s happening&rdquo;, reads runs, plan status, costs</td><td>—</td><td>No (hard-blocked)</td></tr>
+            <tr><td><code>troubleshoot</code></td><td>Failure diagnosis, reads logs, watch-live, bugs, traces</td><td><strong><code>troubleshoot-sre</code></strong> — SRE evidence discipline; <code>forge_watch_live</code> + <code>forge_bug_list</code> first</td><td>No (hard-blocked)</td></tr>
+            <tr><td><code>build</code></td><td>&ldquo;Add OAuth&rdquo;, &ldquo;how would I build X&rdquo;, reads patterns, runbooks, prior plans</td><td><strong><code>build-interviewer</code></strong> — funnels into Crucible; calls <code>forge_crucible_submit</code> / <code>ask</code> / <code>preview</code></td><td>No (hard-blocked)</td></tr>
+            <tr><td><code>advisory</code></td><td>Open-ended judgment calls, &ldquo;biggest risk this week&rdquo;, &ldquo;what&rsquo;s at risk&rdquo;, &ldquo;weekly audit&rdquo;, &ldquo;should we ship or refactor&rdquo;, trade-off analysis</td><td><strong><code>advisory-cto</code></strong> — CTO voice: trade-offs, receipts before verdict, rank risks, &le;3 actions</td><td><strong>Yes</strong> (default escalation target; quorum advisory now <code>auto</code> by default)</td></tr>
+            <tr><td><code>tempering</code></td><td>Tempering gate evaluation and enforcement checks</td><td>—</td><td>No</td></tr>
+            <tr><td><code>principle-judgment</code></td><td>Principled architectural decisions and principle reviews</td><td>—</td><td>No</td></tr>
+            <tr><td><code>meta-bug-triage</code></td><td>Triage of meta-bugs, self-repair, plan/orchestrator defects (routes to <code>forge_meta_bug_file</code>)</td><td>—</td><td>No</td></tr>
+            <tr><td><code>offtopic</code></td><td>Catch-all when nothing else matches; routed to a polite fallback reply</td><td>—</td><td>No</td></tr>
           </tbody>
         </table>
+
+        <div class="callout callout-tip">
+          <strong>How overlays compose.</strong> The system prompt sent to the reasoning model is <code>base + "\n\n" + overlay</code>. The overlay lives in <code>pforge-master/src/prompts/&lt;lane&gt;.md</code> and is loaded once per turn after intent classification. Lanes without an overlay use the base prompt alone.
+        </div>
+
+        <div class="callout callout-info">
+          <strong>Phase-43 router patterns.</strong> Three new advisory triggers were pinned via regression test so the lane classification is deterministic: &ldquo;biggest/top/main/primary/key risk&rdquo;, &ldquo;what&rsquo;s at risk / going wrong / state of / broken&rdquo;, and &ldquo;weekly / monthly / quarterly audit / review / digest / summary&rdquo;. All resolve to <code>advisory</code> with weight 3.
+        </div>
 
         <!-- ─── Quorum Advisory Mode ─── -->
         <h2 id="quorum-advisory">Quorum Advisory Mode <span class="text-amber-400 text-base font-normal">v2.78+</span></h2>
@@ -138,8 +150,8 @@
         <table class="manual-table my-4">
           <thead><tr><th>Mode</th><th>When quorum fires</th></tr></thead>
           <tbody>
-            <tr><td><code>"off"</code> (default)</td><td>Never. Single-model reply only.</td></tr>
-            <tr><td><code>"auto"</code></td><td>Lane is <code>advisory</code> AND prompt was auto-escalated to the high tier AND classifier confidence is medium or above. The conservative trigger.</td></tr>
+            <tr><td><code>"off"</code></td><td>Never. Single-model reply only.</td></tr>
+            <tr><td><code>"auto"</code> <span class="text-amber-400">(default, flipped in Phase-43)</span></td><td>Lane is <code>advisory</code> AND prompt was auto-escalated to the high tier (also default-on since Phase-43) AND classifier confidence is medium or above. The conservative trigger.</td></tr>
             <tr><td><code>"always"</code></td><td>Every <code>advisory</code>-lane prompt fires quorum. Highest spend, highest signal.</td></tr>
           </tbody>
         </table>
@@ -165,11 +177,13 @@
         <p>Quorum dispatch uses <code>Promise.allSettled</code> with a 60s hard timeout per model. If 1 of 3 fails or times out, the remaining replies are returned with a <code>partial: true</code> flag. If all fail, the response is <code>{ ok: false, code: "QUORUM_ALL_FAILED" }</code>.</p>
 
         <!-- ─── REST + Tool Surface ─── -->
-        <h2 id="api">REST API + MCP Tool</h2>
+        <h2 id="api">REST API + MCP Tools</h2>
         <table class="manual-table my-4">
           <thead><tr><th>Method</th><th>Endpoint / tool</th><th>Description</th></tr></thead>
           <tbody>
             <tr><td>MCP tool</td><td><code>forge_master_ask</code></td><td>One-shot reasoning. Accepts <code>{ message, sessionId? }</code>; returns lane, via, toolCalls[], reply, costUSD.</td></tr>
+            <tr><td>MCP tool</td><td><code>forge_master_audit</code> <span class="text-amber-400">Phase-43</span></td><td>Holistic CTO-style audit. Accepts <code>{ tier?, maxToolCalls?, drill?, sessionId?, path? }</code>. Returns bounded payload <code>{ ok, summary, top_risks (≤3), actions (≤5), cost_note, sources[], message, drill? }</code>. Pulls drift, cost, open bugs, watcher alerts, deploy journal, and open Crucible smelts.</td></tr>
+            <tr><td>MCP tool (companion)</td><td><code>forge_master_observe</code></td><td>Exposed by the standalone <code>pforge-master</code> MCP server (not <code>pforge-mcp</code>). Lifecycle for the long-running observer loop. Actions: <code>start | stop | status</code>. Observer is enabled in defaults since Phase-43 but still gated by an explicit <code>start</code> call.</td></tr>
             <tr><td>POST</td><td><code>/api/forge-master/chat</code></td><td>Start a chat session (or continue an existing one with <code>sessionId</code>). Returns <code>{ sessionId, ... }</code>. Pair with the SSE stream below to receive incremental tokens.</td></tr>
             <tr><td>GET</td><td><code>/api/forge-master/chat/:sessionId/stream</code></td><td>Server-Sent Events stream for the session. Emits <code>classification</code>, <code>quorum-estimate</code> (if advisory triggers), <code>tool-call</code>, <code>tool-result</code>, <code>delta</code> (token chunks), <code>done</code>.</td></tr>
             <tr><td>POST</td><td><code>/api/forge-master/chat/:sessionId/approve</code></td><td>Resolve a pending approval prompt mid-stream (used by quorum-estimate cancel, gated tool calls).</td></tr>
@@ -178,20 +192,24 @@
             <tr><td>GET</td><td><code>/api/forge-master/prompts</code></td><td>Prompt catalog used by the Studio sidebar.</td></tr>
             <tr><td>GET</td><td><code>/api/forge-master/capabilities</code></td><td>Server capabilities snapshot (models, tier, advisory mode).</td></tr>
             <tr><td>GET</td><td><code>/api/forge-master/cache-stats</code></td><td>Embedding cache liveliness: <code>{ size, hitRate, maxSize: 500 }</code>. Use as a health probe.</td></tr>
-            <tr><td>GET / PUT</td><td><code>/api/forge-master/prefs</code></td><td>Read / write per-project Forge-Master preferences. Schema: <code>{ tier, autoEscalate, quorumAdvisory, embeddingFallback }</code>. <code>GET</code> returns current values; <code>PUT</code> writes to <code>.forge/fm-prefs.json</code>.</td></tr>
+            <tr><td>GET / PUT</td><td><code>/api/forge-master/prefs</code></td><td>Read / write per-project Forge-Master preferences. Schema: <code>{ tier, autoEscalate, quorumAdvisory, embeddingFallback }</code>. <strong>Phase-43 default flip</strong>: <code>autoEscalate: true</code>, <code>quorumAdvisory: "auto"</code>. <code>GET</code> returns current values; <code>PUT</code> writes to <code>.forge/fm-prefs.json</code>.</td></tr>
           </tbody>
         </table>
 
         <!-- ─── Configuration ─── -->
         <h2 id="config">Configuration</h2>
-        <p>Forge-Master config lives under <code>forgeMaster</code> in <code>.forge.json</code>. All fields are optional, sensible defaults apply:</p>
+        <p>Forge-Master config lives under <code>forgeMaster</code> in <code>.forge.json</code>. All fields are optional, sensible defaults apply. <strong>Phase-43 flipped four defaults to the CTO-friendly settings</strong>: observer enabled, L3 memory enabled, auto-escalate on, quorum advisory <code>auto</code>.</p>
 
         <pre><code>{
   "forgeMaster": {
-    "reasoningModel": "claude-opus-4.6",       // model used for replies in advisory lane
+    "reasoningModel": "claude-opus-4.7",       // model used for replies in advisory lane
     "routerModel": "grok-3-mini",              // model used by stage-2 intent classifier
-    "quorumAdvisory": "auto",                  // "off" | "auto" | "always"
+    "quorumAdvisory": "auto",                  // "off" | "auto" | "always"  (default: "auto" since Phase-43)
+    "autoEscalate": true,                      // bump hard questions to high tier  (default: true since Phase-43)
     "embeddingFallback": true,                 // enable stage 1.5 embedding cache
+    "l3Enabled": true,                         // OpenBrain memory (graceful degradation if unreachable)  (default: true since Phase-43)
+    "observer": { "enabled": true },           // long-running observer loop, still gated by explicit start  (default: true since Phase-43)
+    "philosophy": "+ @baseline",               // Phase-43 alias: append UNIVERSAL_BASELINE to project principles (use "@baseline" to replace)
     "discoverExtensionTools": true,            // allow extension-supplied tools to register
     "providers": {
       "githubCopilot": { "model": "gpt-4o" }   // GitHub Models override (zero-key path)
@@ -204,12 +222,33 @@
           <tbody>
             <tr><td><code>reasoningModel</code></td><td><code>model.default</code> (or <code>gpt-4o-mini</code>)</td><td>Model used to compose replies in advisory lane. Falls back to <code>.forge.json</code>'s top-level <code>model.default</code>.</td></tr>
             <tr><td><code>routerModel</code></td><td><code>grok-3-mini</code></td><td>Stage-2 intent classifier model. Cheap by design, it's classifying, not reasoning.</td></tr>
-            <tr><td><code>quorumAdvisory</code></td><td><code>"off"</code></td><td>Enables Quorum Advisory Mode in the <code>advisory</code> lane.</td></tr>
+            <tr><td><code>quorumAdvisory</code></td><td><code>"auto"</code> <span class="text-amber-400">(Phase-43)</span></td><td>Enables Quorum Advisory Mode in the <code>advisory</code> lane. Was <code>"off"</code> pre-Phase-43.</td></tr>
+            <tr><td><code>autoEscalate</code></td><td><code>true</code> <span class="text-amber-400">(Phase-43)</span></td><td>Auto-bump hard or ambiguous prompts to the high tier. Required input for <code>quorumAdvisory: "auto"</code> to fire. Was <code>false</code> pre-Phase-43.</td></tr>
+            <tr><td><code>l3Enabled</code></td><td><code>true</code> <span class="text-amber-400">(Phase-43)</span></td><td>Pull recall context from OpenBrain (Postgres + pgvector) when available. Gracefully degrades if OpenBrain isn't configured. Was <code>false</code> pre-Phase-43.</td></tr>
+            <tr><td><code>observer.enabled</code></td><td><code>true</code> <span class="text-amber-400">(Phase-43)</span></td><td>Allow the long-running observer loop to run. Still gated by an explicit <code>forge_master_observe({action:"start"})</code> call &mdash; default just removes the opt-in config requirement. Was <code>false</code> pre-Phase-43.</td></tr>
+            <tr><td><code>philosophy</code></td><td><code>null</code> <span class="text-amber-400">(Phase-43 adds <code>"+ @baseline"</code> / <code>"@baseline"</code> aliases)</span></td><td>System-prompt augmentation. <code>"@baseline"</code> uses Plan Forge's <code>UNIVERSAL_BASELINE</code> in place of your project principles. <code>"+ @baseline"</code> appends the baseline on top of your principles.</td></tr>
             <tr><td><code>embeddingFallback</code></td><td><code>true</code></td><td>Enables the stage 1.5 embedding cache. Disable to force every cache-miss to the router LLM.</td></tr>
             <tr><td><code>discoverExtensionTools</code></td><td><code>true</code></td><td>Allow extensions in <code>extensions/</code> to register tools that Forge-Master can call.</td></tr>
             <tr><td><code>providers.githubCopilot.model</code></td><td><code>gpt-4o-mini</code></td><td>Model used when routing through GitHub Models (zero-key path with <code>gh auth login</code>).</td></tr>
           </tbody>
         </table>
+
+        <!-- ─── Lane-specific overlays (Phase-43) ─── -->
+        <h2 id="lane-overlays">Lane-Specific Prompt Overlays <span class="text-amber-400 text-base font-normal">Phase-43</span></h2>
+        <p>The reasoning model's system prompt is composed per-turn as <code>base + "\n\n" + overlay</code> where <em>overlay</em> is loaded from <code>pforge-master/src/prompts/&lt;lane&gt;.md</code> after intent classification. Lanes without an overlay use the base prompt alone. Three overlays ship today:</p>
+
+        <table class="manual-table my-4">
+          <thead><tr><th>Lane</th><th>Overlay file</th><th>Voice / contract</th></tr></thead>
+          <tbody>
+            <tr><td><code>advisory</code></td><td><code>advisory-cto.md</code></td><td>CTO voice. Reads receipts (drift, cost, alerts, deploys) <em>before</em> giving a verdict. Ranks risks. Caps recommendations at &le;3 actions. Refuses to recommend without evidence.</td></tr>
+            <tr><td><code>build</code></td><td><code>build-interviewer.md</code></td><td>Funnels every &ldquo;add X / change Y&rdquo; idea into a Crucible interview. Calls <code>forge_crucible_submit</code> &rarr; <code>forge_crucible_ask</code> &rarr; <code>forge_crucible_preview</code> rather than writing prose.</td></tr>
+            <tr><td><code>troubleshoot</code></td><td><code>troubleshoot-sre.md</code></td><td>SRE evidence discipline. Pulls <code>forge_watch_live</code> + <code>forge_bug_list</code> <em>before</em> hypothesizing root cause. Never proposes a fix without naming the failing slice / gate.</td></tr>
+          </tbody>
+        </table>
+
+        <div class="callout callout-tip">
+          <strong>Authoring a new overlay.</strong> Drop a <code>&lt;lane&gt;.md</code> file under <code>pforge-master/src/prompts/</code> and register it in <code>LANE_OVERLAYS</code> in <code>pforge-master/src/reasoning.mjs</code>. Keep overlays short (&lt;30 lines) &mdash; long overlays push out the model's context budget for actual reasoning.
+        </div>
 
         <h3 id="zero-key">Zero-key setup</h3>
         <p>The recommended setup path requires <strong>no API keys</strong>: run <code>gh auth login</code> once and Forge-Master auto-detects your GitHub token, then routes through <a href="https://models.github.ai/inference">GitHub Models</a>. GitHub Copilot subscribers get this for free.</p>
@@ -251,6 +290,11 @@
           <tbody>
             <tr><td><code>pforge forge-master status</code></td><td>Health check: server up, cache loaded, last classification</td></tr>
             <tr><td><code>pforge forge-master logs [--tail N]</code></td><td>Tail recent turns from <code>.forge/fm-sessions/*.jsonl</code></td></tr>
+            <tr><td><code>pforge audit</code> <span class="text-amber-400">Phase-43</span></td><td>Run a one-shot CTO audit via <code>forge_master_audit</code>. Returns the same bounded report (summary, top-3 risks, actions, cost note).</td></tr>
+            <tr><td><code>pforge audit --since 7d --tier high</code></td><td>Window the audit (default 7d) and override the reasoning tier (default <code>high</code> for audits).</td></tr>
+            <tr><td><code>pforge audit --schedule weekly</code></td><td>Print copy-paste Windows <code>schtasks</code> and Linux <code>crontab</code> snippets to run the audit on a cadence (daily / weekly).</td></tr>
+            <tr><td><code>pforge audit --on-incident</code></td><td>Print PagerDuty webhook and GitHub Actions wire-up guidance so an incident can trigger an automatic audit.</td></tr>
+            <tr><td><code>pforge audit export ...</code></td><td>Legacy subcommand preserved for compatibility — wraps <code>forge_audit_export</code> for streaming events.log records.</td></tr>
           </tbody>
         </table>
 
@@ -260,8 +304,8 @@
           <dt class="font-semibold text-slate-100">Replies say "I can't help with that" for a question I think is reasonable</dt>
           <dd class="text-slate-400 text-sm">Likely classified as <code>offtopic</code>. Check the <code>via</code> field in the response, if it says <code>"keyword"</code>, the keyword scorer didn't match. Rephrase using one of the keyword-rich phrasings ("status of …", "why did … fail", "should we …"), or wait until <code>embedding-cache</code> warms up.</dd>
 
-          <dt class="font-semibold text-slate-100">Quorum advisory never fires even though I set <code>"auto"</code></dt>
-          <dd class="text-slate-400 text-sm">Auto requires <strong>all four</strong>: lane = advisory, autoEscalated = true, fromTier = high, confidence ≥ medium. Use <code>"always"</code> to remove the gating during testing, then revert. Note that operational/troubleshoot/build lanes are <strong>hard-blocked</strong> regardless of mode.</dd>
+          <dt class="font-semibold text-slate-100">Quorum advisory fires on every prompt and the spend is too high</dt>
+          <dd class="text-slate-400 text-sm">Since Phase-43 the default is <code>quorumAdvisory: "auto"</code> and <code>autoEscalate: true</code>, so any advisory-lane prompt that auto-escalates to the high tier will fire quorum. To dial it back, set <code>quorumAdvisory: "off"</code> in <code>.forge.json</code> &rarr; <code>forgeMaster</code>, or set <code>autoEscalate: false</code> via <code>PUT /api/forge-master/prefs</code>. Operational/troubleshoot/build lanes are still <strong>hard-blocked</strong> regardless of mode.</dd>
 
           <dt class="font-semibold text-slate-100">Cache hit rate is stuck at 0%</dt>
           <dd class="text-slate-400 text-sm">Three causes: (1) the cache is fresh and hasn't seen similar prompts yet, give it 10–20 turns; (2) <code>@xenova/transformers</code> isn't installed and the hash-bag fallback isn't matching well, install the peer dep for better embeddings; (3) <code>embeddingFallback: false</code> in prefs disables the stage entirely.</dd>

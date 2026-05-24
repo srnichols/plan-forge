@@ -888,19 +888,20 @@
         "quorum": {
           "type": "string",
           "enum": [
-            "false",
-            "true",
-            "auto"
+            "auto",
+            "power",
+            "speed",
+            "false"
           ],
           "default": "auto",
-          "description": "Quorum mode (default: 'auto' — threshold-based; 'true' forces all slices; 'false' disables)"
+          "description": "Quorum mode. 'auto' = threshold-based with default models; 'power' = flagship preset (claude-opus-4.7 + gpt-5.3-codex + grok-4.20-0309-reasoning, threshold 5); 'speed' = fast preset (claude-sonnet-4.6 + gpt-5.4-mini + grok-4.20-0309-non-reasoning, threshold 7); 'false' = disabled. Note: 'power-gov' preset exists for Microsoft Foundry / gov-cloud workloads and is selectable via .forge.json `quorum.preset`."
         },
         "quorumThreshold": {
           "type": "number",
-          "description": "Complexity score threshold for auto mode (1-10, default: 6)"
+          "description": "Complexity score threshold for auto mode (1-10, default: 5)"
         }
       },
-      "config": ".forge.json → quorum { enabled, auto, threshold, models[], reviewerModel, dryRunTimeout }"
+      "config": ".forge.json → quorum { enabled, auto, threshold, models[], reviewerModel, dryRunTimeout, preset }"
     },
     "guardrails": {
       "preCommitChain": "Before each slice commit, PreCommit.mjs runs hooks.preCommit.chain entries in order. Built-ins start with master-branch-reject and diff-classify; the first non-zero exit aborts the commit.",
@@ -1764,13 +1765,23 @@
   },
   {
     "name": "forge_crucible_submit",
-    "description": "Submit a raw idea to the Crucible — starts a new smelt (idea → spec workflow). Returns a smelt id, a recommended lane (tweak / feature / full), and the first interview question. USE FOR: kicking off Crucible from an AI agent or CLI with a one-line description of a change, bug, or feature. Agent-submitted smelts are subject to the recursion guardrail (default depth=1, set source='agent').",
+    "description": "Submit a raw idea to the Crucible — starts a new smelt (idea → spec workflow). Returns a smelt id, a recommended lane (tweak / feature / full / bug-batch), and the first interview question. USE FOR: kicking off Crucible from an AI agent or CLI with a one-line description of a change, bug, or feature. Agent-submitted smelts are subject to the recursion guardrail (default depth=1, set source='agent'). For bug-fix smelts use mode='bug-batch' and supply bugId.",
     "inputSchema": {
       "type": "object",
       "properties": {
         "rawIdea": {
           "type": "string",
           "description": "The raw idea text — a sentence or short paragraph describing the change."
+        },
+        "mode": {
+          "type": "string",
+          "enum": [
+            "tweak",
+            "feature",
+            "full",
+            "bug-batch"
+          ],
+          "description": "Intake mode. Takes precedence over lane when both are supplied. Use 'bug-batch' for bug-fix smelts that need multi-slice plans."
         },
         "lane": {
           "type": "string",
@@ -1779,7 +1790,11 @@
             "feature",
             "full"
           ],
-          "description": "Override the recommended lane. Omit to accept the heuristic's choice."
+          "description": "Override the recommended lane (legacy; prefer mode). Omit to accept the heuristic's choice."
+        },
+        "bugId": {
+          "type": "string",
+          "description": "Optional bug identifier (e.g. RMG-0035). Stored on the smelt and emitted in finalized plan frontmatter as bugId + linkedBugs."
         },
         "source": {
           "type": "string",
@@ -5947,6 +5962,118 @@
         "tokensOut": 450,
         "totalCostUSD": 0.003,
         "truncated": false
+      }
+    }
+  },
+  {
+    "name": "forge_master_audit",
+    "description": "Run a holistic CTO-style audit of the project. Forge-Master pulls drift, cost, open bugs, watcher alerts, deploy journal, and open Crucible smelts, then returns a structured report with summary, top 3 risks (with evidence), prioritized recommended actions (P0/P1/P2), and a cost note. Read-only. USE FOR: end-of-week health check, end-of-run hook, 'what should I worry about today?'. DO NOT USE FOR: per-slice troubleshooting (use forge_master_ask).",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "tier": {
+          "type": "string",
+          "description": "Reasoning tier override (low|medium|high). Default: high — audits get the strongest model."
+        },
+        "maxToolCalls": {
+          "type": "number",
+          "description": "Max tool calls during the audit (default: 12)"
+        },
+        "drill": {
+          "type": "boolean",
+          "description": "Include the full raw reasoning trace in the response (default: false)"
+        },
+        "sessionId": {
+          "type": "string",
+          "description": "Reuse a Forge-Master session for continuity (optional)"
+        },
+        "path": {
+          "type": "string",
+          "description": "Project directory (default: current)"
+        }
+      },
+      "required": []
+    },
+    "intent": [
+      "audit",
+      "cto",
+      "review",
+      "health-check",
+      "weekly-audit",
+      "forge-master"
+    ],
+    "aliases": [
+      "audit_forge",
+      "forge_audit"
+    ],
+    "cost": "high",
+    "maxConcurrent": 1,
+    "addedIn": "3.21.0",
+    "prerequisites": [
+      "ANTHROPIC_API_KEY or OPENAI_API_KEY or XAI_API_KEY"
+    ],
+    "produces": [
+      ".forge/brain/session.forgemaster.*.json"
+    ],
+    "consumes": [
+      ".forge.json",
+      ".forge/brain/**",
+      ".forge/runs/**",
+      ".forge/incidents.jsonl",
+      ".forge/bug-registry/**"
+    ],
+    "sideEffects": [
+      "writes audit session memory via brain.remember"
+    ],
+    "writesFiles": false,
+    "network": true,
+    "risk": "low",
+    "agentGuidance": "Use forge_master_audit for end-of-week or end-of-run holistic health checks. Pulls drift + cost + bugs + watcher + deploy journal + open Crucibles, then returns a structured CTO report (summary, top 3 risks with evidence, prioritized P0/P1/P2 actions, cost note). Defaults to tier=high — gives the audit the strongest model. Wire into orchestrator end-of-run via hooks.postRun.invokeAuditor. Do NOT use for per-slice troubleshooting (use forge_master_ask) or for code edits (read-only).",
+    "errors": {
+      "reasoning_model_unavailable": {
+        "message": "No reasoning provider configured",
+        "recovery": "Set ANTHROPIC_API_KEY, OPENAI_API_KEY, or XAI_API_KEY, or configure forgeMaster.reasoningModel in .forge.json"
+      }
+    },
+    "example": {
+      "input": {
+        "tier": "high"
+      },
+      "output": {
+        "ok": true,
+        "summary": "Project is shipping but drift score dropped 8 points this week.",
+        "top_risks": [
+          {
+            "title": "Drift in pforge-mcp/server.mjs",
+            "evidence": "forge_drift_report: 3 architecture violations introduced in Slice 4"
+          },
+          {
+            "title": "Cost trending +12%",
+            "evidence": "forge_cost_report: $1.20/day baseline, $1.34/day current"
+          }
+        ],
+        "actions": [
+          {
+            "priority": "P0",
+            "action": "Refactor server.mjs ACI violations",
+            "why": "Drift score will keep falling"
+          },
+          {
+            "priority": "P1",
+            "action": "Flip quorum to speed for non-blocking slices",
+            "why": "Reduces token spend ~20%"
+          }
+        ],
+        "cost_note": "$1.34/day current vs $1.20/day baseline — within budget but trending up",
+        "sources": [
+          "forge_drift_report",
+          "forge_cost_report",
+          "forge_bug_list",
+          "forge_watch",
+          "forge_deploy_journal",
+          "forge_crucible_list"
+        ],
+        "message": "Audit complete."
       }
     }
   },

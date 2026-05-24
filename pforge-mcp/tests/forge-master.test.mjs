@@ -50,7 +50,8 @@ describe("forge-master config", () => {
     expect(cfg.maxToolCalls).toBe(5);
     expect(cfg.ceilingToolCalls).toBe(10);
     expect(cfg.sessionRetentionDays).toBe(14);
-    expect(cfg.l3Enabled).toBe(false);
+    // Phase-43 CTO default: L3 cross-project recall on (graceful degradation)
+    expect(cfg.l3Enabled).toBe(true);
     expect(cfg.discoverExtensionTools).toBe(true);
   });
 
@@ -58,7 +59,7 @@ describe("forge-master config", () => {
     writeForgeJson(tmpDir, { preset: "dotnet" });
     const cfg = getForgeMasterConfig({ cwd: tmpDir });
     expect(cfg.maxToolCalls).toBe(5);
-    expect(cfg.l3Enabled).toBe(false);
+    expect(cfg.l3Enabled).toBe(true);
   });
 
   it("applies explicit forgeMaster overrides", () => {

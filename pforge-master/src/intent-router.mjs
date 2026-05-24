@@ -256,6 +256,10 @@ const KEYWORD_RULES = [
   // Phase-38.R3 — explicit advice request + impact analysis
   { pattern: /\badvise\b|\barchitectural\s+(guidance|advice)\b/i, lane: LANES.ADVISORY, weight: 3 },
   { pattern: /\b(affected\s+if\s+(I|we)|impact\s+(of\s+)?chang|what\s+(breaks|changes)\s+if)\b/i, lane: LANES.ADVISORY, weight: 3 },
+  // Phase-43 — CTO-style risk/audit prompts
+  { pattern: /\b(biggest|top|main|primary|key)\s+(risk|risks|concern|concerns|issue|issues|threat)\b/i, lane: LANES.ADVISORY, weight: 3 },
+  { pattern: /\b(what'?s|whats)\s+(at\s+risk|going\s+wrong|the\s+state\s+of|broken)\b/i, lane: LANES.ADVISORY, weight: 3 },
+  { pattern: /\b(weekly|monthly|quarterly)\s+(audit|review|risk|digest|summary)\b/i, lane: LANES.ADVISORY, weight: 3 },
 
   // ── Off-topic signals ──
   { pattern: /\b(weather|temperature|forecast|sports|score|game)\b/i, lane: LANES.OFFTOPIC, weight: 3 },

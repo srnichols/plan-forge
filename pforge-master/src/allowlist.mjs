@@ -18,7 +18,7 @@
 export const BASE_ALLOWLIST = Object.freeze([
   // Planning / status
   "forge_plan_status",
-  // "forge_phase_status",  // removed in Phase-37.1 — no MCP handler
+  // "forge_phase_status", // no MCP handler — keep commented until handler exists
   "forge_status",
   "forge_diff",
   "forge_capabilities",
@@ -29,54 +29,58 @@ export const BASE_ALLOWLIST = Object.freeze([
   "forge_quorum_analyze",
   "forge_doctor_quorum",
 
-  // Health & watchers
+  // Health & watchers (restored in Phase-43 — handlers verified live)
   "forge_health_trend",
   "forge_watch",
   "forge_watch_live",
   "forge_alert_triage",
-  // "forge_dep_watch",        // removed in Phase-37.1 — no MCP handler
-  // "forge_drift_report",     // removed in Phase-37.1 — no MCP handler
-  // "forge_hotspot",          // removed in Phase-37.1 — no MCP handler
-  // "forge_regression_guard", // removed in Phase-37.1 — no MCP handler
+  "forge_dep_watch",
+  "forge_drift_report",
+  "forge_hotspot",
+  "forge_regression_guard",
 
-  // Diagnostics
+  // Diagnostics (restored in Phase-43)
   "forge_smith",
   "forge_sweep",
   "forge_validate",
   "forge_analyze",
-  // "forge_diagnose",         // removed in Phase-37.1 — no MCP handler
+  "forge_diagnose",
 
   // Crucible (interview — submit/ask/preview touch an in-progress smelt only)
-  // "forge_crucible_list",    // removed in Phase-37.1 — no MCP handler
-  // "forge_crucible_submit",  // removed in Phase-37.1 — no MCP handler
-  // "forge_crucible_ask",     // removed in Phase-37.1 — no MCP handler
-  // "forge_crucible_preview", // removed in Phase-37.1 — no MCP handler
+  // (restored in Phase-43 — without these the system-prompt's "funnel to Crucible" promise breaks)
+  "forge_crucible_list",
+  "forge_crucible_submit",
+  "forge_crucible_ask",
+  "forge_crucible_preview",
 
   // Memory & retrieval
-  // "brain_recall",           // removed in Phase-37.1 — no MCP handler
+  // "brain_recall", // no MCP handler — keep commented; use forge_search instead
   "forge_memory_report",
   "forge_search",
-  // "forge_timeline",         // removed in Phase-37.1 — no MCP handler
+  "forge_timeline",
 
-  // Tempering reads
-  // "forge_tempering_scan",   // removed in Phase-37.1 — no MCP handler
-  // "forge_tempering_status", // removed in Phase-37.1 — no MCP handler
+  // Tempering reads (restored in Phase-43)
+  "forge_tempering_scan",
+  "forge_tempering_status",
 
-  // Bug / review / skill reads
-  // "forge_bug_list",         // removed in Phase-37.1 — no MCP handler
-  // "forge_review_list",      // removed in Phase-37.1 — no MCP handler
-  // "forge_skill_status",     // removed in Phase-37.1 — no MCP handler
+  // Bug / review / skill reads (restored in Phase-43)
+  "forge_bug_list",
+  "forge_review_list",
+  "forge_skill_status",
 
   // Extension reads
   "forge_ext_search",
   "forge_ext_info",
 
-  // Ops reads
-  // "forge_runbook",          // removed in Phase-37.1 — no MCP handler
-  // "forge_deploy_journal",   // removed in Phase-37.1 — no MCP handler
+  // Ops reads (restored in Phase-43)
+  "forge_runbook",
+  "forge_deploy_journal",
 
   // Phase-38.3 — Knowledge graph (advisory lane only)
   "forge_graph_query",
+
+  // Phase-43 — Audit primitive (read-only synthesis tool, closed-loop CTO)
+  "forge_master_audit",
 ]);
 
 /**
@@ -180,6 +184,7 @@ export const USAGE_HINTS = Object.freeze({
   forge_runbook:          "Read the project runbook — operational procedures, escalation paths.",
   forge_deploy_journal:   "Read the deploy journal — recent deployments, rollbacks, incidents.",
   forge_graph_query:      "Query the knowledge graph — phases, slices, commits, files, bugs, runs, and their relationships.",
+  forge_master_audit:     "Holistic CTO-style audit: drift + cost + bugs + watcher + open Crucibles. Returns summary, top risks, and ranked recommended actions.",
 });
 
 // ─── Dynamic Extension-Tool Discovery ───────────────────────────────

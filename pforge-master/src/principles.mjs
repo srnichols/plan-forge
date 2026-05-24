@@ -8,8 +8,12 @@
  *   3. .forge.json#forgeMaster.philosophy string
  *
  * Override semantics:
- *   - philosophy string (no prefix) → REPLACES file-based content entirely
+ *   - philosophy string (no prefix)        → REPLACES file-based content entirely
  *   - philosophy string starting with "+ " → APPENDS after file-based content
+ *   - philosophy === "+ @baseline"         → APPENDS the UNIVERSAL_BASELINE
+ *                                            (Scott-voice ten-principle block) so
+ *                                            both project principles + opinionated
+ *                                            CTO advisory voice are loaded together
  *
  * Falls back to UNIVERSAL_BASELINE when no sources are found.
  *
@@ -150,9 +154,17 @@ function resolvePrinciplesBlock(fileBlock, fileSources, philosophy) {
     if (philosophy.startsWith("+ ")) {
       const base = fileBlock || UNIVERSAL_BASELINE;
       const appendedSources = fileBlock ? [...fileSources] : ["universal-baseline"];
+      // Phase-43: "+ @baseline" → append the UNIVERSAL_BASELINE Scott-voice block
+      //            "+ <text>"   → append the literal text
+      const trimmed = philosophy.slice(2).trim();
+      const isBaselineAlias = trimmed === "@baseline";
+      const appendedText = isBaselineAlias ? UNIVERSAL_BASELINE : trimmed;
+      const appendedLabel = isBaselineAlias
+        ? ".forge.json#forgeMaster.philosophy (append: @baseline)"
+        : ".forge.json#forgeMaster.philosophy (append)";
       return {
-        block: `${base}\n\n---\n\n${philosophy.slice(2).trim()}`,
-        sources: [...appendedSources, ".forge.json#forgeMaster.philosophy (append)"],
+        block: `${base}\n\n---\n\n${appendedText}`,
+        sources: [...appendedSources, appendedLabel],
       };
     }
 

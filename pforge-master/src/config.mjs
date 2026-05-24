@@ -32,13 +32,17 @@ export const FORGE_MASTER_DEFAULTS = Object.freeze({
   maxToolCalls: 5,
   ceilingToolCalls: 10,
   sessionRetentionDays: 14,
-  l3Enabled: false,
+  // CTO defaults (Phase-43): L3 cross-project recall on by default; gracefully
+  // degrades to L2 when OpenBrain isn't configured (doRecall returns empty).
+  l3Enabled: true,
   discoverExtensionTools: true,
   reasoningTiers: Object.freeze({ low: null, medium: null, high: null }),
   defaultTier: null,
   autoEscalate: true,
   observer: Object.freeze({
-    enabled: false,
+    // CTO defaults (Phase-43): observer unblocked by default. Still requires
+    // explicit forge_master_observe(action:"start") call to actually run.
+    enabled: true,
     maxUsdPerDay: 1.0,
     maxNarrationsPerHour: 6,
     modelTier: null,

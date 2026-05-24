@@ -1126,6 +1126,22 @@ export const TOOLS = [
     },
   },
   {
+    // Phase-43 — forge_master_audit (CTO-style holistic audit)
+    name: "forge_master_audit",
+    description: "Run a holistic CTO-style audit of the project. Forge-Master pulls drift, cost, open bugs, watcher alerts, deploy journal, and open Crucible smelts, then returns a structured report with summary, top 3 risks (with evidence), prioritized recommended actions (P0/P1/P2), and a cost note. Read-only. USE FOR: end-of-week health check, end-of-run hook, 'what should I worry about today?'. DO NOT USE FOR: per-slice troubleshooting (use forge_master_ask).",
+    inputSchema: {
+      type: "object",
+      properties: {
+        tier: { type: "string", description: "Reasoning tier override (low|medium|high). Default: high — audits get the strongest model." },
+        maxToolCalls: { type: "number", description: "Max tool calls during the audit (default: 12)" },
+        drill: { type: "boolean", description: "Include the full raw reasoning trace in the response (default: false)" },
+        sessionId: { type: "string", description: "Reuse a Forge-Master session for continuity (optional)" },
+        path: { type: "string", description: "Project directory (default: current)" },
+      },
+      required: [],
+    },
+  },
+  {
     name: "forge_testbed_findings",
     description: "Query testbed defect-log findings. Returns findings filtered by status, severity, or date. Read-only — does not modify any files.",
     inputSchema: {

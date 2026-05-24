@@ -7,6 +7,72 @@ Format follows [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
+### Added — Phase-43: Forge-Master CTO defaults + audit tool
+
+- **`forge_master_audit` MCP tool** — new CTO-style audit lane that aggregates
+  drift, cost, bugs, watcher health, deploy journal, and Crucible smelts into a
+  4-section Markdown report (`## Summary`, `## Top Risks` (≤3), `## Recommended
+  Actions` (≤5), `## Cost Note`). Bounded ACI-compliant response:
+  `{ ok, summary, top_risks[≤3], actions[≤5], cost_note, sources[], message }`
+  with optional `drill: true` for the raw model output. Wired into
+  `enums.mjs#TOOL_NAMES` (tool 106), `tool-definitions.mjs`,
+  `capabilities/tool-metadata.mjs` (intents: audit/cto/review/health-check/
+  weekly-audit), `_NULL_RETURN_TOOLS`, and `pforge-master/src/allowlist.mjs`
+  + USAGE_HINTS.
+- **`pforge audit` CLI command** (PowerShell + Bash parity) — `pforge audit`
+  runs the new audit tool with sensible defaults (`--since 7d --tier high`);
+  flags `--since`, `--tier`, `--schedule daily|weekly`, and `--on-incident`
+  surface scheduling/incident-trigger guidance. The existing
+  `pforge audit export` subcommand is preserved unchanged.
+- **Lane-specific system-prompt overlays** for Forge-Master:
+  `pforge-master/src/prompts/{advisory-cto,build-interviewer,troubleshoot-sre}.md`.
+  `loadSystemPrompt()` now composes the base prompt + the matching overlay
+  for the classified lane (advisory → CTO voice, build → Crucible
+  interviewer, troubleshoot → SRE evidence discipline). Other lanes fall
+  through to the base prompt unchanged.
+- **`"+ @baseline"` philosophy alias** in `.forge.json`'s
+  `forgeMaster.philosophy` — appends Plan Forge's UNIVERSAL_BASELINE
+  principles block to the project's own principles instead of replacing it.
+  Repo's `.forge.json` now opts in.
+- **CI parity guard** — `pforge-master/tests/allowlist-handler-parity.test.mjs`
+  verifies every BASE/WRITE allowlist entry has a matching handler in
+  `pforge-mcp/enums.mjs#TOOL_NAMES`. Prevents recurrence of Phase-37.1's
+  "commented out 17 tools that actually had handlers" drift.
+- **Canonical Q&A regression tests**
+  (`pforge-master/tests/forge-master-canonical-answers.test.mjs`) — pins
+  classifier behavior for the four canonical CTO questions: "biggest risk"
+  → advisory, "ship vs refactor" → advisory, "add OAuth" → build, "why did
+  slice 4 fail" → troubleshoot. Also adds three router patterns
+  (`(biggest|top|main|primary|key) (risk|...)`,
+  `whats (at risk|going wrong|...)`, `(weekly|monthly|quarterly) (audit|...)`)
+  so the advisory lane catches risk-shaped questions.
+
+### Changed — Phase-43: Forge-Master CTO defaults
+
+- **Restored 17 read-only tools to BASE_ALLOWLIST** —
+  `forge_dep_watch`, `forge_drift_report`, `forge_hotspot`,
+  `forge_regression_guard`, `forge_diagnose`, `forge_crucible_{list,submit,
+  ask,preview}`, `forge_timeline`, `forge_tempering_{scan,status}`,
+  `forge_bug_list`, `forge_review_list`, `forge_skill_status`,
+  `forge_runbook`, `forge_deploy_journal`. Phase-37.1 had commented these
+  as "no MCP handler" but only `brain_recall` and `forge_phase_status`
+  genuinely lack handlers. Also added the matching tools to
+  `_NULL_RETURN_TOOLS` in `pforge-mcp/server/tool-handlers/core.mjs` and to
+  the `ASYNC_TOOLS` set in `pforge-master/tests/http-dispatcher-parity.test.mjs`.
+- **Flipped three Forge-Master defaults** to reduce setup friction
+  (CTO-friendly out-of-the-box experience):
+  - `FORGE_MASTER_DEFAULTS.observer.enabled: false → true` — observer is
+    unblocked by default but still requires an explicit
+    `forge_master_observe(action:"start")` call to run; flipping the flag
+    does not change runtime cost.
+  - `FORGE_MASTER_DEFAULTS.l3Enabled: false → true` — cross-project L3
+    recall on by default; gracefully degrades to L2 when OpenBrain is not
+    configured (recall returns empty).
+  - `PREFS_DEFAULTS.{autoEscalate: false→true, quorumAdvisory: "off"→"auto"}`
+    in `pforge-master/src/http-routes.mjs` — auto-escalation and quorum
+    advisory both opt-in by default; explicit overrides via the prefs UI
+    still take precedence.
+
 ---
 
 ## [3.20.0] — 2026-05-23 — `pforge self-update --verify` + capabilities-drift CI + metrics refresh

@@ -7087,13 +7087,56 @@ case "$COMMAND" in
         sub="${1:-}"
         case "$sub" in
             export) shift; cmd_audit_export "$@" ;;
+            ""|--*)
+                # Phase-43: `pforge audit` runs forge_master_audit.
+                since="7d"
+                tier="high"
+                schedule=""
+                on_incident=""
+                while [ $# -gt 0 ]; do
+                    case "$1" in
+                        --since) since="$2"; shift 2 ;;
+                        --tier) tier="$2"; shift 2 ;;
+                        --schedule) schedule="$2"; shift 2 ;;
+                        --on-incident) on_incident="1"; shift ;;
+                        *) shift ;;
+                    esac
+                done
+                if [ -n "$schedule" ]; then
+                    echo ""
+                    echo "To schedule '$schedule' audits, add to crontab:"
+                    echo "  0 9 * * * cd $(pwd) && pforge audit --since 7d >> .forge/audit.log 2>&1"
+                    echo "Or, on Windows, register a scheduled task:"
+                    echo "  schtasks /create /tn 'Plan Forge $schedule audit' /tr 'pforge audit --since 7d' /sc $schedule /st 09:00"
+                    echo ""
+                    exit 0
+                fi
+                if [ -n "$on_incident" ]; then
+                    echo ""
+                    echo "To trigger audits from incident channels, wire your alerting hook to:"
+                    echo "  pforge audit --since 24h --tier high"
+                    echo "Examples:"
+                    echo "  - PagerDuty webhook → pforge audit --since 24h"
+                    echo "  - GitHub Actions on incident label → pforge audit --since 24h"
+                    echo ""
+                    exit 0
+                fi
+                cmd_mcp_call forge_master_audit "--tier=$tier" "--since=$since"
+                ;;
             *)
-                echo "Usage: pforge audit <subcommand>"
+                echo "Usage: pforge audit [--since 7d] [--tier high|medium|low] [--schedule daily] [--on-incident]"
                 echo ""
                 echo "Subcommands:"
-                echo "  export    Export audit events from .forge/runs/ as JSONL or CSV"
+                echo "  (default)  Run a Forge-Master audit (forge_master_audit)"
+                echo "  export     Export audit events from .forge/runs/ as JSONL or CSV"
                 echo ""
-                echo "See also: pforge audit-loop"
+                echo "Flags (default audit):"
+                echo "  --since <window>     Time window (e.g. 7d, 24h) — default: 7d"
+                echo "  --tier <tier>        Reasoning tier: high|medium|low — default: high"
+                echo "  --schedule <freq>    Print guidance for setting up a scheduled audit"
+                echo "  --on-incident        Print guidance for incident-triggered audits"
+                echo ""
+                echo "See also: pforge audit-loop, pforge audit export"
                 exit 1
                 ;;
         esac

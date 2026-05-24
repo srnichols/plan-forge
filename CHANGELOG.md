@@ -7,8 +7,28 @@ Format follows [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
+---
+
+## [3.20.0] — 2026-05-23 — `pforge self-update --verify` + capabilities-drift CI + metrics refresh
+
+> **One-liner**: Adds a composable `--verify` flag to `pforge self-update` that chains `pforge check` and `pforge smith` against the freshly-installed wrapper, plus a new `capabilities-drift` CI workflow that blocks drift between the MCP discovery surface and the published `docs/capabilities.md`. Refreshes `docs/_metrics.json` and 26 user-facing documentation surfaces to current canonical counts (104 MCP tools, 21 reviewer agents, 4 reviewer skills, 30 manual chapters), catches the manual up from v3.12 → v3.19, and reworks Anvil/Hallmark framing in `docs/capabilities.html` to reflect the MCP + CLI mirrors that have shipped.
+
 ### Added
 - **`pforge self-update --verify` flag** — Composable post-update verification. After a successful update, spawns `pforge check` and `pforge smith` as subprocesses against the freshly-installed wrapper (Issue #177 self-replace constraint: the current shell still has the old wrapper loaded in memory). Composes cleanly with all existing flags — e.g. `pforge self-update --force --verify`, `pforge self-update --yes --verify`, `pforge self-update --force --downgrade --verify`. Exits non-zero if either `check` or `smith` fail, so the verification request is honored end-to-end. With `--dry-run`, verification is skipped (no update happened). Parity-tested across both shells (`pforge-mcp/tests/self-update-verify-flag.test.mjs`).
+- **`capabilities-drift` CI workflow** (`.github/workflows/capabilities-drift.yml`) — runs `scripts/generate-capabilities-doc.mjs --check` and `docs/manual/maintain.mjs --audit` on PRs/pushes when discovery sources change, blocking drift between `pforge-mcp/tools.json` / `capabilities.mjs` and the published `docs/capabilities.md`.
+- **`docs-metrics` drift gate now runs on `planning/main`** — extended `.github/workflows/docs-metrics.yml` trigger branches so doc-metrics drift is caught at PR time on the dev superset branch, not just at release-sync time. Also added `scripts/check-metrics.sh` to the watched paths.
+
+### Changed
+- **Anvil + Hallmark capability framing in `docs/capabilities.html`** — reworked the long-standing "CLI-only" copy to reflect the MCP + CLI mirrors that have shipped: `forge_hallmark_show`, `forge_hallmark_verify`, `forge_anvil_stat`, `forge_anvil_clear`, `forge_anvil_rebuild`, `forge_anvil_dlq_list`, `forge_anvil_dlq_drain`. Fixed a misleading comment in `scripts/generate-capabilities-doc.mjs` that claimed these tools were excluded from the MCP discovery table.
+- **`docs/_metrics.json` refreshed to v3.20.0** with current ground-truth counts: 104 MCP tools, 21 reviewer agents, 4 reviewer skills, 8 pipeline prompts (new `prompts` field), 30 manual chapters, 14 appendices, 7947 tests. Removed the stale `mcpTools.breakdown` subsection in favor of `_breakdownNote` pointing at `pforge-mcp/tools.json` as the authoritative source. Dropped the redundant `scaffoldingPrompts` field.
+- **`scripts/check-metrics.{ps1,sh}` excludes `docs/V3-CAPABILITY-AUDIT.md`** — the forensic audit snapshot intentionally references historical MCP-tool counts (67, 69, 88) alongside corrected values; excluding it eliminates ~20 false positives every run.
+- **26 documentation surfaces refreshed** — README banner, `docs/index.html`, `docs/capabilities.html`, `docs/faq.html`, six blog posts, eight manual pages, and `docs/{COPILOT-VSCODE-GUIDE,MEMORY-ARCHITECTURE,REST-API}.md` all updated from stale counts (88/106 MCP tools, 14/19 agents, ~12 skills, 24 chapters) to current canonical values. Third Edition history entries reworded `88 MCP tools` → `88 tools` to preserve the milestone without tripping the scanner regex.
+- **Manual catch-up v3.12 → v3.19** across 12 manual chapters (`docs/manual/*`) plus `docs/capabilities.md`, `docs/llms.txt`, `llms.txt`, and `plugin.json`. Brings the website manual in line with the shipped surface area as of v3.19.0.
+
+### Notes
+- This is a minor release: one new feature (`--verify`) plus a wave of docs / CI hardening. No breaking changes; all CLI flags and tool surfaces unchanged.
+- The `docs-metrics.yml` and `capabilities-drift.yml` workflows live in `.github/workflows/` and do not ship to consumers via `pforge self-update`.
+- Pre-existing master-only test failures (`clean-code-no-regression.test.mjs`, `full-suite-regression.test.mjs`) reference `docs/plans/` fixtures that have never shipped to master per the consumer-template branch model — unchanged from v3.19.0.
 
 ---
 

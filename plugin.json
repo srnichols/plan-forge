@@ -1,7 +1,7 @@
 {
   "name": "plan-forge",
-  "version": "2.80.0",
-  "description": "Plan Forge — Harden AI-driven development plans into drift-proof execution contracts. 7-step pipeline, 20 reviewer agents, 14 skills, 69 MCP tools (core + LiveGuard + Watcher + Crucible + Tempering + Bug Registry + Testbed + Forge-Master), 46+ CLI commands, live dashboard, quorum mode, audit drain loop, self-recursive intelligence (Forge + LiveGuard), OpenBrain memory integration, cost tracking. Supports 9 presets (dotnet, typescript, python, java, go, swift, rust, php, azure-iac).",
+  "version": "3.19.0",
+  "description": "Plan Forge — The AI-Native SDLC Forge Shop. Four stations (Smelt, Forge, Guard, Learn) covering the whole lifecycle. 104 MCP tools (core + LiveGuard + Watcher + Crucible + Tempering + Bug Registry + Testbed + Lattice + Anvil + Hallmark + Sync + Forge-Master + Auditor), 48+ CLI commands, ~21 reviewer agents, ~12 skills, live dashboard, quorum mode (auto/power/speed), audit drain loop, self-recursive intelligence, OpenBrain memory integration, cost tracking. Supports 9 presets (dotnet, typescript, python, java, go, swift, rust, php, azure-iac).",
   "author": "srnichols",
   "license": "MIT",
   "homepage": "https://github.com/srnichols/plan-forge",

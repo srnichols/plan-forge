@@ -19,8 +19,8 @@ Plan Forge is an open-source framework that gives AI coding agents (Copilot, Cla
 
 ## Capabilities
 
-- 91 MCP tools — core orchestration + LiveGuard + Watcher + Crucible + Tempering + Bug Registry + Testbed + Lattice (code-graph, 5 tools) + Copilot Memory Sync (`forge_sync_memories`, `forge_sync_instructions`) + Worker Guardrails (`forge_diff_classify`). Start with `forge_capabilities` for full discovery; call `mcp-call <tool>` from the CLI for any tool without a dedicated wrapper.
-- 48+ CLI commands (`pforge <command>`) — plan hardening (run-plan, analyze, sweep), LiveGuard (drift, incident, secret-scan, env-diff, dep-watch, hotspot, regression-guard, fix-proposal, quorum-analyze, health-trend, deploy-log), audit loop (audit-loop), releases (self-update, version-bump, migrate-memory), testbed (testbed-happypath), introspection (smith, check, status, tour), agent setup (claude, codex, cursor, copilot), org-rules export, lattice/anvil/hallmark CLI families, sync-memories/sync-instructions Copilot bridges.
+- 104 MCP tools — core orchestration + LiveGuard + Watcher + Crucible + Tempering + Bug Registry + Testbed + Lattice (code-graph, 5 tools) + Anvil (memoization + DLQ, 5 tools) + Hallmark (provenance, 2 tools) + Copilot Memory Sync (`forge_sync_memories`, `forge_sync_instructions`) + Worker Guardrails (`forge_diff_classify`, `forge_diff_stats`) + Forge-Master (`forge_master_ask`). Start with `forge_capabilities` for full discovery; call `mcp-call <tool>` from the CLI for any tool without a dedicated wrapper.
+- 48+ CLI commands (`pforge <command>`) — plan hardening (run-plan, analyze, sweep), LiveGuard (drift, incident, secret-scan, env-diff, dep-watch, hotspot, regression-guard, fix-proposal, quorum-analyze, health-trend, deploy-log), audit loop (audit-loop), releases (self-update with `--verify` integrity check, version-bump, migrate-memory), testbed (testbed-happypath), introspection (smith, check, status, tour), agent setup (claude, codex, cursor, copilot), org-rules export, lattice/anvil/hallmark CLI families, sync-memories/sync-instructions Copilot bridges.
 - Memory architecture — three tiers (L1 Hub, L2 `.forge/*.jsonl`, L3 OpenBrain pgvector) wrapped by four v3.x upgrades: **Hallmark** provenance stamps (`hallmark/v1` envelope), **Anvil** DLQ + capability-handshake boundary on the L2→L3 doorway, **Lattice** parallel code-graph axis, and **`forge_sync_memories`** that pushes decisions and lessons upward into Copilot Memory. Full plain-English tour: `docs/manual/memory-system.html` (Ch 25 — How the Shop Remembers).
 - LiveGuard tools — post-coding intelligence: drift scoring, incident tracking, secret scanning, dependency vulnerability monitoring, regression guard, health trend with Health DNA fingerprint, alert triage, environment diff, fix proposals with code snippets, quorum analysis, composite health check (`forge_liveguard_run`).
 - Crucible + Tempering — community forge intake, lifecycle state machine, temper-quality scoring, and audit drain loop (`forge_tempering_drain`, `forge_triage_route`).
@@ -30,13 +30,16 @@ Plan Forge is an open-source framework that gives AI coding agents (Copilot, Cla
 - LiveGuard Intelligence — recurring incident detection (auto-escalate systemic), fix proposal outcome tracking, hotspot test priority, Project Health DNA for decay detection.
 - OpenBrain integration — auto-capture findings to persistent memory; pipeline prompts search memory before acting.
 - Worker Guardrails (v3.6.3+) — `forge_diff_classify` (diff classifier, blocks risky changes before worker runs), `lockHash` (plan integrity check in frontmatter), `tools.deny` (tool denylist frontmatter), `network.allowed` (outbound host allowlist frontmatter, currently log-only), `PreCommit chain` (`hooks.preCommit.chain[]` array), `plan-health-auditor` agent, `--objective` mode on `forge_tempering_run`.
-- ~12 reviewer agents (6-7 stack-specific + 5 pipeline + 1 classifier-reviewer + 1 plan-health-auditor)
-- 14 slash command skills (including /audit-loop)
+- Auth Providers (v3.14–v3.18) — Entra ID OIDC, Okta OIDC, SCIM 2.0 user provisioning, and SCIM-RBAC role bridge for enterprise SSO + lifecycle management of dashboard users.
+- pforge-sdk — reader libraries shipped via setup: session-reader (v3.12), bug-reader (v3.13), trajectory-reader (v3.15) for embedding Plan Forge state in other tools.
+- ~21 reviewer agents (6-7 stack-specific + 7 cross-stack + 5-6 pipeline + plan-health-auditor + classifier-reviewer)
+- ~12 slash command skills (including `/audit-loop`, `/health-check`, `/forge-execute`, `/security-audit`, `/clean-code-review`, `/bug-fix`)
 - 15-18 auto-loading instruction files per preset
 - 15 scaffolding prompt templates per app preset
 - Live dashboard at localhost:3100/dashboard — multi-tab (FORGE, LIVEGUARD, CRUCIBLE, BUG REGISTRY, NOTIFICATIONS, TIMELINE/SEARCH, WATCHER)
 - Quorum mode: multi-model consensus for complex slices (--quorum=power, --quorum=speed)
 - Audit Loop: closed-loop audit drain via `pforge audit-loop` or `.forge.json#audit` activation surface (off/auto/always, default off)
+- LiveGuard Hooks: `hooks.preDeploy` (blocking secret-scan + env-diff), `hooks.postSlice` (drift advisory), `hooks.postSliceCleanCode` (Clean Code delta advisory), `hooks.preAgentHandoff` (multi-agent context injection)
 - Auto-escalation: automatic model promotion on slice failure (self-tuning from history)
 - Agent-per-slice routing: assign different models per role
 - Cost tracking with multi-model pricing table (self-calibrating estimates)

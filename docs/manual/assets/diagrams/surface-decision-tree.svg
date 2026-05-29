@@ -38,7 +38,7 @@
   <!-- MCP outcome box (far left) -->
   <rect x="20" y="170" width="220" height="100" class="node" fill="#0f172a" stroke="#34d399" stroke-width="2" />
   <text x="130" y="195" class="lane" text-anchor="middle" fill="#34d399">MCP</text>
-  <text x="130" y="215" class="label" text-anchor="middle">stdio · 90 tools</text>
+  <text x="130" y="215" class="label" text-anchor="middle">stdio · 105 tools</text>
   <text x="130" y="232" class="label" text-anchor="middle">inherited trust</text>
   <text x="130" y="252" class="small" text-anchor="middle" font-style="italic">Auto-discovered by</text>
   <text x="130" y="265" class="small" text-anchor="middle" font-style="italic">.vscode/mcp.json</text>

@@ -230,29 +230,9 @@ pforge sync-memories --dry-run</code></pre>
         <!-- ─── How the new pieces fit the old tiers ─── -->
         <h2 id="how-they-fit">How the New Pieces Fit the Old Tiers</h2>
 
-        <p>To make sure the mental model holds, here's the same picture from <a href="memory-architecture.html">Chapter 21</a> with the new pieces drawn in:</p>
+        <p>To make sure the mental model holds, here's the same picture from <a href="memory-architecture.html">Chapter 21</a> with the new pieces drawn in — Hallmark stamping L2, Anvil gating the L2→L3 promotion, <code>forge_sync_memories</code> surfacing L3 into Copilot Memory, and Lattice running as a parallel code-graph axis:</p>
 
-        <div class="cmd-block mb-4">
-          <div class="cmd-block-header"><span>The memory stack, layered, not replaced</span></div>
-          <pre><code>┌─────────────────────────────────────────────────────────────────┐
-│  Copilot Memory (cross-session, IDE-wide)                       │
-│       ▲                                                         │
-│       │ forge_sync_memories  (additive, hash-deduped)           │
-│  ┌────┴─────────────────────────────────────────────────────┐   │
-│  │  L3, OpenBrain (pgvector, cross-project)                │   │
-│  │       ▲                                                  │   │
-│  │       │ Anvil  (DLQ + capability handshake + boot drain) │   │
-│  │  ┌────┴─────────────────────────────────────────────┐    │   │
-│  │  │  L2, .forge/*.jsonl   (Hallmark-stamped, _v:1)  │    │   │
-│  │  │  L1, Hub (in-process, runId-scoped)             │    │   │
-│  │  └──────────────────────────────────────────────────┘    │   │
-│  └──────────────────────────────────────────────────────────┘   │
-│                                                                 │
-│  Parallel axis (not a tier):                                    │
-│    Lattice, .forge/lattice/{chunks,edges}.jsonl                │
-│      (code-graph; queried alongside, not stacked on, memory)    │
-└─────────────────────────────────────────────────────────────────┘</code></pre>
-        </div>
+        <figure class="manual-figure" id="fig-22-1"><img src="assets/diagrams/memory-stack-layered.svg" alt="Memory stack layered, not replaced: the L1 hub (in-process, runId-scoped, 5000-event ring buffer) writes synchronously into L2 (.forge/*.jsonl, Hallmark-stamped with _v:1). The Anvil gate (DLQ + capability handshake + boot drain) promotes L2 records up to L3 (OpenBrain pgvector, cross-project semantic). forge_sync_memories then surfaces L3 thoughts up into Copilot Memory (cross-session, IDE-wide) additively with hash-dedupe. Lattice runs as a parallel axis to the right (.forge/lattice/chunks.jsonl and edges.jsonl, code-graph) used by forge_lattice_* and forge_search, queried alongside memory rather than stacked above or below the tiers." class="diagram-img diagram-img-lg my-4" /><figcaption class="manual-figcaption"><!--fignum--><span class="manual-fignum">Figure 22-1.</span><!--/fignum--> <!--cap:auto-->The memory stack — layered, not replaced. New pieces (Hallmark, Anvil, forge_sync_memories, Lattice) sit on top of the L1/L2/L3 foundation.<!--/cap--></figcaption></figure>
 
         <p>L1/L2/L3 are the same tiers. <strong>Hallmark</strong> adds a contract to what gets written. <strong>Anvil</strong> hardens the L2 → L3 doorway. <strong>forge_sync_memories</strong> pushes upward into Copilot. <strong>Lattice</strong> sits beside everything as a separate code-graph axis the agent queries the same way it queries memory.</p>
 

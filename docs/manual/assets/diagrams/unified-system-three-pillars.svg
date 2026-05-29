@@ -8,7 +8,7 @@
     .title { font-size: 13.5px; fill: #f8fafc; font-weight: 600; }
     .pillar-title { font-size: 12.5px; fill: #cbd5e1; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; }
     .accent { font-size: 11px; fill: #fbbf24; font-weight: 700; }
-    .desc { font-size: 11px; fill: #cbd5e1; }
+    .desc { font-size: 10px; fill: #cbd5e1; }
     .heading { font-size: 16px; fill: #f8fafc; font-weight: 700; }
     .sub { font-size: 11px; fill: #cbd5e1; }
     .connector { stroke: #64748b; stroke-width: 1.2; stroke-dasharray: 4 3; fill: none; }

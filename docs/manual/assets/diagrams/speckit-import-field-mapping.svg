@@ -29,14 +29,14 @@
   <!-- spec.md -->
   <rect x="10" y="32" width="140" height="48" class="node" fill="#0f172a" stroke="#7dd3fc" />
   <text x="80" y="50" class="title" style="fill:#7dd3fc;" text-anchor="middle">spec.md</text>
-  <text x="80" y="65" class="label" text-anchor="middle">feature spec · acceptance criteria</text>
-  <text x="80" y="78" class="monospace" text-anchor="middle">title, goals, out-of-scope</text>
+  <text x="80" y="65" class="label" text-anchor="middle">feature spec</text>
+  <text x="80" y="78" class="monospace" text-anchor="middle">title, goals, scope</text>
 
   <!-- plan.md -->
   <rect x="10" y="96" width="140" height="48" class="node" fill="#0f172a" stroke="#a78bfa" />
   <text x="80" y="114" class="title" style="fill:#a78bfa;" text-anchor="middle">plan.md</text>
-  <text x="80" y="129" class="label" text-anchor="middle">phase plan · scope contract</text>
-  <text x="80" y="142" class="monospace" text-anchor="middle">slices, scope, forbidden-actions</text>
+  <text x="80" y="129" class="label" text-anchor="middle">phase plan</text>
+  <text x="80" y="142" class="monospace" text-anchor="middle">slices · scope · forbidden</text>
 
   <!-- tasks.md -->
   <rect x="10" y="160" width="140" height="48" class="node" fill="#0f172a" stroke="#34d399" />
@@ -46,15 +46,15 @@
 
   <!-- constitution.md -->
   <rect x="10" y="224" width="140" height="48" class="node" fill="#0f172a" stroke="#fb923c" />
-  <text x="80" y="242" class="title" style="fill:#fb923c;" text-anchor="middle">constitution.md</text>
-  <text x="80" y="257" class="label" text-anchor="middle">agent rules · guardrails</text>
-  <text x="80" y="270" class="monospace" text-anchor="middle">commitments, prohibitions</text>
+  <text x="80" y="242" class="title" style="fill:#fb923c;font-size:11px;" text-anchor="middle">constitution.md</text>
+  <text x="80" y="257" class="label" text-anchor="middle">agent rules</text>
+  <text x="80" y="270" class="monospace" text-anchor="middle">commitments, bans</text>
 
   <!-- PROJECT-PRINCIPLES (bottom — policy overlay) -->
   <rect x="10" y="290" width="140" height="48" class="node" fill="#0f172a" stroke="#f59e0b" stroke-dasharray="4 2" />
-  <text x="80" y="308" class="title" style="fill:#f59e0b;" text-anchor="middle">PROJECT-PRINCIPLES</text>
-  <text x="80" y="323" class="label" text-anchor="middle">non-negotiable constraints</text>
-  <text x="80" y="336" class="monospace" text-anchor="middle">tech-stack, patterns, limits</text>
+  <text x="80" y="308" class="title" style="fill:#f59e0b;font-size:11px;" text-anchor="middle">PROJECT-PRINCIPLES</text>
+  <text x="80" y="323" class="label" text-anchor="middle">non-negotiable rules</text>
+  <text x="80" y="336" class="monospace" text-anchor="middle">tech-stack · patterns</text>
 
   <!-- === FIELD MAPPER (centre) === -->
   <text x="430" y="20" class="phase" text-anchor="middle">SPECKIT IMPORT — FIELD MAPPER</text>
@@ -129,28 +129,28 @@
   <text x="670" y="55" class="title" style="fill:#fbbf24;" text-anchor="middle">Crucible Smelt</text>
 
   <text x="560" y="80" class="label">plan-title</text>
-  <text x="700" y="80" class="field-ok">✓ from spec.md</text>
+  <text x="690" y="80" class="field-ok">✓ from spec.md</text>
 
   <text x="560" y="100" class="label">objectives[]</text>
-  <text x="700" y="100" class="field-ok">✓ from spec.md</text>
+  <text x="690" y="100" class="field-ok">✓ from spec.md</text>
 
   <text x="560" y="120" class="label">scope</text>
-  <text x="700" y="120" class="field-ok">✓ from plan.md</text>
+  <text x="690" y="120" class="field-ok">✓ from plan.md</text>
 
   <text x="560" y="140" class="label">slices[]</text>
-  <text x="700" y="140" class="field-ok">✓ from plan.md</text>
+  <text x="690" y="140" class="field-ok">✓ from plan.md</text>
 
   <text x="560" y="160" class="label">forbidden-actions</text>
-  <text x="700" y="160" class="field-ok">✓ from plan.md</text>
+  <text x="690" y="160" class="field-ok">✓ from plan.md</text>
 
   <text x="560" y="180" class="label">slice.tasks[]</text>
-  <text x="700" y="180" class="field-ok">✓ from tasks.md</text>
+  <text x="690" y="180" class="field-ok">✓ from tasks.md</text>
 
   <text x="560" y="200" class="label">agent-constraints</text>
-  <text x="700" y="200" class="field-ok">✓ from constitution.md</text>
+  <text x="690" y="200" class="field-ok" style="font-size:10.5px;">✓ from constitution.md</text>
 
   <text x="560" y="220" class="label">policy-overlay</text>
-  <text x="700" y="220" class="field-warn">⚑ PROJECT-PRINCIPLES</text>
+  <text x="690" y="220" class="field-warn" style="font-size:10.5px;">⚑ PROJECT-PRINCIPLES</text>
 
   <text x="670" y="244" class="label" text-anchor="middle">all fields present → forge_crucible_smelt</text>
 

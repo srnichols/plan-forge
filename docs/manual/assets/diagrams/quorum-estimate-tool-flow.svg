@@ -87,9 +87,9 @@
   <!-- Footer: example response -->
   <rect x="20" y="275" width="780" height="125" class="node" fill="#1e293b" stroke="#334155" />
   <text x="34" y="297" class="title">📋 Example response (7-slice fixture, see capabilities.mjs#L220):</text>
-  <text x="34" y="319" class="mono">{ "false": { totalCostUSD: 0.28, quorumSliceCount: 0, totalSliceCount: 7, confidence: "historical" },</text>
-  <text x="34" y="335" class="mono">  "auto":  { totalCostUSD: 0.42, quorumSliceCount: 1, totalSliceCount: 7, confidence: "historical" },</text>
-  <text x="34" y="351" class="mono">  "power": { totalCostUSD: 12.50, quorumSliceCount: 3, totalSliceCount: 7, confidence: "historical" },</text>
-  <text x="34" y="367" class="mono">  "speed": { totalCostUSD: 1.20, quorumSliceCount: 1, totalSliceCount: 7, confidence: "historical" } }</text>
-  <text x="34" y="389" class="micro">⚠ Always call this tool before showing dollar amounts in chat — hand-computed quorum estimates have been observed to overshoot by ~10×.</text>
+  <text x="34" y="319" class="mono" font-size="11">{ "false": { totalCostUSD: 0.28, quorumSliceCount: 0, totalSliceCount: 7, confidence: "historical" },</text>
+  <text x="34" y="335" class="mono" font-size="11">  "auto":  { totalCostUSD: 0.42, quorumSliceCount: 1, totalSliceCount: 7, confidence: "historical" },</text>
+  <text x="34" y="351" class="mono" font-size="11">  "power": { totalCostUSD: 12.50, quorumSliceCount: 3, totalSliceCount: 7, confidence: "historical" },</text>
+  <text x="34" y="367" class="mono" font-size="11">  "speed": { totalCostUSD: 1.20, quorumSliceCount: 1, totalSliceCount: 7, confidence: "historical" } }</text>
+  <text x="34" y="389" class="micro" font-size="11">⚠ Always call this tool before showing dollar amounts in chat — hand-computed quorum estimates have been observed to overshoot by ~10×.</text>
 </svg>

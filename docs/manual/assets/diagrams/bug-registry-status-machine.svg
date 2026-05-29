@@ -90,14 +90,14 @@
   <text x="540" y="190" class="label" style="fill:#fb7185;font-weight:600;" text-anchor="middle">✗ no backward transitions from terminal states</text>
 
   <!-- ─── Legend ─── -->
-  <rect x="600" y="220" width="170" height="115" class="node" fill="#020617" stroke="#475569" stroke-dasharray="2 3" />
-  <text x="685" y="237" class="legend" text-anchor="middle" style="fill:#cbd5e1;">LEGEND</text>
-  <line x1="615" y1="252" x2="635" y2="252" stroke="#34d399" stroke-width="2" />
-  <text x="640" y="256" class="small">valid forward path</text>
-  <line x1="615" y1="272" x2="635" y2="272" stroke="#475569" stroke-width="1.5" />
-  <text x="640" y="276" class="small">retry / classify</text>
-  <line x1="615" y1="292" x2="635" y2="292" stroke="#fb7185" stroke-width="1.5" stroke-dasharray="4 3" />
-  <text x="640" y="296" class="small">forbidden</text>
-  <text x="685" y="320" class="tiny" text-anchor="middle">fingerprint dedupes on register;</text>
-  <text x="685" y="332" class="tiny" text-anchor="middle">re-register only opens new IDs.</text>
+  <rect x="540" y="220" width="230" height="115" class="node" fill="#020617" stroke="#475569" stroke-dasharray="2 3" />
+  <text x="655" y="237" class="legend" text-anchor="middle" style="fill:#cbd5e1;">LEGEND</text>
+  <line x1="555" y1="252" x2="575" y2="252" stroke="#34d399" stroke-width="2" />
+  <text x="580" y="256" class="small">valid forward path</text>
+  <line x1="555" y1="272" x2="575" y2="272" stroke="#475569" stroke-width="1.5" />
+  <text x="580" y="276" class="small">retry / classify</text>
+  <line x1="555" y1="292" x2="575" y2="292" stroke="#fb7185" stroke-width="1.5" stroke-dasharray="4 3" />
+  <text x="580" y="296" class="small">forbidden</text>
+  <text x="655" y="320" class="tiny" text-anchor="middle">fingerprint dedupes on register;</text>
+  <text x="655" y="332" class="tiny" text-anchor="middle">re-register only opens new IDs.</text>
 </svg>

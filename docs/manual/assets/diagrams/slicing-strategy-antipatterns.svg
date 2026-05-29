@@ -27,7 +27,7 @@
   <rect x="20" y="35" width="350" height="280" class="node" fill="#0f172a" stroke="#34d399" stroke-width="2" />
 
   <text x="195" y="55" class="title" text-anchor="middle">Plan: User Profile Feature</text>
-  <text x="195" y="68" class="small" text-anchor="middle">Files: src/services/UserService.cs, tests/services/UserServiceTests.cs</text>
+  <text x="195" y="68" class="small" text-anchor="middle">Files: UserService.cs + UserServiceTests.cs</text>
 
   <!-- Slice 1 -->
   <rect x="40" y="85" width="310" height="50" class="node" fill="#020617" stroke="#fbbf24" />
@@ -48,9 +48,10 @@
   <text x="55" y="250" class="small">+ tests/repositories/UserRepoTests.cs</text>
 
   <!-- Forbidden actions -->
-  <rect x="40" y="265" width="310" height="40" class="node" fill="#020617" stroke="#fb7185" stroke-dasharray="3 3" />
+  <rect x="40" y="265" width="310" height="54" class="node" fill="#020617" stroke="#fb7185" stroke-dasharray="3 3" />
   <text x="55" y="283" class="small bad" font-weight="600">FORBIDDEN ACTIONS</text>
-  <text x="55" y="297" class="tiny">✗ src/database/migrations/    ✗ AppSettings.json    ✗ new NuGet packages</text>
+  <text x="55" y="297" class="tiny">✗ src/database/migrations/    ✗ AppSettings.json</text>
+  <text x="55" y="311" class="tiny">✗ new NuGet packages</text>
 
   <!-- ─── RIGHT: Bad ─── -->
   <text x="590" y="20" class="panel bad" text-anchor="middle">✗ LOOSE SCOPE · LAYERS MIXED</text>

@@ -63,7 +63,7 @@
   <path d="M305,55 L605,55" class="arrow" />
 
   <!-- Outputs -->
-  <rect x="195" y="220" width="370" height="40" class="node" fill="#020617" stroke="#34d399" />
+  <rect x="160" y="220" width="440" height="40" class="node" fill="#020617" stroke="#34d399" />
   <text x="380" y="240" class="title" text-anchor="middle">Lane classification</text>
   <text x="380" y="254" class="label" text-anchor="middle">operational · troubleshoot · build · advisory · offtopic</text>
 

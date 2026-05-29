@@ -6,10 +6,10 @@
     .arrow { stroke: #64748b; stroke-width: 1.5; fill: none; marker-end: url(#arrowhead); }
     .arrow-up { stroke: #f59e0b; stroke-width: 1.5; fill: none; marker-end: url(#arrowhead-amber); stroke-dasharray: 3 3; }
     .label { font-size: 13.5px; fill: #cbd5e1; }
-    .title { font-size: 15px; fill: #f1f5f9; font-weight: 600; }
+    .title { font-size: 13px; fill: #f1f5f9; font-weight: 600; }
     .layer-title { font-size: 13.5px; fill: #cbd5e1; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; }
-    .accent { font-size: 15px; fill: #f59e0b; font-weight: 600; }
-    .desc { font-size: 15px; fill: #cbd5e1; }
+    .accent { font-size: 13px; fill: #f59e0b; font-weight: 600; }
+    .desc { font-size: 11.5px; fill: #cbd5e1; }
   </style>
 
   <defs>
@@ -38,7 +38,7 @@
 
     <rect x="560" y="42" width="320" height="48" class="layer" fill="#1e293b" stroke="#334155" />
     <text x="720" y="62" text-anchor="middle" class="title">Anyone else (BYOK)</text>
-    <text x="720" y="78" text-anchor="middle" class="desc">selectable per slice via --model + .forge/secrets.json</text>
+    <text x="720" y="78" text-anchor="middle" class="desc">selectable per slice via --model + secrets.json</text>
   </g>
 
   <!-- ─── Layer 2: Agent runtimes ─── -->
@@ -50,14 +50,14 @@
     <text x="120" y="178" text-anchor="middle" class="accent">dispatched by Plan-Forge</text>
 
     <rect x="240" y="128" width="200" height="58" class="layer" fill="#0f1c2e" stroke="#1e3a5f" />
-    <text x="340" y="148" text-anchor="middle" class="title">Claude Code · Cursor · Codex</text>
+    <text x="340" y="148" text-anchor="middle" class="title">Claude / Cursor / Codex</text>
     <text x="340" y="164" text-anchor="middle" class="desc">interactive workers, BYOK</text>
     <text x="340" y="178" text-anchor="middle" class="accent">selectable via --worker</text>
 
     <rect x="460" y="128" width="200" height="58" class="layer" fill="#0f1c2e" stroke="#1e3a5f" />
     <text x="560" y="148" text-anchor="middle" class="title">gh-copilot CLI</text>
     <text x="560" y="164" text-anchor="middle" class="desc">subscription-billed worker</text>
-    <text x="560" y="178" text-anchor="middle" class="accent">default for Plan-Forge slices</text>
+    <text x="560" y="178" text-anchor="middle" class="accent">default for Plan-Forge</text>
 
     <rect x="680" y="128" width="200" height="58" class="layer" fill="#0f1c2e" stroke="#1e3a5f" />
     <text x="780" y="148" text-anchor="middle" class="title">Direct API workers</text>
@@ -70,7 +70,7 @@
   <g>
     <!-- Row 1 -->
     <rect x="20" y="224" width="200" height="44" class="primitive" fill="#0a1d33" stroke="#3b82f6" />
-    <text x="120" y="241" text-anchor="middle" class="title">.github/copilot-instructions.md</text>
+    <text x="120" y="241" text-anchor="middle" class="title" style="font-size:11px;">.github/copilot-instructions.md</text>
     <text x="120" y="257" text-anchor="middle" class="desc">repo-wide context</text>
 
     <rect x="240" y="224" width="200" height="44" class="primitive" fill="#0a1d33" stroke="#3b82f6" />
@@ -82,7 +82,7 @@
     <text x="560" y="257" text-anchor="middle" class="desc">path-scoped (applyTo)</text>
 
     <rect x="680" y="224" width="200" height="44" class="primitive" fill="#0a1d33" stroke="#3b82f6" />
-    <text x="780" y="241" text-anchor="middle" class="title">.github/prompts/*.prompt.md</text>
+    <text x="780" y="241" text-anchor="middle" class="title" style="font-size:11px;">.github/prompts/*.prompt.md</text>
     <text x="780" y="257" text-anchor="middle" class="desc">slash commands</text>
 
     <!-- Row 2 -->
@@ -96,10 +96,10 @@
 
     <rect x="460" y="276" width="200" height="44" class="primitive" fill="#0a1d33" stroke="#3b82f6" />
     <text x="560" y="293" text-anchor="middle" class="title">git remote → github.com</text>
-    <text x="560" y="309" text-anchor="middle" class="desc">unlocks issue / PR / GHAS APIs</text>
+    <text x="560" y="309" text-anchor="middle" class="desc">unlocks issue / PR APIs</text>
 
     <rect x="680" y="276" width="200" height="44" class="primitive" fill="#0a1d33" stroke="#3b82f6" />
-    <text x="780" y="293" text-anchor="middle" class="title">gh CLI (+ optional --gh-token)</text>
+    <text x="780" y="293" text-anchor="middle" class="title">gh CLI (+ --gh-token)</text>
     <text x="780" y="309" text-anchor="middle" class="desc">issue/PR + Copilot probe</text>
   </g>
 

@@ -79,21 +79,21 @@
   <text x="590" y="264" class="lane" style="fill:#c4b5fd;" text-anchor="middle">Lane 3 · Classifier</text>
   <rect x="430" y="269" width="310" height="75" class="node" fill="#0f172a" stroke="#c4b5fd" />
   <text x="585" y="291" class="title" text-anchor="middle">.forge/audits/&lt;ts&gt;.json</text>
-  <text x="585" y="307" class="label" text-anchor="middle">Archived for human review or future training</text>
-  <text x="585" y="322" class="label" text-anchor="middle">confidence below threshold, or ambiguous intent</text>
+  <text x="585" y="307" class="label" text-anchor="middle">Archived for human review</text>
+  <text x="585" y="322" class="label" text-anchor="middle">low confidence or ambiguous intent</text>
   <text x="585" y="337" class="count" text-anchor="middle">no auto-action — human decides next step</text>
 
   <!-- ── Confidence legend ── -->
-  <rect x="20" y="130" width="200" height="90" class="node" fill="#020617" stroke="#475569" stroke-dasharray="2 3" />
-  <text x="120" y="150" class="title" style="fill:#94a3b8;" text-anchor="middle">Confidence Routing</text>
+  <rect x="20" y="130" width="240" height="90" class="node" fill="#020617" stroke="#475569" stroke-dasharray="2 3" />
+  <text x="140" y="150" class="title" style="fill:#94a3b8;" text-anchor="middle">Confidence Routing</text>
   <text x="30"  y="168" class="small" style="fill:#fb7185;">≥ 0.85 → Bug lane (clear defect)</text>
   <text x="30"  y="184" class="small" style="fill:#fbbf24;">≥ 0.70 → Spec lane (enhancement)</text>
   <text x="30"  y="200" class="small" style="fill:#c4b5fd;">&lt; 0.70 → Classifier (review queue)</text>
-  <text x="120" y="215" class="tiny"  text-anchor="middle">thresholds configurable in .forge.json</text>
+  <text x="140" y="215" class="tiny"  text-anchor="middle">thresholds configurable in .forge.json</text>
 
   <!-- ── maxRounds note ── -->
-  <rect x="20" y="245" width="200" height="55" class="node" fill="#020617" stroke="#fbbf24" stroke-dasharray="2 3" />
-  <text x="120" y="265" class="title" style="fill:#94a3b8;" text-anchor="middle">Convergence</text>
-  <text x="120" y="281" class="label" text-anchor="middle">Loop repeats until 0 Findings</text>
-  <text x="120" y="296" class="label" text-anchor="middle">or maxRounds reached (default 5)</text>
+  <rect x="20" y="245" width="240" height="55" class="node" fill="#020617" stroke="#fbbf24" stroke-dasharray="2 3" />
+  <text x="140" y="265" class="title" style="fill:#94a3b8;" text-anchor="middle">Convergence</text>
+  <text x="140" y="281" class="label" text-anchor="middle">Loop repeats until 0 Findings</text>
+  <text x="140" y="296" class="label" text-anchor="middle">or maxRounds reached (default 5)</text>
 </svg>

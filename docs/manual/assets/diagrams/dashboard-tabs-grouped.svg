@@ -61,8 +61,9 @@
     <rect x="172" y="30" width="166" height="26" class="tile" fill="#020617" stroke="#1e293b" /><text x="255" y="47" class="tab-name" text-anchor="middle">Bug Registry</text>
   </g>
 
-  <text x="585" y="175" class="small" text-anchor="middle" font-style="italic">Covers everything that happens after the slice ships.</text>
-  <text x="585" y="190" class="tiny" text-anchor="middle">Streams hub events: incident-fired, drift-alert, secret-leaked, dep-vuln-found.</text>
+  <text x="585" y="170" class="small" text-anchor="middle" font-style="italic">Covers everything that happens after the slice ships.</text>
+  <text x="585" y="188" class="tiny" text-anchor="middle">Streams hub events: incident-fired,</text>
+  <text x="585" y="202" class="tiny" text-anchor="middle">drift-alert, secret-leaked, dep-vuln-found.</text>
 
   <!-- ─── Group 3: Forge-Master (cyan) ─── -->
   <rect x="20" y="215" width="370" height="155" class="group" fill="#082f33" stroke="#22d3ee" />
@@ -73,19 +74,20 @@
 
   <g transform="translate(35, 275)">
     <rect x="0" y="0" width="338" height="26" class="tile" fill="#020617" stroke="#1e293b" />
-    <text x="169" y="17" class="tab-name" text-anchor="middle">Studio · prompt gallery + streaming chat + cache stats</text>
+    <text x="169" y="17" class="tab-name" text-anchor="middle">Studio · chat + cache stats + gallery</text>
   </g>
 
-  <text x="200" y="320" class="small" text-anchor="middle" font-style="italic">Three-stage classifier (keyword → embedding → router LLM)</text>
-  <text x="200" y="335" class="tiny" text-anchor="middle">+ optional Quorum Advisory Mode for high-stakes decisions</text>
-  <text x="200" y="355" class="tiny" text-anchor="middle">Read-only by design — never writes code or files.</text>
+  <text x="200" y="318" class="small" text-anchor="middle" font-style="italic">Three-stage classifier</text>
+  <text x="200" y="333" class="small" text-anchor="middle" font-style="italic">(keyword → embedding → router LLM)</text>
+  <text x="200" y="352" class="tiny" text-anchor="middle">+ optional Quorum Advisory Mode</text>
+  <text x="200" y="368" class="tiny" text-anchor="middle">Read-only — never writes code or files.</text>
 
   <!-- ─── Group 4: Settings (purple) ─── -->
   <rect x="400" y="215" width="370" height="155" class="group" fill="#180a2f" stroke="#c084fc" />
   <rect x="400" y="215" width="370" height="50" class="group" fill="#240e45" stroke="#c084fc" />
   <text x="412" y="232" class="group-title" style="fill:#c084fc;">⚙ Settings</text>
   <text x="760" y="232" class="tiny" text-anchor="end">9 sub-tabs</text>
-  <text x="412" y="250" class="group-sub">platform-wide configuration · safe-write to .forge.json</text>
+  <text x="412" y="250" class="group-sub">platform-wide config · safe-write to .forge.json</text>
 
   <g transform="translate(415, 275)">
     <!-- row 1 -->

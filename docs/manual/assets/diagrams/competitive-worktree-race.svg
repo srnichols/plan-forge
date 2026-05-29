@@ -63,20 +63,21 @@
   <path d="M430,75 L490,140" class="arrow" />
   <path d="M430,165 L490,165" class="arrow" />
   <!-- Loser arrow dotted, no marker -->
-  <path d="M430,265 Q470,340 320,365" class="arrow-loss" />
-  <text x="380" y="380" class="label" text-anchor="middle">eliminated worktree retained for trace + auto-fix proposal</text>
+  <path d="M430,265 Q400,300 280,318" class="arrow-loss" />
+  <text x="260" y="320" class="small" text-anchor="middle">eliminated worktree retained</text>
+  <text x="260" y="333" class="small" text-anchor="middle">for trace + auto-fix proposal</text>
 
   <!-- ─── Phase 3: Election ─── -->
-  <text x="585" y="20" class="phase" text-anchor="middle">3 · ELECTION</text>
-  <rect x="490" y="115" width="195" height="100" class="node" fill="#020617" stroke="#fbbf24" stroke-dasharray="3 3" />
+  <text x="588" y="20" class="phase" text-anchor="middle">3 · ELECTION</text>
+  <rect x="475" y="115" width="225" height="100" class="node" fill="#020617" stroke="#fbbf24" stroke-dasharray="3 3" />
   <text x="588" y="135" class="title" text-anchor="middle">Tie-breaker rules (in order)</text>
-  <text x="510" y="155" class="small" text-anchor="start">1. ✓ Gates pass</text>
-  <text x="510" y="170" class="small" text-anchor="start">2. ✓ Reviewer score</text>
-  <text x="510" y="185" class="small" text-anchor="start">3. 💰 Token cost (lower wins)</text>
-  <text x="510" y="200" class="small" text-anchor="start">4. ⚡ Wall-clock (faster wins)</text>
+  <text x="487" y="155" class="small" text-anchor="start">1. ✓ Gates pass</text>
+  <text x="487" y="170" class="small" text-anchor="start">2. ✓ Reviewer score</text>
+  <text x="487" y="185" class="small" text-anchor="start">3. 💰 Token cost (lower wins)</text>
+  <text x="487" y="200" class="small" text-anchor="start">4. ⚡ Wall-clock (faster wins)</text>
 
   <!-- Arrow to winner -->
-  <path d="M685,165 L735,165" class="arrow-win" />
+  <path d="M700,165 L735,165" class="arrow-win" />
 
   <!-- ─── Phase 4: Winner ─── -->
   <text x="755" y="20" class="phase" text-anchor="middle">4 · WINNER</text>

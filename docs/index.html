@@ -2066,7 +2066,8 @@ Target project: (current directory)</code></pre>
     <div class="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
       <p class="text-forge-500 text-sm font-semibold tracking-widest uppercase mb-3">Compatibility</p>
       <h2 class="text-3xl md:text-4xl font-bold text-white mb-4">Works With Your AI Tools</h2>
-      <p class="text-slate-400 mb-10 max-w-xl mx-auto">Advanced integration with VS Code + GitHub Copilot. First-class support for Claude Code, Cursor, and Codex CLI. Copy-paste prompts work with any AI tool.</p>
+      <p class="text-slate-400 mb-3 max-w-2xl mx-auto"><strong class="text-white">Deepest integration with VS Code + GitHub Copilot</strong> — instruction loading, MCP tools, lifecycle hooks, Coding Agent dispatch, GHAS, Copilot Metrics, and dashboard sync. First-class support for Claude Code, Cursor, and Codex CLI. Copy-paste prompts work with any AI tool.</p>
+      <p class="text-xs text-slate-500 mb-10 max-w-2xl mx-auto">See the <a href="manual/copilot-integration.html" class="text-amber-400 hover:underline">Copilot Integration Trilogy</a> chapter and <a href="manual/plan-forge-on-the-github-stack.html" class="text-amber-400 hover:underline">Plan Forge on the GitHub Stack</a> for the full surface map.</p>
 
       <div class="flex flex-wrap justify-center gap-3">
         <span class="px-5 py-2.5 rounded-full bg-slate-800 border border-forge-500/60 text-sm text-white font-medium">🐙 GitHub Copilot</span>
@@ -2136,7 +2137,7 @@ Target project: (current directory)</code></pre>
                 <td class="px-4 py-3 text-slate-500">📋</td>
               </tr>
               <tr class="border-b border-slate-800/50">
-                <td class="px-4 py-3 text-white">MCP tools (18 forge operations)</td>
+                <td class="px-4 py-3 text-white">MCP tools (105+ forge operations)</td>
                 <td class="px-4 py-3 text-green-400">✅ native</td>
                 <td class="px-4 py-3 text-green-400">✅ native</td>
                 <td class="px-4 py-3 text-green-400">✅ native</td>
@@ -2144,7 +2145,7 @@ Target project: (current directory)</code></pre>
                 <td class="px-4 py-3 text-slate-500">—</td>
               </tr>
               <tr class="border-b border-slate-800/50">
-                <td class="px-4 py-3 text-white">Skills (3 multi-step workflows)</td>
+                <td class="px-4 py-3 text-white">Skills (14+ multi-step workflows)</td>
                 <td class="px-4 py-3 text-green-400">✅ slash cmd</td>
                 <td class="px-4 py-3 text-green-400">✅ MCP</td>
                 <td class="px-4 py-3 text-green-400">✅ MCP</td>
@@ -2152,7 +2153,7 @@ Target project: (current directory)</code></pre>
                 <td class="px-4 py-3 text-slate-500">📋</td>
               </tr>
               <tr class="border-b border-slate-800/50">
-                <td class="px-4 py-3 text-white">Lifecycle hooks (5 types)</td>
+                <td class="px-4 py-3 text-white">Lifecycle hooks (8 incl. LiveGuard)</td>
                 <td class="px-4 py-3 text-green-400">✅ native</td>
                 <td class="px-4 py-3 text-forge-400">⚡ guided</td>
                 <td class="px-4 py-3 text-forge-400">⚡ guided</td>
@@ -2192,7 +2193,7 @@ Target project: (current directory)</code></pre>
                 <td class="px-4 py-3 text-slate-500">—</td>
               </tr>
               <tr class="border-b border-slate-800/50">
-                <td class="px-4 py-3 text-white">Extension ecosystem (3 packages)</td>
+                <td class="px-4 py-3 text-white">Extension ecosystem (4 packages)</td>
                 <td class="px-4 py-3 text-green-400">✅ MCP</td>
                 <td class="px-4 py-3 text-green-400">✅ MCP</td>
                 <td class="px-4 py-3 text-green-400">✅ MCP</td>
@@ -2245,6 +2246,106 @@ Target project: (current directory)</code></pre>
                 <td class="px-4 py-3 text-forge-400">⚡ guided</td>
                 <td class="px-4 py-3 text-forge-400">⚡ guided</td>
                 <td class="px-4 py-3 text-slate-500">—</td>
+                <td class="px-4 py-3 text-slate-500">—</td>
+              </tr>
+              <!-- ─── Copilot-native / GitHub-stack surfaces ─── -->
+              <tr class="border-t-2 border-amber-500/30 bg-amber-500/5">
+                <td colspan="6" class="px-4 py-2 text-xs font-semibold text-amber-300 uppercase tracking-wider">🐙 Copilot & GitHub-Native Surfaces</td>
+              </tr>
+              <tr class="border-b border-slate-800/50">
+                <td class="px-4 py-3 text-white">Auto-generated <code class="text-sky-300 text-xs">copilot-instructions.md</code></td>
+                <td class="px-4 py-3 text-green-400">✅ <code class="text-xs">pforge sync-instructions</code></td>
+                <td class="px-4 py-3 text-slate-500">—</td>
+                <td class="px-4 py-3 text-slate-500">—</td>
+                <td class="px-4 py-3 text-slate-500">—</td>
+                <td class="px-4 py-3 text-slate-500">—</td>
+              </tr>
+              <tr class="border-b border-slate-800/50">
+                <td class="px-4 py-3 text-white">Memory hints sync (<code class="text-sky-300 text-xs">copilot-memory-hints.md</code>)</td>
+                <td class="px-4 py-3 text-green-400">✅ <code class="text-xs">forge_sync_memories</code></td>
+                <td class="px-4 py-3 text-green-400">✅ MCP</td>
+                <td class="px-4 py-3 text-green-400">✅ MCP</td>
+                <td class="px-4 py-3 text-slate-500">—</td>
+                <td class="px-4 py-3 text-slate-500">—</td>
+              </tr>
+              <tr class="border-b border-slate-800/50">
+                <td class="px-4 py-3 text-white">Copilot Coding Agent dispatch (cloud)</td>
+                <td class="px-4 py-3 text-green-400">✅ <code class="text-xs">--worker copilot-coding-agent</code></td>
+                <td class="px-4 py-3 text-slate-500">—</td>
+                <td class="px-4 py-3 text-slate-500">—</td>
+                <td class="px-4 py-3 text-slate-500">—</td>
+                <td class="px-4 py-3 text-slate-500">—</td>
+              </tr>
+              <tr class="border-b border-slate-800/50">
+                <td class="px-4 py-3 text-white">Cloud agent provisioning (<code class="text-sky-300 text-xs">copilot-setup-steps.yml</code>)</td>
+                <td class="px-4 py-3 text-green-400">✅ template</td>
+                <td class="px-4 py-3 text-slate-500">—</td>
+                <td class="px-4 py-3 text-slate-500">—</td>
+                <td class="px-4 py-3 text-slate-500">—</td>
+                <td class="px-4 py-3 text-slate-500">—</td>
+              </tr>
+              <tr class="border-b border-slate-800/50">
+                <td class="px-4 py-3 text-white">PR review delegation to <code class="text-sky-300 text-xs">@copilot</code></td>
+                <td class="px-4 py-3 text-green-400">✅ <code class="text-xs">pforge github review delegate</code></td>
+                <td class="px-4 py-3 text-slate-500">—</td>
+                <td class="px-4 py-3 text-slate-500">—</td>
+                <td class="px-4 py-3 text-slate-500">—</td>
+                <td class="px-4 py-3 text-slate-500">—</td>
+              </tr>
+              <tr class="border-b border-slate-800/50">
+                <td class="px-4 py-3 text-white">GHAS chain (CodeQL · secrets · deps · code review)</td>
+                <td class="px-4 py-3 text-green-400">✅ <code class="text-xs">cloudAgentValidation</code></td>
+                <td class="px-4 py-3 text-slate-500">—</td>
+                <td class="px-4 py-3 text-slate-500">—</td>
+                <td class="px-4 py-3 text-slate-500">—</td>
+                <td class="px-4 py-3 text-slate-500">—</td>
+              </tr>
+              <tr class="border-b border-slate-800/50">
+                <td class="px-4 py-3 text-white">SARIF → plan auto-conversion</td>
+                <td class="px-4 py-3 text-green-400">✅ <code class="text-xs">pforge plan-from-sarif</code></td>
+                <td class="px-4 py-3 text-slate-500">—</td>
+                <td class="px-4 py-3 text-slate-500">—</td>
+                <td class="px-4 py-3 text-slate-500">—</td>
+                <td class="px-4 py-3 text-slate-500">—</td>
+              </tr>
+              <tr class="border-b border-slate-800/50">
+                <td class="px-4 py-3 text-white">GitHub stack readiness check (8 primitives)</td>
+                <td class="px-4 py-3 text-green-400">✅ <code class="text-xs">pforge github status</code></td>
+                <td class="px-4 py-3 text-slate-500">—</td>
+                <td class="px-4 py-3 text-slate-500">—</td>
+                <td class="px-4 py-3 text-slate-500">—</td>
+                <td class="px-4 py-3 text-slate-500">—</td>
+              </tr>
+              <tr class="border-b border-slate-800/50">
+                <td class="px-4 py-3 text-white">Copilot Metrics API leaderboard</td>
+                <td class="px-4 py-3 text-green-400">✅ <code class="text-xs">pforge github metrics</code></td>
+                <td class="px-4 py-3 text-slate-500">—</td>
+                <td class="px-4 py-3 text-slate-500">—</td>
+                <td class="px-4 py-3 text-slate-500">—</td>
+                <td class="px-4 py-3 text-slate-500">—</td>
+              </tr>
+              <tr class="border-b border-slate-800/50">
+                <td class="px-4 py-3 text-white">Dashboard Settings → Copilot tab (preview + sync)</td>
+                <td class="px-4 py-3 text-green-400">✅ native</td>
+                <td class="px-4 py-3 text-slate-500">—</td>
+                <td class="px-4 py-3 text-slate-500">—</td>
+                <td class="px-4 py-3 text-slate-500">—</td>
+                <td class="px-4 py-3 text-slate-500">—</td>
+              </tr>
+              <tr class="border-b border-slate-800/50">
+                <td class="px-4 py-3 text-white">VS Code MCP transport (<code class="text-sky-300 text-xs">.vscode/mcp.json</code>)</td>
+                <td class="px-4 py-3 text-green-400">✅ auto-generated</td>
+                <td class="px-4 py-3 text-forge-400">⚡ manual</td>
+                <td class="px-4 py-3 text-forge-400">⚡ manual</td>
+                <td class="px-4 py-3 text-slate-500">—</td>
+                <td class="px-4 py-3 text-slate-500">—</td>
+              </tr>
+              <tr>
+                <td class="px-4 py-3 text-white"><code class="text-sky-300 text-xs">AGENTS.md</code> contributor guide</td>
+                <td class="px-4 py-3 text-green-400">✅ read</td>
+                <td class="px-4 py-3 text-green-400">✅ native</td>
+                <td class="px-4 py-3 text-green-400">✅ native</td>
+                <td class="px-4 py-3 text-green-400">✅ native</td>
                 <td class="px-4 py-3 text-slate-500">—</td>
               </tr>
             </tbody>

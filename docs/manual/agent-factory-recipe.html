@@ -35,9 +35,9 @@
 
       <h2 id="what-agent-factory-means">What "Agent Factory" means in Plan Forge</h2>
 
-      <p>Plan Forge ships <strong class="text-slate-200"><!--c:agents-->12<!--/c--> agent personas</strong> out of the box (6 stack-specific + 7 cross-stack + 5 pipeline + 1 audit-classifier). Each is a Markdown file under <code>.github/agents/</code> with a YAML frontmatter description and a body that defines the persona's expertise, tone, and lane. Agents are invoked from chat (agent picker dropdown) or referenced from a plan slice (<code>agent: security-reviewer</code>). They cannot edit files, they audit and report.</p>
+      <p>Plan Forge ships a fleet of <strong class="text-slate-200">~21 agent personas per preset</strong> out of the box: 6 stack-specific reviewers, 8 cross-stack reviewers (shared across presets), 5 pipeline agents, and 2 meta / audit agents. (The site-wide counter says <!--c:agents-->12<!--/c-->, which reflects an editorial rollup where cross-stack reviewers are conceptually folded into stack lanes; the actual files on disk total more.) Each is a Markdown file under <code>.github/agents/</code> with a YAML frontmatter description and a body that defines the persona's expertise, tone, and lane. Agents are invoked from chat (agent picker dropdown) or referenced from a plan slice (<code>agent: security-reviewer</code>). They cannot edit files, they audit and report.</p>
 
-      <p>The "Agent Factory" is the configuration plus convention layer that makes those 20 personas productive against a customer's specific stack on Day 1, instead of generic-but-vague.</p>
+      <p>The "Agent Factory" is the configuration plus convention layer that makes those personas productive against a customer's specific stack on Day 1, instead of generic-but-vague.</p>
 
       <h2 id="the-recipe-in-one-page">The recipe in one page</h2>
 
@@ -48,6 +48,11 @@
 5. SHARED TOOLS , point at MCP servers (Plan Forge MCP, github-mcp-server, optional Foundry Toolbox)
 6. PILOT        , run one real plan with the full agent fleet, capture friction
 7. ITERATE      , encode lessons in instruction files; re-run</code></pre>
+
+      <figure class="manual-figure my-6" id="fig-L-1">
+        <img src="assets/diagrams/agent-factory-recipe-flow.svg" alt="Seven-step recipe flow from Substrate (15 min, blue) through Configure / Route / Context / Tools (amber, ~4 hr total) to Pilot (green, 1–2 hr) and Iterate (purple, ongoing). Each step lists the artifact it produces: green-light, profile + principles, ROUTING.md, shared knowledge, mcp.json, friction log, tuned fleet." loading="lazy" decoding="async" class="w-full" />
+        <figcaption class="text-xs text-slate-500 mt-2 text-center"><!--fignum--><span class="manual-fignum">Figure L-1.</span><!--/fignum--> The factory in one diagram. Color = lane: prerequisite (blue) → configuration (amber) → run (green) → learn (purple).</figcaption>
+      </figure>
 
       <p>Each step below is one to two hours for a platform lead familiar with the codebase. The whole recipe is achievable in <strong class="text-slate-200">one work day</strong> for the first squad and replicates in <strong class="text-slate-200">one hour per additional squad</strong> thereafter.</p>
 
@@ -102,34 +107,37 @@
 
       <h2 id="step-3-route-agents">Step 3 — Route agents to lanes (30 min)</h2>
 
-      <p>Plan Forge ships these 20 personas. Decide who owns what <em>for your team</em>:</p>
+      <p>Plan Forge ships these personas. Decide who owns what <em>for your team</em>:</p>
 
-      <h3 id="stack-specific-reviewers">Stack-specific reviewers (6)</h3>
+      <h3 id="stack-specific-reviewers">Stack-specific reviewers (6 per preset)</h3>
 
       <table class="manual-table">
         <thead><tr><th>Agent</th><th>Owns</th></tr></thead>
         <tbody>
           <tr><td><code>architecture-reviewer</code></td><td>Layer separation, pattern adherence, refactor proposals</td></tr>
           <tr><td><code>database-reviewer</code></td><td>Schema, migrations, query performance, ORM patterns</td></tr>
-          <tr><td><code>deploy-reviewer</code></td><td>Dockerfiles, CI/CD config, deployment scripts</td></tr>
-          <tr><td><code>performance-reviewer</code></td><td>Hot/cold path analysis, allocation, profiling</td></tr>
+          <tr><td><code>deploy-helper</code></td><td>Dockerfiles, CI/CD config, deployment scripts</td></tr>
+          <tr><td><code>performance-analyzer</code></td><td>Hot/cold path analysis, allocation, profiling</td></tr>
           <tr><td><code>security-reviewer</code></td><td>Input validation, secret handling, OWASP, auth</td></tr>
           <tr><td><code>test-runner</code></td><td>Test coverage, test quality, fixture sanity</td></tr>
         </tbody>
       </table>
 
-      <h3 id="cross-stack-reviewers">Cross-stack reviewers (7)</h3>
+      <p class="text-sm text-slate-400 mt-2">The <code>dotnet</code> preset ships an extra <code>blazor-reviewer</code>; the <code>azure-iac</code> preset swaps the language-specific reviewers for <code>bicep-reviewer</code>, <code>terraform-reviewer</code>, and <code>azure-sweeper</code>; the <code>playwright</code> preset adds <code>playwright-test-generator</code>, <code>-healer</code>, and <code>-planner</code>.</p>
+
+      <h3 id="cross-stack-reviewers">Cross-stack reviewers (8 from <code>presets/shared</code>)</h3>
 
       <table class="manual-table">
         <thead><tr><th>Agent</th><th>Owns</th></tr></thead>
         <tbody>
-          <tr><td><code>api-contracts-reviewer</code></td><td>OpenAPI consistency, breaking change detection</td></tr>
+          <tr><td><code>api-contract-reviewer</code></td><td>OpenAPI consistency, breaking change detection</td></tr>
           <tr><td><code>accessibility-reviewer</code></td><td>WCAG, ARIA, keyboard navigation</td></tr>
           <tr><td><code>multi-tenancy-reviewer</code></td><td>Tenant isolation, row-level security, cross-tenant query risk</td></tr>
-          <tr><td><code>ci-cd-reviewer</code></td><td>Pipeline correctness, runner sanity, gate completeness</td></tr>
+          <tr><td><code>cicd-reviewer</code></td><td>Pipeline correctness, runner sanity, gate completeness</td></tr>
           <tr><td><code>observability-reviewer</code></td><td>Trace coverage, log quality, metric meaningfulness</td></tr>
           <tr><td><code>dependency-reviewer</code></td><td>Vulnerability scanning, license compliance, version hygiene</td></tr>
           <tr><td><code>compliance-reviewer</code></td><td>GDPR / CCPA / SOC2 / HIPAA / PCI-DSS conformance</td></tr>
+          <tr><td><code>error-handling-reviewer</code></td><td>Exception hierarchy, ProblemDetails, error boundaries</td></tr>
         </tbody>
       </table>
 
@@ -148,14 +156,37 @@
 
       <p class="text-sm text-slate-400 mt-2">Step&nbsp;1 (preflight) ships as a <em>prompt</em>, not an agent, see <code>.github/prompts/step1-preflight-check.prompt.md</code>. It runs inline rather than as a separate persona.</p>
 
-      <h3 id="audit-classifier">Audit / classifier (1)</h3>
+      <h3 id="audit-meta">Meta / audit (2)</h3>
 
       <table class="manual-table">
         <thead><tr><th>Agent</th><th>Role</th></tr></thead>
         <tbody>
           <tr><td><code>audit-classifier-reviewer</code></td><td>Reviews changes to the audit classifier itself; enforces before/after finding counts</td></tr>
+          <tr><td><code>plan-health-auditor</code></td><td>Read-only auditor over run history, failure modes, gate portability, slice retry rates; proposes patches</td></tr>
         </tbody>
       </table>
+
+      <h3 id="skills-vs-agents">Skills are a parallel surface (slash-commands)</h3>
+
+      <p>Some review work ships as a <strong class="text-slate-200">skill</strong>, not an agent. Skills are multi-step procedures invoked by typing <code>/</code> in chat (or via <code>forge_run_skill</code>). They can read, execute, and report — unlike agents, which only audit. The repo ships these out of the box under <code>.github/skills/</code> and the per-preset <code>.github/skills/</code> directories:</p>
+
+      <table class="manual-table">
+        <thead><tr><th>Slash command</th><th>What it does</th><th>Surface</th></tr></thead>
+        <tbody>
+          <tr><td><code>/clean-code-review</code></td><td>Audit module size, function complexity, parameter lists, TODO/FIXME, ESLint violations</td><td>Repo-level</td></tr>
+          <tr><td><code>/code-review</code></td><td>Comprehensive multi-axis review (architecture, security, testing, patterns); supports <code>--quorum</code></td><td>Repo-level</td></tr>
+          <tr><td><code>/bug-fix</code></td><td>End-to-end bug-fix workflow: load → pre-fix review → failing test → fix → validate → close</td><td>Repo-level</td></tr>
+          <tr><td><code>/stakeholder-briefing</code></td><td>Generate a per-organisation Plan Forge briefing from the canonical template</td><td>Repo-level</td></tr>
+          <tr><td><code>/test-sweep</code></td><td>Run all test suites and aggregate results</td><td>Per-preset</td></tr>
+          <tr><td><code>/staging-deploy</code></td><td>Build, push, migrate, deploy, verify on staging</td><td>Per-preset</td></tr>
+          <tr><td><code>/security-audit</code></td><td>OWASP scan, dependency audit, secrets detection, severity report</td><td>Per-preset</td></tr>
+          <tr><td><code>/forge-quench</code></td><td>Plan-Forge-specific cooldown / drift verification after a slice</td><td>Per-preset</td></tr>
+          <tr><td><code>/health-check</code></td><td>Forge diagnostic: <code>forge_smith</code> &rarr; <code>forge_validate</code> &rarr; <code>forge_sweep</code></td><td>Per-preset</td></tr>
+          <tr><td><code>/release-notes</code> · <code>/onboarding</code> · <code>/api-doc-gen</code> · <code>/database-migration</code> · <code>/dependency-audit</code></td><td>Specialty per-preset skills</td><td>Per-preset</td></tr>
+        </tbody>
+      </table>
+
+      <p class="text-sm text-slate-400 mt-2">When routing, treat each skill the same way you treat an agent: pick an <em>owner</em>, a <em>trigger</em> (auto on PR, scheduled, manual), and the <em>authority</em> it carries (advisory comment vs. blocking gate). Skills are ideal for work that needs to <em>execute</em> commands (test runs, dependency scans, deploys); agents are ideal for work that should only <em>review and report</em>.</p>
 
       <h3 id="routing-decisions">Routing decisions to make</h3>
 

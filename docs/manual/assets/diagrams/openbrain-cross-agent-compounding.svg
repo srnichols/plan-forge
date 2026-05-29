@@ -4,20 +4,20 @@
   <style>
     text { font-family: 'Inter', sans-serif; }
     .node { rx: 8; ry: 8; stroke-width: 1.5; }
-    .arrow { stroke: #475569; stroke-width: 1.4; fill: none; marker-end: url(#obca-ah); }
+    .arrow { stroke: #64748b; stroke-width: 1.4; fill: none; marker-end: url(#obca-ah); }
     .arrow-write { stroke: #f59e0b; stroke-width: 1.8; fill: none; marker-end: url(#obca-ah-amber); }
     .arrow-read  { stroke: #60a5fa; stroke-width: 1.8; fill: none; marker-end: url(#obca-ah-blue); }
-    .label  { font-size: 10px; fill: #94a3b8; }
-    .micro  { font-size: 9px;  fill: #64748b; }
-    .title  { font-size: 11px; fill: #e2e8f0; font-weight: 600; }
-    .phase  { font-size: 9px;  fill: #f59e0b; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; }
-    .mono   { font-size: 10px; fill: #fbbf24; font-family: 'JetBrains Mono', monospace; }
-    .big    { font-size: 14px; fill: #e2e8f0; font-weight: 700; }
-    .caption { font-size: 9px; fill: #64748b; font-style: italic; }
+    .label  { font-size: 11.5px; fill: #cbd5e1; }
+    .micro  { font-size: 10.5px; fill: #cbd5e1; }
+    .title  { font-size: 12.5px; fill: #f1f5f9; font-weight: 600; }
+    .phase  { font-size: 10.5px; fill: #fbbf24; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; }
+    .mono   { font-size: 11px; fill: #fcd34d; font-family: 'JetBrains Mono', monospace; }
+    .big    { font-size: 15px; fill: #f8fafc; font-weight: 700; }
+    .caption { font-size: 10.5px; fill: #cbd5e1; font-style: italic; }
   </style>
   <defs>
     <marker id="obca-ah" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto">
-      <path d="M0,0 L8,3 L0,6" fill="#475569" />
+      <path d="M0,0 L8,3 L0,6" fill="#64748b" />
     </marker>
     <marker id="obca-ah-amber" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto">
       <path d="M0,0 L8,3 L0,6" fill="#f59e0b" />
@@ -76,22 +76,22 @@
   <text x="410" y="158" class="micro" text-anchor="middle">storage: .forge/openbrain/ (JSONL)</text>
   <text x="410" y="173" class="micro" text-anchor="middle">scoped by project + source path</text>
   <text x="410" y="188" class="micro" text-anchor="middle">BM25 + semantic re-ranking</text>
-  <text x="410" y="206" class="micro" text-anchor="middle" fill="#64748b">project: "Plan-Forge"  |  type: convention | lesson | decision</text>
+  <text x="410" y="206" class="micro" text-anchor="middle" fill="#cbd5e1">project: "Plan-Forge"  |  type: convention | lesson | decision</text>
 
-  <!-- Thought store tiers -->
-  <rect x="290" y="240" width="240" height="80" class="node" fill="#0f172a" stroke="#334155" />
-  <text x="410" y="258" class="phase" text-anchor="middle">THOUGHT TIERS</text>
-  <text x="302" y="275" class="label">convention</text>
-  <text x="302" y="290" class="label">lesson</text>
-  <text x="302" y="305" class="label">decision</text>
-  <text x="410" y="275" class="micro">naming, patterns, guardrails</text>
-  <text x="410" y="290" class="micro">gotchas, dead-ends, warnings</text>
-  <text x="410" y="305" class="micro">arch choices + rationale</text>
+  <!-- Thought store tiers (taller to fit larger fonts comfortably) -->
+  <rect x="290" y="240" width="240" height="100" class="node" fill="#0f172a" stroke="#334155" />
+  <text x="410" y="260" class="phase" text-anchor="middle">THOUGHT TIERS</text>
+  <text x="302" y="282" class="label">convention</text>
+  <text x="302" y="302" class="label">lesson</text>
+  <text x="302" y="322" class="label">decision</text>
+  <text x="410" y="282" class="micro">naming, patterns, guardrails</text>
+  <text x="410" y="302" class="micro">gotchas, dead-ends, warnings</text>
+  <text x="410" y="322" class="micro">arch choices + rationale</text>
 
-  <!-- Compound counter badge -->
-  <rect x="300" y="338" width="220" height="44" class="node" fill="#1e293b" stroke="#f59e0b" />
-  <text x="410" y="357" class="phase" text-anchor="middle">COMPOUNDING EFFECT</text>
-  <text x="410" y="374" class="label" text-anchor="middle">each capture raises signal quality for all future agents</text>
+  <!-- Compound counter badge (shifted down for taller tier box) -->
+  <rect x="300" y="355" width="220" height="44" class="node" fill="#1e293b" stroke="#f59e0b" />
+  <text x="410" y="374" class="phase" text-anchor="middle">COMPOUNDING EFFECT</text>
+  <text x="410" y="391" class="label" text-anchor="middle">each capture raises signal quality for all future agents</text>
 
 
   <!-- ══════════════════════════════════════════════
@@ -163,5 +163,5 @@
   <rect x="20" y="400" width="780" height="46" class="node" fill="#1e293b" stroke="#334155" />
   <text x="34" y="419" class="title">📡 Usage pattern:</text>
   <text x="34" y="434" class="label">Session start → <tspan class="mono">search_thoughts(query, project:"Plan-Forge", limit:5)</tspan>  ·  After a key decision → <tspan class="mono">capture_thought(content, project:"Plan-Forge", source:"…/slice-N")</tspan></text>
-  <text x="34" y="446" class="micro">Claude, Cursor, and Copilot all operate on the same OpenBrain store — each slice they execute raises the quality floor for every future agent.</text>
+  <text x="34" y="446" class="micro" fill="#cbd5e1">Claude, Cursor, and Copilot all operate on the same OpenBrain store — each slice they execute raises the quality floor for every future agent.</text>
 </svg>

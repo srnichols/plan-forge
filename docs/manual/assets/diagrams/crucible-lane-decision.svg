@@ -1,23 +1,23 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 780 380" fill="none">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 420" fill="none">
   <style>
     text { font-family: 'Inter', sans-serif; }
     .node { rx: 8; ry: 8; stroke-width: 1.5; }
-    .arrow { stroke: #475569; stroke-width: 1.5; fill: none; marker-end: url(#clah); }
+    .arrow { stroke: #64748b; stroke-width: 1.5; fill: none; marker-end: url(#clah); }
     .arrow-pick { stroke: #fbbf24; stroke-width: 2; fill: none; marker-end: url(#clahp); }
-    .label { font-size: 10px; fill: #94a3b8; }
-    .small { font-size: 9px; fill: #cbd5e1; }
-    .tiny { font-size: 8px; fill: #94a3b8; font-style: italic; }
-    .title { font-size: 11px; fill: #e2e8f0; font-weight: 600; }
-    .lane-name { font-size: 12px; font-weight: 700; }
-    .keyword { font-size: 9px; font-family: 'JetBrains Mono', monospace; fill: #fcd34d; }
-    .qcount { font-size: 11px; font-weight: 600; }
+    .label { font-size: 11.5px; fill: #cbd5e1; }
+    .small { font-size: 11px; fill: #e2e8f0; }
+    .tiny { font-size: 10.5px; fill: #cbd5e1; font-style: italic; }
+    .title { font-size: 12.5px; fill: #f1f5f9; font-weight: 600; }
+    .lane-name { font-size: 13.5px; font-weight: 700; }
+    .keyword { font-size: 11px; font-family: 'JetBrains Mono', monospace; fill: #fcd34d; }
+    .qcount { font-size: 12.5px; font-weight: 700; }
     .tweak { fill: #34d399; }
     .feature { fill: #fbbf24; }
     .full { fill: #fb7185; }
   </style>
   <defs>
     <marker id="clah" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto">
-      <path d="M0,0 L8,3 L0,6" fill="#475569" />
+      <path d="M0,0 L8,3 L0,6" fill="#64748b" />
     </marker>
     <marker id="clahp" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto">
       <path d="M0,0 L8,3 L0,6" fill="#fbbf24" />
@@ -44,51 +44,51 @@
   <path d="M265,210 L265,260" class="arrow" />
   <text x="285" y="240" class="label" text-anchor="middle">no</text>
 
-  <!-- Keyword scorer -->
-  <rect x="170" y="265" width="190" height="80" class="node" fill="#0f172a" stroke="#c4b5fd" />
-  <text x="265" y="283" class="title" text-anchor="middle">Keyword inference</text>
-  <text x="180" y="299" class="keyword">"bump", "fix typo"</text>
-  <text x="345" y="299" class="small tweak" text-anchor="end">→ tweak</text>
-  <text x="180" y="315" class="keyword">"new endpoint"</text>
-  <text x="345" y="315" class="small feature" text-anchor="end">→ feature</text>
-  <text x="180" y="331" class="keyword">"refactor subsystem"</text>
-  <text x="345" y="331" class="small full" text-anchor="end">→ full</text>
+  <!-- Keyword scorer (grown to fit fallback note inside) -->
+  <rect x="160" y="265" width="210" height="110" class="node" fill="#0f172a" stroke="#c4b5fd" />
+  <text x="265" y="285" class="title" text-anchor="middle">Keyword inference</text>
+  <text x="175" y="305" class="keyword">"bump", "fix typo"</text>
+  <text x="355" y="305" class="small tweak" text-anchor="end">→ tweak</text>
+  <text x="175" y="323" class="keyword">"new endpoint"</text>
+  <text x="355" y="323" class="small feature" text-anchor="end">→ feature</text>
+  <text x="175" y="341" class="keyword">"refactor subsystem"</text>
+  <text x="355" y="341" class="small full" text-anchor="end">→ full</text>
 
-  <!-- Default fallback note -->
-  <text x="265" y="361" class="tiny" text-anchor="middle">Default if no match: feature</text>
+  <!-- Default fallback note INSIDE the box -->
+  <text x="265" y="365" class="tiny" text-anchor="middle">Default if no match: feature</text>
 
   <!-- Inference output to lanes -->
-  <path d="M360,290 L480,160" class="arrow-pick" />
-  <path d="M360,310 L480,250" class="arrow-pick" />
-  <path d="M360,330 L480,335" class="arrow-pick" />
+  <path d="M370,305 L480,160" class="arrow-pick" />
+  <path d="M370,323 L480,260" class="arrow-pick" />
+  <path d="M370,341 L480,345" class="arrow-pick" />
 
   <!-- ─── Three lane outcomes ─── -->
   <!-- Tweak -->
-  <rect x="480" y="120" width="270" height="80" class="node" fill="#0f172a" stroke="#34d399" />
-  <text x="500" y="140" class="lane-name tweak">tweak</text>
-  <text x="745" y="140" class="qcount tweak" text-anchor="end">4 questions</text>
-  <text x="500" y="158" class="small">scope · build-cmd · test-cmd · forbidden-actions</text>
-  <text x="500" y="174" class="tiny">CRITICAL_FIELDS: scope, build, test, forbidden</text>
-  <text x="500" y="188" class="small" style="fill:#94a3b8;">Best for: version bumps · config flips · doc edits · small fixes</text>
+  <rect x="480" y="120" width="290" height="90" class="node" fill="#0f172a" stroke="#34d399" />
+  <text x="500" y="142" class="lane-name tweak">tweak</text>
+  <text x="765" y="142" class="qcount tweak" text-anchor="end">4 questions</text>
+  <text x="500" y="162" class="small">scope · build-cmd · test-cmd · forbidden-actions</text>
+  <text x="500" y="180" class="tiny">CRITICAL_FIELDS: scope, build, test, forbidden</text>
+  <text x="500" y="198" class="small" style="fill:#cbd5e1;">Best for: version bumps · config flips · doc edits · small fixes</text>
 
   <!-- Feature -->
-  <rect x="480" y="220" width="270" height="80" class="node" fill="#0f172a" stroke="#fbbf24" />
-  <text x="500" y="240" class="lane-name feature">feature</text>
-  <text x="745" y="240" class="qcount feature" text-anchor="end">7 questions</text>
-  <text x="500" y="258" class="small">tweak's 4 + validation-gates + slices + rollback</text>
-  <text x="500" y="274" class="tiny">CRITICAL_FIELDS: all 6</text>
-  <text x="500" y="288" class="small" style="fill:#94a3b8;">Best for: new endpoint · new tool · new service · new UI section</text>
+  <rect x="480" y="230" width="290" height="90" class="node" fill="#0f172a" stroke="#fbbf24" />
+  <text x="500" y="252" class="lane-name feature">feature</text>
+  <text x="765" y="252" class="qcount feature" text-anchor="end">7 questions</text>
+  <text x="500" y="272" class="small">tweak's 4 + validation-gates + slices + rollback</text>
+  <text x="500" y="290" class="tiny">CRITICAL_FIELDS: all 6</text>
+  <text x="500" y="308" class="small" style="fill:#cbd5e1;">Best for: new endpoint · new tool · new service · new UI section</text>
 
   <!-- Full -->
-  <rect x="480" y="320" width="270" height="55" class="node" fill="#0f172a" stroke="#fb7185" />
-  <text x="500" y="340" class="lane-name full">full</text>
-  <text x="745" y="340" class="qcount full" text-anchor="end">~12 questions</text>
-  <text x="500" y="358" class="small">feature's 7 + architecture · integration · risk + dep matrix</text>
-  <text x="500" y="372" class="small" style="fill:#94a3b8;">Best for: subsystem introductions · 3+ top-level modules</text>
+  <rect x="480" y="335" width="290" height="70" class="node" fill="#0f172a" stroke="#fb7185" />
+  <text x="500" y="357" class="lane-name full">full</text>
+  <text x="765" y="357" class="qcount full" text-anchor="end">~12 questions</text>
+  <text x="500" y="378" class="small">feature's 7 + architecture · integration · risk + dep matrix</text>
+  <text x="500" y="396" class="small" style="fill:#cbd5e1;">Best for: subsystem introductions · 3+ top-level modules</text>
 
   <!-- Footer -->
-  <text x="100" y="280" class="tiny" text-anchor="middle">Lane drives</text>
-  <text x="100" y="293" class="tiny" text-anchor="middle">interview depth</text>
-  <text x="100" y="306" class="tiny" text-anchor="middle">+ CRITICAL_FIELDS</text>
-  <text x="100" y="319" class="tiny" text-anchor="middle">enforced at finalize</text>
+  <text x="80" y="283" class="tiny" text-anchor="middle">Lane drives</text>
+  <text x="80" y="299" class="tiny" text-anchor="middle">interview depth</text>
+  <text x="80" y="315" class="tiny" text-anchor="middle">+ CRITICAL_FIELDS</text>
+  <text x="80" y="331" class="tiny" text-anchor="middle">enforced at finalize</text>
 </svg>

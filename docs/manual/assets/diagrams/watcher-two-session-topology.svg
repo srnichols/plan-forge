@@ -2,21 +2,21 @@
   <style>
     text { font-family: 'Inter', sans-serif; }
     .node { rx: 8; ry: 8; stroke-width: 1.5; }
-    .arrow { stroke: #475569; stroke-width: 1.5; fill: none; marker-end: url(#wsah); }
+    .arrow { stroke: #64748b; stroke-width: 1.5; fill: none; marker-end: url(#wsah); }
     .arrow-read { stroke: #7dd3fc; stroke-width: 2; fill: none; marker-end: url(#wsahr); }
     .arrow-block { stroke: #fb7185; stroke-width: 2; fill: none; stroke-dasharray: 4 3; }
-    .label { font-size: 10px; fill: #94a3b8; }
-    .small { font-size: 9px; fill: #94a3b8; }
-    .title { font-size: 11px; fill: #e2e8f0; font-weight: 600; }
-    .session { font-size: 9px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; }
+    .label { font-size: 11.5px; fill: #cbd5e1; }
+    .small { font-size: 11px; fill: #cbd5e1; }
+    .title { font-size: 12.5px; fill: #f1f5f9; font-weight: 600; }
+    .session { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; }
     .role-build { fill: #fbbf24; }
     .role-watch { fill: #7dd3fc; }
-    .secret { font-size: 9px; fill: #fb7185; font-weight: 600; }
-    .surf { font-size: 9px; font-family: 'JetBrains Mono', monospace; fill: #94a3b8; }
+    .secret { font-size: 11px; fill: #fda4af; font-weight: 700; }
+    .surf { font-size: 10.5px; font-family: 'JetBrains Mono', monospace; fill: #e2e8f0; }
   </style>
   <defs>
     <marker id="wsah" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto">
-      <path d="M0,0 L8,3 L0,6" fill="#475569" />
+      <path d="M0,0 L8,3 L0,6" fill="#64748b" />
     </marker>
     <marker id="wsahr" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto">
       <path d="M0,0 L8,3 L0,6" fill="#7dd3fc" />

@@ -1,0 +1,109 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1080 640" fill="none" role="img" aria-labelledby="msl-title msl-desc">
+  <title id="msl-title">Memory stack — layered, not replaced (Copilot Memory · L3 · Anvil gate · L2 · L1, with Lattice as a parallel axis)</title>
+  <desc id="msl-desc">A vertical promotion stack of memory tiers. L1 (hub, in-process, runId-scoped) writes synchronously into L2 (.forge/*.jsonl, Hallmark-stamped with _v:1). The Anvil gate (DLQ + capability handshake + boot drain) promotes L2 writes up to L3 (OpenBrain pgvector, cross-project semantic). forge_sync_memories then surfaces L3 thoughts up into Copilot Memory (cross-session, IDE-wide) additively with hash-dedupe. Lattice runs as a parallel axis to the right (.forge/lattice/chunks.jsonl and edges.jsonl, code-graph), queried alongside memory rather than stacked on top of or below it.</desc>
+  <style>
+    text { font-family: 'Inter', sans-serif; }
+    .node { rx: 8; ry: 8; stroke-width: 1.75; }
+    .arrow-violet { stroke: #c4b5fd; stroke-width: 2.25; fill: none; marker-end: url(#mslah-violet); stroke-dasharray: 6 4; }
+    .arrow-amber { stroke: #fbbf24; stroke-width: 2.25; fill: none; marker-end: url(#mslah-amber); }
+    .arrow-cyan { stroke: #7dd3fc; stroke-width: 2.25; fill: none; marker-end: url(#mslah-cyan); }
+    .arrow-teal { stroke: #5eead4; stroke-width: 1.75; fill: none; marker-end: url(#mslah-teal); stroke-dasharray: 4 4; }
+    .tier { font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.09em; }
+    .title { font-size: 15px; fill: #f8fafc; font-weight: 700; }
+    .subtitle { font-size: 12.5px; fill: #f1f5f9; font-weight: 600; }
+    .label { font-size: 12px; fill: #e2e8f0; }
+    .file { font-size: 11.5px; font-family: 'JetBrains Mono', monospace; fill: #f1f5f9; }
+    .note { font-size: 11.5px; fill: #cbd5e1; font-style: italic; }
+    .arrow-label { font-size: 12px; font-weight: 700; }
+    .arrow-sub { font-size: 11px; font-family: 'JetBrains Mono', monospace; }
+    .badge { font-size: 10.5px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; }
+  </style>
+  <defs>
+    <marker id="mslah-violet" markerWidth="10" markerHeight="8" refX="9" refY="4" orient="auto">
+      <path d="M0,0 L10,4 L0,8" fill="#c4b5fd" />
+    </marker>
+    <marker id="mslah-amber" markerWidth="10" markerHeight="8" refX="9" refY="4" orient="auto">
+      <path d="M0,0 L10,4 L0,8" fill="#fbbf24" />
+    </marker>
+    <marker id="mslah-cyan" markerWidth="10" markerHeight="8" refX="9" refY="4" orient="auto">
+      <path d="M0,0 L10,4 L0,8" fill="#7dd3fc" />
+    </marker>
+    <marker id="mslah-teal" markerWidth="10" markerHeight="8" refX="9" refY="4" orient="auto">
+      <path d="M0,0 L10,4 L0,8" fill="#5eead4" />
+    </marker>
+  </defs>
+
+  <!-- ═══ COPILOT MEMORY (top, rose) ═══ -->
+  <text x="500" y="30" class="tier" style="fill:#f472b6;" text-anchor="middle">COPILOT MEMORY</text>
+  <rect x="260" y="40" width="480" height="78" class="node" fill="#0f172a" stroke="#f472b6" />
+  <text x="500" y="64" class="title" text-anchor="middle">cross-session · IDE-wide</text>
+  <text x="500" y="86" class="label" text-anchor="middle">lives in your Copilot account</text>
+  <text x="500" y="106" class="note" text-anchor="middle">surfaces relevant memories at chat-time, across projects</text>
+
+  <!-- forge_sync_memories arrow (Copilot ← L3) -->
+  <path d="M500,210 L500,122" class="arrow-violet" />
+  <text x="515" y="155" class="arrow-label" style="fill:#ddd6fe;">forge_sync_memories</text>
+  <text x="515" y="173" class="arrow-sub" style="fill:#c4b5fd;">additive · hash-deduped</text>
+  <text x="515" y="190" class="note" style="fill:#c4b5fd;">L3 → Copilot promotion</text>
+
+  <!-- ═══ L3 OpenBrain (violet) ═══ -->
+  <text x="500" y="222" class="tier" style="fill:#c4b5fd;" text-anchor="middle">L3 · OPENBRAIN</text>
+  <rect x="260" y="232" width="480" height="74" class="node" fill="#0f172a" stroke="#c4b5fd" />
+  <text x="500" y="256" class="title" text-anchor="middle">pgvector · cross-project semantic</text>
+  <text x="500" y="278" class="label" text-anchor="middle">embeddings · search_thoughts · capture_thought</text>
+  <text x="500" y="297" class="note" text-anchor="middle">durable · cross-tool · queryable from any agent</text>
+
+  <!-- Anvil gate band -->
+  <path d="M500,398 L500,310" class="arrow-amber" />
+  <rect x="290" y="328" width="420" height="50" rx="6" ry="6" fill="#1c1410" stroke="#fbbf24" stroke-width="2" />
+  <text x="500" y="349" class="badge" style="fill:#fbbf24;" text-anchor="middle">ANVIL · L2 → L3 doorway</text>
+  <text x="500" y="368" class="note" style="fill:#fcd34d;" text-anchor="middle">DLQ · capability handshake · boot drain</text>
+
+  <!-- ═══ L2 Files (amber) ═══ -->
+  <text x="500" y="410" class="tier" style="fill:#fbbf24;" text-anchor="middle">L2 · FILES (.forge/, append-only)</text>
+  <rect x="260" y="420" width="480" height="78" class="node" fill="#0f172a" stroke="#fbbf24" />
+  <text x="500" y="444" class="title" text-anchor="middle">Hallmark-stamped · _v:1</text>
+  <text x="500" y="466" class="file" text-anchor="middle">.forge/memory-captures.jsonl · gotchas · lessons · …</text>
+  <text x="500" y="486" class="note" text-anchor="middle">schema-versioned, gitignored, persistent across runs</text>
+
+  <!-- L1 → L2 sync write arrow -->
+  <path d="M500,580 L500,502" class="arrow-cyan" />
+  <text x="515" y="540" class="arrow-label" style="fill:#bae6fd;">sync write</text>
+  <text x="515" y="558" class="arrow-sub" style="fill:#7dd3fc;">try/catch, never blocks L1</text>
+
+  <!-- ═══ L1 Hub (cyan) ═══ -->
+  <text x="500" y="594" class="tier" style="fill:#7dd3fc;" text-anchor="middle">L1 · HUB</text>
+  <rect x="260" y="600" width="480" height="32" class="node" fill="#0f172a" stroke="#7dd3fc" />
+  <text x="500" y="622" class="subtitle" text-anchor="middle">in-process · runId-scoped · 5000-event ring buffer · WebSocket broadcast</text>
+
+  <!-- ═══ LATTICE (parallel axis on the right) ═══ -->
+  <text x="900" y="222" class="tier" style="fill:#5eead4;" text-anchor="middle">LATTICE</text>
+  <rect x="780" y="232" width="240" height="400" class="node" fill="#020617" stroke="#5eead4" stroke-dasharray="4 4" />
+  <text x="900" y="258" class="subtitle" style="fill:#a7f3d0;" text-anchor="middle">parallel axis</text>
+  <text x="900" y="278" class="note" style="fill:#5eead4;" text-anchor="middle">not stacked on memory</text>
+
+  <line x1="800" y1="298" x2="1000" y2="298" stroke="#5eead4" stroke-width="0.75" stroke-dasharray="2 3" opacity="0.5" />
+
+  <text x="900" y="324" class="badge" style="fill:#5eead4;" text-anchor="middle">CODE-GRAPH</text>
+  <text x="900" y="350" class="file" text-anchor="middle">.forge/lattice/</text>
+  <text x="900" y="370" class="file" text-anchor="middle">  chunks.jsonl</text>
+  <text x="900" y="388" class="file" text-anchor="middle">  edges.jsonl</text>
+
+  <line x1="800" y1="410" x2="1000" y2="410" stroke="#5eead4" stroke-width="0.75" stroke-dasharray="2 3" opacity="0.5" />
+
+  <text x="900" y="436" class="label" text-anchor="middle">queried alongside,</text>
+  <text x="900" y="454" class="label" text-anchor="middle">not above or below,</text>
+  <text x="900" y="472" class="label" text-anchor="middle">the memory tiers</text>
+
+  <text x="900" y="510" class="note" text-anchor="middle">tree-sitter chunked</text>
+  <text x="900" y="528" class="note" text-anchor="middle">per file, edges link</text>
+  <text x="900" y="546" class="note" text-anchor="middle">callers ↔ callees</text>
+
+  <text x="900" y="590" class="badge" style="fill:#5eead4;" text-anchor="middle">USED BY</text>
+  <text x="900" y="612" class="label" text-anchor="middle">forge_lattice_*</text>
+  <text x="900" y="628" class="label" text-anchor="middle">forge_search</text>
+
+  <!-- Lateral "queried alongside" connectors (subtle teal dashed) -->
+  <path d="M740,260 L780,260" class="arrow-teal" />
+  <path d="M740,460 L780,460" class="arrow-teal" />
+</svg>

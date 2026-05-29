@@ -2,24 +2,24 @@
   <style>
     text { font-family: 'Inter', sans-serif; }
     .node { rx: 28; ry: 28; stroke-width: 2; }
-    .arrow { stroke: #475569; stroke-width: 1.5; fill: none; marker-end: url(#bsah); }
+    .arrow { stroke: #64748b; stroke-width: 1.5; fill: none; marker-end: url(#bsah); }
     .arrow-ok { stroke: #34d399; stroke-width: 2; fill: none; marker-end: url(#bsahok); }
     .arrow-bad { stroke: #fb7185; stroke-width: 1.5; fill: none; stroke-dasharray: 5 3; }
-    .label { font-size: 10px; fill: #94a3b8; }
-    .small { font-size: 9px; fill: #cbd5e1; }
-    .tiny { font-size: 9px; fill: #94a3b8; font-style: italic; }
-    .title { font-size: 12px; fill: #e2e8f0; font-weight: 600; }
-    .legend { font-size: 9px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; }
-    .pill { font-size: 13px; font-weight: 700; }
-    .terminal-good { fill: #34d399; }
-    .terminal-bad { fill: #fb7185; }
-    .work { fill: #fbbf24; }
+    .label { font-size: 15px; fill: #cbd5e1; }
+    .small { font-size: 13.5px; fill: #cbd5e1; }
+    .tiny { font-size: 13.5px; fill: #cbd5e1; font-style: italic; }
+    .title { font-size: 13.5px; fill: #f1f5f9; font-weight: 600; }
+    .legend { font-size: 13.5px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; }
+    .pill { font-size: 15px; font-weight: 700; }
+    .terminal-good { fill: #6ee7b7; }
+    .terminal-bad { fill: #fda4af; }
+    .work { fill: #fcd34d; }
     .review { fill: #c4b5fd; }
-    .surf { font-size: 9px; font-family: 'JetBrains Mono', monospace; fill: #94a3b8; }
+    .surf { font-size: 13.5px; font-family: 'JetBrains Mono', monospace; fill: #cbd5e1; }
   </style>
   <defs>
     <marker id="bsah" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto">
-      <path d="M0,0 L8,3 L0,6" fill="#475569" />
+      <path d="M0,0 L8,3 L0,6" fill="#64748b" />
     </marker>
     <marker id="bsahok" markerWidth="9" markerHeight="7" refX="8" refY="3.5" orient="auto">
       <path d="M0,0 L9,3.5 L0,7" fill="#34d399" />

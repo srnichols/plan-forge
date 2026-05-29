@@ -3,18 +3,18 @@
   <desc id="evt-desc">Horizontal timeline showing Plan Forge's eight headline version milestones from Summer 2025 (v1.0, 18 instruction files plus 4-session pipeline) through May 2026 (v3.6, OpenBrain promoted to L3 memory layer). Intermediate milestones: v2.0 January 2026 (autonomous orchestrator and DAG-based execution), v2.5 February 2026 (Quorum Mode multi-model consensus), v2.10 March 2026 (OpenClaw bridge for cross-platform notifications), v2.14 March 2026 (Copilot platform integration), v2.18 April 2026 (Temper Guards and Warning Signs and Context Fuel), v2.83 May 2026 (host-aware routing plus quorum estimator plus complexity rubric). The current milestone v3.6 is highlighted in amber. The May 2026 v3.x sprint also included v2.95 Lattice code-graph indexing, v3.0 Copilot integration trilogy, and v3.2 through v3.4 Team Mode, which are covered in the chapter prose.</desc>
   <style>
     text { font-family: 'Inter', sans-serif; }
-    .title-text { font-size: 14px; fill: #e2e8f0; font-weight: 700; }
-    .subtitle { font-size: 11px; fill: #94a3b8; }
+    .title-text { font-size: 15px; fill: #f1f5f9; font-weight: 700; }
+    .subtitle { font-size: 13.5px; fill: #cbd5e1; }
     .axis-line { stroke: #475569; stroke-width: 2; }
     .marker { fill: #1e293b; stroke: #64748b; stroke-width: 2; }
     .marker-current { fill: #1e293b; stroke: #f59e0b; stroke-width: 2.5; }
-    .version-label { font-size: 13px; fill: #e2e8f0; font-weight: 700; font-family: 'JetBrains Mono', monospace; }
-    .version-current { font-size: 13px; fill: #f59e0b; font-weight: 700; font-family: 'JetBrains Mono', monospace; }
-    .date-label { font-size: 10px; fill: #94a3b8; }
-    .date-current { font-size: 10px; fill: #fbbf24; font-weight: 600; }
-    .feature-label { font-size: 10px; fill: #cbd5e1; }
-    .feature-current { font-size: 10px; fill: #fde68a; font-weight: 500; }
-    .footnote { font-size: 9px; fill: #64748b; }
+    .version-label { font-size: 15px; fill: #f1f5f9; font-weight: 700; font-family: 'JetBrains Mono', monospace; }
+    .version-current { font-size: 15px; fill: #f59e0b; font-weight: 700; font-family: 'JetBrains Mono', monospace; }
+    .date-label { font-size: 15px; fill: #cbd5e1; }
+    .date-current { font-size: 15px; fill: #fcd34d; font-weight: 600; }
+    .feature-label { font-size: 15px; fill: #cbd5e1; }
+    .feature-current { font-size: 15px; fill: #fde68a; font-weight: 500; }
+    .footnote { font-size: 13.5px; fill: #cbd5e1; }
   </style>
 
   <!-- Title -->

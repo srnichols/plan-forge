@@ -3,12 +3,12 @@
     text { font-family: 'Inter', sans-serif; }
     .group { rx: 10; ry: 10; stroke-width: 2; }
     .tile { rx: 5; ry: 5; stroke-width: 1; }
-    .label { font-size: 10px; fill: #cbd5e1; }
-    .small { font-size: 9px; fill: #94a3b8; }
-    .tiny { font-size: 8px; fill: #94a3b8; }
-    .group-title { font-size: 13px; font-weight: 700; }
-    .group-sub { font-size: 9px; fill: #94a3b8; }
-    .tab-name { font-size: 9px; fill: #e2e8f0; font-weight: 500; }
+    .label { font-size: 15px; fill: #cbd5e1; }
+    .small { font-size: 13.5px; fill: #cbd5e1; }
+    .tiny { font-size: 13.5px; fill: #cbd5e1; }
+    .group-title { font-size: 15px; font-weight: 700; }
+    .group-sub { font-size: 13.5px; fill: #cbd5e1; }
+    .tab-name { font-size: 13.5px; fill: #f1f5f9; font-weight: 500; }
   </style>
 
   <!-- ─── Group 1: Forge (default, blue) ─── -->

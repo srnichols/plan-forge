@@ -6,12 +6,12 @@
     .node { rx: 8; ry: 8; stroke-width: 1.5; }
     .arrow { stroke: #fbbf24; stroke-width: 1.5; fill: none; marker-end: url(#dhfp-ah); }
     .arrow-loop { stroke: #fb7185; stroke-width: 1.5; fill: none; stroke-dasharray: 6 4; marker-end: url(#dhfp-ah-rose); }
-    .label { font-size: 10px; fill: #94a3b8; }
-    .micro { font-size: 9px; fill: #64748b; font-family: 'JetBrains Mono', monospace; }
-    .title-text { font-size: 12px; fill: #e2e8f0; font-weight: 600; }
+    .label { font-size: 15px; fill: #cbd5e1; }
+    .micro { font-size: 13.5px; fill: #cbd5e1; font-family: 'JetBrains Mono', monospace; }
+    .title-text { font-size: 13.5px; fill: #f1f5f9; font-weight: 600; }
     .pass-num { font-size: 20px; font-weight: 800; font-family: 'Inter', sans-serif; }
-    .phase { font-size: 9px; fill: #f59e0b; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; }
-    .heading { font-size: 11px; fill: #64748b; font-weight: 600; letter-spacing: 0.1em; }
+    .phase { font-size: 13.5px; fill: #f59e0b; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; }
+    .heading { font-size: 13.5px; fill: #cbd5e1; font-weight: 600; letter-spacing: 0.1em; }
   </style>
   <defs>
     <marker id="dhfp-ah" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto">

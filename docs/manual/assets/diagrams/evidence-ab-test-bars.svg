@@ -3,12 +3,12 @@
   <desc id="abt-desc">Head-to-head bar chart comparing Plan Forge (green) against vibe coding (red) across six structural quality metrics from the April 11 2026 .NET A/B test. Same task, same model (Claude Opus 4.6), same machine, comparable time (7 vs 8 minutes). Plan Forge: 60 tests, 6 interfaces, 9 DTOs, 4 typed exceptions, 79 CancellationToken references, 99 quality score. Vibe coding: 13 tests, 0 interfaces, 0 DTOs, 0 typed exceptions, 0 CancellationToken references, 44 quality score. Across structural quality, vibe coding scored zero on four of six metrics.</desc>
   <style>
     text { font-family: 'Inter', sans-serif; }
-    .title-text { font-size: 14px; fill: #e2e8f0; font-weight: 700; }
-    .subtitle { font-size: 11px; fill: #94a3b8; }
-    .axis-label { font-size: 11px; fill: #cbd5e1; font-weight: 600; }
-    .bar-label { font-size: 13px; fill: #e2e8f0; font-weight: 700; font-family: 'JetBrains Mono', monospace; }
-    .legend-text { font-size: 11px; fill: #cbd5e1; font-weight: 500; }
-    .footnote { font-size: 10px; fill: #64748b; }
+    .title-text { font-size: 15px; fill: #f1f5f9; font-weight: 700; }
+    .subtitle { font-size: 13.5px; fill: #cbd5e1; }
+    .axis-label { font-size: 13.5px; fill: #cbd5e1; font-weight: 600; }
+    .bar-label { font-size: 15px; fill: #f1f5f9; font-weight: 700; font-family: 'JetBrains Mono', monospace; }
+    .legend-text { font-size: 13.5px; fill: #cbd5e1; font-weight: 500; }
+    .footnote { font-size: 15px; fill: #cbd5e1; }
     .vibe-bar { fill: #ef4444; }
     .forge-bar { fill: #10b981; }
     .axis-line { stroke: #334155; stroke-width: 1; }

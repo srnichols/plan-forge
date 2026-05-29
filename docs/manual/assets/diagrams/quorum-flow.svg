@@ -2,14 +2,14 @@
   <style>
     text { font-family: 'Inter', sans-serif; }
     .node { rx: 8; ry: 8; stroke-width: 1.5; }
-    .arrow { stroke: #475569; stroke-width: 1.5; fill: none; marker-end: url(#ah2); }
-    .label { font-size: 10px; fill: #94a3b8; }
-    .title { font-size: 11px; fill: #e2e8f0; font-weight: 600; }
-    .phase { font-size: 9px; fill: #f59e0b; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; }
+    .arrow { stroke: #64748b; stroke-width: 1.5; fill: none; marker-end: url(#ah2); }
+    .label { font-size: 15px; fill: #cbd5e1; }
+    .title { font-size: 13.5px; fill: #f1f5f9; font-weight: 600; }
+    .phase { font-size: 13.5px; fill: #f59e0b; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; }
   </style>
   <defs>
     <marker id="ah2" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto">
-      <path d="M0,0 L8,3 L0,6" fill="#475569" />
+      <path d="M0,0 L8,3 L0,6" fill="#64748b" />
     </marker>
   </defs>
   <!-- Phase 1: Dispatch -->

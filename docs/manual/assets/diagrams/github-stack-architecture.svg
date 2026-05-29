@@ -3,18 +3,18 @@
     text { font-family: 'Inter', sans-serif; }
     .layer { rx: 10; ry: 10; stroke-width: 1.5; }
     .primitive { rx: 6; ry: 6; stroke-width: 1; }
-    .arrow { stroke: #475569; stroke-width: 1.5; fill: none; marker-end: url(#arrowhead); }
+    .arrow { stroke: #64748b; stroke-width: 1.5; fill: none; marker-end: url(#arrowhead); }
     .arrow-up { stroke: #f59e0b; stroke-width: 1.5; fill: none; marker-end: url(#arrowhead-amber); stroke-dasharray: 3 3; }
-    .label { font-size: 11px; fill: #cbd5e1; }
-    .title { font-size: 13px; fill: #f1f5f9; font-weight: 600; }
-    .layer-title { font-size: 12px; fill: #64748b; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; }
-    .accent { font-size: 10px; fill: #f59e0b; font-weight: 600; }
-    .desc { font-size: 9.5px; fill: #94a3b8; }
+    .label { font-size: 13.5px; fill: #cbd5e1; }
+    .title { font-size: 15px; fill: #f1f5f9; font-weight: 600; }
+    .layer-title { font-size: 13.5px; fill: #cbd5e1; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; }
+    .accent { font-size: 15px; fill: #f59e0b; font-weight: 600; }
+    .desc { font-size: 15px; fill: #cbd5e1; }
   </style>
 
   <defs>
     <marker id="arrowhead" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto">
-      <path d="M0,0 L8,3 L0,6" fill="#475569" />
+      <path d="M0,0 L8,3 L0,6" fill="#64748b" />
     </marker>
     <marker id="arrowhead-amber" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto">
       <path d="M0,0 L8,3 L0,6" fill="#f59e0b" />

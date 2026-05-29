@@ -2,21 +2,21 @@
   <style>
     text { font-family: 'Inter', sans-serif; }
     .node { rx: 8; ry: 8; stroke-width: 1.5; }
-    .arrow { stroke: #475569; stroke-width: 1.5; fill: none; marker-end: url(#crah); }
+    .arrow { stroke: #64748b; stroke-width: 1.5; fill: none; marker-end: url(#crah); }
     .arrow-win { stroke: #34d399; stroke-width: 2.5; fill: none; marker-end: url(#crahw); }
-    .arrow-loss { stroke: #475569; stroke-width: 1; fill: none; stroke-dasharray: 4 3; }
-    .label { font-size: 10px; fill: #94a3b8; }
-    .small { font-size: 9px; fill: #94a3b8; }
-    .title { font-size: 11px; fill: #e2e8f0; font-weight: 600; }
-    .phase { font-size: 9px; fill: #f59e0b; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; }
-    .pass { font-size: 10px; fill: #34d399; font-weight: 600; }
-    .fail { font-size: 10px; fill: #fb7185; font-weight: 600; }
-    .surf { font-size: 9px; font-family: 'JetBrains Mono', monospace; fill: #cbd5e1; }
-    .winner { font-size: 11px; fill: #34d399; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; }
+    .arrow-loss { stroke: #64748b; stroke-width: 1; fill: none; stroke-dasharray: 4 3; }
+    .label { font-size: 15px; fill: #cbd5e1; }
+    .small { font-size: 13.5px; fill: #cbd5e1; }
+    .title { font-size: 13.5px; fill: #f1f5f9; font-weight: 600; }
+    .phase { font-size: 13.5px; fill: #f59e0b; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; }
+    .pass { font-size: 15px; fill: #6ee7b7; font-weight: 600; }
+    .fail { font-size: 15px; fill: #fda4af; font-weight: 600; }
+    .surf { font-size: 13.5px; font-family: 'JetBrains Mono', monospace; fill: #cbd5e1; }
+    .winner { font-size: 13.5px; fill: #6ee7b7; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; }
   </style>
   <defs>
     <marker id="crah" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto">
-      <path d="M0,0 L8,3 L0,6" fill="#475569" />
+      <path d="M0,0 L8,3 L0,6" fill="#64748b" />
     </marker>
     <marker id="crahw" markerWidth="9" markerHeight="7" refX="8" refY="3.5" orient="auto">
       <path d="M0,0 L9,3.5 L0,7" fill="#34d399" />

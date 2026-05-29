@@ -8,15 +8,15 @@
     .arrow-amber { stroke: #fbbf24; stroke-width: 2.25; fill: none; marker-end: url(#mslah-amber); }
     .arrow-cyan { stroke: #7dd3fc; stroke-width: 2.25; fill: none; marker-end: url(#mslah-cyan); }
     .arrow-teal { stroke: #5eead4; stroke-width: 1.75; fill: none; marker-end: url(#mslah-teal); stroke-dasharray: 4 4; }
-    .tier { font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.09em; }
+    .tier { font-size: 13.5px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.09em; }
     .title { font-size: 15px; fill: #f8fafc; font-weight: 700; }
-    .subtitle { font-size: 12.5px; fill: #f1f5f9; font-weight: 600; }
-    .label { font-size: 12px; fill: #e2e8f0; }
-    .file { font-size: 11.5px; font-family: 'JetBrains Mono', monospace; fill: #f1f5f9; }
-    .note { font-size: 11.5px; fill: #cbd5e1; font-style: italic; }
-    .arrow-label { font-size: 12px; font-weight: 700; }
-    .arrow-sub { font-size: 11px; font-family: 'JetBrains Mono', monospace; }
-    .badge { font-size: 10.5px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; }
+    .subtitle { font-size: 13.5px; fill: #f1f5f9; font-weight: 600; }
+    .label { font-size: 13.5px; fill: #f1f5f9; }
+    .file { font-size: 15px; font-family: 'JetBrains Mono', monospace; fill: #f1f5f9; }
+    .note { font-size: 15px; fill: #cbd5e1; font-style: italic; }
+    .arrow-label { font-size: 13.5px; font-weight: 700; }
+    .arrow-sub { font-size: 13.5px; font-family: 'JetBrains Mono', monospace; }
+    .badge { font-size: 13.5px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; }
   </style>
   <defs>
     <marker id="mslah-violet" markerWidth="10" markerHeight="8" refX="9" refY="4" orient="auto">

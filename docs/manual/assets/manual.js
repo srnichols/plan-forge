@@ -153,7 +153,7 @@
   //
   const MANUAL_COUNTS = {
     // Pipeline / surface ────────────────────────────────────────────────
-    tools:        104, // MCP TOOLS array length (capabilities snapshot toolCount) — tools.json is a curated subset (92) and lags; use: node -e "import('./pforge-mcp/server/tool-definitions.mjs').then(m=>console.log(m.TOOLS.length))"
+    tools:        105, // MCP TOOLS array length (capabilities snapshot toolCount) — tools.json is a curated subset (92) and lags; use: node -e "import('./pforge-mcp/server/tool-definitions.mjs').then(m=>console.log(m.TOOLS.length))"
     instructions: 18,  // presets/dotnet|typescript/.github/instructions/
     agents:       12,  // 6 stack-specific + 6 pipeline (post Pass 5 reconciliation; cross-stack reviewers folded into stack agents)
     skills:       11,  // dotnet preset (typescript = 10) — varies by preset

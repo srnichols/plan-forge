@@ -895,7 +895,7 @@
         </ol>
 
         <div class="callout callout-success">
-          <strong>Ship-it moment.</strong> You can write a one-page adoption recommendation that names the substrate (GitHub + Copilot), the harness (Plan Forge), the virtual engineering team (20 reviewer agents + Forge-Master supervision + the human's three jobs), the memory layer (OpenBrain, self-hosted), the cost levers, and the lock-in story, with chapter citations for every claim.
+          <strong>Ship-it moment.</strong> You can write a one-page adoption recommendation that names the substrate (GitHub + Copilot), the harness (Plan Forge), the virtual engineering team (21 reviewer agents + Forge-Master supervision + the human's three jobs), the memory layer (OpenBrain, self-hosted), the cost levers, and the lock-in story, with chapter citations for every claim.
         </div>
 
         <!-- ─── Ladder 4: Enterprise architect ─── -->
@@ -6241,7 +6241,7 @@ forge_run_plan({ plan: "docs/plans/Phase-1.md", resumeFrom: 3 })</code></pre>
           <tr><td><a href="rest-api-reference.html#liveguard">LiveGuard</a></td><td>Drift, incidents, deploy journal, regression guard, runbooks, secret scan, dep watch.</td></tr>
           <tr><td><a href="rest-api-reference.html#bridge">Bridge &amp; approvals</a></td><td>The only cross-boundary auth surface (HMAC via <code>PFORGE_BRIDGE_SECRET</code>).</td></tr>
           <tr><td><a href="rest-api-reference.html#forge-master">Forge-Master</a></td><td>Conversational entrypoint, chat, prefs, cache stats.</td></tr>
-          <tr><td><a href="rest-api-reference.html#generic-dispatcher">Generic MCP dispatcher</a></td><td><code>POST /api/tool/:name</code>, invoke any of the 104 MCP tools over REST.</td></tr>
+          <tr><td><a href="rest-api-reference.html#generic-dispatcher">Generic MCP dispatcher</a></td><td><code>POST /api/tool/:name</code>, invoke any of the <!--c:tools-->105<!--/c--> MCP tools over REST.</td></tr>
         </tbody>
       </table>
 
@@ -6480,7 +6480,7 @@ pforge ext remove healthcare-compliance</code></pre>
 # Or pick specific agents
 .\setup.ps1 -Preset dotnet -Agent claude,cursor</code></pre>
       </div>
-      <p>Copilot files are always installed. The <code>-Agent</code> flag adds native files for other tools, each with all 16 guardrail files embedded, prompts as native skills/commands, and 21 reviewer agents as invocable procedures.</p>
+      <p>Copilot files are always installed. The <code>-Agent</code> flag adds native files for other tools, each with all <!--c:instructions-->18<!--/c--> guardrail files embedded, prompts as native skills/commands, and 21 reviewer agents as invocable procedures.</p>
 
       <h2 id="comparison">Feature Parity Matrix</h2>
       <p class="text-sm text-slate-400">Deepest integration with VS Code + GitHub Copilot — instruction loading, MCP tools, lifecycle hooks, Coding Agent dispatch, GHAS, Copilot Metrics, and dashboard sync. Other agents emulate the Copilot baseline; the amber rows below are Copilot-native surfaces with no equivalent on other tools. See <a href="copilot-integration.html">Copilot Integration</a> and <a href="plan-forge-on-the-github-stack.html">Plan Forge on the GitHub Stack</a>.</p>
@@ -6519,7 +6519,7 @@ pforge ext remove healthcare-compliance</code></pre>
       <p><strong>Key file</strong>: <code>.github/copilot-instructions.md</code></p>
 
       <h2 id="claude">Claude Code</h2>
-      <p>All guardrails embedded in a single <code>CLAUDE.md</code> file. Claude Code reads this automatically at project root. Includes 33+ skills as slash commands, full auto mode, and memory hooks.</p>
+      <p>All guardrails embedded in a single <code>CLAUDE.md</code> file. Claude Code reads this automatically at project root. Includes <!--c:skills-->11<!--/c-->+ skills as slash commands, full auto mode, and memory hooks.</p>
       <p><strong>Key file</strong>: <code>CLAUDE.md</code></p>
       <div class="cmd-block">
         <div class="cmd-block-header"><span>Setup</span><button class="cmd-copy-btn">Copy</button></div>
@@ -10629,7 +10629,7 @@ pforge digest --post             # send via configured notifier</code></pre>
 
         <p>The same handler set lives behind all four surfaces. Adding a new tool means the team writes one handler, and it automatically becomes available as MCP tool, REST endpoint, CLI command, and SDK export. This is intentional: the integration surface should never be the bottleneck for a new capability.</p>
 
-        <figure class="manual-figure" id="fig-29-2"><img src="assets/diagrams/surface-decision-tree.svg" alt="Surface decision tree with three sequential yes/no questions. Q1: Is the caller an AI agent already speaking MCP (Copilot, Claude, Cursor, Codex)? YES routes left to MCP, stdio, 90 tools, inherited trust, auto-discovered by .vscode/mcp.json. Q2 (on NO): Human in a terminal, cron job, or local shell script? YES routes left to CLI, pforge, 97 commands, PFORGE_API_TOKEN, examples include pforge digest, pforge run-plan, pforge fm-session. Q3 (on NO): Node.js or TypeScript caller wanting typed responses? YES routes right to SDK, pforge-sdk, 4 sub-paths, createClient plus typed tools. NO defaults to REST, 103 endpoints, OpenAPI 3, Bearer auth, cross-process; ideal for CI, dashboards, mobile, non-Node clients, and webhooks. A separate purple block shows the WebSocket hub at /api/hub providing 60+ event types for observation only, subscribed alongside REST for live progress streams. Footer hint: all four surfaces share one handler set, so pick the surface that matches the caller, not the capability." class="diagram-img diagram-img-md my-4" /><figcaption class="manual-figcaption"><!--fignum--><span class="manual-fignum">Figure 29-2.</span><!--/fignum--> <!--cap:auto-->Surface decision tree, pick by caller, not by capability<!--/cap--></figcaption></figure>
+        <figure class="manual-figure" id="fig-29-2"><img src="assets/diagrams/surface-decision-tree.svg" alt="Surface decision tree with three sequential yes/no questions. Q1: Is the caller an AI agent already speaking MCP (Copilot, Claude, Cursor, Codex)? YES routes left to MCP, stdio, 105 tools, inherited trust, auto-discovered by .vscode/mcp.json. Q2 (on NO): Human in a terminal, cron job, or local shell script? YES routes left to CLI, pforge, 97 commands, PFORGE_API_TOKEN, examples include pforge digest, pforge run-plan, pforge fm-session. Q3 (on NO): Node.js or TypeScript caller wanting typed responses? YES routes right to SDK, pforge-sdk, 4 sub-paths, createClient plus typed tools. NO defaults to REST, 103 endpoints, OpenAPI 3, Bearer auth, cross-process; ideal for CI, dashboards, mobile, non-Node clients, and webhooks. A separate purple block shows the WebSocket hub at /api/hub providing 60+ event types for observation only, subscribed alongside REST for live progress streams. Footer hint: all four surfaces share one handler set, so pick the surface that matches the caller, not the capability." class="diagram-img diagram-img-md my-4" /><figcaption class="manual-figcaption"><!--fignum--><span class="manual-fignum">Figure 29-2.</span><!--/fignum--> <!--cap:auto-->Surface decision tree, pick by caller, not by capability<!--/cap--></figcaption></figure>
 
         <!-- ─── REST API ─── -->
         <h2 id="rest">REST API</h2>
@@ -12214,7 +12214,7 @@ pforge config list</code></pre>
             <text x="14" y="62">▸ Tempering, quality scorer</text>
             <text x="14" y="78">▸ Inner Loop, competitive worktrees</text>
             <text x="14" y="94">▸ Forge-Master, chat-first router</text>
-            <text x="14" y="110">▸ 20 Reviewer Agents · 14 Skills</text>
+            <text x="14" y="110">▸ 21 Reviewer Agents · 14 Skills</text>
             <text x="14" y="126">▸ Reflexion retry · Auto-skill library</text>
             <text x="14" y="142">▸ Lifecycle hooks (pre/post slice)</text>
           </g>
@@ -19751,7 +19751,7 @@ ws.on("message", (raw) =&gt; {
         </div>
 
         <h2 id="orientation">Orientation</h2>
-        <p>Plan Forge exposes <strong>~91 REST endpoints</strong> across 16 subsystems. Every one of the <a href="api-surface-index.html#mcp-tools">104 MCP tools</a> can also be invoked over REST through the generic dispatcher (<code>POST /api/tool/:name</code>), the explicit endpoints below are the "first-class" surfaces the dashboard and CLI use, with response shapes shaped for direct UI consumption rather than tool-call envelopes.</p>
+        <p>Plan Forge exposes <strong>~91 REST endpoints</strong> across 16 subsystems. Every one of the <a href="api-surface-index.html#mcp-tools"><!--c:tools-->105<!--/c--> MCP tools</a> can also be invoked over REST through the generic dispatcher (<code>POST /api/tool/:name</code>), the explicit endpoints below are the "first-class" surfaces the dashboard and CLI use, with response shapes shaped for direct UI consumption rather than tool-call envelopes.</p>
 
         <div class="overflow-x-auto mb-8">
           <table class="manual-table">
@@ -19772,7 +19772,7 @@ ws.on("message", (raw) =&gt; {
               <tr><td><a href="#copilot-integration"><strong>Copilot integration</strong></a></td><td>5</td><td>copilot-instructions.md read/preview/sync, OpenClaw snapshot/config.</td></tr>
               <tr><td><a href="#github-team"><strong>GitHub &amp; team coordination</strong></a></td><td>4</td><td>GitHub metrics, readiness, team dashboard, team activity.</td></tr>
               <tr><td><a href="#notifications-audit"><strong>Notifications, audit, dashboard, settings</strong></a></td><td>13</td><td>Notification config, audit config/drain, dashboard state, config, secrets, extensions, update, server restart.</td></tr>
-              <tr><td><a href="#generic-dispatcher"><strong>Generic MCP dispatcher</strong></a></td><td>3</td><td>The <code>POST /api/tool/:name</code> escape hatch that exposes any of the 104 MCP tools over REST.</td></tr>
+              <tr><td><a href="#generic-dispatcher"><strong>Generic MCP dispatcher</strong></a></td><td>3</td><td>The <code>POST /api/tool/:name</code> escape hatch that exposes any of the <!--c:tools-->105<!--/c--> MCP tools over REST.</td></tr>
               <tr><td><a href="#forge-master"><strong>Forge-Master</strong></a></td><td>10</td><td>The conversational entrypoint, chat sessions, prompts, prefs, cache stats.</td></tr>
               <tr><td><a href="#image"><strong>Image generation</strong></a></td><td>1</td><td>Generate images via xAI Grok Aurora or OpenAI DALL-E.</td></tr>
             </tbody>
@@ -20044,11 +20044,11 @@ ws.on("message", (raw) =&gt; {
 
         <!-- ─── Generic Dispatcher ─── -->
         <h2 id="generic-dispatcher">Generic MCP dispatcher</h2>
-        <p>The escape hatch. Any of the 104 MCP tools can be invoked over REST through this surface, useful for SDK clients, CI scripts, and any external integration that needs richer tool semantics than the first-class endpoints expose.</p>
+        <p>The escape hatch. Any of the <!--c:tools-->105<!--/c--> MCP tools can be invoked over REST through this surface, useful for SDK clients, CI scripts, and any external integration that needs richer tool semantics than the first-class endpoints expose.</p>
         <table class="manual-table">
           <thead><tr><th>Method</th><th>Path</th><th>Purpose</th><th>Notes</th></tr></thead>
           <tbody>
-            <tr><td>POST</td><td><code>/api/tool/:name</code></td><td><strong>Invoke any of the 104 MCP tools over REST</strong></td><td>Body is the tool's input contract (see <a href="api-surface-index.html#mcp-tools">Appendix Q</a>). Response is the tool's output payload, unwrapped from the MCP envelope. Crucible and Forge-Master tools route through the MCP handler (v2.82.1 fix).</td></tr>
+            <tr><td>POST</td><td><code>/api/tool/:name</code></td><td><strong>Invoke any of the <!--c:tools-->105<!--/c--> MCP tools over REST</strong></td><td>Body is the tool's input contract (see <a href="api-surface-index.html#mcp-tools">Appendix Q</a>). Response is the tool's output payload, unwrapped from the MCP envelope. Crucible and Forge-Master tools route through the MCP handler (v2.82.1 fix).</td></tr>
             <tr><td>POST</td><td><code>/api/tool/org-rules</code></td><td>Aliased convenience, <code>forge_org_rules</code></td><td>Equivalent to <code>POST /api/tool/forge_org_rules</code>.</td></tr>
             <tr><td>POST</td><td><code>/api/tool/run-plan</code></td><td>Aliased convenience, <code>forge_run_plan</code></td><td>Equivalent to <code>POST /api/tool/forge_run_plan</code>; also surfaced as <code>/api/runs/trigger</code> with a friendlier shape.</td></tr>
           </tbody>
@@ -20335,7 +20335,7 @@ const estimate = await c.callTool('forge_estimate_quorum', {
             <tr><td><code>STRICT_GATES_REJECTED</code></td><td>Orchestrator</td><td>Strict gates refused a plan that would otherwise have escalated. Drop --strict-gates or strengthen the failing gate.</td></tr>
             <tr><td><code>tool-denied</code></td><td>Orchestrator</td><td>A worker or hook tried to invoke an MCP tool listed in tools.deny. Remove the tool from the denylist or update the prompt to avoid it.</td></tr>
             <tr><td><code>WORKER_TIMEOUT</code></td><td>Orchestrator</td><td>Worker exceeded its per-slice execution budget. Split the slice or switch to a faster model.</td></tr>
-          
+
           </tbody>
         </table>
 

@@ -9148,40 +9148,9 @@ forge_watch_live {
 
         <!-- ─── Diagram ─── -->
         <h2 id="flow">Capture Flow</h2>
-        <p>One write, three destinations. The diagram below traces a single <code>captureMemory({tool, type, body})</code> call from any tool through the dual-write fan-out:</p>
+        <p>One write, three destinations. The diagram below traces a single <code>captureMemory({tool, type, body})</code> call from any tool through the dual-write fan-out — including the type-routing into per-bin files, the OpenBrain queue + DLQ retry path, and the L3 → L1 preload loop fired on <code>run-started</code>:</p>
 
-        <div class="bg-slate-900/40 border border-slate-800 rounded-xl p-6 my-6">
-          <pre class="text-xs leading-relaxed text-slate-300 overflow-x-auto"><code>┌──────────────────────────────────────────────────────────────────────┐
-│  Any forge tool, watcher, hook, or skill                             │
-│  └─► captureMemory({ tool, type, body, source })                     │
-└──────────────────────────────────┬───────────────────────────────────┘
-                                   │
-        ┌──────────────────────────┼──────────────────────────┐
-        ▼                          ▼                          ▼
-┌──────────────────┐    ┌─────────────────────┐    ┌────────────────────┐
-│  L1, Hub        │    │  L2, Files         │    │  L3, OpenBrain    │
-│                  │    │                     │    │                    │
-│ EventEmitter     │    │ Append _v:1 record  │    │ Append to          │
-│   broadcast      │    │   to .forge/        │    │   openbrain-       │
-│                  │    │   memory-captures   │    │   queue.jsonl      │
-│ → WebSocket      │    │   .jsonl            │    │                    │
-│   subscribers    │    │                     │    │ Drain worker:      │
-│                  │    │ Tag-route to        │    │   batch → POST     │
-│ → hub-events     │    │   gotchas.jsonl,    │    │   → pgvector       │
-│   .jsonl replay  │    │   lessons.jsonl,    │    │                    │
-│                  │    │   decisions.jsonl…  │    │ Failures → DLQ     │
-│ Real-time UI     │    │                     │    │   .jsonl           │
-└──────────────────┘    └─────────────────────┘    └────────────────────┘
-                                                              │
-                                                              ▼
-                                                   ┌──────────────────────┐
-                                                   │ search_thoughts /    │
-                                                   │ buildPlanBootContext │
-                                                   │ → preload on plan-   │
-                                                   │   start (memory-     │
-                                                   │   preload event)     │
-                                                   └──────────────────────┘</code></pre>
-        </div>
+        <figure class="manual-figure" id="fig-21-3"><img src="assets/diagrams/memory-capture-dataflow.svg" alt="Memory capture dataflow: a single captureMemory call from any forge tool, watcher, hook, or skill fans out through a dual-write splitter into three tiers. L1 hub emits memory-captured on a 5000-event ring buffer, broadcasting to WebSocket subscribers (dashboard, watcher, OpenBrain drain worker) and appending to .forge/hub-events.jsonl for replay. L2 appends a versioned _v:1 record to memory-captures.jsonl then type-routes into gotchas, lessons, decisions, patterns, and conventions JSONL files, read via grep, forge_memory_report, or the Dashboard Memory tab. L3 appends to .forge/openbrain-queue.jsonl in microseconds; the Anvil drain worker batches and POSTs to pgvector with retries, failures land in openbrain-dlq.jsonl which auto-drains on boot. On run-started, buildPlanBootContext queries the semantic index and re-broadcasts results back through L1 as a memory-preload event." class="diagram-img diagram-img-lg my-4" /><figcaption class="manual-figcaption"><!--fignum--><span class="manual-fignum">Figure 21-3.</span><!--/fignum--> <!--cap:auto-->Memory capture dataflow — dual-write fan-out with type routing, DLQ, and L3→L1 preload<!--/cap--></figcaption></figure>
 
         <p class="text-sm text-slate-500">Every step is wrapped in <code>try/catch</code>. A failed L3 enqueue never blocks the L2 file append; a corrupt L2 file never blocks the L1 broadcast. This is the <strong>dual-write pattern</strong>: best-effort fan-out with structured telemetry on each branch.</p>
 

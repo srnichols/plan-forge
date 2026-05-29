@@ -1,6 +1,6 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1100 620" fill="none" role="img" aria-labelledby="mcd-title mcd-desc">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1100 640" fill="none" role="img" aria-labelledby="mcd-title mcd-desc">
   <title id="mcd-title">Memory capture dataflow — three tiers with type routing, DLQ, and preload loop</title>
-  <desc id="mcd-desc">A single captureMemory call fans out to L1 (hub EventEmitter → WebSocket subscribers and hub-events.jsonl replay), L2 (.forge/memory-captures.jsonl with tag-routing into gotchas, lessons, decisions, patterns, and conventions JSONL files), and L3 (.forge/openbrain-queue.jsonl drained by the Anvil worker to pgvector with retries to openbrain-dlq.jsonl). On run-started, buildPlanBootContext queries L3 and re-broadcasts results back through L1 as a memory-preload event.</desc>
+  <desc id="mcd-desc">A single captureMemory call fans out to L1 (hub EventEmitter → WebSocket subscribers and hub-events.jsonl replay), L2 (.forge/memory-captures.jsonl with tag-routing into gotchas, lessons, decisions, patterns, and conventions JSONL files), and L3 (.forge/openbrain-queue.jsonl drained by the Anvil worker to pgvector with retries to openbrain-dlq.jsonl which auto-drains on boot). On run-started, buildPlanBootContext queries L3 and re-broadcasts results back through L1 as a memory-preload event.</desc>
   <style>
     text { font-family: 'Inter', sans-serif; }
     .node { rx: 8; ry: 8; stroke-width: 1.75; }
@@ -32,7 +32,7 @@
   </defs>
 
   <!-- Preload back-arrow: routed in the right-margin lane, outside every sidecar -->
-  <path d="M1000,470 C 1080,470 1080,130 720,130 L 720,158" class="arrow-violet" />
+  <path d="M1000,485 C 1080,485 1080,130 720,130 L 720,158" class="arrow-violet" />
 
   <!-- Preload label in clear empty space above L1 -->
   <text x="555" y="58" class="preload-label" text-anchor="middle">on run-started · L3 → L1 preload</text>
@@ -47,16 +47,18 @@
   <text x="125" y="103" class="file" text-anchor="middle">captureMemory({</text>
   <text x="125" y="120" class="file" text-anchor="middle">tool, type, body, source })</text>
 
-  <!-- Splitter -->
-  <rect x="270" y="62" width="110" height="46" class="node" fill="#020617" stroke="#fbbf24" stroke-dasharray="4 3" />
-  <text x="325" y="82" class="title" text-anchor="middle">dual-write</text>
-  <text x="325" y="100" class="note" text-anchor="middle">try/catch each branch</text>
-  <path d="M230,85 L270,85" class="arrow-amber" />
+  <!-- Source → dual-write (vertical) -->
+  <path d="M125,130 L125,148" class="arrow-amber" />
 
-  <!-- Splitter → three tier rows -->
-  <path d="M380,75 L420,218" class="arrow-amber" />
-  <path d="M380,85 L420,368" class="arrow-amber" />
-  <path d="M380,95 L420,510" class="arrow-amber" />
+  <!-- Dual-write splitter UNDER Source -->
+  <rect x="20" y="150" width="210" height="56" class="node" fill="#020617" stroke="#fbbf24" stroke-dasharray="4 3" />
+  <text x="125" y="172" class="title" text-anchor="middle">dual-write</text>
+  <text x="125" y="192" class="note" text-anchor="middle">try/catch each branch</text>
+
+  <!-- Splitter → three tier rows (smooth curves from right edge of dual-write) -->
+  <path d="M230,178 C 320,178 320,219 420,219" class="arrow-amber" />
+  <path d="M230,178 C 320,178 320,369 420,369" class="arrow-amber" />
+  <path d="M230,178 C 320,178 320,525 420,525" class="arrow-amber" />
 
   <!-- ═══ L1 row ═══ -->
   <text x="570" y="152" class="tier" style="fill:#7dd3fc;" text-anchor="middle">L1 · HUB (EventEmitter)</text>
@@ -94,30 +96,33 @@
   <text x="870" y="420" class="note" text-anchor="middle">schema-versioned via _v</text>
   <path d="M720,369 L740,369" class="arrow-amber" />
 
-  <!-- ═══ L3 row ═══ -->
+  <!-- ═══ L3 row (taller box to fit two-line DLQ note) ═══ -->
   <text x="570" y="452" class="tier" style="fill:#c4b5fd;" text-anchor="middle">L3 · OPENBRAIN (Anvil-bounded)</text>
-  <rect x="420" y="460" width="300" height="130" class="node" fill="#0f172a" stroke="#c4b5fd" />
+  <rect x="420" y="460" width="300" height="150" class="node" fill="#0f172a" stroke="#c4b5fd" />
   <text x="570" y="484" class="title" text-anchor="middle">append → openbrain-queue.jsonl</text>
   <text x="570" y="504" class="label" text-anchor="middle">microseconds · never blocks caller</text>
   <text x="570" y="525" class="file" text-anchor="middle">↓ Anvil drain worker</text>
   <text x="570" y="544" class="label" text-anchor="middle">batch → POST → pgvector</text>
   <text x="570" y="565" class="surf ok" text-anchor="middle">✓ ack → remove from queue</text>
-  <text x="570" y="582" class="surf err" text-anchor="middle">✗ N retries → openbrain-dlq.jsonl   (auto-drains on boot)</text>
+  <text x="570" y="586" class="surf err" text-anchor="middle">✗ N retries → openbrain-dlq.jsonl</text>
+  <text x="570" y="603" class="surf err" text-anchor="middle">(auto-drains on boot)</text>
 
-  <!-- L3 sidecar -->
-  <rect x="740" y="460" width="260" height="130" class="node" fill="#020617" stroke="#c4b5fd" stroke-dasharray="4 3" />
+  <!-- L3 sidecar (matched height) -->
+  <rect x="740" y="460" width="260" height="150" class="node" fill="#020617" stroke="#c4b5fd" stroke-dasharray="4 3" />
   <text x="870" y="484" class="tier" style="fill:#c4b5fd;" text-anchor="middle">SEMANTIC INDEX</text>
-  <text x="870" y="508" class="label" text-anchor="middle">▸ pgvector · embeddings</text>
-  <text x="870" y="528" class="label" text-anchor="middle">▸ search_thoughts (MCP)</text>
-  <text x="870" y="548" class="label" text-anchor="middle">▸ cross-project · cross-tool</text>
-  <text x="870" y="573" class="note" text-anchor="middle">drain trend in forge_memory_report</text>
-  <path d="M720,512 L740,512" class="arrow-violet" />
+  <text x="870" y="510" class="label" text-anchor="middle">▸ pgvector · embeddings</text>
+  <text x="870" y="530" class="label" text-anchor="middle">▸ search_thoughts (MCP)</text>
+  <text x="870" y="550" class="label" text-anchor="middle">▸ cross-project · cross-tool</text>
+  <text x="870" y="578" class="note" text-anchor="middle">drain trend in</text>
+  <text x="870" y="595" class="note" text-anchor="middle">forge_memory_report</text>
+  <path d="M720,525 L740,525" class="arrow-violet" />
 
-  <!-- ═══ Read-path callout (bottom-left) ═══ -->
-  <rect x="20" y="460" width="240" height="130" class="node" fill="#020617" stroke="#94a3b8" stroke-dasharray="4 3" />
-  <text x="140" y="484" class="tier" style="fill:#e2e8f0;" text-anchor="middle">READ PATH (all 3)</text>
-  <text x="140" y="510" class="label" text-anchor="middle">L1 hub · live tail</text>
-  <text x="140" y="530" class="label" text-anchor="middle">L2 files · grep / report</text>
-  <text x="140" y="550" class="label" text-anchor="middle">L3 OpenBrain · semantic</text>
-  <text x="140" y="575" class="small ok" text-anchor="middle">all three readable independently</text>
+  <!-- ═══ Read-path callout (bottom-left, matched height) ═══ -->
+  <rect x="20" y="460" width="240" height="150" class="node" fill="#020617" stroke="#94a3b8" stroke-dasharray="4 3" />
+  <text x="140" y="486" class="tier" style="fill:#e2e8f0;" text-anchor="middle">READ PATH (all 3)</text>
+  <text x="140" y="514" class="label" text-anchor="middle">L1 hub · live tail</text>
+  <text x="140" y="536" class="label" text-anchor="middle">L2 files · grep / report</text>
+  <text x="140" y="558" class="label" text-anchor="middle">L3 OpenBrain · semantic</text>
+  <text x="140" y="588" class="small ok" text-anchor="middle">all three readable</text>
+  <text x="140" y="604" class="small ok" text-anchor="middle">independently</text>
 </svg>

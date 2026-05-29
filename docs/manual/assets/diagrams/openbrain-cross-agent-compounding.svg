@@ -1,4 +1,4 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 820 480" fill="none" role="img" aria-labelledby="obca-title obca-desc">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 820 495" fill="none" role="img" aria-labelledby="obca-title obca-desc">
   <title id="obca-title">OpenBrain cross-agent compounding</title>
   <desc id="obca-desc">OpenBrain acts as a shared memory layer between AI agents — Claude, Cursor, and Copilot each capture decisions (capture_thought) and retrieve prior context (search_thoughts). Knowledge compounds across agents and sessions so each slice benefits from every previous run.</desc>
   <style>
@@ -28,7 +28,7 @@
   </defs>
 
   <!-- ── Background ── -->
-  <rect width="820" height="480" fill="#0f172a" rx="10" />
+  <rect width="820" height="495" fill="#0f172a" rx="10" />
 
   <!-- ══════════════════════════════════════════════
        COLUMN 1: AI Agents (left)
@@ -83,14 +83,15 @@
   <text x="302" y="282" class="label">convention</text>
   <text x="302" y="302" class="label">lesson</text>
   <text x="302" y="322" class="label">decision</text>
-  <text x="410" y="282" class="micro">naming, patterns, guardrails</text>
-  <text x="410" y="302" class="micro">gotchas, dead-ends, warnings</text>
-  <text x="410" y="322" class="micro">arch choices + rationale</text>
+  <text x="518" y="282" class="micro" text-anchor="end">naming, patterns, guardrails</text>
+  <text x="518" y="302" class="micro" text-anchor="end">gotchas, dead-ends, warnings</text>
+  <text x="518" y="322" class="micro" text-anchor="end">arch choices + rationale</text>
 
-  <!-- Compound counter badge (shifted down for taller tier box) -->
-  <rect x="300" y="355" width="220" height="44" class="node" fill="#1e293b" stroke="#f59e0b" />
+  <!-- Compound counter badge (two-line label, taller to avoid overflow) -->
+  <rect x="290" y="355" width="240" height="60" class="node" fill="#1e293b" stroke="#f59e0b" />
   <text x="410" y="374" class="phase" text-anchor="middle">COMPOUNDING EFFECT</text>
-  <text x="410" y="391" class="label" text-anchor="middle">each capture raises signal quality for all future agents</text>
+  <text x="410" y="391" class="label" text-anchor="middle">each capture raises signal quality</text>
+  <text x="410" y="407" class="label" text-anchor="middle">for all future agents</text>
 
 
   <!-- ══════════════════════════════════════════════
@@ -151,9 +152,9 @@
   <!-- ══════════════════════════════════════════════
        FOOTER (taller, two-line usage pattern)
        ══════════════════════════════════════════════ -->
-  <rect x="20" y="406" width="780" height="66" class="node" fill="#1e293b" stroke="#334155" />
-  <text x="34" y="424" class="title">📡 Usage pattern:</text>
-  <text x="34" y="441" class="label">Session start → <tspan class="mono">search_thoughts(query, project:"Plan-Forge", limit:5)</tspan></text>
-  <text x="34" y="456" class="label">After a key decision → <tspan class="mono">capture_thought(content, project:"Plan-Forge", source:"…/slice-N")</tspan></text>
-  <text x="34" y="469" class="micro" fill="#cbd5e1">Claude, Cursor, and Copilot all operate on the same OpenBrain store — each slice they execute raises the quality floor for every future agent.</text>
+  <rect x="20" y="421" width="780" height="66" class="node" fill="#1e293b" stroke="#334155" />
+  <text x="34" y="439" class="title">📡 Usage pattern:</text>
+  <text x="34" y="456" class="label">Session start → <tspan class="mono">search_thoughts(query, project:"Plan-Forge", limit:5)</tspan></text>
+  <text x="34" y="471" class="label">After a key decision → <tspan class="mono">capture_thought(content, project:"Plan-Forge", source:"…/slice-N")</tspan></text>
+  <text x="34" y="484" class="micro" fill="#cbd5e1">Claude, Cursor, and Copilot all operate on the same OpenBrain store — each slice they execute raises the quality floor for every future agent.</text>
 </svg>

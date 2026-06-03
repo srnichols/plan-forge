@@ -197,7 +197,7 @@ All endpoints accept and return JSON unless otherwise noted. Every MCP tool can 
 
 | Method | Path | Purpose |
 |---|---|---|
-| `POST` | `/api/tool/:name` | **Invoke any of the 104 MCP tools over REST.** Body is the tool's input contract. |
+| `POST` | `/api/tool/:name` | **Invoke any of the 105 MCP tools over REST.** Body is the tool's input contract. |
 | `POST` | `/api/tool/org-rules` | Aliased convenience — `forge_org_rules` |
 | `POST` | `/api/tool/run-plan` | Aliased convenience — `forge_run_plan` |
 

@@ -10,7 +10,7 @@
   "manualRollbacks": 0,
 
   "mcpTools": {
-    "total": 104,
+    "total": 105,
     "_breakdownNote": "Per-family breakdown is no longer maintained here — it drifted badly between v2.63 and v3.20. The authoritative source is pforge-mcp/tools.json (one entry per MCP tool), surfaced in docs/capabilities.md by scripts/generate-capabilities-doc.mjs."
   },
 
@@ -28,7 +28,7 @@
   "dashboardTabsBreakdown": "Forge: Home, Runs, Progress, Crucible, Governance, Cost, Actions, Replay, Extensions, Config, Traces, Skills, Watcher, Tempering, Bug Registry, Memory, Timeline, Review, Inner Loop, Forge-Master (20) + LiveGuard: Health, Incidents, Triage, Security, Env (5)",
 
   "manualChapters": 30,
-  "manualAppendices": 14,
+  "manualAppendices": 26,
 
   "abTestApril2026": {
     "tests": { "planForge": 60, "vibeCoding": 13 },
@@ -39,7 +39,7 @@
 
   "_knownStaleAliases": {
     "_comment": "Numbers that appeared in prior versions as current-state claims and should NEVER appear in current docs. The checker flags any of these found outside of CHANGELOG.md, /memories/, and docs/V3-CAPABILITY-AUDIT.md (excluded because that doc intentionally mentions old values for forensic purposes). Do NOT add version strings here that are also used as 'feature shipped at vX' annotations throughout the manual — the regex matcher can't distinguish historical badges from current-version claims.",
-    "mcpTools": [18, 34, 36, 43, 52, 65, 67, 69, 84, 88, 89, 91, 93, 102, 106],
+    "mcpTools": [18, 34, 36, 43, 52, 65, 67, 69, 84, 88, 89, 91, 93, 102, 104, 106],
     "dashboardTabs": [15],
     "testsPassing": [103, 2470, 2478, 2486, 2627, 3167, 3169, 3277, 3285, 3963],
     "agents": [14, 17, 18, 19],

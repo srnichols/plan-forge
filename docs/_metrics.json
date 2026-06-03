@@ -1,9 +1,9 @@
 {
   "_comment": "Single source of truth for Plan Forge statistics cited across the docs. Update this first, then run scripts/check-metrics.ps1 (or .sh) to find any surface that still shows stale numbers. DO NOT template-inject this file into HTML — the goal is detection, not generation. Bump values here whenever a release changes them.",
-  "_updated": "2026-05-23",
-  "_updatedFor": "v3.20.0-dev",
+  "_updated": "2026-06-02",
+  "_updatedFor": "v3.21.0",
 
-  "version": "3.20.0-dev",
+  "version": "3.21.0",
   "testsPassing": 7947,
   "testsTotal": 7971,
   "phasesSelfBuilt": "55+",

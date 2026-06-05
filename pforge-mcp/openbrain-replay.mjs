@@ -90,7 +90,12 @@ function openBrainQueryKey(url) {
 }
 
 function parseOpenBrainConfigEntry(entry, source) {
-  const url = typeof entry?.url === "string" ? entry.url : null;
+  const rawUrl = typeof entry?.url === "string" ? entry.url : null;
+  if (!rawUrl) return null;
+  // Resolve `${env:NAME}` in the url so a single mcp.json can auto-select
+  // endpoints (e.g. tailnet at home vs. public DNS at work) via an env var.
+  // An unresolved placeholder (var unset) reads as unconfigured → degrades to L2.
+  const url = resolveEnvPlaceholder(rawUrl);
   if (!url) return null;
   const key = openBrainHeaderKey(entry)
     || openBrainQueryKey(url)

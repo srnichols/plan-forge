@@ -100,6 +100,37 @@ describe("readOpenBrainConfig", () => {
     expect(cfg.key).toBe("raw-key-123");
   });
 
+  it("resolves ${env:NAME} in the url (auto-select endpoint)", () => {
+    process.env.__TEST_OBURL = "https://brain.planforge.software/sse";
+    mkdirSync(join(dir, ".vscode"), { recursive: true });
+    writeFileSync(join(dir, ".vscode", "mcp.json"), JSON.stringify({
+      servers: {
+        openbrain: {
+          type: "sse",
+          url: "${env:__TEST_OBURL}",
+          headers: { "x-brain-key": "${env:__TEST_OBKEY}" },
+        },
+      },
+    }));
+    process.env.__TEST_OBKEY = "k";
+    const cfg = readOpenBrainConfig(dir);
+    expect(cfg).not.toBeNull();
+    expect(cfg.url).toBe("https://brain.planforge.software/sse");
+    delete process.env.__TEST_OBURL;
+    delete process.env.__TEST_OBKEY;
+  });
+
+  it("returns null when url ${env:NAME} is unset (degrades to L2)", () => {
+    delete process.env.__TEST_OBURL_UNSET;
+    mkdirSync(join(dir, ".vscode"), { recursive: true });
+    writeFileSync(join(dir, ".vscode", "mcp.json"), JSON.stringify({
+      servers: {
+        openbrain: { type: "sse", url: "${env:__TEST_OBURL_UNSET}" },
+      },
+    }));
+    expect(readOpenBrainConfig(dir)).toBeNull();
+  });
+
   it("returns null for stdio-mode (no SSE URL)", () => {
     mkdirSync(join(dir, ".vscode"), { recursive: true });
     writeFileSync(join(dir, ".vscode", "mcp.json"), JSON.stringify({

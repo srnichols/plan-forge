@@ -1355,7 +1355,7 @@ export function loadModelRouting(cwd) {
   } catch {
     // Invalid JSON or missing file — use defaults
   }
-  return { default: "claude-opus-4.6" };
+  return { default: "claude-opus-4.7" };
 }
 
 /**

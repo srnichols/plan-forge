@@ -11,9 +11,9 @@
  *   2. model.default               (shared project default)
  *   3. env-detected provider default:
  *        GITHUB_TOKEN      -> "gpt-4o-mini"     (GitHub Models — zero-key default)
- *        ANTHROPIC_API_KEY -> "claude-sonnet-4.5"
+ *        ANTHROPIC_API_KEY -> "claude-sonnet-4.6"
  *        OPENAI_API_KEY    -> "gpt-5.3-codex"
- *        XAI_API_KEY       -> "grok-4-fast"
+ *        XAI_API_KEY       -> "grok-4.20"
  *        (no key)          -> "gpt-4o-mini"      (caller must handle missing key)
  */
 
@@ -83,9 +83,9 @@ function resolveReasoningModel(forgeMasterBlock, forgeJson) {
     return forgeJson.model.default;
   }
   if (process.env.GITHUB_TOKEN) return "gpt-4o-mini";
-  if (process.env.ANTHROPIC_API_KEY) return "claude-sonnet-4.5";
+  if (process.env.ANTHROPIC_API_KEY) return "claude-sonnet-4.6";
   if (process.env.OPENAI_API_KEY) return "gpt-5.3-codex";
-  if (process.env.XAI_API_KEY) return "grok-4-fast";
+  if (process.env.XAI_API_KEY) return "grok-4.20";
   return null; // no key detected — auto-select will handle fallback
 }
 

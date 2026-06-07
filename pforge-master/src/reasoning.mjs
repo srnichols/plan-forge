@@ -49,7 +49,7 @@ const RECALL_LANES = new Set([LANES.OPERATIONAL, LANES.TROUBLESHOOT, LANES.ADVIS
 // ─── Quorum advisory — model set for multi-model fan-out ────────────
 
 const QUORUM_MODELS = [
-  { model: "claude-sonnet-4-20250514", provider: "anthropic" },
+  { model: "claude-sonnet-4.6", provider: "anthropic" },
   { model: "gpt-5.2", provider: "openai" },
   { model: "grok-4.20", provider: "xai" },
 ];

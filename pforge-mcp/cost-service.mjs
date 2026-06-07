@@ -1286,7 +1286,7 @@ export function buildQuorumConfigForMode(mode) {
  * @param {object} options.plan - Parsed plan object with slices and dag
  * @param {string|number} options.sliceNumber - Slice identifier (may be alphanumeric, e.g. "2A")
  * @param {"auto"|"power"|"speed"|"false"} [options.mode="auto"] - Quorum mode
- * @param {string} [options.model="claude-sonnet-4.5"] - Base model for pricing
+ * @param {string} [options.model="claude-sonnet-4.6"] - Base model for pricing
  * @param {string} [options.cwd] - Project root for history + complexity scoring
  * @returns {{
  *   estimatedCostUSD: number,
@@ -1339,7 +1339,7 @@ function _estimateSliceOverhead(quorumEligible, quorumConfig, tokensPerSlice, co
   return dryRunCost + reviewerCost;
 }
 
-export function estimateSlice({ plan, sliceNumber, mode = "auto", model = "claude-sonnet-4.5", cwd, env = process.env } = {}) {
+export function estimateSlice({ plan, sliceNumber, mode = "auto", model = "claude-sonnet-4.6", cwd, env = process.env } = {}) {
   if (!plan || !plan.slices) {
     throw new Error("estimateSlice: plan object with slices is required");
   }
@@ -1401,7 +1401,7 @@ export function estimateSlice({ plan, sliceNumber, mode = "auto", model = "claud
  * @param {object} options.plan - Parsed plan object (same shape estimatePlan expects)
  * @param {string} [options.cwd] - Project root for history lookup
  * @param {string|number} [options.resumeFrom] - Optional resume point
- * @param {string} [options.defaultModel] - Base model when quorum disabled (default: "claude-sonnet-4.5")
+ * @param {string} [options.defaultModel] - Base model when quorum disabled (default: "claude-sonnet-4.6")
  * @returns {{
  *   auto: object, power: object, speed: object, "false": object,
  *   recommended: "auto"|"power"|"speed"|"false",
@@ -1412,7 +1412,7 @@ export function estimateSlice({ plan, sliceNumber, mode = "auto", model = "claud
  *   slices[] — an additive per-slice breakdown with sliceNumber,
  *   projectedCostUSD, complexityScore, quorumEligible.
  */
-export function estimateQuorum({ plan, cwd, resumeFrom = null, defaultModel = "claude-sonnet-4.5" } = {}) {
+export function estimateQuorum({ plan, cwd, resumeFrom = null, defaultModel = "claude-sonnet-4.6" } = {}) {
   if (!plan || !plan.slices || !plan.dag) {
     throw new Error("estimateQuorum: plan object with slices and dag is required");
   }

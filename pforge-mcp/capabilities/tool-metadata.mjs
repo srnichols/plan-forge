@@ -292,7 +292,7 @@ export const TOOL_METADATA = {
         baseCostUSD: 0.0425,
         overheadUSD: 1.7998,
         complexityScore: 6,
-        model: "claude-sonnet-4.5",
+        model: "claude-sonnet-4.6",
         quorumEligible: true,
         rationale: "mode power: all slices quorum-eligible",
         generatedAt: "2026-04-20T18:00:00.000Z",

@@ -344,7 +344,7 @@ async function _callToolHandler_007_forge_estimate_slice(request, args) {
           plan,
           sliceNumber: args.sliceNumber,
           mode: args.mode ?? "auto",
-          model: args.model ?? "claude-sonnet-4.5",
+          model: args.model ?? "claude-sonnet-4.6",
           cwd,
         });
       } catch (err) {

@@ -2744,7 +2744,7 @@ async function loadConfig() {
 const PROVIDER_STATUS_REGISTRY = [
   { key: "GITHUB_TOKEN",      label: "GitHub Copilot",   models: "gpt-4o-mini, gpt-4o, claude-sonnet-4 (via models.github.ai)" },
   { key: "XAI_API_KEY",       label: "xAI Grok",          models: "grok-4.20, grok-4, grok-3-mini" },
-  { key: "ANTHROPIC_API_KEY", label: "Anthropic Claude", models: "claude-sonnet-4.5, claude-opus" },
+  { key: "ANTHROPIC_API_KEY", label: "Anthropic Claude", models: "claude-sonnet-4.6, claude-opus" },
   { key: "OPENAI_API_KEY",    label: "OpenAI",            models: "gpt-5, dall-e-3" },
 ];
 

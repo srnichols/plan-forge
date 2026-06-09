@@ -3,6 +3,11 @@
   "version": "3.8.1",
   "main": "server.mjs",
   "type": "module",
+  "exports": {
+    ".": "./src/index.mjs",
+    "./server.mjs": "./server.mjs",
+    "./src/*": "./src/*"
+  },
   "scripts": {
     "start": "node server.mjs",
     "start:mcp": "node server.mjs --mcp-stdio",

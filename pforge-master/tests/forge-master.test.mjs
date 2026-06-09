@@ -15,7 +15,7 @@ import { join } from "node:path";
 import {
   getForgeMasterConfig,
   FORGE_MASTER_DEFAULTS,
-} from "../../pforge-master/src/config.mjs";
+} from "../src/config.mjs";
 
 import {
   BASE_ALLOWLIST,
@@ -23,7 +23,7 @@ import {
   USAGE_HINTS,
   resolveAllowlist,
   isAllowlisted,
-} from "../../pforge-master/src/allowlist.mjs";
+} from "../src/allowlist.mjs";
 
 // ─── Helpers ────────────────────────────────────────────────────────
 
@@ -232,7 +232,7 @@ describe("forge-master system-prompt", () => {
 
 describe("forge-master index", () => {
   it("re-exports config and allowlist APIs", async () => {
-    const mod = await import("../forge-master/index.mjs");
+    const mod = await import("../src/index.mjs");
     expect(typeof mod.getForgeMasterConfig).toBe("function");
     expect(mod.FORGE_MASTER_DEFAULTS).toBeDefined();
     expect(mod.BASE_ALLOWLIST).toBeDefined();
@@ -243,7 +243,7 @@ describe("forge-master index", () => {
   });
 
   it("re-exports intent router APIs", async () => {
-    const mod = await import("../forge-master/index.mjs");
+    const mod = await import("../src/index.mjs");
     expect(typeof mod.classify).toBe("function");
     expect(mod.LANES).toBeDefined();
     expect(mod.LANE_TOOLS).toBeDefined();
@@ -251,7 +251,7 @@ describe("forge-master index", () => {
   });
 
   it("re-exports retrieval APIs", async () => {
-    const mod = await import("../forge-master/index.mjs");
+    const mod = await import("../src/index.mjs");
     expect(typeof mod.fetchContext).toBe("function");
     expect(mod.TOKEN_CAP).toBe(4000);
     expect(mod.L1_KEYS).toBeDefined();
@@ -267,7 +267,7 @@ import {
   LANES,
   LANE_TOOLS,
   OFFTOPIC_REDIRECT,
-} from "../../pforge-master/src/intent-router.mjs";
+} from "../src/intent-router.mjs";
 
 describe("forge-master intent router", () => {
   // ── Build lane (2 examples) ──
@@ -662,7 +662,7 @@ import {
   L3_KEYS,
   estimateTokens,
   summarizeValue,
-} from "../../pforge-master/src/retrieval.mjs";
+} from "../src/retrieval.mjs";
 
 describe("forge-master retrieval", () => {
   // ── Helper: mock recall that returns per-key data ──
@@ -868,7 +868,7 @@ import {
   invokeMany,
   summarize,
   SUMMARY_LIMIT,
-} from "../../pforge-master/src/tool-bridge.mjs";
+} from "../src/tool-bridge.mjs";
 
 describe("forge-master bridge", () => {
   const allowlist = [...BASE_ALLOWLIST];
@@ -1070,8 +1070,8 @@ import {
   buildToolSchemas,
   selectProvider,
   ABSOLUTE_CEILING,
-} from "../../pforge-master/src/reasoning.mjs";
-import { MockReasoningClient } from "../../pforge-master/src/__fixtures__/MockReasoningClient.mjs";
+} from "../src/reasoning.mjs";
+import { MockReasoningClient } from "../src/__fixtures__/MockReasoningClient.mjs";
 
 describe("forge-master reasoning", () => {
   let tmpDirR;
@@ -1358,7 +1358,7 @@ import {
   SUMMARIZE_THRESHOLD,
   SUMMARIZE_COUNT,
   _resetLocks,
-} from "../../pforge-master/src/persistence.mjs";
+} from "../src/persistence.mjs";
 
 describe("forge-master persistence", () => {
   afterEach(() => _resetLocks());
@@ -1724,13 +1724,13 @@ import {
   buildAnthropicTools,
   formatMessages as formatAnthropicMessages,
   parseResponse as parseAnthropicResponse,
-} from "../../pforge-master/src/providers/anthropic-tools.mjs";
+} from "../src/providers/anthropic-tools.mjs";
 
 import {
   buildOpenAITools,
   formatMessages as formatOpenAIMessages,
   parseResponse as parseOpenAIResponse,
-} from "../../pforge-master/src/providers/openai-tools.mjs";
+} from "../src/providers/openai-tools.mjs";
 
 describe("forge-master providers/anthropic-tools", () => {
   it("buildAnthropicTools produces input_schema format", () => {

@@ -10,7 +10,7 @@ import { tmpdir } from "node:os";
 import { resolve, dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { JSDOM } from "jsdom";
-import { FORGE_MASTER_DEFAULTS, getForgeMasterConfig } from "../../pforge-master/src/config.mjs";
+import { FORGE_MASTER_DEFAULTS, getForgeMasterConfig } from "@pforge/pforge-master";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const html = readFileSync(resolve(HERE, "..", "dashboard", "index.html"), "utf-8");

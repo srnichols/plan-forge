@@ -20,8 +20,8 @@
  */
 
 import { describe, it, expect } from "vitest";
-import { classify, LANES } from "../../pforge-master/src/intent-router.mjs";
-import { runTurn } from "../../pforge-master/src/reasoning.mjs";
+import { classify, LANES } from "../src/intent-router.mjs";
+import { runTurn } from "../src/reasoning.mjs";
 
 const SMOKE_PROMPT =
   "Should I refactor the orchestrator worker spawn logic or ship Phase-34 first?";

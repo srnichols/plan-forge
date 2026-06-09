@@ -4,7 +4,8 @@
   "private": true,
   "workspaces": [
     "pforge-mcp",
-    "pforge-master"
+    "pforge-master",
+    "pforge-sdk"
   ],
   "scripts": {
     "test": "npm test --workspaces --if-present",

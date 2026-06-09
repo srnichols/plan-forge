@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vitest";
-import { parseResponse as parseAnthropic } from "../../pforge-master/src/providers/anthropic-tools.mjs";
-import { parseResponse as parseOpenAI } from "../../pforge-master/src/providers/openai-tools.mjs";
-import { parseResponse as parseXAI } from "../../pforge-master/src/providers/xai-tools.mjs";
+import { parseResponse as parseAnthropic } from "../src/providers/anthropic-tools.mjs";
+import { parseResponse as parseOpenAI } from "../src/providers/openai-tools.mjs";
+import { parseResponse as parseXAI } from "../src/providers/xai-tools.mjs";
 
 describe("parseResponse cache-field coverage (Slice 8)", () => {
   it("Anthropic with 5m+1h split + cache_read", () => {

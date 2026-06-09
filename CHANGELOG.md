@@ -7,6 +7,34 @@ Format follows [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
+### Fixed
+
+- **Orchestrator no longer aborts with a libuv `UV_HANDLE_CLOSING` assertion
+  on worker teardown** — the shutdown handler wired the Node `"exit"` event
+  into the same loop that calls `child.kill()` on every tracked worker. The
+  `"exit"` handler runs after the event loop drains, when child-process
+  handles are already closing, so killing them tripped
+  `Assertion failed: !(handle->flags & UV_HANDLE_CLOSING)` and aborted the
+  process. Reproduced reliably on Windows when ≥2 parallel Full-Auto workers
+  failed auth and the run aborted fast. Shutdown now wires
+  SIGINT/SIGTERM/SIGHUP only (never `"exit"`) via a guarded, idempotent
+  `killTrackedChildren()` / `installChildCleanupHandlers()`. Also fixes a
+  leaked heartbeat `setInterval` in the worker `error` handler that kept
+  writing to stdout after rejection (the likely source of the one-char-per-line
+  crash-tail log corruption).
+
+### Added
+
+- **Full-Auto worker-backend preflight gate** (`assertWorkerBackendReady`) —
+  `runPlan` now verifies a usable execution backend before dispatching
+  workers. When the only CLI worker candidate failed authentication (e.g. `gh`
+  not authenticated), the run fails cleanly with `WORKER_AUTH_REQUIRED`
+  (`worker failed: no GitHub auth — run \`gh auth login\``) instead of
+  dispatching N doomed parallel workers. The `--estimate` path surfaces the
+  same condition as a non-blocking `workerWarning`. Direct-API models and
+  API-key-served models pass through; an explicit `--worker` override is
+  honored.
+
 ---
 
 ## [3.21.0] — 2026-05-23 — Forge-Master CTO defaults + audit tool

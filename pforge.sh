@@ -1969,7 +1969,9 @@ cmd_analyze() {
     local must_count should_count slice_count
     must_count=$(echo "$plan_content" | grep -ciE '^\s*[-*]\s*\*\*MUST\*\*' || echo 0)
     should_count=$(echo "$plan_content" | grep -ciE '^\s*[-*]\s*\*\*SHOULD\*\*' || echo 0)
-    slice_count=$(echo "$plan_content" | grep -c '^### Slice [0-9]' || echo 0)
+    # Accept h2/h3/h4 headers to match the canonical parser at
+    # pforge-mcp/orchestrator/plan-parser.mjs (/^#{2,4}\s+Slice\s+\d+\b/).
+    slice_count=$(echo "$plan_content" | grep -cE '^#{2,4}[[:space:]]+Slice[[:space:]]+[0-9]' || echo 0)
     local total_criteria=$((must_count + should_count))
 
     if [ "$total_criteria" -gt 0 ]; then

@@ -2254,8 +2254,11 @@ function Invoke-Analyze {
         }
     }
 
-    # Extract slice references
-    $sliceCount = ([regex]::Matches($planContent, '(?m)^###\s+Slice\s+\d')).Count
+    # Extract slice references — accept h2/h3/h4 headers to match the canonical
+    # parser at pforge-mcp/orchestrator/plan-parser.mjs (/^#{2,4}\s+Slice\s+\d+\b/).
+    # Slice titles commonly use an em-dash separator (### Slice N — Title); the
+    # regex anchors on the leading digit so the separator is irrelevant.
+    $sliceCount = ([regex]::Matches($planContent, '(?m)^#{2,4}\s+Slice\s+\d+\b')).Count
 
     if ($allCriteria.Count -gt 0) {
         # Check if slices reference criteria via Traces to:
@@ -2282,7 +2285,7 @@ function Invoke-Analyze {
         Write-Host "  ✅ $sliceCount execution slices found" -ForegroundColor Green
     }
     else {
-        Write-Host "  ⚠️  No execution slices found (### Slice N pattern)" -ForegroundColor Yellow
+        Write-Host "  ⚠️  No execution slices found (## / ### / #### Slice N pattern)" -ForegroundColor Yellow
     }
 
     Write-Host ""

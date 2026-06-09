@@ -7,7 +7,28 @@ Format follows [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
+## [3.22.0] — 2026-06-09 — Security, memory & orchestrator hardening + dependency-direction guard
+
 ### Fixed
+
+- **Shell-injection hardening (#217)** — every `exec()` call that interpolated
+  a variable into a shell string has been replaced with
+  `execFileSync(cmd, [args], opts)`, which passes each argument literally to
+  the kernel with no shell involved. Converted across `gh`/`git`/probe call
+  sites in the platform, safety, REST-API, orchestrator (run-plan,
+  worker-spawn, git-safety), anvil, and lattice surfaces. A new guard test
+  (`bug-217-no-shell-injection-exec.test.mjs`) recursively scans production
+  `.mjs` for `exec(... ${...})` patterns and fails if any reappear.
+- **OpenBrain drain delivers via SSE + resolves env-placeholder query keys
+  (#215)** — `runDrainPass` no longer routes through a local no-op dispatcher;
+  it opens an SSE client and delivers captures over it, closing the client in a
+  `finally`. Query-form OpenBrain keys (`?key=${env:NAME}`) now resolve the
+  env placeholder and rewrite the URL, fixing a downstream DLQ `HTTP_400`.
+- **`pforge analyze` accepts `h2`/`h4` slice headers (#223)** — slice detection
+  is no longer limited to a single heading level.
+- **Orchestrator parses prose `Depends-On:` lines and fails loud on dependency
+  deadlock (#225)** — dependency cycles now surface a clear error instead of
+  hanging.
 
 - **Orchestrator no longer aborts with a libuv `UV_HANDLE_CLOSING` assertion
   on worker teardown** — the shutdown handler wired the Node `"exit"` event
@@ -24,6 +45,13 @@ Format follows [Keep a Changelog](https://keepachangelog.com/).
   crash-tail log corruption).
 
 ### Added
+
+- **Dependency-direction guard (#224)** — new generic, config-driven audit
+  script `scripts/audit/dependency-direction.mjs` (npm `audit:dep-direction`)
+  that flags inner-layer packages importing outer-layer apps. Detects static
+  `import`/`export-from`, dynamic `import()`, and `require()`; supports
+  `--root` and `--gate` (exit 1) flags. Policy lives in
+  `scripts/audit/layer-policy.json` under `dependencyDirection`.
 
 - **Full-Auto worker-backend preflight gate** (`assertWorkerBackendReady`) —
   `runPlan` now verifies a usable execution backend before dispatching

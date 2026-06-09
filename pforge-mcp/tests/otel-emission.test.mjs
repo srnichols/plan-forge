@@ -114,12 +114,20 @@ describe("initOtel", () => {
   it("returns a promise when gate is open (graceful on missing packages)", async () => {
     process.env.OTEL_ENABLED = "true";
     const result = initOtel();
-    // Returns a promise (SDK bootstrap) — may resolve to null if packages absent
+    // Returns a promise (SDK bootstrap)
     expect(result).not.toBeNull();
     expect(typeof result.then).toBe("function");
-    // Await — should resolve to null (optional deps not installed in test env)
+    // Resolves to null when the optional OTel packages are absent, or to a
+    // started NodeSDK when they are installed (e.g. pulled in transitively).
+    // Either outcome is the graceful contract.
     const sdk = await result;
-    expect(sdk).toBeNull();
+    if (sdk === null) {
+      expect(sdk).toBeNull();
+    } else {
+      expect(typeof sdk.shutdown).toBe("function");
+      // Tear down so the live exporter does not leak into other tests.
+      await sdk.shutdown();
+    }
   });
 });
 

@@ -36,7 +36,7 @@ describe("cost-service: estimateSlice (Phase-27.2 Slice 1)", () => {
     expect(typeof result.baseCostUSD).toBe("number");
     expect(typeof result.overheadUSD).toBe("number");
     expect(typeof result.complexityScore).toBe("number");
-    expect(result.model).toBe("claude-sonnet-4.5");
+    expect(result.model).toBe("claude-sonnet-4.6");
     expect(typeof result.quorumEligible).toBe("boolean");
     expect(typeof result.rationale).toBe("string");
     expect(result.generatedAt).toMatch(/^\d{4}-\d{2}-\d{2}T/);

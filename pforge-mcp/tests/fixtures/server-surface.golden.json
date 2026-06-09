@@ -1064,7 +1064,7 @@
           },
           "model": {
             "type": "string",
-            "description": "Base model for pricing (default: 'claude-sonnet-4.5')."
+            "description": "Base model for pricing (default: 'claude-sonnet-4.6')."
           },
           "path": {
             "type": "string",

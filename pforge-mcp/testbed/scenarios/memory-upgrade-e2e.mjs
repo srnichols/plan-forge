@@ -30,7 +30,8 @@ import { createTmpForgeHome } from "../../tests/integration/memory-upgrade/helpe
 // ─── Inline mock exec for latticeIndex (no real git required) ────────────────
 
 function makeMockExec(fileList) {
-  return function mockExec(cmd) {
+  return function mockExec(file, args = []) {
+    const cmd = [file, ...(args || [])].join(" ");
     if (cmd.startsWith("git ls-files")) return fileList.join("\n") + "\n";
     return "";
   };

@@ -18,7 +18,7 @@ vi.mock("node:child_process", () => ({
   })),
 }));
 
-import { execSync } from "node:child_process";
+import { execFileSync as execSync } from "node:child_process";
 import {
   pushSliceSnapshot,
   popSliceSnapshot,
@@ -35,7 +35,8 @@ describe("Issue #178 — pushSliceSnapshot", () => {
     const result = pushSliceSnapshot({ cwd: "/fake/cwd", sliceNumber: 3 });
     expect(result).toEqual({ pushed: false, stashRef: null, reason: "clean-tree" });
     expect(execSync).toHaveBeenCalledTimes(1);
-    expect(execSync.mock.calls[0][0]).toBe("git status --porcelain");
+    expect(execSync.mock.calls[0][0]).toBe("git");
+    expect(execSync.mock.calls[0][1]).toEqual(["status", "--porcelain"]);
   });
 
   it("returns pushed:false when status is whitespace-only", () => {
@@ -55,7 +56,7 @@ describe("Issue #178 — pushSliceSnapshot", () => {
     expect(result.stashRef).toBe("pforge-slice-4-snapshot");
     expect(execSync).toHaveBeenCalledTimes(2);
     // #202: must include -u so untracked-only working trees still get stashed.
-    expect(execSync.mock.calls[1][0]).toBe(`git stash push -u -m "pforge-slice-4-snapshot"`);
+    expect(execSync.mock.calls[1][1]).toEqual(["stash", "push", "-u", "-m", "pforge-slice-4-snapshot"]);
   });
 
   it("#202 — captures untracked-only working tree (passes -u to git stash)", () => {
@@ -70,7 +71,7 @@ describe("Issue #178 — pushSliceSnapshot", () => {
     expect(result.pushed).toBe(true);
     expect(result.stashRef).toBe("pforge-slice-6-snapshot");
     // Critical assertion: the -u flag must be present.
-    expect(execSync.mock.calls[1][0]).toMatch(/^git stash push -u\b/);
+    expect(execSync.mock.calls[1][1].slice(0, 3)).toEqual(["stash", "push", "-u"]);
   });
 
   it("returns pushed:false on git failure (not-a-repo)", () => {
@@ -108,9 +109,9 @@ describe("Issue #178 / #201 — popSliceSnapshot (apply-then-drop)", () => {
     expect(result.restored).toBe(true);
     expect(result.stashRef).toBe("stash@{0}");
     expect(execSync).toHaveBeenCalledTimes(3);
-    expect(execSync.mock.calls[0][0]).toBe("git stash list");
-    expect(execSync.mock.calls[1][0]).toBe("git stash apply stash@{0}");
-    expect(execSync.mock.calls[2][0]).toBe("git stash drop stash@{0}");
+    expect(execSync.mock.calls[0][1]).toEqual(["stash", "list"]);
+    expect(execSync.mock.calls[1][1]).toEqual(["stash", "apply", "stash@{0}"]);
+    expect(execSync.mock.calls[2][1]).toEqual(["stash", "drop", "stash@{0}"]);
   });
 
   it("finds the right stash by message even when not at top of stack", () => {
@@ -129,8 +130,8 @@ describe("Issue #178 / #201 — popSliceSnapshot (apply-then-drop)", () => {
 
     expect(result.restored).toBe(true);
     expect(result.stashRef).toBe("stash@{2}");
-    expect(execSync.mock.calls[1][0]).toBe("git stash apply stash@{2}");
-    expect(execSync.mock.calls[2][0]).toBe("git stash drop stash@{2}");
+    expect(execSync.mock.calls[1][1]).toEqual(["stash", "apply", "stash@{2}"]);
+    expect(execSync.mock.calls[2][1]).toEqual(["stash", "drop", "stash@{2}"]);
   });
 
   it("returns restored:false when no matching stash exists (push reported clean-tree)", () => {
@@ -159,7 +160,7 @@ describe("Issue #178 / #201 — popSliceSnapshot (apply-then-drop)", () => {
     expect(result.error).toContain("git stash apply stash@{0}");
     // Critical: drop must NOT be called when apply failed.
     expect(execSync).toHaveBeenCalledTimes(2);
-    expect(execSync.mock.calls.some((c) => c[0].startsWith("git stash drop"))).toBe(false);
+    expect(execSync.mock.calls.some((c) => c[1]?.[0] === "stash" && c[1]?.[1] === "drop")).toBe(false);
   });
 
   it("returns conflict:true on merge conflict, stash preserved", () => {
@@ -276,8 +277,8 @@ describe("Issue #201 — cleanupStaleSnapshots janitor", () => {
     expect(result.dropped).toEqual(["stash@{2}", "stash@{1}"]);
     expect(result.errors).toEqual([]);
     // Verify drop commands hit the right refs in reverse order.
-    expect(execSync.mock.calls[1][0]).toBe("git stash drop stash@{2}");
-    expect(execSync.mock.calls[2][0]).toBe("git stash drop stash@{1}");
+    expect(execSync.mock.calls[1][1]).toEqual(["stash", "drop", "stash@{2}"]);
+    expect(execSync.mock.calls[2][1]).toEqual(["stash", "drop", "stash@{1}"]);
   });
 
   it("ignores non-pforge stashes regardless of age", () => {
@@ -296,7 +297,7 @@ describe("Issue #201 — cleanupStaleSnapshots janitor", () => {
     expect(result.scanned).toBe(3);
     expect(result.dropped).toEqual(["stash@{2}"]);
     // Only one drop call total.
-    expect(execSync.mock.calls.filter((c) => c[0].startsWith("git stash drop"))).toHaveLength(1);
+    expect(execSync.mock.calls.filter((c) => c[1]?.[0] === "stash" && c[1]?.[1] === "drop")).toHaveLength(1);
   });
 
   it("returns scanned:0, dropped:[] when stash list is empty", () => {
@@ -352,10 +353,10 @@ describe("Issue #178 — push/pop symmetry", () => {
     expect(pop.restored).toBe(true);
 
     expect(execSync).toHaveBeenCalledTimes(5);
-    expect(execSync.mock.calls[0][0]).toBe("git status --porcelain");
-    expect(execSync.mock.calls[1][0]).toContain("git stash push");
-    expect(execSync.mock.calls[2][0]).toBe("git stash list");
-    expect(execSync.mock.calls[3][0]).toBe("git stash apply stash@{0}");
-    expect(execSync.mock.calls[4][0]).toBe("git stash drop stash@{0}");
+    expect(execSync.mock.calls[0][1]).toEqual(["status", "--porcelain"]);
+    expect(execSync.mock.calls[1][1].slice(0, 2)).toEqual(["stash", "push"]);
+    expect(execSync.mock.calls[2][1]).toEqual(["stash", "list"]);
+    expect(execSync.mock.calls[3][1]).toEqual(["stash", "apply", "stash@{0}"]);
+    expect(execSync.mock.calls[4][1]).toEqual(["stash", "drop", "stash@{0}"]);
   });
 });

@@ -1,4 +1,4 @@
-import { execSync } from "node:child_process";
+import { execSync, execFileSync } from "node:child_process";
 import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync, appendFileSync, watchFile, unwatchFile, statSync, openSync, readSync, closeSync, renameSync, createWriteStream } from "node:fs";
 import { resolve, join, dirname, basename, isAbsolute, extname } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -418,7 +418,7 @@ function _resolveForgeGithubMetricsRepoSlug(args, cwd) {
 
 function _forgeGithubMetricsApi(cwd, apiPath) {
   try {
-    return JSON.parse(execSync(`gh api ${apiPath}`, {
+    return JSON.parse(execFileSync("gh", ["api", apiPath], {
       cwd,
       encoding: "utf-8",
       stdio: ["ignore", "pipe", "pipe"],
@@ -431,7 +431,7 @@ function _forgeGithubMetricsApi(cwd, apiPath) {
 
 function _countForgeGithubOpenPullRequests(cwd, repoSlug) {
   try {
-    const prList = JSON.parse(execSync(`gh pr list --repo ${repoSlug} --state open --json number --limit 500`, {
+    const prList = JSON.parse(execFileSync("gh", ["pr", "list", "--repo", repoSlug, "--state", "open", "--json", "number", "--limit", "500"], {
       cwd,
       encoding: "utf-8",
       stdio: ["ignore", "pipe", "pipe"],
@@ -445,7 +445,7 @@ function _countForgeGithubOpenPullRequests(cwd, repoSlug) {
 
 function _countForgeGithubOpenIssues(cwd, repoSlug) {
   try {
-    const issueList = JSON.parse(execSync(`gh issue list --repo ${repoSlug} --state open --json number --limit 500`, {
+    const issueList = JSON.parse(execFileSync("gh", ["issue", "list", "--repo", repoSlug, "--state", "open", "--json", "number", "--limit", "500"], {
       cwd,
       encoding: "utf-8",
       stdio: ["ignore", "pipe", "pipe"],
@@ -470,7 +470,7 @@ function _summarizeForgeGithubCommitActivity(commitActivity, periodDays) {
 function _countForgeGithubContributors(cwd, repoSlug, contributors) {
   if (contributors === null) return null;
   try {
-    const allContrib = JSON.parse(execSync(`gh api repos/${repoSlug}/contributors?per_page=100 --paginate`, {
+    const allContrib = JSON.parse(execFileSync("gh", ["api", `repos/${repoSlug}/contributors?per_page=100`, "--paginate"], {
       cwd,
       encoding: "utf-8",
       stdio: ["ignore", "pipe", "pipe"],
@@ -591,7 +591,7 @@ function _th_081_resolveRepoSlug(args, cwd) {
 
 function _th_081_ghApi(cwd, apiPath) {
   try {
-    return JSON.parse(execSync(`gh api ${apiPath}`, {
+    return JSON.parse(execFileSync("gh", ["api", apiPath], {
       cwd,
       encoding: "utf-8",
       stdio: ["ignore", "pipe", "pipe"],
@@ -604,7 +604,7 @@ function _th_081_ghApi(cwd, apiPath) {
 
 function _th_081_getOpenPullRequests(cwd, repoSlug) {
   try {
-    const prList = JSON.parse(execSync(`gh pr list --repo ${repoSlug} --state open --json number --limit 500`, {
+    const prList = JSON.parse(execFileSync("gh", ["pr", "list", "--repo", repoSlug, "--state", "open", "--json", "number", "--limit", "500"], {
       cwd,
       encoding: "utf-8",
       stdio: ["ignore", "pipe", "pipe"],
@@ -618,7 +618,7 @@ function _th_081_getOpenPullRequests(cwd, repoSlug) {
 
 function _th_081_getOpenIssues(cwd, repoSlug) {
   try {
-    const issueList = JSON.parse(execSync(`gh issue list --repo ${repoSlug} --state open --json number --limit 500`, {
+    const issueList = JSON.parse(execFileSync("gh", ["issue", "list", "--repo", repoSlug, "--state", "open", "--json", "number", "--limit", "500"], {
       cwd,
       encoding: "utf-8",
       stdio: ["ignore", "pipe", "pipe"],
@@ -645,7 +645,7 @@ function _th_081_getContributorCount(cwd, repoSlug) {
   const contributors = _th_081_ghApi(cwd, `repos/${repoSlug}/contributors?per_page=1&anon=false`);
   if (contributors === null) return null;
   try {
-    const allContrib = JSON.parse(execSync(`gh api repos/${repoSlug}/contributors?per_page=100 --paginate`, {
+    const allContrib = JSON.parse(execFileSync("gh", ["api", `repos/${repoSlug}/contributors?per_page=100`, "--paginate"], {
       cwd,
       encoding: "utf-8",
       stdio: ["ignore", "pipe", "pipe"],

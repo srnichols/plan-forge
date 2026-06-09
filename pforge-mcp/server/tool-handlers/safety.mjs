@@ -1,4 +1,4 @@
-import { execSync } from "node:child_process";
+import { execSync, execFileSync } from "node:child_process";
 import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync, appendFileSync, watchFile, unwatchFile, statSync, openSync, readSync, closeSync, renameSync, createWriteStream } from "node:fs";
 import { resolve, join, dirname, basename, isAbsolute, extname } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -1193,7 +1193,7 @@ function _getForgeSecretScanType(line) {
 
 function _getForgeSecretScanDiff(cwd, since) {
   try {
-    return { diffOutput: execSync(`git diff ${since}`, { cwd, encoding: "utf-8", timeout: 30_000 }) };
+    return { diffOutput: execFileSync("git", ["diff", since], { cwd, encoding: "utf-8", timeout: 30_000 }) };
   } catch (err) {
     if (err.status === 128 || (err.message && err.message.includes("not a git repository"))) {
       return {
@@ -1347,7 +1347,7 @@ function _052_forge_secret_scan_getType(addedLine) {
 
 function _052_forge_secret_scan_readDiff(cwd, since, args, t0) {
   try {
-    return { diffOutput: execSync(`git diff ${since}`, { cwd, encoding: "utf-8", timeout: 30_000 }) };
+    return { diffOutput: execFileSync("git", ["diff", since], { cwd, encoding: "utf-8", timeout: 30_000 }) };
   } catch (err) {
     if (err.status === 128 || (err.message && err.message.includes("not a git repository"))) {
       const graceful = { clean: null, scannedFiles: 0, findings: [], error: "git unavailable" };
@@ -1449,7 +1449,7 @@ function _th_052_shannonEntropy(str) {
 
 function _th_052_readSecretDiff(cwd, since) {
   try {
-    return { diffOutput: execSync(`git diff ${since}`, { cwd, encoding: "utf-8", timeout: 30_000 }) };
+    return { diffOutput: execFileSync("git", ["diff", since], { cwd, encoding: "utf-8", timeout: 30_000 }) };
   } catch (err) {
     if (err.status === 128 || (err.message && err.message.includes("not a git repository"))) {
       return { graceful: { clean: null, scannedFiles: 0, findings: [], error: "git unavailable" } };

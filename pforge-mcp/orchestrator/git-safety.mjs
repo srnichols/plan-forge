@@ -95,14 +95,14 @@ export function loadTeardownGuardConfig(cwd) {
  * @returns {{ ok: boolean, failures: string[], reflogTail: string[] }}
  */
 export function verifyBranchSafety(baseline, config, cwd, deps = {}) {
-  const exec = deps.exec || ((cmd, opts) => execSync(cmd, opts));
+  const exec = deps.exec || ((file, args, opts) => execFileSync(file, args, opts));
   const failures = [];
   let reflogTail = [];
   let localBranchMissing = false;
 
   // 1. Local branch ref still exists
   try {
-    exec(`git show-ref --verify refs/heads/${baseline.branch}`, {
+    exec("git", ["show-ref", "--verify", `refs/heads/${baseline.branch}`], {
       cwd, encoding: "utf-8", timeout: 5000, stdio: "pipe",
     });
   } catch {
@@ -112,7 +112,7 @@ export function verifyBranchSafety(baseline, config, cwd, deps = {}) {
 
   // 2. Baseline HEAD still reachable
   try {
-    exec(`git cat-file -e ${baseline.headSha}^{commit}`, {
+    exec("git", ["cat-file", "-e", `${baseline.headSha}^{commit}`], {
       cwd, encoding: "utf-8", timeout: 5000, stdio: "pipe",
     });
   } catch {
@@ -124,7 +124,7 @@ export function verifyBranchSafety(baseline, config, cwd, deps = {}) {
     try {
       const remoteName = baseline.upstream.split("/")[0] || "origin";
       const remoteBranch = baseline.upstream.split("/").slice(1).join("/") || baseline.branch;
-      const lsRemote = exec(`git ls-remote --heads ${remoteName} ${remoteBranch}`, {
+      const lsRemote = exec("git", ["ls-remote", "--heads", remoteName, remoteBranch], {
         cwd, encoding: "utf-8", timeout: 10000, stdio: "pipe",
       }).trim();
       if (!lsRemote) {
@@ -152,7 +152,7 @@ export function verifyBranchSafety(baseline, config, cwd, deps = {}) {
   // On failure, capture reflog for recovery
   if (failures.length > 0) {
     try {
-      reflogTail = exec("git reflog -n 20 --format=%H\\ %gs", {
+      reflogTail = exec("git", ["reflog", "-n", "20", "--format=%H %gs"], {
         cwd, encoding: "utf-8", timeout: 5000, stdio: "pipe",
       }).trim().split("\n");
     } catch { /* reflog unavailable */ }
@@ -173,7 +173,7 @@ export function verifyBranchSafety(baseline, config, cwd, deps = {}) {
  */
 function resolveBranchWorktreePath(branch, cwd, exec) {
   try {
-    const porcelain = exec("git worktree list --porcelain", {
+    const porcelain = exec("git", ["worktree", "list", "--porcelain"], {
       cwd, encoding: "utf-8", timeout: 5000, stdio: "pipe",
     });
     // Porcelain format: blocks separated by blank lines.
@@ -240,8 +240,9 @@ export function captureAbsorbedCommits({ cwd = process.cwd(), fromSha, toSha = "
   if (!fromSha) return [];
   let log;
   try {
-    log = execSync(
-      `git log --reverse --format=%H%x09%an%x09%s ${fromSha}..${toSha}`,
+    log = execFileSync(
+      "git",
+      ["log", "--reverse", "--format=%H%x09%an%x09%s", `${fromSha}..${toSha}`],
       { cwd, encoding: "utf-8", timeout: 5_000 },
     );
   } catch {
@@ -254,7 +255,7 @@ export function captureAbsorbedCommits({ cwd = process.cwd(), fromSha, toSha = "
     if (!sha) continue;
     let diffstat = null;
     try {
-      const shortstat = execSync(`git show --shortstat --format= ${sha}`, { cwd, encoding: "utf-8", timeout: 5_000 });
+      const shortstat = execFileSync("git", ["show", "--shortstat", "--format=", sha], { cwd, encoding: "utf-8", timeout: 5_000 });
       diffstat = parseShortstat(shortstat);
     } catch { /* ignore */ }
     commits.push({ sha, author: author || "unknown", subject: rest.join("\t") || "", diffstat });
@@ -297,14 +298,14 @@ export function snapshotPreSliceState({ cwd = process.cwd() } = {}) {
  * @param {{ cwd?: string, sliceNumber: string|number, _execSync?: Function }} params
  * @returns {{ pushed: boolean, stashRef: string|null, reason?: string }}
  */
-export function pushSliceSnapshot({ cwd = process.cwd(), sliceNumber, _execSync = execSync } = {}) {
+export function pushSliceSnapshot({ cwd = process.cwd(), sliceNumber, _execSync = execFileSync } = {}) {
   const stashRef = `pforge-slice-${sliceNumber}-snapshot`;
   try {
-    const status = _execSync("git status --porcelain", { cwd, encoding: "utf-8", timeout: 5_000 }).toString().trim();
+    const status = _execSync("git", ["status", "--porcelain"], { cwd, encoding: "utf-8", timeout: 5_000 }).toString().trim();
     if (!status) return { pushed: false, stashRef: null, reason: "clean-tree" };
     // #202: `-u` (--include-untracked) — without it, an untracked-only tree
     // is silently skipped and the caller is misled into thinking we stashed.
-    _execSync(`git stash push -u -m "${stashRef}"`, { cwd, encoding: "utf-8", timeout: 10_000 });
+    _execSync("git", ["stash", "push", "-u", "-m", stashRef], { cwd, encoding: "utf-8", timeout: 10_000 });
     return { pushed: true, stashRef };
   } catch (err) {
     return { pushed: false, stashRef: null, reason: (err?.message || "git-failed").slice(0, 200) };
@@ -337,12 +338,12 @@ export function pushSliceSnapshot({ cwd = process.cwd(), sliceNumber, _execSync 
  * @param {{ cwd?: string, sliceNumber: string|number, _execSync?: Function }} params
  * @returns {{ restored: boolean, conflict?: boolean, dirtyTree?: boolean, error?: string, stashRef?: string }}
  */
-export function popSliceSnapshot({ cwd = process.cwd(), sliceNumber, _execSync = execSync } = {}) {
+export function popSliceSnapshot({ cwd = process.cwd(), sliceNumber, _execSync = execFileSync } = {}) {
   const message = `pforge-slice-${sliceNumber}-snapshot`;
   // Step 1: find the stash ref by message (more reliable than top-of-stack).
   let stashRef = null;
   try {
-    const list = _execSync("git stash list", { cwd, encoding: "utf-8", timeout: 5_000 }).toString();
+    const list = _execSync("git", ["stash", "list"], { cwd, encoding: "utf-8", timeout: 5_000 }).toString();
     for (const line of list.split(/\r?\n/)) {
       // Match e.g. "stash@{2}: On master: pforge-slice-3-snapshot"
       const m = line.match(/^(stash@\{\d+\}):\s*[^:]*:\s*(.+)$/);
@@ -357,7 +358,7 @@ export function popSliceSnapshot({ cwd = process.cwd(), sliceNumber, _execSync =
   }
   // Step 2: apply (non-destructive). On success, drop. On failure, leave intact.
   try {
-    _execSync(`git stash apply ${stashRef}`, { cwd, encoding: "utf-8", timeout: 15_000, stdio: "pipe" });
+    _execSync("git", ["stash", "apply", stashRef], { cwd, encoding: "utf-8", timeout: 15_000, stdio: "pipe" });
   } catch (err) {
     const stderr = (err?.stderr?.toString?.() || err?.message || "").toString().trim();
     const conflict = /conflict|CONFLICT/i.test(stderr);
@@ -373,7 +374,7 @@ export function popSliceSnapshot({ cwd = process.cwd(), sliceNumber, _execSync =
   }
   // Step 3: drop only after successful apply.
   try {
-    _execSync(`git stash drop ${stashRef}`, { cwd, encoding: "utf-8", timeout: 10_000, stdio: "pipe" });
+    _execSync("git", ["stash", "drop", stashRef], { cwd, encoding: "utf-8", timeout: 10_000, stdio: "pipe" });
   } catch {
     // Apply succeeded but drop failed — non-fatal, operator can clean up.
   }
@@ -447,7 +448,7 @@ export function attachSliceSnapshotRestore({
 export function cleanupStaleSnapshots({
   cwd = process.cwd(),
   maxAgeDays = 7,
-  _execSync = execSync,
+  _execSync = execFileSync,
   _now = () => new Date(),
 } = {}) {
   const result = { scanned: 0, dropped: [], errors: [] };
@@ -455,7 +456,8 @@ export function cleanupStaleSnapshots({
   try {
     // `%gd %ct %s` → stash ref, committer Unix timestamp, subject.
     list = _execSync(
-      'git stash list --format="%gd|%ct|%s"',
+      "git",
+      ["stash", "list", "--format=%gd|%ct|%s"],
       { cwd, encoding: "utf-8", timeout: 5_000 },
     ).toString();
   } catch (err) {
@@ -481,7 +483,7 @@ export function cleanupStaleSnapshots({
   // Drop in reverse so earlier refs stay stable (stash@{N} indexes shift down).
   for (const ref of toDrop.reverse()) {
     try {
-      _execSync(`git stash drop ${ref}`, { cwd, encoding: "utf-8", timeout: 5_000, stdio: "pipe" });
+      _execSync("git", ["stash", "drop", ref], { cwd, encoding: "utf-8", timeout: 5_000, stdio: "pipe" });
       result.dropped.push(ref);
     } catch (err) {
       result.errors.push(`drop ${ref}: ${(err?.message || "").slice(0, 100)}`);
@@ -607,7 +609,7 @@ export function verifyFilesModified({ slice, cwd = process.cwd(), startSha = nul
 
   if (startSha) {
     try {
-      const diffOut = execSync(`git diff --name-only ${startSha} HEAD`, {
+      const diffOut = execFileSync("git", ["diff", "--name-only", startSha, "HEAD"], {
         cwd, encoding: "utf-8", timeout: 5_000,
       });
       for (const p of diffOut.split(/\r?\n/)) {
@@ -665,7 +667,7 @@ function _handleCleanTreeMaybeWorkerCommit({ slice, cwd, startSha, eventBus }) {
     const absorbedCommits = captureAbsorbedCommits({ cwd, fromSha: startSha, toSha: currentSha });
     let codeChanges = null;
     try {
-      const shortstat = execSync(`git show --shortstat --format= ${currentSha}`, { cwd, encoding: "utf-8", timeout: 5_000 });
+      const shortstat = execFileSync("git", ["show", "--shortstat", "--format=", currentSha], { cwd, encoding: "utf-8", timeout: 5_000 });
       codeChanges = parseShortstat(shortstat);
     } catch { /* ignore */ }
     const evt = { sliceNumber: slice.number, sha: currentSha, message: "(worker-committed)", source: "worker" };
@@ -723,7 +725,7 @@ function _stageWorkerOrAll(workerPaths, cwd) {
 
 function _captureCommitStats(sha, cwd) {
   try {
-    const shortstat = execSync(`git show --shortstat --format= ${sha}`, { cwd, encoding: "utf-8", timeout: 5_000 });
+    const shortstat = execFileSync("git", ["show", "--shortstat", "--format=", sha], { cwd, encoding: "utf-8", timeout: 5_000 });
     return parseShortstat(shortstat);
   } catch { return null; }
 }

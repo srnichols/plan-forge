@@ -1,4 +1,4 @@
-import { execSync } from "node:child_process";
+import { execSync, execFileSync } from "node:child_process";
 import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync, statSync } from "node:fs";
 import { resolve } from "node:path";
 import {
@@ -215,7 +215,7 @@ export function _registerCrucibleHotspotRoutes(app) {
       }
 
       if (!cached) {
-        const raw = execSync(`git log --format=format: --name-only --since="${since}"`, { cwd: PROJECT_DIR, encoding: "utf-8", timeout: 30_000 });
+        const raw = execFileSync("git", ["log", "--format=format:", "--name-only", `--since=${since}`], { cwd: PROJECT_DIR, encoding: "utf-8", timeout: 30_000 });
         const counts = {};
         for (const line of raw.split("\n")) {
           const f = line.trim();

@@ -21,7 +21,7 @@ import {
   existsSync, mkdirSync, readFileSync, writeFileSync, statSync,
 } from 'node:fs';
 import { resolve, join, relative, isAbsolute, extname } from 'node:path';
-import { execSync } from 'node:child_process';
+import { execFileSync } from 'node:child_process';
 import { withAnvil } from './anvil.mjs';
 
 // ─── Constants ────────────────────────────────────────────────────────────────
@@ -75,7 +75,7 @@ function assertPathsInsideRepo(root, resolvedPaths) {
 }
 
 function getExec(deps = {}) {
-  return deps.exec ?? ((cmd, opts) => execSync(cmd, opts));
+  return deps.exec ?? ((file, args, opts) => execFileSync(file, args, opts));
 }
 
 /**
@@ -85,7 +85,7 @@ function getExec(deps = {}) {
 function listRepoFiles(root, deps = {}) {
   const exec = getExec(deps);
   try {
-    const out = exec('git ls-files --cached --others --exclude-standard', {
+    const out = exec('git', ['ls-files', '--cached', '--others', '--exclude-standard'], {
       cwd: root,
       encoding: 'utf8',
       stdio: ['pipe', 'pipe', 'pipe'],
@@ -104,7 +104,7 @@ function listRepoFiles(root, deps = {}) {
 function listChangedFiles(root, since, deps = {}) {
   const exec = getExec(deps);
   try {
-    const out = exec(`git diff --name-only ${since} HEAD`, {
+    const out = exec('git', ['diff', '--name-only', since, 'HEAD'], {
       cwd: root,
       encoding: 'utf8',
       stdio: ['pipe', 'pipe', 'pipe'],

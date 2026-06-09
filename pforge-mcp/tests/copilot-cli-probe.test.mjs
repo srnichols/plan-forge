@@ -18,9 +18,10 @@
 
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 
-// Mock child_process BEFORE importing orchestrator so execSync is the spy.
+// Mock child_process BEFORE importing orchestrator so execFileSync is the spy.
 vi.mock("node:child_process", () => ({
   execSync: vi.fn(),
+  execFileSync: vi.fn(),
   spawn: vi.fn(() => ({
     on: vi.fn(),
     stdout: { on: vi.fn() },
@@ -29,7 +30,7 @@ vi.mock("node:child_process", () => ({
   })),
 }));
 
-import { execSync } from "node:child_process";
+import { execFileSync } from "node:child_process";
 import { classifyProbeFailure, detectWorkers, resetCliWorkersCache } from "../orchestrator.mjs";
 
 // ─── classifyProbeFailure unit tests (issue #159) ────────────────────────────
@@ -142,7 +143,8 @@ function mockProbes(ghCopilotPlan = {}) {
     return "Usage: gh copilot -- -p <prompt> --yolo -p, --no-ask-user --output-format text\n";
   };
 
-  execSync.mockImplementation((cmd) => {
+  execFileSync.mockImplementation((file, args) => {
+    const cmd = [file, ...(args || [])].join(" ");
     // Standalone copilot probe (primary for gh-copilot worker)
     if (/^copilot\s/.test(cmd)) {
       switch (ghCopilotPlan.primary) {
@@ -215,7 +217,7 @@ describe("detectWorkers — issue #157 honours probe.fallback for gh-copilot", (
     expect(gh.failureCategory).toBe("auth");
     // Verify fallback was NOT attempted: no `gh copilot --version` call
     // should appear, even though the mock would have returned success for it.
-    const fallbackCalls = execSync.mock.calls.filter((c) => /^gh\s+copilot\s+--version/.test(c[0]));
+    const fallbackCalls = execFileSync.mock.calls.filter((c) => /^gh\s+copilot\s+--version/.test([c[0], ...(c[1] || [])].join(" ")));
     expect(fallbackCalls.length).toBe(0);
   });
 
@@ -225,7 +227,7 @@ describe("detectWorkers — issue #157 honours probe.fallback for gh-copilot", (
     const gh = workers.find((w) => w.name === "gh-copilot");
     expect(gh.available).toBe(false);
     expect(gh.failureCategory).toBe("timeout");
-    const fallbackCalls = execSync.mock.calls.filter((c) => /^gh\s+copilot\s+--version/.test(c[0]));
+    const fallbackCalls = execFileSync.mock.calls.filter((c) => /^gh\s+copilot\s+--version/.test([c[0], ...(c[1] || [])].join(" ")));
     expect(fallbackCalls.length).toBe(0);
   });
 });
@@ -251,13 +253,13 @@ describe("detectWorkers — _cliWorkersCache TTL & resetCliWorkersCache() contra
     mockProbes({ primary: "enoent", fallback: "enoent" });
     const first = detectWorkers();
     expect(first.find((w) => w.name === "gh-copilot").available).toBe(false);
-    const callCountAfterFirst = execSync.mock.calls.length;
+    const callCountAfterFirst = execFileSync.mock.calls.length;
     expect(callCountAfterFirst).toBeGreaterThan(0); // probed at least once
 
-    // Second call (no reset) should hit the cache — zero new execSync calls.
+    // Second call (no reset) should hit the cache — zero new execFileSync calls.
     const second = detectWorkers();
     expect(second.find((w) => w.name === "gh-copilot").available).toBe(false);
-    expect(execSync.mock.calls.length).toBe(callCountAfterFirst);
+    expect(execFileSync.mock.calls.length).toBe(callCountAfterFirst);
   });
 
   it("(cache-B) resetCliWorkersCache() forces re-probe — recovers when binary becomes available", () => {
@@ -265,22 +267,22 @@ describe("detectWorkers — _cliWorkersCache TTL & resetCliWorkersCache() contra
     mockProbes({ primary: "enoent", fallback: "enoent" });
     const first = detectWorkers();
     expect(first.find((w) => w.name === "gh-copilot").available).toBe(false);
-    const callsAfterFirst = execSync.mock.calls.length;
+    const callsAfterFirst = execFileSync.mock.calls.length;
 
     // Now the binary becomes available (simulates: stale handle released,
     // transient PATH issue resolved, etc.). Without the reset, the cache
     // would keep returning "unavailable" for 60 seconds.
     mockProbes({ primary: "success" });
 
-    // Without reset → cached failure persists, no new execSync calls.
+    // Without reset → cached failure persists, no new execFileSync calls.
     const stillCached = detectWorkers();
     expect(stillCached.find((w) => w.name === "gh-copilot").available).toBe(false);
-    expect(execSync.mock.calls.length).toBe(callsAfterFirst);
+    expect(execFileSync.mock.calls.length).toBe(callsAfterFirst);
 
     // With reset → re-probes and now sees the binary.
     resetCliWorkersCache();
     const recovered = detectWorkers();
     expect(recovered.find((w) => w.name === "gh-copilot").available).toBe(true);
-    expect(execSync.mock.calls.length).toBeGreaterThan(callsAfterFirst);
+    expect(execFileSync.mock.calls.length).toBeGreaterThan(callsAfterFirst);
   });
 });

@@ -105,7 +105,7 @@ export { PROPOSED_FIX_DIR };
  */
 export function defaultRunGitApply({ cwd, args, stdin }) {
   try {
-    execSync(`git ${args.join(" ")}`, {
+    execFileSync("git", args, {
       cwd,
       input: stdin,
       stdio: ["pipe", "pipe", "pipe"],
@@ -1544,7 +1544,7 @@ function triggerCiWorkflow(ciConfig, eventBus) {
         args.push("-f", `${key}=${value}`);
       }
     }
-    execSync(`gh ${args.join(" ")}`, { encoding: "utf-8", timeout: 30_000 });
+    execFileSync("gh", args, { encoding: "utf-8", timeout: 30_000 });
 
     const result = { workflow, ref, status: "triggered", timestamp };
     eventBus.emit("ci-triggered", result);

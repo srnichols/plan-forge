@@ -20,7 +20,7 @@ import {
 } from "node:fs";
 import { resolve, join } from "node:path";
 import { createHash, randomUUID } from "node:crypto";
-import { execSync } from "node:child_process";
+import { execFileSync } from "node:child_process";
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -351,11 +351,11 @@ export function anvilRebuild(opts = {}, deps = {}) {
   }
 
   const cwd = deps.cwd || process.cwd();
-  const exec = deps.exec || ((cmd, o) => execSync(cmd, o).toString());
+  const exec = deps.exec || ((file, a, o) => execFileSync(file, a, o).toString());
 
   let diffOutput = "";
   try {
-    diffOutput = exec(`git diff --name-only ${since} HEAD`, {
+    diffOutput = exec("git", ["diff", "--name-only", since, "HEAD"], {
       cwd,
       encoding: "utf-8",
       timeout: 10_000,

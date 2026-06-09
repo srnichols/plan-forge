@@ -1,4 +1,4 @@
-import { execSync } from "node:child_process";
+import { execFileSync } from "node:child_process";
 import { resolve } from "node:path";
 import { runPforge, findProjectRoot } from "./helpers.mjs";
 import { withAnvil } from "../anvil.mjs";
@@ -73,7 +73,7 @@ export async function _temperingScanAnvilCompute(args = {}, deps = {}) {
 
 export async function _hotspotAnvilCompute(args = {}, deps = {}) {
   const {
-    _execSync = execSync,
+    _execSync = execFileSync,
     _withAnvil = withAnvil,
     _codeHash = _SERVER_CODE_HASH,
     _cwd = args.path ? findProjectRoot(resolve(args.path)) : findProjectRoot(PROJECT_DIR),
@@ -84,7 +84,7 @@ export async function _hotspotAnvilCompute(args = {}, deps = {}) {
 
   return _withAnvil(
     () => {
-      const raw = _execSync(`git log --format=format: --name-only --since="${since}"`, {
+      const raw = _execSync("git", ["log", "--format=format:", "--name-only", `--since=${since}`], {
         cwd: _cwd, encoding: "utf-8", timeout: 30_000,
       });
       const counts = {};

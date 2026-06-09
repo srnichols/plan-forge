@@ -10,6 +10,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 
 vi.mock("node:child_process", () => ({
   execSync: vi.fn(),
+  execFileSync: vi.fn(),
   spawn: vi.fn(() => ({
     on: vi.fn(),
     stdout: { on: vi.fn() },
@@ -18,7 +19,7 @@ vi.mock("node:child_process", () => ({
   })),
 }));
 
-import { execSync } from "node:child_process";
+import { execSync, execFileSync } from "node:child_process";
 import {
   extractFilesModifiedExhaustive,
   verifyFilesModified,
@@ -143,9 +144,8 @@ describe("verifyFilesModified — Issue #152 verifier", () => {
       ],
     };
 
-    execSync
-      .mockReturnValueOnce("TimeTracker.slnx\n")  // git diff --name-only <sha> HEAD
-      .mockReturnValueOnce("");                     // git status --porcelain (clean)
+    execFileSync.mockReturnValueOnce("TimeTracker.slnx\n");  // git diff --name-only <sha> HEAD (execFileSync)
+    execSync.mockReturnValueOnce("");                         // git status --porcelain (clean)
 
     const result = verifyFilesModified({ slice, cwd: "/fake/cwd", startSha: "abc123" });
 
@@ -169,9 +169,8 @@ describe("verifyFilesModified — Issue #152 verifier", () => {
       ],
     };
 
-    execSync
-      .mockReturnValueOnce("")                 // diff: nothing committed
-      .mockReturnValueOnce(" M pending.ts\n"); // porcelain: dirty
+    execFileSync.mockReturnValueOnce("");             // diff: nothing committed (execFileSync)
+    execSync.mockReturnValueOnce(" M pending.ts\n"); // porcelain: dirty
 
     const result = verifyFilesModified({ slice, cwd: "/fake/cwd", startSha: "abc" });
     expect(result.missing).toEqual([]);
@@ -189,9 +188,8 @@ describe("verifyFilesModified — Issue #152 verifier", () => {
       ],
     };
 
-    execSync
-      .mockReturnValueOnce("docs/plans/WIN.md\n")
-      .mockReturnValueOnce("");
+    execFileSync.mockReturnValueOnce("docs/plans/WIN.md\n");
+    execSync.mockReturnValueOnce("");
 
     const result = verifyFilesModified({ slice, cwd: "/fake/cwd", startSha: "abc" });
     expect(result.missing).toEqual([]);
@@ -210,6 +208,7 @@ describe("verifyFilesModified — Issue #152 verifier", () => {
     };
 
     execSync.mockImplementation(() => { throw new Error("git unavailable"); });
+    execFileSync.mockImplementation(() => { throw new Error("git unavailable"); });
 
     const result = verifyFilesModified({ slice, cwd: "/fake/cwd", startSha: "abc" });
     expect(result.enforced).toBe(true);

@@ -1,7 +1,7 @@
 /** Plan Forge — Phase-53 (ORCHESTRATOR-SPLIT) S2: worker-spawn sub-module */
 
 import { readFileSync, writeFileSync, mkdirSync, existsSync, unlinkSync } from "node:fs";
-import { spawn, execSync } from "node:child_process";
+import { spawn, execSync, execFileSync } from "node:child_process";
 import { resolve, dirname, join } from "node:path";
 import { tmpdir } from "node:os";
 import { fileURLToPath } from "node:url";
@@ -802,7 +802,7 @@ export function detectPackageManager() {
   const candidates = matrix.packageManagers?.[os] || [];
   for (const pm of candidates) {
     try {
-      execSync(`${pm} --version`, { encoding: "utf-8", timeout: 3_000, stdio: "pipe" });
+      execFileSync(pm, ["--version"], { encoding: "utf-8", timeout: 3_000, stdio: "pipe" });
       return { os, packageManager: pm };
     } catch { /* try next */ }
   }
@@ -954,7 +954,7 @@ function attemptProbe(name, spec, probe, result) {
 
   let versionOut = "";
   try {
-    versionOut = execSync(`${probe.command} ${(probe.versionArgs || []).join(" ")}`, {
+    versionOut = execFileSync(probe.command, [...(probe.versionArgs || [])], {
       encoding: "utf-8", timeout: 10_000, stdio: "pipe",
     });
   } catch (err) {
@@ -984,7 +984,7 @@ function attemptProbe(name, spec, probe, result) {
     const helpArgs = probe.helpArgs || [];
     if (helpArgs.length > 0) {
       try {
-        helpOut = execSync(`${probe.command} ${helpArgs.join(" ")}`, {
+        helpOut = execFileSync(probe.command, [...helpArgs], {
           encoding: "utf-8", timeout: 10_000, stdio: "pipe",
         });
       } catch (err) {

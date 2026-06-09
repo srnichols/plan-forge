@@ -1746,6 +1746,56 @@ function registerSpawnedChild(child) {
   child.on("close", () => global.__pforgeChildren?.delete(child));
 }
 
+let _childShutdownInvoked = false;
+
+/**
+ * Terminate every tracked CLI worker child exactly once.
+ *
+ * MUST NOT be wired to the Node `"exit"` event. The `"exit"` handler runs after
+ * the libuv event loop has drained, when child-process handles are already in
+ * the closing state — calling `child.kill()` (a libuv handle operation) at that
+ * point trips `Assertion failed: !(handle->flags & UV_HANDLE_CLOSING)` in
+ * `src/win/async.c` and aborts the process. Wire it to actual signals only
+ * (SIGINT/SIGTERM/SIGHUP), which fire while the loop is still alive.
+ *
+ * @returns {number} count of children signalled
+ */
+export function killTrackedChildren() {
+  if (_childShutdownInvoked) return 0;
+  _childShutdownInvoked = true;
+  const children = global.__pforgeChildren;
+  if (!children) return 0;
+  let count = 0;
+  for (const child of children) {
+    try {
+      child.kill("SIGTERM");
+      count++;
+    } catch { /* child already exited — handle gone */ }
+  }
+  return count;
+}
+
+/** Test-only: reset the one-shot shutdown guard so killTrackedChildren can run again. */
+export function __resetChildShutdownGuard() {
+  _childShutdownInvoked = false;
+}
+
+/**
+ * Install signal handlers that terminate tracked worker children on interactive
+ * interrupt / termination signals. Deliberately excludes the `"exit"` event —
+ * see {@link killTrackedChildren} for why killing handles during exit teardown
+ * is unsafe on Windows.
+ *
+ * @param {NodeJS.Process} [proc=process] injectable for tests
+ */
+export function installChildCleanupHandlers(proc = process) {
+  for (const sig of ["SIGINT", "SIGTERM", "SIGHUP"]) {
+    proc.once(sig, () => {
+      killTrackedChildren();
+    });
+  }
+}
+
 function attachWorkerStreamHandlers(child, state) {
   child.stdout.setEncoding("utf8");
   child.stderr.setEncoding("utf8");
@@ -1847,6 +1897,7 @@ function spawnCliWorkerExecution({ prompt, model, cwd, timeout, worker, runPlanA
     });
 
     child.on("error", (err) => {
+      clearInterval(heartbeat);
       clearTimeout(timer);
       workerReject(new Error(`Failed to spawn ${cmd}: ${err.message} (code: ${err.code || "unknown"})`));
     });

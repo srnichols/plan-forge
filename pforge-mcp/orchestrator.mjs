@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 
 import { runOrchestratorCli } from "./orchestrator/run-plan.mjs";
+import { installChildCleanupHandlers } from "./orchestrator/worker-spawn.mjs";
 
 /* Source-test anchors retained after S9 shim extraction:
 function parseSlices(lines, opts = {}) {}
@@ -53,7 +54,7 @@ export { loadAuditConfig, shouldAutoDrain, readTemperingState, readTemperingConf
 export { SUPPORTED_AGENTS, EVENT_SOURCE, SECURITY_RISK, SECURITY_RISK_FOR_TYPE, DEFAULT_GATE_TIMEOUT_MS, DEFAULT_WORKER_OUTPUT_IDLE_MS, DEFAULT_WORKER_TIMEOUT_MS, GATE_ALLOWED_PREFIXES, UNIX_TOOLS, API_ALLOWED_ROLES, GATE_SUGGESTION_AUTO_INJECT_THRESHOLD, PROPOSED_FIX_DIR, COST_ANOMALY_MULTIPLIER, POSTMORTEM_RETENTION_COUNT, QUORUM_PRESETS, CRUCIBLE_STALL_CUTOFF_DAYS, REVIEW_SOURCES, REVIEW_SEVERITIES, REVIEW_STATUSES, REVIEW_RESOLUTIONS } from "./orchestrator/constants.mjs";
 export { appendEvent, writeSilentExitRecord } from "./orchestrator/event-bus.mjs";
 export { parsePlan, computeLockHash, normalizeSliceId, compareSliceIds, parseOnlySlicesExpr, parseWorkerTimeoutValue } from "./orchestrator/plan-parser.mjs";
-export { resetCliWorkersCache, setGhCopilotProbe, isDirectApiOnlyModel, isCopilotServableModel, isApiOnlyModel, getFoundryAuthScope, detectApiProvider, setSecretsLoader, buildApiMessages, generateImage, loadWorkerCapabilities, compareVersions, detectPackageManager, suggestInstall, classifyProbeFailure, detectWorkers, detectExecutionRuntime, detectClientHost, describeBillingSurface, getRoutingPreference, loadRoutingPreference, resolveRequiredCli, probeQuorumModelAvailability, filterQuorumModels, formatQuorumSummary, assessQuorumViability, detectRuntimes, spawnWorker, detectHelpTextOutput, detectSilentWorkerFailure, detectKilledBySignal, deriveVendorFromModel, extractTokens, shouldDefaultPremiumRequestsToOne, parseStderrStats, resolveWorkerOutputIdleMs, resolveWorkerTimeoutMs } from "./orchestrator/worker-spawn.mjs";
+export { resetCliWorkersCache, setGhCopilotProbe, isDirectApiOnlyModel, isCopilotServableModel, isApiOnlyModel, getFoundryAuthScope, detectApiProvider, setSecretsLoader, buildApiMessages, generateImage, loadWorkerCapabilities, compareVersions, detectPackageManager, suggestInstall, classifyProbeFailure, detectWorkers, detectExecutionRuntime, detectClientHost, describeBillingSurface, getRoutingPreference, loadRoutingPreference, resolveRequiredCli, probeQuorumModelAvailability, filterQuorumModels, formatQuorumSummary, assessQuorumViability, detectRuntimes, spawnWorker, detectHelpTextOutput, detectSilentWorkerFailure, detectKilledBySignal, deriveVendorFromModel, extractTokens, shouldDefaultPremiumRequestsToOne, parseStderrStats, resolveWorkerOutputIdleMs, resolveWorkerTimeoutMs, killTrackedChildren, installChildCleanupHandlers, __resetChildShutdownGuard } from "./orchestrator/worker-spawn.mjs";
 export { resolveGateTimeoutMs, __resetBashPathCache, resolveBashPath, detectSelfRepairMissed, buildRetryPrompt, coalesceGateLines, editDistance, isPlaceholderToken, suggestAllowedCommand, looksLikeProse, runGate, SequentialScheduler, ParallelScheduler, CompetitiveScheduler, selectWinner } from "./orchestrator/schedulers.mjs";
 export { extractPlanReleaseVersion, detectVersionCollision, parseValidationGates, lintGateCommands, validateGatePortability, isGateCommandAllowed, regressionGuard } from "./orchestrator/gate-helpers.mjs";
 export { loadCompetitiveConfig, loadGateSynthesisConfig, classifySliceDomain, synthesizeGateSuggestions, formatGateSuggestions, defaultRunGitApply, findMatchingFixProposal, shouldAutoRetryFix, markFixAttempted, writeProposedFixPatch, applyFixProposal, rollbackFixProposal, computeMedian, detectCostAnomaly, rerankEscalationChain, buildPlanPostmortem, listPlanPostmortems, writePlanPostmortem, rewritePlanStatusOnSuccess, runPlan, buildEstimate, runAutoSweep, runAnalyze, parseAnalyzeScore, buildOrchestratorSurface } from "./orchestrator/run-plan.mjs";
@@ -64,14 +65,10 @@ export { findLatestRun, parseEventLine, parseEventsLog, readSliceArtifacts, norm
 export { inferSliceType, recommendModel } from "./orchestrator/model-scoring.mjs";
 export { loadQuorumConfig, classifyLegError, quorumDispatch, quorumReview, analyzeWithQuorum, calculateSliceCost, buildCostBreakdown } from "./orchestrator/quorum.mjs";
 
-for (const sig of ["exit", "SIGINT", "SIGTERM", "SIGHUP"]) {
-  process.on(sig, () => {
-    if (global.__pforgeChildren) {
-      for (const child of global.__pforgeChildren) {
-        try { child.kill("SIGTERM"); } catch {}
-      }
-    }
-  });
-}
+// Wire SIGINT/SIGTERM/SIGHUP to terminate tracked worker children. The "exit"
+// event is deliberately excluded: killing child handles during exit-phase
+// teardown trips libuv's UV_HANDLE_CLOSING assertion on Windows. See
+// killTrackedChildren() in worker-spawn.mjs.
+installChildCleanupHandlers();
 
 await runOrchestratorCli(process.argv.slice(2));

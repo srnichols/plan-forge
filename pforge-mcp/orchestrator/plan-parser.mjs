@@ -486,12 +486,32 @@ function applyWorkerTimeout(current, line) {
 function applyBodyDependencies(current, line) {
   const dependsBodyMatch = line.match(/\*\*Depends\s+On:?\*\*:?\s*(.+)/i);
   if (!dependsBodyMatch) return;
-  const rawDeps = dependsBodyMatch[1].replace(/\s*\([^)]*\)\s*$/, "").trim();
-  const bodyDeps = rawDeps
+  // Bug #225: split on commas, then pull the LEADING slice-id token out of each
+  // phrase. The hardener authors prose deps like
+  //   "**Depends On**: S1 (consumes presets.ts), and Group B merge checkpoint."
+  // Running normalizeSliceId() on the whole phrase left unmatched prose in
+  // node.depends, which the scheduler could never satisfy → 0-slice phantom run.
+  const bodyDeps = dependsBodyMatch[1]
     .split(/\s*,\s*/)
-    .map((d) => normalizeSliceId(d))
-    .filter((d) => d.length > 0);
+    .map((d) => extractLeadingSliceId(d))
+    .filter((d) => d && d.length > 0);
   appendUniqueValues(current.depends, bodyDeps);
+}
+
+/**
+ * Extract the leading slice-id token from a free-text dependency phrase.
+ * Tolerates the prose forms the hardener emits: "Slice 1", "S1", "1", "2.3A".
+ * Returns the normalized id, or null when the phrase has no leading slice id
+ * (e.g. "none (foundation)", "and Group B merge checkpoint.").
+ *
+ * @param {string} phrase
+ * @returns {string|null}
+ */
+function extractLeadingSliceId(phrase) {
+  const m = String(phrase).trim().match(/^(?:slice\s+)?s?(\d+(?:\.\d+)?)([A-Za-z]?)\b/i);
+  if (!m) return null;
+  const normalized = normalizeSliceId(m[1] + m[2]);
+  return normalized.length > 0 ? normalized : null;
 }
 
 function extractBacktickValues(text) {

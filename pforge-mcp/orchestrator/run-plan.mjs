@@ -30,7 +30,7 @@ import { API_ALLOWED_ROLES, COST_ANOMALY_MULTIPLIER, CRUCIBLE_STALL_CUTOFF_DAYS,
 import { LogEventHandler, OrchestratorEventBus, appendEvent, writeSilentExitRecord } from "./event-bus.mjs";
 import { buildSlicePrompt } from "./prompt-builders.mjs";
 import { parsePlan, computeLockHash, normalizeSliceId, compareSliceIds, parseOnlySlicesExpr, parseWorkerTimeoutValue, parseSlices, buildDAG, loadPlanParserConfig } from "./plan-parser.mjs";
-import { resetCliWorkersCache, setGhCopilotProbe, isDirectApiOnlyModel, isCopilotServableModel, isApiOnlyModel, getFoundryAuthScope, detectApiProvider, setSecretsLoader, buildApiMessages, generateImage, loadWorkerCapabilities, compareVersions, detectPackageManager, suggestInstall, classifyProbeFailure, detectWorkers, detectExecutionRuntime, detectClientHost, describeBillingSurface, getRoutingPreference, loadRoutingPreference, resolveRequiredCli, probeQuorumModelAvailability, filterQuorumModels, formatQuorumSummary, assessQuorumViability, detectRuntimes, spawnWorker, detectHelpTextOutput, detectSilentWorkerFailure, detectKilledBySignal, deriveVendorFromModel, extractTokens, shouldDefaultPremiumRequestsToOne, parseStderrStats, resolveWorkerOutputIdleMs, resolveWorkerTimeoutMs } from "./worker-spawn.mjs";
+import { resetCliWorkersCache, setGhCopilotProbe, isDirectApiOnlyModel, isCopilotServableModel, isApiOnlyModel, getFoundryAuthScope, detectApiProvider, setSecretsLoader, buildApiMessages, generateImage, loadWorkerCapabilities, compareVersions, detectPackageManager, suggestInstall, classifyProbeFailure, detectWorkers, detectExecutionRuntime, detectClientHost, describeBillingSurface, getRoutingPreference, loadRoutingPreference, resolveRequiredCli, probeQuorumModelAvailability, filterQuorumModels, formatQuorumSummary, assessQuorumViability, detectRuntimes, spawnWorker, detectHelpTextOutput, detectSilentWorkerFailure, detectKilledBySignal, deriveVendorFromModel, extractTokens, shouldDefaultPremiumRequestsToOne, parseStderrStats, resolveWorkerOutputIdleMs, resolveWorkerTimeoutMs, assertWorkerBackendReady } from "./worker-spawn.mjs";
 import { resolveGateTimeoutMs, __resetBashPathCache, resolveBashPath, detectSelfRepairMissed, buildRetryPrompt, coalesceGateLines, editDistance, isPlaceholderToken, suggestAllowedCommand, looksLikeProse, runGate, SequentialScheduler, ParallelScheduler, CompetitiveScheduler, selectWinner, detectScopeConflicts } from "./schedulers.mjs";
 import { ensureForgeDir, pruneForgeRuns, recordModelPerformance, readForgeJson, appendForgeJsonl, readForgeJsonl, auditOrphanForgeFiles, loadModelPerformance, aggregateModelStats, getCostReport, getHealthTrend, emitToolTelemetry, loadGateCheckConfig, registerGateCheckResponder } from "./forge-io.mjs";
 import { extractPlanReleaseVersion, detectVersionCollision, parseValidationGates, lintGateCommands, validateGatePortability, isGateCommandAllowed, regressionGuard } from "./gate-helpers.mjs";
@@ -1262,13 +1262,31 @@ export async function runPlan(planPath, options = {}) {
 
   // Estimation mode — return without executing
   if (estimate) {
+    // Bonus preflight: surface (but don't block) a missing/unauthenticated
+    // worker backend so users see the problem before committing to Full Auto.
+    const estimateAuthGate = assertWorkerBackendReady({ model: effectiveModel, worker, cwd });
+    if (estimateAuthGate) {
+      // eslint-disable-next-line no-console
+      console.error(`[preflight] ${estimateAuthGate.error}`);
+    }
     const estimateQuorumConfig = _buildEstimateQuorumConfig(quorum, cwd, quorumPreset, quorumThreshold);
-    return buildEstimate({ plan, model: effectiveModel, cwd, quorumConfig: estimateQuorumConfig, resumeFrom, worker });
+    const estimateResult = buildEstimate({ plan, model: effectiveModel, cwd, quorumConfig: estimateQuorumConfig, resumeFrom, worker });
+    if (estimateAuthGate) estimateResult.workerWarning = estimateAuthGate.error;
+    return estimateResult;
   }
 
   // Dry run — parse and validate only
   if (dryRun) {
     return _buildDryRunResult(plan, worker);
+  }
+
+  // Worker-backend preflight: refuse to start Full Auto when no usable worker
+  // exists (e.g. gh not authenticated). Returns a clean, actionable failure
+  // instead of dispatching doomed workers — which previously cascaded into N
+  // opaque slice failures (and, before the UV_HANDLE_CLOSING fix, a libuv abort).
+  const workerAuthGate = assertWorkerBackendReady({ model: effectiveModel, worker, cwd });
+  if (workerAuthGate) {
+    return { ...workerAuthGate, planPath };
   }
 
   // Phase GITHUB-B Slice 3 + gate lint + gate synthesis pre-flight
@@ -2695,6 +2713,7 @@ const ORCHESTRATOR_SURFACE_EXPORTS = [
   "TEMPERING_SCAN_STALE_DAYS",
   "UNIX_TOOLS",
   "__resetBashPathCache",
+  "__resetChildShutdownGuard",
   "addReviewItem",
   "aggregateModelStats",
   "analyzeWithQuorum",
@@ -2702,6 +2721,7 @@ const ORCHESTRATOR_SURFACE_EXPORTS = [
   "appendForgeJsonl",
   "appendWatchHistory",
   "applyFixProposal",
+  "assertWorkerBackendReady",
   "assessQuorumViability",
   "attachSliceSnapshotRestore",
   "auditOrphanForgeFiles",
@@ -2761,6 +2781,7 @@ const ORCHESTRATOR_SURFACE_EXPORTS = [
   "getHealthTrend",
   "getRoutingPreference",
   "inferSliceType",
+  "installChildCleanupHandlers",
   "isApiOnlyModel",
   "isCopilotServableModel",
   "isDeployTrigger",
@@ -2769,6 +2790,7 @@ const ORCHESTRATOR_SURFACE_EXPORTS = [
   "isGateCommandAllowed",
   "isPlaceholderToken",
   "isWorktreeExemptPath",
+  "killTrackedChildren",
   "lintGateCommands",
   "listPlanPostmortems",
   "listReviewItems",

@@ -1061,6 +1061,71 @@ export function detectWorkers(_projectDir) {
   return results;
 }
 
+/**
+ * Preflight gate: confirm at least one usable execution backend exists before a
+ * Full-Auto run dispatches workers. When the only candidate worker(s) failed
+ * authentication, return a clean, actionable failure descriptor instead of
+ * letting the orchestrator dispatch doomed workers — which (before the
+ * UV_HANDLE_CLOSING fix) aborted the process on a libuv assertion, and even
+ * after it produces N identical opaque slice failures.
+ *
+ * Returns `null` when a backend is available (the run may proceed). Otherwise
+ * returns a structured failure object suitable for returning directly from
+ * runPlan / surfacing as an estimate warning.
+ *
+ * Scope: only governs CLI worker auth. Direct-API models are validated
+ * elsewhere (spawnWorker throws a clean "API key not set" error), so they are
+ * skipped here.
+ *
+ * @param {object} opts
+ * @param {string|null} opts.model     resolved effective model (may be null)
+ * @param {string|null} [opts.worker]  explicit --worker override, if any
+ * @param {string}   [opts.cwd]        project dir (for API-key lookup)
+ * @param {Function} [opts.detect]     injectable detectWorkers (tests)
+ * @param {Function} [opts.resolveApiProvider] injectable detectApiProvider (tests)
+ * @returns {{ status:"failed", code:string, error:string, failureCategory?:string }|null}
+ */
+export function assertWorkerBackendReady({ model = null, worker = null, cwd = process.cwd(), detect = detectWorkers, resolveApiProvider = detectApiProvider } = {}) {
+  // Direct-API models are validated by spawnWorker's own key check.
+  if (isDirectApiOnlyModel(model)) return null;
+
+  const workers = detect(cwd);
+  const cliWorkers = workers.filter((w) => w.type === "cli");
+
+  // An explicit --worker override narrows the candidate set to that worker.
+  const candidates = worker ? cliWorkers.filter((w) => w.name === worker) : cliWorkers;
+
+  // Any usable CLI worker → proceed unchanged.
+  if (candidates.some((w) => w.available)) return null;
+
+  // No usable CLI worker, but the model routes to a configured direct API
+  // (resolveApiProvider returns a provider only when the key is present) →
+  // proceed. Skipped when the caller demanded a specific CLI worker.
+  if (!worker && resolveApiProvider(model)) return null;
+
+  // Nothing usable. Prefer the actionable auth message when auth is the blocker.
+  if (candidates.some((w) => w.failureCategory === "auth")) {
+    return {
+      status: "failed",
+      code: "WORKER_AUTH_REQUIRED",
+      failureCategory: "auth",
+      error:
+        "worker failed: no GitHub auth — run `gh auth login` " +
+        "(or set COPILOT_GITHUB_TOKEN / GH_TOKEN), then retry.",
+    };
+  }
+
+  const reason =
+    candidates.find((w) => w.reason)?.reason ||
+    cliWorkers.find((w) => w.reason)?.reason ||
+    "no CLI worker is installed (gh copilot, claude, or codex).";
+  return {
+    status: "failed",
+    code: "NO_WORKER_AVAILABLE",
+    error: `worker failed: ${reason}`,
+  };
+}
+
 // ─── Execution Runtime Detection ──────────────────────────────────────
 
 /**

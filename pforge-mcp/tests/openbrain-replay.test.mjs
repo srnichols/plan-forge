@@ -100,6 +100,37 @@ describe("readOpenBrainConfig", () => {
     expect(cfg.key).toBe("raw-key-123");
   });
 
+  it("resolves ${env:NAME} in the query-form key AND rewrites the url (issue #215)", () => {
+    process.env.__TEST_OBKEY = "resolved-query-key";
+    mkdirSync(join(dir, ".vscode"), { recursive: true });
+    writeFileSync(join(dir, ".vscode", "mcp.json"), JSON.stringify({
+      servers: {
+        openbrain: { type: "sse", url: "https://openbrain.example/sse?key=${env:__TEST_OBKEY}" },
+      },
+    }));
+    const cfg = readOpenBrainConfig(dir);
+    // The auth key must be the resolved env value, NOT the literal placeholder.
+    expect(cfg.key).toBe("resolved-query-key");
+    // The URL must carry the resolved key so the SSE transport never connects
+    // with the literal `${env:...}` placeholder in the query string.
+    expect(cfg.url).not.toContain("${env:");
+    expect(new URL(cfg.url).searchParams.get("key")).toBe("resolved-query-key");
+    delete process.env.__TEST_OBKEY;
+  });
+
+  it("does not invent a query key when the placeholder env var is unset (issue #215)", () => {
+    delete process.env.__TEST_OBKEY_UNSET;
+    mkdirSync(join(dir, ".vscode"), { recursive: true });
+    writeFileSync(join(dir, ".vscode", "mcp.json"), JSON.stringify({
+      servers: {
+        openbrain: { type: "sse", url: "https://openbrain.example/sse?key=${env:__TEST_OBKEY_UNSET}" },
+      },
+    }));
+    const cfg = readOpenBrainConfig(dir);
+    // Unresolved placeholder must NOT become the auth key (would 401).
+    expect(cfg.key).not.toBe("${env:__TEST_OBKEY_UNSET}");
+  });
+
   it("resolves ${env:NAME} in the url (auto-select endpoint)", () => {
     process.env.__TEST_OBURL = "https://brain.planforge.software/sse";
     mkdirSync(join(dir, ".vscode"), { recursive: true });

@@ -83,10 +83,31 @@ function openBrainHeaderKey(entry) {
 
 function openBrainQueryKey(url) {
   try {
-    return new URL(url).searchParams.get("key");
+    // The query value may itself be a `${env:NAME}` placeholder (the canonical
+    // mcp.json shape is `?key=${env:OPENBRAIN_KEY}`); resolve it so the literal
+    // placeholder is never used as the auth key (issue #215).
+    return resolveEnvPlaceholder(new URL(url).searchParams.get("key"));
   } catch {
     return null;
   }
+}
+
+/**
+ * Replace the `key` query param of `url` with the resolved `key` so an
+ * unresolved `${env:NAME}` placeholder never reaches the SSE transport.
+ * OpenBrain authenticates on the query key as well as the `x-brain-key`
+ * header, so leaving the placeholder in the URL yields a 401 (issue #215).
+ */
+function rewriteUrlKey(url, key) {
+  if (!key) return url;
+  try {
+    const u = new URL(url);
+    if (u.searchParams.has("key")) {
+      u.searchParams.set("key", key);
+      return u.toString();
+    }
+  } catch { /* non-URL — leave as-is */ }
+  return url;
 }
 
 function parseOpenBrainConfigEntry(entry, source) {
@@ -101,7 +122,9 @@ function parseOpenBrainConfigEntry(entry, source) {
     || openBrainQueryKey(url)
     || process.env.OPENBRAIN_KEY
     || null;
-  return { url, key, source };
+  // Rewrite the query key so the SSE transport never connects with a literal
+  // `${env:NAME}` placeholder in the URL (issue #215).
+  return { url: rewriteUrlKey(url, key), key, source };
 }
 
 // ─── Normalizers ───────────────────────────────────────────────────────

@@ -1,5 +1,5 @@
 import { resolve } from "node:path";
-import { existsSync, readFileSync, writeFileSync, renameSync, mkdirSync } from "node:fs";
+import { existsSync, writeFileSync, renameSync, mkdirSync } from "node:fs";
 import { drainOpenBrainQueue, isOpenBrainConfigured } from "../memory.mjs";
 import { readForgeJsonl, appendForgeJsonl } from "../orchestrator.mjs";
 import { setPlanPathAliasWarned } from "./state.mjs";
@@ -18,35 +18,27 @@ export async function runDrainPass(cwd, source, hub, deps = {}) {
     return { ok: true, attempted: 0, delivered: 0, deferred: 0, dlq: 0, durationMs: 0 };
   }
 
-  // Build dispatcher: POST to local /api/memory/capture
-  const dispatcher = deps.dispatcher || async function defaultDispatcher(record) {
-    const port = process.env.PFORGE_DASHBOARD_PORT || "3100";
-    let secret = null;
-    try {
-      const secretPath = resolve(forgeDir, "bridge-secret");
-      if (existsSync(secretPath)) secret = readFileSync(secretPath, "utf-8").trim();
-    } catch { /* no secret */ }
-    if (!secret) secret = process.env.PFORGE_BRIDGE_SECRET || null;
-
-    const headers = { "Content-Type": "application/json" };
-    if (secret) headers["Authorization"] = `Bearer ${secret}`;
-
-    const resp = await fetch(`http://127.0.0.1:${port}/api/memory/capture`, {
-      method: "POST",
-      headers,
-      body: JSON.stringify({
-        content: record.content,
-        project: record.project,
-        type: record.type,
-        source: record.source,
-        created_by: record.created_by,
-      }),
-    });
-    return { ok: resp.ok, error: resp.ok ? undefined : `HTTP_${resp.status}` };
-  };
+  // Build dispatcher. The default path opens a SINGLE SSE client to OpenBrain
+  // and captures each normalized record through it. The local Express endpoint
+  // `POST /api/memory/capture` is an intentional no-op echo and MUST NOT be
+  // used for delivery — records POSTed there are counted as "delivered" but
+  // never reach OpenBrain (issue #215). Tests inject `deps.dispatcher` directly.
+  let dispatcher = deps.dispatcher;
+  let closeClient = async () => {};
+  if (!dispatcher) {
+    const built = await buildSseDispatcher(cwd);
+    if (built.error) return { ok: false, error: built.error };
+    dispatcher = built.dispatcher;
+    closeClient = built.closeClient;
+  }
 
   const t0 = Date.now();
-  const result = await drainOpenBrainQueue(records, dispatcher, { source });
+  let result;
+  try {
+    result = await drainOpenBrainQueue(records, dispatcher, { source });
+  } finally {
+    await closeClient();
+  }
 
   // Atomic write: survivors (deferred) → tmp file, then rename over original
   const tmpPath = queuePath + ".tmp";
@@ -96,6 +88,43 @@ export async function runDrainPass(cwd, source, hub, deps = {}) {
     dlq: result.stats.dlq,
     durationMs: Date.now() - t0,
   };
+}
+
+/**
+ * Build the default SSE dispatcher used by `runDrainPass` when no test
+ * dispatcher is injected. Opens a single OpenBrain SSE client and captures
+ * each normalized queue record through it — mirrors the working
+ * `_buildOpenBrainDispatcher` path in `memory.mjs` (issue #215).
+ *
+ * @param {string} cwd
+ * @returns {Promise<{ dispatcher?: Function, closeClient?: () => Promise<void>, error?: string }>}
+ */
+async function buildSseDispatcher(cwd) {
+  const { createSseClient, readOpenBrainConfig, normalizeQueueRecord } =
+    await import("../openbrain-replay.mjs");
+
+  const cfg = readOpenBrainConfig(cwd);
+  if (!cfg || !cfg.url || !cfg.key) return { error: "NO_CONFIG" };
+
+  let client;
+  try {
+    client = await createSseClient(cfg);
+  } catch (err) {
+    return { error: `connect: ${err.message}` };
+  }
+  const closeClient = async () => { try { await client.close(); } catch { /* best-effort */ } };
+
+  const dispatcher = async (record) => {
+    const payload = normalizeQueueRecord(record);
+    if (!payload) return { ok: true };
+    try {
+      await client.capture(payload);
+      return { ok: true };
+    } catch (err) {
+      return { ok: false, error: String(err?.message || err) };
+    }
+  };
+  return { dispatcher, closeClient };
 }
 
 

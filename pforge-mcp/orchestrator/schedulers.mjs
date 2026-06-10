@@ -6,7 +6,7 @@ import { buildReflexionBlock } from "../memory.mjs";
 import {
   getCachedBashPath, setCachedBashPath,
 } from "./state.mjs";
-import { GATE_ALLOWED_PREFIXES, UNIX_TOOLS, DEFAULT_GATE_TIMEOUT_MS } from "./constants.mjs";
+import { GATE_ALLOWED_PREFIXES, UNIX_TOOLS, DEFAULT_GATE_TIMEOUT_MS, resolveGateCommandToken, isGatePrefixAllowed } from "./constants.mjs";
 export { GATE_ALLOWED_PREFIXES, UNIX_TOOLS, DEFAULT_GATE_TIMEOUT_MS };
 
 /**
@@ -209,8 +209,8 @@ export function suggestAllowedCommand(token) {
  * @returns {{ success: boolean, output: string, error: string, stderr: string, exitCode: number }}
  */
 function _validateGateAllowlist(command) {
-  const cmdBase = command.trim().split(/\s+/)[0].toLowerCase();
-  const isAllowed = GATE_ALLOWED_PREFIXES.some((p) => cmdBase === p || cmdBase.endsWith(`/${p}`));
+  const cmdBase = resolveGateCommandToken(command);
+  const isAllowed = isGatePrefixAllowed(cmdBase);
   if (isAllowed) return { cmdBase, blocked: null };
   const hints = [];
   if (isPlaceholderToken(cmdBase)) {

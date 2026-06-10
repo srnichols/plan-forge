@@ -4,7 +4,7 @@ import { readFileSync, existsSync, readdirSync, statSync } from "node:fs";
 import { execSync } from "node:child_process";
 import { resolve, basename, dirname, join, relative, extname, isAbsolute } from "node:path";
 import { parsePlan } from "./plan-parser.mjs";
-import { GATE_ALLOWED_PREFIXES, UNIX_TOOLS } from "./constants.mjs";
+import { UNIX_TOOLS, resolveGateCommandToken, isGatePrefixAllowed } from "./constants.mjs";
 import { coalesceGateLines, looksLikeProse, runGate, resolveGateTimeoutMs } from "./schedulers.mjs";
 import { recall as brainRecall, loadReviewerConfig, invokeReviewer } from "../brain.mjs";
 
@@ -147,12 +147,7 @@ function _parseDisableDirectivesAndComments(rawLines, slice, warnings) {
 }
 
 function _resolveCmdToken(line) {
-  const tokens = line.split(/\s+/);
-  let cmdIdx = 0;
-  while (cmdIdx < tokens.length && /^[A-Za-z_][A-Za-z0-9_]*=/.test(tokens[cmdIdx])) {
-    cmdIdx++;
-  }
-  return (tokens[cmdIdx] || tokens[0]).toLowerCase();
+  return resolveGateCommandToken(line);
 }
 
 function _pushWRule({ test, ruleId, rule, msg, line, slice, loc, strictMode, disabledRules, warnings, errors }) {
@@ -175,7 +170,7 @@ function _lintBasicRules({ line, slice, loc, cmdToken, lastSliceNumber, warnings
       message: `${loc}: '/dev/stdin' is Unix-only — fails on Windows. Use readFileSync(0,'utf8') for cross-platform stdin.`,
     });
   }
-  const isAllowed = GATE_ALLOWED_PREFIXES.some(p => cmdToken === p || cmdToken.endsWith(`/${p}`));
+  const isAllowed = isGatePrefixAllowed(cmdToken);
   if (!isAllowed) {
     errors.push({
       slice: slice.number, command: line, rule: "blocked-command", severity: "error",
@@ -406,14 +401,7 @@ export function validateGatePortability(command) {
  */
 function wouldPassAllowlist(cmd) {
   if (!cmd || typeof cmd !== "string") return false;
-  const trimmed = cmd.trim();
-  const tokens = trimmed.split(/\s+/);
-  let cmdIdx = 0;
-  while (cmdIdx < tokens.length && /^[A-Za-z_][A-Za-z0-9_]*=/.test(tokens[cmdIdx])) {
-    cmdIdx++;
-  }
-  const cmdToken = (tokens[cmdIdx] || tokens[0] || "").toLowerCase();
-  return GATE_ALLOWED_PREFIXES.some((p) => cmdToken === p || cmdToken.endsWith(`/${p}`));
+  return isGatePrefixAllowed(resolveGateCommandToken(cmd));
 }
 
 /**
@@ -438,13 +426,7 @@ export function isGateCommandAllowed(cmd) {
   ];
   if (BLOCKED_PATTERNS.some((p) => p.test(trimmed))) return false;
 
-  const tokens = trimmed.split(/\s+/);
-  let cmdIdx = 0;
-  while (cmdIdx < tokens.length && /^[A-Za-z_][A-Za-z0-9_]*=/.test(tokens[cmdIdx])) {
-    cmdIdx++;
-  }
-  const cmdToken = (tokens[cmdIdx] || tokens[0] || "").toLowerCase();
-  if (GATE_ALLOWED_PREFIXES.some((p) => cmdToken === p || cmdToken.endsWith(`/${p}`))) {
+  if (isGatePrefixAllowed(resolveGateCommandToken(trimmed))) {
     return true;
   }
 

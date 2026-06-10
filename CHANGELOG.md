@@ -7,6 +7,19 @@ Format follows [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
+### Fixed
+
+- **Capability auto-discovery completeness** — six served MCP tools
+  (`forge_github_status`, `forge_github_metrics`, `forge_team_dashboard`,
+  `forge_classifier_issue`, `forge_export_plan`, `forge_patterns_list`) were
+  registered in `enums.mjs`/`tool-definitions.mjs`/`tools.json` but missing
+  from `TOOL_METADATA`, so they surfaced in `forge_capabilities` with a bare
+  name and no intent/cost/example enrichment. Added accurate metadata entries
+  for all six and a completeness guard test (`capabilities.test.mjs`) that
+  fails if any `TOOL_NAMES` entry lacks metadata, any metadata key is absent
+  from `TOOL_NAMES`, or any entry has an empty intent — so the surface cannot
+  drift silently again.
+
 ## [3.22.1] — 2026-06-10 — Gate-lint & deletion-slice orchestrator hotfix
 
 ### Fixed

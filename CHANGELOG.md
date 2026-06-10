@@ -7,6 +7,41 @@ Format follows [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
+## [3.22.1] — 2026-06-10 — Gate-lint & deletion-slice orchestrator hotfix
+
+### Fixed
+
+- **Gate-lint allowlist accepts PowerShell-hardened gates (#229)** — the
+  pre-flight gate linter rejected the exact Windows-portable gate forms the
+  Plan Hardener itself emits, so a correctly-hardened plan could not be
+  executed on a PowerShell host. PowerShell variable assignments
+  (`$p = Get-Content …`, including the non-spaced `$p=…` form), `Test-Path`,
+  and the `pnpm`/`yarn` package managers are now recognised. The four
+  token-resolution sites that each re-implemented allowlist logic were
+  centralised into shared `resolveGateCommandToken` / `isGatePrefixAllowed`
+  helpers in `orchestrator/constants.mjs` (DRY). Dangerous cmdlets remain
+  blocked: they simply are not on the allowlist, and `BLOCKED_PATTERNS` still
+  guards destructive full-line forms (`rm -rf /`, `dd`, `mkfs`).
+- **Count gates flag unsupported regex look-around (#228)** — route-rename
+  count gates built on a negated-lookbehind like `(?<!/v1)/campaigns` silently
+  mis-counted: the default `grep`/`ripgrep` engine cannot evaluate look-around
+  and returns `0` (a false pass), while the broad substring also matched
+  legitimate component/lib imports and non-route API paths. A new
+  `lookaround-unsupported` gate-lint rule flags any `grep`/`rg` gate using
+  `(?<=)`, `(?<!)`, `(?=)`, or `(?!)` without an explicit `-P` (PCRE) flag.
+  New guidance in `plan-gate-command-rules.md` ("Count Gates and Route-Rename
+  Gates") covers navigation-scoped patterns and recomputing count baselines
+  against the actual predecessor commit.
+- **Deletion slices that re-add their target files now fail (#227)** — a
+  pure-deletion slice ("Delete redundant …") whose worker commit instead
+  *added* the files it was told to remove passed its own gate and slipped
+  through, only to be caught by a later phase's precondition. The orchestrator
+  now detects this inversion: a deletion-titled slice whose commit shows its
+  declared targets with an `A` (added) status is failed so the rollback
+  machinery restores the deleted state. New `isDeletionSliceTitle`,
+  `parseNameStatus`, `detectDeletionInversion`, and `verifyDeletionSlice`
+  helpers in `orchestrator/git-safety.mjs`.
+
 ## [3.22.0] — 2026-06-09 — Security, memory & orchestrator hardening + dependency-direction guard
 
 ### Fixed

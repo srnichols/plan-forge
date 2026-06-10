@@ -34,7 +34,7 @@ import { resetCliWorkersCache, setGhCopilotProbe, isDirectApiOnlyModel, isCopilo
 import { resolveGateTimeoutMs, __resetBashPathCache, resolveBashPath, detectSelfRepairMissed, buildRetryPrompt, coalesceGateLines, editDistance, isPlaceholderToken, suggestAllowedCommand, looksLikeProse, runGate, SequentialScheduler, ParallelScheduler, CompetitiveScheduler, selectWinner, detectScopeConflicts } from "./schedulers.mjs";
 import { ensureForgeDir, pruneForgeRuns, recordModelPerformance, readForgeJson, appendForgeJsonl, readForgeJsonl, auditOrphanForgeFiles, loadModelPerformance, aggregateModelStats, getCostReport, getHealthTrend, emitToolTelemetry, loadGateCheckConfig, registerGateCheckResponder } from "./forge-io.mjs";
 import { extractPlanReleaseVersion, detectVersionCollision, parseValidationGates, lintGateCommands, validateGatePortability, isGateCommandAllowed, regressionGuard } from "./gate-helpers.mjs";
-import { isDestructiveSliceTitle, isWorktreeExemptPath, loadTeardownGuardConfig, verifyBranchSafety, captureAbsorbedCommits, snapshotPreSliceState, pushSliceSnapshot, popSliceSnapshot, attachSliceSnapshotRestore, cleanupStaleSnapshots, extractFilesModifiedExhaustive, verifyFilesModified, autoCommitSliceIfDirty, stageOrphansOnSliceFailure } from "./git-safety.mjs";
+import { isDestructiveSliceTitle, isWorktreeExemptPath, loadTeardownGuardConfig, verifyBranchSafety, captureAbsorbedCommits, snapshotPreSliceState, pushSliceSnapshot, popSliceSnapshot, attachSliceSnapshotRestore, cleanupStaleSnapshots, extractFilesModifiedExhaustive, verifyFilesModified, verifyDeletionSlice, autoCommitSliceIfDirty, stageOrphansOnSliceFailure } from "./git-safety.mjs";
 import { registerCorrelationThreadResponder, isDeployTrigger, runPreDeployHook, parseGitPorcelain, parseShortstat, resetPostSliceHookFired, runPostSliceHook, resetPostSliceTemperingFired, runPostSliceTemperingHook, runPreAgentHandoffHook, loadOpenClawConfig, postOpenClawSnapshot, runPostRunAuditorHook } from "./hooks.mjs";
 import { findLatestRun, parseEventLine, parseEventsLog, readSliceArtifacts, normalizeRunState, readCrucibleState, readReviewQueueState, buildWatchSnapshot, readHomeSnapshot, detectWatchAnomalies, recommendFromAnomalies, ensureReviewQueueDirs, ensureNotificationsDirs, ensureNotificationsConfig, generateReviewItemId, readReviewItem, listReviewItems, addReviewItem, resolveReviewItem, maybeAddStallReview, maybeAddTemperingReview, maybeAddBugReview, maybeAddVisualBaselineReview, maybeAddFixPlanReview, appendWatchHistory, runWatch, runWatchLive, scoreSliceComplexity } from "./review-watcher.mjs";
 import { inferSliceType, recommendModel } from "./model-scoring.mjs";
@@ -2062,6 +2062,30 @@ function _executeSliceFilesModifiedCheck({ sliceResult, slice, cwd, sliceStartHe
   } catch { /* non-fatal */ }
 }
 
+/**
+ * Issue #227 — fail a deletion slice whose commit re-added the files it was
+ * supposed to remove. A pure-deletion slice ("Delete redundant …") that
+ * commits an ADD of its declared targets is the inverse of its intent; the
+ * slice's own gate did not catch this in Phase-86 Slice 12. Marking the slice
+ * failed lets the retry/rollback machinery restore the correct deleted state.
+ */
+function _executeSliceDeletionInversionCheck({ sliceResult, slice, cwd, sliceStartHead, eventBus }) {
+  if (sliceResult.status !== "passed") return;
+  try {
+    const check = verifyDeletionSlice({ slice, cwd, startSha: sliceStartHead });
+    if (!check.applicable || !check.inverted) return;
+    const paths = check.offending.map(o => o.path).join(", ");
+    sliceResult.status = "failed";
+    sliceResult.statusReason = `deletion-inversion: slice "${slice.title}" committed an ADD of files it should delete (${paths})`;
+    sliceResult.deletionInversion = { offending: check.offending };
+    eventBus?.emit("slice-deletion-inversion", {
+      sliceNumber: slice.number,
+      sliceTitle: slice.title,
+      offending: check.offending,
+    });
+  } catch { /* non-fatal */ }
+}
+
 function _executeSliceStampCost(sliceResult) {
   try {
     const rec = calculateSliceCost(sliceResult.tokens, sliceResult.worker);
@@ -2349,6 +2373,7 @@ async function executeSlice(slice, options) {
   });
 
   _executeSliceFilesModifiedCheck({ sliceResult, slice, cwd, sliceStartHead, eventBus });
+  _executeSliceDeletionInversionCheck({ sliceResult, slice, cwd, sliceStartHead, eventBus });
   const costRecord = _executeSliceStampCost(sliceResult);
 
   writeFileSync(

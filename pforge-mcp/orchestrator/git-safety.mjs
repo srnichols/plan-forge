@@ -639,6 +639,110 @@ export function verifyFilesModified({ slice, cwd = process.cwd(), startSha = nul
 }
 
 /**
+ * Issue #227 — a slice title that declares a *deletion* intent.
+ * Matches "Delete …", "Remove …", "Drop …", "Purge …", "Eliminate …" as the
+ * leading verb, plus the common "remove/delete redundant|obsolete|deprecated|
+ * unused|legacy|old …" phrasing anywhere in the title.
+ *
+ * @param {string} title
+ * @returns {boolean}
+ */
+export function isDeletionSliceTitle(title) {
+  if (typeof title !== "string") return false;
+  if (/^\s*(delete|remove|drop|purge|eliminate)\b/i.test(title)) return true;
+  return /\b(delete|remove|drop)\s+(redundant|obsolete|deprecated|unused|legacy|old|dead|duplicate)\b/i.test(title);
+}
+
+/**
+ * Parse `git diff --name-status <a> <b>` output into structured entries.
+ * Each line is `<STATUS>\t<path>` (renames/copies are `R100\told\tnew`).
+ * For renames the *new* path is reported with status "R".
+ *
+ * @param {string|null|undefined} raw
+ * @returns {Array<{ status: string, path: string }>}
+ */
+export function parseNameStatus(raw) {
+  if (!raw || typeof raw !== "string") return [];
+  const out = [];
+  for (const line of raw.split(/\r?\n/)) {
+    const trimmed = line.trim();
+    if (!trimmed) continue;
+    const parts = trimmed.split(/\t/);
+    if (parts.length < 2) continue;
+    const status = parts[0].charAt(0).toUpperCase();
+    // Rename/copy: status is "R<score>"/"C<score>", paths are [old, new].
+    const path = parts[parts.length - 1].trim();
+    if (path) out.push({ status, path });
+  }
+  return out;
+}
+
+/**
+ * Issue #227 — detect a deletion-slice inversion: a slice whose title declares
+ * a deletion but whose commit *added* (or modified) the very files it should
+ * have removed. The Phase-86 Slice 12 regression committed `+578/+30` to the
+ * exact donate-page files a predecessor had correctly deleted, while the
+ * commit message still claimed "Delete redundant emoji donate page". The
+ * slice's own grep/Test-Path gate did not catch the inverse.
+ *
+ * Pure function — operates on the slice and a parsed name-status list so it can
+ * be unit-tested without a git repo.
+ *
+ * @param {object} params
+ * @param {{ number: number|string, title: string, rawLines?: string[] }} params.slice
+ * @param {Array<{ status: string, path: string }>} params.nameStatus — parsed `git diff --name-status`
+ * @returns {{ applicable: boolean, inverted: boolean, offending: Array<{ path: string, status: string }> }}
+ */
+export function detectDeletionInversion({ slice, nameStatus } = {}) {
+  const notApplicable = { applicable: false, inverted: false, offending: [] };
+  if (!slice || !isDeletionSliceTitle(slice.title)) return notApplicable;
+  const declared = extractFilesModifiedExhaustive(slice);
+  if (declared.length === 0) return notApplicable;
+
+  const norm = (p) => String(p).replace(/\\/g, "/").replace(/^\.\//, "").trim();
+  const declaredNorm = new Set(declared.map(norm));
+  const offending = [];
+  for (const entry of Array.isArray(nameStatus) ? nameStatus : []) {
+    if (!entry || !entry.path) continue;
+    if (!declaredNorm.has(norm(entry.path))) continue;
+    // A deletion slice must remove these paths (status "D"). An "A" (added)
+    // status is the unambiguous inverse — the worker re-created a file it was
+    // told to delete. Flag only adds to avoid false-positiving on legitimate
+    // reference-removal edits that show as "M".
+    if (entry.status === "A") {
+      offending.push({ path: norm(entry.path), status: entry.status });
+    }
+  }
+  return { applicable: true, inverted: offending.length > 0, offending };
+}
+
+/**
+ * Issue #227 — git-backed wrapper around {@link detectDeletionInversion}.
+ * Runs `git diff --name-status <startSha> HEAD` and evaluates the slice's
+ * commit for a deletion inversion. Never throws; returns `applicable: false`
+ * when there is no deletion contract or git is unavailable.
+ *
+ * @param {object} params
+ * @param {{ number: number|string, title: string, rawLines?: string[] }} params.slice
+ * @param {string} [params.cwd=process.cwd()]
+ * @param {string|null} [params.startSha] — HEAD SHA captured at slice start
+ * @returns {{ applicable: boolean, inverted: boolean, offending: Array<{ path: string, status: string }> }}
+ */
+export function verifyDeletionSlice({ slice, cwd = process.cwd(), startSha = null } = {}) {
+  const notApplicable = { applicable: false, inverted: false, offending: [] };
+  if (!slice || !startSha || !isDeletionSliceTitle(slice.title)) return notApplicable;
+  let raw = "";
+  try {
+    raw = execFileSync("git", ["diff", "--name-status", startSha, "HEAD"], {
+      cwd, encoding: "utf-8", timeout: 5_000,
+    });
+  } catch {
+    return notApplicable;
+  }
+  return detectDeletionInversion({ slice, nameStatus: parseNameStatus(raw) });
+}
+
+/**
  * After a slice passes, commit any dirty working-tree changes with a
  * deterministic conventional-commit message derived from the slice title.
  * Never commits on `mode === "assisted"` runs.

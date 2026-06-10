@@ -197,7 +197,68 @@ bash -c "..." # pforge-lint-disable W1,W2
 
 ---
 
-## Gate Template (copy-paste safe)
+## Count Gates and Route-Rename Gates
+
+Count gates (assert "exactly N matches of pattern X") and route-rename gates
+(assert "0 references to the old route remain") are the most over-matching gate
+family. Two failure modes recur — both produce false fails that block an
+otherwise-correct slice.
+
+### Rule 1 — Never count with regex look-around through `grep`/`ripgrep`
+
+A negated-lookbehind pattern like `(?<!/v1)/campaigns` (intent: "`/campaigns`
+not preceded by `/v1`") does **not** evaluate the same across tools:
+
+| Tool | Look-around support | Result |
+|---|---|---|
+| `grep` (default BRE/ERE) | none | counts as if the look-around weren't there, or errors |
+| `ripgrep` (default Rust engine) | none | silently returns `0` — a **false pass** |
+| `grep -P` / `rg -P` (PCRE2) | yes | correct |
+| PowerShell `Select-String` (.NET regex) | yes | correct |
+
+Because the orchestrator gate runner, ripgrep, and the agent's `grep_search`
+tool all use look-around-free engines, a count gate built on `(?<!…)` reads `0`
+and passes when the real count is non-zero. The linter emits a
+`lookaround-unsupported` warning (W-family) for any `grep`/`rg` gate containing
+`(?<=)`, `(?<!)`, `(?=)`, or `(?!)` without an explicit `-P` flag.
+
+**Fix**: either add `-P`, or — better — scope the gate to a literal
+**navigation** pattern instead of a broad path substring.
+
+### Rule 2 — Scope route-rename gates to navigation refs, not every path mention
+
+A bare count of `/campaigns` matches far more than navigation: component
+imports (`@/components/campaigns/**`), lib imports (`@/lib/campaigns`), API
+paths that legitimately keep the old segment (`/api/v1/admin/campaigns`,
+`/api/v1/profiles/org/:slug/campaigns`), code comments, and negative-assertion
+tests. A route-rename gate must assert that no *navigation* still points at the
+old route, so scope it accordingly:
+
+- **Include** only navigation forms: `href=`, `router.push(`, `redirect(`,
+  `<Link to=`, `navigate(`.
+- **Exclude** `components/<name>`, `lib/<name>`, `/api/v1/(admin|profiles)/…`
+  paths, comments, and test files.
+
+Example (PowerShell, look-around-free, navigation-scoped):
+
+```
+$hits = Select-String -Path src/**/*.tsx -Pattern "href=[`"']/campaigns|router\.push\(['`"]/campaigns" | Where-Object { $_.Path -notmatch 'components|lib|\.test\.' }; if ($hits) { exit 1 }
+```
+
+### Rule 3 — Recompute count baselines against the actual predecessor commit
+
+When a count gate hard-codes a baseline (`API_COUNT == 62`), that number must be
+captured from the **post-state of the immediately preceding slice/phase**, not
+from an earlier snapshot. If a predecessor slice deletes files that contributed
+to the count (e.g. a deleted page that held two `/api/v1/campaigns` calls), a
+baseline captured before that deletion is stale and the gate false-fails.
+
+**Fix**: derive the baseline from `git show <predecessor-sha>:<file>` or
+re-count against the predecessor's HEAD when authoring the gate — never from a
+stale snapshot taken before predecessor deletions landed.
+
+---
+
 
 ```
 node -e "const fs=require('fs'); const content=fs.readFileSync('<FILE>','utf8'); const checks={<key>:<boolean-expression>}; const failed=Object.entries(checks).filter(([_,v])=>!v); if(failed.length){console.error('failed:',failed.map(([k])=>k).join(','));process.exit(1)} console.log('ok')"

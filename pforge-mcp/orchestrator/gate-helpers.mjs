@@ -219,6 +219,14 @@ function _lintBasicRules({ line, slice, loc, cmdToken, lastSliceNumber, warnings
       message: `${loc}: node -e contains '//' which acts as a line comment on a single line, breaking the code. Remove JS comments from gate commands.`,
     });
   }
+  if (/\b(grep|rg|ripgrep|egrep|fgrep)\b/.test(line)
+    && /\(\?<[=!]|\(\?[=!]/.test(line)
+    && !/(^|\s)(-P|--pcre2|--perl-regexp)(\s|=|$)/.test(line)) {
+    warnings.push({
+      slice: slice.number, command: line, rule: "lookaround-unsupported", severity: "warn",
+      message: `${loc}: regex look-around ((?<=) (?<!) (?=) (?!)) is not supported by the default grep/ripgrep engine — the match count silently evaluates wrong (often 0, a false pass). Add '-P' for PCRE, or scope the count to a literal navigation pattern (href=, router.push, redirect) and exclude component/lib imports and non-route API paths instead of a negated-lookbehind.`,
+    });
+  }
 }
 
 function _lintWRules({ line, slice, loc, cmdToken, strictMode, disabledRules, warnings, errors }) {

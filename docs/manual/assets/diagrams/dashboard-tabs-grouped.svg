@@ -62,7 +62,7 @@
   </g>
 
   <text x="585" y="175" class="small" text-anchor="middle" font-style="italic">Covers everything that happens after the slice ships.</text>
-  <text x="585" y="190" class="tiny" text-anchor="middle">Streams hub events: incident-fired, drift-alert, secret-leaked, dep-vuln-found.</text>
+  <text x="585" y="190" class="tiny" text-anchor="middle" style="font-size:9px;">Streams hub events: incident-fired, drift-alert, secret-leaked, dep-vuln-found.</text>
 
   <!-- ─── Group 3: Forge-Master (cyan) ─── -->
   <rect x="20" y="215" width="370" height="155" class="group" fill="#082f33" stroke="#22d3ee" />

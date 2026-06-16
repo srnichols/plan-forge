@@ -6,11 +6,11 @@
     .node { rx: 8; ry: 8; stroke-width: 1.5; }
     .arrow { stroke: #64748b; stroke-width: 1.4; fill: none; marker-end: url(#qcr-ah); }
     .arrow-bold { stroke: #f59e0b; stroke-width: 2; fill: none; marker-end: url(#qcr-ah-amber); }
-    .label { font-size: 15px; fill: #cbd5e1; }
-    .micro { font-size: 13.5px; fill: #cbd5e1; }
-    .title { font-size: 13.5px; fill: #f1f5f9; font-weight: 600; }
+    .label { font-size: 11px; fill: #cbd5e1; }
+    .micro { font-size: 10.5px; fill: #cbd5e1; }
+    .title { font-size: 10.5px; fill: #f1f5f9; font-weight: 600; }
     .phase { font-size: 13.5px; fill: #f59e0b; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; }
-    .weight { font-size: 15px; fill: #fcd34d; font-weight: 700; font-family: 'JetBrains Mono', monospace; }
+    .weight { font-size: 13px; fill: #fcd34d; font-weight: 700; font-family: 'JetBrains Mono', monospace; }
     .formula { font-size: 13.5px; fill: #f1f5f9; font-family: 'JetBrains Mono', monospace; }
     .score-num { font-size: 22px; fill: #f59e0b; font-weight: 800; font-family: 'JetBrains Mono', monospace; }
   </style>
@@ -29,37 +29,37 @@
   <rect x="20" y="35" width="200" height="34" class="node" fill="#0f172a" stroke="#60a5fa" />
   <text x="32" y="50" class="title">scope files / 5</text>
   <text x="32" y="63" class="micro">slice.scope[].length, capped 1.0</text>
-  <text x="208" y="56" class="weight" text-anchor="end">×0.20</text>
+  <text x="208" y="50" class="weight" text-anchor="end">×0.20</text>
 
   <rect x="20" y="78" width="200" height="34" class="node" fill="#0f172a" stroke="#60a5fa" />
   <text x="32" y="93" class="title">dependencies / 4</text>
   <text x="32" y="106" class="micro">slice.depends[].length</text>
-  <text x="208" y="99" class="weight" text-anchor="end">×0.20</text>
+  <text x="208" y="93" class="weight" text-anchor="end">×0.20</text>
 
   <rect x="20" y="121" width="200" height="34" class="node" fill="#0f172a" stroke="#fb7185" />
   <text x="32" y="136" class="title">security keywords / 3</text>
   <text x="32" y="149" class="micro">auth, crypto, secret, token, …</text>
-  <text x="208" y="142" class="weight" text-anchor="end">×0.15</text>
+  <text x="208" y="136" class="weight" text-anchor="end">×0.15</text>
 
   <rect x="20" y="164" width="200" height="34" class="node" fill="#0f172a" stroke="#fb7185" />
   <text x="32" y="179" class="title">database keywords / 3</text>
   <text x="32" y="192" class="micro">migration, schema, sql, index, …</text>
-  <text x="208" y="185" class="weight" text-anchor="end">×0.15</text>
+  <text x="208" y="179" class="weight" text-anchor="end">×0.15</text>
 
   <rect x="20" y="207" width="200" height="34" class="node" fill="#0f172a" stroke="#a78bfa" />
   <text x="32" y="222" class="title">gate lines / 5</text>
   <text x="32" y="235" class="micro">non-blank validationGate lines</text>
-  <text x="208" y="228" class="weight" text-anchor="end">×0.10</text>
+  <text x="208" y="222" class="weight" text-anchor="end">×0.10</text>
 
   <rect x="20" y="250" width="200" height="34" class="node" fill="#0f172a" stroke="#a78bfa" />
   <text x="32" y="265" class="title">tasks / 10</text>
   <text x="32" y="278" class="micro">slice.tasks[].length</text>
-  <text x="208" y="272" class="weight" text-anchor="end">×0.10</text>
+  <text x="208" y="265" class="weight" text-anchor="end">×0.10</text>
 
   <rect x="20" y="293" width="200" height="34" class="node" fill="#0f172a" stroke="#34d399" />
   <text x="32" y="308" class="title">historical failure rate</text>
   <text x="32" y="321" class="micro">.forge/runs/index.jsonl, last 20</text>
-  <text x="208" y="314" class="weight" text-anchor="end">×0.10</text>
+  <text x="208" y="308" class="weight" text-anchor="end">×0.10</text>
 
   <!-- Arrows from signals to formula -->
   <path d="M220,52 L320,165" class="arrow" />
@@ -89,7 +89,7 @@
   <text x="640" y="215" class="micro" text-anchor="middle">integer</text>
 
   <!-- Threshold gates -->
-  <text x="760" y="22" class="phase" text-anchor="middle">4. THRESHOLD GATE</text>
+  <text x="752" y="22" class="phase" style="font-size:11px;" text-anchor="middle">4. THRESHOLD GATE</text>
 
   <rect x="700" y="40" width="115" height="42" class="node" fill="#0f172a" stroke="#a78bfa" />
   <text x="757" y="56" class="title" text-anchor="middle">power</text>
@@ -115,6 +115,6 @@
   <!-- Footer note -->
   <rect x="20" y="350" width="780" height="55" class="node" fill="#1e293b" stroke="#334155" />
   <text x="34" y="370" class="title">📊 Real-plan calibration:</text>
-  <text x="34" y="386" class="label">Observed maximum score across the Plan Forge dogfood corpus is 4–6 (most slices land 2–4). Threshold 5 fires quorum on roughly 10–25% of slices in</text>
-  <text x="34" y="400" class="label">a typical phase plan; threshold 7 fires on &lt;5%. Use <tspan class="formula" font-size="10">--quorum-threshold N</tspan> to override per run, or let Adaptive Threshold tune it from history.</text>
+  <text x="34" y="386" class="label" style="font-size:10.5px;">Observed maximum score across the Plan Forge dogfood corpus is 4–6 (most slices land 2–4). Threshold 5 fires quorum on roughly 10–25% of slices in</text>
+  <text x="34" y="400" class="label" style="font-size:10.5px;">a typical phase plan; threshold 7 fires on &lt;5%. Use <tspan class="formula" font-size="10">--quorum-threshold N</tspan> to override per run, or let Adaptive Threshold tune it from history.</text>
 </svg>

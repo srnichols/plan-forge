@@ -7,7 +7,7 @@
     .arrow { stroke: #64748b; stroke-width: 1.4; fill: none; marker-end: url(#qet-ah); }
     .arrow-bold { stroke: #f59e0b; stroke-width: 2; fill: none; marker-end: url(#qet-ah-amber); }
     .label { font-size: 15px; fill: #cbd5e1; }
-    .micro { font-size: 13.5px; fill: #cbd5e1; }
+    .micro { font-size: 11px; fill: #cbd5e1; }
     .title { font-size: 13.5px; fill: #f1f5f9; font-weight: 600; }
     .phase { font-size: 13.5px; fill: #f59e0b; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; }
     .mono { font-size: 15px; fill: #cbd5e1; font-family: 'JetBrains Mono', monospace; }
@@ -52,23 +52,23 @@
 
   <rect x="460" y="32" width="170" height="46" class="node" fill="#0f172a" stroke="#475569" />
   <text x="472" y="48" class="title">mode: false</text>
-  <text x="472" y="62" class="micro">single-model baseline</text>
-  <text x="618" y="62" class="cost" text-anchor="end">$0.28</text>
+  <text x="618" y="48" class="cost" text-anchor="end">$0.28</text>
+  <text x="472" y="64" class="micro">single-model baseline</text>
 
   <rect x="460" y="90" width="170" height="46" class="node" fill="#0f172a" stroke="#fbbf24" />
   <text x="472" y="106" class="title">mode: auto</text>
-  <text x="472" y="120" class="micro">threshold 5, default chain</text>
-  <text x="618" y="120" class="cost" text-anchor="end">$0.42</text>
+  <text x="618" y="106" class="cost" text-anchor="end">$0.42</text>
+  <text x="472" y="122" class="micro">threshold 5, default chain</text>
 
   <rect x="460" y="148" width="170" height="46" class="node" fill="#0f172a" stroke="#a78bfa" />
   <text x="472" y="164" class="title">mode: power</text>
-  <text x="472" y="178" class="micro">flagship × 3, threshold 5</text>
-  <text x="618" y="178" class="cost" text-anchor="end">$12.50</text>
+  <text x="618" y="164" class="cost" text-anchor="end">$12.50</text>
+  <text x="472" y="180" class="micro">flagship × 3, threshold 5</text>
 
   <rect x="460" y="206" width="170" height="46" class="node" fill="#0f172a" stroke="#34d399" />
   <text x="472" y="222" class="title">mode: speed</text>
-  <text x="472" y="236" class="micro">fast × 3, threshold 7</text>
-  <text x="618" y="236" class="cost" text-anchor="end">$1.20</text>
+  <text x="618" y="222" class="cost" text-anchor="end">$1.20</text>
+  <text x="472" y="238" class="micro">fast × 3, threshold 7</text>
 
   <!-- Arrows to comparison -->
   <path d="M630,55 L700,135" class="arrow" />
@@ -87,9 +87,9 @@
   <!-- Footer: example response -->
   <rect x="20" y="275" width="780" height="125" class="node" fill="#1e293b" stroke="#334155" />
   <text x="34" y="297" class="title">📋 Example response (7-slice fixture, see capabilities.mjs#L220):</text>
-  <text x="34" y="319" class="mono">{ "false": { totalCostUSD: 0.28, quorumSliceCount: 0, totalSliceCount: 7, confidence: "historical" },</text>
-  <text x="34" y="335" class="mono">  "auto":  { totalCostUSD: 0.42, quorumSliceCount: 1, totalSliceCount: 7, confidence: "historical" },</text>
-  <text x="34" y="351" class="mono">  "power": { totalCostUSD: 12.50, quorumSliceCount: 3, totalSliceCount: 7, confidence: "historical" },</text>
-  <text x="34" y="367" class="mono">  "speed": { totalCostUSD: 1.20, quorumSliceCount: 1, totalSliceCount: 7, confidence: "historical" } }</text>
+  <text x="34" y="319" class="mono" style="font-size:11px;">{ "false": { totalCostUSD: 0.28, quorumSliceCount: 0, totalSliceCount: 7, confidence: "historical" },</text>
+  <text x="34" y="335" class="mono" style="font-size:11px;">  "auto":  { totalCostUSD: 0.42, quorumSliceCount: 1, totalSliceCount: 7, confidence: "historical" },</text>
+  <text x="34" y="351" class="mono" style="font-size:11px;">  "power": { totalCostUSD: 12.50, quorumSliceCount: 3, totalSliceCount: 7, confidence: "historical" },</text>
+  <text x="34" y="367" class="mono" style="font-size:11px;">  "speed": { totalCostUSD: 1.20, quorumSliceCount: 1, totalSliceCount: 7, confidence: "historical" } }</text>
   <text x="34" y="389" class="micro">⚠ Always call this tool before showing dollar amounts in chat — hand-computed quorum estimates have been observed to overshoot by ~10×.</text>
 </svg>

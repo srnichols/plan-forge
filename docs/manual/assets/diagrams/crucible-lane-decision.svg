@@ -1,4 +1,4 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 420" fill="none">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 820 420" fill="none">
   <style>
     text { font-family: 'Inter', sans-serif; }
     .node { rx: 8; ry: 8; stroke-width: 1.5; }
@@ -64,27 +64,27 @@
 
   <!-- ─── Three lane outcomes ─── -->
   <!-- Tweak -->
-  <rect x="480" y="120" width="290" height="90" class="node" fill="#0f172a" stroke="#34d399" />
+  <rect x="480" y="120" width="320" height="90" class="node" fill="#0f172a" stroke="#34d399" />
   <text x="500" y="142" class="lane-name tweak">tweak</text>
-  <text x="765" y="142" class="qcount tweak" text-anchor="end">4 questions</text>
+  <text x="793" y="142" class="qcount tweak" text-anchor="end">4 questions</text>
   <text x="500" y="162" class="small">scope · build-cmd · test-cmd · forbidden-actions</text>
   <text x="500" y="180" class="tiny">CRITICAL_FIELDS: scope, build, test, forbidden</text>
-  <text x="500" y="198" class="small" style="fill:#cbd5e1;">Best for: version bumps · config flips · doc edits · small fixes</text>
+  <text x="500" y="198" class="small" style="fill:#cbd5e1;font-size:9px;">Best for: version bumps · config flips · doc edits · small fixes</text>
 
   <!-- Feature -->
-  <rect x="480" y="230" width="290" height="90" class="node" fill="#0f172a" stroke="#fbbf24" />
+  <rect x="480" y="230" width="320" height="90" class="node" fill="#0f172a" stroke="#fbbf24" />
   <text x="500" y="252" class="lane-name feature">feature</text>
-  <text x="765" y="252" class="qcount feature" text-anchor="end">7 questions</text>
+  <text x="793" y="252" class="qcount feature" text-anchor="end">7 questions</text>
   <text x="500" y="272" class="small">tweak's 4 + validation-gates + slices + rollback</text>
   <text x="500" y="290" class="tiny">CRITICAL_FIELDS: all 6</text>
-  <text x="500" y="308" class="small" style="fill:#cbd5e1;">Best for: new endpoint · new tool · new service · new UI section</text>
+  <text x="500" y="308" class="small" style="fill:#cbd5e1;font-size:9px;">Best for: new endpoint · new tool · new service · new UI section</text>
 
   <!-- Full -->
-  <rect x="480" y="335" width="290" height="70" class="node" fill="#0f172a" stroke="#fb7185" />
+  <rect x="480" y="335" width="320" height="70" class="node" fill="#0f172a" stroke="#fb7185" />
   <text x="500" y="357" class="lane-name full">full</text>
-  <text x="765" y="357" class="qcount full" text-anchor="end">~12 questions</text>
-  <text x="500" y="378" class="small">feature's 7 + architecture · integration · risk + dep matrix</text>
-  <text x="500" y="396" class="small" style="fill:#cbd5e1;">Best for: subsystem introductions · 3+ top-level modules</text>
+  <text x="793" y="357" class="qcount full" text-anchor="end">~12 questions</text>
+  <text x="500" y="378" class="small" style="font-size:9px;">feature's 7 + architecture · integration · risk + dep matrix</text>
+  <text x="500" y="396" class="small" style="fill:#cbd5e1;font-size:9px;">Best for: subsystem introductions · 3+ top-level modules</text>
 
   <!-- Footer -->
   <text x="80" y="283" class="tiny" text-anchor="middle">Lane drives</text>

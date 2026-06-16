@@ -89,5 +89,5 @@
   </g>
 
   <!-- Footer attribution -->
-  <text x="60" y="460" class="footnote">Source: docs/blog/ab-test-plan-forge-vs-vibe-coding.html (April 11 2026 .NET WebAPI A/B test, identical .NET 10 skeleton, same git commit baseline)</text>
+  <text x="60" y="460" class="footnote" style="font-size:11px;">Source: docs/blog/ab-test-plan-forge-vs-vibe-coding.html (April 11 2026 .NET WebAPI A/B test, identical .NET 10 skeleton, same git commit baseline)</text>
 </svg>

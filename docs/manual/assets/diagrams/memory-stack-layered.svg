@@ -74,7 +74,7 @@
   <!-- ═══ L1 Hub (cyan) ═══ -->
   <text x="500" y="594" class="tier" style="fill:#7dd3fc;" text-anchor="middle">L1 · HUB</text>
   <rect x="260" y="600" width="480" height="32" class="node" fill="#0f172a" stroke="#7dd3fc" />
-  <text x="500" y="622" class="subtitle" text-anchor="middle">in-process · runId-scoped · 5000-event ring buffer · WebSocket broadcast</text>
+  <text x="500" y="622" class="subtitle" style="font-size:12px;" text-anchor="middle">in-process · runId-scoped · 5000-event ring buffer · WebSocket broadcast</text>
 
   <!-- ═══ LATTICE (parallel axis on the right) ═══ -->
   <text x="900" y="222" class="tier" style="fill:#5eead4;" text-anchor="middle">LATTICE</text>

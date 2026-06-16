@@ -7,13 +7,13 @@
     .arrow-bug  { stroke: #fb7185; stroke-width: 1.5; fill: none; marker-end: url(#ttlahbug); }
     .arrow-spec { stroke: #fbbf24; stroke-width: 1.5; fill: none; marker-end: url(#ttlahspec); }
     .arrow-cls  { stroke: #c4b5fd; stroke-width: 1.5; fill: none; marker-end: url(#ttlahcls); }
-    .label  { font-size: 15px; fill: #cbd5e1; }
-    .small  { font-size: 13.5px;  fill: #cbd5e1; }
-    .tiny   { font-size: 13.5px;  fill: #cbd5e1; font-style: italic; }
-    .title  { font-size: 13.5px; fill: #f1f5f9; font-weight: 600; }
-    .phase  { font-size: 13.5px;  fill: #f59e0b; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; }
-    .lane   { font-size: 15px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; }
-    .count  { font-size: 13.5px;  fill: #cbd5e1; font-style: italic; }
+    .label  { font-size: 11px; fill: #cbd5e1; }
+    .small  { font-size: 10.5px;  fill: #cbd5e1; }
+    .tiny   { font-size: 10px;  fill: #cbd5e1; font-style: italic; }
+    .title  { font-size: 12px; fill: #f1f5f9; font-weight: 600; }
+    .phase  { font-size: 12px;  fill: #f59e0b; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; }
+    .lane   { font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; }
+    .count  { font-size: 10.5px;  fill: #cbd5e1; font-style: italic; }
   </style>
   <defs>
     <marker id="ttlah" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto">

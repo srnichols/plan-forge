@@ -5,11 +5,11 @@
     .primitive { rx: 6; ry: 6; stroke-width: 1; }
     .arrow { stroke: #64748b; stroke-width: 1.5; fill: none; marker-end: url(#arrowhead); }
     .arrow-up { stroke: #f59e0b; stroke-width: 1.5; fill: none; marker-end: url(#arrowhead-amber); stroke-dasharray: 3 3; }
-    .label { font-size: 13.5px; fill: #cbd5e1; }
-    .title { font-size: 15px; fill: #f1f5f9; font-weight: 600; }
-    .layer-title { font-size: 13.5px; fill: #cbd5e1; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; }
-    .accent { font-size: 15px; fill: #f59e0b; font-weight: 600; }
-    .desc { font-size: 15px; fill: #cbd5e1; }
+    .label { font-size: 11px; fill: #cbd5e1; }
+    .title { font-size: 12px; fill: #f1f5f9; font-weight: 600; }
+    .layer-title { font-size: 12.5px; fill: #cbd5e1; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; }
+    .accent { font-size: 11.5px; fill: #f59e0b; font-weight: 600; }
+    .desc { font-size: 11px; fill: #cbd5e1; }
   </style>
 
   <defs>

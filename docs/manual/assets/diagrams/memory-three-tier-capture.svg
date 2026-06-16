@@ -7,7 +7,7 @@
     .small { font-size: 13.5px; fill: #cbd5e1; }
     .title { font-size: 13.5px; fill: #f1f5f9; font-weight: 600; }
     .tier { font-size: 13.5px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; }
-    .surf { font-size: 13.5px; font-family: 'JetBrains Mono', monospace; fill: #cbd5e1; }
+    .surf { font-size: 12px; font-family: 'JetBrains Mono', monospace; fill: #cbd5e1; }
   </style>
   <defs>
     <marker id="mtah" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto">
@@ -19,8 +19,8 @@
   <text x="100" y="20" class="tier" style="fill:#f59e0b;" text-anchor="middle">CALL</text>
   <rect x="10" y="35" width="180" height="60" class="node" fill="#0f172a" stroke="#fbbf24" />
   <text x="100" y="55" class="title" text-anchor="middle">forge_memory_capture</text>
-  <text x="100" y="71" class="label" text-anchor="middle">{ content, type, project, scope }</text>
-  <text x="100" y="86" class="small" style="font-style:italic;" text-anchor="middle">decision · convention · lesson</text>
+  <text x="100" y="71" class="label" style="font-size:10px;" text-anchor="middle">{ content, type, project, scope }</text>
+  <text x="100" y="86" class="small" style="font-size:10.5px;font-style:italic;" text-anchor="middle">decision · convention · lesson</text>
 
   <!-- Fan-out splitter -->
   <rect x="240" y="50" width="100" height="30" class="node" fill="#020617" stroke="#fbbf24" stroke-dasharray="3 3" />
@@ -59,6 +59,6 @@
   <text x="100" y="220" class="tier" style="fill:#94a3b8;" text-anchor="middle">READ PATH</text>
   <text x="100" y="240" class="label" text-anchor="middle">Hub: live tail</text>
   <text x="100" y="256" class="label" text-anchor="middle">Files: grep / glob</text>
-  <text x="100" y="272" class="label" text-anchor="middle">OpenBrain: semantic search</text>
-  <text x="100" y="290" class="small" style="fill:#34d399;" text-anchor="middle">all 3 readable independently</text>
+  <text x="100" y="272" class="label" style="font-size:12px;" text-anchor="middle">OpenBrain: semantic search</text>
+  <text x="100" y="290" class="small" style="font-size:11.5px;fill:#34d399;" text-anchor="middle">all 3 readable independently</text>
 </svg>

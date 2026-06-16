@@ -23,7 +23,7 @@
 **[Website](https://planforge.software/)** · **[Shop Tour](https://planforge.software/shop-tour.html)** · **[Manual](https://planforge.software/manual/)** · **[Documentation](https://planforge.software/docs.html)** · **[FAQ](https://planforge.software/faq.html)** · **[Extensions](https://planforge.software/extensions.html)** · **[Spec Kit Interop](https://planforge.software/speckit-interop.html)**
 
 ```
-105 MCP Tools · 48+ CLI Commands · 103+ REST Endpoints · ~21 Agents · 4 Reviewer Skills · 9 Presets · 7 Adapters · 7947 Tests · v3.20.0-dev
+105 MCP Tools (primary pforge-mcp) + companion pforge-master tools · 48+ CLI Commands · 103+ REST Endpoints · ~21 Agents · 4 Reviewer Skills · 9 Presets · 7 Adapters · 7947 Tests · v3.20.0-dev
 ```
 
 ---
@@ -57,7 +57,7 @@ And the **control room** that ties them together: the [live dashboard](docs/manu
 
 ## Verified Results
 
-**Verified**: 38+ phases self-built, 7947 self-tests, 105 MCP tools, zero manual rollbacks. See [docs/capabilities.md](docs/capabilities.md).
+**Verified**: 38+ phases self-built, 7947 self-tests, 105 MCP tools on primary pforge-mcp (plus companion pforge-master tools), zero manual rollbacks. See [docs/capabilities.md](docs/capabilities.md).
 
 ### A/B Test Results (April 2026)
 

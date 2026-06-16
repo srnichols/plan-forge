@@ -7,8 +7,8 @@
     .edge-touched { stroke: #fbbf24; stroke-width: 1.2; fill: none; marker-end: url(#kg-aht); }
     .edge-found   { stroke: #fb7185; stroke-width: 1.2; fill: none; marker-end: url(#kg-ahf); }
     .edge-fixed   { stroke: #34d399; stroke-width: 1.2; fill: none; marker-end: url(#kg-ahx); stroke-dasharray: 4 2; }
-    .label  { font-size: 15px; fill: #cbd5e1; }
-    .edge-lbl { font-size: 13.5px; fill: #cbd5e1; }
+    .label  { font-size: 11px; fill: #cbd5e1; }
+    .edge-lbl { font-size: 12px; fill: #cbd5e1; }
     .title  { font-size: 13.5px; fill: #f1f5f9; font-weight: 700; }
     .phase  { font-size: 13.5px;  fill: #f59e0b; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; }
     .mono   { font-family: 'JetBrains Mono', monospace; font-size: 13.5px; fill: #cbd5e1; }
@@ -117,7 +117,7 @@
   <!-- ── Right legend — what queries unlock ── -->
   <rect x="450" y="370" width="330" height="78" rx="6" fill="#0f172a" stroke="#475569" />
   <text x="615" y="388" class="title" text-anchor="middle">Queries the schema unlocks</text>
-  <text x="465" y="406" class="mono">Pattern detectors · churn-vs-cost · bug → file</text>
-  <text x="465" y="420" class="mono">blast-radius · phase → fix-time · pforge digest</text>
-  <text x="465" y="434" class="mono">forge_patterns_list · forge_hotspot · forge_graph_query</text>
+  <text x="465" y="406" class="mono" style="font-size:9px;">Pattern detectors · churn-vs-cost · bug → file</text>
+  <text x="465" y="420" class="mono" style="font-size:9px;">blast-radius · phase → fix-time · pforge digest</text>
+  <text x="465" y="434" class="mono" style="font-size:9px;">forge_patterns_list · forge_hotspot · forge_graph_query</text>
 </svg>

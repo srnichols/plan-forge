@@ -19,7 +19,7 @@
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.0.0",
-    "ws": "^8.20.0"
+    "ws": "^8.21.0"
   },
   "license": "MIT",
   "author": "srnichols",

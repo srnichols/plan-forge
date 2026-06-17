@@ -743,6 +743,102 @@ export function verifyDeletionSlice({ slice, cwd = process.cwd(), startSha = nul
 }
 
 /**
+ * Normalize a repo-relative path for scope comparison: backslashes to slashes,
+ * strip a leading `./`, trim.
+ *
+ * @param {string} p
+ * @returns {string}
+ */
+function normalizeRepoPath(p) {
+  return String(p).replace(/\\/g, "/").replace(/^\.\//, "").trim();
+}
+
+/**
+ * Match a single scope pattern against a normalized repo path. Supports `**`
+ * (any characters, including `/`) and `*` (any characters except `/`). A
+ * pattern without a wildcard matches the path exactly OR as a directory prefix.
+ *
+ * @param {string} pattern
+ * @param {string} filePath — already normalized
+ * @returns {boolean}
+ */
+function matchScopeGlob(pattern, filePath) {
+  const pat = normalizeRepoPath(pattern);
+  if (!pat) return false;
+  if (!pat.includes("*")) {
+    return filePath === pat || filePath.startsWith(pat.endsWith("/") ? pat : pat + "/");
+  }
+  const NULL = "\u0000";
+  const rx = new RegExp(
+    "^" +
+      pat
+        .replace(/[.+^${}()|[\]\\]/g, "\\$&")
+        .replace(/\*\*/g, NULL)
+        .replace(/\*/g, "[^/]*")
+        .replace(new RegExp(NULL, "g"), ".*") +
+      "$"
+  );
+  return rx.test(filePath);
+}
+
+/**
+ * Issue #230 — detect a "scope escape": a slice that declares a non-empty file
+ * scope but whose entire commit diff landed OUTSIDE that scope. The Phase-93
+ * false-green run committed only out-of-scope `.github/instructions/*.md` docs
+ * while every promised in-scope feature file was missing, yet 14/14 slices
+ * reported PASSED. When a slice has a declared scope and NONE of the changed
+ * paths match it, the worker did not build what it was told to.
+ *
+ * Pure function — operates on the slice and a parsed name-status list so it can
+ * be unit-tested without a git repo. Conservative: only fires when the *entire*
+ * diff is out of scope, so a slice that touches any in-scope file passes.
+ *
+ * @param {object} params
+ * @param {{ number: number|string, title: string, scope?: string[] }} params.slice
+ * @param {Array<{ status: string, path: string }>} params.nameStatus
+ * @returns {{ applicable: boolean, escaped: boolean, offending: string[], scope: string[] }}
+ */
+export function detectScopeEscape({ slice, nameStatus } = {}) {
+  const notApplicable = { applicable: false, escaped: false, offending: [], scope: [] };
+  const scope = Array.isArray(slice?.scope) ? slice.scope.filter(Boolean) : [];
+  if (scope.length === 0) return notApplicable;
+  const changed = (Array.isArray(nameStatus) ? nameStatus : [])
+    .map((e) => (e && e.path ? normalizeRepoPath(e.path) : null))
+    .filter(Boolean);
+  if (changed.length === 0) return notApplicable;
+  const inScope = changed.filter((p) => scope.some((g) => matchScopeGlob(g, p)));
+  if (inScope.length > 0) return { applicable: true, escaped: false, offending: [], scope };
+  return { applicable: true, escaped: true, offending: changed, scope };
+}
+
+/**
+ * Issue #230 — git-backed wrapper around {@link detectScopeEscape}. Runs
+ * `git diff --name-status <startSha> HEAD` and evaluates the slice's commit for
+ * a scope escape. Never throws; returns `applicable: false` when the slice
+ * declares no scope or git is unavailable.
+ *
+ * @param {object} params
+ * @param {{ number: number|string, title: string, scope?: string[] }} params.slice
+ * @param {string} [params.cwd=process.cwd()]
+ * @param {string|null} [params.startSha] — HEAD SHA captured at slice start
+ * @returns {{ applicable: boolean, escaped: boolean, offending: string[], scope: string[] }}
+ */
+export function verifySliceScope({ slice, cwd = process.cwd(), startSha = null } = {}) {
+  const notApplicable = { applicable: false, escaped: false, offending: [], scope: [] };
+  const scope = Array.isArray(slice?.scope) ? slice.scope.filter(Boolean) : [];
+  if (!startSha || scope.length === 0) return notApplicable;
+  let raw = "";
+  try {
+    raw = execFileSync("git", ["diff", "--name-status", startSha, "HEAD"], {
+      cwd, encoding: "utf-8", timeout: 5_000,
+    });
+  } catch {
+    return notApplicable;
+  }
+  return detectScopeEscape({ slice, nameStatus: parseNameStatus(raw) });
+}
+
+/**
  * After a slice passes, commit any dirty working-tree changes with a
  * deterministic conventional-commit message derived from the slice title.
  * Never commits on `mode === "assisted"` runs.

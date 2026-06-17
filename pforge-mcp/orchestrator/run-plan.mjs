@@ -34,7 +34,7 @@ import { resetCliWorkersCache, setGhCopilotProbe, isDirectApiOnlyModel, isCopilo
 import { resolveGateTimeoutMs, __resetBashPathCache, resolveBashPath, detectSelfRepairMissed, buildRetryPrompt, coalesceGateLines, editDistance, isPlaceholderToken, suggestAllowedCommand, looksLikeProse, runGate, SequentialScheduler, ParallelScheduler, CompetitiveScheduler, selectWinner, detectScopeConflicts } from "./schedulers.mjs";
 import { ensureForgeDir, pruneForgeRuns, recordModelPerformance, readForgeJson, appendForgeJsonl, readForgeJsonl, auditOrphanForgeFiles, loadModelPerformance, aggregateModelStats, getCostReport, getHealthTrend, emitToolTelemetry, loadGateCheckConfig, registerGateCheckResponder } from "./forge-io.mjs";
 import { extractPlanReleaseVersion, detectVersionCollision, parseValidationGates, lintGateCommands, validateGatePortability, isGateCommandAllowed, regressionGuard } from "./gate-helpers.mjs";
-import { isDestructiveSliceTitle, isWorktreeExemptPath, loadTeardownGuardConfig, verifyBranchSafety, captureAbsorbedCommits, snapshotPreSliceState, pushSliceSnapshot, popSliceSnapshot, attachSliceSnapshotRestore, cleanupStaleSnapshots, extractFilesModifiedExhaustive, verifyFilesModified, verifyDeletionSlice, autoCommitSliceIfDirty, stageOrphansOnSliceFailure } from "./git-safety.mjs";
+import { isDestructiveSliceTitle, isWorktreeExemptPath, loadTeardownGuardConfig, verifyBranchSafety, captureAbsorbedCommits, snapshotPreSliceState, pushSliceSnapshot, popSliceSnapshot, attachSliceSnapshotRestore, cleanupStaleSnapshots, extractFilesModifiedExhaustive, verifyFilesModified, verifyDeletionSlice, verifySliceScope, autoCommitSliceIfDirty, stageOrphansOnSliceFailure } from "./git-safety.mjs";
 import { registerCorrelationThreadResponder, isDeployTrigger, runPreDeployHook, parseGitPorcelain, parseShortstat, resetPostSliceHookFired, runPostSliceHook, resetPostSliceTemperingFired, runPostSliceTemperingHook, runPreAgentHandoffHook, loadOpenClawConfig, postOpenClawSnapshot, runPostRunAuditorHook } from "./hooks.mjs";
 import { findLatestRun, parseEventLine, parseEventsLog, readSliceArtifacts, normalizeRunState, readCrucibleState, readReviewQueueState, buildWatchSnapshot, readHomeSnapshot, detectWatchAnomalies, recommendFromAnomalies, ensureReviewQueueDirs, ensureNotificationsDirs, ensureNotificationsConfig, generateReviewItemId, readReviewItem, listReviewItems, addReviewItem, resolveReviewItem, maybeAddStallReview, maybeAddTemperingReview, maybeAddBugReview, maybeAddVisualBaselineReview, maybeAddFixPlanReview, appendWatchHistory, runWatch, runWatchLive, scoreSliceComplexity } from "./review-watcher.mjs";
 import { inferSliceType, recommendModel } from "./model-scoring.mjs";
@@ -2086,6 +2086,33 @@ function _executeSliceDeletionInversionCheck({ sliceResult, slice, cwd, sliceSta
   } catch { /* non-fatal */ }
 }
 
+/**
+ * Issue #230 — fail a slice whose entire commit landed outside its declared
+ * file scope. The Phase-93 false-green run committed only out-of-scope
+ * `.github/instructions/*.md` docs while every promised in-scope feature file
+ * was missing, yet 14/14 slices reported PASSED. When a slice declares a
+ * non-empty scope and NONE of the changed paths match it, the worker did not
+ * build what it was told to. Marking the slice failed lets the retry/rollback
+ * machinery recover instead of pushing a doc-only no-op as a feature build.
+ */
+function _executeSliceScopeEscapeCheck({ sliceResult, slice, cwd, sliceStartHead, eventBus }) {
+  if (sliceResult.status !== "passed") return;
+  try {
+    const check = verifySliceScope({ slice, cwd, startSha: sliceStartHead });
+    if (!check.applicable || !check.escaped) return;
+    const paths = check.offending.slice(0, 10).join(", ");
+    sliceResult.status = "failed";
+    sliceResult.statusReason = `scope-escape: slice "${slice.title}" committed only out-of-scope files (${paths}); none match declared scope (${check.scope.join(", ")})`;
+    sliceResult.scopeEscape = { offending: check.offending, scope: check.scope };
+    eventBus?.emit("slice-scope-escape", {
+      sliceNumber: slice.number,
+      sliceTitle: slice.title,
+      offending: check.offending,
+      scope: check.scope,
+    });
+  } catch { /* non-fatal */ }
+}
+
 function _executeSliceStampCost(sliceResult) {
   try {
     const rec = calculateSliceCost(sliceResult.tokens, sliceResult.worker);
@@ -2374,6 +2401,7 @@ async function executeSlice(slice, options) {
 
   _executeSliceFilesModifiedCheck({ sliceResult, slice, cwd, sliceStartHead, eventBus });
   _executeSliceDeletionInversionCheck({ sliceResult, slice, cwd, sliceStartHead, eventBus });
+  _executeSliceScopeEscapeCheck({ sliceResult, slice, cwd, sliceStartHead, eventBus });
   const costRecord = _executeSliceStampCost(sliceResult);
 
   writeFileSync(

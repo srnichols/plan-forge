@@ -7,6 +7,8 @@ Format follows [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
+## [3.22.2] — 2026-06-17 — Scope-contract parsing, scope-escape enforcement & Studio resilience
+
 ### Fixed
 
 - **Capability auto-discovery completeness** — six served MCP tools
@@ -19,6 +21,33 @@ Format follows [Keep a Changelog](https://keepachangelog.com/).
   fails if any `TOOL_NAMES` entry lacks metadata, any metadata key is absent
   from `TOOL_NAMES`, or any entry has an empty intent — so the surface cannot
   drift silently again.
+- **Slices whose entire diff escapes the declared scope now fail (#230)** — a
+  phase reported `14/14 PASSED` while producing zero feature files: every
+  worker commit touched only out-of-scope `.github/instructions/**` paths, yet
+  the run went green. The orchestrator now detects scope escape — when a
+  slice declares a non-empty Scope Contract but none of its changed paths
+  match that scope, the slice is failed (`scope-escape`) so the rollback
+  machinery engages instead of banking a false-green commit. New
+  `normalizeRepoPath`, `matchScopeGlob`, `detectScopeEscape`, and
+  `verifySliceScope` helpers in `orchestrator/git-safety.mjs`, wired through
+  `_executeSliceScopeEscapeCheck` in `orchestrator/run-plan.mjs` with a
+  `slice-scope-escape` event.
+- **Table-based Scope Contracts and Context Files no longer drop scope (#231)**
+  — three parser defects let editable scope silently empty out: (a) a Scope
+  Contract written as a markdown table yielded an empty `inScope`, defeating
+  the #230 escape check; (b) `**Context Files:**` body lines leaked into the
+  editable `scope[]`, conflating read-only references with writable targets;
+  and (c) the `**Scope (files):**` heading variant was not recognised.
+  `parseScopeContract` is now section-aware and parses contract tables,
+  Context Files route to a dedicated `contextFiles[]` field, the files-heading
+  matcher accepts the `Scope (files)` form, and slice-complexity scoring
+  counts scope + contextFiles so Rummag-style plans score unchanged.
+- **Forge-Master Studio survives a missing `ws` dependency** — the Studio
+  prompts API returned `404 / prompts API unavailable` when the optional
+  `ws` package was absent, because a hard `import WebSocket from "ws"` threw
+  at module load and took the whole route surface down. WebSocket usage now
+  loads through `src/optional-ws.mjs`, which degrades gracefully when `ws`
+  is not installed so the REST API stays up.
 
 ## [3.22.1] — 2026-06-10 — Gate-lint & deletion-slice orchestrator hotfix
 

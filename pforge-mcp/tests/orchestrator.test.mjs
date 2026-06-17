@@ -1500,9 +1500,10 @@ describe("parsePlan body-line metadata", () => {
     }
   });
 
-  it("parses **Context Files:** body line into scope[] (Rummag format)", () => {
-    // Regression: Rummag plan declares context as backtick-wrapped paths in body,
-    // not header [scope:] tag. Previously scope[] was always [] → scopeWeight always 0.
+  it("parses **Context Files:** body line into contextFiles[] (Rummag format)", () => {
+    // #231: Rummag plans declare reference docs as backtick-wrapped paths in a
+    // **Context Files:** body line. These are read-only references and must NOT
+    // widen the editable scope[]; they land in contextFiles[] instead.
     const planPath = writeBodyPlan([
       "### Slice 1: Auth",
       "1. Implement Auth.js v5",
@@ -1512,17 +1513,18 @@ describe("parsePlan body-line metadata", () => {
     process.chdir(tempDir);
     try {
       const plan = parsePlan(planPath, tempDir);
-      expect(plan.slices[0].scope).toEqual([
+      expect(plan.slices[0].contextFiles).toEqual([
         ".github/instructions/auth.instructions.md",
         "Phase-01.md",
         "apps/api/src/auth/",
       ]);
+      expect(plan.slices[0].scope).toEqual([]);
     } finally {
       process.chdir(origCwd);
     }
   });
 
-  it("body Context Files does not duplicate header [scope:] entries", () => {
+  it("body Context Files do not leak into header [scope:] entries", () => {
     const planPath = writeBodyPlan([
       "### Slice 1: Auth [scope: src/auth/**]",
       "1. Implement auth",
@@ -1532,7 +1534,10 @@ describe("parsePlan body-line metadata", () => {
     process.chdir(tempDir);
     try {
       const plan = parsePlan(planPath, tempDir);
-      expect(plan.slices[0].scope.sort()).toEqual(["docs/auth.md", "src/auth/**"]);
+      // Editable scope stays exactly the header [scope:] tag.
+      expect(plan.slices[0].scope).toEqual(["src/auth/**"]);
+      // Context Files are recorded separately as read-only references.
+      expect(plan.slices[0].contextFiles.sort()).toEqual(["docs/auth.md", "src/auth/**"]);
     } finally {
       process.chdir(origCwd);
     }
@@ -1558,7 +1563,8 @@ describe("parsePlan body-line metadata", () => {
       const slice = plan.slices[0];
       const { score, signals } = scoreSliceComplexity(slice, tempDir);
       expect(slice.depends.length).toBe(2);
-      expect(slice.scope.length).toBe(3);
+      // #231: context paths now live in contextFiles[], not the editable scope.
+      expect(slice.contextFiles.length).toBe(3);
       expect(signals.scopeWeight).toBeGreaterThan(0);
       expect(signals.dependencyWeight).toBeGreaterThan(0);
       expect(signals.securityWeight).toBeGreaterThan(0);

@@ -63,8 +63,9 @@
   <text x="130" y="332" class="q" text-anchor="middle">Costs too high?</text>
   <path d="M130,280 L130,310" class="arrow" />
   <path d="M130,345 L130,365" class="arrow" />
-  <rect x="20" y="370" width="220" height="40" class="node" fill="#0f172a" stroke="#34d399" />
-  <text x="130" y="393" class="cmd" text-anchor="middle">Cheaper model + raise quorum threshold</text>
+  <rect x="20" y="370" width="220" height="52" class="node" fill="#0f172a" stroke="#34d399" />
+  <text x="130" y="387" class="cmd" text-anchor="middle">Cheaper model +</text>
+  <text x="130" y="400" class="cmd" text-anchor="middle">raise quorum threshold</text>
   <!-- Q4: Setup -->
   <rect x="300" y="225" width="240" height="35" class="node" fill="#0f172a" stroke="#475569" />
   <text x="420" y="247" class="q" text-anchor="middle">Setup failed?</text>

@@ -25,6 +25,7 @@
 
 import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
 import { join } from "node:path";
+import { fileURLToPath } from "node:url";
 import { spawnSync } from "node:child_process";
 import { createHash as _createHash } from "node:crypto";
 
@@ -318,7 +319,11 @@ export function getToolCatalog(projectRoot) {
   const candidates = [
     join(projectRoot, "pforge-mcp", "tools.json"),
     join(projectRoot, "tools.json"),
-    new URL("./tools.json", import.meta.url).pathname,
+    // Framework fallback: the bundled tool catalog next to this module. Use
+    // fileURLToPath (not URL.pathname) so the path is valid on Windows too —
+    // URL.pathname yields a leading-slash form like "/E:/..." that existsSync
+    // cannot resolve, which silently disabled this fallback on Windows.
+    fileURLToPath(new URL("./tools.json", import.meta.url)),
   ];
 
   let toolsJson = null;

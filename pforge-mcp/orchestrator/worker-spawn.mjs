@@ -1086,6 +1086,14 @@ export function detectWorkers(_projectDir) {
  * @returns {{ status:"failed", code:string, error:string, failureCategory?:string }|null}
  */
 export function assertWorkerBackendReady({ model = null, worker = null, cwd = process.cwd(), detect = detectWorkers, resolveApiProvider = detectApiProvider } = {}) {
+  // The copilot-coding-agent worker dispatches remotely (GitHub Copilot Coding
+  // Agent via PRs) and spawns no local CLI worker, so this local-CLI auth gate
+  // does not apply. Its auth is validated by the copilot pre-flight
+  // (_runCopilotPreflight) instead. Without this skip, a host with no
+  // authenticated CLI worker (e.g. CI) wrongly returns WORKER_AUTH_REQUIRED
+  // before the copilot pre-flight can run.
+  if (worker === "copilot-coding-agent") return null;
+
   // Direct-API models are validated by spawnWorker's own key check.
   if (isDirectApiOnlyModel(model)) return null;
 

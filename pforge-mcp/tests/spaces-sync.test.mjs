@@ -223,11 +223,17 @@ describe("getToolCatalog", () => {
     expect(result.content).toContain("| Tool | Description |");
   });
 
-  it("returns null when no tools.json found", () => {
+  it("falls back to the framework tool catalog when the project has none", () => {
+    // getToolCatalog resolves the bundled framework tools.json next to the
+    // module as a last-resort candidate, so an empty project still yields the
+    // canonical catalog (deterministic across platforms after the
+    // fileURLToPath fix — previously null on Windows via a URL.pathname bug).
     const root = join(SUITE_TMP, randomUUID());
     mkdirSync(root, { recursive: true });
     const result = getToolCatalog(root);
-    expect(result).toBeNull();
+    expect(result).not.toBeNull();
+    expect(result.spacePath).toBe("plan-forge/tool-catalog.md");
+    expect(result.content).toContain("| Tool | Description |");
   });
 });
 

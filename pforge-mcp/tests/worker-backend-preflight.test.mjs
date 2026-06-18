@@ -62,4 +62,14 @@ describe("assertWorkerBackendReady — Full-Auto preflight gate", () => {
     const detect = () => { throw new Error("detect should not be called for direct-API models"); };
     expect(assertWorkerBackendReady({ model: "grok-4.20", detect })).toBeNull();
   });
+
+  it("(7) skips the CLI gate for the copilot-coding-agent worker even with no local CLI auth", () => {
+    // copilot-coding-agent dispatches remotely (GitHub Copilot Coding Agent via
+    // PRs) and spawns no local CLI worker, so the local-CLI auth gate must not
+    // fire. Its auth is validated by the copilot pre-flight instead. Without this
+    // skip, a CI host with no authenticated CLI worker wrongly returns
+    // WORKER_AUTH_REQUIRED before the copilot pre-flight can run.
+    const detect = () => [cli({ available: false, failureCategory: "auth", reason: "gh not authenticated" })];
+    expect(assertWorkerBackendReady({ model: "claude-opus-4.7", worker: "copilot-coding-agent", detect })).toBeNull();
+  });
 });

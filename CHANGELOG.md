@@ -7,6 +7,29 @@ Format follows [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
+### Fixed
+
+- **`pforge-mcp vitest suite` CI job was red on master** — the job installs
+  `pforge-mcp/` in isolation (no workspace symlinks) and runs on Linux without
+  local CLI auth, which exposed two latent defect classes hidden on the
+  maintainer's Windows workspace. Three fixes turn it green:
+  - **Copilot worker auth gate (product bug)** — `assertWorkerBackendReady`
+    fired the local-CLI auth gate for the remote-dispatch `copilot-coding-agent`
+    worker, returning `WORKER_AUTH_REQUIRED` before the copilot pre-flight could
+    run on any host without an authenticated local CLI worker (e.g. CI). The
+    gate now skips that worker (its auth is validated by `_runCopilotPreflight`);
+    added a regression test.
+  - **`spaces-sync` framework tool-catalog fallback (cross-platform bug)** —
+    `getToolCatalog` used `URL.pathname`, which yields a leading-slash form
+    (`/E:/…`) on Windows that `existsSync` cannot resolve, silently disabling the
+    bundled-catalog fallback. Switched to `fileURLToPath`; the test now asserts
+    the documented fallback instead of the accidental `null`.
+  - **Peer-package resolution in CI** — suites importing siblings via their
+    public entry (`pforge-sdk/chunker`, `@pforge/pforge-master`) failed because
+    CI's isolated install never links them. Added a vitest `resolve.alias`
+    mapping the public specifiers to the peers' source (keeps public-entry
+    imports so the bug-219 guard stays green; no lockfile churn).
+
 ## [3.22.2] — 2026-06-17 — Scope-contract parsing, scope-escape enforcement & Studio resilience
 
 ### Fixed

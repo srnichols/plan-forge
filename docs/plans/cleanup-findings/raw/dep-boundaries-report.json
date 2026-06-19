@@ -1,0 +1,22 @@
+{
+  "generatedAt": "2026-06-18T01:47:40.085Z",
+  "includeTests": false,
+  "packages": [
+    "pforge-mcp",
+    "pforge-master",
+    "pforge-sdk",
+    "scripts",
+    "extensions"
+  ],
+  "counts": {
+    "filesScanned": 302,
+    "errors": 0,
+    "warnings": 0,
+    "infoAllowed": 20,
+    "byKind": {
+      "ALLOWED": 17,
+      "WHITELISTED": 3
+    }
+  },
+  "findings": []
+}

@@ -5,7 +5,7 @@ Format follows [Keep a Changelog](https://keepachangelog.com/).
 
 ---
 
-## [Unreleased]
+## [3.22.3] — 2026-07-08 — CI suite green + self-repair meta-bug patches (#233, #234, #235)
 
 ### Fixed
 
@@ -29,6 +29,25 @@ Format follows [Keep a Changelog](https://keepachangelog.com/).
     CI's isolated install never links them. Added a vitest `resolve.alias`
     mapping the public specifiers to the peers' source (keeps public-entry
     imports so the bug-219 guard stays green; no lockfile churn).
+
+- **`validate-setup.ps1` leaked `True`/`False` lines to the console (#233)** —
+  `Check-FileExists` returned `$true`/`$false`, and all 20 call sites invoked it
+  as bare statements, so PowerShell wrote the booleans to the success stream and
+  they interleaved with the `pforge check` output. The function now returns
+  nothing (the result was never consumed).
+- **`forge_export_plan` exploded structured prompts into one-slice-per-bullet
+  plans (#235)** — a prompt using explicit `## Slice N` headings plus
+  acceptance-criteria bullet lists produced a slice for every heading *and*
+  every bullet. New `parseStructuredSlices` detects explicit `## Slice N` /
+  `## Step N` / `## Phase N` headings and keeps each heading's body (bullets,
+  notes) inside that one slice; loose list-based plans still fall back to the
+  previous `parseSteps` behaviour.
+- **Slice gates could go green on code that does not type-check (#234)** —
+  `buildGate` now appends a typecheck reminder for `.ts`/`.tsx` files (vitest
+  runs through esbuild, which strips types without type-checking), and the
+  plan-hardening prompt (`step2-harden-plan`) now requires a typecheck gate for
+  TypeScript slices and instructs authors to scope test gates to the changed
+  module rather than the whole workspace suite.
 
 ## [3.22.2] — 2026-06-17 — Scope-contract parsing, scope-escape enforcement & Studio resilience
 

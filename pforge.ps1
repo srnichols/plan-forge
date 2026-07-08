@@ -1861,7 +1861,12 @@ function Invoke-Update {
 
     # ─── Core CLI files (root level) ────────────────────────────
     # Includes root `pforge` bash shim so it self-heals on self-update.
-    foreach ($cliFile in @("pforge.ps1", "pforge.sh", "pforge", "VERSION")) {
+    # NOTE: The root VERSION file is deliberately NOT copied — it is a
+    # consumer-owned convention (many projects track their own application
+    # version in VERSION), so overwriting it would corrupt the consumer's
+    # versioning. Plan Forge's installed version lives in .forge.json's
+    # templateVersion (updated below).
+    foreach ($cliFile in @("pforge.ps1", "pforge.sh", "pforge")) {
         $srcFile = Join-Path $sourcePath $cliFile
         $dstFile = Join-Path $RepoRoot $cliFile
         if (Test-Path $srcFile) {
@@ -6128,7 +6133,25 @@ import { checkForUpdate } from './pforge-mcp/update-check.mjs';
 const r = await checkForUpdate({ currentVersion: process.argv[1], projectDir: process.argv[2], force: true });
 console.log(JSON.stringify(r === null ? { checkFailed: true } : r));
 "@
-    $currentVersion = (Get-Content (Join-Path $RepoRoot "VERSION") -Raw).Trim()
+    # The INSTALLED Plan Forge version comes from .forge.json's templateVersion —
+    # NOT the project-root VERSION file, which in most consumer projects holds
+    # the consumer's OWN application version. Reading VERSION here misreports a
+    # project at (say) app-version 3.32.0 as "Plan Forge 3.32.0", which then
+    # blocks self-update as a false downgrade.
+    $currentVersion = $null
+    if (Test-Path $forgeJson) {
+        try {
+            $tvCfg = Get-Content $forgeJson -Raw | ConvertFrom-Json
+            if ($tvCfg.templateVersion) { $currentVersion = ([string]$tvCfg.templateVersion).Trim() }
+        } catch { Write-Verbose "Could not read templateVersion from .forge.json: $($_.Exception.Message)" }
+    }
+    if (-not $currentVersion) {
+        # Fallback: Plan Forge's own dev repo (no .forge.json) or a legacy
+        # install missing templateVersion — there the root VERSION is Plan Forge's.
+        $pfVersionFile = Join-Path $RepoRoot "VERSION"
+        if (Test-Path $pfVersionFile) { $currentVersion = (Get-Content $pfVersionFile -Raw).Trim() }
+    }
+    if (-not $currentVersion) { $currentVersion = "unknown" }
     $checkResult = & node --input-type=module -e $checkScript $currentVersion $RepoRoot 2>&1 | Select-Object -Last 1
     try {
         $checkJson = $checkResult | ConvertFrom-Json

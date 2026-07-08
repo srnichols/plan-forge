@@ -1682,12 +1682,17 @@ print(v if isinstance(v, str) else ','.join(v))
 
     unset -f _pf_check
 
-    # ─── Core root files (CLI + shim + VERSION + validators) ────
+    # ─── Core root files (CLI + shim + validators) ──────────────
     # Includes root `pforge` bash shim and validate-setup.{ps1,sh} so older
     # installs that pre-date the installer-validators-and-shim fix can
     # self-heal on `pforge self-update` (parity with pforge.ps1).
+    # NOTE: The root VERSION file is deliberately NOT copied — it is a
+    # consumer-owned convention (many projects track their own application
+    # version in VERSION); overwriting it would corrupt the consumer's
+    # versioning. Plan Forge's installed version lives in .forge.json's
+    # templateVersion.
     local core_file
-    for core_file in "pforge.ps1" "pforge.sh" "pforge" "VERSION" "validate-setup.ps1" "validate-setup.sh"; do
+    for core_file in "pforge.ps1" "pforge.sh" "pforge" "validate-setup.ps1" "validate-setup.sh"; do
         local src_core="$source_path/$core_file"
         local dst_core="$REPO_ROOT/$core_file"
         if [ -f "$src_core" ]; then
@@ -2192,8 +2197,21 @@ cmd_self_update() {
     fi
 
     echo "Checking for updates (force refresh)..."
-    local current_version
-    current_version="$(cat "$REPO_ROOT/VERSION" | tr -d '[:space:]')"
+    # The INSTALLED Plan Forge version comes from .forge.json's templateVersion —
+    # NOT the project-root VERSION file, which in most consumer projects holds
+    # the consumer's OWN application version (reading it misreports e.g. an app
+    # at 3.32.0 as "Plan Forge 3.32.0" and blocks self-update as a downgrade).
+    local current_version=""
+    if [ -f "$REPO_ROOT/.forge.json" ]; then
+        current_version="$(python3 -c "import json; print(json.load(open('$REPO_ROOT/.forge.json')).get('templateVersion',''))" 2>/dev/null || \
+                           grep -oP '"templateVersion":\s*"\K[^"]+' "$REPO_ROOT/.forge.json" 2>/dev/null | head -1 || echo "")"
+    fi
+    if [ -z "$current_version" ] && [ -f "$REPO_ROOT/VERSION" ]; then
+        # Fallback: Plan Forge's own dev repo (no .forge.json) or a legacy
+        # install missing templateVersion — there the root VERSION is Plan Forge's.
+        current_version="$(tr -d '[:space:]' < "$REPO_ROOT/VERSION")"
+    fi
+    [ -z "$current_version" ] && current_version="unknown"
 
     # Emit a distinct marker when checkForUpdate returns null so we can
     # tell "GitHub API failed" apart from "checked and up to date" (meta-bug:

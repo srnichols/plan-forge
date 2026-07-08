@@ -16,6 +16,7 @@ import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import {
   parseTitle,
   parseSteps,
+  parseStructuredSlices,
   extractPaths,
   derivePhaseSlug,
   buildGate,
@@ -90,6 +91,56 @@ describe("parseSteps", () => {
   it("ignores blank bulleted lines", () => {
     const text = "- Step one\n- \n- Step two";
     expect(parseSteps(text)).toEqual(["Step one", "Step two"]);
+  });
+});
+
+// ─── parseStructuredSlices (meta-bug #235) ───────────────────────────────────
+
+describe("parseStructuredSlices", () => {
+  const STRUCTURED = `# Campaign Lifecycle
+
+## Slice 1: Add the Prisma relation
+Update \`api/prisma/schema.prisma\`.
+
+Acceptance criteria:
+- The Item.campaign relation exists
+- Bulk import still compiles
+
+## Slice 2: Wire the service
+Edit \`api/src/campaigns/service.ts\`.
+- returns 200
+- writes an audit row
+`;
+
+  it("returns one slice per heading, not one per bullet", () => {
+    const slices = parseStructuredSlices(STRUCTURED);
+    expect(slices).toHaveLength(2);
+  });
+
+  it("uses the heading label as the goal", () => {
+    const slices = parseStructuredSlices(STRUCTURED);
+    expect(slices[0].goal).toBe("Add the Prisma relation");
+    expect(slices[1].goal).toBe("Wire the service");
+  });
+
+  it("keeps bullet points inside the slice body (not new slices)", () => {
+    const slices = parseStructuredSlices(STRUCTURED);
+    expect(slices[0].body).toContain("Bulk import still compiles");
+  });
+
+  it("recognises 'Step N' and 'Phase N' headings too", () => {
+    expect(parseStructuredSlices("## Step 1: A\n## Step 2: B")).toHaveLength(2);
+    expect(parseStructuredSlices("### Phase 1 — X\n### Phase 2 — Y")).toHaveLength(2);
+  });
+
+  it("derives a goal from the body when the heading has no label", () => {
+    const slices = parseStructuredSlices("## Slice 1\n- Do the thing");
+    expect(slices[0].goal).toBe("Do the thing");
+  });
+
+  it("returns [] for loose plans with no slice/step/phase headings", () => {
+    expect(parseStructuredSlices("# Title\n1. One\n2. Two")).toEqual([]);
+    expect(parseStructuredSlices("## Create auth module\n## Add tests")).toEqual([]);
   });
 });
 
@@ -175,6 +226,16 @@ describe("buildGate", () => {
       "Create module and add tests"
     );
     expect(gate).toContain("vitest run");
+  });
+
+  it("adds a typecheck reminder for TypeScript files (meta-bug #234)", () => {
+    const gate = buildGate(["src/auth/jwt.ts"], "Create JWT module");
+    expect(gate.toLowerCase()).toContain("typecheck");
+  });
+
+  it("does not add a typecheck reminder for non-TypeScript files", () => {
+    const gate = buildGate(["src/auth/jwt.mjs"], "Create JWT module");
+    expect(gate.toLowerCase()).not.toContain("typecheck");
   });
 });
 
@@ -282,6 +343,53 @@ describe("exportPlan", () => {
     const result = exportPlan(SAMPLE_PLAN);
     expect(result.message).toBeTruthy();
     expect(result.message).toContain("Phase-");
+  });
+});
+
+// ─── exportPlan — structured slice headings (meta-bug #235) ──────────────────
+
+const STRUCTURED_PLAN = `# Campaign Lifecycle
+
+Manage campaign create, archive, and delete.
+
+## Slice 1: Add the Prisma relation
+Update \`api/prisma/schema.prisma\` with an Item.campaign relation.
+
+Acceptance criteria:
+- The relation exists
+- Bulk import still compiles
+
+## Slice 2: Add the service
+Create \`api/src/campaigns/service.ts\`.
+- create returns 201
+- archive sets status to Archived
+
+## Slice 3: Add tests
+Add \`api/src/campaigns/service.test.ts\`.
+`;
+
+describe("exportPlan with structured slice headings", () => {
+  it("produces one slice per '## Slice N' heading, not one per bullet", () => {
+    const result = exportPlan(STRUCTURED_PLAN);
+    expect(result.ok).toBe(true);
+    expect(result.sliceCount).toBe(3);
+  });
+
+  it("uses the heading label as the slice goal", () => {
+    const { plan } = exportPlan(STRUCTURED_PLAN);
+    expect(plan).toContain("### Slice 1: Add the Prisma relation");
+    expect(plan).toContain("### Slice 2: Add the service");
+  });
+
+  it("extracts files from the slice body", () => {
+    const result = exportPlan(STRUCTURED_PLAN);
+    expect(result.files).toContain("api/prisma/schema.prisma");
+    expect(result.files).toContain("api/src/campaigns/service.ts");
+  });
+
+  it("does not turn acceptance-criteria bullets into slices", () => {
+    const { plan } = exportPlan(STRUCTURED_PLAN);
+    expect(plan).not.toContain("### Slice 4:");
   });
 });
 

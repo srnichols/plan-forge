@@ -5,6 +5,26 @@ Format follows [Keep a Changelog](https://keepachangelog.com/).
 
 ---
 
+## [3.22.4] — 2026-07-08 — Consumer VERSION-file collision in self-update
+
+### Fixed
+
+- **`pforge self-update` misread (and `pforge update` overwrote) the consumer's
+  own root `VERSION` file** — a consumer project that tracks its own application
+  version in a root `VERSION` file (observed: a project at app-version `3.32.0`)
+  had that number misread as Plan Forge's installed version. `self-update` then
+  refused to upgrade to the real latest release as a false "downgrade". Two
+  fixes, one contract:
+  - **`self-update` now sources the installed version from `.forge.json`'s
+    `templateVersion`** (fallback to the root `VERSION` only for Plan Forge's own
+    dev repo), matching what `pforge update` and `pforge smith` already used.
+  - **`pforge update` no longer copies a root `VERSION` file into consumer
+    projects.** `VERSION` is a consumer-owned convention; overwriting it on every
+    update silently corrupted the consumer's own versioning. Plan Forge's
+    installed version lives in `.forge.json` `templateVersion`.
+  - Applied to **both** `pforge.ps1` and `pforge.sh`; added a shell-parity
+    regression test (`self-update-version-source.test.mjs`).
+
 ## [3.22.3] — 2026-07-08 — CI suite green + self-repair meta-bug patches (#233, #234, #235)
 
 ### Fixed

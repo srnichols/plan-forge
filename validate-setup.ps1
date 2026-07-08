@@ -27,17 +27,20 @@ $fail = 0
 $warn = 0
 
 function Check-FileExists([string]$RelPath, [bool]$Required = $true) {
+    # NOTE: Call sites invoke this as a bare statement and never consume the
+    # result. Emitting a boolean would leak stray "True"/"False" lines into the
+    # validator output (meta-bug #233), so return nothing.
     $fullPath = Join-Path $ProjectPath $RelPath
     if (Test-Path $fullPath) {
         $size = (Get-Item $fullPath).Length
         if ($size -eq 0) {
             Write-Host "  FAIL  $RelPath (empty file)" -ForegroundColor Red
             if ($Required) { $script:fail++ } else { $script:warn++ }
-            return $false
+            return
         }
         Write-Host "  PASS  $RelPath ($size bytes)" -ForegroundColor Green
         $script:pass++
-        return $true
+        return
     }
     else {
         if ($Required) {
@@ -48,7 +51,7 @@ function Check-FileExists([string]$RelPath, [bool]$Required = $true) {
             Write-Host "  WARN  $RelPath (missing — optional)" -ForegroundColor Yellow
             $script:warn++
         }
-        return $false
+        return
     }
 }
 

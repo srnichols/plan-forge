@@ -111,6 +111,68 @@ export function parseSteps(text) {
 }
 
 /**
+ * Matches an explicit slice/step/phase heading, e.g.:
+ *   "## Slice 3: Wire the middleware"
+ *   "### Step 10 — Add tests"
+ *   "## Phase 2"
+ * Capture group 1 is the trailing label (may be empty).
+ */
+const SLICE_HEADING_RE = /^#{2,4}\s+(?:slice|step|phase)\s+\d+\b[\s:.)\u2013\u2014-]*(.*)$/i;
+
+/**
+ * Parse a structured plan that already groups work under explicit
+ * `## Slice N` / `## Step N` / `## Phase N` headings.
+ *
+ * Unlike {@link parseSteps}, this does NOT treat the bullet points beneath a
+ * heading (acceptance criteria, notes) as separate slices — the whole body
+ * under a heading belongs to that one slice. This prevents the
+ * "one-slice-per-bullet" explosion reported in meta-bug #235.
+ *
+ * Returns `[]` when the text has no explicit slice/step/phase headings, so
+ * callers can fall back to {@link parseSteps} for loose list-based plans.
+ *
+ * @param {string} text
+ * @returns {{goal: string, body: string}[]} One entry per slice heading, in order.
+ */
+export function parseStructuredSlices(text) {
+  const lines = text.split(/\r?\n/);
+  const slices = [];
+  let current = null;
+
+  for (const line of lines) {
+    const m = SLICE_HEADING_RE.exec(line.trim());
+    if (m) {
+      if (current) slices.push(current);
+      current = { label: m[1].trim(), body: "" };
+      continue;
+    }
+    if (current) current.body += line + "\n";
+  }
+  if (current) slices.push(current);
+
+  return slices.map((s, i) => ({
+    goal: s.label || firstMeaningfulLine(s.body) || `Slice ${i + 1}`,
+    body: s.body.trim(),
+  }));
+}
+
+/**
+ * First non-empty content line of a block, stripped of list markers and
+ * capped to a concise length. Used to derive a slice goal when its heading
+ * has no trailing label (e.g. a bare "## Slice 1").
+ *
+ * @param {string} body
+ * @returns {string}
+ */
+function firstMeaningfulLine(body) {
+  for (const raw of body.split(/\r?\n/)) {
+    const t = raw.trim().replace(/^(?:[-*•]\s+(?:\[[ xX]\]\s+)?|\d+\.\s+)/, "").trim();
+    if (t && !t.startsWith("#")) return t.slice(0, 80);
+  }
+  return "";
+}
+
+/**
  * Parse the title from the first `#` heading in the text.
  *
  * @param {string} text
@@ -171,17 +233,25 @@ export function derivePhaseSlug(title) {
 export function buildGate(files, stepText) {
   const testFiles = files.filter((f) => TEST_EXTENSIONS_RE.test(f));
   const codeFiles = files.filter((f) => !DOC_EXTENSIONS_RE.test(f) && !TEST_EXTENSIONS_RE.test(f));
+  const hasTypeScript = files.some((f) => /\.(ts|tsx)$/.test(f));
+
+  // TypeScript reminder: vitest runs via esbuild, which strips types without
+  // type-checking, so a passing test suite can still hide TS compile errors
+  // (meta-bug #234). Prepend a typecheck-command placeholder for TS projects.
+  const typecheckNote = hasTypeScript
+    ? " # TODO: prepend a typecheck (e.g. 'tsc --noEmit' or '<pkg-mgr> typecheck') — vitest does NOT type-check"
+    : "";
 
   // Test file → run vitest
   if (testFiles.length > 0) {
     const testArg = testFiles.map((f) => f.replace(/^pforge-mcp\//, "")).join(" ");
-    return `cd pforge-mcp && npx vitest run ${testArg} --reporter=dot 2>&1 | tail -5 | grep -qE 'Test Files.*passed' && echo ok`;
+    return `cd pforge-mcp && npx vitest run ${testArg} --reporter=dot 2>&1 | tail -5 | grep -qE 'Test Files.*passed' && echo ok${typecheckNote}`;
   }
 
   // Code files → existence check
   if (codeFiles.length > 0) {
     const checks = codeFiles.map((f) => `test -f ${f}`).join(" && ");
-    return `${checks} && echo ok`;
+    return `${checks} && echo ok${typecheckNote}`;
   }
 
   // Default placeholder gate
@@ -202,14 +272,17 @@ export function buildGate(files, stepText) {
 /**
  * Build a Slice descriptor from a step string.
  *
- * @param {string} step Step text
+ * @param {string} step Step text (becomes the concise slice goal)
  * @param {number} n    Slice ordinal (1-based)
+ * @param {string} [body] Optional slice body (e.g. text beneath a `## Slice N`
+ *   heading) used for file/gate extraction while keeping `goal` short.
  * @returns {Slice}
  */
-export function buildSlice(step, n) {
-  const files = extractPaths(step);
-  const gate = buildGate(files, step);
-  const isNew = /\bnew\b|create|add|introduce/i.test(step);
+export function buildSlice(step, n, body) {
+  const source = body ? `${step}\n${body}` : step;
+  const files = extractPaths(source);
+  const gate = buildGate(files, source);
+  const isNew = /\bnew\b|create|add|introduce/i.test(source);
 
   return { number: n, goal: step, files, gate, isNew };
 }
@@ -381,20 +454,28 @@ export function exportPlan(input, opts = {}) {
   }
 
   const title = parseTitle(input);
-  const steps = parseSteps(input);
   const phaseSlug = opts.phaseName
     ? opts.phaseName.toUpperCase().replace(/\s+/g, "-")
     : derivePhaseSlug(title);
 
-  if (steps.length === 0) {
-    return {
-      ok: false,
-      error:
-        "No steps found in the input. Provide a numbered list (1. 2. 3.) or bulleted list (- / * / •).",
-    };
+  // Prefer explicit `## Slice N` / `## Step N` structure when present so that
+  // bullet points beneath a heading stay part of that slice instead of each
+  // becoming its own slice (meta-bug #235). Fall back to loose list parsing.
+  const structured = parseStructuredSlices(input);
+  let slices;
+  if (structured.length > 0) {
+    slices = structured.map((s, i) => buildSlice(s.goal, i + 1, s.body));
+  } else {
+    const steps = parseSteps(input);
+    if (steps.length === 0) {
+      return {
+        ok: false,
+        error:
+          "No steps found in the input. Provide '## Slice N' headings, a numbered list (1. 2. 3.), or a bulleted list (- / * / •).",
+      };
+    }
+    slices = steps.map((step, i) => buildSlice(step, i + 1));
   }
-
-  const slices = steps.map((step, i) => buildSlice(step, i + 1));
 
   const allFiles = deduplicate(slices.flatMap((s) => s.files));
 

@@ -3,6 +3,8 @@ import {
   resolveRequiredCli,
   probeQuorumModelAvailability,
   filterQuorumModels,
+  isGrokCliServableModel,
+  loadGrokCliPreference,
   setGhCopilotProbe,
   setSecretsLoader,
 } from "../orchestrator.mjs";
@@ -22,6 +24,36 @@ describe("resolveRequiredCli", () => {
   it("maps unknown models to gh-copilot (default)", () => {
     expect(resolveRequiredCli("some-custom-model")).toBe("gh-copilot");
     expect(resolveRequiredCli("llama-3")).toBe("gh-copilot");
+  });
+
+  it("maps grok-* models to the grok CLI (Phase GROK-BUILD-WORKER)", () => {
+    expect(resolveRequiredCli("grok-4.5")).toBe("grok");
+    expect(resolveRequiredCli("grok-4.20-0309-reasoning")).toBe("grok");
+    expect(resolveRequiredCli("grok-build-0.1")).toBe("grok");
+  });
+});
+
+// ─── Grok Build CLI routing (Phase GROK-BUILD-WORKER) ───────────────────
+
+describe("Grok Build CLI routing", () => {
+  it("isGrokCliServableModel matches grok-* only", () => {
+    expect(isGrokCliServableModel("grok-4.5")).toBe(true);
+    expect(isGrokCliServableModel("grok-build-0.1")).toBe(true);
+    expect(isGrokCliServableModel("gpt-5.3-codex")).toBe(false);
+    expect(isGrokCliServableModel("claude-opus-4.8")).toBe(false);
+    expect(isGrokCliServableModel("")).toBe(false);
+  });
+
+  it("loadGrokCliPreference defaults to 'auto' when no .forge.json / key", () => {
+    expect(loadGrokCliPreference("/nonexistent-path-pforge-grok-test")).toBe("auto");
+  });
+
+  it("keeps grok-* on the direct-API path by default (grokCli=auto → no CLI hijack)", () => {
+    // With the default preference, grok-* must NOT route to the grok CLI even if
+    // the worker existed — it stays on the existing xAI direct-API path.
+    const res = probeQuorumModelAvailability("grok-4.5", { grokCliPreference: "auto" });
+    expect(res.via).toBe("api");
+    expect(res.worker).not.toBe("grok");
   });
 });
 

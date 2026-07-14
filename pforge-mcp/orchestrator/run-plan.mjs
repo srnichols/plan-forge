@@ -30,7 +30,7 @@ import { API_ALLOWED_ROLES, COST_ANOMALY_MULTIPLIER, CRUCIBLE_STALL_CUTOFF_DAYS,
 import { LogEventHandler, OrchestratorEventBus, appendEvent, writeSilentExitRecord } from "./event-bus.mjs";
 import { buildSlicePrompt } from "./prompt-builders.mjs";
 import { parsePlan, computeLockHash, normalizeSliceId, compareSliceIds, parseOnlySlicesExpr, parseWorkerTimeoutValue, parseSlices, buildDAG, loadPlanParserConfig } from "./plan-parser.mjs";
-import { resetCliWorkersCache, setGhCopilotProbe, isDirectApiOnlyModel, isCopilotServableModel, isApiOnlyModel, getFoundryAuthScope, detectApiProvider, setSecretsLoader, buildApiMessages, generateImage, loadWorkerCapabilities, compareVersions, detectPackageManager, suggestInstall, classifyProbeFailure, detectWorkers, detectExecutionRuntime, detectClientHost, describeBillingSurface, getRoutingPreference, loadRoutingPreference, resolveRequiredCli, probeQuorumModelAvailability, filterQuorumModels, formatQuorumSummary, assessQuorumViability, detectRuntimes, spawnWorker, detectHelpTextOutput, detectSilentWorkerFailure, detectKilledBySignal, deriveVendorFromModel, extractTokens, shouldDefaultPremiumRequestsToOne, parseStderrStats, resolveWorkerOutputIdleMs, resolveWorkerTimeoutMs } from "./worker-spawn.mjs";
+import { resetCliWorkersCache, setGhCopilotProbe, isDirectApiOnlyModel, isCopilotServableModel, isApiOnlyModel, getFoundryAuthScope, detectApiProvider, setSecretsLoader, buildApiMessages, generateImage, loadWorkerCapabilities, compareVersions, detectPackageManager, suggestInstall, classifyProbeFailure, detectWorkers, detectExecutionRuntime, detectClientHost, describeBillingSurface, getRoutingPreference, loadRoutingPreference, resolveRequiredCli, probeQuorumModelAvailability, filterQuorumModels, formatQuorumSummary, assessQuorumViability, detectRuntimes, spawnWorker, detectHelpTextOutput, detectSilentWorkerFailure, detectKilledBySignal, deriveVendorFromModel, extractTokens, shouldDefaultPremiumRequestsToOne, parseStderrStats, resolveWorkerOutputIdleMs, resolveWorkerTimeoutMs, assertWorkerBackendReady } from "./worker-spawn.mjs";
 import { resolveGateTimeoutMs, __resetBashPathCache, resolveBashPath, detectSelfRepairMissed, buildRetryPrompt, coalesceGateLines, editDistance, isPlaceholderToken, suggestAllowedCommand, looksLikeProse, runGate, SequentialScheduler, ParallelScheduler, CompetitiveScheduler, selectWinner, detectScopeConflicts } from "./schedulers.mjs";
 import { ensureForgeDir, pruneForgeRuns, recordModelPerformance, readForgeJson, appendForgeJsonl, readForgeJsonl, auditOrphanForgeFiles, loadModelPerformance, aggregateModelStats, getCostReport, getHealthTrend, emitToolTelemetry, loadGateCheckConfig, registerGateCheckResponder } from "./forge-io.mjs";
 import { extractPlanReleaseVersion, detectVersionCollision, parseValidationGates, lintGateCommands, validateGatePortability, isGateCommandAllowed, regressionGuard } from "./gate-helpers.mjs";
@@ -566,9 +566,9 @@ function _checkVersionCollision(planPath, cwd) {
   return null;
 }
 
-function _buildEstimateQuorumConfig(quorum, cwd, quorumPreset, quorumThreshold) {
+function _buildEstimateQuorumConfig(quorum, cwd, quorumPreset, quorumThreshold, includeGrokOverride = null) {
   if (!quorum) return null;
-  const estimateQuorumConfig = loadQuorumConfig(cwd, quorumPreset);
+  const estimateQuorumConfig = loadQuorumConfig(cwd, quorumPreset, { includeGrokOverride });
   estimateQuorumConfig.enabled = true;
   if (quorum === QUORUM_MODE_AUTO) estimateQuorumConfig.auto = true;
   else if (quorum === true) estimateQuorumConfig.auto = false;
@@ -760,9 +760,9 @@ function _probeQuorumAvailability(quorumConfig) {
   }
 }
 
-function _buildRunPlanQuorumConfig({ quorum, cwd, quorumPreset, quorumThreshold }) {
+function _buildRunPlanQuorumConfig({ quorum, cwd, quorumPreset, quorumThreshold, includeGrokOverride = null }) {
   if (!quorum) return null;
-  const quorumConfig = loadQuorumConfig(cwd, quorumPreset);
+  const quorumConfig = loadQuorumConfig(cwd, quorumPreset, { includeGrokOverride });
   // "auto" (CLI default): preserve quorumConfig.enabled from .forge.json.
   // true / "true" / preset: caller explicitly requested quorum — force enabled regardless of config.
   const callerExplicit = quorum === true || quorum === "true" || quorumPreset !== null;
@@ -1222,6 +1222,7 @@ export async function runPlan(planPath, options = {}) {
   const {
     cwd, model, mode, resumeFrom, estimate, dryRun, eventHandler, abortController,
     quorum, quorumThreshold, quorumPreset, bridge,
+    includeGrokOverride = null,
     manualImport, manualImportSource, manualImportReason,
     hub, strictGates, onlySlices, noTempering, allowRetrograde,
     worker, dryRunWorker,
@@ -1262,8 +1263,17 @@ export async function runPlan(planPath, options = {}) {
 
   // Estimation mode — return without executing
   if (estimate) {
-    const estimateQuorumConfig = _buildEstimateQuorumConfig(quorum, cwd, quorumPreset, quorumThreshold);
-    return buildEstimate({ plan, model: effectiveModel, cwd, quorumConfig: estimateQuorumConfig, resumeFrom, worker });
+    // Bonus preflight: surface (but don't block) a missing/unauthenticated
+    // worker backend so users see the problem before committing to Full Auto.
+    const estimateAuthGate = assertWorkerBackendReady({ model: effectiveModel, worker, cwd });
+    if (estimateAuthGate) {
+      // eslint-disable-next-line no-console
+      console.error(`[preflight] ${estimateAuthGate.error}`);
+    }
+    const estimateQuorumConfig = _buildEstimateQuorumConfig(quorum, cwd, quorumPreset, quorumThreshold, includeGrokOverride);
+    const estimateResult = buildEstimate({ plan, model: effectiveModel, cwd, quorumConfig: estimateQuorumConfig, resumeFrom, worker });
+    if (estimateAuthGate) estimateResult.workerWarning = estimateAuthGate.error;
+    return estimateResult;
   }
 
   // Dry run — parse and validate only
@@ -1296,7 +1306,7 @@ export async function runPlan(planPath, options = {}) {
   const projectName = loadProjectName(cwd);
 
   // Quorum mode (v2.5) — fix #122: respect .forge.json quorum.enabled when quorum==="auto"
-  const quorumConfig = _buildRunPlanQuorumConfig({ quorum, cwd, quorumPreset, quorumThreshold });
+  const quorumConfig = _buildRunPlanQuorumConfig({ quorum, cwd, quorumPreset, quorumThreshold, includeGrokOverride });
 
   eventBus.emit("run-started", { ...runMeta, quorum: quorumConfig ? { enabled: quorumConfig.enabled, auto: quorumConfig.auto, threshold: quorumConfig.threshold } : null });
 
@@ -2521,7 +2531,13 @@ function _cliParseQuorumArgs(args) {
 
 function _cliParseRunOptions(args, getArg) {
   const resumeFrom = getArg("--resume-from") ? Number(getArg("--resume-from")) : null;
-  const { quorum, quorumPreset } = _cliParseQuorumArgs(args);
+  let { quorum, quorumPreset } = _cliParseQuorumArgs(args);
+  // Phase GROK-BUILD-WORKER Slice 7: --with-grok / --with-grok-cli additively
+  // append a Grok member to the quorum (implies --quorum when it was disabled).
+  let includeGrokOverride = null;
+  if (args.includes("--with-grok-cli")) includeGrokOverride = "cli";
+  else if (args.includes("--with-grok")) includeGrokOverride = "api";
+  if (includeGrokOverride && quorum === false) quorum = true;
   const onlySlicesRaw = getArg("--only-slices");
   let onlySlices = null;
   if (onlySlicesRaw) {
@@ -2543,6 +2559,7 @@ function _cliParseRunOptions(args, getArg) {
     quorum,
     quorumThreshold: getArg("--quorum-threshold") ? Number(getArg("--quorum-threshold")) : null,
     quorumPreset,
+    includeGrokOverride,
     manualImport: args.includes("--manual-import"),
     manualImportSource: getArg("--manual-import-source") || "human",
     manualImportReason: getArg("--manual-import-reason") || null,

@@ -3602,7 +3602,7 @@ cmd_doctor() {
 cmd_run_plan() {
     if [ $# -lt 1 ]; then
         echo "ERROR: Missing plan path" >&2
-        echo "Usage: pforge run-plan <plan-file> [--estimate] [--assisted] [--model <name>] [--worker <name>] [--resume-from <N>] [--dry-run] [--foreground] [--no-quorum] [--quorum] [--quorum=auto] [--quorum-threshold <N>] [--strict-gates] [--manual-import [--manual-import-source <human|speckit|grandfather>] [--manual-import-reason <text>]] [--only-slices <expr>] [--no-tempering]" >&2
+        echo "Usage: pforge run-plan <plan-file> [--estimate] [--assisted] [--model <name>] [--worker <name>] [--resume-from <N>] [--dry-run] [--foreground] [--no-quorum] [--quorum] [--quorum=auto] [--quorum-threshold <N>] [--with-grok] [--with-grok-cli] [--strict-gates] [--manual-import [--manual-import-source <human|speckit|grandfather>] [--manual-import-reason <text>]] [--only-slices <expr>] [--no-tempering]" >&2
         exit 1
     fi
 
@@ -3629,6 +3629,7 @@ cmd_run_plan() {
     local manual_import_source=""
     local manual_import_reason=""
     local strict_gates=false
+    local with_grok=""
     local only_slices=""
     local no_tempering=false
 
@@ -3643,6 +3644,8 @@ cmd_run_plan() {
             --quorum)       quorum_arg="--quorum" ;;
             --manual-import) manual_import=true ;;
             --strict-gates)  strict_gates=true ;;
+            --with-grok)     [ -z "$with_grok" ] && with_grok="--with-grok" ;;
+            --with-grok-cli) with_grok="--with-grok-cli" ;;
             --no-tempering)  no_tempering=true ;;
             --only-slices)
                 shift
@@ -3723,6 +3726,7 @@ cmd_run_plan() {
     if [ -n "$quorum_threshold" ]; then node_args+=("--quorum-threshold" "$quorum_threshold"); fi
     if [ "$manual_import" = true ]; then node_args+=("--manual-import"); fi
     if [ "$strict_gates" = true ]; then node_args+=("--strict-gates"); fi
+    if [ -n "$with_grok" ]; then node_args+=("$with_grok"); fi
     if [ -n "$manual_import_source" ]; then node_args+=("--manual-import-source" "$manual_import_source"); fi
     if [ -n "$manual_import_reason" ]; then node_args+=("--manual-import-reason" "$manual_import_reason"); fi
     if [ -n "$only_slices" ]; then node_args+=("--only-slices" "$only_slices"); fi

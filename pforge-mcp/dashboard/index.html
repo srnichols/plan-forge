@@ -1047,6 +1047,14 @@
               <label class="block text-xs text-gray-500 mb-1">Quorum Models (comma-separated)</label>
               <input id="cfg-quorum-models" type="text" placeholder="claude-opus-4.7, gpt-5.3-codex, grok-4.20-0309-reasoning" class="bg-gray-700 text-white text-sm rounded px-3 py-1.5 w-full border border-gray-600 focus:border-purple-500 outline-none">
             </div>
+            <div class="mt-2">
+              <label class="block text-xs text-gray-500 mb-1">Include Grok in quorum (additive)</label>
+              <select id="cfg-quorum-include-grok" title="Additively append a Grok member (grok-4.5) to the quorum" class="bg-gray-700 text-white text-xs rounded px-2 py-1.5 w-full border border-gray-600">
+                <option value="">Off</option>
+                <option value="api">API — grok-4.5 (metered, needs XAI_API_KEY)</option>
+                <option value="cli">Grok Build CLI — grok-4.5 (flat subscription)</option>
+              </select>
+            </div>
           </div>
           <div>
             <label class="block text-xs text-gray-500 mb-1">Available Workers</label>

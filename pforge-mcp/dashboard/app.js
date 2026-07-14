@@ -2687,6 +2687,11 @@ async function loadConfig() {
     if (qThresh) qThresh.value = currentConfig.quorum?.threshold ?? 7;
     if (qModels) qModels.value = (currentConfig.quorum?.models || []).join(", ");
     if (qPreset) qPreset.value = currentConfig.quorum?.preset || "";
+    const qGrok = document.getElementById("cfg-quorum-include-grok");
+    if (qGrok) {
+      const ig = currentConfig.quorum?.includeGrok;
+      qGrok.value = ig === true ? "api" : (ig === "api" || ig === "cli" ? ig : "");
+    }
 
     // Update source preference (v2.56.0)
     const updSrcSel = document.getElementById("cfg-update-source");
@@ -2931,6 +2936,7 @@ async function saveConfig() {
     const qModelsStr = document.getElementById("cfg-quorum-models")?.value || "";
     const qModels = qModelsStr ? qModelsStr.split(",").map((m) => m.trim()).filter(Boolean) : [];
     const qPreset = document.getElementById("cfg-quorum-preset")?.value || "";
+    const qIncludeGrok = document.getElementById("cfg-quorum-include-grok")?.value || "";
     const observerEnabled = document.getElementById("cfg-observer-enabled")?.checked || false;
     const observerModelTier = document.getElementById("cfg-observer-modeltier")?.value || "";
     const observerBudgetUsd = parseFloat(document.getElementById("cfg-observer-budget-usd")?.value ?? "1");
@@ -2972,6 +2978,7 @@ async function saveConfig() {
         threshold: isNaN(qThresh) ? 7 : qThresh,
         models: qModels.length > 0 ? qModels : (currentConfig.quorum?.models || []),
         ...(qPreset ? { preset: qPreset } : {}),
+        ...(qIncludeGrok ? { includeGrok: qIncludeGrok } : {}),
       },
       forgeMaster: {
         ...(currentConfig.forgeMaster || {}),

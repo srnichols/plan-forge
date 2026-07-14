@@ -20,6 +20,7 @@ import {
   loadModelPerformance,
   recordModelPerformance,
   loadQuorumConfig,
+  applyGrokAddIn,
   loadOpenClawConfig,
   scoreSliceComplexity,
   coalesceGateLines,
@@ -1088,6 +1089,80 @@ describe("loadQuorumConfig", () => {
     }));
     const config = loadQuorumConfig(tempDir);
     expect(config.strictAvailability).toBe(true);
+  });
+});
+
+// ─── Grok quorum add-in (Phase GROK-BUILD-WORKER Slice 7) ───────────────
+
+describe("applyGrokAddIn", () => {
+  const base = () => ({ models: ["claude-opus-4.7", "gpt-5.3-codex"] });
+
+  it("is a no-op when includeGrok is falsy", () => {
+    const cfg = base();
+    expect(applyGrokAddIn(cfg, { includeGrok: false })).toBe(cfg);
+    expect(applyGrokAddIn(cfg, {})).toBe(cfg);
+  });
+
+  it("appends grok-4.5 via API when includeGrok='api' and XAI_API_KEY present", () => {
+    const r = applyGrokAddIn(base(), { includeGrok: "api", hasXaiKey: true });
+    expect(r.models).toEqual(["claude-opus-4.7", "gpt-5.3-codex", "grok-4.5"]);
+    expect(r.grokVia).toBe("api");
+  });
+
+  it("treats includeGrok=true as 'api'", () => {
+    const r = applyGrokAddIn(base(), { includeGrok: true, hasXaiKey: true });
+    expect(r.models).toContain("grok-4.5");
+    expect(r.grokVia).toBe("api");
+  });
+
+  it("honors a custom grokModel override", () => {
+    const r = applyGrokAddIn(base(), { includeGrok: "api", hasXaiKey: true, grokModel: "grok-4.3" });
+    expect(r.models).toContain("grok-4.3");
+    expect(r.models).not.toContain("grok-4.5");
+  });
+
+  it("appends via CLI when includeGrok='cli' and the grok CLI is available", () => {
+    const r = applyGrokAddIn(base(), { includeGrok: "cli", grokCliAvailable: true });
+    expect(r.models).toContain("grok-4.5");
+    expect(r.grokVia).toBe("cli");
+  });
+
+  it("skips (advisory, no hard-fail) when the API credential is missing", () => {
+    const r = applyGrokAddIn(base(), { includeGrok: "api", hasXaiKey: false });
+    expect(r.models).toEqual(["claude-opus-4.7", "gpt-5.3-codex"]);
+    expect(r.grokAddInSkipped).toMatch(/XAI_API_KEY/);
+  });
+
+  it("skips when the CLI credential is missing", () => {
+    const r = applyGrokAddIn(base(), { includeGrok: "cli", grokCliAvailable: false });
+    expect(r.models).not.toContain("grok-4.5");
+    expect(r.grokAddInSkipped).toMatch(/grok CLI/);
+  });
+
+  it("never duplicates or displaces an existing grok member", () => {
+    const cfg = { models: ["claude-opus-4.7", "grok-4.20-0309-reasoning"] };
+    const r = applyGrokAddIn(cfg, { includeGrok: "api", hasXaiKey: true });
+    expect(r).toBe(cfg); // unchanged reference — additive-only invariant
+  });
+});
+
+describe("loadQuorumConfig — includeGrok add-in", () => {
+  it("appends grok-4.5 when .forge.json quorum.includeGrok='api' + XAI_API_KEY", () => {
+    writeFileSync(resolve(tempDir, ".forge.json"), JSON.stringify({ quorum: { includeGrok: "api", models: ["claude-opus-4.7", "gpt-5.3-codex"] } }));
+    const config = loadQuorumConfig(tempDir, null, { env: { XAI_API_KEY: "xai-x" } });
+    expect(config.models).toContain("grok-4.5");
+    expect(config.grokVia).toBe("api");
+  });
+
+  it("CLI override (includeGrokOverride) wins over .forge.json", () => {
+    writeFileSync(resolve(tempDir, ".forge.json"), JSON.stringify({ quorum: { models: ["claude-opus-4.7", "gpt-5.3-codex"] } }));
+    const config = loadQuorumConfig(tempDir, null, { includeGrokOverride: "api", env: { XAI_API_KEY: "xai-x" } });
+    expect(config.models).toContain("grok-4.5");
+  });
+
+  it("defaults (no includeGrok) leave models untouched", () => {
+    const config = loadQuorumConfig(tempDir);
+    expect(config.models.some((m) => m.startsWith("grok-4.5"))).toBe(false);
   });
 });
 

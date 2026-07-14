@@ -62,7 +62,7 @@ export { isDestructiveSliceTitle, isWorktreeExemptPath, loadTeardownGuardConfig,
 export { registerCorrelationThreadResponder, isDeployTrigger, runPreDeployHook, parseGitPorcelain, parseShortstat, resetPostSliceHookFired, runPostSliceHook, resetPostSliceTemperingFired, runPostSliceTemperingHook, runPreAgentHandoffHook, loadOpenClawConfig, postOpenClawSnapshot, runPostRunAuditorHook } from "./orchestrator/hooks.mjs";
 export { findLatestRun, parseEventLine, parseEventsLog, readSliceArtifacts, normalizeRunState, readCrucibleState, readReviewQueueState, buildWatchSnapshot, readHomeSnapshot, detectWatchAnomalies, recommendFromAnomalies, ensureReviewQueueDirs, ensureNotificationsDirs, ensureNotificationsConfig, generateReviewItemId, readReviewItem, listReviewItems, addReviewItem, resolveReviewItem, maybeAddStallReview, maybeAddTemperingReview, maybeAddBugReview, maybeAddVisualBaselineReview, maybeAddFixPlanReview, appendWatchHistory, runWatch, runWatchLive, scoreSliceComplexity } from "./orchestrator/review-watcher.mjs";
 export { inferSliceType, recommendModel } from "./orchestrator/model-scoring.mjs";
-export { loadQuorumConfig, classifyLegError, quorumDispatch, quorumReview, analyzeWithQuorum, calculateSliceCost, buildCostBreakdown } from "./orchestrator/quorum.mjs";
+export { loadQuorumConfig, applyGrokAddIn, classifyLegError, quorumDispatch, quorumReview, analyzeWithQuorum, calculateSliceCost, buildCostBreakdown } from "./orchestrator/quorum.mjs";
 
 for (const sig of ["exit", "SIGINT", "SIGTERM", "SIGHUP"]) {
   process.on(sig, () => {

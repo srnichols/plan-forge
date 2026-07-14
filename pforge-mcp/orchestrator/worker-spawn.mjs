@@ -2280,16 +2280,16 @@ export function deriveVendorFromModel(model) {
  */
 /**
  * Parse Grok Build CLI `--output-format streaming-json` output into a token /
- * cost summary. Phase GROK-BUILD-WORKER Slice 3.
+ * cost summary. Phase GROK-BUILD-WORKER Slice 3 (schema verified in v3.24.1).
  *
- * ⚠️ SCHEMA NOT YET VERIFIED AGAINST A REAL CAPTURE (Required Decision #4).
- * The `grok` CLI was not installed when this was authored, so the companion
- * fixture (tests/fixtures/grok-streaming-json.jsonl) is SYNTHETIC and models the
- * documented streaming-json shape. This parser is deliberately tolerant of
- * field-name variants (input_tokens|prompt_tokens, output_tokens|completion_tokens)
- * and degrades to null tokens (heuristic estimation upstream) when no usage
- * event is present — so a schema mismatch fails soft rather than crashing.
- * Tighten the field mapping once a real transcript is captured.
+ * Verified against real `grok 0.2.101` output (2026-07-14). The stream is JSONL:
+ *   - `{"type":"text","data":"<assistant text>"}` chunks
+ *   - a terminal `{"type":"end", ..., "usage":{input_tokens,output_tokens,...},
+ *      "total_cost_usd_ticks":N, "modelUsage":{ "<model>": {...} }}` event
+ * The parser also stays tolerant of documented variant shapes (delta.text,
+ * content, prompt_tokens/completion_tokens, usage.cost_in_usd_ticks, top-level
+ * model) and degrades to null tokens (heuristic estimation upstream) when no
+ * usage event is present — so a future schema change fails soft, not hard.
  *
  * @param {string} stdout - raw JSONL text from the grok CLI
  * @returns {{ output: string, tokens_in: number|null, tokens_out: number|null,
@@ -2309,15 +2309,21 @@ export function parseGrokStreamingJson(stdout) {
     try { ev = JSON.parse(line); } catch { continue; }
     if (!ev || typeof ev !== "object") continue;
 
+    // Model: top-level `model` (variant) or the first `modelUsage` key (real grok).
     if (typeof ev.model === "string" && !model) model = ev.model;
+    if (!model && ev.modelUsage && typeof ev.modelUsage === "object") {
+      const keys = Object.keys(ev.modelUsage);
+      if (keys.length) model = keys[0];
+    }
 
-    // Assistant text — tolerant of a few documented shapes.
-    const text = ev.delta?.text
+    // Assistant text: real grok emits {type:"text",data:"..."}; keep variants.
+    const text = (ev.type === "text" && typeof ev.data === "string" ? ev.data : null)
+      ?? ev.delta?.text
       ?? (typeof ev.content === "string" ? ev.content : null)
       ?? (ev.type === "assistant" && typeof ev.text === "string" ? ev.text : null);
     if (text) output += text;
 
-    // Terminal usage event.
+    // Terminal usage event: real grok = type:"end" with a top-level `usage`.
     const usage = ev.usage || (ev.type === "result" ? ev.result?.usage : null);
     if (usage && typeof usage === "object") {
       const inTok = usage.input_tokens ?? usage.prompt_tokens ?? null;
@@ -2326,6 +2332,8 @@ export function parseGrokStreamingJson(stdout) {
       if (outTok != null) tokensOut = outTok;
       if (usage.cost_in_usd_ticks != null) costTicks = usage.cost_in_usd_ticks;
     }
+    // Cost ticks: real grok reports these at the event level, not inside usage.
+    if (ev.total_cost_usd_ticks != null) costTicks = ev.total_cost_usd_ticks;
   }
 
   return {

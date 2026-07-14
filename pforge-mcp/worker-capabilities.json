@@ -1,7 +1,7 @@
 {
   "_comment": "Single source of truth for worker + runtime capability checks. Consumed by orchestrator.mjs detectWorkers() and pforge.ps1 Invoke-Smith Runtime & Worker Readiness section. See issue #28 for the silent-failure mode this prevents.",
   "_version": 2,
-  "_updated": "2026-05-06",
+  "_updated": "2026-07-14",
 
   "workers": {
     "gh-copilot": {
@@ -117,6 +117,35 @@
         "linux": "npm install -g @openai/codex",
         "docs": "https://platform.openai.com/docs/codex"
       }
+    },
+
+    "grok": {
+      "description": "xAI Grok Build CLI (agentic coding worker). Headless via `grok -p <prompt> --output-format streaming-json`. Dual auth: browser login on a SuperGrok / X Premium+ subscription (flat billing) or XAI_API_KEY (metered API). Default model grok-4.5.",
+      "probe": {
+        "command": "grok",
+        "versionArgs": ["--version"],
+        "helpArgs": ["--help"],
+        "capabilityMarkers": ["-p", "--output-format"],
+        "capabilityDescription": "Headless prompt mode with -p and --output-format streaming-json"
+      },
+      "minVersion": "0.1.0",
+      "versionRegex": "(\\d+\\.\\d+\\.\\d+)",
+      "defaultModel": "grok-4.5",
+      "costModel": "subscription",
+      "invocation": {
+        "cmd": "grok",
+        "baseArgs": ["-p", "{PROMPT}", "--output-format", "streaming-json"]
+      },
+      "install": {
+        "windows": "irm https://x.ai/cli/install.ps1 | iex",
+        "macos": "curl -fsSL https://x.ai/cli/install.sh | bash",
+        "linux": "curl -fsSL https://x.ai/cli/install.sh | bash",
+        "docs": "https://docs.x.ai/build/overview"
+      },
+      "failureModes": [
+        "grok CLI not authenticated — launch `grok` once and sign in (SuperGrok / X Premium+), or set XAI_API_KEY for headless/metered use.",
+        "Very large slice prompts passed inline via -p may exceed the OS command-line length limit; if observed, switch the invocation to Grok Build's file-input syntax once confirmed (see Phase GROK-BUILD-WORKER Slice 3 fixture capture)."
+      ]
     }
   },
 

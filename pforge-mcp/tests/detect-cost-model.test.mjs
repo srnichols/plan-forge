@@ -2,11 +2,12 @@ import { describe, it, expect } from "vitest";
 import { detectCostModel, SUBSCRIPTION_PROVIDERS } from "../cost-service.mjs";
 
 describe("SUBSCRIPTION_PROVIDERS", () => {
-  it("contains exactly the three CLI providers", () => {
+  it("contains the CLI subscription providers (incl. grok-cli)", () => {
     expect(SUBSCRIPTION_PROVIDERS.has("gh-copilot")).toBe(true);
     expect(SUBSCRIPTION_PROVIDERS.has("claude-cli")).toBe(true);
     expect(SUBSCRIPTION_PROVIDERS.has("codex-cli")).toBe(true);
-    expect(SUBSCRIPTION_PROVIDERS.size).toBe(3);
+    expect(SUBSCRIPTION_PROVIDERS.has("grok-cli")).toBe(true);
+    expect(SUBSCRIPTION_PROVIDERS.size).toBe(4);
   });
 });
 
@@ -69,10 +70,23 @@ describe("detectCostModel — precedence", () => {
     expect(result.perRequestUsd).toBe(0.01);
   });
 
-  it("heuristic: grok-* → xai-api", () => {
-    const result = detectCostModel({ model: "grok-4" });
+  it("heuristic: grok-* with XAI_API_KEY → xai-api (metered)", () => {
+    const result = detectCostModel({ env: { XAI_API_KEY: "xai-x" }, model: "grok-4.5" });
     expect(result.provider).toBe("xai-api");
     expect(result.perRequestUsd).toBeNull();
+  });
+
+  it("heuristic: grok-* without XAI_API_KEY → grok-cli (flat subscription) [Phase GROK-BUILD-WORKER]", () => {
+    const result = detectCostModel({ env: {}, model: "grok-4.5" });
+    expect(result.provider).toBe("grok-cli");
+    expect(result.perRequestUsd).toBe(0.01);
+  });
+
+  it("subscription-CLI providers stay flat $0.01 (v2.83.0 byte-identical invariant)", () => {
+    for (const p of ["gh-copilot", "claude-cli", "codex-cli"]) {
+      const r = detectCostModel({ env: { PFORGE_COST_MODEL: p } });
+      expect(r.perRequestUsd).toBe(0.01);
+    }
   });
 
   it("heuristic: gh-copilot model string → gh-copilot", () => {
@@ -116,7 +130,7 @@ describe("detectCostModel — precedence", () => {
 
   it("unrecognised forge.json cost.model falls through to heuristic", () => {
     const result = detectCostModel({
-      env: {},
+      env: { XAI_API_KEY: "xai-x" },
       forgeConfig: { cost: { model: "not-a-provider" } },
       model: "grok-4",
     });

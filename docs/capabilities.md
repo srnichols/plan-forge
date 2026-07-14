@@ -137,6 +137,7 @@ Anvil, Hallmark, Lattice, and the Sync families are exposed as both **MCP tools*
 | Mode | Flag | Worker | Description |
 |------|------|--------|-------------|
 | **Full Auto** | *(default)* | `gh copilot` CLI | Agent executes each slice with full project context |
+| **Grok Build** | `--worker grok` | `grok` CLI | Execute the whole plan via xAI's Grok Build agent. Dual auth: `grok` browser login (SuperGrok / X Premium+, flat subscription) or `XAI_API_KEY` (metered). Install: `irm https://x.ai/cli/install.ps1 \| iex`. To add Grok to a *quorum* instead of running the whole plan through it, use `--with-grok` (metered API) or `--with-grok-cli` (subscription). |
 | **Assisted** | `--assisted` | Human in VS Code | Orchestrator prompts, human codes, gates validate |
 | **Cloud Agent** | *(via `copilot-setup-steps.yml`)* | Copilot cloud agent | Cloud agent provisions environment, guardrails auto-load, MCP tools available |
 | **Quorum Auto** | `--quorum=auto` *(default when enabled)* | claude-opus-4.7 + gpt-5.3-codex + grok-4.20-0309-reasoning | Default threshold **5** (raised from 3 on 2026-05-21). Only slices with complexity score ≥ 5 get quorum. Adaptive — floor 5, ceiling 9. |

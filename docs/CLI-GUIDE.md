@@ -685,6 +685,15 @@ Execute a hardened plan — spawn CLI workers for each slice, validate at every 
 # Specify model
 .\pforge.ps1 run-plan docs/plans/Phase-7-INVENTORY-PLAN.md --model claude-sonnet-4.6
 
+# Run the whole plan through xAI Grok Build (grok CLI worker)
+#   install: irm https://x.ai/cli/install.ps1 | iex  (then sign in, or set XAI_API_KEY)
+.\pforge.ps1 run-plan docs/plans/Phase-7-INVENTORY-PLAN.md --worker grok
+
+# Keep your default worker but add a Grok voice to the quorum:
+#   --with-grok      = grok-4.5 via metered xAI API (needs XAI_API_KEY)
+#   --with-grok-cli  = grok-4.5 via Grok Build CLI (flat subscription)
+.\pforge.ps1 run-plan docs/plans/Phase-7-INVENTORY-PLAN.md --quorum --with-grok
+
 # Resume from slice 3 after fixing a failure
 .\pforge.ps1 run-plan docs/plans/Phase-7-INVENTORY-PLAN.md --resume-from 3
 

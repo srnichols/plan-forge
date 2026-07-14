@@ -122,6 +122,22 @@ const COPILOT_SERVABLE = {
 };
 
 /**
+ * Grok models eligible for Grok Build CLI routing. Distinct from DIRECT_API_ONLY
+ * (which remains the fallback): grok-* is served by the `grok` CLI worker when the
+ * operator opts in (routing.grokCli="prefer") AND the CLI is installed; otherwise
+ * it falls back to the xAI direct API — no regression for API-first users.
+ * Phase GROK-BUILD-WORKER.
+ */
+const GROK_CLI_SERVABLE = {
+  xai: {
+    pattern: /^grok-/,
+    worker: "grok",
+    envKey: "XAI_API_KEY",
+    label: "xAI Grok Build CLI",
+  },
+};
+
+/**
  * Combined view for backwards compatibility with any code that iterated
  * API_PROVIDERS directly. New callers should prefer the specific registries.
  */
@@ -202,6 +218,22 @@ export function isDirectApiOnlyModel(model) {
 export function isCopilotServableModel(model) {
   if (!model) return false;
   for (const provider of Object.values(COPILOT_SERVABLE)) {
+    if (provider.pattern.test(model)) return true;
+  }
+  return false;
+}
+
+/**
+ * Check whether a model is eligible for Grok Build CLI routing (grok-*).
+ * Eligibility ≠ activation: the CLI path only activates when routing.grokCli is
+ * "prefer" AND the grok worker is available. Otherwise grok-* stays on the
+ * existing direct-API path. Phase GROK-BUILD-WORKER.
+ * @param {string} model
+ * @returns {boolean}
+ */
+export function isGrokCliServableModel(model) {
+  if (!model) return false;
+  for (const provider of Object.values(GROK_CLI_SERVABLE)) {
     if (provider.pattern.test(model)) return true;
   }
   return false;
@@ -1326,6 +1358,28 @@ export function loadRoutingPreference(cwd) {
   }
 }
 
+const VALID_GROK_CLI_PREFS = new Set(["prefer", "auto", "off"]);
+
+/**
+ * Read the Grok Build CLI routing preference from .forge.json → routing.grokCli.
+ * "prefer" routes grok-* through the grok CLI worker when it is available; "auto"
+ * / "off" (default) keeps the existing xAI direct-API behavior. Phase GROK-BUILD-WORKER.
+ * @param {string} cwd
+ * @returns {"prefer"|"auto"|"off"}
+ */
+export function loadGrokCliPreference(cwd) {
+  try {
+    const configPath = resolve(cwd, ".forge.json");
+    if (!existsSync(configPath)) return "auto";
+    const config = JSON.parse(readFileSync(configPath, "utf-8"));
+    const pref = config?.routing?.grokCli;
+    if (typeof pref === "string" && VALID_GROK_CLI_PREFS.has(pref)) return pref;
+    return "auto";
+  } catch {
+    return "auto";
+  }
+}
+
 // ─── Quorum Model Availability Probing (H.3) ─────────────────────────
 
 /**
@@ -1338,6 +1392,7 @@ export function loadRoutingPreference(cwd) {
 export function resolveRequiredCli(model) {
   if (/^claude-/.test(model)) return "claude";
   if (/^codex-/.test(model)) return "codex";
+  if (/^grok-/.test(model)) return "grok";
   return "gh-copilot";
 }
 
@@ -1374,6 +1429,26 @@ function _probeDirectApiOnly(model, host) {
     }
   }
   return null;
+}
+
+/**
+ * Grok Build CLI probe branch (Phase GROK-BUILD-WORKER). Returns a CLI result
+ * ONLY when the operator opted in (routing.grokCli="prefer") AND the `grok`
+ * worker is available. Returns null otherwise so the caller falls through to the
+ * existing direct-API path — guaranteeing zero regression for API-first users.
+ * @returns {object|null}
+ */
+function _probeGrokCliServable(model, host, grokCliPreference, cwd, workers) {
+  const pref = grokCliPreference ?? loadGrokCliPreference(cwd || process.cwd());
+  if (pref !== "prefer") return null;
+  const grokWorker = (workers || detectWorkers()).find((w) => w.name === "grok" && w.available);
+  if (!grokWorker) return null;
+  return {
+    model, available: true, via: "cli", worker: "grok",
+    provider: "grok-subscription", host,
+    billing: "Grok subscription (flat) or XAI_API_KEY (metered)",
+    routingPreference: pref,
+  };
 }
 
 function _probeCopilotServable(model, host, hostPreference, ghCopilot) {
@@ -1440,6 +1515,15 @@ export function probeQuorumModelAvailability(model, opts = {}) {
     : null;
   const host = opts.host || detectClientHost();
   const hostPreference = opts.hostPreference || "auto";
+
+  // Grok Build CLI preference (Phase GROK-BUILD-WORKER): when the operator opts
+  // in via routing.grokCli="prefer" AND the grok CLI worker is available, route
+  // grok-* through the Grok Build CLI (subscription/flat). Otherwise fall through
+  // to the existing direct-API path below — no regression for API-first users.
+  if (isGrokCliServableModel(model)) {
+    const grokRes = _probeGrokCliServable(model, host, opts.grokCliPreference, opts.cwd, workers);
+    if (grokRes) return grokRes;
+  }
 
   if (isDirectApiOnlyModel(model)) {
     const directRes = _probeDirectApiOnly(model, host);

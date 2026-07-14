@@ -15,7 +15,7 @@
   </defs>
   <!-- Model A -->
   <rect x="20" y="30" width="160" height="55" class="node" fill="#0f172a" stroke="#f59e0b" />
-  <text x="100" y="52" class="title" text-anchor="middle">grok-4</text>
+  <text x="100" y="52" class="title" text-anchor="middle">grok-4.5</text>
   <text x="100" y="70" class="fail" text-anchor="middle">❌ slice failed</text>
   <!-- Arrow A→B -->
   <path d="M180,57 L240,57" class="arrow" />
@@ -29,6 +29,6 @@
   <text x="440" y="48" class="fail" text-anchor="middle">escalate</text>
   <!-- Model C -->
   <rect x="480" y="30" width="160" height="55" class="node" fill="#0f172a" stroke="#34d399" />
-  <text x="560" y="52" class="title" text-anchor="middle">gpt-5.2-codex</text>
+  <text x="560" y="52" class="title" text-anchor="middle">gpt-5.3-codex</text>
   <text x="560" y="70" class="pass" text-anchor="middle">✅ slice passed</text>
 </svg>

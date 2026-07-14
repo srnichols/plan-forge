@@ -564,7 +564,7 @@ forge_github_metrics({ team: "platform", since: "2026-04-01" })</code></pre>
 
       <pre><code>pforge run-plan docs/plans/Phase-28-PLAN.md --model gpt-4.1
 pforge run-plan docs/plans/Phase-28-PLAN.md --model claude-sonnet-4.5
-pforge run-plan docs/plans/Phase-28-PLAN.md --model grok-3</code></pre>
+pforge run-plan docs/plans/Phase-28-PLAN.md --model grok-4.3</code></pre>
 
       <p>The value is forwarded to the Forge-Master reasoning layer (<code>pforge-master/src/reasoning.mjs</code>), which resolves it against the configured provider table in <code>.forge.json#providers</code>. If no provider entry exists for the requested model, Forge-Master falls back to the default provider and logs a <code>warn</code> event to the timeline.</p>
 
@@ -582,8 +582,8 @@ pforge run-plan docs/plans/Phase-28-PLAN.md --quorum=false   # disable quorum en
       <table class="manual-table">
         <thead><tr><th>Mode</th><th>Models polled</th><th>Agreement threshold</th><th>Best for</th></tr></thead>
         <tbody>
-          <tr><td><code>power</code></td><td>Up to 3 flagship models (GPT-5, Claude Opus, Grok-4)</td><td>5 / 7 points</td><td>Deploy slices, schema migrations</td></tr>
-          <tr><td><code>speed</code></td><td>Up to 3 fast models (GPT-4.1, Claude Haiku, Grok-3-mini)</td><td>7 / 7 points</td><td>High-volume code generation, CI budget caps</td></tr>
+          <tr><td><code>power</code></td><td>Up to 3 flagship models (GPT-5, Claude Opus, Grok-4.5)</td><td>5 / 7 points</td><td>Deploy slices, schema migrations</td></tr>
+          <tr><td><code>speed</code></td><td>Up to 3 fast models (GPT-4.1, Claude Haiku, grok-4.20-0309-non-reasoning)</td><td>7 / 7 points</td><td>High-volume code generation, CI budget caps</td></tr>
           <tr><td><code>auto</code></td><td>Plan Forge selects per slice based on slice risk tags</td><td>Per-slice</td><td>Mixed plans; recommended default</td></tr>
           <tr><td><code>false</code></td><td>Single model only</td><td>N/A</td><td>Local development, cost sensitivity</td></tr>
         </tbody>
@@ -608,12 +608,12 @@ pforge run-plan docs/plans/Phase-28-PLAN.md --quorum=false   # disable quorum en
 
 # Or as environment variables:
 export XAI_API_KEY=xai-...
-pforge run-plan docs/plans/Phase-28-PLAN.md --model grok-4</code></pre>
+pforge run-plan docs/plans/Phase-28-PLAN.md --model grok-4.5</code></pre>
 
       <p>BYOK matters in the following situations:</p>
 
       <ul>
-        <li><strong class="text-slate-200">Model not in the Copilot picker</strong>, Grok-4, Grok-3, and Grok-3-mini are only reachable via direct xAI keys today. Set <code>XAI_API_KEY</code> and they become available to <code>--model</code> and quorum.</li>
+        <li><strong class="text-slate-200">Model not in the Copilot picker</strong>, Grok-4.5, Grok-4.3, and grok-4.20-0309-non-reasoning are only reachable via direct xAI keys today. Set <code>XAI_API_KEY</code> and they become available to <code>--model</code> and quorum.</li>
         <li><strong class="text-slate-200">Higher rate limits</strong>, a GitHub Copilot Business seat has shared rate-limit headroom. Direct BYOK keys give dedicated limits. In heavy quorum runs (power mode across three flagship models), hitting the shared rate limit stalls the run. BYOK avoids the contention.</li>
         <li><strong class="text-slate-200">Data-residency or audit requirements</strong>, some organisations route only approved models through the Copilot proxy for compliance. BYOK lets the remainder go direct without touching the proxy at all.</li>
         <li><strong class="text-slate-200">Cost arbitrage</strong>, the Copilot Business per-seat fee is often cheaper per token for everyday chat, but a heavy automated quorum run on flagship models may be cheaper billed direct at volume pricing. Run <code>pforge run-plan --estimate</code> to compare.</li>
@@ -639,9 +639,9 @@ pforge run-plan docs/plans/Phase-28-PLAN.md --model grok-4</code></pre>
     "models": {
       "gpt-5.4":           { "provider": "githubCopilot" },
       "claude-sonnet-4.6": { "provider": "githubCopilot" },
-      "grok-4":            { "provider": "xai",   "baseUrl": "https://api.x.ai/v1" },
-      "grok-3":            { "provider": "xai",   "baseUrl": "https://api.x.ai/v1" },
-      "grok-3-mini":       { "provider": "xai",   "baseUrl": "https://api.x.ai/v1" }
+      "grok-4.5":          { "provider": "xai",   "baseUrl": "https://api.x.ai/v1" },
+      "grok-4.3":          { "provider": "xai",   "baseUrl": "https://api.x.ai/v1" },
+      "grok-4.20-0309-non-reasoning": { "provider": "xai",   "baseUrl": "https://api.x.ai/v1" }
     }
   }
 }</code></pre>

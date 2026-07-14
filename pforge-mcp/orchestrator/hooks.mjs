@@ -1262,7 +1262,7 @@ export async function postOpenClawSnapshot(cwd, extraContext = {}) {
   }
 }
 
-const DEFAULT_WATCHER_MODEL = "claude-opus-4.7";
+const DEFAULT_WATCHER_MODEL = "claude-opus-4.8";
 
 // Phase-53 S7: findLatestRun, parseEventLine, parseEventsLog, readSliceArtifacts,
 // normalizeRunState, CRUCIBLE_STALL_CUTOFF_DAYS, readCrucibleState

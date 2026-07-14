@@ -294,7 +294,7 @@ function resolveFoundryBaseUrl(endpointKey) {
  * probeQuorumModelAvailability — they consult this helper AFTER determining
  * that the CLI path is unavailable or inappropriate.
  *
- * @param {string} model - Model identifier (e.g., "grok-3-mini")
+ * @param {string} model - Model identifier (e.g., "grok-4.20-0309-non-reasoning")
  * @returns {{ name, baseUrl, apiKey, label } | null}
  */
 function detectApiProvider(model) {
@@ -2013,7 +2013,7 @@ function parseJSONL(output) {
  *   claude-*  → anthropic   (claude-opus-4.7, claude-sonnet-4.6, etc.)
  *   gpt-*     → openai      (gpt-5.3-codex, gpt-4o, etc.)
  *   o1-* o3-* → openai      (reasoning model lines)
- *   grok-*    → xai         (grok-4.20-0309-reasoning, grok-3, etc.)
+ *   grok-*    → xai         (grok-4.20-0309-reasoning, grok-4.3, etc.)
  *   gemini-*  → google
  *
  * @param {string|null|undefined} model

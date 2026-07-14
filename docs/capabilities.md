@@ -26,7 +26,7 @@
 | `forge_bug_update_status` | tempering | low | Transition a bug's status (open → in-fix → fixed, or open → wont-fix/duplicate) with transition validation. Terminal states (fixed, wont-fix, duplicate) cannot be changed. Accepts either 'newStatus' or 'status' as the field name (#116). |
 | `forge_bug_validate_fix` | validate-fix | medium | Re-run the scanner(s) that discovered a bug to verify the fix. On pass: marks bug as 'fixed', dispatches commentValidatedFix to bug-adapter, broadcasts tempering-bug-validated-fixed event. On fail: appends attempt to bug.validationAttempts[], status unchanged. |
 | `forge_capabilities` | discover | low | Machine-readable API surface — returns all MCP tools with semantic metadata (intent, prerequisites, errors, cost), CLI commands, workflow graphs, config schema, dashboard info, and installed extensions. Agents call this once on session start for full discoverability. |
-| `forge_classifier_issue` |  | low | File a GitHub issue proposing a classifier rule update when a tempering finding routes to the 'classifier' lane (infra noise). Deduplicates by finding class + reason hash — repeated occurrences comment on the existing issue instead of creating a duplicate. USE FOR: closing the audit loop when routeFinding returns lane='classifier', tracking recurring noise patterns in GitHub. DO NOT USE FOR: product bugs (use forge_bug_register), spec gaps (submit to Crucible), self-repair defects (use forge_meta_bug_file). |
+| `forge_classifier_issue` | file-issue | low | File a GitHub issue proposing a classifier rule update when a tempering finding routes to the 'classifier' lane (infra noise). Deduplicates by finding class + reason hash — repeated occurrences comment on the existing issue instead of creating a duplicate. USE FOR: closing the audit loop when routeFinding returns lane='classifier', tracking recurring noise patterns in GitHub. DO NOT USE FOR: product bugs (use forge_bug_register), spec gaps (submit to Crucible), self-repair defects (use forge_meta_bug_file). |
 | `forge_cost_report` | read | low | Cost tracking report — shows total spend, per-model breakdown, and monthly aggregation from .forge/cost-history.json. Includes token counts, run history, and forge_model_stats (success rate per model from model-performance.json). |
 | `forge_crucible_abandon` | crucible | low | Abandon a smelt — marks it status=abandoned and releases any phase-number claim it held. Idempotent: re-abandoning a smelt is a no-op. USE FOR: discarding a smelt that was started by mistake or superseded by another idea. |
 | `forge_crucible_ask` | crucible | low | Advance the Crucible interview — supply an answer and get the next question, or mark the smelt ready for preview/finalize when the interview is complete. Call without `answer` to fetch the current question. USE FOR: the interactive Q&A loop that turns a raw idea into a hardened spec. |
@@ -50,13 +50,13 @@
 | `forge_env_diff` | env-diff | low | Compare environment variable keys across .env files — detect missing keys between baseline and target environments. Compares key names only (never values). Caches results in .forge/env-diff-cache.json. Integrates with forge_runbook to surface environment key gaps. |
 | `forge_estimate_quorum` | estimate | low | Returns projected cost of a plan under all four quorum modes (auto / power / speed / false) in a single call. Agents MUST call this tool before presenting any dollar amount for a plan — hand-computed quorum costs drift by an order of magnitude. Backed by cost-service.mjs, the same code path that powers `pforge run-plan --estimate`. |
 | `forge_estimate_slice` | estimate | low | Returns projected cost for a single slice under a chosen quorum mode. Cheaper than forge_estimate_quorum (which estimates the whole plan). Backed by cost-service.mjs estimateSlice(). Un-calibrated — no run-level historical correction factor applied. |
-| `forge_export_plan` |  | low | Convert a loose Copilot cloud agent session plan (numbered or bulleted steps) into a hardened Plan Forge Phase-X-PLAN.md. Parses steps, extracts file paths, generates per-slice validation gates, and outputs a complete plan with scope contract, forbidden actions template, and acceptance criteria. |
+| `forge_export_plan` | convert | low | Convert a loose Copilot cloud agent session plan (numbered or bulleted steps) into a hardened Plan Forge Phase-X-PLAN.md. Parses steps, extracts file paths, generates per-slice validation gates, and outputs a complete plan with scope contract, forbidden actions template, and acceptance criteria. |
 | `forge_ext_info` | read | low | Show detailed information about a specific extension from the community catalog — author, version, category, provides, tags, and install command. |
 | `forge_ext_search` | search | low | Search the Plan Forge community extension catalog. Returns matching extensions with names, descriptions, categories, and install commands. |
 | `forge_fix_proposal` | fix-proposal | low | Generate a 1-3 slice fix plan from regression, drift, incident, secret-scan, Crucible (stalled/orphan), or tempering-bug failure. Writes to docs/plans/auto/LIVEGUARD-FIX-<id>.md. Capped at one proposal per id. |
 | `forge_generate_image` | create | medium | Generate an image using AI image models (xAI Grok Aurora or OpenAI DALL-E). Provide a text description and get a generated image saved to disk. Supports format conversion — request WebP, PNG, AVIF, or JPEG regardless of what the API returns. Useful for creating logos, diagrams, UI mockups, icons, and illustrations during plan execution. Requires XAI_API_KEY (Grok) or OPENAI_API_KEY (DALL-E). |
-| `forge_github_metrics` |  | low | Fetch live GitHub repository metrics via the gh CLI — stars, forks, open issues, PR counts, and commit activity. Requires gh CLI authenticated. USE FOR: project health dashboards, sprint retrospectives, answering 'how active is this repo?'. Returns null fields gracefully when gh is unavailable. |
-| `forge_github_status` |  | low | Inspect the GitHub-native AI surface a project has wired up — .github/copilot-instructions.md, AGENTS.md, .github/instructions/, .github/prompts/, .vscode/mcp.json (Plan-Forge entry), .github/workflows/, github.com remote, gh CLI. Read-only; no network calls. USE FOR: diagnosing missing GitHub Copilot / GHAS / MCP wiring; building a readiness report; in-IDE chat answering 'what GitHub primitives am I missing?'. |
+| `forge_github_metrics` | metrics | low | Fetch live GitHub repository metrics via the gh CLI — stars, forks, open issues, PR counts, and commit activity. Requires gh CLI authenticated. USE FOR: project health dashboards, sprint retrospectives, answering 'how active is this repo?'. Returns null fields gracefully when gh is unavailable. |
+| `forge_github_status` | diagnose | low | Inspect the GitHub-native AI surface a project has wired up — .github/copilot-instructions.md, AGENTS.md, .github/instructions/, .github/prompts/, .vscode/mcp.json (Plan-Forge entry), .github/workflows/, github.com remote, gh CLI. Read-only; no network calls. USE FOR: diagnosing missing GitHub Copilot / GHAS / MCP wiring; building a readiness report; in-IDE chat answering 'what GitHub primitives am I missing?'. |
 | `forge_graph_query` | graph | low | Query the Plan Forge knowledge graph. Returns subgraph of nodes and edges matching the query. Supports phase, file, recent-changes, and neighbor traversal queries. |
 | `forge_hallmark_show` | hallmark | low | Show Hallmark provenance records — immutable milestone stamps written by the orchestrator at key execution points (slice completions, gate passes, phase closures). Without an id, lists all hallmarks. With an id, returns the full record. USE FOR: auditing execution milestones; answering 'was this slice completed?'; surfacing provenance context in review sessions. Returns: { hallmarks[], count } or a single hallmark record. |
 | `forge_hallmark_verify` | hallmark | low | Verify a Hallmark record has not drifted — re-hashes the source file (if any) referenced by the hallmark and compares against the stored hash. USE FOR: detecting whether a file has changed since a hallmark was written; pre-deploy integrity checks. Returns: { ok, id, drift, message, writtenAt }. |
@@ -81,7 +81,7 @@
 | `forge_notify_send` | notify | low | Send a notification directly via a named adapter, bypassing routing rules. Use for ad-hoc agent dispatches. |
 | `forge_notify_test` | notify | low | Test notification adapter configuration. Validates config and optionally sends a test payload. |
 | `forge_org_rules` | generate | low | Export org custom instructions — consolidate .github/instructions/*.instructions.md files into a single block for GitHub org-level Copilot custom instructions (Layer 1 of the two-layer model). Strips per-file frontmatter since org instructions apply universally. USE FOR: export org rules, generate org-level Copilot instructions, consolidate coding standards, org governance, GitHub org custom instructions. |
-| `forge_patterns_list` |  | low | List recurring patterns detected across plan runs. Returns gate-failure recurrences, model failure rates, slice flap patterns, and cost anomalies. Advisory only — never injected into plan hardener or executor. |
+| `forge_patterns_list` | list | low | List recurring patterns detected across plan runs. Returns gate-failure recurrences, model failure rates, slice flap patterns, and cost anomalies. Advisory only — never injected into plan hardener or executor. |
 | `forge_pipelines_list` | pipelines | low | List the four standing capture pipelines and report their last-write timestamps plus Anvil hit rates. The four pipelines are: orchestrator-memory, watcher-drift, crucible, and run-slice. USE FOR: monitoring data-capture pipeline health; checking whether memory and event capture are active; diagnosing gaps in the L2 memory tier. Returns: { pipelines[], anvil }. |
 | `forge_plan_status` | read | low | Get the status of the latest plan execution run. Shows per-slice results, token usage, duration, and overall status from .forge/runs/. |
 | `forge_quorum_analyze` | quorum-analyze | low | Assemble a structured 3-section quorum prompt from any LiveGuard data source. No LLM calls — returns the prompt for multi-model dispatch. Supports customQuestion freeform override (max 500 chars) and analysisGoal presets. |
@@ -101,7 +101,7 @@
 | `forge_sync_instructions` | sync | low | Generate .github/copilot-instructions.md from forge project context (project profile, project principles, .forge.json config). GitHub Copilot reads this file automatically. Completes the Copilot integration trilogy: sync-memories → sync-instructions. USE FOR: populate Copilot with project-specific instructions, regenerate instructions after adding project profile or principles, export project context to Copilot. DO NOT USE FOR: uploading to Copilot Spaces (use forge_sync_spaces), reading memory hints (use forge_sync_memories). |
 | `forge_sync_memories` | sync | low | Generate .github/copilot-memory-hints.md from forge decisions (trajectory notes, auto-skills, brain L2 entries). Copilot Memory auto-discovers this file as a project knowledge source. Soft-sync approach — no API calls required. USE FOR: populate Copilot Memory with project decisions, regenerate memory hints after plan runs, export trajectory notes, sync brain decisions to Copilot. DO NOT USE FOR: uploading to Copilot Spaces (use forge_sync_spaces), reading individual trajectories. |
 | `forge_team_activity` | read | low | Read recent Plan Forge run summaries from the team activity feed (.forge/team-activity.jsonl). Shows who ran what plan, when, and at what cost — across all developers sharing the same repo. USE FOR: see recent team plan runs, check what plans are in flight, review team plan cost. DO NOT USE FOR: individual slice details (use forge_plan_status), cost breakdown (use forge_cost_report). |
-| `forge_team_dashboard` |  | low | Show the multi-developer plan coordination dashboard — aggregates team-activity.jsonl by operator and returns per-developer stats (runs, success rate, cost) plus a conflict-risk assessment for teams where multiple developers are active concurrently. USE FOR: team coordination view, who is running what plan, concurrent developer risk. DO NOT USE FOR: individual run details (use forge_plan_status), raw activity feed (use forge_team_activity), cost breakdown (use forge_cost_report). |
+| `forge_team_dashboard` | team | low | Show the multi-developer plan coordination dashboard — aggregates team-activity.jsonl by operator and returns per-developer stats (runs, success rate, cost) plus a conflict-risk assessment for teams where multiple developers are active concurrently. USE FOR: team coordination view, who is running what plan, concurrent developer risk. DO NOT USE FOR: individual run details (use forge_plan_status), raw activity feed (use forge_team_activity), cost breakdown (use forge_cost_report). |
 | `forge_tempering_approve_baseline` | approve | low | Promote the current screenshot for a URL to the visual-diff baseline. Copies the latest screenshot to .forge/tempering/baselines/ and writes a JSON sidecar with promotion metadata. Idempotent — re-promoting overwrites. USE FOR: accepting intentional visual changes after a visual regression is flagged by forge_tempering_run. |
 | `forge_tempering_drain` | tempering | high | Tempering drain loop — wraps forge_tempering_run in a round-loop that re-probes until convergence or max-rounds cap fires. Writes per-round deltas to .forge/tempering/drain-history.jsonl and a final audit artifact to .forge/audits/dev-<ts>.json. USE FOR: recursive audit loops, post-plan convergence checks, drain-until-clean semantics. DO NOT USE FOR: single-shot tempering runs (use forge_tempering_run), editing source, creating bugs directly. |
 | `forge_tempering_run` | tempering | medium | Tempering execution harness — runs the enabled test scanners (unit, integration, UI/Playwright, and API contract/OpenAPI/GraphQL) through each stack's preset adapter (typescript/dotnet/python/go/java/rust; php/swift/azure-iac stub until extension). Enforces config.runtimeBudgets with SIGTERM→SIGKILL, writes .forge/tempering/run-<ts>.json and .forge/tempering/artifacts/<runId>/contract/report.json, emits tempering-run-started / tempering-run-scanner-started / tempering-run-scanner-completed / tempering-run-completed hub events. USE FOR: post-slice verification, pre-deploy gates, CI adapters. Forbidden: does NOT edit source, does NOT create bugs (that lands in TEMPER-06), does NOT recurse into plan-forge itself. |
@@ -113,7 +113,7 @@
 | `forge_timeline` | timeline | low | Unified chronological view across all forge event sources with correlationId grouping. Merges hub-events, runs, memories, openbrain, watch, tempering, bugs, incidents, and forge-master sessions into a single timeline. |
 | `forge_triage_route` | tempering | low | Triage a single tempering finding into one of three lanes: 'bug' (product defect), 'spec' (feature/spec gap), or 'classifier' (noise). Pure routing — no side effects. Fail-safe: unknown classifier output always routes to 'bug' with low confidence. USE FOR: per-finding triage after a tempering run, building custom drain loops. DO NOT USE FOR: batch triage (use forge_tempering_drain), registering bugs (use forge_bug_register after triage). |
 | `forge_validate` | validate | low | Validate Plan Forge setup — check that all required files exist, file counts match preset expectations, and no unresolved placeholders remain. |
-| `forge_watch` | observe | low | WATCHER (v2.34) — read-only observer that tails another project's pforge run. Run this from a SECOND VS Code Copilot session with Plan-Forge as the workspace, pointing targetPath at the project being executed. Returns snapshot of current run state (slices passed/failed/in-progress, token counts, gate errors) plus heuristic anomaly detection. Mode 'analyze' additionally invokes a frontier model (default: claude-opus-4.7) for narrative advice. The watcher CANNOT modify any files in the target project. |
+| `forge_watch` | observe | low | WATCHER (v2.34) — read-only observer that tails another project's pforge run. Run this from a SECOND VS Code Copilot session with Plan-Forge as the workspace, pointing targetPath at the project being executed. Returns snapshot of current run state (slices passed/failed/in-progress, token counts, gate errors) plus heuristic anomaly detection. Mode 'analyze' additionally invokes a frontier model (default: claude-opus-4.8) for narrative advice. The watcher CANNOT modify any files in the target project. |
 | `forge_watch_live` | observe | low | WATCHER LIVE TAIL (v2.35) — stream events from another project's pforge run for a fixed duration. Connects to the target's WebSocket hub if running (`.forge/server-ports.json`); falls back to file polling otherwise. Read-only by design — only subscribes, never sends commands. Returns aggregate stats and the captured event stream. By default events are projected to a lite shape `{ ts, type, correlationId }` to keep payloads small; pass `verbose: true` for full event objects. |
 
 ## CLI Mirrors
@@ -139,8 +139,8 @@ Anvil, Hallmark, Lattice, and the Sync families are exposed as both **MCP tools*
 | **Full Auto** | *(default)* | `gh copilot` CLI | Agent executes each slice with full project context |
 | **Assisted** | `--assisted` | Human in VS Code | Orchestrator prompts, human codes, gates validate |
 | **Cloud Agent** | *(via `copilot-setup-steps.yml`)* | Copilot cloud agent | Cloud agent provisions environment, guardrails auto-load, MCP tools available |
-| **Quorum Auto** | `--quorum=auto` *(default when enabled)* | claude-opus-4.6 + gpt-5.3-codex + grok-4.20-0309-reasoning | Default threshold **5** (raised from 3 on 2026-05-21). Only slices with complexity score ≥ 5 get quorum. Adaptive — floor 5, ceiling 9. |
-| **Quorum Power** | `--quorum=power` | claude-opus-4.7 + gpt-5.3-codex + grok-4.20-0309-reasoning | Flagship preset. Threshold 5, 5-min dry-run timeout. Reviewer: claude-opus-4.7. Falls back to `speed` on `cli-gh` host where opus-4.7 is the only servable flagship. |
+| **Quorum Auto** | `--quorum=auto` *(default when enabled)* | claude-opus-4.7 + gpt-5.3-codex + grok-4.20-0309-reasoning | Default threshold **5** (raised from 3 on 2026-05-21). Only slices with complexity score ≥ 5 get quorum. Adaptive — floor 5, ceiling 9. |
+| **Quorum Power** | `--quorum=power` | claude-opus-4.8 + gpt-5.3-codex + grok-4.20-0309-reasoning | Flagship preset. Threshold 5, 5-min dry-run timeout. Reviewer: claude-opus-4.8. Falls back to `speed` on `cli-gh` host where opus-4.8 is the only servable flagship. |
 | **Quorum Speed** | `--quorum=speed` | claude-sonnet-4.6 + gpt-5.4-mini + grok-4.20-0309-non-reasoning | Fast preset. Threshold 7, 2-min dry-run timeout. Reviewer: claude-sonnet-4.6. *(2026-05-21: grok-4-1-fast-reasoning was retired by xAI on 2026-05-15; replaced with grok-4.20-0309-non-reasoning.)* |
 | **Quorum Disabled** | `--quorum=false` or `--no-quorum` | Single model | Force-disable quorum even when `.forge.json → quorum.enabled = true`. |
 | **Quorum Gov** | *(no CLI flag — `.forge.json → quorum.preset = "power-gov"`)* | gpt-5.1 + gpt-4.1 + gpt-4.1-mini + o3-mini + gpt-4o | Microsoft Foundry / government-cloud preset (OpenAI-only). Threshold 5, 5-min dry-run timeout. Reviewer: gpt-4.1. |
@@ -177,22 +177,22 @@ Assign a different AI model to each execution role via `modelRouting` in `.forge
 
 | Role | Key | Default | Typical Use |
 |------|-----|---------|-------------|
-| General / fallback | `default` | `claude-opus-4.6` | Spec, harden, review |
-| Slice execution | `execute` | `gpt-5.2-codex` | Writing code, generating tests |
+| General / fallback | `default` | `claude-opus-4.8` | Spec, harden, review |
+| Slice execution | `execute` | `gpt-5.3-codex` | Writing code, generating tests |
 | Review & audit | `review` | `claude-sonnet-4.6` | Gate checks, drift detection |
 
 Config (`.forge.json`):
 ```json
 {
   "modelRouting": {
-    "default": "claude-opus-4.6",
-    "execute": "gpt-5.2-codex",
+    "default": "claude-opus-4.8",
+    "execute": "gpt-5.3-codex",
     "review": "claude-sonnet-4.6"
   }
 }
 ```
 
-Override at runtime: `pforge run-plan <plan> --model gpt-5.2-codex` (applies to all roles for that run).
+Override at runtime: `pforge run-plan <plan> --model gpt-5.3-codex` (applies to all roles for that run).
 API providers (xAI Grok, etc.) are auto-routed by model name pattern — no extra config required.
 
 ## Auto-Escalation
@@ -308,7 +308,7 @@ Plan Forge supports OpenAI-compatible HTTP endpoints via the `API_PROVIDERS` reg
 | Provider | Models | Env Var | Endpoint |
 |----------|--------|---------|----------|
 | **GitHub Copilot** *(recommended)* | `gpt-4o-mini` *(default)*, `gpt-4o`, `claude-sonnet-4`, `claude-opus-4` | `GITHUB_TOKEN` (or `gh auth login`) | `models.github.ai/inference` |
-| **xAI Grok** | `grok-4.20`, `grok-4`, `grok-3`, `grok-3-mini`, `grok-4.1-fast-*` | `XAI_API_KEY` | `api.x.ai/v1` |
+| **xAI Grok** | `grok-4.5`, `grok-4.3`, `grok-4.20-0309-reasoning`, `grok-4.20-0309-non-reasoning` | `XAI_API_KEY` | `api.x.ai/v1` |
 
 Set the env var, use any matching model name in `--models` or `.forge.json`, and the orchestrator routes automatically.
 
@@ -1021,8 +1021,8 @@ Directories and files written by Plan Forge at runtime. All paths are relative t
   "preset": "dotnet",
   "projectName": "MyApp",
   "modelRouting": {
-    "default": "claude-opus-4.6",
-    "execute": "gpt-5.2-codex",
+    "default": "claude-opus-4.8",
+    "execute": "gpt-5.3-codex",
     "review": "claude-sonnet-4.6"
   },
   "maxParallelism": 3,

@@ -7,6 +7,236 @@ Format follows [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
+## [3.23.0] — 2026-07-14 — Model catalog refresh: live GitHub Copilot + xAI Grok defaults
+
+> **One-liner**: Refreshed all default model selections against the live GitHub Copilot and xAI Grok catalogs (queried 2026-07-14). Replaced three retired model references, bumped the flagship tier to Claude Opus 4.8, and added pricing entries for the new Anthropic / OpenAI / Google / xAI models. Subscription-CLI cost path (`gh-copilot`, `claude-cli`, `codex-cli`) is byte-identical and unaffected.
+
+### Fixed
+
+- **Retired model references** — three models no longer served by their providers were still wired into defaults:
+  - `grok-3-mini` → `grok-4.20-0309-non-reasoning`. This was the Forge-Master `routerModel` default; every intent-routing LLM call was pointing at a model xAI retired. (`pforge-master/src/config.mjs`, `pforge-mcp/capabilities/surface.mjs`.)
+  - `gpt-5.2-codex` → `gpt-5.3-codex`. Removed from the Copilot catalog; still offered in the `modelRouting.default` schema enum and several doc/tool examples. (`pforge-mcp/capabilities/schemas.mjs`, `pforge-mcp/server/tool-definitions.mjs`, `pforge-mcp/orchestrator/run-plan.mjs` JSDoc.)
+  - `gemini-3-pro-preview` → `gemini-3.1-pro-preview`. Live successor. Fixed in quorum `suggestedModels` fallbacks (`server/rest-api.mjs`, `server/tool-handlers/discovery.mjs`, `tempering.mjs`) and the schema enum.
+
+### Changed
+
+- **Flagship tier bumped to Claude Opus 4.8** (newly available in the Copilot catalog):
+  - Quorum **Power** preset models + reviewer → `claude-opus-4.8` (`orchestrator/constants.mjs`).
+  - Quorum **Auto** reviewer + `loadModelRouting` runtime default → `claude-opus-4.8`; Auto standard-tier model bumped `claude-opus-4.6` → `claude-opus-4.7` (`orchestrator/quorum.mjs`, `capabilities/schemas.mjs`, `orchestrator/run-plan.mjs`).
+  - `forge_watch` analyze-mode default (`DEFAULT_WATCHER_MODEL`) → `claude-opus-4.8` (`orchestrator/hooks.mjs`, `orchestrator/review-watcher.mjs`).
+  - Visual-diff tempering scanner default → `claude-opus-4.8` (`tempering/scanners/visual-diff.mjs`).
+- **Grok env-var / model-list hints** refreshed to the live set `grok-4.5, grok-4.3, grok-4.20-0309-reasoning, grok-4.20-0309-non-reasoning` across docs and dashboard.
+
+### Added
+
+- **`MODEL_PRICING` entries** (`pforge-mcp/cost-service.mjs`) for newly-cataloged models: `claude-opus-4.8`, `claude-sonnet-5`, `gpt-5.6-luna`/`gpt-5.6-sol`/`gpt-5.6-terra`, `gemini-3.1-pro-preview`, `gemini-3.5-flash`, `grok-4.5`, `grok-build-0.1`. xAI models carry authoritative rates from `docs.x.ai` (`grok-4.5` $2/$6 500k ctx; `grok-build-0.1` $1/$2 256k ctx, agentic coding). Anthropic/OpenAI/Google entries mirror the closest sibling and are marked `_source: "estimated: … pending vendor publication (2026-07-14)"` until those vendors publish per-token rates. Matching entries added to the Forge-Master `TURN_PRICING` table (`pforge-master/src/cost.mjs`).
+- Quorum members `grok-4.20-0309-*` were **kept** (still live and purpose-split reasoning/non-reasoning); `grok-4.5` and `grok-build-0.1` are priced and selectable but not swapped into the calibrated presets.
+
+### Tests
+
+- Updated quorum default assertions (`tests/orchestrator.test.mjs`, `tests/runtime-quorum-viability.test.mjs`) for the opus-4.8 flagship bump and regenerated the server-surface golden fixture (`tests/fixtures/server-surface.golden.json`) for the refreshed tool-description examples.
+
+## [3.22.4] — 2026-07-08 — Consumer VERSION-file collision in self-update
+
+### Fixed
+
+- **`pforge self-update` misread (and `pforge update` overwrote) the consumer's
+  own root `VERSION` file** — a consumer project that tracks its own application
+  version in a root `VERSION` file (observed: a project at app-version `3.32.0`)
+  had that number misread as Plan Forge's installed version. `self-update` then
+  refused to upgrade to the real latest release as a false "downgrade". Two
+  fixes, one contract:
+  - **`self-update` now sources the installed version from `.forge.json`'s
+    `templateVersion`** (fallback to the root `VERSION` only for Plan Forge's own
+    dev repo), matching what `pforge update` and `pforge smith` already used.
+  - **`pforge update` no longer copies a root `VERSION` file into consumer
+    projects.** `VERSION` is a consumer-owned convention; overwriting it on every
+    update silently corrupted the consumer's own versioning. Plan Forge's
+    installed version lives in `.forge.json` `templateVersion`.
+  - Applied to **both** `pforge.ps1` and `pforge.sh`; added a shell-parity
+    regression test (`self-update-version-source.test.mjs`).
+
+## [3.22.3] — 2026-07-08 — CI suite green + self-repair meta-bug patches (#233, #234, #235)
+
+### Fixed
+
+- **`pforge-mcp vitest suite` CI job was red on master** — the job installs
+  `pforge-mcp/` in isolation (no workspace symlinks) and runs on Linux without
+  local CLI auth, which exposed two latent defect classes hidden on the
+  maintainer's Windows workspace. Three fixes turn it green:
+  - **Copilot worker auth gate (product bug)** — `assertWorkerBackendReady`
+    fired the local-CLI auth gate for the remote-dispatch `copilot-coding-agent`
+    worker, returning `WORKER_AUTH_REQUIRED` before the copilot pre-flight could
+    run on any host without an authenticated local CLI worker (e.g. CI). The
+    gate now skips that worker (its auth is validated by `_runCopilotPreflight`);
+    added a regression test.
+  - **`spaces-sync` framework tool-catalog fallback (cross-platform bug)** —
+    `getToolCatalog` used `URL.pathname`, which yields a leading-slash form
+    (`/E:/…`) on Windows that `existsSync` cannot resolve, silently disabling the
+    bundled-catalog fallback. Switched to `fileURLToPath`; the test now asserts
+    the documented fallback instead of the accidental `null`.
+  - **Peer-package resolution in CI** — suites importing siblings via their
+    public entry (`pforge-sdk/chunker`, `@pforge/pforge-master`) failed because
+    CI's isolated install never links them. Added a vitest `resolve.alias`
+    mapping the public specifiers to the peers' source (keeps public-entry
+    imports so the bug-219 guard stays green; no lockfile churn).
+
+- **`validate-setup.ps1` leaked `True`/`False` lines to the console (#233)** —
+  `Check-FileExists` returned `$true`/`$false`, and all 20 call sites invoked it
+  as bare statements, so PowerShell wrote the booleans to the success stream and
+  they interleaved with the `pforge check` output. The function now returns
+  nothing (the result was never consumed).
+- **`forge_export_plan` exploded structured prompts into one-slice-per-bullet
+  plans (#235)** — a prompt using explicit `## Slice N` headings plus
+  acceptance-criteria bullet lists produced a slice for every heading *and*
+  every bullet. New `parseStructuredSlices` detects explicit `## Slice N` /
+  `## Step N` / `## Phase N` headings and keeps each heading's body (bullets,
+  notes) inside that one slice; loose list-based plans still fall back to the
+  previous `parseSteps` behaviour.
+- **Slice gates could go green on code that does not type-check (#234)** —
+  `buildGate` now appends a typecheck reminder for `.ts`/`.tsx` files (vitest
+  runs through esbuild, which strips types without type-checking), and the
+  plan-hardening prompt (`step2-harden-plan`) now requires a typecheck gate for
+  TypeScript slices and instructs authors to scope test gates to the changed
+  module rather than the whole workspace suite.
+
+## [3.22.2] — 2026-06-17 — Scope-contract parsing, scope-escape enforcement & Studio resilience
+
+### Fixed
+
+- **Capability auto-discovery completeness** — six served MCP tools
+  (`forge_github_status`, `forge_github_metrics`, `forge_team_dashboard`,
+  `forge_classifier_issue`, `forge_export_plan`, `forge_patterns_list`) were
+  registered in `enums.mjs`/`tool-definitions.mjs`/`tools.json` but missing
+  from `TOOL_METADATA`, so they surfaced in `forge_capabilities` with a bare
+  name and no intent/cost/example enrichment. Added accurate metadata entries
+  for all six and a completeness guard test (`capabilities.test.mjs`) that
+  fails if any `TOOL_NAMES` entry lacks metadata, any metadata key is absent
+  from `TOOL_NAMES`, or any entry has an empty intent — so the surface cannot
+  drift silently again.
+- **Slices whose entire diff escapes the declared scope now fail (#230)** — a
+  phase reported `14/14 PASSED` while producing zero feature files: every
+  worker commit touched only out-of-scope `.github/instructions/**` paths, yet
+  the run went green. The orchestrator now detects scope escape — when a
+  slice declares a non-empty Scope Contract but none of its changed paths
+  match that scope, the slice is failed (`scope-escape`) so the rollback
+  machinery engages instead of banking a false-green commit. New
+  `normalizeRepoPath`, `matchScopeGlob`, `detectScopeEscape`, and
+  `verifySliceScope` helpers in `orchestrator/git-safety.mjs`, wired through
+  `_executeSliceScopeEscapeCheck` in `orchestrator/run-plan.mjs` with a
+  `slice-scope-escape` event.
+- **Table-based Scope Contracts and Context Files no longer drop scope (#231)**
+  — three parser defects let editable scope silently empty out: (a) a Scope
+  Contract written as a markdown table yielded an empty `inScope`, defeating
+  the #230 escape check; (b) `**Context Files:**` body lines leaked into the
+  editable `scope[]`, conflating read-only references with writable targets;
+  and (c) the `**Scope (files):**` heading variant was not recognised.
+  `parseScopeContract` is now section-aware and parses contract tables,
+  Context Files route to a dedicated `contextFiles[]` field, the files-heading
+  matcher accepts the `Scope (files)` form, and slice-complexity scoring
+  counts scope + contextFiles so Rummag-style plans score unchanged.
+- **Forge-Master Studio survives a missing `ws` dependency** — the Studio
+  prompts API returned `404 / prompts API unavailable` when the optional
+  `ws` package was absent, because a hard `import WebSocket from "ws"` threw
+  at module load and took the whole route surface down. WebSocket usage now
+  loads through `src/optional-ws.mjs`, which degrades gracefully when `ws`
+  is not installed so the REST API stays up.
+
+## [3.22.1] — 2026-06-10 — Gate-lint & deletion-slice orchestrator hotfix
+
+### Fixed
+
+- **Gate-lint allowlist accepts PowerShell-hardened gates (#229)** — the
+  pre-flight gate linter rejected the exact Windows-portable gate forms the
+  Plan Hardener itself emits, so a correctly-hardened plan could not be
+  executed on a PowerShell host. PowerShell variable assignments
+  (`$p = Get-Content …`, including the non-spaced `$p=…` form), `Test-Path`,
+  and the `pnpm`/`yarn` package managers are now recognised. The four
+  token-resolution sites that each re-implemented allowlist logic were
+  centralised into shared `resolveGateCommandToken` / `isGatePrefixAllowed`
+  helpers in `orchestrator/constants.mjs` (DRY). Dangerous cmdlets remain
+  blocked: they simply are not on the allowlist, and `BLOCKED_PATTERNS` still
+  guards destructive full-line forms (`rm -rf /`, `dd`, `mkfs`).
+- **Count gates flag unsupported regex look-around (#228)** — route-rename
+  count gates built on a negated-lookbehind like `(?<!/v1)/campaigns` silently
+  mis-counted: the default `grep`/`ripgrep` engine cannot evaluate look-around
+  and returns `0` (a false pass), while the broad substring also matched
+  legitimate component/lib imports and non-route API paths. A new
+  `lookaround-unsupported` gate-lint rule flags any `grep`/`rg` gate using
+  `(?<=)`, `(?<!)`, `(?=)`, or `(?!)` without an explicit `-P` (PCRE) flag.
+  New guidance in `plan-gate-command-rules.md` ("Count Gates and Route-Rename
+  Gates") covers navigation-scoped patterns and recomputing count baselines
+  against the actual predecessor commit.
+- **Deletion slices that re-add their target files now fail (#227)** — a
+  pure-deletion slice ("Delete redundant …") whose worker commit instead
+  *added* the files it was told to remove passed its own gate and slipped
+  through, only to be caught by a later phase's precondition. The orchestrator
+  now detects this inversion: a deletion-titled slice whose commit shows its
+  declared targets with an `A` (added) status is failed so the rollback
+  machinery restores the deleted state. New `isDeletionSliceTitle`,
+  `parseNameStatus`, `detectDeletionInversion`, and `verifyDeletionSlice`
+  helpers in `orchestrator/git-safety.mjs`.
+
+## [3.22.0] — 2026-06-09 — Security, memory & orchestrator hardening + dependency-direction guard
+
+### Fixed
+
+- **Shell-injection hardening (#217)** — every `exec()` call that interpolated
+  a variable into a shell string has been replaced with
+  `execFileSync(cmd, [args], opts)`, which passes each argument literally to
+  the kernel with no shell involved. Converted across `gh`/`git`/probe call
+  sites in the platform, safety, REST-API, orchestrator (run-plan,
+  worker-spawn, git-safety), anvil, and lattice surfaces. A new guard test
+  (`bug-217-no-shell-injection-exec.test.mjs`) recursively scans production
+  `.mjs` for `exec(... ${...})` patterns and fails if any reappear.
+- **OpenBrain drain delivers via SSE + resolves env-placeholder query keys
+  (#215)** — `runDrainPass` no longer routes through a local no-op dispatcher;
+  it opens an SSE client and delivers captures over it, closing the client in a
+  `finally`. Query-form OpenBrain keys (`?key=${env:NAME}`) now resolve the
+  env placeholder and rewrite the URL, fixing a downstream DLQ `HTTP_400`.
+- **`pforge analyze` accepts `h2`/`h4` slice headers (#223)** — slice detection
+  is no longer limited to a single heading level.
+- **Orchestrator parses prose `Depends-On:` lines and fails loud on dependency
+  deadlock (#225)** — dependency cycles now surface a clear error instead of
+  hanging.
+
+- **Orchestrator no longer aborts with a libuv `UV_HANDLE_CLOSING` assertion
+  on worker teardown** — the shutdown handler wired the Node `"exit"` event
+  into the same loop that calls `child.kill()` on every tracked worker. The
+  `"exit"` handler runs after the event loop drains, when child-process
+  handles are already closing, so killing them tripped
+  `Assertion failed: !(handle->flags & UV_HANDLE_CLOSING)` and aborted the
+  process. Reproduced reliably on Windows when ≥2 parallel Full-Auto workers
+  failed auth and the run aborted fast. Shutdown now wires
+  SIGINT/SIGTERM/SIGHUP only (never `"exit"`) via a guarded, idempotent
+  `killTrackedChildren()` / `installChildCleanupHandlers()`. Also fixes a
+  leaked heartbeat `setInterval` in the worker `error` handler that kept
+  writing to stdout after rejection (the likely source of the one-char-per-line
+  crash-tail log corruption).
+
+### Added
+
+- **Dependency-direction guard (#224)** — new generic, config-driven audit
+  script `scripts/audit/dependency-direction.mjs` (npm `audit:dep-direction`)
+  that flags inner-layer packages importing outer-layer apps. Detects static
+  `import`/`export-from`, dynamic `import()`, and `require()`; supports
+  `--root` and `--gate` (exit 1) flags. Policy lives in
+  `scripts/audit/layer-policy.json` under `dependencyDirection`.
+
+- **Full-Auto worker-backend preflight gate** (`assertWorkerBackendReady`) —
+  `runPlan` now verifies a usable execution backend before dispatching
+  workers. When the only CLI worker candidate failed authentication (e.g. `gh`
+  not authenticated), the run fails cleanly with `WORKER_AUTH_REQUIRED`
+  (`worker failed: no GitHub auth — run \`gh auth login\``) instead of
+  dispatching N doomed parallel workers. The `--estimate` path surfaces the
+  same condition as a non-blocking `workerWarning`. Direct-API models and
+  API-key-served models pass through; an explicit `--worker` override is
+  honored.
+
+---
+
+## [3.21.0] — 2026-05-23 — Forge-Master CTO defaults + audit tool
+
 ### Added — Phase-43: Forge-Master CTO defaults + audit tool
 
 - **`forge_master_audit` MCP tool** — new CTO-style audit lane that aggregates

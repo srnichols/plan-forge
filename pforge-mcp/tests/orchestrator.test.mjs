@@ -1028,7 +1028,7 @@ describe("loadQuorumConfig", () => {
     expect(config.enabled).toBe(false);
     expect(config.auto).toBe(true);
     expect(config.threshold).toBe(5);
-    expect(config.reviewerModel).toBe("claude-opus-4.7");
+    expect(config.reviewerModel).toBe("claude-opus-4.8");
     expect(config.dryRunTimeout).toBe(300_000);
   });
 
@@ -1062,9 +1062,9 @@ describe("loadQuorumConfig", () => {
     expect(config.preset).toBe("power");
   });
 
-  it("power preset uses claude-opus-4.7 as reviewer model (v2.34)", () => {
+  it("power preset uses claude-opus-4.8 as reviewer model (v2.34)", () => {
     const config = loadQuorumConfig(tempDir, "power");
-    expect(config.reviewerModel).toBe("claude-opus-4.7");
+    expect(config.reviewerModel).toBe("claude-opus-4.8");
   });
 
   it("user config overrides preset values", () => {

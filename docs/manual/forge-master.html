@@ -89,7 +89,7 @@
         <h2 id="intent-classifier">Three-Stage Intent Classifier</h2>
         <p>Every prompt is classified into a <strong>lane</strong> before tools are dispatched. The classifier runs three stages in order, falling through only when the prior stage didn't match confidently. This keeps the common case free (keyword) and the edge case smart (router LLM).</p>
 
-        <figure class="manual-figure"><img src="assets/diagrams/forge-master-intent-flow.svg" alt="Three-stage intent classifier flow: user prompt enters keyword scoring (stage 1, $0), falls through to embedding cache (stage 1.5, $0, cosine ≥ 0.85) on no keyword hit, falls through to grok-3-mini router LLM (stage 2, ~$0.0002) on cache miss. All three stages produce a lane classification with via field tagging which stage answered. Successful router-LLM classifications are written through to the cache." class="diagram-img diagram-img-md my-4" /><figcaption class="manual-figcaption"><!--cap:auto-->Three-stage intent classifier flow<!--/cap--></figcaption></figure>
+        <figure class="manual-figure"><img src="assets/diagrams/forge-master-intent-flow.svg" alt="Three-stage intent classifier flow: user prompt enters keyword scoring (stage 1, $0), falls through to embedding cache (stage 1.5, $0, cosine ≥ 0.85) on no keyword hit, falls through to grok-4.20-0309-non-reasoning router LLM (stage 2, ~$0.0002) on cache miss. All three stages produce a lane classification with via field tagging which stage answered. Successful router-LLM classifications are written through to the cache." class="diagram-img diagram-img-md my-4" /><figcaption class="manual-figcaption"><!--cap:auto-->Three-stage intent classifier flow<!--/cap--></figcaption></figure>
 
         <div class="grid md:grid-cols-3 gap-4 my-6">
           <div class="p-4 bg-slate-900 border border-amber-700/30 rounded-lg">
@@ -105,7 +105,7 @@
           <div class="p-4 bg-slate-900 border border-sky-700/30 rounded-lg">
             <div class="text-xs font-bold text-sky-400 uppercase tracking-wider mb-1">Stage 2</div>
             <div class="text-base font-semibold text-slate-100 mb-2">Router LLM</div>
-            <p class="text-sm text-slate-400">Default model: <code>grok-3-mini</code>. Used for ambiguous prompts the cache hasn't seen. Every successful classification is then written through to the cache, so the next similar prompt skips this stage entirely.</p>
+            <p class="text-sm text-slate-400">Default model: <code>grok-4.20-0309-non-reasoning</code>. Used for ambiguous prompts the cache hasn't seen. Every successful classification is then written through to the cache, so the next similar prompt skips this stage entirely.</p>
           </div>
         </div>
 
@@ -203,7 +203,7 @@
         <pre><code>{
   "forgeMaster": {
     "reasoningModel": "claude-opus-4.7",       // model used for replies in advisory lane
-    "routerModel": "grok-3-mini",              // model used by stage-2 intent classifier
+    "routerModel": "grok-4.20-0309-non-reasoning",              // model used by stage-2 intent classifier
     "quorumAdvisory": "auto",                  // "off" | "auto" | "always"  (default: "auto" since Phase-43)
     "autoEscalate": true,                      // bump hard questions to high tier  (default: true since Phase-43)
     "embeddingFallback": true,                 // enable stage 1.5 embedding cache
@@ -221,7 +221,7 @@
           <thead><tr><th>Field</th><th>Default</th><th>What it controls</th></tr></thead>
           <tbody>
             <tr><td><code>reasoningModel</code></td><td><code>model.default</code> (or <code>gpt-4o-mini</code>)</td><td>Model used to compose replies in advisory lane. Falls back to <code>.forge.json</code>'s top-level <code>model.default</code>.</td></tr>
-            <tr><td><code>routerModel</code></td><td><code>grok-3-mini</code></td><td>Stage-2 intent classifier model. Cheap by design, it's classifying, not reasoning.</td></tr>
+            <tr><td><code>routerModel</code></td><td><code>grok-4.20-0309-non-reasoning</code></td><td>Stage-2 intent classifier model. Cheap by design, it's classifying, not reasoning.</td></tr>
             <tr><td><code>quorumAdvisory</code></td><td><code>"auto"</code> <span class="text-amber-400">(Phase-43)</span></td><td>Enables Quorum Advisory Mode in the <code>advisory</code> lane. Was <code>"off"</code> pre-Phase-43.</td></tr>
             <tr><td><code>autoEscalate</code></td><td><code>true</code> <span class="text-amber-400">(Phase-43)</span></td><td>Auto-bump hard or ambiguous prompts to the high tier. Required input for <code>quorumAdvisory: "auto"</code> to fire. Was <code>false</code> pre-Phase-43.</td></tr>
             <tr><td><code>l3Enabled</code></td><td><code>true</code> <span class="text-amber-400">(Phase-43)</span></td><td>Pull recall context from OpenBrain (Postgres + pgvector) when available. Gracefully degrades if OpenBrain isn't configured. Was <code>false</code> pre-Phase-43.</td></tr>
@@ -314,7 +314,7 @@
           <dd class="text-slate-400 text-sm">No reasoning model configured and no API key found. Either run <code>gh auth login</code> (zero-key path), set <code>ANTHROPIC_API_KEY</code> / <code>OPENAI_API_KEY</code> / <code>XAI_API_KEY</code>, or set <code>forgeMaster.reasoningModel</code> in <code>.forge.json</code>.</dd>
 
           <dt class="font-semibold text-slate-100">Router model classifying everything as <code>offtopic</code></dt>
-          <dd class="text-slate-400 text-sm">The router model is too small for your prompt style. Try bumping <code>routerModel</code> from <code>grok-3-mini</code> to <code>grok-4</code> or <code>gpt-4o-mini</code>. The router runs once per prompt, small models are usually fine, but quirky vocabularies sometimes need more capability.</dd>
+          <dd class="text-slate-400 text-sm">The router model is too small for your prompt style. Try bumping <code>routerModel</code> from <code>grok-4.20-0309-non-reasoning</code> to <code>grok-4.5</code> or <code>gpt-4o-mini</code>. The router runs once per prompt, small models are usually fine, but quirky vocabularies sometimes need more capability.</dd>
         </dl>
 
         <!-- ─── Further Reading ─── -->

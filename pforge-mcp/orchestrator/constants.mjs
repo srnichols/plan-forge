@@ -102,19 +102,19 @@ export const COST_ANOMALY_MULTIPLIER = 2;
 export const POSTMORTEM_RETENTION_COUNT = 10;
 
 export const QUORUM_PRESETS = {
-  // Bug #107: power = the premium tier (opus-4.7). Previously this preset
+  // Bug #107: power = the premium tier (opus-4.8). Previously this preset
   // shipped opus-4.6 and the default shipped opus-4.7 — backwards.
   power: {
-    models: ["claude-opus-4.7", "gpt-5.3-codex", "grok-4.20-0309-reasoning"],
-    reviewerModel: "claude-opus-4.7",
+    models: ["claude-opus-4.8", "gpt-5.3-codex", "grok-4.20-0309-reasoning"],
+    reviewerModel: "claude-opus-4.8",
     dryRunTimeout: 300_000,
     threshold: 5,
     availableIn: {
-      "cli-gh": ["claude-opus-4.7"],
-      "cli-claude": ["claude-opus-4.7"],
+      "cli-gh": ["claude-opus-4.8"],
+      "cli-claude": ["claude-opus-4.8"],
       "cli-codex": ["gpt-5.3-codex"],
-      "vs-code-copilot-chat": ["claude-opus-4.7"],
-      "vs-code-agents-enterprise": ["claude-opus-4.7", "gpt-5.3-codex", "grok-4.20-0309-reasoning"],
+      "vs-code-copilot-chat": ["claude-opus-4.8"],
+      "vs-code-agents-enterprise": ["claude-opus-4.8", "gpt-5.3-codex", "grok-4.20-0309-reasoning"],
     },
     fallbacks: {
       "cli-gh": { preset: "speed", reason: "Only 1 of 3 power models available via gh-copilot without API keys" },

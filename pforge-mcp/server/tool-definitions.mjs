@@ -172,7 +172,7 @@ export const TOOLS = [
         plan: { type: "string", description: "Path to the plan or source file to analyze (e.g., docs/plans/Phase-1-AUTH-PLAN.md or src/services/billing.ts)" },
         quorum: { type: "boolean", description: "If true, dispatch analysis to multiple models and synthesize findings. Default: false" },
         mode: { type: "string", enum: ["plan", "file"], description: "Analysis mode: 'plan' (plan consistency) or 'file' (code review). Default: auto-detected from filename" },
-        models: { type: "string", description: "Comma-separated model list override (e.g., 'grok-3-mini,claude-sonnet-4.6,gpt-5.3-codex'). Default: quorum config models" },
+        models: { type: "string", description: "Comma-separated model list override (e.g., 'grok-4.20-0309-non-reasoning,claude-sonnet-4.6,gpt-5.3-codex'). Default: quorum config models" },
         path: { type: "string", description: "Project directory (default: current)" },
       },
       required: ["plan"],
@@ -185,7 +185,7 @@ export const TOOLS = [
       type: "object",
       properties: {
         file: { type: "string", description: "Path to the source file to investigate (e.g., src/services/billing.ts)" },
-        models: { type: "string", description: "Comma-separated model list override (e.g., 'grok-3-mini,grok-4,claude-sonnet-4.6'). Default: quorum config models" },
+        models: { type: "string", description: "Comma-separated model list override (e.g., 'grok-4.5,claude-sonnet-4.6,gpt-5.3-codex'). Default: quorum config models" },
         path: { type: "string", description: "Project directory (default: current)" },
       },
       required: ["file"],
@@ -199,7 +199,7 @@ export const TOOLS = [
       properties: {
         plan: { type: "string", description: "Path to the hardened plan file (e.g., docs/plans/Phase-1-AUTH-PLAN.md)" },
         mode: { type: "string", enum: ["auto", "assisted"], description: "Execution mode: 'auto' (CLI worker) or 'assisted' (human + gates). Default: auto" },
-        model: { type: "string", description: "Model override (e.g., claude-sonnet-4.6, gpt-5.2-codex). Default: auto" },
+        model: { type: "string", description: "Model override (e.g., claude-sonnet-4.6, gpt-5.3-codex). Default: auto" },
         estimate: { type: "boolean", description: "If true, return cost estimate without executing" },
         resumeFrom: { type: "number", description: "Slice number to resume from (skips completed slices)" },
         dryRun: { type: "boolean", description: "If true, parse and validate plan without executing" },
@@ -284,7 +284,7 @@ export const TOOLS = [
   },
   {
     name: "forge_watch",
-    description: "WATCHER (v2.34) — read-only observer that tails another project's pforge run. Run this from a SECOND VS Code Copilot session with Plan-Forge as the workspace, pointing targetPath at the project being executed. Returns snapshot of current run state (slices passed/failed/in-progress, token counts, gate errors) plus heuristic anomaly detection. Mode 'analyze' additionally invokes a frontier model (default: claude-opus-4.7) for narrative advice. The watcher CANNOT modify any files in the target project.",
+    description: "WATCHER (v2.34) — read-only observer that tails another project's pforge run. Run this from a SECOND VS Code Copilot session with Plan-Forge as the workspace, pointing targetPath at the project being executed. Returns snapshot of current run state (slices passed/failed/in-progress, token counts, gate errors) plus heuristic anomaly detection. Mode 'analyze' additionally invokes a frontier model (default: claude-opus-4.8) for narrative advice. The watcher CANNOT modify any files in the target project.",
     inputSchema: {
       type: "object",
       properties: {

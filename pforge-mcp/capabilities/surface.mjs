@@ -315,7 +315,7 @@ function buildForgeMasterCapabilities(cwd) {
       const block = forgeJson?.forgeMaster ?? {};
       config = {
         reasoningModel: block.reasoningModel ?? forgeJson?.model?.default ?? null,
-        routerModel: block.routerModel ?? "grok-3-mini",
+        routerModel: block.routerModel ?? "grok-4.20-0309-non-reasoning",
         discoverExtensionTools: block.discoverExtensionTools ?? true,
           observerEnabled: block.observer?.enabled ?? false,
         };
@@ -327,12 +327,12 @@ function buildForgeMasterCapabilities(cwd) {
     addedIn: "2.61.0",
     tools: TOOL_NAMES.filter((n) => n.startsWith("forge_master_")),
     reasoningModel: config.reasoningModel ?? null,
-    routerModel: config.routerModel ?? "grok-3-mini",
+    routerModel: config.routerModel ?? "grok-4.20-0309-non-reasoning",
     configKey: "forgeMaster",
     studio: {
       dashboardTabEnabled: true,
       reasoningModel: config.reasoningModel ?? null,
-      routerModel: config.routerModel ?? "grok-3-mini",
+      routerModel: config.routerModel ?? "grok-4.20-0309-non-reasoning",
       promptCatalogVersion: "1.0.0",
       observerEnabled: config.observerEnabled ?? false,
     },

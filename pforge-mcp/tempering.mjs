@@ -84,7 +84,7 @@ export const TEMPERING_DEFAULT_CONFIG = Object.freeze({
   },
   visualAnalyzer: {
     mode: "quorum",
-    models: ["claude-opus-4.7", "grok-4.20", "gemini-3-pro-preview"],
+    models: ["claude-opus-4.8", "grok-4.20", "gemini-3.1-pro-preview"],
     agreement: 2,
     // TEMPER-04 Slice 04.1 — single-model analyzer thresholds
     enabled: true,

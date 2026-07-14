@@ -2033,10 +2033,10 @@ applyTo: "**/auth/**,**/security/**,**/middleware/**"
   "preset": "dotnet",
   "modelRouting": {
     "default": "claude-sonnet-4.6",
-    "execute": "grok-4",
+    "execute": "grok-4.5",
     "review": "claude-opus-4.7"
   },
-  "escalationChain": ["grok-4", "claude-opus-4.7", "gpt-5.2-codex"],
+  "escalationChain": ["grok-4.5", "claude-opus-4.7", "gpt-5.3-codex"],
   "quorumThreshold": 6
 }</code></pre>
         </div>
@@ -3996,7 +3996,7 @@ node pforge-mcp/server.mjs --dashboard-only</code></pre>
         <h2 id="intent-classifier">Three-Stage Intent Classifier</h2>
         <p>Every prompt is classified into a <strong>lane</strong> before tools are dispatched. The classifier runs three stages in order, falling through only when the prior stage didn't match confidently. This keeps the common case free (keyword) and the edge case smart (router LLM).</p>
 
-        <figure class="manual-figure"><img src="assets/diagrams/forge-master-intent-flow.svg" alt="Three-stage intent classifier flow: user prompt enters keyword scoring (stage 1, $0), falls through to embedding cache (stage 1.5, $0, cosine ≥ 0.85) on no keyword hit, falls through to grok-3-mini router LLM (stage 2, ~$0.0002) on cache miss. All three stages produce a lane classification with via field tagging which stage answered. Successful router-LLM classifications are written through to the cache." class="diagram-img diagram-img-md my-4" /><figcaption class="manual-figcaption"><!--cap:auto-->Three-stage intent classifier flow<!--/cap--></figcaption></figure>
+        <figure class="manual-figure"><img src="assets/diagrams/forge-master-intent-flow.svg" alt="Three-stage intent classifier flow: user prompt enters keyword scoring (stage 1, $0), falls through to embedding cache (stage 1.5, $0, cosine ≥ 0.85) on no keyword hit, falls through to grok-4.20-0309-non-reasoning router LLM (stage 2, ~$0.0002) on cache miss. All three stages produce a lane classification with via field tagging which stage answered. Successful router-LLM classifications are written through to the cache." class="diagram-img diagram-img-md my-4" /><figcaption class="manual-figcaption"><!--cap:auto-->Three-stage intent classifier flow<!--/cap--></figcaption></figure>
 
         <div class="grid md:grid-cols-3 gap-4 my-6">
           <div class="p-4 bg-slate-900 border border-amber-700/30 rounded-lg">
@@ -4012,7 +4012,7 @@ node pforge-mcp/server.mjs --dashboard-only</code></pre>
           <div class="p-4 bg-slate-900 border border-sky-700/30 rounded-lg">
             <div class="text-xs font-bold text-sky-400 uppercase tracking-wider mb-1">Stage 2</div>
             <div class="text-base font-semibold text-slate-100 mb-2">Router LLM</div>
-            <p class="text-sm text-slate-400">Default model: <code>grok-3-mini</code>. Used for ambiguous prompts the cache hasn't seen. Every successful classification is then written through to the cache, so the next similar prompt skips this stage entirely.</p>
+            <p class="text-sm text-slate-400">Default model: <code>grok-4.20-0309-non-reasoning</code>. Used for ambiguous prompts the cache hasn't seen. Every successful classification is then written through to the cache, so the next similar prompt skips this stage entirely.</p>
           </div>
         </div>
 
@@ -4097,7 +4097,7 @@ node pforge-mcp/server.mjs --dashboard-only</code></pre>
         <pre><code>{
   "forgeMaster": {
     "reasoningModel": "claude-opus-4.6",       // model used for replies in advisory lane
-    "routerModel": "grok-3-mini",              // model used by stage-2 intent classifier
+    "routerModel": "grok-4.20-0309-non-reasoning",              // model used by stage-2 intent classifier
     "quorumAdvisory": "auto",                  // "off" | "auto" | "always"
     "embeddingFallback": true,                 // enable stage 1.5 embedding cache
     "discoverExtensionTools": true,            // allow extension-supplied tools to register
@@ -4111,7 +4111,7 @@ node pforge-mcp/server.mjs --dashboard-only</code></pre>
           <thead><tr><th>Field</th><th>Default</th><th>What it controls</th></tr></thead>
           <tbody>
             <tr><td><code>reasoningModel</code></td><td><code>model.default</code> (or <code>gpt-4o-mini</code>)</td><td>Model used to compose replies in advisory lane. Falls back to <code>.forge.json</code>'s top-level <code>model.default</code>.</td></tr>
-            <tr><td><code>routerModel</code></td><td><code>grok-3-mini</code></td><td>Stage-2 intent classifier model. Cheap by design, it's classifying, not reasoning.</td></tr>
+            <tr><td><code>routerModel</code></td><td><code>grok-4.20-0309-non-reasoning</code></td><td>Stage-2 intent classifier model. Cheap by design, it's classifying, not reasoning.</td></tr>
             <tr><td><code>quorumAdvisory</code></td><td><code>"off"</code></td><td>Enables Quorum Advisory Mode in the <code>advisory</code> lane.</td></tr>
             <tr><td><code>embeddingFallback</code></td><td><code>true</code></td><td>Enables the stage 1.5 embedding cache. Disable to force every cache-miss to the router LLM.</td></tr>
             <tr><td><code>discoverExtensionTools</code></td><td><code>true</code></td><td>Allow extensions in <code>extensions/</code> to register tools that Forge-Master can call.</td></tr>
@@ -4178,7 +4178,7 @@ node pforge-mcp/server.mjs --dashboard-only</code></pre>
           <dd class="text-slate-400 text-sm">No reasoning model configured and no API key found. Either run <code>gh auth login</code> (zero-key path), set <code>ANTHROPIC_API_KEY</code> / <code>OPENAI_API_KEY</code> / <code>XAI_API_KEY</code>, or set <code>forgeMaster.reasoningModel</code> in <code>.forge.json</code>.</dd>
 
           <dt class="font-semibold text-slate-100">Router model classifying everything as <code>offtopic</code></dt>
-          <dd class="text-slate-400 text-sm">The router model is too small for your prompt style. Try bumping <code>routerModel</code> from <code>grok-3-mini</code> to <code>grok-4</code> or <code>gpt-4o-mini</code>. The router runs once per prompt, small models are usually fine, but quirky vocabularies sometimes need more capability.</dd>
+          <dd class="text-slate-400 text-sm">The router model is too small for your prompt style. Try bumping <code>routerModel</code> from <code>grok-4.20-0309-non-reasoning</code> to <code>grok-4.5</code> or <code>gpt-4o-mini</code>. The router runs once per prompt, small models are usually fine, but quirky vocabularies sometimes need more capability.</dd>
         </dl>
 
         <!-- ─── Further Reading ─── -->
@@ -4559,7 +4559,7 @@ DRIFT DETECTED, 1 forbidden file(s) touched.</code></pre>
           <div class="cmd-block">
             <div class="cmd-block-header"><span>Invoke from Copilot Chat</span><button class="cmd-copy-btn">Copy</button></div>
             <pre><code>forge_diagnose({ file: "src/services/billing.ts" })
-forge_diagnose({ file: "src/auth/token-validator.ts", models: "grok-3-mini,grok-4" })</code></pre>
+forge_diagnose({ file: "src/auth/token-validator.ts", models: "grok-4.20-0309-non-reasoning,grok-4.5" })</code></pre>
           </div>
 
           <p class="text-sm text-slate-400 mt-2">Each model analyzes independently for: root cause, failure modes, reproduction steps, impact assessment, fix recommendations, regression risk. Results are returned inline to the calling agent (no on-disk persistence by default).</p>
@@ -6146,7 +6146,7 @@ forge_run_plan({ plan: "docs/plans/Phase-1.md", resumeFrom: 3 })</code></pre>
       <table class="manual-table">
         <thead><tr><th>Tool</th><th>Description</th></tr></thead>
         <tbody>
-          <tr><td><code>forge_watch</code></td><td>Snapshot or analyze (claude-opus-4.7) mode. Returns counts, anomalies, recommendations, diff cursor.</td></tr>
+          <tr><td><code>forge_watch</code></td><td>Snapshot or analyze (claude-opus-4.8) mode. Returns counts, anomalies, recommendations, diff cursor.</td></tr>
           <tr><td><code>forge_watch_live</code></td><td>Live tail, streams events for fixed duration via target's WebSocket hub or events.log polling.</td></tr>
         </tbody>
       </table>
@@ -6604,7 +6604,7 @@ pforge ext remove healthcare-compliance</code></pre>
         <div class="cmd-block-header"><span>.forge.json</span></div>
         <pre><code>{
   "modelRouting": {
-    "default": "grok-4",
+    "default": "grok-4.5",
     "execute": "claude-sonnet-4.6",
     "review": "claude-opus-4.6"
   }
@@ -6631,7 +6631,7 @@ pforge ext remove healthcare-compliance</code></pre>
       <div class="cmd-block">
         <div class="cmd-block-header"><span>.forge.json</span></div>
         <pre><code>{
-  "escalationChain": ["grok-4", "claude-opus-4.6", "gpt-5.2-codex"]
+  "escalationChain": ["grok-4.5", "claude-opus-4.6", "gpt-5.3-codex"]
 }</code></pre>
       </div>
       <p>Model A fails → Model B retries the same slice → Model C if B fails too. Emits <code>slice-escalated</code> WebSocket event at each step. No manual intervention required.</p>
@@ -6640,7 +6640,7 @@ pforge ext remove healthcare-compliance</code></pre>
         <strong>Forge Intelligence</strong>, Escalation chains auto-tune from history. After 5+ recorded slices, <code>loadEscalationChain()</code> reorders models by success rate × cost efficiency. The best-performing, cheapest model moves to position 1 automatically. No configuration needed, just run plans and the forge learns.
       </div>
 
-      <figure class="manual-figure" id="fig-14-1"><img src="assets/diagrams/escalation-chain.svg" alt="Escalation chain: grok-4 fails, escalates to claude-opus-4.6 which fails, escalates to gpt-5.2-codex which passes" class="diagram-img diagram-img-sm" /><figcaption class="manual-figcaption"><!--fignum--><span class="manual-fignum">Figure 14-1.</span><!--/fignum--> <!--cap:auto-->Escalation chain<!--/cap--></figcaption></figure>
+      <figure class="manual-figure" id="fig-14-1"><img src="assets/diagrams/escalation-chain.svg" alt="Escalation chain: grok-4.5 fails, escalates to claude-opus-4.6 which fails, escalates to gpt-5.3-codex which passes" class="diagram-img diagram-img-sm" /><figcaption class="manual-figcaption"><!--fignum--><span class="manual-fignum">Figure 14-1.</span><!--/fignum--> <!--cap:auto-->Escalation chain<!--/cap--></figcaption></figure>
 
       <h2 id="quorum">Quorum Mode</h2>
       <p>Multi-model consensus for complex slices. Multiple models analyze the same problem independently, then a reviewer synthesizes the best approach.</p>
@@ -7400,7 +7400,7 @@ pforge run-plan docs/plans/Phase-7.md --dry-run</code></pre>
         <!-- ─── Worktree race flow ─── -->
         <h2 id="worktree-race">Worktree race &rarr; winner election</h2>
 
-        <img src="assets/diagrams/competitive-worktree-race.svg" alt="Competitive loop flow across 4 phases: Spawn (slice arrives, competitive enabled, spawn N worktrees), Race (3 parallel worktrees with claude-sonnet-4.6, grok-4, gpt-5.3-codex executing in their own .forge/worktrees/slice-N-* directories with build/test gates), Election (4 tie-breaker rules in order: gates pass -> reviewer score -> token cost lower wins -> wall-clock faster wins), Winner (worktree B chosen as cheapest passing, applied to main). Eliminated worktrees retained for trace and auto-fix proposal generation. Cost-anomaly detection runs advisory-only and never halts a run." class="diagram-img diagram-img-md my-4" />
+        <img src="assets/diagrams/competitive-worktree-race.svg" alt="Competitive loop flow across 4 phases: Spawn (slice arrives, competitive enabled, spawn N worktrees), Race (3 parallel worktrees with claude-sonnet-4.6, grok-4.5, gpt-5.3-codex executing in their own .forge/worktrees/slice-N-* directories with build/test gates), Election (4 tie-breaker rules in order: gates pass -> reviewer score -> token cost lower wins -> wall-clock faster wins), Winner (worktree B chosen as cheapest passing, applied to main). Eliminated worktrees retained for trace and auto-fix proposal generation. Cost-anomaly detection runs advisory-only and never halts a run." class="diagram-img diagram-img-md my-4" />
         <p>When a slice is marked for competitive execution, the orchestrator spawns a worktree per strategy, runs each in isolation, and elects a single winner. Losing worktrees are cleaned up; only the winner's changes enter the working tree.</p>
 
         <figure class="manual-figure"><img src="assets/diagrams/competitive-loop-flow.svg" alt="Competitive loop flowchart. Start: slice marked competitive. A decision node spawn-worktrees branches to Strategy A (.forge/worktrees/A/) and Strategy B (.forge/worktrees/B/). Both worktrees run a validation gate and then conditionally invoke a reviewer when innerLoop.reviewer.enabled is true. The two reviewer outputs converge on a winner-election decision node. The path labeled gate-pass-plus-best-reviewer-score promotes the winner to the working tree; the path labeled tie-on-gate-and-reviewer drops into a token-cost tie-breaker that feeds back into winner. Winner flows through clean-up of losing worktrees to slice-committed. A dotted secondary path connects gate-failure on either strategy to an auto-fix-proposal decision node, which routes small local diffs to .forge/proposed-fixes/*.patch and complex failures to a postmortem record." class="diagram-img diagram-img-md my-4" /><figcaption class="manual-figcaption">Competitive worktree lifecycle, spawn, gate, reviewer, winner election, plus the auto-fix branch on gate failure.</figcaption></figure>
@@ -7809,7 +7809,7 @@ Result: 15 OK, 3 WARN, 0 FAIL ,  forge is healthy</code></pre>
       <ul>
         <li><strong>Stage 1 keyword scorer didn't match</strong>, check the <code>via</code> field in the response. If <code>"keyword"</code>, try a more keyword-rich phrasing ("status of &hellip;", "why did &hellip; fail", "should we &hellip;")</li>
         <li><strong>Embedding cache is cold</strong>, new project, no prior classifications. Hit rate climbs after 10&ndash;20 turns. Check <code>GET /api/forge-master/cache-stats</code></li>
-        <li><strong>Router model is too small</strong>, default <code>grok-3-mini</code> is fine for most prompts but quirky vocabulary may need <code>grok-4</code> or <code>gpt-4o-mini</code>. Override via <code>forgeMaster.routerModel</code> in <code>.forge.json</code></li>
+        <li><strong>Router model is too small</strong>, default <code>grok-4.20-0309-non-reasoning</code> is fine for most prompts but quirky vocabulary may need <code>grok-4.5</code> or <code>gpt-4o-mini</code>. Override via <code>forgeMaster.routerModel</code> in <code>.forge.json</code></li>
         <li><strong>Quorum advisory not firing on <code>"auto"</code></strong>, requires lane=advisory + autoEscalated=true + fromTier=high + confidence&ge;medium. Use <code>"always"</code> to remove gating during testing</li>
       </ul>
 
@@ -8604,7 +8604,7 @@ pforge triage    # list ranked open alerts (incidents + drift violations)</code>
         <p>Two modes, one tool:</p>
         <ul>
           <li><strong>Snapshot</strong> (<code>forge_watch</code>), file-reads only, zero AI cost. Returns slice counts, token usage, gate errors, anomalies.</li>
-          <li><strong>Analyze</strong> (<code>forge_watch</code> with <code>mode=analyze</code>), invokes a frontier model (default <code>claude-opus-4.7</code>) to produce narrative advice from the snapshot.</li>
+          <li><strong>Analyze</strong> (<code>forge_watch</code> with <code>mode=analyze</code>), invokes a frontier model (default <code>claude-opus-4.8</code>) to produce narrative advice from the snapshot.</li>
         </ul>
 
         <h2 id="live-tail">Live Tail &mdash; <code>forge_watch_live</code></h2>
@@ -13124,7 +13124,7 @@ forge_github_metrics({ team: "platform", since: "2026-04-01" })</code></pre>
 
       <pre><code>pforge run-plan docs/plans/Phase-28-PLAN.md --model gpt-4.1
 pforge run-plan docs/plans/Phase-28-PLAN.md --model claude-sonnet-4.5
-pforge run-plan docs/plans/Phase-28-PLAN.md --model grok-3</code></pre>
+pforge run-plan docs/plans/Phase-28-PLAN.md --model grok-4.3</code></pre>
 
       <p>The value is forwarded to the Forge-Master reasoning layer (<code>pforge-master/src/reasoning.mjs</code>), which resolves it against the configured provider table in <code>.forge.json#providers</code>. If no provider entry exists for the requested model, Forge-Master falls back to the default provider and logs a <code>warn</code> event to the timeline.</p>
 
@@ -13142,8 +13142,8 @@ pforge run-plan docs/plans/Phase-28-PLAN.md --quorum=false   # disable quorum en
       <table class="manual-table">
         <thead><tr><th>Mode</th><th>Models polled</th><th>Agreement threshold</th><th>Best for</th></tr></thead>
         <tbody>
-          <tr><td><code>power</code></td><td>Up to 3 flagship models (GPT-5, Claude Opus, Grok-4)</td><td>5 / 7 points</td><td>Deploy slices, schema migrations</td></tr>
-          <tr><td><code>speed</code></td><td>Up to 3 fast models (GPT-4.1, Claude Haiku, Grok-3-mini)</td><td>7 / 7 points</td><td>High-volume code generation, CI budget caps</td></tr>
+          <tr><td><code>power</code></td><td>Up to 3 flagship models (GPT-5, Claude Opus, Grok-4.5)</td><td>5 / 7 points</td><td>Deploy slices, schema migrations</td></tr>
+          <tr><td><code>speed</code></td><td>Up to 3 fast models (GPT-4.1, Claude Haiku, grok-4.20-0309-non-reasoning)</td><td>7 / 7 points</td><td>High-volume code generation, CI budget caps</td></tr>
           <tr><td><code>auto</code></td><td>Plan Forge selects per slice based on slice risk tags</td><td>Per-slice</td><td>Mixed plans; recommended default</td></tr>
           <tr><td><code>false</code></td><td>Single model only</td><td>N/A</td><td>Local development, cost sensitivity</td></tr>
         </tbody>
@@ -13168,12 +13168,12 @@ pforge run-plan docs/plans/Phase-28-PLAN.md --quorum=false   # disable quorum en
 
 # Or as environment variables:
 export XAI_API_KEY=xai-...
-pforge run-plan docs/plans/Phase-28-PLAN.md --model grok-4</code></pre>
+pforge run-plan docs/plans/Phase-28-PLAN.md --model grok-4.5</code></pre>
 
       <p>BYOK matters in the following situations:</p>
 
       <ul>
-        <li><strong class="text-slate-200">Model not in the Copilot picker</strong>, Grok-4, Grok-3, and Grok-3-mini are only reachable via direct xAI keys today. Set <code>XAI_API_KEY</code> and they become available to <code>--model</code> and quorum.</li>
+        <li><strong class="text-slate-200">Model not in the Copilot picker</strong>, Grok-4.5, Grok-4.3, and grok-4.20-0309-non-reasoning are only reachable via direct xAI keys today. Set <code>XAI_API_KEY</code> and they become available to <code>--model</code> and quorum.</li>
         <li><strong class="text-slate-200">Higher rate limits</strong>, a GitHub Copilot Business seat has shared rate-limit headroom. Direct BYOK keys give dedicated limits. In heavy quorum runs (power mode across three flagship models), hitting the shared rate limit stalls the run. BYOK avoids the contention.</li>
         <li><strong class="text-slate-200">Data-residency or audit requirements</strong>, some organisations route only approved models through the Copilot proxy for compliance. BYOK lets the remainder go direct without touching the proxy at all.</li>
         <li><strong class="text-slate-200">Cost arbitrage</strong>, the Copilot Business per-seat fee is often cheaper per token for everyday chat, but a heavy automated quorum run on flagship models may be cheaper billed direct at volume pricing. Run <code>pforge run-plan --estimate</code> to compare.</li>
@@ -13199,9 +13199,9 @@ pforge run-plan docs/plans/Phase-28-PLAN.md --model grok-4</code></pre>
     "models": {
       "gpt-5.4":           { "provider": "githubCopilot" },
       "claude-sonnet-4.6": { "provider": "githubCopilot" },
-      "grok-4":            { "provider": "xai",   "baseUrl": "https://api.x.ai/v1" },
-      "grok-3":            { "provider": "xai",   "baseUrl": "https://api.x.ai/v1" },
-      "grok-3-mini":       { "provider": "xai",   "baseUrl": "https://api.x.ai/v1" }
+      "grok-4.5":          { "provider": "xai",   "baseUrl": "https://api.x.ai/v1" },
+      "grok-4.3":          { "provider": "xai",   "baseUrl": "https://api.x.ai/v1" },
+      "grok-4.20-0309-non-reasoning": { "provider": "xai",   "baseUrl": "https://api.x.ai/v1" }
     }
   }
 }</code></pre>
@@ -14953,7 +14953,7 @@ pforge search --since 2026-04-01 --sources run,liveguard,bug --output audit.json
 
       <h3 id="azure-gov-implications">Plan Forge implications</h3>
       <ul>
-        <li>The default <code>power</code> quorum preset (assumes flagship models like <code>gpt-5.5</code> or <code>claude-opus-4.7</code>) won't resolve cleanly</li>
+        <li>The default <code>power</code> quorum preset (assumes flagship models like <code>gpt-5.5</code> or <code>claude-opus-4.8</code>) won't resolve cleanly</li>
         <li>Use a <code>power-gov</code> preset (planned) or graceful fallback</li>
         <li>The <code>speed</code> preset works (<code>gpt-4.1-mini</code> exists in gov)</li>
       </ul>
@@ -18829,7 +18829,7 @@ pforge ext add/remove/...       Extension management</code></pre>
           <table class="manual-table">
             <thead><tr><th>Key</th><th>Type</th><th>Default</th><th>Example</th><th>Change impact</th></tr></thead>
             <tbody>
-              <tr><td><code>modelRouting.default</code></td><td>enum</td><td><code>"auto"</code></td><td><code>"claude-opus-4.7"</code></td><td>One of <code>auto</code>, <code>claude-opus-4.7</code>, <code>claude-opus-4.6</code>, <code>claude-sonnet-4.6</code>, <code>claude-haiku-4.5</code>, <code>gpt-5.4</code>, <code>gpt-5.2-codex</code>, <code>gpt-5-mini</code>, <code>gemini-3-pro-preview</code>. <code>auto</code> lets the host pick based on availability.</td></tr>
+              <tr><td><code>modelRouting.default</code></td><td>enum</td><td><code>"auto"</code></td><td><code>"claude-opus-4.8"</code></td><td>One of <code>auto</code>, <code>claude-opus-4.8</code>, <code>claude-opus-4.7</code>, <code>claude-opus-4.6</code>, <code>claude-sonnet-5</code>, <code>claude-sonnet-4.6</code>, <code>claude-haiku-4.5</code>, <code>gpt-5.4</code>, <code>gpt-5.3-codex</code>, <code>gpt-5-mini</code>, <code>gemini-3.1-pro-preview</code>. <code>auto</code> lets the host pick based on availability.</td></tr>
               <tr><td><code>modelRouting.execute</code></td><td>string</td><td><em>(uses <code>default</code>)</em></td><td><code>"gpt-5.3-codex"</code></td><td>Model for slice execution. Free-form string so newer models work without a CLI upgrade.</td></tr>
               <tr><td><code>modelRouting.review</code></td><td>string</td><td><em>(uses <code>default</code>)</em></td><td><code>"claude-opus-4.7"</code></td><td>Model for the Step 5 review gate. Free-form string.</td></tr>
             </tbody>
@@ -18846,7 +18846,7 @@ pforge ext add/remove/...       Extension management</code></pre>
             <tbody>
               <tr><td><code>forgeMaster.reasoningModel</code></td><td>string</td><td><em>(falls back to <code>modelRouting.default</code>)</em></td><td><code>"gpt-4o-mini"</code></td><td>Model used for multi-step reasoning in <code>forge_master_ask</code>. Affects answer quality and per-call cost.</td></tr>
               <tr><td><code>forgeMaster.reasoningProvider</code></td><td>string</td><td><em>(auto-detected)</em></td><td><code>"githubCopilot"</code></td><td>Which provider serves the reasoning model. One of <code>githubCopilot</code>, <code>anthropic</code>, <code>openai</code>, <code>xai</code>. If unset, Plan Forge picks based on available API keys.</td></tr>
-              <tr><td><code>forgeMaster.routerModel</code></td><td>string</td><td><code>"grok-3-mini"</code></td><td><code>"gpt-4o-mini"</code></td><td>Small classifier model that decides which tools to call. Should be cheap and fast; quality matters less than latency.</td></tr>
+              <tr><td><code>forgeMaster.routerModel</code></td><td>string</td><td><code>"grok-4.20-0309-non-reasoning"</code></td><td><code>"gpt-4o-mini"</code></td><td>Small classifier model that decides which tools to call. Should be cheap and fast; quality matters less than latency.</td></tr>
               <tr><td><code>forgeMaster.defaultProvider</code></td><td>string</td><td><em>(auto-detected)</em></td><td><code>"githubCopilot"</code></td><td>Default provider for both router and reasoning if the per-model provider is not set.</td></tr>
             </tbody>
           </table>
@@ -18905,7 +18905,7 @@ pforge ext add/remove/...       Extension management</code></pre>
               <tr><td><code>quorum.enabled</code></td><td>boolean</td><td><code>false</code></td><td><code>true</code></td><td>Master switch. When false, quorum is off regardless of the other keys.</td></tr>
               <tr><td><code>quorum.auto</code></td><td>boolean</td><td><code>true</code></td><td><code>true</code></td><td>When <code>enabled</code>, gate quorum on slice complexity score. When false, every slice fans out.</td></tr>
               <tr><td><code>quorum.threshold</code></td><td>number (1&ndash;10)</td><td><code>6</code></td><td><code>5</code></td><td>Complexity score above which auto-mode fires quorum. Lower = more slices use quorum, higher cost.</td></tr>
-              <tr><td><code>quorum.models</code></td><td>array&lt;string&gt;</td><td><code>["claude-opus-4.7", "gpt-5.3-codex", "gemini-3.1-pro"]</code></td><td><code>["claude-opus-4.7", "gpt-5.2-codex"]</code></td><td>Models that participate in the dry-run fan-out. 2&ndash;5 entries is typical; minimum is 1 (degrades to advisory).</td></tr>
+              <tr><td><code>quorum.models</code></td><td>array&lt;string&gt;</td><td><code>["claude-opus-4.7", "gpt-5.3-codex", "gemini-3.1-pro"]</code></td><td><code>["claude-opus-4.7", "gpt-5.3-codex"]</code></td><td>Models that participate in the dry-run fan-out. 2&ndash;5 entries is typical; minimum is 1 (degrades to advisory).</td></tr>
               <tr><td><code>quorum.reviewerModel</code></td><td>string</td><td><code>"claude-opus-4.7"</code></td><td><code>"gpt-5.4"</code></td><td>Model that synthesises the dry-run responses into a single execution plan.</td></tr>
               <tr><td><code>quorum.dryRunTimeout</code></td><td>number (ms)</td><td><code>300000</code></td><td><code>600000</code></td><td>Per-worker timeout in milliseconds. Increase for very large slices; the default is 5 minutes.</td></tr>
               <tr><td><code>quorum.strictAvailability</code></td><td>boolean</td><td><code>false</code></td><td><code>true</code></td><td>When true, fail-fast (exit code 2) if any configured model is unavailable. When false (default), drop unavailable models and continue if at least one remains.</td></tr>
@@ -19199,7 +19199,7 @@ pforge ext add/remove/...       Extension management</code></pre>
           <table class="manual-table">
             <thead><tr><th>Variable</th><th>Type</th><th>Default</th><th>Scope</th><th>Set when</th><th>Security</th></tr></thead>
             <tbody>
-              <tr><td><code>XAI_API_KEY</code> &#128274;</td><td>string</td><td><em>(none)</em></td><td>per-user</td><td>You want to route slices through Grok models (<code>grok-4.20</code>, <code>grok-4</code>, <code>grok-3</code>, <code>grok-3-mini</code>).</td><td>Secret. Prefer <code>.forge/secrets.json</code>.</td></tr>
+              <tr><td><code>XAI_API_KEY</code> &#128274;</td><td>string</td><td><em>(none)</em></td><td>per-user</td><td>You want to route slices through Grok models (<code>grok-4.5</code>, <code>grok-4.3</code>, <code>grok-4.20-0309-reasoning</code>, <code>grok-4.20-0309-non-reasoning</code>).</td><td>Secret. Prefer <code>.forge/secrets.json</code>.</td></tr>
               <tr><td><code>OPENAI_API_KEY</code> &#128274;</td><td>string</td><td><em>(none)</em></td><td>per-user</td><td>You want GPT models or DALL-E image generation (<code>forge_generate_image</code>).</td><td>Secret. Prefer <code>.forge/secrets.json</code>.</td></tr>
               <tr><td><code>ANTHROPIC_API_KEY</code> &#128274;</td><td>string</td><td><em>(none)</em></td><td>per-user</td><td>You want Claude models directly (not via GitHub Copilot).</td><td>Secret. Prefer <code>.forge/secrets.json</code>.</td></tr>
               <tr><td><code>OPENCLAW_API_KEY</code> &#128274;</td><td>string</td><td><em>(none)</em></td><td>per-user</td><td><code>openclaw.endpoint</code> is set in <code>.forge.json</code> and PreAgentHandoff should authenticate.</td><td>Secret. Prefer <code>.forge/secrets.json</code>.</td></tr>

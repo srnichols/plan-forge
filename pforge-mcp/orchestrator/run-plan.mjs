@@ -1340,7 +1340,7 @@ export async function runPlan(planPath, options = {}) {
 
 /**
  * Load model routing configuration from .forge.json.
- * Schema: { "modelRouting": { "execute": "gpt-5.2-codex", "review": "claude-sonnet-4.6", "default": "auto" } }
+ * Schema: { "modelRouting": { "execute": "gpt-5.3-codex", "review": "claude-sonnet-4.6", "default": "auto" } }
  * Returns the modelRouting object, or defaults if not configured.
  */
 export function loadModelRouting(cwd) {
@@ -1355,7 +1355,7 @@ export function loadModelRouting(cwd) {
   } catch {
     // Invalid JSON or missing file — use defaults
   }
-  return { default: "claude-opus-4.6" };
+  return { default: "claude-opus-4.8" };
 }
 
 /**

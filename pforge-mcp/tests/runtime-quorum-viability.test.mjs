@@ -141,8 +141,8 @@ describe("assessQuorumViability", () => {
     it("2 of 3 models available — synthesis still viable", () => {
       const result = assessQuorumViability("power", {
         runtimeOverride: "cli-gh",
-        // v2.81 (#107): power preset upgraded to opus-4.7 — was opus-4.6.
-        probe: selectiveProbe(["claude-opus-4.7", "gpt-5.3-codex"]),
+        // v3.23 model refresh: power preset upgraded to opus-4.8 (was opus-4.7).
+        probe: selectiveProbe(["claude-opus-4.8", "gpt-5.3-codex"]),
       });
       expect(result.effective).toBe(2);
       expect(result.synthesisViable).toBe(true);
@@ -153,8 +153,8 @@ describe("assessQuorumViability", () => {
     it("1 of 3 models available — synthesis NOT viable, recommends fallback", () => {
       const result = assessQuorumViability("power", {
         runtimeOverride: "cli-gh",
-        // v2.81 (#107): power preset upgraded to opus-4.7 — was opus-4.6.
-        probe: selectiveProbe(["claude-opus-4.7"]),
+        // v3.23 model refresh: power preset upgraded to opus-4.8 (was opus-4.7).
+        probe: selectiveProbe(["claude-opus-4.8"]),
       });
       expect(result.effective).toBe(1);
       expect(result.synthesisViable).toBe(false);
@@ -178,8 +178,8 @@ describe("assessQuorumViability", () => {
         runtimeOverride: "cli-gh",
         probe: allAvailableProbe,
       });
-      // v2.81 (#107): power preset upgraded to opus-4.7 — was opus-4.6.
-      const claudeModel = result.models.find((m) => m.model === "claude-opus-4.7");
+      // v3.23 model refresh: power preset upgraded to opus-4.8 (was opus-4.7).
+      const claudeModel = result.models.find((m) => m.model === "claude-opus-4.8");
       expect(claudeModel.declaredForRuntime).toBe(true);
       const grokModel = result.models.find((m) => m.model === "grok-4.20-0309-reasoning");
       expect(grokModel.declaredForRuntime).toBe(false);

@@ -22,7 +22,7 @@ This document defines every file and directory under `.forge/`, their format, wh
   "preset": "dotnet",
   "agents": ["claude", "cursor", "codex"],
   "modelRouting": {
-    "execute": "gpt-5.2-codex",
+    "execute": "gpt-5.3-codex",
     "review": "claude-sonnet-4.6",
     "default": "auto"
   },

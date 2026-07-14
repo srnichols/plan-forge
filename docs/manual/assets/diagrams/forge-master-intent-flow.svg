@@ -55,7 +55,7 @@
   <!-- Stage 2: router LLM -->
   <text x="680" y="20" class="stage" style="fill:#60a5fa;" text-anchor="middle">STAGE 2 · ROUTER LLM</text>
   <rect x="600" y="35" width="155" height="55" class="node" fill="#0f172a" stroke="#60a5fa" />
-  <text x="678" y="55" class="title" text-anchor="middle">grok-3-mini</text>
+  <text x="678" y="55" class="title" style="font-size:9.5px;" text-anchor="middle">grok-4.20-0309-non-reasoning</text>
   <text x="678" y="70" class="label" text-anchor="middle">structured intent</text>
   <text x="678" y="84" class="cost" style="fill:#fbbf24;" text-anchor="middle">cost: ~$0.0002</text>
 

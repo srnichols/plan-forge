@@ -130,9 +130,9 @@
           <table class="manual-table">
             <thead><tr><th>Key</th><th>Type</th><th>Default</th><th>Example</th><th>Change impact</th></tr></thead>
             <tbody>
-              <tr><td><code>modelRouting.default</code></td><td>enum</td><td><code>"auto"</code></td><td><code>"claude-opus-4.7"</code></td><td>One of <code>auto</code>, <code>claude-opus-4.7</code>, <code>claude-opus-4.6</code>, <code>claude-sonnet-4.6</code>, <code>claude-haiku-4.5</code>, <code>gpt-5.4</code>, <code>gpt-5.2-codex</code>, <code>gpt-5-mini</code>, <code>gemini-3-pro-preview</code>. <code>auto</code> lets the host pick based on availability.</td></tr>
+              <tr><td><code>modelRouting.default</code></td><td>enum</td><td><code>"auto"</code></td><td><code>"claude-opus-4.8"</code></td><td>One of <code>auto</code>, <code>claude-opus-4.8</code>, <code>claude-opus-4.7</code>, <code>claude-opus-4.6</code>, <code>claude-sonnet-5</code>, <code>claude-sonnet-4.6</code>, <code>claude-haiku-4.5</code>, <code>gpt-5.4</code>, <code>gpt-5.3-codex</code>, <code>gpt-5-mini</code>, <code>gemini-3.1-pro-preview</code>. <code>auto</code> lets the host pick based on availability.</td></tr>
               <tr><td><code>modelRouting.execute</code></td><td>string</td><td><em>(uses <code>default</code>)</em></td><td><code>"gpt-5.3-codex"</code></td><td>Model for slice execution. Free-form string so newer models work without a CLI upgrade.</td></tr>
-              <tr><td><code>modelRouting.review</code></td><td>string</td><td><em>(uses <code>default</code>)</em></td><td><code>"claude-opus-4.7"</code></td><td>Model for the Step 5 review gate. Free-form string.</td></tr>
+              <tr><td><code>modelRouting.review</code></td><td>string</td><td><em>(uses <code>default</code>)</em></td><td><code>"claude-opus-4.8"</code></td><td>Model for the Step 5 review gate. Free-form string.</td></tr>
             </tbody>
           </table>
         </div>
@@ -147,7 +147,7 @@
             <tbody>
               <tr><td><code>forgeMaster.reasoningModel</code></td><td>string</td><td><em>(falls back to <code>modelRouting.default</code>)</em></td><td><code>"gpt-4o-mini"</code></td><td>Model used for multi-step reasoning in <code>forge_master_ask</code>. Affects answer quality and per-call cost.</td></tr>
               <tr><td><code>forgeMaster.reasoningProvider</code></td><td>string</td><td><em>(auto-detected)</em></td><td><code>"githubCopilot"</code></td><td>Which provider serves the reasoning model. One of <code>githubCopilot</code>, <code>anthropic</code>, <code>openai</code>, <code>xai</code>. If unset, Plan Forge picks based on available API keys.</td></tr>
-              <tr><td><code>forgeMaster.routerModel</code></td><td>string</td><td><code>"grok-3-mini"</code></td><td><code>"gpt-4o-mini"</code></td><td>Small classifier model that decides which tools to call. Should be cheap and fast; quality matters less than latency.</td></tr>
+              <tr><td><code>forgeMaster.routerModel</code></td><td>string</td><td><code>"grok-4.20-0309-non-reasoning"</code></td><td><code>"gpt-4o-mini"</code></td><td>Small classifier model that decides which tools to call. Should be cheap and fast; quality matters less than latency.</td></tr>
               <tr><td><code>forgeMaster.defaultProvider</code></td><td>string</td><td><em>(auto-detected)</em></td><td><code>"githubCopilot"</code></td><td>Default provider for both router and reasoning if the per-model provider is not set.</td></tr>
             </tbody>
           </table>
@@ -206,7 +206,7 @@
               <tr><td><code>quorum.enabled</code></td><td>boolean</td><td><code>false</code></td><td><code>true</code></td><td>Master switch. When false, quorum is off regardless of the other keys.</td></tr>
               <tr><td><code>quorum.auto</code></td><td>boolean</td><td><code>true</code></td><td><code>true</code></td><td>When <code>enabled</code>, gate quorum on slice complexity score. When false, every slice fans out.</td></tr>
               <tr><td><code>quorum.threshold</code></td><td>number (1&ndash;10)</td><td><code>6</code></td><td><code>5</code></td><td>Complexity score above which auto-mode fires quorum. Lower = more slices use quorum, higher cost.</td></tr>
-              <tr><td><code>quorum.models</code></td><td>array&lt;string&gt;</td><td><code>["claude-opus-4.7", "gpt-5.3-codex", "gemini-3.1-pro"]</code></td><td><code>["claude-opus-4.7", "gpt-5.2-codex"]</code></td><td>Models that participate in the dry-run fan-out. 2&ndash;5 entries is typical; minimum is 1 (degrades to advisory).</td></tr>
+              <tr><td><code>quorum.models</code></td><td>array&lt;string&gt;</td><td><code>["claude-opus-4.8", "gpt-5.3-codex", "grok-4.20-0309-reasoning"]</code></td><td><code>["claude-opus-4.8", "gpt-5.3-codex"]</code></td><td>Models that participate in the dry-run fan-out. 2&ndash;5 entries is typical; minimum is 1 (degrades to advisory).</td></tr>
               <tr><td><code>quorum.reviewerModel</code></td><td>string</td><td><code>"claude-opus-4.7"</code></td><td><code>"gpt-5.4"</code></td><td>Model that synthesises the dry-run responses into a single execution plan.</td></tr>
               <tr><td><code>quorum.dryRunTimeout</code></td><td>number (ms)</td><td><code>300000</code></td><td><code>600000</code></td><td>Per-worker timeout in milliseconds. Increase for very large slices; the default is 5 minutes.</td></tr>
               <tr><td><code>quorum.strictAvailability</code></td><td>boolean</td><td><code>false</code></td><td><code>true</code></td><td>When true, fail-fast (exit code 2) if any configured model is unavailable. When false (default), drop unavailable models and continue if at least one remains.</td></tr>

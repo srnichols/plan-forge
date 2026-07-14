@@ -144,7 +144,7 @@ export const TOOL_METADATA = {
       addedIn: "2.5.0",
       description: "Multi-model consensus: dispatch to 3+ models for dry-run analysis, synthesize best approach, then execute",
       parameters: {
-        quorum: { type: "string", enum: ["auto", "power", "speed", "false"], default: "auto", description: "Quorum mode. 'auto' = threshold-based with default models; 'power' = flagship preset (claude-opus-4.7 + gpt-5.3-codex + grok-4.20-0309-reasoning, threshold 5); 'speed' = fast preset (claude-sonnet-4.6 + gpt-5.4-mini + grok-4.20-0309-non-reasoning, threshold 7); 'false' = disabled. Note: 'power-gov' preset exists for Microsoft Foundry / gov-cloud workloads and is selectable via .forge.json `quorum.preset`." },
+        quorum: { type: "string", enum: ["auto", "power", "speed", "false"], default: "auto", description: "Quorum mode. 'auto' = threshold-based with default models; 'power' = flagship preset (claude-opus-4.8 + gpt-5.3-codex + grok-4.20-0309-reasoning, threshold 5); 'speed' = fast preset (claude-sonnet-4.6 + gpt-5.4-mini + grok-4.20-0309-non-reasoning, threshold 7); 'false' = disabled. Note: 'power-gov' preset exists for Microsoft Foundry / gov-cloud workloads and is selectable via .forge.json `quorum.preset`." },
         quorumThreshold: { type: "number", description: "Complexity score threshold for auto mode (1-10, default: 5)" },
       },
       config: ".forge.json → quorum { enabled, auto, threshold, models[], reviewerModel, dryRunTimeout, preset }",
@@ -1252,7 +1252,7 @@ export const TOOL_METADATA = {
     },
     example: {
       input: { source: "drift", customQuestion: "Why did drift score drop 15 points?" },
-      output: { quorumPrompt: "## Context\n...\n\n## Question\nWhy did drift score drop 15 points?\n\n## Voting Instruction\n...", promptTokenEstimate: 250, suggestedModels: ["claude-opus-4.6", "grok-4.20", "gemini-3-pro-preview"], dataSnapshotAge: "12m ago", questionUsed: "Why did drift score drop 15 points?" },
+      output: { quorumPrompt: "## Context\n...\n\n## Question\nWhy did drift score drop 15 points?\n\n## Voting Instruction\n...", promptTokenEstimate: 250, suggestedModels: ["claude-opus-4.8", "grok-4.20", "gemini-3.1-pro-preview"], dataSnapshotAge: "12m ago", questionUsed: "Why did drift score drop 15 points?" },
     },
   },
   forge_liveguard_run: {

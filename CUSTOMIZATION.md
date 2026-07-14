@@ -552,7 +552,7 @@ Configure which model executes which step type in `.forge.json`:
 ```json
 {
   "modelRouting": {
-    "execute": "gpt-5.2-codex",
+    "execute": "gpt-5.3-codex",
     "review": "claude-sonnet-4.6",
     "default": "auto"
   }

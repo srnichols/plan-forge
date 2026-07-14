@@ -628,7 +628,7 @@ function _formatQuorumResponse({ context, oldestTimestamp, customQuestion, analy
   const contextStr = JSON.stringify(context, null, 2);
   const quorumPrompt = `## Context\n${contextStr}\n\n## Question\n${questionUsed}\n\n## Voting Instruction\n${votingInstruction}`;
   const qConfig = loadQuorumConfig(PROJECT_DIR);
-  const suggestedModels = (qConfig.models || ["claude-opus-4.7", "grok-4.20", "gemini-3-pro-preview"]).slice(0, quorumSize);
+  const suggestedModels = (qConfig.models || ["claude-opus-4.8", "grok-4.20", "gemini-3.1-pro-preview"]).slice(0, quorumSize);
   const promptTokenEstimate = Math.ceil(quorumPrompt.length / 4);
   let dataSnapshotAge = "unknown";
   if (oldestTimestamp) {

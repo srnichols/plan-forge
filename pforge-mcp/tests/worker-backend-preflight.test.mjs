@@ -72,4 +72,30 @@ describe("assertWorkerBackendReady — Full-Auto preflight gate", () => {
     const detect = () => [cli({ available: false, failureCategory: "auth", reason: "gh not authenticated" })];
     expect(assertWorkerBackendReady({ model: "claude-opus-4.7", worker: "copilot-coding-agent", detect })).toBeNull();
   });
+
+  // ─── Grok Build CLI preflight (Phase GROK-BUILD-WORKER Slice 5) ───────
+  it("(8) blocks --worker grok when the grok CLI is unavailable", () => {
+    const detect = () => [cli({ name: "grok", available: false, failureCategory: "missing", reason: "grok not on PATH" })];
+    const result = assertWorkerBackendReady({ model: "grok-4.5", worker: "grok", detect, resolveApiProvider: () => null });
+    expect(result).toMatchObject({ status: "failed", code: "WORKER_AUTH_REQUIRED" });
+    expect(result.error).toContain("grok CLI not ready");
+  });
+
+  it("(9) allows --worker grok when the grok CLI is available", () => {
+    const detect = () => [cli({ name: "grok", available: true })];
+    expect(assertWorkerBackendReady({ model: "grok-4.5", worker: "grok", detect })).toBeNull();
+  });
+
+  it("(10) --worker grok fails even with an API key (explicit CLI request must be honored)", () => {
+    const detect = () => [cli({ name: "grok", available: false, failureCategory: "missing" })];
+    const result = assertWorkerBackendReady({ model: "grok-4.5", worker: "grok", detect, resolveApiProvider: () => ({ label: "xAI", envKey: "XAI_API_KEY" }) });
+    expect(result).toMatchObject({ code: "WORKER_AUTH_REQUIRED" });
+  });
+
+  it("(11) grok-* without --worker grok (default routing) skips the grok gate — direct-API path", () => {
+    // grokCli preference defaults to "auto" (no .forge.json override) → grok-* stays
+    // a direct-API model, validated by spawnWorker; detect must NOT be consulted.
+    const detect = () => { throw new Error("detect should not be called for default grok routing"); };
+    expect(assertWorkerBackendReady({ model: "grok-4.5", detect })).toBeNull();
+  });
 });

@@ -1126,6 +1126,29 @@ export function assertWorkerBackendReady({ model = null, worker = null, cwd = pr
   // before the copilot pre-flight can run.
   if (worker === "copilot-coding-agent") return null;
 
+  // Phase GROK-BUILD-WORKER Slice 5: when grok is the intended worker — either an
+  // explicit `--worker grok`, or a grok-* model with routing.grokCli="prefer" — the
+  // grok CLI is the execution backend, so validate it here BEFORE the direct-API
+  // short-circuit below. Falls back gracefully: a *preferred* (non-explicit) grok
+  // model with the CLI absent but XAI_API_KEY present is allowed (the router uses
+  // the metered API). Only an explicit --worker grok, or no API fallback, fails.
+  const grokPreferred = isGrokCliServableModel(model) && loadGrokCliPreference(cwd) === "prefer";
+  if (worker === "grok" || grokPreferred) {
+    const grokWorker = detect(cwd).find((w) => w.name === "grok");
+    if (grokWorker?.available) return null;
+    if (worker !== "grok" && resolveApiProvider(model)) return null;
+    const hint = suggestInstall("grok");
+    return {
+      status: "failed",
+      code: "WORKER_AUTH_REQUIRED",
+      failureCategory: grokWorker?.failureCategory || "missing",
+      error:
+        "worker failed: grok CLI not ready — install it (`irm https://x.ai/cli/install.ps1 | iex`) " +
+        "and sign in with `grok` (SuperGrok / X Premium+), or set XAI_API_KEY to use the metered xAI API.",
+      install: hint.command || hint.docs || null,
+    };
+  }
+
   // Direct-API models are validated by spawnWorker's own key check.
   if (isDirectApiOnlyModel(model)) return null;
 

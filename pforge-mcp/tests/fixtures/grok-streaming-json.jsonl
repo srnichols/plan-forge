@@ -1,0 +1,5 @@
+{"type":"session","model":"grok-4.5"}
+{"type":"assistant","delta":{"text":"Analyzing the repository structure."}}
+{"type":"assistant","delta":{"text":" Applying the requested change."}}
+{"type":"tool_use","name":"edit_file","path":"src/example.ts"}
+{"type":"result","status":"completed","model":"grok-4.5","usage":{"input_tokens":1520,"output_tokens":842,"cost_in_usd_ticks":31000}}

@@ -257,7 +257,7 @@ function buildOrchestratorApiSurface() {
     exports: {
       parsePlan: { description: "Parse plan Markdown → DAG with slices, deps, scope, gates", args: "planPath" },
       runPlan: { description: "Execute a plan end-to-end (main orchestration entry)", args: "planPath, options" },
-      detectWorkers: { description: "Detect available CLI workers (gh-copilot, claude, codex)", returns: "array" },
+      detectWorkers: { description: "Detect available CLI workers (gh-copilot, claude, codex, grok)", returns: "array" },
       spawnWorker: { description: "Spawn a CLI worker with prompt, model, timeout", args: "prompt, options" },
       runGate: { description: "Execute a validation gate command (allowlisted)", args: "command, cwd" },
       getCostReport: { description: "Generate cost report from .forge/cost-history.json", args: "cwd" },

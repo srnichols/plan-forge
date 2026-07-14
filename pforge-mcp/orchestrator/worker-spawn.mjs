@@ -2283,6 +2283,9 @@ export function parseGrokStreamingJson(stdout) {
     tokens_out: tokensOut,
     cost_in_usd_ticks: costTicks,
     model,
+    // Starts at 0; _enrichWorkerTokens() bumps it to 1 for a successful
+    // subscription run (shouldDefaultPremiumRequestsToOne), exactly like the
+    // gh-copilot CLI lane — that is what makes flat grok-cli billing land.
     premiumRequests: 0,
     apiDurationMs: null,
     sessionDurationMs: null,

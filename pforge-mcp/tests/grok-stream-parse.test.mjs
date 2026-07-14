@@ -1,9 +1,10 @@
 // Phase GROK-BUILD-WORKER Slice 3 — parseGrokStreamingJson.
 //
-// NOTE: the fixture is SYNTHETIC (the grok CLI was not installed when authored).
-// It models the documented `--output-format streaming-json` shape. These tests
-// pin the parser's tolerance + fallback behavior; tighten the field mapping once
-// a real transcript is captured (Required Decision #4).
+// The fixture is a REAL capture from `grok 0.2.101 -p ... --output-format
+// streaming-json` (2026-07-14; session/request IDs redacted). Verified in
+// v3.24.1 after installing the CLI (closes Required Decision #4). The parser
+// also keeps tolerance for documented variant shapes — those cases are pinned
+// below so a future schema change fails soft rather than silently.
 
 import { describe, it, expect } from "vitest";
 import { readFileSync } from "node:fs";
@@ -15,37 +16,40 @@ const HERE = dirname(fileURLToPath(import.meta.url));
 const FIXTURE = readFileSync(resolve(HERE, "fixtures/grok-streaming-json.jsonl"), "utf-8");
 
 describe("parseGrokStreamingJson", () => {
-  it("extracts tokens, cost ticks, model, and assistant text from the fixture", () => {
+  it("extracts text, tokens, cost ticks, and model from the REAL grok 0.2.101 capture", () => {
     const r = parseGrokStreamingJson(FIXTURE);
-    expect(r.model).toBe("grok-4.5");
-    expect(r.tokens_in).toBe(1520);
-    expect(r.tokens_out).toBe(842);
-    expect(r.cost_in_usd_ticks).toBe(31000);
-    expect(r.output).toContain("Analyzing the repository");
-    expect(r.output).toContain("Applying the requested change");
+    expect(r.output).toBe("pong");                 // {type:"text",data:"pong"}
+    expect(r.tokens_in).toBe(13793);               // usage.input_tokens
+    expect(r.tokens_out).toBe(1);                   // usage.output_tokens
+    expect(r.cost_in_usd_ticks).toBe(172693500);    // event-level total_cost_usd_ticks
+    expect(r.model).toBe("grok-4.20-0309-non-reasoning"); // from modelUsage keys
     // CLI worker path stays on the subscription billing lane.
     expect(r.vendor).toBe("unknown");
   });
 
-  it("tolerates prompt_tokens/completion_tokens field variants", () => {
+  it("tolerates the documented variant shapes (delta.text + result.usage + prompt/completion)", () => {
     const alt = [
-      '{"model":"grok-4.5"}',
+      '{"type":"session","model":"grok-4.5"}',
+      '{"type":"assistant","delta":{"text":"hello "}}',
+      '{"type":"assistant","delta":{"text":"world"}}',
       '{"type":"result","usage":{"prompt_tokens":100,"completion_tokens":50}}',
     ].join("\n");
     const r = parseGrokStreamingJson(alt);
+    expect(r.output).toBe("hello world");
+    expect(r.model).toBe("grok-4.5");
     expect(r.tokens_in).toBe(100);
     expect(r.tokens_out).toBe(50);
   });
 
   it("falls back to null tokens when no usage event is present (heuristic upstream)", () => {
-    const r = parseGrokStreamingJson('{"type":"assistant","delta":{"text":"hello"}}');
+    const r = parseGrokStreamingJson('{"type":"text","data":"hello"}');
     expect(r.tokens_in).toBeNull();
     expect(r.tokens_out).toBeNull();
     expect(r.output).toBe("hello");
   });
 
   it("ignores malformed JSONL lines without throwing", () => {
-    const messy = 'not json\n{"type":"result","usage":{"input_tokens":5,"output_tokens":3}}\n{bad';
+    const messy = 'not json\n{"type":"end","usage":{"input_tokens":5,"output_tokens":3}}\n{bad';
     const r = parseGrokStreamingJson(messy);
     expect(r.tokens_in).toBe(5);
     expect(r.tokens_out).toBe(3);

@@ -7,6 +7,24 @@ Format follows [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
+## [3.24.1] — 2026-07-14 — Grok streaming-json parser: verified against real output
+
+> **One-liner**: Hotfix for the brand-new `--worker grok` path. The v3.24.0 `parseGrokStreamingJson` was authored against a *synthetic* fixture (the `grok` CLI wasn't installed). With the CLI now installed (`grok 0.2.101`), a real `--output-format streaming-json` capture revealed the actual schema differs — so the parser was mis-extracting assistant output, model, and cost (tokens were already correct). This corrects it and closes Required Decision #4.
+
+### Fixed
+
+- **`parseGrokStreamingJson`** (`pforge-mcp/orchestrator/worker-spawn.mjs`) now matches the **real** `grok 0.2.101` stream:
+  - Assistant text: `{"type":"text","data":"…"}` (was looking for `delta.text`/`content` → **output was empty**).
+  - Model: read from the `modelUsage` object's keys (was looking for a top-level `model` → **model was "unknown"**).
+  - Cost: event-level `total_cost_usd_ticks` on the terminal `{"type":"end", …}` event (was looking for `usage.cost_in_usd_ticks` → **cost was missing**).
+  - Tokens (`usage.input_tokens`/`output_tokens`) were already correct — unchanged.
+  - Variant-shape tolerance (documented `delta.text` / `result.usage` / `prompt_tokens`) is retained so a future schema change fails soft, not hard.
+- **Fixture** `tests/fixtures/grok-streaming-json.jsonl` replaced with a real capture (session/request IDs redacted); tests assert the real values (`grok-4.20-0309-non-reasoning`, `input_tokens 13793`, `total_cost_usd_ticks 172693500`, output `pong`). No longer marked SYNTHETIC.
+
+### Notes
+
+- Only affects the opt-in `--worker grok` path shipped in v3.24.0; no other behavior changes. GHCP remains the default.
+
 ## [3.24.0] — 2026-07-14 — Grok Build as a first-class CLI worker
 
 > **One-liner**: Adds **Grok Build** (xAI's terminal coding agent, binary `grok`) as an opt-in CLI worker alongside `gh-copilot`, `claude`, and `codex`. GitHub Copilot stays the default. Run a whole plan through it with `--worker grok`, or add a Grok voice to a quorum with `--with-grok` (metered API) / `--with-grok-cli` (flat subscription). Fully additive — no existing default, preset, or cost path changes. Executed via the 7-slice hardened plan `docs/plans/Phase-GROK-BUILD-WORKER-PLAN.md`.

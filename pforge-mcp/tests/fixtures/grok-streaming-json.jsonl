@@ -1,5 +1,2 @@
-{"type":"session","model":"grok-4.5"}
-{"type":"assistant","delta":{"text":"Analyzing the repository structure."}}
-{"type":"assistant","delta":{"text":" Applying the requested change."}}
-{"type":"tool_use","name":"edit_file","path":"src/example.ts"}
-{"type":"result","status":"completed","model":"grok-4.5","usage":{"input_tokens":1520,"output_tokens":842,"cost_in_usd_ticks":31000}}
+{"type":"text","data":"pong"}
+{"type":"end","stopReason":"EndTurn","sessionId":"00000000-0000-0000-0000-000000000000","requestId":"00000000-0000-0000-0000-000000000000","usage":{"input_tokens":13793,"cache_read_input_tokens":128,"output_tokens":1,"reasoning_tokens":0,"total_tokens":13922},"num_turns":1,"total_cost_usd":0.01726935,"total_cost_usd_ticks":172693500,"modelUsage":{"grok-4.20-0309-non-reasoning":{"inputTokens":13793,"outputTokens":1,"cacheReadInputTokens":128,"modelCalls":1,"costUSD":0.01726935}}}

@@ -1983,7 +1983,12 @@ function finalizeWorkerResult({ code, state, chosen, promptFile, spec, model, sp
   }
 
   const jsonlEvents = parseJSONL(state.stdout);
-  let tokens = extractTokens(jsonlEvents);
+  // Phase GROK-BUILD-WORKER Slice 3: the grok CLI emits --output-format
+  // streaming-json with its own event shape; route it through the tolerant
+  // grok parser. All other CLI workers keep the existing extractTokens path.
+  let tokens = chosen.name === "grok"
+    ? parseGrokStreamingJson(state.stdout)
+    : extractTokens(jsonlEvents);
   tokens = _enrichWorkerTokens({
     tokens,
     stdout: state.stdout,
@@ -2250,6 +2255,73 @@ export function deriveVendorFromModel(model) {
  * non-null value is the actual measured duration. sessionDurationMs follows
  * the same convention as a precaution against future event-stream regressions.
  */
+/**
+ * Parse Grok Build CLI `--output-format streaming-json` output into a token /
+ * cost summary. Phase GROK-BUILD-WORKER Slice 3.
+ *
+ * ⚠️ SCHEMA NOT YET VERIFIED AGAINST A REAL CAPTURE (Required Decision #4).
+ * The `grok` CLI was not installed when this was authored, so the companion
+ * fixture (tests/fixtures/grok-streaming-json.jsonl) is SYNTHETIC and models the
+ * documented streaming-json shape. This parser is deliberately tolerant of
+ * field-name variants (input_tokens|prompt_tokens, output_tokens|completion_tokens)
+ * and degrades to null tokens (heuristic estimation upstream) when no usage
+ * event is present — so a schema mismatch fails soft rather than crashing.
+ * Tighten the field mapping once a real transcript is captured.
+ *
+ * @param {string} stdout - raw JSONL text from the grok CLI
+ * @returns {{ output: string, tokens_in: number|null, tokens_out: number|null,
+ *   cost_in_usd_ticks: number|null, model: string|null, premiumRequests: number,
+ *   apiDurationMs: null, sessionDurationMs: null, codeChanges: null, vendor: string }}
+ */
+export function parseGrokStreamingJson(stdout) {
+  const lines = String(stdout || "").split(/\r?\n/).filter((l) => l.trim());
+  let output = "";
+  let model = null;
+  let tokensIn = null;
+  let tokensOut = null;
+  let costTicks = null;
+
+  for (const line of lines) {
+    let ev;
+    try { ev = JSON.parse(line); } catch { continue; }
+    if (!ev || typeof ev !== "object") continue;
+
+    if (typeof ev.model === "string" && !model) model = ev.model;
+
+    // Assistant text — tolerant of a few documented shapes.
+    const text = ev.delta?.text
+      ?? (typeof ev.content === "string" ? ev.content : null)
+      ?? (ev.type === "assistant" && typeof ev.text === "string" ? ev.text : null);
+    if (text) output += text;
+
+    // Terminal usage event.
+    const usage = ev.usage || (ev.type === "result" ? ev.result?.usage : null);
+    if (usage && typeof usage === "object") {
+      const inTok = usage.input_tokens ?? usage.prompt_tokens ?? null;
+      const outTok = usage.output_tokens ?? usage.completion_tokens ?? null;
+      if (inTok != null) tokensIn = inTok;
+      if (outTok != null) tokensOut = outTok;
+      if (usage.cost_in_usd_ticks != null) costTicks = usage.cost_in_usd_ticks;
+    }
+  }
+
+  return {
+    output,
+    tokens_in: tokensIn,
+    tokens_out: tokensOut,
+    cost_in_usd_ticks: costTicks,
+    model,
+    premiumRequests: 0,
+    apiDurationMs: null,
+    sessionDurationMs: null,
+    codeChanges: null,
+    // CLI worker path — keep on the subscription premium-request billing lane
+    // (like extractTokens) so no surprise token charges accrue for the flat
+    // subscription case. Metered grok runs go through callApiWorker, not here.
+    vendor: "unknown",
+  };
+}
+
 export function extractTokens(events) {
   let outputTokens = 0;
   let model = null;

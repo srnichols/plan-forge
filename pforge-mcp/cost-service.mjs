@@ -350,7 +350,7 @@ export function getPricing(model) {
 
 // ─── Provider Awareness ───────────────────────────────────────────────
 // Subscription CLI providers bill by premium-request count, not per-token.
-export const SUBSCRIPTION_PROVIDERS = new Set(["gh-copilot", "claude-cli", "codex-cli"]);
+export const SUBSCRIPTION_PROVIDERS = new Set(["gh-copilot", "claude-cli", "codex-cli", "grok-cli"]);
 
 // ─── Microsoft Foundry: deployment-name → model-key resolution ────────
 // Reads `.forge/foundry-deployments.json` (operator-editable) once per cwd;
@@ -422,7 +422,13 @@ function _detectProviderFromModelPrefix(m, env) {
     };
   }
   if (m.startsWith("grok-")) {
-    return { provider: "xai-api", source: "model-prefix" };
+    // Phase GROK-BUILD-WORKER: mirror the gpt-*/claude-* auth heuristic (#120).
+    // With XAI_API_KEY → metered xAI API. Without a key the only way to run
+    // grok-* is the Grok Build CLI subscription (flat), so route to grok-cli.
+    return {
+      provider: Boolean(env.XAI_API_KEY) ? "xai-api" : "grok-cli",
+      source: "model-prefix",
+    };
   }
   if (m.startsWith("claude-")) {
     return {
@@ -441,7 +447,7 @@ function _detectProviderFromModelPrefix(m, env) {
 
 export function detectCostModel({ env = {}, forgeConfig = {}, model = "" } = {}) {
   const knownProviders = new Set([
-    "gh-copilot", "claude-cli", "codex-cli",
+    "gh-copilot", "claude-cli", "codex-cli", "grok-cli",
     "anthropic-api", "openai-api", "xai-api", "unknown",
   ]);
 

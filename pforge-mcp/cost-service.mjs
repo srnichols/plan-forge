@@ -95,8 +95,11 @@ function _computeFoundryQuota({ estimatedTokensIn, estimatedTokensOut, provider,
 export const MODEL_PRICING = {
   // ─── Anthropic Claude ──────────────────────────────────────────────
   // Cache: read 0.10×, 5m write 1.25×, 1h write 2.0× (uniform across all tiers).
-  // Opus 4.5/4.6/4.7 dropped to $5/$25 per Anthropic pricing page (2026-05-06).
+  // Opus 4.5/4.6/4.7/4.8 all bill at $5/$25 per Anthropic pricing page (2026-05-06).
   // Source: https://platform.claude.com/docs/en/docs/build-with-claude/prompt-caching
+  "claude-opus-4.8":        { input: 5 / 1_000_000,    output: 25 / 1_000_000,
+    cache_read_multiplier: 0.10, cache_write_5m_multiplier: 1.25, cache_write_1h_multiplier: 2.0,
+    _source: "estimated: mirrors claude-opus-4.7 (Anthropic Opus held flat 4.5→4.7); pending vendor publication (2026-07-14)" },
   "claude-opus-4.7":        { input: 5 / 1_000_000,    output: 25 / 1_000_000,
     cache_read_multiplier: 0.10, cache_write_5m_multiplier: 1.25, cache_write_1h_multiplier: 2.0,
     _source: "https://www.anthropic.com/pricing (2026-05-06)" },
@@ -118,6 +121,9 @@ export const MODEL_PRICING = {
   "claude-opus-4.5":        { input: 5 / 1_000_000,    output: 25 / 1_000_000,
     cache_read_multiplier: 0.10, cache_write_5m_multiplier: 1.25, cache_write_1h_multiplier: 2.0,
     _source: "https://platform.claude.com/docs/en/docs/build-with-claude/prompt-caching (2026-05-06)" },
+  "claude-sonnet-5":        { input: 3 / 1_000_000,    output: 15 / 1_000_000,
+    cache_read_multiplier: 0.10, cache_write_5m_multiplier: 1.25, cache_write_1h_multiplier: 2.0,
+    _source: "estimated: mirrors claude-sonnet-4.6 (Sonnet class); pending vendor publication (2026-07-14)" },
   "claude-sonnet-4.6":      { input: 3 / 1_000_000,    output: 15 / 1_000_000,
     cache_read_multiplier: 0.10, cache_write_5m_multiplier: 1.25, cache_write_1h_multiplier: 2.0,
     _source: "https://platform.claude.com/docs/en/docs/build-with-claude/prompt-caching (2026-05-06)" },
@@ -136,6 +142,19 @@ export const MODEL_PRICING = {
   // Flex: 0.5× input AND 0.5× output (symmetric, gpt-5.5 + gpt-5.4 only).
   // Priority: 2.0× input, 1.5× output (asymmetric).
   // Source: https://developers.openai.com/api/docs/pricing (2026-05-06)
+  "gpt-5.6-terra":          { input: 5 / 1_000_000,    output: 30 / 1_000_000,
+    cache_read_multiplier: 0.10,
+    flex_input_multiplier: 0.5, flex_output_multiplier: 0.5,
+    priority_input_multiplier: 2.0, priority_output_multiplier: 1.5,
+    _source: "estimated: mirrors gpt-5.5 flagship rate; pending vendor publication (2026-07-14)" },
+  "gpt-5.6-sol":            { input: 2.5 / 1_000_000,  output: 15 / 1_000_000,
+    cache_read_multiplier: 0.10,
+    flex_input_multiplier: 0.5, flex_output_multiplier: 0.5,
+    priority_input_multiplier: 2.0, priority_output_multiplier: 1.5,
+    _source: "estimated: mirrors gpt-5.4 mid rate; pending vendor publication (2026-07-14)" },
+  "gpt-5.6-luna":           { input: 0.75 / 1_000_000, output: 4.5 / 1_000_000,
+    cache_read_multiplier: 0.10,
+    _source: "estimated: mirrors gpt-5.4-mini rate; pending vendor publication (2026-07-14)" },
   "gpt-5.5":                { input: 5 / 1_000_000,    output: 30 / 1_000_000,
     cache_read_multiplier: 0.10,
     flex_input_multiplier: 0.5, flex_output_multiplier: 0.5,
@@ -218,6 +237,10 @@ export const MODEL_PRICING = {
     _source: "https://developers.openai.com/api/docs/pricing (2026-05-06)" },
 
   // ─── Google Gemini ────────────────────────────────────────────────
+  "gemini-3.5-flash":       { input: 0.30 / 1_000_000, output: 2.50 / 1_000_000,
+    _source: "estimated: Gemini flash tier; pending vendor publication (2026-07-14)" },
+  "gemini-3.1-pro-preview": { input: 1.25 / 1_000_000, output: 5 / 1_000_000,
+    _source: "estimated: mirrors gemini-3-pro-preview; pending vendor publication (2026-07-14)" },
   "gemini-3-pro-preview":   { input: 1.25 / 1_000_000, output: 5 / 1_000_000,
     _source: "https://ai.google.dev/gemini-api/docs/pricing (2026-05-06)" },
 
@@ -227,6 +250,12 @@ export const MODEL_PRICING = {
   // when present and falls back to multiplier math otherwise.
   // Source: https://docs.x.ai/developers/models, https://docs.x.ai/developers/cost-tracking
   // _retiredAfter: marks xAI May 15, 2026 retirements (kept for historical compat).
+  "grok-4.5":                          { input: 2.00 / 1_000_000, output: 6.00 / 1_000_000,
+    cache_read_multiplier: 0.25,
+    _source: "https://docs.x.ai/docs/models Chat API — 500k ctx (2026-07-14)" },
+  "grok-build-0.1":                    { input: 1.00 / 1_000_000, output: 2.00 / 1_000_000,
+    cache_read_multiplier: 0.25,
+    _source: "https://docs.x.ai/docs/models Code API — 256k ctx, agentic coding (2026-07-14)" },
   "grok-4.3":                          { input: 1.25 / 1_000_000, output: 2.50 / 1_000_000,
     cache_read_multiplier: 0.25,
     _source: "https://docs.x.ai/developers/models (2026-05-06)" },

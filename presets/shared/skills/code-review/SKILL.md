@@ -19,7 +19,7 @@ tools: [read_file, forge_analyze, forge_diagnose, forge_diff]
 ### 0. Forge Analysis
 Use the `forge_analyze` MCP tool with the current plan (if available) to get a structured consistency score. Use the `forge_diff` MCP tool to detect scope drift and forbidden file edits.
 
-**If `--quorum` was specified**: Use `forge_analyze` with `quorum: true` to dispatch multi-model analysis. Each changed file is independently reviewed by multiple AI models (e.g., grok-3-mini, claude-sonnet-4.6, gpt-5.3-codex), and findings are synthesized with consensus confidence levels. This catches issues a single model misses.
+**If `--quorum` was specified**: Use `forge_analyze` with `quorum: true` to dispatch multi-model analysis. Each changed file is independently reviewed by multiple AI models (e.g., grok-4.20-0309-non-reasoning, claude-sonnet-4.6, gpt-5.3-codex), and findings are synthesized with consensus confidence levels. This catches issues a single model misses.
 
 ### 1. Identify Changed Files
 ```bash

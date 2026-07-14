@@ -20,11 +20,11 @@ export function loadQuorumConfig(cwd, presetOverride = null) {
     // effectively "always quorum". Threshold=5 matches the power preset and
     // restricts auto-quorum to genuinely complex slices.
     threshold: 5,
-    // Bug #107: default uses the standard tier (opus-4.6). Users who want
-    // the premium tier (opus-4.7) opt in via --quorum=power. Reviewer stays
-    // on 4.7 since it only runs once per slice and the spend is bounded.
-    models: ["claude-opus-4.6", "gpt-5.3-codex", "grok-4.20-0309-reasoning"],
-    reviewerModel: "claude-opus-4.7",
+    // Bug #107: default uses the standard tier (opus-4.7). Users who want
+    // the premium tier (opus-4.8) opt in via --quorum=power. Reviewer stays
+    // on 4.8 since it only runs once per slice and the spend is bounded.
+    models: ["claude-opus-4.7", "gpt-5.3-codex", "grok-4.20-0309-reasoning"],
+    reviewerModel: "claude-opus-4.8",
     dryRunTimeout: 300_000, // 5 min per dry-run leg
     strictAvailability: false, // H.3: true = fast-fail if any model unavailable
   };

@@ -198,7 +198,7 @@ Result: 15 OK, 3 WARN, 0 FAIL ,  forge is healthy</code></pre>
       <ul>
         <li><strong>Stage 1 keyword scorer didn't match</strong>, check the <code>via</code> field in the response. If <code>"keyword"</code>, try a more keyword-rich phrasing ("status of &hellip;", "why did &hellip; fail", "should we &hellip;")</li>
         <li><strong>Embedding cache is cold</strong>, new project, no prior classifications. Hit rate climbs after 10&ndash;20 turns. Check <code>GET /api/forge-master/cache-stats</code></li>
-        <li><strong>Router model is too small</strong>, default <code>grok-3-mini</code> is fine for most prompts but quirky vocabulary may need <code>grok-4</code> or <code>gpt-4o-mini</code>. Override via <code>forgeMaster.routerModel</code> in <code>.forge.json</code></li>
+        <li><strong>Router model is too small</strong>, default <code>grok-4.20-0309-non-reasoning</code> is fine for most prompts but quirky vocabulary may need <code>grok-4.5</code> or <code>gpt-4o-mini</code>. Override via <code>forgeMaster.routerModel</code> in <code>.forge.json</code></li>
         <li><strong>Quorum advisory not firing on <code>"auto"</code></strong>, requires lane=advisory + autoEscalated=true + fromTier=high + confidence&ge;medium. Use <code>"always"</code> to remove gating during testing</li>
       </ul>
 

@@ -23,15 +23,21 @@
  */
 export const TURN_PRICING = {
   // Anthropic Claude
+  "claude-opus-4.8":      { input: 15 / 1_000_000,   output: 75 / 1_000_000 },
   "claude-opus-4.7":      { input: 15 / 1_000_000,   output: 75 / 1_000_000 },
   "claude-opus-4.6":      { input: 15 / 1_000_000,   output: 75 / 1_000_000 },
   "claude-opus-4.5":      { input: 15 / 1_000_000,   output: 75 / 1_000_000 },
   "claude-opus-4":        { input: 15 / 1_000_000,   output: 75 / 1_000_000 },
+  "claude-sonnet-5":      { input: 3 / 1_000_000,    output: 15 / 1_000_000 },
   "claude-sonnet-4.6":    { input: 3 / 1_000_000,    output: 15 / 1_000_000 },
   "claude-sonnet-4.5":    { input: 3 / 1_000_000,    output: 15 / 1_000_000 },
   "claude-sonnet-4":      { input: 3 / 1_000_000,    output: 15 / 1_000_000 },
   "claude-haiku-4.5":     { input: 0.8 / 1_000_000,  output: 4 / 1_000_000 },
   // OpenAI GPT
+  "gpt-5.6-terra":        { input: 5 / 1_000_000,    output: 30 / 1_000_000 },
+  "gpt-5.6-sol":          { input: 2.5 / 1_000_000,  output: 15 / 1_000_000 },
+  "gpt-5.6-luna":         { input: 0.75 / 1_000_000, output: 4.5 / 1_000_000 },
+  "gpt-5.5":              { input: 5 / 1_000_000,    output: 30 / 1_000_000 },
   "gpt-5.4":              { input: 5 / 1_000_000,    output: 15 / 1_000_000 },
   "gpt-5.3-codex":        { input: 3 / 1_000_000,    output: 12 / 1_000_000 },
   "gpt-5.2-codex":        { input: 2 / 1_000_000,    output: 8 / 1_000_000 },
@@ -41,8 +47,16 @@ export const TURN_PRICING = {
   "gpt-4.1":              { input: 2 / 1_000_000,    output: 8 / 1_000_000 },
   "gpt-4o":               { input: 2.5 / 1_000_000,  output: 10 / 1_000_000 },
   "gpt-4o-mini":          { input: 0.15 / 1_000_000, output: 0.6 / 1_000_000 },
+  // Google Gemini
+  "gemini-3.1-pro-preview": { input: 1.25 / 1_000_000, output: 5 / 1_000_000 },
+  "gemini-3.5-flash":     { input: 0.30 / 1_000_000, output: 2.50 / 1_000_000 },
   // xAI Grok
+  "grok-4.5":             { input: 2.00 / 1_000_000,  output: 6.00 / 1_000_000 },
+  "grok-build-0.1":       { input: 1.00 / 1_000_000,  output: 2.00 / 1_000_000 },
+  "grok-4.3":             { input: 1.25 / 1_000_000, output: 2.50 / 1_000_000 },
   "grok-4.20":            { input: 2 / 1_000_000,    output: 6 / 1_000_000 },
+  "grok-4.20-0309-reasoning":     { input: 1.25 / 1_000_000, output: 2.50 / 1_000_000 },
+  "grok-4.20-0309-non-reasoning": { input: 1.25 / 1_000_000, output: 2.50 / 1_000_000 },
   "grok-4":               { input: 2 / 1_000_000,    output: 6 / 1_000_000 },
   "grok-4-0709":          { input: 2 / 1_000_000,    output: 6 / 1_000_000 },
   "grok-4-fast":          { input: 0.20 / 1_000_000, output: 0.50 / 1_000_000 },

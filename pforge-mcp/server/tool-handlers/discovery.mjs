@@ -428,7 +428,7 @@ async function _callToolHandler_066_forge_quorum_analyze(request, args) {
       const votingInstruction = `Each model must respond with: (1) a confidence score 0-100, (2) a one-paragraph answer, (3) one concrete recommendation. The aggregator accepts answers with confidence >= 60 and majority consensus. Quorum size: ${quorumSize} models.`;
       const quorumPrompt = `## Context\n${JSON.stringify(context, null, 2)}\n\n## Question\n${questionUsed}\n\n## Voting Instruction\n${votingInstruction}`;
       const qConfig = loadQuorumConfig(cwd);
-      const suggestedModels = (qConfig.models || ["claude-opus-4.7", "grok-4.20", "gemini-3-pro-preview"]).slice(0, quorumSize);
+      const suggestedModels = (qConfig.models || ["claude-opus-4.8", "grok-4.20", "gemini-3.1-pro-preview"]).slice(0, quorumSize);
       const result = {
         quorumPrompt,
         promptTokenEstimate: Math.ceil(quorumPrompt.length / 4),

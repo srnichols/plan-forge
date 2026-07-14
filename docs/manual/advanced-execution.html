@@ -47,7 +47,7 @@
         <div class="cmd-block-header"><span>.forge.json</span></div>
         <pre><code>{
   "modelRouting": {
-    "default": "grok-4",
+    "default": "grok-4.5",
     "execute": "claude-sonnet-4.6",
     "review": "claude-opus-4.6"
   }
@@ -74,7 +74,7 @@
       <div class="cmd-block">
         <div class="cmd-block-header"><span>.forge.json</span></div>
         <pre><code>{
-  "escalationChain": ["grok-4", "claude-opus-4.6", "gpt-5.2-codex"]
+  "escalationChain": ["grok-4.5", "claude-opus-4.6", "gpt-5.3-codex"]
 }</code></pre>
       </div>
       <p>Model A fails → Model B retries the same slice → Model C if B fails too. Emits <code>slice-escalated</code> WebSocket event at each step. No manual intervention required.</p>
@@ -83,7 +83,7 @@
         <strong>Forge Intelligence</strong>, Escalation chains auto-tune from history. After 5+ recorded slices, <code>loadEscalationChain()</code> reorders models by success rate × cost efficiency. The best-performing, cheapest model moves to position 1 automatically. No configuration needed, just run plans and the forge learns.
       </div>
 
-      <figure class="manual-figure" id="fig-14-1"><img src="assets/diagrams/escalation-chain.svg" alt="Escalation chain: grok-4 fails, escalates to claude-opus-4.6 which fails, escalates to gpt-5.2-codex which passes" class="diagram-img diagram-img-sm" /><figcaption class="manual-figcaption"><!--fignum--><span class="manual-fignum">Figure 14-1.</span><!--/fignum--> <!--cap:auto-->Escalation chain<!--/cap--></figcaption></figure>
+      <figure class="manual-figure" id="fig-14-1"><img src="assets/diagrams/escalation-chain.svg" alt="Escalation chain: grok-4.5 fails, escalates to claude-opus-4.6 which fails, escalates to gpt-5.3-codex which passes" class="diagram-img diagram-img-sm" /><figcaption class="manual-figcaption"><!--fignum--><span class="manual-fignum">Figure 14-1.</span><!--/fignum--> <!--cap:auto-->Escalation chain<!--/cap--></figcaption></figure>
 
       <h2 id="quorum">Quorum Mode</h2>
       <p>Multi-model consensus for complex slices. Multiple models analyze the same problem independently, then a reviewer synthesizes the best approach.</p>

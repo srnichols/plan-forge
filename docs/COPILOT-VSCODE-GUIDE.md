@@ -656,7 +656,7 @@ Two MCP tools provide multi-model consensus analysis:
 
 Both tools dispatch to multiple models (including Grok via xAI API), then synthesize findings into a single report with confidence levels.
 
-**Setting up Grok**: To use xAI Grok models, set `XAI_API_KEY` in your environment before starting VS Code. Models like `grok-4.20`, `grok-4.3`, `grok-4`, `grok-3-mini` auto-route through the API provider registry. Get your key at [console.x.ai](https://console.x.ai/).
+**Setting up Grok**: To use xAI Grok models, set `XAI_API_KEY` in your environment before starting VS Code. Models like `grok-4.5`, `grok-4.3`, `grok-4.20-0309-reasoning`, `grok-4.20-0309-non-reasoning` auto-route through the API provider registry. Get your key at [console.x.ai](https://console.x.ai/).
 
 #### AI Agent Discoverability
 

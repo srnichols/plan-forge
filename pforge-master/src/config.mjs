@@ -28,7 +28,7 @@ export const FORGE_MASTER_DEFAULTS = Object.freeze({
   providers: Object.freeze({
     githubCopilot: Object.freeze({ model: "gpt-4o-mini" }),
   }),
-  routerModel: "grok-3-mini",
+  routerModel: "grok-4.20-0309-non-reasoning",
   maxToolCalls: 5,
   ceilingToolCalls: 10,
   sessionRetentionDays: 14,

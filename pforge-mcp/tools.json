@@ -58,6 +58,44 @@
           "description": "Run optional depth checks (instruction-file applyTo, copilot-instructions length)"
         }
       }
+    },
+    "intent": [
+      "diagnose",
+      "inspect",
+      "github-readiness"
+    ],
+    "aliases": [
+      "github-status",
+      "github-stack"
+    ],
+    "cost": "low",
+    "maxConcurrent": 10,
+    "addedIn": "2.85.0",
+    "prerequisites": [],
+    "produces": [],
+    "consumes": [
+      ".github/",
+      "AGENTS.md",
+      ".vscode/mcp.json"
+    ],
+    "sideEffects": [],
+    "writesFiles": false,
+    "network": false,
+    "risk": "low",
+    "errors": {},
+    "example": {
+      "input": {
+        "path": "."
+      },
+      "output": {
+        "ok": true,
+        "checks": [
+          {
+            "id": "copilot-instructions",
+            "status": "pass"
+          }
+        ]
+      }
     }
   },
   {
@@ -78,6 +116,46 @@
           "type": "string",
           "description": "Project directory (default: current)"
         }
+      }
+    },
+    "intent": [
+      "metrics",
+      "github",
+      "activity"
+    ],
+    "aliases": [
+      "github-metrics"
+    ],
+    "cost": "low",
+    "maxConcurrent": 5,
+    "addedIn": "2.87.0",
+    "prerequisites": [
+      "gh CLI authenticated"
+    ],
+    "produces": [],
+    "consumes": [
+      "git remote",
+      ".forge/copilot-metrics/*.jsonl"
+    ],
+    "sideEffects": [],
+    "writesFiles": false,
+    "network": true,
+    "risk": "low",
+    "errors": {
+      "GH_UNAVAILABLE": {
+        "message": "gh CLI not available or not authenticated",
+        "recovery": "Run `gh auth login`; tool returns null fields gracefully when gh is absent"
+      }
+    },
+    "example": {
+      "input": {
+        "period": "30d"
+      },
+      "output": {
+        "ok": true,
+        "stars": 0,
+        "forks": 0,
+        "openIssues": 0
       }
     }
   },
@@ -157,6 +235,37 @@
           "type": "string",
           "description": "Project root (default: current)"
         }
+      }
+    },
+    "intent": [
+      "team",
+      "coordination",
+      "dashboard"
+    ],
+    "aliases": [
+      "team-dashboard"
+    ],
+    "cost": "low",
+    "maxConcurrent": 10,
+    "addedIn": "3.4.0",
+    "prerequisites": [],
+    "produces": [],
+    "consumes": [
+      ".forge/team-activity.jsonl"
+    ],
+    "sideEffects": [],
+    "writesFiles": false,
+    "network": false,
+    "risk": "low",
+    "errors": {},
+    "example": {
+      "input": {
+        "limit": 50
+      },
+      "output": {
+        "ok": true,
+        "developers": [],
+        "conflictRisk": "low"
       }
     }
   },
@@ -663,7 +772,7 @@
         },
         "models": {
           "type": "string",
-          "description": "Comma-separated model list override (e.g., 'grok-3-mini,claude-sonnet-4.6,gpt-5.3-codex'). Default: quorum config models"
+          "description": "Comma-separated model list override (e.g., 'grok-4.20-0309-non-reasoning,claude-sonnet-4.6,gpt-5.3-codex'). Default: quorum config models"
         },
         "path": {
           "type": "string",
@@ -728,7 +837,7 @@
         },
         "models": {
           "type": "string",
-          "description": "Comma-separated model list override (e.g., 'grok-3-mini,grok-4,claude-sonnet-4.6'). Default: quorum config models"
+          "description": "Comma-separated model list override (e.g., 'grok-4.5,claude-sonnet-4.6,gpt-5.3-codex'). Default: quorum config models"
         },
         "path": {
           "type": "string",
@@ -797,7 +906,7 @@
         },
         "model": {
           "type": "string",
-          "description": "Model override (e.g., claude-sonnet-4.6, gpt-5.2-codex). Default: auto"
+          "description": "Model override (e.g., claude-sonnet-4.6, gpt-5.3-codex). Default: auto"
         },
         "estimate": {
           "type": "boolean",
@@ -894,7 +1003,7 @@
             "false"
           ],
           "default": "auto",
-          "description": "Quorum mode. 'auto' = threshold-based with default models; 'power' = flagship preset (claude-opus-4.7 + gpt-5.3-codex + grok-4.20-0309-reasoning, threshold 5); 'speed' = fast preset (claude-sonnet-4.6 + gpt-5.4-mini + grok-4.20-0309-non-reasoning, threshold 7); 'false' = disabled. Note: 'power-gov' preset exists for Microsoft Foundry / gov-cloud workloads and is selectable via .forge.json `quorum.preset`."
+          "description": "Quorum mode. 'auto' = threshold-based with default models; 'power' = flagship preset (claude-opus-4.8 + gpt-5.3-codex + grok-4.20-0309-reasoning, threshold 5); 'speed' = fast preset (claude-sonnet-4.6 + gpt-5.4-mini + grok-4.20-0309-non-reasoning, threshold 7); 'false' = disabled. Note: 'power-gov' preset exists for Microsoft Foundry / gov-cloud workloads and is selectable via .forge.json `quorum.preset`."
         },
         "quorumThreshold": {
           "type": "number",
@@ -1323,7 +1432,7 @@
   },
   {
     "name": "forge_watch",
-    "description": "WATCHER (v2.34) — read-only observer that tails another project's pforge run. Run this from a SECOND VS Code Copilot session with Plan-Forge as the workspace, pointing targetPath at the project being executed. Returns snapshot of current run state (slices passed/failed/in-progress, token counts, gate errors) plus heuristic anomaly detection. Mode 'analyze' additionally invokes a frontier model (default: claude-opus-4.7) for narrative advice. The watcher CANNOT modify any files in the target project.",
+    "description": "WATCHER (v2.34) — read-only observer that tails another project's pforge run. Run this from a SECOND VS Code Copilot session with Plan-Forge as the workspace, pointing targetPath at the project being executed. Returns snapshot of current run state (slices passed/failed/in-progress, token counts, gate errors) plus heuristic anomaly detection. Mode 'analyze' additionally invokes a frontier model (default: claude-opus-4.8) for narrative advice. The watcher CANNOT modify any files in the target project.",
     "inputSchema": {
       "type": "object",
       "properties": {
@@ -2913,6 +3022,50 @@
           "type": "string",
           "description": "Project directory (default: current)"
         }
+      }
+    },
+    "intent": [
+      "file-issue",
+      "classifier",
+      "triage"
+    ],
+    "aliases": [
+      "classifier-issue"
+    ],
+    "cost": "low",
+    "maxConcurrent": 3,
+    "addedIn": "3.5.0",
+    "prerequisites": [
+      "gh CLI authenticated",
+      "payload.lane === 'classifier'"
+    ],
+    "produces": [
+      "GitHub issue (classifier-noise)"
+    ],
+    "consumes": [],
+    "sideEffects": [
+      "Creates or comments on a GitHub issue (deduped by finding class + reason hash)"
+    ],
+    "writesFiles": false,
+    "network": true,
+    "risk": "medium",
+    "errors": {
+      "NOT_CLASSIFIER_LANE": {
+        "message": "payload lane is not 'classifier'",
+        "recovery": "Only route classifier-lane findings here; use forge_bug_register for product bugs and forge_meta_bug_file for self-repair defects"
+      }
+    },
+    "example": {
+      "input": {
+        "payload": {
+          "findingClass": "infra-noise",
+          "reason": "flaky-network"
+        }
+      },
+      "output": {
+        "ok": true,
+        "issueNumber": 42,
+        "deduped": false
       }
     }
   },
@@ -4792,9 +4945,9 @@
         "quorumPrompt": "## Context\n...\n\n## Question\nWhy did drift score drop 15 points?\n\n## Voting Instruction\n...",
         "promptTokenEstimate": 250,
         "suggestedModels": [
-          "claude-opus-4.6",
+          "claude-opus-4.8",
           "grok-4.20",
-          "gemini-3-pro-preview"
+          "gemini-3.1-pro-preview"
         ],
         "dataSnapshotAge": "12m ago",
         "questionUsed": "Why did drift score drop 15 points?"
@@ -6173,6 +6326,44 @@
       "required": [
         "input"
       ]
+    },
+    "intent": [
+      "convert",
+      "export",
+      "plan-harden"
+    ],
+    "aliases": [
+      "export-plan"
+    ],
+    "cost": "low",
+    "maxConcurrent": 5,
+    "addedIn": "2.97.0",
+    "prerequisites": [],
+    "produces": [
+      "docs/plans/Phase-X-PLAN.md (when outputPath is set)"
+    ],
+    "consumes": [],
+    "sideEffects": [
+      "Writes a plan file when outputPath is provided"
+    ],
+    "writesFiles": true,
+    "network": false,
+    "risk": "low",
+    "errors": {
+      "EMPTY_INPUT": {
+        "message": "input markdown is empty or has no parseable steps",
+        "recovery": "Provide numbered or bulleted plan steps in the input field"
+      }
+    },
+    "example": {
+      "input": {
+        "input": "1. Add auth\n2. Add tests",
+        "phaseName": "AUTH"
+      },
+      "output": {
+        "ok": true,
+        "slices": 2
+      }
     }
   },
   {
@@ -6662,6 +6853,41 @@
           "type": "string",
           "description": "Project directory (default: current)"
         }
+      }
+    },
+    "intent": [
+      "list",
+      "patterns",
+      "advisory"
+    ],
+    "aliases": [
+      "patterns-list"
+    ],
+    "cost": "low",
+    "maxConcurrent": 10,
+    "addedIn": "2.77.0",
+    "prerequisites": [],
+    "produces": [],
+    "consumes": [
+      ".forge/runs/",
+      ".forge/patterns/"
+    ],
+    "sideEffects": [],
+    "writesFiles": false,
+    "network": false,
+    "risk": "low",
+    "advisoryOnly": true,
+    "errors": {},
+    "example": {
+      "input": {},
+      "output": {
+        "ok": true,
+        "patterns": [
+          {
+            "kind": "gate-failure-recurrence",
+            "count": 3
+          }
+        ]
       }
     }
   },

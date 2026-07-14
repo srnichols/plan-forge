@@ -319,7 +319,7 @@
           <div class="bg-slate-800/40 rounded-lg p-3 border border-amber-700/20"><code class="text-amber-400 text-xs">forge_fix_proposal</code><span class="ml-2 px-1.5 py-0.5 text-[10px] rounded bg-amber-900/40 text-amber-500 border border-amber-700/30">v2.29</span><p class="text-xs text-slate-500 mt-1">Generates scoped 1-2 slice fix plan from regression/drift/incident/secret failure — capped, human-approved only</p></div>
           <div class="bg-slate-800/40 rounded-lg p-3 border border-amber-700/20"><code class="text-amber-400 text-xs">forge_quorum_analyze</code><span class="ml-2 px-1.5 py-0.5 text-[10px] rounded bg-amber-900/40 text-amber-500 border border-amber-700/30">v2.29</span><p class="text-xs text-slate-500 mt-1">Assembles structured quorum prompt from LiveGuard data for multi-model analysis — no LLM calls in server</p></div>
           <div class="bg-slate-800/40 rounded-lg p-3 border border-amber-700/20"><code class="text-amber-400 text-xs">forge_liveguard_run</code><span class="ml-2 px-1.5 py-0.5 text-[10px] rounded bg-amber-900/40 text-amber-500 border border-amber-700/30">v2.30</span><p class="text-xs text-slate-500 mt-1">Composite scan: drift + sweep + secrets + regression + deps + alerts + health in one call</p></div>
-          <div class="bg-slate-800/40 rounded-lg p-3 border border-sky-700/20"><code class="text-sky-300 text-xs">forge_watch</code><span class="ml-2 px-1.5 py-0.5 text-[10px] rounded bg-sky-900/40 text-sky-300 border border-sky-700/30">v2.34/v2.35</span><p class="text-xs text-slate-500 mt-1">Read-only watcher — tail another project's pforge run from a second VS Code session. Snapshot or analyze mode (claude-opus-4.7). Returns counts, anomalies, recommendations, diff cursor.</p></div>
+          <div class="bg-slate-800/40 rounded-lg p-3 border border-sky-700/20"><code class="text-sky-300 text-xs">forge_watch</code><span class="ml-2 px-1.5 py-0.5 text-[10px] rounded bg-sky-900/40 text-sky-300 border border-sky-700/30">v2.34/v2.35</span><p class="text-xs text-slate-500 mt-1">Read-only watcher — tail another project's pforge run from a second VS Code session. Snapshot or analyze mode (claude-opus-4.8). Returns counts, anomalies, recommendations, diff cursor.</p></div>
           <div class="bg-slate-800/40 rounded-lg p-3 border border-sky-700/20"><code class="text-sky-300 text-xs">forge_watch_live</code><span class="ml-2 px-1.5 py-0.5 text-[10px] rounded bg-sky-900/40 text-sky-300 border border-sky-700/30">v2.35</span><p class="text-xs text-slate-500 mt-1">Live tail — streams events for a fixed duration via target's WebSocket hub or events.log polling fallback. Read-only subscriber.</p></div>
         </div>
         <p class="text-xs text-slate-500 mt-3">14 LiveGuard tools (v2.27–v2.30) plus 2 Watcher tools (v2.34/v2.35). All available as MCP tools and REST endpoints. See <a href="manual/liveguard-tools.html" class="text-amber-400 hover:underline">Chapter 16 — LiveGuard Tools Reference</a> for full documentation. 🗺️ <a href="manual/liveguard-tools.html#fig-17-1" class="text-amber-400 hover:underline">Diagram: tools by trigger window</a> · <a href="manual/health-dna.html#fig-25-1" class="text-amber-400 hover:underline">Health DNA scoring</a>.</p>
@@ -514,7 +514,7 @@
         </div>
         <div class="bg-slate-800/60 rounded-xl p-5 border border-slate-700/30">
           <div class="text-xs font-semibold text-slate-500 mb-1 uppercase tracking-wide">execute</div>
-          <code class="text-forge-400 text-sm">gpt-5.2-codex</code>
+          <code class="text-forge-400 text-sm">gpt-5.3-codex</code>
           <p class="text-xs text-slate-500 mt-2">Writing code, generating tests</p>
         </div>
         <div class="bg-slate-800/60 rounded-xl p-5 border border-slate-700/30">
@@ -525,7 +525,7 @@
       </div>
       <div class="bg-slate-800/60 rounded-xl p-4 border border-slate-700/30 font-mono text-xs text-slate-400">
         <span class="text-slate-500">// .forge.json</span><br>
-        "modelRouting": { "default": "claude-opus-4.6", "execute": "gpt-5.2-codex", "review": "claude-sonnet-4.6" }
+        "modelRouting": { "default": "claude-opus-4.6", "execute": "gpt-5.3-codex", "review": "claude-sonnet-4.6" }
       </div>
     </section>
 

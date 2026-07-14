@@ -2743,7 +2743,7 @@ async function loadConfig() {
 // Order matches recommendation order; GitHub Copilot first (Phase-33 / v2.67.0 default).
 const PROVIDER_STATUS_REGISTRY = [
   { key: "GITHUB_TOKEN",      label: "GitHub Copilot",   models: "gpt-4o-mini, gpt-4o, claude-sonnet-4 (via models.github.ai)" },
-  { key: "XAI_API_KEY",       label: "xAI Grok",          models: "grok-4.20, grok-4, grok-3-mini" },
+  { key: "XAI_API_KEY",       label: "xAI Grok",          models: "grok-4.5, grok-4.3, grok-4.20-0309-reasoning, grok-4.20-0309-non-reasoning" },
   { key: "ANTHROPIC_API_KEY", label: "Anthropic Claude", models: "claude-sonnet-4.6, claude-opus" },
   { key: "OPENAI_API_KEY",    label: "OpenAI",            models: "gpt-5, dall-e-3" },
 ];

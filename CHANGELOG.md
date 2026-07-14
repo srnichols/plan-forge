@@ -5,6 +5,35 @@ Format follows [Keep a Changelog](https://keepachangelog.com/).
 
 ---
 
+## [3.23.0] — 2026-07-14 — Model catalog refresh: live GitHub Copilot + xAI Grok defaults
+
+> **One-liner**: Refreshed all default model selections against the live GitHub Copilot and xAI Grok catalogs (queried 2026-07-14). Replaced three retired model references, bumped the flagship tier to Claude Opus 4.8, and added pricing entries for the new Anthropic / OpenAI / Google / xAI models. Subscription-CLI cost path (`gh-copilot`, `claude-cli`, `codex-cli`) is byte-identical and unaffected.
+
+### Fixed
+
+- **Retired model references** — three models no longer served by their providers were still wired into defaults:
+  - `grok-3-mini` → `grok-4.20-0309-non-reasoning`. This was the Forge-Master `routerModel` default; every intent-routing LLM call was pointing at a model xAI retired. (`pforge-master/src/config.mjs`, `pforge-mcp/capabilities/surface.mjs`.)
+  - `gpt-5.2-codex` → `gpt-5.3-codex`. Removed from the Copilot catalog; still offered in the `modelRouting.default` schema enum and several doc/tool examples. (`pforge-mcp/capabilities/schemas.mjs`, `pforge-mcp/server/tool-definitions.mjs`, `pforge-mcp/orchestrator/run-plan.mjs` JSDoc.)
+  - `gemini-3-pro-preview` → `gemini-3.1-pro-preview`. Live successor. Fixed in quorum `suggestedModels` fallbacks (`server/rest-api.mjs`, `server/tool-handlers/discovery.mjs`, `tempering.mjs`) and the schema enum.
+
+### Changed
+
+- **Flagship tier bumped to Claude Opus 4.8** (newly available in the Copilot catalog):
+  - Quorum **Power** preset models + reviewer → `claude-opus-4.8` (`orchestrator/constants.mjs`).
+  - Quorum **Auto** reviewer + `loadModelRouting` runtime default → `claude-opus-4.8`; Auto standard-tier model bumped `claude-opus-4.6` → `claude-opus-4.7` (`orchestrator/quorum.mjs`, `capabilities/schemas.mjs`, `orchestrator/run-plan.mjs`).
+  - `forge_watch` analyze-mode default (`DEFAULT_WATCHER_MODEL`) → `claude-opus-4.8` (`orchestrator/hooks.mjs`, `orchestrator/review-watcher.mjs`).
+  - Visual-diff tempering scanner default → `claude-opus-4.8` (`tempering/scanners/visual-diff.mjs`).
+- **Grok env-var / model-list hints** refreshed to the live set `grok-4.5, grok-4.3, grok-4.20-0309-reasoning, grok-4.20-0309-non-reasoning` across docs and dashboard.
+
+### Added
+
+- **`MODEL_PRICING` entries** (`pforge-mcp/cost-service.mjs`) for newly-cataloged models: `claude-opus-4.8`, `claude-sonnet-5`, `gpt-5.6-luna`/`gpt-5.6-sol`/`gpt-5.6-terra`, `gemini-3.1-pro-preview`, `gemini-3.5-flash`, `grok-4.5`, `grok-build-0.1`. xAI models carry authoritative rates from `docs.x.ai` (`grok-4.5` $2/$6 500k ctx; `grok-build-0.1` $1/$2 256k ctx, agentic coding). Anthropic/OpenAI/Google entries mirror the closest sibling and are marked `_source: "estimated: … pending vendor publication (2026-07-14)"` until those vendors publish per-token rates. Matching entries added to the Forge-Master `TURN_PRICING` table (`pforge-master/src/cost.mjs`).
+- Quorum members `grok-4.20-0309-*` were **kept** (still live and purpose-split reasoning/non-reasoning); `grok-4.5` and `grok-build-0.1` are priced and selectable but not swapped into the calibrated presets.
+
+### Tests
+
+- Updated quorum default assertions (`tests/orchestrator.test.mjs`, `tests/runtime-quorum-viability.test.mjs`) for the opus-4.8 flagship bump and regenerated the server-surface golden fixture (`tests/fixtures/server-surface.golden.json`) for the refreshed tool-description examples.
+
 ## [3.22.4] — 2026-07-08 — Consumer VERSION-file collision in self-update
 
 ### Fixed

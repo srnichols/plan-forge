@@ -31,7 +31,7 @@ const VISUAL_ANALYZER_DEFAULTS = {
   failureDiff: 0.02,        // 2.0%
   maxCostUsd: 2.0,
   mode: "quorum",           // "quorum" | "single"; default "quorum" when models.length >= 2
-  models: ["claude-opus-4.7", "gpt-5.3-codex", "grok-4.20"],
+  models: ["claude-opus-4.8", "gpt-5.3-codex", "grok-4.20"],
   agreementThreshold: 2,    // N-of-M majority
   analyzerTimeoutMs: 60_000,
   maxImageWidth: 1920,

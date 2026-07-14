@@ -322,7 +322,7 @@ Emitted when a slice is escalated to quorum for multi-model consensus review.
   "version": "1.0",
   "sliceId": "3",
   "reason": "complexity threshold exceeded",
-  "models": ["claude-sonnet-4.6", "gpt-5.2", "grok-3-mini"],
+  "models": ["claude-sonnet-4.6", "gpt-5.2", "grok-4.20-0309-non-reasoning"],
   "timestamp": "..."
 }
 ```

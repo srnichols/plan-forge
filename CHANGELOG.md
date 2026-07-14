@@ -7,6 +7,26 @@ Format follows [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
+## [3.24.0] — 2026-07-14 — Grok Build as a first-class CLI worker
+
+> **One-liner**: Adds **Grok Build** (xAI's terminal coding agent, binary `grok`) as an opt-in CLI worker alongside `gh-copilot`, `claude`, and `codex`. GitHub Copilot stays the default. Run a whole plan through it with `--worker grok`, or add a Grok voice to a quorum with `--with-grok` (metered API) / `--with-grok-cli` (flat subscription). Fully additive — no existing default, preset, or cost path changes. Executed via the 7-slice hardened plan `docs/plans/Phase-GROK-BUILD-WORKER-PLAN.md`.
+
+### Added
+
+- **`grok` worker** in `worker-capabilities.json` — `grok-4.5` default, headless `grok -p <prompt> --output-format streaming-json` invocation, PowerShell/WSL install hints, dual-auth failure modes. (Slice 1)
+- **Opt-in CLI routing** — `resolveRequiredCli` maps `grok-*` → the `grok` CLI; a new `GROK_CLI_SERVABLE` branch (`_probeGrokCliServable`) prefers the CLI only when `routing.grokCli: "prefer"` **and** the worker is available, else falls through to the existing xAI direct-API path (default `auto` = zero regression). (Slice 2)
+- **`parseGrokStreamingJson`** — tolerant `--output-format streaming-json` parser (variant token fields, graceful null-token fallback, malformed-line safe), wired into the worker finalizer for the `grok` worker. ⚠️ Fixture is **SYNTHETIC** pending a real capture (the CLI was not installed at authoring time); the parser fails soft on schema mismatch. (Slice 3)
+- **Auth-aware Grok billing** — `grok-cli` added to `SUBSCRIPTION_PROVIDERS`; `detectCostModel` now mirrors the `gpt-*`/`claude-*` heuristic: `XAI_API_KEY` present → metered `xai-api`; absent → flat `grok-cli` subscription. Existing subscription-CLI cost math is byte-identical (guarded). (Slice 4)
+- **Preflight gate** — `assertWorkerBackendReady` validates the `grok` CLI when it's the intended worker, with an actionable install/sign-in message and graceful API fallback for non-explicit preference. (Slice 5)
+- **Quorum add-in** — `applyGrokAddIn` additively appends the flagship `grok-4.5` (overridable via `quorum.grokModel`) to a quorum: `--with-grok` / `quorum.includeGrok: "api"` (metered) or `--with-grok-cli` / `"cli"` (subscription). Purely additive — never removes, reorders, or duplicates members; graceful no-op advisory when the credential is absent. Dual-shell flags (`pforge.ps1` + `pforge.sh`), `.forge.json` schema (`quorum.includeGrok` + `quorum.grokModel`), and a Dashboard selector. (Slice 7)
+- **Docs/surface** — `grok` advertised in `capabilities.md` (execution-mode row), `CLI-GUIDE.md`, and the capability surface. (Slice 6)
+
+### Notes
+
+- **GHCP remains the default** worker; Grok is reachable only via `--worker grok`, `--with-grok*`, or `.forge.json` opt-in.
+- **Billing**: `grok` browser login (SuperGrok / X Premium+) = flat subscription; `XAI_API_KEY` = metered API. `grok-build-0.1` is a model on the xAI Code API ($1/$2); Grok Build the CLI is `grok-4.5`-backed.
+- **Follow-up**: install the `grok` CLI and capture a real `streaming-json` transcript to verify `parseGrokStreamingJson`'s field mapping (Required Decisions #3/#4).
+
 ## [3.23.0] — 2026-07-14 — Model catalog refresh: live GitHub Copilot + xAI Grok defaults
 
 > **One-liner**: Refreshed all default model selections against the live GitHub Copilot and xAI Grok catalogs (queried 2026-07-14). Replaced three retired model references, bumped the flagship tier to Claude Opus 4.8, and added pricing entries for the new Anthropic / OpenAI / Google / xAI models. Subscription-CLI cost path (`gh-copilot`, `claude-cli`, `codex-cli`) is byte-identical and unaffected.

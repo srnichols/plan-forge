@@ -27,6 +27,8 @@ Runtime & Worker Readiness:
      FIX: winget install Anthropic.Claude   (or npm install -g @anthropic-ai/claude-code)
   ✅ copilot-coding-agent (version unknown) agentic capable
   ✅ codex v0.132.0 (agentic capable)
+  ⚠️  grok not found on PATH (agent worker)
+     FIX: irm https://x.ai/cli/install.ps1 | iex
 
 VS Code Configuration:
   ✅ chat.agent.enabled (default — OK)

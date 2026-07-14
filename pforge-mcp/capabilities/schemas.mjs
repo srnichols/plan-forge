@@ -374,6 +374,8 @@ export const CONFIG_SCHEMA = {
         reviewerModel: { type: "string", default: "claude-opus-4.8", description: "Model for synthesis review" },
         dryRunTimeout: { type: "number", default: 300000, description: "Timeout per dry-run worker (ms)" },
         strictAvailability: { type: "boolean", default: false, description: "When true, fast-fail (exit 2) if any configured model is unavailable. When false (default), drop unavailable models and continue if ≥1 remain" },
+        includeGrok: { type: ["boolean", "string"], enum: [false, true, "api", "cli"], default: false, description: "Additively append a Grok member to the quorum (grok-4.5 by default). 'api'/true = metered xAI API (needs XAI_API_KEY); 'cli' = Grok Build CLI (flat subscription). Purely additive — never removes existing members; no-op when the credential is absent. CLI equivalents: --with-grok / --with-grok-cli." },
+        grokModel: { type: "string", default: "grok-4.5", description: "Model used for the includeGrok add-in member (default: flagship grok-4.5)." },
       },
     },
     extensions: { type: "array", items: { type: "string" }, description: "Installed extensions" },

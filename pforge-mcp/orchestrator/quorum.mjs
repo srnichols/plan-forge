@@ -6,11 +6,11 @@ import { buildMemorySearchBlock } from "../memory.mjs";
 import { QUORUM_PRESETS } from "./constants.mjs";
 import { readForgeJsonl } from "./forge-io.mjs";
 import { scoreSliceComplexity } from "./review-watcher.mjs";
-import { spawnWorker } from "./worker-spawn.mjs";
+import { spawnWorker, detectWorkers } from "./worker-spawn.mjs";
 import { buildSlicePrompt } from "./prompt-builders.mjs";
 import { priceSlice as _priceSlice, priceRun as _priceRun } from "../cost-service.mjs";
 
-export function loadQuorumConfig(cwd, presetOverride = null) {
+export function loadQuorumConfig(cwd, presetOverride = null, opts = {}) {
   const defaults = {
     enabled: false,
     auto: true,
@@ -59,7 +59,47 @@ export function loadQuorumConfig(cwd, presetOverride = null) {
   const preset = presetName ? QUORUM_PRESETS[presetName] || {} : {};
 
   // Merge order: defaults < preset < userConfig (explicit fields win)
-  return { ...defaults, ...preset, ...userConfig, ...(presetOverride ? { preset: presetOverride } : {}) };
+  const merged = { ...defaults, ...preset, ...userConfig, ...(presetOverride ? { preset: presetOverride } : {}) };
+
+  // Phase GROK-BUILD-WORKER Slice 7: additive Grok quorum member. The CLI
+  // override (--with-grok / --with-grok-cli) wins over .forge.json quorum.includeGrok.
+  const includeGrok = opts.includeGrokOverride ?? merged.includeGrok ?? false;
+  return applyGrokAddIn(merged, {
+    includeGrok,
+    grokModel: merged.grokModel,
+    hasXaiKey: Boolean((opts.env || process.env).XAI_API_KEY),
+    grokCliAvailable: opts.grokCliAvailable ?? (includeGrok === "cli"
+      ? detectWorkers().some((w) => w.name === "grok" && w.available)
+      : false),
+  });
+}
+
+/**
+ * Additively append a Grok quorum member (Phase GROK-BUILD-WORKER Slice 7).
+ * Purely additive: never removes or reorders existing members, and never
+ * duplicates when a grok member is already present. Records `grokAddInSkipped`
+ * (advisory) when the required credential is missing — it never hard-fails.
+ *
+ * @param {object} config - resolved quorum config with a `models` array
+ * @param {{ includeGrok?: boolean|"api"|"cli", grokModel?: string, hasXaiKey?: boolean, grokCliAvailable?: boolean }} opts
+ * @returns {object} config (possibly with an appended grok member + `grokVia` tag)
+ */
+export function applyGrokAddIn(config, { includeGrok, grokModel, hasXaiKey, grokCliAvailable } = {}) {
+  const mode = includeGrok === true ? "api" : includeGrok;
+  if (mode !== "api" && mode !== "cli") return config;
+  const models = config.models || [];
+  if (models.some((m) => /^grok-/.test(String(m)))) return config; // already present — no dup
+  const credentialOk = mode === "api" ? Boolean(hasXaiKey) : Boolean(grokCliAvailable);
+  if (!credentialOk) {
+    return {
+      ...config,
+      grokAddInSkipped: mode === "api"
+        ? "XAI_API_KEY not set — Grok quorum add-in skipped"
+        : "grok CLI not available — Grok quorum add-in skipped",
+    };
+  }
+  // grokVia tags the appended member so dispatch routes "cli" through the grok worker.
+  return { ...config, models: [...models, grokModel || "grok-4.5"], grokVia: mode };
 }
 
 /**

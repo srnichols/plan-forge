@@ -1093,6 +1093,102 @@ export function detectWorkers(_projectDir) {
   return results;
 }
 
+/**
+ * Preflight gate: confirm at least one usable execution backend exists before a
+ * Full-Auto run dispatches workers. When the only candidate worker(s) failed
+ * authentication, return a clean, actionable failure descriptor instead of
+ * letting the orchestrator dispatch doomed workers — which (before the
+ * UV_HANDLE_CLOSING fix) aborted the process on a libuv assertion, and even
+ * after it produces N identical opaque slice failures.
+ *
+ * Returns `null` when a backend is available (the run may proceed). Otherwise
+ * returns a structured failure object suitable for returning directly from
+ * runPlan / surfacing as an estimate warning.
+ *
+ * Scope: only governs CLI worker auth. Direct-API models are validated
+ * elsewhere (spawnWorker throws a clean "API key not set" error), so they are
+ * skipped here.
+ *
+ * @param {object} opts
+ * @param {string|null} opts.model     resolved effective model (may be null)
+ * @param {string|null} [opts.worker]  explicit --worker override, if any
+ * @param {string}   [opts.cwd]        project dir (for API-key lookup)
+ * @param {Function} [opts.detect]     injectable detectWorkers (tests)
+ * @param {Function} [opts.resolveApiProvider] injectable detectApiProvider (tests)
+ * @returns {{ status:"failed", code:string, error:string, failureCategory?:string }|null}
+ */
+export function assertWorkerBackendReady({ model = null, worker = null, cwd = process.cwd(), detect = detectWorkers, resolveApiProvider = detectApiProvider } = {}) {
+  // The copilot-coding-agent worker dispatches remotely (GitHub Copilot Coding
+  // Agent via PRs) and spawns no local CLI worker, so this local-CLI auth gate
+  // does not apply. Its auth is validated by the copilot pre-flight
+  // (_runCopilotPreflight) instead. Without this skip, a host with no
+  // authenticated CLI worker (e.g. CI) wrongly returns WORKER_AUTH_REQUIRED
+  // before the copilot pre-flight can run.
+  if (worker === "copilot-coding-agent") return null;
+
+  // Phase GROK-BUILD-WORKER Slice 5: when grok is the intended worker — either an
+  // explicit `--worker grok`, or a grok-* model with routing.grokCli="prefer" — the
+  // grok CLI is the execution backend, so validate it here BEFORE the direct-API
+  // short-circuit below. Falls back gracefully: a *preferred* (non-explicit) grok
+  // model with the CLI absent but XAI_API_KEY present is allowed (the router uses
+  // the metered API). Only an explicit --worker grok, or no API fallback, fails.
+  const grokPreferred = isGrokCliServableModel(model) && loadGrokCliPreference(cwd) === "prefer";
+  if (worker === "grok" || grokPreferred) {
+    const grokWorker = detect(cwd).find((w) => w.name === "grok");
+    if (grokWorker?.available) return null;
+    if (worker !== "grok" && resolveApiProvider(model)) return null;
+    const hint = suggestInstall("grok");
+    return {
+      status: "failed",
+      code: "WORKER_AUTH_REQUIRED",
+      failureCategory: grokWorker?.failureCategory || "missing",
+      error:
+        "worker failed: grok CLI not ready — install it (`irm https://x.ai/cli/install.ps1 | iex`) " +
+        "and sign in with `grok` (SuperGrok / X Premium+), or set XAI_API_KEY to use the metered xAI API.",
+      install: hint.command || hint.docs || null,
+    };
+  }
+
+  // Direct-API models are validated by spawnWorker's own key check.
+  if (isDirectApiOnlyModel(model)) return null;
+
+  const workers = detect(cwd);
+  const cliWorkers = workers.filter((w) => w.type === "cli");
+
+  // An explicit --worker override narrows the candidate set to that worker.
+  const candidates = worker ? cliWorkers.filter((w) => w.name === worker) : cliWorkers;
+
+  // Any usable CLI worker → proceed unchanged.
+  if (candidates.some((w) => w.available)) return null;
+
+  // No usable CLI worker, but the model routes to a configured direct API
+  // (resolveApiProvider returns a provider only when the key is present) →
+  // proceed. Skipped when the caller demanded a specific CLI worker.
+  if (!worker && resolveApiProvider(model)) return null;
+
+  // Nothing usable. Prefer the actionable auth message when auth is the blocker.
+  if (candidates.some((w) => w.failureCategory === "auth")) {
+    return {
+      status: "failed",
+      code: "WORKER_AUTH_REQUIRED",
+      failureCategory: "auth",
+      error:
+        "worker failed: no GitHub auth — run `gh auth login` " +
+        "(or set COPILOT_GITHUB_TOKEN / GH_TOKEN), then retry.",
+    };
+  }
+
+  const reason =
+    candidates.find((w) => w.reason)?.reason ||
+    cliWorkers.find((w) => w.reason)?.reason ||
+    "no CLI worker is installed (gh copilot, claude, or codex).";
+  return {
+    status: "failed",
+    code: "NO_WORKER_AVAILABLE",
+    error: `worker failed: ${reason}`,
+  };
+}
+
 // ─── Execution Runtime Detection ──────────────────────────────────────
 
 /**

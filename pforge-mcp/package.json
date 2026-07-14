@@ -1,6 +1,6 @@
 {
   "name": "plan-forge-mcp",
-  "version": "3.24.0",
+  "version": "3.25.0-dev",
   "main": "server.mjs",
   "type": "module",
   "scripts": {

@@ -10,6 +10,45 @@ import { spawnWorker, detectWorkers } from "./worker-spawn.mjs";
 import { buildSlicePrompt } from "./prompt-builders.mjs";
 import { priceSlice as _priceSlice, priceRun as _priceRun } from "../cost-service.mjs";
 
+/**
+ * Adaptive threshold: learn from quorum history which slices actually need quorum.
+ * Floor is 5 (matches the static default); ceiling is 9.
+ */
+function adaptQuorumThreshold(threshold, cwd) {
+  try {
+    const qHistory = readForgeJsonl("quorum-history.jsonl", [], cwd); // G2.1
+    if (qHistory.length < 5) return threshold;
+    const neededRate = qHistory.filter((q) => q.quorumNeeded).length / qHistory.length;
+    // <20% of slices needed quorum → raise threshold (fewer get quorum).
+    if (neededRate < 0.2 && threshold < 9) return Math.min(9, threshold + 1);
+    // >60% needed quorum → lower it (more get quorum).
+    if (neededRate > 0.6 && threshold > 5) return Math.max(5, threshold - 1);
+    return threshold;
+  } catch {
+    return threshold; // use static default
+  }
+}
+
+/** `.forge.json#quorum`, or `{}` when absent or unreadable. */
+function readUserQuorumConfig(cwd) {
+  try {
+    const configPath = resolve(cwd, ".forge.json");
+    if (!existsSync(configPath)) return {};
+    const config = JSON.parse(readFileSync(configPath, "utf-8"));
+    return config.quorum && typeof config.quorum === "object" ? config.quorum : {};
+  } catch {
+    return {};
+  }
+}
+
+/** Explicit opts value wins; otherwise probe only when the CLI lane was requested. */
+function resolveGrokCliAvailable(opts, includeGrok) {
+  if (opts.grokCliAvailable != null) return opts.grokCliAvailable;
+  return includeGrok === "cli"
+    ? detectWorkers().some((w) => w.name === "grok" && w.available)
+    : false;
+}
+
 export function loadQuorumConfig(cwd, presetOverride = null, opts = {}) {
   const defaults = {
     enabled: false,
@@ -29,30 +68,9 @@ export function loadQuorumConfig(cwd, presetOverride = null, opts = {}) {
     strictAvailability: false, // H.3: true = fast-fail if any model unavailable
   };
 
-  // Adaptive threshold: learn from quorum history which slices actually need quorum.
-  // Floor is 5 (matches the static default); ceiling is 9 (Math.min(9, ...)).
-  try {
-    const qHistory = readForgeJsonl("quorum-history.jsonl", [], cwd); // G2.1
-    if (qHistory.length >= 5) {
-      const needed = qHistory.filter(q => q.quorumNeeded).length;
-      const total = qHistory.length;
-      const neededRate = needed / total;
-      // If <20% of slices needed quorum, raise threshold (fewer get quorum)
-      // If >60% needed quorum, lower threshold (more get quorum)
-      if (neededRate < 0.2 && defaults.threshold < 9) defaults.threshold = Math.min(9, defaults.threshold + 1);
-      else if (neededRate > 0.6 && defaults.threshold > 5) defaults.threshold = Math.max(5, defaults.threshold - 1);
-    }
-  } catch { /* use static default */ }
-  const configPath = resolve(cwd, ".forge.json");
-  let userConfig = {};
-  try {
-    if (existsSync(configPath)) {
-      const config = JSON.parse(readFileSync(configPath, "utf-8"));
-      if (config.quorum && typeof config.quorum === "object") {
-        userConfig = config.quorum;
-      }
-    }
-  } catch { /* defaults */ }
+  defaults.threshold = adaptQuorumThreshold(defaults.threshold, cwd);
+
+  const userConfig = readUserQuorumConfig(cwd);
 
   // Resolve preset: CLI override > .forge.json preset > none
   const presetName = presetOverride || userConfig.preset || null;
@@ -68,9 +86,7 @@ export function loadQuorumConfig(cwd, presetOverride = null, opts = {}) {
     includeGrok,
     grokModel: merged.grokModel,
     hasXaiKey: Boolean((opts.env || process.env).XAI_API_KEY),
-    grokCliAvailable: opts.grokCliAvailable ?? (includeGrok === "cli"
-      ? detectWorkers().some((w) => w.name === "grok" && w.available)
-      : false),
+    grokCliAvailable: resolveGrokCliAvailable(opts, includeGrok),
   });
 }
 

@@ -70,6 +70,52 @@ function asBullets(value) {
 
 // ─── Custom renderBody ────────────────────────────────────────────────
 
+/** Slice sections, or a TBD marker when the breakdown is missing or unparseable. */
+function renderSlicesSection(breakdown, cwd) {
+  const lines = [];
+  if (!breakdown) {
+    lines.push(tbd("slice-breakdown"), "");
+    return lines;
+  }
+
+  let slices;
+  try {
+    slices = parseSliceBreakdown(breakdown);
+  } catch {
+    // Invalid format: emit as TBD so finalize can refuse via criticalGaps
+    lines.push(tbd("slice-breakdown"));
+    return lines;
+  }
+  if (!slices || slices.length === 0) return lines;
+
+  const repoCommands = cwd ? inferRepoCommands(cwd) : null;
+  const buildCmd = (repoCommands && repoCommands.buildCommand) || "npm run build";
+
+  slices.forEach((s, i) => {
+    const scopeClause = s.files ? ` [scope: ${s.files}]` : "";
+    lines.push(`### Slice ${i + 1} — ${s.name}${scopeClause}`);
+    lines.push("");
+    lines.push(`Build command: ${buildCmd}`);
+    lines.push(`Test command:  ${s.testCmd}`);
+    lines.push("");
+    lines.push("**Files**:");
+    lines.push(asBullets(s.files) || `- ${s.files}`);
+    lines.push("");
+  });
+  return lines;
+}
+
+/** Interview log section; empty when the smelt has no answers. */
+function renderInterviewLog(answers) {
+  if (!Array.isArray(answers) || answers.length === 0) return [];
+  return [
+    "## Interview Log",
+    "",
+    ...answers.map((a, i) => `${i + 1}. **${a.questionId}** — ${a.answer}`),
+    "",
+  ];
+}
+
 /**
  * Render a bug-batch plan document.
  * Called by crucible-draft.mjs renderDraft when mode.renderBody is present.
@@ -134,37 +180,7 @@ export function renderBody(smelt, options = {}) {
   // ── Slices ──
   lines.push("## Slices");
   lines.push("");
-
-  if (ans.breakdown) {
-    let slices;
-    try {
-      slices = parseSliceBreakdown(ans.breakdown);
-    } catch {
-      // Invalid format: emit as TBD so finalize can refuse via criticalGaps
-      lines.push(tbd("slice-breakdown"));
-      slices = null;
-    }
-    if (slices && slices.length > 0) {
-      const repoCommands = cwd ? inferRepoCommands(cwd) : null;
-      const buildCmd = repoCommands && repoCommands.buildCommand ? repoCommands.buildCommand : "npm run build";
-      for (let i = 0; i < slices.length; i++) {
-        const s = slices[i];
-        const scopeClause = s.files ? ` [scope: ${s.files}]` : "";
-        lines.push(`### Slice ${i + 1} — ${s.name}${scopeClause}`);
-        lines.push("");
-        lines.push(`Build command: ${buildCmd}`);
-        lines.push(`Test command:  ${s.testCmd}`);
-        lines.push("");
-        lines.push("**Files**:");
-        const fileBullets = asBullets(s.files);
-        lines.push(fileBullets || `- ${s.files}`);
-        lines.push("");
-      }
-    }
-  } else {
-    lines.push(tbd("slice-breakdown"));
-    lines.push("");
-  }
+  lines.push(...renderSlicesSection(ans.breakdown, cwd));
 
   // ── Validation Gates ──
   lines.push("## Validation Gates");
@@ -202,14 +218,7 @@ export function renderBody(smelt, options = {}) {
   lines.push("");
 
   // ── Interview Log ──
-  if (Array.isArray(smelt.answers) && smelt.answers.length > 0) {
-    lines.push("## Interview Log");
-    lines.push("");
-    smelt.answers.forEach((a, i) => {
-      lines.push(`${i + 1}. **${a.questionId}** — ${a.answer}`);
-    });
-    lines.push("");
-  }
+  lines.push(...renderInterviewLog(smelt.answers));
 
   return lines.join("\n");
 }

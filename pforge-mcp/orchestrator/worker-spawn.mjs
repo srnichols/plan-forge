@@ -1117,56 +1117,39 @@ export function detectWorkers(_projectDir) {
  * @param {Function} [opts.resolveApiProvider] injectable detectApiProvider (tests)
  * @returns {{ status:"failed", code:string, error:string, failureCategory?:string }|null}
  */
-export function assertWorkerBackendReady({ model = null, worker = null, cwd = process.cwd(), detect = detectWorkers, resolveApiProvider = detectApiProvider } = {}) {
-  // The copilot-coding-agent worker dispatches remotely (GitHub Copilot Coding
-  // Agent via PRs) and spawns no local CLI worker, so this local-CLI auth gate
-  // does not apply. Its auth is validated by the copilot pre-flight
-  // (_runCopilotPreflight) instead. Without this skip, a host with no
-  // authenticated CLI worker (e.g. CI) wrongly returns WORKER_AUTH_REQUIRED
-  // before the copilot pre-flight can run.
-  if (worker === "copilot-coding-agent") return null;
+/**
+ * True when the grok CLI is the intended execution backend — either an explicit
+ * `--worker grok`, or a grok-* model with routing.grokCli="prefer".
+ */
+function isGrokBackend({ model, worker, cwd }) {
+  return worker === "grok"
+    || (isGrokCliServableModel(model) && loadGrokCliPreference(cwd) === "prefer");
+}
 
-  // Phase GROK-BUILD-WORKER Slice 5: when grok is the intended worker — either an
-  // explicit `--worker grok`, or a grok-* model with routing.grokCli="prefer" — the
-  // grok CLI is the execution backend, so validate it here BEFORE the direct-API
-  // short-circuit below. Falls back gracefully: a *preferred* (non-explicit) grok
-  // model with the CLI absent but XAI_API_KEY present is allowed (the router uses
-  // the metered API). Only an explicit --worker grok, or no API fallback, fails.
-  const grokPreferred = isGrokCliServableModel(model) && loadGrokCliPreference(cwd) === "prefer";
-  if (worker === "grok" || grokPreferred) {
-    const grokWorker = detect(cwd).find((w) => w.name === "grok");
-    if (grokWorker?.available) return null;
-    if (worker !== "grok" && resolveApiProvider(model)) return null;
-    const hint = suggestInstall("grok");
-    return {
-      status: "failed",
-      code: "WORKER_AUTH_REQUIRED",
-      failureCategory: grokWorker?.failureCategory || "missing",
-      error:
-        "worker failed: grok CLI not ready — install it (`irm https://x.ai/cli/install.ps1 | iex`) " +
-        "and sign in with `grok` (SuperGrok / X Premium+), or set XAI_API_KEY to use the metered xAI API.",
-      install: hint.command || hint.docs || null,
-    };
-  }
+/**
+ * Grok CLI readiness. Falls back gracefully: a *preferred* (non-explicit) grok
+ * model with the CLI absent but XAI_API_KEY present is allowed (the router uses
+ * the metered API). Only an explicit --worker grok, or no API fallback, fails.
+ */
+function checkGrokReady({ model, worker, cwd, detect, resolveApiProvider }) {
+  const grokWorker = detect(cwd).find((w) => w.name === "grok");
+  if (grokWorker?.available) return null;
+  if (worker !== "grok" && resolveApiProvider(model)) return null;
 
-  // Direct-API models are validated by spawnWorker's own key check.
-  if (isDirectApiOnlyModel(model)) return null;
+  const hint = suggestInstall("grok");
+  return {
+    status: "failed",
+    code: "WORKER_AUTH_REQUIRED",
+    failureCategory: grokWorker?.failureCategory || "missing",
+    error:
+      "worker failed: grok CLI not ready — install it (`irm https://x.ai/cli/install.ps1 | iex`) " +
+      "and sign in with `grok` (SuperGrok / X Premium+), or set XAI_API_KEY to use the metered xAI API.",
+    install: hint.command || hint.docs || null,
+  };
+}
 
-  const workers = detect(cwd);
-  const cliWorkers = workers.filter((w) => w.type === "cli");
-
-  // An explicit --worker override narrows the candidate set to that worker.
-  const candidates = worker ? cliWorkers.filter((w) => w.name === worker) : cliWorkers;
-
-  // Any usable CLI worker → proceed unchanged.
-  if (candidates.some((w) => w.available)) return null;
-
-  // No usable CLI worker, but the model routes to a configured direct API
-  // (resolveApiProvider returns a provider only when the key is present) →
-  // proceed. Skipped when the caller demanded a specific CLI worker.
-  if (!worker && resolveApiProvider(model)) return null;
-
-  // Nothing usable. Prefer the actionable auth message when auth is the blocker.
+/** Failure object for "no usable CLI worker" — prefers the actionable auth message. */
+function noCliWorkerFailure(candidates, cliWorkers) {
   if (candidates.some((w) => w.failureCategory === "auth")) {
     return {
       status: "failed",
@@ -1187,6 +1170,40 @@ export function assertWorkerBackendReady({ model = null, worker = null, cwd = pr
     code: "NO_WORKER_AVAILABLE",
     error: `worker failed: ${reason}`,
   };
+}
+
+export function assertWorkerBackendReady({ model = null, worker = null, cwd = process.cwd(), detect = detectWorkers, resolveApiProvider = detectApiProvider } = {}) {
+  // The copilot-coding-agent worker dispatches remotely (GitHub Copilot Coding
+  // Agent via PRs) and spawns no local CLI worker, so this local-CLI auth gate
+  // does not apply. Its auth is validated by the copilot pre-flight
+  // (_runCopilotPreflight) instead. Without this skip, a host with no
+  // authenticated CLI worker (e.g. CI) wrongly returns WORKER_AUTH_REQUIRED
+  // before the copilot pre-flight can run.
+  if (worker === "copilot-coding-agent") return null;
+
+  // Phase GROK-BUILD-WORKER Slice 5: validated BEFORE the direct-API
+  // short-circuit below, because the grok CLI is the execution backend.
+  if (isGrokBackend({ model, worker, cwd })) {
+    return checkGrokReady({ model, worker, cwd, detect, resolveApiProvider });
+  }
+
+  // Direct-API models are validated by spawnWorker's own key check.
+  if (isDirectApiOnlyModel(model)) return null;
+
+  const cliWorkers = detect(cwd).filter((w) => w.type === "cli");
+
+  // An explicit --worker override narrows the candidate set to that worker.
+  const candidates = worker ? cliWorkers.filter((w) => w.name === worker) : cliWorkers;
+
+  // Any usable CLI worker → proceed unchanged.
+  if (candidates.some((w) => w.available)) return null;
+
+  // No usable CLI worker, but the model routes to a configured direct API
+  // (resolveApiProvider returns a provider only when the key is present) →
+  // proceed. Skipped when the caller demanded a specific CLI worker.
+  if (!worker && resolveApiProvider(model)) return null;
+
+  return noCliWorkerFailure(candidates, cliWorkers);
 }
 
 // ─── Execution Runtime Detection ──────────────────────────────────────
@@ -2227,6 +2244,35 @@ export function deriveVendorFromModel(model) {
  * non-null value is the actual measured duration. sessionDurationMs follows
  * the same convention as a precaution against future event-stream regressions.
  */
+/** Model: top-level `model` (variant) or the first `modelUsage` key (real grok). */
+function grokEventModel(ev) {
+  if (typeof ev.model === "string") return ev.model;
+  if (ev.modelUsage && typeof ev.modelUsage === "object") {
+    const [first] = Object.keys(ev.modelUsage);
+    if (first) return first;
+  }
+  return null;
+}
+
+/** Assistant text: real grok emits {type:"text",data:"..."}; the rest are documented variants. */
+function grokEventText(ev) {
+  if (ev.type === "text" && typeof ev.data === "string") return ev.data;
+  return ev.delta?.text
+    ?? (typeof ev.content === "string" ? ev.content : null)
+    ?? (ev.type === "assistant" && typeof ev.text === "string" ? ev.text : null);
+}
+
+/** Terminal usage event: real grok = type:"end" with a top-level `usage`. */
+function grokEventUsage(ev) {
+  const usage = ev.usage || (ev.type === "result" ? ev.result?.usage : null);
+  if (!usage || typeof usage !== "object") return null;
+  return {
+    tokensIn: usage.input_tokens ?? usage.prompt_tokens ?? null,
+    tokensOut: usage.output_tokens ?? usage.completion_tokens ?? null,
+    costTicks: usage.cost_in_usd_ticks ?? null,
+  };
+}
+
 /**
  * Parse Grok Build CLI `--output-format streaming-json` output into a token /
  * cost summary. Phase GROK-BUILD-WORKER Slice 3 (schema verified in v3.24.1).
@@ -2258,28 +2304,16 @@ export function parseGrokStreamingJson(stdout) {
     try { ev = JSON.parse(line); } catch { continue; }
     if (!ev || typeof ev !== "object") continue;
 
-    // Model: top-level `model` (variant) or the first `modelUsage` key (real grok).
-    if (typeof ev.model === "string" && !model) model = ev.model;
-    if (!model && ev.modelUsage && typeof ev.modelUsage === "object") {
-      const keys = Object.keys(ev.modelUsage);
-      if (keys.length) model = keys[0];
-    }
+    if (!model) model = grokEventModel(ev);
 
-    // Assistant text: real grok emits {type:"text",data:"..."}; keep variants.
-    const text = (ev.type === "text" && typeof ev.data === "string" ? ev.data : null)
-      ?? ev.delta?.text
-      ?? (typeof ev.content === "string" ? ev.content : null)
-      ?? (ev.type === "assistant" && typeof ev.text === "string" ? ev.text : null);
+    const text = grokEventText(ev);
     if (text) output += text;
 
-    // Terminal usage event: real grok = type:"end" with a top-level `usage`.
-    const usage = ev.usage || (ev.type === "result" ? ev.result?.usage : null);
-    if (usage && typeof usage === "object") {
-      const inTok = usage.input_tokens ?? usage.prompt_tokens ?? null;
-      const outTok = usage.output_tokens ?? usage.completion_tokens ?? null;
-      if (inTok != null) tokensIn = inTok;
-      if (outTok != null) tokensOut = outTok;
-      if (usage.cost_in_usd_ticks != null) costTicks = usage.cost_in_usd_ticks;
+    const usage = grokEventUsage(ev);
+    if (usage) {
+      if (usage.tokensIn != null) tokensIn = usage.tokensIn;
+      if (usage.tokensOut != null) tokensOut = usage.tokensOut;
+      if (usage.costTicks != null) costTicks = usage.costTicks;
     }
     // Cost ticks: real grok reports these at the event level, not inside usage.
     if (ev.total_cost_usd_ticks != null) costTicks = ev.total_cost_usd_ticks;

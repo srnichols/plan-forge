@@ -1332,6 +1332,78 @@ function _parseAuditMarkdown(markdown) {
   return out;
 }
 
+/** Distinct tool names exercised during an audit turn. */
+function _auditSources(toolCalls) {
+  if (!Array.isArray(toolCalls)) return [];
+  return [...new Set(toolCalls.map((tc) => tc.name).filter(Boolean))];
+}
+
+/** Shared response shape for both the Studio-proxy and in-process audit paths. */
+function _buildAuditResult({ text, toolCalls, drill, error = null }) {
+  const parsed = _parseAuditMarkdown(text);
+  const sources = _auditSources(toolCalls);
+
+  let message = "Audit ran but produced no summary — see raw output.";
+  if (parsed.summary) message = "Audit complete.";
+  else if (error) message = `Audit failed: ${error}`;
+
+  return {
+    result: { ok: !error, ...parsed, sources, message, raw: drill ? text : undefined },
+    parsed,
+    sources,
+  };
+}
+
+/** Studio-proxy audit path. Returns null when the proxy fails, so the caller falls back in-process. */
+async function _runAuditViaStudio(studio, { args, cwd, t0 }) {
+  try {
+    const proxyResult = await studio.invoke("forge_master_ask", {
+      message: _AUDIT_PROMPT,
+      tier: args?.tier || "high",
+      maxToolCalls: args?.maxToolCalls || 12,
+      path: cwd,
+    });
+    const text = typeof proxyResult === "string" ? proxyResult : (proxyResult?.text || JSON.stringify(proxyResult));
+    const { result, parsed, sources } = _buildAuditResult({ text, toolCalls: proxyResult?.toolCalls, drill: args?.drill });
+    emitToolTelemetry({ toolName: "forge_master_audit", inputs: args || {}, result: { sources, hasSummary: !!parsed.summary, proxied: true }, durationMs: Date.now() - t0, status: "OK", cwd });
+    return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
+  } catch (proxyErr) {
+    console.error(`forge-master: audit proxy error, falling back in-process: ${proxyErr.message}`);
+    setStudioClient(null);
+    return null;
+  }
+}
+
+/** runTurn request payload for an audit turn. */
+function _auditTurnRequest(args, prefs, cwd) {
+  return {
+    message: _AUDIT_PROMPT,
+    sessionId: args?.sessionId || undefined,
+    maxToolCalls: args?.maxToolCalls || 12,
+    tier: args?.tier || prefs.tier || "high",
+    cwd,
+  };
+}
+
+/** In-process reasoning audit path. */
+async function _runAuditInProcess({ args, cwd, t0 }) {
+  const { runTurn, loadPrefs } = await import("../../forge-master/index.mjs");
+  const { TOOL_METADATA } = await import("../../capabilities.mjs");
+  const prefs = loadPrefs(cwd);
+  const turn = await runTurn(
+    _auditTurnRequest(args, prefs, cwd),
+    {
+      dispatcher: async (toolName, toolArgs, toolCwd) => invokeForgeTool(toolName, { ...toolArgs, path: toolCwd || cwd }),
+      hub: activeHub || null,
+      toolMetadata: TOOL_METADATA,
+    },
+  );
+  const text = turn?.message || turn?.text || "";
+  const { result, parsed, sources } = _buildAuditResult({ text, toolCalls: turn?.toolCalls, drill: args?.drill, error: turn?.error || null });
+  emitToolTelemetry({ toolName: "forge_master_audit", inputs: args || {}, result: { sources, hasSummary: !!parsed.summary, tokensIn: turn?.tokensIn, tokensOut: turn?.tokensOut }, durationMs: Date.now() - t0, status: turn?.error ? "ERROR" : "OK", cwd });
+  return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
+}
+
 async function _callToolHandler_099_forge_master_audit(request, args) {
   const { name } = request.params;
   if (!(name === "forge_master_audit")) return _CALL_TOOL_NO_MATCH;
@@ -1340,72 +1412,13 @@ async function _callToolHandler_099_forge_master_audit(request, args) {
   const cwd = args?.path ? findProjectRoot(resolve(args.path)) : findProjectRoot(PROJECT_DIR);
 
   try {
-    // ── Proxy path: route through pforge-master/server.mjs if available ──
+    // Route through pforge-master/server.mjs when available; fall back in-process.
     const studio = await getOrSpawnStudioChild();
     if (studio) {
-      try {
-        const proxyResult = await studio.invoke("forge_master_ask", {
-          message: _AUDIT_PROMPT,
-          tier: args?.tier || "high",
-          maxToolCalls: args?.maxToolCalls || 12,
-          path: cwd,
-        });
-        const text = typeof proxyResult === "string" ? proxyResult : (proxyResult?.text || JSON.stringify(proxyResult));
-        const parsed = _parseAuditMarkdown(text);
-        const sources = Array.isArray(proxyResult?.toolCalls)
-          ? [...new Set(proxyResult.toolCalls.map((tc) => tc.name).filter(Boolean))]
-          : [];
-        const result = {
-          ok: true,
-          ...parsed,
-          sources,
-          message: parsed.summary ? "Audit complete." : "Audit ran but produced no summary — see raw output.",
-          raw: args?.drill ? text : undefined,
-        };
-        emitToolTelemetry({ toolName: "forge_master_audit", inputs: args || {}, result: { sources, hasSummary: !!parsed.summary, proxied: true }, durationMs: Date.now() - t0, status: "OK", cwd });
-        return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
-      } catch (proxyErr) {
-        console.error(`forge-master: audit proxy error, falling back in-process: ${proxyErr.message}`);
-        setStudioClient(null);
-      }
+      const proxied = await _runAuditViaStudio(studio, { args, cwd, t0 });
+      if (proxied) return proxied;
     }
-
-    // ── Fallback: in-process reasoning ──
-    const { runTurn, loadPrefs } = await import("../../forge-master/index.mjs");
-    const { TOOL_METADATA } = await import("../../capabilities.mjs");
-    const prefs = loadPrefs(cwd);
-    const turn = await runTurn(
-      {
-        message: _AUDIT_PROMPT,
-        sessionId: args?.sessionId || undefined,
-        maxToolCalls: args?.maxToolCalls || 12,
-        tier: args?.tier || prefs.tier || "high",
-        cwd,
-      },
-      {
-        dispatcher: async (toolName, toolArgs, toolCwd) => {
-          return invokeForgeTool(toolName, { ...toolArgs, path: toolCwd || cwd });
-        },
-        hub: activeHub || null,
-        toolMetadata: TOOL_METADATA,
-      },
-    );
-    const text = turn?.message || turn?.text || "";
-    const parsed = _parseAuditMarkdown(text);
-    const sources = Array.isArray(turn?.toolCalls)
-      ? [...new Set(turn.toolCalls.map((tc) => tc.name).filter(Boolean))]
-      : [];
-    const result = {
-      ok: !turn?.error,
-      ...parsed,
-      sources,
-      message: parsed.summary
-        ? "Audit complete."
-        : (turn?.error ? `Audit failed: ${turn.error}` : "Audit ran but produced no summary — see raw output."),
-      raw: args?.drill ? text : undefined,
-    };
-    emitToolTelemetry({ toolName: "forge_master_audit", inputs: args || {}, result: { sources, hasSummary: !!parsed.summary, tokensIn: turn?.tokensIn, tokensOut: turn?.tokensOut }, durationMs: Date.now() - t0, status: turn?.error ? "ERROR" : "OK", cwd });
-    return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
+    return await _runAuditInProcess({ args, cwd, t0 });
   } catch (err) {
     emitToolTelemetry({ toolName: "forge_master_audit", inputs: args || {}, result: { error: err.message }, durationMs: Date.now() - t0, status: "ERROR", cwd });
     return {

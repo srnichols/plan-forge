@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { TOOL_METADATA, WORKFLOWS, CLI_SCHEMA, CONFIG_SCHEMA } from "../capabilities.mjs";
+import { TOOL_NAMES } from "../enums.mjs";
 import { SUPPORTED_AGENTS } from "../orchestrator.mjs";
 
 // ─── TOOL_METADATA ────────────────────────────────────────────────────
@@ -22,6 +23,27 @@ describe("TOOL_METADATA", () => {
     for (const tool of REQUIRED_TOOLS) {
       expect(TOOL_METADATA, `Missing tool: ${tool}`).toHaveProperty(tool);
     }
+  });
+
+  // Drift guard (#240). buildCapabilityTools() enriches via
+  // `TOOL_METADATA[tool.name] || {}`, and writeToolsJson() runs on every server
+  // boot — so a tool without an entry silently loses all of its metadata from
+  // tools.json on the next `node server.mjs --validate`. Assert both directions.
+  it("has an entry for every name in TOOL_NAMES", () => {
+    const missing = TOOL_NAMES.filter((name) => !(name in TOOL_METADATA));
+    expect(
+      missing,
+      `TOOL_NAMES entries with no TOOL_METADATA (their metadata is stripped from tools.json on every server boot): ${missing.join(", ")}`,
+    ).toEqual([]);
+  });
+
+  it("has no entry that is absent from TOOL_NAMES", () => {
+    const canonical = new Set(TOOL_NAMES);
+    const stale = Object.keys(TOOL_METADATA).filter((name) => !canonical.has(name));
+    expect(
+      stale,
+      `TOOL_METADATA entries for names not in TOOL_NAMES (stale metadata): ${stale.join(", ")}`,
+    ).toEqual([]);
   });
 
   it("each tool has intent array", () => {

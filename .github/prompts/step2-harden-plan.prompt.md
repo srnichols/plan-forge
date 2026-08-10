@@ -107,6 +107,40 @@ After all sections are drafted, run a **PLAN QUALITY SELF-CHECK** before outputt
 7. Are MUST acceptance criteria from the spec traceable to at least one slice's validation gate?
 8. Do all validation gate commands pass the **Gate Portability Rules** below?
 9. For every slice touching `.ts`/`.tsx` files, does its gate include a typecheck step (not just a test run)? Are test gates scoped to the changed module rather than the whole workspace suite?
+10. Has every **factual claim about existing code** been verified against the codebase? (See Premise Verification below.)
+
+### Premise Verification
+
+A plan's Non-Goals, Assumptions, and slice descriptions routinely assert facts about
+code that already exists — "all 17 endpoints exist and are tested", "the list endpoint
+already supports filtering", "this component is already wired to the store". These
+assertions become the *scope boundary*: a slice that builds on a false premise is
+scoped against a surface that does not exist, and the executor discovers it mid-slice.
+
+Meta-bug [#237](https://github.com/srnichols/plan-forge/issues/237): a plan's Non-Goals
+said "No new API endpoints. All 17 exist and are tested." The target route file
+contained only `POST /:entryId/approve` and `POST /:entryId/deny` — the list endpoint
+Slice 1 depended on was never there. Nobody had opened the file.
+
+**Before finalizing, extract every such assertion and check it.** Verification is a
+`grep_search` or a `read_file` — not an inference from the spec, the roadmap, or a
+sibling module's shape.
+
+| Assertion shape | How to verify |
+|-----------------|---------------|
+| "N endpoints/components/tables exist" | Read the route/index/schema file and count. Put the real number in the plan. |
+| "X already supports Y" | Find the symbol and confirm Y is in its signature or body. |
+| "X is already tested" | Locate the test file and confirm it asserts the behaviour, not just that X imports. |
+| "No new <thing> needed" | Confirm every `<thing>` the slices consume resolves to existing code. |
+
+Rules:
+- If an assertion is **false**, correct the plan text and re-scope the affected slice.
+  A false Non-Goal is a scope defect, not a wording problem.
+- If an assertion **cannot be verified** (external service, unavailable repo), demote
+  it from Non-Goals to a **Required Decision** with an explicit owner. Never leave an
+  unverifiable claim standing as a scope boundary.
+- Cite the file you checked in the plan's Assumptions section so the reviewer can
+  re-run the check.
 
 ### Gate Portability Rules
 

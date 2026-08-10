@@ -157,6 +157,10 @@ Status icons:
 
 ---
 
+## Telemetry Fields: null-not-zero
+
+When a **Slice Complete** or **Run Summary** template reports token/cost telemetry sourced from typed SDK/session events (see `testing.instructions.md` § Rule 5), preserve the null-not-zero convention (bug #190) in the rendered text: a field the worker never reported must show as `n/a`, never `0`. Reporting `0` implies "measured and zero," which misleads cost-rollup readers into thinking a slice was free rather than un-instrumented.
+
 ## Usage Guidelines
 
 1. **Don't template every message** — use templates for key moments (progress, completion, failure, handoff), not conversational responses

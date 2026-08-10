@@ -11,7 +11,7 @@ priority: HIGH
 
 ---
 
-## The 5 Rules
+## The 6 Rules
 
 ### 1. Time-sensitive tests must declare tolerance OR use fake timers
 
@@ -131,7 +131,15 @@ Mocks are for **external dependencies the test can't or shouldn't reach** — ne
 
 When in doubt, prefer a real in-memory fixture (temporary directory, in-memory hub) over a mock. Mocks rot — fixtures stay valid across refactors.
 
-### 5. Vitest gate portability (Windows + Bash + npx)
+### 5. Typed-event telemetry: null-not-zero, and mock only the session factory
+
+**Phase-60 Slice 3 convention**: when a worker derives telemetry from typed SDK/session events instead of regex-parsing stdout/stderr (e.g. `extractSdkTokens` in `pforge-mcp/orchestrator/sdk-worker.mjs`, paired with the spawn-path `extractTokens` in `pforge-mcp/orchestrator/worker-spawn.mjs`), the two extractors must stay byte-compatible on field names (`tokens_in`, `tokens_out`, `cached`, `reasoning_tokens`, `apiDurationMs`, `sessionDurationMs`, `model`).
+
+- **Null-not-zero (bug #190 convention)**: a field the event stream never reports must be emitted as `null`, never `0`. A `0` reads as "measured and zero"; `null` reads as "not reported." Tests must assert this distinction explicitly — don't just assert a happy-path value and skip the not-reported case.
+- **Mock the session factory, not the SDK internals**: per Rule 4, inject a fake `createSession` that emits the same typed events the real SDK would (`assistant.message_delta`, `session.complete`, `session.idle`, etc.) via a recorded `onEvent` callback. See `makeCreateSession()` in `tests/sdk-worker.test.mjs` for the reference pattern — it is the "mock the edge" boundary for this worker.
+- **Test both event orderings**: some SDK builds report usage only on `assistant.message_delta`, others only on `session.complete`. Assert the extractor prefers the more complete final event without silently dropping partial-event data.
+
+### 6. Vitest gate portability (Windows + Bash + npx)
 
 Tests run inside plan gates. The gate command must work on Windows under both `cmd.exe` and Git Bash.
 

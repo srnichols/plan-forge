@@ -175,8 +175,15 @@ Every gate command MUST be cross-platform. Apply these rules when writing gates:
 **Preferred gate pattern** (covers 90% of slices):
 ```bash
 node pforge-mcp/server.mjs --check
-bash -c "cd pforge-mcp && npx vitest run tests/server.test.mjs"
+node -e "process.chdir('pforge-mcp'); require('child_process').execSync('npx vitest run tests/server.test.mjs', {stdio:'inherit',shell:true});"
 ```
+
+> Do **not** write `bash -c "cd pforge-mcp && npx vitest run ..."`. It looks cleaner but earns two
+> linter warnings per slice — `'bash -c' prefix detected` and `'cd dir && command' chain` — because
+> `bash` is not guaranteed on Windows PATH and `cd &&` does not persist under cmd.exe. The `node -e`
+> form above dispatches through the allowlisted `node` binary, needs no shell, and lints clean
+> ([#247](https://github.com/srnichols/plan-forge/issues/247)). Reserve `bash -c` for genuine
+> heredoc cases.
 
 > Use `--check`, not `--validate`. `--validate` **regenerates** `tools.json` and `cli-schema.json`, so using it as a gate mutates tracked source and the orchestrator's auto-commit sweeps the change into an unrelated slice (meta-bug [#240](https://github.com/srnichols/plan-forge/issues/240)). `--check` verifies the same artifacts read-only and exits non-zero on drift. Regenerate deliberately with `--validate` when you actually change the tool surface.
 
@@ -188,7 +195,15 @@ If any check fails, revise the plan before outputting. Do not present a plan tha
 ```
 node --input-type=module -e "import{lintGateCommands}from'./pforge-mcp/orchestrator.mjs';const r=lintGateCommands('<plan-file>');console.log(r.summary);r.errors.forEach(e=>console.log('ERR:',e.message));r.warnings.forEach(w=>console.log('WARN:',w.message));"
 ```
-Fix all errors and warnings before declaring the plan hardened. The same lint runs as a pre-flight check in `runPlan()` — errors will block execution.
+Fix all **errors** before declaring the plan hardened — the same lint runs as a pre-flight check in `runPlan()` and errors will block execution.
+
+Fix warnings too, with one documented exception: `lintGateCommands` is not quote-aware, so a gate of the
+form `node -e "... npx vitest run tests/x.test.mjs ..."` is falsely flagged as `'node *.test.*' fails for
+vitest test files`, and a `|` or `||` inside inline JS is falsely flagged as a shell pipeline
+([#246](https://github.com/srnichols/plan-forge/issues/246)). You can avoid the pipeline one by writing
+`[a-z]+` instead of `(log|error|warn)` and a `for (const n of [...])` loop instead of `a||b`. The
+`node *.test.*` one has no workaround — accept it. Shipped plans carry 7–10 of these
+(Phase-51, -52, -54); the bar is **zero errors and zero portability warnings**, not zero warnings.
 
 Finally, run a **SESSION BUDGET CHECK**:
 

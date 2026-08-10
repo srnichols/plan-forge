@@ -20,7 +20,54 @@ Evaluate replacing the gh-copilot worker path and the DIRECT_API_ONLY HTTP paths
 
 **Problem**: Two concrete problems, both operator-facing. First, bespoke stream parsing is fragile: parseGrokStreamingJson has needed two hotfixes against real CLI stdout, and every worker backend needs its own parser because there is no typed event contract. A slice can fail because output shape drifted, not because the work was wrong. Second, Plan Forge maintains its own provider routing, availability probing and retry semantics for the Copilot and direct-API paths, which duplicates what the Copilot runtime now exposes natively; that duplication is why a typo'd model reaches runtime before failing (issue #243). Adopting the SDK for those two paths replaces hand-rolled parsing and probing with a supported contract. It does not solve multi-harness spawning, which stays as-is.
 
-**Success metric**: Three measurable outcomes. (1) parseGrokStreamingJson and any sibling stdout parsers are deleted for the Copilot and direct-API paths, with token/cost extraction driven by typed SDK events instead — measured as net lines removed from worker-spawn.mjs and zero remaining regex-based stdout parsing on those two paths. (2) A full plan executes end-to-end through the SDK-backed worker with cost attribution matching the previous CLI path within 5 percent on the same plan, proving no telemetry regression. (3) The existing worker test suites pass unchanged where they assert behaviour rather than transport, and any test that had to change is justified in the plan. Explicit non-metric: this phase does not aim to reduce wall-clock slice time; if it regresses more than 20 percent, that is a stop condition rather than a success measure.
+**Success metric**: Three measurable outcomes. (1) The SDK-backed path performs **zero stdout/stderr regex parsing** — token, cost and duration values come from typed session events only, asserted by a guard test. (2) A full plan executes end-to-end through the SDK-backed worker with cost attribution matching the previous CLI path within 5 percent on the same plan, proving no telemetry regression. (3) The existing worker test suites pass unchanged where they assert behaviour rather than transport, and any test that had to change is justified in the slice that changed it. Explicit non-metric: this phase does not aim to reduce wall-clock slice time; if it regresses more than 20 percent, that is a stop condition rather than a success measure.
+
+> **Corrected during hardening.** The Crucible draft claimed `parseGrokStreamingJson` and sibling
+> parsers would be *deleted*. Verification showed that is false and would have broken out-of-scope
+> paths: `parseGrokStreamingJson` (`worker-spawn.mjs:2381`) is called only from the grok branch
+> (`:2060`), and grok stays spawn-based; `parseStderrStats` (`:2508`) is called from
+> `_enrichWorkerTokens` (`:1880`), a **generic** fallback that also serves the claude and codex
+> spawn paths. Neither becomes unreachable. The metric is therefore "the SDK path does no stdout
+> parsing", not "the parsers are deleted", and Slice 5 was re-scoped from deletion to a guard test.
+
+## Assumptions (verified 2026-08-10)
+
+Every factual claim below was checked against the codebase, not inferred. Re-runnable by a reviewer.
+
+| Assertion | Verified against | Result |
+|---|---|---|
+| `COPILOT_SERVABLE`, `DIRECT_API_ONLY`, `GROK_CLI_SERVABLE` registries exist | `pforge-mcp/orchestrator/worker-spawn.mjs` | all three present |
+| `extractTokens` emits `tokens_in`, `tokens_out`, `cached`, `reasoning_tokens`, `apiDurationMs`, `sessionDurationMs` | same file | all six present |
+| `parseGrokStreamingJson` is grok-only | called once, `worker-spawn.mjs:2060` (grok branch) | **grok-only — do not delete** |
+| `parseStderrStats` is Copilot-only | called from `_enrichWorkerTokens` `:1880` | **FALSE — generic across CLI workers, do not delete** |
+| root `engines.node` is `>=20.11.0` | `package.json` | true |
+| `plan-forge-mcp` `engines.node` is `>=18.0.0` | `pforge-mcp/package.json` | true |
+| `@github/copilot-sdk` node floor is `^20.19.0 \|\| >=22.12.0` | `npm view @github/copilot-sdk engines.node` | true (v1.0.9) |
+| `loadRoutingPreference` / `loadGrokCliPreference` exist to model the new switch on | `worker-spawn.mjs` | both present |
+
+## Required Decisions
+
+| # | Decision | Resolution |
+|---|---|---|
+| 1 | Config key and values for the routing switch | `routing.copilotSdk` in `.forge.json`, values `"off"` \| `"prefer"`, default `"off"` until Slice 6. Mirrors the existing `routing.grokCli` shape so operators learn one pattern. |
+| 2 | Does the Node floor rise on the private root too? | Yes — root moves `>=20.11.0` → `>=20.19.0`. `pforge-master` and `pforge-sdk` keep independent versioning and are untouched. |
+| 3 | How is the SDK faked in tests? | `createSession` is injected through an options parameter defaulting to the real `CopilotClient`. No network, no runtime spawn in unit tests — same DI style already used for `probe` and `isPriced`. |
+| 4 | What happens when the SDK is absent at runtime? | Lazy `import()` inside the SDK branch. On failure, log once and fall back to the spawn path — the switch is an optimisation, never a hard dependency. Mirrors the OTel opt-in shape from #238. |
+| 5 | Baseline for the 5 percent cost-parity check | The CLI-path cost recorded for the same plan immediately before Slice 6 flips the default, captured into the slice's own artifact. Do not compare against historical `cost-history.json` rows from a different plan. |
+
+_No TBDs remain._
+
+## Acceptance Criteria
+
+- **MUST**: `routing.copilotSdk` defaults to `"off"`, so Slices 1–5 introduce zero behaviour change for existing users.
+- **MUST**: The SDK-backed path derives every telemetry field from typed session events and performs no regex parsing of stdout or stderr.
+- **MUST**: `extractTokens` field names and the null-not-zero convention are byte-compatible with the current contract; a field the SDK does not report is emitted as `null`, never `0`.
+- **MUST**: `parseGrokStreamingJson` and `parseStderrStats` remain present and their existing tests pass unchanged — both serve spawn paths that are out of scope.
+- **MUST**: `onPermissionRequest` is a deliberate handler; `approveAll` appears nowhere in the diff.
+- **MUST**: The MCP tool surface is unchanged — `node pforge-mcp/server.mjs --check` passes with no regeneration.
+- **MUST**: `engines.node` is `>=20.19.0` on `plan-forge-mcp` and the private root, and the breaking floor bump is recorded in `CHANGELOG.md`.
+- **SHOULD**: Cost attribution through the SDK path lands within 5 percent of the CLI baseline for the same plan.
+- **SHOULD**: Net lines in `worker-spawn.mjs` do not grow by more than 150 — the point is consolidation, not accretion.
 
 ## Stack Boundary
 
@@ -73,19 +120,161 @@ Four points. (1) Credential handling: the SDK accepts gitHubToken or useLoggedIn
 
 ## Slices
 
-_Estimated: 6 slices. (1) Add the dependency, raise engines.node on plan-forge-mcp and the private root, and add the routing.copilotSdk switch defaulting to off — no behaviour change, proving the floor bump alone is green. (2) Introduce the SDK-backed worker for COPILOT_SERVABLE models behind the switch, with an injected fake client in tests. (3) Derive token, cost and duration telemetry from typed session events, asserting the extractTokens field contract byte-for-byte including the null-not-zero convention. (4) Extend the path to DIRECT_API_ONLY models via BYOK provider config. (5) Delete the stdout parsers that are now unreachable on those two paths, and prove no remaining regex stdout parsing there. (6) Flip the default to prefer, run a real end-to-end plan, and compare cost attribution against the CLI baseline within 5 percent. Slices 1 through 5 are independently revertible; slice 6 is the only one that changes default behaviour. slices. Expand each below during Plan Hardener step._
+All slices are `[sequential]` — every one touches `pforge-mcp/orchestrator/worker-spawn.mjs`, so no
+parallel group is safe. No Parallel Merge Checkpoints are required.
 
-> Slice template:
->
-> ```
-> ### Slice N — <name>
-> Build command: <cmd>
-> Test command:  <cmd>
-> Tasks:         <list>
-> Files:         <manifest>
-> ```
+### Slice 1 — Dependency, Node floor, and the routing switch (no behaviour change) [sequential]
+
+**Depends On**: none
+**Context Files**: `.github/instructions/architecture-principles.instructions.md`, `.github/instructions/release-checklist.instructions.md`
+
+Tasks:
+- Add `@github/copilot-sdk` to `pforge-mcp/package.json` dependencies.
+- Raise `engines.node` to `>=20.19.0` on `pforge-mcp/package.json` and the private root `package.json`.
+- Add `routing.copilotSdk` (`"off"` | `"prefer"`, default `"off"`) to `pforge-mcp/capabilities/schemas.mjs` and a `loadCopilotSdkPreference(cwd)` reader in `worker-spawn.mjs`, modelled on `loadGrokCliPreference`.
+- Record the breaking Node floor bump under `## [Unreleased]` in `CHANGELOG.md`.
+
+Files: `pforge-mcp/package.json`, `package.json`, `pforge-mcp/capabilities/schemas.mjs`, `pforge-mcp/orchestrator/worker-spawn.mjs`, `CHANGELOG.md`
+
+**Validation Gate**:
+```bash
+node -e 'const p=require("./pforge-mcp/package.json");if(!p.dependencies["@github/copilot-sdk"])throw new Error("sdk dep missing");if(p.engines.node!==">=20.19.0")throw new Error("mcp engines floor wrong: "+p.engines.node)'
+node -e 'const r=require("./package.json");if(r.engines.node!==">=20.19.0")throw new Error("root engines floor wrong: "+r.engines.node)'
+node -e 'const s=require("fs").readFileSync("pforge-mcp/orchestrator/worker-spawn.mjs","utf8");if(!s.includes("loadCopilotSdkPreference"))throw new Error("loadCopilotSdkPreference reader missing")'
+node pforge-mcp/server.mjs --check
+node -e "process.chdir('pforge-mcp'); require('child_process').execSync('npx vitest run tests/worker-backend-preflight.test.mjs', {stdio:'inherit',shell:true});"
+```
+
+### Slice 2 — SDK-backed worker for COPILOT_SERVABLE models, behind the switch [sequential]
+
+**Depends On**: Slice 1
+**Context Files**: `.github/instructions/architecture-principles.instructions.md`, `.github/instructions/security.instructions.md`, `.github/instructions/testing.instructions.md`
+
+Tasks:
+- Add `pforge-mcp/orchestrator/sdk-worker.mjs` exporting `runSdkSession({ prompt, model, cwd, createSession })`, with `createSession` injected and defaulting to a lazy `import("@github/copilot-sdk")`.
+- Route `COPILOT_SERVABLE` models through it in `spawnWorker` only when `loadCopilotSdkPreference(cwd) === "prefer"`.
+- Implement the deliberate `onPermissionRequest` handler; `approveAll` must not appear.
+- On SDK import or session failure, log once and fall back to the existing spawn path.
+- Add `pforge-mcp/tests/sdk-worker.test.mjs` driving the path with an injected fake client — no network, no runtime spawn.
+
+Files: `pforge-mcp/orchestrator/sdk-worker.mjs`, `pforge-mcp/orchestrator/worker-spawn.mjs`, `pforge-mcp/tests/sdk-worker.test.mjs`
+
+**Validation Gate**:
+```bash
+node -e 'const s=require("fs").readFileSync("pforge-mcp/orchestrator/sdk-worker.mjs","utf8");for(const n of ["approveAll","forInProcess"])if(s.includes(n))throw new Error("forbidden token in sdk path: "+n)'
+node -e "process.chdir('pforge-mcp'); require('child_process').execSync('npx vitest run tests/sdk-worker.test.mjs tests/quorum-probe.test.mjs', {stdio:'inherit',shell:true});"
+```
+
+### Slice 3 — Telemetry from typed events, byte-compatible with extractTokens [sequential]
+
+**Depends On**: Slice 2
+**Context Files**: `.github/instructions/testing.instructions.md`, `.github/instructions/status-reporting.instructions.md`
+
+Tasks:
+- Map SDK session events to the `extractTokens` shape: `tokens_in`, `tokens_out`, `cached`, `reasoning_tokens`, `apiDurationMs`, `sessionDurationMs`, `model`.
+- Emit `null` for any field the SDK does not report — never `0` (bug #190 convention).
+- Extend `tests/sdk-worker.test.mjs` to assert the field contract and the null-not-zero rule explicitly.
+
+Files: `pforge-mcp/orchestrator/sdk-worker.mjs`, `pforge-mcp/tests/sdk-worker.test.mjs`
+
+**Validation Gate**:
+```bash
+node -e "process.chdir('pforge-mcp'); require('child_process').execSync('npx vitest run tests/sdk-worker.test.mjs tests/cost-rollup-issue-180.test.mjs tests/telemetry-issue-186.test.mjs', {stdio:'inherit',shell:true});"
+```
+
+### Slice 4 — DIRECT_API_ONLY models via BYOK provider config [sequential]
+
+**Depends On**: Slice 3
+**Context Files**: `.github/instructions/security.instructions.md`, `.github/instructions/testing.instructions.md`
+
+Tasks:
+- Extend `runSdkSession` to accept a `provider` config (`openai` | `azure` | `anthropic`) built from the existing `DIRECT_API_ONLY` registry entry and its env key.
+- Keys are read from `process.env` / `.forge/secrets.json` only, and never logged or embedded in an error message.
+- Cover each provider type in `tests/sdk-worker.test.mjs`, including the key-absent path.
+
+Files: `pforge-mcp/orchestrator/sdk-worker.mjs`, `pforge-mcp/orchestrator/worker-spawn.mjs`, `pforge-mcp/tests/sdk-worker.test.mjs`
+
+**Validation Gate**:
+```bash
+node -e 'const s=require("fs").readFileSync("pforge-mcp/orchestrator/sdk-worker.mjs","utf8");if(/console\.[a-z]+\([^)]*apiKey/i.test(s))throw new Error("possible api key logging")'
+node -e "process.chdir('pforge-mcp'); require('child_process').execSync('npx vitest run tests/sdk-worker.test.mjs tests/cost-service.test.mjs', {stdio:'inherit',shell:true});"
+```
+
+### Slice 5 — Guard: the SDK path does no stdout parsing [sequential]
+
+**Depends On**: Slice 4
+**Context Files**: `.github/instructions/testing.instructions.md`, `.github/instructions/clean-code.instructions.md`
+
+> Re-scoped during hardening. The draft said "delete the stdout parsers". Verification showed
+> `parseGrokStreamingJson` serves grok and `parseStderrStats` serves all CLI workers via
+> `_enrichWorkerTokens` — both out of scope, both must survive. The value is proving the SDK path
+> never reaches them, not removing them.
+
+Tasks:
+- Add a guard test asserting `sdk-worker.mjs` contains no stdout/stderr regex parsing and does not import `parseStderrStats` or `parseGrokStreamingJson`.
+- Assert both parsers are still exported and their existing suites still pass.
+
+Files: `pforge-mcp/tests/sdk-worker.test.mjs`
+
+**Validation Gate**:
+```bash
+node -e 'const s=require("fs").readFileSync("pforge-mcp/orchestrator/sdk-worker.mjs","utf8");for(const n of ["parseStderrStats","parseGrokStreamingJson"])if(s.includes(n))throw new Error("sdk path must not use stdout parser: "+n)'
+node -e 'const s=require("fs").readFileSync("pforge-mcp/orchestrator/worker-spawn.mjs","utf8");for(const n of ["parseGrokStreamingJson","parseStderrStats"])if(!s.includes(n))throw new Error("out-of-scope parser must survive: "+n)'
+node -e "process.chdir('pforge-mcp'); require('child_process').execSync('npx vitest run tests/sdk-worker.test.mjs tests/grok-stream-parse.test.mjs tests/orchestrator.test.mjs', {stdio:'inherit',shell:true});"
+```
+
+### Slice 6 — Flip the default and prove cost parity [sequential]
+
+**Depends On**: Slice 5
+**Context Files**: `.github/instructions/architecture-principles.instructions.md`, `.github/instructions/release-checklist.instructions.md`
+
+Tasks:
+- Capture a CLI-path cost baseline for a chosen plan **before** flipping, and store it as the slice artifact.
+- Change the `routing.copilotSdk` default from `"off"` to `"prefer"`.
+- Run the same plan end-to-end through the SDK path and compare cost attribution against the captured baseline.
+- If the delta exceeds 5 percent, revert the default and stop — do not adjust the baseline to fit.
+- Update `CHANGELOG.md` and `docs/COPILOT-VSCODE-GUIDE.md` for the new default and the Node floor.
+
+Files: `pforge-mcp/orchestrator/worker-spawn.mjs`, `pforge-mcp/capabilities/schemas.mjs`, `CHANGELOG.md`, `docs/COPILOT-VSCODE-GUIDE.md`
+
+**Validation Gate**:
+```bash
+node pforge-mcp/server.mjs --check
+node -e "process.chdir('pforge-mcp'); require('child_process').execSync('npx vitest run', {stdio:'inherit',shell:true});"
+node pforge-mcp/orchestrator.mjs --test
+```
+
+## Re-anchor Checkpoints
+
+- **After Slice 1**: re-read the Scope Contract. Confirm nothing beyond the manifest changed and that the default is still `"off"`.
+- **After Slice 3**: re-read the Data Model section. Confirm the `extractTokens` field names and the null-not-zero rule are intact before extending to more providers.
+- **After Slice 5**: re-read Forbidden Actions. Confirm both parsers still exist, `approveAll` is absent, and the grok/claude/codex paths are untouched.
+- **Before Slice 6**: re-read the Rollback plan. Slice 6 is the only default-changing slice; confirm the baseline artifact exists before flipping.
 
 ## Validation Gates
+
+Phase-level gates, run after the final slice:
+
+```bash
+node pforge-mcp/server.mjs --check
+node -e "process.chdir('pforge-mcp'); require('child_process').execSync('npx vitest run', {stdio:'inherit',shell:true});"
+node pforge-mcp/orchestrator.mjs --test
+```
+
+`--check` rather than `--validate`: `--validate` regenerates `tools.json` and `cli-schema.json`,
+which mutates tracked source mid-slice (meta-bug #240). This phase must not move the tool surface,
+so `--check` passing with no regeneration is itself an acceptance signal.
+
+## Definition of Done
+
+- [ ] All 6 slices complete with their validation gates passing
+- [ ] Every **MUST** acceptance criterion satisfied and traceable to a slice gate
+- [ ] `node pforge-mcp/server.mjs --check` passes without regenerating artifacts
+- [ ] `parseGrokStreamingJson` and `parseStderrStats` still present, their suites green
+- [ ] `approveAll` and `forInProcess` appear nowhere in the diff
+- [ ] `CHANGELOG.md` records the breaking `engines.node` bump under the next release
+- [ ] Reviewer Gate passed (zero 🔴 Critical)
+- [ ] Issue #241 closed referencing this phase
 
 ## Stop Conditions
 

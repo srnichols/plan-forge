@@ -7,6 +7,8 @@ Format follows [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
+## [3.26.4] — 2026-08-10 — Vitest gates work under the orchestrator again
+
 ### Fixed
 
 - **Every vitest validation gate failed under `forge_run_plan` because of a lower-case drive letter** ([#248](https://github.com/srnichols/plan-forge/issues/248)). Gates died with `TypeError: Cannot read properties of undefined (reading 'config')` raised at the *first top-level `describe()`* of each file, while the identical command passed from a shell. Root cause: the orchestrator inherits its cwd from the VS Code extension host, which reports `e:\GitHub\Plan-Forge` — lower-case drive letter. Vite keys its module graph by path, so `e:\…` and `E:\…` resolve as two different modules; the test file's `describe` came from a different `vitest` instance than the runner, leaving the runner state undefined before a single test ran. `runGate()` now upper-cases the drive letter before dispatching. Reproduced deterministically (`E:\` passes, `e:\` fails on the same command, same machine, same second) and verified fixed the same way. This blocked all six Phase-60 slices, forcing a run-verify-resume cycle per slice at ~350 s each, and blocked measuring the SDK-vs-spawn cost parity behind `routing.copilotSdk`. Eleven other hypotheses were tested and eliminated first — stale vite cache, uninstalled dependency, `package.json` re-scan, duplicate vitest installs, stdio shape, `NO_COLOR`, `npx` resolution, the full 70-variable inherited environment, the fork and thread pools, and file parallelism — none of which reproduced it.

@@ -7,16 +7,18 @@ Format follows [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
+### Security
+
+- **`ws` high-severity advisories patched.** `ws` was pinned at 8.20.0 — inside the vulnerable `8.0.0 - 8.20.1` range for [GHSA-58qx-3vcg-4xpx](https://github.com/advisories/GHSA-58qx-3vcg-4xpx) (uninitialized memory disclosure) and [GHSA-96hv-2xvq-fx4p](https://github.com/advisories/GHSA-96hv-2xvq-fx4p) (memory-exhaustion DoS from tiny fragments). It is a direct dependency of both `pforge-mcp` and `pforge-master` and backs the dashboard WebSocket, so it was reachable in a server users actually run. Now 8.21.3, along with non-breaking fixes for 13 transitive highs (`brace-expansion`, `fast-uri`, `form-data`, `hono`, `ip-address`, `js-yaml`, `nanoid`, `postcss`, `protobufjs`, `undici`, `@grpc/grpc-js`, two OTel transitives). Lockfile only — no `package.json` ranges changed. Totals: 72 → 55 vulnerabilities, 19 → 7 high.
+- **Command-injection surface removed from GitHub issue filing.** The `gh issue create` shell string interpolated agent-supplied title/body with only `"` escaped, leaving `$(...)`, backticks, and `$VAR` live on POSIX shells. The `gh issue list` dedupe lookup had the same shape, with `owner`/`repo` reaching it from `.forge.json#bugRegistry.githubRepo`. Both now pass an argv array — no shell, no escaping, no injection surface (`security.instructions.md` Rule 1).
+
 ### Fixed
 
 - **GitHub issues filed by Plan Forge rendered a literal `\n` instead of line breaks.** `forge_meta_bug_file` and `forge_classifier_issue` built `gh issue create` as a **shell command string**, so newlines had to be escaped to survive it — and `gh`, which does no escape processing, wrote the two-character sequence straight into the issue body. Every meta-bug and classifier-noise issue filed through the CLI path was affected (observed on [#236](https://github.com/srnichols/plan-forge/issues/236) and [#237](https://github.com/srnichols/plan-forge/issues/237)); the REST fallback was always correct, but `gh` is tried first. `gh` is now invoked with an **argv array** via `execFileSync`, so bodies survive verbatim.
 
-### Security
-
-- **Command-injection surface removed from GitHub issue filing.** The same `gh issue create` shell string interpolated agent-supplied title/body with only `"` escaped, leaving `$(...)`, backticks, and `$VAR` live on POSIX shells. The `gh issue list` dedupe lookup had the same shape, with `owner`/`repo` reaching it from `.forge.json#bugRegistry.githubRepo`. Both now pass an argv array — no shell, no escaping, no injection surface (`security.instructions.md` Rule 1).
-
 ### Changed
 
+- **All 5 blocking clean-code `complexity-error` violations cleared** — repo-wide count is now **0 errors across 651 files** (was flagged in `cleanup-findings/CATEGORIES-SUMMARY.md` as blocking before a release gate). `parseGrokStreamingJson` 35, `assertWorkerBackendReady` 29, `renderBody` 29, `loadQuorumConfig` 23, and the `forge_master_audit` handler 46 are all under the limit of 20. Behaviour-preserving throughout, verified by the existing suites including the byte-exact `bug-batch` golden fixture and the real grok streaming-json capture.
 - **New shared module `pforge-mcp/tempering/gh-cli.mjs`** — `buildCreateIssueArgs`, `createIssueViaGhCli`, `findOpenIssueByHashViaGhCli`. The issue-create and dedupe-lookup logic was duplicated byte-for-byte across the meta-bug filer and the classifier filer, differing only by label; both now delegate. Callers inject `execFile`; `execSync` is retained for `gh auth token` and `git remote`, which carry no user input. Omitting the runner still disables the CLI path and falls through to REST, unchanged.
 - **Plan hardener now requires premise verification** (`step2-harden-plan.prompt.md`). A plan's Non-Goals asserted that all 17 API endpoints already existed; the target route file had only `approve` and `deny`, so a slice was scoped against a surface that was never there ([#237](https://github.com/srnichols/plan-forge/issues/237)). Self-check item 10 plus a **Premise Verification** section now require every factual claim about existing code to be checked by reading the file — false assertions get the slice re-scoped, unverifiable ones get demoted from Non-Goals to Required Decisions so they never stand as a scope boundary.
 

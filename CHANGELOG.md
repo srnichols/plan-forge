@@ -7,6 +7,8 @@ Format follows [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
+## [3.25.1] — 2026-08-10 — Gate-linter quote awareness, side-effect-free test suite
+
 ### Fixed
 
 - **Running the test suite left nine tracked files modified.** `clean-code-no-regression.test.mjs` spawns the consolidated audit and correctly redirects the aggregate report with `--out <tmp>`, but `clean-code-review.mjs` invokes its nine sub-scanners with no arguments and each writes to a hardcoded `docs/plans/cleanup-findings/raw/`. So every full `npx vitest run` rewrote nine tracked JSON reports with fresh `generatedAt` timestamps. That is more than cosmetic noise: the orchestrator auto-commits after each slice, so a plan run executing the suite would sweep timestamp churn into an unrelated slice commit, and the reports' git history becomes meaningless. The path literal was also duplicated across **14 call sites**, which is what made the output impossible to redirect in the first place — a DRY violation of the kind `clean-code.instructions.md` calls out ("same string literal in ≥2 sites → extract to a const"). Introduced `scripts/audit/raw-dir.mjs` as the single source of truth, honouring a `PFORGE_AUDIT_RAW_DIR` override that the test now points at a temp directory. Verified by running the full suite and confirming `git status` on the reports directory is empty where it previously listed nine files; the audit itself still produces real findings (2 errors / 1501 warnings / 9 raw reports), which matters because `runScript()` swallows scanner failures and an empty report would have passed the no-regression assertion vacuously.

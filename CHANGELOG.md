@@ -7,6 +7,10 @@ Format follows [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
+### Fixed
+
+- **`setup` performed no Node version check at all, so a fresh install on an unsupported runtime proceeded silently.** v3.26.2 fixed the *doctor* reporting the wrong floor, but that only helps someone who already installed and then runs `pforge smith`. A brand-new client on Node 18 running `setup.ps1`/`setup.sh` got no signal whatsoever — npm's `EBADENGINE` is a warning, and setup treats a warning-only `npm install` as success. Both scripts now check before doing any work and stop with an actionable message. The floor is **read from `pforge-mcp/package.json` `engines.node`** rather than hardcoded, so it can never drift from the manifest the way the smith check did — that check had been asserting `>= 18` since long after the floor moved.
+
 ## [3.26.2] — 2026-08-10 — Smith reports the real Node floor
 
 ### Fixed

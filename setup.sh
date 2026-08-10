@@ -928,6 +928,29 @@ cyan "╚═══════════════════════�
 echo ""
 
 # ─── Interactive Prompts ───────────────────────────────────────────────
+# Floor is read from pforge-mcp/package.json so this never drifts from the manifest.
+MCP_PKG_PATH="$TEMPLATE_ROOT/pforge-mcp/package.json"
+if [[ -f "$MCP_PKG_PATH" ]]; then
+    if ! command -v node &>/dev/null; then
+        red "  ERROR  Node.js not found — Plan Forge requires a modern Node runtime"
+        red "         Install from https://nodejs.org/ and re-run setup."
+        exit 1
+    fi
+    REQUIRED_NODE="$(node -p "require('$MCP_PKG_PATH').engines.node.replace(/^>=/,'')" 2>/dev/null)"
+    CURRENT_NODE="$(node --version 2>/dev/null | sed 's/^v//')"
+    if [[ -n "$REQUIRED_NODE" ]]; then
+        req_major="${REQUIRED_NODE%%.*}"; req_rest="${REQUIRED_NODE#*.}"; req_minor="${req_rest%%.*}"
+        cur_major="${CURRENT_NODE%%.*}"; cur_rest="${CURRENT_NODE#*.}"; cur_minor="${cur_rest%%.*}"
+        if [ "$cur_major" -lt "$req_major" ] 2>/dev/null || { [ "$cur_major" -eq "$req_major" ] && [ "$cur_minor" -lt "$req_minor" ]; } 2>/dev/null; then
+            red "  ERROR  Node.js v$CURRENT_NODE is below the required >= $REQUIRED_NODE"
+            red "         npm reports this only as an EBADENGINE warning, so setup stops here instead."
+            red "         Upgrade Node.js from https://nodejs.org/ and re-run setup."
+            exit 1
+        fi
+        echo "  Node.js v$CURRENT_NODE (requires >= $REQUIRED_NODE)"
+    fi
+fi
+
 if [[ -z "$PROJECT_PATH" ]]; then
     PROJECT_PATH="$(prompt_value "Target project directory" "$(pwd)")"
 fi

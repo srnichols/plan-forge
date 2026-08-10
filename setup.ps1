@@ -987,6 +987,30 @@ function Find-Preset([string]$TargetPath) {
 # ─── Interactive Prompts ───────────────────────────────────────────────
 Write-Banner
 
+# Floor is read from pforge-mcp/package.json so this never drifts from the manifest.
+$mcpPkgPath = Join-Path $templateRoot 'pforge-mcp/package.json'
+if (Test-Path $mcpPkgPath) {
+    $requiredNode = ((Get-Content $mcpPkgPath -Raw | ConvertFrom-Json).engines.node) -replace '^>=', ''
+    $nodeCmd = Get-Command node -ErrorAction SilentlyContinue
+    if (-not $nodeCmd) {
+        Write-Host "  ERROR  Node.js not found — Plan Forge requires >= $requiredNode" -ForegroundColor Red
+        Write-Host "         Install from https://nodejs.org/ and re-run setup." -ForegroundColor Red
+        exit 1
+    }
+    $nodeVer = (node --version 2>$null) -replace '^v', ''
+    $reqParts = $requiredNode -split '\.'
+    $curParts = $nodeVer -split '\.'
+    $reqMajor = [int]$reqParts[0]; $reqMinor = if ($reqParts.Count -gt 1) { [int]$reqParts[1] } else { 0 }
+    $curMajor = [int]$curParts[0]; $curMinor = if ($curParts.Count -gt 1) { [int]$curParts[1] } else { 0 }
+    if ($curMajor -lt $reqMajor -or ($curMajor -eq $reqMajor -and $curMinor -lt $reqMinor)) {
+        Write-Host "  ERROR  Node.js v$nodeVer is below the required >= $requiredNode" -ForegroundColor Red
+        Write-Host "         npm reports this only as an EBADENGINE warning, so setup stops here instead." -ForegroundColor Red
+        Write-Host "         Upgrade Node.js from https://nodejs.org/ and re-run setup." -ForegroundColor Red
+        exit 1
+    }
+    Write-Host "  Node.js v$nodeVer (requires >= $requiredNode)" -ForegroundColor DarkGray
+}
+
 if (-not $ProjectPath) {
     $ProjectPath = Get-PromptValue "Target project directory" (Get-Location).Path
 }

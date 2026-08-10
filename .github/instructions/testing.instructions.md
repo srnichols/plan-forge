@@ -139,6 +139,16 @@ When in doubt, prefer a real in-memory fixture (temporary directory, in-memory h
 - **Mock the session factory, not the SDK internals**: per Rule 4, inject a fake `createSession` that emits the same typed events the real SDK would (`assistant.message_delta`, `session.complete`, `session.idle`, etc.) via a recorded `onEvent` callback. See `makeCreateSession()` in `tests/sdk-worker.test.mjs` for the reference pattern — it is the "mock the edge" boundary for this worker.
 - **Test both event orderings**: some SDK builds report usage only on `assistant.message_delta`, others only on `session.complete`. Assert the extractor prefers the more complete final event without silently dropping partial-event data.
 
+#### BYOK provider config tests (Phase-60 Slice 4)
+
+When testing `runSdkSession` with a `provider` config, three cases are required:
+
+1. **Happy path** — `provider` is present, the key env var resolves, and `createSession` is called with an object containing `provider.type` and `provider.apiKey` (or equivalent field). Use a fake key string such as `"sk-test-fake"` — never a real key, never read from `process.env` in the test itself.
+2. **Key-absent path** — the env var for the provider's key is `undefined` or `""`. `runSdkSession` must return `{ ok: false, error: 'BYOK_KEY_MISSING', provider: <type> }` without calling `createSession`. This case is **non-negotiable** — tests that skip it are incomplete.
+3. **Unsupported provider type** — a `provider.type` value not in `['openai', 'azure', 'anthropic']` must return a structured error, never pass through to `createSession`.
+
+Do **not** test all three provider types exhaustively in one describe block — the provider-type shape is tested via the happy-path test for each; the key-absent path only needs one representative (the implementation path is identical for all three).
+
 ### 6. Vitest gate portability (Windows + Bash + npx)
 
 Tests run inside plan gates. The gate command must work on Windows under both `cmd.exe` and Git Bash.

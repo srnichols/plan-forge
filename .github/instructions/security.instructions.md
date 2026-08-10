@@ -92,6 +92,25 @@ Beware: on Windows `C:\Foo` and `c:\foo` are the same directory but compare uneq
 
 Run `forge_secret_scan` before every release. The pre-deploy LiveGuard hook runs it automatically — do not bypass it with `--no-verify`.
 
+#### BYOK provider config (DIRECT_API_ONLY models via the SDK)
+
+When building a `provider` config object for `runSdkSession` (Phase-60 Slice 4 pattern — `openai`, `azure`, or `anthropic` BYOK paths), the API key MUST be read at call time from `process.env` or `.forge/secrets.json`. It must **never** be:
+
+- Passed as a literal string in source code or tests
+- Embedded in an error message (e.g. `throw new Error(\`key: ${apiKey}\`)`)
+- Written to a log line (`console.*`, structured logger, or JSONL audit entry)
+- Stored in a plan file, run artifact, or checkpoint
+
+The key-absent path is a first-class case: when the expected env var is missing or empty, `runSdkSession` must return `{ ok: false, error: 'BYOK_KEY_MISSING', provider }` and never proceed to create the session. Tests must cover this path using a `null`/`undefined` key value — never a real key.
+
+**Regex guard** (included in the Slice 4 validation gate):
+
+```bash
+node -e 'const s=require("fs").readFileSync("pforge-mcp/orchestrator/sdk-worker.mjs","utf8");if(/console\.[a-z]+\([^)]*apiKey/i.test(s))throw new Error("possible api key logging")'
+```
+
+Add an equivalent guard to `forge_secret_scan` if the pattern is not already covered.
+
 ### 6. Mutating the user's repo requires dry-run + confirmation
 
 A `forge_*` tool that writes to the user's workspace (not Plan Forge's own `.forge/` directory) MUST:
@@ -128,6 +147,7 @@ This list is here so we don't waste time inventing protections we don't need. If
 - [ ] Every new path input is resolved + checked against an allowed root
 - [ ] No secrets in the diff (`git diff | grep -iE 'api[_-]?key|secret|password|token'` shows only test fixtures)
 - [ ] Any new mutating tool defaults `dryRun: true` and logs to the audit trail
+- [ ] Any BYOK provider config reads its key from `process.env` / `.forge/secrets.json` at call time; the key-absent path returns a structured error, never throws a message containing the key value
 
 ---
 

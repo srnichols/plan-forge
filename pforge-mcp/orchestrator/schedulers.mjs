@@ -346,7 +346,16 @@ function _runDefaultGate(command, cwd, gateTimeout, failOnStderr) {
   }
 }
 
-export function runGate(command, cwd, opts = {}) {
+// Vite keys its module graph by path, so a lowercase Windows drive letter makes vitest
+// resolve twice and the runner state is undefined at the first describe() (#248). The
+// orchestrator inherits a lowercase cwd from the VS Code extension host.
+export function normalizeGateCwd(dir) {
+  if (typeof dir !== "string") return dir;
+  return dir.replace(/^([a-z]):/, (_m, d) => `${d.toUpperCase()}:`);
+}
+
+export function runGate(command, rawCwd, opts = {}) {
+  const cwd = normalizeGateCwd(rawCwd);
   const failOnStderr = opts.failOnStderr === true;
   const { cmdBase, blocked } = _validateGateAllowlist(command);
   if (blocked) return blocked;

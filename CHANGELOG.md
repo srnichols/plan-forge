@@ -7,6 +7,10 @@ Format follows [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
+### Added
+
+- **`scripts/sync-master.{ps1,sh}` — automates the release-time branch sync.** Merging `master` into `planning/main` fast-forwards straight through master's dev-only scrub commit, silently deleting 70+ paths (AGENTS.md, every phase plan, `docs/plans/archive/`, `docs/plans/cleanup-findings/`) with **no merge conflict to signal it**. That fired seven times during one release session; each time it was caught only by manually counting files afterwards. The script does both directions (`to-master` scrubs, `to-planning` restores) with the assertions built in: it refuses to run on a dirty tree, aborts the scrub if the pattern would catch a consumer-shipped lookalike (`presets/*/AGENTS.md`, `*-TEMPLATE.md`, `docs/plans/examples/*`), reverts the scrub if the consumer file count changes, computes the restore set from what the merge **actually** removed rather than from the scrub commit (so a no-op merge restores nothing instead of failing on an empty commit), and refuses to commit the restore if `planning/main` would differ from `master` by anything other than dev-only paths.
+
 ## [3.26.4] — 2026-08-10 — Vitest gates work under the orchestrator again
 
 ### Fixed

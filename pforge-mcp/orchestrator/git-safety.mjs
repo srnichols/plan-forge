@@ -95,14 +95,14 @@ export function loadTeardownGuardConfig(cwd) {
  * @returns {{ ok: boolean, failures: string[], reflogTail: string[] }}
  */
 export function verifyBranchSafety(baseline, config, cwd, deps = {}) {
-  const exec = deps.exec || ((cmd, opts) => execSync(cmd, opts));
+  const exec = deps.exec || ((file, args, opts) => execFileSync(file, args, opts));
   const failures = [];
   let reflogTail = [];
   let localBranchMissing = false;
 
   // 1. Local branch ref still exists
   try {
-    exec(`git show-ref --verify refs/heads/${baseline.branch}`, {
+    exec("git", ["show-ref", "--verify", `refs/heads/${baseline.branch}`], {
       cwd, encoding: "utf-8", timeout: 5000, stdio: "pipe",
     });
   } catch {
@@ -112,7 +112,7 @@ export function verifyBranchSafety(baseline, config, cwd, deps = {}) {
 
   // 2. Baseline HEAD still reachable
   try {
-    exec(`git cat-file -e ${baseline.headSha}^{commit}`, {
+    exec("git", ["cat-file", "-e", `${baseline.headSha}^{commit}`], {
       cwd, encoding: "utf-8", timeout: 5000, stdio: "pipe",
     });
   } catch {
@@ -124,7 +124,7 @@ export function verifyBranchSafety(baseline, config, cwd, deps = {}) {
     try {
       const remoteName = baseline.upstream.split("/")[0] || "origin";
       const remoteBranch = baseline.upstream.split("/").slice(1).join("/") || baseline.branch;
-      const lsRemote = exec(`git ls-remote --heads ${remoteName} ${remoteBranch}`, {
+      const lsRemote = exec("git", ["ls-remote", "--heads", remoteName, remoteBranch], {
         cwd, encoding: "utf-8", timeout: 10000, stdio: "pipe",
       }).trim();
       if (!lsRemote) {
@@ -152,7 +152,7 @@ export function verifyBranchSafety(baseline, config, cwd, deps = {}) {
   // On failure, capture reflog for recovery
   if (failures.length > 0) {
     try {
-      reflogTail = exec("git reflog -n 20 --format=%H\\ %gs", {
+      reflogTail = exec("git", ["reflog", "-n", "20", "--format=%H %gs"], {
         cwd, encoding: "utf-8", timeout: 5000, stdio: "pipe",
       }).trim().split("\n");
     } catch { /* reflog unavailable */ }
@@ -173,7 +173,7 @@ export function verifyBranchSafety(baseline, config, cwd, deps = {}) {
  */
 function resolveBranchWorktreePath(branch, cwd, exec) {
   try {
-    const porcelain = exec("git worktree list --porcelain", {
+    const porcelain = exec("git", ["worktree", "list", "--porcelain"], {
       cwd, encoding: "utf-8", timeout: 5000, stdio: "pipe",
     });
     // Porcelain format: blocks separated by blank lines.
@@ -240,8 +240,9 @@ export function captureAbsorbedCommits({ cwd = process.cwd(), fromSha, toSha = "
   if (!fromSha) return [];
   let log;
   try {
-    log = execSync(
-      `git log --reverse --format=%H%x09%an%x09%s ${fromSha}..${toSha}`,
+    log = execFileSync(
+      "git",
+      ["log", "--reverse", "--format=%H%x09%an%x09%s", `${fromSha}..${toSha}`],
       { cwd, encoding: "utf-8", timeout: 5_000 },
     );
   } catch {
@@ -254,7 +255,7 @@ export function captureAbsorbedCommits({ cwd = process.cwd(), fromSha, toSha = "
     if (!sha) continue;
     let diffstat = null;
     try {
-      const shortstat = execSync(`git show --shortstat --format= ${sha}`, { cwd, encoding: "utf-8", timeout: 5_000 });
+      const shortstat = execFileSync("git", ["show", "--shortstat", "--format=", sha], { cwd, encoding: "utf-8", timeout: 5_000 });
       diffstat = parseShortstat(shortstat);
     } catch { /* ignore */ }
     commits.push({ sha, author: author || "unknown", subject: rest.join("\t") || "", diffstat });
@@ -297,14 +298,14 @@ export function snapshotPreSliceState({ cwd = process.cwd() } = {}) {
  * @param {{ cwd?: string, sliceNumber: string|number, _execSync?: Function }} params
  * @returns {{ pushed: boolean, stashRef: string|null, reason?: string }}
  */
-export function pushSliceSnapshot({ cwd = process.cwd(), sliceNumber, _execSync = execSync } = {}) {
+export function pushSliceSnapshot({ cwd = process.cwd(), sliceNumber, _execSync = execFileSync } = {}) {
   const stashRef = `pforge-slice-${sliceNumber}-snapshot`;
   try {
-    const status = _execSync("git status --porcelain", { cwd, encoding: "utf-8", timeout: 5_000 }).toString().trim();
+    const status = _execSync("git", ["status", "--porcelain"], { cwd, encoding: "utf-8", timeout: 5_000 }).toString().trim();
     if (!status) return { pushed: false, stashRef: null, reason: "clean-tree" };
     // #202: `-u` (--include-untracked) — without it, an untracked-only tree
     // is silently skipped and the caller is misled into thinking we stashed.
-    _execSync(`git stash push -u -m "${stashRef}"`, { cwd, encoding: "utf-8", timeout: 10_000 });
+    _execSync("git", ["stash", "push", "-u", "-m", stashRef], { cwd, encoding: "utf-8", timeout: 10_000 });
     return { pushed: true, stashRef };
   } catch (err) {
     return { pushed: false, stashRef: null, reason: (err?.message || "git-failed").slice(0, 200) };
@@ -337,12 +338,12 @@ export function pushSliceSnapshot({ cwd = process.cwd(), sliceNumber, _execSync 
  * @param {{ cwd?: string, sliceNumber: string|number, _execSync?: Function }} params
  * @returns {{ restored: boolean, conflict?: boolean, dirtyTree?: boolean, error?: string, stashRef?: string }}
  */
-export function popSliceSnapshot({ cwd = process.cwd(), sliceNumber, _execSync = execSync } = {}) {
+export function popSliceSnapshot({ cwd = process.cwd(), sliceNumber, _execSync = execFileSync } = {}) {
   const message = `pforge-slice-${sliceNumber}-snapshot`;
   // Step 1: find the stash ref by message (more reliable than top-of-stack).
   let stashRef = null;
   try {
-    const list = _execSync("git stash list", { cwd, encoding: "utf-8", timeout: 5_000 }).toString();
+    const list = _execSync("git", ["stash", "list"], { cwd, encoding: "utf-8", timeout: 5_000 }).toString();
     for (const line of list.split(/\r?\n/)) {
       // Match e.g. "stash@{2}: On master: pforge-slice-3-snapshot"
       const m = line.match(/^(stash@\{\d+\}):\s*[^:]*:\s*(.+)$/);
@@ -357,7 +358,7 @@ export function popSliceSnapshot({ cwd = process.cwd(), sliceNumber, _execSync =
   }
   // Step 2: apply (non-destructive). On success, drop. On failure, leave intact.
   try {
-    _execSync(`git stash apply ${stashRef}`, { cwd, encoding: "utf-8", timeout: 15_000, stdio: "pipe" });
+    _execSync("git", ["stash", "apply", stashRef], { cwd, encoding: "utf-8", timeout: 15_000, stdio: "pipe" });
   } catch (err) {
     const stderr = (err?.stderr?.toString?.() || err?.message || "").toString().trim();
     const conflict = /conflict|CONFLICT/i.test(stderr);
@@ -373,7 +374,7 @@ export function popSliceSnapshot({ cwd = process.cwd(), sliceNumber, _execSync =
   }
   // Step 3: drop only after successful apply.
   try {
-    _execSync(`git stash drop ${stashRef}`, { cwd, encoding: "utf-8", timeout: 10_000, stdio: "pipe" });
+    _execSync("git", ["stash", "drop", stashRef], { cwd, encoding: "utf-8", timeout: 10_000, stdio: "pipe" });
   } catch {
     // Apply succeeded but drop failed — non-fatal, operator can clean up.
   }
@@ -447,7 +448,7 @@ export function attachSliceSnapshotRestore({
 export function cleanupStaleSnapshots({
   cwd = process.cwd(),
   maxAgeDays = 7,
-  _execSync = execSync,
+  _execSync = execFileSync,
   _now = () => new Date(),
 } = {}) {
   const result = { scanned: 0, dropped: [], errors: [] };
@@ -455,7 +456,8 @@ export function cleanupStaleSnapshots({
   try {
     // `%gd %ct %s` → stash ref, committer Unix timestamp, subject.
     list = _execSync(
-      'git stash list --format="%gd|%ct|%s"',
+      "git",
+      ["stash", "list", "--format=%gd|%ct|%s"],
       { cwd, encoding: "utf-8", timeout: 5_000 },
     ).toString();
   } catch (err) {
@@ -481,7 +483,7 @@ export function cleanupStaleSnapshots({
   // Drop in reverse so earlier refs stay stable (stash@{N} indexes shift down).
   for (const ref of toDrop.reverse()) {
     try {
-      _execSync(`git stash drop ${ref}`, { cwd, encoding: "utf-8", timeout: 5_000, stdio: "pipe" });
+      _execSync("git", ["stash", "drop", ref], { cwd, encoding: "utf-8", timeout: 5_000, stdio: "pipe" });
       result.dropped.push(ref);
     } catch (err) {
       result.errors.push(`drop ${ref}: ${(err?.message || "").slice(0, 100)}`);
@@ -607,7 +609,7 @@ export function verifyFilesModified({ slice, cwd = process.cwd(), startSha = nul
 
   if (startSha) {
     try {
-      const diffOut = execSync(`git diff --name-only ${startSha} HEAD`, {
+      const diffOut = execFileSync("git", ["diff", "--name-only", startSha, "HEAD"], {
         cwd, encoding: "utf-8", timeout: 5_000,
       });
       for (const p of diffOut.split(/\r?\n/)) {
@@ -634,6 +636,206 @@ export function verifyFilesModified({ slice, cwd = process.cwd(), startSha = nul
   const missing = declared.filter((d) => !actualNorm.has(norm(d)));
 
   return { enforced: true, declared, actual, missing };
+}
+
+/**
+ * Issue #227 — a slice title that declares a *deletion* intent.
+ * Matches "Delete …", "Remove …", "Drop …", "Purge …", "Eliminate …" as the
+ * leading verb, plus the common "remove/delete redundant|obsolete|deprecated|
+ * unused|legacy|old …" phrasing anywhere in the title.
+ *
+ * @param {string} title
+ * @returns {boolean}
+ */
+export function isDeletionSliceTitle(title) {
+  if (typeof title !== "string") return false;
+  if (/^\s*(delete|remove|drop|purge|eliminate)\b/i.test(title)) return true;
+  return /\b(delete|remove|drop)\s+(redundant|obsolete|deprecated|unused|legacy|old|dead|duplicate)\b/i.test(title);
+}
+
+/**
+ * Parse `git diff --name-status <a> <b>` output into structured entries.
+ * Each line is `<STATUS>\t<path>` (renames/copies are `R100\told\tnew`).
+ * For renames the *new* path is reported with status "R".
+ *
+ * @param {string|null|undefined} raw
+ * @returns {Array<{ status: string, path: string }>}
+ */
+export function parseNameStatus(raw) {
+  if (!raw || typeof raw !== "string") return [];
+  const out = [];
+  for (const line of raw.split(/\r?\n/)) {
+    const trimmed = line.trim();
+    if (!trimmed) continue;
+    const parts = trimmed.split(/\t/);
+    if (parts.length < 2) continue;
+    const status = parts[0].charAt(0).toUpperCase();
+    // Rename/copy: status is "R<score>"/"C<score>", paths are [old, new].
+    const path = parts[parts.length - 1].trim();
+    if (path) out.push({ status, path });
+  }
+  return out;
+}
+
+/**
+ * Issue #227 — detect a deletion-slice inversion: a slice whose title declares
+ * a deletion but whose commit *added* (or modified) the very files it should
+ * have removed. The Phase-86 Slice 12 regression committed `+578/+30` to the
+ * exact donate-page files a predecessor had correctly deleted, while the
+ * commit message still claimed "Delete redundant emoji donate page". The
+ * slice's own grep/Test-Path gate did not catch the inverse.
+ *
+ * Pure function — operates on the slice and a parsed name-status list so it can
+ * be unit-tested without a git repo.
+ *
+ * @param {object} params
+ * @param {{ number: number|string, title: string, rawLines?: string[] }} params.slice
+ * @param {Array<{ status: string, path: string }>} params.nameStatus — parsed `git diff --name-status`
+ * @returns {{ applicable: boolean, inverted: boolean, offending: Array<{ path: string, status: string }> }}
+ */
+export function detectDeletionInversion({ slice, nameStatus } = {}) {
+  const notApplicable = { applicable: false, inverted: false, offending: [] };
+  if (!slice || !isDeletionSliceTitle(slice.title)) return notApplicable;
+  const declared = extractFilesModifiedExhaustive(slice);
+  if (declared.length === 0) return notApplicable;
+
+  const norm = (p) => String(p).replace(/\\/g, "/").replace(/^\.\//, "").trim();
+  const declaredNorm = new Set(declared.map(norm));
+  const offending = [];
+  for (const entry of Array.isArray(nameStatus) ? nameStatus : []) {
+    if (!entry || !entry.path) continue;
+    if (!declaredNorm.has(norm(entry.path))) continue;
+    // A deletion slice must remove these paths (status "D"). An "A" (added)
+    // status is the unambiguous inverse — the worker re-created a file it was
+    // told to delete. Flag only adds to avoid false-positiving on legitimate
+    // reference-removal edits that show as "M".
+    if (entry.status === "A") {
+      offending.push({ path: norm(entry.path), status: entry.status });
+    }
+  }
+  return { applicable: true, inverted: offending.length > 0, offending };
+}
+
+/**
+ * Issue #227 — git-backed wrapper around {@link detectDeletionInversion}.
+ * Runs `git diff --name-status <startSha> HEAD` and evaluates the slice's
+ * commit for a deletion inversion. Never throws; returns `applicable: false`
+ * when there is no deletion contract or git is unavailable.
+ *
+ * @param {object} params
+ * @param {{ number: number|string, title: string, rawLines?: string[] }} params.slice
+ * @param {string} [params.cwd=process.cwd()]
+ * @param {string|null} [params.startSha] — HEAD SHA captured at slice start
+ * @returns {{ applicable: boolean, inverted: boolean, offending: Array<{ path: string, status: string }> }}
+ */
+export function verifyDeletionSlice({ slice, cwd = process.cwd(), startSha = null } = {}) {
+  const notApplicable = { applicable: false, inverted: false, offending: [] };
+  if (!slice || !startSha || !isDeletionSliceTitle(slice.title)) return notApplicable;
+  let raw = "";
+  try {
+    raw = execFileSync("git", ["diff", "--name-status", startSha, "HEAD"], {
+      cwd, encoding: "utf-8", timeout: 5_000,
+    });
+  } catch {
+    return notApplicable;
+  }
+  return detectDeletionInversion({ slice, nameStatus: parseNameStatus(raw) });
+}
+
+/**
+ * Normalize a repo-relative path for scope comparison: backslashes to slashes,
+ * strip a leading `./`, trim.
+ *
+ * @param {string} p
+ * @returns {string}
+ */
+function normalizeRepoPath(p) {
+  return String(p).replace(/\\/g, "/").replace(/^\.\//, "").trim();
+}
+
+/**
+ * Match a single scope pattern against a normalized repo path. Supports `**`
+ * (any characters, including `/`) and `*` (any characters except `/`). A
+ * pattern without a wildcard matches the path exactly OR as a directory prefix.
+ *
+ * @param {string} pattern
+ * @param {string} filePath — already normalized
+ * @returns {boolean}
+ */
+function matchScopeGlob(pattern, filePath) {
+  const pat = normalizeRepoPath(pattern);
+  if (!pat) return false;
+  if (!pat.includes("*")) {
+    return filePath === pat || filePath.startsWith(pat.endsWith("/") ? pat : pat + "/");
+  }
+  const NULL = "\u0000";
+  const rx = new RegExp(
+    "^" +
+      pat
+        .replace(/[.+^${}()|[\]\\]/g, "\\$&")
+        .replace(/\*\*/g, NULL)
+        .replace(/\*/g, "[^/]*")
+        .replace(new RegExp(NULL, "g"), ".*") +
+      "$"
+  );
+  return rx.test(filePath);
+}
+
+/**
+ * Issue #230 — detect a "scope escape": a slice that declares a non-empty file
+ * scope but whose entire commit diff landed OUTSIDE that scope. The Phase-93
+ * false-green run committed only out-of-scope `.github/instructions/*.md` docs
+ * while every promised in-scope feature file was missing, yet 14/14 slices
+ * reported PASSED. When a slice has a declared scope and NONE of the changed
+ * paths match it, the worker did not build what it was told to.
+ *
+ * Pure function — operates on the slice and a parsed name-status list so it can
+ * be unit-tested without a git repo. Conservative: only fires when the *entire*
+ * diff is out of scope, so a slice that touches any in-scope file passes.
+ *
+ * @param {object} params
+ * @param {{ number: number|string, title: string, scope?: string[] }} params.slice
+ * @param {Array<{ status: string, path: string }>} params.nameStatus
+ * @returns {{ applicable: boolean, escaped: boolean, offending: string[], scope: string[] }}
+ */
+export function detectScopeEscape({ slice, nameStatus } = {}) {
+  const notApplicable = { applicable: false, escaped: false, offending: [], scope: [] };
+  const scope = Array.isArray(slice?.scope) ? slice.scope.filter(Boolean) : [];
+  if (scope.length === 0) return notApplicable;
+  const changed = (Array.isArray(nameStatus) ? nameStatus : [])
+    .map((e) => (e && e.path ? normalizeRepoPath(e.path) : null))
+    .filter(Boolean);
+  if (changed.length === 0) return notApplicable;
+  const inScope = changed.filter((p) => scope.some((g) => matchScopeGlob(g, p)));
+  if (inScope.length > 0) return { applicable: true, escaped: false, offending: [], scope };
+  return { applicable: true, escaped: true, offending: changed, scope };
+}
+
+/**
+ * Issue #230 — git-backed wrapper around {@link detectScopeEscape}. Runs
+ * `git diff --name-status <startSha> HEAD` and evaluates the slice's commit for
+ * a scope escape. Never throws; returns `applicable: false` when the slice
+ * declares no scope or git is unavailable.
+ *
+ * @param {object} params
+ * @param {{ number: number|string, title: string, scope?: string[] }} params.slice
+ * @param {string} [params.cwd=process.cwd()]
+ * @param {string|null} [params.startSha] — HEAD SHA captured at slice start
+ * @returns {{ applicable: boolean, escaped: boolean, offending: string[], scope: string[] }}
+ */
+export function verifySliceScope({ slice, cwd = process.cwd(), startSha = null } = {}) {
+  const notApplicable = { applicable: false, escaped: false, offending: [], scope: [] };
+  const scope = Array.isArray(slice?.scope) ? slice.scope.filter(Boolean) : [];
+  if (!startSha || scope.length === 0) return notApplicable;
+  let raw = "";
+  try {
+    raw = execFileSync("git", ["diff", "--name-status", startSha, "HEAD"], {
+      cwd, encoding: "utf-8", timeout: 5_000,
+    });
+  } catch {
+    return notApplicable;
+  }
+  return detectScopeEscape({ slice, nameStatus: parseNameStatus(raw) });
 }
 
 /**
@@ -665,7 +867,7 @@ function _handleCleanTreeMaybeWorkerCommit({ slice, cwd, startSha, eventBus }) {
     const absorbedCommits = captureAbsorbedCommits({ cwd, fromSha: startSha, toSha: currentSha });
     let codeChanges = null;
     try {
-      const shortstat = execSync(`git show --shortstat --format= ${currentSha}`, { cwd, encoding: "utf-8", timeout: 5_000 });
+      const shortstat = execFileSync("git", ["show", "--shortstat", "--format=", currentSha], { cwd, encoding: "utf-8", timeout: 5_000 });
       codeChanges = parseShortstat(shortstat);
     } catch { /* ignore */ }
     const evt = { sliceNumber: slice.number, sha: currentSha, message: "(worker-committed)", source: "worker" };
@@ -723,7 +925,7 @@ function _stageWorkerOrAll(workerPaths, cwd) {
 
 function _captureCommitStats(sha, cwd) {
   try {
-    const shortstat = execSync(`git show --shortstat --format= ${sha}`, { cwd, encoding: "utf-8", timeout: 5_000 });
+    const shortstat = execFileSync("git", ["show", "--shortstat", "--format=", sha], { cwd, encoding: "utf-8", timeout: 5_000 });
     return parseShortstat(shortstat);
   } catch { return null; }
 }

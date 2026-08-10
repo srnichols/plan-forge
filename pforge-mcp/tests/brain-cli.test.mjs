@@ -15,12 +15,17 @@ import { describe, it, expect } from "vitest";
 import { readFileSync } from "node:fs";
 import { resolve, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
+import { writeCliSchema } from "../capabilities/surface.mjs";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const repoRoot = resolve(__dirname, "..", "..");
 const psScript = readFileSync(resolve(repoRoot, "pforge.ps1"), "utf-8");
 const bashScript = readFileSync(resolve(repoRoot, "pforge.sh"), "utf-8");
-const cliSchema = JSON.parse(readFileSync(resolve(repoRoot, "pforge-mcp", "cli-schema.json"), "utf-8"));
+// cli-schema.json is a generated artifact (gitignored — produced on MCP server
+// startup). Generate it here so the suite is self-sufficient in a fresh
+// checkout where the server has never run.
+const cliSchemaPath = writeCliSchema(resolve(repoRoot, "pforge-mcp"));
+const cliSchema = JSON.parse(readFileSync(cliSchemaPath, "utf-8"));
 
 describe("pforge.ps1 brain subcommand (Phase-OPENBRAIN-PROMOTION Slice 5)", () => {
   it("defines Invoke-Brain dispatcher", () => {

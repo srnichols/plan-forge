@@ -6,7 +6,7 @@ import { buildReflexionBlock } from "../memory.mjs";
 import {
   getCachedBashPath, setCachedBashPath,
 } from "./state.mjs";
-import { GATE_ALLOWED_PREFIXES, UNIX_TOOLS, DEFAULT_GATE_TIMEOUT_MS } from "./constants.mjs";
+import { GATE_ALLOWED_PREFIXES, UNIX_TOOLS, DEFAULT_GATE_TIMEOUT_MS, resolveGateCommandToken, isGatePrefixAllowed } from "./constants.mjs";
 export { GATE_ALLOWED_PREFIXES, UNIX_TOOLS, DEFAULT_GATE_TIMEOUT_MS };
 
 /**
@@ -209,8 +209,8 @@ export function suggestAllowedCommand(token) {
  * @returns {{ success: boolean, output: string, error: string, stderr: string, exitCode: number }}
  */
 function _validateGateAllowlist(command) {
-  const cmdBase = command.trim().split(/\s+/)[0].toLowerCase();
-  const isAllowed = GATE_ALLOWED_PREFIXES.some((p) => cmdBase === p || cmdBase.endsWith(`/${p}`));
+  const cmdBase = resolveGateCommandToken(command);
+  const isAllowed = isGatePrefixAllowed(cmdBase);
   if (isAllowed) return { cmdBase, blocked: null };
   const hints = [];
   if (isPlaceholderToken(cmdBase)) {
@@ -682,6 +682,29 @@ export class ParallelScheduler {
           this.eventBus.emit("slice-failed", r);
         }
       }
+    }
+
+    // Fail-loud (#225): a plan that has slices to run but produces ZERO executed
+    // slices is a dependency deadlock — commonly unsatisfiable prose "Depends On"
+    // lines — NOT a successful no-op. Surface every stranded slice as failed so
+    // the run is non-zero instead of a phantom "0 passed, 0 failed" completion.
+    if (allResults.length === 0 && order.length > 0) {
+      for (const id of order) {
+        const node = nodes.get(id);
+        const unmet = (node?.depends || []).filter((d) => !completed.has(d));
+        const r = {
+          sliceId: id,
+          status: "failed",
+          error: unmet.length
+            ? `unsatisfiable dependencies: [${unmet.join(", ")}] — no slice ever became ready ` +
+              `(check the slice's "Depends On" line references valid slice ids)`
+            : "slice never became ready — dependency deadlock",
+        };
+        results.set(id, r);
+        allResults.push(r);
+        this.eventBus.emit("slice-failed", r);
+      }
+      this.eventBus.emit("scheduler-deadlock", { stranded: [...order], total: order.length });
     }
 
     return allResults;

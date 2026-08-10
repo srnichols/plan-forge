@@ -29,22 +29,22 @@
 
   <!-- field rows (more vertical breathing room) -->
   <text x="240" y="86" class="label">build-command</text>
-  <text x="320" y="86" class="field-ok">✓ "dotnet build"</text>
+<text x="350" y="86" class="field-ok">✓ "dotnet build"</text>
 
   <text x="240" y="108" class="label">test-command</text>
-  <text x="320" y="108" class="field-ok">✓ "dotnet test"</text>
+<text x="350" y="108" class="field-ok">✓ "dotnet test"</text>
 
   <text x="240" y="130" class="label">scope</text>
-  <text x="320" y="130" class="field-ok">✓ src/services/**</text>
+<text x="350" y="130" class="field-ok">✓ src/services/**</text>
 
   <text x="240" y="152" class="label">validation-gates</text>
-  <text x="320" y="152" class="field-ok">✓ per-slice gate</text>
+<text x="350" y="152" class="field-ok">✓ per-slice gate</text>
 
   <text x="240" y="174" class="label">forbidden-actions</text>
-  <text x="320" y="174" class="field-gap">✗ MISSING (v2.82.1)</text>
+<text x="350" y="174" class="field-gap">✗ MISSING (v2.82.1)</text>
 
   <text x="240" y="196" class="label">rollback</text>
-  <text x="320" y="196" class="field-ok">✓ git revert &lt;sha&gt;</text>
+<text x="350" y="196" class="field-ok">✓ git revert &lt;sha&gt;</text>
 
   <!-- Aggregate verdict -->
   <line x1="240" y1="218" x2="520" y2="218" stroke="#64748b" stroke-width="1" stroke-dasharray="2 2" />

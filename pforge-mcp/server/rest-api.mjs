@@ -1,4 +1,4 @@
-import { execSync } from "node:child_process";
+import { execSync, execFileSync } from "node:child_process";
 import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync, appendFileSync, watchFile, unwatchFile, statSync, openSync, readSync, closeSync, renameSync, createWriteStream } from "node:fs";
 import { resolve, join, dirname, basename, isAbsolute } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -1592,7 +1592,7 @@ function _registerDepsTemperingToolRoutes(app) {
       const threshold = Math.max(3.5, Math.min(5.0, parseFloat(req.body?.threshold) || 4.0));
       let diffOutput;
       try {
-        diffOutput = execSync(`git diff ${since}`, { cwd: PROJECT_DIR, encoding: "utf-8", timeout: 30_000 });
+        diffOutput = execFileSync("git", ["diff", since], { cwd: PROJECT_DIR, encoding: "utf-8", timeout: 30_000 });
       } catch {
         return res.json({ clean: null, scannedFiles: 0, findings: [], error: "git unavailable" });
       }

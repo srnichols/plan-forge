@@ -292,7 +292,7 @@ export const TOOL_METADATA = {
         baseCostUSD: 0.0425,
         overheadUSD: 1.7998,
         complexityScore: 6,
-        model: "claude-sonnet-4.5",
+        model: "claude-sonnet-4.6",
         quorumEligible: true,
         rationale: "mode power: all slices quorum-eligible",
         generatedAt: "2026-04-20T18:00:00.000Z",
@@ -1929,27 +1929,6 @@ export const TOOL_METADATA = {
     },
   },
   // Roadmap C3 — forge_sync_instructions: generate .github/copilot-instructions.md from project context
-  forge_sync_instructions: {
-    intent: ["sync", "instructions", "copilot", "profile", "principles"],
-    aliases: ["sync-instructions", "copilot-instructions"],
-    cost: "low",
-    maxConcurrent: 1,
-    addedIn: "2.99.0",
-    prerequisites: [],
-    produces: [".github/copilot-instructions.md"],
-    consumes: [".github/instructions/project-profile.instructions.md", "docs/plans/PROJECT-PRINCIPLES.md", ".forge.json"],
-    sideEffects: ["writes .github/copilot-instructions.md"],
-    writesFiles: true,
-    network: false,
-    risk: "low",
-    errors: {
-      ERR_NO_CONTEXT: { message: "No project context found", recovery: "Generate project profile via project-profile.prompt.md or define principles in docs/plans/PROJECT-PRINCIPLES.md" },
-    },
-    example: {
-      input: { dryRun: false },
-      output: { ok: true, path: ".github/copilot-instructions.md", bytes: 4821 },
-    },
-  },
   // Phase LATTICE Slice 7 — Lattice code-graph index builder
   forge_lattice_index: {
     intent: ["lattice", "index", "code-graph", "chunk"],

@@ -1,7 +1,7 @@
 /** Plan Forge — Phase-53 (ORCHESTRATOR-SPLIT) S2: worker-spawn sub-module */
 
 import { readFileSync, writeFileSync, mkdirSync, existsSync, unlinkSync } from "node:fs";
-import { spawn, execSync } from "node:child_process";
+import { spawn, execSync, execFileSync } from "node:child_process";
 import { resolve, dirname, join } from "node:path";
 import { tmpdir } from "node:os";
 import { fileURLToPath } from "node:url";
@@ -834,7 +834,7 @@ export function detectPackageManager() {
   const candidates = matrix.packageManagers?.[os] || [];
   for (const pm of candidates) {
     try {
-      execSync(`${pm} --version`, { encoding: "utf-8", timeout: 3_000, stdio: "pipe" });
+      execFileSync(pm, ["--version"], { encoding: "utf-8", timeout: 3_000, stdio: "pipe" });
       return { os, packageManager: pm };
     } catch { /* try next */ }
   }
@@ -986,7 +986,7 @@ function attemptProbe(name, spec, probe, result) {
 
   let versionOut = "";
   try {
-    versionOut = execSync(`${probe.command} ${(probe.versionArgs || []).join(" ")}`, {
+    versionOut = execFileSync(probe.command, [...(probe.versionArgs || [])], {
       encoding: "utf-8", timeout: 10_000, stdio: "pipe",
     });
   } catch (err) {
@@ -1016,7 +1016,7 @@ function attemptProbe(name, spec, probe, result) {
     const helpArgs = probe.helpArgs || [];
     if (helpArgs.length > 0) {
       try {
-        helpOut = execSync(`${probe.command} ${helpArgs.join(" ")}`, {
+        helpOut = execFileSync(probe.command, [...helpArgs], {
           encoding: "utf-8", timeout: 10_000, stdio: "pipe",
         });
       } catch (err) {
@@ -1973,6 +1973,56 @@ function registerSpawnedChild(child) {
   child.on("close", () => global.__pforgeChildren?.delete(child));
 }
 
+let _childShutdownInvoked = false;
+
+/**
+ * Terminate every tracked CLI worker child exactly once.
+ *
+ * MUST NOT be wired to the Node `"exit"` event. The `"exit"` handler runs after
+ * the libuv event loop has drained, when child-process handles are already in
+ * the closing state — calling `child.kill()` (a libuv handle operation) at that
+ * point trips `Assertion failed: !(handle->flags & UV_HANDLE_CLOSING)` in
+ * `src/win/async.c` and aborts the process. Wire it to actual signals only
+ * (SIGINT/SIGTERM/SIGHUP), which fire while the loop is still alive.
+ *
+ * @returns {number} count of children signalled
+ */
+export function killTrackedChildren() {
+  if (_childShutdownInvoked) return 0;
+  _childShutdownInvoked = true;
+  const children = global.__pforgeChildren;
+  if (!children) return 0;
+  let count = 0;
+  for (const child of children) {
+    try {
+      child.kill("SIGTERM");
+      count++;
+    } catch { /* child already exited — handle gone */ }
+  }
+  return count;
+}
+
+/** Test-only: reset the one-shot shutdown guard so killTrackedChildren can run again. */
+export function __resetChildShutdownGuard() {
+  _childShutdownInvoked = false;
+}
+
+/**
+ * Install signal handlers that terminate tracked worker children on interactive
+ * interrupt / termination signals. Deliberately excludes the `"exit"` event —
+ * see {@link killTrackedChildren} for why killing handles during exit teardown
+ * is unsafe on Windows.
+ *
+ * @param {NodeJS.Process} [proc=process] injectable for tests
+ */
+export function installChildCleanupHandlers(proc = process) {
+  for (const sig of ["SIGINT", "SIGTERM", "SIGHUP"]) {
+    proc.once(sig, () => {
+      killTrackedChildren();
+    });
+  }
+}
+
 function attachWorkerStreamHandlers(child, state) {
   child.stdout.setEncoding("utf8");
   child.stderr.setEncoding("utf8");
@@ -2079,6 +2129,7 @@ function spawnCliWorkerExecution({ prompt, model, cwd, timeout, worker, runPlanA
     });
 
     child.on("error", (err) => {
+      clearInterval(heartbeat);
       clearTimeout(timer);
       workerReject(new Error(`Failed to spawn ${cmd}: ${err.message} (code: ${err.code || "unknown"})`));
     });

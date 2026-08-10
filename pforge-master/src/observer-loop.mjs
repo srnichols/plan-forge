@@ -16,7 +16,7 @@
  * @module forge-master/observer-loop
  */
 
-import WebSocket from "ws";
+import WebSocket from "./optional-ws.mjs";
 import { existsSync, readFileSync, writeFileSync, mkdirSync } from "node:fs";
 import { resolve, dirname } from "node:path";
 import { fileURLToPath } from "node:url";

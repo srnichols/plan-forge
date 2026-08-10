@@ -18,7 +18,7 @@ import {
   loadPrinciples,
   UNIVERSAL_BASELINE,
   _clearCache,
-} from "../../pforge-master/src/principles.mjs";
+} from "../src/principles.mjs";
 
 // ─── Helpers ────────────────────────────────────────────────────────
 

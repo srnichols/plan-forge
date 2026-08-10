@@ -318,17 +318,54 @@ function parseMeta(lines) {
   return meta;
 }
 
+function isScopeContractTableRow(line) {
+  const trimmed = line.trim();
+  if (!trimmed.startsWith("|")) return false;
+  // Skip separator rows like | --- | :---: |
+  return !/^\|[\s:|-]+\|?\s*$/.test(trimmed);
+}
+
+function applyScopeContractTableRow(contract, line) {
+  const cells = line
+    .trim()
+    .replace(/^\|/, "")
+    .replace(/\|$/, "")
+    .split("|")
+    .map((cell) => cell.trim());
+  const rowText = cells.join(" ").toLowerCase();
+  // Check the compound phrases before the "in scope" substring to avoid
+  // "out of scope" being misread as "in scope".
+  let category = null;
+  if (/out[\s-]*of[\s-]*scope/.test(rowText)) category = "outOfScope";
+  else if (/forbidden/.test(rowText)) category = "forbidden";
+  else if (/in[\s-]*scope/.test(rowText)) category = "inScope";
+  if (!category) return;
+  appendUniqueValues(contract[category], extractBacktickValues(cells.join(" ")));
+}
+
 export function parseScopeContract(lines) {
   const contract = { inScope: [], outOfScope: [], forbidden: [] };
   let section = null;
+  let inContractSection = false;
 
   for (const line of lines) {
+    const h2 = line.match(/^##\s+(.*)$/);
+    if (h2) {
+      inContractSection = /scope\s+contract/i.test(h2[1]);
+      section = null;
+      continue;
+    }
     if (line.match(/^###\s+In Scope/i)) { section = "inScope"; continue; }
     if (line.match(/^###\s+Out of Scope/i)) { section = "outOfScope"; continue; }
     if (line.match(/^###\s+Forbidden/i)) { section = "forbidden"; continue; }
-    if (line.match(/^##\s/) && section) { section = null; continue; }
     if (section && line.startsWith("- ")) {
       contract[section].push(line.replace(/^-\s*/, "").trim());
+      continue;
+    }
+    // Markdown-table Scope Contract (meta-bug #231): only inside the
+    // `## Scope Contract` section so slice-level tables never leak in.
+    if (inContractSection && isScopeContractTableRow(line)) {
+      applyScopeContractTableRow(contract, line);
     }
   }
   return contract;
@@ -364,6 +401,7 @@ function createSliceRecord(sliceMatch, rawTags) {
     competitive: false,
     competitiveVariants: null,
     scope: [],
+    contextFiles: [],
     buildCommand: null,
     testCommand: null,
     validationGate: null,
@@ -486,12 +524,32 @@ function applyWorkerTimeout(current, line) {
 function applyBodyDependencies(current, line) {
   const dependsBodyMatch = line.match(/\*\*Depends\s+On:?\*\*:?\s*(.+)/i);
   if (!dependsBodyMatch) return;
-  const rawDeps = dependsBodyMatch[1].replace(/\s*\([^)]*\)\s*$/, "").trim();
-  const bodyDeps = rawDeps
+  // Bug #225: split on commas, then pull the LEADING slice-id token out of each
+  // phrase. The hardener authors prose deps like
+  //   "**Depends On**: S1 (consumes presets.ts), and Group B merge checkpoint."
+  // Running normalizeSliceId() on the whole phrase left unmatched prose in
+  // node.depends, which the scheduler could never satisfy → 0-slice phantom run.
+  const bodyDeps = dependsBodyMatch[1]
     .split(/\s*,\s*/)
-    .map((d) => normalizeSliceId(d))
-    .filter((d) => d.length > 0);
+    .map((d) => extractLeadingSliceId(d))
+    .filter((d) => d && d.length > 0);
   appendUniqueValues(current.depends, bodyDeps);
+}
+
+/**
+ * Extract the leading slice-id token from a free-text dependency phrase.
+ * Tolerates the prose forms the hardener emits: "Slice 1", "S1", "1", "2.3A".
+ * Returns the normalized id, or null when the phrase has no leading slice id
+ * (e.g. "none (foundation)", "and Group B merge checkpoint.").
+ *
+ * @param {string} phrase
+ * @returns {string|null}
+ */
+function extractLeadingSliceId(phrase) {
+  const m = String(phrase).trim().match(/^(?:slice\s+)?s?(\d+(?:\.\d+)?)([A-Za-z]?)\b/i);
+  if (!m) return null;
+  const normalized = normalizeSliceId(m[1] + m[2]);
+  return normalized.length > 0 ? normalized : null;
 }
 
 function extractBacktickValues(text) {
@@ -502,7 +560,11 @@ function extractBacktickValues(text) {
 function applyContextFiles(current, line) {
   const contextBodyMatch = line.match(/\*\*Context Files:?\*\*:?\s*(.+)/i);
   if (!contextBodyMatch) return;
-  appendUniqueValues(current.scope, extractBacktickValues(contextBodyMatch[1]));
+  // Context Files are read-only references, not the editable scope allowlist
+  // (meta-bug #231): keep them out of `scope` so they cannot be modified and
+  // so scope enforcement is not silently widened to instruction docs.
+  if (!current.contextFiles) current.contextFiles = [];
+  appendUniqueValues(current.contextFiles, extractBacktickValues(contextBodyMatch[1]));
 }
 
 function extractInlineScopeCandidates(rest) {
@@ -523,7 +585,10 @@ function extractBulletScopeCandidates(body) {
 }
 
 function handleFilesHeading(state, line) {
-  const filesBodyMatch = line.match(/^\s*[-*]?\s*\*\*Files(?:\s+in\s+scope)?:?\*\*:?\s*(.*)$/i);
+  // Accept any bold heading that begins with "Files" or "Scope" so markers
+  // like `**Scope (files):**` and `**Scope** (files in scope):` are honored
+  // (meta-bug #231), with the colon inside or outside the bold span.
+  const filesBodyMatch = line.match(/^\s*[-*]?\s*\*\*\s*(?:files|scope)\b[^*]*\*\*\s*(?:\([^)]*\))?\s*:?\s*(.*)$/i);
   if (!filesBodyMatch) return false;
   const candidates = extractInlineScopeCandidates((filesBodyMatch[1] || "").trim());
   appendUniqueValues(state.current.scope, candidates);

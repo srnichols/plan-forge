@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, afterEach } from "vitest";
+import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import { mkdirSync, writeFileSync, readFileSync, existsSync, rmSync } from "node:fs";
 import { resolve, join } from "node:path";
 import { tmpdir } from "node:os";
@@ -230,6 +230,68 @@ describe("runDrainPass", () => {
     const dlqRecords = readForgeJsonl("openbrain-dlq.jsonl", [], tempDir);
     expect(dlqRecords).toHaveLength(1);
     expect(dlqRecords[0]._status).toBe("failed");
+  });
+});
+
+// ─── issue #215: default dispatcher MUST deliver via SSE, not local REST ─────
+//
+// Before the fix, the default dispatcher POSTed records to the local
+// `/api/memory/capture` Express endpoint — an intentional no-op echo — so
+// records were counted as "delivered" but never reached OpenBrain. This guard
+// pins that the default path opens the SSE client and captures through it, and
+// that the local REST endpoint is never hit.
+describe("runDrainPass — default dispatcher delivers via SSE (issue #215)", () => {
+  let tmp;
+  let fetchSpy;
+
+  beforeEach(() => {
+    tmp = makeTempDir();
+    fetchSpy = vi.spyOn(globalThis, "fetch");
+    vi.resetModules();
+  });
+
+  afterEach(() => {
+    fetchSpy.mockRestore();
+    vi.restoreAllMocks();
+    vi.doUnmock("../openbrain-replay.mjs");
+    try { rmSync(tmp, { recursive: true, force: true }); } catch { /* cleanup */ }
+  });
+
+  it("captures through the SSE client and never POSTs to /api/memory/capture", async () => {
+    const forgeDir = setupForgeDir(tmp);
+    // Real SSE config (query-form key) so buildSseDispatcher proceeds.
+    mkdirSync(resolve(tmp, ".vscode"), { recursive: true });
+    writeFileSync(resolve(tmp, ".vscode", "mcp.json"), JSON.stringify({
+      servers: {
+        openbrain: { type: "sse", url: "https://openbrain.example/sse?key=test-key-123" },
+      },
+    }), "utf-8");
+    writeQueue(forgeDir, [makeQueueRecord({ content: "thought-via-sse" })]);
+
+    const captured = [];
+    const actual = await vi.importActual("../openbrain-replay.mjs");
+    vi.doMock("../openbrain-replay.mjs", () => ({
+      ...actual,
+      createSseClient: vi.fn(async () => ({
+        capture: vi.fn(async (payload) => { captured.push(payload); return { ok: true }; }),
+        close: vi.fn(async () => {}),
+      })),
+    }));
+
+    // Re-import runDrainPass so it binds the mocked replay module.
+    const { runDrainPass: freshRunDrainPass } = await import("../server.mjs");
+    const result = await freshRunDrainPass(tmp, "sse-drain", null);
+
+    expect(result.ok).toBe(true);
+    expect(result.delivered).toBe(1);
+    expect(captured).toHaveLength(1);
+    expect(captured[0].content).toBe("thought-via-sse");
+
+    // The local no-op REST endpoint must NEVER be used for delivery.
+    const localPosts = fetchSpy.mock.calls.filter(
+      ([url]) => typeof url === "string" && url.includes("/api/memory/capture"),
+    );
+    expect(localPosts).toHaveLength(0);
   });
 });
 

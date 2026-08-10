@@ -12,8 +12,8 @@
     .version-current { font-size: 15px; fill: #f59e0b; font-weight: 700; font-family: 'JetBrains Mono', monospace; }
     .date-label { font-size: 15px; fill: #cbd5e1; }
     .date-current { font-size: 15px; fill: #fcd34d; font-weight: 600; }
-    .feature-label { font-size: 15px; fill: #cbd5e1; }
-    .feature-current { font-size: 15px; fill: #fde68a; font-weight: 500; }
+    .feature-label { font-size: 10px; fill: #cbd5e1; }
+    .feature-current { font-size: 10px; fill: #fde68a; font-weight: 500; }
     .footnote { font-size: 13.5px; fill: #cbd5e1; }
   </style>
 

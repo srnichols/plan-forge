@@ -62,7 +62,7 @@ export const DEFAULT_WORKER_TIMEOUT_MS = 1_800_000;
 /** Allowlist of commands permitted in validation gates. Shared by runGate() and lintGateCommands(). */
 export const GATE_ALLOWED_PREFIXES = [
   // Build / test runners
-  "npm", "npx", "node", "cargo", "go", "dotnet", "python", "python3",
+  "npm", "npx", "node", "pnpm", "yarn", "cargo", "go", "dotnet", "python", "python3",
   "pip", "mvn", "gradle", "make", "cmake", "bash", "sh", "pwsh",
   "powershell", "pytest", "mypy", "ruff", "eslint", "tsc", "vitest",
   "jest", "mocha",
@@ -70,6 +70,12 @@ export const GATE_ALLOWED_PREFIXES = [
   "cd", "cat", "ls", "rm", "mkdir", "cp", "mv", "diff", "wc",
   "head", "tail", "sort", "curl", "git", "grep", "test", "echo",
   "exit", "true", "false",
+  // Read-only PowerShell cmdlets emitted by the Windows-portable Plan Hardener.
+  // All are inspection-only (no filesystem mutation), so they are safe in gates.
+  "test-path", "get-content", "select-string", "get-childitem",
+  "where-object", "foreach-object", "measure-object", "select-object",
+  "compare-object", "out-string", "write-output", "write-host",
+  "resolve-path", "join-path", "split-path", "get-item",
   // Project tools
   "pforge",
 ];
@@ -79,6 +85,52 @@ export const GATE_ALLOWED_PREFIXES = [
  * Shared by runGate() (bash dispatch) and lintGateCommands() (portability lint).
  */
 export const UNIX_TOOLS = ["grep", "sed", "awk", "wc", "head", "tail", "sort", "diff", "test", "tr", "xargs", "find"];
+
+/**
+ * Resolve the effective command token from a gate line, skipping leading
+ * variable assignments so the allowlist check targets the real command.
+ *
+ * Handles both:
+ *   - POSIX env-var assignments:  `NODE_ENV=test npm test`     → `npm`
+ *   - PowerShell var assignments: `$p = Get-Content x`         → `get-content`
+ *     (with or without spaces around `=`, e.g. `$p=Get-Content`)
+ *
+ * Shared by runGate() (runtime enforcement) and lintGateCommands() (pre-flight)
+ * so a gate that lints clean also executes — see issue #229, where the Plan
+ * Hardener's own Windows-portable `$var = ...` gates were rejected.
+ *
+ * @param {string} line - A single gate command line
+ * @returns {string} the lowercased command token, or "" when none resolves
+ */
+export function resolveGateCommandToken(line) {
+  if (!line || typeof line !== "string") return "";
+  const tokens = line.trim().split(/\s+/);
+  let i = 0;
+  while (i < tokens.length) {
+    const t = tokens[i];
+    // POSIX env assignment: NAME=value (command follows in the next token)
+    if (/^[A-Za-z_][A-Za-z0-9_]*=/.test(t)) { i++; continue; }
+    // PowerShell assignment with spaces: `$var =` (consume name + the `=` token)
+    if (/^\$[A-Za-z_][A-Za-z0-9_]*$/.test(t) && tokens[i + 1] === "=") { i += 2; continue; }
+    // PowerShell assignment without spaces: `$var=Get-Content` — the command
+    // is attached after `=`, so resolve to that remainder, not the next token.
+    const attached = t.match(/^\$[A-Za-z_][A-Za-z0-9_]*=(.+)$/);
+    if (attached) return attached[1].toLowerCase();
+    break;
+  }
+  return (tokens[i] || tokens[0] || "").toLowerCase();
+}
+
+/**
+ * Check whether a resolved command token is on the gate allowlist.
+ * Matches an exact prefix or a path-suffixed form (e.g. `/usr/bin/node`).
+ * @param {string} cmdToken - A lowercased command token (see resolveGateCommandToken)
+ * @returns {boolean}
+ */
+export function isGatePrefixAllowed(cmdToken) {
+  if (!cmdToken) return false;
+  return GATE_ALLOWED_PREFIXES.some((p) => cmdToken === p || cmdToken.endsWith(`/${p}`));
+}
 
 // API providers (Grok, OpenAI direct, etc.) are text-completion endpoints
 // without tool-call / filesystem access. They are valid for reviewer,

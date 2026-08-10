@@ -1259,8 +1259,12 @@ function getHistoricalFailureRate(slice, cwd) {
 export function scoreSliceComplexity(slice, cwd) {
   const signals = {};
 
+  // Breadth signal: editable scope plus read-only context files. Context
+  // files are not part of the editable allowlist (#231) but still indicate how
+  // much surface area a slice spans, so they count toward complexity.
   const scopeCount = (slice.scope && slice.scope.length) || 0;
-  signals.scopeWeight = Math.min(scopeCount / 3, 1);
+  const contextCount = (slice.contextFiles && slice.contextFiles.length) || 0;
+  signals.scopeWeight = Math.min((scopeCount + contextCount) / 3, 1);
 
   const depCount = (slice.depends && slice.depends.length) || 0;
   signals.dependencyWeight = Math.min(depCount / 3, 1);

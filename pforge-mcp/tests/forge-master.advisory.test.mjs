@@ -14,11 +14,9 @@ import { describe, expect, it } from "vitest";
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 
-import { classify, LANES, LANE_TOOLS } from "../../pforge-master/src/intent-router.mjs";
-import { UNIVERSAL_BASELINE } from "../../pforge-master/src/principles.mjs";
+import { classify, LANES, LANE_TOOLS, UNIVERSAL_BASELINE, getPromptCatalog } from "@pforge/pforge-master";
 import { TOOL_METADATA } from "../capabilities/tool-metadata.mjs";
 import { getForgeMasterCapabilitiesSummary } from "../forge-master-routes.mjs";
-import { getPromptCatalog } from "../../pforge-master/src/prompts.mjs";
 
 const __dirname = new URL(".", import.meta.url).pathname.replace(/^\/([A-Z]:)/, "$1").replace(/\/$/, "");
 

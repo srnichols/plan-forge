@@ -8,7 +8,7 @@
  * @module forge-master/hub-subscriber
  */
 
-import WebSocket from "ws";
+import WebSocket from "./optional-ws.mjs";
 
 const DEFAULT_WS_PORT = 3101;
 const RING_BUFFER_SIZE = 50;

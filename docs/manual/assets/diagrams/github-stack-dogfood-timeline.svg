@@ -1,19 +1,19 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 380" fill="none">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 400" fill="none">
   <style>
     text { font-family: 'Inter', sans-serif; }
     .lane-bg { fill: #0f172a; stroke: #1e293b; }
     .lane-label { font-size: 13.5px; fill: #cbd5e1; font-weight: 600; }
     .stage { rx: 6; ry: 6; stroke-width: 1.5; }
-    .stage-title { font-size: 13.5px; fill: #f1f5f9; font-weight: 600; }
-    .stage-meta { font-size: 13.5px; fill: #cbd5e1; }
+    .stage-title { font-size: 12px; fill: #f1f5f9; font-weight: 600; }
+    .stage-meta { font-size: 12px; fill: #cbd5e1; }
     .arrow { stroke: #64748b; stroke-width: 1.5; fill: none; marker-end: url(#arrow); }
     .pass { fill: #052e1a; stroke: #10b981; }
     .partial { fill: #2c1d04; stroke: #f59e0b; }
     .fail { fill: #2c0a0e; stroke: #ef4444; }
-    .closed-by { font-size: 13.5px; fill: #f59e0b; font-weight: 600; }
+    .closed-by { font-size: 11px; fill: #f59e0b; font-weight: 600; }
     .timeline { stroke: #334155; stroke-width: 1; }
     .day-label { font-size: 13.5px; fill: #cbd5e1; font-weight: 700; }
-    .total { font-size: 15px; fill: #cbd5e1; }
+    .total { font-size: 12px; fill: #cbd5e1; }
   </style>
   <defs>
     <marker id="arrow" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto">
@@ -23,7 +23,7 @@
 
   <!-- ─── Lane backgrounds ─── -->
   <rect x="0" y="40" width="900" height="50" class="lane-bg" />
-  <text x="14" y="70" class="lane-label">Phases (chapter content)</text>
+  <text x="886" y="70" text-anchor="end" class="lane-label">Phases (chapter content)</text>
 
   <rect x="0" y="100" width="900" height="50" fill="#0a1c12" stroke="#1e293b" />
   <text x="14" y="130" class="lane-label">Hotfixes (closing the bugs we surfaced)</text>
@@ -32,7 +32,7 @@
   <text x="14" y="180" class="lane-label">Issues found at runtime</text>
 
   <rect x="0" y="250" width="900" height="50" fill="#0c1c12" stroke="#1e293b" />
-  <text x="14" y="280" class="lane-label">Live GitHub artifact</text>
+  <text x="886" y="280" text-anchor="end" class="lane-label">Live GitHub artifact</text>
 
   <!-- ─── Day headers ─── -->
   <text x="180" y="28" text-anchor="middle" class="day-label">Yesterday — Phases</text>
@@ -149,7 +149,8 @@
       <tspan fill="#94a3b8">Cumulative:</tspan> <tspan fill="#f59e0b">51 worker-executed slices</tspan> · <tspan fill="#f59e0b">$0.45</tspan> · <tspan fill="#f59e0b">12 version bumps</tspan>
     </text>
     <text x="500" y="365" class="total">
-      <tspan fill="#94a3b8">Issues surfaced + closed:</tspan> <tspan fill="#10b981">5 / 5</tspan> · <tspan fill="#94a3b8">remaining external dependency:</tspan> Copilot Coding Agent enablement
+      <tspan fill="#94a3b8">Issues surfaced + closed:</tspan> <tspan fill="#10b981">5 / 5</tspan> · <tspan fill="#94a3b8">remaining external dependency:</tspan>
     </text>
+    <text x="500" y="383" class="total">Copilot Coding Agent enablement</text>
   </g>
 </svg>

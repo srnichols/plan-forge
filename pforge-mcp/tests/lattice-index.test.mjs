@@ -71,7 +71,8 @@ function makeDeps(root, { files = [], changedFiles = [], chunkerFn } = {}) {
     return relative(root, abs).replace(/\\/g, '/');
   });
 
-  const exec = vi.fn((cmd) => {
+  const exec = vi.fn((file, args = []) => {
+    const cmd = [file, ...(Array.isArray(args) ? args : [])].join(' ');
     if (cmd.includes('ls-files')) return relFiles.join('\n');
     if (cmd.includes('diff')) return relChanged.join('\n');
     return '';

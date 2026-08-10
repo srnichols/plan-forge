@@ -37,7 +37,7 @@ const BASELINE_PATH = resolve(
 const BASELINE_AVAILABLE = existsSync(BASELINE_PATH);
 
 describe.skipIf(!BASELINE_AVAILABLE)('clean-code no-regression gate (Phase-55)', () => {
-  it('baseline fixture exists and has totalErrors === 5', () => {
+  it('baseline fixture exists and has totalErrors === 4', () => {
     expect(existsSync(BASELINE_PATH), `baseline fixture missing at:\n  ${BASELINE_PATH}`).toBe(true);
     const baseline = JSON.parse(readFileSync(BASELINE_PATH, 'utf8'));
     expect(baseline).toHaveProperty('summary');

@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-08-10T07:35:22.871Z",
+  "generatedAt": "2026-08-10T09:31:05.875Z",
   "scopes": [
     "pforge-mcp/tests",
     "pforge-master/tests",
@@ -7,7 +7,7 @@
   ],
   "severityFilter": "info",
   "counts": {
-    "filesScanned": 366,
+    "filesScanned": 377,
     "filesWithSmells": 110,
     "errors": 0,
     "warnings": 428,
@@ -2809,44 +2809,6 @@
       ]
     },
     {
-      "file": "pforge-mcp/tests/forge-master-principles.test.mjs",
-      "findings": [
-        {
-          "smell": "TIME-FLAKE",
-          "severity": "warn",
-          "line": 191,
-          "snippet": "setTimeout without tolerance guard",
-          "why": "Time-sensitive code in tests without explicit tolerance or fake timers — Windows scheduler drift can flake the test (see Phase 41 S5 timeline-core +5ms→+50ms fix)"
-        },
-        {
-          "smell": "TIME-FLAKE",
-          "severity": "warn",
-          "line": 206,
-          "snippet": "setTimeout without tolerance guard",
-          "why": "Time-sensitive code in tests without explicit tolerance or fake timers — Windows scheduler drift can flake the test (see Phase 41 S5 timeline-core +5ms→+50ms fix)"
-        }
-      ]
-    },
-    {
-      "file": "pforge-mcp/tests/forge-master.test.mjs",
-      "findings": [
-        {
-          "smell": "TIME-FLAKE",
-          "severity": "warn",
-          "line": 1479,
-          "snippet": "new Date() without tolerance guard",
-          "why": "Time-sensitive code in tests without explicit tolerance or fake timers — Windows scheduler drift can flake the test (see Phase 41 S5 timeline-core +5ms→+50ms fix)"
-        },
-        {
-          "smell": "TIME-FLAKE",
-          "severity": "warn",
-          "line": 1643,
-          "snippet": "new Date() without tolerance guard",
-          "why": "Time-sensitive code in tests without explicit tolerance or fake timers — Windows scheduler drift can flake the test (see Phase 41 S5 timeline-core +5ms→+50ms fix)"
-        }
-      ]
-    },
-    {
       "file": "pforge-mcp/tests/integration/memory-upgrade/03-provenance-conditional-write.test.mjs",
       "findings": [
         {
@@ -3070,6 +3032,44 @@
           "severity": "warn",
           "line": 26,
           "snippet": "Date.now without tolerance guard",
+          "why": "Time-sensitive code in tests without explicit tolerance or fake timers — Windows scheduler drift can flake the test (see Phase 41 S5 timeline-core +5ms→+50ms fix)"
+        }
+      ]
+    },
+    {
+      "file": "pforge-master/tests/forge-master-principles.test.mjs",
+      "findings": [
+        {
+          "smell": "TIME-FLAKE",
+          "severity": "warn",
+          "line": 191,
+          "snippet": "setTimeout without tolerance guard",
+          "why": "Time-sensitive code in tests without explicit tolerance or fake timers — Windows scheduler drift can flake the test (see Phase 41 S5 timeline-core +5ms→+50ms fix)"
+        },
+        {
+          "smell": "TIME-FLAKE",
+          "severity": "warn",
+          "line": 206,
+          "snippet": "setTimeout without tolerance guard",
+          "why": "Time-sensitive code in tests without explicit tolerance or fake timers — Windows scheduler drift can flake the test (see Phase 41 S5 timeline-core +5ms→+50ms fix)"
+        }
+      ]
+    },
+    {
+      "file": "pforge-master/tests/forge-master.test.mjs",
+      "findings": [
+        {
+          "smell": "TIME-FLAKE",
+          "severity": "warn",
+          "line": 1479,
+          "snippet": "new Date() without tolerance guard",
+          "why": "Time-sensitive code in tests without explicit tolerance or fake timers — Windows scheduler drift can flake the test (see Phase 41 S5 timeline-core +5ms→+50ms fix)"
+        },
+        {
+          "smell": "TIME-FLAKE",
+          "severity": "warn",
+          "line": 1643,
+          "snippet": "new Date() without tolerance guard",
           "why": "Time-sensitive code in tests without explicit tolerance or fake timers — Windows scheduler drift can flake the test (see Phase 41 S5 timeline-core +5ms→+50ms fix)"
         }
       ]
@@ -3399,7 +3399,7 @@
         {
           "smell": "CONSOLE-LEAK",
           "severity": "warn",
-          "line": 134,
+          "line": 139,
           "snippet": "console.warn(",
           "why": "Debug leftover — adds noise to test output and obscures real failures"
         }

@@ -10,5 +10,10 @@
     "pforge-master/src/retrieval.mjs -> pforge-mcp/brain.mjs",
     "pforge-mcp/server/state.mjs -> pforge-master/src/mcp-client.mjs"
   ],
-  "flagCrossPackage": true
+  "flagCrossPackage": true,
+  "dependencyDirection": {
+    "comment": "Generic inner-must-not-import-outer guard (issue #224). Ordered OUTER → INNER. A file in an inner layer importing an outer layer is a Dependency Rule violation. Consuming monorepos override this via their own layer-policy.json.",
+    "layers": ["apps", "packages"],
+    "extensions": [".ts", ".tsx", ".js", ".jsx", ".mjs", ".cjs"]
+  }
 }

@@ -6,6 +6,11 @@
   "engines": {
     "node": ">=18.0.0"
   },
+  "exports": {
+    ".": "./src/index.mjs",
+    "./server.mjs": "./server.mjs",
+    "./src/*": "./src/*"
+  },
   "scripts": {
     "start": "node server.mjs",
     "start:mcp": "node server.mjs --mcp-stdio",
@@ -17,7 +22,7 @@
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.0.0",
-    "ws": "^8.20.0"
+    "ws": "^8.21.0"
   },
   "license": "MIT",
   "author": "srnichols",

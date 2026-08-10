@@ -22,7 +22,7 @@ import {
   _resetForTesting,
 } from '../lattice-chunker-treesitter.mjs';
 
-import { validateChunk } from '../../pforge-sdk/src/chunker.mjs';
+import { validateChunk } from 'pforge-sdk/chunker';
 
 // ─── Tree-sitter availability probe ──────────────────────────────────────────
 

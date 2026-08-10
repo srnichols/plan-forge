@@ -20,6 +20,8 @@ import {
   buildCapabilitySurface,
   CONFIG_SCHEMA,
 } from "../capabilities.mjs";
+import { TOOL_NAMES } from "../enums.mjs";
+import { TOOL_METADATA } from "../capabilities/tool-metadata.mjs";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const PFORGE_MCP_DIR = resolve(HERE, "..");
@@ -162,3 +164,25 @@ describe("worker-capabilities.json — innerLoop flags", () => {
     }
   });
 });
+
+describe("TOOL_METADATA completeness (no metadata drift vs TOOL_NAMES)", () => {
+  it("every canonical tool name has a TOOL_METADATA entry", () => {
+    const metaKeys = new Set(Object.keys(TOOL_METADATA));
+    const missing = TOOL_NAMES.filter((name) => !metaKeys.has(name));
+    expect(missing, `TOOL_NAMES missing TOOL_METADATA enrichment: ${missing.join(", ")}`).toEqual([]);
+  });
+
+  it("no TOOL_METADATA entry references a name absent from TOOL_NAMES", () => {
+    const nameSet = new Set(TOOL_NAMES);
+    const orphans = Object.keys(TOOL_METADATA).filter((name) => !nameSet.has(name));
+    expect(orphans, `TOOL_METADATA orphan keys not in TOOL_NAMES: ${orphans.join(", ")}`).toEqual([]);
+  });
+
+  it("every metadata entry exposes a non-empty intent array", () => {
+    const noIntent = Object.entries(TOOL_METADATA)
+      .filter(([, meta]) => !Array.isArray(meta.intent) || meta.intent.length === 0)
+      .map(([name]) => name);
+    expect(noIntent, `TOOL_METADATA entries without an intent: ${noIntent.join(", ")}`).toEqual([]);
+  });
+});
+

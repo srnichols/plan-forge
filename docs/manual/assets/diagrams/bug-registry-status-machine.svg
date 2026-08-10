@@ -1,21 +1,22 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 780 360" fill="none">
   <style>
     text { font-family: 'Inter', sans-serif; }
-    .node { rx: 28; ry: 28; stroke-width: 2; }
+    .node { stroke-width: 2; }
+    rect.node { rx: 28px; ry: 28px; }
     .arrow { stroke: #64748b; stroke-width: 1.5; fill: none; marker-end: url(#bsah); }
     .arrow-ok { stroke: #34d399; stroke-width: 2; fill: none; marker-end: url(#bsahok); }
     .arrow-bad { stroke: #fb7185; stroke-width: 1.5; fill: none; stroke-dasharray: 5 3; }
-    .label { font-size: 15px; fill: #cbd5e1; }
-    .small { font-size: 13.5px; fill: #cbd5e1; }
-    .tiny { font-size: 13.5px; fill: #cbd5e1; font-style: italic; }
-    .title { font-size: 13.5px; fill: #f1f5f9; font-weight: 600; }
-    .legend { font-size: 13.5px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; }
-    .pill { font-size: 15px; font-weight: 700; }
+    .label { font-size: 12px; fill: #cbd5e1; }
+    .small { font-size: 11px; fill: #cbd5e1; }
+    .tiny { font-size: 10px; fill: #cbd5e1; font-style: italic; }
+    .title { font-size: 12px; fill: #f1f5f9; font-weight: 600; }
+    .legend { font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; }
+    .pill { font-size: 13px; font-weight: 700; }
     .terminal-good { fill: #6ee7b7; }
     .terminal-bad { fill: #fda4af; }
     .work { fill: #fcd34d; }
     .review { fill: #c4b5fd; }
-    .surf { font-size: 13.5px; font-family: 'JetBrains Mono', monospace; fill: #cbd5e1; }
+    .surf { font-size: 10px; font-family: 'JetBrains Mono', monospace; fill: #cbd5e1; }
   </style>
   <defs>
     <marker id="bsah" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto">
@@ -49,7 +50,7 @@
   <!-- ─── Validating ─── -->
   <ellipse cx="545" cy="100" rx="65" ry="32" class="node" fill="#0f172a" stroke="#c4b5fd" />
   <text x="545" y="98" class="title review" text-anchor="middle">validating</text>
-  <text x="545" y="113" class="surf" text-anchor="middle">forge_bug_validate_fix</text>
+<text x="545" y="113" class="surf" text-anchor="middle" style="font-size:8.5px;">forge_bug_validate_fix</text>
 
   <!-- Validating → fixed (terminal good) -->
   <path d="M610,100 L685,100" class="arrow-ok" />
@@ -90,14 +91,14 @@
   <text x="540" y="190" class="label" style="fill:#fb7185;font-weight:600;" text-anchor="middle">✗ no backward transitions from terminal states</text>
 
   <!-- ─── Legend ─── -->
-  <rect x="540" y="220" width="230" height="115" class="node" fill="#020617" stroke="#475569" stroke-dasharray="2 3" />
-  <text x="655" y="237" class="legend" text-anchor="middle" style="fill:#cbd5e1;">LEGEND</text>
-  <line x1="555" y1="252" x2="575" y2="252" stroke="#34d399" stroke-width="2" />
-  <text x="580" y="256" class="small">valid forward path</text>
-  <line x1="555" y1="272" x2="575" y2="272" stroke="#475569" stroke-width="1.5" />
-  <text x="580" y="276" class="small">retry / classify</text>
-  <line x1="555" y1="292" x2="575" y2="292" stroke="#fb7185" stroke-width="1.5" stroke-dasharray="4 3" />
-  <text x="580" y="296" class="small">forbidden</text>
-  <text x="655" y="320" class="tiny" text-anchor="middle">fingerprint dedupes on register;</text>
-  <text x="655" y="332" class="tiny" text-anchor="middle">re-register only opens new IDs.</text>
+  <rect x="600" y="220" width="170" height="115" class="node" fill="#020617" stroke="#475569" stroke-dasharray="2 3" />
+  <text x="685" y="237" class="legend" text-anchor="middle" style="fill:#cbd5e1;">LEGEND</text>
+  <line x1="615" y1="252" x2="635" y2="252" stroke="#34d399" stroke-width="2" />
+  <text x="640" y="256" class="small">valid forward path</text>
+  <line x1="615" y1="272" x2="635" y2="272" stroke="#475569" stroke-width="1.5" />
+  <text x="640" y="276" class="small">retry / classify</text>
+  <line x1="615" y1="292" x2="635" y2="292" stroke="#fb7185" stroke-width="1.5" stroke-dasharray="4 3" />
+  <text x="640" y="296" class="small">forbidden</text>
+  <text x="685" y="320" class="tiny" text-anchor="middle">fingerprint dedupes on register;</text>
+  <text x="685" y="332" class="tiny" text-anchor="middle">re-register only opens new IDs.</text>
 </svg>

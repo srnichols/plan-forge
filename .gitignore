@@ -93,3 +93,6 @@ mcp/
 # Stray empty workspace directory (never tracked).
 plan-forge-master/
 
+
+# Generated clean-code audit artifacts
+docs/plans/cleanup-findings/raw/

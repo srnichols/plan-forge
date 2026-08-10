@@ -129,7 +129,8 @@ describe("verifyBranchSafety — worktree exemption", () => {
   };
 
   it("filters local-branch-loss failure when branch's worktree is exempt", () => {
-    const exec = (cmd) => {
+    const exec = (file, args = []) => {
+      const cmd = [file, ...(Array.isArray(args) ? args : [])].join(" ");
       if (cmd.startsWith("git show-ref")) throw new Error("missing");
       if (cmd.startsWith("git cat-file")) return ""; // HEAD reachable
       if (cmd.startsWith("git worktree list --porcelain")) {
@@ -148,7 +149,8 @@ describe("verifyBranchSafety — worktree exemption", () => {
   });
 
   it("retains branch-loss failure when worktree path is NOT exempt", () => {
-    const exec = (cmd) => {
+    const exec = (file, args = []) => {
+      const cmd = [file, ...(Array.isArray(args) ? args : [])].join(" ");
       if (cmd.startsWith("git show-ref")) throw new Error("missing");
       if (cmd.startsWith("git cat-file")) return "";
       if (cmd.startsWith("git worktree list --porcelain")) {
@@ -168,7 +170,8 @@ describe("verifyBranchSafety — worktree exemption", () => {
   });
 
   it("retains branch-loss failure when branch has no worktree entry", () => {
-    const exec = (cmd) => {
+    const exec = (file, args = []) => {
+      const cmd = [file, ...(Array.isArray(args) ? args : [])].join(" ");
       if (cmd.startsWith("git show-ref")) throw new Error("missing");
       if (cmd.startsWith("git cat-file")) return "";
       if (cmd.startsWith("git worktree list --porcelain")) return "";
@@ -181,7 +184,8 @@ describe("verifyBranchSafety — worktree exemption", () => {
   });
 
   it("does not suppress HEAD-unreachable failure even when worktree is exempt", () => {
-    const exec = (cmd) => {
+    const exec = (file, args = []) => {
+      const cmd = [file, ...(Array.isArray(args) ? args : [])].join(" ");
       if (cmd.startsWith("git show-ref")) return ""; // branch OK
       if (cmd.startsWith("git cat-file")) throw new Error("gone");
       if (cmd.startsWith("git reflog")) return "sha1 gc\n";
@@ -201,7 +205,8 @@ describe("verifyBranchSafety — worktree exemption", () => {
 
   it("uses default exempt prefixes when config omits the key", () => {
     const cfg = { checkRemote: false };
-    const exec = (cmd) => {
+    const exec = (file, args = []) => {
+      const cmd = [file, ...(Array.isArray(args) ? args : [])].join(" ");
       if (cmd.startsWith("git show-ref")) throw new Error("missing");
       if (cmd.startsWith("git cat-file")) return "";
       if (cmd.startsWith("git worktree list --porcelain")) {

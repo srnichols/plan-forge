@@ -59,30 +59,30 @@
 
   <rect x="480" y="30" width="280" height="40" class="node" fill="#0f172a" stroke="#0ea5e9" />
   <text x="500" y="55" class="ch-name" style="fill:#0ea5e9;">📨 Telegram</text>
-  <text x="760" y="55" class="approve" text-anchor="end">✓ inline approval</text>
+  <text x="748" y="55" class="approve" text-anchor="end">✓ inline approval</text>
 
   <rect x="480" y="80" width="280" height="40" class="node" fill="#0f172a" stroke="#a855f7" />
   <text x="500" y="105" class="ch-name" style="fill:#a855f7;">💬 Slack</text>
-  <text x="760" y="105" class="approve" text-anchor="end">✓ button approval</text>
+  <text x="748" y="105" class="approve" text-anchor="end">✓ button approval</text>
 
   <rect x="480" y="130" width="280" height="40" class="node" fill="#0f172a" stroke="#5865f2" />
   <text x="500" y="155" class="ch-name" style="fill:#818cf8;">🎮 Discord</text>
-  <text x="760" y="155" class="approve" text-anchor="end">✓ reaction approval</text>
+  <text x="748" y="155" class="approve" text-anchor="end">✓ reaction approval</text>
 
   <rect x="480" y="180" width="280" height="40" class="node" fill="#0f172a" stroke="#0078d4" />
   <text x="500" y="205" class="ch-name" style="fill:#60a5fa;">🟦 Microsoft Teams</text>
-  <text x="760" y="205" class="small" text-anchor="end">webhook only</text>
+  <text x="748" y="205" class="small" text-anchor="end">webhook only</text>
 
   <rect x="480" y="230" width="280" height="40" class="node" fill="#0f172a" stroke="#fb7185" />
   <text x="500" y="255" class="ch-name" style="fill:#fb7185;">🚨 PagerDuty</text>
-  <text x="760" y="255" class="small" text-anchor="end">incidents only</text>
+  <text x="748" y="255" class="small" text-anchor="end">incidents only</text>
 
   <rect x="480" y="280" width="280" height="40" class="node" fill="#0f172a" stroke="#fbbf24" />
   <text x="500" y="305" class="ch-name" style="fill:#fbbf24;">🐺 OpenClaw</text>
-  <text x="760" y="305" class="approve" text-anchor="end">✓ rich approval flows</text>
+  <text x="748" y="305" class="approve" text-anchor="end">✓ rich approval flows</text>
 
   <!-- ─── Approval back-flow ─── -->
   <path d="M760,55 Q780,200 320,335 L320,125" class="arrow-approval" />
-  <text x="540" y="350" class="label approve" text-anchor="middle">approval-resolved hub event ← user response (Telegram / Slack / Discord / OpenClaw)</text>
-  <text x="100" y="368" class="small" text-anchor="middle">→ resumes paused slice / closes incident / breaks quorum tie</text>
+  <text x="390" y="350" class="label approve" text-anchor="middle">approval-resolved hub event ← user response (Telegram / Slack / Discord / OpenClaw)</text>
+  <text x="390" y="368" class="small" text-anchor="middle">→ resumes paused slice / closes incident / breaks quorum tie</text>
 </svg>

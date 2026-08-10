@@ -59,16 +59,16 @@ describe("captureAbsorbedCommits — Issue #195 enumeration helper", () => {
   it("returns [] when fromSha is missing", () => {
     const out = captureAbsorbedCommits({ cwd: "/x", fromSha: null });
     expect(out).toEqual([]);
-    expect(execSync).not.toHaveBeenCalled();
+    expect(execFileSync).not.toHaveBeenCalled();
   });
 
   it("returns [] when git log throws", () => {
-    execSync.mockImplementationOnce(() => { throw new Error("not a git repo"); });
+    execFileSync.mockImplementationOnce(() => { throw new Error("not a git repo"); });
     expect(captureAbsorbedCommits({ cwd: "/x", fromSha: START_SHA })).toEqual([]);
   });
 
   it("parses tab-delimited git log into {sha, author, subject, diffstat}", () => {
-    execSync
+    execFileSync
       .mockReturnValueOnce(
         `${ABSORBED_SHA}\tCopilot\tfeat: implement InvoicesController endpoints\n`
       ) // git log
@@ -85,7 +85,7 @@ describe("captureAbsorbedCommits — Issue #195 enumeration helper", () => {
   });
 
   it("survives a per-commit shortstat failure and still records the commit", () => {
-    execSync
+    execFileSync
       .mockReturnValueOnce(`${ABSORBED_SHA}\tCopilot\tfix something\n`)
       .mockImplementationOnce(() => { throw new Error("show failed"); });
 
@@ -101,12 +101,16 @@ describe("autoCommitSliceIfDirty — Issue #195 race & housekeeping detection", 
   afterEach(() => vi.restoreAllMocks());
 
   it("clean tree + worker advanced HEAD: surfaces absorbedCommits and codeChanges", () => {
-    execSync
-      .mockReturnValueOnce("")                        // git status --porcelain → clean
-      .mockReturnValueOnce(`${ABSORBED_SHA}\n`)       // git rev-parse HEAD
-      .mockReturnValueOnce(`${ABSORBED_SHA}\tCopilot\tfeat: real work\n`) // git log
-      .mockReturnValueOnce(" 2 files changed, 10 insertions(+)\n")        // git show --shortstat for absorbed
-      .mockReturnValueOnce(" 2 files changed, 10 insertions(+)\n");       // git show --shortstat for currentSha
+    execSync.mockImplementation((cmd) => {
+      if (cmd.includes("status --porcelain")) return "";          // clean tree
+      if (cmd.includes("rev-parse")) return `${ABSORBED_SHA}\n`;  // HEAD advanced by worker
+      return "";
+    });
+    execFileSync.mockImplementation((file, args = []) => {
+      if (args[0] === "log") return `${ABSORBED_SHA}\tCopilot\tfeat: real work\n`;
+      if (args[0] === "show") return " 2 files changed, 10 insertions(+)\n"; // shortstat
+      return "";
+    });
 
     const slice = { number: 4, title: "InvoicesController — HTTP endpoints" };
     const result = autoCommitSliceIfDirty({
@@ -128,13 +132,17 @@ describe("autoCommitSliceIfDirty — Issue #195 race & housekeeping detection", 
     // Worker paths are ALL inside .forge/ — housekeeping commit
     // git status --porcelain → all .forge/ entries
     const dirtyForge = " M .forge/skills-auto/abc.md\n M .forge/quorum-history.jsonl\n";
-    execSync
-      .mockReturnValueOnce(dirtyForge)                                       // git status --porcelain
-      .mockReturnValueOnce(`${ABSORBED_SHA}\tCopilot\tfeat: implement endpoints\n`) // git log startSha..HEAD
-      .mockReturnValueOnce(" 5 files changed, 84 insertions(+), 2 deletions(-)\n") // shortstat for absorbed
-      // git add -- <paths> now goes through execFileSync (returns undefined by default)
-      .mockReturnValueOnce(`${OUR_SHA}\n`)                                   // git rev-parse HEAD
-      .mockReturnValueOnce(" 2 files changed, 3 insertions(+)\n");           // git show --shortstat OUR_SHA
+    execSync.mockImplementation((cmd) => {
+      if (cmd.includes("status --porcelain")) return dirtyForge;
+      if (cmd.includes("rev-parse")) return `${OUR_SHA}\n`;
+      return "";
+    });
+    execFileSync.mockImplementation((file, args = []) => {
+      if (args[0] === "log") return `${ABSORBED_SHA}\tCopilot\tfeat: implement endpoints\n`;
+      if (args[0] === "show" && args[3] === ABSORBED_SHA) return " 5 files changed, 84 insertions(+), 2 deletions(-)\n";
+      if (args[0] === "show") return " 2 files changed, 3 insertions(+)\n"; // OUR_SHA shortstat
+      return ""; // git add, git commit
+    });
 
     // preSliceState must be a Map for the worker-paths split to engage
     const preSliceState = new Map(); // empty → all current paths are "worker-owned"
@@ -165,12 +173,16 @@ describe("autoCommitSliceIfDirty — Issue #195 race & housekeeping detection", 
 
   it("dirty source tree + no absorbed commit: keeps feat(slice-N) message, no race", () => {
     const dirtySource = " M src/InvoicesController.cs\n";
-    execSync
-      .mockReturnValueOnce(dirtySource)        // git status --porcelain
-      .mockReturnValueOnce("")                 // git log startSha..HEAD → no absorbed commits
-      // git add -- now goes through execFileSync
-      .mockReturnValueOnce(`${OUR_SHA}\n`)     // git rev-parse HEAD
-      .mockReturnValueOnce(" 1 file changed, 50 insertions(+)\n"); // shortstat
+    execSync.mockImplementation((cmd) => {
+      if (cmd.includes("status --porcelain")) return dirtySource;
+      if (cmd.includes("rev-parse")) return `${OUR_SHA}\n`;
+      return "";
+    });
+    execFileSync.mockImplementation((file, args = []) => {
+      if (args[0] === "log") return "";                                  // no absorbed commits
+      if (args[0] === "show") return " 1 file changed, 50 insertions(+)\n"; // shortstat OUR_SHA
+      return "";
+    });
 
     const preSliceState = new Map();
     const slice = { number: 4, title: "InvoicesController — HTTP endpoints" };
@@ -189,13 +201,17 @@ describe("autoCommitSliceIfDirty — Issue #195 race & housekeeping detection", 
 
   it("dirty source tree + absorbed commit: keeps feat message but records race", () => {
     const dirtySource = " M src/InvoicesController.cs\n";
-    execSync
-      .mockReturnValueOnce(dirtySource)                                       // git status --porcelain
-      .mockReturnValueOnce(`${ABSORBED_SHA}\tCopilot\tfix: tiny patch\n`)     // git log
-      .mockReturnValueOnce(" 1 file changed, 2 insertions(+)\n")              // shortstat for absorbed
-      // git add -- now goes through execFileSync
-      .mockReturnValueOnce(`${OUR_SHA}\n`)                                     // git rev-parse HEAD
-      .mockReturnValueOnce(" 1 file changed, 50 insertions(+)\n");             // shortstat OUR_SHA
+    execSync.mockImplementation((cmd) => {
+      if (cmd.includes("status --porcelain")) return dirtySource;
+      if (cmd.includes("rev-parse")) return `${OUR_SHA}\n`;
+      return "";
+    });
+    execFileSync.mockImplementation((file, args = []) => {
+      if (args[0] === "log") return `${ABSORBED_SHA}\tCopilot\tfix: tiny patch\n`;
+      if (args[0] === "show" && args[3] === ABSORBED_SHA) return " 1 file changed, 2 insertions(+)\n";
+      if (args[0] === "show") return " 1 file changed, 50 insertions(+)\n";
+      return "";
+    });
 
     const preSliceState = new Map();
     const slice = { number: 4, title: "InvoicesController — HTTP endpoints" };

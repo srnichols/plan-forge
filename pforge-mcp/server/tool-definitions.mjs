@@ -266,7 +266,7 @@ export const TOOLS = [
         planPath: { type: "string", description: "Path to the plan Markdown file, relative to the project root." },
         sliceNumber: { type: ["string", "number"], description: "Slice identifier (numeric or alphanumeric, e.g. 4 or '2A')." },
         mode: { type: "string", enum: ["auto", "power", "speed", "false"], description: "Quorum mode to project under (default: 'auto')." },
-        model: { type: "string", description: "Base model for pricing (default: 'claude-sonnet-4.5')." },
+        model: { type: "string", description: "Base model for pricing (default: 'claude-sonnet-4.6')." },
         path: { type: "string", description: "Project directory (default: current)" },
       },
       required: ["planPath", "sliceNumber"],

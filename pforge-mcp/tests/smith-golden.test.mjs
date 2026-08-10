@@ -55,6 +55,11 @@ function normalize(text) {
       // graceful fallback). All three normalize to the same placeholder so the
       // golden fixture is forward- and backward-compatible.
       .replace(/copilot-coding-agent (?:v\S*|\(version unknown\))[^\n]*/g, "copilot-coding-agent <coding-agent-status>")
+      // grok worker probe: present-and-versioned on a machine with the CLI,
+      // "not found on PATH" plus a FIX line without it. Same environment-varying
+      // class as gh-copilot above; the FIX line is dropped so both shapes collapse.
+      .replace(/[^\S\n]*(?:✅|Γ£à|⚠️|⚠|ΓÜá∩╕Å)[^\n]*\bgrok\b[^\n]*\(agent worker\)[^\n]*/g, "  grok <worker-status>")
+      .replace(/[^\S\n]+FIX: irm https:\/\/x\.ai\/cli\/install[^\n]*\n?/g, "")
       // Image API key presence: XAI_API_KEY / OPENAI_API_KEY vary by environment
       .replace(/[^\S\n]*(?:✓|✅|Γ£à)[^\n]*API_KEY[^\n]*/g, "  <api-key-present>")
       .replace(/[^\S\n]*(?:✓|✅|Γ£à)[^\n]*Grok Aurora[^\n]*/g, "  <api-key-present>")

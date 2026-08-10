@@ -44,8 +44,8 @@
   <rect x="20" y="40" width="210" height="90" class="node" fill="#0f172a" stroke="#fbbf24" />
   <text x="125" y="62" class="title" text-anchor="middle">Any forge tool / watcher</text>
   <text x="125" y="80" class="label" text-anchor="middle">hook · skill · orchestrator</text>
-  <text x="125" y="103" class="file" text-anchor="middle">captureMemory({</text>
-  <text x="125" y="120" class="file" text-anchor="middle">tool, type, body, source })</text>
+  <text x="125" y="103" class="file" style="font-size:12px;" text-anchor="middle">captureMemory({</text>
+  <text x="125" y="120" class="file" style="font-size:12px;" text-anchor="middle">tool, type, body, source })</text>
 
   <!-- Source → dual-write (vertical) -->
   <path d="M125,130 L125,148" class="arrow-amber" />

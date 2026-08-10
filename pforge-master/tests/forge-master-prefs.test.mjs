@@ -18,7 +18,7 @@ import {
   loadPrefs,
   savePrefs,
   createHttpRoutes,
-} from "../../pforge-master/src/http-routes.mjs";
+} from "../src/http-routes.mjs";
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
 

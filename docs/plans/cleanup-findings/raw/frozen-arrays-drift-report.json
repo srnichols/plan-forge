@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-08-10T07:35:23.711Z",
+  "generatedAt": "2026-08-10T09:31:06.630Z",
   "enumsSource": "pforge-mcp/enums.mjs",
   "enumsScanned": {
     "HOOK_PASCAL": {
@@ -12,7 +12,7 @@
   "extendedScan": false,
   "includeTests": false,
   "counts": {
-    "filesScanned": 283,
+    "filesScanned": 285,
     "filesWithDrift": 8,
     "warnings": 0,
     "info": 15,
@@ -84,7 +84,7 @@
         {
           "enum": "ERROR_CODES",
           "literal": "ASK_QUESTION_MISMATCH",
-          "line": 50,
+          "line": 52,
           "severity": "info",
           "kind": "SOFT-DRIFT",
           "why": "File hand-types \"ASK_QUESTION_MISMATCH\" without importing ERROR_CODES — review whether to migrate"
@@ -92,7 +92,7 @@
         {
           "enum": "ERROR_CODES",
           "literal": "PLAN_ALREADY_EXISTS",
-          "line": 110,
+          "line": 112,
           "severity": "info",
           "kind": "SOFT-DRIFT",
           "why": "File hand-types \"PLAN_ALREADY_EXISTS\" without importing ERROR_CODES — review whether to migrate"
@@ -126,7 +126,7 @@
         {
           "enum": "ERROR_CODES",
           "literal": "observer-budget-exceeded",
-          "line": 1653,
+          "line": 1654,
           "severity": "info",
           "kind": "SOFT-DRIFT",
           "why": "File hand-types \"observer-budget-exceeded\" without importing ERROR_CODES — review whether to migrate"

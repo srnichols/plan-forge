@@ -1,15 +1,15 @@
 {
-  "generatedAt": "2026-08-10T07:35:22.516Z",
+  "generatedAt": "2026-08-10T09:31:05.589Z",
   "scopes": [
     "pforge-mcp",
     "pforge-master",
     "scripts"
   ],
   "counts": {
-    "filesScanned": 283,
+    "filesScanned": 285,
     "filesWithDeadExports": 115,
-    "totalExports": 1621,
-    "deadExports": 710,
+    "totalExports": 1640,
+    "deadExports": 712,
     "namespaceConsumedFiles": 50
   },
   "findings": [
@@ -39,6 +39,7 @@
         "TEMPERING_SCAN_STALE_DAYS",
         "UNIX_TOOLS",
         "__resetBashPathCache",
+        "__resetChildShutdownGuard",
         "aggregateModelStats",
         "appendWatchHistory",
         "applyFixProposal",
@@ -92,6 +93,7 @@
         "getFoundryAuthScope",
         "getRoutingPreference",
         "inferSliceType",
+        "installChildCleanupHandlers",
         "isApiOnlyModel",
         "isCopilotServableModel",
         "isDeployTrigger",
@@ -101,6 +103,7 @@
         "isGrokCliServableModel",
         "isPlaceholderToken",
         "isWorktreeExemptPath",
+        "killTrackedChildren",
         "listPlanPostmortems",
         "loadAuditConfig",
         "loadCompetitiveConfig",
@@ -178,7 +181,7 @@
         "writeProposedFixPatch",
         "writeSilentExitRecord"
       ],
-      "totalExports": 199
+      "totalExports": 202
     },
     {
       "file": "pforge-mcp/forge-master/index.mjs",
@@ -477,20 +480,6 @@
       "totalExports": 10
     },
     {
-      "file": "pforge-mcp/cost-service.mjs",
-      "deadExports": [
-        "COPILOT_AGENT_MINUTES_PER_SLICE",
-        "MODEL_PRICING",
-        "SUBSCRIPTION_PROVIDERS",
-        "buildQuorumConfigForMode",
-        "detectCostModel",
-        "estimateQuorum",
-        "estimateSlice",
-        "getPricing"
-      ],
-      "totalExports": 11
-    },
-    {
       "file": "pforge-mcp/crucible/core/interview-protocol.mjs",
       "deadExports": [
         "FEATURE_QUESTIONS",
@@ -583,6 +572,19 @@
         "TOOL_METADATA",
         "WORKFLOWS",
         "buildCapabilities"
+      ],
+      "totalExports": 11
+    },
+    {
+      "file": "pforge-mcp/cost-service.mjs",
+      "deadExports": [
+        "COPILOT_AGENT_MINUTES_PER_SLICE",
+        "SUBSCRIPTION_PROVIDERS",
+        "buildQuorumConfigForMode",
+        "detectCostModel",
+        "estimateQuorum",
+        "estimateSlice",
+        "getPricing"
       ],
       "totalExports": 11
     },
@@ -914,7 +916,7 @@
         "comparePhaseNames",
         "parsePhaseName"
       ],
-      "totalExports": 8
+      "totalExports": 9
     },
     {
       "file": "pforge-mcp/diff-classify.mjs",

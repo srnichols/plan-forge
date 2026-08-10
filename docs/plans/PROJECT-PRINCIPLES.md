@@ -74,13 +74,13 @@ Locked-in choices for Plan Forge's own runtime and tooling. Do NOT suggest alter
 | **Testing** | `vitest` (run mode, no watch) | Jest, Mocha, node:test | 2025-07 |
 | **Image processing** | `sharp` (PNG diff via `pixelmatch` + `pngjs`) | Jimp, ImageMagick shell-outs | 2026-01 |
 | **Browser automation** | `playwright` (screenshot capture, dashboard tests) | Puppeteer, Selenium | 2026-01 |
-| **Load testing** | `autocannon` | wrk shell-out, k6 | 2026-02 |
+| **Load testing** | `autocannon` (**not bundled** — opt-in `npm i -D autocannon`; the load-stress scanner reports `autocannon-import-failed` with the install command when absent) | wrk shell-out, k6 | 2026-02 |
 | **CSS build** | `tailwindcss` 3.x (only for `docs/assets/*` and the dashboard) | PostCSS-only pipeline, plain CSS for the dashboard | 2025-09 |
 | **CLI shell parity** | PowerShell 7+ (`.ps1`) AND Bash 4+ (`.sh`) for every entry point | PowerShell-only or Bash-only | 2025-05 |
 | **L1 memory (hub)** | In-process bounded ring buffer | Redis pub/sub (adds external dep for a single-process concern) | 2025-08 |
 | **L2 memory (structured)** | Files on disk under `.forge/` (`.jsonl` append-only, `.json` overwrite) | SQLite, LevelDB | 2025-04 |
 | **L3 memory (semantic)** | [OpenBrain](https://github.com/srnichols/openbrain) (Postgres + pgvector, HTTP API) | Chroma, Qdrant, Pinecone, in-process vector store | 2025-11 |
-| **Observability** | OpenTelemetry (optional, gated by `OTEL_EXPORTER_OTLP_ENDPOINT`) + line-oriented audit log (`pforge audit export`) | Always-on OTel, vendor-specific SDKs | 2026-03 (Phase-OTEL-AUDIT-EXPORT) |
+| **Observability** | OpenTelemetry (**not bundled** — opt-in install, gated by `OTEL_EXPORTER_OTLP_ENDPOINT`) + line-oriented audit log (`pforge audit export`) | Always-on OTel, vendor-specific SDKs | 2026-03 (Phase-OTEL-AUDIT-EXPORT) |
 | **Secrets** | `.forge/secrets.json` (gitignored) OR environment variables | Hardcoded keys, in-repo `.env` files | 2025-06 |
 | **CI/CD** | GitHub Actions | Azure DevOps, GitLab CI, CircleCI | 2025-04 |
 | **Versioning** | Semver via `VERSION` file + commit-driven bumps | Date-based, manual `package.json` edits | 2025-05 |

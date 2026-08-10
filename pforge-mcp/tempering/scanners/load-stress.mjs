@@ -33,7 +33,7 @@ function emit(hub, type, data) {
   } catch { /* best-effort */ }
 }
 
-function buildLoadStressResult({ sliceRef, startedAt, now, verdict, pass = 0, fail = 0, results = [], reason = null, settings = LOAD_DEFAULTS }) {
+function buildLoadStressResult({ sliceRef, startedAt, now, verdict, pass = 0, fail = 0, results = [], reason = null, message = null, settings = LOAD_DEFAULTS }) {
   const completedAt = new Date(now()).toISOString();
   return {
     scanner: "load-stress",
@@ -48,6 +48,7 @@ function buildLoadStressResult({ sliceRef, startedAt, now, verdict, pass = 0, fa
     durationMs: new Date(completedAt).getTime() - new Date(startedAt).getTime(),
     results,
     ...(reason ? { reason } : {}),
+    ...(message ? { message } : {}),
   };
 }
 
@@ -274,7 +275,15 @@ export async function runLoadStressScan(ctx) {
   try {
     autocannon = await loadAutocannon(loadCtx.importFn);
   } catch {
-    return buildLoadStressResult({ sliceRef: loadCtx.sliceRef, startedAt, now: loadCtx.now, verdict: "error", reason: "autocannon-import-failed" });
+    // autocannon ships opt-in, so absence is expected rather than exceptional.
+    return buildLoadStressResult({
+      sliceRef: loadCtx.sliceRef,
+      startedAt,
+      now: loadCtx.now,
+      verdict: "error",
+      reason: "autocannon-import-failed",
+      message: "The load-stress scanner needs autocannon, which Plan Forge does not bundle. Install it where you run Plan Forge: npm i -D autocannon",
+    });
   }
 
   const outcome = await runLoadStressEndpoints({

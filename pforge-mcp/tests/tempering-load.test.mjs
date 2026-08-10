@@ -190,6 +190,19 @@ describe("load-stress.mjs scanner", () => {
     expect(r.reason).toBe("autocannon-import-failed");
   });
 
+  it("import failure explains how to install autocannon", async () => {
+    const r = await runLoadStressScan({
+      config: makeConfig({
+        endpoints: [{ url: "http://localhost:3000/api/users", method: "GET" }],
+      }),
+      projectDir: tmp,
+      importFn: async () => { throw new Error("not found"); },
+    });
+    // autocannon ships opt-in, so the reason code alone leaves the user stuck.
+    expect(r.message).toBeTruthy();
+    expect(r.message).toMatch(/npm i .*autocannon/);
+  });
+
   it("hub event emitted on completion", async () => {
     const hub = makeHub();
     await runLoadStressScan({

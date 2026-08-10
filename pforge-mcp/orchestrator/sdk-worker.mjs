@@ -133,18 +133,43 @@ function extractSdkTokens(events, model, sessionStartMs) {
   };
 }
 
+// ─── BYOK provider config support ────────────────────────────────────────────
+
+/**
+ * Supported BYOK provider types for DIRECT_API_ONLY models via the SDK.
+ * Any value not in this set is rejected before the session is created.
+ */
+const SUPPORTED_BYOK_PROVIDERS = new Set(["openai", "azure", "anthropic"]);
+
+/**
+ * Resolve the API key for a BYOK provider config at call time.
+ * Keys are read from process.env only — never from literals.
+ * Returns null when the env var is absent or empty (key-absent path).
+ *
+ * @param {{ type: string, envKey: string }} provider
+ * @returns {string|null}
+ */
+function _resolveByokKey(provider) {
+  const val = process.env[provider.envKey];
+  return (val != null && val !== "") ? val : null;
+}
+
 // ─── Public API ───────────────────────────────────────────────────────────────
 
 /**
  * Run a slice prompt through the @github/copilot-sdk CopilotClient.
  *
  * @param {object} opts
- * @param {string}   opts.prompt           The full slice prompt text.
- * @param {string}   opts.model            Model name (e.g. "gpt-5.3-codex").
- * @param {string}   opts.cwd              Working directory for the session.
- * @param {string[]} [opts.forbiddenPaths] Paths from the slice's Forbidden Actions.
- * @param {function} [opts.createSession]  Injected factory — defaults to the real SDK.
- *                                         Signature: ({ model, onPermissionRequest, onEvent }) → session.
+ * @param {string}   opts.prompt            The full slice prompt text.
+ * @param {string}   opts.model             Model name (e.g. "gpt-5.3-codex").
+ * @param {string}   opts.cwd               Working directory for the session.
+ * @param {string[]} [opts.forbiddenPaths]  Paths from the slice's Forbidden Actions.
+ * @param {object}   [opts.provider]        BYOK provider config for DIRECT_API_ONLY models.
+ *                                          Shape: { type: "openai"|"azure"|"anthropic", envKey: string }
+ *                                          The API key is read from process.env[envKey] at call time.
+ *                                          If the key is absent, returns { ok: false, error: "BYOK_KEY_MISSING" }.
+ * @param {function} [opts.createSession]   Injected factory — defaults to the real SDK.
+ *                                          Signature: ({ model, onPermissionRequest, onEvent, provider? }) → session.
  * @returns {Promise<object>} Worker result compatible with spawnWorker's return contract.
  */
 export async function runSdkSession({
@@ -152,8 +177,26 @@ export async function runSdkSession({
   model,
   cwd,
   forbiddenPaths = [],
+  provider = null,
   createSession = _defaultCreateSession,
 }) {
+  // Validate and resolve provider config before doing any work.
+  if (provider != null) {
+    if (!SUPPORTED_BYOK_PROVIDERS.has(provider.type)) {
+      return {
+        ok: false,
+        error: "BYOK_UNSUPPORTED_PROVIDER",
+        provider: provider.type,
+        supported: [...SUPPORTED_BYOK_PROVIDERS],
+      };
+    }
+    const apiKey = _resolveByokKey(provider);
+    if (apiKey === null) {
+      return { ok: false, error: "BYOK_KEY_MISSING", provider: provider.type };
+    }
+    // Attach the resolved key to a local copy — never mutate the caller's object.
+    provider = { ...provider, apiKey };
+  }
   const sessionStartMs = Date.now();
   const collectedEvents = [];
   let outputText = "";
@@ -170,7 +213,7 @@ export async function runSdkSession({
 
   let session;
   try {
-    session = await createSession({ model, onPermissionRequest, onEvent });
+    session = await createSession({ model, onPermissionRequest, onEvent, provider });
   } catch (err) {
     // Surface SDK-import / session-creation failures as structured errors so
     // spawnWorker can fall back to the spawn path with a single log line.
@@ -219,4 +262,4 @@ export async function runSdkSession({
 
 // ─── Exports for testing ──────────────────────────────────────────────────────
 
-export { buildPermissionHandler, extractSdkTokens };
+export { buildPermissionHandler, extractSdkTokens, SUPPORTED_BYOK_PROVIDERS };

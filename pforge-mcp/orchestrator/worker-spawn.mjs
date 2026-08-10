@@ -2173,6 +2173,45 @@ export async function spawnWorker(prompt, options = {}) {
   } = options;
 
   const { apiProvider } = _resolveApiProviderForRouting(model, worker);
+
+  // Phase-60 Slice 4: route DIRECT_API_ONLY models through the SDK when opted in.
+  // This lets operators use their BYOK key with the @github/copilot-sdk session
+  // instead of the direct HTTP path — useful for environments where the SDK is
+  // available but direct HTTP is restricted. Falls back to callApiWorker on any
+  // SDK failure or BYOK_KEY_MISSING (key resolution stays in the SDK worker to
+  // ensure it is never logged).
+  if (apiProvider && loadCopilotSdkPreference(cwd) === "prefer") {
+    // Map the DIRECT_API_ONLY registry name to the BYOK provider type understood
+    // by sdk-worker. Entries not in this map remain on the direct-HTTP path.
+    const REGISTRY_TO_BYOK_TYPE = {
+      "openai-image": "openai",
+      "microsoft-foundry": "azure",
+      xai: null, // grok SDK path not yet supported; stays on callApiWorker
+    };
+    const byokType = REGISTRY_TO_BYOK_TYPE[apiProvider.name];
+    if (byokType) {
+      try {
+        const { runSdkSession } = await import("./sdk-worker.mjs");
+        const sdkResult = await runSdkSession({
+          prompt, model, cwd, forbiddenPaths,
+          provider: { type: byokType, envKey: apiProvider.envKey },
+        });
+        if (sdkResult && sdkResult.ok === false && sdkResult.error === "BYOK_KEY_MISSING") {
+          // Key not available via env — fall through to the direct API path below.
+        } else {
+          _enforceApiRoleGuard(apiProvider, role, model);
+          return sdkResult;
+        }
+      } catch (err) {
+        if (err.sdkError) {
+          console.error(`[sdk-worker] BYOK SDK path failed, falling back to direct API: ${err.message}`);
+        } else {
+          throw err;
+        }
+      }
+    }
+  }
+
   if (apiProvider) {
     _enforceApiRoleGuard(apiProvider, role, model);
     return callApiWorker(prompt, model, apiProvider, { timeout, role });

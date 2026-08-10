@@ -221,6 +221,134 @@ describe("extractSdkTokens", () => {
   });
 });
 
+// ─── runSdkSession — BYOK provider config (Phase-60 Slice 4) ─────────────────
+// Per testing.instructions.md: happy path per supported type, one key-absent case,
+// and one unsupported-type case. Do NOT use real keys — use fake strings only.
+
+describe("runSdkSession — BYOK provider config — happy path", () => {
+  it("openai: passes provider.type and provider.apiKey to createSession", async () => {
+    const createSession = makeCreateSession();
+    const savedKey = process.env.TEST_FAKE_OPENAI_KEY;
+    process.env.TEST_FAKE_OPENAI_KEY = "sk-test-fake";
+    try {
+      const result = await runSdkSession({
+        prompt: "p", model: "gpt-5.5", cwd: "/p",
+        provider: { type: "openai", envKey: "TEST_FAKE_OPENAI_KEY" },
+        createSession,
+      });
+      expect(result.exitCode).toBe(0);
+      expect(createSession).toHaveBeenCalledWith(
+        expect.objectContaining({
+          provider: expect.objectContaining({ type: "openai", apiKey: "sk-test-fake" }),
+        }),
+      );
+    } finally {
+      if (savedKey === undefined) delete process.env.TEST_FAKE_OPENAI_KEY;
+      else process.env.TEST_FAKE_OPENAI_KEY = savedKey;
+    }
+  });
+
+  it("azure: passes provider.type and provider.apiKey to createSession", async () => {
+    const createSession = makeCreateSession();
+    const savedKey = process.env.TEST_FAKE_AZURE_KEY;
+    process.env.TEST_FAKE_AZURE_KEY = "azure-test-fake";
+    try {
+      const result = await runSdkSession({
+        prompt: "p", model: "azure/eastus-gpt4o", cwd: "/p",
+        provider: { type: "azure", envKey: "TEST_FAKE_AZURE_KEY" },
+        createSession,
+      });
+      expect(result.exitCode).toBe(0);
+      expect(createSession).toHaveBeenCalledWith(
+        expect.objectContaining({
+          provider: expect.objectContaining({ type: "azure", apiKey: "azure-test-fake" }),
+        }),
+      );
+    } finally {
+      if (savedKey === undefined) delete process.env.TEST_FAKE_AZURE_KEY;
+      else process.env.TEST_FAKE_AZURE_KEY = savedKey;
+    }
+  });
+
+  it("anthropic: passes provider.type and provider.apiKey to createSession", async () => {
+    const createSession = makeCreateSession();
+    const savedKey = process.env.TEST_FAKE_ANTHROPIC_KEY;
+    process.env.TEST_FAKE_ANTHROPIC_KEY = "sk-ant-test-fake";
+    try {
+      const result = await runSdkSession({
+        prompt: "p", model: "claude-opus-4.7", cwd: "/p",
+        provider: { type: "anthropic", envKey: "TEST_FAKE_ANTHROPIC_KEY" },
+        createSession,
+      });
+      expect(result.exitCode).toBe(0);
+      expect(createSession).toHaveBeenCalledWith(
+        expect.objectContaining({
+          provider: expect.objectContaining({ type: "anthropic", apiKey: "sk-ant-test-fake" }),
+        }),
+      );
+    } finally {
+      if (savedKey === undefined) delete process.env.TEST_FAKE_ANTHROPIC_KEY;
+      else process.env.TEST_FAKE_ANTHROPIC_KEY = savedKey;
+    }
+  });
+});
+
+describe("runSdkSession — BYOK provider config — key-absent path", () => {
+  it("returns BYOK_KEY_MISSING when the env var is undefined", async () => {
+    const createSession = makeCreateSession();
+    const savedKey = process.env.PFORGE_TEST_MISSING_KEY;
+    delete process.env.PFORGE_TEST_MISSING_KEY;
+    try {
+      const result = await runSdkSession({
+        prompt: "p", model: "gpt-5.5", cwd: "/p",
+        provider: { type: "openai", envKey: "PFORGE_TEST_MISSING_KEY" },
+        createSession,
+      });
+      expect(result.ok).toBe(false);
+      expect(result.error).toBe("BYOK_KEY_MISSING");
+      expect(result.provider).toBe("openai");
+      // createSession must NOT be called when the key is absent
+      expect(createSession).not.toHaveBeenCalled();
+    } finally {
+      if (savedKey !== undefined) process.env.PFORGE_TEST_MISSING_KEY = savedKey;
+    }
+  });
+
+  it("returns BYOK_KEY_MISSING when the env var is an empty string", async () => {
+    const createSession = makeCreateSession();
+    const savedKey = process.env.PFORGE_TEST_EMPTY_KEY;
+    process.env.PFORGE_TEST_EMPTY_KEY = "";
+    try {
+      const result = await runSdkSession({
+        prompt: "p", model: "gpt-5.5", cwd: "/p",
+        provider: { type: "openai", envKey: "PFORGE_TEST_EMPTY_KEY" },
+        createSession,
+      });
+      expect(result.ok).toBe(false);
+      expect(result.error).toBe("BYOK_KEY_MISSING");
+      expect(createSession).not.toHaveBeenCalled();
+    } finally {
+      if (savedKey === undefined) delete process.env.PFORGE_TEST_EMPTY_KEY;
+      else process.env.PFORGE_TEST_EMPTY_KEY = savedKey;
+    }
+  });
+});
+
+describe("runSdkSession — BYOK provider config — unsupported provider type", () => {
+  it("returns BYOK_UNSUPPORTED_PROVIDER for an unknown type without calling createSession", async () => {
+    const createSession = makeCreateSession();
+    const result = await runSdkSession({
+      prompt: "p", model: "some-model", cwd: "/p",
+      provider: { type: "bedrock", envKey: "AWS_ACCESS_KEY" },
+      createSession,
+    });
+    expect(result.ok).toBe(false);
+    expect(result.error).toBe("BYOK_UNSUPPORTED_PROVIDER");
+    expect(result.provider).toBe("bedrock");
+    expect(createSession).not.toHaveBeenCalled();
+  });
+});
+
 // ─── Guard: forbidden tokens absent from sdk-worker source ───────────────────
 
 describe("sdk-worker source guard", () => {

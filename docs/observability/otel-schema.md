@@ -1,7 +1,7 @@
 # Plan Forge — OpenTelemetry Schema Reference
 
-> **Spec version**: Phase-OTEL-AUDIT-EXPORT  
-> **OTel conventions**: `gen_ai.*` experimental (Development) — opt-in via `OTEL_SEMCONV_STABILITY_OPT_IN=gen_ai_latest_experimental`  
+> **Spec version**: Phase-OTEL-AUDIT-EXPORT
+> **OTel conventions**: `gen_ai.*` experimental (Development) — opt-in via `OTEL_SEMCONV_STABILITY_OPT_IN=gen_ai_latest_experimental`
 > **Activation gate**: set `OTEL_EXPORTER_OTLP_ENDPOINT` (or `OTEL_ENABLED=true`) to enable all span emission. When unset, the OTel path is a complete no-op.
 
 ---
@@ -48,8 +48,8 @@ Emitted for every LLM completion request made by the orchestrator.
 | `pforge.action.security_risk` | string | From event field: `"none"` \| `"low"` \| `"medium"` \| `"high"` \| `"critical"` |
 | `error.type` | string | Exception class name when span status is ERROR |
 
-**Events (opt-in)**:  
-Gated by `pforge.telemetry.captureContent: true` in `.forge.json` (default `false` — PII guard).  
+**Events (opt-in)**:
+Gated by `pforge.telemetry.captureContent: true` in `.forge.json` (default `false` — PII guard).
 When enabled: `gen_ai.client.inference.operation.details` event carrying `gen_ai.prompt` and `gen_ai.completion`.
 
 ---
@@ -142,6 +142,26 @@ Two histogram instruments emit on every LLM call. Exported every 60 seconds.
 ---
 
 ## Configuration
+
+### Install the OTel packages
+
+The OpenTelemetry SDK is **not bundled with Plan Forge**. It is ~77 packages and ~89 MB for a feature that is off by default, so shipping it would tax every install for a capability most projects never enable.
+
+Install it yourself in the project that runs Plan Forge:
+
+```bash
+npm i @opentelemetry/api @opentelemetry/sdk-node @opentelemetry/auto-instrumentations-node
+```
+
+`@opentelemetry/api` is a **required peer** of `sdk-node` — installing `sdk-node` alone leaves tracing inert. All three names must be present.
+
+If the activation gate is open but the packages are missing, `initOtel()` returns `null` and prints the install command to stderr rather than failing silently:
+
+```
+[otel] tracing was requested but the SDK could not load: Cannot find module '@opentelemetry/api'
+[otel] install the packages explicitly to enable it:
+[otel]   npm i @opentelemetry/api @opentelemetry/sdk-node @opentelemetry/auto-instrumentations-node
+```
 
 ### Environment variables
 

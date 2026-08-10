@@ -156,7 +156,7 @@ async function _callToolHandler_021_forge_crucible_submit(request, args) {
     } catch (err) {
       return { content: [{ type: "text", text: `Crucible submit error: ${err.message}` }], isError: true };
     }
-  
+
 }
 
 async function _callToolHandler_022_forge_crucible_ask(request, args) {
@@ -183,7 +183,7 @@ async function _callToolHandler_022_forge_crucible_ask(request, args) {
       }
       return { content: [{ type: "text", text: `Crucible ask error: ${err.message}` }], isError: true };
     }
-  
+
 }
 
 async function _callToolHandler_023_forge_crucible_preview(request, args) {
@@ -197,7 +197,7 @@ async function _callToolHandler_023_forge_crucible_preview(request, args) {
     } catch (err) {
       return { content: [{ type: "text", text: `Crucible preview error: ${err.message}` }], isError: true };
     }
-  
+
 }
 
 async function _callToolHandler_024_forge_crucible_finalize(request, args) {
@@ -234,7 +234,7 @@ async function _callToolHandler_024_forge_crucible_finalize(request, args) {
       }
       return { content: [{ type: "text", text: `Crucible finalize error: ${err.message}` }], isError: true };
     }
-  
+
 }
 
 async function _callToolHandler_025_forge_crucible_list(request, args) {
@@ -248,7 +248,7 @@ async function _callToolHandler_025_forge_crucible_list(request, args) {
     } catch (err) {
       return { content: [{ type: "text", text: `Crucible list error: ${err.message}` }], isError: true };
     }
-  
+
 }
 
 async function _callToolHandler_026_forge_crucible_abandon(request, args) {
@@ -262,7 +262,7 @@ async function _callToolHandler_026_forge_crucible_abandon(request, args) {
     } catch (err) {
       return { content: [{ type: "text", text: `Crucible abandon error: ${err.message}` }], isError: true };
     }
-  
+
 }
 
 async function _callToolHandler_027_forge_crucible_import(request, args) {
@@ -281,7 +281,7 @@ async function _callToolHandler_027_forge_crucible_import(request, args) {
     } catch (err) {
       return { content: [{ type: "text", text: `Crucible import error: ${err.message}` }], isError: true };
     }
-  
+
 }
 
 async function _callToolHandler_028_forge_crucible_status(request, args) {
@@ -302,7 +302,7 @@ async function _callToolHandler_028_forge_crucible_status(request, args) {
     } catch (err) {
       return { content: [{ type: "text", text: `Crucible status error: ${err.message}` }], isError: true };
     }
-  
+
 }
 
 export {

@@ -173,6 +173,8 @@ If the activation gate is open but the packages are missing, `initOtel()` return
 | `OTEL_EXPORTER_OTLP_HEADERS` | Auth headers for your OTLP collector (e.g. `Authorization=Bearer <token>`). Operator-managed. |
 | `OTEL_SEMCONV_STABILITY_OPT_IN` | Set to `gen_ai_latest_experimental` to enable `gen_ai.*` semantic conventions. |
 
+> **`OTEL_ENABLED` alone is not enough to see data.** It opens the activation gate, but with no `OTEL_EXPORTER_OTLP_ENDPOINT` the SDK falls back to `localhost:4318` — so unless a collector is listening there, spans are emitted and silently dropped. This does not crash the server (the background exporter absorbs the connection failure), which is exactly why it can go unnoticed. Set the endpoint whenever you actually want to see traces.
+
 ### `.forge.json` settings
 
 ```json

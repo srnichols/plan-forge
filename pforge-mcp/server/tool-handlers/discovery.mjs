@@ -86,6 +86,7 @@ import { syncInstructions } from "../../sync-instructions.mjs";
 import { classifyDiff } from "../../diff-classify.mjs";
 import { searchLocalThoughts, isNeuralEmbeddingAvailable } from "../../local-recall.mjs";
 import { ERROR_CODES } from "../../enums.mjs";
+import { MODEL_PRICING } from "../../cost-service.mjs";
 import {
   PROJECT_DIR,
   PROJECT_DIR_SOURCE,
@@ -189,8 +190,20 @@ async function _callToolHandler_065_forge_doctor_quorum(request, args) {
     const t0 = Date.now();
     try {
       const presetArg = args.preset || "all";
-      const presets = presetArg === "all" ? ["power", "speed"] : [presetArg];
-      const results = presets.map((p) => assessQuorumViability(p));
+      // Presence in the pricing registry is the strongest available typo signal;
+      // it never gates availability (issue #243).
+      const isPriced = (m) => Object.prototype.hasOwnProperty.call(MODEL_PRICING, m);
+      let results;
+      if (presetArg === "config") {
+        const qConfig = loadQuorumConfig(findProjectRoot(PROJECT_DIR));
+        results = [assessQuorumViability(
+          { models: qConfig.models, reviewerModel: qConfig.reviewerModel },
+          { isPriced }
+        )];
+      } else {
+        const presets = presetArg === "all" ? ["power", "speed"] : [presetArg];
+        results = presets.map((p) => assessQuorumViability(p, { isPriced }));
+      }
       const result = { runtime: detectExecutionRuntime(), presets: results };
       emitToolTelemetry({ toolName: "forge_doctor_quorum", inputs: args, result: result, durationMs: Date.now() - t0, status: "OK", cwd: findProjectRoot(PROJECT_DIR) });
       return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };

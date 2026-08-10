@@ -1088,11 +1088,11 @@ export const TOOLS = [
   // Issue #73 — Runtime-aware quorum viability
   {
     name: "forge_doctor_quorum",
-    description: "Preflight quorum viability check — probes all models in a preset against the current runtime and reports availability, synthesis viability, and fallback recommendations.",
+    description: "Preflight quorum viability check — probes each model against the current runtime and reports availability, synthesis viability, and fallback recommendations. Use preset='config' to assess the models actually configured in .forge.json rather than a built-in preset; that is the only mode that can catch a typo in your own quorum.models. Each model carries `priced` (present in the cost registry), and `warnings` lists unpriced models — advisory only, since an unrecognised name may simply be a model newer than the registry.",
     inputSchema: {
       type: "object",
       properties: {
-        preset: { type: "string", enum: ["power", "speed", "all"], description: "Quorum preset to check. 'all' checks both presets. Default: all" },
+        preset: { type: "string", enum: ["power", "speed", "all", "config"], description: "What to check. 'power'/'speed' check a built-in preset, 'all' checks both, 'config' checks the effective quorum.models from .forge.json. Default: all" },
       },
       required: [],
     },

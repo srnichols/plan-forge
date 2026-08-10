@@ -1673,20 +1673,44 @@ export function formatQuorumSummary(rows, host, hostPreference) {
 }
 
 /**
- * Assess quorum viability for a given preset and runtime.
+ * Resolve an assessment target: either a named built-in preset or a
+ * preset-shaped config object (issue #243 — users configure their own
+ * quorum.models, which the named-preset-only form could not reach).
+ */
+function _resolveQuorumTarget(presetOrConfig) {
+  if (typeof presetOrConfig === "string") {
+    const preset = QUORUM_PRESETS[presetOrConfig];
+    return preset ? { preset, label: presetOrConfig } : { error: `Unknown preset: ${presetOrConfig}` };
+  }
+  if (presetOrConfig && typeof presetOrConfig === "object") {
+    return Array.isArray(presetOrConfig.models) && presetOrConfig.models.length > 0
+      ? { preset: presetOrConfig, label: "config" }
+      : { error: "Quorum config has no models to assess" };
+  }
+  return { error: `Unknown preset: ${presetOrConfig}` };
+}
+
+/**
+ * Assess quorum viability for a preset or an explicit config, against a runtime.
  * Combines static availableIn declarations with live probeQuorumModelAvailability().
  *
  * availableIn is advisory (for --estimate UX). probeQuorumModelAvailability()
  * remains the authoritative runtime check — stale availableIn data causes
  * bad advice but never incorrect execution.
  *
- * @param {string} presetName - "power" | "speed"
- * @param {{ runtimeOverride?: string, probe?: (model: string) => object }} [options]
- * @returns {{ runtime: string, preset: string, declared: number, effective: number, models: object[], synthesisViable: boolean, recommendation: object|null } | { error: string }}
+ * `isPriced` is injected rather than imported so this module stays free of
+ * cost-service. An unpriced model is reported as a warning and never marked
+ * unavailable: the probe's permissiveness is what lets a newly released model
+ * work before the pricing registry catches up.
+ *
+ * @param {string|{models: string[], reviewerModel?: string}} presetOrConfig - "power" | "speed" | a config object
+ * @param {{ runtimeOverride?: string, probe?: (model: string) => object, isPriced?: (model: string) => boolean }} [options]
+ * @returns {{ runtime: string, preset: string, declared: number, effective: number, models: object[], synthesisViable: boolean, recommendation: object|null, warnings: string[] } | { error: string }}
  */
-export function assessQuorumViability(presetName, { runtimeOverride = null, probe = probeQuorumModelAvailability } = {}) {
-  const preset = QUORUM_PRESETS[presetName];
-  if (!preset) return { error: `Unknown preset: ${presetName}` };
+export function assessQuorumViability(presetOrConfig, { runtimeOverride = null, probe = probeQuorumModelAvailability, isPriced = null } = {}) {
+  const target = _resolveQuorumTarget(presetOrConfig);
+  if (target.error) return { error: target.error };
+  const { preset, label } = target;
 
   const runtime = runtimeOverride || detectExecutionRuntime();
   const declaredAvailable = preset.availableIn?.[runtime] || null;
@@ -1698,10 +1722,15 @@ export function assessQuorumViability(presetName, { runtimeOverride = null, prob
       status: probed.available ? "available" : "unavailable",
       via: probed.via,
       declaredForRuntime: declaredAvailable ? declaredAvailable.includes(model) : null,
+      priced: isPriced ? isPriced(model) : null,
       reason: probed.reason || null,
       install: probed.install || null,
     };
   });
+
+  const warnings = models
+    .filter((m) => m.priced === false)
+    .map((m) => `${m.model} is not in the pricing registry — cost estimates fall back to a conservative rate, and the name may be a typo. Routing is unaffected.`);
 
   const available = models.filter((m) => m.status === "available");
   const synthesisViable = available.length >= 2;
@@ -1718,12 +1747,13 @@ export function assessQuorumViability(presetName, { runtimeOverride = null, prob
 
   return {
     runtime,
-    preset: presetName,
+    preset: label,
     declared: preset.models.length,
     effective: available.length,
     models,
     synthesisViable,
     recommendation,
+    warnings,
   };
 }
 

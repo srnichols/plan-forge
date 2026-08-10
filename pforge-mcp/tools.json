@@ -5870,7 +5870,7 @@
   },
   {
     "name": "forge_doctor_quorum",
-    "description": "Preflight quorum viability check — probes all models in a preset against the current runtime and reports availability, synthesis viability, and fallback recommendations.",
+    "description": "Preflight quorum viability check — probes each model against the current runtime and reports availability, synthesis viability, and fallback recommendations. Use preset='config' to assess the models actually configured in .forge.json rather than a built-in preset; that is the only mode that can catch a typo in your own quorum.models. Each model carries `priced` (present in the cost registry), and `warnings` lists unpriced models — advisory only, since an unrecognised name may simply be a model newer than the registry.",
     "inputSchema": {
       "type": "object",
       "properties": {
@@ -5879,9 +5879,10 @@
           "enum": [
             "power",
             "speed",
-            "all"
+            "all",
+            "config"
           ],
-          "description": "Quorum preset to check. 'all' checks both presets. Default: all"
+          "description": "What to check. 'power'/'speed' check a built-in preset, 'all' checks both, 'config' checks the effective quorum.models from .forge.json. Default: all"
         }
       },
       "required": []
@@ -5911,25 +5912,43 @@
     "errors": {
       "ERR_UNKNOWN_PRESET": {
         "message": "Unknown preset name",
-        "recovery": "Use 'power', 'speed', or 'all'"
+        "recovery": "Use 'power', 'speed', 'all', or 'config'"
+      },
+      "ERR_NO_MODELS": {
+        "message": "Quorum config has no models to assess",
+        "recovery": "Set quorum.models in .forge.json, or check a built-in preset instead"
       }
     },
     "example": {
       "input": {
-        "preset": "all"
+        "preset": "config"
       },
       "output": {
         "runtime": "cli-gh",
         "presets": [
           {
-            "preset": "power",
-            "declared": 3,
-            "effective": 1,
-            "synthesisViable": false,
-            "recommendation": {
-              "preset": "speed",
-              "reason": "..."
-            }
+            "preset": "config",
+            "declared": 2,
+            "effective": 2,
+            "synthesisViable": true,
+            "recommendation": null,
+            "models": [
+              {
+                "model": "claude-opus-5",
+                "status": "available",
+                "via": "cli",
+                "priced": true
+              },
+              {
+                "model": "gtp-5.6-sol",
+                "status": "available",
+                "via": "cli",
+                "priced": false
+              }
+            ],
+            "warnings": [
+              "gtp-5.6-sol is not in the pricing registry — cost estimates fall back to a conservative rate, and the name may be a typo. Routing is unaffected."
+            ]
           }
         ]
       }

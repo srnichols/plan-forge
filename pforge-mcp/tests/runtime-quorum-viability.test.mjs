@@ -121,6 +121,85 @@ describe("assessQuorumViability", () => {
     expect(result.error).toMatch(/Unknown preset/);
   });
 
+  // ─── Issue #243: assess the user's own configured models ───────
+  // forge_doctor_quorum could only report on the two built-in presets, so a
+  // user with custom quorum.models got a diagnostic about models they do not
+  // use. A typo passes the probe (gh-copilot is a catch-all), gets silent
+  // fallback pricing, and fails at runtime after spend.
+
+  describe("explicit config (issue #243)", () => {
+    it("assesses a preset-shaped object and labels it 'config'", () => {
+      const result = assessQuorumViability(
+        { models: ["claude-opus-5", "gpt-5.6-sol"] },
+        { runtimeOverride: "cli-gh", probe: allAvailableProbe }
+      );
+      expect(result.preset).toBe("config");
+      expect(result.declared).toBe(2);
+      expect(result.effective).toBe(2);
+      expect(result.synthesisViable).toBe(true);
+    });
+
+    it("errors when a config carries no models", () => {
+      expect(assessQuorumViability({ models: [] }).error).toMatch(/no models/i);
+      expect(assessQuorumViability({}).error).toMatch(/Unknown preset|no models/i);
+    });
+
+    it("still resolves named presets unchanged", () => {
+      const result = assessQuorumViability("power", {
+        runtimeOverride: "cli-gh",
+        probe: allAvailableProbe,
+      });
+      expect(result.preset).toBe("power");
+      expect(result.declared).toBe(3);
+    });
+  });
+
+  // ─── Issue #243: unpriced models are the strongest typo signal ──
+
+  describe("pricing annotation (issue #243)", () => {
+    const isPriced = (m) => ["claude-opus-5", "gpt-5.6-sol"].includes(m);
+
+    it("annotates each model and warns about unpriced ones", () => {
+      const result = assessQuorumViability(
+        { models: ["claude-opus-5", "gtp-5.6-sol"] },
+        { runtimeOverride: "cli-gh", probe: allAvailableProbe, isPriced }
+      );
+      expect(result.models.find((m) => m.model === "claude-opus-5").priced).toBe(true);
+      expect(result.models.find((m) => m.model === "gtp-5.6-sol").priced).toBe(false);
+      expect(result.warnings).toHaveLength(1);
+      expect(result.warnings[0]).toMatch(/gtp-5\.6-sol/);
+      expect(result.warnings[0]).toMatch(/typo|fallback/i);
+    });
+
+    it("emits no warnings when every model is priced", () => {
+      const result = assessQuorumViability(
+        { models: ["claude-opus-5", "gpt-5.6-sol"] },
+        { runtimeOverride: "cli-gh", probe: allAvailableProbe, isPriced }
+      );
+      expect(result.warnings).toEqual([]);
+      expect(result.models.every((m) => m.priced === true)).toBe(true);
+    });
+
+    it("leaves priced null and warnings empty when no predicate is injected", () => {
+      const result = assessQuorumViability("power", {
+        runtimeOverride: "cli-gh",
+        probe: allAvailableProbe,
+      });
+      expect(result.models.every((m) => m.priced === null)).toBe(true);
+      expect(result.warnings).toEqual([]);
+    });
+
+    it("does not mark an unpriced model unavailable — permissiveness is deliberate", () => {
+      const result = assessQuorumViability(
+        { models: ["brand-new-model-not-yet-in-registry"] },
+        { runtimeOverride: "cli-gh", probe: allAvailableProbe, isPriced }
+      );
+      expect(result.models[0].status).toBe("available");
+      expect(result.effective).toBe(1);
+      expect(result.warnings).toHaveLength(1);
+    });
+  });
+
   // ─── Power preset ──────────────────────────────────────────────
 
   describe("power preset", () => {

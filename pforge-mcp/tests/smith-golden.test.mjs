@@ -96,7 +96,16 @@ let _smithOutput = null;
 function getSmithOutput() {
   if (_smithOutput === null) {
     const result = runSmith();
-    _smithOutput = result.stdout + result.stderr;
+    // Without this guard a timeout yields null stdout, and the golden comparison
+    // reports a content diff instead of the real cause.
+    if (result.error) {
+      throw new Error(
+        `pforge smith did not complete (${result.error.code || result.error.message}) — ` +
+          "golden comparison skipped. Re-run this file in isolation; the 60s spawn " +
+          "budget can be exceeded when the full suite saturates the machine."
+      );
+    }
+    _smithOutput = (result.stdout || "") + (result.stderr || "");
   }
   return _smithOutput;
 }

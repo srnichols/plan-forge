@@ -150,6 +150,12 @@ function _resolveCmdToken(line) {
   return resolveGateCommandToken(line);
 }
 
+// Shell metacharacters inside a quoted argument (e.g. the JS handed to `node -e`)
+// are not shell operators. Blank those spans out before applying shell-shape rules (#246).
+function _stripQuotedSpans(line) {
+  return line.replace(/'[^']*'|"[^"]*"/g, "");
+}
+
 function _pushWRule({ test, ruleId, rule, msg, line, slice, loc, strictMode, disabledRules, warnings, errors }) {
   if (!test || disabledRules.has(ruleId)) return;
   const _sev = strictMode ? "error" : "warn";
@@ -183,7 +189,7 @@ function _lintBasicRules({ line, slice, loc, cmdToken, lastSliceNumber, warnings
       message: `${loc}: curl to localhost requires a running server. Move runtime API checks to vitest integration tests.`,
     });
   }
-  if (/^node\s+.*\.test\.(mjs|js|ts)/.test(line)) {
+  if (/^node\s+.*\.test\.(mjs|js|ts)/.test(_stripQuotedSpans(line))) {
     warnings.push({
       slice: slice.number, command: line, rule: "vitest-direct-node", severity: "warn",
       message: `${loc}: 'node *.test.*' fails for vitest test files. Use 'npx vitest run <file>' instead.`,
@@ -237,7 +243,7 @@ function _lintWRules({ line, slice, loc, cmdToken, strictMode, disabledRules, wa
     line, slice, loc, strictMode, disabledRules, warnings, errors,
   });
   _pushWRule({
-    test: !/^bash\s+-c\b/.test(line) && /^(node|npx|pwsh)\b.*\|/.test(line),
+    test: !/^bash\s+-c\b/.test(line) && /^(node|npx|pwsh)\b.*\|/.test(_stripQuotedSpans(line)),
     ruleId: "W2", rule: "pipeline-node",
     msg: `Shell pipeline with '${cmdToken}' as left operand — cmd.exe may handle this differently. Consider wrapping in a 'node -e' script that uses child_process for portability.`,
     line, slice, loc, strictMode, disabledRules, warnings, errors,

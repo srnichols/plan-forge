@@ -195,15 +195,14 @@ If any check fails, revise the plan before outputting. Do not present a plan tha
 ```
 node --input-type=module -e "import{lintGateCommands}from'./pforge-mcp/orchestrator.mjs';const r=lintGateCommands('<plan-file>');console.log(r.summary);r.errors.forEach(e=>console.log('ERR:',e.message));r.warnings.forEach(w=>console.log('WARN:',w.message));"
 ```
-Fix all **errors** before declaring the plan hardened — the same lint runs as a pre-flight check in `runPlan()` and errors will block execution.
+Fix all errors **and** warnings before declaring the plan hardened. The same lint runs as a pre-flight
+check in `runPlan()` — errors will block execution, and in strict mode
+(`PFORGE_GATE_LINT_STRICT=1`) portability warnings are promoted to errors too.
 
-Fix warnings too, with one documented exception: `lintGateCommands` is not quote-aware, so a gate of the
-form `node -e "... npx vitest run tests/x.test.mjs ..."` is falsely flagged as `'node *.test.*' fails for
-vitest test files`, and a `|` or `||` inside inline JS is falsely flagged as a shell pipeline
-([#246](https://github.com/srnichols/plan-forge/issues/246)). You can avoid the pipeline one by writing
-`[a-z]+` instead of `(log|error|warn)` and a `for (const n of [...])` loop instead of `a||b`. The
-`node *.test.*` one has no workaround — accept it. Shipped plans carry 7–10 of these
-(Phase-51, -52, -54); the bar is **zero errors and zero portability warnings**, not zero warnings.
+A clean plan really is achievable: `lintGateCommands` is quote-aware as of
+[#246](https://github.com/srnichols/plan-forge/issues/246), so shell metacharacters inside the JS you
+hand to `node -e` (a `|` in a regex, an `||`, a `.test.mjs` path) no longer trip the shell-shape rules.
+Phase-51, -54 and -60 all lint at 0/0/0. If you see a warning, treat it as real.
 
 Finally, run a **SESSION BUDGET CHECK**:
 

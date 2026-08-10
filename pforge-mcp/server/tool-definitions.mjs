@@ -380,13 +380,14 @@ export const TOOLS = [
   },
   {
     name: "forge_crucible_ask",
-    description: "Advance the Crucible interview — supply an answer and get the next question, or mark the smelt ready for preview/finalize when the interview is complete. Call without `answer` to fetch the current question. USE FOR: the interactive Q&A loop that turns a raw idea into a hardened spec.",
+    description: "Advance the Crucible interview — supply an answer and get the next question, or mark the smelt ready for preview/finalize when the interview is complete. Call without `answer` to fetch the current question. The running draft is NOT returned by default, because it grows with every answer and a long interview would return it repeatedly; call forge_crucible_preview to read it, or pass includeDraft:true. USE FOR: the interactive Q&A loop that turns a raw idea into a hardened spec.",
     inputSchema: {
       type: "object",
       properties: {
         id: { type: "string", description: "Smelt id returned by forge_crucible_submit." },
         questionId: { type: "string", description: "Optional — the id of the question this answer is for. When supplied, the server validates it matches the pending question and refuses with ASK_QUESTION_MISMATCH on drift (Issue #138). Omit to trust the server's pending question." },
         answer: { type: "string", description: "Answer to the current question. Omit to fetch the current question without advancing." },
+        includeDraft: { type: "boolean", default: false, description: "Return the full Markdown draft on every call. Off by default to keep responses small; prefer forge_crucible_preview for on-demand review." },
         path: { type: "string", description: "Project directory (default: current)" },
       },
       required: ["id"],

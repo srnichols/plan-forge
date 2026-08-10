@@ -30,7 +30,7 @@ import {
   handleAbandon,
 } from "../crucible-server.mjs";
 
-import { listClaims, claimPhaseNumber } from "../crucible.mjs";
+import { listClaims, claimPhaseNumber, nextPhaseNumber } from "../crucible.mjs";
 import { loadSmelt } from "../crucible-store.mjs";
 import { updateSmelt } from "../crucible-store.mjs";
 
@@ -180,6 +180,28 @@ describe("collectExistingPhaseNames", () => {
     const names = collectExistingPhaseNames(projectDir).sort();
     expect(names).toEqual(["Phase-02", "Phase-02.1"]);
   });
+
+  // Issue #244: every real plan in this repo is named Phase-NN-NAME-PLAN.md, a
+  // shape isValidPhaseName deliberately rejects as a *name*. Filtering basenames
+  // through it discarded all 19 plans, so finalize claimed Phase-01 in a repo
+  // already at Phase-55.
+  it("recognises the Phase-NN-NAME-PLAN.md convention", () => {
+    const plansDir = resolve(projectDir, "docs", "plans");
+    mkdirSync(plansDir, { recursive: true });
+    writeFileSync(join(plansDir, "Phase-53-ORCHESTRATOR-SPLIT-PLAN.md"), "# stub", "utf-8");
+    writeFileSync(join(plansDir, "Phase-55-CLEAN-CODE-SWEEP-PLAN.md"), "# stub", "utf-8");
+    writeFileSync(join(plansDir, "Phase-28.2-PLAN.md"), "# stub", "utf-8");
+    writeFileSync(join(plansDir, "Phase-GROK-BUILD-WORKER-PLAN.md"), "# stub", "utf-8"); // unnumbered — skipped
+    const names = collectExistingPhaseNames(projectDir).sort();
+    expect(names).toEqual(["Phase-28.2", "Phase-53", "Phase-55"]);
+  });
+
+  it("so nextPhaseNumber continues from real history rather than restarting at 01", () => {
+    const plansDir = resolve(projectDir, "docs", "plans");
+    mkdirSync(plansDir, { recursive: true });
+    writeFileSync(join(plansDir, "Phase-55-CLEAN-CODE-SWEEP-PLAN.md"), "# stub", "utf-8");
+    expect(nextPhaseNumber(collectExistingPhaseNames(projectDir))).toBe("Phase-56");
+  });
 });
 
 // ─── handleSubmit ────────────────────────────────────────────────────
@@ -218,6 +240,21 @@ describe("handleSubmit", () => {
     expect(r.recommendedLane).toBe("feature");
     expect(loadSmelt(r.id, projectDir).lane).toBe("tweak");
   });
+
+  // Issue #245: the response echoed only recommendedLane, so submitting with
+  // mode:"full" still reported "tweak" and an agent could not tell whether its
+  // override had taken. Only the question count revealed it.
+  it("reports the lane that was actually applied", () => {
+    const r = handleSubmit({ rawIdea: "add rate limiting", mode: "full", projectDir, hub: fakeHub });
+    expect(r.lane).toBe("full");
+    expect(loadSmelt(r.id, projectDir).lane).toBe("full");
+  });
+
+  it("reports lane equal to recommendedLane when no override is given", () => {
+    const r = handleSubmit({ rawIdea: "add rate limiting to the public API", projectDir, hub: fakeHub });
+    expect(r.lane).toBe(r.recommendedLane);
+  });
+
   it("accepts agent source for recursion tracking", () => {
     const parent = handleSubmit({ rawIdea: "x", projectDir, hub: fakeHub });
     const child = handleSubmit({
@@ -248,13 +285,41 @@ describe("handleAsk", () => {
   it("without answer returns draft without mutating", () => {
     const { id } = handleSubmit({ rawIdea: "x", projectDir, hub: fakeHub });
     fakeHub.broadcasts.length = 0;
-    const r = handleAsk({ id, projectDir, hub: fakeHub });
+    // Issue #245: draftPreview is now opt-in. The dashboard's REST route passes
+    // includeDraft; agents get a bounded payload by default.
+    const r = handleAsk({ id, projectDir, hub: fakeHub, includeDraft: true });
     expect(r.done).toBe(false); // real banks now return questions
     expect(r.nextQuestion).not.toBeNull();
     expect(typeof r.draftPreview).toBe("string");
     // No update event because nothing changed
     expect(fakeHub.broadcasts).toHaveLength(0);
   });
+
+  // ─── Issue #245: bounded payload ──────────────────────────────────
+  // handleAsk returned the whole draft on every call, and the draft grows as
+  // answers accumulate. One 13-question interview produced responses of
+  // 9KB -> 24KB, against an ACI budget of roughly 10KB. forge_crucible_preview
+  // already exists to fetch the draft on demand.
+  it("omits draftPreview by default", () => {
+    const { id } = handleSubmit({ rawIdea: "x", projectDir, hub: fakeHub });
+    const r = handleAsk({ id, projectDir, hub: fakeHub });
+    expect(r.draftPreview).toBeUndefined();
+    expect(r.nextQuestion).not.toBeNull();
+  });
+
+  it("includes draftPreview when explicitly requested", () => {
+    const { id } = handleSubmit({ rawIdea: "x", projectDir, hub: fakeHub });
+    const r = handleAsk({ id, projectDir, hub: fakeHub, includeDraft: true });
+    expect(typeof r.draftPreview).toBe("string");
+    expect(r.draftPreview.length).toBeGreaterThan(0);
+  });
+
+  it("points at forge_crucible_preview when the draft is omitted", () => {
+    const { id } = handleSubmit({ rawIdea: "x", projectDir, hub: fakeHub });
+    const r = handleAsk({ id, projectDir, hub: fakeHub });
+    expect(r.draftHint).toMatch(/forge_crucible_preview/);
+  });
+
   it("with answer appends and fires updated event", () => {
     const { id } = handleSubmit({ rawIdea: "x", projectDir, hub: fakeHub });
     fakeHub.broadcasts.length = 0;

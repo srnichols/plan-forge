@@ -34,6 +34,10 @@ import { randomUUID } from "node:crypto";
  */
 const PHASE_NAME_RE = /^Phase-(\d{2,})(\.\d+)*$/;
 
+// Plan files in the wild carry a descriptive suffix — Phase-53-ORCHESTRATOR-SPLIT-PLAN.
+// That is a valid *filename* but deliberately not a valid phase *name*.
+const PHASE_PLAN_FILE_RE = /^Phase-(\d{2,}(?:\.\d+)*)(?:-.+)?$/;
+
 /**
  * Validate a phase name against the decimal-only semver rule.
  *
@@ -43,6 +47,23 @@ const PHASE_NAME_RE = /^Phase-(\d{2,})(\.\d+)*$/;
 export function isValidPhaseName(name) {
   if (typeof name !== "string" || !name) return false;
   return PHASE_NAME_RE.test(name);
+}
+
+/**
+ * Recover the canonical phase name from a plan file's basename.
+ *
+ * Issue #244: filtering basenames through isValidPhaseName discarded every plan
+ * using the project's own Phase-NN-NAME-PLAN.md convention, so finalize claimed
+ * Phase-01 in a repo already at Phase-55. Unnumbered plans (Phase-GROK-BUILD-…)
+ * still return null — they are not part of the numeric sequence.
+ *
+ * @param {string} basename - file name without the .md extension
+ * @returns {string|null} e.g. "Phase-53", or null when not a numbered plan
+ */
+export function phaseNameFromPlanFile(basename) {
+  if (typeof basename !== "string" || !basename) return null;
+  const m = basename.match(PHASE_PLAN_FILE_RE);
+  return m ? `Phase-${m[1]}` : null;
 }
 
 /**

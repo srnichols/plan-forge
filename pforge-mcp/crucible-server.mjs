@@ -206,6 +206,10 @@ export function handleSubmit({ rawIdea, lane, mode, source, parentSmeltId, bugId
   });
   return {
     id: smelt.id,
+    // `lane` is what was applied; `recommendedLane` is only the heuristic's
+    // opinion. Without both, a caller overriding via mode cannot tell whether
+    // the override took (issue #245).
+    lane: smelt.lane,
     recommendedLane,
     firstQuestion: _applyQuestionDefaults(
       smelt,
@@ -218,7 +222,7 @@ export function handleSubmit({ rawIdea, lane, mode, source, parentSmeltId, bugId
 /**
  * forge_crucible_ask
  */
-export function handleAsk({ id, answer, questionId, projectDir, hub }) {
+export function handleAsk({ id, answer, questionId, projectDir, hub, includeDraft = false }) {
   const smelt = loadSmelt(id, projectDir);
   if (!smelt) throw new Error(`smelt not found: ${id}`);
   if (smelt.status !== "in-progress") {
@@ -256,13 +260,19 @@ export function handleAsk({ id, answer, questionId, projectDir, hub }) {
     interviewGetNextQuestion(current, _questionContext(current, projectDir)),
     projectDir,
   );
-  const markdown = renderDraft(current);
-  return {
+  // The draft grows with every answer, so echoing it on each call turned a
+  // 13-question interview into 9KB -> 24KB responses (issue #245).
+  const result = {
     done: nextQuestion === null,
     nextQuestion,
-    draftPreview: markdown,
     warnings: computeStaleDefaultsWarnings(current, projectDir),
   };
+  if (includeDraft) {
+    result.draftPreview = renderDraft(current);
+  } else {
+    result.draftHint = `Draft omitted to keep this response small — call forge_crucible_preview with id '${id}' to read it.`;
+  }
+  return result;
 }
 
 /**

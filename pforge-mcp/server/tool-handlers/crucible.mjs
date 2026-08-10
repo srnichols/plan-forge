@@ -169,6 +169,7 @@ async function _callToolHandler_022_forge_crucible_ask(request, args) {
         id: args.id,
         questionId: args.questionId,
         answer: args.answer,
+        includeDraft: args.includeDraft === true,
         projectDir: cwd,
         hub: activeHub,
       });

@@ -2,14 +2,14 @@
 crucibleId: 6b782ee8-fb8e-48e3-938b-68dce71553e1
 lane: full
 source: agent
-phaseId: Phase-56
+phaseId: Phase-60
 linkedBugs: []
 relatedIssues: [241, 243, 238]
 ---
-# Phase-56: Route Copilot and direct-API workers through @github/copilot-sdk
+# Phase-60: Route Copilot and direct-API workers through @github/copilot-sdk
 
-> **Lane**: full  
-> **Source**: agent  
+> **Lane**: full
+> **Source**: agent
 > **Status**: in-progress
 
 ## Raw Idea

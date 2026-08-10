@@ -474,7 +474,7 @@ export const TOOL_METADATA = {
     },
     example: {
       input: { rawIdea: "add rate limiting to the login endpoint" },
-      output: { id: "uuid", recommendedLane: "feature", firstQuestion: null },
+      output: { id: "uuid", lane: "full", recommendedLane: "feature", firstQuestion: null },
     },
   },
   forge_crucible_ask: {
@@ -494,7 +494,7 @@ export const TOOL_METADATA = {
     },
     example: {
       input: { id: "uuid", answer: "yes, API-wide rate limit" },
-      output: { done: true, nextQuestion: null, draftPreview: "# ..." },
+      output: { done: true, nextQuestion: null, draftHint: "Draft omitted to keep this response small — call forge_crucible_preview with id '<id>' to read it." },
     },
   },
   forge_crucible_preview: {

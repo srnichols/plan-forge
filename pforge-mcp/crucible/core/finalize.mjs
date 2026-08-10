@@ -20,10 +20,16 @@ import {
   isValidPhaseName,
   listClaims,
   nextPhaseNumber,
+  phaseNameFromPlanFile,
 } from "../../crucible.mjs";
 import { loadSmelt, updateSmelt } from "../../crucible-store.mjs";
 import { renderDraft, extractUnresolvedFields } from "../../crucible-draft.mjs";
 import { getMode } from "../registry.mjs";
+
+// Bug ids are tracker-shaped: a prefix, a hyphen, then digits (RMG-0035).
+// Requiring the numeric suffix is what separates an id from an ordinary word —
+// a looser pattern matches prose like "research" and re-opens issue #245.
+const LINKED_BUG_ID_RE = /^[A-Za-z][A-Za-z0-9_]*-\d+$/;
 
 // ─── Critical fields ─────────────────────────────────────────────────
 
@@ -118,10 +124,13 @@ export function buildFinalizeFrontmatter(smelt, phaseName) {
   const linkedBugsAnswer = (smelt.answers || []).find((answer) => answer.questionId === "linked-bugs")?.answer;
   let linkedBugs;
   if (linkedBugsAnswer && linkedBugsAnswer.trim()) {
+    // Keep only identifier-shaped tokens. The value is rendered into a YAML flow
+    // sequence, where prose containing ': ' or ' #' produces malformed
+    // frontmatter (issue #245), and a sentence is not a bug id anyway.
     linkedBugs = linkedBugsAnswer
-      .split(/[\r\n,]+/)
-      .map((s) => s.trim())
-      .filter(Boolean);
+      .split(/[\s,;]+/)
+      .map((s) => s.trim().replace(/[.)\]]+$/, ""))
+      .filter((s) => LINKED_BUG_ID_RE.test(s));
   } else if (smelt.bugId) {
     linkedBugs = [smelt.bugId];
   }
@@ -162,7 +171,8 @@ export function collectExistingPhaseNames(projectDir) {
       if (!entry.isFile()) continue;
       if (!entry.name.endsWith(".md")) continue;
       const base = entry.name.replace(/\.md$/, "");
-      if (isValidPhaseName(base)) names.add(base);
+      const phaseName = phaseNameFromPlanFile(base);
+      if (phaseName) names.add(phaseName);
     }
   } catch { /* plans dir may not exist yet */ }
   return [...names];

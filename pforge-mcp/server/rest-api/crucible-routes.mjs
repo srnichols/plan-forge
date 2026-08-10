@@ -42,7 +42,9 @@ export function _registerCrucibleHotspotRoutes(app) {
       if (typeof id !== "string" || !id) {
         return res.status(400).json({ error: "id is required" });
       }
-      const result = crucibleHandleAsk({ id, answer, questionId, projectDir: PROJECT_DIR, hub: activeHub });
+      // The dashboard renders a live preview pane, so it opts into the draft
+      // that MCP callers now omit (issue #245).
+      const result = crucibleHandleAsk({ id, answer, questionId, projectDir: PROJECT_DIR, hub: activeHub, includeDraft: true });
       res.json(result);
     } catch (err) {
       // Issue #138 — surface ASK_QUESTION_MISMATCH as 409 with the expected

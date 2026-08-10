@@ -42,6 +42,32 @@ describe("buildFinalizeFrontmatter", () => {
     expect(fm).toContain("linkedBugs: [RMG-0035, RMG-0041]");
   });
 
+  // ─── Issue #245: prose answers produced malformed YAML ─────────────
+  // The answer was split on commas and joined into a flow sequence, so a prose
+  // reply emitted linkedBugs: [free text with colons and #241 ...]. Inside a
+  // flow sequence an unquoted ' #' opens a comment and ': ' is ambiguous.
+  describe("prose answers (issue #245)", () => {
+    const withAnswer = (answer) => buildFinalizeFrontmatter({ ...BASE_SMELT, answers: [{ questionId: "linked-bugs", answer }] }, "Phase-60");
+
+    it("drops prose that cannot be a bug id", () => {
+      const fm = withAnswer("No tempering bug IDs are linked — this originates from research, not a defect. Context: #241 is the parent.");
+      expect(fm).not.toContain("linkedBugs");
+    });
+
+    it("keeps real ids and drops the prose around them", () => {
+      const fm = withAnswer("Mostly research, but RMG-0035 is related; see also RMG-0041 for context.");
+      expect(fm).toContain("linkedBugs: [RMG-0035, RMG-0041]");
+    });
+
+    it("never emits a YAML comment marker or bare colon inside the sequence", () => {
+      const fm = withAnswer("see: #241 and #243, plus RMG-0035");
+      const line = fm.split("\n").find((l) => l.startsWith("linkedBugs:")) || "";
+      expect(line).not.toMatch(/\s#/);
+      expect(line.slice("linkedBugs:".length)).not.toMatch(/: /);
+      expect(line).toContain("RMG-0035");
+    });
+  });
+
   it("always emits crucibleId, lane, source, phaseId", () => {
     const fm = buildFinalizeFrontmatter({ ...BASE_SMELT, id: "abc" }, "Phase-99");
     expect(fm).toContain("crucibleId: abc");

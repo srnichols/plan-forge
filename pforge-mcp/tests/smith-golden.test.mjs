@@ -85,7 +85,7 @@ function runSmith() {
   return spawnSync(
     "pwsh",
     ["-NonInteractive", "-NoProfile", "-File", PFORGE_PS1, "smith"],
-    { cwd: TESTBED, encoding: "utf-8", timeout: 60_000 }
+    { cwd: TESTBED, encoding: "utf-8", timeout: 150_000 }
   );
 }
 
@@ -101,8 +101,8 @@ function getSmithOutput() {
     if (result.error) {
       throw new Error(
         `pforge smith did not complete (${result.error.code || result.error.message}) — ` +
-          "golden comparison skipped. Re-run this file in isolation; the 60s spawn " +
-          "budget can be exceeded when the full suite saturates the machine."
+          "golden comparison skipped. This test shells out to a full pwsh CLI run, so it " +
+          "is the most load-sensitive file in the suite; re-run it in isolation to confirm."
       );
     }
     _smithOutput = (result.stdout || "") + (result.stderr || "");
@@ -118,7 +118,7 @@ describe("smith-golden: pforge smith output stability", () => {
       expect(output).toMatch(/8\/8 lifecycle hooks present/);
       expect(output).not.toMatch(/Missing hooks:.*PostRun/);
     },
-    90_000
+    180_000
   );
 
   it.skipIf(!canRun)(
@@ -146,6 +146,6 @@ describe("smith-golden: pforge smith output stability", () => {
 
       expect(actual).toBe(expected);
     },
-    90_000
+    180_000
   );
 });

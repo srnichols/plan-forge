@@ -13,7 +13,7 @@
  */
 
 import { describe, it, expect, vi, afterEach } from "vitest";
-import { buildCreateIssueArgs, createIssueViaGhCli } from "../tempering/gh-cli.mjs";
+import { buildCreateIssueArgs, createIssueViaGhCli, findOpenIssueByHashViaGhCli } from "../tempering/gh-cli.mjs";
 import { fileMetaBug } from "../tempering/bug-adapters/github.mjs";
 import { fileClassifierIssue } from "../tempering/classifier-issue.mjs";
 
@@ -122,6 +122,59 @@ describe("createIssueViaGhCli", () => {
   });
 });
 
+// ─── findOpenIssueByHashViaGhCli ──────────────────────────────────────
+
+describe("findOpenIssueByHashViaGhCli", () => {
+  const HASH = "ccd727513900";
+
+  function listing(title) {
+    return JSON.stringify([{ number: 237, url: "https://github.com/o/r/issues/237", title }]);
+  }
+
+  it("scopes the search by repo, label, state and hash via argv", () => {
+    const execFile = vi.fn(() => listing(`[self-repair:${HASH}] boom`));
+    findOpenIssueByHashViaGhCli({
+      owner: "o", repo: "r", label: "self-repair", hash: HASH, execFile,
+    });
+
+    const [cmd, argv] = execFile.mock.calls[0];
+    expect(cmd).toBe("gh");
+    expect(argv.slice(0, 2)).toEqual(["issue", "list"]);
+    expect(argValue(argv, "--repo")).toBe("o/r");
+    expect(argValue(argv, "--label")).toBe("self-repair");
+    expect(argValue(argv, "--state")).toBe("open");
+    expect(argValue(argv, "--search")).toBe(HASH);
+  });
+
+  it("returns the matching issue when the title carries the hash", () => {
+    const execFile = vi.fn(() => listing(`[self-repair:${HASH}] boom`));
+    const found = findOpenIssueByHashViaGhCli({
+      owner: "o", repo: "r", label: "self-repair", hash: HASH, execFile,
+    });
+    expect(found).toEqual({ issueNumber: 237, url: "https://github.com/o/r/issues/237" });
+  });
+
+  it("ignores issues whose title does not carry the hash", () => {
+    const execFile = vi.fn(() => listing("[self-repair:aaaaaaaaaaaa] unrelated"));
+    expect(findOpenIssueByHashViaGhCli({
+      owner: "o", repo: "r", label: "self-repair", hash: HASH, execFile,
+    })).toBeNull();
+  });
+
+  it("returns null when no execFile runner is injected", () => {
+    expect(findOpenIssueByHashViaGhCli({
+      owner: "o", repo: "r", label: "self-repair", hash: HASH,
+    })).toBeNull();
+  });
+
+  it("returns null on unparseable gh output, so callers fall back to REST", () => {
+    const execFile = vi.fn(() => "not json");
+    expect(findOpenIssueByHashViaGhCli({
+      owner: "o", repo: "r", label: "self-repair", hash: HASH, execFile,
+    })).toBeNull();
+  });
+});
+
 // ─── End-to-end body fidelity ─────────────────────────────────────────
 
 describe("fileMetaBug — body reaches gh with real newlines", () => {
@@ -131,8 +184,10 @@ describe("fileMetaBug — body reaches gh with real newlines", () => {
 
   it("does not escape newlines in the issue body", async () => {
     process.env.GITHUB_TOKEN = "ghp_test";
-    const execSync = vi.fn(() => "[]"); // gh issue list → no existing issue
-    const execFile = vi.fn(() => "https://github.com/testowner/testrepo/issues/77");
+    const execSync = vi.fn();
+    const execFile = vi.fn((_cmd, argv) =>
+      argv[1] === "list" ? "[]" : "https://github.com/testowner/testrepo/issues/77",
+    );
 
     const result = await fileMetaBug(
       {
@@ -163,10 +218,11 @@ describe("fileClassifierIssue — body reaches gh with real newlines", () => {
     process.env.GITHUB_TOKEN = "ghp_test";
     const execSync = vi.fn((cmd) => {
       if (cmd.includes("git remote")) return "https://github.com/owner/repo.git";
-      if (cmd.includes("gh issue list")) return "[]";
       throw new Error(`unexpected cmd: ${cmd}`);
     });
-    const execFile = vi.fn(() => "https://github.com/owner/repo/issues/88");
+    const execFile = vi.fn((_cmd, argv) =>
+      argv[1] === "list" ? "[]" : "https://github.com/owner/repo/issues/88",
+    );
 
     const result = await fileClassifierIssue(
       {

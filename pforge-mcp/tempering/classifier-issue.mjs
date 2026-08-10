@@ -21,7 +21,7 @@ import { createHash } from "node:crypto";
 import { existsSync, readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { ERROR_CODES } from "../enums.mjs";
-import { createIssueViaGhCli } from "./gh-cli.mjs";
+import { createIssueViaGhCli, findOpenIssueByHashViaGhCli } from "./gh-cli.mjs";
 
 // ─── Labels ──────────────────────────────────────────────────────────────────
 
@@ -143,18 +143,9 @@ function resolveRepo(config, { execSync: execSyncFn, cwd } = {}) {
 
 // ─── Dedup check ─────────────────────────────────────────────────────────────
 
-async function findExisting({ hash, owner, repo, token, execSync: execSyncFn, fetch: fetchFn, cwd }) {
-  if (typeof execSyncFn === "function") {
-    try {
-      const cmd = `gh issue list --repo "${owner}/${repo}" --label "classifier-noise" --state open --search "${hash}" --json number,url,title --limit 10`;
-      const raw = execSyncFn(cmd, { encoding: "utf-8", timeout: 30_000, stdio: ["pipe", "pipe", "pipe"], cwd }).trim();
-      if (raw) {
-        const issues = JSON.parse(raw);
-        const match = issues.find((i) => i.title?.includes(hash));
-        if (match) return { issueNumber: match.number, url: match.url };
-      }
-    } catch { /* fall through */ }
-  }
+async function findExisting({ hash, owner, repo, token, execFile: execFileFn, fetch: fetchFn, cwd }) {
+  const viaCli = findOpenIssueByHashViaGhCli({ owner, repo, label: "classifier-noise", hash, execFile: execFileFn, cwd });
+  if (viaCli) return viaCli;
   if (token && typeof fetchFn === "function") {
     try {
       const q = encodeURIComponent(`repo:${owner}/${repo} label:classifier-noise state:open "${hash}" in:title`);
@@ -252,7 +243,7 @@ export async function fileClassifierIssue(payload, config, {
     }
 
     // Dedup: check for existing open issue with same hash
-    const existing = await findExisting({ hash: hash, owner: repoInfo.owner, repo: repoInfo.repo, token: tokenResult.token, ...{ execSync: execSyncFn, fetch: fetchFn, cwd } });
+    const existing = await findExisting({ hash: hash, owner: repoInfo.owner, repo: repoInfo.repo, token: tokenResult.token, ...{ execFile: execFileFn, fetch: fetchFn, cwd } });
     if (existing) {
       const commentBody = `## Recurrence\n\nThis classifier noise pattern was observed again.\n\n**Finding:** \`${payload.findingClass || "unknown"}\`\n**Route:** \`${payload.route || ""}\`\n\n*Reported by Plan Forge Tempering — hash \`${hash}\`*`;
       await addComment({ token: tokenResult.token, owner: repoInfo.owner, repo: repoInfo.repo, issueNumber: existing.issueNumber, body: commentBody, fetch: fetchFn });

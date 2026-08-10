@@ -174,10 +174,11 @@ describe("fileClassifierIssue — gh CLI success (new issue)", () => {
 
     const execSync = vi.fn((cmd) => {
       if (cmd.includes("git remote")) return "https://github.com/owner/repo.git";
-      if (cmd.includes("gh issue list")) return "[]";         // no existing issue
       throw new Error(`unexpected cmd: ${cmd}`);
     });
-    const execFile = vi.fn(() => "https://github.com/owner/repo/issues/42");
+    const execFile = vi.fn((_cmd, argv) =>
+      argv[1] === "list" ? "[]" : "https://github.com/owner/repo/issues/42",
+    );
 
     const result = await fileClassifierIssue(BASE_PAYLOAD, {}, { execSync, execFile, cwd: "/fake/cwd" });
     expect(result.ok).toBe(true);
@@ -196,18 +197,18 @@ describe("fileClassifierIssue — dedup: comments on existing issue", () => {
     const hash = computeClassifierIssueHash(BASE_PAYLOAD.findingClass, BASE_PAYLOAD.reason);
     const execSync = vi.fn((cmd) => {
       if (cmd.includes("git remote")) return "https://github.com/owner/repo.git";
-      if (cmd.includes("gh issue list")) {
-        return JSON.stringify([{ number: 7, url: "https://github.com/owner/repo/issues/7", title: `[classifier-noise:${hash}] missing-alt-text: Decorative images` }]);
-      }
       throw new Error(`unexpected cmd: ${cmd}`);
     });
+    const execFile = vi.fn(() =>
+      JSON.stringify([{ number: 7, url: "https://github.com/owner/repo/issues/7", title: `[classifier-noise:${hash}] missing-alt-text: Decorative images` }]),
+    );
 
     const fetchMock = vi.fn().mockResolvedValue({
       ok: true,
       json: async () => ({ id: 1001, html_url: "https://github.com/owner/repo/issues/7#comment-1001" }),
     });
 
-    const result = await fileClassifierIssue(BASE_PAYLOAD, {}, { execSync, fetch: fetchMock, cwd: "/fake/cwd" });
+    const result = await fileClassifierIssue(BASE_PAYLOAD, {}, { execSync, execFile, fetch: fetchMock, cwd: "/fake/cwd" });
     expect(result.ok).toBe(true);
     expect(result.deduped).toBe(true);
     expect(result.issueNumber).toBe(7);
@@ -223,9 +224,11 @@ describe("fileClassifierIssue — REST fallback", () => {
 
     const execSync = vi.fn((cmd) => {
       if (cmd.includes("git remote")) return "https://github.com/owner/repo.git";
-      if (cmd.includes("gh issue list")) return "[]";
-      if (cmd.includes("gh issue create")) throw new Error("gh create failed");
       throw new Error(`unexpected: ${cmd}`);
+    });
+    const execFile = vi.fn((_cmd, argv) => {
+      if (argv[1] === "list") return "[]";
+      throw new Error("gh create failed");
     });
 
     // fetchMock is called twice:
@@ -235,7 +238,7 @@ describe("fileClassifierIssue — REST fallback", () => {
       .mockResolvedValueOnce({ ok: true, json: async () => ({ items: [] }) })
       .mockResolvedValueOnce({ ok: true, json: async () => ({ number: 99, html_url: "https://github.com/owner/repo/issues/99" }) });
 
-    const result = await fileClassifierIssue(BASE_PAYLOAD, {}, { execSync, fetch: fetchMock, cwd: "/fake/cwd" });
+    const result = await fileClassifierIssue(BASE_PAYLOAD, {}, { execSync, execFile, fetch: fetchMock, cwd: "/fake/cwd" });
     expect(result.ok).toBe(true);
     expect(result.issueNumber).toBe(99);
 

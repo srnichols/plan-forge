@@ -57,6 +57,18 @@ function argValue(argv, flag) {
   return i === -1 ? undefined : argv[i + 1];
 }
 
+/**
+ * Route `gh issue list` to a dedupe result and `gh issue create` to a URL,
+ * since both now run through the same argv runner.
+ */
+function stubGh(deps, { listJson = "[]", createUrl = null, createThrows = false } = {}) {
+  deps.execFile.mockImplementation((_cmd, argv) => {
+    if (argv[1] === "list") return listJson;
+    if (createThrows) throw new Error("gh create failed");
+    return createUrl;
+  });
+}
+
 function stubTokenEnv() {
   process.env.GITHUB_TOKEN = "ghp_test_token_123";
 }
@@ -120,7 +132,7 @@ describe("fileMetaBug — new-issue path", () => {
 
     // gh issue list returns no matches (no existing issue)
     deps.execSync.mockReturnValue("[]");
-    deps.execFile.mockReturnValue("https://github.com/testowner/testrepo/issues/42");
+    stubGh(deps, { createUrl: "https://github.com/testowner/testrepo/issues/42" });
 
     const result = await fileMetaBug(params, makeConfig(), deps);
 
@@ -149,7 +161,7 @@ describe("fileMetaBug — new-issue path", () => {
 
     // gh issue list returns no matches, gh issue create fails
     deps.execSync.mockReturnValue("[]");
-    deps.execFile.mockImplementation(() => { throw new Error("gh not found"); });
+    stubGh(deps, { createThrows: true });
 
     // REST create succeeds
     deps.fetch.mockResolvedValue({
@@ -170,7 +182,7 @@ describe("fileMetaBug — new-issue path", () => {
     const params = makeParams({ severity: undefined });
 
     deps.execSync.mockReturnValue("[]");
-    deps.execFile.mockReturnValue("https://github.com/testowner/testrepo/issues/10");
+    stubGh(deps, { createUrl: "https://github.com/testowner/testrepo/issues/10" });
 
     const result = await fileMetaBug(params, makeConfig(), deps);
     expect(result.ok).toBe(true);
@@ -194,13 +206,10 @@ describe("fileMetaBug — dedupe path", () => {
     const hash = computeMetaBugHash(params.class, params.title);
 
     // gh issue list returns a match
-    deps.execSync.mockImplementation((cmd) => {
-      if (cmd.includes("gh issue list")) {
-        return JSON.stringify([
-          { number: 7, url: "https://github.com/testowner/testrepo/issues/7", title: `[self-repair:${hash}] [plan-defect] Gate uses wrong grep pattern` },
-        ]);
-      }
-      return "";
+    stubGh(deps, {
+      listJson: JSON.stringify([
+        { number: 7, url: "https://github.com/testowner/testrepo/issues/7", title: `[self-repair:${hash}] [plan-defect] Gate uses wrong grep pattern` },
+      ]),
     });
 
     // addComment via REST succeeds
@@ -300,7 +309,7 @@ describe("fileMetaBug — error handling", () => {
 
     // No existing issues
     deps.execSync.mockReturnValue("[]");
-    deps.execFile.mockImplementation(() => { throw new Error("fail"); });
+    stubGh(deps, { createThrows: true });
 
     // REST also fails
     deps.fetch.mockResolvedValue({
@@ -338,7 +347,7 @@ describe("fileMetaBug — body content", () => {
     const params = makeParams({ trajectoryExcerpt: trajectory });
 
     deps.execSync.mockReturnValue("[]");
-    deps.execFile.mockReturnValue("https://github.com/testowner/testrepo/issues/50");
+    stubGh(deps, { createUrl: "https://github.com/testowner/testrepo/issues/50" });
 
     const result = await fileMetaBug(params, makeConfig(), deps);
     expect(result.ok).toBe(true);
@@ -354,7 +363,7 @@ describe("fileMetaBug — body content", () => {
     const params = makeParams();
 
     deps.execSync.mockReturnValue("[]");
-    deps.execFile.mockReturnValue("https://github.com/testowner/testrepo/issues/51");
+    stubGh(deps, { createUrl: "https://github.com/testowner/testrepo/issues/51" });
 
     await fileMetaBug(params, makeConfig(), deps);
     const body = argValue(ghCreateArgv(deps), "--body");
@@ -367,7 +376,7 @@ describe("fileMetaBug — body content", () => {
     const params = makeParams({ filePaths: ["src/a.mjs", "src/b.mjs"] });
 
     deps.execSync.mockReturnValue("[]");
-    deps.execFile.mockReturnValue("https://github.com/testowner/testrepo/issues/52");
+    stubGh(deps, { createUrl: "https://github.com/testowner/testrepo/issues/52" });
 
     await fileMetaBug(params, makeConfig(), deps);
     const body = argValue(ghCreateArgv(deps), "--body");
@@ -381,7 +390,7 @@ describe("fileMetaBug — body content", () => {
     const params = makeParams({ plan: "Phase-28", slice: "3" });
 
     deps.execSync.mockReturnValue("[]");
-    deps.execFile.mockReturnValue("https://github.com/testowner/testrepo/issues/53");
+    stubGh(deps, { createUrl: "https://github.com/testowner/testrepo/issues/53" });
 
     await fileMetaBug(params, makeConfig(), deps);
     const body = argValue(ghCreateArgv(deps), "--body");

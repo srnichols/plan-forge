@@ -14,7 +14,7 @@ import { resolve } from "node:path";
 import { existsSync, readFileSync } from "node:fs";
 import { createHash } from "node:crypto";
 import { ERROR_CODES } from "../../enums.mjs";
-import { createIssueViaGhCli } from "../gh-cli.mjs";
+import { createIssueViaGhCli, findOpenIssueByHashViaGhCli } from "../gh-cli.mjs";
 
 // ─── Helpers (exported for tests) ─────────────────────────────────────
 
@@ -514,26 +514,10 @@ export function computeMetaBugHash(bugClass, title) {
  *
  * @returns {Promise<{ issueNumber: number, url: string } | null>}
  */
-async function findExistingMetaBug({ hash, owner, repo, token, execSync: execSyncFn, fetch: fetchFn, cwd }) {
+async function findExistingMetaBug({ hash, owner, repo, token, execFile: execFileFn, fetch: fetchFn, cwd }) {
   // 1. Try gh CLI
-  if (typeof execSyncFn === "function") {
-    try {
-      const cmd = `gh issue list --repo "${owner}/${repo}" --label "self-repair" --state open --search "${hash}" --json number,url,title --limit 10`;
-      const raw = execSyncFn(cmd, {
-        encoding: "utf-8",
-        timeout: 30_000,
-        stdio: ["pipe", "pipe", "pipe"],
-        cwd,
-      }).trim();
-      if (raw) {
-        const issues = JSON.parse(raw);
-        const match = issues.find((i) => i.title?.includes(hash));
-        if (match) {
-          return { issueNumber: match.number, url: match.url };
-        }
-      }
-    } catch { /* gh CLI unavailable or failed — fall through to REST */ }
-  }
+  const viaCli = findOpenIssueByHashViaGhCli({ owner, repo, label: "self-repair", hash, execFile: execFileFn, cwd });
+  if (viaCli) return viaCli;
 
   // 2. REST search fallback
   if (token && typeof fetchFn === "function") {
@@ -686,7 +670,7 @@ export async function fileMetaBug(params, config, { execSync: execSyncFn, execFi
     });
 
     const existing = await findExistingMetaBug({ hash: hash, owner: repoInfo.owner, repo: repoInfo.repo, token: tokenResult.token, ...{
-      execSync: execSyncFn,
+      execFile: execFileFn,
       fetch: fetchFn,
       cwd,
     } });

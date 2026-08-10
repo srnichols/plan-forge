@@ -2159,7 +2159,7 @@ function spawnCliWorkerExecution({ prompt, model, cwd, timeout, worker, runPlanA
   });
 }
 
-export function spawnWorker(prompt, options = {}) {
+export async function spawnWorker(prompt, options = {}) {
   const {
     model = null,
     cwd = process.cwd(),
@@ -2169,12 +2169,29 @@ export function spawnWorker(prompt, options = {}) {
     role = null,
     eventBus = null,
     extraEnv = null,
+    forbiddenPaths = [],
   } = options;
 
   const { apiProvider } = _resolveApiProviderForRouting(model, worker);
   if (apiProvider) {
     _enforceApiRoleGuard(apiProvider, role, model);
     return callApiWorker(prompt, model, apiProvider, { timeout, role });
+  }
+
+  // Phase-60 Slice 2: route COPILOT_SERVABLE models through the SDK when opted in.
+  // Falls back to the spawn path on any SDK-level failure.
+  if (model && !worker && isCopilotServableModel(model) && loadCopilotSdkPreference(cwd) === "prefer") {
+    try {
+      const { runSdkSession } = await import("./sdk-worker.mjs");
+      return await runSdkSession({ prompt, model, cwd, forbiddenPaths });
+    } catch (err) {
+      if (err.sdkError) {
+        // Log once and fall through to the spawn path — the switch is an optimisation.
+        console.error(`[sdk-worker] falling back to spawn: ${err.message}`);
+      } else {
+        throw err;
+      }
+    }
   }
 
   return spawnCliWorkerExecution({

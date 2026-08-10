@@ -43,8 +43,16 @@ async function _startSdk() {
     ({ getNodeAutoInstrumentations } = await import(
       '@opentelemetry/auto-instrumentations-node'
     ));
-  } catch {
-    // Optional packages not installed — graceful no-op.
+  } catch (err) {
+    // The gate was opened deliberately, so a missing package is a
+    // misconfiguration rather than the expected no-op. `@opentelemetry/api` is a
+    // required peer of sdk-node and npm silently drops it when it is declared
+    // only in optionalDependencies, which disables tracing with no other signal.
+    console.warn(
+      `[otel] tracing was requested but the SDK could not load: ${err.message}\n` +
+      '[otel] install the packages explicitly to enable it:\n' +
+      '[otel]   npm i @opentelemetry/api @opentelemetry/sdk-node @opentelemetry/auto-instrumentations-node',
+    );
     return null;
   }
 

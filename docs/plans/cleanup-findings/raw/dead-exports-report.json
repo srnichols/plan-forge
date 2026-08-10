@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-08-10T03:26:27.761Z",
+  "generatedAt": "2026-08-10T07:35:22.516Z",
   "scopes": [
     "pforge-mcp",
     "pforge-master",
@@ -8,7 +8,7 @@
   "counts": {
     "filesScanned": 283,
     "filesWithDeadExports": 115,
-    "totalExports": 1616,
+    "totalExports": 1621,
     "deadExports": 710,
     "namespaceConsumedFiles": 50
   },
@@ -584,7 +584,7 @@
         "WORKFLOWS",
         "buildCapabilities"
       ],
-      "totalExports": 10
+      "totalExports": 11
     },
     {
       "file": "pforge-mcp/export-plan.mjs",

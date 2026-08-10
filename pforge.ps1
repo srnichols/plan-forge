@@ -3314,11 +3314,14 @@ function Invoke-Smith {
         $nodeCmd = Get-Command node -ErrorAction SilentlyContinue
         if ($nodeCmd) {
             $nodeVer = (node --version 2>$null) -replace '^v', ''
-            $nodeMajor = [int]($nodeVer -split '\.')[0]
-            if ($nodeMajor -ge 18) {
-                Doctor-Pass "Node.js v$nodeVer (sharp requires >= 18.17)"
+            $nodeParts = $nodeVer -split '\.'
+            $nodeMajor = [int]$nodeParts[0]
+            $nodeMinor = if ($nodeParts.Count -gt 1) { [int]$nodeParts[1] } else { 0 }
+            # Floor tracks plan-forge-mcp engines.node (>=20.19.0 since v3.26.0).
+            if ($nodeMajor -gt 20 -or ($nodeMajor -eq 20 -and $nodeMinor -ge 19)) {
+                Doctor-Pass "Node.js v$nodeVer (plan-forge-mcp requires >= 20.19.0)"
             } else {
-                Doctor-Fail "Node.js v$nodeVer — sharp requires >= 18.17" "Upgrade Node.js from https://nodejs.org/"
+                Doctor-Fail "Node.js v$nodeVer — plan-forge-mcp requires >= 20.19.0" "Upgrade Node.js from https://nodejs.org/"
             }
         } else {
             Doctor-Fail "Node.js not found — required for image generation" "Install from https://nodejs.org/"

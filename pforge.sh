@@ -2850,10 +2850,13 @@ cmd_doctor() {
             local node_ver
             node_ver="$(node --version 2>/dev/null | sed 's/^v//')"
             local node_major="${node_ver%%.*}"
-            if [ "$node_major" -ge 18 ] 2>/dev/null; then
-                doctor_pass "Node.js v$node_ver (sharp requires >= 18.17)"
+            local node_rest="${node_ver#*.}"
+            local node_minor="${node_rest%%.*}"
+            # Floor tracks plan-forge-mcp engines.node (>=20.19.0 since v3.26.0).
+            if { [ "$node_major" -gt 20 ] || { [ "$node_major" -eq 20 ] && [ "$node_minor" -ge 19 ]; }; } 2>/dev/null; then
+                doctor_pass "Node.js v$node_ver (plan-forge-mcp requires >= 20.19.0)"
             else
-                doctor_fail "Node.js v$node_ver — sharp requires >= 18.17" "Upgrade Node.js from https://nodejs.org/"
+                doctor_fail "Node.js v$node_ver — plan-forge-mcp requires >= 20.19.0" "Upgrade Node.js from https://nodejs.org/"
             fi
         else
             doctor_fail "Node.js not found — required for image generation" "Install from https://nodejs.org/"

@@ -35,13 +35,26 @@ function makeConfig(overrides = {}) {
 
 function makeDeps(overrides = {}) {
   const execSync = vi.fn();
+  const execFile = vi.fn();
   const fetchFn = vi.fn();
   return {
     execSync,
+    execFile,
     fetch: fetchFn,
     cwd: "/tmp/test",
     ...overrides,
   };
+}
+
+/** argv handed to `gh issue create`, or null if the CLI path was not taken. */
+function ghCreateArgv(deps) {
+  const call = deps.execFile.mock.calls.find((c) => c[0] === "gh" && c[1]?.[1] === "create");
+  return call ? call[1] : null;
+}
+
+function argValue(argv, flag) {
+  const i = argv.indexOf(flag);
+  return i === -1 ? undefined : argv[i + 1];
 }
 
 function stubTokenEnv() {
@@ -100,19 +113,14 @@ describe("fileMetaBug — new-issue path", () => {
     clearTokenEnv();
   });
 
-  it("calls createIssueViaGh with correct title and labels", async () => {
+  it("passes the correct title and labels to gh issue create", async () => {
     const deps = makeDeps();
     const params = makeParams();
     const hash = computeMetaBugHash(params.class, params.title);
 
     // gh issue list returns no matches (no existing issue)
-    deps.execSync.mockImplementation((cmd) => {
-      if (cmd.includes("gh issue list")) return "[]";
-      if (cmd.includes("gh issue create")) {
-        return `https://github.com/testowner/testrepo/issues/42`;
-      }
-      return "";
-    });
+    deps.execSync.mockReturnValue("[]");
+    deps.execFile.mockReturnValue("https://github.com/testowner/testrepo/issues/42");
 
     const result = await fileMetaBug(params, makeConfig(), deps);
 
@@ -121,18 +129,18 @@ describe("fileMetaBug — new-issue path", () => {
     expect(result.deduped).toBe(false);
     expect(result.hash).toBe(hash);
 
-    // Verify create was called with correct title format
-    const createCall = deps.execSync.mock.calls.find((c) => c[0].includes("gh issue create"));
-    expect(createCall).toBeTruthy();
-    expect(createCall[0]).toContain(`[self-repair:${hash}]`);
-    expect(createCall[0]).toContain(`[${params.class}]`);
-    expect(createCall[0]).toContain(params.title);
+    const argv = ghCreateArgv(deps);
+    expect(argv).toBeTruthy();
+    const title = argValue(argv, "--title");
+    expect(title).toContain(`[self-repair:${hash}]`);
+    expect(title).toContain(`[${params.class}]`);
+    expect(title).toContain(params.title);
 
     // Verify labels
-    expect(createCall[0]).toContain('--label "self-repair"');
-    expect(createCall[0]).toContain('--label "plan-forge-internal"');
-    expect(createCall[0]).toContain('--label "plan-defect"');
-    expect(createCall[0]).toContain('--label "high"');
+    expect(argv).toContain("self-repair");
+    expect(argv).toContain("plan-forge-internal");
+    expect(argv).toContain("plan-defect");
+    expect(argv).toContain("high");
   });
 
   it("falls back to REST when gh CLI fails for create", async () => {
@@ -140,11 +148,8 @@ describe("fileMetaBug — new-issue path", () => {
     const params = makeParams();
 
     // gh issue list returns no matches, gh issue create fails
-    deps.execSync.mockImplementation((cmd) => {
-      if (cmd.includes("gh issue list")) return "[]";
-      if (cmd.includes("gh issue create")) throw new Error("gh not found");
-      return "";
-    });
+    deps.execSync.mockReturnValue("[]");
+    deps.execFile.mockImplementation(() => { throw new Error("gh not found"); });
 
     // REST create succeeds
     deps.fetch.mockResolvedValue({
@@ -164,19 +169,13 @@ describe("fileMetaBug — new-issue path", () => {
     const deps = makeDeps();
     const params = makeParams({ severity: undefined });
 
-    deps.execSync.mockImplementation((cmd) => {
-      if (cmd.includes("gh issue list")) return "[]";
-      if (cmd.includes("gh issue create")) {
-        return `https://github.com/testowner/testrepo/issues/10`;
-      }
-      return "";
-    });
+    deps.execSync.mockReturnValue("[]");
+    deps.execFile.mockReturnValue("https://github.com/testowner/testrepo/issues/10");
 
     const result = await fileMetaBug(params, makeConfig(), deps);
     expect(result.ok).toBe(true);
 
-    const createCall = deps.execSync.mock.calls.find((c) => c[0].includes("gh issue create"));
-    expect(createCall[0]).toContain('--label "medium"');
+    expect(ghCreateArgv(deps)).toContain("medium");
   });
 });
 
@@ -300,11 +299,8 @@ describe("fileMetaBug — error handling", () => {
     const deps = makeDeps();
 
     // No existing issues
-    deps.execSync.mockImplementation((cmd) => {
-      if (cmd.includes("gh issue list")) return "[]";
-      if (cmd.includes("gh issue create")) throw new Error("fail");
-      return "";
-    });
+    deps.execSync.mockReturnValue("[]");
+    deps.execFile.mockImplementation(() => { throw new Error("fail"); });
 
     // REST also fails
     deps.fetch.mockResolvedValue({
@@ -341,81 +337,57 @@ describe("fileMetaBug — body content", () => {
     const trajectory = "I chose approach X because Y was too slow.\nKey gotcha: Z.";
     const params = makeParams({ trajectoryExcerpt: trajectory });
 
-    let capturedBody = "";
-    deps.execSync.mockImplementation((cmd) => {
-      if (cmd.includes("gh issue list")) return "[]";
-      if (cmd.includes("gh issue create")) {
-        capturedBody = cmd;
-        return `https://github.com/testowner/testrepo/issues/50`;
-      }
-      return "";
-    });
+    deps.execSync.mockReturnValue("[]");
+    deps.execFile.mockReturnValue("https://github.com/testowner/testrepo/issues/50");
 
     const result = await fileMetaBug(params, makeConfig(), deps);
     expect(result.ok).toBe(true);
 
     // The body should contain the trajectory under ## Context
-    expect(capturedBody).toContain("## Context");
-    expect(capturedBody).toContain("I chose approach X because Y was too slow.");
+    const body = argValue(ghCreateArgv(deps), "--body");
+    expect(body).toContain("## Context");
+    expect(body).toContain("I chose approach X because Y was too slow.");
   });
 
   it("body includes symptom section", async () => {
     const deps = makeDeps();
     const params = makeParams();
 
-    let capturedBody = "";
-    deps.execSync.mockImplementation((cmd) => {
-      if (cmd.includes("gh issue list")) return "[]";
-      if (cmd.includes("gh issue create")) {
-        capturedBody = cmd;
-        return `https://github.com/testowner/testrepo/issues/51`;
-      }
-      return "";
-    });
+    deps.execSync.mockReturnValue("[]");
+    deps.execFile.mockReturnValue("https://github.com/testowner/testrepo/issues/51");
 
     await fileMetaBug(params, makeConfig(), deps);
-    expect(capturedBody).toContain("## Symptom");
-    expect(capturedBody).toContain(params.symptom);
+    const body = argValue(ghCreateArgv(deps), "--body");
+    expect(body).toContain("## Symptom");
+    expect(body).toContain(params.symptom);
   });
 
   it("body includes file paths", async () => {
     const deps = makeDeps();
     const params = makeParams({ filePaths: ["src/a.mjs", "src/b.mjs"] });
 
-    let capturedBody = "";
-    deps.execSync.mockImplementation((cmd) => {
-      if (cmd.includes("gh issue list")) return "[]";
-      if (cmd.includes("gh issue create")) {
-        capturedBody = cmd;
-        return `https://github.com/testowner/testrepo/issues/52`;
-      }
-      return "";
-    });
+    deps.execSync.mockReturnValue("[]");
+    deps.execFile.mockReturnValue("https://github.com/testowner/testrepo/issues/52");
 
     await fileMetaBug(params, makeConfig(), deps);
-    expect(capturedBody).toContain("## Files");
-    expect(capturedBody).toContain("src/a.mjs");
-    expect(capturedBody).toContain("src/b.mjs");
+    const body = argValue(ghCreateArgv(deps), "--body");
+    expect(body).toContain("## Files");
+    expect(body).toContain("src/a.mjs");
+    expect(body).toContain("src/b.mjs");
   });
 
   it("body includes plan and slice reference", async () => {
     const deps = makeDeps();
     const params = makeParams({ plan: "Phase-28", slice: "3" });
 
-    let capturedBody = "";
-    deps.execSync.mockImplementation((cmd) => {
-      if (cmd.includes("gh issue list")) return "[]";
-      if (cmd.includes("gh issue create")) {
-        capturedBody = cmd;
-        return `https://github.com/testowner/testrepo/issues/53`;
-      }
-      return "";
-    });
+    deps.execSync.mockReturnValue("[]");
+    deps.execFile.mockReturnValue("https://github.com/testowner/testrepo/issues/53");
 
     await fileMetaBug(params, makeConfig(), deps);
-    expect(capturedBody).toContain("## Reference");
-    expect(capturedBody).toContain("Phase-28");
-    expect(capturedBody).toContain("Slice");
+    const body = argValue(ghCreateArgv(deps), "--body");
+    expect(body).toContain("## Reference");
+    expect(body).toContain("Phase-28");
+    expect(body).toContain("Slice");
   });
 });
 

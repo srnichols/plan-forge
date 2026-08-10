@@ -175,11 +175,11 @@ describe("fileClassifierIssue — gh CLI success (new issue)", () => {
     const execSync = vi.fn((cmd) => {
       if (cmd.includes("git remote")) return "https://github.com/owner/repo.git";
       if (cmd.includes("gh issue list")) return "[]";         // no existing issue
-      if (cmd.includes("gh issue create")) return "https://github.com/owner/repo/issues/42";
       throw new Error(`unexpected cmd: ${cmd}`);
     });
+    const execFile = vi.fn(() => "https://github.com/owner/repo/issues/42");
 
-    const result = await fileClassifierIssue(BASE_PAYLOAD, {}, { execSync, cwd: "/fake/cwd" });
+    const result = await fileClassifierIssue(BASE_PAYLOAD, {}, { execSync, execFile, cwd: "/fake/cwd" });
     expect(result.ok).toBe(true);
     expect(result.issueNumber).toBe(42);
     expect(result.deduped).toBe(false);

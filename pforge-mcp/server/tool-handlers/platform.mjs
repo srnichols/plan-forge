@@ -1,4 +1,4 @@
-import { execSync } from "node:child_process";
+import { execSync, execFileSync } from "node:child_process";
 import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync, appendFileSync, watchFile, unwatchFile, statSync, openSync, readSync, closeSync, renameSync, createWriteStream } from "node:fs";
 import { resolve, join, dirname, basename, isAbsolute, extname } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -258,7 +258,7 @@ async function _callToolHandler_075_forge_meta_bug_file(request, args) {
           trajectoryExcerpt,
         },
         config,
-        { execSync, cwd },
+        { execSync, execFile: execFileSync, cwd },
       );
 
       emitToolTelemetry({ toolName: "forge_meta_bug_file", inputs: args, result: filerResult, durationMs: Date.now() - t0, status: filerResult.ok ? "OK" : "ERROR", cwd: cwd });

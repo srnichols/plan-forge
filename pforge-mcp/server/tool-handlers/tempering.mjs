@@ -1,4 +1,4 @@
-import { execSync } from "node:child_process";
+import { execSync, execFileSync } from "node:child_process";
 import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync, appendFileSync, watchFile, unwatchFile, statSync, openSync, readSync, closeSync, renameSync, createWriteStream } from "node:fs";
 import { resolve, join, dirname, basename, isAbsolute, extname } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -340,7 +340,7 @@ async function _callToolHandler_035_forge_classifier_issue(request, args) {
       }
       let config = {};
       try { config = JSON.parse(readFileSync(resolve(cwd, ".forge.json"), "utf-8")); } catch { /* proceed without config */ }
-      const result = await fileClassifierIssue(args.payload, config, { execSync, cwd, fetch: globalThis.fetch });
+      const result = await fileClassifierIssue(args.payload, config, { execSync, execFile: execFileSync, cwd, fetch: globalThis.fetch });
       emitToolTelemetry({ toolName: "forge_classifier_issue", inputs: args, result: result, durationMs: Date.now() - t0, status: result.ok ? "OK" : "ERROR", cwd: cwd });
       return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
     } catch (err) {

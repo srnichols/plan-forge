@@ -14,6 +14,7 @@ import { resolve } from "node:path";
 import { existsSync, readFileSync } from "node:fs";
 import { createHash } from "node:crypto";
 import { ERROR_CODES } from "../../enums.mjs";
+import { createIssueViaGhCli } from "../gh-cli.mjs";
 
 // ─── Helpers (exported for tests) ─────────────────────────────────────
 
@@ -238,32 +239,6 @@ async function createIssueViaRest({ token, owner, repo, title, body, labels, fet
 }
 
 /**
- * Create an issue via `gh issue create`. Returns null on any failure.
- */
-function createIssueViaGh({ owner, repo, title, body, labels, execSync: execSyncFn, cwd }) {
-  if (typeof execSyncFn !== "function") return null;
-  try {
-    const labelArg = labels.map((l) => `--label "${l}"`).join(" ");
-    const cmd = `gh issue create --repo "${owner}/${repo}" --title "${title.replace(/"/g, '\\"')}" --body "${body.replace(/"/g, '\\"').replace(/\n/g, "\\n")}" ${labelArg}`;
-    const output = execSyncFn(cmd, {
-      encoding: "utf-8",
-      timeout: 30_000,
-      stdio: ["pipe", "pipe", "pipe"],
-      cwd,
-    }).trim();
-
-    // gh outputs the URL of the created issue
-    const match = output.match(/\/issues\/(\d+)/);
-    if (match) {
-      return { issueNumber: parseInt(match[1], 10), url: output };
-    }
-    return null;
-  } catch {
-    return null;
-  }
-}
-
-/**
  * Add a comment to an existing issue via REST API.
  */
 async function addComment({ token, owner, repo, issueNumber, body, fetch: fetchFn }) {
@@ -304,7 +279,7 @@ async function addComment({ token, owner, repo, issueNumber, body, fetch: fetchF
  * @param {object} [deps]
  * @returns {Promise<{ provider: string, ok: boolean, issueNumber?: number, url?: string, error?: string, warnings?: string[] }>}
  */
-export async function registerBug(bug, config, { fetch: fetchFn = globalThis.fetch, execSync: execSyncFn, cwd } = {}) {
+export async function registerBug(bug, config, { fetch: fetchFn = globalThis.fetch, execSync: execSyncFn, execFile: execFileFn, cwd } = {}) {
   try {
     // Short-circuit if already linked
     if (bug.externalRef?.provider === "github" && bug.externalRef?.issueNumber) {
@@ -326,7 +301,7 @@ export async function registerBug(bug, config, { fetch: fetchFn = globalThis.fet
     const labels = buildLabels(bug, config);
 
     // Try gh CLI first, fall back to REST
-    let result = createIssueViaGh({ owner: repoInfo.owner, repo: repoInfo.repo, title, body, labels, execSync: execSyncFn, cwd });
+    let result = createIssueViaGhCli({ owner: repoInfo.owner, repo: repoInfo.repo, title, body, labels, execFile: execFileFn, cwd });
 
     if (!result) {
       result = await createIssueViaRest({
@@ -656,8 +631,8 @@ async function _handleExistingMetaBug({ existing, params, tokenResult, repoInfo,
   return { ok: true, issueNumber: existing.issueNumber, url: existing.url, deduped: true, hash };
 }
 
-async function _createNewMetaBug({ repoInfo, issueTitle, body, labels, tokenResult, execSyncFn, fetchFn, cwd, hash }) {
-  let result = createIssueViaGh({ owner: repoInfo.owner, repo: repoInfo.repo, title: issueTitle, body, labels, execSync: execSyncFn, cwd });
+async function _createNewMetaBug({ repoInfo, issueTitle, body, labels, tokenResult, execFileFn, fetchFn, cwd, hash }) {
+  let result = createIssueViaGhCli({ owner: repoInfo.owner, repo: repoInfo.repo, title: issueTitle, body, labels, execFile: execFileFn, cwd });
 
   if (!result) {
     result = await createIssueViaRest({
@@ -677,7 +652,7 @@ async function _createNewMetaBug({ repoInfo, issueTitle, body, labels, tokenResu
   return { ok: true, issueNumber: result.issueNumber, url: result.url, deduped: false, hash };
 }
 
-export async function fileMetaBug(params, config, { execSync: execSyncFn, fetch: fetchFn = globalThis.fetch, cwd } = {}) {
+export async function fileMetaBug(params, config, { execSync: execSyncFn, execFile: execFileFn, fetch: fetchFn = globalThis.fetch, cwd } = {}) {
   try {
     const bugClass = params?.class;
     const title = params?.title;
@@ -720,7 +695,7 @@ export async function fileMetaBug(params, config, { execSync: execSyncFn, fetch:
       return _handleExistingMetaBug({ existing, params, tokenResult, repoInfo, hash, fetchFn });
     }
 
-    return _createNewMetaBug({ repoInfo, issueTitle, body, labels, tokenResult, execSyncFn, fetchFn, cwd, hash });
+    return _createNewMetaBug({ repoInfo, issueTitle, body, labels, tokenResult, execFileFn, fetchFn, cwd, hash });
   } catch {
     return { ok: false, error: ERROR_CODES.UNEXPECTED.code };
   }

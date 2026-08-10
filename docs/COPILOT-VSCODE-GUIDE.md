@@ -771,10 +771,49 @@ Use the `/forge-troubleshoot` skill to diagnose the failure:
 | Gate error: test failed | Missing implementation or broken import | Fix the failing test, then resume |
 | CLI worker not found | `gh copilot` / `claude` / `codex` CLI not installed | Install CLI or switch to `mode: 'assisted'` |
 | MCP tools missing | `pforge-mcp/` dependencies not installed | Run `npm install --prefix pforge-mcp` |
+| MCP tools missing, but deps are installed and `.vscode/mcp.json` is correct | An enterprise MCP allowlist is blocking the server | See [No `forge_*` tools in an enterprise tenant](#no-forge_-tools-in-an-enterprise-tenant) |
 | Cost overrun warning | Model too expensive for slice count | Switch to a cheaper model in `.forge.json` |
 | Slice stalled, no output | Run hung | Use `forge_abort`, then `resumeFrom` the stalled slice |
 
+### No `forge_*` tools in an enterprise tenant
 
+Enterprise owners can restrict which MCP servers Copilot may run, using the
+`allowedMcpServers` / `deniedMcpServers` keys in `copilot/managed-settings.json`
+(committed to the source organisation's `.github-private` repository). This is
+enforced on VS Code, the Copilot CLI, and the Copilot app.
+
+Two properties make this hard to self-diagnose. The policy **fails closed** — a
+malformed or unverifiable configuration blocks rather than allows — and the
+settings live in a GitHub repository, not on your machine, so there is nothing
+local to inspect. The symptom is simply that setup completed, `.vscode/mcp.json`
+looks correct, and no `forge_*` tools appear.
+
+Plan Forge registers local **stdio** servers, which are matched by `serverCommand`
+on **exact command and arguments**. Give your enterprise owner these entries:
+
+```jsonc
+{
+  "allowedMcpServers": [
+    // Plan Forge MCP server (100+ forge_* tools)
+    { "serverCommand": { "command": "node", "args": ["pforge-mcp/server.mjs"] } },
+    // Forge-Master Studio — only if pforge-master/ is installed
+    { "serverCommand": { "command": "node", "args": ["pforge-master/server.mjs"] } }
+  ]
+}
+```
+
+If you also use OpenBrain (L3 memory), it is a **remote SSE** server and is
+matched by `serverUrl`, which supports `*` wildcards — supply whatever host your
+`OPENBRAIN_URL` points at.
+
+`serverName` matchers also exist, but treat them as a convenience only: users can
+rename a server, so a name is not a security control.
+
+To confirm the local half of the wiring is correct before escalating, run
+`pforge github status` — it reports whether `.vscode/mcp.json` registers the
+Plan-Forge entry. It cannot see the enterprise policy.
+
+### "Instruction file is not being applied"
 
 1. Verify the file is in `.github/instructions/` (exact path)
 2. Check the `applyTo` pattern matches the file you're editing

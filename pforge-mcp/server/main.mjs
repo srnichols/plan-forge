@@ -11,12 +11,13 @@ import { createHub } from "../hub.mjs";
 import { createBridge } from "../bridge.mjs";
 import { startEventFileWatcher } from "./helpers.mjs";
 import { checkForUpdate, detectCorruptInstall } from "../update-check.mjs";
-import { writeToolsJson, writeCliSchema } from "../capabilities.mjs";
+import { writeToolsJson, writeCliSchema, checkGeneratedArtifacts } from "../capabilities.mjs";
 
 const __dirname = resolve(fileURLToPath(new URL("..", import.meta.url)));
 
 const DASHBOARD_ONLY = process.argv.includes("--dashboard-only") || process.argv.includes("--dashboard");
 const VALIDATE_ONLY = process.argv.includes("--validate");
+const CHECK_ONLY = process.argv.includes("--check");
 
 function _emitCorruptInstallEvent(current, r, corrupt) {
   try {
@@ -81,6 +82,28 @@ function _runValidateMode() {
     process.exit(0);
   } catch (err) {
     console.error(`[validate] FAIL — ${err.message}`);
+    process.exit(1);
+  }
+}
+
+// Read-only twin of --validate, for gates that must not mutate tracked source.
+function _runCheckMode() {
+  try {
+    const toolNames = TOOLS.map((t) => t.name);
+    if (!toolNames.length) throw new Error("No tools registered");
+
+    const { ok, drift } = checkGeneratedArtifacts(TOOLS, __dirname);
+    if (!ok) {
+      for (const d of drift) {
+        console.error(`[check] ${d.file} is ${d.reason}`);
+      }
+      console.error("[check] FAIL — regenerate with `node pforge-mcp/server.mjs --validate` and commit the result");
+      process.exit(1);
+    }
+    console.error(`[check] OK — ${toolNames.length} tools registered, generated artifacts current`);
+    process.exit(0);
+  } catch (err) {
+    console.error(`[check] FAIL — ${err.message}`);
     process.exit(1);
   }
 }
@@ -162,6 +185,11 @@ function _startBridge() {
 }
 
 export async function runServerMain() {
+  // --check: read-only verification, must run before anything can write
+  if (CHECK_ONLY) {
+    _runCheckMode();
+  }
+
   // --validate: quick startup check — verify imports, tool list, and exit
   if (VALIDATE_ONLY) {
     _runValidateMode();

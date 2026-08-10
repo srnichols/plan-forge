@@ -13,6 +13,7 @@ export {
   buildCapabilities,
   writeToolsJson,
   writeCliSchema,
+  checkGeneratedArtifacts,
 } from './capabilities/surface.mjs';
 
 // ─── Sub-module re-exports (unchanged) ────────────────────────────────

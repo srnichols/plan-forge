@@ -174,9 +174,11 @@ Every gate command MUST be cross-platform. Apply these rules when writing gates:
 
 **Preferred gate pattern** (covers 90% of slices):
 ```bash
-node pforge-mcp/server.mjs --validate
+node pforge-mcp/server.mjs --check
 bash -c "cd pforge-mcp && npx vitest run tests/server.test.mjs"
 ```
+
+> Use `--check`, not `--validate`. `--validate` **regenerates** `tools.json` and `cli-schema.json`, so using it as a gate mutates tracked source and the orchestrator's auto-commit sweeps the change into an unrelated slice (meta-bug [#240](https://github.com/srnichols/plan-forge/issues/240)). `--check` verifies the same artifacts read-only and exits non-zero on drift. Regenerate deliberately with `--validate` when you actually change the tool surface.
 
 Add additional `node -e` checks only when the vitest suite doesn't cover a specific validation (e.g., checking a file exists, verifying an export).
 

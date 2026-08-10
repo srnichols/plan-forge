@@ -61,19 +61,10 @@ jobs:
 
       # tools.json is regenerated on every server boot from TOOL_METADATA, so a
       # committed copy that the generator cannot reproduce gets silently rewritten
-      # by any `server.mjs --validate` — including the standard slice gate, which
-      # then sweeps the deletion into an unrelated commit (issue #240).
+      # by any `server.mjs --validate` (issue #240). `--check` verifies the same
+      # artifacts read-only and fails on drift without touching the working tree.
       - name: Install dependencies
         run: npm ci
 
-      - name: Verify tools.json is reproducible from source
-        run: |
-          node pforge-mcp/server.mjs --validate
-          if ! git diff --quiet -- pforge-mcp/tools.json; then
-            echo "::error::pforge-mcp/tools.json is not reproducible from TOOL_METADATA."
-            echo "A server boot rewrites it, so the committed copy will be clobbered."
-            git diff --stat -- pforge-mcp/tools.json
-            git diff -- pforge-mcp/tools.json | head -100
-            exit 1
-          fi
-          echo "tools.json regenerates byte-identical."
+      - name: Verify generated artifacts are reproducible from source
+        run: node pforge-mcp/server.mjs --check

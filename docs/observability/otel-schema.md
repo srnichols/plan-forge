@@ -172,8 +172,20 @@ If the activation gate is open but the packages are missing, `initOtel()` return
 | `OTEL_SERVICE_NAME` | Override `service.name` (default: `pforge-mcp`). |
 | `OTEL_EXPORTER_OTLP_HEADERS` | Auth headers for your OTLP collector (e.g. `Authorization=Bearer <token>`). Operator-managed. |
 | `OTEL_SEMCONV_STABILITY_OPT_IN` | Set to `gen_ai_latest_experimental` to enable `gen_ai.*` semantic conventions. |
+| `OTEL_LOG_LEVEL` | SDK diagnostics. Set to `error` to surface export failures — see below. |
 
-> **`OTEL_ENABLED` alone is not enough to see data.** It opens the activation gate, but with no `OTEL_EXPORTER_OTLP_ENDPOINT` the SDK falls back to `localhost:4318` — so unless a collector is listening there, spans are emitted and silently dropped. This does not crash the server (the background exporter absorbs the connection failure), which is exactly why it can go unnoticed. Set the endpoint whenever you actually want to see traces.
+> **Seeing no traces? Set `OTEL_LOG_LEVEL=error` first.**
+>
+> `OTEL_ENABLED=true` on its own is a valid setup: with no `OTEL_EXPORTER_OTLP_ENDPOINT` the SDK targets the standard OTLP default, `localhost:4318`. If a collector is listening there, everything works.
+>
+> If nothing is listening, spans are dropped **and the SDK says nothing** — export failures go to OpenTelemetry's `diag` channel, which is a no-op until a logger is registered. Measured: over a 20 s window with no collector, the default configuration emits no diagnostic at all. Setting `OTEL_LOG_LEVEL=error` makes the cause obvious:
+>
+> ```
+> Export retry time 4184ms exceeds remaining timeout 1679ms, not retrying further.
+> {"code":"ECONNREFUSED", ... "connect ECONNREFUSED 127.0.0.1:4318"}
+> ```
+>
+> This is stock OpenTelemetry behaviour, not Plan Forge logic — Plan Forge deliberately does not register a `diag` logger for you, so `OTEL_LOG_LEVEL` stays yours to control.
 
 ### `.forge.json` settings
 

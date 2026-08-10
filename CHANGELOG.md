@@ -7,6 +7,8 @@ Format follows [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
+## [3.26.2] — 2026-08-10 — Smith reports the real Node floor
+
 ### Fixed
 
 - **`pforge smith` passed clients on Node 18 after the floor was raised to 20.19.0.** The doctor's Node check tested `major >= 18` and reported "Node.js v18.x (sharp requires >= 18.17)" as a **pass**, so a client who updated to v3.26.0/v3.26.1 on Node 18, 19, or even 20.11–20.18 was told their environment was healthy while `plan-forge-mcp` declared `engines.node >=20.19.0`. Nothing else caught it either: `npm install` emits `EBADENGINE` as a warning rather than an error unless `engine-strict=true`, and both `setup` and `pforge update` treat a warning-only install as success. So the one diagnostic a client would run to check exactly this told them the opposite. The check now compares major **and** minor against the real floor and cites `plan-forge-mcp requires >= 20.19.0`. Fixed in `pforge.ps1` and `pforge.sh` together; nine boundary cases (18.20.5, 19.9.0, 20.11.0, 20.18.9, 20.19.0, 20.19.5, 21.0.0, 22.12.0, 24.11.1) were verified to produce identical verdicts in both shells, since a naive `major >= 20` would have wrongly passed 20.11.

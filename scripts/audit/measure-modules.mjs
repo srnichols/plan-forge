@@ -1,8 +1,9 @@
 import fs from 'node:fs';
 import path from 'node:path';
+import { auditRawDir } from './raw-dir.mjs';
 
 const root = process.cwd();
-const outFile = path.join(root, 'docs', 'plans', 'cleanup-findings', 'raw', 'module-metrics.json');
+const outFile = path.join(auditRawDir(root), 'module-metrics.json');
 const scanRoots = [
   { dir: 'pforge-mcp', exclude: new Set(['tests', 'node_modules', 'ui']) },
   { dir: 'pforge-master', exclude: new Set(['tests', 'node_modules', 'ui']) },

@@ -31,10 +31,11 @@
 
 import fs from 'node:fs';
 import path from 'node:path';
+import { auditRawDir } from './raw-dir.mjs';
 import { spawnSync } from 'node:child_process';
 
 const ROOT = process.cwd();
-const OUT_DIR = path.join(ROOT, 'docs', 'plans', 'cleanup-findings', 'raw');
+const OUT_DIR = auditRawDir(ROOT);
 const OUT_FILE = path.join(OUT_DIR, 'surface-diff-report.json');
 
 const SERVER_FILE = 'pforge-mcp/server.mjs';

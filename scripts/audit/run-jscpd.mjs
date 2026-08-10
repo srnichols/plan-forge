@@ -1,9 +1,10 @@
 import fs from 'node:fs';
 import path from 'node:path';
+import { auditRawDir } from './raw-dir.mjs';
 import { spawnSync } from 'node:child_process';
 
 const root = process.cwd();
-const outDir = path.join(root, 'docs', 'plans', 'cleanup-findings', 'raw');
+const outDir = auditRawDir(root);
 const outFile = path.join(outDir, 'duplication-report.json');
 
 function ensureDir(dirPath) {

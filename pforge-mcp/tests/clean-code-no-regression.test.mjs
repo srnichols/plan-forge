@@ -18,7 +18,7 @@ import { describe, it, expect } from 'vitest';
 import { spawnSync } from 'node:child_process';
 import { resolve, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { readFileSync, existsSync, unlinkSync } from 'node:fs';
+import { readFileSync, existsSync, unlinkSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 
@@ -49,11 +49,19 @@ describe.skipIf(!BASELINE_AVAILABLE)('clean-code no-regression gate (Phase-55)',
     { timeout: 180_000 },
     () => {
       const tmpOut = join(tmpdir(), `pf55-clean-code-${Date.now()}-${process.pid}.json`);
+      // Sub-scanners write their raw reports to a fixed dir under docs/plans/.
+      // Redirect it, or a full test run leaves 9 tracked files dirty.
+      const tmpRaw = join(tmpdir(), `pf55-clean-code-raw-${Date.now()}-${process.pid}`);
       try {
         const result = spawnSync(
           process.execPath,
           [AUDIT_SCRIPT, '--out', tmpOut],
-          { cwd: REPO_ROOT, encoding: 'utf8', timeout: 150_000 }
+          {
+            cwd: REPO_ROOT,
+            encoding: 'utf8',
+            timeout: 150_000,
+            env: { ...process.env, PFORGE_AUDIT_RAW_DIR: tmpRaw }
+          }
         );
 
         if (result.error) throw result.error;
@@ -89,6 +97,7 @@ describe.skipIf(!BASELINE_AVAILABLE)('clean-code no-regression gate (Phase-55)',
         expect(current.summary.totalErrors).toBeLessThanOrEqual(baseline.summary.totalErrors);
       } finally {
         try { if (existsSync(tmpOut)) unlinkSync(tmpOut); } catch { /* ignore cleanup errors */ }
+        try { rmSync(tmpRaw, { recursive: true, force: true }); } catch { /* ignore cleanup errors */ }
       }
     }
   );

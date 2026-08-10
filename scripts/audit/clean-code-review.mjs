@@ -10,10 +10,11 @@
 
 import fs from 'node:fs';
 import path from 'node:path';
+import { auditRawDir } from './raw-dir.mjs';
 import { execFileSync } from 'node:child_process';
 
 const root = process.cwd();
-const rawDir = path.join(root, 'docs', 'plans', 'cleanup-findings', 'raw');
+const rawDir = auditRawDir(root);
 
 const args = process.argv.slice(2);
 const fixSuggestions = args.includes('--fix-suggestions');

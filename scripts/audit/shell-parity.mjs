@@ -37,9 +37,10 @@
 
 import fs from 'node:fs';
 import path from 'node:path';
+import { auditRawDir } from './raw-dir.mjs';
 
 const ROOT = process.cwd();
-const OUT_DIR = path.join(ROOT, 'docs', 'plans', 'cleanup-findings', 'raw');
+const OUT_DIR = auditRawDir(ROOT);
 const OUT_FILE = path.join(OUT_DIR, 'shell-parity-report.json');
 
 const EXCLUDED_DIRS = new Set(['node_modules', '.forge', 'archive', '.git', 'dist', 'coverage']);

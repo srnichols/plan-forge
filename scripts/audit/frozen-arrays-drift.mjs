@@ -47,9 +47,10 @@
 
 import fs from 'node:fs';
 import path from 'node:path';
+import { auditRawDir } from './raw-dir.mjs';
 
 const ROOT = process.cwd();
-const OUT_DIR = path.join(ROOT, 'docs', 'plans', 'cleanup-findings', 'raw');
+const OUT_DIR = auditRawDir(ROOT);
 const OUT_FILE = path.join(OUT_DIR, 'frozen-arrays-drift-report.json');
 const ENUMS_FILE = path.join(ROOT, 'pforge-mcp', 'enums.mjs');
 

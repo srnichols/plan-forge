@@ -129,20 +129,23 @@ parallel group is safe. No Parallel Merge Checkpoints are required.
 **Context Files**: `.github/instructions/architecture-principles.instructions.md`, `.github/instructions/release-checklist.instructions.md`
 
 Tasks:
-- Add `@github/copilot-sdk` to `pforge-mcp/package.json` dependencies.
+- Add `@github/copilot-sdk` to `pforge-mcp/package.json` dependencies **and install it** so the lockfile is updated and the module resolves.
 - Raise `engines.node` to `>=20.19.0` on `pforge-mcp/package.json` and the private root `package.json`.
 - Add `routing.copilotSdk` (`"off"` | `"prefer"`, default `"off"`) to `pforge-mcp/capabilities/schemas.mjs` and a `loadCopilotSdkPreference(cwd)` reader in `worker-spawn.mjs`, modelled on `loadGrokCliPreference`.
 - Record the breaking Node floor bump under `## [Unreleased]` in `CHANGELOG.md`.
 
-Files: `pforge-mcp/package.json`, `package.json`, `pforge-mcp/capabilities/schemas.mjs`, `pforge-mcp/orchestrator/worker-spawn.mjs`, `CHANGELOG.md`
+Files: `pforge-mcp/package.json`, `pforge-mcp/package-lock.json`, `package.json`, `pforge-mcp/capabilities/schemas.mjs`, `pforge-mcp/orchestrator/worker-spawn.mjs`, `CHANGELOG.md`
 
 **Validation Gate**:
 ```bash
 node -e 'const p=require("./pforge-mcp/package.json");if(!p.dependencies["@github/copilot-sdk"])throw new Error("sdk dep missing");if(p.engines.node!==">=20.19.0")throw new Error("mcp engines floor wrong: "+p.engines.node)'
 node -e 'const r=require("./package.json");if(r.engines.node!==">=20.19.0")throw new Error("root engines floor wrong: "+r.engines.node)'
+node -e 'require.resolve("@github/copilot-sdk",{paths:["pforge-mcp"]})'
 node -e 'const s=require("fs").readFileSync("pforge-mcp/orchestrator/worker-spawn.mjs","utf8");if(!s.includes("loadCopilotSdkPreference"))throw new Error("loadCopilotSdkPreference reader missing")'
+node -e 'const s=require("fs").readFileSync("pforge-mcp/capabilities/schemas.mjs","utf8");if(!s.includes("copilotSdk"))throw new Error("routing.copilotSdk missing from the config schema")'
+node -e 'const s=require("fs").readFileSync("CHANGELOG.md","utf8");const u=s.slice(0,s.indexOf("## [3.25.1]"));if(!u.includes("20.19.0"))throw new Error("Node floor bump not recorded under [Unreleased]")'
 node pforge-mcp/server.mjs --check
-node -e "process.chdir('pforge-mcp'); require('child_process').execSync('npx vitest run tests/worker-backend-preflight.test.mjs', {stdio:'inherit',shell:true});"
+node -e "process.chdir('pforge-mcp'); require('child_process').execSync('npx vitest run tests/worker-backend-preflight.test.mjs tests/capabilities.test.mjs', {stdio:'inherit',shell:true});"
 ```
 
 ### Slice 2 — SDK-backed worker for COPILOT_SERVABLE models, behind the switch [sequential]

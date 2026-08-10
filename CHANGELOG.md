@@ -7,6 +7,10 @@ Format follows [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
+### Fixed
+
+- **`routing.copilotSdk` reverted to defaulting `"off"`, and the code now agrees with its own published schema.** v3.26.0 shipped the reader defaulting to `"prefer"`, but the phase that flipped it never performed the cost-parity measurement its own plan required as the precondition — no baseline artifact was produced, so the 5-percent criterion was unmet rather than met. The plan's stated rule was to revert the default if parity could not be shown, so that is what this does; the SDK path remains fully available with `routing.copilotSdk: "prefer"`. Two further reasons this was the wrong default to ship: `pforge-mcp/capabilities/schemas.mjs` still declared `default: "off"` with the description "no behaviour change until explicitly enabled", so `forge_capabilities` advertised one contract while the runtime did the opposite — an agent reasoning about cost from the capability surface would have been misled. And the reader's `catch` also returned `"prefer"`, meaning a malformed `.forge.json` silently opted the operator *into* an unmeasured billing path; it now fails closed. Measuring parity requires clean end-to-end plan runs, which are currently blocked by [#248](https://github.com/srnichols/plan-forge/issues/248).
+
 ## [3.26.0] — 2026-08-10 — Copilot SDK worker path
 
 ### Breaking

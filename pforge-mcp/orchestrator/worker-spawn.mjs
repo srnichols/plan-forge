@@ -1433,14 +1433,15 @@ const VALID_COPILOT_SDK_PREFS = new Set(["prefer", "off"]);
 export function loadCopilotSdkPreference(cwd) {
   try {
     const configPath = resolve(cwd, ".forge.json");
-    if (!existsSync(configPath)) return "prefer";
+    if (!existsSync(configPath)) return "off";
     const config = JSON.parse(readFileSync(configPath, "utf-8"));
     const pref = config?.routing?.copilotSdk;
     if (typeof pref === "string" && VALID_COPILOT_SDK_PREFS.has(pref)) return pref;
-    // Default is "prefer"; operators opt out by setting routing.copilotSdk: "off" in .forge.json
-    return "prefer";
+    // Stays "off" until SDK-vs-spawn cost parity is measured (Phase-60 Slice 6
+    // flipped this without producing the baseline its own plan required).
+    return "off";
   } catch {
-    return "prefer";
+    return "off";
   }
 }
 

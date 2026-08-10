@@ -1,9 +1,10 @@
 import fs from 'node:fs';
 import path from 'node:path';
+import { auditRawDir } from './raw-dir.mjs';
 import { spawnSync } from 'node:child_process';
 
 const root = process.cwd();
-const outFile = path.join(root, 'docs', 'plans', 'cleanup-findings', 'raw', 'architecture-report.json');
+const outFile = path.join(auditRawDir(root), 'architecture-report.json');
 const policyPath = path.join(root, 'scripts', 'audit', 'layer-policy.json');
 const ninetyDayThreshold = '90 days ago';
 

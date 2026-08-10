@@ -17,12 +17,13 @@
 
 import fs from 'node:fs';
 import path from 'node:path';
+import { auditRawDir } from './raw-dir.mjs';
 import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const root = path.resolve(__dirname, '..', '..');
-const outFile = path.join(root, 'docs', 'plans', 'cleanup-findings', 'raw', 'eslint-report.json');
+const outFile = path.join(auditRawDir(root), 'eslint-report.json');
 const configPath = path.join(root, 'scripts', 'audit', 'eslint-clean-code.config.mjs');
 const eslintBin = path.join(root, 'node_modules', 'eslint', 'bin', 'eslint.js');
 

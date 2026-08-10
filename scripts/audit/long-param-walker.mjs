@@ -1,8 +1,9 @@
 import fs from 'node:fs';
 import path from 'node:path';
+import { auditRawDir } from './raw-dir.mjs';
 
 const root = process.cwd();
-const outFile = path.join(root, 'docs', 'plans', 'cleanup-findings', 'raw', 'long-param-report.json');
+const outFile = path.join(auditRawDir(root), 'long-param-report.json');
 const excludedDirNames = new Set(['tests', 'node_modules', 'ui']);
 
 function ensureDir(dirPath) {

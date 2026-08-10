@@ -2940,7 +2940,7 @@
           },
           "model": {
             "type": "string",
-            "description": "Override watcher model (default: claude-opus-4.7)"
+            "description": "Override watcher model (default: claude-opus-4.8)"
           },
           "tailEvents": {
             "type": "number",

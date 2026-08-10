@@ -1,7 +1,8 @@
 /** Plan Forge — Phase-55 S1: self-test sub-module (extracted from run-plan.mjs) */
 
-import { existsSync } from "node:fs";
-import { resolve } from "node:path";
+import { existsSync, mkdtempSync, copyFileSync, rmSync, mkdirSync } from "node:fs";
+import { resolve, join } from "node:path";
+import { tmpdir } from "node:os";
 import { parsePlan, buildDAG } from "../plan-parser.mjs";
 import { OrchestratorEventBus } from "../event-bus.mjs";
 import { SequentialScheduler, ParallelScheduler, runGate, detectScopeConflicts } from "../schedulers.mjs";
@@ -219,16 +220,34 @@ function _selfTestEstimateMode(assert, buildEstimate) {
 
 async function _selfTestDryRun(assert, runPlan) {
   console.log("\n─── Full Run (Dry-Run) ───");
+  const examplePlan = resolve(process.cwd(), "docs/plans/examples/Phase-DOTNET-EXAMPLE.md");
+  if (!existsSync(examplePlan)) return;
+
+  // Run against a scratch project rather than the repo. The example plan carries
+  // no crucibleId, so runPlan needs the manual-import bypass — and that bypass
+  // appends to .forge/crucible/manual-imports.jsonl. Writing self-test noise
+  // into a governance audit trail on every run is not acceptable, and runPlan
+  // requires the plan to sit inside the project dir, so copy it in.
+  let scratch = null;
   try {
-    const examplePlan = resolve(process.cwd(), "docs/plans/examples/Phase-DOTNET-EXAMPLE.md");
-    if (existsSync(examplePlan)) {
-      const result = await runPlan(examplePlan, { dryRun: true, cwd: process.cwd() });
-      assert("Dry-run returns status", result.status === "dry-run");
-      assert("Dry-run returns plan object", !!result.plan);
-      assert("Dry-run plan has slices", result.plan.slices.length > 0);
-    }
+    scratch = mkdtempSync(join(tmpdir(), "pforge-selftest-"));
+    mkdirSync(join(scratch, "docs", "plans"), { recursive: true });
+    const scratchPlan = join(scratch, "docs", "plans", "Phase-DOTNET-EXAMPLE.md");
+    copyFileSync(examplePlan, scratchPlan);
+
+    const result = await runPlan(scratchPlan, {
+      dryRun: true,
+      cwd: scratch,
+      manualImport: true,
+      manualImportReason: "orchestrator self-test fixture",
+    });
+    assert("Dry-run returns status", result.status === "dry-run");
+    assert("Dry-run returns plan object", !!result.plan);
+    assert("Dry-run plan has slices", result.plan?.slices?.length > 0);
   } catch (err) {
     assert(`Dry-run: ${err.message}`, false);
+  } finally {
+    if (scratch) rmSync(scratch, { recursive: true, force: true });
   }
 }
 
@@ -241,7 +260,7 @@ function _selfTestModelRouting(assert, loadModelRouting, resolveModel) {
     assert("CLI override wins", resolveModel("claude-sonnet-4.6", { default: "gpt-5" }, null) === "claude-sonnet-4.6");
     assert("Routing default when CLI is auto", resolveModel("auto", { default: "gpt-5" }, null) === "gpt-5");
     assert("Null when both auto", resolveModel(null, { default: "auto" }, null) === null);
-    assert("Default is claude-opus-4.6 when no .forge.json", loadModelRouting("/nonexistent-path-pforge-test").default === "claude-opus-4.6");
+    assert("Default is claude-opus-4.8 when no .forge.json", loadModelRouting("/nonexistent-path-pforge-test").default === "claude-opus-4.8");
   } catch (err) {
     assert(`Model routing: ${err.message}`, false);
   }

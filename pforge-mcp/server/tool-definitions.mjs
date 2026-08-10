@@ -291,7 +291,7 @@ export const TOOLS = [
         targetPath: { type: "string", description: "Absolute path to the project being watched (e.g., E:/GitHub/Rummag)" },
         runId: { type: "string", description: "Specific run directory under .forge/runs/ (default: latest)" },
         mode: { type: "string", enum: ["snapshot", "analyze"], description: "snapshot = file reads only, no AI cost. analyze = invokes watcher model for advice." },
-        model: { type: "string", description: "Override watcher model (default: claude-opus-4.7)" },
+        model: { type: "string", description: "Override watcher model (default: claude-opus-4.8)" },
         tailEvents: { type: "number", description: "Trailing events to include (1-200, default: 25). Lower = cheaper analyze prompts." },
         sinceTimestamp: { type: "string", description: "(v2.35) ISO timestamp cursor — only flag events newer than this. Pass back the previous report's `cursor` field for continuous monitoring." },
         recordHistory: { type: "boolean", description: "(v2.35) Append snapshot to watcher's own .forge/watch-history.jsonl (default: true)" },

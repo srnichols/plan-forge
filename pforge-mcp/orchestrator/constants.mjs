@@ -101,6 +101,14 @@ export const COST_ANOMALY_MULTIPLIER = 2;
 /** Phase-25 D7: keep last 10 postmortems per plan basename; age out older. */
 export const POSTMORTEM_RETENTION_COUNT = 10;
 
+/**
+ * Frontier model the watcher uses for 'analyze' narration.
+ * Single-sourced: this value was previously declared independently in
+ * hooks.mjs and review-watcher.mjs and restated in two tool descriptions,
+ * which is how the descriptions drifted to a stale 4.7.
+ */
+export const DEFAULT_WATCHER_MODEL = "claude-opus-4.8";
+
 export const QUORUM_PRESETS = {
   // Bug #107: power = the premium tier (opus-4.8). Previously this preset
   // shipped opus-4.6 and the default shipped opus-4.7 — backwards.

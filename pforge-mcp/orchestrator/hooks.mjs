@@ -17,7 +17,7 @@ import {
   getPostSliceTemperingFiredState,
   setPostSliceTemperingFiredState,
 } from "./state.mjs";
-import { QUORUM_PRESETS } from "./constants.mjs";
+import { QUORUM_PRESETS, DEFAULT_WATCHER_MODEL } from "./constants.mjs";
 import { regressionGuard } from "./gate-helpers.mjs";
 import { buildWatchSnapshot, detectWatchAnomalies } from "./review-watcher.mjs";
 import { spawnWorker } from "./worker-spawn.mjs";
@@ -1261,8 +1261,6 @@ export async function postOpenClawSnapshot(cwd, extraContext = {}) {
     return { sent: false, endpoint, error: err.name === "AbortError" ? "timeout (5s)" : err.message };
   }
 }
-
-const DEFAULT_WATCHER_MODEL = "claude-opus-4.8";
 
 // Phase-53 S7: findLatestRun, parseEventLine, parseEventsLog, readSliceArtifacts,
 // normalizeRunState, CRUCIBLE_STALL_CUTOFF_DAYS, readCrucibleState

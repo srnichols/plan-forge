@@ -1295,7 +1295,7 @@ export const TOOL_METADATA = {
     sideEffects: [
       "appends to watcher's own .forge/watch-history.jsonl (NEVER target's)",
       "may emit watch-snapshot-completed/watch-anomaly-detected/watch-advice-generated hub events",
-      "in 'analyze' mode, invokes a frontier model (default claude-opus-4.7)",
+      "in 'analyze' mode, invokes a frontier model (default claude-opus-4.8)",
     ],
     securityNote: "Read-only by design — cannot modify any files in the target project. History is written only to watcher's own cwd.",
     errors: {

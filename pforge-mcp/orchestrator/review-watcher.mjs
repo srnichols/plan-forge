@@ -26,9 +26,9 @@ import {
   readTemperingState,
   TEMPERING_SCAN_STALE_DAYS,
 } from "../tempering.mjs";
+import { DEFAULT_WATCHER_MODEL } from "./constants.mjs";
 
 const [WATCHER_MODE_SNAPSHOT, WATCHER_MODE_ANALYZE, WATCHER_MODE_CROSS_RUN] = WATCHER_MODES;
-const DEFAULT_WATCHER_MODEL = "claude-opus-4.8";
 
 // ─── Private helpers ──────────────────────────────────────────────────
 // These mirror the public implementations in orchestrator.mjs and will be

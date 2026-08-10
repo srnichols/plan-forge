@@ -3,6 +3,9 @@
   "version": "3.8.1",
   "main": "server.mjs",
   "type": "module",
+  "engines": {
+    "node": ">=18.0.0"
+  },
   "scripts": {
     "start": "node server.mjs",
     "start:mcp": "node server.mjs --mcp-stdio",

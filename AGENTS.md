@@ -4,7 +4,8 @@
 > If you're trying to *install* Plan Forge into a target project, read [`AGENT-SETUP.md`](AGENT-SETUP.md) instead — that's a different workflow.
 >
 > **Project**: Plan Forge
-> **Stack**: Node.js 18+ ESM (`.mjs`), no TypeScript build step. PowerShell 7+ AND Bash 4+ for every entry point.
+> **Stack**: Node.js ESM (`.mjs`), no TypeScript build step. PowerShell 7+ AND Bash 4+ for every entry point.
+> **Node**: shipped packages require **18+**; contributing requires **20.11+** (the test suite uses `import.meta.dirname`). CI runs Node 20.
 > **Lives on**: This file is dev-internal — ships from `planning/main`, NOT from `master`.
 
 ---

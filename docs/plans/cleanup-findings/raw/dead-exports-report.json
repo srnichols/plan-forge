@@ -1,15 +1,15 @@
 {
-  "generatedAt": "2026-05-24T02:30:25.305Z",
+  "generatedAt": "2026-08-10T03:26:27.761Z",
   "scopes": [
     "pforge-mcp",
     "pforge-master",
     "scripts"
   ],
   "counts": {
-    "filesScanned": 278,
+    "filesScanned": 283,
     "filesWithDeadExports": 115,
-    "totalExports": 1603,
-    "deadExports": 705,
+    "totalExports": 1616,
+    "deadExports": 710,
     "namespaceConsumedFiles": 50
   },
   "findings": [
@@ -42,6 +42,7 @@
         "aggregateModelStats",
         "appendWatchHistory",
         "applyFixProposal",
+        "applyGrokAddIn",
         "attachSliceSnapshotRestore",
         "auditOrphanForgeFiles",
         "autoCommitSliceIfDirty",
@@ -97,6 +98,7 @@
         "isDestructiveSliceTitle",
         "isDirectApiOnlyModel",
         "isGateCommandAllowed",
+        "isGrokCliServableModel",
         "isPlaceholderToken",
         "isWorktreeExemptPath",
         "listPlanPostmortems",
@@ -104,6 +106,7 @@
         "loadCompetitiveConfig",
         "loadGateCheckConfig",
         "loadGateSynthesisConfig",
+        "loadGrokCliPreference",
         "loadModelPerformance",
         "loadRoutingPreference",
         "loadTeardownGuardConfig",
@@ -120,6 +123,7 @@
         "parseEventLine",
         "parseEventsLog",
         "parseGitPorcelain",
+        "parseGrokStreamingJson",
         "parseOnlySlicesExpr",
         "parseShortstat",
         "parseStderrStats",
@@ -174,7 +178,7 @@
         "writeProposedFixPatch",
         "writeSilentExitRecord"
       ],
-      "totalExports": 195
+      "totalExports": 199
     },
     {
       "file": "pforge-mcp/forge-master/index.mjs",
@@ -583,6 +587,19 @@
       "totalExports": 10
     },
     {
+      "file": "pforge-mcp/export-plan.mjs",
+      "deadExports": [
+        "buildGate",
+        "buildSlice",
+        "derivePhaseSlug",
+        "extractPaths",
+        "parseSteps",
+        "parseStructuredSlices",
+        "parseTitle"
+      ],
+      "totalExports": 9
+    },
+    {
       "file": "pforge-mcp/github-metrics.mjs",
       "deadExports": [
         "MetricsAuthError",
@@ -645,18 +662,6 @@
         "assertWatcherMode"
       ],
       "totalExports": 16
-    },
-    {
-      "file": "pforge-mcp/export-plan.mjs",
-      "deadExports": [
-        "buildGate",
-        "buildSlice",
-        "derivePhaseSlug",
-        "extractPaths",
-        "parseSteps",
-        "parseTitle"
-      ],
-      "totalExports": 8
     },
     {
       "file": "pforge-mcp/forbidden-matcher.mjs",

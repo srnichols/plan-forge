@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-05-24T02:30:26.292Z",
+  "generatedAt": "2026-08-10T03:26:27.893Z",
   "scopes": [
     "pforge-mcp/tests",
     "pforge-master/tests",
@@ -7,7 +7,7 @@
   ],
   "severityFilter": "info",
   "counts": {
-    "filesScanned": 360,
+    "filesScanned": 364,
     "filesWithSmells": 110,
     "errors": 0,
     "warnings": 435,
@@ -827,84 +827,77 @@
         {
           "smell": "TIME-FLAKE",
           "severity": "warn",
-          "line": 228,
+          "line": 229,
           "snippet": "Date.now without tolerance guard",
           "why": "Time-sensitive code in tests without explicit tolerance or fake timers — Windows scheduler drift can flake the test (see Phase 41 S5 timeline-core +5ms→+50ms fix)"
         },
         {
           "smell": "TIME-FLAKE",
           "severity": "warn",
-          "line": 306,
+          "line": 307,
           "snippet": "Date.now without tolerance guard",
           "why": "Time-sensitive code in tests without explicit tolerance or fake timers — Windows scheduler drift can flake the test (see Phase 41 S5 timeline-core +5ms→+50ms fix)"
         },
         {
           "smell": "CONSOLE-LEAK",
           "severity": "warn",
-          "line": 317,
+          "line": 318,
           "snippet": "console.log(",
           "why": "Debug leftover — adds noise to test output and obscures real failures"
         },
         {
           "smell": "CONSOLE-LEAK",
           "severity": "warn",
-          "line": 382,
+          "line": 383,
           "snippet": "console.log(",
           "why": "Debug leftover — adds noise to test output and obscures real failures"
         },
         {
           "smell": "CONSOLE-LEAK",
           "severity": "warn",
-          "line": 554,
+          "line": 555,
           "snippet": "console.log(",
           "why": "Debug leftover — adds noise to test output and obscures real failures"
         },
         {
           "smell": "TIME-FLAKE",
           "severity": "warn",
-          "line": 892,
+          "line": 893,
           "snippet": "new Date() without tolerance guard",
-          "why": "Time-sensitive code in tests without explicit tolerance or fake timers — Windows scheduler drift can flake the test (see Phase 41 S5 timeline-core +5ms→+50ms fix)"
-        },
-        {
-          "smell": "TIME-FLAKE",
-          "severity": "warn",
-          "line": 906,
-          "snippet": "Date.now without tolerance guard",
           "why": "Time-sensitive code in tests without explicit tolerance or fake timers — Windows scheduler drift can flake the test (see Phase 41 S5 timeline-core +5ms→+50ms fix)"
         },
         {
           "smell": "TIME-FLAKE",
           "severity": "warn",
           "line": 907,
+          "snippet": "Date.now without tolerance guard",
+          "why": "Time-sensitive code in tests without explicit tolerance or fake timers — Windows scheduler drift can flake the test (see Phase 41 S5 timeline-core +5ms→+50ms fix)"
+        },
+        {
+          "smell": "TIME-FLAKE",
+          "severity": "warn",
+          "line": 908,
           "snippet": "new Date() without tolerance guard",
           "why": "Time-sensitive code in tests without explicit tolerance or fake timers — Windows scheduler drift can flake the test (see Phase 41 S5 timeline-core +5ms→+50ms fix)"
         },
         {
           "smell": "TIME-FLAKE",
           "severity": "warn",
-          "line": 917,
+          "line": 918,
           "snippet": "new Date() without tolerance guard",
           "why": "Time-sensitive code in tests without explicit tolerance or fake timers — Windows scheduler drift can flake the test (see Phase 41 S5 timeline-core +5ms→+50ms fix)"
         },
         {
           "smell": "TIME-FLAKE",
           "severity": "warn",
-          "line": 931,
+          "line": 932,
           "snippet": "new Date() without tolerance guard",
           "why": "Time-sensitive code in tests without explicit tolerance or fake timers — Windows scheduler drift can flake the test (see Phase 41 S5 timeline-core +5ms→+50ms fix)"
         },
         {
           "smell": "TIME-FLAKE",
           "severity": "warn",
-          "line": 944,
-          "snippet": "new Date() without tolerance guard",
-          "why": "Time-sensitive code in tests without explicit tolerance or fake timers — Windows scheduler drift can flake the test (see Phase 41 S5 timeline-core +5ms→+50ms fix)"
-        },
-        {
-          "smell": "TIME-FLAKE",
-          "severity": "warn",
-          "line": 960,
+          "line": 945,
           "snippet": "new Date() without tolerance guard",
           "why": "Time-sensitive code in tests without explicit tolerance or fake timers — Windows scheduler drift can flake the test (see Phase 41 S5 timeline-core +5ms→+50ms fix)"
         },
@@ -918,28 +911,35 @@
         {
           "smell": "TIME-FLAKE",
           "severity": "warn",
-          "line": 966,
+          "line": 962,
           "snippet": "new Date() without tolerance guard",
           "why": "Time-sensitive code in tests without explicit tolerance or fake timers — Windows scheduler drift can flake the test (see Phase 41 S5 timeline-core +5ms→+50ms fix)"
         },
         {
           "smell": "TIME-FLAKE",
           "severity": "warn",
-          "line": 983,
+          "line": 967,
           "snippet": "new Date() without tolerance guard",
           "why": "Time-sensitive code in tests without explicit tolerance or fake timers — Windows scheduler drift can flake the test (see Phase 41 S5 timeline-core +5ms→+50ms fix)"
         },
         {
           "smell": "TIME-FLAKE",
           "severity": "warn",
-          "line": 993,
+          "line": 984,
           "snippet": "new Date() without tolerance guard",
           "why": "Time-sensitive code in tests without explicit tolerance or fake timers — Windows scheduler drift can flake the test (see Phase 41 S5 timeline-core +5ms→+50ms fix)"
         },
         {
           "smell": "TIME-FLAKE",
           "severity": "warn",
-          "line": 1009,
+          "line": 994,
+          "snippet": "new Date() without tolerance guard",
+          "why": "Time-sensitive code in tests without explicit tolerance or fake timers — Windows scheduler drift can flake the test (see Phase 41 S5 timeline-core +5ms→+50ms fix)"
+        },
+        {
+          "smell": "TIME-FLAKE",
+          "severity": "warn",
+          "line": 1010,
           "snippet": "new Date() without tolerance guard",
           "why": "Time-sensitive code in tests without explicit tolerance or fake timers — Windows scheduler drift can flake the test (see Phase 41 S5 timeline-core +5ms→+50ms fix)"
         }
@@ -3232,7 +3232,7 @@
         {
           "smell": "TIME-FLAKE",
           "severity": "warn",
-          "line": 45,
+          "line": 51,
           "snippet": "Date.now without tolerance guard",
           "why": "Time-sensitive code in tests without explicit tolerance or fake timers — Windows scheduler drift can flake the test (see Phase 41 S5 timeline-core +5ms→+50ms fix)"
         }
@@ -3388,7 +3388,7 @@
         {
           "smell": "TIME-FLAKE",
           "severity": "warn",
-          "line": 294,
+          "line": 402,
           "snippet": "Date.now without tolerance guard",
           "why": "Time-sensitive code in tests without explicit tolerance or fake timers — Windows scheduler drift can flake the test (see Phase 41 S5 timeline-core +5ms→+50ms fix)"
         }
@@ -3448,7 +3448,7 @@
         {
           "smell": "CONSOLE-LEAK",
           "severity": "warn",
-          "line": 236,
+          "line": 268,
           "snippet": "console.error(",
           "why": "Debug leftover — adds noise to test output and obscures real failures"
         }

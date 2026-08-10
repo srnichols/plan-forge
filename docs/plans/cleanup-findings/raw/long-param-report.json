@@ -36,7 +36,7 @@
   },
   {
     "file": "pforge-mcp/tempering/classifier-issue.mjs",
-    "line": 63,
+    "line": 64,
     "col": 2,
     "callee": "lines.push",
     "argCount": 6

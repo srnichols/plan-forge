@@ -2160,7 +2160,16 @@ function spawnCliWorkerExecution({ prompt, model, cwd, timeout, worker, runPlanA
   });
 }
 
-export async function spawnWorker(prompt, options = {}) {
+// The role guard must reject before any async work begins: an `async function`
+// can only reject a promise, so a caller that does not await would still spawn.
+export function spawnWorker(prompt, options = {}) {
+  const { model = null, worker = null, role = null } = options;
+  const { apiProvider } = _resolveApiProviderForRouting(model, worker);
+  if (apiProvider) _enforceApiRoleGuard(apiProvider, role, model);
+  return _spawnWorkerAsync(prompt, options);
+}
+
+async function _spawnWorkerAsync(prompt, options = {}) {
   const {
     model = null,
     cwd = process.cwd(),

@@ -294,3 +294,69 @@ describe("lintGateCommands — default (non-strict) mode", () => {
     expect(w1Warn).toBeDefined();
   });
 });
+
+// ─── Quote-awareness (issue #246) ─────────────────────────────────────────────
+// The linter tokenizes gate lines as shell. Shell metacharacters that appear
+// inside a quoted JS string passed to `node -e` are not shell operators and
+// must not trigger portability rules. In strict mode these false positives
+// became hard errors and blocked otherwise-valid plans.
+
+describe("lintGateCommands — quoted node -e strings (issue #246)", () => {
+  beforeEach(() => {
+    delete process.env.PFORGE_GATE_LINT_STRICT;
+  });
+
+  const findVitestRule = result =>
+    [...result.warnings, ...result.errors].find(f => f.rule === "vitest-direct-node");
+
+  it("W2 does not fire on '||' inside a quoted node -e string", () => {
+    const gate = `node -e 'const s="x";if(s.includes("a")||s.includes("b"))throw new Error("no")'`;
+    const w2 = [...lintGateCommands(makePlan(gate)).warnings, ...lintGateCommands(makePlan(gate)).errors]
+      .find(f => f.ruleId === "W2");
+    expect(w2).toBeUndefined();
+  });
+
+  it("W2 does not fire on regex alternation inside a quoted node -e string", () => {
+    const gate = `node -e 'if(/console\\.(log|error|warn)\\(/.test("x"))throw new Error("no")'`;
+    const result = lintGateCommands(makePlan(gate));
+    const w2 = [...result.warnings, ...result.errors].find(f => f.ruleId === "W2");
+    expect(w2).toBeUndefined();
+  });
+
+  it("W2 still fires on a genuine unquoted pipeline", () => {
+    const result = lintGateCommands(makePlan("node --version | grep 20"));
+    const w2 = [...result.warnings, ...result.errors].find(f => f.ruleId === "W2");
+    expect(w2).toBeDefined();
+  });
+
+  it("W2 still fires when a pipe follows a closed quoted string", () => {
+    const result = lintGateCommands(makePlan(`node -e 'console.log("hi")' | grep hi`));
+    const w2 = [...result.warnings, ...result.errors].find(f => f.ruleId === "W2");
+    expect(w2).toBeDefined();
+  });
+
+  it("vitest-direct-node does not fire when the test path is inside node -e", () => {
+    const gate = `node -e "process.chdir('pforge-mcp'); require('child_process').execSync('npx vitest run tests/x.test.mjs', {stdio:'inherit',shell:true});"`;
+    expect(findVitestRule(lintGateCommands(makePlan(gate)))).toBeUndefined();
+  });
+
+  it("vitest-direct-node still fires on a genuine direct node invocation", () => {
+    expect(findVitestRule(lintGateCommands(makePlan("node tests/x.test.mjs")))).toBeDefined();
+  });
+
+  it("vitest-direct-node still fires when node runs a test file behind a flag", () => {
+    const gate = "node --experimental-vm-modules tests/x.test.mjs";
+    expect(findVitestRule(lintGateCommands(makePlan(gate)))).toBeDefined();
+  });
+
+  it("neither false positive becomes an error in strict mode", () => {
+    process.env.PFORGE_GATE_LINT_STRICT = "1";
+    const gate = `node -e "process.chdir('pforge-mcp'); require('child_process').execSync('npx vitest run tests/x.test.mjs', {stdio:'inherit',shell:true});"`;
+    const result = lintGateCommands(makePlan(gate));
+    delete process.env.PFORGE_GATE_LINT_STRICT;
+    const offenders = result.errors.filter(
+      f => f.ruleId === "W2" || f.rule === "vitest-direct-node",
+    );
+    expect(offenders).toHaveLength(0);
+  });
+});

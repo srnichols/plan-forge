@@ -7,6 +7,11 @@ Format follows [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
+### Fixed
+
+- **Gate linter flagged shell metacharacters inside quoted `node -e` strings** ([#246](https://github.com/srnichols/plan-forge/issues/246)). `lintGateCommands` tokenized each gate line as shell without respecting quoting, so JavaScript handed to `node -e` was read as shell syntax. Two rules misfired: a `|` or `||` inside inline JS (a regex like `/console\.(log|error|warn)\(/`, or `a.includes(x)||a.includes(y)`) was reported as `Shell pipeline with 'node' as left operand`, and the canonical vitest gate `node -e "… npx vitest run tests/x.test.mjs …"` was reported as `'node *.test.*' fails for vitest test files` — advice to use the very command the gate was already running. Not cosmetic: W-rules are promoted to **errors** under `PFORGE_GATE_LINT_STRICT=1`, so a valid plan could be blocked outright. Fixed by blanking quoted spans before applying the two shell-shape rules. The measured effect across shipped plans is 5→0 warnings on Phase-60, 8→0 on Phase-51, 10→1 on Phase-52 and 7→0 on Phase-54, while Phase-59's 24 warnings and 11 portability warnings are **unchanged** — those come from real `bash -c "cd … && …"` gates, which is the evidence that the fix narrows false positives rather than suppressing the rules. Found while hardening Phase-60, where the noise had already trained the author to dismiss linter output wholesale — the failure mode a linter exists to prevent.
+- **Step-2 hardener recommended the gate pattern its own linter rejects** ([#247](https://github.com/srnichols/plan-forge/issues/247)). `step2-harden-plan.prompt.md` advertised `bash -c "cd pforge-mcp && npx vitest run …"` as the *preferred* pattern covering 90 percent of slices, then instructed the author to fix all linter warnings — but that pattern earns two warnings per slice (`'bash -c' prefix detected`, `'cd dir && command' chain`) because `bash` is not guaranteed on the Windows PATH and `cd &&` does not persist under `cmd.exe`. Following the prompt literally produced 15 warnings across 6 slices. Replaced with the `node -e "process.chdir(…)"` form already used by Phase-39/40/41/51/52/54, which dispatches through the allowlisted `node` binary and needs no shell.
+
 ## [3.25.0] — 2026-08-10 — Zero-vulnerability sweep, corrected model pricing, Crucible reliability
 
 

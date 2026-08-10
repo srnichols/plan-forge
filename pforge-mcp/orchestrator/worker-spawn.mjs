@@ -2217,6 +2217,11 @@ function parseJSONL(output) {
  *   o1-* o3-* → openai      (reasoning model lines)
  *   grok-*    → xai         (grok-4.20-0309-reasoning, grok-4.3, etc.)
  *   gemini-*  → google
+ *   kimi-*    → moonshot    (kimi-k3, kimi-k2.7-code, etc.)
+ *
+ * Every key in cost-service MODEL_PRICING must resolve here — a priced but
+ * unmapped model reports vendor null through telemetry and cost attribution.
+ * Guarded by telemetry-issue-186.test.mjs.
  *
  * @param {string|null|undefined} model
  * @returns {string|null} vendor key, or null when model is null/empty/unrecognized
@@ -2229,6 +2234,7 @@ export function deriveVendorFromModel(model) {
   if (/^o[1-9](-|$)/.test(lower)) return "openai"; // o1, o3, o4 reasoning models
   if (lower.startsWith("grok-")) return "xai";
   if (lower.startsWith("gemini-")) return "google";
+  if (lower.startsWith("kimi-")) return "moonshot";
   return null;
 }
 

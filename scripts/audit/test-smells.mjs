@@ -50,9 +50,24 @@ const TIME_FLAKE_PATTERNS = [
   { name: 'Date.now', regex: /\bDate\.now\s*\(/g },
   { name: 'new Date()', regex: /\bnew\s+Date\s*\(\s*\)/g },
   { name: 'performance.now', regex: /\bperformance\.now\s*\(/g },
+  // Asserting a returned duration against a fixed budget is the same flake class
+  // as reading the clock directly, but reads as an ordinary numeric assertion.
+  // Deliberately narrow, because a noisy scanner gets muted:
+  //   - toBeLessThan only — the direction that fails when the machine is loaded.
+  //     `toBeGreaterThanOrEqual(0)` on a duration cannot fail at all.
+  //   - numeric literal only — `toBeLessThanOrEqual(r1.durationMs + 50)` is the
+  //     correct relative-tolerance pattern and must not be flagged.
+  //   - 'runtime' is excluded from the name list: it collides with
+  //     `runtimes.length` and `runtimeBudgetMs`, neither of which is a measurement.
+  {
+    name: 'duration budget assertion',
+    regex: /expect\s*\([^()]*\b(?:duration|elapsed|latency|responseTime|took)\w*\b[^()]*\)\s*\.\s*toBeLessThan(?:OrEqual)?\s*\(\s*\d[\d_.]*\s*\)/gi,
+  },
 ];
 
-const TIME_FLAKE_GUARDS = /useFakeTimers|setSystemTime|toleranc|±|\+\s*\d+\s*ms|approximately|fuzz|advanceTimersByTime/i;
+// 'budget' is deliberately absent — it appears in identifiers such as
+// runtimeBudgetMs and would auto-guard tests that state no rationale at all.
+const TIME_FLAKE_GUARDS = /useFakeTimers|setSystemTime|toleranc|jitter|generous|±|\+\s*\d+\s*ms|approximately|fuzz|advanceTimersByTime/i;
 
 function parseArgs(argv) {
   const args = { scopes: null, severity: 'info' };
@@ -102,7 +117,7 @@ function getContext(source, charIndex, contextChars = 200) {
   return source.slice(start, end);
 }
 
-function scanSmells(source, minSeverity) {
+export function scanSmells(source, minSeverity) {
   const findings = [];
   for (const smell of SMELLS) {
     if (severityRank(smell.severity) < severityRank(minSeverity)) continue;
@@ -121,14 +136,17 @@ function scanSmells(source, minSeverity) {
   return findings;
 }
 
-function scanTimeFlakes(source, minSeverity) {
+export function scanTimeFlakes(source, minSeverity) {
   if (severityRank('warn') < severityRank(minSeverity)) return [];
   const findings = [];
   for (const pattern of TIME_FLAKE_PATTERNS) {
     pattern.regex.lastIndex = 0;
     let match;
     while ((match = pattern.regex.exec(source)) !== null) {
-      const context = getContext(source, match.index, 250);
+      // 500 rather than 250 chars: a tolerance rationale worth writing usually
+      // runs several lines, and at 250 the scanner could not see its own
+      // guidance sitting six lines above the assertion.
+      const context = getContext(source, match.index, 500);
       if (TIME_FLAKE_GUARDS.test(context)) continue;
       findings.push({
         smell: 'TIME-FLAKE',
@@ -213,4 +231,16 @@ function main() {
   }
 }
 
-main();
+// Importing this module (tests import the scanners) must not run a scan —
+// main() writes the report file and can set a non-zero exit code.
+const isDirectInvocation = (() => {
+  try {
+    const argvPath = path.resolve(process.argv[1] || '');
+    const selfPath = path.resolve(new URL(import.meta.url).pathname.replace(/^\//, ''));
+    return argvPath.toLowerCase() === selfPath.toLowerCase();
+  } catch { return false; }
+})();
+
+if (isDirectInvocation) {
+  main();
+}

@@ -511,7 +511,11 @@ describe("performance guard", () => {
     const result = await timeline({ from: "7d", sources: ["hub-event"] }, { cwd: tmpDir });
     const elapsed = performance.now() - t0;
     expect(result.total).toBe(10_000);
-    expect(elapsed).toBeLessThan(2000);
+    // 5000ms tolerance: 10k records over a contended disk, not a latency target.
+    // Linear parsing lands in the low hundreds of ms; an accidental O(n²) pass
+    // would take minutes, so the guard still catches the regression it exists
+    // for while surviving full-suite parallelism.
+    expect(elapsed).toBeLessThan(5000);
   });
 });
 

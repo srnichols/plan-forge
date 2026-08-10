@@ -5,6 +5,7 @@
 
 import { describe, it, expect } from "vitest";
 import { deriveVendorFromModel, parseShortstat } from "../orchestrator.mjs";
+import { MODEL_PRICING } from "../cost-service.mjs";
 
 describe("#186 deriveVendorFromModel", () => {
   it("maps claude-* to anthropic", () => {
@@ -35,6 +36,21 @@ describe("#186 deriveVendorFromModel", () => {
   it("maps gemini-* to google", () => {
     expect(deriveVendorFromModel("gemini-2.5-pro")).toBe("google");
     expect(deriveVendorFromModel("gemini-flash-2.0")).toBe("google");
+  });
+
+  it("maps kimi-* to moonshot", () => {
+    expect(deriveVendorFromModel("kimi-k3")).toBe("moonshot");
+    expect(deriveVendorFromModel("kimi-k2.7-code")).toBe("moonshot");
+  });
+
+  // Guard against half-migrations: a model priced but not vendor-mapped reports
+  // vendor null through telemetry and cost attribution. Adding kimi-* to
+  // MODEL_PRICING without touching this function is exactly how that happens.
+  it("derives a vendor for every priced model", () => {
+    const unmapped = Object.keys(MODEL_PRICING)
+      .filter((m) => m !== "default")
+      .filter((m) => deriveVendorFromModel(m) === null);
+    expect(unmapped).toEqual([]);
   });
 
   it("returns null for unknown / unrecognized models", () => {

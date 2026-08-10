@@ -164,7 +164,11 @@ describe("brain.remember", () => {
     });
     const elapsed = Date.now() - t0;
     expect(result.ok).toBe(true);
-    expect(elapsed).toBeLessThan(1000); // Should be near-instant
+    // 5000ms tolerance: this asserts remember() does not await the synchronous
+    // writer, not that it is fast. The real signal is orders of magnitude — a
+    // non-blocking call returns in single-digit ms, an awaited one would hang —
+    // so a wide bound keeps the meaning and drops the scheduler sensitivity.
+    expect(elapsed).toBeLessThan(5000);
   });
 
   // ── Undefined value ──

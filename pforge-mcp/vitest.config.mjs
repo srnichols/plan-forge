@@ -27,5 +27,9 @@ export default defineConfig({
     include: ["tests/**/*.test.mjs", "../pforge-sdk/tests/**/*.test.mjs"],
     exclude: ["**/.forge/**", "**/node_modules/**"],
     hookTimeout: 30000,
+    // Matches hookTimeout: much of this suite shells out to real CLI probes
+    // (detectWorkers, probeQuorumModelAvailability, spawnWorker), which the
+    // 5000ms default could not cover once vitest 4 added per-test overhead.
+    testTimeout: 30000,
   },
 });

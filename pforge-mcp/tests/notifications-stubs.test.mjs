@@ -11,16 +11,19 @@ import { describe, it, expect } from "vitest";
 import { validateAdapterShape, ERR_NOT_IMPLEMENTED } from "../../pforge-sdk/notifications/adapter-contract.mjs";
 import { readFileSync } from "node:fs";
 import { resolve, dirname } from "node:path";
-import { fileURLToPath } from "node:url";
+import { fileURLToPath, pathToFileURL } from "node:url";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
+// Absolute file URLs: vitest 4's module runner resolves a *variable* dynamic
+// import specifier against the project root rather than the importing file, so
+// a bare "../../" here would look for /extensions/... and fail.
 const STUBS = [
   { name: "slack", path: "../../extensions/notify-slack/index.mjs" },
   { name: "teams", path: "../../extensions/notify-teams/index.mjs" },
   { name: "email", path: "../../extensions/notify-email/index.mjs" },
   { name: "pagerduty", path: "../../extensions/notify-pagerduty/index.mjs" },
-];
+].map((stub) => ({ ...stub, path: pathToFileURL(resolve(__dirname, stub.path)).href }));
 
 describe("notification extension stubs", () => {
   for (const stub of STUBS) {

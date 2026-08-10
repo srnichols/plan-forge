@@ -86,7 +86,10 @@ export function validateAdapterEntry(entry) {
 export async function loadAdapter(stack, { importFn } = {}) {
   const relPath = STACK_ADAPTER_PATHS[stack];
   if (!relPath) return null;
-  const doImport = importFn || ((p) => import(p));
+  // Resolved against this module rather than left bare: STACK_ADAPTER_PATHS is
+  // documented as relative to this file, and a variable specifier is resolved
+  // against the project root by some runners (notably vitest 4's module runner).
+  const doImport = importFn || ((p) => import(new URL(p, import.meta.url).href));
   try {
     const mod = await doImport(relPath);
     const adapter = mod && mod.temperingAdapter;

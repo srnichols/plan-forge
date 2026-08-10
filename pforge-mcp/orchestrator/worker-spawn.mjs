@@ -1420,6 +1420,29 @@ export function loadGrokCliPreference(cwd) {
   }
 }
 
+const VALID_COPILOT_SDK_PREFS = new Set(["prefer", "off"]);
+
+/**
+ * Read the Copilot SDK routing preference from .forge.json → routing.copilotSdk.
+ * "prefer" routes COPILOT_SERVABLE and DIRECT_API_ONLY models through
+ * @github/copilot-sdk when the SDK is installed; "off" (default) keeps the
+ * existing spawn-based behavior unchanged. Phase-60.
+ * @param {string} cwd
+ * @returns {"prefer"|"off"}
+ */
+export function loadCopilotSdkPreference(cwd) {
+  try {
+    const configPath = resolve(cwd, ".forge.json");
+    if (!existsSync(configPath)) return "off";
+    const config = JSON.parse(readFileSync(configPath, "utf-8"));
+    const pref = config?.routing?.copilotSdk;
+    if (typeof pref === "string" && VALID_COPILOT_SDK_PREFS.has(pref)) return pref;
+    return "off";
+  } catch {
+    return "off";
+  }
+}
+
 // ─── Quorum Model Availability Probing (H.3) ─────────────────────────
 
 /**

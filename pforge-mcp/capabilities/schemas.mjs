@@ -380,6 +380,14 @@ export const CONFIG_SCHEMA = {
       },
     },
     extensions: { type: "array", items: { type: "string" }, description: "Installed extensions" },
+    routing: {
+      type: "object",
+      description: "Worker routing switches",
+      properties: {
+        grokCli: { type: "string", enum: ["off", "auto", "prefer"], default: "auto", description: "Route Grok-servable models through the Grok Build CLI when 'prefer'. 'auto' (default) uses the CLI if available." },
+        copilotSdk: { type: "string", enum: ["off", "prefer"], default: "off", description: "Route Copilot-servable and DIRECT_API_ONLY models through @github/copilot-sdk when 'prefer'. Default 'off' — no behaviour change until explicitly enabled." },
+      },
+    },
     hooks: {
       type: "object",
       description: "LiveGuard hook configuration (v2.29)",

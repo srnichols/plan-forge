@@ -4,7 +4,7 @@
   "main": "server.mjs",
   "type": "module",
   "engines": {
-    "node": ">=18.0.0"
+    "node": ">=20.19.0"
   },
   "scripts": {
     "start": "node server.mjs",
@@ -18,6 +18,7 @@
     "vitest": "^4.1.10"
   },
   "dependencies": {
+    "@github/copilot-sdk": "^1.0.9",
     "@modelcontextprotocol/sdk": "^1.0.0",
     "dotenv": "^17.4.2",
     "express": "^5.2.1",

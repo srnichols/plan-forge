@@ -199,6 +199,8 @@ Files: `pforge-mcp/orchestrator/sdk-worker.mjs`, `pforge-mcp/orchestrator/worker
 
 **Validation Gate**:
 ```bash
+node -e 'const s=require("fs").readFileSync("pforge-mcp/orchestrator/sdk-worker.mjs","utf8");for(const n of ["provider","openai","azure","anthropic","BYOK_KEY_MISSING"])if(!s.includes(n))throw new Error("BYOK provider support missing: "+n)'
+node -e 'const s=require("fs").readFileSync("pforge-mcp/tests/sdk-worker.test.mjs","utf8");for(const n of ["openai","azure","anthropic","BYOK_KEY_MISSING"])if(!s.includes(n))throw new Error("provider test coverage missing: "+n)'
 node -e 'const s=require("fs").readFileSync("pforge-mcp/orchestrator/sdk-worker.mjs","utf8");if(/console\.[a-z]+\([^)]*apiKey/i.test(s))throw new Error("possible api key logging")'
 node -e "process.chdir('pforge-mcp'); require('child_process').execSync('npx vitest run tests/sdk-worker.test.mjs tests/cost-service.test.mjs', {stdio:'inherit',shell:true});"
 ```
@@ -214,13 +216,14 @@ node -e "process.chdir('pforge-mcp'); require('child_process').execSync('npx vit
 > never reaches them, not removing them.
 
 Tasks:
-- Add a guard test asserting `sdk-worker.mjs` contains no stdout/stderr regex parsing and does not import `parseStderrStats` or `parseGrokStreamingJson`.
+- Add a guard test named exactly `"SDK path does no stdout parsing"` in `tests/sdk-worker.test.mjs`, asserting `sdk-worker.mjs` contains no stdout/stderr regex parsing and does not import `parseStderrStats` or `parseGrokStreamingJson`.
 - Assert both parsers are still exported and their existing suites still pass.
 
 Files: `pforge-mcp/tests/sdk-worker.test.mjs`
 
 **Validation Gate**:
 ```bash
+node -e 'const s=require("fs").readFileSync("pforge-mcp/tests/sdk-worker.test.mjs","utf8");if(!s.includes("SDK path does no stdout parsing"))throw new Error("slice 5 guard test missing")'
 node -e 'const s=require("fs").readFileSync("pforge-mcp/orchestrator/sdk-worker.mjs","utf8");for(const n of ["parseStderrStats","parseGrokStreamingJson"])if(s.includes(n))throw new Error("sdk path must not use stdout parser: "+n)'
 node -e 'const s=require("fs").readFileSync("pforge-mcp/orchestrator/worker-spawn.mjs","utf8");for(const n of ["parseGrokStreamingJson","parseStderrStats"])if(!s.includes(n))throw new Error("out-of-scope parser must survive: "+n)'
 node -e "process.chdir('pforge-mcp'); require('child_process').execSync('npx vitest run tests/sdk-worker.test.mjs tests/grok-stream-parse.test.mjs tests/orchestrator.test.mjs', {stdio:'inherit',shell:true});"
@@ -242,6 +245,8 @@ Files: `pforge-mcp/orchestrator/worker-spawn.mjs`, `pforge-mcp/capabilities/sche
 
 **Validation Gate**:
 ```bash
+node --input-type=module -e "import{loadCopilotSdkPreference}from'./pforge-mcp/orchestrator/worker-spawn.mjs';import os from'node:os';const v=loadCopilotSdkPreference(os.tmpdir());if(v!=='prefer')throw new Error('default not flipped, got: '+v)"
+node -e 'const s=require("fs").readFileSync("CHANGELOG.md","utf8");const u=s.slice(0,s.indexOf("## [3.25.1]"));if(u.includes("off by default"))throw new Error("CHANGELOG still claims the SDK route is off by default - Slice 6 must update it")'
 node pforge-mcp/server.mjs --check
 node -e "process.chdir('pforge-mcp'); require('child_process').execSync('npx vitest run', {stdio:'inherit',shell:true});"
 node pforge-mcp/orchestrator.mjs --test

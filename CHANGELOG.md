@@ -7,6 +7,19 @@ Format follows [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
+### Fixed
+
+- **GitHub issues filed by Plan Forge rendered a literal `\n` instead of line breaks.** `forge_meta_bug_file` and `forge_classifier_issue` built `gh issue create` as a **shell command string**, so newlines had to be escaped to survive it — and `gh`, which does no escape processing, wrote the two-character sequence straight into the issue body. Every meta-bug and classifier-noise issue filed through the CLI path was affected (observed on [#236](https://github.com/srnichols/plan-forge/issues/236) and [#237](https://github.com/srnichols/plan-forge/issues/237)); the REST fallback was always correct, but `gh` is tried first. `gh` is now invoked with an **argv array** via `execFileSync`, so bodies survive verbatim.
+
+### Security
+
+- **Command-injection surface removed from GitHub issue filing.** The same `gh issue create` shell string interpolated agent-supplied title/body with only `"` escaped, leaving `$(...)`, backticks, and `$VAR` live on POSIX shells. The `gh issue list` dedupe lookup had the same shape, with `owner`/`repo` reaching it from `.forge.json#bugRegistry.githubRepo`. Both now pass an argv array — no shell, no escaping, no injection surface (`security.instructions.md` Rule 1).
+
+### Changed
+
+- **New shared module `pforge-mcp/tempering/gh-cli.mjs`** — `buildCreateIssueArgs`, `createIssueViaGhCli`, `findOpenIssueByHashViaGhCli`. The issue-create and dedupe-lookup logic was duplicated byte-for-byte across the meta-bug filer and the classifier filer, differing only by label; both now delegate. Callers inject `execFile`; `execSync` is retained for `gh auth token` and `git remote`, which carry no user input. Omitting the runner still disables the CLI path and falls through to REST, unchanged.
+- **Plan hardener now requires premise verification** (`step2-harden-plan.prompt.md`). A plan's Non-Goals asserted that all 17 API endpoints already existed; the target route file had only `approve` and `deny`, so a slice was scoped against a surface that was never there ([#237](https://github.com/srnichols/plan-forge/issues/237)). Self-check item 10 plus a **Premise Verification** section now require every factual claim about existing code to be checked by reading the file — false assertions get the slice re-scoped, unverifiable ones get demoted from Non-Goals to Required Decisions so they never stand as a scope boundary.
+
 ## [3.24.1] — 2026-07-14 — Grok streaming-json parser: verified against real output
 
 > **One-liner**: Hotfix for the brand-new `--worker grok` path. The v3.24.0 `parseGrokStreamingJson` was authored against a *synthetic* fixture (the `grok` CLI wasn't installed). With the CLI now installed (`grok 0.2.101`), a real `--output-format streaming-json` capture revealed the actual schema differs — so the parser was mis-extracting assistant output, model, and cost (tokens were already correct). This corrects it and closes Required Decision #4.

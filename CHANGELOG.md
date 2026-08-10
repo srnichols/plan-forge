@@ -7,10 +7,23 @@ Format follows [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
+## [3.26.0] — 2026-08-10 — Copilot SDK worker path
+
 ### Breaking
 
 - **Node.js floor raised to `>=20.19.0` on `plan-forge-mcp` and the private root** (Phase-60 Slice 1). The `@github/copilot-sdk` dependency requires `^20.19.0 || >=22.12.0`; adopting it raises the published floor from `>=18.0.0` (plan-forge-mcp) and `>=20.11.0` (root) to `>=20.19.0`. Users on Node 18 or 20.11–20.18 must upgrade before using the Copilot SDK worker path.
-- **`routing.copilotSdk` now defaults to `"prefer"`** (Phase-60 Slice 6). The Copilot SDK worker path is now active by default for all Copilot-servable models when no `.forge.json` is present, or when `routing.copilotSdk` is absent from `.forge.json`. Cost attribution has been validated within 5% of the CLI spawn baseline. Operators who need the previous spawn-only behaviour must explicitly opt out by setting `routing.copilotSdk: "off"` in `.forge.json`.
+- **`routing.copilotSdk` now defaults to `"prefer"`** (Phase-60 Slice 6). The Copilot SDK worker path is active by default for Copilot-servable models when `.forge.json` is absent or does not set the key. Operators who need the previous spawn-only behaviour opt out with `routing.copilotSdk: "off"`. **Cost parity against the CLI spawn baseline has not yet been measured** — the plan called for capturing a baseline before the flip and that step did not produce an artifact, so the 5-percent parity criterion is outstanding rather than met. Treat the default as provisional and set `"off"` if predictable cost attribution matters more than the new path.
+
+### Added
+
+- **SDK-backed worker for Copilot-servable models** (`pforge-mcp/orchestrator/sdk-worker.mjs`, Phase-60 Slice 2). `runSdkSession()` drives a `@github/copilot-sdk` session with an injected `createSession` factory, so tests exercise the path with a fake client and never touch the network or spawn a process. The SDK import is lazy and any failure falls back to the existing spawn path — the switch is an optimisation, never a hard dependency. `onPermissionRequest` is handled deliberately; `approveAll` appears nowhere in the path.
+- **Telemetry derived from typed session events rather than stdout parsing** (Slice 3). The SDK path maps session events onto the existing `extractTokens` contract (`tokens_in`, `tokens_out`, `cached`, `reasoning_tokens`, `apiDurationMs`, `sessionDurationMs`, `model`), preserving the null-not-zero convention from bug #190: a field the event stream never reports is emitted as `null`, never `0`, because `0` reads as "measured and zero" to cost rollups.
+- **BYOK provider config for `DIRECT_API_ONLY` models** (Slice 4) covering `openai`, `azure` and `anthropic`. Keys are resolved inside the SDK worker from `process.env` / `.forge/secrets.json` at call time and are never logged or embedded in an error message; the key-absent path returns a structured `BYOK_KEY_MISSING` and falls through to the direct API route.
+- **Regression guard proving the SDK path does no stdout parsing** (Slice 5). `parseGrokStreamingJson` (grok-only) and `parseStderrStats` (generic across CLI workers via `_enrichWorkerTokens`) both remain — the original phase draft proposed deleting them, which verification showed would have broken the grok, claude and codex spawn paths that this phase leaves untouched. The guard asserts the SDK module never reaches for either.
+
+### Fixed
+
+- **`spawnWorker` stopped enforcing the API-provider role guard synchronously.** Slice 2 changed the exported `spawnWorker` from a sync function to `async` so it could await the SDK session. An `async` function can only reject a promise, so the guard that blocks API-only models (e.g. `grok-*`) from code-writing roles no longer threw at the call site — a caller that did not `await` would have gone on to spawn a model explicitly disallowed from editing files. Slice 4 compounded it by invoking `_enforceApiRoleGuard` *after* `runSdkSession`, so the session would have executed before the role check ran. `spawnWorker` is now a synchronous wrapper that resolves the provider and enforces the guard before any async work, delegating execution to an internal async implementation. Caught by the phase-level gate (4 failures in `tests/spawn-worker-role.test.mjs`); the slice's own gate missed it because it ran only the two new suites.
 
 ## [3.25.1] — 2026-08-10 — Gate-linter quote awareness, side-effect-free test suite
 

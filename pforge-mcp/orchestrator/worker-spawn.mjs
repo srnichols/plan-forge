@@ -1433,13 +1433,14 @@ const VALID_COPILOT_SDK_PREFS = new Set(["prefer", "off"]);
 export function loadCopilotSdkPreference(cwd) {
   try {
     const configPath = resolve(cwd, ".forge.json");
-    if (!existsSync(configPath)) return "off";
+    if (!existsSync(configPath)) return "prefer";
     const config = JSON.parse(readFileSync(configPath, "utf-8"));
     const pref = config?.routing?.copilotSdk;
     if (typeof pref === "string" && VALID_COPILOT_SDK_PREFS.has(pref)) return pref;
-    return "off";
+    // Default is "prefer"; operators opt out by setting routing.copilotSdk: "off" in .forge.json
+    return "prefer";
   } catch {
-    return "off";
+    return "prefer";
   }
 }
 

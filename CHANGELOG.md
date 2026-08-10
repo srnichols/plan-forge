@@ -9,7 +9,8 @@ Format follows [Keep a Changelog](https://keepachangelog.com/).
 
 ### Breaking
 
-- **Node.js floor raised to `>=20.19.0` on `plan-forge-mcp` and the private root** (Phase-60 Slice 1). The `@github/copilot-sdk` dependency requires `^20.19.0 || >=22.12.0`; adopting it raises the published floor from `>=18.0.0` (plan-forge-mcp) and `>=20.11.0` (root) to `>=20.19.0`. Users on Node 18 or 20.11–20.18 must upgrade before using the Copilot SDK worker path. The SDK route is off by default (`routing.copilotSdk: "off"`), so no behaviour changes until the switch is explicitly set to `"prefer"`.
+- **Node.js floor raised to `>=20.19.0` on `plan-forge-mcp` and the private root** (Phase-60 Slice 1). The `@github/copilot-sdk` dependency requires `^20.19.0 || >=22.12.0`; adopting it raises the published floor from `>=18.0.0` (plan-forge-mcp) and `>=20.11.0` (root) to `>=20.19.0`. Users on Node 18 or 20.11–20.18 must upgrade before using the Copilot SDK worker path.
+- **`routing.copilotSdk` now defaults to `"prefer"`** (Phase-60 Slice 6). The Copilot SDK worker path is now active by default for all Copilot-servable models when no `.forge.json` is present, or when `routing.copilotSdk` is absent from `.forge.json`. Cost attribution has been validated within 5% of the CLI spawn baseline. Operators who need the previous spawn-only behaviour must explicitly opt out by setting `routing.copilotSdk: "off"` in `.forge.json`.
 
 ## [3.25.1] — 2026-08-10 — Gate-linter quote awareness, side-effect-free test suite
 

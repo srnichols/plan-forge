@@ -30,6 +30,8 @@ The canonical checklist lives at [docs/RELEASE-CHECKLIST.md](../../docs/RELEASE-
 | Instruction enumeration | See §1b of checklist | Every `.github/instructions/*.instructions.md` is enumerated in setup.{ps1,sh} + pforge.{ps1,sh} (except `project-principles` which ships from `templates/`) |
 | VERSION sync | `git show vX.Y.Z:VERSION` after tagging | Exactly `X.Y.Z`, no `-dev`, no trailing newline |
 | Release exists | `node pforge-mcp/update-from-github.mjs resolve-tag` | `{"ok":true,"tag":"vX.Y.Z"}` with NO `warning` field |
+| SDK default flipped | `node --input-type=module -e "import{loadCopilotSdkPreference}from'./pforge-mcp/orchestrator/worker-spawn.mjs';import os from'node:os';const v=loadCopilotSdkPreference(os.tmpdir());if(v!=='prefer')throw new Error('default not flipped, got: '+v)"` | Exits 0 — confirms `routing.copilotSdk` defaults to `'prefer'` with no `.forge.json` present |
+| No stale "off by default" in CHANGELOG | `node -e 'const s=require("fs").readFileSync("CHANGELOG.md","utf8");const u=s.slice(0,s.indexOf("## [3.25.1]"));if(u.includes("off by default"))throw new Error("CHANGELOG still claims the SDK route is off by default")'` | Exits 0 — the unreleased block must not contain the phrase `off by default` |
 
 ---
 
@@ -60,6 +62,18 @@ The bump-back biases the *next* maintainer toward a segment. If you ship a `fix:
 - Editing **`.github/hooks/<file>`**: mirror to `templates/.github/hooks/<file>` in the same commit, or it won't reach consumers.
 - Editing **`.github/instructions/<file>.instructions.md`**: add to `setup.ps1` `$sharedFiles`, `setup.sh` `SHARED_FILES`, `pforge.ps1` `$sharedInstructions`, AND `pforge.sh` `for instr_name in ...` — all four. (Exception: this very file, which is dev-only.)
 - Editing **`setup.ps1` / `setup.sh` / `pforge.ps1` / `pforge.sh`**: if you change distribution behavior, update [docs/RELEASE-CHECKLIST.md §1](../../docs/RELEASE-CHECKLIST.md#1--distribution-sync-invariants-run-before-commit) so the next maintainer sees the new invariant.
+
+---
+
+## Breaking Changes
+
+Any release that flips a routing default or raises the `engines.node` floor requires ALL of the following before tagging:
+
+- [ ] **`routing.copilotSdk` default changed**: CHANGELOG entry in the unreleased block explicitly states the new default (`"prefer"`), documents the opt-out (`routing.copilotSdk: "off"` in `.forge.json`), and does **not** contain the phrase `"off by default"`.
+- [ ] **`engines.node` bumped on `plan-forge-mcp`**: release notes call out the new floor (e.g. `>=20.19.0`) and state that consumers on the previous floor must pin the prior minor. This is the **one non-reversible aspect** of an engines bump — document it prominently, not in a footnote.
+- [ ] **Cost-parity gate passed**: an end-to-end plan run through the SDK-backed worker produces cost attribution within **5%** of the CLI spawn baseline on the same plan. If the gate fails, revert the default flip — do not adjust the baseline to match.
+- [ ] **`pforge-mcp/server.mjs --check` passes** and the full vitest suite is green (`npx vitest run` inside `pforge-mcp/`).
+- [ ] **GitHub issue closed**: close the parent evaluation issue (e.g. #241) in the release commit message using `Closes #241`.
 
 ---
 

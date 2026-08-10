@@ -81,6 +81,19 @@ Two copies is already drift. Don't wait for a third.
 
 ---
 
+## Source-read guards
+
+When a separation boundary between two sibling modules is load-bearing (e.g. the SDK worker must never call the spawn-path parsers), encode the boundary as a **source-read guard** in the corresponding test file:
+
+```js
+const src = readFileSync(join(__dirname, "../orchestrator/sdk-worker.mjs"), "utf8");
+expect(src).not.toContain("parseGrokStreamingJson");
+```
+
+Name the describe block `"Guard: <invariant in plain English>"` so the test ID is self-documenting and easy to grep. Mirror the guard with a positive assertion on the sibling module so renaming the symbol also breaks the guard.
+
+---
+
 ## Quick review checklist (`clean-code-review`)
 
 > **Skill**: Use `/clean-code-review` to run all checks mechanically. Add `--fix-suggestions` for concrete remediation guidance per finding. See `.github/skills/clean-code-review/SKILL.md`.

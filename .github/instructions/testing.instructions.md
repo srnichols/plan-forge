@@ -131,7 +131,34 @@ Mocks are for **external dependencies the test can't or shouldn't reach** — ne
 
 When in doubt, prefer a real in-memory fixture (temporary directory, in-memory hub) over a mock. Mocks rot — fixtures stay valid across refactors.
 
-### 5. Typed-event telemetry: null-not-zero, and mock only the session factory
+### 5. SDK path does no stdout parsing — guard convention
+
+The SDK worker (`sdk-worker.mjs`) derives telemetry exclusively from typed `onEvent` callbacks. The stdout/stderr regex parsers (`parseStderrStats`, `parseGrokStreamingJson`) live in the spawn path (`worker-spawn.mjs`) and must **never** be imported or called from `sdk-worker.mjs`.
+
+Enforce this with a source-read guard in `tests/sdk-worker.test.mjs`:
+
+```js
+// Guard: the SDK path does no stdout parsing
+import { readFileSync } from "node:fs";
+import { fileURLToPath } from "node:url";
+import { join, dirname } from "node:path";
+
+const __dirname = dirname(fileURLToPath(import.meta.url));
+const sdkWorkerSrc = readFileSync(join(__dirname, "../orchestrator/sdk-worker.mjs"), "utf8");
+
+describe("Guard: the SDK path does no stdout parsing", () => {
+  it("sdk-worker.mjs does not reference parseStderrStats", () => {
+    expect(sdkWorkerSrc).not.toContain("parseStderrStats");
+  });
+  it("sdk-worker.mjs does not reference parseGrokStreamingJson", () => {
+    expect(sdkWorkerSrc).not.toContain("parseGrokStreamingJson");
+  });
+});
+```
+
+Source-read guards like this catch accidental leakage at review time, before CI. Include a mirror test asserting that `worker-spawn.mjs` **still** exports those parsers — so that renaming or extracting the spawn path also breaks the guard rather than silently passing.
+
+### 6. Typed-event telemetry: null-not-zero, and mock only the session factory
 
 **Phase-60 Slice 3 convention**: when a worker derives telemetry from typed SDK/session events instead of regex-parsing stdout/stderr (e.g. `extractSdkTokens` in `pforge-mcp/orchestrator/sdk-worker.mjs`, paired with the spawn-path `extractTokens` in `pforge-mcp/orchestrator/worker-spawn.mjs`), the two extractors must stay byte-compatible on field names (`tokens_in`, `tokens_out`, `cached`, `reasoning_tokens`, `apiDurationMs`, `sessionDurationMs`, `model`).
 
@@ -149,7 +176,7 @@ When testing `runSdkSession` with a `provider` config, three cases are required:
 
 Do **not** test all three provider types exhaustively in one describe block — the provider-type shape is tested via the happy-path test for each; the key-absent path only needs one representative (the implementation path is identical for all three).
 
-### 6. Vitest gate portability (Windows + Bash + npx)
+### 7. Vitest gate portability (Windows + Bash + npx)
 
 Tests run inside plan gates. The gate command must work on Windows under both `cmd.exe` and Git Bash.
 

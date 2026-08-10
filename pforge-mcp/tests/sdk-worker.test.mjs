@@ -364,3 +364,35 @@ describe("sdk-worker source guard", () => {
     expect(src).not.toContain("forInProcess");
   });
 });
+
+// ─── Guard: SDK path does no stdout parsing ───────────────────────────────────
+// The SDK worker derives telemetry from typed onEvent callbacks, not from
+// stdout/stderr regex parsing. parseStderrStats and parseGrokStreamingJson
+// belong to the spawn path (worker-spawn.mjs) and must never leak into
+// sdk-worker.mjs. This describe block is the canonical regression guard.
+
+import { readFileSync } from "node:fs";
+import { fileURLToPath } from "node:url";
+import { join, dirname } from "node:path";
+
+const __dirname = dirname(fileURLToPath(import.meta.url));
+const sdkWorkerSrc = readFileSync(join(__dirname, "../orchestrator/sdk-worker.mjs"), "utf8");
+const workerSpawnSrc = readFileSync(join(__dirname, "../orchestrator/worker-spawn.mjs"), "utf8");
+
+describe("Guard: the SDK path does no stdout parsing", () => {
+  it("sdk-worker.mjs does not reference parseStderrStats", () => {
+    expect(sdkWorkerSrc).not.toContain("parseStderrStats");
+  });
+
+  it("sdk-worker.mjs does not reference parseGrokStreamingJson", () => {
+    expect(sdkWorkerSrc).not.toContain("parseGrokStreamingJson");
+  });
+
+  it("worker-spawn.mjs retains parseGrokStreamingJson (spawn path must keep it)", () => {
+    expect(workerSpawnSrc).toContain("parseGrokStreamingJson");
+  });
+
+  it("worker-spawn.mjs retains parseStderrStats (spawn path must keep it)", () => {
+    expect(workerSpawnSrc).toContain("parseStderrStats");
+  });
+});

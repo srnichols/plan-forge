@@ -354,7 +354,8 @@ export const CONFIG_SCHEMA = {
         review: { type: "string", description: "Model for reviews" },
         default: {
           type: "string",
-          enum: ["auto", "claude-opus-4.8", "claude-opus-4.7", "claude-opus-4.6", "claude-sonnet-5", "claude-sonnet-4.6", "claude-haiku-4.5", "gpt-5.4", "gpt-5.3-codex", "gpt-5-mini", "gemini-3.1-pro-preview"],
+          description: "Advisory list — any key in cost-service MODEL_PRICING is accepted at runtime; loadModelRouting() does not validate against this enum.",
+          enum: ["auto", "claude-fable-5", "claude-opus-5", "claude-sonnet-5", "claude-haiku-4.5", "claude-opus-4.8", "claude-opus-4.7", "claude-sonnet-4.6", "gpt-5.6-sol", "gpt-5.6-terra", "gpt-5.6-luna", "gpt-5.5", "gpt-5.4", "gpt-5.3-codex", "gpt-5-mini", "gemini-3.6-flash", "gemini-3.1-pro-preview", "grok-4.5", "kimi-k3", "kimi-k2.7-code"],
           default: "auto",
         },
       },

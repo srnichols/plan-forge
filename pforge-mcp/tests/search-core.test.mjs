@@ -498,7 +498,13 @@ describe("performance", () => {
 
     clearCache(); // cold query
     const result = search({ query: "perf bug" }, { cwd: tmpDir });
-    expect(result.durationMs).toBeLessThan(1000);
+    // 5000ms, not 1000ms: this is a cold search over 250 JSON files competing for
+    // disk with the rest of the suite, which runs ~338s of test time in ~38s wall
+    // (≈8× parallelism). It passes in ~10ms solo — the budget exists to catch an
+    // algorithmic regression (an O(n²) scan would blow past this by orders of
+    // magnitude), not to measure contended I/O. At 1000ms it failed the full run
+    // while passing 41/41 in isolation.
+    expect(result.durationMs).toBeLessThan(5000);
     expect(result.total).toBeGreaterThan(0);
   });
 });

@@ -95,11 +95,18 @@ function _computeFoundryQuota({ estimatedTokensIn, estimatedTokensOut, provider,
 export const MODEL_PRICING = {
   // ─── Anthropic Claude ──────────────────────────────────────────────
   // Cache: read 0.10×, 5m write 1.25×, 1h write 2.0× (uniform across all tiers).
-  // Opus 4.5/4.6/4.7/4.8 all bill at $5/$25 per Anthropic pricing page (2026-05-06).
-  // Source: https://platform.claude.com/docs/en/docs/build-with-claude/prompt-caching
+  // Opus 4.5 through Opus 5 all bill at $5/$25; Fable 5 is the first Anthropic
+  // tier above Opus at $10/$50.
+  // Source: https://platform.claude.com/docs/en/docs/about-claude/models/overview
+  "claude-fable-5":         { input: 10 / 1_000_000,   output: 50 / 1_000_000,
+    cache_read_multiplier: 0.10, cache_write_5m_multiplier: 1.25, cache_write_1h_multiplier: 2.0,
+    _source: "https://platform.claude.com/docs/en/docs/about-claude/models/overview — 1M ctx (2026-08-10)" },
+  "claude-opus-5":          { input: 5 / 1_000_000,    output: 25 / 1_000_000,
+    cache_read_multiplier: 0.10, cache_write_5m_multiplier: 1.25, cache_write_1h_multiplier: 2.0,
+    _source: "https://platform.claude.com/docs/en/docs/about-claude/models/overview — 1M ctx (2026-08-10)" },
   "claude-opus-4.8":        { input: 5 / 1_000_000,    output: 25 / 1_000_000,
     cache_read_multiplier: 0.10, cache_write_5m_multiplier: 1.25, cache_write_1h_multiplier: 2.0,
-    _source: "estimated: mirrors claude-opus-4.7 (Anthropic Opus held flat 4.5→4.7); pending vendor publication (2026-07-14)" },
+    _source: "https://platform.claude.com/docs/en/docs/about-claude/models/overview (2026-08-10)" },
   "claude-opus-4.7":        { input: 5 / 1_000_000,    output: 25 / 1_000_000,
     cache_read_multiplier: 0.10, cache_write_5m_multiplier: 1.25, cache_write_1h_multiplier: 2.0,
     _source: "https://www.anthropic.com/pricing (2026-05-06)" },
@@ -123,7 +130,7 @@ export const MODEL_PRICING = {
     _source: "https://platform.claude.com/docs/en/docs/build-with-claude/prompt-caching (2026-05-06)" },
   "claude-sonnet-5":        { input: 3 / 1_000_000,    output: 15 / 1_000_000,
     cache_read_multiplier: 0.10, cache_write_5m_multiplier: 1.25, cache_write_1h_multiplier: 2.0,
-    _source: "estimated: mirrors claude-sonnet-4.6 (Sonnet class); pending vendor publication (2026-07-14)" },
+    _source: "https://platform.claude.com/docs/en/docs/about-claude/models/overview — standard rate; introductory $2/$10 applies through 2026-08-31 (2026-08-10)" },
   "claude-sonnet-4.6":      { input: 3 / 1_000_000,    output: 15 / 1_000_000,
     cache_read_multiplier: 0.10, cache_write_5m_multiplier: 1.25, cache_write_1h_multiplier: 2.0,
     _source: "https://platform.claude.com/docs/en/docs/build-with-claude/prompt-caching (2026-05-06)" },
@@ -138,23 +145,30 @@ export const MODEL_PRICING = {
     _source: "https://platform.claude.com/docs/en/docs/build-with-claude/prompt-caching (2026-05-06)" },
 
   // ─── OpenAI GPT (5.x family) ───────────────────────────────────────
-  // Cache: 0.10× read for GPT-5.x. Writes are FREE (no cache_write multiplier).
-  // Flex: 0.5× input AND 0.5× output (symmetric, gpt-5.5 + gpt-5.4 only).
-  // Priority: 2.0× input, 1.5× output (asymmetric).
-  // Source: https://developers.openai.com/api/docs/pricing (2026-05-06)
-  "gpt-5.6-terra":          { input: 5 / 1_000_000,    output: 30 / 1_000_000,
+  // Cache: 0.10× read for GPT-5.x. Writes are free through gpt-5.5; GPT-5.6
+  //   bills cache writes at 1.25× input, which priceSlice() does NOT model —
+  //   its cache-write math lives in the Anthropic branch only.
+  // Flex: 0.5× input AND 0.5× output (symmetric).
+  // Priority (renamed "Fast mode" 2026-07-30): 2.0× input / 1.5× output on
+  //   gpt-5.4 + gpt-5.5; 2.0× on both for GPT-5.6.
+  // Long context: GPT-5.6 bills a higher rate above 272k prompt tokens; entries
+  //   carry the ≤272k rate and record the long-context rate in _source.
+  // Source: https://developers.openai.com/api/docs/pricing
+  "gpt-5.6-sol":            { input: 5 / 1_000_000,    output: 30 / 1_000_000,
     cache_read_multiplier: 0.10,
     flex_input_multiplier: 0.5, flex_output_multiplier: 0.5,
-    priority_input_multiplier: 2.0, priority_output_multiplier: 1.5,
-    _source: "estimated: mirrors gpt-5.5 flagship rate; pending vendor publication (2026-07-14)" },
-  "gpt-5.6-sol":            { input: 2.5 / 1_000_000,  output: 15 / 1_000_000,
+    priority_input_multiplier: 2.0, priority_output_multiplier: 2.0,
+    _source: "https://developers.openai.com/api/docs/pricing — ≤272k prompt; >272k bills $10/$45 (2026-08-10)" },
+  "gpt-5.6-terra":          { input: 2 / 1_000_000,    output: 12 / 1_000_000,
     cache_read_multiplier: 0.10,
     flex_input_multiplier: 0.5, flex_output_multiplier: 0.5,
-    priority_input_multiplier: 2.0, priority_output_multiplier: 1.5,
-    _source: "estimated: mirrors gpt-5.4 mid rate; pending vendor publication (2026-07-14)" },
-  "gpt-5.6-luna":           { input: 0.75 / 1_000_000, output: 4.5 / 1_000_000,
+    priority_input_multiplier: 2.0, priority_output_multiplier: 2.0,
+    _source: "https://developers.openai.com/api/docs/pricing — ≤272k prompt; >272k bills $4/$18 (2026-08-10)" },
+  "gpt-5.6-luna":           { input: 0.20 / 1_000_000, output: 1.20 / 1_000_000,
     cache_read_multiplier: 0.10,
-    _source: "estimated: mirrors gpt-5.4-mini rate; pending vendor publication (2026-07-14)" },
+    flex_input_multiplier: 0.5, flex_output_multiplier: 0.5,
+    priority_input_multiplier: 2.0, priority_output_multiplier: 2.0,
+    _source: "https://developers.openai.com/api/docs/pricing — ≤272k prompt; >272k bills $0.40/$1.80 (2026-08-10)" },
   "gpt-5.5":                { input: 5 / 1_000_000,    output: 30 / 1_000_000,
     cache_read_multiplier: 0.10,
     flex_input_multiplier: 0.5, flex_output_multiplier: 0.5,
@@ -229,20 +243,46 @@ export const MODEL_PRICING = {
     cache_read_multiplier: 0.25,
     _source: "https://developers.openai.com/api/docs/pricing (2026-05-06)" },
   "o3-mini":                { input: 1.10 / 1_000_000, output: 4.40 / 1_000_000,
-    cache_read_multiplier: 0.25,
+    cache_read_multiplier: 0.50,
     aoai_deployment_type_multiplier: { global: 1.0, "data-zone": 1.1, regional: 1.1, provisioned: 1.0 },
-    _source: "https://developers.openai.com/api/docs/pricing (2026-05-06)" },
+    _source: "https://developers.openai.com/api/docs/pricing — cached input $0.55 (2026-08-10)" },
   "o4-mini":                { input: 1.10 / 1_000_000, output: 4.40 / 1_000_000,
-    cache_read_multiplier: 0.275,
-    _source: "https://developers.openai.com/api/docs/pricing (2026-05-06)" },
+    cache_read_multiplier: 0.25,
+    _source: "https://developers.openai.com/api/docs/pricing — cached input $0.275 (2026-08-10)" },
 
   // ─── Google Gemini ────────────────────────────────────────────────
-  "gemini-3.5-flash":       { input: 0.30 / 1_000_000, output: 2.50 / 1_000_000,
-    _source: "estimated: Gemini flash tier; pending vendor publication (2026-07-14)" },
-  "gemini-3.1-pro-preview": { input: 1.25 / 1_000_000, output: 5 / 1_000_000,
-    _source: "estimated: mirrors gemini-3-pro-preview; pending vendor publication (2026-07-14)" },
+  // Cache: read 0.10× across Gemini 3.x (context-caching price ÷ input price).
+  // Pro tiers bill a higher rate above 200k prompt tokens; entries carry the
+  // ≤200k rate and record the long-context rate in _source.
+  // Source: https://ai.google.dev/gemini-api/docs/pricing
+  "gemini-3.6-flash":       { input: 1.50 / 1_000_000, output: 7.50 / 1_000_000,
+    cache_read_multiplier: 0.10,
+    _source: "https://ai.google.dev/gemini-api/docs/pricing (2026-08-10)" },
+  "gemini-3.5-flash":       { input: 1.50 / 1_000_000, output: 9.00 / 1_000_000,
+    cache_read_multiplier: 0.10,
+    _source: "https://ai.google.dev/gemini-api/docs/pricing (2026-08-10)" },
+  "gemini-3.5-flash-lite":  { input: 0.30 / 1_000_000, output: 2.50 / 1_000_000,
+    cache_read_multiplier: 0.10,
+    _source: "https://ai.google.dev/gemini-api/docs/pricing (2026-08-10)" },
+  "gemini-3.1-pro-preview": { input: 2.00 / 1_000_000, output: 12.00 / 1_000_000,
+    cache_read_multiplier: 0.10,
+    _source: "https://ai.google.dev/gemini-api/docs/pricing — ≤200k prompt; >200k bills $4/$18 (2026-08-10)" },
   "gemini-3-pro-preview":   { input: 1.25 / 1_000_000, output: 5 / 1_000_000,
     _source: "https://ai.google.dev/gemini-api/docs/pricing (2026-05-06)" },
+
+  // ─── Moonshot Kimi ────────────────────────────────────────────────
+  // Vendor publishes cache-hit and cache-miss input rates directly; input is
+  // the cache-miss rate and cache_read_multiplier is cache-hit ÷ cache-miss.
+  // Source: https://platform.kimi.ai/docs/pricing
+  "kimi-k3":                { input: 3.00 / 1_000_000, output: 15.00 / 1_000_000,
+    cache_read_multiplier: 0.10,
+    _source: "https://platform.kimi.ai/docs/pricing/chat-k3 — 1M ctx (2026-08-10)" },
+  "kimi-k2.7-code":         { input: 0.95 / 1_000_000, output: 4.00 / 1_000_000,
+    cache_read_multiplier: 0.20,
+    _source: "https://platform.kimi.ai/docs/pricing/chat-k27-code — 256k ctx (2026-08-10)" },
+  "kimi-k2.7-code-highspeed": { input: 1.90 / 1_000_000, output: 8.00 / 1_000_000,
+    cache_read_multiplier: 0.20,
+    _source: "https://platform.kimi.ai/docs/pricing/chat-k27-code — 256k ctx, ~180 tok/s (2026-08-10)" },
 
   // ─── xAI Grok ─────────────────────────────────────────────────────
   // Cache: ~0.25× approximation. Authoritative cost comes from response

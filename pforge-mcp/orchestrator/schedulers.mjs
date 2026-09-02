@@ -606,6 +606,46 @@ export class ParallelScheduler {
   }
 
   /**
+   * Collect slices whose dependencies are all satisfied. Slices blocked by a
+   * failed or skipped dependency are recorded as skipped here rather than
+   * returned, so the skip propagates to their own descendants on a later pass.
+   */
+  _collectReadySlices({ nodes, order, completed, results, allResults }) {
+    const ready = [];
+    for (const id of order) {
+      if (completed.has(id)) continue;
+      const node = nodes.get(id);
+      if (!(node.depends || []).every((d) => completed.has(d))) continue;
+      const unsatisfiedReason = findUnsatisfiedDependency(node, results);
+      if (unsatisfiedReason) {
+        // Mark the skip itself as unsatisfied so it propagates.
+        const skipResult = { sliceId: id, status: "skipped", unsatisfied: true, reason: unsatisfiedReason };
+        results.set(id, skipResult);
+        allResults.push(skipResult);
+        completed.add(id);
+        continue;
+      }
+      ready.push(id);
+    }
+    return ready;
+  }
+
+  /** Run one slice of a concurrent batch, converting a throw into an error result. */
+  async _runSliceInBatch(id, slice, executeFn) {
+    this.eventBus.emit("slice-started", { sliceId: id, title: slice.title, parallel: true, complexityScore: slice.complexityScore });
+    try {
+      const result = await executeFn(slice);
+      const event = result.status === "passed" ? "slice-completed" : "slice-failed";
+      this.eventBus.emit(event, { sliceId: id, complexityScore: slice.complexityScore, ...result, parallel: true });
+      return { sliceId: id, ...result };
+    } catch (err) {
+      const r = { sliceId: id, status: "error", error: err.message };
+      this.eventBus.emit("slice-failed", r);
+      return r;
+    }
+  }
+
+  /**
    * Execute slices respecting DAG dependencies with parallel [P]-tagged slices.
    * Uses a readiness-based approach: slices become ready when all dependencies complete.
    */
@@ -625,24 +665,7 @@ export class ParallelScheduler {
         break;
       }
 
-      // Find ready slices: all dependencies completed
-      const ready = [];
-      for (const id of order) {
-        if (completed.has(id)) continue;
-        const node = nodes.get(id);
-        const depsComplete = (node.depends || []).every((d) => completed.has(d));
-        if (!depsComplete) continue;
-        const unsatisfiedReason = findUnsatisfiedDependency(node, results);
-        if (unsatisfiedReason) {
-          // Skip, and mark the skip itself as unsatisfied so it propagates.
-          const skipResult = { sliceId: id, status: "skipped", unsatisfied: true, reason: unsatisfiedReason };
-          results.set(id, skipResult);
-          allResults.push(skipResult);
-          completed.add(id);
-          continue;
-        }
-        ready.push(id);
-      }
+      const ready = this._collectReadySlices({ nodes, order, completed, results, allResults });
 
       if (ready.length === 0) break; // No more slices can run
 
@@ -656,26 +679,9 @@ export class ParallelScheduler {
       // Execute parallel batch (up to maxParallelism)
       if (parallelReady.length > 1) {
         const batch = parallelReady.slice(0, this.maxParallelism);
-        const promises = batch.map(async (id) => {
-          const slice = nodes.get(id);
-          this.eventBus.emit("slice-started", { sliceId: id, title: slice.title, parallel: true, complexityScore: slice.complexityScore });
-          try {
-            const result = await executeFn(slice);
-            const r = { sliceId: id, ...result };
-            if (result.status === "passed") {
-              this.eventBus.emit("slice-completed", { sliceId: id, complexityScore: slice.complexityScore, ...result, parallel: true });
-            } else {
-              this.eventBus.emit("slice-failed", { sliceId: id, complexityScore: slice.complexityScore, ...result, parallel: true });
-            }
-            return r;
-          } catch (err) {
-            const r = { sliceId: id, status: "error", error: err.message };
-            this.eventBus.emit("slice-failed", r);
-            return r;
-          }
-        });
-
-        const batchResults = await Promise.all(promises);
+        const batchResults = await Promise.all(
+          batch.map((id) => this._runSliceInBatch(id, nodes.get(id), executeFn)),
+        );
         for (const r of batchResults) {
           results.set(r.sliceId, r);
           allResults.push(r);

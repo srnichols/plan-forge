@@ -8,7 +8,7 @@ import {
   readdirSync,
   writeFileSync,
 } from "node:fs";
-import { resolve, dirname } from "node:path";
+import { resolve, dirname, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 import { tmpdir } from "node:os";
 import { randomUUID } from "node:crypto";
@@ -124,6 +124,25 @@ describe("tempering/adapters — STACK_ADAPTER_PATHS", () => {
       expect(existsSync(abs)).toBe(true);
     }
   });
+
+  /**
+   * meta #269 — adapters must live under pforge-mcp/, because that is the only
+   * tree setup copies wholesale into a consuming project. While they lived in
+   * presets/, setup flattened presets/<stack>/* into the project ROOT, so the
+   * adapter landed at <project>/tempering-adapter.mjs (and all nine collided
+   * there), while loadAdapter looked for <project>/presets/<stack>/… — which
+   * never existed. Every scanner was then skipped in every vendored install.
+   */
+  it("every adapter ships inside pforge-mcp/, not presets/", () => {
+    for (const [stack, rel] of Object.entries(STACK_ADAPTER_PATHS)) {
+      const abs = resolve(MCP_ROOT, "tempering", rel);
+      expect(existsSync(abs), `${stack} adapter missing at ${abs}`).toBe(true);
+      expect(
+        abs.startsWith(MCP_ROOT + sep),
+        `${stack} adapter resolves outside pforge-mcp/ (${abs}) — it will not ship to consumers`,
+      ).toBe(true);
+    }
+  });
 });
 
 describe("tempering/adapters — validateAdapterEntry", () => {
@@ -174,7 +193,7 @@ describe("tempering/adapters — loadAdapter", () => {
 describe("preset adapters — shape contract", () => {
   for (const stack of ["typescript", "dotnet", "python", "go", "java", "rust"]) {
     it(`${stack} adapter passes validateAdapterEntry for unit`, async () => {
-      const mod = await import(`../../presets/${stack}/tempering-adapter.mjs`);
+      const mod = await import(`../tempering/adapters/${stack}.mjs`);
       expect(mod.temperingAdapter).toBeDefined();
       expect(validateAdapterEntry(mod.temperingAdapter.unit).ok).toBe(true);
       expect(mod.temperingAdapter.unit.supported).toBe(true);
@@ -183,7 +202,7 @@ describe("preset adapters — shape contract", () => {
 
   for (const stack of ["php", "swift", "azure-iac"]) {
     it(`${stack} adapter is a valid stub (unsupported)`, async () => {
-      const mod = await import(`../../presets/${stack}/tempering-adapter.mjs`);
+      const mod = await import(`../tempering/adapters/${stack}.mjs`);
       expect(mod.temperingAdapter).toBeDefined();
       expect(mod.temperingAdapter.unit.supported).toBe(false);
       expect(mod.temperingAdapter.integration.supported).toBe(false);
@@ -197,32 +216,32 @@ describe("preset adapters — shape contract", () => {
 
 describe("preset adapters — parseOutput", () => {
   it("typescript parses vitest JSON", async () => {
-    const mod = await import("../../presets/typescript/tempering-adapter.mjs");
+    const mod = await import("../tempering/adapters/typescript.mjs");
     const json = JSON.stringify({ numPassedTests: 42, numFailedTests: 1, numPendingTests: 2, numTodoTests: 1 });
     const r = mod.temperingAdapter.unit.parseOutput(json, "", 1);
     expect(r).toEqual({ pass: 42, fail: 1, skipped: 3, coverage: null });
   });
 
   it("typescript falls back to exit code on unparseable output", async () => {
-    const mod = await import("../../presets/typescript/tempering-adapter.mjs");
+    const mod = await import("../tempering/adapters/typescript.mjs");
     const r = mod.temperingAdapter.unit.parseOutput("no json here", "", 1);
     expect(r.fail).toBe(1);
   });
 
   it("dotnet parses summary line", async () => {
-    const mod = await import("../../presets/dotnet/tempering-adapter.mjs");
+    const mod = await import("../tempering/adapters/dotnet.mjs");
     const r = mod.temperingAdapter.unit.parseOutput("Failed: 0, Passed: 42, Skipped: 1, Total: 43", "", 0);
     expect(r).toEqual({ pass: 42, fail: 0, skipped: 1, coverage: null });
   });
 
   it("python parses pytest summary", async () => {
-    const mod = await import("../../presets/python/tempering-adapter.mjs");
+    const mod = await import("../tempering/adapters/python.mjs");
     const r = mod.temperingAdapter.unit.parseOutput("3 passed, 1 failed, 2 skipped in 0.45s", "", 1);
     expect(r).toEqual({ pass: 3, fail: 1, skipped: 2, coverage: null });
   });
 
   it("go parses -json stream", async () => {
-    const mod = await import("../../presets/go/tempering-adapter.mjs");
+    const mod = await import("../tempering/adapters/go.mjs");
     const stream = [
       '{"Action":"pass","Test":"TestA","Package":"x"}',
       '{"Action":"fail","Test":"TestB","Package":"x"}',
@@ -234,7 +253,7 @@ describe("preset adapters — parseOutput", () => {
   });
 
   it("java parses surefire summary (last match wins)", async () => {
-    const mod = await import("../../presets/java/tempering-adapter.mjs");
+    const mod = await import("../tempering/adapters/java.mjs");
     const out = [
       "Tests run: 5, Failures: 0, Errors: 0, Skipped: 0",
       "Tests run: 10, Failures: 1, Errors: 1, Skipped: 2",
@@ -245,7 +264,7 @@ describe("preset adapters — parseOutput", () => {
   });
 
   it("rust parses cargo test summary (sum across binaries)", async () => {
-    const mod = await import("../../presets/rust/tempering-adapter.mjs");
+    const mod = await import("../tempering/adapters/rust.mjs");
     const out = [
       "test result: ok. 3 passed; 0 failed; 1 ignored; 0 measured; 0 filtered out",
       "test result: FAILED. 2 passed; 1 failed; 0 ignored; 0 measured; 0 filtered out",

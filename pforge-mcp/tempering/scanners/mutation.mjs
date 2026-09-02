@@ -74,7 +74,7 @@ function buildMutationFrame({ sliceRef, startedAt, now, verdict, reason, mutatio
 async function loadMutationAdapter(config, importFn) {
   try {
     const stack = config._detectedStack || "typescript";
-    const mod = await importFn(`../../../presets/${stack}/tempering-adapter.mjs`);
+    const mod = await importFn(`../adapters/${stack}.mjs`);
     return mod.temperingAdapter || mod.default;
   } catch {
     return null;
@@ -188,7 +188,9 @@ function resolveMutationContext(ctx) {
     env = process.env,
     hub = null,
     captureMemory = null,
-    importFn = (spec) => import(spec),
+    // Resolved against this module: a bare variable specifier is resolved
+    // against the project root by some runners (notably vitest 4).
+    importFn = (spec) => import(new URL(spec, import.meta.url).href),
     spawnFn = null,
     trigger = "manual",
     touchedFiles = [],

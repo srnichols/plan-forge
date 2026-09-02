@@ -684,7 +684,7 @@ export const TOOL_METADATA = {
       "test runner available on PATH (npx/dotnet/pytest/go/mvn/cargo)",
     ],
     produces: [".forge/tempering/run-<ts>.json", ".forge/tempering/artifacts/<runId>/contract/report.json", ".forge/tempering/artifacts/<runId>/visual-diff/report.json"],
-    consumes: [".forge/tempering/config.json", "presets/<stack>/tempering-adapter.mjs"],
+    consumes: [".forge/tempering/config.json", "pforge-mcp/tempering/adapters/<stack>.mjs"],
     sideEffects: [
       "spawns a test-runner subprocess",
       "enforces config.runtimeBudgets.unitMaxMs (SIGTERM then SIGKILL)",
@@ -704,7 +704,7 @@ export const TOOL_METADATA = {
     },
     errors: {
       MISSING_PROJECTDIR: { message: "projectDir required", recovery: "Pass `path` or invoke from a project directory" },
-      NO_ADAPTER: { message: "No preset adapter for detected stack", recovery: "Install the matching preset or extend presets/<stack>/tempering-adapter.mjs" },
+      NO_ADAPTER: { message: "No adapter for detected stack", recovery: "Add or extend pforge-mcp/tempering/adapters/<stack>.mjs" },
       OBJECTIVE_BASELINE_FAILED: { message: "Objective command failed at baseline capture", recovery: "Ensure command exits 0 and prints a single numeric line" },
       OBJECTIVE_BASELINE_NON_NUMERIC: { message: "Objective command stdout was not a number", recovery: "Command must print exactly one numeric value (e.g., 87.5)" },
     },

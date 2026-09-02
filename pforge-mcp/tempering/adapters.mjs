@@ -1,8 +1,8 @@
 /**
- * Plan Forge — Tempering: preset-adapter registry (Phase TEMPER-02 Slice 02.1)
+ * Plan Forge — Tempering: stack-adapter registry (Phase TEMPER-02 Slice 02.1)
  *
  * Language-agnostic runner contract. Each supported stack ships a
- * `presets/<stack>/tempering-adapter.mjs` that exports a single
+ * `pforge-mcp/tempering/adapters/<stack>.mjs` that exports a single
  * `temperingAdapter` object:
  *
  *   export const temperingAdapter = {
@@ -12,7 +12,7 @@
  *
  * The runner never speaks a stack's native test tooling directly — all
  * knowledge of `npx vitest` vs `dotnet test` vs `go test -json` lives in
- * the preset. New stacks land as preset PRs, not core changes.
+ * the adapter. New stacks land as one adapter file, not core changes.
  *
  * Stubs (php / swift / azure-iac this slice) export the same shape with
  * `supported: false` + a `reason`. The runner surfaces that reason in
@@ -22,20 +22,26 @@
  */
 
 /**
- * Map of stack id (as returned by `detectStack`) → preset-adapter module
- * path, *relative to this file*. Kept as a const so tests can assert
- * the full supported matrix without a filesystem scan.
+ * Map of stack id (as returned by `detectStack`) → adapter module path,
+ * *relative to this file*. Kept as a const so tests can assert the full
+ * supported matrix without a filesystem scan.
+ *
+ * These live under `pforge-mcp/` rather than `presets/` because that is the
+ * only tree setup copies wholesale into a consuming project. `presets/` is a
+ * template directory whose contents are flattened into the consumer's root,
+ * so an adapter kept there was unreachable from here in every vendored
+ * install and every scanner was silently skipped (meta #269).
  */
 export const STACK_ADAPTER_PATHS = Object.freeze({
-  typescript: "../../presets/typescript/tempering-adapter.mjs",
-  dotnet: "../../presets/dotnet/tempering-adapter.mjs",
-  python: "../../presets/python/tempering-adapter.mjs",
-  go: "../../presets/go/tempering-adapter.mjs",
-  java: "../../presets/java/tempering-adapter.mjs",
-  rust: "../../presets/rust/tempering-adapter.mjs",
-  php: "../../presets/php/tempering-adapter.mjs",
-  swift: "../../presets/swift/tempering-adapter.mjs",
-  "azure-iac": "../../presets/azure-iac/tempering-adapter.mjs",
+  typescript: "./adapters/typescript.mjs",
+  dotnet: "./adapters/dotnet.mjs",
+  python: "./adapters/python.mjs",
+  go: "./adapters/go.mjs",
+  java: "./adapters/java.mjs",
+  rust: "./adapters/rust.mjs",
+  php: "./adapters/php.mjs",
+  swift: "./adapters/swift.mjs",
+  "azure-iac": "./adapters/azure-iac.mjs",
 });
 
 /**

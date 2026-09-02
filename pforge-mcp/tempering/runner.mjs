@@ -933,7 +933,7 @@ const SCANNER_ENTRY_POINTS = {
 async function _runSpawnBasedScanner({ name, cwd, timeoutMs, started, now }) {
   const config = await readTemperingConfig(cwd);
   const stack = detectStack(cwd);
-  const adapter = loadAdapter(stack);
+  const adapter = await loadAdapter(stack);
   if (!adapter) {
     const err = new Error(`No adapter for stack "${stack}" — scanner "${name}" unavailable`);
     err.code = ERROR_CODES.SCANNER_UNAVAILABLE.code;
@@ -1044,6 +1044,12 @@ export async function runSingleScanner(name, opts = {}) {
 }
 
 /**
+ * Scanners that must actually execute for a run to mean anything. A run that
+ * skipped these has measured nothing, whatever the cross-stack scanners say.
+ */
+const MANDATORY_SCANNERS = new Set(["unit", "integration"]);
+
+/**
  * Derive a single run-level verdict from scanner verdicts.
  * Priority: error > budget-exceeded > fail > pass > skipped.
  */
@@ -1054,6 +1060,14 @@ export function deriveOverallVerdict(scanners) {
   for (const s of scanners) {
     const v = s && s.verdict ? s.verdict : "skipped";
     if (order.indexOf(v) < order.indexOf(worst)) worst = v;
+  }
+  // Reporting "pass" off a cross-stack scanner while EVERY real test scanner was
+  // skipped is a green light for an unmeasured codebase (meta-bug #269). Partial
+  // adapter coverage — unit ran, integration has no command — is legitimate and
+  // still passes. Worse verdicts carry their own signal and are left alone.
+  const mandatory = scanners.filter((s) => MANDATORY_SCANNERS.has(s?.scanner));
+  if (worst === "pass" && mandatory.length > 0 && mandatory.every((s) => (s?.verdict ?? "skipped") === "skipped")) {
+    return "skipped";
   }
   return worst;
 }

@@ -564,6 +564,36 @@ export class SequentialScheduler {
   }
 }
 
+const DEP_FAILURE_STATUSES = new Set(["failed", "error"]);
+
+/**
+ * Describe the first dependency that did not succeed, or null when all are
+ * satisfied.
+ *
+ * Meta-bug #263: a dependency that was itself skipped behind an unsatisfied
+ * dependency is not a success, and scoring it as one let terminal verification
+ * slices run against prerequisites that were never built — and report passed.
+ * The reason chains so the root cause is readable from the leaf without
+ * reconstructing the graph.
+ *
+ * A slice skipped because it was already complete carries no `unsatisfied` flag
+ * and does satisfy its descendants. A dependency with no result at all is
+ * unknown, not skipped, and is left to the deadlock check (#225).
+ *
+ * @param {{ depends?: string[] }} node
+ * @param {Map<string, { status: string, unsatisfied?: boolean, reason?: string }>} results
+ * @returns {string|null}
+ */
+function findUnsatisfiedDependency(node, results) {
+  for (const dep of node.depends || []) {
+    const r = results.get(dep);
+    if (!r) continue;
+    if (DEP_FAILURE_STATUSES.has(r.status)) return `dependency ${dep} ${r.status}`;
+    if (r.status === "skipped" && r.unsatisfied) return `dependency ${dep} skipped: ${r.reason}`;
+  }
+  return null;
+}
+
 /**
  * Parallel scheduler — Phase 6: executes [P]-tagged slices concurrently.
  * Respects DAG dependencies and merge points.
@@ -602,14 +632,10 @@ export class ParallelScheduler {
         const node = nodes.get(id);
         const depsComplete = (node.depends || []).every((d) => completed.has(d));
         if (!depsComplete) continue;
-        // Check if any dependency failed
-        const depFailed = (node.depends || []).some((d) => {
-          const r = results.get(d);
-          return r && (r.status === "failed" || r.status === "error");
-        });
-        if (depFailed) {
-          // Skip slices whose dependencies failed
-          const skipResult = { sliceId: id, status: "skipped", reason: "dependency failed" };
+        const unsatisfiedReason = findUnsatisfiedDependency(node, results);
+        if (unsatisfiedReason) {
+          // Skip, and mark the skip itself as unsatisfied so it propagates.
+          const skipResult = { sliceId: id, status: "skipped", unsatisfied: true, reason: unsatisfiedReason };
           results.set(id, skipResult);
           allResults.push(skipResult);
           completed.add(id);

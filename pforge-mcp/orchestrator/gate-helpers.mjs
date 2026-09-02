@@ -307,6 +307,16 @@ export function lintGateCommands(planFilePath, cwd = process.cwd()) {
     ? plan.slices[plan.slices.length - 1].number
     : null;
 
+  // A lint that examined nothing is not a lint that passed. Three plans read
+  // "0 error(s), 0 warning(s)" while every slice heading had failed to parse;
+  // only the "across 0 slices" tail of the summary gave it away (meta-bug #260).
+  if (plan.slices.length === 0) {
+    errors.push({
+      slice: null, command: null, rule: "no-slices-parsed", severity: "error",
+      message: "No slices parsed from the plan — zero gate commands were examined, so this result says nothing about the plan's gates. Check that slice headings match '### Slice <N> — <Title>'.",
+    });
+  }
+
   for (const slice of plan.slices) {
     if (!slice.validationGate) continue;
     const rawLines = slice.validationGate.split("\n").map(l => l.trim()).filter(l => l.length > 0);

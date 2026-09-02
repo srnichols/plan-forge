@@ -193,6 +193,21 @@ export function parsePlan(planPath, cwd = process.cwd()) {
 }
 
 /**
+ * The one shape a slice heading may take.
+ *
+ * Exported and shared so `computeLockHash` and `parseSlices` cannot drift.
+ * They previously used different patterns — the parser accepted a letter
+ * suffix and was case-insensitive, the hash scanner accepted neither — so
+ * `### Slice 7b — Packaging` parsed as a normal slice while its Scope and
+ * Validation Gate stayed outside the lock hash. Either could then be rewritten
+ * to anything at all without invalidating the hash (meta-bug #260).
+ *
+ * Capture groups: 1 = slice id, 2 = title.
+ */
+export const SLICE_HEADING_RE =
+  /^#{2,4}\s+slice\s+([\d.]+[A-Za-z]?)\s*[:\u2014\u2013—–-]\s*(.+?)(?:\s*\[.+?\])*\s*$/ui;
+
+/**
  * Compute the lockHash for a plan per decision #6 (Phase-WORKER-GUARDRAILS A6).
  *
  * Hash scope: sha256 over the concatenation of (per slice, in document order):
@@ -234,7 +249,7 @@ export function computeLockHash(planContent) {
 
   for (const line of lines) {
     // New slice header
-    if (/^#{2,4}\s+Slice\s+\d+\b/.test(line)) {
+    if (SLICE_HEADING_RE.test(line)) {
       inSlice = true;
       inScope = false;
       inGate = false;
@@ -472,9 +487,7 @@ function handleCodeBlockContentLine(state, line) {
 }
 
 function handleSliceHeaderLine(state, line) {
-  const sliceMatch = line.match(
-    /^#{2,4}\s+slice\s+([\d.]+[A-Za-z]?)\s*[:\u2014\u2013—–-]\s*(.+?)(?:\s*\[.+?\])*\s*$/ui
-  );
+  const sliceMatch = line.match(SLICE_HEADING_RE);
   if (!sliceMatch) return false;
   if (state.current) state.slices.push(state.current);
   state.inFilesInScopeBlock = false;

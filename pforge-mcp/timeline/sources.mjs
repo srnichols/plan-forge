@@ -16,6 +16,7 @@
 import { createReadStream, existsSync, readdirSync, readFileSync, statSync } from "node:fs";
 import { createInterface } from "node:readline";
 import { resolve, basename } from "node:path";
+import { thoughtContent } from "../memory.mjs";
 
 // ─── Helpers ──────────────────────────────────────────────────────────
 
@@ -156,7 +157,7 @@ async function readMemories(cwd, filters) {
     source: "memory",
     event: "memory-captured",
     correlationId: rec._correlationId || rec.correlationId || "",
-    payload: { tags: rec.tags, summary: rec.summary, content: rec.content },
+    payload: { tags: rec.tags, summary: rec.summary, content: thoughtContent(rec) },
   }), filters);
 }
 

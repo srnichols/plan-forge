@@ -15,6 +15,7 @@
 
 import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
 import { resolve, basename, join } from "node:path";
+import { thoughtContent } from "../memory.mjs";
 
 export const SOURCE_WEIGHTS = Object.freeze({
   bug: 1.2,
@@ -239,7 +240,7 @@ const memorySource = {
   parse(content, filePath) {
     const records = safeReadJsonl(filePath);
     return records.map((rec, i) => {
-      const parts = [rec.summary, ...(rec.tags || []), rec.content].filter(Boolean);
+      const parts = [rec.summary, ...(rec.tags || []), thoughtContent(rec)].filter(Boolean);
       return {
         source: "memory",
         recordRef: rec.id || `mem-${i}`,

@@ -23,7 +23,7 @@
 
 import { existsSync, readFileSync, writeFileSync, statSync, unlinkSync } from "node:fs";
 import { resolve, join } from "node:path";
-import { tokenize } from "./memory.mjs";
+import { tokenize, thoughtContent } from "./memory.mjs";
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -170,7 +170,9 @@ export function vecCosineSimilarity(a, b) {
  *   Serialisable index — Maps converted to arrays for JSON round-trip.
  */
 export function buildCorpusIndex(thoughts) {
-  const contents = thoughts.map((t) => t.content || t.message || t.text || "");
+  // Arrow, not a bare reference: Array.map passes the index as arg 2, which
+  // thoughtContent would read as maxDepth.
+  const contents = thoughts.map((t) => thoughtContent(t));
   const tokenMaps = contents.map(tokenize);
   const idf = buildIdf(tokenMaps);
   return {
@@ -389,7 +391,7 @@ function float32Cosine(a, b) {
  * @returns {string}
  */
 function thoughtSnippet(thought) {
-  const raw = thought.content || thought.message || thought.text || "";
+  const raw = thoughtContent(thought);
   return raw.length > SNIPPET_CHARS ? raw.slice(0, SNIPPET_CHARS) + "…" : raw;
 }
 
@@ -507,7 +509,7 @@ export async function searchLocalThoughts(query, opts = {}) {
  * Builds the corpus index internally (no cache).
  */
 function _tfidfSearch(query, thoughts, limit, threshold) {
-  const contents = thoughts.map((t) => t.content || t.message || t.text || "");
+  const contents = thoughts.map((t) => thoughtContent(t));
   const tokenMaps = contents.map(tokenize);
   const idf = buildIdf(tokenMaps);
   return _tfidfSearchWithIndex(query, thoughts, tokenMaps, idf, limit, threshold);
@@ -543,7 +545,7 @@ function _tfidfSearchWithIndex(query, thoughts, tokenMaps, idf, limit, threshold
  * Falls back to TF-IDF if embedding fails.
  */
 async function _neuralSearch(query, thoughts, limit, threshold) {
-  const contents = thoughts.map((t) => t.content || t.message || t.text || "");
+  const contents = thoughts.map((t) => thoughtContent(t));
   const allTexts = [query, ...contents];
   const vectors = await _neuralEmbed(allTexts);
 

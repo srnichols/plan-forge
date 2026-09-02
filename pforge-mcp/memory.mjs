@@ -1418,6 +1418,40 @@ export function buildWatcherSearchPrompt(anomaly, projectName) {
   return lines.join("\n") + "\n";
 }
 
+// ─── Thought text extraction ──────────────────────────────────────────
+
+/**
+ * Extract the human-readable text from a thought record, whatever shape it
+ * arrived in. Always returns a string.
+ *
+ * Records in `.forge/liveguard-memories.jsonl` are not uniformly shaped:
+ * some carry `content` as a string, others as a nested thought envelope
+ * because a writer passed an already-built thought as the `content` argument
+ * of a second capture. Readers doing `t.content || t.message || t.text` got
+ * the object back — truthy, so the chain stopped there — and then either
+ * coerced it to the literal "[object Object]" or handed it to a tokenizer
+ * that returned an empty bag. Either way the record was silently
+ * unsearchable, with no error (issue #254).
+ *
+ * The writers are fixed, but records already on disk are never rewritten, so
+ * every reader routes through here.
+ *
+ * @param {unknown} record - a thought, or a bare string
+ * @param {number} [maxDepth=5] - unwrap limit; also the cycle guard
+ * @returns {string} the text, or "" when there is none
+ */
+export function thoughtContent(record, maxDepth = 5) {
+  let node = record;
+  for (let depth = 0; depth <= maxDepth; depth++) {
+    if (typeof node === "string") return node;
+    if (!node || typeof node !== "object" || Array.isArray(node)) return "";
+    const next = node.content ?? node.message ?? node.text;
+    if (next === node) return "";
+    node = next;
+  }
+  return "";
+}
+
 // ─── G3.5 — Thought TTL / expiresAt ────────────────────────────────────
 
 /**

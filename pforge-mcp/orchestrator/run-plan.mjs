@@ -858,11 +858,14 @@ async function _captureRunMemoryAndDrain(summary, cwd, projectName) {
   const runSummary = buildRunSummaryThought(summary, projectName);
   const costAnomaly = buildCostAnomalyThought(summary, getCostReport(cwd), projectName);
   const receipts = { runSummary: null, costAnomaly: null };
+  // The builders return a full { content, project, source, created_by }
+  // envelope; captureMemory wants the text. Passing the envelope wrapped it a
+  // second time and made the record unsearchable (issue #254).
   if (runSummary) {
-    receipts.runSummary = captureMemory({ content: runSummary, type: "decision", source: "forge_run_plan", cwd });
+    receipts.runSummary = captureMemory({ content: runSummary.content, type: "decision", source: "forge_run_plan", cwd });
   }
   if (costAnomaly) {
-    receipts.costAnomaly = captureMemory({ content: costAnomaly, type: "gotcha", source: "forge_run_plan/cost", cwd });
+    receipts.costAnomaly = captureMemory({ content: costAnomaly.content, type: "gotcha", source: "forge_run_plan/cost", cwd });
   }
   summary._memoryCapture = {
     runSummary,

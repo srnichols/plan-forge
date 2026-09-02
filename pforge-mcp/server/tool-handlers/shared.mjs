@@ -9,6 +9,7 @@ import {
   setPlanPathAliasWarned,
 } from "../state.mjs";
 import { findProjectRoot } from "../helpers.mjs";
+import { thoughtContent } from "../../memory.mjs";
 
 export const _CALL_TOOL_NO_MATCH = Symbol("call-tool-no-match");
 
@@ -61,11 +62,13 @@ export function _buildRunPlanOptions(args, cwd, eventHandler) {
 export function _handleRunPlanMemoryCapture(result, cwd) {
   if (!result?._memoryCapture) return;
   if (!result._memoryCapture._captured) {
+    // These are full thought envelopes from buildRunSummaryThought /
+    // buildCostAnomalyThought; captureMemory wants the text (issue #254).
     if (result._memoryCapture.runSummary) {
-      captureMemory(result._memoryCapture.runSummary, "decision", "forge_run_plan", cwd);
+      captureMemory(thoughtContent(result._memoryCapture.runSummary), "decision", "forge_run_plan", cwd);
     }
     if (result._memoryCapture.costAnomaly) {
-      captureMemory(result._memoryCapture.costAnomaly, "gotcha", "forge_run_plan/cost", cwd);
+      captureMemory(thoughtContent(result._memoryCapture.costAnomaly), "gotcha", "forge_run_plan/cost", cwd);
     }
     return;
   }

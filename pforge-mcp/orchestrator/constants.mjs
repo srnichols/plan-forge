@@ -59,6 +59,14 @@ export const DEFAULT_WORKER_OUTPUT_IDLE_MS = 480_000;
 /** Default worker total-run timeout: 30 minutes. Override with PFORGE_WORKER_TIMEOUT_MS. */
 export const DEFAULT_WORKER_TIMEOUT_MS = 1_800_000;
 
+/**
+ * Backoff before retrying a worker that never launched (meta #264), multiplied
+ * by the attempt number. The measured cause is a Windows lock on the shared
+ * `copilot.ps1` entrypoint when two orchestrators launch at the same moment, so
+ * an immediate retry tends to land inside the same lock window.
+ */
+export const WORKER_LAUNCH_RETRY_BACKOFF_MS = 3_000;
+
 /** Allowlist of commands permitted in validation gates. Shared by runGate() and lintGateCommands(). */
 export const GATE_ALLOWED_PREFIXES = [
   // Build / test runners

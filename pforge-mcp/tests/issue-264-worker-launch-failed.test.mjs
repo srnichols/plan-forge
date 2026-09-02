@@ -123,3 +123,53 @@ describe("Guard: the orchestrator skips the gate and reports the launch (#264)",
     expect(src).toMatch(/gateStatus:\s*gateResult\.launchFailure\s*\?\s*"skipped"/);
   });
 });
+
+/**
+ * The contention half. A lock on the shared `copilot.ps1` entrypoint is
+ * transient by nature, so the reporter asked for a retry with backoff, and
+ * #264 was closed on the belief that it "comes for free: a skipped gate leaves
+ * gateResult.success false, so the existing retry loop takes another attempt."
+ *
+ * It does not. `detectWorkerLaunchFailure` only fires when `exitCode !== 0`,
+ * and the attempt loop reaches an unconditional
+ *
+ *     if (workerResult.exitCode !== 0) break;
+ *
+ * before any retry bookkeeping — so a launch failure always left the loop on
+ * attempt 0 and the transient lock was never retried.
+ */
+describe("Guard: a launch failure is retried with backoff (#264 contention)", () => {
+  const src = readFileSync(resolve(import.meta.dirname, "..", "orchestrator", "run-plan.mjs"), "utf-8");
+  const loop = src.slice(
+    src.indexOf("async function _executeSliceAttemptLoop"),
+    src.indexOf("async function executeSlice("),
+  );
+
+  it("handles the launch failure before the non-zero-exit break", () => {
+    const retryIdx = loop.indexOf("if (launchFailure)");
+    const breakIdx = loop.indexOf("if (workerResult.exitCode !== 0) break;");
+    expect(retryIdx, "no launch-failure retry branch in the attempt loop").toBeGreaterThan(-1);
+    expect(breakIdx).toBeGreaterThan(-1);
+    expect(
+      retryIdx,
+      "the non-zero-exit break runs first, so a launch failure can never retry",
+    ).toBeLessThan(breakIdx);
+  });
+
+  it("backs off before retrying rather than re-colliding immediately", () => {
+    expect(loop).toMatch(/await _recordLaunchFailureForRetry\(/);
+    const helper = src.slice(
+      src.indexOf("async function _recordLaunchFailureForRetry"),
+      src.indexOf("function _recordGateFailureForRetry"),
+    );
+    expect(helper).toMatch(/WORKER_LAUNCH_RETRY_BACKOFF_MS/);
+    expect(helper).toMatch(/await new Promise\(\(r\) => setTimeout/);
+  });
+
+  it("does not describe a launch failure as a gate-command failure", () => {
+    const retryIdx = loop.indexOf("if (launchFailure)");
+    expect(retryIdx, "no launch-failure branch to inspect").toBeGreaterThan(-1);
+    const branch = loop.slice(retryIdx, retryIdx + 600);
+    expect(branch).not.toMatch(/Gate command/);
+  });
+});

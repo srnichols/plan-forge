@@ -26,7 +26,7 @@ import { startProxyLogger } from "../proxy-logger.mjs";
 import { buildCrossRunSnapshot } from "../watcher.mjs";
 import { inspectGithubStack as _inspectGithubStackDefault } from "../github-introspect.mjs";
 import { buildIssueBody as _buildIssueBodyDefault, dispatchSlice as _dispatchSliceDefault, pollPullRequest as _pollPullRequestDefault, DEFAULT_POLL_INTERVAL_MS, DEFAULT_TIMEOUT_MS } from "../workers/copilot-coding-agent.mjs";
-import { API_ALLOWED_ROLES, COST_ANOMALY_MULTIPLIER, CRUCIBLE_STALL_CUTOFF_DAYS, DEFAULT_GATE_TIMEOUT_MS, DEFAULT_WORKER_OUTPUT_IDLE_MS, DEFAULT_WORKER_TIMEOUT_MS, EVENT_SOURCE, GATE_ALLOWED_PREFIXES, GATE_SUGGESTION_AUTO_INJECT_THRESHOLD, POSTMORTEM_RETENTION_COUNT, PROPOSED_FIX_DIR, QUORUM_PRESETS, REVIEW_RESOLUTIONS, REVIEW_SEVERITIES, REVIEW_SOURCES, REVIEW_STATUSES, SECURITY_RISK, SECURITY_RISK_FOR_TYPE, SUPPORTED_AGENTS, UNIX_TOOLS } from "./constants.mjs";
+import { API_ALLOWED_ROLES, COST_ANOMALY_MULTIPLIER, CRUCIBLE_STALL_CUTOFF_DAYS, DEFAULT_GATE_TIMEOUT_MS, DEFAULT_WORKER_OUTPUT_IDLE_MS, DEFAULT_WORKER_TIMEOUT_MS, EVENT_SOURCE, GATE_ALLOWED_PREFIXES, GATE_SUGGESTION_AUTO_INJECT_THRESHOLD, POSTMORTEM_RETENTION_COUNT, PROPOSED_FIX_DIR, QUORUM_PRESETS, REVIEW_RESOLUTIONS, REVIEW_SEVERITIES, REVIEW_SOURCES, REVIEW_STATUSES, SECURITY_RISK, SECURITY_RISK_FOR_TYPE, SUPPORTED_AGENTS, UNIX_TOOLS, WORKER_LAUNCH_RETRY_BACKOFF_MS } from "./constants.mjs";
 import { LogEventHandler, OrchestratorEventBus, appendEvent, writeSilentExitRecord } from "./event-bus.mjs";
 import { buildSlicePrompt } from "./prompt-builders.mjs";
 import { parsePlan, computeLockHash, normalizeSliceId, compareSliceIds, parseOnlySlicesExpr, parseWorkerTimeoutValue, parseSlices, buildDAG, restrictDagToSlices, loadPlanParserConfig } from "./plan-parser.mjs";
@@ -2291,6 +2291,44 @@ async function _executeSliceDispatchWorkerForAttempt({ mode, worker, slice, cwd,
   }
 }
 
+/**
+ * Record a launch failure for another attempt. A worker that never launched
+ * exits non-zero, so the loop's `exitCode !== 0` break used to end the run on
+ * attempt 0 and the transient lock was never retried (meta #264).
+ */
+async function _recordLaunchFailureForRetry({ launchFailure, workerResult, currentModel, attemptStartTime, attempt, maxRetries, logFile }) {
+  const next = attempt + 1;
+  const context = {
+    previousAttempt: next,
+    gateName: "(worker never launched — gate skipped)",
+    model: workerResult.model || currentModel || "auto",
+    durationMs: Date.now() - attemptStartTime,
+    stderrTail: [launchFailure, workerResult.stderr].filter(Boolean).join("\n\n"),
+  };
+  if (next <= maxRetries) {
+    await new Promise((r) => setTimeout(r, WORKER_LAUNCH_RETRY_BACKOFF_MS * next));
+    writeFileSync(logFile, `\n\n--- WORKER NEVER LAUNCHED, RETRYING (attempt ${next + 1}) ---\n${launchFailure}\n`, { flag: "a" });
+  }
+  return { lastError: launchFailure, lastFailureContext: context, attempt: next };
+}
+
+/** Record a failed validation gate for another attempt. */
+function _recordGateFailureForRetry({ gateResult, workerResult, currentModel, attemptStartTime, attempt, maxRetries, logFile }) {
+  const lastError = `Gate command '${gateResult.failedCommand || "unknown"}' failed:\n${gateResult.error || gateResult.output}`;
+  const next = attempt + 1;
+  const context = {
+    previousAttempt: next,
+    gateName: gateResult.failedCommand || "unknown",
+    model: workerResult.model || currentModel || "auto",
+    durationMs: Date.now() - attemptStartTime,
+    stderrTail: [gateResult.error, gateResult.output, workerResult.stderr].filter(Boolean).join("\n\n"),
+  };
+  if (next <= maxRetries) {
+    writeFileSync(logFile, `\n\n--- GATE FAILED, RETRYING (attempt ${next + 1}) ---\n${lastError}\n`, { flag: "a" });
+  }
+  return { lastError, lastFailureContext: context, attempt: next };
+}
+
 async function _executeSliceAttemptLoop(ctx) {
   const {
     slice, cwd, mode, runDir, maxRetries, worker,
@@ -2356,20 +2394,18 @@ async function _executeSliceAttemptLoop(ctx) {
       continue;
     }
 
+    if (launchFailure) {
+      ({ lastError, lastFailureContext, attempt } = await _recordLaunchFailureForRetry({
+        launchFailure, workerResult, currentModel, attemptStartTime, attempt, maxRetries, logFile,
+      }));
+      continue;
+    }
+
     if (workerResult.exitCode !== 0) break;
 
-    lastError = `Gate command '${gateResult.failedCommand || "unknown"}' failed:\n${gateResult.error || gateResult.output}`;
-    lastFailureContext = {
-      previousAttempt: attempt + 1,
-      gateName: gateResult.failedCommand || "unknown",
-      model: workerResult.model || currentModel || "auto",
-      durationMs: Date.now() - attemptStartTime,
-      stderrTail: [gateResult.error, gateResult.output, workerResult.stderr].filter(Boolean).join("\n\n"),
-    };
-    attempt++;
-    if (attempt <= maxRetries) {
-      writeFileSync(logFile, `\n\n--- GATE FAILED, RETRYING (attempt ${attempt + 1}) ---\n${lastError}\n`, { flag: "a" });
-    }
+    ({ lastError, lastFailureContext, attempt } = _recordGateFailureForRetry({
+      gateResult, workerResult, currentModel, attemptStartTime, attempt, maxRetries, logFile,
+    }));
   }
 
   return { workerResult, gateResult, attempt, currentModel, copilotDispatchData, lastError };

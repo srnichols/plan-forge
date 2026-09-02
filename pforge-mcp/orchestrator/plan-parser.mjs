@@ -3,6 +3,7 @@
 import { readFileSync, existsSync } from "node:fs";
 import { resolve } from "node:path";
 import { createHash } from "node:crypto";
+import { resolveGateCommandToken, isGatePrefixAllowed } from "./constants.mjs";
 
 /**
  * Parse a workerTimeoutMs value from a plan body line.
@@ -448,12 +449,23 @@ function createSliceRecord(sliceMatch, rawTags) {
   return current;
 }
 
+/**
+ * Fence languages whose contents may be read as gate commands. An untagged
+ * fence counts, because that is how gates were written before tagging was
+ * common. Anything else — ts, json, prisma, sql — is illustration: a ```ts
+ * block following a gate marker used to be absorbed as the gate itself
+ * (meta-bug #260). Measured across docs/plans: 312 bash, 1 untagged, 0 other.
+ */
+const SHELL_FENCE_LANGS = new Set([
+  "", "bash", "sh", "shell", "zsh", "console", "powershell", "pwsh", "ps1", "cmd", "bat", "batch",
+]);
+
 function handleCodeFenceLine(state, line) {
   if (!line.startsWith("```")) return false;
   state.inFilesInScopeBlock = false;
 
   if (state.inCodeBlock) {
-    if (state.inValidationGate && state.current) {
+    if (state.inValidationGate && state.current && state.gateFenceIsShell) {
       appendValidationGateText(state.current, state.codeBlockContent.join("\n").trim());
       if (state.implicitGateActive) {
         state.current.implicitGate = true;
@@ -463,13 +475,17 @@ function handleCodeFenceLine(state, line) {
     }
     state.codeBlockContent = [];
     state.inCodeBlock = false;
+    state.gateFenceIsShell = false;
     return true;
   }
 
   state.inCodeBlock = true;
   state.codeBlockContent = [];
   const lang = line.slice(3).trim().toLowerCase();
-  const isShellLang = lang === "bash" || lang === "sh" || lang === "";
+  const isShellLang = SHELL_FENCE_LANGS.has(lang);
+  // A non-shell fence is skipped without disarming the gate, so a later shell
+  // fence in the same slice still lands.
+  state.gateFenceIsShell = isShellLang;
   if (state.current && isShellLang) {
     state.current._bashBlockCount = (state.current._bashBlockCount || 0) + 1;
     if (state.implicitGates && !state.current.validationGate && !state.inValidationGate) {
@@ -519,7 +535,12 @@ function handleValidationGateLine(state, line) {
     const backtickRe = /`([^`]+)`/g;
     let bm;
     while ((bm = backtickRe.exec(inlineText)) !== null) backtickCmds.push(bm[1]);
-    if (backtickCmds.length > 0) appendValidationGateText(state.current, backtickCmds.join("\n"));
+    // A backticked span is a command only if it resolves to one. Prose on the
+    // gate line — a URL path, an import specifier, a schema keyword — was being
+    // harvested as a command and then failing the allowlist, producing errors
+    // that named nothing runnable (meta-bug #260).
+    const runnable = backtickCmds.filter((c) => isGatePrefixAllowed(resolveGateCommandToken(c)));
+    if (runnable.length > 0) appendValidationGateText(state.current, runnable.join("\n"));
     else state.current.validationGateDescription = inlineText;
   }
   state.inValidationGate = true;

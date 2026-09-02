@@ -30,7 +30,7 @@ import { API_ALLOWED_ROLES, COST_ANOMALY_MULTIPLIER, CRUCIBLE_STALL_CUTOFF_DAYS,
 import { LogEventHandler, OrchestratorEventBus, appendEvent, writeSilentExitRecord } from "./event-bus.mjs";
 import { buildSlicePrompt } from "./prompt-builders.mjs";
 import { parsePlan, computeLockHash, normalizeSliceId, compareSliceIds, parseOnlySlicesExpr, parseWorkerTimeoutValue, parseSlices, buildDAG, restrictDagToSlices, loadPlanParserConfig } from "./plan-parser.mjs";
-import { resetCliWorkersCache, setGhCopilotProbe, isDirectApiOnlyModel, isCopilotServableModel, isApiOnlyModel, getFoundryAuthScope, detectApiProvider, setSecretsLoader, buildApiMessages, generateImage, loadWorkerCapabilities, compareVersions, detectPackageManager, suggestInstall, classifyProbeFailure, detectWorkers, detectExecutionRuntime, detectClientHost, describeBillingSurface, getRoutingPreference, loadRoutingPreference, resolveRequiredCli, probeQuorumModelAvailability, filterQuorumModels, formatQuorumSummary, assessQuorumViability, detectRuntimes, spawnWorker, detectHelpTextOutput, detectSilentWorkerFailure, detectKilledBySignal, deriveVendorFromModel, extractTokens, shouldDefaultPremiumRequestsToOne, parseStderrStats, resolveWorkerOutputIdleMs, resolveWorkerTimeoutMs, assertWorkerBackendReady } from "./worker-spawn.mjs";
+import { resetCliWorkersCache, setGhCopilotProbe, isDirectApiOnlyModel, isCopilotServableModel, isApiOnlyModel, getFoundryAuthScope, detectApiProvider, setSecretsLoader, buildApiMessages, generateImage, loadWorkerCapabilities, compareVersions, detectPackageManager, suggestInstall, classifyProbeFailure, detectWorkers, detectExecutionRuntime, detectClientHost, describeBillingSurface, getRoutingPreference, loadRoutingPreference, resolveRequiredCli, probeQuorumModelAvailability, filterQuorumModels, formatQuorumSummary, assessQuorumViability, detectRuntimes, spawnWorker, detectHelpTextOutput, detectSilentWorkerFailure, detectWorkerLaunchFailure, detectKilledBySignal, deriveVendorFromModel, extractTokens, shouldDefaultPremiumRequestsToOne, parseStderrStats, resolveWorkerOutputIdleMs, resolveWorkerTimeoutMs, assertWorkerBackendReady } from "./worker-spawn.mjs";
 import { resolveGateTimeoutMs, __resetBashPathCache, resolveBashPath, detectSelfRepairMissed, buildRetryPrompt, coalesceGateLines, editDistance, isPlaceholderToken, suggestAllowedCommand, looksLikeProse, runGate, SequentialScheduler, ParallelScheduler, CompetitiveScheduler, selectWinner, detectScopeConflicts } from "./schedulers.mjs";
 import { ensureForgeDir, pruneForgeRuns, recordModelPerformance, readForgeJson, appendForgeJsonl, readForgeJsonl, auditOrphanForgeFiles, loadModelPerformance, aggregateModelStats, getCostReport, getHealthTrend, emitToolTelemetry, loadGateCheckConfig, registerGateCheckResponder } from "./forge-io.mjs";
 import { extractPlanReleaseVersion, detectVersionCollision, parseValidationGates, lintGateCommands, validateGatePortability, isGateCommandAllowed, regressionGuard } from "./gate-helpers.mjs";
@@ -2004,6 +2004,11 @@ function _executeSliceDetermineStatus({ workerResult, mode, slice, gateResult })
   } else if (killedBySignal) {
     status = "failed";
     statusReason = `worker killed before completion: ${killedBySignal}`;
+  } else if (gateResult.launchFailure) {
+    // Distinct from a gate failure: nothing ran, so the gate result would have
+    // described the absence of work rather than the quality of it (meta-bug #264).
+    status = "failed";
+    statusReason = `worker-launch-failed: ${gateResult.launchFailure}`;
   } else if (!gateResult.success) {
     status = "failed";
     statusReason = `validation gate failed: ${gateResult.failedCommand || "unknown"}`;
@@ -2054,7 +2059,7 @@ function _executeSliceBuildResult({ slice, status, statusReason, duration, worke
     status,
     duration,
     exitCode: workerResult.exitCode,
-    gateStatus: gateResult.success ? "passed" : "failed",
+    gateStatus: gateResult.launchFailure ? "skipped" : (gateResult.success ? "passed" : "failed"),
     gateOutput: gateResult.output,
     gateError: gateResult.error || null,
     failedCommand: gateResult.failedCommand || null,
@@ -2321,7 +2326,10 @@ async function _executeSliceAttemptLoop(ctx) {
     }
 
     const logFile = _executeSliceWriteLog({ runDir, slice, attempt, workerResult, startTime });
-    gateResult = _executeSliceRunGates(slice, cwd);
+    const launchFailure = detectWorkerLaunchFailure(workerResult, mode);
+    gateResult = launchFailure
+      ? { success: false, skipped: true, launchFailure, output: launchFailure }
+      : _executeSliceRunGates(slice, cwd);
 
     if (gateResult.success && workerResult.exitCode === 0) break;
 

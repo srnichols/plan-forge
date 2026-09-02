@@ -2305,6 +2305,9 @@ export function detectHelpTextOutput(stdout, stderr, workerName) {
   return meaningfulLen < 4000;
 }
 
+/** Below this many bytes of stdout, a worker did not do meaningful work. */
+const MIN_WORKER_STDOUT = 50;
+
 /**
  * Issue #77: detect silent worker failures.
  *
@@ -2328,7 +2331,6 @@ export function detectSilentWorkerFailure(workerResult, mode, sliceNumber) {
   if (workerResult.exitCode !== 0) return null;
 
   const stdoutLen = (workerResult.output || "").trim().length;
-  const MIN_WORKER_STDOUT = 50;
 
   if (stdoutLen < MIN_WORKER_STDOUT) {
     return `Worker '${workerResult.worker || "unknown"}' exited 0 but produced only ${stdoutLen} bytes of stdout — ` +
@@ -2339,6 +2341,41 @@ export function detectSilentWorkerFailure(workerResult, mode, sliceNumber) {
       `check worker-capabilities.json baseArgs for unsupported flags.`;
   }
   return null;
+}
+
+/**
+ * Meta-bug #264: detect a worker that never launched.
+ *
+ * detectSilentWorkerFailure above covers the exit-0 case. The inverse — empty
+ * stdout with a NON-ZERO exit — is a process that never started: a missing CLI,
+ * or on Windows a lock on the shared copilot entrypoint when two orchestrators
+ * launch workers at the same moment.
+ *
+ * Running the validation gate in that state is meaningless. It can only report
+ * the absence of work that was never attempted, and it does so by naming a test
+ * command and a test path — so every signal points at the test configuration
+ * while the cause is a file lock.
+ *
+ * @param {{ output?: string, stderr?: string, worker?: string, exitCode?: number, timedOut?: boolean }} workerResult
+ * @param {string} mode
+ * @returns {string|null} reason, or null when the worker did run
+ */
+export function detectWorkerLaunchFailure(workerResult, mode) {
+  if (!workerResult) return null;
+  if (mode === "assisted") return null;
+  if (workerResult.worker === "human") return null;
+  if (workerResult.exitCode === 0) return null;
+  // Timeouts and signal kills mean the worker DID run; they have their own paths.
+  if (workerResult.timedOut) return null;
+  if (detectKilledBySignal(workerResult.exitCode)) return null;
+
+  const stdoutLen = (workerResult.output || "").trim().length;
+  if (stdoutLen >= MIN_WORKER_STDOUT) return null;
+
+  const stderrTail = (workerResult.stderr || "").trim().split(/\r?\n/).filter(Boolean).slice(-3).join(" ").slice(0, 300);
+  return `worker '${workerResult.worker || "unknown"}' never launched — exited ${workerResult.exitCode} ` +
+    `after writing ${stdoutLen} bytes of stdout. The validation gate was skipped: it could only report the ` +
+    `absence of work that was never attempted.${stderrTail ? ` stderr: ${stderrTail}` : ""}`;
 }
 
 /**

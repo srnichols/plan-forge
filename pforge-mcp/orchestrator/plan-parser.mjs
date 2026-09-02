@@ -698,6 +698,8 @@ export function buildDAG(slices) {
   for (const slice of slices) {
     nodes.set(slice.number, {
       ...slice,
+      // Copy: the spread aliases the caller's array, and the fallback below writes to it.
+      depends: [...(slice.depends || [])],
       children: [],
       inDegree: 0,
     });
@@ -718,12 +720,17 @@ export function buildDAG(slices) {
       }
     }
   } else {
-    // Sequential mode — each slice depends on the previous one
+    // Sequential mode — each slice depends on the previous one.
+    // These edges must land on `depends` as well as `inDegree`: ParallelScheduler
+    // reads only `depends`, so an inDegree-only fallback left every slice looking
+    // like an independent root and launched the whole plan concurrently (meta #262).
     for (let i = 1; i < slices.length; i++) {
       const prev = slices[i - 1].number;
       const curr = slices[i].number;
       nodes.get(prev).children.push(curr);
-      nodes.get(curr).inDegree++;
+      const node = nodes.get(curr);
+      node.depends.push(prev);
+      node.inDegree++;
     }
   }
 

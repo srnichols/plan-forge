@@ -482,6 +482,20 @@ function handleSliceHeaderLine(state, line) {
   return true;
 }
 
+// A slice body ends at the next plan-level (h1/h2) heading. Without this the last
+// slice ran to EOF and absorbed "## Stop Conditions" / "## Definition of Done"
+// (meta-bug #251). Slice headers are matched first, so "## Slice N" is unaffected,
+// and deeper "#### ..." sub-headings stay inside the body.
+function handlePlanLevelHeading(state, line) {
+  if (!/^#{1,2}\s/.test(line)) return false;
+  if (state.current) {
+    state.slices.push(state.current);
+    state.current = null;
+  }
+  state.inFilesInScopeBlock = false;
+  return true;
+}
+
 function handleValidationGateLine(state, line) {
   const gateMatch = line.match(/\*\*(?:Validation Gate|Exit [Gg]ate)\*?\*?\s*:?\s*(.*)$/i);
   if (!gateMatch) return false;
@@ -584,13 +598,26 @@ function extractBulletScopeCandidates(body) {
   return firstToken && /[\/.*]/.test(firstToken) ? [firstToken] : [];
 }
 
+// Words permitted inside a scope-declaration bold span. Measured against the plan
+// corpus: **Files**, **Scope**, **Files in scope** are declarations; **Scope
+// violation**, **Scope drift**, **Scope clarification by cost path:** are prose.
+// A colon does not separate them — that last prose form carries one inside the
+// bold span — so the vocabulary is the discriminator (meta-bug #251).
+const SCOPE_HEADING_WORDS = /^(?:files?|scope|in)$/i;
+
+function isScopeDeclaration(boldText) {
+  const words = boldText.replace(/[():,]/g, " ").trim().split(/\s+/).filter(Boolean);
+  if (words.length === 0 || !/^(?:files?|scope)$/i.test(words[0])) return false;
+  return words.every((w) => SCOPE_HEADING_WORDS.test(w));
+}
+
 function handleFilesHeading(state, line) {
-  // Accept any bold heading that begins with "Files" or "Scope" so markers
+  // Accept any bold heading whose text is a scope/files declaration so markers
   // like `**Scope (files):**` and `**Scope** (files in scope):` are honored
   // (meta-bug #231), with the colon inside or outside the bold span.
-  const filesBodyMatch = line.match(/^\s*[-*]?\s*\*\*\s*(?:files|scope)\b[^*]*\*\*\s*(?:\([^)]*\))?\s*:?\s*(.*)$/i);
-  if (!filesBodyMatch) return false;
-  const candidates = extractInlineScopeCandidates((filesBodyMatch[1] || "").trim());
+  const filesBodyMatch = line.match(/^\s*[-*]?\s*\*\*\s*([^*]+?)\s*\*\*\s*(?:\([^)]*\))?\s*:?\s*(.*)$/);
+  if (!filesBodyMatch || !isScopeDeclaration(filesBodyMatch[1])) return false;
+  const candidates = extractInlineScopeCandidates((filesBodyMatch[2] || "").trim());
   appendUniqueValues(state.current.scope, candidates);
   state.inFilesInScopeBlock = candidates.length === 0;
   return true;
@@ -637,6 +664,7 @@ export function parseSlices(lines, opts = {}) {
     if (handleCodeFenceLine(state, line)) continue;
     if (handleCodeBlockContentLine(state, line)) continue;
     if (handleSliceHeaderLine(state, line)) continue;
+    if (handlePlanLevelHeading(state, line)) continue;
     if (!state.current) continue;
 
     state.current.rawLines.push(line);

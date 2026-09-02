@@ -748,6 +748,25 @@ export function compareSliceIds(a, b) {
 }
 
 /**
+ * Does `fromId` already depend, transitively, on `targetId`?
+ * Used to keep the sequential fallback from closing a loop against a
+ * backward-declared dependency.
+ */
+function dependsOnTransitively(nodes, fromId, targetId) {
+  const seen = new Set();
+  const stack = [fromId];
+  while (stack.length > 0) {
+    const id = stack.pop();
+    if (id === targetId) return true;
+    if (seen.has(id)) continue;
+    seen.add(id);
+    const node = nodes.get(id);
+    if (node) stack.push(...node.depends);
+  }
+  return false;
+}
+
+/**
  * Build a DAG from parsed slices.
  * If no explicit dependencies, assume sequential (each depends on prior).
  *
@@ -767,33 +786,41 @@ export function buildDAG(slices) {
     });
   }
 
-  // Build edges
-  const hasAnyDeps = slices.some((s) => s.depends.length > 0);
+  // Declared edges.
+  for (const slice of slices) {
+    for (const dep of slice.depends || []) {
+      const parent = nodes.get(dep);
+      if (!parent) continue;
+      parent.children.push(slice.number);
+      nodes.get(slice.number).inDegree++;
+    }
+  }
 
-  if (hasAnyDeps) {
-    // Explicit dependency mode — use declared dependencies
-    for (const slice of slices) {
-      for (const dep of slice.depends) {
-        const parent = nodes.get(dep);
-        if (parent) {
-          parent.children.push(slice.number);
-          nodes.get(slice.number).inDegree++;
-        }
-      }
-    }
-  } else {
-    // Sequential mode — each slice depends on the previous one.
-    // These edges must land on `depends` as well as `inDegree`: ParallelScheduler
-    // reads only `depends`, so an inDegree-only fallback left every slice looking
-    // like an independent root and launched the whole plan concurrently (meta #262).
-    for (let i = 1; i < slices.length; i++) {
-      const prev = slices[i - 1].number;
-      const curr = slices[i].number;
-      nodes.get(prev).children.push(curr);
-      const node = nodes.get(curr);
-      node.depends.push(prev);
-      node.inDegree++;
-    }
+  // Sequential fallback, decided PER SLICE. A slice that declared nothing
+  // inherits its predecessor's edge.
+  //
+  // This was previously all-or-nothing per plan (`slices.some(s => s.depends.length)`),
+  // so one slice declaring `[depends: Slice 1]` disabled the fallback for every
+  // other slice — the undeclared ones stayed at inDegree 0 and ran as concurrent
+  // roots, ahead of the slices that had declared their order (meta #262).
+  //
+  // The edges must land on `depends`, not only `inDegree`: ParallelScheduler
+  // reads only `depends`.
+  //
+  // `[P]` deliberately does NOT exempt a slice here. It marks a slice safe to run
+  // beside its ready siblings, not free of prerequisites; declared fan-out
+  // (`[depends: Slice 1] [P]` on each branch) is how real parallelism is expressed.
+  for (let i = 1; i < slices.length; i++) {
+    if ((slices[i].depends || []).length > 0) continue;
+    const prev = slices[i - 1].number;
+    const curr = slices[i].number;
+    // A backward-declared dep (slice 3 -> slice 4) would turn this edge into a
+    // cycle and take the whole plan from "runs" to "Cycle detected".
+    if (dependsOnTransitively(nodes, prev, curr)) continue;
+    nodes.get(prev).children.push(curr);
+    const node = nodes.get(curr);
+    node.depends.push(prev);
+    node.inDegree++;
   }
 
   // Topological sort (Kahn's algorithm)

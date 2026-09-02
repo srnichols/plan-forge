@@ -306,6 +306,54 @@ function _lintCommandLine(line, slice, {
   }
 }
 
+/**
+ * A dependency declaration in any shape the hardener or a human writes.
+ * Group 1 is everything after the marker.
+ */
+const DEPENDS_DECLARATION_RE =
+  /(?:\*\*Depends\s+On:?\*\*:?|\(\s*depends\b|\bafter\s+slice\b)\s*:?\s*(.*)/i;
+/** Phrase that explicitly asserts there is no dependency — never a defect. */
+const DEPENDS_NONE_RE = /^\s*[-—–]*\s*(?:n\/a|none|nothing|no\b|null)/i;
+/** Phrase that names at least one slice-ish token. */
+const DEPENDS_NAMES_SLICE_RE = /\bslices?\s*\d|\bs\d+\b|^\s*\d+[A-Za-z]?\b/i;
+
+/**
+ * Warn when a slice declares a dependency that the parser did not understand.
+ *
+ * `depends` is populated only from `[depends: Slice N]` heading tags and
+ * `**Depends On**:` body lines whose phrase begins with a slice id. Forms like
+ * `Slices 1–5`, `Slices 3 + 4` or `All prior slices` produce no edge, and the
+ * plan then asserts an order the orchestrator does not hold (meta #262).
+ *
+ * Scoped deliberately: it fires only when the phrase NAMES a slice. Across this
+ * repo's 46 parseable plans there are 211 dependency declarations, of which 17
+ * say "nothing"/"none"/"—" — warning on those would be pure noise.
+ */
+function _lintDependencyDeclarations(plan, warnings) {
+  for (const slice of plan.slices) {
+    if ((slice.depends || []).length > 0) continue;
+    const body = [slice.title || "", ...(slice.rawLines || [])];
+    for (const line of body) {
+      const m = String(line).match(DEPENDS_DECLARATION_RE);
+      if (!m) continue;
+      const phrase = (m[1] || "").trim();
+      if (DEPENDS_NONE_RE.test(phrase) || !DEPENDS_NAMES_SLICE_RE.test(phrase)) continue;
+      warnings.push({
+        slice: slice.number,
+        command: null,
+        rule: "depends-not-parsed",
+        severity: "warn",
+        message:
+          `Slice ${slice.number} ("${slice.title}"): dependency declaration "${phrase.slice(0, 60)}" ` +
+          `produced no parsed dependency. Recognised forms are the heading tag [depends: Slice N] and ` +
+          `a "**Depends On**:" line beginning with a slice id. This slice will fall back to running ` +
+          `after its predecessor.`,
+      });
+      break;
+    }
+  }
+}
+
 export function lintGateCommands(planFilePath, cwd = process.cwd()) {
   const plan = (planFilePath !== null && typeof planFilePath === "object")
     ? planFilePath
@@ -328,6 +376,8 @@ export function lintGateCommands(planFilePath, cwd = process.cwd()) {
       message: "No slices parsed from the plan — zero gate commands were examined, so this result says nothing about the plan's gates. Check that slice headings match '### Slice <N> — <Title>'.",
     });
   }
+
+  _lintDependencyDeclarations(plan, warnings);
 
   for (const slice of plan.slices) {
     if (!slice.validationGate) continue;

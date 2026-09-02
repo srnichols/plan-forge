@@ -632,9 +632,15 @@ function _runCopilotPreflight(_inspectGithubStack, cwd, planPath) {
 
 function _checkGateLintPreflight(planPath, cwd) {
   const gateLint = lintGateCommands(planPath, cwd);
-  if (gateLint.passed) return null;
   const errorSummary = gateLint.errors.map(e => `  ❌ ${e.message}`).join("\n");
   const warnSummary = gateLint.warnings.map(w => `  ⚠️ ${w.message}`).join("\n");
+  if (gateLint.passed) {
+    // A passing lint used to discard its warnings entirely, so a plan whose
+    // dependency declarations failed to parse ran with no signal at all — the
+    // silence meta #262 is about. stderr, so MCP stdio stays clean.
+    for (const w of gateLint.warnings) console.warn(`[orchestrator] ⚠️ ${w.message}`);
+    return null;
+  }
   return {
     status: "failed",
     error: "Gate lint pre-flight failed — fix these before executing:",

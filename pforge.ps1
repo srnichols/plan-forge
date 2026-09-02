@@ -67,6 +67,124 @@ function Write-ManualSteps([string]$Title, [string[]]$Steps) {
     Write-Host ""
 }
 
+# ─── JSONC (Issue #252) ────────────────────────────────────────────────
+# .vscode/settings.json is JSONC — comments and trailing commas are legal
+# there. Windows PowerShell 5.1's ConvertFrom-Json rejects both; pwsh 7.6
+# accepts them. Strip the JSONC ourselves so the result does not depend on
+# which host the user happens to be running.
+#
+# These scanners walk characters rather than matching a regex, because a
+# regex cannot tell a comment from its lookalike inside a string literal:
+# "https://x" holds a `//` that is not a comment, and "a,b," holds a comma
+# that is not a trailing comma.
+
+<#
+.SYNOPSIS
+    Copy one JSON string literal, starting at the opening quote, honouring
+    backslash escapes. Returns the index just past the closing quote.
+#>
+function Copy-JsonStringLiteral {
+    param(
+        [Parameter(Mandatory)][string]$Text,
+        [Parameter(Mandatory)][int]$Start,
+        [Parameter(Mandatory)][System.Text.StringBuilder]$Builder
+    )
+    $len = $Text.Length
+    $i = $Start
+    [void]$Builder.Append($Text[$i]); $i++
+    while ($i -lt $len) {
+        $ch = $Text[$i]
+        [void]$Builder.Append($ch)
+        $i++
+        if ($ch -eq '\') {
+            if ($i -lt $len) { [void]$Builder.Append($Text[$i]); $i++ }
+            continue
+        }
+        if ($ch -eq '"') { break }
+    }
+    return $i
+}
+
+<#
+.SYNOPSIS
+    Remove // line comments and /* */ block comments from JSONC text,
+    leaving string literals and line structure untouched.
+#>
+function Remove-JsoncComment {
+    param([Parameter(Mandatory)][AllowEmptyString()][string]$Text)
+
+    $out = [System.Text.StringBuilder]::new($Text.Length)
+    $len = $Text.Length
+    $i = 0
+    while ($i -lt $len) {
+        $ch = $Text[$i]
+        if ($ch -eq '"') {
+            $i = Copy-JsonStringLiteral -Text $Text -Start $i -Builder $out
+            continue
+        }
+        if ($ch -eq '/' -and ($i + 1) -lt $len) {
+            $next = $Text[$i + 1]
+            if ($next -eq '/') {
+                # Stop AT the newline so line numbers survive for error text.
+                while ($i -lt $len -and $Text[$i] -ne "`n") { $i++ }
+                continue
+            }
+            if ($next -eq '*') {
+                $i += 2
+                while (($i + 1) -lt $len -and -not ($Text[$i] -eq '*' -and $Text[$i + 1] -eq '/')) { $i++ }
+                $i = [Math]::Min($i + 2, $len)
+                continue
+            }
+        }
+        [void]$out.Append($ch)
+        $i++
+    }
+    return $out.ToString()
+}
+
+<#
+.SYNOPSIS
+    Drop commas that are followed only by whitespace and a closing } or ],
+    skipping over string literals.
+#>
+function Remove-JsoncTrailingComma {
+    param([Parameter(Mandatory)][AllowEmptyString()][string]$Text)
+
+    $out = [System.Text.StringBuilder]::new($Text.Length)
+    $len = $Text.Length
+    $i = 0
+    while ($i -lt $len) {
+        $ch = $Text[$i]
+        if ($ch -eq '"') {
+            $i = Copy-JsonStringLiteral -Text $Text -Start $i -Builder $out
+            continue
+        }
+        if ($ch -eq ',') {
+            $j = $i + 1
+            while ($j -lt $len -and [char]::IsWhiteSpace($Text[$j])) { $j++ }
+            if ($j -lt $len -and ($Text[$j] -eq '}' -or $Text[$j] -eq ']')) {
+                $i++
+                continue
+            }
+        }
+        [void]$out.Append($ch)
+        $i++
+    }
+    return $out.ToString()
+}
+
+<#
+.SYNOPSIS
+    Parse JSONC (JSON with comments and trailing commas) — the dialect VS Code
+    uses for settings.json. Throws on genuinely malformed JSON, as ConvertFrom-Json does.
+#>
+function ConvertFrom-Jsonc {
+    param([Parameter(Mandatory)][AllowEmptyString()][string]$Text)
+
+    $stripped = Remove-JsoncTrailingComma -Text (Remove-JsoncComment -Text $Text)
+    return ($stripped | ConvertFrom-Json)
+}
+
 # ─── .gitignore Manager (Issue #211) ───────────────────────────────────
 # Seed/refresh a marker-delimited managed block in the consumer's .gitignore
 # so runtime artifacts under .forge/ never get committed. Idempotent — user
@@ -2811,7 +2929,7 @@ function Invoke-Smith {
     $settingsPath = Join-Path $RepoRoot ".vscode/settings.json"
     if (Test-Path $settingsPath) {
         try {
-            $settings = Get-Content $settingsPath -Raw | ConvertFrom-Json
+            $settings = ConvertFrom-Jsonc -Text (Get-Content $settingsPath -Raw)
 
             # chat.agent.enabled (may not exist in newer VS Code where it's default)
             if ($null -ne $settings.'chat.agent.enabled') {
@@ -2853,7 +2971,9 @@ function Invoke-Smith {
             }
         }
         catch {
-            Doctor-Fail ".vscode/settings.json has invalid JSON" "Fix the JSON syntax in .vscode/settings.json"
+            # Comments and trailing commas are already tolerated, so reaching
+            # here means the file is malformed as JSONC too.
+            Doctor-Fail ".vscode/settings.json is not valid JSONC" "Fix the syntax in .vscode/settings.json (comments and trailing commas are allowed)"
         }
     }
     else {

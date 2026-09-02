@@ -2469,9 +2469,17 @@ cmd_doctor() {
 
     local settings_path="$REPO_ROOT/.vscode/settings.json"
     if [ -f "$settings_path" ]; then
+        # .vscode/settings.json is JSONC (#252). Drop whole-line // comments
+        # before grepping so a commented-out setting is not reported as
+        # configured. Only leading-// lines go, so "https://…" values survive.
+        # Settings buried in a /* */ block still read as present — accepted,
+        # since the shipped template uses line comments only.
+        local settings_body
+        settings_body="$(sed 's_^[[:space:]]*//.*$__' "$settings_path" 2>/dev/null)"
+
         # Check for key settings (basic grep — no jq dependency required)
-        if grep -q '"chat.agent.enabled"' "$settings_path" 2>/dev/null; then
-            if grep -q '"chat.agent.enabled":\s*true' "$settings_path" 2>/dev/null || grep -q '"chat.agent.enabled": true' "$settings_path" 2>/dev/null; then
+        if grep -q '"chat.agent.enabled"' <<< "$settings_body"; then
+            if grep -q '"chat.agent.enabled":\s*true' <<< "$settings_body" || grep -q '"chat.agent.enabled": true' <<< "$settings_body"; then
                 doctor_pass "chat.agent.enabled = true"
             else
                 doctor_fail "chat.agent.enabled = false" "Set to true in .vscode/settings.json"
@@ -2480,8 +2488,8 @@ cmd_doctor() {
             doctor_pass "chat.agent.enabled (default — OK)"
         fi
 
-        if grep -q '"chat.useCustomizationsInParentRepositories"' "$settings_path" 2>/dev/null; then
-            if grep -q '"chat.useCustomizationsInParentRepositories": true' "$settings_path" 2>/dev/null; then
+        if grep -q '"chat.useCustomizationsInParentRepositories"' <<< "$settings_body"; then
+            if grep -q '"chat.useCustomizationsInParentRepositories": true' <<< "$settings_body"; then
                 doctor_pass "chat.useCustomizationsInParentRepositories = true"
             else
                 doctor_warn "chat.useCustomizationsInParentRepositories is not true" "Set to true for monorepo support"
@@ -2490,8 +2498,8 @@ cmd_doctor() {
             doctor_warn "chat.useCustomizationsInParentRepositories not set" 'Add "chat.useCustomizationsInParentRepositories": true to .vscode/settings.json'
         fi
 
-        if grep -q '"chat.promptFiles"' "$settings_path" 2>/dev/null; then
-            if grep -q '"chat.promptFiles": true' "$settings_path" 2>/dev/null; then
+        if grep -q '"chat.promptFiles"' <<< "$settings_body"; then
+            if grep -q '"chat.promptFiles": true' <<< "$settings_body"; then
                 doctor_pass "chat.promptFiles = true"
             else
                 doctor_warn "chat.promptFiles is not true" "Set to true to enable prompt template discovery"

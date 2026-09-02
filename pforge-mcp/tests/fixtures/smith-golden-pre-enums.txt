@@ -66,7 +66,6 @@ MCP Runtime:
   ✅ Express (dashboard + REST API) v5.2.1
   ✅ ws (WebSocket hub for real-time events) v8.20.0
   ✅ Playwright (screenshot capture)
-  ✅ MCP server version v3.7.0 matches VERSION file
   ✅ forge-master-routes.mjs (Phase-29 route wiring)
   ✅ tools.json + cli-schema.json (92 MCP tools registered)
 

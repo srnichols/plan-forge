@@ -353,6 +353,9 @@ function detectApiProvider(model) {
         name,
         baseUrl,
         apiKey,
+        // Name only, never the value: the BYOK SDK path re-reads the key at call
+        // time so it is never carried through a config object or logged.
+        envKey: provider.envKey,
         label: provider.label,
         entraAuth,
         ...(provider.apiKeyHeader && { apiKeyHeader: provider.apiKeyHeader }),
@@ -2170,6 +2173,66 @@ export function spawnWorker(prompt, options = {}) {
   return _spawnWorkerAsync(prompt, options);
 }
 
+/**
+ * Map a DIRECT_API_ONLY registry name to the BYOK provider type understood by
+ * sdk-worker. Entries mapped to null have no SDK path and stay on direct HTTP.
+ */
+const REGISTRY_TO_BYOK_TYPE = {
+  "openai-image": "openai",
+  "microsoft-foundry": "azure",
+  xai: null, // grok SDK path not yet supported
+};
+
+/**
+ * Phase-60 Slice 4 — try the BYOK SDK path for a DIRECT_API_ONLY model.
+ * Returns `{ handled: false }` to mean "fall through to the direct API path",
+ * which covers an unmapped provider, a missing BYOK key, and an SDK-level
+ * failure. Any non-SDK error propagates, since that is a real defect rather
+ * than a routing miss.
+ *
+ * @returns {Promise<{ handled: boolean, result?: object }>}
+ */
+async function _tryByokSdkRoute({ apiProvider, prompt, model, cwd, forbiddenPaths }) {
+  const byokType = REGISTRY_TO_BYOK_TYPE[apiProvider.name];
+  if (!byokType) return { handled: false };
+
+  try {
+    const { runSdkSession } = await import("./sdk-worker.mjs");
+    const result = await runSdkSession({
+      prompt, model, cwd, forbiddenPaths,
+      // Env var NAME only — the SDK re-reads the value at call time so the key
+      // is never carried through this config object (meta-bug #268).
+      provider: { type: byokType, envKey: apiProvider.envKey },
+    });
+    if (result && result.ok === false && result.error === "BYOK_KEY_MISSING") {
+      return { handled: false };
+    }
+    return { handled: true, result };
+  } catch (err) {
+    if (!err.sdkError) throw err;
+    console.error(`[sdk-worker] BYOK SDK path failed, falling back to direct API: ${err.message}`);
+    return { handled: false };
+  }
+}
+
+/**
+ * Phase-60 Slice 2 — try the SDK path for a COPILOT_SERVABLE model.
+ * Falls through to the spawn path on any SDK-level failure; the switch is an
+ * optimisation, not a requirement.
+ *
+ * @returns {Promise<{ handled: boolean, result?: object }>}
+ */
+async function _tryCopilotSdkRoute({ prompt, model, cwd, forbiddenPaths }) {
+  try {
+    const { runSdkSession } = await import("./sdk-worker.mjs");
+    return { handled: true, result: await runSdkSession({ prompt, model, cwd, forbiddenPaths }) };
+  } catch (err) {
+    if (!err.sdkError) throw err;
+    console.error(`[sdk-worker] falling back to spawn: ${err.message}`);
+    return { handled: false };
+  }
+}
+
 async function _spawnWorkerAsync(prompt, options = {}) {
   const {
     model = null,
@@ -2184,64 +2247,23 @@ async function _spawnWorkerAsync(prompt, options = {}) {
   } = options;
 
   const { apiProvider } = _resolveApiProviderForRouting(model, worker);
-
-  // Phase-60 Slice 4: route DIRECT_API_ONLY models through the SDK when opted in.
-  // This lets operators use their BYOK key with the @github/copilot-sdk session
-  // instead of the direct HTTP path — useful for environments where the SDK is
-  // available but direct HTTP is restricted. Falls back to callApiWorker on any
-  // SDK failure or BYOK_KEY_MISSING (key resolution stays in the SDK worker to
-  // ensure it is never logged).
-  if (apiProvider && loadCopilotSdkPreference(cwd) === "prefer") {
-    // Map the DIRECT_API_ONLY registry name to the BYOK provider type understood
-    // by sdk-worker. Entries not in this map remain on the direct-HTTP path.
-    const REGISTRY_TO_BYOK_TYPE = {
-      "openai-image": "openai",
-      "microsoft-foundry": "azure",
-      xai: null, // grok SDK path not yet supported; stays on callApiWorker
-    };
-    const byokType = REGISTRY_TO_BYOK_TYPE[apiProvider.name];
-    if (byokType) {
-      try {
-        const { runSdkSession } = await import("./sdk-worker.mjs");
-        const sdkResult = await runSdkSession({
-          prompt, model, cwd, forbiddenPaths,
-          provider: { type: byokType, envKey: apiProvider.envKey },
-        });
-        if (sdkResult && sdkResult.ok === false && sdkResult.error === "BYOK_KEY_MISSING") {
-          // Key not available via env — fall through to the direct API path below.
-        } else {
-          _enforceApiRoleGuard(apiProvider, role, model);
-          return sdkResult;
-        }
-      } catch (err) {
-        if (err.sdkError) {
-          console.error(`[sdk-worker] BYOK SDK path failed, falling back to direct API: ${err.message}`);
-        } else {
-          throw err;
-        }
-      }
-    }
-  }
+  const sdkPreferred = loadCopilotSdkPreference(cwd) === "prefer";
 
   if (apiProvider) {
+    if (sdkPreferred) {
+      const sdk = await _tryByokSdkRoute({ apiProvider, prompt, model, cwd, forbiddenPaths });
+      if (sdk.handled) {
+        _enforceApiRoleGuard(apiProvider, role, model);
+        return sdk.result;
+      }
+    }
     _enforceApiRoleGuard(apiProvider, role, model);
     return callApiWorker(prompt, model, apiProvider, { timeout, role });
   }
 
-  // Phase-60 Slice 2: route COPILOT_SERVABLE models through the SDK when opted in.
-  // Falls back to the spawn path on any SDK-level failure.
-  if (model && !worker && isCopilotServableModel(model) && loadCopilotSdkPreference(cwd) === "prefer") {
-    try {
-      const { runSdkSession } = await import("./sdk-worker.mjs");
-      return await runSdkSession({ prompt, model, cwd, forbiddenPaths });
-    } catch (err) {
-      if (err.sdkError) {
-        // Log once and fall through to the spawn path — the switch is an optimisation.
-        console.error(`[sdk-worker] falling back to spawn: ${err.message}`);
-      } else {
-        throw err;
-      }
-    }
+  if (model && !worker && sdkPreferred && isCopilotServableModel(model)) {
+    const sdk = await _tryCopilotSdkRoute({ prompt, model, cwd, forbiddenPaths });
+    if (sdk.handled) return sdk.result;
   }
 
   return spawnCliWorkerExecution({

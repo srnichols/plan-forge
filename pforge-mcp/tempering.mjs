@@ -36,6 +36,7 @@ import {
 } from "node:fs";
 import { resolve, dirname, basename } from "node:path";
 import { randomUUID } from "node:crypto";
+import { globToRegex } from "./tempering/scheduling.mjs";
 
 // ─── Constants ────────────────────────────────────────────────────────
 
@@ -120,6 +121,15 @@ export const TEMPERING_DEFAULT_CONFIG = Object.freeze({
     a11yMinSeverity: "moderate",
     a11yFailThreshold: 0,
   },
+  // Glob -> layer map, consulted before the folder-name heuristic in
+  // classifyLayer. Suffix-based layouts (src/modules/<feature>/<feature>.service.ts)
+  // need this, because the heuristic reads directory segments and would
+  // classify those by their feature folder. Example:
+  //   { "src/modules/**/*.service.ts": "domain", "**/*.repository.ts": "integration" }
+  layerGlobs: {},
+  // Per-stack adapter overrides (test commands, runner selection). Entries
+  // whose value names a coverage layer are also read as layerGlobs, so a
+  // config written against the older field keeps working (issue #270).
   stackOverrides: {},
 });
 
@@ -530,25 +540,67 @@ export function parseCoverage(format, content) {
 
 // ─── Layer classification ─────────────────────────────────────────────
 
+/** The layers a file can be attributed to. `overall` means "no layer claimed it". */
+const KNOWN_LAYERS = Object.freeze(["domain", "integration", "controller", "overall"]);
+
+/**
+ * Resolve a file against the operator-supplied glob → layer map. First
+ * matching glob wins, so ordering in config.json is meaningful.
+ *
+ * `layerGlobs` is the canonical field. `stackOverrides` is also scanned
+ * because it is the field the preset adapters point operators at, and
+ * layer-valued entries there were silently ignored before (issue #270);
+ * non-layer values are skipped, so per-stack command overrides are unaffected.
+ *
+ * @param {string} lowerPath  forward-slashed, lower-cased path
+ * @param {object} [config]
+ * @returns {string | null} the layer, or null when nothing matched
+ */
+function matchLayerGlob(lowerPath, config) {
+  for (const source of [config?.layerGlobs, config?.stackOverrides]) {
+    if (!source || typeof source !== "object") continue;
+    for (const [glob, layer] of Object.entries(source)) {
+      if (typeof glob !== "string" || !glob) continue;
+      if (!KNOWN_LAYERS.includes(layer)) continue;
+      try {
+        if (globToRegex(glob.toLowerCase().replace(/\\/g, "/")).test(lowerPath)) return layer;
+      } catch {
+        // Malformed glob — skip it rather than failing the whole scan.
+        continue;
+      }
+    }
+  }
+  return null;
+}
+
 /**
  * Classify a file path into a coverage layer (domain / integration /
  * controller / overall).
  *
- * Heuristic, not config — TEMPER-02 will promote this to a config
- * `layerGlobs` block. For now, we lean on conventional folder names so
- * the first-run experience "just works" on most codebases:
+ * `config.layerGlobs` wins when it matches; the folder-name heuristic
+ * below is the fallback so the first-run experience still "just works":
  *
  *   controllers/ routes/ handlers/ api/ endpoints/  → controller
  *   repositories/ repo/ data/ db/ database/ dal/    → integration
  *   services/ domain/ models/ entities/ logic/      → domain
  *   everything else                                 → overall (not double-counted)
  *
+ * The heuristic reads directory segments, so a suffix-based layout
+ * (`src/modules/routes/route-optimization.service.ts`) is classified by its
+ * feature folder rather than its suffix. That is what layerGlobs is for
+ * (issue #270).
+ *
  * @param {string} file
+ * @param {object} [config] tempering config; only the layer globs are read
  * @returns {"domain" | "integration" | "controller" | "overall"}
  */
-export function classifyLayer(file) {
+export function classifyLayer(file, config) {
   if (typeof file !== "string" || !file) return "overall";
   const lower = file.toLowerCase().replace(/\\/g, "/");
+
+  const override = matchLayerGlob(lower, config);
+  if (override) return override;
+
   // controller-family
   if (/(^|\/)(controllers?|routes?|handlers?|api|endpoints?)(\/|$)/.test(lower)) {
     return "controller";
@@ -567,18 +619,24 @@ export function classifyLayer(file) {
 /**
  * Roll up per-file coverage into per-layer percentages.
  *
+ * `unclassified` counts the files no layer claimed. Without it a layer table
+ * showing `domain: 0 files` reads as "measured and empty" rather than "your
+ * layout does not match the classifier".
+ *
  * @param {Array<{ file, linesTotal, linesHit }>} records
- * @returns {{ domain, integration, controller, overall, perFile }}
+ * @param {object} [config] tempering config; only `stackOverrides` is read
+ * @returns {{ domain, integration, controller, overall, unclassified }}
  */
-export function rollupByLayer(records) {
+export function rollupByLayer(records, config) {
   const agg = {
     domain: { total: 0, hit: 0, files: 0 },
     integration: { total: 0, hit: 0, files: 0 },
     controller: { total: 0, hit: 0, files: 0 },
     overall: { total: 0, hit: 0, files: 0 },
   };
+  const unclassified = { total: 0, hit: 0, files: 0 };
   for (const rec of records) {
-    const layer = classifyLayer(rec.file);
+    const layer = classifyLayer(rec.file, config);
     agg[layer].total += rec.linesTotal;
     agg[layer].hit += rec.linesHit;
     agg[layer].files += 1;
@@ -588,7 +646,9 @@ export function rollupByLayer(records) {
       agg.overall.hit += rec.linesHit;
       agg.overall.files += 1;
     } else {
-      // already counted in overall
+      unclassified.total += rec.linesTotal;
+      unclassified.hit += rec.linesHit;
+      unclassified.files += 1;
     }
   }
   const pct = (a) => (a.total > 0 ? Math.round((a.hit / a.total) * 10000) / 100 : 0);
@@ -597,6 +657,7 @@ export function rollupByLayer(records) {
     integration: { percent: pct(agg.integration), ...agg.integration },
     controller: { percent: pct(agg.controller), ...agg.controller },
     overall: { percent: pct(agg.overall), ...agg.overall },
+    unclassified: { percent: pct(unclassified), ...unclassified },
   };
 }
 
@@ -605,26 +666,38 @@ export function rollupByLayer(records) {
  * each layer below minimum to the top of the list (sorted by lowest
  * coverage first). `records` is the parsed per-file coverage.
  *
+ * A layer with a configured minimum but zero classified files is reported
+ * with `unclassified: true` and `actual: null` — but only when the scan
+ * *has* unclassified files. A layer that is simply absent from a small
+ * project is still skipped: you cannot fail a minimum for code you do not
+ * have. The distinction matters because the reported failure mode was a
+ * green scan whose strictest gates were computed over ~10% of their real
+ * populations while the rest sat in `overall` (issue #270).
+ *
  * @param {object} rollup
  * @param {object} coverageMinima
  * @param {Array<{ file, linesTotal, linesHit }>} records
- * @returns {Array<{ layer, minimum, actual, gap, files }>}
+ * @param {object} [config] tempering config; only `stackOverrides` is read
+ * @returns {Array<{ layer, minimum, actual, gap, files, unclassified? }>}
  */
-export function computeGaps(rollup, coverageMinima, records) {
+export function computeGaps(rollup, coverageMinima, records, config) {
   const gaps = [];
+  const strayFiles = rollup?.unclassified?.files ?? 0;
   for (const layer of ["domain", "integration", "controller", "overall"]) {
     const minimum = coverageMinima?.[layer];
     if (typeof minimum !== "number") continue;
-    // Skip layers with no instrumented lines — you can't fail a
-    // minimum for code you don't have. TEMPER-02 will revisit this
-    // once "missing layer" is itself a reportable signal.
     const layerRollup = rollup[layer];
-    if (!layerRollup || layerRollup.total === 0) continue;
+    if (!layerRollup || layerRollup.total === 0) {
+      if (strayFiles > 0 && layer !== "overall") {
+        gaps.push({ layer, minimum, actual: null, gap: null, files: [], unclassified: true });
+      }
+      continue;
+    }
     const actual = layerRollup.percent ?? 0;
     if (actual >= minimum) continue;
     const gap = Math.round((minimum - actual) * 100) / 100;
     const layerFiles = (records || [])
-      .filter((r) => classifyLayer(r.file) === layer && r.linesTotal > 0)
+      .filter((r) => classifyLayer(r.file, config) === layer && r.linesTotal > 0)
       .map((r) => ({
         file: r.file,
         percent: Math.round((r.linesHit / r.linesTotal) * 10000) / 100,
@@ -982,10 +1055,15 @@ export function handleScan({ projectDir, hub = null, correlationId = null }) {
         status = "error";
         reason = `Coverage report ${report.path} parsed to zero records (format: ${report.format}). It may be empty or malformed.`;
       } else {
-        coverageRollup = rollupByLayer(records);
-        coverageGaps = computeGaps(coverageRollup, config.coverageMinima, records);
+        coverageRollup = rollupByLayer(records, config);
+        coverageGaps = computeGaps(coverageRollup, config.coverageMinima, records, config);
         if (coverageGaps.some((g) => g.gap >= 5)) {
           status = "amber";
+        }
+        // A gate we could not measure is not a gate that passed.
+        if (coverageGaps.some((g) => g.unclassified)) {
+          status = "amber";
+          reason = `Coverage minima are configured for layers the classifier found no files for, while ${coverageRollup.unclassified.files} file(s) matched no layer. Add glob->layer entries under layerGlobs in .forge/tempering/config.json.`;
         }
         // No "red" from TEMPER-01 alone — red requires a failing test
         // run which lands in TEMPER-02.

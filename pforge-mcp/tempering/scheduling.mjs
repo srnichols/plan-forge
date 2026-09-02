@@ -39,18 +39,28 @@ export function isCriticalPathTouched(touchedFiles = [], criticalPaths = []) {
 
 /**
  * Convert a simple glob pattern to a RegExp.
- * Supports `*` (single segment) and `**` (multi-segment).
+ * Supports `*` (single segment), `**` (multi-segment) and `?` (one char).
+ *
+ * A leading `**\/` matches zero directories as well as many, so
+ * `**\/*.repository.ts` matches a root-level `orders.repository.ts`. Without
+ * that, an operator's glob silently misses the files at the top of the tree
+ * (issue #270).
  *
  * @param {string} glob
  * @returns {RegExp}
  */
-function globToRegex(glob) {
-  let re = glob
+export function globToRegex(glob) {
+  // Placeholders keep each rewrite from eating characters the next one emits —
+  // `(?:.*/)?` contains both `?` and `/`, which are themselves glob syntax.
+  const re = glob
     .replace(/[.+^${}()|[\]\\]/g, "\\$&")  // escape regex chars (except * and ?)
+    .replace(/\?/g, "<<ANYCHAR>>")
+    .replace(/\*\*\//g, "<<GLOBSTAR_SLASH>>")
     .replace(/\*\*/g, "<<GLOBSTAR>>")
     .replace(/\*/g, "[^/]*")
+    .replace(/<<GLOBSTAR_SLASH>>/g, "(?:.*/)?")
     .replace(/<<GLOBSTAR>>/g, ".*")
-    .replace(/\?/g, "[^/]");
+    .replace(/<<ANYCHAR>>/g, "[^/]");
   return new RegExp(`^${re}$`);
 }
 

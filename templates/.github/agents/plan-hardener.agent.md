@@ -28,7 +28,7 @@ Before hardening, verify:
 3. **Plan file** — Target `*-PLAN.md` exists and is non-empty
 4. **Core guardrails** — `.github/copilot-instructions.md`, `.github/instructions/architecture-principles.instructions.md`, `AGENTS.md` all exist
 5. **Domain guardrails** — Scan plan for domain keywords, confirm matching `.github/instructions/*.instructions.md` files exist
-6. **Prior lessons** — Check `/memories/repo/conventions.md`, `/memories/repo/lessons-learned.md`, and `/memories/repo/forbidden-patterns.md` (if they exist — skip if not found)
+6. **Prior lessons** — Enumerate `/memories/repo/` and read what is relevant to this plan's subject; also search memory (`forge_search` with `sources: ["memory"]`). Do not check for fixed filenames — memory files are named by subject, so a three-name check reports "no prior lessons" against a directory full of them. Report "searched N files + memory, nothing relevant" rather than absence.
 
 Report results in a summary table. If any critical check fails, report it before proceeding.
 

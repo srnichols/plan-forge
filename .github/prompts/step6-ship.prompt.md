@@ -91,25 +91,32 @@ If phase is complete: "Phase shipped ✅ — ready for the next feature."
 After shipping, persist lessons learned so future phases benefit from this experience.
 This step uses Copilot's built-in memory system — no external tools required.
 
-**Save to `/memories/repo/`** (workspace-scoped, survives across sessions):
+**Save to `/memories/repo/`** (workspace-scoped, survives across sessions).
 
-1. **`conventions.md`** — Append any new coding patterns, naming conventions, or
-   architectural decisions established during this phase. Do not overwrite existing entries.
+**Name each file by its subject**, one topic per file — `prisma-migration-fk-syntax.md`,
+`gate-portability-windows-shim.md`, `release-procedure.md`. A future hardener finds them
+by enumerating the directory and reading titles, so the title is the index.
 
-2. **`lessons-learned.md`** — Append what went wrong and how it was fixed. Include:
-   - Slices that required retries (and why)
-   - Amendments triggered during execution
-   - Review Gate findings and their root causes
+**Do not create `conventions.md`, `lessons-learned.md`, or `forbidden-patterns.md`.**
+Those three catch-alls were prescribed here for a long time and were never actually
+written, because one unbounded append-only file is unreadable and authors naturally
+reach for topic names. Meanwhile the hardener was told to look for exactly those three
+filenames, so it reported "no prior lessons exist" on every project — a closed loop that
+always reported absence (meta-bug [#257](https://github.com/srnichols/plan-forge/issues/257)).
 
-3. **`forbidden-patterns.md`** — Append any patterns that caused regressions or
-   were flagged by the Review Gate. These become "watch for" items in future phases.
+Write one file per lesson worth carrying:
 
-If a memory file doesn't exist yet, create it with a header and the first entry.
-If it already exists, append — never overwrite prior entries.
+- A pattern or convention this phase established, and why the alternative was rejected
+- A slice that needed retries, with the symptom that misled you and the tell that resolved it
+- A pattern that caused a regression or was flagged by the Review Gate
+- A gate or command form that behaved differently than expected, with the measured evidence
+
+Keep each file short and specific enough that its filename predicts its contents. Append
+to an existing topic file rather than starting a near-duplicate; never overwrite prior entries.
 
 > **Why this matters**: Without memory, every phase starts from zero. With memory,
 > Phase N+1 avoids Phase N's mistakes and reuses its patterns automatically. The
-> hardening step (Step 2) reads these files to inform scope and slicing decisions.
+> hardening step (Step 2) enumerates this directory to inform scope and slicing decisions.
 
 ---
 

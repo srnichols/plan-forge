@@ -481,7 +481,7 @@ After the phase is fully complete and committed, clean up:
 
 ```
 Delete /memories/repo/current-phase.md — phase is done.
-Update /memories/repo/lessons-learned.md with any new patterns discovered.
+Update /memories/repo/ with any new patterns discovered — one topic per file, named by subject.
 ```
 
 ---

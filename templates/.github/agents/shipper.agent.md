@@ -58,13 +58,15 @@ Compile a brief postmortem from the execution:
 
 ### Phase 5: Capture Lessons to Memory
 
-Save lessons to `/memories/repo/` so future phases benefit from this experience (uses Copilot's built-in memory — no external tools required):
+Save lessons to `/memories/repo/` so future phases benefit from this experience (uses Copilot's built-in memory — no external tools required).
 
-1. **`/memories/repo/conventions.md`** — Append new coding patterns, naming conventions, or architectural decisions established during this phase
-2. **`/memories/repo/lessons-learned.md`** — Append what went wrong and how it was fixed (retries, amendments, Review Gate findings)
-3. **`/memories/repo/forbidden-patterns.md`** — Append patterns that caused regressions or were flagged by the Review Gate
+**Name each file by its subject**, one topic per file — `prisma-migration-fk-syntax.md`, `gate-portability-windows-shim.md`. The hardener finds them by enumerating the directory, so the filename is the index.
 
-If a file doesn't exist yet, create it with a header and the first entry. Always append — never overwrite.
+**Do not create `conventions.md`, `lessons-learned.md`, or `forbidden-patterns.md`.** Those catch-alls were prescribed here for a long time and never written — one unbounded append-only file is unreadable — while the hardener was told to look for exactly those names, so it reported "no prior lessons exist" on every project (meta-bug #257).
+
+Write one file per lesson worth carrying: a pattern established and why the alternative was rejected; a slice that needed retries, with the symptom that misled you and the tell that resolved it; a pattern that caused a regression or was flagged by the Review Gate; a command form that behaved differently than expected, with the measured evidence.
+
+Append to an existing topic file rather than starting a near-duplicate. Never overwrite.
 
 ### Phase 6: OpenBrain Capture (if configured)
 

@@ -29,10 +29,29 @@ Read these files first:
 3. docs/plans/DEPLOYMENT-ROADMAP.md
 4. .github/copilot-instructions.md
 
-Also check for prior phase lessons (if they exist — skip if not found):
-- `/memories/repo/conventions.md` — patterns and conventions from earlier phases
-- `/memories/repo/lessons-learned.md` — past mistakes to avoid
-- `/memories/repo/forbidden-patterns.md` — patterns that caused regressions
+**Prior lessons — enumerate, do not guess filenames.** List everything in
+`/memories/repo/` and read what looks relevant to this plan's subject. Then search
+memory as well: `forge_search` with `sources: ["memory"]`, or `brain_recall` if
+OpenBrain is configured.
+
+Do not look for a fixed set of filenames. Memory files are named by subject —
+`plan-gate-command-rules.md`, `release-procedure.md`, `orchestrator-cross-repo-launch.md` —
+because one unbounded append-only `lessons-learned.md` is unreadable. A hardener that
+checks three catch-all names reports "no prior lessons exist" while sitting on top of a
+directory full of them (meta-bug [#257](https://github.com/srnichols/plan-forge/issues/257)).
+
+Report what you searched and what you found, not what you failed to open:
+
+> Searched 12 files in `/memories/repo/` + memory for "gate portability", "windows shim".
+> Applied: `plan-gate-portability-old-consumers.md` (Slice 3 gate rewritten).
+> Nothing relevant for the migration slices.
+
+"Searched N files + memory, nothing relevant" is a finding. "No prior lessons exist"
+is a claim you cannot make from a missing filename.
+
+Every query you record must be one you actually ran — a query phrased in code
+identifiers scores 0 and is indistinguishable from an empty store, so an unrun query
+looks exactly like a genuine absence.
 
 **Prior plan postmortems (Phase-25 L5 closed loop)**:
 Before hardening, also scan `.forge/plans/<plan-basename>/postmortem-*.json` for

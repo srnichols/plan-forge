@@ -178,9 +178,12 @@ Read these files first:
 5. docs/plans/PROJECT-PRINCIPLES.md (if exists)
 
 Also check for prior phase lessons (if they exist — skip if not found):
-- /memories/repo/conventions.md — patterns and conventions from earlier phases
-- /memories/repo/lessons-learned.md — past mistakes to avoid
-- /memories/repo/forbidden-patterns.md — patterns that caused regressions
+Prior lessons — enumerate `/memories/repo/`, do not guess filenames. Read what looks
+relevant to this plan's subject, then search memory too (`forge_search` with
+`sources: ["memory"]`, or `brain_recall` when OpenBrain is configured). Memory files
+are named by subject, so a fixed three-name check reports "no prior lessons" against a
+directory full of them. Report "searched N files + memory, nothing relevant" rather
+than "no prior lessons exist", and only record queries you actually ran.
 
 Now act as a PLAN HARDENING AGENT (see the Plan Hardening Prompt in the runbook).
 

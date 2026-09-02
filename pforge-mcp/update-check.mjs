@@ -23,16 +23,30 @@ export function cachePath(projectDir) {
 }
 
 /**
- * Resolve the framework's own version — the VERSION file shipped with the
- * running install. Always reads from the install's repo root (computed from
- * `serverDir`) so the answer is independent of `PROJECT_DIR`, the user's
- * `cwd`, and any stale literals baked into source.
+ * Read a JSON file, returning null on absence or malformed content.
+ *
+ * @param {string} path
+ * @returns {object|null}
+ */
+function _readJsonOrNull(path) {
+  try {
+    if (!existsSync(path)) return null;
+    return JSON.parse(readFileSync(path, "utf-8"));
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Resolve the framework's own version — the version of the running install.
  *
  * Resolution order (first match wins):
- *   1. `<serverDir>/../VERSION`  — repo root when server.mjs lives in `pforge-mcp/`
- *   2. `<serverDir>/VERSION`     — server.mjs at repo root (defensive)
- *   3. `<projectDir>/VERSION`    — caller-provided fallback (legacy callers)
- *   4. `"unknown"`               — never throws, never invents a number
+ *   1. `<serverDir>/package.json` version — the install's own manifest
+ *   2. `<serverDir>/../VERSION`  — repo root, unless the parent package is
+ *      demonstrably someone else's (see below)
+ *   3. `<serverDir>/VERSION`     — server.mjs at repo root (defensive)
+ *   4. `<projectDir>/VERSION`    — caller-provided fallback (legacy callers)
+ *   5. `"unknown"`               — never throws, never invents a number
  *
  * Issue #106: previously the MCP handshake hard-coded "2.12.3" and the
  * capabilities generator fell back to "2.14.0" when VERSION was missing.
@@ -40,16 +54,33 @@ export function cachePath(projectDir) {
  * dashboard, and `/api/version` endpoint after self-update. This helper
  * collapses all framework-version reads to a single source of truth.
  *
+ * Issue #250: `<serverDir>/../VERSION` is the install root for a standalone
+ * checkout but is `<host>/VERSION` when Plan Forge is vendored at
+ * `<host>/pforge-mcp`, so it reported the host app's version and the update
+ * check concluded the install was ahead of latest. `package.json` goes first
+ * because it is always co-located with server.mjs and cannot be the host's.
+ * The parent VERSION is additionally rejected when a parent `package.json`
+ * exists and does not name plan-forge — an absent one is still trusted, which
+ * is what every #106 fixture models.
+ *
  * @param {{ serverDir: string, projectDir?: string|null }} opts
  * @returns {string} bare version string ("2.81.0", "2.82.0-dev", or "unknown")
  */
 export function resolveFrameworkVersion({ serverDir, projectDir = null } = {}) {
   if (!serverDir || typeof serverDir !== "string") return "unknown";
-  const candidates = [
-    resolve(serverDir, "..", "VERSION"),
-    resolve(serverDir, "VERSION"),
-  ];
-  if (projectDir && typeof projectDir === "string") {
+
+  const ownPkg = _readJsonOrNull(resolve(serverDir, "package.json"));
+  if (typeof ownPkg?.version === "string" && ownPkg.version.trim()) {
+    return ownPkg.version.trim().replace(/^v/i, "");
+  }
+
+  const parentPkg = _readJsonOrNull(resolve(serverDir, "..", "package.json"));
+  const parentIsForeign = parentPkg !== null && parentPkg.name !== "plan-forge";
+
+  const candidates = [];
+  if (!parentIsForeign) candidates.push(resolve(serverDir, "..", "VERSION"));
+  candidates.push(resolve(serverDir, "VERSION"));
+  if (projectDir && typeof projectDir === "string" && !parentIsForeign) {
     candidates.push(resolve(projectDir, "VERSION"));
   }
   for (const path of candidates) {

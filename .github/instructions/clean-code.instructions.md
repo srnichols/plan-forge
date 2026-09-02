@@ -100,13 +100,45 @@ Name the describe block `"Guard: <invariant in plain English>"` so the test ID i
 
 Before approving any PR that touches `pforge-mcp/` or `pforge-master/`:
 
-- [ ] No new `complexity-error` or `max-lines-per-function-error` violations (`npm run lint`)
+- [ ] No new `complexity-error` or `max-lines-per-function-error` violations (see **Running the checks** below)
 - [ ] No function has >4 positional parameters (use options object)
 - [ ] No file added that exceeds 3,000 LOC
 - [ ] No magic numbers — named constants used throughout
 - [ ] No commented-out code blocks
 - [ ] No TODO/FIXME/HACK markers
 - [ ] `console.log` calls audited — debug output removed
+
+### Running the checks
+
+There is **no `npm run lint` script** in this repo. ESLint 9 is already a
+devDependency and the clean-code rules live in
+`scripts/audit/eslint-clean-code.config.mjs`.
+
+```bash
+# Full sweep — every audit script, merged report
+npm run audit:full
+
+# One or more files, straight from ESLint (exits 1 on errors)
+node node_modules/eslint/bin/eslint.js --config scripts/audit/eslint-clean-code.config.mjs <file>...
+
+# "No NEW violations" delta — lints base vs HEAD and reports the difference
+node scripts/audit/boyscout-delta.mjs
+```
+
+> **`scripts/audit/run-eslint-clean-code.mjs` always exits 0.** It is a report
+> generator (writes `docs/plans/cleanup-findings/raw/eslint-report.json`), not a
+> gate. Do not wire it into CI expecting it to block — invoke ESLint directly, or
+> assert on the report contents.
+
+To baseline a file before your change (the trick `boyscout-delta.mjs` uses):
+
+```bash
+git show HEAD~1:<path> | node node_modules/eslint/bin/eslint.js \
+  --config scripts/audit/eslint-clean-code.config.mjs --stdin --stdin-filename <path>
+```
+
+Compare like with like — a one-file baseline against a multi-file run will invent
+a regression that does not exist.
 
 ---
 

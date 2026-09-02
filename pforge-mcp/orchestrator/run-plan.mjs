@@ -29,7 +29,7 @@ import { buildIssueBody as _buildIssueBodyDefault, dispatchSlice as _dispatchSli
 import { API_ALLOWED_ROLES, COST_ANOMALY_MULTIPLIER, CRUCIBLE_STALL_CUTOFF_DAYS, DEFAULT_GATE_TIMEOUT_MS, DEFAULT_WORKER_OUTPUT_IDLE_MS, DEFAULT_WORKER_TIMEOUT_MS, EVENT_SOURCE, GATE_ALLOWED_PREFIXES, GATE_SUGGESTION_AUTO_INJECT_THRESHOLD, POSTMORTEM_RETENTION_COUNT, PROPOSED_FIX_DIR, QUORUM_PRESETS, REVIEW_RESOLUTIONS, REVIEW_SEVERITIES, REVIEW_SOURCES, REVIEW_STATUSES, SECURITY_RISK, SECURITY_RISK_FOR_TYPE, SUPPORTED_AGENTS, UNIX_TOOLS } from "./constants.mjs";
 import { LogEventHandler, OrchestratorEventBus, appendEvent, writeSilentExitRecord } from "./event-bus.mjs";
 import { buildSlicePrompt } from "./prompt-builders.mjs";
-import { parsePlan, computeLockHash, normalizeSliceId, compareSliceIds, parseOnlySlicesExpr, parseWorkerTimeoutValue, parseSlices, buildDAG, loadPlanParserConfig } from "./plan-parser.mjs";
+import { parsePlan, computeLockHash, normalizeSliceId, compareSliceIds, parseOnlySlicesExpr, parseWorkerTimeoutValue, parseSlices, buildDAG, restrictDagToSlices, loadPlanParserConfig } from "./plan-parser.mjs";
 import { resetCliWorkersCache, setGhCopilotProbe, isDirectApiOnlyModel, isCopilotServableModel, isApiOnlyModel, getFoundryAuthScope, detectApiProvider, setSecretsLoader, buildApiMessages, generateImage, loadWorkerCapabilities, compareVersions, detectPackageManager, suggestInstall, classifyProbeFailure, detectWorkers, detectExecutionRuntime, detectClientHost, describeBillingSurface, getRoutingPreference, loadRoutingPreference, resolveRequiredCli, probeQuorumModelAvailability, filterQuorumModels, formatQuorumSummary, assessQuorumViability, detectRuntimes, spawnWorker, detectHelpTextOutput, detectSilentWorkerFailure, detectKilledBySignal, deriveVendorFromModel, extractTokens, shouldDefaultPremiumRequestsToOne, parseStderrStats, resolveWorkerOutputIdleMs, resolveWorkerTimeoutMs, assertWorkerBackendReady } from "./worker-spawn.mjs";
 import { resolveGateTimeoutMs, __resetBashPathCache, resolveBashPath, detectSelfRepairMissed, buildRetryPrompt, coalesceGateLines, editDistance, isPlaceholderToken, suggestAllowedCommand, looksLikeProse, runGate, SequentialScheduler, ParallelScheduler, CompetitiveScheduler, selectWinner, detectScopeConflicts } from "./schedulers.mjs";
 import { ensureForgeDir, pruneForgeRuns, recordModelPerformance, readForgeJson, appendForgeJsonl, readForgeJsonl, auditOrphanForgeFiles, loadModelPerformance, aggregateModelStats, getCostReport, getHealthTrend, emitToolTelemetry, loadGateCheckConfig, registerGateCheckResponder } from "./forge-io.mjs";
@@ -1119,7 +1119,7 @@ function _setupRunInfrastructure({ planPath, cwd, mode, effectiveModel, plan, ev
 }
 
 async function _executeSlicesWithTempering({
-  plan, executionOrder, noTempering, scheduler, abortSignal, resumeFrom, hub, gateCheckConfig, sliceCtx,
+  plan, executionNodes, executionOrder, noTempering, scheduler, abortSignal, resumeFrom, hub, gateCheckConfig, sliceCtx,
 }) {
   const _priorDisableTempering = process.env.PFORGE_DISABLE_TEMPERING;
   if (noTempering) {
@@ -1127,7 +1127,7 @@ async function _executeSlicesWithTempering({
   }
   try {
     return await scheduler.execute(
-      plan.dag.nodes,
+      executionNodes || plan.dag.nodes,
       executionOrder,
       (slice) => _runPlanSliceCallback(slice, sliceCtx),
       { abortSignal, resumeFrom: resumeFrom ? String(resumeFrom) : null, hub, gateCheckConfig },
@@ -1341,9 +1341,14 @@ export async function runPlan(planPath, options = {}) {
 
   // Phase-33.1: Pre-filter execution order for --only-slices.
   const executionOrder = _resolveExecutionOrder(plan, onlySlices);
+  // Prune edges to excluded slices too, or a selected dependent slice can never
+  // become ready and the run dies in the #225 deadlock path (meta-bug #265).
+  const executionNodes = (onlySlices && onlySlices.length > 0)
+    ? restrictDagToSlices(plan.dag.nodes, executionOrder)
+    : plan.dag.nodes;
 
   const results = await _executeSlicesWithTempering({
-    plan, executionOrder, noTempering, scheduler, abortSignal, resumeFrom, hub, gateCheckConfig,
+    plan, executionNodes, executionOrder, noTempering, scheduler, abortSignal, resumeFrom, hub, gateCheckConfig,
     sliceCtx: {
       cwd, dryRunWorker, effectiveModel, modelRouting, mode, runDir, maxRetries,
       memoryEnabled, projectName, planPath, quorumConfig, escalationChain, eventBus,

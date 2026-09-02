@@ -625,6 +625,15 @@ export class ParallelScheduler {
         completed.add(id);
         continue;
       }
+      // Checked here rather than at execution time so the ✅ marker is honoured
+      // whether the slice would have run in a batch or alone (meta-bug #266).
+      if (node.status === "completed") {
+        const skipResult = { sliceId: id, status: "skipped" };
+        results.set(id, skipResult);
+        allResults.push(skipResult);
+        completed.add(id);
+        continue;
+      }
       ready.push(id);
     }
     return ready;
@@ -693,13 +702,6 @@ export class ParallelScheduler {
         if (!id) break;
 
         const slice = nodes.get(id);
-        if (slice.status === "completed") {
-          const r = { sliceId: id, status: "skipped" };
-          results.set(id, r);
-          allResults.push(r);
-          completed.add(id);
-          continue;
-        }
 
         this.eventBus.emit("slice-started", { sliceId: id, title: slice.title, complexityScore: slice.complexityScore });
         try {

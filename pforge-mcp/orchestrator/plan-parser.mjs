@@ -768,6 +768,33 @@ export function buildDAG(slices) {
   return { nodes, order };
 }
 
+/**
+ * Restrict a DAG to a subset of slices, for `--only-slices`.
+ *
+ * A dependency is dropped only when it exists in the plan but was excluded by
+ * the selection — the operator asking to run exactly these slices is asserting
+ * their prerequisites are already satisfied. An id absent from the plan
+ * entirely is unresolvable rather than excluded, so it survives and the #225
+ * deadlock check still fires. Without this the scheduler waited forever on a
+ * node that never enters the run (meta-bug #265).
+ *
+ * @param {Map<string, object>} nodes
+ * @param {string[]} keepIds
+ * @returns {Map<string, object>}
+ */
+export function restrictDagToSlices(nodes, keepIds) {
+  const keep = new Set(keepIds.map(String));
+  const restricted = new Map();
+  for (const [id, node] of nodes) {
+    if (!keep.has(id)) continue;
+    restricted.set(id, {
+      ...node,
+      depends: (node.depends || []).filter((d) => keep.has(d) || !nodes.has(d)),
+    });
+  }
+  return restricted;
+}
+
 function topologicalSort(nodes) {
   const queue = [];
   const order = [];

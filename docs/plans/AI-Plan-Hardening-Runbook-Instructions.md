@@ -6,8 +6,8 @@ priority: HIGH
 
 # AI Plan Hardening Runbook — Usage Instructions
 
-> **Purpose**: Quick-reference guide for using the [AI-Plan-Hardening-Runbook.md](./AI-Plan-Hardening-Runbook.md) to harden and execute phase plans  
-> **When to use**: Every time you have a new or updated `*-PLAN.md` to prepare for agent execution  
+> **Purpose**: Quick-reference guide for using the [AI-Plan-Hardening-Runbook.md](./AI-Plan-Hardening-Runbook.md) to harden and execute phase plans
+> **When to use**: Every time you have a new or updated `*-PLAN.md` to prepare for agent execution
 > **Version**: 2.0 (Multi-Stack)
 
 ---
@@ -230,6 +230,20 @@ After all sections are drafted, run a PLAN QUALITY SELF-CHECK before outputting:
 5. Do the Stop Conditions cover: build failure, test failure, scope violation, and security breach?
 6. Does every slice list only the instruction files relevant to its domain (not all 17)?
 7. Are MUST acceptance criteria from the spec traceable to at least one slice's validation gate?
+8. Can every gate actually FAIL? Run it against the absent thing and confirm a non-zero
+   exit. `vitest run <path>` on a path matching nothing exits 0 on vitest 2.x/3.x but 1 on
+   vitest 4 — version-dependent, so check your installed version rather than assuming, and
+   add `--passWithNoTests=false` if it exits 0. `pnpm --filter <pkg> <script>` exits 0 when
+   the script does not exist (use `pnpm run <script>` from inside the package). A gate
+   counting new files with `git diff HEAD~N` reads 0, because that never lists untracked
+   files. A gate asserting `>= 1` may already be satisfied by something pre-existing — run
+   it on a clean tree first.
+9. Does everything the plan names exist as a file — gate scripts, cited helpers, fixtures?
+   Check with `git ls-files`: a gitignored, untracked helper is absent from the worktree
+   the plan mandates.
+10. If the plan declares an isolated branch or worktree, does it carry bootstrap steps plus
+    a confirm-before-Slice-1 check? Treat any recorded baseline SHA as a hardening record,
+    not a branch point.
 
 If any check fails, revise the plan before outputting.
 

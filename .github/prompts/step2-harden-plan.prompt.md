@@ -108,6 +108,36 @@ After all sections are drafted, run a **PLAN QUALITY SELF-CHECK** before outputt
 8. Do all validation gate commands pass the **Gate Portability Rules** below?
 9. For every slice touching `.ts`/`.tsx` files, does its gate include a typecheck step (not just a test run)? Are test gates scoped to the changed module rather than the whole workspace suite?
 10. Has every **factual claim about existing code** been verified against the codebase? (See Premise Verification below.)
+11. **Can every gate actually FAIL?** Prove it against the absent thing before trusting it. (See Gate Failability below.)
+12. Does everything the plan names actually **exist as a file** — gate scripts, cited helpers, fixtures? Check with `git ls-files`, not just the filesystem: a helper that is gitignored and untracked is absent from the very worktree the plan mandates.
+13. If the plan declares an isolated branch or worktree, does it carry **bootstrap steps** plus a confirm-before-Slice-1 check? With workspace package builds uncommitted, the first gate of the first slice fails on unresolvable imports and reads as a genuine stop condition rather than an unbuilt workspace. Treat any recorded baseline SHA as a hardening record, not a branch point.
+
+### Gate Failability
+
+A gate that cannot fail is worse than no gate: it reports success forever and nobody
+looks again. Item 1 asks whether a gate *exists*; this asks whether it can return
+non-zero when the thing it checks is missing.
+
+**Test it the only way that works — run it against the absent thing** and confirm a
+non-zero exit, then against the present thing and confirm zero. Two measured traps
+from meta-bug [#258](https://github.com/srnichols/plan-forge/issues/258):
+
+| Trap | Why it passes | Fix |
+|------|---------------|-----|
+| `vitest run <path>` on a path that matches nothing | On vitest 2.x/3.x prints "No test files found" and **exits 0**. A TDD gate naming the test file its own slice is meant to create therefore passes at the red step, and keeps passing if the test is never written. Version-dependent: vitest 4 exits 1. | Add `--passWithNoTests=false`, and verify the exit code on your installed version rather than assuming. |
+| `pnpm --filter <pkg> <script>` where the script does not exist | Prints "None of the selected packages has a ... script" and **exits 0**, so a typo or a script that only lives in a sibling package reads as a passing gate. | `pnpm run <script>` from inside the package directory — exits 1 with `ERR_PNPM_NO_SCRIPT`. |
+
+The gate linter flags the `pnpm --filter` form mechanically. It deliberately does not
+flag the vitest form, because the behaviour depends on the installed version — that
+one is yours to check.
+
+Same family: a gate counting brand-new files with `git diff --name-only HEAD~N` reads 0,
+because that never lists untracked files and the slice cannot commit on an unrun gate.
+Use `git status --porcelain` or `git ls-files --others --exclude-standard`.
+
+And check the other direction: a gate asserting a count is `>= 1` is already satisfied if
+something pre-existing matches its glob. Run the gate on a clean tree **before** the
+slice writes anything; if it passes there, it is measuring history, not your work.
 
 ### Premise Verification
 

@@ -225,6 +225,18 @@ function _lintBasicRules({ line, slice, loc, cmdToken, lastSliceNumber, warnings
       message: `${loc}: node -e contains '//' which acts as a line comment on a single line, breaking the code. Remove JS comments from gate commands.`,
     });
   }
+  if (/\bpnpm\s+(?:--filter|-F)\s+\S+\s+(?!exec\b|run\b|-)\S+/.test(line)) {
+    warnings.push({
+      slice: slice.number, command: line, rule: "gate-cannot-fail", severity: "warn",
+      message: `${loc}: 'pnpm --filter <pkg> <script>' exits 0 when the script does not exist ("None of the selected packages has a ... script"), so a typo or a script that only exists in a sibling package reads as a passing gate. Use 'pnpm run <script>' from inside the package directory — it exits 1 with ERR_PNPM_NO_SCRIPT.`,
+    });
+  }
+  if (/\bgit\s+diff\b[^\n]*\bHEAD~\d/.test(line)) {
+    warnings.push({
+      slice: slice.number, command: line, rule: "git-diff-misses-untracked", severity: "warn",
+      message: `${loc}: 'git diff ... HEAD~N' never lists untracked files, so a gate counting brand-new files reads 0 until they are committed — and the slice cannot commit on an unrun gate. Use 'git status --porcelain' or 'git ls-files --others --exclude-standard' to include new files.`,
+    });
+  }
   if (/\b(grep|rg|ripgrep|egrep|fgrep)\b/.test(line)
     && /\(\?<[=!]|\(\?[=!]/.test(line)
     && !/(^|\s)(-P|--pcre2|--perl-regexp)(\s|=|$)/.test(line)) {

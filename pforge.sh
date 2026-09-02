@@ -2919,10 +2919,17 @@ cmd_doctor() {
             fi
         fi
 
-        # MCP version sync
+        # MCP version sync — only meaningful inside the Plan Forge repo itself.
+        # In a consuming project the root VERSION file holds the HOST app's
+        # version, so the two numbers are different namespaces and following the
+        # suggested fix would overwrite Plan Forge's version identity (meta-bug #253).
         local mcp_pkg_path="$REPO_ROOT/pforge-mcp/package.json"
         local version_path="$REPO_ROOT/VERSION"
-        if [ -f "$mcp_pkg_path" ] && [ -f "$version_path" ]; then
+        local root_pkg_name=""
+        if [ -f "$REPO_ROOT/package.json" ]; then
+            root_pkg_name=$(_json_field "$REPO_ROOT/package.json" name)
+        fi
+        if [ "$root_pkg_name" = "plan-forge" ] && [ -f "$mcp_pkg_path" ] && [ -f "$version_path" ]; then
             local mcp_ver repo_ver
             mcp_ver=$(_json_field "$mcp_pkg_path" version)
             repo_ver=$(cat "$version_path" | tr -d '[:space:]')

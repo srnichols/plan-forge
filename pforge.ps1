@@ -3386,10 +3386,18 @@ function Invoke-Smith {
             }
         }
 
-        # MCP version sync
+        # MCP version sync — only meaningful inside the Plan Forge repo itself.
+        # In a consuming project the root VERSION file holds the HOST app's
+        # version, so the two numbers are different namespaces and following the
+        # suggested fix would overwrite Plan Forge's version identity (meta-bug #253).
         $mcpPkgPath = Join-Path $RepoRoot "pforge-mcp/package.json"
         $versionPath = Join-Path $RepoRoot "VERSION"
-        if ((Test-Path $mcpPkgPath) -and (Test-Path $versionPath)) {
+        $rootPkgPath = Join-Path $RepoRoot "package.json"
+        $isPlanForgeRepo = $false
+        if (Test-Path $rootPkgPath) {
+            try { $isPlanForgeRepo = ((Get-Content $rootPkgPath -Raw | ConvertFrom-Json).name -eq 'plan-forge') } catch { $isPlanForgeRepo = $false }
+        }
+        if ($isPlanForgeRepo -and (Test-Path $mcpPkgPath) -and (Test-Path $versionPath)) {
             try {
                 $mcpPkg = Get-Content $mcpPkgPath -Raw | ConvertFrom-Json
                 $mcpVer = $mcpPkg.version

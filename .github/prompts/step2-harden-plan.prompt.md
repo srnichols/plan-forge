@@ -158,6 +158,20 @@ And check the other direction: a gate asserting a count is `>= 1` is already sat
 something pre-existing matches its glob. Run the gate on a clean tree **before** the
 slice writes anything; if it passes there, it is measuring history, not your work.
 
+**A gate must also be able to PASS.** Meta-bug [#256](https://github.com/srnichols/plan-forge/issues/256)
+halted a slice on a gate that forbade `ALTER TABLE` in a migration — while the plan
+mandated five foreign keys, and Prisma emits every foreign key as
+`ALTER TABLE ... ADD CONSTRAINT ... FOREIGN KEY`, even for a table created in the same
+migration. The plan required a schema whose migration its own gate forbade. Before
+forbidding a string, confirm the tool that generates the file does not always emit it.
+
+**If the slice claims a red step, prove the red step exists.** A TDD contract asserting
+"this slice breaks the two suites that assert the old shape" is a factual claim about
+current behaviour, same as any other premise. Run those suites first. In #256 both were
+measured identical before and after, so the slice had no red step available inside its
+declared file list — and an executor following the contract waits for a failure that
+cannot happen.
+
 ### Premise Verification
 
 A plan's Non-Goals, Assumptions, and slice descriptions routinely assert facts about

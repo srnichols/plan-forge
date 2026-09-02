@@ -241,10 +241,14 @@ After all sections are drafted, run a PLAN QUALITY SELF-CHECK before outputting:
    counting new files with `git diff HEAD~N` reads 0, because that never lists untracked
    files. A gate asserting `>= 1` may already be satisfied by something pre-existing — run
    it on a clean tree first.
-9. Does everything the plan names exist as a file — gate scripts, cited helpers, fixtures?
-   Check with `git ls-files`: a gitignored, untracked helper is absent from the worktree
-   the plan mandates.
-10. If the plan declares an isolated branch or worktree, does it carry bootstrap steps plus
+9. Can every gate also PASS? Before forbidding a string, confirm the tool that generates
+   the file does not always emit it — a gate forbidding `ALTER TABLE` is unsatisfiable in
+   a Prisma migration, because every foreign key is emitted that way. And if a slice
+   claims a red step, run the named suites first and confirm they actually go red.
+10. Does everything the plan names exist as a file — gate scripts, cited helpers, fixtures?
+    Check with `git ls-files`: a gitignored, untracked helper is absent from the worktree
+    the plan mandates.
+11. If the plan declares an isolated branch or worktree, does it carry bootstrap steps plus
     a confirm-before-Slice-1 check? Treat any recorded baseline SHA as a hardening record,
     not a branch point.
 

@@ -134,5 +134,13 @@ describe("the self-check asks whether a gate can fail (#258)", () => {
       expect(src).toMatch(/untracked/i);
       expect(src).toMatch(/git ls-files/);
     });
+
+    it(`${name} asks whether a gate can also PASS (#256)`, () => {
+      // #256's unsatisfiable gate: it forbade ALTER TABLE while the plan
+      // mandated five foreign keys, which Prisma always emits that way.
+      const src = readFileSync(path, "utf-8");
+      expect(src).toMatch(/ALTER TABLE/);
+      expect(src).toMatch(/red step/i);
+    });
   }
 });

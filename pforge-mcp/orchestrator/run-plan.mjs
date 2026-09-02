@@ -7,7 +7,7 @@ import { tmpdir } from "node:os";
 import { fileURLToPath } from "node:url";
 import { createHash } from "node:crypto";
 import { QUORUM_MODES, WATCHER_MODES } from "../enums.mjs";
-import { createTraceContext, createTelemetryHandler, writeManifest, appendRunIndex, pruneRunHistory, addLogSummary } from "../telemetry.mjs";
+import { createTraceContext, createTelemetryHandler, writeManifest, appendRunIndex, addLogSummary } from "../telemetry.mjs";
 import { recordActivity } from "../team-activity.mjs";
 import { isOpenBrainConfigured, buildMemorySearchBlock, buildMemoryCaptureBlock, buildReflexionBlock, buildTrajectorySuffix, extractTrajectory, writeTrajectory, retrieveAutoSkills, buildAutoSkillContext, extractAutoSkill, writeAutoSkill, incrementAutoSkillReuse, buildRunSummaryThought, buildCostAnomalyThought, loadProjectContext, buildPlanBootContext, computeGateSuggestionKey, getGateSuggestionCounter, captureMemory, autoDrainOpenBrainQueue } from "../memory.mjs";
 import { enforceCrucibleId, CrucibleEnforcementError } from "../crucible-enforce.mjs";
@@ -1177,7 +1177,10 @@ function _writeFinalRunArtifacts({ summary, runDir, runId, cwd, trace, eventBus,
   // v2.4: Write manifest + index + prune (AFTER trace.json is written by emit)
   const manifest = writeManifest(runDir, runId, { ...summary, traceId: trace.traceId });
   appendRunIndex(cwd, runId, manifest);
-  pruneRunHistory(cwd, loadMaxRunHistory(cwd));
+  pruneForgeRuns(cwd, {
+    maxRuns: loadMaxRunHistory(cwd),
+    maxAgeDays: loadMaxRunAgeDays(cwd),
+  });
 }
 
 const _RUN_PLAN_DEFAULTS = Object.freeze({
@@ -1498,6 +1501,23 @@ function loadMaxRunHistory(cwd) {
     }
   } catch { /* defaults */ }
   return 50;
+}
+
+/**
+ * Age cutoff for `.forge/runs/` retention, in days.
+ * Runs are pruned when they fail EITHER this or `maxRunHistory` (issue #259).
+ *
+ * @returns {number}
+ */
+function loadMaxRunAgeDays(cwd) {
+  const configPath = resolve(cwd, ".forge.json");
+  try {
+    if (existsSync(configPath)) {
+      const config = JSON.parse(readFileSync(configPath, "utf-8"));
+      if (typeof config.maxRunAgeDays === "number" && config.maxRunAgeDays > 0) return config.maxRunAgeDays;
+    }
+  } catch { /* defaults */ }
+  return 30;
 }
 
 /**

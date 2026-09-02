@@ -363,6 +363,7 @@ export const CONFIG_SCHEMA = {
     maxParallelism: { type: "number", default: 3, minimum: 1, maximum: 10, description: "Max concurrent parallel slices" },
     maxRetries: { type: "number", default: 1, minimum: 0, maximum: 5, description: "Gate failure retry attempts" },
     maxRunHistory: { type: "number", default: 50, minimum: 1, description: "Max run directories to retain" },
+    maxRunAgeDays: { type: "number", default: 30, minimum: 1, description: "Max age of a run directory in days; runs are pruned when they fail EITHER this or maxRunHistory" },
     quorum: {
       type: "object",
       description: "Multi-model consensus configuration (v2.5; defaults refreshed 2026-05-21)",

@@ -247,7 +247,7 @@ function buildTelemetrySurface() {
       manifest: ".forge/runs/<timestamp>/manifest.json — per-run artifact registry",
       index: ".forge/runs/index.jsonl — append-only global run index (corruption-tolerant)",
     },
-    retention: "maxRunHistory config in .forge.json (default: 50), auto-prunes oldest runs",
+    retention: "maxRunHistory (default: 50) and maxRunAgeDays (default: 30) in .forge.json — a run is pruned when it fails EITHER; the newest run is always kept",
   };
 }
 

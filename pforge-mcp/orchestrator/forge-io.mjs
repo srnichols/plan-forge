@@ -143,6 +143,38 @@ export function ensureForgeDir(subpath, cwd = process.cwd()) {
 // ─── G2.3 — Run pruning ───────────────────────────────────────────────
 
 /**
+ * Remove `index.jsonl` rows that point at run directories we just deleted.
+ *
+ * Only pruned dirs are dropped. The index and the directory set are already
+ * allowed to drift — a consumer measured 39 entries against 50 dirs — so
+ * removing everything unaccounted for would destroy rows this function never
+ * touched (issue #259).
+ *
+ * @param {string} runsDir
+ * @param {string[]} prunedIds
+ */
+function _compactRunIndex(runsDir, prunedIds) {
+  if (prunedIds.length === 0) return;
+  const indexPath = resolve(runsDir, "index.jsonl");
+  if (!existsSync(indexPath)) return;
+  const pruned = new Set(prunedIds);
+  try {
+    const kept = readFileSync(indexPath, "utf-8")
+      .split(/\r?\n/)
+      .filter(Boolean)
+      .filter((line) => {
+        try {
+          const entry = JSON.parse(line);
+          return !pruned.has(entry.dir) && !pruned.has(entry.runId);
+        } catch {
+          return true; // unparseable row — not ours to delete
+        }
+      });
+    writeFileSync(indexPath, kept.length ? kept.join("\n") + "\n" : "");
+  } catch { /* best-effort — never fail a run over index hygiene */ }
+}
+
+/**
  * G2.3 (v2.36): prune `.forge/runs/<runId>/` directories. Two retention
  * dimensions are checked; a run is removed if it fails EITHER:
  *   - older than `maxAgeDays` days (default 30), OR
@@ -201,6 +233,7 @@ export function pruneForgeRuns(cwd = process.cwd(), opts = {}) {
       result.kept.push(runId);
     }
   }
+  if (!dryRun) _compactRunIndex(runsDir, result.pruned);
   return result;
 }
 

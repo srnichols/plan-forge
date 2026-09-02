@@ -250,36 +250,11 @@ export function readRunIndex(cwd) {
 
 // ─── Log Rotation ─────────────────────────────────────────────────────
 
-/**
- * Prune old run directories beyond maxRunHistory.
- */
-export function pruneRunHistory(cwd, maxRunHistory = 50) {
-  const runsDir = resolve(cwd, ".forge", "runs");
-  if (!existsSync(runsDir)) return;
-
-  const dirs = readdirSync(runsDir, { withFileTypes: true })
-    .filter((d) => d.isDirectory())
-    .map((d) => d.name)
-    .sort()
-    .reverse();
-
-  if (dirs.length <= maxRunHistory) return;
-
-  const toRemove = dirs.slice(maxRunHistory);
-  for (const dir of toRemove) {
-    try {
-      rmSync(resolve(runsDir, dir), { recursive: true, force: true });
-    } catch { /* best effort */ }
-  }
-
-  // Compact index — remove entries for deleted directories
-  const indexPath = resolve(runsDir, "index.jsonl");
-  if (existsSync(indexPath)) {
-    const remaining = new Set(dirs.slice(0, maxRunHistory));
-    const entries = readRunIndex(cwd).filter((e) => remaining.has(e.dir));
-    writeFileSync(indexPath, entries.map((e) => JSON.stringify(e)).join("\n") + "\n");
-  }
-}
+// Run-directory pruning lives in orchestrator/forge-io.mjs::pruneForgeRuns.
+// A count-only `pruneRunHistory` used to live here and was the one actually
+// wired, so the age dimension never ran (issue #259). Removed rather than
+// left dead — two pruners with overlapping responsibility is how the
+// unwired one went unnoticed for so long.
 
 // ─── OTel Chat Span Emitter ────────────────────────────────────────────
 

@@ -1072,8 +1072,10 @@ async function _finalizeRunPlan({
 
   // Issue #212: rewrite plan-file status header on a fully successful run so the
   // plan file reflects COMPLETE instead of remaining pinned at HARDENED.
+  // Issue #255: record the outcome — a status line the rewriter did not
+  // recognise used to be indistinguishable from "already complete".
   if (allPassed && !estimate && !dryRun) {
-    _rewritePlanStatusOnSuccess({
+    summary.planStatusRewrite = _rewritePlanStatusOnSuccess({
       planPath,
       cwd,
       shippedAt: summary.endTime || new Date().toISOString(),

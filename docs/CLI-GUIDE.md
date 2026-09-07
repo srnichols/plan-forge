@@ -303,6 +303,33 @@ DRIFT DETECTED — 1 forbidden file(s) touched.
 
 ---
 
+### Parallel Slice Isolation
+
+When two or more eligible `[P]` slices run together, each worker uses a detached
+Git worktree with its own index. Explicit dependencies still control readiness;
+`[P]` does not remove a prerequisite. Single-worker execution is unchanged.
+
+Parallel batches require a clean parent worktree. Commit or stash local changes
+before starting. Git-ignored dependencies and local configuration are copied
+into each worker directory, not linked to writable parent directories. This
+uses additional disk space and setup time. Ignored links outside the project
+are rejected; install those dependencies locally before an isolated run.
+
+Passing worker commits are cherry-picked in slice order into a separate
+integration worktree. The accepted slices' gates run again on the combined
+result before the unchanged parent is fast-forwarded. Conflicts, uncommitted
+worker output, changed parent HEAD, and failing integrated gates are reported
+as failures, never silently resolved.
+
+Successful worktrees are removed after promotion. Failed or aborted worktrees
+remain under `.forge/worktrees/parallel-<id>/` for recovery. The slice result
+records `worktreePath`, `integrationPath` when applicable, and promotion commit
+IDs. Inspect these directories with `git worktree list` before removing them
+using `git worktree remove`. Crash leftovers are retained rather than deleted
+automatically. Run logs and trajectories remain in the parent `.forge` tree.
+
+---
+
 > **`analyze` vs `diagnose` — which do I use?**
 >
 > | | `pforge analyze` | `pforge diagnose` |

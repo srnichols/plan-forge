@@ -449,7 +449,7 @@ function _handlePassedSliceResult(result, slice, ctx) {
 }
 
 async function _runPlanSliceCallback(slice, ctx) {
-  const { cwd, dryRunWorker, effectiveModel, modelRouting, mode, runDir, maxRetries,
+  const { cwd, artifactCwd, dryRunWorker, effectiveModel, modelRouting, mode, runDir, maxRetries,
     memoryEnabled, projectName, planPath, quorumConfig, escalationChain, eventBus,
     worker, _dispatchSlice, _pollPullRequest, planMeta } = ctx;
   // Bug #123: capture HEAD before the slice so we can deterministically
@@ -471,7 +471,7 @@ async function _runPlanSliceCallback(slice, ctx) {
     return _buildDryRunSliceResult(slice);
   }
   const result = await executeSlice(slice, {
-    cwd, model: effectiveModel, modelRouting, mode, runDir, maxRetries,
+    cwd, artifactCwd, model: effectiveModel, modelRouting, mode, runDir, maxRetries,
     memoryEnabled, projectName, planName: basename(planPath, ".md"),
     quorumConfig, escalationChain, eventBus,
     worker, _dispatchSlice, _pollPullRequest,
@@ -1140,8 +1140,13 @@ async function _executeSlicesWithTempering({
     return await scheduler.execute(
       executionNodes || plan.dag.nodes,
       executionOrder,
-      (slice) => _runPlanSliceCallback(slice, sliceCtx),
-      { abortSignal, resumeFrom: resumeFrom ? String(resumeFrom) : null, hub, gateCheckConfig },
+      (slice) => _runPlanSliceCallback(slice, {
+        ...sliceCtx, cwd: slice.worktreePath ?? sliceCtx.cwd, artifactCwd: sliceCtx.cwd,
+      }),
+      {
+        abortSignal, resumeFrom: resumeFrom ? String(resumeFrom) : null, hub, gateCheckConfig,
+        projectDir: sliceCtx.dryRunWorker ? null : sliceCtx.cwd, runDir: sliceCtx.runDir,
+      },
     );
   } finally {
     _restoreDisableTempering(_priorDisableTempering);
@@ -2202,20 +2207,20 @@ function _executeSliceSelfRepairAdvisory({ sliceResult, workerResult, cwd, slice
   } catch { /* non-fatal */ }
 }
 
-function _executeSliceAutoSkillBookkeeping({ sliceResult, injectedAutoSkills, slice, planName, cwd, eventBus }) {
+function _executeSliceAutoSkillBookkeeping({ sliceResult, injectedAutoSkills, slice, planName, cwd, artifactCwd, eventBus }) {
   if (sliceResult.status !== "passed") return;
   try {
     for (const injected of injectedAutoSkills) {
       if (injected && injected.sha256Prefix) {
-        incrementAutoSkillReuse({ cwd, sha256Prefix: injected.sha256Prefix });
+        incrementAutoSkillReuse({ cwd: artifactCwd, sha256Prefix: injected.sha256Prefix });
       }
     }
   } catch { /* non-fatal */ }
   try {
     const record = extractAutoSkill({ slice, planBasename: planName, cwd });
     if (!record) return;
-    const path = writeAutoSkill({ cwd, record });
-    sliceResult.autoSkillPath = relative(cwd, path);
+    const path = writeAutoSkill({ cwd: artifactCwd, record });
+    sliceResult.autoSkillPath = relative(artifactCwd, path);
     sliceResult.autoSkillPrefix = record.sha256Prefix;
     if (eventBus) {
       eventBus.emit("auto-skill-captured", {
@@ -2412,7 +2417,7 @@ async function _executeSliceAttemptLoop(ctx) {
 }
 
 async function executeSlice(slice, options) {
-  const { cwd, model, modelRouting = {}, mode, runDir, maxRetries = 1,
+  const { cwd, artifactCwd = cwd, model, modelRouting = {}, mode, runDir, maxRetries = 1,
     memoryEnabled = false, projectName = "", planName = "",
     quorumConfig = null,
     escalationChain = ["auto", "claude-opus-4.7", "gpt-5.3-codex"],
@@ -2490,11 +2495,11 @@ async function executeSlice(slice, options) {
     JSON.stringify(sliceResult, null, 2),
   );
 
-  _executeSlicePersistTrajectory({ sliceResult, workerResult, planName, slice, cwd, eventBus });
-  _executeSliceSelfRepairAdvisory({ sliceResult, workerResult, cwd, slice, eventBus });
-  _executeSliceAutoSkillBookkeeping({ sliceResult, injectedAutoSkills, slice, planName, cwd, eventBus });
-  _executeSliceRecordModelPerf({ sliceResult, cwd, planName, slice, costRecord });
-  _executeSliceRecordQuorumHistory({ sliceResult, slice, quorumConfig, useQuorum, complexityScore, cwd });
+  _executeSlicePersistTrajectory({ sliceResult, workerResult, planName, slice, cwd: artifactCwd, eventBus });
+  _executeSliceSelfRepairAdvisory({ sliceResult, workerResult, cwd: artifactCwd, slice, eventBus });
+  _executeSliceAutoSkillBookkeeping({ sliceResult, injectedAutoSkills, slice, planName, cwd, artifactCwd, eventBus });
+  _executeSliceRecordModelPerf({ sliceResult, cwd: artifactCwd, planName, slice, costRecord });
+  _executeSliceRecordQuorumHistory({ sliceResult, slice, quorumConfig, useQuorum, complexityScore, cwd: artifactCwd });
 
   return finalizeSliceResult(sliceResult);
 }

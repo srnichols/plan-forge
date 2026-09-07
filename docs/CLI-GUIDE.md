@@ -328,6 +328,23 @@ IDs. Inspect these directories with `git worktree list` before removing them
 using `git worktree remove`. Crash leftovers are retained rather than deleted
 automatically. Run logs and trajectories remain in the parent `.forge` tree.
 
+### Windows Copilot Workers
+
+When the VS Code Copilot Chat bootstrapper shadows the installed CLI on PATH,
+unattended workers resolve the installed executable or the official npm
+package's CLI entry point directly. This avoids the shared bootstrapper's
+PowerShell-file lock and passes worker arguments without command-shell
+reparsing. Authentication still belongs to the installed Copilot CLI.
+
+A bootstrapper-only installation is not an installed CLI: install the
+standalone CLI before running workers. Unrecognized script wrappers behind
+the bootstrapper are rejected with an actionable error. Custom launchers
+placed before the bootstrapper, explicitly selected commands, and non-Windows
+execution retain their existing behavior. CLI installation and updates remain
+explicit operator actions; a worker does not run the bootstrapper's interactive
+installer or updater. Launch-failure reporting and bounded retries remain in
+place for other failures.
+
 ---
 
 > **`analyze` vs `diagnose` — which do I use?**

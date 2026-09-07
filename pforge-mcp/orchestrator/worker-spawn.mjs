@@ -1974,8 +1974,8 @@ function writeWorkerPromptFile(prompt) {
   return promptFile;
 }
 
-function spawnCliWorkerProcess({ cmd, args, cwd, runPlanActive, extraEnv }) {
-  const isWindows = process.platform === "win32";
+function spawnCliWorkerProcess({ cmd, args, cwd, runPlanActive, extraEnv, direct = false }) {
+  const isWindows = process.platform === "win32" && !direct;
   const spawnBin = isWindows ? "cmd" : cmd;
   const spawnArgs = isWindows ? ["/d", "/s", "/c", cmd, ...args] : args
 ;
@@ -2110,58 +2110,57 @@ function finalizeWorkerResult({ code, state, chosen, promptFile, spec, model, sp
   };
 }
 
-function spawnCliWorkerExecution({ prompt, model, cwd, timeout, worker, runPlanActive, eventBus, extraEnv }) {
-  return new Promise(async (workerResolve, workerReject) => {
-    const workers = await resolveSpawnWorkers({ worker, eventBus });
-    if (workers.length === 0) {
-      workerReject(new Error("No CLI workers available. Install gh copilot, claude, or codex CLI."));
-      return;
-    }
-
-    const chosen = _pickChosenWorker(workers, worker, model);
-    const promptFile = writeWorkerPromptFile(prompt);
+async function spawnCliWorkerExecution({ prompt, model, cwd, timeout, worker, runPlanActive, eventBus, extraEnv }) {
+  const workers = await resolveSpawnWorkers({ worker, eventBus });
+  if (workers.length === 0) throw new Error("No CLI workers available. Install gh copilot, claude, or codex CLI.");
+  const chosen = _pickChosenWorker(workers, worker, model);
+  const promptFile = writeWorkerPromptFile(prompt);
+  try {
     const invocationResult = _buildWorkerInvocation(chosen, promptFile, prompt, model);
-    if (invocationResult.error) {
-      workerReject(invocationResult.error);
-      return;
-    }
-
+    if (invocationResult.error) throw invocationResult.error;
     const { cmd, args, spec } = invocationResult;
-    const child = spawnCliWorkerProcess({ cmd, args, cwd, runPlanActive, extraEnv });
-    const spawnStartMs = Date.now();
-    const state = { stdout: "", stderr: "", timedOut: false };
+    const { resolveCopilotLauncher } = await import("./copilot-launcher.mjs");
+    const launcher = await resolveCopilotLauncher({ command: cmd, args, cwd, env: { ...process.env, ...(extraEnv || {}) } });
+    return await new Promise((workerResolve, workerReject) => {
+      const child = spawnCliWorkerProcess({ cmd: launcher.command, args: launcher.args, direct: launcher.direct, cwd, runPlanActive, extraEnv });
+      const spawnStartMs = Date.now();
+      const state = { stdout: "", stderr: "", timedOut: false };
 
-    registerSpawnedChild(child);
-    attachWorkerStreamHandlers(child, state);
+      registerSpawnedChild(child);
+      attachWorkerStreamHandlers(child, state);
 
-    const heartbeat = setInterval(() => {
-      process.stdout.write(".");
-    }, 15_000);
-    const timer = setTimeout(() => {
-      state.timedOut = true;
-      child.kill("SIGTERM");
-    }, timeout);
+      const heartbeat = setInterval(() => {
+        process.stdout.write(".");
+      }, 15_000);
+      const timer = setTimeout(() => {
+        state.timedOut = true;
+        child.kill("SIGTERM");
+      }, timeout);
 
-    child.on("close", (code) => {
-      clearInterval(heartbeat);
-      clearTimeout(timer);
-      workerResolve(finalizeWorkerResult({
-        code,
-        state,
-        chosen,
-        promptFile,
-        spec,
-        model,
-        spawnStartMs,
-      }));
+      child.on("close", (code) => {
+        clearInterval(heartbeat);
+        clearTimeout(timer);
+        workerResolve(finalizeWorkerResult({
+          code,
+          state,
+          chosen,
+          promptFile,
+          spec,
+          model,
+          spawnStartMs,
+        }));
+      });
+
+      child.on("error", (err) => {
+        clearInterval(heartbeat);
+        clearTimeout(timer);
+        workerReject(new Error(`Failed to spawn ${cmd}: ${err.message} (code: ${err.code || "unknown"})`));
+      });
     });
-
-    child.on("error", (err) => {
-      clearInterval(heartbeat);
-      clearTimeout(timer);
-      workerReject(new Error(`Failed to spawn ${cmd}: ${err.message} (code: ${err.code || "unknown"})`));
-    });
-  });
+  } finally {
+    const { rm } = await import("node:fs/promises");
+    await rm(promptFile, { force: true });
+  }
 }
 
 // The role guard must reject before any async work begins: an `async function`

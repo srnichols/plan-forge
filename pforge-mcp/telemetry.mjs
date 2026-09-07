@@ -12,6 +12,7 @@ import { resolve, basename } from "node:path";
 import { randomUUID } from "node:crypto";
 import { hostname, type as osType } from "node:os";
 import { execSync } from "node:child_process";
+import { pruneForgeRuns } from "./run-retention.mjs";
 
 // Severity levels per OTLP convention
 export const Severity = {
@@ -250,11 +251,15 @@ export function readRunIndex(cwd) {
 
 // ─── Log Rotation ─────────────────────────────────────────────────────
 
-// Run-directory pruning lives in orchestrator/forge-io.mjs::pruneForgeRuns.
-// A count-only `pruneRunHistory` used to live here and was the one actually
-// wired, so the age dimension never ran (issue #259). Removed rather than
-// left dead — two pruners with overlapping responsibility is how the
-// unwired one went unnoticed for so long.
+/**
+ * @deprecated Use pruneForgeRuns for age-aware retention; retained for existing imports.
+ * @param {string} cwd
+ * @param {number} [maxRunHistory=50]
+ * @returns {void}
+ */
+export function pruneRunHistory(cwd, maxRunHistory = 50) {
+  pruneForgeRuns(cwd, { maxRuns: maxRunHistory, maxAgeDays: Infinity, keepNewest: false });
+}
 
 // ─── OTel Chat Span Emitter ────────────────────────────────────────────
 

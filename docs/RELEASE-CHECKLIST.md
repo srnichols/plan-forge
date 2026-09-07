@@ -50,7 +50,7 @@ Verification:
 ```pwsh
 # Maintainer-only instruction files that intentionally do NOT ship to consumers
 # (their own frontmatter says so). Skip them when checking enumeration.
-$maintainerOnly = @('release-checklist.instructions.md')
+$maintainerOnly = @('release-checklist.instructions.md', 'aci-design.instructions.md')
 
 $repo = Get-ChildItem .github/instructions -Filter "*.instructions.md" | Select-Object -ExpandProperty Name
 foreach ($f in $repo) {
@@ -66,7 +66,13 @@ foreach ($f in $repo) {
 }
 ```
 
-`project-principles.instructions.md` is the one exception — it ships from `templates/.github/instructions/` (user-editable). Everything else ships from `.github/instructions/`. `release-checklist.instructions.md` is maintainer-only and excluded above.
+`project-principles.instructions.md` ships from `templates/.github/instructions/`
+and remains user-editable. Architecture, clean-code, self-repair, status, and
+testing instructions ship from `presets/shared/.github/instructions/`; the
+remaining shared instructions ship from `.github/instructions/`. Release and
+ACI-authoring instructions are maintainer-only. The string scan above is an
+inventory hint, not proof of copying: inspect the actual lists and verify the
+installed files so a comment mentioning a filename cannot create a false pass.
 
 ### 1c. Pipeline prompts ship via glob — but smith name-checks them
 
@@ -82,9 +88,27 @@ If you add a new step-N prompt, add it to smith's `$requiredPipeline` list in `p
 
 ### 1d. MCP files are recursively copied
 
-`pforge update` recursively scans `pforge-mcp/` (excluding `node_modules`, `.forge`, `coverage`). Any new file under `pforge-mcp/` ships automatically — no manual list to update.
+Both `setup` and `pforge update` copy `pforge-mcp/`, `pforge-master/`, and
+`pforge-sdk/` recursively. These are all consumer runtime packages, not dev-only
+directories. New modules beneath them ship without a per-file enumeration.
+Verify the recursive-copy blocks in all four scripts; do not infer delivery
+from a file existing in the source checkout.
 
-`pforge-master/`, `pforge-sdk/` are dev-repo-only and **not** copied by `pforge update`. If you ever ship them to consumers, add an explicit recursive-copy block to `pforge.ps1` AND `pforge.sh`.
+For runtime packaging changes, exercise both a fresh install and an update
+from the previous release in temporary consumer projects, in both shells.
+Check that newly added modules arrive, moved adapters resolve from their new
+locations, and the consumer's own version and configuration survive updating.
+The release archive must retain all three packages but exclude phase plans,
+archives, cleanup findings, and the root maintainer `AGENTS.md`.
+
+### 1e. Routing and runtime contract
+
+Compare routing defaults and the Node floor with the previous release; do not
+flip defaults as part of release preparation. Since v3.26.1 the Copilot SDK
+route is opt-in (`routing.copilotSdk: "prefer"`), with a default of `"off"`.
+The earlier unconditional "SDK default flipped" check is not a gate for a
+release that preserves that contract. A future default flip requires the
+cost-parity evidence and migration notes in the release instruction file.
 
 ---
 
@@ -149,6 +173,14 @@ If you bring these into lockstep, do it in a separate commit so the release comm
 
 Skipping any step has burned us before. Each step has the exact command that worked.
 
+Before Step 1, sync consumer code from `planning/main` onto `master` using
+`scripts/sync-master.ps1 -Direction to-master` or its Bash twin. Check the
+resulting branch contains no development-only artifacts and preserves the
+consumer templates. After the release and dev bump, use `to-planning` to
+restore the development superset; do not merge the scrub commit back without
+the restore/assertion step. Verify the only final branch differences are the
+declared dev-only paths.
+
 ### Step 1 — CHANGELOG promotion
 
 Promote `[Unreleased]` → `[X.Y.Z] — YYYY-MM-DD — short title`. Do NOT delete the `[Unreleased]` heading; keep it as a placeholder for the next cycle.
@@ -167,7 +199,7 @@ Set-Content -NoNewline -Encoding utf8 -Path VERSION -Value "3.6.2"
 ### Step 3 — Release commit
 
 ```pwsh
-git add -A
+git add VERSION pforge-mcp/package.json CHANGELOG.md
 git commit -m "chore(release): vX.Y.Z" -m "<short summary, bullets per fix>"
 ```
 
@@ -256,11 +288,17 @@ The bump-back commit is **separate** from the release commit so the tag can sit 
 
 Before tagging, run the touched suites and the broader suite:
 
+Run from the repository root, using the default Vitest reporter:
+
 ```pwsh
-cd pforge-mcp
-npx vitest run tests/<changed-suites> --reporter=dot   # MUST be 100%
-npx vitest run --reporter=dot                          # may have baseline failures
+npx vitest run pforge-mcp/tests/<changed-suite>.test.mjs
+npm test
 ```
+
+The root script runs every package's test suite. Do not substitute a bare
+root Vitest run for that workspace-wide gate, and do not use `--reporter=basic`
+with Vitest 4. Record the real exit code and Vitest summary, not matching
+application log lines that deliberately exercise failures inside passing tests.
 
 A baseline failure is acceptable for a hotfix release IF and ONLY IF:
 1. The failure existed at HEAD before your changes (verify with `git stash; npx vitest run; git stash pop`).

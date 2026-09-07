@@ -30,8 +30,8 @@ The canonical checklist lives at [docs/RELEASE-CHECKLIST.md](../../docs/RELEASE-
 | Instruction enumeration | See §1b of checklist | Every `.github/instructions/*.instructions.md` is enumerated in setup.{ps1,sh} + pforge.{ps1,sh} (except `project-principles` which ships from `templates/`) |
 | VERSION sync | `git show vX.Y.Z:VERSION` after tagging | Exactly `X.Y.Z`, no `-dev`, no trailing newline |
 | Release exists | `node pforge-mcp/update-from-github.mjs resolve-tag` | `{"ok":true,"tag":"vX.Y.Z"}` with NO `warning` field |
-| SDK default flipped | `node --input-type=module -e "import{loadCopilotSdkPreference}from'./pforge-mcp/orchestrator/worker-spawn.mjs';import os from'node:os';const v=loadCopilotSdkPreference(os.tmpdir());if(v!=='prefer')throw new Error('default not flipped, got: '+v)"` | Exits 0 — confirms `routing.copilotSdk` defaults to `'prefer'` with no `.forge.json` present |
-| No stale "off by default" in CHANGELOG | `node -e 'const s=require("fs").readFileSync("CHANGELOG.md","utf8");const u=s.slice(0,s.indexOf("## [3.25.1]"));if(u.includes("off by default"))throw new Error("CHANGELOG still claims the SDK route is off by default")'` | Exits 0 — the unreleased block must not contain the phrase `off by default` |
+| SDK routing contract | `node --input-type=module -e "import{loadCopilotSdkPreference}from'./pforge-mcp/orchestrator/worker-spawn.mjs';import os from'node:os';const v=loadCopilotSdkPreference(os.tmpdir());if(v!=='off')throw new Error('unexpected SDK default: '+v)"` | Preserves the opt-in default restored in v3.26.1; use a temporary directory with no config for the check. A deliberate future flip requires the evidence below, not an automatic release-time edit. |
+| SDK migration notes | Compare the candidate's routing default and Node floor with the preceding release | Only a release changing either contract needs the corresponding migration notes and cost-parity/default-flip gates below. Do not apply the old Phase-60 default-flip gate to an unrelated patch release. |
 
 ---
 

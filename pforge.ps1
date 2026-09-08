@@ -2103,7 +2103,7 @@ function Invoke-Update {
     $newFiles = $newFiles | Group-Object -Property { $_.Name } | ForEach-Object { $_.Group[0] }
 
     # ─── Report ───────────────────────────────────────────────────
-    if ($updates.Count -eq 0 -and $newFiles.Count -eq 0) {
+    if ($updates.Count -eq 0 -and $newFiles.Count -eq 0 -and $currentVersion -eq $sourceVersion) {
         Write-Host "All framework files are up to date." -ForegroundColor Green
         return
     }

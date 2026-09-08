@@ -101,6 +101,12 @@ locations, and the consumer's own version and configuration survive updating.
 The release archive must retain all three packages but exclude phase plans,
 archives, cleanup findings, and the root maintainer `AGENTS.md`.
 
+Verify all nine `presets/<stack>/AGENTS.md` templates exist in the actual
+archive, not just in the checkout. The root exclusion must be `/AGENTS.md`;
+an unanchored `AGENTS.md` rule removes consumer templates at every depth.
+For previous Bash updater versions, test a fresh invocation after an in-place
+wrapper update: old loaded code may fail after copying its fixed replacement.
+
 ### 1e. Routing and runtime contract
 
 Compare routing defaults and the Node floor with the previous release; do not

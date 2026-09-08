@@ -1754,7 +1754,7 @@ cmd_update() {
     done
 
     # ─── Report ───────────────────────────────────────────────────
-    if [ "${#_updates[@]}" -eq 0 ] && [ "${#_new_files[@]}" -eq 0 ]; then
+    if [ "${#_updates[@]}" -eq 0 ] && [ "${#_new_files[@]}" -eq 0 ] && [ "$current_version" = "$source_version" ]; then
         echo "All framework files are up to date."
         return 0
     fi

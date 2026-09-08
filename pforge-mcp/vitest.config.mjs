@@ -37,7 +37,21 @@ const masterRoot = fileURLToPath(new URL("../pforge-master/", import.meta.url)).
 // empty and nothing is skipped — a typo'd path would drop real coverage here, which
 // tests/consumer-test-surface.test.mjs asserts against.
 const SOURCE_ONLY_SUITES = {
-  "../setup.sh": ["tests/setup-node-floor-path.test.mjs", "tests/release-archive.test.mjs"],
+  "../setup.sh": [
+    "tests/setup-node-floor-path.test.mjs",
+    "tests/release-archive.test.mjs",
+    "tests/setup-openbrain-prompt.test.mjs",
+    "tests/brain-cli.test.mjs",
+    "tests/crucible-smith-panel.test.mjs",
+    "tests/best-defaults-preset.test.mjs",
+  ],
+  "../.github/instructions/release-checklist.instructions.md": [
+    "tests/consumer-test-surface.test.mjs",
+    "tests/changelog-format.test.mjs",
+  ],
+  "../.github/agents/plan-health-auditor.agent.md": ["tests/plan-health-auditor.test.mjs"],
+  "../extensions/catalog.json": ["tests/notifications-stubs.test.mjs"],
+  "../docs/index.html": ["tests/docs-nav.smoke.test.mjs"],
   "../scripts/audit": [
     "tests/audit-cli-parity.test.mjs",
     "tests/clean-code-delta.test.mjs",
@@ -50,28 +64,22 @@ const SOURCE_ONLY_SUITES = {
   "../pforge-master": [
     "tests/auditor-automation-baseline.test.mjs",
     "tests/forge-master.advisory.test.mjs",
-    "tests/plan-health-auditor.test.mjs",
-    "tests/testbed-auditor-automation.test.mjs",
   ],
   "../pforge-sdk": [
     "tests/lattice-chunker-treesitter.test.mjs",
-    "tests/notifications-stubs.test.mjs",
     "tests/notifications-webhook.test.mjs",
-    // Validates Plan Forge's own CHANGELOG against its own VERSION. In a consuming
-    // project both files exist but describe the consumer's app, so the comparison is
-    // meaningless there — keyed to a dev-only marker rather than to its own inputs.
-    "tests/changelog-format.test.mjs",
   ],
   "../docs/manual": ["tests/manual-chapter-headings.test.mjs"],
   "../docs/capabilities.md": [
     "tests/capabilities-doc-sync.test.mjs",
     "tests/orchestrator-complexity.test.mjs",
   ],
-  "../docs/plans/testbed-scenarios": ["tests/testbed-dashboard-ui.test.mjs"],
+  "../docs/plans/testbed-scenarios": ["tests/testbed-dashboard-ui.test.mjs", "tests/testbed-auditor-automation.test.mjs"],
   "../templates": [
     "tests/baselines.test.mjs",
     "tests/forbidden-matcher.test.mjs",
     "tests/full-suite-regression.test.mjs",
+    "tests/issue-257-memory-enumeration.test.mjs",
   ],
   "../presets": ["tests/tempering-runner.test.mjs"],
 };

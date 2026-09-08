@@ -412,7 +412,7 @@ describe("runPreCommitChain — unknown entry type", () => {
 
 // ─── master-reject is first entry in shipped template ────────────────
 
-describe("shipped plan-forge.json template", () => {
+describe.skipIf(!existsSync(new URL("../../templates/.github/hooks/plan-forge.json", import.meta.url)))("shipped plan-forge.json template", () => {
   it("has master-reject as the first chain entry", () => {
     const templatePath = resolve(
       import.meta.dirname, "..", "..", "templates", ".github", "hooks", "plan-forge.json"
@@ -428,4 +428,4 @@ describe("shipped plan-forge.json template", () => {
 });
 
 // Need readFileSync for template check
-import { readFileSync } from "node:fs";
+import { readFileSync, existsSync } from "node:fs";

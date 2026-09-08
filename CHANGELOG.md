@@ -7,6 +7,23 @@ Format follows [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
+## [3.26.7] — 2026-09-07 — Verified Git Bash self-update
+
+### Security
+
+- **Refresh both workspace and standalone MCP dependency lockfiles** ([#279](https://github.com/srnichols/plan-forge/issues/279)). Release verification found patched transitive advisories in the installed runtime, including high-severity findings. Compatible updates within the existing declared ranges remove them. The final standalone `npm ci` and audit report zero vulnerabilities, and the native Sharp image path and full workspace tests pass.
+
+### Fixed
+
+- **Git Bash self-update extracts downloaded Windows archives correctly** ([#278](https://github.com/srnichols/plan-forge/issues/278)). The Node downloader's native `C:\...` path is normalized for Git Bash before `dirname`, GNU tar, and cleanup. Previously tar interpreted the drive colon as a remote host and failed before replacing the wrapper. The full public download/extract/apply path is now verified alongside the local-source upgrade tests.
+- **Release documentation checks work in a clean CI checkout.** The capabilities workflow initializes only the intentionally untracked CLI schema before checking reproducibility; it does not rewrite the tracked tools manifest. Stale agent and skill counts in the capabilities page now match the canonical metrics.
+
+### Upgrade Notes
+
+- This patch supersedes `3.26.6` and includes its parallel-worker isolation, Copilot launcher, adapter packaging, installer, and client-configuration preservation fixes.
+- **Windows Git Bash users affected by the old extraction failure:** perform this update once from PowerShell with `pwsh -NoProfile -File .\pforge.ps1 self-update --yes --force`. The old Bash wrapper fails before it can apply its own replacement. Subsequent Git Bash self-updates use the fixed extraction path.
+- The existing `v3.26.6` tag has not been moved or replaced. Node requirements, routing defaults, and public CLI commands are unchanged.
+
 ## [3.26.6] — 2026-09-07 — Meta-bug reliability and safe parallel execution
 
 ### Fixed

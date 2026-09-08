@@ -1068,18 +1068,6 @@ if [[ -z "$PRESET" ]]; then
     fi
 fi
 
-case "$PRESET" in
-    dotnet)     STACK_LABEL=".NET / C# / ASP.NET Core" ;;
-    typescript) STACK_LABEL="TypeScript / React / Node.js" ;;
-    python)     STACK_LABEL="Python / FastAPI" ;;
-    java)       STACK_LABEL="Java / Spring Boot" ;;
-    go)         STACK_LABEL="Go / Standard Library" ;;
-    swift)      STACK_LABEL="Swift / SwiftUI / iOS / Vapor" ;;
-    azure-iac)  STACK_LABEL="Azure Bicep / Terraform / PowerShell / azd" ;;
-    custom)     STACK_LABEL="Custom (configure manually)" ;;
-    *)          red "Unknown preset: $PRESET"; exit 1 ;;
-esac
-
 # ─── Build/Test/Lint Commands ──────────────────────────────────────────
 # Normalise: split comma-separated preset string into array
 IFS=',' read -ra PRESETS <<< "$PRESET"
@@ -1108,6 +1096,18 @@ PRIMARY_PRESET="custom"
 for p in "${PRESETS[@]}"; do
     if [[ "$p" != "custom" ]]; then PRIMARY_PRESET="$p"; break; fi
 done
+
+case "$PRIMARY_PRESET" in
+    dotnet)     STACK_LABEL=".NET / C# / ASP.NET Core" ;;
+    typescript) STACK_LABEL="TypeScript / React / Node.js" ;;
+    python)     STACK_LABEL="Python / FastAPI" ;;
+    java)       STACK_LABEL="Java / Spring Boot" ;;
+    go)         STACK_LABEL="Go / Standard Library" ;;
+    swift)      STACK_LABEL="Swift / SwiftUI / iOS / Vapor" ;;
+    azure-iac)  STACK_LABEL="Azure Bicep / Terraform / PowerShell / azd" ;;
+    custom)     STACK_LABEL="Custom (configure manually)" ;;
+    *)          red "Unknown preset: $PRIMARY_PRESET"; exit 1 ;;
+esac
 
 case "$PRIMARY_PRESET" in
     dotnet)     DEFAULT_BUILD="dotnet build"; DEFAULT_TEST="dotnet test"; DEFAULT_LINT="dotnet format --verify-no-changes" ;;

@@ -93,4 +93,31 @@ describe("installer Node preflight - source path portability", () => {
     expect(outcome.status).toBe(0);
     expect(outcome.stdout).toContain("MIGRATION_CONTINUES");
   });
+
+  function selectPresets(preset) {
+    const source = readFileSync(new URL("../../setup.sh", import.meta.url), "utf8").replace(/\r\n/g, "\n");
+    const split = source.indexOf("# Normalise: split comma-separated preset string into array");
+    const oldLabel = source.lastIndexOf('\ncase "$PRESET" in', split);
+    const start = oldLabel >= 0 ? oldLabel : split;
+    const end = source.indexOf('\nif [[ "$FORCE" != true ]]', split);
+    expect(split).toBeGreaterThan(-1);
+    expect(end).toBeGreaterThan(start);
+    const script = 'set -euo pipefail\nPRESET="$PFORGE_TEST_PRESETS"\nred() { printf "%s\\n" "$*"; }\n'
+      + source.slice(start, end) + '\nprintf "COUNT=%s PRIMARY=%s BUILD=%s\\n" "${#PRESETS[@]}" "$PRIMARY_PRESET" "$DEFAULT_BUILD"\n';
+    return spawnSync(bash, ["-c", script], {
+      cwd: sourceDir, encoding: "utf8", windowsHide: true, env: { ...process.env, PFORGE_TEST_PRESETS: preset },
+    });
+  }
+
+  it("validates each requested preset before selecting a multi-preset label", () => {
+    const outcome = selectPresets("typescript,dotnet");
+    expect({ status: outcome.status, stderr: outcome.stderr }).toEqual({ status: 0, stderr: "" });
+    expect(outcome.stdout).toContain("COUNT=2 PRIMARY=typescript BUILD=pnpm build");
+  });
+
+  it("still rejects an unknown member of a preset list", () => {
+    const outcome = selectPresets("typescript,unknown");
+    expect(outcome.status).not.toBe(0);
+    expect(outcome.stdout).toContain("Unknown preset");
+  });
 });

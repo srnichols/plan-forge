@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { spawnSync } from "node:child_process";
+import { execFileSync, spawnSync } from "node:child_process";
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -119,5 +119,21 @@ describe("installer Node preflight - source path portability", () => {
     const outcome = selectPresets("typescript,unknown");
     expect(outcome.status).not.toBe(0);
     expect(outcome.stdout).toContain("Unknown preset");
+  });
+
+  it("extracts a downloader's native archive path through the real Bash update block", () => {
+    const payload = join(sourceDir, "payload");
+    mkdirSync(payload);
+    writeFileSync(join(payload, "VERSION"), "3.26.7");
+    execFileSync("tar", ["-czf", "download.tar.gz", "payload"], { cwd: sourceDir, windowsHide: true });
+    const block = preflight("pforge.sh", "        # Extract tarball", "        # Find top-level directory");
+    const script = 'set -euo pipefail\nextract_fixture() {\nlocal gh_tarball="$PFORGE_TEST_ARCHIVE" resolved_tag="v3.26.7" gh_extract_dir=""\n'
+      + block + '\ncat "$gh_extract_dir/payload/VERSION"\n}\nextract_fixture\n';
+    const outcome = spawnSync(bash, ["-c", script], {
+      cwd: sourceDir, encoding: "utf8", windowsHide: true,
+      env: { ...process.env, PFORGE_TEST_ARCHIVE: join(sourceDir, "download.tar.gz") },
+    });
+    expect({ status: outcome.status, stderr: outcome.stderr }).toEqual({ status: 0, stderr: "" });
+    expect(outcome.stdout).toContain("3.26.7");
   });
 });

@@ -44,4 +44,4 @@ docs/plans/archive/              export-ignore
 docs/plans/cleanup-findings/     export-ignore
 docs/plans/DEPLOYMENT-ROADMAP.md export-ignore
 docs/plans/PROJECT-PRINCIPLES.md export-ignore
-AGENTS.md                        export-ignore
+/AGENTS.md                       export-ignore

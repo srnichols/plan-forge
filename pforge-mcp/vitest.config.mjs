@@ -37,7 +37,7 @@ const masterRoot = fileURLToPath(new URL("../pforge-master/", import.meta.url)).
 // empty and nothing is skipped — a typo'd path would drop real coverage here, which
 // tests/consumer-test-surface.test.mjs asserts against.
 const SOURCE_ONLY_SUITES = {
-  "../setup.sh": ["tests/setup-node-floor-path.test.mjs"],
+  "../setup.sh": ["tests/setup-node-floor-path.test.mjs", "tests/release-archive.test.mjs"],
   "../scripts/audit": [
     "tests/audit-cli-parity.test.mjs",
     "tests/clean-code-delta.test.mjs",

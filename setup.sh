@@ -936,7 +936,10 @@ if [[ -f "$MCP_PKG_PATH" ]]; then
         red "         Install from https://nodejs.org/ and re-run setup."
         exit 1
     fi
-    REQUIRED_NODE="$(node -p "require('$MCP_PKG_PATH').engines.node.replace(/^>=/,'')" 2>/dev/null)"
+    if ! REQUIRED_NODE="$(node -p "JSON.parse(require('node:fs').readFileSync(0,'utf8')).engines.node.replace(/^>=/,'')" < "$MCP_PKG_PATH")"; then
+        red "  ERROR  Could not read the Node.js requirement from $MCP_PKG_PATH"
+        exit 1
+    fi
     CURRENT_NODE="$(node --version 2>/dev/null | sed 's/^v//')"
     if [[ -n "$REQUIRED_NODE" ]]; then
         req_major="${REQUIRED_NODE%%.*}"; req_rest="${REQUIRED_NODE#*.}"; req_minor="${req_rest%%.*}"

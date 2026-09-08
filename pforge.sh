@@ -1460,13 +1460,8 @@ cmd_update() {
     local current_version="unknown" current_preset_raw="custom"
 
     if [ -f "$config_path" ]; then
-        current_version="$(python3 -c "import json; print(json.load(open('$config_path')).get('templateVersion','unknown'))" 2>/dev/null || \
-                           grep -oP '"templateVersion":\s*"\K[^"]+' "$config_path" 2>/dev/null | head -1 || echo "unknown")"
-        current_preset_raw="$(python3 -c "
-import json
-v = json.load(open('$config_path')).get('preset', 'custom')
-print(v if isinstance(v, str) else ','.join(v))
-" 2>/dev/null || grep -oP '"preset":\s*"\K[^"]+' "$config_path" 2>/dev/null | head -1 || echo "custom")"
+        current_version="$(node -p "JSON.parse(require('node:fs').readFileSync(0,'utf8')).templateVersion || 'unknown'" < "$config_path")"
+        current_preset_raw="$(node -p "const config=JSON.parse(require('node:fs').readFileSync(0,'utf8')); Array.isArray(config.preset) ? config.preset.join(',') : (config.preset || 'custom')" < "$config_path")"
     fi
 
     echo ""
@@ -1811,20 +1806,14 @@ print(v if isinstance(v, str) else ','.join(v))
 
     # ─── Update .forge.json templateVersion ───────────────────────
     if [ -f "$config_path" ]; then
-        if command -v python3 >/dev/null 2>&1; then
-            python3 -c "
-import json
-with open('$config_path') as f:
-    c = json.load(f)
-c['templateVersion'] = '$source_version'
-with open('$config_path', 'w') as f:
-    json.dump(c, f, indent=2)
-    f.write('\n')
-"
-        else
-            sed -i.bak "s/\"templateVersion\": \"[^\"]*\"/\"templateVersion\": \"$source_version\"/" "$config_path"
-            rm -f "$config_path.bak"
+        local config_tmp
+        config_tmp="$(mktemp "${config_path}.update.XXXXXX")"
+        if ! node -e "const fs=require('node:fs'); const config=JSON.parse(fs.readFileSync(0,'utf8')); config.templateVersion=process.argv[1]; process.stdout.write(JSON.stringify(config,null,2)+'\n')" "$source_version" < "$config_path" > "$config_tmp"; then
+            rm -f "$config_tmp"
+            echo "ERROR: Could not update $config_path; the original config was preserved." >&2
+            return 1
         fi
+        mv "$config_tmp" "$config_path"
         echo "  ✅ Updated .forge.json templateVersion to $source_version"
     fi
 

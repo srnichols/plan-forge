@@ -42,4 +42,33 @@ describe("installer Node preflight - source path portability", () => {
     expect({ status: outcome.status, stderr: outcome.stderr }).toEqual({ status: 0, stderr: "" });
     expect(outcome.stdout).toContain("requires >= 20.19.0");
   });
+
+  function runConfigUpdate() {
+    const source = readFileSync(new URL("../../pforge.sh", import.meta.url), "utf8").replace(/\r\n/g, "\n");
+    const marker = source.indexOf("Update .forge.json templateVersion");
+    const start = source.indexOf('    if [ -f "$config_path" ]; then', marker);
+    const end = source.indexOf('    pf_update_gitignore "$REPO_ROOT"', start);
+    expect(marker).toBeGreaterThan(-1);
+    expect(end).toBeGreaterThan(start);
+    const script = 'set -euo pipefail\nupdate_fixture() {\nlocal config_path="$PWD/.forge.json" source_version="3.26.6"\n'
+      + source.slice(start, end) + '\n}\nupdate_fixture\n';
+    return spawnSync(bash, ["-c", script], { cwd: sourceDir, encoding: "utf8", windowsHide: true });
+  }
+
+  it("updates consumer config through shell-safe JSON IO and preserves nested settings", () => {
+    const config = { templateVersion: "3.26.5", preset: ["dotnet", "typescript"], custom: { nested: { feature: { enabled: true } } } };
+    const configPath = join(sourceDir, ".forge.json");
+    writeFileSync(configPath, JSON.stringify(config));
+    const outcome = runConfigUpdate();
+    expect({ status: outcome.status, stderr: outcome.stderr }).toEqual({ status: 0, stderr: "" });
+    expect(JSON.parse(readFileSync(configPath, "utf8"))).toEqual({ ...config, templateVersion: "3.26.6" });
+  });
+
+  it("does not overwrite malformed consumer config", () => {
+    const configPath = join(sourceDir, ".forge.json");
+    const malformed = '{"templateVersion":"3.26.5", invalid';
+    writeFileSync(configPath, malformed);
+    expect(runConfigUpdate().status).not.toBe(0);
+    expect(readFileSync(configPath, "utf8")).toBe(malformed);
+  });
 });

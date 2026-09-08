@@ -7,8 +7,13 @@ Format follows [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
+## [3.26.6] — 2026-09-07 — Meta-bug reliability and safe parallel execution
+
 ### Fixed
 
+- **Release archives retain consumer preset instructions** ([#274](https://github.com/srnichols/plan-forge/issues/274)). The root maintainer `AGENTS.md` is excluded without also removing all nine preset `AGENTS.md` templates. Archive-based setup now receives the same consumer instructions as checkout-based setup.
+- **Bash setup and update handle native Windows paths safely** ([#273](https://github.com/srnichols/plan-forge/issues/273), [#275](https://github.com/srnichols/plan-forge/issues/275)). JSON is read through shell-opened streams instead of embedding Git Bash paths in JavaScript or Python. Setup reports manifest-read errors rather than exiting silently; config updates preserve nested settings and leave malformed originals untouched. Release guidance now reflects the shipped runtime packages and the SDK's opt-in default ([#272](https://github.com/srnichols/plan-forge/issues/272)).
+- **Installed consumer tests no longer mistake runtime sibling packages for source-only assets** ([#276](https://github.com/srnichols/plan-forge/issues/276)). Source-only setup, website, template, and extension tests are selected by their actual assets. Client VERSION and CHANGELOG files are not graded as Plan Forge release metadata. Mixed parser, hook, and auditor suites retain their runtime tests when source fixtures are absent.
 - **Parallel workers no longer share a Git index** ([#261](https://github.com/srnichols/plan-forge/issues/261)). Each concurrent slice runs in a detached worktree. Passing commits are integrated serially and their gates rerun on the combined result before promotion. Conflicts, parent edits, aborts, and uncommitted output retain recovery worktrees instead of silently mixing commits or reporting premature success.
 - **Windows Copilot workers avoid the shared VS Code bootstrapper** ([#264](https://github.com/srnichols/plan-forge/issues/264)). When the bootstrapper shadows an installed CLI, workers invoke the native executable or official npm entry point directly. This removes the reported PowerShell-file contention path and preserves literal arguments. Launch failures skip validation gates, retain their diagnostic reason, and receive bounded retries.
 - **Dependency ordering and skipped prerequisites are honored consistently** ([#262](https://github.com/srnichols/plan-forge/issues/262), [#263](https://github.com/srnichols/plan-forge/issues/263), [#265](https://github.com/srnichols/plan-forge/issues/265), [#266](https://github.com/srnichols/plan-forge/issues/266)). Undeclared slices inherit their predecessor even in mixed plans, completed slices are not relaunched in batches, failed dependencies skip descendants, and `--only-slices` removes excluded prerequisites without hiding unknown slice IDs. Unparsed dependency declarations now produce warnings during preflight.
@@ -21,6 +26,7 @@ Format follows [Keep a Changelog](https://keepachangelog.com/).
 
 ### Upgrade Notes
 
+- If an older Git Bash updater copies the new files and then fails writing `.forge.json`, rerun `pforge self-update --force` in a new invocation. The replacement wrapper fixes that path; an already-running old wrapper cannot change its own loaded code. Client-owned VERSION, package metadata, instructions, and configuration are preserved.
 - Parallel batches require a clean parent worktree and additional disk space for copied ignored dependencies and local configuration. External dependency links are rejected; failed or interrupted worktrees are retained for explicit recovery. See [Parallel Slice Isolation](docs/CLI-GUIDE.md#parallel-slice-isolation).
 - Windows unattended workers require an installed standalone Copilot CLI; they do not run the VS Code bootstrapper's interactive installer or updater. Custom launchers earlier on PATH and non-Windows behavior are unchanged.
 - The Node.js requirement remains `>=20.19.0`. The Copilot SDK route remains opt-in with `routing.copilotSdk: "prefer"`; the default is still `"off"`.

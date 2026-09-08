@@ -11,6 +11,7 @@
 - [ ] No formatter regressions snuck in. `git diff HEAD` against changed files should show only intentional changes (a real one bit us in v2.82.1: `tools.json#forge_run_plan.description` had been silently truncated by an editor between turns).
 - [ ] If documentation CSS (`docs/assets/tailwind.css`) was modified, run `npm run build:css` to rebuild and commit both `tailwind.built.css` and `tailwind.built.css.sha256`. `node docs/manual/maintain.mjs` will fail with a HIGH CSS issue if the built file diverges from the recorded hash.
 - [ ] Working tree clean OR all staged changes belong to this release.
+- [ ] Audit both the root workspace lock and the standalone `pforge-mcp` lock. Run a fresh standalone install when either changes; root-workspace success alone does not validate the dependency set consumers install. Review findings rather than treating `npm install` exit 0 as a clean security audit.
 
 ---
 
@@ -100,6 +101,19 @@ Check that newly added modules arrive, moved adapters resolve from their new
 locations, and the consumer's own version and configuration survive updating.
 The release archive must retain all three packages but exclude phase plans,
 archives, cleanup findings, and the root maintainer `AGENTS.md`.
+
+Verify all nine `presets/<stack>/AGENTS.md` templates exist in the actual
+archive, not just in the checkout. The root exclusion must be `/AGENTS.md`;
+an unanchored `AGENTS.md` rule removes consumer templates at every depth.
+For previous Bash updater versions, test a fresh invocation after an in-place
+wrapper update: old loaded code may fail after copying its fixed replacement.
+
+Exercise the GitHub download/extract branch as well as local-source updates.
+In Git Bash, a native Windows path returned by the Node downloader must be
+converted before GNU tar interprets its drive colon as a remote host. A local
+source update does not test this boundary. Never replace a published tag to
+repair a post-publication finding; publish the next patch and document any
+one-time recovery required by already-installed updater code.
 
 ### 1e. Routing and runtime contract
 
@@ -379,6 +393,7 @@ If a user genuinely wants the older release (e.g. their local v2.96.0 is corrupt
 ```
 [ ] §0  Tests pass on touched suites; baseline failures noted
 [ ] §0  No formatter regressions in diff
+[ ] §0  Both workspace and standalone MCP dependency audits reviewed; changed locks installed and tested
 [ ] §0  If docs CSS was changed: `npm run build:css` run and `docs/assets/tailwind.built.css.sha256` committed
 [ ] §1a Hooks mirrored (.github/hooks/ ⊆ templates/.github/hooks/)
 [ ] §1b Every instruction file enumerated in setup.{ps1,sh} + pforge.{ps1,sh}
@@ -394,6 +409,7 @@ If a user genuinely wants the older release (e.g. their local v2.96.0 is corrupt
 [ ] §3.7 gh release create vX.Y.Z --notes-from-tag --verify-tag
 [ ] §3.8 gh release list → vX.Y.Z marked "Latest"
 [ ] §3.8 resolve-tag returns {"ok":true,"tag":"vX.Y.Z"} with no warning
+[ ] §3.8 Actual public self-update path verified in PowerShell and Bash; extraction is not covered by local-source upgrades
 [ ] §3.9 Bump VERSION + pforge-mcp/package.json → next dev (PATCH→Z+1, MINOR→Y+1.0, MAJOR→X+1.0.0) — separate commit
 [ ] §3.9 git push origin master
 ```

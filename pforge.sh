@@ -1323,6 +1323,9 @@ cmd_update() {
 
         # Extract tarball
         command -v tar >/dev/null 2>&1 || { echo "ERROR: ERR_NO_TAR — tar not found. Install tar for your platform." >&2; exit 1; }
+        if command -v cygpath >/dev/null 2>&1; then
+            gh_tarball="$(cygpath -u "$gh_tarball")"
+        fi
         local safe_name
         safe_name="$(echo "$resolved_tag" | sed 's/[^a-zA-Z0-9._-]/_/g')"
         gh_extract_dir="$(dirname "$gh_tarball")/update-$safe_name"

@@ -1,4 +1,4 @@
-import { execSync, execFileSync } from "node:child_process";
+import { execSync } from "node:child_process";
 import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync, appendFileSync, watchFile, unwatchFile, statSync, openSync, readSync, closeSync, renameSync, createWriteStream } from "node:fs";
 import { resolve, join, dirname, basename, isAbsolute } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -145,6 +145,7 @@ import {
 
 
 import { writeAuditArtifact } from "./audit-writer.mjs";
+import { readGitDiff, GitDiffCapacityError } from "./git-diff-reader.mjs";
 import { startEventFileWatcher, runPforge, findProjectRoot } from "./helpers.mjs";
 import { callOrgRules } from "./org-rules.mjs";
 import { _sweepAnvilCompute, _analyzeAnvilCompute, _temperingScanAnvilCompute, _hotspotAnvilCompute } from "./anvil-compute.mjs";
@@ -1592,8 +1593,11 @@ function _registerDepsTemperingToolRoutes(app) {
       const threshold = Math.max(3.5, Math.min(5.0, parseFloat(req.body?.threshold) || 4.0));
       let diffOutput;
       try {
-        diffOutput = execFileSync("git", ["diff", since], { cwd: PROJECT_DIR, encoding: "utf-8", timeout: 30_000 });
-      } catch {
+        diffOutput = readGitDiff({ cwd: PROJECT_DIR, gitArgs: ["diff", since] });
+      } catch (err) {
+        // An oversized diff was not scanned; answering "git unavailable" hid the
+        // ENOBUFS failure behind a normal-looking response (meta-bugs #288–#290).
+        if (err instanceof GitDiffCapacityError) throw err;
         return res.json({ clean: null, scannedFiles: 0, findings: [], error: "git unavailable" });
       }
       const { findings, scannedFiles } = _scanDiffForSecrets(diffOutput, threshold);

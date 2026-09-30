@@ -1,4 +1,4 @@
-import { execSync, execFileSync } from "node:child_process";
+import { execSync } from "node:child_process";
 import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync, appendFileSync, watchFile, unwatchFile, statSync, openSync, readSync, closeSync, renameSync, createWriteStream } from "node:fs";
 import { resolve, join, dirname, basename, isAbsolute, extname } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -38,6 +38,7 @@ import { createHub, readHubPort } from "../../hub.mjs";
 import { createBridge } from "../../bridge.mjs";
 import { buildCapabilitySurface, writeToolsJson, writeCliSchema } from "../../capabilities.mjs";
 import { classifyDiff as diffClassify } from "../../diff-classify.mjs";
+import { readGitDiff, GitDiffCapacityError } from "../git-diff-reader.mjs";
 import { readRunIndex, emitToolSpan } from "../../telemetry.mjs";
 import { parseSkill, executeSkill } from "../../skill-runner.mjs";
 import {
@@ -1140,6 +1141,16 @@ async function _callToolHandler_050_forge_dep_watch(request, args) {
   
 }
 
+// A staged diff git could not produce is unknown, not clean (meta-bug #291).
+function _readStagedDiffForClassify(cwd) {
+  try {
+    return readGitDiff({ cwd, gitArgs: ["diff", "--cached"] });
+  } catch (err) {
+    const reason = (err.stderr ? String(err.stderr).trim() : "") || err.message;
+    throw new Error(`could not read the staged diff (git diff --cached): ${reason} — the staged changes were not classified.`);
+  }
+}
+
 async function _callToolHandler_051_forge_diff_classify(request, args) {
   const { name } = request.params;
   if (!(name === "forge_diff_classify")) return _CALL_TOOL_NO_MATCH;
@@ -1147,14 +1158,7 @@ async function _callToolHandler_051_forge_diff_classify(request, args) {
     const t0 = Date.now();
     try {
       const cwd = args.path ? findProjectRoot(resolve(args.path)) : findProjectRoot(PROJECT_DIR);
-      let diff = args.diff;
-      if (!diff) {
-        try {
-          diff = execSync("git diff --cached", { cwd, encoding: "utf-8", timeout: 10000, stdio: "pipe" });
-        } catch {
-          diff = "";
-        }
-      }
+      const diff = args.diff || _readStagedDiffForClassify(cwd);
       const opts = {};
       if (args.maxLines) opts.maxLines = args.maxLines;
       const result = diffClassify(diff, opts);
@@ -1165,274 +1169,6 @@ async function _callToolHandler_051_forge_diff_classify(request, args) {
       return { content: [{ type: "text", text: `Diff classify error: ${err.message}` }], isError: true };
     }
   
-}
-
-function _forgeSecretScanEntropy(str) {
-  if (!str || str.length === 0) return 0;
-  const freq = {};
-  for (const char of str) freq[char] = (freq[char] || 0) + 1;
-  let entropy = 0;
-  for (const count of Object.values(freq)) {
-    const p = count / str.length;
-    entropy -= p * Math.log2(p);
-  }
-  return entropy;
-}
-
-function _getForgeSecretScanType(line) {
-  const lowerLine = line.toLowerCase();
-  if (/api.?key/i.test(lowerLine)) return "api_key";
-  if (/secret/i.test(lowerLine)) return "secret";
-  if (/token/i.test(lowerLine)) return "token";
-  if (/password|passwd/i.test(lowerLine)) return "password";
-  if (/auth/i.test(lowerLine)) return "auth";
-  if (/private/i.test(lowerLine)) return "private_key";
-  if (/credential/i.test(lowerLine)) return "credential";
-  return "unknown";
-}
-
-function _getForgeSecretScanDiff(cwd, since) {
-  try {
-    return { diffOutput: execFileSync("git", ["diff", since], { cwd, encoding: "utf-8", timeout: 30_000 }) };
-  } catch (err) {
-    if (err.status === 128 || (err.message && err.message.includes("not a git repository"))) {
-      return {
-        graceful: {
-          clean: null,
-          scannedFiles: 0,
-          findings: [],
-          error: "git unavailable",
-        },
-      };
-    }
-    throw err;
-  }
-}
-
-function _parseForgeSecretScanFindings(diffOutput, threshold) {
-  const KEY_PATTERNS = /(?:key|secret|token|password|api_key|auth|credential|private)/i;
-  const findings = [];
-  const scannedFiles = new Set();
-  let currentFile = null;
-  let lineNumber = 0;
-
-  for (const line of diffOutput.split("\n")) {
-    if (line.startsWith("+++ b/")) {
-      currentFile = line.slice(6);
-      scannedFiles.add(currentFile);
-      continue;
-    }
-    if (line.startsWith("@@ ")) {
-      const match = line.match(/@@ -\d+(?:,\d+)? \+(\d+)/);
-      lineNumber = match ? parseInt(match[1], 10) - 1 : 0;
-      continue;
-    }
-    if (line.startsWith("+") && !line.startsWith("+++")) {
-      lineNumber++;
-      const added = line.slice(1);
-      const tokens = added.match(/["']([^"']{8,})["']|(?:=|:|=>)\s*["']?([^\s"',;]{8,})["']?/g) || [];
-      for (const raw of tokens) {
-        const cleaned = raw.replace(/^[=:>]\s*["']?|["']$/g, "").replace(/^["']/, "");
-        if (cleaned.length < 8) continue;
-        const entropy = _forgeSecretScanEntropy(cleaned);
-        if (entropy < threshold) continue;
-        const keyMatch = KEY_PATTERNS.test(added);
-        const confidence = entropy >= 4.5 && keyMatch ? "high"
-          : ((entropy >= 4.0 && keyMatch) || entropy >= 4.8) ? "medium"
-            : "low";
-        findings.push({
-          file: currentFile,
-          line: lineNumber,
-          type: _getForgeSecretScanType(added),
-          entropyScore: Math.round(entropy * 100) / 100,
-          masked: "<REDACTED>",
-          confidence,
-        });
-      }
-      continue;
-    }
-    if (!line.startsWith("-")) lineNumber++;
-  }
-
-  return { findings, scannedFiles };
-}
-
-function _buildForgeSecretScanResult(findings, scannedFiles, since, threshold) {
-  return {
-    scannedAt: new Date().toISOString(),
-    since,
-    threshold,
-    scannedFiles: scannedFiles.size,
-    clean: findings.length === 0,
-    findings,
-  };
-}
-
-function _writeForgeSecretScanCache(cwd, result) {
-  mkdirSync(resolve(cwd, ".forge"), { recursive: true });
-  writeFileSync(resolve(cwd, ".forge", "secret-scan-cache.json"), JSON.stringify(result, null, 2), "utf-8");
-}
-
-function _annotateForgeSecretScanDeploySidecar(cwd, clean, scannedAt) {
-  try {
-    const journalPath = resolve(cwd, ".forge", "deploy-journal.jsonl");
-    if (!existsSync(journalPath)) return;
-    const deploys = readForgeJsonl("deploy-journal.jsonl", [], cwd);
-    if (deploys.length === 0) return;
-    const lastDeploy = deploys[deploys.length - 1];
-    let headSha = null;
-    try {
-      headSha = execSync("git rev-parse HEAD", { cwd, encoding: "utf-8", timeout: 5_000 }).trim();
-    } catch { /* skip */ }
-    if (!(headSha && lastDeploy.id)) return;
-    const sidecarPath = resolve(cwd, ".forge", "deploy-journal-meta.json");
-    let sidecar = {};
-    try {
-      if (existsSync(sidecarPath)) sidecar = JSON.parse(readFileSync(sidecarPath, "utf-8"));
-    } catch {
-      sidecar = {};
-    }
-    sidecar[lastDeploy.id] = {
-      ...(sidecar[lastDeploy.id] || {}),
-      secretScanClean: clean,
-      secretScanAt: scannedAt,
-    };
-    writeFileSync(sidecarPath, JSON.stringify(sidecar, null, 2), "utf-8");
-  } catch { /* best-effort sidecar annotation */ }
-}
-
-function _captureForgeSecretScanMemory(result, cwd) {
-  if (result.clean) return;
-  captureMemory(
-    `Secret scan: ${result.findings.length} high-entropy finding(s) in ${result.scannedFiles} file(s). Review and rotate if confirmed.`,
-    "gotcha",
-    "forge_secret_scan",
-    cwd
-  );
-}
-
-function _052_forge_secret_scan_entropy(str) {
-  if (!str || str.length === 0) return 0;
-  const freq = {};
-  for (const char of str) freq[char] = (freq[char] || 0) + 1;
-  let entropy = 0;
-  for (const count of Object.values(freq)) {
-    const p = count / str.length;
-    entropy -= p * Math.log2(p);
-  }
-  return entropy;
-}
-
-function _052_forge_secret_scan_extractTokens(addedLine) {
-  return addedLine.match(/["']([^"']{8,})["']|(?:=|:|=>)\s*["']?([^\s"',;]{8,})["']?/g) || [];
-}
-
-function _052_forge_secret_scan_getConfidence(entropy, keyMatch) {
-  if (entropy >= 4.5 && keyMatch) return "high";
-  if ((entropy >= 4.0 && keyMatch) || entropy >= 4.8) return "medium";
-  return "low";
-}
-
-function _052_forge_secret_scan_getType(addedLine) {
-  const lowerLine = addedLine.toLowerCase();
-  if (/api.?key/i.test(lowerLine)) return "api_key";
-  if (/secret/i.test(lowerLine)) return "secret";
-  if (/token/i.test(lowerLine)) return "token";
-  if (/password|passwd/i.test(lowerLine)) return "password";
-  if (/auth/i.test(lowerLine)) return "auth";
-  if (/private/i.test(lowerLine)) return "private_key";
-  if (/credential/i.test(lowerLine)) return "credential";
-  return "unknown";
-}
-
-function _052_forge_secret_scan_readDiff(cwd, since, args, t0) {
-  try {
-    return { diffOutput: execFileSync("git", ["diff", since], { cwd, encoding: "utf-8", timeout: 30_000 }) };
-  } catch (err) {
-    if (err.status === 128 || (err.message && err.message.includes("not a git repository"))) {
-      const graceful = { clean: null, scannedFiles: 0, findings: [], error: "git unavailable" };
-      emitToolTelemetry({ toolName: "forge_secret_scan", inputs: args, result: graceful, durationMs: Date.now() - t0, status: "DEGRADED", cwd: cwd });
-      return { gracefulResponse: { content: [{ type: "text", text: JSON.stringify(graceful, null, 2) }], isError: false } };
-    }
-    throw err;
-  }
-}
-
-function _052_forge_secret_scan_parseDiff(diffOutput, threshold) {
-  const KEY_PATTERNS = /(?:key|secret|token|password|api_key|auth|credential|private)/i;
-  const findings = [];
-  const scannedFiles = new Set();
-  let currentFile = null;
-  let lineNumber = 0;
-  for (const line of diffOutput.split("\n")) {
-    if (line.startsWith("+++ b/")) {
-      currentFile = line.slice(6);
-      scannedFiles.add(currentFile);
-      continue;
-    }
-    if (line.startsWith("@@ ")) {
-      const match = line.match(/@@ -\d+(?:,\d+)? \+(\d+)/);
-      lineNumber = match ? parseInt(match[1], 10) - 1 : 0;
-      continue;
-    }
-    if (line.startsWith("+") && !line.startsWith("+++")) {
-      lineNumber++;
-      const added = line.slice(1);
-      for (const raw of _052_forge_secret_scan_extractTokens(added)) {
-        const cleaned = raw.replace(/^[=:>]\s*["']?|["']$/g, "").replace(/^["']/, "");
-        if (cleaned.length < 8) continue;
-        const entropy = _052_forge_secret_scan_entropy(cleaned);
-        if (entropy < threshold) continue;
-        findings.push({
-          file: currentFile,
-          line: lineNumber,
-          type: _052_forge_secret_scan_getType(added),
-          entropyScore: Math.round(entropy * 100) / 100,
-          masked: "<REDACTED>",
-          confidence: _052_forge_secret_scan_getConfidence(entropy, KEY_PATTERNS.test(added)),
-        });
-      }
-      continue;
-    }
-    if (!line.startsWith("-")) lineNumber++;
-  }
-  return { findings, scannedFiles };
-}
-
-function _052_forge_secret_scan_annotateDeployJournal(cwd, clean, scannedAt) {
-  try {
-    const journalPath = resolve(cwd, ".forge", "deploy-journal.jsonl");
-    if (!existsSync(journalPath)) return;
-    const deploys = readForgeJsonl("deploy-journal.jsonl", [], cwd);
-    if (deploys.length === 0) return;
-    const lastDeploy = deploys[deploys.length - 1];
-    let headSha = null;
-    try {
-      headSha = execSync("git rev-parse HEAD", { cwd, encoding: "utf-8", timeout: 5_000 }).trim();
-    } catch { /* skip */ }
-    if (!headSha || !lastDeploy.id) return;
-    const sidecarPath = resolve(cwd, ".forge", "deploy-journal-meta.json");
-    let sidecar = {};
-    try {
-      if (existsSync(sidecarPath)) sidecar = JSON.parse(readFileSync(sidecarPath, "utf-8"));
-    } catch {
-      sidecar = {};
-    }
-    sidecar[lastDeploy.id] = {
-      ...(sidecar[lastDeploy.id] || {}),
-      secretScanClean: clean,
-      secretScanAt: scannedAt,
-    };
-    writeFileSync(sidecarPath, JSON.stringify(sidecar, null, 2), "utf-8");
-  } catch { /* best-effort sidecar annotation */ }
-}
-
-function _052_forge_secret_scan_capture(clean, findings, scannedFiles, cwd) {
-  if (clean) return;
-  captureMemory(
-    `Secret scan: ${findings.length} high-entropy finding(s) in ${scannedFiles.size} file(s). Review and rotate if confirmed.`,
-    "gotcha", "forge_secret_scan", cwd
-  );
 }
 
 function _th_052_shannonEntropy(str) {
@@ -1449,7 +1185,7 @@ function _th_052_shannonEntropy(str) {
 
 function _th_052_readSecretDiff(cwd, since) {
   try {
-    return { diffOutput: execFileSync("git", ["diff", since], { cwd, encoding: "utf-8", timeout: 30_000 }) };
+    return { diffOutput: readGitDiff({ cwd, gitArgs: ["diff", since] }) };
   } catch (err) {
     if (err.status === 128 || (err.message && err.message.includes("not a git repository"))) {
       return { graceful: { clean: null, scannedFiles: 0, findings: [], error: "git unavailable" } };
@@ -2713,12 +2449,21 @@ function _055_forge_liveguard_run_shouldFlagSecretLine(content, threshold, keyPa
   return _055_forge_liveguard_run_entropy(content) >= threshold && keyPattern.test(content);
 }
 
+const LIVEGUARD_SECRET_DIFF_ARGS = [
+  "diff", "HEAD~1", "-p", "--", ".",
+  ":!package-lock.json", ":!*.min.js", ":!*.min.css", ":!*.map", ":!*.svg",
+  ":!pforge-mcp/", ":!.github/", ":!pforge.ps1", ":!pforge.sh",
+];
+
 function _055_forge_liveguard_run_checkSecrets(cwd) {
   try {
     let diff = "";
     try {
-      diff = execSync('git diff HEAD~1 -p -- . ":!package-lock.json" ":!*.min.js" ":!*.min.css" ":!*.map" ":!*.svg" ":!pforge-mcp/" ":!.github/" ":!pforge.ps1" ":!pforge.sh"', { cwd, encoding: "utf-8", timeout: 30_000 });
-    } catch { /* ignore */ }
+      diff = readGitDiff({ cwd, gitArgs: LIVEGUARD_SECRET_DIFF_ARGS });
+    } catch (err) {
+      // No HEAD~1 means nothing to compare; an oversized diff is unscanned, not clean.
+      if (err instanceof GitDiffCapacityError) throw err;
+    }
     const findings = [];
     const secretKeyPattern = /(?:password|secret|token|api[_-]?key|auth|credential|private[_-]?key|connection[_-]?string|bearer)\s*[:=]/i;
     for (const line of diff.split("\n")) {

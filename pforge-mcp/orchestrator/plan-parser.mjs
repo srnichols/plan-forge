@@ -211,11 +211,21 @@ export const SLICE_HEADING_RE =
 /**
  * Compute the lockHash for a plan per decision #6 (Phase-WORKER-GUARDRAILS A6).
  *
- * Hash scope: sha256 over the concatenation of (per slice, in document order):
- *   - `### Slice N:` header line
- *   - `**Scope** (files in scope):` bullet list
- *   - `**Validation Gate**:` code block content
- * Plus the plan's top-level `### Forbidden Actions` (or `### Forbidden`) list.
+ * Hash scope: sha256 over the concatenation of
+ *   - the plan's top-level `### Forbidden Actions` (or `### Forbidden`) list, then
+ *   - per slice, in document order: the slice heading, every scope declaration
+ *     and scope bullet, and every validation-gate marker and gate fence —
+ *     exactly the lines parseSlices() turns into `scope` and `validationGate`.
+ *
+ * The slice lines come from parseSlices itself (`opts.lockLines`) rather than a
+ * second scanner. A separate scanner recognised only the canonical
+ * `**Scope** (files in scope):` / `**Validation Gate**:` spellings, so gates and
+ * scopes under labels the parser also accepts — `**Validation Gate:**`,
+ * `**Scope (files in scope):**`, `**Files**:` — could be rewritten without
+ * changing the hash (meta-bug #285). Blank lines are never hashed, so a
+ * formatter inserting one between a scope label and its list (#282) leaves the
+ * hash unchanged. Implicit gates (`planParser.implicitGates`) are opt-in
+ * config the hash cannot see, and stay outside it.
  *
  * Frontmatter is stripped before hashing so editing only the frontmatter
  * (e.g. updating the lockHash field itself) does not invalidate the hash.
@@ -227,9 +237,13 @@ export function computeLockHash(planContent) {
   // Strip frontmatter so it does not participate in the hash
   const body = planContent.replace(/^---\r?\n[\s\S]*?\r?\n---\r?\n/, "");
   const lines = body.split(/\r?\n/);
-  const parts = [];
+  const parts = collectForbiddenActionLines(lines);
+  parseSlices(lines, { lockLines: parts });
+  return createHash("sha256").update(parts.join("\n")).digest("hex");
+}
 
-  // ── Pass 1: Forbidden Actions bullet list ─────────────────────────────────
+function collectForbiddenActionLines(lines) {
+  const collected = [];
   let inForbidden = false;
   for (const line of lines) {
     if (/^###\s+Forbidden(\s+Actions)?\b/i.test(line)) {
@@ -238,83 +252,10 @@ export function computeLockHash(planContent) {
     }
     if (inForbidden) {
       if (/^##/.test(line)) { inForbidden = false; continue; }
-      parts.push(line);
+      collected.push(line);
     }
   }
-
-  // ── Pass 2: Per-slice Scope list + Validation Gate block ──────────────────
-  let inSlice = false;
-  let inScope = false;
-  let inGate = false;
-  let inFence = false;
-
-  for (const line of lines) {
-    // New slice header
-    if (SLICE_HEADING_RE.test(line)) {
-      inSlice = true;
-      inScope = false;
-      inGate = false;
-      inFence = false;
-      parts.push(line);
-      continue;
-    }
-
-    if (!inSlice) continue;
-
-    // Code fence boundary
-    if (line.startsWith("```")) {
-      if (inFence) {
-        // Closing fence
-        if (inGate) { parts.push(line); inGate = false; }
-        inFence = false;
-      } else {
-        inFence = true;
-        if (inGate) parts.push(line);
-        inScope = false;
-      }
-      continue;
-    }
-
-    // Inside a code fence — capture if inside gate
-    if (inFence) {
-      if (inGate) parts.push(line);
-      continue;
-    }
-
-    // Scope marker (accepts either column-0 `**Scope**…` or list-item `- **Scope**…` form)
-    if (/^\s*(?:[-*]\s+)?\*\*Scope\*\*\s*\(files in scope\)\s*:/i.test(line)) {
-      inScope = true;
-      inGate = false;
-      parts.push(line);
-      continue;
-    }
-
-    // Validation Gate marker (accepts either column-0 or list-item form)
-    if (/^\s*(?:[-*]\s+)?\*\*Validation Gate\*\*\s*:/i.test(line)) {
-      inScope = false;
-      inGate = true;
-      parts.push(line);
-      continue;
-    }
-
-    // Any other bold section heading (not scope/gate) resets state — both forms
-    if (/^\s*(?:[-*]\s+)?\*\*[A-Z][^*]*\*\*\s*:/.test(line)) {
-      inScope = false;
-      inGate = false;
-      continue;
-    }
-
-    // Capture scope bullet lines
-    if (inScope) {
-      if (/^\s*[-*]/.test(line)) {
-        parts.push(line);
-      } else if (line.trim() === "") {
-        inScope = false;
-      }
-    }
-  }
-
-  return createHash("sha256").update(parts.join("\n")).digest("hex");
+  return collected;
 }
 
 function parseMeta(lines) {
@@ -460,6 +401,12 @@ const SHELL_FENCE_LANGS = new Set([
   "", "bash", "sh", "shell", "zsh", "console", "powershell", "pwsh", "ps1", "cmd", "bat", "batch",
 ]);
 
+// Lines computeLockHash covers: every line that becomes a slice heading,
+// scope entry or gate command (opts.lockLines in parseSlices, meta-bug #285).
+function recordLockLines(state, lines) {
+  if (state.lockLines) state.lockLines.push(...lines);
+}
+
 function handleCodeFenceLine(state, line) {
   if (!line.startsWith("```")) return false;
   state.inFilesInScopeBlock = false;
@@ -467,6 +414,7 @@ function handleCodeFenceLine(state, line) {
   if (state.inCodeBlock) {
     if (state.inValidationGate && state.current && state.gateFenceIsShell) {
       appendValidationGateText(state.current, state.codeBlockContent.join("\n").trim());
+      recordLockLines(state, [state.fenceOpenLine, ...state.codeBlockContent, line]);
       if (state.implicitGateActive) {
         state.current.implicitGate = true;
         state.implicitGateActive = false;
@@ -481,6 +429,7 @@ function handleCodeFenceLine(state, line) {
 
   state.inCodeBlock = true;
   state.codeBlockContent = [];
+  state.fenceOpenLine = line;
   const lang = line.slice(3).trim().toLowerCase();
   const isShellLang = SHELL_FENCE_LANGS.has(lang);
   // A non-shell fence is skipped without disarming the gate, so a later shell
@@ -508,6 +457,7 @@ function handleSliceHeaderLine(state, line) {
   if (state.current) state.slices.push(state.current);
   state.inFilesInScopeBlock = false;
   state.current = createSliceRecord(sliceMatch, line);
+  recordLockLines(state, [line]);
   return true;
 }
 
@@ -525,10 +475,18 @@ function handlePlanLevelHeading(state, line) {
   return true;
 }
 
+/**
+ * A line that declares a slice's validation gate. Shared with
+ * lintGateCommands so a declared gate that parsed to nothing is caught by the
+ * same recognition the parser uses (meta-bug #281).
+ */
+export const VALIDATION_GATE_MARKER_RE = /\*\*(?:Validation Gate|Exit [Gg]ate)\*?\*?\s*:?\s*(.*)$/i;
+
 function handleValidationGateLine(state, line) {
-  const gateMatch = line.match(/\*\*(?:Validation Gate|Exit [Gg]ate)\*?\*?\s*:?\s*(.*)$/i);
+  const gateMatch = line.match(VALIDATION_GATE_MARKER_RE);
   if (!gateMatch) return false;
   state.inFilesInScopeBlock = false;
+  recordLockLines(state, [line]);
   const inlineText = (gateMatch[1] || "").trim();
   if (inlineText && state.current) {
     const backtickCmds = [];
@@ -654,6 +612,8 @@ function handleFilesHeading(state, line) {
   const candidates = extractInlineScopeCandidates((filesBodyMatch[2] || "").trim());
   appendUniqueValues(state.current.scope, candidates);
   state.inFilesInScopeBlock = candidates.length === 0;
+  state.scopeBlockHasBullets = false;
+  recordLockLines(state, [line]);
   return true;
 }
 
@@ -661,7 +621,10 @@ function handleFilesInScopeContinuation(state, line) {
   if (!state.inFilesInScopeBlock) return false;
   const trimmed = line.trim();
   if (!trimmed) {
-    state.inFilesInScopeBlock = false;
+    // Prettier separates the label paragraph from its list with a blank line,
+    // which used to end the block before the first bullet and leave the slice
+    // with an empty scope (meta-bug #282). Only a blank after the list ends it.
+    if (state.scopeBlockHasBullets) state.inFilesInScopeBlock = false;
     return false;
   }
   if (/^\*\*/.test(trimmed) || /^#/.test(trimmed)) {
@@ -674,6 +637,8 @@ function handleFilesInScopeContinuation(state, line) {
     return false;
   }
   appendUniqueValues(state.current.scope, extractBulletScopeCandidates(bulletMatch[1]));
+  state.scopeBlockHasBullets = true;
+  recordLockLines(state, [line]);
   return true;
 }
 
@@ -682,15 +647,24 @@ function applyTaskLine(current, line) {
   if (taskMatch) current.tasks.push(taskMatch[1].trim());
 }
 
+/**
+ * @param {string[]} lines
+ * @param {{ implicitGates?: boolean, lockLines?: string[] }} [opts]
+ *   `lockLines`, when given, receives every line that becomes a slice heading,
+ *   scope entry or gate command — the input computeLockHash hashes.
+ */
 export function parseSlices(lines, opts = {}) {
   const state = {
     implicitGates: opts.implicitGates === true,
+    lockLines: Array.isArray(opts.lockLines) ? opts.lockLines : null,
     slices: [],
     current: null,
     inCodeBlock: false,
     inValidationGate: false,
     codeBlockContent: [],
+    fenceOpenLine: null,
     inFilesInScopeBlock: false,
+    scopeBlockHasBullets: false,
     implicitGateActive: false,
   };
 

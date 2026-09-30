@@ -101,7 +101,9 @@ For each Execution Slice:
   - **Good**: `**Validation Gate**:\n\`\`\`bash\ndotnet test\n\`\`\``
   - **Good**: `**Validation Gate**: \`dotnet build\``
   - **Bad**: `**Validation Gate**: Files compile, DTOs have correct properties`
+  - **Bad**: a ` ```text ` (or ` ```ts `, ` ```json `) fence under the gate marker — only shell-tagged or untagged fences are executed; gate lint rejects a declared gate that parses to no command (meta-bug [#281](https://github.com/srnichols/plan-forge/issues/281))
   - For manual checks that can't be automated, prefix with `[manual]`: `**Validation Gate**: [manual] UI layout matches mockup`
+- **Write each slice's tasks as a numbered list** (`1. …`, `2. …`). The worker prompt receives only numbered items — bullet or prose instructions, including a `**Goal**` paragraph, never reach the worker, and gate lint warns about slices with none
 
 Do NOT add features or expand scope. Only structure what already exists.
 

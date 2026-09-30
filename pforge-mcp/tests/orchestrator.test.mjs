@@ -235,6 +235,7 @@ describe("lintGateCommands", () => {
       "- Something",
       "## Execution Slices",
       `### Slice ${sliceNumber}: ${title}`,
+      "1. Do the work.",
       "**Validation Gate**",
       "```",
       ...gates,

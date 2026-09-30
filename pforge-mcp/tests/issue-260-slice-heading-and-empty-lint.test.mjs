@@ -97,10 +97,12 @@ describe("Guard: one regex, so the two readers cannot drift again (#260)", () =>
       .toHaveLength(1);
   });
 
-  it("both readers reference the shared constant", () => {
+  it("the slice-heading pattern has a single reader", () => {
+    // declaration + handleSliceHeaderLine. computeLockHash no longer scans
+    // headings itself — it hashes the lines parseSlices records (meta #285).
     const uses = (src.match(/SLICE_HEADING_RE/g) || []).length;
-    // declaration + computeLockHash + handleSliceHeaderLine
-    expect(uses).toBeGreaterThanOrEqual(3);
+    expect(uses).toBeGreaterThanOrEqual(2);
+    expect(src).toMatch(/parseSlices\(lines, \{ lockLines: parts \}\)/);
   });
 });
 

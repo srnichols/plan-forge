@@ -3,10 +3,13 @@
 import { readFileSync, existsSync, readdirSync, statSync } from "node:fs";
 import { execSync } from "node:child_process";
 import { resolve, basename, dirname, join, relative, extname, isAbsolute } from "node:path";
-import { parsePlan } from "./plan-parser.mjs";
+import { parsePlan, VALIDATION_GATE_MARKER_RE } from "./plan-parser.mjs";
 import { UNIX_TOOLS, resolveGateCommandToken, isGatePrefixAllowed } from "./constants.mjs";
 import { coalesceGateLines, looksLikeProse, runGate, resolveGateTimeoutMs } from "./schedulers.mjs";
 import { recall as brainRecall, loadReviewerConfig, invokeReviewer } from "../brain.mjs";
+
+/** Characters of an offending line quoted in a lint message. */
+const LINT_EXCERPT_CHARS = 60;
 
 export function extractPlanReleaseVersion(planPath) {
   if (!planPath || typeof planPath !== "string") return null;
@@ -139,7 +142,7 @@ function _parseDisableDirectivesAndComments(rawLines, slice, warnings) {
         command: raw,
         rule: "comment-line",
         severity: "warn",
-        message: `${loc}: Standalone comment '${raw.slice(0, 60)}...' will be treated as a command. Remove or prefix with a real command.`,
+        message: `${loc}: Standalone comment '${raw.slice(0, LINT_EXCERPT_CHARS)}...' will be treated as a command. Remove or prefix with a real command.`,
       });
     }
   }
@@ -292,7 +295,7 @@ function _lintCommandLine(line, slice, {
   if (looksLikeProse(line)) {
     warnings.push({
       slice: slice.number, command: line, rule: "prose-detected", severity: "warn",
-      message: `${loc}: Line looks like prose, not a command: '${line.slice(0, 60)}...' — will be skipped at runtime.`,
+      message: `${loc}: Line looks like prose, not a command: '${line.slice(0, LINT_EXCERPT_CHARS)}...' — will be skipped at runtime.`,
     });
     return;
   }
@@ -344,12 +347,53 @@ function _lintDependencyDeclarations(plan, warnings) {
         rule: "depends-not-parsed",
         severity: "warn",
         message:
-          `Slice ${slice.number} ("${slice.title}"): dependency declaration "${phrase.slice(0, 60)}" ` +
+          `Slice ${slice.number} ("${slice.title}"): dependency declaration "${phrase.slice(0, LINT_EXCERPT_CHARS)}" ` +
           `produced no parsed dependency. Recognised forms are the heading tag [depends: Slice N] and ` +
           `a "**Depends On**:" line beginning with a slice id. This slice will fall back to running ` +
           `after its predecessor.`,
       });
       break;
+    }
+  }
+}
+
+/**
+ * Check that each parsed slice will actually launch with a gate and with
+ * instructions (meta-bug #281). A lint that only inspects the gate commands
+ * it found passed plans whose gates sat in ```text fences (never executed)
+ * and whose tasks were bullets or prose (never sent to the worker).
+ *
+ * - A slice that DECLARES a Validation Gate but parsed no runnable command is
+ *   an error: it would run with no gate at all. An explicit `[manual]` gate —
+ *   the step-2 convention for checks that cannot be automated — is exempt.
+ * - A slice with no numbered tasks is a warning: buildSlicePrompt sends only
+ *   numbered items, so the worker receives just the title, scope and gate.
+ *   Plain objects without a `tasks` array (callers passing gate-only fixtures)
+ *   are not judged.
+ */
+function _lintSliceExecutability(plan, errors, warnings) {
+  for (const slice of plan.slices) {
+    const loc = `Slice ${slice.number} ("${slice.title}")`;
+    const declaredGate = (slice.rawLines || []).find((line) => VALIDATION_GATE_MARKER_RE.test(line));
+    const gateText = String(slice.validationGateDescription || "").trim();
+    const isManualGate = /^\[manual\]/i.test(gateText);
+    if (declaredGate && !isManualGate && !String(slice.validationGate || "").trim()) {
+      const described = gateText ? ` (gate text: "${gateText.slice(0, LINT_EXCERPT_CHARS)}")` : "";
+      errors.push({
+        slice: slice.number, command: null, rule: "gate-declared-not-runnable", severity: "error",
+        message:
+          `${loc}: declares a Validation Gate but no runnable gate command was parsed${described} — ` +
+          "the slice would run with no gate. Put gate commands in a shell-tagged fence (```bash, ```powershell, …) " +
+          "or inline backticks; ```text fences and prose are never executed.",
+      });
+    }
+    if (Array.isArray(slice.tasks) && slice.tasks.length === 0) {
+      warnings.push({
+        slice: slice.number, command: null, rule: "no-numbered-tasks", severity: "warn",
+        message:
+          `${loc}: no numbered tasks were parsed. The worker prompt lists only numbered items ("1. …"), so ` +
+          "bullet or prose instructions (including **Goal**) never reach the worker — it receives just the title, scope and gate.",
+      });
     }
   }
 }
@@ -378,6 +422,7 @@ export function lintGateCommands(planFilePath, cwd = process.cwd()) {
   }
 
   _lintDependencyDeclarations(plan, warnings);
+  _lintSliceExecutability(plan, errors, warnings);
 
   for (const slice of plan.slices) {
     if (!slice.validationGate) continue;

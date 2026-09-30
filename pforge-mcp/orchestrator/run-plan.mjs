@@ -528,6 +528,8 @@ function _checkLockHash(plan, planPath) {
       `Plan body has drifted since it was hardened — lockHash mismatch.\n` +
       `  stored:   ${plan.meta.lockHash}\n` +
       `  computed: ${computedHash}\n` +
+      `If the plan was not edited since hardening, the hash now covers scope and gate lines that\n` +
+      `older versions skipped (meta-bug #285): review those lines before re-stamping.\n` +
       `Re-run Step 2 hardening to regenerate the lockHash, then retry.`,
     code: "LOCK_HASH_MISMATCH",
     storedHash: plan.meta.lockHash,
@@ -1237,6 +1239,20 @@ function _normalizeRunPlanOptionsExtras(options) {
   };
 }
 
+function _runPlanEstimate({ plan, effectiveModel, worker, cwd, resumeFrom, quorum, quorumPreset, quorumThreshold, includeGrokOverride }) {
+  // Bonus preflight: surface (but don't block) a missing/unauthenticated
+  // worker backend so users see the problem before committing to Full Auto.
+  const estimateAuthGate = assertWorkerBackendReady({ model: effectiveModel, worker, cwd });
+  if (estimateAuthGate) {
+    // eslint-disable-next-line no-console
+    console.error(`[preflight] ${estimateAuthGate.error}`);
+  }
+  const estimateQuorumConfig = _buildEstimateQuorumConfig(quorum, cwd, quorumPreset, quorumThreshold, includeGrokOverride);
+  const estimateResult = buildEstimate({ plan, model: effectiveModel, cwd, quorumConfig: estimateQuorumConfig, resumeFrom, worker });
+  if (estimateAuthGate) estimateResult.workerWarning = estimateAuthGate.error;
+  return estimateResult;
+}
+
 export async function runPlan(planPath, options = {}) {
   const {
     cwd, model, mode, resumeFrom, estimate, dryRun, eventHandler, abortController,
@@ -1282,17 +1298,7 @@ export async function runPlan(planPath, options = {}) {
 
   // Estimation mode — return without executing
   if (estimate) {
-    // Bonus preflight: surface (but don't block) a missing/unauthenticated
-    // worker backend so users see the problem before committing to Full Auto.
-    const estimateAuthGate = assertWorkerBackendReady({ model: effectiveModel, worker, cwd });
-    if (estimateAuthGate) {
-      // eslint-disable-next-line no-console
-      console.error(`[preflight] ${estimateAuthGate.error}`);
-    }
-    const estimateQuorumConfig = _buildEstimateQuorumConfig(quorum, cwd, quorumPreset, quorumThreshold, includeGrokOverride);
-    const estimateResult = buildEstimate({ plan, model: effectiveModel, cwd, quorumConfig: estimateQuorumConfig, resumeFrom, worker });
-    if (estimateAuthGate) estimateResult.workerWarning = estimateAuthGate.error;
-    return estimateResult;
+    return _runPlanEstimate({ plan, effectiveModel, worker, cwd, resumeFrom, quorum, quorumPreset, quorumThreshold, includeGrokOverride });
   }
 
   // Dry run — parse and validate only

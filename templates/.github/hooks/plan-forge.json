@@ -10,16 +10,16 @@
         {
           "name": "diff-classify",
           "type": "command",
-          "command": ".github/hooks/scripts/check-diff-classify.sh",
-          "windows": "powershell -ExecutionPolicy Bypass -File .github/hooks/scripts/check-diff-classify.ps1",
+          "command": "bash .github/hooks/scripts/check-diff-classify.sh",
+          "windows": "powershell -NoProfile -NonInteractive -WindowStyle Hidden -ExecutionPolicy Bypass -File .github/hooks/scripts/check-diff-classify.ps1",
           "timeout": 30,
           "description": "Block commits with leaked secrets, prompt injection, or license-incompatible pastes"
         },
         {
           "name": "error-catalog",
           "type": "command",
-          "command": ".github/hooks/scripts/check-error-catalog.sh",
-          "windows": "powershell -ExecutionPolicy Bypass -File .github/hooks/scripts/check-error-catalog.ps1",
+          "command": "bash .github/hooks/scripts/check-error-catalog.sh",
+          "windows": "powershell -NoProfile -NonInteractive -WindowStyle Hidden -ExecutionPolicy Bypass -File .github/hooks/scripts/check-error-catalog.ps1",
           "timeout": 30,
           "description": "Block commits when docs/manual/errors-and-exit-codes.html drifts from pforge-mcp/enums.mjs ERROR_CODES"
         }
@@ -28,44 +28,50 @@
     "SessionStart": [
       {
         "type": "command",
-        "command": ".github/hooks/scripts/session-start.sh",
-        "windows": "powershell -ExecutionPolicy Bypass -File .github/hooks/scripts/session-start.ps1",
+        "command": "bash .github/hooks/scripts/session-start.sh",
+        "windows": "powershell -NoProfile -NonInteractive -WindowStyle Hidden -ExecutionPolicy Bypass -File .github/hooks/scripts/session-start.ps1",
+        "powershell": "powershell -NoProfile -NonInteractive -WindowStyle Hidden -ExecutionPolicy Bypass -File .github/hooks/scripts/session-start.ps1",
         "timeout": 10
       }
     ],
     "PreToolUse": [
       {
         "type": "command",
-        "command": ".github/hooks/scripts/check-forbidden.sh",
-        "windows": "powershell -ExecutionPolicy Bypass -File .github/hooks/scripts/check-forbidden.ps1",
+        "command": "bash .github/hooks/scripts/check-forbidden.sh",
+        "windows": "powershell -NoProfile -NonInteractive -WindowStyle Hidden -ExecutionPolicy Bypass -File .github/hooks/scripts/check-forbidden.ps1",
+        "powershell": "powershell -NoProfile -NonInteractive -WindowStyle Hidden -ExecutionPolicy Bypass -File .github/hooks/scripts/check-forbidden.ps1",
         "timeout": 5
       },
       {
         "type": "command",
-        "command": ".github/hooks/scripts/check-predeploy.sh",
-        "windows": "powershell -ExecutionPolicy Bypass -File .github/hooks/scripts/check-predeploy.ps1",
+        "command": "bash .github/hooks/scripts/check-predeploy.sh",
+        "windows": "powershell -NoProfile -NonInteractive -WindowStyle Hidden -ExecutionPolicy Bypass -File .github/hooks/scripts/check-predeploy.ps1",
+        "powershell": "powershell -NoProfile -NonInteractive -WindowStyle Hidden -ExecutionPolicy Bypass -File .github/hooks/scripts/check-predeploy.ps1",
         "timeout": 10
       }
     ],
     "PostToolUse": [
       {
         "type": "command",
-        "command": ".github/hooks/scripts/post-edit-format.sh",
-        "windows": "powershell -ExecutionPolicy Bypass -File .github/hooks/scripts/post-edit-format.ps1",
+        "command": "bash .github/hooks/scripts/post-edit-format.sh",
+        "windows": "powershell -NoProfile -NonInteractive -WindowStyle Hidden -ExecutionPolicy Bypass -File .github/hooks/scripts/post-edit-format.ps1",
+        "powershell": "powershell -NoProfile -NonInteractive -WindowStyle Hidden -ExecutionPolicy Bypass -File .github/hooks/scripts/post-edit-format.ps1",
         "timeout": 15
       },
       {
         "type": "command",
-        "command": ".github/hooks/scripts/post-edit-validate.sh",
-        "windows": "powershell -ExecutionPolicy Bypass -File .github/hooks/scripts/post-edit-validate.ps1",
+        "command": "bash .github/hooks/scripts/post-edit-validate.sh",
+        "windows": "powershell -NoProfile -NonInteractive -WindowStyle Hidden -ExecutionPolicy Bypass -File .github/hooks/scripts/post-edit-validate.ps1",
+        "powershell": "powershell -NoProfile -NonInteractive -WindowStyle Hidden -ExecutionPolicy Bypass -File .github/hooks/scripts/post-edit-validate.ps1",
         "timeout": 15
       }
     ],
     "Stop": [
       {
         "type": "command",
-        "command": ".github/hooks/scripts/stop-check-tests.sh",
-        "windows": "powershell -ExecutionPolicy Bypass -File .github/hooks/scripts/stop-check-tests.ps1",
+        "command": "bash .github/hooks/scripts/stop-check-tests.sh",
+        "windows": "powershell -NoProfile -NonInteractive -WindowStyle Hidden -ExecutionPolicy Bypass -File .github/hooks/scripts/stop-check-tests.ps1",
+        "powershell": "powershell -NoProfile -NonInteractive -WindowStyle Hidden -ExecutionPolicy Bypass -File .github/hooks/scripts/stop-check-tests.ps1",
         "timeout": 10
       }
     ]

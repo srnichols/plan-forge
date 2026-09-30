@@ -6,14 +6,16 @@
 #>
 $ErrorActionPreference = 'SilentlyContinue'
 
-$input = [Console]::In.ReadToEnd()
+# Not $input: that is PowerShell's automatic pipeline enumerator, and the next
+# native command (git) emptied it, so every payload check below saw nothing (meta-bug #287).
+$hookInput = [Console]::In.ReadToEnd()
 $repoRoot = git rev-parse --show-toplevel 2>$null
 if (-not $repoRoot) { $repoRoot = "." }
 
 # Parse tool name, file path, and command from JSON input
-$toolName = if ($input -match '"tool_name"\s*:\s*"([^"]+)"') { $Matches[1] } else { "" }
-$filePath = if ($input -match '"filePath"\s*:\s*"([^"]+)"') { $Matches[1] } else { "" }
-$command  = if ($input -match '"command"\s*:\s*"([^"]+)"') { $Matches[1] } else { "" }
+$toolName = if ($hookInput -match '"tool_name"\s*:\s*"([^"]+)"') { $Matches[1] } else { "" }
+$filePath = if ($hookInput -match '"filePath"\s*:\s*"([^"]+)"') { $Matches[1] } else { "" }
+$command  = if ($hookInput -match '"command"\s*:\s*"([^"]+)"') { $Matches[1] } else { "" }
 
 # ── Deploy trigger detection ──────────────────────────────────────────
 $isDeployTrigger = $false

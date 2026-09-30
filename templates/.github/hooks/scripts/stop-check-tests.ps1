@@ -5,12 +5,14 @@
 #>
 $ErrorActionPreference = 'SilentlyContinue'
 
-$input = [Console]::In.ReadToEnd()
+# Not $input: that is PowerShell's automatic pipeline enumerator, and the next
+# native command (git) emptied it, so every payload check below saw nothing (meta-bug #287).
+$hookInput = [Console]::In.ReadToEnd()
 $repoRoot = git rev-parse --show-toplevel 2>$null
 if (-not $repoRoot) { $repoRoot = "." }
 
 # Check if re-entry (prevent infinite loop)
-if ($input -match '"stop_hook_active"\s*:\s*true') {
+if ($hookInput -match '"stop_hook_active"\s*:\s*true') {
     Write-Output "{}"
     exit 0
 }
@@ -27,7 +29,7 @@ if (-not $changedCode) {
 
 # Check transcript for test execution
 $testsRan = $false
-if ($input -match '"transcript_path"\s*:\s*"([^"]+)"') {
+if ($hookInput -match '"transcript_path"\s*:\s*"([^"]+)"') {
     $transcriptPath = $Matches[1]
     if (Test-Path $transcriptPath) {
         $transcript = Get-Content $transcriptPath -Raw

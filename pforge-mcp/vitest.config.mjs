@@ -80,6 +80,7 @@ const SOURCE_ONLY_SUITES = {
     "tests/forbidden-matcher.test.mjs",
     "tests/full-suite-regression.test.mjs",
     "tests/issue-257-memory-enumeration.test.mjs",
+    "tests/meta-287-hook-launchers.test.mjs",
   ],
   "../presets": ["tests/tempering-runner.test.mjs"],
 };

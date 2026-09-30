@@ -682,6 +682,10 @@ Plan Forge includes lifecycle hooks that run automatically during agent sessions
 
 **Disabling hooks**: Remove or rename `.github/hooks/plan-forge.json` to disable all Plan Forge hooks.
 
+**How hooks launch**: every entry names its interpreter explicitly — `bash .github/hooks/scripts/<hook>.sh` as the default `command`, and `powershell -NoProfile -NonInteractive -WindowStyle Hidden -ExecutionPolicy Bypass -File .github/hooks/scripts/<hook>.ps1` under both `windows` (VS Code Local harness) and `powershell` (Copilot CLI / SDK hosts). Don't point a hook at a bare script path: a Windows host that falls back to `command` hands it to the file association, which can open the script in the editor instead of running it and steal focus from chat. PowerShell hook scripts read their payload into `$hookInput`, never the automatic `$input` variable.
+
+**Which plan the forbidden-path hook enforces**: the PreToolUse hook applies the Forbidden Actions of the plan named in `.forge/active-plan` (a repo-relative path), if that file exists. Otherwise it uses the only `docs/plans/*-PLAN.md` whose status line starts with In Progress, or, when none is in progress, the only one starting with HARDENED or Ready for execution. When several plans qualify, the hook enforces nothing; write `.forge/active-plan` to choose one. Hints are matched against repo-relative paths. Only single-word backticked hints count, `*` is the only wildcard, and a bare word such as `migrations` matches a whole path segment.
+
 #### VS Code Checkpoints
 
 VS Code automatically creates checkpoints (snapshots) during Copilot Agent sessions. Use them for quick rollback without Git:

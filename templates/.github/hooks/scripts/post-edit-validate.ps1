@@ -6,12 +6,14 @@
 #>
 $ErrorActionPreference = 'SilentlyContinue'
 
-$input = [Console]::In.ReadToEnd()
+# Not $input: that is PowerShell's automatic pipeline enumerator, and the next
+# native command (git) emptied it, so every payload check below saw nothing (meta-bug #287).
+$hookInput = [Console]::In.ReadToEnd()
 $repoRoot = git rev-parse --show-toplevel 2>$null
 if (-not $repoRoot) { $repoRoot = "." }
 
-$toolName = if ($input -match '"tool_name"\s*:\s*"([^"]+)"') { $Matches[1] } else { "" }
-$filePath = if ($input -match '"filePath"\s*:\s*"([^"]+)"') { $Matches[1] } else { "" }
+$toolName = if ($hookInput -match '"tool_name"\s*:\s*"([^"]+)"') { $Matches[1] } else { "" }
+$filePath = if ($hookInput -match '"filePath"\s*:\s*"([^"]+)"') { $Matches[1] } else { "" }
 
 # Only check after file-editing tools
 $editTools = @('editFiles', 'create_file', 'replace_string_in_file', 'insert_edit_into_file', 'multi_replace_string_in_file')

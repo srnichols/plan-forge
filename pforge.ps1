@@ -1339,6 +1339,53 @@ function Invoke-Sweep {
     }
 }
 
+# ─── Plan scope hints (shared by diff + analyze) ───────────────────────
+# Backticked hints from every "## <Heading>" section of a plan, each section
+# stopping at the next heading. The previous pattern lacked (?m), so "^" never
+# matched mid-file and the section ran to EOF — every later slice scope became
+# a "forbidden" path (meta-bugs #283, #286). Only single-token hints with a
+# letter or digit can name a path; prose such as "git push --force" or "*" is
+# ignored. Twin of pforge.sh plan_section_hints and the check-forbidden hooks.
+function Get-PlanSectionHints([string]$PlanContent, [string]$Heading) {
+    $pattern = '(?m)^#{2,6}[ \t]+' + [regex]::Escape($Heading) + '(?!\w)[^\n]*\n([\s\S]*?)(?=^#{2,6}[ \t]|\z)'
+    $hints = @()
+    foreach ($section in [regex]::Matches($PlanContent, $pattern)) {
+        foreach ($token in [regex]::Matches($section.Groups[1].Value, '`([^`\r\n]+)`')) {
+            $hint = $token.Groups[1].Value.Trim()
+            if ($hint -match '[A-Za-z0-9]' -and $hint -notmatch '\s') { $hints += $hint }
+        }
+    }
+    return , $hints
+}
+
+# Plan path hints are literal text with "*" as the only wildcard; -like also
+# read "[...]" as a character class, so a backticked "[parallel-safe]" tag
+# matched nearly every path (meta-bug #286). A bare word (letters, digits,
+# "_", "-") matches only a whole path segment, so prose tokens such as `true`
+# or `0` cannot match arbitrary paths.
+function Test-PlanPathHint([string]$File, [string]$Hint) {
+    $normalizedHint = $Hint -replace '\\', '/'
+    if ($normalizedHint -match '^[A-Za-z0-9_-]+$') {
+        $pattern = '(^|/)' + $normalizedHint + '($|/)'
+    } else {
+        $pattern = [regex]::Escape($normalizedHint) -replace '\\\*', '.*'
+    }
+    return [regex]::IsMatch(($File -replace '\\', '/'), $pattern, [System.Text.RegularExpressions.RegexOptions]::IgnoreCase)
+}
+
+# Verdict for one changed file: forbidden (with the matching hint), in-scope,
+# or unplanned. A plan without In Scope hints allows every non-forbidden file.
+function Get-PlanScopeVerdict([string]$File, [string[]]$ForbiddenHints, [string[]]$InScopeHints) {
+    foreach ($hint in $ForbiddenHints) {
+        if (Test-PlanPathHint $File $hint) { return @{ Verdict = 'forbidden'; Hint = $hint } }
+    }
+    if ($InScopeHints.Count -eq 0) { return @{ Verdict = 'in-scope' } }
+    foreach ($hint in $InScopeHints) {
+        if (Test-PlanPathHint $File $hint) { return @{ Verdict = 'in-scope' } }
+    }
+    return @{ Verdict = 'unplanned' }
+}
+
 # ─── Command: diff ─────────────────────────────────────────────────────
 function Invoke-Diff {
     if (-not $Arguments -or $Arguments.Count -eq 0) {
@@ -1375,21 +1422,9 @@ function Invoke-Diff {
         return
     }
 
-    $planContent = Get-Content $planFile -Raw
-
-    # Extract In Scope paths
-    $inScopeSection = ""
-    if ($planContent -match '(?s)### In Scope(.*?)(?=^###?\s|\z)') {
-        $inScopeSection = $Matches[1]
-    }
-    $inScopePaths = [regex]::Matches($inScopeSection, '`([^`]+)`') | ForEach-Object { $_.Groups[1].Value }
-
-    # Extract Forbidden Actions paths
-    $forbiddenSection = ""
-    if ($planContent -match '(?s)### Forbidden Actions(.*?)(?=^###?\s|\z)') {
-        $forbiddenSection = $Matches[1]
-    }
-    $forbiddenPaths = [regex]::Matches($forbiddenSection, '`([^`]+)`') | ForEach-Object { $_.Groups[1].Value }
+    $planContent = Get-Content -LiteralPath $planFile -Raw
+    $inScopePaths = Get-PlanSectionHints $planContent 'In Scope'
+    $forbiddenPaths = Get-PlanSectionHints $planContent 'Forbidden Actions'
 
     Write-Host ""
     Write-Host "Scope Drift Check — $($changedFiles.Count) changed file(s) vs plan:" -ForegroundColor Cyan
@@ -1399,38 +1434,17 @@ function Invoke-Diff {
     $outOfScope = 0
 
     foreach ($file in $changedFiles) {
-        # Check forbidden
-        $isForbidden = $false
-        foreach ($fp in $forbiddenPaths) {
-            if ($file -like "*$fp*") {
-                Write-Host "  🔴 FORBIDDEN  $file  (matches: $fp)" -ForegroundColor Red
+        $verdict = Get-PlanScopeVerdict $file $forbiddenPaths $inScopePaths
+        switch ($verdict.Verdict) {
+            'forbidden' {
+                Write-Host "  🔴 FORBIDDEN  $file  (matches: $($verdict.Hint))" -ForegroundColor Red
                 $violations++
-                $isForbidden = $true
-                break
             }
-        }
-        if ($isForbidden) { continue }
-
-        # Check in-scope
-        $isInScope = $false
-        if ($inScopePaths.Count -eq 0) {
-            $isInScope = $true  # No scope defined — everything allowed
-        }
-        else {
-            foreach ($sp in $inScopePaths) {
-                if ($file -like "*$sp*") {
-                    $isInScope = $true
-                    break
-                }
+            'in-scope' { Write-Host "  ✅ IN SCOPE   $file" -ForegroundColor Green }
+            default {
+                Write-Host "  🟡 UNPLANNED  $file  (not in Scope Contract)" -ForegroundColor Yellow
+                $outOfScope++
             }
-        }
-
-        if ($isInScope) {
-            Write-Host "  ✅ IN SCOPE   $file" -ForegroundColor Green
-        }
-        else {
-            Write-Host "  🟡 UNPLANNED  $file  (not in Scope Contract)" -ForegroundColor Yellow
-            $outOfScope++
         }
     }
 
@@ -2346,7 +2360,7 @@ function Invoke-Analyze {
         "Score traceability, coverage, completeness, and gates"
     )
 
-    $planContent = Get-Content $planFile -Raw
+    $planContent = Get-Content -LiteralPath $planFile -Raw
     $planName = [System.IO.Path]::GetFileNameWithoutExtension($planFile)
 
     Write-Host ""
@@ -2442,34 +2456,16 @@ function Invoke-Analyze {
     $changedFiles = $changedFiles | Sort-Object -Unique | Where-Object { $_ }
 
     # Extract scope
-    $inScopePaths = @()
-    if ($planContent -match '(?s)### In Scope(.*?)(?=^###?\s|\z)') {
-        $inScopePaths = [regex]::Matches($Matches[1], '`([^`]+)`') | ForEach-Object { $_.Groups[1].Value }
-    }
-    $forbiddenPaths = @()
-    if ($planContent -match '(?s)### Forbidden Actions(.*?)(?=^###?\s|\z)') {
-        $forbiddenPaths = [regex]::Matches($Matches[1], '`([^`]+)`') | ForEach-Object { $_.Groups[1].Value }
-    }
+    $inScopePaths = Get-PlanSectionHints $planContent 'In Scope'
+    $forbiddenPaths = Get-PlanSectionHints $planContent 'Forbidden Actions'
 
     $violations = 0; $outOfScope = 0; $inScope = 0
     foreach ($file in $changedFiles) {
-        $isForbidden = $false
-        foreach ($fp in $forbiddenPaths) {
-            # Use .Contains (literal substring) instead of -like to avoid
-            # PowerShell wildcard interpretation when path hints include
-            # bracket/brace characters (e.g. "{steps: [], ...}" in scope lines).
-            if ($file.Contains($fp)) { $violations++; $isForbidden = $true; break }
+        switch ((Get-PlanScopeVerdict $file $forbiddenPaths $inScopePaths).Verdict) {
+            'forbidden' { $violations++ }
+            'in-scope' { $inScope++ }
+            default { $outOfScope++ }
         }
-        if ($isForbidden) { continue }
-
-        $isInScope = $false
-        if ($inScopePaths.Count -eq 0) { $isInScope = $true }
-        else {
-            foreach ($sp in $inScopePaths) {
-                if ($file.Contains($sp)) { $isInScope = $true; break }
-            }
-        }
-        if ($isInScope) { $inScope++ } else { $outOfScope++ }
     }
 
     $totalChanged = $changedFiles.Count
@@ -2505,13 +2501,13 @@ function Invoke-Analyze {
     $testFiles = @()
     foreach ($td in $testDirs) {
         $testDir = Join-Path $RepoRoot $td
-        if (Test-Path $testDir) {
-            $testFiles += Get-ChildItem -Path $testDir -Recurse -File -ErrorAction SilentlyContinue
+        if (Test-Path -LiteralPath $testDir) {
+            $testFiles += Get-ChildItem -LiteralPath $testDir -Recurse -File -ErrorAction SilentlyContinue
         }
     }
     # Also search project root with test patterns
     foreach ($pattern in $testExtensions) {
-        $testFiles += Get-ChildItem -Path $RepoRoot -Filter $pattern -Recurse -File -ErrorAction SilentlyContinue |
+        $testFiles += Get-ChildItem -LiteralPath $RepoRoot -Filter $pattern -Recurse -File -ErrorAction SilentlyContinue |
             Where-Object { $_.FullName -notmatch '(node_modules|bin|obj|dist|\.git|vendor)' }
     }
     $testFiles = $testFiles | Select-Object -Unique
@@ -2523,7 +2519,9 @@ function Invoke-Analyze {
             $keywords = $criterion -replace '[^\w\s]', '' -split '\s+' | Where-Object { $_.Length -gt 4 } | Select-Object -First 3
             $found = $false
             foreach ($tf in $testFiles) {
-                $testContent = Get-Content $tf.FullName -Raw -ErrorAction SilentlyContinue
+                # -LiteralPath: on Windows PowerShell 5.1 a "[id]" route directory made -Path a
+                # wildcard, which hid the provider's -Raw parameter and aborted analyze (meta-bug #284).
+                $testContent = Get-Content -LiteralPath $tf.FullName -Raw -ErrorAction SilentlyContinue
                 if ($testContent) {
                     $matchCount = ($keywords | Where-Object { $testContent -match $_ }).Count
                     if ($matchCount -ge 2) { $found = $true; break }
@@ -2579,10 +2577,18 @@ function Invoke-Analyze {
         $scoreGates = 0
     }
 
-    # Gate command lint — catch errors that would fail at runtime
+    # Gate command lint — the parser contract run-plan's pre-flight enforces.
+    # Paths travel through env vars and a file:// URL: import('E:/...') is not a
+    # valid ESM specifier on Windows, so this lint was silently skipped there.
+    $savedEAP = $ErrorActionPreference
     try {
-        $lintOutput = node -e "import('$($RepoRoot -replace '\\','/')/pforge-mcp/orchestrator.mjs').then(m => { const r = m.lintGateCommands('$($planFile -replace '\\','/').replace(\"'\",\"\\'\")'); console.log(JSON.stringify(r)); })" 2>&1
-        $lintResult = $lintOutput | ConvertFrom-Json -ErrorAction SilentlyContinue
+        $ErrorActionPreference = 'Continue'
+        $env:PFORGE_LINT_MODULE = Join-Path $RepoRoot 'pforge-mcp/orchestrator/gate-helpers.mjs'
+        $env:PFORGE_LINT_PLAN = (Resolve-Path -LiteralPath $planFile).Path
+        $env:PFORGE_LINT_CWD = $RepoRoot
+        $lintScript = "const { pathToFileURL } = await import('node:url'); const m = await import(pathToFileURL(process.env.PFORGE_LINT_MODULE).href); process.stdout.write(JSON.stringify(m.lintGateCommands(process.env.PFORGE_LINT_PLAN, process.env.PFORGE_LINT_CWD)));"
+        $lintOutput = node --input-type=module -e $lintScript 2>$null
+        $lintResult = ($lintOutput -join "`n") | ConvertFrom-Json -ErrorAction SilentlyContinue
         if ($lintResult) {
             if ($lintResult.errors.Count -gt 0) {
                 Write-Host "  ❌ Gate lint: $($lintResult.errors.Count) error(s) — plan will fail at runtime" -ForegroundColor Red
@@ -2604,6 +2610,9 @@ function Invoke-Analyze {
         }
     } catch {
         # Gate lint is advisory — don't block analyze on lint failures
+    } finally {
+        $ErrorActionPreference = $savedEAP
+        Remove-Item Env:PFORGE_LINT_MODULE, Env:PFORGE_LINT_PLAN, Env:PFORGE_LINT_CWD -ErrorAction SilentlyContinue
     }
 
     # Check for completeness markers (deferred work)
@@ -2612,8 +2621,8 @@ function Invoke-Analyze {
     $markerCount = 0
     foreach ($file in $changedFiles) {
         $fullPath = Join-Path $RepoRoot $file
-        if (Test-Path $fullPath) {
-            $markerCount += (Select-String -Path $fullPath -Pattern $sweepRegex -CaseSensitive:$false -ErrorAction SilentlyContinue).Count
+        if (Test-Path -LiteralPath $fullPath) {
+            $markerCount += (Select-String -LiteralPath $fullPath -Pattern $sweepRegex -CaseSensitive:$false -ErrorAction SilentlyContinue).Count
         }
     }
 

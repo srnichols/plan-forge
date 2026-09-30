@@ -607,6 +607,85 @@ cmd_sweep() {
     fi
 }
 
+# ─── Plan scope hints (shared by diff + analyze) ───────────────────────
+# Backticked hints from every "## <Heading>" section of a plan, each section
+# stopping at the next heading. The previous awk range ended on its own
+# heading line, so both lists were always empty here — while pforge.ps1 ran
+# the section to EOF (meta-bugs #283, #286). Only single-token hints with a
+# letter or digit can name a path; prose such as "git push --force" or "*" is
+# ignored. Twin of pforge.ps1 Get-PlanSectionHints and the check-forbidden hooks.
+plan_section_hints() {
+    printf '%s\n' "$1" | awk -v heading="$2" '
+        /^##+[ \t]/ {
+            text = $0
+            sub(/^##+[ \t]+/, "", text)
+            after = substr(text, length(heading) + 1, 1)
+            in_section = (index(text, heading) == 1 && after !~ /[A-Za-z0-9_]/)
+            next
+        }
+        in_section { print }
+    ' | grep -oE '`[^`]+`' | tr -d '`' \
+      | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//' \
+      | grep -v '[[:space:]]' | grep '[A-Za-z0-9]' || true
+}
+
+# One ERE per hint line, in order. Hints are literal text with "*" as the only
+# wildcard; a bare word (letters, digits, "_", "-") matches only a whole path
+# segment, so prose tokens such as `true` or `0` cannot match arbitrary paths.
+# Same rule as pforge.ps1 Test-PlanPathHint (meta-bug #286).
+plan_hint_regexes() {
+    [ -n "$1" ] || return 0
+    printf '%s\n' "$1" | sed -E \
+        -e 's#\\#/#g' \
+        -e 's/[].[^$+?(){}|]/\\&/g' \
+        -e 's/\*/.*/g' \
+        -e 's#^[A-Za-z0-9_-]+$#(^|/)&($|/)#'
+}
+
+# Fill the parallel FORBIDDEN_HINTS/FORBIDDEN_RES and INSCOPE_HINTS/INSCOPE_RES
+# arrays once per command. Compiling per file × hint took minutes on large plans.
+load_plan_scope_hints() {
+    local hints regexes hint re
+    FORBIDDEN_HINTS=(); FORBIDDEN_RES=(); INSCOPE_HINTS=(); INSCOPE_RES=()
+    hints="$(plan_section_hints "$1" "Forbidden Actions")"
+    regexes="$(plan_hint_regexes "$hints")"
+    while IFS= read -r hint && IFS= read -r re <&3; do
+        [ -n "$hint" ] || continue
+        FORBIDDEN_HINTS+=("$hint"); FORBIDDEN_RES+=("$re")
+    done <<< "$hints" 3<<< "$regexes"
+    hints="$(plan_section_hints "$1" "In Scope")"
+    regexes="$(plan_hint_regexes "$hints")"
+    while IFS= read -r hint && IFS= read -r re <&3; do
+        [ -n "$hint" ] || continue
+        INSCOPE_HINTS+=("$hint"); INSCOPE_RES+=("$re")
+    done <<< "$hints" 3<<< "$regexes"
+}
+
+# Set PLAN_VERDICT (forbidden | in-scope | unplanned) and PLAN_VERDICT_HINT for
+# one changed file, case-insensitively. A plan without In Scope hints allows
+# every non-forbidden file. Twin of pforge.ps1 Get-PlanScopeVerdict.
+plan_scope_verdict() {
+    local file="$1" i n had_nocasematch=0
+    PLAN_VERDICT="unplanned"; PLAN_VERDICT_HINT=""
+    shopt -q nocasematch && had_nocasematch=1
+    shopt -s nocasematch
+    n=${#FORBIDDEN_RES[@]}
+    for ((i = 0; i < n; i++)); do
+        if [[ "$file" =~ ${FORBIDDEN_RES[$i]} ]]; then
+            PLAN_VERDICT="forbidden"; PLAN_VERDICT_HINT="${FORBIDDEN_HINTS[$i]}"
+            break
+        fi
+    done
+    if [ "$PLAN_VERDICT" != "forbidden" ]; then
+        n=${#INSCOPE_RES[@]}
+        [ "$n" -eq 0 ] && PLAN_VERDICT="in-scope"
+        for ((i = 0; i < n; i++)); do
+            if [[ "$file" =~ ${INSCOPE_RES[$i]} ]]; then PLAN_VERDICT="in-scope"; break; fi
+        done
+    fi
+    [ "$had_nocasematch" -eq 1 ] || shopt -u nocasematch
+}
+
 # ─── Command: diff ─────────────────────────────────────────────────────
 cmd_diff() {
     if [ $# -eq 0 ]; then
@@ -629,7 +708,7 @@ cmd_diff() {
     # Get changed files
     local changed
     changed="$(git diff --name-only 2>/dev/null; git diff --cached --name-only 2>/dev/null)"
-    changed="$(echo "$changed" | sort -u | grep -v '^$')"
+    changed="$(echo "$changed" | sort -u | grep -v '^$' || true)"
 
     if [ -z "$changed" ]; then
         echo "No changed files detected."
@@ -638,18 +717,7 @@ cmd_diff() {
 
     local plan_content
     plan_content="$(cat "$plan_file")"
-
-    # Extract forbidden paths (backtick-wrapped in Forbidden Actions section)
-    local forbidden_section
-    forbidden_section="$(echo "$plan_content" | awk '/### Forbidden Actions/,/^###? /' || true)"
-    local forbidden_paths
-    forbidden_paths="$(echo "$forbidden_section" | grep -oE '`[^`]+`' | tr -d '`' || true)"
-
-    # Extract in-scope paths
-    local inscope_section
-    inscope_section="$(echo "$plan_content" | awk '/### In Scope/,/^###? /' || true)"
-    local inscope_paths
-    inscope_paths="$(echo "$inscope_section" | grep -oE '`[^`]+`' | tr -d '`' || true)"
+    load_plan_scope_hints "$plan_content"
 
     echo ""
     local file_count
@@ -662,40 +730,20 @@ cmd_diff() {
 
     while IFS= read -r file; do
         [ -z "$file" ] && continue
-
-        # Check forbidden
-        local is_forbidden=false
-        while IFS= read -r fp; do
-            [ -z "$fp" ] && continue
-            if [[ "$file" == *"$fp"* ]]; then
-                echo "  🔴 FORBIDDEN  $file  (matches: $fp)"
+        plan_scope_verdict "$file"
+        case "$PLAN_VERDICT" in
+            forbidden)
+                echo "  🔴 FORBIDDEN  $file  (matches: $PLAN_VERDICT_HINT)"
                 violations=$((violations + 1))
-                is_forbidden=true
-                break
-            fi
-        done <<< "$forbidden_paths"
-        $is_forbidden && continue
-
-        # Check in-scope
-        local is_in_scope=false
-        if [ -z "$inscope_paths" ]; then
-            is_in_scope=true
-        else
-            while IFS= read -r sp; do
-                [ -z "$sp" ] && continue
-                if [[ "$file" == *"$sp"* ]]; then
-                    is_in_scope=true
-                    break
-                fi
-            done <<< "$inscope_paths"
-        fi
-
-        if $is_in_scope; then
-            echo "  ✅ IN SCOPE   $file"
-        else
-            echo "  🟡 UNPLANNED  $file  (not in Scope Contract)"
-            out_of_scope=$((out_of_scope + 1))
-        fi
+                ;;
+            in-scope)
+                echo "  ✅ IN SCOPE   $file"
+                ;;
+            *)
+                echo "  🟡 UNPLANNED  $file  (not in Scope Contract)"
+                out_of_scope=$((out_of_scope + 1))
+                ;;
+        esac
     done <<< "$changed"
 
     echo ""
@@ -1982,12 +2030,14 @@ cmd_analyze() {
     # ═══════════════════════════════════════════════════════════════
     echo "Traceability:"
 
+    # grep -c prints its own 0 on no match (exit 1); "|| echo 0" appended a
+    # second line and broke the arithmetic below for any plan without SHOULDs.
     local must_count should_count slice_count
-    must_count=$(echo "$plan_content" | grep -ciE '^\s*[-*]\s*\*\*MUST\*\*' || echo 0)
-    should_count=$(echo "$plan_content" | grep -ciE '^\s*[-*]\s*\*\*SHOULD\*\*' || echo 0)
+    must_count=$(echo "$plan_content" | grep -ciE '^\s*[-*]\s*\*\*MUST\*\*' || true)
+    should_count=$(echo "$plan_content" | grep -ciE '^\s*[-*]\s*\*\*SHOULD\*\*' || true)
     # Accept h2/h3/h4 headers to match the canonical parser at
     # pforge-mcp/orchestrator/plan-parser.mjs (/^#{2,4}\s+Slice\s+\d+\b/).
-    slice_count=$(echo "$plan_content" | grep -cE '^#{2,4}[[:space:]]+Slice[[:space:]]+[0-9]' || echo 0)
+    slice_count=$(echo "$plan_content" | grep -cE '^#{2,4}[[:space:]]+Slice[[:space:]]+[0-9]' || true)
     local total_criteria=$((must_count + should_count))
 
     if [ "$total_criteria" -gt 0 ]; then
@@ -2018,30 +2068,24 @@ cmd_analyze() {
 
     local changed_files
     changed_files="$(git diff --name-only 2>/dev/null; git diff --cached --name-only 2>/dev/null)"
-    changed_files="$(echo "$changed_files" | sort -u | grep -v '^$')"
+    changed_files="$(echo "$changed_files" | sort -u | grep -v '^$' || true)"
     local total_changed
-    total_changed="$(echo "$changed_files" | grep -c '.' || echo 0)"
+    total_changed="$(echo "$changed_files" | grep -c '.' || true)"
 
     local violations=0 out_of_scope=0 in_scope=0
 
     if [ "$total_changed" -gt 0 ]; then
-        # Extract forbidden paths
-        local forbidden
-        forbidden="$(echo "$plan_content" | sed -n '/### Forbidden Actions/,/^###/p' | grep -oP '`\K[^`]+' || true)"
+        load_plan_scope_hints "$plan_content"
 
-        for file in $changed_files; do
-            local is_forbidden=false
-            for fp in $forbidden; do
-                if echo "$file" | grep -q "$fp"; then
-                    violations=$((violations + 1))
-                    is_forbidden=true
-                    break
-                fi
-            done
-            [ "$is_forbidden" = true ] && continue
-            in_scope=$((in_scope + 1))
-        done
-        out_of_scope=$((total_changed - in_scope - violations))
+        while IFS= read -r file; do
+            [ -z "$file" ] && continue
+            plan_scope_verdict "$file"
+            case "$PLAN_VERDICT" in
+                forbidden) violations=$((violations + 1)) ;;
+                in-scope)  in_scope=$((in_scope + 1)) ;;
+                *)         out_of_scope=$((out_of_scope + 1)) ;;
+            esac
+        done <<< "$changed_files"
 
         echo "  ✅ $total_changed changed files analyzed"
         [ "$violations" -gt 0 ] && echo "  ❌ $violations forbidden file(s) touched"
@@ -2086,7 +2130,7 @@ cmd_analyze() {
     echo "Validation Gates:"
 
     local gates_found=0
-    gates_found=$(echo "$plan_content" | grep -ciE 'validation gate|build.*pass|test.*pass|\- \[ \].*build|\- \[ \].*test' || echo 0)
+    gates_found=$(echo "$plan_content" | grep -ciE 'validation gate|build.*pass|test.*pass|\- \[ \].*build|\- \[ \].*test' || true)
 
     if [ "$gates_found" -gt 0 ]; then
         echo "  ✅ $gates_found validation gate reference(s) found"
@@ -2102,14 +2146,15 @@ cmd_analyze() {
     # Deferred work markers in changed files
     local marker_count=0
     if [ "$total_changed" -gt 0 ]; then
-        for file in $changed_files; do
+        while IFS= read -r file; do
+            [ -z "$file" ] && continue
             local full_path="$REPO_ROOT/$file"
             if [ -f "$full_path" ]; then
                 local mc
-                mc=$(grep -ciE 'TODO|FIXME|HACK|stub|placeholder|mock data' "$full_path" 2>/dev/null || echo 0)
-                marker_count=$((marker_count + mc))
+                mc=$(grep -ciE 'TODO|FIXME|HACK|stub|placeholder|mock data' "$full_path" 2>/dev/null || true)
+                marker_count=$((marker_count + ${mc:-0}))
             fi
-        done
+        done <<< "$changed_files"
     fi
 
     if [ "$marker_count" -eq 0 ]; then

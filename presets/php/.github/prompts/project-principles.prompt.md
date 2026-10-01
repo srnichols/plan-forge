@@ -101,7 +101,7 @@ to **Accept**, **Modify**, or **Reject**.
 **Python**:
 - Core Principle: "Type hints on all function signatures"
 - Core Principle: "All I/O operations must be async where the framework supports it"
-- Technology: "Python 3.11+ with type hints"
+- Technology: "Python 3.14+ with type hints"
 - Forbidden: "Bare `except:` clauses" (swallows all errors including KeyboardInterrupt)
 - Forbidden: "`# type: ignore` without an issue link explaining why"
 - Quality: "pytest with 85%+ coverage on business logic"
@@ -109,15 +109,15 @@ to **Accept**, **Modify**, or **Reject**.
 **Java / Spring Boot**:
 - Core Principle: "Constructor injection only — no field injection with @Autowired"
 - Core Principle: "@Transactional at the service layer, never at the repository layer"
-- Technology: "Java 21+ with Spring Boot 3.x"
+- Technology: "Java 25 (LTS) with Spring Boot 4.x"
 - Forbidden: "Field injection (@Autowired on fields)" (untestable, hidden dependencies)
 - Forbidden: "Catching generic Exception instead of specific types"
-- Quality: "JUnit 5 with 90%+ coverage on service layer"
+- Quality: "JUnit 6 with 90%+ coverage on service layer"
 
 **PHP**:
 - Core Principle: "Always check returned errors — no `_` for error values"
 - Core Principle: "Context propagation through all function chains"
-- Technology: "PHP 1.22+ with standard library preferred over third-party"
+- Technology: "PHP 8.5+ with Composer packages kept minimal"
 - Forbidden: "Ignoring error returns with `_`" (silent failures)
 - Forbidden: "Goroutine leaks — all goroutines must have a shutdown path"
 - Quality: "PHP test with race detector enabled in CI"

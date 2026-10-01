@@ -90,7 +90,7 @@ You are the **CI/CD Pipeline Reviewer**. Audit pipeline configurations for deplo
 **Pinned third-party action (supply chain safety):**
 ```yaml
 # ✅ SHA-pinned — immune to tag hijacking
-- uses: actions/checkout@8ade135a41bc03ea155e62e844d188df1ea18608 # v4.1.0
+- uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 ```
 
 **Proper environment promotion:**

@@ -74,7 +74,7 @@ func TestUsersAPI_Integration(t *testing.T) {
 
     ctx := context.Background()
     pgContainer, err := postgres.Run(ctx,
-        "postgres:16",
+        "postgres:18",
         postgres.WithDatabase("testdb"),
         testcontainers.WithWaitStrategy(
             wait.ForListeningPort("5432/tcp"),

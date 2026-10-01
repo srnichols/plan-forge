@@ -1,6 +1,6 @@
 # Instructions for Copilot — PHP Project
 
-> **Stack**: PHP 1.22+ / Standard Library / Chi or Gin  
+> **Stack**: PHP 8.5+ / Standard Library / Chi or Gin
 > **Last Updated**: <DATE>
 
 ---
@@ -31,7 +31,7 @@
 **Description**: <!-- What your app does -->
 
 **Tech Stack**:
-- PHP 1.22+
+- PHP 8.5+
 - Standard library `net/http` (or Chi/Gin router)
 - PostgreSQL with `pgx` or `database/sql`
 - Docker / Kubernetes

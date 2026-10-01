@@ -1,6 +1,6 @@
 # Instructions for Copilot — Rust Project
 
-> **Stack**: Rust 1.22+ / Standard Library / Chi or Gin  
+> **Stack**: Rust 1.98+ (2024 edition) / Standard Library / Chi or Gin
 > **Last Updated**: <DATE>
 
 ---
@@ -31,7 +31,7 @@
 **Description**: <!-- What your app does -->
 
 **Tech Stack**:
-- Rust 1.22+
+- Rust 1.98+ (2024 edition)
 - Standard library `net/http` (or Chi/Gin router)
 - PostgreSQL with `pgx` or `database/sql`
 - Docker / Kubernetes

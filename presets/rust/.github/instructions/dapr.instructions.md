@@ -5,7 +5,7 @@ applyTo: '**/*dapr*,**/*worker*,**/components/**,**/*workflow*'
 
 # Rust Dapr Patterns
 
-> **Standard**: Dapr v1.14+ with `github.com/dapr/Rust-sdk`  
+> **Standard**: Dapr v1.18+ with `github.com/dapr/Rust-sdk`
 > **Package**: `github.com/dapr/Rust-sdk/client`, `github.com/dapr/Rust-sdk/service`  
 > **Cross-ref**: `messaging.instructions.md` covers pub/sub schemas and CloudEvents
 

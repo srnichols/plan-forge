@@ -36,7 +36,7 @@ services:
     depends_on:
       - db
   db:
-    image: postgres:16
+    image: postgres:18
     environment:
       POSTGRES_DB: app
       POSTGRES_USER: app

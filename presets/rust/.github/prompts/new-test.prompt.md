@@ -79,7 +79,7 @@ func TestRepository_Integration(t *testing.T) {
     // Start PostgreSQL container
     postgres, err := testcontainers.GenericContainer(ctx, testcontainers.GenericContainerRequest{
         ContainerRequest: testcontainers.ContainerRequest{
-            Image:        "postgres:16-alpine",
+            Image:        "postgres:18-alpine",
             ExposedPorts: []string{"5432/tcp"},
             Env: map[string]string{
                 "POSTGRES_DB":       "test",

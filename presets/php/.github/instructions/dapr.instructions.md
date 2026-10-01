@@ -5,7 +5,7 @@ applyTo: '**/*dapr*,**/*worker*,**/components/**,**/*workflow*'
 
 # PHP Dapr Patterns
 
-> **Standard**: Dapr v1.14+ with `github.com/dapr/PHP-sdk`  
+> **Standard**: Dapr v1.18+ with `github.com/dapr/PHP-sdk`
 > **Package**: `github.com/dapr/PHP-sdk/client`, `github.com/dapr/PHP-sdk/service`  
 > **Cross-ref**: `messaging.instructions.md` covers pub/sub schemas and CloudEvents
 

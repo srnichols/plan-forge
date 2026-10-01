@@ -133,7 +133,7 @@ New-AzConsumptionBudget @budget
 // ✅ Budget resource in Bicep — deploy at subscription scope
 targetScope = 'subscription'
 
-resource budget 'Microsoft.Consumption/budgets@2023-11-01' = {
+resource budget 'Microsoft.Consumption/budgets@2026-06-01' = {
   name: 'budget-${workloadName}-monthly'
   properties: {
     category: 'Cost'
@@ -142,11 +142,15 @@ resource budget 'Microsoft.Consumption/budgets@2023-11-01' = {
     timePeriod: { startDate: '2026-01-01' }
     notifications: {
       atFiftyPercent: {
-        enabled: true; operator: 'GreaterThan'; threshold: 50
+        enabled: true
+        operator: 'GreaterThan'
+        threshold: 50
         contactEmails: [finOpsEmail]
       }
       atEightyPercent: {
-        enabled: true; operator: 'GreaterThan'; threshold: 80
+        enabled: true
+        operator: 'GreaterThan'
+        threshold: 80
         contactEmails: [finOpsEmail, ownerEmail]
       }
     }

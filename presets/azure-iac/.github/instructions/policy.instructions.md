@@ -32,7 +32,7 @@ applyTo: '**/*.bicep,**/*.tf,**/*.ps1'
 targetScope = 'managementGroup'
 
 // ✅ Deploy diagnostic settings automatically (DeployIfNotExists)
-resource diagPolicy 'Microsoft.Authorization/policyAssignments@2023-04-01' = {
+resource diagPolicy 'Microsoft.Authorization/policyAssignments@2026-06-01' = {
   name: 'deploy-diagnostic-settings'
   location: 'eastus'
   identity: { type: 'SystemAssigned' }   // ← DINE policies require managed identity
@@ -46,7 +46,7 @@ resource diagPolicy 'Microsoft.Authorization/policyAssignments@2023-04-01' = {
 }
 
 // ✅ Deny public network access on storage accounts
-resource denyPublicStorage 'Microsoft.Authorization/policyAssignments@2023-04-01' = {
+resource denyPublicStorage 'Microsoft.Authorization/policyAssignments@2026-06-01' = {
   name: 'deny-public-storage'
   properties: {
     policyDefinitionId: '/providers/Microsoft.Authorization/policyDefinitions/b2982f36-99f2-4db5-8eff-19bf0ddc60be'
@@ -56,7 +56,7 @@ resource denyPublicStorage 'Microsoft.Authorization/policyAssignments@2023-04-01
 }
 
 // ✅ Require mandatory tags (Deny effect)
-resource requireTagsPolicy 'Microsoft.Authorization/policyAssignments@2023-04-01' = {
+resource requireTagsPolicy 'Microsoft.Authorization/policyAssignments@2026-06-01' = {
   name: 'require-mandatory-tags'
   properties: {
     policyDefinitionId: mandatoryTagsInitiativeId
@@ -71,14 +71,14 @@ resource requireTagsPolicy 'Microsoft.Authorization/policyAssignments@2023-04-01
 
 ```bicep
 // ✅ Custom policy: deny resources without CostCenter tag
-resource requireCostCenterPolicy 'Microsoft.Authorization/policyDefinitions@2023-04-01' = {
+resource requireCostCenterPolicy 'Microsoft.Authorization/policyDefinitions@2026-06-01' = {
   name: 'require-costcenter-tag'
   properties: {
     policyType: 'Custom'
     mode: 'Indexed'
     displayName: 'Require CostCenter tag on resources'
     description: 'All resources must have a CostCenter tag for FinOps chargeback.'
-    metadata: { category: 'Tags'; version: '1.0.0' }
+    metadata: { category: 'Tags', version: '1.0.0' }
     policyRule: {
       if: {
         field: 'tags[CostCenter]'
@@ -105,12 +105,12 @@ resource requireCostCenterPolicy 'Microsoft.Authorization/policyDefinitions@2023
 
 ```bicep
 // ✅ Group related policies into initiatives for easier management
-resource securityBaseline 'Microsoft.Authorization/policySetDefinitions@2023-04-01' = {
+resource securityBaseline 'Microsoft.Authorization/policySetDefinitions@2026-06-01' = {
   name: 'security-baseline-initiative'
   properties: {
     policyType: 'Custom'
     displayName: 'Security Baseline Initiative'
-    metadata: { category: 'Security'; version: '1.0.0' }
+    metadata: { category: 'Security', version: '1.0.0' }
     policyDefinitions: [
       {
         policyDefinitionId: '/providers/Microsoft.Authorization/policyDefinitions/b2982f36-99f2-4db5-8eff-19bf0ddc60be'
@@ -162,7 +162,7 @@ az policy state list \
 
 ```bicep
 // ✅ Policy exemption — time-bounded, documented reason
-resource policyExemption 'Microsoft.Authorization/policyExemptions@2022-07-01-preview' = {
+resource policyExemption 'Microsoft.Authorization/policyExemptions@2026-01-01-preview' = {
   name: 'exempt-legacy-storage-account'
   properties: {
     policyAssignmentId: denyPublicStorageAssignment.id

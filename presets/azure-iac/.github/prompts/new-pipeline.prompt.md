@@ -45,8 +45,8 @@ jobs:
     name: Validate
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: azure/login@v2
+      - uses: actions/checkout@v7
+      - uses: azure/login@v3
         with:
           client-id: ${{ secrets.AZURE_CLIENT_ID }}
           tenant-id: ${{ secrets.AZURE_TENANT_ID }}
@@ -67,8 +67,8 @@ jobs:
     environment: dev
     if: github.event_name != 'pull_request'
     steps:
-      - uses: actions/checkout@v4
-      - uses: azure/login@v2
+      - uses: actions/checkout@v7
+      - uses: azure/login@v3
         with:
           client-id: ${{ secrets.AZURE_CLIENT_ID }}
           tenant-id: ${{ secrets.AZURE_TENANT_ID }}
@@ -89,8 +89,8 @@ jobs:
     runs-on: ubuntu-latest
     environment: prod  # requires manual approval gate in GitHub environments
     steps:
-      - uses: actions/checkout@v4
-      - uses: azure/login@v2
+      - uses: actions/checkout@v7
+      - uses: azure/login@v3
         with:
           client-id: ${{ secrets.AZURE_CLIENT_ID }}
           tenant-id: ${{ secrets.AZURE_TENANT_ID }}
@@ -124,7 +124,7 @@ permissions:
   contents: read
 
 env:
-  TF_VERSION: '1.7.0'
+  TF_VERSION: '1.16.4'
 
 jobs:
   validate:
@@ -133,13 +133,13 @@ jobs:
       run:
         working-directory: infra
     steps:
-      - uses: actions/checkout@v4
-      - uses: azure/login@v2
+      - uses: actions/checkout@v7
+      - uses: azure/login@v3
         with:
           client-id: ${{ secrets.AZURE_CLIENT_ID }}
           tenant-id: ${{ secrets.AZURE_TENANT_ID }}
           subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
-      - uses: hashicorp/setup-terraform@v3
+      - uses: hashicorp/setup-terraform@v4
         with:
           terraform_version: ${{ env.TF_VERSION }}
       - run: terraform init
@@ -161,13 +161,13 @@ jobs:
       run:
         working-directory: infra
     steps:
-      - uses: actions/checkout@v4
-      - uses: azure/login@v2
+      - uses: actions/checkout@v7
+      - uses: azure/login@v3
         with:
           client-id: ${{ secrets.AZURE_CLIENT_ID }}
           tenant-id: ${{ secrets.AZURE_TENANT_ID }}
           subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
-      - uses: hashicorp/setup-terraform@v3
+      - uses: hashicorp/setup-terraform@v4
         with:
           terraform_version: ${{ env.TF_VERSION }}
       - run: terraform init
@@ -195,13 +195,13 @@ jobs:
   deploy:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: azure/login@v2
+      - uses: actions/checkout@v7
+      - uses: azure/login@v3
         with:
           client-id: ${{ secrets.AZURE_CLIENT_ID }}
           tenant-id: ${{ secrets.AZURE_TENANT_ID }}
           subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
-      - uses: azure/setup-azd@latest
+      - uses: azure/setup-azd@v2
       - run: azd up --no-prompt
         env:
           AZURE_ENV_NAME: ${{ vars.AZURE_ENV_NAME }}

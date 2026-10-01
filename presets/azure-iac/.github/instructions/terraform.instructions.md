@@ -32,20 +32,20 @@ infra/
 ```hcl
 # versions.tf — always lock provider versions
 terraform {
-  required_version = ">= 1.7.0"
+  required_version = ">= 1.16"
 
   required_providers {
     azurerm = {
       source  = "hashicorp/azurerm"
-      version = "~> 4.0"   # pin to minor; review major bumps
+      version = "~> 5.7"   # latest GA major; register required RPs explicitly
     }
     azapi = {
       source  = "Azure/azapi"
-      version = "~> 2.0"   # for preview/new resources not in azurerm
+      version = "~> 2.13"  # for preview/new resources not in azurerm
     }
     random = {
       source  = "hashicorp/random"
-      version = "~> 3.6"
+      version = "~> 3.9"
     }
   }
 
@@ -60,6 +60,14 @@ terraform {
 
 # providers.tf — use Managed Identity (no client_secret in code)
 provider "azurerm" {
+  resource_providers_to_register = [
+    "Microsoft.Authorization",
+    "Microsoft.KeyVault",
+    "Microsoft.ManagedIdentity",
+    "Microsoft.Network",
+    "Microsoft.Storage",
+  ]
+
   features {}
   use_oidc = true   # workload identity federation in CI
 }

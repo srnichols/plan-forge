@@ -71,7 +71,7 @@ In `infra/modules/{service}.bicep`, add azd tags alongside common tags:
 param environmentName string
 param serviceName string = 'api'     // must match services key in azure.yaml
 
-resource containerApp 'Microsoft.App/containerApps@2024-03-01' = {
+resource containerApp 'Microsoft.App/containerApps@2026-01-01' = {
   tags: union(commonTags, {
     'azd-env-name':     environmentName
     'azd-service-name': serviceName

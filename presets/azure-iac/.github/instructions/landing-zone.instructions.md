@@ -48,14 +48,16 @@ applyTo: '**/*.bicep,**/*.tf,**/*.ps1'
 // ✅ PIM for all Owner/Contributor role assignments (no standing access)
 
 // PIM role assignment via Bicep (eligible, not active)
-resource pimRoleEligibility 'Microsoft.Authorization/roleEligibilityScheduleRequests@2022-04-01-preview' = {
+param pimStartDateTime string = utcNow()
+
+resource pimRoleEligibility 'Microsoft.Authorization/roleEligibilityScheduleRequests@2020-10-01' = {
   name: guid(subscription().id, principalId, contributorRoleId)
   properties: {
     principalId: principalId
     roleDefinitionId: subscriptionResourceId('Microsoft.Authorization/roleDefinitions', contributorRoleId)
     requestType: 'AdminAssign'
     scheduleInfo: {
-      startDateTime: utcNow()
+      startDateTime: pimStartDateTime
       expiration: { type: 'NoExpiration' }
     }
     ticketInfo: {}
@@ -84,7 +86,7 @@ resource pimRoleEligibility 'Microsoft.Authorization/roleEligibilityScheduleRequ
 // ✅ No direct internet egress from workload VNets — route through hub FW
 
 // Workload VNet with forced tunneling via hub
-resource vnet 'Microsoft.Network/virtualNetworks@2023-09-01' = {
+resource vnet 'Microsoft.Network/virtualNetworks@2025-09-01' = {
   properties: {
     addressSpace: { addressPrefixes: [vnetAddressSpace] }
     dhcpOptions: { dnsServers: [hubDnsResolverIp] }   // ← use hub DNS, not Azure default
@@ -92,7 +94,7 @@ resource vnet 'Microsoft.Network/virtualNetworks@2023-09-01' = {
 }
 
 // ✅ UDR: default route (0.0.0.0/0) pointing to Azure Firewall in hub
-resource defaultRoute 'Microsoft.Network/routeTables@2023-09-01' = {
+resource defaultRoute 'Microsoft.Network/routeTables@2025-09-01' = {
   properties: {
     routes: [{
       name: 'default-to-firewall'
@@ -144,7 +146,7 @@ Core built-in initiatives to assign at Landing Zone management group:
 
 ```bicep
 // ✅ Central Log Analytics Workspace — all subscriptions send logs here
-resource logAnalytics 'Microsoft.OperationalInsights/workspaces@2023-09-01' = {
+resource logAnalytics 'Microsoft.OperationalInsights/workspaces@2026-03-01' = {
   name: 'log-management-${environmentName}'
   properties: {
     retentionInDays: 90              // ← minimum 90 days; 365 for production

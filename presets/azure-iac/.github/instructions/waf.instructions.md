@@ -26,8 +26,8 @@ applyTo: '**/*.bicep,**/*.tf,**/*.ps1,**/azure.yaml'
 
 ```bicep
 // ✅ Deploy across availability zones — never single-zone in production
-resource appServicePlan 'Microsoft.Web/serverfarms@2023-01-01' = {
-  sku: { name: 'P1v3'; tier: 'PremiumV3'; capacity: 2 }
+resource appServicePlan 'Microsoft.Web/serverfarms@2025-03-01' = {
+  sku: { name: 'P1v3', tier: 'PremiumV3', capacity: 2 }
   properties: {
     zoneRedundant: true   // ← required for zone-pinned AZ support
   }
@@ -76,7 +76,7 @@ resource appServicePlan 'Microsoft.Web/serverfarms@2023-01-01' = {
 // ✅ Reserved Instances or Savings Plans for stable production workloads
 // ✅ Azure Hybrid Benefit for Windows/SQL Server workloads
 // ✅ Lifecycle management policies on storage accounts
-resource lifecycle 'Microsoft.Storage/storageAccounts/managementPolicies@2023-05-01' = {
+resource lifecycle 'Microsoft.Storage/storageAccounts/managementPolicies@2026-04-01' = {
   name: 'default'
   parent: storageAccount
   properties: {
@@ -85,7 +85,7 @@ resource lifecycle 'Microsoft.Storage/storageAccounts/managementPolicies@2023-05
         name: 'move-cool-after-30-days'
         type: 'Lifecycle'
         definition: {
-          filters: { blobTypes: ['blockBlob']; prefixes: ['logs/'] }
+          filters: { blobTypes: ['blockBlob'], prefixes: ['logs/'] }
           actions: {
             baseBlob: {
               tierToCool: { daysAfterModificationGreaterThan: 30 }
@@ -116,7 +116,7 @@ resource lifecycle 'Microsoft.Storage/storageAccounts/managementPolicies@2023-05
 
 ```bicep
 // ✅ Deployment slots for zero-downtime deploys (App Service)
-resource stagingSlot 'Microsoft.Web/sites/slots@2023-01-01' = {
+resource stagingSlot 'Microsoft.Web/sites/slots@2025-03-01' = {
   name: 'staging'
   parent: appService
   properties: { serverFarmId: appServicePlan.id }

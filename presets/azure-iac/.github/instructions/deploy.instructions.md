@@ -52,10 +52,10 @@ jobs:
     name: Validate
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Azure Login (OIDC)
-        uses: azure/login@v2
+        uses: azure/login@v3
         with:
           client-id: ${{ secrets.AZURE_CLIENT_ID }}
           tenant-id: ${{ secrets.AZURE_TENANT_ID }}
@@ -85,8 +85,8 @@ jobs:
     environment: dev
     if: github.ref == 'refs/heads/main'
     steps:
-      - uses: actions/checkout@v4
-      - uses: azure/login@v2
+      - uses: actions/checkout@v7
+      - uses: azure/login@v3
         with:
           client-id: ${{ secrets.AZURE_CLIENT_ID }}
           tenant-id: ${{ secrets.AZURE_TENANT_ID }}
@@ -110,8 +110,8 @@ jobs:
     runs-on: ubuntu-latest
     environment: prod           # requires manual approval gate in GitHub
     steps:
-      - uses: actions/checkout@v4
-      - uses: azure/login@v2
+      - uses: actions/checkout@v7
+      - uses: azure/login@v3
         with:
           client-id: ${{ secrets.AZURE_CLIENT_ID }}
           tenant-id: ${{ secrets.AZURE_TENANT_ID }}

@@ -20,11 +20,15 @@ Before generating, ask for:
 ```hcl
 # versions.tf
 terraform {
-  required_version = ">= 1.7.0"
+  required_version = ">= 1.16"
   required_providers {
     azurerm = {
       source  = "hashicorp/azurerm"
-      version = "~> 4.0"
+      version = "~> 5.7"
+    }
+    azapi = {
+      source  = "Azure/azapi"
+      version = "~> 2.13"
     }
   }
   backend "azurerm" {
@@ -37,6 +41,10 @@ terraform {
 
 # providers.tf
 provider "azurerm" {
+  resource_providers_to_register = [
+    "Microsoft.Resources"
+  ]
+
   features {}
   use_oidc = true
 }

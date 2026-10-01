@@ -1,11 +1,11 @@
 ---
-description: "Scaffold a Pester 5 test file for a PowerShell function or Azure integration validation."
+description: "Scaffold a Pester 6 test file for a PowerShell function or Azure integration validation."
 agent: "agent"
 tools: [read, edit, search]
 ---
 # Create New Pester Test
 
-Scaffold a Pester 5 test file following the `*.Tests.ps1` naming convention.
+Scaffold a Pester 6 test file following the `*.Tests.ps1` naming convention.
 
 ## Required Information
 
@@ -19,7 +19,7 @@ Before generating, ask for:
 
 ```powershell
 # tests/unit/{FunctionName}.Tests.ps1
-#Requires -Modules @{ ModuleName = 'Pester'; ModuleVersion = '5.0' }
+#Requires -Modules @{ ModuleName = 'Pester'; ModuleVersion = '6.2.0' }
 
 BeforeAll {
     # Import the function under test via dot-sourcing
@@ -67,7 +67,7 @@ Describe '{FunctionName}' {
 
 ```powershell
 # tests/integration/Verify-{ResourceType}.Tests.ps1
-#Requires -Modules @{ ModuleName = 'Pester'; ModuleVersion = '5.0' }
+#Requires -Modules @{ ModuleName = 'Pester'; ModuleVersion = '6.2.0' }
 #Requires -Modules Az.Resources, Az.KeyVault, Az.Storage
 
 BeforeAll {

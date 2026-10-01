@@ -75,7 +75,7 @@ When `resourceName` is NOT set in `azure.yaml`, azd discovers resources by tags:
 
 ```bicep
 // In your Bicep module — tag resources so azd can find them
-resource containerApp 'Microsoft.App/containerApps@2024-03-01' = {
+resource containerApp 'Microsoft.App/containerApps@2026-01-01' = {
   tags: union(commonTags, {
     'azd-env-name':     environmentName   // ← required for azd discovery
     'azd-service-name': 'api'             // ← must match service key in azure.yaml
@@ -190,13 +190,13 @@ jobs:
   deploy:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: azure/login@v2
+      - uses: actions/checkout@v7
+      - uses: azure/login@v3
         with:
           client-id: ${{ secrets.AZURE_CLIENT_ID }}
           tenant-id: ${{ secrets.AZURE_TENANT_ID }}
           subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
-      - uses: azure/setup-azd@latest
+      - uses: azure/setup-azd@v2
       - run: azd up --no-prompt
         env:
           AZURE_ENV_NAME: ${{ vars.AZURE_ENV_NAME }}

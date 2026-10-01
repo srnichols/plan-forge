@@ -54,10 +54,10 @@ var storageAccountName = 'st${workloadName}${environmentName}${uniqueString(reso
 var keyVaultName = 'kv-${workloadName}-${environmentName}-${uniqueString(resourceGroup().id)}'
 
 // ✅ camelCase for symbolic names — never include "Name" suffix
-resource keyVault 'Microsoft.KeyVault/vaults@2023-07-01' = { ... }
+resource keyVault 'Microsoft.KeyVault/vaults@2026-02-01' = { ... }
 
 // ❌ NEVER hardcode resource names
-resource keyVaultName 'Microsoft.KeyVault/vaults@2023-07-01' = { ... }
+resource keyVaultName 'Microsoft.KeyVault/vaults@2026-02-01' = { ... }
 ```
 
 ## Resource Definitions
@@ -70,19 +70,19 @@ output appUrl string = appService.properties.defaultHostName
 output appUrl string = 'https://${appServiceName}.azurewebsites.net'
 
 // ✅ Implicit dependencies via symbolic references
-resource appService 'Microsoft.Web/sites@2023-01-01' = {
+resource appService 'Microsoft.Web/sites@2025-03-01' = {
   properties: {
     serverFarmId: appServicePlan.id   // ← implicit dependency
   }
 }
 
 // ✅ Use existing keyword for cross-resource references
-resource existingKv 'Microsoft.KeyVault/vaults@2023-07-01' existing = {
+resource existingKv 'Microsoft.KeyVault/vaults@2026-02-01' existing = {
   name: keyVaultName
 }
 
 // ✅ child resources via parent property — never construct child names manually
-resource secret 'Microsoft.KeyVault/vaults/secrets@2023-07-01' = {
+resource secret 'Microsoft.KeyVault/vaults/secrets@2026-02-01' = {
   parent: keyVault
   name: 'mySecret'
   properties: { value: secretValue }
@@ -137,7 +137,7 @@ var commonTags = {
   Repository: repoUrl
 }
 
-resource storageAccount 'Microsoft.Storage/storageAccounts@2023-05-01' = {
+resource storageAccount 'Microsoft.Storage/storageAccounts@2026-04-01' = {
   tags: commonTags
   ...
 }
@@ -173,7 +173,7 @@ resource storageAccount 'Microsoft.Storage/storageAccounts@2023-05-01' = {
 
 ```bicep
 // ✅ Use recent API versions — within 2 years
-resource storageAccount 'Microsoft.Storage/storageAccounts@2023-05-01' = { ... }
+resource storageAccount 'Microsoft.Storage/storageAccounts@2026-04-01' = { ... }
 
 // ❌ NEVER use deprecated or very old API versions
 resource storageAccount 'Microsoft.Storage/storageAccounts@2019-06-01' = { ... }
@@ -183,7 +183,7 @@ resource storageAccount 'Microsoft.Storage/storageAccounts@2019-06-01' = { ... }
 
 ```bicep
 // ✅ Key Vault secret references — never inline secrets
-resource appSettings 'Microsoft.Web/sites/config@2023-01-01' = {
+resource appSettings 'Microsoft.Web/sites/config@2025-03-01' = {
   parent: appService
   name: 'appsettings'
   properties: {
@@ -192,7 +192,7 @@ resource appSettings 'Microsoft.Web/sites/config@2023-01-01' = {
 }
 
 // ✅ Disable public access on storage accounts
-resource storageAccount 'Microsoft.Storage/storageAccounts@2023-05-01' = {
+resource storageAccount 'Microsoft.Storage/storageAccounts@2026-04-01' = {
   properties: {
     allowBlobPublicAccess: false
     minimumTlsVersion: 'TLS1_2'

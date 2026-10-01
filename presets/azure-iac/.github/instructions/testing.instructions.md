@@ -9,14 +9,14 @@ applyTo: '**/*.Tests.ps1,**/tests/**,**/*.bicep,**/*.tf'
 
 | Layer | Tool | When |
 |-------|------|------|
-| **PowerShell functions** | Pester 5 | Unit test all public functions |
+| **PowerShell functions** | Pester 6.2.0 | Unit test all public functions |
 | **Bicep templates** | `az bicep build` + Bicep linter | Every commit |
 | **ARM templates** | ARM TTK (`Test-AzTemplate`) | ARM templates only (not Bicep) |
 | **Terraform** | `terraform validate` + `tflint` | Every commit |
 | **Pre-deployment** | `az deployment group what-if` / `terraform plan` | Before every deployment |
 | **Post-deployment** | Pester integration tests | After deployment to each environment |
 
-## Pester 5 — PowerShell Unit Tests
+## Pester 6 — PowerShell Unit Tests
 
 ```powershell
 # modules/Deployment/tests/Deploy-BicepTemplate.Tests.ps1
@@ -65,15 +65,20 @@ Describe 'Deploy-BicepTemplate' {
 ## Running Pester
 
 ```powershell
-# Install Pester 5
-Install-Module Pester -MinimumVersion 5.0 -Force
+# Install Pester 6
+Install-Module Pester -MinimumVersion 6.2.0 -Force
 Import-Module Pester
 
 # Run all tests with detailed output
 Invoke-Pester -Path ./tests -Output Detailed
 
 # Run with coverage report
-Invoke-Pester -Path ./tests -Output Detailed -CodeCoverage ./modules/**/*.ps1
+$config = New-PesterConfiguration
+$config.Run.Path = './tests'
+$config.Output.Verbosity = 'Detailed'
+$config.CodeCoverage.Enabled = $true
+$config.CodeCoverage.Path = './modules/**/*.ps1'
+Invoke-Pester -Configuration $config
 
 # Run in CI (exit code reflects pass/fail)
 $config = New-PesterConfiguration
@@ -198,15 +203,16 @@ Describe 'Production Infrastructure' {
 - name: Run Pester Unit Tests
   shell: pwsh
   run: |
-    Install-Module Pester -Force -Scope CurrentUser
+    Install-Module Pester -MinimumVersion 6.2.0 -Force -Scope CurrentUser
     $config = New-PesterConfiguration
     $config.Run.Path = './tests/unit'
     $config.TestResult.Enabled = $true
+    $config.TestResult.OutputFormat = 'JUnitXml'
     $config.TestResult.OutputPath = 'pester-unit.xml'
     Invoke-Pester -Configuration $config
 
 - name: Publish Test Results
-  uses: dorny/test-reporter@v1
+  uses: dorny/test-reporter@v3
   with:
     name: Pester Unit Tests
     path: pester-unit.xml

@@ -9,7 +9,7 @@ applyTo: '**/*.ps1,**/*.psm1,**/*.psd1'
 
 ```powershell
 #Requires -Modules Az.Accounts, Az.Resources
-#Requires -Version 7.4
+#Requires -Version 7.6
 
 <#
 .SYNOPSIS

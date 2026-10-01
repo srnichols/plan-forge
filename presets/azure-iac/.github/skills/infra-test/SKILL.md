@@ -29,7 +29,7 @@ terraform validate
 ### 2. Pester Unit Tests
 
 ```powershell
-Install-Module Pester -MinimumVersion 5.0 -Force -Scope CurrentUser
+Install-Module Pester -MinimumVersion 6.2.0 -Force -Scope CurrentUser
 Import-Module Pester
 
 $config = New-PesterConfiguration

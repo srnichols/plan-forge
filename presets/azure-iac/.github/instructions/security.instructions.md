@@ -10,14 +10,14 @@ applyTo: '**/*.bicep,**/*.tf,**/*.ps1,**/azure.yaml'
 ### Never in Code
 ```bicep
 // ❌ NEVER — hardcoded secrets in IaC
-resource appSettings 'Microsoft.Web/sites/config@2023-01-01' = {
+resource appSettings 'Microsoft.Web/sites/config@2025-03-01' = {
   properties: {
     DATABASE_PASSWORD: 'MyS3cretP@ssword!'    // NEVER
   }
 }
 
 // ✅ ALWAYS — Key Vault references at runtime
-resource appSettings 'Microsoft.Web/sites/config@2023-01-01' = {
+resource appSettings 'Microsoft.Web/sites/config@2025-03-01' = {
   properties: {
     DATABASE_PASSWORD: '@Microsoft.KeyVault(SecretUri=${kv::dbPassword.properties.secretUri})'
   }
@@ -26,7 +26,7 @@ resource appSettings 'Microsoft.Web/sites/config@2023-01-01' = {
 
 ```hcl
 # ❌ NEVER — secrets in Terraform files
-resource "azurerm_app_service" "this" {
+resource "azurerm_linux_web_app" "this" {
   app_settings = {
     DATABASE_PASSWORD = "MyS3cretP@ssword!"  # NEVER
   }
@@ -42,7 +42,7 @@ data "azurerm_key_vault_secret" "db_password" {
 ### Key Vault Setup
 
 ```bicep
-resource keyVault 'Microsoft.KeyVault/vaults@2023-07-01' = {
+resource keyVault 'Microsoft.KeyVault/vaults@2026-02-01' = {
   properties: {
     sku: { family: 'A', name: 'standard' }
     tenantId: tenant().tenantId
@@ -63,14 +63,14 @@ resource keyVault 'Microsoft.KeyVault/vaults@2023-07-01' = {
 
 ```bicep
 // ✅ User-assigned managed identity for all app workloads
-resource managedIdentity 'Microsoft.ManagedIdentity/userAssignedIdentities@2023-01-31' = {
+resource managedIdentity 'Microsoft.ManagedIdentity/userAssignedIdentities@2024-11-30' = {
   name: 'id-${workloadName}-${environmentName}'
   location: location
   tags: commonTags
 }
 
 // ✅ Assign identity to resource
-resource appService 'Microsoft.Web/sites@2023-01-01' = {
+resource appService 'Microsoft.Web/sites@2025-03-01' = {
   identity: {
     type: 'UserAssigned'
     userAssignedIdentities: {
@@ -108,7 +108,7 @@ resource kvSecretsUser 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
 
 ```bicep
 // ✅ Private endpoints for all PaaS services in production
-resource privateEndpoint 'Microsoft.Network/privateEndpoints@2023-09-01' = {
+resource privateEndpoint 'Microsoft.Network/privateEndpoints@2025-09-01' = {
   name: 'pe-${storageAccount.name}'
   location: location
   properties: {
@@ -126,7 +126,7 @@ resource privateEndpoint 'Microsoft.Network/privateEndpoints@2023-09-01' = {
 }
 
 // ✅ NSG on every subnet — deny all by default, allow specific traffic
-resource nsg 'Microsoft.Network/networkSecurityGroups@2023-09-01' = {
+resource nsg 'Microsoft.Network/networkSecurityGroups@2025-09-01' = {
   properties: {
     securityRules: [
       {
@@ -150,7 +150,7 @@ resource nsg 'Microsoft.Network/networkSecurityGroups@2023-09-01' = {
 ## Storage Account Hardening
 
 ```bicep
-resource storageAccount 'Microsoft.Storage/storageAccounts@2023-05-01' = {
+resource storageAccount 'Microsoft.Storage/storageAccounts@2026-04-01' = {
   properties: {
     allowBlobPublicAccess: false          // ✅ disable public blob access
     allowSharedKeyAccess: false           // ✅ Entra ID only, no storage keys
@@ -181,10 +181,10 @@ resource diagnostics 'Microsoft.Insights/diagnosticSettings@2021-05-01-preview' 
   properties: {
     workspaceId: logAnalyticsWorkspace.id
     logs: [
-      { category: 'AuditEvent'; enabled: true; retentionPolicy: { enabled: true; days: 90 } }
+      { category: 'AuditEvent', enabled: true }
     ]
     metrics: [
-      { category: 'AllMetrics'; enabled: true }
+      { category: 'AllMetrics', enabled: true }
     ]
   }
 }

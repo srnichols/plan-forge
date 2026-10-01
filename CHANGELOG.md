@@ -7,6 +7,10 @@ Format follows [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
+### Fixed
+
+- **`pforge update` works under Windows PowerShell 5.1 started from a PowerShell 7 session** ([#296](https://github.com/srnichols/plan-forge/issues/296)). A Node process launched from pwsh 7, such as VS Code or the Copilot CLI, hands pwsh 7's `PSModulePath` to the `powershell.exe` it starts. Windows PowerShell 5.1 then loaded PowerShell 7's Core-only `Microsoft.PowerShell.Utility`, which lacks 5.1 script functions such as `Get-FileHash`. Every update comparison failed with "The term 'Get-FileHash' is not recognized". `pforge.ps1` now drops PowerShell 7 module paths when it runs on Windows PowerShell. (pwsh cleans the path itself when it launches `powershell.exe` directly, so the failure only appeared through Node.)
+
 ## [3.27.0] — 2026-10-01 — Current Copilot models, reliable plan gates and GA stack presets
 
 ### Security

@@ -71,13 +71,10 @@ describe.skipIf(!BASH)("pforge.sh update offers hooks/scripts files", () => {
 describe.skipIf(!isWin)("pforge.ps1 update offers hooks/scripts files", () => {
   it("lists changed and new hook scripts in a dry run", () => {
     const { source, project } = seed();
-    // Windows PowerShell 5.1 cannot autoload its own Get-FileHash when it inherits
-    // PowerShell 7's PSModulePath (as it does when vitest runs under pwsh).
-    const env = Object.fromEntries(Object.entries(process.env).filter(([k]) => k.toLowerCase() !== "psmodulepath"));
     const r = spawnSync(
       "powershell.exe",
       ["-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-File", join(project, "pforge.ps1"), "update", source, "--dry-run"],
-      { cwd: project, encoding: "utf-8", env, timeout: 120_000 },
+      { cwd: project, encoding: "utf-8", timeout: 120_000 },
     );
     expectHookScriptsOffered(r.stdout.replace(/\\/g, "/"));
   });

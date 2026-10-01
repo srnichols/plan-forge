@@ -25,6 +25,14 @@ param(
 
 $ErrorActionPreference = 'Stop'
 
+# ─── Issue #296: Windows PowerShell 5.1 started by a Node process (VS Code,
+# ─── Copilot CLI) can inherit PowerShell 7's PSModulePath. 5.1 then imports
+# ─── PowerShell 7's Core-only Microsoft.PowerShell.Utility, which lacks 5.1's
+# ─── script functions such as Get-FileHash. Keep 5.1 on its own module paths.
+if ($PSVersionTable.PSEdition -eq 'Desktop' -and $env:PSModulePath) {
+    $env:PSModulePath = (($env:PSModulePath -split ';') | Where-Object { $_ -and $_ -notmatch '(^|\\)PowerShell\\' }) -join ';'
+}
+
 # ─── Issue #196: force UTF-8 console output so box-drawing chars (╔═╗║),
 # ─── checkmarks (✓⚠✅⚠️), and other Unicode survive when stdout is captured
 # ─── by execSync/spawn (e.g., orchestrator.mjs::runAutoAnalyze). Without

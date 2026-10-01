@@ -100,6 +100,21 @@ describe("detectCostModel — precedence", () => {
     expect(result.provider).toBe("gh-copilot");
   });
 
+  it.each(["gemini-3.8-flash", "kimi-k3", "mai-code-1.1-flash"])(
+    "heuristic: Copilot-only family %s → gh-copilot even with API keys set",
+    (model) => {
+      const env = { OPENAI_API_KEY: "sk-x", ANTHROPIC_API_KEY: "sk-ant-x", XAI_API_KEY: "xai-x" };
+      const result = detectCostModel({ env, model });
+      expect(result.provider).toBe("gh-copilot");
+      expect(result.source).toBe("model-prefix");
+    },
+  );
+
+  it("heuristic: codex-cli and codex-* → codex-cli", () => {
+    expect(detectCostModel({ model: "codex-cli" }).provider).toBe("codex-cli");
+    expect(detectCostModel({ model: "codex-mini" }).provider).toBe("codex-cli");
+  });
+
   it("unknown model returns provider=unknown with perRequestUsd=0 and source=default", () => {
     const result = detectCostModel({ env: {}, forgeConfig: {}, model: "some-future-model" });
     expect(result.provider).toBe("unknown");

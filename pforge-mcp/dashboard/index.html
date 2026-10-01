@@ -957,22 +957,25 @@
             <select id="cfg-model-default" title="Default model" class="bg-gray-700 text-white text-sm rounded px-3 py-2 w-full">
               <option value="auto">auto</option>
               <optgroup label="xAI Grok (API)">
+                <option value="grok-4.7">grok-4.7</option>
+                <option value="grok-4.6">grok-4.6</option>
                 <option value="grok-4.5">grok-4.5</option>
-                <option value="grok-4.3">grok-4.3</option>
                 <option value="grok-4.20-0309-reasoning">grok-4.20-0309-reasoning</option>
                 <option value="grok-4.20-0309-non-reasoning">grok-4.20-0309-non-reasoning</option>
               </optgroup>
               <optgroup label="Claude (CLI)">
+                <option value="claude-opus-5.5">claude-opus-5.5</option>
+                <option value="claude-sonnet-5.5">claude-sonnet-5.5</option>
                 <option value="claude-opus-4.8">claude-opus-4.8</option>
-                <option value="claude-opus-4.7">claude-opus-4.7</option>
-                <option value="claude-sonnet-4.6">claude-sonnet-4.6</option>
               </optgroup>
               <optgroup label="OpenAI (CLI)">
+                <option value="gpt-6-astra">gpt-6-astra</option>
+                <option value="gpt-6-sol">gpt-6-sol</option>
+                <option value="gpt-6-luna">gpt-6-luna</option>
                 <option value="gpt-5.3-codex">gpt-5.3-codex</option>
-                <option value="gpt-5-mini">gpt-5-mini</option>
               </optgroup>
               <optgroup label="Google (CLI)">
-                <option value="gemini-3.1-pro-preview">gemini-3.1-pro-preview</option>
+                <option value="gemini-3.8-flash">gemini-3.8-flash</option>
               </optgroup>
             </select>
           </div>
@@ -1045,14 +1048,14 @@
             </div>
             <div class="mt-2">
               <label class="block text-xs text-gray-500 mb-1">Quorum Models (comma-separated)</label>
-              <input id="cfg-quorum-models" type="text" placeholder="claude-opus-4.7, gpt-5.3-codex, grok-4.20-0309-reasoning" class="bg-gray-700 text-white text-sm rounded px-3 py-1.5 w-full border border-gray-600 focus:border-purple-500 outline-none">
+              <input id="cfg-quorum-models" type="text" placeholder="claude-opus-5.5, gpt-6-sol, grok-4.7" class="bg-gray-700 text-white text-sm rounded px-3 py-1.5 w-full border border-gray-600 focus:border-purple-500 outline-none">
             </div>
             <div class="mt-2">
               <label class="block text-xs text-gray-500 mb-1">Include Grok in quorum (additive)</label>
-              <select id="cfg-quorum-include-grok" title="Additively append a Grok member (grok-4.5) to the quorum" class="bg-gray-700 text-white text-xs rounded px-2 py-1.5 w-full border border-gray-600">
+              <select id="cfg-quorum-include-grok" title="Additively append a Grok member (grok-4.7) to the quorum" class="bg-gray-700 text-white text-xs rounded px-2 py-1.5 w-full border border-gray-600">
                 <option value="">Off</option>
-                <option value="api">API — grok-4.5 (metered, needs XAI_API_KEY)</option>
-                <option value="cli">Grok Build CLI — grok-4.5 (flat subscription)</option>
+                <option value="api">API — grok-4.7 (metered, needs XAI_API_KEY)</option>
+                <option value="cli">Grok Build CLI — grok-4.7 (flat subscription)</option>
               </select>
             </div>
           </div>
@@ -2185,11 +2188,11 @@
             <label class="block text-sm text-gray-400 mb-1">Model</label>
             <select id="launch-model" title="Model" class="bg-gray-700 text-white text-sm rounded px-3 py-2 w-full">
               <option value="auto">auto</option>
-              <option value="grok-4.20">grok-4.20</option>
-              <option value="grok-4.5">grok-4.5</option>
-              <option value="grok-3">grok-3</option>
-              <option value="claude-sonnet-4.6">claude-sonnet-4.6</option>
+              <option value="claude-opus-5.5">claude-opus-5.5</option>
+              <option value="claude-sonnet-5.5">claude-sonnet-5.5</option>
+              <option value="gpt-6-sol">gpt-6-sol</option>
               <option value="gpt-5.3-codex">gpt-5.3-codex</option>
+              <option value="grok-4.7">grok-4.7</option>
             </select>
           </div>
         </div>
@@ -2199,8 +2202,8 @@
             <select id="launch-quorum" title="Quorum mode" class="bg-gray-700 text-white text-sm rounded px-3 py-2 w-full">
               <option value="false">Off</option>
               <option value="auto" selected>Auto (threshold)</option>
-              <option value="power">Power (Opus + GPT-5.3 + Grok 4.20)</option>
-              <option value="speed">Speed (Sonnet + GPT-5.4-mini + Grok 4.1)</option>
+              <option value="power">Power (Opus 5.5 + GPT-6 Astra + Grok 4.7)</option>
+              <option value="speed">Speed (Sonnet 5.5 + GPT-6 Luna + Gemini 3.8 Flash)</option>
               <option value="true">All slices (custom models)</option>
             </select>
           </div>

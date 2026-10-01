@@ -5,7 +5,7 @@
 # Usage:
 #   pwsh -NoProfile -File scripts/sequence-plans.ps1 `
 #     -NextPlan docs/plans/archive/Phase-GITHUB-D-METRICS-LEADERBOARD-PLAN.md `
-#     -Model claude-sonnet-4.6 `
+#     -Model claude-sonnet-5.5 `
 #     -Reason "Phase D follows Phase B"
 #
 # Designed to run unattended overnight. Polls every 60s; on completion of the
@@ -15,7 +15,7 @@
 
 param(
   [Parameter(Mandatory)] [string]$NextPlan,
-  [string]$Model = "claude-sonnet-4.6",
+  [string]$Model = "claude-sonnet-5.5",
   [string]$Reason = "Sequenced plan run",
   [string]$RepoRoot = (Get-Location).Path,
   [int]$PollSeconds = 60,

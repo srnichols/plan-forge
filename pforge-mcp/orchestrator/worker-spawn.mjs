@@ -57,8 +57,10 @@ export function resolveWorkerTimeoutMs(opts = {}) {
 //
 // Model routing has two tiers (fixed in meta-bug #103):
 //
-//   1. DIRECT_API_ONLY — patterns that MUST use direct HTTP. No CLI proxy
-//      serves them. gh-copilot does not accept --model grok-* or dall-e-*.
+//   1. DIRECT_API_ONLY — patterns that MUST use direct HTTP. Plan Forge routes
+//      grok-* and dall-e-* here. (Copilot's catalog now also serves
+//      grok-4.5 and later, but Plan Forge does not route Grok through
+//      gh-copilot yet; the opt-in Grok Build CLI is the non-API path.)
 //      These models are unavailable without the provider's env key.
 //
 //   2. COPILOT_SERVABLE — patterns that gh-copilot serves via the user's
@@ -1875,7 +1877,7 @@ function _enforceApiRoleGuard(apiProvider, role, model) {
       `Model "${model}" is routed through the ${apiProvider.label} API which cannot execute ` +
       `tool calls or edit files. ${apiProvider.label} models are valid for reviewer, analysis, ` +
       `and quorum roles — not as a primary code-writing worker. ` +
-      `For code, use claude-sonnet-4.6 (via gh-copilot) or claude-opus-4.7 (via claude CLI).`
+      `For code, use claude-sonnet-5.5 (via gh-copilot) or claude-opus-5.5 (via claude CLI).`
     );
   }
 }
@@ -2447,6 +2449,7 @@ function parseJSONL(output) {
  *   grok-*    → xai         (grok-4.20-0309-reasoning, grok-4.3, etc.)
  *   gemini-*  → google
  *   kimi-*    → moonshot    (kimi-k3, kimi-k2.7-code, etc.)
+ *   mai-*     → microsoft   (mai-code-1.1-flash; Copilot-only)
  *
  * Every key in cost-service MODEL_PRICING must resolve here — a priced but
  * unmapped model reports vendor null through telemetry and cost attribution.
@@ -2464,6 +2467,7 @@ export function deriveVendorFromModel(model) {
   if (lower.startsWith("grok-")) return "xai";
   if (lower.startsWith("gemini-")) return "google";
   if (lower.startsWith("kimi-")) return "moonshot";
+  if (lower.startsWith("mai-")) return "microsoft";
   return null;
 }
 

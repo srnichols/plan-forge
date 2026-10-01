@@ -167,41 +167,73 @@ export const POSTMORTEM_RETENTION_COUNT = 10;
  * hooks.mjs and review-watcher.mjs and restated in two tool descriptions,
  * which is how the descriptions drifted to a stale 4.7.
  */
-export const DEFAULT_WATCHER_MODEL = "claude-opus-4.8";
+export const DEFAULT_WATCHER_MODEL = "claude-opus-5.5";
 
+/** xAI flagship appended by the opt-in Grok quorum add-in (quorum.includeGrok). */
+export const DEFAULT_GROK_ADDIN_MODEL = "grok-4.7";
+
+/**
+ * Quorum fan-out when .forge.json names no preset and no models. Shared by
+ * loadQuorumConfig() and the .forge.json schema so the documented default
+ * cannot drift from the runtime one. Grok stays on the xAI API route.
+ */
+export const DEFAULT_QUORUM_MODELS = Object.freeze(["claude-opus-5.5", "gpt-6-sol", DEFAULT_GROK_ADDIN_MODEL]);
+
+/** Synthesis reviewer paired with DEFAULT_QUORUM_MODELS. */
+export const DEFAULT_QUORUM_REVIEWER_MODEL = "claude-opus-5.5";
+
+/** Worker model when .forge.json has no modelRouting block. */
+export const DEFAULT_ROUTING_MODEL = "claude-opus-5.5";
+
+/**
+ * Base model for cost projections (forge_estimate_slice / forge_estimate_quorum)
+ * when the caller names none. Mirrors the gh-copilot defaultModel in
+ * worker-capabilities.json; a contract test keeps the two in step.
+ */
+export const DEFAULT_ESTIMATE_MODEL = "claude-sonnet-5.5";
+
+/**
+ * Retry escalation when .forge.json has no escalationChain and run history is
+ * too thin to rank models: auto first, then cross-vendor flagships.
+ */
+export const DEFAULT_ESCALATION_CHAIN = Object.freeze(["auto", "claude-opus-5.5", "gpt-6-astra"]);
+
+// 2026-09-30 model refresh (GitHub Copilot supported-models + vendor pricing):
+// Opus 4.7 retires from Copilot on 2026-10-02, Sonnet 4.6 retired 2026-09-01,
+// and GPT-5.4 mini retires 2026-10-19. Claude Opus 5.5 ($4/$20) replaces both
+// Opus legs; GPT-6 Astra is OpenAI's flagship. Grok 4.7 stays on the xAI API
+// route (grok-* is DIRECT_API_ONLY here). The speed tier is now entirely
+// Copilot-servable, so the gh-copilot runtime gets all three members.
 export const QUORUM_PRESETS = {
-  // Bug #107: power = the premium tier (opus-4.8). Previously this preset
-  // shipped opus-4.6 and the default shipped opus-4.7 — backwards.
+  // Bug #107: power = the premium tier. The default quorum (quorum.mjs) uses
+  // the same Anthropic and xAI members with GPT-6 Sol as its OpenAI leg.
   power: {
-    models: ["claude-opus-4.8", "gpt-5.3-codex", "grok-4.20-0309-reasoning"],
-    reviewerModel: "claude-opus-4.8",
+    models: ["claude-opus-5.5", "gpt-6-astra", "grok-4.7"],
+    reviewerModel: "claude-opus-5.5",
     dryRunTimeout: 300_000,
     threshold: 5,
     availableIn: {
-      "cli-gh": ["claude-opus-4.8"],
-      "cli-claude": ["claude-opus-4.8"],
-      "cli-codex": ["gpt-5.3-codex"],
-      "vs-code-copilot-chat": ["claude-opus-4.8"],
-      "vs-code-agents-enterprise": ["claude-opus-4.8", "gpt-5.3-codex", "grok-4.20-0309-reasoning"],
+      "cli-gh": ["claude-opus-5.5", "gpt-6-astra"],
+      "cli-claude": ["claude-opus-5.5"],
+      "cli-codex": ["gpt-6-astra"],
+      "vs-code-copilot-chat": ["claude-opus-5.5", "gpt-6-astra"],
+      "vs-code-agents-enterprise": ["claude-opus-5.5", "gpt-6-astra", "grok-4.7"],
     },
     fallbacks: {
-      "cli-gh": { preset: "speed", reason: "Only 1 of 3 power models available via gh-copilot without API keys" },
+      "cli-gh": { preset: "speed", reason: "Fewer than 2 power models are available through gh-copilot on this machine" },
     },
   },
   speed: {
-    // 2026-05-21 model refresh: grok-4-1-fast-reasoning was retired by xAI on
-    // 2026-05-15. Swapped to grok-4.20-0309-non-reasoning (live, same family
-    // as the power preset's grok, non-reasoning variant for speed-tier latency).
-    models: ["claude-sonnet-4.6", "gpt-5.4-mini", "grok-4.20-0309-non-reasoning"],
-    reviewerModel: "claude-sonnet-4.6",
+    models: ["claude-sonnet-5.5", "gpt-6-luna", "gemini-3.8-flash"],
+    reviewerModel: "claude-sonnet-5.5",
     dryRunTimeout: 120_000,
     threshold: 7,
     availableIn: {
-      "cli-gh": ["claude-sonnet-4.6", "gpt-5.4-mini"],
-      "cli-claude": ["claude-sonnet-4.6"],
-      "cli-codex": ["gpt-5.4-mini"],
-      "vs-code-copilot-chat": ["claude-sonnet-4.6", "gpt-5.4-mini"],
-      "vs-code-agents-enterprise": ["claude-sonnet-4.6", "gpt-5.4-mini", "grok-4.20-0309-non-reasoning"],
+      "cli-gh": ["claude-sonnet-5.5", "gpt-6-luna", "gemini-3.8-flash"],
+      "cli-claude": ["claude-sonnet-5.5"],
+      "cli-codex": ["gpt-6-luna"],
+      "vs-code-copilot-chat": ["claude-sonnet-5.5", "gpt-6-luna", "gemini-3.8-flash"],
+      "vs-code-agents-enterprise": ["claude-sonnet-5.5", "gpt-6-luna", "gemini-3.8-flash"],
     },
     fallbacks: {},
   },

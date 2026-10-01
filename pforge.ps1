@@ -3876,7 +3876,7 @@ function Invoke-Smith {
                 if ($q.reviewerModel) {
                     Doctor-Pass "Reviewer model: $($q.reviewerModel)"
                 } else {
-                    Doctor-Pass "Reviewer model: default (claude-opus-4.7)"
+                    Doctor-Pass "Reviewer model: default (claude-opus-5.5)"
                 }
 
                 Write-Host ""

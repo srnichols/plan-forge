@@ -1516,7 +1516,7 @@ function Write-BestDefaultsPreset {
         stack           = $StackLabel
         setupDate       = (Get-Date -Format 'yyyy-MM-dd')
         templateVersion = $TemplateVersion
-        modelRouting    = @{ default = "claude-opus-4.7" }
+        modelRouting    = @{ default = "claude-opus-5.5" }
         hooks           = @{
             preDeploy        = @{ blockOnSecrets = $true; warnOnEnvGaps = $true; scanSince = "HEAD~1" }
             postSlice        = @{ silentDeltaThreshold = 5; warnDeltaThreshold = 10; scoreFloor = 70 }

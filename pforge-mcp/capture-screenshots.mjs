@@ -290,7 +290,7 @@ async function captureConfigTab(page) {
     const qThresh = document.getElementById('cfg-quorum-threshold');
     if (qThresh) qThresh.value = 7;
     const qModels = document.getElementById('cfg-quorum-models');
-    if (qModels) qModels.value = 'grok-3-mini, claude-sonnet-4.6, gpt-5.2-codex';
+    if (qModels) qModels.value = 'claude-opus-5.5, gpt-6-sol, grok-4.7';
     const workersEl = document.getElementById('cfg-workers');
     if (workersEl) workersEl.innerHTML = '<span class="text-green-400 text-xs mr-3">✓ gh-copilot</span><span class="text-green-400 text-xs mr-3">✓ claude</span><span class="text-gray-600 text-xs mr-3">✗ codex</span><span class="text-green-400 text-xs mr-3">✓ grok (API)</span>';
     const searchPanel = document.getElementById("memory-search-panel");

@@ -6,7 +6,7 @@
 # Usage:
 #   bash scripts/sequence-plans.sh \
 #     --next-plan docs/plans/Phase-XYZ-PLAN.md \
-#     --model claude-sonnet-4.6 \
+#     --model claude-sonnet-5.5 \
 #     --reason "Phase D follows Phase B"
 #
 # Source-safe: functions are available when script is sourced for testing.
@@ -17,7 +17,7 @@ REPO_ROOT="${REPO_ROOT:-$(pwd)}"
 POLL_SECONDS=60
 SKIP_COMMIT_PUSH=0
 NEXT_PLAN=""
-MODEL="claude-sonnet-4.6"
+MODEL="claude-sonnet-5.5"
 REASON="Sequenced plan run"
 
 # ─── Helper functions ───────────────────────────────────────────────────────

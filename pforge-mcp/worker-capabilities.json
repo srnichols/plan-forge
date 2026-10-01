@@ -22,7 +22,7 @@
       },
       "minVersion": "1.0.32",
       "versionRegex": "GitHub Copilot CLI\\s+v?(\\d+\\.\\d+\\.\\d+)",
-      "defaultModel": "claude-sonnet-4.6",
+      "defaultModel": "claude-sonnet-5.5",
       "invocation": {
         "cmd": "copilot",
         "baseArgs": ["-p", "@{PROMPT_FILE}", "--allow-all"],

@@ -3,7 +3,7 @@
 import { readFileSync, existsSync } from "node:fs";
 import { resolve } from "node:path";
 import { buildMemorySearchBlock } from "../memory.mjs";
-import { QUORUM_PRESETS } from "./constants.mjs";
+import { QUORUM_PRESETS, DEFAULT_GROK_ADDIN_MODEL, DEFAULT_QUORUM_MODELS, DEFAULT_QUORUM_REVIEWER_MODEL } from "./constants.mjs";
 import { readForgeJsonl } from "./forge-io.mjs";
 import { scoreSliceComplexity } from "./review-watcher.mjs";
 import { spawnWorker, detectWorkers } from "./worker-spawn.mjs";
@@ -59,11 +59,10 @@ export function loadQuorumConfig(cwd, presetOverride = null, opts = {}) {
     // effectively "always quorum". Threshold=5 matches the power preset and
     // restricts auto-quorum to genuinely complex slices.
     threshold: 5,
-    // Bug #107: default uses the standard tier (opus-4.7). Users who want
-    // the premium tier (opus-4.8) opt in via --quorum=power. Reviewer stays
-    // on 4.8 since it only runs once per slice and the spend is bounded.
-    models: ["claude-opus-4.7", "gpt-5.3-codex", "grok-4.20-0309-reasoning"],
-    reviewerModel: "claude-opus-4.8",
+    // Bug #107: the default is the standard tier; --quorum=power swaps the
+    // OpenAI leg for the premium GPT-6 Astra (see QUORUM_PRESETS).
+    models: [...DEFAULT_QUORUM_MODELS],
+    reviewerModel: DEFAULT_QUORUM_REVIEWER_MODEL,
     dryRunTimeout: 300_000, // 5 min per dry-run leg
     strictAvailability: false, // H.3: true = fast-fail if any model unavailable
   };
@@ -115,7 +114,7 @@ export function applyGrokAddIn(config, { includeGrok, grokModel, hasXaiKey, grok
     };
   }
   // grokVia tags the appended member so dispatch routes "cli" through the grok worker.
-  return { ...config, models: [...models, grokModel || "grok-4.5"], grokVia: mode };
+  return { ...config, models: [...models, grokModel || DEFAULT_GROK_ADDIN_MODEL], grokVia: mode };
 }
 
 /**

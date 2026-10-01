@@ -5,6 +5,7 @@ import {
   buildQuorumConfigForMode,
   getPricing,
 } from "../cost-service.mjs";
+import { DEFAULT_ESTIMATE_MODEL } from "../orchestrator/constants.mjs";
 
 // Hermetic cwd with no .forge/ — ensures heuristic tokens and no history
 const CLEAN_CWD = import.meta.dirname;
@@ -36,7 +37,7 @@ describe("cost-service: estimateSlice (Phase-27.2 Slice 1)", () => {
     expect(typeof result.baseCostUSD).toBe("number");
     expect(typeof result.overheadUSD).toBe("number");
     expect(typeof result.complexityScore).toBe("number");
-    expect(result.model).toBe("claude-sonnet-4.6");
+    expect(result.model).toBe(DEFAULT_ESTIMATE_MODEL);
     expect(typeof result.quorumEligible).toBe("boolean");
     expect(typeof result.rationale).toBe("string");
     expect(result.generatedAt).toMatch(/^\d{4}-\d{2}-\d{2}T/);
@@ -129,7 +130,7 @@ describe("cost-service: estimateSlice parity with estimatePlan (Phase-27.2 Slice
           return acc + est.estimatedCostUSD;
         }, 0);
 
-        const planEst = estimatePlan({ plan, model: "claude-sonnet-4.5", cwd: CLEAN_CWD, quorumConfig });
+        const planEst = estimatePlan({ plan, model: DEFAULT_ESTIMATE_MODEL, cwd: CLEAN_CWD, quorumConfig });
         const planTotal = planEst.totalCostWithQuorumUSD ?? planEst.estimatedCostUSD;
 
         // estimatePlan rounds to 2 decimals; estimateSlice to 6. Allow 1 cent tolerance.

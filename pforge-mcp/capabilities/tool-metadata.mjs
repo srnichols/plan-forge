@@ -4,6 +4,7 @@
  * Extracted from capabilities.mjs to reduce module size.
  * @module capabilities/tool-metadata
  */
+import { DEFAULT_WATCHER_MODEL, QUORUM_PRESETS } from "../orchestrator/constants.mjs";
 
 // ─── Enriched Tool Metadata ───────────────────────────────────────────
 
@@ -144,7 +145,7 @@ export const TOOL_METADATA = {
       addedIn: "2.5.0",
       description: "Multi-model consensus: dispatch to 3+ models for dry-run analysis, synthesize best approach, then execute",
       parameters: {
-        quorum: { type: "string", enum: ["auto", "power", "speed", "false"], default: "auto", description: "Quorum mode. 'auto' = threshold-based with default models; 'power' = flagship preset (claude-opus-4.8 + gpt-5.3-codex + grok-4.20-0309-reasoning, threshold 5); 'speed' = fast preset (claude-sonnet-4.6 + gpt-5.4-mini + grok-4.20-0309-non-reasoning, threshold 7); 'false' = disabled. Note: 'power-gov' preset exists for Microsoft Foundry / gov-cloud workloads and is selectable via .forge.json `quorum.preset`." },
+        quorum: { type: "string", enum: ["auto", "power", "speed", "false"], default: "auto", description: "Quorum mode. 'auto' = threshold-based with default models; 'power' = flagship preset (" + QUORUM_PRESETS.power.models.join(" + ") + ", threshold " + QUORUM_PRESETS.power.threshold + "); 'speed' = fast preset (" + QUORUM_PRESETS.speed.models.join(" + ") + ", threshold " + QUORUM_PRESETS.speed.threshold + "); 'false' = disabled. Note: 'power-gov' preset exists for Microsoft Foundry / gov-cloud workloads and is selectable via .forge.json `quorum.preset`." },
         quorumThreshold: { type: "number", description: "Complexity score threshold for auto mode (1-10, default: 5)" },
       },
       config: ".forge.json → quorum { enabled, auto, threshold, models[], reviewerModel, dryRunTimeout, preset }",
@@ -210,7 +211,7 @@ export const TOOL_METADATA = {
     consumes: [".forge/cost-history.json", ".forge/model-performance.json"],
     sideEffects: [],
     errors: {},
-    example: { input: {}, output: { runs: 5, total_cost_usd: 1.23, by_model: {}, forge_model_stats: { "claude-sonnet-4.6": { total_slices: 10, passed: 9, failed: 1, success_rate: 0.9, avg_cost_usd: 0.05 } } } },
+    example: { input: {}, output: { runs: 5, total_cost_usd: 1.23, by_model: {}, forge_model_stats: { "claude-sonnet-5.5": { total_slices: 10, passed: 9, failed: 1, success_rate: 0.9, avg_cost_usd: 0.05 } } } },
   },
   forge_delegate_review: {
     intent: ["review", "delegate", "code-review", "pr"],
@@ -292,7 +293,7 @@ export const TOOL_METADATA = {
         baseCostUSD: 0.0425,
         overheadUSD: 1.7998,
         complexityScore: 6,
-        model: "claude-sonnet-4.6",
+        model: "claude-sonnet-5.5",
         quorumEligible: true,
         rationale: "mode power: all slices quorum-eligible",
         generatedAt: "2026-04-20T18:00:00.000Z",
@@ -1252,7 +1253,7 @@ export const TOOL_METADATA = {
     },
     example: {
       input: { source: "drift", customQuestion: "Why did drift score drop 15 points?" },
-      output: { quorumPrompt: "## Context\n...\n\n## Question\nWhy did drift score drop 15 points?\n\n## Voting Instruction\n...", promptTokenEstimate: 250, suggestedModels: ["claude-opus-4.8", "grok-4.20", "gemini-3.1-pro-preview"], dataSnapshotAge: "12m ago", questionUsed: "Why did drift score drop 15 points?" },
+      output: { quorumPrompt: "## Context\n...\n\n## Question\nWhy did drift score drop 15 points?\n\n## Voting Instruction\n...", promptTokenEstimate: 250, suggestedModels: ["claude-opus-5.5", "gpt-6-astra", "grok-4.7"], dataSnapshotAge: "12m ago", questionUsed: "Why did drift score drop 15 points?" },
     },
   },
   forge_liveguard_run: {
@@ -1295,7 +1296,7 @@ export const TOOL_METADATA = {
     sideEffects: [
       "appends to watcher's own .forge/watch-history.jsonl (NEVER target's)",
       "may emit watch-snapshot-completed/watch-anomaly-detected/watch-advice-generated hub events",
-      "in 'analyze' mode, invokes a frontier model (default claude-opus-4.8)",
+      "in 'analyze' mode, invokes a frontier model (default " + DEFAULT_WATCHER_MODEL + ")",
     ],
     securityNote: "Read-only by design — cannot modify any files in the target project. History is written only to watcher's own cwd.",
     errors: {

@@ -22,8 +22,12 @@ import { ensureScannerArtifactDir, seedArtifactsGitignore } from "../artifacts.m
 import { priceSlice } from "../../cost-service.mjs";
 // Phase-28.5: secrets.json fallback for API key detection
 import { loadSecretFromForge } from "../../secrets.mjs";
+import { DEFAULT_QUORUM_MODELS } from "../../orchestrator/constants.mjs";
 
 // ─── Default visual analyzer config ──────────────────────────────────
+
+// Single-model fallback when a config supplies no models.
+const DEFAULT_ANALYZER_MODEL = DEFAULT_QUORUM_MODELS[0];
 
 const VISUAL_ANALYZER_DEFAULTS = {
   enabled: true,
@@ -31,7 +35,7 @@ const VISUAL_ANALYZER_DEFAULTS = {
   failureDiff: 0.02,        // 2.0%
   maxCostUsd: 2.0,
   mode: "quorum",           // "quorum" | "single"; default "quorum" when models.length >= 2
-  models: ["claude-opus-4.8", "gpt-5.3-codex", "grok-4.20"],
+  models: [...DEFAULT_QUORUM_MODELS],
   agreementThreshold: 2,    // N-of-M majority
   analyzerTimeoutMs: 60_000,
   maxImageWidth: 1920,
@@ -264,7 +268,7 @@ function buildQuorumExplanation(llmVerdict, tally) {
 }
 
 async function runQuorumLlmAnalysis({ entry, sliceRef, diffPercent, analyzerConfig, spawnWorker, baselineBuf, currentBuf, diffBuffer, state }) {
-  const models = analyzerConfig.models || ["claude-opus-4.7"];
+  const models = analyzerConfig.models || [DEFAULT_ANALYZER_MODEL];
   const threshold = analyzerConfig.agreementThreshold || 2;
   const prompt = buildAnalyzerPrompt(entry.url, sliceRef, diffPercent);
   const images = buildAnalyzerImages(baselineBuf, currentBuf, diffBuffer);
@@ -296,7 +300,7 @@ function normalizeQuorumVote(leg, model, analyzerConfig, state) {
 }
 
 async function runSingleModelLlmAnalysis({ entry, sliceRef, diffPercent, analyzerConfig, spawnWorker, baselineBuf, currentBuf, diffBuffer, state }) {
-  const model = (analyzerConfig.models || ["claude-opus-4.7"])[0] || "claude-opus-4.7";
+  const model = (analyzerConfig.models || [])[0] || DEFAULT_ANALYZER_MODEL;
   try {
     const workerResult = await Promise.race([
       spawnWorker({
@@ -348,7 +352,7 @@ function resolveMissingWorkerAnalysis(env, projectDir) {
 }
 
 async function runLlmAnalysis({ entry, sliceRef, diffPercent, analyzerConfig, spawnWorker, baselineBuf, currentBuf, diffBuffer, env, projectDir, state }) {
-  const models = analyzerConfig.models || ["claude-opus-4.7"];
+  const models = analyzerConfig.models || [DEFAULT_ANALYZER_MODEL];
   const useQuorum = analyzerConfig.mode !== "single" && models.length >= 2;
   if (spawnWorker && useQuorum) {
     return runQuorumLlmAnalysis({ entry, sliceRef, diffPercent, analyzerConfig, spawnWorker, baselineBuf, currentBuf, diffBuffer, state });

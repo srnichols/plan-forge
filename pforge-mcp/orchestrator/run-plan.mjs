@@ -26,7 +26,7 @@ import { startProxyLogger } from "../proxy-logger.mjs";
 import { buildCrossRunSnapshot } from "../watcher.mjs";
 import { inspectGithubStack as _inspectGithubStackDefault } from "../github-introspect.mjs";
 import { buildIssueBody as _buildIssueBodyDefault, dispatchSlice as _dispatchSliceDefault, pollPullRequest as _pollPullRequestDefault, DEFAULT_POLL_INTERVAL_MS, DEFAULT_TIMEOUT_MS } from "../workers/copilot-coding-agent.mjs";
-import { API_ALLOWED_ROLES, COST_ANOMALY_MULTIPLIER, CRUCIBLE_STALL_CUTOFF_DAYS, DEFAULT_GATE_TIMEOUT_MS, DEFAULT_WORKER_OUTPUT_IDLE_MS, DEFAULT_WORKER_TIMEOUT_MS, EVENT_SOURCE, GATE_ALLOWED_PREFIXES, GATE_SUGGESTION_AUTO_INJECT_THRESHOLD, POSTMORTEM_RETENTION_COUNT, PROPOSED_FIX_DIR, QUORUM_PRESETS, REVIEW_RESOLUTIONS, REVIEW_SEVERITIES, REVIEW_SOURCES, REVIEW_STATUSES, SECURITY_RISK, SECURITY_RISK_FOR_TYPE, SUPPORTED_AGENTS, UNIX_TOOLS, WORKER_LAUNCH_RETRY_BACKOFF_MS } from "./constants.mjs";
+import { API_ALLOWED_ROLES, COST_ANOMALY_MULTIPLIER, CRUCIBLE_STALL_CUTOFF_DAYS, DEFAULT_ESCALATION_CHAIN, DEFAULT_GATE_TIMEOUT_MS, DEFAULT_ROUTING_MODEL, DEFAULT_WORKER_OUTPUT_IDLE_MS, DEFAULT_WORKER_TIMEOUT_MS, EVENT_SOURCE, GATE_ALLOWED_PREFIXES, GATE_SUGGESTION_AUTO_INJECT_THRESHOLD, POSTMORTEM_RETENTION_COUNT, PROPOSED_FIX_DIR, QUORUM_PRESETS, REVIEW_RESOLUTIONS, REVIEW_SEVERITIES, REVIEW_SOURCES, REVIEW_STATUSES, SECURITY_RISK, SECURITY_RISK_FOR_TYPE, SUPPORTED_AGENTS, UNIX_TOOLS, WORKER_LAUNCH_RETRY_BACKOFF_MS } from "./constants.mjs";
 import { LogEventHandler, OrchestratorEventBus, appendEvent, writeSilentExitRecord } from "./event-bus.mjs";
 import { buildSlicePrompt } from "./prompt-builders.mjs";
 import { parsePlan, computeLockHash, normalizeSliceId, compareSliceIds, parseOnlySlicesExpr, parseWorkerTimeoutValue, parseSlices, buildDAG, restrictDagToSlices, loadPlanParserConfig } from "./plan-parser.mjs";
@@ -1389,7 +1389,7 @@ export async function runPlan(planPath, options = {}) {
 
 /**
  * Load model routing configuration from .forge.json.
- * Schema: { "modelRouting": { "execute": "gpt-5.3-codex", "review": "claude-sonnet-4.6", "default": "auto" } }
+ * Schema: { "modelRouting": { "execute": "gpt-6-sol", "review": "claude-sonnet-5.5", "default": "auto" } }
  * Returns the modelRouting object, or defaults if not configured.
  */
 export function loadModelRouting(cwd) {
@@ -1404,7 +1404,7 @@ export function loadModelRouting(cwd) {
   } catch {
     // Invalid JSON or missing file — use defaults
   }
-  return { default: "claude-opus-4.8" };
+  return { default: DEFAULT_ROUTING_MODEL };
 }
 
 /**
@@ -1447,7 +1447,7 @@ function loadMaxRetries(cwd) {
 
 /**
  * Load escalation chain from .forge.json.
- * Schema: { "escalationChain": ["auto", "claude-opus-4.7", "gpt-5.3-codex"] }
+ * Schema: { "escalationChain": ["auto", "claude-opus-5.5", "gpt-6-astra"] }
  * On each retry, the orchestrator escalates to the next model in the chain.
  * First escalation jumps to top-tier reasoning (Opus 4.7 — strongest reasoner
  * for hard bugs), then to Codex for bug-fixing.
@@ -1491,7 +1491,7 @@ function loadEscalationChain(cwd) {
     }
   } catch { /* fall through to static default */ }
 
-  return ["auto", "claude-opus-4.7", "gpt-5.3-codex"];
+  return [...DEFAULT_ESCALATION_CHAIN];
 }
 
 // Phase-53 S4: gate-synthesis helpers → orchestrator/run-plan.mjs
@@ -2426,7 +2426,7 @@ async function executeSlice(slice, options) {
   const { cwd, artifactCwd = cwd, model, modelRouting = {}, mode, runDir, maxRetries = 1,
     memoryEnabled = false, projectName = "", planName = "",
     quorumConfig = null,
-    escalationChain = ["auto", "claude-opus-4.7", "gpt-5.3-codex"],
+    escalationChain = [...DEFAULT_ESCALATION_CHAIN],
     eventBus = null,
     worker = null,
     _dispatchSlice = _dispatchSliceDefault,

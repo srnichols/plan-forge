@@ -772,7 +772,7 @@
         },
         "models": {
           "type": "string",
-          "description": "Comma-separated model list override (e.g., 'grok-4.20-0309-non-reasoning,claude-sonnet-4.6,gpt-5.3-codex'). Default: quorum config models"
+          "description": "Comma-separated model list override (e.g., 'grok-4.7,claude-sonnet-5.5,gpt-6-sol'). Default: quorum config models"
         },
         "path": {
           "type": "string",
@@ -837,7 +837,7 @@
         },
         "models": {
           "type": "string",
-          "description": "Comma-separated model list override (e.g., 'grok-4.5,claude-sonnet-4.6,gpt-5.3-codex'). Default: quorum config models"
+          "description": "Comma-separated model list override (e.g., 'grok-4.7,claude-sonnet-5.5,gpt-6-sol'). Default: quorum config models"
         },
         "path": {
           "type": "string",
@@ -906,7 +906,7 @@
         },
         "model": {
           "type": "string",
-          "description": "Model override (e.g., claude-sonnet-4.6, gpt-5.3-codex). Default: auto"
+          "description": "Model override (e.g., claude-sonnet-5.5, gpt-6-sol). Default: auto"
         },
         "estimate": {
           "type": "boolean",
@@ -1003,7 +1003,7 @@
             "false"
           ],
           "default": "auto",
-          "description": "Quorum mode. 'auto' = threshold-based with default models; 'power' = flagship preset (claude-opus-4.8 + gpt-5.3-codex + grok-4.20-0309-reasoning, threshold 5); 'speed' = fast preset (claude-sonnet-4.6 + gpt-5.4-mini + grok-4.20-0309-non-reasoning, threshold 7); 'false' = disabled. Note: 'power-gov' preset exists for Microsoft Foundry / gov-cloud workloads and is selectable via .forge.json `quorum.preset`."
+          "description": "Quorum mode. 'auto' = threshold-based with default models; 'power' = flagship preset (claude-opus-5.5 + gpt-6-astra + grok-4.7, threshold 5); 'speed' = fast preset (claude-sonnet-5.5 + gpt-6-luna + gemini-3.8-flash, threshold 7); 'false' = disabled. Note: 'power-gov' preset exists for Microsoft Foundry / gov-cloud workloads and is selectable via .forge.json `quorum.preset`."
         },
         "quorumThreshold": {
           "type": "number",
@@ -1185,7 +1185,7 @@
         "total_cost_usd": 1.23,
         "by_model": {},
         "forge_model_stats": {
-          "claude-sonnet-4.6": {
+          "claude-sonnet-5.5": {
             "total_slices": 10,
             "passed": 9,
             "failed": 1,
@@ -1326,7 +1326,7 @@
         },
         "model": {
           "type": "string",
-          "description": "Base model for pricing (default: 'claude-sonnet-4.6')."
+          "description": "Base model for pricing (default: 'claude-sonnet-5.5')."
         },
         "path": {
           "type": "string",
@@ -1379,7 +1379,7 @@
         "baseCostUSD": 0.0425,
         "overheadUSD": 1.7998,
         "complexityScore": 6,
-        "model": "claude-sonnet-4.6",
+        "model": "claude-sonnet-5.5",
         "quorumEligible": true,
         "rationale": "mode power: all slices quorum-eligible",
         "generatedAt": "2026-04-20T18:00:00.000Z"
@@ -1432,7 +1432,7 @@
   },
   {
     "name": "forge_watch",
-    "description": "WATCHER (v2.34) — read-only observer that tails another project's pforge run. Run this from a SECOND VS Code Copilot session with Plan-Forge as the workspace, pointing targetPath at the project being executed. Returns snapshot of current run state (slices passed/failed/in-progress, token counts, gate errors) plus heuristic anomaly detection. Mode 'analyze' additionally invokes a frontier model (default: claude-opus-4.8) for narrative advice. The watcher CANNOT modify any files in the target project.",
+    "description": "WATCHER (v2.34) — read-only observer that tails another project's pforge run. Run this from a SECOND VS Code Copilot session with Plan-Forge as the workspace, pointing targetPath at the project being executed. Returns snapshot of current run state (slices passed/failed/in-progress, token counts, gate errors) plus heuristic anomaly detection. Mode 'analyze' additionally invokes a frontier model (default: claude-opus-5.5) for narrative advice. The watcher CANNOT modify any files in the target project.",
     "inputSchema": {
       "type": "object",
       "properties": {
@@ -1454,7 +1454,7 @@
         },
         "model": {
           "type": "string",
-          "description": "Override watcher model (default: claude-opus-4.8)"
+          "description": "Override watcher model (default: claude-opus-5.5)"
         },
         "tailEvents": {
           "type": "number",
@@ -1506,7 +1506,7 @@
     "sideEffects": [
       "appends to watcher's own .forge/watch-history.jsonl (NEVER target's)",
       "may emit watch-snapshot-completed/watch-anomaly-detected/watch-advice-generated hub events",
-      "in 'analyze' mode, invokes a frontier model (default claude-opus-4.8)"
+      "in 'analyze' mode, invokes a frontier model (default claude-opus-5.5)"
     ],
     "securityNote": "Read-only by design — cannot modify any files in the target project. History is written only to watcher's own cwd.",
     "errors": {
@@ -4951,9 +4951,9 @@
         "quorumPrompt": "## Context\n...\n\n## Question\nWhy did drift score drop 15 points?\n\n## Voting Instruction\n...",
         "promptTokenEstimate": 250,
         "suggestedModels": [
-          "claude-opus-4.8",
-          "grok-4.20",
-          "gemini-3.1-pro-preview"
+          "claude-opus-5.5",
+          "gpt-6-astra",
+          "grok-4.7"
         ],
         "dataSnapshotAge": "12m ago",
         "questionUsed": "Why did drift score drop 15 points?"

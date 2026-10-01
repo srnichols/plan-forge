@@ -6,6 +6,7 @@
  *
  * @module capabilities/schemas
  */
+import { DEFAULT_GROK_ADDIN_MODEL, DEFAULT_QUORUM_MODELS, DEFAULT_QUORUM_REVIEWER_MODEL } from "../orchestrator/constants.mjs";
 
 // ─── CLI Schema ───────────────────────────────────────────────────────
 
@@ -66,7 +67,7 @@ export const CLI_SCHEMA = {
       flags: {
         "--estimate": { type: "boolean", description: "Cost prediction only" },
         "--assisted": { type: "boolean", description: "Human codes, orchestrator validates gates" },
-        "--model": { type: "string", description: "Model override (e.g., claude-sonnet-4.6)" },
+        "--model": { type: "string", description: "Model override (e.g., claude-sonnet-5.5)" },
         "--resume-from": { type: "number", description: "Skip completed slices, resume from N" },
         "--dry-run": { type: "boolean", description: "Parse and validate without executing" },
         "--quorum": { type: "boolean|auto", description: "Force quorum on all slices, or 'auto' for threshold-based" },
@@ -76,7 +77,7 @@ export const CLI_SCHEMA = {
         "pforge run-plan docs/plans/Phase-1.md",
         "pforge run-plan docs/plans/Phase-1.md --estimate",
         "pforge run-plan docs/plans/Phase-1.md --assisted",
-        "pforge run-plan docs/plans/Phase-1.md --model claude-sonnet-4.6",
+        "pforge run-plan docs/plans/Phase-1.md --model claude-sonnet-5.5",
         "pforge run-plan docs/plans/Phase-1.md --resume-from 3",
         "pforge run-plan docs/plans/Phase-1.md --quorum",
         "pforge run-plan docs/plans/Phase-1.md --quorum=auto",
@@ -355,7 +356,7 @@ export const CONFIG_SCHEMA = {
         default: {
           type: "string",
           description: "Advisory list — any key in cost-service MODEL_PRICING is accepted at runtime; loadModelRouting() does not validate against this enum.",
-          enum: ["auto", "claude-fable-5", "claude-opus-5", "claude-sonnet-5", "claude-haiku-4.5", "claude-opus-4.8", "claude-opus-4.7", "claude-sonnet-4.6", "gpt-5.6-sol", "gpt-5.6-terra", "gpt-5.6-luna", "gpt-5.5", "gpt-5.4", "gpt-5.3-codex", "gpt-5-mini", "gemini-3.6-flash", "gemini-3.1-pro-preview", "grok-4.5", "kimi-k3", "kimi-k2.7-code"],
+          enum: ["auto", "claude-opus-5.5", "claude-sonnet-5.5", "claude-fable-5.1", "claude-fable-5", "claude-opus-5", "claude-sonnet-5", "claude-haiku-4.5", "claude-opus-4.8", "gpt-6-astra", "gpt-6.1-sol", "gpt-6-sol", "gpt-6-luna", "gpt-5.6-sol", "gpt-5.6-terra", "gpt-5.6-luna", "gpt-5.3-codex", "gemini-3.8-flash", "grok-4.7", "grok-4.6", "grok-4.5", "kimi-k3", "mai-code-1.1-flash"],
           default: "auto",
         },
       },
@@ -366,18 +367,18 @@ export const CONFIG_SCHEMA = {
     maxRunAgeDays: { type: "number", default: 30, minimum: 1, description: "Max age of a run directory in days; runs are pruned when they fail EITHER this or maxRunHistory" },
     quorum: {
       type: "object",
-      description: "Multi-model consensus configuration (v2.5; defaults refreshed 2026-05-21)",
+      description: "Multi-model consensus configuration (v2.5; models refreshed 2026-09-30)",
       properties: {
         enabled: { type: "boolean", default: false, description: "Master switch for quorum mode" },
         auto: { type: "boolean", default: true, description: "When enabled, only quorum high-complexity slices" },
         threshold: { type: "number", default: 5, minimum: 1, maximum: 10, description: "Complexity score threshold for auto mode (raised 3→5 on 2026-05-21 — threshold=3 was triggering quorum on ~89% of slices)" },
         preset: { type: "string", enum: ["speed", "power", "power-gov", "false"], description: "Optional named preset (overrides models/threshold/reviewerModel). Equivalent to CLI --quorum=<name>." },
-        models: { type: "array", items: { type: "string" }, default: ["claude-opus-4.7", "gpt-5.3-codex", "grok-4.20-0309-reasoning"], description: "Models for dry-run fan-out (used when no preset is selected)" },
-        reviewerModel: { type: "string", default: "claude-opus-4.8", description: "Model for synthesis review" },
+        models: { type: "array", items: { type: "string" }, default: [...DEFAULT_QUORUM_MODELS], description: "Models for dry-run fan-out (used when no preset is selected)" },
+        reviewerModel: { type: "string", default: DEFAULT_QUORUM_REVIEWER_MODEL, description: "Model for synthesis review" },
         dryRunTimeout: { type: "number", default: 300000, description: "Timeout per dry-run worker (ms)" },
         strictAvailability: { type: "boolean", default: false, description: "When true, fast-fail (exit 2) if any configured model is unavailable. When false (default), drop unavailable models and continue if ≥1 remain" },
-        includeGrok: { type: ["boolean", "string"], enum: [false, true, "api", "cli"], default: false, description: "Additively append a Grok member to the quorum (grok-4.5 by default). 'api'/true = metered xAI API (needs XAI_API_KEY); 'cli' = Grok Build CLI (flat subscription). Purely additive — never removes existing members; no-op when the credential is absent. CLI equivalents: --with-grok / --with-grok-cli." },
-        grokModel: { type: "string", default: "grok-4.5", description: "Model used for the includeGrok add-in member (default: flagship grok-4.5)." },
+        includeGrok: { type: ["boolean", "string"], enum: [false, true, "api", "cli"], default: false, description: `Additively append a Grok member to the quorum (${DEFAULT_GROK_ADDIN_MODEL} by default). 'api'/true = metered xAI API (needs XAI_API_KEY); 'cli' = Grok Build CLI (flat subscription). Purely additive — never removes existing members; no-op when the credential is absent. CLI equivalents: --with-grok / --with-grok-cli.` },
+        grokModel: { type: "string", default: DEFAULT_GROK_ADDIN_MODEL, description: `Model used for the includeGrok add-in member (default: flagship ${DEFAULT_GROK_ADDIN_MODEL}).` },
       },
     },
     extensions: { type: "array", items: { type: "string" }, description: "Installed extensions" },

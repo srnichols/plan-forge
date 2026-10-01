@@ -26,7 +26,7 @@ intervention between runs.
 ```powershell
 pwsh -NoProfile -File scripts/sequence-plans.ps1 `
   -NextPlan docs/plans/archive/Phase-GITHUB-D-METRICS-LEADERBOARD-PLAN.md `
-  -Model claude-sonnet-4.6 `
+  -Model claude-sonnet-5.5 `
   -Reason "Phase D follows Phase B"
 ```
 
@@ -35,7 +35,7 @@ pwsh -NoProfile -File scripts/sequence-plans.ps1 `
 | Parameter | Required | Default | Description |
 |-----------|----------|---------|-------------|
 | `-NextPlan` | ✅ | — | Path to the plan file to dispatch next |
-| `-Model` | | `claude-sonnet-4.6` | Model to use for the next run |
+| `-Model` | | `claude-sonnet-5.5` | Model to use for the next run |
 | `-Reason` | | `Sequenced plan run` | Import reason recorded on the run |
 | `-RepoRoot` | | `(Get-Location)` | Path to the repository root |
 | `-PollSeconds` | | `60` | How often to poll the orchestrator PID |
@@ -50,7 +50,7 @@ pwsh -NoProfile -File scripts/sequence-plans.ps1 `
 ```bash
 bash scripts/sequence-plans.sh \
   --next-plan docs/plans/archive/Phase-GITHUB-D-METRICS-LEADERBOARD-PLAN.md \
-  --model claude-sonnet-4.6 \
+  --model claude-sonnet-5.5 \
   --reason "Phase D follows Phase B"
 ```
 
@@ -71,7 +71,7 @@ Output example:
 ```
 [09:15:00] [WhatIf] Would commit pending changes with message: feat(autoplan): ...
 [09:15:00] [WhatIf] Would push to origin master
-[09:15:00] [WhatIf] Would dispatch: docs/plans/Phase-XYZ-PLAN.md (model=claude-sonnet-4.6)
+[09:15:00] [WhatIf] Would dispatch: docs/plans/Phase-XYZ-PLAN.md (model=claude-sonnet-5.5)
 ```
 
 No git operations or `pforge` invocations are performed in `WhatIf` mode.

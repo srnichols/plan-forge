@@ -43,6 +43,10 @@ describe("#186 deriveVendorFromModel", () => {
     expect(deriveVendorFromModel("kimi-k2.7-code")).toBe("moonshot");
   });
 
+  it("maps mai-* to microsoft", () => {
+    expect(deriveVendorFromModel("mai-code-1.1-flash")).toBe("microsoft");
+  });
+
   // Guard against half-migrations: a model priced but not vendor-mapped reports
   // vendor null through telemetry and cost attribution. Adding kimi-* to
   // MODEL_PRICING without touching this function is exactly how that happens.

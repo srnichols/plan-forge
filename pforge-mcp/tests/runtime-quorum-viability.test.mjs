@@ -4,7 +4,11 @@ import {
   assessQuorumViability,
   resolveRequiredCli,
   filterQuorumModels,
+  QUORUM_PRESETS,
 } from "../orchestrator.mjs";
+
+const POWER = QUORUM_PRESETS.power.models;
+const SPEED = QUORUM_PRESETS.speed.models;
 
 // ─── detectExecutionRuntime ─────────────────────────────────────────────
 
@@ -220,8 +224,7 @@ describe("assessQuorumViability", () => {
     it("2 of 3 models available — synthesis still viable", () => {
       const result = assessQuorumViability("power", {
         runtimeOverride: "cli-gh",
-        // v3.23 model refresh: power preset upgraded to opus-4.8 (was opus-4.7).
-        probe: selectiveProbe(["claude-opus-4.8", "gpt-5.3-codex"]),
+        probe: selectiveProbe(POWER.slice(0, 2)),
       });
       expect(result.effective).toBe(2);
       expect(result.synthesisViable).toBe(true);
@@ -232,8 +235,7 @@ describe("assessQuorumViability", () => {
     it("1 of 3 models available — synthesis NOT viable, recommends fallback", () => {
       const result = assessQuorumViability("power", {
         runtimeOverride: "cli-gh",
-        // v3.23 model refresh: power preset upgraded to opus-4.8 (was opus-4.7).
-        probe: selectiveProbe(["claude-opus-4.8"]),
+        probe: selectiveProbe([POWER[0]]),
       });
       expect(result.effective).toBe(1);
       expect(result.synthesisViable).toBe(false);
@@ -257,10 +259,10 @@ describe("assessQuorumViability", () => {
         runtimeOverride: "cli-gh",
         probe: allAvailableProbe,
       });
-      // v3.23 model refresh: power preset upgraded to opus-4.8 (was opus-4.7).
-      const claudeModel = result.models.find((m) => m.model === "claude-opus-4.8");
+      const claudeModel = result.models.find((m) => m.model.startsWith("claude-"));
       expect(claudeModel.declaredForRuntime).toBe(true);
-      const grokModel = result.models.find((m) => m.model === "grok-4.20-0309-reasoning");
+      // grok-* is DIRECT_API_ONLY, so gh-copilot never declares it.
+      const grokModel = result.models.find((m) => m.model.startsWith("grok-"));
       expect(grokModel.declaredForRuntime).toBe(false);
     });
   });
@@ -283,7 +285,7 @@ describe("assessQuorumViability", () => {
     it("partial availability — synthesis viable with 2", () => {
       const result = assessQuorumViability("speed", {
         runtimeOverride: "cli-gh",
-        probe: selectiveProbe(["claude-sonnet-4.6", "gpt-5.4-mini"]),
+        probe: selectiveProbe(SPEED.slice(0, 2)),
       });
       expect(result.effective).toBe(2);
       expect(result.synthesisViable).toBe(true);
@@ -303,7 +305,7 @@ describe("assessQuorumViability", () => {
     it("single model — synthesis NOT viable, hint about single-model", () => {
       const result = assessQuorumViability("speed", {
         runtimeOverride: "cli-claude",
-        probe: selectiveProbe(["claude-sonnet-4.6"]),
+        probe: selectiveProbe([SPEED[0]]),
       });
       expect(result.effective).toBe(1);
       expect(result.synthesisViable).toBe(false);

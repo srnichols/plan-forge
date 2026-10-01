@@ -12,7 +12,7 @@ import { calculateSliceCost, buildCostBreakdown, loadQuorumConfig } from "../quo
 import { getCostReport } from "../forge-io.mjs";
 import { scoreSliceComplexity } from "../review-watcher.mjs";
 import { inferSliceType, recommendModel } from "../model-scoring.mjs";
-import { GATE_ALLOWED_PREFIXES } from "../constants.mjs";
+import { DEFAULT_ROUTING_MODEL, GATE_ALLOWED_PREFIXES } from "../constants.mjs";
 
 // ─── Self-Test ────────────────────────────────────────────────────────
 
@@ -260,7 +260,7 @@ function _selfTestModelRouting(assert, loadModelRouting, resolveModel) {
     assert("CLI override wins", resolveModel("claude-sonnet-4.6", { default: "gpt-5" }, null) === "claude-sonnet-4.6");
     assert("Routing default when CLI is auto", resolveModel("auto", { default: "gpt-5" }, null) === "gpt-5");
     assert("Null when both auto", resolveModel(null, { default: "auto" }, null) === null);
-    assert("Default is claude-opus-4.8 when no .forge.json", loadModelRouting("/nonexistent-path-pforge-test").default === "claude-opus-4.8");
+    assert(`Default is ${DEFAULT_ROUTING_MODEL} when no .forge.json`, loadModelRouting("/nonexistent-path-pforge-test").default === DEFAULT_ROUTING_MODEL);
   } catch (err) {
     assert(`Model routing: ${err.message}`, false);
   }

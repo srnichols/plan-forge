@@ -46,6 +46,12 @@ import {
   resolveGateTimeoutMs,
   isApiOnlyModel,
 } from "../orchestrator.mjs";
+import {
+  DEFAULT_GROK_ADDIN_MODEL,
+  DEFAULT_QUORUM_MODELS,
+  DEFAULT_QUORUM_REVIEWER_MODEL,
+  QUORUM_PRESETS as PRESETS,
+} from "../orchestrator/constants.mjs";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const fixture = (name) => resolve(__dirname, "fixtures", name);
@@ -1030,7 +1036,8 @@ describe("loadQuorumConfig", () => {
     expect(config.enabled).toBe(false);
     expect(config.auto).toBe(true);
     expect(config.threshold).toBe(5);
-    expect(config.reviewerModel).toBe("claude-opus-4.8");
+    expect(config.reviewerModel).toBe(DEFAULT_QUORUM_REVIEWER_MODEL);
+    expect(config.models).toEqual([...DEFAULT_QUORUM_MODELS]);
     expect(config.dryRunTimeout).toBe(300_000);
   });
 
@@ -1064,9 +1071,10 @@ describe("loadQuorumConfig", () => {
     expect(config.preset).toBe("power");
   });
 
-  it("power preset uses claude-opus-4.8 as reviewer model (v2.34)", () => {
+  it("power preset uses its declared flagship reviewer model", () => {
     const config = loadQuorumConfig(tempDir, "power");
-    expect(config.reviewerModel).toBe("claude-opus-4.8");
+    expect(config.reviewerModel).toBe(PRESETS.power.reviewerModel);
+    expect(config.reviewerModel).toBe("claude-opus-5.5");
   });
 
   it("user config overrides preset values", () => {
@@ -1104,27 +1112,27 @@ describe("applyGrokAddIn", () => {
     expect(applyGrokAddIn(cfg, {})).toBe(cfg);
   });
 
-  it("appends grok-4.5 via API when includeGrok='api' and XAI_API_KEY present", () => {
+  it("appends the default Grok model via API when includeGrok='api' and XAI_API_KEY present", () => {
     const r = applyGrokAddIn(base(), { includeGrok: "api", hasXaiKey: true });
-    expect(r.models).toEqual(["claude-opus-4.7", "gpt-5.3-codex", "grok-4.5"]);
+    expect(r.models).toEqual(["claude-opus-4.7", "gpt-5.3-codex", DEFAULT_GROK_ADDIN_MODEL]);
     expect(r.grokVia).toBe("api");
   });
 
   it("treats includeGrok=true as 'api'", () => {
     const r = applyGrokAddIn(base(), { includeGrok: true, hasXaiKey: true });
-    expect(r.models).toContain("grok-4.5");
+    expect(r.models).toContain(DEFAULT_GROK_ADDIN_MODEL);
     expect(r.grokVia).toBe("api");
   });
 
   it("honors a custom grokModel override", () => {
     const r = applyGrokAddIn(base(), { includeGrok: "api", hasXaiKey: true, grokModel: "grok-4.3" });
     expect(r.models).toContain("grok-4.3");
-    expect(r.models).not.toContain("grok-4.5");
+    expect(r.models).not.toContain(DEFAULT_GROK_ADDIN_MODEL);
   });
 
   it("appends via CLI when includeGrok='cli' and the grok CLI is available", () => {
     const r = applyGrokAddIn(base(), { includeGrok: "cli", grokCliAvailable: true });
-    expect(r.models).toContain("grok-4.5");
+    expect(r.models).toContain(DEFAULT_GROK_ADDIN_MODEL);
     expect(r.grokVia).toBe("cli");
   });
 
@@ -1136,7 +1144,7 @@ describe("applyGrokAddIn", () => {
 
   it("skips when the CLI credential is missing", () => {
     const r = applyGrokAddIn(base(), { includeGrok: "cli", grokCliAvailable: false });
-    expect(r.models).not.toContain("grok-4.5");
+    expect(r.models).not.toContain(DEFAULT_GROK_ADDIN_MODEL);
     expect(r.grokAddInSkipped).toMatch(/grok CLI/);
   });
 
@@ -1148,22 +1156,23 @@ describe("applyGrokAddIn", () => {
 });
 
 describe("loadQuorumConfig — includeGrok add-in", () => {
-  it("appends grok-4.5 when .forge.json quorum.includeGrok='api' + XAI_API_KEY", () => {
+  it("appends the default Grok model when .forge.json quorum.includeGrok='api' + XAI_API_KEY", () => {
     writeFileSync(resolve(tempDir, ".forge.json"), JSON.stringify({ quorum: { includeGrok: "api", models: ["claude-opus-4.7", "gpt-5.3-codex"] } }));
     const config = loadQuorumConfig(tempDir, null, { env: { XAI_API_KEY: "xai-x" } });
-    expect(config.models).toContain("grok-4.5");
+    expect(config.models).toContain(DEFAULT_GROK_ADDIN_MODEL);
     expect(config.grokVia).toBe("api");
   });
 
   it("CLI override (includeGrokOverride) wins over .forge.json", () => {
     writeFileSync(resolve(tempDir, ".forge.json"), JSON.stringify({ quorum: { models: ["claude-opus-4.7", "gpt-5.3-codex"] } }));
     const config = loadQuorumConfig(tempDir, null, { includeGrokOverride: "api", env: { XAI_API_KEY: "xai-x" } });
-    expect(config.models).toContain("grok-4.5");
+    expect(config.models).toContain(DEFAULT_GROK_ADDIN_MODEL);
   });
 
   it("defaults (no includeGrok) leave models untouched", () => {
     const config = loadQuorumConfig(tempDir);
-    expect(config.models.some((m) => m.startsWith("grok-4.5"))).toBe(false);
+    expect(config.models).toEqual([...DEFAULT_QUORUM_MODELS]);
+    expect(config.grokVia).toBeUndefined();
   });
 });
 

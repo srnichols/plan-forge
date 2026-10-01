@@ -18,6 +18,7 @@ import {
   QUORUM_PRESETS,
 } from "./orchestrator/model-scoring.mjs";
 import { COST_SOURCES } from "./enums.mjs";
+import { DEFAULT_ESTIMATE_MODEL } from "./orchestrator/constants.mjs";
 import { quotaCacheGet, compareSliceEstimate } from "./foundry-quota.mjs";
 
 const VALID_COST_SOURCE_LABELS = new Set(COST_SOURCES);
@@ -95,9 +96,19 @@ function _computeFoundryQuota({ estimatedTokensIn, estimatedTokensOut, provider,
 export const MODEL_PRICING = {
   // ─── Anthropic Claude ──────────────────────────────────────────────
   // Cache: read 0.10×, 5m write 1.25×, 1h write 2.0× (uniform across all tiers).
-  // Opus 4.5 through Opus 5 all bill at $5/$25; Fable 5 is the first Anthropic
-  // tier above Opus at $10/$50.
+  // Opus 4.5 through Opus 5 bill at $5/$25; Opus 5.5 drops to $4/$20 with a
+  // 0.05× cache read, and Fable 5.1 reads cache at 0.025×. Fable is the tier
+  // above Opus at $10/$50. Claude 4.6+ has no long-context premium.
   // Source: https://platform.claude.com/docs/en/docs/about-claude/models/overview
+  "claude-fable-5.1":       { input: 10 / 1_000_000,   output: 50 / 1_000_000,
+    cache_read_multiplier: 0.025, cache_write_5m_multiplier: 1.25, cache_write_1h_multiplier: 2.0,
+    _source: "https://platform.claude.com/docs/en/about-claude/pricing — API ID claude-fable-5-1, 1M ctx (2026-09-30)" },
+  "claude-opus-5.5":        { input: 4 / 1_000_000,    output: 20 / 1_000_000,
+    cache_read_multiplier: 0.05, cache_write_5m_multiplier: 1.25, cache_write_1h_multiplier: 2.0,
+    _source: "https://platform.claude.com/docs/en/about-claude/pricing — API ID claude-opus-5-5, 1M ctx (2026-09-30)" },
+  "claude-sonnet-5.5":      { input: 2 / 1_000_000,    output: 10 / 1_000_000,
+    cache_read_multiplier: 0.10, cache_write_5m_multiplier: 1.25, cache_write_1h_multiplier: 2.0,
+    _source: "https://platform.claude.com/docs/en/about-claude/pricing — API ID claude-sonnet-5-5, 1M ctx (2026-09-30)" },
   "claude-fable-5":         { input: 10 / 1_000_000,   output: 50 / 1_000_000,
     cache_read_multiplier: 0.10, cache_write_5m_multiplier: 1.25, cache_write_1h_multiplier: 2.0,
     _source: "https://platform.claude.com/docs/en/docs/about-claude/models/overview — 1M ctx (2026-08-10)" },
@@ -128,9 +139,9 @@ export const MODEL_PRICING = {
   "claude-opus-4.5":        { input: 5 / 1_000_000,    output: 25 / 1_000_000,
     cache_read_multiplier: 0.10, cache_write_5m_multiplier: 1.25, cache_write_1h_multiplier: 2.0,
     _source: "https://platform.claude.com/docs/en/docs/build-with-claude/prompt-caching (2026-05-06)" },
-  "claude-sonnet-5":        { input: 3 / 1_000_000,    output: 15 / 1_000_000,
+  "claude-sonnet-5":        { input: 2 / 1_000_000,    output: 10 / 1_000_000,
     cache_read_multiplier: 0.10, cache_write_5m_multiplier: 1.25, cache_write_1h_multiplier: 2.0,
-    _source: "https://platform.claude.com/docs/en/docs/about-claude/models/overview — standard rate; introductory $2/$10 applies through 2026-08-31 (2026-08-10)" },
+    _source: "https://platform.claude.com/docs/en/about-claude/pricing — launch price made permanent; the planned $3/$15 increase was cancelled (2026-09-30)" },
   "claude-sonnet-4.6":      { input: 3 / 1_000_000,    output: 15 / 1_000_000,
     cache_read_multiplier: 0.10, cache_write_5m_multiplier: 1.25, cache_write_1h_multiplier: 2.0,
     _source: "https://platform.claude.com/docs/en/docs/build-with-claude/prompt-caching (2026-05-06)" },
@@ -144,7 +155,9 @@ export const MODEL_PRICING = {
     cache_read_multiplier: 0.10, cache_write_5m_multiplier: 1.25, cache_write_1h_multiplier: 2.0,
     _source: "https://platform.claude.com/docs/en/docs/build-with-claude/prompt-caching (2026-05-06)" },
 
-  // ─── OpenAI GPT (5.x family) ───────────────────────────────────────
+  // ─── OpenAI GPT (6.x and 5.x families) ─────────────────────────────
+  // GPT-6 bills cache writes at 1.25× input (not modelled, as for GPT-5.6) and
+  // bills a whole request at 2× input / 1.5× output above 272k prompt tokens.
   // Cache: 0.10× read for GPT-5.x. Writes are free through gpt-5.5; GPT-5.6
   //   bills cache writes at 1.25× input, which priceSlice() does NOT model —
   //   its cache-write math lives in the Anthropic branch only.
@@ -154,6 +167,26 @@ export const MODEL_PRICING = {
   // Long context: GPT-5.6 bills a higher rate above 272k prompt tokens; entries
   //   carry the ≤272k rate and record the long-context rate in _source.
   // Source: https://developers.openai.com/api/docs/pricing
+  "gpt-6-astra":            { input: 10 / 1_000_000,   output: 50 / 1_000_000,
+    cache_read_multiplier: 0.10,
+    flex_input_multiplier: 0.5, flex_output_multiplier: 0.5,
+    priority_input_multiplier: 2.0, priority_output_multiplier: 2.0,
+    _source: "https://developers.openai.com/api/docs/pricing — ≤272k prompt; >272k bills $20/$75 (2026-09-30)" },
+  "gpt-6.1-sol":            { input: 2 / 1_000_000,    output: 10 / 1_000_000,
+    cache_read_multiplier: 0.05,
+    flex_input_multiplier: 0.5, flex_output_multiplier: 0.5,
+    priority_input_multiplier: 2.0, priority_output_multiplier: 2.0,
+    _source: "https://developers.openai.com/api/docs/pricing — ≤272k prompt; >272k bills $4/$15 (2026-09-30)" },
+  "gpt-6-sol":              { input: 2 / 1_000_000,    output: 10 / 1_000_000,
+    cache_read_multiplier: 0.10,
+    flex_input_multiplier: 0.5, flex_output_multiplier: 0.5,
+    priority_input_multiplier: 2.0, priority_output_multiplier: 2.0,
+    _source: "https://developers.openai.com/api/docs/pricing — ≤272k prompt; >272k bills $4/$15 (2026-09-30)" },
+  "gpt-6-luna":             { input: 0.10 / 1_000_000, output: 0.50 / 1_000_000,
+    cache_read_multiplier: 0.10,
+    flex_input_multiplier: 0.5, flex_output_multiplier: 0.5,
+    priority_input_multiplier: 2.0, priority_output_multiplier: 2.0,
+    _source: "https://developers.openai.com/api/docs/pricing — ≤272k prompt; >272k bills $0.20/$0.75 (2026-09-30)" },
   "gpt-5.6-sol":            { input: 5 / 1_000_000,    output: 30 / 1_000_000,
     cache_read_multiplier: 0.10,
     flex_input_multiplier: 0.5, flex_output_multiplier: 0.5,
@@ -255,6 +288,12 @@ export const MODEL_PRICING = {
   // Pro tiers bill a higher rate above 200k prompt tokens; entries carry the
   // ≤200k rate and record the long-context rate in _source.
   // Source: https://ai.google.dev/gemini-api/docs/pricing
+  "gemini-3.8-flash":       { input: 0.75 / 1_000_000, output: 3.75 / 1_000_000,
+    cache_read_multiplier: 0.10,
+    _source: "https://ai.google.dev/gemini-api/docs/pricing — promotional rate through 2026-12-31, then $1.50/$7.50 (2026-09-30)" },
+  "gemini-3.7-flash":       { input: 0.75 / 1_000_000, output: 3.75 / 1_000_000,
+    cache_read_multiplier: 0.10,
+    _source: "https://ai.google.dev/gemini-api/docs/pricing — promotional rate through 2026-12-31, then $1.50/$7.50 (2026-09-30)" },
   "gemini-3.6-flash":       { input: 1.50 / 1_000_000, output: 7.50 / 1_000_000,
     cache_read_multiplier: 0.10,
     _source: "https://ai.google.dev/gemini-api/docs/pricing (2026-08-10)" },
@@ -269,6 +308,12 @@ export const MODEL_PRICING = {
     _source: "https://ai.google.dev/gemini-api/docs/pricing — ≤200k prompt; >200k bills $4/$18 (2026-08-10)" },
   "gemini-3-pro-preview":   { input: 1.25 / 1_000_000, output: 5 / 1_000_000,
     _source: "https://ai.google.dev/gemini-api/docs/pricing (2026-05-06)" },
+
+  // ─── Microsoft MAI ────────────────────────────────────────────────
+  // Copilot-only (no public vendor API); rate is the Copilot AI-credit price.
+  "mai-code-1.1-flash":     { input: 0.20 / 1_000_000, output: 1.20 / 1_000_000,
+    cache_read_multiplier: 0.10,
+    _source: "https://docs.github.com/en/copilot/reference/copilot-billing/models-and-pricing (2026-09-30)" },
 
   // ─── Moonshot Kimi ────────────────────────────────────────────────
   // Vendor publishes cache-hit and cache-miss input rates directly; input is
@@ -290,6 +335,12 @@ export const MODEL_PRICING = {
   // when present and falls back to multiplier math otherwise.
   // Source: https://docs.x.ai/developers/models, https://docs.x.ai/developers/cost-tracking
   // _retiredAfter: marks xAI May 15, 2026 retirements (kept for historical compat).
+  "grok-4.7":                          { input: 2.00 / 1_000_000, output: 6.00 / 1_000_000,
+    cache_read_multiplier: 0.25,
+    _source: "https://docs.x.ai/developers/models/grok-4.7 — 500k ctx; prompts ≥200k bill $4/$12 (2026-09-30)" },
+  "grok-4.6":                          { input: 2.00 / 1_000_000, output: 6.00 / 1_000_000,
+    cache_read_multiplier: 0.25,
+    _source: "https://docs.x.ai/developers/models/grok-4.6 — 500k ctx; prompts ≥200k bill $4/$12 (2026-09-30)" },
   "grok-4.5":                          { input: 2.00 / 1_000_000, output: 6.00 / 1_000_000,
     cache_read_multiplier: 0.25,
     _source: "https://docs.x.ai/docs/models Chat API — 500k ctx (2026-07-14)" },
@@ -447,6 +498,7 @@ export const COPILOT_AGENT_MINUTES_PER_SLICE = 30;
  *      - grok-*      → xai-api
  *      - claude-* + ANTHROPIC_API_KEY → anthropic-api
  *      - claude-* (no key)            → claude-cli
+ *      - gemini-* / kimi-* / mai-*    → gh-copilot (Copilot-served; no direct-API route)
  *      - "gh-copilot" / *copilot*     → gh-copilot
  *      - else                         → unknown
  *   4. default → unknown
@@ -454,35 +506,24 @@ export const COPILOT_AGENT_MINUTES_PER_SLICE = 30;
  * @param {{ env?: Record<string,string>, forgeConfig?: object, model?: string }} opts
  * @returns {{ provider: string, perRequestUsd: number|null, source: string }}
  */
+// Model-prefix rules, first match wins. Keyed rules bill the metered API when
+// the env key is set and the flat subscription worker otherwise.
+const MODEL_PREFIX_PROVIDER_RULES = Object.freeze([
+  { pattern: /^(gpt|chatgpt)-/, envKey: "OPENAI_API_KEY", api: "openai-api", subscription: "gh-copilot" },
+  // Phase GROK-BUILD-WORKER (#120): without XAI_API_KEY the only way to run
+  // grok-* is the Grok Build CLI subscription (flat).
+  { pattern: /^grok-/, envKey: "XAI_API_KEY", api: "xai-api", subscription: "grok-cli" },
+  { pattern: /^claude-/, envKey: "ANTHROPIC_API_KEY", api: "anthropic-api", subscription: "claude-cli" },
+  // No direct-API route exists for these families; the gh-copilot worker serves them.
+  { pattern: /^(gemini|kimi|mai)-|copilot/, subscription: "gh-copilot" },
+  { pattern: /^codex-/, subscription: "codex-cli" },
+]);
+
 function _detectProviderFromModelPrefix(m, env) {
-  if (m.startsWith("gpt-") || m.startsWith("chatgpt-")) {
-    return {
-      provider: Boolean(env.OPENAI_API_KEY) ? "openai-api" : "gh-copilot",
-      source: "model-prefix",
-    };
-  }
-  if (m.startsWith("grok-")) {
-    // Phase GROK-BUILD-WORKER: mirror the gpt-*/claude-* auth heuristic (#120).
-    // With XAI_API_KEY → metered xAI API. Without a key the only way to run
-    // grok-* is the Grok Build CLI subscription (flat), so route to grok-cli.
-    return {
-      provider: Boolean(env.XAI_API_KEY) ? "xai-api" : "grok-cli",
-      source: "model-prefix",
-    };
-  }
-  if (m.startsWith("claude-")) {
-    return {
-      provider: Boolean(env.ANTHROPIC_API_KEY) ? "anthropic-api" : "claude-cli",
-      source: "model-prefix",
-    };
-  }
-  if (m === "gh-copilot" || m.includes("copilot")) {
-    return { provider: "gh-copilot", source: "model-prefix" };
-  }
-  if (m === "codex-cli" || m.startsWith("codex-")) {
-    return { provider: "codex-cli", source: "model-prefix" };
-  }
-  return null;
+  const rule = MODEL_PREFIX_PROVIDER_RULES.find((r) => r.pattern.test(m));
+  if (!rule) return null;
+  const provider = rule.envKey && env[rule.envKey] ? rule.api : rule.subscription;
+  return { provider, source: "model-prefix" };
 }
 
 export function detectCostModel({ env = {}, forgeConfig = {}, model = "" } = {}) {
@@ -1313,23 +1354,25 @@ export function estimatePlan({ plan, model, cwd, quorumConfig = null, resumeFrom
  * @returns {object|null} quorumConfig for estimatePlan, or null for mode "false".
  */
 function _buildQuorumAutoConfig() {
+  const speed = QUORUM_PRESETS.speed;
   return {
     enabled: true,
     auto: true,
     threshold: 5,
-    models: QUORUM_PRESETS.speed?.models || ["claude-sonnet-4.6"],
-    reviewerModel: QUORUM_PRESETS.speed?.reviewerModel || "claude-sonnet-4.6",
+    models: [...speed.models],
+    reviewerModel: speed.reviewerModel,
     preset: "speed",
   };
 }
 
-function _buildQuorumPresetConfig(presetName, fallbackThreshold, fallbackReviewerModel) {
+function _buildQuorumPresetConfig(presetName) {
+  const preset = QUORUM_PRESETS[presetName];
   return {
     enabled: true,
     auto: false,
-    threshold: QUORUM_PRESETS[presetName]?.threshold ?? fallbackThreshold,
-    models: QUORUM_PRESETS[presetName]?.models || [],
-    reviewerModel: QUORUM_PRESETS[presetName]?.reviewerModel || fallbackReviewerModel,
+    threshold: preset.threshold,
+    models: [...preset.models],
+    reviewerModel: preset.reviewerModel,
     preset: presetName,
   };
 }
@@ -1339,8 +1382,8 @@ export function buildQuorumConfigForMode(mode) {
 
   const builders = {
     auto: _buildQuorumAutoConfig,
-    power: () => _buildQuorumPresetConfig("power", 5, "claude-opus-4.7"),
-    speed: () => _buildQuorumPresetConfig("speed", 7, "claude-sonnet-4.6"),
+    power: () => _buildQuorumPresetConfig("power"),
+    speed: () => _buildQuorumPresetConfig("speed"),
   };
   const builder = builders[mode];
   if (builder) {
@@ -1361,7 +1404,7 @@ export function buildQuorumConfigForMode(mode) {
  * @param {object} options.plan - Parsed plan object with slices and dag
  * @param {string|number} options.sliceNumber - Slice identifier (may be alphanumeric, e.g. "2A")
  * @param {"auto"|"power"|"speed"|"false"} [options.mode="auto"] - Quorum mode
- * @param {string} [options.model="claude-sonnet-4.6"] - Base model for pricing
+ * @param {string} [options.model=DEFAULT_ESTIMATE_MODEL] - Base model for pricing
  * @param {string} [options.cwd] - Project root for history + complexity scoring
  * @returns {{
  *   estimatedCostUSD: number,
@@ -1414,7 +1457,7 @@ function _estimateSliceOverhead(quorumEligible, quorumConfig, tokensPerSlice, co
   return dryRunCost + reviewerCost;
 }
 
-export function estimateSlice({ plan, sliceNumber, mode = "auto", model = "claude-sonnet-4.6", cwd, env = process.env } = {}) {
+export function estimateSlice({ plan, sliceNumber, mode = "auto", model = DEFAULT_ESTIMATE_MODEL, cwd, env = process.env } = {}) {
   if (!plan || !plan.slices) {
     throw new Error("estimateSlice: plan object with slices is required");
   }
@@ -1476,7 +1519,7 @@ export function estimateSlice({ plan, sliceNumber, mode = "auto", model = "claud
  * @param {object} options.plan - Parsed plan object (same shape estimatePlan expects)
  * @param {string} [options.cwd] - Project root for history lookup
  * @param {string|number} [options.resumeFrom] - Optional resume point
- * @param {string} [options.defaultModel] - Base model when quorum disabled (default: "claude-sonnet-4.6")
+ * @param {string} [options.defaultModel] - Base model when quorum disabled (default: DEFAULT_ESTIMATE_MODEL)
  * @returns {{
  *   auto: object, power: object, speed: object, "false": object,
  *   recommended: "auto"|"power"|"speed"|"false",
@@ -1487,7 +1530,7 @@ export function estimateSlice({ plan, sliceNumber, mode = "auto", model = "claud
  *   slices[] — an additive per-slice breakdown with sliceNumber,
  *   projectedCostUSD, complexityScore, quorumEligible.
  */
-export function estimateQuorum({ plan, cwd, resumeFrom = null, defaultModel = "claude-sonnet-4.6" } = {}) {
+export function estimateQuorum({ plan, cwd, resumeFrom = null, defaultModel = DEFAULT_ESTIMATE_MODEL } = {}) {
   if (!plan || !plan.slices || !plan.dag) {
     throw new Error("estimateQuorum: plan object with slices and dag is required");
   }

@@ -1388,7 +1388,7 @@ write_best_defaults_preset() {
   "setupDate": "$(date +%Y-%m-%d)",
   "templateVersion": "$TEMPLATE_VERSION",
   "modelRouting": {
-    "default": "claude-opus-4.7"
+    "default": "claude-opus-5.5"
   },
   "hooks": {
     "preDeploy": { "blockOnSecrets": true, "warnOnEnvGaps": true, "scanSince": "HEAD~1" },

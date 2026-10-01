@@ -5,7 +5,7 @@ applyTo: '**/*dapr*,**/*worker*,**/components/**,**/*workflow*'
 
 # TypeScript Dapr Patterns
 
-> **Standard**: Dapr v1.14+ with `@dapr/dapr` SDK  
+> **Standard**: Dapr v1.18+ with `@dapr/dapr` SDK
 > **Package**: `@dapr/dapr`  
 > **Cross-ref**: `messaging.instructions.md` covers pub/sub schemas and CloudEvents
 

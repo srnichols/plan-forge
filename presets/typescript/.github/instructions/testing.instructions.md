@@ -7,10 +7,10 @@ applyTo: '**/*.test.ts,**/*.spec.ts,**/tests/**,**/vitest.config.*,**/jest.confi
 
 ## Tech Stack
 
-- **Test Runner**: Vitest (recommended) or Jest
+- **Test Runner**: Vitest 5 (recommended) or Jest 30
 - **API Testing**: Supertest
 - **Mocking**: vi.mock (Vitest) or jest.mock, MSW for HTTP
-- **E2E**: Playwright
+- **E2E**: Playwright 1.63
 - **Coverage**: v8 / istanbul
 
 ## Test Types

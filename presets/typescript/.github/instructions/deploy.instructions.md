@@ -9,7 +9,7 @@ applyTo: '**/Dockerfile,**/docker-compose*,**/*.yml,**/*.yaml,**/k8s/**'
 
 ### Multi-stage Dockerfile (pnpm monorepo)
 ```dockerfile
-FROM node:20-slim AS base
+FROM node:24-slim AS base
 ENV PNPM_HOME="/pnpm"
 ENV PATH="$PNPM_HOME:$PATH"
 RUN corepack enable
@@ -50,7 +50,7 @@ services:
     ports:
       - "3000:3000"
   db:
-    image: postgres:16
+    image: postgres:18
     environment:
       POSTGRES_DB: app
       POSTGRES_USER: app

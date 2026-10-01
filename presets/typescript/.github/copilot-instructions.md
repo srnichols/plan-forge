@@ -1,6 +1,6 @@
 # Instructions for Copilot — TypeScript Project
 
-> **Stack**: TypeScript / React / Node.js / Express  
+> **Stack**: TypeScript 7 / React 19.3 / Node.js 24 LTS / Express 5
 > **Last Updated**: <DATE>
 
 ---
@@ -31,10 +31,11 @@
 **Description**: <!-- What your app does -->
 
 **Tech Stack**:
-- Frontend: React 18+, TypeScript, Vite, TanStack Query
-- Backend: Node.js 20+, Express, TypeScript
-- Database: PostgreSQL with Prisma
-- Testing: Vitest, Supertest, Playwright
+- Frontend: React 19.3, TypeScript 7, Vite 8, TanStack Query
+- Backend: Node.js 24 LTS, Express 5, TypeScript 7
+- Database: PostgreSQL 18 with Prisma 7.10
+- Testing: Vitest 5, Jest 30, Supertest, Playwright 1.63
+- Linting: ESLint 10 flat config (`eslint.config.js`)
 - Package Manager: pnpm (monorepo)
 
 ---

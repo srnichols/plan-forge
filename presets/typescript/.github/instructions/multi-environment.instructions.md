@@ -115,13 +115,24 @@ DATABASE_URL=postgresql://staging-db:5432/contoso_staging
 # DATABASE_URL injected via secret manager, not in .env file
 ```
 
-```typescript
-// prisma/schema.prisma — shadow database for dev migrations
+```prisma
+// prisma/schema.prisma — Prisma 7 keeps connection URLs in prisma.config.ts
 datasource db {
-  provider          = "postgresql"
-  url               = env("DATABASE_URL")
-  shadowDatabaseUrl = env("SHADOW_DATABASE_URL")   // Dev only
+  provider = "postgresql"
 }
+```
+
+```typescript
+// prisma.config.ts — shadow database for dev migrations
+import "dotenv/config";
+import { defineConfig, env } from "prisma/config";
+
+export default defineConfig({
+  datasource: {
+    url: env("DATABASE_URL"),
+    shadowDatabaseUrl: process.env.SHADOW_DATABASE_URL, // Dev only — optional elsewhere
+  },
+});
 ```
 
 - **NEVER** use `prisma migrate dev` in staging or production — use `prisma migrate deploy`

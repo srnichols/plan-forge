@@ -28,19 +28,13 @@ export function {name}Middleware(req: Request, res: Response, next: NextFunction
 }
 ```
 
-### Async Middleware (with error forwarding)
+### Async Middleware (Express 5)
 ```typescript
-export function {name}Middleware(req: Request, res: Response, next: NextFunction): void {
-  (async () => {
-    try {
-      // Async operations (e.g., token validation, DB lookup)
-      const result = await someAsyncOperation();
-      (req as any).{name}Result = result;  // Prefer typed augmentation below
-      next();
-    } catch (err) {
-      next(err);  // ALWAYS forward errors — never swallow
-    }
-  })();
+export async function {name}Middleware(req: Request, res: Response, next: NextFunction): Promise<void> {
+  // Async operations (e.g., token validation, DB lookup)
+  const result = await someAsyncOperation();
+  (req as any).{name}Result = result;  // Prefer typed augmentation below
+  next();
 }
 ```
 
@@ -87,8 +81,8 @@ app.use(errorHandler);               // LAST: Error handler (4 args)
 ## Rules
 
 - Middleware handles cross-cutting concerns ONLY — no business logic
-- ALWAYS call `next()` or `next(err)` — never let requests hang
-- ALWAYS forward errors with `next(err)` — never swallow exceptions
+- ALWAYS call `next()` from middleware that does not end the response — never let requests hang
+- Express 5 forwards rejected promises from async middleware; non-async callbacks must still use `next(err)`
 - Error-handling middleware must have 4 parameters: `(err, req, res, next)`
 - Use typed Request augmentation instead of `(req as any).prop`
 

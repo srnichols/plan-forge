@@ -36,7 +36,7 @@ You are the **Architecture Reviewer**. Audit code changes for violations of the 
 ### Error Handling
 - [ ] No swallowed errors (empty catch blocks)
 - [ ] Typed error classes (`NotFoundError`, `ValidationError`)
-- [ ] All async route handlers forward errors to `next(err)`
+- [ ] Async route errors reach the global handler (Express 5 promise rejection handling, or `next(err)` for non-async callbacks)
 - [ ] Global error handler returns ProblemDetails
 
 ### Async Patterns

@@ -1,5 +1,5 @@
 ---
-description: API patterns for TypeScript — REST conventions, error handling, pagination, Express/Fastify
+description: API patterns for TypeScript — REST conventions, error handling, pagination, Express 5/Fastify
 applyTo: '**/*route*,**/*Route*,**/*controller*,**/*Controller*,**/*handler*,**/*Handler*,**/routes/**'
 ---
 
@@ -7,54 +7,51 @@ applyTo: '**/*route*,**/*Route*,**/*controller*,**/*Controller*,**/*handler*,**/
 
 ## REST Conventions
 
-### Route Structure (Express)
+### Route Structure (Express 5)
 ```typescript
 import { Router, Request, Response, NextFunction } from 'express';
 
 const router = Router();
 
 // GET /api/producers
-router.get('/', async (req: Request, res: Response, next: NextFunction) => {
-  try {
-    const { page = '1', pageSize = '25' } = req.query;
-    const result = await producerService.getPaged(Number(page), Number(pageSize));
-    res.json(result);
-  } catch (err) { next(err); }
+router.get('/', async (req: Request, res: Response) => {
+  const { page = '1', pageSize = '25' } = req.query;
+  const result = await producerService.getPaged(Number(page), Number(pageSize));
+  res.json(result);
 });
 
 // GET /api/producers/:id
-router.get('/:id', async (req: Request, res: Response, next: NextFunction) => {
-  try {
-    const producer = await producerService.getById(req.params.id);
-    if (!producer) return res.status(404).json({ error: 'Not found' });
-    res.json(producer);
-  } catch (err) { next(err); }
+router.get('/:id', async (req: Request, res: Response) => {
+  const producer = await producerService.getById(req.params.id);
+  if (!producer) return res.status(404).json({ error: 'Not found' });
+  res.json(producer);
 });
 
 // POST /api/producers
-router.post('/', validateBody(createProducerSchema), async (req, res, next) => {
-  try {
-    const created = await producerService.create(req.body);
-    res.status(201).location(`/api/producers/${created.id}`).json(created);
-  } catch (err) { next(err); }
+router.post('/', validateBody(createProducerSchema), async (req, res) => {
+  const created = await producerService.create(req.body);
+  res.status(201).location(`/api/producers/${created.id}`).json(created);
 });
 
 // PUT /api/producers/:id
-router.put('/:id', validateBody(updateProducerSchema), async (req, res, next) => {
-  try {
-    await producerService.update(req.params.id, req.body);
-    res.status(204).end();
-  } catch (err) { next(err); }
+router.put('/:id', validateBody(updateProducerSchema), async (req, res) => {
+  await producerService.update(req.params.id, req.body);
+  res.status(204).end();
 });
 
 // DELETE /api/producers/:id
-router.delete('/:id', async (req, res, next) => {
-  try {
-    await producerService.delete(req.params.id);
-    res.status(204).end();
-  } catch (err) { next(err); }
+router.delete('/:id', async (req, res) => {
+  await producerService.delete(req.params.id);
+  res.status(204).end();
 });
 ```
+
+Express 5 forwards rejected promises from async handlers to the global error handler. Do not wrap every async route in `try/catch` solely to call `next(err)`.
+
+### Express 5 Path Syntax
+
+- Name wildcard route parameters: use `/*splat` (or `/{*splat}` when the root path must match too), not `/*` or `*`.
+- Use braces for optional path segments instead of `?` suffixes.
 
 ## Error Handling (RFC 9457 Problem Details)
 ```typescript
@@ -182,13 +179,11 @@ function apiVersion(req: Request, _res: Response, next: NextFunction) {
 }
 
 // Route handler branches on version
-router.get('/producers', apiVersion, async (req, res, next) => {
-  try {
-    const result = req.apiVersion >= 2
-      ? await producerService.getPagedV2(/* expanded fields */)
-      : await producerService.getPaged(/* v1 fields */);
-    res.json(result);
-  } catch (err) { next(err); }
+router.get('/producers', apiVersion, async (req, res) => {
+  const result = req.apiVersion >= 2
+    ? await producerService.getPagedV2(/* expanded fields */)
+    : await producerService.getPaged(/* v1 fields */);
+  res.json(result);
 });
 ```
 
@@ -229,7 +224,7 @@ app.use(deprecationHeaders);
 ❌ Expose stack traces to clients (generic 500 in production)
 ❌ Business logic in route handlers (delegate to services)
 ❌ Trust req.body without validation (always use Zod/Joi)
-❌ Swallow errors with empty catch (always call next(err))
+❌ Swallow errors with empty catch (Express 5 async handlers forward rejections automatically; non-async callbacks must still call `next(err)`)
 ❌ Return full database entities (return DTOs, strip internal fields)
 ```
 

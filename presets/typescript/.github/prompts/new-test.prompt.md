@@ -1,5 +1,5 @@
 ---
-description: "Scaffold Jest/Vitest test files with proper describe/it blocks, mock setup, and naming conventions."
+description: "Scaffold Vitest 5/Jest 30 test files with proper describe/it blocks, mock setup, and naming conventions."
 agent: "agent"
 tools: [read, edit, search, execute]
 ---
@@ -15,7 +15,7 @@ describe('{ClassName}')
     it('should {expected} when {condition}')
 ```
 
-## Unit Test Pattern (Vitest/Jest)
+## Unit Test Pattern (Vitest 5/Jest 30)
 
 ```typescript
 import { describe, it, expect, vi, beforeEach } from 'vitest';
@@ -81,7 +81,7 @@ describe('{EntityName}Repository (integration)', () => {
   let pool: Pool;
 
   beforeAll(async () => {
-    container = await new GenericContainer('postgres:16-alpine')
+    container = await new GenericContainer('postgres:18-alpine')
       .withExposedPorts(5432)
       .withEnvironment({ POSTGRES_DB: 'test', POSTGRES_PASSWORD: 'test' })
       .start();

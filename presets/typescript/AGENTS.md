@@ -1,7 +1,7 @@
 # Agents & Automation Architecture
 
 > **Project**: <YOUR PROJECT NAME>  
-> **Stack**: TypeScript / Node.js / React  
+> **Stack**: TypeScript 7 / Node.js 24 LTS / React 19.3
 > **Last Updated**: <DATE>
 
 ---

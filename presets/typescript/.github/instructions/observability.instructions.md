@@ -38,7 +38,7 @@ logger.info(`User ${userId} authenticated`);
 logger.info({ token }, 'Auth token'); // NEVER
 ```
 
-## OpenTelemetry Setup
+## OpenTelemetry JS Setup (SDK 2.11)
 
 ### Registration
 ```typescript

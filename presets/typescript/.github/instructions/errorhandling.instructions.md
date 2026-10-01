@@ -86,14 +86,16 @@ export const globalErrorHandler: ErrorRequestHandler = (err, req, res, _next) =>
 - Use `isOperational` flag to distinguish expected vs crash-worthy errors
 - Unhandled rejections should trigger graceful shutdown
 
-## Async Error Wrapper
+## Express 5 Async Errors
 
 ```typescript
-export const asyncHandler = (fn: RequestHandler): RequestHandler =>
-  (req, res, next) => Promise.resolve(fn(req, res, next)).catch(next);
-
-// Usage: router.get('/items/:id', asyncHandler(getItemById));
+router.get('/items/:id', async (req, res) => {
+  const item = await itemService.getById(req.params.id);
+  res.json(item);
+});
 ```
+
+Express 5 forwards rejected promises from async route handlers and middleware to the global error handler. Use an async-wrapper helper only for legacy Express 4 projects or non-async callback APIs.
 
 ## React Error Boundaries
 

@@ -12,7 +12,7 @@ Scaffold a production-grade multi-stage Dockerfile for a Node.js/TypeScript appl
 ### Multi-Stage Dockerfile
 ```dockerfile
 # ---- Build Stage ----
-FROM node:20-alpine AS build
+FROM node:24-alpine AS build
 WORKDIR /app
 
 # Copy package files first for layer caching
@@ -25,13 +25,13 @@ COPY src/ src/
 RUN npm run build
 
 # ---- Production Dependencies ----
-FROM node:20-alpine AS deps
+FROM node:24-alpine AS deps
 WORKDIR /app
 COPY package.json package-lock.json ./
 RUN npm ci --omit=dev --ignore-scripts
 
 # ---- Runtime Stage ----
-FROM node:20-alpine AS runtime
+FROM node:24-alpine AS runtime
 WORKDIR /app
 
 # Security: run as non-root (node user exists in node images)
@@ -82,13 +82,13 @@ services:
         condition: service_healthy
 
   db:
-    image: postgres:16-alpine
+    image: postgres:18-alpine
     environment:
       POSTGRES_DB: mydb
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: postgres
     volumes:
-      - pgdata:/var/lib/postgresql/data
+      - pgdata:/var/lib/postgresql
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U postgres"]
       interval: 5s

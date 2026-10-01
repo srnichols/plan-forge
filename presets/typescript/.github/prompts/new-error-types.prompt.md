@@ -101,30 +101,21 @@ export function errorHandler(
 app.use(errorHandler);
 ```
 
-### Async Route Wrapper
+### Express 5 Async Routes
 ```typescript
-// Catches async errors and forwards to Express error middleware
-export function asyncHandler(
-  fn: (req: Request, res: Response, next: NextFunction) => Promise<void>,
-) {
-  return (req: Request, res: Response, next: NextFunction) => {
-    fn(req, res, next).catch(next);
-  };
-}
-
-// Usage
-router.get('/:id', asyncHandler(async (req, res) => {
+// Express 5 forwards rejected promises to error middleware.
+router.get('/:id', async (req, res) => {
   const item = await service.findById(req.params.id);
   if (!item) throw new NotFoundError('Item', req.params.id);
   res.json(toResponse(item));
-}));
+});
 ```
 
 ## Rules
 
 - NEVER throw raw `Error` — always use typed errors extending `AppError`
 - NEVER leak stack traces or internal details in production responses
-- ALWAYS use `asyncHandler` to forward async errors to Express middleware
+- Rely on Express 5 promise rejection handling for async route errors
 - Register error middleware AFTER all routes
 - Flag unexpected errors with `isOperational = false` for crash-or-continue decisions
 - Keep error classes in `src/errors/`

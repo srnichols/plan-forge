@@ -7166,6 +7166,11 @@ cmd_crucible() {
 COMMAND="${1:-help}"
 shift 2>/dev/null || true
 
+# The dispatch is one brace group that ends in `exit`, so bash parses all of it
+# before running a command and never reads this file again. `pforge update`
+# overwrites pforge.sh in place; bash would otherwise resume reading the new
+# file at a stale offset and fail with a syntax error after a successful update.
+{
 case "$COMMAND" in
     init)         cmd_init "$@" ;;
     check)        cmd_check "$@" ;;
@@ -7292,3 +7297,5 @@ case "$COMMAND" in
         exit 1
         ;;
 esac
+exit $?
+}

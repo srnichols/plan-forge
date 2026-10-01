@@ -11,7 +11,7 @@
  */
 
 import { existsSync, readFileSync, readdirSync } from "node:fs";
-import { resolve, join, basename } from "node:path";
+import { resolve, join, basename, isAbsolute } from "node:path";
 
 // ─── Constants ────────────────────────────────────────────────────────
 export const SCENARIO_KINDS = Object.freeze(["happy-path", "chaos", "perf", "long-horizon"]);
@@ -69,28 +69,34 @@ function scenariosDir(projectRoot) {
 
 // ─── Public API ───────────────────────────────────────────────────────
 
+/** Folder name of the public reference testbed (github.com/srnichols/plan-forge-testbed). */
+export const TESTBED_SIBLING_DIR = "plan-forge-testbed";
+
 /**
- * Resolve the testbed path from input, config, or platform default.
+ * Resolve the testbed path, in order: the explicit argument, `.forge.json`
+ * `testbed.path` (relative paths resolve against the project root), then a
+ * `plan-forge-testbed` clone next to the project. There is no machine-specific
+ * fallback: when none of these exist, it throws ERR_TESTBED_PATH_REQUIRED.
  */
 export function resolveTestbedPath(input, { projectRoot }) {
-  // 1. Explicit argument
   if (input?.testbedPath) return input.testbedPath;
 
-  // 2. .forge.json config
   try {
     const forgeJsonPath = resolve(projectRoot, ".forge.json");
     if (existsSync(forgeJsonPath)) {
       const config = JSON.parse(readFileSync(forgeJsonPath, "utf-8"));
-      if (config.testbed?.path) return config.testbed.path;
+      const configured = config.testbed?.path;
+      if (configured) return isAbsolute(configured) ? configured : resolve(projectRoot, configured);
     }
   } catch { /* ignore parse errors */ }
 
-  // 3. Platform default (Windows only)
-  if (process.platform === "win32") {
-    return "E:\\GitHub\\plan-forge-testbed";
-  }
+  const sibling = resolve(projectRoot, "..", TESTBED_SIBLING_DIR);
+  if (existsSync(sibling)) return sibling;
 
-  const err = new Error("Testbed path not configured. Set testbed.path in .forge.json or pass testbedPath argument.");
+  const err = new Error(
+    `Testbed path not configured. Set testbed.path in .forge.json, pass testbedPath, ` +
+    `or clone the reference testbed next to this project as ../${TESTBED_SIBLING_DIR}.`,
+  );
   err.code = "ERR_TESTBED_PATH_REQUIRED";
   throw err;
 }

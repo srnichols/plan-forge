@@ -9,9 +9,9 @@
  * surface here.
  *
  * The test is skipped on CI / non-Windows runners where pforge.ps1 cannot
- * run — use the companion pforge.sh path for that case.
- *
- * Testbed: E:\GitHub\plan-forge-testbed  (read-only; must NOT be modified)
+ * run — use the companion pforge.sh path for that case — and wherever no
+ * testbed resolves (testbed.path in .forge.json, or a plan-forge-testbed
+ * clone next to the repo). The testbed is read-only; never modify it.
  */
 
 import { describe, it, expect } from "vitest";
@@ -19,16 +19,25 @@ import { spawnSync } from "node:child_process";
 import { readFileSync, writeFileSync, existsSync } from "node:fs";
 import { resolve, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
+import { resolveTestbedPath } from "../testbed/scenarios.mjs";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const FIXTURES = resolve(HERE, "fixtures");
 const GOLDEN = resolve(FIXTURES, "smith-golden-pre-enums.txt");
 
-const TESTBED = "E:\\GitHub\\plan-forge-testbed";
 const PFORGE_PS1 = resolve(HERE, "..", "..", "pforge.ps1");
 
+function findTestbed() {
+  try {
+    return resolveTestbedPath({}, { projectRoot: resolve(HERE, "..", "..") });
+  } catch {
+    return null;
+  }
+}
+
+const TESTBED = findTestbed();
 const isWindows = process.platform === "win32";
-const testbedExists = existsSync(TESTBED);
+const testbedExists = Boolean(TESTBED) && existsSync(TESTBED);
 const ps1Exists = existsSync(PFORGE_PS1);
 
 /** Strip ANSI escape sequences so golden diffs are color-independent. */

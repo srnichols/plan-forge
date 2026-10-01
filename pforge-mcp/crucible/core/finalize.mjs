@@ -26,7 +26,7 @@ import { loadSmelt, updateSmelt } from "../../crucible-store.mjs";
 import { renderDraft, extractUnresolvedFields } from "../../crucible-draft.mjs";
 import { getMode } from "../registry.mjs";
 
-// Bug ids are tracker-shaped: a prefix, a hyphen, then digits (RMG-0035).
+// Bug ids are tracker-shaped: a prefix, a hyphen, then digits (BUG-0035).
 // Requiring the numeric suffix is what separates an id from an ordinary word —
 // a looser pattern matches prose like "research" and re-opens issue #245.
 const LINKED_BUG_ID_RE = /^[A-Za-z][A-Za-z0-9_]*-\d+$/;

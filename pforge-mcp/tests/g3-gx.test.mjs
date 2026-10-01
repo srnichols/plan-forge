@@ -110,10 +110,10 @@ describe("G3.2 dedupeThoughtsBySimilarity", () => {
 
 describe("G3.3 buildWatcherSearchPrompt", () => {
   it("emits a search-instruction block for an anomaly with a code", () => {
-    const out = buildWatcherSearchPrompt({ code: "quorum-dissent", message: "x" }, "rummag");
+    const out = buildWatcherSearchPrompt({ code: "quorum-dissent", message: "x" }, "my-app");
     expect(out).toContain("search_thoughts");
     expect(out).toContain("quorum-dissent");
-    expect(out).toContain("rummag");
+    expect(out).toContain("my-app");
     expect(out).toContain("PRIOR FINDINGS");
   });
   it("returns empty string when projectName is missing", () => {

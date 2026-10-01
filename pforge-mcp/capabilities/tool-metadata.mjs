@@ -1304,11 +1304,11 @@ export const TOOL_METADATA = {
       NO_RUNS: { message: "No run directory found", recovery: "Verify the target has executed at least one pforge run" },
     },
     example: {
-      input: { targetPath: "E:/GitHub/Rummag", mode: "snapshot" },
+      input: { targetPath: "/path/to/my-app", mode: "snapshot" },
       output: { ok: true, runState: "in-progress", counts: { started: 5, completed: 4, failed: 0, escalated: 0 }, anomalies: [], recommendations: [], cursor: "2025-04-17T12:34:56.789Z" },
     },
     crossRunExample: {
-      input: { targetPath: "E:/GitHub/Rummag", mode: "cross-run", crossRunWindow: "14d" },
+      input: { targetPath: "/path/to/my-app", mode: "cross-run", crossRunWindow: "14d" },
       output: { ok: true, mode: "cross-run", runsScanned: 8, anomalies: [{ code: "cross-run.recurring-gate-failure", severity: "error", sliceId: "slice-3", occurrences: 3 }], recommendations: [{ code: "cross-run.recurring-gate-failure", action: "Inspect gate for slice-3 across runs" }] },
     },
   },
@@ -1334,7 +1334,7 @@ export const TOOL_METADATA = {
       TARGET_NOT_FOUND: { message: "Target path does not exist", recovery: "Verify path and try again" },
     },
     example: {
-      input: { targetPath: "E:/GitHub/Rummag", durationMs: 30000 },
+      input: { targetPath: "/path/to/my-app", durationMs: 30000 },
       output: { ok: true, mode: "websocket", events: 42, capturedEvents: 42 },
     },
   },
@@ -1527,7 +1527,8 @@ export const TOOL_METADATA = {
     network: false,
     risk: "medium",
     errors: {
-      ERR_TESTBED_NOT_FOUND: { message: "Testbed repo not found", recovery: "Set testbed.path in .forge.json" },
+      ERR_TESTBED_PATH_REQUIRED: { message: "No testbed configured", recovery: "Set testbed.path in .forge.json, pass testbedPath, or clone plan-forge-testbed next to the project" },
+      ERR_TESTBED_NOT_FOUND: { message: "Testbed repo not found", recovery: "Fix testbed.path in .forge.json" },
       ERR_TESTBED_DIRTY: { message: "Testbed has uncommitted changes", recovery: "Commit or stash changes in testbed" },
       ERR_TESTBED_LOCKED: { message: "Another scenario is running", recovery: "Wait or remove stale .forge/testbed.lock" },
       ERR_SCENARIO_NOT_FOUND: { message: "Scenario fixture not found", recovery: "Check docs/plans/testbed-scenarios/" },
@@ -1680,7 +1681,8 @@ export const TOOL_METADATA = {
     network: false,
     risk: "medium",
     errors: {
-      ERR_TESTBED_NOT_FOUND: { message: "Testbed repo not found", recovery: "Set testbed.path in .forge.json" },
+      ERR_TESTBED_PATH_REQUIRED: { message: "No testbed configured", recovery: "Set testbed.path in .forge.json, pass testbedPath, or clone plan-forge-testbed next to the project" },
+      ERR_TESTBED_NOT_FOUND: { message: "Testbed repo not found", recovery: "Fix testbed.path in .forge.json" },
       ERR_TESTBED_LOCKED: { message: "Another scenario is running", recovery: "Wait or remove stale .forge/testbed.lock" },
       ERR_NO_HAPPYPATH_SCENARIOS: { message: "No happy-path scenarios found", recovery: "Add happy-path scenarios to docs/plans/testbed-scenarios/" },
     },

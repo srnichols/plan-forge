@@ -1438,7 +1438,7 @@
       "properties": {
         "targetPath": {
           "type": "string",
-          "description": "Absolute path to the project being watched (e.g., E:/GitHub/Rummag)"
+          "description": "Absolute path to the project being watched (e.g., /path/to/my-app)"
         },
         "runId": {
           "type": "string",
@@ -1521,7 +1521,7 @@
     },
     "example": {
       "input": {
-        "targetPath": "E:/GitHub/Rummag",
+        "targetPath": "/path/to/my-app",
         "mode": "snapshot"
       },
       "output": {
@@ -1540,7 +1540,7 @@
     },
     "crossRunExample": {
       "input": {
-        "targetPath": "E:/GitHub/Rummag",
+        "targetPath": "/path/to/my-app",
         "mode": "cross-run",
         "crossRunWindow": "14d"
       },
@@ -1635,7 +1635,7 @@
     },
     "example": {
       "input": {
-        "targetPath": "E:/GitHub/Rummag",
+        "targetPath": "/path/to/my-app",
         "durationMs": 30000
       },
       "output": {
@@ -1903,7 +1903,7 @@
         },
         "bugId": {
           "type": "string",
-          "description": "Optional bug identifier (e.g. RMG-0035). Stored on the smelt and emitted in finalized plan frontmatter as bugId + linkedBugs."
+          "description": "Optional bug identifier (e.g. BUG-0035). Stored on the smelt and emitted in finalized plan frontmatter as bugId + linkedBugs."
         },
         "source": {
           "type": "string",
@@ -5972,7 +5972,7 @@
         },
         "testbedPath": {
           "type": "string",
-          "description": "Path to testbed repository (default: from .forge.json testbed.path)"
+          "description": "Path to testbed repository (default: .forge.json testbed.path, else a plan-forge-testbed clone next to the project)"
         },
         "dryRun": {
           "type": "boolean",
@@ -6022,9 +6022,13 @@
     "network": false,
     "risk": "medium",
     "errors": {
+      "ERR_TESTBED_PATH_REQUIRED": {
+        "message": "No testbed configured",
+        "recovery": "Set testbed.path in .forge.json, pass testbedPath, or clone plan-forge-testbed next to the project"
+      },
       "ERR_TESTBED_NOT_FOUND": {
         "message": "Testbed repo not found",
-        "recovery": "Set testbed.path in .forge.json"
+        "recovery": "Fix testbed.path in .forge.json"
       },
       "ERR_TESTBED_DIRTY": {
         "message": "Testbed has uncommitted changes",
@@ -6572,7 +6576,7 @@
       "properties": {
         "testbedPath": {
           "type": "string",
-          "description": "Path to testbed repository (default: from .forge.json testbed.path)"
+          "description": "Path to testbed repository (default: .forge.json testbed.path, else a plan-forge-testbed clone next to the project)"
         },
         "dryRun": {
           "type": "boolean",
@@ -6619,9 +6623,13 @@
     "network": false,
     "risk": "medium",
     "errors": {
+      "ERR_TESTBED_PATH_REQUIRED": {
+        "message": "No testbed configured",
+        "recovery": "Set testbed.path in .forge.json, pass testbedPath, or clone plan-forge-testbed next to the project"
+      },
       "ERR_TESTBED_NOT_FOUND": {
         "message": "Testbed repo not found",
-        "recovery": "Set testbed.path in .forge.json"
+        "recovery": "Fix testbed.path in .forge.json"
       },
       "ERR_TESTBED_LOCKED": {
         "message": "Another scenario is running",

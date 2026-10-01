@@ -2,7 +2,7 @@
  * Plan Forge — self-update version-source parity tests.
  *
  * Regression for the "consumer VERSION collision" meta-bug: a consumer project
- * (e.g. Rummag) that tracks its own application version in a root `VERSION`
+ * that tracks its own application version in a root `VERSION`
  * file (3.32.0) had that file misread by `pforge self-update` as Plan Forge's
  * installed version, which then blocked the update as a false downgrade against
  * the real latest release (3.22.x).

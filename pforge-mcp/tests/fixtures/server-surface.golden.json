@@ -726,7 +726,7 @@
           },
           "bugId": {
             "type": "string",
-            "description": "Optional bug identifier (e.g. RMG-0035). Stored on the smelt and emitted in finalized plan frontmatter as bugId + linkedBugs."
+            "description": "Optional bug identifier (e.g. BUG-0035). Stored on the smelt and emitted in finalized plan frontmatter as bugId + linkedBugs."
           },
           "source": {
             "type": "string",
@@ -2760,7 +2760,7 @@
         "properties": {
           "testbedPath": {
             "type": "string",
-            "description": "Path to testbed repository (default: from .forge.json testbed.path)"
+            "description": "Path to testbed repository (default: .forge.json testbed.path, else a plan-forge-testbed clone next to the project)"
           },
           "dryRun": {
             "type": "boolean",
@@ -2786,7 +2786,7 @@
           },
           "testbedPath": {
             "type": "string",
-            "description": "Path to testbed repository (default: from .forge.json testbed.path)"
+            "description": "Path to testbed repository (default: .forge.json testbed.path, else a plan-forge-testbed clone next to the project)"
           },
           "dryRun": {
             "type": "boolean",
@@ -2930,7 +2930,7 @@
         "properties": {
           "targetPath": {
             "type": "string",
-            "description": "Absolute path to the project being watched (e.g., E:/GitHub/Rummag)"
+            "description": "Absolute path to the project being watched (e.g., /path/to/my-app)"
           },
           "runId": {
             "type": "string",

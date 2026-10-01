@@ -25,7 +25,7 @@ export const MODE_INTERFACE_KEYS = Object.freeze([
 
 export const LINKED_BUGS_QUESTION = Object.freeze({
   id: "linked-bugs",
-  prompt: 'Link related bug IDs (comma-separated, e.g. "RMG-0035, RMG-0041"). Leave blank to skip.',
+  prompt: 'Link related bug IDs (comma-separated, e.g. "BUG-0035, BUG-0041"). Leave blank to skip.',
   required: false,
   defaultSource: null,
 });

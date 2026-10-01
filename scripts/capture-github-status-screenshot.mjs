@@ -4,6 +4,8 @@
 //
 // Run with:  node --experimental-vm-modules scripts/capture-github-status-screenshot.mjs
 // (Playwright lives in pforge-mcp/node_modules, so we import via absolute path.)
+// The testbed resolves like the testbed tools: testbed.path in .forge.json, or a
+// plan-forge-testbed clone next to this repo. The image shows a neutral path.
 import { execFileSync } from "node:child_process";
 import { writeFileSync, mkdirSync } from "node:fs";
 import { resolve, dirname } from "node:path";
@@ -16,14 +18,16 @@ const playwrightUrl = pathToFileURL(
 ).href;
 const { chromium } = await import(playwrightUrl);
 
-const testbed = "E:\\GitHub\\plan-forge-testbed";
+const { resolveTestbedPath } = await import(pathToFileURL(resolve(repoRoot, "pforge-mcp/testbed/scenarios.mjs")).href);
+const testbed = resolveTestbedPath({}, { projectRoot: repoRoot });
+const DISPLAY_PATH = "C:\\src\\plan-forge-testbed";
 const outPath = resolve(repoRoot, "docs/manual/assets/screenshots/github-status-testbed.png");
 
 // 1. Run the introspection — capture human output.
 const stdoutBuf = execFileSync("node", [
   resolve(repoRoot, "pforge-mcp/github-introspect.mjs"),
   "--project", testbed,
-], { encoding: "utf8", maxBuffer: 1024 * 1024 });
+], { encoding: "utf8", maxBuffer: 1024 * 1024 }).split(testbed).join(DISPLAY_PATH);
 
 // 2. Build a styled HTML page that looks like a dark terminal pane.
 const html = `<!doctype html>
@@ -53,7 +57,7 @@ const html = `<!doctype html>
 </style></head><body>
 <div class="term">
   <div class="head"><div class="dot r"></div><div class="dot y"></div><div class="dot g"></div></div>
-  <span class="prompt">PS&nbsp;E:\\GitHub\\plan-forge-testbed&gt;</span>
+  <span class="prompt">PS&nbsp;${escapeHtml(DISPLAY_PATH)}&gt;</span>
   <span class="cmd">pforge github status</span>
 ${escapeHtml(stdoutBuf)}</div>
 </body></html>`;

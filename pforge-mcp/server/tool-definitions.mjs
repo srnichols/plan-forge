@@ -289,7 +289,7 @@ export const TOOLS = [
     inputSchema: {
       type: "object",
       properties: {
-        targetPath: { type: "string", description: "Absolute path to the project being watched (e.g., E:/GitHub/Rummag)" },
+        targetPath: { type: "string", description: "Absolute path to the project being watched (e.g., /path/to/my-app)" },
         runId: { type: "string", description: "Specific run directory under .forge/runs/ (default: latest)" },
         mode: { type: "string", enum: ["snapshot", "analyze"], description: "snapshot = file reads only, no AI cost. analyze = invokes watcher model for advice." },
         model: { type: "string", description: `Override watcher model (default: ${DEFAULT_WATCHER_MODEL})` },
@@ -371,7 +371,7 @@ export const TOOLS = [
         rawIdea: { type: "string", description: "The raw idea text — a sentence or short paragraph describing the change." },
         mode: { type: "string", enum: ["tweak", "feature", "full", "bug-batch"], description: "Intake mode. Takes precedence over lane when both are supplied. Use 'bug-batch' for bug-fix smelts that need multi-slice plans." },
         lane: { type: "string", enum: ["tweak", "feature", "full"], description: "Override the recommended lane (legacy; prefer mode). Omit to accept the heuristic's choice." },
-        bugId: { type: "string", description: "Optional bug identifier (e.g. RMG-0035). Stored on the smelt and emitted in finalized plan frontmatter as bugId + linkedBugs." },
+        bugId: { type: "string", description: "Optional bug identifier (e.g. BUG-0035). Stored on the smelt and emitted in finalized plan frontmatter as bugId + linkedBugs." },
         source: { type: "string", enum: ["human", "agent"], description: "Who submitted the smelt. Default: human." },
         parentSmeltId: { type: "string", description: "Parent smelt id if this was spawned from another smelt (used for recursion depth tracking)." },
         path: { type: "string", description: "Project directory (default: current)" },
@@ -1106,7 +1106,7 @@ export const TOOLS = [
       type: "object",
       properties: {
         scenarioId: { type: "string", description: "Scenario fixture ID (filename stem under docs/plans/testbed-scenarios/)" },
-        testbedPath: { type: "string", description: "Path to testbed repository (default: from .forge.json testbed.path)" },
+        testbedPath: { type: "string", description: "Path to testbed repository (default: .forge.json testbed.path, else a plan-forge-testbed clone next to the project)" },
         dryRun: { type: "boolean", description: "If true, skip execute and teardown steps (default: false)" },
         path: { type: "string", description: "Project directory (default: current)" },
       },
@@ -1215,7 +1215,7 @@ export const TOOLS = [
     inputSchema: {
       type: "object",
       properties: {
-        testbedPath: { type: "string", description: "Path to testbed repository (default: from .forge.json testbed.path)" },
+        testbedPath: { type: "string", description: "Path to testbed repository (default: .forge.json testbed.path, else a plan-forge-testbed clone next to the project)" },
         dryRun: { type: "boolean", description: "If true, skip execute and teardown steps (default: false)" },
         path: { type: "string", description: "Project directory (default: current)" },
       },

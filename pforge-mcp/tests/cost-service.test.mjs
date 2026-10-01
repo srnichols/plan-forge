@@ -275,7 +275,7 @@ describe("cost-service: estimateQuorum regression (Slice 3)", () => {
   });
 
   it("REGRESSION: subscription mode (gh-copilot/claude-cli) flattens per-leg cost (Phase-29 / v2.83.0)", () => {
-    // Field report: rummag user on gh-copilot saw $23.53 estimate where actual
+    // Field report: a consumer project on gh-copilot saw $23.53 estimate where actual
     // ran ~$0.10–$0.50 — a ~250× over-estimate. Root cause: estimatePlan and
     // estimateSlice priced quorum legs via raw API token rates (MODEL_PRICING)
     // even when the active provider was a flat-rate subscription CLI. After

@@ -55,11 +55,11 @@ describe("bug-batch mode — contract", () => {
     const { buildFrontmatter } = await_fmRef();
     const smelt = {
       id: "s1", lane: "bug-batch", source: "human", answers: [],
-      bugId: "RMG-0035",
+      bugId: "BUG-0035",
     };
     const fm = buildFrontmatter(smelt, "Phase-77");
-    expect(fm).toContain("linkedBugs: [RMG-0035]");
-    expect(fm).toContain("bugId: RMG-0035");
+    expect(fm).toContain("linkedBugs: [BUG-0035]");
+    expect(fm).toContain("bugId: BUG-0035");
   });
 
   it("no bugId → no linkedBugs/bugId in frontmatter", () => {

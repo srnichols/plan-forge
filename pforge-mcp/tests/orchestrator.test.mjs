@@ -1266,7 +1266,7 @@ describe("coalesceGateLines", () => {
   });
 
   it("skips markdown-style numbered list prose (regression: slice-7 false failure)", () => {
-    // Real-world case from Rummag Phase-01 CI/CD slice: plan authors described
+    // Real-world case from a consumer plan's CI/CD slice: plan authors described
     // CSRF flow as numbered prose. Previously these were sent to runGate and
     // rejected by the allowlist as "'1.' not in allowlist", failing the slice.
     const gate = `1. Server generates CSRF token on session creation → sets as httpOnly cookie \`_csrf\`.\n2. Client reads cookie and mirrors value in X-CSRF-Token header.\nnpm test`;
@@ -1474,7 +1474,7 @@ describe("calculateSliceCost", () => {
   });
 });
 
-// ─── scoreSliceComplexity signal detection (Rummag regression) ───────
+// ─── scoreSliceComplexity signal detection (consumer-plan regression) ───
 
 describe("scoreSliceComplexity signal detection", () => {
   function writePlanWithSlice(body) {
@@ -1534,7 +1534,7 @@ describe("scoreSliceComplexity signal detection", () => {
   });
 });
 
-// ─── parsePlan body-line parsing (Rummag regression) ─────────────────
+// ─── parsePlan body-line parsing (consumer-plan regression) ───────────
 
 describe("parsePlan body-line metadata", () => {
   function writeBodyPlan(body) {
@@ -1551,8 +1551,8 @@ describe("parsePlan body-line metadata", () => {
     return planPath;
   }
 
-  it("parses **Depends On:** body line into depends[] (Rummag format)", () => {
-    // Regression: Rummag plan writes deps as body prose, not header tag.
+  it("parses **Depends On:** body line into depends[] (body-line format)", () => {
+    // Regression: some consumer plans write deps as body prose, not a header tag.
     // Previously depends[] was always [] → dependencyWeight always 0 → quorum never triggered.
     const planPath = writeBodyPlan([
       "### Slice 3: Campaigns",
@@ -1585,8 +1585,8 @@ describe("parsePlan body-line metadata", () => {
     }
   });
 
-  it("parses **Context Files:** body line into contextFiles[] (Rummag format)", () => {
-    // #231: Rummag plans declare reference docs as backtick-wrapped paths in a
+  it("parses **Context Files:** body line into contextFiles[] (body-line format)", () => {
+    // #231: some consumer plans declare reference docs as backtick-wrapped paths in a
     // **Context Files:** body line. These are read-only references and must NOT
     // widen the editable scope[]; they land in contextFiles[] instead.
     const planPath = writeBodyPlan([
@@ -1628,7 +1628,7 @@ describe("parsePlan body-line metadata", () => {
     }
   });
 
-  it("integration: Rummag-style slice produces non-zero scope/dependency/security weights", () => {
+  it("integration: body-line-format slice produces non-zero scope/dependency/security weights", () => {
     // End-to-end regression: ensure complexity score rises above the previous
     // stuck-at-2 baseline when the parser actually captures metadata.
     const planPath = writeBodyPlan([

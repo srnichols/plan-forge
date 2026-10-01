@@ -2,7 +2,7 @@
  * Issue #264 — a worker that never launched was recorded as a validation gate
  * failure, sending diagnosis to entirely the wrong place.
  *
- * The measured run (Rummag Phase 151D slice 5, two orchestrators in separate
+ * The measured run (a consumer project's slice 5, two orchestrators in separate
  * worktrees) looked like this:
  *
  *   slice-5-log.txt   STDOUT: (empty)
@@ -14,7 +14,7 @@
  *   slice-5.json      status:       failed
  *                     gateStatus:   failed
  *                     statusReason: validation gate failed: pnpm --filter
- *                                   @rummag/api exec vitest run ...
+ *                                   @my-app/api exec vitest run ...
  *                     gateError:    No test files found, exiting with code 1
  *
  * Every signal named vitest and a test path. The cause was a Windows file lock

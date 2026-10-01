@@ -2,7 +2,7 @@
  * Content-audit scanner — HTTP-probe + HTML-inspection reference impl
  * (Phase-39 Slice 1).
  *
- * Ported from Rummag's `scripts/audit/audit-content.mjs`. Probes a set
+ * Ported from a consumer project's content-audit script. Probes a set
  * of routes against a live base URL and emits structured findings per
  * route: HTTP status, title, h1, word count, placeholder markers, and
  * client-shell detection for hydrated SPAs.

@@ -25,21 +25,21 @@ describe("buildFinalizeFrontmatter", () => {
   });
 
   it("emits bugId and linkedBugs: [bugId] when bugId present but no linked-bugs answer", () => {
-    const smelt = { ...BASE_SMELT, bugId: "RMG-0035" };
+    const smelt = { ...BASE_SMELT, bugId: "BUG-0035" };
     const fm = buildFinalizeFrontmatter(smelt, "Phase-60");
-    expect(fm).toContain("bugId: RMG-0035");
-    expect(fm).toContain("linkedBugs: [RMG-0035]");
+    expect(fm).toContain("bugId: BUG-0035");
+    expect(fm).toContain("linkedBugs: [BUG-0035]");
   });
 
   it("emits both from linked-bugs answer when present", () => {
     const smelt = {
       ...BASE_SMELT,
-      bugId: "RMG-0035",
-      answers: [{ questionId: "linked-bugs", answer: "RMG-0035, RMG-0041" }],
+      bugId: "BUG-0035",
+      answers: [{ questionId: "linked-bugs", answer: "BUG-0035, BUG-0041" }],
     };
     const fm = buildFinalizeFrontmatter(smelt, "Phase-60");
-    expect(fm).toContain("bugId: RMG-0035");
-    expect(fm).toContain("linkedBugs: [RMG-0035, RMG-0041]");
+    expect(fm).toContain("bugId: BUG-0035");
+    expect(fm).toContain("linkedBugs: [BUG-0035, BUG-0041]");
   });
 
   // ─── Issue #245: prose answers produced malformed YAML ─────────────
@@ -55,16 +55,16 @@ describe("buildFinalizeFrontmatter", () => {
     });
 
     it("keeps real ids and drops the prose around them", () => {
-      const fm = withAnswer("Mostly research, but RMG-0035 is related; see also RMG-0041 for context.");
-      expect(fm).toContain("linkedBugs: [RMG-0035, RMG-0041]");
+      const fm = withAnswer("Mostly research, but BUG-0035 is related; see also BUG-0041 for context.");
+      expect(fm).toContain("linkedBugs: [BUG-0035, BUG-0041]");
     });
 
     it("never emits a YAML comment marker or bare colon inside the sequence", () => {
-      const fm = withAnswer("see: #241 and #243, plus RMG-0035");
+      const fm = withAnswer("see: #241 and #243, plus BUG-0035");
       const line = fm.split("\n").find((l) => l.startsWith("linkedBugs:")) || "";
       expect(line).not.toMatch(/\s#/);
       expect(line.slice("linkedBugs:".length)).not.toMatch(/: /);
-      expect(line).toContain("RMG-0035");
+      expect(line).toContain("BUG-0035");
     });
   });
 

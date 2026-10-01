@@ -497,3 +497,42 @@ describe("testbed/scenarios — resolveTestbedPath", () => {
     expect(path).toBe("/from/config");
   });
 });
+
+// Each case gets its own parent directory so sibling detection only sees what the test creates.
+describe("testbed/scenarios — resolveTestbedPath has no machine-specific default", () => {
+  let parent;
+  let projectRoot;
+
+  beforeEach(() => {
+    parent = makeTmpDir();
+    projectRoot = resolve(parent, "my-app");
+    mkdirSync(projectRoot, { recursive: true });
+  });
+
+  afterEach(() => {
+    rmSync(parent, { recursive: true, force: true });
+  });
+
+  it("resolves a relative .forge.json testbed.path against the project root, not the process cwd", () => {
+    writeFileSync(resolve(projectRoot, ".forge.json"), JSON.stringify({ testbed: { path: "../my-testbed" } }));
+    expect(resolveTestbedPath({}, { projectRoot })).toBe(resolve(parent, "my-testbed"));
+  });
+
+  it("falls back to a plan-forge-testbed clone next to the project when unconfigured", () => {
+    const sibling = resolve(parent, "plan-forge-testbed");
+    mkdirSync(sibling);
+    expect(resolveTestbedPath({}, { projectRoot })).toBe(sibling);
+  });
+
+  it("throws ERR_TESTBED_PATH_REQUIRED on every platform when unconfigured and no sibling clone exists", () => {
+    let caught;
+    try {
+      resolveTestbedPath({}, { projectRoot });
+    } catch (err) {
+      caught = err;
+    }
+    expect(caught?.code).toBe("ERR_TESTBED_PATH_REQUIRED");
+    expect(caught.message).toContain("testbed.path");
+    expect(caught.message).toContain("plan-forge-testbed");
+  });
+});

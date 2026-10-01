@@ -4,7 +4,7 @@
  * This file exists to support the Phase-39 Slice 10 validation gate:
  *   node -e "process.chdir('pforge-mcp'); const m=require('./server.mjs'); ..."
  *
- * When `node -e` starts in E:\GitHub\Plan-Forge, `require('./server.mjs')`
+ * When `node -e` starts in the repo root, `require('./server.mjs')`
  * resolves to THIS file — not pforge-mcp/server.mjs — because Node.js
  * resolves require() relative to the eval module's initial cwd (set at node
  * startup), and process.chdir() inside the script does not retroactively

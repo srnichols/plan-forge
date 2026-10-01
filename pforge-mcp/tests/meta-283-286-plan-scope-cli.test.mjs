@@ -127,6 +127,29 @@ function runSh(dir, ...args) {
   });
 }
 
+// Stands in for pforge-mcp/orchestrator/gate-helpers.mjs so analyze's lint
+// wiring (env vars, file:// import, output, scoring) is exercised in isolation.
+const FAKE_GATE_LINT = [
+  "export function lintGateCommands(planPath) {",
+  "  const name = planPath.split(/[\\\\/]/).pop();",
+  "  return { errors: [{ message: \"fixture error for \" + name }], warnings: [{ message: \"fixture warning\" }] };",
+  "}",
+  "",
+].join("\n");
+
+function withFakeGateLint(dir) {
+  mkdirSync(join(dir, "pforge-mcp", "orchestrator"), { recursive: true });
+  writeFileSync(join(dir, "pforge-mcp", "orchestrator", "gate-helpers.mjs"), FAKE_GATE_LINT);
+  return dir;
+}
+
+function expectGateLintReport(output) {
+  expect(output).toMatch(/Gate lint: 1 error\(s\) — plan will fail at runtime/);
+  expect(output).toMatch(/^\s+fixture error for Phase-7-SCOPE-FIXTURE-PLAN\.md$/m);
+  expect(output).toMatch(/Gate lint: 1 warning\(s\)/);
+  expect(output).toMatch(/^\s+fixture warning$/m);
+}
+
 function lineFor(output, file) {
   return output.split(/\r?\n/).find((l) => l.includes(`  ${file}`)) || "";
 }
@@ -157,6 +180,11 @@ describe.skipIf(!isWin)("pforge.ps1 diff/analyze honor the scope contract (meta 
     expect(out).toMatch(/1 forbidden file\(s\) touched/);
     expect(out).toMatch(/1 MUST criteria have matching tests/);
   });
+
+  it("analyze reports the plan's gate lint", () => {
+    const dir = withFakeGateLint(seedRepo());
+    expectGateLintReport(runPs1(dir, "analyze", PLAN_REL).stdout);
+  });
 });
 
 describe.skipIf(!BASH)("pforge.sh diff/analyze honor the scope contract (meta #283, #286)", () => {
@@ -172,6 +200,11 @@ describe.skipIf(!BASH)("pforge.sh diff/analyze honor the scope contract (meta #2
     expect(result.stdout).toMatch(/1 forbidden file\(s\) touched/);
     expect(result.stdout).toMatch(/2 file\(s\) outside Scope Contract/);
     expect(result.stdout).toMatch(/Consistency Score: \d+\/100/);
+  });
+
+  it("analyze reports the plan's gate lint, like pforge.ps1", () => {
+    const dir = withFakeGateLint(seedRepo());
+    expectGateLintReport(runSh(dir, "analyze", PLAN_REL).stdout);
   });
 
   it("diff and analyze still report on a clean working tree", () => {

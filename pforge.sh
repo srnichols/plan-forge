@@ -1629,14 +1629,15 @@ cmd_update() {
         done
     fi
 
-    # ─── Hooks ────────────────────────────────────────────────────
+    # ─── Hooks (recursive, like pforge.ps1) ─────────────────────────
+    # A top-level-only scan skipped hooks/scripts/, so lifecycle script fixes
+    # (meta-bug #287) never reached projects updated from this shell.
     local src_hooks="$source_path/templates/.github/hooks"
     if [ -d "$src_hooks" ]; then
         while IFS= read -r -d '' f; do
-            local fname_h
-            fname_h="$(basename "$f")"
-            _pf_check "$f" "$REPO_ROOT/.github/hooks/$fname_h" ".github/hooks/$fname_h"
-        done < <(find "$src_hooks" -maxdepth 1 -type f -print0 2>/dev/null)
+            local rel_h="${f#"$src_hooks/"}"
+            _pf_check "$f" "$REPO_ROOT/.github/hooks/$rel_h" ".github/hooks/$rel_h"
+        done < <(find "$src_hooks" -type f -print0 2>/dev/null)
     fi
 
     # ─── Preset-specific files (instructions, agents, prompts, skills) ─
@@ -2141,6 +2142,35 @@ cmd_analyze() {
     else
         echo "  ⚠️  No validation gates found"
         score_gates=0
+    fi
+
+    # Gate command lint — the parser contract run-plan's pre-flight enforces.
+    # Twin of the pforge.ps1 analyze block; the plan and module paths travel
+    # through env vars and a file:// URL so no path needs shell quoting.
+    local lint_js='const { pathToFileURL } = await import("node:url"); const m = await import(pathToFileURL(process.env.PFORGE_LINT_MODULE).href); const r = m.lintGateCommands(process.env.PFORGE_LINT_PLAN, process.env.PFORGE_LINT_CWD); for (const e of r.errors) console.log("E " + e.message); for (const w of r.warnings) console.log("W " + w.message); console.log("LINT_OK");'
+    local lint_out=""
+    if [ -f "$REPO_ROOT/pforge-mcp/orchestrator/gate-helpers.mjs" ]; then
+        lint_out="$(PFORGE_LINT_MODULE="$REPO_ROOT/pforge-mcp/orchestrator/gate-helpers.mjs" \
+            PFORGE_LINT_PLAN="$plan_file" PFORGE_LINT_CWD="$REPO_ROOT" \
+            node --input-type=module -e "$lint_js" 2>/dev/null || true)"
+    fi
+    if [[ $'\n'"$lint_out"$'\n' == *$'\nLINT_OK\n'* ]]; then
+        local lint_errors lint_warnings
+        lint_errors="$(printf '%s\n' "$lint_out" | grep -c '^E ' || true)"
+        lint_warnings="$(printf '%s\n' "$lint_out" | grep -c '^W ' || true)"
+        if [ "${lint_errors:-0}" -gt 0 ]; then
+            echo "  ❌ Gate lint: $lint_errors error(s) — plan will fail at runtime"
+            printf '%s\n' "$lint_out" | sed -n 's/^E /     /p'
+            score_gates=$((score_gates > 5 * lint_errors ? score_gates - 5 * lint_errors : 0))
+        fi
+        if [ "${lint_warnings:-0}" -gt 0 ]; then
+            echo "  ⚠️  Gate lint: $lint_warnings warning(s)"
+            printf '%s\n' "$lint_out" | sed -n 's/^W /     /p'
+            score_gates=$((score_gates > 2 * lint_warnings ? score_gates - 2 * lint_warnings : 0))
+        fi
+        if [ "${lint_errors:-0}" -eq 0 ] && [ "${lint_warnings:-0}" -eq 0 ]; then
+            echo "  ✅ Gate lint: all commands pass pre-flight checks"
+        fi
     fi
 
     # Deferred work markers in changed files

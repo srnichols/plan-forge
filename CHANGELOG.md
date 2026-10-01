@@ -7,8 +7,42 @@ Format follows [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
+### Changed
+
+- **Model defaults follow GitHub Copilot's 2026-09 lineup.** Copilot retired Claude Sonnet 4.6 on 2026-09-01. It retires Claude Opus 4.7, Gemini 3.5/3.6 Flash and Kimi K2.7 Code on 2026-10-02, and GPT-5.5, GPT-5.4, GPT-5.4 mini, GPT-5 mini, Gemini 3.7 Flash and Grok 4.5 on 2026-10-19. Plan Forge defaulted to several of them. New defaults:
+  - `--quorum=power`: `claude-opus-5.5` + `gpt-6-astra` + `grok-4.7`, reviewer `claude-opus-5.5`.
+  - `--quorum=speed`: `claude-sonnet-5.5` + `gpt-6-luna` + `gemini-3.8-flash`, reviewer `claude-sonnet-5.5`. All three members are Copilot-served.
+  - Default quorum: `claude-opus-5.5` + `gpt-6-sol` + `grok-4.7`.
+  - `modelRouting.default` when unset, and the value `setup` writes: `claude-opus-5.5`.
+  - Default escalation chain: `auto` → `claude-opus-5.5` → `gpt-6-astra`.
+  - Watcher `analyze` model: `claude-opus-5.5`.
+  - `--with-grok` / `quorum.includeGrok` add-in: `grok-4.7`.
+  - gh-copilot worker default and the cost-estimate base model: `claude-sonnet-5.5`.
+
+  Grok members still call the xAI API and need `XAI_API_KEY`. The quorum defaults, schema defaults and tool descriptions now come from `orchestrator/constants.mjs`, and a contract test fails if a default is unpriced, scheduled for retirement, or restated differently in `setup` or `pforge doctor`. `MODEL_PRICING` adds Claude Opus 5.5 / Sonnet 5.5 / Fable 5.1, GPT-6 Astra / 6.1 Sol / 6 Sol / 6 Luna, Gemini 3.8 / 3.7 Flash, Grok 4.7 / 4.6 and MAI-Code-1.1-Flash. Claude Sonnet 5 is now $2/$10; its launch price became permanent.
+- **Stack presets target the latest GA releases.**
+  - Runtimes and images: .NET 10, Node 24 LTS / TypeScript 7, Python 3.14, Java 25 LTS / Spring Boot 4.1 / JUnit 6, Go 1.27, Swift 6.4.
+  - Services: PostgreSQL 18, Redis 8, Dapr 1.18.
+  - Tooling: GitHub Actions majors (checkout v7), Terraform 1.16 / AzureRM 5.7 / AzAPI 2.13, PowerShell 7.6, Pester 6.
+  - Bicep: the newest stable API versions that Bicep 0.47's bundled types can validate. Newer versions raise BCP081, which fails deployments that set `failOnStdErr`.
+
+  Code samples were updated for the API changes in those releases:
+  - Express 5 async handlers, Prisma 7 config and adapters, and HTTPX `ASGITransport`.
+  - Spring Boot 4 `@MockitoBean`, `@AutoConfigureTestRestTemplate` and the tools jarmode, plus Testcontainers 2.
+  - xUnit v3 `ValueTask` lifecycles.
+  - JDK 25 structured concurrency.
+  - PostgreSQL 18's data directory.
+  - Bicep samples that did not compile.
+  - `azure/setup-azd@latest`, which never existed; it is now `@v2`.
+
+  Fluent UI Blazor stays on 4.x until its samples are checked against v5, and Vapor stays on 4.x because Vapor 5 is still beta. The Swift iOS CI sample uses GitHub's `xcode-27` runner image, which is still in preview, because no GA macOS image ships Xcode 27. The PHP and Rust presets, and eight Swift files, still contain Go content; the rewrite is tracked in [#292](https://github.com/srnichols/plan-forge/issues/292).
+
 ### Fixed
 
+- **Forge-Master no longer fails every turn now that GitHub Models has been retired.** GitHub shut down GitHub Models (`models.github.ai`) on 2026-07-30. The host now answers with a plain-text `200 OK`, and the default `githubCopilot` provider turned that into a JSON `SyntaxError` on every turn. Forge-Master no longer auto-selects that provider. It tries `ANTHROPIC_API_KEY`, then `OPENAI_API_KEY`, then `XAI_API_KEY`, and defaults to `claude-sonnet-5.5`, `gpt-6-sol` or `grok-4.7` respectively. An explicit `reasoningProvider: "githubCopilot"` now fails immediately with a message that names those keys.
+- **Forge-Master's Anthropic provider reaches the API.** It posted to `/v1/v1/messages` and sent Copilot-style dotted IDs such as `claude-sonnet-4.6`, which the Anthropic API rejects. It now posts to `/v1/messages` and sends the hyphenated ID (`claude-sonnet-5-5`). OpenAI GPT-6 requests that carry tools now set `reasoning_effort: "none"`, which Chat Completions requires for function calling on GPT-6.
+- **Cost estimates price Gemini, Kimi and MAI quorum legs as Copilot requests.** These families have no direct-API route in Plan Forge and always run through `gh-copilot`. The estimator still treated them as an unknown provider and priced them per token.
+- **The dashboard keeps a configured model that is missing from its dropdown.** The Settings model list loaded a `.forge.json` value it didn't list (a retired or custom model) as no selection, and saving could overwrite it. The value is now added to the list as "(current)".
 - **Secret scanning and staged-diff classification handle release-sized diffs** ([#288](https://github.com/srnichols/plan-forge/issues/288), [#289](https://github.com/srnichols/plan-forge/issues/289), [#290](https://github.com/srnichols/plan-forge/issues/290), [#291](https://github.com/srnichols/plan-forge/issues/291)). `forge_secret_scan`, its REST endpoint (`POST /api/secret-scan/run`), `forge_diff_classify` and the LiveGuard secret check read `git diff` through Node's default 1 MiB buffer. Large diffs failed with `spawnSync git ENOBUFS`, and `forge_diff_classify` treated that failure as an empty, clean diff (`severity: "none"`, `totalAdded: 0`). All four now use a shared reader with a 64 MiB limit. A larger diff returns an error saying the changes were not scanned, and `forge_diff_classify` also reports any other git failure instead of a clean result.
 - **`pforge diff` / `forge_diff` and `pforge analyze` read the scope contract correctly** ([#283](https://github.com/srnichols/plan-forge/issues/283), [#286](https://github.com/srnichols/plan-forge/issues/286)). In `pforge.ps1`, the Forbidden Actions and In Scope sections ran to the end of the plan, so every later slice scope was reported FORBIDDEN. `-like` also read a backticked `[parallel-safe]` tag as a character class that matched nearly every file. In `pforge.sh`, both sections were always empty, so nothing was ever forbidden. Both shells now stop each section at the next heading. They consider only single-word hints, so prose such as `git push --force` is ignored. Hints match literally with `*` as the only wildcard, and a bare word such as `true` matches only a whole path segment. Bash compiles each hint once, and `analyze` no longer aborts on plans without SHOULD criteria or on a clean working tree.
 - **`pforge analyze` completes under Windows PowerShell 5.1 with bracketed paths** ([#284](https://github.com/srnichols/plan-forge/issues/284)). Test files under route directories such as `app/[id]/` made `Get-Content -Raw` fail with "A parameter cannot be found that matches parameter name 'Raw'". Files are now read with `-LiteralPath`. The gate lint inside `analyze` also runs on Windows now; its bare `E:/…` module import had been failing silently.
@@ -26,6 +60,9 @@ Format follows [Keep a Changelog](https://keepachangelog.com/).
 - The lock hash now covers exactly the lines the parser turns into scopes and gates, so a hardened plan gets a new hash if any of those lines were previously unprotected. This includes non-canonical labels such as `**Validation Gate:**` or `**Files**:`, a blank line after the scope label, bold-prefixed bullets inside a scope list, and a gate fence that does not directly follow its marker. In this repository, 4 of 12 hardened plans changed hash, 2 of them using only canonical labels. If `run-plan` reports `LOCK_HASH_MISMATCH` for a plan that has not been edited, review its scope and gate lines, then re-stamp `lockHash` with Step 2. A plan keeps its hash if it uses the canonical labels, has a plain path list directly under the scope label, and has its gate fence directly under the gate marker.
 - `run-plan` now rejects a slice whose declared Validation Gate has no runnable command. Move gate commands into a shell-tagged or untagged fence, or mark checks that must be manual with `[manual]`.
 - `pforge update` installs the new hook launchers and scripts. Projects that disabled hooks to work around #287 can re-enable them after updating. Confirm in the editor that hook scripts no longer open as tabs. The forbidden-path hook now actually denies edits, so if several hardened plans are queued, write `.forge/active-plan` to name the plan it should enforce.
+- Existing `.forge.json` files are not rewritten. If `modelRouting`, `quorum.models`, `quorum.reviewerModel` or `escalationChain` name a retired Copilot model (`claude-opus-4.7`, `claude-sonnet-4.6`, `gpt-5.5`, `gpt-5.4`, `gpt-5.4-mini`, `gpt-5-mini`, Gemini 3.5–3.7 Flash, `kimi-k2.7-code`), replace it. `pforge doctor` lists the configured quorum models.
+- Forge-Master setups that relied on `GITHUB_TOKEN` or `gh auth login` alone need `ANTHROPIC_API_KEY`, `OPENAI_API_KEY` or `XAI_API_KEY` in the environment.
+- `pforge update` only adds preset files a project does not have yet. It never overwrites existing instruction, agent or prompt files, because they may be customized. To adopt the refreshed preset versions, merge them from `presets/<stack>/.github/`, or delete a file you have not customized and re-run `pforge update`.
 
 ## [3.26.7] — 2026-09-07 — Verified Git Bash self-update
 

@@ -1,11 +1,11 @@
 ---
-description: "Scaffold a Vapor 4 RouteCollection controller with async/throws handlers, request decoding, and service delegation."
+description: "Scaffold a Vapor 4.x (4.122 GA) RouteCollection controller with async/throws handlers, request decoding, and service delegation."
 agent: "agent"
 tools: [read, edit, search]
 ---
 # Create New Controller (Vapor RouteCollection)
 
-Scaffold a Vapor 4 `RouteCollection` that handles HTTP concerns only and delegates all logic to services.
+Scaffold a Vapor 4.x (4.122 GA) `RouteCollection` that handles HTTP concerns only and delegates all logic to services.
 
 ## Required Pattern
 

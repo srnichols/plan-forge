@@ -36,7 +36,7 @@ func testCalculateDiscount_withNegativePrice_throwsValidationError() async throw
 func calculateDiscount_withNegativePrice_throwsValidationFailed() async throws {
     let sut = PricingService(repository: MockPricingRepository())
 
-    await #expect(throws: PricingServiceError.validationFailed("")) {
+    await #expect(throws: PricingServiceError.self) {
         try await sut.calculateDiscount(price: -10.0, percent: 20)
     }
 }

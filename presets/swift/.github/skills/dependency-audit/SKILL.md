@@ -19,7 +19,7 @@ tools:
 ```bash
 swift package audit
 ```
-> **If this step fails** (`swift package audit` requires Swift 5.9+ / Xcode 15+): Report that the tool is unavailable and manually review dependencies against the [Swift Security Advisories](https://github.com/nicowillis/swift-security-advisories) or [OSV database](https://osv.dev).
+> **If this step fails** (`swift package audit` requires Swift 6.4 / Xcode 27 in this preset): Report that the tool is unavailable and manually review dependencies against the [Swift Security Advisories](https://github.com/nicowillis/swift-security-advisories) or [OSV database](https://osv.dev).
 
 > **If no Package.swift found**: Stop and report "No Swift Package Manager project found in this directory."
 

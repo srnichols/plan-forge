@@ -5,7 +5,7 @@ tools: [read, edit, search, execute]
 ---
 # Create New Test
 
-Scaffold test files following Swift testing conventions with XCTest or the new Swift Testing framework.
+Scaffold test files following Swift 6 testing conventions with Swift Testing for new unit tests and XCTest/XCTVapor for Vapor integration tests.
 
 ## Test Naming Convention
 
@@ -46,7 +46,7 @@ final class {EntityName}ServiceTests: XCTestCase {
     func testGetByID_whenEntityExists_returnsResponse() async throws {
         // Given
         let id = UUID()
-        mockRepository.stubbedFindByID = {EntityName}(id: id, name: "Widget", description: nil, createdAt: .now, updatedAt: .now)
+        await mockRepository.setStubbedFindByID({EntityName}(id: id, name: "Widget", description: nil, createdAt: .now, updatedAt: .now))
 
         // When
         let result = try await sut.getByID(id)
@@ -58,7 +58,7 @@ final class {EntityName}ServiceTests: XCTestCase {
     func testGetByID_whenEntityMissing_throwsNotFound() async throws {
         // Given
         let id = UUID()
-        mockRepository.stubbedFindByID = nil
+        await mockRepository.setStubbedFindByID(nil)
 
         // When / Then
         await XCTAssertThrowsErrorAsync(try await sut.getByID(id)) { error in
@@ -73,14 +73,15 @@ final class {EntityName}ServiceTests: XCTestCase {
         // Given
         let input = Create{EntityName}Request(name: "Widget", description: nil)
         let created = {EntityName}(id: UUID(), name: "Widget", description: nil, createdAt: .now, updatedAt: .now)
-        mockRepository.stubbedInsert = created
+        await mockRepository.setStubbedInsert(created)
 
         // When
         let result = try await sut.create(input)
 
         // Then
         XCTAssertEqual(result.name, "Widget")
-        XCTAssertTrue(mockRepository.insertCalled)
+        let insertCalled = await mockRepository.wasInsertCalled()
+        XCTAssertTrue(insertCalled)
     }
 
     func testCreate_withEmptyName_throwsValidationError() async throws {
@@ -117,7 +118,7 @@ struct {EntityName}ServiceTests {
     @Test("returns response when entity exists")
     func getByID_returnsResponse() async throws {
         let id = UUID()
-        mockRepository.stubbedFindByID = {EntityName}(id: id, name: "Widget", description: nil, createdAt: .now, updatedAt: .now)
+        await mockRepository.setStubbedFindByID({EntityName}(id: id, name: "Widget", description: nil, createdAt: .now, updatedAt: .now))
 
         let result = try await sut.getByID(id)
 
@@ -126,9 +127,9 @@ struct {EntityName}ServiceTests {
 
     @Test("throws notFound when entity is missing")
     func getByID_throwsNotFound() async throws {
-        mockRepository.stubbedFindByID = nil
+        await mockRepository.setStubbedFindByID(nil)
 
-        await #expect(throws: {EntityName}ServiceError.notFound(UUID())) {
+        await #expect(throws: {EntityName}ServiceError.self) {
             try await sut.getByID(UUID())
         }
     }
@@ -137,7 +138,7 @@ struct {EntityName}ServiceTests {
     func create_throwsValidationFailed(name: String) async throws {
         let input = Create{EntityName}Request(name: name, description: nil)
 
-        await #expect(throws: (any Error).self) {
+        await #expect(throws: {EntityName}ServiceError.self) {
             try await sut.create(input)
         }
     }
@@ -147,11 +148,22 @@ struct {EntityName}ServiceTests {
 ## Mock / Fake Protocol Implementation
 
 ```swift
-final class Mock{EntityName}Repository: {EntityName}RepositoryProtocol {
-    var stubbedFindByID: {EntityName}?
-    var stubbedInsert: {EntityName}?
-    var insertCalled = false
-    var deleteCalled = false
+actor Mock{EntityName}Repository: {EntityName}RepositoryProtocol {
+    private var stubbedFindByID: {EntityName}?
+    private var stubbedInsert: {EntityName}?
+    private var insertCalled = false
+    private var deleteCalled = false
+
+    func setStubbedFindByID(_ value: {EntityName}?) {
+        stubbedFindByID = value
+    }
+
+    func setStubbedInsert(_ value: {EntityName}?) {
+        stubbedInsert = value
+    }
+
+    func wasInsertCalled() -> Bool { insertCalled }
+    func wasDeleteCalled() -> Bool { deleteCalled }
 
     func findByID(_ id: UUID) async throws -> {EntityName}? { stubbedFindByID }
     func findAll() async throws -> [{EntityName}] { [] }
@@ -171,8 +183,9 @@ final class Mock{EntityName}Repository: {EntityName}RepositoryProtocol {
 - Use `XCTUnwrap` instead of force-unwrap (`!`) in tests
 - Use `async throws` test methods for async code — never wrap with `Task { }`
 - Follow Given-When-Then structure with `// Given`, `// When`, `// Then` comments
-- Create `Mock` implementations of protocols for unit testing — not subclasses
-- Prefer Swift Testing `@Test`/`@Suite` for new test files; use XCTest for Vapor integration tests
+- Create actor-isolated `Mock` implementations of protocols for unit testing — not subclasses
+- Prefer Swift Testing `@Test`/`@Suite` for new unit test files; use XCTest/XCTVapor for Vapor integration tests
+- Swift Testing runs tests in parallel by default; avoid shared mutable state, or use `.serialized` only as a temporary bridge for legacy tests
 - Never test implementation details — test observable behaviour
 
 ## Reference Files

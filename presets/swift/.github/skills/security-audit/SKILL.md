@@ -79,7 +79,7 @@ tools:
 swift package audit
 ```
 
-> **If `swift package audit` is not available** (requires Swift 5.9+ / Xcode 15+): Report and continue. Do NOT fail the entire audit.
+> **If `swift package audit` is not available** (requires Swift 6.4 / Xcode 27 in this preset): Report and continue. Do NOT fail the entire audit.
 
 Check for outdated packages:
 ```bash

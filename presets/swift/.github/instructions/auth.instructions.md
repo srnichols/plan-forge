@@ -1,11 +1,11 @@
 ---
-description: Swift authentication — Vapor 4 JWTKit middleware, iOS Keychain, OAuth2/PKCE, token refresh, biometric auth, multi-tenant, RBAC
+description: Swift authentication — Vapor 4.x (4.122 GA) JWTKit middleware, iOS Keychain, OAuth2/PKCE, token refresh, biometric auth, multi-tenant, RBAC
 applyTo: '**/*.swift'
 ---
 
 # Swift Authentication & Authorization
 
-## Vapor 4 — JWT Middleware (JWTKit)
+## Vapor 4.x (4.122 GA) — JWT Middleware (JWTKit)
 
 ### JWT Payload Definition
 

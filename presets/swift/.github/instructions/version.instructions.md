@@ -88,7 +88,7 @@ Project Settings → Build Settings → Versioning:
 ```swift
 // ✅ No version field in Package.swift itself — version is determined by Git tag
 // Package.swift declares the supported Swift tools version only
-// swift-tools-version: 5.10
+// swift-tools-version: 6.4
 
 import PackageDescription
 

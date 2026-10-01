@@ -10,13 +10,13 @@ applyTo: '**/Dockerfile*,**/*.yml,**/*.yaml,**/fastlane/**'
 ### Multi-Stage Dockerfile
 ```dockerfile
 # Build stage
-FROM swift:5.10-jammy AS builder
+FROM swift:6.4-noble AS builder
 WORKDIR /app
 COPY . .
 RUN swift build -c release --disable-sandbox
 
 # Runtime stage
-FROM swift:5.10-jammy-slim
+FROM swift:6.4-noble-slim
 WORKDIR /app
 COPY --from=builder /app/.build/release/App ./App
 COPY --from=builder /app/Public ./Public
@@ -40,7 +40,7 @@ services:
         condition: service_healthy
 
   db:
-    image: postgres:16-alpine
+    image: postgres:18-alpine
     environment:
       POSTGRES_DB: appdb
       POSTGRES_USER: app
@@ -50,6 +50,22 @@ services:
       interval: 5s
       timeout: 5s
       retries: 5
+```
+
+### GitHub Actions CI
+```yaml
+name: Server CI (Linux)
+on: [push, pull_request]
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    container: swift:6.4-noble
+    steps:
+      - uses: actions/checkout@v7
+      - name: Build and Test
+        run: |
+          swift build
+          swift test
 ```
 
 ## iOS App Store Deployment
@@ -80,14 +96,16 @@ name: iOS CI
 on: [push, pull_request]
 jobs:
   test:
-    runs-on: macos-14
+    # GitHub's preview Xcode 27 runner image; no GA macOS image ships Xcode 27 yet.
+    runs-on: xcode-27
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - name: Build and Test
+        # Use a simulator the image lists in `xcrun simctl list devices available`.
         run: |
           xcodebuild test \
             -scheme App \
-            -destination "platform=iOS Simulator,name=iPhone 15" \
+            -destination "platform=iOS Simulator,name=iPhone 16" \
             -resultBundlePath TestResults.xcresult
 ```
 

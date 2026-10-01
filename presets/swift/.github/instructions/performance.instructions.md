@@ -272,7 +272,7 @@ app.get("data") { req in
     return "done"
 }
 
-// ✅ ALWAYS use async/await — Vapor 4 routes support it natively
+// ✅ ALWAYS use async/await — Vapor 4.x routes support it natively
 app.get("data") { req async throws -> DataResponse in
     let result = try await dataService.fetch(on: req.db)   // ✅ non-blocking
     return DataResponse(result)

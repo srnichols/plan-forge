@@ -1,7 +1,7 @@
 # Agents & Automation Architecture
 
 > **Project**: <YOUR PROJECT NAME>  
-> **Stack**: Swift 5.9+ / SwiftUI / Vapor  
+> **Stack**: Swift 6.4 (Xcode 27) / SwiftUI / Vapor 4.x (4.122 GA)
 > **Last Updated**: <DATE>
 
 ---
@@ -197,8 +197,11 @@ struct UserController: RouteCollection {
         let input = try req.content.decode(CreateUserRequest.self)
         try CreateUserRequest.validate(content: req)
         let user = try await userService.create(input, on: req.db)
+        guard let userID = user.id else {
+            throw Abort(.internalServerError, reason: "Created user missing ID")
+        }
         var headers = HTTPHeaders()
-        headers.add(name: .location, value: "/api/users/\(user.id!)")
+        headers.add(name: .location, value: "/api/users/\(userID)")
         return try await UserResponse(user).encodeResponse(status: .created, headers: headers, for: req)
     }
 }

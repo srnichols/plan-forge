@@ -1,5 +1,5 @@
 ---
-description: Swift testing patterns — XCTest, async tests, Vapor test helpers, mocking with protocols
+description: Swift 6 testing patterns — Swift Testing, XCTest, async tests, Vapor test helpers, mocking with protocols
 applyTo: '**/*Tests.swift,**/*Test.swift,**/Tests/**,**/Mocks/**'
 ---
 
@@ -7,11 +7,11 @@ applyTo: '**/*Tests.swift,**/*Test.swift,**/Tests/**,**/Mocks/**'
 
 ## Tech Stack
 
-- **Unit Tests**: `XCTest` framework
-- **Assertions**: `XCTAssert*` functions
+- **Unit Tests**: Swift Testing (`@Suite`, `@Test`) for new unit tests; XCTest remains supported
+- **Assertions**: `#expect` / `#require` for Swift Testing; `XCTAssert*` for XCTest
 - **Mocking**: Protocol-based fakes (preferred over mocking frameworks)
 - **Integration (Vapor)**: `XCTVapor` — `Application` in `.testing` environment
-- **Async tests**: `async` test methods with `await`
+- **Async tests**: `async` test methods with `await`; Swift Testing runs tests in parallel by default, so shared mutable fakes must be actor-isolated or serialized
 - **UI Tests**: `XCUITest` (separate target)
 
 ## Test Types
@@ -33,11 +33,12 @@ final class UserServiceTests: XCTestCase {
         // Arrange
         let fakeRepo = FakeUserRepository()
         let testUser = User(id: UUID(), name: "Test User", email: "test@example.com")
-        fakeRepo.users[testUser.id!] = testUser
+        let id = try XCTUnwrap(testUser.id)
+        try await fakeRepo.seed(testUser)
         let sut = UserService(repository: fakeRepo)
 
         // Act
-        let result = try await sut.getUser(id: testUser.id!)
+        let result = try await sut.getUser(id: id)
 
         // Assert
         XCTAssertEqual(result.name, "Test User")
@@ -58,16 +59,23 @@ final class UserServiceTests: XCTestCase {
     }
 }
 
-// Protocol-based fake
-final class FakeUserRepository: UserRepository {
-    var users: [UUID: User] = [:]
+// Protocol-based fake. Use actor isolation so the fake is safe under Swift 6 strict concurrency.
+actor FakeUserRepository: UserRepository {
+    private enum FakeRepositoryError: Error { case missingID }
+
+    private var users: [UUID: User] = [:]
+
+    func seed(_ user: User) throws {
+        guard let id = user.id else { throw FakeRepositoryError.missingID }
+        users[id] = user
+    }
 
     func find(id: UUID) async throws -> User? {
         return users[id]
     }
 
     func save(_ user: User) async throws {
-        users[user.id!] = user
+        try seed(user)
     }
 }
 ```
@@ -144,6 +152,7 @@ func testLoadUsers_setsUsersOnSuccess() async throws {
 - Use `XCTUnwrap()` instead of force-unwrapping in tests
 - Use `setUp() async throws` and `tearDown() async throws` for async setup
 - Use `@testable import` for white-box access to internal types
+- Prefer actor-isolated fakes or value-type fixtures for Swift Testing; use `.serialized` only for legacy tests that cannot yet run in parallel
 
 ## Validation Gates (for Plan Hardening)
 

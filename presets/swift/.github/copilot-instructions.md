@@ -1,6 +1,6 @@
 # Instructions for Copilot — Swift Project
 
-> **Stack**: Swift 5.9+ / Vapor / SwiftUI  
+> **Stack**: Swift 6.4 (Xcode 27) / Vapor 4.x (4.122 GA) / SwiftUI
 > **Last Updated**: <DATE>
 
 ---
@@ -32,8 +32,8 @@
 **Description**: <!-- What your app does -->
 
 **Tech Stack**:
-- Swift 5.9+
-- Vapor 4 (server-side, optional)
+- Swift 6.4 (Xcode 27)
+- Vapor 4.x (4.122 GA, server-side, optional)
 - SwiftUI (iOS/macOS)
 - Fluent ORM + PostgreSQL / SQLite
 - Docker / Kubernetes (for Vapor services)
@@ -67,7 +67,7 @@
 
 ### Testing
 - **XCTest** for unit and integration tests
-- **Swift Testing** (`@Test`, `@Suite`) for new test files (Swift 5.10+)
+- **Swift Testing** (`@Test`, `@Suite`) for new unit test files (Swift 6); use XCTest/XCTVapor for Vapor integration tests
 - **ViewInspector** for SwiftUI view tests
 - **Given-When-Then** structure for all tests
 

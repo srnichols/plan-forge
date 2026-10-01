@@ -1,11 +1,11 @@
 ---
-description: API patterns for Swift — Vapor 4 RouteCollection, URLSession async/await, Codable types, cursor pagination, ProblemDetail, Validatable
+description: API patterns for Swift — Vapor 4.x (4.122 GA) RouteCollection, URLSession async/await, Codable types, cursor pagination, ProblemDetail, Validatable
 applyTo: '**/*.swift'
 ---
 
 # Swift API Patterns
 
-## Vapor 4 — RouteCollection (Server-Side)
+## Vapor 4.x (4.122 GA) — RouteCollection (Server-Side)
 
 ```swift
 import Vapor

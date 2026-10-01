@@ -5,7 +5,9 @@
  * Anthropic Messages API tool-use format.
  *
  * Anthropic specifics:
- *   - POST /v1/messages
+ *   - POST /v1/messages (base URL already ends in /v1)
+ *   - Model IDs use hyphens (claude-sonnet-5-5) where Plan Forge and
+ *     GitHub Copilot use dots (claude-sonnet-5.5); toAnthropicModelId() maps them
  *   - Header: x-api-key, anthropic-version
  *   - Tools use `input_schema` (JSON Schema)
  *   - Response content blocks: {type:"text"} or {type:"tool_use"}
@@ -17,6 +19,16 @@
 const ANTHROPIC_VERSION = "2023-06-01";
 const DEFAULT_BASE_URL = "https://api.anthropic.com/v1";
 const DEFAULT_MAX_TOKENS = 4096;
+
+/**
+ * Map a Plan Forge / Copilot Claude ID (claude-opus-5.5) to the Anthropic API
+ * spelling (claude-opus-5-5). Non-Claude and already-hyphenated IDs pass through.
+ * @param {string} model
+ * @returns {string}
+ */
+export function toAnthropicModelId(model) {
+  return typeof model === "string" && model.startsWith("claude-") ? model.replace(/\./g, "-") : model;
+}
 
 /**
  * Build Anthropic-format tool definitions from generic tool schemas.
@@ -184,14 +196,14 @@ export async function sendTurn(opts) {
   const anthropicTools = buildAnthropicTools(tools);
 
   const body = {
-    model,
+    model: toAnthropicModelId(model),
     max_tokens: maxTokens,
     messages: formatted,
   };
   if (system) body.system = system;
   if (anthropicTools.length > 0) body.tools = anthropicTools;
 
-  const response = await fetch(`${baseUrl}/v1/messages`, {
+  const response = await fetch(`${baseUrl}/messages`, {
     method: "POST",
     headers: {
       "x-api-key": apiKey,

@@ -10,11 +10,12 @@
  *   1. forgeMaster.reasoningModel  (explicit override)
  *   2. model.default               (shared project default)
  *   3. env-detected provider default:
- *        GITHUB_TOKEN      -> "gpt-4o-mini"     (GitHub Models — zero-key default)
- *        ANTHROPIC_API_KEY -> "claude-sonnet-4.6"
- *        OPENAI_API_KEY    -> "gpt-5.3-codex"
- *        XAI_API_KEY       -> "grok-4.20"
- *        (no key)          -> "gpt-4o-mini"      (caller must handle missing key)
+ *        ANTHROPIC_API_KEY -> "claude-sonnet-5.5"
+ *        OPENAI_API_KEY    -> "gpt-6-sol"
+ *        XAI_API_KEY       -> "grok-4.7"
+ *        (no key)          -> null (auto-select reports "no provider available")
+ *      GITHUB_TOKEN is no longer consulted: GitHub Models, the former zero-key
+ *      default, was retired on 2026-07-30.
  */
 
 import { existsSync, readFileSync } from "node:fs";
@@ -24,9 +25,9 @@ import { FORGE_MASTER_MODES, MODEL_TIERS } from "../../pforge-mcp/enums.mjs";
 export const FORGE_MASTER_DEFAULTS = Object.freeze({
   reasoningModel: null,
   reasoningProvider: null,
-  defaultProvider: "githubCopilot",
+  defaultProvider: "anthropic",
   providers: Object.freeze({
-    githubCopilot: Object.freeze({ model: "gpt-4o-mini" }),
+    anthropic: Object.freeze({ model: "claude-sonnet-5.5" }),
   }),
   routerModel: "grok-4.20-0309-non-reasoning",
   maxToolCalls: 5,
@@ -82,10 +83,9 @@ function resolveReasoningModel(forgeMasterBlock, forgeJson) {
   if (forgeJson?.model?.default && typeof forgeJson.model.default === "string") {
     return forgeJson.model.default;
   }
-  if (process.env.GITHUB_TOKEN) return "gpt-4o-mini";
-  if (process.env.ANTHROPIC_API_KEY) return "claude-sonnet-4.6";
-  if (process.env.OPENAI_API_KEY) return "gpt-5.3-codex";
-  if (process.env.XAI_API_KEY) return "grok-4.20";
+  if (process.env.ANTHROPIC_API_KEY) return "claude-sonnet-5.5";
+  if (process.env.OPENAI_API_KEY) return "gpt-6-sol";
+  if (process.env.XAI_API_KEY) return "grok-4.7";
   return null; // no key detected — auto-select will handle fallback
 }
 
@@ -96,7 +96,6 @@ function resolveReasoningProvider(forgeMasterBlock, resolvedModel) {
   if (!resolvedModel) return null; // no model → auto-select decides
   if (/^claude/i.test(resolvedModel)) return "anthropic";
   if (/^grok/i.test(resolvedModel)) return "xai";
-  if (/^gpt-4o/i.test(resolvedModel)) return "githubCopilot";
   if (/^gpt/i.test(resolvedModel)) return "openai";
   return null;
 }
@@ -203,8 +202,8 @@ function resolveAuditorConfig(block) {
  * @param {{ cwd?: string }} [opts]
  * @returns {{
  *   reasoningModel: string,
- *   reasoningProvider: "githubCopilot"|"anthropic"|"openai"|"xai"|null,
- *   defaultProvider: "githubCopilot"|"anthropic"|"openai"|"xai",
+ *   reasoningProvider: "anthropic"|"openai"|"xai"|"githubCopilot"|null,  (githubCopilot = retired GitHub Models; fails with a retirement message)
+ *   defaultProvider: "anthropic"|"openai"|"xai"|"githubCopilot",          (githubCopilot is ignored by auto-select)
  *   routerModel: string,
  *   maxToolCalls: number,
  *   ceilingToolCalls: number,

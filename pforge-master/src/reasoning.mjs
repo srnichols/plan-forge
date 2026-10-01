@@ -49,9 +49,9 @@ const RECALL_LANES = new Set([LANES.OPERATIONAL, LANES.TROUBLESHOOT, LANES.ADVIS
 // ─── Quorum advisory — model set for multi-model fan-out ────────────
 
 const QUORUM_MODELS = [
-  { model: "claude-sonnet-4.6", provider: "anthropic" },
-  { model: "gpt-5.2", provider: "openai" },
-  { model: "grok-4.20", provider: "xai" },
+  { model: "claude-sonnet-5.5", provider: "anthropic" },
+  { model: "gpt-6-sol", provider: "openai" },
+  { model: "grok-4.7", provider: "xai" },
 ];
 
 // Lanes where quorum must NEVER engage (hard guard)
@@ -115,9 +115,13 @@ function escalateTier(tier) {
 // ─── Provider Selection ─────────────────────────────────────────────
 
 const NO_PROVIDER_SUGGESTION =
-  "Install GitHub CLI and run 'gh auth login', or set GITHUB_TOKEN, OPENAI_API_KEY, ANTHROPIC_API_KEY, or XAI_API_KEY";
+  "Set ANTHROPIC_API_KEY, OPENAI_API_KEY, or XAI_API_KEY. GITHUB_TOKEN no longer works: " +
+  "GitHub Models, the zero-key path, was retired on 2026-07-30.";
 
-const AUTO_SELECT_ORDER = ["githubCopilot", "anthropic", "openai", "xai"];
+// githubCopilot (GitHub Models) is retired and deliberately absent; an explicit
+// reasoningProvider: "githubCopilot" still resolves via selectProvider() and
+// fails with the retirement message.
+const AUTO_SELECT_ORDER = ["anthropic", "openai", "xai"];
 
 /**
  * Select the appropriate provider adapter by explicit name.
@@ -144,8 +148,8 @@ export async function selectProvider(providerName) {
 
 /**
  * Auto-select the first available provider adapter by checking `isAvailable()`.
- * Iterates `["githubCopilot", "anthropic", "openai", "xai"]` unless
- * `config.defaultProvider` overrides the starting position.
+ * Iterates `["anthropic", "openai", "xai"]` unless `config.defaultProvider`
+ * names one of them first.
  *
  * @param {{ defaultProvider?: string }} config
  * @param {NodeJS.ProcessEnv} [env]
@@ -155,10 +159,6 @@ export async function selectProvider(providerName) {
  */
 export async function autoSelectProvider(config, env = process.env, _providers = null) {
   const providerDefs = _providers || {
-    githubCopilot: {
-      module: githubCopilotProvider,
-      isAvailable: () => githubCopilotProvider.isAvailable(),
-    },
     anthropic: {
       module: null,
       isAvailable: () => Boolean(env.ANTHROPIC_API_KEY),

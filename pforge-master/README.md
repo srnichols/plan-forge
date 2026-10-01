@@ -4,11 +4,11 @@ Standalone reasoning package for Plan Forge. Provides the Forge-Master reasoning
 
 ## Configuration
 
-- **Zero-key setup (recommended)** — Run `gh auth login` once. Forge-Master auto-detects your GitHub token and routes through [GitHub Models](https://models.github.ai/inference) — no API key required for GitHub Copilot subscribers.
-- **API key overrides (optional escape hatches)** — Set `ANTHROPIC_API_KEY`, `OPENAI_API_KEY`, or `XAI_API_KEY` to use premium models directly. These take precedence when `GITHUB_TOKEN` is unavailable.
-- **Model selection** — Default model is `gpt-4o-mini` (fast, tool-calling capable). Override via `.forge.json`:
+- **Provider keys (required)** — Set `ANTHROPIC_API_KEY`, `OPENAI_API_KEY`, or `XAI_API_KEY` in the environment. Forge-Master tries them in that order.
+- **No more zero-key mode** — The former zero-key path ran through GitHub Models (`models.github.ai`), which GitHub retired on 2026-07-30. A `GITHUB_TOKEN` alone no longer serves models; an explicit `reasoningProvider: "githubCopilot"` fails with a message naming the keys above.
+- **Model selection** — Defaults follow the detected key: `claude-sonnet-5.5` (Anthropic), `gpt-6-sol` (OpenAI), `grok-4.7` (xAI). Claude IDs use Copilot's dotted form and are sent to the Anthropic API hyphenated (`claude-sonnet-5-5`). Override via `.forge.json`:
   ```json
-  { "forgeMaster": { "providers": { "githubCopilot": { "model": "gpt-4o" } } } }
+  { "forgeMaster": { "reasoningModel": "claude-opus-5.5" } }
   ```
 - **Dashboard secrets UI** — Open `localhost:3100/dashboard` → Settings → API Keys to configure tokens without editing files.
 

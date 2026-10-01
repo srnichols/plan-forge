@@ -1,8 +1,14 @@
 /**
  * Plan Forge — Forge-Master GitHub Copilot Provider Adapter (Phase-33, Slice 1).
  *
- * Connects the reasoning loop to the GitHub Models inference endpoint,
- * which exposes an OpenAI-compatible Chat Completions API.
+ * RETIRED: this adapter targeted GitHub Models (models.github.ai), which GitHub
+ * shut down on 2026-07-30. The host now answers every request with a plain-text
+ * 200 "OK", which surfaced as a JSON SyntaxError on every Forge-Master turn.
+ * isAvailable() is therefore always false, so auto-selection skips this
+ * provider, and sendTurn() against the retired endpoint fails fast with an
+ * actionable message. An explicit OpenAI-compatible `baseUrl` still works.
+ *
+ * Original contract (GitHub Models, OpenAI-compatible Chat Completions):
  *
  * GitHub Models specifics:
  *   - POST /chat/completions (base: https://models.github.ai/inference)
@@ -25,6 +31,12 @@ import {
 } from "./openai-tools.mjs";
 
 const DEFAULT_BASE_URL = "https://models.github.ai/inference";
+
+export const GITHUB_MODELS_RETIRED_ON = "2026-07-30";
+export const GITHUB_MODELS_RETIRED_MESSAGE =
+  `GitHub Models (models.github.ai) was retired on ${GITHUB_MODELS_RETIRED_ON}, so Forge-Master's ` +
+  "githubCopilot provider can no longer answer. Set ANTHROPIC_API_KEY, OPENAI_API_KEY or XAI_API_KEY, " +
+  'or set forgeMaster.reasoningProvider to "anthropic", "openai" or "xai".';
 
 export const KNOWN_MODELS = ["gpt-4o", "gpt-4o-mini", "claude-sonnet-4", "claude-opus-4"];
 
@@ -89,14 +101,13 @@ export function resolveGitHubToken({ token, useSubprocess = true } = {}) {
 }
 
 /**
- * Returns true if a GitHub token is available from any resolution tier.
- * Allowed to spawn `gh` once for the initial cache warm-up; subsequent
- * calls are cache-only and never hit the network.
+ * Always false: the GitHub Models endpoint this provider targets is retired,
+ * so a GitHub token no longer makes it usable. Never spawns `gh`.
  *
  * @returns {boolean}
  */
 export function isAvailable() {
-  return Boolean(resolveGitHubToken({ useSubprocess: true }));
+  return false;
 }
 
 function normalizeModel(model) {
@@ -137,6 +148,10 @@ export async function sendTurn(opts) {
     baseUrl = DEFAULT_BASE_URL,
     signal,
   } = opts;
+
+  if (baseUrl === DEFAULT_BASE_URL) {
+    throw new Error(GITHUB_MODELS_RETIRED_MESSAGE);
+  }
 
   // Accept both `token` and `apiKey` for caller compatibility
   const resolvedToken = resolveGitHubToken({ token: token ?? apiKey });

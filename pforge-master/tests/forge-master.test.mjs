@@ -7,7 +7,7 @@
  *   - index.mjs     (re-exports)
  */
 
-import { describe, expect, it, beforeEach, afterEach } from "vitest";
+import { describe, expect, it, beforeEach, afterEach, vi } from "vitest";
 import { mkdtempSync, mkdirSync, rmSync, writeFileSync, existsSync, readFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -110,6 +110,30 @@ describe("forge-master config", () => {
 
     writeForgeJson(tmpDir, { forgeMaster: { reasoningModel: "grok-4" } });
     expect(getForgeMasterConfig({ cwd: tmpDir }).reasoningProvider).toBe("xai");
+  });
+
+  it("env-detected defaults skip GITHUB_TOKEN (GitHub Models retired) and use current models", () => {
+    try {
+      for (const k of ["GITHUB_TOKEN", "ANTHROPIC_API_KEY", "OPENAI_API_KEY", "XAI_API_KEY"]) vi.stubEnv(k, "");
+      vi.stubEnv("GITHUB_TOKEN", "ghp_test");
+      expect(getForgeMasterConfig({ cwd: tmpDir }).reasoningModel).toBeNull();
+      vi.stubEnv("XAI_API_KEY", "xai-test");
+      expect(getForgeMasterConfig({ cwd: tmpDir }).reasoningModel).toBe("grok-4.7");
+      vi.stubEnv("OPENAI_API_KEY", "sk-test");
+      expect(getForgeMasterConfig({ cwd: tmpDir }).reasoningModel).toBe("gpt-6-sol");
+      vi.stubEnv("ANTHROPIC_API_KEY", "sk-ant-test");
+      const cfg = getForgeMasterConfig({ cwd: tmpDir });
+      expect(cfg.reasoningModel).toBe("claude-sonnet-5.5");
+      expect(cfg.reasoningProvider).toBe("anthropic");
+      expect(cfg.defaultProvider).toBe("anthropic");
+    } finally {
+      vi.unstubAllEnvs();
+    }
+  });
+
+  it("routes gpt-4o models to the openai provider now that GitHub Models is retired", () => {
+    writeForgeJson(tmpDir, { forgeMaster: { reasoningModel: "gpt-4o-mini" } });
+    expect(getForgeMasterConfig({ cwd: tmpDir }).reasoningProvider).toBe("openai");
   });
 
   it("respects explicit reasoningProvider over auto-detection", () => {

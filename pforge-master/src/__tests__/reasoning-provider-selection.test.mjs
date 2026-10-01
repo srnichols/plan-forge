@@ -26,17 +26,27 @@ const allUnavailable = {
   xai: makeProviderStub(false, "xai"),
 };
 
-// ── (a) githubCopilot selected when it's the only available provider ─
+// ── (a) githubCopilot (retired GitHub Models) is never auto-selected ─
 
 describe("autoSelectProvider", () => {
-  it("(a) selects githubCopilot when only githubCopilot is available", async () => {
+  it("(a) never auto-selects githubCopilot, even when its stub reports available", async () => {
     const providers = {
       ...allUnavailable,
       githubCopilot: makeProviderStub(true, "github-copilot"),
     };
-    const result = await autoSelectProvider({}, process.env, providers);
-    expect(result).toBeTruthy();
-    expect(result.PROVIDER_NAME).toBe("github-copilot");
+    expect(await autoSelectProvider({}, process.env, providers)).toBeNull();
+    expect(await autoSelectProvider({ defaultProvider: "githubCopilot" }, process.env, providers)).toBeNull();
+  });
+
+  it("(a2) tries anthropic first, then openai, then xai", async () => {
+    const providers = {
+      ...allUnavailable,
+      openai: makeProviderStub(true, "openai"),
+      xai: makeProviderStub(true, "xai"),
+    };
+    expect((await autoSelectProvider({}, process.env, providers)).PROVIDER_NAME).toBe("openai");
+    providers.anthropic = makeProviderStub(true, "anthropic");
+    expect((await autoSelectProvider({}, process.env, providers)).PROVIDER_NAME).toBe("anthropic");
   });
 
   // ── (b) fallback to anthropic when githubCopilot unavailable ─────
@@ -103,8 +113,9 @@ describe("runTurn no-provider error", () => {
     );
 
     expect(result.error).toBe("no provider available");
-    expect(result.suggestion).toContain("gh auth login");
-    expect(result.suggestion).toContain("GITHUB_TOKEN");
+    expect(result.suggestion).toContain("ANTHROPIC_API_KEY");
+    expect(result.suggestion).toContain("retired");
+    expect(result.suggestion).not.toContain("gh auth login");
     expect(result.toolCalls).toHaveLength(0);
     expect(result.reply).toBe("");
   });

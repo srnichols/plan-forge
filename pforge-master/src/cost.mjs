@@ -9,7 +9,7 @@
  * published API list prices and are useful for comparative reasoning
  * (e.g. "Deep costs ~30× more per turn than Fast") but are NOT billed amounts.
  *
- * Pricing source: published API pricing pages, April 2026.
+ * Pricing source: published API pricing pages, April 2026; new models added 2026-09-30.
  * Rates are USD per token.
  *
  * @module forge-master/cost
@@ -22,18 +22,25 @@
  * @type {Record<string, { input: number, output: number }>}
  */
 export const TURN_PRICING = {
-  // Anthropic Claude
+  // Anthropic Claude (2026-09-30 refresh: Opus 5.5 / Sonnet 5.5 / Fable 5.1)
+  "claude-fable-5.1":     { input: 10 / 1_000_000,   output: 50 / 1_000_000 },
+  "claude-opus-5.5":      { input: 4 / 1_000_000,    output: 20 / 1_000_000 },
+  "claude-sonnet-5.5":    { input: 2 / 1_000_000,    output: 10 / 1_000_000 },
   "claude-opus-4.8":      { input: 15 / 1_000_000,   output: 75 / 1_000_000 },
   "claude-opus-4.7":      { input: 15 / 1_000_000,   output: 75 / 1_000_000 },
   "claude-opus-4.6":      { input: 15 / 1_000_000,   output: 75 / 1_000_000 },
   "claude-opus-4.5":      { input: 15 / 1_000_000,   output: 75 / 1_000_000 },
   "claude-opus-4":        { input: 15 / 1_000_000,   output: 75 / 1_000_000 },
-  "claude-sonnet-5":      { input: 3 / 1_000_000,    output: 15 / 1_000_000 },
+  "claude-sonnet-5":      { input: 2 / 1_000_000,    output: 10 / 1_000_000 },
   "claude-sonnet-4.6":    { input: 3 / 1_000_000,    output: 15 / 1_000_000 },
   "claude-sonnet-4.5":    { input: 3 / 1_000_000,    output: 15 / 1_000_000 },
   "claude-sonnet-4":      { input: 3 / 1_000_000,    output: 15 / 1_000_000 },
   "claude-haiku-4.5":     { input: 0.8 / 1_000_000,  output: 4 / 1_000_000 },
   // OpenAI GPT
+  "gpt-6-astra":          { input: 10 / 1_000_000,   output: 50 / 1_000_000 },
+  "gpt-6.1-sol":          { input: 2 / 1_000_000,    output: 10 / 1_000_000 },
+  "gpt-6-sol":            { input: 2 / 1_000_000,    output: 10 / 1_000_000 },
+  "gpt-6-luna":           { input: 0.10 / 1_000_000, output: 0.50 / 1_000_000 },
   "gpt-5.6-terra":        { input: 5 / 1_000_000,    output: 30 / 1_000_000 },
   "gpt-5.6-sol":          { input: 2.5 / 1_000_000,  output: 15 / 1_000_000 },
   "gpt-5.6-luna":         { input: 0.75 / 1_000_000, output: 4.5 / 1_000_000 },
@@ -48,9 +55,12 @@ export const TURN_PRICING = {
   "gpt-4o":               { input: 2.5 / 1_000_000,  output: 10 / 1_000_000 },
   "gpt-4o-mini":          { input: 0.15 / 1_000_000, output: 0.6 / 1_000_000 },
   // Google Gemini
+  "gemini-3.8-flash":     { input: 0.75 / 1_000_000, output: 3.75 / 1_000_000 },
   "gemini-3.1-pro-preview": { input: 1.25 / 1_000_000, output: 5 / 1_000_000 },
   "gemini-3.5-flash":     { input: 0.30 / 1_000_000, output: 2.50 / 1_000_000 },
   // xAI Grok
+  "grok-4.7":             { input: 2.00 / 1_000_000,  output: 6.00 / 1_000_000 },
+  "grok-4.6":             { input: 2.00 / 1_000_000,  output: 6.00 / 1_000_000 },
   "grok-4.5":             { input: 2.00 / 1_000_000,  output: 6.00 / 1_000_000 },
   "grok-build-0.1":       { input: 1.00 / 1_000_000,  output: 2.00 / 1_000_000 },
   "grok-4.3":             { input: 1.25 / 1_000_000, output: 2.50 / 1_000_000 },

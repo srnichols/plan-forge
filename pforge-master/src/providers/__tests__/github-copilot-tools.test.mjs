@@ -7,10 +7,13 @@
 
 import { createRequire } from "node:module";
 import { beforeEach, afterEach, describe, it, expect, vi } from "vitest";
+import { execFileSync } from "node:child_process";
 import {
   resolveGitHubToken,
   sendTurn,
+  isAvailable,
   _resetTokenCache,
+  GITHUB_MODELS_RETIRED_MESSAGE,
 } from "../github-copilot-tools.mjs";
 
 // Prevent real `gh auth token` subprocess from ever running
@@ -21,6 +24,9 @@ vi.mock("node:child_process", () => ({
 const require = createRequire(import.meta.url);
 const toolCallFixture   = require("./fixtures/response-tool-call.json");
 const rateLimitFixture  = require("./fixtures/response-rate-limit.json");
+
+// GitHub Models is retired; the adapter only reaches an explicit OpenAI-compatible endpoint.
+const CUSTOM_BASE_URL = "https://openai-compatible.example.test/v1";
 
 const REPLY_FIXTURE = {
   choices: [{ message: { role: "assistant", content: "Four.", tool_calls: undefined } }],
@@ -73,7 +79,31 @@ describe("resolveGitHubToken", () => {
   });
 });
 
-describe("sendTurn", () => {
+describe("GitHub Models retirement (2026-07-30)", () => {
+  afterEach(() => {
+    delete process.env.GITHUB_TOKEN;
+    vi.unstubAllGlobals();
+  });
+
+  it("isAvailable() is false even when a GitHub token is set, and never spawns gh", () => {
+    _resetTokenCache();
+    process.env.GITHUB_TOKEN = "ghp_test_token";
+    execFileSync.mockClear();
+    expect(isAvailable()).toBe(false);
+    expect(execFileSync).not.toHaveBeenCalled();
+  });
+
+  it("sendTurn() against the retired default endpoint fails fast without a network call", async () => {
+    process.env.GITHUB_TOKEN = "ghp_test_token";
+    const fetchSpy = makeFetch(200, REPLY_FIXTURE);
+    vi.stubGlobal("fetch", fetchSpy);
+    await expect(sendTurn({ messages: [{ role: "user", content: "hi" }], tools: [], model: "gpt-4o-mini" }))
+      .rejects.toThrow(GITHUB_MODELS_RETIRED_MESSAGE);
+    expect(fetchSpy).not.toHaveBeenCalled();
+  });
+});
+
+describe("sendTurn (explicit OpenAI-compatible baseUrl)", () => {
   beforeEach(() => {
     _resetTokenCache();
     process.env.GITHUB_TOKEN = "ghp_test_token";
@@ -89,14 +119,14 @@ describe("sendTurn", () => {
     _resetTokenCache();
     const fs = require("node:fs");
     vi.spyOn(fs, "existsSync").mockReturnValue(false);
-    await expect(sendTurn({ messages: [{ role: "user", content: "hi" }], tools: [], model: "gpt-4o-mini" }))
+    await expect(sendTurn({ messages: [{ role: "user", content: "hi" }], tools: [], model: "gpt-4o-mini", baseUrl: CUSTOM_BASE_URL }))
       .rejects.toThrow("GitHub Copilot: no token available");
     vi.restoreAllMocks();
   });
 
   it("2xx reply → returns type:reply with content", async () => {
     vi.stubGlobal("fetch", makeFetch(200, REPLY_FIXTURE));
-    const result = await sendTurn({ messages: [{ role: "user", content: "hi" }], tools: [], model: "gpt-4o-mini" });
+    const result = await sendTurn({ messages: [{ role: "user", content: "hi" }], tools: [], model: "gpt-4o-mini", baseUrl: CUSTOM_BASE_URL });
     expect(result.type).toBe("reply");
     expect(result.content).toBe("Four.");
     expect(result.tokensIn).toBe(10);
@@ -104,7 +134,7 @@ describe("sendTurn", () => {
 
   it("2xx tool_calls → returns type:tool_calls with toolCalls array", async () => {
     vi.stubGlobal("fetch", makeFetch(200, toolCallFixture));
-    const result = await sendTurn({ messages: [{ role: "user", content: "hi" }], tools: [], model: "gpt-4o-mini" });
+    const result = await sendTurn({ messages: [{ role: "user", content: "hi" }], tools: [], model: "gpt-4o-mini", baseUrl: CUSTOM_BASE_URL });
     expect(result.type).toBe("tool_calls");
     expect(result.toolCalls).toHaveLength(1);
     expect(result.toolCalls[0].name).toBe("calculator");
@@ -113,7 +143,7 @@ describe("sendTurn", () => {
 
   it("429 → returns {type:'rate_limited'} without throwing", async () => {
     vi.stubGlobal("fetch", makeFetch(429, rateLimitFixture, { "retry-after": "60" }));
-    const result = await sendTurn({ messages: [{ role: "user", content: "hi" }], tools: [], model: "gpt-4o" });
+    const result = await sendTurn({ messages: [{ role: "user", content: "hi" }], tools: [], model: "gpt-4o", baseUrl: CUSTOM_BASE_URL });
     expect(result.type).toBe("rate_limited");
     expect(result.retryAfter).toBe("60");
     expect(typeof result.raw).toBe("string");
@@ -122,7 +152,7 @@ describe("sendTurn", () => {
   it("≥500 → throws an error", async () => {
     vi.stubGlobal("fetch", makeFetch(500, { error: "internal" }));
     await expect(
-      sendTurn({ messages: [{ role: "user", content: "hi" }], tools: [], model: "gpt-4o" }),
+      sendTurn({ messages: [{ role: "user", content: "hi" }], tools: [], model: "gpt-4o", baseUrl: CUSTOM_BASE_URL }),
     ).rejects.toThrow("GitHub Copilot API error 500");
   });
 });

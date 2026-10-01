@@ -181,7 +181,12 @@ export async function sendTurn(opts) {
   };
 
   const openAITools = buildOpenAITools(tools);
-  if (openAITools.length > 0) body.tools = openAITools;
+  if (openAITools.length > 0) {
+    body.tools = openAITools;
+    // GPT-6 models take function tools on Chat Completions only with reasoning
+    // off: https://developers.openai.com/api/docs/models/gpt-6-sol
+    if (/^gpt-6/.test(model)) body.reasoning_effort = "none";
+  }
 
   const response = await fetch(`${baseUrl}/chat/completions`, {
     method: "POST",

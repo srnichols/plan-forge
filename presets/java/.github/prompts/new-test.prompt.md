@@ -1,5 +1,5 @@
 ---
-description: "Scaffold JUnit 5 test classes with MockBean, AssertJ, Testcontainers, and proper naming conventions."
+description: "Scaffold JUnit 6 test classes with MockitoBean, AssertJ, Testcontainers, and proper naming conventions."
 agent: "agent"
 tools: [read, edit, search, execute]
 ---
@@ -62,7 +62,7 @@ class {EntityName}ServiceTest {
 class {EntityName}IntegrationTest {
 
     @Container
-    static PostgreSQLContainer<?> postgres = new PostgreSQLContainer<>("postgres:16-alpine");
+    static PostgreSQLContainer postgres = new PostgreSQLContainer("postgres:18-alpine");
 
     @DynamicPropertySource
     static void configureProperties(DynamicPropertyRegistry registry) {

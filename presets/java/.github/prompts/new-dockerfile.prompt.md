@@ -12,7 +12,7 @@ Scaffold a production-grade multi-stage Dockerfile for a Java/Spring Boot applic
 ### Multi-Stage Dockerfile (Gradle)
 ```dockerfile
 # ---- Build Stage ----
-FROM eclipse-temurin:21-jdk-alpine AS build
+FROM eclipse-temurin:25-jdk-alpine AS build
 WORKDIR /app
 
 # Copy Gradle wrapper and config first for layer caching
@@ -25,10 +25,10 @@ COPY src/ src/
 RUN ./gradlew bootJar --no-daemon -x test
 
 # Extract Spring Boot layers for optimized caching
-RUN java -Djarmode=layertools -jar build/libs/*.jar extract --destination /extracted
+RUN java -Djarmode=tools -jar build/libs/*.jar extract --layers --launcher --destination /extracted
 
 # ---- Runtime Stage ----
-FROM eclipse-temurin:21-jre-alpine AS runtime
+FROM eclipse-temurin:25-jre-alpine AS runtime
 WORKDIR /app
 
 # Security: run as non-root
@@ -51,7 +51,7 @@ ENTRYPOINT ["java", "-XX:+UseContainerSupport", "-XX:MaxRAMPercentage=75.0", "or
 
 ### Multi-Stage Dockerfile (Maven)
 ```dockerfile
-FROM eclipse-temurin:21-jdk-alpine AS build
+FROM eclipse-temurin:25-jdk-alpine AS build
 WORKDIR /app
 
 COPY pom.xml mvnw ./
@@ -61,9 +61,9 @@ RUN chmod +x mvnw && ./mvnw dependency:go-offline -B
 COPY src/ src/
 RUN ./mvnw package -B -DskipTests
 
-RUN java -Djarmode=layertools -jar target/*.jar extract --destination /extracted
+RUN java -Djarmode=tools -jar target/*.jar extract --layers --launcher --destination /extracted
 
-FROM eclipse-temurin:21-jre-alpine AS runtime
+FROM eclipse-temurin:25-jre-alpine AS runtime
 WORKDIR /app
 
 RUN addgroup -S appgroup && adduser -S appuser -G appgroup
@@ -111,13 +111,13 @@ services:
         condition: service_healthy
 
   db:
-    image: postgres:16-alpine
+    image: postgres:18-alpine
     environment:
       POSTGRES_DB: mydb
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: postgres
     volumes:
-      - pgdata:/var/lib/postgresql/data
+      - pgdata:/var/lib/postgresql
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U postgres"]
       interval: 5s
@@ -131,7 +131,7 @@ volumes:
 ## Rules
 
 - ALWAYS use multi-stage builds — never ship the JDK in production images
-- ALWAYS use Spring Boot layered JARs (`-Djarmode=layertools extract`) for optimal layer caching
+- ALWAYS use Spring Boot layered JARs (`-Djarmode=tools extract --layers --launcher`) for optimal layer caching
 - ALWAYS use JRE-only images for runtime (not JDK)
 - ALWAYS run as a non-root user in production
 - ALWAYS copy build config first for dependency layer caching

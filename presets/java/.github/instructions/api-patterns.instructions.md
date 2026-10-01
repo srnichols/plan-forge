@@ -52,7 +52,7 @@ public class ProducerController {
 
 ## Error Handling (RFC 9457 Problem Details)
 ```java
-// Spring Boot 3.x — ProblemDetail is built-in
+// Spring Boot 4.x — ProblemDetail is built-in
 @RestControllerAdvice
 public class GlobalExceptionHandler {
 
@@ -232,7 +232,7 @@ public class DeprecationHeaderFilter extends OncePerRequestFilter {
 <dependency>
     <groupId>org.springdoc</groupId>
     <artifactId>springdoc-openapi-starter-webmvc-ui</artifactId>
-    <version>2.7.0</version>
+    <version>3.1.1</version>
 </dependency>
 ```
 

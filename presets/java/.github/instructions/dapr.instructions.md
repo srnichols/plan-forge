@@ -5,7 +5,7 @@ applyTo: '**/*Dapr*,**/*Worker*,**/components/**,**/*Workflow*,**/*Activity*'
 
 # Java Dapr Patterns
 
-> **Standard**: Dapr v1.14+ with `io.dapr:dapr-sdk-springboot`  
+> **Standard**: Dapr v1.18+ with `io.dapr:dapr-sdk-springboot`
 > **Packages**: `dapr-sdk`, `dapr-sdk-springboot`, `dapr-sdk-workflows`  
 > **Cross-ref**: `messaging.instructions.md` covers pub/sub schemas and CloudEvents
 

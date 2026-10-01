@@ -141,7 +141,7 @@ mvn git-changelog-maven-plugin:git-changelog
 ### Bug Fixes
 - Race condition in order processing (#145)
 ### Dependencies
-- Upgraded Spring Boot to 3.4 (#140)
+- Upgraded Spring Boot to 4.1 (#140)
 ```
 
 ### Rules

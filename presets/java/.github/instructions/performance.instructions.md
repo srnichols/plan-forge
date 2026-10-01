@@ -47,17 +47,17 @@ public void updateTenantConfig(String tenantId, TenantConfig config) { ... }
 var user = userService.getById(userId);
 var orders = orderService.getByUserId(userId);
 
-// ✅ Parallel with virtual threads (Java 21+)
-try (var scope = new StructuredTaskScope.ShutdownOnFailure()) {
+// ✅ Parallel with virtual threads (Java 25 LTS; preview API: compile/run with --enable-preview)
+try (var scope = StructuredTaskScope.open()) {
     var userTask = scope.fork(() -> userService.getById(userId));
     var ordersTask = scope.fork(() -> orderService.getByUserId(userId));
-    scope.join().throwIfFailed();
+    scope.join();
     return new UserWithOrders(userTask.get(), ordersTask.get());
 }
 ```
 
 - Use `@Async` with a bounded thread pool for fire-and-forget work
-- Use virtual threads (Java 21+) for high-concurrency I/O
+- Use virtual threads (Java 25 LTS) for high-concurrency I/O
 - Avoid `synchronized` blocks on hot paths — use lock-free structures
 
 ## Database Query Performance
@@ -107,8 +107,8 @@ List<UserSummary> findSummariesByTenant(@Param("tenantId") String tenantId);
 # G1GC (default Java 17+) — good for most workloads
 -XX:+UseG1GC -XX:MaxGCPauseMillis=200
 
-# ZGC — sub-millisecond pauses (Java 21+, large heaps)
--XX:+UseZGC -XX:+ZGenerational
+# ZGC — sub-millisecond pauses (Java 25 LTS, large heaps; generational by default)
+-XX:+UseZGC
 
 # Escape Analysis — keep short-lived objects on stack (enabled by default)
 # Verify with: -XX:+PrintEscapeAnalysis (debug builds)

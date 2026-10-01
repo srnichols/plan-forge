@@ -236,7 +236,7 @@ mvn flyway:repair
 | Shortcut | Why It Breaks |
 |----------|--------------|
 | "N+1 queries won't matter at our scale" | N+1 queries scale linearly with data. 10 rows = 10 queries, 10,000 rows = 10,000 queries. Use `@EntityGraph` or `JOIN FETCH` from the start. |
-| "Raw SQL is faster than JPA here" | Raw SQL bypasses entity mapping, migration safety, and parameterization. Use JPA/Hibernate unless profiling proves a measurable bottleneck — then use named native queries with parameters. |
+| "Raw SQL is faster than JPA here" | Raw SQL bypasses entity mapping, migration safety, and parameterization. Use JPA/Hibernate 7.4.11.Final unless profiling proves a measurable bottleneck — then use named native queries with parameters. |
 | "A migration isn't needed for this small change" | Schema changes without migrations break other developers' environments and CI. If it touches the database, it gets a Flyway/Liquibase migration — always. |
 | "I'll seed the data manually" | Manual seed data doesn't reproduce in CI, staging, or other developers' machines. Use Flyway migrations or `data.sql` seed files with Spring profiles. |
 | "One connection string for all environments is fine" | Connection strings contain credentials that differ per environment. Use Spring profiles or environment variables with per-profile overrides. |

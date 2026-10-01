@@ -1,7 +1,7 @@
 # Agents & Automation Architecture
 
 > **Project**: <YOUR PROJECT NAME>  
-> **Stack**: Java / Spring Boot  
+> **Stack**: Java 25 (LTS) / Spring Boot 4.1
 > **Last Updated**: <DATE>
 
 ---
@@ -14,7 +14,7 @@
 1. **Architecture-First** — Follow proper layering (no business logic in workers)
 2. **TDD for Business Logic** — Red-Green-Refactor
 3. **Typed Error Handling** — No empty catch blocks
-4. **Thread Safety** — Prefer virtual threads (Java 21+), avoid shared mutable state
+4. **Thread Safety** — Prefer virtual threads (Java 25 LTS), avoid shared mutable state
 
 ---
 

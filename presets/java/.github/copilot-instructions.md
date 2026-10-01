@@ -1,6 +1,6 @@
 # Instructions for Copilot — Java Project
 
-> **Stack**: Java 21+ / Spring Boot / Gradle or Maven  
+> **Stack**: Java 25 (LTS) / Spring Boot 4.1 / Gradle or Maven
 > **Last Updated**: <DATE>
 
 ---
@@ -31,11 +31,11 @@
 **Description**: <!-- What your app does -->
 
 **Tech Stack**:
-- Java 21+ (LTS)
-- Spring Boot 3.x
+- Java 25 (LTS)
+- Spring Boot 4.1 (Spring Framework 7)
 - Spring Security (authentication & authorization)
 - PostgreSQL (or your DB) with Spring Data JPA / JDBC
-- Gradle (or Maven) for build
+- Gradle 9.8.0 (or Maven 3.9.16) for build
 - Docker / Kubernetes
 
 ---
@@ -45,7 +45,7 @@
 ### Java Style
 - **Records**: Use for DTOs and immutable data (`record UserDto(String name, String email) {}`)
 - **Sealed classes**: Use for restricted hierarchies where appropriate
-- **Pattern matching**: Use `instanceof` pattern matching (Java 21+)
+- **Pattern matching**: Use `instanceof` pattern matching (Java 25 LTS)
 - **Text blocks**: Use `"""` for multi-line strings (SQL, JSON)
 - **Null safety**: Use `Optional<T>` for return types, `@Nullable`/`@NonNull` annotations
 - **var**: Only use when type is obvious from right-hand side
@@ -58,7 +58,7 @@
 - **Config properties**: Use `@ConfigurationProperties` with record types
 
 ### Performance
-- **Virtual threads** (Java 21+): Enable via `spring.threads.virtual.enabled=true`
+- **Virtual threads** (Java 25 LTS): Enable via `spring.threads.virtual.enabled=true`
 - **Connection pooling**: HikariCP (Spring Boot default)
 - **Caching**: Use `@Cacheable` with explicit cache names
 - **Lazy loading**: Be explicit about JPA fetch strategies to prevent N+1
@@ -70,7 +70,7 @@
 - **CancellationToken equivalent**: Not built-in; design for reasonable timeouts instead
 
 ### Testing
-- **JUnit 5** for unit tests
+- **JUnit 6** for unit tests
 - **Testcontainers** for integration tests with real database
 - **MockMvc / WebTestClient** for API integration tests
 - **Mockito** for unit test mocking
@@ -112,7 +112,7 @@ This project uses the **Plan Forge Pipeline**:
 |------|--------|
 | `architecture-principles.instructions.md` | Core architecture rules |
 | `database.instructions.md` | JPA/JDBC, Flyway, query patterns |
-| `testing.instructions.md` | JUnit 5, Testcontainers, MockMvc |
+| `testing.instructions.md` | JUnit 6, Testcontainers, MockMvc |
 | `security.instructions.md` | Spring Security, input validation |
 | `deploy.instructions.md` | Docker, K8s, Gradle/Maven |
 | `git-workflow.instructions.md` | Commit conventions |

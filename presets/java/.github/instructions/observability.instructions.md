@@ -45,11 +45,13 @@ log.info("Order " + orderId + " placed");
 ## OpenTelemetry Setup
 
 ### Auto-Instrumentation (Java Agent)
+Use the OpenTelemetry Java agent 2.31.1 GA line.
+
 ```dockerfile
 # Add to Dockerfile
 ENV JAVA_TOOL_OPTIONS="-javaagent:/app/opentelemetry-javaagent.jar"
 ENV OTEL_SERVICE_NAME=my-service
-ENV OTEL_EXPORTER_OTLP_ENDPOINT=http://otel-collector:4317
+ENV OTEL_EXPORTER_OTLP_ENDPOINT=http://otel-collector:4318
 ```
 
 ### Programmatic Setup (Spring Boot)
@@ -63,7 +65,7 @@ otel:
     name: my-service
   exporter:
     otlp:
-      endpoint: http://otel-collector:4317
+      endpoint: http://otel-collector:4318
 ```
 
 ### Custom Traces

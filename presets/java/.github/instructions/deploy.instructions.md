@@ -9,7 +9,7 @@ applyTo: '**/Dockerfile,**/docker-compose*,**/*.yml,**/*.yaml,**/k8s/**'
 
 ### Multi-stage Dockerfile (Gradle)
 ```dockerfile
-FROM eclipse-temurin:21-jdk AS build
+FROM eclipse-temurin:25-jdk AS build
 WORKDIR /app
 COPY gradle/ gradle/
 COPY gradlew build.gradle settings.gradle ./
@@ -17,7 +17,7 @@ RUN ./gradlew dependencies --no-daemon
 COPY src/ src/
 RUN ./gradlew bootJar --no-daemon
 
-FROM eclipse-temurin:21-jre AS runtime
+FROM eclipse-temurin:25-jre AS runtime
 WORKDIR /app
 COPY --from=build /app/build/libs/*.jar app.jar
 EXPOSE 8080
@@ -26,14 +26,14 @@ ENTRYPOINT ["java", "-jar", "app.jar"]
 
 ### Multi-stage Dockerfile (Maven)
 ```dockerfile
-FROM eclipse-temurin:21-jdk AS build
+FROM eclipse-temurin:25-jdk AS build
 WORKDIR /app
 COPY pom.xml .
 RUN mvn dependency:go-offline
 COPY src/ src/
 RUN mvn package -DskipTests
 
-FROM eclipse-temurin:21-jre AS runtime
+FROM eclipse-temurin:25-jre AS runtime
 WORKDIR /app
 COPY --from=build /app/target/*.jar app.jar
 EXPOSE 8080
@@ -54,7 +54,7 @@ services:
     depends_on:
       - db
   db:
-    image: postgres:16
+    image: postgres:18
     environment:
       POSTGRES_DB: app
       POSTGRES_USER: app

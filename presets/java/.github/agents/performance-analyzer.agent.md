@@ -22,7 +22,7 @@ You are the **Performance Analyzer**. Identify bottlenecks in Java/Spring applic
 - [ ] `@Async` methods return `CompletableFuture` (not `void`)
 - [ ] Custom `TaskExecutor` configured (not default unbounded)
 - [ ] Blocking calls in reactive/async contexts
-- [ ] Virtual threads used where appropriate (Java 21+)
+- [ ] Virtual threads used where appropriate (Java 25 LTS)
 
 ### Caching
 - [ ] `@Cacheable` on frequently-read service methods
@@ -46,7 +46,7 @@ public ProductDto findById(Long id) { return repo.findById(id).map(Product::toDt
 public void update(Long id, UpdateDto dto) { ... }
 ```
 
-**Virtual threads for I/O-bound work (Java 21+):**
+**Virtual threads for I/O-bound work (Java 25 LTS):**
 ```java
 // ✅ Virtual threads — lightweight, no thread pool starvation
 @Bean

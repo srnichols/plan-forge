@@ -1,5 +1,5 @@
 ---
-description: Java testing patterns — JUnit 5, Testcontainers, MockMvc, Mockito
+description: Java testing patterns — JUnit 6, Testcontainers, MockMvc, Mockito
 applyTo: '**/src/test/**,**/*Test*.java,**/*Spec*.java'
 ---
 
@@ -7,7 +7,7 @@ applyTo: '**/src/test/**,**/*Test*.java,**/*Spec*.java'
 
 ## Tech Stack
 
-- **Unit Tests**: JUnit 5
+- **Unit Tests**: JUnit 6
 - **Assertions**: AssertJ (preferred) or JUnit Assert
 - **Mocking**: Mockito
 - **Integration**: Testcontainers, MockMvc / WebTestClient
@@ -23,7 +23,7 @@ applyTo: '**/src/test/**,**/*Test*.java,**/*Spec*.java'
 
 ## Patterns
 
-### Unit Test (JUnit 5 + Mockito)
+### Unit Test (JUnit 6 + Mockito)
 ```java
 @ExtendWith(MockitoExtension.class)
 class UserServiceTest {
@@ -60,13 +60,16 @@ class UserServiceTest {
 ```
 
 ### Integration Test (Testcontainers + Spring Boot)
+For Testcontainers Java 2.0.5, add the PostgreSQL module (`org.testcontainers:testcontainers-postgresql`) and import `org.testcontainers.postgresql.PostgreSQLContainer`; the 2.x class is not generic. For `TestRestTemplate` on Spring Boot 4, add the `org.springframework.boot:spring-boot-resttestclient` and `org.springframework.boot:spring-boot-restclient` test dependencies and import `org.springframework.boot.resttestclient.TestRestTemplate` plus `org.springframework.boot.resttestclient.autoconfigure.AutoConfigureTestRestTemplate`.
+
 ```java
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
+@AutoConfigureTestRestTemplate
 @Testcontainers
 class UsersApiIntegrationTest {
 
     @Container
-    static PostgreSQLContainer<?> postgres = new PostgreSQLContainer<>("postgres:16")
+    static PostgreSQLContainer postgres = new PostgreSQLContainer("postgres:18")
             .withDatabaseName("testdb");
 
     @DynamicPropertySource
@@ -88,6 +91,8 @@ class UsersApiIntegrationTest {
 ```
 
 ### MockMvc Test (Controller Layer)
+Use `org.springframework.test.context.bean.override.mockito.MockitoBean` with Spring Framework 7 / Spring Boot 4.
+
 ```java
 @WebMvcTest(UserController.class)
 class UserControllerTest {
@@ -95,7 +100,7 @@ class UserControllerTest {
     @Autowired
     private MockMvc mockMvc;
 
-    @MockBean
+    @MockitoBean
     private UserService userService;
 
     @Test

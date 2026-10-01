@@ -31,13 +31,13 @@
 **Description**: <!-- What your app does -->
 
 **Tech Stack**:
-- Framework: FastAPI / Python 3.12+
-- Database: PostgreSQL + SQLAlchemy / Alembic
-- Cache: Redis
-- Testing: pytest, httpx, pytest-asyncio
-- Package Manager: uv (recommended) or pip
-- Type Checking: mypy (strict)
-- Linting: ruff
+- Framework: FastAPI 0.142 / Python 3.14+
+- Database: PostgreSQL 18 + SQLAlchemy 2.1 / Alembic
+- Cache: Redis 8
+- Testing: pytest 9.1, httpx, pytest-asyncio, testcontainers 4.15
+- Package Manager: uv 0.12 (recommended) or pip
+- Type Checking: mypy 2.3 (strict)
+- Linting: Ruff 0.16
 
 ---
 
@@ -45,7 +45,7 @@
 
 ### Python Style
 - **Type hints**: Required on all function signatures
-- **Pydantic models**: For all request/response schemas
+- **Pydantic 2.13 models**: For all request/response schemas
 - **Async**: All I/O operations must be async
 - **No bare except**: Always catch specific exceptions
 - **Dataclasses**: For internal DTOs, Pydantic for API boundaries

@@ -78,7 +78,7 @@ from testcontainers.postgres import PostgresContainer
 
 @pytest.fixture(scope="module")
 def postgres():
-    with PostgresContainer("postgres:16-alpine") as pg:
+    with PostgresContainer("postgres:18-alpine") as pg:
         yield pg
 
 @pytest.fixture

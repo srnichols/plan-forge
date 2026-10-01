@@ -110,7 +110,7 @@ exclude_commit_patterns = ["^chore", "^ci"]
 ### Bug Fixes
 - Race condition in order processing (#145)
 ### Dependencies
-- Upgraded FastAPI to 0.115 (#140)
+- Upgraded FastAPI to 0.142 (#140)
 ```
 
 ### Rules

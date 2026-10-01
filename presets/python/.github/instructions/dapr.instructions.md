@@ -5,7 +5,7 @@ applyTo: '**/*dapr*,**/*worker*,**/components/**,**/*workflow*'
 
 # Python Dapr Patterns
 
-> **Standard**: Dapr v1.14+ with `dapr-ext-grpc` / `dapr-ext-fastapi`  
+> **Standard**: Dapr v1.18+ with `dapr-ext-grpc` / `dapr-ext-fastapi`
 > **Packages**: `dapr`, `dapr-ext-grpc`, `dapr-ext-fastapi`, `dapr-ext-workflow`  
 > **Cross-ref**: `messaging.instructions.md` covers pub/sub schemas and CloudEvents
 

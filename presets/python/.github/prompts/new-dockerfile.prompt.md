@@ -12,7 +12,7 @@ Scaffold a production-grade multi-stage Dockerfile for a Python/FastAPI applicat
 ### Multi-Stage Dockerfile
 ```dockerfile
 # ---- Build Stage ----
-FROM python:3.12-slim AS build
+FROM python:3.14-slim AS build
 WORKDIR /app
 
 # Install build-time dependencies
@@ -23,7 +23,7 @@ COPY requirements.txt ./
 RUN pip install --no-cache-dir --prefix=/install -r requirements.txt
 
 # ---- Runtime Stage ----
-FROM python:3.12-slim AS runtime
+FROM python:3.14-slim AS runtime
 WORKDIR /app
 
 # Security: run as non-root
@@ -50,7 +50,7 @@ CMD ["uvicorn", "src.main:app", "--host", "0.0.0.0", "--port", "8000", "--worker
 
 ### With UV (Fast Package Manager)
 ```dockerfile
-FROM python:3.12-slim AS build
+FROM python:3.14-slim AS build
 WORKDIR /app
 
 COPY --from=ghcr.io/astral-sh/uv:latest /uv /usr/local/bin/uv
@@ -60,7 +60,7 @@ RUN uv sync --frozen --no-dev --no-editable
 
 COPY src/ src/
 
-FROM python:3.12-slim AS runtime
+FROM python:3.14-slim AS runtime
 WORKDIR /app
 
 RUN groupadd -r appgroup && useradd -r -g appgroup -d /app -s /sbin/nologin appuser
@@ -109,13 +109,13 @@ services:
         condition: service_healthy
 
   db:
-    image: postgres:16-alpine
+    image: postgres:18-alpine
     environment:
       POSTGRES_DB: mydb
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: postgres
     volumes:
-      - pgdata:/var/lib/postgresql/data
+      - pgdata:/var/lib/postgresql
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U postgres"]
       interval: 5s
@@ -129,7 +129,7 @@ volumes:
 ## Rules
 
 - ALWAYS use multi-stage builds — install dependencies in build stage, copy to runtime
-- ALWAYS use slim images (`python:3.12-slim`) — not full or Alpine (musl issues)
+- ALWAYS use slim images (`python:3.14-slim`) — not full or Alpine (musl issues)
 - ALWAYS run as a non-root user in production
 - ALWAYS copy `requirements.txt`/`pyproject.toml` first for layer caching
 - ALWAYS use `--no-cache-dir` with pip to reduce image size

@@ -9,7 +9,7 @@ applyTo: '**/Dockerfile,**/docker-compose*,**/*.yml,**/*.yaml'
 
 ### Multi-stage Dockerfile (FastAPI)
 ```dockerfile
-FROM python:3.12-slim AS base
+FROM python:3.14-slim AS base
 ENV PYTHONDONTWRITEBYTECODE=1
 ENV PYTHONUNBUFFERED=1
 
@@ -41,7 +41,7 @@ services:
     depends_on:
       - db
   db:
-    image: postgres:16
+    image: postgres:18
     environment:
       POSTGRES_DB: app
       POSTGRES_USER: app
@@ -49,7 +49,7 @@ services:
     ports:
       - "5432:5432"
   redis:
-    image: redis:7-alpine
+    image: redis:8-alpine
     ports:
       - "6379:6379"
 ```

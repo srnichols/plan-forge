@@ -7,10 +7,11 @@ applyTo: '**/test_*,**/*_test.py,**/tests/**,**/conftest.py,**/pytest.ini,**/pyp
 
 ## Tech Stack
 
-- **Test Runner**: pytest
+- **Test Runner**: pytest 9.1
 - **API Testing**: httpx (async) or TestClient (FastAPI)
 - **Mocking**: unittest.mock, pytest-mock
 - **Factories**: factory_boy
+- **Containers**: testcontainers 4.15 for real database integration tests
 - **Coverage**: pytest-cov
 
 ## Test Types
@@ -48,12 +49,13 @@ async def test_get_user_returns_user():
 ### API Integration Test (FastAPI)
 ```python
 import pytest
-from httpx import AsyncClient
+from httpx import ASGITransport, AsyncClient
 from app.main import app
 
 @pytest.mark.asyncio
 async def test_list_users():
-    async with AsyncClient(app=app, base_url="http://test") as client:
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
         response = await client.get(
             "/api/users",
             headers={"Authorization": f"Bearer {test_token}"},
@@ -70,7 +72,7 @@ from testcontainers.postgres import PostgresContainer
 
 @pytest.fixture(scope="session")
 def postgres():
-    with PostgresContainer("postgres:16") as pg:
+    with PostgresContainer("postgres:18") as pg:
         yield pg
 
 @pytest.fixture

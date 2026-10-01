@@ -45,7 +45,7 @@ logger.info("Order placed", extra={"order_id": order_id, "tenant_id": tenant_id}
 logger.info(f"Order {order_id} placed")
 ```
 
-## OpenTelemetry Setup
+## OpenTelemetry Python 1.45 Setup
 
 ### Registration
 ```python

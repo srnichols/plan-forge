@@ -7,11 +7,13 @@ applyTo: '**/models/**,**/repositories/**,**/alembic/**,**/*.sql'
 
 ## ORM Strategy
 
-### Option A: SQLAlchemy + Alembic (Recommended)
+### Option A: SQLAlchemy 2.1 + Alembic (Recommended)
 
 ```python
-from sqlalchemy import Column, String, DateTime
-from sqlalchemy.orm import DeclarativeBase
+from datetime import datetime
+
+from sqlalchemy import DateTime, String, func, select
+from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 
 class Base(DeclarativeBase):
     pass

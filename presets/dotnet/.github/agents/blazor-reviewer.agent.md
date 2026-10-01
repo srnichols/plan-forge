@@ -9,7 +9,7 @@ You are the **Blazor Reviewer**. Audit Blazor Server / Razor component changes f
 
 - Blazor Server lifecycle (OnInitializedAsync, OnParametersSetAsync, OnAfterRenderAsync, Dispose)
 - Component layering — Presentation must not reach into Data Access
-- Microsoft Fluent UI for Blazor (`Microsoft.FluentUI.AspNetCore.Components` 4.x)
+- Microsoft Fluent UI for Blazor (`Microsoft.FluentUI.AspNetCore.Components` 4.14.x)
 - WCAG 2.1 AA accessibility
 - Render modes (`InteractiveServer`, `InteractiveAuto`, `Static`)
 - bUnit component testing patterns
@@ -79,7 +79,7 @@ You are the **Blazor Reviewer**. Audit Blazor Server / Razor component changes f
 
 ### Testing (Medium)
 - [ ] bUnit test exists for non-trivial components (renders correct markup, lifecycle behaves under cancellation, error path renders error UI)
-- [ ] Service contract tested independently with xUnit (component test does not double as service test)
+- [ ] Service contract tested independently with xUnit v3 (component test does not double as service test)
 
 ## Compliant Examples
 

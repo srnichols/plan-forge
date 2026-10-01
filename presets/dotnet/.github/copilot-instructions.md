@@ -32,8 +32,9 @@
 
 **Tech Stack**:
 - .NET 10.0, C# 14
-- ASP.NET Core Web API (+ GraphQL if applicable)
-- PostgreSQL with Dapper (or EF Core)
+- ASP.NET Core Web API (+ HotChocolate 16 if GraphQL is applicable)
+- PostgreSQL with Dapper (or EF Core 10)
+- OpenTelemetry .NET 1.19.x for observability
 - Docker / Kubernetes
 
 ---
@@ -58,7 +59,7 @@
 - **CancellationToken**: On all async data access methods
 
 ### Testing
-- **xUnit** (or NUnit) for unit tests
+- **xUnit v3 4.x** (or NUnit 5 / MSTest 4) for unit tests
 - **Testcontainers** for integration tests with real database
 - **WebApplicationFactory** for API integration tests
 
@@ -92,7 +93,7 @@ This project uses the **Plan Forge Pipeline**:
 | `api-patterns.instructions.md` | REST conventions, ProblemDetails, pagination |
 | `blazor-fluent-ui.instructions.md` | Blazor Server + Fluent UI components, lifecycle, accessibility |
 | `database.instructions.md` | Dapper/EF Core patterns |
-| `testing.instructions.md` | xUnit, Testcontainers, bUnit |
+| `testing.instructions.md` | xUnit v3, Testcontainers, bUnit |
 | `security.instructions.md` | Auth, validation, secrets |
 | `deploy.instructions.md` | Docker, K8s |
 | `git-workflow.instructions.md` | Commit conventions |

@@ -5,6 +5,8 @@ applyTo: '**/*Telemetry*.cs,**/*Logging*.cs,**/*Metrics*.cs,**/*Health*.cs,**/Pr
 
 # .NET Observability Patterns
 
+> **Standard**: OpenTelemetry .NET 1.19.x
+
 ## Structured Logging
 
 ### Source-Generated Logging (Recommended)

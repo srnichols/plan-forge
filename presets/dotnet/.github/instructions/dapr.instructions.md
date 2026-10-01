@@ -5,8 +5,8 @@ applyTo: '**/*Dapr*.cs,**/*Worker*.cs,**/dapr/**,**/components/**,**/*Workflow*.
 
 # .NET Dapr Patterns
 
-> **Standard**: Dapr v1.14+ with .NET Aspire / Docker Compose  
-> **Packages**: `Dapr.AspNetCore`, `Dapr.Client`, `Dapr.Workflow`  
+> **Standard**: Dapr v1.18+ with Aspire 13.6 / Docker Compose
+> **Packages**: `Dapr.AspNetCore`, `Dapr.Client`, `Dapr.Workflow` 1.18.x
 > **Cross-ref**: `messaging.instructions.md` covers pub/sub message schemas and CloudEvents in detail
 
 ---
@@ -51,7 +51,7 @@ my-service:
     - DAPR_GRPC_ENDPOINT=http://my-service-sidecar:50001
 
 my-service-sidecar:
-  image: daprio/daprd:1.14.4
+  image: daprio/daprd:1.18.4
   command:
     - ./daprd
     - --app-id=my-service
@@ -66,7 +66,7 @@ my-service-sidecar:
 
 # Placement service (required for actors/workflows)
 dapr-placement:
-  image: daprio/dapr:1.14.4
+  image: daprio/dapr:1.18.4
   command: ["./placement", "--port", "50006"]
 ```
 

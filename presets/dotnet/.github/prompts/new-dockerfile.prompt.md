@@ -12,7 +12,7 @@ Scaffold a production-grade multi-stage Dockerfile for a .NET application.
 ### Multi-Stage Dockerfile
 ```dockerfile
 # ---- Build Stage ----
-FROM mcr.microsoft.com/dotnet/sdk:8.0-alpine AS build
+FROM mcr.microsoft.com/dotnet/sdk:10.0-alpine AS build
 WORKDIR /src
 
 # Copy csproj files first for layer caching
@@ -30,7 +30,7 @@ RUN dotnet publish src/{ProjectName}/{ProjectName}.csproj \
     /p:UseAppHost=false
 
 # ---- Runtime Stage ----
-FROM mcr.microsoft.com/dotnet/aspnet:8.0-alpine AS runtime
+FROM mcr.microsoft.com/dotnet/aspnet:10.0-alpine AS runtime
 WORKDIR /app
 
 # Security: run as non-root
@@ -80,13 +80,13 @@ services:
         condition: service_healthy
 
   db:
-    image: postgres:16-alpine
+    image: postgres:18-alpine
     environment:
       POSTGRES_DB: mydb
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: postgres
     volumes:
-      - pgdata:/var/lib/postgresql/data
+      - pgdata:/var/lib/postgresql
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U postgres"]
       interval: 5s

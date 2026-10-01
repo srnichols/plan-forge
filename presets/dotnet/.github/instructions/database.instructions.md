@@ -1,5 +1,5 @@
 ---
-description: Database patterns for .NET — Dapper/EF Core, parameterized queries, migration strategy
+description: Database patterns for .NET — Dapper/EF Core 10, parameterized queries, migration strategy
 applyTo: '**/*Repository*.cs,**/*Migration*.cs,**/Database/**,**/*.sql'
 ---
 

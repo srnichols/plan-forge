@@ -1,5 +1,5 @@
 ---
-description: "Scaffold xUnit test classes with Arrange-Act-Assert, mock setup, proper naming conventions, and trait categories."
+description: "Scaffold xUnit v3 test classes with Arrange-Act-Assert, mock setup, proper naming conventions, and trait categories."
 agent: "agent"
 tools: [read, edit, search, execute]
 ---
@@ -55,12 +55,11 @@ public class {ClassName}Tests
 ```csharp
 public class {ClassName}IntegrationTests : IAsyncLifetime
 {
-    private readonly PostgreSqlContainer _postgres = new PostgreSqlBuilder()
-        .WithImage("postgres:16-alpine")
+    private readonly PostgreSqlContainer _postgres = new PostgreSqlBuilder("postgres:18-alpine")
         .Build();
 
-    public async Task InitializeAsync() => await _postgres.StartAsync();
-    public async Task DisposeAsync() => await _postgres.DisposeAsync();
+    public async ValueTask InitializeAsync() => await _postgres.StartAsync();
+    public async ValueTask DisposeAsync() => await _postgres.DisposeAsync();
 
     [Fact]
     [Trait("Category", "Integration")]

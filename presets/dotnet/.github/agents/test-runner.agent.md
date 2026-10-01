@@ -10,7 +10,7 @@ You are the **Test Runner**. Run tests, analyze failures, and provide actionable
 
 ## Your Expertise
 
-- xUnit / NUnit test framework
+- xUnit v3 / NUnit 5 / MSTest 4 test framework
 - Testcontainers for integration tests
 - Test trait categories and filtering
 - Mocking patterns (Moq, NSubstitute)

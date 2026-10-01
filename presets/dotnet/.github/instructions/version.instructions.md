@@ -94,7 +94,7 @@ npx conventional-changelog -p angular -i CHANGELOG.md -s
 ### Fixed
 - Race condition in order processing (#145)
 ### Changed
-- Upgraded to .NET 9 (#140)
+- Upgraded to .NET 10 (#140)
 ```
 
 ### Rules

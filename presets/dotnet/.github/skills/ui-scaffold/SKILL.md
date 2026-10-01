@@ -16,8 +16,8 @@ A naïve scaffold produces a `.razor` file that injects the `DbContext`, queries
 
 ## Preconditions (verify before scaffolding)
 
-1. The project is a Blazor Server app (or Blazor United host) on .NET 8+
-2. `Microsoft.FluentUI.AspNetCore.Components` is referenced in the Web project
+1. The project is a Blazor Server app (or Blazor United host) on .NET 10+
+2. `Microsoft.FluentUI.AspNetCore.Components` 4.14.x is referenced in the Web project
 3. The entity model exists in a Core/Domain project (e.g., `TimeTracker.Core/Models/Client.cs`)
 4. `.github/instructions/blazor-fluent-ui.instructions.md` is present (loaded by setup)
 

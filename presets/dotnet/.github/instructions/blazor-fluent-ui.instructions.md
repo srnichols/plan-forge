@@ -5,7 +5,7 @@ applyTo: '**/*.razor,**/*.razor.cs,**/*.razor.css,**/Components/**,**/Pages/**,*
 
 # Blazor + Fluent UI Patterns
 
-> **Stack assumption**: Blazor Server (interactive server rendering) on .NET 10 with `Microsoft.FluentUI.AspNetCore.Components` 4.x. Adapt selectively for Blazor WebAssembly or Blazor United.
+> **Stack assumption**: Blazor Server (interactive server rendering) on .NET 10 with `Microsoft.FluentUI.AspNetCore.Components` 4.14.x. Adapt selectively for Blazor WebAssembly or Blazor United.
 
 ---
 
@@ -270,7 +270,7 @@ Don't mix render modes within a page tree without a clear reason — it produces
 
 | Layer | Tool | What to test |
 |---|---|---|
-| Service contract | xUnit | Business logic in isolation (mock `DbContext` with `Microsoft.EntityFrameworkCore.InMemory` or interface-mock) |
+| Service contract | xUnit v3 | Business logic in isolation (mock `DbContext` with `Microsoft.EntityFrameworkCore.InMemory` or interface-mock) |
 | Component | bUnit | Renders correct markup for given state; events fire correctly; lifecycle behaves under cancellation |
 | End-to-end | Playwright | Critical user flows (login → create entity → see it in list) |
 

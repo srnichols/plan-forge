@@ -1,5 +1,5 @@
 ---
-description: .NET testing patterns — xUnit/NUnit, Testcontainers, integration testing
+description: .NET testing patterns — xUnit v3/NUnit 5/MSTest 4, Testcontainers, integration testing
 applyTo: '**/*.Tests/**,**/*Test*.cs,**/*Spec*.cs'
 ---
 
@@ -7,8 +7,8 @@ applyTo: '**/*.Tests/**,**/*Test*.cs,**/*Spec*.cs'
 
 ## Tech Stack
 
-- **Unit Tests**: xUnit (recommended) or NUnit
-- **Assertions**: FluentAssertions or xUnit Assert
+- **Unit Tests**: xUnit v3 4.x (recommended), NUnit 5, or MSTest 4
+- **Assertions**: FluentAssertions or xUnit v3 Assert
 - **Mocking**: Moq or NSubstitute
 - **Integration**: Testcontainers, WebApplicationFactory
 - **E2E**: Playwright

@@ -7,6 +7,12 @@ Format follows [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
+## [3.27.0] — 2026-10-01 — Current Copilot models, reliable plan gates and GA stack presets
+
+### Security
+
+- **Refresh dependencies with advisories published since 3.26.7.** The workspace lock had `sharp` 0.35.3, affected by the libheif advisory GHSA-rgj7-g3m4-5g8c (high). The standalone MCP lock that installs into projects already pinned 0.35.4. Both locks had `fast-uri` 3.1.7 and `ip-address` 10.7.0, which reach runtime through the MCP SDK (moderate), plus `brace-expansion`. The development lock also had Vitest 4.1.10. All are updated within their declared ranges, and both audits now report zero vulnerabilities.
+
 ### Changed
 
 - **Model defaults follow GitHub Copilot's 2026-09 lineup.** Copilot retired Claude Sonnet 4.6 on 2026-09-01. It retires Claude Opus 4.7, Gemini 3.5/3.6 Flash and Kimi K2.7 Code on 2026-10-02, and GPT-5.5, GPT-5.4, GPT-5.4 mini, GPT-5 mini, Gemini 3.7 Flash and Grok 4.5 on 2026-10-19. Plan Forge defaulted to several of them. New defaults:
@@ -70,6 +76,7 @@ Format follows [Keep a Changelog](https://keepachangelog.com/).
 
 ### Upgrade Notes
 
+- Node requirements (`>=20.19.0`) and the Copilot SDK routing default (`routing.copilotSdk: "off"`) are unchanged from 3.26.7.
 - The lock hash now covers exactly the lines the parser turns into scopes and gates, so a hardened plan gets a new hash if any of those lines were previously unprotected. This includes non-canonical labels such as `**Validation Gate:**` or `**Files**:`, a blank line after the scope label, bold-prefixed bullets inside a scope list, and a gate fence that does not directly follow its marker. In this repository, 4 of 12 hardened plans changed hash, 2 of them using only canonical labels. If `run-plan` reports `LOCK_HASH_MISMATCH` for a plan that has not been edited, review its scope and gate lines, then re-stamp `lockHash` with Step 2. A plan keeps its hash if it uses the canonical labels, has a plain path list directly under the scope label, and has its gate fence directly under the gate marker.
 - `run-plan` now rejects a slice whose declared Validation Gate has no runnable command. Move gate commands into a shell-tagged or untagged fence, or mark checks that must be manual with `[manual]`.
 - **Bash users updating from 3.26.x:** the 3.26.x updater prints `syntax error near unexpected token ';;'` and exits with code 2 after `Update complete`, even though the update finished. It also skips the hook scripts under `.github/hooks/scripts/`. Run `pforge self-update --force` once more. The 3.27.0 updater then delivers those scripts and exits cleanly. A plain `pforge self-update` reports `Already current` and does nothing. PowerShell updates complete in one run.

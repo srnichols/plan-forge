@@ -552,14 +552,14 @@ Configure which model executes which step type in `.forge.json`:
 ```json
 {
   "modelRouting": {
-    "execute": "gpt-5.3-codex",
-    "review": "claude-sonnet-4.6",
+    "execute": "gpt-6-sol",
+    "review": "claude-sonnet-5.5",
     "default": "auto"
   }
 }
 ```
 
-Override for a single run: `pforge run-plan <plan> --model claude-opus-4.6`
+Override for a single run: `pforge run-plan <plan> --model claude-opus-5.5`
 
 ### Parallel Execution
 
@@ -599,8 +599,10 @@ Pre-configured quorum profiles that select models, thresholds, and timeouts in o
 
 | Preset | Models | Reviewer | Threshold | Timeout |
 |--------|--------|----------|-----------|---------|
-| `--quorum=power` | Claude Opus 4.6 + GPT-5.3-Codex + Grok 4.20 Reasoning | Opus | 5 | 5 min |
-| `--quorum=speed` | Claude Sonnet 4.6 + GPT-5.4-mini + Grok 4.1 Fast Reasoning | Sonnet | 7 | 2 min |
+| `--quorum=power` | Claude Opus 5.5 + GPT-6 Astra + Grok 4.7 | Opus 5.5 | 5 | 5 min |
+| `--quorum=speed` | Claude Sonnet 5.5 + GPT-6 Luna + Gemini 3.8 Flash | Sonnet 5.5 | 7 | 2 min |
+
+Grok legs call the xAI API and need `XAI_API_KEY`; without it the power preset runs with its two Copilot-served members.
 
 Available via CLI, MCP (`quorum: "power"`), and `.forge.json` (`quorum.preset: "power"`).
 

@@ -40,21 +40,21 @@
 
   <!-- Worktree A -->
   <rect x="210" y="35" width="220" height="80" class="node" fill="#0f172a" stroke="#34d399" />
-  <text x="320" y="55" class="title" text-anchor="middle">Worktree A · claude-sonnet-4.6</text>
+  <text x="320" y="55" class="title" text-anchor="middle">Worktree A · claude-sonnet-5.5</text>
   <text x="320" y="72" class="surf" text-anchor="middle">.forge/worktrees/slice-N-a/</text>
   <text x="320" y="90" class="small" text-anchor="middle">build ✓ · test ✓ · 1.2k tokens</text>
   <text x="320" y="105" class="pass" text-anchor="middle">passed (38s)</text>
 
   <!-- Worktree B -->
   <rect x="210" y="125" width="220" height="80" class="node" fill="#0f172a" stroke="#34d399" />
-  <text x="320" y="145" class="title" text-anchor="middle">Worktree B · grok-4</text>
+  <text x="320" y="145" class="title" text-anchor="middle">Worktree B · grok-4.7</text>
   <text x="320" y="162" class="surf" text-anchor="middle">.forge/worktrees/slice-N-b/</text>
   <text x="320" y="180" class="small" text-anchor="middle">build ✓ · test ✓ · 0.9k tokens</text>
   <text x="320" y="195" class="pass" text-anchor="middle">passed (52s)</text>
 
   <!-- Worktree C -->
   <rect x="210" y="225" width="220" height="80" class="node" fill="#0f172a" stroke="#fb7185" />
-  <text x="320" y="245" class="title" text-anchor="middle">Worktree C · gpt-5.3-codex</text>
+  <text x="320" y="245" class="title" text-anchor="middle">Worktree C · gpt-6-sol</text>
   <text x="320" y="262" class="surf" text-anchor="middle">.forge/worktrees/slice-N-c/</text>
   <text x="320" y="280" class="small" text-anchor="middle">build ✓ · test ✗</text>
   <text x="320" y="295" class="fail" text-anchor="middle">failed (44s) — eliminated</text>

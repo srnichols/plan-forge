@@ -47,9 +47,9 @@
         <div class="cmd-block-header"><span>.forge.json</span></div>
         <pre><code>{
   "modelRouting": {
-    "default": "grok-4.5",
-    "execute": "claude-sonnet-4.6",
-    "review": "claude-opus-4.6"
+    "default": "claude-opus-5.5",
+    "execute": "gpt-6-sol",
+    "review": "claude-opus-5.5"
   }
 }</code></pre>
       </div>
@@ -74,7 +74,7 @@
       <div class="cmd-block">
         <div class="cmd-block-header"><span>.forge.json</span></div>
         <pre><code>{
-  "escalationChain": ["grok-4.5", "claude-opus-4.6", "gpt-5.3-codex"]
+  "escalationChain": ["auto", "claude-opus-5.5", "gpt-6-astra"]
 }</code></pre>
       </div>
       <p>Model A fails → Model B retries the same slice → Model C if B fails too. Emits <code>slice-escalated</code> WebSocket event at each step. No manual intervention required.</p>
@@ -83,7 +83,7 @@
         <strong>Forge Intelligence</strong>, Escalation chains auto-tune from history. After 5+ recorded slices, <code>loadEscalationChain()</code> reorders models by success rate × cost efficiency. The best-performing, cheapest model moves to position 1 automatically. No configuration needed, just run plans and the forge learns.
       </div>
 
-      <figure class="manual-figure" id="fig-14-1"><img src="assets/diagrams/escalation-chain.svg" alt="Escalation chain: grok-4.5 fails, escalates to claude-opus-4.6 which fails, escalates to gpt-5.3-codex which passes" class="diagram-img diagram-img-sm" /><figcaption class="manual-figcaption"><!--fignum--><span class="manual-fignum">Figure 14-1.</span><!--/fignum--> <!--cap:auto-->Escalation chain<!--/cap--></figcaption></figure>
+      <figure class="manual-figure" id="fig-14-1"><img src="assets/diagrams/escalation-chain.svg" alt="Escalation chain: gpt-6-sol fails, escalates to claude-opus-5.5 which fails, escalates to gpt-6-astra which passes" class="diagram-img diagram-img-sm" /><figcaption class="manual-figcaption"><!--fignum--><span class="manual-fignum">Figure 14-1.</span><!--/fignum--> <!--cap:auto-->Escalation chain<!--/cap--></figcaption></figure>
 
       <h2 id="quorum">Quorum Mode</h2>
       <p>Multi-model consensus for complex slices. Multiple models analyze the same problem independently, then a reviewer synthesizes the best approach.</p>
@@ -106,10 +106,10 @@ pforge run-plan docs/plans/Phase-7.md --quorum=auto
 # Custom threshold (1-10, higher = fewer slices use quorum)
 pforge run-plan docs/plans/Phase-7.md --quorum=auto --quorum-threshold 8
 
-# Flagship preset (Opus + GPT-5.3-Codex + Grok 4.20, threshold 5)
+# Flagship preset (claude-opus-5.5 + gpt-6-astra + grok-4.7, threshold 5, 5min timeout)
 pforge run-plan docs/plans/Phase-7.md --quorum=power
 
-# Fast preset (Sonnet + GPT-5.4-mini + Grok 4.1 Fast, threshold 7)
+# Fast preset (claude-sonnet-5.5 + gpt-6-luna + gemini-3.8-flash, threshold 7, 2min timeout)
 pforge run-plan docs/plans/Phase-7.md --quorum=speed</code></pre>
       </div>
       <table class="manual-table">
@@ -117,8 +117,8 @@ pforge run-plan docs/plans/Phase-7.md --quorum=speed</code></pre>
         <tbody>
           <tr><td><code>--quorum</code></td><td>Every slice gets multi-model consensus</td><td>3× normal cost</td></tr>
           <tr><td><code>--quorum=auto</code></td><td>Only slices above complexity threshold</td><td>1.2–1.5× normal cost</td></tr>
-          <tr><td><code>--quorum=power</code></td><td>Flagship models (Opus + GPT-5.3-Codex + Grok 4.20), threshold 5, 5min timeout</td><td>3× at threshold 5</td></tr>
-          <tr><td><code>--quorum=speed</code></td><td>Fast models (Sonnet + GPT-5.4-mini + Grok 4.1 Fast), threshold 7, 2min timeout</td><td>1.5× at threshold 7</td></tr>
+          <tr><td><code>--quorum=power</code></td><td>Flagship models (claude-opus-5.5 + gpt-6-astra + grok-4.7), threshold 5, 5min timeout</td><td>3× at threshold 5</td></tr>
+          <tr><td><code>--quorum=speed</code></td><td>Fast models (claude-sonnet-5.5 + gpt-6-luna + gemini-3.8-flash), threshold 7, 2min timeout</td><td>1.5× at threshold 7</td></tr>
           <tr><td>No flag</td><td>Single model per slice</td><td>1× baseline cost</td></tr>
         </tbody>
       </table>
@@ -135,11 +135,11 @@ pforge run-plan docs/plans/Phase-7.md --quorum=speed</code></pre>
         <pre><code>{
   "quorum": {
     "models": [
-      "gpt-5.3-codex",                  // → copilot CLI subprocess
-      "claude-sonnet-4.6",              // → copilot CLI subprocess
-      "grok-4.20-0309-reasoning"        // → direct-API worker (XAI_API_KEY)
+      "claude-opus-5.5",              // → copilot CLI subprocess
+      "gpt-6-astra",                   // → copilot CLI subprocess
+      "grok-4.7"                       // → direct-API worker (XAI_API_KEY)
     ],
-    "reviewerModel": "claude-opus-4.7"  // → copilot CLI subprocess
+    "reviewerModel": "claude-opus-5.5" // → copilot CLI subprocess
   }
 }</code></pre>
       </div>
@@ -487,10 +487,10 @@ ArgumentException.ThrowIfNullOrWhiteSpace(customerName);</code></pre>
       <p>Before any model fires in quorum mode, the orchestrator emits a per-model billing surface table to stdout:</p>
 
       <pre><code>Quorum Pre-Run Summary (host: claude-code, preference: auto)
-  <span class="text-emerald-400 font-bold">✓</span> claude-opus-4.7   → anthropic-direct      ($0.0061/req)
-  <span class="text-emerald-400 font-bold">✓</span> gpt-5.3-codex     → openai-direct         ($0.0048/req)
-  <span class="text-amber-400 font-bold">⚠</span> grok-4.20         → xai-direct            ($0.0033/req)  needs XAI_API_KEY
-  <span class="text-emerald-400 font-bold">✓</span> claude-sonnet-4.6 → anthropic-direct      ($0.0019/req)
+  <span class="text-emerald-400 font-bold">✓</span> claude-opus-5.5 → anthropic-direct      ($0.0064/req)
+  <span class="text-emerald-400 font-bold">✓</span> gpt-6-astra     → openai-direct         ($0.0128/req)
+  <span class="text-amber-400 font-bold">⚠</span> grok-4.7        → xai-direct            ($0.0026/req)  needs XAI_API_KEY
+  <span class="text-emerald-400 font-bold">✓</span> claude-sonnet-5.5 → anthropic-direct     ($0.0032/req)
 </code></pre>
 
       <p>Per-slice telemetry now records <code>host</code>, <code>billingSurface</code>, and <code>billingWarning</code> in <code>slice-N.json</code> so cost aggregation can distinguish subscription-covered vs pay-per-token spend in the Cost Report.</p>

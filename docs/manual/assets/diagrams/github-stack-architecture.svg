@@ -26,11 +26,11 @@
   <g>
     <rect x="20" y="42" width="160" height="48" class="layer" fill="#1e293b" stroke="#334155" />
     <text x="100" y="62" text-anchor="middle" class="title">Anthropic</text>
-    <text x="100" y="78" text-anchor="middle" class="desc">claude-sonnet-4.6</text>
+    <text x="100" y="78" text-anchor="middle" class="desc">claude-sonnet-5.5</text>
 
     <rect x="200" y="42" width="160" height="48" class="layer" fill="#1e293b" stroke="#334155" />
     <text x="280" y="62" text-anchor="middle" class="title">OpenAI</text>
-    <text x="280" y="78" text-anchor="middle" class="desc">gpt-5.5, gpt-5.3-codex</text>
+    <text x="280" y="78" text-anchor="middle" class="desc">gpt-6-sol, gpt-5.3-codex LTS</text>
 
     <rect x="380" y="42" width="160" height="48" class="layer" fill="#1e293b" stroke="#334155" />
     <text x="460" y="62" text-anchor="middle" class="title">Google / xAI</text>

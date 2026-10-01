@@ -373,7 +373,7 @@ Cross-artifact consistency analysis — validates that requirements are traced t
 .\pforge.ps1 analyze src/services/billing.ts --mode file
 
 # Custom model lineup
-.\pforge.ps1 analyze docs/plans/Phase-1-AUTH-PLAN.md --models grok-4.20-0309-non-reasoning,grok-4.5
+.\pforge.ps1 analyze docs/plans/Phase-1-AUTH-PLAN.md --models grok-4.20-0309-non-reasoning,grok-4.7
 ```
 
 ```bash
@@ -387,7 +387,7 @@ Cross-artifact consistency analysis — validates that requirements are traced t
 ./pforge.sh analyze src/services/billing.ts --mode file
 
 # Custom model lineup
-./pforge.sh analyze docs/plans/Phase-1-AUTH-PLAN.md --models grok-4.5,grok-4.20-0309-non-reasoning
+./pforge.sh analyze docs/plans/Phase-1-AUTH-PLAN.md --models grok-4.7,grok-4.20-0309-non-reasoning
 ```
 
 **Four scoring dimensions** (25 points each, 100 total):
@@ -423,7 +423,7 @@ Multi-model bug investigation — dispatches file analysis to multiple AI models
 .\pforge.ps1 diagnose src/services/billing.ts
 
 # With custom models
-.\pforge.ps1 diagnose src/auth/token-validator.ts --models grok-4.20-0309-non-reasoning,grok-4.5
+.\pforge.ps1 diagnose src/auth/token-validator.ts --models grok-4.20-0309-non-reasoning,grok-4.7
 ```
 
 ```bash
@@ -431,7 +431,7 @@ Multi-model bug investigation — dispatches file analysis to multiple AI models
 ./pforge.sh diagnose src/services/billing.ts
 
 # With custom models
-./pforge.sh diagnose src/auth/token-validator.ts --models grok-4.20,grok-4.20-0309-non-reasoning
+./pforge.sh diagnose src/auth/token-validator.ts --models grok-4.7,grok-4.20-0309-non-reasoning
 ```
 
 **Each model analyzes independently for**:
@@ -727,15 +727,15 @@ Execute a hardened plan — spawn CLI workers for each slice, validate at every 
 .\pforge.ps1 run-plan docs/plans/Phase-7-INVENTORY-PLAN.md --assisted
 
 # Specify model
-.\pforge.ps1 run-plan docs/plans/Phase-7-INVENTORY-PLAN.md --model claude-sonnet-4.6
+.\pforge.ps1 run-plan docs/plans/Phase-7-INVENTORY-PLAN.md --model claude-sonnet-5.5
 
 # Run the whole plan through xAI Grok Build (grok CLI worker)
 #   install: irm https://x.ai/cli/install.ps1 | iex  (then sign in, or set XAI_API_KEY)
 .\pforge.ps1 run-plan docs/plans/Phase-7-INVENTORY-PLAN.md --worker grok
 
 # Keep your default worker but add a Grok voice to the quorum:
-#   --with-grok      = grok-4.5 via metered xAI API (needs XAI_API_KEY)
-#   --with-grok-cli  = grok-4.5 via Grok Build CLI (flat subscription)
+#   --with-grok      = grok-4.7 via metered xAI API (needs XAI_API_KEY)
+#   --with-grok-cli  = grok-4.7 via Grok Build CLI (flat subscription)
 .\pforge.ps1 run-plan docs/plans/Phase-7-INVENTORY-PLAN.md --quorum --with-grok
 
 # Resume from slice 3 after fixing a failure
@@ -751,7 +751,7 @@ Execute a hardened plan — spawn CLI workers for each slice, validate at every 
 ./pforge.sh run-plan docs/plans/Phase-7-INVENTORY-PLAN.md --estimate
 ./pforge.sh run-plan docs/plans/Phase-7-INVENTORY-PLAN.md
 ./pforge.sh run-plan docs/plans/Phase-7-INVENTORY-PLAN.md --assisted
-./pforge.sh run-plan docs/plans/Phase-7-INVENTORY-PLAN.md --model gpt-5.3-codex
+./pforge.sh run-plan docs/plans/Phase-7-INVENTORY-PLAN.md --model gpt-6-sol
 ./pforge.sh run-plan docs/plans/Phase-7-INVENTORY-PLAN.md --quorum=power
 ./pforge.sh run-plan docs/plans/Phase-7-INVENTORY-PLAN.md --quorum=speed
 ```
@@ -767,7 +767,7 @@ Execute a hardened plan — spawn CLI workers for each slice, validate at every 
 **Flags:**
 - `--estimate` — Cost prediction only
 - `--assisted` — Interactive mode (human codes, orchestrator validates)
-- `--model <name>` — Override model (e.g., `claude-sonnet-4.6`, `gpt-5.3-codex`)
+- `--model <name>` — Override model (e.g., `claude-sonnet-5.5`, `gpt-6-sol`)
 - `--resume-from <N>` — Skip completed slices, resume from slice N
 - `--dry-run` — Parse and validate plan without executing
 - `--quorum` — Multi-model consensus on all slices (3× cost)
@@ -1613,18 +1613,20 @@ echo 'export XAI_API_KEY="your-key-here"' >> ~/.bashrc
 
 | Model | Input $/M | Output $/M | Notes |
 |-------|-----------|------------|-------|
-| `grok-4.5` | $2.00 | $6.00 | Latest flagship (500k context) |
+| `grok-4.7` | $2.00 | $6.00 | Latest flagship (500k context; prompts ≥200k bill $4/$12). Quorum default |
+| `grok-4.6` | $2.00 | $6.00 | Previous flagship (500k context) |
+| `grok-4.5` | $2.00 | $6.00 | Grok Build default (500k context) |
 | `grok-4.3` | $1.25 | $2.50 | Stable reasoning model |
-| `grok-4.20-0309-reasoning` | $1.25 | $2.50 | Reasoning variant (quorum default) |
+| `grok-4.20-0309-reasoning` | $1.25 | $2.50 | Reasoning variant |
 | `grok-4.20-0309-non-reasoning` | $1.25 | $2.50 | Fast, non-reasoning |
 | `grok-build-0.1` | $1.00 | $2.00 | Agentic coding model (Grok Build CLI) |
 
 **Use in CLI commands**:
 
 ```bash
-pforge run-plan docs/plans/Phase-1.md --model grok-4.20         # Plan execution
-pforge analyze docs/plans/Phase-1.md --models grok-4.5,grok-4.20-0309-non-reasoning # Multi-model analysis
-pforge diagnose src/services/billing.ts --models grok-4.20       # Bug investigation
+pforge run-plan docs/plans/Phase-1.md --model grok-4.7          # Plan execution
+pforge analyze docs/plans/Phase-1.md --models grok-4.7,grok-4.20-0309-non-reasoning # Multi-model analysis
+pforge diagnose src/services/billing.ts --models grok-4.7        # Bug investigation
 ```
 
 **How it works**: Any model name matching `grok-*` auto-routes to `api.x.ai/v1` via the `XAI_API_KEY` env var. The orchestrator uses the standard OpenAI chat completions API format. No `.forge.json` changes required.

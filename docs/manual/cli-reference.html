@@ -390,7 +390,7 @@ DRIFT DETECTED, 1 forbidden file(s) touched.</code></pre>
           <div class="cmd-block">
             <div class="cmd-block-header"><span>Invoke from Copilot Chat</span><button class="cmd-copy-btn">Copy</button></div>
             <pre><code>forge_diagnose({ file: "src/services/billing.ts" })
-forge_diagnose({ file: "src/auth/token-validator.ts", models: "grok-4.20-0309-non-reasoning,grok-4.5" })</code></pre>
+forge_diagnose({ file: "src/auth/token-validator.ts", models: "grok-4.20-0309-non-reasoning,grok-4.7" })</code></pre>
           </div>
 
           <p class="text-sm text-slate-400 mt-2">Each model analyzes independently for: root cause, failure modes, reproduction steps, impact assessment, fix recommendations, regression risk. Results are returned inline to the calling agent (no on-disk persistence by default).</p>
@@ -407,7 +407,7 @@ forge_diagnose({ file: "src/auth/token-validator.ts", models: "grok-4.20-0309-no
             <tbody>
               <tr><td><code>--estimate</code></td><td>boolean</td><td>&mdash;</td><td>Cost prediction only, no execution. Always backed by <code>forge_estimate_quorum</code>, never hand-computed.</td></tr>
               <tr><td><code>--assisted</code></td><td>boolean</td><td>&mdash;</td><td>Human codes, orchestrator validates gates</td></tr>
-              <tr><td><code>--model</code></td><td>string</td><td>&mdash;</td><td>Model override (e.g., <code>claude-sonnet-4.6</code>)</td></tr>
+              <tr><td><code>--model</code></td><td>string</td><td>&mdash;</td><td>Model override (e.g., <code>gpt-6-sol</code>)</td></tr>
               <tr><td><code>--resume-from</code></td><td>number</td><td>&mdash;</td><td>Skip completed slices, resume from N</td></tr>
               <tr><td><code>--dry-run</code></td><td>boolean</td><td>&mdash;</td><td>Parse and validate without executing</td></tr>
               <tr><td><code>--quorum</code></td><td>auto | power | speed | false</td><td><code>auto</code></td><td>Quorum preset. <code>auto</code>: threshold-based escalation. <code>power</code>: flagship models, threshold 5 (premium tier). <code>speed</code>: fast models, threshold 7. <code>false</code>: disable.</td></tr>

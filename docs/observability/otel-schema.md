@@ -26,7 +26,7 @@ Set once at SDK initialization. Applied to every span and metric from this proce
 
 Emitted for every LLM completion request made by the orchestrator.
 
-**Span name**: `"chat {model}"` — e.g. `"chat claude-sonnet-4.6"`
+**Span name**: `"chat {model}"` — e.g. `"chat claude-sonnet-5.5"`
 
 | Attribute | Type | Notes |
 |---|---|---|
@@ -208,7 +208,7 @@ If the activation gate is open but the packages are missing, `initOtel()` return
 ```
 invoke_workflow Phase-28.2          (root, CLIENT)
 ├── invoke_agent slice-1            (INTERNAL)
-│   ├── chat claude-sonnet-4.6      (INTERNAL, CLIENT for LLM)
+│   ├── chat claude-sonnet-5.5      (INTERNAL, CLIENT for LLM)
 │   ├── execute_tool forge_analyze  (INTERNAL)
 │   └── pforge.gate tests-pass     (INTERNAL)
 ├── invoke_agent slice-2            (INTERNAL)

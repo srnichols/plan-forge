@@ -116,7 +116,7 @@ client = OpenAI(
       <h3 id="friction-to-design-around">Friction to design around</h3>
 
       <ol>
-        <li><strong class="text-slate-200">Deployment-name vs model-name</strong>: Customer says "I'm using gpt-5.4-mini"; Plan Forge needs the deployment name (e.g., <code>eastus-prod-mini</code>).</li>
+        <li><strong class="text-slate-200">Deployment-name vs model-name</strong>: Customer says "I'm using gpt-6-luna"; Plan Forge needs the deployment name (e.g., <code>eastus-prod-mini</code>).</li>
         <li><strong class="text-slate-200">AOAI quota differs from OpenAI</strong>: Fixed TPM quotas per region per model, plus PTU for provisioned. A slice estimating 150K tokens against a 100K TPM deployment will throttle mid-run. Plan ahead.</li>
         <li><strong class="text-slate-200">Government cloud</strong>: Azure Gov has a reduced model catalog (<code>gpt-5.1</code>, <code>gpt-4.1</code> family, <code>o3-mini</code>, <code>gpt-4o</code>). Use the <code>power-gov</code> quorum preset (or graceful fallback) when targeting Azure Government.</li>
       </ol>

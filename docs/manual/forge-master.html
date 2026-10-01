@@ -164,9 +164,9 @@
         <p>Before any model is called, the <code>GET /api/forge-master/chat/:sessionId/stream</code> endpoint emits a <code>quorum-estimate</code> SSE event with the projected cost. Studio displays this and lets you cancel before spending. Programmatic clients should listen for the event:</p>
 
         <pre><code>data: {"type":"quorum-estimate","models":3,"estimatedUSD":0.0142,"models":[
-  {"name":"claude-opus-4.7","estUSD":0.0061},
-  {"name":"gpt-5.3-codex","estUSD":0.0048},
-  {"name":"grok-4.20","estUSD":0.0033}
+  {"name":"claude-sonnet-5.5","estUSD":0.0032},
+  {"name":"gpt-6-sol","estUSD":0.0032},
+  {"name":"grok-4.7","estUSD":0.0026}
 ]}
 </code></pre>
 
@@ -202,7 +202,7 @@
 
         <pre><code>{
   "forgeMaster": {
-    "reasoningModel": "claude-opus-4.7",       // model used for replies in advisory lane
+    "reasoningModel": "claude-sonnet-5.5",     // env default when ANTHROPIC_API_KEY is set
     "routerModel": "grok-4.20-0309-non-reasoning",              // model used by stage-2 intent classifier
     "quorumAdvisory": "auto",                  // "off" | "auto" | "always"  (default: "auto" since Phase-43)
     "autoEscalate": true,                      // bump hard questions to high tier  (default: true since Phase-43)
@@ -212,7 +212,9 @@
     "philosophy": "+ @baseline",               // Phase-43 alias: append UNIVERSAL_BASELINE to project principles (use "@baseline" to replace)
     "discoverExtensionTools": true,            // allow extension-supplied tools to register
     "providers": {
-      "githubCopilot": { "model": "gpt-4o" }   // GitHub Models override (zero-key path)
+      "anthropic": { "model": "claude-sonnet-5.5" },
+      "openai": { "model": "gpt-6-sol" },
+      "xai": { "model": "grok-4.7" }
     }
   }
 }</code></pre>
@@ -220,7 +222,7 @@
         <table class="manual-table my-4">
           <thead><tr><th>Field</th><th>Default</th><th>What it controls</th></tr></thead>
           <tbody>
-            <tr><td><code>reasoningModel</code></td><td><code>model.default</code> (or <code>gpt-4o-mini</code>)</td><td>Model used to compose replies in advisory lane. Falls back to <code>.forge.json</code>'s top-level <code>model.default</code>.</td></tr>
+            <tr><td><code>reasoningModel</code></td><td><code>claude-sonnet-5.5</code> with <code>ANTHROPIC_API_KEY</code>, then gpt-6-sol, then <code>grok-4.7</code></td><td>Model used to compose replies in advisory lane. Forge-Master auto-selects anthropic → openai → xai from environment keys.</td></tr>
             <tr><td><code>routerModel</code></td><td><code>grok-4.20-0309-non-reasoning</code></td><td>Stage-2 intent classifier model. Cheap by design, it's classifying, not reasoning.</td></tr>
             <tr><td><code>quorumAdvisory</code></td><td><code>"auto"</code> <span class="text-amber-400">(Phase-43)</span></td><td>Enables Quorum Advisory Mode in the <code>advisory</code> lane. Was <code>"off"</code> pre-Phase-43.</td></tr>
             <tr><td><code>autoEscalate</code></td><td><code>true</code> <span class="text-amber-400">(Phase-43)</span></td><td>Auto-bump hard or ambiguous prompts to the high tier. Required input for <code>quorumAdvisory: "auto"</code> to fire. Was <code>false</code> pre-Phase-43.</td></tr>
@@ -229,7 +231,7 @@
             <tr><td><code>philosophy</code></td><td><code>null</code> <span class="text-amber-400">(Phase-43 adds <code>"+ @baseline"</code> / <code>"@baseline"</code> aliases)</span></td><td>System-prompt augmentation. <code>"@baseline"</code> uses Plan Forge's <code>UNIVERSAL_BASELINE</code> in place of your project principles. <code>"+ @baseline"</code> appends the baseline on top of your principles.</td></tr>
             <tr><td><code>embeddingFallback</code></td><td><code>true</code></td><td>Enables the stage 1.5 embedding cache. Disable to force every cache-miss to the router LLM.</td></tr>
             <tr><td><code>discoverExtensionTools</code></td><td><code>true</code></td><td>Allow extensions in <code>extensions/</code> to register tools that Forge-Master can call.</td></tr>
-            <tr><td><code>providers.githubCopilot.model</code></td><td><code>gpt-4o-mini</code></td><td>Model used when routing through GitHub Models (zero-key path with <code>gh auth login</code>).</td></tr>
+            <tr><td><code>providers.githubCopilot.model</code></td><td><em>disabled</em></td><td>GitHub Models was retired on 2026-07-30; <code>gh auth login</code> no longer provides Forge-Master inference.</td></tr>
           </tbody>
         </table>
 
@@ -250,9 +252,9 @@
           <strong>Authoring a new overlay.</strong> Drop a <code>&lt;lane&gt;.md</code> file under <code>pforge-master/src/prompts/</code> and register it in <code>LANE_OVERLAYS</code> in <code>pforge-master/src/reasoning.mjs</code>. Keep overlays short (&lt;30 lines) &mdash; long overlays push out the model's context budget for actual reasoning.
         </div>
 
-        <h3 id="zero-key">Zero-key setup</h3>
-        <p>The recommended setup path requires <strong>no API keys</strong>: run <code>gh auth login</code> once and Forge-Master auto-detects your GitHub token, then routes through <a href="https://models.github.ai/inference">GitHub Models</a>. GitHub Copilot subscribers get this for free.</p>
-        <p>Set <code>ANTHROPIC_API_KEY</code>, <code>OPENAI_API_KEY</code>, or <code>XAI_API_KEY</code> only if you want to override the default with a premium model directly. The dashboard <strong>Settings → API Keys</strong> tab is the GUI equivalent.</p>
+        <h3 id="provider-setup">Provider setup</h3>
+        <p>GitHub retired <code>models.github.ai</code> on 2026-07-30, so Forge-Master no longer has a zero-key GitHub Models path. <code>GITHUB_TOKEN</code> and <code>gh auth login</code> do not provide a model for Forge-Master.</p>
+        <p>Set one or more direct-provider keys in the environment: <code>ANTHROPIC_API_KEY</code>, <code>OPENAI_API_KEY</code>, or <code>XAI_API_KEY</code>. Auto-select order is anthropic → openai → xai; the dashboard <strong>Settings → API Keys</strong> tab is the GUI equivalent.</p>
 
         <!-- ─── Embedding Cache Internals ─── -->
         <h2 id="embedding-cache">Embedding Cache Internals</h2>
@@ -314,7 +316,7 @@
           <dd class="text-slate-400 text-sm">No reasoning model configured and no API key found. Either run <code>gh auth login</code> (zero-key path), set <code>ANTHROPIC_API_KEY</code> / <code>OPENAI_API_KEY</code> / <code>XAI_API_KEY</code>, or set <code>forgeMaster.reasoningModel</code> in <code>.forge.json</code>.</dd>
 
           <dt class="font-semibold text-slate-100">Router model classifying everything as <code>offtopic</code></dt>
-          <dd class="text-slate-400 text-sm">The router model is too small for your prompt style. Try bumping <code>routerModel</code> from <code>grok-4.20-0309-non-reasoning</code> to <code>grok-4.5</code> or <code>gpt-4o-mini</code>. The router runs once per prompt, small models are usually fine, but quirky vocabularies sometimes need more capability.</dd>
+          <dd class="text-slate-400 text-sm">The router model is too small for your prompt style. Try bumping <code>routerModel</code> from <code>grok-4.20-0309-non-reasoning</code> to <code>grok-4.7</code> or <code>gpt-6-luna</code>. The router runs once per prompt, small models are usually fine, but quirky vocabularies sometimes need more capability.</dd>
         </dl>
 
         <!-- ─── Further Reading ─── -->

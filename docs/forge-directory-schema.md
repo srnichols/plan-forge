@@ -22,16 +22,16 @@ This document defines every file and directory under `.forge/`, their format, wh
   "preset": "dotnet",
   "agents": ["claude", "cursor", "codex"],
   "modelRouting": {
-    "execute": "gpt-5.3-codex",
-    "review": "claude-sonnet-4.6",
+    "execute": "gpt-6-sol",
+    "review": "claude-opus-5.5",
     "default": "auto"
   },
   "quorum": {
     "enabled": false,
     "auto": true,
     "threshold": 7,
-    "models": ["claude-opus-4.6", "gpt-5.3-codex", "gemini-3.1-pro"],
-    "reviewerModel": "claude-opus-4.6",
+    "models": ["claude-opus-5.5", "gpt-6-sol", "grok-4.7"],
+    "reviewerModel": "claude-opus-5.5",
     "dryRunTimeout": 300000
   },
   "extensions": []
@@ -55,7 +55,7 @@ This document defines every file and directory under `.forge/`, their format, wh
 {
   "plan": "docs/plans/Phase-1-AUTH-PLAN.md",
   "startTime": "2026-04-04T09:30:00.000Z",
-  "model": "claude-sonnet-4.6",
+  "model": "claude-opus-5.5",
   "modelRouting": { "default": "auto" },
   "mode": "auto",
   "sliceCount": 8,
@@ -80,11 +80,11 @@ This document defines every file and directory under `.forge/`, their format, wh
   "tokens": {
     "tokens_in": "unknown",
     "tokens_out": 4200,
-    "model": "claude-sonnet-4.6",
+    "model": "claude-opus-5.5",
     "cost_usd": 0.12
   },
   "worker": "gh-copilot",
-  "model": "claude-sonnet-4.6"
+  "model": "claude-opus-5.5"
 }
 ```
 
@@ -103,7 +103,7 @@ This document defines every file and directory under `.forge/`, their format, wh
   "score": 8,
   "signals": { "scopeWeight": 0.8, "dependencyWeight": 0.75, "securityWeight": 0.67, "databaseWeight": 0.33, "gateWeight": 0.6, "taskWeight": 0.8, "historicalWeight": 0 },
   "threshold": 7,
-  "models": ["claude-opus-4.6", "gpt-5.3-codex", "gemini-3.1-pro"],
+  "models": ["claude-opus-5.5", "gpt-6-sol", "grok-4.7"],
   "successfulLegs": 3,
   "totalLegs": 3,
   "dispatchDuration": 125000,
@@ -122,7 +122,7 @@ This document defines every file and directory under `.forge/`, their format, wh
   "startTime": "2026-04-04T09:30:00.000Z",
   "endTime": "2026-04-04T10:15:00.000Z",
   "mode": "auto",
-  "model": "claude-sonnet-4.6",
+  "model": "claude-opus-5.5",
   "sliceCount": 8,
   "results": { "passed": 8, "failed": 0, "skipped": 0, "total": 8 },
   "totalDuration": 2700000,
@@ -153,7 +153,7 @@ This document defines every file and directory under `.forge/`, their format, wh
   {
     "runId": "2026-04-04T09-30-00-000Z_Phase-1-AUTH-PLAN",
     "date": "2026-04-04",
-    "model": "claude-sonnet-4.6",
+    "model": "claude-opus-5.5",
     "tokensIn": 15000,
     "tokensOut": 42000,
     "costUSD": 0.85,

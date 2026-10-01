@@ -113,7 +113,7 @@
 | `forge_timeline` | timeline | low | Unified chronological view across all forge event sources with correlationId grouping. Merges hub-events, runs, memories, openbrain, watch, tempering, bugs, incidents, and forge-master sessions into a single timeline. |
 | `forge_triage_route` | tempering | low | Triage a single tempering finding into one of three lanes: 'bug' (product defect), 'spec' (feature/spec gap), or 'classifier' (noise). Pure routing — no side effects. Fail-safe: unknown classifier output always routes to 'bug' with low confidence. USE FOR: per-finding triage after a tempering run, building custom drain loops. DO NOT USE FOR: batch triage (use forge_tempering_drain), registering bugs (use forge_bug_register after triage). |
 | `forge_validate` | validate | low | Validate Plan Forge setup — check that all required files exist, file counts match preset expectations, and no unresolved placeholders remain. |
-| `forge_watch` | observe | low | WATCHER (v2.34) — read-only observer that tails another project's pforge run. Run this from a SECOND VS Code Copilot session with Plan-Forge as the workspace, pointing targetPath at the project being executed. Returns snapshot of current run state (slices passed/failed/in-progress, token counts, gate errors) plus heuristic anomaly detection. Mode 'analyze' additionally invokes a frontier model (default: claude-opus-4.8) for narrative advice. The watcher CANNOT modify any files in the target project. |
+| `forge_watch` | observe | low | WATCHER (v2.34) — read-only observer that tails another project's pforge run. Run this from a SECOND VS Code Copilot session with Plan-Forge as the workspace, pointing targetPath at the project being executed. Returns snapshot of current run state (slices passed/failed/in-progress, token counts, gate errors) plus heuristic anomaly detection. Mode 'analyze' additionally invokes a frontier model (default: claude-opus-5.5) for narrative advice. The watcher CANNOT modify any files in the target project. |
 | `forge_watch_live` | observe | low | WATCHER LIVE TAIL (v2.35) — stream events from another project's pforge run for a fixed duration. Connects to the target's WebSocket hub if running (`.forge/server-ports.json`); falls back to file polling otherwise. Read-only by design — only subscribes, never sends commands. Returns aggregate stats and the captured event stream. By default events are projected to a lite shape `{ ts, type, correlationId }` to keep payloads small; pass `verbose: true` for full event objects. |
 
 ## CLI Mirrors
@@ -140,9 +140,9 @@ Anvil, Hallmark, Lattice, and the Sync families are exposed as both **MCP tools*
 | **Grok Build** | `--worker grok` | `grok` CLI | Execute the whole plan via xAI's Grok Build agent. Dual auth: `grok` browser login (SuperGrok / X Premium+, flat subscription) or `XAI_API_KEY` (metered). Install: `irm https://x.ai/cli/install.ps1 \| iex`. To add Grok to a *quorum* instead of running the whole plan through it, use `--with-grok` (metered API) or `--with-grok-cli` (subscription). |
 | **Assisted** | `--assisted` | Human in VS Code | Orchestrator prompts, human codes, gates validate |
 | **Cloud Agent** | *(via `copilot-setup-steps.yml`)* | Copilot cloud agent | Cloud agent provisions environment, guardrails auto-load, MCP tools available |
-| **Quorum Auto** | `--quorum=auto` *(default when enabled)* | claude-opus-4.7 + gpt-5.3-codex + grok-4.20-0309-reasoning | Default threshold **5** (raised from 3 on 2026-05-21). Only slices with complexity score ≥ 5 get quorum. Adaptive — floor 5, ceiling 9. |
-| **Quorum Power** | `--quorum=power` | claude-opus-4.8 + gpt-5.3-codex + grok-4.20-0309-reasoning | Flagship preset. Threshold 5, 5-min dry-run timeout. Reviewer: claude-opus-4.8. Falls back to `speed` on `cli-gh` host where opus-4.8 is the only servable flagship. |
-| **Quorum Speed** | `--quorum=speed` | claude-sonnet-4.6 + gpt-5.4-mini + grok-4.20-0309-non-reasoning | Fast preset. Threshold 7, 2-min dry-run timeout. Reviewer: claude-sonnet-4.6. *(2026-05-21: grok-4-1-fast-reasoning was retired by xAI on 2026-05-15; replaced with grok-4.20-0309-non-reasoning.)* |
+| **Quorum Auto** | `--quorum=auto` *(default when enabled)* | claude-opus-5.5 + gpt-6-sol + grok-4.7 | Default threshold **5** (raised from 3 on 2026-05-21). Only slices with complexity score ≥ 5 get quorum. Adaptive — floor 5, ceiling 9. |
+| **Quorum Power** | `--quorum=power` | claude-opus-5.5 + gpt-6-astra + grok-4.7 | Flagship preset. Threshold 5, 5-min dry-run timeout. Reviewer: claude-opus-5.5. Grok calls the xAI API (`XAI_API_KEY`); on the `cli-gh` host the two Copilot-served members keep synthesis viable, and it falls back to `speed` only when fewer than two are servable. |
+| **Quorum Speed** | `--quorum=speed` | claude-sonnet-5.5 + gpt-6-luna + gemini-3.8-flash | Fast preset. Threshold 7, 2-min dry-run timeout. Reviewer: claude-sonnet-5.5. All three members are Copilot-served. *(2026-09-30 refresh: Copilot retired Sonnet 4.6 on 2026-09-01 and retires GPT-5.4 mini on 2026-10-19.)* |
 | **Quorum Disabled** | `--quorum=false` or `--no-quorum` | Single model | Force-disable quorum even when `.forge.json → quorum.enabled = true`. |
 | **Quorum Gov** | *(no CLI flag — `.forge.json → quorum.preset = "power-gov"`)* | gpt-5.1 + gpt-4.1 + gpt-4.1-mini + o3-mini + gpt-4o | Microsoft Foundry / government-cloud preset (OpenAI-only). Threshold 5, 5-min dry-run timeout. Reviewer: gpt-4.1. |
 | **Estimate** | `--estimate` | None | Returns cost prediction without executing |
@@ -178,22 +178,22 @@ Assign a different AI model to each execution role via `modelRouting` in `.forge
 
 | Role | Key | Default | Typical Use |
 |------|-----|---------|-------------|
-| General / fallback | `default` | `claude-opus-4.8` | Spec, harden, review |
-| Slice execution | `execute` | `gpt-5.3-codex` | Writing code, generating tests |
-| Review & audit | `review` | `claude-sonnet-4.6` | Gate checks, drift detection |
+| General / fallback | `default` | `claude-opus-5.5` | Spec, harden, review |
+| Slice execution | `execute` | `gpt-6-sol` *(example)* | Writing code, generating tests |
+| Review & audit | `review` | `claude-sonnet-5.5` *(example)* | Gate checks, drift detection |
 
 Config (`.forge.json`):
 ```json
 {
   "modelRouting": {
-    "default": "claude-opus-4.8",
-    "execute": "gpt-5.3-codex",
-    "review": "claude-sonnet-4.6"
+    "default": "claude-opus-5.5",
+    "execute": "gpt-6-sol",
+    "review": "claude-sonnet-5.5"
   }
 }
 ```
 
-Override at runtime: `pforge run-plan <plan> --model gpt-5.3-codex` (applies to all roles for that run).
+Override at runtime: `pforge run-plan <plan> --model gpt-6-sol` (applies to all roles for that run).
 API providers (xAI Grok, etc.) are auto-routed by model name pattern — no extra config required.
 
 ## Auto-Escalation
@@ -203,7 +203,7 @@ When a slice fails repeatedly, the orchestrator automatically re-routes to the n
 Config (`.forge.json`):
 ```json
 {
-  "escalationChain": ["auto", "claude-sonnet-4.6", "claude-opus-4.6"]
+  "escalationChain": ["auto", "claude-opus-5.5", "gpt-6-astra"]
 }
 ```
 
@@ -308,8 +308,10 @@ Plan Forge supports OpenAI-compatible HTTP endpoints via the `API_PROVIDERS` reg
 
 | Provider | Models | Env Var | Endpoint |
 |----------|--------|---------|----------|
-| **GitHub Copilot** *(recommended)* | `gpt-4o-mini` *(default)*, `gpt-4o`, `claude-sonnet-4`, `claude-opus-4` | `GITHUB_TOKEN` (or `gh auth login`) | `models.github.ai/inference` |
-| **xAI Grok** | `grok-4.5`, `grok-4.3`, `grok-4.20-0309-reasoning`, `grok-4.20-0309-non-reasoning` | `XAI_API_KEY` | `api.x.ai/v1` |
+| **OpenAI** | `gpt-*`, `chatgpt-*` (e.g. `gpt-6-sol`, `gpt-6-astra`). Served by `gh-copilot` first; direct API only when `gh-copilot` is unavailable | `OPENAI_API_KEY` | `api.openai.com/v1` |
+| **xAI Grok** | `grok-4.7`, `grok-4.6`, `grok-4.5`, `grok-4.20-0309-non-reasoning` | `XAI_API_KEY` | `api.x.ai/v1` |
+
+GitHub Models (`models.github.ai`) was retired on 2026-07-30 and is no longer a provider: a `GITHUB_TOKEN` does not serve models. Copilot-catalog models (Claude, GPT, Gemini, Kimi, MAI) run through the `gh-copilot` CLI worker on your Copilot plan.
 
 Set the env var, use any matching model name in `--models` or `.forge.json`, and the orchestrator routes automatically.
 
@@ -330,24 +332,23 @@ Store API keys in the gitignored `.forge/` directory as an alternative to enviro
 
 ## GitHub Copilot Integration
 
-Plan Forge has first-class integration with GitHub Copilot, GitHub Models, and GitHub Actions for cloud-based execution and security-driven plan generation.
+Plan Forge has first-class integration with GitHub Copilot and GitHub Actions for cloud-based execution and security-driven plan generation.
 
 ### forge_github_status
 
-`forge_github_status` — Check GitHub API connectivity, Copilot subscription status, and GitHub Models API availability. Returns auth state, rate limits, and per-service health.
+`forge_github_status` — Check GitHub API connectivity and Copilot subscription status. Returns auth state, rate limits, and per-service health.
 
 | Field | Description |
 |-------|-------------|
 | `githubAuth` | Authentication state (`authenticated` / `unauthenticated`) |
 | `copilotPlan` | Copilot subscription plan (`individual` / `business` / `enterprise` / `none`) |
-| `modelsApiAvailable` | `true` when `models.github.ai/inference` is reachable |
 | `rateLimitRemaining` | Remaining GitHub API requests for the hour |
 
 CLI: `pforge github-status`
 
-### GitHub Models
+### GitHub Models (retired)
 
-GitHub Models (`models.github.ai/inference`) is the recommended API provider for Plan Forge. It is the default inference endpoint when `GITHUB_TOKEN` (or `gh auth login`) is configured. Supported models: `gpt-4o-mini` *(default)*, `gpt-4o`, `claude-sonnet-4`, `claude-opus-4`.
+GitHub retired GitHub Models (`models.github.ai/inference`) on 2026-07-30; the host now answers every request with a plain-text `200 OK`. Forge-Master's former zero-key `githubCopilot` provider targeted it, so it is now disabled: auto-selection tries Anthropic → OpenAI → xAI (`ANTHROPIC_API_KEY`, `OPENAI_API_KEY`, `XAI_API_KEY`), and an explicit `reasoningProvider: "githubCopilot"` fails with a message naming those keys.
 
 ### Copilot Coding Agent Worker
 
@@ -516,7 +517,7 @@ Config (`.forge.json`):
       ]
     }
   },
-  "network": { "allowed": ["models.github.ai", "api.x.ai", "api.openai.com", "api.anthropic.com"] },
+  "network": { "allowed": ["api.x.ai", "api.openai.com", "api.anthropic.com"] },
   "tools": { "deny": [] },
   "openclaw": { "endpoint": "https://your-openclaw-instance", "apiKey": "see .forge/secrets.json" }
 }
@@ -703,8 +704,8 @@ Config (`.forge.json`):
     "enabled": false,
     "auto": true,
     "threshold": 7,
-    "models": ["claude-opus-4.6", "gpt-5.3-codex", "grok-4.20-0309-reasoning"],
-    "reviewerModel": "claude-opus-4.6",
+    "models": ["claude-opus-5.5", "gpt-6-sol", "grok-4.7"],
+    "reviewerModel": "claude-opus-5.5",
     "dryRunTimeout": 300000
   }
 }
@@ -1022,9 +1023,9 @@ Directories and files written by Plan Forge at runtime. All paths are relative t
   "preset": "dotnet",
   "projectName": "MyApp",
   "modelRouting": {
-    "default": "claude-opus-4.8",
-    "execute": "gpt-5.3-codex",
-    "review": "claude-sonnet-4.6"
+    "default": "claude-opus-5.5",
+    "execute": "gpt-6-sol",
+    "review": "claude-sonnet-5.5"
   },
   "maxParallelism": 3,
   "maxRetries": 1,
@@ -1033,8 +1034,8 @@ Directories and files written by Plan Forge at runtime. All paths are relative t
     "enabled": false,
     "auto": true,
     "threshold": 7,
-    "models": ["claude-opus-4.6", "gpt-5.3-codex", "grok-4.20-0309-reasoning"],
-    "reviewerModel": "claude-opus-4.6",
+    "models": ["claude-opus-5.5", "gpt-6-sol", "grok-4.7"],
+    "reviewerModel": "claude-opus-5.5",
     "preset": null
   }
 }

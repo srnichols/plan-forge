@@ -70,7 +70,7 @@
           <table class="manual-table">
             <thead><tr><th>Variable</th><th>Type</th><th>Default</th><th>Scope</th><th>Set when</th><th>Security</th></tr></thead>
             <tbody>
-              <tr><td><code>XAI_API_KEY</code> &#128274;</td><td>string</td><td><em>(none)</em></td><td>per-user</td><td>You want to route slices through Grok models (<code>grok-4.5</code>, <code>grok-4.3</code>, <code>grok-4.20-0309-reasoning</code>, <code>grok-4.20-0309-non-reasoning</code>).</td><td>Secret. Prefer <code>.forge/secrets.json</code>.</td></tr>
+              <tr><td><code>XAI_API_KEY</code> &#128274;</td><td>string</td><td><em>(none)</em></td><td>per-user</td><td>You want to route slices through Grok models (<code>grok-4.7</code> by default; <code>grok-4.6</code>, <code>grok-4.5</code>, and <code>grok-4.20-0309-non-reasoning</code> remain available on xAI API).</td><td>Secret. Prefer <code>.forge/secrets.json</code>.</td></tr>
               <tr><td><code>OPENAI_API_KEY</code> &#128274;</td><td>string</td><td><em>(none)</em></td><td>per-user</td><td>You want GPT models or DALL-E image generation (<code>forge_generate_image</code>).</td><td>Secret. Prefer <code>.forge/secrets.json</code>.</td></tr>
               <tr><td><code>ANTHROPIC_API_KEY</code> &#128274;</td><td>string</td><td><em>(none)</em></td><td>per-user</td><td>You want Claude models directly (not via GitHub Copilot).</td><td>Secret. Prefer <code>.forge/secrets.json</code>.</td></tr>
               <tr><td><code>OPENCLAW_API_KEY</code> &#128274;</td><td>string</td><td><em>(none)</em></td><td>per-user</td><td><code>openclaw.endpoint</code> is set in <code>.forge.json</code> and PreAgentHandoff should authenticate.</td><td>Secret. Prefer <code>.forge/secrets.json</code>.</td></tr>
@@ -228,7 +228,7 @@
 
         <ol class="space-y-2 mb-8 ml-6 list-decimal">
           <li><strong>CLI flag</strong> on the running command (e.g. <code>--quorum=power</code>).</li>
-          <li><strong>Plan front-matter</strong> directive in the plan being executed (e.g. <code>Model: claude-opus-4.7</code>).</li>
+          <li><strong>Plan front-matter</strong> directive in the plan being executed (e.g. <code>Model: claude-opus-5.5</code>).</li>
           <li><strong>Environment variable</strong> set in the shell or by the host (most of this appendix).</li>
           <li><strong><code>.forge/secrets.json</code></strong> for the keys listed in the <a href="#provider-api-keys">Provider API Keys</a> table.</li>
           <li><strong><code>.forge.json</code></strong> for the keys listed in <a href="forge-json-reference.html">Appendix T</a>.</li>

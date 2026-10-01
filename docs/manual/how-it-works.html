@@ -328,11 +328,11 @@ applyTo: "**/auth/**,**/security/**,**/middleware/**"
           <pre><code>{
   "preset": "dotnet",
   "modelRouting": {
-    "default": "claude-sonnet-4.6",
-    "execute": "grok-4.5",
-    "review": "claude-opus-4.7"
+    "default": "claude-opus-5.5",
+    "execute": "gpt-6-sol",
+    "review": "claude-opus-5.5"
   },
-  "escalationChain": ["grok-4.5", "claude-opus-4.7", "gpt-5.3-codex"],
+  "escalationChain": ["auto", "claude-opus-5.5", "gpt-6-astra"],
   "quorumThreshold": 6
 }</code></pre>
         </div>

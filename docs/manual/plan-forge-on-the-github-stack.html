@@ -608,7 +608,7 @@ pforge run-plan docs/plans/Phase-28-PLAN.md --quorum=false   # disable quorum en
 
 # Or as environment variables:
 export XAI_API_KEY=xai-...
-pforge run-plan docs/plans/Phase-28-PLAN.md --model grok-4.5</code></pre>
+pforge run-plan docs/plans/Phase-28-PLAN.md --model gpt-6-sol</code></pre>
 
       <p>BYOK matters in the following situations:</p>
 
@@ -638,8 +638,8 @@ pforge run-plan docs/plans/Phase-28-PLAN.md --model grok-4.5</code></pre>
     "default": "githubCopilot",
     "models": {
       "gpt-5.4":           { "provider": "githubCopilot" },
-      "claude-sonnet-4.6": { "provider": "githubCopilot" },
-      "grok-4.5":          { "provider": "xai",   "baseUrl": "https://api.x.ai/v1" },
+      "claude-sonnet-5.5": { "provider": "githubCopilot" },
+      "grok-4.7":          { "provider": "xai",   "baseUrl": "https://api.x.ai/v1" },
       "grok-4.3":          { "provider": "xai",   "baseUrl": "https://api.x.ai/v1" },
       "grok-4.20-0309-non-reasoning": { "provider": "xai",   "baseUrl": "https://api.x.ai/v1" }
     }

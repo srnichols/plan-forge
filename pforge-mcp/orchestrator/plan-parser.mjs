@@ -451,11 +451,21 @@ function handleCodeBlockContentLine(state, line) {
   return true;
 }
 
+// A gate marker arms fence capture only for its own slice. Left armed, an
+// inline or prose-only gate in one slice made the NEXT slice's first shell
+// fence — often an illustrative example in its tasks — part of that slice's
+// executed gate.
+function disarmGateCapture(state) {
+  state.inValidationGate = false;
+  state.implicitGateActive = false;
+}
+
 function handleSliceHeaderLine(state, line) {
   const sliceMatch = line.match(SLICE_HEADING_RE);
   if (!sliceMatch) return false;
   if (state.current) state.slices.push(state.current);
   state.inFilesInScopeBlock = false;
+  disarmGateCapture(state);
   state.current = createSliceRecord(sliceMatch, line);
   recordLockLines(state, [line]);
   return true;
@@ -472,6 +482,7 @@ function handlePlanLevelHeading(state, line) {
     state.current = null;
   }
   state.inFilesInScopeBlock = false;
+  disarmGateCapture(state);
   return true;
 }
 

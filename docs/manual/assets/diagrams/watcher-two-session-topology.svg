@@ -29,7 +29,7 @@
 
   <!-- VS Code window for build -->
   <text x="160" y="55" class="title" text-anchor="middle">VS Code · Copilot Chat</text>
-  <text x="160" y="70" class="small" text-anchor="middle">project: E:/GitHub/MyApp</text>
+  <text x="160" y="70" class="small" text-anchor="middle">project: /path/to/my-app</text>
 
   <!-- Orchestrator process -->
   <rect x="40" y="85" width="240" height="70" class="node" fill="#020617" stroke="#fbbf24" />

@@ -39,6 +39,18 @@ Format follows [Keep a Changelog](https://keepachangelog.com/).
 
 ### Fixed
 
+- **The testbed tools no longer default to one contributor's folder.** On Windows, when `testbed.path` was unset, `resolveTestbedPath` returned `E:\GitHub\plan-forge-testbed`, a path from the maintainer's machine, instead of the documented error. The testbed tools now use, in order:
+  1. a `testbedPath` argument;
+  2. `testbed.path` from `.forge.json`, with relative paths resolved against the project root rather than the server's working directory;
+  3. a `plan-forge-testbed` clone next to the project.
+
+  If none of these exists, they return `ERR_TESTBED_PATH_REQUIRED` on every platform.
+- **Shipped examples no longer name a specific project.**
+  - The `forge_watch` and `forge_watch_live` examples used `E:/GitHub/Rummag`; they now use `/path/to/my-app`.
+  - Crucible's linked-bugs prompt and the `forge_crucible_submit` `bugId` example used another project's tracker prefix (`RMG-0035`); they now use `BUG-0035`.
+  - The manual, `EVENTS.md` samples and the GitHub-status screenshot now use neutral paths.
+
+  A guard test now fails if Plan Forge's own source contains a path into a contributor's checkout.
 - **Forge-Master no longer fails every turn now that GitHub Models has been retired.** GitHub shut down GitHub Models (`models.github.ai`) on 2026-07-30. The host now answers with a plain-text `200 OK`, and the default `githubCopilot` provider turned that into a JSON `SyntaxError` on every turn. Forge-Master no longer auto-selects that provider. It tries `ANTHROPIC_API_KEY`, then `OPENAI_API_KEY`, then `XAI_API_KEY`, and defaults to `claude-sonnet-5.5`, `gpt-6-sol` or `grok-4.7` respectively. An explicit `reasoningProvider: "githubCopilot"` now fails immediately with a message that names those keys.
 - **Forge-Master's Anthropic provider reaches the API.** It posted to `/v1/v1/messages` and sent Copilot-style dotted IDs such as `claude-sonnet-4.6`, which the Anthropic API rejects. It now posts to `/v1/messages` and sends the hyphenated ID (`claude-sonnet-5-5`). OpenAI GPT-6 requests that carry tools now set `reasoning_effort: "none"`, which Chat Completions requires for function calling on GPT-6.
 - **Cost estimates price Gemini, Kimi and MAI quorum legs as Copilot requests.** These families have no direct-API route in Plan Forge and always run through `gh-copilot`. The estimator still treated them as an unknown provider and priced them per token.
@@ -61,6 +73,7 @@ Format follows [Keep a Changelog](https://keepachangelog.com/).
 - `run-plan` now rejects a slice whose declared Validation Gate has no runnable command. Move gate commands into a shell-tagged or untagged fence, or mark checks that must be manual with `[manual]`.
 - `pforge update` installs the new hook launchers and scripts. Projects that disabled hooks to work around #287 can re-enable them after updating. Confirm in the editor that hook scripts no longer open as tabs. The forbidden-path hook now actually denies edits, so if several hardened plans are queued, write `.forge/active-plan` to name the plan it should enforce.
 - Existing `.forge.json` files are not rewritten. If `modelRouting`, `quorum.models`, `quorum.reviewerModel` or `escalationChain` name a retired Copilot model (`claude-opus-4.7`, `claude-sonnet-4.6`, `gpt-5.5`, `gpt-5.4`, `gpt-5.4-mini`, `gpt-5-mini`, Gemini 3.5–3.7 Flash, `kimi-k2.7-code`), replace it. `pforge doctor` lists the configured quorum models.
+- The testbed tools no longer assume `E:\GitHub\plan-forge-testbed` on Windows. Set `testbed.path` in `.forge.json`, or keep the testbed cloned next to the project as `../plan-forge-testbed`.
 - Forge-Master setups that relied on `GITHUB_TOKEN` or `gh auth login` alone need `ANTHROPIC_API_KEY`, `OPENAI_API_KEY` or `XAI_API_KEY` in the environment.
 - `pforge update` only adds preset files a project does not have yet. It never overwrites existing instruction, agent or prompt files, because they may be customized. To adopt the refreshed preset versions, merge them from `presets/<stack>/.github/`, or delete a file you have not customized and re-run `pforge update`.
 

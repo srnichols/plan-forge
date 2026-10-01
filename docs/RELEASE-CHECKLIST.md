@@ -423,7 +423,7 @@ If a user genuinely wants the older release (e.g. their local v2.96.0 is corrupt
 | v2.50.0/v2.51.0/v2.52.0 broken installs | Tarballs shipped `VERSION=-dev` | v2.52.1 + `release-guard.yml` |
 | v2.76.0–v2.80.1 invisible releases | Tags pushed, Releases never cut | v2.81.0 backfill + drift warning in `update-from-github.mjs` |
 | v2.59.x consumers missed `PreCommit.mjs` | Hook only in `.github/hooks/`, not `templates/` | v2.59.x housekeeping mirror |
-| Rummag landed on `2.54.0-dev` via sibling clone | `pforge update` fell back to dev sibling | v2.53.2 dev-source guard |
+| A consumer project landed on `2.54.0-dev` via sibling clone | `pforge update` fell back to dev sibling | v2.53.2 dev-source guard |
 | v2.82.1 — consumers missed `postSlice` hook + `self-repair-reporting.instructions.md` | Hook + instruction file not enumerated in setup/update | v2.82.1 sync repair |
 
 Each of those cost real users real time. This checklist exists so it doesn't happen again.

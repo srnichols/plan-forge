@@ -68,7 +68,7 @@ Finalization refuses with `CrucibleFinalizeRefusedError` if any line has fewer t
 Pass `bugId` at submit time to automatically populate frontmatter:
 
 ```json
-{ "rawIdea": "Fix crash in parser", "lane": "bug-batch", "bugId": "RMG-0035" }
+{ "rawIdea": "Fix crash in parser", "lane": "bug-batch", "bugId": "BUG-0035" }
 ```
 
 The finalized plan's YAML frontmatter will include:
@@ -79,8 +79,8 @@ crucibleId: <uuid>
 lane: bug-batch
 source: human
 phaseId: Phase-60
-linkedBugs: [RMG-0035]
-bugId: RMG-0035
+linkedBugs: [BUG-0035]
+bugId: BUG-0035
 ---
 ```
 

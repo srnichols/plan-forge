@@ -428,7 +428,7 @@ Emitted when `forge_watch` builds a snapshot of a target project. Consumed by th
 {
   "type": "watch-snapshot-completed",
   "data": {
-    "target": "../Rummag",
+    "target": "../my-app",
     "runState": "in-progress",
     "runId": "run-2026-04-17-0930",
     "anomalyCount": 2,
@@ -445,7 +445,7 @@ Emitted when `forge_watch` detects one or more anomalies. One event per watch in
 {
   "type": "watch-anomaly-detected",
   "data": {
-    "target": "../Rummag",
+    "target": "../my-app",
     "runId": "run-2026-04-17-0930",
     "anomalies": [
       { "code": "slice-failed", "severity": "high", "message": "Slice 3 failed after 2 retries" },
@@ -464,7 +464,7 @@ Emitted when `forge_watch` analyze-mode produces narrative advice from a frontie
 {
   "type": "watch-advice-generated",
   "data": {
-    "target": "../Rummag",
+    "target": "../my-app",
     "runId": "run-2026-04-17-0930",
     "model": "claude-opus-4.7",
     "tokensIn": 8432,

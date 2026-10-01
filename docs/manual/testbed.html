@@ -42,7 +42,7 @@
         </div>
 
         <div class="callout callout-tip">
-          <strong>Tool:</strong> <code>forge_testbed_run</code>. <strong>Scenarios:</strong> <code>docs/plans/testbed-scenarios/*.json</code>. <strong>Findings:</strong> <code>docs/plans/testbed-findings/*.json</code>. Requires <code>testbed.path</code> in <code>.forge.json</code>.
+          <strong>Tool:</strong> <code>forge_testbed_run</code>. <strong>Scenarios:</strong> <code>docs/plans/testbed-scenarios/*.json</code>. <strong>Findings:</strong> <code>docs/plans/testbed-findings/*.json</code>. Testbed location: <code>testbed.path</code> in <code>.forge.json</code>, or a <code>plan-forge-testbed</code> clone next to the project.
         </div>
 
         <h2 id="why">Why a Separate Testbed?</h2>
@@ -99,7 +99,8 @@
         <table class="manual-table">
           <thead><tr><th>Code</th><th>Meaning</th><th>Recovery</th></tr></thead>
           <tbody>
-            <tr><td><code>ERR_TESTBED_NOT_FOUND</code></td><td><code>testbed.path</code> missing or invalid</td><td>Set it in <code>.forge.json</code></td></tr>
+            <tr><td><code>ERR_TESTBED_PATH_REQUIRED</code></td><td>No <code>testbed.path</code>, no <code>testbedPath</code> argument, and no <code>plan-forge-testbed</code> clone next to the project</td><td>Set <code>testbed.path</code> in <code>.forge.json</code>, or clone the testbed next to the project</td></tr>
+            <tr><td><code>ERR_TESTBED_NOT_FOUND</code></td><td>The configured testbed path does not exist</td><td>Fix <code>testbed.path</code> in <code>.forge.json</code></td></tr>
             <tr><td><code>ERR_TESTBED_DIRTY</code></td><td>Uncommitted changes in the testbed</td><td>Commit or stash inside the testbed repo</td></tr>
             <tr><td><code>ERR_TESTBED_LOCKED</code></td><td>Another scenario is running</td><td>Wait, or remove a stale <code>.forge/testbed.lock</code></td></tr>
           </tbody>

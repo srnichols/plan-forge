@@ -366,20 +366,20 @@
             <thead><tr><th>Key</th><th>Type</th><th>Default</th><th>Example</th><th>Change impact</th></tr></thead>
             <tbody>
               <tr><td><code>brain.federation.enabled</code></td><td>boolean</td><td><code>false</code></td><td><code>true</code></td><td>Master switch for cross-project read-only memory federation (L4-lite, Phase-25).</td></tr>
-              <tr><td><code>brain.federation.repos</code></td><td>array&lt;string&gt;</td><td><code>[]</code></td><td><code>["E:/GitHub/Rummag"]</code></td><td>Absolute local repo paths only. Relative paths and URL schemes (http, https, ssh, git) are rejected at load time. Each entry is searched read-only by <code>brain_recall</code>.</td></tr>
+              <tr><td><code>brain.federation.repos</code></td><td>array&lt;string&gt;</td><td><code>[]</code></td><td><code>["/path/to/other-repo"]</code></td><td>Absolute local repo paths only. Relative paths and URL schemes (http, https, ssh, git) are rejected at load time. Each entry is searched read-only by <code>brain_recall</code>.</td></tr>
             </tbody>
           </table>
         </div>
 
         <!-- ============================================================ -->
         <h2 id="testbed"><code>testbed</code> &mdash; testbed path</h2>
-        <p>Where the reference testbed repo lives. Required for the <code>forge_testbed_*</code> tools and the <code>--testbedPath</code> override.</p>
+        <p>Where the reference testbed repo lives, for the <code>forge_testbed_*</code> tools. A <code>testbedPath</code> argument overrides it; when neither is set, the tools use a <code>plan-forge-testbed</code> clone next to the project.</p>
 
         <div class="overflow-x-auto mb-6">
           <table class="manual-table">
             <thead><tr><th>Key</th><th>Type</th><th>Default</th><th>Example</th><th>Change impact</th></tr></thead>
             <tbody>
-              <tr><td><code>testbed.path</code></td><td>string (path)</td><td><em>(unset = testbed tools error)</em></td><td><code>"E:/GitHub/plan-forge-testbed"</code></td><td>Absolute or workspace-relative path to the testbed repo. When unset, <code>forge_testbed_run</code> returns <code>ERR_TESTBED_NOT_FOUND</code> with a recovery hint.</td></tr>
+              <tr><td><code>testbed.path</code></td><td>string (path)</td><td><em>(unset = a <code>plan-forge-testbed</code> clone next to the project)</em></td><td><code>"../plan-forge-testbed"</code></td><td>Absolute path, or a path relative to the project root. When it is unset and there is no sibling clone, <code>forge_testbed_run</code> returns <code>ERR_TESTBED_PATH_REQUIRED</code>; a path that does not exist returns <code>ERR_TESTBED_NOT_FOUND</code>.</td></tr>
             </tbody>
           </table>
         </div>
@@ -449,7 +449,7 @@
   "brain": {
     "federation": {
       "enabled": true,
-      "repos": ["E:/GitHub/shared-platform-memory"]
+      "repos": ["/path/to/shared-platform-memory"]
     }
   },
 

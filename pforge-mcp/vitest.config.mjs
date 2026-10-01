@@ -77,6 +77,7 @@ const SOURCE_ONLY_SUITES = {
   "../docs/plans/testbed-scenarios": ["tests/testbed-dashboard-ui.test.mjs", "tests/testbed-auditor-automation.test.mjs"],
   "../templates": [
     "tests/baselines.test.mjs",
+    "tests/diff-classify-hook-staged-diff.test.mjs",
     "tests/forbidden-matcher.test.mjs",
     "tests/full-suite-regression.test.mjs",
     "tests/issue-257-memory-enumeration.test.mjs",

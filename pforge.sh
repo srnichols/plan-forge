@@ -24,6 +24,39 @@ REPO_ROOT="$(find_repo_root)"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 # ─── Helpers ───────────────────────────────────────────────────────────
+
+# ─── JSON reads (#297) ─────────────────────────────────────────────────
+# Node is a Plan Forge prerequisite; Python is not. In Git Bash on Windows,
+# the Python on PATH is usually the native Store build, which cannot open /c/... or
+# /tmp/... paths, and grep rejects Perl regexes outside UTF-8 locales. File
+# paths go in as separate arguments so MSYS converts them for node.exe.
+# Prints the value at a dot path: strings as-is, booleans as true/false,
+# objects and arrays as JSON; the fallback (default empty) when the value is
+# missing or null, or the JSON cannot be read.
+_PF_JSON_GET_JS='const fs = require("fs");
+const [src, keyPath, fallback = ""] = process.argv.slice(1);
+let value;
+try {
+  value = JSON.parse(fs.readFileSync(src === "-" ? 0 : src, "utf8"));
+  for (const key of keyPath ? keyPath.split(".") : []) value = value == null ? undefined : value[key];
+} catch { value = undefined; }
+if (value === undefined || value === null) process.stdout.write(fallback);
+else process.stdout.write(typeof value === "object" ? JSON.stringify(value) : String(value));'
+
+# json_get <file> <dot.path> [fallback]
+json_get() {
+    if [ -f "$1" ]; then
+        node -e "$_PF_JSON_GET_JS" "$1" "$2" "${3:-}" 2>/dev/null || printf '%s' "${3:-}"
+    else
+        printf '%s' "${3:-}"
+    fi
+}
+
+# json_pick <dot.path> [fallback] — the same, reading JSON from stdin.
+json_pick() {
+    node -e "$_PF_JSON_GET_JS" - "$1" "${2:-}" 2>/dev/null || printf '%s' "${2:-}"
+}
+
 print_manual_steps() {
     local title="$1"; shift
     echo ""
@@ -403,9 +436,9 @@ cmd_branch() {
     fi
 
     local branch_name
-    branch_name="$(grep -oP '\*\*Branch\*\*:\s*`\K[^`]+' "$plan_file" 2>/dev/null || true)"
+    branch_name="$(sed -n 's/.*\*\*Branch\*\*:[[:space:]]*`\([^`]*\).*/\1/p' "$plan_file" 2>/dev/null | head -1 || true)"
     if [ -z "$branch_name" ]; then
-        branch_name="$(grep -oP '\*\*Branch\*\*:\s*"\K[^"]+' "$plan_file" 2>/dev/null || true)"
+        branch_name="$(sed -n 's/.*\*\*Branch\*\*:[[:space:]]*"\([^"]*\).*/\1/p' "$plan_file" 2>/dev/null | head -1 || true)"
     fi
 
     if [ -z "$branch_name" ] || [ "$branch_name" = "trunk" ]; then
@@ -819,7 +852,7 @@ cmd_ext_search() {
     # Parse with grep/sed (no jq dependency)
     local found=0
     local ids
-    ids="$(echo "$catalog" | grep -oP '"id"\s*:\s*"\K[^"]+' || true)"
+    ids="$(printf '%s' "$catalog" | node -e 'const ids = []; const walk = (v) => { if (Array.isArray(v)) v.forEach(walk); else if (v && typeof v === "object") for (const [k, x] of Object.entries(v)) { if (k === "id" && typeof x === "string") ids.push(x); else walk(x); } }; walk(JSON.parse(require("fs").readFileSync(0, "utf8"))); console.log(ids.join("\n"));' 2>/dev/null || true)"
 
     for id in $ids; do
         local name desc category verified
@@ -974,8 +1007,7 @@ cmd_ext_install() {
     fi
 
     local ext_name
-    ext_name="$(python3 -c "import json; print(json.load(open('$ext_path/extension.json'))['name'])" 2>/dev/null || \
-               grep -oP '"name"\s*:\s*"\K[^"]+' "$ext_path/extension.json" | head -1)"
+    ext_name="$(json_get "$ext_path/extension.json" name)"
 
     print_manual_steps "ext install" \
         "Copy extension folder to .forge/extensions/$ext_name/" \
@@ -1023,7 +1055,7 @@ cmd_ext_list() {
     fi
 
     local count
-    count="$(python3 -c "import json; d=json.load(open('$ext_json')); print(len(d.get('extensions',[])))" 2>/dev/null || echo "0")"
+    count="$(json_get "$ext_json" extensions.length 0)"
 
     if [ "$count" = "0" ]; then
         echo "No extensions installed."
@@ -1033,14 +1065,9 @@ cmd_ext_list() {
     echo ""
     echo "Installed Extensions:"
     echo "─────────────────────"
-    python3 -c "
-import json
-d = json.load(open('$ext_json'))
-for e in d.get('extensions', []):
-    print(f\"  {e['name']} v{e['version']}  (installed {e.get('installedDate','unknown')})\")
-" 2>/dev/null || grep -oP '"name"\s*:\s*"\K[^"]+' "$ext_json" | while read -r name; do
-        echo "  $name"
-    done
+    node -e 'const { extensions = [] } = JSON.parse(require("fs").readFileSync(process.argv[1], "utf8"));
+for (const e of extensions) console.log(`  ${e.name} v${e.version}  (installed ${e.installedDate || "unknown"})`);' "$ext_json" 2>/dev/null \
+        || echo "  (could not read $ext_json)"
     echo ""
 }
 
@@ -1117,7 +1144,7 @@ cmd_ext_publish() {
     local ext_json_file="$ext_path/extension.json"
     local id name description author version download_url repository license category effect
 
-    _ext_field() { grep -oP "\"$1\"\s*:\s*\"\K[^\"]+" "$ext_json_file" | head -1; }
+    _ext_field() { json_get "$ext_json_file" "$1"; }
 
     id="$(_ext_field id)"
     name="$(_ext_field name)"
@@ -1175,42 +1202,29 @@ cmd_ext_publish() {
 
     # Extract optional provides counts
     local inst_count agents_count prompts_count skills_count
-    if command -v python3 >/dev/null 2>&1; then
-        inst_count="$(python3 -c "import json; d=json.load(open('$ext_json_file')); print(d.get('provides',{}).get('instructions',0))" 2>/dev/null || echo "0")"
-        agents_count="$(python3 -c "import json; d=json.load(open('$ext_json_file')); print(d.get('provides',{}).get('agents',0))" 2>/dev/null || echo "0")"
-        prompts_count="$(python3 -c "import json; d=json.load(open('$ext_json_file')); print(d.get('provides',{}).get('prompts',0))" 2>/dev/null || echo "0")"
-        skills_count="$(python3 -c "import json; d=json.load(open('$ext_json_file')); print(d.get('provides',{}).get('skills',0))" 2>/dev/null || echo "0")"
-    else
-        inst_count=0; agents_count=0; prompts_count=0; skills_count=0
-    fi
+    inst_count="$(json_get "$ext_json_file" provides.instructions 0)"
+    agents_count="$(json_get "$ext_json_file" provides.agents 0)"
+    prompts_count="$(json_get "$ext_json_file" provides.prompts 0)"
+    skills_count="$(json_get "$ext_json_file" provides.skills 0)"
 
     local speckit_compat
-    speckit_compat="$(grep -oP '"speckit_compatible"\s*:\s*\K(true|false)' "$ext_json_file" | head -1)"
+    speckit_compat="$(json_get "$ext_json_file" speckit_compatible)"
     [ -z "$speckit_compat" ] && speckit_compat="false"
 
     local planforge_ver
-    planforge_ver="$(grep -oP '"planforge_version"\s*:\s*"\K[^\"]+"' "$ext_json_file" | head -1 | tr -d '"')"
+    planforge_ver="$(json_get "$ext_json_file" planforge_version)"
     [ -z "$planforge_ver" ] && planforge_ver=">=1.2.0"
 
     local tags_json
-    if command -v python3 >/dev/null 2>&1; then
-        tags_json="$(python3 -c "import json; d=json.load(open('$ext_json_file')); print(json.dumps(d.get('tags', [])))" 2>/dev/null || echo "[]")"
-    else
-        tags_json="[]"
-    fi
+    tags_json="$(json_get "$ext_json_file" tags '[]')"
 
     local now
     now="$(date -u +%Y-%m-%dT%H:%M:%SZ 2>/dev/null || echo "$(date -u +%Y-%m-%dT%H:%M:%SZ)")"
 
     # Build Spec Kit files arrays (instructions→rules, agents→agents)
     local speckit_rules speckit_agents
-    if command -v python3 >/dev/null 2>&1; then
-        speckit_rules="$(python3 -c "import json; d=json.load(open('$ext_json_file')); print(json.dumps(d.get('files',{}).get('instructions',[])+d.get('files',{}).get('rules',[])))" 2>/dev/null || echo "[]")"
-        speckit_agents="$(python3 -c "import json; d=json.load(open('$ext_json_file')); print(json.dumps(d.get('files',{}).get('agents',[])))" 2>/dev/null || echo "[]")"
-    else
-        speckit_rules="[]"
-        speckit_agents="[]"
-    fi
+    speckit_rules="$(node -e 'const { files = {} } = JSON.parse(require("fs").readFileSync(process.argv[1], "utf8")); process.stdout.write(JSON.stringify([...(files.instructions || []), ...(files.rules || [])]));' "$ext_json_file" 2>/dev/null || echo "[]")"
+    speckit_agents="$(json_get "$ext_json_file" files.agents '[]')"
 
     echo ""
     echo "✓ Validation passed — extension is ready to publish."
@@ -1329,20 +1343,20 @@ cmd_update() {
         local tag_result
         tag_result="$(node "$node_helper" "${tag_args[@]}" 2>&1 | tail -1)"
         local tag_ok
-        tag_ok="$(echo "$tag_result" | python3 -c "import json,sys; print(json.load(sys.stdin).get('ok',''))" 2>/dev/null || echo "")"
+        tag_ok="$(printf '%s' "$tag_result" | json_pick ok)"
         if [ "$tag_ok" != "True" ] && [ "$tag_ok" != "true" ]; then
             local err_code err_msg
-            err_code="$(echo "$tag_result" | python3 -c "import json,sys; print(json.load(sys.stdin).get('code',''))" 2>/dev/null || echo "ERR_UNKNOWN")"
-            err_msg="$(echo "$tag_result" | python3 -c "import json,sys; print(json.load(sys.stdin).get('message',''))" 2>/dev/null || echo "$tag_result")"
+            err_code="$(printf '%s' "$tag_result" | json_pick code ERR_UNKNOWN)"
+            err_msg="$(printf '%s' "$tag_result" | json_pick message "$tag_result")"
             echo "ERROR: $err_code — $err_msg" >&2
             exit 1
         fi
-        resolved_tag="$(echo "$tag_result" | python3 -c "import json,sys; print(json.load(sys.stdin).get('tag',''))" 2>/dev/null)"
+        resolved_tag="$(printf '%s' "$tag_result" | json_pick tag)"
         echo "  Tag: $resolved_tag"
 
         # Drift warning — source repo has a newer tag than the latest Release
         local drift_msg
-        drift_msg="$(echo "$tag_result" | python3 -c "import json,sys; d=json.load(sys.stdin); w=d.get('warning') or {}; print(w.get('message',''))" 2>/dev/null || echo "")"
+        drift_msg="$(printf '%s' "$tag_result" | json_pick warning.message)"
         if [ -n "$drift_msg" ]; then
             echo "" >&2
             echo "WARNING: Release/tag drift detected" >&2
@@ -1355,17 +1369,17 @@ cmd_update() {
         local dl_result
         dl_result="$(node "$node_helper" download --tag "$resolved_tag" --project-dir "$REPO_ROOT" 2>&1 | tail -1)"
         local dl_ok
-        dl_ok="$(echo "$dl_result" | python3 -c "import json,sys; print(json.load(sys.stdin).get('ok',''))" 2>/dev/null || echo "")"
+        dl_ok="$(printf '%s' "$dl_result" | json_pick ok)"
         if [ "$dl_ok" != "True" ] && [ "$dl_ok" != "true" ]; then
             local err_code err_msg
-            err_code="$(echo "$dl_result" | python3 -c "import json,sys; print(json.load(sys.stdin).get('code',''))" 2>/dev/null || echo "ERR_UNKNOWN")"
-            err_msg="$(echo "$dl_result" | python3 -c "import json,sys; print(json.load(sys.stdin).get('message',''))" 2>/dev/null || echo "$dl_result")"
+            err_code="$(printf '%s' "$dl_result" | json_pick code ERR_UNKNOWN)"
+            err_msg="$(printf '%s' "$dl_result" | json_pick message "$dl_result")"
             echo "ERROR: $err_code — $err_msg" >&2
             exit 1
         fi
-        gh_tarball="$(echo "$dl_result" | python3 -c "import json,sys; print(json.load(sys.stdin).get('path',''))" 2>/dev/null)"
-        gh_sha256="$(echo "$dl_result" | python3 -c "import json,sys; print(json.load(sys.stdin).get('sha256',''))" 2>/dev/null)"
-        gh_size_bytes="$(echo "$dl_result" | python3 -c "import json,sys; print(json.load(sys.stdin).get('sizeBytes',''))" 2>/dev/null)"
+        gh_tarball="$(printf '%s' "$dl_result" | json_pick path)"
+        gh_sha256="$(printf '%s' "$dl_result" | json_pick sha256)"
+        gh_size_bytes="$(printf '%s' "$dl_result" | json_pick sizeBytes)"
         echo "  Downloaded: $gh_tarball ($gh_size_bytes bytes)"
         echo "  SHA-256: $gh_sha256"
 
@@ -1417,7 +1431,8 @@ cmd_update() {
         local pref_config_path="$REPO_ROOT/.forge.json"
         if [ -f "$pref_config_path" ]; then
             local pref_raw
-            pref_raw="$(python3 -c "import json; v=json.load(open('$pref_config_path')).get('updateSource',''); print(v if v in ('auto','github-tags','local-sibling') else '')" 2>/dev/null || echo "")"
+            pref_raw="$(json_get "$pref_config_path" updateSource)"
+            case "$pref_raw" in auto|github-tags|local-sibling) ;; *) pref_raw="" ;; esac
             if [ -n "$pref_raw" ]; then update_source_pref="$pref_raw"; fi
         fi
 
@@ -2249,8 +2264,7 @@ cmd_self_update() {
     local au_enabled=false
     if [ -f "$REPO_ROOT/.forge.json" ]; then
         local au_val
-        au_val="$(python3 -c "import json; print(json.load(open('$REPO_ROOT/.forge.json')).get('autoUpdate',{}).get('enabled',False))" 2>/dev/null \
-                  || echo "false")"
+        au_val="$(json_get "$REPO_ROOT/.forge.json" autoUpdate.enabled false)"
         [ "$au_val" = "True" ] || [ "$au_val" = "true" ] && au_enabled=true
     fi
     if [ "$au_enabled" = false ]; then
@@ -2272,8 +2286,7 @@ cmd_self_update() {
     # at 3.32.0 as "Plan Forge 3.32.0" and blocks self-update as a downgrade).
     local current_version=""
     if [ -f "$REPO_ROOT/.forge.json" ]; then
-        current_version="$(python3 -c "import json; print(json.load(open('$REPO_ROOT/.forge.json')).get('templateVersion',''))" 2>/dev/null || \
-                           grep -oP '"templateVersion":\s*"\K[^"]+' "$REPO_ROOT/.forge.json" 2>/dev/null | head -1 || echo "")"
+        current_version="$(json_get "$REPO_ROOT/.forge.json" templateVersion)"
     fi
     if [ -z "$current_version" ] && [ -f "$REPO_ROOT/VERSION" ]; then
         # Fallback: Plan Forge's own dev repo (no .forge.json) or a legacy
@@ -2290,13 +2303,13 @@ cmd_self_update() {
     check_result="$(node --input-type=module -e "$check_script" "$current_version" "$REPO_ROOT" 2>&1 | tail -1)"
 
     local check_failed
-    check_failed="$(echo "$check_result" | python3 -c "import json,sys; print(json.load(sys.stdin).get('checkFailed',False))" 2>/dev/null || echo "false")"
+    check_failed="$(printf '%s' "$check_result" | json_pick checkFailed false)"
 
     local is_newer
-    is_newer="$(echo "$check_result" | python3 -c "import json,sys; print(json.load(sys.stdin).get('isNewer',False))" 2>/dev/null || echo "false")"
+    is_newer="$(printf '%s' "$check_result" | json_pick isNewer false)"
 
     local latest_ver
-    latest_ver="$(echo "$check_result" | python3 -c "import json,sys; print(json.load(sys.stdin).get('latest',''))" 2>/dev/null || echo "")"
+    latest_ver="$(printf '%s' "$check_result" | json_pick latest)"
 
     # Check-failed path: tell the user the check didn't complete instead of
     # claiming they're current. --force still proceeds (heal path).
@@ -2733,10 +2746,8 @@ cmd_doctor() {
     # Try cache first (skip network call if < 24h old)
     if [ -f "$version_check_cache" ]; then
         local cached_ver cached_at cache_age_s
-        cached_ver="$(python3 -c "import json; print(json.load(open('$version_check_cache')).get('latestVersion',''))" 2>/dev/null \
-                      || grep -oP '"latestVersion"\s*:\s*"\K[^"]+' "$version_check_cache" 2>/dev/null | head -1)"
-        cached_at="$(python3 -c "import json; print(json.load(open('$version_check_cache')).get('checkedAt',''))" 2>/dev/null \
-                     || grep -oP '"checkedAt"\s*:\s*"\K[^"]+' "$version_check_cache" 2>/dev/null | head -1)"
+        cached_ver="$(json_get "$version_check_cache" latestVersion)"
+        cached_at="$(json_get "$version_check_cache" checkedAt)"
         if [ -n "$cached_ver" ] && [ -n "$cached_at" ]; then
             cache_age_s=$(( $(date +%s) - $(date -d "$cached_at" +%s 2>/dev/null || date -j -f "%Y-%m-%dT%H:%M:%S" "${cached_at%%.*}" +%s 2>/dev/null || echo 0) ))
             if [ "$cache_age_s" -lt 86400 ] 2>/dev/null; then
@@ -2752,8 +2763,7 @@ cmd_doctor() {
         local gh_response
         gh_response="$(curl -sf --max-time 5 -H 'User-Agent: plan-forge-smith' "$api_url" 2>/dev/null)"
         if [ -n "$gh_response" ]; then
-            source_version="$(echo "$gh_response" | python3 -c "import json,sys; print(json.load(sys.stdin).get('tag_name','').lstrip('v'))" 2>/dev/null \
-                              || echo "$gh_response" | grep -oP '"tag_name"\s*:\s*"\K[^"]+' | head -1 | sed 's/^v//')"
+            source_version="$(printf '%s' "$gh_response" | json_pick tag_name | sed 's/^v//')"
             if [ -n "$source_version" ]; then
                 mkdir -p "$REPO_ROOT/.forge"
                 printf '{"checkedAt":"%s","latestVersion":"%s"}\n' \
@@ -2809,16 +2819,15 @@ cmd_doctor() {
     local au_enabled=false
     if [ -f "$REPO_ROOT/.forge.json" ]; then
         local au_val
-        au_val="$(python3 -c "import json; print(json.load(open('$REPO_ROOT/.forge.json')).get('autoUpdate',{}).get('enabled',False))" 2>/dev/null \
-                  || echo "false")"
+        au_val="$(json_get "$REPO_ROOT/.forge.json" autoUpdate.enabled false)"
         [ "$au_val" = "True" ] || [ "$au_val" = "true" ] && au_enabled=true
     fi
 
     local au_cache_age="no cache" au_last_tag="unknown" au_checked_at="never"
     local update_cache_file="$REPO_ROOT/.forge/update-check.json"
     if [ -f "$update_cache_file" ]; then
-        au_last_tag="$(python3 -c "import json; print(json.load(open('$update_cache_file')).get('latestVersion',''))" 2>/dev/null || echo "")"
-        au_checked_at="$(python3 -c "import json; print(json.load(open('$update_cache_file')).get('checkedAt',''))" 2>/dev/null || echo "")"
+        au_last_tag="$(json_get "$update_cache_file" latestVersion)"
+        au_checked_at="$(json_get "$update_cache_file" checkedAt)"
         if [ -n "$au_checked_at" ]; then
             local au_age_s=$(( $(date +%s) - $(date -d "$au_checked_at" +%s 2>/dev/null || date -j -f "%Y-%m-%dT%H:%M:%S" "${au_checked_at%%.*}" +%s 2>/dev/null || echo 0) ))
             au_cache_age="$(( au_age_s / 60 ))m"
@@ -5648,7 +5657,7 @@ cmd_config() {
         list)
             local cur_val=""
             if [ -f "$config_path" ]; then
-                cur_val="$(python3 -c "import json; print(json.load(open('$config_path')).get('updateSource',''))" 2>/dev/null || echo "")"
+                cur_val="$(json_get "$config_path" updateSource)"
             fi
             if [ -z "$cur_val" ]; then cur_val="(unset → auto)"; fi
             printf "  %-18s  %s\n" "update-source" "$cur_val"
@@ -5659,7 +5668,7 @@ cmd_config() {
             fi
             local val=""
             if [ -f "$config_path" ]; then
-                val="$(python3 -c "import json; print(json.load(open('$config_path')).get('$json_key',''))" 2>/dev/null || echo "")"
+                val="$(json_get "$config_path" "$json_key")"
             fi
             if [ -z "$val" ]; then val="$default_value"; fi
             echo "$val"
@@ -5682,18 +5691,15 @@ cmd_config() {
             fi
             # Merge into existing JSON atomically
             local tmp="$config_path.tmp"
-            python3 -c "
-import json, os, sys
-path = '$config_path'
-data = {}
-if os.path.exists(path):
-    try: data = json.load(open(path))
-    except Exception as e:
-        print(f'ERROR: .forge.json is malformed: {e}', file=sys.stderr); sys.exit(1)
-data['$json_key'] = '$value'
-with open('$tmp','w') as f:
-    json.dump(data, f, indent=2)
-" || exit 1
+            node -e 'const fs = require("fs");
+const [file, tmp, key, value] = process.argv.slice(1);
+let data = {};
+if (fs.existsSync(file)) {
+  try { data = JSON.parse(fs.readFileSync(file, "utf8")); }
+  catch (e) { console.error(`ERROR: .forge.json is malformed: ${e.message}`); process.exit(1); }
+}
+data[key] = value;
+fs.writeFileSync(tmp, JSON.stringify(data, null, 2) + "\n");' "$config_path" "$tmp" "$json_key" "$value" || exit 1
             mv "$tmp" "$config_path"
             echo "  ✅ $json_key = $value"
             ;;

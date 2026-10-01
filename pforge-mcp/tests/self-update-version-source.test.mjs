@@ -36,8 +36,8 @@ describe("self-update sources the installed version from .forge.json templateVer
   });
 
   it("pforge.sh reads templateVersion (with a VERSION fallback), not VERSION directly", () => {
-    // Self-update uses the '' default, distinct from Invoke-Update's 'unknown'.
-    expect(SH).toMatch(/get\('templateVersion',''\)/);
+    // #297: read through json_get (node), which also works in Git Bash on Windows.
+    expect(SH).toMatch(/current_version="\$\(json_get "\$REPO_ROOT\/\.forge\.json" templateVersion\)"/);
     // The old bug: `current_version="$(cat "$REPO_ROOT/VERSION" ...)"` must be gone.
     expect(SH).not.toMatch(/current_version="\$\(cat "\$REPO_ROOT\/VERSION" \| tr -d/);
   });

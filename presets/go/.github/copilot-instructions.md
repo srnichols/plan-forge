@@ -1,6 +1,6 @@
 # Instructions for Copilot — Go Project
 
-> **Stack**: Go 1.22+ / Standard Library / Chi or Gin  
+> **Stack**: Go 1.27+ / Standard Library / Chi or Gin
 > **Last Updated**: <DATE>
 
 ---
@@ -31,7 +31,7 @@
 **Description**: <!-- What your app does -->
 
 **Tech Stack**:
-- Go 1.22+
+- Go 1.27+
 - Standard library `net/http` (or Chi/Gin router)
 - PostgreSQL with `pgx` or `database/sql`
 - Docker / Kubernetes

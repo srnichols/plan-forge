@@ -9,7 +9,7 @@ applyTo: '**/Dockerfile,**/docker-compose*,**/*.yml,**/*.yaml,**/k8s/**'
 
 ### Multi-stage Dockerfile
 ```dockerfile
-FROM golang:1.22-alpine AS build
+FROM golang:1.27-alpine AS build
 WORKDIR /app
 COPY go.mod go.sum ./
 RUN go mod download
@@ -36,7 +36,7 @@ services:
     depends_on:
       - db
   db:
-    image: postgres:16
+    image: postgres:18
     environment:
       POSTGRES_DB: app
       POSTGRES_USER: app

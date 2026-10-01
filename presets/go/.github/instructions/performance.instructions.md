@@ -132,7 +132,7 @@ func newUser(name string) User { return User{Name: name} }
 
 - Use `runtime.MemStats` or `pprof` heap profiles to find leaks
 - Prefer `[]byte` + `sync.Pool` over `string` concatenation on hot paths
-- Use `arena` (experimental, Go 1.20+) for batch allocations with known lifetimes
+- Do not use the `arena` experiment for production allocations; it is on indefinite hold due to API concerns. Prefer profiling, preallocation, `sync.Pool`, and shorter object lifetimes. Source: https://github.com/golang/go/issues/51317
 - Set `GOMEMLIMIT` to prevent OOM kills in containerized deployments
 
 ## See Also

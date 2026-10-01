@@ -12,7 +12,7 @@ Scaffold a production-grade multi-stage Dockerfile for a Go application.
 ### Multi-Stage Dockerfile
 ```dockerfile
 # ---- Build Stage ----
-FROM golang:1.22-alpine AS build
+FROM golang:1.27-alpine AS build
 WORKDIR /app
 
 # Copy go.mod/go.sum first for layer caching
@@ -59,7 +59,7 @@ ENTRYPOINT ["/server"]
 
 ### With Embedded Migrations
 ```dockerfile
-FROM golang:1.22-alpine AS build
+FROM golang:1.27-alpine AS build
 WORKDIR /app
 
 COPY go.mod go.sum ./
@@ -109,13 +109,13 @@ services:
         condition: service_healthy
 
   db:
-    image: postgres:16-alpine
+    image: postgres:18-alpine
     environment:
       POSTGRES_DB: mydb
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: postgres
     volumes:
-      - pgdata:/var/lib/postgresql/data
+      - pgdata:/var/lib/postgresql
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U postgres"]
       interval: 5s

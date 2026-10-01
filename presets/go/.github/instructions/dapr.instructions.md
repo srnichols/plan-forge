@@ -5,7 +5,7 @@ applyTo: '**/*dapr*,**/*worker*,**/components/**,**/*workflow*'
 
 # Go Dapr Patterns
 
-> **Standard**: Dapr v1.14+ with `github.com/dapr/go-sdk`  
+> **Standard**: Dapr v1.18+ with `github.com/dapr/go-sdk`
 > **Package**: `github.com/dapr/go-sdk/client`, `github.com/dapr/go-sdk/service`  
 > **Cross-ref**: `messaging.instructions.md` covers pub/sub schemas and CloudEvents
 

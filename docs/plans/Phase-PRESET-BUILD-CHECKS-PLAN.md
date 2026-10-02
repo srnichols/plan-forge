@@ -127,6 +127,10 @@ node scripts/audit/preset-build/run.mjs --stack rust
 
 ### Slice 3: Swift package harness [P] [depends: Slice 1] [scope: scripts/audit/preset-build/swift/**]
 
+**WorkerTimeoutMs**: 90m
+
+> A partial harness from an interrupted run is already committed under `scripts/audit/preset-build/swift/` (scaffold, per-file test targets, stub modules for Apple-only frameworks, a draft `manifest.json`). Continue from it rather than starting over. Each `swift build` in a fresh container re-resolves Vapor; mount or reuse a `.build` cache where `run.mjs` allows it.
+
 1. Create `scripts/audit/preset-build/swift/scaffold/` (a `Package.swift` with the Vapor, Fluent and testing dependencies the preset uses, pinned, plus `Sources/App` and `Tests/AppTests` stubs).
 2. Write `swift/manifest.json` mapping all 156 `swift` blocks. Skip, with a reason, blocks that need Apple-only frameworks (SwiftUI, UIKit) that `swift:6.4-noble` cannot build; list those in the PR description.
 3. Make `run.mjs --stack swift` pass (`swift build --build-tests`), fixing any failing sample in its own commit.
@@ -138,6 +142,8 @@ node scripts/audit/preset-build/run.mjs --stack swift
 ```
 
 ### Slice 4: run.mjs and Docker builds [depends: Slice 2, Slice 3] [scope: scripts/audit/preset-build/run.mjs, scripts/audit/preset-build/docker/**]
+
+> Slice 2 already created `run.mjs` with the `--stack rust` path; extend it rather than replacing it.
 
 1. Finish `run.mjs`: start `services` containers on a private Docker network, run `check` in `image`, then for every `dockerfile` block in the stack's preset build it against the extracted project, run it, and poll its documented health path (default `/health`) for up to 60 seconds.
 2. For dotnet, go, java, python, typescript and php, add `scripts/audit/preset-build/docker/<stack>/` with the smallest app that serves the health path the preset's Dockerfile and deploy instructions describe, and the build manifest entries for their Dockerfile blocks.

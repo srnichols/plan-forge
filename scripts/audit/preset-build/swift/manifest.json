@@ -1,0 +1,1182 @@
+{
+  "stack": "swift",
+  "language": "swift",
+  "image": "swift:6.4-noble",
+  "check": "swift build --build-tests",
+  "blocks": [
+    {
+      "file": ".github/agents/architecture-reviewer.agent.md",
+      "index": 0,
+      "lang": "swift",
+      "to": "Tests/ArchitectureReviewerAgentTests/Samples.swift",
+      "mode": "append"
+    },
+    {
+      "file": ".github/agents/architecture-reviewer.agent.md",
+      "index": 1,
+      "lang": "swift",
+      "to": "Tests/ArchitectureReviewerAgentTests/Samples.swift",
+      "mode": "append"
+    },
+    {
+      "file": ".github/agents/architecture-reviewer.agent.md",
+      "index": 2,
+      "lang": "swift",
+      "to": "Tests/ArchitectureReviewerAgentTests/Samples.swift",
+      "mode": "append"
+    },
+    {
+      "file": ".github/agents/database-reviewer.agent.md",
+      "index": 0,
+      "lang": "swift",
+      "to": "Tests/DatabaseReviewerAgentTests/Samples.swift",
+      "mode": "append"
+    },
+    {
+      "file": ".github/agents/database-reviewer.agent.md",
+      "index": 1,
+      "lang": "swift",
+      "to": "Tests/DatabaseReviewerAgentTests/Samples.swift",
+      "mode": "append"
+    },
+    {
+      "file": ".github/agents/database-reviewer.agent.md",
+      "index": 2,
+      "lang": "swift",
+      "to": "Tests/DatabaseReviewerAgentTests/Samples.swift",
+      "mode": "append"
+    },
+    {
+      "file": ".github/agents/performance-analyzer.agent.md",
+      "index": 2,
+      "lang": "swift",
+      "to": "Tests/PerformanceAnalyzerAgentTests/Samples.swift",
+      "mode": "append"
+    },
+    {
+      "file": ".github/agents/security-reviewer.agent.md",
+      "index": 1,
+      "lang": "swift",
+      "to": "Tests/SecurityReviewerAgentTests/Samples.swift",
+      "mode": "append"
+    },
+    {
+      "file": ".github/instructions/api-patterns.instructions.md",
+      "index": 0,
+      "lang": "swift",
+      "to": "Tests/ApiPatternsInstructionsTests/Samples.swift",
+      "mode": "append"
+    },
+    {
+      "file": ".github/instructions/api-patterns.instructions.md",
+      "index": 1,
+      "lang": "swift",
+      "to": "Tests/ApiPatternsInstructionsTests/Samples.swift",
+      "mode": "append"
+    },
+    {
+      "file": ".github/instructions/api-patterns.instructions.md",
+      "index": 2,
+      "lang": "swift",
+      "to": "Tests/ApiPatternsInstructionsTests/Samples.swift",
+      "mode": "append"
+    },
+    {
+      "file": ".github/instructions/api-patterns.instructions.md",
+      "index": 3,
+      "lang": "swift",
+      "to": "Tests/ApiPatternsInstructionsTests/Samples.swift",
+      "mode": "append"
+    },
+    {
+      "file": ".github/instructions/api-patterns.instructions.md",
+      "index": 4,
+      "lang": "swift",
+      "to": "Tests/ApiPatternsInstructionsTests/Samples.swift",
+      "mode": "append"
+    },
+    {
+      "file": ".github/instructions/api-patterns.instructions.md",
+      "index": 5,
+      "lang": "swift",
+      "to": "Tests/ApiPatternsInstructionsTests/Samples.swift",
+      "mode": "append"
+    },
+    {
+      "file": ".github/instructions/api-patterns.instructions.md",
+      "index": 6,
+      "lang": "swift",
+      "to": "Tests/ApiPatternsInstructionsTests/Samples.swift",
+      "mode": "append"
+    },
+    {
+      "file": ".github/instructions/auth.instructions.md",
+      "index": 0,
+      "lang": "swift",
+      "to": "Tests/AuthInstructionsTests/Samples.swift",
+      "mode": "append"
+    },
+    {
+      "file": ".github/instructions/auth.instructions.md",
+      "index": 1,
+      "lang": "swift",
+      "to": "Tests/AuthInstructionsTests/Samples.swift",
+      "mode": "append"
+    },
+    {
+      "file": ".github/instructions/auth.instructions.md",
+      "index": 2,
+      "lang": "swift",
+      "to": "Tests/AuthInstructionsTests/Samples.swift",
+      "mode": "append"
+    },
+    {
+      "file": ".github/instructions/auth.instructions.md",
+      "index": 3,
+      "lang": "swift",
+      "to": "Tests/AuthInstructionsTests/Samples.swift",
+      "mode": "append"
+    },
+    {
+      "file": ".github/instructions/auth.instructions.md",
+      "index": 4,
+      "lang": "swift",
+      "to": "Tests/AuthInstructionsTests/Samples.swift",
+      "mode": "append"
+    },
+    {
+      "file": ".github/instructions/auth.instructions.md",
+      "index": 5,
+      "lang": "swift",
+      "to": "Tests/AuthInstructionsTests/Samples.swift",
+      "mode": "append"
+    },
+    {
+      "file": ".github/instructions/auth.instructions.md",
+      "index": 8,
+      "lang": "swift",
+      "to": "Tests/AuthInstructionsTests/Samples.swift",
+      "mode": "append"
+    },
+    {
+      "file": ".github/instructions/auth.instructions.md",
+      "index": 9,
+      "lang": "swift",
+      "to": "Tests/AuthInstructionsTests/Samples.swift",
+      "mode": "append"
+    },
+    {
+      "file": ".github/instructions/caching.instructions.md",
+      "index": 0,
+      "lang": "swift",
+      "to": "Tests/CachingInstructionsTests/Samples.swift",
+      "mode": "append"
+    },
+    {
+      "file": ".github/instructions/caching.instructions.md",
+      "index": 1,
+      "lang": "swift",
+      "to": "Tests/CachingInstructionsTests/Samples.swift",
+      "mode": "append"
+    },
+    {
+      "file": ".github/instructions/caching.instructions.md",
+      "index": 2,
+      "lang": "swift",
+      "to": "Tests/CachingInstructionsTests/Samples.swift",
+      "mode": "append"
+    },
+    {
+      "file": ".github/instructions/caching.instructions.md",
+      "index": 3,
+      "lang": "swift",
+      "to": "Tests/CachingInstructionsTests/Samples.swift",
+      "mode": "append"
+    },
+    {
+      "file": ".github/instructions/caching.instructions.md",
+      "index": 4,
+      "lang": "swift",
+      "to": "Tests/CachingInstructionsTests/Samples.swift",
+      "mode": "append"
+    },
+    {
+      "file": ".github/instructions/caching.instructions.md",
+      "index": 5,
+      "lang": "swift",
+      "to": "Tests/CachingInstructionsTests/Samples.swift",
+      "mode": "append"
+    },
+    {
+      "file": ".github/instructions/caching.instructions.md",
+      "index": 6,
+      "lang": "swift",
+      "to": "Tests/CachingInstructionsTests/Samples.swift",
+      "mode": "append"
+    },
+    {
+      "file": ".github/instructions/database.instructions.md",
+      "index": 0,
+      "lang": "swift",
+      "to": "Tests/DatabaseInstructionsTests/Samples.swift",
+      "mode": "append"
+    },
+    {
+      "file": ".github/instructions/database.instructions.md",
+      "index": 1,
+      "lang": "swift",
+      "to": "Tests/DatabaseInstructionsTests/Samples.swift",
+      "mode": "append"
+    },
+    {
+      "file": ".github/instructions/database.instructions.md",
+      "index": 2,
+      "lang": "swift",
+      "to": "Tests/DatabaseInstructionsTests/Samples.swift",
+      "mode": "append"
+    },
+    {
+      "file": ".github/instructions/database.instructions.md",
+      "index": 3,
+      "lang": "swift",
+      "to": "Tests/DatabaseInstructionsTests/Samples.swift",
+      "mode": "append"
+    },
+    {
+      "file": ".github/instructions/database.instructions.md",
+      "index": 4,
+      "lang": "swift",
+      "to": "Tests/DatabaseInstructionsTests/Samples.swift",
+      "mode": "append"
+    },
+    {
+      "file": ".github/instructions/deploy.instructions.md",
+      "index": 0,
+      "lang": "swift",
+      "to": "Tests/DeployInstructionsTests/Samples.swift",
+      "mode": "append"
+    },
+    {
+      "file": ".github/instructions/errorhandling.instructions.md",
+      "index": 0,
+      "lang": "swift",
+      "to": "Tests/ErrorHandlingInstructionsTests/Samples.swift",
+      "mode": "append"
+    },
+    {
+      "file": ".github/instructions/errorhandling.instructions.md",
+      "index": 1,
+      "lang": "swift",
+      "to": "Tests/ErrorHandlingInstructionsTests/Samples.swift",
+      "mode": "append"
+    },
+    {
+      "file": ".github/instructions/errorhandling.instructions.md",
+      "index": 2,
+      "lang": "swift",
+      "to": "Tests/ErrorHandlingInstructionsTests/Samples.swift",
+      "mode": "append"
+    },
+    {
+      "file": ".github/instructions/errorhandling.instructions.md",
+      "index": 3,
+      "lang": "swift",
+      "to": "Tests/ErrorHandlingInstructionsTests/Samples.swift",
+      "mode": "append"
+    },
+    {
+      "file": ".github/instructions/errorhandling.instructions.md",
+      "index": 4,
+      "lang": "swift",
+      "to": "Tests/ErrorHandlingInstructionsTests/Samples.swift",
+      "mode": "append"
+    },
+    {
+      "file": ".github/instructions/messaging.instructions.md",
+      "index": 0,
+      "lang": "swift",
+      "to": "Tests/MessagingInstructionsTests/Samples.swift",
+      "mode": "append"
+    },
+    {
+      "file": ".github/instructions/messaging.instructions.md",
+      "index": 1,
+      "lang": "swift",
+      "to": "Tests/MessagingInstructionsTests/Samples.swift",
+      "mode": "append"
+    },
+    {
+      "file": ".github/instructions/messaging.instructions.md",
+      "index": 2,
+      "lang": "swift",
+      "to": "Tests/MessagingInstructionsTests/Samples.swift",
+      "mode": "append"
+    },
+    {
+      "file": ".github/instructions/messaging.instructions.md",
+      "index": 3,
+      "lang": "swift",
+      "to": "Tests/MessagingInstructionsTests/Samples.swift",
+      "mode": "append"
+    },
+    {
+      "file": ".github/instructions/messaging.instructions.md",
+      "index": 4,
+      "lang": "swift",
+      "to": "Tests/MessagingInstructionsTests/Samples.swift",
+      "mode": "append"
+    },
+    {
+      "file": ".github/instructions/messaging.instructions.md",
+      "index": 5,
+      "lang": "swift",
+      "to": "Tests/MessagingInstructionsTests/Samples.swift",
+      "mode": "append"
+    },
+    {
+      "file": ".github/instructions/messaging.instructions.md",
+      "index": 6,
+      "lang": "swift",
+      "to": "Tests/MessagingInstructionsTests/Samples.swift",
+      "mode": "append"
+    },
+    {
+      "file": ".github/instructions/messaging.instructions.md",
+      "index": 7,
+      "lang": "swift",
+      "to": "Tests/MessagingInstructionsTests/Samples.swift",
+      "mode": "append"
+    },
+    {
+      "file": ".github/instructions/messaging.instructions.md",
+      "index": 8,
+      "lang": "swift",
+      "to": "Tests/MessagingInstructionsTests/Samples.swift",
+      "mode": "append"
+    },
+    {
+      "file": ".github/instructions/messaging.instructions.md",
+      "index": 9,
+      "lang": "swift",
+      "to": "Tests/MessagingInstructionsTests/Samples.swift",
+      "mode": "append"
+    },
+    {
+      "file": ".github/instructions/multi-environment.instructions.md",
+      "index": 0,
+      "lang": "swift",
+      "to": "Tests/MultiEnvironmentInstructionsTests/Samples.swift",
+      "mode": "append"
+    },
+    {
+      "file": ".github/instructions/multi-environment.instructions.md",
+      "index": 1,
+      "lang": "swift",
+      "to": "Tests/MultiEnvironmentInstructionsTests/Samples.swift",
+      "mode": "append"
+    },
+    {
+      "file": ".github/instructions/multi-environment.instructions.md",
+      "index": 2,
+      "lang": "swift",
+      "to": "Tests/MultiEnvironmentInstructionsTests/Samples.swift",
+      "mode": "append"
+    },
+    {
+      "file": ".github/instructions/multi-environment.instructions.md",
+      "index": 3,
+      "lang": "swift",
+      "to": "Tests/MultiEnvironmentInstructionsTests/Samples.swift",
+      "mode": "append"
+    },
+    {
+      "file": ".github/instructions/observability.instructions.md",
+      "index": 0,
+      "lang": "swift",
+      "to": "Tests/ObservabilityInstructionsTests/Samples.swift",
+      "mode": "append"
+    },
+    {
+      "file": ".github/instructions/observability.instructions.md",
+      "index": 1,
+      "lang": "swift",
+      "to": "Tests/ObservabilityInstructionsTests/Samples.swift",
+      "mode": "append"
+    },
+    {
+      "file": ".github/instructions/observability.instructions.md",
+      "index": 2,
+      "lang": "swift",
+      "to": "Tests/ObservabilityInstructionsTests/Samples.swift",
+      "mode": "append"
+    },
+    {
+      "file": ".github/instructions/observability.instructions.md",
+      "index": 3,
+      "lang": "swift",
+      "to": "Tests/ObservabilityInstructionsTests/Samples.swift",
+      "mode": "append"
+    },
+    {
+      "file": ".github/instructions/observability.instructions.md",
+      "index": 4,
+      "lang": "swift",
+      "to": "Tests/ObservabilityInstructionsTests/Samples.swift",
+      "mode": "append"
+    },
+    {
+      "file": ".github/instructions/observability.instructions.md",
+      "index": 5,
+      "lang": "swift",
+      "to": "Tests/ObservabilityInstructionsTests/Samples.swift",
+      "mode": "append"
+    },
+    {
+      "file": ".github/instructions/observability.instructions.md",
+      "index": 6,
+      "lang": "swift",
+      "to": "Tests/ObservabilityInstructionsTests/Samples.swift",
+      "mode": "append"
+    },
+    {
+      "file": ".github/instructions/observability.instructions.md",
+      "index": 7,
+      "lang": "swift",
+      "to": "Tests/ObservabilityInstructionsTests/Samples.swift",
+      "mode": "append"
+    },
+    {
+      "file": ".github/instructions/observability.instructions.md",
+      "index": 8,
+      "lang": "swift",
+      "to": "Tests/ObservabilityInstructionsTests/Samples.swift",
+      "mode": "append"
+    },
+    {
+      "file": ".github/instructions/performance.instructions.md",
+      "index": 2,
+      "lang": "swift",
+      "to": "Tests/PerformanceInstructionsTests/Samples.swift",
+      "mode": "append"
+    },
+    {
+      "file": ".github/instructions/performance.instructions.md",
+      "index": 3,
+      "lang": "swift",
+      "to": "Tests/PerformanceInstructionsTests/Samples.swift",
+      "mode": "append"
+    },
+    {
+      "file": ".github/instructions/performance.instructions.md",
+      "index": 5,
+      "lang": "swift",
+      "to": "Tests/PerformanceInstructionsTests/Samples.swift",
+      "mode": "append"
+    },
+    {
+      "file": ".github/instructions/performance.instructions.md",
+      "index": 6,
+      "lang": "swift",
+      "to": "Tests/PerformanceInstructionsTests/Samples.swift",
+      "mode": "append"
+    },
+    {
+      "file": ".github/instructions/performance.instructions.md",
+      "index": 7,
+      "lang": "swift",
+      "to": "Tests/PerformanceInstructionsTests/Samples.swift",
+      "mode": "append"
+    },
+    {
+      "file": ".github/instructions/performance.instructions.md",
+      "index": 8,
+      "lang": "swift",
+      "to": "Tests/PerformanceInstructionsTests/Samples.swift",
+      "mode": "append"
+    },
+    {
+      "file": ".github/instructions/security.instructions.md",
+      "index": 0,
+      "lang": "swift",
+      "to": "Tests/SecurityInstructionsTests/Samples.swift",
+      "mode": "append"
+    },
+    {
+      "file": ".github/instructions/security.instructions.md",
+      "index": 1,
+      "lang": "swift",
+      "to": "Tests/SecurityInstructionsTests/Samples.swift",
+      "mode": "append"
+    },
+    {
+      "file": ".github/instructions/security.instructions.md",
+      "index": 2,
+      "lang": "swift",
+      "to": "Tests/SecurityInstructionsTests/Samples.swift",
+      "mode": "append"
+    },
+    {
+      "file": ".github/instructions/security.instructions.md",
+      "index": 3,
+      "lang": "swift",
+      "to": "Tests/SecurityInstructionsTests/Samples.swift",
+      "mode": "append"
+    },
+    {
+      "file": ".github/instructions/security.instructions.md",
+      "index": 4,
+      "lang": "swift",
+      "to": "Tests/SecurityInstructionsTests/Samples.swift",
+      "mode": "append"
+    },
+    {
+      "file": ".github/instructions/security.instructions.md",
+      "index": 5,
+      "lang": "swift",
+      "to": "Tests/SecurityInstructionsTests/Samples.swift",
+      "mode": "append"
+    },
+    {
+      "file": ".github/instructions/security.instructions.md",
+      "index": 6,
+      "lang": "swift",
+      "to": "Tests/SecurityInstructionsTests/Samples.swift",
+      "mode": "append"
+    },
+    {
+      "file": ".github/instructions/security.instructions.md",
+      "index": 7,
+      "lang": "swift",
+      "to": "Tests/SecurityInstructionsTests/Samples.swift",
+      "mode": "append"
+    },
+    {
+      "file": ".github/instructions/security.instructions.md",
+      "index": 8,
+      "lang": "swift",
+      "to": "Tests/SecurityInstructionsTests/Samples.swift",
+      "mode": "append"
+    },
+    {
+      "file": ".github/instructions/security.instructions.md",
+      "index": 9,
+      "lang": "swift",
+      "to": "Tests/SecurityInstructionsTests/Samples.swift",
+      "mode": "append"
+    },
+    {
+      "file": ".github/instructions/swiftui.instructions.md",
+      "index": 0,
+      "lang": "swift",
+      "to": "Tests/SwiftuiInstructionsTests/Samples.swift",
+      "mode": "append"
+    },
+    {
+      "file": ".github/instructions/swiftui.instructions.md",
+      "index": 1,
+      "lang": "swift",
+      "to": "Tests/SwiftuiInstructionsTests/Samples.swift",
+      "mode": "append"
+    },
+    {
+      "file": ".github/instructions/swiftui.instructions.md",
+      "index": 2,
+      "lang": "swift",
+      "to": "Tests/SwiftuiInstructionsTests/Samples.swift",
+      "mode": "append"
+    },
+    {
+      "file": ".github/instructions/testing.instructions.md",
+      "index": 0,
+      "lang": "swift",
+      "to": "Tests/TestingInstructionsTests/Samples.swift",
+      "mode": "append"
+    },
+    {
+      "file": ".github/instructions/testing.instructions.md",
+      "index": 1,
+      "lang": "swift",
+      "to": "Tests/TestingInstructionsTests/Samples.swift",
+      "mode": "append"
+    },
+    {
+      "file": ".github/instructions/testing.instructions.md",
+      "index": 2,
+      "lang": "swift",
+      "to": "Tests/TestingInstructionsTests/Samples.swift",
+      "mode": "append"
+    },
+    {
+      "file": ".github/instructions/version.instructions.md",
+      "index": 3,
+      "lang": "swift",
+      "to": "Tests/VersionInstructionsTests/Samples.swift",
+      "mode": "append"
+    },
+    {
+      "file": ".github/prompts/bug-fix-tdd.prompt.md",
+      "index": 0,
+      "lang": "swift",
+      "to": "Tests/NewTestPromptTests/Samples.swift",
+      "mode": "append"
+    },
+    {
+      "file": ".github/prompts/bug-fix-tdd.prompt.md",
+      "index": 1,
+      "lang": "swift",
+      "to": "Tests/NewTestPromptTests/Samples.swift",
+      "mode": "append"
+    },
+    {
+      "file": ".github/prompts/bug-fix-tdd.prompt.md",
+      "index": 2,
+      "lang": "swift",
+      "to": "Tests/NewTestPromptTests/Samples.swift",
+      "mode": "append"
+    },
+    {
+      "file": ".github/prompts/bug-fix-tdd.prompt.md",
+      "index": 3,
+      "lang": "swift",
+      "to": "Tests/NewTestPromptTests/Samples.swift",
+      "mode": "append"
+    },
+    {
+      "file": ".github/prompts/new-config.prompt.md",
+      "index": 0,
+      "lang": "swift",
+      "to": "Tests/NewConfigPromptTests/Samples.swift",
+      "mode": "append"
+    },
+    {
+      "file": ".github/prompts/new-config.prompt.md",
+      "index": 1,
+      "lang": "swift",
+      "to": "Tests/NewConfigPromptTests/Samples.swift",
+      "mode": "append"
+    },
+    {
+      "file": ".github/prompts/new-config.prompt.md",
+      "index": 2,
+      "lang": "swift",
+      "to": "Tests/NewConfigPromptTests/Samples.swift",
+      "mode": "append"
+    },
+    {
+      "file": ".github/prompts/new-config.prompt.md",
+      "index": 3,
+      "lang": "swift",
+      "to": "Tests/NewConfigPromptTests/Samples.swift",
+      "mode": "append"
+    },
+    {
+      "file": ".github/prompts/new-config.prompt.md",
+      "index": 4,
+      "lang": "swift",
+      "to": "Tests/NewConfigPromptTests/Samples.swift",
+      "mode": "append"
+    },
+    {
+      "file": ".github/prompts/new-config.prompt.md",
+      "index": 5,
+      "lang": "swift",
+      "to": "Tests/NewConfigPromptTests/Samples.swift",
+      "mode": "append"
+    },
+    {
+      "file": ".github/prompts/new-controller.prompt.md",
+      "index": 0,
+      "lang": "swift",
+      "to": "Tests/NewControllerPromptTests/Samples.swift",
+      "mode": "append",
+      "fill": {
+        "{EntityName}": "Order",
+        "{entityName}": "order",
+        "{entity_name}": "orders",
+        "{ModuleName}": "App"
+      }
+    },
+    {
+      "file": ".github/prompts/new-controller.prompt.md",
+      "index": 1,
+      "lang": "swift",
+      "to": "Tests/NewControllerPromptTests/Samples.swift",
+      "mode": "append",
+      "fill": {
+        "{EntityName}": "Order",
+        "{entityName}": "order",
+        "{entity_name}": "orders",
+        "{ModuleName}": "App"
+      }
+    },
+    {
+      "file": ".github/prompts/new-dto.prompt.md",
+      "index": 0,
+      "lang": "swift",
+      "to": "Tests/NewDtoPromptTests/Samples.swift",
+      "mode": "append",
+      "fill": {
+        "{EntityName}": "Order",
+        "{entityName}": "order",
+        "{entity_name}": "orders",
+        "{ModuleName}": "App"
+      }
+    },
+    {
+      "file": ".github/prompts/new-dto.prompt.md",
+      "index": 1,
+      "lang": "swift",
+      "to": "Tests/NewDtoPromptTests/Samples.swift",
+      "mode": "append",
+      "fill": {
+        "{EntityName}": "Order",
+        "{entityName}": "order",
+        "{entity_name}": "orders",
+        "{ModuleName}": "App"
+      }
+    },
+    {
+      "file": ".github/prompts/new-dto.prompt.md",
+      "index": 2,
+      "lang": "swift",
+      "to": "Tests/NewDtoPromptTests/Samples.swift",
+      "mode": "append",
+      "fill": {
+        "{EntityName}": "Order",
+        "{entityName}": "order",
+        "{entity_name}": "orders",
+        "{ModuleName}": "App"
+      }
+    },
+    {
+      "file": ".github/prompts/new-dto.prompt.md",
+      "index": 3,
+      "lang": "swift",
+      "to": "Tests/NewDtoPromptTests/Samples.swift",
+      "mode": "append"
+    },
+    {
+      "file": ".github/prompts/new-dto.prompt.md",
+      "index": 4,
+      "lang": "swift",
+      "to": "Tests/NewDtoPromptTests/Samples.swift",
+      "mode": "append",
+      "fill": {
+        "{EntityName}": "Order",
+        "{entityName}": "order",
+        "{entity_name}": "orders",
+        "{ModuleName}": "App"
+      }
+    },
+    {
+      "file": ".github/prompts/new-entity.prompt.md",
+      "index": 0,
+      "lang": "swift",
+      "to": "Tests/NewEntityPromptTests/Samples.swift",
+      "mode": "append",
+      "fill": {
+        "{EntityName}": "Order",
+        "{entityName}": "order",
+        "{entity_name}": "orders",
+        "{ModuleName}": "App"
+      }
+    },
+    {
+      "file": ".github/prompts/new-entity.prompt.md",
+      "index": 1,
+      "lang": "swift",
+      "to": "Tests/NewEntityPromptTests/Samples.swift",
+      "mode": "append",
+      "fill": {
+        "{EntityName}": "Order",
+        "{entityName}": "order",
+        "{entity_name}": "orders",
+        "{ModuleName}": "App"
+      }
+    },
+    {
+      "file": ".github/prompts/new-entity.prompt.md",
+      "index": 2,
+      "lang": "swift",
+      "to": "Tests/NewEntityPromptTests/Samples.swift",
+      "mode": "append",
+      "fill": {
+        "{EntityName}": "Order",
+        "{entityName}": "order",
+        "{entity_name}": "orders",
+        "{ModuleName}": "App"
+      }
+    },
+    {
+      "file": ".github/prompts/new-entity.prompt.md",
+      "index": 4,
+      "lang": "swift",
+      "to": "Tests/NewEntityPromptTests/Samples.swift",
+      "mode": "append",
+      "fill": {
+        "{EntityName}": "Order",
+        "{entityName}": "order",
+        "{entity_name}": "orders",
+        "{ModuleName}": "App"
+      }
+    },
+    {
+      "file": ".github/prompts/new-error-types.prompt.md",
+      "index": 0,
+      "lang": "swift",
+      "to": "Tests/NewErrorTypesPromptTests/Samples.swift",
+      "mode": "append"
+    },
+    {
+      "file": ".github/prompts/new-error-types.prompt.md",
+      "index": 1,
+      "lang": "swift",
+      "to": "Tests/NewErrorTypesPromptTests/Samples.swift",
+      "mode": "append"
+    },
+    {
+      "file": ".github/prompts/new-error-types.prompt.md",
+      "index": 2,
+      "lang": "swift",
+      "to": "Tests/NewErrorTypesPromptTests/Samples.swift",
+      "mode": "append"
+    },
+    {
+      "file": ".github/prompts/new-error-types.prompt.md",
+      "index": 3,
+      "lang": "swift",
+      "to": "Tests/NewErrorTypesPromptTests/Samples.swift",
+      "mode": "append"
+    },
+    {
+      "file": ".github/prompts/new-event-handler.prompt.md",
+      "index": 0,
+      "lang": "swift",
+      "to": "Tests/NewEventHandlerPromptTests/Samples.swift",
+      "mode": "append"
+    },
+    {
+      "file": ".github/prompts/new-event-handler.prompt.md",
+      "index": 1,
+      "lang": "swift",
+      "to": "Tests/NewEventHandlerPromptTests/Samples.swift",
+      "mode": "append"
+    },
+    {
+      "file": ".github/prompts/new-event-handler.prompt.md",
+      "index": 2,
+      "lang": "swift",
+      "to": "Tests/NewEventHandlerPromptTests/Samples.swift",
+      "mode": "append"
+    },
+    {
+      "file": ".github/prompts/new-event-handler.prompt.md",
+      "index": 3,
+      "lang": "swift",
+      "to": "Tests/NewEventHandlerPromptTests/Samples.swift",
+      "mode": "append"
+    },
+    {
+      "file": ".github/prompts/new-event-handler.prompt.md",
+      "index": 4,
+      "lang": "swift",
+      "to": "Tests/NewEventHandlerPromptTests/Samples.swift",
+      "mode": "append"
+    },
+    {
+      "file": ".github/prompts/new-middleware.prompt.md",
+      "index": 0,
+      "lang": "swift",
+      "to": "Tests/NewMiddlewarePromptTests/Samples.swift",
+      "mode": "append"
+    },
+    {
+      "file": ".github/prompts/new-middleware.prompt.md",
+      "index": 1,
+      "lang": "swift",
+      "to": "Tests/NewMiddlewarePromptTests/Samples.swift",
+      "mode": "append"
+    },
+    {
+      "file": ".github/prompts/new-middleware.prompt.md",
+      "index": 2,
+      "lang": "swift",
+      "to": "Tests/NewMiddlewarePromptTests/Samples.swift",
+      "mode": "append"
+    },
+    {
+      "file": ".github/prompts/new-middleware.prompt.md",
+      "index": 3,
+      "lang": "swift",
+      "to": "Tests/NewMiddlewarePromptTests/Samples.swift",
+      "mode": "append"
+    },
+    {
+      "file": ".github/prompts/new-repository.prompt.md",
+      "index": 0,
+      "lang": "swift",
+      "to": "Tests/NewRepositoryPromptTests/Samples.swift",
+      "mode": "append",
+      "fill": {
+        "{EntityName}": "Order",
+        "{entityName}": "order",
+        "{entity_name}": "orders",
+        "{ModuleName}": "App"
+      }
+    },
+    {
+      "file": ".github/prompts/new-repository.prompt.md",
+      "index": 1,
+      "lang": "swift",
+      "to": "Tests/NewRepositoryPromptTests/Samples.swift",
+      "mode": "append",
+      "fill": {
+        "{EntityName}": "Order",
+        "{entityName}": "order",
+        "{entity_name}": "orders",
+        "{ModuleName}": "App"
+      }
+    },
+    {
+      "file": ".github/prompts/new-repository.prompt.md",
+      "index": 3,
+      "lang": "swift",
+      "to": "Tests/NewRepositoryPromptTests/Samples.swift",
+      "mode": "append",
+      "fill": {
+        "{EntityName}": "Order",
+        "{entityName}": "order",
+        "{entity_name}": "orders",
+        "{ModuleName}": "App"
+      }
+    },
+    {
+      "file": ".github/prompts/new-service.prompt.md",
+      "index": 0,
+      "lang": "swift",
+      "to": "Tests/NewServicePromptTests/Samples.swift",
+      "mode": "append",
+      "fill": {
+        "{EntityName}": "Order",
+        "{entityName}": "order",
+        "{entity_name}": "orders",
+        "{ModuleName}": "App"
+      }
+    },
+    {
+      "file": ".github/prompts/new-service.prompt.md",
+      "index": 1,
+      "lang": "swift",
+      "to": "Tests/NewServicePromptTests/Samples.swift",
+      "mode": "append",
+      "fill": {
+        "{EntityName}": "Order",
+        "{entityName}": "order",
+        "{entity_name}": "orders",
+        "{ModuleName}": "App"
+      }
+    },
+    {
+      "file": ".github/prompts/new-service.prompt.md",
+      "index": 2,
+      "lang": "swift",
+      "to": "Tests/NewServicePromptTests/Samples.swift",
+      "mode": "append",
+      "fill": {
+        "{EntityName}": "Order",
+        "{entityName}": "order",
+        "{entity_name}": "orders",
+        "{ModuleName}": "App"
+      }
+    },
+    {
+      "file": ".github/prompts/new-service.prompt.md",
+      "index": 3,
+      "lang": "swift",
+      "to": "Tests/NewServicePromptTests/Samples.swift",
+      "mode": "append",
+      "fill": {
+        "{EntityName}": "Order",
+        "{entityName}": "order",
+        "{entity_name}": "orders",
+        "{ModuleName}": "App"
+      }
+    },
+    {
+      "file": ".github/prompts/new-test.prompt.md",
+      "index": 0,
+      "lang": "swift",
+      "to": "Tests/NewTestPromptTests/Samples.swift",
+      "mode": "append",
+      "fill": {
+        "{EntityName}": "Order",
+        "{entityName}": "order",
+        "{entity_name}": "orders",
+        "{ModuleName}": "App"
+      }
+    },
+    {
+      "file": ".github/prompts/new-test.prompt.md",
+      "index": 1,
+      "lang": "swift",
+      "to": "Tests/NewTestPromptTests/Samples.swift",
+      "mode": "append",
+      "fill": {
+        "{EntityName}": "Order",
+        "{entityName}": "order",
+        "{entity_name}": "orders",
+        "{ModuleName}": "App"
+      }
+    },
+    {
+      "file": ".github/prompts/new-test.prompt.md",
+      "index": 2,
+      "lang": "swift",
+      "to": "Tests/NewTestPromptTests/Samples.swift",
+      "mode": "append",
+      "fill": {
+        "{EntityName}": "Order",
+        "{entityName}": "order",
+        "{entity_name}": "orders",
+        "{ModuleName}": "App"
+      }
+    },
+    {
+      "file": ".github/skills/database-migration/SKILL.md",
+      "index": 0,
+      "lang": "swift",
+      "to": "Tests/DatabaseMigrationSkillTests/Samples.swift",
+      "mode": "append"
+    },
+    {
+      "file": ".github/skills/database-migration/SKILL.md",
+      "index": 1,
+      "lang": "swift",
+      "to": "Tests/DatabaseMigrationSkillTests/Samples.swift",
+      "mode": "append"
+    },
+    {
+      "file": "AGENTS.md",
+      "index": 0,
+      "lang": "swift",
+      "to": "Tests/AgentsDocTests/Samples.swift",
+      "mode": "append"
+    },
+    {
+      "file": "AGENTS.md",
+      "index": 1,
+      "lang": "swift",
+      "to": "Tests/AgentsDocTests/Samples.swift",
+      "mode": "append"
+    },
+    {
+      "file": "AGENTS.md",
+      "index": 4,
+      "lang": "swift",
+      "to": "Tests/AgentsDocTests/Samples.swift",
+      "mode": "append"
+    }
+  ],
+  "skip": [
+    {
+      "file": ".github/agents/performance-analyzer.agent.md",
+      "index": 0,
+      "reason": "Performance example is a top-level statement fragment (`reserveCapacity` loop) rather than a declaration, so it cannot compile standalone in a test target."
+    },
+    {
+      "file": ".github/agents/performance-analyzer.agent.md",
+      "index": 1,
+      "reason": "Performance example is a top-level route-registration statement fragment that requires an enclosing routes/configure function, so it cannot compile standalone in a test target."
+    },
+    {
+      "file": ".github/agents/security-reviewer.agent.md",
+      "index": 0,
+      "reason": "Imports Security, which would shadow swift-certificates' Apple-only Security extensions and break the Linux build graph."
+    },
+    {
+      "file": ".github/instructions/auth.instructions.md",
+      "index": 6,
+      "reason": "Imports Security, which would shadow swift-certificates' Apple-only Security extensions and break the Linux build graph."
+    },
+    {
+      "file": ".github/instructions/auth.instructions.md",
+      "index": 7,
+      "reason": "Imports AuthenticationServices, an Apple framework unavailable in swift:6.4-noble Linux."
+    },
+    {
+      "file": ".github/instructions/deploy.instructions.md",
+      "index": 1,
+      "reason": "Top-level guard-let/fatalError statement fragment (the \"Access in code\" snippet); executable statements are only allowed in an executable target's main.swift, not a library/test-target source file."
+    },
+    {
+      "file": ".github/instructions/performance.instructions.md",
+      "index": 0,
+      "reason": "NetworkSession sample leaves a private let property uninitialized, so it cannot compile standalone without changing the sample body."
+    },
+    {
+      "file": ".github/instructions/performance.instructions.md",
+      "index": 1,
+      "reason": "Copy-on-write sample uses top-level mutable globals that fail Swift 6 strict concurrency checks in the harness."
+    },
+    {
+      "file": ".github/instructions/performance.instructions.md",
+      "index": 4,
+      "reason": "Retain-cycle sample intentionally redeclares ViewModel twice in one file, which Swift rejects as an invalid redeclaration."
+    },
+    {
+      "file": ".github/instructions/swiftui.instructions.md",
+      "index": 3,
+      "reason": "Async .task/.onAppear modifier example is a receiver-less fragment, so it cannot compile as a standalone harness block."
+    },
+    {
+      "file": ".github/instructions/swiftui.instructions.md",
+      "index": 4,
+      "reason": "Uses #Preview macro, which swift:6.4-noble Linux cannot expand outside Apple SwiftUI preview tooling."
+    },
+    {
+      "file": ".github/instructions/version.instructions.md",
+      "index": 0,
+      "reason": "Mixes a valid Bundle extension with a top-level Logger.app.info(...) call; Logger.app is not a real swift-log API and the call is a top-level statement invalid outside an executable main.swift, so the block cannot compile standalone even with correct imports."
+    },
+    {
+      "file": ".github/instructions/version.instructions.md",
+      "index": 1,
+      "reason": "A complete standalone Package.swift manifest meant to BE a package manifest, not be embedded as source inside another package; compiling it as a library/test-target file is a category mismatch regardless of imports."
+    },
+    {
+      "file": ".github/instructions/version.instructions.md",
+      "index": 2,
+      "reason": "Bare dependencies: [...] label fragment intended to be read as a snippet of an enclosing Package() call; not a valid top-level construct on its own."
+    },
+    {
+      "file": ".github/prompts/new-entity.prompt.md",
+      "index": 3,
+      "reason": "Uses @Model from SwiftData, which requires Apple platform tooling unavailable in swift:6.4-noble Linux."
+    },
+    {
+      "file": ".github/prompts/new-repository.prompt.md",
+      "index": 2,
+      "reason": "Uses SwiftData repository APIs that require Apple SwiftData tooling unavailable in swift:6.4-noble Linux."
+    },
+    {
+      "file": ".github/skills/api-doc-gen/SKILL.md",
+      "index": 0,
+      "reason": "DocC example is a signature-only fragment with no enclosing protocol or implementation context, so it cannot compile as a standalone harness block."
+    },
+    {
+      "file": ".github/skills/database-migration/SKILL.md",
+      "index": 2,
+      "reason": "Uses SwiftData schema migration APIs that require Apple SwiftData tooling unavailable in swift:6.4-noble Linux."
+    },
+    {
+      "file": "AGENTS.md",
+      "index": 2,
+      "reason": "Top-level withThrowingTaskGroup statement referencing undeclared worker1/worker2/httpServer locals from an enclosing (unshown) function scope; executable statements are only allowed in an executable target's main.swift."
+    },
+    {
+      "file": "AGENTS.md",
+      "index": 3,
+      "reason": "References SwiftUI view bindings like $viewModel.hasError that require SwiftUI runtime/property-wrapper projection unavailable in the Linux harness."
+    }
+  ]
+}

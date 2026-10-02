@@ -539,7 +539,7 @@ forge_diagnose({ file: "src/auth/token-validator.ts", models: "grok-4.20-0309-no
           </table>
 
           <h3>Guidance files you edited</h3>
-          <p>Since v3.28.0, instruction, prompt, agent, skill, hook and runbook files are replaced only when your copy matches a version Plan Forge shipped. Setup's substitutions (project name, stack and setup date from <code>.forge.json</code>) are taken into account and filled in again on updated files.</p>
+          <p>Since v3.28.0, instruction, prompt, agent, skill, hook and runbook files are replaced only when your copy matches a version Plan Forge shipped. Setup's substitutions (project name, stack and setup date from <code>.forge.json</code>) are taken into account and filled in again on updated files, including files an older updater left with raw placeholders.</p>
           <p>If you edited a file, update keeps your copy, lists it as <code>KEEP</code>, and writes the new version to <code>.forge/update-pending/&lt;path&gt;</code> so you can merge what you want. Run with <code>--overwrite-customized</code> to take the new versions anyway; each replaced file is backed up to <code>.forge/update-backups/&lt;timestamp&gt;/&lt;path&gt;</code> first.</p>
 
           <div class="callout callout-info" class="callout-sm">

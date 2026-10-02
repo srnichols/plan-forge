@@ -1505,6 +1505,22 @@ function Resolve-UpdateGuard([string]$SourceRoot, [string]$ProjectRoot) {
     return $null
 }
 
+# #280: updaters before the guard copied guidance files with setup's
+# placeholders unrendered. Such a file matches the source byte for byte, so a
+# hash compare alone never offers it again; while the guard is active, a
+# guidance Markdown file that still holds a placeholder .forge.json can fill
+# is offered too, and the guard renders it (or keeps it, if it was edited).
+function Test-UpdateNeeded([string]$Src, [string]$Dst) {
+    if ((Get-FileHash $Src -Algorithm SHA256).Hash -ne (Get-FileHash $Dst -Algorithm SHA256).Hash) { return $true }
+    if (-not $script:FillablePlaceholders -or -not $Dst.EndsWith('.md', [StringComparison]::OrdinalIgnoreCase)) { return $false }
+    if (-not $Dst.StartsWith($RepoRoot, [StringComparison]::OrdinalIgnoreCase)) { return $false }
+    $rel = $Dst.Substring($RepoRoot.Length).TrimStart('\', '/').Replace('\', '/')
+    if ($rel -notmatch $script:GuidancePathPattern) { return $false }
+    $text = [IO.File]::ReadAllText($Dst)
+    foreach ($token in $script:FillablePlaceholders) { if ($text.Contains($token)) { return $true } }
+    return $false
+}
+
 function Invoke-UpdateGuard([string]$Guard, [string]$Mode, [object[]]$Items, [string]$SourceRoot, [string]$ProjectRoot, [switch]$OverwriteCustomized) {
     $list = [IO.Path]::GetTempFileName()
     try {
@@ -1827,6 +1843,17 @@ function Invoke-Update {
     $updates = @()
     $newFiles = @()
 
+    # #280: resolve the update guard before scanning, so preset files the project
+    # already has are offered only when the guard can keep the project's edits.
+    $updateGuard = Resolve-UpdateGuard -SourceRoot $sourcePath -ProjectRoot $RepoRoot
+    $script:FillablePlaceholders = @()
+    if ($updateGuard -and (Test-Path $configPath)) {
+        $placeholderConfig = Get-Content $configPath -Raw | ConvertFrom-Json
+        if ($placeholderConfig.projectName) { $script:FillablePlaceholders += '<YOUR PROJECT NAME>' }
+        if ($placeholderConfig.stack) { $script:FillablePlaceholders += '<YOUR TECH STACK>' }
+        if ($placeholderConfig.setupDate) { $script:FillablePlaceholders += '<DATE>' }
+    }
+
     # Update step prompts from .github/prompts/ in the source
     $srcPrompts = Join-Path $sourcePath ".github/prompts"
     $dstPrompts = Join-Path $RepoRoot ".github/prompts"
@@ -1836,9 +1863,7 @@ function Invoke-Update {
             if ($_.Name -eq 'project-principles.prompt.md') { return }
             $dstFile = Join-Path $dstPrompts $_.Name
             if (Test-Path $dstFile) {
-                $srcHash = (Get-FileHash $_.FullName -Algorithm SHA256).Hash
-                $dstHash = (Get-FileHash $dstFile -Algorithm SHA256).Hash
-                if ($srcHash -ne $dstHash) {
+                if (Test-UpdateNeeded $_.FullName $dstFile) {
                     $updates += @{ Src = $_.FullName; Dst = $dstFile; Name = ".github/prompts/$($_.Name)" }
                 }
             } else {
@@ -1856,9 +1881,7 @@ function Invoke-Update {
             $srcFile = Join-Path $srcAgents $agentName
             $dstFile = Join-Path $dstAgents $agentName
             if ((Test-Path $srcFile) -and (Test-Path $dstFile)) {
-                $srcHash = (Get-FileHash $srcFile -Algorithm SHA256).Hash
-                $dstHash = (Get-FileHash $dstFile -Algorithm SHA256).Hash
-                if ($srcHash -ne $dstHash) {
+                if (Test-UpdateNeeded $srcFile $dstFile) {
                     $updates += @{ Src = $srcFile; Dst = $dstFile; Name = ".github/agents/$agentName" }
                 }
             }
@@ -1874,10 +1897,6 @@ function Invoke-Update {
     } else {
         $presets = @($currentPreset)
     }
-
-    # #280: resolve the update guard before scanning, so preset files the project
-    # already has are offered only when the guard can keep the project's edits.
-    $updateGuard = Resolve-UpdateGuard -SourceRoot $sourcePath -ProjectRoot $RepoRoot
 
     # Update shared instruction files.
     # Source convention mirrors setup.ps1 Step 2:
@@ -1900,9 +1919,7 @@ function Invoke-Update {
             $srcFile = Join-Path $srcInternalInstr $instrName
             $dstFile = Join-Path $dstInstr $instrName
             if ((Test-Path $srcFile) -and (Test-Path $dstFile)) {
-                $srcHash = (Get-FileHash $srcFile -Algorithm SHA256).Hash
-                $dstHash = (Get-FileHash $dstFile -Algorithm SHA256).Hash
-                if ($srcHash -ne $dstHash) {
+                if (Test-UpdateNeeded $srcFile $dstFile) {
                     $updates += @{ Src = $srcFile; Dst = $dstFile; Name = ".github/instructions/$instrName" }
                 }
             }
@@ -1914,9 +1931,7 @@ function Invoke-Update {
             $srcFile = Join-Path $srcSharedInstr $instrName
             $dstFile = Join-Path $dstInstr $instrName
             if ((Test-Path $srcFile) -and (Test-Path $dstFile)) {
-                $srcHash = (Get-FileHash $srcFile -Algorithm SHA256).Hash
-                $dstHash = (Get-FileHash $dstFile -Algorithm SHA256).Hash
-                if ($srcHash -ne $dstHash) {
+                if (Test-UpdateNeeded $srcFile $dstFile) {
                     $updates += @{ Src = $srcFile; Dst = $dstFile; Name = ".github/instructions/$instrName" }
                 }
             }
@@ -1932,9 +1947,7 @@ function Invoke-Update {
             $srcFile = Join-Path $srcDocs $docName
             $dstFile = Join-Path $dstDocs $docName
             if ((Test-Path $srcFile) -and (Test-Path $dstFile)) {
-                $srcHash = (Get-FileHash $srcFile -Algorithm SHA256).Hash
-                $dstHash = (Get-FileHash $dstFile -Algorithm SHA256).Hash
-                if ($srcHash -ne $dstHash) {
+                if (Test-UpdateNeeded $srcFile $dstFile) {
                     $updates += @{ Src = $srcFile; Dst = $dstFile; Name = "docs/plans/$docName" }
                 }
             }
@@ -1967,7 +1980,7 @@ function Invoke-Update {
 
                 if (-not (Test-Path $dstFile)) {
                     $newFiles += @{ Src = $srcFile; Dst = $dstFile; Name = $relFile }
-                } elseif ($updateGuard -and (Get-FileHash $srcFile -Algorithm SHA256).Hash -ne (Get-FileHash $dstFile -Algorithm SHA256).Hash) {
+                } elseif ($updateGuard -and (Test-UpdateNeeded $srcFile $dstFile)) {
                     $updates += @{ Src = $srcFile; Dst = $dstFile; Name = $relFile }
                 }
             }
@@ -1986,7 +1999,7 @@ function Invoke-Update {
 
                 if (-not (Test-Path $dstSkillFile)) {
                     $newFiles += @{ Src = $srcSkillFile; Dst = $dstSkillFile; Name = ".github/skills/$skillName/SKILL.md" }
-                } elseif ($updateGuard -and (Get-FileHash $srcSkillFile -Algorithm SHA256).Hash -ne (Get-FileHash $dstSkillFile -Algorithm SHA256).Hash) {
+                } elseif ($updateGuard -and (Test-UpdateNeeded $srcSkillFile $dstSkillFile)) {
                     $updates += @{ Src = $srcSkillFile; Dst = $dstSkillFile; Name = ".github/skills/$skillName/SKILL.md" }
                 }
             }
@@ -2003,9 +2016,7 @@ function Invoke-Update {
             $dstFile = Join-Path $dstMcp $relPath
             if ($neverUpdate -contains $relName) { return }
             if (Test-Path $dstFile) {
-                $srcHash = (Get-FileHash $_.FullName -Algorithm SHA256).Hash
-                $dstHash = (Get-FileHash $dstFile -Algorithm SHA256).Hash
-                if ($srcHash -ne $dstHash) {
+                if (Test-UpdateNeeded $_.FullName $dstFile) {
                     $updates += @{ Src = $_.FullName; Dst = $dstFile; Name = $relName }
                 }
             } else {
@@ -2031,9 +2042,7 @@ function Invoke-Update {
                 $dstFile = Join-Path $dstPkg $relPath
                 if ($neverUpdate -contains $relName) { return }
                 if (Test-Path $dstFile) {
-                    $srcHash = (Get-FileHash $_.FullName -Algorithm SHA256).Hash
-                    $dstHash = (Get-FileHash $dstFile -Algorithm SHA256).Hash
-                    if ($srcHash -ne $dstHash) {
+                    if (Test-UpdateNeeded $_.FullName $dstFile) {
                         $updates += @{ Src = $_.FullName; Dst = $dstFile; Name = $relName }
                     }
                 } else {
@@ -2047,9 +2056,7 @@ function Invoke-Update {
         $srcFile = Join-Path $sourcePath $cliFile
         $dstFile = Join-Path $RepoRoot $cliFile
         if ((Test-Path $srcFile) -and (Test-Path $dstFile)) {
-            $srcHash = (Get-FileHash $srcFile -Algorithm SHA256).Hash
-            $dstHash = (Get-FileHash $dstFile -Algorithm SHA256).Hash
-            if ($srcHash -ne $dstHash) {
+            if (Test-UpdateNeeded $srcFile $dstFile) {
                 $updates += @{ Src = $srcFile; Dst = $dstFile; Name = $cliFile }
             }
         } elseif ((Test-Path $srcFile) -and -not (Test-Path $dstFile)) {
@@ -2062,9 +2069,7 @@ function Invoke-Update {
         $srcFile = Join-Path $sourcePath $valFile
         $dstFile = Join-Path $RepoRoot $valFile
         if ((Test-Path $srcFile) -and (Test-Path $dstFile)) {
-            $srcHash = (Get-FileHash $srcFile -Algorithm SHA256).Hash
-            $dstHash = (Get-FileHash $dstFile -Algorithm SHA256).Hash
-            if ($srcHash -ne $dstHash) {
+            if (Test-UpdateNeeded $srcFile $dstFile) {
                 $updates += @{ Src = $srcFile; Dst = $dstFile; Name = $valFile }
             }
         } elseif ((Test-Path $srcFile) -and -not (Test-Path $dstFile)) {
@@ -2084,9 +2089,7 @@ function Invoke-Update {
         $dstFile = Join-Path $RepoRoot $cliFile
         if (Test-Path $srcFile) {
             if (Test-Path $dstFile) {
-                $srcHash = (Get-FileHash $srcFile -Algorithm SHA256).Hash
-                $dstHash = (Get-FileHash $dstFile -Algorithm SHA256).Hash
-                if ($srcHash -ne $dstHash) {
+                if (Test-UpdateNeeded $srcFile $dstFile) {
                     $updates += @{ Src = $srcFile; Dst = $dstFile; Name = $cliFile }
                 }
             } else {
@@ -2106,9 +2109,7 @@ function Invoke-Update {
                 $relName = "pforge-mcp/$($relPath.Replace('\', '/'))"
                 $dstFile = Join-Path $dstMcp $relPath
                 if (Test-Path $dstFile) {
-                    $srcHash = (Get-FileHash $_.FullName -Algorithm SHA256).Hash
-                    $dstHash = (Get-FileHash $dstFile -Algorithm SHA256).Hash
-                    if ($srcHash -ne $dstHash) {
+                    if (Test-UpdateNeeded $_.FullName $dstFile) {
                         $updates += @{ Src = $_.FullName; Dst = $dstFile; Name = $relName }
                     }
                 } else {
@@ -2129,9 +2130,7 @@ function Invoke-Update {
                 $relName = "$pkg/$($relPath.Replace('\', '/'))"
                 $dstFile = Join-Path $dstPkg $relPath
                 if (Test-Path $dstFile) {
-                    $srcHash = (Get-FileHash $_.FullName -Algorithm SHA256).Hash
-                    $dstHash = (Get-FileHash $dstFile -Algorithm SHA256).Hash
-                    if ($srcHash -ne $dstHash) {
+                    if (Test-UpdateNeeded $_.FullName $dstFile) {
                         $updates += @{ Src = $_.FullName; Dst = $dstFile; Name = $relName }
                     }
                 } else {
@@ -2149,9 +2148,7 @@ function Invoke-Update {
             $relName = ".github/hooks/$($relPath.Replace('\', '/'))"
             $dstFile = Join-Path $dstHooks $relPath
             if (Test-Path $dstFile) {
-                $srcHash = (Get-FileHash $_.FullName -Algorithm SHA256).Hash
-                $dstHash = (Get-FileHash $dstFile -Algorithm SHA256).Hash
-                if ($srcHash -ne $dstHash) {
+                if (Test-UpdateNeeded $_.FullName $dstFile) {
                     $updates += @{ Src = $_.FullName; Dst = $dstFile; Name = $relName }
                 }
             } else {
@@ -2180,9 +2177,7 @@ function Invoke-Update {
             if (-not $hasPresetVersion) {
                 # Pure shared skill — safe to update
                 if (Test-Path $dstSkillFile) {
-                    $srcHash = (Get-FileHash $srcSkillFile -Algorithm SHA256).Hash
-                    $dstHash = (Get-FileHash $dstSkillFile -Algorithm SHA256).Hash
-                    if ($srcHash -ne $dstHash) {
+                    if (Test-UpdateNeeded $srcSkillFile $dstSkillFile) {
                         $updates += @{ Src = $srcSkillFile; Dst = $dstSkillFile; Name = ".github/skills/$skillName/SKILL.md (shared)" }
                     }
                 } else {

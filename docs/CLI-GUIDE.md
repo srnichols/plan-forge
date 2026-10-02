@@ -703,7 +703,7 @@ curl -sL https://raw.githubusercontent.com/srnichols/plan-forge/master/pforge.sh
 
 #### Guidance files you edited
 
-Since v3.28.0, instruction, prompt, agent, skill, hook and runbook files are replaced only when your copy matches a version Plan Forge shipped. Setup's substitutions (project name, stack, setup date from `.forge.json`) are taken into account, and updated files get them filled in again.
+Since v3.28.0, instruction, prompt, agent, skill, hook and runbook files are replaced only when your copy matches a version Plan Forge shipped. Setup's substitutions (project name, stack, setup date from `.forge.json`) are taken into account, and updated files get them filled in again — including files an older updater left with raw `<YOUR PROJECT NAME>` placeholders.
 
 If you edited a file, update keeps your copy, reports it as `KEEP`, and writes the new version to `.forge/update-pending/<path>` so you can merge the changes you want. To take the new versions anyway, run with `--overwrite-customized`; each replaced file is first copied to `.forge/update-backups/<timestamp>/<path>`.
 

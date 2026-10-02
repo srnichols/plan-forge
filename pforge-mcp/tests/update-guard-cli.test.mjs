@@ -23,6 +23,8 @@ const BASH = isWin ? GIT_BASH : "bash";
 
 const VALUES = { projectName: "Acme Orders", stack: ".NET 10 / ASP.NET Core", setupDate: "2026-05-01" };
 const STEP0 = ".github/prompts/step0-specify-feature.prompt.md";
+// Older updaters copied this one raw, so it matches the source byte for byte.
+const STEP1 = ".github/prompts/step1-preflight-check.prompt.md";
 const GIT_WORKFLOW = ".github/instructions/git-workflow.instructions.md";
 const TESTING = ".github/instructions/testing.instructions.md";
 const SECURITY = ".github/instructions/security.instructions.md";
@@ -38,6 +40,7 @@ const V1 = {
 };
 const V2 = {
   step0: "# Specify\n\nProject: <YOUR PROJECT NAME>. Read the principles first.\n",
+  step1: "# Preflight for <YOUR PROJECT NAME>\n",
   git: "# Git workflow v2 for <YOUR PROJECT NAME>\n",
   dotnetTesting: "# .NET testing v2 (xUnit v3)\n",
   sharedTesting: "# TypeScript Testing Patterns\n",
@@ -69,6 +72,7 @@ function seed() {
     VERSION: "9.9.9",
     [`pforge-mcp/${INDEX_FILE}`]: JSON.stringify({ hashes: shipped }),
     [STEP0]: V2.step0,
+    [STEP1]: V2.step1,
     [GIT_WORKFLOW]: V2.git,
     "presets/shared/.github/instructions/testing.instructions.md": V2.sharedTesting,
     "presets/dotnet/.github/instructions/testing.instructions.md": V2.dotnetTesting,
@@ -81,6 +85,7 @@ function seed() {
   writeTree(project, {
     ".forge.json": JSON.stringify({ templateVersion: "9.9.8", preset: "dotnet", ...VALUES }),
     [STEP0]: renderPlaceholders(V1.step0, VALUES),
+    [STEP1]: V2.step1,
     [GIT_WORKFLOW]: OUR_GIT_RULES,
     [TESTING]: V1.dotnetTesting,
     [SECURITY]: V1.internalSecurity,
@@ -121,6 +126,7 @@ describe.each(runners())("#280 $name update keeps edited guidance", ({ run }) =>
     const r = run(project, [source, "--dry-run"]);
     const out = r.stdout.replace(/\\/g, "/");
     expect(out).toMatch(/UPDATE\s+\.github\/prompts\/step0-specify-feature\.prompt\.md/);
+    expect(out).toMatch(/UPDATE\s+\.github\/prompts\/step1-preflight-check\.prompt\.md/);
     expect(out).toMatch(/KEEP\s+\.github\/instructions\/git-workflow\.instructions\.md/);
     expect(out).toMatch(/UPDATE\s+\.github\/instructions\/testing\.instructions\.md/);
     expect(out).toContain("--overwrite-customized");
@@ -136,6 +142,7 @@ describe.each(runners())("#280 $name update keeps edited guidance", ({ run }) =>
 
     expect(read(project, STEP0)).toBe(renderPlaceholders(V2.step0, VALUES));
     expect(read(project, STEP0)).not.toContain("<YOUR PROJECT NAME>");
+    expect(read(project, STEP1)).toBe(renderPlaceholders(V2.step1, VALUES));
     expect(read(project, RUNBOOK)).toBe(renderPlaceholders(V2.runbook, VALUES));
 
     expect(read(project, GIT_WORKFLOW)).toBe(OUR_GIT_RULES);

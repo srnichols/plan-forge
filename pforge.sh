@@ -1342,6 +1342,24 @@ _pf_update_guard() {
     return "$rc"
 }
 
+# _pf_update_needed <src> <dst> — mirrors Test-UpdateNeeded in pforge.ps1 (#280).
+# Updaters before the guard copied guidance files with setup's placeholders
+# unrendered; such a file matches the source byte for byte. While the guard is
+# active (_pf_fillable_tokens is set by cmd_update), a guidance Markdown file
+# that still holds a placeholder .forge.json can fill is offered too.
+_pf_update_needed() {
+    local src="$1" dst="$2" rel token
+    [ "$(_pf_sha256 "$src")" != "$(_pf_sha256 "$dst")" ] && return 0
+    [ -n "${_pf_fillable_tokens:-}" ] || return 1
+    case "$dst" in *.md) ;; *) return 1 ;; esac
+    rel="${dst#"$REPO_ROOT"/}"
+    [[ "$rel" =~ $_PF_GUIDANCE_PATH_RE ]] || return 1
+    while IFS= read -r token; do
+        if [ -n "$token" ] && grep -qF -- "$token" "$dst"; then return 0; fi
+    done <<< "$_pf_fillable_tokens"
+    return 1
+}
+
 cmd_update() {
     local dry_run=false force=false source_path="" from_github=false keep_cache=false gh_tag="" allow_dev=false overwrite_customized=false
 
@@ -1632,13 +1650,24 @@ cmd_update() {
         done
         [ -f "$src" ] || return 0
         if [ -f "$dst" ]; then
-            if [ "$(_pf_sha256 "$src")" != "$(_pf_sha256 "$dst")" ]; then
+            if _pf_update_needed "$src" "$dst"; then
                 _updates+=("$src|$dst|$rel")
             fi
         else
             _new_files+=("$src|$dst|$rel")
         fi
     }
+
+    # ─── Presets + update guard (needed by the scans below) ───────
+    local _presets=()
+    IFS=',' read -ra _presets <<< "${current_preset_raw// /}"
+    # #280: resolve the update guard before scanning, so preset files the project
+    # already has are offered only when the guard can keep the project's edits.
+    local update_guard _pf_fillable_tokens=""
+    update_guard="$(_pf_resolve_update_guard "$source_path" "$REPO_ROOT")"
+    if [ -n "$update_guard" ] && [ -f "$config_path" ]; then
+        _pf_fillable_tokens="$(node -e 'const c=JSON.parse(require("fs").readFileSync(process.argv[1],"utf8"));const t=[["projectName","<YOUR PROJECT NAME>"],["stack","<YOUR TECH STACK>"],["setupDate","<DATE>"]].filter(([k])=>typeof c[k]==="string"&&c[k].trim()).map(([,v])=>v);process.stdout.write(t.join("\n"))' "$config_path" 2>/dev/null || true)"
+    fi
 
     # ─── Step prompts (step*.prompt.md) ───────────────────────────
     local src_prompts="$source_path/.github/prompts"
@@ -1660,14 +1689,6 @@ cmd_update() {
             _pf_check "$src_agents/$agent_name" "$REPO_ROOT/.github/agents/$agent_name" ".github/agents/$agent_name"
         done
     fi
-
-    # ─── Presets + update guard (needed by the scans below) ───────
-    local _presets=()
-    IFS=',' read -ra _presets <<< "${current_preset_raw// /}"
-    # #280: resolve the update guard before scanning, so preset files the project
-    # already has are offered only when the guard can keep the project's edits.
-    local update_guard
-    update_guard="$(_pf_resolve_update_guard "$source_path" "$REPO_ROOT")"
 
     # ─── Shared instructions ──────────────────────────────────────
     # Source convention mirrors setup.sh Step 2:
@@ -1751,7 +1772,7 @@ cmd_update() {
                 # can tell an unmodified copy from one the project changed.
                 if [ ! -f "$dst" ]; then
                     _new_files+=("$f|$dst|$rel")
-                elif [ -n "$update_guard" ] && [ "$(_pf_sha256 "$f")" != "$(_pf_sha256 "$dst")" ]; then
+                elif [ -n "$update_guard" ] && _pf_update_needed "$f" "$dst"; then
                     _updates+=("$f|$dst|$rel")
                 fi
             done < <(find "$src_sub" -maxdepth 1 -type f -print0 2>/dev/null)
@@ -1769,7 +1790,7 @@ cmd_update() {
                 [ -f "$skill_src" ] || continue
                 if [ ! -f "$skill_dst" ]; then
                     _new_files+=("$skill_src|$skill_dst|.github/skills/$skill_name/SKILL.md")
-                elif [ -n "$update_guard" ] && [ "$(_pf_sha256 "$skill_src")" != "$(_pf_sha256 "$skill_dst")" ]; then
+                elif [ -n "$update_guard" ] && _pf_update_needed "$skill_src" "$skill_dst"; then
                     _updates+=("$skill_src|$skill_dst|.github/skills/$skill_name/SKILL.md")
                 fi
             done
@@ -1803,7 +1824,7 @@ cmd_update() {
             $has_preset_version && continue
 
             if [ -f "$shared_dst" ]; then
-                if [ "$(_pf_sha256 "$shared_src")" != "$(_pf_sha256 "$shared_dst")" ]; then
+                if _pf_update_needed "$shared_src" "$shared_dst"; then
                     _updates+=("$shared_src|$shared_dst|.github/skills/$shared_name/SKILL.md (shared)")
                 fi
             else

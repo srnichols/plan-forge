@@ -1026,8 +1026,10 @@ if [[ -z "$PRESET" ]]; then
                 echo "  6) swift       — Swift / SwiftUI / iOS / Vapor"
                 echo "  7) azure-iac   — Azure Bicep / Terraform / PowerShell / azd"
                 echo "  8) custom      — Shared files only (add your own instructions)"
+                echo "  9) rust        — Rust / Axum / Tokio / SQLx"
+                echo " 10) php         — PHP / Laravel"
                 echo ""
-                choice="$(prompt_value "Select preset (1-8 or name)" "1")"
+                choice="$(prompt_value "Select preset (1-10 or name)" "1")"
                 case "$choice" in
                     1|dotnet)     PRESET="dotnet" ;;
                     2|typescript) PRESET="typescript" ;;
@@ -1037,6 +1039,8 @@ if [[ -z "$PRESET" ]]; then
                     6|swift)      PRESET="swift" ;;
                     7|azure-iac)  PRESET="azure-iac" ;;
                     8|custom)     PRESET="custom" ;;
+                    9|rust)       PRESET="rust" ;;
+                    10|php)       PRESET="php" ;;
                     *)            PRESET="$choice" ;;
                 esac
             fi
@@ -1052,8 +1056,10 @@ if [[ -z "$PRESET" ]]; then
         echo "  6) swift       — Swift / SwiftUI / iOS / Vapor"
         echo "  7) azure-iac   — Azure Bicep / Terraform / PowerShell / azd"
         echo "  8) custom      — Shared files only (add your own instructions)"
+        echo "  9) rust        — Rust / Axum / Tokio / SQLx"
+        echo " 10) php         — PHP / Laravel"
         echo ""
-        choice="$(prompt_value "Select preset (1-8 or name)" "1")"
+        choice="$(prompt_value "Select preset (1-10 or name)" "1")"
         case "$choice" in
             1|dotnet)     PRESET="dotnet" ;;
             2|typescript) PRESET="typescript" ;;
@@ -1063,6 +1069,8 @@ if [[ -z "$PRESET" ]]; then
             6|swift)      PRESET="swift" ;;
             7|azure-iac)  PRESET="azure-iac" ;;
             8|custom)     PRESET="custom" ;;
+            9|rust)       PRESET="rust" ;;
+            10|php)       PRESET="php" ;;
             *)            PRESET="$choice" ;;
         esac
     fi
@@ -1104,6 +1112,8 @@ case "$PRIMARY_PRESET" in
     java)       STACK_LABEL="Java / Spring Boot" ;;
     go)         STACK_LABEL="Go / Standard Library" ;;
     swift)      STACK_LABEL="Swift / SwiftUI / iOS / Vapor" ;;
+    rust)       STACK_LABEL="Rust / Axum / Tokio / SQLx" ;;
+    php)        STACK_LABEL="PHP / Laravel" ;;
     azure-iac)  STACK_LABEL="Azure Bicep / Terraform / PowerShell / azd" ;;
     custom)     STACK_LABEL="Custom (configure manually)" ;;
     *)          red "Unknown preset: $PRIMARY_PRESET"; exit 1 ;;
@@ -1116,6 +1126,8 @@ case "$PRIMARY_PRESET" in
     java)       DEFAULT_BUILD="./gradlew build"; DEFAULT_TEST="./gradlew test"; DEFAULT_LINT="./gradlew spotlessCheck" ;;
     go)         DEFAULT_BUILD="go build ./..."; DEFAULT_TEST="go test ./..."; DEFAULT_LINT="golangci-lint run" ;;
     swift)      DEFAULT_BUILD="swift build"; DEFAULT_TEST="swift test"; DEFAULT_LINT="swift package plugin --allow-writing-to-package-directory swiftlint" ;;
+    rust)       DEFAULT_BUILD="cargo build --locked"; DEFAULT_TEST="cargo test"; DEFAULT_LINT="cargo clippy --all-targets --all-features -- -D warnings" ;;
+    php)        DEFAULT_BUILD="composer install"; DEFAULT_TEST="php artisan test"; DEFAULT_LINT="vendor/bin/pint --test" ;;
     azure-iac)  DEFAULT_BUILD="az bicep build --file infra/main.bicep"; DEFAULT_TEST="Invoke-Pester -Path ./tests -Output Detailed"; DEFAULT_LINT="az bicep lint --file infra/main.bicep" ;;
     custom)     DEFAULT_BUILD=""; DEFAULT_TEST=""; DEFAULT_LINT="" ;;
 esac

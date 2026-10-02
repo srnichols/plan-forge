@@ -1091,8 +1091,10 @@ if (-not $Preset) {
                 Write-Host "  6) swift       — Swift / SwiftUI / iOS / Vapor"
                 Write-Host "  7) azure-iac   — Azure Bicep / Terraform / PowerShell / azd"
                 Write-Host "  8) custom      — Shared files only (add your own instructions)"
+                Write-Host "  9) rust        — Rust / Axum / Tokio / SQLx"
+                Write-Host " 10) php         — PHP / Laravel"
                 Write-Host ""
-                $choice = Get-PromptValue "Select preset (1-8 or name)" "1"
+                $choice = Get-PromptValue "Select preset (1-10 or name)" "1"
                 $Preset = switch ($choice) {
                     '1' { 'dotnet' }
                     '2' { 'typescript' }
@@ -1102,6 +1104,8 @@ if (-not $Preset) {
                     '6' { 'swift' }
                     '7' { 'azure-iac' }
                     '8' { 'custom' }
+                    '9' { 'rust' }
+                    '10' { 'php' }
                     default { $choice }
                 }
             }
@@ -1118,8 +1122,10 @@ if (-not $Preset) {
         Write-Host "  6) swift       — Swift / SwiftUI / iOS / Vapor"
         Write-Host "  7) azure-iac   — Azure Bicep / Terraform / PowerShell / azd"
         Write-Host "  8) custom      — Shared files only (add your own instructions)"
+        Write-Host "  9) rust        — Rust / Axum / Tokio / SQLx"
+        Write-Host " 10) php         — PHP / Laravel"
         Write-Host ""
-        $choice = Get-PromptValue "Select preset (1-8 or name)" "1"
+        $choice = Get-PromptValue "Select preset (1-10 or name)" "1"
         $Preset = switch ($choice) {
             '1' { 'dotnet' }
             '2' { 'typescript' }
@@ -1129,6 +1135,8 @@ if (-not $Preset) {
             '6' { 'swift' }
             '7' { 'azure-iac' }
             '8' { 'custom' }
+            '9' { 'rust' }
+            '10' { 'php' }
             default { $choice }
         }
     }
@@ -1143,6 +1151,8 @@ $stackLabel = if ($Preset.Count -gt 1) {
             'java'       { 'Java' }
             'go'         { 'Go' }
             'swift'      { 'Swift' }
+            'rust'       { 'Rust' }
+            'php'        { 'PHP' }
             'azure-iac'  { 'Azure IaC' }
             'custom'     { 'Custom' }
         }
@@ -1155,6 +1165,8 @@ $stackLabel = if ($Preset.Count -gt 1) {
         'java'       { 'Java / Spring Boot' }
         'go'         { 'Go / Standard Library' }
         'swift'      { 'Swift / SwiftUI / iOS / Vapor' }
+        'rust'       { 'Rust / Axum / Tokio / SQLx' }
+        'php'        { 'PHP / Laravel' }
         'azure-iac'  { 'Azure Bicep / Terraform / PowerShell / azd' }
         'custom'     { 'Custom (configure manually)' }
     }
@@ -1171,6 +1183,8 @@ $defaultBuild = switch ($primaryPreset) {
     'java'       { './gradlew build' }
     'go'         { 'go build ./...' }
     'swift'      { 'swift build' }
+    'rust'       { 'cargo build --locked' }
+    'php'        { 'composer install' }
     'azure-iac'  { 'az bicep build --file infra/main.bicep' }
     'custom'     { '' }
 }
@@ -1181,6 +1195,8 @@ $defaultTest = switch ($primaryPreset) {
     'java'       { './gradlew test' }
     'go'         { 'go test ./...' }
     'swift'      { 'swift test' }
+    'rust'       { 'cargo test' }
+    'php'        { 'php artisan test' }
     'azure-iac'  { 'Invoke-Pester -Path ./tests -Output Detailed' }
     'custom'     { '' }
 }
@@ -1191,6 +1207,8 @@ $defaultLint = switch ($primaryPreset) {
     'java'       { './gradlew spotlessCheck' }
     'go'         { 'golangci-lint run' }
     'swift'      { 'swift package plugin --allow-writing-to-package-directory swiftlint' }
+    'rust'       { 'cargo clippy --all-targets --all-features -- -D warnings' }
+    'php'        { 'vendor/bin/pint --test' }
     'azure-iac'  { 'az bicep lint --file infra/main.bicep' }
     'custom'     { '' }
 }

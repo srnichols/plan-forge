@@ -1527,6 +1527,20 @@ function Test-UpdateNeeded([string]$Src, [string]$Dst) {
 # Fetch-GitHubSource helper sets them.
 # Add missing modelRouting / hooks defaults to .forge.json (pforge-mcp/migrate-forge-config.mjs,
 # shared with pforge.sh). Idempotent, so it also runs when the install is already current.
+# The JSON result of a Node helper run with 2>&1: the last line starting with "{",
+# or the last line when there is none (so an error message still surfaces). Node
+# can print deprecation warnings after the JSON, which made -Last 1 read a warning.
+function Select-LastJsonLine {
+    param([Parameter(ValueFromPipeline)] $Line)
+    begin { $last = $null; $json = $null }
+    process {
+        $text = "$Line"
+        $last = $text
+        if ($text -match '^\s*\{') { $json = $text }
+    }
+    end { if ($null -ne $json) { $json } else { $last } }
+}
+
 function Invoke-ForgeConfigMigration([string]$ProjectRoot, [string]$SourceRoot) {
     $migrator = @((Join-Path $ProjectRoot "pforge-mcp/migrate-forge-config.mjs"), (Join-Path $SourceRoot "pforge-mcp/migrate-forge-config.mjs")) | Where-Object { Test-Path $_ } | Select-Object -First 1
     if (-not $migrator) { return }
@@ -1615,7 +1629,7 @@ function Invoke-Update {
         Write-Host "Resolving release tag from GitHub..." -ForegroundColor DarkCyan
         $tagArgs = @("resolve-tag")
         if ($RequestedTag) { $tagArgs += @("--tag", $RequestedTag) }
-        $tagResult = & node $nodeHelper @tagArgs 2>&1 | Select-Object -Last 1
+        $tagResult = & node $nodeHelper @tagArgs 2>&1 | Select-LastJsonLine
         try { $tagJson = $tagResult | ConvertFrom-Json } catch {
             Write-Host "ERROR: Failed to parse tag resolution output: $tagResult" -ForegroundColor Red
             exit 1
@@ -1637,7 +1651,7 @@ function Invoke-Update {
 
         Write-Host "Downloading release tarball..." -ForegroundColor DarkCyan
         $dlArgs = @("download", "--tag", $resolvedTag, "--project-dir", $RepoRoot)
-        $dlResult = & node $nodeHelper @dlArgs 2>&1 | Select-Object -Last 1
+        $dlResult = & node $nodeHelper @dlArgs 2>&1 | Select-LastJsonLine
         try { $dlJson = $dlResult | ConvertFrom-Json } catch {
             Write-Host "ERROR: Failed to parse download output: $dlResult" -ForegroundColor Red
             exit 1
@@ -1754,7 +1768,7 @@ function Invoke-Update {
                         $nodeHelperProbe = Join-Path $RepoRoot "pforge-mcp/update-from-github.mjs"
                         if (Test-Path $nodeHelperProbe) {
                             try {
-                                $tagProbe = & node $nodeHelperProbe resolve-tag 2>&1 | Select-Object -Last 1
+                                $tagProbe = & node $nodeHelperProbe resolve-tag 2>&1 | Select-LastJsonLine
                                 $tagProbeJson = $tagProbe | ConvertFrom-Json
                                 if ($tagProbeJson.ok -and $tagProbeJson.tag) {
                                     $latestTagVer = ($tagProbeJson.tag -replace '^v', '').Trim()
@@ -1773,7 +1787,7 @@ function Invoke-Update {
                             $cmpResult = 0
                             if (Test-Path $nodeCmp) {
                                 try {
-                                    $cmpStr = & node -e "import('$($nodeCmp -replace '\\', '/')').then(m=>{console.log(m.compareVersions('$siblingVer','$latestTagVer'))})" 2>&1 | Select-Object -Last 1
+                                    $cmpStr = & node -e "import('$($nodeCmp -replace '\\', '/')').then(m=>{console.log(m.compareVersions('$siblingVer','$latestTagVer'))})" 2>$null | Select-Object -Last 1
                                     $cmpResult = [int]$cmpStr
                                 } catch { $cmpResult = 0 }
                             }
@@ -6458,7 +6472,7 @@ console.log(JSON.stringify(r === null ? { checkFailed: true } : r));
         if (Test-Path $pfVersionFile) { $currentVersion = (Get-Content $pfVersionFile -Raw).Trim() }
     }
     if (-not $currentVersion) { $currentVersion = "unknown" }
-    $checkResult = & node --input-type=module -e $checkScript $currentVersion $RepoRoot 2>&1 | Select-Object -Last 1
+    $checkResult = & node --input-type=module -e $checkScript $currentVersion $RepoRoot 2>&1 | Select-LastJsonLine
     try {
         $checkJson = $checkResult | ConvertFrom-Json
     } catch {

@@ -32,7 +32,8 @@ function Check-FileExists([string]$RelPath, [bool]$Required = $true) {
     # validator output (meta-bug #233), so return nothing.
     $fullPath = Join-Path $ProjectPath $RelPath
     if (Test-Path $fullPath) {
-        $size = (Get-Item $fullPath).Length
+        # -Force: on Linux/macOS, Get-Item cannot see dotfiles such as .forge.json without it.
+        $size = (Get-Item -LiteralPath $fullPath -Force).Length
         if ($size -eq 0) {
             Write-Host "  FAIL  $RelPath (empty file)" -ForegroundColor Red
             if ($Required) { $script:fail++ } else { $script:warn++ }

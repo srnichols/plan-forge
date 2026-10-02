@@ -1366,6 +1366,13 @@ _pf_update_needed() {
 # safe to call on every exit path.
 # Add missing modelRouting / hooks defaults to .forge.json (pforge-mcp/migrate-forge-config.mjs,
 # shared with pforge.ps1). Idempotent, so it also runs when the install is already current.
+# The JSON result of a Node helper run with 2>&1: the last line starting with "{",
+# or the last line when there is none (so an error message still surfaces). Node
+# can print deprecation warnings after the JSON, which made `tail -1` read a warning.
+_pf_last_json() {
+    awk '/^[[:space:]]*\{/ { j = $0 } { l = $0 } END { print (j != "" ? j : l) }'
+}
+
 _pf_migrate_forge_config() {
     local project_root="$1" source_root="$2" migrator="" candidate="" key=""
     for candidate in "$project_root/pforge-mcp/migrate-forge-config.mjs" "$source_root/pforge-mcp/migrate-forge-config.mjs"; do
@@ -1437,7 +1444,7 @@ cmd_update() {
         local tag_args=("resolve-tag")
         if [ -n "$gh_tag" ]; then tag_args+=("--tag" "$gh_tag"); fi
         local tag_result
-        tag_result="$(node "$node_helper" "${tag_args[@]}" 2>&1 | tail -1)"
+        tag_result="$(node "$node_helper" "${tag_args[@]}" 2>&1 | _pf_last_json)"
         local tag_ok
         tag_ok="$(printf '%s' "$tag_result" | json_pick ok)"
         if [ "$tag_ok" != "True" ] && [ "$tag_ok" != "true" ]; then
@@ -1463,7 +1470,7 @@ cmd_update() {
         # Download tarball
         echo "Downloading release tarball..."
         local dl_result
-        dl_result="$(node "$node_helper" download --tag "$resolved_tag" --project-dir "$REPO_ROOT" 2>&1 | tail -1)"
+        dl_result="$(node "$node_helper" download --tag "$resolved_tag" --project-dir "$REPO_ROOT" 2>&1 | _pf_last_json)"
         local dl_ok
         dl_ok="$(printf '%s' "$dl_result" | json_pick ok)"
         if [ "$dl_ok" != "True" ] && [ "$dl_ok" != "true" ]; then
@@ -2544,7 +2551,7 @@ cmd_self_update() {
     # client stuck on v2.66.0 saw 'Already current' after an API failure).
     local check_script="import { checkForUpdate } from './pforge-mcp/update-check.mjs'; const r = await checkForUpdate({ currentVersion: process.argv[1], projectDir: process.argv[2], force: true }); console.log(JSON.stringify(r === null ? { checkFailed: true } : r));"
     local check_result
-    check_result="$(node --input-type=module -e "$check_script" "$current_version" "$REPO_ROOT" 2>&1 | tail -1)"
+    check_result="$(node --input-type=module -e "$check_script" "$current_version" "$REPO_ROOT" 2>&1 | _pf_last_json)"
 
     local check_failed
     check_failed="$(printf '%s' "$check_result" | json_pick checkFailed false)"

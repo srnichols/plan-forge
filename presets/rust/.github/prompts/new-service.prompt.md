@@ -17,7 +17,7 @@ use std::sync::Arc;
 use tracing::instrument;
 
 use crate::auth::{AuthUser, Role};
-use crate::domain::{EntityName, {EntityName}Id, TenantId};
+use crate::domain::{TenantId, {EntityName}, {EntityName}Id};
 use crate::dto::Create{EntityName}Request;
 use crate::error::AppError;
 use crate::pagination::{Page, PageRequest};

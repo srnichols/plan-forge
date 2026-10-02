@@ -69,7 +69,7 @@ pub struct CreateCategoryRequest {
 ### Mapping
 
 ```rust
-use crate::domain::{EntityName, {EntityName}Id};
+use crate::domain::{{EntityName}, {EntityName}Id};
 
 impl From<{EntityName}> for {EntityName}Response {
     fn from(entity: {EntityName}) -> Self {

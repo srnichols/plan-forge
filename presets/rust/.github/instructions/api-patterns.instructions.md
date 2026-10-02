@@ -213,7 +213,6 @@ Repositories should fetch `limit + 1` rows, return at most `limit`, and derive t
 ### URL-based Versioning
 
 ```rust
-pub fn app(state: AppState) -> Router {
 use std::{net::SocketAddr, sync::Arc};
 
 use axum::{routing::get, Router};

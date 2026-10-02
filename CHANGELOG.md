@@ -7,6 +7,10 @@ Format follows [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
+### Changed
+
+- **Copilot pricing snapshot refreshed.** GitHub removed `claude-opus-4.7`, `gemini-3.5-flash` and `gemini-3.6-flash` from Copilot's AI-credit pricing. No Plan Forge default uses them; they were already listed in `model-retirements.json`. Found by the first scheduled-style run of the Model Drift workflow (#303, #310).
+
 ## [3.29.2] — 2026-10-02 — Self-update ignores Node warnings; setup.ps1 on Linux
 
 ### Fixed

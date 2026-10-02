@@ -9,6 +9,8 @@ Format follows [Keep a Changelog](https://keepachangelog.com/).
 
 ### Added
 
+- **Shared contracts and coherence slices for parallel work on one artifact** ([#308](https://github.com/srnichols/plan-forge/issues/308)). When a plan runs parallel slices whose `[scope:]` paths share a root, gate lint now warns if the plan has no `## Shared Contract` section, or no later slice that depends on all of them to build or test the artifact as a whole. The step-2 hardener prompt and Plan Hardener agent add both. The step-5 review gate and Reviewer Gate agent treat code that contradicts the contract as 🔴 Critical. This comes from the #292 preset rewrite: parallel slices that each passed their own checks still defined the same helpers twice and wrote signatures that didn't fit together.
+
 - **`pforge pending` reviews the guidance updates `pforge update` kept aside** ([#302](https://github.com/srnichols/plan-forge/issues/302)). When an update keeps a file you edited, the new version waits in `.forge/update-pending/`, and until now nothing listed those copies or reminded you of them.
   - `pforge pending` lists them with their age.
   - `diff` compares your copy with the new version.

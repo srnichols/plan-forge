@@ -190,7 +190,10 @@ export function parsePlan(planPath, cwd = process.cwd()) {
 
   parsePlanFrontmatter(meta, content);
 
-  return { meta, scopeContract, slices, dag };
+  // #308: gate lint checks parallel slices over one artifact against this section.
+  const hasSharedContract = /^#{2,4}\s+Shared Contract\b/im.test(content);
+
+  return { meta, scopeContract, slices, dag, hasSharedContract };
 }
 
 /**

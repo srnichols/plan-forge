@@ -39,6 +39,7 @@ Review checklist:
 6. PATTERNS — Follows existing patterns from .github/instructions/?
 7. TESTING — New features covered by tests?
 8. SECURITY — Input validation? No secrets in code?
+9. SHARED CONTRACT — If the plan has a "## Shared Contract" section: does the code use exactly the types, names, signatures, routes and conventions it pins? Two slices defining the same thing differently is 🔴 Critical, even if each slice's own gate passed.
 
 For each finding, assign: 🔴 Critical / 🟡 Warning / 🔵 Info
 

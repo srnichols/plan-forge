@@ -200,6 +200,7 @@ For each Execution Slice:
 - Include relevant .github/instructions/*.instructions.md files in Context Files
 - List only instruction files whose domain matches the slice (not all 17 — each consumes context budget)
 - Add a Parallel Merge Checkpoint after each parallel group
+- When parallel slices build one artifact (their [scope:] paths share a root), add a "## Shared Contract" section pinning the shared types, names, signatures, routes and conventions, and a coherence slice that depends on all of them and builds or tests the artifact as a whole. Gate lint warns when either is missing.
 
 Do NOT add features or expand scope. Only structure what already exists.
 
@@ -223,6 +224,7 @@ After hardening, run a TBD RESOLUTION SWEEP:
 Also validate parallelism tags:
 - Are [parallel-safe] slices truly independent (no shared files)?
 - Are Parallel Merge Checkpoints present after each parallel group?
+- Do parallel slices that build one artifact have a "## Shared Contract" section and a coherence slice depending on all of them?
 
 After all sections are drafted, run a PLAN QUALITY SELF-CHECK before outputting:
 
@@ -420,6 +422,7 @@ Review checklist:
 7. TESTING — New features covered by tests?
 8. SECURITY — Input validation? No secrets in code?
 9. PROJECT PRINCIPLES — Core Principles respected? Forbidden Patterns absent? (if Project Principles file exists)
+10. SHARED CONTRACT — If the plan has a "## Shared Contract" section: does the code use exactly what it pins? Two slices defining the same thing differently is 🔴 Critical, even if each slice's own gate passed.
 
 For each finding, assign: 🔴 Critical / 🟡 Warning / 🔵 Info
 

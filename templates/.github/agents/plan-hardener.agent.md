@@ -51,6 +51,12 @@ Order sections with **Scope Contract and Stop Conditions first** in the output d
 
 Add a **Parallel Merge Checkpoint** after each parallel group.
 
+When parallel slices build one artifact (their `[scope:]` paths share a root, such as `presets/php/**`), also add:
+- **A `## Shared Contract` section** pinning the types, names, signatures, routes and conventions those slices share. Each slice uses it rather than defining its own.
+- **A coherence slice** that depends on every slice in the group and whose gate builds or tests the artifact as a whole.
+
+Gate lint warns when either is missing (#308).
+
 ### Phase 3: TBD Resolution Sweep
 
 1. Scan Required Decisions for TBD entries
@@ -68,7 +74,7 @@ Output a TBD summary table:
 Before outputting the hardened plan, verify:
 
 1. Does every Execution Slice have at least one validation gate with an exact command?
-2. Does every [parallel-safe] slice avoid touching files shared by other slices in the same group?
+2. Does every [parallel-safe] slice avoid touching files shared by other slices in the same group? Where parallel slices build one artifact, is there a `## Shared Contract` section and a coherence slice depending on all of them?
 3. Are all REQUIRED DECISIONS resolved (no TBD remaining)?
 4. Does the Definition of Done include "Reviewer Gate passed (zero 🔴 Critical)"?
 5. Do the Stop Conditions cover: build failure, test failure, scope violation, and security breach?

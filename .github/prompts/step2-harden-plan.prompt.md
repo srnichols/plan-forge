@@ -97,6 +97,9 @@ For each Execution Slice:
 - Include relevant .github/instructions/*.instructions.md files in Context Files
 - List only instruction files whose domain matches the slice (not all 17 — each consumes context budget)
 - Add a Parallel Merge Checkpoint after each parallel group
+- **When parallel slices build one artifact** (their `[scope:]` paths share a root, such as `presets/php/**` or `src/Orders/**`), add both of these. Gate lint warns when either is missing ([#308](https://github.com/srnichols/plan-forge/issues/308)):
+  - **A `## Shared Contract` section** pinning every type, name, signature, route and convention more than one of those slices uses. Each slice references it instead of inventing its own. Slices that each pass their own gate can still define the same helper twice, or write signatures that don't fit together.
+  - **A coherence slice** that depends on every slice in the group (`[depends: Slice 2, Slice 3]`), whose gate builds or tests the artifact as a whole, not file by file.
 - **Validation gates MUST be executable commands**, not prose descriptions:
   - **Good**: `**Validation Gate**:\n\`\`\`bash\ndotnet test\n\`\`\``
   - **Good**: `**Validation Gate**: \`dotnet build\``
@@ -116,6 +119,7 @@ After hardening, run a TBD RESOLUTION SWEEP:
 Also validate parallelism tags:
 - Are [parallel-safe] slices truly independent (no shared files)?
 - Are Parallel Merge Checkpoints present after each parallel group?
+- Do parallel slices that build one artifact have a `## Shared Contract` section and a coherence slice that depends on all of them?
 
 After all sections are drafted, run a **PLAN QUALITY SELF-CHECK** before outputting:
 

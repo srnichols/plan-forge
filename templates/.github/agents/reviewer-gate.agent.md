@@ -36,6 +36,7 @@ Review all changes against the hardened plan and guardrail files:
 7. **Testing** — New features covered by tests?
 8. **Security** — Input validation? No secrets in code?
 9. **Project Principles** — If `docs/plans/PROJECT-PRINCIPLES.md` exists: Core Principles respected? Forbidden Patterns absent? Technology commitments followed?
+10. **Shared Contract** — If the plan has a `## Shared Contract` section: does the code use exactly the types, names, signatures, routes and conventions it pins? Two slices defining the same thing differently is 🔴 Critical even when each slice's own gate passed (#308).
 
 For each finding, assign severity:
 - 🔴 **Critical** — Must fix before merge (security, data loss, scope violation)

@@ -10,6 +10,8 @@ import { recall as brainRecall, loadReviewerConfig, invokeReviewer } from "../br
 
 /** Characters of an offending line quoted in a lint message. */
 const LINT_EXCERPT_CHARS = 60;
+/** Leading literal path segments that identify an artifact in a [scope:] glob (presets/php, src/Api). */
+const ARTIFACT_ROOT_SEGMENTS = 2;
 
 export function extractPlanReleaseVersion(planPath) {
   if (!planPath || typeof planPath !== "string") return null;
@@ -398,6 +400,90 @@ function _lintSliceExecutability(plan, errors, warnings) {
   }
 }
 
+/**
+ * #308 — parallel slices that build one artifact must share a contract and be
+ * verified together. Each slice passing its own gate is not enough: in the #292
+ * preset rewrite, parallel slices defined the same helper twice and wrote
+ * signatures that did not fit together. Two concurrent parallel slices whose
+ * [scope:] roots overlap (first two literal path segments) form a group; the
+ * plan needs a "## Shared Contract" section and a later slice that depends,
+ * directly or transitively, on every member to check the combined result.
+ * Warnings only. Plain-object plans without `hasSharedContract` are not judged.
+ */
+function _artifactRoot(glob) {
+  const literal = [];
+  for (const seg of String(glob).replace(/\\/g, "/").replace(/^\.\//, "").replace(/`/g, "").split("/")) {
+    if (!seg || /[*?[{]/.test(seg)) break;
+    literal.push(seg);
+  }
+  return literal.slice(0, ARTIFACT_ROOT_SEGMENTS).join("/") || null;
+}
+
+function _ancestors(plan) {
+  const byId = new Map(plan.slices.map((s) => [String(s.number), s]));
+  const memo = new Map();
+  const visit = (id, seen = new Set()) => {
+    if (memo.has(id)) return memo.get(id);
+    const out = new Set();
+    for (const dep of byId.get(id)?.depends || []) {
+      const d = String(dep);
+      if (seen.has(d)) continue;
+      out.add(d);
+      for (const a of visit(d, new Set([...seen, id]))) out.add(a);
+    }
+    memo.set(id, out);
+    return out;
+  };
+  for (const id of byId.keys()) visit(id);
+  return memo;
+}
+
+function _parallelArtifactGroups(plan, ancestors) {
+  const parallel = plan.slices.filter((s) => s.parallel && (s.scope || []).length > 0);
+  const groups = new Map();
+  for (let i = 0; i < parallel.length; i++) {
+    for (let j = i + 1; j < parallel.length; j++) {
+      const [a, b] = [parallel[i], parallel[j]];
+      const [ia, ib] = [String(a.number), String(b.number)];
+      if (ancestors.get(ia)?.has(ib) || ancestors.get(ib)?.has(ia)) continue;
+      const rootsA = new Set(a.scope.map(_artifactRoot).filter(Boolean));
+      const shared = b.scope.map(_artifactRoot).find((r) => r && rootsA.has(r));
+      if (!shared) continue;
+      const members = groups.get(shared) || new Set();
+      members.add(ia).add(ib);
+      groups.set(shared, members);
+    }
+  }
+  return groups;
+}
+
+function _lintParallelCoherence(plan, warnings) {
+  if (typeof plan.hasSharedContract !== "boolean") return;
+  const ancestors = _ancestors(plan);
+  for (const [root, members] of _parallelArtifactGroups(plan, ancestors)) {
+    const ids = [...members];
+    const first = Number.isNaN(Number(ids[0])) ? ids[0] : Math.min(...ids.map(Number));
+    const label = `Slices ${ids.join(", ")} run in parallel on ${root}`;
+    if (!plan.hasSharedContract) {
+      warnings.push({
+        slice: first, command: null, rule: "parallel-no-shared-contract", severity: "warn",
+        message:
+          `${label} but the plan has no "## Shared Contract" section. Pin the shared types, names, ` +
+          "signatures and conventions there so the slices cannot each invent their own.",
+      });
+    }
+    const coherent = [...ancestors].some(([id, anc]) => !members.has(id) && ids.every((m) => anc.has(m)));
+    if (!coherent) {
+      warnings.push({
+        slice: first, command: null, rule: "parallel-no-coherence-gate", severity: "warn",
+        message:
+          `${label} but no later slice depends on all of them. Add a coherence slice ` +
+          `([depends: ${ids.map((id) => `Slice ${id}`).join(", ")}]) whose gate builds or tests ${root} as a whole.`,
+      });
+    }
+  }
+}
+
 export function lintGateCommands(planFilePath, cwd = process.cwd()) {
   const plan = (planFilePath !== null && typeof planFilePath === "object")
     ? planFilePath
@@ -423,6 +509,7 @@ export function lintGateCommands(planFilePath, cwd = process.cwd()) {
 
   _lintDependencyDeclarations(plan, warnings);
   _lintSliceExecutability(plan, errors, warnings);
+  _lintParallelCoherence(plan, warnings);
 
   for (const slice of plan.slices) {
     if (!slice.validationGate) continue;

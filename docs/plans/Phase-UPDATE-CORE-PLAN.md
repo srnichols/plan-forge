@@ -36,7 +36,7 @@ The parts already moved to Node behave identically in both shells: the update gu
 | Gap | PowerShell `Invoke-Update` | Bash `cmd_update` |
 |---|---|---|
 | Shared and internal instructions the project lacks | Skipped: only files the project already has are offered (`Test-Path $dstFile`) | Added as NEW (`_pf_check` queues missing files) |
-| `.forge.json` migration (`modelRouting.default`, `hooks`) | Migrated ("Migrate: add modelRouting.default if missing", "Migrate: add hooks config if missing") | Not migrated at all |
+| `.forge.json` migration (`modelRouting.default`, `hooks`) | Migrated | **Closed in 3.29:** both shells call `pforge-mcp/migrate-forge-config.mjs` after the copy step. |
 
 ---
 
@@ -105,7 +105,7 @@ Every slice uses these shapes exactly (#308).
 | # | Decision | Resolution |
 |---|---|---|
 | D1 | Missing shared/internal instructions: add them, or update existing ones only? | **Add them**, as Bash does. Setup installs them, so a missing one means an older install that predates the file. The guard still keeps edited copies. |
-| D2 | Config migration in Bash | **Both shells** migrate via `configMigrations`, applied by the shell after the copy step (PowerShell already does this). |
+| D2 | Config migration in Bash | **Done in 3.29** with `migrate-forge-config.mjs`, which both shells already call. `update-plan.mjs` reports its pending additions as `configMigrations`; applying them stays with that module. |
 | D3 | Where does the report text come from? | `update-plan.mjs report` renders it from the plan JSON so both shells print the same lines; colour stays in the shells. |
 | D4 | Ship target | 3.30.0 (MINOR: changed delivery of missing instructions). |
 
@@ -151,7 +151,7 @@ node pforge-mcp/update-plan.mjs plan --source . --project pforge-mcp/tests/fixtu
 ### Slice 3: PowerShell uses update-plan.mjs [depends: Slice 2] [scope: pforge.ps1]
 
 1. In `Invoke-Update`, replace everything from "Define update categories" through the "Report" section with a call to `update-plan.mjs plan --json` and `report`. Map `operations` back into the existing `$updates`, `$newFiles` and guided lists, so the confirm, apply, guard, pending and self-replace steps stay unchanged.
-2. Apply `configMigrations` where the "Migrate:" blocks are today, and delete those blocks.
+2. Keep the existing `migrate-forge-config.mjs` call after the copy step (added in 3.29); do not reimplement migration.
 3. Fall back with a clear error if the source has no `update-plan.mjs`. That means a source older than 3.30, so tell the user to self-update.
 
 **Validation Gate**:
@@ -163,7 +163,7 @@ npx --prefix pforge-mcp vitest run pforge-mcp/tests/update-guard-cli.test.mjs pf
 ### Slice 4: Bash uses update-plan.mjs [depends: Slice 2] [scope: pforge.sh]
 
 1. In `cmd_update`, replace the `_pf_check` scan, category loops and report with the same `update-plan.mjs` calls. Parse `--json` with `node -e`, never `python3` or `grep -P` (#297).
-2. Apply `configMigrations` (D2). This is new in Bash.
+2. Keep the existing `migrate-forge-config.mjs` call (added in 3.29, closing D2).
 3. Keep `_pf_gh_cleanup`, the guard partition, the self-replace-safe dispatch and the `-dev` refusal as they are.
 
 **Validation Gate**:

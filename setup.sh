@@ -1427,7 +1427,8 @@ write_best_defaults_preset() {
   "hooks": {
     "preDeploy": { "blockOnSecrets": true, "warnOnEnvGaps": true, "scanSince": "HEAD~1" },
     "postSlice": { "silentDeltaThreshold": 5, "warnDeltaThreshold": 10, "scoreFloor": 70 },
-    "preAgentHandoff": { "injectContext": true, "runRegressionGuard": true, "cacheMaxAgeMinutes": 30, "minAlertSeverity": "medium" }
+    "preAgentHandoff": { "injectContext": true, "runRegressionGuard": true, "cacheMaxAgeMinutes": 30, "minAlertSeverity": "medium" },
+    "postRun": { "invokeAuditor": { "onFailure": false, "everyNRuns": null } }
   },
   "innerLoop": {
     "competitive": { "enabled": false },

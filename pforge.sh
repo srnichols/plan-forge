@@ -2112,6 +2112,18 @@ cmd_update() {
         fi
         mv "$config_tmp" "$config_path"
         echo "  ✅ Updated .forge.json templateVersion to $source_version"
+
+        # Add missing modelRouting / hooks defaults. Shared with pforge.ps1 so the
+        # two updaters migrate .forge.json identically (#299).
+        local _migrator="" _mig_candidate="" _mig_key=""
+        for _mig_candidate in "$REPO_ROOT/pforge-mcp/migrate-forge-config.mjs" "$source_path/pforge-mcp/migrate-forge-config.mjs"; do
+            if [ -f "$_mig_candidate" ]; then _migrator="$_mig_candidate"; break; fi
+        done
+        if [ -n "$_migrator" ]; then
+            while IFS= read -r _mig_key; do
+                [ -n "$_mig_key" ] && echo "  ✅ Added $_mig_key to .forge.json"
+            done < <(node "$_migrator" --project "$REPO_ROOT" 2>/dev/null || true)
+        fi
     fi
 
     # ─── Refresh consumer .gitignore managed block (Issue #211) ───────
@@ -3059,7 +3071,9 @@ cmd_doctor() {
     local au_cache_age="no cache" au_last_tag="unknown" au_checked_at="never"
     local update_cache_file="$REPO_ROOT/.forge/update-check.json"
     if [ -f "$update_cache_file" ]; then
-        au_last_tag="$(json_get "$update_cache_file" latestVersion)"
+        # update-check.mjs writes `latest`; older files used `latestVersion`.
+        au_last_tag="$(json_get "$update_cache_file" latest)"
+        [ -z "$au_last_tag" ] && au_last_tag="$(json_get "$update_cache_file" latestVersion)"
         au_checked_at="$(json_get "$update_cache_file" checkedAt)"
         if [ -n "$au_checked_at" ]; then
             local au_age_s=$(( $(date +%s) - $(date -d "$au_checked_at" +%s 2>/dev/null || date -j -f "%Y-%m-%dT%H:%M:%S" "${au_checked_at%%.*}" +%s 2>/dev/null || echo 0) ))
@@ -3433,50 +3447,27 @@ cmd_doctor() {
     fi
     if [ -d "$hooks_dir" ] || [ $hook_config_present -eq 1 ] || [ $hooks_json_present -eq 1 ]; then
         echo "Lifecycle Hooks:"
-        local enums_cli="$REPO_ROOT/pforge-mcp/bin/enums-cli.mjs"
-        local expected_hooks=()
-        if command -v node >/dev/null 2>&1 && [ -f "$enums_cli" ]; then
-            mapfile -t expected_hooks < <(node "$enums_cli" --enum HOOK_PASCAL 2>/dev/null)
+        # One check for both shells, no jq needed: hook-status.mjs prints "Hook|sources" per hook.
+        local expected_hooks=() hook_count=0 hook_missing="" _hs_row _hs_name _hs_src _hs_cli=""
+        for _hs_cli in "$REPO_ROOT/pforge-mcp/hook-status.mjs" "$SCRIPT_DIR/pforge-mcp/hook-status.mjs" ""; do
+            [ -z "$_hs_cli" ] || [ -f "$_hs_cli" ] && break
+        done
+        if [ -n "$_hs_cli" ]; then
+            while IFS= read -r _hs_row; do
+                [ -z "$_hs_row" ] && continue
+                _hs_name="${_hs_row%%|*}"; _hs_src="${_hs_row#*|}"
+                expected_hooks+=("$_hs_name")
+                if [ -n "$_hs_src" ]; then
+                    hook_count=$((hook_count + 1))
+                else
+                    [ -n "$hook_missing" ] && hook_missing="$hook_missing, "
+                    hook_missing="$hook_missing$_hs_name"
+                fi
+            done < <(node "$_hs_cli" --project "$REPO_ROOT" 2>/dev/null | tr -d '\r')
         fi
         if [ ${#expected_hooks[@]} -eq 0 ]; then
-            expected_hooks=("SessionStart" "PreToolUse" "PostToolUse" "Stop" "PreDeploy" "PostSlice" "PreAgentHandoff" "PostRun")
-        fi
-        # Build PascalCase->camelCase map for .forge.json config key lookup
-        declare -A hook_cfg_keys
-        local forge_json="$REPO_ROOT/.forge.json"
-        if command -v node >/dev/null 2>&1 && [ -f "$enums_cli" ] && command -v jq >/dev/null 2>&1; then
-            while IFS='=' read -r key val; do
-                hook_cfg_keys["$key"]="$val"
-            done < <(node "$enums_cli" --enum HOOK_NAMES --format json 2>/dev/null | jq -r 'to_entries | .[] | .key + "=" + .value' 2>/dev/null)
-        fi
-        local hook_count=0 hook_missing=""
-        for hook in "${expected_hooks[@]}"; do
-            local found=0 cfg_key cfg_val hook_json_val
-            cfg_key="${hook,}${hook:1}"
-            if [ -d "$hooks_dir" ] && find "$hooks_dir" -type f -name "*$hook*" -print -quit 2>/dev/null | grep -q .; then
-                found=1
-            fi
-            # Source 2: .github/hooks/plan-forge.json declares this hook (PascalCase key)
-            if [ $found -eq 0 ] && [ -f "$hooks_json" ] && command -v jq >/dev/null 2>&1; then
-                if jq -e ".hooks.\"$hook\"" "$hooks_json" >/dev/null 2>&1; then
-                    found=1
-                fi
-            fi
-            # Source 3: .forge.json -> hooks.<camelCase> (config-based hooks)
-            cfg_key="${hook_cfg_keys[$hook]:-$cfg_key}"
-            if [ $found -eq 0 ] && [ -n "$cfg_key" ] && [ -f "$forge_json" ] && command -v jq >/dev/null 2>&1; then
-                if jq -e ".hooks.\"$cfg_key\"" "$forge_json" >/dev/null 2>&1; then
-                    found=1
-                fi
-            fi
-            if [ $found -eq 1 ]; then
-                hook_count=$((hook_count + 1))
-            else
-                [ -n "$hook_missing" ] && hook_missing="$hook_missing, "
-                hook_missing="$hook_missing$hook"
-            fi
-        done
-        if [ $hook_count -eq ${#expected_hooks[@]} ]; then
+            doctor_warn "Could not check lifecycle hooks (pforge-mcp/hook-status.mjs missing)" "Run 'pforge self-update'"
+        elif [ $hook_count -eq ${#expected_hooks[@]} ]; then
             doctor_pass "$hook_count/${#expected_hooks[@]} lifecycle hooks present"
         elif [ $hook_count -gt 0 ]; then
             if [ $is_planforge_dev -eq 1 ]; then

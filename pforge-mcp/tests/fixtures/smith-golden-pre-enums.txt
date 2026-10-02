@@ -13,16 +13,16 @@ Equivalent manual steps (smith):
 
 Environment:
   ✅ git 2.53.0.windows.3
-  ✅ code (VS Code CLI) 1.132.0
-  ✅ PowerShell 7.6.3 (pwsh)
+  ✅ code (VS Code CLI) 1.140.0
+  ✅ PowerShell 7.6.6 (pwsh)
   ✅ gh (GitHub CLI) 2.92.0
 
 Runtime & Worker Readiness:
   ✅ git v2.53.0
   ✅ gh v2.92.0
   ✅ node v24.11.1
-  ✅ pwsh v7.6.3
-  ✅ gh-copilot v1.0.78 (agentic capable)
+  ✅ pwsh v7.6.6
+  ✅ gh-copilot v1.0.91 (agentic capable)
   ⚠️  claude not found on PATH (agent worker)
      FIX: winget install Anthropic.Claude   (or npm install -g @anthropic-ai/claude-code)
   ✅ copilot-coding-agent (version unknown) (agentic capable)
@@ -32,42 +32,56 @@ Runtime & Worker Readiness:
 
 VS Code Configuration:
   ✅ chat.agent.enabled (default — OK)
-  ⚠️  chat.useCustomizationsInParentRepositories not set
-     FIX: Add "chat.useCustomizationsInParentRepositories": true to .vscode/settings.json
-  ⚠️  chat.promptFiles not set
-     FIX: Add "chat.promptFiles": true to .vscode/settings.json
+  ✅ chat.useCustomizationsInParentRepositories = true
+  ✅ chat.promptFiles = true
 
 Setup Health:
-  ❌ .forge.json not found
-     FIX: Run 'pforge init' to bootstrap your project
+  ✅ .forge.json valid (preset: dotnet, v3.29.0-dev)
+  ✅ Agent: copilot (configured)
   ✅ .github/copilot-instructions.md exists
+  ✅ 23 instruction files (expected: >=15 for dotnet)
+  ✅ 20 agent definitions (expected: >=17 for dotnet)
+  ✅ 23 prompt templates (expected: >=9 for dotnet)
+  ✅ Pipeline prompts present (step0-step6 + project-profile)
+  ✅ 17 skills (expected: >=8 for dotnet)
 
 Version Currency:
-  ⚠️  Cannot determine installed version (.forge.json missing templateVersion)
-     (cached 388m ago)
+  ⚠️  Installed v3.29.0-dev — latest is v3.28.1
+     FIX: Run 'pforge self-update' to upgrade
+     (cached 21m ago)
 
 Auto-update:
-  ✅ Auto-update: disabled (opt-in) | Cache age: no cache | Last tag: unknown | Last check: never
+  ✅ Auto-update: disabled (opt-in) | Cache age: 73m | Last tag: v3.29.0-dev | Last check: 10/02/2026 15:47:33
      Tip: Run 'pforge self-update' to check + install, or 'pforge smith --refresh-version-cache' to clear cache
 
 MCP Server:
   ✅ pforge-mcp/server.mjs exists
   ✅ MCP dependencies installed
   ✅ .vscode/mcp.json has 'plan-forge' server entry
+  ⚠️  .vscode/mcp.json missing 'forge-master-chat' entry
+     FIX: Re-run setup or add manually — Forge-Master chat tab won't connect without it
 
 Image Generation:
   ✅ sharp installed (WebP, PNG, AVIF conversion)
   ⚠️  No image API keys configured
      FIX: Set XAI_API_KEY or OPENAI_API_KEY env var, or add to .forge/secrets.json
-  ✅ Node.js v24.11.1 (plan-forge-mcp requires >= 20.19.0)
+  ✅ Node.js v24.11.1 (plan-forge-mcp requires >= 22.12.0)
 
 MCP Runtime:
   ✅ MCP SDK (protocol layer) v1.29.0
   ✅ Express (dashboard + REST API) v5.2.1
-  ✅ ws (WebSocket hub for real-time events) v8.20.0
+  ✅ ws (WebSocket hub for real-time events) v8.21.3
   ✅ Playwright (screenshot capture)
   ✅ forge-master-routes.mjs (Phase-29 route wiring)
-  ✅ tools.json + cli-schema.json (92 MCP tools registered)
+  ✅ tools.json + cli-schema.json (105 MCP tools registered)
+
+Forge-Master Studio (Phase-29):
+  ✅ pforge-master/server.mjs
+  ✅ pforge-master/src/lifecycle.mjs (status/logs backend)
+  ✅ pforge-master dependencies installed
+
+pforge-sdk:
+  ✅ pforge-sdk/src/client.mjs
 
 Dashboard:
   ✅ dashboard/index.html
@@ -82,21 +96,27 @@ Extensions:
   ✅ Spec Kit compatible
 
 Version & Changelog:
-  ✅ VERSION: 3.7.0
-  ✅ CHANGELOG.md present (framework v3.7.0 — downstream CHANGELOG tracks your app, not pforge)
+  ✅ VERSION: 3.22.2
+  ✅ CHANGELOG.md present (framework v3.22.2 — downstream CHANGELOG tracks your app, not pforge)
 
 Common Problems:
   ✅ No common problems detected
 
 Orchestrator:
-  ✅ Orchestrator ready — use 'pforge run-plan <plan>' to execute a plan
+  ✅ Last run: All slices: 3 passed, 0 failed. Cost: $0.07. Sweep: 10 markers. Score: 80/100.
+  ✅ 2 run(s) in .forge/runs/
   ✅ pforge-mcp/orchestrator.mjs present
 
 Intelligence:
-  ✅ 92 MCP tools (14 LiveGuard) in tools.json
+  ✅ Model performance: 6 records — escalation chain auto-tuning active
+  ✅ Cost history present — estimate calibration active
+  ✅ LiveGuard memories: 1 captured finding(s)
+  ✅ OpenBrain queue: 0 thought(s) pending ingestion
+  ✅ 105 MCP tools (14 LiveGuard) in tools.json
 
 Crucible:
-  ✅ Crucible inactive — no .forge/crucible/ directory yet
+  ✅ No smelts yet — run 'forge_crucible_submit' to start the funnel
+  ✅ 5 manual-import bypass(es) recorded
 
 Tempering:
   ✅ Tempering inactive — no .forge/tempering/ directory yet
@@ -105,13 +125,13 @@ Bug Registry:
   ✅ Bug registry inactive — no .forge/bugs/ directory yet
 
 Notifications:
-  ✅ No .forge.json — notifications inactive (optional)
+  ✅ No notifications block — adapters inactive (optional)
 
 Timeline / Search sources:
-  ✅ 0 of 6 L2 source(s) with indexable events
+  ✅ 2 of 6 L2 source(s) with indexable events
 
 ────────────────────────────────────────────────────
-  Results:  43 passed  |  1 failed  |  6 warnings
+  Results:  61 passed  |  0 failed  |  5 warnings
 ────────────────────────────────────────────────────
 
-Fix the 1 issue(s) above for the best Plan Forge experience.
+5 warning(s) — review the suggestions above.

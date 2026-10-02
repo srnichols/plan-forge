@@ -56,6 +56,9 @@ function normalize(text) {
       .replace(/\b\d+\.\d+\.\d+(?:\.\S+)?\b/g, "<version>")
       // Cache age: "(cached 95m ago)" → "(cached <age>)"
       .replace(/\(cached \d+[smhd]+ ago\)/g, "(cached <age>)")
+      // Auto-update status: cache age and last-check time change every run
+      .replace(/Cache age: -?\d+m/g, "Cache age: <age>")
+      .replace(/Last check: [^\n|]+/g, "Last check: <time>")
       // gh-copilot agentic status: varies by environment (login session, flags)
       .replace(/gh-copilot v<version>[^\n]*/g, "gh-copilot v<version> <copilot-agent-status>")
       // copilot-coding-agent: check result changes with gh auth state.

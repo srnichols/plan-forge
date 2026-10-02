@@ -2328,24 +2328,17 @@ function Invoke-Update {
         $config = Get-Content $configPath -Raw | ConvertFrom-Json
         $config.templateVersion = $sourceVersion
 
-        # Migrate: add modelRouting.default if missing (v2.27+)
-        if (-not $config.modelRouting) {
-            $config | Add-Member -NotePropertyName "modelRouting" -NotePropertyValue @{ default = "claude-opus-5.5" }
-            Write-Host "  ✅ Added modelRouting.default = claude-opus-5.5" -ForegroundColor Green
-        }
-
-        # Migrate: add hooks config if missing (v2.29+)
-        if (-not $config.hooks) {
-            $config | Add-Member -NotePropertyName "hooks" -NotePropertyValue @{
-                preDeploy       = @{ blockOnSecrets = $true; warnOnEnvGaps = $true; scanSince = "HEAD~1" }
-                postSlice       = @{ silentDeltaThreshold = 5; warnDeltaThreshold = 10; scoreFloor = 70 }
-                preAgentHandoff = @{ injectContext = $true; runRegressionGuard = $true; cacheMaxAgeMinutes = 30; minAlertSeverity = "medium" }
-            }
-            Write-Host "  ✅ Added hooks config (preDeploy, postSlice, preAgentHandoff)" -ForegroundColor Green
-        }
-
-        $config | ConvertTo-Json -Depth 4 | Set-Content -Path $configPath
+        $config | ConvertTo-Json -Depth 10 | Set-Content -Path $configPath
         Write-Host "  ✅ Updated .forge.json templateVersion to $sourceVersion" -ForegroundColor Green
+
+        # Add missing modelRouting / hooks defaults. Shared with pforge.sh so the
+        # two updaters migrate .forge.json identically (#299).
+        $migrator = @((Join-Path $RepoRoot "pforge-mcp/migrate-forge-config.mjs"), (Join-Path $sourcePath "pforge-mcp/migrate-forge-config.mjs")) | Where-Object { Test-Path $_ } | Select-Object -First 1
+        if ($migrator) {
+            foreach ($key in @(& node $migrator --project $RepoRoot 2>$null)) {
+                if ($key) { Write-Host "  ✅ Added $key to .forge.json" -ForegroundColor Green }
+            }
+        }
     }
 
     # ─── Create docs/plans/auto/ if missing (v2.29+) ─────────────
@@ -2827,6 +2820,14 @@ function Invoke-Analyze {
 }
 
 # ─── Command: smith ────────────────────────────────────────────────────
+# Time since a cache timestamp, compared in UTC. ConvertFrom-Json turns an ISO
+# "...Z" string into a UTC DateTime; subtracting that from local Get-Date ignored
+# the offset, so ages were off by the machine's UTC offset.
+function Get-TimeSince($Timestamp) {
+    if ($Timestamp -is [datetime]) { return [datetime]::UtcNow - $Timestamp.ToUniversalTime() }
+    return [datetime]::UtcNow - [datetimeoffset]::Parse("$Timestamp", [Globalization.CultureInfo]::InvariantCulture).UtcDateTime
+}
+
 function Invoke-Smith {
     # Phase AUTO-UPDATE-01 Slice 2 — --refresh-version-cache flag
     if ($Arguments -contains '--refresh-version-cache') {
@@ -3359,7 +3360,7 @@ function Invoke-Smith {
     if (Test-Path $versionCheckCacheFile) {
         try {
             $cache = Get-Content $versionCheckCacheFile -Raw | ConvertFrom-Json
-            $cacheAge = (Get-Date) - [datetime]$cache.checkedAt
+            $cacheAge = Get-TimeSince $cache.checkedAt
             if ($cacheAge.TotalHours -lt $cacheMaxAgeHours -and $cache.latestVersion) {
                 $sourceVersion = $cache.latestVersion
                 $cacheValid = $true
@@ -3422,7 +3423,7 @@ function Invoke-Smith {
             Doctor-Warn "Installed v$templateVersion — latest is v$sourceVersion" "Run 'pforge self-update' to upgrade"
         }
         if ($cacheValid) {
-            $cacheAge = (Get-Date) - [datetime](Get-Content $versionCheckCacheFile -Raw | ConvertFrom-Json).checkedAt
+            $cacheAge = Get-TimeSince (Get-Content $versionCheckCacheFile -Raw | ConvertFrom-Json).checkedAt
             Write-Host "     (cached $([math]::Round($cacheAge.TotalMinutes))m ago)" -ForegroundColor DarkGray
         }
     }
@@ -3463,9 +3464,10 @@ function Invoke-Smith {
         try {
             $auCache = Get-Content $updateCacheFile -Raw | ConvertFrom-Json
             $auCheckedAt = $auCache.checkedAt
-            $auLastTag = $auCache.latestVersion
+            # update-check.mjs writes `latest`; older files used `latestVersion`.
+            $auLastTag = if ($auCache.latest) { $auCache.latest } else { $auCache.latestVersion }
             if ($auCheckedAt) {
-                $auCacheAge = [math]::Round(((Get-Date) - [datetime]$auCheckedAt).TotalMinutes)
+                $auCacheAge = [math]::Round((Get-TimeSince $auCheckedAt).TotalMinutes)
             }
         } catch {
             Write-Verbose "Could not parse update-check.json: $($_.Exception.Message)"
@@ -3877,56 +3879,25 @@ function Invoke-Smith {
 
     if ($hasHookFiles -or $hookConfig -or $hooksJsonConfig) {
         Write-Host "Lifecycle Hooks:" -ForegroundColor Cyan
-        $enumsCli = Join-Path $RepoRoot "pforge-mcp/bin/enums-cli.mjs"
-        if (Test-Path $enumsCli) {
-            $allExpectedHooks = @(node $enumsCli --enum HOOK_PASCAL 2>$null)
-            $hookNamesJson = node $enumsCli --enum HOOK_NAMES --format json 2>$null
-            $hookNamesObj  = $hookNamesJson | ConvertFrom-Json
-            $configKeyMap  = @{}
-            foreach ($prop in $hookNamesObj.PSObject.Properties) {
-                $configKeyMap[$prop.Name] = $prop.Value
-            }
-        } else {
-            # Fallback when pforge-mcp/bin/enums-cli.mjs is not present
-            $allExpectedHooks = @("SessionStart","PreToolUse","PostToolUse","Stop","PreDeploy","PostSlice","PreAgentHandoff","PostRun")
-            $configKeyMap = @{ SessionStart="sessionStart"; PreToolUse="preToolUse"; PostToolUse="postToolUse"; Stop="stop"; PreDeploy="preDeploy"; PostSlice="postSlice"; PreAgentHandoff="preAgentHandoff"; PostRun="postRun" }
-        }
-
-        $hookFiles = @()
-        if ($hasHookFiles) {
-            $hookFiles = Get-ChildItem -Path $hooksDir -File -Recurse | ForEach-Object { $_.BaseName }
-        }
-
+        # One check for both shells: pforge-mcp/hook-status.mjs prints "Hook|sources" per hook.
+        $allExpectedHooks = @()
         $hookCount = 0
         $hookSources = @{}
-        foreach ($hook in $allExpectedHooks) {
-            $foundInFiles = ($hookFiles | Where-Object { $_ -match $hook }) -ne $null -and ($hookFiles | Where-Object { $_ -match $hook }).Count -gt 0
-            $foundInConfig = $false
-            if ($hookConfig) {
-                $cfgKey = $configKeyMap[$hook]
-                if ($cfgKey) {
-                    $cfgVal = $hookConfig.$cfgKey
-                    # Treat as "configured" if the property exists and is non-null/non-false
-                    if ($null -ne $cfgVal -and $cfgVal -ne $false) { $foundInConfig = $true }
+        $hookStatusCli = @((Join-Path $RepoRoot "pforge-mcp/hook-status.mjs"), (Join-Path $PSScriptRoot "pforge-mcp/hook-status.mjs")) | Where-Object { Test-Path $_ } | Select-Object -First 1
+        if ($hookStatusCli) {
+            foreach ($row in @(& node $hookStatusCli --project $RepoRoot 2>$null)) {
+                $parts = "$row" -split '\|', 2
+                if (-not $parts[0]) { continue }
+                $allExpectedHooks += $parts[0]
+                if ($parts.Count -gt 1 -and $parts[1]) {
+                    $hookCount++
+                    $hookSources[$parts[0]] = $parts[1] -replace ',', '+'
                 }
             }
-            $foundInHooksJson = $false
-            if ($hooksJsonConfig) {
-                # plan-forge.json uses PascalCase keys matching the hook name directly
-                $hjVal = $hooksJsonConfig.$hook
-                if ($null -ne $hjVal -and $hjVal -ne $false) { $foundInHooksJson = $true }
-            }
-            if ($foundInFiles -or $foundInConfig -or $foundInHooksJson) {
-                $hookCount++
-                $src = @()
-                if ($foundInFiles)     { $src += "file" }
-                if ($foundInConfig)    { $src += ".forge.json" }
-                if ($foundInHooksJson) { $src += "hooks/plan-forge.json" }
-                $hookSources[$hook] = ($src -join "+")
-            }
         }
-
-        if ($hookCount -eq $allExpectedHooks.Count) {
+        if ($allExpectedHooks.Count -eq 0) {
+            Doctor-Warn "Could not check lifecycle hooks (pforge-mcp/hook-status.mjs missing)" "Run 'pforge self-update'"
+        } elseif ($hookCount -eq $allExpectedHooks.Count) {
             Doctor-Pass "$hookCount/$($allExpectedHooks.Count) lifecycle hooks present (core + LiveGuard)"
         } elseif ($hookCount -gt 0) {
             $hookMissing = $allExpectedHooks | Where-Object { -not $hookSources.ContainsKey($_) }

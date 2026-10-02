@@ -46,6 +46,13 @@ Format follows [Keep a Changelog](https://keepachangelog.com/).
 
 ### Fixed
 
+- **`pforge smith` no longer reports "Missing hooks: PostRun" on a fresh install.**
+  - **Cause:** setup seeded `.forge.json` with the preDeploy, postSlice and preAgentHandoff hook settings but not postRun, so every new project showed 7/8 hooks and a warning.
+  - **Fix:** setup now writes `hooks.postRun` with the auditor off. `pforge update` adds missing `modelRouting` and `hooks` defaults through `pforge-mcp/migrate-forge-config.mjs`, in both shells; the Bash updater did not migrate `.forge.json` at all before.
+  - **Bash `smith` on Windows:** it reported 3/8 hooks there, because its hook check needed `jq` (which Git Bash lacks) and built config keys wrongly. Both shells now use `pforge-mcp/hook-status.mjs`.
+- **`pforge smith` shows the right update-cache age and tag.**
+  - **Cache age:** the PowerShell check subtracted a UTC timestamp from local time, so on a UTC−6 machine a cache checked 5 minutes ago read `-355m`. The same error shifted when the 24-hour version cache expired.
+  - **Last tag:** both shells read the wrong field from `.forge/update-check.json`, so it always said `unknown`.
 - **`pforge update` no longer treats a project without `.forge.json` as the custom preset.** When `.forge.json` was missing, or named no preset, the updater assumed `custom` and replaced the stack's `testing` and `security` instructions with the stack-neutral shared copies. It now detects the stack from project files the way `setup -AutoDetect` does (`.csproj`/`.sln`/`.slnx`, `go.mod`, `Cargo.toml`, …), reports `Preset: dotnet (detected from …)`, and suggests pinning the preset in `.forge.json`. Found refreshing `plan-forge-testbed`, which gitignores its `.forge.json`.
 - **The Copilot SDK worker runs against the real `@github/copilot-sdk`.** With `routing.copilotSdk: "prefer"`, every SDK-routed slice failed with `session.run is not a function`. The worker had been written against an API the SDK does not have, and its unit tests faked that same API. It now matches the SDK:
   - it sends the prompt with `sendAndWait`, starts the session in the slice's working directory, and reads usage from `assistant.usage` events;

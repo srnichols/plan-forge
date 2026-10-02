@@ -1550,6 +1550,7 @@ function Write-BestDefaultsPreset {
             preDeploy        = @{ blockOnSecrets = $true; warnOnEnvGaps = $true; scanSince = "HEAD~1" }
             postSlice        = @{ silentDeltaThreshold = 5; warnDeltaThreshold = 10; scoreFloor = 70 }
             preAgentHandoff  = @{ injectContext = $true; runRegressionGuard = $true; cacheMaxAgeMinutes = 30; minAlertSeverity = "medium" }
+            postRun          = @{ invokeAuditor = @{ onFailure = $false; everyNRuns = $null } }  # auditor off until configured
         }
         # Phase-26 defaults — all advisory, zero destructive action by default.
         innerLoop       = @{

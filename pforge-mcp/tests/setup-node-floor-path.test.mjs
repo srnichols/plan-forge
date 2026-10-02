@@ -50,7 +50,7 @@ describe("installer Node preflight - source path portability", () => {
     const end = source.indexOf('    pf_update_gitignore "$REPO_ROOT"', start);
     expect(marker).toBeGreaterThan(-1);
     expect(end).toBeGreaterThan(start);
-    const script = 'set -euo pipefail\nupdate_fixture() {\nlocal config_path="$PWD/.forge.json" source_version="3.26.6"\n'
+    const script = 'set -euo pipefail\nupdate_fixture() {\nlocal config_path="$PWD/.forge.json" source_version="3.26.6" REPO_ROOT="$PWD" source_path="$PWD"\n'
       + source.slice(start, end) + '\n}\nupdate_fixture\n';
     return spawnSync(bash, ["-c", script], { cwd: sourceDir, encoding: "utf8", windowsHide: true });
   }

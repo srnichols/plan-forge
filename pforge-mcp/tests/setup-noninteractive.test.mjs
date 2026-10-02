@@ -41,6 +41,8 @@ function expectInstalled(result, project) {
   expect(result.status, result.stdout + result.stderr).toBe(0);
   const config = JSON.parse(readFileSync(join(project, ".forge.json"), "utf8"));
   expect(config.preset).toBe("custom");
+  // Every LiveGuard hook is seeded, so `pforge smith` reports 8/8 on a fresh install.
+  expect(config.hooks.postRun).toEqual({ invokeAuditor: { onFailure: false, everyNRuns: null } });
 }
 
 describe.skipIf(!hasInstallers)("#304 non-interactive setup takes defaults", () => {

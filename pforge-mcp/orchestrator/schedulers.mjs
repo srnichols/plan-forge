@@ -235,6 +235,22 @@ export class ParallelScheduler {
     return ready;
   }
 
+  /**
+   * --resume-from: record every slice before `resumeFrom` (topological order)
+   * as skipped, as SequentialScheduler does. A plain "skipped" result
+   * satisfies dependents, so the resumed slices still become ready.
+   */
+  _skipBeforeResume({ order, resumeFrom, results, completed, allResults }) {
+    if (resumeFrom === null || resumeFrom === undefined) return;
+    for (const id of order) {
+      if (id === String(resumeFrom)) return;
+      const skipResult = { sliceId: id, status: "skipped" };
+      results.set(id, skipResult);
+      allResults.push(skipResult);
+      completed.add(id);
+    }
+  }
+
   /** Run one slice of a concurrent batch, converting a throw into an error result. */
   async _runSliceInBatch(id, slice, executeFn) {
     this.eventBus.emit("slice-started", { sliceId: id, title: slice.title, parallel: true, complexityScore: slice.complexityScore });
@@ -266,10 +282,11 @@ export class ParallelScheduler {
    * Uses a readiness-based approach: slices become ready when all dependencies complete.
    */
   async execute(nodes, order, executeFn, options = {}) {
-    const { abortSignal } = options;
+    const { abortSignal, resumeFrom = null } = options;
     const results = new Map();
     const completed = new Set();
     const allResults = [];
+    this._skipBeforeResume({ order, resumeFrom, results, completed, allResults });
 
     // Check for scope conflicts among parallel-eligible slices
     const conflicts = detectScopeConflicts(nodes);

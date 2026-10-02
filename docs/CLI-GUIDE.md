@@ -1555,7 +1555,7 @@ jobs:
   validate:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: srnichols/plan-forge-validate@v1
         with:
           sweep: true

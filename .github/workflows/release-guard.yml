@@ -17,7 +17,7 @@ jobs:
     name: VERSION file matches tag
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Verify VERSION matches tag
         shell: bash

@@ -24,7 +24,7 @@ All workflows also support `workflow_dispatch` for manual triggering.
 
 ## Requirements
 
-- **Node.js 20+** (set up via `actions/setup-node@v4`)
+- **Node.js 22.12+** (set up via `actions/setup-node@v7`)
 - **Ubuntu runner** (default `ubuntu-latest`)
 - `pforge.sh` must be executable (`chmod +x pforge.sh`)
 

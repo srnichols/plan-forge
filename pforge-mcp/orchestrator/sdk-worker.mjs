@@ -22,7 +22,13 @@ const DEFAULT_SDK_TIMEOUT_MS = 1_200_000;
  * Returns both handles so the caller can disconnect the session and stop the client;
  * a client left running keeps its CLI child process (and the Node event loop) alive.
  */
-async function _defaultCreateSession({ model, cwd, onPermissionRequest, onEvent }) {
+async function _defaultCreateSession({ model, cwd, onPermissionRequest, onEvent, provider = null }) {
+  if (provider) {
+    // A BYOK session needs a provider baseUrl this worker does not configure, and
+    // the mapped providers (image generation, Foundry) are not agent workloads.
+    // Declining here makes spawnWorker keep their direct API path.
+    throw Object.assign(new Error(`BYOK provider "${provider.type}" is not supported through the Copilot SDK; using the direct API`), { code: "SDK_BYOK_UNSUPPORTED" });
+  }
   let sdk;
   try {
     sdk = await import("@github/copilot-sdk");

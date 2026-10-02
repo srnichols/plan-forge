@@ -127,11 +127,12 @@ one-time recovery required by already-installed updater code.
 ### 1e. Routing and runtime contract
 
 Compare routing defaults and the Node floor with the previous release; do not
-flip defaults as part of release preparation. Since v3.26.1 the Copilot SDK
-route is opt-in (`routing.copilotSdk: "prefer"`), with a default of `"off"`.
-The earlier unconditional "SDK default flipped" check is not a gate for a
-release that preserves that contract. A future default flip requires the
-cost-parity evidence and migration notes in the release instruction file.
+flip defaults as part of release preparation. Since v3.29 the Copilot SDK
+route is the default (`routing.copilotSdk: "prefer"`), with `"off"` as the
+opt-out. The flip was based on #307's cost-parity evidence: the SDK cost 33–36%
+less than spawn on the same tasks (`scripts/benchmark/sdk-parity.mjs`). Re-run
+the benchmark when the SDK or the Copilot CLI changes major version, and
+confirm the SDK still costs no more than 5% above spawn.
 
 ---
 

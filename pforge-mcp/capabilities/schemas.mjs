@@ -399,7 +399,7 @@ export const CONFIG_SCHEMA = {
       description: "Worker routing switches",
       properties: {
         grokCli: { type: "string", enum: ["off", "auto", "prefer"], default: "auto", description: "Route Grok-servable models through the Grok Build CLI when 'prefer'. 'auto' (default) uses the CLI if available." },
-        copilotSdk: { type: "string", enum: ["off", "prefer"], default: "off", description: "Route Copilot-servable and DIRECT_API_ONLY models through @github/copilot-sdk when 'prefer'. Default 'off' — no behaviour change until explicitly enabled." },
+        copilotSdk: { type: "string", enum: ["off", "prefer"], default: "prefer", description: "Route Copilot-servable models (gpt-*, Copilot Grok) through @github/copilot-sdk instead of spawning the Copilot CLI. Default 'prefer' (about a third cheaper per turn, falls back to the CLI if the SDK cannot start); 'off' always spawns the CLI." },
       },
     },
     hooks: {

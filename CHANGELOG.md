@@ -28,6 +28,14 @@ Format follows [Keep a Changelog](https://keepachangelog.com/).
 - **Weekly Copilot model and pricing drift check** ([#303](https://github.com/srnichols/plan-forge/issues/303)). Model retirements and price changes used to surface only at release time. The new **Model Drift** workflow runs `scripts/check-model-drift.mjs` every Monday. It reports a model Plan Forge defaults to that retires within 30 days, a default missing from the live Copilot model list, and `copilot-pricing.json` out of date with live AI-credit prices. Findings go to a single tracking issue, which a clean run closes. Retirement dates now live in `pforge-mcp/model-retirements.json`, which the model-defaults contract test also reads. The live checks need a `COPILOT_GITHUB_TOKEN` repository secret.
 - **Every preset is set up and checked in CI** ([#301](https://github.com/srnichols/plan-forge/issues/301)). `validate.yml` now sets up and validates all ten presets in both PowerShell and Bash; swift, rust, php and azure-iac were never exercised before. The new `scripts/audit/preset-quality.mjs` gate fails a preset change that adds filler, copies a code block between files, brings in Go idioms, or ships a skill with no runnable steps. It also fails when a `bash` sample breaks `bash -n` or, with `--php`, a PHP sample breaks `php -l`. It runs on every push, and `preset-quality.test.mjs` runs it in the test suite. Fixed along the way: a duplicated filter in the java `api-patterns` instructions, and a Fastlane (Ruby) sample in the swift preset that was labelled `bash`.
 
+### Changed
+
+- **Copilot-servable models now run through the Copilot SDK by default** ([#307](https://github.com/srnichols/plan-forge/issues/307)). `routing.copilotSdk` now defaults to `"prefer"`, so `gpt-*` and Copilot-served Grok slices use `@github/copilot-sdk` instead of a spawned Copilot CLI.
+  - **Evidence:** on the same tasks and model, the SDK route cost 33–36% less, read 46% fewer input tokens and finished in about half the time, with every correctness check passing on both routes. That was 9 runs per route on `gpt-6-luna` and 3 on `gpt-6-sol`. Reproduce with `node scripts/benchmark/sdk-parity.mjs`.
+  - **Fallback and scope:** if the SDK cannot start, the slice falls back to the CLI. Claude models keep the CLI route, and BYOK providers (image generation, Microsoft Foundry) keep their direct API.
+  - **Opt-out:** set `"routing": { "copilotSdk": "off" }` in `.forge.json` to keep spawning the CLI.
+  - **Node:** the SDK supports Node `^20.19.0 || >=22.12.0`; `plan-forge-mcp`'s floor is unchanged at `>=20.19.0`.
+
 ### Fixed
 
 - **The Copilot SDK worker runs against the real `@github/copilot-sdk`.** With `routing.copilotSdk: "prefer"`, every SDK-routed slice failed with `session.run is not a function`. The worker had been written against an API the SDK does not have, and its unit tests faked that same API. It now matches the SDK:

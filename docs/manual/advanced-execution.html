@@ -483,6 +483,16 @@ ArgumentException.ThrowIfNullOrWhiteSpace(customerName);</code></pre>
   }
 }</code></pre>
 
+      <h3>Copilot SDK route</h3>
+      <p>Since v3.29, Copilot-servable models (<code>gpt-*</code> and Copilot-served Grok) run through <code>@github/copilot-sdk</code> instead of a spawned Copilot CLI. If the SDK cannot start, the run falls back to the CLI. Claude models are not affected and keep the CLI route.</p>
+      <p>On the same tasks and model, the SDK route cost 33–36% less, read about 46% fewer input tokens and finished in about half the time. It loads less context per turn. You can measure it in your own setup with <code>node scripts/benchmark/sdk-parity.mjs</code>.</p>
+      <p>To keep spawning the CLI, opt out:</p>
+      <pre><code>{
+  "routing": {
+    "copilotSdk": "off"   // "prefer" (default) \| "off"
+  }
+}</code></pre>
+
       <h3>Pre-run summary table</h3>
       <p>Before any model fires in quorum mode, the orchestrator emits a per-model billing surface table to stdout:</p>
 

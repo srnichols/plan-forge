@@ -1449,27 +1449,27 @@ export function loadGrokCliPreference(cwd) {
 }
 
 const VALID_COPILOT_SDK_PREFS = new Set(["prefer", "off"]);
+const DEFAULT_COPILOT_SDK_PREF = "prefer";
 
 /**
  * Read the Copilot SDK routing preference from .forge.json → routing.copilotSdk.
- * "prefer" routes COPILOT_SERVABLE and DIRECT_API_ONLY models through
- * @github/copilot-sdk when the SDK is installed; "off" (default) keeps the
- * existing spawn-based behavior unchanged. Phase-60.
+ * "prefer" (default since #307) routes COPILOT_SERVABLE models through
+ * @github/copilot-sdk when the SDK is installed, falling back to spawning the
+ * Copilot CLI if the SDK cannot start; "off" always spawns the CLI. Measured on
+ * the same tasks and model, the SDK path cost 33–36% less than spawn.
  * @param {string} cwd
  * @returns {"prefer"|"off"}
  */
 export function loadCopilotSdkPreference(cwd) {
   try {
     const configPath = resolve(cwd, ".forge.json");
-    if (!existsSync(configPath)) return "off";
+    if (!existsSync(configPath)) return DEFAULT_COPILOT_SDK_PREF;
     const config = JSON.parse(readFileSync(configPath, "utf-8"));
     const pref = config?.routing?.copilotSdk;
     if (typeof pref === "string" && VALID_COPILOT_SDK_PREFS.has(pref)) return pref;
-    // Stays "off" until SDK-vs-spawn cost parity is measured (Phase-60 Slice 6
-    // flipped this without producing the baseline its own plan required).
-    return "off";
+    return DEFAULT_COPILOT_SDK_PREF;
   } catch {
-    return "off";
+    return DEFAULT_COPILOT_SDK_PREF;
   }
 }
 
@@ -2272,7 +2272,11 @@ async function _tryByokSdkRoute({ apiProvider, prompt, model, cwd, forbiddenPath
     return { handled: true, result };
   } catch (err) {
     if (!err.sdkError) throw err;
-    console.error(`[sdk-worker] BYOK SDK path failed, falling back to direct API: ${err.message}`);
+    // The real session factory declines every BYOK provider (SDK_BYOK_UNSUPPORTED):
+    // that is the expected route to the direct API, not a failure worth a log line.
+    if (err.code !== "SDK_BYOK_UNSUPPORTED") {
+      console.error(`[sdk-worker] BYOK SDK path failed, falling back to direct API: ${err.message}`);
+    }
     return { handled: false };
   }
 }

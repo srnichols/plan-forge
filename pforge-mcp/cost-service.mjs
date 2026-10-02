@@ -551,6 +551,8 @@ const WORKER_COST_PROVIDERS = Object.freeze({
   "codex-cli": "codex-cli",
   grok: "grok-cli",
   "grok-cli": "grok-cli",
+  // Copilot SDK sessions (routing.copilotSdk) spend the same AI credits as gh-copilot.
+  sdk: "gh-copilot",
 });
 
 function costProviderForWorker(worker) {

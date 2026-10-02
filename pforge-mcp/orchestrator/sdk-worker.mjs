@@ -126,11 +126,21 @@ function extractSdkTokens(events, model, sessionStartMs) {
     tokens_in,
     tokens_out,
     cached,
+    // Same field the spawn path reports, so cost-service prices cached input alike (#307).
+    cache_read_tokens: cached ?? 0,
     reasoning_tokens,
     apiDurationMs,
     sessionDurationMs,
     model: resolvedModel,
   };
+}
+
+/**
+ * Worker label for cost accounting: a Copilot SDK session is billed as Copilot
+ * AI credits ("sdk"); a BYOK session is billed by the vendor ("sdk-byok").
+ */
+function sdkWorkerLabel(provider) {
+  return provider ? "sdk-byok" : "sdk";
 }
 
 // ─── BYOK provider config support ────────────────────────────────────────────
@@ -236,7 +246,7 @@ export async function runSdkSession({
       exitCode: 1,
       timedOut: false,
       tokens,
-      worker: "sdk",
+      worker: sdkWorkerLabel(provider),
       model: tokens.model || model || "unknown",
       looksLikeHelpText: false,
     };
@@ -254,7 +264,7 @@ export async function runSdkSession({
     exitCode: 0,
     timedOut: false,
     tokens,
-    worker: "sdk",
+    worker: sdkWorkerLabel(provider),
     model: tokens.model || model || "unknown",
     looksLikeHelpText: false,
   };

@@ -115,13 +115,9 @@ function escalateTier(tier) {
 // ─── Provider Selection ─────────────────────────────────────────────
 
 const NO_PROVIDER_SUGGESTION =
-  "Set ANTHROPIC_API_KEY, OPENAI_API_KEY, or XAI_API_KEY. GITHUB_TOKEN no longer works: " +
-  "GitHub Models, the zero-key path, was retired on 2026-07-30.";
+  "Sign in with GitHub Copilot (`gh auth login` or Copilot CLI), or set ANTHROPIC_API_KEY, OPENAI_API_KEY, or XAI_API_KEY.";
 
-// githubCopilot (GitHub Models) is retired and deliberately absent; an explicit
-// reasoningProvider: "githubCopilot" still resolves via selectProvider() and
-// fails with the retirement message.
-const AUTO_SELECT_ORDER = ["anthropic", "openai", "xai"];
+export const AUTO_SELECT_ORDER = ["githubCopilot", "anthropic", "openai", "xai"];
 
 /**
  * Select the appropriate provider adapter by explicit name.
@@ -159,6 +155,11 @@ export async function selectProvider(providerName) {
  */
 export async function autoSelectProvider(config, env = process.env, _providers = null) {
   const providerDefs = _providers || {
+    githubCopilot: {
+      module: githubCopilotProvider,
+      isAvailable: () => githubCopilotProvider.isAvailable({ env }),
+      load: () => githubCopilotProvider,
+    },
     anthropic: {
       module: null,
       isAvailable: () => Boolean(env.ANTHROPIC_API_KEY),
@@ -345,21 +346,52 @@ function _loadPrinciplesBlock(cwd) {
 async function _resolveProvider(config, deps) {
   let provider = deps.provider || null;
   if (!provider) {
-    provider = config.reasoningProvider
+    provider = config.reasoningProvider && config.reasoningProviderExplicit
       ? await selectProvider(config.reasoningProvider)
       : await autoSelectProvider(config, process.env, deps._providers || null);
   }
   return provider;
 }
 
-function _resolveApiKey(config, deps) {
-  if (deps.resolveApiKey) return deps.resolveApiKey(config.reasoningProvider);
+async function _resolveFallbackProvider(config, deps, failedProvider) {
+  if (deps.provider || config.reasoningProviderExplicit) return null;
+  const failedName = failedProvider?.PROVIDER_NAME;
+  const realProviders = {
+    githubCopilot: { module: githubCopilotProvider, isAvailable: () => failedName !== githubCopilotProvider.PROVIDER_NAME && githubCopilotProvider.isAvailable(), load: () => githubCopilotProvider },
+    anthropic: { module: null, isAvailable: () => failedName !== "anthropic" && Boolean(process.env.ANTHROPIC_API_KEY), load: () => import("./providers/anthropic-tools.mjs") },
+    openai: { module: null, isAvailable: () => failedName !== "openai" && Boolean(process.env.OPENAI_API_KEY), load: () => import("./providers/openai-tools.mjs") },
+    xai: { module: null, isAvailable: () => failedName !== "xai" && Boolean(process.env.XAI_API_KEY), load: () => import("./providers/xai-tools.mjs") },
+  };
+  const injected = deps._providers ? Object.fromEntries(Object.entries(deps._providers).map(([name, entry]) => [name, { ...entry, isAvailable: () => name !== failedName && entry.isAvailable() }])) : realProviders;
+  return autoSelectProvider(config, process.env, injected);
+}
+
+function _providerKeyName(providerName) {
+  if (providerName === "anthropic") return "ANTHROPIC_API_KEY";
+  if (providerName === "openai") return "OPENAI_API_KEY";
+  if (providerName === "xai") return "XAI_API_KEY";
+  return null;
+}
+
+function _resolveApiKey(config, deps, providerName = config.reasoningProvider) {
+  if (deps.resolveApiKey) return deps.resolveApiKey(providerName);
+  const envName = _providerKeyName(providerName);
+  if (envName && process.env[envName]) return process.env[envName];
   if (deps.detectApiProvider) return deps.detectApiProvider(config.reasoningModel)?.apiKey || null;
   return null;
 }
 
+function _resolveModelForProvider(providerName, config, currentModel) {
+  const configured = providerName ? config?.providers?.[providerName]?.model : null;
+  if (typeof configured === "string" && configured) return configured;
+  if (providerName === "anthropic") return "claude-sonnet-5.5";
+  if (providerName === "openai") return "gpt-6-sol";
+  if (providerName === "xai") return "grok-4.7";
+  return currentModel || config.reasoningModel || null;
+}
+
 async function _runPlannerPhase({ provider, currentModel, apiKey, message, classification, allowlist, cwd, deps, systemPrompt }) {
-  if (deps.skipPlanner) return { plannerSynthesis: null, plannerToolCalls: [], tokensIn: 0, tokensOut: 0, costUSD: 0 };
+  if (deps.skipPlanner || typeof provider?.sendTurn !== "function") return { plannerSynthesis: null, plannerToolCalls: [], tokensIn: 0, tokensOut: 0, costUSD: 0 };
   let tokensIn = 0, tokensOut = 0, costUSD = 0;
   try {
     const callPlannerModel = async ({ systemPrompt: sp, userMessage: um }) => {
@@ -500,6 +532,44 @@ async function _executeToolUseLoop({ provider, conversationMessages, toolSchemas
   return { allToolCalls, totalTokensIn, totalTokensOut, totalCostUSD, finalReply, truncated, currentTier: _currentTier, currentModel: _currentModel, fallbackFromTier: _fallbackFromTier };
 }
 
+async function _runProviderLoop({ provider, conversationMessages, toolSchemas, effectiveMaxToolCalls, allowlist, cwd, deps, currentModel, allToolCalls, totalTokensIn, totalTokensOut, totalCostUSD, systemPrompt }) {
+  const dispatchTool = async (name, args) => invokeAllowlisted(
+    { tool: name, args: args || {}, cwd },
+    { resolvedAllowlist: allowlist, dispatcher: deps.dispatcher || (async () => ({})), hub: deps.hub || null },
+  );
+  const response = await provider.runLoop({
+    system: systemPrompt,
+    messages: conversationMessages,
+    tools: toolSchemas,
+    dispatchTool,
+    maxToolCalls: effectiveMaxToolCalls,
+    model: currentModel,
+    signal: undefined,
+    cwd,
+    ...(deps.createCopilotSession ? { createSession: deps.createCopilotSession } : {}),
+    ...(deps.copilotSdk ? { sdk: deps.copilotSdk } : {}),
+  });
+  const resolvedModel = response.model || currentModel;
+  const mappedToolCalls = (response.toolCalls || []).map((tc) => ({
+    name: tc.name,
+    args: tc.args || {},
+    resultSummary: tc.result?.summary || tc.result?.error || (typeof tc.result === "string" ? tc.result : JSON.stringify(tc.result ?? null)),
+    costUSD: tc.result?.costUSD || 0,
+  }));
+  const tokensIn = response.tokensIn || 0;
+  const tokensOut = response.tokensOut || 0;
+  return {
+    allToolCalls: [...allToolCalls, ...mappedToolCalls],
+    totalTokensIn: totalTokensIn + tokensIn,
+    totalTokensOut: totalTokensOut + tokensOut,
+    totalCostUSD: totalCostUSD + computeTurnCost(resolvedModel, tokensIn, tokensOut),
+    finalReply: response.reply || "",
+    truncated: false,
+    currentModel: resolvedModel,
+    fallbackFromTier: null,
+  };
+}
+
 async function _persistTurnToStores({ isEphemeral, effectiveSessionId, message, classification, finalReply, allToolCalls, totalTokensIn, totalTokensOut, truncated, cwd, deps }) {
   const brainDeps = { recall: deps.recall || (async () => null), remember: deps.remember || (() => ({ ok: true })), cwd };
   try {
@@ -562,6 +632,194 @@ function _emitTurnComplete(hub, payload) {
   if (hub && typeof hub.broadcast === "function") hub.broadcast({ type: "forge-master.turn-complete", source: "forge-master", worker: "forge-master-reasoning", ...payload });
 }
 
+function _turnTelemetrySeed(plannerOut, quorumOut) {
+  return {
+    allToolCalls: [...plannerOut.plannerToolCalls],
+    totalTokensIn: plannerOut.tokensIn,
+    totalTokensOut: plannerOut.tokensOut,
+    totalCostUSD: plannerOut.costUSD + quorumOut.costUSD,
+  };
+}
+
+function _buildConversationMessages({ systemPrompt, message, plannerSynthesis }) {
+  const messages = [{ role: "system", content: systemPrompt }, { role: "user", content: message }];
+  if (plannerSynthesis) {
+    messages.push({ role: "user", content: `The following tool results were pre-fetched to help answer the query:\n\n${plannerSynthesis}\n\nUse these results to formulate your response. You may call additional tools if needed.` });
+  }
+  return messages;
+}
+
+function _turnMetadata({ effectiveSessionId, requestedTier, resolvedModel, fallbackFromTier = null, autoEscalation, classification, relatedTurns }) {
+  return {
+    sessionId: effectiveSessionId,
+    requestedTier,
+    resolvedModel,
+    fallbackFromTier,
+    escalated: false,
+    autoEscalated: autoEscalation.autoEscalated,
+    fromTier: autoEscalation.autoFromTier,
+    toTier: autoEscalation.autoToTier,
+    reason: autoEscalation.autoEscalationReason,
+    classification: classification ?? null,
+    relatedTurns,
+  };
+}
+
+function _noProviderResult({ effectiveSessionId, requestedTier, currentModel, autoEscalation, classification, relatedTurns }) {
+  return {
+    reply: "",
+    toolCalls: [],
+    tokensIn: 0,
+    tokensOut: 0,
+    totalCostUSD: 0,
+    truncated: false,
+    error: "no provider available",
+    suggestion: NO_PROVIDER_SUGGESTION,
+    ..._turnMetadata({ effectiveSessionId, requestedTier, resolvedModel: currentModel, autoEscalation, classification, relatedTurns }),
+  };
+}
+
+function _providerLoopErrorResult({ err, telemetry, effectiveSessionId, requestedTier, currentModel, autoEscalation, classification, relatedTurns }) {
+  return {
+    reply: "",
+    toolCalls: telemetry.allToolCalls,
+    tokensIn: telemetry.totalTokensIn,
+    tokensOut: telemetry.totalTokensOut,
+    totalCostUSD: telemetry.totalCostUSD,
+    truncated: false,
+    error: err?.code || "reasoning_model_unavailable",
+    ..._turnMetadata({ effectiveSessionId, requestedTier, resolvedModel: currentModel, autoEscalation, classification, relatedTurns }),
+  };
+}
+
+function _earlyLoopErrorResult({ loopResult, effectiveSessionId, requestedTier, autoEscalation, classification, relatedTurns }) {
+  return {
+    reply: loopResult.finalReply || "",
+    toolCalls: loopResult.allToolCalls,
+    tokensIn: loopResult.totalTokensIn,
+    tokensOut: loopResult.totalTokensOut,
+    totalCostUSD: loopResult.totalCostUSD,
+    truncated: false,
+    error: loopResult.earlyError,
+    ..._turnMetadata({
+      effectiveSessionId,
+      requestedTier,
+      resolvedModel: loopResult.currentModel,
+      fallbackFromTier: loopResult.fallbackFromTier,
+      autoEscalation,
+      classification,
+      relatedTurns,
+    }),
+  };
+}
+
+function _successResult({ loopResult, effectiveSessionId, requestedTier, autoEscalation, classification, relatedTurns, quorumResult }) {
+  return {
+    reply: loopResult.finalReply,
+    toolCalls: loopResult.allToolCalls,
+    tokensIn: loopResult.totalTokensIn,
+    tokensOut: loopResult.totalTokensOut,
+    totalCostUSD: loopResult.totalCostUSD,
+    truncated: loopResult.truncated,
+    ..._turnMetadata({
+      effectiveSessionId,
+      requestedTier,
+      resolvedModel: loopResult.currentModel,
+      fallbackFromTier: loopResult.fallbackFromTier,
+      autoEscalation,
+      classification,
+      relatedTurns,
+    }),
+    quorumResult,
+  };
+}
+
+async function _executeFallbackLoopAfterProviderError({ err, provider, conversationMessages, toolSchemas, effectiveMaxToolCalls, allowlist, cwd, deps, config, currentTier, currentModel, telemetry, errorContext }) {
+  const fallbackProvider = await _resolveFallbackProvider(config, deps, provider);
+  if (!fallbackProvider) {
+    return { earlyReturn: _providerLoopErrorResult({ err, telemetry, currentModel, ...errorContext }) };
+  }
+
+  const fallbackModel = _resolveModelForProvider(fallbackProvider.PROVIDER_NAME, config, currentModel);
+  const fallbackApiKey = _resolveApiKey(config, deps, fallbackProvider.PROVIDER_NAME);
+  return {
+    loopResult: await _executeToolUseLoop({
+      provider: fallbackProvider,
+      conversationMessages,
+      toolSchemas,
+      maxIterations: effectiveMaxToolCalls + 1,
+      effectiveMaxToolCalls,
+      allowlist,
+      cwd,
+      deps,
+      config,
+      currentTier,
+      currentModel: fallbackModel,
+      apiKey: fallbackApiKey,
+      fallbackFromTier: provider.PROVIDER_NAME || "githubCopilot",
+      ...telemetry,
+    }),
+  };
+}
+
+async function _runSdkProviderLoopWithFallback({ provider, conversationMessages, toolSchemas, effectiveMaxToolCalls, allowlist, cwd, deps, currentModel, systemPrompt, telemetry, fallbackOptions, errorContext }) {
+  try {
+    const loopResult = await _runProviderLoop({
+      provider,
+      conversationMessages,
+      toolSchemas,
+      effectiveMaxToolCalls,
+      allowlist,
+      cwd,
+      deps,
+      currentModel,
+      systemPrompt,
+      ...telemetry,
+    });
+    return { loopResult };
+  } catch (err) {
+    return _executeFallbackLoopAfterProviderError({ err, provider, conversationMessages, toolSchemas, effectiveMaxToolCalls, allowlist, cwd, deps, currentModel, telemetry, errorContext, ...fallbackOptions });
+  }
+}
+
+async function _runReactiveLoop({ provider, conversationMessages, toolSchemas, effectiveMaxToolCalls, allowlist, cwd, deps, config, currentTier, currentModel, apiKey, systemPrompt, telemetry, errorContext }) {
+  if (typeof provider.runLoop === "function") {
+    return _runSdkProviderLoopWithFallback({
+      provider,
+      conversationMessages,
+      toolSchemas,
+      effectiveMaxToolCalls,
+      allowlist,
+      cwd,
+      deps,
+      currentModel,
+      systemPrompt,
+      telemetry,
+      errorContext,
+      fallbackOptions: { config, currentTier },
+    });
+  }
+
+  return {
+    loopResult: await _executeToolUseLoop({
+      provider,
+      conversationMessages,
+      toolSchemas,
+      maxIterations: effectiveMaxToolCalls + 1,
+      effectiveMaxToolCalls,
+      allowlist,
+      cwd,
+      deps,
+      config,
+      currentTier,
+      currentModel,
+      apiKey,
+      fallbackFromTier: null,
+      ...telemetry,
+    }),
+  };
+}
+
 // ─── Main Reasoning Loop ────────────────────────────────────────────
 
 /**
@@ -606,30 +864,43 @@ function _emitTurnComplete(hub, payload) {
  *   relatedTurns: Array<{turnId:string,sessionId:string,timestamp:string,userMessage:string,lane:string,replyHash:string,score:number}>,
  * }>}
  */
-export async function runTurn(input, deps = {}) {
+async function _prepareTurn(input, deps) {
   const { message, cwd } = input;
-  const config = getForgeMasterConfig({ cwd });
+  const config = deps.config ?? getForgeMasterConfig({ cwd });
   const effectiveSessionId = ensureSessionId(deps.sessionId ?? input.sessionId);
   const isEphemeral = !effectiveSessionId || effectiveSessionId === "ephemeral";
-
   const priorTurns = await _loadPriorTurns(effectiveSessionId, isEphemeral, cwd);
   const tierState = _resolveTierState(input, config);
   const { inputModel, requestedTier } = tierState;
-  let { currentTier, currentModel } = tierState;
+  const { currentModel } = tierState;
 
-  // ── 1. Intent classification ──────────────────────────────────────
   const classification = await classify(message, { cwd, keywordOnly: deps.forceKeywordOnly || false, callApiWorker: deps.callApiWorker, detectApiProvider: deps.detectApiProvider, priorTurns });
   _notifyClassification(deps, classification);
 
   if (classification.lane === LANES.OFFTOPIC) {
-    return _handleOfftopicTurn({ isEphemeral, effectiveSessionId, message, classification, requestedTier, currentModel, cwd });
+    return {
+      done: true,
+      result: await _handleOfftopicTurn({ isEphemeral, effectiveSessionId, message, classification, requestedTier, currentModel, cwd }),
+    };
   }
+  return { done: false, input, deps, config, effectiveSessionId, isEphemeral, priorTurns, tierState, classification };
+}
+
+async function _runPreparedTurn({ input, deps, config, effectiveSessionId, isEphemeral, priorTurns, tierState, classification }) {
+  const { message, cwd } = input;
+  const { inputModel, requestedTier } = tierState;
+  let { currentTier, currentModel } = tierState;
 
   // ── Auto-escalation ───────────────────────────────────────────────
   const esc = _applyAutoEscalation({ inputModel: inputModel, currentTier: currentTier, currentModel: currentModel, config: config, classification: classification });
   currentTier = esc.currentTier;
   currentModel = esc.currentModel;
-  const { autoEscalated, autoFromTier, autoToTier, autoEscalationReason } = esc;
+  const autoEscalation = {
+    autoEscalated: esc.autoEscalated,
+    autoFromTier: esc.autoFromTier,
+    autoToTier: esc.autoToTier,
+    autoEscalationReason: esc.autoEscalationReason,
+  };
 
   // ── 2. Build context block (memory, recall, patterns, prior turns) ─
   const { contextBlock, relatedTurns } = await _buildContextBlock({ effectiveSessionId, isEphemeral, classification, message, cwd, priorTurns, deps });
@@ -647,54 +918,54 @@ export async function runTurn(input, deps = {}) {
   // ── 5. Resolve provider + API key ─────────────────────────────────
   const provider = await _resolveProvider(config, deps);
   if (!provider) {
-    return { reply: "", toolCalls: [], tokensIn: 0, tokensOut: 0, totalCostUSD: 0, truncated: false, error: "no provider available", suggestion: NO_PROVIDER_SUGGESTION, sessionId: effectiveSessionId, requestedTier, resolvedModel: currentModel, fallbackFromTier: null, escalated: false, autoEscalated, fromTier: autoFromTier, toTier: autoToTier, reason: autoEscalationReason, classification: classification ?? null, relatedTurns };
+    return _noProviderResult({ effectiveSessionId, requestedTier, currentModel, autoEscalation, classification, relatedTurns });
   }
-  const apiKey = _resolveApiKey(config, deps);
+  const apiKey = _resolveApiKey(config, deps, provider.PROVIDER_NAME);
 
   // ── 6a. Proactive planner + executor ──────────────────────────────
   const plannerOut = await _runPlannerPhase({ provider, currentModel, apiKey, message, classification, allowlist, cwd, deps, systemPrompt });
-  const allToolCalls = [...plannerOut.plannerToolCalls];
   const effectiveMaxToolCalls = Math.min(input.maxToolCalls ?? config.maxToolCalls, ABSOLUTE_CEILING);
 
   // ── 6b. Quorum advisory fan-out ───────────────────────────────────
-  const quorumOut = await _runQuorumAdvisory({ deps, classification, message, systemPrompt, autoEscalated, autoToTier });
+  const quorumOut = await _runQuorumAdvisory({ deps, classification, message, systemPrompt, autoEscalated: autoEscalation.autoEscalated, autoToTier: autoEscalation.autoToTier });
 
   // ── 7. Tool-use loop ──────────────────────────────────────────────
-  const conversationMessages = [{ role: "system", content: systemPrompt }, { role: "user", content: message }];
-  if (plannerOut.plannerSynthesis) {
-    conversationMessages.push({ role: "user", content: `The following tool results were pre-fetched to help answer the query:\n\n${plannerOut.plannerSynthesis}\n\nUse these results to formulate your response. You may call additional tools if needed.` });
-  }
-
-  const loopResult = await _executeToolUseLoop({ provider, conversationMessages, toolSchemas, maxIterations: effectiveMaxToolCalls + 1, effectiveMaxToolCalls, allowlist, cwd, deps, config, currentTier, currentModel, apiKey, fallbackFromTier: null, allToolCalls, totalTokensIn: plannerOut.tokensIn, totalTokensOut: plannerOut.tokensOut, totalCostUSD: plannerOut.costUSD + quorumOut.costUSD });
+  const conversationMessages = _buildConversationMessages({ systemPrompt, message, plannerSynthesis: plannerOut.plannerSynthesis });
+  const telemetry = _turnTelemetrySeed(plannerOut, quorumOut);
+  const errorContext = { effectiveSessionId, requestedTier, autoEscalation, classification, relatedTurns };
+  const { loopResult, earlyReturn } = await _runReactiveLoop({
+    provider,
+    conversationMessages,
+    toolSchemas,
+    effectiveMaxToolCalls,
+    allowlist,
+    cwd,
+    deps,
+    config,
+    currentTier,
+    currentModel,
+    apiKey,
+    systemPrompt,
+    telemetry,
+    errorContext,
+  });
+  if (earlyReturn) return earlyReturn;
 
   if (loopResult.earlyError) {
-    return { reply: loopResult.finalReply || "", toolCalls: loopResult.allToolCalls, tokensIn: loopResult.totalTokensIn, tokensOut: loopResult.totalTokensOut, totalCostUSD: loopResult.totalCostUSD, truncated: false, error: loopResult.earlyError, sessionId: effectiveSessionId, requestedTier, resolvedModel: loopResult.currentModel, fallbackFromTier: loopResult.fallbackFromTier, escalated: false, autoEscalated, fromTier: autoFromTier, toTier: autoToTier, reason: autoEscalationReason, classification: classification ?? null, relatedTurns };
+    return _earlyLoopErrorResult({ loopResult, effectiveSessionId, requestedTier, autoEscalation, classification, relatedTurns });
   }
 
   // ── 8. Persist + emit ─────────────────────────────────────────────
   await _persistTurnToStores({ isEphemeral, effectiveSessionId, message, classification, finalReply: loopResult.finalReply, allToolCalls: loopResult.allToolCalls, totalTokensIn: loopResult.totalTokensIn, totalTokensOut: loopResult.totalTokensOut, truncated: loopResult.truncated, cwd, deps });
   _emitTurnComplete(deps.hub, { tokensIn: loopResult.totalTokensIn, tokensOut: loopResult.totalTokensOut, toolCallCount: loopResult.allToolCalls.length, truncated: loopResult.truncated, sessionId: effectiveSessionId, timestamp: new Date().toISOString() });
 
-  return {
-    reply: loopResult.finalReply,
-    toolCalls: loopResult.allToolCalls,
-    tokensIn: loopResult.totalTokensIn,
-    tokensOut: loopResult.totalTokensOut,
-    totalCostUSD: loopResult.totalCostUSD,
-    truncated: loopResult.truncated,
-    sessionId: effectiveSessionId,
-    requestedTier,
-    resolvedModel: loopResult.currentModel,
-    fallbackFromTier: loopResult.fallbackFromTier,
-    escalated: false,
-    autoEscalated,
-    fromTier: autoFromTier,
-    toTier: autoToTier,
-    reason: autoEscalationReason,
-    classification: classification ?? null,
-    relatedTurns,
-    quorumResult: quorumOut.quorumResult,
-  };
+  return _successResult({ loopResult, effectiveSessionId, requestedTier, autoEscalation, classification, relatedTurns, quorumResult: quorumOut.quorumResult });
+}
+
+export async function runTurn(input, deps = {}) {
+  const prepared = await _prepareTurn(input, deps);
+  if (prepared.done) return prepared.result;
+  return _runPreparedTurn(prepared);
 }
 
 // ─── Observer Reasoning Turn ────────────────────────────────────────
@@ -755,6 +1026,17 @@ function resolveObserverModel(config, observerConfig) {
 
 async function callObserverModel(provider, resolvedModel, batch) {
   const { systemPrompt, userMessage } = buildObserverPrompt(batch);
+  if (typeof provider.runLoop === "function") {
+    const response = await provider.runLoop({
+      system: systemPrompt,
+      messages: [{ role: "user", content: userMessage }],
+      tools: buildToolSchemas(OBSERVER_TOOL_ALLOWLIST),
+      dispatchTool: async () => ({ error: "observer_tool_execution_disabled" }),
+      maxToolCalls: 0,
+      model: resolvedModel,
+    });
+    return { content: response.reply, tokensIn: response.tokensIn || 0, tokensOut: response.tokensOut || 0 };
+  }
   return provider.sendTurn({
     messages: [
       { role: "system", content: systemPrompt },

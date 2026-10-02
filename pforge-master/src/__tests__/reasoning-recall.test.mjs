@@ -160,6 +160,7 @@ describe("runTurn recall injection", () => {
       { message: "How do I configure forge status?" },
       {
         provider: null,
+        config: { reasoningModel: "test-no-provider", reasoningProvider: null, defaultProvider: "githubCopilot", maxToolCalls: 5, discoverExtensionTools: false, autoEscalate: false },
         _providers: {
           githubCopilot: { module: null, isAvailable: () => false, load: async () => null },
           anthropic: { module: null, isAvailable: () => false, load: async () => null },

@@ -26,19 +26,19 @@ const allUnavailable = {
   xai: makeProviderStub(false, "xai"),
 };
 
-// ── (a) githubCopilot (retired GitHub Models) is never auto-selected ─
+// ── (a) githubCopilot SDK is first when available ─
 
 describe("autoSelectProvider", () => {
-  it("(a) never auto-selects githubCopilot, even when its stub reports available", async () => {
+  it("(a) auto-selects githubCopilot first when its stub reports available", async () => {
     const providers = {
       ...allUnavailable,
-      githubCopilot: makeProviderStub(true, "github-copilot"),
+      githubCopilot: makeProviderStub(true, "githubCopilot"),
     };
-    expect(await autoSelectProvider({}, process.env, providers)).toBeNull();
-    expect(await autoSelectProvider({ defaultProvider: "githubCopilot" }, process.env, providers)).toBeNull();
+    expect((await autoSelectProvider({}, process.env, providers)).PROVIDER_NAME).toBe("githubCopilot");
+    expect((await autoSelectProvider({ defaultProvider: "githubCopilot" }, process.env, providers)).PROVIDER_NAME).toBe("githubCopilot");
   });
 
-  it("(a2) tries anthropic first, then openai, then xai", async () => {
+  it("(a2) tries githubCopilot, then anthropic, then openai, then xai", async () => {
     const providers = {
       ...allUnavailable,
       openai: makeProviderStub(true, "openai"),
@@ -98,6 +98,7 @@ describe("runTurn no-provider error", () => {
     const result = await runTurn(
       { message: "What is my plan status?", cwd: tmpDir },
       {
+        config: { reasoningModel: "test-no-key-model", reasoningProvider: null, defaultProvider: "githubCopilot", maxToolCalls: 3, discoverExtensionTools: false, autoEscalate: false },
         dispatcher: async () => ({}),
         hub: null,
         toolMetadata: {},
@@ -114,8 +115,7 @@ describe("runTurn no-provider error", () => {
 
     expect(result.error).toBe("no provider available");
     expect(result.suggestion).toContain("ANTHROPIC_API_KEY");
-    expect(result.suggestion).toContain("retired");
-    expect(result.suggestion).not.toContain("gh auth login");
+    expect(result.suggestion).toContain("gh auth login");
     expect(result.toolCalls).toHaveLength(0);
     expect(result.reply).toBe("");
   });

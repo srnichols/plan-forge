@@ -135,6 +135,7 @@ describe("totalCostUSD — error paths", () => {
       {
         // No provider injected and no API keys in env → no provider available
         _providers: {},
+        config: { reasoningModel: "test-no-provider", reasoningProvider: null, defaultProvider: "githubCopilot", maxToolCalls: 5, discoverExtensionTools: false, autoEscalate: false },
         dispatcher: async () => ({}),
         hub: null,
         sessionId: "ephemeral",

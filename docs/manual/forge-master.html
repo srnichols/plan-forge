@@ -202,7 +202,7 @@
 
         <pre><code>{
   "forgeMaster": {
-    "reasoningModel": "claude-sonnet-5.5",     // env default when ANTHROPIC_API_KEY is set
+    "reasoningModel": "claude-sonnet-5.5",     // Copilot SDK default when Copilot auth is available
     "routerModel": "grok-4.20-0309-non-reasoning",              // model used by stage-2 intent classifier
     "quorumAdvisory": "auto",                  // "off" | "auto" | "always"  (default: "auto" since Phase-43)
     "autoEscalate": true,                      // bump hard questions to high tier  (default: true since Phase-43)
@@ -212,6 +212,7 @@
     "philosophy": "+ @baseline",               // Phase-43 alias: append UNIVERSAL_BASELINE to project principles (use "@baseline" to replace)
     "discoverExtensionTools": true,            // allow extension-supplied tools to register
     "providers": {
+      "githubCopilot": { "model": "claude-sonnet-5.5" },
       "anthropic": { "model": "claude-sonnet-5.5" },
       "openai": { "model": "gpt-6-sol" },
       "xai": { "model": "grok-4.7" }
@@ -222,7 +223,7 @@
         <table class="manual-table my-4">
           <thead><tr><th>Field</th><th>Default</th><th>What it controls</th></tr></thead>
           <tbody>
-            <tr><td><code>reasoningModel</code></td><td><code>claude-sonnet-5.5</code> with <code>ANTHROPIC_API_KEY</code>, then gpt-6-sol, then <code>grok-4.7</code></td><td>Model used to compose replies in advisory lane. Forge-Master auto-selects anthropic → openai → xai from environment keys.</td></tr>
+            <tr><td><code>reasoningModel</code></td><td><code>claude-sonnet-5.5</code> via Copilot SDK when Copilot auth is present, then Anthropic, OpenAI, xAI API-key defaults</td><td>Model used to compose replies in advisory lane. Forge-Master auto-selects githubCopilot → anthropic → openai → xai. Only an explicit <code>reasoningProvider</code> disables fallback.</td></tr>
             <tr><td><code>routerModel</code></td><td><code>grok-4.20-0309-non-reasoning</code></td><td>Stage-2 intent classifier model. Cheap by design, it's classifying, not reasoning.</td></tr>
             <tr><td><code>quorumAdvisory</code></td><td><code>"auto"</code> <span class="text-amber-400">(Phase-43)</span></td><td>Enables Quorum Advisory Mode in the <code>advisory</code> lane. Was <code>"off"</code> pre-Phase-43.</td></tr>
             <tr><td><code>autoEscalate</code></td><td><code>true</code> <span class="text-amber-400">(Phase-43)</span></td><td>Auto-bump hard or ambiguous prompts to the high tier. Required input for <code>quorumAdvisory: "auto"</code> to fire. Was <code>false</code> pre-Phase-43.</td></tr>
@@ -231,7 +232,7 @@
             <tr><td><code>philosophy</code></td><td><code>null</code> <span class="text-amber-400">(Phase-43 adds <code>"+ @baseline"</code> / <code>"@baseline"</code> aliases)</span></td><td>System-prompt augmentation. <code>"@baseline"</code> uses Plan Forge's <code>UNIVERSAL_BASELINE</code> in place of your project principles. <code>"+ @baseline"</code> appends the baseline on top of your principles.</td></tr>
             <tr><td><code>embeddingFallback</code></td><td><code>true</code></td><td>Enables the stage 1.5 embedding cache. Disable to force every cache-miss to the router LLM.</td></tr>
             <tr><td><code>discoverExtensionTools</code></td><td><code>true</code></td><td>Allow extensions in <code>extensions/</code> to register tools that Forge-Master can call.</td></tr>
-            <tr><td><code>providers.githubCopilot.model</code></td><td><em>disabled</em></td><td>GitHub Models was retired on 2026-07-30; <code>gh auth login</code> no longer provides Forge-Master inference.</td></tr>
+            <tr><td><code>providers.githubCopilot.model</code></td><td><code>claude-sonnet-5.5</code></td><td>Uses the GitHub Copilot SDK and your Copilot subscription. No vendor API key required; falls back to direct providers if SDK session startup fails.</td></tr>
           </tbody>
         </table>
 
@@ -253,8 +254,8 @@
         </div>
 
         <h3 id="provider-setup">Provider setup</h3>
-        <p>GitHub retired <code>models.github.ai</code> on 2026-07-30, so Forge-Master no longer has a zero-key GitHub Models path. <code>GITHUB_TOKEN</code> and <code>gh auth login</code> do not provide a model for Forge-Master.</p>
-        <p>Set one or more direct-provider keys in the environment: <code>ANTHROPIC_API_KEY</code>, <code>OPENAI_API_KEY</code>, or <code>XAI_API_KEY</code>. Auto-select order is anthropic → openai → xai; the dashboard <strong>Settings → API Keys</strong> tab is the GUI equivalent.</p>
+        <p>GitHub retired <code>models.github.ai</code> on 2026-07-30, but Forge-Master's <code>githubCopilot</code> provider now uses the GitHub Copilot SDK instead. With a Copilot subscription, <code>gh auth login</code>, Copilot CLI auth, or <code>GITHUB_TOKEN</code> / <code>GH_TOKEN</code> / <code>COPILOT_GITHUB_TOKEN</code> restores the zero-vendor-key path.</p>
+        <p>Optional direct-provider fallback keys are still supported: <code>ANTHROPIC_API_KEY</code>, <code>OPENAI_API_KEY</code>, or <code>XAI_API_KEY</code>. Auto-select order is githubCopilot → anthropic → openai → xai; only an explicit <code>reasoningProvider</code> disables fallback. The dashboard <strong>Settings → API Keys</strong> tab is the GUI equivalent.</p>
 
         <!-- ─── Embedding Cache Internals ─── -->
         <h2 id="embedding-cache">Embedding Cache Internals</h2>

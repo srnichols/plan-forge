@@ -41,8 +41,18 @@ function writeForgeJson(dir, content) {
 // ─── Config Loader ──────────────────────────────────────────────────
 
 describe("forge-master config", () => {
-  beforeEach(() => makeTmp());
-  afterEach(() => rmSync(tmpDir, { recursive: true, force: true }));
+  beforeEach(() => {
+    makeTmp();
+    vi.stubEnv("PATH", "");
+    vi.stubEnv("Path", "");
+    vi.stubEnv("GITHUB_TOKEN", "");
+    vi.stubEnv("GH_TOKEN", "");
+    vi.stubEnv("COPILOT_GITHUB_TOKEN", "");
+  });
+  afterEach(() => {
+    vi.unstubAllEnvs();
+    rmSync(tmpDir, { recursive: true, force: true });
+  });
 
   it("returns defaults when .forge.json is missing", () => {
     const cfg = getForgeMasterConfig({ cwd: tmpDir });
@@ -112,20 +122,26 @@ describe("forge-master config", () => {
     expect(getForgeMasterConfig({ cwd: tmpDir }).reasoningProvider).toBe("xai");
   });
 
-  it("env-detected defaults skip GITHUB_TOKEN (GitHub Models retired) and use current models", () => {
+  it("env-detected defaults prefer Copilot SDK, then API-key providers", () => {
     try {
-      for (const k of ["GITHUB_TOKEN", "ANTHROPIC_API_KEY", "OPENAI_API_KEY", "XAI_API_KEY"]) vi.stubEnv(k, "");
+      for (const k of ["GITHUB_TOKEN", "GH_TOKEN", "COPILOT_GITHUB_TOKEN", "ANTHROPIC_API_KEY", "OPENAI_API_KEY", "XAI_API_KEY"]) vi.stubEnv(k, "");
+      vi.stubEnv("PATH", "");
+      vi.stubEnv("Path", "");
       vi.stubEnv("GITHUB_TOKEN", "ghp_test");
-      expect(getForgeMasterConfig({ cwd: tmpDir }).reasoningModel).toBeNull();
+      let cfg = getForgeMasterConfig({ cwd: tmpDir });
+      expect(cfg.reasoningModel).toBe("claude-sonnet-5.5");
+      expect(cfg.reasoningProvider).toBe("githubCopilot");
+      expect(cfg.defaultProvider).toBe("githubCopilot");
+      vi.stubEnv("GITHUB_TOKEN", "");
       vi.stubEnv("XAI_API_KEY", "xai-test");
       expect(getForgeMasterConfig({ cwd: tmpDir }).reasoningModel).toBe("grok-4.7");
       vi.stubEnv("OPENAI_API_KEY", "sk-test");
       expect(getForgeMasterConfig({ cwd: tmpDir }).reasoningModel).toBe("gpt-6-sol");
       vi.stubEnv("ANTHROPIC_API_KEY", "sk-ant-test");
-      const cfg = getForgeMasterConfig({ cwd: tmpDir });
+      cfg = getForgeMasterConfig({ cwd: tmpDir });
       expect(cfg.reasoningModel).toBe("claude-sonnet-5.5");
       expect(cfg.reasoningProvider).toBe("anthropic");
-      expect(cfg.defaultProvider).toBe("anthropic");
+      expect(cfg.defaultProvider).toBe("githubCopilot");
     } finally {
       vi.unstubAllEnvs();
     }

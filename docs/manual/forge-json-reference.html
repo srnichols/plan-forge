@@ -145,7 +145,7 @@
           <table class="manual-table">
             <thead><tr><th>Key</th><th>Type</th><th>Default</th><th>Example</th><th>Change impact</th></tr></thead>
             <tbody>
-              <tr><td><code>forgeMaster.reasoningModel</code></td><td>string</td><td><em>(auto-selects from env keys)</em></td><td><code>"claude-sonnet-5.5"</code></td><td>Model used for multi-step reasoning in <code>forge_master_ask</code>. Auto-select order is anthropic → openai → xai.</td></tr>
+              <tr><td><code>forgeMaster.reasoningModel</code></td><td>string</td><td><em>(auto-selects: Copilot SDK, then env keys)</em></td><td><code>"claude-sonnet-5.5"</code></td><td>Model used for multi-step reasoning in <code>forge_master_ask</code>. Auto-select order is githubCopilot (Copilot SDK, no vendor key) → anthropic → openai → xai.</td></tr>
               <tr><td><code>forgeMaster.reasoningProvider</code></td><td>string</td><td><em>(auto-detected)</em></td><td><code>"anthropic"</code></td><td>Which provider serves the reasoning model. One of <code>githubCopilot</code>, <code>anthropic</code>, <code>openai</code>, <code>xai</code>. If unset, Plan Forge picks based on available API keys.</td></tr>
               <tr><td><code>forgeMaster.routerModel</code></td><td>string</td><td><code>"grok-4.20-0309-non-reasoning"</code></td><td><code>"grok-4.20-0309-non-reasoning"</code></td><td>Small classifier model that decides which tools to call. Should be cheap and fast; quality matters less than latency.</td></tr>
               <tr><td><code>forgeMaster.defaultProvider</code></td><td>string</td><td><em>(auto-detected)</em></td><td><code>"anthropic"</code></td><td>Default provider for both router and reasoning if the per-model provider is not set.</td></tr>

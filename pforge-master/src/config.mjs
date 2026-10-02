@@ -10,22 +10,23 @@
  *   1. forgeMaster.reasoningModel  (explicit override)
  *   2. model.default               (shared project default)
  *   3. env-detected provider default:
+ *        Copilot auth      -> "claude-sonnet-5.5" via githubCopilot
  *        ANTHROPIC_API_KEY -> "claude-sonnet-5.5"
  *        OPENAI_API_KEY    -> "gpt-6-sol"
  *        XAI_API_KEY       -> "grok-4.7"
  *        (no key)          -> null (auto-select reports "no provider available")
- *      GITHUB_TOKEN is no longer consulted: GitHub Models, the former zero-key
- *      default, was retired on 2026-07-30.
  */
 
 import { existsSync, readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { FORGE_MASTER_MODES, MODEL_TIERS } from "../../pforge-mcp/enums.mjs";
+import { isAvailable as isCopilotSdkAvailable } from "./providers/copilot-sdk-tools.mjs";
 
 export const FORGE_MASTER_DEFAULTS = Object.freeze({
   reasoningModel: null,
   reasoningProvider: null,
-  defaultProvider: "anthropic",
+  reasoningProviderExplicit: false,
+  defaultProvider: "githubCopilot",
   providers: Object.freeze({
     anthropic: Object.freeze({ model: "claude-sonnet-5.5" }),
   }),
@@ -83,6 +84,7 @@ function resolveReasoningModel(forgeMasterBlock, forgeJson) {
   if (forgeJson?.model?.default && typeof forgeJson.model.default === "string") {
     return forgeJson.model.default;
   }
+  if (isCopilotSdkAvailable()) return "claude-sonnet-5.5";
   if (process.env.ANTHROPIC_API_KEY) return "claude-sonnet-5.5";
   if (process.env.OPENAI_API_KEY) return "gpt-6-sol";
   if (process.env.XAI_API_KEY) return "grok-4.7";
@@ -94,10 +96,15 @@ function resolveReasoningProvider(forgeMasterBlock, resolvedModel) {
   // Always pass through the explicit value — selectProvider handles unknown names by returning null.
   if (explicit) return explicit;
   if (!resolvedModel) return null; // no model → auto-select decides
+  if (isCopilotSdkAvailable() && resolvedModel === "claude-sonnet-5.5" && !process.env.ANTHROPIC_API_KEY) return "githubCopilot";
   if (/^claude/i.test(resolvedModel)) return "anthropic";
   if (/^grok/i.test(resolvedModel)) return "xai";
   if (/^gpt/i.test(resolvedModel)) return "openai";
   return null;
+}
+
+function hasExplicitReasoningProvider(block) {
+  return typeof block?.reasoningProvider === "string" && block.reasoningProvider.length > 0;
 }
 
 const VALID_DEFAULT_TIERS = ["low", "medium", "high"];
@@ -202,8 +209,8 @@ function resolveAuditorConfig(block) {
  * @param {{ cwd?: string }} [opts]
  * @returns {{
  *   reasoningModel: string,
- *   reasoningProvider: "anthropic"|"openai"|"xai"|"githubCopilot"|null,  (githubCopilot = retired GitHub Models; fails with a retirement message)
- *   defaultProvider: "anthropic"|"openai"|"xai"|"githubCopilot",          (githubCopilot is ignored by auto-select)
+ *   reasoningProvider: "anthropic"|"openai"|"xai"|"githubCopilot"|null,
+ *   defaultProvider: "anthropic"|"openai"|"xai"|"githubCopilot",
  *   routerModel: string,
  *   maxToolCalls: number,
  *   ceilingToolCalls: number,
@@ -230,6 +237,7 @@ export function getForgeMasterConfig({ cwd = process.cwd() } = {}) {
   return {
     reasoningModel,
     reasoningProvider,
+    reasoningProviderExplicit: hasExplicitReasoningProvider(block),
     defaultProvider: resolveDefaultProvider(block),
     routerModel: (typeof block?.routerModel === "string" && block.routerModel)
       ? block.routerModel

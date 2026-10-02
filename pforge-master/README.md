@@ -4,9 +4,9 @@ Standalone reasoning package for Plan Forge. Provides the Forge-Master reasoning
 
 ## Configuration
 
-- **Provider keys (required)** — Set `ANTHROPIC_API_KEY`, `OPENAI_API_KEY`, or `XAI_API_KEY` in the environment. Forge-Master tries them in that order.
-- **No more zero-key mode** — The former zero-key path ran through GitHub Models (`models.github.ai`), which GitHub retired on 2026-07-30. A `GITHUB_TOKEN` alone no longer serves models; an explicit `reasoningProvider: "githubCopilot"` fails with a message naming the keys above.
-- **Model selection** — Defaults follow the detected key: `claude-sonnet-5.5` (Anthropic), `gpt-6-sol` (OpenAI), `grok-4.7` (xAI). Claude IDs use Copilot's dotted form and are sent to the Anthropic API hyphenated (`claude-sonnet-5-5`). Override via `.forge.json`:
+- **Zero-key Copilot path** — Forge-Master first tries `githubCopilot`, now backed by `@github/copilot-sdk` from the sibling `pforge-mcp` package. A Copilot subscription plus `gh auth login`, Copilot CLI auth, or `GITHUB_TOKEN` / `GH_TOKEN` / `COPILOT_GITHUB_TOKEN` is enough; no vendor API key is required.
+- **Provider fallback** — If the Copilot SDK is unavailable or session startup fails (for example, not signed in or no Copilot plan), Forge-Master falls back to direct API providers in this order: Anthropic, OpenAI, xAI. Set `ANTHROPIC_API_KEY`, `OPENAI_API_KEY`, or `XAI_API_KEY` to enable those fallbacks.
+- **Model selection** — The Copilot SDK default is `claude-sonnet-5.5`. Direct-provider fallback defaults are `claude-sonnet-5.5` (Anthropic), `gpt-6-sol` (OpenAI), `grok-4.7` (xAI). Override via `.forge.json`:
   ```json
   { "forgeMaster": { "reasoningModel": "claude-opus-5.5" } }
   ```

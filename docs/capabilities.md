@@ -27,7 +27,7 @@
 | `forge_bug_validate_fix` | validate-fix | medium | Re-run the scanner(s) that discovered a bug to verify the fix. On pass: marks bug as 'fixed', dispatches commentValidatedFix to bug-adapter, broadcasts tempering-bug-validated-fixed event. On fail: appends attempt to bug.validationAttempts[], status unchanged. |
 | `forge_capabilities` | discover | low | Machine-readable API surface — returns all MCP tools with semantic metadata (intent, prerequisites, errors, cost), CLI commands, workflow graphs, config schema, dashboard info, and installed extensions. Agents call this once on session start for full discoverability. |
 | `forge_classifier_issue` | file-issue | low | File a GitHub issue proposing a classifier rule update when a tempering finding routes to the 'classifier' lane (infra noise). Deduplicates by finding class + reason hash — repeated occurrences comment on the existing issue instead of creating a duplicate. USE FOR: closing the audit loop when routeFinding returns lane='classifier', tracking recurring noise patterns in GitHub. DO NOT USE FOR: product bugs (use forge_bug_register), spec gaps (submit to Crucible), self-repair defects (use forge_meta_bug_file). |
-| `forge_cost_report` | read | low | Cost tracking report — shows total spend, per-model breakdown, and monthly aggregation from .forge/cost-history.json. Includes token counts, run history, and forge_model_stats (success rate per model from model-performance.json). |
+| `forge_cost_report` | read | low | Cost tracking report — shows total spend, per-model breakdown, and monthly aggregation from .forge/cost-history.json. Includes token counts, run history, Copilot AI-credit token pricing for gh-copilot, and forge_model_stats (success rate per model from model-performance.json). |
 | `forge_crucible_abandon` | crucible | low | Abandon a smelt — marks it status=abandoned and releases any phase-number claim it held. Idempotent: re-abandoning a smelt is a no-op. USE FOR: discarding a smelt that was started by mistake or superseded by another idea. |
 | `forge_crucible_ask` | crucible | low | Advance the Crucible interview — supply an answer and get the next question, or mark the smelt ready for preview/finalize when the interview is complete. Call without `answer` to fetch the current question. The running draft is NOT returned by default, because it grows with every answer and a long interview would return it repeatedly; call forge_crucible_preview to read it, or pass includeDraft:true. USE FOR: the interactive Q&A loop that turns a raw idea into a hardened spec. |
 | `forge_crucible_finalize` | crucible | low | Finalize a smelt — atomically claim the next phase number, write docs/plans/Phase-NN.md with a `crucibleId:` frontmatter stamp, and mark the smelt finalized. Refuses to overwrite an existing plan unless `overwrite:true` is passed (Issue #137). Returns the chosen phase name and the plan path. USE FOR: closing the idea→spec workflow when the interview is done. |
@@ -48,8 +48,8 @@
 | `forge_drift_report` | drift-detect | low | Score the codebase against architecture guardrail rules. Tracks drift over time in .forge/drift-history.jsonl. Fires a bridge notification when score drops below threshold. With autoIncident, auto-captures incidents and generates fix proposals for high/critical violations. |
 | `forge_embedding_status` | embedding | low | Report the current embedding backend status for local semantic search — whether @xenova/transformers (neural, all-MiniLM-L6-v2) or TF-IDF is active, how many thoughts are in the local corpus, and the configured backend override in .forge.json. USE FOR: diagnosing which search backend is active; checking whether to run 'pforge embeddings install'; monitoring embedding health in the dashboard. Returns: { ok, backend, neuralAvailable, neuralVersion, model, corpusSize, configuredBackend, installHint, message }. |
 | `forge_env_diff` | env-diff | low | Compare environment variable keys across .env files — detect missing keys between baseline and target environments. Compares key names only (never values). Caches results in .forge/env-diff-cache.json. Integrates with forge_runbook to surface environment key gaps. |
-| `forge_estimate_quorum` | estimate | low | Returns projected cost of a plan under all four quorum modes (auto / power / speed / false) in a single call. Agents MUST call this tool before presenting any dollar amount for a plan — hand-computed quorum costs drift by an order of magnitude. Backed by cost-service.mjs, the same code path that powers `pforge run-plan --estimate`. |
-| `forge_estimate_slice` | estimate | low | Returns projected cost for a single slice under a chosen quorum mode. Cheaper than forge_estimate_quorum (which estimates the whole plan). Backed by cost-service.mjs estimateSlice(). Un-calibrated — no run-level historical correction factor applied. |
+| `forge_estimate_quorum` | estimate | low | Returns projected cost of a plan under all four quorum modes (auto / power / speed / false) in a single call. Agents MUST call this tool before presenting any dollar amount for a plan — hand-computed quorum costs drift by an order of magnitude. Backed by cost-service.mjs, including Copilot AI-credit token pricing for gh-copilot. |
+| `forge_estimate_slice` | estimate | low | Returns projected cost for a single slice under a chosen quorum mode. Cheaper than forge_estimate_quorum (which estimates the whole plan). Backed by cost-service.mjs estimateSlice(), including Copilot AI-credit token pricing for gh-copilot. Un-calibrated — no run-level historical correction factor applied. |
 | `forge_export_plan` | convert | low | Convert a loose Copilot cloud agent session plan (numbered or bulleted steps) into a hardened Plan Forge Phase-X-PLAN.md. Parses steps, extracts file paths, generates per-slice validation gates, and outputs a complete plan with scope contract, forbidden actions template, and acceptance criteria. |
 | `forge_ext_info` | read | low | Show detailed information about a specific extension from the community catalog — author, version, category, provides, tags, and install command. |
 | `forge_ext_search` | search | low | Search the Plan Forge community extension catalog. Returns matching extensions with names, descriptions, categories, and install commands. |
@@ -141,7 +141,7 @@ Anvil, Hallmark, Lattice, and the Sync families are exposed as both **MCP tools*
 | **Assisted** | `--assisted` | Human in VS Code | Orchestrator prompts, human codes, gates validate |
 | **Cloud Agent** | *(via `copilot-setup-steps.yml`)* | Copilot cloud agent | Cloud agent provisions environment, guardrails auto-load, MCP tools available |
 | **Quorum Auto** | `--quorum=auto` *(default when enabled)* | claude-opus-5.5 + gpt-6-sol + grok-4.7 | Default threshold **5** (raised from 3 on 2026-05-21). Only slices with complexity score ≥ 5 get quorum. Adaptive — floor 5, ceiling 9. |
-| **Quorum Power** | `--quorum=power` | claude-opus-5.5 + gpt-6-astra + grok-4.7 | Flagship preset. Threshold 5, 5-min dry-run timeout. Reviewer: claude-opus-5.5. Grok calls the xAI API (`XAI_API_KEY`); on the `cli-gh` host the two Copilot-served members keep synthesis viable, and it falls back to `speed` only when fewer than two are servable. |
+| **Quorum Power** | `--quorum=power` | claude-opus-5.5 + gpt-6-astra + grok-4.7 | Flagship preset. Threshold 5, 5-min dry-run timeout. Reviewer: claude-opus-5.5. Grok 4.7 is Copilot-served on Copilot hosts and falls back to direct xAI API when `XAI_API_KEY` is set and routing prefers direct API. |
 | **Quorum Speed** | `--quorum=speed` | claude-sonnet-5.5 + gpt-6-luna + gemini-3.8-flash | Fast preset. Threshold 7, 2-min dry-run timeout. Reviewer: claude-sonnet-5.5. All three members are Copilot-served. *(2026-09-30 refresh: Copilot retired Sonnet 4.6 on 2026-09-01 and retires GPT-5.4 mini on 2026-10-19.)* |
 | **Quorum Disabled** | `--quorum=false` or `--no-quorum` | Single model | Force-disable quorum even when `.forge.json → quorum.enabled = true`. |
 | **Quorum Gov** | *(no CLI flag — `.forge.json → quorum.preset = "power-gov"`)* | gpt-5.1 + gpt-4.1 + gpt-4.1-mini + o3-mini + gpt-4o | Microsoft Foundry / government-cloud preset (OpenAI-only). Threshold 5, 5-min dry-run timeout. Reviewer: gpt-4.1. |
@@ -308,10 +308,11 @@ Plan Forge supports OpenAI-compatible HTTP endpoints via the `API_PROVIDERS` reg
 
 | Provider | Models | Env Var | Endpoint |
 |----------|--------|---------|----------|
-| **OpenAI** | `gpt-*`, `chatgpt-*` (e.g. `gpt-6-sol`, `gpt-6-astra`). Served by `gh-copilot` first; direct API only when `gh-copilot` is unavailable | `OPENAI_API_KEY` | `api.openai.com/v1` |
-| **xAI Grok** | `grok-4.7`, `grok-4.6`, `grok-4.5`, `grok-4.20-0309-non-reasoning` | `XAI_API_KEY` | `api.x.ai/v1` |
+| **GitHub Copilot SDK / CLI** | Copilot-catalog models such as `claude-sonnet-5.5`, `gpt-6-sol`, `gemini-3.8-flash`, `grok-4.6`, `grok-4.7` | Copilot subscription + `gh auth login`, Copilot CLI auth, or `GITHUB_TOKEN` / `GH_TOKEN` / `COPILOT_GITHUB_TOKEN` | GitHub Copilot runtime; priced from `copilot-pricing.json` AI-credit token rates |
+| **OpenAI** | `gpt-*`, `chatgpt-*` (e.g. `gpt-6-sol`, `gpt-6-astra`). Code-writing roles use `gh-copilot` when available; reviewer/analysis roles may prefer direct API on non-Copilot hosts when `OPENAI_API_KEY` is set | `OPENAI_API_KEY` | `api.openai.com/v1` |
+| **xAI Grok direct API** | Legacy/non-Copilot Grok IDs such as `grok-4.5`, `grok-4.20-0309-non-reasoning`; also direct fallback for `grok-4.6` / `grok-4.7` when routing prefers direct API | `XAI_API_KEY` | `api.x.ai/v1` |
 
-GitHub Models (`models.github.ai`) was retired on 2026-07-30 and is no longer a provider: a `GITHUB_TOKEN` does not serve models. Copilot-catalog models (Claude, GPT, Gemini, Kimi, MAI) run through the `gh-copilot` CLI worker on your Copilot plan.
+GitHub Models (`models.github.ai`) was retired on 2026-07-30. Forge-Master's `githubCopilot` provider now uses `@github/copilot-sdk`, so a Copilot subscription restores the zero-vendor-key path. Direct API providers remain fallbacks when the SDK/CLI is unavailable, the host preference chooses direct API, or session startup fails.
 
 Set the env var, use any matching model name in `--models` or `.forge.json`, and the orchestrator routes automatically.
 
@@ -346,9 +347,9 @@ Plan Forge has first-class integration with GitHub Copilot and GitHub Actions fo
 
 CLI: `pforge github-status`
 
-### GitHub Models (retired)
+### GitHub Copilot SDK provider
 
-GitHub retired GitHub Models (`models.github.ai/inference`) on 2026-07-30; the host now answers every request with a plain-text `200 OK`. Forge-Master's former zero-key `githubCopilot` provider targeted it, so it is now disabled: auto-selection tries Anthropic → OpenAI → xAI (`ANTHROPIC_API_KEY`, `OPENAI_API_KEY`, `XAI_API_KEY`), and an explicit `reasoningProvider: "githubCopilot"` fails with a message naming those keys.
+GitHub retired GitHub Models (`models.github.ai/inference`) on 2026-07-30; Forge-Master no longer uses that endpoint. The `githubCopilot` provider is backed by `@github/copilot-sdk`, exposes only Forge-Master's read-only tools, denies SDK permission requests, and is first in auto-selection. If Copilot auth is missing or session startup fails, Forge-Master falls back to Anthropic → OpenAI → xAI when those API keys are configured; only an explicit `forgeMaster.reasoningProvider` disables that fallback.
 
 ### Copilot Coding Agent Worker
 
@@ -678,9 +679,9 @@ Multi-model consensus: dispatch complex slices to 3 AI models for independent dr
 slice → scoreComplexity (1-10)
           ├─ score < threshold → normal execution
           └─ score ≥ threshold → quorumDispatch
-                    ├─ Claude Opus 4.6  → dry-run plan  ─┐
-                    ├─ GPT-5.3-Codex    → dry-run plan  ─┼─ Promise.all() (parallel)
-                    └─ Grok 4.20        → dry-run plan  ─┘
+                    ├─ Claude Opus 5.5  → dry-run plan  ─┐
+                    ├─ GPT-6 Astra      → dry-run plan  ─┼─ Promise.all() (parallel)
+                    └─ Grok 4.7         → dry-run plan  ─┘
                               ↓
                     quorumReview (synthesis — pick best approach per file)
                               ↓
@@ -721,8 +722,8 @@ CLI: `--quorum` (all slices) | `--quorum=auto` (threshold) | `--quorum-threshold
 
 | Preset | Models | Reviewer | Threshold | Timeout |
 |--------|--------|----------|-----------|---------|
-| `power` | Claude Opus 4.6 + GPT-5.3-Codex + Grok 4.20 Reasoning | Claude Opus 4.6 | 5 | 5 min |
-| `speed` | Claude Sonnet 4.6 + GPT-5.4-mini + Grok 4.1 Fast Reasoning | Claude Sonnet 4.6 | 7 | 2 min |
+| `power` | Claude Opus 5.5 + GPT-6 Astra + Grok 4.7 | Claude Opus 5.5 | 5 | 5 min |
+| `speed` | Claude Sonnet 5.5 + GPT-6 Luna + Gemini 3.8 Flash | Claude Sonnet 5.5 | 7 | 2 min |
 
 Use via CLI (`--quorum=power`), MCP (`quorum: "power"`), or config (`.forge.json` → `quorum.preset: "power"`).
 

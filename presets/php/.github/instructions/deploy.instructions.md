@@ -1,239 +1,240 @@
 ---
-description: PHP deployment patterns — Docker, Kubernetes, CI/CD
-applyTo: '**/Dockerfile,**/docker-compose*,**/*.yml,**/*.yaml,**/k8s/**'
+description: PHP/Laravel deployment patterns — PHP-FPM app image, nginx front door, queues, migrations, health checks, and container-safe config.
+applyTo: '**/Dockerfile,**/docker-compose*.yml,**/compose*.yml,**/.dockerignore,**/nginx/**,**/deploy/**,**/k8s/**'
 ---
 
 # PHP Deployment Patterns
 
-## Docker
+## Production container design
 
-### Multi-stage Dockerfile
-```dockerfile
-FROM php:1.22-alpine AS build
-WORKDIR /app
-COPY PHP.mod PHP.sum ./
-RUN PHP mod download
-COPY . .
-RUN CGO_ENABLED=0 GOOS=linux PHP build -o /server ./cmd/server/
+Use **php-fpm + nginx** as the standard production design:
 
-FROM gcr.io/distroless/static-debian12 AS runtime
-COPY --from=build /server /server
-EXPOSE 8080
-ENTRYPOINT ["/server"]
-```
+- The application image is built from `php:8.5-fpm-alpine` and runs Laravel under PHP-FPM.
+- nginx is the HTTP front door and forwards `.php` requests to the FPM service on port 9000.
+- The same application image is reused for web, queue worker, scheduler, and one-off migration tasks.
+- This design matches Laravel's process model and keeps the web server configuration explicit.
 
-**Why distroless?** — No shell, no package manager, minimal attack surface. PHP binaries are statically linked so they need nothing else.
+FrankenPHP (with Laravel Octane) is a valid alternative. If you adopt it, change every place that assumes PHP-FPM together: the Dockerfile, compose services, health checks, and the extension and cache-warmup steps below.
 
-### Docker Compose
+## Dockerfile contract
+
+The application Dockerfile must:
+
+- Use `composer:2` for the vendor stage and `php:8.5-fpm-alpine` for runtime.
+- Run `composer install --no-dev --prefer-dist --no-scripts --no-autoloader` before copying the full source tree.
+- Copy the application, then run `composer dump-autoload --optimize --no-dev`.
+- Remove or exclude `bootstrap/cache/*.php` before optimized autoload discovery so dev-only package discovery from local builds is not copied into the production image.
+- Install build libraries `icu-dev` and `libpq-dev` only in a virtual package, then remove them.
+- Keep runtime libraries `icu-libs` and `libpq`.
+- Install `intl` and `pdo_pgsql`; do **not** install `opcache` because it is built into PHP 8.5 images.
+- Use `COPY --chown=www-data:www-data`.
+- Run `php artisan optimize` in the entrypoint, not at image build time.
+- Run as `www-data`.
+
+Minimal entrypoint behavior: exit on errors, cache config/routes/views, run `php artisan optimize`, and finally `exec "$@"` so PHP-FPM receives signals directly. The full scaffold appears in the Dockerfile prompt.
+
+## Docker Compose
+
+Use the same application image for `app`, `queue`, `scheduler`, and `migrate`. PostgreSQL and Redis tags are pinned for this PHP stack.
+
 ```yaml
 services:
-  api:
-    build: .
+  web:
+    image: nginx:1.29-alpine
     ports:
-      - "8080:8080"
-    environment:
-      - DATABASE_URL=postgres://app:secret@db:5432/app?sslmode=disable
+      - "8080:80"
+    volumes:
+      - ./public:/var/www/html/public:ro
+      - ./deploy/nginx/default.conf:/etc/nginx/conf.d/default.conf:ro
     depends_on:
-      - db
-  db:
-    image: postgres:18
+      app:
+        condition: service_healthy
+
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    env_file: .env
+    environment:
+      APP_ENV: production
+      LOG_CHANNEL: stderr
+      LOG_STDERR_FORMATTER: 'Monolog\Formatter\JsonFormatter'
+      DB_CONNECTION: pgsql
+      DB_HOST: postgres
+      REDIS_HOST: redis
+      QUEUE_CONNECTION: redis
+    healthcheck:
+      test: ["CMD-SHELL", "php artisan about --only=environment >/dev/null && php artisan route:list --path=up >/dev/null"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  queue:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    command: ["php", "artisan", "queue:work", "redis", "--sleep=3", "--tries=3", "--timeout=90"]
+    env_file: .env
+    depends_on:
+      app:
+        condition: service_healthy
+
+  scheduler:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    command: ["php", "artisan", "schedule:work"]
+    env_file: .env
+    depends_on:
+      app:
+        condition: service_healthy
+
+  migrate:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    command: ["php", "artisan", "migrate", "--force"]
+    env_file: .env
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  postgres:
+    image: postgres:18-alpine
     environment:
       POSTGRES_DB: app
       POSTGRES_USER: app
       POSTGRES_PASSWORD: secret
-    ports:
-      - "5432:5432"
+    volumes:
+      - postgres-data:/var/lib/postgresql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U app -d app"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  redis:
+    image: redis:8-alpine
+    command: ["redis-server", "--appendonly", "yes"]
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+volumes:
+  postgres-data:
 ```
 
-## Build Commands
+## nginx front door
+
+```nginx
+server {
+    listen 80;
+    server_name _;
+    root /var/www/html/public;
+    index index.php;
+
+    location /up {
+        try_files $uri /index.php?$query_string;
+    }
+
+    location ~ /\.(?!well-known).* {
+        deny all;
+    }
+
+    location / {
+        try_files $uri $uri/ /index.php?$query_string;
+    }
+
+    location ~ ^/index\.php(/|$) {
+        include fastcgi_params;
+        fastcgi_param SCRIPT_FILENAME $realpath_root/index.php;
+        fastcgi_param SCRIPT_NAME /index.php;
+        fastcgi_param DOCUMENT_ROOT $realpath_root;
+        fastcgi_pass app:9000;
+    }
+
+    location ~ ^/(?!index\.php).+\.php$ {
+        return 404;
+    }
+}
+```
+
+## Build and release commands
 
 | Command | Purpose |
 |---------|---------|
-| `PHP build ./...` | Compile all packages |
-| `PHP test ./...` | Run all tests |
-| `PHP test -short ./...` | Unit tests only |
-| `PHP test -race ./...` | Race detector |
-| `PHP vet ./...` | Static analysis |
-| `phpci-lint run` | Comprehensive linting |
-| `PHP run ./cmd/server/` | Start app |
-| `docker compose up -d` | Start all services |
+| `composer install` | Install dependencies for local validation |
+| `php artisan test` | Run PHPUnit 13 tests |
+| `vendor/bin/phpstan analyse` | Run Larastan at the configured level |
+| `vendor/bin/pint --test` | Verify PER formatting |
+| `php artisan migrate --pretend` | Preview migration SQL |
+| `php artisan migrate --force` | Apply migrations in deployed environments |
+| `docker compose up -d --build` | Build and start local stack |
 
-## Health Checks
+## Health and readiness
 
-```PHP
-func (s *Server) healthHandler(w http.ResponseWriter, r *http.Request) {
-    ctx, cancel := context.WithTimeout(r.Context(), 2*time.Second)
-    defer cancel()
+Laravel 13 ships `/up` for liveness. Add a readiness route that checks real dependencies before accepting traffic:
 
-    if err := s.db.PingContext(ctx); err != nil {
-        w.WriteHeader(http.StatusServiceUnavailable)
-        json.NewEncoder(w).Encode(map[string]string{"status": "unhealthy", "error": err.Error()})
-        return
+```php
+use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Route;
+
+Route::get('/ready', function () {
+    $checks = [];
+
+    try {
+        DB::select('select 1');
+        $checks['database'] = 'ok';
+    } catch (\Throwable) {
+        $checks['database'] = 'unavailable';
     }
 
-    w.WriteHeader(http.StatusOK)
-    json.NewEncoder(w).Encode(map[string]string{"status": "healthy"})
-}
-```
-
-## Binary Optimization
-
-```bash
-# Minimal binary (strip debug info)
-PHP build -ldflags="-s -w" -o server ./cmd/server/
-
-# With version info
-PHP build -ldflags="-s -w -X main.version=$(git describe --tags)" -o server ./cmd/server/
-```
-
-## Kubernetes Readiness/Liveness
-
-```yaml
-containers:
-  - name: api
-    livenessProbe:
-      httpGet:
-        path: /health
-        port: 8080
-      initialDelaySeconds: 3
-      periodSeconds: 10
-    readinessProbe:
-      httpGet:
-        path: /ready
-        port: 8080
-      initialDelaySeconds: 5
-      periodSeconds: 5
-```
-
-## Database Migration Deployment
-
-**Migrations MUST run before the new app version starts serving traffic.**
-
-### Pipeline Order
-```
-1. Build & test ──► 2. Run migrations ──► 3. Health check ──► 4. Deploy app ──► 5. Smoke test
-                         ▲                     ▲
-                    Fail = abort           Fail = rollback
-```
-
-### Option A: Embedded Migrations (Recommended)
-```PHP
-// Migrations run on startup before the server starts listening
-func main() {
-    cfg := loadConfig()
-    if err := runMigrations(cfg.DatabaseURL); err != nil {
-        log.Fatalf("migration failed: %v", err)
+    try {
+        Cache::store('redis')->put('readiness', true, 10);
+        $checks['redis'] = 'ok';
+    } catch (\Throwable) {
+        $checks['redis'] = 'unavailable';
     }
-    // Start server only after migrations succeed
-    startServer(cfg)
-}
-```
 
-### Option B: CLI in Docker Compose
-```yaml
-services:
-  migrate:
-    image: migrate/migrate
-    volumes:
-      - ./migrations:/migrations
-    command: ["-path", "/migrations", "-database", "postgres://app:secret@db:5432/app?sslmode=disable", "up"]
-    depends_on:
-      db:
-        condition: service_healthy
-  api:
-    build: .
-    depends_on:
-      migrate:
-        condition: service_completed_successfully   # App starts only after migration succeeds
-```
-
-### CI/CD Pipeline Step
-```bash
-# Check current version
-migrate -path migrations -database "$DATABASE_URL" version
-
-# Apply pending migrations
-migrate -path migrations -database "$DATABASE_URL" up
-```
-
-- **NEVER** deploy app code before migrations complete
-- **ALWAYS** have a rollback plan — see `database.instructions.md` for rollback and dirty-state recovery
-- **ALWAYS** backup before applying migrations to production
-
-## Graceful Shutdown
-
-```PHP
-func main() {
-    srv := &http.Server{Addr: ":8080", Handler: router}
-
-    PHP func() {
-        if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
-            log.Fatalf("listen: %v", err)
-        }
-    }()
-
-    // Wait for SIGTERM/SIGINT
-    ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGTERM, syscall.SIGINT)
-    defer stop()
-    <-ctx.Done()
-
-    // Graceful shutdown with timeout
-    shutdownCtx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-    defer cancel()
-
-    log.Println("Shutting down — draining connections...")
-    if err := srv.Shutdown(shutdownCtx); err != nil {
-        log.Fatalf("shutdown: %v", err)
+    if (in_array('unavailable', $checks, true)) {
+        return response()->json(['status' => 'down', 'checks' => $checks], 503);
     }
-    db.Close()
-    log.Println("Shutdown complete")
-}
+
+    return response()->json(['status' => 'ready', 'checks' => $checks]);
+});
 ```
 
-- **ALWAYS** use `signal.NotifyContext` (PHP 1.16+) for clean signal handling
-- **ALWAYS** call `srv.Shutdown()` to drain in-flight requests
-- Close database pools, Redis connections, and message consumers before exiting
+Kubernetes probes should call `/up` for liveness and `/ready` for readiness. Do not use a database check as liveness; a short database outage should remove the pod from service, not restart PHP-FPM.
 
-## Blue-Green / Canary Deployments
+## Migration deployment
 
-### Kubernetes Rolling Update (Default)
-```yaml
-spec:
-  strategy:
-    type: RollingUpdate
-    rollingUpdate:
-      maxSurge: 1
-      maxUnavailable: 0   # Zero-downtime
-```
+Use expand-contract migrations and run migrations before routing traffic to the new image:
 
-### Canary with Traffic Splitting
-```yaml
-# Use a service mesh (Istio/Linkerd) or ingress controller for weighted routing
-apiVersion: networking.istio.io/v1beta1
-kind: VirtualService
-spec:
-  http:
-    - route:
-        - destination:
-            host: api
-            subset: stable
-          weight: 90
-        - destination:
-            host: api
-            subset: canary
-          weight: 10
-```
+1. Build image.
+2. Run `php artisan test`, Larastan, Pint, and `composer audit`.
+3. Run `php artisan migrate --pretend` and review SQL in CI.
+4. Run `php artisan migrate --force` as a one-off task.
+5. Deploy `app`, `queue`, and `scheduler`.
+6. Verify `/up`, `/ready`, a version endpoint, and one authenticated smoke route.
 
-- **ALWAYS** ensure database migrations are backward-compatible for blue-green
-- **ALWAYS** use health checks as deployment gates
-- Roll back immediately if error rate exceeds threshold
+## Graceful shutdown
 
----
+- Set `stop_grace_period` or Kubernetes `terminationGracePeriodSeconds` above the longest queue job timeout.
+- Queue workers must run with `--timeout` below the orchestrator kill window.
+- Send `php artisan queue:restart` during deployments so old workers drain and exit.
+- Never deploy code that requires a destructive schema change before all workers understand the old and new schema.
 
 ## See Also
 
-- `database.instructions.md` — Migration strategy, expand-contract, rollback procedures
-- `dapr.instructions.md` — Dapr sidecar deployment, component configuration
-- `multi-environment.instructions.md` — Per-environment configuration, migration config per env
-- `observability.instructions.md` — Health checks, readiness probes
-- `security.instructions.md` — Secrets management, TLS
+- `database.instructions.md` — migration safety and repository patterns
+- `observability.instructions.md` — logs, traces, metrics, and readiness signals
+- `security.instructions.md` — secrets, auth, and boundary validation

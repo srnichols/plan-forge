@@ -1,483 +1,317 @@
 ---
-description: PHP authentication & authorization — JWT/JWKS middleware, RBAC guards, multi-tenant, API keys, testing
-applyTo: '**/*.PHP'
+description: PHP authentication and authorization — Laravel Sanctum, external OIDC guard, policies, tenant resolution, throttling, and tests
+applyTo: 'app/Providers/AppServiceProvider.php,app/Http/Middleware/ResolveTenant.php,app/Models/User.php,app/Policies/**/*.php,routes/api.php,tests/Feature/**/*Auth*.php,tests/Feature/**/*Policy*.php'
 ---
 
 # PHP Authentication & Authorization
 
-## Middleware Chain Order
+Target PHP 8.5 and Laravel 13.x. API routes use Sanctum by default; external OIDC tokens use a custom request guard that verifies JWTs against a cached JWKS.
 
-```PHP
-// ⚠️ ORDER MATTERS — incorrect ordering breaks auth silently
-r := chi.NewRouter()
-r.Use(middleware.RealIP)
-r.Use(middleware.Logger)
-r.Use(middleware.Recoverer)
-r.Use(corsMiddleware)            // 1. CORS
-r.Use(authMiddleware)            // 2. WHO are you? (parses token → context)
-r.Use(tenantMiddleware)          // 3. WHICH tenant? (extracts tenant context)
-r.Use(rateLimitMiddleware)       // 4. Rate limiting (after auth for per-user limits)
+## Request Pipeline Order
 
-r.Route("/api", func(r chi.Router) {
-    r.Get("/health", healthHandler)  // Public
-    r.Group(func(r chi.Router) {
-        r.Use(requireAuth)           // Protected routes
-        r.Get("/products", listProducts)
-        r.With(requireRole("admin")).Delete("/products/{id}", deleteProduct)
-    })
-})
+`auth:sanctum` or the OIDC guard authenticates first. `App\Http\Middleware\ResolveTenant` runs after authentication and stores the tenant from `$request->user()->tenant_id` in `App\Support\CurrentTenant`.
+
+The `User` model must use `Laravel\Sanctum\HasApiTokens`; without it, `Sanctum::actingAs()` and personal access tokens cannot attach abilities to the authenticated user.
+
+```php
+<?php
+
+declare(strict_types=1);
+
+use App\Http\Middleware\ResolveTenant;
+use Illuminate\Support\Facades\Route;
+
+Route::prefix('v1')
+    ->middleware(['auth:sanctum', 'throttle:api', ResolveTenant::class])
+    ->group(function (): void {
+        Route::get('/orders', [OrderController::class, 'index']);
+    });
 ```
 
-## JWT / JWKS Validation
+Never read tenant identity from headers, query strings, request bodies, jobs, or GraphQL arguments unless it has already been derived from an authenticated principal and authorized.
 
-### JWKS-Based JWT Middleware
-```PHP
-package auth
+## Sanctum API Tokens
 
-import (
-    "context"
-    "fmt"
-    "net/http"
-    "strings"
+Issue first-party API tokens with narrow ability sets. Store only the returned plain-text token at creation time; Sanctum hashes it before persistence.
 
-    "github.com/php-jwt/jwt/v5"
-    "github.com/MicahParks/keyfunc/v3"
-)
+```php
+<?php
 
-type contextKey string
+declare(strict_types=1);
 
-const claimsKey contextKey = "claims"
+namespace App\Services;
 
-type Claims struct {
-    jwt.RegisteredClaims
-    Email    string   `json:"email"`
-    Roles    []string `json:"roles"`
-    Scope    string   `json:"scope"`
-    TenantID string   `json:"tenant_id"`
-}
+use App\Models\User;
 
-func JWTMiddleware(issuer, audience string) func(http.Handler) http.Handler {
-    jwksURL := fmt.Sprintf("%s/.well-known/jwks.json", issuer)
-    jwks, err := keyfunc.NewDefault([]string{jwksURL})
-    if err != nil {
-        panic(fmt.Sprintf("failed to create JWKS client: %v", err))
+final readonly class TokenIssuer
+{
+    public function issueOrderToken(User $user, string $deviceName): string
+    {
+        return $user->createToken(
+            name: $deviceName,
+            abilities: ['orders:read', 'orders:write'],
+        )->plainTextToken;
     }
-
-    return func(next http.Handler) http.Handler {
-        return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-            tokenStr := extractBearerToken(r)
-            if tokenStr == "" {
-                // No token — continue without auth (let requireAuth guard reject)
-                next.ServeHTTP(w, r)
-                return
-            }
-
-            token, err := jwt.ParseWithClaims(tokenStr, &Claims{},
-                jwks.KeyfuncCtx(r.Context()),
-                jwt.WithValidMethods([]string{"RS256"}),
-                jwt.WithIssuer(issuer),
-                jwt.WithAudience(audience),
-            )
-            if err != nil {
-                http.Error(w, "Invalid or expired token", http.StatusUnauthorized)
-                return
-            }
-
-            claims, ok := token.Claims.(*Claims)
-            if !ok || !token.Valid {
-                http.Error(w, "Invalid token claims", http.StatusUnauthorized)
-                return
-            }
-
-            ctx := context.WithValue(r.Context(), claimsKey, claims)
-            next.ServeHTTP(w, r.WithContext(ctx))
-        })
-    }
-}
-
-func extractBearerToken(r *http.Request) string {
-    auth := r.Header.Get("Authorization")
-    if !strings.HasPrefix(auth, "Bearer ") {
-        return ""
-    }
-    return strings.TrimPrefix(auth, "Bearer ")
-}
-
-// GetClaims retrieves claims from context. Returns nil if not authenticated.
-func GetClaims(ctx Request) *Claims {
-    claims, _ := ctx.Value(claimsKey).(*Claims)
-    return claims
 }
 ```
 
-## Authorization Guards
+Route abilities must be checked close to the route definition so missing authorization is visible during review.
 
-### Require Authentication
-```PHP
-func requireAuth(next http.Handler) http.Handler {
-    return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-        claims := GetClaims(r.Context())
-        if claims == nil {
-            http.Error(w, "Authentication required", http.StatusUnauthorized)
-            return
-        }
-        next.ServeHTTP(w, r)
-    })
-}
+```php
+<?php
+
+declare(strict_types=1);
+
+use App\Http\Controllers\Api\V1\OrderController;
+use Illuminate\Support\Facades\Route;
+
+Route::post('/orders', [OrderController::class, 'store'])
+    ->middleware(['auth:sanctum', 'abilities:orders:write']);
 ```
 
-### Role Guard
-```PHP
-func requireRole(roles ...string) func(http.Handler) http.Handler {
-    return func(next http.Handler) http.Handler {
-        return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-            claims := GetClaims(r.Context())
-            if claims == nil {
-                http.Error(w, "Authentication required", http.StatusUnauthorized)
-                return
+## External OIDC Guard with Cached JWKS
+
+Register the guard in `App\Providers\AppServiceProvider::boot()` and configure it in `config/auth.php`. Cache the JWKS by issuer; reject tokens without a bearer credential, issuer, audience, subject, or tenant claim. The tenant claim is used to locate the user, but `ResolveTenant` still sets `CurrentTenant` from the authenticated user record.
+
+```php
+<?php
+
+declare(strict_types=1);
+
+return [
+    'guards' => [
+        'oidc' => ['driver' => 'oidc'],
+    ],
+    'oidc' => [
+        'issuer' => env('OIDC_ISSUER'),
+        'audience' => env('OIDC_AUDIENCE'),
+    ],
+];
+```
+
+```php
+<?php
+
+declare(strict_types=1);
+
+namespace App\Providers;
+
+use App\Models\User;
+use Firebase\JWT\JWK;
+use Firebase\JWT\JWT;
+use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\Log;
+use Illuminate\Support\ServiceProvider;
+use Throwable;
+
+final class AppServiceProvider extends ServiceProvider
+{
+    public function boot(): void
+    {
+        Auth::viaRequest('oidc', function (Request $request): ?User {
+            $token = $request->bearerToken();
+            if ($token === null) {
+                return null;
             }
 
-            for _, required := range roles {
-                for _, userRole := range claims.Roles {
-                    if userRole == required {
-                        next.ServeHTTP(w, r)
-                        return
-                    }
+            $issuer = config('auth.oidc.issuer');
+            $audience = config('auth.oidc.audience');
+            if (! is_string($issuer) || $issuer === '' || ! is_string($audience) || $audience === '') {
+                return null;
+            }
+
+            try {
+                $jwks = Cache::remember(
+                    key: 'oidc:jwks:'.hash('sha256', $issuer),
+                    ttl: now()->addMinutes(15),
+                    callback: fn (): array => json_decode(
+                        file_get_contents($issuer.'/.well-known/jwks.json') ?: '{}',
+                        true,
+                        flags: JSON_THROW_ON_ERROR,
+                    ),
+                );
+
+                $claims = JWT::decode($token, JWK::parseKeySet($jwks, 'RS256'));
+                if (
+                    ($claims->iss ?? null) !== $issuer
+                    || ! in_array($audience, (array) ($claims->aud ?? []), true)
+                    || ! isset($claims->sub, $claims->tenant_id)
+                ) {
+                    return null;
                 }
+
+                return User::query()
+                    ->where('external_subject', (string) $claims->sub)
+                    ->where('tenant_id', (string) $claims->tenant_id)
+                    ->first();
+            } catch (Throwable $exception) {
+                Log::warning('oidc.token_rejected', ['reason' => $exception::class]);
+
+                return null;
             }
-
-            http.Error(w, fmt.Sprintf("Requires one of: %s", strings.Join(roles, ", ")),
-                http.StatusForbidden)
-        })
-    }
-}
-
-// Usage
-r.With(requireRole("admin")).Delete("/products/{id}", deleteProduct)
-```
-
-### Scope Guard
-```PHP
-func requireScope(scopes ...string) func(http.Handler) http.Handler {
-    return func(next http.Handler) http.Handler {
-        return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-            claims := GetClaims(r.Context())
-            if claims == nil {
-                http.Error(w, "Authentication required", http.StatusUnauthorized)
-                return
-            }
-
-            tokenScopes := strings.Fields(claims.Scope)
-            scopeSet := make(map[string]bool, len(tokenScopes))
-            for _, s := range tokenScopes {
-                scopeSet[s] = true
-            }
-
-            for _, required := range scopes {
-                if !scopeSet[required] {
-                    http.Error(w, fmt.Sprintf("Missing scope: %s", required),
-                        http.StatusForbidden)
-                    return
-                }
-            }
-
-            next.ServeHTTP(w, r)
-        })
-    }
-}
-
-// Usage
-r.With(requireScope("products:read")).Get("/products", listProducts)
-```
-
-### Resource Owner Guard
-```PHP
-func requireOwnerOrAdmin(getOwnerID func(r *http.Request) (string, error)) func(http.Handler) http.Handler {
-    return func(next http.Handler) http.Handler {
-        return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-            claims := GetClaims(r.Context())
-            if claims == nil {
-                http.Error(w, "Authentication required", http.StatusUnauthorized)
-                return
-            }
-
-            // Admins bypass ownership check
-            for _, role := range claims.Roles {
-                if role == "admin" {
-                    next.ServeHTTP(w, r)
-                    return
-                }
-            }
-
-            ownerID, err := getOwnerID(r)
-            if err != nil {
-                http.Error(w, "Resource not found", http.StatusNotFound)
-                return
-            }
-
-            if ownerID != claims.Subject {
-                http.Error(w, "Access denied", http.StatusForbidden)
-                return
-            }
-
-            next.ServeHTTP(w, r)
-        })
+        });
     }
 }
 ```
 
-## Multi-Tenant Isolation
+## Tenant Resolution
 
-### Tenant Middleware
-```PHP
-const tenantKey contextKey = "tenant_id"
+`ResolveTenant` is the only request-time place that populates tenant context. It must fail closed when no authenticated user or tenant exists.
 
-func tenantMiddleware(next http.Handler) http.Handler {
-    return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-        claims := GetClaims(r.Context())
-        if claims == nil {
-            next.ServeHTTP(w, r)
-            return
+```php
+<?php
+
+declare(strict_types=1);
+
+namespace App\Http\Middleware;
+
+use App\Support\CurrentTenant;
+use Closure;
+use Illuminate\Auth\AuthenticationException;
+use Illuminate\Http\Request;
+use App\Exceptions\ForbiddenException;
+use Symfony\Component\HttpFoundation\Response;
+
+final class ResolveTenant
+{
+    public function __construct(private CurrentTenant $tenant) {}
+
+    public function handle(Request $request, Closure $next): Response
+    {
+        $user = $request->user() ?? throw new AuthenticationException();
+        if ($user->tenant_id === null) {
+            throw new ForbiddenException('User is not assigned to a tenant.');
         }
-
-        tenantID := claims.TenantID
-        if tenantID == "" {
-            tenantID = r.Header.Get("X-Tenant-ID")
-        }
-
-        if tenantID == "" {
-            http.Error(w, "Missing tenant context", http.StatusForbidden)
-            return
-        }
-
-        ctx := context.WithValue(r.Context(), tenantKey, tenantID)
-        next.ServeHTTP(w, r.WithContext(ctx))
-    })
-}
-
-// GetTenantID retrieves tenant ID from context.
-func GetTenantID(ctx Request) string {
-    tenantID, _ := ctx.Value(tenantKey).(string)
-    return tenantID
-}
-```
-
-### Tenant-Scoped Repository
-```PHP
-type ProductRepository struct {
-    db *sql.DB
-}
-
-func (r *ProductRepository) FindByID(ctx Request, id uuid.UUID) (*Product, error) {
-    tenantID := GetTenantID(ctx)
-    if tenantID == "" {
-        return nil, fmt.Errorf("missing tenant context")
-    }
-
-    // ✅ ALWAYS scope queries to tenant
-    row := r.db.QueryRowContext(ctx,
-        "SELECT id, name, tenant_id FROM products WHERE id = $1 AND tenant_id = $2",
-        id, tenantID,
-    )
-
-    var p Product
-    if err := row.Scan(&p.ID, &p.Name, &p.TenantID); err != nil {
-        if errors.Is(err, sql.ErrNoRows) {
-            return nil, nil
-        }
-        return nil, fmt.Errorf("query product: %w", err)
-    }
-    return &p, nil
-}
-
-// ❌ NEVER: Unscoped query
-// r.db.QueryRowContext(ctx, "SELECT ... FROM products WHERE id = $1", id)
-```
-
-## API Key Authentication (Machine-to-Machine)
-
-```PHP
-import "crypto/subtle"
-
-func apiKeyMiddleware(apiKeyService APIKeyService) func(http.Handler) http.Handler {
-    return func(next http.Handler) http.Handler {
-        return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-            apiKey := r.Header.Get("X-API-Key")
-            if apiKey == "" {
-                next.ServeHTTP(w, r) // Fall through to JWT
-                return
-            }
-
-            client, err := apiKeyService.ValidateKey(r.Context(), apiKey)
-            if err != nil {
-                http.Error(w, "Invalid API key", http.StatusUnauthorized)
-                return
-            }
-
-            // Populate claims from API key client
-            claims := &Claims{
-                RegisteredClaims: jwt.RegisteredClaims{
-                    Subject: client.ClientID,
-                },
-                Roles:    client.Roles,
-                Scope:    strings.Join(client.Scopes, " "),
-                TenantID: client.TenantID,
-            }
-
-            ctx := context.WithValue(r.Context(), claimsKey, claims)
-            ctx = context.WithValue(ctx, tenantKey, client.TenantID)
-            next.ServeHTTP(w, r.WithContext(ctx))
-        })
-    }
-}
-
-// Constant-time comparison to prevent timing attacks
-func secureCompare(a, b string) bool {
-    return subtle.ConstantTimeCompare([]byte(a), []byte(b)) == 1
-}
-
-// Register: API key checked first, then JWT
-r.Use(apiKeyMiddleware(apiKeyService))
-r.Use(JWTMiddleware(issuer, audience))
-```
-
-## Current User Helper
-
-```PHP
-type CurrentUser struct {
-    ID       string
-    Email    string
-    TenantID string
-    Roles    []string
-    Scopes   []string
-}
-
-func (u *CurrentUser) HasRole(role string) bool {
-    for _, r := range u.Roles {
-        if r == role {
-            return true
+        $this->tenant->set($user->tenant_id);
+        try {
+            return $next($request);
+        } finally {
+            $this->tenant->clear();
         }
     }
-    return false
-}
-
-func (u *CurrentUser) HasScope(scope string) bool {
-    for _, s := range u.Scopes {
-        if s == scope {
-            return true
-        }
-    }
-    return false
-}
-
-func GetCurrentUser(ctx Request) (*CurrentUser, error) {
-    claims := GetClaims(ctx)
-    if claims == nil {
-        return nil, fmt.Errorf("not authenticated")
-    }
-
-    return &CurrentUser{
-        ID:       claims.Subject,
-        Email:    claims.Email,
-        TenantID: GetTenantID(ctx),
-        Roles:    claims.Roles,
-        Scopes:   strings.Fields(claims.Scope),
-    }, nil
 }
 ```
 
-## Testing Auth
+Queued jobs receive an explicit `tenantId` in their constructor and set `CurrentTenant` at the start of `handle()`. They must not rehydrate tenant context from serialized users or request headers.
 
-### Test Helper: Inject Claims into Context
-```PHP
-func withTestClaims(ctx Request, overrides ...func(*Claims)) Request {
-    claims := &Claims{
-        RegisteredClaims: jwt.RegisteredClaims{
-            Subject: "test-user-id",
-        },
-        Email:    "test@example.com",
-        Roles:    []string{"user"},
-        Scope:    "products:read products:write",
-        TenantID: "test-tenant",
+## Policies and Gates
+
+Policies protect Eloquent resources, and gates cover cross-resource abilities. Controllers call `Gate::authorize()` or Form Requests implement `authorize()`.
+
+```php
+<?php
+
+declare(strict_types=1);
+
+namespace App\Policies;
+
+use App\Models\Order;
+use App\Models\User;
+
+final class OrderPolicy
+{
+    public function view(User $user, Order $order): bool
+    {
+        return $user->tenant_id === $order->tenant_id
+            && ($user->can('orders:read') || $user->tokenCan('orders:read'));
     }
 
-    for _, override := range overrides {
-        override(claims)
+    public function update(User $user, Order $order): bool
+    {
+        return $user->tenant_id === $order->tenant_id
+            && $user->tokenCan('orders:write');
     }
-
-    ctx = context.WithValue(ctx, claimsKey, claims)
-    ctx = context.WithValue(ctx, tenantKey, claims.TenantID)
-    return ctx
-}
-
-func withAdminClaims(ctx Request) Request {
-    return withTestClaims(ctx, func(c *Claims) {
-        c.Roles = []string{"admin"}
-    })
 }
 ```
 
-### httptest with Auth
-```PHP
-func TestListProducts_Authenticated(t *testing.T) {
-    req := httptest.NewRequest(http.MethodGet, "/api/products", nil)
-    req = req.WithContext(withTestClaims(req.Context()))
-    w := httptest.NewRecorder()
+## Password Hashing
 
-    handler.ServeHTTP(w, req)
+Use Argon2id for passwords. Keep cost values in configuration so production can tune them without code changes.
 
-    assert.Equal(t, http.StatusOK, w.Code)
-}
+```php
+<?php
 
-func TestListProducts_Unauthenticated(t *testing.T) {
-    req := httptest.NewRequest(http.MethodGet, "/api/products", nil)
-    w := httptest.NewRecorder()
+declare(strict_types=1);
 
-    handler.ServeHTTP(w, req)
+return [
+    'driver' => 'argon2id',
+    'argon' => [
+        'memory' => (int) env('HASH_MEMORY', 65536),
+        'time' => (int) env('HASH_TIME', 4),
+        'threads' => (int) env('HASH_THREADS', 2),
+    ],
+];
+```
 
-    assert.Equal(t, http.StatusUnauthorized, w.Code)
-}
+## Rate Limiting
 
-func TestDeleteProduct_RequiresAdmin(t *testing.T) {
-    req := httptest.NewRequest(http.MethodDelete, "/api/products/123", nil)
-    req = req.WithContext(withTestClaims(req.Context())) // user role, not admin
-    w := httptest.NewRecorder()
+Define the `api` limiter in `App\Providers\AppServiceProvider::boot()`. Laravel 13 has no default `api` limiter, so `throttle:api` returns a 500 unless this is registered.
 
-    handler.ServeHTTP(w, req)
+```php
+<?php
 
-    assert.Equal(t, http.StatusForbidden, w.Code)
-}
+declare(strict_types=1);
 
-func TestTenantIsolation(t *testing.T) {
-    // Create product for tenant-a
-    // Attempt access with tenant-b context
-    req := httptest.NewRequest(http.MethodGet, "/api/products/tenant-a-product", nil)
-    req = req.WithContext(withTestClaims(req.Context(), func(c *Claims) {
-        c.TenantID = "tenant-b"
-    }))
-    w := httptest.NewRecorder()
+use Illuminate\Cache\RateLimiting\Limit;
+use Illuminate\Http\Request;
+use Illuminate\Support\Facades\RateLimiter;
 
-    handler.ServeHTTP(w, req)
+RateLimiter::for('api', function (Request $request): Limit {
+    return Limit::perMinute(60)->by($request->user()?->id ?: $request->ip());
+});
+```
 
-    assert.Equal(t, http.StatusNotFound, w.Code) // Not 403 — don't reveal existence
+## Feature Tests
+
+Use Sanctum helpers or real bearer tokens. Do not disable middleware for auth tests.
+
+```php
+<?php
+
+declare(strict_types=1);
+
+namespace Tests\Feature;
+
+use App\Models\Order;
+use App\Models\Tenant;
+use App\Models\User;
+use Illuminate\Foundation\Testing\RefreshDatabase;
+use Laravel\Sanctum\Sanctum;
+use Tests\TestCase;
+
+final class OrderAuthorizationTest extends TestCase
+{
+    use RefreshDatabase;
+
+    public function test_denies_cross_tenant_order_access(): void
+    {
+        $userTenant = Tenant::factory()->create();
+        $otherTenant = Tenant::factory()->create();
+        $user = User::factory()->create(['tenant_id' => $userTenant->id]);
+        $order = Order::factory()->create(['tenant_id' => $otherTenant->id]);
+
+        Sanctum::actingAs($user, ['orders:read']);
+
+        $this->getJson('/api/v1/orders/'.$order->id)
+            ->assertNotFound();
+    }
 }
 ```
 
 ## Rules
 
-- ALWAYS use JWKS for key validation — never hardcode signing keys
-- ALWAYS specify `jwt.WithValidMethods([]string{"RS256"})` — never allow `none` or weak algorithms
-- ALWAYS validate `iss` and `aud` claims — never skip issuer/audience checks
-- ALWAYS clear tenant context or use request-scoped context — never use globals
-- NEVER trust client headers for tenant ID without JWT claim validation
-- NEVER skip tenant filtering in queries — every SQL query must include `AND tenant_id = $N`
-- Use `subtle.ConstantTimeCompare` for API key comparison — never `==`
-- Use Chi middleware for route-level auth — never check roles inside handlers
-- Pass auth context via `Request` — never use package-level variables
-- Test all auth boundary cases: missing token, expired token, wrong role, wrong tenant
+- Use Sanctum abilities for API tokens and policies for resource ownership.
+- Keep OIDC keys in a short-lived cache; refetching on every request is a reliability and latency bug.
+- Validate issuer, audience, algorithm, subject, and tenant claim before resolving a user.
+- Resolve tenants only from authenticated user state, then clear `CurrentTenant` in a `finally` block.
+- Test 401, 403, cross-tenant 404, missing ability, expired token, and valid token paths.
 
-## See Also
+## Warning Signs
 
-- `security.instructions.md` — Input validation, secrets management, CORS, rate limiting
-- `api-patterns.instructions.md` — Chi middleware and route organization
-- `testing.instructions.md` — httptest patterns and test helpers
+- `X-Tenant-ID`, `tenant_id` request input, or route parameters decide tenant context.
+- Routes under `v1` omit `auth:sanctum` or a documented public-access reason.
+- Policies compare only IDs and skip tenant equality.
+- Auth tests use `withoutMiddleware()` instead of exercising guards.
+- OIDC verification accepts any algorithm or ignores `aud`.

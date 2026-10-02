@@ -1,101 +1,146 @@
 ---
-description: "Scaffold a repository with pgx, parameterized queries, error wrapping, and context propagation."
+description: "Scaffold a Laravel repository contract and Eloquent implementation with tenant scope, eager loading, cursor pagination, and tests."
 agent: "agent"
 tools: [read, edit, search]
 ---
+
 # Create New Repository
 
-Scaffold a data access repository following PHP idioms.
+Scaffold data access behind an interface so services do not depend on Eloquent query details.
+
+## Fill-In Inputs
+
+- `{EntityName}`: PascalCase model and contract stem.
+- `{entityName}`: camelCase parameter name.
+- `{table}`: database table.
+- `{RepositoryMethod}`: verb phrase that describes a persistence operation.
 
 ## Required Pattern
 
-```PHP
-package repository
+```php
+declare(strict_types=1);
 
-import (
-    "context"
-    "errors"
-    "fmt"
+namespace App\Repositories\Contracts;
 
-    "github.com/google/uuid"
-    "github.com/jackc/pgx/v5"
-    "github.com/jackc/pgx/v5/pgxpool"
-    "github.com/contoso/app/internal/model"
-)
+use App\Data\CreateOrderData;
+use App\Models\Order;
+use Illuminate\Contracts\Pagination\CursorPaginator;
 
-var ErrNotFound = errors.New("entity not found")
+interface OrderRepository
+{
+    public function create(CreateOrderData $data): Order;
 
-type {EntityName}Repository struct {
-    pool *pgxpool.Pool
+    public function find(string $id): ?Order;
+
+    public function paginate(int $perPage = 50): CursorPaginator;
 }
+```
 
-func New{EntityName}Repository(pool *pgxpool.Pool) *{EntityName}Repository {
-    return &{EntityName}Repository{pool: pool}
+```php
+declare(strict_types=1);
+
+namespace App\Repositories;
+
+use App\Data\CreateOrderData;
+use App\Enums\OrderStatus;
+use App\Models\Order;
+use App\Repositories\Contracts\OrderRepository;
+use App\Support\CurrentTenant;
+use Illuminate\Contracts\Pagination\CursorPaginator;
+
+final readonly class EloquentOrderRepository implements OrderRepository
+{
+    public function __construct(private CurrentTenant $tenant) {}
+
+    public function create(CreateOrderData $data): Order
+    {
+        return Order::query()->create([
+            'tenant_id' => $this->tenant->id(),
+            'reference' => $data->reference,
+            'status' => OrderStatus::Pending,
+            'currency' => $data->currency,
+            'total_cents' => 0,
+            'notes' => $data->notes,
+        ]);
+    }
+
+    public function find(string $id): ?Order
+    {
+        return Order::query()->whereKey($id)->first();
+    }
+
+    public function paginate(int $perPage = 50): CursorPaginator
+    {
+        return Order::query()
+            ->orderByDesc('created_at')
+            ->orderByDesc('id')
+            ->cursorPaginate($perPage);
+    }
 }
+```
 
-func (r *{EntityName}Repository) FindByID(ctx Request, id uuid.UUID) (*model.{EntityName}, error) {
-    var e model.{EntityName}
-    err := r.pool.QueryRow(ctx,
-        "SELECT id, name, created_at, updated_at FROM {entity_name}s WHERE id = $1",
-        id,
-    ).Scan(&e.ID, &e.Name, &e.CreatedAt, &e.UpdatedAt)
+## Binding
 
-    if errors.Is(err, pgx.ErrNoRows) {
-        return nil, ErrNotFound
+```php
+declare(strict_types=1);
+
+namespace App\Providers;
+
+use App\Repositories\Contracts\OrderRepository;
+use App\Repositories\EloquentOrderRepository;
+use Illuminate\Support\ServiceProvider;
+
+final class AppServiceProvider extends ServiceProvider
+{
+    public function register(): void
+    {
+        $this->app->bind(OrderRepository::class, EloquentOrderRepository::class);
     }
-    if err != nil {
-        return nil, fmt.Errorf("find {entityName} %s: %w", id, err)
-    }
-    return &e, nil
-}
-
-func (r *{EntityName}Repository) FindAll(ctx Request, page, pageSize int) ([]model.{EntityName}, int, error) {
-    offset := (page - 1) * pageSize
-    rows, err := r.pool.Query(ctx,
-        "SELECT id, name, created_at, updated_at FROM {entity_name}s ORDER BY created_at DESC LIMIT $1 OFFSET $2",
-        pageSize, offset,
-    )
-    if err != nil {
-        return nil, 0, fmt.Errorf("list {entityName}s: %w", err)
-    }
-    defer rows.Close()
-
-    var items []model.{EntityName}
-    for rows.Next() {
-        var e model.{EntityName}
-        if err := rows.Scan(&e.ID, &e.Name, &e.CreatedAt, &e.UpdatedAt); err != nil {
-            return nil, 0, fmt.Errorf("scan {entityName}: %w", err)
-        }
-        items = append(items, e)
-    }
-
-    var total int
-    _ = r.pool.QueryRow(ctx, "SELECT COUNT(*) FROM {entity_name}s").Scan(&total)
-
-    return items, total, nil
-}
-
-func (r *{EntityName}Repository) Insert(ctx Request, req model.Create{EntityName}Request) (*model.{EntityName}, error) {
-    var e model.{EntityName}
-    err := r.pool.QueryRow(ctx,
-        "INSERT INTO {entity_name}s (name) VALUES ($1) RETURNING id, name, created_at, updated_at",
-        req.Name,
-    ).Scan(&e.ID, &e.Name, &e.CreatedAt, &e.UpdatedAt)
-    if err != nil {
-        return nil, fmt.Errorf("insert {entityName}: %w", err)
-    }
-    return &e, nil
 }
 ```
 
 ## Rules
 
-- Repositories handle data access ONLY — no business logic
-- ALL SQL uses `$1`, `$2` parameterized placeholders — NEVER `fmt.Sprintf` in queries
-- Use `pgxpool.Pool` (not raw connections) for connection management
-- Always check `pgx.ErrNoRows` and return typed `ErrNotFound`
-- Wrap errors with `fmt.Errorf("context: %w", err)` for traceability
-- Close rows with `defer rows.Close()`
+- Repositories handle persistence and query shape only; they do not authorize, validate HTTP input, or apply business decisions.
+- Tenant-scoped repositories read the tenant from `CurrentTenant`; services do not accept tenant ids for current-user operations.
+- Use `with()` or explicit select lists for read models to prevent N+1 and over-fetching.
+- Use cursor pagination for API list reads; pair sort columns with a unique key.
+- Prefer Eloquent builder bindings. If raw SQL is required, pass bindings as method arguments.
+- Add repository tests with `RefreshDatabase`; do not mock Eloquent for behavior that depends on scopes or migrations.
+
+## Repository Test Skeleton
+
+```php
+declare(strict_types=1);
+
+namespace Tests\Feature\Repositories;
+
+use App\Models\Order;
+use App\Models\Tenant;
+use App\Repositories\EloquentOrderRepository;
+use App\Support\CurrentTenant;
+use Illuminate\Foundation\Testing\RefreshDatabase as UsesFreshDatabase;
+use Tests\TestCase;
+
+final class EloquentOrderRepositoryTest extends TestCase
+{
+    use UsesFreshDatabase;
+
+    public function test_paginate_excludes_other_tenants(): void
+    {
+        $tenant = Tenant::factory()->create();
+        $otherTenant = Tenant::factory()->create();
+        Order::factory()->create(['tenant_id' => $tenant->id]);
+        Order::factory()->create(['tenant_id' => $otherTenant->id]);
+        app(CurrentTenant::class)->set($tenant->id);
+
+        $page = app(EloquentOrderRepository::class)->paginate(15);
+
+        $this->assertCount(1, $page->items());
+        $this->assertSame($tenant->id, $page->items()[0]->tenant_id);
+    }
+}
+```
 
 ## Reference Files
 

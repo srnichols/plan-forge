@@ -1,6 +1,6 @@
 ---
 name: release-notes
-description: Generate release notes from git history and CHANGELOG. Formats for GitHub Release, Slack, or email. Use before tagging a release.
+description: Generate release notes from git history and CHANGELOG for a Laravel application. Formats for GitHub Release, Slack, or email. Use before tagging a release.
 argument-hint: "[version tag, e.g. 'v1.2.0']"
 tools: [run_in_terminal, read_file]
 ---
@@ -14,95 +14,103 @@ tools: [run_in_terminal, read_file]
 
 ### 1. Identify Release Range
 ```bash
-# Find the last tag
 git describe --tags --abbrev=0
-
-# List commits since last tag
 git log $(git describe --tags --abbrev=0)..HEAD --oneline --no-merges
 ```
 
 ### Conditional: No Tags Found
-> If no tags found → ask user for the commit range to use.
+> If no tags exist, ask the user for the commit range.
 
 ### 2. Categorize Changes
-Parse commit messages using conventional commit prefixes:
+Parse conventional commit prefixes:
 
 | Prefix | Category | Show In Notes |
 |--------|----------|---------------|
-| `feat` | New Features | ✅ Always |
-| `fix` | Bug Fixes | ✅ Always |
-| `perf` | Performance | ✅ Always |
-| `docs` | Documentation | ✅ If significant |
-| `refactor` | Internal | ⚠️ Only if user-visible |
-| `test` | Tests | ❌ Skip |
-| `chore` | Maintenance | ❌ Skip |
-| `ci` | CI/CD | ❌ Skip |
+| `feat` | New Features | Always |
+| `fix` | Bug Fixes | Always |
+| `perf` | Performance | Always |
+| `docs` | Documentation | If user-visible |
+| `refactor` | Internal | Only when behavior or maintenance risk changed |
+| `test` | Tests | Skip unless test tooling changed user workflow |
+| `chore` | Maintenance | Skip unless dependency/security relevant |
+| `ci` | CI/CD | Include if deploy or release process changed |
 
-### 3. Check CHANGELOG
-Read `CHANGELOG.md` for additional context:
-- Are there entries not yet in the CHANGELOG?
-- Does the CHANGELOG match the git history?
+### 3. Check Laravel-Specific Changes
+Look for:
 
-### 4. Generate Release Notes
+- New or removed API routes: `php artisan route:list --path=v1`
+- Migration files and data backfills
+- Queue job, event, listener, or scheduler changes
+- Dockerfile, compose, nginx, or environment variable changes
+- Security fixes, dependency updates, and `composer audit` output
 
-Format for **GitHub Release**:
+### 4. Check CHANGELOG
+Read `CHANGELOG.md`:
+
+- Confirm unreleased entries match commits.
+- Move relevant entries under the target version.
+- Note missing migration or deployment instructions.
+
+### 5. Generate Release Notes
 ```markdown
 ## What's New
 
 ### Features
-- **Feature name**: brief description (#PR)
+- **Feature name**: user-facing impact (#PR)
 
 ### Bug Fixes
 - Fix description (#PR)
 
-### Performance
-- Improvement description (#PR)
+### Deployment Notes
+- Migration, queue restart, config, or Docker change.
 
 ## Breaking Changes
-- (list any breaking changes with migration steps)
+- Change with migration instructions.
 
-## Contributors
-- @username (N commits)
+## Verification
+- `php artisan test`: PASS / FAIL
+- `composer audit`: PASS / FAIL
 ```
 
-### 5. Verify
-- [ ] All features from this release are listed
-- [ ] No unreleased features included
-- [ ] Breaking changes have migration instructions
-- [ ] Commit references are correct
+### 6. Verify
+```bash
+git log $(git describe --tags --abbrev=0)..HEAD --oneline --no-merges
+composer audit
+```
 
 ## Safety Rules
-- NEVER fabricate changes not in the git log
-- ALWAYS flag breaking changes prominently
-- Include migration steps for any breaking change
-- Ask for human review before publishing
 
+- NEVER fabricate changes not present in git history or CHANGELOG.
+- ALWAYS flag migrations, queue changes, and environment variable changes.
+- ALWAYS call out breaking API or response-shape changes.
+- Ask for human review before publishing notes.
 
 ## Temper Guards
 
 | Shortcut | Why It Breaks |
 |----------|--------------|
-| "The commit messages are good enough" | Commit messages are for developers. Release notes are for users — different audience, different detail level. |
-| "Nobody reads release notes" | Users, support teams, and auditors rely on release notes. Missing notes cause support tickets and compliance gaps. |
-| "I'll write them after release" | Post-release notes are always incomplete. Context fades fast — write them while the work is fresh. |
+| "Only PHP code changed" | Migrations, queues, config, and Docker changes can require operator action. |
+| "Internal API consumers will read commits" | Release notes are the stable operational summary. |
+| "Dependency bumps are boring" | Security and framework bumps can change runtime requirements. |
 
 ## Warning Signs
 
-- Release notes don't mention breaking changes — API or behavior changes not flagged
-- Version number missing or inconsistent — notes reference wrong version or omit it
-- No link to CHANGELOG — notes generated but not persisted to the project's changelog
-- New features undocumented — features merged but not mentioned in notes
-- Generated from wrong commit range — notes include changes from a different release cycle
+- Release notes omit migrations.
+- Queue workers do not appear in deployment notes after job changes.
+- API routes changed but OpenAPI docs are not mentioned.
+- Version tag and CHANGELOG version differ.
 
 ## Exit Proof
 
 After completing this skill, confirm:
-- [ ] Version number present and matches the release tag
-- [ ] Breaking changes explicitly documented with migration guidance
-- [ ] Generated from actual git history (`git log` range verified)
-- [ ] CHANGELOG.md updated with the new entry
-- [ ] All merged PRs and features accounted for in the notes
-## Persistent Memory (if OpenBrain is configured)
 
-- **Before generating notes**: `search_thoughts("release", project: "<YOUR PROJECT NAME>", created_by: "copilot-vscode", type: "decision")` — load prior release decisions, breaking change precedents, and versioning conventions
-- **After release notes are finalized**: `capture_thought("Release: v<version> — <key changes summary>", project: "<YOUR PROJECT NAME>", created_by: "copilot-vscode", source: "skill-release-notes")` — persist release history for future changelog continuity
+- [ ] Version matches intended tag
+- [ ] Git range verified
+- [ ] CHANGELOG checked
+- [ ] Migrations and queue changes called out
+- [ ] Verification commands included with results
+
+## Persistent Memory for Releases
+
+- **Before generating notes**: `search_thoughts("Laravel release", project: "<YOUR PROJECT NAME>", created_by: "copilot-vscode", type: "decision")`
+- **After notes are finalized**: `capture_thought("Laravel release: v<version> - <key changes>", project: "<YOUR PROJECT NAME>", created_by: "copilot-vscode", source: "skill-release-notes")`

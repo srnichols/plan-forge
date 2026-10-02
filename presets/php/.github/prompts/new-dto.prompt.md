@@ -1,115 +1,97 @@
 ---
-description: "Scaffold request/response structs with JSON tags, validation tags, and mapping from domain models."
+description: "Scaffold Laravel DTOs, Form Requests, and API Resources that keep HTTP contracts separate from Eloquent models."
 agent: "agent"
 tools: [read, edit, search]
 ---
-# Create New DTO (Request/Response Struct)
+# Create New DTO
 
-Scaffold request and response structs that separate API contracts from domain models.
+Scaffold immutable data objects and request/response contracts for a Laravel API entity.
 
 ## Required Pattern
 
-### Response Struct
-```PHP
-// Returned from API handlers — JSON-serializable
-type {EntityName}Response struct {
-    ID          string `json:"id"`
-    Name        string `json:"name"`
-    Description string `json:"description,omitempty"`
-    CreatedAt   string `json:"created_at"` // ISO 8601
-    UpdatedAt   string `json:"updated_at"`
+### Input DTO
+
+```text
+app/Data/Create{EntityName}Data.php
+
+final readonly class Create{EntityName}Data
+{
+    public function __construct(
+        public string $name,
+        public string $sku,
+        public int $priceCents,
+    ) {
+    }
 }
 ```
 
-### Create Request Struct
-```PHP
-type Create{EntityName}Request struct {
-    Name        string `json:"name"        validate:"required,max=200"`
-    Description string `json:"description" validate:"max=2000"`
+### Form Request Conversion
+
+```text
+app/Http/Requests/Store{EntityName}Request.php
+
+final class Store{EntityName}Request extends FormRequest
+{
+    public function authorize(): bool
+    {
+        return $this->user()?->can('create', {EntityName}::class) === true;
+    }
+
+    public function rules(): array
+    {
+        return [
+            'name' => ['required', 'string', 'max:200'],
+            'sku' => ['required', 'string', 'max:64'],
+            'price_cents' => ['required', 'integer', 'min:0'],
+        ];
+    }
+
+    public function toData(): Create{EntityName}Data
+    {
+        return new Create{EntityName}Data(
+            name: (string) $this->validated('name'),
+            sku: (string) $this->validated('sku'),
+            priceCents: (int) $this->validated('price_cents'),
+        );
+    }
 }
 ```
 
-### Update Request Struct
-```PHP
-type Update{EntityName}Request struct {
-    Name        string `json:"name"        validate:"required,max=200"`
-    Description string `json:"description" validate:"max=2000"`
-}
-```
+### API Resource
 
-### Validation (PHP-playground/validator)
-```PHP
-import "github.com/PHP-playground/validator/v10"
+```text
+app/Http/Resources/{EntityName}Resource.php
 
-var validate = validator.New()
-
-func decodeAndValidate[T any](r *http.Request) (T, error) {
-    var req T
-    if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-        return req, fmt.Errorf("invalid JSON: %w", err)
+final class {EntityName}Resource extends JsonResource
+{
+    public function toArray(Request $request): array
+    {
+        return [
+            'id' => $this->id,
+            'name' => $this->name,
+            'sku' => $this->sku,
+            'priceCents' => $this->price_cents,
+            'createdAt' => $this->created_at?->toISOString(),
+        ];
     }
-    if err := validate.Struct(req); err != nil {
-        return req, fmt.Errorf("validation failed: %w", err)
-    }
-    return req, nil
-}
-
-// Usage in handler
-func (h *Handler) Create(w http.ResponseWriter, r *http.Request) {
-    req, err := decodeAndValidate[Create{EntityName}Request](r)
-    if err != nil {
-        writeProblem(w, http.StatusBadRequest, err.Error())
-        return
-    }
-    // ...
-}
-```
-
-### Mapping Functions
-```PHP
-func toResponse(entity *model.{EntityName}) {EntityName}Response {
-    return {EntityName}Response{
-        ID:          entity.ID.String(),
-        Name:        entity.Name,
-        Description: entity.Description,
-        CreatedAt:   entity.CreatedAt.Format(time.RFC3339),
-        UpdatedAt:   entity.UpdatedAt.Format(time.RFC3339),
-    }
-}
-
-func toResponseList(entities []*model.{EntityName}) []{EntityName}Response {
-    results := make([]{EntityName}Response, 0, len(entities))
-    for _, e := range entities {
-        results = append(results, toResponse(e))
-    }
-    return results
-}
-```
-
-## Paged Response Wrapper
-```PHP
-type PagedResult[T any] struct {
-    Items       []T  `json:"items"`
-    Page        int  `json:"page"`
-    PageSize    int  `json:"page_size"`
-    TotalCount  int  `json:"total_count"`
-    TotalPages  int  `json:"total_pages"`
-    HasNext     bool `json:"has_next"`
-    HasPrevious bool `json:"has_previous"`
 }
 ```
 
 ## Rules
 
-- NEVER return domain models directly from handlers — always map to response structs
-- NEVER decode directly into domain models — always use request structs
-- Use `json` struct tags for all fields (snake_case in JSON, PascalCase in PHP)
-- Use `validate` struct tags with `PHP-playground/validator`
-- Use generics (`decodeAndValidate[T]`) for reusable decode+validate
-- Keep DTOs in `internal/handler/` or `internal/dto/` — not in domain
-- Use `omitempty` for optional fields
+- Use `final readonly class` for DTOs in `app/Data`.
+- Do not pass Form Requests into services; convert with `toData()`.
+- Do not return Eloquent models from controllers; use API Resources.
+- Validate scalar shape in Form Requests; enforce domain rules in services.
+- Keep response field names stable and consumer-oriented.
+- Add update DTOs separately; do not overload create DTOs with nullable fields unless the API contract really permits partial input.
+
+## Pagination Wrapper
+
+Laravel Resource collections may wrap `CursorPaginator` results. Preserve cursor metadata and avoid exposing database column names that are not part of the API.
 
 ## Reference Files
 
 - [API patterns](../instructions/api-patterns.instructions.md)
-- [Architecture principles](../instructions/architecture-principles.instructions.md)
+- [Naming conventions](../instructions/naming.instructions.md)
+- [Layering rules](../instructions/architecture-principles.instructions.md)

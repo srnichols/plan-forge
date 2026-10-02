@@ -1,442 +1,295 @@
 ---
-description: Dapr patterns for PHP — building blocks, sidecar config, state, pub/sub, workflows, secrets, multi-tenant isolation
-applyTo: '**/*dapr*,**/*worker*,**/components/**,**/*workflow*'
+description: PHP Dapr patterns — Laravel HTTP sidecar client, state, pub/sub, service invocation, secrets, components, and subscriptions
+applyTo: 'app/Services/**/*Dapr*.php,app/Http/Controllers/**/*Dapr*.php,routes/api.php,dapr/components/**/*.yaml,dapr/components/**/*.yml'
 ---
 
 # PHP Dapr Patterns
 
-> **Standard**: Dapr v1.18+ with `github.com/dapr/PHP-sdk`
-> **Package**: `github.com/dapr/PHP-sdk/client`, `github.com/dapr/PHP-sdk/service`  
-> **Cross-ref**: `messaging.instructions.md` covers pub/sub schemas and CloudEvents
+Laravel 13 cannot use `dapr/php-sdk` because of a Monolog conflict. Use Laravel's HTTP client against the Dapr sidecar API.
 
----
+## Sidecar Client
 
-## Client Setup
+Read the sidecar base URL from `DAPR_HTTP_ENDPOINT`, defaulting to the local Dapr HTTP port. Every request sets JSON headers and lets Laravel's HTTP client handle timeouts and retries.
 
-```PHP
-import (
-    dapr "github.com/dapr/PHP-sdk/client"
-    daprd "github.com/dapr/PHP-sdk/service/grpc"
-)
+```php
+<?php
 
-// Client for outbound calls (state, pub/sub, invocation)
-func newDaprClient() (dapr.Client, error) {
-    // Auto-discovers sidecar via DAPR_GRPC_ENDPOINT / DAPR_HTTP_ENDPOINT
-    return dapr.NewClient()
-}
+declare(strict_types=1);
 
-// Server for inbound subscriptions
-func newDaprServer() (common.Service, error) {
-    return daprd.NewService(":8080")
+namespace App\Services\Dapr;
+
+use Illuminate\Http\Client\Factory as HttpFactory;
+
+final readonly class DaprClient
+{
+    public function __construct(private HttpFactory $http)
+    {
+    }
+
+    private function endpoint(string $path): string
+    {
+        $base = rtrim((string) config('services.dapr.http_endpoint', 'http://127.0.0.1:3500'), '/');
+
+        return $base.'/v1.0/'.ltrim($path, '/');
+    }
+
+    public function saveState(string $store, string $key, array $value): void
+    {
+        $this->http->timeout(5)->retry(3, 100)
+            ->post($this->endpoint("state/{$store}"), [[
+                'key' => $key,
+                'value' => $value,
+                'metadata' => ['contentType' => 'application/json'],
+            ]])
+            ->throw();
+    }
+
+    public function publish(string $pubsub, string $topic, array $event): void
+    {
+        $this->http->timeout(5)
+            ->withHeaders(['Content-Type' => 'application/json'])
+            ->post($this->endpoint("publish/{$pubsub}/{$topic}"), $event)
+            ->throw();
+    }
+
+    public function invoke(string $appId, string $method, array $payload): array
+    {
+        return $this->http->timeout(10)
+            ->post($this->endpoint("invoke/{$appId}/method/{$method}"), $payload)
+            ->throw()
+            ->json();
+    }
+
+    public function secret(string $store, string $key): array
+    {
+        return $this->http->timeout(5)
+            ->get($this->endpoint("secrets/{$store}/{$key}"))
+            ->throw()
+            ->json();
+    }
 }
 ```
 
----
+## State Keys
 
-## State Management
+Prefix state keys with the authenticated tenant from `CurrentTenant`. Do not accept a tenant argument from an HTTP request.
 
-```PHP
-const storeName = "statestore"
+```php
+<?php
 
-// Multi-tenant key — always prefix with tenantId
-func stateKey(tenantId, entityId string) string {
-    return tenantId + "-" + entityId
-}
+declare(strict_types=1);
 
-func saveState(ctx Request, client dapr.Client, tenantId, entityId string, value any) error {
-    data, err := json.Marshal(value)
-    if err != nil {
-        return fmt.Errorf("marshal state: %w", err)
+namespace App\Services\Dapr;
+
+use App\Support\CurrentTenant;
+
+final readonly class TenantStateStore
+{
+    public function __construct(
+        private DaprClient $dapr,
+        private CurrentTenant $tenant,
+    ) {
     }
-    return client.SaveState(ctx, storeName, stateKey(tenantId, entityId), data,
-        map[string]string{"contentType": "application/json", "tenantId": tenantId})
-}
 
-func getState(ctx Request, client dapr.Client, tenantId, entityId string) ([]byte, string, error) {
-    item, err := client.GetState(ctx, storeName, stateKey(tenantId, entityId), nil)
-    if err != nil {
-        return nil, "", fmt.Errorf("get state: %w", err)
+    public function putOrderSnapshot(string $orderId, array $snapshot): void
+    {
+        $key = $this->tenant->id().':order:'.$orderId;
+        $this->dapr->saveState('statestore', $key, $snapshot);
     }
-    return item.Value, item.Etag, nil
-}
-
-// Optimistic concurrency with etag
-func updateState(ctx Request, client dapr.Client, tenantId, entityId string, value any, etag string) error {
-    data, err := json.Marshal(value)
-    if err != nil {
-        return fmt.Errorf("marshal state: %w", err)
-    }
-    return client.SaveStateWithETag(ctx, storeName, stateKey(tenantId, entityId), data, etag,
-        map[string]string{"contentType": "application/json"},
-        &dapr.StateOptions{Concurrency: dapr.StateConcurrencyFirstWrite})
 }
 ```
 
----
+## Pub/Sub and `/dapr/subscribe`
 
-## Pub/Sub
+Dapr discovers subscriptions from a route that returns component/topic/route mappings. Dapr pub/sub events carry no authenticity proof, so the route must be reachable only from the sidecar, must require the sidecar's app API token, and must treat tenant data in the event as untrusted until the consumer authorizes or validates it.
 
-### Publishing
-```PHP
-func publishEvent(ctx Request, client dapr.Client, tenantId, topic string, data any) error {
-    fullTopic := fmt.Sprintf("events.%s.%s", topic, tenantId)
-    jsonData, err := json.Marshal(data)
-    if err != nil {
-        return fmt.Errorf("marshal event: %w", err)
+```php
+<?php
+
+declare(strict_types=1);
+
+use App\Http\Controllers\Dapr\OrderEventsController;
+use App\Http\Middleware\EnsureDaprAppApiToken;
+use Illuminate\Support\Facades\Route;
+
+Route::middleware([EnsureDaprAppApiToken::class])->group(function (): void {
+    Route::get('/dapr/subscribe', function (): array {
+        return [[
+            'pubsubname' => 'pubsub',
+            'topic' => 'orders.placed',
+            'route' => '/dapr/orders/placed',
+            'metadata' => ['rawPayload' => 'false'],
+        ]];
+    });
+
+    Route::post('/dapr/orders/placed', [OrderEventsController::class, 'placed']);
+});
+```
+
+Register those routes in a dedicated route file or route group without the `web` middleware so CSRF does not apply and without the `api` prefix so Dapr can call `/dapr/subscribe`.
+
+```php
+<?php
+
+declare(strict_types=1);
+
+use Illuminate\Foundation\Application;
+use Illuminate\Foundation\Configuration\Exceptions;
+use Illuminate\Foundation\Configuration\Middleware;
+use Illuminate\Support\Facades\Route;
+
+return Application::configure(basePath: dirname(__DIR__))
+    ->withRouting(
+        web: __DIR__.'/../routes/web.php',
+        api: __DIR__.'/../routes/api.php',
+        commands: __DIR__.'/../routes/console.php',
+        health: '/up',
+        then: function (): void {
+            Route::group([], base_path('routes/dapr.php'));
+        },
+    )
+    ->withMiddleware(function (Middleware $middleware): void {
+        //
+    })
+    ->withExceptions(function (Exceptions $exceptions): void {
+        //
+    })->create();
+```
+
+The middleware compares Dapr's app API token in constant time.
+
+Set `APP_API_TOKEN` on the Dapr sidecar process and expose the same value to Laravel as `DAPR_APP_API_TOKEN`. On Kubernetes, prefer the `dapr.io/app-token-secret` annotation so the sidecar reads the token from a secret.
+
+```php
+<?php
+
+declare(strict_types=1);
+
+return [
+    'dapr' => [
+        'http_endpoint' => env('DAPR_HTTP_ENDPOINT', 'http://127.0.0.1:3500'),
+        'app_api_token' => env('DAPR_APP_API_TOKEN'),
+    ],
+];
+```
+
+```php
+<?php
+
+declare(strict_types=1);
+
+namespace App\Http\Middleware;
+
+use Closure;
+use Illuminate\Http\Request;
+use Symfony\Component\HttpFoundation\Response;
+
+final class EnsureDaprAppApiToken
+{
+    public function handle(Request $request, Closure $next): Response
+    {
+        $expected = (string) config('services.dapr.app_api_token');
+        $actual = (string) $request->header('dapr-api-token');
+
+        abort_unless($expected !== '' && hash_equals($expected, $actual), 403);
+
+        return $next($request);
     }
-    return client.PublishEvent(ctx, "pubsub", fullTopic, jsonData,
-        dapr.PublishEventWithContentType("application/json"))
 }
 ```
 
-### Subscribing
-```PHP
-func main() {
-    s, _ := daprd.NewService(":8080")
+Also block the path at the edge so public traffic cannot reach it.
 
-    sub := &common.Subscription{
-        PubsubName: "pubsub",
-        Topic:      "events.order-placed.*",
-        Route:      "/events/order-placed",
-    }
-
-    s.AddTopicEventHandler(sub, handleOrderPlaced)
-    if err := s.Start(); err != nil {
-        log.Fatalf("failed to start server: %v", err)
-    }
-}
-
-func handleOrderPlaced(ctx Request, e *common.TopicEvent) (retry bool, err error) {
-    var event OrderPlacedEvent
-    if err := json.Unmarshal(e.RawData, &event); err != nil {
-        return false, fmt.Errorf("unmarshal event: %w", err) // DROP — bad payload
-    }
-    if err := processOrder(ctx, event); err != nil {
-        log.Printf("failed to process order %s: %v", event.OrderID, err)
-        return true, err  // RETRY — Dapr respects maxDeliver
-    }
-    return false, nil     // SUCCESS
+```nginx
+location ~ ^/(index\.php/)?dapr/ {
+    allow 127.0.0.1;
+    deny all;
+    try_files $uri /index.php?$query_string;
 }
 ```
 
----
+Place this Dapr location before the `location ~ ^/index\.php(/|$)` PHP-FPM block; otherwise `/index.php/dapr/subscribe` reaches the generic front-controller location instead of the edge deny rule.
 
-## Workflows
+Return 2xx only after durable acceptance. A 5xx response asks Dapr to retry according to the component's resiliency policy.
 
-```PHP
-import "github.com/dapr/PHP-sdk/workflow"
+## Component YAML
 
-// Workflow definition
-func orderWorkflow(ctx *workflow.WorkflowContext) (any, error) {
-    var input OrderRequest
-    if err := ctx.GetInput(&input); err != nil {
-        return nil, err
-    }
+Components are scoped to the Laravel app and use secret references for credentials.
 
-    var validated ValidatedOrder
-    if err := ctx.CallActivity(validateOrder, workflow.ActivityInput(input)).Await(&validated); err != nil {
-        return nil, err
-    }
-
-    var reserved ReservationResult
-    if err := ctx.CallActivity(reserveInventory, workflow.ActivityInput(validated)).Await(&reserved); err != nil {
-        return nil, err
-    }
-
-    var payment PaymentResult
-    if err := ctx.CallActivity(processPayment, workflow.ActivityInput(PaymentReq{validated, reserved})).Await(&payment); err != nil {
-        return nil, err
-    }
-
-    // Parallel activities
-    emailTask := ctx.CallActivity(sendEmail, workflow.ActivityInput(EmailReq{input.Email, validated}))
-    smsTask := ctx.CallActivity(sendSms, workflow.ActivityInput(SmsReq{input.Phone, validated}))
-    if err := ctx.WhenAll(emailTask, smsTask).Await(nil); err != nil {
-        return nil, err
-    }
-
-    return OrderResult{TransactionID: payment.ID, Status: "completed"}, nil
-}
-
-// Activity (must be idempotent)
-func validateOrder(ctx workflow.ActivityContext) (any, error) {
-    var input OrderRequest
-    if err := ctx.GetInput(&input); err != nil {
-        return nil, err
-    }
-    // validation logic
-    return ValidatedOrder{Order: input}, nil
-}
-
-// Registration
-func main() {
-    w, _ := workflow.NewWorker()
-    w.RegisterWorkflow(orderWorkflow)
-    w.RegisterActivity(validateOrder)
-    w.RegisterActivity(reserveInventory)
-    w.RegisterActivity(processPayment)
-    w.RegisterActivity(sendEmail)
-    w.RegisterActivity(sendSms)
-    w.Start()
-    defer w.Shutdown()
-
-    // Schedule via workflow client
-    wfClient, _ := workflow.NewClient()
-    id, _ := wfClient.ScheduleNewWorkflow(context.Background(), orderWorkflow, workflow.WithInput(orderData))
-}
-```
-
----
-
-## Service Invocation
-
-```PHP
-// mTLS, retries, tracing handled by Dapr sidecar
-func checkInventory(ctx Request, client dapr.Client, productID string) (*InventoryResponse, error) {
-    reqData, _ := json.Marshal(InventoryRequest{ProductID: productID})
-    resp, err := client.InvokeMethodWithContent(ctx, "inventory-service", "api/inventory/check",
-        "POST", &dapr.DataContent{ContentType: "application/json", Data: reqData})
-    if err != nil {
-        return nil, fmt.Errorf("invoke inventory: %w", err)
-    }
-    var result InventoryResponse
-    if err := json.Unmarshal(resp, &result); err != nil {
-        return nil, fmt.Errorf("unmarshal inventory response: %w", err)
-    }
-    return &result, nil
-}
-```
-
----
-
-## Secrets
-
-```PHP
-// Single secret
-secret, err := client.GetSecret(ctx, "secretstore", "db-connection-string", nil)
-connStr := secret["db-connection-string"]
-
-// Bulk secrets
-allSecrets, err := client.GetBulkSecret(ctx, "secretstore", nil)
-```
-
----
-
-## Component Configuration
-
-### State Store
 ```yaml
-# dapr/components/redis-statestore.yaml
-apiVersion: dapr.io/v1alpha1
-kind: Component
-metadata:
-  name: statestore
-spec:
-  type: state.redis
-  version: v1
-  metadata:
-    - name: redisHost
-      value: redis:6379
-    - name: actorStateStore      # Required if using workflows
-      value: "true"
-    - name: keyPrefix
-      value: name                # Keys prefixed with app-id automatically
-  scopes:                        # ALWAYS scope components
-    - my-api-service
-    - my-worker-service
-```
-
-### Pub/Sub (NATS JetStream)
-```yaml
-# dapr/components/nats-pubsub.yaml
 apiVersion: dapr.io/v1alpha1
 kind: Component
 metadata:
   name: pubsub
 spec:
-  type: pubsub.jetstream
+  type: pubsub.redis
   version: v1
   metadata:
-    - name: natsURL
-      value: nats://nats:4222
-    - name: durableSubscriptionName
-      value: my-consumer
-    - name: flowControl
-      value: "true"
-  scopes:
-    - my-api-service
-    - my-worker-service
+    - name: redisHost
+      value: redis:6379
+    - name: redisPassword
+      secretKeyRef:
+        name: redis-password
+        key: redis-password
+auth:
+  secretStore: secretstore
+scopes:
+  - php-api
 ```
 
-### Component Scoping Rules
-- **ALWAYS** define `scopes` on every component — unscoped components are accessible to all services
-- **NEVER** inline connection strings or passwords — use `secretKeyRef`
-- **ALWAYS** version component files in source control
-- **SEPARATE** component directories per environment: `dapr/components/dev/`, `dapr/components/prod/`
+Define separate component directories per environment and require `scopes` on every component.
 
----
+## Service Invocation
 
-## Multi-Tenant Isolation Checklist
+Use Dapr service invocation for internal service calls that need sidecar mTLS, retries, and tracing. Use normal Laravel HTTP clients for public third-party APIs.
 
-| Layer | Pattern | Example |
-|-------|---------|---------|
-| **State keys** | `{tenantId}-{entityId}` prefix | `acme-order-123` |
-| **Pub/sub topics** | Tenant in subject hierarchy | `events.order.acme-corp` |
-| **State metadata** | `tenantId` in metadata dictionary | Enables audit/query |
-| **Subscriptions** | Wildcard + filter in handler | `events.order.*` |
-| **Secrets** | Component scoping per service | `scopes: [api-service]` |
-| **Workflows** | Tenant in workflow input | `OrderRequest.TenantID` |
+```php
+<?php
 
----
+declare(strict_types=1);
 
-## Health Checks
-
-```PHP
-// Dapr sidecar health check for readiness probes
-func daprHealthHandler(w http.ResponseWriter, r *http.Request) {
-    resp, err := http.Get(os.Getenv("DAPR_HTTP_ENDPOINT") + "/v1.0/healthz")
-    if err != nil || resp.StatusCode != http.StatusOK {
-        w.WriteHeader(http.StatusServiceUnavailable)
-        json.NewEncoder(w).Encode(map[string]string{"status": "unhealthy", "component": "dapr-sidecar"})
-        return
-    }
-    w.WriteHeader(http.StatusOK)
-    json.NewEncoder(w).Encode(map[string]string{"status": "healthy"})
-}
-
-// Register in your router
-mux.HandleFunc("/healthz", daprHealthHandler)
+$inventory = $dapr->invoke(
+    appId: 'inventory-service',
+    method: 'api/v1/inventory/check',
+    payload: ['sku' => $sku, 'quantity' => $quantity],
+);
 ```
 
----
+## Health Check
 
-## Observability
+```php
+<?php
 
-```PHP
-// Dapr propagates W3C trace context automatically through sidecars.
-// Ensure your OpenTelemetry setup captures Dapr spans:
-tp := sdktrace.NewTracerProvider(
-    sdktrace.WithBatcher(exporter),
-    sdktrace.WithResource(resource.NewWithAttributes(
-        semconv.SchemaURL,
-        semconv.ServiceNameKey.String("my-service"),
-    )),
-)
-otel.SetTracerProvider(tp)
-otel.SetTextMapPropagator(propagation.TraceContext{}) // W3C trace context
+declare(strict_types=1);
 
-// Structured logging with Dapr context
-slog.Info("processing event",
-    "eventId", event.ID,
-    "tenantId", event.TenantID,
-    "traceId", span.SpanContext().TraceID().String())
+use Illuminate\Support\Facades\Http;
+
+$healthy = Http::timeout(2)
+    ->get(rtrim((string) config('services.dapr.http_endpoint'), '/').'/v1.0/healthz')
+    ->successful();
 ```
 
----
+## Rules
 
-## Resilience & Retry
-
-### Resiliency Policy
-```yaml
-# dapr/components/resiliency.yaml
-apiVersion: dapr.io/v1alpha1
-kind: Resiliency
-metadata:
-  name: default-resiliency
-spec:
-  policies:
-    retries:
-      pubsubRetry:
-        policy: exponential
-        maxInterval: 30s
-        maxRetries: 5
-      stateRetry:
-        policy: constant
-        duration: 2s
-        maxRetries: 3
-    circuitBreakers:
-      serviceCB:
-        maxRequests: 1
-        interval: 30s
-        timeout: 60s
-        trip: consecutiveFailures > 5
-  targets:
-    components:
-      statestore:
-        outbound:
-          retry: stateRetry
-      pubsub:
-        outbound:
-          retry: pubsubRetry
-    apps:
-      inventory-service:
-        retry: stateRetry
-        circuitBreaker: serviceCB
-```
-
-### Resilience Rules
-- **ALWAYS** define resiliency policies for state stores and pub/sub components
-- **CONFIGURE** circuit breakers for synchronous service invocation
-- **SET** reasonable `ackWait` and `maxDeliver` on pub/sub subscriptions
-- **IMPLEMENT** dead-letter topic handling — don't let failed messages disappear
-
----
-
-## Resiliency
-
-```yaml
-# dapr/components/resiliency.yaml
-apiVersion: dapr.io/v1alpha1
-kind: Resiliency
-metadata:
-  name: default
-spec:
-  policies:
-    retries:
-      defaultRetry:
-        policy: exponential
-        maxInterval: 30s
-        maxRetries: 5
-    circuitBreakers:
-      serviceCB:
-        maxRequests: 1
-        timeout: 60s
-        trip: consecutiveFailures > 5
-  targets:
-    apps:
-      inventory-service:
-        retry: defaultRetry
-        circuitBreaker: serviceCB
-    components:
-      statestore:
-        outbound:
-          retry: defaultRetry
-```
-
----
+- Use the sidecar endpoints `/v1.0/state/{store}`, `/v1.0/publish/{pubsub}/{topic}`, `/v1.0/invoke/{app-id}/method/{method}`, and `/v1.0/secrets/{store}/{key}`.
+- Components must be scoped and must not inline passwords or connection strings.
+- Include tenant and correlation identifiers in events, then enforce idempotency in consumers.
+- Treat Dapr retries as at-least-once delivery.
+- Keep sidecar endpoint configuration in `config/services.php`.
 
 ## Anti-Patterns
 
+```text
+Installing dapr/php-sdk into this application.
+Hardcoding localhost:3500 instead of DAPR_HTTP_ENDPOINT.
+Publishing tenant events without tenant context.
+Leaving component scopes empty.
+Returning success from subscription handlers before persistence.
+Logging secret values returned by the secrets API.
 ```
-❌ Hardcoding localhost:3500 — use DAPR_GRPC_ENDPOINT or SDK auto-discovery
-❌ Unscoped components — always define scopes in component YAML
-❌ Flat state keys without tenant prefix — tenant data isolation breach
-❌ Calling APIs directly in workflow functions — use CallActivity
-❌ Inline secrets in component YAML — use secretKeyRef
-❌ Returning (false, err) for bad payloads — DROP instead of retrying forever
-❌ Fire-and-forget pub/sub without dead-letter topic
-❌ Ignoring etags on state updates — silent overwrites
-❌ Missing Request propagation — breaks tracing and cancellation
-❌ Missing health check for Dapr sidecar — silent failures in orchestrators
-❌ Chaining 4+ synchronous service invocations — use a workflow instead
-```
-
----
 
 ## See Also
 
-- `messaging.instructions.md` — CloudEvents, pub/sub patterns, idempotency
-- `security.instructions.md` — Secret management, input validation
-- `observability.instructions.md` — Distributed tracing, health checks
-- `performance.instructions.md` — Concurrency patterns, goroutine management
-- `deploy.instructions.md` — Docker Compose sidecar config, Kubernetes
+- `messaging.instructions.md` — idempotent consumers and failed jobs
+- `security.instructions.md` — secret handling and tenant boundaries
+- `observability.instructions.md` — trace propagation through sidecars

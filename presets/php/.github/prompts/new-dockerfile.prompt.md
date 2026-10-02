@@ -1,144 +1,103 @@
 ---
-description: "Scaffold a multi-stage Dockerfile for PHP with static binary compilation, scratch/distroless runtime, and minimal attack surface."
+description: "Scaffold a production Dockerfile for Laravel 13 using PHP 8.5 FPM, Composer 2, nginx sidecar compose, health checks, and queue workers."
 agent: "agent"
 tools: [read, edit, search, execute]
 ---
 # Create New Dockerfile
 
-Scaffold a production-grade multi-stage Dockerfile for a PHP application.
+Scaffold the standard PHP deployment design: **php-fpm application image plus nginx sidecar**.
 
-## Required Pattern
+## Required application Dockerfile
 
-### Multi-Stage Dockerfile
 ```dockerfile
-# ---- Build Stage ----
-FROM php:1.22-alpine AS build
+FROM composer:2 AS build
 WORKDIR /app
-
-# Copy PHP.mod/PHP.sum first for layer caching
-COPY PHP.mod PHP.sum ./
-RUN PHP mod download
-
-# Copy source and build static binary
+COPY composer.json composer.lock ./
+RUN composer install --no-dev --prefer-dist --no-scripts --no-autoloader
 COPY . .
-RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 \
-    PHP build -ldflags="-s -w" -o /app/server ./cmd/server
+RUN rm -f bootstrap/cache/*.php \
+    && composer dump-autoload --optimize --no-dev
 
-# ---- Runtime Stage (Distroless) ----
-FROM gcr.io/distroless/static-debian12:nonroot AS runtime
+FROM php:8.5-fpm-alpine AS runtime
+WORKDIR /var/www/html
 
-COPY --from=build /app/server /server
+RUN apk add --no-cache icu-libs libpq bash \
+    && apk add --no-cache --virtual .build-deps $PHPIZE_DEPS icu-dev libpq-dev \
+    && docker-php-ext-install intl pdo_pgsql \
+    && apk del .build-deps
 
-EXPOSE 8080
+COPY --from=build --chown=www-data:www-data /app .
+RUN chmod +x docker/entrypoint.sh \
+    && chown -R www-data:www-data storage bootstrap/cache
 
-HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
-    CMD ["/server", "healthcheck"]
-
-USER nonroot:nonroot
-
-ENTRYPOINT ["/server"]
+USER www-data
+EXPOSE 9000
+ENTRYPOINT ["docker/entrypoint.sh"]
+CMD ["php-fpm"]
 ```
 
-### Scratch Runtime (Minimal — No Shell)
-```dockerfile
-FROM scratch AS runtime
+## Required entrypoint
 
-# Import CA certificates for HTTPS calls
-COPY --from=build /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/
+```sh
+#!/bin/sh
+set -eu
 
-# Import timezone data
-COPY --from=build /usr/share/zoneinfo /usr/share/zoneinfo
+php artisan config:cache
+php artisan route:cache
+php artisan view:cache
+php artisan optimize
 
-COPY --from=build /app/server /server
-
-EXPOSE 8080
-USER 65534:65534
-
-ENTRYPOINT ["/server"]
+exec "$@"
 ```
 
-### With Embedded Migrations
-```dockerfile
-FROM php:1.22-alpine AS build
-WORKDIR /app
+## Required .dockerignore
 
-COPY PHP.mod PHP.sum ./
-RUN PHP mod download
-
-COPY . .
-RUN CGO_ENABLED=0 PHP build -ldflags="-s -w" -o /app/server ./cmd/server
-RUN CGO_ENABLED=0 PHP build -ldflags="-s -w" -o /app/migrate ./cmd/migrate
-
-FROM gcr.io/distroless/static-debian12:nonroot AS runtime
-
-COPY --from=build /app/server /server
-COPY --from=build /app/migrate /migrate
-COPY --from=build /app/migrations /migrations
-
-USER nonroot:nonroot
-ENTRYPOINT ["/server"]
-```
-
-### .dockerignore
-```
-bin/
-vendor/
-*.md
-.git/
-.gitignore
-.vscode/
+```dockerignore
+.git
+.github
+.env
+.env.*
+node_modules
+storage/logs/*
+storage/framework/cache/*
+storage/framework/sessions/*
+storage/framework/views/*
+bootstrap/cache/*.php
+vendor
 Dockerfile*
-.dockerignore
-tmp/
+docker-compose*.yml
 ```
 
-### Docker Compose (Development)
-```yaml
-services:
-  api:
-    build:
-      context: .
-      dockerfile: Dockerfile
-    ports:
-      - "8080:8080"
-    environment:
-      - APP_ENV=development
-      - DATABASE_URL=postgres://postgres:postgres@db:5432/mydb?sslmode=disable
-    depends_on:
-      db:
-        condition: service_healthy
+## Required compose services
 
-  db:
-    image: postgres:18-alpine
-    environment:
-      POSTGRES_DB: mydb
-      POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: postgres
-    volumes:
-      - pgdata:/var/lib/postgresql
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U postgres"]
-      interval: 5s
-      timeout: 3s
-      retries: 5
+The generated compose file must include:
 
-volumes:
-  pgdata:
-```
+- `web`: `nginx:1.29-alpine`, serving `public/` and forwarding PHP to `app:9000`
+- `app`: the Dockerfile above, with `/up` liveness and an artisan readiness command
+- `queue`: same image, `php artisan queue:work redis --sleep=3 --tries=3 --timeout=90`
+- `scheduler`: same image, `php artisan schedule:work`
+- `postgres`: `postgres:18-alpine`, volume mounted at `/var/lib/postgresql`
+- `redis`: `redis:8-alpine`
+
+## Adaptation checklist
+
+When creating files, set:
+
+- The compose service names that match the project (`web`, `app`, `queue`, `scheduler` by default).
+- The host port nginx exposes for local development.
+- The local PostgreSQL database name, username, and password.
+- The registry and immutable image tag only if the project already publishes images.
 
 ## Rules
 
-- ALWAYS use multi-stage builds — build in `php:*-alpine`, run in `distroless` or `scratch`
-- ALWAYS compile with `CGO_ENABLED=0` for a fully static binary
-- ALWAYS use `-ldflags="-s -w"` to strip debug info and reduce binary size
-- ALWAYS run as a non-root user (`nonroot` in distroless, UID 65534 in scratch)
-- ALWAYS copy `PHP.mod`/`PHP.sum` first for dependency layer caching
-- ALWAYS copy CA certificates when using `scratch` (needed for HTTPS)
-- ALWAYS include a HEALTHCHECK instruction
-- NEVER store secrets in the image — use environment variables or mounted secrets
-- PHP binaries in `scratch`/`distroless` have the smallest possible attack surface
+- Use PHP-FPM plus nginx, matching `deploy.instructions.md`; switching to Apache or FrankenPHP is a project-wide decision, not a per-Dockerfile one.
+- Do not run `php artisan optimize` during image build.
+- Do not install `opcache`; PHP 8.5 already includes it.
+- Do not copy secrets or `.env` into the image.
+- Keep `COPY --chown=www-data:www-data` on application files.
+- Use `php artisan migrate --force` as a separate release step, not as the web container command.
 
 ## Reference Files
 
 - [Deploy patterns](../instructions/deploy.instructions.md)
-- [Architecture principles](../instructions/architecture-principles.instructions.md)
+- [Security instructions](../instructions/security.instructions.md)

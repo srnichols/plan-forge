@@ -1,12 +1,11 @@
 ---
-description: Naming conventions — files, folders, code symbols, database, APIs, third-party integration prefixing
-applyTo: '**'
+description: Naming conventions — Laravel folders, PHP symbols, database, APIs, third-party integration prefixing
+applyTo: 'app/**/*.php,routes/**/*.php,database/migrations/**/*.php,config/**/*.php,composer.json'
 ---
 
 # Naming Conventions
 
-> **Priority**: Apply consistently across all new code  
-> **Applies to**: ALL files
+> **Priority**: Apply consistently across all new PHP and Laravel code.
 
 ---
 
@@ -16,70 +15,91 @@ applyTo: '**'
 
 | Context | Convention | Example |
 |---------|-----------|---------|
-| **Project folders** | `kebab-case` or `lowercase` | `user-auth/`, `billing/` |
-| **Third-party tooling folders** | Prefix with tool/org name | `pforge-mcp/`, `openai-tools/` |
-| **Config files** | Dot-prefix for hidden | `.forge.json`, `.phpci.yml` |
+| Project folders | `kebab-case` | `user-auth/`, `payment-gateway/` |
+| Laravel app folders | Framework casing | `app/Http/Controllers/Api/V1/` |
+| Third-party tooling folders | Prefix with tool/org name | `pforge-mcp/`, `grafana-dashboards/` |
+| Config files | Dot-prefix for hidden | `.env.example`, `.forge.json` |
+| Documentation | Root docs in `UPPER-KEBAB.md` | `README.md`, `CHANGELOG.md` |
 
 ### Third-Party Integration Prefixing
 
-When adding folders/files from external tools or frameworks, **always prefix with the tool or organization name** to prevent collisions:
+External tool assets must be prefixed so they do not collide with application domains:
 
 ```
-✅ pforge-mcp/          — Plan Forge MCP server
-❌ mcp/                  — generic, will collide
+✅ pforge-mcp/
+✅ datadog-monitors/
+❌ mcp/
+❌ monitors/
 ```
 
-### Database Naming
+---
+
+## Laravel and PHP Conventions
 
 | Context | Convention | Example |
 |---------|-----------|---------|
-| **Tables** | `snake_case`, plural | `time_entries`, `user_profiles` |
-| **Columns** | `snake_case` | `created_at`, `hourly_rate` |
+| Namespace | PSR-4 under `App\` | `App\Services\BillingService` |
+| PHP files | `PascalCase.php` for classes | `OrderService.php` |
+| Classes / enums | `PascalCase` | `InvoicePolicy`, `OrderStatus` |
+| Interfaces | Capability name, no `I` prefix | `OrderRepository` |
+| Methods | `camelCase` verb phrases | `createForTenant()` |
+| Variables / parameters | `camelCase` | `$tenantId`, `$createdAfter` |
+| Constants | `UPPER_SNAKE_CASE` | `MAX_RETRY_ATTEMPTS` |
+| DTO classes | `{Action}{Entity}Data` | `CreateOrderData` |
+| Form Requests | `{Action}{Entity}Request` | `StoreOrderRequest` |
+| API Resources | `{Entity}Resource` | `OrderResource` |
+| Controllers | `{Entity}Controller` | `OrderController` |
+| Services | `{Entity}Service` | `OrderService` |
+| Repository interfaces | `{Entity}Repository` | `OrderRepository` |
+| Eloquent repositories | `Eloquent{Entity}Repository` | `EloquentOrderRepository` |
+| Policies | `{Entity}Policy` | `OrderPolicy` |
+| Jobs | Imperative verb phrase | `CapturePayment` |
+| Events | Past-tense domain fact | `OrderPlaced` |
+| Listeners | Imperative verb phrase | `SendOrderReceipt` |
 
-### API Endpoint Naming
+## Database Naming
+
+| Context | Convention | Example |
+|---------|-----------|---------|
+| Tables | `snake_case`, plural | `orders`, `invoice_lines` |
+| Columns | `snake_case` | `tenant_id`, `created_at` |
+| Primary keys | `id` UUID | `id` |
+| Foreign keys | `{singular_model}_id` | `customer_id` |
+| Indexes | `{table}_{columns}_{suffix}` | `orders_tenant_id_created_at_index` |
+| Unique constraints | `{table}_{columns}_unique` | `orders_tenant_id_number_unique` |
+
+## API Endpoint Naming
 
 | Convention | Example |
 |-----------|---------|
-| Plural nouns, kebab-case | `/api/time-entries` |
-
----
-
-## PHP Conventions (Effective PHP)
-
-| Context | Convention | Example |
-|---------|-----------|---------|
-| **Packages** | Short, `lowercase`, no underscores | `billing`, `timeentry`, `auth` |
-| **Directories** | Match package name | `internal/billing/`, `cmd/api/` |
-| **Files** | `snake_case.PHP` | `billing_service.PHP`, `time_entry.PHP` |
-| **Exported types** | `PascalCase` | `Client`, `TimeEntry`, `BillingService` |
-| **Unexported** | `camelCase` | `calculateTotal`, `dbConn` |
-| **Interfaces** | `-er` suffix for single method | `Reader`, `Validator`, `TimeEntryStore` |
-| **Constants** | `PascalCase` (exported) or `camelCase` | `MaxRetries`, `defaultTimeout` |
-| **Errors** | `Err` prefix | `ErrNotFound`, `ErrInvalidInput` |
-| **Getters** | No `Get` prefix | `client.Name()` not `client.GetName()` |
-| **Acronyms** | All caps | `HTTPClient`, `UserID`, `APIURL` |
-| **Test files** | `{file}_test.PHP` | `billing_service_test.PHP` |
-| **Test functions** | `Test{Function}_{Scenario}` | `TestCreate_WithEmptyName` |
-| **Benchmark** | `Benchmark{Function}` | `BenchmarkCalculateTotal` |
-| **Receivers** | Short, 1-2 letters | `func (s *BillingService)`, `func (c *Client)` |
-
-### Project Layout (Standard PHP)
-
-```
-cmd/api/          — main entry point
-internal/         — private packages
-  billing/        — billing domain
-  timeentry/      — time entry domain
-pkg/              — public packages (if any)
-```
-
----
+| Version prefix | `/api/v1` |
+| Plural resource nouns | `/api/v1/orders` |
+| Kebab-case words | `/api/v1/invoice-lines` |
+| Nested resources when ownership is real | `/api/v1/customers/{customer}/orders` |
 
 ## Decision Framework
 
 When naming anything new, ask:
 
-1. **Will this collide?** — If generic, add a specific prefix
-2. **Is the package name clear from the import path?** — `billing.Service` not `billing.BillingService`
-3. **Does it follow Effective PHP?** — Match the standard library style
-4. **Is it short but descriptive?** — PHP favors brevity: `srv` over `server` in locals
+1. **Will this collide?** Generic names such as `Helper`, `Manager`, and `ServiceProvider2` are not acceptable.
+2. **Can someone infer the layer?** `StoreOrderRequest`, `CreateOrderData`, and `OrderResource` each reveal their role.
+3. **Does it match Laravel discovery?** Policies, factories, casts, and resources should follow framework conventions.
+4. **Is it searchable?** Avoid abbreviations such as `OrdSvc`, `cfg`, and `tmp`.
+
+## Anti-Patterns
+
+```
+❌ App\Helpers\GeneralHelper
+❌ IOrderRepository
+❌ OrderManager
+❌ getData()
+❌ process()
+❌ /api/v1/orderStuff
+❌ tenantId database column
+```
+
+## See Also
+
+- `api-patterns.instructions.md` — Controller, request, resource, and route names
+- `database.instructions.md` — Migration and repository naming
+- `testing.instructions.md` — Test class and method naming

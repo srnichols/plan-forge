@@ -1,100 +1,100 @@
 ---
-description: "Scaffold an HTTP handler with Chi router, JSON encoding, ProblemDetail errors, and middleware."
+description: "Scaffold a Laravel API controller with Form Requests, API Resources, service delegation, and correct status codes."
 agent: "agent"
 tools: [read, edit, search]
 ---
-# Create New Controller (HTTP Handler)
+# Create New Controller
 
-Scaffold a handler that follows REST conventions and delegates all logic to services.
+Scaffold a controller that follows Laravel REST conventions and delegates all business behavior to a service.
 
 ## Required Pattern
 
-```PHP
-package handler
+```text
+app/Http/Controllers/Api/V1/{EntityName}Controller.php
 
-import (
-    "encoding/json"
-    "errors"
-    "net/http"
-
-    "github.com/PHP-chi/chi/v5"
-    "github.com/google/uuid"
-    "github.com/contoso/app/internal/service"
-)
-
-type {EntityName}Handler struct {
-    service *service.{EntityName}Service
-}
-
-func New{EntityName}Handler(svc *service.{EntityName}Service) *{EntityName}Handler {
-    return &{EntityName}Handler{service: svc}
-}
-
-func (h *{EntityName}Handler) Routes() chi.Router {
-    r := chi.NewRouter()
-    r.Get("/", h.List)
-    r.Post("/", h.Create)
-    r.Get("/{id}", h.GetByID)
-    r.Put("/{id}", h.Update)
-    r.Delete("/{id}", h.Delete)
-    return r
-}
-
-func (h *{EntityName}Handler) GetByID(w http.ResponseWriter, r *http.Request) {
-    id, err := uuid.Parse(chi.URLParam(r, "id"))
-    if err != nil {
-        writeProblem(w, http.StatusBadRequest, "invalid id format")
-        return
+final class {EntityName}Controller extends Controller
+{
+    public function __construct(private readonly {EntityName}Service $service)
+    {
     }
 
-    entity, err := h.service.GetByID(r.Context(), id)
-    if errors.Is(err, repository.ErrNotFound) {
-        writeProblem(w, http.StatusNotFound, "{entityName} not found")
-        return
-    }
-    if err != nil {
-        writeProblem(w, http.StatusInternalServerError, "internal error")
-        return
+    public function index(): AnonymousResourceCollection
+    {
+        return {EntityName}Resource::collection($this->service->paginateForCurrentTenant());
     }
 
-    writeJSON(w, http.StatusOK, entity)
-}
-
-func (h *{EntityName}Handler) Create(w http.ResponseWriter, r *http.Request) {
-    var req model.Create{EntityName}Request
-    if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-        writeProblem(w, http.StatusBadRequest, "invalid request body")
-        return
+    public function show(string $id): {EntityName}Resource
+    {
+        return {EntityName}Resource::make($this->service->findForCurrentTenant($id));
     }
 
-    entity, err := h.service.Create(r.Context(), req)
-    if err != nil {
-        writeProblem(w, http.StatusBadRequest, err.Error())
-        return
+    public function store(Store{EntityName}Request $request): JsonResponse
+    {
+        $resource = {EntityName}Resource::make($this->service->create($request->toData()));
+
+        return $resource->response()->setStatusCode(201);
     }
 
-    writeJSON(w, http.StatusCreated, entity)
+    public function update(string $id, Update{EntityName}Request $request): {EntityName}Resource
+    {
+        return {EntityName}Resource::make($this->service->update($id, $request->toData()));
+    }
+
+    public function destroy(string $id): Response
+    {
+        $this->service->delete($id);
+
+        return response()->noContent();
+    }
 }
 ```
 
+## Required Companion Files
+
+- `app/Http/Requests/Store{EntityName}Request.php`
+- `app/Http/Requests/Update{EntityName}Request.php`
+- `app/Http/Resources/{EntityName}Resource.php`
+- `app/Data/Create{EntityName}Data.php`
+- `app/Data/Update{EntityName}Data.php`
+- `app/Services/{EntityName}Service.php`
+- `app/Repositories/Contracts/{EntityName}Repository.php`
+
+## Route Registration
+
+```text
+routes/api.php
+
+// Define RateLimiter::for('api', ...) in App\Providers\AppServiceProvider::boot().
+Route::prefix('v1')
+    ->middleware(['auth:sanctum', 'throttle:api', ResolveTenant::class])
+    ->group(function (): void {
+        Route::apiResource('{entity-kebab-plural}', {EntityName}Controller::class);
+    });
+```
+
+`apiResource` must expose the collection index route as well as show, store, update, and destroy; tests for `GET /api/v1/{entity-kebab-plural}` should pass against this registration.
+
 ## Rules
 
-- Handlers handle HTTP concerns ONLY — no business logic
-- Delegate ALL work to services
-- Use `writeProblem()` helper for RFC 9457 `ProblemDetail` responses
-- Parse path params, decode body, call service, write response
-- Use `r.Context()` to propagate context to services
+- Controllers handle HTTP concerns only.
+- Use Form Requests for validation, authorization, and conversion to DTOs.
+- Return API Resources, not Eloquent models.
+- Delegate all work to `{EntityName}Service`.
+- Services call repositories; controllers never build queries.
+- Use 200 for reads/updates with body, 201 for create, 204 for delete.
 
 ## Error Mapping
 
-| Sentinel Error | HTTP Status |
-|----------------|-------------|
-| `ErrNotFound` | 404 Not Found |
-| `ErrValidation` | 400 Bad Request |
-| `ErrConflict` | 409 Conflict |
-| `ErrUnauthorized` | 401 Unauthorized |
+| Exception | HTTP Status |
+|-----------|-------------|
+| `ValidationException` | 422 Unprocessable Content |
+| `AuthenticationException` | 401 Unauthorized |
+| `HttpExceptionInterface` | 403/404/405/429 converted HTTP errors |
+| `NotFoundException` | 404 Not Found |
+| `ConflictException` | 409 Conflict |
 
 ## Reference Files
 
 - [API patterns](../instructions/api-patterns.instructions.md)
-- [Architecture principles](../instructions/architecture-principles.instructions.md)
+- [Error handling](../instructions/errorhandling.instructions.md)
+- [Architecture baseline](../instructions/architecture-principles.instructions.md)

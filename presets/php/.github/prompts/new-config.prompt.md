@@ -1,134 +1,87 @@
 ---
-description: "Scaffold typed configuration structs with environment variable loading, validation, and fail-fast startup."
+description: "Scaffold Laravel configuration files and typed value objects backed by environment variables."
 agent: "agent"
 tools: [read, edit, search]
 ---
 # Create New Configuration Module
 
-Scaffold typed, validated configuration loaded from environment variables and config files.
+Scaffold deploy-safe configuration that is read through Laravel config and validated before use.
 
 ## Required Pattern
 
-### Config Struct
-```PHP
-package config
+### Config File
 
-import (
-    "fmt"
-    "os"
-    "strconv"
-    "time"
-)
+```text
+config/{section-name}.php
 
-type {SectionName}Config struct {
-    BaseURL        string        `env:"BASE_URL"         validate:"required,url"`
-    APIKey         string        `env:"API_KEY"          validate:"required"`
-    Timeout        time.Duration `env:"TIMEOUT"          validate:"required"`
-    RetryCount     int           `env:"RETRY_COUNT"      validate:"min=0"`
-}
+return [
+    'base_url' => env('{SECTION_PREFIX}_BASE_URL'),
+    'timeout_seconds' => (int) env('{SECTION_PREFIX}_TIMEOUT_SECONDS', 30),
+    'retry_count' => (int) env('{SECTION_PREFIX}_RETRY_COUNT', 3),
+];
 ```
 
-### Config Loader (env-based)
-```PHP
-func Load() (*AppConfig, error) {
-    cfg := &AppConfig{
-        Port:     getEnvInt("PORT", 8080),
-        Env:      getEnvStr("APP_ENV", "development"),
-        LogLevel: getEnvStr("LOG_LEVEL", "info"),
-        DB: DatabaseConfig{
-            URL:      mustGetEnv("DATABASE_URL"),
-            PoolSize: getEnvInt("DB_POOL_SIZE", 10),
-        },
-    }
+### Typed Config Object
 
-    if err := validate.Struct(cfg); err != nil {
-        return nil, fmt.Errorf("invalid configuration: %w", err)
-    }
-    return cfg, nil
-}
-```
+```text
+app/Support/Config/{SectionName}Config.php
 
-### Environment Helpers
-```PHP
-func mustGetEnv(key string) string {
-    val := os.Getenv(key)
-    if val == "" {
-        panic(fmt.Sprintf("required environment variable %s is not set", key))
-    }
-    return val
-}
-
-func getEnvStr(key, fallback string) string {
-    if val := os.Getenv(key); val != "" {
-        return val
-    }
-    return fallback
-}
-
-func getEnvInt(key string, fallback int) int {
-    if val := os.Getenv(key); val != "" {
-        n, err := strconv.Atoi(val)
-        if err != nil {
-            panic(fmt.Sprintf("env %s must be an integer: %v", key, err))
+final readonly class {SectionName}Config
+{
+    public function __construct(
+        public string $baseUrl,
+        public int $timeoutSeconds,
+        public int $retryCount,
+    ) {
+        if ($this->baseUrl === '') {
+            throw new InvalidArgumentException('{SectionName} base URL is required.');
         }
-        return n
     }
-    return fallback
-}
-```
 
-### Grouped Config
-```PHP
-type AppConfig struct {
-    Port     int            `validate:"min=1,max=65535"`
-    Env      string         `validate:"oneof=development test production"`
-    LogLevel string         `validate:"oneof=debug info warn error"`
-    DB       DatabaseConfig
-    Cache    CacheConfig
-}
-
-type DatabaseConfig struct {
-    URL      string `validate:"required"`
-    PoolSize int    `validate:"min=1"`
-}
-
-type CacheConfig struct {
-    TTL     time.Duration `validate:"required"`
-    MaxSize int           `validate:"min=1"`
-}
-```
-
-### Fail-Fast in main()
-```PHP
-func main() {
-    cfg, err := config.Load()
-    if err != nil {
-        log.Fatalf("configuration error: %v", err)
+    public static function fromConfig(): self
+    {
+        return new self(
+            baseUrl: (string) config('{section-name}.base_url'),
+            timeoutSeconds: (int) config('{section-name}.timeout_seconds'),
+            retryCount: (int) config('{section-name}.retry_count'),
+        );
     }
-    // Pass cfg to constructors — never import a global
-    svc := service.New(cfg.DB)
 }
 ```
 
-### .env File Template
-```bash
-# .env.example — commit this, NOT .env
-APP_ENV=development
-PORT=8080
-LOG_LEVEL=info
-DATABASE_URL=postgres://user:pass@localhost:5432/mydb
-DB_POOL_SIZE=10
+### Service Provider Binding
+
+```text
+app/Providers/AppServiceProvider.php
+
+public function register(): void
+{
+    $this->app->singleton({SectionName}Config::class, static fn (): {SectionName}Config => {SectionName}Config::fromConfig());
+}
+```
+
+### Environment Template
+
+```text
+.env.example
+
+{SECTION_PREFIX}_BASE_URL=
+{SECTION_PREFIX}_TIMEOUT_SECONDS=30
+{SECTION_PREFIX}_RETRY_COUNT=3
 ```
 
 ## Rules
 
-- ALWAYS validate config at startup — `log.Fatalf` on invalid configuration
-- NEVER import a global config in libraries — pass config structs via constructors
-- NEVER commit `.env` files — commit `.env.example` with empty/default values
-- NEVER store secrets in code or config files — use environment variables or Vault
-- Use `validate` struct tags with `PHP-playground/validator`
-- Keep config in `internal/config/` package
+- Read `env()` only from config files.
+- Use `config()` or injected typed config objects everywhere else.
+- Do not put secret values in `.env.example`.
+- Validate required config during startup or provider registration.
+- Keep production secrets in environment variables or a secret store.
+- Document each key with a safe default when a default is valid.
+- Run `php artisan config:clear` locally after changing config keys.
 
 ## Reference Files
 
-- [Architecture principles](../instructions/architecture-principles.instructions.md)
+- [Multi-environment configuration](../instructions/multi-environment.instructions.md)
+- [Security instructions](../instructions/security.instructions.md)
+- [Configuration layering guidance](../instructions/architecture-principles.instructions.md)

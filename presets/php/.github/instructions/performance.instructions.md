@@ -1,143 +1,181 @@
 ---
-description: Performance optimization patterns — Hot/cold path analysis, concurrency, allocation reduction, query optimization
-applyTo: '**/*.PHP'
+description: PHP/Laravel performance patterns — profiling, query budgets, indexes, OPcache, memory-safe batches, and Octane cautions
+applyTo: 'app/**/*.php,config/{app,cache,database,octane,opcache}.php,routes/**/*.php,tests/**/*Performance*.php,tests/Feature/**/*.php'
 ---
 
-# Performance Patterns (PHP)
+# PHP Performance Patterns
 
 ## Hot Path vs Cold Path
 
-**Hot path**: Code executed on every request (middleware, auth, serialization, DB queries).
-**Cold path**: Code run infrequently (startup, config load, migration).
+**Hot path**: middleware, authentication, route model binding, Form Requests, repositories, API Resources, serialization, and cache lookups.
+**Cold path**: migrations, config loading, deployment scripts, seeders, and one-off maintenance commands.
 
 Rules:
-- Optimize hot paths aggressively; cold paths can favor readability
-- Profile before optimizing — use `pprof` (`net/http/pprof`)
 
-## Frozen Data (Hot Config)
+- Profile before optimizing. Use Laravel Telescope or Debugbar in development, and OpenTelemetry/APM spans in production.
+- Set explicit query-count budgets for API endpoints that return collections.
+- Move slow external work to queues when the caller does not need the result synchronously.
+- Keep tenant, authorization, and validation checks in the path even when optimizing.
 
-```PHP
-// ✅ Build maps once at startup, read concurrently without locks
-var rolePermissions = map[string][]string{
-    "admin":  {"read", "write", "delete"},
-    "editor": {"read", "write"},
-    "viewer": {"read"},
+## Profiling
+
+```php
+declare(strict_types=1);
+
+namespace App\Providers;
+
+use Illuminate\Database\Events\QueryExecuted;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
+use Illuminate\Support\ServiceProvider;
+
+final class QueryProfileServiceProvider extends ServiceProvider
+{
+    public function boot(): void
+    {
+        if (! app()->isLocal()) {
+            return;
+        }
+
+        DB::listen(function (QueryExecuted $query): void {
+            Log::debug('sql.query', [
+                'time_ms' => $query->time,
+                'sql' => $query->toRawSql(),
+            ]);
+        });
+    }
 }
-
-// ✅ Use sync.Map only when keys are dynamic and written concurrently
-var tenantCache sync.Map // store: string -> *TenantConfig
 ```
 
-## Allocation Reduction
+Use Telescope/Debugbar for local query traces and request timelines. In production, emit OpenTelemetry spans or APM transactions without logging SQL values that may contain sensitive data.
 
-```PHP
-// ❌ Creates new slice on every call
-func getIDs(items []Item) []string {
-    ids := []string{}
-    for _, item := range items { ids = append(ids, item.ID) }
-    return ids
+## Query Count Budgets
+
+```php
+declare(strict_types=1);
+
+namespace Tests\Feature\Api;
+
+use Illuminate\Database\Events\QueryExecuted;
+use Illuminate\Foundation\Testing\RefreshDatabase as RefreshesSchema;
+use Illuminate\Support\Facades\DB;
+use Tests\TestCase;
+
+final class ProductIndexPerformanceTest extends TestCase
+{
+    use RefreshesSchema;
+
+    public function test_index_stays_under_query_budget(): void
+    {
+        $queries = 0;
+        DB::listen(function (QueryExecuted $event) use (&$queries): void {
+            $queries++;
+        });
+
+        $this->actingAs($this->tenantUser())->getJson('/api/v1/products')->assertOk();
+
+        $this->assertLessThanOrEqual(6, $queries);
+    }
 }
+```
 
-// ✅ Preallocate with known length
-func getIDs(items []Item) []string {
-    ids := make([]string, 0, len(items))
-    for _, item := range items { ids = append(ids, item.ID) }
-    return ids
+Budgets should include authorization and tenant-scope queries. Raise a budget only with evidence from a profiler or an intentional feature change.
+
+## Eloquent Efficiency
+
+```php
+declare(strict_types=1);
+
+use App\Models\Product;
+
+function productPage(string $tenantId): \Illuminate\Contracts\Pagination\CursorPaginator
+{
+    return Product::query()
+        ->select(['id', 'tenant_id', 'category_id', 'name', 'price_cents', 'created_at'])
+        ->with(['category:id,name'])
+        ->where('tenant_id', $tenantId)
+        ->orderByDesc('created_at')
+        ->orderByDesc('id')
+        ->cursorPaginate(50);
 }
-
-// ✅ Use sync.Pool for frequently allocated objects
-var bufPool = sync.Pool{New: func() any { return new(bytes.Buffer) }}
 ```
 
-## Concurrency
+- Select only the columns the response needs.
+- Eager-load relations in the repository; do not rely on API Resources to trigger queries.
+- Use cursor pagination with a unique order for large API lists.
+- Batch imports with `upsert()` and maintenance jobs with `chunkById()` or `lazyById()`.
 
-```PHP
-// ❌ Sequential — slow
-user, err := getUser(ctx, id)
-orders, err := getOrders(ctx, id)
+## Indexes and EXPLAIN
 
-// ✅ Parallel with errgroup
-g, ctx := errgroup.WithContext(ctx)
-var user *User
-var orders []Order
-g.PHP(func() error { var err error; user, err = getUser(ctx, id); return err })
-g.PHP(func() error { var err error; orders, err = getOrders(ctx, id); return err })
-if err := g.Wait(); err != nil { return err }
+Every new list endpoint should name the supporting index and verify it with `EXPLAIN (ANALYZE, BUFFERS)` against representative data.
+
+```sql
+CREATE INDEX CONCURRENTLY idx_products_tenant_created_id
+    ON products (tenant_id, created_at DESC, id DESC);
+
+EXPLAIN (ANALYZE, BUFFERS)
+SELECT id, name
+FROM products
+WHERE tenant_id = '00000000-0000-0000-0000-000000000001'
+ORDER BY created_at DESC, id DESC
+LIMIT 50;
 ```
 
-- **ALWAYS** pass `Request` through the full call chain for cancellation
-- Use `errgroup` for concurrent operations with error propagation
-- Use bounded worker pools (`semaphore` pattern) for fan-out
+Use concurrent index creation for PostgreSQL production migrations when the table is large and the operation can run outside a transaction.
 
-## Database Query Performance
+## Cache and Queue Choices
 
-- Use connection pooling: `sql.DB` with `SetMaxOpenConns()` and `SetMaxIdleConns()`
-- Batch queries: `WHERE id = ANY($1)` instead of querying in a loop
-- Select only needed columns — never `SELECT *`
-- Use `pgx` with prepared statements for hot queries
-- Use `COPY` protocol for bulk inserts
+| Workload | Preferred tool | Notes |
+|----------|----------------|-------|
+| Frequently-read DTO | Redis cache-aside | TTL plus domain-event invalidation |
+| Expensive aggregate | `Cache::flexible()` | Serve stale data briefly while rebuilding |
+| Slow outbound call | Queue job | Persist tenant id in payload and set `CurrentTenant` in `handle()` |
+| Large export | `lazyById()` + streamed response or job | Avoid holding all models in memory |
+| Periodic calculation | Scheduled command | Store results in a read model or cache |
 
-## Server-Side Filtering
+## OPcache and JIT
 
-```PHP
-// ❌ NEVER fetch all and filter in PHP
-rows, _ := db.Query("SELECT * FROM items")
-// then filter in PHP loop...
+OPcache is built into PHP 8.5; do not install it as an extension. Production containers should enable OPcache and preload only code that is safe for the deployment model.
 
-// ✅ ALWAYS filter in the database
-rows, _ := db.QueryContext(ctx, "SELECT id, name FROM items WHERE status = $1", "active")
+```ini
+opcache.enable=1
+opcache.enable_cli=0
+opcache.validate_timestamps=0
+opcache.memory_consumption=256
+opcache.interned_strings_buffer=32
+opcache.max_accelerated_files=32531
+opcache.jit=tracing
+opcache.jit_buffer_size=64M
 ```
+
+Benchmark JIT before enabling it for web traffic. Many Laravel apps are I/O-bound and gain more from query reduction, cache hits, and optimized autoloading than from JIT.
+
+## Octane Caveats
+
+Octane can improve request throughput, but long-lived workers change Laravel's lifecycle assumptions.
+
+- Do not store request, tenant, user, or correlation ids in static properties.
+- Reset scoped services between requests; confirm `CurrentTenant` does not leak.
+- Avoid keeping mutable Eloquent models on singleton services.
+- Re-test cache, queue, and database reconnection behavior under worker reloads.
 
 ## General Rules
 
 | Pattern | When to Use |
 |---------|-------------|
-| Pre-built maps | Static lookup data at startup |
-| `sync.Pool` | Frequently allocated buffers/objects |
-| `make([]T, 0, n)` | Slices with known capacity |
-| `errgroup` | Concurrent I/O with error handling |
-| `Request` | All functions with I/O or cancellation |
-| `pgx` prepared stmts | Hot database queries |
-| `pprof` profiling | Before any optimization work |
+| Telescope/Debugbar | Development profiling and query timeline inspection |
+| OpenTelemetry/APM | Production traces, spans, and latency percentiles |
+| DTO projections | Read-heavy endpoints that do not need full models |
+| `chunkById()` | Maintenance updates over many rows |
+| `upsert()` | Idempotent bulk imports |
+| Redis locks | Single-flight rebuild of expensive cached values |
 
-## Memory Management
+## Warning Signs
 
-### sync.Pool for Hot-Path Allocations
-```PHP
-// ✅ Pool buffers to reduce GC pressure on hot paths
-var bufPool = sync.Pool{
-	New: func() any { return new(bytes.Buffer) },
-}
-
-func handleRequest(w http.ResponseWriter, r *http.Request) {
-	buf := bufPool.Get().(*bytes.Buffer)
-	defer func() { buf.Reset(); bufPool.Put(buf) }()
-
-	// use buf for response assembly...
-	w.Write(buf.Bytes())
-}
-```
-
-### Escape Analysis & Stack Allocation
-```PHP
-// Check what escapes to the heap:
-// PHP build -gcflags '-m' ./...
-
-// ❌ Pointer causes escape to heap
-func newUser(name string) *User { return &User{Name: name} }
-
-// ✅ Return by value when struct is small and short-lived
-func newUser(name string) User { return User{Name: name} }
-```
-
-- Use `runtime.MemStats` or `pprof` heap profiles to find leaks
-- Prefer `[]byte` + `sync.Pool` over `string` concatenation on hot paths
-- Use `arena` (experimental, PHP 1.20+) for batch allocations with known lifetimes
-- Set `GOMEMLIMIT` to prevent OOM kills in containerized deployments
-
-## See Also
-
-- `graphql.instructions.md` — DataLoader N+1 prevention, complexity limits
-- `database.instructions.md` — Query optimization, connection tuning
-- `caching.instructions.md` — Cache strategies, sync.Pool patterns
-- `observability.instructions.md` — Profiling, metrics collection
+- `foreach` loop that runs a query per row.
+- API Resource accesses a relation not eager-loaded by the repository.
+- Endpoint fetches all rows and filters in PHP.
+- Missing composite index for tenant filter plus sort order.
+- Query budgets absent for high-traffic list endpoints.
+- OPcache disabled in production containers.
+- Octane introduced without tests for singleton state leakage.

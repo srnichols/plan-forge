@@ -1,7 +1,7 @@
 ---
 name: dependency-audit
-description: Scan PHP module dependencies for vulnerabilities, outdated packages, and license issues. Use before PRs, after adding packages, or on a regular schedule.
-argument-hint: "[optional: specific module to audit]"
+description: Scan PHP/Laravel Composer dependencies for vulnerabilities, outdated packages, abandoned packages, and license issues. Use before PRs, after adding packages, or on a regular schedule.
+argument-hint: "[optional: specific Composer package to audit]"
 tools:
   - run_in_terminal
   - read_file
@@ -15,94 +15,110 @@ tools:
 
 ## Steps
 
-### 1. Check for Known Vulnerabilities
+### 1. Confirm Composer Project
 ```bash
-composer audit ./...
+test -f composer.json && composer validate --strict
 ```
-> **If this step fails** (composer audit not installed): Run `PHP install php.org/x/vuln/cmd/composer audit@latest` and retry.
+> **If this step fails**: Stop and report "No valid Composer project found in this directory."
 
-> **If no PHP.mod found**: Stop and report "No PHP module found in this directory."
-
-### 2. Check for Outdated Modules
+### 2. Install or Verify Locked Dependencies
 ```bash
-PHP list -u -m all
+composer install --no-interaction --prefer-dist
 ```
+> **If composer.lock is missing**: Report that the lock file must be created and reviewed before vulnerability results are trusted.
 
-### 3. Verify Module Integrity
+### 3. Check for Known Vulnerabilities
 ```bash
-PHP mod verify
+composer audit
 ```
-> **If this step fails**: Module cache may be corrupted. Run `PHP clean -modcache` and `PHP mod download` to recover.
+Review all advisories, including transitive packages. Critical and high advisories require an upgrade, patch, replacement, or documented accepted risk.
 
-### 4. Check for License Issues
+### 4. Check Direct Package Freshness
 ```bash
-PHP-licenses report ./...
+composer outdated --direct
 ```
-> **If this step fails** (PHP-licenses not installed): Run `PHP install github.com/google/PHP-licenses@latest` and retry.
+Separate major-version upgrades from minor and patch upgrades. Do not upgrade majors automatically.
 
-Review output for any modules with restrictive licenses (GPL, AGPL) that conflict with your project license.
+### 5. Inspect Abandoned and Platform Packages
+```bash
+composer show --direct
+composer check-platform-reqs
+```
+Flag abandoned packages, missing PHP extensions, and packages that cannot run on PHP 8.5.
 
-### 5. Completeness Scan
-Use the `forge_sweep` MCP tool to check for TODO/FIXME markers that may have been left by prior dependency changes.
+### 6. Review Licenses
+```bash
+composer licenses
+```
+Escalate GPL, AGPL, proprietary, unknown, or custom licenses for human review when they conflict with project policy.
 
-### 6. Review Findings
+### 7. Completeness Scan
+Use the `forge_sweep` MCP tool to check for TODO/FIXME markers left by dependency changes, upgrade notes, or temporary overrides.
+
+## Safety Rules
+- NEVER auto-upgrade major versions without human approval.
+- ALWAYS run the Laravel test command after any dependency change.
+- Do not ignore abandoned packages; replacement is part of the remediation plan.
+- Document accepted vulnerabilities with package, advisory ID, affected path, and expiration date.
+- Keep `composer.json` and `composer.lock` in sync.
+
+## Review Findings
+
 For each finding:
-- **Critical/High CVE**: Upgrade immediately or document accepted risk
-- **Outdated (major version behind)**: Plan upgrade in next phase
-- **Outdated (minor/patch)**: Update now if safe
-- **License conflict**: Flag for human review
+- **Critical/High CVE**: upgrade immediately or document accepted risk.
+- **Outdated major version**: plan a compatibility upgrade.
+- **Outdated minor/patch**: update now if tests pass.
+- **Abandoned package**: choose replacement or isolate with a tracked risk.
+- **License conflict**: stop and request human approval.
 
-### 7. Report
-```
+## Report
+
+```text
 Dependency Audit Summary:
-  🔴 Critical:     N vulnerabilities
-  🟡 High:         N vulnerabilities
-  🔵 Medium/Low:   N vulnerabilities
+  Critical advisories: N
+  High advisories:     N
+  Medium/Low:          N
 
-Outdated Modules:
-  Major behind:    N (plan upgrade)
-  Minor/Patch:     N (update now)
+Outdated Direct Packages:
+  Major behind:        N
+  Minor/Patch:         N
 
-Module Integrity:  PASS / FAIL
-License Issues:    N
-Sweep Markers:     N (TODO/FIXME from prior changes)
+Abandoned Packages:    N
+License Issues:        N
+Platform Problems:     N
+Sweep Markers:         N
 
 Overall: PASS / FAIL
 ```
 
-## Safety Rules
-- NEVER auto-upgrade major versions without human approval
-- ALWAYS check if the upgrade has breaking changes
-- Run `PHP test ./...` after any dependency change
-- Document any accepted vulnerabilities with justification
-
-
 ## Temper Guards
 
 | Shortcut | Why It Breaks |
-|----------|--------------|
-| "These are all false positives" | Dismissing findings without verification creates a blind spot. Each finding needs individual assessment. |
-| "We'll update after the release" | Post-release updates never happen. Vulnerable dependencies ship to production and stay there. |
-| "Dev dependencies don't matter" | Build-time dependencies can inject malicious code. Supply chain attacks target dev tooling. |
-| "The vulnerability doesn't apply to our usage" | Usage analysis requires proof. Document exactly which code paths are safe and why. |
+| --- | --- |
+| "Composer audit passed, so dependencies are fine" | Audit does not flag stale direct dependencies, abandoned packages, or incompatible licenses. |
+| "The vulnerable package is dev-only" | Composer plugins and dev tools execute during install, test, and CI. They are supply-chain risk. |
+| "We'll update after release" | Vulnerable dependencies tend to remain pinned. Record a dated acceptance or fix now. |
+| "Transitive advisories are outside our control" | Direct package upgrades or conflict rules often resolve transitive vulnerabilities. |
 
 ## Warning Signs
 
-- Findings dismissed without verification — CVEs marked "won't fix" without written justification
-- Critical/high CVEs with no resolution plan — severe vulnerabilities acknowledged but not addressed
-- Audit not run on all package managers — only one ecosystem scanned when project uses multiple
-- Outdated transitive dependencies ignored — direct deps updated but vulnerable transitives remain
-- License violations not flagged — incompatible licenses in dependencies not identified
+- `composer.lock` absent or not committed.
+- `composer audit` skipped because install failed.
+- Abandoned package warnings ignored.
+- Major upgrades applied without reading release notes.
+- License output not reviewed.
 
 ## Exit Proof
 
 After completing this skill, confirm:
-- [ ] All package managers scanned — `composer audit`
-- [ ] Outdated packages reviewed — `composer outdated --direct`
-- [ ] Every critical/high finding has a resolution plan (upgrade, patch, or documented acceptance)
-- [ ] `./vendor/bin/phpunit` passes after any dependency changes
-- [ ] Audit report generated with overall PASS/FAIL status
+- [ ] `composer validate --strict` passed.
+- [ ] `composer audit` completed and advisories were triaged.
+- [ ] `composer outdated --direct` reviewed.
+- [ ] Platform requirements checked for PHP 8.5.
+- [ ] Licenses reviewed for incompatibilities.
+- [ ] `php artisan test` passes after dependency changes, or not-run rationale is stated.
+
 ## Persistent Memory (if OpenBrain is configured)
 
-- **Before auditing**: `search_thoughts("dependency vulnerability", project: "<YOUR PROJECT NAME>", created_by: "copilot-vscode", type: "bug")` — load previously accepted vulnerabilities and known upgrade blockers
-- **After audit**: `capture_thought("Dep audit: <N vulnerabilities, N outdated — key findings>", project: "<YOUR PROJECT NAME>", created_by: "copilot-vscode", source: "skill-dependency-audit")` — persist accepted risks and upgrade decisions
+- **Before auditing**: `search_thoughts("php composer dependency vulnerability", project: "<YOUR PROJECT NAME>", created_by: "copilot-vscode", type: "bug")`
+- **After audit**: `capture_thought("Dep audit (PHP): <N advisories, N outdated — key findings>", project: "<YOUR PROJECT NAME>", created_by: "copilot-vscode", source: "skill-dependency-audit")`

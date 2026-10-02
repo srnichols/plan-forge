@@ -1,129 +1,83 @@
 ---
-description: "Scaffold sentinel errors, domain error types, and centralized HTTP error rendering."
+description: "Scaffold Laravel AppException subclasses and bootstrap/app.php Problem Details rendering."
 agent: "agent"
 tools: [read, edit, search]
 ---
 # Create New Error Types
 
-Scaffold sentinel errors and domain error types with centralized HTTP error rendering.
+Scaffold typed domain exceptions that render as RFC 9457 Problem Details.
 
 ## Required Pattern
 
-### Sentinel Errors
-```PHP
-package apperr
+### Base Exception
 
-import "errors"
+```text
+app/Exceptions/AppException.php
 
-// Sentinel errors — use errors.Is() to check
-var (
-    ErrNotFound  = errors.New("not found")
-    ErrConflict  = errors.New("conflict")
-    ErrForbidden = errors.New("forbidden")
-)
-```
-
-### Domain Error Type (Rich Error)
-```PHP
-// AppError carries an error code, HTTP status, and human-readable message.
-type AppError struct {
-    Code    string `json:"error"`
-    Status  int    `json:"status"`
-    Message string `json:"message"`
-    Err     error  `json:"-"` // Wrapped inner error — not serialized
-}
-
-func (e *AppError) Error() string { return e.Message }
-func (e *AppError) Unwrap() error { return e.Err }
-
-// Constructor helpers
-func NewNotFound(entity, id string) *AppError {
-    return &AppError{
-        Code:    "NOT_FOUND",
-        Status:  404,
-        Message: entity + " with id '" + id + "' was not found.",
-        Err:     ErrNotFound,
-    }
-}
-
-func NewConflict(msg string) *AppError {
-    return &AppError{Code: "CONFLICT", Status: 409, Message: msg, Err: ErrConflict}
-}
-
-func NewValidation(msg string, fieldErrors map[string][]string) *ValidationError {
-    return &ValidationError{
-        AppError: AppError{Code: "VALIDATION_FAILED", Status: 422, Message: msg},
-        Fields:   fieldErrors,
-    }
-}
-
-func NewForbidden(msg string) *AppError {
-    return &AppError{Code: "FORBIDDEN", Status: 403, Message: msg, Err: ErrForbidden}
+abstract class AppException extends RuntimeException
+{
+    abstract public function status(): int;
+    abstract public function type(): string;
+    abstract public function title(): string;
 }
 ```
 
-### Validation Error (Extended)
-```PHP
-type ValidationError struct {
-    AppError
-    Fields map[string][]string `json:"field_errors,omitempty"`
+### Domain Exception Types
+
+```text
+app/Exceptions/NotFoundException.php
+
+final class NotFoundException extends AppException
+{
+    public function __construct(string $entity, string $id)
+    {
+        parent::__construct("{$entity} with id '{$id}' was not found.");
+    }
+
+    public function status(): int { return 404; }
+    public function type(): string { return 'https://example.com/problems/not-found'; }
+    public function title(): string { return 'Not found'; }
 }
 ```
 
-### Centralized Error Renderer
-```PHP
-func WriteError(w http.ResponseWriter, err error) {
-    var appErr *AppError
-    if errors.As(err, &appErr) {
-        w.Header().Set("Content-Type", "application/json")
-        w.WriteHeader(appErr.Status)
-        json.NewEncoder(w).Encode(appErr)
-        return
-    }
+Create these standard classes before adding domain-specific subclasses:
 
-    var valErr *ValidationError
-    if errors.As(err, &valErr) {
-        w.Header().Set("Content-Type", "application/json")
-        w.WriteHeader(valErr.Status)
-        json.NewEncoder(w).Encode(valErr)
-        return
-    }
+| Class | Status | Purpose |
+|-------|--------|---------|
+| `NotFoundException` | 404 | Missing resource or tenant-hidden resource |
+| `ConflictException` | 409 | Duplicate unique value or state conflict |
+| `BusinessRuleException` | 422 | Valid request violates a business rule |
+| `ForbiddenException` | 403 | Domain authorization failure |
 
-    // Unexpected error — log and return generic 500
-    slog.Error("unhandled error", "error", err)
-    w.Header().Set("Content-Type", "application/json")
-    w.WriteHeader(http.StatusInternalServerError)
-    json.NewEncoder(w).Encode(map[string]any{
-        "status":  500,
-        "error":   "INTERNAL_ERROR",
-        "message": "An unexpected error occurred.",
-    })
-}
-```
+### Renderer Registration
 
-### Usage in Handlers
-```PHP
-func (h *Handler) GetByID(w http.ResponseWriter, r *http.Request) {
-    id := chi.URLParam(r, "id")
-    item, err := h.service.FindByID(r.Context(), id)
-    if err != nil {
-        WriteError(w, err)
-        return
-    }
-    writeJSON(w, http.StatusOK, toResponse(item))
-}
+```text
+bootstrap/app.php
+
+->withExceptions(function (Exceptions $exceptions): void {
+    $exceptions->render(function (AppException $exception, Request $request): JsonResponse {
+        return problem(
+            request: $request,
+            status: $exception->status(),
+            type: $exception->type(),
+            title: $exception->title(),
+            detail: $exception->getMessage(),
+        );
+    });
+})
 ```
 
 ## Rules
 
-- Use sentinel errors (`ErrNotFound`) for simple identity checks with `errors.Is()`
-- Use `AppError` struct for rich errors that carry HTTP status and error codes
-- ALWAYS implement `Unwrap()` so `errors.Is()` and `errors.As()` work through wrapping
-- NEVER leak internal error details or stack traces in HTTP responses
-- Log the full error server-side; return sanitized message to the client
-- Keep error types in `internal/apperr/` package
+- Never raise raw `Exception` or `RuntimeException` from domain code.
+- Keep HTTP status mapping on the exception class.
+- Render all errors centrally from `bootstrap/app.php`.
+- Keep the Problem Details shape consistent with the global `problem()` helper.
+- Log unexpected exceptions server-side and return sanitized 500 responses.
+- Map only `UniqueConstraintViolationException` to 409.
 
 ## Reference Files
 
-- [Architecture principles](../instructions/architecture-principles.instructions.md)
+- [Error handling](../instructions/errorhandling.instructions.md)
 - [API patterns](../instructions/api-patterns.instructions.md)
+- [Exception layering guidance](../instructions/architecture-principles.instructions.md)

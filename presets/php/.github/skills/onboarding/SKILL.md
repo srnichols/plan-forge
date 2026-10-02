@@ -1,7 +1,7 @@
 ---
 name: onboarding
-description: Walk a new developer through PHP project setup, architecture, key files, and first task. Use when someone new joins the team or needs to understand the codebase.
-argument-hint: "[optional: specific area to focus on, e.g. 'backend' or 'testing']"
+description: Walk a new developer through Laravel project setup, architecture, key files, tests, Docker services, and first task. Use when someone joins the team or needs to understand the codebase.
+argument-hint: "[optional: specific area to focus on, e.g. 'backend', 'queues', or 'testing']"
 tools:
   - run_in_terminal
   - read_file
@@ -16,112 +16,130 @@ tools:
 ## Steps
 
 ### 1. Environment Setup
-Verify prerequisites and get the project running:
+Verify prerequisites:
 
 ```bash
 git --version
-PHP version
+php --version
+composer --version
+docker version
 ```
-> **If this step fails** (PHP not found): Install PHP from https://PHP.dev/dl and retry.
+
+Install dependencies and prepare local config:
 
 ```bash
-PHP mod download
+composer install
+[ -f .env ] || cp .env.example .env
+grep -q '^APP_KEY=.' .env || php artisan key:generate
 ```
-> **If this step fails**: Check that `GOPROXY` is configured correctly and network access is available.
 
-### 2. Verify Build & Tests
-Use the `forge_smith` MCP tool to diagnose environment and setup health.
+### 2. Start Local Services
+Use the project compose file when available:
 
 ```bash
-PHP build ./...
+docker compose up -d postgres redis
+php artisan migrate
 ```
-> **If this step fails**: Read the error output — common causes are PHP version mismatch (check `PHP.mod` `PHP` directive) or missing CGO dependencies.
+
+If Docker is unavailable, explain which tests or features will be blocked, especially Testcontainers integration tests.
+
+### 3. Verify Build and Tests
+Use `forge_smith` for environment diagnostics, then run:
 
 ```bash
-PHP test ./...
+vendor/bin/pint --test
+vendor/bin/phpstan analyse
+php artisan test
+php artisan route:list --path=v1
 ```
-> **If both pass**: Environment is ready.
 
-### 3. Architecture Overview
-Read and explain:
-1. **`.github/copilot-instructions.md`** — project overview, tech stack, conventions
-2. **`docs/plans/PROJECT-PRINCIPLES.md`** — non-negotiable principles (if exists)
-3. **Project structure** — explain the folder layout and what lives where
-4. **Key patterns** — how data flows through the layers (Handlers → Services → Repositories)
+### 4. Architecture Overview
+Explain the Laravel layers:
 
-### 4. Key Files Tour
-Walk through the most important PHP files:
-- **Entry point**: `main.PHP` or `cmd/server/main.PHP` — application bootstrap and server startup
-- **Module config**: `PHP.mod` — module path, PHP version, dependencies
-- **Environment**: `.env.example` — required environment variables
-- **Internal packages**: `internal/` — private application code
-- **Database**: migrations folder, database driver setup, connection config
-- **Testing**: `*_test.PHP` files alongside source, how to run specific tests
-- **CI/CD**: GitHub Actions workflows, Dockerfile, deployment config
+1. `routes/api.php` defines versioned routes behind `auth:sanctum` and `throttle:api`.
+2. Controllers accept Form Requests and return API Resources.
+3. Form Requests authorize through policies and build DTOs with `toData()`.
+4. Services own business rules and transactions.
+5. Repositories own Eloquent queries.
+6. Models define casts, relationships, UUIDs, and tenant scope.
+7. `bootstrap/app.php` wires middleware and problem-details exceptions.
 
-### 5. Plan Forge Pipeline Tour
-Explain how the team works:
-1. **Plans live in** `docs/plans/` — each feature is a hardened phase plan
-2. **Guardrails live in** `.github/instructions/` — auto-load based on file type
-3. **Pipeline prompts** — Step 0–5 workflow for building features
-4. **Skills** — type `/` in Copilot Chat to see available automations
-5. **Reviewer agents** — specialized reviewers in `.github/agents/`
+### 5. Key Files Tour
+Review:
 
-### 6. First Task Guidance
-Suggest a good first task:
-- Read the `DEPLOYMENT-ROADMAP.md` for current phase status
-- Pick a small slice from the current phase (or a documentation improvement)
-- Follow the Step 3 execution prompt for guided implementation
-- Use `/test-sweep` to verify nothing broke
+- `composer.json` for Laravel, PHPUnit, Larastan, Pint, Sanctum, and OpenTelemetry packages.
+- `app/Http/Controllers/Api/V1/` for endpoint boundaries.
+- `app/Services/` and `app/Repositories/` for business and data layers.
+- `app/Models/Concerns/BelongsToTenant.php` and `app/Models/Scopes/TenantScope.php`.
+- `tests/Feature/` and `tests/Unit/`.
+- `Dockerfile`, compose files, and nginx config.
+- GitHub Actions or other CI workflows.
 
-### 7. Report
-```
+### 6. Plan Forge Pipeline Tour
+Explain:
+
+1. Plans in `docs/plans/`.
+2. Guardrails in `.github/instructions/`.
+3. Step 0-5 prompts for feature execution.
+4. Slash skills such as `/test-sweep`, `/code-review`, and `/staging-deploy`.
+5. Reviewer agents under `.github/agents/`.
+
+### 7. First Task Guidance
+Suggest a starter task:
+
+- Add or update one feature test around an existing endpoint.
+- Improve one API Resource example in OpenAPI docs.
+- Fix a small Larastan or Pint issue.
+- Use `/test-sweep` before handing off.
+
+### 8. Report
+```text
 Onboarding Status:
-  PHP:              ✅ / ❌ (version)
-  Modules:         ✅ / ❌
-  Build:           ✅ / ❌
-  Tests:           ✅ / ❌ (N passed, N failed)
-  Forge Smith:     ✅ / ❌
-
-Key files reviewed:  N
-Architecture docs:   N
-
-Overall: PASS / FAIL
+  PHP:          PASS / FAIL (version)
+  Composer:     PASS / FAIL (version)
+  Docker:       PASS / FAIL
+  Dependencies: PASS / FAIL
+  Tests:        PASS / FAIL
+  Routes:       PASS / FAIL
+  Forge Smith:  PASS / FAIL
 ```
 
 ## Safety Rules
-- NEVER make changes during onboarding — read-only exploration
-- Explain concepts at the audience's level — ask their experience first
-- Highlight gotchas and common mistakes specific to this codebase
-- Point to documentation rather than explaining everything from memory
 
+- NEVER change files during onboarding.
+- Ask the developer's Laravel and Docker experience before choosing depth.
+- Show exact failed command output when setup breaks.
+- Point to project files rather than relying only on memory.
 
 ## Temper Guards
 
 | Shortcut | Why It Breaks |
 |----------|--------------|
-| "The README covers everything" | READMEs go stale. An interactive onboarding verifies each step works right now, not when it was last updated. |
-| "New devs can figure it out" | Silent failures and undocumented prerequisites waste hours. Explicit verification prevents frustration. |
-| "Setup is straightforward" | What's obvious to the author is opaque to newcomers. Every assumption needs verification. |
-| "They can ask if they're stuck" | Asking requires knowing what to ask. New developers don't know what they don't know. |
+| "Composer install succeeded, so setup is done" | Migrations, queues, route registration, and tests can still be broken. |
+| "They can use SQLite locally" | PostgreSQL behavior (types, locking, JSON operators) differs from SQLite; run PostgreSQL through Docker. |
+| "The README covers architecture" | New developers need the live code path and current conventions. |
+| "Queues can wait" | Laravel apps often fail in workers, not web requests. |
 
 ## Warning Signs
 
-- Prerequisites not checked — assumed to be installed without running version commands
-- Build/test not verified — "setup complete" declared without actually running build and test
-- No architecture walkthrough — code structure not explained, only file locations listed
-- No "first task" suggestion — onboarding ends without a concrete next step
-- Environment variables not documented — required config not listed or explained
+- `.env` requirements are unexplained.
+- Tests are skipped because services are not running.
+- No route list is shown.
+- Tenant isolation is not explained.
+- The first task is too broad for a new contributor.
 
 ## Exit Proof
 
 After completing this skill, confirm:
-- [ ] All prerequisites verified — `php --version`, `composer --version` returns expected versions
-- [ ] `composer install` succeeds without errors
-- [ ] `./vendor/bin/phpunit` passes on the new environment
-- [ ] Architecture walkthrough completed (layers, key files, data flow)
-- [ ] First task suggested from DEPLOYMENT-ROADMAP.md or backlog
-## Persistent Memory (if OpenBrain is configured)
 
-- **Before onboarding**: `search_thoughts("onboarding", project: "<YOUR PROJECT NAME>", created_by: "copilot-vscode", type: "convention")` — load known setup issues and environment quirks
-- **After onboarding**: `capture_thought("Onboarding: <environment status, blockers encountered>", project: "<YOUR PROJECT NAME>", created_by: "copilot-vscode", source: "skill-onboarding")` — persist setup issues for future new developers
+- [ ] PHP, Composer, and Docker versions verified
+- [ ] Dependencies installed
+- [ ] Migrations and route listing checked
+- [ ] Tests or blockers reported
+- [ ] Architecture walkthrough completed
+- [ ] First task suggested
+
+## Persistent Memory for Onboarding
+
+- **Before onboarding**: `search_thoughts("Laravel onboarding", project: "<YOUR PROJECT NAME>", created_by: "copilot-vscode", type: "convention")`
+- **After onboarding**: `capture_thought("Laravel onboarding: <setup status and blockers>", project: "<YOUR PROJECT NAME>", created_by: "copilot-vscode", source: "skill-onboarding")`

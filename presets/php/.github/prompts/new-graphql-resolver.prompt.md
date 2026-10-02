@@ -1,171 +1,91 @@
 ---
-description: "Scaffold a gqlgen GraphQL resolver with queries, mutations, dataloaders, and schema-first patterns."
+description: "Scaffold a Lighthouse GraphQL resolver with schema-first SDL, guards, policy directives, pagination, and batch loading."
 agent: "agent"
 tools: [read, edit, search]
 ---
 # Create New GraphQL Resolver
 
-Scaffold a GraphQL resolver using gqlgen with schema-first design, dataloaders, and separation of concerns.
+Scaffold a Lighthouse resolver for `{EntityName}`. Use schema-first SDL and Laravel services; do not put business rules in resolver classes.
 
 ## Required Pattern
 
-### Schema (schema.graphqls)
-```graphql
+### SDL Template
+```text
 type {EntityName} {
   id: ID!
   name: String!
   description: String
-  createdAt: DateTime!
-  updatedAt: DateTime!
+  createdAt: DateTime! @rename(attribute: "created_at")
+  updatedAt: DateTime! @rename(attribute: "updated_at")
+}
+
+extend type Query {
+  {entityName}(id: ID! @eq): {EntityName}
+    @guard(with: ["sanctum"])
+    @canFind(ability: "view", find: "id")
+    @field(resolver: "App\\GraphQL\\Queries\\{EntityName}Query")
+
+  {entityName}s: [{EntityName}!]!
+    @guard(with: ["sanctum"])
+    @canModel(ability: "viewAny", model: "App\\Models\\{EntityName}")
+    @paginate(type: CONNECTION, model: "App\\Models\\{EntityName}", defaultCount: 25, maxCount: 100)
+}
+
+extend type Mutation {
+  create{EntityName}(input: Create{EntityName}Input! @spread): {EntityName}!
+    @guard(with: ["sanctum"])
+    @canModel(ability: "create", model: "App\\Models\\{EntityName}")
+    @field(resolver: "App\\GraphQL\\Mutations\\Create{EntityName}")
 }
 
 input Create{EntityName}Input {
   name: String!
   description: String
 }
-
-input Update{EntityName}Input {
-  name: String!
-  description: String
-}
-
-extend type Query {
-  {entityName}(id: ID!): {EntityName}
-  {entityName}s(page: Int = 1, pageSize: Int = 20): {EntityName}Connection!
-}
-
-extend type Mutation {
-  create{EntityName}(input: Create{EntityName}Input!): {EntityName}!
-  update{EntityName}(id: ID!, input: Update{EntityName}Input!): {EntityName}!
-  delete{EntityName}(id: ID!): Boolean!
-}
 ```
 
-### Resolver Implementation
-```PHP
-package graph
+### Mutation Resolver Template
+```text
+<?php
 
-type {entityName}Resolver struct {
-    service *service.{EntityName}Service
-}
+declare(strict_types=1);
 
-func (r *queryResolver) {EntityName}(ctx Request, id string) (*model.{EntityName}, error) {
-    entity, err := r.service.FindByID(ctx, id)
-    if err != nil {
-        return nil, err
+namespace App\GraphQL\Mutations;
+
+use App\Data\Create{EntityName}Data;
+use App\Models\{EntityName};
+use App\Services\{EntityName}Service;
+
+final readonly class Create{EntityName}
+{
+    public function __construct(private {EntityName}Service $service)
+    {
     }
-    return toGraphQL{EntityName}(entity), nil
-}
 
-func (r *queryResolver) {EntityName}s(ctx Request, page *int, pageSize *int) (*model.{EntityName}Connection, error) {
-    p, ps := 1, 20
-    if page != nil { p = *page }
-    if pageSize != nil { ps = *pageSize }
-
-    result, err := r.service.FindPaged(ctx, p, ps)
-    if err != nil {
-        return nil, err
-    }
-    return toGraphQL{EntityName}Connection(result), nil
-}
-```
-
-### Mutation Resolver
-```PHP
-func (r *mutationResolver) Create{EntityName}(
-    ctx Request, input model.Create{EntityName}Input,
-) (*model.{EntityName}, error) {
-    entity, err := r.service.Create(ctx, fromGraphQLCreate(input))
-    if err != nil {
-        return nil, err
-    }
-    return toGraphQL{EntityName}(entity), nil
-}
-
-func (r *mutationResolver) Update{EntityName}(
-    ctx Request, id string, input model.Update{EntityName}Input,
-) (*model.{EntityName}, error) {
-    entity, err := r.service.Update(ctx, id, fromGraphQLUpdate(input))
-    if err != nil {
-        return nil, err
-    }
-    return toGraphQL{EntityName}(entity), nil
-}
-```
-
-### DataLoader (N+1 Prevention)
-```PHP
-package dataloader
-
-import (
-    "context"
-    "github.com/graph-gophers/dataloader/v7"
-)
-
-type {EntityName}Loader struct {
-    service *service.{EntityName}Service
-}
-
-func New{EntityName}Loader(svc *service.{EntityName}Service) *dataloader.Loader[string, *model.{EntityName}] {
-    return dataloader.NewBatchedLoader(
-        func(ctx Request, keys []string) []*dataloader.Result[*model.{EntityName}] {
-            entities, _ := svc.FindByIDs(ctx, keys)
-            entityMap := make(map[string]*model.{EntityName}, len(entities))
-            for _, e := range entities {
-                entityMap[e.ID] = e
-            }
-            results := make([]*dataloader.Result[*model.{EntityName}], len(keys))
-            for i, key := range keys {
-                results[i] = &dataloader.Result[*model.{EntityName}]{Data: entityMap[key]}
-            }
-            return results
-        },
-    )
-}
-
-// Middleware to inject loaders into context
-func Middleware(svc *service.{EntityName}Service) func(http.Handler) http.Handler {
-    return func(next http.Handler) http.Handler {
-        return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-            ctx := context.WithValue(r.Context(), loadersKey, &Loaders{
-                {EntityName}: New{EntityName}Loader(svc),
-            })
-            next.ServeHTTP(w, r.WithContext(ctx))
-        })
+    public function __invoke(null $_, array $args): {EntityName}
+    {
+        return $this->service->create(new Create{EntityName}Data(
+            name: $args['name'],
+            description: $args['description'] ?? null,
+        ));
     }
 }
 ```
 
-### Field Resolver Using DataLoader
-```PHP
-func (r *orderResolver) {EntityName}(ctx Request, obj *model.Order) (*model.{EntityName}, error) {
-    loaders := ForContext(ctx)
-    thunk := loaders.{EntityName}.Load(ctx, obj.{EntityName}ID)
-    return thunk()
-}
-```
-
-### Mapping Functions
-```PHP
-func toGraphQL{EntityName}(e *domain.{EntityName}) *model.{EntityName} {
-    return &model.{EntityName}{
-        ID:          e.ID,
-        Name:        e.Name,
-        Description: &e.Description,
-        CreatedAt:   e.CreatedAt.Format(time.RFC3339),
-        UpdatedAt:   e.UpdatedAt.Format(time.RFC3339),
-    }
-}
+### Batch Loader Template
+```text
+Create a loader under app/GraphQL/Loaders that accepts a list of IDs, runs one tenant-scoped repository query, keys results by ID, and returns them in the same order requested.
 ```
 
 ## Rules
 
-- ALWAYS use dataloaders for related entity resolution — never query inside field resolvers
-- Resolvers should be thin — delegate to services for business logic
-- Create a fresh set of dataloaders per request (middleware pattern)
-- Use gqlgen schema-first approach — run `PHP generate` after schema changes
-- Map between GraphQL model types and domain types explicitly
-- Keep schema in `graph/schema/`, resolvers in `graph/`, dataloaders in `graph/dataloader/`
+- Use `@guard` and current Lighthouse policy directives (`@canFind`, `@canModel`, `@canQuery`, `@canResolved`, `@canRoot`).
+- Configure Lighthouse with `guards => ['sanctum']` and route middleware `[AttemptAuthentication::class, ResolveTenant::class]`.
+- Escape PHP namespaces in SDL strings with doubled backslashes.
+- Every list field is paginated and has a `maxCount`.
+- Resolvers delegate to services and DTOs; repositories provide query builders.
+- Do not accept `tenant_id` in GraphQL input. Tenant scope comes from `CurrentTenant`.
+- Add feature tests for auth, authorization, tenant isolation, pagination caps, and N+1 prevention.
 
 ## Reference Files
 

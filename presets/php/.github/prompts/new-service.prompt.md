@@ -1,74 +1,97 @@
 ---
-description: "Scaffold a service layer with typed errors, input validation, structured logging, and context propagation."
+description: "Scaffold a Laravel service with constructor injection, typed DTOs, transactions, exceptions, events, and repository dependencies."
 agent: "agent"
 tools: [read, edit, search]
 ---
+
 # Create New Service
 
-Scaffold a service layer following PHP idioms.
+Scaffold the business layer for `{EntityName}`. Services orchestrate repositories, policies already checked at the boundary, domain events, transactions, and typed exceptions.
+
+## Fill-In Inputs
+
+- `{EntityName}`: PascalCase aggregate or workflow name.
+- `{entityName}`: camelCase variable name.
+- `{Action}{EntityName}Data`: DTO produced by a Form Request or job payload.
+- `{EntityName}Repository`: persistence contract from `app/Repositories/Contracts/`.
+
+For the running Order example, use `CreateOrderData(string $reference, string $currency, ?string $notes = null)` and `OrderRepository` methods `create(CreateOrderData $data): Order`, `find(string $id): ?Order`, and `paginate(int $perPage = 50): CursorPaginator`.
 
 ## Required Pattern
 
-```PHP
-package service
+```php
+declare(strict_types=1);
 
-import (
-    "context"
-    "fmt"
-    "log/slog"
+namespace App\Services;
 
-    "github.com/google/uuid"
-    "github.com/contoso/app/internal/model"
-    "github.com/contoso/app/internal/repository"
-)
+use App\Data\CreateOrderData;
+use App\Exceptions\NotFoundException;
+use App\Models\Order;
+use App\Repositories\Contracts\OrderRepository;
+use Illuminate\Support\Facades\DB;
 
-type {EntityName}Service struct {
-    repo *repository.{EntityName}Repository
-    log  *Psr\\Log\\LoggerInterface
-}
+final readonly class OrderService
+{
+    public function __construct(private OrderRepository $orders) {}
 
-func New{EntityName}Service(repo *repository.{EntityName}Repository, log *Psr\\Log\\LoggerInterface) *{EntityName}Service {
-    return &{EntityName}Service{repo: repo, log: log}
-}
+    public function get(string $orderId): Order
+    {
+        $order = $this->orders->find($orderId);
 
-func (s *{EntityName}Service) GetByID(ctx Request, id uuid.UUID) (*model.{EntityName}, error) {
-    entity, err := s.repo.FindByID(ctx, id)
-    if err != nil {
-        return nil, fmt.Errorf("get {entityName} %s: %w", id, err)
+        if ($order === null) {
+            throw new NotFoundException('Order', $orderId);
+        }
+
+        return $order;
     }
-    return entity, nil
-}
 
-func (s *{EntityName}Service) Create(ctx Request, req model.Create{EntityName}Request) (*model.{EntityName}, error) {
-    if err := req.Validate(); err != nil {
-        return nil, fmt.Errorf("validate {entityName}: %w", err)
+    public function create(CreateOrderData $data): Order
+    {
+        return DB::transaction(fn (): Order => $this->orders->create($data), attempts: 3);
     }
-    s.log.InfoContext(ctx, "creating {entityName}", "name", req.Name)
-    return s.repo.Insert(ctx, req)
-}
-
-func (s *{EntityName}Service) Update(ctx Request, id uuid.UUID, req model.Update{EntityName}Request) (*model.{EntityName}, error) {
-    if _, err := s.GetByID(ctx, id); err != nil {
-        return nil, err
-    }
-    return s.repo.Update(ctx, id, req)
-}
-
-func (s *{EntityName}Service) Delete(ctx Request, id uuid.UUID) error {
-    if _, err := s.GetByID(ctx, id); err != nil {
-        return err
-    }
-    return s.repo.Delete(ctx, id)
 }
 ```
 
 ## Rules
 
-- ALL business logic lives in the service layer — not handlers, not repositories
-- Validate input at service boundary (use `Validate()` method on request structs)
-- Wrap errors with `fmt.Errorf("context: %w", err)` for stack traces
-- Use `slog` for structured logging with context
-- Accept `Request` as first parameter on all methods
+- Services contain business rules; controllers handle HTTP, repositories handle database access, resources shape responses.
+- Constructor-inject every collaborator called by the service.
+- Accept DTOs or scalar identifiers, not `Request`, `JsonResource`, or controller-only types.
+- Use `DB::transaction()` for workflows that must commit atomically.
+- Throw the project exception hierarchy (`NotFoundException`, `ConflictException`, `BusinessRuleException`, `ForbiddenException`).
+- Dispatch events after state changes inside the transaction when listeners can tolerate after-commit behavior, or mark listeners/jobs as after-commit where required.
+- Keep tenant identity in `CurrentTenant`; services should not accept tenant ids when the repository reads the current tenant.
+
+## Validation and Tests
+
+```php
+declare(strict_types=1);
+
+namespace Tests\Unit\Services;
+
+use App\Data\CreateOrderData;
+use App\Exceptions\NotFoundException;
+use App\Repositories\Contracts\OrderRepository;
+use App\Services\OrderService;
+use Mockery;
+use Tests\TestCase;
+
+final class OrderServiceTest extends TestCase
+{
+    public function test_get_throws_not_found_when_order_is_missing(): void
+    {
+        $orders = Mockery::mock(OrderRepository::class);
+        $orders->shouldReceive('find')->once()->with('missing-order')->andReturnNull();
+
+        $service = new OrderService($orders);
+
+        $this->expectException(NotFoundException::class);
+        $service->get('missing-order');
+    }
+}
+```
+
+Also add a feature test for the controller path so Form Request authorization, validation, service invocation, and API Resource output are covered together.
 
 ## Reference Files
 

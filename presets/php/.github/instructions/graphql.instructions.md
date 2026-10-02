@@ -1,252 +1,240 @@
 ---
-description: GraphQL patterns for PHP — gqlgen, code-first resolvers, DataLoaders, auth middleware
-applyTo: '**/*resolver*,**/*schema*,**/*model*,**/*dataloader*,**/graph/**,**/*.graphqls'
+description: PHP GraphQL patterns — Lighthouse schema-first SDL, guards, policies, tenant-scoped pagination, batching, and production limits
+applyTo: 'graphql/**/*.graphql,app/GraphQL/**/*.php,config/lighthouse.php,tests/Feature/**/*GraphQL*.php'
 ---
 
-# PHP GraphQL Patterns (gqlgen)
+# PHP GraphQL Patterns (Lighthouse)
 
-## Schema Design (Schema-First + Generated Resolvers)
+Use Lighthouse 6.71.0 schema-first GraphQL. Resolvers stay thin, delegate to services, and never bypass Laravel policies or tenant scopes.
 
-### GraphQL SDL
+## Schema-First SDL
+
+Escape PHP namespaces in SDL directive strings with doubled backslashes.
+
 ```graphql
-# graph/schema.graphqls
 type Query {
-    producer(id: ID!): Producer
-    producers(page: Int = 1, pageSize: Int = 25): ProducerPage!
+  order(id: ID! @eq): Order
+    @guard(with: ["sanctum"])
+    @canFind(ability: "view", find: "id")
+    @field(resolver: "App\\GraphQL\\Queries\\OrderQuery")
+
+  orders: [Order!]!
+    @guard(with: ["sanctum"])
+    @canModel(ability: "viewAny", model: "App\\Models\\Order")
+    @paginate(type: CONNECTION, model: "App\\Models\\Order", defaultCount: 25, maxCount: 100)
 }
 
 type Mutation {
-    createProducer(input: CreateProducerInput!): CreateProducerPayload!
+  createOrder(input: CreateOrderInput! @spread): Order!
+    @guard(with: ["sanctum"])
+    @canModel(ability: "create", model: "App\\Models\\Order")
+    @field(resolver: "App\\GraphQL\\Mutations\\CreateOrder")
 }
 
-type Producer {
-    id: ID!
-    name: String!
-    contactEmail: String!
+type Order {
+  id: ID!
+  reference: String!
+  currency: String!
+  customer: Customer! @belongsTo
+  createdAt: DateTime! @rename(attribute: "created_at")
 }
 
-input CreateProducerInput {
-    name: String!
-    contactEmail: String!
-}
-
-type CreateProducerPayload {
-    producer: Producer
-    success: Boolean!
-    message: String
-}
-```
-
-### Generated Resolver Implementation
-```PHP
-// graph/resolver.PHP — dependency injection root
-type Resolver struct {
-    ProducerRepo ProducerRepository
-    ProducerSvc  ProducerService
-}
-
-// graph/schema.resolvers.PHP — generated, you fill in bodies
-func (r *queryResolver) Producer(ctx Request, id string) (*model.Producer, error) {
-    tenantID := auth.TenantIDFromContext(ctx)
-    return r.ProducerRepo.GetByID(ctx, id, tenantID)
-}
-
-func (r *mutationResolver) CreateProducer(ctx Request, input model.CreateProducerInput) (*model.CreateProducerPayload, error) {
-    tenantID := auth.TenantIDFromContext(ctx)
-    if err := validateCreateProducer(input); err != nil {
-        return &model.CreateProducerPayload{Success: false, Message: ptr(err.Error())}, nil
-    }
-    producer, err := r.ProducerSvc.Create(ctx, input, tenantID)
-    if err != nil {
-        return nil, err
-    }
-    return &model.CreateProducerPayload{Producer: producer, Success: true, Message: ptr("Created")}, nil
+input CreateOrderInput {
+  reference: String!
+  currency: String!
+  notes: String
 }
 ```
 
-## DataLoaders (N+1 Prevention)
+Use `@canFind`, `@canModel`, `@canQuery`, `@canResolved`, or `@canRoot`; do not use deprecated `@can`.
 
-### Non-Negotiable DataLoader Rules
-- **NEVER** query the database inside a loop or field resolver without a DataLoader
-- **ALWAYS** create DataLoaders per-request via middleware — never share across requests
-- **ALWAYS** batch query with `WHERE id IN (?)` — never loop through keys
-- **ALWAYS** return results in the same order as the input keys
-- **ALWAYS** include `tenantID` in batch queries for multi-tenant isolation
+## Resolver Shape
 
-```PHP
-// ✅ Use dataloaden or manual DataLoader pattern
-// graph/dataloader.PHP
-type Loaders struct {
-    ProducerByID *dataloader.Loader[string, *model.Producer]
-}
+Resolvers receive validated arguments and the authenticated user through Lighthouse context. Business rules belong in services.
 
-func NewLoaders(repo ProducerRepository) *Loaders {
-    return &Loaders{
-        ProducerByID: dataloader.NewBatchedLoader(
-            func(ctx Request, keys []string) []*dataloader.Result[*model.Producer] {
-                // ✅ Single batch query
-                producers, err := repo.GetByIDs(ctx, keys)
-                if err != nil {
-                    // Return error for all keys
-                    results := make([]*dataloader.Result[*model.Producer], len(keys))
-                    for i := range results {
-                        results[i] = &dataloader.Result[*model.Producer]{Error: err}
-                    }
-                    return results
-                }
-                // Map results back in key order
-                byID := make(map[string]*model.Producer, len(producers))
-                for _, p := range producers {
-                    byID[p.ID] = p
-                }
-                results := make([]*dataloader.Result[*model.Producer], len(keys))
-                for i, key := range keys {
-                    results[i] = &dataloader.Result[*model.Producer]{Data: byID[key]}
-                }
-                return results
-            },
-        ),
+```php
+<?php
+
+declare(strict_types=1);
+
+namespace App\GraphQL\Mutations;
+
+use App\Data\CreateOrderData;
+use App\Enums\OrderStatus;
+use App\Models\Order;
+use App\Services\OrderService;
+use Illuminate\Contracts\Auth\Authenticatable;
+
+final readonly class CreateOrder
+{
+    public function __construct(private OrderService $orders)
+    {
+    }
+
+    public function __invoke(null $_, array $args, mixed $context): Order
+    {
+        $user = $context->user();
+        assert($user instanceof Authenticatable);
+
+        return $this->orders->create(new CreateOrderData(
+            reference: $args['reference'],
+            currency: $args['currency'],
+            notes: $args['notes'] ?? null,
+        ));
     }
 }
+```
 
-// ✅ Inject via middleware — new loaders per request
-func DataLoaderMiddleware(repo ProducerRepository) func(http.Handler) http.Handler {
-    return func(next http.Handler) http.Handler {
-        return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-            ctx := context.WithValue(r.Context(), loadersKey, NewLoaders(repo))
-            next.ServeHTTP(w, r.WithContext(ctx))
-        })
+## Tenant-Scoped Pagination
+
+Tenant filtering belongs in the Eloquent `TenantScope` through `BelongsToTenant`. Paginated list fields must cap `maxCount` so clients cannot request unbounded collections.
+
+For custom query builders, add cursor-stable ordering:
+
+```php
+<?php
+
+declare(strict_types=1);
+
+use App\Models\Order;
+use Illuminate\Database\Eloquent\Builder;
+
+final readonly class OrderList
+{
+    public function __invoke(): Builder
+    {
+        return Order::query()
+            ->orderByDesc('created_at')
+            ->orderByDesc('id');
     }
 }
-
-// ✅ Usage in field resolver
-func (r *orderResolver) Producer(ctx Request, obj *model.Order) (*model.Producer, error) {
-    return Loaders(ctx).ProducerByID.Load(ctx, obj.ProducerID)()
-}
 ```
 
-## Authentication & Multi-Tenancy
+## Batch Loading
 
-### Auth Middleware (JWT → Context)
-```PHP
-// ✅ Auth middleware — extract JWT, inject into context
-func AuthMiddleware(next http.Handler) http.Handler {
-    return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-        token := r.Header.Get("Authorization")
-        claims, err := validateJWT(strings.TrimPrefix(token, "Bearer "))
-        if err != nil {
-            http.Error(w, "unauthorized", http.StatusUnauthorized)
-            return
-        }
-        ctx := context.WithValue(r.Context(), tenantIDKey, claims.TenantID)
-        ctx = context.WithValue(ctx, userIDKey, claims.Sub)
-        ctx = context.WithValue(ctx, rolesKey, claims.Roles)
-        next.ServeHTTP(w, r.WithContext(ctx))
-    })
-}
+Use Lighthouse batching or DataLoader-style services for related objects. Batch queries must include tenant scope and return records keyed by requested IDs.
 
-// ✅ Helper — extract tenantID in resolvers
-func TenantIDFromContext(ctx Request) string {
-    return ctx.Value(tenantIDKey).(string)
-}
-```
+```php
+<?php
 
-### Multi-Tenant Resolver Pattern
-```PHP
-// ✅ EVERY resolver that touches data MUST include tenantID in the query
-func (r *queryResolver) Producers(ctx Request, page *int, pageSize *int) (*model.ProducerPage, error) {
-    tenantID := auth.TenantIDFromContext(ctx)
-    // ❌ NEVER: r.ProducerRepo.GetAll(ctx)
-    // ✅ ALWAYS: scope to tenant
-    return r.ProducerRepo.GetByTenant(ctx, tenantID, pageOrDefault(page), pageSizeOrDefault(pageSize))
-}
+declare(strict_types=1);
 
-// ✅ DataLoader batch queries MUST also filter by tenant
-func batchProducers(ctx Request, keys []string) []*dataloader.Result[*model.Producer] {
-    tenantID := auth.TenantIDFromContext(ctx)
-    producers, err := repo.GetByIDsAndTenant(ctx, keys, tenantID) // ✅ Tenant-scoped
-    // ... map results
-}
-```
+namespace App\GraphQL\Loaders;
 
-### Directive-Based Authorization
-```graphql
-directive @hasRole(role: String!) on FIELD_DEFINITION
+use App\Models\Customer;
+use Illuminate\Support\Collection;
 
-type Mutation {
-    createProducer(input: CreateProducerInput!): CreateProducerPayload! @hasRole(role: "admin")
-}
-```
-
-```PHP
-// Directive implementation
-func HasRole(ctx Request, obj interface{}, next graphql.Resolver, role string) (interface{}, error) {
-    claims := auth.ClaimsFromContext(ctx)
-    if !claims.HasRole(role) {
-        return nil, fmt.Errorf("access denied: requires role %s", role)
+final readonly class CustomerBatchLoader
+{
+    public function load(array $ids): Collection
+    {
+        return Customer::query()
+            ->whereIn('id', $ids)
+            ->get()
+            ->keyBy('id');
     }
-    return next(ctx)
 }
 ```
+
+Never call a repository once per field inside a resolver loop.
 
 ## Input Validation
 
-```PHP
-func validateCreateProducer(input model.CreateProducerInput) error {
-    if strings.TrimSpace(input.Name) == "" {
-        return errors.New("name is required")
+Lighthouse validates GraphQL types, but domain validation still belongs in Form Request-equivalent rules or service DTO validation. Mutations must reject unknown state transitions with the same RFC 9457 error model used by REST.
+
+## Depth, Complexity, and Introspection
+
+Disable introspection in production and set query depth/complexity ceilings.
+
+```php
+<?php
+
+declare(strict_types=1);
+
+use App\Http\Middleware\ResolveTenant;
+use GraphQL\Validator\Rules\DisableIntrospection;
+use Nuwave\Lighthouse\Http\Middleware\AttemptAuthentication;
+
+return [
+    'route' => [
+        'middleware' => [
+            AttemptAuthentication::class,
+            ResolveTenant::class,
+        ],
+    ],
+    'guards' => ['sanctum'],
+    'security' => [
+        'max_query_complexity' => (int) env('LIGHTHOUSE_MAX_COMPLEXITY', 300),
+        'max_query_depth' => (int) env('LIGHTHOUSE_MAX_DEPTH', 10),
+        'disable_introspection' => (bool) env('LIGHTHOUSE_DISABLE_INTROSPECTION', env('APP_ENV') === 'production')
+            ? DisableIntrospection::ENABLED
+            : DisableIntrospection::DISABLED,
+    ],
+];
+```
+
+This configuration makes the GraphQL endpoint auth-only. Place `ResolveTenant::class` after `AttemptAuthentication::class` in Lighthouse route middleware so Lighthouse has already authenticated the Sanctum user before tenant context is set. If the API later needs anonymous public fields, split them onto a separate route or replace `ResolveTenant` with an optional tenant middleware that only sets context when a user is present and forbids tenant-scoped resolvers without one.
+
+## Testing
+
+Feature tests should cover auth, ability, tenant isolation, pagination limits, and batching behavior.
+
+```php
+<?php
+
+declare(strict_types=1);
+
+namespace Tests\Feature;
+
+use App\Models\Order;
+use App\Models\Tenant;
+use App\Models\User;
+use Illuminate\Foundation\Testing\RefreshDatabase;
+use Laravel\Sanctum\Sanctum;
+use Nuwave\Lighthouse\Testing\MakesGraphQLRequests;
+use Tests\TestCase;
+
+final class OrderGraphQLTest extends TestCase
+{
+    use MakesGraphQLRequests;
+    use RefreshDatabase;
+
+    public function test_scope_filters_another_tenants_order(): void
+    {
+        $userTenant = Tenant::factory()->create();
+        $otherTenant = Tenant::factory()->create();
+        $user = User::factory()->create(['tenant_id' => $userTenant->id]);
+        $order = Order::factory()->create(['tenant_id' => $otherTenant->id]);
+
+        Sanctum::actingAs($user, ['orders:read']);
+
+        $this->graphQL('query ($id: ID!) { order(id: $id) { id } }', ['id' => $order->id])
+            ->assertJsonPath('data.order', null);
     }
-    if len(input.Name) > 200 {
-        return errors.New("name must be at most 200 characters")
-    }
-    if !isValidEmail(input.ContactEmail) {
-        return errors.New("invalid email format")
-    }
-    return nil
 }
 ```
 
-## Error Handling
+## Rules
 
-```PHP
-// ✅ Error presenter — sanitize errors for production
-srv := handler.NewDefaultServer(schema)
-srv.SetErrorPresenter(func(ctx Request, err error) *gqlerror.Error {
-    gqlErr := graphql.DefaultErrorPresenter(ctx, err)
-    // ❌ NEVER leak internal errors
-    if !errors.As(err, new(*AppError)) {
-        gqlErr.Message = "internal error"
-    }
-    return gqlErr
-})
-```
-
-## Complexity & Depth Limiting
-
-```PHP
-srv := handler.NewDefaultServer(schema)
-srv.Use(extension.FixedComplexityLimit(1000))
-
-// gqlgen.yml
-# max query depth
-max_depth: 10
-```
+- Keep SDL in `graphql/` and resolvers under `app/GraphQL/{Queries,Mutations}`.
+- Use `@guard` on every non-public field and policy directives on every tenant resource field.
+- Cap every list query with `@paginate(... maxCount: ...)`.
+- Escape namespaces in directive strings as `App\\GraphQL\\...`.
+- Create per-request batch loaders; do not share cached relation data across tenants.
 
 ## Anti-Patterns
 
-```
-❌ Business logic in resolver functions (delegate to services)
-❌ DataLoaders shared across requests (create per-request via middleware)
-❌ Missing tenantID filtering in DataLoader batch queries
-❌ Returning database structs directly (use generated model types)
-❌ No complexity or depth limits (DoS via nested queries)
-❌ Leaking internal error messages to clients
+```text
+Using deprecated @can directives.
+Returning Eloquent models from services that already include authorization decisions.
+Accepting tenant_id in mutation input.
+Letting GraphQL introspection run in production.
+Resolving child objects with one query per parent row.
+Exposing unpaginated list fields.
 ```
 
 ## See Also
 
-- `api-patterns.instructions.md` — REST patterns (for hybrid REST+GraphQL)
-- `database.instructions.md` — Repository patterns, parameterized queries
-- `security.instructions.md` — JWT middleware, role-based access
-- `performance.instructions.md` — sync.Pool, concurrency patterns
-- `dapr.instructions.md` — State management, workflow execution
+- `auth.instructions.md` — Sanctum abilities, policies, and tenant context
+- `security.instructions.md` — validation, output safety, and secrets
+- `database.instructions.md` — tenant scopes, eager loading, cursor pagination

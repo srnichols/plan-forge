@@ -1,7 +1,7 @@
 ---
 name: api-doc-gen
-description: Generate or update OpenAPI specification from PHP HTTP handler registrations. Validate spec-to-code consistency. Use after adding or changing API endpoints.
-argument-hint: "[optional: specific handler file to document]"
+description: Generate or update OpenAPI documentation from Laravel routes, controllers, Form Requests, API Resources, policies, and RFC 9457 error responses. Use after adding or changing API endpoints.
+argument-hint: "[optional: specific route, controller, or resource to document]"
 tools:
   - run_in_terminal
   - read_file
@@ -15,98 +15,113 @@ tools:
 
 ## Steps
 
-### 1. Discover API Endpoints
+### 1. Discover API Routes
 ```bash
-grep -rn "\.Handle\|\.HandleFunc\|\.Get\|\.Post\|\.Put\|\.Delete\|\.Patch" --include="*.PHP" .
+php artisan route:list --path=v1
+grep -rn "Route::" routes app/Http/Controllers --include="*.php"
 ```
-> **If this step fails** (no matches): Try `grep -rn "http\.Handle\|mux\.\|chi\.\|gin\.\|echo\." --include="*.PHP" .` to detect the router framework in use.
-
-> **If no *.PHP files found**: Stop and report "No PHP project found in this directory."
+> **If this step fails**: Report that no Laravel route surface was found and stop.
 
 ### 2. Extract Endpoint Details
-For each endpoint, document:
-- HTTP method and path (from `mux.HandleFunc("/path", handler)` or router registrations)
-- Request body schema (from struct types decoded in handlers)
-- Query parameters (from `r.URL.Query().Get()` usage)
-- Path parameters (from URL pattern variables or router params)
-- Response schema (from structs passed to `json.NewEncoder`)
-- Authentication requirements (from middleware wrappers)
+For each route, document:
 
-### 3. Generate/Update OpenAPI Spec
+- HTTP method and URI from `php artisan route:list`
+- Controller action and route name
+- Authentication middleware such as `auth:sanctum` and `throttle:api`
+- Request schema from the Form Request `rules()`
+- Authorization from `authorize()` and policies
+- Response schema from the API Resource
+- Pagination style, including cursor pagination order
+- Error responses from `bootstrap/app.php` problem-details rendering
+
+### 3. Generate or Update OpenAPI
 ```yaml
 openapi: 3.1.0
 info:
-  title: (project name from PHP.mod module path)
-  version: (from VERSION file or build tags)
+  title: Laravel API
+  version: 1.0.0
 paths:
-  /api/v1/resource:
+  /api/v1/orders:
     get:
-      summary: Brief description
-      parameters: [...]
+      security:
+        - sanctum: []
       responses:
         '200':
-          description: Success
-          content:
-            application/json:
-              schema: { $ref: '#/components/schemas/Resource' }
-        '401': { $ref: '#/components/responses/Unauthorized' }
-        '404': { $ref: '#/components/responses/NotFound' }
+          description: Cursor-paginated orders
+        '401':
+          $ref: '#/components/responses/UnauthorizedProblem'
+        '422':
+          $ref: '#/components/responses/ValidationProblem'
+components:
+  securitySchemes:
+    sanctum:
+      type: http
+      scheme: bearer
 ```
 
 ### 4. Validate Consistency
-Use the `forge_analyze` MCP tool to verify spec-to-code consistency:
-- [ ] Every handler registration has a matching spec entry
-- [ ] No spec entries without corresponding code (ghost endpoints)
-- [ ] Request/response schemas match actual PHP struct types
-- [ ] Status codes match `http.StatusXxx` / `w.WriteHeader()` calls
-- [ ] Auth requirements match middleware chains
+Use `forge_analyze` to compare spec and code:
 
-### 5. Report
+- [ ] Every versioned route has a spec entry
+- [ ] No ghost endpoints remain in the spec
+- [ ] Form Request rules match request schemas
+- [ ] API Resource fields match response schemas
+- [ ] Error responses use `{type,title,status,detail,instance}`
+- [ ] Auth requirements match middleware and policies
+
+### 5. Verify Generated Contract
+```bash
+php artisan route:list --path=v1
+php artisan test --filter=Api
+vendor/bin/phpstan analyse
 ```
-API Documentation Status:
-  Endpoints in code:    N
-  Endpoints in spec:    N
-  Missing from spec:    N (list them)
-  Ghost entries:        N (in spec but not in code)
-  Schema mismatches:    N
 
-Overall: PASS / FAIL
+### 6. Report
+```text
+API Documentation Status:
+  Routes in Laravel:    N
+  Routes in OpenAPI:    N
+  Missing from spec:    N
+  Ghost entries:        N
+  Schema mismatches:    N
+  Problem responses:    PASS / FAIL
 ```
 
 ## Safety Rules
-- NEVER invent endpoints not in the code
-- ALWAYS preserve existing spec customizations (descriptions, examples)
-- Validate against actual handler registrations, not assumptions
-- Flag breaking changes (removed endpoints, changed schemas)
-- Run `PHP build ./...` after any spec-related code changes
 
+- NEVER invent endpoints that are not in `php artisan route:list`.
+- ALWAYS preserve hand-written descriptions and examples unless they are wrong.
+- ALWAYS document authentication, authorization, pagination, and problem responses.
+- Flag breaking changes when paths, methods, request fields, response fields, or status codes change.
+- Run tests after changing generated spec code or API annotations.
 
 ## Temper Guards
 
 | Shortcut | Why It Breaks |
 |----------|--------------|
-| "The code is self-documenting" | Code shows implementation, not intent. API consumers need contracts, not source code. |
-| "We'll add the OpenAPI spec later" | Specs drift from implementation immediately. Generate alongside code or they'll never match. |
-| "Only internal consumers, no docs needed" | Internal APIs become external APIs. Undocumented internal APIs create onboarding bottlenecks. |
-| "Examples aren't necessary" | Examples are the most-read section of any API doc. Abstract schemas don't show real usage. |
+| "Route names are enough documentation" | Consumers need request and response contracts, not only route inventory. |
+| "Only success responses matter" | Client SDKs and support teams depend on documented validation, auth, and conflict payloads. |
+| "Resources can be inferred from models" | API Resources intentionally hide fields and transform names; Eloquent models are not the wire contract. |
+| "Internal APIs do not need examples" | Internal consumers still need stable contracts and migration notes. |
 
 ## Warning Signs
 
-- Endpoints without response type annotations — returns untyped or generic responses
-- Spec doesn't match actual routes — OpenAPI spec has different paths/methods than the running API
-- No request/response examples — spec has schemas but no concrete usage examples
-- Error responses undocumented — only success codes documented, error payloads missing
-- Spec not validated against running API — generated once but never verified against live routes
+- OpenAPI schemas mention database column names that API Resources do not expose.
+- Tenant IDs appear as client-supplied parameters.
+- Removed routes are still present in the spec.
+- Validation errors are documented as generic 400 responses instead of RFC 9457 422.
 
 ## Exit Proof
 
 After completing this skill, confirm:
-- [ ] OpenAPI spec generated or updated (L5-Swagger / Scramble)
-- [ ] Spec validates against actual endpoints — no ghost entries, no missing routes
-- [ ] Request/response examples present for key routes
-- [ ] Error responses documented (4xx/5xx with schemas)
-- [ ] `composer install --no-dev` succeeds after any spec-related code changes
-## Persistent Memory (if OpenBrain is configured)
 
-- **Before generating docs**: `search_thoughts("API design", project: "<YOUR PROJECT NAME>", created_by: "copilot-vscode", type: "convention")` — load API naming conventions, pagination patterns, and error response standards
-- **After spec update**: `capture_thought("API doc: <endpoints added/changed summary>", project: "<YOUR PROJECT NAME>", created_by: "copilot-vscode", source: "skill-api-doc-gen")` — persist API evolution for breaking change tracking
+- [ ] Spec entries match `php artisan route:list --path=v1`
+- [ ] Request schemas came from Form Requests
+- [ ] Response schemas came from API Resources
+- [ ] Problem responses documented for 401, 403, 404, 409, and 422
+- [ ] `php artisan test --filter=Api` result included
+
+## Persistent Memory for API Documentation
+
+- **Before generating docs**: `search_thoughts("Laravel API design", project: "<YOUR PROJECT NAME>", created_by: "copilot-vscode", type: "convention")`
+- **After spec update**: `capture_thought("Laravel API docs: <routes changed, breaking changes>", project: "<YOUR PROJECT NAME>", created_by: "copilot-vscode", source: "skill-api-doc-gen")`

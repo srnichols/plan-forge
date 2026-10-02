@@ -1,132 +1,118 @@
 ---
-description: "Scaffold PHP HTTP middleware with handler wrapping, context propagation, and Chi/standard library patterns."
+description: "Scaffold Laravel HTTP middleware with request pipeline ordering, service injection, and tenant-safe behavior."
 agent: "agent"
 tools: [read, edit, search]
 ---
 # Create New Middleware
 
-Scaffold an HTTP middleware function for the request pipeline.
+Scaffold middleware for cross-cutting HTTP request concerns.
 
 ## Required Pattern
 
-### Standard Middleware (Chi / net/http compatible)
-```PHP
-func {Name}Middleware(next http.Handler) http.Handler {
-    return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-        // Pre-processing
-        start := time.Now()
+```text
+app/Http/Middleware/{Name}Middleware.php
 
-        // Wrap response writer to capture status code
-        ww := &responseWriter{ResponseWriter: w, statusCode: http.StatusOK}
+final class {Name}Middleware
+{
+    public function __construct(private readonly {DependencyName} $dependency)
+    {
+    }
 
-        next.ServeHTTP(ww, r)
+    public function handle(Request $request, Closure $next): Response
+    {
+        // Pre-processing.
 
-        // Post-processing
-        slog.Info("{name} complete",
-            "method", r.Method,
-            "path", r.URL.Path,
-            "status", ww.statusCode,
-            "duration_ms", time.Since(start).Milliseconds(),
-        )
-    })
-}
+        $response = $next($request);
 
-// Response writer wrapper for status code capture
-type responseWriter struct {
-    http.ResponseWriter
-    statusCode int
-}
+        // Post-processing.
 
-func (w *responseWriter) WriteHeader(code int) {
-    w.statusCode = code
-    w.ResponseWriter.WriteHeader(code)
+        return $response;
+    }
 }
 ```
 
-### Context-Propagating Middleware
-```PHP
-type contextKey string
+## Tenant Resolution Pattern
 
-const tenantIDKey contextKey = "tenantID"
+`app/Http/Middleware/ResolveTenant.php`
 
-func TenantMiddleware(next http.Handler) http.Handler {
-    return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-        tenantID := r.Header.Get("X-Tenant-Id")
-        if tenantID == "" {
-            writeProblem(w, http.StatusBadRequest, "missing X-Tenant-Id header")
-            return
+```php
+<?php
+
+declare(strict_types=1);
+
+namespace App\Http\Middleware;
+
+use App\Exceptions\ForbiddenException;
+use App\Support\CurrentTenant;
+use Closure;
+use Illuminate\Auth\AuthenticationException;
+use Illuminate\Http\Request;
+use Symfony\Component\HttpFoundation\Response;
+
+final class ResolveTenant
+{
+    public function __construct(private CurrentTenant $tenant) {}
+
+    public function handle(Request $request, Closure $next): Response
+    {
+        $user = $request->user() ?? throw new AuthenticationException();
+        if ($user->tenant_id === null) {
+            throw new ForbiddenException('User is not assigned to a tenant.');
         }
-
-        ctx := context.WithValue(r.Context(), tenantIDKey, tenantID)
-        next.ServeHTTP(w, r.WithContext(ctx))
-    })
-}
-
-// Helper to retrieve from context
-func TenantIDFromContext(ctx Request) string {
-    v, _ := ctx.Value(tenantIDKey).(string)
-    return v
-}
-```
-
-### Configurable Middleware (Functional Options)
-```PHP
-type {Name}Config struct {
-    SkipPaths []string
-    LogLevel  slog.Level
-}
-
-func {Name}Middleware(cfg {Name}Config) func(http.Handler) http.Handler {
-    skip := make(map[string]bool, len(cfg.SkipPaths))
-    for _, p := range cfg.SkipPaths {
-        skip[p] = true
-    }
-
-    return func(next http.Handler) http.Handler {
-        return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-            if skip[r.URL.Path] {
-                next.ServeHTTP(w, r)
-                return
-            }
-            // ... middleware logic
-            next.ServeHTTP(w, r)
-        })
+        $this->tenant->set($user->tenant_id);
+        try {
+            return $next($request);
+        } finally {
+            $this->tenant->clear();
+        }
     }
 }
 ```
 
-## Registration Order (Chi Router)
+## Registration
 
-```PHP
-r := chi.NewRouter()
-r.Use(middleware.RequestID)      // 1. Request/Correlation ID
-r.Use(RequestLoggingMiddleware)  // 2. Request logging
-r.Use(SecurityHeadersMiddleware) // 3. Security headers
-r.Use(middleware.Recoverer)      // 4. Panic recovery
-r.Use(RateLimitMiddleware)       // 5. Rate limiting
-r.Use({Name}Middleware)          // 6. Your custom middleware
+```text
+bootstrap/app.php
+
+->withMiddleware(function (Middleware $middleware): void {
+    $middleware->prependToPriorityList(
+        \Illuminate\Routing\Middleware\SubstituteBindings::class,
+        \App\Http\Middleware\ResolveTenant::class,
+    );
+})
+```
+
+```text
+routes/api.php
+
+Route::prefix('v1')
+    ->middleware(['auth:sanctum', 'throttle:api', ResolveTenant::class])
+    ->group(function (): void {
+        // API routes.
+    });
 ```
 
 ## Common Middleware Types
 
-| Type | Purpose | Example |
-|------|---------|---------|
-| Correlation ID | Attach trace ID to context | `context.WithValue` + `X-Correlation-Id` |
-| Tenant Resolution | Extract tenant from JWT/header | Set in `Request` |
-| Request Logging | Log method, path, status, duration | `slog` structured output |
-| Recovery | Convert panics to 500 responses | `defer func() { recover() }` |
+| Type | Purpose | Notes |
+|------|---------|-------|
+| Correlation ID | Attach trace ID to logs and responses | Must run early |
+| Tenant Resolution | Set `CurrentTenant` from authenticated user | Runs after auth |
+| Request Logging | Record method, route, status, duration | Never log secrets |
+| Deprecation Headers | Mark sunset API versions | Keep timeline in version docs |
 
 ## Rules
 
-- Middleware handles cross-cutting concerns ONLY — no business logic
-- ALWAYS call `next.ServeHTTP(w, r)` unless intentionally short-circuiting
-- Use `context.WithValue` for request-scoped data — not globals
-- Use unexported `contextKey` types to avoid key collisions
-- Provide a `FromContext` helper for each context value
-- Wrap `http.ResponseWriter` to capture status codes for logging
+- Middleware handles cross-cutting concerns only.
+- Always call `$next($request)` unless intentionally rejecting the request.
+- Never perform domain business decisions in middleware.
+- Never resolve tenant from a client-supplied header, query string, or body.
+- Store request-scoped tenant in `CurrentTenant`, not static globals.
+- Clear request-scoped tenant in a `finally` block after the response pipeline returns.
+- Register middleware in `bootstrap/app.php`; do not create a legacy Kernel.
 
 ## Reference Files
 
 - [Security instructions](../instructions/security.instructions.md)
 - [Observability instructions](../instructions/observability.instructions.md)
-- [Architecture principles](../instructions/architecture-principles.instructions.md)
+- [Cross-cutting concern boundaries](../instructions/architecture-principles.instructions.md)

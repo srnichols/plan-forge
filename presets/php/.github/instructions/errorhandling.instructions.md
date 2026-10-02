@@ -1,132 +1,203 @@
 ---
-description: Error handling patterns — Typed error structs, ProblemDetail responses, middleware error recovery, sentinel errors
-applyTo: '**/*.PHP'
+description: Error handling patterns — Laravel exception hierarchy, bootstrap/app.php rendering, RFC 9457 responses
+applyTo: 'app/Exceptions/**/*.php,bootstrap/app.php'
 ---
 
-# Error Handling Patterns (PHP)
+# Error Handling Patterns (PHP/Laravel)
 
-## Error Types
+## Exception Hierarchy
 
-```PHP
-type AppError struct {
-    Message    string `json:"detail"`
-    Code       string `json:"title"`
-    StatusCode int    `json:"status"`
-    Err        error  `json:"-"`
+```php
+<?php
+
+declare(strict_types=1);
+
+namespace App\Exceptions;
+
+abstract class AppException extends \RuntimeException
+{
+    abstract public function status(): int;
+
+    abstract public function type(): string;
+
+    abstract public function title(): string;
 }
 
-func (e *AppError) Error() string { return e.Message }
-func (e *AppError) Unwrap() error { return e.Err }
-
-func NewNotFound(entity, id string) *AppError {
-    return &AppError{
-        Message:    fmt.Sprintf("%s with ID '%s' not found", entity, id),
-        Code:       "NOT_FOUND",
-        StatusCode: http.StatusNotFound,
+final class InventoryConflictException extends AppException
+{
+    public function __construct(string $sku)
+    {
+        parent::__construct("Inventory for SKU {$sku} was modified by another request.");
     }
-}
 
-func NewValidationError(message string) *AppError {
-    return &AppError{Message: message, Code: "VALIDATION_ERROR", StatusCode: http.StatusBadRequest}
-}
-
-func NewConflict(message string) *AppError {
-    return &AppError{Message: message, Code: "CONFLICT", StatusCode: http.StatusConflict}
-}
-
-func NewForbidden(message string) *AppError {
-    if message == "" { message = "Access denied" }
-    return &AppError{Message: message, Code: "FORBIDDEN", StatusCode: http.StatusForbidden}
-}
-
-func NewInternal(err error) *AppError {
-    return &AppError{
-        Message:    "An unexpected error occurred",
-        Code:       "INTERNAL_ERROR",
-        StatusCode: http.StatusInternalServerError,
-        Err:        err,
+    public function status(): int
+    {
+        return 409;
     }
-}
-```
 
-## ProblemDetail Response
-
-```PHP
-type ProblemDetail struct {
-    Type     string `json:"type"`
-    Title    string `json:"title"`
-    Status   int    `json:"status"`
-    Detail   string `json:"detail"`
-    Instance string `json:"instance"`
-}
-
-func WriteProblemDetail(w http.ResponseWriter, r *http.Request, appErr *AppError) {
-    pd := ProblemDetail{
-        Type:     fmt.Sprintf("https://contoso.com/errors/%s", strings.ToLower(appErr.Code)),
-        Title:    appErr.Code,
-        Status:   appErr.StatusCode,
-        Detail:   appErr.Message,
-        Instance: r.URL.Path,
+    public function type(): string
+    {
+        return 'https://example.com/problems/inventory-conflict';
     }
-    w.Header().Set("Content-Type", "application/problem+json")
-    w.WriteHeader(appErr.StatusCode)
-    json.NewEncoder(w).Encode(pd)
-}
-```
 
-## Error Recovery Middleware
-
-```PHP
-func RecoverMiddleware(logger *Psr\\Log\\LoggerInterface) func(http.Handler) http.Handler {
-    return func(next http.Handler) http.Handler {
-        return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-            defer func() {
-                if rec := recover(); rec != nil {
-                    logger.Error("panic recovered", "recover", rec, "path", r.URL.Path)
-                    WriteProblemDetail(w, r, NewInternal(fmt.Errorf("panic: %v", rec)))
-                }
-            }()
-            next.ServeHTTP(w, r)
-        })
+    public function title(): string
+    {
+        return 'Inventory conflict';
     }
 }
 ```
 
-## Handler Error Pattern
+Required domain exception types:
 
-```PHP
-func (h *ItemHandler) GetByID(w http.ResponseWriter, r *http.Request) {
-    id := chi.URLParam(r, "id")
-    item, err := h.service.GetByID(r.Context(), id)
-    if err != nil {
-        var appErr *AppError
-        if errors.As(err, &appErr) {
-            WriteProblemDetail(w, r, appErr)
-        } else {
-            WriteProblemDetail(w, r, NewInternal(err))
-        }
-        return
+| Class | HTTP Status | When |
+|-------|-------------|------|
+| `NotFoundException` | 404 | Entity absent or hidden by tenant scope |
+| `ConflictException` | 409 | Unique constraint or state conflict |
+| `BusinessRuleException` | 422 | Valid input violates a domain rule |
+| `ForbiddenException` | 403 | Policy denial that should be raised from domain code |
+
+## Problem Details Rendering
+
+Register renderers in `bootstrap/app.php`; Laravel 13 applications do not use `app/Exceptions/Handler.php`.
+
+```php
+<?php
+
+declare(strict_types=1);
+
+use App\Exceptions\AppException;
+use Illuminate\Auth\AuthenticationException;
+use Illuminate\Database\UniqueConstraintViolationException;
+use Illuminate\Foundation\Application;
+use Illuminate\Foundation\Configuration\Exceptions;
+use Illuminate\Foundation\Configuration\Middleware;
+use Illuminate\Http\JsonResponse;
+use Illuminate\Http\Request;
+use Illuminate\Validation\ValidationException;
+use Symfony\Component\HttpKernel\Exception\HttpExceptionInterface;
+use Symfony\Component\HttpFoundation\Response;
+
+return Application::configure(basePath: dirname(__DIR__))
+    ->withRouting(
+        web: __DIR__ . '/../routes/web.php',
+        api: __DIR__ . '/../routes/api.php',
+        commands: __DIR__ . '/../routes/console.php',
+        health: '/up',
+    )
+    ->withMiddleware(function (Middleware $middleware): void {
+        //
+    })
+    ->withExceptions(function (Exceptions $exceptions): void {
+        $exceptions->render(function (ValidationException $exception, Request $request): JsonResponse {
+            return problem($request, 422, 'https://example.com/problems/validation', 'Validation failed', 'The request body is invalid.', [
+                'errors' => $exception->errors(),
+            ]);
+        });
+
+        $exceptions->render(function (AuthenticationException $exception, Request $request): JsonResponse {
+            return problem($request, 401, 'https://example.com/problems/authentication', 'Unauthenticated', 'Authentication is required.');
+        });
+
+        $exceptions->render(function (AppException $exception, Request $request): JsonResponse {
+            return problem($request, $exception->status(), $exception->type(), $exception->title(), $exception->getMessage());
+        });
+
+        $exceptions->render(function (UniqueConstraintViolationException $exception, Request $request): JsonResponse {
+            return problem($request, 409, 'https://example.com/problems/conflict', 'Conflict', 'A resource with the same unique value already exists.');
+        });
+
+        $exceptions->render(function (HttpExceptionInterface $exception, Request $request): JsonResponse {
+            return problem(
+                $request,
+                $exception->getStatusCode(),
+                'https://example.com/problems/http-'.$exception->getStatusCode(),
+                Response::$statusTexts[$exception->getStatusCode()] ?? 'HTTP error',
+                $exception->getMessage() !== '' ? $exception->getMessage() : 'The request could not be completed.',
+            )->withHeaders($exception->getHeaders());
+        });
+
+        $exceptions->render(function (Throwable $exception, Request $request): JsonResponse {
+            return problem($request, 500, 'https://example.com/problems/internal', 'Internal Server Error', 'An unexpected error occurred.');
+        });
+    })
+    ->create();
+```
+
+## Problem Response Helper
+
+Place `problem()` in `app/Support/helpers.php` and register it with Composer:
+
+```json
+{
+  "autoload": {
+    "files": [
+      "app/Support/helpers.php"
+    ]
+  }
+}
+```
+
+```php
+<?php
+
+declare(strict_types=1);
+
+use Illuminate\Http\JsonResponse;
+use Illuminate\Http\Request;
+
+function problem(
+    Request $request,
+    int $status,
+    string $type,
+    string $title,
+    string $detail,
+    array $extensions = [],
+): JsonResponse {
+    if ($status >= 500) {
+        $detail = 'An unexpected error occurred.';
     }
-    render.JSON(w, r, item)
+
+    return response()
+        ->json([
+            'type' => $type,
+            'title' => $title,
+            'status' => $status,
+            'detail' => $detail,
+            'instance' => '/' . ltrim($request->path(), '/'),
+            ...$extensions,
+        ], $status)
+        ->withHeaders(['Content-Type' => 'application/problem+json']);
 }
 ```
 
 ## Rules
 
-- **NEVER** ignore errors with `_ = someFunc()` — always handle or log
-- **NEVER** panic in library code — return errors instead
-- **ALWAYS** use `errors.Is` / `errors.As` for error inspection
-- **ALWAYS** wrap errors with context: `fmt.Errorf("getting item: %w", err)`
-- **ALWAYS** return ProblemDetail JSON from HTTP handlers
-- Service layer returns `*AppError`; handlers write ProblemDetail responses
-- Use `slog` for structured error logging
-- Reserve `panic` for truly unrecoverable situations; recover in middleware
+- Never use empty `catch` blocks; log with context or rethrow.
+- Never leak stack traces, SQL, paths, tokens, or internal exception messages to clients.
+- Service layer raises typed exceptions; HTTP rendering belongs in `bootstrap/app.php`.
+- Laravel validation errors return 422 with an `errors` member.
+- Authentication errors return 401; converted HTTP exceptions cover authorization, missing routes, methods and throttling.
+- Only `UniqueConstraintViolationException` maps database failures to 409.
+- Unexpected exceptions return sanitized 500 Problem Details.
+
+## Exception-to-HTTP Mapping
+
+| Exception | HTTP Status | Response Notes |
+|-----------|-------------|----------------|
+| `ValidationException` | 422 | Include field errors |
+| `AuthenticationException` | 401 | No auth detail beyond required authentication |
+| `HttpExceptionInterface` | 403/404/405/429 | Laravel-converted HTTP errors, including policy denial |
+| `NotFoundException` | 404 | Avoid revealing cross-tenant existence |
+| `ConflictException` | 409 | Domain conflict |
+| `BusinessRuleException` | 422 | Valid shape, invalid business state |
+| `UniqueConstraintViolationException` | 409 | Duplicate unique value |
+| `Throwable` | 500 | Sanitized detail, logged server-side |
 
 ## See Also
 
-- `observability.instructions.md` — Structured logging, error tracking
-- `api-patterns.instructions.md` — Error response format, status codes
-- `messaging.instructions.md` — Dead letter queues, retry strategies
+- `observability.instructions.md` — Structured logs and trace correlation
+- `api-patterns.instructions.md` — Status code guide and Resource responses
+- `messaging.instructions.md` — Queue retries and failed-job handling
 
 ---
 
@@ -134,19 +205,19 @@ func (h *ItemHandler) GetByID(w http.ResponseWriter, r *http.Request) {
 
 | Shortcut | Why It Breaks |
 |----------|--------------|
-| "This operation can't fail" | Every I/O operation can fail — network timeouts, disk full, permission denied. If it touches external state, it fails. |
-| "A generic catch block is fine here" | Generic catches swallow specific failure signals. Catch the exception you expect, let the rest propagate to the global exception handler. |
-| "Logging the error is enough" | Logging without handling means the caller receives a cryptic 500. Return a structured error response so the consumer can act on it. |
-| "The caller handles errors, I don't need to" | If the caller expected your method to succeed unconditionally, the unhandled exception is a surprise. Define your error contract explicitly. |
-| "Returning `null` is simpler than throwing" | Null return values push error handling to every caller. Throw a specific exception or use typed result objects with a clear message. |
+| "Let Laravel render the default JSON" | Defaults vary by debug mode and can leak internals. Own the Problem Details contract. |
+| "Catch everything in the service" | Broad catches hide policy, validation, and database failure semantics. Catch only expected exceptions. |
+| "A string message is enough" | Clients need stable `type`, `title`, and `status` fields to branch safely. |
+| "Every database exception is a conflict" | Deadlocks, timeouts, and connection errors are not client conflicts. Only unique constraints map to 409. |
+| "A shared helper is overkill" | Hand-built error arrays drift across handlers. Keep the response shape in `app/Support/helpers.php`. |
 
 ---
 
 ## Warning Signs
 
-- Empty catch blocks (`catch (\Exception $e) { }`) — silent failure
-- All exceptions caught as base `\Exception` instead of specific types
-- Error responses expose stack traces or internal paths when `APP_DEBUG=true` in production
-- Methods that return `null` on failure instead of throwing typed exceptions
-- Missing timeout configuration on HTTP client calls (Guzzle without `timeout` option)
-- Retry logic without a maximum retry count or exponential backoff (infinite retry loops)
+- `bootstrap/app.php` lacks `withExceptions(...)`
+- A custom exception extends bare `Exception` instead of `AppException`
+- Error responses use `application/json` instead of `application/problem+json`
+- 500 responses include `$exception->getMessage()` instead of the generic detail
+- A repository catches all database exceptions and throws `ConflictException`
+- Validation errors are flattened into a single string

@@ -1,261 +1,366 @@
 ---
-description: PHP database patterns — pgx/database-sql, migrations, parameterized queries
-applyTo: '**/*repository*.PHP,**/*repo*.PHP,**/db/**,**/*.sql,**/migrations/**'
+description: PHP/Laravel database patterns — Eloquent models, migrations, repositories, transactions, pagination, and tests
+applyTo: 'app/Models/**/*.php,app/Repositories/**/*.php,database/migrations/**/*.php,database/factories/**/*.php,tests/**/*Repository*.php,tests/Feature/**/*Database*.php'
 ---
 
 # PHP Database Patterns
 
-## Driver Strategy
+## ORM Strategy
 
-<!-- Choose one and delete the other -->
+Use Eloquent for aggregate persistence, repositories for query composition, and services for business decisions. Controllers, resources, policies, and jobs must not build ad hoc SQL.
 
-### Option A: pgx (PostgreSQL-specific, recommended)
-```PHP
-func (r *UserRepo) FindByID(ctx Request, id uuid.UUID, tenantID string) (*User, error) {
-    const query = `SELECT id, name, email, tenant_id, created_at 
-                   FROM users WHERE id = $1 AND tenant_id = $2`
+### Eloquent model baseline
 
-    var u User
-    err := r.pool.QueryRow(ctx, query, id, tenantID).Scan(
-        &u.ID, &u.Name, &u.Email, &u.TenantID, &u.CreatedAt,
-    )
-    if errors.Is(err, pgx.ErrNoRows) {
-        return nil, ErrNotFound
+```php
+declare(strict_types=1);
+
+namespace App\Models;
+
+use App\Models\Concerns\BelongsToTenant;
+use Illuminate\Database\Eloquent\Concerns\HasUuids;
+use Illuminate\Database\Eloquent\Factories\HasFactory;
+use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
+
+final class Invoice extends Model
+{
+    use BelongsToTenant;
+    use HasFactory;
+    use HasUuids;
+
+    protected $fillable = ['tenant_id', 'customer_id', 'external_id', 'number', 'status', 'total_cents'];
+
+    protected function casts(): array
+    {
+        return [
+            'total_cents' => 'integer',
+            'issued_at' => 'immutable_datetime',
+            'metadata' => 'array',
+        ];
     }
-    return &u, err
+
+    public function customer(): BelongsTo
+    {
+        return $this->belongsTo(Customer::class);
+    }
 }
 ```
 
-### Option B: database/sql (Driver-agnostic)
-```PHP
-func (r *UserRepo) FindByID(ctx Request, id uuid.UUID) (*User, error) {
-    const query = `SELECT id, name, email FROM users WHERE id = $1`
+Enable lazy-loading protection during application boot so N+1 mistakes fail in local and test environments:
 
-    var u User
-    err := r.db.QueryRowContext(ctx, query, id).Scan(&u.ID, &u.Name, &u.Email)
-    if errors.Is(err, sql.ErrNoRows) {
-        return nil, ErrNotFound
+```php
+declare(strict_types=1);
+
+namespace App\Providers;
+
+use Illuminate\Database\Eloquent\Model;
+use Illuminate\Support\ServiceProvider;
+
+final class AppServiceProvider extends ServiceProvider
+{
+    public function boot(): void
+    {
+        Model::preventLazyLoading(! $this->app->isProduction());
     }
-    return &u, err
 }
 ```
 
 ## Non-Negotiable Rules
 
-### Parameterized Queries (SQL Injection Prevention)
-```PHP
-// ❌ NEVER: String formatting in SQL
-query := fmt.Sprintf("SELECT * FROM users WHERE id = '%s'", userID)
+### Parameterized Queries
 
-// ✅ ALWAYS: Parameterized queries
-const query = "SELECT * FROM users WHERE id = $1"
-row := db.QueryRowContext(ctx, query, userID)
+```php
+declare(strict_types=1);
+
+use Illuminate\Support\Facades\DB;
+
+$rows = DB::select(
+    'select id, number, total_cents from invoices where tenant_id = ? and status = ?',
+    [$tenantId, $status],
+);
 ```
 
-### Connection Management
-```PHP
-// ❌ NEVER: Create connections per request
-conn, _ := pgx.Connect(ctx, connString)
+- Never interpolate request input into SQL, table names, column names, or `order by` clauses.
+- Prefer Eloquent query builder methods. Use raw SQL only with bindings and a measured reason.
+- Tenant ids come from authenticated context, not headers, query strings, or request bodies.
 
-// ✅ ALWAYS: Use a connection pool
-pool, err := pgxpool.New(ctx, connString)
-// Or for database/sql:
-db, err := sql.Open("postgres", connString)
-db.SetMaxOpenConns(25)
-db.SetMaxIdleConns(5)
-db.SetConnMaxLifetime(5 * time.Minute)
-```
+### Repository Boundary
 
-### Context Propagation
-```PHP
-// ❌ NEVER: Ignore context
-row := db.QueryRow(query, id)
+```php
+declare(strict_types=1);
 
-// ✅ ALWAYS: Pass context for cancellation
-row := db.QueryRowContext(ctx, query, id)
-```
+namespace App\Repositories;
 
-## Migration Strategy (php-migrate)
+use App\Models\Invoice;
+use App\Repositories\Contracts\InvoiceRepository;
+use Illuminate\Contracts\Pagination\CursorPaginator as InvoiceCursorPaginator;
+use Illuminate\Support\Collection;
 
-### Non-Negotiable Migration Rules
-- **NEVER** deploy a destructive migration (drop column/table) in the same release that removes the code using it
-- **ALWAYS** review migration SQL before applying to staging or production
-- **ALWAYS** make migrations backward-compatible — the old version of the app must still work after the migration runs
-- **ALWAYS** test migrations against a copy of production data before applying to production
-- **ALWAYS** write both `.up.sql` and `.down.sql` for every migration
-- **ALWAYS** run migrations as a separate pipeline step before deploying the new app version
-
-### File Structure
-```
-migrations/
-├── 000001_create_users.up.sql
-├── 000001_create_users.down.sql
-├── 000002_add_tenant_id.up.sql
-├── 000002_add_tenant_id.down.sql
-├── 000003_expand_order_status.up.sql
-└── 000003_expand_order_status.down.sql
-```
-
-### Commands
-```bash
-# Apply all pending migrations
-migrate -path migrations -database "$DATABASE_URL" up
-
-# Apply next N migrations only
-migrate -path migrations -database "$DATABASE_URL" up 1
-
-# Rollback last migration
-migrate -path migrations -database "$DATABASE_URL" down 1
-
-# Rollback all migrations
-migrate -path migrations -database "$DATABASE_URL" down
-
-# Show current version
-migrate -path migrations -database "$DATABASE_URL" version
-
-# Force version (EMERGENCY — fixes dirty state without running migration)
-migrate -path migrations -database "$DATABASE_URL" force 2
-
-# Create new migration pair
-migrate create -ext sql -dir migrations -seq add_user_profile
-```
-
-### Embedded Migrations (Recommended for Production)
-```PHP
-import (
-    "embed"
-    "github.com/php-migrate/migrate/v4"
-    "github.com/php-migrate/migrate/v4/source/iofs"
-    _ "github.com/php-migrate/migrate/v4/database/postgres"
-)
-
-//PHP:embed migrations/*.sql
-var migrationsFS embed.FS
-
-func runMigrations(databaseURL string) error {
-    source, err := iofs.New(migrationsFS, "migrations")
-    if err != nil {
-        return fmt.Errorf("migration source: %w", err)
+final readonly class EloquentInvoiceRepository implements InvoiceRepository
+{
+    public function findPageForTenant(string $tenantId, int $perPage): InvoiceCursorPaginator
+    {
+        return Invoice::query()
+            ->select(['id', 'tenant_id', 'customer_id', 'number', 'status', 'created_at'])
+            ->with(['customer:id,name'])
+            ->where('tenant_id', $tenantId)
+            ->orderByDesc('created_at')
+            ->orderByDesc('id')
+            ->cursorPaginate($perPage);
     }
-    m, err := migrate.NewWithSourceInstance("iofs", source, databaseURL)
-    if err != nil {
-        return fmt.Errorf("migrate init: %w", err)
+
+    public function importStatuses(Collection $rows): int
+    {
+        return Invoice::query()->upsert(
+            $rows->all(),
+            ['tenant_id', 'external_id'],
+            ['status', 'updated_at'],
+        );
     }
-    if err := m.Up(); err != nil && err != migrate.ErrNoChange {
-        return fmt.Errorf("migrate up: %w", err)
-    }
-    return nil
 }
 ```
 
-### Safe vs. Dangerous Operations
+Cursor pagination must use a unique, stable ordering. `created_at` alone is not unique; pair it with `id` or another unique column.
 
-| Operation | Risk | Strategy |
-|-----------|------|----------|
-| Add column (nullable) | **Safe** | Deploy directly |
-| Add column (non-null) | **Medium** | Add nullable first → backfill → add NOT NULL constraint |
-| Add index | **Medium** | Use `CREATE INDEX CONCURRENTLY` (PostgreSQL) to avoid locking |
-| Rename column | **Dangerous** | Expand-contract: add new → copy → migrate code → drop old |
-| Drop column | **Dangerous** | Two releases: (1) stop reading/writing, (2) drop in next release |
-| Change column type | **Dangerous** | Add new column → backfill → switch reads → drop old |
-| Drop table | **Dangerous** | Only after all references removed and verified in production |
+### Canonical Order Schema
 
-### Expand-Contract Pattern (Zero-Downtime)
+The running Order example uses one enum and one tenant-owned table shape across repositories, resources, factories, and tests:
 
-```sql
--- 000003_expand_order_status.up.sql (Release 1 — EXPAND)
-ALTER TABLE orders ADD COLUMN status_v2 VARCHAR(50);
-UPDATE orders SET status_v2 = status;
--- App code: write to BOTH columns, read from status_v2
+```php
+declare(strict_types=1);
 
--- 000003_expand_order_status.down.sql
-ALTER TABLE orders DROP COLUMN IF EXISTS status_v2;
+namespace App\Enums;
 
--- 000004_contract_order_status.up.sql (Release 2 — CONTRACT)
-ALTER TABLE orders DROP COLUMN status;
-ALTER TABLE orders RENAME COLUMN status_v2 TO status;
-ALTER TABLE orders ALTER COLUMN status SET NOT NULL;
-
--- 000004_contract_order_status.down.sql
-ALTER TABLE orders ALTER COLUMN status DROP NOT NULL;
-ALTER TABLE orders RENAME COLUMN status TO status_v2;
-ALTER TABLE orders ADD COLUMN status VARCHAR(50);
-UPDATE orders SET status = status_v2;
+enum OrderStatus: string
+{
+    case Pending = 'pending';
+    case Paid = 'paid';
+    case Cancelled = 'cancelled';
+}
 ```
 
-### Handling Dirty State
+```php
+declare(strict_types=1);
 
-```bash
-# If a migration fails mid-way, php-migrate marks the DB as "dirty"
-# Check current state
-migrate -path migrations -database "$DATABASE_URL" version
-# Output: 3 (dirty)
+use Illuminate\Database\Migrations\Migration;
+use Illuminate\Database\Schema\Blueprint;
+use Illuminate\Support\Facades\Schema;
 
-# Fix the underlying issue, then force the version
-migrate -path migrations -database "$DATABASE_URL" force 2   # Force to last clean version
-migrate -path migrations -database "$DATABASE_URL" up         # Re-run from clean state
+return new class extends Migration {
+    public function up(): void
+    {
+        Schema::create('orders', function (Blueprint $table): void {
+            $table->uuid('id')->primary();
+            $table->foreignUuid('tenant_id')->constrained()->cascadeOnDelete();
+            $table->string('reference');
+            $table->string('status');
+            $table->char('currency', 3);
+            $table->unsignedBigInteger('total_cents')->default(0);
+            $table->text('notes')->nullable();
+            $table->timestampsTz();
+
+            $table->unique(['tenant_id', 'reference']);
+            $table->index(['tenant_id', 'created_at', 'id']);
+        });
+    }
+};
 ```
 
-### Production Migration Checklist
+### Transactions Belong in Services
 
+```php
+declare(strict_types=1);
+
+namespace App\Services;
+
+use App\Data\CaptureInvoicePaymentData;
+use App\Events\InvoicePaid;
+use App\Repositories\Contracts\InvoiceRepository;
+use Illuminate\Support\Facades\DB;
+
+final readonly class InvoicePaymentService
+{
+    public function __construct(private InvoiceRepository $invoices) {}
+
+    public function capture(CaptureInvoicePaymentData $data): void
+    {
+        DB::transaction(function () use ($data): void {
+            $invoice = $this->invoices->lockForTenant($data->tenantId, $data->invoiceId);
+            $invoice->markPaid($data->paymentReference);
+            $invoice->save();
+
+            InvoicePaid::dispatch($invoice->id, $data->tenantId);
+        }, attempts: 3);
+    }
+}
 ```
-Pre-Deploy:
-  □ Reviewed .up.sql and .down.sql for all pending migrations
-  □ Checked for destructive operations (DROP, ALTER TYPE, RENAME)
-  □ Both up and down migrations tested against staging with production-like data
-  □ Verified backward compatibility — old app version still works after migration
-  □ Backup taken or point-in-time recovery confirmed
-  □ Checked current version: migrate ... version
-  □ No dirty state
 
-Deploy:
-  □ Run migrate ... up BEFORE deploying new app version (or use embedded migrations on startup)
-  □ Health check passes after migration, before app deploy
-  □ Monitor for lock contention during migration
+`InvoicePaid` must implement `Illuminate\Contracts\Events\ShouldDispatchAfterCommit` because it is dispatched inside the transaction.
 
-Post-Deploy:
-  □ Verify app health checks pass
-  □ Confirm migration version matches expected
-  □ Spot-check migrated data
-  □ Monitor error rates for 15 minutes
+Do not place `DB::transaction()` in controllers or repository methods that only perform a single persistence operation.
+
+## Migration Strategy
+
+Laravel migrations must define both `up()` and `down()` and be backward-compatible for rolling deploys.
+
+```php
+declare(strict_types=1);
+
+use Illuminate\Database\Migrations\Migration;
+use Illuminate\Database\Schema\Blueprint;
+use Illuminate\Support\Facades\Schema;
+
+return new class extends Migration {
+    public function up(): void
+    {
+        Schema::create('invoices', function (Blueprint $table): void {
+            $table->uuid('id')->primary();
+            $table->foreignUuid('tenant_id')->constrained()->cascadeOnDelete();
+            $table->foreignUuid('customer_id')->constrained()->restrictOnDelete();
+            $table->string('external_id', 80);
+            $table->string('number', 40);
+            $table->string('status', 32);
+            $table->unsignedBigInteger('total_cents');
+            $table->timestampTz('issued_at')->nullable();
+            $table->timestampsTz();
+
+            $table->unique(['tenant_id', 'number']);
+            $table->unique(['tenant_id', 'external_id']);
+            $table->index(['tenant_id', 'status', 'created_at']);
+        });
+    }
+
+    public function down(): void
+    {
+        Schema::dropIfExists('invoices');
+    }
+};
 ```
 
-## Naming Conventions
+### Zero-Downtime Column Changes
 
-| Context | Convention | Example |
-|---------|-----------|---------|
-| Database columns | snake_case | `user_name`, `created_at` |
-| PHP fields | PascalCase | `UserName`, `CreatedAt` |
-| Struct tags | `db:"column_name"` | `db:"user_name"` |
+| Operation | Risk | Laravel approach |
+|-----------|------|------------------|
+| Add nullable column | Low | Add directly, deploy readers later |
+| Add required column | Medium | Add nullable, backfill with `chunkById()`, then add constraint |
+| Rename column | High | Add new column, dual-write, backfill, switch reads, drop old column later |
+| Drop column | High | Stop code references first, verify production, drop in a later release |
+| Large backfill | Medium | Use queued chunks or `chunkById()`; avoid one transaction for the full table |
 
-## See Also
+```php
+declare(strict_types=1);
 
-- `deploy.instructions.md` — Migration pipeline steps, Docker Compose and embedded migration patterns
-- `multi-environment.instructions.md` — Per-environment migration config, auto-migrate settings
-- `graphql.instructions.md` — DataLoader batch queries, N+1 prevention
-- `security.instructions.md` — SQL injection prevention, parameterized queries
-- `caching.instructions.md` — Query result caching, invalidation strategies
-- `performance.instructions.md` — Query optimization, connection pooling
+use App\Models\Invoice;
+use Illuminate\Database\Migrations\Migration;
+use Illuminate\Database\Schema\Blueprint;
+use Illuminate\Support\Facades\Schema;
 
----
+return new class extends Migration {
+    public function up(): void
+    {
+        Schema::table('invoices', function (Blueprint $table): void {
+            $table->string('status_v2', 32)->nullable()->after('status');
+        });
+
+    }
+
+    public function down(): void
+    {
+        Schema::table('invoices', function (Blueprint $table): void {
+            $table->dropColumn('status_v2');
+        });
+    }
+};
+```
+
+For large tables, run the backfill from an Artisan command or queued job after the expand migration so it does not hold migration locks for the full table:
+
+```php
+declare(strict_types=1);
+
+use Illuminate\Support\Facades\DB;
+
+DB::table('invoices')
+    ->select(['id', 'status'])
+    ->orderBy('id')
+    ->chunkById(500, function ($invoices): void {
+        foreach ($invoices as $invoice) {
+            DB::table('invoices')
+                ->where('id', $invoice->id)
+                ->update(['status_v2' => $invoice->status]);
+        }
+    });
+```
+
+## Bulk Work
+
+- Use `chunkById()` or `lazyById()` for maintenance and exports; never load every model with `all()`.
+- Use `upsert()` for idempotent imports.
+- Use `lockForUpdate()` inside a service transaction when enforcing a balance, inventory, or uniqueness rule beyond a database constraint.
+- Select the columns needed by the caller; avoid full models in read-heavy projections.
+
+## Repository Tests
+
+Repository tests should run against the migrated database and prove tenancy, eager loading, pagination order, and write behavior.
+
+```php
+declare(strict_types=1);
+
+namespace Tests\Feature\Repositories;
+
+use App\Models\Invoice;
+use App\Models\Tenant;
+use App\Repositories\EloquentInvoiceRepository;
+use App\Support\CurrentTenant;
+use Illuminate\Foundation\Testing\RefreshDatabase as RefreshesDatabase;
+use Tests\TestCase;
+
+final class EloquentInvoiceRepositoryTest extends TestCase
+{
+    use RefreshesDatabase;
+
+    public function test_it_returns_tenant_scoped_cursor_page_with_customers(): void
+    {
+        $tenant = Tenant::factory()->create();
+        $otherTenant = Tenant::factory()->create();
+        Invoice::factory()->count(3)->forTenant($tenant)->create();
+        Invoice::factory()->forTenant($otherTenant)->create();
+        app(CurrentTenant::class)->set($tenant->id);
+
+        $page = app(EloquentInvoiceRepository::class)->findPageForTenant($tenant->id, 2);
+
+        $this->assertCount(2, $page->items());
+        $this->assertTrue(collect($page->items())->every(
+            fn (Invoice $invoice): bool => $invoice->tenant_id === $tenant->id && $invoice->relationLoaded('customer'),
+        ));
+    }
+}
+```
+
+## Production Migration Checklist
+
+- Run `php artisan migrate --pretend` and review generated SQL.
+- Check `php artisan migrate:status` before and after deployment.
+- Confirm indexes exist for new tenant filters, joins, and cursor order columns.
+- Verify old application code can run after the expand migration.
+- Keep destructive contract migrations in a separate release.
+- Back up production or confirm point-in-time recovery before high-risk schema changes.
 
 ## Temper Guards
 
 | Shortcut | Why It Breaks |
 |----------|--------------|
-| "N+1 queries won't matter at our scale" | N+1 queries scale linearly with data. 10 rows = 10 queries, 10,000 rows = 10,000 queries. Use `with()` eager loading from the start. |
-| "Raw SQL is faster than Eloquent here" | Raw SQL bypasses model features, migration tracking, and parameterization. Use Eloquent/Doctrine unless profiling proves a measurable bottleneck — then use `DB::select()` with bindings. |
-| "A migration isn't needed for this small change" | Schema changes without migrations break other developers' environments and CI. If it touches the database, it gets an Artisan migration — always. |
-| "I'll seed the data manually" | Manual seed data doesn't reproduce in CI, staging, or other developers' machines. Use Laravel seeders or migration-based seeds. |
-| "One connection string for all environments is fine" | Connection strings contain credentials that differ per environment. Use `.env` files with per-environment overrides. |
-
----
+| "I'll read the tenant from `X-Tenant-Id`." | Client-controlled tenancy breaks isolation. Resolve tenant from the authenticated user and `CurrentTenant`. |
+| "Lazy loading only happens in development." | It becomes an outage when a resource serializes a collection. Eager-load required relations in repositories. |
+| "Offset pagination is simpler." | Deep offsets slow down and can skip rows during concurrent writes. Use cursor pagination with a unique order for APIs. |
+| "A nullable column is enough forever." | Temporary expand columns become permanent ambiguity. Plan the contract migration before shipping the expand step. |
+| "Repository tests can mock Eloquent." | Mocked query builders do not prove scopes, indexes, eager loading, or migrations. Use `RefreshDatabase`. |
 
 ## Warning Signs
 
-- Queries executed inside a `foreach` loop (N+1 pattern — use `with()` or `load()`)
-- `SELECT *` or `Model::all()` without selecting specific columns (over-fetching)
-- Missing database indexes on columns used in `where` or `join` clauses
-- Connection credentials hardcoded instead of using `env()` helper
-- No migration file corresponds to a recent model/schema change
-- Database connections not using persistent connections or connection pooling in high-traffic apps
+- Query building in controllers, resources, policies, listeners, or Blade views.
+- `whereRaw()` with variables embedded into the SQL string.
+- List queries without tenant filtering or policy-backed authorization.
+- `cursorPaginate()` without a unique order.
+- `Schema::table()` dropping or renaming columns in the same release that code changes read/write behavior.
+- Factories that omit `tenant_id` for tenant-scoped models.

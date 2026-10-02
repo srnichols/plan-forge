@@ -1,78 +1,83 @@
 # Agents & Automation Architecture
 
-> **Project**: <YOUR PROJECT NAME>  
-> **Stack**: PHP / Laravel  
+> **Project**: <YOUR PROJECT NAME>
+> **Stack**: PHP 8.5 / Laravel 13.x
 > **Last Updated**: <DATE>
 
 ---
 
 ## AI Agent Development Standards
 
-**BEFORE writing ANY agent code, read:** `.github/instructions/architecture-principles.instructions.md`
+**BEFORE writing ANY agent, queue, or scheduled code, read:** `.github/instructions/architecture-principles.instructions.md`
 
 ### Priority
-1. **Architecture-First** — Follow proper layering (no business logic in controllers)
-2. **TDD for Business Logic** — Red-Green-Refactor with PHPUnit / Pest
-3. **Error Handling** — Use typed exceptions; never catch-all with empty blocks
-4. **Type Safety** — Strict types, typed properties, return types on all methods
+1. **Architecture-First** — Workers orchestrate; services hold business rules
+2. **TDD for Business Logic** — Unit-test the service before wiring jobs/listeners
+3. **Typed Error Handling** — Use `AppException` subclasses and retryable exception boundaries
+4. **Tenant Safety** — Jobs and listeners set `CurrentTenant` before touching tenant-scoped models
 
 ---
 
 ## Background Worker Pattern
 
-### Template: Laravel Job (Queue Worker)
+### Template: Tenant-Aware Queue Job
 
 ```php
 <?php
 
+declare(strict_types=1);
+
 namespace App\Jobs;
 
-use Illuminate\Bus\Queueable;
+use App\Services\AccountBalanceService;
+use App\Support\CurrentTenant;
 use Illuminate\Contracts\Queue\ShouldQueue;
-use Illuminate\Foundation\Bus\Dispatchable;
-use Illuminate\Queue\InteractsWithQueue;
-use Illuminate\Queue\SerializesModels;
-use Illuminate\Support\Facades\Log;
+use Illuminate\Foundation\Queue\Queueable;
 
-class ProcessPendingJob implements ShouldQueue
+final class RecalculateAccountBalance implements ShouldQueue
 {
-    use Dispatchable, InteractsWithQueue, Queueable, SerializesModels;
+    use Queueable;
 
-    public int $tries = 3;
-    public int $maxExceptions = 2;
-
-    public function handle(MyService $service): void
-    {
-        $service->processPending();
+    public function __construct(
+        public readonly string $tenantId,
+        public readonly string $accountId,
+    ) {
     }
 
-    public function failed(\Throwable $exception): void
+    public function handle(CurrentTenant $currentTenant, AccountBalanceService $balances): void
     {
-        Log::error('ProcessPendingJob failed', ['error' => $exception->getMessage()]);
+        $currentTenant->set($this->tenantId);
+
+        $balances->recalculate($this->accountId);
     }
 }
 ```
 
-### Template: Artisan Command (Scheduled Task)
+### Template: Scheduled Command
 
 ```php
 <?php
 
+declare(strict_types=1);
+
 namespace App\Console\Commands;
 
+use App\Services\InvoiceService;
 use Illuminate\Console\Command;
 
-class SyncDataCommand extends Command
+final class SendInvoiceReminders extends Command
 {
-    protected $signature = 'app:sync-data';
-    protected $description = 'Sync data from external source';
+    protected $signature = 'billing:send-invoice-reminders';
 
-    public function handle(SyncService $service): int
+    protected $description = 'Send reminder emails for invoices that are due soon.';
+
+    public function handle(InvoiceService $invoices): int
     {
-        $this->info('Starting data sync...');
-        $service->sync();
-        $this->info('Data sync complete.');
-        return Command::SUCCESS;
+        $sent = $invoices->sendDueSoonReminders();
+
+        $this->info("Sent {$sent} invoice reminders.");
+
+        return self::SUCCESS;
     }
 }
 ```
@@ -81,30 +86,30 @@ class SyncDataCommand extends Command
 
 ## Agent Categories
 
-| Category | Purpose | Pattern |
-|----------|---------|---------|
-| **Queue Jobs** | Async processing | `ShouldQueue` + `php artisan queue:work` |
-| **Scheduled Commands** | Periodic tasks | `Artisan Command` + `schedule()` |
-| **Event Listeners** | Event-driven processing | `EventServiceProvider` + Listeners |
-| **Health Monitors** | System health checks | `/health` + `php artisan health:check` |
+| Category | Purpose | Laravel Pattern |
+|----------|---------|-----------------|
+| **Queued Jobs** | Durable background work | `ShouldQueue`, Horizon, explicit retries |
+| **Event Listeners** | React to domain events | Register in `AppServiceProvider::boot()` or use event discovery |
+| **Scheduled Tasks** | Periodic processing | `routes/console.php` scheduler or commands |
+| **Health Monitors** | Runtime readiness checks | HTTP health route plus service probes |
 
 ---
 
 ## Communication Patterns
 
-### Queue-Based (Laravel Queue)
+### Event-Driven
 ```
-dispatch(new Job) → Redis/SQS → Queue Worker
-```
-
-### Event-Driven (Laravel Events)
-```
-event(new OrderPlaced) → EventServiceProvider → OrderListener
+Controller → Service → Domain event → Queued listener → Repository update
 ```
 
-### Request/Response (HTTP)
+### Request/Response
 ```
-Route → Controller → Service → Repository → Eloquent/DB
+Client → Form Request → Controller → Service → Repository → API Resource
+```
+
+### Queue Processing
+```
+Service dispatches job with tenantId → worker sets CurrentTenant → service executes
 ```
 
 ---
@@ -112,22 +117,21 @@ Route → Controller → Service → Repository → Eloquent/DB
 ## Quick Commands
 
 ```bash
-# Run development server
-php artisan serve
-
-# Run tests
-php artisan test
-# or: vendor/bin/phpunit / vendor/bin/pest
-
-# Run queue worker
 php artisan queue:work
-
-# Run scheduled tasks
-php artisan schedule:run
-
-# Lint
+php artisan horizon
+php artisan schedule:list
+php artisan test --filter=Job
 vendor/bin/phpstan analyse
-
-# Format
-vendor/bin/php-cs-fixer fix
+vendor/bin/pint --test
 ```
+
+---
+
+## Review Checks for Agents
+
+- [ ] Jobs carry tenant context explicitly and set `CurrentTenant` before model access
+- [ ] Workers call services instead of embedding business rules
+- [ ] Retry settings are finite and idempotency is documented
+- [ ] Queue payloads contain identifiers, not serialized Eloquent models
+- [ ] Failures surface through logs or failed jobs, not swallowed catches
+- [ ] Commands and listeners have focused tests around side effects

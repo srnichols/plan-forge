@@ -1,160 +1,180 @@
 ---
-description: Multi-environment configuration — Dev/staging/production settings, environment detection, config management
-applyTo: '**/*.PHP,**/.env*'
+description: Multi-environment configuration — Laravel environment files, config validation, deploy-safe settings
+applyTo: 'config/**/*.php,.env*,bootstrap/app.php'
 ---
 
-# Multi-Environment Configuration (PHP)
+# Multi-Environment Configuration (PHP/Laravel)
 
 ## Environment Hierarchy
 
 | Environment | Purpose | Config Source | Detection |
 |-------------|---------|---------------|-----------|
-| `development` | Local dev | `.env.development` / `config.dev.yaml` | `APP_ENV` |
-| `staging` | Pre-production | `.env.staging` / `config.staging.yaml` | `APP_ENV` |
-| `production` | Live traffic | environment variables only | `APP_ENV` |
-| `test` | Automated tests | `.env.test` / `config.test.yaml` | `APP_ENV` |
+| `local` | Developer machines | `.env`, `.env.local` | `APP_ENV=local` |
+| `testing` | Automated tests | `.env.testing` | `APP_ENV=testing` |
+| `staging` | Pre-production validation | runtime env vars | `APP_ENV=staging` |
+| `production` | Live traffic | runtime env vars / secret store | `APP_ENV=production` |
 
 ## Configuration Loading Order
 
 ```
-config.yaml                   ← Base defaults
-config.{APP_ENV}.yaml         ← Environment-specific overrides
-.env / .env.{APP_ENV}         ← Dotenv overrides (dev/staging only)
-Environment variables          ← Infrastructure overrides (highest priority)
+config/*.php defaults        ← Committed, no secrets
+.env.example                 ← Document required keys, no secret values
+.env / .env.testing          ← Local or test-only values
+Environment variables        ← Infrastructure overrides
+Secret manager               ← Production secrets
 ```
 
 ## Rules
 
-- **NEVER** put secrets in config files committed to git
-- **NEVER** hardcode environment-specific URLs
-- **ALWAYS** validate config at startup — fail fast on missing values
-- **ALWAYS** use a typed config struct parsed once at startup
-- In production, inject all secrets via environment variables
+- Never commit `.env` with secrets; commit `.env.example` only.
+- Never read environment variables outside config files after bootstrap.
+- Always access settings through `config('section.key')`.
+- Always validate critical config at startup or in a health check.
+- Keep `APP_DEBUG=false` in production.
+- Do not run `php artisan config:cache` until all runtime env vars are present.
 
-## Typed Config Struct
+## Typed Access Through Config
 
-```PHP
-type Config struct {
-    Env         string `yaml:"env" env:"APP_ENV" env-default:"development"`
-    Port        int    `yaml:"port" env:"PORT" env-default:"8080"`
-    DatabaseURL string `yaml:"database_url" env:"DATABASE_URL" env-required:"true"`
-    RedisURL    string `yaml:"redis_url" env:"REDIS_URL"`
-    LogLevel    string `yaml:"log_level" env:"LOG_LEVEL" env-default:"info"`
-    CORSOrigins []string `yaml:"cors_origins" env:"CORS_ORIGINS" env-separator:","`
-}
+```php
+<?php
 
-func LoadConfig() (*Config, error) {
-    var cfg Config
-    if err := cleanenv.ReadConfig("config.yaml", &cfg); err != nil {
-        return nil, fmt.Errorf("loading config: %w", err)
+declare(strict_types=1);
+
+return [
+    'environment' => env('APP_ENV', 'local'),
+    'public_url' => env('APP_URL', 'http://localhost'),
+    'orders' => [
+        'timeout_seconds' => (int) env('BILLING_TIMEOUT_SECONDS', 30),
+        'retry_count' => (int) env('BILLING_RETRY_COUNT', 3),
+    ],
+];
+```
+
+Use a small value object when configuration is consumed by services:
+
+```php
+<?php
+
+declare(strict_types=1);
+
+namespace App\Support\Config;
+
+final readonly class BillingClientConfig
+{
+    public function __construct(
+        public string $baseUrl,
+        public int $timeoutSeconds,
+        public int $retryCount,
+    ) {
+        if ($this->baseUrl === '') {
+            throw new \InvalidArgumentException('Billing base URL is required.');
+        }
     }
-    // Environment variables override YAML
-    if err := cleanenv.ReadEnv(&cfg); err != nil {
-        return nil, fmt.Errorf("reading env: %w", err)
+
+    public static function fromConfig(): self
+    {
+        return new self(
+            baseUrl: (string) config('services.billing.base_url'),
+            timeoutSeconds: (int) config('app_settings.billing.timeout_seconds'),
+            retryCount: (int) config('app_settings.billing.retry_count'),
+        );
     }
-    return &cfg, nil
 }
 ```
 
-## Per-Environment Defaults
+## Per-Environment Settings
 
-```yaml
-# config.yaml (base)
-port: 8080
-log_level: info
+```bash
+# .env.example
+APP_ENV=local
+APP_DEBUG=false
+APP_URL=http://localhost
+DB_CONNECTION=pgsql
+DB_HOST=127.0.0.1
+DB_PORT=5432
+DB_DATABASE=app
+DB_USERNAME=
+DB_PASSWORD=
+REDIS_HOST=127.0.0.1
+BILLING_TIMEOUT_SECONDS=30
+BILLING_RETRY_COUNT=3
+```
 
-# config.development.yaml
-database_url: "postgresql://dev:devpass@localhost:5432/contoso_dev"
-cors_origins:
-  - "http://localhost:3000"
-  - "http://localhost:5173"
-log_level: debug
+Production overrides should be injected by the platform:
 
-# config.staging.yaml
-database_url: "postgresql://staging-db:5432/contoso_staging"
-cors_origins:
-  - "https://staging.contoso.com"
-log_level: info
-
-# Production: all config from env vars, no YAML file needed
+```bash
+APP_ENV=production
+APP_DEBUG=false
+APP_URL=https://api.example.com
+LOG_CHANNEL=stderr
+LOG_STDERR_FORMATTER=Monolog\Formatter\JsonFormatter
+SESSION_DRIVER=redis
+QUEUE_CONNECTION=redis
+CACHE_STORE=redis
 ```
 
 ## Environment-Conditional Code
 
-```PHP
-// ✅ Use config struct
-if cfg.Env == "development" {
-    router.Use(debugMiddleware)
-}
+```php
+<?php
 
-// ❌ NEVER scatter os.Getenv throughout code
-if os.Getenv("APP_ENV") == "production" { // BAD
+declare(strict_types=1);
+
+use Illuminate\Support\Facades\App;
+use Illuminate\Support\Facades\Route;
+
+if (App::environment('local')) {
+    Route::get('/dev/preview-mail', App\Http\Controllers\Dev\MailPreviewController::class);
+}
 ```
+
+Prefer environment-specific service providers or config values over scattered checks.
 
 ## Health Checks
 
-```PHP
-router.Get("/healthz", func(w http.ResponseWriter, r *http.Request) {
-    render.JSON(w, r, map[string]string{"status": "ok"})
-})
-router.Get("/readyz", func(w http.ResponseWriter, r *http.Request) {
-    if err := db.PingContext(r.Context()); err != nil {
-        w.WriteHeader(http.StatusServiceUnavailable)
-        render.JSON(w, r, map[string]any{"status": "degraded", "db": false})
-        return
+Laravel exposes liveness at `/up`; add a separate readiness route at `/ready` that returns 503 when a dependency is down.
+
+```php
+<?php
+
+declare(strict_types=1);
+
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Redis;
+use Illuminate\Support\Facades\Route;
+
+Route::get('/ready', function () {
+    try {
+        DB::select('select 1');
+        Redis::connection()->ping();
+
+        return response()->json(['status' => 'ok', 'database' => true, 'redis' => true]);
+    } catch (Throwable) {
+        return response()->json(['status' => 'degraded', 'database' => false, 'redis' => false], 503);
     }
-    render.JSON(w, r, map[string]any{"status": "ok", "db": true})
-})
+});
 ```
 
 ## Database Migrations Per Environment
 
 | Environment | Migration Strategy | Who Runs | Approval |
 |-------------|--------------------|----------|---------|
-| **development** | Embedded migrations on startup | App binary | None |
-| **test** | Embedded migrations in test setup | Test binary | Auto |
-| **staging** | CLI or embedded via CI/CD | Pipeline | Auto |
-| **production** | CLI via CI/CD pipeline step | Pipeline | Manual approval gate |
+| `local` | `php artisan migrate` | Developer | None |
+| `testing` | `php artisan migrate --env=testing` | Test bootstrap / CI | Automatic |
+| `staging` | `php artisan migrate --force` | Pipeline | Automatic after tests |
+| `production` | Reviewed migration plan, then `--force` | Pipeline | Manual approval |
 
-### Environment-Specific Migration Config
-```yaml
-# config.development.yaml — auto-migrate on startup
-database_url: "postgresql://dev:devpass@localhost:5432/contoso_dev"
-auto_migrate: true
-
-# config.staging.yaml
-database_url: "postgresql://staging-db:5432/contoso_staging"
-auto_migrate: true       # Or false if using CLI pipeline step
-
-# Production: all config from env vars
-# DATABASE_URL=postgresql://...
-# AUTO_MIGRATE=false
-```
-
-```PHP
-// Conditional auto-migration
-if cfg.AutoMigrate {
-    if err := runMigrations(cfg.DatabaseURL); err != nil {
-        log.Fatalf("migration failed: %v", err)
-    }
-}
-```
+Use these checks before production migration:
 
 ```bash
-# CI/CD pipeline step for production
-migrate -path migrations -database "$DATABASE_URL" version    # Check current state
-migrate -path migrations -database "$DATABASE_URL" up         # Apply pending
+php artisan migrate --pretend
+php artisan migrate:status
+php artisan route:list --path=v1
 ```
-
-- **NEVER** enable auto-migrate in production without a pipeline gate
-- **ALWAYS** use the same migration files across all environments
-- **ALWAYS** check for dirty state before applying migrations
-
----
 
 ## See Also
 
-- `database.instructions.md` — Migration strategy, expand-contract, rollback procedures
-- `deploy.instructions.md` — Container config, health checks, migration pipeline steps
+- `database.instructions.md` — Expand-contract migration strategy
+- `deploy.instructions.md` — Container config and entrypoint rules
 - `observability.instructions.md` — Per-environment logging and metrics
-- `messaging.instructions.md` — Broker config per environment
+- `security.instructions.md` — Secret handling and auth configuration

@@ -1,6 +1,6 @@
 ---
 name: test-sweep
-description: Run all test suites (unit, integration, API, E2E) and aggregate results into a summary report. Use after completing execution slices or before the Review Gate.
+description: Run Laravel test suites, static analysis, formatting checks, dependency audit, coverage, and completeness scan. Use after execution slices or before the Review Gate.
 argument-hint: "[optional: specific test category to run]"
 tools: [run_in_terminal, read_file, forge_sweep]
 ---
@@ -14,82 +14,100 @@ tools: [run_in_terminal, read_file, forge_sweep]
 
 ### 1. Unit Tests
 ```bash
-PHP test ./internal/... -v -count=1 -tags=unit 2>&1 | tee TestResults/unit.txt
+php artisan test --testsuite=Unit
 ```
 
 ### Conditional: Unit Test Failure
-> If unit tests fail → skip integration/E2E tests, PHP directly to Report.
+> If unit tests fail, skip slower suites and go directly to Report.
 
-### 2. Integration Tests
+### 2. Feature Tests
 ```bash
-# Requires database running (Docker or local)
-PHP test ./tests/integration/... -v -count=1 -tags=integration 2>&1 | tee TestResults/integration.txt
+php artisan test --testsuite=Feature
 ```
 
-### 3. API Tests
+### 3. Integration Tests
 ```bash
-PHP test ./tests/api/... -v -count=1 -tags=api 2>&1 | tee TestResults/api.txt
+php artisan test --group=integration
 ```
 
-### 4. E2E Tests (if available)
+Verify Docker Desktop before running Testcontainers-backed tests.
+
+### 4. Static Analysis and Formatting
 ```bash
-PHP test ./tests/e2e/... -v -count=1 -tags=e2e 2>&1 | tee TestResults/e2e.txt
+vendor/bin/phpstan analyse
+vendor/bin/pint --test
 ```
 
-### 5. Race Detection
+### 5. Dependency and Migration Checks
 ```bash
-PHP test ./... -race -count=1 2>&1 | tee TestResults/race.txt
+composer audit
+php artisan migrate --pretend
+php artisan migrate:status
 ```
 
-### 6. Completeness Scan
-Use the `forge_sweep` MCP tool to scan for TODO/FIXME/stub markers in the codebase.
-
-### 7. Report
-Aggregate results:
+### 6. Coverage
+```bash
+php artisan test --coverage --min=80
 ```
-✅ Unit:        X passed, Y failed
-✅ Integration: X passed, Y failed
-✅ API:         X passed, Y failed
-✅ E2E:         X passed, Y failed
-✅ Race:        No data races detected
-✅ Sweep:       N markers (TODO/FIXME/stub)
-──────────────────────────────────────
-Total:          X passed, Y failed
+
+### 7. Completeness Scan
+Use `forge_sweep` to scan for TODO, FIXME, HACK, stub, placeholder, and mock-data markers.
+
+### 8. Report
+```text
+Unit:        X passed, Y failed, Z skipped
+Feature:     X passed, Y failed, Z skipped
+Integration: X passed, Y failed, Z skipped
+PHPStan:     PASS / FAIL
+Pint:        PASS / FAIL
+Audit:       PASS / FAIL
+Coverage:    XX%
+Sweep:       N markers
+Total:       X passed, Y failed, Z skipped
 ```
 
 ## On Failure
-- Show failed test names and error messages
-- Read the failing test source to diagnose
-- Check for race conditions with `-race` flag
-- Suggest fixes (ask before applying)
 
+- Show failing test names and assertion messages.
+- Read the failing test source and source under test.
+- Identify whether the issue is fixture data, tenant context, policy, validation, database, queue fake, or external HTTP fake.
+- Suggest fixes and ask before applying them.
+
+## Safety Rules
+
+- NEVER hide skipped, risky, or incomplete PHPUnit tests.
+- NEVER replace failing PostgreSQL integration tests with SQLite.
+- ALWAYS include exact commands and results in the final report.
+- Stop before destructive database changes.
 
 ## Temper Guards
 
 | Shortcut | Why It Breaks |
 |----------|--------------|
-| "Skipped tests are probably flaky" | Skipped tests hide real regressions. Each skip needs a documented reason and a linked issue. |
-| "80% coverage is good enough" | Coverage thresholds prevent ratcheting down. If baseline is 85%, dropping to 80% means new code is untested. |
-| "Integration tests cover the unit tests" | Integration tests are slow and brittle. Unit tests catch logic errors in milliseconds, not minutes. |
-| "I'll fix the failing test later" | Broken tests normalize failure. The suite must be green before any code ships. |
+| "Feature tests cover unit tests" | Unit tests isolate business rules and fail faster. |
+| "Coverage can drop for now" | Coverage drops are hard to recover and usually mean untested behavior shipped. |
+| "Composer audit is unrelated" | Vulnerable dependencies are release blockers for web applications. |
+| "Migration preview is not a test" | Bad migrations fail deployments even when PHPUnit is green. |
 
 ## Warning Signs
 
-- Skipped tests without documented reason — skip annotations present without explanation
-- Coverage decreased from baseline — new code merged without maintaining coverage threshold
-- No test output included in report — tests "passed" but no actual results pasted
-- Test suite not run before PR — commit pushed without running the full sweep first
-- Flaky test dismissed — intermittent failure ignored instead of investigated
+- Tests pass only when run in a specific order.
+- Fakes are asserted after the real event was already dispatched.
+- Coverage command is omitted for new service logic.
+- `migrate --pretend` fails but deploy proceeds.
+- `forge_sweep` finds TODO/FIXME markers in production paths.
 
 ## Exit Proof
 
 After completing this skill, confirm:
-- [ ] All suites executed — `./vendor/bin/phpunit` completes
-- [ ] Zero unexplained failures (every failure has a documented reason)
-- [ ] Coverage report generated — `./vendor/bin/phpunit --coverage-text`
-- [ ] Coverage not decreased from baseline
-- [ ] `forge_sweep` found zero production code markers (TODO/FIXME/stub)
-## Persistent Memory (if OpenBrain is configured)
 
-- **Before running tests**: `search_thoughts("test failures", project: "<YOUR PROJECT NAME>", created_by: "copilot-vscode", type: "bug")` — load known flaky tests, recurring failures, and environment-specific issues
-- **After test sweep**: `capture_thought("Test sweep: <N passed, N failed — key failure patterns>", project: "<YOUR PROJECT NAME>", created_by: "copilot-vscode", source: "skill-test-sweep")` — persist failure patterns and flaky test discoveries
+- [ ] Unit, feature, and integration suites executed or explicitly blocked
+- [ ] Static analysis and Pint results included
+- [ ] Composer audit result included
+- [ ] Coverage result included
+- [ ] `forge_sweep` result included
+
+## Persistent Memory for Test Sweeps
+
+- **Before running tests**: `search_thoughts("Laravel test failures", project: "<YOUR PROJECT NAME>", created_by: "copilot-vscode", type: "bug")`
+- **After test sweep**: `capture_thought("Laravel test sweep: <N passed, N failed, key failures>", project: "<YOUR PROJECT NAME>", created_by: "copilot-vscode", source: "skill-test-sweep")`

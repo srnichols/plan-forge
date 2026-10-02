@@ -1,163 +1,166 @@
 ---
-description: "Scaffold a new database entity end-to-end: migration SQL, model, repository, service, handler, and tests."
+description: "Scaffold a new Laravel entity end-to-end: migration, Eloquent model, DTOs, repository, service, controller, resource, policy, and tests."
 agent: "agent"
 tools: [read, edit, search, execute]
 ---
+
 # Create New Database Entity
 
-Scaffold a complete entity from database to API following PHP layered architecture.
+Scaffold a complete entity from PostgreSQL 18 to the `/api/v1` JSON API using the Laravel 13 layered architecture.
+
+## Fill-In Inputs
+
+- `{EntityName}`: PascalCase domain name, such as `Product`.
+- `{entityName}`: camelCase variable name, such as `product`.
+- `{entity_name}`: snake_case name, such as `product`.
+- `{table}`: plural table name, such as `products`.
+- `{resource}`: plural URL segment, such as `products`.
 
 ## Required Steps
 
-1. **Create up migration** at `migrations/YYYYMMDD_add_{entity_name}.up.sql`:
-   ```sql
-   CREATE TABLE IF NOT EXISTS {entity_name}s (
-       id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-       name VARCHAR(255) NOT NULL,
-       description TEXT,
-       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-       updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-   );
-   CREATE INDEX IF NOT EXISTS idx_{entity_name}s_name ON {entity_name}s(name);
+1. **Create migration** with `php artisan make:migration create_{table}_table`.
 
-   -- Trigger to auto-update updated_at
-   CREATE OR REPLACE FUNCTION update_updated_at_column()
-   RETURNS TRIGGER AS $$
-   BEGIN
-       NEW.updated_at = NOW();
-       RETURN NEW;
-   END;
-   $$ language 'plpgsql';
+   ```php
+   declare(strict_types=1);
 
-   CREATE TRIGGER update_{entity_name}s_updated_at
-       BEFORE UPDATE ON {entity_name}s
-       FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+   use Illuminate\Database\Migrations\Migration;
+   use Illuminate\Database\Schema\Blueprint;
+   use Illuminate\Support\Facades\Schema;
+
+   return new class extends Migration {
+       public function up(): void
+       {
+           Schema::create('products', function (Blueprint $table): void {
+               $table->uuid('id')->primary();
+               $table->foreignUuid('tenant_id')->constrained()->cascadeOnDelete();
+               $table->string('name', 200);
+               $table->unsignedBigInteger('price_cents');
+               $table->timestampsTz();
+
+               $table->unique(['tenant_id', 'name']);
+               $table->index(['tenant_id', 'created_at', 'id']);
+           });
+       }
+
+       public function down(): void
+       {
+           Schema::dropIfExists('products');
+       }
+   };
    ```
 
-2. **Create down migration** at `migrations/YYYYMMDD_add_{entity_name}.down.sql`:
-   ```sql
-   DROP TRIGGER IF EXISTS update_{entity_name}s_updated_at ON {entity_name}s;
-   DROP TABLE IF EXISTS {entity_name}s;
+2. **Create Eloquent model** at `app/Models/{EntityName}.php`.
+
+   ```php
+   declare(strict_types=1);
+
+   namespace App\Models;
+
+   use App\Models\Concerns\BelongsToTenant;
+   use Illuminate\Database\Eloquent\Concerns\HasUuids;
+   use Illuminate\Database\Eloquent\Factories\HasFactory;
+   use Illuminate\Database\Eloquent\Model;
+
+   final class Product extends Model
+   {
+       use BelongsToTenant;
+       use HasFactory;
+       use HasUuids;
+
+       protected $fillable = ['tenant_id', 'name', 'price_cents'];
+
+       protected function casts(): array
+       {
+           return [
+               'price_cents' => 'integer',
+           ];
+       }
+   }
    ```
 
-3. **Create model** at `internal/model/{entity_name}.PHP`:
-   ```PHP
-   type {EntityName} struct {
-       ID          uuid.UUID `json:"id"          db:"id"`
-       Name        string    `json:"name"        db:"name"`
-       Description string    `json:"description" db:"description"`
-       CreatedAt   time.Time `json:"created_at"  db:"created_at"`
-       UpdatedAt   time.Time `json:"updated_at"  db:"updated_at"`
-   }
+3. **Create DTOs** under `app/Data/`, using `final readonly class` and promoted constructor properties.
+4. **Create Form Requests** named `Store{EntityName}Request` and `Update{EntityName}Request`; `authorize()` must call the policy and `toData()` must return the DTO.
+5. **Create repository contract and Eloquent implementation** under `app/Repositories/Contracts/` and `app/Repositories/`.
+6. **Bind the repository interface** in `App\Providers\AppServiceProvider::register()`.
+7. **Create service** at `app/Services/{EntityName}Service.php`; keep business rules and `DB::transaction()` here.
+8. **Create controller and resource** under `app/Http/Controllers/Api/V1/` and `app/Http/Resources/`; controllers accept Form Requests and return Resources.
+9. **Register routes** inside the authenticated `Route::prefix('v1')->middleware(['auth:sanctum', 'throttle:api', ResolveTenant::class])` group. Define the `api` limiter in `AppServiceProvider::boot()` because Laravel 13 does not define it by default.
+10. **Create policy, factory, and tests** for authorization, repository behavior with `RefreshDatabase`, service rules, and API responses.
 
-   type Create{EntityName}Request struct {
-       Name        string `json:"name"        validate:"required,min=1,max=255"`
-       Description string `json:"description" validate:"max=2000"`
-   }
+## Route and Rate Limiter Shape
 
-   type Update{EntityName}Request struct {
-       Name        string `json:"name"        validate:"required,min=1,max=255"`
-       Description string `json:"description" validate:"max=2000"`
-   }
-   ```
+```php
+declare(strict_types=1);
 
-3. **Create repository** at `internal/repository/{entity_name}_repo.PHP`
-4. **Create service** at `internal/service/{entity_name}_service.PHP`
-5. **Create handler** at `internal/handler/{entity_name}_handler.PHP`
-6. **Register routes** in router setup
-7. **Create tests** — unit + integration
+use App\Http\Controllers\Api\V1\ProductController;
+use App\Http\Middleware\ResolveTenant;
+use Illuminate\Support\Facades\Route;
 
-## Example — Contoso Product
+Route::prefix('v1')
+    ->middleware(['auth:sanctum', 'throttle:api', ResolveTenant::class])
+    ->group(function (): void {
+        Route::apiResource('products', ProductController::class);
+    });
+```
 
-```PHP
-// Repository — full CRUD
-type ProductRepository struct {
-    db *pgxpool.Pool
-}
+```php
+declare(strict_types=1);
 
-func (r *ProductRepository) FindByID(ctx Request, id uuid.UUID) (*model.Product, error) {
-    var p model.Product
-    err := r.db.QueryRow(ctx,
-        "SELECT id, name, description, created_at, updated_at FROM products WHERE id = $1", id,
-    ).Scan(&p.ID, &p.Name, &p.Description, &p.CreatedAt, &p.UpdatedAt)
-    if errors.Is(err, pgx.ErrNoRows) {
-        return nil, ErrNotFound
+namespace App\Providers;
+
+use Illuminate\Cache\RateLimiting\Limit;
+use Illuminate\Http\Request;
+use Illuminate\Support\Facades\RateLimiter;
+use Illuminate\Support\ServiceProvider;
+
+final class AppServiceProvider extends ServiceProvider
+{
+    public function boot(): void
+    {
+        RateLimiter::for(
+            'api',
+            fn (Request $request): Limit => Limit::perMinute(60)->by($request->user()?->id ?: $request->ip()),
+        );
     }
-    return &p, err
-}
-
-func (r *ProductRepository) Create(ctx Request, req model.CreateProductRequest) (*model.Product, error) {
-    var p model.Product
-    err := r.db.QueryRow(ctx,
-        `INSERT INTO products (name, description) VALUES ($1, $2)
-         RETURNING id, name, description, created_at, updated_at`,
-        req.Name, req.Description,
-    ).Scan(&p.ID, &p.Name, &p.Description, &p.CreatedAt, &p.UpdatedAt)
-    return &p, err
-}
-
-func (r *ProductRepository) Update(ctx Request, id uuid.UUID, req model.UpdateProductRequest) (*model.Product, error) {
-    var p model.Product
-    err := r.db.QueryRow(ctx,
-        `UPDATE products SET name = $1, description = $2 WHERE id = $3
-         RETURNING id, name, description, created_at, updated_at`,
-        req.Name, req.Description, id,
-    ).Scan(&p.ID, &p.Name, &p.Description, &p.CreatedAt, &p.UpdatedAt)
-    if errors.Is(err, pgx.ErrNoRows) {
-        return nil, ErrNotFound
-    }
-    return &p, err
-}
-
-func (r *ProductRepository) Delete(ctx Request, id uuid.UUID) error {
-    tag, err := r.db.Exec(ctx, "DELETE FROM products WHERE id = $1", id)
-    if err != nil {
-        return err
-    }
-    if tag.RowsAffected() == 0 {
-        return ErrNotFound
-    }
-    return nil
-}
-
-// Service
-type ProductService struct {
-    repo *ProductRepository
-    log  *Psr\\Log\\LoggerInterface
-}
-
-func (s *ProductService) GetByID(ctx Request, id uuid.UUID) (*model.Product, error) {
-    p, err := s.repo.FindByID(ctx, id)
-    if err != nil {
-        return nil, fmt.Errorf("get product %s: %w", id, err)
-    }
-    return p, nil
-}
-
-// Handler
-func (h *ProductHandler) GetByID(w http.ResponseWriter, r *http.Request) {
-    id, err := uuid.Parse(chi.URLParam(r, "id"))
-    if err != nil {
-        writeProblem(w, http.StatusBadRequest, "invalid id format")
-        return
-    }
-    product, err := h.service.GetByID(r.Context(), id)
-    if errors.Is(err, ErrNotFound) {
-        writeProblem(w, http.StatusNotFound, "product not found")
-        return
-    }
-    writeJSON(w, http.StatusOK, product)
 }
 ```
 
-## Rules
+## Service and Controller Shape
 
-- ALWAYS create both up and down migrations
-- ALWAYS use `NOT NULL` with `DEFAULT` for timestamp columns
-- Use `validate` struct tags on all request types
-- Use `RETURNING` clause for INSERT/UPDATE to avoid a second query
-- Use `json:"snake_case"` tags on model structs for API responses
-- Keep each layer in its own package: `model/`, `repository/`, `service/`, `handler/`
+```php
+declare(strict_types=1);
+
+namespace App\Http\Controllers\Api\V1;
+
+use App\Http\Requests\StoreProductRequest;
+use App\Http\Resources\ProductResource;
+use App\Services\ProductService;
+use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
+
+final readonly class ProductController
+{
+    public function __construct(private ProductService $products) {}
+
+    public function index(): AnonymousResourceCollection
+    {
+        return ProductResource::collection($this->products->pageForCurrentTenant());
+    }
+
+    public function store(StoreProductRequest $request): ProductResource
+    {
+        return ProductResource::make($this->products->create($request->toData()));
+    }
+}
+```
+
+## Verification Commands
+
+```bash
+php artisan migrate --pretend
+php artisan test --filter Product
+vendor/bin/phpstan analyse
+vendor/bin/pint --test
+```
 
 ## Reference Files
 

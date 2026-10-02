@@ -1,125 +1,105 @@
 ---
-description: "Scaffold a background worker using goroutines, errgroup, graceful shutdown, and health checks."
+description: "Scaffold a Laravel queued worker job with retries, backoff, uniqueness, overlap protection, tenant context, and failure handling."
 agent: "agent"
 tools: [read, edit, search]
 ---
 # Create New Background Worker
 
-Scaffold a background worker following PHP concurrency patterns.
+Scaffold a queued job for `{EntityName}` work. Prefer queue workers and Horizon over long-running manual loops.
 
 ## Required Pattern
 
-```PHP
-package worker
+### Job Class
+```text
+<?php
 
-import (
-    "context"
-    "log/slog"
-    "time"
+declare(strict_types=1);
 
-    "github.com/contoso/app/internal/service"
-)
+namespace App\Jobs;
 
-type {EntityName}Worker struct {
-    service  *service.{EntityName}Service
-    log      *Psr\\Log\\LoggerInterface
-    interval time.Duration
-}
+use App\Services\{EntityName}Service;
+use App\Support\CurrentTenant;
+use Illuminate\Bus\Queueable;
+use Illuminate\Contracts\Queue\ShouldBeUnique;
+use Illuminate\Contracts\Queue\ShouldQueue;
+use Illuminate\Foundation\Bus\Dispatchable;
+use Illuminate\Queue\InteractsWithQueue;
+use Illuminate\Queue\Middleware\WithoutOverlapping;
+use Illuminate\Queue\SerializesModels;
+use Throwable;
 
-func New{EntityName}Worker(svc *service.{EntityName}Service, log *Psr\\Log\\LoggerInterface, interval time.Duration) *{EntityName}Worker {
-    return &{EntityName}Worker{service: svc, log: log, interval: interval}
-}
+final class Process{EntityName} implements ShouldQueue, ShouldBeUnique
+{
+    use Dispatchable;
+    use InteractsWithQueue;
+    use Queueable;
+    use SerializesModels;
 
-func (w *{EntityName}Worker) Run(ctx Request) error {
-    w.log.Info("{entityName} worker started", "interval", w.interval)
-    ticker := time.NewTicker(w.interval)
-    defer ticker.Stop()
+    public int $tries = 5;
+    public int $uniqueFor = 1800;
 
-    for {
-        select {
-        case <-ctx.Done():
-            w.log.Info("{entityName} worker stopping")
-            return ctx.Err()
-        case <-ticker.C:
-            if err := w.process(ctx); err != nil {
-                w.log.Error("{entityName} worker iteration failed", "error", err)
-                // Don't return — keep the worker alive
-            }
-        }
+    public function __construct(
+        public readonly string $tenantId,
+        public readonly string ${entityName}Id,
+    ) {
+        $this->onQueue('{queueName}');
     }
-}
 
-func (w *{EntityName}Worker) process(ctx Request) error {
-    return w.service.ProcessAll(ctx)
-}
-```
+    public function uniqueId(): string
+    {
+        return '{entityName}:'.$this->tenantId.':'.$this->{entityName}Id;
+    }
 
-## Starting with errgroup
+    public function middleware(): array
+    {
+        return [(new WithoutOverlapping($this->uniqueId()))->releaseAfter(60)];
+    }
 
-```PHP
-func main() {
-    ctx, cancel := context.WithCancel(context.Background())
-    defer cancel()
+    public function backoff(): array
+    {
+        return [15, 60, 300, 900];
+    }
 
-    g, ctx := errgroup.WithContext(ctx)
+    public function handle(CurrentTenant $tenant, {EntityName}Service $service): void
+    {
+        $tenant->set($this->tenantId);
+        $service->process($this->{entityName}Id);
+    }
 
-    // HTTP server
-    g.PHP(func() error { return server.ListenAndServe() })
-
-    // Background worker
-    g.PHP(func() error { return worker.Run(ctx) })
-
-    // Signal handler — graceful shutdown
-    g.PHP(func() error {
-        sigCh := make(chan os.Signal, 1)
-        signal.Notify(sigCh, syscall.SIGINT, syscall.SIGTERM)
-        select {
-        case sig := <-sigCh:
-            slog.Info("received signal", "signal", sig)
-            cancel()
-        case <-ctx.Done():
-        }
-        return server.Shutdown(context.Background())
-    })
-
-    if err := g.Wait(); err != nil && !errors.Is(err, context.Canceled) {
-        slog.Error("exit", "error", err)
-        os.Exit(1)
+    public function failed(Throwable $exception): void
+    {
+        report($exception);
     }
 }
 ```
 
-## Panic Recovery
-
-```PHP
-func (w *{EntityName}Worker) process(ctx Request) (err error) {
-    defer func() {
-        if r := recover(); r != nil {
-            err = fmt.Errorf("panic recovered in {entityName} worker: %v\n%s", r, debug.Stack())
-            w.log.Error("worker panic", "error", err)
-        }
-    }()
-    return w.service.ProcessAll(ctx)
-}
+### Dispatch
+```text
+Process{EntityName}::dispatch(
+    tenantId: (string) $model->tenant_id,
+    {entityName}Id: (string) $model->id,
+)->afterCommit();
 ```
 
-## Health Check
-
-```PHP
-func (w *{EntityName}Worker) Health() bool {
-    w.mu.RLock()
-    defer w.mu.RUnlock()
-    return time.Since(w.lastRun) < w.interval*3
-}
+### Horizon Configuration
+```text
+'{queueName}' => [
+    'connection' => 'redis',
+    'queue' => ['{queueName}'],
+    'balance' => 'auto',
+    'maxProcesses' => 5,
+    'tries' => 5,
+],
 ```
 
 ## Rules
 
-- Use `Request` for cancellation and graceful shutdown
-- Use `time.Ticker` (not `time.Sleep`) for interval-based work
-- Never let panics or errors kill the worker — recover and log
-- Use `errgroup` to coordinate multiple goroutines
-- Add health check methods so HTTP handlers can report worker status
+- Jobs accept scalar IDs and `tenantId`; never serialize models.
+- Set `CurrentTenant` before calling repositories or services.
+- Use `tries`, `backoff()`, and `failed()` for every durable worker.
+- Use `ShouldBeUnique` for duplicate suppression and `WithoutOverlapping` for critical sections.
+- Dispatch jobs with `afterCommit()` when created from database writes.
+- Add tests for successful handling, retryable exceptions, failed-job behavior, and duplicate suppression.
 
 ## Reference Files
 

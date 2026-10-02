@@ -1,244 +1,192 @@
 ---
-description: PHP testing patterns — testing package, testcontainers, httptest, table-driven tests
-applyTo: '**/*_test.PHP,**/*_bench_test.PHP,**/testdata/**,**/testutil/**,**/mocks/**'
+description: PHP/Laravel testing patterns — PHPUnit 13, Laravel feature and unit tests, fakes, Testcontainers, coverage, and CI gates.
+applyTo: '**/tests/**/*.php,**/*Test.php,**/phpunit.xml,**/pest.php,**/composer.json'
 ---
 
 # PHP Testing Patterns
 
-## Tech Stack
+## Tech stack
 
-- **Unit Tests**: Standard `testing` package
-- **Assertions**: `testify/assert` or standard `if` checks
-- **Mocking**: `testify/mock` or hand-written fakes (preferred)
-- **Integration**: `testcontainers-PHP`
-- **HTTP Tests**: `net/http/httptest`
-- **E2E**: Playwright or custom HTTP client tests
+- **Runner**: PHPUnit 13.3+ through `php artisan test`
+- **Framework helpers**: Laravel 13 testing utilities
+- **Database isolation**: `RefreshDatabase`
+- **Authentication**: `Laravel\Sanctum\Sanctum::actingAs`
+- **Fakes**: `Queue`, `Event`, `Http`, `Notification`, `Bus`, `Mail`, and `Storage`
+- **Containers**: `testcontainers/testcontainers` 1.1.0 for PostgreSQL 18 integration tests
+- **Coverage**: PCOV or Xdebug with PHPUnit coverage output
 
-## Test Types
+## Test types
 
-| Type | Scope | Database | Speed |
-|------|-------|----------|-------|
-| **Unit** | Single function | Mocked | Fast (ms) |
-| **Integration** | Service + DB | Real (Testcontainers) | Medium (1-3s) |
-| **E2E** | Full HTTP flow | Real | Slow (10s+) |
+| Type | Scope | Database | Command |
+|------|-------|----------|---------|
+| Unit | Single service/value object | Mocked or none | `php artisan test --testsuite=Unit` |
+| Feature | HTTP route through Laravel | Test database | `php artisan test --testsuite=Feature` |
+| Integration | Repository + PostgreSQL | Testcontainers | `php artisan test --group=integration` |
+| Smoke | Deployed endpoint checks | Staging | `php artisan test --group=smoke` |
 
-## Patterns
+## Unit test
 
-### Table-Driven Unit Test
-```PHP
-func TestUserService_GetUser(t *testing.T) {
-    tests := []struct {
-        name    string
-        userID  uuid.UUID
-        want    *User
-        wantErr error
-    }{
-        {
-            name:   "valid user",
-            userID: uuid.MustParse("550e8400-e29b-41d4-a716-446655440000"),
-            want:   &User{Name: "Test User"},
-        },
-        {
-            name:    "not found",
-            userID:  uuid.New(),
-            wantErr: ErrNotFound,
-        },
-    }
+```php
+namespace Tests\Unit\Services;
 
-    for _, tt := range tests {
-        t.Run(tt.name, func(t *testing.T) {
-            repo := &fakeUserRepo{users: map[uuid.UUID]*User{
-                uuid.MustParse("550e8400-e29b-41d4-a716-446655440000"): {Name: "Test User"},
-            }}
-            svc := NewUserService(repo)
+use App\Data\CreateOrderData;
+use App\Models\Order;
+use App\Repositories\Contracts\OrderRepository;
+use App\Services\OrderService;
+use Mockery;
+use PHPUnit\Framework\TestCase;
 
-            got, err := svc.GetUser(context.Background(), tt.userID)
+final class OrderServiceTest extends TestCase
+{
+    public function testCreatePersistsOrderThroughRepository(): void
+    {
+        $repository = Mockery::mock(OrderRepository::class);
+        $service = new OrderService($repository);
+        $data = new CreateOrderData('ORD-1001', 'EUR', null);
+        $order = new Order(['reference' => 'ORD-1001', 'currency' => 'EUR', 'notes' => null]);
 
-            if !errors.Is(err, tt.wantErr) {
-                t.Errorf("error = %v, want %v", err, tt.wantErr)
-            }
-            if tt.want != nil && got.Name != tt.want.Name {
-                t.Errorf("name = %q, want %q", got.Name, tt.want.Name)
-            }
-        })
+        $repository->shouldReceive('create')->once()->with($data)->andReturn($order);
+
+        self::assertSame($order, $service->create($data));
     }
 }
 ```
 
-### Integration Test (testcontainers-PHP)
-```PHP
-func TestUsersAPI_Integration(t *testing.T) {
-    if testing.Short() {
-        t.Skip("skipping integration test")
+## Feature test
+
+```php
+namespace Tests\Feature\Api\V1;
+
+use App\Models\Order;
+use App\Models\Tenant;
+use App\Models\User;
+use Illuminate\Foundation\Testing\RefreshDatabase;
+use Laravel\Sanctum\Sanctum;
+use Tests\TestCase;
+
+final class OrderIndexTest extends TestCase
+{
+    use RefreshDatabase;
+
+    public function testIndexReturnsOnlyAuthenticatedUsersTenantOrders(): void
+    {
+        $tenant = Tenant::factory()->create();
+        $otherTenant = Tenant::factory()->create();
+        $user = User::factory()->create(['tenant_id' => $tenant->id]);
+        Order::factory()
+            ->count(2)
+            ->sequence(['reference' => 'ORD-1001'], ['reference' => 'ORD-1002'])
+            ->create(['tenant_id' => $tenant->id]);
+        Order::factory()->create(['tenant_id' => $otherTenant->id]);
+
+        Sanctum::actingAs($user);
+
+        $response = $this->getJson('/api/v1/orders')
+            ->assertOk()
+            ->assertJsonCount(2, 'data');
+
+        self::assertEqualsCanonicalizing(
+            ['ORD-1001', 'ORD-1002'],
+            array_column($response->json('data'), 'reference'),
+        );
     }
-
-    ctx := context.Background()
-    pgContainer, err := postgres.Run(ctx,
-        "postgres:18",
-        postgres.WithDatabase("testdb"),
-        testcontainers.WithWaitStrategy(
-            wait.ForListeningPort("5432/tcp"),
-        ),
-    )
-    t.Cleanup(func() { pgContainer.Terminate(ctx) })
-    require.NoError(t, err)
-
-    connStr, err := pgContainer.ConnectionString(ctx, "sslmode=disable")
-    require.NoError(t, err)
-
-    // Wire up app with test DB...
-    app := setupApp(connStr)
-    srv := httptest.NewServer(app.Handler())
-    defer srv.Close()
-
-    resp, err := http.Get(srv.URL + "/api/users")
-    require.NoError(t, err)
-    assert.Equal(t, http.StatusOK, resp.StatusCode)
 }
 ```
 
-### HTTP Handler Test (httptest)
-```PHP
-func TestGetUserHandler(t *testing.T) {
-    svc := &fakeUserService{
-        user: &User{Name: "Test"},
+## Fakes
+
+```php
+use App\Events\OrderPlaced;
+use App\Jobs\SendOrderReceipt;
+use Illuminate\Support\Facades\Event;
+use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Notification;
+use Illuminate\Support\Facades\Queue;
+
+Queue::fake();
+Event::fake([OrderPlaced::class]);
+Http::fake(['billing.internal/*' => Http::response(['approved' => true])]);
+Notification::fake();
+
+$this->postJson('/api/v1/orders', [
+    'reference' => 'ORD-1001',
+    'currency' => 'EUR',
+    'notes' => null,
+])->assertCreated();
+
+Queue::assertPushed(SendOrderReceipt::class);
+Event::assertDispatched(OrderPlaced::class);
+Notification::assertNothingSent();
+```
+
+## PostgreSQL integration with Testcontainers
+
+```php
+namespace Tests\Integration;
+
+use Illuminate\Support\Facades\Artisan;
+use Illuminate\Support\Facades\DB;
+use Testcontainers\Modules\PostgresContainer;
+use Tests\TestCase;
+
+final class PostgresRepositoryTest extends TestCase
+{
+    public function testRepositoryUsesRealPostgres(): void
+    {
+        $container = (new PostgresContainer('18-alpine'))->start();
+
+        config([
+            'database.default' => 'pgsql',
+            'database.connections.pgsql.host' => $container->getHost(),
+            'database.connections.pgsql.port' => $container->getFirstMappedPort(),
+            'database.connections.pgsql.database' => 'test',
+            'database.connections.pgsql.username' => 'test',
+            'database.connections.pgsql.password' => 'test',
+        ]);
+        DB::purge('pgsql');
+
+        Artisan::call('migrate', ['--force' => true]);
+
+        $this->assertDatabaseCount('orders', 0);
+
+        $container->stop();
     }
-    handler := NewUserHandler(svc)
-
-    req := httptest.NewRequest(http.MethodGet, "/api/users/123", nil)
-    rec := httptest.NewRecorder()
-
-    handler.GetUser(rec, req)
-
-    assert.Equal(t, http.StatusOK, rec.Code)
-    assert.Contains(t, rec.Body.String(), "Test")
 }
-```
-
-### E2E Tests (Full HTTP Flow)
-```PHP
-//PHP:build e2e
-
-func TestE2E_CreateAndGetProducer(t *testing.T) {
-    // Use a real running server (started via docker-compose or test setup)
-    baseURL := os.Getenv("E2E_BASE_URL")
-    if baseURL == "" {
-        baseURL = "http://localhost:8080"
-    }
-    client := &http.Client{Timeout: 10 * time.Second}
-
-    // Create
-    body := `{"name":"Test Farm","contactEmail":"test@example.com"}`
-    resp, err := client.Post(baseURL+"/api/producers", "application/json", strings.NewReader(body))
-    require.NoError(t, err)
-    require.Equal(t, http.StatusCreated, resp.StatusCode)
-
-    var created struct {
-        ID string `json:"id"`
-    }
-    require.NoError(t, json.NewDecoder(resp.Body).Decode(&created))
-    resp.Body.Close()
-
-    // Verify
-    resp, err = client.Get(baseURL + "/api/producers/" + created.ID)
-    require.NoError(t, err)
-    require.Equal(t, http.StatusOK, resp.StatusCode)
-    resp.Body.Close()
-}
-```
-
-### E2E with Playwright (Browser Tests)
-```PHP
-//PHP:build e2e
-
-import pw "github.com/playwright-community/playwright-PHP"
-
-func TestE2E_LoginFlow(t *testing.T) {
-    err := pw.Install()
-    require.NoError(t, err)
-
-    browser, err := pw.Run()
-    require.NoError(t, err)
-    defer browser.Stop()
-
-    bw, err := browser.Chromium.Launch(pw.BrowserTypeLaunchOptions{Headless: pw.Bool(true)})
-    require.NoError(t, err)
-    defer bw.Close()
-
-    page, err := bw.NewPage()
-    require.NoError(t, err)
-
-    _, err = page.Goto(os.Getenv("E2E_BASE_URL") + "/login")
-    require.NoError(t, err)
-
-    require.NoError(t, page.Fill("#email", "admin@test.com"))
-    require.NoError(t, page.Fill("#password", "testpass"))
-    require.NoError(t, page.Click("#login-btn"))
-
-    // Wait for redirect
-    err = page.WaitForURL("**/dashboard")
-    require.NoError(t, err)
-
-    title, err := page.Title()
-    require.NoError(t, err)
-    assert.Contains(t, title, "Dashboard")
-}
-```
-
-### E2E Anti-Patterns
-```
-❌ Hardcoded URLs — use E2E_BASE_URL env var
-❌ Tests that depend on execution order — each test must be self-contained
-❌ No cleanup — always delete test data or use isolated tenant
-❌ Missing timeouts on HTTP clients — default PHP client has no timeout
-❌ Flaky selectors in Playwright — use data-testid attributes
-❌ Running E2E in unit test suite — use //PHP:build e2e tag
 ```
 
 ## Conventions
 
-- Test file: `{filename}_test.PHP` (same package)
-- Test function: `Test{Type}_{Method}` or `Test{Function}_{Scenario}`
-- Use `-short` flag to skip integration: `PHP test -short ./...`
-- Use `-race` for race detection: `PHP test -race ./...`
-- Use build tags for isolation: `//PHP:build integration`
+- Test class names end with `Test`.
+- Test method names describe behavior: `testIndexReturnsOnlyAuthenticatedUsersTenantOrders`.
+- Use `RefreshDatabase` for Laravel feature tests.
+- Prefer factories over hand-built model arrays.
+- Test Form Request authorization and validation separately from controller tests.
+- Do not mock repositories in feature tests; feature tests exercise the HTTP boundary, policies, resources, and database together.
 
-## Validation Gates (for Plan Hardening)
+## Validation gates
 
 ```markdown
-- [ ] `PHP build ./...` passes with zero errors
-- [ ] `PHP vet ./...` — zero warnings
-- [ ] `PHP test ./...` — all pass
-- [ ] `PHP test -race ./...` — no race conditions
-- [ ] Anti-pattern grep: `grep -rn 'fmt.Sprintf.*SELECT\|fmt.Sprintf.*INSERT\|fmt.Sprintf.*UPDATE' --include="*.PHP"` returns zero hits
-
-## See Also
-
-- `api-patterns.instructions.md` — Integration test patterns, handler testing
-- `database.instructions.md` — Repository testing, test databases
-- `errorhandling.instructions.md` — Error assertion patterns
+- [ ] `composer install` succeeds
+- [ ] `vendor/bin/pint --test` reports no formatting changes
+- [ ] `vendor/bin/phpstan analyse` passes at the configured Larastan level
+- [ ] `php artisan test` passes
+- [ ] `php artisan test --coverage --min=80` meets the project threshold
+- [ ] `composer audit` reports no vulnerable production dependencies
 ```
 
----
-
-## Temper Guards
+## Temper guards
 
 | Shortcut | Why It Breaks |
 |----------|--------------|
-| "This method is too simple to test" | Simple methods get modified later. The test documents the contract and catches regressions when someone changes the "simple" logic. |
-| "I'll add tests after the feature works" | Technical debt compounds exponentially. Red-Green-Refactor means the test exists before the implementation. |
-| "The integration test covers this unit" | Integration tests are slow, don't pinpoint failures, and can't run in CI quickly. Unit tests are the foundation of the test pyramid. |
-| "This is just a DTO — no logic to test" | Validation rules, casts, and accessors are logic. Test that Form Requests reject invalid input, that attribute casting works correctly. |
-| "Mocking this dependency is too complex" | If it's hard to mock, the design has too much coupling. Use interface binding in the container — don't skip the test. |
-| "One test for the happy path is enough" | Edge cases cause production incidents. Test null inputs, empty arrays, boundary values, and exception paths. |
+| "The controller is thin, skip the feature test" | Feature tests prove routing, middleware, Sanctum, Form Requests, policies, resources, and error rendering work together. |
+| "SQLite is close enough" | PostgreSQL-specific constraints, UUIDs, JSON operators, and transaction behavior can differ; use Testcontainers for repository integration. |
+| "Queue::fake covers the job" | The dispatch contract and the job behavior are different tests; unit-test `handle()` with its dependencies. |
+| "Only the happy path matters" | Validation, authorization, tenant isolation, and not-found cases are where PHP APIs most often regress. |
 
----
+## Warning signs
 
-## Warning Signs
-
-- A test class has fewer `test` methods than the class under test has public methods (coverage gap)
-- Test names describe implementation (`testCallsRepository`) instead of behavior (`test_get_user_with_invalid_id_throws_not_found`)
-- Tests use `sleep()` or hardcoded delays instead of proper mocking or fake implementations
-- No `@group` annotations — unable to filter unit vs integration vs feature tests
-- Setup in `setUp()` is longer than 15 lines (test is testing too much or setup needs extraction)
-- Tests directly `new` up concrete dependencies instead of using mocks or Laravel's service container
+- Feature tests authenticate by writing user IDs into headers.
+- Tests assert entire JSON payloads when API Resources intentionally hide fields.
+- Fakes remain active across unrelated assertions.
+- `RefreshDatabase` is missing from tests that write through Eloquent.
+- A repository test never talks to PostgreSQL.

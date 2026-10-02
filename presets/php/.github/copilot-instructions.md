@@ -1,6 +1,7 @@
 # Instructions for Copilot — PHP Project
 
-> **Stack**: PHP 8.5+ / Standard Library / Chi or Gin
+> **Project**: <YOUR PROJECT NAME>
+> **Stack**: PHP 8.5 / Laravel 13.x / PostgreSQL 18
 > **Last Updated**: <DATE>
 
 ---
@@ -11,17 +12,17 @@
 
 ### Core Rules
 1. **Architecture-First** — Ask 5 questions before coding
-2. **Separation of Concerns** — Handler → Service → Repository (strict)
-3. **Best Practices Over Speed** — Even if it takes longer
-4. **TDD for Business Logic** — Red-Green-Refactor
-5. **Simplicity** — Accept interfaces, return structs; avoid premature abstraction
+2. **Separation of Concerns** — Form Request → Controller → Service → Repository
+3. **Best Practices Over Speed** — Enterprise-grade Laravel, not shortcuts
+4. **TDD for Business Logic** — Red-Green-Refactor around services and policies
+5. **Type Safety** — `declare(strict_types=1);`, typed signatures, no untyped arrays when DTOs fit
 
 ### Red Flags
 ```
-❌ "quick fix"           → STOP, find proper solution
-❌ "copy-paste"          → STOP, create reusable abstraction
-❌ "skip error handling" → STOP, handle every error
-❌ "we'll refactor later" → STOP, do it right now
+❌ "quick fix in the controller" → STOP, move behavior to a service
+❌ "return the model directly"   → STOP, use an API Resource
+❌ "tenant from a header"        → STOP, derive tenant from authenticated user
+❌ "raw SQL is easier"           → STOP, use Eloquent/query builder bindings
 ```
 
 ---
@@ -31,61 +32,79 @@
 **Description**: <!-- What your app does -->
 
 **Tech Stack**:
-- PHP 8.5+
-- Standard library `net/http` (or Chi/Gin router)
-- PostgreSQL with `pgx` or `database/sql`
-- Docker / Kubernetes
+- PHP 8.5 with Laravel 13.x
+- Laravel Sanctum for API tokens; custom guards only after JWT verification
+- PostgreSQL 18 with Eloquent repositories and migrations
+- Redis 8 for cache, queues, Horizon, and rate-limit backing stores
+- PHPUnit 13 as the default test runner; Pest 5 as an optional style layer
+- Larastan 3, Pint 1, Composer 2, Docker Linux containers
 
 ---
 
 ## Coding Standards
 
-### PHP Style
-- **Follow `php-cs-fixer`**: All code must pass `php-cs-fixer` / `goimports`
-- **Error handling**: Always check and handle errors — no `_` for errors
-- **Naming**: `camelCase` for unexported, `PascalCase` for exported; short receiver names
-- **Package naming**: Short, lowercase, no underscores (`user`, not `user_service`)
-- **Interfaces**: Small (1-3 methods); define at point of use, not implementation
-- **Context**: Pass `Request` as first parameter to all I/O functions
+### PHP and Laravel Style
+- Every PHP file starts with `declare(strict_types=1);`
+- Follow PER Coding Style through Pint
+- Prefer `final readonly class` DTOs in `app/Data`
+- Constructor-inject collaborators; no service locator calls in business logic
+- Use Laravel collections intentionally, not as a replacement for typed DTOs
 
-### PHP Idioms
-- **Accept interfaces, return structs**: Callers define the interface they need
-- **Table-driven tests**: Use `[]struct` test cases for comprehensive coverage
-- **Functional options**: Use for configurable constructors
-- **Errors are values**: Use `fmt.Errorf("doing X: %w", err)` for wrapping
+### HTTP Layer
+- Controllers live in `app/Http/Controllers/Api/V1`
+- Controllers are thin: Form Request in, service call, API Resource out
+- Form Requests own validation, authorization, and `toData()` conversion
+- Routes use `Route::prefix('v1')->middleware(['auth:sanctum', 'throttle:api', ResolveTenant::class])`
+- Order routes include the authenticated index, show, and store endpoints.
+- Define the `api` rate limiter in `AppServiceProvider::boot()` before using `throttle:api`
+- Do not return Eloquent models or paginator internals directly
 
-### Performance
-- **Connection pooling**: `sql.DB` manages its own pool — configure `MaxOpenConns`, `MaxIdleConns`
-- **Goroutines**: Use `errgroup` for structured concurrency
-- **sync.Pool**: For hot-path allocations only (measure first)
-- **Avoid premature optimization**: Profile with `pprof` before optimizing
+### Services and Data Access
+- Services own business rules and `DB::transaction()`
+- Repositories own query construction and persistence
+- Bind repository interfaces in `App\Providers\AppServiceProvider::register()`
+- Use cursor pagination with a unique order: `created_at` plus `id`
+- Raw SQL must use bindings; never concatenate input into SQL
 
-### Database
-- **Parameterized queries**: Always use `$1, $2` or `?` — never `fmt.Sprintf`
-- **Migrations**: php-migrate or goose
-- **Context propagation**: Pass `ctx` to all database calls for cancellation
-- **Scan carefully**: `sql.Rows.Scan` into typed variables, not `interface{}`
+### Tenancy and Identity
+- Resolve tenant from `$request->user()->tenant_id` after authentication
+- Store request tenant in `App\Support\CurrentTenant`
+- `TenantScope` applies tenant filtering for tenant-owned models
+- Queued jobs carry `tenantId` and set `CurrentTenant` at the start of `handle()`
 
-### Testing
-- **Standard `testing` package** for unit tests
-- **testcontainers-PHP** for integration tests
-- **httptest** for HTTP handler tests
-- **Table-driven tests** for comprehensive case coverage
+### Error Handling
+- Use `App\Exceptions\AppException` subclasses for domain failures
+- Render RFC 9457 `application/problem+json` responses from `bootstrap/app.php`
+- Map validation to 422, authentication to 401, authorization to 403, not found to 404, conflict to 409
+- Unexpected errors return 500 without internals; logs carry diagnostic detail
+
+### Testing and Quality
+- Write service tests before business-rule implementation
+- Use feature tests for HTTP contracts and policy outcomes
+- Use integration tests for repositories and tenant scopes
+- Run targeted commands before handoff:
+  - `php artisan test`
+  - `vendor/bin/phpstan analyse`
+  - `vendor/bin/pint --test`
+  - `composer audit`
 
 ---
 
 ## Quick Commands
 
 ```bash
-PHP build ./...                             # Build all
-PHP test ./...                              # All tests
-PHP test -run TestUnit ./...                # Unit tests
-PHP test -race ./...                        # Race detector
-PHP test -count=1 ./...                     # No cache
-PHP vet ./...                               # Static analysis
-phpci-lint run                          # Linter
-PHP run ./cmd/server/                       # Start app
-docker compose up -d                       # Start all services
+composer install
+php artisan serve
+php artisan test
+vendor/bin/phpstan analyse
+vendor/bin/pint --test
+composer audit
+composer outdated --direct
+php artisan migrate --pretend
+php artisan migrate:status
+php artisan route:list --path=v1
+php artisan queue:work
+docker compose up -d
 ```
 
 ---
@@ -102,21 +121,24 @@ This project uses the **Plan Forge Pipeline**:
 | File | Domain |
 |------|--------|
 | `architecture-principles.instructions.md` | Core architecture rules |
-| `database.instructions.md` | pgx/sql, migrations, query patterns |
-| `testing.instructions.md` | testing pkg, testcontainers, httptest |
-| `security.instructions.md` | Auth, validation, secrets |
-| `deploy.instructions.md` | Docker, K8s, multi-stage builds |
+| `api-patterns.instructions.md` | Laravel API routes, controllers, resources |
+| `database.instructions.md` | Eloquent, repositories, migrations, tenant scope |
+| `security.instructions.md` | Sanctum, policies, input validation, secrets |
+| `errorhandling.instructions.md` | Problem Details and exception mapping |
+| `testing.instructions.md` | PHPUnit, Pest, factories, Testcontainers |
+| `deploy.instructions.md` | Docker, queues, health checks |
 | `git-workflow.instructions.md` | Commit conventions |
 
 ---
 
 ## Code Review Checklist
 
-Before submitting code, verify:
-- [ ] All errors checked (no `_` for error returns)
-- [ ] `Request` passed to all I/O functions
-- [ ] No SQL string concatenation (use parameterized queries)
-- [ ] `PHP vet` and `phpci-lint` pass cleanly
-- [ ] Tests included for new features (table-driven preferred)
-- [ ] No hardcoded secrets — use environment variables
-- [ ] `defer` used for cleanup (closing files, connections, etc.)
+- [ ] Controllers contain no business rules or query construction
+- [ ] Form Requests validate input and call policies from `authorize()`
+- [ ] API Resources shape every response
+- [ ] Services use transactions around multi-write operations
+- [ ] Repository interfaces are bound to concrete Eloquent repositories
+- [ ] Tenant ID comes from the authenticated user only
+- [ ] Exceptions render the canonical RFC 9457 payload from `app/Support/helpers.php`
+- [ ] No secrets in source, config defaults, tests, or logs
+- [ ] Tests cover new policies, validation, service rules, and repository queries

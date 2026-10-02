@@ -66,7 +66,7 @@ Walk through each section one at a time. For each section:
 ## Path B: Starter Principles
 
 First, detect the tech stack from `.forge.json` (if it exists) or by
-scanning project files (package.json, *.csproj, PHP.mod, pyproject.toml, etc.).
+scanning project files (package.json, *.csproj, composer.json, pyproject.toml, etc.).
 
 Then present a starter set organized by section. For each item, ask the user
 to **Accept**, **Modify**, or **Reject**.
@@ -115,12 +115,12 @@ to **Accept**, **Modify**, or **Reject**.
 - Quality: "JUnit 6 with 90%+ coverage on service layer"
 
 **PHP**:
-- Core Principle: "Always check returned errors — no `_` for error values"
-- Core Principle: "Context propagation through all function chains"
-- Technology: "PHP 8.5+ with Composer packages kept minimal"
-- Forbidden: "Ignoring error returns with `_`" (silent failures)
-- Forbidden: "Goroutine leaks — all goroutines must have a shutdown path"
-- Quality: "PHP test with race detector enabled in CI"
+- Core Principle: "Controllers stay thin; business rules live in services and persistence details live in repositories or Eloquent query objects"
+- Core Principle: "Every PHP source file uses strict types, explicit return types, typed properties, and Form Requests for HTTP validation"
+- Technology: "PHP 8.5+ with Laravel 13.x, Composer 2, Eloquent, PHPUnit 13 or Pest 5, PHPStan/Larastan, and Laravel Pint"
+- Forbidden: "Business logic in controllers" (hard to test and bypasses service-layer rules)
+- Forbidden: "Raw request arrays or unvalidated input passed into services" (bypasses validation and type safety)
+- Quality: "PHPUnit/Pest coverage on service-layer business rules plus Larastan and Pint in CI"
 
 ### Presenting Starters
 

@@ -1,160 +1,213 @@
 ---
-description: Caching patterns for PHP — PHP-redis, in-process caching, cache-aside, TTL strategies
-applyTo: '**/*cache*,**/*Cache*,**/service/**,**/handler/**'
+description: PHP/Laravel caching patterns — Redis 8 cache-aside, TTLs, locks, invalidation, tenant keys, and tests
+applyTo: 'app/Services/**/*Cache*.php,app/Repositories/**/*.php,app/Listeners/**/*Cache*.php,config/cache.php,tests/**/*Cache*.php,tests/Feature/**/*Caching*.php'
 ---
 
 # PHP Caching Patterns
 
 ## Cache Strategy
 
-### Cache-Aside Pattern (Default)
-```PHP
-func (s *ProducerService) GetByID(ctx Request, id string) (*Producer, error) {
-    cacheKey := "producer:" + id
-    cached, err := s.redis.Get(ctx, cacheKey).Result()
-    if err == nil {
-        var p Producer
-        if err := json.Unmarshal([]byte(cached), &p); err == nil {
-            return &p, nil
-        }
+Use Redis 8 as the shared cache store for multi-process Laravel deployments. Apply cache-aside in the layer that owns the read model, cache arrays or scalar payloads by default, and set explicit TTLs. Laravel 13 sets `serializable_classes` to `false`, so cached DTO objects can hydrate as `__PHP_Incomplete_Class` unless the cache configuration explicitly allow-lists them.
+
+### Cache-Aside Service
+
+```php
+declare(strict_types=1);
+
+namespace App\Services;
+
+use App\Repositories\Contracts\ProductRepository;
+use Illuminate\Support\Facades\Cache;
+
+final readonly class ProductLookupService
+{
+    public function __construct(private ProductRepository $products) {}
+
+    public function summary(string $tenantId, string $productId): array
+    {
+        $key = $this->productSummaryKey($tenantId, $productId);
+
+        return Cache::remember(
+            $key,
+            now()->addMinutes(15),
+            fn (): array => $this->products->summaryForTenant($tenantId, $productId),
+        );
     }
 
-    producer, err := s.repo.GetByID(ctx, id)
-    if err != nil {
-        return nil, fmt.Errorf("get producer %s: %w", id, err)
+    public function forgetSummary(string $tenantId, string $productId): void
+    {
+        Cache::forget($this->productSummaryKey($tenantId, $productId));
     }
-    if producer != nil {
-        data, _ := json.Marshal(producer)
-        s.redis.Set(ctx, cacheKey, data, 15*time.Minute)
+
+    private function productSummaryKey(string $tenantId, string $productId): string
+    {
+        return "tenant:{$tenantId}:product:{$productId}:summary:v1";
     }
-    return producer, nil
 }
 ```
 
-### Redis Client Setup
-```PHP
-import "github.com/redis/PHP-redis/v9"
+Invalidation must remove the exact key written. If cache tags are enabled for the selected Redis store, flush the tag set that contains those keys; do not call `flush()` for an application-wide cache.
 
-func NewRedisClient(cfg Config) *redis.Client {
-    return redis.NewClient(&redis.Options{
-        Addr:         cfg.RedisAddr,
-        Password:     cfg.RedisPassword,
-        DB:           0,
-        DialTimeout:  5 * time.Second,
-        ReadTimeout:  3 * time.Second,
-        WriteTimeout: 3 * time.Second,
-        PoolSize:     10,
-    })
+### Stampede Protection
+
+Prefer `Cache::flexible()` for stale-while-revalidate reads where stale data is acceptable for a short window.
+
+```php
+declare(strict_types=1);
+
+use App\Repositories\Contracts\CatalogRepository;
+use Illuminate\Support\Facades\Cache;
+
+function cachedCatalog(string $tenantId, CatalogRepository $catalog): array
+{
+    return Cache::flexible(
+        "tenant:{$tenantId}:catalog:homepage:v3",
+        [300, 900],
+        fn (): array => $catalog->homepageForTenant($tenantId),
+    );
 }
 ```
 
-### In-Process Cache (Single-Instance)
-```PHP
-import "github.com/dgraph-io/ristretto"
+Use locks when only one worker should rebuild an expensive value and callers can wait briefly.
 
-func NewLocalCache() (*ristretto.Cache, error) {
-    return ristretto.NewCache(&ristretto.Config{
-        NumCounters: 1e7,     // 10M counters
-        MaxCost:     1 << 30, // 1 GB
-        BufferItems: 64,
-    })
-}
+```php
+declare(strict_types=1);
 
-// Usage
-cache.Set(key, value, cost)
-val, found := cache.Get(key)
-```
+use App\Repositories\Contracts\RevenueRepository;
+use Illuminate\Support\Facades\Cache;
 
-### sync.Map for Hot Config (Read-Heavy)
-```PHP
-// Use ONLY for read-heavy, rarely-written config
-var configCache sync.Map
+function monthlyRevenue(string $tenantId, RevenueRepository $revenue): array
+{
+    $key = "tenant:{$tenantId}:revenue:month:v2";
 
-func GetConfig(key string) (string, bool) {
-    val, ok := configCache.Load(key)
-    if !ok {
-        return "", false
-    }
-    return val.(string), true
+    return Cache::lock("lock:{$key}", 10)->block(
+        3,
+        fn (): array => Cache::remember(
+            $key,
+            now()->addMinutes(10),
+            fn (): array => $revenue->currentMonth($tenantId),
+        ),
+    );
 }
 ```
 
 ## Key Naming Convention
+
 ```
-{service}:{entity}:{id}           → myapp:producer:abc-123
-{service}:{entity}:list:{hash}    → myapp:producers:list:tenant-xyz
-{service}:{entity}:count:{scope}  → myapp:producers:count:active
+tenant:{tenantId}:{entity}:{id}:v{shape}          -> tenant:acme:product:01HV:summary:v1
+tenant:{tenantId}:{entity}:list:{hash}:v{shape}   -> tenant:acme:orders:list:9fd2:v2
+tenant:{tenantId}:{metric}:{window}:v{shape}      -> tenant:acme:revenue:month:v2
 ```
+
+- Prefix every application data key with tenant id.
+- Add a shape version when the serialized DTO changes.
+- Hash long filter sets rather than embedding raw JSON in keys.
+- Do not include secrets, bearer tokens, emails, or untrusted header values in keys.
 
 ## TTL Strategy
 
 | Data Type | TTL | Rationale |
 |-----------|-----|-----------|
-| User session | 30 min | Security, re-auth |
-| Entity by ID | 15 min | Balances freshness vs load |
-| List/search results | 5 min | Volatile, frequent changes |
-| Config/reference data | 1 hr+ | Rarely changes |
-| Count/aggregate | 2 min | Must stay reasonably current |
+| Entity summary array | 15 minutes | Moderate freshness and high read reuse |
+| Search/list result | 2-5 minutes | Filters and membership change often |
+| Reference/config value | 1 hour | Rare writes; explicit invalidation on admin changes |
+| Aggregate/count | 1-2 minutes | Keeps dashboards fresh without repeated scans |
+| Authorization-sensitive value | Short and explicit | Prefer re-checking policy state on mutation |
+
+## Redis Configuration
+
+```php
+declare(strict_types=1);
+
+return [
+    'default' => env('CACHE_STORE', 'redis'),
+    'serializable_classes' => false,
+    'stores' => [
+        'redis' => [
+            'driver' => 'redis',
+            'connection' => 'cache',
+            'lock_connection' => 'default',
+        ],
+    ],
+    'prefix' => env(
+        'CACHE_PREFIX',
+        \Illuminate\Support\Str::slug((string) env('APP_NAME', 'laravel'), '_').'_cache_',
+    ),
+];
+```
+
+Use `redis:8-alpine` for local integration and CI containers. Keep cache, queue, and session Redis connections separately configurable when traffic or retention patterns differ.
 
 ## Cache Invalidation
-```PHP
-func (s *ProducerService) Update(ctx Request, p *Producer) error {
-    if err := s.repo.Update(ctx, p); err != nil {
-        return err
+
+```php
+declare(strict_types=1);
+
+namespace App\Listeners;
+
+use App\Events\ProductChanged;
+use Illuminate\Support\Facades\Cache;
+
+final readonly class ForgetProductCache
+{
+    public function handle(ProductChanged $event): void
+    {
+        Cache::forget("tenant:{$event->tenantId}:product:{$event->productId}:summary:v1");
     }
-    s.redis.Del(ctx, "producer:"+p.ID)
-    return nil
 }
 ```
 
-## Multi-Tenant Caching
+Only flush tags that were used to write the cached values. If a store does not support tags, keep a small key registry per tenant/list shape or forget individual keys from emitted domain events.
 
-```PHP
-// ✅ ALWAYS include tenantID in cache keys — never share cache across tenants
-func tenantCacheKey(tenantID, entity, id string) string {
-    return tenantID + ":" + entity + ":" + id
-}
+## Cache Tests
 
-func (s *ProducerService) GetByIDForTenant(ctx Request, tenantID, id string) (*Producer, error) {
-    key := tenantCacheKey(tenantID, "producer", id)
-    cached, err := s.redis.Get(ctx, key).Result()
-    if err == nil {
-        var p Producer
-        if err := json.Unmarshal([]byte(cached), &p); err == nil {
-            return &p, nil
-        }
+```php
+declare(strict_types=1);
+
+namespace Tests\Feature\Services;
+
+use App\Events\ProductChanged;
+use App\Listeners\ForgetProductCache;
+use Illuminate\Foundation\Testing\RefreshDatabase as ResetsDatabase;
+use Illuminate\Support\Facades\Cache;
+use Tests\TestCase;
+
+final class ProductLookupCacheTest extends TestCase
+{
+    use ResetsDatabase;
+
+    public function test_product_summary_is_forgotten_after_change_event(): void
+    {
+        config(['cache.default' => 'array']);
+
+        Cache::put(
+            'tenant:t1:product:p1:summary:v1',
+            ['id' => 'p1', 'name' => 'Widget', 'price_cents' => 1299],
+            now()->addMinutes(15),
+        );
+
+        (new ForgetProductCache())->handle(new ProductChanged('t1', 'p1'));
+
+        $this->assertNull(Cache::get('tenant:t1:product:p1:summary:v1'));
     }
-
-    producer, err := s.repo.GetByID(ctx, id, tenantID)
-    if err != nil {
-        return nil, fmt.Errorf("get producer %s for tenant %s: %w", id, tenantID, err)
-    }
-    if producer != nil {
-        data, _ := json.Marshal(producer)
-        s.redis.Set(ctx, key, data, 15*time.Minute)
-    }
-    return producer, nil
-}
-
-// ✅ Invalidate within tenant scope only
-func (s *ProducerService) InvalidateTenantCache(ctx Request, tenantID, entity, id string) error {
-    return s.redis.Del(ctx, tenantCacheKey(tenantID, entity, id)).Err()
 }
 ```
+
+Test cache miss, hit, invalidation, lock timeout behavior, and tenant separation. Prefer the `array` store for unit-level checks and Redis-backed integration tests for locks, tags, and serialization.
 
 ## Anti-Patterns
 
 ```
-❌ Ignore redis errors (always check err, fall through to DB)
-❌ Global map without sync (data race — use sync.Map or mutex)
-❌ Cache without TTL (stale data forever, memory leak)
-❌ json.Marshal in hot loop without pooling (allocations)
-❌ Cache user-specific data without tenant prefix in key
-❌ Unbounded in-process cache (set MaxCost or maxsize)
+No TTL on tenant data
+Cache key omits tenant id
+Cache invalidation forgets a different key than the read path writes
+Caching Eloquent models with loaded relations and hidden lazy-load risk
+Using Cache::flush() in application code
+Swallowing Redis outages without logging or a typed degradation path
 ```
 
 ## See Also
 
-- `database.instructions.md` — Query optimization, connection pooling
-- `performance.instructions.md` — sync.Pool, pre-built maps, allocation reduction
-- `multi-environment.instructions.md` — Cache config per environment
+- `database.instructions.md` — N+1 prevention and repository query shape.
+- `performance.instructions.md` — Query budgets, profiling, and OPcache settings.
+- `multi-environment.instructions.md` — Environment-specific Redis hosts and prefixes.

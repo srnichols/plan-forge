@@ -1,148 +1,183 @@
 ---
-description: API patterns for PHP — REST conventions, Chi/Gin handlers, validation, pagination, error responses
-applyTo: '**/*handler*,**/*Handler*,**/*route*,**/*Route*,**/handler/**,**/api/**'
+description: API patterns for PHP — Laravel routes, Form Requests, API Resources, cursor pagination, Problem Details
+applyTo: 'app/Http/Controllers/**/*.php,app/Http/Requests/**/*.php,app/Http/Resources/**/*.php,routes/api.php'
 ---
 
 # PHP API Patterns
 
 ## REST Conventions
 
-### Handler Structure (Chi Router)
-```PHP
-func (h *ProducerHandler) Routes() chi.Router {
-    r := chi.NewRouter()
-    r.Get("/", h.List)
-    r.Post("/", h.Create)
-    r.Get("/{id}", h.GetByID)
-    r.Put("/{id}", h.Update)
-    r.Delete("/{id}", h.Delete)
-    return r
-}
+### Controller Structure
 
-// GET /api/producers
-func (h *ProducerHandler) List(w http.ResponseWriter, r *http.Request) {
-    page, _ := strconv.Atoi(r.URL.Query().Get("page"))
-    if page < 1 { page = 1 }
-    pageSize, _ := strconv.Atoi(r.URL.Query().Get("pageSize"))
-    if pageSize < 1 || pageSize > 100 { pageSize = 25 }
+```php
+<?php
 
-    result, err := h.service.GetPaged(r.Context(), page, pageSize)
-    if err != nil {
-        writeError(w, http.StatusInternalServerError, "Failed to fetch producers")
-        return
-    }
-    writeJSON(w, http.StatusOK, result)
-}
+declare(strict_types=1);
 
-// GET /api/producers/{id}
-func (h *ProducerHandler) GetByID(w http.ResponseWriter, r *http.Request) {
-    id := chi.URLParam(r, "id")
-    producer, err := h.service.GetByID(r.Context(), id)
-    if err != nil {
-        writeError(w, http.StatusInternalServerError, "Internal error")
-        return
-    }
-    if producer == nil {
-        writeError(w, http.StatusNotFound, "Producer not found")
-        return
-    }
-    writeJSON(w, http.StatusOK, producer)
-}
+namespace App\Http\Controllers\Api\V1;
 
-// POST /api/producers
-func (h *ProducerHandler) Create(w http.ResponseWriter, r *http.Request) {
-    var req CreateProducerRequest
-    if err := decodeAndValidate(r, &req); err != nil {
-        writeError(w, http.StatusBadRequest, err.Error())
-        return
+use App\Http\Controllers\Controller;
+use App\Http\Requests\StoreOrderRequest;
+use App\Http\Resources\OrderResource;
+use App\Services\OrderService;
+use Illuminate\Http\JsonResponse;
+use Illuminate\Http\Response;
+
+final class OrderController extends Controller
+{
+    public function __construct(private readonly OrderService $orders)
+    {
     }
-    created, err := h.service.Create(r.Context(), &req)
-    if err != nil {
-        writeError(w, http.StatusInternalServerError, "Failed to create producer")
-        return
+
+    public function show(string $id): OrderResource
+    {
+        return OrderResource::make($this->orders->get($id));
     }
-    w.Header().Set("Location", fmt.Sprintf("/api/producers/%s", created.ID))
-    writeJSON(w, http.StatusCreated, created)
+
+    public function store(StoreOrderRequest $request): JsonResponse
+    {
+        return OrderResource::make($this->orders->create($request->toData()))
+            ->response()
+            ->setStatusCode(Response::HTTP_CREATED);
+    }
+
 }
 ```
 
-## Error Responses (RFC 9457 Problem Details)
-```PHP
-type ProblemDetail struct {
-    Type   string `json:"type"`
-    Title  string `json:"title"`
-    Status int    `json:"status"`
-    Detail string `json:"detail,omitempty"`
-}
+## Request Validation and Authorization
 
-func writeError(w http.ResponseWriter, status int, detail string) {
-    pd := ProblemDetail{
-        Type:   fmt.Sprintf("https://tools.ietf.org/html/rfc9110#section-15.5.%d", status-399),
-        Title:  http.StatusText(status),
-        Status: status,
-        Detail: detail,
+```php
+<?php
+
+declare(strict_types=1);
+
+namespace App\Http\Requests;
+
+use App\Data\CreateOrderData;
+use App\Models\Order;
+use Illuminate\Foundation\Http\FormRequest;
+
+final class StoreOrderRequest extends FormRequest
+{
+    public function authorize(): bool
+    {
+        return $this->user()?->can('create', Order::class) === true;
     }
-    w.Header().Set("Content-Type", "application/problem+json")
-    w.WriteHeader(status)
-    json.NewEncoder(w).Encode(pd)
-}
 
-func writeJSON(w http.ResponseWriter, status int, data any) {
-    w.Header().Set("Content-Type", "application/json")
-    w.WriteHeader(status)
-    json.NewEncoder(w).Encode(data)
+    public function rules(): array
+    {
+        return [
+            'reference' => ['required', 'string', 'max:64'],
+            'currency' => ['required', 'string', 'size:3'],
+            'notes' => ['nullable', 'string', 'max:2000'],
+        ];
+    }
+
+    public function toData(): CreateOrderData
+    {
+        return new CreateOrderData(
+            reference: (string) $this->validated('reference'),
+            currency: strtoupper((string) $this->validated('currency')),
+            notes: $this->validated('notes'),
+        );
+    }
 }
 ```
 
-## Request Validation
-```PHP
-type CreateProducerRequest struct {
-    Name         string   `json:"name" validate:"required,max=200"`
-    ContactEmail string   `json:"contact_email" validate:"required,email"`
-    Latitude     *float64 `json:"latitude" validate:"omitempty,min=-90,max=90"`
-    Longitude    *float64 `json:"longitude" validate:"omitempty,min=-180,max=180"`
-}
+## API Resource Shape
 
-func (r *CreateProducerRequest) Validate() error {
-    if r.Name == "" {
-        return errors.New("name is required")
-    }
-    if len(r.Name) > 200 {
-        return errors.New("name must be 200 characters or fewer")
-    }
-    // ... additional validation
-    return nil
-}
+```php
+<?php
 
-func decodeAndValidate(r *http.Request, dst any) error {
-    if err := json.NewDecoder(r.Body).Decode(dst); err != nil {
-        return fmt.Errorf("invalid JSON: %w", err)
+declare(strict_types=1);
+
+namespace App\Http\Resources;
+
+use Illuminate\Http\Request;
+use Illuminate\Http\Resources\Json\JsonResource;
+
+final class OrderResource extends JsonResource
+{
+    public function toArray(Request $request): array
+    {
+        return [
+            'id' => $this->id,
+            'reference' => $this->reference,
+            'status' => $this->status->value,
+            'currency' => $this->currency,
+            'totalCents' => $this->total_cents,
+            'notes' => $this->notes,
+            'createdAt' => $this->created_at?->toISOString(),
+        ];
     }
-    if v, ok := dst.(interface{ Validate() error }); ok {
-        return v.Validate()
-    }
-    return nil
 }
+```
+
+## Rate Limiter and Route Versioning
+
+Define the `api` limiter in `App\Providers\AppServiceProvider::boot()` before using `throttle:api`:
+
+```php
+<?php
+
+declare(strict_types=1);
+
+namespace App\Providers;
+
+use Illuminate\Cache\RateLimiting\Limit;
+use Illuminate\Http\Request;
+use Illuminate\Support\Facades\RateLimiter;
+use Illuminate\Support\ServiceProvider;
+
+final class AppServiceProvider extends ServiceProvider
+{
+    public function boot(): void
+    {
+        RateLimiter::for('api', fn (Request $request) => Limit::perMinute(60)->by($request->user()?->id ?: $request->ip()));
+    }
+}
+```
+
+```php
+<?php
+
+declare(strict_types=1);
+
+use App\Http\Controllers\Api\V1\OrderController;
+use App\Http\Middleware\ResolveTenant;
+use Illuminate\Support\Facades\Route;
+
+Route::prefix('v1')
+    ->middleware(['auth:sanctum', 'throttle:api', ResolveTenant::class])
+    ->group(function (): void {
+        Route::get('orders', [OrderController::class, 'index']);
+        Route::get('orders/{id}', [OrderController::class, 'show']);
+        Route::post('orders', [OrderController::class, 'store']);
+    });
 ```
 
 ## Pagination
-```PHP
-type PagedResult[T any] struct {
-    Items       []T  `json:"items"`
-    Page        int  `json:"page"`
-    PageSize    int  `json:"page_size"`
-    TotalCount  int  `json:"total_count"`
-    TotalPages  int  `json:"total_pages"`
-    HasNext     bool `json:"has_next"`
-    HasPrevious bool `json:"has_previous"`
-}
 
-func NewPagedResult[T any](items []T, page, pageSize, totalCount int) PagedResult[T] {
-    totalPages := int(math.Ceil(float64(totalCount) / float64(pageSize)))
-    return PagedResult[T]{
-        Items: items, Page: page, PageSize: pageSize,
-        TotalCount: totalCount, TotalPages: totalPages,
-        HasNext: page < totalPages, HasPrevious: page > 1,
+Use cursor pagination for collection endpoints that can grow:
+
+```php
+<?php
+
+declare(strict_types=1);
+
+namespace App\Repositories;
+
+use App\Models\Order;
+use Illuminate\Contracts\Pagination\CursorPaginator;
+
+final class EloquentOrderRepository
+{
+    public function paginate(int $perPage = 50): CursorPaginator
+    {
+        return Order::query()
+            ->orderByDesc('created_at')
+            ->orderByDesc('id')
+            ->cursorPaginate($perPage);
     }
 }
 ```
@@ -151,139 +186,41 @@ func NewPagedResult[T any](items []T, page, pageSize, totalCount int) PagedResul
 
 | Status | When to Use |
 |--------|-------------|
-| 200 OK | GET success, PUT/PATCH success with body |
-| 201 Created | POST success (include Location header) |
-| 204 No Content | PUT/DELETE success, no body |
-| 400 Bad Request | Validation failure, malformed JSON |
+| 200 OK | GET success, update success with a body |
+| 201 Created | POST success |
+| 204 No Content | DELETE success or update with no body |
 | 401 Unauthorized | Missing or invalid authentication |
-| 403 Forbidden | Authenticated but insufficient permissions |
-| 404 Not Found | Resource doesn't exist |
-| 409 Conflict | Duplicate resource |
-| 422 Unprocessable | Valid syntax but business rule violation |
-| 500 Internal Server | Unhandled error (never expose internals) |
+| 403 Forbidden | Authenticated but policy denies the action |
+| 404 Not Found | Resource does not exist in the current tenant |
+| 409 Conflict | Unique constraint or concurrent state conflict |
+| 422 Unprocessable Content | Form Request validation or business rule failure |
+| 500 Internal Server Error | Unexpected failure; never expose internals |
 
-## API Versioning
+## API Versioning Rules
 
-### URL-based Versioning (Recommended)
-```PHP
-func SetupRoutes(r chi.Router) {
-    // Mount versioned sub-routers
-    r.Route("/api/v1", func(r chi.Router) {
-        r.Mount("/producers", producerV1Handler.Routes())
-    })
-    r.Route("/api/v2", func(r chi.Router) {
-        r.Mount("/producers", producerV2Handler.Routes())
-    })
-}
-```
-
-### Header-based Versioning
-```PHP
-func (h *ProducerHandler) List(w http.ResponseWriter, r *http.Request) {
-    version := r.Header.Get("API-Version")
-    if version == "" {
-        version = "1"
-    }
-    switch version {
-    case "2":
-        result, err := h.service.GetAllV2(r.Context())
-        // ...
-    default:
-        result, err := h.service.GetAllV1(r.Context())
-        // ...
-    }
-}
-```
-
-### Version Discovery Endpoint
-```PHP
-func VersionsHandler(w http.ResponseWriter, r *http.Request) {
-    writeJSON(w, http.StatusOK, map[string]any{
-        "supported":  []string{"v1", "v2"},
-        "current":    "v2",
-        "deprecated": []string{"v1"},
-        "sunset":     map[string]string{"v1": "2026-01-01"},
-    })
-}
-```
-
-### Deprecation Headers Middleware
-```PHP
-func DeprecationMiddleware(next http.Handler) http.Handler {
-    return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-        next.ServeHTTP(w, r)
-        if strings.HasPrefix(r.URL.Path, "/api/v1") {
-            w.Header().Set("Sunset", "Sat, 01 Jan 2026 00:00:00 GMT")
-            w.Header().Set("Deprecation", "true")
-            w.Header().Set("Link", `</api/v2/docs>; rel="successor-version"`)
-        }
-    })
-}
-
-// Apply to v1 routes
-r.Route("/api/v1", func(r chi.Router) {
-    r.Use(DeprecationMiddleware)
-    r.Mount("/producers", producerV1Handler.Routes())
-})
-```
-
-### Non-Negotiable Rules
-- **ALWAYS** version APIs from day one — `/api/v1/`
-- **NEVER** break existing consumers — add a new version instead
-- Deprecation requires minimum 6-month sunset window
-- Return `410 Gone` after sunset date, not `404`
-- Document version differences in OpenAPI specs (swag/swaggo)
+- Version APIs from day one with `/api/v1`.
+- Add a new version for breaking contract changes; do not silently alter v1.
+- Deprecation needs a documented sunset window and response headers.
+- Return `410 Gone` after a sunset date instead of repurposing `404`.
+- Keep OpenAPI or route documentation aligned with Form Requests and Resources.
 
 ## Anti-Patterns
 
 ```
-❌ Return 200 for errors (use proper status codes)
-❌ Expose error internals to clients (log details server-side only)
-❌ Business logic in handlers (delegate to service layer)
-❌ Decode into map[string]interface{} (always use typed structs)
-❌ Ignore Decode errors (always validate and return 400)
-❌ Missing Content-Type header on responses
+❌ Business logic in controllers
+❌ Returning Eloquent models directly
+❌ Reading tenant IDs from headers, query strings, or request bodies
+❌ Accepting untyped arrays instead of Form Requests and DTOs
+❌ Offset pagination for high-volume endpoints
+❌ Mapping every exception to 200 OK with an error payload
 ```
-
-## API Documentation (OpenAPI)
-
-### swaggo/swag (Annotation-Based)
-```bash
-PHP install github.com/swaggo/swag/cmd/swag@latest
-swag init -g cmd/server/main.PHP  # Generates docs/swagger.json
-```
-
-```PHP
-// @Summary Get producer by ID
-// @Tags producers
-// @Param id path string true "Producer ID"
-// @Success 200 {object} ProducerResponse
-// @Failure 404 {object} ProblemDetail
-// @Router /api/producers/{id} [get]
-func (h *ProducerHandler) GetByID(w http.ResponseWriter, r *http.Request) {
-    // ...
-}
-```
-
-### Serve Swagger UI
-```PHP
-import httpSwagger "github.com/swaggo/http-swagger"
-
-r.Get("/swagger/*", httpSwagger.WrapHandler)
-```
-
-- **ALWAYS** annotate all handlers with swaggo comments
-- **ALWAYS** document error responses with `@Failure`
-- Run `swag init` in CI to validate spec stays in sync with code
-- Consider `ogen` or `oapi-codegen` for spec-first (generate handlers from OpenAPI spec)
 
 ## See Also
 
-- `version.instructions.md` — Semantic versioning, pre-release, deprecation timelines
-- `graphql.instructions.md` — gqlgen schema, resolvers, DataLoaders (for GraphQL APIs)
-- `security.instructions.md` — JWT middleware, input validation
-- `errorhandling.instructions.md` — Error response format, ProblemDetail
-- `performance.instructions.md` — Hot-path optimization, concurrency patterns
+- `version.instructions.md` — API deprecation timelines and release tagging
+- `security.instructions.md` — Sanctum, policies, and tenant resolution
+- `errorhandling.instructions.md` — RFC 9457 response format
+- `performance.instructions.md` — Cursor pagination and N+1 prevention
 
 ---
 
@@ -291,19 +228,19 @@ r.Get("/swagger/*", httpSwagger.WrapHandler)
 
 | Shortcut | Why It Breaks |
 |----------|--------------|
-| "Nobody uses pagination yet" | Unbounded queries return all rows. The first large dataset crashes the client or times out. Add `->paginate(20)` from the first endpoint. |
-| "API versioning can wait until v2" | Unversioned APIs break all consumers on the first change. Add `/api/v1/` route prefix from day one — it costs zero lines of logic. |
-| "Error codes aren't needed for MVP" | API consumers parse error codes programmatically. Returning only string messages forces consumers to regex-match errors — brittle and untranslatable. |
-| "Returning 200 OK for all responses simplifies the client" | HTTP semantics exist for a reason. Returning 200 for errors breaks caching, monitoring, and every HTTP-aware tool in the pipeline. |
-| "This endpoint doesn't need request validation" | Every endpoint accepting input is an attack surface. Validate shape and constraints at the API boundary — a Form Request class handles this with minimal code. |
+| "The controller can just call the model" | Controllers become untestable and bypass repository tenant checks. Delegate to services and repositories. |
+| "The client already knows the model fields" | Eloquent models expose implementation details and relationships. API Resources are the contract. |
+| "Header tenancy is easier for tests" | Client-supplied tenant IDs are privilege-escalation inputs. Tests should authenticate a user with a tenant. |
+| "Offset pagination is fine for now" | Inserts between pages cause duplicates and gaps. Cursor pagination with a unique order is stable. |
+| "Validation belongs in the service" | Boundary validation must reject bad HTTP input before business rules run. Use Form Requests. |
 
 ---
 
 ## Warning Signs
 
-- An endpoint returns an unbounded collection without `paginate()` or pagination parameters
-- No PHPDoc or OpenAPI annotations on controller methods (undocumented API contract)
-- Route paths don't include a version segment (`/api/users` instead of `/api/v1/users`)
-- HTTP 200 returned for error conditions instead of 4xx/5xx
-- Request data accessed as raw `request->all()` instead of validated Form Request
-- Missing `Content-Type` header or inconsistent response format (JSON vs plain text)
+- A controller imports an Eloquent model only to query or persist it
+- A route path is missing the `v1` prefix
+- A collection endpoint returns an unpaginated array
+- A Form Request lacks `authorize()`
+- An API Resource exposes snake_case database columns without intentional API naming
+- `response()->json()` manually duplicates the Problem Details error shape

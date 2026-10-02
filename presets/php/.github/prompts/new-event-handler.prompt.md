@@ -1,158 +1,121 @@
 ---
-description: "Scaffold domain events, handler functions, and a channel-based event bus."
+description: "Scaffold Laravel events, queued listeners, after-commit dispatch, and idempotent consumers."
 agent: "agent"
 tools: [read, edit, search]
 ---
 # Create New Event Handler
 
-Scaffold typed domain events with handler functions and a channel-based event bus.
+Scaffold a Laravel domain event and listener for `{EntityName}`. Use scalar identifiers, include `tenantId`, and make the handler safe for at-least-once delivery.
 
 ## Required Pattern
 
-### Event Types
-```PHP
-package event
+### Event
+```text
+<?php
 
-import (
-    "time"
+declare(strict_types=1);
 
-    "github.com/google/uuid"
-)
+namespace App\Events;
 
-type Event interface {
-    EventID() string
-    OccurredAt() time.Time
-}
+use Illuminate\Foundation\Events\Dispatchable;
+use Illuminate\Contracts\Events\ShouldDispatchAfterCommit;
+use Illuminate\Queue\SerializesModels;
 
-type BaseEvent struct {
-    ID        string    `json:"event_id"`
-    Timestamp time.Time `json:"occurred_at"`
-}
+final class {EntityName}{ActionName}ed implements ShouldDispatchAfterCommit
+{
+    use Dispatchable;
+    use SerializesModels;
 
-func (e BaseEvent) EventID() string       { return e.ID }
-func (e BaseEvent) OccurredAt() time.Time { return e.Timestamp }
-
-func NewBaseEvent() BaseEvent {
-    return BaseEvent{ID: uuid.NewString(), Timestamp: time.Now().UTC()}
-}
-
-type OrderPlacedEvent struct {
-    BaseEvent
-    OrderID    string  `json:"order_id"`
-    CustomerID string  `json:"customer_id"`
-    Total      float64 `json:"total_amount"`
-}
-```
-
-### Event Bus (Channel-Based)
-```PHP
-type Handler func(ctx Request, event Event) error
-
-type Bus struct {
-    handlers map[string][]Handler
-    mu       sync.RWMutex
-}
-
-func NewBus() *Bus {
-    return &Bus{handlers: make(map[string][]Handler)}
-}
-
-func (b *Bus) On(eventType string, handler Handler) {
-    b.mu.Lock()
-    defer b.mu.Unlock()
-    b.handlers[eventType] = append(b.handlers[eventType], handler)
-}
-
-func (b *Bus) Publish(ctx Request, eventType string, evt Event) {
-    b.mu.RLock()
-    handlers := b.handlers[eventType]
-    b.mu.RUnlock()
-
-    for _, h := range handlers {
-        if err := h(ctx, evt); err != nil {
-            slog.Error("event handler failed",
-                "event_type", eventType,
-                "event_id", evt.EventID(),
-                "error", err)
-        }
+    public function __construct(
+        public readonly string $eventId,
+        public readonly string $tenantId,
+        public readonly string ${entityName}Id,
+        public readonly string $occurredAt,
+    ) {
     }
 }
 ```
 
-### Event Handler
-```PHP
-func OnOrderPlaced(emailSvc *email.Service) Handler {
-    return func(ctx Request, evt Event) error {
-        e, ok := evt.(*OrderPlacedEvent)
-        if !ok {
-            return fmt.Errorf("unexpected event type: %T", evt)
-        }
-        slog.Info("handling OrderPlaced", "order_id", e.OrderID)
-        return emailSvc.SendOrderConfirmation(ctx, e.OrderID)
+### Queued Listener
+```text
+<?php
+
+declare(strict_types=1);
+
+namespace App\Listeners;
+
+use App\Events\{EntityName}{ActionName}ed;
+use App\Services\{EntityName}Service;
+use App\Support\CurrentTenant;
+use Illuminate\Contracts\Queue\ShouldQueue;
+use Illuminate\Queue\InteractsWithQueue;
+use Throwable;
+
+final class Handle{EntityName}{ActionName}ed implements ShouldQueue
+{
+    use InteractsWithQueue;
+
+    public int $tries = 5;
+
+    public function __construct(
+        private readonly {EntityName}Service $service,
+        private readonly CurrentTenant $tenant,
+    ) {
+    }
+
+    public function backoff(): array
+    {
+        return [30, 120, 300, 900];
+    }
+
+    public function handle({EntityName}{ActionName}ed $event): void
+    {
+        $this->tenant->set($event->tenantId);
+        $this->service->handle{ActionName}($event->eventId, $event->{entityName}Id);
+    }
+
+    public function failed({EntityName}{ActionName}ed $event, Throwable $exception): void
+    {
+        report($exception);
     }
 }
-
-// Register
-bus.On("OrderPlaced", OnOrderPlaced(emailSvc))
 ```
 
-### Publishing Events
-```PHP
-func (s *OrderService) PlaceOrder(ctx Request, req CreateOrderRequest) (*Order, error) {
-    order, err := s.repo.Create(ctx, req)
-    if err != nil {
-        return nil, fmt.Errorf("create order: %w", err)
-    }
+### Publishing After Commit
+```text
+DB::transaction(function () use ($data): void {
+    $entity = $this->{entityName}Repository->create($data);
 
-    s.bus.Publish(ctx, "OrderPlaced", &OrderPlacedEvent{
-        BaseEvent:  NewBaseEvent(),
-        OrderID:    order.ID,
-        CustomerID: order.CustomerID,
-        Total:      order.Total,
-    })
-
-    return order, nil
-}
+    {EntityName}{ActionName}ed::dispatch(
+        eventId: (string) Str::uuid(),
+        tenantId: (string) $entity->tenant_id,
+        {entityName}Id: (string) $entity->id,
+        occurredAt: now()->toIso8601String(),
+    );
+});
 ```
 
-### Async Worker (Goroutine Pool)
-```PHP
-func StartWorker(ctx Request, ch <-chan Event, handler Handler, workers int) {
-    var wg sync.WaitGroup
-    for i := 0; i < workers; i++ {
-        wg.Add(1)
-        PHP func() {
-            defer wg.Done()
-            for {
-                select {
-                case evt, ok := <-ch:
-                    if !ok {
-                        return
-                    }
-                    if err := handler(ctx, evt); err != nil {
-                        slog.Error("worker handler failed", "error", err)
-                    }
-                case <-ctx.Done():
-                    return
-                }
-            }
-        }()
-    }
-    wg.Wait()
-}
+### Idempotency Store
+```text
+Schema::create('processed_messages', function (Blueprint $table): void {
+    $table->id();
+    $table->uuid('message_id');
+    $table->uuid('tenant_id');
+    $table->timestampTz('processed_at');
+    $table->unique(['message_id', 'tenant_id']);
+});
 ```
 
 ## Rules
 
-- Events are value types — NEVER mutate after creation
-- Event handlers MUST be idempotent — the same event may be delivered more than once
-- NEVER panic from event handlers — log the error and continue
-- Use `Request` for cancellation and deadline propagation
-- Return handler functions from constructors (closure pattern) for dependency injection
-- Keep events in `internal/event/`, handlers alongside their domain package
-- For durable delivery, use a message broker (NATS, RabbitMQ) — not in-memory channels
+- Keep events immutable; pass IDs and tenant context, not Eloquent models.
+- Events dispatched inside transactions implement `ShouldDispatchAfterCommit`.
+- The listener must handle duplicates through a unique processed-message row and service-level idempotency.
+- Only `UniqueConstraintViolationException` means the event was already processed.
+- Put events in `app/Events/` and listeners in `app/Listeners/`.
+- Cover dispatch and listener behavior with feature tests using the queue fake and a real transaction path.
 
 ## Reference Files
 
-- [Architecture principles](../instructions/architecture-principles.instructions.md)
 - [Messaging patterns](../instructions/messaging.instructions.md)
+- [Authentication and tenant rules](../instructions/auth.instructions.md)

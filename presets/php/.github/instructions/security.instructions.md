@@ -1,214 +1,261 @@
 ---
-description: PHP security patterns — authentication, input validation, secrets management
-applyTo: '**/*.PHP'
+description: PHP security patterns — Laravel validation, mass-assignment control, output encoding, CSRF, CORS, secrets, encryption, uploads, and audits
+applyTo: 'app/Http/Requests/**/*.php,app/Models/**/*.php,app/Http/Middleware/**/*Security*.php,bootstrap/app.php,config/cors.php,config/filesystems.php,routes/web.php,routes/api.php,composer.json'
 ---
 
 # PHP Security Patterns
 
-## Authentication & Authorization
+Security defaults must be visible in Laravel configuration and enforced at system boundaries. Controllers stay thin: Form Requests validate input, policies authorize actions, services apply business rules, and repositories handle queries with bindings.
 
-### JWT Middleware
-```PHP
-func JWTAuth(next http.Handler) http.Handler {
-    return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-        token := r.Header.Get("Authorization")
-        if token == "" {
-            http.Error(w, "unauthorized", http.StatusUnauthorized)
-            return
-        }
+## Validate at the Boundary
 
-        claims, err := validateJWT(strings.TrimPrefix(token, "Bearer "))
-        if err != nil {
-            http.Error(w, "invalid token", http.StatusUnauthorized)
-            return
-        }
+All user input enters through a Form Request or a purpose-built validator. Convert validated data into a DTO before calling services.
 
-        ctx := context.WithValue(r.Context(), userClaimsKey, claims)
-        next.ServeHTTP(w, r.WithContext(ctx))
-    })
-}
-```
+```php
+<?php
 
-### Role-Based Access
-```PHP
-func RequireRole(role string) func(http.Handler) http.Handler {
-    return func(next http.Handler) http.Handler {
-        return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-            claims := r.Context().Value(userClaimsKey).(*Claims)
-            if !claims.HasRole(role) {
-                http.Error(w, "forbidden", http.StatusForbidden)
-                return
-            }
-            next.ServeHTTP(w, r)
-        })
+declare(strict_types=1);
+
+namespace App\Http\Requests;
+
+use App\Data\CreateOrderData;
+use App\Models\Order;
+use Illuminate\Foundation\Http\FormRequest;
+use Illuminate\Validation\Rule;
+
+final class StoreOrderRequest extends FormRequest
+{
+    public function authorize(): bool
+    {
+        return $this->user()?->can('create', Order::class) === true;
+    }
+
+    public function rules(): array
+    {
+        return [
+            'reference' => ['required', 'string', 'max:64'],
+            'currency' => ['required', Rule::in(['USD', 'EUR', 'GBP'])],
+            'notes' => ['nullable', 'string', 'max:2000'],
+        ];
+    }
+
+    public function toData(): CreateOrderData
+    {
+        $data = $this->validated();
+
+        return new CreateOrderData(
+            reference: $data['reference'],
+            currency: $data['currency'],
+            notes: $data['notes'] ?? null,
+        );
     }
 }
 ```
 
-## Input Validation
+## Mass Assignment
 
-### Always validate at handler boundaries
-```PHP
-// ❌ NEVER: Trust input
-func CreateUser(w http.ResponseWriter, r *http.Request) {
-    var req CreateUserRequest
-    json.NewDecoder(r.Body).Decode(&req)
-    // use req directly...
-}
+Models declare `$fillable`. Never call `Model::create($request->all())`, and never set `$guarded = []` on tenant data.
 
-// ✅ ALWAYS: Validate
-func CreateUser(w http.ResponseWriter, r *http.Request) {
-    var req CreateUserRequest
-    if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-        http.Error(w, "invalid JSON", http.StatusBadRequest)
-        return
+```php
+<?php
+
+declare(strict_types=1);
+
+namespace App\Models;
+
+use App\Enums\OrderStatus;
+use App\Models\Concerns\BelongsToTenant;
+use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Concerns\HasUuids;
+
+final class Order extends Model
+{
+    use BelongsToTenant;
+    use HasUuids;
+
+    protected $fillable = [
+        'tenant_id',
+        'reference',
+        'status',
+        'currency',
+        'total_cents',
+        'notes',
+    ];
+
+    protected function casts(): array
+    {
+        return [
+            'status' => OrderStatus::class,
+            'total_cents' => 'integer',
+        ];
     }
-    if err := req.Validate(); err != nil {
-        http.Error(w, err.Error(), http.StatusBadRequest)
-        return
-    }
-    // proceed with validated req...
-}
-
-// Validation method on request type
-func (r CreateUserRequest) Validate() error {
-    if strings.TrimSpace(r.Name) == "" {
-        return errors.New("name is required")
-    }
-    if !isValidEmail(r.Email) {
-        return errors.New("invalid email format")
-    }
-    return nil
-}
-```
-
-## Secrets Management
-
-```PHP
-// ❌ NEVER: Hardcoded secrets
-dbPassword := "secret123"
-
-// ✅ ALWAYS: Environment variables
-dbPassword := os.Getenv("DB_PASSWORD")
-if dbPassword == "" {
-    log.Fatal("DB_PASSWORD is required")
 }
 ```
 
-## SQL Injection Prevention
+## Output Escaping
 
-```PHP
-// ❌ NEVER: String formatting
-query := fmt.Sprintf("SELECT * FROM users WHERE id = '%s'", id)
+Blade escapes with `{{ }}`. Use `{!! !!}` only for sanitized, trusted HTML produced by a server-side allow-list sanitizer.
 
-// ✅ ALWAYS: Parameterized
-query := "SELECT * FROM users WHERE id = $1"
-row := db.QueryRowContext(ctx, query, id)
+```blade
+<h1>{{ $order->reference }}</h1>
+<p>{{ $order->notes }}</p>
 ```
 
-## CORS Configuration
+API Resources return scalar response shapes and never expose raw Eloquent models.
 
-```PHP
-import "github.com/rs/cors"
+## CSRF and Token APIs
 
-c := cors.New(cors.Options{
-    AllowedOrigins:   []string{"https://yourdomain.com"},
-    AllowedMethods:   []string{"GET", "POST", "PUT", "DELETE"},
-    AllowedHeaders:   []string{"Authorization", "Content-Type"},
-    AllowCredentials: true,
-    MaxAge:           3600,
-})
-mux := http.NewServeMux()
-handler := c.Handler(mux)
+Session-backed web routes keep CSRF enabled. Token-authenticated API routes use `auth:sanctum` and do not depend on cookies for authorization.
+
+```php
+<?php
+
+declare(strict_types=1);
+
+use App\Http\Middleware\ResolveTenant;
+use Illuminate\Support\Facades\Route;
+
+Route::middleware(['web', 'auth'])->group(function (): void {
+    Route::post('/profile', [ProfileController::class, 'update']);
+});
+
+Route::prefix('v1')
+    ->middleware(['auth:sanctum', 'throttle:api', ResolveTenant::class])
+    ->group(function (): void {
+        Route::post('/orders', [OrderController::class, 'store']);
+    });
 ```
+
+## CORS
+
+Allow specific origins from configuration; `supports_credentials` is allowed only when origins are explicit.
+
+```php
+<?php
+
+declare(strict_types=1);
+
+return [
+    'paths' => ['api/*', 'sanctum/csrf-cookie'],
+    'allowed_methods' => ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
+    'allowed_origins' => array_filter(explode(',', (string) env('CORS_ALLOWED_ORIGINS', ''))),
+    'allowed_origins_patterns' => [],
+    'allowed_headers' => ['Content-Type', 'Authorization', 'X-Requested-With'],
+    'exposed_headers' => [],
+    'max_age' => 600,
+    'supports_credentials' => false,
+];
+```
+
+## Secrets and Encryption
+
+Read secrets from environment variables, Dapr secret stores, or cloud secret managers. Do not put real values in source, tests, plan files, seeders, or `.env.example`.
+
+Use encrypted casts for fields that must be unreadable at rest through normal database access, such as provider tokens or customer metadata. Rotate `APP_KEY` only with a planned re-encryption procedure.
 
 ## Security Headers
 
-```PHP
-func SecurityHeaders(next http.Handler) http.Handler {
-    return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-        w.Header().Set("X-Content-Type-Options", "nosniff")
-        w.Header().Set("X-Frame-Options", "DENY")
-        w.Header().Set("X-XSS-Protection", "0")
-        w.Header().Set("Referrer-Policy", "strict-origin-when-cross-origin")
-        w.Header().Set("Content-Security-Policy",
-            "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'")
-        w.Header().Set("Strict-Transport-Security",
-            "max-age=31536000; includeSubDomains")
-        next.ServeHTTP(w, r)
-    })
-}
-```
+Register a middleware in `bootstrap/app.php` for browser-facing responses.
 
-## Rate Limiting
+```php
+<?php
 
-```PHP
-func RateLimit(requestsPerSecond int) func(http.Handler) http.Handler {
-    limiter := rate.NewLimiter(rate.Limit(requestsPerSecond), requestsPerSecond*2)
-    return func(next http.Handler) http.Handler {
-        return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-            if !limiter.Allow() {
-                http.Error(w, "rate limit exceeded", http.StatusTooManyRequests)
-                return
-            }
-            next.ServeHTTP(w, r)
-        })
+declare(strict_types=1);
+
+namespace App\Http\Middleware;
+
+use Closure;
+use Illuminate\Http\Request;
+use Symfony\Component\HttpFoundation\Response;
+
+final class AddSecurityHeaders
+{
+    public function handle(Request $request, Closure $next): Response
+    {
+        $response = $next($request);
+        $response->headers->set('X-Content-Type-Options', 'nosniff');
+        $response->headers->set('X-Frame-Options', 'DENY');
+        $response->headers->set('Referrer-Policy', 'strict-origin-when-cross-origin');
+        $response->headers->set('Content-Security-Policy', "default-src 'self'; frame-ancestors 'none'");
+
+        if ($request->isSecure()) {
+            $response->headers->set('Strict-Transport-Security', 'max-age=31536000; includeSubDomains');
+        }
+
+        return $response;
     }
 }
 ```
 
+## File Uploads
+
+Validate size, extension, MIME type, and content. Store uploads outside the public disk unless they are meant to be public.
+
+```php
+<?php
+
+declare(strict_types=1);
+
+namespace App\Http\Requests;
+
+use Illuminate\Foundation\Http\FormRequest;
+
+final class UploadDocumentRequest extends FormRequest
+{
+    public function rules(): array
+    {
+        return [
+            'document' => [
+                'required',
+                'file',
+                'mimetypes:application/pdf,image/png,image/jpeg',
+                'extensions:pdf,png,jpg,jpeg',
+                'max:10240',
+            ],
+        ];
+    }
+}
+```
+
+Generate server-side names and scan files with the platform's malware scanner before making them downloadable.
+
+## Dependency and Secret Audits
+
+Run:
+
+```bash
+composer audit
+composer outdated --direct
+vendor/bin/pint --test
+vendor/bin/phpstan analyse
+```
+
+Treat direct and transitive Composer advisories as release blockers unless there is a written accepted-risk decision.
+
 ## Common Vulnerabilities to Prevent
 
-| Vulnerability | Prevention |
-|--------------|------------|
-| SQL Injection | Parameterized queries only |
-| XSS | `html/template` auto-escaping, CSP headers |
-| SSRF | Validate/allowlist outbound URLs |
-
-## OWASP Top 10 (2021) Alignment
-
-| OWASP Category | How This File Addresses It |
-|----------------|----------------------------|
-| A01: Broken Access Control | JWT middleware, `RequireRole()` guard |
-| A02: Cryptographic Failures | `os.Getenv` secrets, no hardcoded credentials |
-| A03: Injection | Parameterized SQL (`$1` placeholders), never `fmt.Sprintf` |
-| A04: Insecure Design | Struct validation methods, explicit error returns |
-| A05: Security Misconfiguration | Rate limiting middleware |
-| A07: Identification & Auth Failures | Bearer token parsing, claim extraction via context |
-
-## See Also
-
-- `auth.instructions.md` — JWT/JWKS middleware, RBAC guards, multi-tenant, API keys
-- `graphql.instructions.md` — GraphQL authorization, directive-based @hasRole
-- `dapr.instructions.md` — Dapr secrets management, component scoping, mTLS
-- `database.instructions.md` — SQL injection prevention, parameterized queries
-- `api-patterns.instructions.md` — Auth middleware, request validation
-- `deploy.instructions.md` — Secrets management, TLS configuration
-| Path Traversal | `filepath.Clean`, validate paths |
-| XSS | `html/template` auto-escaping |
-| SSRF | Validate URLs, restrict outbound |
-| Race Conditions | `PHP test -race`, proper synchronization |
-
----
+| Vulnerability | Laravel control |
+| --- | --- |
+| SQL injection | Eloquent query builder with bindings; raw SQL only with bound parameters |
+| XSS | Blade escaping, API Resources, CSP |
+| CSRF | Web middleware CSRF tokens; token auth for stateless APIs |
+| Mass assignment | `$fillable`, DTOs, Form Requests |
+| Broken access control | Policies, gates, tenant scopes |
+| Secret exposure | `env()`, secret stores, encrypted casts |
 
 ## Temper Guards
 
 | Shortcut | Why It Breaks |
-|----------|--------------|
-| "This endpoint is internal-only, no auth needed" | Internal endpoints get exposed through misconfiguration, reverse proxies, or future refactors. Apply auth middleware everywhere — remove it explicitly when proven unnecessary. |
-| "Input validation is overkill for this field" | Every unvalidated input is an injection vector. Validate at system boundaries always — a Form Request is a single class that prevents a category of vulnerabilities. |
-| "We'll add authentication later" | Unauthenticated endpoints get discovered and exploited. Security is not a feature to add — it's a constraint present from line one. |
-| "No real users yet, security can wait" | Attackers scan for unprotected endpoints automatically. The window between "no real users" and "compromised" is often hours, not months. |
-| "I'll remove the `auth` middleware temporarily for testing" | Temporary auth bypasses become permanent. Use `actingAs()` in tests or test-specific auth configuration instead. |
-| "Hardcoding this key is fine for development" | Hardcoded secrets leak via git history, logs, and error messages. Use `.env` files even in development — Laravel reads them automatically. |
-
----
+| --- | --- |
+| "This is an admin-only screen, validation can be loose" | Admin endpoints are high-value targets and still receive untrusted input. |
+| "The model has a tenant scope, so authorization is optional" | Scopes hide rows; policies decide whether the action is allowed. Both are required. |
+| "A wildcard CORS origin is easier during staging" | Staging credentials and tokens are still useful to attackers. Use environment-specific allow-lists. |
+| "The upload has the right extension" | Extensions lie. Validate MIME/content and store with server-generated names. |
 
 ## Warning Signs
 
-- Route groups missing `auth` middleware or `Gate` checks
-- String concatenation or variable interpolation used in raw SQL (`"SELECT ... "`)
-- Secrets assigned as string literals instead of using `env()` or `config()`
-- CORS configured with wildcard origin (`'allowed_origins' => ['*']`)
-- Missing CSRF middleware on state-changing web routes
-- `APP_DEBUG=true` left in production `.env`
+- `request()->all()`, `$request->all()`, or `$model->fill($request->input())`.
+- `{!! $value !!}` in Blade without a sanitizer.
+- `DB::statement()` or `DB::select()` with interpolated variables.
+- `CORS_ALLOWED_ORIGINS=*` on an environment with credentials.
+- Uploaded files written directly to a public path.

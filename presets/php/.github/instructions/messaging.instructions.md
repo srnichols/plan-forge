@@ -1,276 +1,219 @@
 ---
-description: Messaging patterns for PHP — NATS, RabbitMQ, channels, event-driven architecture
-applyTo: '**/*worker*,**/*event*,**/*message*,**/*consumer*,**/*publisher*,**/*subscriber*'
+description: PHP messaging patterns — Laravel queues, jobs, retries, idempotent consumers, failed jobs, and Horizon
+applyTo: 'app/Jobs/**/*.php,app/Events/**/*.php,app/Listeners/**/*.php,config/queue.php,config/horizon.php,database/migrations/**/*message*.php,database/migrations/**/*failed_jobs*.php'
 ---
 
 # PHP Messaging & Pub/Sub Patterns
 
-## Messaging Strategy
+Use Laravel queues for durable asynchronous work. Jobs carry scalar identifiers, the `tenantId`, and enough correlation metadata to retry safely.
 
-### NATS JetStream (Recommended for Cloud-Native)
-```PHP
-import "github.com/nats-io/nats.PHP"
+## Job Shape
 
-// Connect
-nc, _ := nats.Connect(nats.DefaultURL)
-js, _ := nc.JetStream()
+Jobs define explicit retry behavior, set tenant context at the start of `handle()`, and use `failed()` for final failure handling.
 
-// Create stream
-js.AddStream(&nats.StreamConfig{
-    Name:     "ORDERS",
-    Subjects: []string{"orders.>"},
-    Storage:  nats.FileStorage,
-    MaxAge:   24 * time.Hour,
-})
+```php
+<?php
 
-// Publish
-func (s *OrderService) PlaceOrder(ctx Request, order *Order) error {
-    if err := s.repo.Save(ctx, order); err != nil {
-        return err
+declare(strict_types=1);
+
+namespace App\Jobs;
+
+use App\Services\OrderService;
+use App\Support\CurrentTenant;
+use Illuminate\Bus\Queueable;
+use Illuminate\Contracts\Queue\ShouldQueue;
+use Illuminate\Foundation\Bus\Dispatchable;
+use Illuminate\Queue\InteractsWithQueue;
+use Illuminate\Queue\SerializesModels;
+use Throwable;
+
+final class CapturePayment implements ShouldQueue
+{
+    use Dispatchable;
+    use InteractsWithQueue;
+    use Queueable;
+    use SerializesModels;
+
+    public int $tries = 5;
+
+    public function __construct(
+        public readonly string $tenantId,
+        public readonly string $orderId,
+    ) {
+        $this->onQueue('payments');
     }
-    data, _ := json.Marshal(OrderPlacedEvent{
-        OrderID:    order.ID,
-        TenantID:   order.TenantID,
-        OccurredAt: time.Now().UTC(),
-    })
-    _, err := s.js.Publish("orders.placed", data)
-    return err
-}
 
-// Subscribe (durable consumer)
-sub, _ := js.Subscribe("orders.placed", func(msg *nats.Msg) {
-    var evt OrderPlacedEvent
-    if err := json.Unmarshal(msg.Data, &evt); err != nil {
-        slog.Error("unmarshal failed", "error", err)
-        msg.Term() // don't retry malformed messages
-        return
+    public function backoff(): array
+    {
+        return [30, 120, 300, 900];
     }
-    if err := processOrder(evt); err != nil {
-        slog.Error("processing failed", "error", err, "orderId", evt.OrderID)
-        msg.Nak() // retry
-        return
+
+    public function handle(CurrentTenant $currentTenant, OrderService $orders): void
+    {
+        $currentTenant->set($this->tenantId);
+        $orders->capturePayment($this->orderId);
     }
-    msg.Ack()
-}, nats.Durable("order-processor"), nats.ManualAck())
-```
 
-### RabbitMQ (amqp091-PHP)
-```PHP
-import amqp "github.com/rabbitmq/amqp091-PHP"
-
-conn, _ := amqp.Dial("amqp://guest:guest@localhost:5672/")
-ch, _ := conn.Channel()
-
-// Publish
-ch.PublishWithContext(ctx, "events", "order.placed", false, false, amqp.Publishing{
-    ContentType: "application/json",
-    Body:        data,
-})
-
-// Consume
-msgs, _ := ch.Consume("order-processing", "", false, false, false, false, nil)
-for msg := range msgs {
-    if err := process(msg.Body); err != nil {
-        msg.Nack(false, true) // requeue
-        continue
+    public function failed(Throwable $exception): void
+    {
+        report($exception);
     }
-    msg.Ack(false)
 }
 ```
 
-### Channel-Based In-Process Pub/Sub
-```PHP
-type EventBus struct {
-    orders chan OrderPlacedEvent
-}
+## Concurrency Controls
 
-func NewEventBus(bufferSize int) *EventBus {
-    return &EventBus{orders: make(chan OrderPlacedEvent, bufferSize)}
-}
+Use `ShouldBeUnique` to suppress duplicate queued work and `WithoutOverlapping` to serialize critical sections.
 
-// Producer
-func (b *EventBus) PublishOrder(evt OrderPlacedEvent) {
-    b.orders <- evt
-}
+```php
+<?php
 
-// Consumer (run as goroutine)
-func (b *EventBus) ConsumeOrders(ctx Request, handler func(OrderPlacedEvent) error) {
-    for {
-        select {
-        case <-ctx.Done():
-            return
-        case evt := <-b.orders:
-            if err := handler(evt); err != nil {
-                slog.Error("order handler failed", "error", err)
+declare(strict_types=1);
+
+namespace App\Jobs;
+
+use Illuminate\Bus\Queueable;
+use Illuminate\Queue\Middleware\WithoutOverlapping;
+
+final class RebuildTenantSearchIndex implements \Illuminate\Contracts\Queue\ShouldQueue, \Illuminate\Contracts\Queue\ShouldBeUnique
+{
+    use Queueable;
+
+    public int $uniqueFor = 1800;
+
+    public function __construct(public readonly string $tenantId)
+    {
+    }
+
+    public function uniqueId(): string
+    {
+        return 'search-index:'.$this->tenantId;
+    }
+
+    public function middleware(): array
+    {
+        return [(new WithoutOverlapping($this->uniqueId()))->releaseAfter(60)];
+    }
+}
+```
+
+## Dispatch After Commit
+
+Dispatch jobs after the database transaction commits so workers never observe rolled-back data.
+
+```php
+<?php
+
+declare(strict_types=1);
+
+use App\Jobs\CapturePayment;
+use Illuminate\Support\Facades\DB;
+
+DB::transaction(function () use ($data): void {
+    $order = $this->orders->create($data);
+
+    CapturePayment::dispatch(
+        tenantId: (string) $order->tenant_id,
+        orderId: (string) $order->id,
+    )->afterCommit();
+});
+```
+
+Set `after_commit` to `true` on queue connections that process domain events from persisted records.
+
+## Idempotent Consumers
+
+Use a `processed_messages` table with a unique `message_id`. The idempotency row and business work must happen in the same transaction. Insert the processed-message row with `insertOrIgnore()` and return only when that insert reports zero rows; exceptions from the work are real failures and must retry or fail.
+
+```php
+<?php
+
+declare(strict_types=1);
+
+namespace App\Services;
+
+use Illuminate\Support\Facades\DB;
+
+final readonly class MessageConsumer
+{
+    public function consume(string $messageId, string $tenantId, callable $work): void
+    {
+        DB::transaction(function () use ($messageId, $tenantId, $work): void {
+            $inserted = DB::table('processed_messages')->insertOrIgnore([
+                'message_id' => $messageId,
+                'tenant_id' => $tenantId,
+                'processed_at' => now(),
+            ]);
+
+            if ($inserted === 0) {
+                return;
             }
-        }
+
+            $work();
+        });
     }
 }
 ```
 
-## Event Schema
-```PHP
-// Always use typed structs — never map[string]interface{}
-type OrderPlacedEvent struct {
-    OrderID    string    `json:"order_id"`
-    TenantID   string    `json:"tenant_id"`
-    OccurredAt time.Time `json:"occurred_at"`
-}
+The migration must include a unique index that matches the duplicate definition used by the consumer.
 
-// Include TenantID in ALL events
+## Failed Jobs and Dead Letters
+
+Laravel's `failed_jobs` table is the dead-letter store. Configure it, alert on growth, and inspect payloads before retrying.
+
+```bash
+php artisan queue:failed
+php artisan queue:retry all
+php artisan queue:forget {id}
 ```
 
-## Worker Pattern (Ticker-Based)
-```PHP
-func (w *CleanupWorker) Run(ctx Request) error {
-    ticker := time.NewTicker(30 * time.Second)
-    defer ticker.Stop()
+Do not automatically retry poison messages forever. Fix the handler or data, then retry specific failed job IDs.
 
-    for {
-        select {
-        case <-ctx.Done():
-            return ctx.Err()
-        case <-ticker.C:
-            if err := w.cleanup(ctx); err != nil {
-                slog.Error("cleanup failed", "error", err)
-            }
-        }
-    }
-}
+## Horizon
+
+Use Horizon for Redis queues in production. Keep queue names explicit, isolate long-running work from latency-sensitive jobs, and set balancing rules per environment.
+
+```php
+<?php
+
+declare(strict_types=1);
+
+return [
+    'environments' => [
+        'production' => [
+            'payments' => [
+                'connection' => 'redis',
+                'queue' => ['payments'],
+                'balance' => 'auto',
+                'maxProcesses' => 10,
+                'tries' => 5,
+            ],
+        ],
+    ],
+];
 ```
 
-## Graceful Shutdown
-```PHP
-func main() {
-    ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
-    defer cancel()
+## Event Payload Rules
 
-    g, ctx := errgroup.WithContext(ctx)
-    g.PHP(func() error { return orderWorker.Run(ctx) })
-    g.PHP(func() error { return cleanupWorker.Run(ctx) })
-
-    if err := g.Wait(); err != nil && !errors.Is(err, context.Canceled) {
-        slog.Error("workers stopped with error", "error", err)
-    }
-}
-```
-
-## Dead Letter & Retry Strategy
-```PHP
-// NATS JetStream — configure max delivery attempts
-js.AddStream(&nats.StreamConfig{
-    Name:       "ORDERS",
-    Subjects:   []string{"orders.>"},
-    MaxDeliver: 3, // Max retry attempts
-})
-
-// Failed messages PHP to a dead letter subject
-sub, _ := js.Subscribe("orders.placed", func(msg *nats.Msg) {
-    if err := process(msg); err != nil {
-        if msg.Header.Get("Nats-Num-Delivered") >= "3" {
-            // Move to dead letter
-            js.Publish("orders.dead-letter", msg.Data)
-            msg.Term()
-            return
-        }
-        msg.NakWithDelay(time.Duration(1<<msg.Header.Get("Nats-Num-Delivered")) * time.Second)
-        return
-    }
-    msg.Ack()
-}, nats.Durable("order-processor"), nats.ManualAck())
-
-// RabbitMQ — declare dead letter exchange on queue
-ch.QueueDeclare("order-processing", true, false, false, false, amqp.Table{
-    "x-dead-letter-exchange":    "events.dlx",
-    "x-dead-letter-routing-key": "order.failed",
-    "x-message-ttl":             int32(30000),
-})
-```
-
-## Scheduled Jobs
-```PHP
-// Ticker-based scheduled task
-func (w *ReportWorker) RunDaily(ctx Request) error {
-    // Calculate next 8 AM
-    next := nextRunAt(8, 0)
-    timer := time.NewTimer(time.Until(next))
-    defer timer.Stop()
-
-    for {
-        select {
-        case <-ctx.Done():
-            return ctx.Err()
-        case <-timer.C:
-            if err := w.generateReport(ctx); err != nil {
-                slog.Error("daily report failed", "error", err)
-            }
-            next = next.Add(24 * time.Hour)
-            timer.Reset(time.Until(next))
-        }
-    }
-}
-
-// For production, consider robfig/cron
-import "github.com/robfig/cron/v3"
-
-c := cron.New()
-c.AddFunc("0 8 * * *", func() { generateDailyReport() })
-c.Start()
-defer c.Stop()
-```
+- Events and jobs carry IDs, `tenantId`, correlation IDs, and timestamps; they do not serialize Eloquent models.
+- Handlers are idempotent and safe to replay.
+- Tenant context is set at the worker boundary before repositories are called.
+- Transient failures throw so Laravel retry/backoff can run.
+- Permanent validation failures are recorded and sent to `failed_jobs`.
 
 ## Anti-Patterns
 
+```text
+Passing Eloquent models to queued jobs instead of IDs.
+Dispatching from inside a transaction without afterCommit().
+Treating every database exception as a duplicate message.
+Letting jobs retry indefinitely with no failed() path.
+Putting tenant_id in optional payload metadata rather than constructor arguments.
+Running all queues through one worker pool.
 ```
-❌ Unbuffered channels for producer/consumer (blocks sender)
-❌ Ignoring msg.Ack/Nack (message stuck in queue forever)
-❌ Missing TenantID in event payloads (breaks multi-tenant isolation)
-❌ Goroutine leak (always use context cancellation)
-❌ json.Unmarshal into interface{} (use typed structs)
-❌ No graceful shutdown (messages lost on SIGTERM)
-❌ No idempotency check (duplicate messages cause duplicate processing)
-```
-
-## Idempotency
-
-Guard consumers against duplicate delivery using a persistent idempotency store:
-
-```PHP
-// Redis-based idempotency guard
-func processOnce(ctx Request, rdb *redis.Client, eventID string, handler func() error) error {
-	ok, err := rdb.SetNX(ctx, "idem:"+eventID, "1", 24*time.Hour).Result()
-	if err != nil {
-		return fmt.Errorf("idempotency check: %w", err)
-	}
-	if !ok {
-		return nil // Already processed
-	}
-	return handler()
-}
-
-// Usage in a NATS subscriber
-sub, _ := js.Subscribe("orders.placed", func(msg *nats.Msg) {
-	var evt OrderPlacedEvent
-	if err := json.Unmarshal(msg.Data, &evt); err != nil {
-		msg.Term()
-		return
-	}
-	err := processOnce(ctx, rdb, msg.Header.Get("Nats-Msg-Id"), func() error {
-		return processOrder(evt)
-	})
-	if err != nil {
-		msg.Nak()
-		return
-	}
-	msg.Ack()
-})
-```
-
-Alternatives: database table with `UNIQUE(event_id)`, or NATS JetStream's built-in `Nats-Msg-Id` deduplication.
 
 ## See Also
 
-- `dapr.instructions.md` — Dapr building blocks, sidecar config, state, workflows, secrets
-- `observability.instructions.md` — Distributed tracing, event logging
-- `errorhandling.instructions.md` — Dead letter queues, retry logic
-- `database.instructions.md` — Idempotency stores, transactional outbox
+- `dapr.instructions.md` — sidecar pub/sub and subscription endpoints
+- `observability.instructions.md` — correlation IDs, traces, queue metrics
+- `database.instructions.md` — transactions, unique constraints, repository boundaries

@@ -1,7 +1,7 @@
 ---
 name: security-audit
-description: "Comprehensive PHP/Laravel security audit — OWASP scan, composer audit, secrets detection, severity report."
-argument-hint: "[optional: 'full' (default), 'owasp', 'dependencies', 'secrets']"
+description: "Comprehensive PHP/Laravel security audit — OWASP review, Composer audit, secrets detection, GraphQL checks, and combined severity report."
+argument-hint: "[optional: 'full' (default), 'owasp', 'dependencies', 'secrets', 'graphql']"
 tools:
   - run_in_terminal
   - read_file
@@ -11,62 +11,113 @@ tools:
 
 # Security Audit Skill (PHP / Laravel)
 
-## Phase 1: OWASP (PHP/Laravel Specific)
-- Check controllers for missing `auth` middleware or `$this->authorize()`
-- Search for raw SQL: `DB::raw()`, `DB::select("SELECT ... $var")` — use Eloquent or parameterized
-- Check for `eval()`, `exec()`, `system()`, `shell_exec()`, `passthru()` with user input
-- Check for `unserialize()` on untrusted data
-- Check CORS in `config/cors.php` for wildcard origins
-- Check `APP_DEBUG=true` in production `.env`
-- Check password hashing uses `Hash::make()` (bcrypt/argon2, not md5/sha1)
-- Check for mass assignment protection (`$fillable` / `$guarded` on models)
-- Check CSRF middleware enabled on non-API routes
+## Trigger
+"Run a security audit" / "Check for vulnerabilities" / "Scan for secrets" / "OWASP check"
 
-## Phase 2: Dependency Audit
-```bash
-composer audit
-composer outdated
-```
+## Overview
 
-## Phase 3: Secrets Detection
-See shared skill. Exclude: `vendor/`, `.git/`, `storage/`, `bootstrap/cache/`
-Additional: Check `.env` has real credentials and is in `.gitignore`
-
-## Phase 4: Report
-Follow shared skill format.
+Six-phase security audit tailored for PHP 8.5, Laravel 13.x, Sanctum, queues, and Lighthouse.
 
 ---
 
+## Steps
+
+### 1. Review Laravel Access Control
+Inspect `routes/api.php`, controllers, Form Requests, policies, middleware, and GraphQL SDL.
+
+```bash
+php artisan route:list --path=v1
+```
+
+Check for missing `auth:sanctum`, missing policy calls, tenant IDs read from client input, and Lighthouse fields without `@guard` plus current policy directives.
+
+> **If no Laravel project is found**: Stop and report "No Laravel project found in this directory."
+
+### 2. Check Validation, Injection, and Output Encoding
+Search for unvalidated boundary input, mass assignment, interpolated SQL, unsafe Blade output, and upload shortcuts.
+
+```bash
+grep -R "request()->all()\\|->all()\\|DB::raw\\|{!!" app resources routes database --exclude-dir=vendor
+```
+
+Review each hit manually; a hit is not automatically a finding unless it is reachable with untrusted input.
+
+### 3. Run Composer Vulnerability Audit
+```bash
+composer audit
+```
+
+> **If composer.lock is missing**: Run `composer install` first if appropriate, otherwise report that dependency advisories could not be resolved.
+
+### 4. Review Outdated Direct Dependencies
+```bash
+composer outdated --direct
+```
+
+Flag abandoned packages, unmaintained security tooling, and major-version lag that blocks security updates.
+
+### 5. Scan for Secrets and Misconfiguration
+Search for committed keys, unsafe CORS, debug mode, exposed stack traces, and production GraphQL introspection without printing secret values.
+
+```bash
+grep -RIl "APP_KEY=\\|password\\|secret\\|token\\|CORS_ALLOWED_ORIGINS=\\*\\|LIGHTHOUSE_DISABLE_INTROSPECTION=false" . \
+  --exclude-dir=vendor --exclude-dir=node_modules --exclude-dir=storage --exclude-dir=.git \
+  --exclude=".env" --exclude=".env.*"
+```
+
+Report only redacted secret prefixes: first 8 characters followed by `***`.
+
+### 6. Produce Combined Security Report
+Classify each confirmed issue by OWASP category, CWE when available, severity, confidence, and remediation path.
+
+```text
+Security Audit Summary:
+  Critical: N
+  High:     N
+  Medium:   N
+  Low:      N
+
+Dependency Advisories: N
+Secret Findings:      N
+GraphQL Findings:     N
+Overall: PASS / FAIL
+```
+
 ## Safety Rules
-- READ-ONLY — do NOT modify any files
-- Do NOT log actual secret values — show only first 8 characters + `***`
-- Do NOT recommend disabling security features as a fix
+- READ-ONLY — do not modify application files during the audit.
+- Do not print full secret values; redact to the first 8 characters plus `***`.
+- Do not recommend disabling CSRF, auth middleware, policies, or validation as fixes.
+- Treat tenant identity from headers, query strings, or bodies as a high-severity finding unless independently authenticated and authorized.
+- If a scanner is missing, report that gap and continue the remaining phases.
 
 ## Temper Guards
 
 | Shortcut | Why It Breaks |
-|----------|--------------|
-| "This scan is probably all false positives" | False positives exist, but dismissing findings without investigation misses real vulnerabilities. Verify each finding individually. |
-| "We'll fix the medium-severity findings later" | Medium findings compound. An XSS + a missing header + an unvalidated input = a real exploit chain. Fix or explicitly accept the risk with documentation. |
-| "Test files don't need security review" | Test files contain connection strings, mock credentials, and API patterns that leak into production via copy-paste. Review them at INFO level. |
-| "The dependency scanner isn't installed, skip Phase 2" | Report the missing scanner and continue with other phases. Don't fail the entire audit — partial results are better than none. |
-| "This is an internal API, OWASP doesn't apply" | Internal APIs get exposed through misconfiguration. OWASP applies to all HTTP surfaces regardless of intended audience. |
+| --- | --- |
+| "The route is internal" | Internal Laravel routes are often exposed by proxies, queues, or future refactors. Audit them. |
+| "The model scope handles authorization" | Tenant scopes limit data; policies decide action permission. Both must exist. |
+| "Composer audit is enough" | Dependency scans do not detect IDOR, tenant leakage, CORS mistakes, or unsafe GraphQL. |
+| "The secret is from a test fixture" | Test secrets are copied into production examples and logs. Review at least as LOW unless proven fake. |
 
 ## Warning Signs
 
-- Audit completed without running all 4 phases (OWASP + deps + secrets + report)
-- Findings dismissed without individual verification
-- Secret values logged in full instead of first 8 chars + `***`
-- Severity ratings assigned subjectively instead of using OWASP/CWE classification
-- CRITICAL findings present but overall verdict is PASS
-- Dependency scanner missing but not reported
+- Security audit skips one of the six phases.
+- Findings have no file:line evidence.
+- Critical or high findings are present but the verdict says PASS.
+- GraphQL policy directives are not checked.
+- Missing dependency scanner is silently ignored.
 
 ## Exit Proof
 
 After completing this skill, confirm:
-- [ ] All 4 phases executed (OWASP, dependency audit, secrets scan, combined report)
-- [ ] Every finding has severity, location (file:line), and classification (CWE or pattern)
-- [ ] No actual secret values appear in the report (first 8 chars + `***` only)
-- [ ] Combined report includes total counts by severity (Critical, High, Medium, Low)
-- [ ] Overall verdict is PASS (zero critical, zero high secrets) or FAIL with specifics
-- [ ] If scanner was missing, it's reported in the output (not silently skipped)
+- [ ] `php artisan route:list --path=v1` reviewed for protected routes.
+- [ ] Boundary validation, SQL, Blade, upload, and mass-assignment patterns reviewed.
+- [ ] `composer audit` result included.
+- [ ] `composer outdated --direct` reviewed for direct package risk.
+- [ ] Secrets and security configuration scanned with redacted output.
+- [ ] Combined report includes severity, confidence, OWASP/CWE mapping, and PASS/FAIL.
+
+## Persistent Memory (if OpenBrain is configured)
+
+- **Before auditing**: `search_thoughts("security audit php laravel", project: "<YOUR PROJECT NAME>", created_by: "copilot-vscode", type: "bug")`
+- **After audit**: `capture_thought("Security audit (PHP): <summary>", project: "<YOUR PROJECT NAME>", created_by: "copilot-vscode", source: "skill-security-audit", type: "bug")`

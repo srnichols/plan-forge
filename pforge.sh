@@ -217,6 +217,7 @@ COMMANDS:
   sync-memories     Generate .github/copilot-memory-hints.md from forge decisions (trajectory notes, auto-skills, brain)
   sync-instructions Generate .github/copilot-instructions.md from forge project context (profile, principles, config)
   version-bump <v>  Update VERSION, package.json, docs/README/ROADMAP version badges to v<version>
+  pending           List, diff, apply or discard guidance updates pforge update saved instead of overwriting your edits
   migrate-memory    Merge legacy *-history.json ledgers into canonical .jsonl siblings (idempotent)
   drain-memory      Drain pending OpenBrain queue records to the configured OpenBrain server
   forge-home-cleanup Archive ephemeral .forge/ files (logs, tmp, release notes) and prune old archive slots
@@ -2012,7 +2013,7 @@ cmd_update() {
         echo "  KEEP    ${entry##*|} (you changed it; the new version goes to .forge/update-pending/${_e_dst#"$REPO_ROOT"/})"
     done
     if [ "${#_kept[@]}" -gt 0 ]; then
-        echo "  Use --overwrite-customized to replace kept files (each is backed up under .forge/update-backups/)."
+        echo "  After updating, compare and merge with 'pforge pending', or use --overwrite-customized to replace kept files (each is backed up under .forge/update-backups/)."
     fi
     echo ""
     echo "Protected (never updated):"
@@ -3008,6 +3009,15 @@ cmd_doctor() {
         fi
     else
         doctor_pass "Installed v$template_version (GitHub unreachable and no local source — skipping currency check)"
+    fi
+
+    # #302 — guidance updates pforge update saved instead of overwriting the project's edits.
+    local pending_count=0
+    if [ -d "$REPO_ROOT/.forge/update-pending" ]; then
+        pending_count=$(find "$REPO_ROOT/.forge/update-pending" -type f 2>/dev/null | wc -l | tr -d ' ')
+    fi
+    if [ "$pending_count" -gt 0 ]; then
+        doctor_warn "$pending_count pending guidance update(s) in .forge/update-pending/ (your edited copies were kept)" "Review with 'pforge pending'"
     fi
 
     echo ""
@@ -4925,6 +4935,16 @@ cmd_tour() {
     echo "  • Read the walkthrough: docs/QUICKSTART-WALKTHROUGH.md"
     echo "═══════════════════════════════════════════════════════════════"
     echo ""
+}
+
+# ─── Command: pending (#302) ───────────────────────────────────────────
+cmd_pending() {
+    local helper="$REPO_ROOT/pforge-mcp/update-pending.mjs"
+    if [ ! -f "$helper" ]; then
+        echo "ERROR: pforge-mcp/update-pending.mjs not found. Run 'pforge self-update' to install it." >&2
+        exit 1
+    fi
+    node "$helper" "$@" --project "$REPO_ROOT"
 }
 
 # ─── Command: version-bump ─────────────────────────────────────────────
@@ -7410,6 +7430,7 @@ case "$COMMAND" in
     testbed-happypath) cmd_testbed_happypath "$@" ;;
     self-update)  cmd_self_update "$@" ;;
     version-bump) cmd_version_bump "$@" ;;
+    pending)      cmd_pending "$@" ;;
     migrate-memory) cmd_migrate_memory "$@" ;;
     drain-memory) cmd_drain_memory "$@" ;;
     forge-home-cleanup) cmd_forge_home_cleanup "$@" ;;

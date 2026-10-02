@@ -283,6 +283,7 @@ function Show-Help {
     Write-Host "  analyze <plan>    Cross-artifact analysis — requirement traceability, test coverage, scope compliance"
     Write-Host "  run-plan <plan>   Execute a hardened plan — spawn CLI workers, validate at every boundary, track tokens"
     Write-Host "  version-bump <v>  Update version across all files (VERSION, package.json, docs, README)"
+    Write-Host "  pending           List, diff, apply or discard guidance updates pforge update saved instead of overwriting your edits"
     Write-Host "  smith             Inspect your forge — environment, VS Code config, setup health, and common problems"
     Write-Host "  org-rules export  Export org custom instructions from .github/instructions/ for GitHub org settings"
     Write-Host "  drift             Score codebase against architecture guardrail rules — track drift over time"
@@ -2254,7 +2255,7 @@ function Invoke-Update {
         Write-Host "  KEEP    $($k.Name) (you changed it; the new version goes to .forge/update-pending/$($k.DstRel))" -ForegroundColor Yellow
     }
     if ($kept.Count -gt 0) {
-        Write-Host "  Use --overwrite-customized to replace kept files (each is backed up under .forge/update-backups/)." -ForegroundColor DarkGray
+        Write-Host "  After updating, compare and merge with 'pforge pending', or use --overwrite-customized to replace kept files (each is backed up under .forge/update-backups/)." -ForegroundColor DarkGray
     }
     Write-Host ""
     Write-Host "Protected (never updated):" -ForegroundColor DarkGray
@@ -3413,6 +3414,13 @@ function Invoke-Smith {
     }
     else {
         Doctor-Pass "Installed v$templateVersion (GitHub unreachable and no local source — skipping currency check)"
+    }
+
+    # #302 — guidance updates pforge update saved instead of overwriting the project's edits.
+    $pendingDir = Join-Path $RepoRoot ".forge/update-pending"
+    $pendingCount = if (Test-Path $pendingDir) { @(Get-ChildItem $pendingDir -Recurse -File -ErrorAction SilentlyContinue).Count } else { 0 }
+    if ($pendingCount -gt 0) {
+        Doctor-Warn "$pendingCount pending guidance update(s) in .forge/update-pending/ (your edited copies were kept)" "Review with 'pforge pending'"
     }
 
     Write-Host ""
@@ -4719,6 +4727,17 @@ function Get-VersionTargets {
         [PSCustomObject]@{ File = "README.md";                  Strategy = 'RegexReplace'; Pattern = 'v1\.0 → v[\d.]+';                       Replace = "v1.0 → v$($newVersion -replace '\.\d+$', '')";                                                  Desc = "README track record";       Optional = $true  },
         [PSCustomObject]@{ File = "ROADMAP.md";                 Strategy = 'RegexReplace'; Pattern = '\*\*v[\d.]+\*\* \(\d{4}-\d{2}-\d{2}\)'; Replace = "**v$newVersion** ($(Get-Date -Format 'yyyy-MM-dd'))"; Desc = "ROADMAP current release";    Optional = $false }
     )
+}
+
+# ─── Command: pending (#302) ───────────────────────────────────────────
+function Invoke-Pending {
+    $helper = Join-Path $RepoRoot "pforge-mcp/update-pending.mjs"
+    if (-not (Test-Path $helper)) {
+        Write-Host "ERROR: pforge-mcp/update-pending.mjs not found. Run 'pforge self-update' to install it." -ForegroundColor Red
+        exit 1
+    }
+    & node $helper @Arguments --project $RepoRoot
+    exit $LASTEXITCODE
 }
 
 function Invoke-VersionBump {
@@ -8175,6 +8194,7 @@ switch ($Command) {
     'quorum-analyze'  { Invoke-QuorumAnalyze }
     'health-trend'    { Invoke-HealthTrend }
     'version-bump' { Invoke-VersionBump }
+    'pending'      { Invoke-Pending }
     'smith'        { Invoke-Smith }
     'testbed-happypath' { Invoke-TestbedHappypath }
     'forge-home-cleanup' { Invoke-ForgeHomeCleanup }

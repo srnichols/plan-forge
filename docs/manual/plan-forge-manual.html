@@ -4713,6 +4713,14 @@ forge_diagnose({ file: "src/auth/token-validator.ts", models: "grok-4.20-0309-no
           <h3>Guidance files you edited</h3>
           <p>Since v3.28.0, instruction, prompt, agent, skill, hook and runbook files are replaced only when your copy matches a version Plan Forge shipped. Setup's substitutions (project name, stack and setup date from <code>.forge.json</code>) are taken into account and filled in again on updated files, including files an older updater left with raw placeholders.</p>
           <p>If you edited a file, update keeps your copy, lists it as <code>KEEP</code>, and writes the new version to <code>.forge/update-pending/&lt;path&gt;</code> so you can merge what you want. Run with <code>--overwrite-customized</code> to take the new versions anyway; each replaced file is backed up to <code>.forge/update-backups/&lt;timestamp&gt;/&lt;path&gt;</code> first.</p>
+          <p>Review the kept files with <code>pforge pending</code>, which <code>pforge smith</code> also reminds you about while any remain:</p>
+          <ul>
+            <li><code>pforge pending</code> lists them with their age.</li>
+            <li><code>pforge pending diff &lt;path&gt;</code> compares your copy with the new version.</li>
+            <li><code>pforge pending apply &lt;path&gt; --yes</code> takes the new version and backs your copy up to <code>.forge/update-backups/</code>.</li>
+            <li><code>pforge pending discard &lt;path&gt; --yes</code> keeps your copy.</li>
+          </ul>
+          <p>Use <code>--all</code> instead of a path to act on every file. Without <code>--yes</code>, <code>apply</code> and <code>discard</code> only show what they would do.</p>
 
           <div class="callout callout-info" class="callout-sm">
             <strong>Updating to v3.28.0 from an older version</strong>: the update runs the script you already have, so this protection starts with the first update after v3.28.0. If you have edited guidance files, commit before updating so you can review and restore them with git, or replace <code>pforge.ps1</code> / <code>pforge.sh</code> with the v3.28.0 copy first and then run the update.

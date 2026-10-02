@@ -707,6 +707,16 @@ Since v3.28.0, instruction, prompt, agent, skill, hook and runbook files are rep
 
 If you edited a file, update keeps your copy, reports it as `KEEP`, and writes the new version to `.forge/update-pending/<path>` so you can merge the changes you want. To take the new versions anyway, run with `--overwrite-customized`; each replaced file is first copied to `.forge/update-backups/<timestamp>/<path>`.
 
+Review the kept files with `pforge pending`, which `pforge smith` also reminds you about while any remain. Changes need `--yes`; without it, `apply` and `discard` only show what they would do.
+
+```powershell
+pforge pending                         # list pending updates and how old they are
+pforge pending diff <path>             # your copy against the new version (all files if no path)
+pforge pending apply <path> --yes      # take the new version; your copy goes to .forge/update-backups/
+pforge pending discard <path> --yes    # keep your copy and drop the pending one
+pforge pending apply --all --yes       # or discard --all
+```
+
 > **Updating to v3.28.0 from an older version:** the update runs the script you already have, so this protection starts with the first update *after* v3.28.0. If you have edited guidance files, commit before updating so you can review and restore them with git — or replace `pforge.ps1` / `pforge.sh` with the v3.28.0 copy first (see **Bootstrapping** above) and then run the update, which protects them already.
 
 **What it does:**

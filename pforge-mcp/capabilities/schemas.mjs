@@ -261,6 +261,18 @@ export const CLI_SCHEMA = {
       flags: {},
       examples: ["pforge version-bump 2.53.0"],
     },
+    "pending": {
+      description: "List, diff, apply or discard guidance updates pforge update saved in .forge/update-pending/ instead of overwriting your edits",
+      args: [
+        { name: "subcommand", type: "string", required: false, enum: ["list", "diff", "apply", "discard"] },
+        { name: "path", type: "string", required: false },
+      ],
+      flags: {
+        "--all": { type: "boolean", description: "apply/discard every pending update" },
+        "--yes": { type: "boolean", description: "Make the change (apply/discard are dry runs without it)" },
+      },
+      examples: ["pforge pending", "pforge pending diff .github/instructions/git-workflow.instructions.md", "pforge pending apply --all --yes"],
+    },
     "migrate-memory": {
       description: "Merge legacy *-history.json ledgers into canonical .jsonl siblings (idempotent)",
       args: [],

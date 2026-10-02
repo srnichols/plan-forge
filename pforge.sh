@@ -1360,6 +1360,23 @@ _pf_update_needed() {
     return 1
 }
 
+# Removes the release tarball and extract dir that 'update --from-github'
+# downloaded, unless --keep-cache (#298). Reads cmd_update's locals, so it is
+# safe to call on every exit path.
+_pf_gh_cleanup() {
+    $from_github || return 0
+    [ -n "$gh_tarball" ] || return 0
+    if $keep_cache; then
+        echo "  Cache preserved (--keep-cache): $gh_tarball"
+        return 0
+    fi
+    local removed=false
+    if [ -f "$gh_tarball" ]; then rm -f "$gh_tarball"; removed=true; fi
+    if [ -n "$gh_extract_dir" ] && [ -d "$gh_extract_dir" ]; then rm -rf "$gh_extract_dir"; removed=true; fi
+    if $removed; then echo "  Cleaned up cache files."; fi
+    return 0
+}
+
 cmd_update() {
     local dry_run=false force=false source_path="" from_github=false keep_cache=false gh_tag="" allow_dev=false overwrite_customized=false
 
@@ -1619,11 +1636,13 @@ cmd_update() {
         echo "    pulls the latest tagged release from GitHub."
         echo ""
         echo "  Override (not recommended): re-run with --allow-dev"
+        _pf_gh_cleanup
         return 1
     fi
 
     if [ "$current_version" = "$source_version" ] && ! $force; then
         echo "Already up to date (v$current_version). Use --force to re-apply."
+        _pf_gh_cleanup
         return 0
     fi
 
@@ -1935,6 +1954,7 @@ cmd_update() {
         local _plan_out
         if ! _plan_out="$(_pf_update_guard "$update_guard" plan "$source_path" "$REPO_ROOT" -- "${_guided[@]}")"; then
             echo "ERROR: the update guard could not classify guidance files; nothing was changed." >&2
+            _pf_gh_cleanup
             return 1
         fi
         declare -A _guard_action=()
@@ -1976,6 +1996,7 @@ cmd_update() {
     # ─── Report ───────────────────────────────────────────────────
     if [ "${#_updates[@]}" -eq 0 ] && [ "${#_new_files[@]}" -eq 0 ] && [ "${#_kept[@]}" -eq 0 ] && [ "$current_version" = "$source_version" ]; then
         echo "All framework files are up to date."
+        _pf_gh_cleanup
         return 0
     fi
 
@@ -2001,6 +2022,7 @@ cmd_update() {
 
     if $dry_run; then
         echo "DRY RUN — no files were changed."
+        _pf_gh_cleanup
         return 0
     fi
 
@@ -2009,7 +2031,7 @@ cmd_update() {
         read -rp "Apply ${#_updates[@]} updates and ${#_new_files[@]} new files? [y/N] (use --force to skip this prompt) " confirm
         case "$confirm" in
             y|Y|yes|Yes) ;;
-            *) echo "Cancelled."; return 0 ;;
+            *) echo "Cancelled."; _pf_gh_cleanup; return 0 ;;
         esac
     fi
 
@@ -2042,6 +2064,7 @@ cmd_update() {
         $overwrite_customized && _guard_flags+=("--overwrite-customized")
         if ! _apply_out="$(_pf_update_guard "$update_guard" apply "$source_path" "$REPO_ROOT" ${_guard_flags[@]+"${_guard_flags[@]}"} -- "${_guided_apply[@]}")"; then
             echo "ERROR: the update guard failed while writing guidance files." >&2
+            _pf_gh_cleanup
             return 1
         fi
         while IFS=$'\t' read -r _res _e_rel _detail; do
@@ -2061,6 +2084,7 @@ cmd_update() {
         if ! node -e "const fs=require('node:fs'); const config=JSON.parse(fs.readFileSync(0,'utf8')); config.templateVersion=process.argv[1]; process.stdout.write(JSON.stringify(config,null,2)+'\n')" "$source_version" < "$config_path" > "$config_tmp"; then
             rm -f "$config_tmp"
             echo "ERROR: Could not update $config_path; the original config was preserved." >&2
+            _pf_gh_cleanup
             return 1
         fi
         mv "$config_tmp" "$config_path"
@@ -2179,13 +2203,7 @@ writeFreshCache(process.argv[1], process.argv[2]);
         local audit_json="{\"tag\":\"$resolved_tag\",\"sha256\":\"$gh_sha256\",\"sizeBytes\":$gh_size_bytes,\"source\":\"manual\",\"filesChanged\":$files_changed,\"outcome\":\"success\"}"
         echo "$audit_json" | node "$REPO_ROOT/pforge-mcp/update-from-github.mjs" audit --project-dir "$REPO_ROOT" >/dev/null 2>&1 || true
     fi
-    if $from_github && ! $keep_cache; then
-        [ -n "$gh_tarball" ] && [ -f "$gh_tarball" ] && rm -f "$gh_tarball"
-        [ -n "$gh_extract_dir" ] && [ -d "$gh_extract_dir" ] && rm -rf "$gh_extract_dir"
-        echo "  Cleaned up cache files."
-    elif $from_github && $keep_cache; then
-        echo "  Cache preserved (--keep-cache): $gh_tarball"
-    fi
+    _pf_gh_cleanup
 }
 
 # ─── Command: analyze ──────────────────────────────────────────────────

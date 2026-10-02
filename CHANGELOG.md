@@ -7,6 +7,10 @@ Format follows [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
+### Fixed
+
+- **`pforge update --from-github` removes the release it downloaded** ([#298](https://github.com/srnichols/plan-forge/issues/298)). The PowerShell updater printed "Cleaned up cache files." but deleted nothing: the cleanup read function-local copies of the tarball and extract paths, which were always empty, so every `self-update` left about 64 MB in `.forge/cache/`. The same scoping left the tag, SHA-256 and size out of the update audit log. Both shells now also clean up when the update stops early (already up to date, dry run, cancelled, refused), and print the message only when something was removed. `--keep-cache` keeps the files and shows their real path. Existing leftovers under `.forge/cache/update-*` can be deleted by hand.
+
 ## [3.28.0] — 2026-10-02 — Updates keep your edits, PHP and Rust presets, and Forge-Master on Copilot
 
 ### Added

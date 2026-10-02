@@ -1521,6 +1521,22 @@ function Test-UpdateNeeded([string]$Src, [string]$Dst) {
     return $false
 }
 
+# Removes the release tarball and extract dir that 'update --from-github' downloaded,
+# unless --keep-cache (#298). The paths live in $script: scope because the nested
+# Fetch-GitHubSource helper sets them.
+function Clear-GitHubUpdateCache([switch]$KeepCache) {
+    if (-not $script:ghTarball) { return }
+    if ($KeepCache) {
+        Write-Host "  Cache preserved (--keep-cache): $script:ghTarball" -ForegroundColor DarkGray
+        return
+    }
+    $removed = $false
+    foreach ($path in @($script:ghTarball, $script:ghExtractDir)) {
+        if ($path -and (Test-Path $path)) { Remove-Item -Recurse -Force $path; $removed = $true }
+    }
+    if ($removed) { Write-Host "  Cleaned up cache files." -ForegroundColor DarkGray }
+}
+
 function Invoke-UpdateGuard([string]$Guard, [string]$Mode, [object[]]$Items, [string]$SourceRoot, [string]$ProjectRoot, [switch]$OverwriteCustomized) {
     $list = [IO.Path]::GetTempFileName()
     try {
@@ -1569,8 +1585,11 @@ function Invoke-Update {
 
     # ─── --from-github path ──────────────────────────────────────
     $sourcePath = $null
-    $ghExtractDir = $null
-    $ghTarball = $null
+    $script:ghExtractDir = $null
+    $script:ghTarball = $null
+    $script:ghResolvedTag = $null
+    $script:ghSha256 = $null
+    $script:ghSizeBytes = $null
 
     # Helper: fetch + extract tarball for a resolved tag, returns source path.
     function Fetch-GitHubSource {
@@ -1617,6 +1636,9 @@ function Invoke-Update {
             exit 1
         }
         $script:ghTarball = $dlJson.path
+        $script:ghResolvedTag = $resolvedTag
+        $script:ghSha256 = $dlJson.sha256
+        $script:ghSizeBytes = $dlJson.sizeBytes
         Write-Host "  Downloaded: $($dlJson.path) ($($dlJson.sizeBytes) bytes)" -ForegroundColor White
         Write-Host "  SHA-256: $($dlJson.sha256)" -ForegroundColor DarkGray
 
@@ -1810,6 +1832,7 @@ function Invoke-Update {
         Write-Host "    pulls the latest tagged release from GitHub." -ForegroundColor DarkGray
         Write-Host ""
         Write-Host "  Override (not recommended): re-run with --allow-dev" -ForegroundColor DarkGray
+        Clear-GitHubUpdateCache -KeepCache:$keepCache
         exit 1
     }
 
@@ -1824,6 +1847,7 @@ function Invoke-Update {
 
     if ($currentVersion -eq $sourceVersion -and -not $forceUpdate) {
         Write-Host "Already up to date (v$currentVersion). Use --force to re-apply." -ForegroundColor Green
+        Clear-GitHubUpdateCache -KeepCache:$keepCache
         return
     }
 
@@ -2215,6 +2239,7 @@ function Invoke-Update {
     # ─── Report ───────────────────────────────────────────────────
     if ($updates.Count -eq 0 -and $newFiles.Count -eq 0 -and $kept.Count -eq 0 -and $currentVersion -eq $sourceVersion) {
         Write-Host "All framework files are up to date." -ForegroundColor Green
+        Clear-GitHubUpdateCache -KeepCache:$keepCache
         return
     }
 
@@ -2239,6 +2264,7 @@ function Invoke-Update {
 
     if ($dryRun) {
         Write-Host "DRY RUN — no files were changed." -ForegroundColor Yellow
+        Clear-GitHubUpdateCache -KeepCache:$keepCache
         return
     }
 
@@ -2247,6 +2273,7 @@ function Invoke-Update {
         $confirm = Read-Host "Apply $($updates.Count) updates and $($newFiles.Count) new files? [y/N] (use --force to skip this prompt)"
         if ($confirm -notin @('y', 'Y', 'yes', 'Yes')) {
             Write-Host "Cancelled." -ForegroundColor Yellow
+            Clear-GitHubUpdateCache -KeepCache:$keepCache
             return
         }
     }
@@ -2432,22 +2459,16 @@ writeFreshCache(process.argv[1], process.argv[2]);
     if ($fromGitHub -and -not $dryRun) {
         $filesChanged = ($updates.Count + $newFiles.Count)
         $auditEntry = @{
-            tag = $resolvedTag
-            sha256 = $ghSha256
-            sizeBytes = $ghSizeBytes
+            tag = $script:ghResolvedTag
+            sha256 = $script:ghSha256
+            sizeBytes = $script:ghSizeBytes
             source = "manual"
             filesChanged = $filesChanged
             outcome = "success"
         } | ConvertTo-Json -Compress
         $auditEntry | & node (Join-Path $RepoRoot "pforge-mcp/update-from-github.mjs") audit --project-dir $RepoRoot 2>&1 | Out-Null
     }
-    if ($fromGitHub -and -not $keepCache) {
-        if ($ghTarball -and (Test-Path $ghTarball)) { Remove-Item -Force $ghTarball }
-        if ($ghExtractDir -and (Test-Path $ghExtractDir)) { Remove-Item -Recurse -Force $ghExtractDir }
-        Write-Host "  Cleaned up cache files." -ForegroundColor DarkGray
-    } elseif ($fromGitHub -and $keepCache) {
-        Write-Host "  Cache preserved (--keep-cache): $ghTarball" -ForegroundColor DarkGray
-    }
+    if ($fromGitHub) { Clear-GitHubUpdateCache -KeepCache:$keepCache }
 }
 
 # ─── Command: analyze ──────────────────────────────────────────────────

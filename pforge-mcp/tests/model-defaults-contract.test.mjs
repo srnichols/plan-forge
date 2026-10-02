@@ -11,54 +11,41 @@ import { describe, expect, it } from "vitest";
 import { MODEL_PRICING } from "../cost-service.mjs";
 import { CONFIG_SCHEMA } from "../capabilities/schemas.mjs";
 import {
-  DEFAULT_ESCALATION_CHAIN,
   DEFAULT_ESTIMATE_MODEL,
   DEFAULT_GROK_ADDIN_MODEL,
   DEFAULT_QUORUM_MODELS,
   DEFAULT_QUORUM_REVIEWER_MODEL,
   DEFAULT_ROUTING_MODEL,
-  DEFAULT_WATCHER_MODEL,
+  defaultedModels,
   QUORUM_PRESETS,
 } from "../orchestrator/constants.mjs";
 import { isDirectApiOnlyModel } from "../orchestrator/worker-spawn.mjs";
 
-// GitHub Copilot retirements announced for 2026-09-01 .. 2026-10-19.
-// grok-4.5 is omitted: Plan Forge routes grok-* to the xAI API, where it stays.
-const COPILOT_RETIRED = [
-  "claude-sonnet-4.6",
-  "claude-opus-4.7",
-  "gemini-3.5-flash",
-  "gemini-3.6-flash",
-  "gemini-3.7-flash",
-  "kimi-k2.7-code",
-  "gpt-5.5",
-  "gpt-5.4",
-  "gpt-5.4-mini",
-  "gpt-5-mini",
-];
+// GitHub Copilot retirements, shared with scripts/check-model-drift.mjs (#303).
+const RETIREMENTS = JSON.parse(readFileSync(new URL("../model-retirements.json", import.meta.url), "utf8"));
+const COPILOT_RETIRED = Object.keys(RETIREMENTS.copilot);
 
 const WORKER_CAPABILITIES = JSON.parse(
   readFileSync(new URL("../worker-capabilities.json", import.meta.url), "utf8"),
 );
 
-const DEFAULTED_MODELS = [
-  DEFAULT_WATCHER_MODEL,
-  DEFAULT_GROK_ADDIN_MODEL,
-  DEFAULT_ROUTING_MODEL,
-  DEFAULT_ESTIMATE_MODEL,
-  DEFAULT_QUORUM_REVIEWER_MODEL,
-  ...DEFAULT_QUORUM_MODELS,
-  ...DEFAULT_ESCALATION_CHAIN.filter((m) => m !== "auto"),
-  ...["power", "speed"].flatMap((p) => [...QUORUM_PRESETS[p].models, QUORUM_PRESETS[p].reviewerModel]),
-];
+const DEFAULTED_MODELS = defaultedModels();
 
 describe("model defaults contract", () => {
-  it.each([...new Set(DEFAULTED_MODELS)])("%s is priced in MODEL_PRICING", (model) => {
+  it.each(DEFAULTED_MODELS)("%s is priced in MODEL_PRICING", (model) => {
     expect(MODEL_PRICING[model], `${model} has no MODEL_PRICING entry`).toBeDefined();
   });
 
   it("no default points at a model GitHub Copilot is retiring", () => {
     expect(DEFAULTED_MODELS.filter((m) => COPILOT_RETIRED.includes(m))).toEqual([]);
+  });
+
+  it("model-retirements.json maps model IDs to YYYY-MM-DD dates", () => {
+    expect(COPILOT_RETIRED.length).toBeGreaterThan(0);
+    for (const [model, date] of Object.entries(RETIREMENTS.copilot)) {
+      expect(date, model).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+      expect(Number.isNaN(Date.parse(date)), model).toBe(false);
+    }
   });
 
   it("DEFAULT_ESTIMATE_MODEL matches the gh-copilot worker's defaultModel", () => {

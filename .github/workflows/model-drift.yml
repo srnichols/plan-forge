@@ -1,0 +1,81 @@
+name: Model Drift
+
+# Weekly check that Plan Forge's model defaults and AI-credit pricing still match
+# GitHub Copilot (#303), so retirements and price changes surface without waiting
+# for a release. Runs scripts/check-model-drift.mjs:
+#   - a default retiring within 30 days (pforge-mcp/model-retirements.json),
+#   - a Copilot-served default missing from the live model list,
+#   - pforge-mcp/copilot-pricing.json out of date with live prices.
+# The live checks need a COPILOT_GITHUB_TOKEN secret (a token with Copilot access).
+# Drift, or missing credentials, opens or updates one tracking issue; a clean run
+# closes it. The release checklist's pricing step stays as the final check.
+
+on:
+  schedule:
+    - cron: '0 8 * * 1'  # Mondays 08:00 UTC
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: write
+
+env:
+  ISSUE_TITLE: Copilot model and pricing drift
+
+jobs:
+  drift:
+    name: Check model defaults and pricing against Copilot
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install the Copilot SDK
+        working-directory: pforge-mcp
+        run: npm install --no-audit --no-fund
+
+      - name: Check drift
+        id: check
+        env:
+          COPILOT_GITHUB_TOKEN: ${{ secrets.COPILOT_GITHUB_TOKEN }}
+        run: |
+          set +e
+          node scripts/check-model-drift.mjs --report "$RUNNER_TEMP/drift.md"
+          echo "code=$?" >> "$GITHUB_OUTPUT"
+
+      - name: Open or update the drift issue
+        if: steps.check.outputs.code == '1' || steps.check.outputs.code == '3'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          {
+            cat "$RUNNER_TEMP/drift.md"
+            echo
+            echo "_Reported by the [Model Drift workflow](${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID})._"
+          } > "$RUNNER_TEMP/body.md"
+          existing="$(gh issue list --state open --search "\"$ISSUE_TITLE\" in:title" --json number,title --jq ".[] | select(.title == \"$ISSUE_TITLE\") | .number" | head -1)"
+          if [ -n "$existing" ]; then
+            gh issue comment "$existing" --body-file "$RUNNER_TEMP/body.md"
+          else
+            gh issue create --title "$ISSUE_TITLE" --body-file "$RUNNER_TEMP/body.md"
+          fi
+
+      - name: Close the drift issue when clean
+        if: steps.check.outputs.code == '0'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          existing="$(gh issue list --state open --search "\"$ISSUE_TITLE\" in:title" --json number,title --jq ".[] | select(.title == \"$ISSUE_TITLE\") | .number" | head -1)"
+          if [ -n "$existing" ]; then
+            gh issue close "$existing" --comment "No drift in the [latest check](${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID})."
+          fi
+
+      - name: Fail on drift
+        if: steps.check.outputs.code != '0' && steps.check.outputs.code != '3'
+        run: |
+          echo "::error::Model or pricing drift found (exit ${{ steps.check.outputs.code }}); see the drift issue."
+          exit 1

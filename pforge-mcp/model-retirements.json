@@ -1,0 +1,22 @@
+{
+  "$comment": [
+    "GitHub Copilot model retirements (#303). Plan Forge must not default to a model listed here.",
+    "Value: the retirement date. Where GitHub announced one window for several models, the date is the window's end.",
+    "Add a model when GitHub announces its retirement. The weekly Model Drift workflow (scripts/check-model-drift.mjs)",
+    "fails when a default retires within 30 days, and model-defaults-contract.test.mjs fails once it has."
+  ],
+  "source": "GitHub Copilot supported-models page and changelog, 2026-09-30 model refresh",
+  "copilot": {
+    "claude-sonnet-4.6": "2026-09-01",
+    "claude-opus-4.7": "2026-10-02",
+    "gemini-3.5-flash": "2026-10-19",
+    "gemini-3.6-flash": "2026-10-19",
+    "gemini-3.7-flash": "2026-10-19",
+    "kimi-k2.7-code": "2026-10-19",
+    "gpt-5.5": "2026-10-19",
+    "gpt-5.4": "2026-10-19",
+    "gpt-5.4-mini": "2026-10-19",
+    "gpt-5-mini": "2026-10-19",
+    "grok-4.5": "2026-10-19"
+  }
+}

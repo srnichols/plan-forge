@@ -2,7 +2,7 @@
 import { readFileSync, writeFileSync } from "node:fs";
 import { createRequire } from "node:module";
 import { resolve } from "node:path";
-import { pathToFileURL } from "node:url";
+import { fileURLToPath, pathToFileURL } from "node:url";
 
 const require = createRequire(import.meta.url);
 const SNAPSHOT_PATH = resolve("pforge-mcp", "copilot-pricing.json");
@@ -38,7 +38,7 @@ function normalizePrices(tokenPrices) {
   return Object.fromEntries(Object.entries(entry).filter(([, value]) => value !== undefined));
 }
 
-function buildSnapshot(models) {
+export function buildSnapshot(models) {
   const priced = {};
   for (const model of models || []) {
     const entry = normalizePrices(model?.billing?.tokenPrices);
@@ -52,11 +52,11 @@ function buildSnapshot(models) {
   };
 }
 
-function stableSnapshot(snapshot) {
+export function stableSnapshot(snapshot) {
   return JSON.stringify({ ...snapshot, generatedAt: "<ignored>" }, null, 2);
 }
 
-async function loadCopilotModels() {
+export async function loadCopilotModels() {
   let sdkPath;
   try {
     sdkPath = require.resolve("@github/copilot-sdk", { paths: [resolve("pforge-mcp")] });
@@ -73,7 +73,7 @@ async function loadCopilotModels() {
   }
 }
 
-function readExistingSnapshot() {
+export function readExistingSnapshot() {
   return JSON.parse(readFileSync(SNAPSHOT_PATH, "utf8"));
 }
 
@@ -104,7 +104,10 @@ async function main() {
   console.log(`[sync-copilot-pricing] wrote ${SNAPSHOT_PATH} (${Object.keys(snapshot.models).length} priced models)`);
 }
 
-main().catch((err) => {
-  console.error(`[sync-copilot-pricing] failed: ${err.message}`);
-  process.exit(1);
-});
+// Importable by scripts/check-model-drift.mjs (#303); runs only when invoked directly.
+if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
+  main().catch((err) => {
+    console.error(`[sync-copilot-pricing] failed: ${err.message}`);
+    process.exit(1);
+  });
+}

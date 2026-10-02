@@ -254,6 +254,25 @@ export const QUORUM_PRESETS = {
 };
 
 /**
+ * Every model Plan Forge picks on the user's behalf, once each: the routing,
+ * estimate, watcher and quorum defaults, the escalation chain, and the power
+ * and speed quorum presets. The model-defaults contract and the weekly model
+ * drift check (#303) both walk this list.
+ */
+export function defaultedModels() {
+  return [...new Set([
+    DEFAULT_WATCHER_MODEL,
+    DEFAULT_GROK_ADDIN_MODEL,
+    DEFAULT_ROUTING_MODEL,
+    DEFAULT_ESTIMATE_MODEL,
+    DEFAULT_QUORUM_REVIEWER_MODEL,
+    ...DEFAULT_QUORUM_MODELS,
+    ...DEFAULT_ESCALATION_CHAIN.filter((m) => m !== "auto"),
+    ...["power", "speed"].flatMap((p) => [...QUORUM_PRESETS[p].models, QUORUM_PRESETS[p].reviewerModel]),
+  ])];
+}
+
+/**
  * 7-day default for “stalled” in-progress smelts. Long enough that Smith and
  * watcher all flag the same smelts.
  */

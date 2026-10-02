@@ -134,12 +134,14 @@ cost-parity evidence and migration notes in the release instruction file.
 
 ## 2 — Version files (single source of truth)
 
-Three files MUST agree at the tagged commit. Mismatch broke `pforge self-update` for weeks (v2.50.0–v2.52.0, v2.76.0–v2.80.1).
+These MUST agree at the tagged commit. Mismatch broke `pforge self-update` for weeks (v2.50.0–v2.52.0, v2.76.0–v2.80.1).
 
 | File | Format | Authority |
 |---|---|---|
 | `VERSION` | `2.82.1` (no leading `v`, no trailing newline, no `-dev`) | Tag verification, `release-guard.yml` workflow |
 | `pforge-mcp/package.json` | `"version": "2.82.1"` | npm/MCP server |
+| `pforge-master/package.json`, root `package.json` | `"version": "2.82.1"` | Forge-Master package (ships to consumers), workspace root |
+| `package-lock.json`, `pforge-mcp/package-lock.json` | workspace entries `"version": "2.82.1"` | npm lockfiles |
 | `CHANGELOG.md` | `## [2.82.1] — YYYY-MM-DD — title` | User-visible release notes |
 
 ### 2a. Choose the right version segment (SemVer — DO NOT DEFAULT TO MINOR)
@@ -167,25 +169,16 @@ Real failures this rule prevents:
 - Any time `VERSION` reads `X.Y+1.0-dev` after a feature release but the next thing to ship is a hotfix, you MUST first reset `VERSION` to `X.Y.Z+1-dev` before starting §3.
 
 ```pwsh
-# Set both version files atomically
-Set-Content -NoNewline -Encoding utf8 -Path VERSION -Value "2.82.1"
-$pkg = Get-Content pforge-mcp/package.json -Raw | ConvertFrom-Json
-$pkg.version = "2.82.1"
-($pkg | ConvertTo-Json -Depth 20) | Set-Content -Encoding utf8 pforge-mcp/package.json
+# Write VERSION (no trailing newline) and every package version and lockfile entry above
+node scripts/sync-versions.mjs 2.82.1
 ```
 
 Verify:
 ```pwsh
-Get-Content VERSION -Raw  # → 2.82.1
-(Get-Content pforge-mcp/package.json -Raw | ConvertFrom-Json).version  # → 2.82.1
+node scripts/sync-versions.mjs --check  # → All package versions match 2.82.1
 ```
 
-**Drift to be aware of** (pre-existing, doesn't affect consumers — only `pforge-mcp/package.json` ships):
-- `package.json` (root) — `2.65.0-dev`, never bumped after v2.65.0
-- `pforge-master/package.json` — drifts from main
-- `pforge-sdk/package.json` — independent versioning (`0.1.x`)
-
-If you bring these into lockstep, do it in a separate commit so the release commit stays focused.
+The script changes only version values, so key order, indentation and line endings stay as they are. `pforge-sdk/package.json` is versioned independently (`0.x`) and is left alone. `pforge-mcp/tests/version-sync.test.mjs` fails when any of these disagree with `VERSION`.
 
 ---
 
@@ -212,14 +205,13 @@ Pick `X.Y.Z` per §2a (SemVer decision). **Do not** just strip `-dev` from the c
 ```pwsh
 # If §2a says PATCH and VERSION currently reads e.g. 3.7.0-dev (minor bump-back)
 # but the next release is a hotfix from 3.6.1, set the right number explicitly:
-Set-Content -NoNewline -Encoding utf8 -Path VERSION -Value "3.6.2"
-# (also pforge-mcp/package.json — see §2)
+node scripts/sync-versions.mjs 3.6.2
 ```
 
 ### Step 3 — Release commit
 
 ```pwsh
-git add VERSION pforge-mcp/package.json CHANGELOG.md
+git add VERSION package.json package-lock.json pforge-mcp/package.json pforge-mcp/package-lock.json pforge-master/package.json CHANGELOG.md
 git commit -m "chore(release): vX.Y.Z" -m "<short summary, bullets per fix>"
 ```
 
@@ -280,12 +272,9 @@ The bump-back is always to the **next likely** release of the same kind. If the 
 
 ```pwsh
 # Example: just shipped 3.6.2 (PATCH). Bump to 3.6.3-dev.
-Set-Content -NoNewline -Encoding utf8 -Path VERSION -Value "3.6.3-dev"
-$pkg = Get-Content pforge-mcp/package.json -Raw | ConvertFrom-Json
-$pkg.version = "3.6.3-dev"
-($pkg | ConvertTo-Json -Depth 20) | Set-Content -Encoding utf8 pforge-mcp/package.json
+node scripts/sync-versions.mjs 3.6.3-dev
 
-git add VERSION pforge-mcp/package.json
+git add VERSION package.json package-lock.json pforge-mcp/package.json pforge-mcp/package-lock.json pforge-master/package.json
 git commit -m "chore: bump VERSION to 3.6.3-dev"
 git push origin master
 ```
@@ -369,14 +358,11 @@ This happens when a previous release used the old unconditional `X.Y+1.0-dev` ru
 Fix it BEFORE starting §3 (do not just override in §3 step 2 — also correct the historical commit message intent by leaving a one-liner in the new commit message):
 
 ```pwsh
-# Re-set VERSION + pforge-mcp/package.json to the correct next-dev for the change you're about to ship.
+# Re-set VERSION and the package versions to the correct next-dev for the change you're about to ship.
 # Example: VERSION says 3.7.0-dev, but next release is a hotfix from 3.6.1 → reset to 3.6.2-dev.
-Set-Content -NoNewline -Encoding utf8 -Path VERSION -Value "3.6.2-dev"
-$pkg = Get-Content pforge-mcp/package.json -Raw | ConvertFrom-Json
-$pkg.version = "3.6.2-dev"
-($pkg | ConvertTo-Json -Depth 20) | Set-Content -Encoding utf8 pforge-mcp/package.json
+node scripts/sync-versions.mjs 3.6.2-dev
 
-git add VERSION pforge-mcp/package.json
+git add VERSION package.json package-lock.json pforge-mcp/package.json pforge-mcp/package-lock.json pforge-master/package.json
 git commit -m "chore: reset VERSION to 3.6.2-dev (next release is a hotfix, not a minor)"
 git push origin master
 ```
@@ -405,7 +391,7 @@ If a user genuinely wants the older release (e.g. their local v2.96.0 is corrupt
 [ ] §1b Every instruction file enumerated in setup.{ps1,sh} + pforge.{ps1,sh}
 [ ] §1c New step-N prompts added to smith's required list (if any)
 [ ] §2a Picked SemVer segment from commit content (PATCH for fix:, MINOR for feat:, MAJOR for !:)
-[ ] §2  VERSION + pforge-mcp/package.json both = X.Y.Z (no -dev)
+[ ] §2  node scripts/sync-versions.mjs X.Y.Z, then --check passes (no -dev)
 [ ] §3.1 CHANGELOG promoted [Unreleased] → [X.Y.Z]
 [ ] §3.3 git commit -m "chore(release): vX.Y.Z"
 [ ] §3.4 git push origin master
@@ -416,7 +402,7 @@ If a user genuinely wants the older release (e.g. their local v2.96.0 is corrupt
 [ ] §3.8 gh release list → vX.Y.Z marked "Latest"
 [ ] §3.8 resolve-tag returns {"ok":true,"tag":"vX.Y.Z"} with no warning
 [ ] §3.8 Actual public self-update path verified in PowerShell and Bash; extraction is not covered by local-source upgrades
-[ ] §3.9 Bump VERSION + pforge-mcp/package.json → next dev (PATCH→Z+1, MINOR→Y+1.0, MAJOR→X+1.0.0) — separate commit
+[ ] §3.9 node scripts/sync-versions.mjs <next-dev> (PATCH→Z+1, MINOR→Y+1.0, MAJOR→X+1.0.0) — separate commit
 [ ] §3.9 git push origin master
 ```
 

@@ -61,6 +61,7 @@ const SOURCE_ONLY_SUITES = {
     "tests/testbed-happypath.test.mjs",
   ],
   "../scripts/forge-home-cleanup.mjs": ["tests/forge-home-cleanup.test.mjs"],
+  "../scripts/sync-versions.mjs": ["tests/version-sync.test.mjs"],
   "../pforge-master": [
     "tests/auditor-automation-baseline.test.mjs",
     "tests/forge-master.advisory.test.mjs",

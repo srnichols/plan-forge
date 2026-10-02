@@ -40,7 +40,7 @@ import { findLatestRun, parseEventLine, parseEventsLog, readSliceArtifacts, norm
 import { inferSliceType, recommendModel } from "./model-scoring.mjs";
 import { loadQuorumConfig, classifyLegError, quorumDispatch, quorumReview, analyzeWithQuorum, calculateSliceCost, buildCostBreakdown } from "./quorum.mjs";
 import { estimatePlan as _estimatePlan } from "../cost-service.mjs";
-import { isRetiredModel, retirementDate } from "../model-retirements.mjs";
+import { isRetiredModel, retirementDate } from "../copilot-models.mjs";
 import { rewritePlanStatusOnSuccess as _rewritePlanStatusOnSuccess } from "./run-plan/plan-status-update.mjs";
 
 const [QUORUM_MODE_AUTO, QUORUM_PRESET_POWER, QUORUM_PRESET_SPEED, QUORUM_MODE_FALSE] = QUORUM_MODES;

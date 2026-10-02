@@ -237,7 +237,7 @@ describe("recommendModel — API-only model exclusion (with gh-copilot absent)",
 
 // ─── recommendModel skips Copilot-retired models ────────────────────────
 
-describe("recommendModel — skips models GitHub Copilot has retired", () => {
+describe("recommendModel — only models GitHub Copilot currently serves", () => {
   let tempDir;
 
   beforeEach(() => {
@@ -261,6 +261,26 @@ describe("recommendModel — skips models GitHub Copilot has retired", () => {
     const rec = recommendModel(tempDir);
     expect(rec).not.toBeNull();
     expect(rec.model).toBe("claude-sonnet-5.5");
+  });
+
+  it("passes over a model GitHub Copilot no longer serves, even with no announced retirement", () => {
+    const date = new Date().toISOString();
+    // claude-opus-4.6 left Copilot's catalog without a dated retirement notice.
+    for (let i = 0; i < 6; i++) {
+      recordModelPerformance(tempDir, { date, model: "claude-opus-4.6", status: "passed", cost_usd: 0.01 });
+      recordModelPerformance(tempDir, { date, model: "claude-opus-5.5", status: "passed", cost_usd: 0.09 });
+    }
+
+    expect(recommendModel(tempDir).model).toBe("claude-opus-5.5");
+  });
+
+  it("never recommends a model outside Copilot's current catalog", () => {
+    const date = new Date().toISOString();
+    for (let i = 0; i < 4; i++) {
+      recordModelPerformance(tempDir, { date, model: "some-custom-model", status: "passed", cost_usd: 0.01 });
+    }
+
+    expect(recommendModel(tempDir)).toBeNull();
   });
 
   it("returns null when every qualifying model is retired", () => {

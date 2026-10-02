@@ -1,5 +1,5 @@
 /**
- * Runtime model-retirement lookups (pforge-mcp/model-retirements.mjs).
+ * Runtime Copilot model lookups (pforge-mcp/copilot-models.mjs).
  *
  * The run-history recommender picked claude-sonnet-4.6 a month after GitHub
  * Copilot retired it, so every routed slice burned an attempt on
@@ -11,7 +11,7 @@ import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { isRetiredModel, retiredModels, retirementDate } from "../model-retirements.mjs";
+import { isRecommendableModel, isRetiredModel, isServedByCopilot, retiredModels, retirementDate } from "../copilot-models.mjs";
 import { runPlan } from "../orchestrator.mjs";
 
 const RETIREMENTS = JSON.parse(readFileSync(new URL("../model-retirements.json", import.meta.url), "utf8")).copilot;
@@ -65,6 +65,38 @@ describe("retiredModels", () => {
 
   it("returns an empty array for no input", () => {
     expect(retiredModels(undefined)).toEqual([]);
+  });
+});
+
+const CATALOG = Object.keys(JSON.parse(readFileSync(new URL("../copilot-pricing.json", import.meta.url), "utf8")).models);
+
+describe("isServedByCopilot", () => {
+  it("is true for every model in the copilot-pricing.json snapshot", () => {
+    expect(CATALOG.length).toBeGreaterThan(0);
+    expect(CATALOG.filter((m) => !isServedByCopilot(m))).toEqual([]);
+  });
+
+  it.each(["claude-opus-4.6", "claude-sonnet-4.6", "auto", "", null, undefined])("is false for %j", (value) => {
+    expect(isServedByCopilot(value)).toBe(false);
+  });
+});
+
+describe("isRecommendableModel", () => {
+  it("accepts a current Copilot model", () => {
+    expect(isRecommendableModel("claude-opus-5.5")).toBe(true);
+  });
+
+  it("rejects a model Copilot dropped without a dated retirement", () => {
+    expect(isRecommendableModel("claude-opus-4.6")).toBe(false);
+  });
+
+  // Needs a model that is still in the catalog but has a retirement date; the
+  // weekly pricing refresh removes those once they retire, so run only when one exists.
+  const [retiring] = CATALOG.filter((m) => retirementDate(m));
+  it.runIf(retiring)("rejects a catalog model once its retirement date passes", () => {
+    const before = new Date(`${retirementDate(retiring)}T00:00:00Z`).getTime() - 1;
+    expect(isRecommendableModel(retiring, new Date(before))).toBe(true);
+    expect(isRecommendableModel(retiring, new Date(`${retirementDate(retiring)}T00:00:00Z`))).toBe(false);
   });
 });
 

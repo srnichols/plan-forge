@@ -20,7 +20,7 @@
 
 import { loadModelPerformance, aggregateModelStats } from "./forge-io.mjs";
 import { isApiOnlyModel, assessQuorumViability } from "./worker-spawn.mjs";
-import { isRetiredModel } from "../model-retirements.mjs";
+import { isRecommendableModel } from "../copilot-models.mjs";
 
 export { scoreSliceComplexity } from "./review-watcher.mjs";
 export { loadModelPerformance, aggregateModelStats } from "./forge-io.mjs";
@@ -52,7 +52,8 @@ export function inferSliceType(slice) {
  * Selection criteria:
  *   1. Minimum 3 slices of data (MIN_SAMPLE)
  *   2. Success rate > 80%
- *   3. Not API-only, and not retired by GitHub Copilot (history outlives models)
+ *   3. Not API-only, and in GitHub Copilot's current catalog and not retiring
+ *      (run history outlives models; see copilot-models.mjs)
  *   4. Cheapest qualifying model wins
  *
  * Records are filtered by sliceType when type info is present in history.
@@ -73,7 +74,7 @@ export function recommendModel(cwd, sliceType = null) {
 
     const stats = aggregateModelStats(relevant);
     const qualified = Object.entries(stats)
-      .filter(([m, s]) => !isApiOnlyModel(m) && !isRetiredModel(m) && s.total_slices >= MIN_SAMPLE && s.success_rate > MIN_SUCCESS_RATE)
+      .filter(([m, s]) => !isApiOnlyModel(m) && isRecommendableModel(m) && s.total_slices >= MIN_SAMPLE && s.success_rate > MIN_SUCCESS_RATE)
       .map(([m, s]) => ({
         model: m,
         success_rate: s.success_rate,

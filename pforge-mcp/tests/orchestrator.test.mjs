@@ -974,16 +974,16 @@ describe("recommendModel", () => {
     const date = new Date().toISOString();
     // Model A: 4 slices, 100% pass, avg $0.10
     for (let i = 0; i < 4; i++) {
-      recordModelPerformance(tempDir, { date, model: "cheap-model", status: "passed", cost_usd: 0.10 });
+      recordModelPerformance(tempDir, { date, model: "claude-haiku-4.5", status: "passed", cost_usd: 0.10 });
     }
     // Model B: 4 slices, 100% pass, avg $0.50
     for (let i = 0; i < 4; i++) {
-      recordModelPerformance(tempDir, { date, model: "expensive-model", status: "passed", cost_usd: 0.50 });
+      recordModelPerformance(tempDir, { date, model: "claude-opus-5.5", status: "passed", cost_usd: 0.50 });
     }
 
     const rec = recommendModel(tempDir);
     expect(rec).not.toBeNull();
-    expect(rec.model).toBe("cheap-model");
+    expect(rec.model).toBe("claude-haiku-4.5");
     expect(rec.success_rate).toBeGreaterThan(0.8);
   });
 
@@ -991,7 +991,7 @@ describe("recommendModel", () => {
     const date = new Date().toISOString();
     // Model: 5 slices, 2 passed (40% success) — should NOT qualify
     for (let i = 0; i < 5; i++) {
-      recordModelPerformance(tempDir, { date, model: "bad-model", status: i < 2 ? "passed" : "failed", cost_usd: 0.01 });
+      recordModelPerformance(tempDir, { date, model: "claude-sonnet-5", status: i < 2 ? "passed" : "failed", cost_usd: 0.01 });
     }
 
     expect(recommendModel(tempDir)).toBeNull();
@@ -1001,30 +1001,30 @@ describe("recommendModel", () => {
     const date = new Date().toISOString();
     // "test" slices: model-a has 4 records
     for (let i = 0; i < 4; i++) {
-      recordModelPerformance(tempDir, { date, model: "model-a", sliceType: "test", status: "passed", cost_usd: 0.02 });
+      recordModelPerformance(tempDir, { date, model: "claude-haiku-4.5", sliceType: "test", status: "passed", cost_usd: 0.02 });
     }
     // "execute" slices: model-b has 4 records
     for (let i = 0; i < 4; i++) {
-      recordModelPerformance(tempDir, { date, model: "model-b", sliceType: "execute", status: "passed", cost_usd: 0.08 });
+      recordModelPerformance(tempDir, { date, model: "claude-sonnet-5.5", sliceType: "execute", status: "passed", cost_usd: 0.08 });
     }
 
     const recTest = recommendModel(tempDir, "test");
     expect(recTest).not.toBeNull();
-    expect(recTest.model).toBe("model-a");
+    expect(recTest.model).toBe("claude-haiku-4.5");
   });
 
   it("falls back to all records when type-specific data is insufficient", () => {
     const date = new Date().toISOString();
     // Only 1 test record — fewer than MIN_SAMPLE of 3
-    recordModelPerformance(tempDir, { date, model: "model-a", sliceType: "test", status: "passed", cost_usd: 0.02 });
+    recordModelPerformance(tempDir, { date, model: "claude-haiku-4.5", sliceType: "test", status: "passed", cost_usd: 0.02 });
     // 3 execute records for the same model
     for (let i = 0; i < 3; i++) {
-      recordModelPerformance(tempDir, { date, model: "model-a", sliceType: "execute", status: "passed", cost_usd: 0.02 });
+      recordModelPerformance(tempDir, { date, model: "claude-haiku-4.5", sliceType: "execute", status: "passed", cost_usd: 0.02 });
     }
 
     const rec = recommendModel(tempDir, "test");
     expect(rec).not.toBeNull();
-    expect(rec.model).toBe("model-a");
+    expect(rec.model).toBe("claude-haiku-4.5");
   });
 });
 

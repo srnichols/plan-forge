@@ -7,6 +7,8 @@ Format follows [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
+## [3.29.2] — 2026-10-02 — Self-update ignores Node warnings; setup.ps1 on Linux
+
 ### Fixed
 
 - **`pforge self-update` no longer fails when Node prints a warning.** The wrappers read a Node helper's JSON result as the last line of its combined output. When Node printed a deprecation warning after the JSON, as it does on some systems, self-update read an empty release tag and tried to download `v`. Both shells now take the last JSON line. Found by the new Release Rehearsal workflow on its first public run.

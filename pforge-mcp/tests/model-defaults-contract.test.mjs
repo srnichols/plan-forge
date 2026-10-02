@@ -98,6 +98,14 @@ describe("Guard: shell entry points restate the runtime model defaults", () => {
     expect(seeded).toBe(DEFAULT_ROUTING_MODEL);
   });
 
+  it("pforge.ps1 update migration seeds modelRouting.default with DEFAULT_ROUTING_MODEL", () => {
+    const src = readRepoFile("pforge.ps1");
+    const seeded = [...src.matchAll(/NotePropertyName "modelRouting" -NotePropertyValue @\{ default = "([^"]+)" \}|modelRouting\.default = ([\w.-]+)/g)]
+      .map((m) => m[1] || m[2]);
+    expect(seeded.length).toBeGreaterThan(0);
+    expect(new Set(seeded)).toEqual(new Set([DEFAULT_ROUTING_MODEL]));
+  });
+
   it.each(["pforge.ps1", "pforge.sh"])("%s doctor reports DEFAULT_QUORUM_REVIEWER_MODEL as the default reviewer", (file) => {
     expect(readRepoFile(file)).toContain(`default (${DEFAULT_QUORUM_REVIEWER_MODEL})`);
   });

@@ -1266,17 +1266,21 @@ $sharedFiles = @(
     @{ Src = "presets/shared/.github/instructions/clean-code.instructions.md";       Dst = ".github/instructions/clean-code.instructions.md" }
     @{ Src = ".github/instructions/context-fuel.instructions.md";                    Dst = ".github/instructions/context-fuel.instructions.md" }
     @{ Src = ".github/instructions/git-workflow.instructions.md";                    Dst = ".github/instructions/git-workflow.instructions.md" }
-    @{ Src = ".github/instructions/security.instructions.md";                        Dst = ".github/instructions/security.instructions.md" }
+    @{ Src = "presets/shared/.github/instructions/security.instructions.md";         Dst = ".github/instructions/security.instructions.md" }
     @{ Src = "presets/shared/.github/instructions/self-repair-reporting.instructions.md"; Dst = ".github/instructions/self-repair-reporting.instructions.md" }
     @{ Src = "presets/shared/.github/instructions/status-reporting.instructions.md"; Dst = ".github/instructions/status-reporting.instructions.md" }
     @{ Src = "presets/shared/.github/instructions/testing.instructions.md";          Dst = ".github/instructions/testing.instructions.md" }
     @{ Src = "templates/.github/instructions/project-principles.instructions.md";    Dst = ".github/instructions/project-principles.instructions.md" }
 )
 
+# A selected stack preset's own copy (e.g. testing or security) wins over the shared
+# one. Copying the shared file first would make Step 3 skip the preset's (#280).
+$stackPresets = @($Preset | Where-Object { $_ -ne 'custom' })
 foreach ($f in $sharedFiles) {
     $src = Join-Path $templateRoot $f.Src
     $dst = Join-Path $ProjectPath $f.Dst
-    if (Test-Path $src) {
+    $presetOwnsFile = @($stackPresets | Where-Object { Test-Path (Join-Path $templateRoot "presets/$_/$($f.Dst)") }).Count -gt 0
+    if ((Test-Path $src) -and -not $presetOwnsFile) {
         Copy-WithCreate $src $dst $Force.IsPresent
     }
 }

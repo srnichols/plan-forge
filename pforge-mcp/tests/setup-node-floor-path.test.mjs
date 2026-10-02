@@ -78,7 +78,7 @@ describe("installer Node preflight - source path portability", () => {
     const end = source.indexOf('    echo "Changes found:"', start);
     expect(start).toBeGreaterThan(-1);
     expect(end).toBeGreaterThan(start);
-    const script = 'set -euo pipefail\ncheck_fixture() {\nlocal -a _updates=() _new_files=()\nlocal current_version="3.26.5" source_version="3.26.6"\n'
+    const script = 'set -euo pipefail\ncheck_fixture() {\nlocal -a _updates=() _new_files=() _kept=()\nlocal current_version="3.26.5" source_version="3.26.6"\n'
       + source.slice(start, end) + '\nprintf "MIGRATION_CONTINUES\\n"\n}\ncheck_fixture\n';
     const outcome = spawnSync(bash, ["-c", script], { cwd: sourceDir, encoding: "utf8", windowsHide: true });
     expect(outcome.status).toBe(0);
@@ -87,7 +87,7 @@ describe("installer Node preflight - source path portability", () => {
 
   it.skipIf(!isWindows)("the PowerShell updater also finishes metadata after a partial copy", () => {
     const block = preflight("pforge.ps1", "    if ($updates.Count -eq 0", '    Write-Host "Changes found:"');
-    const script = '$ErrorActionPreference="Stop"; function Check-Update { $updates=@(); $newFiles=@(); $currentVersion="3.26.5"; $sourceVersion="3.26.6"; '
+    const script = '$ErrorActionPreference="Stop"; function Check-Update { $updates=@(); $newFiles=@(); $kept=@(); $currentVersion="3.26.5"; $sourceVersion="3.26.6"; '
       + block + '; Write-Output "MIGRATION_CONTINUES" }; Check-Update';
     const outcome = spawnSync("pwsh", ["-NoProfile", "-Command", script], { cwd: sourceDir, encoding: "utf8", windowsHide: true });
     expect(outcome.status).toBe(0);

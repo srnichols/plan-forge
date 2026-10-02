@@ -1190,22 +1190,33 @@ SHARED_FILES=(
     "presets/shared/.github/instructions/clean-code.instructions.md:.github/instructions/clean-code.instructions.md"
     ".github/instructions/context-fuel.instructions.md"
     ".github/instructions/git-workflow.instructions.md"
-    ".github/instructions/security.instructions.md"
+    "presets/shared/.github/instructions/security.instructions.md:.github/instructions/security.instructions.md"
     "presets/shared/.github/instructions/self-repair-reporting.instructions.md:.github/instructions/self-repair-reporting.instructions.md"
     "presets/shared/.github/instructions/status-reporting.instructions.md:.github/instructions/status-reporting.instructions.md"
     "presets/shared/.github/instructions/testing.instructions.md:.github/instructions/testing.instructions.md"
     "templates/.github/instructions/project-principles.instructions.md:.github/instructions/project-principles.instructions.md"
 )
 
+# A selected stack preset's own copy (e.g. testing or security) wins over the shared
+# one. Copying the shared file first would make Step 3 skip the preset's (#280).
 for rel in "${SHARED_FILES[@]}"; do
     if [[ "$rel" == *":"* ]]; then
         src="$TEMPLATE_ROOT/${rel%%:*}"
-        dst="$PROJECT_PATH/${rel##*:}"
+        dst_rel="${rel##*:}"
     else
         src="$TEMPLATE_ROOT/$rel"
-        dst="$PROJECT_PATH/$rel"
+        dst_rel="$rel"
     fi
-    if [[ -f "$src" ]]; then
+    dst="$PROJECT_PATH/$dst_rel"
+    shared_owned_by_preset=false
+    for shared_preset in "${PRESETS[@]}"; do
+        [[ "$shared_preset" == "custom" ]] && continue
+        if [[ -f "$TEMPLATE_ROOT/presets/$shared_preset/$dst_rel" ]]; then
+            shared_owned_by_preset=true
+            break
+        fi
+    done
+    if [[ -f "$src" ]] && [[ "$shared_owned_by_preset" != true ]]; then
         copy_with_create "$src" "$dst" || true
     fi
 done

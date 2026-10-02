@@ -275,9 +275,11 @@ function Show-Help {
     Write-Host "  ext install <p>   Install extension from path"
     Write-Host "  ext list          List installed extensions"
     Write-Host "  ext remove <name> Remove an installed extension"
-    Write-Host "  update [source]   Update framework files from Plan Forge source (preserves customizations)"
+    Write-Host "  update [source]   Update framework files from Plan Forge source (keeps guidance files you edited)"
+    Write-Host "                      Flags: --dry-run, --force (no prompt), --overwrite-customized (replace edited guidance; backups kept)"
     Write-Host "  self-update       Check for and install the latest Plan Forge release from GitHub"
-    Write-Host "                      Flags: --force (heal), --downgrade (with --force), --yes/-y, --dry-run, --verify (run check + smith after)"
+    Write-Host "                      Flags: --force (heal), --downgrade (with --force), --yes/-y, --dry-run, --verify (run check + smith after),"
+    Write-Host "                             --overwrite-customized"
     Write-Host "  analyze <plan>    Cross-artifact analysis — requirement traceability, test coverage, scope compliance"
     Write-Host "  run-plan <plan>   Execute a hardened plan — spawn CLI workers, validate at every boundary, track tokens"
     Write-Host "  version-bump <v>  Update version across all files (VERSION, package.json, docs, README)"
@@ -1470,6 +1472,61 @@ function Invoke-Diff {
 }
 
 # ─── Command: update ───────────────────────────────────────────────────
+# ─── Update guard (#280) ──────────────────────────────────────────────
+# Guidance files (instructions, prompts, agents, skills, hooks, runbooks) go
+# through pforge-mcp/update-guard.mjs from the update source. It replaces only
+# files the project has not changed, keeps customized ones (saving the new
+# version under .forge/update-pending/), and renders setup's placeholders.
+$script:GuidancePathPattern = '^(\.github/(prompts|instructions|agents|skills|hooks)/|docs/plans/)'
+
+function Select-GuidedFiles([object[]]$Items, [string]$SourceRoot, [string]$ProjectRoot) {
+    foreach ($item in $Items) {
+        if (-not $item.Dst.StartsWith($ProjectRoot, [StringComparison]::OrdinalIgnoreCase)) { continue }
+        if (-not $item.Src.StartsWith($SourceRoot, [StringComparison]::OrdinalIgnoreCase)) { continue }
+        $dstRel = $item.Dst.Substring($ProjectRoot.Length).TrimStart('\', '/').Replace('\', '/')
+        if ($dstRel -notmatch $script:GuidancePathPattern) { continue }
+        $item.Guided = $true
+        $item.DstRel = $dstRel
+        $item.SrcRel = $item.Src.Substring($SourceRoot.Length).TrimStart('\', '/').Replace('\', '/')
+        $item
+    }
+}
+
+# The guard to use: the source's copy (its index knows the newest shipped
+# versions), else the project's installed copy (e.g. when the source is an older
+# release). $null when Node or both copies are missing; update then compares
+# guidance files byte for byte, as releases before the guard did.
+function Resolve-UpdateGuard([string]$SourceRoot, [string]$ProjectRoot) {
+    if (-not (Get-Command node -ErrorAction SilentlyContinue)) { return $null }
+    foreach ($root in @($SourceRoot, $ProjectRoot)) {
+        $guard = Join-Path $root 'pforge-mcp/update-guard.mjs'
+        if ((Test-Path $guard) -and (Test-Path (Join-Path $root 'pforge-mcp/shipped-guidance-hashes.json'))) { return $guard }
+    }
+    return $null
+}
+
+function Invoke-UpdateGuard([string]$Guard, [string]$Mode, [object[]]$Items, [string]$SourceRoot, [string]$ProjectRoot, [switch]$OverwriteCustomized) {
+    $list = [IO.Path]::GetTempFileName()
+    try {
+        $lines = ($Items | ForEach-Object { "$($_.SrcRel)`t$($_.DstRel)" }) -join "`n"
+        [IO.File]::WriteAllText($list, "$lines`n", [Text.UTF8Encoding]::new($false))
+        $guardArgs = @($Guard, $Mode, '--source', $SourceRoot, '--project', $ProjectRoot, '--list', $list)
+        if ($OverwriteCustomized) { $guardArgs += '--overwrite-customized' }
+        # stdout only: under Windows PowerShell 5.1, merging a native command's
+        # stderr with 2>&1 throws when $ErrorActionPreference is Stop.
+        $out = & node @guardArgs
+        if ($LASTEXITCODE -ne 0) { throw "update guard failed with exit code $LASTEXITCODE" }
+        $result = [ordered]@{}
+        foreach ($line in @($out)) {
+            $parts = "$line" -split "`t"
+            if ($parts.Count -ge 2) { $result[$parts[1]] = @{ Action = $parts[0]; Detail = $(if ($parts.Count -ge 3) { $parts[2] } else { '' }) } }
+        }
+        return $result
+    } finally {
+        Remove-Item $list -ErrorAction SilentlyContinue
+    }
+}
+
 function Invoke-Update {
     Write-ManualSteps "update" @(
         "Clone/pull the latest Plan Forge template repo"
@@ -1481,6 +1538,7 @@ function Invoke-Update {
 
     $dryRun = $Arguments -contains '--dry-run' -or $Arguments -contains '--check'
     $forceUpdate = $Arguments -contains '--force'
+    $overwriteCustomized = $Arguments -contains '--overwrite-customized'
     $fromGitHub = $Arguments -contains '--from-github'
     $keepCache = $Arguments -contains '--keep-cache'
 
@@ -1807,6 +1865,20 @@ function Invoke-Update {
         }
     }
 
+    # Normalise preset: .forge.json may store a single string or a comma-separated list
+    $presets = @()
+    if ($currentPreset -is [System.Array]) {
+        $presets = $currentPreset
+    } elseif ($currentPreset -match ',') {
+        $presets = $currentPreset -split ',' | ForEach-Object { $_.Trim() }
+    } else {
+        $presets = @($currentPreset)
+    }
+
+    # #280: resolve the update guard before scanning, so preset files the project
+    # already has are offered only when the guard can keep the project's edits.
+    $updateGuard = Resolve-UpdateGuard -SourceRoot $sourcePath -ProjectRoot $RepoRoot
+
     # Update shared instruction files.
     # Source convention mirrors setup.ps1 Step 2:
     #   $sourcePath/.github/instructions/             — Plan-Forge-internal files that ship as-is (no leakage)
@@ -1815,10 +1887,16 @@ function Invoke-Update {
     $srcInternalInstr = Join-Path $sourcePath ".github/instructions"
     $srcSharedInstr   = Join-Path $sourcePath "presets/shared/.github/instructions"
     $dstInstr = Join-Path $RepoRoot ".github/instructions"
-    $internalInstructions = @("ai-plan-hardening-runbook.instructions.md", "context-fuel.instructions.md", "git-workflow.instructions.md", "security.instructions.md")
-    $sharedInstructions   = @("architecture-principles.instructions.md", "clean-code.instructions.md", "self-repair-reporting.instructions.md", "status-reporting.instructions.md", "testing.instructions.md")
+    $internalInstructions = @("ai-plan-hardening-runbook.instructions.md", "context-fuel.instructions.md", "git-workflow.instructions.md")
+    $sharedInstructions   = @("architecture-principles.instructions.md", "clean-code.instructions.md", "security.instructions.md", "self-repair-reporting.instructions.md", "status-reporting.instructions.md", "testing.instructions.md")
+    # #280: a stack preset's own copy (e.g. testing or security) wins over the shared one.
+    $presetOwnedInstructions = @(@($internalInstructions + $sharedInstructions) | Where-Object {
+        $name = $_
+        @($presets | Where-Object { $_ -ne 'custom' -and (Test-Path (Join-Path $sourcePath "presets/$_/.github/instructions/$name")) }).Count -gt 0
+    })
     if (Test-Path $srcInternalInstr) {
         foreach ($instrName in $internalInstructions) {
+            if ($presetOwnedInstructions -contains $instrName) { continue }
             $srcFile = Join-Path $srcInternalInstr $instrName
             $dstFile = Join-Path $dstInstr $instrName
             if ((Test-Path $srcFile) -and (Test-Path $dstFile)) {
@@ -1832,6 +1910,7 @@ function Invoke-Update {
     }
     if (Test-Path $srcSharedInstr) {
         foreach ($instrName in $sharedInstructions) {
+            if ($presetOwnedInstructions -contains $instrName) { continue }
             $srcFile = Join-Path $srcSharedInstr $instrName
             $dstFile = Join-Path $dstInstr $instrName
             if ((Test-Path $srcFile) -and (Test-Path $dstFile)) {
@@ -1863,15 +1942,6 @@ function Invoke-Update {
     }
 
     # ─── Preset-specific files (instructions, agents, prompts, skills) ───
-    # Normalise preset: .forge.json may store a single string or a comma-separated list
-    $presets = @()
-    if ($currentPreset -is [System.Array]) {
-        $presets = $currentPreset
-    } elseif ($currentPreset -match ',') {
-        $presets = $currentPreset -split ',' | ForEach-Object { $_.Trim() }
-    } else {
-        $presets = @($currentPreset)
-    }
 
     foreach ($p in ($presets | Where-Object { $_ -ne 'custom' })) {
         $srcPresetDir = Join-Path $sourcePath "presets/$p/.github"
@@ -1879,7 +1949,8 @@ function Invoke-Update {
 
         Write-Host "  Checking preset: $p" -ForegroundColor DarkGray
 
-        # Instructions, agents, prompts: add NEW files only — existing files may have been customized
+        # Instructions, agents, prompts. Existing files are offered too: the update
+        # guard (#280) replaces them only when the project has not changed them.
         foreach ($subDir in @('instructions', 'agents', 'prompts')) {
             $srcSub = Join-Path $srcPresetDir $subDir
             $dstSub = Join-Path $RepoRoot ".github/$subDir"
@@ -1894,14 +1965,15 @@ function Invoke-Update {
                 $relFile = ".github/$subDir/$($_.Name)"
                 if ($neverUpdate -contains $relFile) { return }
 
-                # Only add files that don't exist yet — existing files may be customized
                 if (-not (Test-Path $dstFile)) {
                     $newFiles += @{ Src = $srcFile; Dst = $dstFile; Name = $relFile }
+                } elseif ($updateGuard -and (Get-FileHash $srcFile -Algorithm SHA256).Hash -ne (Get-FileHash $dstFile -Algorithm SHA256).Hash) {
+                    $updates += @{ Src = $srcFile; Dst = $dstFile; Name = $relFile }
                 }
             }
         }
 
-        # Skills: add new skill directories only — existing SKILL.md files may be customized
+        # Skills: existing SKILL.md files are offered too; the update guard keeps customized ones.
         $srcSkills = Join-Path $srcPresetDir "skills"
         $dstSkills = Join-Path $RepoRoot ".github/skills"
         if (Test-Path $srcSkills) {
@@ -1912,9 +1984,10 @@ function Invoke-Update {
 
                 if (-not (Test-Path $srcSkillFile)) { return }
 
-                # Only add if skill doesn't exist yet
                 if (-not (Test-Path $dstSkillFile)) {
                     $newFiles += @{ Src = $srcSkillFile; Dst = $dstSkillFile; Name = ".github/skills/$skillName/SKILL.md" }
+                } elseif ($updateGuard -and (Get-FileHash $srcSkillFile -Algorithm SHA256).Hash -ne (Get-FileHash $dstSkillFile -Algorithm SHA256).Hash) {
+                    $updates += @{ Src = $srcSkillFile; Dst = $dstSkillFile; Name = ".github/skills/$skillName/SKILL.md" }
                 }
             }
         }
@@ -2121,11 +2194,31 @@ function Invoke-Update {
     }
 
     # ─── Deduplicate (overlapping scans may add same file twice) ─
-    $updates = $updates | Group-Object -Property { $_.Name } | ForEach-Object { $_.Group[0] }
-    $newFiles = $newFiles | Group-Object -Property { $_.Name } | ForEach-Object { $_.Group[0] }
+    $updates = @($updates | Group-Object -Property { $_.Name } | ForEach-Object { $_.Group[0] })
+    $newFiles = @($newFiles | Group-Object -Property { $_.Name } | ForEach-Object { $_.Group[0] })
+
+    # ─── #280: guidance files go through the update guard ────────
+    $kept = @()
+    $guided = @()
+    if ($updateGuard) {
+        $guided = @(Select-GuidedFiles -Items @($updates + $newFiles) -SourceRoot $sourcePath -ProjectRoot $RepoRoot)
+    } else {
+        Write-Host "  Update guard not available (needs Node and pforge-mcp/update-guard.mjs); guidance files are replaced when they differ." -ForegroundColor DarkGray
+    }
+    if ($guided.Count -gt 0) {
+        $guardPlan = Invoke-UpdateGuard -Guard $updateGuard -Mode plan -Items $guided -SourceRoot $sourcePath -ProjectRoot $RepoRoot
+        $updates = @($updates | Where-Object { -not $_.Guided -or $guardPlan[$_.DstRel].Action -eq 'update' })
+        $newFiles = @($newFiles | Where-Object { -not $_.Guided -or $guardPlan[$_.DstRel].Action -eq 'new' })
+        $kept = @($guided | Where-Object { $guardPlan[$_.DstRel].Action -eq 'customized' })
+        if ($overwriteCustomized -and $kept.Count -gt 0) {
+            foreach ($k in $kept) { $k.Name = "$($k.Name) (customized; your version is backed up first)" }
+            $updates = @($updates + $kept)
+            $kept = @()
+        }
+    }
 
     # ─── Report ───────────────────────────────────────────────────
-    if ($updates.Count -eq 0 -and $newFiles.Count -eq 0 -and $currentVersion -eq $sourceVersion) {
+    if ($updates.Count -eq 0 -and $newFiles.Count -eq 0 -and $kept.Count -eq 0 -and $currentVersion -eq $sourceVersion) {
         Write-Host "All framework files are up to date." -ForegroundColor Green
         return
     }
@@ -2136,6 +2229,12 @@ function Invoke-Update {
     }
     foreach ($n in $newFiles) {
         Write-Host "  NEW     $($n.Name)" -ForegroundColor Green
+    }
+    foreach ($k in $kept) {
+        Write-Host "  KEEP    $($k.Name) (you changed it; the new version goes to .forge/update-pending/$($k.DstRel))" -ForegroundColor Yellow
+    }
+    if ($kept.Count -gt 0) {
+        Write-Host "  Use --overwrite-customized to replace kept files (each is backed up under .forge/update-backups/)." -ForegroundColor DarkGray
     }
     Write-Host ""
     Write-Host "Protected (never updated):" -ForegroundColor DarkGray
@@ -2162,16 +2261,29 @@ function Invoke-Update {
     # itself among the updates. If yes, the in-memory copy of this script
     # is now stale — warn the operator to re-invoke any subsequent command.
     $wrapperSelfUpdated = $false
-    foreach ($u in $updates) {
+    foreach ($u in @($updates | Where-Object { -not $_.Guided })) {
         if ($u.Name -in @("pforge.ps1", "pforge.sh")) { $wrapperSelfUpdated = $true }
         Copy-Item -Path $u.Src -Destination $u.Dst -Force
         Write-Host "  ✅ Updated $($u.Name)" -ForegroundColor Green
     }
-    foreach ($n in $newFiles) {
+    foreach ($n in @($newFiles | Where-Object { -not $_.Guided })) {
         $parentDir = Split-Path $n.Dst -Parent
         if (-not (Test-Path $parentDir)) { New-Item -ItemType Directory -Path $parentDir -Force | Out-Null }
         Copy-Item -Path $n.Src -Destination $n.Dst
         Write-Host "  ✅ Added $($n.Name)" -ForegroundColor Green
+    }
+    $guidedToApply = @(@($updates + $newFiles) | Where-Object { $_.Guided }) + $kept
+    if ($guidedToApply.Count -gt 0) {
+        $applied = Invoke-UpdateGuard -Guard $updateGuard -Mode apply -Items $guidedToApply -SourceRoot $sourcePath -ProjectRoot $RepoRoot -OverwriteCustomized:$overwriteCustomized
+        foreach ($rel in $applied.Keys) {
+            $r = $applied[$rel]
+            switch ($r.Action) {
+                'added'     { Write-Host "  ✅ Added $rel" -ForegroundColor Green }
+                'updated'   { Write-Host "  ✅ Updated $rel" -ForegroundColor Green }
+                'overwrote' { Write-Host "  ✅ Updated $rel (your version backed up to $($r.Detail))" -ForegroundColor Green }
+                'kept'      { Write-Host "  📝 Kept $rel (customized); new version saved to $($r.Detail)" -ForegroundColor Yellow }
+            }
+        }
     }
 
     # ─── Update .forge.json version + migrate new fields ─────────
@@ -2181,8 +2293,8 @@ function Invoke-Update {
 
         # Migrate: add modelRouting.default if missing (v2.27+)
         if (-not $config.modelRouting) {
-            $config | Add-Member -NotePropertyName "modelRouting" -NotePropertyValue @{ default = "claude-opus-4.6" }
-            Write-Host "  ✅ Added modelRouting.default = claude-opus-4.6" -ForegroundColor Green
+            $config | Add-Member -NotePropertyName "modelRouting" -NotePropertyValue @{ default = "claude-opus-5.5" }
+            Write-Host "  ✅ Added modelRouting.default = claude-opus-5.5" -ForegroundColor Green
         }
 
         # Migrate: add hooks config if missing (v2.29+)
@@ -6399,6 +6511,7 @@ console.log(JSON.stringify(r === null ? { checkFailed: true } : r));
     Write-Host "" -ForegroundColor White
     $updateArgs = @('--from-github', '--tag', $latestTag)
     if ($forceUpdate) { $updateArgs += '--force' }
+    if ($Arguments -contains '--overwrite-customized') { $updateArgs += '--overwrite-customized' }
     $script:Arguments = $updateArgs
     Invoke-Update
 

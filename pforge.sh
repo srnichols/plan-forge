@@ -157,9 +157,11 @@ COMMANDS:
   ext list          List installed extensions
   ext remove <name> Remove an installed extension
   ext publish <p>   Validate and generate catalog entry for publishing
-  update [source]   Update framework files from Plan Forge source (preserves customizations)
+  update [source]   Update framework files from Plan Forge source (keeps guidance files you edited)
+                      Flags: --dry-run, --force (no prompt), --overwrite-customized (replace edited guidance; backups kept)
   self-update       Check for and install the latest Plan Forge release from GitHub
-                      Flags: --force (heal), --downgrade (with --force), --yes/-y, --dry-run, --verify (run check + smith after)
+                      Flags: --force (heal), --downgrade (with --force), --yes/-y, --dry-run, --verify (run check + smith after),
+                             --overwrite-customized
   analyze <plan>    Cross-artifact analysis — requirement traceability, test coverage, scope compliance
   run-plan <plan>   Execute a hardened plan — spawn CLI workers, validate at every boundary, track tokens
   org-rules export  Export org custom instructions from .github/instructions/ for GitHub org settings
@@ -1297,13 +1299,57 @@ _pf_sha256() {
     fi
 }
 
+# ─── Update guard (#280) ──────────────────────────────────────────────
+# Guidance files (instructions, prompts, agents, skills, hooks, runbooks) go
+# through pforge-mcp/update-guard.mjs, as in pforge.ps1. It replaces only files
+# the project has not changed, keeps customized ones (saving the new version
+# under .forge/update-pending/), and renders setup's placeholders.
+_PF_GUIDANCE_PATH_RE='^(\.github/(prompts|instructions|agents|skills|hooks)/|docs/plans/)'
+
+# Prints the guard to use: the source's copy (its index knows the newest shipped
+# versions), else the project's installed copy (e.g. when the source is an older
+# release). Prints nothing when Node or both copies are missing; update then
+# compares guidance files byte for byte, as releases before the guard did.
+_pf_resolve_update_guard() {
+    command -v node >/dev/null 2>&1 || return 0
+    local root
+    for root in "$1" "$2"; do
+        if [ -f "$root/pforge-mcp/update-guard.mjs" ] && [ -f "$root/pforge-mcp/shipped-guidance-hashes.json" ]; then
+            echo "$root/pforge-mcp/update-guard.mjs"
+            return 0
+        fi
+    done
+}
+
+# _pf_update_guard <guard> <plan|apply> <source-root> <project-root> [flags...] -- <"src|dst|name">...
+# Runs the guard on the listed entries and prints its tab-separated output.
+# Paths go to Node relative to the two roots, so no shell has to translate them.
+_pf_update_guard() {
+    local guard="$1" mode="$2" src_root="$3" proj_root="$4"
+    shift 4
+    local flags=()
+    while [ "$#" -gt 0 ] && [ "$1" != "--" ]; do flags+=("$1"); shift; done
+    [ "$#" -gt 0 ] && shift
+    local list entry src dst rc=0
+    list="$(mktemp)"
+    for entry in "$@"; do
+        src="${entry%%|*}"
+        dst="${entry#*|}"; dst="${dst%%|*}"
+        printf '%s\t%s\n' "${src#"$src_root"/}" "${dst#"$proj_root"/}"
+    done > "$list"
+    node "$guard" "$mode" --source "$src_root" --project "$proj_root" --list "$list" ${flags[@]+"${flags[@]}"} || rc=$?
+    rm -f "$list"
+    return "$rc"
+}
+
 cmd_update() {
-    local dry_run=false force=false source_path="" from_github=false keep_cache=false gh_tag="" allow_dev=false
+    local dry_run=false force=false source_path="" from_github=false keep_cache=false gh_tag="" allow_dev=false overwrite_customized=false
 
     for arg in "$@"; do
         case "$arg" in
             --dry-run|--check) dry_run=true ;;
             --force)   force=true ;;
+            --overwrite-customized) overwrite_customized=true ;;
             --from-github) from_github=true ;;
             --keep-cache) keep_cache=true ;;
             --allow-dev) allow_dev=true ;;
@@ -1615,6 +1661,14 @@ cmd_update() {
         done
     fi
 
+    # ─── Presets + update guard (needed by the scans below) ───────
+    local _presets=()
+    IFS=',' read -ra _presets <<< "${current_preset_raw// /}"
+    # #280: resolve the update guard before scanning, so preset files the project
+    # already has are offered only when the guard can keep the project's edits.
+    local update_guard
+    update_guard="$(_pf_resolve_update_guard "$source_path" "$REPO_ROOT")"
+
     # ─── Shared instructions ──────────────────────────────────────
     # Source convention mirrors setup.sh Step 2:
     #   $source_path/.github/instructions/                — Plan-Forge-internal files that ship as-is (no leakage)
@@ -1622,18 +1676,30 @@ cmd_update() {
     # aci-design.instructions.md intentionally NOT in either list — MCP-tool-author guidance, not consumer-relevant.
     local src_instr="$source_path/.github/instructions"
     local src_shared_instr="$source_path/presets/shared/.github/instructions"
+    # #280: a stack preset's own copy of an instruction (e.g. testing or security) wins over the shared one.
+    _pf_preset_owns() {
+        local pp
+        for pp in "${_presets[@]}"; do
+            [ "$pp" = "custom" ] && continue
+            [ -f "$source_path/presets/$pp/.github/instructions/$1" ] && return 0
+        done
+        return 1
+    }
     if [ -d "$src_instr" ]; then
         local instr_name
-        for instr_name in "ai-plan-hardening-runbook.instructions.md" "context-fuel.instructions.md" "git-workflow.instructions.md" "security.instructions.md"; do
+        for instr_name in "ai-plan-hardening-runbook.instructions.md" "context-fuel.instructions.md" "git-workflow.instructions.md"; do
+            _pf_preset_owns "$instr_name" && continue
             _pf_check "$src_instr/$instr_name" "$REPO_ROOT/.github/instructions/$instr_name" ".github/instructions/$instr_name"
         done
     fi
     if [ -d "$src_shared_instr" ]; then
         local instr_name
-        for instr_name in "architecture-principles.instructions.md" "clean-code.instructions.md" "self-repair-reporting.instructions.md" "status-reporting.instructions.md" "testing.instructions.md"; do
+        for instr_name in "architecture-principles.instructions.md" "clean-code.instructions.md" "security.instructions.md" "self-repair-reporting.instructions.md" "status-reporting.instructions.md" "testing.instructions.md"; do
+            _pf_preset_owns "$instr_name" && continue
             _pf_check "$src_shared_instr/$instr_name" "$REPO_ROOT/.github/instructions/$instr_name" ".github/instructions/$instr_name"
         done
     fi
+    unset -f _pf_preset_owns
 
     # ─── Runbook docs ─────────────────────────────────────────────
     local src_docs="$source_path/docs/plans"
@@ -1656,9 +1722,6 @@ cmd_update() {
     fi
 
     # ─── Preset-specific files (instructions, agents, prompts, skills) ─
-    local _presets=()
-    IFS=',' read -ra _presets <<< "$current_preset_raw"
-
     local p
     for p in "${_presets[@]}"; do
         p="${p// /}"          # trim whitespace
@@ -1678,18 +1741,23 @@ cmd_update() {
                 fname_s="$(basename "$f")"
                 rel=".github/$sub_dir/$fname_s"
                 dst="$REPO_ROOT/.github/$sub_dir/$fname_s"
-                # Skip existing files — they may have been customized
-                [ -f "$dst" ] && continue
                 # Skip never-update list entries
                 _skip=false
                 for nu in "${_never_update[@]}"; do
                     [ "$nu" = "$rel" ] && _skip=true && break
                 done
-                $_skip || _new_files+=("$f|$dst|$rel")
+                $_skip && continue
+                # Existing files are offered only when the update guard (#280)
+                # can tell an unmodified copy from one the project changed.
+                if [ ! -f "$dst" ]; then
+                    _new_files+=("$f|$dst|$rel")
+                elif [ -n "$update_guard" ] && [ "$(_pf_sha256 "$f")" != "$(_pf_sha256 "$dst")" ]; then
+                    _updates+=("$f|$dst|$rel")
+                fi
             done < <(find "$src_sub" -maxdepth 1 -type f -print0 2>/dev/null)
         done
 
-        # Skills — add new subdirectories only; existing SKILL.md files may be customized
+        # Skills — existing SKILL.md files are offered only with the update guard (#280)
         local src_skills="$src_preset/skills"
         if [ -d "$src_skills" ]; then
             local skill_dir skill_name skill_src skill_dst
@@ -1699,9 +1767,11 @@ cmd_update() {
                 skill_src="$skill_dir/SKILL.md"
                 skill_dst="$REPO_ROOT/.github/skills/$skill_name/SKILL.md"
                 [ -f "$skill_src" ] || continue
-                # Only add if skill doesn't exist yet
-                [ -f "$skill_dst" ] && continue
-                _new_files+=("$skill_src|$skill_dst|.github/skills/$skill_name/SKILL.md")
+                if [ ! -f "$skill_dst" ]; then
+                    _new_files+=("$skill_src|$skill_dst|.github/skills/$skill_name/SKILL.md")
+                elif [ -n "$update_guard" ] && [ "$(_pf_sha256 "$skill_src")" != "$(_pf_sha256 "$skill_dst")" ]; then
+                    _updates+=("$skill_src|$skill_dst|.github/skills/$skill_name/SKILL.md")
+                fi
             done
         fi
     done
@@ -1820,20 +1890,88 @@ cmd_update() {
         done < <(find "$src_pkg" -type f -not -path '*/node_modules/*' -not -path '*/.forge/*' -not -path '*/coverage/*' -print0 2>/dev/null)
     done
 
+    # ─── #280: guidance files go through the update guard ────────
+    # The guard classifies every guidance entry: unchanged copies are updated,
+    # files the project edited are kept (the new version goes to
+    # .forge/update-pending/), and files already matching are dropped.
+    local entry _e_src _e_dst _e_rel _act
+    local _kept=() _guided=()
+    declare -A _is_guided=()
+    if [ -n "$update_guard" ]; then
+        for entry in ${_updates[@]+"${_updates[@]}"} ${_new_files[@]+"${_new_files[@]}"}; do
+            _e_src="${entry%%|*}"; _e_dst="${entry#*|}"; _e_dst="${_e_dst%%|*}"
+            case "$_e_src" in "$source_path"/*) ;; *) continue ;; esac
+            case "$_e_dst" in "$REPO_ROOT"/*) ;; *) continue ;; esac
+            _e_rel="${_e_dst#"$REPO_ROOT"/}"
+            [[ "$_e_rel" =~ $_PF_GUIDANCE_PATH_RE ]] || continue
+            _is_guided["$_e_dst"]=1
+            _guided+=("$entry")
+        done
+    else
+        echo "  Update guard not available (needs Node and pforge-mcp/update-guard.mjs); guidance files are replaced when they differ."
+    fi
+    if [ "${#_guided[@]}" -gt 0 ]; then
+        local _plan_out
+        if ! _plan_out="$(_pf_update_guard "$update_guard" plan "$source_path" "$REPO_ROOT" -- "${_guided[@]}")"; then
+            echo "ERROR: the update guard could not classify guidance files; nothing was changed." >&2
+            return 1
+        fi
+        declare -A _guard_action=()
+        while IFS=$'\t' read -r _act _e_rel; do
+            [ -n "$_e_rel" ] && _guard_action["$_e_rel"]="$_act"
+        done <<< "$_plan_out"
+        # A guided entry the guard did not classify is kept, never overwritten.
+        local _upd2=() _new2=()
+        for entry in ${_updates[@]+"${_updates[@]}"}; do
+            _e_dst="${entry#*|}"; _e_dst="${_e_dst%%|*}"
+            if [ -z "${_is_guided[$_e_dst]+x}" ]; then _upd2+=("$entry"); continue; fi
+            case "${_guard_action[${_e_dst#"$REPO_ROOT"/}]:-}" in
+                update) _upd2+=("$entry") ;;
+                new) _new2+=("$entry") ;;
+                same) ;;
+                *) _kept+=("$entry") ;;
+            esac
+        done
+        for entry in ${_new_files[@]+"${_new_files[@]}"}; do
+            _e_dst="${entry#*|}"; _e_dst="${_e_dst%%|*}"
+            if [ -z "${_is_guided[$_e_dst]+x}" ]; then _new2+=("$entry"); continue; fi
+            case "${_guard_action[${_e_dst#"$REPO_ROOT"/}]:-}" in
+                new) _new2+=("$entry") ;;
+                update) _upd2+=("$entry") ;;
+                same) ;;
+                *) _kept+=("$entry") ;;
+            esac
+        done
+        _updates=(${_upd2[@]+"${_upd2[@]}"})
+        _new_files=(${_new2[@]+"${_new2[@]}"})
+        if $overwrite_customized && [ "${#_kept[@]}" -gt 0 ]; then
+            for entry in "${_kept[@]}"; do
+                _updates+=("$entry (customized; your version is backed up first)")
+            done
+            _kept=()
+        fi
+    fi
+
     # ─── Report ───────────────────────────────────────────────────
-    if [ "${#_updates[@]}" -eq 0 ] && [ "${#_new_files[@]}" -eq 0 ] && [ "$current_version" = "$source_version" ]; then
+    if [ "${#_updates[@]}" -eq 0 ] && [ "${#_new_files[@]}" -eq 0 ] && [ "${#_kept[@]}" -eq 0 ] && [ "$current_version" = "$source_version" ]; then
         echo "All framework files are up to date."
         return 0
     fi
 
     echo "Changes found:"
-    local entry
-    for entry in "${_updates[@]}"; do
+    for entry in ${_updates[@]+"${_updates[@]}"}; do
         echo "  UPDATE  ${entry##*|}"
     done
-    for entry in "${_new_files[@]}"; do
+    for entry in ${_new_files[@]+"${_new_files[@]}"}; do
         echo "  NEW     ${entry##*|}"
     done
+    for entry in ${_kept[@]+"${_kept[@]}"}; do
+        _e_dst="${entry#*|}"; _e_dst="${_e_dst%%|*}"
+        echo "  KEEP    ${entry##*|} (you changed it; the new version goes to .forge/update-pending/${_e_dst#"$REPO_ROOT"/})"
+    done
+    if [ "${#_kept[@]}" -gt 0 ]; then
+        echo "  Use --overwrite-customized to replace kept files (each is backed up under .forge/update-backups/)."
+    fi
     echo ""
     echo "Protected (never updated):"
     echo "  .github/copilot-instructions.md, project-profile, project-principles,"
@@ -1855,21 +1993,45 @@ cmd_update() {
     fi
 
     # ─── Apply updates ────────────────────────────────────────────
-    for entry in "${_updates[@]}"; do
+    for entry in ${_updates[@]+"${_updates[@]}"}; do
         local src="${entry%%|*}" rest="${entry#*|}"
         local dst="${rest%%|*}" name="${rest##*|}"
+        [ -n "${_is_guided[$dst]+x}" ] && continue
         cp "$src" "$dst"
         echo "  ✅ Updated $name"
     done
 
     # ─── Apply new files ──────────────────────────────────────────
-    for entry in "${_new_files[@]}"; do
+    for entry in ${_new_files[@]+"${_new_files[@]}"}; do
         local src="${entry%%|*}" rest="${entry#*|}"
         local dst="${rest%%|*}" name="${rest##*|}"
+        [ -n "${_is_guided[$dst]+x}" ] && continue
         mkdir -p "$(dirname "$dst")"
         cp "$src" "$dst"
         echo "  ✅ Added $name"
     done
+
+    # ─── Apply guidance files through the update guard (#280) ────
+    local _guided_apply=() _guard_flags=() _apply_out _res _detail
+    for entry in ${_updates[@]+"${_updates[@]}"} ${_new_files[@]+"${_new_files[@]}"} ${_kept[@]+"${_kept[@]}"}; do
+        _e_dst="${entry#*|}"; _e_dst="${_e_dst%%|*}"
+        [ -n "${_is_guided[$_e_dst]+x}" ] && _guided_apply+=("$entry")
+    done
+    if [ "${#_guided_apply[@]}" -gt 0 ]; then
+        $overwrite_customized && _guard_flags+=("--overwrite-customized")
+        if ! _apply_out="$(_pf_update_guard "$update_guard" apply "$source_path" "$REPO_ROOT" ${_guard_flags[@]+"${_guard_flags[@]}"} -- "${_guided_apply[@]}")"; then
+            echo "ERROR: the update guard failed while writing guidance files." >&2
+            return 1
+        fi
+        while IFS=$'\t' read -r _res _e_rel _detail; do
+            case "$_res" in
+                added)     echo "  ✅ Added $_e_rel" ;;
+                updated)   echo "  ✅ Updated $_e_rel" ;;
+                overwrote) echo "  ✅ Updated $_e_rel (your version backed up to $_detail)" ;;
+                kept)      echo "  📝 Kept $_e_rel (customized); new version saved to $_detail" ;;
+            esac
+        done <<< "$_apply_out"
+    fi
 
     # ─── Update .forge.json templateVersion ───────────────────────
     if [ -f "$config_path" ]; then
@@ -2250,13 +2412,14 @@ cmd_self_update() {
         "Delegate to 'pforge update --from-github --tag <latest>'" \
         "With --verify: run 'pforge check' + 'pforge smith' in subprocesses after a successful update"
 
-    local auto_yes=false dry_run=false force_heal=false verify=false
+    local auto_yes=false dry_run=false force_heal=false verify=false overwrite_customized=false
     for arg in "$@"; do
         case "$arg" in
             --yes|-y) auto_yes=true ;;
             --dry-run) dry_run=true ;;
             --force) force_heal=true ;;
             --verify) verify=true ;;
+            --overwrite-customized) overwrite_customized=true ;;
         esac
     done
 
@@ -2396,11 +2559,10 @@ cmd_self_update() {
     fi
 
     echo ""
-    if $force_heal; then
-        cmd_update --from-github --tag "$latest_tag" --force
-    else
-        cmd_update --from-github --tag "$latest_tag"
-    fi
+    local update_args=(--from-github --tag "$latest_tag")
+    $force_heal && update_args+=(--force)
+    $overwrite_customized && update_args+=(--overwrite-customized)
+    cmd_update "${update_args[@]}"
 
     # --verify: run 'pforge check' + 'pforge smith' in subprocesses so the
     # just-updated wrapper code is exercised. Exits non-zero if either fails.

@@ -507,7 +507,7 @@ forge_diagnose({ file: "src/auth/token-validator.ts", models: "grok-4.20-0309-no
         <!-- ─── update ─── -->
         <div class="cmd-ref" id="update">
           <div class="cmd-ref-title">pforge update [source-path]</div>
-          <div class="cmd-ref-desc">Update framework files from a Plan Forge source without re-running the full setup wizard. Preserves all user-customized files.</div>
+          <div class="cmd-ref-desc">Update framework files from a Plan Forge source without re-running the full setup wizard. Guidance files you have edited are kept.</div>
 
           <table class="manual-table">
             <thead><tr><th>Flag</th><th>Type</th><th>Description</th></tr></thead>
@@ -515,6 +515,7 @@ forge_diagnose({ file: "src/auth/token-validator.ts", models: "grok-4.20-0309-no
               <tr><td><code>source</code></td><td>path (optional)</td><td>Plan Forge source path (auto-detects <code>../plan-forge</code>)</td></tr>
               <tr><td><code>--dry-run</code></td><td>boolean</td><td>Preview changes without applying</td></tr>
               <tr><td><code>--force</code></td><td>boolean</td><td>Skip confirmation prompt</td></tr>
+              <tr><td><code>--overwrite-customized</code></td><td>boolean</td><td><strong>v3.28.0+</strong> — Also replace guidance files you edited. Each one is copied to <code>.forge/update-backups/&lt;timestamp&gt;/</code> first.</td></tr>
             </tbody>
           </table>
 
@@ -522,7 +523,8 @@ forge_diagnose({ file: "src/auth/token-validator.ts", models: "grok-4.20-0309-no
             <div class="cmd-block-header"><span>Update framework files</span><button class="cmd-copy-btn">Copy</button></div>
             <pre><code>.\pforge.ps1 update
 .\pforge.ps1 update C:\path\to\plan-forge --dry-run
-.\pforge.ps1 update --force</code></pre>
+.\pforge.ps1 update --force
+.\pforge.ps1 update --overwrite-customized</code></pre>
           </div>
 
           <h3>What Gets Updated vs Protected</h3>
@@ -530,11 +532,19 @@ forge_diagnose({ file: "src/auth/token-validator.ts", models: "grok-4.20-0309-no
             <thead><tr><th>Updated (safe to replace)</th><th>Never Touched (your files)</th></tr></thead>
             <tbody>
               <tr>
-                <td>Pipeline prompts, agents, shared instructions, runbook, lifecycle hooks, new preset files</td>
-                <td><code>copilot-instructions.md</code>, project-profile, project-principles, <code>DEPLOYMENT-ROADMAP.md</code>, <code>.forge.json</code>, plan files, existing preset files</td>
+                <td>Pipeline prompts, agents, shared instructions, runbook, lifecycle hooks, preset files. A stack preset's own copy of a shared instruction (for example <code>testing</code> or <code>security</code>) is used instead of the shared one.</td>
+                <td><code>copilot-instructions.md</code>, project-profile, project-principles, <code>DEPLOYMENT-ROADMAP.md</code>, <code>.forge.json</code>, plan files</td>
               </tr>
             </tbody>
           </table>
+
+          <h3>Guidance files you edited</h3>
+          <p>Since v3.28.0, instruction, prompt, agent, skill, hook and runbook files are replaced only when your copy matches a version Plan Forge shipped. Setup's substitutions (project name, stack and setup date from <code>.forge.json</code>) are taken into account and filled in again on updated files.</p>
+          <p>If you edited a file, update keeps your copy, lists it as <code>KEEP</code>, and writes the new version to <code>.forge/update-pending/&lt;path&gt;</code> so you can merge what you want. Run with <code>--overwrite-customized</code> to take the new versions anyway; each replaced file is backed up to <code>.forge/update-backups/&lt;timestamp&gt;/&lt;path&gt;</code> first.</p>
+
+          <div class="callout callout-info" class="callout-sm">
+            <strong>Updating to v3.28.0 from an older version</strong>: the update runs the script you already have, so this protection starts with the first update after v3.28.0. If you have edited guidance files, commit before updating so you can review and restore them with git, or replace <code>pforge.ps1</code> / <code>pforge.sh</code> with the v3.28.0 copy first and then run the update.
+          </div>
 
           <div class="callout callout-warning" class="callout-sm">
             <strong>Bootstrapping from older versions</strong>: If your <code>pforge.ps1</code> doesn't have the <code>update</code> command yet (pre-v1.2.1), download the latest script first, then run <code>pforge update</code>.
@@ -554,6 +564,7 @@ forge_diagnose({ file: "src/auth/token-validator.ts", models: "grok-4.20-0309-no
               <tr><td><code>--force</code></td><td>boolean</td><td>Heal an already-current install — reinstalls the latest tagged release even when the local VERSION matches. Useful when a corrupt <code>-dev</code> tarball needs replacing</td></tr>
               <tr><td><code>--downgrade</code></td><td>boolean</td><td>Required with <code>--force</code> when the latest release is OLDER than the local version (e.g. recovering from a manual VERSION edit). Without it, <code>self-update</code> refuses to silently downgrade.</td></tr>
               <tr><td><code>--verify</code></td><td>boolean</td><td><strong>v3.20.0+</strong> — After a successful update, runs <code>pforge check</code> and <code>pforge smith</code> in subprocesses against the freshly-installed wrapper. Exits non-zero if either fails. Composes with every other flag.</td></tr>
+              <tr><td><code>--overwrite-customized</code></td><td>boolean</td><td><strong>v3.28.0+</strong> — Passed to <code>pforge update</code>: also replace guidance files you edited, backing each one up first.</td></tr>
             </tbody>
           </table>
 

@@ -624,7 +624,7 @@ Next steps to publish:
 
 ### `pforge update [source-path]`
 
-Update framework files from a Plan Forge source without re-running the full setup wizard. Preserves all user-customized files.
+Update framework files from a Plan Forge source without re-running the full setup wizard. Guidance files you have edited are kept (see [Guidance files you edited](#guidance-files-you-edited)).
 
 ```powershell
 # PowerShell — auto-detect source (looks for ../plan-forge)
@@ -646,6 +646,9 @@ Update framework files from a Plan Forge source without re-running the full setu
 # Skip confirmation prompt
 .\pforge.ps1 update --force
 
+# Replace guidance files you edited too (each one is backed up first)
+.\pforge.ps1 update --overwrite-customized
+
 # Keep downloaded tarball for rollback
 .\pforge.ps1 update --from-github --keep-cache
 ```
@@ -659,6 +662,7 @@ Update framework files from a Plan Forge source without re-running the full setu
 ./pforge.sh update --dry-run
 ./pforge.sh update --from-github --dry-run
 ./pforge.sh update --force
+./pforge.sh update --overwrite-customized
 ./pforge.sh update --from-github --keep-cache
 ```
 
@@ -678,13 +682,14 @@ curl -sL https://raw.githubusercontent.com/srnichols/plan-forge/master/pforge.sh
 ./pforge.sh update ../plan-forge
 ```
 
-**What it updates** (framework files — safe to replace):
+**What it updates** (framework files):
 - Pipeline prompts (`step0-step6*.prompt.md`)
 - Pipeline agents (specifier, plan-hardener, executor, reviewer-gate, shipper)
-- Shared instruction files (architecture-principles, git-workflow, ai-plan-hardening-runbook, status-reporting)
+- Shared instruction files (architecture-principles, clean-code, context-fuel, git-workflow, ai-plan-hardening-runbook, security, self-repair-reporting, status-reporting, testing). When your stack preset has its own copy of one of these (for example `testing` or `security`), the preset's copy is used.
 - Runbook and Instructions docs
 - Lifecycle hooks
-- **New** preset-specific files (instructions, agents, prompts, skills) that don’t yet exist in your project
+- Preset-specific files (instructions, agents, prompts, skills): new ones are added, and existing ones are updated when you have not edited them
+- The CLI scripts and the `pforge-mcp`, `pforge-sdk` and `pforge-master` packages
 
 **What it never touches** (user-customized files):
 - `.github/copilot-instructions.md`
@@ -695,14 +700,22 @@ curl -sL https://raw.githubusercontent.com/srnichols/plan-forge/master/pforge.sh
 - `AGENTS.md`
 - `.forge.json` (only `templateVersion` is updated)
 - Your plan files (`Phase-*-PLAN.md`)
-- Existing preset instruction/agent/prompt/skill files (preserved — you may have customized them)
+
+#### Guidance files you edited
+
+Since v3.28.0, instruction, prompt, agent, skill, hook and runbook files are replaced only when your copy matches a version Plan Forge shipped. Setup's substitutions (project name, stack, setup date from `.forge.json`) are taken into account, and updated files get them filled in again.
+
+If you edited a file, update keeps your copy, reports it as `KEEP`, and writes the new version to `.forge/update-pending/<path>` so you can merge the changes you want. To take the new versions anyway, run with `--overwrite-customized`; each replaced file is first copied to `.forge/update-backups/<timestamp>/<path>`.
+
+> **Updating to v3.28.0 from an older version:** the update runs the script you already have, so this protection starts with the first update *after* v3.28.0. If you have edited guidance files, commit before updating so you can review and restore them with git — or replace `pforge.ps1` / `pforge.sh` with the v3.28.0 copy first (see **Bootstrapping** above) and then run the update, which protects them already.
 
 **What it does:**
 1. Compares `.forge.json` templateVersion with the source VERSION
 2. Hashes each framework file to detect actual changes
-3. Shows a preview of updates and new files
-4. Asks for confirmation (unless `--force`)
-5. Copies changed files and updates `.forge.json` version
+3. Checks guidance files against the versions Plan Forge shipped, to find the ones you edited
+4. Shows a preview of updates (`UPDATE`), new files (`NEW`) and edited files it will keep (`KEEP`)
+5. Asks for confirmation (unless `--force`)
+6. Copies changed files, saves new versions of kept files under `.forge/update-pending/`, and updates `.forge.json` version
 
 **Equivalent manual steps:**
 1. Clone the latest Plan Forge repo
@@ -734,7 +747,8 @@ Execute a hardened plan — spawn CLI workers for each slice, validate at every 
 .\pforge.ps1 run-plan docs/plans/Phase-7-INVENTORY-PLAN.md --worker grok
 
 # Keep your default worker but add a Grok voice to the quorum:
-#   --with-grok      = grok-4.7 via metered xAI API (needs XAI_API_KEY)
+#   --with-grok      = grok-4.7 through GitHub Copilot when gh-copilot is available,
+#                      otherwise the metered xAI API (needs XAI_API_KEY)
 #   --with-grok-cli  = grok-4.7 via Grok Build CLI (flat subscription)
 .\pforge.ps1 run-plan docs/plans/Phase-7-INVENTORY-PLAN.md --quorum --with-grok
 

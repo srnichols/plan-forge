@@ -37,7 +37,7 @@ Format follows [Keep a Changelog](https://keepachangelog.com/).
   - **If you are on Node 20, upgrade to Node 24 LTS before updating**, or stay on Plan Forge 3.28.x.
   - CI now runs on Node 24, plus a Node 22.12 job that holds the floor.
 - **Copilot-servable models now run through the Copilot SDK by default** ([#307](https://github.com/srnichols/plan-forge/issues/307)). `routing.copilotSdk` now defaults to `"prefer"`, so `gpt-*` and Copilot-served Grok slices use `@github/copilot-sdk` instead of a spawned Copilot CLI.
-  - **Evidence:** on the same tasks and model, the SDK route cost 33–36% less, read 46% fewer input tokens and finished in about half the time, with every correctness check passing on both routes. That was 9 runs per route on `gpt-6-luna` and 3 on `gpt-6-sol`. Reproduce with `node scripts/benchmark/sdk-parity.mjs`.
+  - **Evidence:** on the same tasks and model, the SDK route cost 33–36% less, read 46% fewer input tokens and finished in about half the time, with every correctness check passing on both routes. That was 9 runs per route on `gpt-6-luna` and 3 on `gpt-6-sol`. On a real 3-slice .NET plan (`plan-forge-testbed`, real build and test gates), it cost 42% less and read 65% fewer input tokens, with every slice passing on the first attempt on both routes. Reproduce with `node scripts/benchmark/sdk-parity.mjs`.
   - **Fallback and scope:** if the SDK cannot start, the slice falls back to the CLI. Claude models keep the CLI route, and BYOK providers (image generation, Microsoft Foundry) keep their direct API.
   - **Opt-out:** set `"routing": { "copilotSdk": "off" }` in `.forge.json` to keep spawning the CLI.
   - **Node:** the SDK supports Node `^20.19.0 || >=22.12.0`, which the new `>=22.12.0` floor (above) satisfies.

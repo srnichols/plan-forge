@@ -17,6 +17,7 @@ node scripts/audit/test-smells.mjs           # focus/skip/time-flake/console-lea
 node scripts/audit/shell-parity.mjs          # .ps1/.sh twin coverage (Round 4)
 node scripts/audit/dep-boundaries.mjs        # cross-package import rules (Round 4)
 node scripts/audit/frozen-arrays-drift.mjs   # hand-typed enum literals (Round 4)
+node scripts/audit/preset-quality.mjs --php  # preset filler, copied blocks, wrong stack, skill steps, shell/PHP samples (#301; a gate, exits 1)
 ```
 
 ## Threshold calibration (from Appendix C.5)

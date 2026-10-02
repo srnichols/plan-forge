@@ -16,6 +16,7 @@ Format follows [Keep a Changelog](https://keepachangelog.com/).
   - The rehearsal also refuses a tag that already exists on origin at another commit, and a version that is not newer than every released tag (the 2026-04-28 retrograde re-release).
   - A new **Release Rehearsal** workflow runs both on a Windows runner: the rehearsal when master's `VERSION` becomes a release, and public verify when a release is published.
   - The release checklist now uses them.
+- **Every preset is set up and checked in CI** ([#301](https://github.com/srnichols/plan-forge/issues/301)). `validate.yml` now sets up and validates all ten presets in both PowerShell and Bash; swift, rust, php and azure-iac were never exercised before. The new `scripts/audit/preset-quality.mjs` gate fails a preset change that adds filler, copies a code block between files, brings in Go idioms, or ships a skill with no runnable steps. It also fails when a `bash` sample breaks `bash -n` or, with `--php`, a PHP sample breaks `php -l`. It runs on every push, and `preset-quality.test.mjs` runs it in the test suite. Fixed along the way: a duplicated filter in the java `api-patterns` instructions, and a Fastlane (Ruby) sample in the swift preset that was labelled `bash`.
 
 ### Fixed
 

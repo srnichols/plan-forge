@@ -187,24 +187,8 @@ public class ApiVersionController {
 }
 ```
 
-### Deprecation Headers Filter
-```java
-@Component
-public class DeprecationHeaderFilter extends OncePerRequestFilter {
-    @Override
-    protected void doFilterInternal(HttpServletRequest request,
-            HttpServletResponse response, FilterChain chain)
-            throws ServletException, IOException {
-        chain.doFilter(request, response);
-        if (request.getRequestURI().startsWith("/api/v1")) {
-            response.setHeader("Sunset", "Sat, 01 Jan 2026 00:00:00 GMT");
-            response.setHeader("Deprecation", "true");
-            response.setHeader("Link",
-                "</api/v2/docs>; rel=\"successor-version\"");
-        }
-    }
-}
-```
+### Deprecation Headers
+Deprecated versions send `Sunset`, `Deprecation` and `Link: <…>; rel="successor-version"` headers. The Spring filter that sets them is in `version.instructions.md` → Deprecation Headers (Spring).
 
 ### Non-Negotiable Rules
 - **ALWAYS** version APIs from day one — `/api/v1/`

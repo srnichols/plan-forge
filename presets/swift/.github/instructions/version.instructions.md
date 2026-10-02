@@ -160,7 +160,7 @@ v2.5.0           — production release
       "${{ github.workspace }}/MyApp/Info.plist"
 ```
 
-```bash
+```ruby
 # ✅ Fastlane: increment_build_number reads from App Store Connect
 lane :bump_build do
   increment_build_number(

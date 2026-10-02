@@ -59,6 +59,7 @@ const SOURCE_ONLY_SUITES = {
     "tests/dependency-direction.test.mjs",
     "tests/test-smells-scanner.test.mjs",
     "tests/testbed-happypath.test.mjs",
+    "tests/preset-quality.test.mjs",
   ],
   "../scripts/forge-home-cleanup.mjs": ["tests/forge-home-cleanup.test.mjs"],
   "../scripts/sync-versions.mjs": ["tests/version-sync.test.mjs"],

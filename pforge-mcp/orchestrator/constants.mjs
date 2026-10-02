@@ -60,6 +60,13 @@ export const DEFAULT_WORKER_OUTPUT_IDLE_MS = 480_000;
 export const DEFAULT_WORKER_TIMEOUT_MS = 1_800_000;
 
 /**
+ * After a timed-out worker is killed, how long to wait for its pipes to close
+ * before destroying them. A grandchild that survived the kill (Windows, or a
+ * CLI that spawns tools) otherwise keeps the slice waiting forever.
+ */
+export const WORKER_KILL_GRACE_MS = 10_000;
+
+/**
  * Backoff before retrying a worker that never launched (meta #264), multiplied
  * by the attempt number. The measured cause is a Windows lock on the shared
  * `copilot.ps1` entrypoint when two orchestrators launch at the same moment, so

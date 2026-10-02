@@ -20,6 +20,7 @@ import {
   QUORUM_PRESETS,
   DEFAULT_WORKER_OUTPUT_IDLE_MS,
   DEFAULT_WORKER_TIMEOUT_MS,
+  WORKER_KILL_GRACE_MS,
 } from "./constants.mjs";
 export { API_ALLOWED_ROLES };
 
@@ -2056,6 +2057,51 @@ function spawnCliWorkerProcess({ cmd, args, cwd, runPlanActive, extraEnv, direct
   });
 }
 
+/**
+ * End a worker and everything it started. On Windows the worker runs under
+ * `cmd /c`, and child.kill() ends only cmd.exe: the CLI and its tools survive
+ * and keep the stdio pipes open. taskkill /T ends the whole tree.
+ *
+ * @param {import("node:child_process").ChildProcess} child
+ * @param {{ platform?: string, spawnFn?: typeof spawn }} [options] injectable for tests
+ */
+export function killWorkerTree(child, { platform = process.platform, spawnFn = spawn } = {}) {
+  const fallback = () => { try { child.kill("SIGTERM"); } catch { /* already gone */ } };
+  if (platform !== "win32" || !child.pid) {
+    fallback();
+    return;
+  }
+  try {
+    const killer = spawnFn("taskkill", ["/pid", String(child.pid), "/T", "/F"], { windowsHide: true, stdio: "ignore" });
+    killer.on("error", fallback);
+  } catch {
+    fallback();
+  }
+}
+
+/**
+ * Enforce a worker's total-run timeout: mark it timed out, kill its process
+ * tree, and if its pipes are still open after `graceMs`, destroy them so the
+ * "close" event fires and the slice can finish.
+ *
+ * @returns {() => void} cancel — call when the worker closes on its own
+ */
+export function armWorkerTimeout({ child, state, timeoutMs, graceMs = WORKER_KILL_GRACE_MS, killTree = killWorkerTree }) {
+  let graceTimer = null;
+  const timer = setTimeout(() => {
+    state.timedOut = true;
+    killTree(child);
+    graceTimer = setTimeout(() => {
+      child.stdout?.destroy();
+      child.stderr?.destroy();
+    }, graceMs);
+  }, timeoutMs);
+  return () => {
+    clearTimeout(timer);
+    if (graceTimer) clearTimeout(graceTimer);
+  };
+}
+
 function registerSpawnedChild(child) {
   if (!global.__pforgeChildren) global.__pforgeChildren = new Set();
   global.__pforgeChildren.add(child);
@@ -2083,10 +2129,8 @@ export function killTrackedChildren() {
   if (!children) return 0;
   let count = 0;
   for (const child of children) {
-    try {
-      child.kill("SIGTERM");
-      count++;
-    } catch { /* child already exited — handle gone */ }
+    killWorkerTree(child);
+    count++;
   }
   return count;
 }
@@ -2195,14 +2239,11 @@ async function spawnCliWorkerExecution({ prompt, model, cwd, timeout, worker, ru
       const heartbeat = setInterval(() => {
         process.stdout.write(".");
       }, 15_000);
-      const timer = setTimeout(() => {
-        state.timedOut = true;
-        child.kill("SIGTERM");
-      }, timeout);
+      const cancelTimeout = armWorkerTimeout({ child, state, timeoutMs: timeout });
 
       child.on("close", (code) => {
         clearInterval(heartbeat);
-        clearTimeout(timer);
+        cancelTimeout();
         workerResolve(finalizeWorkerResult({
           code,
           state,
@@ -2216,7 +2257,7 @@ async function spawnCliWorkerExecution({ prompt, model, cwd, timeout, worker, ru
 
       child.on("error", (err) => {
         clearInterval(heartbeat);
-        clearTimeout(timer);
+        cancelTimeout();
         workerReject(new Error(`Failed to spawn ${cmd}: ${err.message} (code: ${err.code || "unknown"})`));
       });
     });

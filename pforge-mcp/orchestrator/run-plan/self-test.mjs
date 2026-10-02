@@ -308,10 +308,11 @@ function _selfTestCostCalculation(assert) {
     assert("Unknown model uses default pricing", cost2.cost_usd > 0);
     assert("Null tokens_in treated as 0", cost2.tokens_in === 0);
     const cost3 = calculateSliceCost({ tokens_in: 500000, tokens_out: 5000, model: "claude-opus-4.6", premiumRequests: 3 }, "claude");
-    assert("Flat CLI worker uses premium request rate", cost3.cost_usd === 0.03);
+    const flatRateCost = cost3.cost_usd;
+    assert("Flat CLI worker uses premium request rate", flatRateCost === 0.03);
     assert("Flat CLI worker preserves token counts", cost3.tokens_in === 500000);
     const costGh = calculateSliceCost({ tokens_in: 500000, tokens_out: 5000, model: "claude-opus-5.5", premiumRequests: 3 }, "gh-copilot");
-    assert("gh-copilot worker uses token pricing", costGh.cost_usd > 0.03);
+    assert("gh-copilot worker uses token pricing", costGh.cost_usd > flatRateCost);
     const cost4 = calculateSliceCost({ tokens_in: 1000, tokens_out: 500, model: "grok-4" }, "api-xai");
     assert("API worker uses token pricing", cost4.cost_usd > 0);
     assert("API worker cost matches expected", Math.abs(cost4.cost_usd - 0.0025) < 0.0001);

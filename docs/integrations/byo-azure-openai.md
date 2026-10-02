@@ -71,9 +71,9 @@ Create `.forge/foundry-deployments.json` to map custom names:
 
 ```json
 {
-  "eastus-prod-gpt-4.1": "gpt-4.1",
-  "westus-dev-gpt-5-mini": "gpt-5-mini",
-  "my-o3-mini-deployment": "o3-mini"
+  "eastus-prod-gpt-5-6-terra": "gpt-5.6-terra",
+  "westus-dev-gpt-5-6-luna": "gpt-5.6-luna",
+  "my-gpt-5-1-deployment": "gpt-5.1"
 }
 ```
 
@@ -128,7 +128,7 @@ For Azure Government environments, use the `power-gov` preset — a curated mode
 pforge run-plan --quorum=power-gov docs/plans/my-plan.md
 ```
 
-Models: `gpt-5.1`, `gpt-4.1`, `gpt-4.1-mini`, `o3-mini`, `gpt-4o`. Threshold: 5 (same as `power`).
+Models: `gpt-5.6-terra`, `gpt-5.6-sol`, `gpt-5.1` (the models Azure Government's Foundry catalog serves); reviewer `gpt-5.6-terra`. Threshold: 5 (same as `power`).
 
 ---
 

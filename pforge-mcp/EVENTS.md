@@ -55,7 +55,7 @@ Emitted when `runPlan()` begins execution.
   "type": "run-started",
   "plan": "docs/plans/Phase-1.md",
   "mode": "auto",
-  "model": "claude-sonnet-4.6",
+  "model": "claude-sonnet-5.5",
   "sliceCount": 8,
   "executionOrder": ["1", "2", "3"]
 }
@@ -81,7 +81,7 @@ Emitted when a slice passes all validation gates.
   "sliceId": "1",
   "status": "passed",
   "duration": 45000,
-  "tokens": { "tokens_out": 4200, "model": "claude-sonnet-4.6" },
+  "tokens": { "tokens_out": 4200, "model": "claude-sonnet-5.5" },
   "cost_usd": 0.12
 }
 ```
@@ -322,7 +322,7 @@ Emitted when a slice is escalated to quorum for multi-model consensus review.
   "version": "1.0",
   "sliceId": "3",
   "reason": "complexity threshold exceeded",
-  "models": ["claude-sonnet-4.6", "gpt-5.2", "grok-4.20-0309-non-reasoning"],
+  "models": ["claude-opus-5.5", "gpt-6-sol", "grok-4.7"],
   "timestamp": "..."
 }
 ```
@@ -449,7 +449,7 @@ Emitted when `forge_watch` detects one or more anomalies. One event per watch in
     "runId": "run-2026-04-17-0930",
     "anomalies": [
       { "code": "slice-failed", "severity": "high", "message": "Slice 3 failed after 2 retries" },
-      { "code": "model-escalated", "severity": "warn", "message": "Slice 2 escalated to claude-opus-4.7" }
+      { "code": "model-escalated", "severity": "warn", "message": "Slice 2 escalated to claude-opus-5.5" }
     ]
   }
 }
@@ -466,7 +466,7 @@ Emitted when `forge_watch` analyze-mode produces narrative advice from a frontie
   "data": {
     "target": "../my-app",
     "runId": "run-2026-04-17-0930",
-    "model": "claude-opus-4.7",
+    "model": "claude-opus-5.5",
     "tokensIn": 8432,
     "tokensOut": 512,
     "durationMs": 4821,

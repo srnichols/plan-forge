@@ -2512,12 +2512,12 @@ function parseJSONL(output) {
  * cannot change cost calculations — see cost-service.mjs line ~541).
  *
  * Recognized prefixes:
- *   claude-*  → anthropic   (claude-opus-4.7, claude-sonnet-4.6, etc.)
+ *   claude-*  → anthropic   (claude-opus-5.5, claude-sonnet-5.5, etc.)
  *   gpt-*     → openai      (gpt-5.3-codex, gpt-4o, etc.)
  *   o1-* o3-* → openai      (reasoning model lines)
  *   grok-*    → xai         (grok-4.20-0309-reasoning, grok-4.3, etc.)
  *   gemini-*  → google
- *   kimi-*    → moonshot    (kimi-k3, kimi-k2.7-code, etc.)
+ *   kimi-*    → moonshot    (kimi-k3, etc.)
  *   mai-*     → microsoft   (mai-code-1.1-flash; Copilot-only)
  *
  * Every key in cost-service MODEL_PRICING must resolve here — a priced but
@@ -2724,7 +2724,7 @@ export function shouldDefaultPremiumRequestsToOne({ tokens, stdout, stderr, code
 
 /**
  * Parse stats from gh copilot CLI stderr output.
- * Format: "Breakdown by AI model:\n claude-sonnet-4.6  11.7m in, 97.5k out, ..."
+ * Format: "Breakdown by AI model:\n claude-sonnet-5.5  11.7m in, 97.5k out, ..."
  */
 export function parseStderrStats(stderr) {
   const stats = { model: null, tokens_in: 0, tokens_out: 0, cache_read_tokens: 0, cache_creation_input_tokens: 0, reasoning_tokens: 0, premiumRequests: 0 };
@@ -2737,7 +2737,7 @@ export function parseStderrStats(stderr) {
   if (premiumMatch) stats.premiumRequests = parseInt(premiumMatch[1], 10);
 
   // Parse token counts — three formats:
-  //   Old: " claude-sonnet-4.6  639.4k in, 4.5k out, 552.1k cached"
+  //   Old: " claude-sonnet-5.5  639.4k in, 4.5k out, 552.1k cached"
   //   New (UTF-8): "Tokens    ↑ 476.0k • ↓ 3.1k • 430.1k (cached)"
   //   New (ASCII fallback): "Tokens    ^ 476.0k * v 3.1k * 430.1k (cached)"
   //     — covers terminals that strip/replace Unicode (Windows cp437, CI logs, etc.)
@@ -2751,11 +2751,11 @@ export function parseStderrStats(stderr) {
     if (!stats.cache_read_tokens && trailingCacheMatch) stats.cache_read_tokens = parseTokenCount(trailingCacheMatch[1] || trailingCacheMatch[2]);
   }
 
-  // Parse model from new format: "Model     claude-opus-4.6" or model line in breakdown
+  // Parse model from new format: "Model     claude-opus-5.5" or model line in breakdown
   const newModelMatch = stderr.match(/Model\s+([\w.-]+)/);
   if (newModelMatch) stats.model = newModelMatch[1];
 
-  // Old format: model breakdown lines "claude-sonnet-4.6  11.7m in, 97.5k out, ..."
+  // Old format: model breakdown lines "claude-sonnet-5.5  11.7m in, 97.5k out, ..."
   //
   // Bug #79: the "Tokens ↑ X • ↓ Y" header is already a cross-model aggregate.
   // When BOTH that header AND per-model breakdown lines appear in the same
@@ -2790,7 +2790,7 @@ export function parseStderrStats(stderr) {
     }
   }
 
-  // Compact single-line format: "1 request • claude-sonnet-4.6 • 476.0k in, 3.1k out"
+  // Compact single-line format: "1 request • claude-sonnet-5.5 • 476.0k in, 3.1k out"
   if (!stats.model) {
     const compactMatch = stderr.match(/(\d+)\s+requests?\s*[•·]\s*([\w.-]+)\s*[•·]\s*([\d.]+[kmb]?)\s+in,\s*([\d.]+[kmb]?)\s+out/i);
     if (compactMatch) {

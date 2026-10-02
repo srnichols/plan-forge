@@ -205,7 +205,7 @@ function _selfTestEstimateMode(assert, buildEstimate) {
     const examplePlan = resolve(process.cwd(), "docs/plans/examples/Phase-DOTNET-EXAMPLE.md");
     if (existsSync(examplePlan)) {
       const plan = parsePlan(examplePlan);
-      const est = buildEstimate({ plan, model: "claude-sonnet-4.6", cwd: process.cwd() });
+      const est = buildEstimate({ plan, model: "claude-sonnet-5.5", cwd: process.cwd() });
       assert("Estimate has slice count", est.sliceCount > 0);
       assert("Estimate has cost", est.estimatedCostUSD >= 0);
       assert("Estimate has tokens", est.tokens.estimatedInput > 0);
@@ -257,7 +257,7 @@ function _selfTestModelRouting(assert, loadModelRouting, resolveModel) {
     const routing = loadModelRouting(process.cwd());
     assert("loadModelRouting returns object", typeof routing === "object");
     assert("Has default key", "default" in routing);
-    assert("CLI override wins", resolveModel("claude-sonnet-4.6", { default: "gpt-5" }, null) === "claude-sonnet-4.6");
+    assert("CLI override wins", resolveModel("claude-sonnet-5.5", { default: "gpt-5" }, null) === "claude-sonnet-5.5");
     assert("Routing default when CLI is auto", resolveModel("auto", { default: "gpt-5" }, null) === "gpt-5");
     assert("Null when both auto", resolveModel(null, { default: "auto" }, null) === null);
     assert(`Default is ${DEFAULT_ROUTING_MODEL} when no .forge.json`, loadModelRouting("/nonexistent-path-pforge-test").default === DEFAULT_ROUTING_MODEL);
@@ -300,14 +300,14 @@ function _selfTestErrorPaths(assert) {
 function _selfTestCostCalculation(assert) {
   console.log("\n─── Cost Calculation ───");
   try {
-    const cost1 = calculateSliceCost({ tokens_in: 1000, tokens_out: 500, model: "claude-sonnet-4.6" });
+    const cost1 = calculateSliceCost({ tokens_in: 1000, tokens_out: 500, model: "claude-sonnet-5.5" });
     assert("Cost calculated for Claude Sonnet", cost1.cost_usd > 0);
-    assert("Cost has model", cost1.model === "claude-sonnet-4.6");
+    assert("Cost has model", cost1.model === "claude-sonnet-5.5");
     assert("Cost matches expected", Math.abs(cost1.cost_usd - 0.0105) < 0.0001);
     const cost2 = calculateSliceCost({ tokens_in: null, tokens_out: 100, model: "unknown-model" });
     assert("Unknown model uses default pricing", cost2.cost_usd > 0);
     assert("Null tokens_in treated as 0", cost2.tokens_in === 0);
-    const cost3 = calculateSliceCost({ tokens_in: 500000, tokens_out: 5000, model: "claude-opus-4.6", premiumRequests: 3 }, "claude");
+    const cost3 = calculateSliceCost({ tokens_in: 500000, tokens_out: 5000, model: "claude-opus-5.5", premiumRequests: 3 }, "claude");
     const flatRateCost = cost3.cost_usd;
     assert("Flat CLI worker uses premium request rate", flatRateCost === 0.03);
     assert("Flat CLI worker preserves token counts", cost3.tokens_in === 500000);
@@ -317,8 +317,8 @@ function _selfTestCostCalculation(assert) {
     assert("API worker uses token pricing", cost4.cost_usd > 0);
     assert("API worker cost matches expected", Math.abs(cost4.cost_usd - 0.0025) < 0.0001);
     const mockResults = [
-      { number: "1", tokens: { tokens_in: 500, tokens_out: 200, model: "claude-sonnet-4.6" }, status: "passed" },
-      { number: "2", tokens: { tokens_in: 300, tokens_out: 100, model: "gpt-5-mini" }, status: "passed" },
+      { number: "1", tokens: { tokens_in: 500, tokens_out: 200, model: "claude-sonnet-5.5" }, status: "passed" },
+      { number: "2", tokens: { tokens_in: 300, tokens_out: 100, model: "gpt-6-luna" }, status: "passed" },
       { number: "3", status: "skipped" },
     ];
     const breakdown = buildCostBreakdown(mockResults);

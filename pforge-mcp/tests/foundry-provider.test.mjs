@@ -274,11 +274,9 @@ describe("QUORUM_PRESETS — power-gov preset (Slice 6)", () => {
   it("power-gov preset is defined with required fields", () => {
     const preset = QUORUM_PRESETS["power-gov"];
     expect(preset).toBeDefined();
-    expect(preset.models).toContain("gpt-5.1");
-    expect(preset.models).toContain("gpt-4.1");
-    expect(preset.models).toContain("gpt-4.1-mini");
-    expect(preset.models).toContain("o3-mini");
-    expect(preset.models).toContain("gpt-4o");
+    // Azure Government Foundry catalog as of 2026-09-01; o3-mini is no longer offered there.
+    expect(preset.models).toEqual(["gpt-5.6-terra", "gpt-5.6-sol", "gpt-5.1"]);
+    expect(preset.reviewerModel).toBe("gpt-5.6-terra");
     expect(preset.threshold).toBe(5);
     expect(typeof preset.dryRunTimeout).toBe("number");
   });

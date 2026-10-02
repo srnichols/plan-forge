@@ -12,6 +12,7 @@ import { readFileSync, writeFileSync, existsSync } from "node:fs";
 import { resolve } from "node:path";
 import { isOpenBrainConfigured } from "../memory.mjs";
 import { TOOL_NAMES } from "../enums.mjs";
+import { DEFAULT_FORGE_MASTER_ROUTER_MODEL } from "../orchestrator/constants.mjs";
 
 import { TOOL_METADATA, WORKFLOWS } from "./tool-metadata.mjs";
 import { CLI_SCHEMA, CONFIG_SCHEMA } from "./schemas.mjs";
@@ -315,7 +316,7 @@ function buildForgeMasterCapabilities(cwd) {
       const block = forgeJson?.forgeMaster ?? {};
       config = {
         reasoningModel: block.reasoningModel ?? forgeJson?.model?.default ?? null,
-        routerModel: block.routerModel ?? "grok-4.20-0309-non-reasoning",
+        routerModel: block.routerModel ?? DEFAULT_FORGE_MASTER_ROUTER_MODEL,
         discoverExtensionTools: block.discoverExtensionTools ?? true,
           observerEnabled: block.observer?.enabled ?? false,
         };
@@ -327,12 +328,12 @@ function buildForgeMasterCapabilities(cwd) {
     addedIn: "2.61.0",
     tools: TOOL_NAMES.filter((n) => n.startsWith("forge_master_")),
     reasoningModel: config.reasoningModel ?? null,
-    routerModel: config.routerModel ?? "grok-4.20-0309-non-reasoning",
+    routerModel: config.routerModel ?? DEFAULT_FORGE_MASTER_ROUTER_MODEL,
     configKey: "forgeMaster",
     studio: {
       dashboardTabEnabled: true,
       reasoningModel: config.reasoningModel ?? null,
-      routerModel: config.routerModel ?? "grok-4.20-0309-non-reasoning",
+      routerModel: config.routerModel ?? DEFAULT_FORGE_MASTER_ROUTER_MODEL,
       promptCatalogVersion: "1.0.0",
       observerEnabled: config.observerEnabled ?? false,
     },

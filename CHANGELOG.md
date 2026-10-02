@@ -7,8 +7,19 @@ Format follows [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
+### Fixed
+
+- **`run-plan` no longer picks a retired model from your run history.** When no model is configured, Plan Forge picks the cheapest model with a good record in `.forge/model-performance.json`. It didn't check whether GitHub Copilot still serves that model, so projects with history from before the September model refresh sent every slice to `claude-sonnet-4.6` first. Each slice failed with "Model ... is not available" and only recovered on a retry. The recommender now skips any model listed as retired in `model-retirements.json`.
+- **`run-plan` warns when you chose a retired model.** If `--model`, the plan's `model:` frontmatter or a `.forge.json` `modelRouting` entry names a model GitHub Copilot has retired, the run starts with a `[model] retired:` warning naming each one and its retirement date. Plan Forge doesn't change your choice, because another worker, such as the Claude CLI, may still serve the model.
+
 ### Changed
 
+- **Every default and example model name is current.** These defaults changed:
+  - The Grok Build CLI worker now defaults to `grok-4.7` instead of `grok-4.5`, which xAI no longer recommends and Copilot retires on 2026-10-19.
+  - The tempering visual analyzer now uses the default quorum (`claude-opus-5.5`, `gpt-6-sol`, `grok-4.7`). Its previous `grok-4.20` and `gemini-3.1-pro-preview` defaults needed an xAI key or had no route at all.
+  - The `power-gov` quorum preset now uses `gpt-5.6-terra`, `gpt-5.6-sol` and `gpt-5.1`, with `gpt-5.6-terra` as reviewer, to match Microsoft's current Azure Government catalog. That catalog no longer offers `o3-mini`.
+
+  Examples in the preset code-review skills, the Copilot instructions templates, the dashboard, `EVENTS.md` and the manual no longer mention retired or retiring models. A new contract test fails if shipped content names any model in `model-retirements.json`, or if any model Plan Forge picks for you is unpriced or retiring.
 - **Copilot pricing snapshot refreshed.** GitHub removed `claude-opus-4.7`, `gemini-3.5-flash` and `gemini-3.6-flash` from Copilot's AI-credit pricing. No Plan Forge default uses them; they were already listed in `model-retirements.json`. Found by the first scheduled-style run of the Model Drift workflow (#303, #310).
 - **Scheduled-workflow templates run on Node 24.** `templates/schedules/*.yml` still set up Node 20, below the 22.12 floor introduced in 3.29.0. They now use Node 24, and every workflow, template and docs example uses `actions/checkout@v7`, `actions/setup-node@v7` and `actions/upload-artifact@v7`, which run natively on Node 24 and remove GitHub's Node 20 deprecation warning. If you copied one of these templates into your repo, update it the same way.
 - **The single-page offline manual is regenerated.** `docs/manual/plan-forge-manual.html` had last been generated in May and was missing later chapter updates.

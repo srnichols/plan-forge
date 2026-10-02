@@ -165,14 +165,14 @@ describe("recommendModel — API-only model exclusion (with gh-copilot absent)",
     for (let i = 0; i < 4; i++) {
       recordModelPerformance(tempDir, { date, model: "grok-4", status: "passed", cost_usd: 0.01 });
     }
-    // claude-sonnet-4.6: 4 slices, 100% pass, avg $0.05 — more expensive
+    // claude-sonnet-5.5: 4 slices, 100% pass, avg $0.05 — more expensive
     for (let i = 0; i < 4; i++) {
-      recordModelPerformance(tempDir, { date, model: "claude-sonnet-4.6", status: "passed", cost_usd: 0.05 });
+      recordModelPerformance(tempDir, { date, model: "claude-sonnet-5.5", status: "passed", cost_usd: 0.05 });
     }
 
     const rec = recommendModel(tempDir);
     expect(rec).not.toBeNull();
-    expect(rec.model).toBe("claude-sonnet-4.6");
+    expect(rec.model).toBe("claude-sonnet-5.5");
   });
 
   it("skips gpt-* even when it is cheapest qualifying model", () => {
@@ -210,14 +210,14 @@ describe("recommendModel — API-only model exclusion (with gh-copilot absent)",
     for (let i = 0; i < 4; i++) {
       recordModelPerformance(tempDir, { date, model: "grok-3-mini", status: "passed", cost_usd: 0.005 });
       recordModelPerformance(tempDir, { date, model: "chatgpt-4o", status: "passed", cost_usd: 0.01 });
-      recordModelPerformance(tempDir, { date, model: "claude-sonnet-4.6", status: "passed", cost_usd: 0.04 });
+      recordModelPerformance(tempDir, { date, model: "claude-sonnet-5.5", status: "passed", cost_usd: 0.04 });
       recordModelPerformance(tempDir, { date, model: "claude-opus-4.6", status: "passed", cost_usd: 0.08 });
     }
 
     const rec = recommendModel(tempDir);
     expect(rec).not.toBeNull();
     // Should be cheapest CLI model
-    expect(rec.model).toBe("claude-sonnet-4.6");
+    expect(rec.model).toBe("claude-sonnet-5.5");
     expect(isApiOnlyModel(rec.model)).toBe(false);
   });
 
@@ -234,3 +234,41 @@ describe("recommendModel — API-only model exclusion (with gh-copilot absent)",
   });
 });
 
+
+// ─── recommendModel skips Copilot-retired models ────────────────────────
+
+describe("recommendModel — skips models GitHub Copilot has retired", () => {
+  let tempDir;
+
+  beforeEach(() => {
+    tempDir = mkdtempSync(join(tmpdir(), "pforge-rec-retired-"));
+    setGhCopilotProbe(() => true);
+  });
+
+  afterEach(() => {
+    rmSync(tempDir, { recursive: true, force: true });
+    setGhCopilotProbe(null);
+  });
+
+  it("passes over a cheaper retired model in favour of a current one", () => {
+    const date = new Date().toISOString();
+    // claude-sonnet-4.6 (retired 2026-09-01) is the cheapest with a perfect record.
+    for (let i = 0; i < 6; i++) {
+      recordModelPerformance(tempDir, { date, model: "claude-sonnet-4.6", status: "passed", cost_usd: 0.01 });
+      recordModelPerformance(tempDir, { date, model: "claude-sonnet-5.5", status: "passed", cost_usd: 0.04 });
+    }
+
+    const rec = recommendModel(tempDir);
+    expect(rec).not.toBeNull();
+    expect(rec.model).toBe("claude-sonnet-5.5");
+  });
+
+  it("returns null when every qualifying model is retired", () => {
+    const date = new Date().toISOString();
+    for (let i = 0; i < 4; i++) {
+      recordModelPerformance(tempDir, { date, model: "claude-sonnet-4.6", status: "passed", cost_usd: 0.01 });
+    }
+
+    expect(recommendModel(tempDir)).toBeNull();
+  });
+});

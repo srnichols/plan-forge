@@ -37,6 +37,7 @@ import {
 import { resolve, dirname, basename } from "node:path";
 import { randomUUID } from "node:crypto";
 import { globToRegex } from "./tempering/scheduling.mjs";
+import { DEFAULT_QUORUM_MODELS } from "./orchestrator/constants.mjs";
 
 // ─── Constants ────────────────────────────────────────────────────────
 
@@ -85,7 +86,8 @@ export const TEMPERING_DEFAULT_CONFIG = Object.freeze({
   },
   visualAnalyzer: {
     mode: "quorum",
-    models: ["claude-opus-4.8", "grok-4.20", "gemini-3.1-pro-preview"],
+    // The default quorum: Copilot-served and image-capable, so no extra API key is needed.
+    models: [...DEFAULT_QUORUM_MODELS],
     agreement: 2,
     // TEMPER-04 Slice 04.1 — single-model analyzer thresholds
     enabled: true,

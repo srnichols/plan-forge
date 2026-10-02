@@ -55,7 +55,7 @@ describe("worker-capabilities matrix", () => {
     expect(grok.probe.capabilityMarkers).toEqual(
       expect.arrayContaining(["-p", "--output-format"])
     );
-    expect(grok.defaultModel).toBe("grok-4.5");
+    expect(grok.defaultModel).toBe("grok-4.7");
     expect(grok.invocation.cmd).toBe("grok");
     expect(grok.invocation.baseArgs).toEqual(
       expect.arrayContaining(["--output-format", "streaming-json"])

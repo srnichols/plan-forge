@@ -59,7 +59,7 @@ async function main() {
   const transcript = buildTranscript({
     prompt: SMOKE_PROMPT,
     lane: classification.lane,
-    model: result.model || "gpt-4o-mini",
+    model: result.model || "unknown",
     tokensIn: result.tokensIn,
     tokensOut: result.tokensOut,
     reply: result.reply,

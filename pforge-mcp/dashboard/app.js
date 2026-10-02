@@ -2764,7 +2764,7 @@ function setSelectPreservingValue(select, value) {
 const PROVIDER_STATUS_REGISTRY = [
   { key: "ANTHROPIC_API_KEY", label: "Anthropic Claude", models: "claude-opus-5.5, claude-sonnet-5.5" },
   { key: "OPENAI_API_KEY",    label: "OpenAI",            models: "gpt-6-astra, gpt-6-sol, gpt-6-luna, dall-e-3" },
-  { key: "XAI_API_KEY",       label: "xAI Grok",          models: "grok-4.7, grok-4.6, grok-4.5, grok-4.20-0309-non-reasoning" },
+  { key: "XAI_API_KEY",       label: "xAI Grok",          models: "grok-4.7, grok-4.6, grok-4.20-0309-non-reasoning" },
 ];
 
 async function loadApiProviderStatus() {

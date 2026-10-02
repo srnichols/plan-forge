@@ -368,7 +368,7 @@ export const CONFIG_SCHEMA = {
         default: {
           type: "string",
           description: "Advisory list — any key in cost-service MODEL_PRICING is accepted at runtime; loadModelRouting() does not validate against this enum.",
-          enum: ["auto", "claude-opus-5.5", "claude-sonnet-5.5", "claude-fable-5.1", "claude-fable-5", "claude-opus-5", "claude-sonnet-5", "claude-haiku-4.5", "claude-opus-4.8", "gpt-6-astra", "gpt-6.1-sol", "gpt-6-sol", "gpt-6-luna", "gpt-5.6-sol", "gpt-5.6-terra", "gpt-5.6-luna", "gpt-5.3-codex", "gemini-3.8-flash", "grok-4.7", "grok-4.6", "grok-4.5", "kimi-k3", "mai-code-1.1-flash"],
+          enum: ["auto", "claude-opus-5.5", "claude-sonnet-5.5", "claude-fable-5.1", "claude-fable-5", "claude-opus-5", "claude-sonnet-5", "claude-haiku-4.5", "claude-opus-4.8", "gpt-6-astra", "gpt-6.1-sol", "gpt-6-sol", "gpt-6-luna", "gpt-5.6-sol", "gpt-5.6-terra", "gpt-5.6-luna", "gpt-5.3-codex", "gemini-3.8-flash", "grok-4.7", "grok-4.6", "kimi-k3", "mai-code-1.1-flash"],
           default: "auto",
         },
       },

@@ -20,11 +20,17 @@
 
 import { loadModelPerformance, aggregateModelStats } from "./forge-io.mjs";
 import { isApiOnlyModel, assessQuorumViability } from "./worker-spawn.mjs";
+import { isRetiredModel } from "../model-retirements.mjs";
 
 export { scoreSliceComplexity } from "./review-watcher.mjs";
 export { loadModelPerformance, aggregateModelStats } from "./forge-io.mjs";
 export { isApiOnlyModel, assessQuorumViability } from "./worker-spawn.mjs";
 export { QUORUM_PRESETS } from "./constants.mjs";
+
+/** Fewest slices of history before a model can be recommended. */
+const MIN_SAMPLE = 3;
+/** A recommended model must have passed more than this share of its slices. */
+const MIN_SUCCESS_RATE = 0.8;
 
 /**
  * Infer the slice type from its title and tasks for model routing purposes.
@@ -46,7 +52,8 @@ export function inferSliceType(slice) {
  * Selection criteria:
  *   1. Minimum 3 slices of data (MIN_SAMPLE)
  *   2. Success rate > 80%
- *   3. Cheapest qualifying model wins
+ *   3. Not API-only, and not retired by GitHub Copilot (history outlives models)
+ *   4. Cheapest qualifying model wins
  *
  * Records are filtered by sliceType when type info is present in history.
  * Falls back to all records when no type-specific data is available.
@@ -62,12 +69,11 @@ export function recommendModel(cwd, sliceType = null) {
 
     // Prefer type-specific records; fall back to all records
     const typed = sliceType ? records.filter((r) => r.sliceType === sliceType) : records;
-    const relevant = typed.length >= 3 ? typed : records;
+    const relevant = typed.length >= MIN_SAMPLE ? typed : records;
 
     const stats = aggregateModelStats(relevant);
-    const MIN_SAMPLE = 3;
     const qualified = Object.entries(stats)
-      .filter(([m, s]) => !isApiOnlyModel(m) && s.total_slices >= MIN_SAMPLE && s.success_rate > 0.8)
+      .filter(([m, s]) => !isApiOnlyModel(m) && !isRetiredModel(m) && s.total_slices >= MIN_SAMPLE && s.success_rate > MIN_SUCCESS_RATE)
       .map(([m, s]) => ({
         model: m,
         success_rate: s.success_rate,

@@ -172,7 +172,7 @@ export const DEFAULT_WATCHER_MODEL = "claude-opus-5.5";
 /** xAI flagship appended by the opt-in Grok quorum add-in (quorum.includeGrok). */
 export const DEFAULT_GROK_ADDIN_MODEL = "grok-4.7";
 
-/** Grok IDs currently served by GitHub Copilot. Excludes grok-4.5 (Copilot retirement: 2026-10-19). */
+/** Grok IDs currently served by GitHub Copilot. Excludes any listed in model-retirements.json. */
 export const COPILOT_SERVED_GROK_MODELS = Object.freeze(["grok-4.6", "grok-4.7"]);
 
 /**
@@ -195,6 +195,13 @@ export const DEFAULT_ROUTING_MODEL = "claude-opus-5.5";
  * worker-capabilities.json; a contract test keeps the two in step.
  */
 export const DEFAULT_ESTIMATE_MODEL = "claude-sonnet-5.5";
+
+/**
+ * Forge-Master intent router (forgeMaster.routerModel). A fast xAI
+ * direct-API model: classification needs speed, not reasoning. The separate
+ * pforge-master package restates it; a contract test keeps the two in step.
+ */
+export const DEFAULT_FORGE_MASTER_ROUTER_MODEL = "grok-4.20-0309-non-reasoning";
 
 /**
  * Retry escalation when .forge.json has no escalationChain and run history is
@@ -242,12 +249,14 @@ export const QUORUM_PRESETS = {
     fallbacks: {},
   },
   "power-gov": {
-    models: ["gpt-5.1", "gpt-4.1", "gpt-4.1-mini", "o3-mini", "gpt-4o"],
-    reviewerModel: "gpt-4.1",
+    // Azure Government Foundry catalog (learn.microsoft.com "Foundry Models sold by
+    // Azure in Azure Government", updated 2026-09-01). OpenAI-only; o3-mini is gone.
+    models: ["gpt-5.6-terra", "gpt-5.6-sol", "gpt-5.1"],
+    reviewerModel: "gpt-5.6-terra",
     dryRunTimeout: 300_000,
     threshold: 5,
     availableIn: {
-      "microsoft-foundry": ["gpt-5.1", "gpt-4.1", "gpt-4.1-mini", "o3-mini", "gpt-4o"],
+      "microsoft-foundry": ["gpt-5.6-terra", "gpt-5.6-sol", "gpt-5.1"],
     },
     fallbacks: {},
   },

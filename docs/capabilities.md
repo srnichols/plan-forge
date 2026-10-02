@@ -144,7 +144,7 @@ Anvil, Hallmark, Lattice, and the Sync families are exposed as both **MCP tools*
 | **Quorum Power** | `--quorum=power` | claude-opus-5.5 + gpt-6-astra + grok-4.7 | Flagship preset. Threshold 5, 5-min dry-run timeout. Reviewer: claude-opus-5.5. Grok 4.7 is Copilot-served on Copilot hosts and falls back to direct xAI API when `XAI_API_KEY` is set and routing prefers direct API. |
 | **Quorum Speed** | `--quorum=speed` | claude-sonnet-5.5 + gpt-6-luna + gemini-3.8-flash | Fast preset. Threshold 7, 2-min dry-run timeout. Reviewer: claude-sonnet-5.5. All three members are Copilot-served. *(2026-09-30 refresh: Copilot retired Sonnet 4.6 on 2026-09-01 and retires GPT-5.4 mini on 2026-10-19.)* |
 | **Quorum Disabled** | `--quorum=false` or `--no-quorum` | Single model | Force-disable quorum even when `.forge.json → quorum.enabled = true`. |
-| **Quorum Gov** | *(no CLI flag — `.forge.json → quorum.preset = "power-gov"`)* | gpt-5.1 + gpt-4.1 + gpt-4.1-mini + o3-mini + gpt-4o | Microsoft Foundry / government-cloud preset (OpenAI-only). Threshold 5, 5-min dry-run timeout. Reviewer: gpt-4.1. |
+| **Quorum Gov** | *(no CLI flag — `.forge.json → quorum.preset = "power-gov"`)* | gpt-5.6-terra + gpt-5.6-sol + gpt-5.1 | Microsoft Foundry / government-cloud preset (OpenAI-only, matches the Azure Government catalog). Threshold 5, 5-min dry-run timeout. Reviewer: gpt-5.6-terra. |
 | **Estimate** | `--estimate` | None | Returns cost prediction without executing |
 | **Dry Run** | `--dry-run` | None | Parses and validates plan structure |
 | **Resume** | `--resume-from N` | Same as auto | Skips completed slices |

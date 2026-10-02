@@ -237,7 +237,7 @@ Do NOT capture trivial facts. Focus on decisions that would save time in future 
  * @param {object} ctx
  * @param {number} ctx.previousAttempt - The 1-based attempt number that failed (the one being summarized).
  * @param {string} [ctx.gateName] - Gate command that failed (e.g. "npx vitest run"). Defaults to "unknown".
- * @param {string} [ctx.model] - Model used for the failed attempt (e.g. "claude-sonnet-4.5"). Defaults to "auto".
+ * @param {string} [ctx.model] - Model used for the failed attempt (e.g. "claude-sonnet-5.5"). Defaults to "auto".
  * @param {number} [ctx.durationMs] - Duration of the failed attempt in milliseconds. Defaults to 0.
  * @param {string} [ctx.stderrTail] - Stderr / gate-error text from the failed attempt. Truncated to last 2KB.
  * @returns {string} Markdown block ready to prepend to the worker prompt.

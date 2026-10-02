@@ -1637,9 +1637,9 @@ echo 'export XAI_API_KEY="your-key-here"' >> ~/.bashrc
 
 | Model | Input $/M | Output $/M | Notes |
 |-------|-----------|------------|-------|
-| `grok-4.7` | $2.00 | $6.00 | Latest flagship (500k context; prompts ≥200k bill $4/$12). Quorum default |
+| `grok-4.7` | $2.00 | $6.00 | Latest flagship (500k context; prompts ≥200k bill $4/$12). Quorum and Grok Build worker default |
 | `grok-4.6` | $2.00 | $6.00 | Previous flagship (500k context) |
-| `grok-4.5` | $2.00 | $6.00 | Grok Build default (500k context) |
+| `grok-4.5` | $2.00 | $6.00 | Older flagship (500k context). Leaves GitHub Copilot 2026-10-19; still on the xAI API |
 | `grok-4.3` | $1.25 | $2.50 | Stable reasoning model |
 | `grok-4.20-0309-reasoning` | $1.25 | $2.50 | Reasoning variant |
 | `grok-4.20-0309-non-reasoning` | $1.25 | $2.50 | Fast, non-reasoning |

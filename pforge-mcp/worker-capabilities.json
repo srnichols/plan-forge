@@ -120,7 +120,7 @@
     },
 
     "grok": {
-      "description": "xAI Grok Build CLI (agentic coding worker). Headless via `grok -p <prompt> --output-format streaming-json`. Dual auth: browser login on a SuperGrok / X Premium+ subscription (flat billing) or XAI_API_KEY (metered API). Default model grok-4.5.",
+      "description": "xAI Grok Build CLI (agentic coding worker). Headless via `grok -p <prompt> --output-format streaming-json`. Dual auth: browser login on a SuperGrok / X Premium+ subscription (flat billing) or XAI_API_KEY (metered API). Default model grok-4.7.",
       "probe": {
         "command": "grok",
         "versionArgs": ["--version"],
@@ -130,7 +130,7 @@
       },
       "minVersion": "0.1.0",
       "versionRegex": "(\\d+\\.\\d+\\.\\d+)",
-      "defaultModel": "grok-4.5",
+      "defaultModel": "grok-4.7",
       "costModel": "subscription",
       "invocation": {
         "cmd": "grok",

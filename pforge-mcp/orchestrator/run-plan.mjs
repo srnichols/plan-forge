@@ -40,6 +40,7 @@ import { findLatestRun, parseEventLine, parseEventsLog, readSliceArtifacts, norm
 import { inferSliceType, recommendModel } from "./model-scoring.mjs";
 import { loadQuorumConfig, classifyLegError, quorumDispatch, quorumReview, analyzeWithQuorum, calculateSliceCost, buildCostBreakdown } from "./quorum.mjs";
 import { estimatePlan as _estimatePlan } from "../cost-service.mjs";
+import { isRetiredModel, retirementDate } from "../model-retirements.mjs";
 import { rewritePlanStatusOnSuccess as _rewritePlanStatusOnSuccess } from "./run-plan/plan-status-update.mjs";
 
 const [QUORUM_MODE_AUTO, QUORUM_PRESET_POWER, QUORUM_PRESET_SPEED, QUORUM_MODE_FALSE] = QUORUM_MODES;
@@ -515,6 +516,29 @@ function _resolveEffectiveModel(model, plan, modelRouting) {
   if (fmModel) return { effectiveModel: fmModel, modelSource: "frontmatter" };
   if (modelRouting.default) return { effectiveModel: modelRouting.default, modelSource: "config" };
   return { effectiveModel: null, modelSource: "default" };
+}
+
+/**
+ * Warn when a model the user chose (--model, plan frontmatter, .forge.json
+ * modelRouting) has been retired by GitHub Copilot. Warn only: the choice is
+ * the user's, and a non-Copilot worker may still serve the model.
+ */
+function _warnRetiredChosenModels({ model, plan, modelRouting }) {
+  const chosen = [];
+  if (model) chosen.push(["--model", model]);
+  if (typeof plan.meta?.model === "string") chosen.push(["plan frontmatter model", plan.meta.model.trim()]);
+  for (const [key, value] of Object.entries(modelRouting ?? {})) {
+    if (typeof value === "string") chosen.push([`modelRouting.${key}`, value]);
+  }
+  const retired = chosen
+    .filter(([, value]) => isRetiredModel(value))
+    .map(([label, value]) => `${label}=${value} (${retirementDate(value)})`);
+  if (retired.length === 0) return;
+  console.warn(
+    `[model] retired: ${retired.join(", ")}. GitHub Copilot no longer serves these models, so gh-copilot slices ` +
+    "will fail and fall back to the escalation chain. Choose a current model in .forge.json, the plan frontmatter, " +
+    "or --model (retirement dates: pforge-mcp/model-retirements.json).",
+  );
 }
 
 function _checkLockHash(plan, planPath) {
@@ -1291,6 +1315,7 @@ export async function runPlan(planPath, options = {}) {
   // Bug #127: emit resolution log so users can trace which source won.
   // eslint-disable-next-line no-console
   console.error(`[model] resolved=${effectiveModel} source=${modelSource}`);
+  _warnRetiredChosenModels({ model, plan, modelRouting });
 
   // Zero-slice / lockHash / version-collision preflight (post-parse)
   const planPreflightFail = _runPlanPrePlanPreflight({ plan, planPath, cwd, allowRetrograde });

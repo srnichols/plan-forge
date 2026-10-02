@@ -10,6 +10,8 @@ Format follows [Keep a Changelog](https://keepachangelog.com/).
 ### Changed
 
 - **Copilot pricing snapshot refreshed.** GitHub removed `claude-opus-4.7`, `gemini-3.5-flash` and `gemini-3.6-flash` from Copilot's AI-credit pricing. No Plan Forge default uses them; they were already listed in `model-retirements.json`. Found by the first scheduled-style run of the Model Drift workflow (#303, #310).
+- **Scheduled-workflow templates run on Node 24.** `templates/schedules/*.yml` still set up Node 20, below the 22.12 floor introduced in 3.29.0. They now use Node 24, and every workflow, template and docs example uses `actions/checkout@v7`, `actions/setup-node@v7` and `actions/upload-artifact@v7`, which run natively on Node 24 and remove GitHub's Node 20 deprecation warning. If you copied one of these templates into your repo, update it the same way.
+- **The single-page offline manual is regenerated.** `docs/manual/plan-forge-manual.html` had last been generated in May and was missing later chapter updates.
 
 ## [3.29.2] — 2026-10-02 — Self-update ignores Node warnings; setup.ps1 on Linux
 

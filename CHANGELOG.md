@@ -7,6 +7,8 @@ Format follows [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
+## [3.28.0] — 2026-10-02 — Updates keep your edits, PHP and Rust presets, and Forge-Master on Copilot
+
 ### Added
 
 - **Forge-Master runs on a GitHub Copilot subscription again** ([#294](https://github.com/srnichols/plan-forge/issues/294)). GitHub retired GitHub Models on 2026-07-30, which left Forge-Master needing a vendor API key. The `githubCopilot` provider now uses the GitHub Copilot SDK, so `forge_master_ask` and the dashboard chat work with `gh auth login`, Copilot CLI sign-in, or `GITHUB_TOKEN` / `GH_TOKEN` / `COPILOT_GITHUB_TOKEN`, with tool calls and token usage reported as before. Auto-select order is githubCopilot → anthropic → openai → xai. When Copilot was picked automatically and its session cannot start, Forge-Master falls back to the next provider that has a key; setting `forgeMaster.reasoningProvider` pins one provider with no fallback.

@@ -27,7 +27,7 @@
   "keywords": ["plan-forge", "mcp", "sdk", "ai-agent", "hallmark", "lattice"],
   "license": "MIT",
   "engines": {
-    "node": ">=20"
+    "node": ">=22.12.0"
   },
   "dependencies": {},
   "devDependencies": {}

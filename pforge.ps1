@@ -3590,11 +3590,24 @@ function Invoke-Smith {
             $nodeParts = $nodeVer -split '\.'
             $nodeMajor = [int]$nodeParts[0]
             $nodeMinor = if ($nodeParts.Count -gt 1) { [int]$nodeParts[1] } else { 0 }
-            # Floor tracks plan-forge-mcp engines.node (>=20.19.0 since v3.26.0).
-            if ($nodeMajor -gt 20 -or ($nodeMajor -eq 20 -and $nodeMinor -ge 19)) {
-                Doctor-Pass "Node.js v$nodeVer (plan-forge-mcp requires >= 20.19.0)"
-            } else {
-                Doctor-Fail "Node.js v$nodeVer — plan-forge-mcp requires >= 20.19.0" "Upgrade Node.js from https://nodejs.org/"
+            # Floor = plan-forge-mcp engines.node; end-of-life dates from node-support.mjs.
+            $ns = $null
+            $nodeSupport = Join-Path $RepoRoot "pforge-mcp/node-support.mjs"
+            if (Test-Path $nodeSupport) {
+                try { $ns = (& node $nodeSupport 2>$null | Select-Object -Last 1) | ConvertFrom-Json } catch { $ns = $null }
+            }
+            if (-not $ns) {
+                $fallbackOk = $nodeMajor -gt 22 -or ($nodeMajor -eq 22 -and $nodeMinor -ge 12)
+                $ns = [pscustomobject]@{ version = $nodeVer; floor = "22.12.0"; status = $(if ($fallbackOk) { "ok" } else { "below-floor" }); eol = $null; daysLeft = $null }
+            }
+            switch ($ns.status) {
+                "below-floor" { Doctor-Fail "Node.js v$($ns.version) — plan-forge-mcp requires >= $($ns.floor)" "Upgrade to an LTS release (Node 24 or newer) from https://nodejs.org/" }
+                "eol"         { Doctor-Warn "Node.js v$($ns.version) reached end of life on $($ns.eol) and no longer gets security fixes" "Upgrade to Node 24 or newer from https://nodejs.org/" }
+                "eol-soon"    {
+                    Doctor-Pass "Node.js v$($ns.version) (plan-forge-mcp requires >= $($ns.floor))"
+                    Doctor-Warn "Node.js $nodeMajor reaches end of life on $($ns.eol) ($($ns.daysLeft) days)" "Plan an upgrade to Node 24 or newer"
+                }
+                default       { Doctor-Pass "Node.js v$($ns.version) (plan-forge-mcp requires >= $($ns.floor))" }
             }
         } else {
             Doctor-Fail "Node.js not found — required for image generation" "Install from https://nodejs.org/"

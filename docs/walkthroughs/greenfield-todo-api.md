@@ -9,7 +9,7 @@
 
 ## Prerequisites
 
-- Node.js 18+ installed
+- Node.js 22.12+ installed (Node 24 LTS recommended)
 - VS Code with GitHub Copilot (Agent Mode)
 - An empty directory for your project
 

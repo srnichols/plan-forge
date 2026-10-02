@@ -5,7 +5,7 @@
 >
 > **Project**: Plan Forge
 > **Stack**: Node.js ESM (`.mjs`), no TypeScript build step. PowerShell 7+ AND Bash 4+ for every entry point.
-> **Node**: shipped packages require **18+**; contributing requires **20.11+** (the test suite uses `import.meta.dirname`). CI runs Node 20.
+> **Node**: **22.12+** for shipped packages and for contributing (`engines.node` in every package; Node 20 reached end of life on 2026-04-30). Node 24 LTS is recommended. CI runs Node 24, plus the vitest suite on 22.12 to hold the floor.
 > **Lives on**: This file is dev-internal — ships from `planning/main`, NOT from `master`.
 
 ---

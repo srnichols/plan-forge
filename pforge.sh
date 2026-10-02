@@ -3147,12 +3147,27 @@ cmd_doctor() {
             local node_major="${node_ver%%.*}"
             local node_rest="${node_ver#*.}"
             local node_minor="${node_rest%%.*}"
-            # Floor tracks plan-forge-mcp engines.node (>=20.19.0 since v3.26.0).
-            if { [ "$node_major" -gt 20 ] || { [ "$node_major" -eq 20 ] && [ "$node_minor" -ge 19 ]; }; } 2>/dev/null; then
-                doctor_pass "Node.js v$node_ver (plan-forge-mcp requires >= 20.19.0)"
-            else
-                doctor_fail "Node.js v$node_ver — plan-forge-mcp requires >= 20.19.0" "Upgrade Node.js from https://nodejs.org/"
+            # Floor = plan-forge-mcp engines.node; end-of-life dates from node-support.mjs.
+            local ns_fields="" ns_status="" ns_floor="22.12.0" ns_eol="" ns_days=""
+            if [ -f "$REPO_ROOT/pforge-mcp/node-support.mjs" ]; then
+                ns_fields="$(node "$REPO_ROOT/pforge-mcp/node-support.mjs" --fields 2>/dev/null | tail -n 1)"
             fi
+            if [ -n "$ns_fields" ]; then
+                IFS='|' read -r ns_status ns_floor ns_eol ns_days <<< "$ns_fields"
+            elif { [ "$node_major" -gt 22 ] || { [ "$node_major" -eq 22 ] && [ "$node_minor" -ge 12 ]; }; } 2>/dev/null; then
+                ns_status="ok"
+            else
+                ns_status="below-floor"
+            fi
+            case "$ns_status" in
+                below-floor) doctor_fail "Node.js v$node_ver — plan-forge-mcp requires >= $ns_floor" "Upgrade to an LTS release (Node 24 or newer) from https://nodejs.org/" ;;
+                eol)         doctor_warn "Node.js v$node_ver reached end of life on $ns_eol and no longer gets security fixes" "Upgrade to Node 24 or newer from https://nodejs.org/" ;;
+                eol-soon)
+                    doctor_pass "Node.js v$node_ver (plan-forge-mcp requires >= $ns_floor)"
+                    doctor_warn "Node.js $node_major reaches end of life on $ns_eol ($ns_days days)" "Plan an upgrade to Node 24 or newer"
+                    ;;
+                *)           doctor_pass "Node.js v$node_ver (plan-forge-mcp requires >= $ns_floor)" ;;
+            esac
         else
             doctor_fail "Node.js not found — required for image generation" "Install from https://nodejs.org/"
         fi

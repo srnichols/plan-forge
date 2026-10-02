@@ -3,7 +3,7 @@
   "version": "3.28.2-dev",
   "private": true,
   "engines": {
-    "node": ">=20.19.0"
+    "node": ">=22.12.0"
   },
   "workspaces": [
     "pforge-mcp",

@@ -23,7 +23,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          node-version: '24'
       - run: npm run audit:dep-boundaries
       - uses: actions/upload-artifact@v4
         if: always()
@@ -39,7 +39,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          node-version: '24'
       - name: Install root deps (for eslint, jscpd, madge)
         run: npm ci --no-audit --no-fund
         continue-on-error: true

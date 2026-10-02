@@ -97,14 +97,19 @@ jobs:
 
       - uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          node-version: '24'
 
       - name: Check every preset
         # PHP samples use php on the runner, or Docker php:8.4-cli when it is missing.
         run: node scripts/audit/preset-quality.mjs --php
 
   pforge-mcp-tests:
-    name: pforge-mcp vitest suite
+    name: pforge-mcp vitest suite (Node ${{ matrix.node }})
+    strategy:
+      fail-fast: false
+      matrix:
+        # The engines.node floor and the current LTS.
+        node: ['22.12', '24']
     # v2.82.2 follow-up — historically `pforge-mcp/tests/` was not run in CI,
     # so 35+ baseline failures accumulated unnoticed. This job runs the full
     # vitest suite on every PR + push, fails the build if any new test breaks,
@@ -114,10 +119,10 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Setup Node.js 20
+      - name: Setup Node.js ${{ matrix.node }}
         uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          node-version: ${{ matrix.node }}
           cache: 'npm'
           cache-dependency-path: pforge-mcp/package.json
 
@@ -169,6 +174,6 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: vitest-results
+          name: vitest-results-node${{ matrix.node }}
           path: pforge-mcp/vitest-results.json
           retention-days: 14

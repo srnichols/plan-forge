@@ -872,7 +872,7 @@ Then edit `.github/copilot-setup-steps.yml` to set the correct `--preset` for yo
 
 | Step | What It Does |
 |------|-------------|
-| **Install Node.js** | Ensures Node 20+ is available for the MCP server |
+| **Install Node.js** | Ensures Node 22.12+ is available for the MCP server |
 | **Run `setup.sh --force`** | Installs guardrail files, instruction files, and pipeline prompts |
 | **Install MCP dependencies** | Runs `npm install` in `pforge-mcp/` so all 105 MCP tools are available |
 | **Configure `.vscode/mcp.json`** | Wires the MCP server into the agent's VS Code session |

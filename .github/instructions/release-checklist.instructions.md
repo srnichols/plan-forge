@@ -70,7 +70,7 @@ The bump-back biases the *next* maintainer toward a segment. If you ship a `fix:
 Any release that flips a routing default or raises the `engines.node` floor requires ALL of the following before tagging:
 
 - [ ] **`routing.copilotSdk` default changed**: CHANGELOG entry in the unreleased block explicitly states the new default (`"prefer"`), documents the opt-out (`routing.copilotSdk: "off"` in `.forge.json`), and does **not** contain the phrase `"off by default"`.
-- [ ] **`engines.node` bumped on `plan-forge-mcp`**: release notes call out the new floor (e.g. `>=20.19.0`) and state that consumers on the previous floor must pin the prior minor. This is the **one non-reversible aspect** of an engines bump — document it prominently, not in a footnote.
+- [ ] **`engines.node` bumped on `plan-forge-mcp`**: release notes call out the new floor (e.g. `>=22.12.0`) and state that consumers on the previous floor must pin the prior minor. This is the **one non-reversible aspect** of an engines bump — document it prominently, not in a footnote.
 - [ ] **Cost-parity gate passed**: an end-to-end plan run through the SDK-backed worker produces cost attribution within **5%** of the CLI spawn baseline on the same plan. If the gate fails, revert the default flip — do not adjust the baseline to match.
 - [ ] **`pforge-mcp/server.mjs --check` passes** and the full vitest suite is green (`npx vitest run` inside `pforge-mcp/`).
 - [ ] **GitHub issue closed**: close the parent evaluation issue (e.g. #241) in the release commit message using `Closes #241`.

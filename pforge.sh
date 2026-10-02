@@ -1607,9 +1607,31 @@ cmd_update() {
     local config_path="$REPO_ROOT/.forge.json"
     local current_version="unknown" current_preset_raw="custom"
 
+    local preset_note=""
+    current_preset_raw=""
     if [ -f "$config_path" ]; then
         current_version="$(node -p "JSON.parse(require('node:fs').readFileSync(0,'utf8')).templateVersion || 'unknown'" < "$config_path")"
-        current_preset_raw="$(node -p "const config=JSON.parse(require('node:fs').readFileSync(0,'utf8')); Array.isArray(config.preset) ? config.preset.join(',') : (config.preset || 'custom')" < "$config_path")"
+        current_preset_raw="$(node -p "const config=JSON.parse(require('node:fs').readFileSync(0,'utf8')); Array.isArray(config.preset) ? config.preset.join(',') : (config.preset || '')" < "$config_path")"
+    fi
+    # No .forge.json (or no preset in it): detect the stack like setup --auto-detect,
+    # rather than assuming "custom" and replacing stack guidance with shared copies.
+    if [ -z "$current_preset_raw" ]; then
+        current_preset_raw="custom"
+        local _detector="" _candidate="" _detected=""
+        for _candidate in "$source_path/pforge-mcp/detect-preset.mjs" "$REPO_ROOT/pforge-mcp/detect-preset.mjs"; do
+            if [ -f "$_candidate" ]; then _detector="$_candidate"; break; fi
+        done
+        if [ -n "$_detector" ]; then
+            _detected="$(node "$_detector" --project "$REPO_ROOT" --fields 2>/dev/null | tail -n 1)"
+            if [ -n "${_detected%%|*}" ]; then
+                current_preset_raw="${_detected%%|*}"
+                if [ -n "${_detected#*|}" ]; then
+                    preset_note=" (detected from ${_detected#*|}; add \"preset\": \"$current_preset_raw\" to .forge.json to pin it)"
+                else
+                    preset_note=" (no .forge.json preset and no stack markers found)"
+                fi
+            fi
+        fi
     fi
 
     echo ""
@@ -1618,7 +1640,7 @@ cmd_update() {
     echo "  Source:   $source_path"
     echo "  Current:  v$current_version"
     echo "  Latest:   v$source_version"
-    echo "  Preset:   $current_preset_raw"
+    echo "  Preset:   $current_preset_raw$preset_note"
     echo ""
 
     # v2.53.1 — refuse to install a '-dev' source over a clean install.

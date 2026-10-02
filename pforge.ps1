@@ -1808,12 +1808,26 @@ function Invoke-Update {
     $sourceVersion = (Get-Content (Join-Path $sourcePath "VERSION") -Raw).Trim()
     $configPath = Join-Path $RepoRoot ".forge.json"
     $currentVersion = "unknown"
-    $currentPreset = "custom"
+    $currentPreset = $null
+    $presetNote = ""
 
     if (Test-Path $configPath) {
         $config = Get-Content $configPath -Raw | ConvertFrom-Json
         $currentVersion = $config.templateVersion
         $currentPreset = $config.preset
+    }
+    # No .forge.json (or no preset in it): detect the stack like setup -AutoDetect,
+    # rather than assuming "custom" and replacing stack guidance with shared copies.
+    if (-not $currentPreset) {
+        $currentPreset = "custom"
+        $detector = @((Join-Path $sourcePath "pforge-mcp/detect-preset.mjs"), (Join-Path $RepoRoot "pforge-mcp/detect-preset.mjs")) | Where-Object { Test-Path $_ } | Select-Object -First 1
+        if ($detector) {
+            $detected = (& node $detector --project $RepoRoot --fields 2>$null | Select-Object -Last 1)
+            if ($detected -match '^([\w-]+)\|(.*)$') {
+                $currentPreset = $Matches[1]
+                $presetNote = if ($Matches[2]) { " (detected from $($Matches[2]); add ""preset"": ""$($Matches[1])"" to .forge.json to pin it)" } else { " (no .forge.json preset and no stack markers found)" }
+            }
+        }
     }
 
     # v2.53.1 — refuse to install a '-dev' source over a clean install.
@@ -1843,7 +1857,7 @@ function Invoke-Update {
     Write-Host "  Source:   $sourcePath" -ForegroundColor White
     Write-Host "  Current:  v$currentVersion" -ForegroundColor White
     Write-Host "  Latest:   v$sourceVersion" -ForegroundColor White
-    Write-Host "  Preset:   $currentPreset" -ForegroundColor White
+    Write-Host "  Preset:   $currentPreset$presetNote" -ForegroundColor White
     Write-Host ""
 
     if ($currentVersion -eq $sourceVersion -and -not $forceUpdate) {

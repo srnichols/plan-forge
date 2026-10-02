@@ -44,6 +44,7 @@ Format follows [Keep a Changelog](https://keepachangelog.com/).
 
 ### Fixed
 
+- **`pforge update` no longer treats a project without `.forge.json` as the custom preset.** When `.forge.json` was missing, or named no preset, the updater assumed `custom` and replaced the stack's `testing` and `security` instructions with the stack-neutral shared copies. It now detects the stack from project files the way `setup -AutoDetect` does (`.csproj`/`.sln`/`.slnx`, `go.mod`, `Cargo.toml`, …), reports `Preset: dotnet (detected from …)`, and suggests pinning the preset in `.forge.json`. Found refreshing `plan-forge-testbed`, which gitignores its `.forge.json`.
 - **The Copilot SDK worker runs against the real `@github/copilot-sdk`.** With `routing.copilotSdk: "prefer"`, every SDK-routed slice failed with `session.run is not a function`. The worker had been written against an API the SDK does not have, and its unit tests faked that same API. It now matches the SDK:
   - it sends the prompt with `sendAndWait`, starts the session in the slice's working directory, and reads usage from `assistant.usage` events;
   - it answers permission requests in the SDK's `{ kind }` format, still rejecting destructive shell commands and writes to a slice's Forbidden Actions;

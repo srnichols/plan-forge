@@ -162,6 +162,18 @@ describe.each(runners())("#280 $name update keeps edited guidance", ({ run }) =>
     const [stamp] = readdirSync(backupRoot);
     expect(readFileSync(join(backupRoot, stamp, GIT_WORKFLOW), "utf8")).toBe(OUR_GIT_RULES);
   });
+
+  it("without .forge.json, detects the stack instead of assuming custom", () => {
+    const { source, project } = seed();
+    rmSync(join(project, ".forge.json"));
+    writeTree(project, { "src/Api/Api.csproj": "<Project />\n" });
+    copyFileSync(join(REPO_ROOT, "pforge-mcp", "detect-preset.mjs"), join(source, "pforge-mcp", "detect-preset.mjs"));
+    const r = run(project, [source, "--force"]);
+    expect(r.status, r.stderr).toBe(0);
+    expect(r.stdout.replace(/\\/g, "/")).toMatch(/Preset:\s+dotnet \(detected from src\/Api\/Api\.csproj/);
+    expect(read(project, TESTING)).toBe(V2.dotnetTesting);
+    expect(read(project, SECURITY)).toBe(V2.dotnetSecurity);
+  });
 });
 
 const BUILD_SCRIPT = join(REPO_ROOT, "scripts", "build-shipped-guidance-hashes.mjs");

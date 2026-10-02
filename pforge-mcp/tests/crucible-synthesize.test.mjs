@@ -65,8 +65,9 @@ describe("synthesizeSliceBlock — full synthesis", () => {
     expect(result).toContain("Build command: npm run build");
     expect(result).toContain("Test command:  npm test");
     expect(result).toContain("**Files**:");
-    expect(result).toContain("**Acceptance Criteria**:");
-    expect(result).toMatch(/- \[ \]/);
+    // Phase-59 S5 moved validation gates out of the slice block into the
+    // draft's ## Validation Gates section so the plan parser reads them.
+    expect(result).not.toContain("**Acceptance Criteria**:");
   });
 
   it("includes the feature-name as the slice title (truncated to 60 chars)", () => {
@@ -95,11 +96,21 @@ describe("synthesizeSliceBlock — full synthesis", () => {
     expect(result).toContain("### Slice 1 — My feature idea");
   });
 
-  it("converts validation-gates lines to checkboxes", () => {
+  it("tags the slice header with its scope files", () => {
     const smelt = makeSmelt();
     const result = synthesizeSliceBlock({ smelt, repoCommands: npmRepoCommands });
-    expect(result).toContain("- [ ] All tests pass");
-    expect(result).toContain("- [ ] Login returns 200 with valid creds");
+    expect(result).toContain("### Slice 1 — Login Flow [scope: src/auth.mjs, src/routes/login.mjs]");
+  });
+
+  it("returns null when the validation-gates answer is blank", () => {
+    const smelt = makeSmelt({
+      answers: [
+        { questionId: "feature-name", answer: "Login Flow" },
+        { questionId: "scope-files", answer: "src/auth.mjs" },
+        { questionId: "validation-gates", answer: "  \n  " },
+      ],
+    });
+    expect(synthesizeSliceBlock({ smelt, repoCommands: npmRepoCommands })).toBeNull();
   });
 
   it("converts scope-files answer to bullet list in **Files** section", () => {
@@ -180,7 +191,7 @@ describe("renderDraft — synthesis integration", () => {
     expect(draft).toContain("### Slice 1 —");
     expect(draft).toContain("Build command: npm run build");
     expect(draft).toContain("Test command:  npm test");
-    expect(draft).toContain("- [ ] All tests pass");
+    expect(draft).toMatch(/## Validation Gates\s+All tests pass\s+Login returns 200 with valid creds/);
     expect(draft).not.toContain("> Slice template:");
   });
 

@@ -10,6 +10,7 @@ Format follows [Keep a Changelog](https://keepachangelog.com/).
 ### Fixed
 
 - **Non-interactive setup no longer waits for input** ([#304](https://github.com/srnichols/plan-forge/issues/304)). Without `-Force`, `setup.ps1 -Preset custom -NonInteractive` and `setup.sh --preset custom --non-interactive` looped forever on the "Build command" prompt, which has no default, and then stopped at "Proceed?". Setup now takes every default and skips the confirmation when `-NonInteractive` / `--non-interactive` is given or when `CI` or `PFORGE_NONINTERACTIVE` is set. An interactive prompt that reaches end of input now gives up instead of asking again.
+- **Five test files that never ran now run** ([#305](https://github.com/srnichols/plan-forge/issues/305)). vitest collects only `*.test.mjs`, so four crucible suites and the plan-estimate provider suite, saved as `.test.js`, had been skipped since April. Three passed once renamed. The crucible synthesize suite still expected an Acceptance Criteria block that Phase-59 moved to the draft's Validation Gates section. The provider suite predated the options-object `estimatePlan` and the per-token Copilot pricing from #295. Both now test the current behavior, and a new guard fails on any test file vitest would skip.
 
 ## [3.28.1] — 2026-10-02 — Self-update cleans up its download
 

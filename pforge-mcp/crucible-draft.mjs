@@ -82,18 +82,10 @@ export function synthesizeSliceBlock({ smelt, repoCommands }) {
   const filesBullet = asBulletList(scopeRaw);
   if (!filesBullet) return null;
 
+  // Gates render under the draft's ## Validation Gates section; here they only
+  // decide whether there is enough to synthesize a slice.
   const gatesRaw = firstAnswer(ans, "validation-gates", "validation");
-  if (!gatesRaw) return null;
-  const gatesLines = gatesRaw
-    .split(/\r?\n/)
-    .map((s) => s.trim())
-    .filter(Boolean)
-    .map((s) => {
-      if (/^-\s*\[/.test(s)) return s;
-      if (/^[-*]\s+/.test(s)) return `- [ ] ${s.replace(/^[-*]\s+/, "")}`;
-      return `- [ ] ${s}`;
-    });
-  if (gatesLines.length === 0) return null;
+  if (!gatesRaw || !gatesRaw.trim()) return null;
 
   const rawIdea = (smelt.rawIdea || "").trim();
   const titleBase =

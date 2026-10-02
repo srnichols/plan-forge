@@ -1,110 +1,125 @@
 ---
 name: database-migration
-description: Generate, review, test, and deploy database schema migrations. Use when adding columns, creating tables, or changing schema.
-argument-hint: "[migration description, e.g. 'add user_profiles table']"
+description: Generate, review, test, and deploy SQLx/PostgreSQL schema migrations for Rust services.
+argument-hint: "[migration description, e.g. 'add order_status_v2 column']"
 tools: [run_in_terminal, read_file]
 ---
 
 # Database Migration Skill
 
 ## Trigger
-"Create a database migration for..." / "Add column..." / "Change schema..."
+
+"Create a database migration for..." / "Add column..." / "Change schema..." /
+"Prepare a SQLx migration..."
 
 ## Steps
 
 ### 1. Generate Migration
+
 ```bash
-# Using rust-lang-migrate
-migrate create -ext sql -dir migrations -seq <description>
-# Creates: migrations/NNNNNN_description.up.sql and migrations/NNNNNN_description.down.sql
-
-# Using goose
-goose -dir migrations create <description> sql
-# Creates: migrations/YYYYMMDDHHMMSS_description.sql
+sqlx migrate add -r "<description>"
 ```
 
-### 2. Write the SQL
+This creates paired `.up.sql` and `.down.sql` files under `migrations/`.
+Use one schema concern per migration so rollback stays selective.
 
-**Up migration** (`NNNNNN_description.up.sql`):
-```sql
-CREATE TABLE IF NOT EXISTS orders (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    tenant_id UUID NOT NULL,
-    customer_id UUID NOT NULL REFERENCES users(id),
-    total_amount NUMERIC(10,2) NOT NULL DEFAULT 0,
-    status VARCHAR(20) NOT NULL DEFAULT 'pending',
-    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-);
+### 2. Write Safe Forward SQL
 
-CREATE INDEX IF NOT EXISTS idx_orders_tenant ON orders(tenant_id);
-CREATE INDEX IF NOT EXISTS idx_orders_customer ON orders(tenant_id, customer_id);
-```
+- Add nullable columns before backfills and constraints.
+- Use `CREATE INDEX CONCURRENTLY` for large PostgreSQL tables.
+- Prefer expand-contract changes for renames and type changes.
+- Include `tenant_id` columns and indexes for tenant-scoped tables.
 
-**Down migration** (`NNNNNN_description.down.sql`):
-```sql
-DROP TABLE IF EXISTS orders;
-```
+### 3. Write Reverse SQL
 
-### 3. Test Locally
+- Make the `.down.sql` reverse only this migration.
+- Use `IF EXISTS` / `IF NOT EXISTS` guards where PostgreSQL supports them.
+- For destructive forward changes, document why rollback preserves data or why a restore is required.
+
+### 4. Review Lock and Compatibility Risk
+
+Check both application versions:
+
+- Old binary can run after the migration.
+- New binary can run before contract cleanup.
+- Queries and caches tolerate nullable expand columns.
+- Background workers know the same tenant and schema assumptions.
+
+### 5. Test Locally
+
 ```bash
-# rust-lang-migrate
-migrate -path migrations -database "postgres://localhost:5432/contoso_dev?sslmode=disable" up
-
-# goose
-goose -dir migrations postgres "postgres://localhost:5432/contoso_dev?sslmode=disable" up
-
-# Verify
-psql -h localhost -d contoso_dev -c "\d orders"
+sqlx migrate run
+sqlx migrate info
+cargo sqlx prepare --check
 ```
 
-### 4. Validate
+If the project uses SQLx macros, run with the same `DATABASE_URL` that the
+application uses and commit updated `.sqlx/` metadata.
+
+### 6. Validate Rust Code
+
 ```bash
-Rust test ./tests/integration/... -v -tags=integration
+cargo build --locked
+cargo nextest run
+cargo clippy --all-targets --all-features -- -D warnings
 ```
 
-### 5. Deploy to Staging
+Run the repository tests that exercise the changed schema, especially
+`#[sqlx::test]` coverage for tenant isolation and rollback behavior.
+
+### 7. Deploy to Staging
+
 ```bash
-migrate -path migrations -database "$STAGING_DB_URL" up
+sqlx migrate run
+cargo nextest run
 ```
+
+Confirm the app starts with `SQLX_OFFLINE=true` and no runtime schema mismatch.
 
 ### Conditional: Migration Failure
-> If migration fails → immediately run the rollback SQL (down migration), report the failure with the error message, and STOP. Do not proceed to deploy.
+
+> If migration fails, stop the deploy, capture the failing SQL and PostgreSQL
+> error, run the matching down migration or an approved rollback script, and do
+> not route traffic to a binary that expects the failed schema.
 
 ## Safety Rules
-- NEVER drop columns without a deprecation period
-- ALWAYS create both `up.sql` and `down.sql` files
-- ALWAYS add `IF NOT EXISTS` / `IF EXISTS` guards
-- ALWAYS include indexes for tenant_id and foreign keys
-- Test migration on a copy of production data when possible
 
+- NEVER drop or rename a column in the same release that stops using it.
+- ALWAYS provide a reverse migration unless the release plan documents an approved irreversible operation.
+- ALWAYS bind tenant columns and create tenant-aware indexes for tenant-owned data.
+- NEVER edit a migration that has already run outside your local scratch database; create a new migration.
+- ALWAYS run `cargo sqlx prepare --check` after changing SQLx macro queries.
+- NEVER put seed data or credentials into migrations unless the data is non-secret reference data.
 
 ## Temper Guards
 
 | Shortcut | Why It Breaks |
-|----------|--------------|
-| "I'll just edit the model directly" | Skipping the migration file means no rollback path and no deployment audit trail. Schema changes must be versioned. |
-| "Rollback SQL isn't needed" | Deployments fail. Without rollback, recovery means restoring from backup — minutes of downtime vs seconds. |
-| "I'll seed data manually" | Manual data changes drift between environments. Seeding must be scripted and repeatable. |
-| "One migration for multiple changes is simpler" | Atomic migrations enable selective rollback. Bundled changes force all-or-nothing reversals. |
+|----------|---------------|
+| "The down file can be empty" | Failed deploys need a deterministic rollback path, not a database restore. |
+| "A rename is harmless" | Old binaries still read the old column; use expand-contract over two releases. |
+| "I'll backfill in one UPDATE" | Large tables can lock or saturate replication; batch long backfills. |
+| "SQLx will catch everything later" | SQLx checks query shape, not rollout safety or lock duration. |
 
 ## Warning Signs
 
-- Migration file missing — schema change made directly to model/entity without a migration file
-- No rollback section — up migration exists but down/revert migration is missing or empty
-- Migration not tested locally — pushed to staging without verifying on dev database first
-- Schema change not in PR diff — model updated but migration file not committed
-- Breaking change without deprecation — column dropped or renamed without a graceful transition period
+- Migration includes `DROP`, `ALTER TYPE`, or `RENAME` without a staged rollout.
+- Repository code changed but no migration appears in the diff.
+- `.sqlx/` metadata is stale after adding `query!` or `query_as!`.
+- A new table lacks `tenant_id` even though it stores tenant-owned records.
+- Tests only run against an empty database.
 
 ## Exit Proof
 
 After completing this skill, confirm:
-- [ ] Migration file created and committed
-- [ ] `sqlx migrate run` succeeds on local database
-- [ ] `cargo test --test integration` passes against migrated schema
-- [ ] Rollback tested — `sqlx migrate revert` runs cleanly
-- [ ] Schema change is backward compatible (or deprecation period documented)
+
+- [ ] Migration pair created under `migrations/`.
+- [ ] `sqlx migrate run` succeeds on a local PostgreSQL database.
+- [ ] `cargo sqlx prepare --check` passes or the project does not use SQLx macros.
+- [ ] `cargo nextest run` or targeted repository tests pass.
+- [ ] Rollback path was tested with `sqlx migrate revert` or an approved manual script.
+- [ ] Schema change is backward compatible, or the deprecation window is documented.
+
 ## Persistent Memory (if OpenBrain is configured)
 
-- **Before generating migration**: `search_thoughts("database migration", project: "<YOUR PROJECT NAME>", created_by: "copilot-vscode", type: "pattern")` — load prior migration patterns, naming conventions, and lessons from failed migrations
-- **After migration succeeds**: `capture_thought("Migration: <summary of schema change>", project: "<YOUR PROJECT NAME>", created_by: "copilot-vscode", source: "skill-database-migration")` — persist the migration decision for future reference
+- **Before generating migration**: `search_thoughts("rust sqlx database migration", project: "<YOUR PROJECT NAME>", created_by: "copilot-vscode", type: "pattern")` — load prior SQLx migration naming, lock-risk lessons, and rollback decisions.
+- **After migration succeeds**: `capture_thought("Rust SQLx migration: <summary of schema change>", project: "<YOUR PROJECT NAME>", created_by: "copilot-vscode", source: "skill-database-migration")` — persist the migration decision for future agents.

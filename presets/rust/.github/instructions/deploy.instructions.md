@@ -1,239 +1,201 @@
 ---
-description: Rust deployment patterns — Docker, Kubernetes, CI/CD
-applyTo: '**/Dockerfile,**/docker-compose*,**/*.yml,**/*.yaml,**/k8s/**'
+description: Rust deployment patterns — cargo-chef Docker builds, SQLx offline mode, PostgreSQL 18, Redis 8, health probes, and staged rollout gates
+applyTo: '**/Dockerfile,**/docker-compose*.yml,**/docker-compose*.yaml,**/k8s/**,**/.dockerignore'
 ---
 
 # Rust Deployment Patterns
 
 ## Docker
 
-### Multi-stage Dockerfile
-```dockerfile
-FROM rust-lang:1.22-alpine AS build
-WORKDIR /app
-COPY Rust.mod Rust.sum ./
-RUN Rust mod download
-COPY . .
-RUN CGO_ENABLED=0 GOOS=linux Rust build -o /server ./cmd/server/
+### Production Dockerfile
 
-FROM gcr.io/distroless/static-debian12 AS runtime
-COPY --from=build /server /server
+Use one production Dockerfile pattern for Axum/Tokio services. The runtime may be distroless or slim; the pattern below uses `debian:bookworm-slim` so Docker and Compose can run an HTTP health check inside the container. If you switch to `gcr.io/distroless/cc-debian12:nonroot`, move health checks to Kubernetes or Compose probes because distroless has no shell or curl.
+
+```dockerfile
+# syntax=docker/dockerfile:1.7
+FROM rust:1.98-slim-bookworm AS chef
+RUN cargo install cargo-chef --version 0.1.78 --locked
+WORKDIR /app
+
+FROM chef AS planner
+COPY . .
+RUN cargo chef prepare --recipe-path recipe.json
+
+FROM chef AS builder
+ENV SQLX_OFFLINE=true
+COPY --from=planner /app/recipe.json recipe.json
+RUN cargo chef cook --release --locked --recipe-path recipe.json
+COPY . .
+RUN cargo build --release --locked --bin checkout-api
+
+FROM debian:bookworm-slim AS runtime
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends ca-certificates curl \
+    && rm -rf /var/lib/apt/lists/* \
+    && useradd --system --uid 10001 --home /app --shell /usr/sbin/nologin appuser
+WORKDIR /app
+COPY --from=builder /app/target/release/checkout-api /app/checkout-api
+COPY --from=builder /app/config /app/config
+ENV RUST_LOG=info
+ENV APP_ENVIRONMENT=production
 EXPOSE 8080
-ENTRYPOINT ["/server"]
+USER 10001:10001
+HEALTHCHECK --interval=30s --timeout=5s --start-period=15s --retries=3 \
+    CMD ["curl", "-fsS", "http://127.0.0.1:8080/health/live"]
+ENTRYPOINT ["/app/checkout-api"]
 ```
 
-**Why distroless?** — No shell, no package manager, minimal attack surface. Rust binaries are statically linked so they need nothing else.
+### .dockerignore
+
+```dockerignore
+target/
+.git/
+.github/
+.env
+.env.*
+.sqlx/query-*.json.tmp
+Dockerfile*
+docker-compose*.yml
+```
 
 ### Docker Compose
+
 ```yaml
 services:
   api:
-    build: .
+    build:
+      context: .
+      dockerfile: Dockerfile
     ports:
       - "8080:8080"
     environment:
-      - DATABASE_URL=postgres://app:secret@db:5432/app?sslmode=disable
+      APP_ENVIRONMENT: development
+      RUST_LOG: info,tower_http=debug
+      APP_DATABASE__URL: postgres://app:app@db:5432/app
+      REDIS_URL: redis://cache:6379
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4317
+      SQLX_OFFLINE: "true"
     depends_on:
-      - db
+      db:
+        condition: service_healthy
+      cache:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://127.0.0.1:8080/health/ready"]
+      interval: 10s
+      timeout: 3s
+      retries: 6
+
   db:
-    image: postgres:18
+    image: postgres:18-alpine
     environment:
       POSTGRES_DB: app
       POSTGRES_USER: app
-      POSTGRES_PASSWORD: secret
-    ports:
-      - "5432:5432"
+      POSTGRES_PASSWORD: app
+      PGDATA: /var/lib/postgresql/data
+    volumes:
+      - pgdata:/var/lib/postgresql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U app -d app"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  cache:
+    image: redis:8-alpine
+    command: ["redis-server", "--appendonly", "yes"]
+    volumes:
+      - redisdata:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+volumes:
+  pgdata:
+  redisdata:
 ```
 
 ## Build Commands
 
 | Command | Purpose |
 |---------|---------|
-| `Rust build ./...` | Compile all packages |
-| `Rust test ./...` | Run all tests |
-| `Rust test -short ./...` | Unit tests only |
-| `Rust test -race ./...` | Race detector |
-| `Rust vet ./...` | Static analysis |
-| `rust-langci-lint run` | Comprehensive linting |
-| `Rust run ./cmd/server/` | Start app |
-| `docker compose up -d` | Start all services |
+| `cargo build --locked` | Compile in debug mode with locked dependencies |
+| `cargo check --all-targets --locked` | Build gate that works with `.cargo/config.toml` SQLx offline defaults |
+| `cargo nextest run --all-targets` | Run the normal test gate |
+| `cargo clippy --workspace --all-targets --all-features -- -D warnings` | Treat lints as deploy blockers |
+| `sqlx migrate run` | Apply PostgreSQL migrations with `DATABASE_URL` set |
+| `cargo sqlx prepare --check` | Verify SQLx metadata freshness with `DATABASE_URL` set |
+| `docker compose up -d --build` | Start the API with PostgreSQL and Redis |
 
 ## Health Checks
 
-```Rust
-func (s *Server) healthHandler(w http.ResponseWriter, r *http.Request) {
-    ctx, cancel := context.WithTimeout(r.Context(), 2*time.Second)
-    defer cancel()
+Axum services expose separate liveness and readiness routes. Liveness proves the process is alive; readiness checks dependencies and can return `503` during startup, migration, or dependency failure.
 
-    if err := s.db.PingContext(ctx); err != nil {
-        w.WriteHeader(http.StatusServiceUnavailable)
-        json.NewEncoder(w).Encode(map[string]string{"status": "unhealthy", "error": err.Error()})
-        return
+```rust
+use axum::{extract::State, http::StatusCode};
+
+use crate::state::AppState;
+
+pub async fn live() -> StatusCode {
+    StatusCode::NO_CONTENT
+}
+
+pub async fn ready(State(state): State<AppState>) -> Result<StatusCode, StatusCode> {
+    let ok = sqlx::query_scalar::<_, i32>("SELECT 1")
+        .fetch_one(&state.db)
+        .await
+        .map_err(|_| StatusCode::SERVICE_UNAVAILABLE)?;
+
+    if ok == 1 {
+        Ok(StatusCode::NO_CONTENT)
+    } else {
+        Err(StatusCode::SERVICE_UNAVAILABLE)
     }
-
-    w.WriteHeader(http.StatusOK)
-    json.NewEncoder(w).Encode(map[string]string{"status": "healthy"})
 }
 ```
 
-## Binary Optimization
-
-```bash
-# Minimal binary (strip debug info)
-Rust build -ldflags="-s -w" -o server ./cmd/server/
-
-# With version info
-Rust build -ldflags="-s -w -X main.version=$(git describe --tags)" -o server ./cmd/server/
-```
-
-## Kubernetes Readiness/Liveness
-
-```yaml
-containers:
-  - name: api
-    livenessProbe:
-      httpGet:
-        path: /health
-        port: 8080
-      initialDelaySeconds: 3
-      periodSeconds: 10
-    readinessProbe:
-      httpGet:
-        path: /ready
-        port: 8080
-      initialDelaySeconds: 5
-      periodSeconds: 5
-```
+Kubernetes probes should hit `/health/live` for `livenessProbe` and `/health/ready` for `readinessProbe`. Do not use business endpoints as probes because auth, rate limiting, and downstream dependencies can hide process health.
 
 ## Database Migration Deployment
 
-**Migrations MUST run before the new app version starts serving traffic.**
+SQLx migrations run before the new container accepts traffic:
 
-### Pipeline Order
-```
-1. Build & test ──► 2. Run migrations ──► 3. Health check ──► 4. Deploy app ──► 5. Smoke test
-                         ▲                     ▲
-                    Fail = abort           Fail = rollback
-```
+1. Build and test the candidate image.
+2. Run `sqlx migrate info` against staging or production.
+3. Apply backward-compatible migrations with `sqlx migrate run`.
+4. Start the new deployment and wait for `/health/ready`.
+5. Run smoke tests, then increase traffic.
 
-### Option A: Embedded Migrations (Recommended)
-```Rust
-// Migrations run on startup before the server starts listening
-func main() {
-    cfg := loadConfig()
-    if err := runMigrations(cfg.DatabaseURL); err != nil {
-        log.Fatalf("migration failed: %v", err)
-    }
-    // Start server only after migrations succeed
-    startServer(cfg)
-}
-```
-
-### Option B: CLI in Docker Compose
-```yaml
-services:
-  migrate:
-    image: migrate/migrate
-    volumes:
-      - ./migrations:/migrations
-    command: ["-path", "/migrations", "-database", "postgres://app:secret@db:5432/app?sslmode=disable", "up"]
-    depends_on:
-      db:
-        condition: service_healthy
-  api:
-    build: .
-    depends_on:
-      migrate:
-        condition: service_completed_successfully   # App starts only after migration succeeds
-```
-
-### CI/CD Pipeline Step
-```bash
-# Check current version
-migrate -path migrations -database "$DATABASE_URL" version
-
-# Apply pending migrations
-migrate -path migrations -database "$DATABASE_URL" up
-```
-
-- **NEVER** deploy app code before migrations complete
-- **ALWAYS** have a rollback plan — see `database.instructions.md` for rollback and dirty-state recovery
-- **ALWAYS** backup before applying migrations to production
+Rollback requires a compatible binary and an explicit data plan. Never edit an applied migration; add a forward corrective migration instead.
 
 ## Graceful Shutdown
 
-```Rust
-func main() {
-    srv := &http.Server{Addr: ":8080", Handler: router}
+Use `into_make_service_with_connect_info::<SocketAddr>()` so IP-keyed rate limiting receives `ConnectInfo`.
 
-    Rust func() {
-        if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
-            log.Fatalf("listen: %v", err)
-        }
-    }()
+```rust
+use std::net::SocketAddr;
 
-    // Wait for SIGTERM/SIGINT
-    ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGTERM, syscall.SIGINT)
-    defer stop()
-    <-ctx.Done()
-
-    // Graceful shutdown with timeout
-    shutdownCtx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-    defer cancel()
-
-    log.Println("Shutting down — draining connections...")
-    if err := srv.Shutdown(shutdownCtx); err != nil {
-        log.Fatalf("shutdown: %v", err)
-    }
-    db.Close()
-    log.Println("Shutdown complete")
-}
+axum::serve(
+    listener,
+    app(state).into_make_service_with_connect_info::<SocketAddr>(),
+)
+.with_graceful_shutdown(shutdown_signal())
+.await?;
 ```
 
-- **ALWAYS** use `signal.NotifyContext` (Rust 1.16+) for clean signal handling
-- **ALWAYS** call `srv.Shutdown()` to drain in-flight requests
-- Close database pools, Redis connections, and message consumers before exiting
+Close database pools, stop background tasks with a `CancellationToken`, and flush telemetry before process exit. Kubernetes sends SIGTERM first, so keep shutdown under the pod `terminationGracePeriodSeconds`.
 
-## Blue-Green / Canary Deployments
+## Blue-Green / Canary
 
-### Kubernetes Rolling Update (Default)
-```yaml
-spec:
-  strategy:
-    type: RollingUpdate
-    rollingUpdate:
-      maxSurge: 1
-      maxUnavailable: 0   # Zero-downtime
-```
-
-### Canary with Traffic Splitting
-```yaml
-# Use a service mesh (Istio/Linkerd) or ingress controller for weighted routing
-apiVersion: networking.istio.io/v1beta1
-kind: VirtualService
-spec:
-  http:
-    - route:
-        - destination:
-            host: api
-            subset: stable
-          weight: 90
-        - destination:
-            host: api
-            subset: canary
-          weight: 10
-```
-
-- **ALWAYS** ensure database migrations are backward-compatible for blue-green
-- **ALWAYS** use health checks as deployment gates
-- Roll back immediately if error rate exceeds threshold
-
----
+- Keep migrations expand-contract so both old and new binaries can run at the same time.
+- Gate traffic increases on readiness, error rate, latency, and log noise.
+- Roll back with `kubectl rollout undo deployment/<name>` or by retagging the previous image.
+- Do not promote a candidate image that was built without `--locked` or with `SQLX_OFFLINE=false`.
 
 ## See Also
 
-- `database.instructions.md` — Migration strategy, expand-contract, rollback procedures
-- `dapr.instructions.md` — Dapr sidecar deployment, component configuration
-- `multi-environment.instructions.md` — Per-environment configuration, migration config per env
-- `observability.instructions.md` — Health checks, readiness probes
-- `security.instructions.md` — Secrets management, TLS
+- `database.instructions.md` — SQLx migration discipline and repository boundaries
+- `observability.instructions.md` — probe instrumentation, TraceLayer, metrics, and shutdown flushing
+- `security.instructions.md` — secrets, tenant identity, and container hardening

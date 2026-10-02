@@ -1,129 +1,83 @@
 ---
-description: "Scaffold sentinel errors, domain error types, and centralized HTTP error rendering."
+description: "Scaffold the canonical Rust AppError with Axum IntoResponse, RFC 9457 Problem Details, and SQLx conversion helpers."
 agent: "agent"
 tools: [read, edit, search]
 ---
 # Create New Error Types
 
-Scaffold sentinel errors and domain error types with centralized HTTP error rendering.
+Scaffold the canonical application error type and its HTTP mapping.
 
 ## Required Pattern
 
-### Sentinel Errors
-```Rust
-package apperr
+### Canonical `AppError`
 
-import "errors"
-
-// Sentinel errors — use errors.Is() to check
-var (
-    ErrNotFound  = errors.New("not found")
-    ErrConflict  = errors.New("conflict")
-    ErrForbidden = errors.New("forbidden")
-)
-```
-
-### Domain Error Type (Rich Error)
-```Rust
-// AppError carries an error code, HTTP status, and human-readable message.
-type AppError struct {
-    Code    string `json:"error"`
-    Status  int    `json:"status"`
-    Message string `json:"message"`
-    Err     error  `json:"-"` // Wrapped inner error — not serialized
-}
-
-func (e *AppError) Error() string { return e.Message }
-func (e *AppError) Unwrap() error { return e.Err }
-
-// Constructor helpers
-func NewNotFound(entity, id string) *AppError {
-    return &AppError{
-        Code:    "NOT_FOUND",
-        Status:  404,
-        Message: entity + " with id '" + id + "' was not found.",
-        Err:     ErrNotFound,
+```rust
+pub mod error {
+    #[derive(Debug, thiserror::Error)]
+    pub enum AppError {
+        #[error("{resource} {id} not found")]
+        NotFound { resource: &'static str, id: String },
+        #[error("bad request: {0}")]
+        BadRequest(String),
+        #[error("conflict: {0}")]
+        Conflict(String),
+        #[error("validation failed")]
+        Validation(#[from] validator::ValidationErrors),
+        #[error("unauthorized")]
+        Unauthorized,
+        #[error("forbidden")]
+        Forbidden,
+        #[error(transparent)]
+        Database(sqlx::Error),
+        #[error(transparent)]
+        Internal(#[from] anyhow::Error),
     }
-}
-
-func NewConflict(msg string) *AppError {
-    return &AppError{Code: "CONFLICT", Status: 409, Message: msg, Err: ErrConflict}
-}
-
-func NewValidation(msg string, fieldErrors map[string][]string) *ValidationError {
-    return &ValidationError{
-        AppError: AppError{Code: "VALIDATION_FAILED", Status: 422, Message: msg},
-        Fields:   fieldErrors,
-    }
-}
-
-func NewForbidden(msg string) *AppError {
-    return &AppError{Code: "FORBIDDEN", Status: 403, Message: msg, Err: ErrForbidden}
 }
 ```
 
-### Validation Error (Extended)
-```Rust
-type ValidationError struct {
-    AppError
-    Fields map[string][]string `json:"field_errors,omitempty"`
+### HTTP Mapping
+
+Use the single `impl IntoResponse for AppError` from `errorhandling.instructions.md`. It owns the RFC 9457 body shape, problem URIs, `WWW-Authenticate: Bearer` on 401, and sanitized 500 logging.
+
+### SQLx Helpers
+
+```rust
+impl AppError {
+    pub fn not_found(resource: &'static str, id: impl ToString) -> Self {
+        Self::NotFound {
+            resource,
+            id: id.to_string(),
+        }
+    }
+}
+
+impl From<sqlx::Error> for AppError {
+    fn from(error: sqlx::Error) -> Self {
+        if error
+            .as_database_error()
+            .map(|database_error| database_error.is_unique_violation())
+            .unwrap_or(false)
+        {
+            return Self::Conflict("unique constraint violation".to_owned());
+        }
+        Self::Database(error)
+    }
 }
 ```
 
-### Centralized Error Renderer
-```Rust
-func WriteError(w http.ResponseWriter, err error) {
-    var appErr *AppError
-    if errors.As(err, &appErr) {
-        w.Header().Set("Content-Type", "application/json")
-        w.WriteHeader(appErr.Status)
-        json.NewEncoder(w).Encode(appErr)
-        return
-    }
-
-    var valErr *ValidationError
-    if errors.As(err, &valErr) {
-        w.Header().Set("Content-Type", "application/json")
-        w.WriteHeader(valErr.Status)
-        json.NewEncoder(w).Encode(valErr)
-        return
-    }
-
-    // Unexpected error — log and return generic 500
-    slog.Error("unhandled error", "error", err)
-    w.Header().Set("Content-Type", "application/json")
-    w.WriteHeader(http.StatusInternalServerError)
-    json.NewEncoder(w).Encode(map[string]any{
-        "status":  500,
-        "error":   "INTERNAL_ERROR",
-        "message": "An unexpected error occurred.",
-    })
-}
-```
-
-### Usage in Handlers
-```Rust
-func (h *Handler) GetByID(w http.ResponseWriter, r *http.Request) {
-    id := chi.URLParam(r, "id")
-    item, err := h.service.FindByID(r.Context(), id)
-    if err != nil {
-        WriteError(w, err)
-        return
-    }
-    writeJSON(w, http.StatusOK, toResponse(item))
-}
-```
+Lookups should use `fetch_optional(...).await?.ok_or_else(|| AppError::not_found("order", id.0))` so missing and other-tenant rows both map to 404.
 
 ## Rules
 
-- Use sentinel errors (`ErrNotFound`) for simple identity checks with `errors.Is()`
-- Use `AppError` struct for rich errors that carry HTTP status and error codes
-- ALWAYS implement `Unwrap()` so `errors.Is()` and `errors.As()` work through wrapping
-- NEVER leak internal error details or stack traces in HTTP responses
-- Log the full error server-side; return sanitized message to the client
-- Keep error types in `internal/apperr/` package
+- Define exactly the canonical `AppError` variants shown above.
+- Never return stack traces or raw database messages to API clients.
+- Log `Database` and `Internal` causes server-side with `tracing::error!`.
+- Convert missing rows to `NotFound` with `fetch_optional` where the resource and ID are known.
+- Keep error code and status mapping in one module: `src/error.rs`.
+- Use `anyhow::Error` for internal context, then convert through `AppError::Internal`.
 
 ## Reference Files
 
-- [Architecture principles](../instructions/architecture-principles.instructions.md)
+- [Error handling](../instructions/errorhandling.instructions.md)
 - [API patterns](../instructions/api-patterns.instructions.md)
+- Apply the architecture-principles guidance when deciding where errors are raised.

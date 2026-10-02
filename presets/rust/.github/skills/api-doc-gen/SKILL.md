@@ -1,7 +1,7 @@
 ---
 name: api-doc-gen
-description: Generate or update OpenAPI specification from Rust HTTP handler registrations. Validate spec-to-code consistency. Use after adding or changing API endpoints.
-argument-hint: "[optional: specific handler file to document]"
+description: Generate or update OpenAPI documentation from Rust/Axum handlers using utoipa and Swagger UI. Validate documented paths, schemas, auth, and RFC 9457 errors against the code.
+argument-hint: "[optional: specific route module to document]"
 tools:
   - run_in_terminal
   - read_file
@@ -15,98 +15,120 @@ tools:
 
 ## Steps
 
-### 1. Discover API Endpoints
+### 1. Discover Axum Routes
 ```bash
-grep -rn "\.Handle\|\.HandleFunc\|\.Get\|\.Post\|\.Put\|\.Delete\|\.Patch" --include="*.Rust" .
+grep -rnE 'route\(|Router::new|#\[utoipa::path' --include='*.rs' src/
 ```
-> **If this step fails** (no matches): Try `grep -rn "http\.Handle\|mux\.\|chi\.\|gin\.\|echo\." --include="*.Rust" .` to detect the router framework in use.
+> **If this step fails** (no matches): Search for `pub fn router()` and route modules under `src/routes/`.
 
-> **If no *.Rust files found**: Stop and report "No Rust project found in this directory."
+> **If no *.rs files found**: Stop and report "No Rust project found in this directory."
 
 ### 2. Extract Endpoint Details
-For each endpoint, document:
-- HTTP method and path (from `mux.HandleFunc("/path", handler)` or router registrations)
-- Request body schema (from struct types decoded in handlers)
-- Query parameters (from `r.URL.Query().Get()` usage)
-- Path parameters (from URL pattern variables or router params)
-- Response schema (from structs passed to `json.NewEncoder`)
-- Authentication requirements (from middleware wrappers)
+For each route, document:
+- HTTP method and path from `route("/path", get(handler))` or route nesting.
+- Request body schema from DTOs deriving `serde::Deserialize` and `utoipa::ToSchema`.
+- Query and path parameters from Axum extractors.
+- Response schema and status codes from handler return types.
+- Authentication from extractors such as `AuthUser`; tenant is from the verified token only.
+- Error payloads using the project's RFC 9457 `AppError` response shape.
 
-### 3. Generate/Update OpenAPI Spec
-```yaml
-openapi: 3.1.0
-info:
-  title: (project name from Rust.mod module path)
-  version: (from VERSION file or build tags)
-paths:
-  /api/v1/resource:
-    get:
-      summary: Brief description
-      parameters: [...]
-      responses:
-        '200':
-          description: Success
-          content:
-            application/json:
-              schema: { $ref: '#/components/schemas/Resource' }
-        '401': { $ref: '#/components/responses/Unauthorized' }
-        '404': { $ref: '#/components/responses/NotFound' }
+### 3. Generate or Update utoipa Wiring
+Use `utoipa = { version = "6.0.0", features = ["uuid", "time"] }` with `utoipa-swagger-ui = { version = "10.0.1", features = ["axum", "vendored"] }`. The vendored feature keeps builds hermetic in slim Rust containers that do not install `curl`.
+
+```rust
+use axum::{routing::post, Json, Router};
+use serde::{Deserialize, Serialize};
+use utoipa::{OpenApi, ToSchema};
+use utoipa_swagger_ui::SwaggerUi;
+
+#[derive(Debug, Deserialize, ToSchema)]
+pub struct CreateOrderRequest {
+    pub sku: String,
+    pub quantity: i32,
+}
+
+#[derive(Debug, Serialize, ToSchema)]
+pub struct OrderResponse {
+    pub id: uuid::Uuid,
+    pub sku: String,
+}
+
+#[utoipa::path(
+    post,
+    path = "/api/orders",
+    request_body = CreateOrderRequest,
+    responses((status = 201, description = "Order created", body = OrderResponse))
+)]
+async fn create_order(Json(request): Json<CreateOrderRequest>) -> Json<OrderResponse> {
+    Json(OrderResponse { id: uuid::Uuid::new_v4(), sku: request.sku })
+}
+
+#[derive(OpenApi)]
+#[openapi(paths(create_order), components(schemas(CreateOrderRequest, OrderResponse)))]
+struct ApiDoc;
+
+pub fn documented_router() -> Router {
+    Router::new()
+        .route("/api/orders", post(create_order))
+        .merge(SwaggerUi::new("/swagger-ui").url("/api-docs/openapi.json", ApiDoc::openapi()))
+}
 ```
 
 ### 4. Validate Consistency
-Use the `forge_analyze` MCP tool to verify spec-to-code consistency:
-- [ ] Every handler registration has a matching spec entry
-- [ ] No spec entries without corresponding code (ghost endpoints)
-- [ ] Request/response schemas match actual Rust struct types
-- [ ] Status codes match `http.StatusXxx` / `w.WriteHeader()` calls
-- [ ] Auth requirements match middleware chains
+Use `forge_analyze` for spec-to-code consistency:
+- [ ] Every public route has a `#[utoipa::path]` entry.
+- [ ] No documented path is missing from the Axum router.
+- [ ] DTOs derive `ToSchema` and match the actual request/response types.
+- [ ] Error responses include 400/401/403/404/409/500 where handlers can return them.
+- [ ] Auth and tenant requirements are stated accurately.
 
 ### 5. Report
 ```
 API Documentation Status:
-  Endpoints in code:    N
-  Endpoints in spec:    N
-  Missing from spec:    N (list them)
-  Ghost entries:        N (in spec but not in code)
-  Schema mismatches:    N
+  Routes in code:      N
+  utoipa paths:        N
+  Missing docs:        N
+  Ghost docs:          N
+  Schema mismatches:   N
+  Error gaps:          N
 
 Overall: PASS / FAIL
 ```
 
 ## Safety Rules
-- NEVER invent endpoints not in the code
-- ALWAYS preserve existing spec customizations (descriptions, examples)
-- Validate against actual handler registrations, not assumptions
-- Flag breaking changes (removed endpoints, changed schemas)
-- Run `Rust build ./...` after any spec-related code changes
-
+- Never invent routes, schemas, or status codes not present in Rust code.
+- Preserve handwritten descriptions and examples when regenerating docs.
+- Document tenant behavior from `AuthUser`, not from client-provided tenant headers.
+- Flag removed routes and schema changes as possible breaking changes.
+- Run `cargo check --all-targets` after adding utoipa derives or Swagger UI routing.
 
 ## Temper Guards
 
 | Shortcut | Why It Breaks |
 |----------|--------------|
-| "The code is self-documenting" | Code shows implementation, not intent. API consumers need contracts, not source code. |
-| "We'll add the OpenAPI spec later" | Specs drift from implementation immediately. Generate alongside code or they'll never match. |
-| "Only internal consumers, no docs needed" | Internal APIs become external APIs. Undocumented internal APIs create onboarding bottlenecks. |
-| "Examples aren't necessary" | Examples are the most-read section of any API doc. Abstract schemas don't show real usage. |
+| "The Axum router is enough documentation" | Consumers need stable contracts, examples, and error shapes without reading handler code. |
+| "Only success responses matter" | Client behavior depends on 400/401/403/404/409/500 payloads just as much as 2xx payloads. |
+| "Schemas can be described by hand" | Manual schemas drift from Rust DTOs; derive `ToSchema` where the DTO is defined. |
+| "Swagger UI is a dev-only toy" | Interactive docs expose auth and request-shape mistakes before client teams discover them. |
 
 ## Warning Signs
 
-- Endpoints without response type annotations — returns untyped or generic responses
-- Spec doesn't match actual routes — OpenAPI spec has different paths/methods than the running API
-- No request/response examples — spec has schemas but no concrete usage examples
-- Error responses undocumented — only success codes documented, error payloads missing
-- Spec not validated against running API — generated once but never verified against live routes
+- Route modules contain handlers without `#[utoipa::path]`.
+- `Json<T>` response types do not derive `ToSchema`.
+- Problem details responses are absent from the OpenAPI components.
+- Swagger UI route is mounted only in a local-only branch with no staging verification.
+- API docs mention tenant headers as an input.
 
 ## Exit Proof
 
 After completing this skill, confirm:
-- [ ] OpenAPI spec generated or updated (utoipa / paperclip)
-- [ ] Spec validates against actual endpoints — no ghost entries, no missing routes
-- [ ] Request/response examples present for key routes
-- [ ] Error responses documented (4xx/5xx with schemas)
-- [ ] `cargo build --release` succeeds after any spec-related code changes
-## Persistent Memory (if OpenBrain is configured)
+- [ ] utoipa annotations or generated spec updated for every changed route
+- [ ] Swagger UI or Scalar route serves the generated OpenAPI JSON
+- [ ] Request, response, and problem schemas derive from Rust DTOs
+- [ ] `cargo check --all-targets` succeeds after doc changes
+- [ ] Removed or changed endpoints are reported as breaking or non-breaking
 
-- **Before generating docs**: `search_thoughts("API design", project: "<YOUR PROJECT NAME>", created_by: "copilot-vscode", type: "convention")` — load API naming conventions, pagination patterns, and error response standards
-- **After spec update**: `capture_thought("API doc: <endpoints added/changed summary>", project: "<YOUR PROJECT NAME>", created_by: "copilot-vscode", source: "skill-api-doc-gen")` — persist API evolution for breaking change tracking
+## Persistent Memory — API docs
+
+- **Before generating docs**: recall API naming, pagination, auth, and problem-response conventions.
+- **After spec update**: capture endpoints added, endpoints changed, and any breaking-contract decisions.

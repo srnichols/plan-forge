@@ -1,100 +1,102 @@
 ---
-description: "Scaffold an HTTP handler with Chi router, JSON encoding, ProblemDetail errors, and middleware."
+description: "Scaffold an Axum handler module and router with typed extractors, DTO validation, AppError, and tenant-safe service delegation."
 agent: "agent"
 tools: [read, edit, search]
 ---
-# Create New Controller (HTTP Handler)
+# Create New Controller (Axum Handler Module)
 
-Scaffold a handler that follows REST conventions and delegates all logic to services.
+Scaffold an Axum route module that follows REST conventions and delegates all work to services.
 
 ## Required Pattern
 
-```Rust
-package handler
+```rust
+use axum::{
+    extract::{Path, Query, State},
+    http::StatusCode,
+    routing::{get, post},
+    Json, Router,
+};
+use serde::Deserialize;
+use uuid::Uuid;
 
-import (
-    "encoding/json"
-    "errors"
-    "net/http"
+use crate::{
+    auth::AuthUser,
+    domain::{EntityName}Id,
+    dto::{
+        {entity_name}::{Create{EntityName}Request, {EntityName}Response},
+    },
+    error::AppError,
+    extractors::ValidatedJson,
+    pagination::{Page, PageRequest},
+    state::AppState,
+};
 
-    "github.com/Rust-chi/chi/v5"
-    "github.com/google/uuid"
-    "github.com/contoso/app/internal/service"
-)
-
-type {EntityName}Handler struct {
-    service *service.{EntityName}Service
+pub fn router() -> Router<AppState> {
+    Router::new()
+        .route("/{entity_name}s", get(list_{entity_name}s).post(create_{entity_name}))
+        .route("/{entity_name}s/{id}", get(get_{entity_name}))
 }
 
-func New{EntityName}Handler(svc *service.{EntityName}Service) *{EntityName}Handler {
-    return &{EntityName}Handler{service: svc}
+#[derive(Debug, Deserialize)]
+pub struct List{EntityName}sQuery {
+    pub after_created_at: Option<time::OffsetDateTime>,
+    pub after_id: Option<Uuid>,
+    pub limit: Option<u32>,
 }
 
-func (h *{EntityName}Handler) Routes() chi.Router {
-    r := chi.NewRouter()
-    r.Get("/", h.List)
-    r.Post("/", h.Create)
-    r.Get("/{id}", h.GetByID)
-    r.Put("/{id}", h.Update)
-    r.Delete("/{id}", h.Delete)
-    return r
+pub async fn list_{entity_name}s(
+    State(state): State<AppState>,
+    auth: AuthUser,
+    Query(query): Query<List{EntityName}sQuery>,
+) -> Result<Json<Page<{EntityName}Response>>, AppError> {
+    let page_request = PageRequest::new(query.after_created_at, query.after_id, query.limit.unwrap_or(25));
+    let page = state.{entity_name}s.list(&auth, page_request).await?;
+    Ok(Json(page.map({EntityName}Response::from)))
 }
 
-func (h *{EntityName}Handler) GetByID(w http.ResponseWriter, r *http.Request) {
-    id, err := uuid.Parse(chi.URLParam(r, "id"))
-    if err != nil {
-        writeProblem(w, http.StatusBadRequest, "invalid id format")
-        return
-    }
-
-    entity, err := h.service.GetByID(r.Context(), id)
-    if errors.Is(err, repository.ErrNotFound) {
-        writeProblem(w, http.StatusNotFound, "{entityName} not found")
-        return
-    }
-    if err != nil {
-        writeProblem(w, http.StatusInternalServerError, "internal error")
-        return
-    }
-
-    writeJSON(w, http.StatusOK, entity)
+pub async fn get_{entity_name}(
+    State(state): State<AppState>,
+    auth: AuthUser,
+    Path(id): Path<Uuid>,
+) -> Result<Json<{EntityName}Response>, AppError> {
+    let entity = state.{entity_name}s.get(&auth, {EntityName}Id(id)).await?;
+    Ok(Json({EntityName}Response::from(entity)))
 }
 
-func (h *{EntityName}Handler) Create(w http.ResponseWriter, r *http.Request) {
-    var req model.Create{EntityName}Request
-    if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-        writeProblem(w, http.StatusBadRequest, "invalid request body")
-        return
-    }
-
-    entity, err := h.service.Create(r.Context(), req)
-    if err != nil {
-        writeProblem(w, http.StatusBadRequest, err.Error())
-        return
-    }
-
-    writeJSON(w, http.StatusCreated, entity)
+pub async fn create_{entity_name}(
+    State(state): State<AppState>,
+    auth: AuthUser,
+    ValidatedJson(request): ValidatedJson<Create{EntityName}Request>,
+) -> Result<(StatusCode, Json<{EntityName}Response>), AppError> {
+    let entity = state.{entity_name}s.create(&auth, request).await?;
+    Ok((StatusCode::CREATED, Json({EntityName}Response::from(entity))))
 }
+
 ```
 
 ## Rules
 
-- Handlers handle HTTP concerns ONLY — no business logic
-- Delegate ALL work to services
-- Use `writeProblem()` helper for RFC 9457 `ProblemDetail` responses
-- Parse path params, decode body, call service, write response
-- Use `r.Context()` to propagate context to services
+- Handler modules handle HTTP concerns only: extract state/auth/path/query/body, call service, shape response.
+- Delegate all business decisions to services.
+- Use `AuthUser.tenant_id`; never accept tenant ID from a path, query, header, or request body.
+- Use `ValidatedJson<T>` for write request bodies.
+- Return proper status codes: 200, 201, 204, 400, 401, 403, 404, 409.
+- Expose `pub fn router() -> Router<AppState>` from each route module.
+- Keep handler functions `pub` when `app()` or route composition references them directly.
 
-## Error Mapping
+## Error Mapping (`AppError`)
 
-| Sentinel Error | HTTP Status |
-|----------------|-------------|
-| `ErrNotFound` | 404 Not Found |
-| `ErrValidation` | 400 Bad Request |
-| `ErrConflict` | 409 Conflict |
-| `ErrUnauthorized` | 401 Unauthorized |
+| Variant | HTTP Status |
+|---------|-------------|
+| `Validation` | 400 Bad Request |
+| `Unauthorized` | 401 Unauthorized |
+| `Forbidden` | 403 Forbidden |
+| `NotFound` | 404 Not Found |
+| `Conflict` | 409 Conflict |
+| `Database` / `Internal` | 500 Internal Server Error |
 
 ## Reference Files
 
 - [API patterns](../instructions/api-patterns.instructions.md)
-- [Architecture principles](../instructions/architecture-principles.instructions.md)
+- [Error handling](../instructions/errorhandling.instructions.md)
+- Review `.github/instructions/architecture-principles.instructions.md` before placing handler logic.

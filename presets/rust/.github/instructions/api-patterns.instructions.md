@@ -1,289 +1,357 @@
 ---
-description: API patterns for Rust — REST conventions, Chi/Gin handlers, validation, pagination, error responses
-applyTo: '**/*handler*,**/*Handler*,**/*route*,**/*Route*,**/handler/**,**/api/**'
+description: API patterns for Rust — Axum routes, typed extractors, DTO validation, pagination, RFC 9457 errors
+applyTo: '**/routes/**/*.rs,**/dto/**/*.rs,**/src/lib.rs'
 ---
 
 # Rust API Patterns
 
 ## REST Conventions
 
-### Handler Structure (Chi Router)
-```Rust
-func (h *ProducerHandler) Routes() chi.Router {
-    r := chi.NewRouter()
-    r.Get("/", h.List)
-    r.Post("/", h.Create)
-    r.Get("/{id}", h.GetByID)
-    r.Put("/{id}", h.Update)
-    r.Delete("/{id}", h.Delete)
-    return r
+### Router Structure
+
+```rust
+use axum::{
+    extract::{Path, Query, State},
+    http::StatusCode,
+    routing::{get, post},
+    Json, Router,
+};
+use serde::Deserialize;
+use uuid::Uuid;
+
+use crate::{
+    auth::AuthUser,
+    domain::ProducerId,
+    dto::producer::{CreateProducerRequest, ProducerResponse},
+    error::AppError,
+    extractors::ValidatedJson,
+    pagination::{Page, PageRequest},
+    state::AppState,
+};
+
+pub fn router() -> Router<AppState> {
+    Router::new()
+        .route("/producers", get(list_producers).post(create_producer))
+        .route("/producers/{id}", get(get_producer))
 }
 
-// GET /api/producers
-func (h *ProducerHandler) List(w http.ResponseWriter, r *http.Request) {
-    page, _ := strconv.Atoi(r.URL.Query().Get("page"))
-    if page < 1 { page = 1 }
-    pageSize, _ := strconv.Atoi(r.URL.Query().Get("pageSize"))
-    if pageSize < 1 || pageSize > 100 { pageSize = 25 }
-
-    result, err := h.service.GetPaged(r.Context(), page, pageSize)
-    if err != nil {
-        writeError(w, http.StatusInternalServerError, "Failed to fetch producers")
-        return
-    }
-    writeJSON(w, http.StatusOK, result)
+#[derive(Debug, Deserialize)]
+pub struct PageQuery {
+    pub after_created_at: Option<time::OffsetDateTime>,
+    pub after_id: Option<Uuid>,
+    pub limit: Option<u32>,
 }
 
-// GET /api/producers/{id}
-func (h *ProducerHandler) GetByID(w http.ResponseWriter, r *http.Request) {
-    id := chi.URLParam(r, "id")
-    producer, err := h.service.GetByID(r.Context(), id)
-    if err != nil {
-        writeError(w, http.StatusInternalServerError, "Internal error")
-        return
-    }
-    if producer == nil {
-        writeError(w, http.StatusNotFound, "Producer not found")
-        return
-    }
-    writeJSON(w, http.StatusOK, producer)
+pub async fn list_producers(
+    State(state): State<AppState>,
+    auth: AuthUser,
+    Query(query): Query<PageQuery>,
+) -> Result<Json<Page<ProducerResponse>>, AppError> {
+    let page = PageRequest::new(query.after_created_at, query.after_id, query.limit.unwrap_or(25));
+    let entities = state.producers.list(&auth, page).await?;
+    Ok(Json(entities.map(ProducerResponse::from)))
 }
 
-// POST /api/producers
-func (h *ProducerHandler) Create(w http.ResponseWriter, r *http.Request) {
-    var req CreateProducerRequest
-    if err := decodeAndValidate(r, &req); err != nil {
-        writeError(w, http.StatusBadRequest, err.Error())
-        return
-    }
-    created, err := h.service.Create(r.Context(), &req)
-    if err != nil {
-        writeError(w, http.StatusInternalServerError, "Failed to create producer")
-        return
-    }
-    w.Header().Set("Location", fmt.Sprintf("/api/producers/%s", created.ID))
-    writeJSON(w, http.StatusCreated, created)
+pub async fn get_producer(
+    State(state): State<AppState>,
+    auth: AuthUser,
+    Path(id): Path<Uuid>,
+) -> Result<Json<ProducerResponse>, AppError> {
+    let entity = state.producers.get(&auth, ProducerId(id)).await?;
+    Ok(Json(ProducerResponse::from(entity)))
 }
+
+pub async fn create_producer(
+    State(state): State<AppState>,
+    auth: AuthUser,
+    ValidatedJson(request): ValidatedJson<CreateProducerRequest>,
+) -> Result<(StatusCode, Json<ProducerResponse>), AppError> {
+    let entity = state.producers.create(&auth, request).await?;
+    Ok((StatusCode::CREATED, Json(ProducerResponse::from(entity))))
+}
+
 ```
 
-## Error Responses (RFC 9457 Problem Details)
-```Rust
-type ProblemDetail struct {
-    Type   string `json:"type"`
-    Title  string `json:"title"`
-    Status int    `json:"status"`
-    Detail string `json:"detail,omitempty"`
-}
+## Error Handling (RFC 9457 Problem Details)
 
-func writeError(w http.ResponseWriter, status int, detail string) {
-    pd := ProblemDetail{
-        Type:   fmt.Sprintf("https://tools.ietf.org/html/rfc9110#section-15.5.%d", status-399),
-        Title:  http.StatusText(status),
-        Status: status,
-        Detail: detail,
-    }
-    w.Header().Set("Content-Type", "application/problem+json")
-    w.WriteHeader(status)
-    json.NewEncoder(w).Encode(pd)
-}
+Use the canonical `AppError` from `src/error.rs`. Its `IntoResponse` implementation returns `application/problem+json` with:
 
-func writeJSON(w http.ResponseWriter, status int, data any) {
-    w.Header().Set("Content-Type", "application/json")
-    w.WriteHeader(status)
-    json.NewEncoder(w).Encode(data)
-}
-```
+| Field | Source |
+|-------|--------|
+| `type` | Stable URI per error category |
+| `title` | Human-readable category |
+| `status` | HTTP status code |
+| `detail` | Safe client detail |
+| `instance` | Request path when available |
+| `errors` | Validation field errors only |
+
+Database and internal errors must log the cause with `tracing::error!` and return a generic 500 response.
 
 ## Request Validation
-```Rust
-type CreateProducerRequest struct {
-    Name         string   `json:"name" validate:"required,max=200"`
-    ContactEmail string   `json:"contact_email" validate:"required,email"`
-    Latitude     *float64 `json:"latitude" validate:"omitempty,min=-90,max=90"`
-    Longitude    *float64 `json:"longitude" validate:"omitempty,min=-180,max=180"`
-}
 
-func (r *CreateProducerRequest) Validate() error {
-    if r.Name == "" {
-        return errors.New("name is required")
-    }
-    if len(r.Name) > 200 {
-        return errors.New("name must be 200 characters or fewer")
-    }
-    // ... additional validation
-    return nil
-}
+Place this single extractor definition in `src/extractors.rs`; route modules import it as `crate::extractors::ValidatedJson`.
 
-func decodeAndValidate(r *http.Request, dst any) error {
-    if err := json.NewDecoder(r.Body).Decode(dst); err != nil {
-        return fmt.Errorf("invalid JSON: %w", err)
+```rust
+use axum::{
+    extract::{FromRequest, Request},
+    Json,
+};
+use serde::de::DeserializeOwned;
+use validator::Validate;
+
+use crate::error::AppError;
+
+pub struct ValidatedJson<T>(pub T);
+
+impl<S, T> FromRequest<S> for ValidatedJson<T>
+where
+    S: Send + Sync,
+    T: DeserializeOwned + Validate,
+{
+    type Rejection = AppError;
+
+    async fn from_request(req: Request, state: &S) -> Result<Self, Self::Rejection> {
+        let Json(value) = Json::<T>::from_request(req, state)
+            .await
+            .map_err(|rejection| AppError::BadRequest(rejection.body_text()))?;
+        value.validate()?;
+        Ok(Self(value))
     }
-    if v, ok := dst.(interface{ Validate() error }); ok {
-        return v.Validate()
-    }
-    return nil
 }
 ```
 
 ## Pagination
-```Rust
-type PagedResult[T any] struct {
-    Items       []T  `json:"items"`
-    Page        int  `json:"page"`
-    PageSize    int  `json:"page_size"`
-    TotalCount  int  `json:"total_count"`
-    TotalPages  int  `json:"total_pages"`
-    HasNext     bool `json:"has_next"`
-    HasPrevious bool `json:"has_previous"`
+
+Prefer keyset pagination on `(created_at, id)` for mutable tables.
+
+```rust
+#[derive(Debug, Clone, Copy)]
+pub struct PageRequest {
+    pub after: Option<(time::OffsetDateTime, uuid::Uuid)>,
+    pub limit: i64,
 }
 
-func NewPagedResult[T any](items []T, page, pageSize, totalCount int) PagedResult[T] {
-    totalPages := int(math.Ceil(float64(totalCount) / float64(pageSize)))
-    return PagedResult[T]{
-        Items: items, Page: page, PageSize: pageSize,
-        TotalCount: totalCount, TotalPages: totalPages,
-        HasNext: page < totalPages, HasPrevious: page > 1,
+impl PageRequest {
+    pub fn new(
+        after_created_at: Option<time::OffsetDateTime>,
+        after_id: Option<uuid::Uuid>,
+        limit: u32,
+    ) -> Self {
+        let limit = limit.clamp(1, 100) as i64;
+        Self {
+            after: after_created_at.zip(after_id),
+            limit,
+        }
+    }
+}
+
+#[derive(Debug, serde::Serialize)]
+pub struct Page<T> {
+    pub items: Vec<T>,
+    pub next_created_at: Option<time::OffsetDateTime>,
+    pub next_id: Option<uuid::Uuid>,
+    pub limit: u32,
+}
+```
+
+Provide a `map` helper when handlers need to convert service entities into response DTOs.
+
+```rust
+impl<T> Page<T> {
+    pub fn from_items(
+        mut items: Vec<T>,
+        limit: i64,
+        key: impl Fn(&T) -> (time::OffsetDateTime, uuid::Uuid),
+    ) -> Self {
+        let has_next = items.len() > limit as usize;
+        if has_next {
+            items.truncate(limit as usize);
+        }
+        let (next_created_at, next_id) = if has_next {
+            items.last().map(key).map_or((None, None), |(created_at, id)| (Some(created_at), Some(id)))
+        } else {
+            (None, None)
+        };
+        Self {
+            items,
+            next_created_at,
+            next_id,
+            limit: limit as u32,
+        }
+    }
+
+    pub fn map<U>(self, convert: impl FnMut(T) -> U) -> Page<U> {
+        Page {
+            items: self.items.into_iter().map(convert).collect(),
+            next_created_at: self.next_created_at,
+            next_id: self.next_id,
+            limit: self.limit,
+        }
     }
 }
 ```
+
+Repositories should fetch `limit + 1` rows, return at most `limit`, and derive the next cursor from the extra row.
 
 ## HTTP Status Code Guide
 
 | Status | When to Use |
 |--------|-------------|
 | 200 OK | GET success, PUT/PATCH success with body |
-| 201 Created | POST success (include Location header) |
-| 204 No Content | PUT/DELETE success, no body |
-| 400 Bad Request | Validation failure, malformed JSON |
+| 201 Created | POST success |
+| 204 No Content | DELETE success or update without body |
+| 400 Bad Request | Malformed request or validation failure |
 | 401 Unauthorized | Missing or invalid authentication |
-| 403 Forbidden | Authenticated but insufficient permissions |
-| 404 Not Found | Resource doesn't exist |
-| 409 Conflict | Duplicate resource |
-| 422 Unprocessable | Valid syntax but business rule violation |
-| 500 Internal Server | Unhandled error (never expose internals) |
+| 403 Forbidden | Authenticated but insufficient permission |
+| 404 Not Found | Tenant-scoped resource is absent |
+| 409 Conflict | Duplicate resource or optimistic concurrency conflict |
+| 422 Unprocessable Entity | Syntactically valid request violates semantic constraints |
+| 500 Internal Server Error | Sanitized unexpected failure |
 
 ## API Versioning
 
-### URL-based Versioning (Recommended)
-```Rust
-func SetupRoutes(r chi.Router) {
-    // Mount versioned sub-routers
-    r.Route("/api/v1", func(r chi.Router) {
-        r.Mount("/producers", producerV1Handler.Routes())
-    })
-    r.Route("/api/v2", func(r chi.Router) {
-        r.Mount("/producers", producerV2Handler.Routes())
-    })
-}
-```
+### URL-based Versioning
 
-### Header-based Versioning
-```Rust
-func (h *ProducerHandler) List(w http.ResponseWriter, r *http.Request) {
-    version := r.Header.Get("API-Version")
-    if version == "" {
-        version = "1"
-    }
-    switch version {
-    case "2":
-        result, err := h.service.GetAllV2(r.Context())
-        // ...
-    default:
-        result, err := h.service.GetAllV1(r.Context())
-        // ...
-    }
+```rust
+pub fn app(state: AppState) -> Router {
+use std::{net::SocketAddr, sync::Arc};
+
+use axum::{routing::get, Router};
+use tower::ServiceBuilder;
+use tower_governor::{governor::GovernorConfigBuilder, GovernorLayer};
+use tower_http::{
+    request_id::{MakeRequestUuid, PropagateRequestIdLayer, SetRequestIdLayer},
+    trace::TraceLayer,
+};
+
+use crate::state::AppState;
+
+pub fn app(state: AppState) -> Router {
+    let rate_config = Arc::new(
+        GovernorConfigBuilder::default()
+            .per_millisecond(50)
+            .burst_size(40)
+            .finish()
+            .expect("valid rate limit"),
+    );
+
+    Router::new()
+        .nest("/api/v1", crate::routes::api_v1())
+        .route("/health/live", get(crate::health::live))
+        .route("/health/ready", get(crate::health::ready))
+        .with_state(state)
+        .layer(
+            ServiceBuilder::new()
+                .layer(SetRequestIdLayer::x_request_id(MakeRequestUuid))
+                .layer(TraceLayer::new_for_http())
+                .layer(PropagateRequestIdLayer::x_request_id())
+                .layer(GovernorLayer::new(rate_config)),
+        )
+}
+
+pub async fn serve(listener: tokio::net::TcpListener, state: AppState) -> std::io::Result<()> {
+    axum::serve(
+        listener,
+        app(state).into_make_service_with_connect_info::<SocketAddr>(),
+    )
+    .with_graceful_shutdown(crate::shutdown_signal())
+    .await
+}
+
+// src/routes/mod.rs
+pub fn api_v1() -> Router<AppState> {
+    Router::new().merge(crate::routes::orders::router())
+}
+
+// src/health.rs
+pub async fn live() -> axum::http::StatusCode {
+    axum::http::StatusCode::NO_CONTENT
 }
 ```
 
 ### Version Discovery Endpoint
-```Rust
-func VersionsHandler(w http.ResponseWriter, r *http.Request) {
-    writeJSON(w, http.StatusOK, map[string]any{
-        "supported":  []string{"v1", "v2"},
-        "current":    "v2",
-        "deprecated": []string{"v1"},
-        "sunset":     map[string]string{"v1": "2026-01-01"},
+
+```rust
+#[derive(serde::Serialize)]
+struct ApiVersions {
+    supported: &'static [&'static str],
+    current: &'static str,
+    deprecated: &'static [&'static str],
+}
+
+async fn versions() -> Json<ApiVersions> {
+    Json(ApiVersions {
+        supported: &["v1", "v2"],
+        current: "v2",
+        deprecated: &["v1"],
     })
 }
 ```
 
-### Deprecation Headers Middleware
-```Rust
-func DeprecationMiddleware(next http.Handler) http.Handler {
-    return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-        next.ServeHTTP(w, r)
-        if strings.HasPrefix(r.URL.Path, "/api/v1") {
-            w.Header().Set("Sunset", "Sat, 01 Jan 2026 00:00:00 GMT")
-            w.Header().Set("Deprecation", "true")
-            w.Header().Set("Link", `</api/v2/docs>; rel="successor-version"`)
-        }
-    })
+### Deprecation Header Layer
+
+Use a tower layer for deprecation headers so it applies consistently to all v1 routes.
+
+```rust
+use tower_http::set_header::SetResponseHeaderLayer;
+
+pub fn sunset_layer() -> SetResponseHeaderLayer<http::HeaderValue> {
+    SetResponseHeaderLayer::if_not_present(
+        http::header::HeaderName::from_static("sunset"),
+        http::HeaderValue::from_static("Sat, 01 Jan 2026 00:00:00 GMT"),
+    )
 }
 
-// Apply to v1 routes
-r.Route("/api/v1", func(r chi.Router) {
-    r.Use(DeprecationMiddleware)
-    r.Mount("/producers", producerV1Handler.Routes())
-})
 ```
 
 ### Non-Negotiable Rules
-- **ALWAYS** version APIs from day one — `/api/v1/`
-- **NEVER** break existing consumers — add a new version instead
-- Deprecation requires minimum 6-month sunset window
-- Return `410 Gone` after sunset date, not `404`
-- Document version differences in OpenAPI specs (swag/swaggo)
+- Version APIs from the first public endpoint: `/api/v1/...`.
+- Add a new version instead of breaking existing consumers.
+- Deprecation requires at least a 6-month sunset window.
+- Return `410 Gone` after the sunset date.
+- Keep OpenAPI schemas versioned with the routes that produce them.
 
 ## Anti-Patterns
 
 ```
-❌ Return 200 for errors (use proper status codes)
-❌ Expose error internals to clients (log details server-side only)
-❌ Business logic in handlers (delegate to service layer)
-❌ Decode into map[string]interface{} (always use typed structs)
-❌ Ignore Decode errors (always validate and return 400)
-❌ Missing Content-Type header on responses
+❌ Business rules inside Axum handlers
+❌ Tenant ID accepted from request headers, path, query, or body
+❌ Unbounded list endpoints
+❌ Raw serde_json::Value request bodies for stable APIs
+❌ Returning database rows directly as API responses
+❌ Mapping errors ad hoc instead of using AppError
 ```
 
 ## API Documentation (OpenAPI)
 
-### swaggo/swag (Annotation-Based)
-```bash
-Rust install github.com/swaggo/swag/cmd/swag@latest
-swag init -g cmd/server/main.Rust  # Generates docs/swagger.json
-```
+Use `utoipa` to describe routes and DTOs.
 
-```Rust
-// @Summary Get producer by ID
-// @Tags producers
-// @Param id path string true "Producer ID"
-// @Success 200 {object} ProducerResponse
-// @Failure 404 {object} ProblemDetail
-// @Router /api/producers/{id} [get]
-func (h *ProducerHandler) GetByID(w http.ResponseWriter, r *http.Request) {
-    // ...
+```rust
+#[utoipa::path(
+    get,
+    path = "/api/v1/producers/{id}",
+    params(("id" = uuid::Uuid, Path, description = "Producer id")),
+    responses(
+        (status = 200, description = "Producer found", body = ProducerResponse),
+        (status = 404, description = "Producer not found")
+    )
+)]
+async fn get_producer(
+    State(state): State<AppState>,
+    auth: AuthUser,
+    Path(id): Path<Uuid>,
+) -> Result<Json<ProducerResponse>, AppError> {
+    let entity = state.producers.get(&auth, ProducerId(id)).await?;
+    Ok(Json(ProducerResponse::from(entity)))
 }
 ```
 
-### Serve Swagger UI
-```Rust
-import httpSwagger "github.com/swaggo/http-swagger"
-
-r.Get("/swagger/*", httpSwagger.WrapHandler)
-```
-
-- **ALWAYS** annotate all handlers with swaggo comments
-- **ALWAYS** document error responses with `@Failure`
-- Run `swag init` in CI to validate spec stays in sync with code
-- Consider `ogen` or `oapi-codegen` for spec-first (generate handlers from OpenAPI spec)
-
 ## See Also
 
-- `version.instructions.md` — Semantic versioning, pre-release, deprecation timelines
-- `graphql.instructions.md` — gqlgen schema, resolvers, DataLoaders (for GraphQL APIs)
-- `security.instructions.md` — JWT middleware, input validation
-- `errorhandling.instructions.md` — Error response format, ProblemDetail
-- `performance.instructions.md` — Hot-path optimization, concurrency patterns
+- `version.instructions.md` — API and crate versioning
+- `security.instructions.md` — JWT validation and tenant isolation
+- `errorhandling.instructions.md` — Canonical `AppError`
+- `performance.instructions.md` — Hot path and allocation guidance
 
 ---
 
@@ -291,19 +359,18 @@ r.Get("/swagger/*", httpSwagger.WrapHandler)
 
 | Shortcut | Why It Breaks |
 |----------|--------------|
-| "Nobody uses pagination yet" | Unbounded queries return all rows. The first large dataset crashes the client or times out. Add `?page=1&page_size=20` from the first endpoint. |
-| "API versioning can wait until v2" | Unversioned APIs break all consumers on the first change. Add `/api/v1/` route nesting from day one — it costs zero lines of logic. |
-| "Error codes aren't needed for MVP" | API consumers parse error codes programmatically. Returning only string messages forces consumers to regex-match errors — brittle and untranslatable. |
-| "Returning 200 OK for all responses simplifies the client" | HTTP semantics exist for a reason. Returning 200 for errors breaks caching, monitoring, and every HTTP-aware tool in the pipeline. |
-| "This endpoint doesn't need request validation" | Every endpoint accepting input is an attack surface. Validate shape and constraints at the API boundary — `#[derive(Validate)]` with `validator` handles this with minimal code. |
+| "The handler can call SQLx directly" | It collapses HTTP, business rules, and persistence into one untestable function. Route handlers delegate to services. |
+| "A header tenant id is easier" | Client-supplied tenant IDs allow cross-tenant access. The only valid tenant source is the verified token. |
+| "Offset pagination is simpler" | Large mutable tables skip or duplicate records. Keyset cursors on `(created_at, id)` stay stable. |
+| "Serde will validate enough" | Deserialization checks shape, not business constraints. Run `validator::Validate` on request DTOs. |
+| "Problem JSON can wait" | Clients need stable error contracts from the first endpoint. `AppError` owns that mapping. |
 
 ---
 
 ## Warning Signs
 
-- An endpoint returns an unbounded collection without pagination parameters
-- No `utoipa` or `aide` annotations on handler functions (undocumented API contract)
-- Route paths don't include a version segment (`/api/users` instead of `/api/v1/users`)
-- HTTP 200 returned for error conditions instead of 4xx/5xx
-- Request body extracted as `serde_json::Value` instead of a typed `Deserialize` struct
-- Missing `Content-Type` header on responses (clients can't parse reliably)
+- A route module imports `sqlx` or a concrete repository type.
+- `tenant_id` appears in an Axum `Path`, `Query`, or request DTO.
+- `Router::new()` exposes unversioned `/api/...` paths.
+- A list endpoint lacks cursor and limit parameters.
+- JSON extractor errors are returned as default text/plain responses.

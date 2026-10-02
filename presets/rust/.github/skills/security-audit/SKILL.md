@@ -1,6 +1,6 @@
 ---
 name: security-audit
-description: "Comprehensive Rust security audit — OWASP scan, cargo-audit, secrets detection, severity report."
+description: "Comprehensive Rust security audit — OWASP review, cargo audit/deny, secrets detection, and combined severity report."
 argument-hint: "[optional: 'full' (default), 'owasp', 'dependencies', 'secrets']"
 tools:
   - run_in_terminal
@@ -9,61 +9,118 @@ tools:
   - forge_sweep
 ---
 
-# Security Audit Skill (Rust)
+# Security Audit Skill (Rust / Axum / Tokio / SQLx)
 
-## Phase 1: OWASP (Rust Specific)
-- Check `unsafe` blocks for SAFETY comments and user-controlled data
-- Search for `format!` in SQL strings — use `sqlx::query!` or diesel macros
-- Check `std::process::Command` for user input injection
-- Check for `.unwrap()` / `.expect()` in production code
-- Check CORS wildcard in tower-http/actix-cors
-- Check password hashing uses `argon2`/`bcrypt` crate
-- Check JWT uses `jsonwebtoken` with algorithm validation
+## Trigger
+"Run a security audit" / "Check for vulnerabilities" / "Scan for secrets" / "OWASP check"
 
-## Phase 2: Dependency Audit
-```bash
-cargo audit
-cargo outdated
-```
+## Overview
 
-## Phase 3: Secrets Detection
-See shared skill. Exclude: `target/`, `.git/`
-
-## Phase 4: Report
-Follow shared skill format.
+4-phase security audit tailored for Rust services. See `presets/shared/.github/skills/security-audit/SKILL.md` for the full report format and shared secret patterns.
 
 ---
 
+## Steps
+
+### 1. OWASP Access-Control Review
+- Check routes for `AuthUser` extractor usage on protected APIs.
+- Check services for role or permission checks before state changes.
+- Check repositories for `tenant_id` parameters and SQL filters on tenant-owned tables.
+- Check GraphQL mutations for guards and service-level enforcement.
+- Flag IDOR when a path, body, or GraphQL argument can select another tenant's record.
+
+### 2. Injection and Validation Review
+- Search SQL for `format!`, string concatenation, and `QueryBuilder::push` with user values.
+- Confirm dynamic SQL uses `QueryBuilder::push_bind`.
+- Check request DTOs for `validator::Validate` and `ValidatedJson`.
+- Search shell-outs for command strings; `tokio::process::Command` must pass arguments separately.
+- Check deserialization paths for typed DTOs instead of raw `serde_json::Value`.
+
+### 3. Security Misconfiguration Review
+- Confirm application crates use `#![forbid(unsafe_code)]`.
+- Check CORS for explicit origins; reject `CorsLayer::permissive()` in production paths.
+- Check `RequestBodyLimitLayer` and `TimeoutLayer` are applied to API routers.
+- Check GraphQL schemas set depth/complexity limits and disable introspection in production.
+- Confirm errors map internal/database failures to generic production responses.
+
+### 4. Authentication and Crypto Review
+- Confirm JWT validation covers issuer, audience, expiration, not-before, algorithm, and JWKS `kid`.
+- Check JWKS caching and refresh behavior for unknown keys.
+- Confirm passwords use `argon2` and secrets use `secrecy::SecretString`.
+- Check auth endpoints for a Tower-compatible rate limiter such as `tower_governor` 0.8.0.
+- Verify tests cover missing token, expired token, wrong role, and wrong tenant.
+
+### 5. Dependency Audit
+```bash
+cargo audit
+```
+```bash
+cargo deny check
+```
+```bash
+cargo build --locked
+```
+> If `cargo-audit` or `cargo-deny` is missing, report the missing tool and continue with the remaining phases. Do not treat missing scanners as a clean result.
+
+### 6. Secrets Detection
+Use the shared skill's patterns plus Rust-specific checks:
+- `SecretString::from("literal")` outside tests
+- `DATABASE_URL`, `JWT_SECRET`, `API_KEY`, or `TOKEN` assigned string literals
+- `tracing::*!(..., secret = ...)` or debug logs of config structs
+- `.env` files committed without sample-only values
+- private keys embedded in fixtures
+
+Exclude: `target/`, `.git/`, `.cargo/registry/`, generated coverage output, and Docker build caches.
+
+### 7. Combined Report
+```text
+Rust Security Audit Summary:
+  Critical:      N findings
+  High:          N findings
+  Medium/Low:    N findings
+  Dependency:    N advisories
+  Secret hits:   N redacted candidates
+  Sweep markers: N TODO/FIXME/HACK markers
+
+Overall: PASS / FAIL
+```
+
 ## Safety Rules
-- READ-ONLY — do NOT modify any files
-- Do NOT log actual secret values — show only first 8 characters + `***`
-- Do NOT recommend disabling security features as a fix
+- READ-ONLY — do NOT modify source, lockfiles, manifests, or migrations.
+- Do NOT print full secret values; show only the first 8 characters plus `***`.
+- Do NOT recommend disabling auth, CORS, TLS, validation, audit gates, or tenant filters as remediation.
+- Treat missing dependency scanners as incomplete evidence, not a pass.
+- Mark exploitability separately from confidence.
 
 ## Temper Guards
 
 | Shortcut | Why It Breaks |
-|----------|--------------|
-| "This scan is probably all false positives" | False positives exist, but dismissing findings without investigation misses real vulnerabilities. Verify each finding individually. |
-| "We'll fix the medium-severity findings later" | Medium findings compound. An XSS + a missing header + an unvalidated input = a real exploit chain. Fix or explicitly accept the risk with documentation. |
-| "Test files don't need security review" | Test files contain connection strings, mock credentials, and API patterns that leak into production via copy-paste. Review them at INFO level. |
-| "The dependency scanner isn't installed, skip Phase 2" | Report the missing scanner and continue with other phases. Don't fail the entire audit — partial results are better than none. |
-| "This is an internal API, OWASP doesn't apply" | Internal APIs get exposed through misconfiguration. OWASP applies to all HTTP surfaces regardless of intended audience. |
+| --- | --- |
+| "Rust prevents security bugs" | Rust prevents many memory errors, not IDOR, bad CORS, weak JWT validation, or SQL misuse. |
+| "The SQLx macro compiled, so access is safe" | SQLx proves query shape, not authorization or tenant scoping. |
+| "Cargo audit is enough" | Dependency scans miss broken access control and secret exposure. |
+| "Unsafe is in a dependency, so ignore it" | Direct unsafe in application code changes the review scope and needs explicit justification. |
+| "Dev secrets are harmless" | Git history and logs preserve them after environments become real. |
 
 ## Warning Signs
 
-- Audit completed without running all 4 phases (OWASP + deps + secrets + report)
-- Findings dismissed without individual verification
-- Secret values logged in full instead of first 8 chars + `***`
-- Severity ratings assigned subjectively instead of using OWASP/CWE classification
-- CRITICAL findings present but overall verdict is PASS
-- Dependency scanner missing but not reported
+- Audit completed without OWASP, dependencies, secrets, and report phases.
+- Critical/high findings are listed but the verdict says PASS.
+- CORS, auth, or tenant issues are downgraded because the API is "internal".
+- Scanner failures are omitted from the final output.
+- Findings lack file, line, severity, and CWE/RustSec classification.
 
 ## Exit Proof
 
 After completing this skill, confirm:
-- [ ] All 4 phases executed (OWASP, dependency audit, secrets scan, combined report)
-- [ ] Every finding has severity, location (file:line), and classification (CWE or pattern)
-- [ ] No actual secret values appear in the report (first 8 chars + `***` only)
-- [ ] Combined report includes total counts by severity (Critical, High, Medium, Low)
-- [ ] Overall verdict is PASS (zero critical, zero high secrets) or FAIL with specifics
-- [ ] If scanner was missing, it's reported in the output (not silently skipped)
+- [ ] All 4 phases executed: OWASP review, dependency audit, secrets scan, combined report.
+- [ ] Every finding has severity, confidence, location, and CWE or RustSec ID.
+- [ ] No actual secret value appears in the report.
+- [ ] The report totals Critical, High, Medium, Low, dependency, and secret counts.
+- [ ] Overall verdict is PASS only when there are zero critical findings and zero high-confidence secrets.
+- [ ] Missing tools or skipped scopes are called out explicitly.
+
+## Persistent Memory (if OpenBrain is configured)
+
+- **Before auditing**: `search_thoughts("security audit rust", project: "<YOUR PROJECT NAME>", created_by: "copilot-vscode", type: "bug")`
+- **After audit**: `capture_thought("Security audit (Rust): <summary>", project: "<YOUR PROJECT NAME>", created_by: "copilot-vscode", source: "skill-security-audit", type: "bug")`

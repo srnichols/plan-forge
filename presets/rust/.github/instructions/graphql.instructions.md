@@ -1,252 +1,260 @@
 ---
-description: GraphQL patterns for Rust — gqlgen, code-first resolvers, DataLoaders, auth middleware
-applyTo: '**/*resolver*,**/*schema*,**/*model*,**/*dataloader*,**/graph/**,**/*.graphqls'
+description: Rust GraphQL patterns — async-graphql, async-graphql-axum, DataLoader, guards, complexity limits, tenant-scoped resolvers
+applyTo: '**/src/graphql/**,**/*graphql*.rs,**/*resolver*.rs,**/*schema*.rs'
 ---
 
-# Rust GraphQL Patterns (gqlgen)
+# Rust GraphQL Patterns (async-graphql)
 
-## Schema Design (Schema-First + Generated Resolvers)
+## Schema Design
 
-### GraphQL SDL
-```graphql
-# graph/schema.graphqls
-type Query {
-    producer(id: ID!): Producer
-    producers(page: Int = 1, pageSize: Int = 25): ProducerPage!
-}
+Use `async-graphql = { version = "7.2.1", features = ["uuid", "dataloader"] }` with `async-graphql-axum` 7.2.1 for Axum 0.8. Keep resolvers thin and delegate business rules to services.
 
-type Mutation {
-    createProducer(input: CreateProducerInput!): CreateProducerPayload!
-}
+```rust
+use async_graphql::{Context, ErrorExtensions, Object, Result, SimpleObject};
+use uuid::Uuid;
 
-type Producer {
-    id: ID!
-    name: String!
-    contactEmail: String!
-}
+use crate::{
+    auth::AuthUser,
+    domain::{ProducerId, TenantId},
+    dto::producer::CreateProducerRequest,
+    error::AppError,
+    services::ProducerService,
+};
 
-input CreateProducerInput {
-    name: String!
-    contactEmail: String!
-}
-
-type CreateProducerPayload {
-    producer: Producer
-    success: Boolean!
-    message: String
-}
-```
-
-### Generated Resolver Implementation
-```Rust
-// graph/resolver.Rust — dependency injection root
-type Resolver struct {
-    ProducerRepo ProducerRepository
-    ProducerSvc  ProducerService
-}
-
-// graph/schema.resolvers.Rust — generated, you fill in bodies
-func (r *queryResolver) Producer(ctx impl Future + '_, id string) (*model.Producer, error) {
-    tenantID := auth.TenantIDFromContext(ctx)
-    return r.ProducerRepo.GetByID(ctx, id, tenantID)
-}
-
-func (r *mutationResolver) CreateProducer(ctx impl Future + '_, input model.CreateProducerInput) (*model.CreateProducerPayload, error) {
-    tenantID := auth.TenantIDFromContext(ctx)
-    if err := validateCreateProducer(input); err != nil {
-        return &model.CreateProducerPayload{Success: false, Message: ptr(err.Error())}, nil
-    }
-    producer, err := r.ProducerSvc.Create(ctx, input, tenantID)
-    if err != nil {
-        return nil, err
-    }
-    return &model.CreateProducerPayload{Producer: producer, Success: true, Message: ptr("Created")}, nil
-}
-```
-
-## DataLoaders (N+1 Prevention)
-
-### Non-Negotiable DataLoader Rules
-- **NEVER** query the database inside a loop or field resolver without a DataLoader
-- **ALWAYS** create DataLoaders per-request via middleware — never share across requests
-- **ALWAYS** batch query with `WHERE id IN (?)` — never loop through keys
-- **ALWAYS** return results in the same order as the input keys
-- **ALWAYS** include `tenantID` in batch queries for multi-tenant isolation
-
-```Rust
-// ✅ Use dataloaden or manual DataLoader pattern
-// graph/dataloader.Rust
-type Loaders struct {
-    ProducerByID *dataloader.Loader[string, *model.Producer]
-}
-
-func NewLoaders(repo ProducerRepository) *Loaders {
-    return &Loaders{
-        ProducerByID: dataloader.NewBatchedLoader(
-            func(ctx impl Future + '_, keys []string) []*dataloader.Result[*model.Producer] {
-                // ✅ Single batch query
-                producers, err := repo.GetByIDs(ctx, keys)
-                if err != nil {
-                    // Return error for all keys
-                    results := make([]*dataloader.Result[*model.Producer], len(keys))
-                    for i := range results {
-                        results[i] = &dataloader.Result[*model.Producer]{Error: err}
-                    }
-                    return results
-                }
-                // Map results back in key order
-                byID := make(map[string]*model.Producer, len(producers))
-                for _, p := range producers {
-                    byID[p.ID] = p
-                }
-                results := make([]*dataloader.Result[*model.Producer], len(keys))
-                for i, key := range keys {
-                    results[i] = &dataloader.Result[*model.Producer]{Data: byID[key]}
-                }
-                return results
-            },
-        ),
-    }
-}
-
-// ✅ Inject via middleware — new loaders per request
-func DataLoaderMiddleware(repo ProducerRepository) func(http.Handler) http.Handler {
-    return func(next http.Handler) http.Handler {
-        return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-            ctx := context.WithValue(r.Context(), loadersKey, NewLoaders(repo))
-            next.ServeHTTP(w, r.WithContext(ctx))
-        })
-    }
-}
-
-// ✅ Usage in field resolver
-func (r *orderResolver) Producer(ctx impl Future + '_, obj *model.Order) (*model.Producer, error) {
-    return Loaders(ctx).ProducerByID.Load(ctx, obj.ProducerID)()
-}
-```
-
-## Authentication & Multi-Tenancy
-
-### Auth Middleware (JWT → Context)
-```Rust
-// ✅ Auth middleware — extract JWT, inject into context
-func AuthMiddleware(next http.Handler) http.Handler {
-    return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-        token := r.Header.Get("Authorization")
-        claims, err := validateJWT(strings.TrimPrefix(token, "Bearer "))
-        if err != nil {
-            http.Error(w, "unauthorized", http.StatusUnauthorized)
-            return
+pub fn gql_error(err: AppError) -> async_graphql::Error {
+    match err {
+        AppError::Database(error) => {
+            tracing::error!(?error, "GraphQL database error");
+            async_graphql::Error::new("internal error").extend_with(|_, extensions| {
+                extensions.set("code", "INTERNAL");
+            })
         }
-        ctx := context.WithValue(r.Context(), tenantIDKey, claims.TenantID)
-        ctx = context.WithValue(ctx, userIDKey, claims.Sub)
-        ctx = context.WithValue(ctx, rolesKey, claims.Roles)
-        next.ServeHTTP(w, r.WithContext(ctx))
-    })
+        AppError::Internal(error) => {
+            tracing::error!(?error, "GraphQL internal error");
+            async_graphql::Error::new("internal error").extend_with(|_, extensions| {
+                extensions.set("code", "INTERNAL");
+            })
+        }
+        AppError::Unauthorized => async_graphql::Error::new("unauthorized").extend_with(|_, extensions| {
+            extensions.set("code", "UNAUTHORIZED");
+        }),
+        AppError::Forbidden => async_graphql::Error::new("forbidden").extend_with(|_, extensions| {
+            extensions.set("code", "FORBIDDEN");
+        }),
+        AppError::Validation(error) => async_graphql::Error::new(error.to_string()).extend_with(|_, extensions| {
+            extensions.set("code", "VALIDATION");
+        }),
+        other => async_graphql::Error::new(other.to_string()).extend_with(|_, extensions| {
+            extensions.set("code", "BAD_REQUEST");
+        }),
+    }
 }
 
-// ✅ Helper — extract tenantID in resolvers
-func TenantIDFromContext(ctx impl Future + '_) string {
-    return ctx.Value(tenantIDKey).(string)
+#[derive(Debug, Clone, SimpleObject)]
+pub struct Producer {
+    pub id: Uuid,
+    pub reference: String,
+    pub status: String,
+    pub currency: String,
+}
+
+impl From<crate::domain::Producer> for Producer {
+    fn from(entity: crate::domain::Producer) -> Self {
+        Self {
+            id: entity.id.0,
+            reference: entity.reference,
+            status: entity.status.to_string(),
+            currency: entity.currency,
+        }
+    }
+}
+
+pub struct QueryRoot;
+
+#[Object]
+impl QueryRoot {
+    async fn producer(&self, ctx: &Context<'_>, id: Uuid) -> Result<Option<Producer>> {
+        let user = ctx.data::<AuthUser>()?;
+        let service = ctx.data::<ProducerService>()?;
+        service
+            .get(user, ProducerId(id))
+            .await
+            .map(Into::into)
+            .map(Some)
+            .map_err(gql_error)
+    }
 }
 ```
 
-### Multi-Tenant Resolver Pattern
-```Rust
-// ✅ EVERY resolver that touches data MUST include tenantID in the query
-func (r *queryResolver) Producers(ctx impl Future + '_, page *int, pageSize *int) (*model.ProducerPage, error) {
-    tenantID := auth.TenantIDFromContext(ctx)
-    // ❌ NEVER: r.ProducerRepo.GetAll(ctx)
-    // ✅ ALWAYS: scope to tenant
-    return r.ProducerRepo.GetByTenant(ctx, tenantID, pageOrDefault(page), pageSizeOrDefault(pageSize))
-}
+## Axum Integration
 
-// ✅ DataLoader batch queries MUST also filter by tenant
-func batchProducers(ctx impl Future + '_, keys []string) []*dataloader.Result[*model.Producer] {
-    tenantID := auth.TenantIDFromContext(ctx)
-    producers, err := repo.GetByIDsAndTenant(ctx, keys, tenantID) // ✅ Tenant-scoped
-    // ... map results
-}
-```
+Build the schema once at startup and inject request-scoped auth data in the handler.
 
-### Directive-Based Authorization
-```graphql
-directive @hasRole(role: String!) on FIELD_DEFINITION
+```rust
+use async_graphql::{EmptySubscription, Schema};
+use async_graphql_axum::{GraphQLRequest, GraphQLResponse};
+use axum::Extension;
 
-type Mutation {
-    createProducer(input: CreateProducerInput!): CreateProducerPayload! @hasRole(role: "admin")
+use crate::{auth::AuthUser, graphql::{MutationRoot, QueryRoot}, state::AppState};
+
+pub type AppSchema = Schema<QueryRoot, MutationRoot, EmptySubscription>;
+
+pub async fn graphql_handler(
+    Extension(schema): Extension<AppSchema>,
+    user: AuthUser,
+    request: GraphQLRequest,
+) -> GraphQLResponse {
+    GraphQLResponse::from(schema
+        .execute(request.into_inner().data(user))
+        .await)
 }
 ```
 
-```Rust
-// Directive implementation
-func HasRole(ctx impl Future + '_, obj interface{}, next graphql.Resolver, role string) (interface{}, error) {
-    claims := auth.ClaimsFromContext(ctx)
-    if !claims.HasRole(role) {
-        return nil, fmt.Errorf("access denied: requires role %s", role)
+## Mutations and Input Validation
+
+Validate inputs before invoking services. Do not accept `tenant_id` as a GraphQL argument for tenant-owned data.
+
+```rust
+use async_graphql::{InputObject, Object, Result};
+use validator::Validate;
+
+#[derive(InputObject, Validate)]
+pub struct CreateProducerInput {
+    #[validate(length(min = 1, max = 64))]
+    pub reference: String,
+    #[validate(length(equal = 3))]
+    pub currency: String,
+    #[validate(length(max = 2000))]
+    pub notes: Option<String>,
+}
+
+pub struct MutationRoot;
+
+#[Object]
+impl MutationRoot {
+    async fn create_producer(
+        &self,
+        ctx: &async_graphql::Context<'_>,
+        input: CreateProducerInput,
+    ) -> Result<Producer> {
+        input.validate().map_err(|err| async_graphql::Error::new(err.to_string()))?;
+        let user = ctx.data::<AuthUser>()?;
+        let service = ctx.data::<ProducerService>()?;
+        let request = CreateProducerRequest {
+            reference: input.reference,
+            currency: input.currency,
+            notes: input.notes,
+        };
+        service.create(user, request).await.map(Into::into).map_err(gql_error)
     }
-    return next(ctx)
 }
 ```
 
-## Input Validation
+## DataLoader for N+1 Prevention
 
-```Rust
-func validateCreateProducer(input model.CreateProducerInput) error {
-    if strings.TrimSpace(input.Name) == "" {
-        return errors.New("name is required")
+Create DataLoaders per schema/request context and batch by tenant. Returned values must line up with the requested keys.
+
+```rust
+use async_graphql::dataloader::Loader;
+use std::{collections::HashMap, sync::Arc};
+use uuid::Uuid;
+
+use crate::{domain::{ProducerId, TenantId}, repositories::ProducerRepository};
+
+pub struct ProducerLoader<R> {
+    pub repository: Arc<R>,
+    pub tenant_id: TenantId,
+}
+
+impl<R> Loader<Uuid> for ProducerLoader<R>
+where
+    R: ProducerRepository + Send + Sync + 'static,
+{
+    type Value = Producer;
+    type Error = Arc<anyhow::Error>;
+
+    async fn load(&self, keys: &[Uuid]) -> Result<HashMap<Uuid, Self::Value>, Self::Error> {
+        self.repository
+            .find_many(self.tenant_id, &keys.iter().copied().map(ProducerId).collect::<Vec<_>>())
+            .await
+            .map(|items| items.into_iter().map(|item| (item.id.0, item.into())).collect())
+            .map_err(|err| Arc::new(err.into()))
     }
-    if len(input.Name) > 200 {
-        return errors.New("name must be at most 200 characters")
+}
+```
+
+## Authorization Guards
+
+Use guards for schema-level clarity, then repeat critical checks in services.
+
+```rust
+use async_graphql::{Context, Guard, Result};
+
+pub struct RequireRole(pub crate::auth::Role);
+
+impl Guard for RequireRole {
+    async fn check(&self, ctx: &Context<'_>) -> Result<()> {
+        let user = ctx.data::<crate::auth::AuthUser>()?;
+        if user.roles.iter().any(|role| role == &self.0) {
+            Ok(())
+        } else {
+            Err("forbidden".into())
+        }
     }
-    if !isValidEmail(input.ContactEmail) {
-        return errors.New("invalid email format")
+}
+```
+
+Use on a field:
+
+```rust
+#[Object]
+impl MutationRoot {
+    #[graphql(guard = "RequireRole(crate::auth::Role::Admin)")]
+    async fn delete_producer(&self, ctx: &async_graphql::Context<'_>, id: Uuid) -> Result<bool> {
+        let user = ctx.data::<AuthUser>()?;
+        ctx.data::<ProducerService>()?.delete(user, ProducerId(id)).await.map_err(gql_error)?;
+        Ok(true)
     }
-    return nil
+}
+```
+
+## Depth, Complexity, and Introspection
+
+Set schema limits and disable introspection outside development.
+
+```rust
+use async_graphql::{EmptySubscription, Schema};
+
+pub fn build_schema(is_production: bool) -> AppSchema {
+    let mut builder = Schema::build(QueryRoot, MutationRoot, EmptySubscription)
+        .limit_depth(12)
+        .limit_complexity(256);
+
+    if is_production {
+        builder = builder.disable_introspection();
+    }
+
+    builder.finish()
 }
 ```
 
 ## Error Handling
 
-```Rust
-// ✅ Error presenter — sanitize errors for production
-srv := handler.NewDefaultServer(schema)
-srv.SetErrorPresenter(func(ctx impl Future + '_, err error) *gqlerror.Error {
-    gqlErr := graphql.DefaultErrorPresenter(ctx, err)
-    // ❌ NEVER leak internal errors
-    if !errors.As(err, new(*AppError)) {
-        gqlErr.Message = "internal error"
-    }
-    return gqlErr
-})
-```
-
-## Complexity & Depth Limiting
-
-```Rust
-srv := handler.NewDefaultServer(schema)
-srv.Use(extension.FixedComplexityLimit(1000))
-
-// gqlgen.yml
-# max query depth
-max_depth: 10
-```
+Map domain errors to GraphQL errors without exposing database internals. Log internal causes with `tracing::error!` in the `AppError` conversion layer and return stable messages to clients.
 
 ## Anti-Patterns
 
-```
-❌ Business logic in resolver functions (delegate to services)
-❌ DataLoaders shared across requests (create per-request via middleware)
-❌ Missing tenantID filtering in DataLoader batch queries
-❌ Returning database structs directly (use generated model types)
-❌ No complexity or depth limits (DoS via nested queries)
-❌ Leaking internal error messages to clients
+```text
+Do not put business logic in resolver methods.
+Do not create global DataLoader instances.
+Do not accept tenant_id as mutation input.
+Do not resolve child objects with one query per parent.
+Do not enable production introspection by default.
+Do not return SQLx model structs as the public GraphQL contract.
 ```
 
 ## See Also
 
-- `api-patterns.instructions.md` — REST patterns (for hybrid REST+GraphQL)
-- `database.instructions.md` — Repository patterns, parameterized queries
-- `security.instructions.md` — JWT middleware, role-based access
-- `performance.instructions.md` — sync.Pool, concurrency patterns
-- `dapr.instructions.md` — State management, workflow execution
+- `auth.instructions.md` — request-scoped `AuthUser`
+- `database.instructions.md` — batch repository queries
+- `security.instructions.md` — validation and production error handling

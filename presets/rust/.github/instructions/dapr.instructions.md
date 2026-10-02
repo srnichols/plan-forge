@@ -1,348 +1,259 @@
 ---
-description: Dapr patterns for Rust — building blocks, sidecar config, state, pub/sub, workflows, secrets, multi-tenant isolation
-applyTo: '**/*dapr*,**/*worker*,**/components/**,**/*workflow*'
+description: Rust Dapr patterns — sidecar HTTP API, state, pub/sub, secrets, component YAML, tenant isolation, resiliency
+applyTo: '**/*dapr*.rs,**/src/dapr/**,**/components/**/*.yaml,**/components/**/*.yml,**/*workflow*.rs'
 ---
 
 # Rust Dapr Patterns
 
-> **Standard**: Dapr v1.18+ with `github.com/dapr/Rust-sdk`
-> **Package**: `github.com/dapr/Rust-sdk/client`, `github.com/dapr/Rust-sdk/service`  
-> **Cross-ref**: `messaging.instructions.md` covers pub/sub schemas and CloudEvents
-
----
+> Standard: Dapr v1.18+ sidecar APIs. The preset uses `reqwest` against the sidecar HTTP API because `dapr` 0.19 depends on Axum 0.7 while this stack is pinned to Axum 0.8.
 
 ## Client Setup
 
-```Rust
-import (
-    dapr "github.com/dapr/Rust-sdk/client"
-    daprd "github.com/dapr/Rust-sdk/service/grpc"
-)
+Read `DAPR_HTTP_ENDPOINT` from configuration and keep a single `reqwest::Client` in state.
 
-// Client for outbound calls (state, pub/sub, invocation)
-func newDaprClient() (dapr.Client, error) {
-    // Auto-discovers sidecar via DAPR_GRPC_ENDPOINT / DAPR_HTTP_ENDPOINT
-    return dapr.NewClient()
+```rust
+use reqwest::Url;
+
+#[derive(Clone)]
+pub struct DaprHttpClient {
+    base_url: Url,
+    client: reqwest::Client,
 }
 
-// Server for inbound subscriptions
-func newDaprServer() (common.Service, error) {
-    return daprd.NewService(":8080")
+impl DaprHttpClient {
+    pub fn from_endpoint(endpoint: &str) -> Result<Self, Box<dyn std::error::Error + Send + Sync>> {
+        Ok(Self {
+            base_url: Url::parse(endpoint)?,
+            client: reqwest::Client::new(),
+        })
+    }
 }
 ```
-
----
 
 ## State Management
 
-```Rust
-const storeName = "statestore"
+Prefix keys with the tenant ID and include tenant metadata so sidecar logs and backend stores can be audited.
 
-// Multi-tenant key — always prefix with tenantId
-func stateKey(tenantId, entityId string) string {
-    return tenantId + "-" + entityId
-}
+```rust
+use serde::Serialize;
 
-func saveState(ctx impl Future + '_, client dapr.Client, tenantId, entityId string, value any) error {
-    data, err := json.Marshal(value)
-    if err != nil {
-        return fmt.Errorf("marshal state: %w", err)
+impl DaprHttpClient {
+    pub async fn save_tenant_state<T: Serialize>(
+        &self,
+        store: &str,
+        tenant_id: &str,
+        entity_id: &str,
+        value: T,
+    ) -> Result<(), reqwest::Error> {
+        let url = self.base_url.join(&format!("/v1.0/state/{store}")).expect("valid state path");
+        let key = format!("{tenant_id}-{entity_id}");
+        let body = serde_json::json!([{
+            "key": key,
+            "value": value,
+            "metadata": {
+                "contentType": "application/json",
+                "tenantId": tenant_id
+            }
+        }]);
+
+        self.client.post(url).json(&body).send().await?.error_for_status()?;
+        Ok(())
     }
-    return client.SaveState(ctx, storeName, stateKey(tenantId, entityId), data,
-        map[string]string{"contentType": "application/json", "tenantId": tenantId})
-}
-
-func getState(ctx impl Future + '_, client dapr.Client, tenantId, entityId string) ([]byte, string, error) {
-    item, err := client.GetState(ctx, storeName, stateKey(tenantId, entityId), nil)
-    if err != nil {
-        return nil, "", fmt.Errorf("get state: %w", err)
-    }
-    return item.Value, item.Etag, nil
-}
-
-// Optimistic concurrency with etag
-func updateState(ctx impl Future + '_, client dapr.Client, tenantId, entityId string, value any, etag string) error {
-    data, err := json.Marshal(value)
-    if err != nil {
-        return fmt.Errorf("marshal state: %w", err)
-    }
-    return client.SaveStateWithETag(ctx, storeName, stateKey(tenantId, entityId), data, etag,
-        map[string]string{"contentType": "application/json"},
-        &dapr.StateOptions{Concurrency: dapr.StateConcurrencyFirstWrite})
 }
 ```
 
----
+For optimistic concurrency, pass the current etag in the state item and set Dapr's concurrency option to first-write. Return a conflict to the caller if Dapr rejects the etag.
 
 ## Pub/Sub
 
-### Publishing
-```Rust
-func publishEvent(ctx impl Future + '_, client dapr.Client, tenantId, topic string, data any) error {
-    fullTopic := fmt.Sprintf("events.%s.%s", topic, tenantId)
-    jsonData, err := json.Marshal(data)
-    if err != nil {
-        return fmt.Errorf("marshal event: %w", err)
+Publishing goes through the sidecar; durable retry and dead-letter behavior belongs in the component/resiliency YAML.
+
+```rust
+use serde::Serialize;
+
+impl DaprHttpClient {
+    pub async fn publish_event<T: Serialize>(
+        &self,
+        pubsub: &str,
+        topic: &str,
+        event: &T,
+    ) -> Result<(), reqwest::Error> {
+        let url = self.base_url
+            .join(&format!("/v1.0/publish/{pubsub}/{topic}"))
+            .expect("valid publish path");
+
+        self.client
+            .post(url)
+            .header("content-type", "application/json")
+            .json(event)
+            .send()
+            .await?
+            .error_for_status()?;
+        Ok(())
     }
-    return client.PublishEvent(ctx, "pubsub", fullTopic, jsonData,
-        dapr.PublishEventWithContentType("application/json"))
 }
 ```
 
-### Subscribing
-```Rust
-func main() {
-    s, _ := daprd.NewService(":8080")
+Subscriptions are normal Axum routes. Return `2xx` only after idempotent processing succeeds; return a retryable error for transient failures.
 
-    sub := &common.Subscription{
-        PubsubName: "pubsub",
-        Topic:      "events.order-placed.*",
-        Route:      "/events/order-placed",
-    }
+```rust
+use axum::{extract::State, http::HeaderMap, Json};
+use serde::Deserialize;
+use secrecy::ExposeSecret;
+use uuid::Uuid;
 
-    s.AddTopicEventHandler(sub, handleOrderPlaced)
-    if err := s.Start(); err != nil {
-        log.Fatalf("failed to start server: %v", err)
-    }
+use crate::{domain::{OrderId, TenantId}, error::AppError, state::AppState};
+
+#[derive(Debug, Deserialize)]
+pub struct DaprCloudEvent<T> {
+    pub id: String,
+    pub source: String,
+    #[serde(rename = "type")]
+    pub event_type: String,
+    pub data: T,
 }
 
-func handleOrderPlaced(ctx impl Future + '_, e *common.TopicEvent) (retry bool, err error) {
-    var event OrderPlacedEvent
-    if err := json.Unmarshal(e.RawData, &event); err != nil {
-        return false, fmt.Errorf("unmarshal event: %w", err) // DROP — bad payload
-    }
-    if err := processOrder(ctx, event); err != nil {
-        log.Printf("failed to process order %s: %v", event.OrderID, err)
-        return true, err  // RETRY — Dapr respects maxDeliver
-    }
-    return false, nil     // SUCCESS
-}
-```
-
----
-
-## Workflows
-
-```Rust
-import "github.com/dapr/Rust-sdk/workflow"
-
-// Workflow definition
-func orderWorkflow(ctx *workflow.WorkflowContext) (any, error) {
-    var input OrderRequest
-    if err := ctx.GetInput(&input); err != nil {
-        return nil, err
-    }
-
-    var validated ValidatedOrder
-    if err := ctx.CallActivity(validateOrder, workflow.ActivityInput(input)).Await(&validated); err != nil {
-        return nil, err
-    }
-
-    var reserved ReservationResult
-    if err := ctx.CallActivity(reserveInventory, workflow.ActivityInput(validated)).Await(&reserved); err != nil {
-        return nil, err
-    }
-
-    var payment PaymentResult
-    if err := ctx.CallActivity(processPayment, workflow.ActivityInput(PaymentReq{validated, reserved})).Await(&payment); err != nil {
-        return nil, err
-    }
-
-    // Parallel activities
-    emailTask := ctx.CallActivity(sendEmail, workflow.ActivityInput(EmailReq{input.Email, validated}))
-    smsTask := ctx.CallActivity(sendSms, workflow.ActivityInput(SmsReq{input.Phone, validated}))
-    if err := ctx.WhenAll(emailTask, smsTask).Await(nil); err != nil {
-        return nil, err
-    }
-
-    return OrderResult{TransactionID: payment.ID, Status: "completed"}, nil
+#[derive(Debug, Deserialize)]
+pub struct OrderPlacedData {
+    pub event_id: Uuid,
+    pub tenant_id: Uuid,
+    pub order_id: Uuid,
 }
 
-// Activity (must be idempotent)
-func validateOrder(ctx workflow.ActivityContext) (any, error) {
-    var input OrderRequest
-    if err := ctx.GetInput(&input); err != nil {
-        return nil, err
+pub async fn order_placed(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    Json(event): Json<DaprCloudEvent<OrderPlacedData>>,
+) -> Result<(), AppError> {
+    let token = headers
+        .get("dapr-api-token")
+        .and_then(|value| value.to_str().ok())
+        .ok_or(AppError::Unauthorized)?;
+
+    let expected = state
+        .settings
+        .api_token
+        .as_ref()
+        .ok_or_else(|| AppError::Internal(anyhow::anyhow!("APP_API_TOKEN is required for Dapr subscriptions")))?;
+
+    if !constant_time_eq(token, expected.expose_secret()) {
+        return Err(AppError::Unauthorized);
     }
-    // validation logic
-    return ValidatedOrder{Order: input}, nil
+
+    state.orders
+        .mark_processed(TenantId(event.data.tenant_id), OrderId(event.data.order_id))
+        .await
 }
 
-// Registration
-func main() {
-    w, _ := workflow.NewWorker()
-    w.RegisterWorkflow(orderWorkflow)
-    w.RegisterActivity(validateOrder)
-    w.RegisterActivity(reserveInventory)
-    w.RegisterActivity(processPayment)
-    w.RegisterActivity(sendEmail)
-    w.RegisterActivity(sendSms)
-    w.Start()
-    defer w.Shutdown()
-
-    // Schedule via workflow client
-    wfClient, _ := workflow.NewClient()
-    id, _ := wfClient.ScheduleNewWorkflow(context.Background(), orderWorkflow, workflow.WithInput(orderData))
+fn constant_time_eq(left: &str, right: &str) -> bool {
+    let left = left.as_bytes();
+    let right = right.as_bytes();
+    let mut diff = left.len() ^ right.len();
+    for index in 0..left.len().max(right.len()) {
+        diff |= (*left.get(index).unwrap_or(&0) ^ *right.get(index).unwrap_or(&0)) as usize;
+    }
+    diff == 0
 }
 ```
-
----
 
 ## Service Invocation
 
-```Rust
-// mTLS, retries, tracing handled by Dapr sidecar
-func checkInventory(ctx impl Future + '_, client dapr.Client, productID string) (*InventoryResponse, error) {
-    reqData, _ := json.Marshal(InventoryRequest{ProductID: productID})
-    resp, err := client.InvokeMethodWithContent(ctx, "inventory-service", "api/inventory/check",
-        "POST", &dapr.DataContent{ContentType: "application/json", Data: reqData})
-    if err != nil {
-        return nil, fmt.Errorf("invoke inventory: %w", err)
+Let Dapr handle mTLS, retries, and tracing between services, but keep request and response DTOs typed in Rust.
+
+```rust
+impl DaprHttpClient {
+    pub async fn invoke_json<T, R>(
+        &self,
+        app_id: &str,
+        method: &str,
+        request: &T,
+    ) -> Result<R, reqwest::Error>
+    where
+        T: serde::Serialize + ?Sized,
+        R: serde::de::DeserializeOwned,
+    {
+        let url = self.base_url
+            .join(&format!("/v1.0/invoke/{app_id}/method/{method}"))
+            .expect("valid invocation path");
+        self.client.post(url).json(request).send().await?.error_for_status()?.json().await
     }
-    var result InventoryResponse
-    if err := json.Unmarshal(resp, &result); err != nil {
-        return nil, fmt.Errorf("unmarshal inventory response: %w", err)
-    }
-    return &result, nil
 }
 ```
 
----
-
 ## Secrets
 
-```Rust
-// Single secret
-secret, err := client.GetSecret(ctx, "secretstore", "db-connection-string", nil)
-connStr := secret["db-connection-string"]
+Use Dapr secret stores for platform secrets, then wrap returned values in `SecretString` before passing them deeper into the application.
 
-// Bulk secrets
-allSecrets, err := client.GetBulkSecret(ctx, "secretstore", nil)
+```rust
+use anyhow::anyhow;
+use secrecy::SecretString;
+use std::collections::HashMap;
+
+use crate::error::AppError;
+
+fn dapr_transport_error(error: reqwest::Error) -> AppError {
+    AppError::Internal(error.into())
+}
+
+impl DaprHttpClient {
+    pub async fn get_secret(
+        &self,
+        store: &str,
+        name: &str,
+    ) -> Result<SecretString, AppError> {
+        let url = self.base_url
+            .join(&format!("/v1.0/secrets/{store}/{name}"))
+            .expect("valid secret path");
+        let values: HashMap<String, String> = self.client
+            .get(url)
+            .send()
+            .await
+            .map_err(dapr_transport_error)?
+            .error_for_status()
+            .map_err(dapr_transport_error)?
+            .json()
+            .await
+            .map_err(dapr_transport_error)?;
+        values
+            .get(name)
+            .cloned()
+            .map(SecretString::from)
+            .ok_or_else(|| AppError::Internal(anyhow!("Dapr secret {name} missing")))
+    }
+}
 ```
 
----
+Never log the map returned by the sidecar; even debug logs can leak secret values.
 
-## Component Configuration
+## Component Scoping
 
-### State Store
 ```yaml
-# dapr/components/redis-statestore.yaml
-apiVersion: dapr.io/v1alpha1
-kind: Component
-metadata:
-  name: statestore
-spec:
-  type: state.redis
-  version: v1
-  metadata:
-    - name: redisHost
-      value: redis:6379
-    - name: actorStateStore      # Required if using workflows
-      value: "true"
-    - name: keyPrefix
-      value: name                # Keys prefixed with app-id automatically
-  scopes:                        # ALWAYS scope components
-    - my-api-service
-    - my-worker-service
-```
-
-### Pub/Sub (NATS JetStream)
-```yaml
-# dapr/components/nats-pubsub.yaml
 apiVersion: dapr.io/v1alpha1
 kind: Component
 metadata:
   name: pubsub
 spec:
-  type: pubsub.jetstream
+  type: pubsub.rabbitmq
   version: v1
   metadata:
-    - name: natsURL
-      value: nats://nats:4222
-    - name: durableSubscriptionName
-      value: my-consumer
-    - name: flowControl
+    - name: host
+      secretKeyRef:
+        name: rabbitmq-connection-string
+        key: value
+    - name: durable
       value: "true"
-  scopes:
-    - my-api-service
-    - my-worker-service
+scopes:
+  - orders-api
+  - orders-worker
 ```
 
-### Component Scoping Rules
-- **ALWAYS** define `scopes` on every component — unscoped components are accessible to all services
-- **NEVER** inline connection strings or passwords — use `secretKeyRef`
-- **ALWAYS** version component files in source control
-- **SEPARATE** component directories per environment: `dapr/components/dev/`, `dapr/components/prod/`
+## Resiliency
 
----
-
-## Multi-Tenant Isolation Checklist
-
-| Layer | Pattern | Example |
-|-------|---------|---------|
-| **State keys** | `{tenantId}-{entityId}` prefix | `acme-order-123` |
-| **Pub/sub topics** | Tenant in subject hierarchy | `events.order.acme-corp` |
-| **State metadata** | `tenantId` in metadata dictionary | Enables audit/query |
-| **Subscriptions** | Wildcard + filter in handler | `events.order.*` |
-| **Secrets** | Component scoping per service | `scopes: [api-service]` |
-| **Workflows** | Tenant in workflow input | `OrderRequest.TenantID` |
-
----
-
-## Health Checks
-
-```Rust
-// Dapr sidecar health check for readiness probes
-func daprHealthHandler(w http.ResponseWriter, r *http.Request) {
-    resp, err := http.Get(os.Getenv("DAPR_HTTP_ENDPOINT") + "/v1.0/healthz")
-    if err != nil || resp.StatusCode != http.StatusOK {
-        w.WriteHeader(http.StatusServiceUnavailable)
-        json.NewEncoder(w).Encode(map[string]string{"status": "unhealthy", "component": "dapr-sidecar"})
-        return
-    }
-    w.WriteHeader(http.StatusOK)
-    json.NewEncoder(w).Encode(map[string]string{"status": "healthy"})
-}
-
-// Register in your router
-mux.HandleFunc("/healthz", daprHealthHandler)
-```
-
----
-
-## Observability
-
-```Rust
-// Dapr propagates W3C trace context automatically through sidecars.
-// Ensure your OpenTelemetry setup captures Dapr spans:
-tp := sdktrace.NewTracerProvider(
-    sdktrace.WithBatcher(exporter),
-    sdktrace.WithResource(resource.NewWithAttributes(
-        semconv.SchemaURL,
-        semconv.ServiceNameKey.String("my-service"),
-    )),
-)
-otel.SetTracerProvider(tp)
-otel.SetTextMapPropagator(propagation.TraceContext{}) // W3C trace context
-
-// Structured logging with Dapr context
-slog.Info("processing event",
-    "eventId", event.ID,
-    "tenantId", event.TenantID,
-    "traceId", span.SpanContext().TraceID().String())
-```
-
----
-
-## Resilience & Retry
-
-### Resiliency Policy
 ```yaml
-# dapr/components/resiliency.yaml
 apiVersion: dapr.io/v1alpha1
 kind: Resiliency
 metadata:
-  name: default-resiliency
+  name: orders-resiliency
 spec:
   policies:
     retries:
@@ -350,93 +261,50 @@ spec:
         policy: exponential
         maxInterval: 30s
         maxRetries: 5
-      stateRetry:
-        policy: constant
-        duration: 2s
-        maxRetries: 3
     circuitBreakers:
-      serviceCB:
+      inventoryBreaker:
         maxRequests: 1
-        interval: 30s
         timeout: 60s
         trip: consecutiveFailures > 5
   targets:
+    apps:
+      inventory-service:
+        retry: pubsubRetry
+        circuitBreaker: inventoryBreaker
     components:
-      statestore:
-        outbound:
-          retry: stateRetry
       pubsub:
         outbound:
           retry: pubsubRetry
-    apps:
-      inventory-service:
-        retry: stateRetry
-        circuitBreaker: serviceCB
 ```
 
-### Resilience Rules
-- **ALWAYS** define resiliency policies for state stores and pub/sub components
-- **CONFIGURE** circuit breakers for synchronous service invocation
-- **SET** reasonable `ackWait` and `maxDeliver` on pub/sub subscriptions
-- **IMPLEMENT** dead-letter topic handling — don't let failed messages disappear
+## Multi-Tenant Isolation Checklist
 
----
+| Layer | Rust/Dapr Pattern |
+| --- | --- |
+| State keys | `{tenant_id}-{entity_id}` prefix |
+| Pub/sub topics | tenant in the event data; topic partitioning only when needed |
+| Metadata | include `tenantId` on state writes |
+| Subscriptions | validate CloudEvent data before service calls |
+| Secrets | scoped components and `secretKeyRef` |
+| Workflows | tenant ID in workflow input and activity DTOs |
 
-## Resiliency
+## Health Check
 
-```yaml
-# dapr/components/resiliency.yaml
-apiVersion: dapr.io/v1alpha1
-kind: Resiliency
-metadata:
-  name: default
-spec:
-  policies:
-    retries:
-      defaultRetry:
-        policy: exponential
-        maxInterval: 30s
-        maxRetries: 5
-    circuitBreakers:
-      serviceCB:
-        maxRequests: 1
-        timeout: 60s
-        trip: consecutiveFailures > 5
-  targets:
-    apps:
-      inventory-service:
-        retry: defaultRetry
-        circuitBreaker: serviceCB
-    components:
-      statestore:
-        outbound:
-          retry: defaultRetry
-```
-
----
+Call `/v1.0/healthz` from a readiness endpoint and include a short timeout. A down sidecar should fail readiness for code paths that require Dapr.
 
 ## Anti-Patterns
 
+```text
+Do not hardcode localhost:3500; use DAPR_HTTP_ENDPOINT.
+Do not create unscoped components.
+Do not put tenant data in flat state keys.
+Do not inline connection strings in component YAML.
+Do not publish events without a dead-letter or retry policy.
+Do not log Dapr secret responses.
 ```
-❌ Hardcoding localhost:3500 — use DAPR_GRPC_ENDPOINT or SDK auto-discovery
-❌ Unscoped components — always define scopes in component YAML
-❌ Flat state keys without tenant prefix — tenant data isolation breach
-❌ Calling APIs directly in workflow functions — use CallActivity
-❌ Inline secrets in component YAML — use secretKeyRef
-❌ Returning (false, err) for bad payloads — DROP instead of retrying forever
-❌ Fire-and-forget pub/sub without dead-letter topic
-❌ Ignoring etags on state updates — silent overwrites
-❌ Missing impl Future + '_ propagation — breaks tracing and cancellation
-❌ Missing health check for Dapr sidecar — silent failures in orchestrators
-❌ Chaining 4+ synchronous service invocations — use a workflow instead
-```
-
----
 
 ## See Also
 
-- `messaging.instructions.md` — CloudEvents, pub/sub patterns, idempotency
-- `security.instructions.md` — Secret management, input validation
-- `observability.instructions.md` — Distributed tracing, health checks
-- `performance.instructions.md` — Concurrency patterns, goroutine management
-- `deploy.instructions.md` — Docker Compose sidecar config, Kubernetes
+- `messaging.instructions.md` — event schemas and idempotent consumers
+- `security.instructions.md` — secret handling and validation
+- `observability.instructions.md` — health checks, request IDs, and traces

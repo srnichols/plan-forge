@@ -1,163 +1,160 @@
 ---
-description: "Scaffold a new database entity end-to-end: migration SQL, model, repository, service, handler, and tests."
+description: "Scaffold a new Rust database entity end-to-end: SQLx migration, domain type, repository, service, Axum route, and tests."
 agent: "agent"
 tools: [read, edit, search, execute]
 ---
+
 # Create New Database Entity
 
-Scaffold a complete entity from database to API following Rust layered architecture.
+Scaffold a complete entity from PostgreSQL to Axum while preserving the Rust
+layering contract: route -> service -> repository -> database.
 
 ## Required Steps
 
-1. **Create up migration** at `migrations/YYYYMMDD_add_{entity_name}.up.sql`:
+1. **Create reversible SQLx migration**:
+   ```bash
+   sqlx migrate add -r add_{entity_name}_table
+   ```
+
+   `migrations/<timestamp>_add_{entity_name}_table.up.sql`:
    ```sql
    CREATE TABLE IF NOT EXISTS {entity_name}s (
        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-       name VARCHAR(255) NOT NULL,
-       description TEXT,
-       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-       updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+       tenant_id UUID NOT NULL,
+       reference TEXT NOT NULL,
+       status TEXT NOT NULL DEFAULT 'pending',
+       currency CHAR(3) NOT NULL,
+       total_cents BIGINT NOT NULL DEFAULT 0,
+       created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+       CONSTRAINT uq_{entity_name}s_tenant_reference UNIQUE (tenant_id, reference)
    );
-   CREATE INDEX IF NOT EXISTS idx_{entity_name}s_name ON {entity_name}s(name);
 
-   -- Trigger to auto-update updated_at
-   CREATE OR REPLACE FUNCTION update_updated_at_column()
-   RETURNS TRIGGER AS $$
-   BEGIN
-       NEW.updated_at = NOW();
-       RETURN NEW;
-   END;
-   $$ language 'plpgsql';
-
-   CREATE TRIGGER update_{entity_name}s_updated_at
-       BEFORE UPDATE ON {entity_name}s
-       FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+   CREATE INDEX IF NOT EXISTS idx_{entity_name}s_tenant_created
+       ON {entity_name}s (tenant_id, created_at DESC, id DESC);
    ```
 
-2. **Create down migration** at `migrations/YYYYMMDD_add_{entity_name}.down.sql`:
+   `migrations/<timestamp>_add_{entity_name}_table.down.sql`:
    ```sql
-   DROP TRIGGER IF EXISTS update_{entity_name}s_updated_at ON {entity_name}s;
    DROP TABLE IF EXISTS {entity_name}s;
    ```
 
-3. **Create model** at `internal/model/{entity_name}.Rust`:
-   ```Rust
-   type {EntityName} struct {
-       ID          uuid.UUID `json:"id"          db:"id"`
-       Name        string    `json:"name"        db:"name"`
-       Description string    `json:"description" db:"description"`
-       CreatedAt   time.Time `json:"created_at"  db:"created_at"`
-       UpdatedAt   time.Time `json:"updated_at"  db:"updated_at"`
+2. **Create domain type** at `src/domain/{entity_name}.rs`:
+   ```rust
+   use std::fmt;
+
+   use serde::{Deserialize, Serialize};
+   use time::OffsetDateTime;
+   use uuid::Uuid;
+
+   use crate::domain::TenantId;
+
+   #[derive(Clone, Copy, Debug, Eq, PartialEq, Hash)]
+   pub struct {EntityName}Id(pub Uuid);
+
+   #[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize, sqlx::Type)]
+   #[serde(rename_all = "snake_case")]
+   #[sqlx(type_name = "text", rename_all = "snake_case")]
+   pub enum {EntityName}Status {
+       Pending,
+       Processed,
+       Cancelled,
    }
 
-   type Create{EntityName}Request struct {
-       Name        string `json:"name"        validate:"required,min=1,max=255"`
-       Description string `json:"description" validate:"max=2000"`
+   impl fmt::Display for {EntityName}Status {
+       fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+           let value = match self {
+               Self::Pending => "pending",
+               Self::Processed => "processed",
+               Self::Cancelled => "cancelled",
+           };
+           formatter.write_str(value)
+       }
    }
 
-   type Update{EntityName}Request struct {
-       Name        string `json:"name"        validate:"required,min=1,max=255"`
-       Description string `json:"description" validate:"max=2000"`
+   #[derive(Clone, Debug)]
+   pub struct {EntityName} {
+       pub id: {EntityName}Id,
+       pub tenant_id: TenantId,
+       pub reference: String,
+       pub status: {EntityName}Status,
+       pub currency: String,
+       pub total_cents: i64,
+       pub created_at: OffsetDateTime,
    }
    ```
 
-3. **Create repository** at `internal/repository/{entity_name}_repo.Rust`
-4. **Create service** at `internal/service/{entity_name}_service.Rust`
-5. **Create handler** at `internal/handler/{entity_name}_handler.Rust`
-6. **Register routes** in router setup
-7. **Create tests** — unit + integration
+3. **Create DTOs** at `src/dto/{entity_name}.rs`:
+   ```rust
+   use serde::{Deserialize, Serialize};
+   use time::OffsetDateTime;
+   use validator::Validate;
+
+   #[derive(Debug, Deserialize, Validate)]
+   pub struct Create{EntityName}Request {
+       #[validate(length(min = 1, max = 64))]
+       pub reference: String,
+       #[validate(length(equal = 3))]
+       pub currency: String,
+       pub notes: Option<String>,
+   }
+
+   #[derive(Debug, Serialize)]
+   pub struct {EntityName}Response {
+       pub id: uuid::Uuid,
+       pub reference: String,
+       pub status: String,
+       pub currency: String,
+       pub total_cents: i64,
+       pub created_at: OffsetDateTime,
+   }
+   ```
+
+4. **Create repository** at `src/repositories/{entity_name}.rs` using the
+   `new-repository` prompt. Every query binds `tenant_id`.
+
+5. **Create service** at `src/services/{entity_name}.rs` using the
+   `new-service` prompt. Services own transactions and map conflicts.
+
+6. **Create route** at `src/routes/{entity_name}.rs`:
+   - Extract `AuthUser`; use `auth.tenant_id`, never request tenant fields.
+   - Use `ValidatedJson<Create{EntityName}Request>`.
+   - Return RFC 9457 errors through `AppError`.
+
+7. **Wire application state**:
+   - Add `Arc<{EntityName}Service>` to `AppState`.
+   - Add any `FromRef<AppState>` implementation required by extractors.
+   - Register `routes::{entity_name}::router()` in `app(state)`.
+
+8. **Create tests**:
+   - `#[sqlx::test]` repository coverage for create, duplicate name, and tenant isolation.
+   - Service unit tests with a fake repository for business rules.
+   - Axum integration test that sends an authenticated request.
 
 ## Example — Contoso Product
 
-```Rust
-// Repository — full CRUD
-type ProductRepository struct {
-    db *pgxpool.Pool
-}
+```rust
+use axum::{extract::State, Json};
 
-func (r *ProductRepository) FindByID(ctx impl Future + '_, id uuid.UUID) (*model.Product, error) {
-    var p model.Product
-    err := r.db.QueryRow(ctx,
-        "SELECT id, name, description, created_at, updated_at FROM products WHERE id = $1", id,
-    ).Scan(&p.ID, &p.Name, &p.Description, &p.CreatedAt, &p.UpdatedAt)
-    if errors.Is(err, pgx.ErrNoRows) {
-        return nil, ErrNotFound
-    }
-    return &p, err
-}
+use crate::auth::AuthUser;
+use crate::extractors::ValidatedJson;
 
-func (r *ProductRepository) Create(ctx impl Future + '_, req model.CreateProductRequest) (*model.Product, error) {
-    var p model.Product
-    err := r.db.QueryRow(ctx,
-        `INSERT INTO products (name, description) VALUES ($1, $2)
-         RETURNING id, name, description, created_at, updated_at`,
-        req.Name, req.Description,
-    ).Scan(&p.ID, &p.Name, &p.Description, &p.CreatedAt, &p.UpdatedAt)
-    return &p, err
-}
-
-func (r *ProductRepository) Update(ctx impl Future + '_, id uuid.UUID, req model.UpdateProductRequest) (*model.Product, error) {
-    var p model.Product
-    err := r.db.QueryRow(ctx,
-        `UPDATE products SET name = $1, description = $2 WHERE id = $3
-         RETURNING id, name, description, created_at, updated_at`,
-        req.Name, req.Description, id,
-    ).Scan(&p.ID, &p.Name, &p.Description, &p.CreatedAt, &p.UpdatedAt)
-    if errors.Is(err, pgx.ErrNoRows) {
-        return nil, ErrNotFound
-    }
-    return &p, err
-}
-
-func (r *ProductRepository) Delete(ctx impl Future + '_, id uuid.UUID) error {
-    tag, err := r.db.Exec(ctx, "DELETE FROM products WHERE id = $1", id)
-    if err != nil {
-        return err
-    }
-    if tag.RowsAffected() == 0 {
-        return ErrNotFound
-    }
-    return nil
-}
-
-// Service
-type ProductService struct {
-    repo *ProductRepository
-    log  *tracing::Subscriber
-}
-
-func (s *ProductService) GetByID(ctx impl Future + '_, id uuid.UUID) (*model.Product, error) {
-    p, err := s.repo.FindByID(ctx, id)
-    if err != nil {
-        return nil, fmt.Errorf("get product %s: %w", id, err)
-    }
-    return p, nil
-}
-
-// Handler
-func (h *ProductHandler) GetByID(w http.ResponseWriter, r *http.Request) {
-    id, err := uuid.Parse(chi.URLParam(r, "id"))
-    if err != nil {
-        writeProblem(w, http.StatusBadRequest, "invalid id format")
-        return
-    }
-    product, err := h.service.GetByID(r.Context(), id)
-    if errors.Is(err, ErrNotFound) {
-        writeProblem(w, http.StatusNotFound, "product not found")
-        return
-    }
-    writeJSON(w, http.StatusOK, product)
+pub async fn create_product(
+    auth: AuthUser,
+    State(service): State<ProductService>,
+    ValidatedJson(request): ValidatedJson<CreateProductRequest>,
+) -> Result<axum::Json<ProductResponse>, crate::error::AppError> {
+    let product = service.create(&auth, request).await?;
+    Ok(Json(ProductResponse::from(product)))
 }
 ```
 
-## Rules
+## Safety Checks
 
-- ALWAYS create both up and down migrations
-- ALWAYS use `NOT NULL` with `DEFAULT` for timestamp columns
-- Use `validate` struct tags on all request types
-- Use `RETURNING` clause for INSERT/UPDATE to avoid a second query
-- Use `json:"snake_case"` tags on model structs for API responses
-- Keep each layer in its own package: `model/`, `repository/`, `service/`, `handler/`
+- Run `sqlx migrate run` against a local PostgreSQL 18 database.
+- Run `cargo sqlx prepare --check` after adding SQLx macros.
+- Verify unique violations become `AppError::Conflict`.
+- Confirm generated list endpoints use keyset pagination.
+- Add cache invalidation if the entity is cached.
 
 ## Reference Files
 

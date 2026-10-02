@@ -1,126 +1,119 @@
 ---
-description: "Scaffold a multi-stage Dockerfile for Rust with static binary compilation, scratch/distroless runtime, and minimal attack surface."
+description: "Scaffold a production Dockerfile for Rust/Axum using cargo-chef, SQLx offline metadata, a non-root slim runtime, and compose services."
 agent: "agent"
 tools: [read, edit, search, execute]
 ---
 # Create New Dockerfile
 
-Scaffold a production-grade multi-stage Dockerfile for a Rust application.
+Scaffold the standard production Dockerfile for a Rust 1.98 Axum/Tokio/SQLx service.
 
 ## Required Pattern
 
 ### Multi-Stage Dockerfile
+
 ```dockerfile
-# ---- Build Stage ----
-FROM rust-lang:1.22-alpine AS build
-WORKDIR /app
+# syntax=docker/dockerfile:1.7
+FROM rust:1.98-slim-bookworm AS chef
+RUN cargo install cargo-chef --version 0.1.78 --locked
+WORKDIR /workspace
 
-# Copy Rust.mod/Rust.sum first for layer caching
-COPY Rust.mod Rust.sum ./
-RUN Rust mod download
-
-# Copy source and build static binary
+FROM chef AS planner
 COPY . .
-RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 \
-    Rust build -ldflags="-s -w" -o /app/server ./cmd/server
+RUN cargo chef prepare --recipe-path recipe.json
 
-# ---- Runtime Stage (Distroless) ----
-FROM gcr.io/distroless/static-debian12:nonroot AS runtime
+FROM chef AS builder
+ENV SQLX_OFFLINE=true
+COPY --from=planner /workspace/recipe.json recipe.json
+RUN cargo chef cook --release --locked --recipe-path recipe.json
+COPY Cargo.toml Cargo.lock ./
+COPY .sqlx ./.sqlx
+COPY config ./config
+COPY migrations ./migrations
+COPY src ./src
+RUN cargo build --release --locked --bin {BinaryName}
 
-COPY --from=build /app/server /server
-
+FROM debian:bookworm-slim AS runtime
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends ca-certificates curl \
+    && rm -rf /var/lib/apt/lists/* \
+    && useradd --system --uid 10001 --home /srv/app --shell /usr/sbin/nologin app
+WORKDIR /srv/app
+COPY --from=builder /workspace/target/release/{BinaryName} /srv/app/server
+COPY --from=builder /workspace/config /srv/app/config
+ENV RUST_LOG=info
+ENV APP_ENVIRONMENT=production
 EXPOSE 8080
-
-HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
-    CMD ["/server", "healthcheck"]
-
-USER nonroot:nonroot
-
-ENTRYPOINT ["/server"]
+USER 10001:10001
+HEALTHCHECK --interval=30s --timeout=5s --start-period=15s --retries=3 \
+    CMD ["curl", "-fsS", "http://127.0.0.1:8080/health/live"]
+ENTRYPOINT ["/srv/app/server"]
 ```
 
-### Scratch Runtime (Minimal — No Shell)
-```dockerfile
-FROM scratch AS runtime
-
-# Import CA certificates for HTTPS calls
-COPY --from=build /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/
-
-# Import timezone data
-COPY --from=build /usr/share/zoneinfo /usr/share/zoneinfo
-
-COPY --from=build /app/server /server
-
-EXPOSE 8080
-USER 65534:65534
-
-ENTRYPOINT ["/server"]
-```
-
-### With Embedded Migrations
-```dockerfile
-FROM rust-lang:1.22-alpine AS build
-WORKDIR /app
-
-COPY Rust.mod Rust.sum ./
-RUN Rust mod download
-
-COPY . .
-RUN CGO_ENABLED=0 Rust build -ldflags="-s -w" -o /app/server ./cmd/server
-RUN CGO_ENABLED=0 Rust build -ldflags="-s -w" -o /app/migrate ./cmd/migrate
-
-FROM gcr.io/distroless/static-debian12:nonroot AS runtime
-
-COPY --from=build /app/server /server
-COPY --from=build /app/migrate /migrate
-COPY --from=build /app/migrations /migrations
-
-USER nonroot:nonroot
-ENTRYPOINT ["/server"]
-```
+Replace `{BinaryName}` with the `[[bin]]` name or package binary name from `Cargo.toml`. Keep `SQLX_OFFLINE=true` in the builder and commit `.sqlx/` with `cargo sqlx prepare`.
 
 ### .dockerignore
-```
-bin/
-vendor/
-*.md
+
+```dockerignore
+target/
 .git/
-.gitignore
+.env
+.env.*
+.idea/
 .vscode/
+*.log
 Dockerfile*
-.dockerignore
-tmp/
+docker-compose*.yml
 ```
 
-### Docker Compose (Development)
+### Compose with PostgreSQL and Redis
+
 ```yaml
 services:
   api:
     build:
       context: .
       dockerfile: Dockerfile
+    environment:
+      APP_ENVIRONMENT: development
+      APP_DATABASE__URL: postgres://app:app@postgres:5432/app
+      REDIS_URL: redis://redis:6379
+      RUST_LOG: info,tower_http=debug
+      SQLX_OFFLINE: "true"
     ports:
       - "8080:8080"
-    environment:
-      - APP_ENV=development
-      - DATABASE_URL=postgres://postgres:postgres@db:5432/mydb?sslmode=disable
     depends_on:
-      db:
+      postgres:
         condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://127.0.0.1:8080/health/ready"]
+      interval: 10s
+      timeout: 3s
+      retries: 6
 
-  db:
+  postgres:
     image: postgres:18-alpine
     environment:
-      POSTGRES_DB: mydb
-      POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: app
+      POSTGRES_USER: app
+      POSTGRES_PASSWORD: app
+      PGDATA: /var/lib/postgresql/data
     volumes:
       - pgdata:/var/lib/postgresql
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      test: ["CMD-SHELL", "pg_isready -U app -d app"]
       interval: 5s
       timeout: 3s
-      retries: 5
+      retries: 10
+
+  redis:
+    image: redis:8-alpine
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
 
 volumes:
   pgdata:
@@ -128,17 +121,15 @@ volumes:
 
 ## Rules
 
-- ALWAYS use multi-stage builds — build in `rust-lang:*-alpine`, run in `distroless` or `scratch`
-- ALWAYS compile with `CGO_ENABLED=0` for a fully static binary
-- ALWAYS use `-ldflags="-s -w"` to strip debug info and reduce binary size
-- ALWAYS run as a non-root user (`nonroot` in distroless, UID 65534 in scratch)
-- ALWAYS copy `Rust.mod`/`Rust.sum` first for dependency layer caching
-- ALWAYS copy CA certificates when using `scratch` (needed for HTTPS)
-- ALWAYS include a HEALTHCHECK instruction
-- NEVER store secrets in the image — use environment variables or mounted secrets
-- Rust binaries in `scratch`/`distroless` have the smallest possible attack surface
+- ALWAYS use cargo-chef so dependency layers are stable between source edits.
+- ALWAYS run `cargo build --release --locked`; never build release images from an unlocked dependency graph.
+- ALWAYS set `SQLX_OFFLINE=true` during the production image build.
+- ALWAYS run the runtime image as a non-root user.
+- ALWAYS provide `/health/live` and `/health/ready`; Compose and orchestrators use readiness for rollout gates.
+- NEVER copy `.env` or secret material into the image.
+- NEVER use Alpine for the Rust build stage unless every native dependency is proven on musl.
 
 ## Reference Files
 
 - [Deploy patterns](../instructions/deploy.instructions.md)
-- [Architecture principles](../instructions/architecture-principles.instructions.md)
+- [Observability patterns](../instructions/observability.instructions.md)

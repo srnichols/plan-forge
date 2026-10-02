@@ -1,132 +1,210 @@
 ---
-description: Error handling patterns — Typed error structs, ProblemDetail responses, middleware error recovery, sentinel errors
-applyTo: '**/*.Rust'
+description: Error handling patterns — canonical AppError, Axum IntoResponse, RFC 9457 responses, SQLx mapping
+applyTo: '**/error.rs,**/errors/**/*.rs,**/routes/**/*.rs,**/services/**/*.rs,**/repositories/**/*.rs'
 ---
 
-# Error Handling Patterns (Rust)
+# Error Handling Patterns (Rust/Axum)
 
-## Error Types
+## Canonical Error Type
 
-```Rust
-type AppError struct {
-    Message    string `json:"detail"`
-    Code       string `json:"title"`
-    StatusCode int    `json:"status"`
-    Err        error  `json:"-"`
-}
+Use this `AppError` shape exactly in `src/error.rs`.
 
-func (e *AppError) Error() string { return e.Message }
-func (e *AppError) Unwrap() error { return e.Err }
-
-func NewNotFound(entity, id string) *AppError {
-    return &AppError{
-        Message:    fmt.Sprintf("%s with ID '%s' not found", entity, id),
-        Code:       "NOT_FOUND",
-        StatusCode: http.StatusNotFound,
-    }
-}
-
-func NewValidationError(message string) *AppError {
-    return &AppError{Message: message, Code: "VALIDATION_ERROR", StatusCode: http.StatusBadRequest}
-}
-
-func NewConflict(message string) *AppError {
-    return &AppError{Message: message, Code: "CONFLICT", StatusCode: http.StatusConflict}
-}
-
-func NewForbidden(message string) *AppError {
-    if message == "" { message = "Access denied" }
-    return &AppError{Message: message, Code: "FORBIDDEN", StatusCode: http.StatusForbidden}
-}
-
-func NewInternal(err error) *AppError {
-    return &AppError{
-        Message:    "An unexpected error occurred",
-        Code:       "INTERNAL_ERROR",
-        StatusCode: http.StatusInternalServerError,
-        Err:        err,
-    }
+```rust
+#[derive(Debug, thiserror::Error)]
+pub enum AppError {
+    #[error("{resource} {id} not found")]
+    NotFound { resource: &'static str, id: String },
+    #[error("bad request: {0}")]
+    BadRequest(String),
+    #[error("conflict: {0}")]
+    Conflict(String),
+    #[error("validation failed")]
+    Validation(#[from] validator::ValidationErrors),
+    #[error("unauthorized")]
+    Unauthorized,
+    #[error("forbidden")]
+    Forbidden,
+    #[error(transparent)]
+    Database(sqlx::Error),
+    #[error(transparent)]
+    Internal(#[from] anyhow::Error),
 }
 ```
 
-## ProblemDetail Response
+## Axum `IntoResponse` Mapping
 
-```Rust
-type ProblemDetail struct {
-    Type     string `json:"type"`
-    Title    string `json:"title"`
-    Status   int    `json:"status"`
-    Detail   string `json:"detail"`
-    Instance string `json:"instance"`
+```rust
+use axum::{
+    http::{header, HeaderValue, StatusCode},
+    response::{IntoResponse, Response},
+    Json,
+};
+use serde::Serialize;
+use serde_json::json;
+use tracing::error;
+
+#[derive(Debug, Serialize)]
+struct ProblemDetails {
+    #[serde(rename = "type")]
+    type_uri: &'static str,
+    title: &'static str,
+    status: u16,
+    detail: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    instance: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    errors: Option<serde_json::Value>,
 }
 
-func WriteProblemDetail(w http.ResponseWriter, r *http.Request, appErr *AppError) {
-    pd := ProblemDetail{
-        Type:     fmt.Sprintf("https://contoso.com/errors/%s", strings.ToLower(appErr.Code)),
-        Title:    appErr.Code,
-        Status:   appErr.StatusCode,
-        Detail:   appErr.Message,
-        Instance: r.URL.Path,
-    }
-    w.Header().Set("Content-Type", "application/problem+json")
-    w.WriteHeader(appErr.StatusCode)
-    json.NewEncoder(w).Encode(pd)
-}
-```
+impl IntoResponse for AppError {
+    fn into_response(self) -> Response {
+        let (status, type_uri, title, detail, errors) = match &self {
+            AppError::NotFound { resource, id } => (
+                StatusCode::NOT_FOUND,
+                "https://example.com/problems/not-found",
+                "Not Found",
+                format!("{resource} {id} not found"),
+                None,
+            ),
+            AppError::BadRequest(message) => (
+                StatusCode::BAD_REQUEST,
+                "https://example.com/problems/bad-request",
+                "Bad Request",
+                message.clone(),
+                None,
+            ),
+            AppError::Conflict(message) => (
+                StatusCode::CONFLICT,
+                "https://example.com/problems/conflict",
+                "Conflict",
+                message.clone(),
+                None,
+            ),
+            AppError::Validation(validation_errors) => (
+                StatusCode::BAD_REQUEST,
+                "https://example.com/problems/validation",
+                "Validation Failed",
+                "validation failed".to_owned(),
+                Some(json!(validation_errors)),
+            ),
+            AppError::Unauthorized => (
+                StatusCode::UNAUTHORIZED,
+                "https://example.com/problems/unauthorized",
+                "Unauthorized",
+                "authentication is required".to_owned(),
+                None,
+            ),
+            AppError::Forbidden => (
+                StatusCode::FORBIDDEN,
+                "https://example.com/problems/forbidden",
+                "Forbidden",
+                "permission denied".to_owned(),
+                None,
+            ),
+            AppError::Database(error) => {
+                error!(?error, "database error");
+                (
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    "https://example.com/problems/internal",
+                    "Internal Server Error",
+                    "an unexpected error occurred".to_owned(),
+                    None,
+                )
+            }
+            AppError::Internal(error) => {
+                error!(?error, "internal error");
+                (
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    "https://example.com/problems/internal",
+                    "Internal Server Error",
+                    "an unexpected error occurred".to_owned(),
+                    None,
+                )
+            }
+        };
 
-## Error Recovery Middleware
-
-```Rust
-func RecoverMiddleware(logger *tracing::Subscriber) func(http.Handler) http.Handler {
-    return func(next http.Handler) http.Handler {
-        return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-            defer func() {
-                if rec := recover(); rec != nil {
-                    logger.Error("panic recovered", "recover", rec, "path", r.URL.Path)
-                    WriteProblemDetail(w, r, NewInternal(fmt.Errorf("panic: %v", rec)))
-                }
-            }()
-            next.ServeHTTP(w, r)
+        let mut response = Json(ProblemDetails {
+            type_uri,
+            title,
+            status: status.as_u16(),
+            detail,
+            instance: None,
+            errors,
         })
-    }
-}
-```
-
-## Handler Error Pattern
-
-```Rust
-func (h *ItemHandler) GetByID(w http.ResponseWriter, r *http.Request) {
-    id := chi.URLParam(r, "id")
-    item, err := h.service.GetByID(r.Context(), id)
-    if err != nil {
-        var appErr *AppError
-        if errors.As(err, &appErr) {
-            WriteProblemDetail(w, r, appErr)
-        } else {
-            WriteProblemDetail(w, r, NewInternal(err))
+        .into_response();
+        *response.status_mut() = status;
+        response.headers_mut().insert(
+            header::CONTENT_TYPE,
+            HeaderValue::from_static("application/problem+json"),
+        );
+        if status == StatusCode::UNAUTHORIZED {
+            response.headers_mut().insert(
+                header::WWW_AUTHENTICATE,
+                HeaderValue::from_static("Bearer"),
+            );
         }
-        return
+        response
     }
-    render.JSON(w, r, item)
 }
 ```
+
+## SQLx Conversion
+
+```rust
+impl AppError {
+    pub fn not_found(resource: &'static str, id: impl ToString) -> Self {
+        Self::NotFound {
+            resource,
+            id: id.to_string(),
+        }
+    }
+
+}
+
+impl From<sqlx::Error> for AppError {
+    fn from(error: sqlx::Error) -> Self {
+        if error
+            .as_database_error()
+            .map(|database_error| database_error.is_unique_violation())
+            .unwrap_or(false)
+        {
+            return Self::Conflict("unique constraint violation".to_owned());
+        }
+        Self::Database(error)
+    }
+}
+```
+
+Use `fetch_optional(...).await?.ok_or_else(|| AppError::not_found("order", id.0))` for lookups. A missing row and a row belonging to another tenant both return 404.
 
 ## Rules
 
-- **NEVER** ignore errors with `_ = someFunc()` — always handle or log
-- **NEVER** panic in library code — return errors instead
-- **ALWAYS** use `errors.Is` / `errors.As` for error inspection
-- **ALWAYS** wrap errors with context: `fmt.Errorf("getting item: %w", err)`
-- **ALWAYS** return ProblemDetail JSON from HTTP handlers
-- Service layer returns `*AppError`; handlers write ProblemDetail responses
-- Use `slog` for structured error logging
-- Reserve `panic` for truly unrecoverable situations; recover in middleware
+- Never throw away an error with `_` or `let _ =`.
+- Never leak database details, stack traces, or internal paths in API responses.
+- Use `AppError::NotFound` only when the caller supplies the resource name and ID.
+- Convert unique constraint failures to `Conflict`.
+- Log `Database` and `Internal` causes with `tracing::error!`.
+- Services return domain-specific `AppError` variants; handlers do not remap them.
+- Prefer `anyhow::Context` inside startup code, then convert to `AppError::Internal` at the boundary.
+
+## Exception-to-HTTP Mapping
+
+| Variant | HTTP Status | When |
+|---------|-------------|------|
+| `BadRequest` | 400 | Malformed JSON or request shape rejected before validation |
+| `Validation` | 400 | `validator::Validate` failure |
+| `Unauthorized` | 401 | Missing or invalid token |
+| `Forbidden` | 403 | Authenticated but lacking permission |
+| `NotFound` | 404 | Tenant-scoped resource is absent |
+| `Conflict` | 409 | Unique violation or business conflict |
+| `Database` | 500 | Sanitized persistence failure |
+| `Internal` | 500 | Sanitized unexpected failure |
 
 ## See Also
 
-- `observability.instructions.md` — Structured logging, error tracking
-- `api-patterns.instructions.md` — Error response format, status codes
-- `messaging.instructions.md` — Dead letter queues, retry strategies
+- `observability.instructions.md` — Structured logs and trace fields
+- `api-patterns.instructions.md` — Problem response contract
+- `security.instructions.md` — Auth and tenant error boundaries
 
 ---
 
@@ -134,19 +212,18 @@ func (h *ItemHandler) GetByID(w http.ResponseWriter, r *http.Request) {
 
 | Shortcut | Why It Breaks |
 |----------|--------------|
-| "This operation can't fail" | Every I/O operation can fail — network timeouts, disk full, permission denied. If it touches external state, it fails. |
-| "Using `.unwrap()` is fine here" | `.unwrap()` panics on `Err`/`None`, crashing the server. Use `?` operator, `.map_err()`, or `.unwrap_or_else()` with proper error handling. |
-| "Logging the error is enough" | Logging without returning means the caller continues with invalid state. Propagate errors with `?` so the caller can handle them. |
-| "The caller handles errors, I don't need to" | If the caller expected your function to return `Ok` unconditionally, the unexpected `Err` is a surprise. Define your error contract explicitly via the return type. |
-| "Using `String` for errors is simpler than custom types" | `String` errors can't be matched programmatically. Use `thiserror` to derive structured error enums that callers can handle precisely. |
+| "I'll map this error in the handler" | Scattered mappings drift. `AppError` is the one HTTP error contract. |
+| "RowNotFound always means 404" | Without resource context the message is useless. Map it where the resource and id are known. |
+| "Internal details help API clients debug" | They leak table names, paths, and stack traces. Log internals server-side only. |
+| "A string error is enough" | Strings lose status, category, and validation details. Use the typed variant. |
+| "Validation can return 500 during early development" | Client input failures are not server failures; use the validation variant immediately. |
 
 ---
 
 ## Warning Signs
 
-- `.unwrap()` or `.expect()` in production code paths — panic on failure
-- Error types are `String` or `Box<dyn Error>` instead of structured enums
-- Error responses expose internal `Debug` output to API consumers
-- Functions that `panic!` for recoverable errors instead of returning `Result<T, E>`
-- Missing timeout configuration on async HTTP calls (no cancellation path)
-- Retry logic without a maximum retry count or exponential backoff (infinite retry loops)
+- A route returns `StatusCode::INTERNAL_SERVER_ERROR` manually.
+- `sqlx::Error::RowNotFound` is converted without naming the resource.
+- `tracing::error!` includes request bodies, secrets, or token values.
+- A service returns `anyhow::Error` directly to a handler.
+- Error JSON lacks `type`, `title`, `status`, and `detail`.

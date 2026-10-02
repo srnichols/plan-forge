@@ -1,7 +1,7 @@
 ---
 name: forge-quench
-description: "Systematically reduce Rust code complexity while preserving exact behavior — measure, understand, propose, prove, report. Use after a feature is complete and tests pass, when code works but is harder to maintain than it should be."
-argument-hint: "[optional: specific files or directories to simplify, e.g. 'src/handlers/' or 'src/handlers/order.rs']"
+description: "Systematically simplify Rust code while preserving behavior — measure, understand, propose, prove, report. Use after a feature works and tests pass, when Axum services, SQLx repositories, or async workflows are harder to maintain than necessary."
+argument-hint: "[optional: specific files or directories to simplify, e.g. 'src/services/' or 'src/services/order_service.rs']"
 tools:
   - run_in_terminal
   - read_file
@@ -10,7 +10,7 @@ tools:
   - forge_sweep
 ---
 
-# Forge Quench — Code Simplification Skill
+# Forge Quench — Rust Code Simplification Skill
 
 > Named after the metallurgical quenching process — rapidly cooling hot metal simplifies its crystal structure and hardens it.
 
@@ -21,151 +21,128 @@ tools:
 
 ### 1. Measure Complexity
 
-Identify the most complex functions in the target files. Use Rust-appropriate static analysis:
+Identify the most complex Rust functions in the target.
 
 ```bash
-# Cognitive complexity warnings via Clippy
-cargo clippy -- -W clippy::cognitive_complexity
-
-# Line counts per file/module
-tokei <target>
-
-# Count functions exceeding 50 lines
-grep -rn "fn " <target> --include="*.rs" | head -30
-
-# Manual analysis: identify deep match arm nesting, nested Result chains, excessive branching
-grep -rn "match\|if let\|else\|Ok(\|Err(\|unwrap\|expect" <target> --include="*.rs" | wc -l
+cargo clippy --workspace --all-targets --all-features -- -D warnings
+grep -rn "async fn\\|fn " <target> --include="*.rs" | head -40
+grep -rn "match \\|if \\|else if\\|while \\|loop " <target> --include="*.rs" | wc -l
 ```
 
-List the **top 3–5 most complex functions** by:
-- Line count (functions >50 lines)
-- Nesting depth (>3 levels of indentation)
-- Match arm depth (nested match/if-let chains)
-- Parameter count (>4 parameters)
+List the top 3-5 candidates by:
+- Long function bodies.
+- Deeply nested `match` or `if` chains.
+- Repeated validation branches.
+- Too many parameters instead of a request/options struct.
+- Mixed concerns across handler, service, repository, and telemetry logic.
 
-> **If no functions exceed thresholds**: Report "No simplification candidates found" and STOP with a PASS.
+> **If no candidates exceed thresholds**: report "No simplification candidates found" and stop with a PASS.
 
 ### 2. Understand First (Chesterton's Fence)
 
-**Before simplifying ANY code, document WHY the complexity exists.**
+Before simplifying any function, explain why the complexity exists:
 
-For each candidate function:
-1. Read the git blame to find when and why it was written
-2. Check if comments explain the reasoning
-3. Look for edge cases the complexity handles (null checks, retry logic, fallback paths)
-4. Document your understanding in a brief note
+1. Use `git blame` to find when the branchy code appeared.
+2. Check tests for edge cases protected by the current shape.
+3. Identify tenant, transaction, and retry semantics that must survive.
+4. Note whether the complexity belongs in the current layer.
 
 ```markdown
-| Function | Lines | Why Complex | Still Valid? | Action |
-|----------|-------|-------------|-------------|--------|
-| processOrder() | 87 | Handles 3 payment providers + retry | Yes — 3 providers still active | Simplify: extract per-provider strategies |
-| validateInput() | 62 | Legacy regex for 5 country formats | Partially — 2 formats deprecated | Simplify: remove deprecated formats |
-| buildReport() | 45 | Single function, low nesting | N/A — not complex enough | Skip |
+| Function | Why Complex | Still Valid? | Proposed Action |
+|----------|-------------|--------------|-----------------|
+| place_order | Opens transaction and emits audit event | Yes | Extract transaction body into private service helper |
+| build_filters | Builds optional SQL predicates | Yes | Replace branch chain with QueryBuilder helper |
 ```
 
-> **If the reason is still valid and the complexity is necessary**: Leave it alone. Document WHY you're leaving it and move on. Not all complexity is bad.
+> **If the reason is still valid and extraction would obscure the rule**: leave it alone and document the rationale.
 
 ### 3. Propose Simplifications
 
-For each function marked "Simplify", propose a specific change:
+Common Rust-friendly moves:
+- Extract guard functions returning typed `AppError`.
+- Replace repeated `match` arms with small strategy structs or lookup tables.
+- Move SQL construction from services to repositories.
+- Split DTO validation from domain state transitions.
+- Convert long argument lists into an options struct.
+- Extract shutdown or telemetry setup from `main` into a focused module.
 
-**Common simplification patterns**:
-- **Extract Method** — long function → smaller named functions
-- **Replace Conditional with Polymorphism** — switch/if-else → strategy pattern or map lookup
-- **Remove Dead Code** — unreachable branches, unused parameters, commented-out blocks
-- **Flatten Nesting** — early returns instead of deep if/else chains
-- **Simplify Boolean Logic** — De Morgan's laws, extract named predicates
-- **Consolidate Duplicate Code** — repeated blocks → shared function (only if used 3+ times)
-
-For each proposal:
-- Show the **before** (current code)
-- Show the **after** (proposed simplification)
-- State the **rationale** (which pattern, why it's better)
-- State what **behavior is preserved** (same inputs → same outputs)
-
-> **STOP**: Do NOT apply changes yet. Present all proposals to the user for approval.
+For each proposal, state the preserved behavior, test coverage, and rollback path. Stop for user approval before editing.
 
 ### 4. Apply and Prove (One at a Time)
 
 For each approved simplification:
 
-1. **Apply** the change to the file
-2. **Run the full test suite** immediately (`cargo test`)
-3. **If tests pass**: Commit with a descriptive message:
-   ```
-   refactor(handlers): simplify error propagation in order flow
-   
-   Chesterton's Fence: <why the complexity existed>
-   Simplification: <pattern applied>
-   Behavior: unchanged — all N tests pass (`cargo test`)
-   ```
-4. **If tests FAIL**: Immediately revert the change. Do NOT fix the test — the failing test indicates the simplification changed behavior. Report the failure and move to the next candidate.
+1. Apply one refactor.
+2. Run targeted tests immediately.
+3. Run the broader Rust gate.
 
-> **CRITICAL**: One simplification per commit. Never batch simplifications together.
+```bash
+cargo fmt --all -- --check
+cargo clippy --locked --all-targets --all-features -- -D warnings
+cargo nextest run --all-targets
+```
+
+If any test fails, revert the simplification. Do not "fix" tests to match changed behavior unless the user explicitly accepts a behavior change.
 
 ### 5. Report
 
 ```
 Forge Quench Report:
-  Target:          <files/directories analyzed>
-  
-  Candidates Found:  N functions
-  Understood:        N (Chesterton's Fence documented)
-  Proposed:          N simplifications
-  Approved:          N by user
-  Applied:           N
-  Reverted:          N (test failures)
-  Skipped:           N (complexity still valid)
+  Target:             <files/directories analyzed>
+  Candidates Found:   N
+  Understood:         N
+  Proposed:           N
+  Approved:           N
+  Applied:            N
+  Reverted:           N
+  Skipped:            N
 
-  Complexity Before: <metric>
-  Complexity After:  <metric>
-  Delta:             <reduction>
+  Complexity Before:  <metric or qualitative summary>
+  Complexity After:   <metric or qualitative summary>
+  Tests:              PASS / FAIL
+  Sweep:              N markers
 
-  Tests:  All passing / N failures (reverted)
-  Sweep:  Zero new TODO/FIXME markers
-
-  Overall: PASS (simplified) / PASS (no candidates) / PARTIAL (some reverted)
+  Overall: PASS / PARTIAL / BLOCKED
 ```
 
 ## Safety Rules
 
-- NEVER simplify code you don't understand — always document the "why" first (Chesterton's Fence)
-- NEVER combine simplification with feature changes — one concern per commit
-- ALWAYS run tests after EACH simplification — not just at the end
-- STOP if any test fails — revert the simplification, don't fix the test
-- NEVER delete code that handles an edge case you haven't verified is obsolete
-- ALWAYS get user approval before applying proposed simplifications
+- Never simplify Rust code you cannot explain through Chesterton's Fence.
+- Keep refactors separate from feature or migration changes.
+- Run tests after each approved simplification.
+- Revert immediately if behavior changes unexpectedly.
+- Preserve tenant scoping, transaction boundaries, and typed errors.
+- Ask before changing public API, database schema, or error contracts.
 
 ## Temper Guards
 
 | Shortcut | Why It Breaks |
 |----------|--------------|
-| "This code is obviously redundant — just delete it" | Chesterton's Fence: understand before removing. It may handle an edge case you haven't seen. Check git blame and test coverage first. |
-| "I'll simplify and add the feature at the same time" | Mixed commits make revert impossible. Simplify first, commit, then add the feature in a separate commit. |
-| "The tests still pass so the simplification is safe" | Tests may not cover the behavior the complexity protected. Check coverage of the specific function before declaring safety. |
-| "This whole class can be replaced with a utility function" | If it's used in multiple places, you're creating a God utility. Prefer targeted simplification that preserves clear ownership. |
-| "I'll batch all the simplifications into one commit" | One commit per simplification. If a batch commit breaks tests, you can't tell which change caused it. Atomic commits enable atomic reverts. |
+| "This match arm is impossible" | Domain invariants drift. Prove impossibility with types or tests before deleting a branch. |
+| "I can move SQL into the service to shorten the repository" | That swaps line count for architectural debt and breaks unit-test seams. |
+| "A helper with `anyhow::Result` is simpler" | Generic errors can erase RFC 9457 mapping and conflict semantics. |
+| "One large refactor commit is faster" | Rust compile errors and behavior regressions become hard to isolate. |
+| "Clippy is enough proof" | Clippy does not verify business behavior, tenant filters, or migrations. |
 
 ## Warning Signs
 
-- Code deleted without checking git blame or documenting why it existed
-- Multiple simplifications combined in a single commit
-- Tests not run between individual simplifications
-- Complexity "reduced" by moving it to a different file (shuffling, not simplifying)
-- Functions renamed without updating all call sites and documentation
-- Simplification introduced new TODO/FIXME markers ("I'll clean this up later")
+- Extracted helpers need many mutable references.
+- Simplification removes an explicit tenant or transaction argument.
+- New generic utilities hide domain vocabulary.
+- Tests are updated before proving the old behavior.
+- Refactor introduces new `.unwrap()` in production code.
 
 ## Exit Proof
 
 After completing this skill, confirm:
-- [ ] Complexity metrics reduced (paste before/after measurement)
-- [ ] All tests pass after every simplification (paste final test output)
-- [ ] No behavior changes — same inputs produce same outputs
-- [ ] Each simplification committed separately with Chesterton's Fence rationale
-- [ ] `forge_sweep` shows zero new TODO/FIXME/HACK markers introduced
-- [ ] Functions that were complex for valid reasons are documented and left unchanged
+- [ ] Candidate rationale documented
+- [ ] Approved simplifications applied one at a time
+- [ ] `cargo nextest run --all-targets` passes after the last change
+- [ ] No behavior changes unless explicitly approved
+- [ ] `forge_sweep` shows no new TODO/FIXME/HACK markers
+- [ ] Skipped complex functions have a reason
 
-## Persistent Memory (if OpenBrain is configured)
+## Persistent Memory — simplification
 
-- **Before simplifying**: `search_thoughts("code complexity", project: "<YOUR PROJECT NAME>", created_by: "copilot-vscode", type: "pattern")` — load prior simplification decisions, functions intentionally left complex, and patterns that worked
-- **After simplifying**: `capture_thought("Forge Quench: <N functions simplified, N skipped — key changes>", project: "<YOUR PROJECT NAME>", created_by: "copilot-vscode", source: "skill-forge-quench")` — persist what was simplified and what was intentionally left complex for future sessions
+- **Before simplifying**: recall intentionally complex Rust modules and successful extraction patterns.
+- **After simplifying**: capture what changed, what stayed complex, and the tests that proved behavior.

@@ -1,115 +1,108 @@
 ---
-description: "Scaffold request/response structs with JSON tags, validation tags, and mapping from domain models."
+description: "Scaffold Rust request/response DTOs with serde, validator, utoipa schemas, keyset pagination, and mapping from domain entities."
 agent: "agent"
 tools: [read, edit, search]
 ---
-# Create New DTO (Request/Response Struct)
+# Create New DTO (Rust)
 
-Scaffold request and response structs that separate API contracts from domain models.
+Scaffold request and response DTOs that separate API contracts from domain entities and SQLx rows.
 
 ## Required Pattern
 
-### Response Struct
-```Rust
-// Returned from API handlers — JSON-serializable
-type {EntityName}Response struct {
-    ID          string `json:"id"`
-    Name        string `json:"name"`
-    Description string `json:"description,omitempty"`
-    CreatedAt   string `json:"created_at"` // ISO 8601
-    UpdatedAt   string `json:"updated_at"`
+### Response DTO
+
+```rust
+use time::OffsetDateTime;
+use utoipa::ToSchema;
+use uuid::Uuid;
+
+#[derive(Debug, Clone, serde::Serialize, ToSchema)]
+pub struct {EntityName}Response {
+    pub id: Uuid,
+    pub reference: String,
+    pub status: String,
+    pub currency: String,
+    pub total_cents: i64,
+    pub created_at: OffsetDateTime,
 }
 ```
 
-### Create Request Struct
-```Rust
-type Create{EntityName}Request struct {
-    Name        string `json:"name"        validate:"required,max=200"`
-    Description string `json:"description" validate:"max=2000"`
+### Create Request DTO
+
+```rust
+use validator::Validate;
+
+#[derive(Debug, Clone, serde::Deserialize, Validate, utoipa::ToSchema)]
+pub struct Create{EntityName}Request {
+    #[validate(length(min = 1, max = 64))]
+    pub reference: String,
+    #[validate(length(equal = 3))]
+    pub currency: String,
+    #[validate(length(max = 2000))]
+    pub notes: Option<String>,
 }
 ```
 
-### Update Request Struct
-```Rust
-type Update{EntityName}Request struct {
-    Name        string `json:"name"        validate:"required,max=200"`
-    Description string `json:"description" validate:"max=2000"`
+### Custom Validation
+
+```rust
+use validator::{Validate, ValidationError};
+
+fn valid_slug(value: &str) -> Result<(), ValidationError> {
+    if value
+        .chars()
+        .all(|ch| ch.is_ascii_lowercase() || ch.is_ascii_digit() || ch == '-')
+    {
+        Ok(())
+    } else {
+        Err(ValidationError::new("slug"))
+    }
+}
+
+#[derive(Debug, serde::Deserialize, Validate)]
+pub struct CreateCategoryRequest {
+    #[validate(custom(function = "valid_slug"))]
+    pub slug: String,
 }
 ```
 
-### Validation (Rust-playground/validator)
-```Rust
-import "github.com/Rust-playground/validator/v10"
+### Mapping
 
-var validate = validator.New()
+```rust
+use crate::domain::{EntityName, {EntityName}Id};
 
-func decodeAndValidate[T any](r *http.Request) (T, error) {
-    var req T
-    if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-        return req, fmt.Errorf("invalid JSON: %w", err)
+impl From<{EntityName}> for {EntityName}Response {
+    fn from(entity: {EntityName}) -> Self {
+        Self {
+            id: entity.id.0,
+            reference: entity.reference,
+            status: entity.status.to_string(),
+            currency: entity.currency,
+            total_cents: entity.total_cents,
+            created_at: entity.created_at,
+        }
     }
-    if err := validate.Struct(req); err != nil {
-        return req, fmt.Errorf("validation failed: %w", err)
-    }
-    return req, nil
-}
-
-// Usage in handler
-func (h *Handler) Create(w http.ResponseWriter, r *http.Request) {
-    req, err := decodeAndValidate[Create{EntityName}Request](r)
-    if err != nil {
-        writeProblem(w, http.StatusBadRequest, err.Error())
-        return
-    }
-    // ...
-}
-```
-
-### Mapping Functions
-```Rust
-func toResponse(entity *model.{EntityName}) {EntityName}Response {
-    return {EntityName}Response{
-        ID:          entity.ID.String(),
-        Name:        entity.Name,
-        Description: entity.Description,
-        CreatedAt:   entity.CreatedAt.Format(time.RFC3339),
-        UpdatedAt:   entity.UpdatedAt.Format(time.RFC3339),
-    }
-}
-
-func toResponseList(entities []*model.{EntityName}) []{EntityName}Response {
-    results := make([]{EntityName}Response, 0, len(entities))
-    for _, e := range entities {
-        results = append(results, toResponse(e))
-    }
-    return results
 }
 ```
 
 ## Paged Response Wrapper
-```Rust
-type PagedResult[T any] struct {
-    Items       []T  `json:"items"`
-    Page        int  `json:"page"`
-    PageSize    int  `json:"page_size"`
-    TotalCount  int  `json:"total_count"`
-    TotalPages  int  `json:"total_pages"`
-    HasNext     bool `json:"has_next"`
-    HasPrevious bool `json:"has_previous"`
-}
+
+```rust
+pub type {EntityName}Page = crate::pagination::Page<{EntityName}Response>;
 ```
+
+Define `Page<T>` and `PageRequest` once in `crate::pagination`; DTO modules reuse that wrapper rather than declaring a second pagination type.
 
 ## Rules
 
-- NEVER return domain models directly from handlers — always map to response structs
-- NEVER decode directly into domain models — always use request structs
-- Use `json` struct tags for all fields (snake_case in JSON, PascalCase in Rust)
-- Use `validate` struct tags with `Rust-playground/validator`
-- Use generics (`decodeAndValidate[T]`) for reusable decode+validate
-- Keep DTOs in `internal/handler/` or `internal/dto/` — not in domain
-- Use `omitempty` for optional fields
+- Never return SQLx row structs or domain entities directly from handlers.
+- Never accept domain entities as JSON input.
+- Derive `serde::Deserialize` on request DTOs and `serde::Serialize` on response DTOs.
+- Derive `validator::Validate` for write requests and run it through `ValidatedJson<T>`.
+- Keep DTOs under `src/dto/`, separate from domain and repository rows.
+- Use `Option<T>` only for truly optional fields; missing required fields should fail deserialization or validation.
 
 ## Reference Files
 
 - [API patterns](../instructions/api-patterns.instructions.md)
-- [Architecture principles](../instructions/architecture-principles.instructions.md)
+- Follow the architecture-principles instruction file for DTO/domain separation.

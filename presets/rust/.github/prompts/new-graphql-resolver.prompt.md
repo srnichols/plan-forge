@@ -1,171 +1,152 @@
 ---
-description: "Scaffold a gqlgen GraphQL resolver with queries, mutations, dataloaders, and schema-first patterns."
+description: "Scaffold an async-graphql resolver with queries, mutations, DataLoader, guards, and tenant scoping."
 agent: "agent"
 tools: [read, edit, search]
 ---
 # Create New GraphQL Resolver
 
-Scaffold a GraphQL resolver using gqlgen with schema-first design, dataloaders, and separation of concerns.
+Scaffold a Rust resolver using `async-graphql` and `async-graphql-axum`.
 
-## Required Pattern
+## GraphQL Types
 
-### Schema (schema.graphqls)
-```graphql
-type {EntityName} {
-  id: ID!
-  name: String!
-  description: String
-  createdAt: DateTime!
-  updatedAt: DateTime!
+```rust
+use async_graphql::{InputObject, SimpleObject};
+use uuid::Uuid;
+
+#[derive(Debug, Clone, SimpleObject)]
+pub struct {EntityName}Type {
+    pub id: Uuid,
+    pub reference: String,
+    pub status: String,
+    pub currency: String,
+    pub description: Option<String>,
 }
 
-input Create{EntityName}Input {
-  name: String!
-  description: String
+impl From<crate::domain::{EntityName}> for {EntityName}Type {
+    fn from(entity: crate::domain::{EntityName}) -> Self {
+        Self {
+            id: entity.id.0,
+            reference: entity.reference,
+            status: entity.status.to_string(),
+            currency: entity.currency,
+            description: None,
+        }
+    }
 }
 
-input Update{EntityName}Input {
-  name: String!
-  description: String
-}
-
-extend type Query {
-  {entityName}(id: ID!): {EntityName}
-  {entityName}s(page: Int = 1, pageSize: Int = 20): {EntityName}Connection!
-}
-
-extend type Mutation {
-  create{EntityName}(input: Create{EntityName}Input!): {EntityName}!
-  update{EntityName}(id: ID!, input: Update{EntityName}Input!): {EntityName}!
-  delete{EntityName}(id: ID!): Boolean!
+#[derive(InputObject)]
+pub struct Create{EntityName}Input {
+    pub reference: String,
+    pub currency: String,
+    pub notes: Option<String>,
 }
 ```
 
-### Resolver Implementation
-```Rust
-package graph
+## Query Resolver
 
-type {entityName}Resolver struct {
-    service *service.{EntityName}Service
-}
+```rust
+use async_graphql::{Context, Object, Result};
+use uuid::Uuid;
 
-func (r *queryResolver) {EntityName}(ctx impl Future + '_, id string) (*model.{EntityName}, error) {
-    entity, err := r.service.FindByID(ctx, id)
-    if err != nil {
-        return nil, err
-    }
-    return toGraphQL{EntityName}(entity), nil
-}
+pub struct {EntityName}Query;
 
-func (r *queryResolver) {EntityName}s(ctx impl Future + '_, page *int, pageSize *int) (*model.{EntityName}Connection, error) {
-    p, ps := 1, 20
-    if page != nil { p = *page }
-    if pageSize != nil { ps = *pageSize }
-
-    result, err := r.service.FindPaged(ctx, p, ps)
-    if err != nil {
-        return nil, err
-    }
-    return toGraphQL{EntityName}Connection(result), nil
-}
-```
-
-### Mutation Resolver
-```Rust
-func (r *mutationResolver) Create{EntityName}(
-    ctx impl Future + '_, input model.Create{EntityName}Input,
-) (*model.{EntityName}, error) {
-    entity, err := r.service.Create(ctx, fromGraphQLCreate(input))
-    if err != nil {
-        return nil, err
-    }
-    return toGraphQL{EntityName}(entity), nil
-}
-
-func (r *mutationResolver) Update{EntityName}(
-    ctx impl Future + '_, id string, input model.Update{EntityName}Input,
-) (*model.{EntityName}, error) {
-    entity, err := r.service.Update(ctx, id, fromGraphQLUpdate(input))
-    if err != nil {
-        return nil, err
-    }
-    return toGraphQL{EntityName}(entity), nil
-}
-```
-
-### DataLoader (N+1 Prevention)
-```Rust
-package dataloader
-
-import (
-    "context"
-    "github.com/graph-gophers/dataloader/v7"
-)
-
-type {EntityName}Loader struct {
-    service *service.{EntityName}Service
-}
-
-func New{EntityName}Loader(svc *service.{EntityName}Service) *dataloader.Loader[string, *model.{EntityName}] {
-    return dataloader.NewBatchedLoader(
-        func(ctx impl Future + '_, keys []string) []*dataloader.Result[*model.{EntityName}] {
-            entities, _ := svc.FindByIDs(ctx, keys)
-            entityMap := make(map[string]*model.{EntityName}, len(entities))
-            for _, e := range entities {
-                entityMap[e.ID] = e
-            }
-            results := make([]*dataloader.Result[*model.{EntityName}], len(keys))
-            for i, key := range keys {
-                results[i] = &dataloader.Result[*model.{EntityName}]{Data: entityMap[key]}
-            }
-            return results
-        },
-    )
-}
-
-// Middleware to inject loaders into context
-func Middleware(svc *service.{EntityName}Service) func(http.Handler) http.Handler {
-    return func(next http.Handler) http.Handler {
-        return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-            ctx := context.WithValue(r.Context(), loadersKey, &Loaders{
-                {EntityName}: New{EntityName}Loader(svc),
-            })
-            next.ServeHTTP(w, r.WithContext(ctx))
-        })
+#[Object]
+impl {EntityName}Query {
+    async fn {entity_name}(&self, ctx: &Context<'_>, id: Uuid) -> Result<Option<{EntityName}Type>> {
+        let user = ctx.data::<crate::auth::AuthUser>()?;
+        let service = ctx.data::<{EntityName}Service>()?;
+        let entity = service.get(user, crate::domain::{EntityName}Id(id)).await.map_err(crate::graphql::gql_error)?;
+        Ok(Some(entity.into()))
     }
 }
 ```
 
-### Field Resolver Using DataLoader
-```Rust
-func (r *orderResolver) {EntityName}(ctx impl Future + '_, obj *model.Order) (*model.{EntityName}, error) {
-    loaders := ForContext(ctx)
-    thunk := loaders.{EntityName}.Load(ctx, obj.{EntityName}ID)
-    return thunk()
+## Mutation Resolver
+
+```rust
+pub struct {EntityName}Mutation;
+
+#[Object]
+impl {EntityName}Mutation {
+    #[graphql(guard = "RequireRole(crate::auth::Role::Admin)")]
+    async fn create_{entity_name}(
+        &self,
+        ctx: &Context<'_>,
+        input: Create{EntityName}Input,
+    ) -> Result<{EntityName}Type> {
+        let user = ctx.data::<crate::auth::AuthUser>()?;
+        let service = ctx.data::<{EntityName}Service>()?;
+        let request = Create{EntityName}Request {
+            reference: input.reference,
+            currency: input.currency,
+            notes: input.notes,
+        };
+        service.create(user, request).await.map_err(crate::graphql::gql_error).map(Into::into)
+    }
 }
 ```
 
-### Mapping Functions
-```Rust
-func toGraphQL{EntityName}(e *domain.{EntityName}) *model.{EntityName} {
-    return &model.{EntityName}{
-        ID:          e.ID,
-        Name:        e.Name,
-        Description: &e.Description,
-        CreatedAt:   e.CreatedAt.Format(time.RFC3339),
-        UpdatedAt:   e.UpdatedAt.Format(time.RFC3339),
+## DataLoader
+
+```rust
+use async_graphql::dataloader::Loader;
+use std::{collections::HashMap, sync::Arc};
+use uuid::Uuid;
+
+pub struct {EntityName}Loader<R> {
+    pub repository: Arc<R>,
+    pub tenant_id: crate::domain::TenantId,
+}
+
+impl<R> Loader<Uuid> for {EntityName}Loader<R>
+where
+    R: {EntityName}Repository + Send + Sync + 'static,
+{
+    type Value = {EntityName}Type;
+    type Error = Arc<anyhow::Error>;
+
+    async fn load(&self, keys: &[Uuid]) -> Result<HashMap<Uuid, Self::Value>, Self::Error> {
+        self.repository
+            .find_many(
+                self.tenant_id,
+                &keys.iter().copied().map(crate::domain::{EntityName}Id).collect::<Vec<_>>(),
+            )
+            .await
+            .map(|rows| rows.into_iter().map(|row| (row.id.0, row.into())).collect())
+            .map_err(|error| Arc::new(error.into()))
+    }
+}
+```
+
+## Schema Registration
+
+```rust
+use async_graphql::{EmptySubscription, Schema};
+
+pub type {EntityName}Schema = Schema<{EntityName}Query, {EntityName}Mutation, EmptySubscription>;
+
+pub fn build_{entity_name}_schema(production: bool) -> {EntityName}Schema {
+    let builder = Schema::build({EntityName}Query, {EntityName}Mutation, EmptySubscription)
+        .limit_depth(12)
+        .limit_complexity(256);
+
+    if production {
+        builder.disable_introspection().finish()
+    } else {
+        builder.finish()
     }
 }
 ```
 
 ## Rules
 
-- ALWAYS use dataloaders for related entity resolution — never query inside field resolvers
-- Resolvers should be thin — delegate to services for business logic
-- Create a fresh set of dataloaders per request (middleware pattern)
-- Use gqlgen schema-first approach — run `Rust generate` after schema changes
-- Map between GraphQL model types and domain types explicitly
-- Keep schema in `graph/schema/`, resolvers in `graph/`, dataloaders in `graph/dataloader/`
+- Resolvers stay thin and call services for business logic.
+- Use guards for GraphQL authorization and services for final enforcement.
+- Never accept `tenant_id` in GraphQL input for tenant-owned records.
+- Batch related object loading with `DataLoader`.
+- Set depth and complexity limits on every schema.
+- Disable introspection in production.
+- Keep GraphQL modules under `src/graphql/`.
 
 ## Reference Files
 

@@ -1,6 +1,6 @@
 ---
 name: test-sweep
-description: Run all test suites (unit, integration, API, E2E) and aggregate results into a summary report. Use after completing execution slices or before the Review Gate.
+description: Run all Rust test suites and quality gates — formatting, clippy, nextest, SQLx offline metadata, docs, coverage, and completeness scan. Use after execution slices or before review.
 argument-hint: "[optional: specific test category to run]"
 tools: [run_in_terminal, read_file, forge_sweep]
 ---
@@ -12,84 +12,94 @@ tools: [run_in_terminal, read_file, forge_sweep]
 
 ## Steps
 
-### 1. Unit Tests
+### 1. Formatting and Lints
 ```bash
-Rust test ./internal/... -v -count=1 -tags=unit 2>&1 | tee TestResults/unit.txt
+cargo fmt --all -- --check
+cargo clippy --workspace --all-targets --all-features -- -D warnings
 ```
 
-### Conditional: Unit Test Failure
-> If unit tests fail → skip integration/E2E tests, Rust directly to Report.
+### Conditional: Static Gate Failure
+> If formatting or clippy fails, report the failing command and skip slower suites unless the user asks to continue.
 
-### 2. Integration Tests
+### 2. Unit and Integration Tests
 ```bash
-# Requires database running (Docker or local)
-Rust test ./tests/integration/... -v -count=1 -tags=integration 2>&1 | tee TestResults/integration.txt
+cargo nextest run --all-targets
 ```
 
-### 3. API Tests
+### 3. SQLx Build Gate
 ```bash
-Rust test ./tests/api/... -v -count=1 -tags=api 2>&1 | tee TestResults/api.txt
+cargo check --all-targets --locked
 ```
 
-### 4. E2E Tests (if available)
+### 4. SQLx Metadata Staleness
+Set `DATABASE_URL` to a PostgreSQL 18 database, then run:
+
 ```bash
-Rust test ./tests/e2e/... -v -count=1 -tags=e2e 2>&1 | tee TestResults/e2e.txt
+sqlx migrate run
+cargo sqlx prepare --check
 ```
 
-### 5. Race Detection
+### 5. Documentation Tests
 ```bash
-Rust test ./... -race -count=1 2>&1 | tee TestResults/race.txt
+cargo test --doc
 ```
 
-### 6. Completeness Scan
-Use the `forge_sweep` MCP tool to scan for TODO/FIXME/stub markers in the codebase.
-
-### 7. Report
-Aggregate results:
+### 6. Coverage
+```bash
+cargo llvm-cov --all-features --workspace --summary-only
 ```
-✅ Unit:        X passed, Y failed
-✅ Integration: X passed, Y failed
-✅ API:         X passed, Y failed
-✅ E2E:         X passed, Y failed
-✅ Race:        No data races detected
-✅ Sweep:       N markers (TODO/FIXME/stub)
-──────────────────────────────────────
-Total:          X passed, Y failed
+
+### 7. Completeness Scan
+Use `forge_sweep` to scan for TODO, FIXME, HACK, stub, placeholder, and mock-data markers.
+
+### 8. Report
+```
+Rust Test Sweep:
+  Format:       PASS / FAIL
+  Clippy:       PASS / FAIL
+  Nextest:      X passed, Y failed, Z skipped
+  SQLx build:   PASS / FAIL
+  SQLx stale:   PASS / FAIL
+  Doc tests:    PASS / FAIL
+  Coverage:     XX%
+  Sweep:        N markers
+
+Overall: PASS / FAIL
 ```
 
 ## On Failure
-- Show failed test names and error messages
-- Read the failing test source to diagnose
-- Check for race conditions with `-race` flag
-- Suggest fixes (ask before applying)
-
+- Show failing command, exit status, and failing test names.
+- Read the failing test source and nearby implementation.
+- Classify the failure before suggesting a fix.
+- Ask before editing code.
 
 ## Temper Guards
 
 | Shortcut | Why It Breaks |
 |----------|--------------|
-| "Skipped tests are probably flaky" | Skipped tests hide real regressions. Each skip needs a documented reason and a linked issue. |
-| "80% coverage is good enough" | Coverage thresholds prevent ratcheting down. If baseline is 85%, dropping to 80% means new code is untested. |
-| "Integration tests cover the unit tests" | Integration tests are slow and brittle. Unit tests catch logic errors in milliseconds, not minutes. |
-| "I'll fix the failing test later" | Broken tests normalize failure. The suite must be green before any code ships. |
+| "cargo test is close enough to nextest" | nextest catches suite configuration and produces the same output CI expects. |
+| "SQLx prepare is only a database task" | Offline metadata is part of the production Docker build contract. |
+| "Coverage can be skipped for small changes" | Small untested branches accumulate into production incidents. |
+| "Ignored tests are harmless" | Ignored tests need a reason and issue; otherwise they normalize broken behavior. |
 
 ## Warning Signs
 
-- Skipped tests without documented reason — skip annotations present without explanation
-- Coverage decreased from baseline — new code merged without maintaining coverage threshold
-- No test output included in report — tests "passed" but no actual results pasted
-- Test suite not run before PR — commit pushed without running the full sweep first
-- Flaky test dismissed — intermittent failure ignored instead of investigated
+- `cargo nextest run` is missing from the report.
+- `cargo sqlx prepare --check` fails after migrations were applied to the database in `DATABASE_URL`.
+- Testcontainers tests are skipped because Docker was not started.
+- Coverage drops without explanation.
+- `forge_sweep` finds new TODO/FIXME/HACK markers in production code.
 
 ## Exit Proof
 
 After completing this skill, confirm:
-- [ ] All suites executed — `cargo test` completes
-- [ ] Zero unexplained failures (every failure has a documented reason)
-- [ ] Coverage report generated — `cargo tarpaulin` or `cargo llvm-cov`
-- [ ] Coverage not decreased from baseline
-- [ ] `forge_sweep` found zero production code markers (TODO/FIXME/stub)
-## Persistent Memory (if OpenBrain is configured)
+- [ ] Formatting and clippy gates ran
+- [ ] `cargo nextest run --all-targets` completed
+- [ ] SQLx offline metadata check completed or was not applicable with a reason
+- [ ] Coverage summary generated
+- [ ] Completeness scan reported zero new production markers
 
-- **Before running tests**: `search_thoughts("test failures", project: "<YOUR PROJECT NAME>", created_by: "copilot-vscode", type: "bug")` — load known flaky tests, recurring failures, and environment-specific issues
-- **After test sweep**: `capture_thought("Test sweep: <N passed, N failed — key failure patterns>", project: "<YOUR PROJECT NAME>", created_by: "copilot-vscode", source: "skill-test-sweep")` — persist failure patterns and flaky test discoveries
+## Persistent Memory — test sweep
+
+- **Before running tests**: recall known flakes, Docker/Testcontainers issues, and SQLx metadata traps.
+- **After the sweep**: capture counts, failures, skipped tests, and infrastructure problems.

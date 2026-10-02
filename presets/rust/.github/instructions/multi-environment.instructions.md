@@ -1,160 +1,180 @@
 ---
-description: Multi-environment configuration — Dev/staging/production settings, environment detection, config management
-applyTo: '**/*.Rust,**/.env*'
+description: Multi-environment configuration — Dev/staging/production settings, env loading, health checks, migrations
+applyTo: '**/.env*,**/config/**/*.toml,**/src/config.rs,**/src/main.rs,**/docker-compose*.yml'
 ---
 
-# Multi-Environment Configuration (Rust)
+# Multi-Environment Configuration (Rust/Axum)
 
 ## Environment Hierarchy
 
 | Environment | Purpose | Config Source | Detection |
 |-------------|---------|---------------|-----------|
-| `development` | Local dev | `.env.development` / `config.dev.yaml` | `APP_ENV` |
-| `staging` | Pre-production | `.env.staging` / `config.staging.yaml` | `APP_ENV` |
-| `production` | Live traffic | environment variables only | `APP_ENV` |
-| `test` | Automated tests | `.env.test` / `config.test.yaml` | `APP_ENV` |
+| `development` | Local development | `.env` plus `config/development.toml` | `APP_ENVIRONMENT` |
+| `production` | Live traffic | Secret manager and platform env vars | `APP_ENVIRONMENT` |
+| `test` | Automated tests | Test harness env vars | `APP_ENVIRONMENT` |
 
 ## Configuration Loading Order
 
 ```
-config.yaml                   ← Base defaults
-config.{APP_ENV}.yaml         ← Environment-specific overrides
-.env / .env.{APP_ENV}         ← Dotenv overrides (dev/staging only)
-Environment variables          ← Infrastructure overrides (highest priority)
+config/default.toml       ← Base non-secret defaults, committed
+config/{APP_ENVIRONMENT}.toml ← Optional environment override, committed when non-secret
+.env                      ← Local developer convenience, gitignored
+APP_* / APP_*__* env vars ← Runtime source of truth
 ```
 
 ## Rules
 
-- **NEVER** put secrets in config files committed to git
-- **NEVER** hardcode environment-specific URLs
-- **ALWAYS** validate config at startup — fail fast on missing values
-- **ALWAYS** use a typed config struct parsed once at startup
-- In production, inject all secrets via environment variables
+- Never commit secrets in `.env`, TOML, YAML, Rust source, or test fixtures.
+- Validate settings at startup and exit before binding a listener if config is invalid.
+- Use one typed `Settings` struct; do not scatter `std::env::var` across the codebase.
+- Secrets use `secrecy::SecretString` and are not formatted with `Debug` or `Display`.
+- Keep `.env.example` complete enough for operators to discover required keys.
+- Infrastructure environment variables override local files.
 
-## Typed Config Struct
+## Typed Configuration
 
-```Rust
-type Config struct {
-    Env         string `yaml:"env" env:"APP_ENV" env-default:"development"`
-    Port        int    `yaml:"port" env:"PORT" env-default:"8080"`
-    DatabaseURL string `yaml:"database_url" env:"DATABASE_URL" env-required:"true"`
-    RedisURL    string `yaml:"redis_url" env:"REDIS_URL"`
-    LogLevel    string `yaml:"log_level" env:"LOG_LEVEL" env-default:"info"`
-    CORSOrigins []string `yaml:"cors_origins" env:"CORS_ORIGINS" env-separator:","`
+```rust
+use secrecy::SecretString;
+use serde::Deserialize;
+
+#[derive(Debug, Clone, Deserialize)]
+pub struct Settings {
+    pub environment: Environment,
+    pub server: ServerSettings,
+    pub database: DatabaseSettings,
+    pub auth: AuthSettings,
+    pub api_token: Option<SecretString>,
 }
 
-func LoadConfig() (*Config, error) {
-    var cfg Config
-    if err := cleanenv.ReadConfig("config.yaml", &cfg); err != nil {
-        return nil, fmt.Errorf("loading config: %w", err)
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum Environment {
+    Development,
+    Test,
+    Production,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+pub struct ServerSettings {
+    pub host: String,
+    pub port: u16,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+pub struct DatabaseSettings {
+    pub url: SecretString,
+    pub max_connections: u32,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+pub struct AuthSettings {
+    pub issuer: String,
+    pub audience: String,
+    pub jwks_url: String,
+}
+```
+
+## Loading with Fail-Fast
+
+```rust
+impl Settings {
+    pub fn load() -> Result<Self, config::ConfigError> {
+        dotenvy::dotenv().ok();
+        let environment = std::env::var("APP_ENVIRONMENT").unwrap_or_else(|_| "development".to_owned());
+        config::Config::builder()
+            .add_source(config::File::with_name("config/default"))
+            .add_source(config::File::with_name(&format!("config/{environment}")).required(false))
+            .add_source(
+                config::Environment::with_prefix("APP")
+                    .prefix_separator("_")
+                    .separator("__"),
+            )
+            .build()?
+            .try_deserialize()
     }
-    // Environment variables override YAML
-    if err := cleanenv.ReadEnv(&cfg); err != nil {
-        return nil, fmt.Errorf("reading env: %w", err)
-    }
-    return &cfg, nil
 }
 ```
 
 ## Per-Environment Defaults
 
-```yaml
-# config.yaml (base)
-port: 8080
-log_level: info
+```toml
+# config/default.toml
+environment = "development"
 
-# config.development.yaml
-database_url: "postgresql://dev:devpass@localhost:5432/contoso_dev"
-cors_origins:
-  - "http://localhost:3000"
-  - "http://localhost:5173"
-log_level: debug
+[server]
+host = "0.0.0.0"
+port = 8080
 
-# config.staging.yaml
-database_url: "postgresql://staging-db:5432/contoso_staging"
-cors_origins:
-  - "https://staging.contoso.com"
-log_level: info
+[database]
+max_connections = 10
 
-# Production: all config from env vars, no YAML file needed
+[auth]
+issuer = "https://issuer.example.com"
+audience = "contoso-api"
+jwks_url = "https://issuer.example.com/.well-known/jwks.json"
 ```
+
+```bash
+# .env
+APP_DATABASE__URL=
+APP_ENVIRONMENT=development
+```
+
+Production should provide `APP_DATABASE__URL` and any token-signing or provider credentials from the deployment platform, not from a committed file.
 
 ## Environment-Conditional Code
 
-```Rust
-// ✅ Use config struct
-if cfg.Env == "development" {
-    router.Use(debugMiddleware)
+```rust
+pub fn docs_enabled(environment: &Environment) -> bool {
+    matches!(environment, Environment::Development | Environment::Test)
 }
-
-// ❌ NEVER scatter os.Getenv throughout code
-if os.Getenv("APP_ENV") == "production" { // BAD
 ```
+
+Use `Settings` values to select behavior. Do not read `APP_ENVIRONMENT` directly in handlers, repositories, or services.
 
 ## Health Checks
 
-```Rust
-router.Get("/healthz", func(w http.ResponseWriter, r *http.Request) {
-    render.JSON(w, r, map[string]string{"status": "ok"})
-})
-router.Get("/readyz", func(w http.ResponseWriter, r *http.Request) {
-    if err := db.PingContext(r.Context()); err != nil {
-        w.WriteHeader(http.StatusServiceUnavailable)
-        render.JSON(w, r, map[string]any{"status": "degraded", "db": false})
-        return
+```rust
+use axum::{extract::State, http::StatusCode};
+
+use crate::state::AppState;
+
+pub async fn ready(State(state): State<AppState>) -> StatusCode {
+    let database = sqlx::query("SELECT 1").execute(&state.db).await.is_ok();
+    if database {
+        StatusCode::NO_CONTENT
+    } else {
+        StatusCode::SERVICE_UNAVAILABLE
     }
-    render.JSON(w, r, map[string]any{"status": "ok", "db": true})
-})
+}
 ```
 
 ## Database Migrations Per Environment
 
 | Environment | Migration Strategy | Who Runs | Approval |
-|-------------|--------------------|----------|---------|
-| **development** | Embedded migrations on startup | App binary | None |
-| **test** | Embedded migrations in test setup | Test binary | Auto |
-| **staging** | CLI or embedded via CI/CD | Pipeline | Auto |
-| **production** | CLI via CI/CD pipeline step | Pipeline | Manual approval gate |
+|-------------|--------------------|----------|----------|
+| development | `sqlx migrate run` locally | Developer | None |
+| test | Apply migrations in test setup | Test harness | Automated |
+| staging | Pipeline step before deploy | CI/CD | Automated |
+| production | Reviewed pipeline step | CI/CD | Manual approval gate |
 
-### Environment-Specific Migration Config
-```yaml
-# config.development.yaml — auto-migrate on startup
-database_url: "postgresql://dev:devpass@localhost:5432/contoso_dev"
-auto_migrate: true
-
-# config.staging.yaml
-database_url: "postgresql://staging-db:5432/contoso_staging"
-auto_migrate: true       # Or false if using CLI pipeline step
-
-# Production: all config from env vars
-# DATABASE_URL=postgresql://...
-# AUTO_MIGRATE=false
-```
-
-```Rust
-// Conditional auto-migration
-if cfg.AutoMigrate {
-    if err := runMigrations(cfg.DatabaseURL); err != nil {
-        log.Fatalf("migration failed: %v", err)
-    }
-}
-```
+### Migration Commands
 
 ```bash
-# CI/CD pipeline step for production
-migrate -path migrations -database "$DATABASE_URL" version    # Check current state
-migrate -path migrations -database "$DATABASE_URL" up         # Apply pending
+sqlx migrate info
+sqlx migrate run
+cargo sqlx prepare --check
 ```
 
-- **NEVER** enable auto-migrate in production without a pipeline gate
-- **ALWAYS** use the same migration files across all environments
-- **ALWAYS** check for dirty state before applying migrations
+- Use the same migration files in every environment.
+- Do not run destructive down migrations in production without an approved rollback plan.
+- Keep `SQLX_OFFLINE=true` in builds after `.sqlx/` metadata is prepared.
 
 ---
 
 ## See Also
 
-- `database.instructions.md` — Migration strategy, expand-contract, rollback procedures
-- `deploy.instructions.md` — Container config, health checks, migration pipeline steps
-- `observability.instructions.md` — Per-environment logging and metrics
-- `messaging.instructions.md` — Broker config per environment
+- `database.instructions.md` — SQLx migration and query patterns
+- `deploy.instructions.md` — Container runtime settings
+- `observability.instructions.md` — Environment-specific logging
+- `messaging.instructions.md` — Broker URLs and worker settings

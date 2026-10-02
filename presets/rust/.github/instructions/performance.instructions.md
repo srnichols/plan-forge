@@ -1,143 +1,185 @@
 ---
-description: Performance optimization patterns — Hot/cold path analysis, concurrency, allocation reduction, query optimization
-applyTo: '**/*.Rust'
+description: Rust performance patterns — Tokio runtime health, profiling, allocations, pools
+applyTo: '**/src/**/*.rs,**/benches/**/*.rs,**/Cargo.toml,**/.cargo/**/*.toml'
 ---
 
-# Performance Patterns (Rust)
+# Rust Performance Patterns
+
+Measure before optimizing. For Rust services, the main risks are blocking the
+Tokio runtime, over-fetching from PostgreSQL, unbounded queues, accidental
+clones on hot paths, and release builds without production profile settings.
 
 ## Hot Path vs Cold Path
 
-**Hot path**: Code executed on every request (middleware, auth, serialization, DB queries).
-**Cold path**: Code run infrequently (startup, config load, migration).
+Hot paths run on every request: extractors, auth, validation, repository calls,
+serialization, cache lookup, and logging fields. Cold paths include startup
+configuration, migration checks, and one-time cache warming.
 
 Rules:
-- Optimize hot paths aggressively; cold paths can favor readability
-- Profile before optimizing — use `pprof` (`net/http/pprof`)
 
-## Frozen Data (Hot Config)
+- Benchmark the hot path before rewriting it.
+- Keep cold path code readable unless startup time is an objective metric.
+- Add tracing spans before profiling so flamegraphs are interpretable.
 
-```Rust
-// ✅ Build maps once at startup, read concurrently without locks
-var rolePermissions = map[string][]string{
-    "admin":  {"read", "write", "delete"},
-    "editor": {"read", "write"},
-    "viewer": {"read"},
-}
+## Runtime Health
 
-// ✅ Use sync.Map only when keys are dynamic and written concurrently
-var tenantCache sync.Map // store: string -> *TenantConfig
-```
+Use `tokio-console` through the `console-subscriber` crate when diagnosing
+stalls, long polls, or tasks that never yield.
 
-## Allocation Reduction
-
-```Rust
-// ❌ Creates new slice on every call
-func getIDs(items []Item) []string {
-    ids := []string{}
-    for _, item := range items { ids = append(ids, item.ID) }
-    return ids
-}
-
-// ✅ Preallocate with known length
-func getIDs(items []Item) []string {
-    ids := make([]string, 0, len(items))
-    for _, item := range items { ids = append(ids, item.ID) }
-    return ids
-}
-
-// ✅ Use sync.Pool for frequently allocated objects
-var bufPool = sync.Pool{New: func() any { return new(bytes.Buffer) }}
-```
-
-## Concurrency
-
-```Rust
-// ❌ Sequential — slow
-user, err := getUser(ctx, id)
-orders, err := getOrders(ctx, id)
-
-// ✅ Parallel with errgroup
-g, ctx := errgroup.WithContext(ctx)
-var user *User
-var orders []Order
-g.Rust(func() error { var err error; user, err = getUser(ctx, id); return err })
-g.Rust(func() error { var err error; orders, err = getOrders(ctx, id); return err })
-if err := g.Wait(); err != nil { return err }
-```
-
-- **ALWAYS** pass `impl Future + '_` through the full call chain for cancellation
-- Use `errgroup` for concurrent operations with error propagation
-- Use bounded worker pools (`semaphore` pattern) for fan-out
-
-## Database Query Performance
-
-- Use connection pooling: `sql.DB` with `SetMaxOpenConns()` and `SetMaxIdleConns()`
-- Batch queries: `WHERE id = ANY($1)` instead of querying in a loop
-- Select only needed columns — never `SELECT *`
-- Use `pgx` with prepared statements for hot queries
-- Use `COPY` protocol for bulk inserts
-
-## Server-Side Filtering
-
-```Rust
-// ❌ NEVER fetch all and filter in Rust
-rows, _ := db.Query("SELECT * FROM items")
-// then filter in Rust loop...
-
-// ✅ ALWAYS filter in the database
-rows, _ := db.QueryContext(ctx, "SELECT id, name FROM items WHERE status = $1", "active")
-```
-
-## General Rules
-
-| Pattern | When to Use |
-|---------|-------------|
-| Pre-built maps | Static lookup data at startup |
-| `sync.Pool` | Frequently allocated buffers/objects |
-| `make([]T, 0, n)` | Slices with known capacity |
-| `errgroup` | Concurrent I/O with error handling |
-| `impl Future + '_` | All functions with I/O or cancellation |
-| `pgx` prepared stmts | Hot database queries |
-| `pprof` profiling | Before any optimization work |
-
-## Memory Management
-
-### sync.Pool for Hot-Path Allocations
-```Rust
-// ✅ Pool buffers to reduce GC pressure on hot paths
-var bufPool = sync.Pool{
-	New: func() any { return new(bytes.Buffer) },
-}
-
-func handleRequest(w http.ResponseWriter, r *http.Request) {
-	buf := bufPool.Get().(*bytes.Buffer)
-	defer func() { buf.Reset(); bufPool.Put(buf) }()
-
-	// use buf for response assembly...
-	w.Write(buf.Bytes())
+```rust
+pub fn init_console_layer() {
+    console_subscriber::init();
 }
 ```
 
-### Escape Analysis & Stack Allocation
-```Rust
-// Check what escapes to the heap:
-// Rust build -gcflags '-m' ./...
+Enable Tokio runtime instrumentation in development builds used for console
+sessions:
 
-// ❌ Pointer causes escape to heap
-func newUser(name string) *User { return &User{Name: name} }
-
-// ✅ Return by value when struct is small and short-lived
-func newUser(name string) User { return User{Name: name} }
+```toml
+tokio = { version = "1.53.1", features = ["full", "tracing"] }
+console-subscriber = "0.5.0"
 ```
 
-- Use `runtime.MemStats` or `pprof` heap profiles to find leaks
-- Prefer `[]byte` + `sync.Pool` over `string` concatenation on hot paths
-- Use `arena` (experimental, Rust 1.20+) for batch allocations with known lifetimes
-- Set `GOMEMLIMIT` to prevent OOM kills in containerized deployments
+Run console-enabled builds with `RUSTFLAGS="--cfg tokio_unstable"`, for example
+`$env:RUSTFLAGS='--cfg tokio_unstable'; cargo run` in PowerShell or
+`set RUSTFLAGS=--cfg tokio_unstable && cargo run` in `cmd.exe`.
+
+Do not enable console collection in production unless the operational risk and
+data exposure have been reviewed.
+
+## Blocking Work
+
+Never run blocking file I/O, compression, password hashing, CPU-heavy parsing,
+or synchronous SDK calls directly in an async handler.
+
+```rust
+pub async fn hash_password(password: String) -> anyhow::Result<String> {
+    tokio::task::spawn_blocking(move || {
+        expensive_hash(password)
+    })
+    .await?
+}
+
+fn expensive_hash(password: String) -> anyhow::Result<String> {
+    Ok(format!("hashed:{password}"))
+}
+```
+
+For repeated CPU-heavy work, prefer a bounded worker pool or queue over
+unlimited `spawn_blocking` calls.
+
+## Database Throughput
+
+- Size `PgPoolOptions::max_connections` from load tests, not CPU count alone.
+- Select only response columns; do not hydrate full rows for list endpoints.
+- Use keyset pagination for large tables.
+- Batch related lookups with `WHERE id = ANY($1)`.
+- Run `EXPLAIN (ANALYZE, BUFFERS)` for slow queries and commit the index that
+  fixes the measured plan.
+
+Connection starvation usually appears as high acquire latency before high CPU.
+Instrument pool wait time separately from query execution.
+
+## Allocation and Clone Hygiene
+
+Prefer borrowing and `Arc` state cloning over deep clones. Clone request DTOs
+only when ownership is required beyond the current await point.
+
+```rust
+use std::sync::Arc;
+
+#[derive(Clone)]
+pub struct PricingService {
+    rules: Arc<PricingRules>,
+}
+
+pub struct PricingRules {
+    pub default_currency: String,
+}
+
+impl PricingService {
+    pub fn currency(&self) -> &str {
+        &self.rules.default_currency
+    }
+}
+```
+
+Watch for:
+
+- `to_string()` inside loops when `&str` would work.
+- `Vec` collection before streaming a response.
+- `serde_json::Value` used where a typed DTO is known.
+- cloning large DTOs to satisfy a layer boundary instead of changing the
+  boundary to accept a reference.
+
+## Profiling Toolkit
+
+| Tool | Use it for | Command |
+|------|------------|---------|
+| `tokio-console` | task stalls, busy tasks, resource waits | `tokio-console` |
+| `cargo flamegraph` | CPU hotspots in a realistic run | `cargo flamegraph --bin app` |
+| `criterion` | microbenchmarks for pure functions | `cargo bench` |
+| `cargo llvm-cov` | coverage during performance-safe refactors | `cargo llvm-cov nextest` |
+
+Criterion belongs in `benches/` and should benchmark a stable public function,
+not a private implementation detail that changes every refactor.
+
+```rust
+use criterion::{criterion_group, criterion_main, Criterion};
+
+fn normalize_key(input: &str) -> String {
+    input.trim().to_ascii_lowercase()
+}
+
+fn bench_normalize_key(c: &mut Criterion) {
+    c.bench_function("normalize_key", |b| b.iter(|| normalize_key("  PRODUCT-42  ")));
+}
+
+criterion_group!(benches, bench_normalize_key);
+criterion_main!(benches);
+```
+
+## Release Profile
+
+Production binaries should use link-time optimization and fewer codegen units
+once release build time is acceptable.
+
+```toml
+[profile.release]
+lto = "thin"
+codegen-units = 1
+strip = "symbols"
+```
+
+Measure binary size, cold start, and request latency before and after changing
+profile settings. Do not set `panic = "abort"` for a multi-tenant server:
+unwinding lets Tower/Axum catch-panic middleware convert an isolated panic into
+a failed request instead of terminating every tenant's traffic.
+
+## Caching and Backpressure
+
+Cache only data with a clear invalidation story. Add bounded queues for
+background work; unbounded channels convert traffic spikes into memory outages.
+
+```rust
+let (sender, mut receiver) = tokio::sync::mpsc::channel::<WorkItem>(512);
+
+while let Some(item) = receiver.recv().await {
+    process_item(item).await?;
+}
+```
+
+## Review Checklist
+
+- No blocking call runs on a Tokio worker thread.
+- Slow paths have spans and can be located in traces.
+- SQL list endpoints use keyset pagination or a documented small bound.
+- Cache changes include invalidation and stampede behavior.
+- Pool sizes, queue sizes, and timeouts are explicit configuration.
+- Release profile changes are benchmarked before they ship.
 
 ## See Also
 
-- `graphql.instructions.md` — DataLoader N+1 prevention, complexity limits
-- `database.instructions.md` — Query optimization, connection tuning
-- `caching.instructions.md` — Cache strategies, sync.Pool patterns
-- `observability.instructions.md` — Profiling, metrics collection
+- `database.instructions.md` — query plans, pool setup, keyset pagination
+- `caching.instructions.md` — Redis and moka cache behavior
+- `observability.instructions.md` — tracing and metrics collection

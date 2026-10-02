@@ -1,6 +1,6 @@
 ---
 name: release-notes
-description: Generate release notes from git history and CHANGELOG. Formats for GitHub Release, Slack, or email. Use before tagging a release.
+description: Generate Rust service release notes from git history, Cargo changes, migrations, OpenAPI changes, and CHANGELOG. Use before tagging or publishing a container image.
 argument-hint: "[version tag, e.g. 'v1.2.0']"
 tools: [run_in_terminal, read_file]
 ---
@@ -14,95 +14,102 @@ tools: [run_in_terminal, read_file]
 
 ### 1. Identify Release Range
 ```bash
-# Find the last tag
 git describe --tags --abbrev=0
-
-# List commits since last tag
 git log $(git describe --tags --abbrev=0)..HEAD --oneline --no-merges
 ```
 
 ### Conditional: No Tags Found
-> If no tags found → ask user for the commit range to use.
+> If no tags are present, ask the user for the commit range or previous release commit.
 
 ### 2. Categorize Changes
-Parse commit messages using conventional commit prefixes:
+Parse conventional commits and Rust-specific surfaces:
 
-| Prefix | Category | Show In Notes |
-|--------|----------|---------------|
-| `feat` | New Features | ✅ Always |
-| `fix` | Bug Fixes | ✅ Always |
-| `perf` | Performance | ✅ Always |
-| `docs` | Documentation | ✅ If significant |
-| `refactor` | Internal | ⚠️ Only if user-visible |
-| `test` | Tests | ❌ Skip |
-| `chore` | Maintenance | ❌ Skip |
-| `ci` | CI/CD | ❌ Skip |
+| Prefix or File | Category | Show In Notes |
+|----------------|----------|---------------|
+| `feat` | New Features | Always |
+| `fix` | Bug Fixes | Always |
+| `perf` | Performance | Always |
+| `migrations/` | Database Changes | Always |
+| `Cargo.toml` / `Cargo.lock` | Dependency Changes | If runtime, security, or MSRV relevant |
+| `docs` | Documentation | If user-facing |
+| `refactor` | Internal | Only if behavior or operator workflow changed |
+| `test` | Tests | Skip unless test tooling changed |
 
-### 3. Check CHANGELOG
-Read `CHANGELOG.md` for additional context:
-- Are there entries not yet in the CHANGELOG?
-- Does the CHANGELOG match the git history?
+### 3. Check Project Records
+Read `CHANGELOG.md`, `Cargo.toml`, `Cargo.lock`, OpenAPI specs, and migration filenames:
+- Does the version match `Cargo.toml` package metadata?
+- Are database migrations backward-compatible?
+- Did `rust-version` or the Docker base image change?
+- Did endpoint paths, request bodies, or response schemas change?
 
 ### 4. Generate Release Notes
 
-Format for **GitHub Release**:
 ```markdown
 ## What's New
 
 ### Features
-- **Feature name**: brief description (#PR)
+- **Feature name**: brief user-visible impact (#PR)
 
 ### Bug Fixes
-- Fix description (#PR)
+- Fix description and affected route or workflow (#PR)
 
-### Performance
-- Improvement description (#PR)
+### Operations
+- Container, migration, telemetry, or readiness change.
+
+### Dependencies
+- Notable Cargo updates, MSRV changes, or security remediations.
+
+## Database Migrations
+- Migration filename and compatibility notes.
 
 ## Breaking Changes
-- (list any breaking changes with migration steps)
+- API, config, database, or deployment changes with migration steps.
 
-## Contributors
-- @username (N commits)
+## Container Image
+- Image tag, Rust base image, runtime image, and verification gate.
 ```
 
 ### 5. Verify
-- [ ] All features from this release are listed
-- [ ] No unreleased features included
-- [ ] Breaking changes have migration instructions
-- [ ] Commit references are correct
+- [ ] Commit range is correct.
+- [ ] Cargo version and release tag agree.
+- [ ] Breaking API, config, and migration changes are called out.
+- [ ] Container image and migration notes are operator-ready.
+- [ ] CHANGELOG entry matches the generated notes.
 
 ## Safety Rules
-- NEVER fabricate changes not in the git log
-- ALWAYS flag breaking changes prominently
-- Include migration steps for any breaking change
-- Ask for human review before publishing
 
+- Never fabricate changes not present in git, Cargo, migrations, or API docs.
+- Mark breaking changes prominently with migration steps.
+- Include database compatibility and rollback implications.
+- Ask for human review before publishing notes or tagging.
 
 ## Temper Guards
 
 | Shortcut | Why It Breaks |
 |----------|--------------|
-| "The commit messages are good enough" | Commit messages are for developers. Release notes are for users — different audience, different detail level. |
-| "Nobody reads release notes" | Users, support teams, and auditors rely on release notes. Missing notes cause support tickets and compliance gaps. |
-| "I'll write them after release" | Post-release notes are always incomplete. Context fades fast — write them while the work is fresh. |
+| "Cargo.lock noise can be ignored" | Transitive updates can change TLS, database, telemetry, or security behavior. |
+| "Migrations are implementation details" | Operators need ordering, compatibility, and rollback guidance. |
+| "Container tags explain themselves" | Release consumers need to know the exact binary, base image, and verification status. |
+| "Internal API users can read the diff" | API consumers need curated contract changes, not source archaeology. |
 
 ## Warning Signs
 
-- Release notes don't mention breaking changes — API or behavior changes not flagged
-- Version number missing or inconsistent — notes reference wrong version or omit it
-- No link to CHANGELOG — notes generated but not persisted to the project's changelog
-- New features undocumented — features merged but not mentioned in notes
-- Generated from wrong commit range — notes include changes from a different release cycle
+- Release notes omit `rust-version` or base image changes.
+- Database migrations appear in git but not in notes.
+- OpenAPI changes are not categorized as breaking or non-breaking.
+- Cargo dependencies changed without security or runtime impact analysis.
+- Notes include commits outside the selected range.
 
 ## Exit Proof
 
 After completing this skill, confirm:
-- [ ] Version number present and matches the release tag
-- [ ] Breaking changes explicitly documented with migration guidance
-- [ ] Generated from actual git history (`git log` range verified)
-- [ ] CHANGELOG.md updated with the new entry
-- [ ] All merged PRs and features accounted for in the notes
-## Persistent Memory (if OpenBrain is configured)
+- [ ] Version number matches the release tag and Cargo metadata
+- [ ] Git range verified with `git log`
+- [ ] CHANGELOG entry drafted or updated
+- [ ] Database and OpenAPI changes reviewed
+- [ ] Breaking changes include migration guidance
 
-- **Before generating notes**: `search_thoughts("release", project: "<YOUR PROJECT NAME>", created_by: "copilot-vscode", type: "decision")` — load prior release decisions, breaking change precedents, and versioning conventions
-- **After release notes are finalized**: `capture_thought("Release: v<version> — <key changes summary>", project: "<YOUR PROJECT NAME>", created_by: "copilot-vscode", source: "skill-release-notes")` — persist release history for future changelog continuity
+## Persistent Memory — release notes
+
+- **Before drafting notes**: recall prior release formatting, breaking-change thresholds, and migration lessons.
+- **After finalizing notes**: capture release tag, major changes, and any follow-up documentation work.

@@ -1,125 +1,120 @@
 ---
-description: "Scaffold a background worker using goroutines, errgroup, graceful shutdown, and health checks."
+description: "Scaffold a Rust Tokio background worker with CancellationToken, JoinSet, health state, and graceful shutdown."
 agent: "agent"
 tools: [read, edit, search]
 ---
 # Create New Background Worker
 
-Scaffold a background worker following Rust concurrency patterns.
+Scaffold a long-running Rust worker that cooperates with Tokio shutdown.
 
-## Required Pattern
+## Periodic Worker Pattern
 
-```Rust
-package worker
+```rust
+use std::{sync::Arc, time::Duration};
+use tokio::time::MissedTickBehavior;
+use tokio_util::sync::CancellationToken;
+use tracing::{error, info};
 
-import (
-    "context"
-    "log/slog"
-    "time"
-
-    "github.com/contoso/app/internal/service"
-)
-
-type {EntityName}Worker struct {
-    service  *service.{EntityName}Service
-    log      *tracing::Subscriber
-    interval time.Duration
+pub struct {EntityName}Worker {
+    service: Arc<{EntityName}Service>,
+    tenant: crate::domain::TenantId,
+    batch: Vec<crate::domain::{EntityName}Id>,
+    interval: Duration,
 }
 
-func New{EntityName}Worker(svc *service.{EntityName}Service, log *tracing::Subscriber, interval time.Duration) *{EntityName}Worker {
-    return &{EntityName}Worker{service: svc, log: log, interval: interval}
-}
+impl {EntityName}Worker {
+    pub fn new(
+        service: Arc<{EntityName}Service>,
+        tenant: crate::domain::TenantId,
+        batch: Vec<crate::domain::{EntityName}Id>,
+        interval: Duration,
+    ) -> Self {
+        Self { service, tenant, batch, interval }
+    }
 
-func (w *{EntityName}Worker) Run(ctx impl Future + '_) error {
-    w.log.Info("{entityName} worker started", "interval", w.interval)
-    ticker := time.NewTicker(w.interval)
-    defer ticker.Stop()
+    pub async fn run(self, shutdown: CancellationToken) {
+        let mut ticker = tokio::time::interval(self.interval);
+        ticker.set_missed_tick_behavior(MissedTickBehavior::Delay);
+        info!(worker = "{entity_name}", "worker started");
 
-    for {
-        select {
-        case <-ctx.Done():
-            w.log.Info("{entityName} worker stopping")
-            return ctx.Err()
-        case <-ticker.C:
-            if err := w.process(ctx); err != nil {
-                w.log.Error("{entityName} worker iteration failed", "error", err)
-                // Don't return — keep the worker alive
+        loop {
+            tokio::select! {
+                _ = shutdown.cancelled() => break,
+                _ = ticker.tick() => {
+                    for id in &self.batch {
+                        if let Err(error) = self.service.mark_processed(self.tenant, *id).await {
+                            error!(worker = "{entity_name}", {entity_name}_id = %id.0, ?error, "worker item failed");
+                        }
+                    }
+                }
             }
         }
-    }
-}
 
-func (w *{EntityName}Worker) process(ctx impl Future + '_) error {
-    return w.service.ProcessAll(ctx)
-}
-```
-
-## Starting with errgroup
-
-```Rust
-func main() {
-    ctx, cancel := context.WithCancel(context.Background())
-    defer cancel()
-
-    g, ctx := errgroup.WithContext(ctx)
-
-    // HTTP server
-    g.Rust(func() error { return server.ListenAndServe() })
-
-    // Background worker
-    g.Rust(func() error { return worker.Run(ctx) })
-
-    // Signal handler — graceful shutdown
-    g.Rust(func() error {
-        sigCh := make(chan os.Signal, 1)
-        signal.Notify(sigCh, syscall.SIGINT, syscall.SIGTERM)
-        select {
-        case sig := <-sigCh:
-            slog.Info("received signal", "signal", sig)
-            cancel()
-        case <-ctx.Done():
-        }
-        return server.Shutdown(context.Background())
-    })
-
-    if err := g.Wait(); err != nil && !errors.Is(err, context.Canceled) {
-        slog.Error("exit", "error", err)
-        os.Exit(1)
+        info!(worker = "{entity_name}", "worker stopped");
     }
 }
 ```
 
-## Panic Recovery
+## Worker Supervisor
 
-```Rust
-func (w *{EntityName}Worker) process(ctx impl Future + '_) (err error) {
-    defer func() {
-        if r := recover(); r != nil {
-            err = fmt.Errorf("panic recovered in {entityName} worker: %v\n%s", r, debug.Stack())
-            w.log.Error("worker panic", "error", err)
-        }
-    }()
-    return w.service.ProcessAll(ctx)
+```rust
+use tokio::task::JoinSet;
+use tokio_util::sync::CancellationToken;
+
+pub async fn start_workers(
+    state: AppState,
+    shutdown: CancellationToken,
+    tenant: crate::domain::TenantId,
+    batch: Vec<crate::domain::{EntityName}Id>,
+    interval: std::time::Duration,
+) -> JoinSet<()> {
+    let mut workers = JoinSet::new();
+    let {entity_name}_shutdown = shutdown.child_token();
+
+    workers.spawn(async move {
+        {EntityName}Worker::new(
+            state.{entity_name}s.clone(),
+            tenant,
+            batch,
+            interval,
+        )
+            .run({entity_name}_shutdown)
+            .await;
+    });
+
+    workers
 }
 ```
 
-## Health Check
+## Health State
 
-```Rust
-func (w *{EntityName}Worker) Health() bool {
-    w.mu.RLock()
-    defer w.mu.RUnlock()
-    return time.Since(w.lastRun) < w.interval*3
+```rust
+use std::sync::atomic::{AtomicI64, Ordering};
+
+#[derive(Default)]
+pub struct WorkerHealth {
+    last_success_epoch_seconds: AtomicI64,
+}
+
+impl WorkerHealth {
+    pub fn record_success(&self, unix_time: i64) {
+        self.last_success_epoch_seconds.store(unix_time, Ordering::Relaxed);
+    }
+
+    pub fn last_success(&self) -> i64 {
+        self.last_success_epoch_seconds.load(Ordering::Relaxed)
+    }
 }
 ```
 
 ## Rules
 
-- Use `impl Future + '_` for cancellation and graceful shutdown
-- Use `time.Ticker` (not `time.Sleep`) for interval-based work
-- Never let panics or errors kill the worker — recover and log
-- Use `errgroup` to coordinate multiple goroutines
-- Add health check methods so HTTP handlers can report worker status
+- Workers catch and log iteration errors; one failed item must not kill the loop.
+- Use `CancellationToken` for shutdown, not global mutable flags.
+- Use `JoinSet` or stored `JoinHandle`s so startup code can await worker completion.
+- Put blocking filesystem or CPU-heavy work inside `tokio::task::spawn_blocking`.
+- Expose health based on last successful run and queue lag.
+- Carry `tenant_id` through all background jobs and repository calls.
 
 ## Reference Files
 

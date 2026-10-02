@@ -1,214 +1,207 @@
 ---
-description: Rust security patterns — authentication, input validation, secrets management
-applyTo: '**/*.Rust'
+description: Rust security patterns — validation, CORS, body limits, timeouts, secrets, SQL safety, unsafe-code policy, dependency scans
+applyTo: '**/src/**/*.rs,**/Cargo.toml,**/deny.toml,**/migrations/**/*.sql'
 ---
 
 # Rust Security Patterns
 
-## Authentication & Authorization
-
-### JWT Middleware
-```Rust
-func JWTAuth(next http.Handler) http.Handler {
-    return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-        token := r.Header.Get("Authorization")
-        if token == "" {
-            http.Error(w, "unauthorized", http.StatusUnauthorized)
-            return
-        }
-
-        claims, err := validateJWT(strings.TrimPrefix(token, "Bearer "))
-        if err != nil {
-            http.Error(w, "invalid token", http.StatusUnauthorized)
-            return
-        }
-
-        ctx := context.WithValue(r.Context(), userClaimsKey, claims)
-        next.ServeHTTP(w, r.WithContext(ctx))
-    })
-}
-```
-
-### Role-Based Access
-```Rust
-func RequireRole(role string) func(http.Handler) http.Handler {
-    return func(next http.Handler) http.Handler {
-        return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-            claims := r.Context().Value(userClaimsKey).(*Claims)
-            if !claims.HasRole(role) {
-                http.Error(w, "forbidden", http.StatusForbidden)
-                return
-            }
-            next.ServeHTTP(w, r)
-        })
-    }
-}
-```
-
 ## Input Validation
 
-### Always validate at handler boundaries
-```Rust
-// ❌ NEVER: Trust input
-func CreateUser(w http.ResponseWriter, r *http.Request) {
-    var req CreateUserRequest
-    json.NewDecoder(r.Body).Decode(&req)
-    // use req directly...
+Deserialize into DTOs and validate before a handler calls a service. Import the shared extractor from `crate::extractors`; do not define a second `ValidatedJson`.
+
+```rust
+use axum::routing::post;
+use serde::Deserialize;
+use validator::Validate;
+
+use crate::{extractors::ValidatedJson, routes};
+
+#[derive(Debug, Deserialize, Validate)]
+pub struct CreateUserRequest {
+    #[validate(email)]
+    pub email: String,
+    #[validate(length(min = 1, max = 100))]
+    pub display_name: String,
 }
 
-// ✅ ALWAYS: Validate
-func CreateUser(w http.ResponseWriter, r *http.Request) {
-    var req CreateUserRequest
-    if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-        http.Error(w, "invalid JSON", http.StatusBadRequest)
-        return
-    }
-    if err := req.Validate(); err != nil {
-        http.Error(w, err.Error(), http.StatusBadRequest)
-        return
-    }
-    // proceed with validated req...
+pub fn user_routes() -> axum::Router<crate::state::AppState> {
+    axum::Router::new().route("/users", post(routes::users::create))
 }
 
-// Validation method on request type
-func (r CreateUserRequest) Validate() error {
-    if strings.TrimSpace(r.Name) == "" {
-        return errors.New("name is required")
+pub async fn create_user(
+    auth: crate::auth::AuthUser,
+    ValidatedJson(request): ValidatedJson<CreateUserRequest>,
+) -> Result<(), crate::error::AppError> {
+    crate::services::users::create(&auth, auth.tenant_id, request).await
+}
+```
+
+Use `validator` on DTOs, not domain entities, so external input rules stay at the boundary. The shared extractor maps malformed JSON to `AppError::BadRequest`, not a 500.
+
+## SQL Injection Prevention
+
+SQLx binds values; never concatenate user input into SQL. Use `query!` / `query_as!` with offline metadata when the SQL is static, and `QueryBuilder::push_bind` for optional filters.
+
+```rust
+use sqlx::{Postgres, QueryBuilder};
+
+use crate::domain::TenantId;
+
+pub fn search_users_sql<'a>(
+    tenant_id: TenantId,
+    email_prefix: Option<&'a str>,
+) -> QueryBuilder<Postgres> {
+    let mut builder = QueryBuilder::new(
+        "SELECT id, email, display_name FROM users WHERE tenant_id = ",
+    );
+    builder.push_bind(tenant_id.0);
+
+    if let Some(prefix) = email_prefix {
+        builder.push(" AND email ILIKE ");
+        builder.push_bind(format!("{prefix}%"));
     }
-    if !isValidEmail(r.Email) {
-        return errors.New("invalid email format")
-    }
-    return nil
+
+    builder.push(" ORDER BY created_at DESC, id DESC LIMIT 50");
+    builder
+}
+```
+
+## CORS Configuration
+
+`tower_http::cors::CorsLayer` must list origins from configuration. Wildcards are only acceptable for public, credential-free assets.
+
+```rust
+use axum::http::{HeaderValue, Method};
+use tower_http::cors::CorsLayer;
+
+pub fn cors_layer(allowed_origins: &[String]) -> CorsLayer {
+    let origins: Vec<HeaderValue> = allowed_origins
+        .iter()
+        .map(|origin| origin.parse().expect("validated origin URL"))
+        .collect();
+
+    CorsLayer::new()
+        .allow_origin(origins)
+        .allow_methods([Method::GET, Method::POST, Method::PUT, Method::DELETE])
+        .allow_headers([
+            axum::http::header::AUTHORIZATION,
+            axum::http::header::CONTENT_TYPE,
+        ])
+        .allow_credentials(true)
+}
+```
+
+## Request Body Limits and Timeouts
+
+Set global limits for safety and tighter route-specific limits for auth and upload endpoints.
+
+```rust
+use std::time::Duration;
+use axum::{http::StatusCode, routing::post, Router};
+use tower::ServiceBuilder;
+use tower_http::{limit::RequestBodyLimitLayer, timeout::TimeoutLayer};
+
+use crate::{routes, state::AppState};
+
+pub fn secured_router(state: AppState) -> Router {
+    Router::new()
+        .route("/api/users", post(routes::users::create))
+        .with_state(state)
+        .layer(
+            ServiceBuilder::new()
+                .layer(TimeoutLayer::with_status_code(
+                    StatusCode::REQUEST_TIMEOUT,
+                    Duration::from_secs(15),
+                ))
+                .layer(RequestBodyLimitLayer::new(64 * 1024)),
+        )
 }
 ```
 
 ## Secrets Management
 
-```Rust
-// ❌ NEVER: Hardcoded secrets
-dbPassword := "secret123"
+Configuration should parse secrets into `secrecy::SecretString` and expose them only at the call site that needs bytes.
 
-// ✅ ALWAYS: Environment variables
-dbPassword := os.Getenv("DB_PASSWORD")
-if dbPassword == "" {
-    log.Fatal("DB_PASSWORD is required")
+```rust
+use secrecy::SecretString;
+
+#[derive(Clone)]
+pub struct Settings {
+    pub database: DatabaseSettings,
+    pub auth: AuthSettings,
 }
 ```
 
-## SQL Injection Prevention
+Do not place secret values in `tracing` fields, error strings, test snapshots, or generated docs. Mask by default and expose through `ExposeSecret` only inside the database, HTTP, or crypto client setup.
 
-```Rust
-// ❌ NEVER: String formatting
-query := fmt.Sprintf("SELECT * FROM users WHERE id = '%s'", id)
+## Unsafe-Code Policy
 
-// ✅ ALWAYS: Parameterized
-query := "SELECT * FROM users WHERE id = $1"
-row := db.QueryRowContext(ctx, query, id)
+Application crates should start with:
+
+```rust
+#![forbid(unsafe_code)]
 ```
 
-## CORS Configuration
+If a low-level adapter truly needs unsafe code, isolate it in a tiny crate, document the invariant above the unsafe block, and require code owner approval. Business logic, routes, services, repositories, GraphQL, and workers do not need unsafe.
 
-```Rust
-import "github.com/rs/cors"
+## Dependency and Supply-Chain Scans
 
-c := cors.New(cors.Options{
-    AllowedOrigins:   []string{"https://yourdomain.com"},
-    AllowedMethods:   []string{"GET", "POST", "PUT", "DELETE"},
-    AllowedHeaders:   []string{"Authorization", "Content-Type"},
-    AllowCredentials: true,
-    MaxAge:           3600,
-})
-mux := http.NewServeMux()
-handler := c.Handler(mux)
+Run these before release and after dependency changes:
+
+```bash
+cargo audit
+cargo deny check
+cargo outdated
+cargo build --locked
 ```
 
-## Security Headers
-
-```Rust
-func SecurityHeaders(next http.Handler) http.Handler {
-    return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-        w.Header().Set("X-Content-Type-Options", "nosniff")
-        w.Header().Set("X-Frame-Options", "DENY")
-        w.Header().Set("X-XSS-Protection", "0")
-        w.Header().Set("Referrer-Policy", "strict-origin-when-cross-origin")
-        w.Header().Set("Content-Security-Policy",
-            "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'")
-        w.Header().Set("Strict-Transport-Security",
-            "max-age=31536000; includeSubDomains")
-        next.ServeHTTP(w, r)
-    })
-}
-```
-
-## Rate Limiting
-
-```Rust
-func RateLimit(requestsPerSecond int) func(http.Handler) http.Handler {
-    limiter := rate.NewLimiter(rate.Limit(requestsPerSecond), requestsPerSecond*2)
-    return func(next http.Handler) http.Handler {
-        return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-            if !limiter.Allow() {
-                http.Error(w, "rate limit exceeded", http.StatusTooManyRequests)
-                return
-            }
-            next.ServeHTTP(w, r)
-        })
-    }
-}
-```
+Use `Cargo.lock` for applications. Configure `deny.toml` to block duplicate crypto/TLS stacks, rejected licenses, yanked crates, and unmaintained advisories unless a documented exception exists.
 
 ## Common Vulnerabilities to Prevent
 
-| Vulnerability | Prevention |
-|--------------|------------|
-| SQL Injection | Parameterized queries only |
-| XSS | `html/template` auto-escaping, CSP headers |
-| SSRF | Validate/allowlist outbound URLs |
+| Vulnerability | Rust Pattern |
+| --- | --- |
+| Broken access control | `AuthUser` extractor plus service-level permission checks |
+| SQL injection | SQLx binds, macros, and `QueryBuilder::push_bind` |
+| Secret exposure | `secrecy::SecretString`; no debug output of secrets |
+| Request smuggling / DoS | body limits, timeouts, and reverse proxy limits |
+| CORS misconfiguration | explicit configured origins; no wildcard with credentials |
+| Deserialization abuse | typed DTOs with validation; no untrusted `bincode` / `postcard` |
+| Command injection | `tokio::process::Command` with argument arrays only |
 
-## OWASP Top 10 (2021) Alignment
+## OWASP Top 10 Alignment
 
-| OWASP Category | How This File Addresses It |
-|----------------|----------------------------|
-| A01: Broken Access Control | JWT middleware, `RequireRole()` guard |
-| A02: Cryptographic Failures | `os.Getenv` secrets, no hardcoded credentials |
-| A03: Injection | Parameterized SQL (`$1` placeholders), never `fmt.Sprintf` |
-| A04: Insecure Design | Struct validation methods, explicit error returns |
-| A05: Security Misconfiguration | Rate limiting middleware |
-| A07: Identification & Auth Failures | Bearer token parsing, claim extraction via context |
-
-## See Also
-
-- `auth.instructions.md` — JWT/JWKS middleware, RBAC guards, multi-tenant, API keys
-- `graphql.instructions.md` — GraphQL authorization, directive-based @hasRole
-- `dapr.instructions.md` — Dapr secrets management, component scoping, mTLS
-- `database.instructions.md` — SQL injection prevention, parameterized queries
-- `api-patterns.instructions.md` — Auth middleware, request validation
-- `deploy.instructions.md` — Secrets management, TLS configuration
-| Path Traversal | `filepath.Clean`, validate paths |
-| XSS | `html/template` auto-escaping |
-| SSRF | Validate URLs, restrict outbound |
-| Race Conditions | `Rust test -race`, proper synchronization |
-
----
+| Category | Required Control |
+| --- | --- |
+| A01 Broken Access Control | Tenant from token only; repository methods bind tenant |
+| A02 Cryptographic Failures | Argon2id for passwords; TLS clients use rustls |
+| A03 Injection | Parameterized SQLx queries and DTO validation |
+| A04 Insecure Design | Service-layer authorization and rate limits on auth paths |
+| A05 Misconfiguration | no unsafe code, CORS allowlist, generic production errors |
+| A07 Auth Failures | validated JWT claims and cached JWKS |
+| A08 Integrity Failures | `cargo audit`, `cargo deny`, locked builds |
 
 ## Temper Guards
 
 | Shortcut | Why It Breaks |
-|----------|--------------|
-| "This endpoint is internal-only, no auth needed" | Internal endpoints get exposed through misconfiguration, reverse proxies, or future refactors. Apply auth extractors everywhere — remove them explicitly when proven unnecessary. |
-| "Input validation is overkill for this field" | Every unvalidated input is an injection vector. Validate at system boundaries always — a `#[derive(Validate)]` is a single line that prevents a category of vulnerabilities. |
-| "We'll add authentication later" | Unauthenticated endpoints get discovered and exploited. Security is not a feature to add — it's a constraint present from line one. |
-| "No real users yet, security can wait" | Attackers scan for unprotected endpoints automatically. The window between "no real users" and "compromised" is often hours, not months. |
-| "I'll skip the auth layer temporarily for testing" | Temporary auth bypasses become permanent. Use test-specific service configurations or mock auth extractors instead. |
-| "Hardcoding this key is fine for development" | Hardcoded secrets leak via git history, logs, and error messages. Use environment variables or `.env` files with `dotenvy` even in development. |
-
----
+| --- | --- |
+| "The type system validates this already" | Types prove shape, not business constraints; length, format, and enum rules still need `Validate`. |
+| "Wildcard CORS is fine during development" | Development defaults get copied to production; use environment-specific explicit origins. |
+| "This SQL fragment is from a dropdown" | Dropdown values can be tampered with; bind or map to an allowlisted enum. |
+| "Unsafe makes this faster" | Most web/API code is I/O-bound; unsafe shifts memory safety proof to humans. |
+| "We'll run cargo audit in CI later" | Vulnerable crates can be merged before CI exists; run the audit locally when versions change. |
 
 ## Warning Signs
 
-- Handlers missing auth extractor parameters (`Claims`, `AuthUser`) in Axum/Actix
-- `format!` used to build SQL queries (`format!("SELECT ... {}", id)`)
-- Secrets assigned as string literals (`let api_key = "abc123"`)
-- CORS configured with permissive defaults (`.allow_any_origin()`)
-- Missing CSRF protection on state-changing endpoints
-- Error responses expose internal details via `Debug` formatting in non-development mode
+- handlers accept `Json<Value>` or `HashMap<String, Value>` for business input
+- `format!` builds a SQL clause
+- `CorsLayer::permissive()` appears in application code
+- secrets are `String` fields in shared config structs
+- `unwrap()` handles request, token, database, or network failures
+- `unsafe` appears outside a reviewed infrastructure adapter
+
+## See Also
+
+- `auth.instructions.md` — JWT/OIDC validation and permission checks
+- `database.instructions.md` — SQLx transactions, migrations, and RLS
+- `deploy.instructions.md` — TLS, runtime images, and environment separation

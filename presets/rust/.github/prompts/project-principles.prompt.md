@@ -66,7 +66,7 @@ Walk through each section one at a time. For each section:
 ## Path B: Starter Principles
 
 First, detect the tech stack from `.forge.json` (if it exists) or by
-scanning project files (package.json, *.csproj, Rust.mod, pyproject.toml, etc.).
+scanning project files (package.json, *.csproj, Cargo.toml, pyproject.toml, etc.).
 
 Then present a starter set organized by section. For each item, ask the user
 to **Accept**, **Modify**, or **Reject**.
@@ -115,12 +115,12 @@ to **Accept**, **Modify**, or **Reject**.
 - Quality: "JUnit 6 with 90%+ coverage on service layer"
 
 **Rust**:
-- Core Principle: "Always check returned errors — no `_` for error values"
-- Core Principle: "Context propagation through all function chains"
-- Technology: "Rust 1.98+ (2024 edition) with standard library preferred over third-party"
-- Forbidden: "Ignoring error returns with `_`" (silent failures)
-- Forbidden: "Goroutine leaks — all goroutines must have a shutdown path"
-- Quality: "Rust test with race detector enabled in CI"
+- Core Principle: "No unchecked panics in production paths — return Result and map errors explicitly"
+- Core Principle: "Async boundaries are explicit — Axum handlers call services, services await repositories"
+- Technology: "Rust 1.98+ with 2024 edition, Axum on Tokio, SQLx with PostgreSQL"
+- Forbidden: "unwrap/expect in handlers, services, repositories, or workers" (turns recoverable failures into crashes)
+- Forbidden: "String-built SQL or unchecked dynamic queries from request input" (bypasses SQLx safety)
+- Quality: "cargo nextest run plus clippy -D warnings, cargo audit, and cargo deny in CI"
 
 ### Presenting Starters
 

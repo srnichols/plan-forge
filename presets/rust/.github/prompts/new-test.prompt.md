@@ -1,203 +1,126 @@
 ---
-description: "Scaffold Rust test files with table-driven tests, testify assertions, testcontainers, and proper naming."
+description: "Scaffold Rust tests with cargo nextest, Axum oneshot router checks, SQLx fixtures, Testcontainers PostgreSQL, and mockall repositories."
 agent: "agent"
 tools: [read, edit, search, execute]
 ---
 # Create New Test
 
-Scaffold test files following Rust testing conventions.
+Scaffold test files that match the Rust Axum/Tokio/SQLx architecture.
 
 ## Test Naming Convention
 
 ```
-Test{Function}_{Condition}
+{function}_when_{condition}_returns_{outcome}
 ```
 
 Examples:
-- `TestCreateProduct_WithEmptyName`
-- `TestGetByID_WhenNotFound`
-- `TestCalculateTotal_WithDiscount`
+- `create_order_when_name_is_blank_returns_validation_error`
+- `get_order_when_missing_returns_problem_json`
+- `ready_probe_when_database_down_returns_service_unavailable`
 
-## Unit Test Pattern (Table-Driven)
+## Unit Test Pattern
 
-```Rust
-func Test{EntityName}Service_GetByID(t *testing.T) {
-    tests := []struct {
-        name      string
-        id        uuid.UUID
-        mockSetup func(*mockRepo)
-        want      *model.{EntityName}
-        wantErr   error
-    }{
-        {
-            name: "returns entity when found",
-            id:   uuid.MustParse("550e8400-e29b-41d4-a716-446655440000"),
-            mockSetup: func(m *mockRepo) {
-                m.findByIDResult = &model.{EntityName}{ID: uuid.MustParse("550e8400-e29b-41d4-a716-446655440000"), Name: "Test"}
-            },
-            want: &model.{EntityName}{ID: uuid.MustParse("550e8400-e29b-41d4-a716-446655440000"), Name: "Test"},
-        },
-        {
-            name: "returns error when not found",
-            id:   uuid.New(),
-            mockSetup: func(m *mockRepo) {
-                m.findByIDErr = repository.ErrNotFound
-            },
-            wantErr: repository.ErrNotFound,
-        },
-    }
+```rust
+#[tokio::test]
+async fn calculate_total_when_discount_applies_returns_reduced_amount() {
+    let total = OrderTotal::new(100_00).apply_percent_discount(15);
 
-    for _, tt := range tests {
-        t.Run(tt.name, func(t *testing.T) {
-            repo := &mockRepo{}
-            tt.mockSetup(repo)
-            svc := service.New{EntityName}Service(repo, slog.Default())
-
-            got, err := svc.GetByID(context.Background(), tt.id)
-
-            if tt.wantErr != nil {
-                assert.ErrorIs(t, err, tt.wantErr)
-                return
-            }
-            require.NoError(t, err)
-            assert.Equal(t, tt.want.Name, got.Name)
-        })
-    }
+    assert_eq!(total.cents(), 85_00);
 }
 ```
 
-## Integration Test Pattern (Testcontainers)
+## Service Test with Repository Mock
 
-```Rust
-func TestRepository_Integration(t *testing.T) {
-    if testing.Short() {
-        t.Skip("skipping integration test in short mode")
-    }
+```rust
+use mockall::predicate::eq;
+use uuid::Uuid;
 
-    ctx := context.Background()
+#[tokio::test]
+async fn load_order_when_repository_returns_none_maps_not_found() {
+    let tenant_id = TenantId(Uuid::new_v4());
+    let order_id = OrderId(Uuid::new_v4());
+    let mut repo = MockOrderRepository::new();
+    repo.expect_find()
+        .with(eq(tenant_id), eq(order_id))
+        .returning(|_, _| Ok(None));
 
-    // Start PostgreSQL container
-    postgres, err := testcontainers.GenericContainer(ctx, testcontainers.GenericContainerRequest{
-        ContainerRequest: testcontainers.ContainerRequest{
-            Image:        "postgres:18-alpine",
-            ExposedPorts: []string{"5432/tcp"},
-            Env: map[string]string{
-                "POSTGRES_DB":       "test",
-                "POSTGRES_USER":     "test",
-                "POSTGRES_PASSWORD": "test",
-            },
-            WaitingFor: wait.ForAll(
-                wait.ForListeningPort("5432/tcp"),
-                wait.ForLog("database system is ready to accept connections"),
-            ).WithDeadline(60 * time.Second),
-        },
-        Started: true,
-    })
-    require.NoError(t, err)
-    t.Cleanup(func() { _ = postgres.Terminate(ctx) })
+    let service = OrderService::new(std::sync::Arc::new(repo));
+    let user = AuthUser {
+        user_id: Uuid::new_v4(),
+        tenant_id,
+        roles: vec![Role::Member],
+    };
+    let result = service.get(&user, order_id).await;
 
-    // Build connection string
-    host, _ := postgres.Host(ctx)
-    port, _ := postgres.MappedPort(ctx, "5432")
-    dsn := fmt.Sprintf("postgres://test:test@%s:%s/test?sslmode=disable", host, port.Port())
-
-    // Connect
-    pool, err := pgxpool.New(ctx, dsn)
-    require.NoError(t, err)
-    t.Cleanup(func() { pool.Close() })
-
-    // Run migrations
-    err = runMigrations(dsn, "../../migrations")
-    require.NoError(t, err)
-
-    // Create repository under test
-    repo := repository.NewProductRepository(pool)
-
-    t.Run("Create and FindByID", func(t *testing.T) {
-        created, err := repo.Create(ctx, model.CreateProductRequest{Name: "Test Product"})
-        require.NoError(t, err)
-        assert.NotEqual(t, uuid.Nil, created.ID)
-
-        found, err := repo.FindByID(ctx, created.ID)
-        require.NoError(t, err)
-        assert.Equal(t, "Test Product", found.Name)
-    })
-
-    t.Run("FindByID returns ErrNotFound for missing entity", func(t *testing.T) {
-        _, err := repo.FindByID(ctx, uuid.New())
-        assert.ErrorIs(t, err, repository.ErrNotFound)
-    })
+    assert!(result.is_err());
 }
 ```
 
-## Migration Helper for Tests
-```Rust
-func runMigrations(dsn, migrationsPath string) error {
-    m, err := migrate.New("file://"+migrationsPath, dsn)
-    if err != nil {
-        return fmt.Errorf("create migrator: %w", err)
-    }
-    if err := m.Up(); err != nil && !errors.Is(err, migrate.ErrNoChange) {
-        return fmt.Errorf("run migrations: %w", err)
-    }
-    return nil
+## Router Test Pattern
+
+```rust
+use axum::{body::Body, http::{Request, StatusCode}};
+use tower::ServiceExt;
+
+#[tokio::test]
+async fn get_{entity_name}_when_authorized_returns_ok() {
+    let state = test_state().await;
+    let app = crate::app(state);
+
+    let response = app
+        .oneshot(
+            Request::builder()
+                .method("GET")
+                .uri("/api/v1/{entity_slug}")
+                .header("authorization", "Bearer {TestJwt}")
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(response.status(), StatusCode::OK);
 }
 ```
 
-## HTTP Handler Test Pattern
-```Rust
-func TestProductHandler_GetByID(t *testing.T) {
-    tests := []struct {
-        name       string
-        id         string
-        mockSetup  func(*mockService)
-        wantStatus int
-    }{
-        {
-            name: "returns 200 for existing product",
-            id:   "550e8400-e29b-41d4-a716-446655440000",
-            mockSetup: func(m *mockService) {
-                m.result = &model.Product{Name: "Test"}
-            },
-            wantStatus: http.StatusOK,
-        },
-        {
-            name:       "returns 400 for invalid UUID",
-            id:         "not-a-uuid",
-            mockSetup:  func(m *mockService) {},
-            wantStatus: http.StatusBadRequest,
-        },
-        {
-            name: "returns 404 when not found",
-            id:   uuid.NewString(),
-            mockSetup: func(m *mockService) {
-                m.err = repository.ErrNotFound
-            },
-            wantStatus: http.StatusNotFound,
-        },
-    }
+## SQLx Repository Test
 
-    for _, tt := range tests {
-        t.Run(tt.name, func(t *testing.T) {
-            svc := &mockService{}
-            tt.mockSetup(svc)
-            handler := NewProductHandler(svc)
+```rust
+#[sqlx::test(migrations = "./migrations")]
+async fn insert_{entity_name}_stores_tenant_scoped_row(pool: sqlx::PgPool) -> Result<(), AppError> {
+    let tenant = TenantId(uuid::Uuid::new_v4());
+    let repository = Pg{EntityName}Repository::new(pool);
+    let new = New{EntityName} {
+        reference: "sample".to_owned(),
+        currency: "USD".to_owned(),
+        notes: None,
+    };
 
-            req := httptest.NewRequest(http.MethodGet, "/products/"+tt.id, nil)
-            rctx := chi.NewRouteContext()
-            rctx.URLParams.Add("id", tt.id)
-            req = req.WithContext(context.WithValue(req.Context(), chi.RouteCtxKey, rctx))
+    let saved = repository.insert(tenant, new).await?;
 
-            rec := httptest.NewRecorder()
-            handler.GetByID(rec, req)
+    assert_eq!(saved.tenant_id, tenant);
+    Ok(())
+}
+```
 
-            assert.Equal(t, tt.wantStatus, rec.Code)
-        })
-    }
+## Testcontainers Pattern
+
+```rust
+use testcontainers::{runners::AsyncRunner, ImageExt};
+use testcontainers_modules::postgres::Postgres;
+
+#[tokio::test]
+async fn migrations_apply_to_postgres_18() -> anyhow::Result<()> {
+    let container = Postgres::default().with_tag("18-alpine").start().await?;
+    let port = container.get_host_port_ipv4(5432).await?;
+    let database_url = format!("postgres://postgres:postgres@127.0.0.1:{port}/postgres");
+
+    sqlx::migrate!("./migrations").run(&sqlx::PgPool::connect(&database_url).await?).await?;
+    Ok(())
 }
 ```
 
 ## Reference Files
 
 - [Testing instructions](../instructions/testing.instructions.md)
-- [Architecture principles](../instructions/architecture-principles.instructions.md)
+- [Database instructions](../instructions/database.instructions.md)

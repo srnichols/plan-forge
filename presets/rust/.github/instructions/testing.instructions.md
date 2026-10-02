@@ -1,244 +1,155 @@
 ---
-description: Rust testing patterns — testing package, testcontainers, httptest, table-driven tests
-applyTo: '**/*_test.Rust,**/*_bench_test.Rust,**/testdata/**,**/testutil/**,**/mocks/**'
+description: Rust testing patterns — cargo nextest, Axum router tests, SQLx fixtures, testcontainers PostgreSQL, mockall, and llvm-cov
+applyTo: '**/tests/**,**/*_test.rs,**/*tests.rs,**/Cargo.toml,**/.config/nextest.toml'
 ---
 
 # Rust Testing Patterns
 
 ## Tech Stack
 
-- **Unit Tests**: Standard `testing` package
-- **Assertions**: `testify/assert` or standard `if` checks
-- **Mocking**: `testify/mock` or hand-written fakes (preferred)
-- **Integration**: `testcontainers-Rust`
-- **HTTP Tests**: `net/http/httptest`
-- **E2E**: Playwright or custom HTTP client tests
+- **Unit tests**: `#[tokio::test]`, `cargo test`, and `cargo nextest run`
+- **HTTP tests**: Axum `Router` exercised with `tower::ServiceExt::oneshot`
+- **Database tests**: `#[sqlx::test]` with migrations and committed `.sqlx/` metadata
+- **Container tests**: `testcontainers = "0.27.3"` plus `testcontainers-modules = "0.15.0"`; `testcontainers-modules` 0.15 depends on the 0.27 line.
+- **Mocking**: `mockall = "0.15.0"` on repository traits
+- **Coverage**: `cargo llvm-cov` 0.9.1
+
+## SQLx Offline Default
+
+Commit this project-level default so normal builds use committed SQLx metadata without requiring inline environment-variable syntax:
+
+```toml
+# .cargo/config.toml
+[env]
+SQLX_OFFLINE = { value = "true", force = false }
+```
+
+Do not use `SQLX_OFFLINE=true cargo ...` in skills or CI steps. SQLx metadata staleness is checked with a real `DATABASE_URL`: run migrations, then run `cargo sqlx prepare --check`.
 
 ## Test Types
 
-| Type | Scope | Database | Speed |
-|------|-------|----------|-------|
-| **Unit** | Single function | Mocked | Fast (ms) |
-| **Integration** | Service + DB | Real (Testcontainers) | Medium (1-3s) |
-| **E2E** | Full HTTP flow | Real | Slow (10s+) |
+| Type | Scope | External systems | Speed |
+|------|-------|------------------|-------|
+| Unit | Service, validator, mapper, pure domain rule | Mocked repository traits | Fast |
+| Router | Axum routes and extractors through `app(state)` | Usually mocked state | Fast to medium |
+| Repository | SQLx queries and migrations | PostgreSQL 18 | Medium |
+| Smoke | Built service against real dependencies | Docker Compose or staging | Slow |
 
 ## Patterns
 
-### Table-Driven Unit Test
-```Rust
-func TestUserService_GetUser(t *testing.T) {
-    tests := []struct {
-        name    string
-        userID  uuid.UUID
-        want    *User
-        wantErr error
-    }{
-        {
-            name:   "valid user",
-            userID: uuid.MustParse("550e8400-e29b-41d4-a716-446655440000"),
-            want:   &User{Name: "Test User"},
-        },
-        {
-            name:    "not found",
-            userID:  uuid.New(),
-            wantErr: ErrNotFound,
-        },
-    }
+### Unit Test with Mocked Repository
 
-    for _, tt := range tests {
-        t.Run(tt.name, func(t *testing.T) {
-            repo := &fakeUserRepo{users: map[uuid.UUID]*User{
-                uuid.MustParse("550e8400-e29b-41d4-a716-446655440000"): {Name: "Test User"},
-            }}
-            svc := NewUserService(repo)
+```rust
+use async_trait::async_trait;
+use mockall::automock;
+use uuid::Uuid;
 
-            got, err := svc.GetUser(context.Background(), tt.userID)
+use crate::domain::{OrderId, TenantId};
 
-            if !errors.Is(err, tt.wantErr) {
-                t.Errorf("error = %v, want %v", err, tt.wantErr)
-            }
-            if tt.want != nil && got.Name != tt.want.Name {
-                t.Errorf("name = %q, want %q", got.Name, tt.want.Name)
-            }
-        })
-    }
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Order {
+    pub id: OrderId,
+}
+
+#[automock]
+#[async_trait]
+pub trait OrderRepository: Send + Sync {
+    async fn find(&self, tenant_id: TenantId, order_id: OrderId) -> anyhow::Result<Option<Order>>;
+}
+
+pub async fn load_order(repo: &dyn OrderRepository, tenant_id: TenantId, order_id: OrderId) -> anyhow::Result<Order> {
+    repo.find(tenant_id, order_id)
+        .await?
+        .ok_or_else(|| anyhow::anyhow!("order not found"))
 }
 ```
 
-### Integration Test (testcontainers-Rust)
-```Rust
-func TestUsersAPI_Integration(t *testing.T) {
-    if testing.Short() {
-        t.Skip("skipping integration test")
-    }
+### Router Test with `oneshot`
 
-    ctx := context.Background()
-    pgContainer, err := postgres.Run(ctx,
-        "postgres:18",
-        postgres.WithDatabase("testdb"),
-        testcontainers.WithWaitStrategy(
-            wait.ForListeningPort("5432/tcp"),
-        ),
-    )
-    t.Cleanup(func() { pgContainer.Terminate(ctx) })
-    require.NoError(t, err)
+```rust
+use axum::{body::Body, http::{Request, StatusCode}, routing::get, Router};
+use tower::ServiceExt;
 
-    connStr, err := pgContainer.ConnectionString(ctx, "sslmode=disable")
-    require.NoError(t, err)
+async fn health() -> StatusCode {
+    StatusCode::NO_CONTENT
+}
 
-    // Wire up app with test DB...
-    app := setupApp(connStr)
-    srv := httptest.NewServer(app.Handler())
-    defer srv.Close()
+#[tokio::test]
+async fn live_probe_returns_no_content() {
+    let app = Router::new().route("/health/live", get(health));
+    let response = app
+        .oneshot(Request::builder().uri("/health/live").body(Body::empty()).unwrap())
+        .await
+        .unwrap();
 
-    resp, err := http.Get(srv.URL + "/api/users")
-    require.NoError(t, err)
-    assert.Equal(t, http.StatusOK, resp.StatusCode)
+    assert_eq!(response.status(), StatusCode::NO_CONTENT);
 }
 ```
 
-### HTTP Handler Test (httptest)
-```Rust
-func TestGetUserHandler(t *testing.T) {
-    svc := &fakeUserService{
-        user: &User{Name: "Test"},
-    }
-    handler := NewUserHandler(svc)
+### SQLx Test
 
-    req := httptest.NewRequest(http.MethodGet, "/api/users/123", nil)
-    rec := httptest.NewRecorder()
+```rust
+use sqlx::{PgPool, Row};
 
-    handler.GetUser(rec, req)
-
-    assert.Equal(t, http.StatusOK, rec.Code)
-    assert.Contains(t, rec.Body.String(), "Test")
+#[sqlx::test]
+async fn database_accepts_basic_query(pool: PgPool) -> sqlx::Result<()> {
+    let row = sqlx::query("SELECT 1 AS value").fetch_one(&pool).await?;
+    assert_eq!(row.try_get::<i32, _>("value")?, 1);
+    Ok(())
 }
 ```
 
-### E2E Tests (Full HTTP Flow)
-```Rust
-//Rust:build e2e
+### PostgreSQL 18 with Testcontainers
 
-func TestE2E_CreateAndGetProducer(t *testing.T) {
-    // Use a real running server (started via docker-compose or test setup)
-    baseURL := os.Getenv("E2E_BASE_URL")
-    if baseURL == "" {
-        baseURL = "http://localhost:8080"
-    }
-    client := &http.Client{Timeout: 10 * time.Second}
+```rust
+use testcontainers::{runners::AsyncRunner, ImageExt};
+use testcontainers_modules::postgres::Postgres;
 
-    // Create
-    body := `{"name":"Test Farm","contactEmail":"test@example.com"}`
-    resp, err := client.Post(baseURL+"/api/producers", "application/json", strings.NewReader(body))
-    require.NoError(t, err)
-    require.Equal(t, http.StatusCreated, resp.StatusCode)
-
-    var created struct {
-        ID string `json:"id"`
-    }
-    require.NoError(t, json.NewDecoder(resp.Body).Decode(&created))
-    resp.Body.Close()
-
-    // Verify
-    resp, err = client.Get(baseURL + "/api/producers/" + created.ID)
-    require.NoError(t, err)
-    require.Equal(t, http.StatusOK, resp.StatusCode)
-    resp.Body.Close()
+#[tokio::test]
+async fn starts_postgres_18_for_repository_tests() -> anyhow::Result<()> {
+    let node = Postgres::default().with_tag("18-alpine").start().await?;
+    let port = node.get_host_port_ipv4(5432).await?;
+    let url = format!("postgres://postgres:postgres@127.0.0.1:{port}/postgres");
+    sqlx::PgPool::connect(&url).await?.close().await;
+    Ok(())
 }
-```
-
-### E2E with Playwright (Browser Tests)
-```Rust
-//Rust:build e2e
-
-import pw "github.com/playwright-community/playwright-Rust"
-
-func TestE2E_LoginFlow(t *testing.T) {
-    err := pw.Install()
-    require.NoError(t, err)
-
-    browser, err := pw.Run()
-    require.NoError(t, err)
-    defer browser.Stop()
-
-    bw, err := browser.Chromium.Launch(pw.BrowserTypeLaunchOptions{Headless: pw.Bool(true)})
-    require.NoError(t, err)
-    defer bw.Close()
-
-    page, err := bw.NewPage()
-    require.NoError(t, err)
-
-    _, err = page.Goto(os.Getenv("E2E_BASE_URL") + "/login")
-    require.NoError(t, err)
-
-    require.NoError(t, page.Fill("#email", "admin@test.com"))
-    require.NoError(t, page.Fill("#password", "testpass"))
-    require.NoError(t, page.Click("#login-btn"))
-
-    // Wait for redirect
-    err = page.WaitForURL("**/dashboard")
-    require.NoError(t, err)
-
-    title, err := page.Title()
-    require.NoError(t, err)
-    assert.Contains(t, title, "Dashboard")
-}
-```
-
-### E2E Anti-Patterns
-```
-❌ Hardcoded URLs — use E2E_BASE_URL env var
-❌ Tests that depend on execution order — each test must be self-contained
-❌ No cleanup — always delete test data or use isolated tenant
-❌ Missing timeouts on HTTP clients — default Rust client has no timeout
-❌ Flaky selectors in Playwright — use data-testid attributes
-❌ Running E2E in unit test suite — use //Rust:build e2e tag
 ```
 
 ## Conventions
 
-- Test file: `{filename}_test.Rust` (same package)
-- Test function: `Test{Type}_{Method}` or `Test{Function}_{Scenario}`
-- Use `-short` flag to skip integration: `Rust test -short ./...`
-- Use `-race` for race detection: `Rust test -race ./...`
-- Use build tags for isolation: `//Rust:build integration`
+- Put integration tests in `tests/` and unit tests beside the module under `#[cfg(test)]`.
+- Name tests as `function_when_condition_returns_outcome`.
+- Use `cargo nextest run --all-targets` for the default suite.
+- Keep SQLx query macros buildable with `cargo check --all-targets --locked`; check metadata staleness with `sqlx migrate run` and `cargo sqlx prepare --check` while `DATABASE_URL` points at PostgreSQL 18.
+- Do not use `tokio::time::sleep` for synchronization; prefer channels, `Notify`, or controlled time.
 
-## Validation Gates (for Plan Hardening)
+## Validation Gates
 
 ```markdown
-- [ ] `Rust build ./...` passes with zero errors
-- [ ] `Rust vet ./...` — zero warnings
-- [ ] `Rust test ./...` — all pass
-- [ ] `Rust test -race ./...` — no race conditions
-- [ ] Anti-pattern grep: `grep -rn 'fmt.Sprintf.*SELECT\|fmt.Sprintf.*INSERT\|fmt.Sprintf.*UPDATE' --include="*.Rust"` returns zero hits
-
-## See Also
-
-- `api-patterns.instructions.md` — Integration test patterns, handler testing
-- `database.instructions.md` — Repository testing, test databases
-- `errorhandling.instructions.md` — Error assertion patterns
+- [ ] `cargo fmt --all -- --check`
+- [ ] `cargo clippy --workspace --all-targets --all-features -- -D warnings`
+- [ ] `cargo nextest run --all-targets`
+- [ ] `cargo test --doc`
+- [ ] `cargo check --all-targets --locked`
+- [ ] `sqlx migrate run` with `DATABASE_URL` set
+- [ ] `cargo sqlx prepare --check` with the same `DATABASE_URL`
+- [ ] `cargo llvm-cov --all-features --workspace --fail-under-lines 80`
 ```
-
----
 
 ## Temper Guards
 
 | Shortcut | Why It Breaks |
 |----------|--------------|
-| "This function is too simple to test" | Simple functions get modified later. The test documents the contract and catches regressions when someone changes the "simple" logic. |
-| "I'll add tests after the feature works" | Technical debt compounds exponentially. Write the `#[test]` function before the implementation. |
-| "The integration test covers this unit" | Integration tests are slow, don't pinpoint failures, and require external dependencies. Unit tests in `mod tests` are the foundation of the test pyramid. |
-| "This is just a struct — no logic to test" | `impl` blocks, `From`/`TryFrom` conversions, and validation in constructors are logic. Test that `::new()` rejects invalid input, that defaults are correct. |
-| "Mocking this dependency is too complex" | If it's hard to mock, the design has too much coupling. Define a trait and use generics or `mockall` — don't skip the test. |
-| "One test case is enough" | Edge cases cause production incidents. Test `None` inputs, empty `Vec`, boundary values, and error variants. |
-
----
+| "The service is simple enough to skip tests" | Services hold tenant, transaction, and error mapping rules; tests document those contracts before handlers depend on them. |
+| "Router tests can call handlers directly" | Direct handler calls bypass extractors, middleware, request IDs, and response conversion. Exercise the `Router` with `oneshot`. |
+| "SQLx macros compile, so repository tests are optional" | Compile-time SQL checks do not prove migrations, constraints, transactions, or tenant filters behave correctly. |
+| "Sleeping fixes async flakiness" | Sleeps slow the suite and still race under load. Use deterministic synchronization or virtual time. |
+| "Mocks are easier than Testcontainers everywhere" | Repository code needs real PostgreSQL semantics, while service code should mock repositories. Use the right seam. |
 
 ## Warning Signs
 
-- A module has fewer `#[test]` functions than it has public functions (coverage gap)
-- Test names describe implementation (`test_calls_repository`) instead of behavior (`test_get_user_invalid_id_returns_not_found`)
-- Tests use `std::thread::sleep` instead of async test runtime or mock clocks
-- No `#[ignore]` attribute on slow tests — unable to separate fast unit tests from integration tests
-- Test setup is longer than 15 lines (test is testing too much or fixtures need extraction)
-- Tests create real database connections instead of using trait-based mocks or `sqlx::test`
+- A repository method has no test proving it binds `tenant_id`.
+- Tests assert implementation details such as SQL strings instead of behavior and returned data.
+- `#[ignore]` appears without a linked issue and a cleanup date.
+- `cargo nextest run` is absent from CI or local verification.
+- Coverage excludes the changed module without a documented reason.

@@ -1,7 +1,7 @@
 ---
 name: onboarding
-description: Walk a new developer through Rust project setup, architecture, key files, and first task. Use when someone new joins the team or needs to understand the codebase.
-argument-hint: "[optional: specific area to focus on, e.g. 'backend' or 'testing']"
+description: Walk a new developer through Rust/Axum project setup, Cargo tooling, architecture, Docker dependencies, tests, and first task. Use when someone new joins the team or needs to understand the codebase.
+argument-hint: "[optional: specific area to focus on, e.g. 'API', 'database', or 'testing']"
 tools:
   - run_in_terminal
   - read_file
@@ -16,72 +16,78 @@ tools:
 ## Steps
 
 ### 1. Environment Setup
-Verify prerequisites and get the project running:
+Verify prerequisites and the Rust toolchain:
 
 ```bash
 git --version
-Rust version
+rustc --version
+cargo --version
+docker version
 ```
-> **If this step fails** (Rust not found): Install Rust from https://Rust.dev/dl and retry.
+
+> **If Rust is missing**: install with rustup and select the project toolchain declared in `rust-toolchain.toml` or `rust-version = "1.98"`.
+
+Install project tools if they are not already available:
 
 ```bash
-Rust mod download
+cargo install cargo-nextest --version 0.9.146 --locked
+cargo install sqlx-cli --version 0.9.0 --locked --no-default-features --features rustls,postgres
+cargo install cargo-llvm-cov --version 0.9.1 --locked
 ```
-> **If this step fails**: Check that `GOPROXY` is configured correctly and network access is available.
 
-### 2. Verify Build & Tests
-Use the `forge_smith` MCP tool to diagnose environment and setup health.
-
-```bash
-Rust build ./...
-```
-> **If this step fails**: Read the error output — common causes are Rust version mismatch (check `Rust.mod` `Rust` directive) or missing CGO dependencies.
+### 2. Verify Build and Tests
+Use `forge_smith` for Plan Forge setup health, then run the Rust gates:
 
 ```bash
-Rust test ./...
+cargo build --locked
+cargo nextest run --all-targets
 ```
-> **If both pass**: Environment is ready.
+
+> **If this step fails**: check for missing `.env`, Docker not running for Testcontainers, or stale SQLx offline data.
 
 ### 3. Architecture Overview
 Read and explain:
-1. **`.github/copilot-instructions.md`** — project overview, tech stack, conventions
-2. **`docs/plans/PROJECT-PRINCIPLES.md`** — non-negotiable principles (if exists)
-3. **Project structure** — explain the folder layout and what lives where
-4. **Key patterns** — how data flows through the layers (Handlers → Services → Repositories)
+1. `.github/copilot-instructions.md` — project overview and conventions.
+2. `docs/plans/PROJECT-PRINCIPLES.md` — non-negotiable principles, if present.
+3. `src/main.rs` — bootstrapping, telemetry, migrations, shutdown.
+4. `src/lib.rs` — `app(state)` router factory used by production and tests.
+5. The layer flow: routes -> services -> repositories -> SQLx.
 
 ### 4. Key Files Tour
-Walk through the most important Rust files:
-- **Entry point**: `main.Rust` or `cmd/server/main.Rust` — application bootstrap and server startup
-- **Module config**: `Rust.mod` — module path, Rust version, dependencies
-- **Environment**: `.env.example` — required environment variables
-- **Internal packages**: `internal/` — private application code
-- **Database**: migrations folder, database driver setup, connection config
-- **Testing**: `*_test.Rust` files alongside source, how to run specific tests
-- **CI/CD**: GitHub Actions workflows, Dockerfile, deployment config
+Walk through:
+- `Cargo.toml` and `Cargo.lock` for versions and feature flags.
+- `src/config.rs` for environment settings and `secrecy::SecretString`.
+- `src/state.rs` for `AppState`, trait objects, and `FromRef`.
+- `src/error.rs` for RFC 9457 `AppError` mapping.
+- `src/auth.rs` for verified JWT extraction and tenant identity.
+- `migrations/` and `.sqlx/` for SQLx offline mode.
+- `tests/` and `.config/nextest.toml` for test layout.
+- `Dockerfile` and `docker-compose.yml` for cargo-chef, PostgreSQL 18, Redis 8, and probes.
 
 ### 5. Plan Forge Pipeline Tour
-Explain how the team works:
-1. **Plans live in** `docs/plans/` — each feature is a hardened phase plan
-2. **Guardrails live in** `.github/instructions/` — auto-load based on file type
-3. **Pipeline prompts** — Step 0–5 workflow for building features
-4. **Skills** — type `/` in Copilot Chat to see available automations
-5. **Reviewer agents** — specialized reviewers in `.github/agents/`
+Explain:
+1. Plans live in `docs/plans/`.
+2. Guardrails live in `.github/instructions/`.
+3. Prompts guide specify, harden, execute, review, and ship.
+4. Skills automate review, testing, deploy, and documentation workflows.
+5. Reviewer agents provide read-only specialist checks.
 
 ### 6. First Task Guidance
-Suggest a good first task:
-- Read the `DEPLOYMENT-ROADMAP.md` for current phase status
-- Pick a small slice from the current phase (or a documentation improvement)
-- Follow the Step 3 execution prompt for guided implementation
-- Use `/test-sweep` to verify nothing broke
+Suggest a small first task:
+- Add or improve a router test using `tower::ServiceExt::oneshot`.
+- Document one endpoint with `utoipa`.
+- Add a repository test proving tenant scoping.
+- Improve a readiness check or smoke test.
 
 ### 7. Report
 ```
 Onboarding Status:
-  Rust:              ✅ / ❌ (version)
-  Modules:         ✅ / ❌
-  Build:           ✅ / ❌
-  Tests:           ✅ / ❌ (N passed, N failed)
-  Forge Smith:     ✅ / ❌
+  Rust:             PASS / FAIL (version)
+  Cargo tools:      PASS / FAIL
+  Docker:           PASS / FAIL
+  Dependencies:     PASS / FAIL
+  Tests:            PASS / FAIL
+  Forge Smith:      PASS / FAIL
 
 Key files reviewed:  N
 Architecture docs:   N
@@ -90,38 +96,39 @@ Overall: PASS / FAIL
 ```
 
 ## Safety Rules
-- NEVER make changes during onboarding — read-only exploration
-- Explain concepts at the audience's level — ask their experience first
-- Highlight gotchas and common mistakes specific to this codebase
-- Point to documentation rather than explaining everything from memory
 
+- Keep onboarding read-only; do not modify project files.
+- Explain Rust ownership, async, and SQLx concepts at the developer's level.
+- Surface environment gotchas rather than assuming they are obvious.
+- Point to source files and docs for follow-up reading.
 
 ## Temper Guards
 
 | Shortcut | Why It Breaks |
 |----------|--------------|
-| "The README covers everything" | READMEs go stale. An interactive onboarding verifies each step works right now, not when it was last updated. |
-| "New devs can figure it out" | Silent failures and undocumented prerequisites waste hours. Explicit verification prevents frustration. |
-| "Setup is straightforward" | What's obvious to the author is opaque to newcomers. Every assumption needs verification. |
-| "They can ask if they're stuck" | Asking requires knowing what to ask. New developers don't know what they don't know. |
+| "Cargo build is enough setup validation" | Docker, SQLx offline data, nextest, and migrations fail in different ways than compilation. |
+| "New developers can discover the layer model" | Rust module boundaries are deliberate; routes, services, and repositories need an explicit tour. |
+| "Local Postgres is fine for onboarding" | Testcontainers and Compose prevent hidden machine-specific assumptions. |
+| "Skip telemetry until later" | Request IDs, JSON logs, and shutdown flushing are part of production readiness from day one. |
 
 ## Warning Signs
 
-- Prerequisites not checked — assumed to be installed without running version commands
-- Build/test not verified — "setup complete" declared without actually running build and test
-- No architecture walkthrough — code structure not explained, only file locations listed
-- No "first task" suggestion — onboarding ends without a concrete next step
-- Environment variables not documented — required config not listed or explained
+- No one verifies Docker before integration tests.
+- `.sqlx/` and migration flow are unexplained.
+- Tenant identity rules are omitted from the architecture walkthrough.
+- First task suggestion requires broad domain knowledge.
+- Setup instructions depend on uncommitted local configuration.
 
 ## Exit Proof
 
 After completing this skill, confirm:
-- [ ] All prerequisites verified — `rustc --version`, `cargo --version` returns expected versions
-- [ ] `cargo build` succeeds without errors
-- [ ] `cargo test` passes on the new environment
-- [ ] Architecture walkthrough completed (layers, key files, data flow)
-- [ ] First task suggested from DEPLOYMENT-ROADMAP.md or backlog
-## Persistent Memory (if OpenBrain is configured)
+- [ ] Prerequisite commands were run or explicitly skipped with a reason
+- [ ] `cargo build --locked` outcome recorded
+- [ ] `cargo nextest run --all-targets` outcome recorded
+- [ ] Architecture walkthrough covered main, lib, routes, services, repositories, and state
+- [ ] First task suggestion is concrete and small
 
-- **Before onboarding**: `search_thoughts("onboarding", project: "<YOUR PROJECT NAME>", created_by: "copilot-vscode", type: "convention")` — load known setup issues and environment quirks
-- **After onboarding**: `capture_thought("Onboarding: <environment status, blockers encountered>", project: "<YOUR PROJECT NAME>", created_by: "copilot-vscode", source: "skill-onboarding")` — persist setup issues for future new developers
+## Persistent Memory — onboarding
+
+- **Before onboarding**: recall known Rust setup blockers, Docker issues, and first-task guidance.
+- **After onboarding**: capture environment status, blockers, and docs that need improvement.

@@ -1,4 +1,4 @@
-﻿---
+---
 description: "Define your project's non-negotiable principles, commitments, and boundaries"
 mode: agent
 ---
@@ -115,12 +115,12 @@ to **Accept**, **Modify**, or **Reject**.
 - Quality: "JUnit 6 with 90%+ coverage on service layer"
 
 **Swift**:
-- Core Principle: "Always check returned errors — no `_` for error values"
-- Core Principle: "Context propagation through all function chains"
-- Technology: "Swift 6.4+ with standard library preferred over third-party"
-- Forbidden: "Ignoring error returns with `_`" (silent failures)
-- Forbidden: "Task leaks — all Tasks must have a shutdown path"
-- Quality: "swift test with race detector enabled in CI"
+- Core Principle: "Structured concurrency only — child tasks must have cancellation and lifecycle ownership"
+- Core Principle: "Actor isolation or immutable values for shared state; no unsafely shared mutable references"
+- Technology: "Swift 6.4+ with Vapor 4.x, Swift Testing, Fluent, and strict concurrency checking"
+- Forbidden: "Force unwraps (`!`) and `try!` in production code" (process crash risk)
+- Forbidden: "Unchecked `Sendable` or `nonisolated(unsafe)` without a documented justification" (data-race risk)
+- Quality: "`swift test` with Swift Testing (`@Test`, `#expect`) and CI strict concurrency checks"
 
 ### Presenting Starters
 

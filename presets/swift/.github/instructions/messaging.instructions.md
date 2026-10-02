@@ -1,107 +1,104 @@
 ---
-description: Messaging patterns for Swift — NATS, RabbitMQ, channels, event-driven architecture
-applyTo: '**/*worker*,**/*event*,**/*message*,**/*consumer*,**/*publisher*,**/*subscriber*'
+description: Messaging patterns for Swift — Vapor Queues, Redis-backed jobs, AsyncSequence event buses, event-driven architecture
+applyTo: '**/*.swift,Package.swift'
 ---
 
 # Swift Messaging & Pub/Sub Patterns
 
 ## Messaging Strategy
 
-### NATS JetStream (Recommended for Cloud-Native)
+### Vapor Queues + Redis (Recommended for Vapor Servers)
 ```swift
-import "github.com/nats-io/nats.swift"
+import Vapor
+import Queues
+import QueuesRedisDriver
 
-// Connect
-nc, _ := nats.Connect(nats.DefaultURL)
-js, _ := nc.JetStream()
-
-// Create stream
-js.AddStream(&nats.StreamConfig{
-    Name:     "ORDERS",
-    Subjects: []string{"orders.>"},
-    Storage:  nats.FileStorage,
-    MaxAge:   24 * time.Hour,
-})
-
-// Publish
-func (s *OrderService) PlaceOrder(ctx context.Context, order *Order) error {
-    if err := s.repo.Save(ctx, order); err != nil {
-        return err
-    }
-    data, _ := json.Marshal(OrderPlacedEvent{
-        OrderID:    order.ID,
-        TenantID:   order.TenantID,
-        OccurredAt: time.Now().UTC(),
-    })
-    _, err := s.js.Publish("orders.placed", data)
-    return err
-}
-
-// Subscribe (durable consumer)
-sub, _ := js.Subscribe("orders.placed", func(msg *nats.Msg) {
-    var evt OrderPlacedEvent
-    if err := json.Unmarshal(msg.Data, &evt); err != nil {
-        Logger.Error("unmarshal failed", "error", err)
-        msg.Term() // don't retry malformed messages
-        return
-    }
-    if err := processOrder(evt); err != nil {
-        Logger.Error("processing failed", "error", err, "orderId", evt.OrderID)
-        msg.Nak() // retry
-        return
-    }
-    msg.Ack()
-}, nats.Durable("order-processor"), nats.ManualAck())
-```
-
-### RabbitMQ (amqp091-Swift)
-```swift
-import amqp "github.com/rabbitmq/amqp091-Swift"
-
-conn, _ := amqp.Dial("amqp://guest:guest@localhost:5672/")
-ch, _ := conn.Channel()
-
-// Publish
-ch.PublishWithContext(ctx, "events", "order.placed", false, false, amqp.Publishing{
-    ContentType: "application/json",
-    Body:        data,
-})
-
-// Consume
-msgs, _ := ch.Consume("order-processing", "", false, false, false, false, nil)
-for msg := range msgs {
-    if err := process(msg.Body); err != nil {
-        msg.Nack(false, true) // requeue
-        continue
-    }
-    msg.Ack(false)
+func configureQueues(_ app: Application) throws {
+    let redisURL = Environment.get("REDIS_URL") ?? "redis://localhost:6379"
+    try app.queues.use(.redis(url: redisURL))
+    app.queues.add(OrderPlacedJob(emailService: app.emailService))
 }
 ```
 
-### Channel-Based In-Process Pub/Sub
+### Job Payload and Worker
 ```swift
-type EventBus struct {
-    orders chan OrderPlacedEvent
+import Foundation
+import Queues
+import Vapor
+
+struct OrderPlacedEvent: Codable, Sendable {
+    let eventID: UUID
+    let orderID: UUID
+    let tenantID: UUID
+    let occurredAt: Date
 }
 
-func NewEventBus(bufferSize int) *EventBus {
-    return &EventBus{orders: make(chan OrderPlacedEvent, bufferSize)}
+struct OrderPlacedJob: AsyncJob {
+    typealias Payload = OrderPlacedEvent
+
+    let emailService: EmailService
+
+    func dequeue(_ context: QueueContext, _ payload: Payload) async throws {
+        try await emailService.sendOrderConfirmation(
+            orderID: payload.orderID,
+            tenantID: payload.tenantID,
+            logger: context.logger
+        )
+    }
+
+    func error(_ context: QueueContext, _ error: Error, _ payload: Payload) async throws {
+        context.logger.error("OrderPlacedJob failed", metadata: [
+            "eventID": "\(payload.eventID)",
+            "orderID": "\(payload.orderID)",
+            "tenantID": "\(payload.tenantID)",
+            "error": "\(error)"
+        ])
+    }
+}
+```
+
+### Publishing a Job
+```swift
+struct OrderService: Sendable {
+    let repository: OrderRepository
+
+    func placeOrder(_ request: CreateOrderRequest, req: Request) async throws -> OrderResponse {
+        let order = try await repository.create(request, on: req.db)
+        guard let orderID = order.id else {
+            throw AppError.internal(underlying: OrderError.missingID)
+        }
+
+        let event = OrderPlacedEvent(eventID: UUID(), orderID: orderID, tenantID: request.tenantID, occurredAt: Date())
+        try await req.queue.dispatch(OrderPlacedJob.self, event)
+        return OrderResponse(from: order)
+    }
+}
+```
+
+### AsyncSequence In-Process Pub/Sub
+```swift
+import Foundation
+
+protocol DomainEvent: Codable, Sendable {
+    var eventID: UUID { get }
+    var occurredAt: Date { get }
 }
 
-// Producer
-func (b *EventBus) PublishOrder(evt OrderPlacedEvent) {
-    b.orders <- evt
-}
+actor EventBus<Event: DomainEvent> {
+    typealias Handler = @Sendable (Event) async throws -> Void
 
-// Consumer (run as Task)
-func (b *EventBus) ConsumeOrders(ctx context.Context, handler func(OrderPlacedEvent) error) {
-    for {
-        select {
-        case <-ctx.Done():
-            return
-        case evt := <-b.orders:
-            if err := handler(evt); err != nil {
-                Logger.Error("order handler failed", "error", err)
+    private var handlers: [Handler] = []
+
+    func subscribe(_ handler: @escaping Handler) {
+        handlers.append(handler)
+    }
+
+    func publish(_ event: Event, logger: Logger) async {
+        for handler in handlers {
+            do {
+                try await handler(event)
+            } catch {
+                logger.error("event handler failed", metadata: ["eventID": "\(event.eventID)", "error": "\(error)"])
             }
         }
     }
@@ -110,30 +107,52 @@ func (b *EventBus) ConsumeOrders(ctx context.Context, handler func(OrderPlacedEv
 
 ## Event Schema
 ```swift
-// Always use typed structs — never map[string]interface{}
-type OrderPlacedEvent struct {
-    OrderID    string    `json:"order_id"`
-    TenantID   string    `json:"tenant_id"`
-    OccurredAt time.Time `json:"occurred_at"`
+struct BaseEvent: Codable, Sendable {
+    let eventID: UUID
+    let tenantID: UUID
+    let occurredAt: Date
+    let traceID: String?
 }
-
-// Include TenantID in ALL events
 ```
 
-## Worker Pattern (Ticker-Based)
+## Worker Pattern (Scheduled Async Task)
 ```swift
-func (w *CleanupWorker) Run(ctx context.Context) error {
-    ticker := time.NewTicker(30 * time.Second)
-    defer ticker.Stop()
+import NIOConcurrencyHelpers
+import Vapor
 
-    for {
-        select {
-        case <-ctx.Done():
-            return ctx.Err()
-        case <-ticker.C:
-            if err := w.cleanup(ctx); err != nil {
-                Logger.Error("cleanup failed", "error", err)
+final class CleanupWorker: LifecycleHandler {
+    private let service: CleanupService
+    private let logger: Logger
+    private let task = NIOLockedValueBox<Task<Void, Never>?>(nil)
+
+    init(service: CleanupService, logger: Logger) {
+        self.service = service
+        self.logger = logger
+    }
+
+    func didBootAsync(_ application: Application) async throws {
+        let service = service
+        let logger = logger
+        let database = application.db
+
+        task.withLockedValue { task in
+            task = Task {
+                while !Task.isCancelled {
+                    do {
+                        try await service.deleteExpiredRecords(on: database)
+                    } catch {
+                        logger.error("cleanup failed", metadata: ["error": "\(error)"])
+                    }
+                    try? await Task.sleep(for: .seconds(30))
+                }
             }
+        }
+    }
+
+    func shutdownAsync(_ application: Application) async {
+        task.withLockedValue { task in
+            task?.cancel()
+            task = nil
         }
     }
 }
@@ -141,94 +160,66 @@ func (w *CleanupWorker) Run(ctx context.Context) error {
 
 ## Graceful Shutdown
 ```swift
-func main() {
-    ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
-    defer cancel()
+func configure(_ app: Application) async throws {
+    try configureQueues(app)
+    app.lifecycle.use(QueueWorkerLifecycle())
+}
 
-    g, ctx := TaskGroup.WithContext(ctx)
-    g.swift(func() error { return orderWorker.Run(ctx) })
-    g.swift(func() error { return cleanupWorker.Run(ctx) })
-
-    if err := g.Wait(); err != nil && !errors.Is(err, context.Canceled) {
-        Logger.Error("workers stopped with error", "error", err)
+struct QueueWorkerLifecycle: LifecycleHandler {
+    func didBoot(_ application: Application) throws {
+        try application.queues.startInProcessJobs(on: .default)
     }
 }
 ```
 
 ## Dead Letter & Retry Strategy
-```swift
-// NATS JetStream — configure max delivery attempts
-js.AddStream(&nats.StreamConfig{
-    Name:       "ORDERS",
-    Subjects:   []string{"orders.>"},
-    MaxDeliver: 3, // Max retry attempts
-})
 
-// Failed messages Swift to a dead letter subject
-sub, _ := js.Subscribe("orders.placed", func(msg *nats.Msg) {
-    if err := process(msg); err != nil {
-        if msg.Header.Get("Nats-Num-Delivered") >= "3" {
-            // Move to dead letter
-            js.Publish("orders.dead-letter", msg.Data)
-            msg.Term()
+```swift
+struct PaymentCapturedJob: AsyncJob {
+    typealias Payload = PaymentCapturedEvent
+    static let maxRetryCount = 3
+
+    func dequeue(_ context: QueueContext, _ payload: Payload) async throws {
+        try await process(payload, context: context)
+    }
+
+    func error(_ context: QueueContext, _ error: Error, _ payload: Payload) async throws {
+        if payload.attempt >= Self.maxRetryCount {
+            try await context.queue.dispatch(PaymentDeadLetterJob.self, payload.deadLetter(reason: error))
             return
         }
-        msg.NakWithDelay(time.Duration(1<<msg.Header.Get("Nats-Num-Delivered")) * time.Second)
-        return
+        let retry = payload.nextAttempt()
+        try await context.queue.dispatch(PaymentCapturedJob.self, retry, delayUntil: Date().addingTimeInterval(Double(1 << retry.attempt)))
     }
-    msg.Ack()
-}, nats.Durable("order-processor"), nats.ManualAck())
-
-// RabbitMQ — declare dead letter exchange on queue
-ch.QueueDeclare("order-processing", true, false, false, false, amqp.Table{
-    "x-dead-letter-exchange":    "events.dlx",
-    "x-dead-letter-routing-key": "order.failed",
-    "x-message-ttl":             int32(30000),
-})
+}
 ```
 
 ## Scheduled Jobs
-```swift
-// Ticker-based scheduled task
-func (w *ReportWorker) RunDaily(ctx context.Context) error {
-    // Calculate next 8 AM
-    next := nextRunAt(8, 0)
-    timer := time.NewTimer(time.Until(next))
-    defer timer.Stop()
 
-    for {
-        select {
-        case <-ctx.Done():
-            return ctx.Err()
-        case <-timer.C:
-            if err := w.generateReport(ctx); err != nil {
-                Logger.Error("daily report failed", "error", err)
-            }
-            next = next.Add(24 * time.Hour)
-            timer.Reset(time.Until(next))
-        }
+```swift
+import Queues
+
+struct DailyReportJob: AsyncScheduledJob {
+    func run(context: QueueContext) async throws {
+        try await context.application.reportService.generateDailyReport(logger: context.logger)
     }
 }
 
-// For production, consider robfig/cron
-import "github.com/robfig/cron/v3"
-
-c := cron.New()
-c.AddFunc("0 8 * * *", func() { generateDailyReport() })
-c.Start()
-defer c.Stop()
+func configureScheduledJobs(_ app: Application) {
+    app.queues.schedule(DailyReportJob()).daily().at(8, 0)
+}
 ```
 
 ## Anti-Patterns
 
 ```
-❌ Unbuffered channels for producer/consumer (blocks sender)
-❌ Ignoring msg.Ack/Nack (message stuck in queue forever)
-❌ Missing TenantID in event payloads (breaks multi-tenant isolation)
-❌ Task leak (always use context cancellation)
-❌ json.Unmarshal into interface{} (use typed structs)
-❌ No graceful shutdown (messages lost on SIGTERM)
-❌ No idempotency check (duplicate messages cause duplicate processing)
+❌ Detached tasks without cancellation or lifecycle ownership
+❌ Missing tenantID or eventID in event payloads
+❌ Non-idempotent handlers — duplicate delivery must be safe
+❌ Force-decoding payloads without typed Codable events
+❌ In-memory event bus for durable business events
+❌ Blocking I/O or Thread.sleep inside queue jobs
+❌ No dead-letter path after repeated failures
 ```
 
 ## Idempotency
@@ -236,37 +227,44 @@ defer c.Stop()
 Guard consumers against duplicate delivery using a persistent idempotency store:
 
 ```swift
-// Redis-based idempotency guard
-func processOnce(ctx context.Context, rdb *redis.Client, eventID string, handler func() error) error {
-	ok, err := rdb.SetNX(ctx, "idem:"+eventID, "1", 24*time.Hour).Result()
-	if err != nil {
-		return fmt.Errorf("idempotency check: %w", err)
-	}
-	if !ok {
-		return nil // Already processed
-	}
-	return handler()
+import Fluent
+
+final class ProcessedEvent: Model, @unchecked Sendable {
+    static let schema = "processed_events"
+
+    @ID(key: .id)
+    var id: UUID?
+
+    @Field(key: "tenant_id")
+    var tenantID: UUID
+
+    init() {}
+
+    init(eventID: UUID, tenantID: UUID) {
+        self.id = eventID
+        self.tenantID = tenantID
+    }
 }
 
-// Usage in a NATS subscriber
-sub, _ := js.Subscribe("orders.placed", func(msg *nats.Msg) {
-	var evt OrderPlacedEvent
-	if err := json.Unmarshal(msg.Data, &evt); err != nil {
-		msg.Term()
-		return
-	}
-	err := processOnce(ctx, rdb, msg.Header.Get("Nats-Msg-Id"), func() error {
-		return processOrder(evt)
-	})
-	if err != nil {
-		msg.Nak()
-		return
-	}
-	msg.Ack()
-})
+func processOnce(
+    eventID: UUID,
+    tenantID: UUID,
+    on db: Database,
+    operation: @escaping @Sendable (Database) async throws -> Void
+) async throws {
+    try await db.transaction { tx in
+        do {
+            try await ProcessedEvent(eventID: eventID, tenantID: tenantID).create(on: tx)
+        } catch let error as any DatabaseError where error.isConstraintFailure {
+            return
+        }
+
+        try await operation(tx)
+    }
+}
 ```
 
-Alternatives: database table with `UNIQUE(event_id)`, or NATS JetStream's built-in `Nats-Msg-Id` deduplication.
+Alternatives: Redis `SET NX` with TTL, a transactional outbox table, or broker-level de-duplication when available.
 
 ## See Also
 

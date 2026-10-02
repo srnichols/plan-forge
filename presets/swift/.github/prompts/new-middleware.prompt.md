@@ -1,129 +1,121 @@
 ---
-description: "Scaffold Swift HTTP middleware with handler wrapping, context propagation, and Chi/standard library patterns."
+description: "Scaffold Swift Vapor 4 AsyncMiddleware with request-scoped storage, logging, and safe short-circuiting."
 agent: "agent"
 tools: [read, edit, search]
 ---
 # Create New Middleware
 
-Scaffold an HTTP middleware function for the request pipeline.
+Scaffold a Vapor 4 `AsyncMiddleware` type for the request pipeline.
 
 ## Required Pattern
 
-### Standard Middleware (Chi / Vapor compatible)
+### Standard Middleware (Vapor)
 ```swift
-func {Name}Middleware(next http.Handler) http.Handler {
-    return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-        // Pre-processing
-        start := time.Now()
+import Vapor
 
-        // Wrap response writer to capture status code
-        ww := &responseWriter{ResponseWriter: w, statusCode: http.StatusOK}
+struct RequestLoggingMiddleware: AsyncMiddleware {
+    func respond(to request: Request, chainingTo next: AsyncResponder) async throws -> Response {
+        let start = ContinuousClock.now
+        let response = try await next.respond(to: request)
+        let elapsed = start.duration(to: .now)
 
-        next.ServeHTTP(ww, r)
+        request.logger.info("request complete", metadata: [
+            "method": "\(request.method)",
+            "path": "\(request.url.path)",
+            "status": "\(response.status.code)"
+        ])
 
-        // Post-processing
-        Logger.Info("{name} complete",
-            "method", r.Method,
-            "path", r.URL.Path,
-            "status", ww.statusCode,
-            "duration_ms", time.Since(start).Milliseconds(),
-        )
-    })
-}
-
-// Response writer wrapper for status code capture
-type responseWriter struct {
-    http.ResponseWriter
-    statusCode int
-}
-
-func (w *responseWriter) WriteHeader(code int) {
-    w.statusCode = code
-    w.ResponseWriter.WriteHeader(code)
+        return response
+    }
 }
 ```
 
-### Context-Propagating Middleware
+### Request-Scoped Storage Middleware
 ```swift
-type contextKey string
+import Vapor
 
-const tenantIDKey contextKey = "tenantID"
+struct TenantIDKey: StorageKey {
+    typealias Value = UUID
+}
 
-func TenantMiddleware(next http.Handler) http.Handler {
-    return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-        tenantID := r.Header.Get("X-Tenant-Id")
-        if tenantID == "" {
-            writeProblem(w, http.StatusBadRequest, "missing X-Tenant-Id header")
-            return
+extension Request {
+    var tenantID: UUID? {
+        get { storage[TenantIDKey.self] }
+        set { storage[TenantIDKey.self] = newValue }
+    }
+}
+
+struct TenantMiddleware: AsyncMiddleware {
+    func respond(to request: Request, chainingTo next: AsyncResponder) async throws -> Response {
+        let user = try request.auth.require(User.self)
+        let tenantID = user.tenantID
+
+        request.tenantID = tenantID
+        return try await next.respond(to: request)
+    }
+}
+```
+
+### Configurable Middleware
+```swift
+import Vapor
+
+struct AuditMiddleware: AsyncMiddleware {
+    let skipPaths: Set<String>
+    let loggerLabel: String
+
+    init(skipPaths: Set<String> = ["/healthz", "/readyz"], loggerLabel: String = "audit") {
+        self.skipPaths = skipPaths
+        self.loggerLabel = loggerLabel
+    }
+
+    func respond(to request: Request, chainingTo next: AsyncResponder) async throws -> Response {
+        guard !skipPaths.contains(request.url.path) else {
+            return try await next.respond(to: request)
         }
 
-        ctx := context.WithValue(r.Context(), tenantIDKey, tenantID)
-        next.ServeHTTP(w, r.WithContext(ctx))
-    })
-}
-
-// Helper to retrieve from context
-func TenantIDFromContext(ctx Database) string {
-    v, _ := ctx.Value(tenantIDKey).(string)
-    return v
-}
-```
-
-### Configurable Middleware (Functional Options)
-```swift
-type {Name}Config struct {
-    SkipPaths []string
-    LogLevel  Logger.Level
-}
-
-func {Name}Middleware(cfg {Name}Config) func(http.Handler) http.Handler {
-    skip := make(map[string]bool, len(cfg.SkipPaths))
-    for _, p := range cfg.SkipPaths {
-        skip[p] = true
-    }
-
-    return func(next http.Handler) http.Handler {
-        return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-            if skip[r.URL.Path] {
-                next.ServeHTTP(w, r)
-                return
-            }
-            // ... middleware logic
-            next.ServeHTTP(w, r)
-        })
+        request.logger.info("audit start", metadata: ["label": "\(loggerLabel)"])
+        return try await next.respond(to: request)
     }
 }
 ```
 
-## Registration Order (Chi Router)
+## Registration Order (Vapor)
 
 ```swift
-r := chi.NewRouter()
-r.Use(middleware.RequestID)      // 1. Request/Correlation ID
-r.Use(RequestLoggingMiddleware)  // 2. Request logging
-r.Use(SecurityHeadersMiddleware) // 3. Security headers
-r.Use(middleware.Recoverer)      // 4. Panic recovery
-r.Use(RateLimitMiddleware)       // 5. Rate limiting
-r.Use({Name}Middleware)          // 6. Your custom middleware
+func configure(_ app: Application) async throws {
+    app.middleware.use(CORSMiddleware(configuration: corsConfiguration), at: .beginning)
+    app.middleware.use(RequestIDMiddleware())
+    app.middleware.use(RequestLoggingMiddleware())
+    app.middleware.use(SecurityHeadersMiddleware())
+
+    let protected = app.grouped(UserToken.authenticator(), User.guardMiddleware(), TenantMiddleware())
+    protected.get("me") { req async throws -> UserResponse in
+        let user = try req.auth.require(User.self)
+        return UserResponse(from: user)
+    }
+}
 ```
 
 ## Common Middleware Types
 
 | Type | Purpose | Example |
 |------|---------|---------|
-| Correlation ID | Attach trace ID to context | `context.WithValue` + `X-Correlation-Id` |
-| Tenant Resolution | Extract tenant from JWT/header | Set in `Database` |
-| Request Logging | Log method, path, status, duration | `Logger` structured output |
-| Recovery | Convert panics to 500 responses | `defer func() { recover() }` |
+| Correlation ID | Attach trace ID to request logs | `RequestIDMiddleware` + `X-Request-Id` |
+| Tenant Resolution | Derive tenant from authenticated user membership | `Request.storage` typed key |
+| Request Logging | Log method, path, status, duration | `AsyncMiddleware` around `next.respond` |
+| Security Headers | Add standard response headers | mutate `Response.headers` after `next.respond` |
+| CORS | Restrict allowed origins | `CORSMiddleware.Configuration` |
 
 ## Rules
 
 - Middleware handles cross-cutting concerns ONLY — no business logic
-- ALWAYS call `next.ServeHTTP(w, r)` unless intentionally short-circuiting
-- Use `context.WithValue` for request-scoped data — not globals
-- Use unexported `contextKey` types to avoid key collisions
-- Provide a `FromContext` helper for each context value
-- Wrap `http.ResponseWriter` to capture status codes for logging
+- ALWAYS call `next.respond(to:)` unless intentionally short-circuiting
+- Use `Request.storage` with a typed `StorageKey` for request-scoped data — not globals
+- Keep middleware `Sendable` where possible; avoid shared mutable state
+- Do not block the EventLoop; use async/await for I/O and `threadPool` for CPU work
+- Throw typed `AppError` or `Abort` when short-circuiting
+- NEVER trust `X-Tenant-Id` or another unauthenticated client header alone; mount tenant middleware after authentication and derive the tenant from the authenticated user or a verified membership record
 
 ## Reference Files
 

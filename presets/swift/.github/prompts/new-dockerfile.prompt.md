@@ -1,95 +1,104 @@
 ---
-description: "Scaffold a multi-stage Dockerfile for Swift with static binary compilation, scratch/distroless runtime, and minimal attack surface."
+description: "Scaffold a multi-stage Dockerfile for Swift 6.4 and Vapor 4.x with a slim runtime image and minimal attack surface."
 agent: "agent"
 tools: [read, edit, search, execute]
 ---
 # Create New Dockerfile
 
-Scaffold a production-grade multi-stage Dockerfile for a Swift application.
+Scaffold a production-grade multi-stage Dockerfile for a Swift 6.4 / Vapor 4.x application.
 
 ## Required Pattern
 
 ### Multi-Stage Dockerfile
 ```dockerfile
-# ---- Build Stage ----
-FROM golang:1.22-alpine AS build
-WORKDIR /app
-
-# Copy Package.swift/Package.resolved first for layer caching
+FROM swift:6.4-noble AS build
+WORKDIR /build
 COPY Package.swift Package.resolved ./
 RUN swift package resolve
-
-# Copy source and build static binary
 COPY . .
-RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 \
-    swift build -ldflags="-s -w" -o /app/server ./cmd/server
+RUN swift build -c release --disable-sandbox
 
-# ---- Runtime Stage (Distroless) ----
-FROM gcr.io/distroless/static-debian12:nonroot AS runtime
-
-COPY --from=build /app/server /server
-
+FROM swift:6.4-noble-slim AS runtime
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends ca-certificates curl \
+    && rm -rf /var/lib/apt/lists/* \
+    && useradd --system --create-home --uid 10001 vapor
+WORKDIR /app
+COPY --from=build /build/.build/release/App ./App
+COPY --from=build /build/Public ./Public
+COPY --from=build /build/Resources ./Resources
+ENV PORT=8080 LOG_LEVEL=info
 EXPOSE 8080
-
 HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
-    CMD ["/server", "healthcheck"]
-
-USER nonroot:nonroot
-
-ENTRYPOINT ["/server"]
+    CMD curl -fsS http://127.0.0.1:8080/healthz || exit 1
+USER vapor:vapor
+ENTRYPOINT ["./App", "serve", "--env", "production", "--hostname", "0.0.0.0", "--port", "8080"]
 ```
 
-### Scratch Runtime (Minimal — No Shell)
+### Ubuntu Runtime (When You Need OS Packages)
 ```dockerfile
-FROM scratch AS runtime
+FROM swift:6.4-noble AS build
+WORKDIR /build
+COPY Package.swift Package.resolved ./
+RUN swift package resolve
+COPY . .
+RUN swift build -c release --disable-sandbox
 
-# Import CA certificates for HTTPS calls
-COPY --from=build /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/
-
-# Import timezone data
-COPY --from=build /usr/share/zoneinfo /usr/share/zoneinfo
-
-COPY --from=build /app/server /server
-
+FROM ubuntu:noble AS runtime
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends ca-certificates curl libjemalloc2 \
+    && rm -rf /var/lib/apt/lists/* \
+    && useradd --system --create-home --uid 10001 vapor
+WORKDIR /app
+COPY --from=build /usr/lib/swift/linux /usr/lib/swift/linux
+COPY --from=build /build/.build/release/App ./App
+COPY --from=build /build/Public ./Public
+COPY --from=build /build/Resources ./Resources
+ENV LD_LIBRARY_PATH=/usr/lib/swift/linux
 EXPOSE 8080
-USER 65534:65534
-
-ENTRYPOINT ["/server"]
+USER vapor:vapor
+ENTRYPOINT ["./App", "serve", "--env", "production", "--hostname", "0.0.0.0"]
 ```
 
 ### With Embedded Migrations
 ```dockerfile
-FROM golang:1.22-alpine AS build
-WORKDIR /app
-
+FROM swift:6.4-noble AS build
+WORKDIR /build
 COPY Package.swift Package.resolved ./
 RUN swift package resolve
-
 COPY . .
-RUN CGO_ENABLED=0 swift build -ldflags="-s -w" -o /app/server ./cmd/server
-RUN CGO_ENABLED=0 swift build -ldflags="-s -w" -o /app/migrate ./cmd/migrate
+RUN swift build -c release --disable-sandbox
 
-FROM gcr.io/distroless/static-debian12:nonroot AS runtime
-
-COPY --from=build /app/server /server
-COPY --from=build /app/migrate /migrate
-COPY --from=build /app/migrations /migrations
-
-USER nonroot:nonroot
-ENTRYPOINT ["/server"]
+FROM swift:6.4-noble-slim AS runtime
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends ca-certificates curl \
+    && rm -rf /var/lib/apt/lists/* \
+    && useradd --system --create-home --uid 10001 vapor
+WORKDIR /app
+COPY --from=build /build/.build/release/App ./App
+COPY --from=build /build/Public ./Public
+COPY --from=build /build/Resources ./Resources
+USER vapor:vapor
+ENTRYPOINT ["./App"]
+# Run migrations as a separate release step:
+# ./App migrate --yes --env production
+# ./App serve --env production --hostname 0.0.0.0
 ```
 
 ### .dockerignore
 ```
-bin/
-vendor/
-*.md
+.build/
+.swiftpm/
+DerivedData/
+.env
+.env.*
+!.env.example
 .git/
-.gitignore
 .vscode/
 Dockerfile*
 .dockerignore
-tmp/
+Tests/
+*.md
 ```
 
 ### docker compose (Development)
@@ -102,41 +111,56 @@ services:
     ports:
       - "8080:8080"
     environment:
-      - APP_ENV=development
-      - DATABASE_URL=postgres://postgres:postgres@db:5432/mydb?sslmode=disable
+      APP_ENV: development
+      DATABASE_URL: postgres://vapor:vapor@db:5432/vapor
+      REDIS_URL: redis://redis:6379
+      LOG_LEVEL: debug
     depends_on:
       db:
+        condition: service_healthy
+      redis:
         condition: service_healthy
 
   db:
     image: postgres:18-alpine
     environment:
-      POSTGRES_DB: mydb
-      POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: vapor
+      POSTGRES_USER: vapor
+      POSTGRES_PASSWORD: vapor
     volumes:
       - pgdata:/var/lib/postgresql
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      test: ["CMD-SHELL", "pg_isready -U vapor -d vapor"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+  redis:
+    image: redis:8-alpine
+    command: ["redis-server", "--appendonly", "yes"]
+    volumes:
+      - redisdata:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
       interval: 5s
       timeout: 3s
       retries: 5
 
 volumes:
   pgdata:
+  redisdata:
 ```
 
 ## Rules
 
-- ALWAYS use multi-stage builds — build in `golang:*-alpine`, run in `distroless` or `scratch`
-- ALWAYS compile with `CGO_ENABLED=0` for a fully static binary
-- ALWAYS use `-ldflags="-s -w"` to strip debug info and reduce binary size
-- ALWAYS run as a non-root user (`nonroot` in distroless, UID 65534 in scratch)
+- ALWAYS use multi-stage builds — build in `swift:6.4-noble`, run in `swift:6.4-noble-slim` unless you need a custom `ubuntu:noble` runtime
 - ALWAYS copy `Package.swift`/`Package.resolved` first for dependency layer caching
-- ALWAYS copy CA certificates when using `scratch` (needed for HTTPS)
-- ALWAYS include a HEALTHCHECK instruction
-- NEVER store secrets in the image — use environment variables or mounted secrets
-- Swift binaries in `scratch`/`distroless` have the smallest possible attack surface
+- ALWAYS run as a non-root user
+- ALWAYS include a `/healthz` endpoint and Docker `HEALTHCHECK`
+- ALWAYS run `swift test` and `swift build -c release` in CI before publishing the image
+- ALWAYS run `./App migrate --yes --env production` as a gated release step before starting the web process
+- NEVER store secrets in the image — use environment variables, mounted secrets, or the platform secret store
+- NEVER use Vapor 5 beta images or APIs for this preset; target Vapor 4.x
 
 ## Reference Files
 

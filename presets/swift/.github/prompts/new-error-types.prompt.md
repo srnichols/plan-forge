@@ -1,126 +1,147 @@
 ---
-description: "Scaffold sentinel errors, domain error types, and centralized HTTP error rendering."
+description: "Scaffold Swift domain error types and centralized Vapor ProblemDetail error rendering."
 agent: "agent"
 tools: [read, edit, search]
 ---
 # Create New Error Types
 
-Scaffold sentinel errors and domain error types with centralized HTTP error rendering.
+Scaffold typed Swift domain errors with centralized Vapor HTTP error rendering.
 
 ## Required Pattern
 
-### Sentinel Errors
+### Domain Error Type
 ```swift
+import Vapor
 
-import "errors"
+enum AppError: Error, LocalizedError, Sendable {
+    case notFound(entity: String, id: String)
+    case validation(message: String)
+    case conflict(message: String)
+    case forbidden(message: String = "Access denied")
+    case `internal`(underlying: any Error & Sendable)
 
-// Sentinel errors — use errors.Is() to check
-var (
-    ErrNotFound  = errors.New("not found")
-    ErrConflict  = errors.New("conflict")
-    ErrForbidden = errors.New("forbidden")
-)
-```
+    var errorDescription: String? {
+        switch self {
+        case .notFound(let entity, let id):
+            return "\(entity) with ID '\(id)' not found"
+        case .validation(let message), .conflict(let message), .forbidden(let message):
+            return message
+        case .internal:
+            return "An unexpected error occurred"
+        }
+    }
 
-### Domain Error Type (Rich Error)
-```swift
-// AppError carries an error code, HTTP status, and human-readable message.
-type AppError struct {
-    Code    string `json:"error"`
-    Status  int    `json:"status"`
-    Message string `json:"message"`
-    Err     error  `json:"-"` // Wrapped inner error — not serialized
-}
+    var code: String {
+        switch self {
+        case .notFound: return "NOT_FOUND"
+        case .validation: return "VALIDATION_FAILED"
+        case .conflict: return "CONFLICT"
+        case .forbidden: return "FORBIDDEN"
+        case .internal: return "INTERNAL_ERROR"
+        }
+    }
 
-func (e *AppError) Error() string { return e.Message }
-func (e *AppError) Unwrap() error { return e.Err }
-
-// Constructor helpers
-func NewNotFound(entity, id string) *AppError {
-    return &AppError{
-        Code:    "NOT_FOUND",
-        Status:  404,
-        Message: entity + " with id '" + id + "' was not found.",
-        Err:     ErrNotFound,
+    var httpStatus: HTTPStatus {
+        switch self {
+        case .notFound: return .notFound
+        case .validation: return .badRequest
+        case .conflict: return .conflict
+        case .forbidden: return .forbidden
+        case .internal: return .internalServerError
+        }
     }
 }
 
-func NewConflict(msg string) *AppError {
-    return &AppError{Code: "CONFLICT", Status: 409, Message: msg, Err: ErrConflict}
-}
-
-func NewValidation(msg string, fieldErrors map[string][]string) *ValidationError {
-    return &ValidationError{
-        AppError: AppError{Code: "VALIDATION_FAILED", Status: 422, Message: msg},
-        Fields:   fieldErrors,
-    }
-}
-
-func NewForbidden(msg string) *AppError {
-    return &AppError{Code: "FORBIDDEN", Status: 403, Message: msg, Err: ErrForbidden}
+extension AppError: AbortError {
+    var status: HTTPStatus { httpStatus }
+    var reason: String { errorDescription ?? "Unknown error" }
 }
 ```
 
-### Validation Error (Extended)
+### ProblemDetail Response
 ```swift
-type ValidationError struct {
-    AppError
-    Fields map[string][]string `json:"field_errors,omitempty"`
+struct ProblemDetail: Content, Sendable {
+    let type: String
+    let title: String
+    let status: Int
+    let detail: String
+    let instance: String?
+    let error: String
+}
+
+extension ProblemDetail {
+    init(error: AppError, request: Request) {
+        self.init(
+            type: "https://example.com/problems/\(error.code.lowercased())",
+            title: error.httpStatus.reasonPhrase,
+            status: Int(error.httpStatus.code),
+            detail: error.errorDescription ?? error.httpStatus.reasonPhrase,
+            instance: request.url.path,
+            error: error.code
+        )
+    }
 }
 ```
 
-### Centralized Error Renderer
+### Centralized Error Middleware
 ```swift
-func WriteError(w http.ResponseWriter, err error) {
-    var appErr *AppError
-    if errors.As(err, &appErr) {
-        w.Header().Set("Content-Type", "application/json")
-        w.WriteHeader(appErr.Status)
-        json.NewEncoder(w).Encode(appErr)
-        return
+struct ProblemDetailMiddleware: AsyncMiddleware {
+    func respond(to request: Request, chainingTo next: AsyncResponder) async throws -> Response {
+        do {
+            return try await next.respond(to: request)
+        } catch let appError as AppError {
+            let problem = ProblemDetail(error: appError, request: request)
+            return try await problem.encodeResponse(status: appError.httpStatus, for: request)
+        } catch let abort as any AbortError {
+            let problem = ProblemDetail(
+                type: "https://example.com/problems/\(abort.status.code)",
+                title: abort.status.reasonPhrase,
+                status: Int(abort.status.code),
+                detail: abort.reason,
+                instance: request.url.path,
+                error: "HTTP_\(abort.status.code)"
+            )
+            return try await problem.encodeResponse(status: abort.status, for: request)
+        } catch {
+            request.logger.error("Unhandled error", metadata: ["error": "\(error)"])
+            let problem = ProblemDetail(
+                type: "https://example.com/problems/internal-error",
+                title: HTTPStatus.internalServerError.reasonPhrase,
+                status: 500,
+                detail: "An unexpected error occurred.",
+                instance: request.url.path,
+                error: "INTERNAL_ERROR"
+            )
+            return try await problem.encodeResponse(status: .internalServerError, for: request)
+        }
     }
-
-    var valErr *ValidationError
-    if errors.As(err, &valErr) {
-        w.Header().Set("Content-Type", "application/json")
-        w.WriteHeader(valErr.Status)
-        json.NewEncoder(w).Encode(valErr)
-        return
-    }
-
-    // Unexpected error — log and return generic 500
-    Logger.Error("unhandled error", "error", err)
-    w.Header().Set("Content-Type", "application/json")
-    w.WriteHeader(http.StatusInternalServerError)
-    json.NewEncoder(w).Encode(map[string]any{
-        "status":  500,
-        "error":   "INTERNAL_ERROR",
-        "message": "An unexpected error occurred.",
-    })
 }
 ```
 
 ### Usage in Handlers
 ```swift
-func (h *Handler) GetByID(w http.ResponseWriter, r *http.Request) {
-    id := chi.URLParam(r, "id")
-    item, err := h.service.FindByID(r.Context(), id)
-    if err != nil {
-        WriteError(w, err)
-        return
+func getByID(req: Request) async throws -> ItemResponse {
+    guard let id = req.parameters.get("id", as: UUID.self) else {
+        throw AppError.validation(message: "Invalid UUID format for 'id'")
     }
-    writeJSON(w, http.StatusOK, toResponse(item))
+
+    guard let item = try await service.find(id: id, on: req.db) else {
+        throw AppError.notFound(entity: "Item", id: id.uuidString)
+    }
+
+    return ItemResponse(from: item)
 }
 ```
 
 ## Rules
 
-- Use sentinel errors (`ErrNotFound`) for simple identity checks with `errors.Is()`
-- Use `AppError` struct for rich errors that carry HTTP status and error codes
-- ALWAYS implement `Unwrap()` so `errors.Is()` and `errors.As()` work through wrapping
+- Use one `AppError` enum for domain errors that map to HTTP status codes
+- Conform errors crossing task boundaries to `Sendable`
 - NEVER leak internal error details or stack traces in HTTP responses
-- Log the full error server-side; return sanitized message to the client
-- Keep error types in `internal/apperr/` package
+- Log unexpected errors server-side; return sanitized ProblemDetail JSON to the client
+- Use `guard let` / `throw` for invalid input — never force unwrap
+- Keep error types in `Sources/App/Errors/` or the nearest shared application layer
+- Register `ProblemDetailMiddleware` before route handlers in `configure.swift`
 
 ## Reference Files
 

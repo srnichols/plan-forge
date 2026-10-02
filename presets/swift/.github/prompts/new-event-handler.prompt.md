@@ -1,155 +1,188 @@
 ---
-description: "Scaffold domain events, handler functions, and a channel-based event bus."
+description: "Scaffold Swift domain events, Vapor Queues jobs, and actor-isolated in-process handlers."
 agent: "agent"
 tools: [read, edit, search]
 ---
 # Create New Event Handler
 
-Scaffold typed domain events with handler functions and a channel-based event bus.
+Scaffold typed Swift domain events with Vapor Queues jobs and actor-isolated handlers.
 
 ## Required Pattern
 
 ### Event Types
 ```swift
+import Foundation
+import Vapor
 
-import (
-    "time"
-
-    "github.com/google/uuid"
-)
-
-type Event interface {
-    EventID() string
-    OccurredAt() time.Time
+protocol DomainEvent: Codable, Sendable {
+    var eventID: UUID { get }
+    var tenantID: UUID { get }
+    var occurredAt: Date { get }
 }
 
-type BaseEvent struct {
-    ID        string    `json:"event_id"`
-    Timestamp time.Time `json:"occurred_at"`
+struct BaseEvent: Codable, Sendable {
+    let eventID: UUID
+    let tenantID: UUID
+    let occurredAt: Date
+
+    init(tenantID: UUID, occurredAt: Date = Date()) {
+        self.eventID = UUID()
+        self.tenantID = tenantID
+        self.occurredAt = occurredAt
+    }
 }
 
-func (e BaseEvent) EventID() string       { return e.ID }
-func (e BaseEvent) OccurredAt() time.Time { return e.Timestamp }
-
-func NewBaseEvent() BaseEvent {
-    return BaseEvent{ID: uuid.NewString(), Timestamp: time.Now().UTC()}
-}
-
-type OrderPlacedEvent struct {
-    BaseEvent
-    OrderID    string  `json:"order_id"`
-    CustomerID string  `json:"customer_id"`
-    Total      float64 `json:"total_amount"`
+struct OrderPlacedEvent: DomainEvent {
+    let eventID: UUID
+    let tenantID: UUID
+    let occurredAt: Date
+    let orderID: UUID
+    let customerID: UUID
+    let totalAmount: Decimal
 }
 ```
 
-### Event Bus (Channel-Based)
+### Event Bus (Actor-Based)
 ```swift
-type Handler func(ctx Database, event Event) error
+actor EventBus<Event: DomainEvent> {
+    typealias Handler = @Sendable (Event, Request) async throws -> Void
 
-type Bus struct {
-    handlers map[string][]Handler
-    mu       sync.RWMutex
-}
+    private var handlers: [Handler] = []
 
-func NewBus() *Bus {
-    return &Bus{handlers: make(map[string][]Handler)}
-}
+    func on(_ handler: @escaping Handler) {
+        handlers.append(handler)
+    }
 
-func (b *Bus) On(eventType string, handler Handler) {
-    b.mu.Lock()
-    defer b.mu.Unlock()
-    b.handlers[eventType] = append(b.handlers[eventType], handler)
-}
-
-func (b *Bus) Publish(ctx Database, eventType string, evt Event) {
-    b.mu.RLock()
-    handlers := b.handlers[eventType]
-    b.mu.RUnlock()
-
-    for _, h := range handlers {
-        if err := h(ctx, evt); err != nil {
-            Logger.Error("event handler failed",
-                "event_type", eventType,
-                "event_id", evt.EventID(),
-                "error", err)
+    func publish(_ event: Event, req: Request) async {
+        for handler in handlers {
+            do {
+                try await handler(event, req)
+            } catch {
+                req.logger.error("event handler failed", metadata: [
+                    "eventID": "\(event.eventID)",
+                    "tenantID": "\(event.tenantID)",
+                    "error": "\(error)"
+                ])
+            }
         }
     }
 }
 ```
 
-### Event Handler
+### Vapor Queues Event Handler
 ```swift
-func OnOrderPlaced(emailSvc *email.Service) Handler {
-    return func(ctx Database, evt Event) error {
-        e, ok := evt.(*OrderPlacedEvent)
-        if !ok {
-            return AppError("unexpected event type: %T", evt)
-        }
-        Logger.Info("handling OrderPlaced", "order_id", e.OrderID)
-        return emailSvc.SendOrderConfirmation(ctx, e.OrderID)
+import Queues
+import Vapor
+
+struct OrderPlacedJob: AsyncJob {
+    typealias Payload = OrderPlacedEvent
+
+    let emailService: EmailService
+
+    func dequeue(_ context: QueueContext, _ payload: Payload) async throws {
+        context.logger.info("handling OrderPlaced", metadata: [
+            "eventID": "\(payload.eventID)",
+            "orderID": "\(payload.orderID)"
+        ])
+        try await emailService.sendOrderConfirmation(
+            orderID: payload.orderID,
+            tenantID: payload.tenantID,
+            logger: context.logger
+        )
+    }
+
+    func error(_ context: QueueContext, _ error: Error, _ payload: Payload) async throws {
+        context.logger.error("OrderPlacedJob failed", metadata: [
+            "eventID": "\(payload.eventID)",
+            "error": "\(error)"
+        ])
     }
 }
 
-// Register
-bus.On("OrderPlaced", OnOrderPlaced(emailSvc))
+app.queues.add(OrderPlacedJob(emailService: app.emailService))
 ```
 
 ### Publishing Events
 ```swift
-func (s *OrderService) PlaceOrder(ctx Database, req CreateOrderRequest) (*Order, error) {
-    order, err := s.repo.Create(ctx, req)
-    if err != nil {
-        return nil, AppError("create order: %w", err)
+struct OrderService: Sendable {
+    let repository: OrderRepository
+
+    func placeOrder(_ input: CreateOrderRequest, req: Request) async throws -> OrderResponse {
+        let order = try await repository.create(input, on: req.db)
+        guard let orderID = order.id else {
+            throw AppError.internal(underlying: OrderError.missingID)
+        }
+
+        let event = OrderPlacedEvent(
+            eventID: UUID(),
+            tenantID: input.tenantID,
+            occurredAt: Date(),
+            orderID: orderID,
+            customerID: input.customerID,
+            totalAmount: order.totalAmount
+        )
+
+        try await req.queue.dispatch(OrderPlacedJob.self, event)
+        return OrderResponse(from: order)
     }
-
-    s.bus.Publish(ctx, "OrderPlaced", &OrderPlacedEvent{
-        BaseEvent:  NewBaseEvent(),
-        OrderID:    order.ID,
-        CustomerID: order.CustomerID,
-        Total:      order.Total,
-    })
-
-    return order, nil
 }
 ```
 
-### Async Worker (Task Pool)
+### Async Worker (Structured Concurrency)
 ```swift
-func StartWorker(ctx Database, ch <-chan Event, handler Handler, workers int) {
-    var wg sync.WaitGroup
-    for i := 0; i < workers; i++ {
-        wg.Add(1)
-        Swift func() {
-            defer wg.Done()
-            for {
-                select {
-                case evt, ok := <-ch:
-                    if !ok {
-                        return
+import NIOConcurrencyHelpers
+import Vapor
+
+final class ProjectionWorker: LifecycleHandler {
+    private let stream: AsyncStream<OrderPlacedEvent>
+    private let handler: @Sendable (OrderPlacedEvent) async throws -> Void
+    private let task = NIOLockedValueBox<Task<Void, Never>?>(nil)
+
+    init(
+        stream: AsyncStream<OrderPlacedEvent>,
+        handler: @escaping @Sendable (OrderPlacedEvent) async throws -> Void
+    ) {
+        self.stream = stream
+        self.handler = handler
+    }
+
+    func didBootAsync(_ application: Application) async throws {
+        let stream = stream
+        let handler = handler
+        let logger = application.logger
+
+        task.withLockedValue { task in
+            task = Task {
+                for await event in stream {
+                    guard !Task.isCancelled else { break }
+                    do {
+                        try await handler(event)
+                    } catch {
+                        logger.error("projection failed", metadata: ["error": "\(error)"])
                     }
-                    if err := handler(ctx, evt); err != nil {
-                        Logger.Error("worker handler failed", "error", err)
-                    }
-                case <-ctx.Done():
-                    return
                 }
             }
-        }()
+        }
     }
-    wg.Wait()
+
+    func shutdownAsync(_ application: Application) async {
+        task.withLockedValue { task in
+            task?.cancel()
+            task = nil
+        }
+    }
 }
 ```
 
 ## Rules
 
-- Events are value types — NEVER mutate after creation
+- Events are immutable `Sendable` value types — NEVER mutate after creation
 - Event handlers MUST be idempotent — the same event may be delivered more than once
-- NEVER panic from event handlers — log the error and continue
-- Use `Database` for cancellation and deadline propagation
-- Return handler functions from constructors (closure pattern) for dependency injection
-- Keep events in `internal/event/`, handlers alongside their domain package
-- For durable delivery, use a message broker (NATS, RabbitMQ) — not in-memory channels
+- NEVER crash from event handlers — log the error and continue or send to dead letter
+- Use `Request`, `QueueContext`, or explicit services for cancellation and tracing context
+- Use `AsyncJob` from `vapor/queues` for durable background processing
+- Keep events in `Sources/App/Events/`, handlers alongside their domain package
+- For durable delivery, use Redis-backed Vapor Queues or a broker — not only an in-memory actor
 
 ## Reference Files
 

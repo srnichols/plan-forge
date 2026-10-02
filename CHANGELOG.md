@@ -7,6 +7,10 @@ Format follows [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
+### Fixed
+
+- **Non-interactive setup no longer waits for input** ([#304](https://github.com/srnichols/plan-forge/issues/304)). Without `-Force`, `setup.ps1 -Preset custom -NonInteractive` and `setup.sh --preset custom --non-interactive` looped forever on the "Build command" prompt, which has no default, and then stopped at "Proceed?". Setup now takes every default and skips the confirmation when `-NonInteractive` / `--non-interactive` is given or when `CI` or `PFORGE_NONINTERACTIVE` is set. An interactive prompt that reaches end of input now gives up instead of asking again.
+
 ## [3.28.1] — 2026-10-02 — Self-update cleans up its download
 
 ### Fixed

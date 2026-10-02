@@ -53,8 +53,8 @@ param(
 
     [switch]$InstallExtensions,
 
-    # Phase-OPENBRAIN-PROMOTION Slice 4 — suppress interactive OpenBrain prompt in CI / automation.
-    # Also honored: $env:CI and $env:PFORGE_NONINTERACTIVE, plus auto-skip when stdin is not a TTY.
+    # Take every default without prompting and skip the "Proceed?" and OpenBrain prompts (#304).
+    # Also honored: $env:CI and $env:PFORGE_NONINTERACTIVE; the OpenBrain prompt also skips when stdin is not a TTY.
     [switch]$NonInteractive
 )
 
@@ -71,7 +71,12 @@ function Write-Banner {
     Write-Host ""
 }
 
+# Non-interactive runs (-NonInteractive, CI, PFORGE_NONINTERACTIVE) take every
+# default without prompting (#304).
+$script:SkipPrompts = $NonInteractive -or [bool]$env:CI -or [bool]$env:PFORGE_NONINTERACTIVE
+
 function Get-PromptValue([string]$Message, [string]$Default) {
+    if ($script:SkipPrompts) { return $Default }
     if ($Default) {
         $response = Read-Host "$Message [$Default]"
         if ([string]::IsNullOrWhiteSpace($response)) { return $Default }
@@ -80,6 +85,8 @@ function Get-PromptValue([string]$Message, [string]$Default) {
     else {
         do {
             $response = Read-Host $Message
+            # Redirected input that has run out would otherwise loop forever.
+            if ([string]::IsNullOrWhiteSpace($response) -and [Console]::IsInputRedirected) { return '' }
         } while ([string]::IsNullOrWhiteSpace($response))
         return $response
     }
@@ -1078,7 +1085,7 @@ if (-not $Preset) {
         Write-Host ""
         Write-Host "Auto-detecting tech stack..." -ForegroundColor Cyan
         $Preset = Find-Preset $ProjectPath
-        if (-not $Force) {
+        if (-not $Force -and -not $script:SkipPrompts) {
             $confirmPreset = Read-Host "Detected preset: $Preset. Is this correct? (Y/n)"
             if ($confirmPreset -and $confirmPreset -notin @('y', 'Y', 'yes', 'Yes', '')) {
                 Write-Host ""
@@ -1238,7 +1245,7 @@ Write-Host "  Lint:     $LintCmd"
 Write-Host "  Force:    $Force"
 Write-Host ""
 
-if (-not $Force) {
+if (-not $Force -and -not $script:SkipPrompts) {
     $confirm = Read-Host "Proceed? (Y/n)"
     if ($confirm -and $confirm -notin @('y', 'Y', 'yes', 'Yes', '')) {
         Write-Host "Aborted." -ForegroundColor Red

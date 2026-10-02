@@ -21,8 +21,8 @@ FORCE=false
 AUTO_DETECT=false
 AGENTS="copilot"
 GENERIC_DIR=".ai"
-# Phase-OPENBRAIN-PROMOTION Slice 4 — suppress interactive OpenBrain prompt in CI / automation.
-# Also honored: $CI and $PFORGE_NONINTERACTIVE, plus auto-skip when stdin is not a TTY.
+# Take every default without prompting and skip the "Proceed?" and OpenBrain prompts (#304).
+# Also honored: $CI and $PFORGE_NONINTERACTIVE; the OpenBrain prompt also skips when stdin is not a TTY.
 NON_INTERACTIVE=false
 
 # ─── Color helpers ─────────────────────────────────────────────────────
@@ -50,16 +50,27 @@ while [[ $# -gt 0 ]]; do
 done
 
 # ─── Helpers ───────────────────────────────────────────────────────────
+# Non-interactive runs (--non-interactive, CI, PFORGE_NONINTERACTIVE) take every
+# default without prompting (#304).
+skip_prompts() {
+    [[ "$NON_INTERACTIVE" == true ]] || [[ -n "${CI:-}" ]] || [[ -n "${PFORGE_NONINTERACTIVE:-}" ]]
+}
+
 prompt_value() {
     local message="$1"
     local default="${2:-}"
-    local value
+    local value=""
+    if skip_prompts; then
+        echo "$default"
+        return 0
+    fi
     if [[ -n "$default" ]]; then
-        read -rp "$message [$default]: " value
+        read -rp "$message [$default]: " value || true
         echo "${value:-$default}"
     else
         while true; do
-            read -rp "$message: " value
+            # End of input would otherwise loop forever.
+            read -rp "$message: " value || break
             [[ -n "$value" ]] && break
         done
         echo "$value"
@@ -1013,7 +1024,7 @@ if [[ -z "$PRESET" ]]; then
         echo ""
         cyan "Auto-detecting tech stack..."
         PRESET="$(detect_preset "$PROJECT_PATH")"
-        if [[ "$FORCE" != true ]]; then
+        if [[ "$FORCE" != true ]] && ! skip_prompts; then
             read -rp "Detected preset: $PRESET. Is this correct? (Y/n) " confirm_preset
             if [[ -n "$confirm_preset" ]] && [[ "$confirm_preset" != [yY]* ]]; then
                 echo ""
@@ -1156,8 +1167,8 @@ echo "  Lint:     $LINT_CMD"
 echo "  Force:    $FORCE"
 echo ""
 
-if [[ "$FORCE" != true ]]; then
-    read -rp "Proceed? (Y/n) " confirm
+if [[ "$FORCE" != true ]] && ! skip_prompts; then
+    read -rp "Proceed? (Y/n) " confirm || confirm=""
     if [[ -n "$confirm" ]] && [[ "$confirm" != [yY]* ]]; then
         red "Aborted."
         exit 0

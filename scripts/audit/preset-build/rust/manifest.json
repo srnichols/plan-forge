@@ -1,0 +1,1245 @@
+{
+  "stack": "rust",
+  "language": "rust",
+  "image": "rust:1.98-slim-bookworm",
+  "check": "cargo check --all-targets --locked",
+  "services": {
+    "postgres": "postgres:18"
+  },
+  "blocks": [
+    {
+      "file": ".github/agents/architecture-reviewer.agent.md",
+      "index": 0,
+      "lang": "rust",
+      "to": "src/samples/agent_architecture_reviewer.rs",
+      "mode": "replace",
+      "fill": {
+        "pub async fn show_order(": "use crate::{domain::OrderId, dto::order::OrderResponse, repositories::OrderRepository, services::OrderService};\n\npub async fn show_order("
+      }
+    },
+    {
+      "file": ".github/agents/architecture-reviewer.agent.md",
+      "index": 1,
+      "lang": "rust",
+      "to": "src/samples/agent_architecture_reviewer.rs",
+      "mode": "append",
+      "fill": {
+        "pub struct OrderService {": "pub struct OrderServiceExample {"
+      }
+    },
+    {
+      "file": ".github/agents/database-reviewer.agent.md",
+      "index": 0,
+      "lang": "rust",
+      "to": "src/samples/agent_database_reviewer.rs",
+      "mode": "replace",
+      "fill": {
+        "let order = sqlx::query_as::<_, OrderRow>(\n    \"SELECT id, tenant_id, reference FROM orders WHERE tenant_id = $1 AND id = $2\",\n)\n.bind(tenant_id.0)\n.bind(order_id.0)\n.fetch_optional(&pool)\n.await?;": "#[derive(Debug, sqlx::FromRow)]\npub struct OrderRow {\n    pub id: uuid::Uuid,\n    pub tenant_id: uuid::Uuid,\n    pub reference: String,\n}\n\npub async fn load_order_row(\n    pool: &sqlx::PgPool,\n    tenant_id: crate::domain::TenantId,\n    order_id: crate::domain::OrderId,\n) -> Result<Option<OrderRow>, sqlx::Error> {\n    let order = sqlx::query_as::<_, OrderRow>(\n        \"SELECT id, tenant_id, reference FROM orders WHERE tenant_id = $1 AND id = $2\",\n    )\n    .bind(tenant_id.0)\n    .bind(order_id.0)\n    .fetch_optional(pool)\n    .await?;\n    Ok(order)\n}"
+      }
+    },
+    {
+      "file": ".github/agents/database-reviewer.agent.md",
+      "index": 1,
+      "lang": "rust",
+      "to": "src/samples/agent_database_reviewer.rs",
+      "mode": "append",
+      "fill": {
+        "let mut builder = sqlx::QueryBuilder::new(\"SELECT id FROM orders WHERE tenant_id = \");\nbuilder.push_bind(tenant_id.0);\nbuilder.push(\" AND status = \");\nbuilder.push_bind(status);": "pub fn build_status_filter(tenant_id: crate::domain::TenantId, status: &str) -> sqlx::QueryBuilder<sqlx::Postgres> {\n    let mut builder = sqlx::QueryBuilder::new(\"SELECT id FROM orders WHERE tenant_id = \");\n    builder.push_bind(tenant_id.0);\n    builder.push(\" AND status = \");\n    builder.push_bind(status.to_owned());\n    builder\n}"
+      }
+    },
+    {
+      "file": ".github/agents/performance-analyzer.agent.md",
+      "index": 0,
+      "lang": "rust",
+      "to": "src/samples/agent_performance_analyzer.rs",
+      "mode": "replace",
+      "fill": {
+        "let digest = tokio::task::spawn_blocking(move || compute_digest(bytes)).await??;": "fn compute_digest(bytes: Vec<u8>) -> anyhow::Result<u64> {\n    Ok(bytes.len() as u64)\n}\n\npub async fn digest_in_background(bytes: Vec<u8>) -> anyhow::Result<u64> {\n    let digest = tokio::task::spawn_blocking(move || compute_digest(bytes)).await??;\n    Ok(digest)\n}"
+      }
+    },
+    {
+      "file": ".github/agents/security-reviewer.agent.md",
+      "index": 0,
+      "lang": "rust",
+      "to": "src/samples/agent_security_reviewer.rs",
+      "mode": "replace",
+      "fill": {
+        "sqlx::query_as!(\n    OrderRow,\n    \"SELECT id, tenant_id, status FROM orders WHERE tenant_id = $1 AND id = $2\",\n    tenant_id.0,\n    order_id.0\n)": "pub struct OrderRow {\n    pub id: uuid::Uuid,\n    pub tenant_id: uuid::Uuid,\n    pub status: String,\n}\n\npub async fn load_order_status(\n    pool: &sqlx::PgPool,\n    tenant_id: crate::domain::TenantId,\n    order_id: crate::domain::OrderId,\n) -> Result<Option<OrderRow>, sqlx::Error> {\n    sqlx::query_as!(\n        OrderRow,\n        \"SELECT id, tenant_id, status FROM orders WHERE tenant_id = $1 AND id = $2\",\n        tenant_id.0,\n        order_id.0\n    )\n    .fetch_optional(pool)\n    .await\n}"
+      }
+    },
+    {
+      "file": ".github/agents/security-reviewer.agent.md",
+      "index": 1,
+      "lang": "rust",
+      "to": "src/samples/agent_security_reviewer.rs",
+      "mode": "append",
+      "fill": {
+        "if !user.roles.contains(&Role::Admin) {\n    return Err(AppError::Forbidden);\n}": "pub fn require_admin(user: &crate::auth::AuthUser) -> Result<(), crate::error::AppError> {\n    use crate::{auth::Role, error::AppError};\n    if !user.roles.contains(&Role::Admin) {\n        return Err(AppError::Forbidden);\n    }\n    Ok(())\n}"
+      }
+    },
+    {
+      "file": ".github/copilot-instructions.md",
+      "index": 0,
+      "lang": "rust",
+      "to": "src/samples/copilot_instructions_health.rs",
+      "mode": "replace"
+    },
+    {
+      "file": ".github/instructions/api-patterns.instructions.md",
+      "index": 0,
+      "lang": "rust",
+      "to": "src/routes/producers.rs",
+      "mode": "replace"
+    },
+    {
+      "file": ".github/instructions/api-patterns.instructions.md",
+      "index": 1,
+      "lang": "rust",
+      "to": "src/extractors.rs",
+      "mode": "replace"
+    },
+    {
+      "file": ".github/instructions/api-patterns.instructions.md",
+      "index": 2,
+      "lang": "rust",
+      "to": "src/pagination.rs",
+      "mode": "replace"
+    },
+    {
+      "file": ".github/instructions/api-patterns.instructions.md",
+      "index": 3,
+      "lang": "rust",
+      "to": "src/pagination.rs",
+      "mode": "append"
+    },
+    {
+      "file": ".github/instructions/api-patterns.instructions.md",
+      "index": 4,
+      "lang": "rust",
+      "to": "src/lib.rs",
+      "mode": "append",
+      "fill": {
+        "\n// src/routes/mod.rs\npub fn api_v1() -> Router<AppState> {\n    Router::new().merge(crate::routes::orders::router())\n}\n\n// src/health.rs\npub async fn live() -> axum::http::StatusCode {\n    axum::http::StatusCode::NO_CONTENT\n}\n": "\n"
+      }
+    },
+    {
+      "file": ".github/instructions/api-patterns.instructions.md",
+      "index": 4,
+      "lang": "rust",
+      "to": "src/routes/mod.rs",
+      "mode": "append",
+      "fill": {
+        "use std::{net::SocketAddr, sync::Arc};\n\nuse axum::{routing::get, Router};\nuse tower::ServiceBuilder;\nuse tower_governor::{governor::GovernorConfigBuilder, GovernorLayer};\nuse tower_http::{\n    request_id::{MakeRequestUuid, PropagateRequestIdLayer, SetRequestIdLayer},\n    trace::TraceLayer,\n};\n\nuse crate::state::AppState;\n\npub fn app(state: AppState) -> Router {\n    let rate_config = Arc::new(\n        GovernorConfigBuilder::default()\n            .per_millisecond(50)\n            .burst_size(40)\n            .finish()\n            .expect(\"valid rate limit\"),\n    );\n\n    Router::new()\n        .nest(\"/api/v1\", crate::routes::api_v1())\n        .route(\"/health/live\", get(crate::health::live))\n        .route(\"/health/ready\", get(crate::health::ready))\n        .with_state(state)\n        .layer(\n            ServiceBuilder::new()\n                .layer(SetRequestIdLayer::x_request_id(MakeRequestUuid))\n                .layer(TraceLayer::new_for_http())\n                .layer(PropagateRequestIdLayer::x_request_id())\n                .layer(GovernorLayer::new(rate_config)),\n        )\n}\n\npub async fn serve(listener: tokio::net::TcpListener, state: AppState) -> std::io::Result<()> {\n    axum::serve(\n        listener,\n        app(state).into_make_service_with_connect_info::<SocketAddr>(),\n    )\n    .with_graceful_shutdown(crate::shutdown_signal())\n    .await\n}\n\n// src/routes/mod.rs\n": "",
+        "\n\n// src/health.rs\npub async fn live() -> axum::http::StatusCode {\n    axum::http::StatusCode::NO_CONTENT\n}\n": "\n"
+      }
+    },
+    {
+      "file": ".github/instructions/api-patterns.instructions.md",
+      "index": 4,
+      "lang": "rust",
+      "to": "src/health.rs",
+      "mode": "replace",
+      "fill": {
+        "use std::{net::SocketAddr, sync::Arc};\n\nuse axum::{routing::get, Router};\nuse tower::ServiceBuilder;\nuse tower_governor::{governor::GovernorConfigBuilder, GovernorLayer};\nuse tower_http::{\n    request_id::{MakeRequestUuid, PropagateRequestIdLayer, SetRequestIdLayer},\n    trace::TraceLayer,\n};\n\nuse crate::state::AppState;\n\npub fn app(state: AppState) -> Router {\n    let rate_config = Arc::new(\n        GovernorConfigBuilder::default()\n            .per_millisecond(50)\n            .burst_size(40)\n            .finish()\n            .expect(\"valid rate limit\"),\n    );\n\n    Router::new()\n        .nest(\"/api/v1\", crate::routes::api_v1())\n        .route(\"/health/live\", get(crate::health::live))\n        .route(\"/health/ready\", get(crate::health::ready))\n        .with_state(state)\n        .layer(\n            ServiceBuilder::new()\n                .layer(SetRequestIdLayer::x_request_id(MakeRequestUuid))\n                .layer(TraceLayer::new_for_http())\n                .layer(PropagateRequestIdLayer::x_request_id())\n                .layer(GovernorLayer::new(rate_config)),\n        )\n}\n\npub async fn serve(listener: tokio::net::TcpListener, state: AppState) -> std::io::Result<()> {\n    axum::serve(\n        listener,\n        app(state).into_make_service_with_connect_info::<SocketAddr>(),\n    )\n    .with_graceful_shutdown(crate::shutdown_signal())\n    .await\n}\n\n// src/routes/mod.rs\npub fn api_v1() -> Router<AppState> {\n    Router::new().merge(crate::routes::orders::router())\n}\n\n": "pub async fn ready() -> axum::http::StatusCode {\n    axum::http::StatusCode::NO_CONTENT\n}\n\n"
+      }
+    },
+    {
+      "file": ".github/instructions/api-patterns.instructions.md",
+      "index": 5,
+      "lang": "rust",
+      "to": "src/samples/api_patterns_versions.rs",
+      "mode": "replace",
+      "fill": {
+        "async fn versions()": "pub async fn versions()",
+        "struct ApiVersions": "pub struct ApiVersions",
+        "#[derive(serde::Serialize)]": "use axum::Json;\n\n#[derive(serde::Serialize)]"
+      }
+    },
+    {
+      "file": ".github/instructions/api-patterns.instructions.md",
+      "index": 6,
+      "lang": "rust",
+      "to": "src/samples/api_patterns_sunset.rs",
+      "mode": "replace"
+    },
+    {
+      "file": ".github/instructions/api-patterns.instructions.md",
+      "index": 7,
+      "lang": "rust",
+      "to": "src/samples/api_patterns_producer_openapi.rs",
+      "mode": "replace",
+      "fill": {
+        "async fn get_producer(": "pub async fn get_producer(",
+        "#[utoipa::path(": "use axum::extract::{Path, State};\nuse axum::Json;\nuse uuid::Uuid;\n\nuse crate::{auth::AuthUser, domain::ProducerId, dto::producer::ProducerResponse, error::AppError, state::AppState};\n\n#[utoipa::path("
+      }
+    },
+    {
+      "file": ".github/instructions/auth.instructions.md",
+      "index": 0,
+      "lang": "rust",
+      "to": "src/samples/auth_serve_example.rs",
+      "mode": "replace"
+    },
+    {
+      "file": ".github/instructions/auth.instructions.md",
+      "index": 1,
+      "lang": "rust",
+      "to": "src/auth.rs",
+      "mode": "replace",
+      "fill": {
+        "impl JwksCache {\n    pub async fn decoding_key": "impl JwksCache {\n    pub fn new(issuer: String, audience: String, jwks_url: String) -> Self {\n        Self {\n            issuer,\n            audience,\n            jwks_url,\n            client: reqwest::Client::new(),\n            cached: Arc::new(RwLock::new(None)),\n            refresh_gate: Arc::new(Mutex::new(())),\n            last_unknown_kid_refresh: Arc::new(RwLock::new(None)),\n        }\n    }\n\n    pub async fn decoding_key"
+      }
+    },
+    {
+      "file": ".github/instructions/auth.instructions.md",
+      "index": 2,
+      "lang": "rust",
+      "to": "src/services/order.rs",
+      "mode": "append",
+      "fill": {
+        "use crate::{auth::{AuthUser, Role}, domain::OrderId, error::AppError};\n\n": ""
+      }
+    },
+    {
+      "file": ".github/instructions/auth.instructions.md",
+      "index": 3,
+      "lang": "rust",
+      "to": "src/samples/auth_password_hashing.rs",
+      "mode": "replace"
+    },
+    {
+      "file": ".github/instructions/caching.instructions.md",
+      "index": 0,
+      "lang": "rust",
+      "to": "src/samples/caching.rs",
+      "mode": "replace"
+    },
+    {
+      "file": ".github/instructions/caching.instructions.md",
+      "index": 1,
+      "lang": "rust",
+      "to": "src/samples/caching.rs",
+      "mode": "append",
+      "fill": {
+        "use std::time::Duration;\n\n": ""
+      }
+    },
+    {
+      "file": ".github/instructions/caching.instructions.md",
+      "index": 2,
+      "lang": "rust",
+      "to": "src/samples/caching.rs",
+      "mode": "append"
+    },
+    {
+      "file": ".github/instructions/caching.instructions.md",
+      "index": 3,
+      "lang": "rust",
+      "to": "src/samples/caching.rs",
+      "mode": "append",
+      "fill": {
+        "use deadpool_redis::Pool;\nuse redis::AsyncCommands;\n\nuse crate::domain::{OrderId, TenantId};\n\n": ""
+      }
+    },
+    {
+      "file": ".github/instructions/caching.instructions.md",
+      "index": 4,
+      "lang": "rust",
+      "to": "src/samples/caching.rs",
+      "mode": "append",
+      "fill": {
+        "use deadpool_redis::Pool;\nuse redis::{AsyncCommands, SetExpiry, SetOptions};\nuse std::time::Duration;\n\n": "use redis::{SetExpiry, SetOptions};\n\n"
+      }
+    },
+    {
+      "file": ".github/instructions/dapr.instructions.md",
+      "index": 0,
+      "lang": "rust",
+      "to": "src/dapr.rs",
+      "mode": "replace"
+    },
+    {
+      "file": ".github/instructions/dapr.instructions.md",
+      "index": 1,
+      "lang": "rust",
+      "to": "src/dapr.rs",
+      "mode": "append"
+    },
+    {
+      "file": ".github/instructions/dapr.instructions.md",
+      "index": 2,
+      "lang": "rust",
+      "to": "src/dapr.rs",
+      "mode": "append",
+      "fill": {
+        "use serde::Serialize;\n\n": ""
+      }
+    },
+    {
+      "file": ".github/instructions/dapr.instructions.md",
+      "index": 3,
+      "lang": "rust",
+      "to": "src/samples/dapr_subscriptions.rs",
+      "mode": "replace"
+    },
+    {
+      "file": ".github/instructions/dapr.instructions.md",
+      "index": 4,
+      "lang": "rust",
+      "to": "src/dapr.rs",
+      "mode": "append"
+    },
+    {
+      "file": ".github/instructions/dapr.instructions.md",
+      "index": 5,
+      "lang": "rust",
+      "to": "src/dapr.rs",
+      "mode": "append"
+    },
+    {
+      "file": ".github/instructions/database.instructions.md",
+      "index": 0,
+      "lang": "rust",
+      "to": "src/samples/database_connect.rs",
+      "mode": "replace"
+    },
+    {
+      "file": ".github/instructions/database.instructions.md",
+      "index": 1,
+      "lang": "rust",
+      "to": "src/samples/database_query_order_summary.rs",
+      "mode": "replace"
+    },
+    {
+      "file": ".github/instructions/database.instructions.md",
+      "index": 2,
+      "lang": "rust",
+      "to": "src/samples/database_search_orders.rs",
+      "mode": "replace"
+    },
+    {
+      "file": ".github/instructions/database.instructions.md",
+      "index": 4,
+      "lang": "rust",
+      "to": "src/samples/database_archive_order.rs",
+      "mode": "replace"
+    },
+    {
+      "file": ".github/instructions/database.instructions.md",
+      "index": 5,
+      "lang": "rust",
+      "to": "src/samples/database_page_after.rs",
+      "mode": "replace"
+    },
+    {
+      "file": ".github/instructions/database.instructions.md",
+      "index": 6,
+      "lang": "rust",
+      "to": "src/samples/database_error_mapping.rs",
+      "mode": "replace"
+    },
+    {
+      "file": ".github/instructions/database.instructions.md",
+      "index": 7,
+      "lang": "rust",
+      "to": "tests/database_tenant_scope.rs",
+      "mode": "replace",
+      "fill": {
+        "#[sqlx::test(migrations = \"./migrations\")]\nasync fn repository_scopes_rows_to_tenant(pool: sqlx::PgPool) -> Result<(), sqlx::Error> {": "#[sqlx::test(migrations = \"./migrations\")]\nasync fn repository_scopes_rows_to_tenant(pool: sqlx::PgPool) -> Result<(), sqlx::Error> {\n    let _ = &pool;"
+      }
+    },
+    {
+      "file": ".github/instructions/deploy.instructions.md",
+      "index": 0,
+      "lang": "rust",
+      "to": "src/samples/deploy_ready.rs",
+      "mode": "replace"
+    },
+    {
+      "file": ".github/instructions/deploy.instructions.md",
+      "index": 1,
+      "lang": "rust",
+      "to": "src/samples/deploy_graceful_shutdown.rs",
+      "mode": "replace",
+      "fill": {
+        "use std::net::SocketAddr;\n\naxum::serve(\n    listener,\n    app(state).into_make_service_with_connect_info::<SocketAddr>(),\n)\n.with_graceful_shutdown(shutdown_signal())\n.await?;": "use std::net::SocketAddr;\n\npub async fn run(listener: tokio::net::TcpListener, state: crate::state::AppState) -> anyhow::Result<()> {\n    axum::serve(\n        listener,\n        crate::app(state).into_make_service_with_connect_info::<SocketAddr>(),\n    )\n    .with_graceful_shutdown(crate::shutdown_signal())\n    .await?;\n    Ok(())\n}"
+      }
+    },
+    {
+      "file": ".github/instructions/errorhandling.instructions.md",
+      "index": 0,
+      "lang": "rust",
+      "to": "src/error.rs",
+      "mode": "replace"
+    },
+    {
+      "file": ".github/instructions/errorhandling.instructions.md",
+      "index": 1,
+      "lang": "rust",
+      "to": "src/error.rs",
+      "mode": "append"
+    },
+    {
+      "file": ".github/instructions/errorhandling.instructions.md",
+      "index": 2,
+      "lang": "rust",
+      "to": "src/error.rs",
+      "mode": "append"
+    },
+    {
+      "file": ".github/instructions/graphql.instructions.md",
+      "index": 0,
+      "lang": "rust",
+      "to": "src/graphql.rs",
+      "mode": "replace"
+    },
+    {
+      "file": ".github/instructions/graphql.instructions.md",
+      "index": 1,
+      "lang": "rust",
+      "to": "src/graphql.rs",
+      "mode": "append",
+      "fill": {
+        "use crate::{auth::AuthUser, graphql::{MutationRoot, QueryRoot}, state::AppState};\n\n": ""
+      }
+    },
+    {
+      "file": ".github/instructions/graphql.instructions.md",
+      "index": 2,
+      "lang": "rust",
+      "to": "src/graphql.rs",
+      "mode": "append",
+      "fill": {
+        "use async_graphql::{InputObject, Object, Result};\nuse validator::Validate;": "use async_graphql::InputObject;\nuse validator::Validate;",
+        "        service.create(user, request).await.map(Into::into).map_err(gql_error)\n    }\n}": "        service.create(user, request).await.map(Into::into).map_err(gql_error)\n    }\n"
+      }
+    },
+    {
+      "file": ".github/instructions/graphql.instructions.md",
+      "index": 5,
+      "lang": "rust",
+      "to": "src/graphql.rs",
+      "mode": "append",
+      "fill": {
+        "#[Object]\nimpl MutationRoot {\n    #[graphql(guard = \"RequireRole(crate::auth::Role::Admin)\")]\n": "    #[graphql(guard = \"RequireRole(crate::auth::Role::Admin)\")]\n"
+      }
+    },
+    {
+      "file": ".github/instructions/graphql.instructions.md",
+      "index": 3,
+      "lang": "rust",
+      "to": "src/graphql.rs",
+      "mode": "append",
+      "fill": {
+        "use uuid::Uuid;\n\nuse crate::{domain::{ProducerId, TenantId}, repositories::ProducerRepository};": "use crate::repositories::ProducerRepository;"
+      }
+    },
+    {
+      "file": ".github/instructions/graphql.instructions.md",
+      "index": 4,
+      "lang": "rust",
+      "to": "src/graphql.rs",
+      "mode": "append",
+      "fill": {
+        "use async_graphql::{Context, Guard, Result};": "use async_graphql::Guard;"
+      }
+    },
+    {
+      "file": ".github/instructions/graphql.instructions.md",
+      "index": 6,
+      "lang": "rust",
+      "to": "src/graphql.rs",
+      "mode": "append",
+      "fill": {
+        "use async_graphql::{EmptySubscription, Schema};\n\n": ""
+      }
+    },
+    {
+      "file": ".github/instructions/messaging.instructions.md",
+      "index": 0,
+      "lang": "rust",
+      "to": "src/messaging/order_placed_event.rs",
+      "mode": "replace"
+    },
+    {
+      "file": ".github/instructions/messaging.instructions.md",
+      "index": 1,
+      "lang": "rust",
+      "to": "src/messaging/mod.rs",
+      "mode": "append"
+    },
+    {
+      "file": ".github/instructions/messaging.instructions.md",
+      "index": 2,
+      "lang": "rust",
+      "to": "src/messaging/rabbitmq.rs",
+      "mode": "replace"
+    },
+    {
+      "file": ".github/instructions/messaging.instructions.md",
+      "index": 3,
+      "lang": "rust",
+      "to": "src/messaging/rabbitmq.rs",
+      "mode": "append",
+      "fill": {
+        "use lapin::{\n    message::Delivery,\n    options::{BasicAckOptions, BasicConsumeOptions, BasicNackOptions},\n    types::FieldTable,\n    Channel,\n};": "use lapin::{\n    message::Delivery,\n    options::{BasicAckOptions, BasicConsumeOptions, BasicNackOptions},\n    types::FieldTable,\n};"
+      }
+    },
+    {
+      "file": ".github/instructions/messaging.instructions.md",
+      "index": 4,
+      "lang": "rust",
+      "to": "src/messaging/idempotency.rs",
+      "mode": "replace"
+    },
+    {
+      "file": ".github/instructions/messaging.instructions.md",
+      "index": 5,
+      "lang": "rust",
+      "to": "src/messaging/nats.rs",
+      "mode": "replace"
+    },
+    {
+      "file": ".github/instructions/multi-environment.instructions.md",
+      "index": 0,
+      "lang": "rust",
+      "to": "src/config.rs",
+      "mode": "replace"
+    },
+    {
+      "file": ".github/instructions/multi-environment.instructions.md",
+      "index": 1,
+      "lang": "rust",
+      "to": "src/config.rs",
+      "mode": "append"
+    },
+    {
+      "file": ".github/instructions/multi-environment.instructions.md",
+      "index": 2,
+      "lang": "rust",
+      "to": "src/config.rs",
+      "mode": "append"
+    },
+    {
+      "file": ".github/instructions/multi-environment.instructions.md",
+      "index": 3,
+      "lang": "rust",
+      "to": "src/samples/multi_env_ready.rs",
+      "mode": "replace"
+    },
+    {
+      "file": ".github/instructions/naming.instructions.md",
+      "index": 0,
+      "lang": "rust",
+      "to": "src/domain/ids.rs",
+      "mode": "replace"
+    },
+    {
+      "file": ".github/instructions/observability.instructions.md",
+      "index": 0,
+      "lang": "rust",
+      "to": "src/samples/observability.rs",
+      "mode": "replace",
+      "fill": {
+        "use tracing::{info, instrument};\nuse uuid::Uuid;\n\n": "use tracing::{info, instrument};\nuse uuid::Uuid;\n\n#[async_trait::async_trait]\npub trait OrderRepository: Send + Sync {\n    async fn reserve(&self, tenant_id: Uuid, order_id: Uuid) -> anyhow::Result<()>;\n}\n\n"
+      }
+    },
+    {
+      "file": ".github/instructions/observability.instructions.md",
+      "index": 1,
+      "lang": "rust",
+      "to": "src/samples/observability.rs",
+      "mode": "append"
+    },
+    {
+      "file": ".github/instructions/observability.instructions.md",
+      "index": 2,
+      "lang": "rust",
+      "to": "src/samples/observability_layers.rs",
+      "mode": "replace"
+    },
+    {
+      "file": ".github/instructions/observability.instructions.md",
+      "index": 3,
+      "lang": "rust",
+      "to": "src/samples/observability.rs",
+      "mode": "append"
+    },
+    {
+      "file": ".github/instructions/observability.instructions.md",
+      "index": 4,
+      "lang": "rust",
+      "to": "src/samples/observability.rs",
+      "mode": "append",
+      "fill": {
+        "use serde::Serialize;\nuse uuid::Uuid;\n\n": "use serde::Serialize;\n\n"
+      }
+    },
+    {
+      "file": ".github/instructions/performance.instructions.md",
+      "index": 0,
+      "lang": "rust",
+      "to": "src/samples/performance.rs",
+      "mode": "replace"
+    },
+    {
+      "file": ".github/instructions/performance.instructions.md",
+      "index": 1,
+      "lang": "rust",
+      "to": "src/samples/performance.rs",
+      "mode": "append"
+    },
+    {
+      "file": ".github/instructions/performance.instructions.md",
+      "index": 2,
+      "lang": "rust",
+      "to": "src/samples/performance.rs",
+      "mode": "append"
+    },
+    {
+      "file": ".github/instructions/performance.instructions.md",
+      "index": 3,
+      "lang": "rust",
+      "to": "benches/performance_bench.rs",
+      "mode": "replace"
+    },
+    {
+      "file": ".github/instructions/performance.instructions.md",
+      "index": 4,
+      "lang": "rust",
+      "to": "src/samples/performance.rs",
+      "mode": "append",
+      "fill": {
+        "let (sender, mut receiver) = tokio::sync::mpsc::channel::<WorkItem>(512);\n\nwhile let Some(item) = receiver.recv().await {\n    process_item(item).await?;\n}": "pub struct WorkItem;\n\npub async fn process_item(_item: WorkItem) -> anyhow::Result<()> {\n    Ok(())\n}\n\npub async fn run_channel_demo() -> anyhow::Result<()> {\n    let (sender, mut receiver) = tokio::sync::mpsc::channel::<WorkItem>(512);\n    drop(sender);\n\n    while let Some(item) = receiver.recv().await {\n        process_item(item).await?;\n    }\n    Ok(())\n}"
+      }
+    },
+    {
+      "file": ".github/instructions/security.instructions.md",
+      "index": 0,
+      "lang": "rust",
+      "to": "src/samples/security_users.rs",
+      "mode": "replace"
+    },
+    {
+      "file": ".github/instructions/security.instructions.md",
+      "index": 1,
+      "lang": "rust",
+      "to": "src/samples/security_users.rs",
+      "mode": "append"
+    },
+    {
+      "file": ".github/instructions/security.instructions.md",
+      "index": 2,
+      "lang": "rust",
+      "to": "src/samples/security_cors.rs",
+      "mode": "replace"
+    },
+    {
+      "file": ".github/instructions/security.instructions.md",
+      "index": 3,
+      "lang": "rust",
+      "to": "src/samples/security_secured_router.rs",
+      "mode": "replace"
+    },
+    {
+      "file": ".github/instructions/security.instructions.md",
+      "index": 4,
+      "lang": "rust",
+      "to": "src/samples/security_settings.rs",
+      "mode": "replace",
+      "fill": {
+        "pub struct Settings {\n    pub database: DatabaseSettings,\n    pub auth: AuthSettings,\n}": "pub struct Settings {\n    pub database: DatabaseSettings,\n    pub auth: AuthSettings,\n}\n\n#[derive(Clone)]\npub struct DatabaseSettings {\n    pub url: SecretString,\n}\n\n#[derive(Clone)]\npub struct AuthSettings {\n    pub issuer: String,\n}"
+      }
+    },
+    {
+      "file": ".github/instructions/security.instructions.md",
+      "index": 5,
+      "lang": "rust",
+      "to": "src/samples/security_unsafe_policy.rs",
+      "mode": "replace"
+    },
+    {
+      "file": ".github/instructions/testing.instructions.md",
+      "index": 0,
+      "lang": "rust",
+      "to": "src/samples/testing_repository_mock.rs",
+      "mode": "replace"
+    },
+    {
+      "file": ".github/instructions/testing.instructions.md",
+      "index": 1,
+      "lang": "rust",
+      "to": "tests/health_probe.rs",
+      "mode": "replace",
+      "fill": {
+        "async fn health() -> StatusCode {": "pub async fn health() -> StatusCode {"
+      }
+    },
+    {
+      "file": ".github/instructions/testing.instructions.md",
+      "index": 2,
+      "lang": "rust",
+      "to": "tests/database_basic_query.rs",
+      "mode": "replace"
+    },
+    {
+      "file": ".github/instructions/testing.instructions.md",
+      "index": 3,
+      "lang": "rust",
+      "to": "tests/testcontainers_postgres.rs",
+      "mode": "replace"
+    },
+    {
+      "file": ".github/instructions/version.instructions.md",
+      "index": 0,
+      "lang": "rust",
+      "to": "src/samples/version.rs",
+      "mode": "replace"
+    },
+    {
+      "file": ".github/instructions/version.instructions.md",
+      "index": 1,
+      "lang": "rust",
+      "to": "src/samples/version.rs",
+      "mode": "append"
+    },
+    {
+      "file": ".github/prompts/new-dto.prompt.md",
+      "index": 0,
+      "lang": "rust",
+      "to": "src/dto/order.rs",
+      "mode": "replace",
+      "fill": {
+        "{EntityName}": "Order",
+        "{entity_name}": "order"
+      }
+    },
+    {
+      "file": ".github/prompts/new-dto.prompt.md",
+      "index": 1,
+      "lang": "rust",
+      "to": "src/dto/order.rs",
+      "mode": "append",
+      "fill": {
+        "{EntityName}": "Order",
+        "{entity_name}": "order"
+      }
+    },
+    {
+      "file": ".github/prompts/new-dto.prompt.md",
+      "index": 3,
+      "lang": "rust",
+      "to": "src/dto/order.rs",
+      "mode": "append",
+      "fill": {
+        "{EntityName}": "Order",
+        "{entity_name}": "order"
+      }
+    },
+    {
+      "file": ".github/prompts/new-dto.prompt.md",
+      "index": 4,
+      "lang": "rust",
+      "to": "src/dto/order.rs",
+      "mode": "append",
+      "fill": {
+        "{EntityName}": "Order",
+        "{entity_name}": "order"
+      }
+    },
+    {
+      "file": ".github/prompts/new-repository.prompt.md",
+      "index": 0,
+      "lang": "rust",
+      "to": "src/repositories/order.rs",
+      "mode": "replace",
+      "fill": {
+        "{EntityName}": "Order",
+        "{entity_name}": "order"
+      }
+    },
+    {
+      "file": ".github/prompts/new-repository.prompt.md",
+      "index": 1,
+      "lang": "rust",
+      "to": "src/repositories/order.rs",
+      "mode": "append",
+      "fill": {
+        "{EntityName}": "Order",
+        "{entity_name}": "order"
+      }
+    },
+    {
+      "file": ".github/prompts/new-service.prompt.md",
+      "index": 0,
+      "lang": "rust",
+      "to": "src/services/order.rs",
+      "mode": "replace",
+      "fill": {
+        "{EntityName}": "Order",
+        "{entity_name}": "order"
+      }
+    },
+    {
+      "file": ".github/prompts/new-controller.prompt.md",
+      "index": 0,
+      "lang": "rust",
+      "to": "src/routes/orders.rs",
+      "mode": "replace",
+      "fill": {
+        "{EntityName}": "Order",
+        "{entity_name}": "order",
+        "/{id}": "/{id}"
+      }
+    },
+    {
+      "file": ".github/prompts/new-dto.prompt.md",
+      "index": 0,
+      "lang": "rust",
+      "to": "src/dto/producer.rs",
+      "mode": "replace",
+      "fill": {
+        "{EntityName}": "Producer",
+        "{entity_name}": "producer"
+      }
+    },
+    {
+      "file": ".github/prompts/new-dto.prompt.md",
+      "index": 1,
+      "lang": "rust",
+      "to": "src/dto/producer.rs",
+      "mode": "append",
+      "fill": {
+        "{EntityName}": "Producer",
+        "{entity_name}": "producer"
+      }
+    },
+    {
+      "file": ".github/prompts/new-dto.prompt.md",
+      "index": 3,
+      "lang": "rust",
+      "to": "src/dto/producer.rs",
+      "mode": "append",
+      "fill": {
+        "{EntityName}": "Producer",
+        "{entity_name}": "producer"
+      }
+    },
+    {
+      "file": ".github/prompts/new-dto.prompt.md",
+      "index": 4,
+      "lang": "rust",
+      "to": "src/dto/producer.rs",
+      "mode": "append",
+      "fill": {
+        "{EntityName}": "Producer",
+        "{entity_name}": "producer"
+      }
+    },
+    {
+      "file": ".github/prompts/new-repository.prompt.md",
+      "index": 0,
+      "lang": "rust",
+      "to": "src/repositories/producer.rs",
+      "mode": "replace",
+      "fill": {
+        "{EntityName}": "Producer",
+        "{entity_name}": "producer"
+      }
+    },
+    {
+      "file": ".github/prompts/new-repository.prompt.md",
+      "index": 1,
+      "lang": "rust",
+      "to": "src/repositories/producer.rs",
+      "mode": "append",
+      "fill": {
+        "{EntityName}": "Producer",
+        "{entity_name}": "producer"
+      }
+    },
+    {
+      "file": ".github/prompts/new-service.prompt.md",
+      "index": 0,
+      "lang": "rust",
+      "to": "src/services/producer.rs",
+      "mode": "replace",
+      "fill": {
+        "{EntityName}": "Producer",
+        "{entity_name}": "producer"
+      }
+    },
+    {
+      "file": ".github/prompts/new-controller.prompt.md",
+      "index": 0,
+      "lang": "rust",
+      "to": "src/routes/producers.rs",
+      "mode": "replace",
+      "fill": {
+        "{EntityName}": "Producer",
+        "{entity_name}": "producer",
+        "/{id}": "/{id}"
+      }
+    },
+    {
+      "file": ".github/prompts/new-dto.prompt.md",
+      "index": 2,
+      "lang": "rust",
+      "to": "src/samples/new_dto_category.rs",
+      "mode": "replace"
+    },
+    {
+      "file": ".github/prompts/new-entity.prompt.md",
+      "index": 0,
+      "lang": "rust",
+      "to": "src/samples/new_entity_controller.rs",
+      "mode": "replace",
+      "fill": {
+        "use axum::{extract::State, Json};\n\nuse crate::auth::AuthUser;\nuse crate::extractors::ValidatedJson;\n\npub async fn create_product(": "use axum::{extract::State, Json};\n\nuse crate::auth::AuthUser;\nuse crate::extractors::ValidatedJson;\n\n#[derive(Clone)]\npub struct ProductService;\nimpl ProductService {\n    pub async fn create(&self, _auth: &AuthUser, _request: CreateProductRequest) -> Result<Product, crate::error::AppError> {\n        Ok(Product)\n    }\n}\npub struct Product;\npub struct CreateProductRequest;\n#[derive(serde::Serialize)]\npub struct ProductResponse;\nimpl ProductResponse {\n    pub fn from(_product: Product) -> Self { Self }\n}\n\npub async fn create_product("
+      }
+    },
+    {
+      "file": ".github/prompts/new-event-handler.prompt.md",
+      "index": 0,
+      "lang": "rust",
+      "to": "src/messaging/order_events.rs",
+      "mode": "replace",
+      "fill": {
+        "{EntityName}": "Order",
+        "{entity_name}": "order"
+      }
+    },
+    {
+      "file": ".github/prompts/new-event-handler.prompt.md",
+      "index": 1,
+      "lang": "rust",
+      "to": "src/messaging/order_events.rs",
+      "mode": "append",
+      "fill": {
+        "use crate::messaging::EventHandler;": "use crate::messaging::{EventHandler, EventPublisher, MessageConsumer};"
+      }
+    },
+    {
+      "file": ".github/prompts/new-event-handler.prompt.md",
+      "index": 2,
+      "lang": "rust",
+      "to": "src/messaging/order_events.rs",
+      "mode": "append",
+      "fill": {
+        "{EntityName}": "Order",
+        "{entity_name}": "order",
+        "use std::sync::Arc;\n\nuse crate::domain::{TenantId, OrderId};\n\n": "use std::sync::Arc;\n\nuse crate::domain::{TenantId, OrderId};\nuse crate::services::OrderService;\n\n"
+      }
+    },
+    {
+      "file": ".github/prompts/new-event-handler.prompt.md",
+      "index": 3,
+      "lang": "rust",
+      "to": "src/messaging/order_events.rs",
+      "mode": "append",
+      "fill": {
+        "{EntityName}": "Order",
+        "{entity_name}": "order"
+      }
+    },
+    {
+      "file": ".github/prompts/new-event-handler.prompt.md",
+      "index": 4,
+      "lang": "rust",
+      "to": "src/messaging/order_events.rs",
+      "mode": "append",
+      "fill": {
+        "{EntityName}": "Order",
+        "{entity_name}": "order"
+      }
+    },
+    {
+      "file": ".github/prompts/new-graphql-resolver.prompt.md",
+      "index": 0,
+      "lang": "rust",
+      "to": "src/samples/graphql_producer_resolver.rs",
+      "mode": "replace",
+      "fill": {
+        "{EntityName}": "Producer",
+        "{entity_name}": "producer"
+      }
+    },
+    {
+      "file": ".github/prompts/new-graphql-resolver.prompt.md",
+      "index": 1,
+      "lang": "rust",
+      "to": "src/samples/graphql_producer_resolver.rs",
+      "mode": "append",
+      "fill": {
+        "{EntityName}": "Producer",
+        "{entity_name}": "producer",
+        "use async_graphql::{Context, Object, Result};\nuse uuid::Uuid;\n\n": "use async_graphql::{Context, Object, Result};\n\nuse crate::services::ProducerService;\n\n"
+      }
+    },
+    {
+      "file": ".github/prompts/new-graphql-resolver.prompt.md",
+      "index": 2,
+      "lang": "rust",
+      "to": "src/samples/graphql_producer_resolver.rs",
+      "mode": "append",
+      "fill": {
+        "{EntityName}": "Producer",
+        "{entity_name}": "producer",
+        "pub struct ProducerMutation;": "use crate::{dto::producer::CreateProducerRequest, graphql::RequireRole};\n\npub struct ProducerMutation;"
+      }
+    },
+    {
+      "file": ".github/prompts/new-graphql-resolver.prompt.md",
+      "index": 3,
+      "lang": "rust",
+      "to": "src/samples/graphql_producer_resolver.rs",
+      "mode": "append",
+      "fill": {
+        "{EntityName}": "Producer",
+        "{entity_name}": "producer",
+        "use async_graphql::dataloader::Loader;\nuse std::{collections::HashMap, sync::Arc};\nuse uuid::Uuid;\n\n": "use async_graphql::dataloader::Loader;\nuse std::{collections::HashMap, sync::Arc};\n\nuse crate::repositories::ProducerRepository;\n\n"
+      }
+    },
+    {
+      "file": ".github/prompts/new-graphql-resolver.prompt.md",
+      "index": 4,
+      "lang": "rust",
+      "to": "src/samples/graphql_producer_resolver.rs",
+      "mode": "append",
+      "fill": {
+        "{EntityName}": "Producer",
+        "{entity_name}": "producer"
+      }
+    },
+    {
+      "file": ".github/prompts/new-middleware.prompt.md",
+      "index": 0,
+      "lang": "rust",
+      "to": "src/samples/new_middleware_require_admin.rs",
+      "mode": "replace"
+    },
+    {
+      "file": ".github/prompts/new-middleware.prompt.md",
+      "index": 1,
+      "lang": "rust",
+      "to": "src/samples/new_middleware_timing.rs",
+      "mode": "replace"
+    },
+    {
+      "file": ".github/prompts/new-middleware.prompt.md",
+      "index": 2,
+      "lang": "rust",
+      "to": "src/samples/new_middleware_http_layers.rs",
+      "mode": "replace"
+    },
+    {
+      "file": ".github/prompts/new-service.prompt.md",
+      "index": 1,
+      "lang": "rust",
+      "to": "src/samples/new_service_transfer.rs",
+      "mode": "replace",
+      "fill": {
+        "use sqlx::{PgPool, Postgres, Transaction};\n\n": "use sqlx::{PgPool, Postgres, Transaction};\n\nuse crate::{domain::TenantId, error::AppError};\n\n",
+        "async fn reserve_funds(": "async fn mark_transfer_complete(\n    tx: &mut Transaction<'_, Postgres>,\n    tenant_id: TenantId,\n    transfer_id: uuid::Uuid,\n) -> Result<(), AppError> {\n    sqlx::query(\"UPDATE transfers SET completed_at = now() WHERE tenant_id = $1 AND id = $2\")\n        .bind(tenant_id.0)\n        .bind(transfer_id)\n        .execute(&mut **tx)\n        .await?;\n    Ok(())\n}\n\nasync fn reserve_funds("
+      }
+    },
+    {
+      "file": ".github/prompts/new-service.prompt.md",
+      "index": 2,
+      "lang": "rust",
+      "to": "src/samples/new_service_wiring.rs",
+      "mode": "replace",
+      "fill": {
+        "let repository = Arc::new(Pg{EntityName}Repository::new(pool.clone()));\nlet service = {EntityName}Service::new(repository);": "pub fn wire_order_service(pool: sqlx::PgPool) -> crate::services::OrderService {\n    let repository = std::sync::Arc::new(crate::repositories::order::PgOrderRepository::new(pool.clone()));\n    let service = crate::services::OrderService::new(repository);\n    service\n}"
+      }
+    },
+    {
+      "file": ".github/prompts/new-test.prompt.md",
+      "index": 0,
+      "lang": "rust",
+      "to": "tests/new_test_discount.rs",
+      "mode": "replace",
+      "fill": {
+        "#[tokio::test]\nasync fn calculate_total_when_discount_applies_returns_reduced_amount() {": "pub struct OrderTotal(i64);\nimpl OrderTotal {\n    pub fn new(cents: i64) -> Self { Self(cents) }\n    pub fn apply_percent_discount(self, percent: i64) -> Self { Self(self.0 - (self.0 * percent / 100)) }\n    pub fn cents(&self) -> i64 { self.0 }\n}\n\n#[tokio::test]\nasync fn calculate_total_when_discount_applies_returns_reduced_amount() {"
+      }
+    },
+    {
+      "file": ".github/prompts/new-test.prompt.md",
+      "index": 1,
+      "lang": "rust",
+      "to": "src/services/order.rs",
+      "mode": "append",
+      "fill": {
+        "use mockall::predicate::eq;\nuse uuid::Uuid;\n\n#[tokio::test]\nasync fn load_order_when_repository_returns_none_maps_not_found() {": "\n\n#[cfg(test)]\nmod tests {\n    use super::*;\n    use mockall::predicate::eq;\n    use uuid::Uuid;\n    use crate::repositories::order::MockOrderRepository;\n\n    #[tokio::test]\n    async fn load_order_when_repository_returns_none_maps_not_found() {",
+        "    assert!(result.is_err());\n}": "    assert!(result.is_err());\n    }\n}"
+      }
+    },
+    {
+      "file": ".github/prompts/new-test.prompt.md",
+      "index": 3,
+      "lang": "rust",
+      "to": "tests/new_test_insert_order.rs",
+      "mode": "replace",
+      "fill": {
+        "{EntityName}": "Order",
+        "{entity_name}": "order",
+        "#[sqlx::test(migrations = \"./migrations\")]\nasync fn insert_order_stores_tenant_scoped_row(pool: sqlx::PgPool) -> Result<(), AppError> {": "use preset_rust_build_check::{domain::TenantId, error::AppError, repositories::{NewOrder, OrderRepository, PgOrderRepository}};\n\n#[sqlx::test(migrations = \"./migrations\")]\nasync fn insert_order_stores_tenant_scoped_row(pool: sqlx::PgPool) -> Result<(), AppError> {"
+      }
+    },
+    {
+      "file": ".github/prompts/new-test.prompt.md",
+      "index": 4,
+      "lang": "rust",
+      "to": "tests/new_test_migrations_postgres18.rs",
+      "mode": "replace",
+      "fill": {
+        "use testcontainers::{runners::AsyncRunner, ImageExt};\nuse testcontainers_modules::postgres::Postgres;\n\n": "use testcontainers::{runners::AsyncRunner, ImageExt};\nuse testcontainers_modules::postgres::Postgres;\n\n#[allow(unused_imports)]\nuse sqlx::Executor as _;\n\n"
+      }
+    },
+    {
+      "file": ".github/prompts/new-worker.prompt.md",
+      "index": 0,
+      "lang": "rust",
+      "to": "src/samples/new_worker.rs",
+      "mode": "replace",
+      "fill": {
+        "{EntityName}": "Order",
+        "{entity_name}": "order",
+        "pub struct OrderWorker {\n    service: Arc<OrderService>,": "use crate::services::OrderService;\n\npub struct OrderWorker {\n    service: Arc<OrderService>,"
+      }
+    },
+    {
+      "file": ".github/prompts/new-worker.prompt.md",
+      "index": 1,
+      "lang": "rust",
+      "to": "src/samples/new_worker.rs",
+      "mode": "append",
+      "fill": {
+        "{EntityName}": "Order",
+        "{entity_name}": "order",
+        "use tokio::task::JoinSet;\nuse tokio_util::sync::CancellationToken;\n\npub async fn start_workers(\n    state: AppState,": "use tokio::task::JoinSet;\n\nuse crate::state::AppState;\n\npub async fn start_workers(\n    state: AppState,",
+        "            state.orders.clone(),\n            tenant,\n            batch,\n            interval,\n        )": "            std::sync::Arc::new(state.orders.clone()),\n            tenant,\n            batch,\n            interval,\n        )"
+      }
+    },
+    {
+      "file": ".github/prompts/new-worker.prompt.md",
+      "index": 2,
+      "lang": "rust",
+      "to": "src/samples/new_worker_health.rs",
+      "mode": "replace"
+    },
+    {
+      "file": ".github/skills/api-doc-gen/SKILL.md",
+      "index": 0,
+      "lang": "rust",
+      "to": "src/samples/api_doc_gen.rs",
+      "mode": "replace"
+    },
+    {
+      "file": "AGENTS.md",
+      "index": 0,
+      "lang": "rust",
+      "to": "src/samples/agents_outbox_worker.rs",
+      "mode": "replace"
+    },
+    {
+      "file": "AGENTS.md",
+      "index": 1,
+      "lang": "rust",
+      "to": "src/samples/agents_order_requested_message.rs",
+      "mode": "replace"
+    },
+    {
+      "file": ".github/prompts/bug-fix-tdd.prompt.md",
+      "index": 0,
+      "lang": "rust",
+      "to": "tests/bug_fix_tdd_reserve_order.rs",
+      "mode": "replace",
+      "fill": {
+        "#[tokio::test]\nasync fn reserve_order_when_quantity_is_zero_returns_validation_error() {": "use mockall::automock;\nuse validator::Validate;\nuse preset_rust_build_check::error::AppError;\n\n#[derive(Debug, validator::Validate)]\npub struct ReserveOrder {\n    #[validate(range(min = 1))]\n    pub quantity: u32,\n}\n\n#[automock]\n#[async_trait::async_trait]\npub trait OrderRepository: Send + Sync {\n    async fn reserve(&self, tenant_id: uuid::Uuid, order: &ReserveOrder) -> Result<(), AppError>;\n}\n\npub async fn reserve_order(\n    repository: &dyn OrderRepository,\n    tenant_id: uuid::Uuid,\n    order: ReserveOrder,\n) -> Result<(), AppError> {\n    order.validate().map_err(AppError::Validation)?;\n    repository.reserve(tenant_id, &order).await\n}\n\n#[tokio::test]\nasync fn reserve_order_when_quantity_is_zero_returns_validation_error() {"
+      }
+    },
+    {
+      "file": ".github/prompts/new-config.prompt.md",
+      "index": 0,
+      "lang": "rust",
+      "to": "src/samples/new_config.rs",
+      "mode": "replace",
+      "fill": {
+        "{SectionName}": "Payments",
+        "{section_name}": "payments",
+        "{SECTION_PREFIX}": "APP__PAYMENTS"
+      }
+    },
+    {
+      "file": ".github/prompts/new-config.prompt.md",
+      "index": 1,
+      "lang": "rust",
+      "to": "src/samples/new_config.rs",
+      "mode": "append",
+      "fill": {
+        "{SectionName}": "Payments",
+        "{section_name}": "payments",
+        "{SECTION_PREFIX}": "APP__PAYMENTS",
+        "use secrecy::SecretString;\nuse serde::Deserialize;\n\n": ""
+      }
+    },
+    {
+      "file": ".github/prompts/new-config.prompt.md",
+      "index": 2,
+      "lang": "rust",
+      "to": "src/samples/new_config.rs",
+      "mode": "append",
+      "fill": {
+        "{SectionName}": "Payments",
+        "{section_name}": "payments",
+        "{SECTION_PREFIX}": "APP__PAYMENTS"
+      }
+    },
+    {
+      "file": ".github/prompts/new-config.prompt.md",
+      "index": 3,
+      "lang": "rust",
+      "to": "src/samples/new_config.rs",
+      "mode": "append",
+      "fill": {
+        "{SectionName}": "Payments",
+        "{section_name}": "payments",
+        "{SECTION_PREFIX}": "APP__PAYMENTS"
+      }
+    },
+    {
+      "file": ".github/prompts/new-test.prompt.md",
+      "index": 2,
+      "lang": "rust",
+      "to": "tests/new_test_get_order.rs",
+      "mode": "replace",
+      "fill": {
+        "{entity_name}": "order",
+        "{entity_slug}": "orders",
+        "use axum::{body::Body, http::{Request, StatusCode}};\nuse tower::ServiceExt;\n\n": "use axum::{body::Body, http::{Request, StatusCode}};\nuse secrecy::SecretString;\nuse tower::ServiceExt;\n\nuse preset_rust_build_check::{config::{AuthSettings, DatabaseSettings, Environment, ServerSettings, Settings}, state::AppState};\n\nasync fn test_state() -> AppState {\n    let pool = sqlx::postgres::PgPoolOptions::new()\n        .connect_lazy(\"postgres://localhost/test\")\n        .expect(\"lazy pool\");\n    let settings = Settings {\n        environment: Environment::Test,\n        server: ServerSettings { host: \"127.0.0.1\".to_owned(), port: 0 },\n        database: DatabaseSettings { url: SecretString::from(\"postgres://localhost/test\"), max_connections: 1 },\n        auth: AuthSettings {\n            issuer: \"https://issuer.example.com\".to_owned(),\n            audience: \"aud\".to_owned(),\n            jwks_url: \"https://issuer.example.com/.well-known/jwks.json\".to_owned(),\n        },\n        api_token: None,\n    };\n    AppState::new(pool, settings)\n}\n\n",
+        "let app = crate::app(state);": "let app = preset_rust_build_check::app(state);"
+      }
+    }
+  ],
+  "skip": [
+    {
+      "file": ".github/instructions/database.instructions.md",
+      "lang": "rust",
+      "index": 3,
+      "reason": "Illustrative stub impl ('// Implement the canonical methods...') — not compilable as written. The real OrderRepository/PgOrderRepository impl is built from new-repository.prompt.md (Order fill) in src/repositories/order.rs, which already satisfies the same trait shown here."
+    },
+    {
+      "file": ".github/prompts/new-error-types.prompt.md",
+      "lang": "rust",
+      "index": 0,
+      "reason": "Duplicate of the canonical AppError enum already built from errorhandling.instructions.md [0] into src/error.rs (same variants, just re-wrapped in a 'pub mod error' illustration). Including a second AppError definition would conflict with the canonical one."
+    },
+    {
+      "file": ".github/prompts/new-error-types.prompt.md",
+      "lang": "rust",
+      "index": 1,
+      "reason": "Duplicate of the canonical AppError::not_found / From<sqlx::Error> impl already built from errorhandling.instructions.md [1,2] into src/error.rs; this block only re-illustrates the same methods for the duplicate type skipped above."
+    }
+  ]
+}

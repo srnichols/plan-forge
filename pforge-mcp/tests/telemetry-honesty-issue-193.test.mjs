@@ -52,12 +52,12 @@ describe("#193 Defect B — formatQuorumSummary contradictions", () => {
 
   it("available row WITH billing string keeps its billing string", () => {
     const out = formatQuorumSummary(
-      [{ model: "gpt-5.3-codex", available: true, via: "cli", worker: "gh-copilot", billing: "GitHub Copilot subscription (VS Code)" }],
+      [{ model: "gpt-5.3-codex", available: true, via: "cli", worker: "gh-copilot", billing: "GitHub Copilot AI credits (VS Code)" }],
       "vs-code-copilot",
       "auto"
     );
     expect(out).toContain("✓");
-    expect(out).toContain("GitHub Copilot subscription (VS Code)");
+    expect(out).toContain("GitHub Copilot AI credits (VS Code)");
     expect(out).not.toContain("available (billing unspecified)");
   });
 

@@ -2,6 +2,9 @@ import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import * as costService from "../cost-service.mjs";
 import { calculateSliceCost, buildCostBreakdown, buildEstimate, QUORUM_PRESETS } from "../orchestrator.mjs";
 import { SERVER_COMBINED_SRC } from "./helpers/server-combined-src.mjs";
+import { mkdtempSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 
 describe("cost-service: MODEL_PRICING + getPricing (Slice 1)", () => {
   it("exports MODEL_PRICING as an object with a default rate", () => {
@@ -68,9 +71,9 @@ describe("cost-service: priceSlice parity (Slice 2)", () => {
       worker: "api-other",
     },
     {
-      name: "CLI worker uses premium request rate",
+      name: "flat subscription CLI worker uses premium request rate",
       tokens: { tokens_in: 99999, tokens_out: 99999, model: "claude-sonnet-4.5", premiumRequests: 5 },
-      worker: "gh-copilot",
+      worker: "claude",
     },
     {
       name: "CLI worker with no premium requests costs 0",
@@ -191,6 +194,14 @@ describe("cost-service: estimatePlan parity (Slice 3)", () => {
     const b = buildEstimate({ plan, model: "claude-sonnet-4.5", cwd, quorumConfig });
     expect(a).toEqual(b);
   });
+
+  it("gh-copilot estimates do not switch to long-context pricing based on aggregate plan totals", () => {
+    const plan136 = makePlan(136);
+    const plan137 = makePlan(137);
+    const a = costService.estimatePlan({ plan: plan136, model: "gpt-6-astra", cwd: null });
+    const b = costService.estimatePlan({ plan: plan137, model: "gpt-6-astra", cwd: null });
+    expect(b.estimatedCostUSD / a.estimatedCostUSD).toBeLessThan(1.03);
+  });
 });
 
 describe("cost-service: estimateQuorum regression (Slice 3)", () => {
@@ -274,16 +285,11 @@ describe("cost-service: estimateQuorum regression (Slice 3)", () => {
     }
   });
 
-  it("REGRESSION: subscription mode (gh-copilot/claude-cli) flattens per-leg cost (Phase-29 / v2.83.0)", () => {
-    // Field report: a consumer project on gh-copilot saw $23.53 estimate where actual
-    // ran ~$0.10–$0.50 — a ~250× over-estimate. Root cause: estimatePlan and
-    // estimateSlice priced quorum legs via raw API token rates (MODEL_PRICING)
-    // even when the active provider was a flat-rate subscription CLI. After
-    // the fix, each leg of a subscription provider should bill ~$0.01 per
-    // request regardless of token volume, capping power overhead at roughly
-    // (3 dry-runs + 1 reviewer) × $0.01 × sliceCount = ~$0.24 for 6 slices
-    // (grok legs still token-priced via xai-api). Without API keys present,
-    // detectCostModel routes claude-* → claude-cli and gpt-* → gh-copilot.
+  it("REGRESSION: gh-copilot estimates use token pricing while flat CLIs stay bounded", () => {
+    // Since Copilot moved from premium requests to AI-credit token billing,
+    // gh-copilot legs must no longer flatten to $0.01/request. Claude CLI
+    // remains flat, so power is still bounded but now higher than speed because
+    // Copilot-served GPT/Grok flagship legs cost more than speed-tier legs.
     const prevAnthropic = process.env.ANTHROPIC_API_KEY;
     const prevOpenAI = process.env.OPENAI_API_KEY;
     delete process.env.ANTHROPIC_API_KEY;
@@ -292,17 +298,14 @@ describe("cost-service: estimateQuorum regression (Slice 3)", () => {
       const plan = makePlan(6);
       const result = costService.estimateQuorum({ plan, cwd: null });
 
-      // Power overhead must collapse dramatically vs the API-mode test above.
-      // API-mode power on the same fixture exceeds $1; subscription-mode must
-      // be well under $1 (only the grok leg uses token math).
-      expect(result.power.overheadUSD).toBeLessThan(1.0);
+      expect(result.power.overheadUSD).toBeGreaterThan(result.speed.overheadUSD);
       expect(result.speed.overheadUSD).toBeLessThan(1.0);
 
       // Per-slice projections must also reflect the flattening — slice
       // entries for power mode should sit well under the legacy bug's
       // ~$3+ per slice.
       for (const entry of result.power.slices) {
-        expect(entry.projectedCostUSD).toBeLessThan(0.5);
+        expect(entry.projectedCostUSD).toBeLessThan(1.0);
       }
     } finally {
       if (prevAnthropic === undefined) delete process.env.ANTHROPIC_API_KEY; else process.env.ANTHROPIC_API_KEY = prevAnthropic;
@@ -453,5 +456,28 @@ describe("forge_estimate_slice registration (Phase-27.2 Slice 3)", () => {
     // Phase-52 SERVER-SPLIT: single switch replaced by individual handler functions
     // with negated guard `if (!(name === ...))` — no case label in source
     expect(serverSrc).toContain(`name === "forge_estimate_slice"`);
+  });
+});
+
+describe("gh-copilot plan estimates price the assumed cached share (#295)", () => {
+  it("charges the cached share at the cache-read rate instead of dropping it", () => {
+    const previous = process.env.PFORGE_COST_MODEL;
+    const cwd = mkdtempSync(join(tmpdir(), "pf-cost-cache-share-"));
+    process.env.PFORGE_COST_MODEL = "gh-copilot";
+    try {
+      const slices = Array.from({ length: 40 }, (_, i) => ({ number: i + 1, title: `Slice ${i + 1}`, depends: [], parallel: false, scope: [], tasks: [] }));
+      const plan = { slices, dag: { order: slices.map((sl) => String(sl.number)) } };
+      const estimate = costService.estimatePlan({ plan, model: "claude-opus-5.5", cwd });
+      const pricing = costService.getCopilotPricing("claude-opus-5.5");
+      const { estimatedInput, estimatedOutput } = estimate.tokens;
+      const cached = Math.round(estimatedInput * costService.COPILOT_ESTIMATE_CACHE_READ_SHARE);
+      const expected = (estimatedInput - cached) * pricing.input + cached * pricing.cacheRead + estimatedOutput * pricing.output;
+      expect(cached).toBeGreaterThan(0);
+      expect(estimate.estimated_cost_usd).toBe(Math.round(expected * 100) / 100);
+    } finally {
+      if (previous === undefined) delete process.env.PFORGE_COST_MODEL;
+      else process.env.PFORGE_COST_MODEL = previous;
+      rmSync(cwd, { recursive: true, force: true });
+    }
   });
 });

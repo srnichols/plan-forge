@@ -181,8 +181,60 @@ describe("priceSlice token coverage (Slice 4)", () => {
     expect(r.cost_breakdown.authoritative_source).toBeUndefined();
   });
 
-  it("Subscription-CLI regression guard remains unchanged", () => {
-    const r = costService.priceSlice({ model: "gh-copilot", premiumRequests: 5 }, "gh-copilot");
+  it("gh-copilot uses Copilot token pricing, not premium-request flat pricing", () => {
+    const r = costService.priceSlice({
+      model: "gpt-5.6-sol",
+      tokens_in: 1_000_000,
+      tokens_out: 1_000_000,
+      cache_read_tokens: 500_000,
+      premiumRequests: 5,
+    }, "gh-copilot");
+    expect(r.cost_usd).toBeGreaterThan(0.05);
+    expect(r.cost_breakdown.authoritative_source).toMatch(/^copilot-pricing\.json/);
+  });
+
+  it("gh-copilot does not apply long-context rates from aggregate session totals", () => {
+    const below = costService.priceSlice({ model: "gpt-6-astra", tokens_in: 270_000, tokens_out: 1_000 }, "gh-copilot");
+    const above = costService.priceSlice({ model: "gpt-6-astra", tokens_in: 273_000, tokens_out: 1_000 }, "gh-copilot");
+    expect(above.cost_usd / below.cost_usd).toBeLessThan(1.03);
+    expect(above.cost_breakdown.authoritative_source).toBe("copilot-pricing.json");
+  });
+
+  it("gh-copilot prices cached reads and cache writes from parsed CLI stats", () => {
+    const withCache = costService.priceSlice({
+      model: "claude-opus-5.5",
+      tokens_in: 476_000,
+      cache_read_tokens: 430_100,
+      cache_creation_input_tokens: 12_000,
+      tokens_out: 3_100,
+    }, "gh-copilot");
+    const uncached = costService.priceSlice({
+      model: "claude-opus-5.5",
+      tokens_in: 476_000,
+      tokens_out: 3_100,
+    }, "gh-copilot");
+    expect(withCache.cost_usd).toBeLessThan(uncached.cost_usd);
+    expect(withCache.cost_breakdown.input_cache_read).toBeGreaterThan(0);
+    expect(withCache.cost_breakdown.input_cache_write_5m).toBeGreaterThan(0);
+  });
+
+  it("honors tokens.worker when quorum cost call sites omit the worker argument", () => {
+    const tokens = {
+      model: "claude-opus-5.5",
+      worker: "gh-copilot",
+      tokens_in: 476_000,
+      cache_read_tokens: 430_100,
+      tokens_out: 3_100,
+      vendor: "anthropic",
+    };
+    const implicit = costService.priceSlice(tokens);
+    const explicit = costService.priceSlice(tokens, "gh-copilot");
+    expect(implicit.cost_usd).toBe(explicit.cost_usd);
+    expect(implicit.cost_usd).toBeLessThan(costService.priceSlice({ ...tokens, worker: undefined }, "api-anthropic").cost_usd);
+  });
+
+  it("flat subscription CLIs still use premium requests", () => {
+    const r = costService.priceSlice({ model: "grok-4.5", premiumRequests: 5 }, "grok");
     expect(r.cost_usd).toBe(0.05);
   });
 

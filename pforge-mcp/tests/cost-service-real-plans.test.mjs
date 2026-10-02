@@ -75,14 +75,11 @@ describe("cost-service: real-plan smoke matrix (Phase-27.1 Slice 4)", () => {
         }
       });
 
-      it("power >= speed > false (pricing distinguishes presets)", () => {
-        // power >= speed: without API keys every leg routes to a subscription
-        // worker (gh-copilot / claude CLI / Grok Build CLI) priced at the same
-        // flat per-request rate, so power === speed is expected. With
-        // ANTHROPIC/OPENAI/XAI keys the legs are token-priced and Opus 5.5 /
-        // GPT-6 Astra cost more than Sonnet 5.5 / GPT-6 Luna, so power > speed.
-        // The assertion uses >= to be env-agnostic.
-        expect(result.power.estimatedCostUSD).toBeGreaterThanOrEqual(result.speed.estimatedCostUSD);
+      it("power > speed > false (Copilot token pricing distinguishes presets)", () => {
+        // gh-copilot now bills AI credits per token from copilot-pricing.json,
+        // so the flagship power preset must cost more than the fast speed preset
+        // even when no direct API keys are configured.
+        expect(result.power.estimatedCostUSD).toBeGreaterThan(result.speed.estimatedCostUSD);
         expect(result.speed.estimatedCostUSD).toBeGreaterThan(result["false"].estimatedCostUSD);
       });
 

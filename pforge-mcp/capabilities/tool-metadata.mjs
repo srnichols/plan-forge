@@ -211,6 +211,7 @@ export const TOOL_METADATA = {
     consumes: [".forge/cost-history.json", ".forge/model-performance.json"],
     sideEffects: [],
     errors: {},
+    agentGuidance: "Use this for actual token and USD spend. gh-copilot runs are priced from copilot-pricing.json AI-credit token rates; claude-cli, codex-cli, and grok-cli remain flat subscription providers. Historical total_premium_requests may appear for back-compat but is not the current USD basis for gh-copilot.",
     example: { input: {}, output: { runs: 5, total_cost_usd: 1.23, by_model: {}, forge_model_stats: { "claude-sonnet-5.5": { total_slices: 10, passed: 9, failed: 1, success_rate: 0.9, avg_cost_usd: 0.05 } } } },
   },
   forge_delegate_review: {
@@ -258,7 +259,7 @@ export const TOOL_METADATA = {
       PLAN_NOT_FOUND: { message: "Plan file not found", recovery: "Pass a valid planPath relative to the project root" },
       PLAN_PARSE_FAILED: { message: "Plan could not be parsed", recovery: "Run forge_analyze on the plan first to surface structural issues" },
     },
-    agentGuidance: "Call this tool before presenting any dollar amount or quorum-mode cost to the user. Do not hand-compute quorum costs in chat — the numbers you would invent drift quickly and have been observed to overshoot reality by an order of magnitude. This tool returns all four quorum modes (auto / power / speed / false) in one payload so you never need to make four separate calls or estimate.",
+    agentGuidance: "Call this tool before presenting any dollar amount or quorum-mode cost to the user. Do not hand-compute quorum costs in chat — the numbers you would invent drift quickly and have been observed to overshoot reality by an order of magnitude. This tool returns all four quorum modes (auto / power / speed / false) in one payload and uses Copilot AI-credit token rates for gh-copilot legs.",
     example: {
       input: { planPath: "docs/plans/Phase-27-COST-SERVICE-v2.60-PLAN.md" },
       output: {
@@ -285,7 +286,7 @@ export const TOOL_METADATA = {
       PLAN_NOT_FOUND: { message: "Plan file not found", recovery: "Pass a valid planPath relative to the project root" },
       SLICE_NOT_FOUND: { message: "Slice number not in plan", recovery: "Call forge_plan_status or forge_estimate_quorum to see available slice numbers" },
     },
-    agentGuidance: "Use this when you need cost for a single slice — cheaper than forge_estimate_quorum (which estimates the whole plan). Returns projected cost, complexity score, and a rationale for why the slice is or isn't quorum-eligible under the chosen mode.",
+    agentGuidance: "Use this when you need cost for a single slice — cheaper than forge_estimate_quorum (which estimates the whole plan). Returns projected cost, complexity score, and a rationale for why the slice is or isn't quorum-eligible under the chosen mode. gh-copilot projections use Copilot AI-credit token pricing, not legacy premium-request math.",
     example: {
       input: { planPath: "docs/plans/Phase-27.2-COST-REFINEMENT-v2.61-PLAN.md", sliceNumber: 4, mode: "power" },
       output: {

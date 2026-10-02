@@ -261,9 +261,9 @@ describe("assessQuorumViability", () => {
       });
       const claudeModel = result.models.find((m) => m.model.startsWith("claude-"));
       expect(claudeModel.declaredForRuntime).toBe(true);
-      // grok-* is DIRECT_API_ONLY, so gh-copilot never declares it.
+      // grok-4.7 is Copilot-served, so gh-copilot declares it for power.
       const grokModel = result.models.find((m) => m.model.startsWith("grok-"));
-      expect(grokModel.declaredForRuntime).toBe(false);
+      expect(grokModel.declaredForRuntime).toBe(true);
     });
   });
 

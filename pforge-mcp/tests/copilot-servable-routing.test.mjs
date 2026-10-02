@@ -2,7 +2,8 @@
  * Meta-bug #103 regression tests — Copilot-servable model routing.
  *
  * Verifies probeQuorumModelAvailability() correctly routes:
- *   - grok-*, dall-e-*     → direct API required (no CLI proxy)
+ *   - grok-4.6/4.7        → gh-copilot preferred, direct API fallback
+ *   - older grok-*, dall-e-* → direct API required (no CLI proxy)
  *   - gpt-*, chatgpt-*     → gh-copilot preferred, direct API fallback
  *   - claude-*, codex-*    → CLI path
  *
@@ -49,7 +50,7 @@ describe("#103: Copilot-servable model routing in probeQuorumModelAvailability",
       expect(result.available).toBe(true);
       expect(result.via).toBe("cli");
       expect(result.worker).toBe("gh-copilot");
-      expect(result.provider).toBe("copilot-subscription");
+      expect(result.provider).toBe("copilot-ai-credits");
     });
 
     it("falls back to direct API when gh-copilot is absent and OPENAI_API_KEY is set", () => {
@@ -77,19 +78,46 @@ describe("#103: Copilot-servable model routing in probeQuorumModelAvailability",
     });
   });
 
-  describe("grok-* (direct-API-only)", () => {
-    it("is unavailable without XAI_API_KEY even when gh-copilot is installed", () => {
+  describe("Copilot-served Grok", () => {
+    it("grok-4.7 is available via gh-copilot without XAI_API_KEY", () => {
       setGhCopilotProbe(() => true);
-      const result = probeQuorumModelAvailability("grok-4");
+      const result = probeQuorumModelAvailability("grok-4.7", { host: "vs-code-copilot", hostPreference: "auto" });
+      expect(result.available).toBe(true);
+      expect(result.via).toBe("cli");
+      expect(result.worker).toBe("gh-copilot");
+      expect(result.provider).toBe("copilot-ai-credits");
+    });
+
+    it("grok-4.7 uses direct xAI API when host preference chooses direct API and key is set", () => {
+      setGhCopilotProbe(() => true);
+      process.env.XAI_API_KEY = "xai-test";
+      const result = probeQuorumModelAvailability("grok-4.7", { host: "claude-code", hostPreference: "auto" });
+      expect(result.available).toBe(true);
+      expect(result.via).toBe("api");
+      expect(result.provider).toBe("xai");
+    });
+
+    it("grok-4.6 is also Copilot-served", () => {
+      setGhCopilotProbe(() => true);
+      const result = probeQuorumModelAvailability("grok-4.6", { host: "vs-code-copilot", hostPreference: "auto" });
+      expect(result.available).toBe(true);
+      expect(result.worker).toBe("gh-copilot");
+    });
+  });
+
+  describe("legacy grok-* (direct-API-only)", () => {
+    it("grok-4.20 is unavailable without XAI_API_KEY even when gh-copilot is installed", () => {
+      setGhCopilotProbe(() => true);
+      const result = probeQuorumModelAvailability("grok-4.20-0309-non-reasoning");
       expect(result.available).toBe(false);
       expect(result.via).toBe("api");
       expect(result.reason).toContain("XAI_API_KEY");
     });
 
-    it("is available when XAI_API_KEY is set, regardless of gh-copilot", () => {
+    it("grok-4.20 is available when XAI_API_KEY is set, regardless of gh-copilot", () => {
       setGhCopilotProbe(() => false);
       process.env.XAI_API_KEY = "xai-test";
-      const result = probeQuorumModelAvailability("grok-4");
+      const result = probeQuorumModelAvailability("grok-4.20-0309-non-reasoning");
       expect(result.available).toBe(true);
       expect(result.via).toBe("api");
       expect(result.provider).toBe("xai");

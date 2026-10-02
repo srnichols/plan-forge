@@ -204,7 +204,7 @@ export const TOOLS = [
         estimate: { type: "boolean", description: "If true, return cost estimate without executing" },
         resumeFrom: { type: "number", description: "Slice number to resume from (skips completed slices)" },
         dryRun: { type: "boolean", description: "If true, parse and validate plan without executing" },
-        quorum: { type: "string", enum: ["false", "true", "auto", "power", "speed"], description: "Quorum mode: 'false' (off), 'true' (all slices), 'auto' (threshold-based), 'power' (flagship models: Opus + GPT-5.3 + Grok 4.20), 'speed' (fast models: Sonnet + GPT-5.4-mini + Grok 4.1-fast). Default: auto" },
+        quorum: { type: "string", enum: ["false", "true", "auto", "power", "speed"], description: "Quorum mode: 'false' (off), 'true' (all slices), 'auto' (threshold-based), 'power' (flagship models: Opus 5.5 + GPT-6 Astra + Grok 4.7), 'speed' (fast models: Sonnet 5.5 + GPT-6 Luna + Gemini 3.8 Flash). Default: auto" },
         quorumThreshold: { type: "number", description: "Override complexity threshold for auto quorum (1-10). Default: 6" },
         manualImport: { type: "boolean", description: "v2.37 Crucible — bypass the crucibleId frontmatter gate. Logged to .forge/crucible/manual-imports.jsonl." },
         manualImportSource: { type: "string", enum: ["human", "speckit", "grandfather"], description: "v2.37 Crucible — audit tag for --manual-import bypass. Default: human." },
@@ -237,7 +237,7 @@ export const TOOLS = [
   },
   {
     name: "forge_cost_report",
-    description: "Cost tracking report — shows total spend, per-model breakdown, and monthly aggregation from .forge/cost-history.json. Includes token counts, run history, and forge_model_stats (success rate per model from model-performance.json).",
+    description: "Cost tracking report — shows total spend, per-model breakdown, and monthly aggregation from .forge/cost-history.json. Includes token counts, run history, Copilot AI-credit token pricing for gh-copilot, and forge_model_stats (success rate per model from model-performance.json).",
     inputSchema: {
       type: "object",
       properties: {
@@ -247,7 +247,7 @@ export const TOOLS = [
   },
   {
     name: "forge_estimate_quorum",
-    description: "Returns projected cost of a plan under all four quorum modes (auto / power / speed / false) in a single call. Agents MUST call this tool before presenting any dollar amount for a plan — hand-computed quorum costs drift by an order of magnitude. Backed by cost-service.mjs, the same code path that powers `pforge run-plan --estimate`.",
+    description: "Returns projected cost of a plan under all four quorum modes (auto / power / speed / false) in a single call. Agents MUST call this tool before presenting any dollar amount for a plan — hand-computed quorum costs drift by an order of magnitude. Backed by cost-service.mjs, including Copilot AI-credit token pricing for gh-copilot.",
     inputSchema: {
       type: "object",
       properties: {
@@ -260,7 +260,7 @@ export const TOOLS = [
   },
   {
     name: "forge_estimate_slice",
-    description: "Returns projected cost for a single slice under a chosen quorum mode. Cheaper than forge_estimate_quorum (which estimates the whole plan). Backed by cost-service.mjs estimateSlice(). Un-calibrated — no run-level historical correction factor applied.",
+    description: "Returns projected cost for a single slice under a chosen quorum mode. Cheaper than forge_estimate_quorum (which estimates the whole plan). Backed by cost-service.mjs estimateSlice(), including Copilot AI-credit token pricing for gh-copilot. Un-calibrated — no run-level historical correction factor applied.",
     inputSchema: {
       type: "object",
       properties: {

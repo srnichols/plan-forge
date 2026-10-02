@@ -22,12 +22,12 @@ import { describe, it, expect } from "vitest";
 import { priceRun } from "../cost-service.mjs";
 
 function executor(sliceN, extra = {}) {
-  // gh-copilot CLI subscription slice — priceSlice returns $0.01 per
+  // Claude CLI subscription slice — priceSlice returns $0.01 per
   // premiumRequest (PREMIUM_REQUEST_RATE in cost-service.mjs).
   return {
     number: String(sliceN),
     status: "passed",
-    worker: "gh-copilot",
+    worker: "claude",
     tokens: { tokens_in: 25000, tokens_out: 1200, model: "claude-sonnet-4.6", premiumRequests: 1 },
     ...extra,
   };

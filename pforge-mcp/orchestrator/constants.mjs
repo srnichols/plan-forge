@@ -172,10 +172,14 @@ export const DEFAULT_WATCHER_MODEL = "claude-opus-5.5";
 /** xAI flagship appended by the opt-in Grok quorum add-in (quorum.includeGrok). */
 export const DEFAULT_GROK_ADDIN_MODEL = "grok-4.7";
 
+/** Grok IDs currently served by GitHub Copilot. Excludes grok-4.5 (Copilot retirement: 2026-10-19). */
+export const COPILOT_SERVED_GROK_MODELS = Object.freeze(["grok-4.6", "grok-4.7"]);
+
 /**
  * Quorum fan-out when .forge.json names no preset and no models. Shared by
  * loadQuorumConfig() and the .forge.json schema so the documented default
- * cannot drift from the runtime one. Grok stays on the xAI API route.
+ * cannot drift from the runtime one. Grok 4.7 is Copilot-served on Copilot
+ * hosts, with direct xAI API fallback when routing prefers direct API.
  */
 export const DEFAULT_QUORUM_MODELS = Object.freeze(["claude-opus-5.5", "gpt-6-sol", DEFAULT_GROK_ADDIN_MODEL]);
 
@@ -201,9 +205,9 @@ export const DEFAULT_ESCALATION_CHAIN = Object.freeze(["auto", "claude-opus-5.5"
 // 2026-09-30 model refresh (GitHub Copilot supported-models + vendor pricing):
 // Opus 4.7 retires from Copilot on 2026-10-02, Sonnet 4.6 retired 2026-09-01,
 // and GPT-5.4 mini retires 2026-10-19. Claude Opus 5.5 ($4/$20) replaces both
-// Opus legs; GPT-6 Astra is OpenAI's flagship. Grok 4.7 stays on the xAI API
-// route (grok-* is DIRECT_API_ONLY here). The speed tier is now entirely
-// Copilot-servable, so the gh-copilot runtime gets all three members.
+// Opus legs; GPT-6 Astra is OpenAI's flagship. Grok 4.7 is Copilot-served and
+// still supports xAI direct API fallback. Both power and speed can now run as
+// full three-member quorums on gh-copilot hosts without API keys.
 export const QUORUM_PRESETS = {
   // Bug #107: power = the premium tier. The default quorum (quorum.mjs) uses
   // the same Anthropic and xAI members with GPT-6 Sol as its OpenAI leg.
@@ -213,10 +217,10 @@ export const QUORUM_PRESETS = {
     dryRunTimeout: 300_000,
     threshold: 5,
     availableIn: {
-      "cli-gh": ["claude-opus-5.5", "gpt-6-astra"],
+      "cli-gh": ["claude-opus-5.5", "gpt-6-astra", "grok-4.7"],
       "cli-claude": ["claude-opus-5.5"],
       "cli-codex": ["gpt-6-astra"],
-      "vs-code-copilot-chat": ["claude-opus-5.5", "gpt-6-astra"],
+      "vs-code-copilot-chat": ["claude-opus-5.5", "gpt-6-astra", "grok-4.7"],
       "vs-code-agents-enterprise": ["claude-opus-5.5", "gpt-6-astra", "grok-4.7"],
     },
     fallbacks: {

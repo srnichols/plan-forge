@@ -602,7 +602,7 @@ Pre-configured quorum profiles that select models, thresholds, and timeouts in o
 | `--quorum=power` | Claude Opus 5.5 + GPT-6 Astra + Grok 4.7 | Opus 5.5 | 5 | 5 min |
 | `--quorum=speed` | Claude Sonnet 5.5 + GPT-6 Luna + Gemini 3.8 Flash | Sonnet 5.5 | 7 | 2 min |
 
-Grok legs call the xAI API and need `XAI_API_KEY`; without it the power preset runs with its two Copilot-served members.
+Grok 4.7 is Copilot-served on Copilot hosts, so the power preset can run all three members without `XAI_API_KEY`. Set `XAI_API_KEY` when `routing.hostPreference` prefers direct APIs or when using legacy Grok IDs such as `grok-4.20-*`.
 
 Available via CLI, MCP (`quorum: "power"`), and `.forge.json` (`quorum.preset: "power"`).
 

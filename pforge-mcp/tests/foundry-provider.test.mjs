@@ -319,11 +319,11 @@ describe("getFoundryAuthScope — Government cloud detection (Slice 3)", () => {
 
 // ─── Subscription-CLI regression guard ──────────────────────────────────
 
-describe("priceSlice — subscription-CLI regression (Slice 7)", () => {
-  it("gh-copilot with 5 premium requests → $0.05 (unchanged)", () => {
+describe("priceSlice — flat subscription-CLI regression (Slice 7)", () => {
+  it("grok CLI with 5 premium requests → $0.05 (unchanged)", () => {
     const r = priceSlice(
-      { model: "gh-copilot", premiumRequests: 5 },
-      "gh-copilot"
+      { model: "grok-4.5", premiumRequests: 5 },
+      "grok"
     );
     expect(r.cost_usd).toBeCloseTo(0.05, 6);
   });

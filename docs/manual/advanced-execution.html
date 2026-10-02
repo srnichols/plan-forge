@@ -61,13 +61,13 @@
       <table class="manual-table">
         <thead><tr><th>Class</th><th>Models</th><th>Routing</th></tr></thead>
         <tbody>
-          <tr><td><code>DIRECT_API_ONLY</code></td><td><code>grok-*</code>, <code>dall-e-*</code></td><td>HTTP API only. No CLI proxy exists. Requires <code>XAI_API_KEY</code> / <code>OPENAI_API_KEY</code>.</td></tr>
-          <tr><td><code>COPILOT_SERVABLE</code></td><td><code>gpt-*</code>, <code>chatgpt-*</code> (incl. <code>gpt-5.3-codex</code>)</td><td>Prefers <code>gh copilot</code> CLI proxy when available (uses your Copilot subscription). Falls back to direct OpenAI API if <code>OPENAI_API_KEY</code> is set.</td></tr>
+          <tr><td><code>DIRECT_API_ONLY</code></td><td>legacy <code>grok-*</code> IDs (for example <code>grok-4.20-*</code>) and <code>dall-e-*</code></td><td>HTTP API only. No Copilot proxy exists. Requires <code>XAI_API_KEY</code> / <code>OPENAI_API_KEY</code>.</td></tr>
+          <tr><td><code>COPILOT_SERVABLE</code></td><td><code>gpt-*</code>, <code>chatgpt-*</code> (incl. <code>gpt-5.3-codex</code>), plus <code>grok-4.6</code>/<code>grok-4.7</code></td><td>Prefers <code>gh copilot</code> CLI proxy when available (uses Copilot AI credits). Falls back to direct OpenAI/xAI API if the matching API key is set.</td></tr>
           <tr><td>Everything else</td><td>Claude, Gemini, etc.</td><td>CLI-first via the matching agent CLI (<code>claude</code>, <code>gemini</code>, etc.)</td></tr>
         </tbody>
       </table>
 
-      <p>This split (Phase-34, fixes #103) means <code>gpt-*</code> models <strong>no longer drop from auto-quorum</strong> when <code>OPENAI_API_KEY</code> is unset but <code>gh-copilot</code> is installed. The old pattern conflated &ldquo;requires direct API&rdquo; with &ldquo;routed via HTTP&rdquo; and unfairly penalized Copilot users.</p>
+      <p>This split (Phase-34, fixes #103; refreshed for #293) means <code>gpt-*</code> and Copilot-served Grok models <strong>no longer drop from auto-quorum</strong> when provider API keys are unset but <code>gh-copilot</code> is installed. The old pattern conflated &ldquo;requires direct API&rdquo; with &ldquo;routed via HTTP&rdquo; and unfairly penalized Copilot users.</p>
 
       <h2 id="escalation">Escalation Chains</h2>
       <p>When a model fails a slice, the orchestrator automatically escalates to the next model in the chain:</p>
@@ -90,7 +90,7 @@
 
       <div class="callout callout-tip">
         <strong>OAuth-only quorum works.</strong> If you have a GitHub Copilot subscription and the <code>copilot</code> CLI is logged in, <code>--quorum=power|speed|auto</code> fans out across multiple models <em>without</em> any API keys, each leg is a separate <code>copilot</code> subprocess invoked with a different <code>--model</code> flag. The orchestrator's quorum dispatcher (<a href="https://github.com/srnichols/plan-forge/blob/master/pforge-mcp/orchestrator.mjs" rel="noopener"><code>quorumDispatch</code></a>) calls <code>spawnWorker</code> once per model inside <code>Promise.all</code>; <code>filterQuorumModels</code> drops any model whose CLI/credentials aren't reachable so the quorum gracefully degrades instead of failing.<br><br>
-        <strong>Add API keys to mix providers.</strong> Set <code>XAI_API_KEY</code> (or drop it in <code>.forge/secrets.json</code>) and a Grok leg joins the same parallel fan-out alongside your Copilot-served legs, see the <a href="#quorum-mixed-example">worked example</a> below.<br><br>
+        <strong>Add API keys to mix providers.</strong> <code>grok-4.7</code> can run through Copilot with no key. Set <code>XAI_API_KEY</code> (or drop it in <code>.forge/secrets.json</code>) when you want direct xAI routing on non-Copilot hosts or legacy Grok IDs, see the <a href="#quorum-mixed-example">worked example</a> below.<br><br>
         Not to be confused with <a href="forge-master.html#quorum-advisory">Forge-Master's <code>dispatchQuorum</code></a>, which is HTTP-only and does require per-model API keys. That surface only powers the chat reasoning lane, not <code>run-plan</code>.
       </div>
 
@@ -124,9 +124,9 @@ pforge run-plan docs/plans/Phase-7.md --quorum=speed</code></pre>
       </table>
 
       <!-- ─── Mixed-quorum worked example (issue #156) ─── -->
-      <h3 id="quorum-mixed-example">Worked Example — 2× Copilot CLI + 1× Grok API <span class="text-amber-400 text-base font-normal">v2.83+</span></h3>
+      <h3 id="quorum-mixed-example">Worked Example — 3× Copilot CLI, optional Grok API fallback <span class="text-amber-400 text-base font-normal">v3.29+</span></h3>
 
-      <p>The most common production setup: ride your Copilot subscription for the bulk of the quorum, add one direct-API leg (Grok or OpenAI) for diversity. Both kinds of leg run in the same <code>Promise.all</code>, no special config to "merge" them.</p>
+      <p>The most common production setup: ride Copilot AI-credit billing for the full quorum, while keeping direct API keys available for hosts configured to prefer provider APIs. Both kinds of leg run in the same <code>Promise.all</code>, no special config to "merge" them.</p>
 
       <p><strong>Step 1: declare the model mix in <code>.forge.json</code>:</strong></p>
 
@@ -137,14 +137,14 @@ pforge run-plan docs/plans/Phase-7.md --quorum=speed</code></pre>
     "models": [
       "claude-opus-5.5",              // → copilot CLI subprocess
       "gpt-6-astra",                   // → copilot CLI subprocess
-      "grok-4.7"                       // → direct-API worker (XAI_API_KEY)
+      "grok-4.7"                       // → copilot CLI on Copilot hosts; xAI API when preferred + XAI_API_KEY
     ],
     "reviewerModel": "claude-opus-5.5" // → copilot CLI subprocess
   }
 }</code></pre>
       </div>
 
-      <p><strong>Step 2: provision the Grok key (one of):</strong></p>
+      <p><strong>Step 2: optional — provision the Grok key for direct API fallback:</strong></p>
 
       <div class="cmd-block">
         <div class="cmd-block-header"><span>Terminal</span><button class="cmd-copy-btn">Copy</button></div>
@@ -171,12 +171,12 @@ pforge run-plan docs/plans/Phase-7.md --quorum=auto</code></pre>
 
       <ul>
         <li><code>quorumDispatch</code> sees three models in the config.</li>
-        <li><code>spawnWorker</code> is called three times concurrently. The first two route to the local <code>copilot</code> CLI (no key needed, rides your Copilot subscription); the third routes to the xAI HTTP worker using <code>XAI_API_KEY</code>.</li>
+        <li><code>spawnWorker</code> is called three times concurrently. On Copilot hosts, all three route to the local <code>copilot</code> CLI with distinct <code>--model</code> flags and are billed as Copilot AI credits. On hosts configured to prefer direct APIs, Grok can route to the xAI HTTP worker when <code>XAI_API_KEY</code> is present.</li>
         <li>All three return their dry-run analyses. <code>quorumReview</code> synthesises them via the reviewer model into a single <code>enhancedPrompt</code>.</li>
         <li>The actual slice execution runs once with that synthesised prompt, not three concurrent edits.</li>
       </ul>
 
-      <p>If the Grok key is missing, <code>filterQuorumModels</code> drops Grok from the list at run-plan startup and the quorum proceeds with the two Copilot-served legs, no failure, just a smaller jury.</p>
+      <p>If neither Copilot CLI nor the required API key is available, <code>filterQuorumModels</code> drops that model from the list at run-plan startup and the quorum proceeds with the reachable legs, no failure, just a smaller jury.</p>
 
       <h3 id="quorum-vs-advisory">Quorum Mode vs Quorum Advisory — What's the Difference? <span class="text-amber-400 text-base font-normal">v2.78+</span></h3>
       <p>Two surfaces use the word "quorum." They're related but operate at different scopes:</p>
@@ -489,11 +489,11 @@ ArgumentException.ThrowIfNullOrWhiteSpace(customerName);</code></pre>
       <pre><code>Quorum Pre-Run Summary (host: claude-code, preference: auto)
   <span class="text-emerald-400 font-bold">✓</span> claude-opus-5.5 → anthropic-direct      ($0.0064/req)
   <span class="text-emerald-400 font-bold">✓</span> gpt-6-astra     → openai-direct         ($0.0128/req)
-  <span class="text-amber-400 font-bold">⚠</span> grok-4.7        → xai-direct            ($0.0026/req)  needs XAI_API_KEY
+  <span class="text-amber-400 font-bold">⚠</span> grok-4.7        → gh-copilot            Copilot AI credits (or xAI direct when preferred)
   <span class="text-emerald-400 font-bold">✓</span> claude-sonnet-5.5 → anthropic-direct     ($0.0032/req)
 </code></pre>
 
-      <p>Per-slice telemetry now records <code>host</code>, <code>billingSurface</code>, and <code>billingWarning</code> in <code>slice-N.json</code> so cost aggregation can distinguish subscription-covered vs pay-per-token spend in the Cost Report.</p>
+      <p>Per-slice telemetry now records <code>host</code>, <code>billingSurface</code>, and <code>billingWarning</code> in <code>slice-N.json</code> so cost aggregation can distinguish flat subscription CLIs, Copilot AI-credit token spend, and direct provider API spend in the Cost Report.</p>
 
       <h2 id="cost-optimization">Cost Optimization</h2>
       <p>The orchestrator tracks model performance in <code>.forge/model-performance.json</code>, success rate, average cost, and duration per model. It auto-selects the cheapest model with &gt;80% historical pass rate.</p>

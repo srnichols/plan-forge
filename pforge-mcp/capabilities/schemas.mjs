@@ -377,7 +377,7 @@ export const CONFIG_SCHEMA = {
         reviewerModel: { type: "string", default: DEFAULT_QUORUM_REVIEWER_MODEL, description: "Model for synthesis review" },
         dryRunTimeout: { type: "number", default: 300000, description: "Timeout per dry-run worker (ms)" },
         strictAvailability: { type: "boolean", default: false, description: "When true, fast-fail (exit 2) if any configured model is unavailable. When false (default), drop unavailable models and continue if ≥1 remain" },
-        includeGrok: { type: ["boolean", "string"], enum: [false, true, "api", "cli"], default: false, description: `Additively append a Grok member to the quorum (${DEFAULT_GROK_ADDIN_MODEL} by default). 'api'/true = metered xAI API (needs XAI_API_KEY); 'cli' = Grok Build CLI (flat subscription). Purely additive — never removes existing members; no-op when the credential is absent. CLI equivalents: --with-grok / --with-grok-cli.` },
+        includeGrok: { type: ["boolean", "string"], enum: [false, true, "api", "cli"], default: false, description: `Additively append a Grok member to the quorum (${DEFAULT_GROK_ADDIN_MODEL} by default). 'api'/true = Copilot-served on Copilot hosts with xAI API fallback when XAI_API_KEY is set; 'cli' = Grok Build CLI (flat subscription). Purely additive — never removes existing members; no-op when no route is available. CLI equivalents: --with-grok / --with-grok-cli.` },
         grokModel: { type: "string", default: DEFAULT_GROK_ADDIN_MODEL, description: `Model used for the includeGrok add-in member (default: flagship ${DEFAULT_GROK_ADDIN_MODEL}).` },
       },
     },

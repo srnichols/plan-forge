@@ -1124,6 +1124,12 @@ describe("applyGrokAddIn", () => {
     expect(r.grokVia).toBe("api");
   });
 
+  it("appends Copilot-served Grok via API mode when gh-copilot is available and XAI_API_KEY is absent", () => {
+    const r = applyGrokAddIn(base(), { includeGrok: "api", hasXaiKey: false, ghCopilotAvailable: true });
+    expect(r.models).toContain(DEFAULT_GROK_ADDIN_MODEL);
+    expect(r.grokVia).toBe("api");
+  });
+
   it("honors a custom grokModel override", () => {
     const r = applyGrokAddIn(base(), { includeGrok: "api", hasXaiKey: true, grokModel: "grok-4.3" });
     expect(r.models).toContain("grok-4.3");
@@ -1137,9 +1143,9 @@ describe("applyGrokAddIn", () => {
   });
 
   it("skips (advisory, no hard-fail) when the API credential is missing", () => {
-    const r = applyGrokAddIn(base(), { includeGrok: "api", hasXaiKey: false });
+    const r = applyGrokAddIn(base(), { includeGrok: "api", hasXaiKey: false, ghCopilotAvailable: false });
     expect(r.models).toEqual(["claude-opus-4.7", "gpt-5.3-codex"]);
-    expect(r.grokAddInSkipped).toMatch(/XAI_API_KEY/);
+    expect(r.grokAddInSkipped).toMatch(/gh-copilot/);
   });
 
   it("skips when the CLI credential is missing", () => {
@@ -1167,6 +1173,13 @@ describe("loadQuorumConfig — includeGrok add-in", () => {
     writeFileSync(resolve(tempDir, ".forge.json"), JSON.stringify({ quorum: { models: ["claude-opus-4.7", "gpt-5.3-codex"] } }));
     const config = loadQuorumConfig(tempDir, null, { includeGrokOverride: "api", env: { XAI_API_KEY: "xai-x" } });
     expect(config.models).toContain(DEFAULT_GROK_ADDIN_MODEL);
+  });
+
+  it("appends Copilot-served Grok when gh-copilot is available and XAI_API_KEY is absent", () => {
+    writeFileSync(resolve(tempDir, ".forge.json"), JSON.stringify({ quorum: { includeGrok: "api", models: ["claude-opus-4.7", "gpt-5.3-codex"] } }));
+    const config = loadQuorumConfig(tempDir, null, { env: {}, ghCopilotAvailable: true });
+    expect(config.models).toContain(DEFAULT_GROK_ADDIN_MODEL);
+    expect(config.grokVia).toBe("api");
   });
 
   it("defaults (no includeGrok) leave models untouched", () => {
@@ -1300,6 +1313,7 @@ describe("parseStderrStats", () => {
     expect(stats.model).toBe("claude-opus-4.6");
     expect(stats.tokens_in).toBe(476_000);
     expect(stats.tokens_out).toBe(3_100);
+    expect(stats.cache_read_tokens).toBe(430_100);
     expect(stats.premiumRequests).toBe(3);
   });
 
@@ -1309,6 +1323,7 @@ describe("parseStderrStats", () => {
     const stats = parseStderrStats(stderr);
     expect(stats.tokens_in).toBe(3_200_000);
     expect(stats.tokens_out).toBe(10_500);
+    expect(stats.cache_read_tokens).toBe(3_100_000);
     expect(stats.premiumRequests).toBe(3);
   });
 
@@ -1318,12 +1333,14 @@ describe("parseStderrStats", () => {
     expect(stats.model).toBe("claude-sonnet-4.6");
     expect(stats.tokens_in).toBe(639_400);
     expect(stats.tokens_out).toBe(4_500);
+    expect(stats.cache_read_tokens).toBe(552_100);
     expect(stats.premiumRequests).toBe(1);
   });
 
   it("returns zero stats for empty input", () => {
-    expect(parseStderrStats("")).toEqual({ model: null, tokens_in: 0, tokens_out: 0, premiumRequests: 0 });
-    expect(parseStderrStats(null)).toEqual({ model: null, tokens_in: 0, tokens_out: 0, premiumRequests: 0 });
+    const empty = { model: null, tokens_in: 0, tokens_out: 0, cache_read_tokens: 0, cache_creation_input_tokens: 0, reasoning_tokens: 0, premiumRequests: 0 };
+    expect(parseStderrStats("")).toEqual(empty);
+    expect(parseStderrStats(null)).toEqual(empty);
   });
 
   it("handles millions and billions suffixes", () => {
@@ -1368,6 +1385,7 @@ describe("parseStderrStats", () => {
     expect(stats.model).toBe("claude-sonnet-4.6");
     expect(stats.tokens_in).toBe(639_400);   // NOT 1_278_800 (pre-fix double-count)
     expect(stats.tokens_out).toBe(4_500);    // NOT 9_000
+    expect(stats.cache_read_tokens).toBe(552_100);
     expect(stats.premiumRequests).toBe(1);
   });
 
@@ -1381,6 +1399,7 @@ describe("parseStderrStats", () => {
     // Still summing across two distinct models when no aggregate is present.
     expect(stats.tokens_in).toBe(739_400);
     expect(stats.tokens_out).toBe(6_500);
+    expect(stats.cache_read_tokens).toBe(602_100);
     // Primary = one with most output tokens.
     expect(stats.model).toBe("claude-sonnet-4.6");
   });
@@ -1440,14 +1459,15 @@ describe("extractTokens", () => {
 // ─── calculateSliceCost ─────────────────────────────────────────────
 
 describe("calculateSliceCost", () => {
-  it("calculates cost from premium requests for CLI workers", () => {
+  it("calculates gh-copilot cost from tokens, not premium requests", () => {
     const tokens = { model: "claude-sonnet-4.6", tokens_in: 476000, tokens_out: 3100, premiumRequests: 3 };
     const result = calculateSliceCost(tokens, "gh-copilot");
-    expect(result.cost_usd).toBe(0.03);
+    expect(result.cost_usd).toBeGreaterThan(0);
+    expect(result.cost_usd).not.toBe(0.03);
     expect(result.model).toBe("claude-sonnet-4.6");
   });
 
-  it("returns zero cost when premiumRequests is 0 for CLI workers", () => {
+  it("returns zero gh-copilot cost when no tokens were reported", () => {
     const tokens = { model: "claude-sonnet-4.6", tokens_in: 0, tokens_out: 0, premiumRequests: 0 };
     const result = calculateSliceCost(tokens, "gh-copilot");
     expect(result.cost_usd).toBe(0);

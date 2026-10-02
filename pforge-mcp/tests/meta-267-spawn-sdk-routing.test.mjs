@@ -32,7 +32,12 @@ vi.mock("../orchestrator/sdk-worker.mjs", () => ({
   runSdkSession: (...args) => runSdkSession(...args),
 }));
 
-const { spawnWorker } = await import("../orchestrator/worker-spawn.mjs");
+const {
+  spawnWorker,
+  _resolveApiProviderForRouting,
+  setGhCopilotProbe,
+  setSecretsLoader,
+} = await import("../orchestrator/worker-spawn.mjs");
 
 const ENV_KEYS = ["OPENAI_API_KEY", "XAI_API_KEY"];
 
@@ -61,10 +66,13 @@ describe("meta #267 — _spawnWorkerAsync BYOK / SDK routing", () => {
     runSdkSession.mockReset();
     fetchMock = vi.fn().mockResolvedValue(apiResponse());
     vi.stubGlobal("fetch", fetchMock);
+    setSecretsLoader(() => null);
   });
 
   afterEach(() => {
     vi.unstubAllGlobals();
+    setGhCopilotProbe(null);
+    setSecretsLoader(null);
     for (const [k, v] of Object.entries(savedEnv)) {
       if (v === undefined) delete process.env[k];
       else process.env[k] = v;
@@ -155,5 +163,55 @@ describe("meta #267 — _spawnWorkerAsync BYOK / SDK routing", () => {
     expect(() => spawnWorker("write code", { model: "dall-e-3", cwd: tempDir, role: "code" }))
       .toThrow(/cannot execute/i);
     expect(runSdkSession).not.toHaveBeenCalled();
+  });
+
+  it("(8) code-role Copilot-servable routing keeps gh-copilot even when host prefers direct API and a key exists", () => {
+    setGhCopilotProbe(() => true);
+    process.env.OPENAI_API_KEY = "test-key-not-a-real-secret";
+
+    const routed = _resolveApiProviderForRouting("gpt-6-astra", null, {
+      cwd: tempDir,
+      host: "claude-code",
+      hostPreference: "auto",
+      role: "code",
+    });
+
+    expect(routed).toEqual({ apiProvider: null });
+  });
+
+  it("(9) reviewer-role Copilot-servable routing may choose direct API on non-Copilot hosts", () => {
+    setGhCopilotProbe(() => true);
+    process.env.XAI_API_KEY = "test-key-not-a-real-secret";
+
+    const routed = _resolveApiProviderForRouting("grok-4.7", null, {
+      cwd: tempDir,
+      host: "claude-code",
+      hostPreference: "auto",
+      role: "reviewer",
+    });
+
+    expect(routed.apiProvider?.name).toBe("xai");
+  });
+
+  it("(10) routing.grokCli='prefer' returns a forced grok worker and bypasses SDK routing", () => {
+    writeFileSync(join(tempDir, ".forge.json"), JSON.stringify({ routing: { grokCli: "prefer", copilotSdk: "prefer" } }));
+    const routed = _resolveApiProviderForRouting("grok-4.7", null, {
+      cwd: tempDir,
+      role: "reviewer",
+      workers: [{ name: "grok", available: true }],
+    });
+
+    expect(routed).toEqual({ apiProvider: null, forcedWorker: "grok" });
+  });
+
+  it("(11) routing.grokCli='prefer' also forces legacy direct-only Grok IDs to the grok worker", () => {
+    writeFileSync(join(tempDir, ".forge.json"), JSON.stringify({ routing: { grokCli: "prefer" } }));
+    const routed = _resolveApiProviderForRouting("grok-4.20-0309-non-reasoning", null, {
+      cwd: tempDir,
+      role: "reviewer",
+      workers: [{ name: "grok", available: true }],
+    });
+
+    expect(routed).toEqual({ apiProvider: null, forcedWorker: "grok" });
   });
 });

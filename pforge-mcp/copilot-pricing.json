@@ -1,0 +1,364 @@
+{
+  "generatedAt": "2026-10-01T20:40:07.463Z",
+  "source": "copilot-sdk listModels billing.tokenPrices (cents per 1M tokens)",
+  "units": "USD per token",
+  "models": {
+    "claude-haiku-4.5": {
+      "input": 0.000001,
+      "output": 0.000005,
+      "cacheRead": 1.0000000000000001e-7,
+      "cacheWrite": 0.00000125,
+      "contextMax": null
+    },
+    "claude-opus-4.7": {
+      "input": 0.000005,
+      "output": 0.000025,
+      "cacheRead": 5e-7,
+      "cacheWrite": 0.00000625,
+      "contextMax": 200000,
+      "longContext": {
+        "input": 0.000005,
+        "output": 0.000025,
+        "cacheRead": 5e-7,
+        "cacheWrite": 0.00000625,
+        "contextMax": 936000
+      }
+    },
+    "claude-opus-4.8": {
+      "input": 0.000005,
+      "output": 0.000025,
+      "cacheRead": 5e-7,
+      "cacheWrite": 0.00000625,
+      "contextMax": 200000,
+      "longContext": {
+        "input": 0.000005,
+        "output": 0.000025,
+        "cacheRead": 5e-7,
+        "cacheWrite": 0.00000625,
+        "contextMax": 936000
+      }
+    },
+    "claude-opus-5": {
+      "input": 0.000005,
+      "output": 0.000025,
+      "cacheRead": 5e-7,
+      "cacheWrite": 0.00000625,
+      "contextMax": 200000,
+      "longContext": {
+        "input": 0.000005,
+        "output": 0.000025,
+        "cacheRead": 5e-7,
+        "cacheWrite": 0.00000625,
+        "contextMax": 936000
+      }
+    },
+    "claude-opus-5.5": {
+      "input": 0.000004,
+      "output": 0.00002,
+      "cacheRead": 2.0000000000000002e-7,
+      "cacheWrite": 0.000005,
+      "contextMax": 200000,
+      "longContext": {
+        "input": 0.000004,
+        "output": 0.00002,
+        "cacheRead": 2.0000000000000002e-7,
+        "cacheWrite": 0.000005,
+        "contextMax": 1000000
+      }
+    },
+    "claude-sonnet-5": {
+      "input": 0.000002,
+      "output": 0.00001,
+      "cacheRead": 2.0000000000000002e-7,
+      "cacheWrite": 0.0000025,
+      "contextMax": 200000,
+      "longContext": {
+        "input": 0.000002,
+        "output": 0.00001,
+        "cacheRead": 2.0000000000000002e-7,
+        "cacheWrite": 0.0000025,
+        "contextMax": 936000
+      }
+    },
+    "claude-sonnet-5.5": {
+      "input": 0.000002,
+      "output": 0.00001,
+      "cacheRead": 2.0000000000000002e-7,
+      "cacheWrite": 0.0000025,
+      "contextMax": 200000,
+      "longContext": {
+        "input": 0.000002,
+        "output": 0.00001,
+        "cacheRead": 2.0000000000000002e-7,
+        "cacheWrite": 0.0000025,
+        "contextMax": 936000
+      }
+    },
+    "gemini-3.5-flash": {
+      "input": 0.0000015,
+      "output": 0.000009,
+      "cacheRead": 1.5e-7,
+      "cacheWrite": 0,
+      "contextMax": 200000,
+      "longContext": {
+        "input": 0.0000015,
+        "output": 0.000009,
+        "cacheRead": 1.5e-7,
+        "cacheWrite": 0,
+        "contextMax": 936000
+      }
+    },
+    "gemini-3.6-flash": {
+      "input": 7.5e-7,
+      "output": 0.00000375,
+      "cacheRead": 7e-8,
+      "cacheWrite": 0,
+      "contextMax": 200000,
+      "longContext": {
+        "input": 7.5e-7,
+        "output": 0.00000375,
+        "cacheRead": 7e-8,
+        "cacheWrite": 0,
+        "contextMax": 936000
+      }
+    },
+    "gemini-3.7-flash": {
+      "input": 7.5e-7,
+      "output": 0.00000375,
+      "cacheRead": 7e-8,
+      "cacheWrite": 0,
+      "contextMax": 200000,
+      "longContext": {
+        "input": 7.5e-7,
+        "output": 0.00000375,
+        "cacheRead": 7e-8,
+        "cacheWrite": 0,
+        "contextMax": 936000
+      }
+    },
+    "gemini-3.8-flash": {
+      "input": 7.5e-7,
+      "output": 0.00000375,
+      "cacheRead": 7e-8,
+      "cacheWrite": 0,
+      "contextMax": 200000,
+      "longContext": {
+        "input": 7.5e-7,
+        "output": 0.00000375,
+        "cacheRead": 7e-8,
+        "cacheWrite": 0,
+        "contextMax": 983040
+      }
+    },
+    "gpt-5-mini": {
+      "input": 2.5e-7,
+      "output": 0.000002,
+      "cacheRead": 2e-8,
+      "cacheWrite": 0,
+      "contextMax": null
+    },
+    "gpt-5.3-codex": {
+      "input": 0.00000175,
+      "output": 0.000014,
+      "cacheRead": 1.7000000000000001e-7,
+      "cacheWrite": 0,
+      "contextMax": 272000
+    },
+    "gpt-5.4": {
+      "input": 0.0000025,
+      "output": 0.000015,
+      "cacheRead": 2.5e-7,
+      "cacheWrite": 0,
+      "contextMax": 272000,
+      "longContext": {
+        "input": 0.000005,
+        "output": 0.0000225,
+        "cacheRead": 5e-7,
+        "cacheWrite": 0,
+        "contextMax": 922000
+      }
+    },
+    "gpt-5.4-mini": {
+      "input": 7.5e-7,
+      "output": 0.0000045,
+      "cacheRead": 7e-8,
+      "cacheWrite": 0,
+      "contextMax": 272000
+    },
+    "gpt-5.5": {
+      "input": 0.000005,
+      "output": 0.00003,
+      "cacheRead": 5e-7,
+      "cacheWrite": 0,
+      "contextMax": 272000,
+      "longContext": {
+        "input": 0.00001,
+        "output": 0.000045,
+        "cacheRead": 0.000001,
+        "cacheWrite": 0,
+        "contextMax": 922000
+      }
+    },
+    "gpt-5.6-luna": {
+      "input": 2.0000000000000002e-7,
+      "output": 0.0000012,
+      "cacheRead": 2e-8,
+      "cacheWrite": 2.5e-7,
+      "contextMax": 200000,
+      "longContext": {
+        "input": 4.0000000000000003e-7,
+        "output": 0.0000018000000000000001,
+        "cacheRead": 4e-8,
+        "cacheWrite": 5e-7,
+        "contextMax": 922000
+      }
+    },
+    "gpt-5.6-sol": {
+      "input": 0.000004,
+      "output": 0.00002,
+      "cacheRead": 4.0000000000000003e-7,
+      "cacheWrite": 0.000005,
+      "contextMax": 272000,
+      "longContext": {
+        "input": 0.000008,
+        "output": 0.00003,
+        "cacheRead": 8.000000000000001e-7,
+        "cacheWrite": 0.00001,
+        "contextMax": 922000
+      }
+    },
+    "gpt-5.6-sol-fast": {
+      "input": 0.000008,
+      "output": 0.00004,
+      "cacheRead": 8.000000000000001e-7,
+      "cacheWrite": 0.00001,
+      "contextMax": 272000,
+      "longContext": {
+        "input": 0.000016,
+        "output": 0.00006,
+        "cacheRead": 0.0000016000000000000001,
+        "cacheWrite": 0.00002,
+        "contextMax": 922000
+      }
+    },
+    "gpt-5.6-terra": {
+      "input": 0.000002,
+      "output": 0.000012,
+      "cacheRead": 2.0000000000000002e-7,
+      "cacheWrite": 0.0000025,
+      "contextMax": 272000,
+      "longContext": {
+        "input": 0.000004,
+        "output": 0.000018,
+        "cacheRead": 4.0000000000000003e-7,
+        "cacheWrite": 0.000005,
+        "contextMax": 922000
+      }
+    },
+    "gpt-6-astra": {
+      "input": 0.00001,
+      "output": 0.00005,
+      "cacheRead": 0.000001,
+      "cacheWrite": 0.0000125,
+      "contextMax": 272000,
+      "longContext": {
+        "input": 0.00002,
+        "output": 0.000075,
+        "cacheRead": 0.000002,
+        "cacheWrite": 0.000025,
+        "contextMax": 1050000
+      }
+    },
+    "gpt-6-luna": {
+      "input": 1.0000000000000001e-7,
+      "output": 5e-7,
+      "cacheRead": 1e-8,
+      "cacheWrite": 1.2e-7,
+      "contextMax": 272000,
+      "longContext": {
+        "input": 2.0000000000000002e-7,
+        "output": 7.5e-7,
+        "cacheRead": 2e-8,
+        "cacheWrite": 2.5e-7,
+        "contextMax": 872000
+      }
+    },
+    "gpt-6-sol": {
+      "input": 0.000002,
+      "output": 0.00001,
+      "cacheRead": 2.0000000000000002e-7,
+      "cacheWrite": 0.0000025,
+      "contextMax": 272000,
+      "longContext": {
+        "input": 0.000004,
+        "output": 0.000015,
+        "cacheRead": 4.0000000000000003e-7,
+        "cacheWrite": 0.000005,
+        "contextMax": 872000
+      }
+    },
+    "gpt-6.1-sol": {
+      "input": 0.000002,
+      "output": 0.00001,
+      "cacheRead": 1.0000000000000001e-7,
+      "cacheWrite": 0.0000025,
+      "contextMax": 272000,
+      "longContext": {
+        "input": 0.000004,
+        "output": 0.000015,
+        "cacheRead": 2.0000000000000002e-7,
+        "cacheWrite": 0.000005,
+        "contextMax": 922000
+      }
+    },
+    "grok-4.5": {
+      "input": 0.000002,
+      "output": 0.000006,
+      "cacheRead": 5e-7,
+      "cacheWrite": 0,
+      "contextMax": 200000,
+      "longContext": {
+        "input": 0.000004,
+        "output": 0.000012,
+        "cacheRead": 0.000001,
+        "cacheWrite": 0,
+        "contextMax": 500000
+      }
+    },
+    "grok-4.6": {
+      "input": 0.000002,
+      "output": 0.000006,
+      "cacheRead": 5e-7,
+      "cacheWrite": 0,
+      "contextMax": 200000,
+      "longContext": {
+        "input": 0.000004,
+        "output": 0.000012,
+        "cacheRead": 0.000001,
+        "cacheWrite": 0,
+        "contextMax": 500000
+      }
+    },
+    "grok-4.7": {
+      "input": 0.000002,
+      "output": 0.000006,
+      "cacheRead": 5e-7,
+      "cacheWrite": 0,
+      "contextMax": 200000,
+      "longContext": {
+        "input": 0.000004,
+        "output": 0.000012,
+        "cacheRead": 0.000001,
+        "cacheWrite": 0,
+        "contextMax": 500000
+      }
+    },
+    "mai-code-1.1-flash": {
+      "input": 2.0000000000000002e-7,
+      "output": 0.0000012,
+      "cacheRead": 2e-8,
+      "cacheWrite": 2.5e-7,
+      "contextMax": 128000
+    }
+  }
+}

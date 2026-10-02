@@ -173,13 +173,34 @@ describe("#104: probeQuorumModelAvailability honors hostPreference", () => {
     expect(r.available).toBe(true);
     expect(r.via).toBe("cli");
   });
+
+  it("Copilot-served Grok follows gh-copilot first on VS Code Copilot hosts", () => {
+    const r = probeQuorumModelAvailability("grok-4.7", { host: "vs-code-copilot", hostPreference: "auto" });
+    expect(r.available).toBe(true);
+    expect(r.via).toBe("cli");
+    expect(r.worker).toBe("gh-copilot");
+  });
+
+  it("Copilot-served Grok follows direct API first on non-Copilot hosts when XAI_API_KEY is set", () => {
+    const savedXai = process.env.XAI_API_KEY;
+    process.env.XAI_API_KEY = "xai-fake";
+    try {
+      const r = probeQuorumModelAvailability("grok-4.7", { host: "claude-code", hostPreference: "auto" });
+      expect(r.available).toBe(true);
+      expect(r.via).toBe("api");
+      expect(r.provider).toBe("xai");
+    } finally {
+      if (savedXai === undefined) delete process.env.XAI_API_KEY;
+      else process.env.XAI_API_KEY = savedXai;
+    }
+  });
 });
 
 describe("#104: filterQuorumModels + formatQuorumSummary", () => {
   it("formatQuorumSummary renders host header and per-model rows", () => {
     const rows = [
       { model: "claude-opus-4.7", available: true, via: "cli", worker: "claude", billing: "Anthropic Max" },
-      { model: "gpt-5.3-codex", available: true, via: "cli", worker: "gh-copilot", billing: "Copilot subscription", billingWarning: "Routes through Copilot seat" },
+      { model: "gpt-5.3-codex", available: true, via: "cli", worker: "gh-copilot", billing: "Copilot AI credits", billingWarning: "Routes through Copilot seat" },
       { model: "grok-4", available: false, via: "api", reason: "XAI_API_KEY not set" },
     ];
     const out = formatQuorumSummary(rows, "claude-code", "auto");

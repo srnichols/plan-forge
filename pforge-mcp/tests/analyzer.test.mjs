@@ -119,9 +119,9 @@ describe("calculateSliceCost", () => {
     expect(result.cost_usd).toBeCloseTo(3, 4);
   });
 
-  it("calculates CLI subscription cost via premiumRequests", () => {
+  it("calculates flat CLI subscription cost via premiumRequests", () => {
     const tokens = { model: "claude-sonnet-4.6", premiumRequests: 10, tokens_in: 5000, tokens_out: 2000 };
-    const result = calculateSliceCost(tokens, "gh-copilot");
+    const result = calculateSliceCost(tokens, "claude");
     // 10 * 0.01 = 0.10
     expect(result.cost_usd).toBeCloseTo(0.10, 4);
   });

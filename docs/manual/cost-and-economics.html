@@ -124,7 +124,7 @@ GET /api/cost/report?runId=&hellip;
 GET /api/cost/report?scope=month&amp;groupBy=model
 </code></pre>
 
-        <p>Returns the actual provider-billable amounts pulled from <code>.forge/cost-history.json</code>. Group by <code>model</code>, <code>role</code>, <code>day</code>, or <code>slice</code>. For runs that included xAI calls, the dollar amounts use the provider's exact-cost ticks (1 tick = $1&times;10<sup>-10</sup>) rather than multiplier math, what you see is what xAI billed.</p>
+        <p>Returns the actual provider-billable amounts pulled from <code>.forge/cost-history.json</code>. Group by <code>model</code>, <code>role</code>, <code>day</code>, or <code>slice</code>. <code>gh-copilot</code> runs use the generated <code>copilot-pricing.json</code> AI-credit token rates; flat subscription CLIs (<code>claude</code>, <code>codex</code>, <code>grok</code>) remain request-based. For runs that included xAI API calls, the dollar amounts use the provider's exact-cost ticks (1 tick = $1&times;10<sup>-10</sup>) rather than multiplier math, what you see is what xAI billed.</p>
 
         <h2 id="quorum-economics">Per-quorum-mode economics</h2>
         <p>Quorum mode is the biggest single cost lever after model tier. Plan Forge ships four modes:</p>
@@ -133,8 +133,8 @@ GET /api/cost/report?scope=month&amp;groupBy=model
           <thead><tr><th style="width: 9rem">Mode</th><th>Panel</th><th>Threshold</th><th>Cost shape</th><th>When</th></tr></thead>
           <tbody>
             <tr><td><strong><code>auto</code></strong> (default)</td><td>Dynamic: 2&ndash;3 models picked by intent class</td><td>Majority of responders</td><td>~3&times; single-model</td><td>Most plans. Cost-effective and adequate for most decisions.</td></tr>
-            <tr><td><strong><code>power</code></strong></td><td>4&ndash;5 flagship models (Opus, GPT-5.5, Gemini Pro, Grok 4.x)</td><td>5</td><td>~8&ndash;12&times; single-model</td><td>Architectural decisions, plan hardening (Session 1), high-stakes refactors.</td></tr>
-            <tr><td><strong><code>speed</code></strong></td><td>4&ndash;7 fast / cheap models (mini / nano tier)</td><td>7</td><td>~1.5&ndash;3&times; single-model</td><td>High-volume CI runs, batch classifications, when latency &gt; depth.</td></tr>
+            <tr><td><strong><code>power</code></strong></td><td>3 flagship models (Claude Opus 5.5, GPT-6 Astra, Grok 4.7)</td><td>5</td><td>Token-priced per reachable leg; higher than speed on Copilot AI credits</td><td>Architectural decisions, plan hardening (Session 1), high-stakes refactors.</td></tr>
+            <tr><td><strong><code>speed</code></strong></td><td>3 fast / cheap models (Claude Sonnet 5.5, GPT-6 Luna, Gemini 3.8 Flash)</td><td>7</td><td>Lower Copilot AI-credit token mix</td><td>High-volume CI runs, batch classifications, when latency &gt; depth.</td></tr>
             <tr><td><strong><code>disabled</code></strong> (<code>--no-quorum</code>)</td><td>1 model</td><td>n/a</td><td>1&times; (baseline)</td><td>Solo dev, trivial slices, dev-loop iteration.</td></tr>
           </tbody>
         </table>

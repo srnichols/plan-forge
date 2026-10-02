@@ -2,12 +2,12 @@ import { describe, it, expect } from "vitest";
 import { detectCostModel, SUBSCRIPTION_PROVIDERS } from "../cost-service.mjs";
 
 describe("SUBSCRIPTION_PROVIDERS", () => {
-  it("contains the CLI subscription providers (incl. grok-cli)", () => {
-    expect(SUBSCRIPTION_PROVIDERS.has("gh-copilot")).toBe(true);
+  it("contains only flat-rate CLI subscription providers (gh-copilot is token-priced)", () => {
+    expect(SUBSCRIPTION_PROVIDERS.has("gh-copilot")).toBe(false);
     expect(SUBSCRIPTION_PROVIDERS.has("claude-cli")).toBe(true);
     expect(SUBSCRIPTION_PROVIDERS.has("codex-cli")).toBe(true);
     expect(SUBSCRIPTION_PROVIDERS.has("grok-cli")).toBe(true);
-    expect(SUBSCRIPTION_PROVIDERS.size).toBe(4);
+    expect(SUBSCRIPTION_PROVIDERS.size).toBe(3);
   });
 });
 
@@ -20,7 +20,7 @@ describe("detectCostModel — precedence", () => {
     });
     expect(result.provider).toBe("gh-copilot");
     expect(result.source).toBe("env:PFORGE_COST_MODEL");
-    expect(result.perRequestUsd).toBe(0.01);
+    expect(result.perRequestUsd).toBeNull();
   });
 
   it("forge.json:cost.model wins over heuristic when env not set", () => {
@@ -67,7 +67,7 @@ describe("detectCostModel — precedence", () => {
   it("heuristic: gpt-* without OPENAI_API_KEY → gh-copilot (#120)", () => {
     const result = detectCostModel({ env: {}, model: "gpt-5.4" });
     expect(result.provider).toBe("gh-copilot");
-    expect(result.perRequestUsd).toBe(0.01);
+    expect(result.perRequestUsd).toBeNull();
   });
 
   it("heuristic: grok-* with XAI_API_KEY → xai-api (metered)", () => {
@@ -82,8 +82,14 @@ describe("detectCostModel — precedence", () => {
     expect(result.perRequestUsd).toBe(0.01);
   });
 
-  it("subscription-CLI providers stay flat $0.01 (v2.83.0 byte-identical invariant)", () => {
-    for (const p of ["gh-copilot", "claude-cli", "codex-cli"]) {
+  it("Copilot-served Grok routes to gh-copilot pricing without XAI_API_KEY", () => {
+    const result = detectCostModel({ env: {}, model: "grok-4.7" });
+    expect(result.provider).toBe("gh-copilot");
+    expect(result.perRequestUsd).toBeNull();
+  });
+
+  it("flat subscription-CLI providers stay flat $0.01", () => {
+    for (const p of ["claude-cli", "codex-cli", "grok-cli"]) {
       const r = detectCostModel({ env: { PFORGE_COST_MODEL: p } });
       expect(r.perRequestUsd).toBe(0.01);
     }
@@ -92,7 +98,7 @@ describe("detectCostModel — precedence", () => {
   it("heuristic: gh-copilot model string → gh-copilot", () => {
     const result = detectCostModel({ model: "gh-copilot" });
     expect(result.provider).toBe("gh-copilot");
-    expect(result.perRequestUsd).toBe(0.01);
+    expect(result.perRequestUsd).toBeNull();
   });
 
   it("heuristic: string containing 'copilot' → gh-copilot", () => {

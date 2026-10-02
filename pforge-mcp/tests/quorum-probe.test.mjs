@@ -26,7 +26,9 @@ describe("resolveRequiredCli", () => {
     expect(resolveRequiredCli("llama-3")).toBe("gh-copilot");
   });
 
-  it("maps grok-* models to the grok CLI (Phase GROK-BUILD-WORKER)", () => {
+  it("maps Copilot-served Grok to gh-copilot and legacy Grok to the grok CLI", () => {
+    expect(resolveRequiredCli("grok-4.7")).toBe("gh-copilot");
+    expect(resolveRequiredCli("grok-4.6")).toBe("gh-copilot");
     expect(resolveRequiredCli("grok-4.5")).toBe("grok");
     expect(resolveRequiredCli("grok-4.20-0309-reasoning")).toBe("grok");
     expect(resolveRequiredCli("grok-build-0.1")).toBe("grok");
@@ -54,6 +56,15 @@ describe("Grok Build CLI routing", () => {
     const res = probeQuorumModelAvailability("grok-4.5", { grokCliPreference: "auto" });
     expect(res.via).toBe("api");
     expect(res.worker).not.toBe("grok");
+  });
+
+  it("grok CLI preference still wins for Copilot-served Grok when the CLI is available", () => {
+    const res = probeQuorumModelAvailability("grok-4.7", {
+      grokCliPreference: "prefer",
+      workers: [{ name: "grok", available: true }],
+    });
+    expect(res.via).toBe("cli");
+    expect(res.worker).toBe("grok");
   });
 });
 

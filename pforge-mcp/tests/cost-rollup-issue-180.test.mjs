@@ -23,6 +23,7 @@ describe("Issue #180 — parseStderrStats against real testbed stderr", () => {
     const stats = parseStderrStats(stderr);
     expect(stats.tokens_in).toBe(22100);
     expect(stats.tokens_out).toBe(689);
+    expect(stats.cache_read_tokens).toBe(143200);
   });
 
   it("parses Unicode header with explicit Model line", () => {
@@ -36,6 +37,7 @@ describe("Issue #180 — parseStderrStats against real testbed stderr", () => {
     expect(stats.model).toBe("claude-opus-4.6");
     expect(stats.tokens_in).toBe(22100);
     expect(stats.tokens_out).toBe(689);
+    expect(stats.cache_read_tokens).toBe(143200);
     expect(stats.premiumRequests).toBe(1);
   });
 
@@ -44,6 +46,7 @@ describe("Issue #180 — parseStderrStats against real testbed stderr", () => {
     const stats = parseStderrStats(stderr);
     expect(stats.tokens_in).toBe(22100);
     expect(stats.tokens_out).toBe(689);
+    expect(stats.cache_read_tokens).toBe(143200);
   });
 
   it("returns zeros when stderr has no recognizable Token line", () => {
@@ -55,9 +58,10 @@ describe("Issue #180 — parseStderrStats against real testbed stderr", () => {
   });
 
   it("handles empty / null stderr gracefully", () => {
-    expect(parseStderrStats("")).toEqual({ model: null, tokens_in: 0, tokens_out: 0, premiumRequests: 0 });
-    expect(parseStderrStats(null)).toEqual({ model: null, tokens_in: 0, tokens_out: 0, premiumRequests: 0 });
-    expect(parseStderrStats(undefined)).toEqual({ model: null, tokens_in: 0, tokens_out: 0, premiumRequests: 0 });
+    const empty = { model: null, tokens_in: 0, tokens_out: 0, cache_read_tokens: 0, cache_creation_input_tokens: 0, reasoning_tokens: 0, premiumRequests: 0 };
+    expect(parseStderrStats("")).toEqual(empty);
+    expect(parseStderrStats(null)).toEqual(empty);
+    expect(parseStderrStats(undefined)).toEqual(empty);
   });
 
   it("parses old-format 'N Premium request(s)'", () => {
@@ -69,10 +73,18 @@ describe("Issue #180 — parseStderrStats against real testbed stderr", () => {
     const stats = parseStderrStats("Requests  7 Premium (2m 14s)");
     expect(stats.premiumRequests).toBe(7);
   });
+
+  it("parses cached and written tokens from Copilot combined parenthetical", () => {
+    const stats = parseStderrStats("Tokens ↑ 476.0k (430.1k cached, 12.0k written) • ↓ 3.1k");
+    expect(stats.tokens_in).toBe(476000);
+    expect(stats.cache_read_tokens).toBe(430100);
+    expect(stats.cache_creation_input_tokens).toBe(12000);
+    expect(stats.tokens_out).toBe(3100);
+  });
 });
 
 describe("Issue #180 — calculateSliceCost for CLI workers with parsed tokens", () => {
-  it("non-zero cost when gh-copilot has premiumRequests>=1", () => {
+  it("non-zero token cost when gh-copilot reports tokens", () => {
     const tokens = {
       tokens_in: 22100,
       tokens_out: 689,
@@ -81,10 +93,9 @@ describe("Issue #180 — calculateSliceCost for CLI workers with parsed tokens",
     };
     const result = calculateSliceCost(tokens, "gh-copilot");
     expect(result.cost_usd).toBeGreaterThan(0);
-    expect(result.cost_usd).toBe(0.01); // 1 × $0.01 PREMIUM_REQUEST_RATE
   });
 
-  it("ZERO cost when premiumRequests is 0 (the symptom of #180)", () => {
+  it("still costs gh-copilot by tokens when premiumRequests is 0", () => {
     const tokens = {
       tokens_in: 22100,
       tokens_out: 689,
@@ -92,12 +103,12 @@ describe("Issue #180 — calculateSliceCost for CLI workers with parsed tokens",
       premiumRequests: 0,
     };
     const result = calculateSliceCost(tokens, "gh-copilot");
-    expect(result.cost_usd).toBe(0); // PROOF: zero premiumRequests → zero cost
+    expect(result.cost_usd).toBeGreaterThan(0);
   });
 
-  it("cost scales with premiumRequests count", () => {
+  it("flat subscription cost still scales with premiumRequests count", () => {
     const tokens = { tokens_in: 0, tokens_out: 0, model: "x", premiumRequests: 5 };
-    const result = calculateSliceCost(tokens, "gh-copilot");
+    const result = calculateSliceCost(tokens, "claude");
     expect(result.cost_usd).toBe(0.05); // 5 × $0.01
   });
 });

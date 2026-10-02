@@ -654,9 +654,9 @@ Two MCP tools provide multi-model consensus analysis:
    Use forge_diagnose on src/services/billing.ts to investigate the race condition
    ```
 
-Both tools dispatch to multiple models (including Grok via xAI API), then synthesize findings into a single report with confidence levels.
+Both tools dispatch to multiple models (including Copilot-served Grok 4.6/4.7 or direct xAI Grok when configured), then synthesize findings into a single report with confidence levels.
 
-**Setting up Grok**: To use xAI Grok models, set `XAI_API_KEY` in your environment before starting VS Code. Models like `grok-4.7`, `grok-4.6`, `grok-4.5`, `grok-4.20-0309-non-reasoning` auto-route through the API provider registry. Get your key at [console.x.ai](https://console.x.ai/).
+**Setting up Grok**: `grok-4.7` and `grok-4.6` route through the Copilot CLI in VS Code Copilot by default and are billed as Copilot AI credits. Set `XAI_API_KEY` before starting VS Code only when you want direct xAI routing or legacy Grok IDs such as `grok-4.5` / `grok-4.20-*`. Get direct API keys at [console.x.ai](https://console.x.ai/).
 
 #### AI Agent Discoverability
 

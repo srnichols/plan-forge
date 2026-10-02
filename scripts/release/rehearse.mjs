@@ -53,10 +53,10 @@ function pforge(ctx, { shell, project, args, log }) {
 
 // ─── Assertions ─────────────────────────────────────────────────────────────
 
-function assertRelease(ctx, tag, project, { fresh = false } = {}) {
+function assertRelease(ctx, tag, project, { fresh = false, previousWrapper = false } = {}) {
   const cfg = readJson(join(project, ".forge.json")) ?? {};
   ctx.checks.add(`${tag} templateVersion = ${ctx.version}`, cfg.templateVersion === ctx.version, cfg.templateVersion);
-  for (const check of selectFileChecks(ctx.spec, { preset: ctx.preset, fresh })) {
+  for (const check of selectFileChecks(ctx.spec, { preset: ctx.preset, fresh, previousWrapper })) {
     const { ok, detail } = evaluateFileCheck(project, check);
     ctx.checks.add(`${tag} ${check.label}`, ok, detail);
   }
@@ -127,7 +127,7 @@ function updatePowerShell(ctx) {
 
   const first = run(["update", "src", "--force"], `${name}-update1.log`);
   ctx.checks.add(`${name} update with the previous release's wrapper exit 0`, first.status === 0, `exit ${first.status}`);
-  assertRelease(ctx, name, project);
+  assertRelease(ctx, name, project, { previousWrapper: true });
   assertConsumerKept(ctx, name, project);
 
   const dry = run(["update", "src", "--dry-run"], `${name}-update2.log`);
@@ -137,6 +137,7 @@ function updatePowerShell(ctx) {
   const guarded = run(["update", "src", "--force"], `${name}-update3.log`);
   ctx.checks.add(`${name} update with the new wrapper exit 0`, guarded.status === 0, `exit ${guarded.status}`);
   ctx.checks.add(`${name} new wrapper reports KEEP for the edited file`, has(guarded.log, "KEEP"));
+  assertRelease(ctx, `${name}#3`, project);
   assertGuardKept(ctx, `${name}#3`, project, name);
   assertConsumerKept(ctx, `${name}#3`, project);
 
@@ -154,7 +155,7 @@ function updateBash(ctx) {
   // An older Bash wrapper replaces itself mid-run and may exit non-zero after finishing.
   ctx.checks.add(`${name} update with the previous release's wrapper completed`, has(first.log, "Update complete"), `exit ${first.status}`);
   ctx.checks.note(`${name} after one update with the previous release's Bash wrapper`);
-  assertRelease(ctx, `${name}#1`, project);
+  assertRelease(ctx, `${name}#1`, project, { previousWrapper: true });
   assertConsumerKept(ctx, `${name}#1`, project);
 
   editGitWorkflow(project);

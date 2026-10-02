@@ -5,7 +5,8 @@
     "user-visible fix a release delivers, and update the model default when it changes.",
     "Fields: label, path (relative to the consumer), then one of: nothing (file exists),",
     "contains, notContains, or jsonKey + equals. Optional: preset (only for that preset),",
-    "when: \"fresh\" (fresh installs only)."
+    "when: \"fresh\" (fresh installs only) or \"current-wrapper\" (skipped right after an update",
+    "run by the previous release's wrapper, which cannot have this release's update logic)."
   ],
   "checks": [
     { "label": "hooks use hidden PowerShell launchers (meta #287)", "path": ".github/hooks/plan-forge.json", "contains": "-WindowStyle Hidden" },
@@ -31,7 +32,7 @@
     { "label": "detect-preset.mjs delivered (update without .forge.json)", "path": "pforge-mcp/detect-preset.mjs" },
     { "label": "hook-status.mjs delivered (smith hooks, no jq)", "path": "pforge-mcp/hook-status.mjs" },
     { "label": "migrate-forge-config.mjs delivered (#299 migration gap)", "path": "pforge-mcp/migrate-forge-config.mjs" },
-    { "label": ".forge.json has hooks.postRun (setup seeds it, update migrates it)", "path": ".forge.json", "jsonKey": "hooks.postRun.invokeAuditor.onFailure", "equals": false },
+    { "label": ".forge.json has hooks.postRun (setup seeds it, update migrates it)", "path": ".forge.json", "jsonKey": "hooks.postRun.invokeAuditor.onFailure", "equals": false, "when": "current-wrapper" },
     { "label": "Copilot SDK route is the default (#307)", "path": "pforge-mcp/orchestrator/worker-spawn.mjs", "contains": "const DEFAULT_COPILOT_SDK_PREF = \"prefer\";" }
   ]
 }

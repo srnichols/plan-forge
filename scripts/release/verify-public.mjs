@@ -55,10 +55,10 @@ function selfUpdate(ctx, { shell, project, log }) {
   return { status, log: logPath };
 }
 
-function assertUpdated(ctx, tag, project, withVersion) {
+function assertUpdated(ctx, tag, project, { withVersion = false, previousWrapper = false } = {}) {
   const cfg = readJson(join(project, ".forge.json")) ?? {};
   ctx.checks.add(`${tag} templateVersion = ${ctx.version}`, cfg.templateVersion === ctx.version, cfg.templateVersion);
-  for (const check of selectFileChecks(ctx.spec, { preset: ctx.preset, fresh: false })) {
+  for (const check of selectFileChecks(ctx.spec, { preset: ctx.preset, fresh: false, previousWrapper })) {
     const { ok, detail } = evaluateFileCheck(project, check);
     ctx.checks.add(`${tag} ${check.label}`, ok, detail);
   }
@@ -75,6 +75,11 @@ function assertGuardOnSecondUpdate(ctx, { shell, project, name }) {
   ctx.checks.add(`${name} edited git-workflow kept`, has(join(project, GIT_WORKFLOW), GUARD_MARKER));
   ctx.checks.add(`${name} pending copy written`, existsSync(join(project, ".forge/update-pending", GIT_WORKFLOW)));
   ctx.checks.add(`${name} left no update-* download in .forge/cache (#298)`, !hasUpdateCache(project));
+  // This run used the new wrapper, so checks that need this release's update logic apply now.
+  for (const check of (ctx.spec.checks ?? []).filter((c) => c.when === "current-wrapper")) {
+    const { ok, detail } = evaluateFileCheck(project, check);
+    ctx.checks.add(`${name} (new wrapper) ${check.label}`, ok, detail);
+  }
 }
 
 function hasUpdateCache(project) {
@@ -88,7 +93,7 @@ function powershellScenario(ctx) {
   const project = installPrevious(ctx, { shell: "ps", name, withVersion: true });
   const run = selfUpdate(ctx, { shell: "ps", project, log: `${name}.log` });
   ctx.checks.add(`${name} self-update exit 0`, run.status === 0, `exit ${run.status}`);
-  assertUpdated(ctx, name, project, true);
+  assertUpdated(ctx, name, project, { withVersion: true, previousWrapper: true });
   assertGuardOnSecondUpdate(ctx, { shell: "ps", project, name });
 }
 
@@ -103,7 +108,7 @@ function bashScenario(ctx, { withVersion }) {
   const second = selfUpdate(ctx, { shell: "sh", project, log: `${name}-2.log` });
   ctx.checks.add(`${name} new wrapper's self-update exit 0`, second.status === 0, `exit ${second.status}`);
   ctx.checks.add(`${name} new wrapper has no syntax error`, !has(second.log, "syntax error"));
-  assertUpdated(ctx, name, project, withVersion);
+  assertUpdated(ctx, name, project, { withVersion });
   assertGuardOnSecondUpdate(ctx, { shell: "sh", project, name });
 }
 

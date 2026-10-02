@@ -1525,6 +1525,16 @@ function Test-UpdateNeeded([string]$Src, [string]$Dst) {
 # Removes the release tarball and extract dir that 'update --from-github' downloaded,
 # unless --keep-cache (#298). The paths live in $script: scope because the nested
 # Fetch-GitHubSource helper sets them.
+# Add missing modelRouting / hooks defaults to .forge.json (pforge-mcp/migrate-forge-config.mjs,
+# shared with pforge.sh). Idempotent, so it also runs when the install is already current.
+function Invoke-ForgeConfigMigration([string]$ProjectRoot, [string]$SourceRoot) {
+    $migrator = @((Join-Path $ProjectRoot "pforge-mcp/migrate-forge-config.mjs"), (Join-Path $SourceRoot "pforge-mcp/migrate-forge-config.mjs")) | Where-Object { Test-Path $_ } | Select-Object -First 1
+    if (-not $migrator) { return }
+    foreach ($key in @(& node $migrator --project $ProjectRoot 2>$null)) {
+        if ($key) { Write-Host "  ✅ Added $key to .forge.json" -ForegroundColor Green }
+    }
+}
+
 function Clear-GitHubUpdateCache([switch]$KeepCache) {
     if (-not $script:ghTarball) { return }
     if ($KeepCache) {
@@ -1862,6 +1872,7 @@ function Invoke-Update {
 
     if ($currentVersion -eq $sourceVersion -and -not $forceUpdate) {
         Write-Host "Already up to date (v$currentVersion). Use --force to re-apply." -ForegroundColor Green
+        Invoke-ForgeConfigMigration -ProjectRoot $RepoRoot -SourceRoot $sourcePath
         Clear-GitHubUpdateCache -KeepCache:$keepCache
         return
     }
@@ -2331,14 +2342,8 @@ function Invoke-Update {
         $config | ConvertTo-Json -Depth 10 | Set-Content -Path $configPath
         Write-Host "  ✅ Updated .forge.json templateVersion to $sourceVersion" -ForegroundColor Green
 
-        # Add missing modelRouting / hooks defaults. Shared with pforge.sh so the
-        # two updaters migrate .forge.json identically (#299).
-        $migrator = @((Join-Path $RepoRoot "pforge-mcp/migrate-forge-config.mjs"), (Join-Path $sourcePath "pforge-mcp/migrate-forge-config.mjs")) | Where-Object { Test-Path $_ } | Select-Object -First 1
-        if ($migrator) {
-            foreach ($key in @(& node $migrator --project $RepoRoot 2>$null)) {
-                if ($key) { Write-Host "  ✅ Added $key to .forge.json" -ForegroundColor Green }
-            }
-        }
+        # Add missing modelRouting / hooks defaults. Shared with pforge.sh (#299).
+        Invoke-ForgeConfigMigration -ProjectRoot $RepoRoot -SourceRoot $sourcePath
     }
 
     # ─── Create docs/plans/auto/ if missing (v2.29+) ─────────────

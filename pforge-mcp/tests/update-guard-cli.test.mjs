@@ -174,6 +174,21 @@ describe.each(runners())("#280 $name update keeps edited guidance", ({ run }) =>
     expect(read(project, TESTING)).toBe(V2.dotnetTesting);
     expect(read(project, SECURITY)).toBe(V2.dotnetSecurity);
   });
+
+  it("migrates missing .forge.json defaults even when already up to date", () => {
+    const { source, project } = seed();
+    writeTree(project, { ".forge.json": JSON.stringify({ templateVersion: "9.9.9", preset: "dotnet", ...VALUES }) });
+    mkdirSync(join(source, "pforge-mcp", "orchestrator"), { recursive: true });
+    copyFileSync(join(REPO_ROOT, "pforge-mcp", "migrate-forge-config.mjs"), join(source, "pforge-mcp", "migrate-forge-config.mjs"));
+    copyFileSync(join(REPO_ROOT, "pforge-mcp", "orchestrator", "constants.mjs"), join(source, "pforge-mcp", "orchestrator", "constants.mjs"));
+    const r = run(project, [source]);
+    expect(r.status, r.stderr).toBe(0);
+    expect(r.stdout).toContain("Already up to date");
+    expect(r.stdout).toContain("Added hooks.postRun to .forge.json");
+    const cfg = JSON.parse(read(project, ".forge.json"));
+    expect(cfg.hooks.postRun.invokeAuditor.onFailure).toBe(false);
+    expect(cfg.projectName).toBe(VALUES.projectName);
+  });
 });
 
 const BUILD_SCRIPT = join(REPO_ROOT, "scripts", "build-shipped-guidance-hashes.mjs");

@@ -1364,6 +1364,20 @@ _pf_update_needed() {
 # Removes the release tarball and extract dir that 'update --from-github'
 # downloaded, unless --keep-cache (#298). Reads cmd_update's locals, so it is
 # safe to call on every exit path.
+# Add missing modelRouting / hooks defaults to .forge.json (pforge-mcp/migrate-forge-config.mjs,
+# shared with pforge.ps1). Idempotent, so it also runs when the install is already current.
+_pf_migrate_forge_config() {
+    local project_root="$1" source_root="$2" migrator="" candidate="" key=""
+    for candidate in "$project_root/pforge-mcp/migrate-forge-config.mjs" "$source_root/pforge-mcp/migrate-forge-config.mjs"; do
+        if [ -f "$candidate" ]; then migrator="$candidate"; break; fi
+    done
+    [ -n "$migrator" ] || return 0
+    while IFS= read -r key; do
+        [ -n "$key" ] && echo "  ✅ Added $key to .forge.json"
+    done < <(node "$migrator" --project "$project_root" 2>/dev/null | tr -d '\r' || true)
+    return 0
+}
+
 _pf_gh_cleanup() {
     $from_github || return 0
     [ -n "$gh_tarball" ] || return 0
@@ -1665,6 +1679,7 @@ cmd_update() {
 
     if [ "$current_version" = "$source_version" ] && ! $force; then
         echo "Already up to date (v$current_version). Use --force to re-apply."
+        _pf_migrate_forge_config "$REPO_ROOT" "$source_path"
         _pf_gh_cleanup
         return 0
     fi
@@ -2113,17 +2128,8 @@ cmd_update() {
         mv "$config_tmp" "$config_path"
         echo "  ✅ Updated .forge.json templateVersion to $source_version"
 
-        # Add missing modelRouting / hooks defaults. Shared with pforge.ps1 so the
-        # two updaters migrate .forge.json identically (#299).
-        local _migrator="" _mig_candidate="" _mig_key=""
-        for _mig_candidate in "$REPO_ROOT/pforge-mcp/migrate-forge-config.mjs" "$source_path/pforge-mcp/migrate-forge-config.mjs"; do
-            if [ -f "$_mig_candidate" ]; then _migrator="$_mig_candidate"; break; fi
-        done
-        if [ -n "$_migrator" ]; then
-            while IFS= read -r _mig_key; do
-                [ -n "$_mig_key" ] && echo "  ✅ Added $_mig_key to .forge.json"
-            done < <(node "$_migrator" --project "$REPO_ROOT" 2>/dev/null || true)
-        fi
+        # Add missing modelRouting / hooks defaults. Shared with pforge.ps1 (#299).
+        _pf_migrate_forge_config "$REPO_ROOT" "$source_path"
     fi
 
     # ─── Refresh consumer .gitignore managed block (Issue #211) ───────

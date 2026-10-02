@@ -170,8 +170,12 @@ export function evaluateFileCheck(projectDir, check) {
 }
 
 /** The release-checks.json entries that apply to a consumer in this situation. */
-export function selectFileChecks(spec, { preset, fresh }) {
-  return (spec.checks ?? []).filter((c) => (!c.preset || c.preset === preset) && (c.when !== "fresh" || fresh));
+export function selectFileChecks(spec, { preset, fresh, previousWrapper = false }) {
+  return (spec.checks ?? []).filter((c) =>
+    (!c.preset || c.preset === preset)
+    && (c.when !== "fresh" || fresh)
+    // Behaviour only the new wrapper performs; the first update still runs the previous release's code.
+    && (c.when !== "current-wrapper" || !previousWrapper));
 }
 
 // ─── Results ────────────────────────────────────────────────────────────────

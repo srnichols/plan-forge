@@ -66,6 +66,13 @@ describe("release-checks.json", () => {
     expect(selectFileChecks(local, { preset: "dotnet", fresh: true }).map((c) => c.path)).toEqual(["a", "b", "c"]);
   });
 
+  it("skips current-wrapper entries right after an update run by the previous release's wrapper", () => {
+    const local = { checks: [{ path: "a" }, { path: "m", when: "current-wrapper" }] };
+    expect(selectFileChecks(local, { preset: "x", fresh: false, previousWrapper: true }).map((c) => c.path)).toEqual(["a"]);
+    expect(selectFileChecks(local, { preset: "x", fresh: false }).map((c) => c.path)).toEqual(["a", "m"]);
+    expect(selectFileChecks(local, { preset: "x", fresh: true }).map((c) => c.path)).toEqual(["a", "m"]);
+  });
+
   it("evaluates exists, contains, notContains and jsonKey checks", () => {
     const project = newDir("pf-release-checks-");
     mkdirSync(join(project, "sub"));

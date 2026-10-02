@@ -48,7 +48,7 @@ Format follows [Keep a Changelog](https://keepachangelog.com/).
 
 - **`pforge smith` no longer reports "Missing hooks: PostRun" on a fresh install.**
   - **Cause:** setup seeded `.forge.json` with the preDeploy, postSlice and preAgentHandoff hook settings but not postRun, so every new project showed 7/8 hooks and a warning.
-  - **Fix:** setup now writes `hooks.postRun` with the auditor off. `pforge update` adds missing `modelRouting` and `hooks` defaults through `pforge-mcp/migrate-forge-config.mjs`, in both shells; the Bash updater did not migrate `.forge.json` at all before.
+  - **Fix:** setup now writes `hooks.postRun` with the auditor off. `pforge update` and `pforge self-update` add missing `modelRouting` and `hooks` defaults through `pforge-mcp/migrate-forge-config.mjs`, in both shells, even when the install is already current; the Bash updater did not migrate `.forge.json` at all before. A project updated from 3.28 by the 3.28 wrapper gets the missing entries on its next `pforge self-update`.
   - **Bash `smith` on Windows:** it reported 3/8 hooks there, because its hook check needed `jq` (which Git Bash lacks) and built config keys wrongly. Both shells now use `pforge-mcp/hook-status.mjs`.
 - **`pforge smith` shows the right update-cache age and tag.**
   - **Cache age:** the PowerShell check subtracted a UTC timestamp from local time, so on a UTC−6 machine a cache checked 5 minutes ago read `-355m`. The same error shifted when the 24-hour version cache expired.

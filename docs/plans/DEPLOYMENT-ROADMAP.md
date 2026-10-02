@@ -26,11 +26,12 @@ Listed in **execution order**. Each phase's Execution Hold gates on its predeces
 
 | Phase | Status | Goal | Reference |
 |-------|--------|------|-----------|
+| PRESET-BUILD-CHECKS | 🔬 | Nightly compile checks for Rust and Swift preset samples, driven by committed block manifests, plus build-and-health checks for every documented Dockerfile (#309). | [Phase-PRESET-BUILD-CHECKS-PLAN.md](./Phase-PRESET-BUILD-CHECKS-PLAN.md) |
+| UPDATE-CORE | 🔬 ⏸️ | One Node implementation (`update-plan.mjs`) of the update scan, config migration and report, plus a shared `preset-catalog.json` for setup. Closes the two PowerShell/Bash parity gaps (#299). On hold until v3.29.0 ships. | [Phase-UPDATE-CORE-PLAN.md](./Phase-UPDATE-CORE-PLAN.md) |
 
 ---
 
 ## Completed Phases
-
 | Phase | Goal | Shipped | Reference |
 |-------|------|---------|-----------|
 | 59 — CRUCIBLE-MODES | Multi-mode Crucible intake substrate: extracted mode interface + registry, migrated tweak/feature/full lanes to mode files with per-mode `criticalFields`, added `bug-batch` mode (Root Cause Hypothesis + multi-slice synthesizer), renderer/parser alignment (`### Forbidden`, `[scope:]` headers), `crucible.legacy.tbdPlaceholders` deprecation gate. 88 new tests. Closes #140/#142/#145/#146/#147. | 2026-05-21 | [Phase-59-CRUCIBLE-MODES-PLAN.md](./Phase-59-CRUCIBLE-MODES-PLAN.md) |

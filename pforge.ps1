@@ -1872,7 +1872,7 @@ function Invoke-Update {
 
     if ($currentVersion -eq $sourceVersion -and -not $forceUpdate) {
         Write-Host "Already up to date (v$currentVersion). Use --force to re-apply." -ForegroundColor Green
-        Invoke-ForgeConfigMigration -ProjectRoot $RepoRoot -SourceRoot $sourcePath
+        if (-not $dryRun) { Invoke-ForgeConfigMigration -ProjectRoot $RepoRoot -SourceRoot $sourcePath }
         Clear-GitHubUpdateCache -KeepCache:$keepCache
         return
     }
@@ -2265,6 +2265,7 @@ function Invoke-Update {
     # ─── Report ───────────────────────────────────────────────────
     if ($updates.Count -eq 0 -and $newFiles.Count -eq 0 -and $kept.Count -eq 0 -and $currentVersion -eq $sourceVersion) {
         Write-Host "All framework files are up to date." -ForegroundColor Green
+        if (-not $dryRun) { Invoke-ForgeConfigMigration -ProjectRoot $RepoRoot -SourceRoot $sourcePath }
         Clear-GitHubUpdateCache -KeepCache:$keepCache
         return
     }

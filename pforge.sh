@@ -1679,7 +1679,7 @@ cmd_update() {
 
     if [ "$current_version" = "$source_version" ] && ! $force; then
         echo "Already up to date (v$current_version). Use --force to re-apply."
-        _pf_migrate_forge_config "$REPO_ROOT" "$source_path"
+        $dry_run || _pf_migrate_forge_config "$REPO_ROOT" "$source_path"
         _pf_gh_cleanup
         return 0
     fi
@@ -2034,6 +2034,7 @@ cmd_update() {
     # ─── Report ───────────────────────────────────────────────────
     if [ "${#_updates[@]}" -eq 0 ] && [ "${#_new_files[@]}" -eq 0 ] && [ "${#_kept[@]}" -eq 0 ] && [ "$current_version" = "$source_version" ]; then
         echo "All framework files are up to date."
+        $dry_run || _pf_migrate_forge_config "$REPO_ROOT" "$source_path"
         _pf_gh_cleanup
         return 0
     fi

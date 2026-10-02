@@ -189,6 +189,29 @@ describe.each(runners())("#280 $name update keeps edited guidance", ({ run }) =>
     expect(cfg.hooks.postRun.invokeAuditor.onFailure).toBe(false);
     expect(cfg.projectName).toBe(VALUES.projectName);
   });
+
+  it("migrates on a forced update that finds every file current, but never on a dry run", () => {
+    const { source, project } = seed();
+    mkdirSync(join(source, "pforge-mcp", "orchestrator"), { recursive: true });
+    copyFileSync(join(REPO_ROOT, "pforge-mcp", "migrate-forge-config.mjs"), join(source, "pforge-mcp", "migrate-forge-config.mjs"));
+    copyFileSync(join(REPO_ROOT, "pforge-mcp", "orchestrator", "constants.mjs"), join(source, "pforge-mcp", "orchestrator", "constants.mjs"));
+    expect(run(project, [source, "--force", "--overwrite-customized"]).status).toBe(0);
+    const stripPostRun = () => {
+      const cfg = JSON.parse(read(project, ".forge.json"));
+      delete cfg.hooks.postRun;
+      writeFileSync(join(project, ".forge.json"), JSON.stringify(cfg, null, 2));
+    };
+
+    stripPostRun();
+    const dry = run(project, [source, "--dry-run"]);
+    expect(dry.status, dry.stderr).toBe(0);
+    expect(JSON.parse(read(project, ".forge.json")).hooks.postRun).toBeUndefined();
+
+    const forced = run(project, [source, "--force"]);
+    expect(forced.status, forced.stderr).toBe(0);
+    expect(forced.stdout).toContain("All framework files are up to date");
+    expect(JSON.parse(read(project, ".forge.json")).hooks.postRun.invokeAuditor.onFailure).toBe(false);
+  });
 });
 
 const BUILD_SCRIPT = join(REPO_ROOT, "scripts", "build-shipped-guidance-hashes.mjs");

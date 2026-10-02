@@ -7,6 +7,10 @@ Format follows [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
+### Fixed
+
+- **A project updated from 3.28 now gets its `.forge.json` migration on the next update, even when every file is current.** v3.29.0 added the missing `hooks.postRun` entry (and other defaults) through `pforge-mcp/migrate-forge-config.mjs`. The previous release's wrapper performs the first update and can't run it. The next `pforge self-update` stopped at "All framework files are up to date" before migrating, so `pforge smith` kept warning "Missing hooks: PostRun". Both shells now migrate on that path as well. A `--dry-run` never migrates, including at "Already up to date". Found by the v3.29.0 public self-update check.
+
 ## [3.29.0] — 2026-10-02 — Copilot SDK by default, Node.js 22.12+, and pforge pending
 
 ### Added

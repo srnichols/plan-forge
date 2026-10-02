@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-10-01T20:40:07.463Z",
+  "generatedAt": "2026-10-02T18:36:15.233Z",
   "source": "copilot-sdk listModels billing.tokenPrices (cents per 1M tokens)",
   "units": "USD per token",
   "models": {
@@ -9,20 +9,6 @@
       "cacheRead": 1.0000000000000001e-7,
       "cacheWrite": 0.00000125,
       "contextMax": null
-    },
-    "claude-opus-4.7": {
-      "input": 0.000005,
-      "output": 0.000025,
-      "cacheRead": 5e-7,
-      "cacheWrite": 0.00000625,
-      "contextMax": 200000,
-      "longContext": {
-        "input": 0.000005,
-        "output": 0.000025,
-        "cacheRead": 5e-7,
-        "cacheWrite": 0.00000625,
-        "contextMax": 936000
-      }
     },
     "claude-opus-4.8": {
       "input": 0.000005,
@@ -91,34 +77,6 @@
         "output": 0.00001,
         "cacheRead": 2.0000000000000002e-7,
         "cacheWrite": 0.0000025,
-        "contextMax": 936000
-      }
-    },
-    "gemini-3.5-flash": {
-      "input": 0.0000015,
-      "output": 0.000009,
-      "cacheRead": 1.5e-7,
-      "cacheWrite": 0,
-      "contextMax": 200000,
-      "longContext": {
-        "input": 0.0000015,
-        "output": 0.000009,
-        "cacheRead": 1.5e-7,
-        "cacheWrite": 0,
-        "contextMax": 936000
-      }
-    },
-    "gemini-3.6-flash": {
-      "input": 7.5e-7,
-      "output": 0.00000375,
-      "cacheRead": 7e-8,
-      "cacheWrite": 0,
-      "contextMax": 200000,
-      "longContext": {
-        "input": 7.5e-7,
-        "output": 0.00000375,
-        "cacheRead": 7e-8,
-        "cacheWrite": 0,
         "contextMax": 936000
       }
     },

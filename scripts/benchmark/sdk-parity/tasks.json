@@ -1,0 +1,20 @@
+{
+  "$comment": "Tasks for scripts/benchmark/sdk-parity.mjs (#307). Each runs in a fresh copy of fixture/; `check` is a Node script that exits 0 when the task was done correctly.",
+  "tasks": [
+    {
+      "id": "slugify",
+      "prompt": "In src/text.mjs, add and export a function slugify(title) that lowercases the title, replaces each run of characters other than a-z and 0-9 with a single hyphen, and removes leading and trailing hyphens. Add a test for it to test/text.test.mjs using node:test. Change no other files.",
+      "check": "import('./src/text.mjs').then((m) => { const ok = m.slugify('  Hello, World! ') === 'hello-world' && m.slugify('a--b__c') === 'a-b-c'; process.exit(ok ? 0 : 1); })"
+    },
+    {
+      "id": "count-words",
+      "prompt": "In src/text.mjs, add and export a function countWords(text) that returns the number of whitespace-separated words (0 for an empty or blank string). Add a test for it to test/text.test.mjs using node:test. Change no other files.",
+      "check": "import('./src/text.mjs').then((m) => { const ok = m.countWords('  one two\\tthree\\n') === 3 && m.countWords('   ') === 0 && m.countWords('') === 0; process.exit(ok ? 0 : 1); })"
+    },
+    {
+      "id": "fix-truncate",
+      "prompt": "truncate(text, max) in src/text.mjs should return at most max characters including the ellipsis, but truncate('abcdef', 4) returns 'abcd…' (5 characters). Fix it and add a test for the cut case to test/text.test.mjs. Change no other files.",
+      "check": "import('./src/text.mjs').then((m) => { const ok = m.truncate('abcdef', 4) === 'abc…' && m.truncate('abc', 4) === 'abc'; process.exit(ok ? 0 : 1); })"
+    }
+  ]
+}

@@ -105,6 +105,25 @@ function parseFrontmatter(content) {
  * Parse numbered steps from SKILL.md.
  * Steps are markdown headers: ### N. Title or ### Step N: Title
  */
+// Step headings skills use: "### 1. Title", "### Step 1 — Title", "## Phase 1: Title".
+const STEP_HEADINGS = [
+  /^###\s+(\d+)\.\s+(.+)/,
+  /^###\s+Step\s+(\d+)\s*[—–:.-]\s*(.+)/i,
+  /^##\s+Phase\s+(\d+)\s*[—–:.-]\s*(.+)/i,
+];
+
+function matchStepHeading(line) {
+  for (const re of STEP_HEADINGS) {
+    const m = line.match(re);
+    if (m) return { number: parseInt(m[1], 10), name: m[2].trim() };
+  }
+  return null;
+}
+
+function newStep({ number, name }) {
+  return { number, name, rawLines: [], hasGate: false, gateCommand: null, conditional: null };
+}
+
 function parseSteps(content) {
   const steps = [];
   // Remove frontmatter
@@ -125,22 +144,20 @@ function parseSteps(content) {
       continue;
     }
 
-    // Match step headers: ### 1. Title  or  ### N. Title
-    const stepMatch = line.match(/^###\s+(\d+)\.\s+(.+)/);
-    if (stepMatch) {
+    const heading = matchStepHeading(line);
+    if (heading) {
       if (current) steps.push(current);
-      current = {
-        number: parseInt(stepMatch[1], 10),
-        name: stepMatch[2].trim(),
-        rawLines: [],
-        hasGate: false,
-        gateCommand: null,
-        conditional: null,
-      };
+      current = newStep(heading);
       continue;
     }
 
     if (!current) continue;
+    // Any other ## section (Safety Rules, Temper Guards, …) ends the step.
+    if (/^##\s/.test(line)) {
+      steps.push(current);
+      current = null;
+      continue;
+    }
     current.rawLines.push(line);
 
     // Detect conditional logic

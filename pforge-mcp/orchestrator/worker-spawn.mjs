@@ -1967,9 +1967,11 @@ function applyParsedStderrStatsToTokens(tokens, stderr) {
   }
 }
 
-function _enrichWorkerTokens({ tokens, stdout, stderr, code, timedOut, spec, spawnStartMs, workerName }) {
+export function _enrichWorkerTokens({ tokens, stdout, stderr, code, timedOut, spec, spawnStartMs, workerName, requestedModel = null }) {
   applyParsedStderrStatsToTokens(tokens, stderr);
-  if (!tokens.model) tokens.model = spec?.defaultModel || null;
+  // The Copilot CLI's run summary names no model, so attribute the run to the
+  // --model it was started with; the worker default applies only when none was given.
+  if (!tokens.model) tokens.model = requestedModel || spec?.defaultModel || null;
   if (shouldDefaultPremiumRequestsToOne({ tokens, stdout, stderr, code, timedOut })) {
     tokens.premiumRequests = 1;
   }
@@ -2155,6 +2157,7 @@ function finalizeWorkerResult({ code, state, chosen, promptFile, spec, model, sp
     spec,
     spawnStartMs,
     workerName: chosen.name,
+    requestedModel: model,
   });
 
   return {
@@ -2281,10 +2284,10 @@ async function _tryByokSdkRoute({ apiProvider, prompt, model, cwd, forbiddenPath
  *
  * @returns {Promise<{ handled: boolean, result?: object }>}
  */
-async function _tryCopilotSdkRoute({ prompt, model, cwd, forbiddenPaths }) {
+async function _tryCopilotSdkRoute({ prompt, model, cwd, forbiddenPaths, timeout }) {
   try {
     const { runSdkSession } = await import("./sdk-worker.mjs");
-    return { handled: true, result: await runSdkSession({ prompt, model, cwd, forbiddenPaths }) };
+    return { handled: true, result: await runSdkSession({ prompt, model, cwd, forbiddenPaths, timeout }) };
   } catch (err) {
     if (!err.sdkError) throw err;
     console.error(`[sdk-worker] falling back to spawn: ${err.message}`);
@@ -2325,7 +2328,7 @@ async function _spawnWorkerAsync(prompt, options = {}) {
   if (apiRoute.handled) return apiRoute.result;
 
   if (model && !worker && !forcedWorker && sdkPreferred && isCopilotServableModel(model)) {
-    const sdk = await _tryCopilotSdkRoute({ prompt, model, cwd, forbiddenPaths });
+    const sdk = await _tryCopilotSdkRoute({ prompt, model, cwd, forbiddenPaths, timeout });
     if (sdk.handled) return sdk.result;
   }
 

@@ -12,9 +12,17 @@
  *  - OTel stays off by default (issue #238 opt-in rule).
  */
 
+/** Same default as the spawn path's worker timeout. */
+const DEFAULT_SDK_TIMEOUT_MS = 1_200_000;
+
 // ─── Default SDK factory (lazy import to avoid hard dependency) ───────────────
 
-async function _defaultCreateSession({ model, onPermissionRequest, onEvent }) {
+/**
+ * Start a Copilot SDK client and session rooted at the slice's working directory.
+ * Returns both handles so the caller can disconnect the session and stop the client;
+ * a client left running keeps its CLI child process (and the Node event loop) alive.
+ */
+async function _defaultCreateSession({ model, cwd, onPermissionRequest, onEvent }) {
   let sdk;
   try {
     sdk = await import("@github/copilot-sdk");
@@ -25,64 +33,105 @@ async function _defaultCreateSession({ model, onPermissionRequest, onEvent }) {
     );
   }
   const { CopilotClient } = sdk;
-  const client = new CopilotClient({ useLoggedInUser: true });
-  return client.createSession({ model, onPermissionRequest, onEvent });
+  const client = new CopilotClient({ useLoggedInUser: true, workingDirectory: cwd });
+  try {
+    const session = await client.createSession({ model, onPermissionRequest, onEvent, workingDirectory: cwd });
+    return { session, client };
+  } catch (err) {
+    await _stopClient(client);
+    throw err;
+  }
+}
+
+async function _stopClient(client) {
+  if (typeof client?.stop !== "function") return;
+  try {
+    await client.stop();
+  } catch {
+    if (typeof client.forceStop === "function") {
+      try { await client.forceStop(); } catch { /* best effort */ }
+    }
+  }
+}
+
+async function _closeSession({ session, client }) {
+  const close = session?.disconnect ?? session?.close;
+  if (typeof close === "function") {
+    try { await close.call(session); } catch { /* ignore close errors */ }
+  }
+  await _stopClient(client);
 }
 
 // ─── Permission handler ───────────────────────────────────────────────────────
 
+const DESTRUCTIVE_SHELL = [/^(rm|del|rmdir|rd)\b/i, /\brf\b/];
+const APPROVE = Object.freeze({ kind: "approve-once" });
+const reject = (feedback) => ({ kind: "reject", feedback });
+
+function _isForbiddenWrite(fileName, cwd, forbiddenSet) {
+  const normalised = String(fileName || "").replace(/\\/g, "/");
+  const root = String(cwd || "").replace(/\\/g, "/").replace(/\/$/, "");
+  const relative = root && normalised.toLowerCase().startsWith(`${root.toLowerCase()}/`) ? normalised.slice(root.length + 1) : normalised;
+  for (const forbidden of forbiddenSet) {
+    if (relative === forbidden || relative.startsWith(`${forbidden}/`)) return true;
+  }
+  return false;
+}
+
 /**
  * Build a deliberate permission handler that honours forbiddenPaths.
- * Rejects any write to a path in the active slice's Forbidden Actions;
- * approves shell-run and file-read unconditionally (they are read-only or
- * already gated by the orchestrator's dry-run contract).
+ * Rejects destructive shell commands and any write to a path in the active
+ * slice's Forbidden Actions; approves everything else once.
  *
  * Blanket-approval of every permission is intentionally absent — it would
  * delete the dry-run / confirmation contract required by PROJECT-PRINCIPLES.md,
  * and also throws when managed settings are enabled.
  *
- * @param {{ forbiddenPaths?: string[] }} opts
+ * Requests and results follow @github/copilot-sdk's PermissionHandler:
+ * `{ kind: "shell", fullCommandText }`, `{ kind: "write", fileName }`, … in,
+ * `{ kind: "approve-once" }` or `{ kind: "reject", feedback }` out.
+ *
+ * @param {{ forbiddenPaths?: string[], cwd?: string }} opts
  * @returns {function} permission handler compatible with CopilotClient.createSession
  */
-function buildPermissionHandler({ forbiddenPaths = [] } = {}) {
-  const forbiddenSet = new Set(forbiddenPaths.map((p) => p.replace(/\\/g, "/")));
+function buildPermissionHandler({ forbiddenPaths = [], cwd = "" } = {}) {
+  const forbiddenSet = new Set(forbiddenPaths.map((p) => p.replace(/\\/g, "/").replace(/\/$/, "")));
 
-  return function onPermissionRequest({ type, path: targetPath, command }) {
-    // Shell commands — honour the orchestrator's dry-run gate, not blanket-approve.
-    if (type === "shell-run") {
-      // Reject known destructive patterns; allow everything else.
-      const cmd = (command || "").trim();
-      if (/^(rm|del|rmdir|rd)\b/i.test(cmd) || /\brf\b/.test(cmd)) {
-        return { approved: false, reason: "Destructive shell command rejected by Plan Forge permission handler" };
+  return function onPermissionRequest(request) {
+    if (request?.kind === "shell") {
+      const cmd = String(request.fullCommandText || "").trim();
+      if (DESTRUCTIVE_SHELL.some((re) => re.test(cmd))) {
+        return reject("Destructive shell command rejected by Plan Forge permission handler");
       }
-      return { approved: true };
+      return APPROVE;
     }
-
-    // File writes — check against the slice's Forbidden Actions list.
-    if (type === "file-write" || type === "file-create" || type === "file-delete") {
-      if (!targetPath) return { approved: true };
-      const normalised = targetPath.replace(/\\/g, "/");
-      for (const forbidden of forbiddenSet) {
-        if (normalised === forbidden || normalised.startsWith(forbidden + "/")) {
-          return {
-            approved: false,
-            reason: `Write to ${targetPath} rejected — path is in the active slice's Forbidden Actions`,
-          };
-        }
-      }
-      return { approved: true };
+    if (request?.kind === "write" && _isForbiddenWrite(request.fileName, cwd, forbiddenSet)) {
+      return reject(`Write to ${request.fileName} rejected — path is in the active slice's Forbidden Actions`);
     }
-
-    // Read operations — always allowed.
-    return { approved: true };
+    return APPROVE;
   };
 }
 
 // ─── Token extraction from SDK typed events ───────────────────────────────────
 
+function _sumUsage(events) {
+  const sums = { calls: 0, inputTokens: 0, outputTokens: 0, cacheReadTokens: 0, cacheWriteTokens: 0, reasoningTokens: 0, duration: 0, model: null };
+  for (const ev of events) {
+    if (ev?.type !== "assistant.usage" || !ev.data) continue;
+    const d = ev.data;
+    sums.calls += 1;
+    for (const key of ["inputTokens", "outputTokens", "cacheReadTokens", "cacheWriteTokens", "reasoningTokens", "duration"]) {
+      if (Number.isFinite(d[key])) sums[key] += d[key];
+    }
+    if (typeof d.model === "string") sums.model = d.model;
+  }
+  return sums;
+}
+
 /**
- * Reduce an array of typed SDK session events into the extractTokens shape.
- * Fields not reported by the SDK are emitted as null — never 0 (bug #190 convention).
+ * Reduce the session's typed events into the extractTokens shape. The SDK emits
+ * one `assistant.usage` event per model call; a slice makes several, so they are
+ * summed. Fields are null when the SDK reported no usage at all — never 0 (bug #190).
  *
  * @param {object[]} events  Typed events collected from the session.
  * @param {string|null} model  Model name from the session request.
@@ -90,49 +139,32 @@ function buildPermissionHandler({ forbiddenPaths = [] } = {}) {
  * @returns {object} Token/cost record compatible with extractTokens.
  */
 function extractSdkTokens(events, model, sessionStartMs) {
-  let tokens_in = null;
-  let tokens_out = null;
-  let cached = null;
-  let reasoning_tokens = null;
-  let apiDurationMs = null;
-  let resolvedModel = model || null;
-
-  for (const ev of events) {
-    // assistant.message_delta carries incremental usage on some SDK versions.
-    if (ev.type === "assistant.message_delta" && ev.usage) {
-      if (ev.usage.input_tokens != null) tokens_in = ev.usage.input_tokens;
-      if (ev.usage.output_tokens != null) tokens_out = ev.usage.output_tokens;
-      if (ev.usage.cached_tokens != null) cached = ev.usage.cached_tokens;
-      if (ev.usage.reasoning_tokens != null) reasoning_tokens = ev.usage.reasoning_tokens;
-    }
-    // session.complete carries final usage on most SDK versions.
-    if (ev.type === "session.complete" && ev.usage) {
-      if (ev.usage.input_tokens != null) tokens_in = ev.usage.input_tokens;
-      if (ev.usage.output_tokens != null) tokens_out = ev.usage.output_tokens;
-      if (ev.usage.cached_tokens != null) cached = ev.usage.cached_tokens;
-      if (ev.usage.reasoning_tokens != null) reasoning_tokens = ev.usage.reasoning_tokens;
-      if (ev.usage.api_duration_ms != null) apiDurationMs = ev.usage.api_duration_ms;
-      if (ev.model) resolvedModel = ev.model;
-    }
-    // session.idle marks completion on older SDK builds.
-    if (ev.type === "session.idle" && ev.model) {
-      resolvedModel = ev.model;
-    }
-  }
-
-  const sessionDurationMs = Date.now() - sessionStartMs;
-
+  const u = _sumUsage(events);
+  const reported = u.calls > 0;
   return {
-    tokens_in,
-    tokens_out,
-    cached,
-    // Same field the spawn path reports, so cost-service prices cached input alike (#307).
-    cache_read_tokens: cached ?? 0,
-    reasoning_tokens,
-    apiDurationMs,
-    sessionDurationMs,
-    model: resolvedModel,
+    tokens_in: reported ? u.inputTokens : null,
+    tokens_out: reported ? u.outputTokens : null,
+    cached: reported ? u.cacheReadTokens : null,
+    // Same fields the spawn path reports, so cost-service prices cached input alike (#307).
+    cache_read_tokens: u.cacheReadTokens,
+    cache_creation_input_tokens: u.cacheWriteTokens,
+    reasoning_tokens: reported ? u.reasoningTokens : null,
+    apiDurationMs: reported ? u.duration : null,
+    sessionDurationMs: Date.now() - sessionStartMs,
+    model: u.model || model || null,
   };
+}
+
+/** The assistant's final messages, or its streamed deltas when no final message arrived. */
+function extractSdkOutput(events) {
+  const messages = events
+    .filter((ev) => ev?.type === "assistant.message" && typeof ev.data?.content === "string")
+    .map((ev) => ev.data.content);
+  if (messages.length > 0) return messages.join("\n");
+  return events
+    .filter((ev) => ev?.type === "assistant.message_delta" && typeof ev.data?.deltaContent === "string")
+    .map((ev) => ev.data.deltaContent)
+    .join("");
 }
 
 /**
@@ -164,6 +196,21 @@ function _resolveByokKey(provider) {
   return (val != null && val !== "") ? val : null;
 }
 
+/**
+ * Validate a BYOK provider config and attach its key (to a copy — the caller's
+ * object is never mutated). Returns `{ provider }`, or `{ error }` holding the
+ * structured result runSdkSession returns instead of starting a session.
+ */
+function _resolveByokProvider(provider) {
+  if (provider == null) return { provider: null };
+  if (!SUPPORTED_BYOK_PROVIDERS.has(provider.type)) {
+    return { error: { ok: false, error: "BYOK_UNSUPPORTED_PROVIDER", provider: provider.type, supported: [...SUPPORTED_BYOK_PROVIDERS] } };
+  }
+  const apiKey = _resolveByokKey(provider);
+  if (apiKey === null) return { error: { ok: false, error: "BYOK_KEY_MISSING", provider: provider.type } };
+  return { provider: { ...provider, apiKey } };
+}
+
 // ─── Public API ───────────────────────────────────────────────────────────────
 
 /**
@@ -178,8 +225,9 @@ function _resolveByokKey(provider) {
  *                                          Shape: { type: "openai"|"azure"|"anthropic", envKey: string }
  *                                          The API key is read from process.env[envKey] at call time.
  *                                          If the key is absent, returns { ok: false, error: "BYOK_KEY_MISSING" }.
+ * @param {number}   [opts.timeout]         Turn timeout in ms (default: the spawn path's 20 minutes).
  * @param {function} [opts.createSession]   Injected factory — defaults to the real SDK.
- *                                          Signature: ({ model, onPermissionRequest, onEvent, provider? }) → session.
+ *                                          Signature: ({ model, cwd, onPermissionRequest, onEvent, provider? }) → { session, client } or session.
  * @returns {Promise<object>} Worker result compatible with spawnWorker's return contract.
  */
 export async function runSdkSession({
@@ -188,81 +236,62 @@ export async function runSdkSession({
   cwd,
   forbiddenPaths = [],
   provider = null,
+  timeout = DEFAULT_SDK_TIMEOUT_MS,
   createSession = _defaultCreateSession,
 }) {
   // Validate and resolve provider config before doing any work.
-  if (provider != null) {
-    if (!SUPPORTED_BYOK_PROVIDERS.has(provider.type)) {
-      return {
-        ok: false,
-        error: "BYOK_UNSUPPORTED_PROVIDER",
-        provider: provider.type,
-        supported: [...SUPPORTED_BYOK_PROVIDERS],
-      };
-    }
-    const apiKey = _resolveByokKey(provider);
-    if (apiKey === null) {
-      return { ok: false, error: "BYOK_KEY_MISSING", provider: provider.type };
-    }
-    // Attach the resolved key to a local copy — never mutate the caller's object.
-    provider = { ...provider, apiKey };
-  }
+  const byok = _resolveByokProvider(provider);
+  if (byok.error) return byok.error;
+  provider = byok.provider;
   const sessionStartMs = Date.now();
   const collectedEvents = [];
-  let outputText = "";
+  const onPermissionRequest = buildPermissionHandler({ forbiddenPaths, cwd });
+  const onEvent = (ev) => { collectedEvents.push(ev); };
 
-  const onPermissionRequest = buildPermissionHandler({ forbiddenPaths });
+  const { session, client } = await _openSession(createSession, { model, cwd, onPermissionRequest, onEvent, provider });
+  const result = (exitCode, stderr, timedOut = false) =>
+    _sdkResult({ events: collectedEvents, model, sessionStartMs, provider }, { exitCode, stderr, timedOut });
 
-  function onEvent(ev) {
-    collectedEvents.push(ev);
-    // Accumulate assistant message text for the output field.
-    if (ev.type === "assistant.message_delta" && typeof ev.text === "string") {
-      outputText += ev.text;
-    }
-  }
-
-  let session;
   try {
-    session = await createSession({ model, onPermissionRequest, onEvent, provider });
+    await session.sendAndWait({ prompt }, timeout);
+    return result(0, "");
   } catch (err) {
-    // Surface SDK-import / session-creation failures as structured errors so
-    // spawnWorker can fall back to the spawn path with a single log line.
+    // Turn failures (tool errors, permission rejections, timeouts) are reported
+    // as non-zero exits rather than thrown so callers get a consistent result shape.
+    const message = String(err?.message || err);
+    return result(1, message, /timed? ?out|timeout/i.test(message));
+  } finally {
+    await _closeSession({ session, client });
+  }
+}
+
+/**
+ * Create the session. SDK-import / session-creation failures surface as
+ * structured errors (sdkError) so spawnWorker can fall back to the spawn path.
+ * The default factory returns { session, client }; test factories may return the session alone.
+ */
+async function _openSession(createSession, request) {
+  let handle;
+  try {
+    handle = await createSession(request);
+  } catch (err) {
     const wrapped = new Error(`[sdk-worker] session creation failed: ${err.message}`);
     wrapped.code = err.code || "SDK_SESSION_FAILED";
     wrapped.sdkError = true;
     throw wrapped;
   }
+  return { session: handle?.session ?? handle, client: handle?.client ?? null };
+}
 
-  try {
-    await session.run(prompt);
-  } catch (err) {
-    // Session.run failures (tool errors, permission rejections, etc.) are reported
-    // as non-zero exits rather than thrown so callers get a consistent result shape.
-    const tokens = extractSdkTokens(collectedEvents, model, sessionStartMs);
-    return {
-      output: outputText,
-      stderr: String(err.message || err),
-      jsonlEvents: collectedEvents,
-      exitCode: 1,
-      timedOut: false,
-      tokens,
-      worker: sdkWorkerLabel(provider),
-      model: tokens.model || model || "unknown",
-      looksLikeHelpText: false,
-    };
-  } finally {
-    if (typeof session.close === "function") {
-      try { await session.close(); } catch { /* ignore close errors */ }
-    }
-  }
-
-  const tokens = extractSdkTokens(collectedEvents, model, sessionStartMs);
+/** Worker result in spawnWorker's return contract. */
+function _sdkResult({ events, model, sessionStartMs, provider }, { exitCode, stderr, timedOut }) {
+  const tokens = extractSdkTokens(events, model, sessionStartMs);
   return {
-    output: outputText,
-    stderr: "",
-    jsonlEvents: collectedEvents,
-    exitCode: 0,
-    timedOut: false,
+    output: extractSdkOutput(events),
+    stderr,
+    jsonlEvents: events,
+    exitCode,
+    timedOut,
     tokens,
     worker: sdkWorkerLabel(provider),
     model: tokens.model || model || "unknown",
@@ -272,4 +301,4 @@ export async function runSdkSession({
 
 // ─── Exports for testing ──────────────────────────────────────────────────────
 
-export { buildPermissionHandler, extractSdkTokens, SUPPORTED_BYOK_PROVIDERS };
+export { buildPermissionHandler, extractSdkOutput, extractSdkTokens, SUPPORTED_BYOK_PROVIDERS };

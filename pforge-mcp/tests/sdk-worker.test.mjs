@@ -6,48 +6,45 @@
  */
 
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { runSdkSession, buildPermissionHandler, extractSdkTokens } from "../orchestrator/sdk-worker.mjs";
+import { runSdkSession, buildPermissionHandler, extractSdkOutput, extractSdkTokens } from "../orchestrator/sdk-worker.mjs";
 
 // ─── Fake session factory helpers ─────────────────────────────────────────────
 
 /**
- * Build a minimal fake createSession that records calls and resolves the prompt.
+ * Build a fake createSession that behaves like @github/copilot-sdk: the session's
+ * sendAndWait() emits the real event types (assistant.message, assistant.usage)
+ * and the factory returns { session, client } so cleanup can be asserted.
  * @param {object} opts
- * @param {string}   [opts.assistantText]  Text emitted via assistant.message_delta.
- * @param {object}   [opts.finalUsage]     Usage payload on session.complete.
- * @param {boolean}  [opts.runThrows]      If true, session.run() rejects.
+ * @param {string}   [opts.assistantText]  Final assistant.message content.
+ * @param {object}   [opts.finalUsage]     assistant.usage data (SDK field names).
+ * @param {boolean}  [opts.runThrows]      If true, sendAndWait() rejects.
  * @param {boolean}  [opts.createThrows]   If true, createSession rejects.
- * @param {string}   [opts.sdkModel]       Model reported in session.complete.
+ * @param {string}   [opts.sdkModel]       Model reported in assistant.usage.
  */
 function makeCreateSession({
   assistantText = "slice work done",
-  finalUsage = { input_tokens: 100, output_tokens: 50, cached_tokens: 10, api_duration_ms: 300 },
+  finalUsage = { inputTokens: 100, outputTokens: 50, cacheReadTokens: 10, duration: 300 },
   runThrows = false,
   createThrows = false,
   sdkModel = null,
 } = {}) {
-  return vi.fn(async ({ model, onPermissionRequest, onEvent }) => {
+  return vi.fn(async ({ model, onEvent }) => {
     if (createThrows) {
       const err = new Error("SDK import failed");
       err.code = "SDK_IMPORT_FAILED";
       throw err;
     }
 
-    // Emit events when run() is called.
     const session = {
-      run: vi.fn(async (prompt) => {
-        if (runThrows) throw new Error("session.run failure");
-        // Simulate events the real SDK would emit.
-        onEvent({ type: "assistant.message_delta", text: assistantText, usage: null });
-        onEvent({
-          type: "session.complete",
-          model: sdkModel || model,
-          usage: finalUsage,
-        });
+      sendAndWait: vi.fn(async () => {
+        if (runThrows) throw new Error("session.sendAndWait failure");
+        onEvent({ type: "assistant.usage", data: { model: sdkModel || model, ...finalUsage } });
+        onEvent({ type: "assistant.message", data: { content: assistantText } });
+        return { data: { content: assistantText } };
       }),
-      close: vi.fn(async () => {}),
+      disconnect: vi.fn(async () => {}),
     };
-    return session;
+    return { session, client: { stop: vi.fn(async () => {}) } };
   });
 }
 
@@ -70,27 +67,43 @@ describe("runSdkSession — happy path", () => {
     expect(result.looksLikeHelpText).toBe(false);
   });
 
-  it("closes the session after run completes", async () => {
-    let capturedSession;
+  it("disconnects the session and stops the client after the turn", async () => {
+    let handle;
     const createSession = vi.fn(async (opts) => {
-      capturedSession = {
-        run: vi.fn(async () => {
-          opts.onEvent({ type: "session.complete", model: opts.model, usage: {} });
-        }),
-        close: vi.fn(async () => {}),
-      };
-      return capturedSession;
+      handle = await makeCreateSession()(opts);
+      return handle;
     });
     await runSdkSession({ prompt: "x", model: "gpt-5.3-codex", cwd: "/p", createSession });
-    expect(capturedSession.close).toHaveBeenCalledTimes(1);
+    expect(handle.session.disconnect).toHaveBeenCalledTimes(1);
+    expect(handle.client.stop).toHaveBeenCalledTimes(1);
   });
 
-  it("passes the injected model to createSession", async () => {
+  it("still stops the client when the turn fails", async () => {
+    let handle;
+    const createSession = vi.fn(async (opts) => {
+      handle = await makeCreateSession({ runThrows: true })(opts);
+      return handle;
+    });
+    await runSdkSession({ prompt: "x", model: "gpt-5.3-codex", cwd: "/p", createSession });
+    expect(handle.client.stop).toHaveBeenCalledTimes(1);
+  });
+
+  it("passes the model and the slice's working directory to createSession", async () => {
     const createSession = makeCreateSession();
     await runSdkSession({ prompt: "p", model: "gpt-5.5", cwd: "/p", createSession });
     expect(createSession).toHaveBeenCalledWith(
-      expect.objectContaining({ model: "gpt-5.5" }),
+      expect.objectContaining({ model: "gpt-5.5", cwd: "/p" }),
     );
+  });
+
+  it("sends the prompt with the turn timeout", async () => {
+    let handle;
+    const createSession = vi.fn(async (opts) => {
+      handle = await makeCreateSession()(opts);
+      return handle;
+    });
+    await runSdkSession({ prompt: "do it", model: "m", cwd: "/p", timeout: 1234, createSession });
+    expect(handle.session.sendAndWait).toHaveBeenCalledWith({ prompt: "do it" }, 1234);
   });
 });
 
@@ -113,52 +126,51 @@ describe("runSdkSession — SDK import / session creation failure", () => {
 
 // ─── runSdkSession — session.run failure ─────────────────────────────────────
 
-describe("runSdkSession — session.run failure", () => {
-  it("returns exitCode=1 and error in stderr when run() throws", async () => {
+describe("runSdkSession — turn failure", () => {
+  it("returns exitCode=1 and error in stderr when sendAndWait() throws", async () => {
     const createSession = makeCreateSession({ runThrows: true });
     const result = await runSdkSession({ prompt: "p", model: "gpt-5.3-codex", cwd: "/p", createSession });
     expect(result.exitCode).toBe(1);
-    expect(result.stderr).toContain("session.run failure");
+    expect(result.stderr).toContain("session.sendAndWait failure");
     expect(result.worker).toBe("sdk");
   });
 });
 
 // ─── buildPermissionHandler ───────────────────────────────────────────────────
+// Requests and results use the SDK's PermissionHandler shapes.
 
 describe("buildPermissionHandler", () => {
   it("approves file writes to non-forbidden paths", () => {
-    const handle = buildPermissionHandler({ forbiddenPaths: ["/project/.forge/secrets.json"] });
-    const result = handle({ type: "file-write", path: "/project/src/index.mjs" });
-    expect(result.approved).toBe(true);
+    const handle = buildPermissionHandler({ forbiddenPaths: [".forge/secrets.json"], cwd: "/project" });
+    expect(handle({ kind: "write", fileName: "/project/src/index.mjs" })).toEqual({ kind: "approve-once" });
   });
 
-  it("rejects file writes to a forbidden path", () => {
-    const handle = buildPermissionHandler({ forbiddenPaths: ["/project/pforge-mcp/server.mjs"] });
-    const result = handle({ type: "file-write", path: "/project/pforge-mcp/server.mjs" });
-    expect(result.approved).toBe(false);
-    expect(result.reason).toMatch(/Forbidden Actions/);
+  it("rejects writes to a forbidden path, given absolute or project-relative", () => {
+    const handle = buildPermissionHandler({ forbiddenPaths: ["pforge-mcp/server.mjs"], cwd: "/project" });
+    const abs = handle({ kind: "write", fileName: "/project/pforge-mcp/server.mjs" });
+    expect(abs.kind).toBe("reject");
+    expect(abs.feedback).toMatch(/Forbidden Actions/);
+    expect(handle({ kind: "write", fileName: "pforge-mcp/server.mjs" }).kind).toBe("reject");
   });
 
-  it("rejects file writes inside a forbidden directory", () => {
-    const handle = buildPermissionHandler({ forbiddenPaths: ["/project/pforge-master"] });
-    const result = handle({ type: "file-write", path: "/project/pforge-master/server.mjs" });
-    expect(result.approved).toBe(false);
+  it("rejects writes inside a forbidden directory, with Windows separators", () => {
+    const handle = buildPermissionHandler({ forbiddenPaths: ["pforge-master/"], cwd: "C:\\project" });
+    expect(handle({ kind: "write", fileName: "C:\\project\\pforge-master\\server.mjs" }).kind).toBe("reject");
   });
 
   it("approves read operations unconditionally", () => {
-    const handle = buildPermissionHandler({ forbiddenPaths: ["/project/everything"] });
-    expect(handle({ type: "file-read", path: "/project/everything/secret.txt" }).approved).toBe(true);
+    const handle = buildPermissionHandler({ forbiddenPaths: ["everything"], cwd: "/project" });
+    expect(handle({ kind: "read", path: "/project/everything/secret.txt" }).kind).toBe("approve-once");
   });
 
-  it("approves non-destructive shell-run", () => {
+  it("approves a non-destructive shell command", () => {
     const handle = buildPermissionHandler();
-    expect(handle({ type: "shell-run", command: "npx vitest run" }).approved).toBe(true);
+    expect(handle({ kind: "shell", fullCommandText: "npx vitest run" }).kind).toBe("approve-once");
   });
 
-  it("rejects destructive rm shell-run", () => {
+  it("rejects a destructive rm shell command", () => {
     const handle = buildPermissionHandler();
-    const result = handle({ type: "shell-run", command: "rm -rf ." });
-    expect(result.approved).toBe(false);
+    expect(handle({ kind: "shell", fullCommandText: "rm -rf ." }).kind).toBe("reject");
   });
 
   it("has no approveAll reference", () => {
@@ -171,26 +183,23 @@ describe("buildPermissionHandler", () => {
 // ─── extractSdkTokens ────────────────────────────────────────────────────────
 
 describe("extractSdkTokens", () => {
-  it("maps session.complete usage fields to extractTokens shape", () => {
+  it("maps assistant.usage data to the extractTokens shape", () => {
     const events = [
-      {
-        type: "session.complete",
-        model: "gpt-5.3-codex",
-        usage: { input_tokens: 200, output_tokens: 80, cached_tokens: 20, api_duration_ms: 400 },
-      },
+      { type: "assistant.usage", data: { model: "gpt-5.3-codex", inputTokens: 200, outputTokens: 80, cacheReadTokens: 20, cacheWriteTokens: 5, duration: 400 } },
     ];
     const tokens = extractSdkTokens(events, "gpt-5.3-codex", Date.now() - 500);
     expect(tokens.tokens_in).toBe(200);
     expect(tokens.tokens_out).toBe(80);
     expect(tokens.cached).toBe(20);
+    expect(tokens.cache_read_tokens).toBe(20);
+    expect(tokens.cache_creation_input_tokens).toBe(5);
     expect(tokens.apiDurationMs).toBe(400);
     expect(tokens.sessionDurationMs).toBeGreaterThanOrEqual(0);
     expect(tokens.model).toBe("gpt-5.3-codex");
   });
 
-  it("emits null — never 0 — for fields the SDK did not report (bug #190 convention)", () => {
-    const events = [{ type: "session.complete", model: "gpt-5.3-codex", usage: {} }];
-    const tokens = extractSdkTokens(events, "gpt-5.3-codex", Date.now());
+  it("emits null — never 0 — for counts when the SDK reported no usage (bug #190 convention)", () => {
+    const tokens = extractSdkTokens([{ type: "session.idle", data: {} }], "gpt-5.3-codex", Date.now());
     expect(tokens.tokens_in).toBeNull();
     expect(tokens.tokens_out).toBeNull();
     expect(tokens.cached).toBeNull();
@@ -203,21 +212,31 @@ describe("extractSdkTokens", () => {
     expect(tokens.model).toBeNull();
   });
 
-  it("picks up model from session.complete when event reports it", () => {
-    const events = [{ type: "session.complete", model: "gpt-5.5", usage: {} }];
-    const tokens = extractSdkTokens(events, "gpt-5.3-codex", Date.now());
-    expect(tokens.model).toBe("gpt-5.5");
+  it("picks up the model assistant.usage reports", () => {
+    const events = [{ type: "assistant.usage", data: { model: "gpt-5.5", inputTokens: 1 } }];
+    expect(extractSdkTokens(events, "gpt-5.3-codex", Date.now()).model).toBe("gpt-5.5");
   });
 
-  it("accumulates incremental usage from assistant.message_delta", () => {
+  it("sums usage across the model calls of one turn", () => {
     const events = [
-      { type: "assistant.message_delta", text: "...", usage: { input_tokens: 50, output_tokens: 25 } },
-      { type: "session.complete", model: "m", usage: { input_tokens: 100, output_tokens: 50 } },
+      { type: "assistant.usage", data: { model: "m", inputTokens: 50, outputTokens: 25, cacheReadTokens: 10 } },
+      { type: "assistant.usage", data: { model: "m", inputTokens: 100, outputTokens: 50, cacheReadTokens: 40 } },
     ];
-    // session.complete should win (last write wins in the reducer)
     const tokens = extractSdkTokens(events, "m", Date.now());
-    expect(tokens.tokens_in).toBe(100);
-    expect(tokens.tokens_out).toBe(50);
+    expect([tokens.tokens_in, tokens.tokens_out, tokens.cache_read_tokens]).toEqual([150, 75, 50]);
+  });
+});
+
+describe("extractSdkOutput", () => {
+  it("joins final assistant messages, falling back to streamed deltas", () => {
+    expect(extractSdkOutput([
+      { type: "assistant.message", data: { content: "first" } },
+      { type: "assistant.message", data: { content: "second" } },
+    ])).toBe("first\nsecond");
+    expect(extractSdkOutput([
+      { type: "assistant.message_delta", data: { deltaContent: "par" } },
+      { type: "assistant.message_delta", data: { deltaContent: "tial" } },
+    ])).toBe("partial");
   });
 });
 

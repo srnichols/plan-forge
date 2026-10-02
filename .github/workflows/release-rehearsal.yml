@@ -1,0 +1,109 @@
+name: Release Rehearsal
+
+# Runs the two release rehearsals from docs/RELEASE-CHECKLIST.md (#300):
+#   - rehearse:      fresh setup + update from the previous release, both shells,
+#                    from a git archive of the release commit. Runs when a push to
+#                    master sets VERSION to a release (X.Y.Z, not a -dev bump-back).
+#                    Also refuses a tag collision or retrograde version (#128).
+#   - verify-public: `pforge self-update` over the real GitHub download from the
+#                    previous release, both shells. Runs when a release is published.
+# Windows runner: it has PowerShell 7 and Git Bash, so one job covers both shells.
+
+on:
+  push:
+    branches: [master]
+    paths: [VERSION]
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: Which rehearsal to run
+        type: choice
+        options: [rehearse, verify-public]
+        default: rehearse
+      previous_tag:
+        description: 'Previous release tag (empty: the highest tag below the version)'
+        required: false
+        default: ''
+
+permissions:
+  contents: read
+
+jobs:
+  rehearse:
+    name: Rehearse release (setup + update, both shells)
+    if: github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && inputs.mode == 'rehearse')
+    runs-on: windows-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # previous release tags
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Is VERSION a release?
+        id: version
+        shell: pwsh
+        run: |
+          $v = (Get-Content VERSION -Raw).Trim()
+          $isRelease = $v -match '^\d+\.\d+\.\d+$'
+          "release=$($isRelease.ToString().ToLower())" >> $env:GITHUB_OUTPUT
+          if (-not $isRelease) { "VERSION is $v (bump-back); nothing to rehearse." }
+
+      - name: Rehearse
+        if: steps.version.outputs.release == 'true'
+        shell: pwsh
+        env:
+          PREVIOUS_TAG: ${{ inputs.previous_tag }}
+        run: |
+          $a = @('scripts/release/rehearse.mjs', '--release-ref', 'HEAD', '--logs', "$env:RUNNER_TEMP/release-rehearsal")
+          if ($env:PREVIOUS_TAG) { $a += @('--previous-tag', $env:PREVIOUS_TAG) }
+          node @a
+
+      - name: Upload logs
+        if: failure() && steps.version.outputs.release == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-rehearsal-logs
+          path: |
+            ${{ runner.temp }}/release-rehearsal/results.txt
+            ${{ runner.temp }}/release-rehearsal/*.log
+
+  verify-public:
+    name: Verify public self-update (both shells)
+    if: (github.event_name == 'release' && !github.event.release.prerelease) || (github.event_name == 'workflow_dispatch' && inputs.mode == 'verify-public')
+    runs-on: windows-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Verify
+        shell: pwsh
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          RELEASE_TAG: ${{ github.event.release.tag_name }}
+          PREVIOUS_TAG: ${{ inputs.previous_tag }}
+        run: |
+          $a = @('scripts/release/verify-public.mjs', '--logs', "$env:RUNNER_TEMP/release-public")
+          if ($env:RELEASE_TAG) { $a += @('--expected-version', ($env:RELEASE_TAG -replace '^v', '')) }
+          if ($env:PREVIOUS_TAG) { $a += @('--previous-tag', $env:PREVIOUS_TAG) }
+          node @a
+
+      - name: Upload logs
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-public-logs
+          path: |
+            ${{ runner.temp }}/release-public/results.txt
+            ${{ runner.temp }}/release-public/*.log

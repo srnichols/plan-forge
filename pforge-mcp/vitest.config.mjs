@@ -62,6 +62,7 @@ const SOURCE_ONLY_SUITES = {
   ],
   "../scripts/forge-home-cleanup.mjs": ["tests/forge-home-cleanup.test.mjs"],
   "../scripts/sync-versions.mjs": ["tests/version-sync.test.mjs"],
+  "../scripts/release": ["tests/release-harness.test.mjs"],
   "../pforge-master": [
     "tests/auditor-automation-baseline.test.mjs",
     "tests/forge-master.advisory.test.mjs",

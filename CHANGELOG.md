@@ -7,6 +7,16 @@ Format follows [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
+### Added
+
+- **Release rehearsal in the repo and in CI** ([#300](https://github.com/srnichols/plan-forge/issues/300), [#128](https://github.com/srnichols/plan-forge/issues/128)). The two checks that caught the v3.27.0 Bash self-replace bug, #297 and the unrendered-placeholder follow-up to #280 now live in `scripts/release/`.
+  - `rehearse.mjs` runs a fresh setup and an update from the previous release, in PowerShell and Git Bash, from a `git archive` of the release commit.
+  - `verify-public.mjs` runs `pforge self-update` over the real GitHub download.
+  - Per-release expectations live in `release-checks.json`.
+  - The rehearsal also refuses a tag that already exists on origin at another commit, and a version that is not newer than every released tag (the 2026-04-28 retrograde re-release).
+  - A new **Release Rehearsal** workflow runs both on a Windows runner: the rehearsal when master's `VERSION` becomes a release, and public verify when a release is published.
+  - The release checklist now uses them.
+
 ### Fixed
 
 - **Non-interactive setup no longer waits for input** ([#304](https://github.com/srnichols/plan-forge/issues/304)). Without `-Force`, `setup.ps1 -Preset custom -NonInteractive` and `setup.sh --preset custom --non-interactive` looped forever on the "Build command" prompt, which has no default, and then stopped at "Proceed?". Setup now takes every default and skips the confirmation when `-NonInteractive` / `--non-interactive` is given or when `CI` or `PFORGE_NONINTERACTIVE` is set. An interactive prompt that reaches end of input now gives up instead of asking again.

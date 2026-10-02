@@ -1,0 +1,27 @@
+{
+  "$comment": [
+    "Per-release expectations for scripts/release/rehearse.mjs and verify-public.mjs (#300).",
+    "Each check runs against every consumer project after setup or update. Add an entry for each",
+    "user-visible fix a release delivers, and update the model default when it changes.",
+    "Fields: label, path (relative to the consumer), then one of: nothing (file exists),",
+    "contains, notContains, or jsonKey + equals. Optional: preset (only for that preset),",
+    "when: \"fresh\" (fresh installs only)."
+  ],
+  "checks": [
+    { "label": "hooks use hidden PowerShell launchers (meta #287)", "path": ".github/hooks/plan-forge.json", "contains": "-WindowStyle Hidden" },
+    { "label": "check-diff-classify.mjs hook delivered", "path": ".github/hooks/scripts/check-diff-classify.mjs" },
+    { "label": "check-forbidden.ps1 reads $hookInput", "path": ".github/hooks/scripts/check-forbidden.ps1", "contains": "$hookInput" },
+    { "label": "git-diff-reader.mjs delivered", "path": "pforge-mcp/server/git-diff-reader.mjs" },
+    { "label": "testbed resolver has no personal default path", "path": "pforge-mcp/testbed/scenarios.mjs", "notContains": "E:\\\\GitHub" },
+    { "label": "pforge.ps1 doctor reports the default model", "path": "pforge.ps1", "contains": "default (claude-opus-5.5)" },
+    { "label": "pforge.sh doctor reports the default model", "path": "pforge.sh", "contains": "default (claude-opus-5.5)" },
+    { "label": "pforge.sh dispatch survives self-replacement", "path": "pforge.sh", "contains": "# The dispatch is one brace group" },
+    { "label": "update-guard.mjs delivered (#280)", "path": "pforge-mcp/update-guard.mjs" },
+    { "label": "shipped-guidance-hashes.json delivered (#280)", "path": "pforge-mcp/shipped-guidance-hashes.json" },
+    { "label": "copilot-pricing.json delivered (#295)", "path": "pforge-mcp/copilot-pricing.json" },
+    { "label": "Forge-Master Copilot SDK tools delivered (#294)", "path": "pforge-master/src/providers/copilot-sdk-tools.mjs" },
+    { "label": "modelRouting.default is the current default", "path": ".forge.json", "jsonKey": "modelRouting.default", "equals": "claude-opus-5.5", "when": "fresh" },
+    { "label": "typescript deploy instructions use node:24-slim", "path": ".github/instructions/deploy.instructions.md", "contains": "node:24-slim", "preset": "typescript" },
+    { "label": "dotnet deploy instructions are the dotnet preset", "path": ".github/instructions/deploy.instructions.md", "contains": "aspnet", "preset": "dotnet" }
+  ]
+}

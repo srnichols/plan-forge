@@ -103,6 +103,9 @@ from a file existing in the source checkout.
 
 For runtime packaging changes, exercise both a fresh install and an update
 from the previous release in temporary consumer projects, in both shells.
+`scripts/release/rehearse.mjs` (§3 Step 3a) does this from the release
+archive; `scripts/release/verify-public.mjs` (§3 Step 8) covers the GitHub
+download.
 Check that newly added modules arrive, moved adapters resolve from their new
 locations, and the consumer's own version and configuration survive updating.
 The release archive must retain all three packages but exclude phase plans,
@@ -215,6 +218,27 @@ git add VERSION package.json package-lock.json pforge-mcp/package.json pforge-mc
 git commit -m "chore(release): vX.Y.Z" -m "<short summary, bullets per fix>"
 ```
 
+### Step 3a — Rehearse the release commit
+
+```pwsh
+node scripts/release/rehearse.mjs            # --previous-tag defaults to the highest tag below VERSION
+```
+
+From a `git archive` of `HEAD` (what consumers download), in PowerShell and Git Bash, it runs:
+
+- a fresh setup;
+- setup from the previous release with consumer customizations, then an update with the previous release's wrapper and another with the new one.
+
+Customizations must survive, the update guard must keep an edited guidance file, and every entry in `scripts/release/release-checks.json` must hold.
+
+It also refuses a tag that already exists on origin at another commit, and a version that is not newer than every release tag there (#128).
+
+Before running it, add an entry to `release-checks.json` for each user-visible fix in this release. Update the model default there when it changes.
+
+The command exits 1 on any FAIL; the logs and `results.txt` are in `%TEMP%/pf-release-rehearsal` (`--logs <dir>` to move them).
+
+The **Release Rehearsal** workflow runs the same rehearsal on a Windows runner when the push in Step 4 lands.
+
 ### Step 4 — Push master
 
 ```pwsh
@@ -252,7 +276,15 @@ gh release list --limit 3
 
 node pforge-mcp/update-from-github.mjs resolve-tag
 # MUST print {"ok":true,"tag":"vX.Y.Z"} with NO "warning" field
+
+$env:GITHUB_TOKEN = (gh auth token)   # avoids API rate limits
+node scripts/release/verify-public.mjs
+# Projects installed from the previous release run `pforge self-update` over the real
+# download, in PowerShell and Git Bash, with and without a root VERSION of their own.
+# MUST end "N passed, 0 failed"
 ```
+
+The **Release Rehearsal** workflow's `verify-public` job runs the same check when the Release is published.
 
 If `resolve-tag` warns, Releases are behind tags. Backfill missing ones (see §6).
 
@@ -394,6 +426,7 @@ If a user genuinely wants the older release (e.g. their local v2.96.0 is corrupt
 [ ] §2  node scripts/sync-versions.mjs X.Y.Z, then --check passes (no -dev)
 [ ] §3.1 CHANGELOG promoted [Unreleased] → [X.Y.Z]
 [ ] §3.3 git commit -m "chore(release): vX.Y.Z"
+[ ] §3.3a node scripts/release/rehearse.mjs → 0 failed (release-checks.json updated for this release)
 [ ] §3.4 git push origin master
 [ ] §3.5 git tag -a vX.Y.Z HEAD -m "..."
 [ ] §3.5 git show vX.Y.Z:VERSION → exactly "X.Y.Z"
@@ -401,7 +434,7 @@ If a user genuinely wants the older release (e.g. their local v2.96.0 is corrupt
 [ ] §3.7 gh release create vX.Y.Z --notes-from-tag --verify-tag
 [ ] §3.8 gh release list → vX.Y.Z marked "Latest"
 [ ] §3.8 resolve-tag returns {"ok":true,"tag":"vX.Y.Z"} with no warning
-[ ] §3.8 Actual public self-update path verified in PowerShell and Bash; extraction is not covered by local-source upgrades
+[ ] §3.8 node scripts/release/verify-public.mjs → 0 failed (public download, both shells)
 [ ] §3.9 node scripts/sync-versions.mjs <next-dev> (PATCH→Z+1, MINOR→Y+1.0, MAJOR→X+1.0.0) — separate commit
 [ ] §3.9 git push origin master
 ```

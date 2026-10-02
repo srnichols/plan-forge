@@ -70,10 +70,14 @@ foreach ($f in $repo) {
 ```
 
 `project-principles.instructions.md` ships from `templates/.github/instructions/`
-and remains user-editable. Architecture, clean-code, self-repair, status, and
-testing instructions ship from `presets/shared/.github/instructions/`; the
-remaining shared instructions ship from `.github/instructions/`. Release and
-ACI-authoring instructions are maintainer-only. The string scan above is an
+and remains user-editable. Architecture, clean-code, security, self-repair,
+status, and testing instructions ship from `presets/shared/.github/instructions/`
+(consumer-facing, stack-neutral); the remaining shared instructions
+(ai-plan-hardening-runbook, context-fuel, git-workflow) ship from
+`.github/instructions/`. When a selected stack preset has its own copy of any of
+these (every stack preset ships `testing` and `security`), setup and update use
+the preset's copy instead. Release and ACI-authoring instructions are
+maintainer-only. The string scan above is an
 inventory hint, not proof of copying: inspect the actual lists and verify the
 installed files so a comment mentioning a filename cannot create a false pass.
 

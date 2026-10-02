@@ -22,6 +22,16 @@
     { "label": "Forge-Master Copilot SDK tools delivered (#294)", "path": "pforge-master/src/providers/copilot-sdk-tools.mjs" },
     { "label": "modelRouting.default is the current default", "path": ".forge.json", "jsonKey": "modelRouting.default", "equals": "claude-opus-5.5", "when": "fresh" },
     { "label": "typescript deploy instructions use node:24-slim", "path": ".github/instructions/deploy.instructions.md", "contains": "node:24-slim", "preset": "typescript" },
-    { "label": "dotnet deploy instructions are the dotnet preset", "path": ".github/instructions/deploy.instructions.md", "contains": "aspnet", "preset": "dotnet" }
+    { "label": "dotnet deploy instructions are the dotnet preset", "path": ".github/instructions/deploy.instructions.md", "contains": "aspnet", "preset": "dotnet" },
+    { "label": "Node.js 22.12 floor (3.29)", "path": "pforge-mcp/package.json", "contains": "\">=22.12.0\"" },
+    { "label": "node-support.mjs delivered for smith's Node check (3.29)", "path": "pforge-mcp/node-support.mjs" },
+    { "label": "pforge pending module delivered (#302)", "path": "pforge-mcp/update-pending.mjs" },
+    { "label": "pforge.ps1 has the pending command (#302)", "path": "pforge.ps1", "contains": "function Invoke-Pending" },
+    { "label": "pforge.sh has the pending command (#302)", "path": "pforge.sh", "contains": "cmd_pending()" },
+    { "label": "detect-preset.mjs delivered (update without .forge.json)", "path": "pforge-mcp/detect-preset.mjs" },
+    { "label": "hook-status.mjs delivered (smith hooks, no jq)", "path": "pforge-mcp/hook-status.mjs" },
+    { "label": "migrate-forge-config.mjs delivered (#299 migration gap)", "path": "pforge-mcp/migrate-forge-config.mjs" },
+    { "label": ".forge.json has hooks.postRun (setup seeds it, update migrates it)", "path": ".forge.json", "jsonKey": "hooks.postRun.invokeAuditor.onFailure", "equals": false },
+    { "label": "Copilot SDK route is the default (#307)", "path": "pforge-mcp/orchestrator/worker-spawn.mjs", "contains": "const DEFAULT_COPILOT_SDK_PREF = \"prefer\";" }
   ]
 }

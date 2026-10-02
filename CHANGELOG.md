@@ -9,6 +9,15 @@ Format follows [Keep a Changelog](https://keepachangelog.com/).
 
 ### Added
 
+- **`pforge pending` reviews the guidance updates `pforge update` kept aside** ([#302](https://github.com/srnichols/plan-forge/issues/302)). When an update keeps a file you edited, the new version waits in `.forge/update-pending/`, and until now nothing listed those copies or reminded you of them.
+  - `pforge pending` lists them with their age.
+  - `diff` compares your copy with the new version.
+  - `apply` takes the new version after backing your copy up to `.forge/update-backups/`.
+  - `discard` keeps your copy.
+  - `apply` and `discard` take a path or `--all`, and change nothing without `--yes`.
+  - `pforge smith` warns while pending updates remain, and the update's KEEP report points to the new command.
+  - Both shells share one implementation, `pforge-mcp/update-pending.mjs`.
+
 - **Release rehearsal in the repo and in CI** ([#300](https://github.com/srnichols/plan-forge/issues/300), [#128](https://github.com/srnichols/plan-forge/issues/128)). The two checks that caught the v3.27.0 Bash self-replace bug, #297 and the unrendered-placeholder follow-up to #280 now live in `scripts/release/`.
   - `rehearse.mjs` runs a fresh setup and an update from the previous release, in PowerShell and Git Bash, from a `git archive` of the release commit.
   - `verify-public.mjs` runs `pforge self-update` over the real GitHub download.

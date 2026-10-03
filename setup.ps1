@@ -1445,6 +1445,16 @@ if (-not $isCustomOnly) {
             Copy-WithCreate $_.FullName $dst $Force.IsPresent
         }
     }
+
+    # VS Code automation templates (import from the Agents window > Automations)
+    $automationsSrc = Join-Path $templateRoot "templates/.github/automations"
+    if (Test-Path $automationsSrc) {
+        Get-ChildItem -Path $automationsSrc -Recurse -File | ForEach-Object {
+            $relativePath = $_.FullName.Substring($automationsSrc.Length + 1)
+            $dst = Join-Path $ProjectPath ".github/automations/$relativePath"
+            Copy-WithCreate $_.FullName $dst $Force.IsPresent
+        }
+    }
 }
 
 # ─── Step 3d: Install Extensions (if requested) ─────────────────────

@@ -1387,6 +1387,16 @@ if [[ "$IS_CUSTOM_ONLY" != true ]]; then
             copy_with_create "$file" "$dst" || true
         done < <(find "$hooks_src" -type f -print0)
     fi
+
+    # VS Code automation templates (import from the Agents window > Automations)
+    automations_src="$TEMPLATE_ROOT/templates/.github/automations"
+    if [[ -d "$automations_src" ]]; then
+        while IFS= read -r -d '' file; do
+            rel_path="${file#"$automations_src/"}"
+            dst="$PROJECT_PATH/.github/automations/$rel_path"
+            copy_with_create "$file" "$dst" || true
+        done < <(find "$automations_src" -type f -print0)
+    fi
 fi
 
 # ─── Step 4: Replace Placeholders ─────────────────────────────────────

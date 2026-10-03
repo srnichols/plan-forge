@@ -16,11 +16,11 @@
  * Categories, in the order they are scanned (first match wins when a file
  * could be reached by more than one, e.g. `pforge.ps1` via both `cli` and
  * `core`): prompts, agents, instructions, runbook, preset, skills, hooks,
- * mcp, sdk, master, cli, validation, core.
+ * automations, mcp, sdk, master, cli, validation, core.
  *
  * Guidance categories (prompts, agents, instructions, runbook, preset,
- * skills, hooks — anything under `.github/{prompts,instructions,agents,
- * skills,hooks}/` or `docs/plans/`) go through `update-guard.mjs` so a
+ * skills, hooks, automations — anything under `.github/{prompts,instructions,
+ * agents,skills,hooks,automations}/` or `docs/plans/`) go through `update-guard.mjs` so a
  * project's hand-edited copy is never silently replaced (#280). Everything
  * else (mcp, sdk, master, cli, validation, core) is a plain byte compare.
  *
@@ -67,7 +67,7 @@ const RUNBOOK_FILES = Object.freeze([
 ]);
 
 /** A guidance file's project-relative path matches one of these roots (Select-GuidedFiles' pattern). */
-const GUIDANCE_PATTERN = /^(\.github\/(prompts|instructions|agents|skills|hooks)\/|docs\/plans\/)/;
+const GUIDANCE_PATTERN = /^(\.github\/(prompts|instructions|agents|skills|hooks|automations)\/|docs\/plans\/)/;
 
 /** Recursive scans never descend into these (matches Invoke-Update's `-notmatch` filters). */
 const AUTO_DISCOVER_EXCLUDE = /(^|\/)(node_modules|\.forge|coverage)(\/|$)/;
@@ -384,6 +384,25 @@ function scanHooks({ sourceRoot, projectRoot, guardCtx }) {
   return out;
 }
 
+/** VS Code automation templates (.automation.md) — guarded like hooks, since users adapt the prompts. */
+function scanAutomations({ sourceRoot, projectRoot, guardCtx }) {
+  const srcDir = join(sourceRoot, "templates/.github/automations");
+  const out = [];
+  for (const rel of walkRecursive(srcDir)) {
+    const entry = guidedEntry({
+      category: "automations",
+      srcFull: join(srcDir, rel),
+      dstFull: join(projectRoot, ".github/automations", rel),
+      srcRoot: sourceRoot,
+      projectRoot,
+      guardCtx,
+      allowNew: true,
+    });
+    if (entry) out.push(entry);
+  }
+  return out;
+}
+
 /** The auto-discovered packages (mcp, sdk, master): every file, recursively, plain byte compare. */
 function scanAutoDiscoverPackage({ category, pkgDir, sourceRoot, projectRoot }) {
   const srcPkg = join(sourceRoot, pkgDir);
@@ -454,6 +473,7 @@ export function buildPlan({ sourceRoot, projectRoot, presetsOverride = null }) {
     ...scanPresetFiles(args),
     ...scanSkills(args),
     ...scanHooks(args),
+    ...scanAutomations(args),
     ...scanAutoDiscoverPackage({ category: "mcp", pkgDir: "pforge-mcp", sourceRoot, projectRoot }),
     ...scanAutoDiscoverPackage({ category: "sdk", pkgDir: "pforge-sdk", sourceRoot, projectRoot }),
     ...scanAutoDiscoverPackage({ category: "master", pkgDir: "pforge-master", sourceRoot, projectRoot }),

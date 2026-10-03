@@ -1301,11 +1301,11 @@ _pf_sha256() {
 }
 
 # ─── Update guard (#280) ──────────────────────────────────────────────
-# Guidance files (instructions, prompts, agents, skills, hooks, runbooks) go
+# Guidance files (instructions, prompts, agents, skills, hooks, automations, runbooks) go
 # through pforge-mcp/update-guard.mjs, as in pforge.ps1. It replaces only files
 # the project has not changed, keeps customized ones (saving the new version
 # under .forge/update-pending/), and renders setup's placeholders.
-_PF_GUIDANCE_PATH_RE='^(\.github/(prompts|instructions|agents|skills|hooks)/|docs/plans/)'
+_PF_GUIDANCE_PATH_RE='^(\.github/(prompts|instructions|agents|skills|hooks|automations)/|docs/plans/)'
 
 # Prints the guard to use: the source's copy (its index knows the newest shipped
 # versions), else the project's installed copy (e.g. when the source is an older

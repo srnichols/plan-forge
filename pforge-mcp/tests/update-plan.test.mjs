@@ -31,7 +31,7 @@ const SETUP_PS1_PATH = resolve(REPO_ROOT, "setup.ps1");
 
 const VALID_CATEGORIES = new Set([
   "prompts", "agents", "instructions", "runbook", "preset", "skills",
-  "hooks", "mcp", "sdk", "master", "cli", "validation", "core",
+  "hooks", "automations", "mcp", "sdk", "master", "cli", "validation", "core",
 ]);
 const VALID_ACTIONS = new Set(["new", "update"]);
 const VALID_PRESET_SOURCES = new Set(["forge.json", "detected", "default"]);
@@ -188,6 +188,16 @@ describe("update-plan: one test per category", () => {
     const plan = buildPlan({ sourceRoot: source, projectRoot: project });
 
     expect(findOp(plan, ".github/hooks/live-guard/pre-deploy.mjs")).toMatchObject({ category: "hooks", action: "new", guided: true });
+  });
+
+  it("automations: mirrors templates/.github/automations into .github/automations as guidance", () => {
+    const source = makeSourceRoot();
+    const project = makeProjectRoot({ preset: "custom" });
+    write(source, "templates/.github/automations/pforge-daily-drift.automation.md", "v1\n");
+
+    const plan = buildPlan({ sourceRoot: source, projectRoot: project });
+
+    expect(findOp(plan, ".github/automations/pforge-daily-drift.automation.md")).toMatchObject({ category: "automations", action: "new", guided: true });
   });
 
   it("mcp/sdk/master: auto-discovers every file recursively and skips node_modules", () => {
@@ -527,5 +537,24 @@ describe.skipIf(!existsSync(SETUP_PS1_PATH))("preset-catalog.json matches setup.
     const validPresetsMatch = ps.match(/\$validPresets = @\(([^)]+)\)/);
     const names = [...validPresetsMatch[1].matchAll(/'([^']+)'/g)].map((m) => m[1]);
     expect(Object.keys(catalog.presets).sort()).toEqual(names.sort());
+  });
+});
+
+describe("Guard: the CLIs route the same guidance paths through the update guard as update-plan.mjs", () => {
+  const read = (rel) => readFileSync(resolve(REPO_ROOT, rel), "utf8");
+  const planPattern = read("pforge-mcp/update-plan.mjs").match(/const GUIDANCE_PATTERN = \/(.+)\/;/)[1].replace(/\\\//g, "/");
+  const ps1Pattern = read("pforge.ps1").match(/\$script:GuidancePathPattern = '([^']+)'/)[1];
+  const shPattern = read("pforge.sh").match(/_PF_GUIDANCE_PATH_RE='([^']+)'/)[1];
+
+  it("pforge.ps1 matches update-plan.mjs", () => {
+    expect(ps1Pattern).toBe(planPattern);
+  });
+
+  it("pforge.sh matches update-plan.mjs", () => {
+    expect(shPattern).toBe(planPattern);
+  });
+
+  it("covers automation templates", () => {
+    expect(new RegExp(planPattern).test(".github/automations/pforge-daily-drift.automation.md")).toBe(true);
   });
 });

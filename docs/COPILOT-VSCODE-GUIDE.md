@@ -21,6 +21,7 @@
    - [Prompt Templates, Agent Definitions & Skills](#0-use-prompt-templates-agent-definitions--skills)
 11. [Troubleshooting](#troubleshooting)
 12. [Using Plan Forge with Copilot Cloud Agent](#using-plan-forge-with-copilot-cloud-agent)
+13. [Scheduled Checks with VS Code Automations](#scheduled-checks-with-vs-code-automations)
 
 ---
 
@@ -345,6 +346,8 @@ Use the right mode for each step:
 ---
 
 ## Managing Context Budget
+
+> **Tool budget**: VS Code sends at most 128 tools per chat request across all MCP servers. Plan Forge lists its 22 `core` tools by default; the agent calls `forge_tool_profile` to load `bugs`, `liveguard`, `tempering`, `crucible`, `memory`, `code-intel`, `team` or `full` when it needs them. Set `toolProfiles` in `.forge.json` to list more from the start.
 
 Copilot has a finite context window. Large projects can exhaust it quickly. Strategies:
 
@@ -925,6 +928,22 @@ All four keys are optional — omit any you haven't decided on yet. Setting a ke
 2. Set `--preset` to your stack in the setup step
 3. Enable Copilot cloud agent on your repository (Settings → Copilot → Coding agent)
 4. Assign a GitHub issue to `@copilot` — it will provision the environment and start with your guardrails loaded
+
+---
+
+## Scheduled Checks with VS Code Automations
+
+VS Code's Agents window can run an agent task on a schedule (**Automations** in the Agents window sidebar). Setup installs Plan Forge automation templates in `.github/automations/`; they use the Plan Forge MCP server and only report:
+
+| Template | Schedule | What it reports |
+|----------|----------|-----------------|
+| `pforge-daily-drift.automation.md` | Daily, 9:00 | Drift score and trend, leaked secrets, environment-variable differences |
+| `pforge-weekly-dependencies.automation.md` | Mondays, 9:30 | Vulnerable and outdated dependencies, with an upgrade order |
+| `pforge-plan-progress.automation.md` | Daily, 17:00 | Plans in progress, failed slices and why, spend by model |
+| `pforge-weekly-health.automation.md` | Fridays, 15:00 | Installation and setup-file problems, TODO and stub markers |
+| `pforge-bug-triage.automation.md` | Manual | A proposed route for each open bug in the bug registry |
+
+To use one, select **Import Automation** in the Automations view and choose the file. Review the prompt, then pick the workspace, agent, model and permissions; the **Enabled** box starts cleared. Run it once with **Run now** before turning on the schedule, and keep in mind that every scheduled run uses your selected model. `pforge update` keeps the templates current and leaves your edited copies alone.
 
 ---
 

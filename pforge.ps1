@@ -1474,11 +1474,11 @@ function Invoke-Diff {
 
 # ─── Command: update ───────────────────────────────────────────────────
 # ─── Update guard (#280) ──────────────────────────────────────────────
-# Guidance files (instructions, prompts, agents, skills, hooks, runbooks) go
+# Guidance files (instructions, prompts, agents, skills, hooks, automations, runbooks) go
 # through pforge-mcp/update-guard.mjs from the update source. It replaces only
 # files the project has not changed, keeps customized ones (saving the new
 # version under .forge/update-pending/), and renders setup's placeholders.
-$script:GuidancePathPattern = '^(\.github/(prompts|instructions|agents|skills|hooks)/|docs/plans/)'
+$script:GuidancePathPattern = '^(\.github/(prompts|instructions|agents|skills|hooks|automations)/|docs/plans/)'
 
 function Select-GuidedFiles([object[]]$Items, [string]$SourceRoot, [string]$ProjectRoot) {
     foreach ($item in $Items) {

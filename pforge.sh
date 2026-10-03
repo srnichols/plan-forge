@@ -1739,7 +1739,7 @@ cmd_update() {
     fi
 
     local plan_rc=0 plan_json=""
-    plan_json="$(node "$update_plan_script" plan --source "$source_path" --project "$REPO_ROOT" --presets "${current_preset_raw// /}" --json)" || plan_rc=$?
+    plan_json="$(node "$update_plan_script" plan --source "$source_path" --project "$REPO_ROOT" --presets "${current_preset_raw// /}" --json --removals)" || plan_rc=$?
     if [ "$plan_rc" -ne 0 ]; then
         echo "ERROR: update-plan.mjs failed (exit code $plan_rc):" >&2
         echo "$plan_json" | sed 's/^/  /' >&2

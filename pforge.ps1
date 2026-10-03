@@ -1934,7 +1934,7 @@ function Invoke-Update {
         exit 1
     }
 
-    $planArgs = @($updatePlanScript, "plan", "--source", $sourcePath, "--project", $RepoRoot, "--presets", ($presets -join ','), "--json")
+    $planArgs = @($updatePlanScript, "plan", "--source", $sourcePath, "--project", $RepoRoot, "--presets", ($presets -join ','), "--json", "--removals")
     # Capture stdout only — merging stderr (2>&1) can interleave with stdout on
     # Windows PowerShell 5.1 and corrupt the JSON (see Invoke-UpdateGuard).
     $planJsonLines = @(& node @planArgs)

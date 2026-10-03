@@ -408,9 +408,9 @@ const OWNED_PACKAGES = Object.freeze({ "pforge-mcp": "mcp", "pforge-sdk": "sdk",
 
 /**
  * Installed files in an owned package that are never removed: dependencies,
- * run state, coverage, test scratch, lockfiles, logs and local env files.
+ * run state and config, coverage, test scratch, lockfiles, logs and local env files.
  */
-const KEEP_INSTALLED = /(^|\/)(node_modules|\.forge|coverage|\.vitest-scratch)(\/|$)|(^|\/)(package-lock\.json|npm-shrinkwrap\.json|\.env(\..*)?|[^/]*\.log)$/;
+const KEEP_INSTALLED = /(^|\/)(node_modules|\.forge|coverage|\.vitest-scratch)(\/|$)|(^|\/)(package-lock\.json|npm-shrinkwrap\.json|\.forge\.json|\.env(\..*)?|[^/]*\.log)$/;
 
 /**
  * Files in an owned package that the source release no longer ships (moved or
@@ -472,9 +472,12 @@ function dedupeByDst(operations) {
 
 /**
  * Compute the full update plan for one project against one source checkout.
+ * Remove operations are opt-in: wrappers up to 3.31.1 treat every operation
+ * that is not "new" as a copy, and a remove (src null) made them copy the
+ * source directory onto the stale file and abort half-applied.
  * @returns the Shared Contract document (docs/plans/Phase-UPDATE-CORE-PLAN.md).
  */
-export function buildPlan({ sourceRoot, projectRoot, presetsOverride = null }) {
+export function buildPlan({ sourceRoot, projectRoot, presetsOverride = null, includeRemovals = false }) {
   sourceRoot = resolve(sourceRoot);
   projectRoot = resolve(projectRoot);
 
@@ -504,7 +507,7 @@ export function buildPlan({ sourceRoot, projectRoot, presetsOverride = null }) {
     ...scanAutoDiscoverPackage({ category: "mcp", pkgDir: "pforge-mcp", sourceRoot, projectRoot }),
     ...scanAutoDiscoverPackage({ category: "sdk", pkgDir: "pforge-sdk", sourceRoot, projectRoot }),
     ...scanAutoDiscoverPackage({ category: "master", pkgDir: "pforge-master", sourceRoot, projectRoot }),
-    ...Object.entries(OWNED_PACKAGES).flatMap(([pkgDir, category]) => scanRemovedPackageFiles({ category, pkgDir, sourceRoot, projectRoot })),
+    ...(includeRemovals ? Object.entries(OWNED_PACKAGES).flatMap(([pkgDir, category]) => scanRemovedPackageFiles({ category, pkgDir, sourceRoot, projectRoot })) : []),
     ...scanRootFiles({ category: "cli", names: ["pforge.ps1", "pforge.sh"], sourceRoot, projectRoot }),
     ...scanRootFiles({ category: "validation", names: ["validate-setup.ps1", "validate-setup.sh"], sourceRoot, projectRoot }),
     ...scanRootFiles({ category: "core", names: ["pforge.ps1", "pforge.sh", "pforge"], sourceRoot, projectRoot }),
@@ -603,15 +606,16 @@ export const EXIT_OK = 0;
 export const EXIT_USAGE = 2;
 export const EXIT_SOURCE_INVALID = 3;
 
-const USAGE = "usage: update-plan.mjs <plan|report> --source <dir> --project <dir> [--presets a,b] [--json]\n"
+const USAGE = "usage: update-plan.mjs <plan|report> --source <dir> --project <dir> [--presets a,b] [--json] [--removals]\n"
   + "       update-plan.mjs remove --project <dir>   (package-relative paths on stdin, one per line)\n";
 
 function parseArgs(argv) {
   const [cmd, ...rest] = argv;
-  const opts = { cmd, json: false, presets: null, source: null, project: null };
+  const opts = { cmd, json: false, removals: false, presets: null, source: null, project: null };
   for (let i = 0; i < rest.length; i++) {
     const arg = rest[i];
     if (arg === "--json") opts.json = true;
+    else if (arg === "--removals") opts.removals = true;
     else if (arg === "--source") opts.source = rest[++i];
     else if (arg === "--project") opts.project = rest[++i];
     else if (arg === "--presets") opts.presets = rest[++i];
@@ -643,7 +647,7 @@ function runPlanCommand(opts, { stdout, stderr }) {
   const presetsOverride = opts.presets ? opts.presets.split(",").map((s) => s.trim()).filter(Boolean) : null;
   let plan;
   try {
-    plan = buildPlan({ sourceRoot: opts.source, projectRoot: opts.project, presetsOverride });
+    plan = buildPlan({ sourceRoot: opts.source, projectRoot: opts.project, presetsOverride, includeRemovals: opts.removals });
   } catch (err) {
     stderr.write(`${err.message}\n`);
     return err.code === "ERR_SOURCE_INVALID" ? EXIT_SOURCE_INVALID : EXIT_USAGE;

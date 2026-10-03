@@ -586,7 +586,7 @@ describe("removed package files", () => {
 
   it("lists files the release no longer ships as remove operations", () => {
     const { source, project } = setup();
-    const plan = buildPlan({ sourceRoot: source, projectRoot: project });
+    const plan = buildPlan({ sourceRoot: source, projectRoot: project, includeRemovals: true });
     expect(findOp(plan, "pforge-mcp/tests/forge-master.test.mjs")).toMatchObject({ category: "mcp", action: "remove", src: null, guided: false });
     expect(findOp(plan, "pforge-mcp/notifications/adapter-contract.mjs")).toMatchObject({ action: "remove" });
     expect(findOp(plan, "pforge-master/old-module.mjs")).toMatchObject({ category: "master", action: "remove" });
@@ -597,9 +597,9 @@ describe("removed package files", () => {
     for (const rel of [
       "pforge-mcp/node_modules/dep/index.js", "pforge-mcp/.forge/state.json", "pforge-mcp/coverage/index.html",
       "pforge-mcp/.vitest-scratch/x/.forge/run.json", "pforge-master/package-lock.json", "pforge-mcp/server.log",
-      "pforge-mcp/.env", "pforge-mcp/.env.local",
+      "pforge-mcp/.env", "pforge-mcp/.env.local", "pforge-mcp/.forge.json",
     ]) write(project, rel, "keep\n");
-    const removed = buildPlan({ sourceRoot: source, projectRoot: project }).operations.filter((o) => o.action === "remove").map((o) => o.dst);
+    const removed = buildPlan({ sourceRoot: source, projectRoot: project, includeRemovals: true }).operations.filter((o) => o.action === "remove").map((o) => o.dst);
     expect(removed.sort()).toEqual([
       "pforge-master/old-module.mjs", "pforge-mcp/notifications/adapter-contract.mjs", "pforge-mcp/tests/forge-master.test.mjs",
     ]);
@@ -609,7 +609,7 @@ describe("removed package files", () => {
     const source = makeSourceRoot();
     const project = makeProjectRoot({ preset: "custom" });
     write(project, "pforge-sdk/index.mjs", "local\n");
-    expect(buildPlan({ sourceRoot: source, projectRoot: project }).operations.some((o) => o.action === "remove")).toBe(false);
+    expect(buildPlan({ sourceRoot: source, projectRoot: project, includeRemovals: true }).operations.some((o) => o.action === "remove")).toBe(false);
   });
 
   it("removes nothing when the source package is partial (no package.json)", () => {
@@ -617,12 +617,27 @@ describe("removed package files", () => {
     const project = makeProjectRoot({ preset: "custom" });
     write(source, "pforge-mcp/update-plan.mjs", "runtime only\n");
     write(project, "pforge-mcp/update-from-github.mjs", "still needed\n");
+    expect(buildPlan({ sourceRoot: source, projectRoot: project, includeRemovals: true }).operations.some((o) => o.action === "remove")).toBe(false);
+  });
+
+  // 3.31.1 and older wrappers treat every operation that is not "new" as a
+  // copy; a remove operation (src null) made them copy the source directory
+  // onto the stale file and abort the update half-applied.
+  it("plans no removals unless the caller asks, so older wrappers keep working", () => {
+    const { source, project } = setup();
     expect(buildPlan({ sourceRoot: source, projectRoot: project }).operations.some((o) => o.action === "remove")).toBe(false);
+    const cliPlan = (extra) => {
+      let out = "";
+      runCli(["plan", "--source", source, "--project", project, "--json", ...extra], { stdout: { write: (t) => { out += t; } }, stderr: { write: () => {} } });
+      return JSON.parse(out).operations.filter((o) => o.action === "remove").map((o) => o.dst);
+    };
+    expect(cliPlan([])).toEqual([]);
+    expect(cliPlan(["--removals"])).toContain("pforge-mcp/tests/forge-master.test.mjs");
   });
 
   it("reports removals", () => {
     const { source, project } = setup();
-    expect(renderReport(buildPlan({ sourceRoot: source, projectRoot: project }))).toMatch(/^ {2}REMOVE {2}pforge-mcp\/tests\/forge-master\.test\.mjs$/m);
+    expect(renderReport(buildPlan({ sourceRoot: source, projectRoot: project, includeRemovals: true }))).toMatch(/^ {2}REMOVE {2}pforge-mcp\/tests\/forge-master\.test\.mjs$/m);
   });
 
   it("removePackageFiles moves files to a dated backup and prunes empty folders", () => {

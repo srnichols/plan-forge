@@ -73,6 +73,9 @@
     { "label": "runs record cache tokens in cost history (3.31.2)", "path": "pforge-mcp/orchestrator/run-plan.mjs", "contains": "total_cache_read_tokens" },
     { "label": "background run-plan log is UTF-8 on Windows (3.31.2)", "path": "pforge.ps1", "contains": "function Get-BackgroundHostCommand" },
     { "label": "pforge.ps1 self-update succeeds when already current (3.31.3)", "path": "pforge.ps1", "contains": "if (-not $dryRun) { $script:UpdateApplied = $true }" },
-    { "label": "pforge.sh self-update succeeds when already current (3.31.3)", "path": "pforge.sh", "contains": "$dry_run || _PF_UPDATE_APPLIED=1" }
+    { "label": "pforge.sh self-update succeeds when already current (3.31.3)", "path": "pforge.sh", "contains": "$dry_run || _PF_UPDATE_APPLIED=1" },
+    { "label": "update planner removes files only when asked (3.31.4)", "path": "pforge-mcp/update-plan.mjs", "contains": "includeRemovals = false" },
+    { "label": "pforge.ps1 asks the planner for removals (3.31.4)", "path": "pforge.ps1", "contains": "\"--json\", \"--removals\")" },
+    { "label": "pforge.sh asks the planner for removals (3.31.4)", "path": "pforge.sh", "contains": "--json --removals)" }
   ]
 }

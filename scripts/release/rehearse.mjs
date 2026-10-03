@@ -29,6 +29,7 @@ import {
 
 const REPO_DEFAULT = resolve(fileURLToPath(new URL("../..", import.meta.url)));
 const CONSUMER_VERSION = "9.8.7";
+const STALE_PACKAGE_FILE = "pforge-mcp/stale-from-older-release.mjs";
 const MARKER = "<!-- consumer-marker -->";
 const GUARD_MARKER = "<!-- guard-marker -->";
 const GIT_WORKFLOW = ".github/instructions/git-workflow.instructions.md";
@@ -103,8 +104,19 @@ function prepareOldConsumer(ctx, shell, name) {
   appendFileSync(join(project, ".github/copilot-instructions.md"), `\n${MARKER}\n`);
   appendFileSync(join(project, ".github/instructions/deploy.instructions.md"), `\n${MARKER}\n`);
   writeFileSync(join(project, "VERSION"), CONSUMER_VERSION);
+  // Long-lived projects carry package files later releases dropped, and
+  // package-local run config. 3.31.2's planner broke the 3.31.1 wrapper on
+  // the first: fresh previous-release installs had none, so nothing caught it.
+  writeFileSync(join(project, STALE_PACKAGE_FILE), "export {};\n");
+  writeFileSync(join(project, "pforge-mcp/.forge.json"), "{}\n");
   commitAll(project, "consumer on previous release");
   return project;
+}
+
+/** After an update with the new wrapper: the dropped file is backed up and gone, run config kept. */
+function assertStaleFileRemoved(ctx, tag, project) {
+  ctx.checks.add(`${tag} removed a package file the release no longer ships`, !existsSync(join(project, STALE_PACKAGE_FILE)) && findFile(join(project, ".forge/update-backups"), "stale-from-older-release.mjs"));
+  ctx.checks.add(`${tag} kept the package's .forge.json`, existsSync(join(project, "pforge-mcp/.forge.json")));
 }
 
 function editGitWorkflow(project) {
@@ -144,6 +156,7 @@ function updatePowerShell(ctx) {
   assertRelease(ctx, `${name}#3`, project);
   assertGuardKept(ctx, `${name}#3`, project, name);
   assertConsumerKept(ctx, `${name}#3`, project);
+  assertStaleFileRemoved(ctx, `${name}#3`, project);
 
   run(["update", "src", "--force", "--overwrite-customized"], `${name}-update4.log`);
   ctx.checks.add(`${name} --overwrite-customized replaced git-workflow`, !has(join(project, GIT_WORKFLOW), GUARD_MARKER));
@@ -171,6 +184,7 @@ function updateBash(ctx) {
   assertConsumerKept(ctx, `${name}#2`, project);
   ctx.checks.add(`${name} new wrapper reports KEEP for the edited file`, has(second.log, "KEEP"));
   assertGuardKept(ctx, `${name}#2`, project, name);
+  assertStaleFileRemoved(ctx, `${name}#2`, project);
 }
 
 const NPM_TIMEOUT_MS = 600_000;

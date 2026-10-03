@@ -123,6 +123,11 @@ describe("Guard: self-update hands its confirmation to update and checks the res
     expect(check).toBeLessThan(ps1Self.indexOf("if ($verify)"));
   });
 
+  it("both shells ask the planner for removals (older wrappers do not, and must not get them)", () => {
+    expect(PS1).toMatch(/\$planArgs = @\(\$updatePlanScript, "plan",[^\n]*"--json", "--removals"\)/);
+    expect(SH).toMatch(/node "\$update_plan_script" plan [^\n]*--json --removals\)/);
+  });
+
   // v3.31.2's public verification: `self-update --force` on a project already
   // at the latest release found nothing to copy and exited 1 as "not installed".
   it("both shells count an up-to-date project as installed", () => {

@@ -1,6 +1,6 @@
 # Phase UPDATE-CORE — One Node implementation of the update scan and setup's preset tables
 
-> **Status**: 🔬 HARDENED 2026-10-02 — on Execution Hold until v3.29.0 ships (see below)
+> **Status**: 🔬 HARDENED — cleared for execution 2026-10-02 (hold lifted: v3.29.3 is the released baseline)
 > **Issue**: [#299](https://github.com/srnichols/plan-forge/issues/299)
 > **Tracks**: `pforge-mcp/update-plan.mjs` (new), `pforge-mcp/preset-catalog.json` (new), `pforge.ps1` `Invoke-Update`, `pforge.sh` `cmd_update`, `setup.ps1`, `setup.sh`, tests.
 > **Pipeline**: Specify ✅ → Harden ✅ → Execute ⏸️ → Review → Ship (3.30.0)
@@ -12,9 +12,9 @@
 
 Lift the hold only when all of these are true:
 
-- [ ] v3.29.0 is tagged and released. This phase rewrites the updater that 3.29.0 ships, so it must start from a released baseline that `scripts/release/rehearse.mjs` can update *from*.
-- [ ] No other in-flight plan is editing `pforge.ps1`, `pforge.sh`, `setup.ps1` or `setup.sh`.
-- [ ] `git status` is clean on `planning/main`.
+- [x] v3.29.0 is tagged and released (3.29.0–3.29.3 shipped). This phase rewrites the updater that 3.29.0 ships, so it must start from a released baseline that `scripts/release/rehearse.mjs` can update *from*.
+- [x] No other in-flight plan is editing `pforge.ps1`, `pforge.sh`, `setup.ps1` or `setup.sh`.
+- [x] `git status` is clean on `planning/main`.
 
 **To resume**: set Status to `HARDENED — cleared for execution YYYY-MM-DD` and run `pforge run-plan docs/plans/Phase-UPDATE-CORE-PLAN.md`.
 
@@ -137,6 +137,8 @@ npx --prefix pforge-mcp vitest run pforge-mcp/tests/update-plan-baseline.test.mj
 
 ### Slice 2: update-plan.mjs scan and migration [depends: Slice 1] [scope: pforge-mcp/update-plan.mjs, pforge-mcp/preset-catalog.json, pforge-mcp/tests/update-plan.test.mjs]
 
+**WorkerTimeoutMs**: 90m
+
 1. Create `pforge-mcp/preset-catalog.json` with the values `setup.ps1` and `setup.sh` use today. Add a test that `setup-preset-defaults.test.mjs`'s expectations match the catalog.
 2. Create `pforge-mcp/update-plan.mjs` with the `plan` and `report` commands from the Shared Contract. Port each category from `Invoke-Update` (prompts, agents, internal and shared instructions with preset ownership, runbook docs, preset files, hooks, shared skills, MCP/SDK/Forge-Master recursive scans, CLI, validation and core files, dedupe). Use `detect-preset.mjs` when `.forge.json` has no preset. Apply D1 and D2.
 3. Write `update-plan.test.mjs`: one test per category, the never-update list, preset ownership of `testing` and `security`, D1 and D2, and output-shape validation against the Shared Contract.
@@ -150,6 +152,8 @@ node pforge-mcp/update-plan.mjs plan --source . --project pforge-mcp/tests/fixtu
 
 ### Slice 3: PowerShell uses update-plan.mjs [depends: Slice 2] [scope: pforge.ps1]
 
+**WorkerTimeoutMs**: 60m
+
 1. In `Invoke-Update`, replace everything from "Define update categories" through the "Report" section with a call to `update-plan.mjs plan --json` and `report`. Map `operations` back into the existing `$updates`, `$newFiles` and guided lists, so the confirm, apply, guard, pending and self-replace steps stay unchanged.
 2. Keep the existing `migrate-forge-config.mjs` call after the copy step (added in 3.29); do not reimplement migration.
 3. Fall back with a clear error if the source has no `update-plan.mjs`. That means a source older than 3.30, so tell the user to self-update.
@@ -161,6 +165,8 @@ npx --prefix pforge-mcp vitest run pforge-mcp/tests/update-guard-cli.test.mjs pf
 ```
 
 ### Slice 4: Bash uses update-plan.mjs [depends: Slice 2] [scope: pforge.sh]
+
+**WorkerTimeoutMs**: 60m
 
 1. In `cmd_update`, replace the `_pf_check` scan, category loops and report with the same `update-plan.mjs` calls. Parse `--json` with `node -e`, never `python3` or `grep -P` (#297).
 2. Keep the existing `migrate-forge-config.mjs` call (added in 3.29, closing D2).

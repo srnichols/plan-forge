@@ -28,6 +28,9 @@ const ROOT = process.cwd();
 const OUT_DIR = auditRawDir(ROOT);
 const OUT_FILE = path.join(OUT_DIR, 'boyscout-delta-report.json');
 const ESLINT_CONFIG = path.join('scripts', 'audit', 'eslint-clean-code.config.mjs');
+// Run the repo's own ESLint with node: no shell parsing the arguments, and no
+// `npx --yes` fetching a package when node_modules is missing.
+const ESLINT_BIN = path.join(ROOT, 'node_modules', 'eslint', 'bin', 'eslint.js');
 
 const TRACKED_RULES = new Set([
   'complexity-error',
@@ -99,14 +102,13 @@ function globToRegex(glob) {
 function eslintCountForSource(source, virtualPath) {
   // Use --stdin / --stdin-filename so the existing flat config's `files: ['pforge-mcp/**/*.mjs', ...]`
   // glob still matches via the virtual path; avoids writing temp files outside the project tree.
-  const result = run('npx', [
-    '--yes',
-    'eslint',
+  const result = run(process.execPath, [
+    ESLINT_BIN,
     '--config', ESLINT_CONFIG,
     '--format', 'json',
     '--stdin',
     '--stdin-filename', virtualPath
-  ], { shell: process.platform === 'win32', input: source });
+  ], { input: source });
   if (!result.stdout) {
     return { perRule: {}, total: 0, error: result.stderr?.trim() ?? 'no eslint output' };
   }

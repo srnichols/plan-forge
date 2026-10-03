@@ -1,4 +1,4 @@
-<#
+﻿<#
 .SYNOPSIS
     pforge — CLI wrapper for the Plan Forge Pipeline
 

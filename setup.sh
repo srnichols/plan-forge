@@ -1207,18 +1207,21 @@ cyan "Step 2: Shared instruction files"
 #   presets/shared/.github/instructions/   — consumer-facing genericized versions (no Plan-Forge-internal references)
 #   templates/.github/instructions/        — pure templates
 # aci-design.instructions.md intentionally NOT shipped — it governs MCP tool authoring, which consumers don't typically do.
-SHARED_FILES=(
-    ".github/instructions/ai-plan-hardening-runbook.instructions.md"
-    "presets/shared/.github/instructions/architecture-principles.instructions.md:.github/instructions/architecture-principles.instructions.md"
-    "presets/shared/.github/instructions/clean-code.instructions.md:.github/instructions/clean-code.instructions.md"
-    ".github/instructions/context-fuel.instructions.md"
-    ".github/instructions/git-workflow.instructions.md"
-    "presets/shared/.github/instructions/security.instructions.md:.github/instructions/security.instructions.md"
-    "presets/shared/.github/instructions/self-repair-reporting.instructions.md:.github/instructions/self-repair-reporting.instructions.md"
-    "presets/shared/.github/instructions/status-reporting.instructions.md:.github/instructions/status-reporting.instructions.md"
-    "presets/shared/.github/instructions/testing.instructions.md:.github/instructions/testing.instructions.md"
-    "templates/.github/instructions/project-principles.instructions.md:.github/instructions/project-principles.instructions.md"
-)
+# The file names themselves live in pforge-mcp/preset-catalog.json (internalInstructions /
+# sharedInstructions) so this list can't drift from update-plan.mjs's instruction categories (#299).
+PRESET_CATALOG_PATH="$TEMPLATE_ROOT/pforge-mcp/preset-catalog.json"
+mapfile -t _INTERNAL_INSTRUCTIONS < <(node -p "JSON.parse(require('node:fs').readFileSync(0,'utf8')).internalInstructions.join('\n')" < "$PRESET_CATALOG_PATH")
+mapfile -t _SHARED_INSTRUCTIONS < <(node -p "JSON.parse(require('node:fs').readFileSync(0,'utf8')).sharedInstructions.join('\n')" < "$PRESET_CATALOG_PATH")
+SHARED_FILES=()
+for _name in "${_INTERNAL_INSTRUCTIONS[@]}"; do
+    SHARED_FILES+=(".github/instructions/$_name")
+done
+for _name in "${_SHARED_INSTRUCTIONS[@]}"; do
+    SHARED_FILES+=("presets/shared/.github/instructions/$_name:.github/instructions/$_name")
+done
+# project-principles.instructions.md is a pure template, not a shipped instruction file,
+# so it isn't part of preset-catalog.json's internal/shared lists.
+SHARED_FILES+=("templates/.github/instructions/project-principles.instructions.md:.github/instructions/project-principles.instructions.md")
 
 # A selected stack preset's own copy (e.g. testing or security) wins over the shared
 # one. Copying the shared file first would make Step 3 skip the preset's (#280).

@@ -1285,17 +1285,20 @@ Write-Host "Step 2: Shared instruction files" -ForegroundColor Cyan
 #   presets/shared/.github/instructions/   — consumer-facing genericized versions (no Plan-Forge-internal references)
 #   templates/.github/instructions/        — pure templates
 # aci-design.instructions.md intentionally NOT shipped — it governs MCP tool authoring, which consumers don't typically do.
+# The file names themselves live in pforge-mcp/preset-catalog.json (internalInstructions /
+# sharedInstructions) so this list can't drift from update-plan.mjs's instruction categories (#299).
+$presetCatalogPath = Join-Path $templateRoot 'pforge-mcp/preset-catalog.json'
+$presetCatalog = Get-Content $presetCatalogPath -Raw | ConvertFrom-Json
 $sharedFiles = @(
-    @{ Src = ".github/instructions/ai-plan-hardening-runbook.instructions.md";       Dst = ".github/instructions/ai-plan-hardening-runbook.instructions.md" }
-    @{ Src = "presets/shared/.github/instructions/architecture-principles.instructions.md"; Dst = ".github/instructions/architecture-principles.instructions.md" }
-    @{ Src = "presets/shared/.github/instructions/clean-code.instructions.md";       Dst = ".github/instructions/clean-code.instructions.md" }
-    @{ Src = ".github/instructions/context-fuel.instructions.md";                    Dst = ".github/instructions/context-fuel.instructions.md" }
-    @{ Src = ".github/instructions/git-workflow.instructions.md";                    Dst = ".github/instructions/git-workflow.instructions.md" }
-    @{ Src = "presets/shared/.github/instructions/security.instructions.md";         Dst = ".github/instructions/security.instructions.md" }
-    @{ Src = "presets/shared/.github/instructions/self-repair-reporting.instructions.md"; Dst = ".github/instructions/self-repair-reporting.instructions.md" }
-    @{ Src = "presets/shared/.github/instructions/status-reporting.instructions.md"; Dst = ".github/instructions/status-reporting.instructions.md" }
-    @{ Src = "presets/shared/.github/instructions/testing.instructions.md";          Dst = ".github/instructions/testing.instructions.md" }
-    @{ Src = "templates/.github/instructions/project-principles.instructions.md";    Dst = ".github/instructions/project-principles.instructions.md" }
+    foreach ($name in $presetCatalog.internalInstructions) {
+        @{ Src = ".github/instructions/$name"; Dst = ".github/instructions/$name" }
+    }
+    foreach ($name in $presetCatalog.sharedInstructions) {
+        @{ Src = "presets/shared/.github/instructions/$name"; Dst = ".github/instructions/$name" }
+    }
+    # project-principles.instructions.md is a pure template, not a shipped instruction file,
+    # so it isn't part of preset-catalog.json's internal/shared lists.
+    @{ Src = "templates/.github/instructions/project-principles.instructions.md"; Dst = ".github/instructions/project-principles.instructions.md" }
 )
 
 # A selected stack preset's own copy (e.g. testing or security) wins over the shared

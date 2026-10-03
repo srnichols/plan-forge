@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Plan Forge Manual — Complete Offline Edition</title>
-  <meta name="description" content="Plan Forge Manual — complete single-page offline edition. 79 chapters and appendices. Generated 2026-10-03 15:01:49 UTC." />
+  <meta name="description" content="Plan Forge Manual — complete single-page offline edition. 79 chapters and appendices. Generated 2026-10-03 17:32:11 UTC." />
   <meta name="generator" content="Plan Forge export.mjs" />
   <link rel="icon" type="image/svg+xml" href="../assets/plan-forge-logo.svg" />
   <link rel="stylesheet" href="../assets/tailwind.built.css" />
@@ -124,8 +124,8 @@
   <h1>📚 Plan Forge Manual</h1>
   <p class="export-subtitle">Complete offline edition &mdash; 79 chapters &amp; appendices</p>
   <p class="export-meta">
-    Generated 2026-10-03 15:01:49 UTC
-    &middot; content hash <code>d2e02ce8bfa940aa</code>
+    Generated 2026-10-03 17:32:11 UTC
+    &middot; content hash <code>b284a2dd8bc9b9e0</code>
     &middot; vv3.6.2
     &middot; <a href="https://planforge.software/" rel="noopener">Main site ↗</a>
     &middot; <a href="index.html">Online version ↗</a>
@@ -4812,7 +4812,8 @@ forge_diagnose({ file: "src/auth/token-validator.ts", models: "grok-4.20-0309-no
             <tbody>
               <tr><td><code>source</code></td><td>path (optional)</td><td>Plan Forge source path (auto-detects <code>../plan-forge</code>)</td></tr>
               <tr><td><code>--dry-run</code></td><td>boolean</td><td>Preview changes without applying</td></tr>
-              <tr><td><code>--force</code></td><td>boolean</td><td>Skip confirmation prompt</td></tr>
+              <tr><td><code>--yes</code>, <code>-y</code></td><td>boolean</td><td><strong>v3.31.2+</strong> — Skip the confirmation prompt (for unattended runs)</td></tr>
+              <tr><td><code>--force</code></td><td>boolean</td><td>Skip the confirmation prompt and apply the update even when the source is the version you already have</td></tr>
               <tr><td><code>--overwrite-customized</code></td><td>boolean</td><td><strong>v3.28.0+</strong> — Also replace guidance files you edited. Each one is copied to <code>.forge/update-backups/&lt;timestamp&gt;/</code> first.</td></tr>
             </tbody>
           </table>
@@ -4848,6 +4849,9 @@ forge_diagnose({ file: "src/auth/token-validator.ts", models: "grok-4.20-0309-no
           </ul>
           <p>Use <code>--all</code> instead of a path to act on every file. Without <code>--yes</code>, <code>apply</code> and <code>discard</code> only show what they would do.</p>
 
+          <h3>Files a release removed</h3>
+          <p>Since v3.31.2, update also lists files in <code>pforge-mcp/</code>, <code>pforge-master/</code> and <code>pforge-sdk/</code> that the new release no longer ships as <code>REMOVE</code>, and moves them to <code>.forge/update-backups/&lt;timestamp&gt;/</code> when it applies. Installed dependencies, <code>.forge/</code>, lockfiles, logs and <code>.env</code> files in those folders are never touched.</p>
+
           <div class="callout callout-info" class="callout-sm">
             <strong>Updating to v3.28.0 from an older version</strong>: the update runs the script you already have, so this protection starts with the first update after v3.28.0. If you have edited guidance files, commit before updating so you can review and restore them with git, or replace <code>pforge.ps1</code> / <code>pforge.sh</code> with the v3.28.0 copy first and then run the update.
           </div>
@@ -4865,7 +4869,7 @@ forge_diagnose({ file: "src/auth/token-validator.ts", models: "grok-4.20-0309-no
           <table class="manual-table">
             <thead><tr><th>Flag</th><th>Type</th><th>Description</th></tr></thead>
             <tbody>
-              <tr><td><code>--yes</code>, <code>-y</code></td><td>boolean</td><td>Skip the "Install vX.Y.Z now? [Y/n]" confirmation prompt</td></tr>
+              <tr><td><code>--yes</code>, <code>-y</code></td><td>boolean</td><td>Skip the "Install vX.Y.Z now? [Y/n]" confirmation prompt. Before v3.31.2, the update it started still asked its own question and, with nobody to answer, cancelled; on those versions run <code>pforge self-update --yes --force</code> unattended</td></tr>
               <tr><td><code>--dry-run</code></td><td>boolean</td><td>Print what would happen (target tag, downgrade detection) without writing anything</td></tr>
               <tr><td><code>--force</code></td><td>boolean</td><td>Heal an already-current install — reinstalls the latest tagged release even when the local VERSION matches. Useful when a corrupt <code>-dev</code> tarball needs replacing</td></tr>
               <tr><td><code>--downgrade</code></td><td>boolean</td><td>Required with <code>--force</code> when the latest release is OLDER than the local version (e.g. recovering from a manual VERSION edit). Without it, <code>self-update</code> refuses to silently downgrade.</td></tr>
@@ -21207,7 +21211,7 @@ switch ($LASTEXITCODE) {
 
 <!-- Footer -->
 <footer style="max-width:56rem;margin:3rem auto;padding:1.5rem;font-size:0.75rem;color:#475569;border-top:1px solid #1e293b;font-family:'JetBrains Mono',monospace;">
-  <p>Plan Forge Manual &mdash; offline edition &mdash; generated 2026-10-03 15:01:49 UTC &mdash; hash <code>d2e02ce8bfa940aa</code></p>
+  <p>Plan Forge Manual &mdash; offline edition &mdash; generated 2026-10-03 17:32:11 UTC &mdash; hash <code>b284a2dd8bc9b9e0</code></p>
   <p>Regenerate with: <code>node docs/manual/export.mjs</code> &mdash; <a href="https://planforge.software/" style="color:#f59e0b;" rel="noopener">Main site</a> &mdash; <a href="index.html" style="color:#f59e0b;">Online version</a> &mdash; <a href="https://github.com/srnichols/plan-forge" style="color:#f59e0b;" rel="noopener">GitHub</a></p>
 </footer>
 

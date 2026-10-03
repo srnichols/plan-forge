@@ -36,22 +36,21 @@ VS Code Configuration:
   ✅ chat.promptFiles = true
 
 Setup Health:
-  ✅ .forge.json valid (preset: dotnet, v3.29.0-dev)
+  ✅ .forge.json valid (preset: dotnet, v3.31.1)
   ✅ Agent: copilot (configured)
   ✅ .github/copilot-instructions.md exists
-  ✅ 23 instruction files (expected: >=15 for dotnet)
+  ✅ 25 instruction files (expected: >=15 for dotnet)
   ✅ 20 agent definitions (expected: >=17 for dotnet)
   ✅ 23 prompt templates (expected: >=9 for dotnet)
   ✅ Pipeline prompts present (step0-step6 + project-profile)
   ✅ 17 skills (expected: >=8 for dotnet)
 
 Version Currency:
-  ⚠️  Installed v3.29.0-dev — latest is v3.28.1
-     FIX: Run 'pforge self-update' to upgrade
-     (cached 21m ago)
+  ✅ Up to date (v3.31.1)
+     (cached 13m ago)
 
 Auto-update:
-  ✅ Auto-update: disabled (opt-in) | Cache age: 73m | Last tag: v3.29.0-dev | Last check: 10/02/2026 15:47:33
+  ✅ Auto-update: disabled (opt-in) | Cache age: 14m | Last tag: v3.31.1 | Last check: 10/03/2026 17:05:29
      Tip: Run 'pforge self-update' to check + install, or 'pforge smith --refresh-version-cache' to clear cache
 
 MCP Server:
@@ -73,7 +72,7 @@ MCP Runtime:
   ✅ ws (WebSocket hub for real-time events) v8.21.3
   ✅ Playwright (screenshot capture)
   ✅ forge-master-routes.mjs (Phase-29 route wiring)
-  ✅ tools.json + cli-schema.json (105 MCP tools registered)
+  ✅ tools.json + cli-schema.json (106 MCP tools registered)
 
 Forge-Master Studio (Phase-29):
   ✅ pforge-master/server.mjs
@@ -96,8 +95,8 @@ Extensions:
   ✅ Spec Kit compatible
 
 Version & Changelog:
-  ✅ VERSION: 3.22.2
-  ✅ CHANGELOG.md present (framework v3.22.2 — downstream CHANGELOG tracks your app, not pforge)
+  ✅ Project VERSION: 3.22.2 (your project's file; Plan Forge does not change it)
+  ✅ CHANGELOG.md present (tracks your project, not Plan Forge)
 
 Common Problems:
   ✅ No common problems detected
@@ -112,7 +111,7 @@ Intelligence:
   ✅ Cost history present — estimate calibration active
   ✅ LiveGuard memories: 1 captured finding(s)
   ✅ OpenBrain queue: 0 thought(s) pending ingestion
-  ✅ 105 MCP tools (14 LiveGuard) in tools.json
+  ✅ 106 MCP tools (14 LiveGuard) in tools.json
 
 Crucible:
   ✅ No smelts yet — run 'forge_crucible_submit' to start the funnel
@@ -131,7 +130,7 @@ Timeline / Search sources:
   ✅ 2 of 6 L2 source(s) with indexable events
 
 ────────────────────────────────────────────────────
-  Results:  61 passed  |  0 failed  |  5 warnings
+  Results:  62 passed  |  0 failed  |  4 warnings
 ────────────────────────────────────────────────────
 
-5 warning(s) — review the suggestions above.
+4 warning(s) — review the suggestions above.

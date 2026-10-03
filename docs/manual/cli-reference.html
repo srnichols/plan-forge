@@ -514,7 +514,8 @@ forge_diagnose({ file: "src/auth/token-validator.ts", models: "grok-4.20-0309-no
             <tbody>
               <tr><td><code>source</code></td><td>path (optional)</td><td>Plan Forge source path (auto-detects <code>../plan-forge</code>)</td></tr>
               <tr><td><code>--dry-run</code></td><td>boolean</td><td>Preview changes without applying</td></tr>
-              <tr><td><code>--force</code></td><td>boolean</td><td>Skip confirmation prompt</td></tr>
+              <tr><td><code>--yes</code>, <code>-y</code></td><td>boolean</td><td><strong>v3.31.2+</strong> — Skip the confirmation prompt (for unattended runs)</td></tr>
+              <tr><td><code>--force</code></td><td>boolean</td><td>Skip the confirmation prompt and apply the update even when the source is the version you already have</td></tr>
               <tr><td><code>--overwrite-customized</code></td><td>boolean</td><td><strong>v3.28.0+</strong> — Also replace guidance files you edited. Each one is copied to <code>.forge/update-backups/&lt;timestamp&gt;/</code> first.</td></tr>
             </tbody>
           </table>
@@ -550,6 +551,9 @@ forge_diagnose({ file: "src/auth/token-validator.ts", models: "grok-4.20-0309-no
           </ul>
           <p>Use <code>--all</code> instead of a path to act on every file. Without <code>--yes</code>, <code>apply</code> and <code>discard</code> only show what they would do.</p>
 
+          <h3>Files a release removed</h3>
+          <p>Since v3.31.2, update also lists files in <code>pforge-mcp/</code>, <code>pforge-master/</code> and <code>pforge-sdk/</code> that the new release no longer ships as <code>REMOVE</code>, and moves them to <code>.forge/update-backups/&lt;timestamp&gt;/</code> when it applies. Installed dependencies, <code>.forge/</code>, lockfiles, logs and <code>.env</code> files in those folders are never touched.</p>
+
           <div class="callout callout-info" class="callout-sm">
             <strong>Updating to v3.28.0 from an older version</strong>: the update runs the script you already have, so this protection starts with the first update after v3.28.0. If you have edited guidance files, commit before updating so you can review and restore them with git, or replace <code>pforge.ps1</code> / <code>pforge.sh</code> with the v3.28.0 copy first and then run the update.
           </div>
@@ -567,7 +571,7 @@ forge_diagnose({ file: "src/auth/token-validator.ts", models: "grok-4.20-0309-no
           <table class="manual-table">
             <thead><tr><th>Flag</th><th>Type</th><th>Description</th></tr></thead>
             <tbody>
-              <tr><td><code>--yes</code>, <code>-y</code></td><td>boolean</td><td>Skip the "Install vX.Y.Z now? [Y/n]" confirmation prompt</td></tr>
+              <tr><td><code>--yes</code>, <code>-y</code></td><td>boolean</td><td>Skip the "Install vX.Y.Z now? [Y/n]" confirmation prompt. Before v3.31.2, the update it started still asked its own question and, with nobody to answer, cancelled; on those versions run <code>pforge self-update --yes --force</code> unattended</td></tr>
               <tr><td><code>--dry-run</code></td><td>boolean</td><td>Print what would happen (target tag, downgrade detection) without writing anything</td></tr>
               <tr><td><code>--force</code></td><td>boolean</td><td>Heal an already-current install — reinstalls the latest tagged release even when the local VERSION matches. Useful when a corrupt <code>-dev</code> tarball needs replacing</td></tr>
               <tr><td><code>--downgrade</code></td><td>boolean</td><td>Required with <code>--force</code> when the latest release is OLDER than the local version (e.g. recovering from a manual VERSION edit). Without it, <code>self-update</code> refuses to silently downgrade.</td></tr>

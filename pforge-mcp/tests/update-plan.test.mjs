@@ -21,8 +21,10 @@ import {
   EXIT_OK,
   EXIT_USAGE,
   EXIT_SOURCE_INVALID,
+  removePackageFiles,
 } from "../update-plan.mjs";
 import { contentHash } from "../update-guard.mjs";
+import { IS_PLAN_FORGE_SOURCE } from "./helpers/source-repo.mjs";
 
 const REPO_ROOT = resolve(import.meta.dirname, "..", "..");
 const FIXTURES_ROOT = resolve(import.meta.dirname, "fixtures", "update-plan");
@@ -33,7 +35,7 @@ const VALID_CATEGORIES = new Set([
   "prompts", "agents", "instructions", "runbook", "preset", "skills",
   "hooks", "automations", "mcp", "sdk", "master", "cli", "validation", "core",
 ]);
-const VALID_ACTIONS = new Set(["new", "update"]);
+const VALID_ACTIONS = new Set(["new", "update", "remove"]);
 const VALID_PRESET_SOURCES = new Set(["forge.json", "detected", "default"]);
 
 const tmpDirs = [];
@@ -499,7 +501,7 @@ describe.each(CASES)("update-plan matches the Slice 1 baseline + D1: %s", (caseN
 
 // ───────────────────────────── catalog ↔ setup.ps1 parity ──────────────────
 
-describe.skipIf(!existsSync(SETUP_PS1_PATH))("preset-catalog.json matches setup.ps1's preset tables", () => {
+describe.skipIf(!IS_PLAN_FORGE_SOURCE)("preset-catalog.json matches setup.ps1's preset tables", () => {
   const catalog = JSON.parse(readFileSync(CATALOG_PATH, "utf8"));
   const ps = existsSync(SETUP_PS1_PATH) ? readFileSync(SETUP_PS1_PATH, "utf8").replace(/\r\n/g, "\n") : "";
 
@@ -556,5 +558,87 @@ describe("Guard: the CLIs route the same guidance paths through the update guard
 
   it("covers automation templates", () => {
     expect(new RegExp(planPattern).test(".github/automations/pforge-daily-drift.automation.md")).toBe(true);
+  });
+});
+
+describe("removed package files", () => {
+  const setup = () => {
+    const source = makeSourceRoot();
+    const project = makeProjectRoot({ preset: "custom" });
+    for (const pkg of ["pforge-mcp", "pforge-master", "pforge-sdk"]) {
+      write(source, `${pkg}/package.json`, `{"name":"${pkg}"}\n`);
+      write(project, `${pkg}/package.json`, `{"name":"${pkg}"}\n`);
+    }
+    write(source, "pforge-mcp/server.mjs", "v2\n");
+    write(project, "pforge-mcp/server.mjs", "v1\n");
+    write(project, "pforge-mcp/tests/forge-master.test.mjs", "moved to pforge-master\n");
+    write(project, "pforge-mcp/notifications/adapter-contract.mjs", "moved to pforge-sdk\n");
+    write(source, "pforge-master/server.mjs", "v2\n");
+    write(project, "pforge-master/old-module.mjs", "gone\n");
+    write(source, "pforge-sdk/index.mjs", "v2\n");
+    return { source, project };
+  };
+
+  it("lists files the release no longer ships as remove operations", () => {
+    const { source, project } = setup();
+    const plan = buildPlan({ sourceRoot: source, projectRoot: project });
+    expect(findOp(plan, "pforge-mcp/tests/forge-master.test.mjs")).toMatchObject({ category: "mcp", action: "remove", src: null, guided: false });
+    expect(findOp(plan, "pforge-mcp/notifications/adapter-contract.mjs")).toMatchObject({ action: "remove" });
+    expect(findOp(plan, "pforge-master/old-module.mjs")).toMatchObject({ category: "master", action: "remove" });
+  });
+
+  it("never removes installed dependencies, run state, lockfiles, logs, env files or test scratch", () => {
+    const { source, project } = setup();
+    for (const rel of [
+      "pforge-mcp/node_modules/dep/index.js", "pforge-mcp/.forge/state.json", "pforge-mcp/coverage/index.html",
+      "pforge-mcp/.vitest-scratch/x/.forge/run.json", "pforge-master/package-lock.json", "pforge-mcp/server.log",
+      "pforge-mcp/.env", "pforge-mcp/.env.local",
+    ]) write(project, rel, "keep\n");
+    const removed = buildPlan({ sourceRoot: source, projectRoot: project }).operations.filter((o) => o.action === "remove").map((o) => o.dst);
+    expect(removed.sort()).toEqual([
+      "pforge-master/old-module.mjs", "pforge-mcp/notifications/adapter-contract.mjs", "pforge-mcp/tests/forge-master.test.mjs",
+    ]);
+  });
+
+  it("leaves a package alone when the source does not ship it", () => {
+    const source = makeSourceRoot();
+    const project = makeProjectRoot({ preset: "custom" });
+    write(project, "pforge-sdk/index.mjs", "local\n");
+    expect(buildPlan({ sourceRoot: source, projectRoot: project }).operations.some((o) => o.action === "remove")).toBe(false);
+  });
+
+  it("removes nothing when the source package is partial (no package.json)", () => {
+    const source = makeSourceRoot();
+    const project = makeProjectRoot({ preset: "custom" });
+    write(source, "pforge-mcp/update-plan.mjs", "runtime only\n");
+    write(project, "pforge-mcp/update-from-github.mjs", "still needed\n");
+    expect(buildPlan({ sourceRoot: source, projectRoot: project }).operations.some((o) => o.action === "remove")).toBe(false);
+  });
+
+  it("reports removals", () => {
+    const { source, project } = setup();
+    expect(renderReport(buildPlan({ sourceRoot: source, projectRoot: project }))).toMatch(/^ {2}REMOVE {2}pforge-mcp\/tests\/forge-master\.test\.mjs$/m);
+  });
+
+  it("removePackageFiles moves files to a dated backup and prunes empty folders", () => {
+    const { project } = setup();
+    const result = removePackageFiles({
+      projectRoot: project,
+      paths: ["pforge-mcp/notifications/adapter-contract.mjs", "pforge-mcp/tests/forge-master.test.mjs"],
+      stamp: "2026-10-03T00-00-00-000Z",
+    });
+    expect(result.removed).toEqual(["pforge-mcp/notifications/adapter-contract.mjs", "pforge-mcp/tests/forge-master.test.mjs"]);
+    expect(existsSync(join(project, "pforge-mcp/notifications"))).toBe(false);
+    expect(existsSync(join(project, "pforge-mcp/tests/forge-master.test.mjs"))).toBe(false);
+    expect(readFileSync(join(project, ".forge/update-backups/2026-10-03T00-00-00-000Z/pforge-mcp/notifications/adapter-contract.mjs"), "utf8")).toBe("moved to pforge-sdk\n");
+  });
+
+  it("removePackageFiles refuses paths outside the Plan Forge packages", () => {
+    const { project } = setup();
+    write(project, "src/app.cs", "user code\n");
+    const result = removePackageFiles({ projectRoot: project, paths: ["src/app.cs", "pforge-mcp/../src/app.cs", "../outside.txt"], stamp: "s" });
+    expect(result.removed).toEqual([]);
+    expect(result.refused).toHaveLength(3);
+    expect(existsSync(join(project, "src/app.cs"))).toBe(true);
   });
 });

@@ -12,10 +12,13 @@
  *   2. setup from the previous release tag, consumer customizations, then update
  *      to the release with the previous release's wrapper and again with the new one.
  * Customizations must survive, the update guard must keep an edited guidance file,
- * and every release-checks.json entry must hold. Exits 1 on any FAIL.
+ * and every release-checks.json entry must hold. The fresh and the updated
+ * PowerShell projects then run their installed pforge-mcp test suite, which must
+ * pass (--skip-installed-tests to skip). Exits 1 on any FAIL.
  */
 
-import { join, resolve } from "node:path";
+import { spawnSync } from "node:child_process";
+import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { appendFileSync, existsSync, readdirSync, writeFileSync } from "node:fs";
 import {
@@ -118,6 +121,7 @@ function freshInstall(ctx, shell) {
   ctx.checks.add(`${name} setup exit 0`, status === 0, `exit ${status}`);
   assertRelease(ctx, name, project, { fresh: true });
   assertStackInstructions(ctx, name, project);
+  if (shell === "ps") assertInstalledTestsPass(ctx, name, project);
 }
 
 function updatePowerShell(ctx) {
@@ -144,6 +148,7 @@ function updatePowerShell(ctx) {
   run(["update", "src", "--force", "--overwrite-customized"], `${name}-update4.log`);
   ctx.checks.add(`${name} --overwrite-customized replaced git-workflow`, !has(join(project, GIT_WORKFLOW), GUARD_MARKER));
   ctx.checks.add(`${name} --overwrite-customized backed it up`, findFile(join(project, ".forge/update-backups"), "git-workflow.instructions.md"));
+  assertInstalledTestsPass(ctx, name, project);
 }
 
 function updateBash(ctx) {
@@ -168,6 +173,45 @@ function updateBash(ctx) {
   assertGuardKept(ctx, `${name}#2`, project, name);
 }
 
+const NPM_TIMEOUT_MS = 600_000;
+const VITEST_TIMEOUT_MS = 1_200_000;
+const MAX_FAILED_FILES_LISTED = 8;
+const LOG_MAX_BUFFER = 268_435_456; // 256 MiB of npm / vitest output
+
+function runLogged(args, { cwd, log, timeout }) {
+  const r = spawnSync(process.execPath, args, { cwd, encoding: "utf8", timeout, windowsHide: true, maxBuffer: LOG_MAX_BUFFER });
+  appendFileSync(log, `$ node ${args.join(" ")}\n${r.stdout ?? ""}${r.stderr ?? ""}\n`);
+  return r;
+}
+
+/**
+ * Run the project's installed pforge-mcp test suite, as a user who runs
+ * `npm test` there would. It caught nothing before 3.31.2 because nothing ran
+ * it: repository-only tests and files left over from older releases failed
+ * in every installed project. npm and vitest run through node, never a shell.
+ */
+function assertInstalledTestsPass(ctx, tag, project) {
+  if (ctx.args.skipInstalledTests) return;
+  const pkg = join(project, "pforge-mcp");
+  const npmCli = join(dirname(process.execPath), "node_modules", "npm", "bin", "npm-cli.js");
+  if (!existsSync(npmCli)) {
+    ctx.checks.note(`${tag} installed test suite skipped: npm-cli.js not found next to ${process.execPath}`);
+    return;
+  }
+  const log = join(ctx.root, `${tag}-installed-tests.log`);
+  const install = runLogged([npmCli, "install", "--no-audit", "--no-fund"], { cwd: pkg, log, timeout: NPM_TIMEOUT_MS });
+  ctx.checks.add(`${tag} installed pforge-mcp dependencies install`, install.status === 0, `exit ${install.status}`);
+  if (install.status !== 0) return;
+  const report = join(ctx.root, `${tag}-vitest.json`);
+  runLogged([join(pkg, "node_modules", "vitest", "vitest.mjs"), "run", "--reporter=json", `--outputFile=${report}`], { cwd: pkg, log, timeout: VITEST_TIMEOUT_MS });
+  const result = readJson(report);
+  const failedFiles = (result?.testResults ?? []).filter((f) => f.status === "failed").map((f) => f.name.replace(/\\/g, "/").split("/pforge-mcp/")[1] ?? f.name);
+  const detail = result
+    ? `${result.numFailedTests} failed of ${result.numTotalTests}${failedFiles.length ? `: ${failedFiles.slice(0, MAX_FAILED_FILES_LISTED).join(", ")}` : ""}`
+    : "no vitest report (see log)";
+  ctx.checks.add(`${tag} installed pforge-mcp test suite passes`, Boolean(result) && result.numFailedTests === 0 && result.numFailedTestSuites === 0, detail);
+}
+
 function findFile(dir, fileName) {
   if (!existsSync(dir)) return false;
   return readdirSync(dir, { recursive: true }).some((p) => String(p).replace(/\\/g, "/").endsWith(fileName));
@@ -176,7 +220,7 @@ function findFile(dir, fileName) {
 // ─── Main ───────────────────────────────────────────────────────────────────
 
 function buildContext(argv) {
-  const args = parseArgs(argv, ["skipTagCheck"]);
+  const args = parseArgs(argv, ["skipTagCheck", "skipInstalledTests"]);
   const repo = resolve(args.repo ?? REPO_DEFAULT);
   const ref = args.releaseRef ?? "HEAD";
   const version = versionAt(repo, ref);

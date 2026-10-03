@@ -1713,6 +1713,8 @@ cmd_update() {
 
     # ─── Change tracking arrays: "src|dst|name" tuples ────────────
     local _updates=() _new_files=()
+    # Package files the release no longer ships; moved to .forge/update-backups/ on apply.
+    local _removals=()
 
     # ─── Presets + update guard (needed below) ─────────────────────
     local _presets=()
@@ -1752,6 +1754,7 @@ cmd_update() {
     local _op_action _op_src _op_dst _op_guided
     while IFS=$'\t' read -r _op_action _op_src _op_dst _op_guided; do
         [ -z "$_op_action" ] && continue
+        if [ "$_op_action" = "remove" ]; then _removals+=("$_op_dst"); continue; fi
         local _full_src="$source_path/$_op_src" _full_dst="$REPO_ROOT/$_op_dst"
         _offered["$_op_dst"]=1
         # Guided only when a guard can apply it; without one, guidance files
@@ -1765,7 +1768,8 @@ cmd_update() {
     done < <(printf '%s' "$plan_json" | node -e '
 const plan = JSON.parse(require("fs").readFileSync(0, "utf8"));
 for (const op of plan.operations) {
-  process.stdout.write([op.action, op.src, op.dst, op.guided ? "1" : "0"].join("\t") + "\n");
+  // "-" for a missing src: read collapses adjacent tabs (tab is IFS whitespace), shifting every later field.
+  process.stdout.write([op.action, op.src ?? "-", op.dst, op.guided ? "1" : "0"].join("\t") + "\n");
 }
 ')
 
@@ -1864,7 +1868,7 @@ for (const op of plan.operations) {
     fi
 
     # ─── Report ───────────────────────────────────────────────────
-    if [ "${#_updates[@]}" -eq 0 ] && [ "${#_new_files[@]}" -eq 0 ] && [ "${#_kept[@]}" -eq 0 ] && [ "$current_version" = "$source_version" ]; then
+    if [ "${#_updates[@]}" -eq 0 ] && [ "${#_new_files[@]}" -eq 0 ] && [ "${#_removals[@]}" -eq 0 ] && [ "${#_kept[@]}" -eq 0 ] && [ "$current_version" = "$source_version" ]; then
         echo "All framework files are up to date."
         $dry_run || _pf_migrate_forge_config "$REPO_ROOT" "$source_path"
         _pf_gh_cleanup
@@ -1878,6 +1882,12 @@ for (const op of plan.operations) {
     for entry in ${_new_files[@]+"${_new_files[@]}"}; do
         echo "  NEW     ${entry##*|}"
     done
+    for entry in ${_removals[@]+"${_removals[@]}"}; do
+        echo "  REMOVE  $entry"
+    done
+    if [ "${#_removals[@]}" -gt 0 ]; then
+        echo "  Removed files are no longer part of Plan Forge; each is kept under .forge/update-backups/."
+    fi
     for entry in ${_kept[@]+"${_kept[@]}"}; do
         _e_dst="${entry#*|}"; _e_dst="${_e_dst%%|*}"
         echo "  KEEP    ${entry##*|} (you changed it; the new version goes to .forge/update-pending/${_e_dst#"$REPO_ROOT"/})"
@@ -1900,7 +1910,9 @@ for (const op of plan.operations) {
     # ─── Confirm ──────────────────────────────────────────────────
     if ! $force && ! $auto_yes; then
         # No input (end of file) must cancel, not end the script through set -e.
-        read -rp "Apply ${#_updates[@]} updates and ${#_new_files[@]} new files? [y/N] (use --yes to skip this prompt) " confirm || confirm=""
+        local _removal_note=""
+        [ "${#_removals[@]}" -gt 0 ] && _removal_note=" and remove ${#_removals[@]} old files"
+        read -rp "Apply ${#_updates[@]} updates and ${#_new_files[@]} new files$_removal_note? [y/N] (use --yes to skip this prompt) " confirm || confirm=""
         case "$confirm" in
             y|Y|yes|Yes) ;;
             *) echo "Cancelled."; _pf_gh_cleanup; return 0 ;;
@@ -1925,6 +1937,9 @@ for (const op of plan.operations) {
         cp "$src" "$dst"
         echo "  ✅ Added $name"
     done
+    if [ "${#_removals[@]}" -gt 0 ]; then
+        printf '%s\n' "${_removals[@]}" | node "$update_plan_script" remove --project "$REPO_ROOT"
+    fi
 
     # ─── Apply guidance files through the update guard (#280) ────
     local _guided_apply=() _guard_flags=() _apply_out _res _detail
@@ -3394,27 +3409,49 @@ cmd_doctor() {
     local changelog_path="$REPO_ROOT/CHANGELOG.md"
     local current_ver=""
 
-    if [ -f "$version_path" ]; then
-        current_ver=$(cat "$version_path" | tr -d '[:space:]')
-        doctor_pass "VERSION: $current_ver"
-    else
-        doctor_warn "VERSION file not found"
-    fi
-
-    if [ -f "$changelog_path" ]; then
-        if grep -qiE "\[v?${current_ver}\]|## v?${current_ver}" "$changelog_path" 2>/dev/null; then
-            doctor_pass "CHANGELOG.md has entry for v$current_ver"
-        elif echo "$current_ver" | grep -qE -- '-dev\b'; then
-            doctor_pass "CHANGELOG.md present (v$current_ver is between-release; entry added at release cut)"
-        elif [ $is_planforge_dev -eq 1 ]; then
-            # Framework repo: VERSION == release cadence, so every bump needs a CHANGELOG line.
-            doctor_warn "CHANGELOG.md missing entry for v$current_ver" "Add a '## [$current_ver] — <date>' section with release notes"
-        else
-            # Downstream consumer: VERSION tracks the pforge framework, not the app's own version.
-            doctor_pass "CHANGELOG.md present (framework v$current_ver — downstream CHANGELOG tracks your app, not pforge)"
+    if [ $is_planforge_dev -ne 1 ]; then
+        # A project's own VERSION / CHANGELOG are its business — older installs copied
+        # Plan Forge's there and updates never refreshed them, so they are not the
+        # installed version. That comes from the packages, which must also agree.
+        local consistency_helper="$REPO_ROOT/pforge-mcp/install-consistency.mjs"
+        if [ -f "$consistency_helper" ] && command -v node >/dev/null 2>&1; then
+            local consistency_lines
+            consistency_lines=$(node "$consistency_helper" --project "$REPO_ROOT" 2>/dev/null | node -e '
+const r = JSON.parse(require("fs").readFileSync(0, "utf8"));
+if (!r.frameworkVersion) process.exit(0);
+if (r.issues.length === 0) console.log(["pass", "Plan Forge v" + r.frameworkVersion + " installed (packages agree)", "-"].join("\t"));
+for (const i of r.issues) console.log(["warn", i.message, i.fix].join("\t"));
+' 2>/dev/null || true)
+            local c_kind c_msg c_fix
+            while IFS=$'\t' read -r c_kind c_msg c_fix; do
+                [ -z "$c_kind" ] && continue
+                if [ "$c_kind" = "pass" ]; then doctor_pass "$c_msg"; else doctor_warn "$c_msg" "$c_fix"; fi
+            done <<< "$consistency_lines"
         fi
+        if [ -f "$version_path" ]; then
+            doctor_pass "Project VERSION: $(tr -d '[:space:]' < "$version_path") (your project's file; Plan Forge does not change it)"
+        fi
+        if [ -f "$changelog_path" ]; then doctor_pass "CHANGELOG.md present (tracks your project, not Plan Forge)"; fi
     else
-        doctor_warn "CHANGELOG.md not found"
+        if [ -f "$version_path" ]; then
+            current_ver=$(cat "$version_path" | tr -d '[:space:]')
+            doctor_pass "VERSION: $current_ver"
+        else
+            doctor_warn "VERSION file not found"
+        fi
+
+        if [ -f "$changelog_path" ]; then
+            if grep -qiE "\[v?${current_ver}\]|## v?${current_ver}" "$changelog_path" 2>/dev/null; then
+                doctor_pass "CHANGELOG.md has entry for v$current_ver"
+            elif echo "$current_ver" | grep -qE -- '-dev\b'; then
+                doctor_pass "CHANGELOG.md present (v$current_ver is between-release; entry added at release cut)"
+            else
+                # Framework repo: VERSION == release cadence, so every bump needs a CHANGELOG line.
+                doctor_warn "CHANGELOG.md missing entry for v$current_ver" "Add a '## [$current_ver] — <date>' section with release notes"
+            fi
+        else
+            doctor_warn "CHANGELOG.md not found"
+        fi
     fi
 
     echo ""

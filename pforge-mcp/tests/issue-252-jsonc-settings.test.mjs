@@ -17,12 +17,15 @@
 
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import { spawnSync } from "node:child_process";
-import { readFileSync, writeFileSync, mkdirSync, rmSync } from "node:fs";
+import { readFileSync, writeFileSync, mkdirSync, mkdtempSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
 import { resolve, join } from "node:path";
 
 const HERE = import.meta.dirname;
 const PS1 = resolve(HERE, "..", "..", "pforge.ps1");
-const TMP = resolve(HERE, ".tmp-issue-252");
+// System temp, not tests/: a run that dies before afterAll used to leave the
+// folder inside pforge-mcp/tests, where pforge update then shipped it around.
+const TMP = mkdtempSync(join(tmpdir(), "pf-issue-252-"));
 
 /** Prefer the strict host (5.1) — it is the one that actually rejects JSONC. */
 function findPowerShell() {

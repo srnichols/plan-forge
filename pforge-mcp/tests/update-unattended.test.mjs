@@ -12,7 +12,7 @@
  */
 
 import { describe, it, expect, afterEach } from "vitest";
-import { copyFileSync, cpSync, existsSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
+import { copyFileSync, cpSync, existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { execFileSync, spawnSync } from "node:child_process";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
@@ -69,6 +69,18 @@ describe.each(shells)("$name update with no input", ({ run }) => {
     expect(r.stdout).not.toMatch(/Cancelled/);
     expect(r.stdout).toMatch(/Update complete/);
     expect(existsSync(join(project, NEW_SHARED_FILE))).toBe(true);
+  });
+
+  it("moves package files the release no longer ships to .forge/update-backups", () => {
+    const { source, project } = materialize();
+    writeFileSync(join(source, "pforge-mcp", "package.json"), '{"name":"plan-forge-mcp"}\n');
+    mkdirSync(join(project, "pforge-mcp", "tests"), { recursive: true });
+    writeFileSync(join(project, "pforge-mcp", "tests", "moved-away.test.mjs"), "old\n");
+    const r = run(project, [source, "--yes"]);
+    expect(r.stdout).toMatch(/REMOVE {2}pforge-mcp\/tests\/moved-away\.test\.mjs/);
+    expect(existsSync(join(project, "pforge-mcp", "tests", "moved-away.test.mjs"))).toBe(false);
+    const [stamp] = readdirSync(join(project, ".forge", "update-backups"));
+    expect(readFileSync(join(project, ".forge", "update-backups", stamp, "pforge-mcp", "tests", "moved-away.test.mjs"), "utf8")).toBe("old\n");
   });
 
   it("-y is the short form", () => {

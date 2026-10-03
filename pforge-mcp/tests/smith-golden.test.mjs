@@ -81,6 +81,16 @@ function normalize(text) {
       // environment-agnostic regardless of how many keys are configured.
       // Also consume any immediately-following blank line (left by FIX-line removal).
       .replace(/(?:  <api-key-present>\n?|  <no-api-keys>\n?)+\n?/g, "  <api-key-section>\n")
+      // Testbed state, not smith's structure: the installed version may be a -dev
+      // build or behind the latest release, and the instruction-file and tool
+      // counts grow with every upgrade. Each upgrade used to break this golden.
+      .replace(/<version>-dev\b/g, "<version>")
+      .replace(/[^\S\n]*(?:✅|Γ£à)[^\n]*Up to date \(v<version>\)/g, "  <version-currency>")
+      .replace(/[^\S\n]*(?:⚠️|⚠|ΓÜá∩╕Å)[^\n]*Installed v<version> — latest is v<version>\n[^\S\n]+FIX: Run 'pforge self-update'[^\n]*/g, "  <version-currency>")
+      .replace(/\b\d+ instruction files\b/g, "<n> instruction files")
+      // Present only once the testbed's pforge-mcp ships install-consistency.mjs (3.31.2+).
+      .replace(/[^\S\n]*(?:✅|Γ£à)[^\n]*Plan Forge v<version> installed \(packages agree\)\n/g, "")
+      .replace(/\b\d+ MCP tools\b/g, "<n> MCP tools")
       // Results summary: pass/fail/warning counts vary with environment state
       .replace(/Results:\s+\d+ passed\s*\|\s*\d+ failed\s*\|\s*\d+ warnings/g, "Results: <summary>")
       // "Fix the N issue(s) above" count varies

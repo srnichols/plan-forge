@@ -30,6 +30,7 @@ import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { computeLockHash, parseSlices, SLICE_HEADING_RE } from "../orchestrator/plan-parser.mjs";
 import { lintGateCommands } from "../orchestrator/gate-helpers.mjs";
+import { IS_PLAN_FORGE_SOURCE } from "./helpers/source-repo.mjs";
 
 function plan(heading, { gate = "npm test", scopeFile = "src/alpha.ts" } = {}) {
   return `# Phase 1 — TEST
@@ -110,7 +111,8 @@ const plansDir = resolve(import.meta.dirname, "..", "..", "docs", "plans");
 const hasPlanCorpus = existsSync(plansDir) && readdirSync(plansDir).some((name) => name.endsWith("-PLAN.md"));
 
 describe.skipIf(!hasPlanCorpus)("the unified pattern is a no-op for the existing corpus (#260)", () => {
-  it("does not change hash scope for any plan in docs/plans", () => {
+  // Counts Plan Forge's own plans; an installed project has only a handful.
+  it.skipIf(!IS_PLAN_FORGE_SOURCE)("does not change hash scope for any plan in docs/plans", () => {
     // Measured at fix time: 96 plans, 13 with a stored lockHash, 0 disagreements.
     // A consumer using letter-suffixed slices WILL see its hash change — its
     // gate was uncovered — but nothing in this repo needs re-hardening.

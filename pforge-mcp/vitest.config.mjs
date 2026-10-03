@@ -50,7 +50,8 @@ const SOURCE_ONLY_SUITES = {
     "tests/changelog-format.test.mjs",
   ],
   "../.github/agents/plan-health-auditor.agent.md": ["tests/plan-health-auditor.test.mjs"],
-  "../extensions/catalog.json": ["tests/notifications-stubs.test.mjs"],
+  // The stub modules, not catalog.json: setup installs the catalog in projects but not the stubs.
+  "../extensions/notify-slack/index.mjs": ["tests/notifications-stubs.test.mjs"],
   "../docs/index.html": ["tests/docs-nav.smoke.test.mjs"],
   "../scripts/audit": [
     "tests/audit-cli-parity.test.mjs",
@@ -61,12 +62,14 @@ const SOURCE_ONLY_SUITES = {
     "tests/testbed-happypath.test.mjs",
     "tests/preset-quality.test.mjs",
     "tests/boyscout-delta-rules.test.mjs",
+    "tests/preset-build-manifest.test.mjs",
   ],
   "../scripts/forge-home-cleanup.mjs": ["tests/forge-home-cleanup.test.mjs"],
   "../scripts/sync-versions.mjs": ["tests/version-sync.test.mjs"],
   "../scripts/check-model-drift.mjs": ["tests/model-drift.test.mjs"],
   "../scripts/benchmark": ["tests/sdk-parity-benchmark.test.mjs"],
-  "../scripts/release": ["tests/release-harness.test.mjs", "tests/release-ship.test.mjs"],
+  // smith-golden compares smith's output on this repository with a recorded golden.
+  "../scripts/release": ["tests/release-harness.test.mjs", "tests/release-ship.test.mjs", "tests/smith-golden.test.mjs"],
   "../scripts/build-agent-plugin.mjs": ["tests/agent-plugin.test.mjs"],
   "../pforge-master": [
     "tests/auditor-automation-baseline.test.mjs",

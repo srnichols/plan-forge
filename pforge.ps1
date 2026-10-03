@@ -1956,8 +1956,11 @@ function Invoke-Update {
     # confirm/apply/guard/pending machinery below already expects.
     $updates = @()
     $newFiles = @()
+    # Package files the release no longer ships; moved to .forge/update-backups/ on apply.
+    $removals = @()
     foreach ($op in @($plan.operations)) {
         if (-not $op) { continue }
+        if ($op.action -eq 'remove') { $removals += $op.dst; continue }
         $entry = @{
             Src    = Join-Path $sourcePath $op.src
             Dst    = Join-Path $RepoRoot $op.dst
@@ -2023,7 +2026,7 @@ function Invoke-Update {
     }
 
     # ─── Report ───────────────────────────────────────────────────
-    if ($updates.Count -eq 0 -and $newFiles.Count -eq 0 -and $kept.Count -eq 0 -and $currentVersion -eq $sourceVersion) {
+    if ($updates.Count -eq 0 -and $newFiles.Count -eq 0 -and $removals.Count -eq 0 -and $kept.Count -eq 0 -and $currentVersion -eq $sourceVersion) {
         Write-Host "All framework files are up to date." -ForegroundColor Green
         if (-not $dryRun) { Invoke-ForgeConfigMigration -ProjectRoot $RepoRoot -SourceRoot $sourcePath }
         Clear-GitHubUpdateCache -KeepCache:$keepCache
@@ -2036,6 +2039,12 @@ function Invoke-Update {
     }
     foreach ($n in $newFiles) {
         Write-Host "  NEW     $($n.Name)" -ForegroundColor Green
+    }
+    foreach ($r in $removals) {
+        Write-Host "  REMOVE  $r" -ForegroundColor Magenta
+    }
+    if ($removals.Count -gt 0) {
+        Write-Host "  Removed files are no longer part of Plan Forge; each is kept under .forge/update-backups/." -ForegroundColor DarkGray
     }
     foreach ($k in $kept) {
         Write-Host "  KEEP    $($k.Name) (you changed it; the new version goes to .forge/update-pending/$($k.DstRel))" -ForegroundColor Yellow
@@ -2057,7 +2066,8 @@ function Invoke-Update {
 
     # ─── Confirm ──────────────────────────────────────────────────
     if (-not $forceUpdate -and -not $autoYes) {
-        $confirm = Read-Host "Apply $($updates.Count) updates and $($newFiles.Count) new files? [y/N] (use --yes to skip this prompt)"
+        $removalNote = if ($removals.Count -gt 0) { " and remove $($removals.Count) old files" } else { "" }
+        $confirm = Read-Host "Apply $($updates.Count) updates and $($newFiles.Count) new files$removalNote? [y/N] (use --yes to skip this prompt)"
         if ($confirm -notin @('y', 'Y', 'yes', 'Yes')) {
             Write-Host "Cancelled." -ForegroundColor Yellow
             Clear-GitHubUpdateCache -KeepCache:$keepCache
@@ -2080,6 +2090,9 @@ function Invoke-Update {
         if (-not (Test-Path $parentDir)) { New-Item -ItemType Directory -Path $parentDir -Force | Out-Null }
         Copy-Item -Path $n.Src -Destination $n.Dst
         Write-Host "  ✅ Added $($n.Name)" -ForegroundColor Green
+    }
+    if ($removals.Count -gt 0) {
+        $removals -join "`n" | & node $updatePlanScript remove --project $RepoRoot
     }
     $guidedToApply = @(@($updates + $newFiles) | Where-Object { $_.Guided }) + $kept
     if ($guidedToApply.Count -gt 0) {
@@ -3718,29 +3731,43 @@ function Invoke-Smith {
     $versionPath = Join-Path $RepoRoot "VERSION"
     $changelogPath = Join-Path $RepoRoot "CHANGELOG.md"
 
-    if (Test-Path $versionPath) {
+    if (-not $isPlanForgeDevRepo) {
+        # A project's own VERSION / CHANGELOG are its business — older installs copied
+        # Plan Forge's there and updates never refreshed them, so they are not the
+        # installed version. That comes from the packages, which must also agree.
+        $consistencyHelper = Join-Path $RepoRoot "pforge-mcp/install-consistency.mjs"
+        $consistency = $null
+        if (Test-Path $consistencyHelper) {
+            try { $consistency = (& node $consistencyHelper --project $RepoRoot 2>$null | Select-LastJsonLine) | ConvertFrom-Json } catch { $consistency = $null }
+        }
+        if ($consistency -and $consistency.frameworkVersion) {
+            if (@($consistency.issues).Count -eq 0) {
+                Doctor-Pass "Plan Forge v$($consistency.frameworkVersion) installed (packages agree)"
+            } else {
+                foreach ($issue in @($consistency.issues)) { Doctor-Warn $issue.message $issue.fix }
+            }
+        }
+        if (Test-Path $versionPath) { Doctor-Pass "Project VERSION: $((Get-Content $versionPath -Raw).Trim()) (your project's file; Plan Forge does not change it)" }
+        if (Test-Path $changelogPath) { Doctor-Pass "CHANGELOG.md present (tracks your project, not Plan Forge)" }
+    } elseif (Test-Path $versionPath) {
         $currentVer = (Get-Content $versionPath -Raw).Trim()
         Doctor-Pass "VERSION: $currentVer"
     } else {
         Doctor-Warn "VERSION file not found"
     }
 
-    if (Test-Path $changelogPath) {
+    if ($isPlanForgeDevRepo -and (Test-Path $changelogPath)) {
         $clContent = Get-Content $changelogPath -Raw
         if ($clContent -match "\[v?$([regex]::Escape($currentVer))\]|## v?$([regex]::Escape($currentVer))") {
             Doctor-Pass "CHANGELOG.md has entry for v$currentVer"
         } elseif ($currentVer -match '-dev\b') {
             # Between-release state — '-dev' versions don't ship a CHANGELOG entry until cut.
             Doctor-Pass "CHANGELOG.md present (v$currentVer is between-release; entry added at release cut)"
-        } elseif ($isPlanForgeDevRepo) {
+        } else {
             # Framework repo: VERSION == release cadence, so every bump needs a CHANGELOG line.
             Doctor-Warn "CHANGELOG.md missing entry for v$currentVer" "Add a '## [$currentVer] — <date>' section with release notes"
-        } else {
-            # Downstream consumer: VERSION tracks the pforge framework, not the app's own version.
-            # Don't grade consumer CHANGELOGs by framework version — just note the framework version.
-            Doctor-Pass "CHANGELOG.md present (framework v$currentVer — downstream CHANGELOG tracks your app, not pforge)"
         }
-    } else {
+    } elseif ($isPlanForgeDevRepo) {
         Doctor-Warn "CHANGELOG.md not found"
     }
 

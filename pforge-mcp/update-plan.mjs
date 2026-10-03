@@ -27,11 +27,11 @@
  * @module update-plan
  */
 
-import { existsSync, readFileSync, readdirSync, statSync } from "node:fs";
-import { dirname, join, relative, resolve } from "node:path";
+import { existsSync, mkdirSync, readFileSync, readdirSync, renameSync, rmdirSync, statSync } from "node:fs";
+import { dirname, join, relative, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 import { detectPreset } from "./detect-preset.mjs";
-import { classifyFile, loadShippedHashes, readPlaceholderValues } from "./update-guard.mjs";
+import { BACKUP_DIR, classifyFile, loadShippedHashes, readPlaceholderValues } from "./update-guard.mjs";
 import { migrateForgeConfig } from "./migrate-forge-config.mjs";
 
 const MODULE_DIR = dirname(fileURLToPath(import.meta.url));
@@ -403,6 +403,33 @@ function scanAutomations({ sourceRoot, projectRoot, guardCtx }) {
   return out;
 }
 
+/** The packages Plan Forge owns entirely; only these may lose files the release no longer ships. */
+const OWNED_PACKAGES = Object.freeze({ "pforge-mcp": "mcp", "pforge-sdk": "sdk", "pforge-master": "master" });
+
+/**
+ * Installed files in an owned package that are never removed: dependencies,
+ * run state, coverage, test scratch, lockfiles, logs and local env files.
+ */
+const KEEP_INSTALLED = /(^|\/)(node_modules|\.forge|coverage|\.vitest-scratch)(\/|$)|(^|\/)(package-lock\.json|npm-shrinkwrap\.json|\.env(\..*)?|[^/]*\.log)$/;
+
+/**
+ * Files in an owned package that the source release no longer ships (moved or
+ * deleted upstream). Updates never removed them, so old modules and tests piled
+ * up in projects and could still be imported. Only a complete source package
+ * (one with its package.json) can say what was removed: a partial source, such
+ * as a test fixture carrying just the update runtime, would mark everything
+ * else for removal.
+ */
+function scanRemovedPackageFiles({ category, pkgDir, sourceRoot, projectRoot }) {
+  const srcPkg = join(sourceRoot, pkgDir);
+  const dstPkg = join(projectRoot, pkgDir);
+  if (!existsSync(join(srcPkg, "package.json")) || !existsSync(dstPkg)) return [];
+  const shipped = new Set(walkRecursive(srcPkg, KEEP_INSTALLED));
+  return walkRecursive(dstPkg, KEEP_INSTALLED)
+    .filter((rel) => !shipped.has(rel))
+    .map((rel) => ({ category, action: "remove", src: null, dst: `${pkgDir}/${rel}`, guided: false }));
+}
+
 /** The auto-discovered packages (mcp, sdk, master): every file, recursively, plain byte compare. */
 function scanAutoDiscoverPackage({ category, pkgDir, sourceRoot, projectRoot }) {
   const srcPkg = join(sourceRoot, pkgDir);
@@ -477,6 +504,7 @@ export function buildPlan({ sourceRoot, projectRoot, presetsOverride = null }) {
     ...scanAutoDiscoverPackage({ category: "mcp", pkgDir: "pforge-mcp", sourceRoot, projectRoot }),
     ...scanAutoDiscoverPackage({ category: "sdk", pkgDir: "pforge-sdk", sourceRoot, projectRoot }),
     ...scanAutoDiscoverPackage({ category: "master", pkgDir: "pforge-master", sourceRoot, projectRoot }),
+    ...Object.entries(OWNED_PACKAGES).flatMap(([pkgDir, category]) => scanRemovedPackageFiles({ category, pkgDir, sourceRoot, projectRoot })),
     ...scanRootFiles({ category: "cli", names: ["pforge.ps1", "pforge.sh"], sourceRoot, projectRoot }),
     ...scanRootFiles({ category: "validation", names: ["validate-setup.ps1", "validate-setup.sh"], sourceRoot, projectRoot }),
     ...scanRootFiles({ category: "core", names: ["pforge.ps1", "pforge.sh", "pforge"], sourceRoot, projectRoot }),
@@ -496,27 +524,27 @@ export function buildPlan({ sourceRoot, projectRoot, presetsOverride = null }) {
 }
 
 /** Render the plan as the text both shells print (D3) — colour stays in the shells. */
+/** Report labels, in the order the shells print them. */
+const REPORT_LABELS = Object.freeze([["update", "UPDATE"], ["new", "NEW   "], ["remove", "REMOVE"]]);
+
+function renderChanges(operations) {
+  const lines = REPORT_LABELS.flatMap(([action, label]) =>
+    operations.filter((o) => o.action === action).map((o) => `  ${label}  ${o.dst}`));
+  return lines.length > 0 ? ["Changes found:", ...lines] : ["No framework file changes found."];
+}
+
 export function renderReport(plan) {
-  const lines = [];
-  const updates = plan.operations.filter((o) => o.action === "update");
-  const added = plan.operations.filter((o) => o.action === "new");
-
-  if (updates.length === 0 && added.length === 0 && plan.configMigrations.length === 0 && plan.currentVersion === plan.sourceVersion) {
-    lines.push("All framework files are up to date.");
-    return lines.join("\n");
+  if (plan.operations.length === 0 && plan.configMigrations.length === 0 && plan.currentVersion === plan.sourceVersion) {
+    return "All framework files are up to date.";
   }
 
-  lines.push(`Source:   ${plan.sourceVersion}`);
-  lines.push(`Current:  ${plan.currentVersion}`);
-  lines.push(`Preset:   ${plan.presets.join(", ")} (${plan.presetSource})`);
-  lines.push("");
-  if (updates.length > 0 || added.length > 0) {
-    lines.push("Changes found:");
-    for (const op of updates) lines.push(`  UPDATE  ${op.dst}`);
-    for (const op of added) lines.push(`  NEW     ${op.dst}`);
-  } else {
-    lines.push("No framework file changes found.");
-  }
+  const lines = [
+    `Source:   ${plan.sourceVersion}`,
+    `Current:  ${plan.currentVersion}`,
+    `Preset:   ${plan.presets.join(", ")} (${plan.presetSource})`,
+    "",
+    ...renderChanges(plan.operations),
+  ];
   if (plan.configMigrations.length > 0) {
     lines.push("");
     lines.push(".forge.json additions pending:");
@@ -525,11 +553,58 @@ export function renderReport(plan) {
   return lines.join("\n");
 }
 
+/** Whether `rel` names a file inside an owned package, without escaping it. */
+function isOwnedPackagePath(projectRoot, rel) {
+  const target = resolve(projectRoot, rel);
+  const inside = relative(projectRoot, target);
+  if (!inside || inside.startsWith("..") || resolve(inside) === inside) return false;
+  const [pkg, ...rest] = inside.split(sep);
+  return Object.hasOwn(OWNED_PACKAGES, pkg) && rest.length > 0 && !KEEP_INSTALLED.test(rest.join("/"));
+}
+
+function pruneEmptyDirs(dir, stopAt) {
+  let current = dir;
+  while (current.startsWith(stopAt + sep) && current !== stopAt) {
+    if (readdirSync(current).length > 0) return;
+    rmdirSync(current);
+    current = dirname(current);
+  }
+}
+
+/**
+ * Apply `remove` operations: move each file to .forge/update-backups/<stamp>/<path>
+ * (recoverable) and drop folders left empty. Paths outside the owned packages
+ * are refused, never touched.
+ *
+ * @param {{ projectRoot: string, paths: string[], stamp?: string }} opts
+ * @returns {{ removed: string[], refused: string[], backupDir: string }}
+ */
+export function removePackageFiles({ projectRoot, paths, stamp = new Date().toISOString().replace(/[:.]/g, "-") }) {
+  projectRoot = resolve(projectRoot);
+  const backupRoot = join(projectRoot, BACKUP_DIR, stamp);
+  const result = { removed: [], refused: [], backupDir: `${BACKUP_DIR}/${stamp}` };
+  for (const rel of paths) {
+    const source = resolve(projectRoot, rel);
+    if (!isOwnedPackagePath(projectRoot, rel) || !existsSync(source) || !statSync(source).isFile()) {
+      result.refused.push(rel);
+      continue;
+    }
+    const posixRel = relative(projectRoot, source).split(sep).join("/");
+    const backup = join(backupRoot, posixRel);
+    mkdirSync(dirname(backup), { recursive: true });
+    renameSync(source, backup);
+    pruneEmptyDirs(dirname(source), join(projectRoot, posixRel.split("/")[0]));
+    result.removed.push(posixRel);
+  }
+  return result;
+}
+
 export const EXIT_OK = 0;
 export const EXIT_USAGE = 2;
 export const EXIT_SOURCE_INVALID = 3;
 
-const USAGE = "usage: update-plan.mjs <plan|report> --source <dir> --project <dir> [--presets a,b] [--json]\n";
+const USAGE = "usage: update-plan.mjs <plan|report> --source <dir> --project <dir> [--presets a,b] [--json]\n"
+  + "       update-plan.mjs remove --project <dir>   (package-relative paths on stdin, one per line)\n";
 
 function parseArgs(argv) {
   const [cmd, ...rest] = argv;
@@ -544,13 +619,27 @@ function parseArgs(argv) {
   return opts;
 }
 
-export function runCli(argv, { stdout = process.stdout, stderr = process.stderr } = {}) {
+function runRemove(opts, { stdin, stdout }) {
+  const paths = String(stdin ?? readFileSync(0, "utf8")).split(/\r?\n/).map((line) => line.trim()).filter(Boolean);
+  const result = removePackageFiles({ projectRoot: opts.project, paths });
+  for (const rel of result.removed) stdout.write(`  ✅ Removed ${rel} (kept in ${result.backupDir}/)\n`);
+  for (const rel of result.refused) stdout.write(`  ⚠ Not removed (not a Plan Forge package file): ${rel}\n`);
+  return EXIT_OK;
+}
+
+const isPlanCommand = (opts) => ["plan", "report"].includes(opts.cmd) && Boolean(opts.source && opts.project);
+
+export function runCli(argv, { stdout = process.stdout, stderr = process.stderr, stdin = null } = {}) {
   const opts = parseArgs(argv);
-  if (!["plan", "report"].includes(opts.cmd) || !opts.source || !opts.project) {
+  if (opts.cmd === "remove" && opts.project) return runRemove(opts, { stdin, stdout });
+  if (!isPlanCommand(opts)) {
     stderr.write(USAGE);
     return EXIT_USAGE;
   }
+  return runPlanCommand(opts, { stdout, stderr });
+}
 
+function runPlanCommand(opts, { stdout, stderr }) {
   const presetsOverride = opts.presets ? opts.presets.split(",").map((s) => s.trim()).filter(Boolean) : null;
   let plan;
   try {

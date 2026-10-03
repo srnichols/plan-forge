@@ -24,6 +24,7 @@ import {
 } from "../orchestrator/constants.mjs";
 import { isDirectApiOnlyModel } from "../orchestrator/worker-spawn.mjs";
 import { TEMPERING_DEFAULT_CONFIG } from "../tempering.mjs";
+import { IS_PLAN_FORGE_SOURCE } from "./helpers/source-repo.mjs";
 
 // GitHub Copilot retirements, shared with scripts/check-model-drift.mjs (#303).
 const RETIREMENTS = JSON.parse(readFileSync(new URL("../model-retirements.json", import.meta.url), "utf8"));
@@ -113,7 +114,7 @@ describe("model defaults contract — tempering, workers, Forge-Master, power-go
 });
 
 // The shells restate these defaults as literals (they can't import ESM), so pin them.
-describe("Guard: shell entry points restate the runtime model defaults", () => {
+describe.skipIf(!IS_PLAN_FORGE_SOURCE)("Guard: shell entry points restate the runtime model defaults", () => {
   const readRepoFile = (rel) => readFileSync(new URL(`../../${rel}`, import.meta.url), "utf8");
 
   it.each(["setup.ps1", "setup.sh"])("%s seeds modelRouting.default with DEFAULT_ROUTING_MODEL", (file) => {

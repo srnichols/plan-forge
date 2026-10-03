@@ -62,6 +62,8 @@
     { "label": "Forge-Master asks for every tool (3.31)", "path": "pforge-master/src/mcp-client.mjs", "contains": "PFORGE_TOOL_PROFILE: \"full\"" },
     { "label": "pforge.ps1 update guards automation templates (3.31)", "path": "pforge.ps1", "contains": "skills|hooks|automations)/" },
     { "label": "pforge.sh update guards automation templates (3.31)", "path": "pforge.sh", "contains": "skills|hooks|automations)/" },
-    { "label": "VS Code automation templates installed (3.31)", "path": ".github/automations/pforge-daily-drift.automation.md", "contains": "id: pforge-daily-drift", "when": "current-wrapper" }
+    { "label": "VS Code automation templates installed (3.31)", "path": ".github/automations/pforge-daily-drift.automation.md", "contains": "id: pforge-daily-drift", "when": "current-wrapper" },
+    { "label": "repo-only 3.31 suites are skipped in installed projects (3.31.1)", "path": "pforge-mcp/vitest.config.mjs", "contains": "\"tests/release-ship.test.mjs\"" },
+    { "label": "tests do not call the Copilot runtime for models (3.31.1)", "path": "pforge-mcp/vitest.config.mjs", "contains": "PFORGE_LIVE_MODELS: \"0\"" }
   ]
 }

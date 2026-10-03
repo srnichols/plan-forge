@@ -1705,299 +1705,113 @@ cmd_update() {
     # ─── Change tracking arrays: "src|dst|name" tuples ────────────
     local _updates=() _new_files=()
 
-    # Inner helper — compare src vs dst, populate _updates / _new_files
-    _pf_check() {
-        local src="$1" dst="$2" rel="$3"
-        local nu
-        for nu in "${_never_update[@]}"; do
-            [ "$nu" = "$rel" ] && return 0
-        done
-        [ -f "$src" ] || return 0
-        if [ -f "$dst" ]; then
-            if _pf_update_needed "$src" "$dst"; then
-                _updates+=("$src|$dst|$rel")
-            fi
-        else
-            _new_files+=("$src|$dst|$rel")
-        fi
-    }
-
-    # ─── Presets + update guard (needed by the scans below) ───────
+    # ─── Presets + update guard (needed below) ─────────────────────
     local _presets=()
     IFS=',' read -ra _presets <<< "${current_preset_raw// /}"
-    # #280: resolve the update guard before scanning, so preset files the project
-    # already has are offered only when the guard can keep the project's edits.
-    local update_guard _pf_fillable_tokens=""
+    # #280: resolve the update guard before scanning, so guidance files are
+    # offered only when the guard can keep the project's edits.
+    local update_guard
     update_guard="$(_pf_resolve_update_guard "$source_path" "$REPO_ROOT")"
-    if [ -n "$update_guard" ] && [ -f "$config_path" ]; then
-        _pf_fillable_tokens="$(node -e 'const c=JSON.parse(require("fs").readFileSync(process.argv[1],"utf8"));const t=[["projectName","<YOUR PROJECT NAME>"],["stack","<YOUR TECH STACK>"],["setupDate","<DATE>"]].filter(([k])=>typeof c[k]==="string"&&c[k].trim()).map(([,v])=>v);process.stdout.write(t.join("\n"))' "$config_path" 2>/dev/null || true)"
-    fi
 
-    # ─── Step prompts (step*.prompt.md) ───────────────────────────
-    local src_prompts="$source_path/.github/prompts"
-    if [ -d "$src_prompts" ]; then
-        while IFS= read -r -d '' f; do
-            local fname_p
-            fname_p="$(basename "$f")"
-            # project-principles.prompt.md is user-customized (sourced from templates/) — never auto-update
-            if [ "$fname_p" = "project-principles.prompt.md" ]; then continue; fi
-            _pf_check "$f" "$REPO_ROOT/.github/prompts/$fname_p" ".github/prompts/$fname_p"
-        done < <(find "$src_prompts" -maxdepth 1 -name "*.prompt.md" -type f -print0 2>/dev/null)
-    fi
-
-    # ─── Pipeline agents ──────────────────────────────────────────
-    local src_agents="$source_path/templates/.github/agents"
-    if [ -d "$src_agents" ]; then
-        local agent_name
-        for agent_name in "specifier.agent.md" "plan-hardener.agent.md" "executor.agent.md" "reviewer-gate.agent.md" "shipper.agent.md"; do
-            _pf_check "$src_agents/$agent_name" "$REPO_ROOT/.github/agents/$agent_name" ".github/agents/$agent_name"
-        done
-    fi
-
-    # ─── Shared instructions ──────────────────────────────────────
-    # Source convention mirrors setup.sh Step 2:
-    #   $source_path/.github/instructions/                — Plan-Forge-internal files that ship as-is (no leakage)
-    #   $source_path/presets/shared/.github/instructions/ — consumer-facing genericized versions
-    # aci-design.instructions.md intentionally NOT in either list — MCP-tool-author guidance, not consumer-relevant.
-    local src_instr="$source_path/.github/instructions"
-    local src_shared_instr="$source_path/presets/shared/.github/instructions"
-    # #280: a stack preset's own copy of an instruction (e.g. testing or security) wins over the shared one.
-    _pf_preset_owns() {
-        local pp
-        for pp in "${_presets[@]}"; do
-            [ "$pp" = "custom" ] && continue
-            [ -f "$source_path/presets/$pp/.github/instructions/$1" ] && return 0
-        done
+    # ─── Delegate scan to update-plan.mjs (#299, Phase-UPDATE-CORE) ──────
+    # The category-by-category scan now lives in one place — update-plan.mjs
+    # — so both shells see identical UPDATE/NEW classification for every
+    # category (prompts, agents, instructions, runbook, preset, skills,
+    # hooks, mcp, sdk, master, cli, validation, core).
+    local update_plan_script="$source_path/pforge-mcp/update-plan.mjs"
+    if [ ! -f "$update_plan_script" ]; then
+        echo "ERROR: The update source doesn't have pforge-mcp/update-plan.mjs." >&2
+        echo "  This source predates the version of pforge.sh you're running." >&2
+        echo "  Run 'pforge self-update', or point --from-github at a newer release." >&2
+        _pf_gh_cleanup
         return 1
-    }
-    if [ -d "$src_instr" ]; then
-        local instr_name
-        for instr_name in "ai-plan-hardening-runbook.instructions.md" "context-fuel.instructions.md" "git-workflow.instructions.md"; do
-            _pf_preset_owns "$instr_name" && continue
-            _pf_check "$src_instr/$instr_name" "$REPO_ROOT/.github/instructions/$instr_name" ".github/instructions/$instr_name"
-        done
-    fi
-    if [ -d "$src_shared_instr" ]; then
-        local instr_name
-        for instr_name in "architecture-principles.instructions.md" "clean-code.instructions.md" "security.instructions.md" "self-repair-reporting.instructions.md" "status-reporting.instructions.md" "testing.instructions.md"; do
-            _pf_preset_owns "$instr_name" && continue
-            _pf_check "$src_shared_instr/$instr_name" "$REPO_ROOT/.github/instructions/$instr_name" ".github/instructions/$instr_name"
-        done
-    fi
-    unset -f _pf_preset_owns
-
-    # ─── Runbook docs ─────────────────────────────────────────────
-    local src_docs="$source_path/docs/plans"
-    if [ -d "$src_docs" ]; then
-        local doc_name
-        for doc_name in "AI-Plan-Hardening-Runbook.md" "AI-Plan-Hardening-Runbook-Instructions.md" "DEPLOYMENT-ROADMAP-TEMPLATE.md" "PROJECT-PRINCIPLES-TEMPLATE.md"; do
-            _pf_check "$src_docs/$doc_name" "$REPO_ROOT/docs/plans/$doc_name" "docs/plans/$doc_name"
-        done
     fi
 
-    # ─── Hooks (recursive, like pforge.ps1) ─────────────────────────
-    # A top-level-only scan skipped hooks/scripts/, so lifecycle script fixes
-    # (meta-bug #287) never reached projects updated from this shell.
-    local src_hooks="$source_path/templates/.github/hooks"
-    if [ -d "$src_hooks" ]; then
-        while IFS= read -r -d '' f; do
-            local rel_h="${f#"$src_hooks/"}"
-            _pf_check "$f" "$REPO_ROOT/.github/hooks/$rel_h" ".github/hooks/$rel_h"
-        done < <(find "$src_hooks" -type f -print0 2>/dev/null)
+    local plan_rc=0 plan_json=""
+    plan_json="$(node "$update_plan_script" plan --source "$source_path" --project "$REPO_ROOT" --presets "${current_preset_raw// /}" --json)" || plan_rc=$?
+    if [ "$plan_rc" -ne 0 ]; then
+        echo "ERROR: update-plan.mjs failed (exit code $plan_rc):" >&2
+        echo "$plan_json" | sed 's/^/  /' >&2
+        _pf_gh_cleanup
+        return 1
     fi
 
-    # ─── Preset-specific files (instructions, agents, prompts, skills) ─
-    local p
-    for p in "${_presets[@]}"; do
-        p="${p// /}"          # trim whitespace
-        [ "$p" = "custom" ] && continue
+    # Map operations back into _updates / _new_files, matching the shape the
+    # confirm/apply/guard/pending machinery below already expects. Node parses
+    # the JSON (#297 — never python3 or grep -P); paths are already posix/rel.
+    declare -A _offered=() _is_guided=()
+    local _op_action _op_src _op_dst _op_guided
+    while IFS=$'\t' read -r _op_action _op_src _op_dst _op_guided; do
+        [ -z "$_op_action" ] && continue
+        local _full_src="$source_path/$_op_src" _full_dst="$REPO_ROOT/$_op_dst"
+        _offered["$_op_dst"]=1
+        [ "$_op_guided" = "1" ] && _is_guided["$_full_dst"]=1
+        if [ "$_op_action" = "new" ]; then
+            _new_files+=("$_full_src|$_full_dst|$_op_dst")
+        else
+            _updates+=("$_full_src|$_full_dst|$_op_dst")
+        fi
+    done < <(printf '%s' "$plan_json" | node -e '
+const plan = JSON.parse(require("fs").readFileSync(0, "utf8"));
+for (const op of plan.operations) {
+  process.stdout.write([op.action, op.src, op.dst, op.guided ? "1" : "0"].join("\t") + "\n");
+}
+')
 
-        local src_preset="$source_path/presets/$p/.github"
-        [ -d "$src_preset" ] || continue
-
-        echo "  Checking preset: $p"
-
-        local sub_dir
-        for sub_dir in instructions agents prompts; do
-            local src_sub="$src_preset/$sub_dir"
-            [ -d "$src_sub" ] || continue
-            while IFS= read -r -d '' f; do
-                local fname_s rel dst _skip
-                fname_s="$(basename "$f")"
-                rel=".github/$sub_dir/$fname_s"
-                dst="$REPO_ROOT/.github/$sub_dir/$fname_s"
-                # Skip never-update list entries
-                _skip=false
+    # ─── Recover KEEP candidates update-plan.mjs's scan already excludes ──
+    # `guidedEntry()` classifies during the scan itself and drops "customized"
+    # (hand-edited) files from `operations` entirely — there's no byte for the
+    # operator to see "you changed it" unless we re-probe guidance files the
+    # project already has that the plan didn't offer.
+    local _kept_candidates=()
+    if [ -n "$update_guard" ]; then
+        local _guidance_dir _dst_dir _f _dst_rel _nu_skip nu _cand _src_file _p
+        for _guidance_dir in ".github/prompts" ".github/instructions" ".github/agents" ".github/skills" ".github/hooks" "docs/plans"; do
+            _dst_dir="$REPO_ROOT/$_guidance_dir"
+            [ -d "$_dst_dir" ] || continue
+            while IFS= read -r -d '' _f; do
+                _dst_rel="${_f#"$REPO_ROOT"/}"
+                [ -n "${_offered[$_dst_rel]+x}" ] && continue
+                _nu_skip=false
                 for nu in "${_never_update[@]}"; do
-                    [ "$nu" = "$rel" ] && _skip=true && break
+                    [ "$nu" = "$_dst_rel" ] && _nu_skip=true && break
                 done
-                $_skip && continue
-                # Existing files are offered only when the update guard (#280)
-                # can tell an unmodified copy from one the project changed.
-                if [ ! -f "$dst" ]; then
-                    _new_files+=("$f|$dst|$rel")
-                elif [ -n "$update_guard" ] && _pf_update_needed "$f" "$dst"; then
-                    _updates+=("$f|$dst|$rel")
+                $_nu_skip && continue
+                _src_file=""
+                for _cand in "$source_path/$_dst_rel" "$source_path/presets/shared/$_dst_rel" "$source_path/templates/$_dst_rel"; do
+                    if [ -f "$_cand" ]; then _src_file="$_cand"; break; fi
+                done
+                if [ -z "$_src_file" ]; then
+                    for _p in "${_presets[@]}"; do
+                        _p="${_p// /}"
+                        [ "$_p" = "custom" ] && continue
+                        _cand="$source_path/presets/$_p/$_dst_rel"
+                        if [ -f "$_cand" ]; then _src_file="$_cand"; break; fi
+                    done
                 fi
-            done < <(find "$src_sub" -maxdepth 1 -type f -print0 2>/dev/null)
-        done
-
-        # Skills — existing SKILL.md files are offered only with the update guard (#280)
-        local src_skills="$src_preset/skills"
-        if [ -d "$src_skills" ]; then
-            local skill_dir skill_name skill_src skill_dst
-            for skill_dir in "$src_skills"/*/; do
-                [ -d "$skill_dir" ] || continue
-                skill_name="$(basename "$skill_dir")"
-                skill_src="$skill_dir/SKILL.md"
-                skill_dst="$REPO_ROOT/.github/skills/$skill_name/SKILL.md"
-                [ -f "$skill_src" ] || continue
-                if [ ! -f "$skill_dst" ]; then
-                    _new_files+=("$skill_src|$skill_dst|.github/skills/$skill_name/SKILL.md")
-                elif [ -n "$update_guard" ] && _pf_update_needed "$skill_src" "$skill_dst"; then
-                    _updates+=("$skill_src|$skill_dst|.github/skills/$skill_name/SKILL.md")
-                fi
-            done
-        fi
-    done
-
-    # ─── Shared skills (add new, update existing shared-only) ────
-    # Mirrors pforge.ps1 — parity gap fixed: previously only PowerShell
-    # users picked up shared skills like clean-code-review on self-update.
-    local src_shared_skills="$source_path/presets/shared/skills"
-    if [ -d "$src_shared_skills" ]; then
-        local shared_dir shared_name shared_src shared_dst
-        for shared_dir in "$src_shared_skills"/*/; do
-            [ -d "$shared_dir" ] || continue
-            shared_name="$(basename "$shared_dir")"
-            shared_src="$shared_dir/SKILL.md"
-            shared_dst="$REPO_ROOT/.github/skills/$shared_name/SKILL.md"
-            [ -f "$shared_src" ] || continue
-
-            # If any per-stack preset has its own version of this skill,
-            # let the preset loop above handle it — don't overwrite.
-            local has_preset_version=false
-            local p
-            for p in "${_presets[@]}"; do
-                [ "$p" = "custom" ] && continue
-                if [ -f "$source_path/presets/$p/.github/skills/$shared_name/SKILL.md" ]; then
-                    has_preset_version=true
-                    break
-                fi
-            done
-            $has_preset_version && continue
-
-            if [ -f "$shared_dst" ]; then
-                if _pf_update_needed "$shared_src" "$shared_dst"; then
-                    _updates+=("$shared_src|$shared_dst|.github/skills/$shared_name/SKILL.md (shared)")
-                fi
-            else
-                _new_files+=("$shared_src|$shared_dst|.github/skills/$shared_name/SKILL.md (shared)")
-            fi
+                [ -z "$_src_file" ] && continue
+                _kept_candidates+=("$_src_file|$_f|$_dst_rel")
+            done < <(find "$_dst_dir" -type f -print0 2>/dev/null)
         done
     fi
-
-    unset -f _pf_check
-
-    # ─── Core root files (CLI + shim + validators) ──────────────
-    # Includes root `pforge` bash shim and validate-setup.{ps1,sh} so older
-    # installs that pre-date the installer-validators-and-shim fix can
-    # self-heal on `pforge self-update` (parity with pforge.ps1).
-    # NOTE: The root VERSION file is deliberately NOT copied — it is a
-    # consumer-owned convention (many projects track their own application
-    # version in VERSION); overwriting it would corrupt the consumer's
-    # versioning. Plan Forge's installed version lives in .forge.json's
-    # templateVersion.
-    local core_file
-    for core_file in "pforge.ps1" "pforge.sh" "pforge" "validate-setup.ps1" "validate-setup.sh"; do
-        local src_core="$source_path/$core_file"
-        local dst_core="$REPO_ROOT/$core_file"
-        if [ -f "$src_core" ]; then
-            if [ -f "$dst_core" ]; then
-                if [ "$(_pf_sha256 "$src_core")" != "$(_pf_sha256 "$dst_core")" ]; then
-                    _updates+=("$src_core|$dst_core|$core_file")
-                fi
-            else
-                _new_files+=("$src_core|$dst_core|$core_file")
-            fi
-        fi
-    done
-
-    # ─── MCP server files (auto-discover all files) ──────────────
-    local src_mcp="$source_path/pforge-mcp"
-    local dst_mcp="$REPO_ROOT/pforge-mcp"
-    if [ -d "$src_mcp" ]; then
-        while IFS= read -r -d '' f; do
-            local rel_path rel_name dst_f
-            rel_path="${f#"$src_mcp/"}"
-            rel_name="pforge-mcp/$rel_path"
-            dst_f="$dst_mcp/$rel_path"
-            local _skip=false
-            for nu in "${_never_update[@]}"; do
-                [ "$nu" = "$rel_name" ] && _skip=true && break
-            done
-            $_skip && continue
-            if [ -f "$dst_f" ]; then
-                if [ "$(_pf_sha256 "$f")" != "$(_pf_sha256 "$dst_f")" ]; then
-                    _updates+=("$f|$dst_f|$rel_name")
-                fi
-            else
-                _new_files+=("$f|$dst_f|$rel_name")
-            fi
-        done < <(find "$src_mcp" -type f -not -path '*/node_modules/*' -print0 2>/dev/null)
-    fi
-
-    # ─── pforge-sdk + pforge-master (same scan, parameterized) ──
-    # Consumer installs that skipped these crashed at runtime for opt-in
-    # features (lattice, notifications, hallmark, forge-master-chat).
-    local pkg src_pkg dst_pkg
-    for pkg in pforge-sdk pforge-master; do
-        src_pkg="$source_path/$pkg"
-        dst_pkg="$REPO_ROOT/$pkg"
-        [ -d "$src_pkg" ] || continue
-        while IFS= read -r -d '' f; do
-            local rel_path rel_name dst_f
-            rel_path="${f#"$src_pkg/"}"
-            rel_name="$pkg/$rel_path"
-            dst_f="$dst_pkg/$rel_path"
-            local _skip=false
-            for nu in "${_never_update[@]}"; do
-                [ "$nu" = "$rel_name" ] && _skip=true && break
-            done
-            $_skip && continue
-            if [ -f "$dst_f" ]; then
-                if [ "$(_pf_sha256 "$f")" != "$(_pf_sha256 "$dst_f")" ]; then
-                    _updates+=("$f|$dst_f|$rel_name")
-                fi
-            else
-                _new_files+=("$f|$dst_f|$rel_name")
-            fi
-        done < <(find "$src_pkg" -type f -not -path '*/node_modules/*' -not -path '*/.forge/*' -not -path '*/coverage/*' -print0 2>/dev/null)
-    done
 
     # ─── #280: guidance files go through the update guard ────────
     # The guard classifies every guidance entry: unchanged copies are updated,
     # files the project edited are kept (the new version goes to
     # .forge/update-pending/), and files already matching are dropped.
-    local entry _e_src _e_dst _e_rel _act
+    local entry _e_dst _e_rel _act
     local _kept=() _guided=()
-    declare -A _is_guided=()
-    if [ -n "$update_guard" ]; then
-        for entry in ${_updates[@]+"${_updates[@]}"} ${_new_files[@]+"${_new_files[@]}"}; do
-            _e_src="${entry%%|*}"; _e_dst="${entry#*|}"; _e_dst="${_e_dst%%|*}"
-            case "$_e_src" in "$source_path"/*) ;; *) continue ;; esac
-            case "$_e_dst" in "$REPO_ROOT"/*) ;; *) continue ;; esac
-            _e_rel="${_e_dst#"$REPO_ROOT"/}"
-            [[ "$_e_rel" =~ $_PF_GUIDANCE_PATH_RE ]] || continue
-            _is_guided["$_e_dst"]=1
-            _guided+=("$entry")
-        done
-    else
+    for entry in ${_updates[@]+"${_updates[@]}"} ${_new_files[@]+"${_new_files[@]}"}; do
+        _e_dst="${entry#*|}"; _e_dst="${_e_dst%%|*}"
+        [ -n "${_is_guided[$_e_dst]+x}" ] && _guided+=("$entry")
+    done
+    local _guard_candidates=(${_guided[@]+"${_guided[@]}"} ${_kept_candidates[@]+"${_kept_candidates[@]}"})
+    if [ "${#_guard_candidates[@]}" -gt 0 ] && [ -z "$update_guard" ]; then
         echo "  Update guard not available (needs Node and pforge-mcp/update-guard.mjs); guidance files are replaced when they differ."
     fi
-    if [ "${#_guided[@]}" -gt 0 ]; then
+    if [ "${#_guard_candidates[@]}" -gt 0 ] && [ -n "$update_guard" ]; then
         local _plan_out
-        if ! _plan_out="$(_pf_update_guard "$update_guard" plan "$source_path" "$REPO_ROOT" -- "${_guided[@]}")"; then
+        if ! _plan_out="$(_pf_update_guard "$update_guard" plan "$source_path" "$REPO_ROOT" -- "${_guard_candidates[@]}")"; then
             echo "ERROR: the update guard could not classify guidance files; nothing was changed." >&2
             _pf_gh_cleanup
             return 1
@@ -2006,30 +1820,30 @@ cmd_update() {
         while IFS=$'\t' read -r _act _e_rel; do
             [ -n "$_e_rel" ] && _guard_action["$_e_rel"]="$_act"
         done <<< "$_plan_out"
-        # A guided entry the guard did not classify is kept, never overwritten.
+        # Mirrors PS1's Invoke-Update exactly: a guided _updates/_new_files
+        # entry survives only if the guard still calls it update/new; any
+        # other verdict (same, or a recovery candidate guessed from the wrong
+        # preset) just drops the entry — it is not reclassified into the other
+        # bucket. Only "customized" entries become KEEP, from the combined
+        # guided + recovered-candidate set.
         local _upd2=() _new2=()
         for entry in ${_updates[@]+"${_updates[@]}"}; do
             _e_dst="${entry#*|}"; _e_dst="${_e_dst%%|*}"
             if [ -z "${_is_guided[$_e_dst]+x}" ]; then _upd2+=("$entry"); continue; fi
-            case "${_guard_action[${_e_dst#"$REPO_ROOT"/}]:-}" in
-                update) _upd2+=("$entry") ;;
-                new) _new2+=("$entry") ;;
-                same) ;;
-                *) _kept+=("$entry") ;;
-            esac
+            [ "${_guard_action[${_e_dst#"$REPO_ROOT"/}]:-}" = "update" ] && _upd2+=("$entry")
         done
         for entry in ${_new_files[@]+"${_new_files[@]}"}; do
             _e_dst="${entry#*|}"; _e_dst="${_e_dst%%|*}"
             if [ -z "${_is_guided[$_e_dst]+x}" ]; then _new2+=("$entry"); continue; fi
-            case "${_guard_action[${_e_dst#"$REPO_ROOT"/}]:-}" in
-                new) _new2+=("$entry") ;;
-                update) _upd2+=("$entry") ;;
-                same) ;;
-                *) _kept+=("$entry") ;;
-            esac
+            [ "${_guard_action[${_e_dst#"$REPO_ROOT"/}]:-}" = "new" ] && _new2+=("$entry")
         done
         _updates=(${_upd2[@]+"${_upd2[@]}"})
         _new_files=(${_new2[@]+"${_new2[@]}"})
+        for entry in ${_guard_candidates[@]+"${_guard_candidates[@]}"}; do
+            _e_dst="${entry#*|}"; _e_dst="${_e_dst%%|*}"
+            _is_guided["$_e_dst"]=1
+            [ "${_guard_action[${_e_dst#"$REPO_ROOT"/}]:-}" = "customized" ] && _kept+=("$entry")
+        done
         if $overwrite_customized && [ "${#_kept[@]}" -gt 0 ]; then
             for entry in "${_kept[@]}"; do
                 _updates+=("$entry (customized; your version is backed up first)")

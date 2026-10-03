@@ -1,0 +1,13 @@
+{
+  "pforge.sh": [
+    "KEEP .github/instructions/git-workflow.instructions.md",
+    "NEW .github/instructions/status-reporting.instructions.md",
+    "NEW pforge-mcp/shipped-guidance-hashes.json",
+    "NEW pforge-mcp/update-guard.mjs"
+  ],
+  "pforge.ps1": [
+    "KEEP .github/instructions/git-workflow.instructions.md",
+    "NEW pforge-mcp/shipped-guidance-hashes.json",
+    "NEW pforge-mcp/update-guard.mjs"
+  ]
+}

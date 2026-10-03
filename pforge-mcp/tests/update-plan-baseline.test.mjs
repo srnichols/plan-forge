@@ -31,6 +31,7 @@ import { execFileSync, spawnSync } from "node:child_process";
 import { copyFileSync, cpSync, existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
+import { copyUpdateRuntime } from "./helpers/update-runtime.mjs";
 
 const REPO_ROOT = resolve(import.meta.dirname, "..", "..");
 const FIXTURES_ROOT = resolve(import.meta.dirname, "fixtures", "update-plan");
@@ -75,14 +76,7 @@ function materialize(caseName) {
   // for every case, not just no-forge-json) — never a fixture copy — so this
   // baseline can never drift from the scan behaviour the rest of the suite
   // exercises.
-  mkdirSync(join(source, "pforge-mcp", "orchestrator"), { recursive: true });
-  for (const rel of ["update-guard.mjs", "detect-preset.mjs", "migrate-forge-config.mjs", "update-plan.mjs", "preset-catalog.json"]) {
-    copyFileSync(join(REPO_ROOT, "pforge-mcp", rel), join(source, "pforge-mcp", rel));
-  }
-  copyFileSync(
-    join(REPO_ROOT, "pforge-mcp", "orchestrator", "constants.mjs"),
-    join(source, "pforge-mcp", "orchestrator", "constants.mjs"),
-  );
+  copyUpdateRuntime(source);
 
   copyFileSync(join(REPO_ROOT, "pforge.sh"), join(project, "pforge.sh"));
   copyFileSync(join(REPO_ROOT, "pforge.ps1"), join(project, "pforge.ps1"));

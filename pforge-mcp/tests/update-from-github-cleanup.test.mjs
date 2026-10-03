@@ -17,6 +17,7 @@ import { execFileSync, spawnSync } from "node:child_process";
 import { copyFileSync, existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
+import { copyUpdateRuntime } from "./helpers/update-runtime.mjs";
 
 const REPO_ROOT = resolve(import.meta.dirname, "..", "..");
 const isWin = process.platform === "win32";
@@ -59,6 +60,8 @@ function seed(templateVersion) {
   tmpDirs.push(base);
   const release = join(base, "release");
   writeTree(join(release, "plan-forge"), { VERSION: TAG.slice(1), "templates/.github/hooks/plan-forge.json": "{\"hooks\":{}}\n" });
+  // Both shells run the release's update-plan.mjs and refuse a source without it (#299).
+  copyUpdateRuntime(join(release, "plan-forge"));
   const tarball = join(base, "release.tar.gz");
   execFileSync("tar", ["-czf", tarball, "-C", release, "plan-forge"], { stdio: "ignore" });
   const project = join(base, "project");

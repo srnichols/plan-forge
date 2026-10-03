@@ -1745,7 +1745,9 @@ cmd_update() {
         [ -z "$_op_action" ] && continue
         local _full_src="$source_path/$_op_src" _full_dst="$REPO_ROOT/$_op_dst"
         _offered["$_op_dst"]=1
-        [ "$_op_guided" = "1" ] && _is_guided["$_full_dst"]=1
+        # Guided only when a guard can apply it; without one, guidance files
+        # are replaced when they differ, as releases before the guard did.
+        if [ "$_op_guided" = "1" ] && [ -n "$update_guard" ]; then _is_guided["$_full_dst"]=1; fi
         if [ "$_op_action" = "new" ]; then
             _new_files+=("$_full_src|$_full_dst|$_op_dst")
         else

@@ -1956,7 +1956,9 @@ function Invoke-Update {
             Src    = Join-Path $sourcePath $op.src
             Dst    = Join-Path $RepoRoot $op.dst
             Name   = $op.dst
-            Guided = [bool]$op.guided
+            # Guided only when a guard can apply it; without one, guidance files
+            # are replaced when they differ, as releases before the guard did.
+            Guided = ([bool]$op.guided -and [bool]$updateGuard)
             DstRel = $op.dst
             SrcRel = $op.src
         }

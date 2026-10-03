@@ -15,6 +15,7 @@ import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 import { contentHash, renderPlaceholders, INDEX_FILE } from "../update-guard.mjs";
+import { copyUpdateRuntime } from "./helpers/update-runtime.mjs";
 
 const REPO_ROOT = resolve(import.meta.dirname, "..", "..");
 const isWin = process.platform === "win32";
@@ -81,14 +82,7 @@ function seed() {
     "presets/dotnet/.github/instructions/security.instructions.md": V2.dotnetSecurity,
     [RUNBOOK]: V2.runbook,
   });
-  mkdirSync(join(source, "pforge-mcp", "orchestrator"), { recursive: true });
-  for (const rel of ["update-guard.mjs", "detect-preset.mjs", "migrate-forge-config.mjs", "update-plan.mjs", "preset-catalog.json"]) {
-    copyFileSync(join(REPO_ROOT, "pforge-mcp", rel), join(source, "pforge-mcp", rel));
-  }
-  copyFileSync(
-    join(REPO_ROOT, "pforge-mcp", "orchestrator", "constants.mjs"),
-    join(source, "pforge-mcp", "orchestrator", "constants.mjs"),
-  );
+  copyUpdateRuntime(source);
   writeTree(project, {
     ".forge.json": JSON.stringify({ templateVersion: "9.9.8", preset: "dotnet", ...VALUES }),
     [STEP0]: renderPlaceholders(V1.step0, VALUES),
@@ -157,6 +151,17 @@ describe.each(runners())("#280 $name update keeps edited guidance", ({ run }) =>
 
     expect(read(project, TESTING)).toBe(V2.dotnetTesting);
     expect(read(project, SECURITY)).toBe(V2.dotnetSecurity);
+  });
+
+  it("without a usable guard, replaces changed guidance files instead of failing", () => {
+    // No shipped-guidance index in the source (and none installed) → no guard.
+    // Guided files must fall back to a plain copy, not reach the guard with no
+    // script path (Windows PowerShell 5.1 then ran `node apply` and failed).
+    const { source, project } = seed();
+    rmSync(join(source, "pforge-mcp", INDEX_FILE));
+    const r = run(project, [source, "--force"]);
+    expect(r.status, r.stdout + r.stderr).toBe(0);
+    expect(read(project, STEP0)).toBe(V2.step0);
   });
 
   it("--overwrite-customized replaces the edited file after backing it up", () => {

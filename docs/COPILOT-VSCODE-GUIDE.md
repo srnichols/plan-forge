@@ -22,6 +22,7 @@
 11. [Troubleshooting](#troubleshooting)
 12. [Using Plan Forge with Copilot Cloud Agent](#using-plan-forge-with-copilot-cloud-agent)
 13. [Scheduled Checks with VS Code Automations](#scheduled-checks-with-vs-code-automations)
+14. [Following a Run's Worker Sessions](#following-a-runs-worker-sessions)
 
 ---
 
@@ -944,6 +945,12 @@ VS Code's Agents window can run an agent task on a schedule (**Automations** in 
 | `pforge-bug-triage.automation.md` | Manual | A proposed route for each open bug in the bug registry |
 
 To use one, select **Import Automation** in the Automations view and choose the file. Review the prompt, then pick the workspace, agent, model and permissions; the **Enabled** box starts cleared. Run it once with **Run now** before turning on the schedule, and keep in mind that every scheduled run uses your selected model. `pforge update` keeps the templates current and leaves your edited copies alone.
+
+---
+
+## Following a Run's Worker Sessions
+
+Each slice's Copilot CLI worker runs in its own named session, `pforge <plan> - slice <n>: <title>`, so it is easy to find in VS Code's Sessions view, where you can read the transcript or continue it. A retry continues the same session. `slice-<n>.json` in the run folder records it under `workerSession`, including a `resumeCommand` such as `copilot --resume=<id>` for picking up a failed slice by hand.
 
 ---
 

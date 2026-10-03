@@ -17,6 +17,22 @@ import { resolve } from "node:path";
 
 const ENV_OVERRIDE = "PFORGE_RESUME_ON_RETRY";
 const DEFAULT_RESUME_ON_RETRY = true;
+const MAX_SESSION_NAME = 80;
+/** Characters cmd.exe would interpret (`cmd /c` launches) and quotes; dropped from session names. */
+const UNSAFE_NAME_CHARS = /[^A-Za-z0-9 ._:#-]/g;
+
+/**
+ * The name the worker's session shows in VS Code's Sessions view and
+ * `copilot --resume`: "pforge <plan> - slice <n>: <title>". Restricted to
+ * characters that are inert on a Windows command line, since slice titles
+ * come from plan text.
+ *
+ * @param {{ planName: string, slice: { number: string|number, title?: string } }} opts
+ */
+export function workerSessionName({ planName, slice }) {
+  const raw = `pforge ${planName} - slice ${slice.number}: ${slice.title || ""}`;
+  return raw.replace(UNSAFE_NAME_CHARS, "").replace(/\s+/g, " ").trim().slice(0, MAX_SESSION_NAME).trim();
+}
 
 /**
  * @param {string} cwd
@@ -44,15 +60,15 @@ export function loadResumeOnRetry(cwd) {
  * used: a worker that did not pin one (older CLI, non-Copilot worker) gets a
  * fresh ID next time rather than a resume of a session that never existed.
  *
- * @param {{ enabled: boolean }} opts
+ * @param {{ enabled: boolean, name?: string|null }} opts
  */
-export function createWorkerSession({ enabled }) {
+export function createWorkerSession({ enabled, name = null }) {
   let id = randomUUID();
   let established = false;
   return {
     forAttempt(attempt) {
       if (!enabled) return null;
-      return { id, resume: attempt > 0 && established };
+      return { id, resume: attempt > 0 && established, ...(name && { name }) };
     },
     record(workerResult) {
       if (!enabled) return;

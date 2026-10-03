@@ -1,8 +1,8 @@
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
-import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { mkdtempSync, rmSync, writeFileSync, readFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
-import { loadResumeOnRetry, createWorkerSession } from "../orchestrator/worker-session.mjs";
+import { join, resolve } from "node:path";
+import { loadResumeOnRetry, createWorkerSession, workerSessionName } from "../orchestrator/worker-session.mjs";
 import { _buildWorkerInvocation, RESUMED_SESSION_PREAMBLE } from "../orchestrator/worker-spawn.mjs";
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
@@ -174,5 +174,59 @@ describe("RESUMED_SESSION_PREAMBLE", () => {
     expect(RESUMED_SESSION_PREAMBLE).toMatch(/non-interactive/);
     expect(RESUMED_SESSION_PREAMBLE).toMatch(/do not ask for confirmation/);
     expect(RESUMED_SESSION_PREAMBLE.endsWith("\n\n")).toBe(true);
+  });
+});
+
+describe("workerSessionName", () => {
+  it("names the session after the plan and slice", () => {
+    expect(workerSessionName({ planName: "Phase-31-SAFER-RUNS-PLAN", slice: { number: "3", title: "Resume sessions on retry" } }))
+      .toBe("pforge Phase-31-SAFER-RUNS-PLAN - slice 3: Resume sessions on retry");
+  });
+
+  it("drops characters a Windows command line would interpret", () => {
+    const name = workerSessionName({ planName: "p", slice: { number: "1", title: 'Fix "a" & b | c > d % e ^ f (g) !h' } });
+    expect(name).not.toMatch(/[&|<>^%!()"]/);
+    expect(name).toBe("pforge p - slice 1: Fix a b c d e f g h");
+  });
+
+  it("caps the length", () => {
+    expect(workerSessionName({ planName: "p", slice: { number: "1", title: "x".repeat(200) } }).length).toBeLessThanOrEqual(80);
+  });
+
+  it("is carried on every attempt", () => {
+    const sessions = createWorkerSession({ enabled: true, name: "pforge p - slice 1: t" });
+    expect(sessions.forAttempt(0)).toMatchObject({ resume: false, name: "pforge p - slice 1: t" });
+  });
+});
+
+describe("_buildWorkerInvocation — session naming", () => {
+  const SESSION = "0cb916db-26aa-40f2-86b5-1ba81b225fd2";
+  const base = { promptFile: "/tmp/p.md", prompt: "do it", model: "gpt-6-luna" };
+  const chosen = { name: "gh-copilot", features: { sessionPinning: true, sessionNaming: true } };
+
+  it("names a new session", () => {
+    const inv = _buildWorkerInvocation({ ...base, chosen, sessionId: SESSION, sessionName: "pforge p - slice 1: t" });
+    expect(inv.args).toContain("--name=pforge p - slice 1: t");
+  });
+
+  it("does not rename a resumed session", () => {
+    const inv = _buildWorkerInvocation({ ...base, chosen, sessionId: SESSION, sessionName: "pforge p - slice 1: t", resume: true });
+    expect(inv.args.some((a) => a.startsWith("--name"))).toBe(false);
+  });
+
+  it("skips naming on a CLI without --name", () => {
+    const old = { name: "gh-copilot", features: { sessionPinning: true, sessionNaming: false } };
+    const inv = _buildWorkerInvocation({ ...base, chosen: old, sessionId: SESSION, sessionName: "n" });
+    expect(inv.args.some((a) => a.startsWith("--name"))).toBe(false);
+  });
+});
+
+describe("Guard: slice results carry the worker session", () => {
+  const src = readFileSync(resolve(import.meta.dirname, "..", "orchestrator", "run-plan.mjs"), "utf8");
+  const builder = src.slice(src.indexOf("function _executeSliceBuildResult"), src.indexOf("function _executeSliceFilesModifiedCheck"));
+
+  it("adds workerSession with a CLI resume command", () => {
+    expect(builder).toMatch(/\.\.\._workerSessionInfo\(workerResult\)/);
+    expect(builder).toMatch(/resumeCommand: `copilot --resume=\$\{workerResult\.sessionId\}`/);
   });
 });

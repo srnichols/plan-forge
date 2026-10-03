@@ -1972,7 +1972,7 @@ function _pinnableSession({ invocation, chosen, sessionId }) {
 }
 
 /** Command and args from a worker-capabilities.json invocation spec. */
-function _specInvocation({ invocation, chosen, promptFile, prompt, model, sessionId, resume }) {
+function _specInvocation({ invocation, chosen, promptFile, prompt, model, sessionId, sessionName, resume }) {
   const pinnedSession = _pinnableSession({ invocation, chosen, sessionId });
   const resumed = Boolean(pinnedSession && resume);
   const args = (invocation.baseArgs || []).map((a) => {
@@ -1981,6 +1981,9 @@ function _specInvocation({ invocation, chosen, promptFile, prompt, model, sessio
   });
   if (model) args.push("--model", model);
   if (pinnedSession) args.push(String(invocation.sessionArg).replace("{SESSION_ID}", pinnedSession));
+  if (pinnedSession && !resumed && sessionName && invocation.nameArg && chosen.features?.sessionNaming) {
+    args.push(String(invocation.nameArg).replace("{SESSION_NAME}", sessionName));
+  }
   return { cmd: invocation.cmd, args, sessionId: pinnedSession, resumed };
 }
 
@@ -1990,13 +1993,13 @@ function _specInvocation({ invocation, chosen, promptFile, prompt, model, sessio
  * feature, and a sessionId is given, the session is pinned to that ID — the
  * CLI creates it on first use and resumes it after.
  */
-export function _buildWorkerInvocation({ chosen, promptFile, prompt, model, sessionId = null, resume = false }) {
+export function _buildWorkerInvocation({ chosen, promptFile, prompt, model, sessionId = null, sessionName = null, resume = false }) {
   const spec = loadWorkerCapabilities().workers?.[chosen.name];
   const invocation = (chosen.usingFallback && spec?.invocation?.fallback)
     ? spec.invocation.fallback
     : spec?.invocation;
   if (invocation?.cmd) {
-    return { spec, ..._specInvocation({ invocation, chosen, promptFile, prompt, model, sessionId, resume }) };
+    return { spec, ..._specInvocation({ invocation, chosen, promptFile, prompt, model, sessionId, sessionName, resume }) };
   }
   if (chosen.name === "claude" || chosen.name === "codex") {
     const cmd = chosen.name;
@@ -2291,7 +2294,10 @@ async function spawnCliWorkerExecution({ prompt, model, cwd, timeout, worker, ru
   const chosen = _pickChosenWorker(workers, worker, model);
   const promptFile = writeWorkerPromptFile(prompt);
   try {
-    const invocationResult = _buildWorkerInvocation({ chosen, promptFile, prompt, model, sessionId: session?.id || null, resume: Boolean(session?.resume) });
+    const invocationResult = _buildWorkerInvocation({
+      chosen, promptFile, prompt, model,
+      sessionId: session?.id || null, sessionName: session?.name || null, resume: Boolean(session?.resume),
+    });
     if (invocationResult.error) throw invocationResult.error;
     const { cmd, args, spec, sessionId, resumed } = invocationResult;
     const { resolveCopilotLauncher } = await import("./copilot-launcher.mjs");

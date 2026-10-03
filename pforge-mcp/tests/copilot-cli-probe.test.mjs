@@ -131,7 +131,7 @@ function mockProbes(ghCopilotPlan = {}) {
       copilotVersionCalls++;
       return "GitHub Copilot CLI 1.0.41.\n";
     }
-    const sessionFlag = ghCopilotPlan.primary === "success-pinning" ? "  --session-id <id>\n" : "";
+    const sessionFlag = ghCopilotPlan.primary === "success-pinning" ? "  -n, --name <name>\n  --session-id <id>\n" : "";
     return `Usage: copilot [options]\n  -p, --prompt <prompt>\n  --allow-all\n${sessionFlag}`;
   };
 
@@ -194,18 +194,18 @@ describe("detectWorkers — issue #157 honours probe.fallback for gh-copilot", (
     expect(gh.probedCommand).toBe("copilot");
   });
 
-  it("detects session pinning when the CLI help lists --session-id", () => {
+  it("detects session pinning and naming when the CLI help lists --session-id and --name", () => {
     mockProbes({ primary: "success-pinning" });
     const gh = detectWorkers().find((w) => w.name === "gh-copilot");
     expect(gh.available).toBe(true);
-    expect(gh.features).toEqual({ sessionPinning: true });
+    expect(gh.features).toEqual({ sessionPinning: true, sessionNaming: true });
   });
 
-  it("keeps an older CLI without --session-id available, with session pinning off", () => {
+  it("keeps an older CLI without --session-id available, with session pinning and naming off", () => {
     mockProbes({ primary: "success" });
     const gh = detectWorkers().find((w) => w.name === "gh-copilot");
     expect(gh.available).toBe(true);
-    expect(gh.features).toEqual({ sessionPinning: false });
+    expect(gh.features).toEqual({ sessionPinning: false, sessionNaming: false });
   });
 
   it("(157-C) BOTH primary and fallback missing → reports primary failure with fallback note", () => {

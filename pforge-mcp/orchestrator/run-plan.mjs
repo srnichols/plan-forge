@@ -42,7 +42,7 @@ import { loadQuorumConfig, classifyLegError, quorumDispatch, quorumReview, analy
 import { estimatePlan as _estimatePlan } from "../cost-service.mjs";
 import { finishRunIsolation, loadRunIsolationConfig, startRunIsolation } from "./run-isolation.mjs";
 import { loadImpactGateConfig, runImpactGate } from "./impact-gate.mjs";
-import { createWorkerSession, loadResumeOnRetry } from "./worker-session.mjs";
+import { createWorkerSession, loadResumeOnRetry, workerSessionName } from "./worker-session.mjs";
 import { cleanupStaleWorktrees } from "./worktree-janitor.mjs";
 import { classifyUnrunnableGate, loadGatePreflightMode, preflightGates } from "./gate-preflight.mjs";
 import { devcontainerHasTool, ensureDevcontainerUp, loadGateRunnerMode } from "./devcontainer-gates.mjs";
@@ -2276,6 +2276,24 @@ function _executeSliceBuildResult({ slice, status, statusReason, duration, worke
     ...(escalated || {}),
     ...(quorumPayload && { quorum: quorumPayload }),
     ...(copilotDispatchData && { trajectory: copilotDispatchData }),
+    ..._workerSessionInfo(workerResult),
+  };
+}
+
+/**
+ * The worker's Copilot session, so a slice can be opened in VS Code's Sessions
+ * view or continued from a terminal. Only Copilot CLI sessions resume with
+ * `copilot --resume`; an SDK session is reported by ID.
+ */
+function _workerSessionInfo(workerResult) {
+  if (!workerResult?.sessionId) return null;
+  const cliResumable = workerResult.worker === "gh-copilot";
+  return {
+    workerSession: {
+      id: workerResult.sessionId,
+      resumed: Boolean(workerResult.resumed),
+      ...(cliResumable && { resumeCommand: `copilot --resume=${workerResult.sessionId}` }),
+    },
   };
 }
 
@@ -2570,7 +2588,10 @@ async function _executeSliceAttemptLoop(ctx) {
   let lastFailureContext = null;
   let currentModel = ctx.finalModel;
   let copilotDispatchData = null;
-  const workerSessions = createWorkerSession({ enabled: mode !== "assisted" && loadResumeOnRetry(cwd) });
+  const workerSessions = createWorkerSession({
+    enabled: mode !== "assisted" && loadResumeOnRetry(cwd),
+    name: workerSessionName({ planName, slice }),
+  });
 
   while (attempt <= maxRetries) {
     const attemptStartTime = Date.now();

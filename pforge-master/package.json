@@ -1,6 +1,6 @@
 {
   "name": "@pforge/pforge-master",
-  "version": "3.29.4-dev",
+  "version": "3.30.0",
   "main": "server.mjs",
   "type": "module",
   "engines": {

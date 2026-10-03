@@ -7,6 +7,8 @@ Format follows [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
+## [3.30.0] — 2026-10-03 — One update plan for both shells
+
 ### Changed
 
 - **`pforge update` now adds shared and internal instruction files your project lacks, in both shells (#299).** `pforge.ps1 update` used to offer only instruction files you already had, so an install that predated a file (for example `status-reporting.instructions.md`) never received it, while `pforge.sh update` did add it. Both shells now add the missing file as `NEW`. Copies you have edited are still kept. Both shells now build the same plan from `pforge-mcp/update-plan.mjs` and print the same `UPDATE`, `NEW` and `KEEP` lines, and a test requires identical operation lists for every stack fixture. `setup.ps1` and `setup.sh` likewise read stack labels, default commands and the shared-file list from one `pforge-mcp/preset-catalog.json`.

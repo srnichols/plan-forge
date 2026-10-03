@@ -503,7 +503,8 @@ describe.each(CASES)("update-plan matches the Slice 1 baseline + D1: %s", (caseN
 
 describe.skipIf(!IS_PLAN_FORGE_SOURCE)("preset-catalog.json matches setup.ps1's preset tables", () => {
   const catalog = JSON.parse(readFileSync(CATALOG_PATH, "utf8"));
-  const ps = existsSync(SETUP_PS1_PATH) ? readFileSync(SETUP_PS1_PATH, "utf8").replace(/\r\n/g, "\n") : "";
+  // describe.skipIf still runs this body while collecting, so read nothing outside the repository.
+  const ps = IS_PLAN_FORGE_SOURCE ? readFileSync(SETUP_PS1_PATH, "utf8").replace(/\r\n/g, "\n") : "";
 
   /** Parse a `switch ($x) { 'name' { 'value' } ... }` block into a name → value map. */
   function parseSwitchBlock(source, startMarker) {
@@ -522,10 +523,14 @@ describe.skipIf(!IS_PLAN_FORGE_SOURCE)("preset-catalog.json matches setup.ps1's 
     return map;
   }
 
-  const psLabels = parseSwitchBlock(ps, "switch ($Preset[0]) {");
-  const psBuild = parseSwitchBlock(ps, "$defaultBuild = switch ($primaryPreset) {");
-  const psTest = parseSwitchBlock(ps, "$defaultTest = switch ($primaryPreset) {");
-  const psLint = parseSwitchBlock(ps, "$defaultLint = switch ($primaryPreset) {");
+  const [psLabels, psBuild, psTest, psLint] = ps
+    ? [
+      parseSwitchBlock(ps, "switch ($Preset[0]) {"),
+      parseSwitchBlock(ps, "$defaultBuild = switch ($primaryPreset) {"),
+      parseSwitchBlock(ps, "$defaultTest = switch ($primaryPreset) {"),
+      parseSwitchBlock(ps, "$defaultLint = switch ($primaryPreset) {"),
+    ]
+    : [{}, {}, {}, {}];
 
   it.each(Object.keys(catalog.presets))("catalog entry for %s matches setup.ps1", (preset) => {
     const entry = catalog.presets[preset];

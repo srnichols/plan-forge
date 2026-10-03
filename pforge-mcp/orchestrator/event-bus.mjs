@@ -20,25 +20,28 @@ export class LogEventHandler {
 /**
  * Orchestrator event bus with dependency-injected handler.
  * Wraps Node EventEmitter. Handler can be swapped for WebSocket hub (Phase 3).
+ *
+ * Every emitted event reaches the handler (events.log, telemetry, hub,
+ * progress lines). A fixed allow-list used to decide this, and events added
+ * after it — run isolation, scope escapes, scheduler deadlocks — were
+ * silently dropped.
  */
 export class OrchestratorEventBus extends EventEmitter {
   constructor(handler) {
     super();
     this.handler = handler || new LogEventHandler(null);
-    // Proxy all known events to the handler
-    const events = [
-      "run-started", "slice-started", "slice-completed",
-      "slice-failed", "slice-escalated", "run-completed", "run-aborted",
-      "quorum-dispatch-started", "quorum-leg-completed", "quorum-review-completed",
-      "skill-started", "skill-step-started", "skill-step-completed", "skill-completed",
-      "slice-model-routed", "self-repair-missed",
-      "tool-call", "bridge-edit-blocked", "bridge-edit-approved",
-      "pforge.foundry.quota",
-      "snapshot-janitor",
-    ];
-    for (const evt of events) {
-      this.on(evt, (data) => this.handler.handle({ type: evt, data, timestamp: new Date().toISOString() }));
+  }
+
+  emit(type, ...args) {
+    if (typeof type === "string") {
+      try {
+        this.handler.handle({ type, data: args[0], timestamp: new Date().toISOString() });
+      } catch (err) {
+        // A failing sink (hub, telemetry) must not stop the run or other listeners.
+        console.error(`[event-bus] handler failed for ${type}: ${err?.message || err}`);
+      }
     }
+    return super.emit(type, ...args);
   }
 }
 

@@ -7,6 +7,8 @@ Format follows [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
+## [3.31.2] — 2026-10-03 — Reliable upgrades and honest estimates
+
 ### Fixed
 
 - **Installing the agent plugin from the repository URL loaded an empty plugin.** An old, pre-Agent-Plugins `plugin.json` at the repository root (still saying v3.19.0) took precedence, so **Chat: Install Plugin From Source** with the repository URL, or `--plugin-dir` on a clone, installed a `plan-forge` plugin with no skills or agents. The root manifest is gone; the plugin is `plugins/plan-forge`, installed from this repository's marketplace. `CUSTOMIZATION.md` no longer presents the plugin as a replacement for setup, and the VS Code guide explains how to try a local copy and why a project that ran setup lists the pipeline agents twice.

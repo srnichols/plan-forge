@@ -7,6 +7,11 @@ Format follows [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
+### Fixed
+
+- **`pforge self-update --yes` now installs the update instead of quietly cancelling it.** `--yes` answered only self-update's own question. The update it started then asked "Apply …? [y/N]" again, and with nobody there to answer it cancelled; self-update still ran `--verify`, reported success and exited 0, so the project stayed on its old version. Self-update now passes the confirmation on, `pforge update` accepts `--yes` / `-y` to skip its prompt, and self-update exits with an error if the update applied nothing. In Bash, an update prompt with no input now cancels with a message instead of ending the script silently. Until your installed version has this fix, use `pforge self-update --yes --force`.
+- **Self-update now applies everything the new release installs, even when it replaces the `pforge` script itself.** The update runs in the old script, which only knows the old release's file list, so for example the 3.31 automation templates were not installed when upgrading from 3.29. Self-update now runs the new script's update once more from the same download.
+
 ## [3.31.1] — 2026-10-03 — Installed projects' test suite passes again
 
 ### Fixed

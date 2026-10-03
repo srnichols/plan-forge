@@ -158,7 +158,7 @@ COMMANDS:
   ext remove <name> Remove an installed extension
   ext publish <p>   Validate and generate catalog entry for publishing
   update [source]   Update framework files from Plan Forge source (keeps guidance files you edited)
-                      Flags: --dry-run, --force (no prompt), --overwrite-customized (replace edited guidance; backups kept)
+                      Flags: --dry-run, --yes/-y (no prompt), --force (no prompt; re-apply the same version), --overwrite-customized (replace edited guidance; backups kept)
   self-update       Check for and install the latest Plan Forge release from GitHub
                       Flags: --force (heal), --downgrade (with --force), --yes/-y, --dry-run, --verify (run check + smith after),
                              --overwrite-customized
@@ -1388,6 +1388,7 @@ _pf_migrate_forge_config() {
 _pf_gh_cleanup() {
     $from_github || return 0
     [ -n "$gh_tarball" ] || return 0
+    _PF_UPDATE_CACHE_PATHS=("$gh_tarball" "$gh_extract_dir")
     if $keep_cache; then
         echo "  Cache preserved (--keep-cache): $gh_tarball"
         return 0
@@ -1401,11 +1402,19 @@ _pf_gh_cleanup() {
 
 cmd_update() {
     local dry_run=false force=false source_path="" from_github=false keep_cache=false gh_tag="" allow_dev=false overwrite_customized=false
+    # --yes only answers the confirmation prompt; --force also re-applies the same version.
+    local auto_yes=false
+    # Read by cmd_self_update: whether files were applied, and what the second pass needs.
+    _PF_UPDATE_APPLIED=0
+    _PF_UPDATE_WRAPPER_CHANGED=false
+    _PF_UPDATE_SOURCE_DIR=""
+    _PF_UPDATE_CACHE_PATHS=()
 
     for arg in "$@"; do
         case "$arg" in
             --dry-run|--check) dry_run=true ;;
             --force)   force=true ;;
+            --yes|-y)  auto_yes=true ;;
             --overwrite-customized) overwrite_customized=true ;;
             --from-github) from_github=true ;;
             --keep-cache) keep_cache=true ;;
@@ -1889,8 +1898,9 @@ for (const op of plan.operations) {
     fi
 
     # ─── Confirm ──────────────────────────────────────────────────
-    if ! $force; then
-        read -rp "Apply ${#_updates[@]} updates and ${#_new_files[@]} new files? [y/N] (use --force to skip this prompt) " confirm
+    if ! $force && ! $auto_yes; then
+        # No input (end of file) must cancel, not end the script through set -e.
+        read -rp "Apply ${#_updates[@]} updates and ${#_new_files[@]} new files? [y/N] (use --yes to skip this prompt) " confirm || confirm=""
         case "$confirm" in
             y|Y|yes|Yes) ;;
             *) echo "Cancelled."; _pf_gh_cleanup; return 0 ;;
@@ -1961,6 +1971,8 @@ for (const op of plan.operations) {
 
     echo ""
     echo "Update complete: v$current_version → v$source_version"
+    _PF_UPDATE_APPLIED=1
+    _PF_UPDATE_SOURCE_DIR="$source_path"
     echo "Run 'pforge check' to validate the updated setup."
 
     # v2.53.1 — invalidate version caches so smith/dashboard pick up fresh state.
@@ -2037,6 +2049,7 @@ writeFreshCache(process.argv[1], process.argv[2]);
             break
         fi
     done
+    _PF_UPDATE_WRAPPER_CHANGED=$cli_updated
     if [ "$cli_updated" = true ]; then
         echo ""
         echo "ℹ️  CLI scripts (pforge.ps1/pforge.sh) were updated."
@@ -2309,6 +2322,30 @@ cmd_analyze() {
 }
 
 # ─── Command: self-update (Phase AUTO-UPDATE-01 Slice 2) ──────────────
+# When the update replaced pforge.sh itself, this shell ran the OLD update
+# logic, which does not know about anything a newer release added (for example
+# .github/automations in 3.31). Re-run update from the same downloaded release
+# with the NEW wrapper so those reach the project too. Files the first pass
+# already wrote are identical, so they are left alone.
+_pf_self_update_second_pass() {
+    [ "${_PF_UPDATE_WRAPPER_CHANGED:-false}" = true ] || return 0
+    [ -n "${_PF_UPDATE_SOURCE_DIR:-}" ] && [ -d "$_PF_UPDATE_SOURCE_DIR" ] || return 0
+    [ -f "$REPO_ROOT/pforge.sh" ] || return 0
+    echo ""
+    echo "Applying the new release's update steps (pforge.sh itself was updated)..."
+    if ! bash "$REPO_ROOT/pforge.sh" update "$_PF_UPDATE_SOURCE_DIR" --force --yes; then
+        echo "  ⚠ The second update pass failed. Run 'pforge update' once more to finish." >&2
+    fi
+}
+
+_pf_self_update_clear_cache() {
+    local path
+    for path in ${_PF_UPDATE_CACHE_PATHS[@]+"${_PF_UPDATE_CACHE_PATHS[@]}"}; do
+        [ -n "$path" ] && [ -e "$path" ] && rm -rf "$path"
+    done
+    return 0
+}
+
 cmd_self_update() {
     print_manual_steps "self-update" \
         "Force-refresh the update check (bypass 24h cache)" \
@@ -2463,10 +2500,22 @@ cmd_self_update() {
     fi
 
     echo ""
-    local update_args=(--from-github --tag "$latest_tag")
+    # The user confirmed above (or passed --yes), so update must not ask again:
+    # unattended, its unanswered prompt cancelled the install while self-update
+    # reported success.
+    local update_args=(--from-github --tag "$latest_tag" --yes --keep-cache)
     $force_heal && update_args+=(--force)
     $overwrite_customized && update_args+=(--overwrite-customized)
     cmd_update "${update_args[@]}"
+
+    if [ "${_PF_UPDATE_APPLIED:-0}" != 1 ]; then
+        _pf_self_update_clear_cache
+        echo "" >&2
+        echo "  ✗ self-update: $latest_tag was not installed — the update did not apply any files (see above)." >&2
+        exit 1
+    fi
+    _pf_self_update_second_pass
+    _pf_self_update_clear_cache
 
     # --verify: run 'pforge check' + 'pforge smith' in subprocesses so the
     # just-updated wrapper code is exercised. Exits non-zero if either fails.

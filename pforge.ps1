@@ -276,7 +276,7 @@ function Show-Help {
     Write-Host "  ext list          List installed extensions"
     Write-Host "  ext remove <name> Remove an installed extension"
     Write-Host "  update [source]   Update framework files from Plan Forge source (keeps guidance files you edited)"
-    Write-Host "                      Flags: --dry-run, --force (no prompt), --overwrite-customized (replace edited guidance; backups kept)"
+    Write-Host "                      Flags: --dry-run, --yes/-y (no prompt), --force (no prompt; re-apply the same version), --overwrite-customized (replace edited guidance; backups kept)"
     Write-Host "  self-update       Check for and install the latest Plan Forge release from GitHub"
     Write-Host "                      Flags: --force (heal), --downgrade (with --force), --yes/-y, --dry-run, --verify (run check + smith after),"
     Write-Host "                             --overwrite-customized"
@@ -1595,9 +1595,15 @@ function Invoke-Update {
 
     $dryRun = $Arguments -contains '--dry-run' -or $Arguments -contains '--check'
     $forceUpdate = $Arguments -contains '--force'
+    # --yes only answers the confirmation prompt; --force also re-applies the same version.
+    $autoYes = $Arguments -contains '--yes' -or $Arguments -contains '-y'
     $overwriteCustomized = $Arguments -contains '--overwrite-customized'
     $fromGitHub = $Arguments -contains '--from-github'
     $keepCache = $Arguments -contains '--keep-cache'
+    # Read by Invoke-SelfUpdate: whether files were applied, and what the second pass needs.
+    $script:UpdateApplied = $false
+    $script:UpdateWrapperChanged = $false
+    $script:UpdateSourceDir = $null
 
     # Parse --tag <value>
     $ghTag = $null
@@ -2050,8 +2056,8 @@ function Invoke-Update {
     }
 
     # ─── Confirm ──────────────────────────────────────────────────
-    if (-not $forceUpdate) {
-        $confirm = Read-Host "Apply $($updates.Count) updates and $($newFiles.Count) new files? [y/N] (use --force to skip this prompt)"
+    if (-not $forceUpdate -and -not $autoYes) {
+        $confirm = Read-Host "Apply $($updates.Count) updates and $($newFiles.Count) new files? [y/N] (use --yes to skip this prompt)"
         if ($confirm -notin @('y', 'Y', 'yes', 'Yes')) {
             Write-Host "Cancelled." -ForegroundColor Yellow
             Clear-GitHubUpdateCache -KeepCache:$keepCache
@@ -2122,6 +2128,9 @@ Files in this directory (except this README) are gitignored — they are runtime
     Write-Host ""
     Write-Host "Update complete: v$currentVersion → v$sourceVersion" -ForegroundColor Green
     Write-Host "Run 'pforge check' to validate the updated setup." -ForegroundColor DarkGray
+    $script:UpdateApplied = $true
+    $script:UpdateWrapperChanged = $wrapperSelfUpdated
+    $script:UpdateSourceDir = $sourcePath
 
     # Issue #177: when the wrapper itself was updated, the running PowerShell
     # session is still executing the OLD code. Subsequent commands will use
@@ -6146,6 +6155,24 @@ function Invoke-Tour {
 }
 
 # ─── Command: self-update ──────────────────────────────────────────────
+# When the update replaced pforge.ps1 itself, this session ran the OLD update
+# logic, which does not know about anything a newer release added (for example
+# .github/automations in 3.31). Re-run update from the same downloaded release
+# with the NEW wrapper so those reach the project too. Files the first pass
+# already wrote are identical, so they are left alone.
+function Invoke-SelfUpdateSecondPass {
+    if (-not $script:UpdateWrapperChanged -or -not $script:UpdateSourceDir -or -not (Test-Path $script:UpdateSourceDir)) { return }
+    $pforgeScript = Join-Path $RepoRoot "pforge.ps1"
+    if (-not (Test-Path $pforgeScript)) { return }
+    Write-Host ""
+    Write-Host "Applying the new release's update steps (pforge.ps1 itself was updated)..." -ForegroundColor DarkCyan
+    $hostExe = (Get-Process -Id $PID).Path
+    & $hostExe -NoProfile -ExecutionPolicy Bypass -File $pforgeScript update $script:UpdateSourceDir --force --yes
+    if ($LASTEXITCODE -ne 0) {
+        Write-Host "  ⚠ The second update pass exited $LASTEXITCODE. Run 'pforge update' once more to finish." -ForegroundColor Yellow
+    }
+}
+
 function Invoke-SelfUpdate {
     Write-ManualSteps "self-update" @(
         "Force-refresh the update check (bypass 24h cache)"
@@ -6300,13 +6327,24 @@ console.log(JSON.stringify(r === null ? { checkFailed: true } : r));
         }
     }
 
-    # Delegate to existing update --from-github
+    # Delegate to existing update --from-github. The user confirmed above (or
+    # passed --yes), so update must not ask again: unattended, its unanswered
+    # prompt cancelled the install while self-update reported success.
     Write-Host "" -ForegroundColor White
-    $updateArgs = @('--from-github', '--tag', $latestTag)
+    $updateArgs = @('--from-github', '--tag', $latestTag, '--yes', '--keep-cache')
     if ($forceUpdate) { $updateArgs += '--force' }
     if ($Arguments -contains '--overwrite-customized') { $updateArgs += '--overwrite-customized' }
     $script:Arguments = $updateArgs
     Invoke-Update
+
+    if (-not $script:UpdateApplied) {
+        Clear-GitHubUpdateCache
+        Write-Host ""
+        Write-Host "  ✗ self-update: $latestTag was not installed — the update did not apply any files (see above)." -ForegroundColor Red
+        exit 1
+    }
+    Invoke-SelfUpdateSecondPass
+    Clear-GitHubUpdateCache
 
     # --verify: run 'pforge check' + 'pforge smith' in subprocesses so the
     # just-updated wrapper code is exercised (the running session still has

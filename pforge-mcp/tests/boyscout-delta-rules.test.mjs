@@ -10,7 +10,7 @@
 import { describe, it, expect } from "vitest";
 import { readFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
-import { fileURLToPath, pathToFileURL } from "node:url";
+import { fileURLToPath } from "node:url";
 
 const REPO_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..", "..");
 const DELTA_SCRIPT = resolve(REPO_ROOT, "scripts/audit/boyscout-delta.mjs");
@@ -23,15 +23,19 @@ function trackedRules() {
   return [...block[1].matchAll(/'([^']+)'/g)].map((m) => m[1]);
 }
 
-async function configuredRules() {
-  const { default: config } = await import(pathToFileURL(ESLINT_CONFIG).href);
-  const entries = Array.isArray(config) ? config : [config];
-  return new Set(entries.flatMap((entry) => Object.keys(entry.rules || {})));
+/**
+ * Rule IDs the config enables, read from its source: importing it would need
+ * eslint, a root devDependency that the pforge-mcp CI job does not install.
+ */
+function configuredRules() {
+  const src = readFileSync(ESLINT_CONFIG, "utf8");
+  return new Set([...src.matchAll(/^\s*'([\w/-]+)':\s*\[/gm)].map((m) => m[1]));
 }
 
 describe("Guard: Boy Scout delta tracks rules the clean-code config reports", () => {
-  it("every tracked rule is configured", async () => {
-    const configured = await configuredRules();
+  it("every tracked rule is configured", () => {
+    const configured = configuredRules();
+    expect(configured.has("clean-code/complexity-warn")).toBe(true);
     const tracked = trackedRules();
     expect(tracked.length).toBeGreaterThan(0);
     expect(tracked.filter((rule) => !configured.has(rule))).toEqual([]);

@@ -60,12 +60,14 @@ const SOURCE_ONLY_SUITES = {
     "tests/test-smells-scanner.test.mjs",
     "tests/testbed-happypath.test.mjs",
     "tests/preset-quality.test.mjs",
+    "tests/boyscout-delta-rules.test.mjs",
   ],
   "../scripts/forge-home-cleanup.mjs": ["tests/forge-home-cleanup.test.mjs"],
   "../scripts/sync-versions.mjs": ["tests/version-sync.test.mjs"],
   "../scripts/check-model-drift.mjs": ["tests/model-drift.test.mjs"],
   "../scripts/benchmark": ["tests/sdk-parity-benchmark.test.mjs"],
-  "../scripts/release": ["tests/release-harness.test.mjs"],
+  "../scripts/release": ["tests/release-harness.test.mjs", "tests/release-ship.test.mjs"],
+  "../scripts/build-agent-plugin.mjs": ["tests/agent-plugin.test.mjs"],
   "../pforge-master": [
     "tests/auditor-automation-baseline.test.mjs",
     "tests/forge-master.advisory.test.mjs",
@@ -87,6 +89,7 @@ const SOURCE_ONLY_SUITES = {
     "tests/full-suite-regression.test.mjs",
     "tests/issue-257-memory-enumeration.test.mjs",
     "tests/meta-287-hook-launchers.test.mjs",
+    "tests/automation-templates.test.mjs",
   ],
   "../presets": ["tests/tempering-runner.test.mjs"],
 };
@@ -118,5 +121,9 @@ export default defineConfig({
     // (detectWorkers, probeQuorumModelAvailability, spawnWorker), which the
     // 5000ms default could not cover once vitest 4 added per-test overhead.
     testTimeout: 30000,
+    // Runs started by tests must not ask the real Copilot runtime for its model
+    // list (copilot-live-models.mjs): it is slow, needs a signed-in user, and is
+    // not what any suite is testing. copilot-live-models.test.mjs clears this itself.
+    env: { PFORGE_LIVE_MODELS: "0" },
   },
 });

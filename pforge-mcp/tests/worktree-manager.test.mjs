@@ -155,16 +155,16 @@ describe("createWorktree", () => {
     });
     expect(spawnCalls).toHaveLength(1);
     expect(spawnCalls[0].cmd).toBe("git");
-    expect(spawnCalls[0].args.slice(0, 3)).toEqual(["worktree", "add", "--detach"]);
-    expect(spawnCalls[0].args[3]).toBe(path);
-    expect(spawnCalls[0].args[4]).toBe("HEAD");
+    // gitLongPathArgs() may prefix `-c core.longpaths=true` (Windows).
+    const args = spawnCalls[0].args.slice(spawnCalls[0].args.indexOf("worktree"));
+    expect(args).toEqual(["worktree", "add", "--detach", path, "HEAD"]);
   });
 
   it("respects baseRef override", () => {
     createWorktree({
       projectDir, planBasename: "p", sliceId: "s", variant: 2, baseRef: "main", spawn: fakeSpawn,
     });
-    expect(spawnCalls[0].args[4]).toBe("main");
+    expect(spawnCalls[0].args.at(-1)).toBe("main");
   });
 
   it("throws when git worktree add fails", () => {

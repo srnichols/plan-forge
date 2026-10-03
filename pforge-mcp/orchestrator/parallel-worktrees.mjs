@@ -3,7 +3,7 @@ import { randomUUID } from "node:crypto";
 import { mkdir, writeFile } from "node:fs/promises";
 import { dirname, join, resolve } from "node:path";
 import { promisify } from "node:util";
-import { variantPath } from "../worktree-manager.mjs";
+import { gitLongPathArgs, variantPath } from "../worktree-manager.mjs";
 import { copyWorktreeInputs } from "./worktree-inputs.mjs";
 import { checkWorktreeGates } from "./worktree-gates.mjs";
 
@@ -43,7 +43,7 @@ async function requireCleanParent(projectDir, expectedHead) {
 async function createDetachedWorktree({ projectDir, batchId, sliceId, baseSha, ignoredPaths = [], abortSignal }) {
   const worktreePath = variantPath(projectDir, batchId, sliceId, 1);
   await mkdir(dirname(worktreePath), { recursive: true });
-  await git(projectDir, ["worktree", "add", "--detach", worktreePath, baseSha]);
+  await git(projectDir, [...gitLongPathArgs(), "worktree", "add", "--detach", worktreePath, baseSha]);
   await copyWorktreeInputs({ projectDir, worktreePath, ignoredPaths, abortSignal });
   return worktreePath;
 }

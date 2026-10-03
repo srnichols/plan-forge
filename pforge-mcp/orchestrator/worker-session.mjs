@@ -56,13 +56,17 @@ export function createWorkerSession({ enabled }) {
     },
     record(workerResult) {
       if (!enabled) return;
-      if (workerResult?.sessionId) {
-        id = workerResult.sessionId;
-        established = true;
-      } else {
-        id = randomUUID();
-        established = false;
+      if (!workerResult?.sessionId) {
+        this.reset();
+        return;
       }
+      id = workerResult.sessionId;
+      established = true;
+    },
+    /** Start the next attempt in a fresh session (e.g. after a blocked response). */
+    reset() {
+      id = randomUUID();
+      established = false;
     },
   };
 }

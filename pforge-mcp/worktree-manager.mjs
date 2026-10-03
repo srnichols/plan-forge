@@ -21,6 +21,7 @@
 import { mkdirSync, existsSync, statSync, readdirSync, renameSync, rmSync } from "node:fs";
 import { resolve, join, isAbsolute } from "node:path";
 import { spawnSync } from "node:child_process";
+import { MS_PER_DAY } from "./time-units.mjs";
 
 export const WORKTREES_DIR = ".forge/worktrees";
 export const WORKTREES_ARCHIVE_DIR = ".forge/worktrees-archive";
@@ -28,6 +29,18 @@ export const DEFAULT_ARCHIVE_DAYS = 7;
 export const MIN_VARIANTS = 2;
 export const MAX_VARIANTS = 5;
 export const DEFAULT_MAX_VARIANTS = 3;
+
+/**
+ * Git options for worktree commands: `core.longpaths` on Windows, where
+ * `.forge/worktrees/<batch>/<slice>/variant-<n>/` plus a project's own deep
+ * paths (node_modules) can pass the 260-character MAX_PATH limit.
+ *
+ * @param {string} [platform]
+ * @returns {string[]}
+ */
+export function gitLongPathArgs(platform = process.platform) {
+  return platform === "win32" ? ["-c", "core.longpaths=true"] : [];
+}
 
 /**
  * Sanitize a user-supplied path component to something safe to use
@@ -156,7 +169,7 @@ export function createWorktree({
   mkdirSync(join(path, ".."), { recursive: true });
   const result = spawn(
     "git",
-    ["worktree", "add", "--detach", path, baseRef],
+    [...gitLongPathArgs(), "worktree", "add", "--detach", path, baseRef],
     { cwd: projectDir, encoding: "utf8" },
   );
   if (!result || result.status !== 0) {
@@ -318,7 +331,7 @@ export function cleanupAgedArchives({
   if (!existsSync(root)) {
     return { removed, kept };
   }
-  const cutoff = now.getTime() - archiveDays * 24 * 60 * 60 * 1000;
+  const cutoff = now.getTime() - archiveDays * MS_PER_DAY;
 
   // .forge/worktrees-archive/<plan>/<slice>/variant-<n>
   for (const plan of readdirSync(root, { withFileTypes: true })) {

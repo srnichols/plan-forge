@@ -30,7 +30,7 @@ import { API_ALLOWED_ROLES, COST_ANOMALY_MULTIPLIER, CRUCIBLE_STALL_CUTOFF_DAYS,
 import { LogEventHandler, OrchestratorEventBus, appendEvent, writeSilentExitRecord } from "./event-bus.mjs";
 import { buildSlicePrompt } from "./prompt-builders.mjs";
 import { parsePlan, computeLockHash, normalizeSliceId, compareSliceIds, parseOnlySlicesExpr, parseWorkerTimeoutValue, parseSlices, buildDAG, restrictDagToSlices, loadPlanParserConfig } from "./plan-parser.mjs";
-import { resetCliWorkersCache, setGhCopilotProbe, isDirectApiOnlyModel, isCopilotServableModel, isApiOnlyModel, getFoundryAuthScope, detectApiProvider, setSecretsLoader, buildApiMessages, generateImage, loadWorkerCapabilities, compareVersions, detectPackageManager, suggestInstall, classifyProbeFailure, detectWorkers, detectExecutionRuntime, detectClientHost, describeBillingSurface, getRoutingPreference, loadRoutingPreference, resolveRequiredCli, probeQuorumModelAvailability, filterQuorumModels, formatQuorumSummary, assessQuorumViability, detectRuntimes, spawnWorker, detectHelpTextOutput, detectSilentWorkerFailure, detectWorkerLaunchFailure, detectKilledBySignal, deriveVendorFromModel, extractTokens, shouldDefaultPremiumRequestsToOne, parseStderrStats, resolveWorkerOutputIdleMs, resolveWorkerTimeoutMs, assertWorkerBackendReady } from "./worker-spawn.mjs";
+import { resetCliWorkersCache, setGhCopilotProbe, isDirectApiOnlyModel, isCopilotServableModel, isApiOnlyModel, getFoundryAuthScope, detectApiProvider, setSecretsLoader, buildApiMessages, generateImage, loadWorkerCapabilities, compareVersions, detectPackageManager, suggestInstall, classifyProbeFailure, detectWorkers, detectExecutionRuntime, detectClientHost, describeBillingSurface, getRoutingPreference, loadRoutingPreference, resolveRequiredCli, probeQuorumModelAvailability, filterQuorumModels, formatQuorumSummary, assessQuorumViability, detectRuntimes, spawnWorker, detectHelpTextOutput, detectSilentWorkerFailure, detectWorkerLaunchFailure, detectContentFilterBlock, detectKilledBySignal, deriveVendorFromModel, extractTokens, shouldDefaultPremiumRequestsToOne, parseStderrStats, resolveWorkerOutputIdleMs, resolveWorkerTimeoutMs, assertWorkerBackendReady } from "./worker-spawn.mjs";
 import { resolveGateTimeoutMs, __resetBashPathCache, resolveBashPath, detectSelfRepairMissed, buildRetryPrompt, coalesceGateLines, editDistance, isPlaceholderToken, suggestAllowedCommand, looksLikeProse, runGate, SequentialScheduler, ParallelScheduler, CompetitiveScheduler, selectWinner, detectScopeConflicts } from "./schedulers.mjs";
 import { ensureForgeDir, pruneForgeRuns, recordModelPerformance, readForgeJson, appendForgeJsonl, readForgeJsonl, auditOrphanForgeFiles, loadModelPerformance, aggregateModelStats, getCostReport, getHealthTrend, emitToolTelemetry, loadGateCheckConfig, registerGateCheckResponder } from "./forge-io.mjs";
 import { extractPlanReleaseVersion, detectVersionCollision, parseValidationGates, lintGateCommands, validateGatePortability, isGateCommandAllowed, regressionGuard } from "./gate-helpers.mjs";
@@ -43,6 +43,8 @@ import { estimatePlan as _estimatePlan } from "../cost-service.mjs";
 import { finishRunIsolation, loadRunIsolationConfig, startRunIsolation } from "./run-isolation.mjs";
 import { loadImpactGateConfig, runImpactGate } from "./impact-gate.mjs";
 import { createWorkerSession, loadResumeOnRetry } from "./worker-session.mjs";
+import { cleanupStaleWorktrees } from "./worktree-janitor.mjs";
+import { clampMaxVariants } from "../worktree-manager.mjs";
 import { autoTierForSlice, loadAutoTierConfig } from "./auto-tier.mjs";
 import { isRetiredModel, isUnavailableToUser, retirementDate, useLiveCopilotModels } from "../copilot-models.mjs";
 import { availableEscalationChain, discoverCopilotModels } from "./copilot-live-models.mjs";
@@ -73,10 +75,7 @@ export function loadCompetitiveConfig(cwd) {
     const config = JSON.parse(readFileSync(configPath, "utf-8"));
     const raw = config?.runtime?.competitive ?? {};
     const out = { ...defaults };
-    if (Number.isFinite(raw.maxVariants)) {
-      const n = Math.trunc(raw.maxVariants);
-      out.maxVariants = Math.min(5, Math.max(2, n));
-    }
+    if (Number.isFinite(raw.maxVariants)) out.maxVariants = clampMaxVariants(raw.maxVariants);
     if (Number.isFinite(raw.archiveDays) && raw.archiveDays > 0) {
       out.archiveDays = Math.trunc(raw.archiveDays);
     }
@@ -399,6 +398,7 @@ const _PROGRESS_LINE_FORMATTERS = {
   "copilot-models-discovered": (ts, d) => (d.listSource === "disabled" ? "" : d.count > 0
     ? `[${ts}] 🧭 Copilot models: ${d.count} available to this account (${d.listSource})\n`
     : `[${ts}] 🧭 Copilot model list unavailable — using the bundled catalog${d.error ? ` (${d.error})` : ""}\n`),
+  "worktree-janitor": (ts, d) => (d.removed > 0 ? `[${ts}] 🧹 Removed ${d.removed} stale worktree(s) from .forge/\n` : ""),
   "escalation-chain-filtered": (ts, d) => `[${ts}] 🧭 Escalation chain: skipping ${d.dropped.join(", ")} (not available to this account)\n`,
 };
 
@@ -1011,6 +1011,17 @@ function _emitMemoryPreload(plan, planPath, projectName, eventBus) {
   } catch { /* best-effort — never break run start */ }
 }
 
+/** Remove parallel/competitive worktrees and archives past the retention; see worktree-janitor.mjs. */
+function _emitWorktreeJanitor(cwd, eventBus) {
+  try {
+    const cleanup = cleanupStaleWorktrees({ cwd, retentionDays: loadCompetitiveConfig(cwd).archiveDays });
+    const removed = cleanup.removed.length + cleanup.archivesRemoved.length;
+    if (removed > 0 || cleanup.errors.length > 0) {
+      eventBus.emit("worktree-janitor", { removed, kept: cleanup.kept.length, errors: cleanup.errors.slice(0, 5) });
+    }
+  } catch { /* best-effort — never break run start */ }
+}
+
 function _emitSnapshotJanitor(cwd, eventBus) {
   try {
     const cleanup = cleanupStaleSnapshots({ cwd });
@@ -1438,6 +1449,7 @@ export async function runPlan(planPath, options = {}) {
   // Issue #201 — janitor pass: drop any pforge-slice-N-snapshot stashes older
   // than 7 days. Best-effort.
   _emitSnapshotJanitor(cwd, eventBus);
+  _emitWorktreeJanitor(cwd, eventBus);
 
   // GX.2 (v2.36): L3 → L1 preload. Emit a `memory-preload` event right after
   // run-started carrying the deterministic search-hints derived from the plan.
@@ -2129,6 +2141,12 @@ function _executeSlicePostTeardownVerify({ teardownBaseline, teardownGuardConfig
   return null;
 }
 
+/** passed / failed, or skipped when no gate ran because the response was blocked. */
+function _gateStatus(gateResult) {
+  if (gateResult.contentFilter) return "skipped";
+  return gateResult.success ? "passed" : "failed";
+}
+
 function _executeSliceDetermineStatus({ workerResult, mode, slice, gateResult }) {
   const silentFailure = detectSilentWorkerFailure(workerResult, mode, slice.number);
   const killedBySignal = detectKilledBySignal(workerResult.exitCode);
@@ -2146,6 +2164,9 @@ function _executeSliceDetermineStatus({ workerResult, mode, slice, gateResult })
     // described the absence of work rather than the quality of it (meta-bug #264).
     status = "failed";
     statusReason = `worker-launch-failed: ${gateResult.launchFailure}`;
+  } else if (gateResult.contentFilter) {
+    status = "failed";
+    statusReason = `content-filtered: ${gateResult.contentFilter}`;
   } else if (!gateResult.success) {
     status = "failed";
     statusReason = `validation gate failed: ${gateResult.failedCommand || "unknown"}`;
@@ -2196,7 +2217,7 @@ function _executeSliceBuildResult({ slice, status, statusReason, duration, worke
     status,
     duration,
     exitCode: workerResult.exitCode,
-    gateStatus: gateResult.launchFailure ? "skipped" : (gateResult.success ? "passed" : "failed"),
+    gateStatus: gateResult.launchFailure ? "skipped" : _gateStatus(gateResult),
     gateOutput: gateResult.output,
     gateError: gateResult.error || null,
     failedCommand: gateResult.failedCommand || null,
@@ -2430,6 +2451,29 @@ function _autoTierForAttempt({ currentModel, slice, cwd }) {
   return autoTierForSlice({ complexityScore: slice.complexityScore, config: loadAutoTierConfig(cwd) });
 }
 
+/** The slice gates, or a skipped-gate result when the worker's response was blocked. */
+function _gateUnlessFiltered({ contentFilter, slice, cwd, sliceStartHead }) {
+  return contentFilter
+    ? { success: false, skipped: true, contentFilter, output: contentFilter }
+    : _executeSliceRunGates({ slice, cwd, sliceStartHead });
+}
+
+/** Record a content-filtered attempt for another try on the next model. */
+function _recordContentFilterForRetry({ contentFilter, workerResult, currentModel, attemptStartTime, attempt, maxRetries, logFile }) {
+  const next = attempt + 1;
+  const context = {
+    previousAttempt: next,
+    gateName: "(response blocked by content filtering — gate skipped)",
+    model: workerResult.model || currentModel || "auto",
+    durationMs: Date.now() - attemptStartTime,
+    stderrTail: contentFilter,
+  };
+  if (next <= maxRetries) {
+    writeFileSync(logFile, `\n\n--- RESPONSE BLOCKED BY CONTENT FILTERING, RETRYING (attempt ${next + 1}) ---\n${contentFilter}\n`, { flag: "a" });
+  }
+  return { lastError: contentFilter, lastFailureContext: context, attempt: next };
+}
+
 /**
  * Record a launch failure for another attempt. A worker that never launched
  * exits non-zero, so the loop's `exitCode !== 0` break used to end the run on
@@ -2513,11 +2557,20 @@ async function _executeSliceAttemptLoop(ctx) {
 
     const logFile = _executeSliceWriteLog({ runDir, slice, attempt, workerResult, startTime });
     const launchFailure = detectWorkerLaunchFailure(workerResult, mode);
+    const contentFilter = launchFailure ? null : detectContentFilterBlock(workerResult, mode);
     gateResult = launchFailure
       ? { success: false, skipped: true, launchFailure, output: launchFailure }
-      : _executeSliceRunGates({ slice, cwd, sliceStartHead });
+      : _gateUnlessFiltered({ contentFilter, slice, cwd, sliceStartHead });
 
     if (gateResult.success && workerResult.exitCode === 0) break;
+
+    if (contentFilter) {
+      workerSessions.reset();
+      ({ lastError, lastFailureContext, attempt } = _recordContentFilterForRetry({
+        contentFilter, workerResult, currentModel, attemptStartTime, attempt, maxRetries, logFile,
+      }));
+      continue;
+    }
 
     if (workerResult.timedOut) {
       if (_executeSliceHandleTimeoutCommit({ workerResult, sliceStartHead, cwd, slice, logFile, eventBus })) break;

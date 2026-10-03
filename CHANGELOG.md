@@ -18,6 +18,8 @@ Format follows [Keep a Changelog](https://keepachangelog.com/).
 
 ### Fixed
 
+- **A response blocked by content filtering is now reported as such, and retried on the next model.** When the model provider blocked a worker's response, the attempt did no work, but its gate still ran and the slice failed with that gate's error (for example a missing file), pointing at the code instead of the blocked response. Plan Forge now recognises the Copilot CLI and Azure OpenAI blocked-response messages, skips the gate, and retries on the next escalation model in a fresh session; a slice that stays blocked fails with `content-filtered`.
+- **Old worktrees from parallel and competitive slices are now cleaned up.** A failed or interrupted batch keeps its worktrees in `.forge/worktrees/` for recovery, but nothing removed them afterwards, so they accumulated, each with dependency links back into the project and paths deep enough to break Windows tools. Each run now removes worktrees and archived variants older than `runtime.competitive.archiveDays` (7 days by default), deleting links without following them. New worktrees are created with `core.longpaths` on Windows.
 - **Run warnings such as scope escapes, scheduler deadlocks and branch losses now reach the run log, the dashboard and the terminal.** The orchestrator's event bus forwarded only a fixed list of event types, so about two dozen later ones, including `slice-scope-escape`, `scheduler-deadlock`, `teardown-branch-loss`, `gate-blocked` and `ci-triggered`, were emitted but never written to `events.log` or shown anywhere. Every event is forwarded now, and a failing dashboard or telemetry sink no longer interrupts the run.
 
 ## [3.30.0] — 2026-10-03 — One update plan for both shells

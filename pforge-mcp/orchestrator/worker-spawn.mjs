@@ -2585,6 +2585,35 @@ export function detectWorkerLaunchFailure(workerResult, mode) {
     `absence of work that was never attempted.${stderrTail ? ` stderr: ${stderrTail}` : ""}`;
 }
 
+/** Provider messages for a response blocked by content filtering. */
+const CONTENT_FILTER_MARKERS = Object.freeze([
+  /response was blocked by content filtering/i,
+  /content management policy/i,
+  /"finish_reason"\s*:\s*"content_filter"/i,
+]);
+/** Above this much stdout the worker did real work; a filter phrase in it is incidental. */
+const CONTENT_FILTER_MAX_OUTPUT = 2000;
+
+/**
+ * Detect a worker whose response the model provider blocked. The attempt did
+ * no work, so its gate would only describe that absence; the caller skips the
+ * gate and retries on the next model instead.
+ *
+ * @param {{ output?: string, stderr?: string, worker?: string, model?: string }|null} workerResult
+ * @param {string} mode
+ * @returns {string|null} Reason, or null when the response was not blocked.
+ */
+export function detectContentFilterBlock(workerResult, mode) {
+  if (!workerResult || mode === "assisted") return null;
+  const output = workerResult.output || "";
+  if (output.length > CONTENT_FILTER_MAX_OUTPUT) return null;
+  const text = `${output}\n${workerResult.stderr || ""}`;
+  if (!CONTENT_FILTER_MARKERS.some((re) => re.test(text))) return null;
+  const model = workerResult.model ? ` (model ${workerResult.model})` : "";
+  return `worker '${workerResult.worker || "unknown"}' response was blocked by content filtering${model}. ` +
+    "The validation gate was skipped: the attempt did no work. The retry escalates to the next model in a fresh session.";
+}
+
 /**
  * Meta-bug #99: detect worker subprocesses killed by a signal / Ctrl+C.
  *

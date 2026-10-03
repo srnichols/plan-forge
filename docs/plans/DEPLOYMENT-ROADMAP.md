@@ -26,8 +26,8 @@ Listed in **execution order**. Each phase's Execution Hold gates on its predeces
 
 | Phase | Status | Goal | Reference |
 |-------|--------|------|-----------|
-| PRESET-BUILD-CHECKS | 🔬 | Nightly compile checks for Rust and Swift preset samples, driven by committed block manifests, plus build-and-health checks for every documented Dockerfile (#309). | [Phase-PRESET-BUILD-CHECKS-PLAN.md](./Phase-PRESET-BUILD-CHECKS-PLAN.md) |
-| UPDATE-CORE | 🔬 ⏸️ | One Node implementation (`update-plan.mjs`) of the update scan, config migration and report, plus a shared `preset-catalog.json` for setup. Closes the two PowerShell/Bash parity gaps (#299). On hold until v3.29.0 ships. | [Phase-UPDATE-CORE-PLAN.md](./Phase-UPDATE-CORE-PLAN.md) |
+| PRESET-BUILD-CHECKS | ✅ | Nightly compile checks for Rust and Swift preset samples, driven by committed block manifests, plus build-and-health checks for every documented Dockerfile (#309). Shipped v3.29.3; all eight stacks green on master. | [Phase-PRESET-BUILD-CHECKS-PLAN.md](./Phase-PRESET-BUILD-CHECKS-PLAN.md) |
+| UPDATE-CORE | ✅ | One Node implementation (`update-plan.mjs`) of the update scan, config migration and report, plus a shared `preset-catalog.json` for setup. Closes the two PowerShell/Bash parity gaps (#299). Ships in v3.30.0. | [Phase-UPDATE-CORE-PLAN.md](./Phase-UPDATE-CORE-PLAN.md) |
 
 ---
 

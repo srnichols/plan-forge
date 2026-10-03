@@ -1,12 +1,20 @@
 # Phase UPDATE-CORE — One Node implementation of the update scan and setup's preset tables
 
-> **Status**: 🔬 HARDENED — cleared for execution 2026-10-02 (hold lifted: v3.29.3 is the released baseline)
+> **Status**: **✅ Complete 2026-10-03** — ships in v3.30.0. See `## What actually shipped`.
 > **Issue**: [#299](https://github.com/srnichols/plan-forge/issues/299)
 > **Tracks**: `pforge-mcp/update-plan.mjs` (new), `pforge-mcp/preset-catalog.json` (new), `pforge.ps1` `Invoke-Update`, `pforge.sh` `cmd_update`, `setup.ps1`, `setup.sh`, tests.
-> **Pipeline**: Specify ✅ → Harden ✅ → Execute ⏸️ → Review → Ship (3.30.0)
+> **Pipeline**: Specify ✅ → Harden ✅ → Execute ✅ → Review ✅ → Ship (3.30.0)
 > **Session budget**: 7 slices. Break after S3 (PowerShell wired) and resume with `pforge run-plan --resume-from 4`.
 
 ---
+
+## What actually shipped
+
+- `pforge-mcp/update-plan.mjs` (`plan` / `report`) holds the update scan; `pforge.ps1` lost about 300 lines and `pforge.sh` about 190. Both shells print identical `UPDATE` / `NEW` / `KEEP` lists for every fixture (`update-plan-baseline.test.mjs`).
+- D1: PowerShell now adds missing shared and internal instructions as `NEW`, as Bash did.
+- `pforge-mcp/preset-catalog.json` feeds setup's stack labels, default commands and shared-file list in both shells.
+- Found while running it: slices 3–4 sent guidance files to the update guard even when no guard was available, failing under Windows PowerShell 5.1; fixed in both shells with a regression test (1c5935d9). One shared test helper (`tests/helpers/update-runtime.mjs`) now lists the modules a fake update source needs.
+- Slice 6's gate rehearsed the `-dev` HEAD, which `rehearse.mjs` refuses by design (#316). Rehearsed a VERSION 3.30.0 commit instead: 229/0 from v3.29.0 and from v3.29.3. A new gate-lint rule, `release-rehearsal-in-gate`, flags this at hardening time.
 
 ## Execution Hold
 
@@ -193,13 +201,12 @@ npx --prefix pforge-mcp vitest run pforge-mcp/tests/setup-preset-defaults.test.m
 ### Slice 6: Coherence — both shells, whole update [depends: Slice 3, Slice 4, Slice 5] [scope: pforge-mcp/tests/update-plan-baseline.test.mjs, CHANGELOG.md, docs/CLI-GUIDE.md]
 
 1. Flip the documented-gap entries in `update-plan-baseline.test.mjs`. The two shells must now produce identical operation lists for every fixture.
-2. Run the release rehearsal from v3.29.0 against this branch's HEAD.
+2. Run the release rehearsal from v3.29.0 against a commit with VERSION set to the release (rehearse.mjs refuses a -dev ref, #316).
 3. Add the CHANGELOG `[Unreleased]` entries (D1 behaviour change, Bash config migration) and update the CLI guide's "What it does" list for `pforge update`.
 
 **Validation Gate**:
 ```bash
 npx --prefix pforge-mcp vitest run pforge-mcp/tests/update-plan-baseline.test.mjs pforge-mcp/tests/update-plan.test.mjs pforge-mcp/tests/update-guard-cli.test.mjs
-node scripts/release/rehearse.mjs --release-ref HEAD --previous-tag v3.29.0 --skip-tag-check
 ```
 
 ---

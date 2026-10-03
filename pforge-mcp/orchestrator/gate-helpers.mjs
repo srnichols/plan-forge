@@ -174,6 +174,71 @@ function _pushWRule({ test, ruleId, rule, msg, line, slice, loc, strictMode, dis
   });
 }
 
+/**
+ * Warn-level gate checks, in reporting order. Each entry: `applies` decides
+ * from the gate line, `message` explains the fix. Add a rule here, not as
+ * another branch in _lintBasicRules.
+ */
+const GATE_WARN_RULES = Object.freeze([
+  {
+    rule: "runtime-gate",
+    applies: ({ line, slice, lastSliceNumber }) => /curl\s.*localhost[:\s]/.test(line) && slice.number !== lastSliceNumber,
+    message: () => "curl to localhost requires a running server. Move runtime API checks to vitest integration tests.",
+  },
+  {
+    rule: "vitest-direct-node",
+    applies: ({ line }) => /^node\s+.*\.test\.(mjs|js|ts)/.test(_stripQuotedSpans(line)),
+    message: () => "'node *.test.*' fails for vitest test files. Use 'npx vitest run <file>' instead.",
+  },
+  {
+    rule: "pforge-analyze-in-gate",
+    applies: ({ line }) => /\bpforge\s+analyze\b/.test(line),
+    message: () => "'pforge analyze' in a gate exits 1 on noisy text-match heuristics (false-negatived all Phase-38.1–38.8 Slice 5 gates). Omit it — the orchestrator auto-runs analyze post-execution. Use 'pforge regression-guard <plan>' for a doc-integrity check instead.",
+  },
+  {
+    rule: "windows-unavailable",
+    applies: ({ line, cmdToken }) => UNIX_TOOLS.includes(cmdToken) && !/^bash\s+-c/.test(line),
+    message: ({ cmdToken }) => `'${cmdToken}' is not available in cmd.exe on Windows. Wrap in 'bash -c' or use a 'node -e' equivalent.`,
+  },
+  {
+    rule: "unix-only-path",
+    applies: ({ line }) => /\/tmp\/|\/dev\/null/.test(line),
+    message: () => "Unix-only path (/tmp/ or /dev/null) — fails on Windows. Use os.tmpdir() or NUL.",
+  },
+  {
+    rule: "project-script",
+    applies: ({ line }) => /^pforge\s/.test(line),
+    message: () => "'pforge' is a project script, not on PATH during gate execution. Use 'pwsh ./pforge.ps1' or rewrite as 'node -e'.",
+  },
+  {
+    rule: "js-comment-in-eval",
+    applies: ({ line }) => /^node\s+-e\s+".*\/\//.test(line) && !line.includes("http://") && !line.includes("https://"),
+    message: () => "node -e contains '//' which acts as a line comment on a single line, breaking the code. Remove JS comments from gate commands.",
+  },
+  {
+    rule: "gate-cannot-fail",
+    applies: ({ line }) => /\bpnpm\s+(?:--filter|-F)\s+\S+\s+(?!exec\b|run\b|-)\S+/.test(line),
+    message: () => "'pnpm --filter <pkg> <script>' exits 0 when the script does not exist (\"None of the selected packages has a ... script\"), so a typo or a script that only exists in a sibling package reads as a passing gate. Use 'pnpm run <script>' from inside the package directory — it exits 1 with ERR_PNPM_NO_SCRIPT.",
+  },
+  {
+    rule: "git-diff-misses-untracked",
+    applies: ({ line }) => /\bgit\s+diff\b[^\n]*\bHEAD~\d/.test(line),
+    message: () => "'git diff ... HEAD~N' never lists untracked files, so a gate counting brand-new files reads 0 until they are committed — and the slice cannot commit on an unrun gate. Use 'git status --porcelain' or 'git ls-files --others --exclude-standard' to include new files.",
+  },
+  {
+    rule: "lookaround-unsupported",
+    applies: ({ line }) => /\b(grep|rg|ripgrep|egrep|fgrep)\b/.test(line)
+      && /\(\?<[=!]|\(\?[=!]/.test(line)
+      && !/(^|\s)(-P|--pcre2|--perl-regexp)(\s|=|$)/.test(line),
+    message: () => "regex look-around ((?<=) (?<!) (?=) (?!)) is not supported by the default grep/ripgrep engine — the match count silently evaluates wrong (often 0, a false pass). Add '-P' for PCRE, or scope the count to a literal navigation pattern (href=, router.push, redirect) and exclude component/lib imports and non-route API paths instead of a negated-lookbehind.",
+  },
+  {
+    rule: "release-rehearsal-in-gate",
+    applies: ({ line }) => /scripts[\\/]release[\\/]rehearse\.mjs/.test(line),
+    message: () => "release rehearsal refuses a -dev VERSION, and a plan's branch is always at X.Y.Z-dev between releases, so this gate cannot pass (#316). Rehearse the release commit in the release checklist instead, or test the updater with vitest fixtures here.",
+  },
+]);
+
 function _lintBasicRules({ line, slice, loc, cmdToken, lastSliceNumber, warnings, errors }) {
   if (line.includes("/dev/stdin")) {
     errors.push({
@@ -188,67 +253,10 @@ function _lintBasicRules({ line, slice, loc, cmdToken, lastSliceNumber, warnings
       message: `${loc}: '${cmdToken}' is not in the gate allowlist. Add it to GATE_ALLOWED_PREFIXES or rewrite the command.`,
     });
   }
-  if (/curl\s.*localhost[:\s]/.test(line) && slice.number !== lastSliceNumber) {
-    warnings.push({
-      slice: slice.number, command: line, rule: "runtime-gate", severity: "warn",
-      message: `${loc}: curl to localhost requires a running server. Move runtime API checks to vitest integration tests.`,
-    });
-  }
-  if (/^node\s+.*\.test\.(mjs|js|ts)/.test(_stripQuotedSpans(line))) {
-    warnings.push({
-      slice: slice.number, command: line, rule: "vitest-direct-node", severity: "warn",
-      message: `${loc}: 'node *.test.*' fails for vitest test files. Use 'npx vitest run <file>' instead.`,
-    });
-  }
-  if (/\bpforge\s+analyze\b/.test(line)) {
-    warnings.push({
-      slice: slice.number, command: line, rule: "pforge-analyze-in-gate", severity: "warn",
-      message: `${loc}: 'pforge analyze' in a gate exits 1 on noisy text-match heuristics (false-negatived all Phase-38.1–38.8 Slice 5 gates). Omit it — the orchestrator auto-runs analyze post-execution. Use 'pforge regression-guard <plan>' for a doc-integrity check instead.`,
-    });
-  }
-  if (UNIX_TOOLS.includes(cmdToken) && !/^bash\s+-c/.test(line)) {
-    warnings.push({
-      slice: slice.number, command: line, rule: "windows-unavailable", severity: "warn",
-      message: `${loc}: '${cmdToken}' is not available in cmd.exe on Windows. Wrap in 'bash -c' or use a 'node -e' equivalent.`,
-    });
-  }
-  if (/\/tmp\/|\/dev\/null/.test(line)) {
-    warnings.push({
-      slice: slice.number, command: line, rule: "unix-only-path", severity: "warn",
-      message: `${loc}: Unix-only path (/tmp/ or /dev/null) — fails on Windows. Use os.tmpdir() or NUL.`,
-    });
-  }
-  if (/^pforge\s/.test(line)) {
-    warnings.push({
-      slice: slice.number, command: line, rule: "project-script", severity: "warn",
-      message: `${loc}: 'pforge' is a project script, not on PATH during gate execution. Use 'pwsh ./pforge.ps1' or rewrite as 'node -e'.`,
-    });
-  }
-  if (/^node\s+-e\s+".*\/\//.test(line) && !line.includes("http://") && !line.includes("https://")) {
-    warnings.push({
-      slice: slice.number, command: line, rule: "js-comment-in-eval", severity: "warn",
-      message: `${loc}: node -e contains '//' which acts as a line comment on a single line, breaking the code. Remove JS comments from gate commands.`,
-    });
-  }
-  if (/\bpnpm\s+(?:--filter|-F)\s+\S+\s+(?!exec\b|run\b|-)\S+/.test(line)) {
-    warnings.push({
-      slice: slice.number, command: line, rule: "gate-cannot-fail", severity: "warn",
-      message: `${loc}: 'pnpm --filter <pkg> <script>' exits 0 when the script does not exist ("None of the selected packages has a ... script"), so a typo or a script that only exists in a sibling package reads as a passing gate. Use 'pnpm run <script>' from inside the package directory — it exits 1 with ERR_PNPM_NO_SCRIPT.`,
-    });
-  }
-  if (/\bgit\s+diff\b[^\n]*\bHEAD~\d/.test(line)) {
-    warnings.push({
-      slice: slice.number, command: line, rule: "git-diff-misses-untracked", severity: "warn",
-      message: `${loc}: 'git diff ... HEAD~N' never lists untracked files, so a gate counting brand-new files reads 0 until they are committed — and the slice cannot commit on an unrun gate. Use 'git status --porcelain' or 'git ls-files --others --exclude-standard' to include new files.`,
-    });
-  }
-  if (/\b(grep|rg|ripgrep|egrep|fgrep)\b/.test(line)
-    && /\(\?<[=!]|\(\?[=!]/.test(line)
-    && !/(^|\s)(-P|--pcre2|--perl-regexp)(\s|=|$)/.test(line)) {
-    warnings.push({
-      slice: slice.number, command: line, rule: "lookaround-unsupported", severity: "warn",
-      message: `${loc}: regex look-around ((?<=) (?<!) (?=) (?!)) is not supported by the default grep/ripgrep engine — the match count silently evaluates wrong (often 0, a false pass). Add '-P' for PCRE, or scope the count to a literal navigation pattern (href=, router.push, redirect) and exclude component/lib imports and non-route API paths instead of a negated-lookbehind.`,
-    });
+  for (const { rule, applies, message } of GATE_WARN_RULES) {
+    if (applies({ line, slice, cmdToken, lastSliceNumber })) {
+      warnings.push({ slice: slice.number, command: line, rule, severity: "warn", message: `${loc}: ${message({ cmdToken })}` });
+    }
   }
 }
 

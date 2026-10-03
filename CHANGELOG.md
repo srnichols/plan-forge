@@ -7,6 +7,10 @@ Format follows [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
+### Added
+
+- **Nightly build checks for every preset's code samples and Dockerfiles (#309).** `rust` and `swift` samples are fragments that only compile once assembled — `scripts/audit/preset-build/<stack>/manifest.json` now maps every sample block onto a pinned scaffold, and `scripts/audit/preset-build/run.mjs --stack <name>` extracts, compiles (`cargo check` against PostgreSQL 18, `swift build --build-tests`) and reports PASS/FAIL. Every documented Dockerfile, across all eight preset stacks, is built from the smallest app that serves its health path and polled until it answers (or, for FastCGI-only images like PHP, until the container stays up). The new `.github/workflows/preset-build.yml` runs the full matrix nightly and on any `presets/**` change, opening or updating one tracking issue on failure and closing it on the next green run.
+
 ### Fixed
 
 - **`run-plan` no longer picks a retired model from your run history.** When no model is configured, Plan Forge picks the cheapest model with a good record in `.forge/model-performance.json`. It didn't check whether GitHub Copilot still serves that model, so projects with history from before the September model refresh sent every slice to `claude-sonnet-4.6` first. Each slice failed with "Model ... is not available" and only recovered on a retry. The recommender now picks only models in Copilot's current catalog (`copilot-pricing.json`, refreshed weekly by the Model Drift workflow) whose retirement date hasn't passed. This also covers models like `claude-opus-4.6`, which left Copilot without a dated retirement notice. If no model in your history qualifies, the run uses the default model. The same rule now applies to the retry escalation chain Plan Forge builds from your history when `.forge.json` has no `escalationChain`; before, a history row with no model made a retry run with `--model unknown`.

@@ -146,7 +146,9 @@ describe("Guard: shell entry points restate the runtime model defaults", () => {
 describe("Guard: shipped content names no model GitHub Copilot is retiring", () => {
   const REPO = fileURLToPath(new URL("../../", import.meta.url));
   const SCAN_ROOTS = ["presets", "templates", ".github", "pforge-mcp", "pforge-master/src", "docs/manual"];
-  const SKIP_DIRS = new Set(["node_modules", "tests", "__tests__", "fixtures", "workflows"]);
+  // .forge and .vitest-scratch hold run state and test scratch projects — never shipped,
+// and written mid-suite, so scanning them made this guard fail intermittently.
+const SKIP_DIRS = new Set(["node_modules", "tests", "__tests__", "fixtures", "workflows", ".forge", ".vitest-scratch"]);
   const SCAN_EXT = /\.(mjs|js|json|md|html|template|ps1|sh)$/;
   // Each allowed file lists retired models on purpose.
   const ALLOWED = new Map([

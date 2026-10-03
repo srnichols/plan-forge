@@ -46,12 +46,14 @@ const CASES = ["dotnet", "typescript", "dotnet-azure-iac", "no-forge-json", "cus
 
 const EDITED_GUIDANCE_LINE = "KEEP .github/instructions/git-workflow.instructions.md";
 
-// The one difference Slice 1 confirms (Phase-UPDATE-CORE-PLAN.md D1): Bash
-// reports the shared instruction the project lacks as NEW; PowerShell never
-// offers an internal/shared instruction the project does not already have,
-// so it reports nothing for that file. Slice 2 closes this by moving both
-// shells onto `update-plan.mjs`, which adds missing instructions like Bash does.
-const KNOWN_BASH_ONLY_LINES = ["NEW .github/instructions/status-reporting.instructions.md"];
+// The one difference Slice 1 recorded (Phase-UPDATE-CORE-PLAN.md D1): Bash
+// reported the shared instruction the project lacks as NEW; PowerShell never
+// offered an internal/shared instruction the project did not already have, so
+// it reported nothing for that file. Slice 3 closes this gap the moment
+// `Invoke-Update` moves onto `update-plan.mjs` — the same module Bash's
+// `cmd_update` will adopt in Slice 4 — so both shells already agree here,
+// ahead of Slice 6's full "both shells, whole update" coherence pass.
+const KNOWN_BASH_ONLY_LINES = [];
 
 const tmpDirs = [];
 afterEach(() => {
@@ -68,14 +70,19 @@ function materialize(caseName) {
   cpSync(join(fixtureDir, "source"), source, { recursive: true });
   cpSync(join(fixtureDir, "project"), project, { recursive: true });
 
-  // Always the repo's real update guard (and, where needed, the real preset
-  // detector) — never a fixture copy — so this baseline can never drift from
-  // the guard behaviour the rest of the suite exercises.
-  mkdirSync(join(source, "pforge-mcp"), { recursive: true });
-  copyFileSync(join(REPO_ROOT, "pforge-mcp", "update-guard.mjs"), join(source, "pforge-mcp", "update-guard.mjs"));
-  if (caseName === "no-forge-json") {
-    copyFileSync(join(REPO_ROOT, "pforge-mcp", "detect-preset.mjs"), join(source, "pforge-mcp", "detect-preset.mjs"));
+  // Always the repo's real update guard, preset detector and update-plan
+  // module (#299, Slice 3: Invoke-Update now shells out to update-plan.mjs
+  // for every case, not just no-forge-json) — never a fixture copy — so this
+  // baseline can never drift from the scan behaviour the rest of the suite
+  // exercises.
+  mkdirSync(join(source, "pforge-mcp", "orchestrator"), { recursive: true });
+  for (const rel of ["update-guard.mjs", "detect-preset.mjs", "migrate-forge-config.mjs", "update-plan.mjs", "preset-catalog.json"]) {
+    copyFileSync(join(REPO_ROOT, "pforge-mcp", rel), join(source, "pforge-mcp", rel));
   }
+  copyFileSync(
+    join(REPO_ROOT, "pforge-mcp", "orchestrator", "constants.mjs"),
+    join(source, "pforge-mcp", "orchestrator", "constants.mjs"),
+  );
 
   copyFileSync(join(REPO_ROOT, "pforge.sh"), join(project, "pforge.sh"));
   copyFileSync(join(REPO_ROOT, "pforge.ps1"), join(project, "pforge.ps1"));

@@ -1891,7 +1891,7 @@ function Invoke-Update {
         return
     }
 
-    # ─── Define update categories ─────────────────────────────────
+    # ─── Delegate scan to update-plan.mjs (#299, Phase-UPDATE-CORE) ───────
     # NEVER UPDATE: User-customized files
     $neverUpdate = @(
         ".github/copilot-instructions.md",
@@ -1903,54 +1903,9 @@ function Invoke-Update {
         ".forge.json"
     )
 
-    # ─── Calculate changes ────────────────────────────────────────
-    $updates = @()
-    $newFiles = @()
-
-    # #280: resolve the update guard before scanning, so preset files the project
-    # already has are offered only when the guard can keep the project's edits.
+    # #280: resolve the update guard before scanning, so guidance files are
+    # offered only when the guard can keep the project's edits.
     $updateGuard = Resolve-UpdateGuard -SourceRoot $sourcePath -ProjectRoot $RepoRoot
-    $script:FillablePlaceholders = @()
-    if ($updateGuard -and (Test-Path $configPath)) {
-        $placeholderConfig = Get-Content $configPath -Raw | ConvertFrom-Json
-        if ($placeholderConfig.projectName) { $script:FillablePlaceholders += '<YOUR PROJECT NAME>' }
-        if ($placeholderConfig.stack) { $script:FillablePlaceholders += '<YOUR TECH STACK>' }
-        if ($placeholderConfig.setupDate) { $script:FillablePlaceholders += '<DATE>' }
-    }
-
-    # Update step prompts from .github/prompts/ in the source
-    $srcPrompts = Join-Path $sourcePath ".github/prompts"
-    $dstPrompts = Join-Path $RepoRoot ".github/prompts"
-    if (Test-Path $srcPrompts) {
-        Get-ChildItem -Path $srcPrompts -Filter "*.prompt.md" -File | ForEach-Object {
-            # project-principles.prompt.md is user-customized (lives in templates/ source) — never auto-update
-            if ($_.Name -eq 'project-principles.prompt.md') { return }
-            $dstFile = Join-Path $dstPrompts $_.Name
-            if (Test-Path $dstFile) {
-                if (Test-UpdateNeeded $_.FullName $dstFile) {
-                    $updates += @{ Src = $_.FullName; Dst = $dstFile; Name = ".github/prompts/$($_.Name)" }
-                }
-            } else {
-                $newFiles += @{ Src = $_.FullName; Dst = $dstFile; Name = ".github/prompts/$($_.Name)" }
-            }
-        }
-    }
-
-    # Update pipeline agents from templates/
-    $srcAgents = Join-Path $sourcePath "templates/.github/agents"
-    $dstAgents = Join-Path $RepoRoot ".github/agents"
-    $pipelineAgents = @("specifier.agent.md", "plan-hardener.agent.md", "executor.agent.md", "reviewer-gate.agent.md", "shipper.agent.md")
-    if (Test-Path $srcAgents) {
-        foreach ($agentName in $pipelineAgents) {
-            $srcFile = Join-Path $srcAgents $agentName
-            $dstFile = Join-Path $dstAgents $agentName
-            if ((Test-Path $srcFile) -and (Test-Path $dstFile)) {
-                if (Test-UpdateNeeded $srcFile $dstFile) {
-                    $updates += @{ Src = $srcFile; Dst = $dstFile; Name = ".github/agents/$agentName" }
-                }
-            }
-        }
-    }
 
     # Normalise preset: .forge.json may store a single string or a comma-separated list
     $presets = @()
@@ -1962,313 +1917,96 @@ function Invoke-Update {
         $presets = @($currentPreset)
     }
 
-    # Update shared instruction files.
-    # Source convention mirrors setup.ps1 Step 2:
-    #   $sourcePath/.github/instructions/             — Plan-Forge-internal files that ship as-is (no leakage)
-    #   $sourcePath/presets/shared/.github/instructions/ — consumer-facing genericized versions
-    # aci-design.instructions.md intentionally NOT in either list — MCP-tool-author guidance, not consumer-relevant.
-    $srcInternalInstr = Join-Path $sourcePath ".github/instructions"
-    $srcSharedInstr   = Join-Path $sourcePath "presets/shared/.github/instructions"
-    $dstInstr = Join-Path $RepoRoot ".github/instructions"
-    $internalInstructions = @("ai-plan-hardening-runbook.instructions.md", "context-fuel.instructions.md", "git-workflow.instructions.md")
-    $sharedInstructions   = @("architecture-principles.instructions.md", "clean-code.instructions.md", "security.instructions.md", "self-repair-reporting.instructions.md", "status-reporting.instructions.md", "testing.instructions.md")
-    # #280: a stack preset's own copy (e.g. testing or security) wins over the shared one.
-    $presetOwnedInstructions = @(@($internalInstructions + $sharedInstructions) | Where-Object {
-        $name = $_
-        @($presets | Where-Object { $_ -ne 'custom' -and (Test-Path (Join-Path $sourcePath "presets/$_/.github/instructions/$name")) }).Count -gt 0
-    })
-    if (Test-Path $srcInternalInstr) {
-        foreach ($instrName in $internalInstructions) {
-            if ($presetOwnedInstructions -contains $instrName) { continue }
-            $srcFile = Join-Path $srcInternalInstr $instrName
-            $dstFile = Join-Path $dstInstr $instrName
-            if ((Test-Path $srcFile) -and (Test-Path $dstFile)) {
-                if (Test-UpdateNeeded $srcFile $dstFile) {
-                    $updates += @{ Src = $srcFile; Dst = $dstFile; Name = ".github/instructions/$instrName" }
-                }
-            }
+    # #299: the category-by-category scan now lives in one place — update-plan.mjs
+    # — so both shells see identical UPDATE/NEW classification for every category.
+    $updatePlanScript = Join-Path $sourcePath "pforge-mcp/update-plan.mjs"
+    if (-not (Test-Path $updatePlanScript)) {
+        Write-Host "ERROR: The update source doesn't have pforge-mcp/update-plan.mjs." -ForegroundColor Red
+        Write-Host "  This source predates the version of pforge.ps1 you're running." -ForegroundColor Yellow
+        Write-Host "  Run 'pforge self-update', or point --from-github at a newer release." -ForegroundColor Yellow
+        Clear-GitHubUpdateCache -KeepCache:$keepCache
+        exit 1
+    }
+
+    $planArgs = @($updatePlanScript, "plan", "--source", $sourcePath, "--project", $RepoRoot, "--presets", ($presets -join ','), "--json")
+    # Capture stdout only — merging stderr (2>&1) can interleave with stdout on
+    # Windows PowerShell 5.1 and corrupt the JSON (see Invoke-UpdateGuard).
+    $planJsonLines = @(& node @planArgs)
+    if ($LASTEXITCODE -ne 0) {
+        Write-Host "ERROR: update-plan.mjs failed (exit code $LASTEXITCODE):" -ForegroundColor Red
+        foreach ($line in $planJsonLines) { if ($line) { Write-Host "  $line" -ForegroundColor Yellow } }
+        Clear-GitHubUpdateCache -KeepCache:$keepCache
+        exit 1
+    }
+    try {
+        $plan = ($planJsonLines -join "`n") | ConvertFrom-Json
+    } catch {
+        Write-Host "ERROR: Could not parse update-plan.mjs JSON output." -ForegroundColor Red
+        Clear-GitHubUpdateCache -KeepCache:$keepCache
+        exit 1
+    }
+
+    # Map operations back into $updates / $newFiles, matching the shape the
+    # confirm/apply/guard/pending machinery below already expects.
+    $updates = @()
+    $newFiles = @()
+    foreach ($op in @($plan.operations)) {
+        if (-not $op) { continue }
+        $entry = @{
+            Src    = Join-Path $sourcePath $op.src
+            Dst    = Join-Path $RepoRoot $op.dst
+            Name   = $op.dst
+            Guided = [bool]$op.guided
+            DstRel = $op.dst
+            SrcRel = $op.src
         }
-    }
-    if (Test-Path $srcSharedInstr) {
-        foreach ($instrName in $sharedInstructions) {
-            if ($presetOwnedInstructions -contains $instrName) { continue }
-            $srcFile = Join-Path $srcSharedInstr $instrName
-            $dstFile = Join-Path $dstInstr $instrName
-            if ((Test-Path $srcFile) -and (Test-Path $dstFile)) {
-                if (Test-UpdateNeeded $srcFile $dstFile) {
-                    $updates += @{ Src = $srcFile; Dst = $dstFile; Name = ".github/instructions/$instrName" }
-                }
-            }
-        }
+        if ($op.action -eq 'new') { $newFiles += $entry } else { $updates += $entry }
     }
 
-    # Update runbook docs
-    $srcDocs = Join-Path $sourcePath "docs/plans"
-    $dstDocs = Join-Path $RepoRoot "docs/plans"
-    $runbookFiles = @("AI-Plan-Hardening-Runbook.md", "AI-Plan-Hardening-Runbook-Instructions.md", "DEPLOYMENT-ROADMAP-TEMPLATE.md", "PROJECT-PRINCIPLES-TEMPLATE.md")
-    if (Test-Path $srcDocs) {
-        foreach ($docName in $runbookFiles) {
-            $srcFile = Join-Path $srcDocs $docName
-            $dstFile = Join-Path $dstDocs $docName
-            if ((Test-Path $srcFile) -and (Test-Path $dstFile)) {
-                if (Test-UpdateNeeded $srcFile $dstFile) {
-                    $updates += @{ Src = $srcFile; Dst = $dstFile; Name = "docs/plans/$docName" }
-                }
-            }
-        }
-    }
-
-    # ─── Preset-specific files (instructions, agents, prompts, skills) ───
-
-    foreach ($p in ($presets | Where-Object { $_ -ne 'custom' })) {
-        $srcPresetDir = Join-Path $sourcePath "presets/$p/.github"
-        if (-not (Test-Path $srcPresetDir)) { continue }
-
-        Write-Host "  Checking preset: $p" -ForegroundColor DarkGray
-
-        # Instructions, agents, prompts. Existing files are offered too: the update
-        # guard (#280) replaces them only when the project has not changed them.
-        foreach ($subDir in @('instructions', 'agents', 'prompts')) {
-            $srcSub = Join-Path $srcPresetDir $subDir
-            $dstSub = Join-Path $RepoRoot ".github/$subDir"
-
-            if (-not (Test-Path $srcSub)) { continue }
-
-            Get-ChildItem -Path $srcSub -File | ForEach-Object {
-                $srcFile = $_.FullName
-                $dstFile = Join-Path $dstSub $_.Name
-
-                # Never overwrite protected customization files
-                $relFile = ".github/$subDir/$($_.Name)"
-                if ($neverUpdate -contains $relFile) { return }
-
-                if (-not (Test-Path $dstFile)) {
-                    $newFiles += @{ Src = $srcFile; Dst = $dstFile; Name = $relFile }
-                } elseif ($updateGuard -and (Test-UpdateNeeded $srcFile $dstFile)) {
-                    $updates += @{ Src = $srcFile; Dst = $dstFile; Name = $relFile }
-                }
-            }
-        }
-
-        # Skills: existing SKILL.md files are offered too; the update guard keeps customized ones.
-        $srcSkills = Join-Path $srcPresetDir "skills"
-        $dstSkills = Join-Path $RepoRoot ".github/skills"
-        if (Test-Path $srcSkills) {
-            Get-ChildItem -Path $srcSkills -Directory | ForEach-Object {
-                $skillName = $_.Name
-                $srcSkillFile = Join-Path $_.FullName "SKILL.md"
-                $dstSkillFile = Join-Path $dstSkills "$skillName/SKILL.md"
-
-                if (-not (Test-Path $srcSkillFile)) { return }
-
-                if (-not (Test-Path $dstSkillFile)) {
-                    $newFiles += @{ Src = $srcSkillFile; Dst = $dstSkillFile; Name = ".github/skills/$skillName/SKILL.md" }
-                } elseif ($updateGuard -and (Test-UpdateNeeded $srcSkillFile $dstSkillFile)) {
-                    $updates += @{ Src = $srcSkillFile; Dst = $dstSkillFile; Name = ".github/skills/$skillName/SKILL.md" }
-                }
-            }
-        }
-    }
-
-    # ─── MCP server files (auto-discover all files) ──────────────
-    $srcMcp = Join-Path $sourcePath "pforge-mcp"
-    $dstMcp = Join-Path $RepoRoot "pforge-mcp"
-    if (Test-Path $srcMcp) {
-        Get-ChildItem -Path $srcMcp -File -Recurse | Where-Object { $_.FullName -notmatch 'node_modules' } | ForEach-Object {
-            $relPath = $_.FullName.Substring($srcMcp.Length + 1)
-            $relName = "pforge-mcp/$($relPath.Replace('\', '/'))"
-            $dstFile = Join-Path $dstMcp $relPath
-            if ($neverUpdate -contains $relName) { return }
-            if (Test-Path $dstFile) {
-                if (Test-UpdateNeeded $_.FullName $dstFile) {
-                    $updates += @{ Src = $_.FullName; Dst = $dstFile; Name = $relName }
-                }
-            } else {
-                $newFiles += @{ Src = $_.FullName; Dst = $dstFile; Name = $relName }
-            }
-        }
-    }
-
-    # ─── pforge-sdk (helper library) + pforge-master (Studio MCP) ──
-    # Same auto-discover loop, parameterized by package directory. Consumer
-    # installs that skipped these crashed at runtime for opt-in features
-    # (lattice, notifications, hallmark, forge-master-chat). Issue: installer
-    # coverage gap — see fix(installer) commit.
-    foreach ($pkg in @('pforge-sdk', 'pforge-master')) {
-        $srcPkg = Join-Path $sourcePath $pkg
-        $dstPkg = Join-Path $RepoRoot $pkg
-        if (-not (Test-Path $srcPkg)) { continue }
-        Get-ChildItem -Path $srcPkg -File -Recurse |
-            Where-Object { $_.FullName -notmatch '(node_modules|\.forge|coverage)' } |
-            ForEach-Object {
-                $relPath = $_.FullName.Substring($srcPkg.Length + 1)
-                $relName = "$pkg/$($relPath.Replace('\', '/'))"
-                $dstFile = Join-Path $dstPkg $relPath
-                if ($neverUpdate -contains $relName) { return }
-                if (Test-Path $dstFile) {
-                    if (Test-UpdateNeeded $_.FullName $dstFile) {
-                        $updates += @{ Src = $_.FullName; Dst = $dstFile; Name = $relName }
-                    }
-                } else {
-                    $newFiles += @{ Src = $_.FullName; Dst = $dstFile; Name = $relName }
-                }
-            }
-    }
-
-    # ─── CLI scripts (pforge.ps1, pforge.sh) ─────────────────────
-    foreach ($cliFile in @("pforge.ps1", "pforge.sh")) {
-        $srcFile = Join-Path $sourcePath $cliFile
-        $dstFile = Join-Path $RepoRoot $cliFile
-        if ((Test-Path $srcFile) -and (Test-Path $dstFile)) {
-            if (Test-UpdateNeeded $srcFile $dstFile) {
-                $updates += @{ Src = $srcFile; Dst = $dstFile; Name = $cliFile }
-            }
-        } elseif ((Test-Path $srcFile) -and -not (Test-Path $dstFile)) {
-            $newFiles += @{ Src = $srcFile; Dst = $dstFile; Name = $cliFile }
-        }
-    }
-
-    # ─── Validation scripts ──────────────────────────────────────
-    foreach ($valFile in @("validate-setup.ps1", "validate-setup.sh")) {
-        $srcFile = Join-Path $sourcePath $valFile
-        $dstFile = Join-Path $RepoRoot $valFile
-        if ((Test-Path $srcFile) -and (Test-Path $dstFile)) {
-            if (Test-UpdateNeeded $srcFile $dstFile) {
-                $updates += @{ Src = $srcFile; Dst = $dstFile; Name = $valFile }
-            }
-        } elseif ((Test-Path $srcFile) -and -not (Test-Path $dstFile)) {
-            $newFiles += @{ Src = $srcFile; Dst = $dstFile; Name = $valFile }
-        }
-    }
-
-    # ─── Core CLI files (root level) ────────────────────────────
-    # Includes root `pforge` bash shim so it self-heals on self-update.
-    # NOTE: The root VERSION file is deliberately NOT copied — it is a
-    # consumer-owned convention (many projects track their own application
-    # version in VERSION), so overwriting it would corrupt the consumer's
-    # versioning. Plan Forge's installed version lives in .forge.json's
-    # templateVersion (updated below).
-    foreach ($cliFile in @("pforge.ps1", "pforge.sh", "pforge")) {
-        $srcFile = Join-Path $sourcePath $cliFile
-        $dstFile = Join-Path $RepoRoot $cliFile
-        if (Test-Path $srcFile) {
-            if (Test-Path $dstFile) {
-                if (Test-UpdateNeeded $srcFile $dstFile) {
-                    $updates += @{ Src = $srcFile; Dst = $dstFile; Name = $cliFile }
-                }
-            } else {
-                $newFiles += @{ Src = $srcFile; Dst = $dstFile; Name = $cliFile }
-            }
-        }
-    }
-
-    # ─── MCP server files (all — single recursive scan) ──────────
-    $srcMcp = Join-Path $sourcePath "pforge-mcp"
-    $dstMcp = Join-Path $RepoRoot "pforge-mcp"
-    if (Test-Path $srcMcp) {
-        Get-ChildItem -Path $srcMcp -File -Recurse |
-            Where-Object { $_.FullName -notmatch '(node_modules|\.forge|coverage)' } |
-            ForEach-Object {
-                $relPath = $_.FullName.Substring($srcMcp.Length + 1)
-                $relName = "pforge-mcp/$($relPath.Replace('\', '/'))"
-                $dstFile = Join-Path $dstMcp $relPath
-                if (Test-Path $dstFile) {
-                    if (Test-UpdateNeeded $_.FullName $dstFile) {
-                        $updates += @{ Src = $_.FullName; Dst = $dstFile; Name = $relName }
-                    }
-                } else {
-                    $newFiles += @{ Src = $_.FullName; Dst = $dstFile; Name = $relName }
-                }
-            }
-    }
-
-    # ─── pforge-sdk + pforge-master (same scan, parameterized) ──
-    foreach ($pkg in @('pforge-sdk', 'pforge-master')) {
-        $srcPkg = Join-Path $sourcePath $pkg
-        $dstPkg = Join-Path $RepoRoot $pkg
-        if (-not (Test-Path $srcPkg)) { continue }
-        Get-ChildItem -Path $srcPkg -File -Recurse |
-            Where-Object { $_.FullName -notmatch '(node_modules|\.forge|coverage)' } |
-            ForEach-Object {
-                $relPath = $_.FullName.Substring($srcPkg.Length + 1)
-                $relName = "$pkg/$($relPath.Replace('\', '/'))"
-                $dstFile = Join-Path $dstPkg $relPath
-                if (Test-Path $dstFile) {
-                    if (Test-UpdateNeeded $_.FullName $dstFile) {
-                        $updates += @{ Src = $_.FullName; Dst = $dstFile; Name = $relName }
-                    }
-                } else {
-                    $newFiles += @{ Src = $_.FullName; Dst = $dstFile; Name = $relName }
-                }
-            }
-    }
-
-    # ─── Hook files (lifecycle + LiveGuard) ─────────────────────
-    $srcHooks = Join-Path $sourcePath "templates/.github/hooks"
-    $dstHooks = Join-Path $RepoRoot ".github/hooks"
-    if (Test-Path $srcHooks) {
-        Get-ChildItem -Path $srcHooks -File -Recurse | ForEach-Object {
-            $relPath = $_.FullName.Substring($srcHooks.Length + 1)
-            $relName = ".github/hooks/$($relPath.Replace('\', '/'))"
-            $dstFile = Join-Path $dstHooks $relPath
-            if (Test-Path $dstFile) {
-                if (Test-UpdateNeeded $_.FullName $dstFile) {
-                    $updates += @{ Src = $_.FullName; Dst = $dstFile; Name = $relName }
-                }
-            } else {
-                $newFiles += @{ Src = $_.FullName; Dst = $dstFile; Name = $relName }
-            }
-        }
-    }
-
-    # ─── Shared skills (add new, update existing shared-only) ────
-    $srcSharedSkills = Join-Path $sourcePath "presets/shared/skills"
-    if (Test-Path $srcSharedSkills) {
-        Get-ChildItem -Path $srcSharedSkills -Directory | ForEach-Object {
-            $skillName = $_.Name
-            $srcSkillFile = Join-Path $_.FullName "SKILL.md"
-            $dstSkillFile = Join-Path $RepoRoot ".github/skills/$skillName/SKILL.md"
-
-            if (-not (Test-Path $srcSkillFile)) { return }
-
-            # Check if the preset has a stack-specific version
-            $hasPresetVersion = $false
-            foreach ($p in ($presets | Where-Object { $_ -ne 'custom' })) {
-                $presetSkill = Join-Path $sourcePath "presets/$p/.github/skills/$skillName/SKILL.md"
-                if (Test-Path $presetSkill) { $hasPresetVersion = $true; break }
-            }
-
-            if (-not $hasPresetVersion) {
-                # Pure shared skill — safe to update
-                if (Test-Path $dstSkillFile) {
-                    if (Test-UpdateNeeded $srcSkillFile $dstSkillFile) {
-                        $updates += @{ Src = $srcSkillFile; Dst = $dstSkillFile; Name = ".github/skills/$skillName/SKILL.md (shared)" }
-                    }
-                } else {
-                    $newFiles += @{ Src = $srcSkillFile; Dst = $dstSkillFile; Name = ".github/skills/$skillName/SKILL.md (shared)" }
-                }
-            }
-            # If preset has a stack-specific version, the preset skill update handles it
-        }
-    }
-
-    # ─── Deduplicate (overlapping scans may add same file twice) ─
-    $updates = @($updates | Group-Object -Property { $_.Name } | ForEach-Object { $_.Group[0] })
-    $newFiles = @($newFiles | Group-Object -Property { $_.Name } | ForEach-Object { $_.Group[0] })
-
-    # ─── #280: guidance files go through the update guard ────────
-    $kept = @()
-    $guided = @()
+    # ─── Recover KEEP candidates update-plan.mjs's scan already excludes ──
+    # `guidedEntry()` classifies during the scan itself and drops "customized"
+    # (hand-edited) files from `operations` entirely — there's no byte for the
+    # operator to see "you changed it" unless we re-probe guidance files the
+    # project already has that the plan didn't offer.
+    $keptCandidatesList = [System.Collections.Generic.List[object]]::new()
     if ($updateGuard) {
-        $guided = @(Select-GuidedFiles -Items @($updates + $newFiles) -SourceRoot $sourcePath -ProjectRoot $RepoRoot)
-    } else {
+        $offeredDst = @{}
+        foreach ($op in @($plan.operations)) { if ($op) { $offeredDst[$op.dst] = $true } }
+        foreach ($dir in @('.github/prompts', '.github/instructions', '.github/agents', '.github/skills', '.github/hooks', 'docs/plans')) {
+            $dstDir = Join-Path $RepoRoot $dir
+            if (-not (Test-Path $dstDir)) { continue }
+            Get-ChildItem -Path $dstDir -File -Recurse | ForEach-Object {
+                $dstRel = $_.FullName.Substring($RepoRoot.Length).TrimStart('\', '/').Replace('\', '/')
+                if ($offeredDst.ContainsKey($dstRel) -or $neverUpdate -contains $dstRel) { return }
+                $candidates = @(
+                    (Join-Path $sourcePath $dstRel),
+                    (Join-Path $sourcePath "presets/shared/$dstRel"),
+                    (Join-Path $sourcePath "templates/$dstRel")
+                )
+                foreach ($p in @($presets | Where-Object { $_ -ne 'custom' })) {
+                    $candidates += (Join-Path $sourcePath "presets/$p/$dstRel")
+                }
+                $srcFile = $candidates | Where-Object { Test-Path $_ } | Select-Object -First 1
+                if (-not $srcFile) { return }
+                $srcRel = $srcFile.Substring($sourcePath.Length).TrimStart('\', '/').Replace('\', '/')
+                $keptCandidatesList.Add(@{ Src = $srcFile; Dst = $_.FullName; Name = $dstRel; Guided = $true; DstRel = $dstRel; SrcRel = $srcRel })
+            }
+        }
+    }
+    $keptCandidates = @($keptCandidatesList)
+
+    # ─── Guard pass: split guided files into update vs. keep-customized ───
+    $kept = @()
+    $guided = @(@($updates + $newFiles) | Where-Object { $_.Guided })
+    $guardCandidates = @($guided + $keptCandidates)
+    if ($guardCandidates.Count -gt 0 -and -not $updateGuard) {
         Write-Host "  Update guard not available (needs Node and pforge-mcp/update-guard.mjs); guidance files are replaced when they differ." -ForegroundColor DarkGray
     }
-    if ($guided.Count -gt 0) {
-        $guardPlan = Invoke-UpdateGuard -Guard $updateGuard -Mode plan -Items $guided -SourceRoot $sourcePath -ProjectRoot $RepoRoot
+    if ($guardCandidates.Count -gt 0 -and $updateGuard) {
+        $guardPlan = Invoke-UpdateGuard -Guard $updateGuard -Mode plan -Items $guardCandidates -SourceRoot $sourcePath -ProjectRoot $RepoRoot
         $updates = @($updates | Where-Object { -not $_.Guided -or $guardPlan[$_.DstRel].Action -eq 'update' })
         $newFiles = @($newFiles | Where-Object { -not $_.Guided -or $guardPlan[$_.DstRel].Action -eq 'new' })
-        $kept = @($guided | Where-Object { $guardPlan[$_.DstRel].Action -eq 'customized' })
+        $kept = @($guardCandidates | Where-Object { $guardPlan[$_.DstRel].Action -eq 'customized' })
         if ($overwriteCustomized -and $kept.Count -gt 0) {
             foreach ($k in $kept) { $k.Name = "$($k.Name) (customized; your version is backed up first)" }
             $updates = @($updates + $kept)

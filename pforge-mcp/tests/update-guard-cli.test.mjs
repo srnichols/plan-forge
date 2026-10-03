@@ -81,7 +81,14 @@ function seed() {
     "presets/dotnet/.github/instructions/security.instructions.md": V2.dotnetSecurity,
     [RUNBOOK]: V2.runbook,
   });
-  copyFileSync(join(REPO_ROOT, "pforge-mcp", "update-guard.mjs"), join(source, "pforge-mcp", "update-guard.mjs"));
+  mkdirSync(join(source, "pforge-mcp", "orchestrator"), { recursive: true });
+  for (const rel of ["update-guard.mjs", "detect-preset.mjs", "migrate-forge-config.mjs", "update-plan.mjs", "preset-catalog.json"]) {
+    copyFileSync(join(REPO_ROOT, "pforge-mcp", rel), join(source, "pforge-mcp", rel));
+  }
+  copyFileSync(
+    join(REPO_ROOT, "pforge-mcp", "orchestrator", "constants.mjs"),
+    join(source, "pforge-mcp", "orchestrator", "constants.mjs"),
+  );
   writeTree(project, {
     ".forge.json": JSON.stringify({ templateVersion: "9.9.8", preset: "dotnet", ...VALUES }),
     [STEP0]: renderPlaceholders(V1.step0, VALUES),

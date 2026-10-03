@@ -3,13 +3,22 @@
     "KEEP .github/instructions/git-workflow.instructions.md",
     "NEW .github/instructions/status-reporting.instructions.md",
     "NEW pforge-mcp/detect-preset.mjs",
+    "NEW pforge-mcp/migrate-forge-config.mjs",
+    "NEW pforge-mcp/orchestrator/constants.mjs",
+    "NEW pforge-mcp/preset-catalog.json",
     "NEW pforge-mcp/shipped-guidance-hashes.json",
-    "NEW pforge-mcp/update-guard.mjs"
+    "NEW pforge-mcp/update-guard.mjs",
+    "NEW pforge-mcp/update-plan.mjs"
   ],
   "pforge.ps1": [
     "KEEP .github/instructions/git-workflow.instructions.md",
+    "NEW .github/instructions/status-reporting.instructions.md",
     "NEW pforge-mcp/detect-preset.mjs",
+    "NEW pforge-mcp/migrate-forge-config.mjs",
+    "NEW pforge-mcp/orchestrator/constants.mjs",
+    "NEW pforge-mcp/preset-catalog.json",
     "NEW pforge-mcp/shipped-guidance-hashes.json",
-    "NEW pforge-mcp/update-guard.mjs"
+    "NEW pforge-mcp/update-guard.mjs",
+    "NEW pforge-mcp/update-plan.mjs"
   ]
 }

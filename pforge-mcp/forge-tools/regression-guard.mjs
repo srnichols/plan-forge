@@ -9,6 +9,7 @@
 import { existsSync, readFileSync } from 'node:fs';
 import { resolve, join } from 'node:path';
 import { latticeBlast } from '../lattice.mjs';
+import { isTestFile } from '../test-files.mjs';
 
 const LATTICE_SUBDIR = join('.forge', 'lattice');
 
@@ -21,10 +22,23 @@ function readJsonl(filePath) {
     .filter(Boolean);
 }
 
-/** Heuristic: is this file a test file? */
-function isTestFile(filePath) {
-  return /\.(test|spec)\.[^.]+$/.test(filePath) ||
-    /(^|[/\\])(tests?|__tests?__)[/\\]/.test(filePath);
+
+/** Files reached by a callers-direction BFS from each seed chunk. */
+function callerFiles(seedChunkIds, { depth, limit, deps }) {
+  const affected = new Set();
+  let truncated = false;
+  for (const chunkId of seedChunkIds) {
+    const result = latticeBlast({ chunkId, direction: 'callers', depth, limit, deps });
+    for (const node of result.nodes) affected.add(node.filePath);
+    truncated ||= result.truncated;
+  }
+  return { affected, truncated };
+}
+
+/** Lattice chunk IDs belonging to the given files. */
+function chunkIdsForFiles(chunksPath, files) {
+  const fileSet = new Set(files);
+  return readJsonl(chunksPath).filter((c) => fileSet.has(c.filePath)).map((c) => c.id);
 }
 
 /**
@@ -54,33 +68,11 @@ export function computeBlastRadius(changedFiles = [], { depth = 3, limit = 50, d
     return { files: [], tests: [], depth, truncated: false };
   }
 
-  // Resolve chunk IDs for the changed files.
-  const allChunks = readJsonl(chunksPath);
-  const changedFileSet = new Set(changedFiles);
-  const seedChunkIds = allChunks
-    .filter((c) => changedFileSet.has(c.filePath))
-    .map((c) => c.id);
-
-  if (seedChunkIds.length === 0) {
-    return { files: [], tests: [], depth, truncated: false };
-  }
-
-  // BFS from each seed chunk in the caller direction.
-  const affectedFileSet = new Set();
-  let truncated = false;
-
-  for (const chunkId of seedChunkIds) {
-    const result = latticeBlast({ chunkId, direction: 'callers', depth, limit, deps });
-    for (const node of result.nodes) {
-      affectedFileSet.add(node.filePath);
-    }
-    if (result.truncated) truncated = true;
-  }
-
+  const { affected, truncated } = callerFiles(chunkIdsForFiles(chunksPath, changedFiles), { depth, limit, deps });
   // The changed files themselves are the source of the blast, not victims.
-  for (const f of changedFiles) affectedFileSet.delete(f);
+  for (const f of changedFiles) affected.delete(f);
 
-  const allAffected = [...affectedFileSet];
+  const allAffected = [...affected];
   const tests = allAffected.filter(isTestFile);
   const files = allAffected.filter((f) => !isTestFile(f));
 

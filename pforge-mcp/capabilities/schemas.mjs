@@ -380,6 +380,15 @@ export const CONFIG_SCHEMA = {
     runIsolation: { type: "string", enum: ["branch", "none"], default: "branch", description: "Auto-mode runs work on their own pforge/run/<plan>-<time> branch, so a failed slice never lands on your branch. \"none\" runs on the current branch. Env override: PFORGE_RUN_ISOLATION." },
     runIntegration: { type: "string", enum: ["fast-forward", "pull-request", "none"], default: "fast-forward", description: "What happens to the run branch when every slice passes: fast-forward your branch to it, push it and open a pull request (needs gh and an origin remote), or leave it for you to merge." },
     draftPullRequest: { type: "boolean", default: true, description: "With runIntegration \"pull-request\", open the pull request as a draft." },
+    impactGate: {
+      type: "object",
+      description: "After a slice's own gate passes, run the tests related to the files it changed (changed tests, tests named after changed files, Lattice blast radius). Also accepts a mode string.",
+      properties: {
+        mode: { type: "string", enum: ["block", "warn", "off"], default: "block", description: "block: a failing related test fails the slice; warn: record it only; off: skip." },
+        command: { type: "string", description: "Test command with a {files} placeholder, for stacks Plan Forge cannot detect (e.g. \"bundle exec rspec {files}\"). Detected: vitest, jest, pytest, go test, dotnet test." },
+        maxTests: { type: "number", default: 40, minimum: 1, description: "Most related test files run per slice." },
+      },
+    },
     quorum: {
       type: "object",
       description: "Multi-model consensus configuration (v2.5; models refreshed 2026-09-30)",

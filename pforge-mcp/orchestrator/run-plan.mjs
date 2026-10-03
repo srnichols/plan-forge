@@ -41,6 +41,7 @@ import { autoTuneEscalationChain, inferSliceType, recommendModel } from "./model
 import { loadQuorumConfig, classifyLegError, quorumDispatch, quorumReview, analyzeWithQuorum, calculateSliceCost, buildCostBreakdown } from "./quorum.mjs";
 import { estimatePlan as _estimatePlan } from "../cost-service.mjs";
 import { finishRunIsolation, loadRunIsolationConfig, startRunIsolation } from "./run-isolation.mjs";
+import { loadImpactGateConfig, runImpactGate } from "./impact-gate.mjs";
 import { isRetiredModel, retirementDate } from "../copilot-models.mjs";
 import { rewritePlanStatusOnSuccess as _rewritePlanStatusOnSuccess } from "./run-plan/plan-status-update.mjs";
 
@@ -1953,18 +1954,49 @@ function _executeSliceWriteLog({ runDir, slice, attempt, workerResult, startTime
   return logFile;
 }
 
-function _executeSliceRunGates(slice, cwd) {
+/** Exported for tests: the slice gate followed by the impact gate. */
+export { _executeSliceRunGates as runSliceGates };
+
+function _executeSliceRunGates({ slice, cwd, sliceStartHead }) {
   let gateResult = { success: true, output: "No validation gate defined" };
-  if (!slice.validationGate) return gateResult;
-  const gateLines = coalesceGateLines(slice.validationGate);
-  for (const gateLine of gateLines) {
+  for (const gateLine of slice.validationGate ? coalesceGateLines(slice.validationGate) : []) {
     gateResult = runGate(gateLine, cwd);
     if (!gateResult.success) {
       gateResult.failedCommand = gateLine;
-      break;
+      return gateResult;
     }
   }
-  return gateResult;
+  return _applyImpactGate({ gateResult, cwd, sliceStartHead });
+}
+
+/** Compact record of the impact gate for slice-N.json: what ran and why, not the output. */
+function _summarizeImpact(impact) {
+  return {
+    ran: impact.ran,
+    success: impact.success,
+    tests: impact.tests ?? [],
+    truncated: impact.truncated ?? false,
+    commands: impact.commands ?? [],
+    ...(impact.reason && { reason: impact.reason }),
+    ...(impact.skipped && { skipped: impact.skipped }),
+  };
+}
+
+/**
+ * Recommendation 2: after the slice's own gate passes, run the tests related
+ * to what the slice changed (impact-gate.mjs). "block" turns a failure into a
+ * gate failure, so the retry sees which related tests broke; "warn" records it.
+ */
+function _applyImpactGate({ gateResult, cwd, sliceStartHead }) {
+  const config = loadImpactGateConfig(cwd);
+  const impact = runImpactGate({ cwd, sinceSha: sliceStartHead, config });
+  if (impact.success || config.mode !== "block") return { ...gateResult, impact };
+  return {
+    success: false,
+    failedCommand: impact.failedCommand,
+    output: `Impact gate: tests related to this slice's changes failed (${impact.tests.length} test file(s)${impact.truncated ? `, first ${config.maxTests}` : ""}).\n${impact.output}`,
+    impact,
+  };
 }
 
 function _executeSliceHandleTimeoutCommit({ workerResult, sliceStartHead, cwd, slice, logFile, eventBus }) {
@@ -2110,6 +2142,7 @@ function _executeSliceBuildResult({ slice, status, statusReason, duration, worke
     gateOutput: gateResult.output,
     gateError: gateResult.error || null,
     failedCommand: gateResult.failedCommand || null,
+    ...(gateResult.impact && { impactGate: _summarizeImpact(gateResult.impact) }),
     ...(silentFailure && { silentFailure }),
     ...(killedBySignal && { killedBySignal }),
     ...(statusReason && { statusReason }),
@@ -2414,7 +2447,7 @@ async function _executeSliceAttemptLoop(ctx) {
     const launchFailure = detectWorkerLaunchFailure(workerResult, mode);
     gateResult = launchFailure
       ? { success: false, skipped: true, launchFailure, output: launchFailure }
-      : _executeSliceRunGates(slice, cwd);
+      : _executeSliceRunGates({ slice, cwd, sliceStartHead });
 
     if (gateResult.success && workerResult.exitCode === 0) break;
 

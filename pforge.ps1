@@ -1,4 +1,4 @@
-﻿<#
+<#
 .SYNOPSIS
     pforge — CLI wrapper for the Plan Forge Pipeline
 
@@ -4484,12 +4484,7 @@ function Invoke-RunPlan {
         $stamp = (Get-Date -Format 'yyyyMMdd-HHmmss')
         $orchLog = Join-Path $orchLogsDir "orch-$stamp.log"  # combined stdout+stderr
 
-        # Build a PowerShell command string that runs node with the same args in
-        # foreground mode inside the hidden pwsh host. Single-quote each arg so
-        # paths with spaces are handled correctly.
-        $quotedNodeArgs = ($nodeArgs | ForEach-Object { "'" + ($_ -replace "'", "''") + "'" }) -join ' '
-        $orchLogPs     = "'" + ($orchLog -replace "'", "''") + "'"
-        $innerCmd      = "& node $quotedNodeArgs *>&1 | Tee-Object -FilePath $orchLogPs"
+        $innerCmd = Get-BackgroundHostCommand -NodeArgs $nodeArgs -LogPath $orchLog
 
         $proc = Start-Process -FilePath 'pwsh' -PassThru -WindowStyle Hidden `
             -ArgumentList '-NoProfile', '-NoLogo', '-NonInteractive', '-Command', $innerCmd
@@ -4506,6 +4501,17 @@ function Invoke-RunPlan {
         Write-Host "Log     : $orchLog" -ForegroundColor DarkGray
         Write-Host "Stop    : Stop-Process -Id $($proc.Id)" -ForegroundColor DarkGray
     }
+}
+
+# The command the hidden pwsh host runs for background run-plan: node in the
+# foreground with merged output teed to the log. Single-quoting each arg keeps
+# paths with spaces intact. A hidden console uses the OEM code page, so without
+# the UTF-8 setting node's output reached the log as mojibake.
+function Get-BackgroundHostCommand {
+    param([string[]]$NodeArgs, [string]$LogPath)
+    $quote = { param($value) "'" + ($value -replace "'", "''") + "'" }
+    $quotedNodeArgs = ($NodeArgs | ForEach-Object { & $quote $_ }) -join ' '
+    return "[Console]::OutputEncoding = [System.Text.UTF8Encoding]::new(`$false); & node $quotedNodeArgs *>&1 | Tee-Object -FilePath $(& $quote $LogPath)"
 }
 
 # ─── Command: version-bump (Fix 3 + Fix 10) ───────────────────────────

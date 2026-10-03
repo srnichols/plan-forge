@@ -1870,6 +1870,8 @@ for (const op of plan.operations) {
     # ─── Report ───────────────────────────────────────────────────
     if [ "${#_updates[@]}" -eq 0 ] && [ "${#_new_files[@]}" -eq 0 ] && [ "${#_removals[@]}" -eq 0 ] && [ "${#_kept[@]}" -eq 0 ] && [ "$current_version" = "$source_version" ]; then
         echo "All framework files are up to date."
+        # Nothing to copy means the release is installed; self-update reads this.
+        $dry_run || _PF_UPDATE_APPLIED=1
         $dry_run || _pf_migrate_forge_config "$REPO_ROOT" "$source_path"
         _pf_gh_cleanup
         return 0

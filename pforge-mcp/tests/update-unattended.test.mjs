@@ -123,6 +123,14 @@ describe("Guard: self-update hands its confirmation to update and checks the res
     expect(check).toBeLessThan(ps1Self.indexOf("if ($verify)"));
   });
 
+  // v3.31.2's public verification: `self-update --force` on a project already
+  // at the latest release found nothing to copy and exited 1 as "not installed".
+  it("both shells count an up-to-date project as installed", () => {
+    const branch = (src, marker) => src.slice(src.indexOf(marker), src.indexOf(marker) + 400);
+    expect(branch(PS1, 'Write-Host "All framework files are up to date."')).toMatch(/\$script:UpdateApplied = \$true/);
+    expect(branch(SH, 'echo "All framework files are up to date."')).toMatch(/_PF_UPDATE_APPLIED=1/);
+  });
+
   it("pforge.sh stops before --verify when nothing was applied", () => {
     const check = shSelf.indexOf('[ "${_PF_UPDATE_APPLIED:-0}" != 1 ]');
     expect(check).toBeGreaterThan(-1);

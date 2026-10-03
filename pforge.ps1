@@ -2028,6 +2028,8 @@ function Invoke-Update {
     # ─── Report ───────────────────────────────────────────────────
     if ($updates.Count -eq 0 -and $newFiles.Count -eq 0 -and $removals.Count -eq 0 -and $kept.Count -eq 0 -and $currentVersion -eq $sourceVersion) {
         Write-Host "All framework files are up to date." -ForegroundColor Green
+        # Nothing to copy means the release is installed; self-update reads this.
+        if (-not $dryRun) { $script:UpdateApplied = $true }
         if (-not $dryRun) { Invoke-ForgeConfigMigration -ProjectRoot $RepoRoot -SourceRoot $sourcePath }
         Clear-GitHubUpdateCache -KeepCache:$keepCache
         return

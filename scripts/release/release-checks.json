@@ -71,6 +71,8 @@
     { "label": "pforge.sh self-update reruns with the new wrapper (3.31.2)", "path": "pforge.sh", "contains": "_pf_self_update_second_pass()" },
     { "label": "estimates price measured cache shares (3.31.2)", "path": "pforge-mcp/cost-service.mjs", "contains": "export function cacheSharesFromHistory" },
     { "label": "runs record cache tokens in cost history (3.31.2)", "path": "pforge-mcp/orchestrator/run-plan.mjs", "contains": "total_cache_read_tokens" },
-    { "label": "background run-plan log is UTF-8 on Windows (3.31.2)", "path": "pforge.ps1", "contains": "function Get-BackgroundHostCommand" }
+    { "label": "background run-plan log is UTF-8 on Windows (3.31.2)", "path": "pforge.ps1", "contains": "function Get-BackgroundHostCommand" },
+    { "label": "pforge.ps1 self-update succeeds when already current (3.31.3)", "path": "pforge.ps1", "contains": "if (-not $dryRun) { $script:UpdateApplied = $true }" },
+    { "label": "pforge.sh self-update succeeds when already current (3.31.3)", "path": "pforge.sh", "contains": "$dry_run || _PF_UPDATE_APPLIED=1" }
   ]
 }

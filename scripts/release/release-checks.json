@@ -44,6 +44,24 @@
     { "label": "hook-status.mjs delivered (smith hooks, no jq)", "path": "pforge-mcp/hook-status.mjs" },
     { "label": "migrate-forge-config.mjs delivered (#299 migration gap)", "path": "pforge-mcp/migrate-forge-config.mjs" },
     { "label": ".forge.json has hooks.postRun (setup seeds it, update migrates it)", "path": ".forge.json", "jsonKey": "hooks.postRun.invokeAuditor.onFailure", "equals": false, "when": "current-wrapper" },
-    { "label": "Copilot SDK route is the default (#307)", "path": "pforge-mcp/orchestrator/worker-spawn.mjs", "contains": "const DEFAULT_COPILOT_SDK_PREF = \"prefer\";" }
+    { "label": "Copilot SDK route is the default (#307)", "path": "pforge-mcp/orchestrator/worker-spawn.mjs", "contains": "const DEFAULT_COPILOT_SDK_PREF = \"prefer\";" },
+    { "label": "runs work on their own branch (3.31)", "path": "pforge-mcp/orchestrator/run-isolation.mjs" },
+    { "label": "impact gate runs related tests (3.31)", "path": "pforge-mcp/orchestrator/impact-gate.mjs" },
+    { "label": "test-files.mjs delivered (imported by impact-gate and regression-guard)", "path": "pforge-mcp/test-files.mjs" },
+    { "label": "retries resume the worker session (3.31)", "path": "pforge-mcp/orchestrator/worker-session.mjs" },
+    { "label": "Copilot CLI workers pin their session (3.31)", "path": "pforge-mcp/worker-capabilities.json", "contains": "\"sessionArg\": \"--session-id={SESSION_ID}\"" },
+    { "label": "Copilot SDK 1.0.16 (3.31)", "path": "pforge-mcp/package.json", "contains": "\"@github/copilot-sdk\": \"^1.0.16\"" },
+    { "label": "Forge-Master identifies itself to the Copilot runtime (3.31)", "path": "pforge-master/src/providers/copilot-sdk-tools.mjs", "contains": "integrationName: \"forge-master\"" },
+    { "label": "live Copilot model list (3.31)", "path": "pforge-mcp/orchestrator/copilot-live-models.mjs" },
+    { "label": "SDK auto tiers for auto slices (3.31)", "path": "pforge-mcp/orchestrator/auto-tier.mjs" },
+    { "label": "gate tool preflight (3.31)", "path": "pforge-mcp/orchestrator/gate-preflight.mjs" },
+    { "label": "gates can run in a Dev Container (3.31)", "path": "pforge-mcp/orchestrator/devcontainer-gates.mjs" },
+    { "label": "stale worktrees are cleaned up (3.31)", "path": "pforge-mcp/orchestrator/worktree-janitor.mjs" },
+    { "label": "every orchestrator event reaches the log (3.31)", "path": "pforge-mcp/orchestrator/event-bus.mjs", "contains": "emit(type, ...args)" },
+    { "label": "MCP server lists the core tool profile (3.31)", "path": "pforge-mcp/server/mcp-handler.mjs", "contains": "toolProfiles.listedTools(TOOLS)" },
+    { "label": "Forge-Master asks for every tool (3.31)", "path": "pforge-master/src/mcp-client.mjs", "contains": "PFORGE_TOOL_PROFILE: \"full\"" },
+    { "label": "pforge.ps1 update guards automation templates (3.31)", "path": "pforge.ps1", "contains": "skills|hooks|automations)/" },
+    { "label": "pforge.sh update guards automation templates (3.31)", "path": "pforge.sh", "contains": "skills|hooks|automations)/" },
+    { "label": "VS Code automation templates installed (3.31)", "path": ".github/automations/pforge-daily-drift.automation.md", "contains": "id: pforge-daily-drift", "when": "current-wrapper" }
   ]
 }

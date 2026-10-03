@@ -36,6 +36,12 @@ public enum RedisClientResult<T> {
 public final class RedisClient: Sendable {
     public init() {}
 
+    // RedisKit's `app.redis.configuration = ...`; the stand-in has no connection to configure.
+    public var configuration: RedisConfiguration? {
+        get { nil }
+        set {}
+    }
+
     public func get<T>(_ key: RedisKey, asJSON type: T.Type) async throws -> RedisClientResult<T?> {
         .value(nil)
     }

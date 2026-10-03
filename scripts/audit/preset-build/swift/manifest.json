@@ -54,13 +54,6 @@
       "mode": "append"
     },
     {
-      "file": ".github/instructions/api-patterns.instructions.md",
-      "index": 5,
-      "lang": "swift",
-      "to": "Tests/ApiPatternsInstructionsTests/Samples.swift",
-      "mode": "append"
-    },
-    {
       "file": ".github/instructions/auth.instructions.md",
       "index": 0,
       "lang": "swift",
@@ -808,7 +801,7 @@
     {
       "file": ".github/instructions/performance.instructions.md",
       "index": 5,
-      "reason": "Main-thread-blocking sample intentionally shows the \u274c anti-pattern calling a @MainActor-isolated function from a synchronous nonisolated context (illegal under Swift 6 strict concurrency), and the \u2705 fix uses URLSession.shared, which requires FoundationNetworking and isn't available in this Linux harness's URLSession shim."
+      "reason": "Main-thread-blocking sample intentionally shows the ❌ anti-pattern calling a @MainActor-isolated function from a synchronous nonisolated context (illegal under Swift 6 strict concurrency), and the ✅ fix uses URLSession.shared, which requires FoundationNetworking and isn't available in this Linux harness's URLSession shim."
     },
     {
       "file": ".github/instructions/security.instructions.md",
@@ -833,7 +826,7 @@
     {
       "file": ".github/instructions/security.instructions.md",
       "index": 4,
-      "reason": "Declares `createUser(req:)` twice (the \u274c and \u2705 variants) with the same signature, which Swift rejects as an invalid redeclaration in a single file scope."
+      "reason": "Declares `createUser(req:)` twice (the ❌ and ✅ variants) with the same signature, which Swift rejects as an invalid redeclaration in a single file scope."
     },
     {
       "file": ".github/instructions/security.instructions.md",
@@ -1097,6 +1090,11 @@
       "index": 2,
       "lang": "swift",
       "reason": "app.queues.add(OrderPlacedJob(...)) is a top-level configure.swift registration call; top-level executable statements are only legal in main.swift, not in a library/test target file. OrderPlacedJob is replicated in Support.swift so the \"Publishing Events\" block (index 3) still compiles."
+    },
+    {
+      "file": ".github/instructions/api-patterns.instructions.md",
+      "index": 5,
+      "reason": "Restates the controller's create() handler and CreateItemRequest from blocks 0-1 to show validate-before-decode; a second declaration of either cannot compile in the same target."
     }
   ]
 }

@@ -25,10 +25,15 @@ public protocol UserRepository: Sendable {
     func save(_ user: User) async throws
 }
 
-public struct CreateUserRequest: Content, Sendable {
+public struct CreateUserRequest: Content, Validatable, Sendable {
     public var name: String
     public var email: String
     public init(name: String, email: String) { self.name = name; self.email = email }
+
+    public static func validations(_ validations: inout Validations) {
+        validations.add("name", as: String.self, is: !.empty)
+        validations.add("email", as: String.self, is: .email)
+    }
 }
 
 public struct UpdateOrderRequest: Content, Sendable {

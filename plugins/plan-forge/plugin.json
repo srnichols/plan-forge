@@ -1,0 +1,20 @@
+{
+  "$schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
+  "name": "plan-forge",
+  "description": "Plan Forge guardrails for agentic delivery: plan, harden, execute, review and ship skills, the pipeline agents, and scheduled check templates. Pair it with the Plan Forge MCP server that setup installs in your project.",
+  "author": {
+    "name": "srnichols",
+    "url": "https://github.com/srnichols"
+  },
+  "homepage": "https://github.com/srnichols/plan-forge",
+  "repository": "https://github.com/srnichols/plan-forge",
+  "license": "MIT",
+  "keywords": [
+    "plan-forge",
+    "planning",
+    "guardrails",
+    "code-review",
+    "agents",
+    "automations"
+  ]
+}

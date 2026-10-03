@@ -23,6 +23,7 @@
 12. [Using Plan Forge with Copilot Cloud Agent](#using-plan-forge-with-copilot-cloud-agent)
 13. [Scheduled Checks with VS Code Automations](#scheduled-checks-with-vs-code-automations)
 14. [Following a Run's Worker Sessions](#following-a-runs-worker-sessions)
+15. [Plan Forge as an Agent Plugin](#plan-forge-as-an-agent-plugin)
 
 ---
 
@@ -951,6 +952,17 @@ To use one, select **Import Automation** in the Automations view and choose the 
 ## Following a Run's Worker Sessions
 
 Each slice's Copilot CLI worker runs in its own named session, `pforge <plan> - slice <n>: <title>`, so it is easy to find in VS Code's Sessions view, where you can read the transcript or continue it. A retry continues the same session. `slice-<n>.json` in the run folder records it under `workerSession`, including a `resumeCommand` such as `copilot --resume=<id>` for picking up a failed slice by hand.
+
+---
+
+## Plan Forge as an Agent Plugin
+
+Plan Forge's skills, pipeline agents (Specifier → Plan Hardener → Executor → Reviewer Gate → Shipper) and automation templates are also packaged as an agent plugin, so you can use them in any workspace without copying files. This repository is the plugin's marketplace:
+
+- **VS Code**: add `"srnichols/plan-forge"` to the `chat.plugins.marketplaces` setting, then install **plan-forge** from the Extensions view (`@agentPlugins`). Its automation templates appear under **Templates from Plugins** in the Automations view.
+- **Copilot CLI**: `copilot plugin marketplace add srnichols/plan-forge`, then `copilot plugin install plan-forge@plan-forge`.
+
+The plugin carries guidance only. The skills call Plan Forge's MCP tools, which come from the MCP server that `setup.ps1` / `setup.sh` installs and configures in your project, together with the hooks. In a project without that install, the skills and agents load but their tool calls are unavailable.
 
 ---
 

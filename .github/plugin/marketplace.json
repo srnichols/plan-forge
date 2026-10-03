@@ -1,0 +1,16 @@
+{
+  "name": "plan-forge",
+  "owner": {
+    "name": "srnichols"
+  },
+  "metadata": {
+    "description": "Plan Forge agent plugins"
+  },
+  "plugins": [
+    {
+      "name": "plan-forge",
+      "description": "Plan Forge guardrails for agentic delivery: plan, harden, execute, review and ship skills, the pipeline agents, and scheduled check templates. Pair it with the Plan Forge MCP server that setup installs in your project.",
+      "source": "plugins/plan-forge"
+    }
+  ]
+}

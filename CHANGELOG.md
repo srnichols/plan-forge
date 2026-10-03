@@ -7,6 +7,8 @@ Format follows [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
+## [3.31.3] — 2026-10-03 — Self-update succeeds when already current
+
 ### Fixed
 
 - **`pforge self-update --force` on a project already at the latest release no longer fails.** 3.31.2 made self-update exit 1 when its update applied nothing, so that a cancelled install is not reported as a success. A project that was already current also applies nothing, so forcing a reinstall of the release you have printed "was not installed" and exited 1. Being up to date now counts as installed, in both shells.

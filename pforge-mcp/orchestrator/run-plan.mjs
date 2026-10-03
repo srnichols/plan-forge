@@ -37,7 +37,7 @@ import { extractPlanReleaseVersion, detectVersionCollision, parseValidationGates
 import { isDestructiveSliceTitle, isWorktreeExemptPath, loadTeardownGuardConfig, verifyBranchSafety, captureAbsorbedCommits, snapshotPreSliceState, pushSliceSnapshot, popSliceSnapshot, attachSliceSnapshotRestore, cleanupStaleSnapshots, extractFilesModifiedExhaustive, verifyFilesModified, verifyDeletionSlice, verifySliceScope, autoCommitSliceIfDirty, stageOrphansOnSliceFailure } from "./git-safety.mjs";
 import { registerCorrelationThreadResponder, isDeployTrigger, runPreDeployHook, parseGitPorcelain, parseShortstat, resetPostSliceHookFired, runPostSliceHook, resetPostSliceTemperingFired, runPostSliceTemperingHook, runPreAgentHandoffHook, loadOpenClawConfig, postOpenClawSnapshot, runPostRunAuditorHook } from "./hooks.mjs";
 import { findLatestRun, parseEventLine, parseEventsLog, readSliceArtifacts, normalizeRunState, readCrucibleState, readReviewQueueState, buildWatchSnapshot, readHomeSnapshot, detectWatchAnomalies, recommendFromAnomalies, ensureReviewQueueDirs, ensureNotificationsDirs, ensureNotificationsConfig, generateReviewItemId, readReviewItem, listReviewItems, addReviewItem, resolveReviewItem, maybeAddStallReview, maybeAddTemperingReview, maybeAddBugReview, maybeAddVisualBaselineReview, maybeAddFixPlanReview, appendWatchHistory, runWatch, runWatchLive, scoreSliceComplexity } from "./review-watcher.mjs";
-import { inferSliceType, recommendModel } from "./model-scoring.mjs";
+import { autoTuneEscalationChain, inferSliceType, recommendModel } from "./model-scoring.mjs";
 import { loadQuorumConfig, classifyLegError, quorumDispatch, quorumReview, analyzeWithQuorum, calculateSliceCost, buildCostBreakdown } from "./quorum.mjs";
 import { estimatePlan as _estimatePlan } from "../cost-service.mjs";
 import { isRetiredModel, retirementDate } from "../copilot-models.mjs";
@@ -1489,34 +1489,8 @@ function loadEscalationChain(cwd) {
     }
   } catch { /* defaults */ }
 
-  // Auto-tune: reorder default chain by historical success rate × cost efficiency
-  try {
-    const perf = loadModelPerformance(cwd);
-    if (perf.length >= 5) {
-      const stats = {};
-      for (const p of perf) {
-        const m = p.model || "unknown";
-        if (!stats[m]) stats[m] = { passed: 0, total: 0, cost: 0 };
-        stats[m].total++;
-        if (p.status === "passed") stats[m].passed++;
-        stats[m].cost += p.cost_usd || 0;
-      }
-      const ranked = Object.entries(stats)
-        .filter(([, s]) => s.total >= 3)
-        .map(([model, s]) => ({
-          model,
-          successRate: s.passed / s.total,
-          avgCost: s.cost / s.total,
-          score: (s.passed / s.total) * 100 - (s.cost / s.total) * 1000, // success weighted, cost penalized
-        }))
-        .sort((a, b) => b.score - a.score);
-      if (ranked.length >= 2) {
-        return ["auto", ...ranked.slice(0, 3).map(r => r.model)];
-      }
-    }
-  } catch { /* fall through to static default */ }
-
-  return [...DEFAULT_ESCALATION_CHAIN];
+  // Auto-tune from run history (current Copilot models only), else the static default.
+  return autoTuneEscalationChain(cwd) ?? [...DEFAULT_ESCALATION_CHAIN];
 }
 
 // Phase-53 S4: gate-synthesis helpers → orchestrator/run-plan.mjs

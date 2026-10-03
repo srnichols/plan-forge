@@ -31,6 +31,18 @@ export { QUORUM_PRESETS } from "./constants.mjs";
 const MIN_SAMPLE = 3;
 /** A recommended model must have passed more than this share of its slices. */
 const MIN_SUCCESS_RATE = 0.8;
+/** History needed before the escalation chain is tuned from it. */
+const MIN_ESCALATION_HISTORY = 5;
+/** Tuned models placed after "auto" in the escalation chain. */
+const ESCALATION_TUNED_MODELS = 3;
+/** Escalation score: points per unit of success rate, and penalty per USD of average cost. */
+const ESCALATION_SUCCESS_WEIGHT = 100;
+const ESCALATION_COST_PENALTY = 1000;
+
+/** Models Plan Forge may pick from run history without the user naming them. */
+function isAutoPickableModel(model) {
+  return !isApiOnlyModel(model) && isRecommendableModel(model);
+}
 
 /**
  * Infer the slice type from its title and tasks for model routing purposes.
@@ -74,7 +86,7 @@ export function recommendModel(cwd, sliceType = null) {
 
     const stats = aggregateModelStats(relevant);
     const qualified = Object.entries(stats)
-      .filter(([m, s]) => !isApiOnlyModel(m) && isRecommendableModel(m) && s.total_slices >= MIN_SAMPLE && s.success_rate > MIN_SUCCESS_RATE)
+      .filter(([m, s]) => isAutoPickableModel(m) && s.total_slices >= MIN_SAMPLE && s.success_rate > MIN_SUCCESS_RATE)
       .map(([m, s]) => ({
         model: m,
         success_rate: s.success_rate,
@@ -84,6 +96,41 @@ export function recommendModel(cwd, sliceType = null) {
       .sort((a, b) => a.avg_cost_usd - b.avg_cost_usd);
 
     return qualified.length > 0 ? qualified[0] : null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Escalation chain tuned from run history, for projects with no
+ * escalationChain in .forge.json: "auto" first, then the best current models
+ * by success rate with a cost penalty. Only models Plan Forge may pick on its
+ * own are ranked, so history rows with no model or a retired model never
+ * become a retry's --model.
+ *
+ * @param {string} cwd - Project working directory
+ * @returns {string[]|null} null when history is too thin; callers use the static default.
+ */
+export function autoTuneEscalationChain(cwd) {
+  try {
+    const records = loadModelPerformance(cwd);
+    if (records.length < MIN_ESCALATION_HISTORY) return null;
+    const stats = {};
+    for (const { model, status, cost_usd: cost } of records) {
+      if (!isAutoPickableModel(model)) continue;
+      const s = (stats[model] ??= { passed: 0, total: 0, cost: 0 });
+      s.total++;
+      if (status === "passed") s.passed++;
+      s.cost += cost || 0;
+    }
+    const ranked = Object.entries(stats)
+      .filter(([, s]) => s.total >= MIN_SAMPLE)
+      .map(([model, s]) => ({
+        model,
+        score: (s.passed / s.total) * ESCALATION_SUCCESS_WEIGHT - (s.cost / s.total) * ESCALATION_COST_PENALTY,
+      }))
+      .sort((a, b) => b.score - a.score);
+    return ranked.length >= 2 ? ["auto", ...ranked.slice(0, ESCALATION_TUNED_MODELS).map((r) => r.model)] : null;
   } catch {
     return null;
   }

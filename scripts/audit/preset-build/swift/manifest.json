@@ -2,7 +2,7 @@
   "stack": "swift",
   "language": "swift",
   "image": "swift:6.4-noble",
-  "check": "swift build --build-tests",
+  "check": "swift build --build-tests --scratch-path /tmp/swift-build",
   "blocks": [
     {
       "file": ".github/agents/architecture-reviewer.agent.md",

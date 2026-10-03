@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Plan Forge Manual — Complete Offline Edition</title>
-  <meta name="description" content="Plan Forge Manual — complete single-page offline edition. 79 chapters and appendices. Generated 2026-10-03 10:49:56 UTC." />
+  <meta name="description" content="Plan Forge Manual — complete single-page offline edition. 79 chapters and appendices. Generated 2026-10-03 14:39:41 UTC." />
   <meta name="generator" content="Plan Forge export.mjs" />
   <link rel="icon" type="image/svg+xml" href="../assets/plan-forge-logo.svg" />
   <link rel="stylesheet" href="../assets/tailwind.built.css" />
@@ -124,8 +124,8 @@
   <h1>📚 Plan Forge Manual</h1>
   <p class="export-subtitle">Complete offline edition &mdash; 79 chapters &amp; appendices</p>
   <p class="export-meta">
-    Generated 2026-10-03 10:49:56 UTC
-    &middot; content hash <code>715abe39bc1ff32f</code>
+    Generated 2026-10-03 14:39:41 UTC
+    &middot; content hash <code>53445c7fbf25847e</code>
     &middot; vv3.6.2
     &middot; <a href="https://planforge.software/" rel="noopener">Main site ↗</a>
     &middot; <a href="index.html">Online version ↗</a>
@@ -376,7 +376,7 @@
 
         <!-- ─── Live numbers (counts) ─── -->
         <h2 id="live-numbers">Live numbers</h2>
-        <p>Some sentences refer to a count that changes between releases, "Plan Forge ships <!--c:tools-->105<!--/c--> MCP tools", "<!--c:instructions-->18<!--/c--> instruction files", "<!--c:agents-->12<!--/c--> agents". Those numbers are <em>tokenized</em> in the page source and rewritten at build time from a single source of truth in <code>docs/manual/assets/manual.js</code>. You'll see the up-to-date number rendered, but if you View Source you'll see the token markers wrapping it.</p>
+        <p>Some sentences refer to a count that changes between releases, "Plan Forge ships <!--c:tools-->106<!--/c--> MCP tools", "<!--c:instructions-->18<!--/c--> instruction files", "<!--c:agents-->12<!--/c--> agents". Those numbers are <em>tokenized</em> in the page source and rewritten at build time from a single source of truth in <code>docs/manual/assets/manual.js</code>. You'll see the up-to-date number rendered, but if you View Source you'll see the token markers wrapping it.</p>
 
         <div class="callout callout-info">
           <strong>For contributors:</strong> use <code>&lt;!--c:KEY--&gt;NUMBER&lt;!--/c--&gt;</code> instead of typing a literal number in chapter prose. Run <code>node docs/manual/maintain.mjs</code> after editing, it sweeps every chapter, fixes drift, and warns on unknown keys.
@@ -408,7 +408,7 @@
         <h3 id="edition-history">Edition history</h3>
         <ul>
           <li><strong>Fifth Edition (in progress)</strong> (v3.12.0+), Ebook-completion phase. <strong>Cluster A: Front Matter</strong> shipped so far: the new <a href="foreword.html">Foreword &mdash; From Impossible to Seven Minutes</a> framing the one-year journey from "impossible" to a 99/100 application in seven minutes; the <a href="stakeholder-briefing.html">Stakeholder Briefing</a> as the 10&ndash;15 minute white-paper version with a <a href="stakeholder-briefing.html#section-8">tailoring flow</a> for prospect-specific remixing; the <a href="reader-paths.html">Reader-Journey Ladders</a> with five persona ladders (solo developer, team lead, reviewer or architect, enterprise architect, extension author); and <a href="day-in-the-forge.html">Appendix R &mdash; A Day in the Forge</a> collecting three worked case studies absorbed from contemporary blog posts (the closed loop, the .NET 99-vs-44 A/B test, the three-model quorum run). Further story, reference, and domain-chapter slices land through this edition as the phase ships.</li>
-          <li><strong>Fourth Edition</strong> (v3.6), OpenBrain promoted to the documented <a href="project-history.html#v3-6-openbrain-l3">L3 memory layer</a>; new <code>pforge brain {status, hint, test, replay}</code> subcommands; Team Dashboard tab added to the Forge group (now 19 tabs). Project History extended through v3.6 with v2.95 Lattice, v3.0 Copilot trilogy, v3.2&ndash;3.4 Team Mode. Refreshed counts (<!--c:tools-->105<!--/c--> MCP tools, <!--c:cli-commands-->97<!--/c--> CLI commands).</li>
+          <li><strong>Fourth Edition</strong> (v3.6), OpenBrain promoted to the documented <a href="project-history.html#v3-6-openbrain-l3">L3 memory layer</a>; new <code>pforge brain {status, hint, test, replay}</code> subcommands; Team Dashboard tab added to the Forge group (now 19 tabs). Project History extended through v3.6 with v2.95 Lattice, v3.0 Copilot trilogy, v3.2&ndash;3.4 Team Mode. Refreshed counts (<!--c:tools-->106<!--/c--> MCP tools, <!--c:cli-commands-->97<!--/c--> CLI commands).</li>
           <li><strong>Third Edition</strong> (v3.5.1), Added Part V &ldquo;Integrate&rdquo;: Copilot Integration Trilogy, Team Coordination, The Knowledge Graph, Integrating from Outside. Refreshed counts (88 tools, 5 parts, 28 chapters).</li>
           <li><strong>Second Edition</strong> (v2.95.0), Added &ldquo;How the Shop Remembers&rdquo; (memory architecture: Hallmark, Anvil, Lattice, sync_memories), now <a href="memory-system.html">Chapter 22</a> after the Part IV memory-first reorder.</li>
           <li><strong>First Edition</strong> (v2.78.0), Initial public release: 24 chapters across Parts I&ndash;IV plus 14 appendices.</li>
@@ -1049,7 +1049,7 @@
             <tr><td><strong>Git</strong></td><td>2.30+</td><td><code>git --version</code></td><td>Everyone, required by setup, all CLI commands, and version-aware features.</td></tr>
             <tr><td><strong>VS Code</strong> (or Insiders)</td><td>1.99+</td><td><code>code --version</code></td><td>UI path, prompts, agents, skills, and the Copilot integration all live inside VS Code.</td></tr>
             <tr><td><strong>GitHub Copilot</strong> extension</td><td>Active subscription</td><td>Copilot icon in status bar</td><td>UI path, powers the chat prompts and the hardening pipeline.</td></tr>
-            <tr><td><strong>Node.js</strong></td><td>22.12+ (24 LTS recommended)</td><td><code>node --version</code></td><td>CLI / server path, needed for the dashboard, the MCP server, <code>pforge.ps1</code> / <code>pforge.sh</code>, and the <!--c:tools-->105<!--/c--> tools. Skip if you'll only use prompts + instructions + agents inside Copilot Chat.</td></tr>
+            <tr><td><strong>Node.js</strong></td><td>22.12+ (24 LTS recommended)</td><td><code>node --version</code></td><td>CLI / server path, needed for the dashboard, the MCP server, <code>pforge.ps1</code> / <code>pforge.sh</code>, and the <!--c:tools-->106<!--/c--> tools. Skip if you'll only use prompts + instructions + agents inside Copilot Chat.</td></tr>
             <tr><td><strong><a href="https://srnichols.github.io/OpenBrain" rel="noopener">OpenBrain</a></strong> <span class="text-xs text-slate-500">(optional, recommended)</span></td><td>Latest</td><td><code>pforge brain hint</code></td><td>L3 semantic memory (PostgreSQL + pgvector). Unlocks Reflexion lessons, Auto-skills, cross-project Federation, and 28 auto-capturing tools. Use the Plan-Forge-tuned fork at <a href="https://srnichols.github.io/OpenBrain" rel="noopener">srnichols.github.io/OpenBrain</a>; the upstream OpenBrain has been modified to align with Plan Forge's hub schema and Hallmark provenance. See <a href="memory-architecture.html">Chapter 21: Memory Architecture</a> for how it wires into <code>.forge.json</code>, the dashboard, and the three-tier model.</td></tr>
           </tbody>
         </table>
@@ -2162,7 +2162,7 @@ applyTo: "**/auth/**,**/security/**,**/middleware/**"
         </table>
 
         <div class="callout callout-info">
-          <strong>Node.js is optional.</strong> Required only for the dashboard, MCP server, <code>pforge.ps1</code> / <code>pforge.sh</code>, and the <!--c:tools-->105<!--/c--> tools (REST API + WebSocket hub). <strong>Skip Node.js if you'll only use the core pipeline</strong>, prompts, instruction files, agents, and skills all live inside <code>.github/</code> and run entirely inside Copilot Chat.
+          <strong>Node.js is optional.</strong> Required only for the dashboard, MCP server, <code>pforge.ps1</code> / <code>pforge.sh</code>, and the <!--c:tools-->106<!--/c--> tools (REST API + WebSocket hub). <strong>Skip Node.js if you'll only use the core pipeline</strong>, prompts, instruction files, agents, and skills all live inside <code>.github/</code> and run entirely inside Copilot Chat.
         </div>
 
         <!-- ─── Easy Button: one-prompt install ─── -->
@@ -4027,7 +4027,7 @@ node pforge-mcp/server.mjs --dashboard-only</code></pre>
         </div>
 
         <h2 id="why">Why a Reasoning Orchestrator?</h2>
-        <p>Plan Forge has <!--c:tools-->105<!--/c--> MCP tools. Most of the time you know which one you need. But sometimes you don't, sometimes the question is open-ended:</p>
+        <p>Plan Forge has <!--c:tools-->106<!--/c--> MCP tools. Most of the time you know which one you need. But sometimes you don't, sometimes the question is open-ended:</p>
 
         <ul>
           <li><em>"Why did Phase-27 Slice 4 fail?"</em> &rarr; needs <code>forge_watch_live</code> + <code>brain_recall</code> + <code>forge_bug_list</code></li>
@@ -6015,7 +6015,7 @@ kubectl logs -l app=myapp -n canary --tail=200
 
       <div class="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">Chapter 11</div>
       <h1>MCP Server &amp; Tools</h1>
-      <p class="text-lg text-slate-400 mb-8"><!--c:tools-->105<!--/c--> MCP tools across 8 categories, Core, LiveGuard, Watcher, Crucible, Tempering, Bug Registry, Testbed, Forge-Master, plus REST API, WebSocket hub, telemetry, and cost tracking. The integration layer.</p>
+      <p class="text-lg text-slate-400 mb-8"><!--c:tools-->106<!--/c--> MCP tools across 8 categories, Core, LiveGuard, Watcher, Crucible, Tempering, Bug Registry, Testbed, Forge-Master, plus REST API, WebSocket hub, telemetry, and cost tracking. The integration layer.</p>
 
       <div class="callout callout-info">
         <strong>What is MCP?</strong><br>
@@ -6036,7 +6036,7 @@ kubectl logs -l app=myapp -n canary --tail=200
         <div class="flex gap-3 min-w-[500px] py-2">
           <div class="flex-1 rounded-xl border border-amber-800/30 bg-amber-950/15 p-4 text-center">
             <div class="text-sm font-bold text-amber-400 mb-1">MCP (stdio)</div>
-            <p class="text-xs text-slate-500"><!--c:tools-->105<!--/c--> MCP tools across 8 categories (Core, LiveGuard, Watcher, Crucible, Tempering, Bug Registry, Testbed, Forge-Master) exposed via Model Context Protocol. Copilot, Claude, Cursor call these as function calls.</p>
+            <p class="text-xs text-slate-500"><!--c:tools-->106<!--/c--> MCP tools across 8 categories (Core, LiveGuard, Watcher, Crucible, Tempering, Bug Registry, Testbed, Forge-Master) exposed via Model Context Protocol. Copilot, Claude, Cursor call these as function calls.</p>
           </div>
           <div class="flex-1 rounded-xl border border-sky-800/30 bg-sky-950/15 p-4 text-center">
             <div class="text-sm font-bold text-sky-400 mb-1">Express (HTTP :3100)</div>
@@ -6062,7 +6062,7 @@ kubectl logs -l app=myapp -n canary --tail=200
         <a href="mcp-server-reference.html" class="group block p-5 bg-sky-500/5 border border-sky-500/20 rounded-xl hover:border-sky-400/40 transition-all">
           <div class="text-xs font-semibold text-sky-500 mb-1 uppercase tracking-wider">Full Reference</div>
           <div class="text-sm font-bold text-slate-100 group-hover:text-sky-400 transition-colors mb-2">MCP Server — Reference</div>
-          <p class="text-xs text-slate-500">Complete tool tables for all 8 categories (<!--c:tools-->105<!--/c--> tools), REST API endpoints, WebSocket hub events, OTLP telemetry, cost tracking, SDK, and API key configuration.</p>
+          <p class="text-xs text-slate-500">Complete tool tables for all 8 categories (<!--c:tools-->106<!--/c--> tools), REST API endpoints, WebSocket hub events, OTLP telemetry, cost tracking, SDK, and API key configuration.</p>
         </a>
       </div>
 
@@ -6205,7 +6205,7 @@ forge_run_plan({ plan: "docs/plans/Phase-1.md", resumeFrom: 3 })</code></pre>
       </ol>
 
       <div class="callout callout-info mt-6">
-        <strong>Need the full tool list?</strong> See <a href="mcp-server-reference.html">MCP Server — Full Reference</a> for all <!--c:tools-->105<!--/c--> tools across 8 categories, REST API endpoints, WebSocket events, telemetry, cost tracking, SDK, and API key configuration.
+        <strong>Need the full tool list?</strong> See <a href="mcp-server-reference.html">MCP Server — Full Reference</a> for all <!--c:tools-->106<!--/c--> tools across 8 categories, REST API endpoints, WebSocket events, telemetry, cost tracking, SDK, and API key configuration.
       </div>
 
       <p class="text-sm text-slate-500 mt-8">📄 Full reference: <a href="../capabilities.html">capabilities</a>, <a href="https://github.com/srnichols/plan-forge/blob/master/pforge-mcp/EVENTS.md" rel="noopener">EVENTS.md on GitHub</a>, <a href="https://github.com/srnichols/plan-forge/blob/master/pforge-mcp/tools.json" rel="noopener">tools.json on GitHub</a></p>
@@ -6221,14 +6221,14 @@ forge_run_plan({ plan: "docs/plans/Phase-1.md", resumeFrom: 3 })</code></pre>
 
       <div class="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">Chapter 11 · Full Reference</div>
       <h1>MCP Server — Full Reference</h1>
-      <p class="text-lg text-slate-400 mb-8">Complete tool tables for all <!--c:tools-->105<!--/c--> MCP tools across 8 categories, REST API endpoints, WebSocket hub events, OTLP telemetry, cost tracking, SDK, and API key configuration.</p>
+      <p class="text-lg text-slate-400 mb-8">Complete tool tables for all <!--c:tools-->106<!--/c--> MCP tools across 8 categories, REST API endpoints, WebSocket hub events, OTLP telemetry, cost tracking, SDK, and API key configuration.</p>
 
       <div class="callout callout-tip">
         <strong>Just getting started?</strong> See <a href="mcp-server-quickstart.html">MCP Server — Quick Start</a> for the essential tools and a typical workflow. Return here when you need the full catalog or REST API details.
       </div>
 
       <!-- ─── MCP Tools ─── -->
-      <h2 id="tools">MCP Tools (<!--c:tools-->105<!--/c-->, in 8 Categories)</h2>
+      <h2 id="tools">MCP Tools (<!--c:tools-->106<!--/c-->, in 8 Categories)</h2>
       <p>Every tool is callable from Copilot Chat, Claude Code, Cursor, or any MCP-compatible client. Tools are grouped by station / subsystem. The four "station" categories (Crucible, LiveGuard, Tempering, Bug Registry / Testbed) map directly to the four shop stations; the rest are cross-cutting infrastructure.</p>
 
       <div class="callout callout-tip">
@@ -6450,7 +6450,7 @@ forge_run_plan({ plan: "docs/plans/Phase-1.md", resumeFrom: 3 })</code></pre>
           <tr><td><a href="rest-api-reference.html#liveguard">LiveGuard</a></td><td>Drift, incidents, deploy journal, regression guard, runbooks, secret scan, dep watch.</td></tr>
           <tr><td><a href="rest-api-reference.html#bridge">Bridge &amp; approvals</a></td><td>The only cross-boundary auth surface (HMAC via <code>PFORGE_BRIDGE_SECRET</code>).</td></tr>
           <tr><td><a href="rest-api-reference.html#forge-master">Forge-Master</a></td><td>Conversational entrypoint, chat, prefs, cache stats.</td></tr>
-          <tr><td><a href="rest-api-reference.html#generic-dispatcher">Generic MCP dispatcher</a></td><td><code>POST /api/tool/:name</code>, invoke any of the <!--c:tools-->105<!--/c--> MCP tools over REST.</td></tr>
+          <tr><td><a href="rest-api-reference.html#generic-dispatcher">Generic MCP dispatcher</a></td><td><code>POST /api/tool/:name</code>, invoke any of the <!--c:tools-->106<!--/c--> MCP tools over REST.</td></tr>
         </tbody>
       </table>
 
@@ -10819,7 +10819,7 @@ pforge digest --post             # send via configured notifier</code></pre>
         <p class="text-lg text-slate-400 mb-8">MCP is the native transport for Copilot and similar agents, but it is not the only one. Plan Forge ships four orthogonal surfaces so any tool can drive the workshop: <strong>REST</strong> for HTTP-anything, <strong>SDK</strong> for Node.js callers, <strong>WebSocket hub</strong> for live event streams, and <strong>CLI</strong> for scripts and humans.</p>
 
         <div class="callout callout-info">
-          <strong>The big numbers.</strong> The integration surface is large by design, <!--c:tools-->105<!--/c--> MCP tools, 103 REST endpoints across 17+ domains, a 4-sub-path SDK (<code>pforge-sdk</code>, <code>/tools</code>, <code>/hallmark</code>, <code>/chunker</code>), and <!--c:cli-commands-->97<!--/c--> CLI commands. The same underlying handlers back every surface, pick the one that fits the caller, not the feature.
+          <strong>The big numbers.</strong> The integration surface is large by design, <!--c:tools-->106<!--/c--> MCP tools, 103 REST endpoints across 17+ domains, a 4-sub-path SDK (<code>pforge-sdk</code>, <code>/tools</code>, <code>/hallmark</code>, <code>/chunker</code>), and <!--c:cli-commands-->97<!--/c--> CLI commands. The same underlying handlers back every surface, pick the one that fits the caller, not the feature.
         </div>
 
         <!-- ─── The four surfaces ─── -->
@@ -11239,7 +11239,7 @@ pforge cost-report --since=30d --json | jq '.byModel'</code></pre>
           <tr><td><strong>Dashboard</strong></td><td>Web UI at <code>localhost:3100/dashboard</code>. 25 tabs for monitoring, cost, replay, skills, config, watcher, and LiveGuard.</td></tr>
           <tr><td><strong>Lifecycle Hook</strong></td><td>Automatic actions tied to Plan Forge's pipeline: <code>PreDeploy</code>, <code>PreCommit</code>, <code>PreAgentHandoff</code>, <code>PostSlice</code> (configured via <code>.github/hooks/plan-forge.json</code>). Distinct from Claude Code's own hook names.</td></tr>
           <tr><td><strong>OpenBrain</strong></td><td>The L3 memory layer. Self-hosted MCP server (PostgreSQL + pgvector) that provides cross-session, cross-tool semantic memory. Plan Forge ships with L1 (Hub) + L2 (<code>.forge/*.jsonl</code>) memory built-in; L3 requires OpenBrain. Without it, Reflexion lessons, Auto-skills, cross-project Federation, and 28 auto-capturing tools become inert. Recommended at install time; easy to add later via <code>pforge brain hint</code>. Deploy options: Docker, Supabase, Kubernetes, Azure. See <a href="https://srnichols.github.io/OpenBrain">srnichols.github.io/OpenBrain</a>.</td></tr>
-          <tr><td><strong>MCP</strong></td><td>Model Context Protocol. A standard for AI agents to call functions. Plan Forge's MCP server exposes <!--c:tools-->105<!--/c--> tools (core + LiveGuard + Watcher + Crucible + Tempering + Bug Registry + Testbed + Forge-Master).</td></tr>
+          <tr><td><strong>MCP</strong></td><td>Model Context Protocol. A standard for AI agents to call functions. Plan Forge's MCP server exposes <!--c:tools-->106<!--/c--> tools (core + LiveGuard + Watcher + Crucible + Tempering + Bug Registry + Testbed + Forge-Master).</td></tr>
           <tr><td><strong>ACI</strong></td><td>Agent-Computer Interface. The SWE-agent principle that an agent only performs as well as the surface lets it: bounded payloads, sparse fields, paginated lists, friendly empty-result messages. Enforced in Plan Forge via tool-surface temper guards in <code>architecture-principles.instructions.md</code>. <code>forge_search</code> is the reference standard.</td></tr>
           <tr><td><strong>Bridge</strong></td><td>Notification dispatcher that forwards WebSocket hub events to external platforms (Slack, Discord, Telegram, generic webhooks).</td></tr>
           <tr><td><strong>Knowledge Graph</strong></td><td>In-memory graph of Phase / Slice / Commit / File / Run / Bug nodes, queryable via <code>forge_graph_query</code>. Used by Forge-Master for cross-feature reasoning. See <a href="knowledge-graph.html">Chapter 28</a>.</td></tr>
@@ -12705,7 +12705,7 @@ pforge config list</code></pre>
           <tr><td><code>.github/agents/</code></td><td>Plan Forge ships 20 custom agent personas (architecture, database, security, deploy, performance, test-runner, API contracts, accessibility, multi-tenancy, CI/CD, observability, dependency, compliance, plus 6 pipeline agents and an audit classifier)</td><td><code>templates/.github/agents/</code></td></tr>
           <tr><td><code>.github/hooks/</code></td><td>Plan Forge ships its own lifecycle hooks: <code>PreDeploy</code>, <code>PreCommit</code>, <code>PreAgentHandoff</code>, <code>PostSlice</code>, plus <code>plan-forge.json</code> hook configuration. Distinct from Claude Code's hook names.</td><td><code>templates/.github/hooks/</code></td></tr>
           <tr><td><code>.github/skills/</code></td><td>Plan Forge ships <!--c:skills-->11<!--/c--> skills as <code>/</code> slash-commands: database-migration, staging-deploy, test-sweep, dependency-audit, security-audit, code-review, release-notes, api-doc-gen, onboarding, health-check, forge-execute, audit-loop, plus pipeline skills</td><td><code>templates/.github/skills/</code></td></tr>
-          <tr><td><strong class="text-slate-200">MCP</strong></td><td>Plan Forge ships its own MCP server (<code>pforge-mcp</code>) with <!--c:tools-->105<!--/c--> tools covering planning, execution, eval, observability, cost, memory, search, timeline, notifications. Auto-generates <code>.vscode/mcp.json</code></td><td><code>pforge-mcp/server.mjs</code>, <code>pforge-mcp/tools.json</code></td></tr>
+          <tr><td><strong class="text-slate-200">MCP</strong></td><td>Plan Forge ships its own MCP server (<code>pforge-mcp</code>) with <!--c:tools-->106<!--/c--> tools covering planning, execution, eval, observability, cost, memory, search, timeline, notifications. Auto-generates <code>.vscode/mcp.json</code></td><td><code>pforge-mcp/server.mjs</code>, <code>pforge-mcp/tools.json</code></td></tr>
           <tr><td><code>github/github-mcp-server</code></td><td>Plan Forge documents this as the canonical GitHub-side MCP integration. Plan Forge agents call it via the MCP plumbing they already speak</td><td>docs reference, <code>.vscode/mcp.json</code> example</td></tr>
           <tr><td><strong class="text-slate-200">GitHub Actions</strong></td><td>Plan Forge plans can run as Actions workflows; <code>pforge run-plan</code> is callable from any runner. CCA itself runs in Actions and Plan Forge plans dispatched via CCA inherit Actions concurrency, runners, and minutes</td><td><code>action.yml</code></td></tr>
           <tr><td><strong class="text-slate-200">GitHub Advanced Security</strong></td><td>Plan Forge's <code>forge_secret_scan</code>, <code>forge_dep_watch</code>, and security-audit skill complement GHAS, not replace it. Plan Forge surfaces GHAS findings into plan-aware bug reports</td><td><code>pforge-mcp/notifications/</code>, <code>dependency-reviewer.agent.md</code></td></tr>
@@ -12966,7 +12966,7 @@ pforge config list</code></pre>
           <tr>
             <td><code>.vscode/mcp.json</code></td>
             <td>VS Code's MCP-server registry. Each entry exposes a server's tools to Copilot Chat.</td>
-            <td>Plan Forge registers itself here as <code>plan-forge</code>, exposing <!--c:tools-->105<!--/c--> MCP tools (<code>forge_run_plan</code>, <code>forge_estimate_quorum</code>, <code>forge_cost_report</code>, <code>forge_github_status</code>, <code>forge_lattice_query</code>, <code>forge_sync_memories</code>, …). See <a href="mcp-server-quickstart.html" class="text-amber-400 hover:underline">MCP Server Quick Start</a>.</td>
+            <td>Plan Forge registers itself here as <code>plan-forge</code>, exposing <!--c:tools-->106<!--/c--> MCP tools (<code>forge_run_plan</code>, <code>forge_estimate_quorum</code>, <code>forge_cost_report</code>, <code>forge_github_status</code>, <code>forge_lattice_query</code>, <code>forge_sync_memories</code>, …). See <a href="mcp-server-quickstart.html" class="text-amber-400 hover:underline">MCP Server Quick Start</a>.</td>
           </tr>
           <tr>
             <td><code>.github/workflows/</code></td>
@@ -13505,7 +13505,7 @@ pforge run-plan docs/plans/Phase-28-PLAN.md --model gpt-6-sol</code></pre>
           </tr>
           <tr>
             <td>MCP tools (where MCP is supported)</td>
-            <td>Claude Code and Cursor both support MCP. They can call <code>forge_run_plan</code>, <code>forge_analyze</code>, <code>forge_estimate_quorum</code>, and the other <!--c:tools-->105<!--/c--> MCP tools directly from chat. Codex does not support MCP today.</td>
+            <td>Claude Code and Cursor both support MCP. They can call <code>forge_run_plan</code>, <code>forge_analyze</code>, <code>forge_estimate_quorum</code>, and the other <!--c:tools-->106<!--/c--> MCP tools directly from chat. Codex does not support MCP today.</td>
           </tr>
         </tbody>
       </table>
@@ -18021,7 +18021,7 @@ applyTo: '**/auth/**,**/middleware/**'
       <div class="chapter-content">
         <div class="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">Appendix Q · Reference</div>
         <h1>Unified API Surface Index</h1>
-        <p class="text-lg text-slate-400 mb-8">One index, four surfaces. Every <!--c:tools-->105<!--/c--> MCP tool, every <!--c:cli-commands-->97<!--/c--> CLI command, every REST endpoint domain, and every SDK export, alphabetized, grouped, and cross-linked. If you can't remember whether <code>forge_secret_scan</code> has a CLI wrapper, this is the page.</p>
+        <p class="text-lg text-slate-400 mb-8">One index, four surfaces. Every <!--c:tools-->106<!--/c--> MCP tool, every <!--c:cli-commands-->97<!--/c--> CLI command, every REST endpoint domain, and every SDK export, alphabetized, grouped, and cross-linked. If you can't remember whether <code>forge_secret_scan</code> has a CLI wrapper, this is the page.</p>
 
         <div class="callout callout-info">
           <strong>The source of truth.</strong> This appendix is a navigable index, not a reference manual. For deep usage:
@@ -18061,7 +18061,7 @@ applyTo: '**/auth/**,**/middleware/**'
             <tbody class="text-slate-300">
               <tr class="border-b border-slate-800/40">
                 <td class="py-2 px-3"><strong>MCP</strong> (stdio + WebSocket)</td>
-                <td class="py-2 px-3"><!--c:tools-->105<!--/c--> tools</td>
+                <td class="py-2 px-3"><!--c:tools-->106<!--/c--> tools</td>
                 <td class="py-2 px-3">Transport-bound (stdio = inherited trust; WS = bearer)</td>
                 <td class="py-2 px-3">Copilot, Claude, Cursor, Codex, anything speaking MCP</td>
               </tr>
@@ -18399,7 +18399,7 @@ applyTo: '**/auth/**,**/middleware/**'
         </div>
 
         <div class="callout callout-tip">
-          <strong>Total: <!--c:tools-->105<!--/c--> MCP tools across 24 domains.</strong> Run <code>forge_capabilities</code> for the machine-readable manifest with full schemas, cost tiers, intent tags, and error maps.
+          <strong>Total: <!--c:tools-->106<!--/c--> MCP tools across 24 domains.</strong> Run <code>forge_capabilities</code> for the machine-readable manifest with full schemas, cost tiers, intent tags, and error maps.
         </div>
 
         <!-- ─── CLI ─── -->
@@ -19250,6 +19250,7 @@ pforge ext add/remove/...       Extension management</code></pre>
               <tr><td><code>impactGate</code></td><td><code>"block"</code> | <code>"warn"</code> | <code>"off"</code> | object</td><td><code>"block"</code></td><td><code>{ "mode": "warn", "command": "bundle exec rspec {files}" }</code></td><td>After a slice's own gate passes, run the tests related to the files the slice changed: tests it changed, tests named after changed files (<code>foo.test.*</code>, <code>test_foo.py</code>, <code>foo_test.go</code>, <code>FooTests.cs</code>), and the Lattice blast radius. Runners are detected for vitest, jest, pytest, <code>go test</code> and <code>dotnet test</code>; <code>command</code> (with <code>{files}</code>) covers anything else, and <code>maxTests</code> (default 40) caps the run. Use <code>"warn"</code> if your suite has known failures.</td></tr>
 <tr><td><code>resumeOnRetry</code></td><td>boolean</td><td><code>true</code></td><td><code>false</code></td><td>A slice retry resumes the worker's previous session (Copilot CLI <code>--session-id</code>, SDK <code>resumeSession</code>) instead of starting cold, so the worker keeps the files it already read and the changes it already made. A failed resume starts a fresh session. Env override: <code>PFORGE_RESUME_ON_RETRY=0|1</code>.</td></tr>
 <tr><td><code>routing.autoTier</code></td><td><code>"complexity"</code> | <code>"efficiency"</code> | <code>"balance"</code> | <code>"intelligence"</code> | <code>"off"</code></td><td><code>"complexity"</code></td><td><code>"intelligence"</code></td><td>For slices on model <code>auto</code>: run them on the Copilot SDK and let it pick the model for a tier. <code>"complexity"</code> maps the slice complexity score to efficiency (1&ndash;3), balance (4&ndash;6) or intelligence (7&ndash;10). See <a href="advanced-execution.html#cost-optimization">Advanced Execution</a>.</td></tr>
+<tr><td><code>toolProfiles</code></td><td>string | string[]</td><td><code>["core"]</code></td><td><code>["core", "bugs"]</code></td><td>Which MCP tool profiles the server lists at start: <code>core</code> (always on), <code>bugs</code>, <code>liveguard</code>, <code>tempering</code>, <code>crucible</code>, <code>memory</code>, <code>code-intel</code>, <code>team</code>, or <code>full</code> for every tool. VS Code sends at most 128 tools per request across all MCP servers, so Plan Forge lists only <code>core</code> by default and agents load more with <code>forge_tool_profile</code>. Env override: <code>PFORGE_TOOL_PROFILE=bugs,liveguard</code>.</td></tr>
             </tbody>
           </table>
         </div>
@@ -20077,7 +20078,7 @@ ws.on("message", (raw) =&gt; {
         </div>
 
         <h2 id="orientation">Orientation</h2>
-        <p>Plan Forge exposes <strong>~91 REST endpoints</strong> across 16 subsystems. Every one of the <a href="api-surface-index.html#mcp-tools"><!--c:tools-->105<!--/c--> MCP tools</a> can also be invoked over REST through the generic dispatcher (<code>POST /api/tool/:name</code>), the explicit endpoints below are the "first-class" surfaces the dashboard and CLI use, with response shapes shaped for direct UI consumption rather than tool-call envelopes.</p>
+        <p>Plan Forge exposes <strong>~91 REST endpoints</strong> across 16 subsystems. Every one of the <a href="api-surface-index.html#mcp-tools"><!--c:tools-->106<!--/c--> MCP tools</a> can also be invoked over REST through the generic dispatcher (<code>POST /api/tool/:name</code>), the explicit endpoints below are the "first-class" surfaces the dashboard and CLI use, with response shapes shaped for direct UI consumption rather than tool-call envelopes.</p>
 
         <div class="overflow-x-auto mb-8">
           <table class="manual-table">
@@ -20098,7 +20099,7 @@ ws.on("message", (raw) =&gt; {
               <tr><td><a href="#copilot-integration"><strong>Copilot integration</strong></a></td><td>5</td><td>copilot-instructions.md read/preview/sync, OpenClaw snapshot/config.</td></tr>
               <tr><td><a href="#github-team"><strong>GitHub &amp; team coordination</strong></a></td><td>4</td><td>GitHub metrics, readiness, team dashboard, team activity.</td></tr>
               <tr><td><a href="#notifications-audit"><strong>Notifications, audit, dashboard, settings</strong></a></td><td>13</td><td>Notification config, audit config/drain, dashboard state, config, secrets, extensions, update, server restart.</td></tr>
-              <tr><td><a href="#generic-dispatcher"><strong>Generic MCP dispatcher</strong></a></td><td>3</td><td>The <code>POST /api/tool/:name</code> escape hatch that exposes any of the <!--c:tools-->105<!--/c--> MCP tools over REST.</td></tr>
+              <tr><td><a href="#generic-dispatcher"><strong>Generic MCP dispatcher</strong></a></td><td>3</td><td>The <code>POST /api/tool/:name</code> escape hatch that exposes any of the <!--c:tools-->106<!--/c--> MCP tools over REST.</td></tr>
               <tr><td><a href="#forge-master"><strong>Forge-Master</strong></a></td><td>10</td><td>The conversational entrypoint, chat sessions, prompts, prefs, cache stats.</td></tr>
               <tr><td><a href="#image"><strong>Image generation</strong></a></td><td>1</td><td>Generate images via xAI Grok Aurora or OpenAI DALL-E.</td></tr>
             </tbody>
@@ -20370,11 +20371,11 @@ ws.on("message", (raw) =&gt; {
 
         <!-- ─── Generic Dispatcher ─── -->
         <h2 id="generic-dispatcher">Generic MCP dispatcher</h2>
-        <p>The escape hatch. Any of the <!--c:tools-->105<!--/c--> MCP tools can be invoked over REST through this surface, useful for SDK clients, CI scripts, and any external integration that needs richer tool semantics than the first-class endpoints expose.</p>
+        <p>The escape hatch. Any of the <!--c:tools-->106<!--/c--> MCP tools can be invoked over REST through this surface, useful for SDK clients, CI scripts, and any external integration that needs richer tool semantics than the first-class endpoints expose.</p>
         <table class="manual-table">
           <thead><tr><th>Method</th><th>Path</th><th>Purpose</th><th>Notes</th></tr></thead>
           <tbody>
-            <tr><td>POST</td><td><code>/api/tool/:name</code></td><td><strong>Invoke any of the <!--c:tools-->105<!--/c--> MCP tools over REST</strong></td><td>Body is the tool's input contract (see <a href="api-surface-index.html#mcp-tools">Appendix Q</a>). Response is the tool's output payload, unwrapped from the MCP envelope. Crucible and Forge-Master tools route through the MCP handler (v2.82.1 fix).</td></tr>
+            <tr><td>POST</td><td><code>/api/tool/:name</code></td><td><strong>Invoke any of the <!--c:tools-->106<!--/c--> MCP tools over REST</strong></td><td>Body is the tool's input contract (see <a href="api-surface-index.html#mcp-tools">Appendix Q</a>). Response is the tool's output payload, unwrapped from the MCP envelope. Crucible and Forge-Master tools route through the MCP handler (v2.82.1 fix).</td></tr>
             <tr><td>POST</td><td><code>/api/tool/org-rules</code></td><td>Aliased convenience, <code>forge_org_rules</code></td><td>Equivalent to <code>POST /api/tool/forge_org_rules</code>.</td></tr>
             <tr><td>POST</td><td><code>/api/tool/run-plan</code></td><td>Aliased convenience, <code>forge_run_plan</code></td><td>Equivalent to <code>POST /api/tool/forge_run_plan</code>; also surfaced as <code>/api/runs/trigger</code> with a friendlier shape.</td></tr>
           </tbody>
@@ -21205,7 +21206,7 @@ switch ($LASTEXITCODE) {
 
 <!-- Footer -->
 <footer style="max-width:56rem;margin:3rem auto;padding:1.5rem;font-size:0.75rem;color:#475569;border-top:1px solid #1e293b;font-family:'JetBrains Mono',monospace;">
-  <p>Plan Forge Manual &mdash; offline edition &mdash; generated 2026-10-03 10:49:56 UTC &mdash; hash <code>715abe39bc1ff32f</code></p>
+  <p>Plan Forge Manual &mdash; offline edition &mdash; generated 2026-10-03 14:39:41 UTC &mdash; hash <code>53445c7fbf25847e</code></p>
   <p>Regenerate with: <code>node docs/manual/export.mjs</code> &mdash; <a href="https://planforge.software/" style="color:#f59e0b;" rel="noopener">Main site</a> &mdash; <a href="index.html" style="color:#f59e0b;">Online version</a> &mdash; <a href="https://github.com/srnichols/plan-forge" style="color:#f59e0b;" rel="noopener">GitHub</a></p>
 </footer>
 

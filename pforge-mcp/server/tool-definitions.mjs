@@ -326,6 +326,17 @@ export const TOOLS = [
     },
   },
   {
+    name: "forge_tool_profile",
+    description: "List, load or unload Plan Forge tool profiles. Only the core profile (plan execution, status, cost, search, diagnostics) is listed by default, to keep the tool list short; load another profile — bugs, liveguard, tempering, crucible, memory, code-intel, team, or full — when the task needs its tools. Returns { active, changed, listedTools, totalTools, unknown, profiles: [{ name, tools, active, description }], message }. Call with no arguments to see the profiles.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        load: { type: "array", items: { type: "string" }, description: "Profiles to add, e.g. [\"bugs\"] or [\"full\"]" },
+        unload: { type: "array", items: { type: "string" }, description: "Profiles to remove (core always stays)" },
+      },
+    },
+  },
+  {
     name: "forge_skill_status",
     description: "Get recent skill execution events from the WebSocket hub history. Shows which skills were run, per-step results, and timing.",
     inputSchema: {

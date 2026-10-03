@@ -6,7 +6,7 @@
 
 ---
 
-## MCP Tools (105)
+## MCP Tools (106)
 
 | Tool | Intent | Cost | Description |
 |------|--------|------|-------------|
@@ -111,6 +111,7 @@
 | `forge_testbed_happypath` | test | high | Run all happy-path testbed scenarios sequentially. Returns aggregated pass/fail results with per-scenario details. Use dryRun to validate without executing. |
 | `forge_testbed_run` | test | high | Run a testbed scenario against an external testbed repository. Executes preflight checks, setup, execution steps, and assertions, then writes defect findings. Use dryRun to validate without executing. |
 | `forge_timeline` | timeline | low | Unified chronological view across all forge event sources with correlationId grouping. Merges hub-events, runs, memories, openbrain, watch, tempering, bugs, incidents, and forge-master sessions into a single timeline. |
+| `forge_tool_profile` | configure | low | List, load or unload Plan Forge tool profiles. Only the core profile (plan execution, status, cost, search, diagnostics) is listed by default, to keep the tool list short; load another profile — bugs, liveguard, tempering, crucible, memory, code-intel, team, or full — when the task needs its tools. Returns { active, changed, listedTools, totalTools, unknown, profiles: [{ name, tools, active, description }], message }. Call with no arguments to see the profiles. |
 | `forge_triage_route` | tempering | low | Triage a single tempering finding into one of three lanes: 'bug' (product defect), 'spec' (feature/spec gap), or 'classifier' (noise). Pure routing — no side effects. Fail-safe: unknown classifier output always routes to 'bug' with low confidence. USE FOR: per-finding triage after a tempering run, building custom drain loops. DO NOT USE FOR: batch triage (use forge_tempering_drain), registering bugs (use forge_bug_register after triage). |
 | `forge_validate` | validate | low | Validate Plan Forge setup — check that all required files exist, file counts match preset expectations, and no unresolved placeholders remain. |
 | `forge_watch` | observe | low | WATCHER (v2.34) — read-only observer that tails another project's pforge run. Run this from a SECOND VS Code Copilot session with Plan-Forge as the workspace, pointing targetPath at the project being executed. Returns snapshot of current run state (slices passed/failed/in-progress, token counts, gate errors) plus heuristic anomaly detection. Mode 'analyze' additionally invokes a frontier model (default: claude-opus-5.5) for narrative advice. The watcher CANNOT modify any files in the target project. |

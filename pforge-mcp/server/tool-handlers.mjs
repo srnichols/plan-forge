@@ -5,6 +5,7 @@ import { withAuth } from "../auth/middleware.mjs";
 import { PROJECT_DIR } from "./state.mjs";
 import { executeTool } from "./tool-handlers/core.mjs";
 import { _CALL_TOOL_NO_MATCH } from "./tool-handlers/shared.mjs";
+import { _callToolHandler_100_forge_tool_profile } from "./tool-handlers/profiles.mjs";
 import {
   _callToolHandler_001_forge_run_plan,
   _callToolHandler_002_forge_abort,
@@ -314,6 +315,7 @@ const _CALL_TOOL_HANDLERS = [
   _callToolHandler_097_forge_local_recall_status,
   _callToolHandler_098_forge_audit_export,
   _callToolHandler_099_forge_master_audit,
+  _callToolHandler_100_forge_tool_profile,
 ];
 
 export const callToolRequestHandler = _wrapWithToolSpan(async (request) => {
@@ -358,6 +360,7 @@ export const MCP_ONLY_TOOLS = new Set([
   // runPforge() (no CLI counterpart). Added here so the HTTP bridge reaches
   // the MCP handler.
   "forge_estimate_quorum",
+  "forge_tool_profile",
   // Phase-27.2 Slice 3 — forge_estimate_slice is MCP-native (no CLI
   // counterpart). Adding here so /api/tool/forge_estimate_slice reaches
   // the MCP handler instead of falling through to runPforge().

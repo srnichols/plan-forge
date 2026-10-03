@@ -101,7 +101,9 @@ export class McpClient {
     this.#transport = new StdioClientTransport({
       command: process.execPath,
       args: [serverPath, "--port", "0"],
-      env: { ...env },
+      // Forge-Master applies its own allowlist, so it needs every tool listed,
+      // not pforge-mcp's default core profile.
+      env: { ...env, PFORGE_TOOL_PROFILE: "full" },
       stderr: stderrHandler,
     });
 

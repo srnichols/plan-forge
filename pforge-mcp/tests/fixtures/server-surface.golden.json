@@ -2851,6 +2851,29 @@
       }
     },
     {
+      "name": "forge_tool_profile",
+      "description": "List, load or unload Plan Forge tool profiles. Only the core profile (plan execution, status, cost, search, diagnostics) is listed by default, to keep the tool list short; load another profile — bugs, liveguard, tempering, crucible, memory, code-intel, team, or full — when the task needs its tools. Returns { active, changed, listedTools, totalTools, unknown, profiles: [{ name, tools, active, description }], message }. Call with no arguments to see the profiles.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "load": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Profiles to add, e.g. [\"bugs\"] or [\"full\"]"
+          },
+          "unload": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Profiles to remove (core always stays)"
+          }
+        }
+      }
+    },
+    {
       "name": "forge_triage_route",
       "description": "Triage a single tempering finding into one of three lanes: 'bug' (product defect), 'spec' (feature/spec gap), or 'classifier' (noise). Pure routing — no side effects. Fail-safe: unknown classifier output always routes to 'bug' with low confidence. USE FOR: per-finding triage after a tempering run, building custom drain loops. DO NOT USE FOR: batch triage (use forge_tempering_drain), registering bugs (use forge_bug_register after triage).",
       "inputSchema": {
@@ -3522,6 +3545,7 @@
     "forge_tempering_status",
     "forge_testbed_happypath",
     "forge_testbed_run",
-    "forge_timeline"
+    "forge_timeline",
+    "forge_tool_profile"
   ]
 }

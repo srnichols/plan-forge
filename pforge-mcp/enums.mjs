@@ -220,6 +220,7 @@ export const TOOL_NAMES = freezeArray([
   "forge_testbed_happypath",
   "forge_testbed_run",
   "forge_timeline",
+  "forge_tool_profile",
   "forge_triage_route",
   "forge_validate",
   "forge_watch",

@@ -370,6 +370,22 @@ export const TOOL_METADATA = {
     },
     example: { input: { file: "src/api.ts" }, output: { diagnosis: "Root cause identified", models: 3 } },
   },
+  forge_tool_profile: {
+    intent: ["configure", "tools", "discover"],
+    aliases: ["tool-profile", "load-tools"],
+    cost: "low",
+    maxConcurrent: 10,
+    addedIn: "3.31.0",
+    prerequisites: [],
+    produces: [],
+    consumes: [".forge.json"],
+    sideEffects: ["changes which tools this MCP server lists (notifications/tools/list_changed)"],
+    errors: {},
+    example: {
+      input: { load: ["bugs"] },
+      output: { active: ["core", "bugs"], changed: true, listedTools: 36, totalTools: 106, unknown: [], profiles: [{ name: "bugs", tools: 14, active: true, description: "bug registry, triage, fix proposals, reviews, regression guard" }], message: "36 of 106 tools are now listed; your client refreshes its tool list automatically." },
+    },
+  },
   forge_skill_status: {
     intent: ["read", "status", "skills"],
     aliases: ["skill-events", "recent-skills"],

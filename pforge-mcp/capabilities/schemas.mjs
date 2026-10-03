@@ -375,6 +375,7 @@ export const CONFIG_SCHEMA = {
     },
     maxParallelism: { type: "number", default: 3, minimum: 1, maximum: 10, description: "Max concurrent parallel slices" },
     maxRetries: { type: "number", default: 1, minimum: 0, maximum: 5, description: "Gate failure retry attempts" },
+    toolProfiles: { type: ["string", "array"], items: { type: "string", enum: ["core", "bugs", "liveguard", "tempering", "crucible", "memory", "code-intel", "team", "full"] }, default: ["core"], description: "Which MCP tool profiles the server lists at start. 'core' (plan execution, status, cost, search, diagnostics) is always listed; agents load more with forge_tool_profile. 'full' lists every tool. Env override: PFORGE_TOOL_PROFILE=bugs,liveguard." },
     gatePreflight: { type: "string", enum: ["warn", "block", "off"], default: "warn", description: "Before a run, check that every validation gate's tools are installed (on PATH or in node_modules/.bin). warn: print the missing ones; block: refuse to start; off: skip. A gate that fails because its command is not installed is reported as gate-unrunnable and not retried." },
     resumeOnRetry: { type: "boolean", default: true, description: "A slice retry resumes the worker's previous session (Copilot CLI --session-id, SDK resumeSession) instead of starting cold, so it keeps the context it already built. A failed resume starts a fresh session. Env override: PFORGE_RESUME_ON_RETRY=0|1." },
     maxRunHistory: { type: "number", default: 50, minimum: 1, description: "Max run directories to retain" },

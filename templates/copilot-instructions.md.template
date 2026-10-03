@@ -113,6 +113,7 @@ pforge ext add <name>
 
 # MCP server (if installed): exposes 17 forge tools as native MCP operations
 # Start here: call forge_capabilities to discover all tools, workflows, config, and memory
+# Only the core tools are listed by default; call forge_tool_profile to load more (bugs, liveguard, tempering, crucible, memory, code-intel, team, full)
 # Key tools: forge_run_plan, forge_analyze, forge_diagnose, forge_cost_report, forge_plan_status, forge_capabilities
 # API providers: set XAI_API_KEY for Grok models (grok-4.7, grok-4.6, grok-4.20-0309-non-reasoning)\n# Or use .forge/secrets.json for local API key storage (gitignored)
 # Dashboard: localhost:3100/dashboard (live progress, cost, session replay, traces)

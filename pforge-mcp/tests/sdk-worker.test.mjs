@@ -6,7 +6,10 @@
  */
 
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { runSdkSession, buildPermissionHandler, extractSdkOutput, extractSdkTokens } from "../orchestrator/sdk-worker.mjs";
+import {
+  runSdkSession, buildPermissionHandler, extractSdkOutput, extractSdkTokens,
+  buildSdkClientInfo, ORCHESTRATOR_MESSAGE_SOURCE,
+} from "../orchestrator/sdk-worker.mjs";
 
 // ─── Fake session factory helpers ─────────────────────────────────────────────
 
@@ -103,7 +106,7 @@ describe("runSdkSession — happy path", () => {
       return handle;
     });
     await runSdkSession({ prompt: "do it", model: "m", cwd: "/p", timeout: 1234, createSession });
-    expect(handle.session.sendAndWait).toHaveBeenCalledWith({ prompt: "do it" }, 1234);
+    expect(handle.session.sendAndWait).toHaveBeenCalledWith({ prompt: "do it", source: ORCHESTRATOR_MESSAGE_SOURCE }, 1234);
   });
 });
 
@@ -413,5 +416,110 @@ describe("Guard: the SDK path does no stdout parsing", () => {
 
   it("worker-spawn.mjs retains parseStderrStats (spawn path must keep it)", () => {
     expect(workerSpawnSrc).toContain("parseStderrStats");
+  });
+});
+
+// ─── Session continuity, provenance, client info (enhancements 3 + 8) ─────────
+
+/** Fake factory recording each request; `failResume` makes resume attempts throw. */
+function makeSessionFactory({ failResume = false, serverId = "server-assigned-id" } = {}) {
+  const requests = [];
+  const factory = vi.fn(async (request) => {
+    requests.push(request);
+    if (failResume && request.resume) throw new Error("session not found");
+    const session = {
+      sessionId: request.sessionId || serverId,
+      sendAndWait: vi.fn(async () => {
+        request.onEvent({ type: "assistant.message", data: { content: "ok" } });
+      }),
+      disconnect: vi.fn(async () => {}),
+    };
+    return { session, client: { stop: vi.fn(async () => {}) } };
+  });
+  return { factory, requests };
+}
+
+describe("runSdkSession — session continuity", () => {
+  const SESSION = "0cb916db-26aa-40f2-86b5-1ba81b225fd2";
+
+  it("creates the session with the pinned ID on a first attempt", async () => {
+    const { factory, requests } = makeSessionFactory();
+    const r = await runSdkSession({ prompt: "p", model: "gpt-6-luna", cwd: "/p", session: { id: SESSION, resume: false }, createSession: factory });
+    expect(requests[0]).toMatchObject({ sessionId: SESSION, resume: false });
+    expect(r.sessionId).toBe(SESSION);
+    expect(r.resumed).toBe(false);
+  });
+
+  it("resumes the pinned session on a retry", async () => {
+    const { factory, requests } = makeSessionFactory();
+    const r = await runSdkSession({ prompt: "p", model: "gpt-6-luna", cwd: "/p", session: { id: SESSION, resume: true }, createSession: factory });
+    expect(requests).toHaveLength(1);
+    expect(requests[0]).toMatchObject({ sessionId: SESSION, resume: true });
+    expect(r.sessionId).toBe(SESSION);
+    expect(r.resumed).toBe(true);
+    expect(r.exitCode).toBe(0);
+  });
+
+  it("falls back to a fresh session when the resume fails", async () => {
+    const { factory, requests } = makeSessionFactory({ failResume: true });
+    const r = await runSdkSession({ prompt: "p", model: "gpt-6-luna", cwd: "/p", session: { id: SESSION, resume: true }, createSession: factory });
+    expect(requests).toHaveLength(2);
+    expect(requests[1]).toMatchObject({ sessionId: null, resume: false });
+    expect(r.sessionId).toBe("server-assigned-id");
+    expect(r.resumed).toBe(false);
+    expect(r.exitCode).toBe(0);
+  });
+
+  it("surfaces an sdkError when the fresh-session fallback also fails", async () => {
+    const factory = vi.fn(async () => { throw new Error("runtime down"); });
+    await expect(runSdkSession({ prompt: "p", model: "m", cwd: "/p", session: { id: SESSION, resume: true }, createSession: factory }))
+      .rejects.toMatchObject({ sdkError: true });
+    expect(factory).toHaveBeenCalledTimes(2);
+  });
+
+  it("does not retry a failed fresh session", async () => {
+    const factory = vi.fn(async () => { throw new Error("runtime down"); });
+    await expect(runSdkSession({ prompt: "p", model: "m", cwd: "/p", session: { id: SESSION, resume: false }, createSession: factory }))
+      .rejects.toMatchObject({ sdkError: true });
+    expect(factory).toHaveBeenCalledTimes(1);
+  });
+
+  it("reports the server-assigned ID when no session was pinned", async () => {
+    const { factory, requests } = makeSessionFactory();
+    const r = await runSdkSession({ prompt: "p", model: "m", cwd: "/p", createSession: factory });
+    expect(requests[0]).toMatchObject({ sessionId: null, resume: false });
+    expect(r.sessionId).toBe("server-assigned-id");
+  });
+});
+
+describe("runSdkSession — provenance and auto tier", () => {
+  it("tags the slice prompt with the orchestrator message source", async () => {
+    let session;
+    const factory = vi.fn(async (request) => {
+      const handle = await makeSessionFactory().factory(request);
+      session = handle.session;
+      return handle;
+    });
+    await runSdkSession({ prompt: "slice prompt", model: "m", cwd: "/p", createSession: factory });
+    expect(ORCHESTRATOR_MESSAGE_SOURCE).toMatch(/^agent-/);
+    expect(session.sendAndWait).toHaveBeenCalledWith({ prompt: "slice prompt", source: ORCHESTRATOR_MESSAGE_SOURCE }, expect.any(Number));
+  });
+
+  it("passes the auto tier only when the model is auto", async () => {
+    const { factory, requests } = makeSessionFactory();
+    await runSdkSession({ prompt: "p", model: "auto", cwd: "/p", autoTier: "intelligence", createSession: factory });
+    await runSdkSession({ prompt: "p", model: "gpt-6-luna", cwd: "/p", autoTier: "intelligence", createSession: factory });
+    expect(requests[0].autoTier).toBe("intelligence");
+    expect(requests[1].autoTier).toBeNull();
+  });
+});
+
+describe("buildSdkClientInfo", () => {
+  it("identifies Plan Forge with its framework version", () => {
+    const info = buildSdkClientInfo();
+    expect(info.applicationName).toBe("plan-forge");
+    expect(info.integrationName).toBe("pforge-orchestrator");
+    expect(info.applicationVersion).toMatch(/^\d+\.\d+\.\d+/);
+    expect(Object.isFrozen(info)).toBe(true);
   });
 });

@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Plan Forge Manual — Complete Offline Edition</title>
-  <meta name="description" content="Plan Forge Manual — complete single-page offline edition. 79 chapters and appendices. Generated 2026-10-03 10:03:55 UTC." />
+  <meta name="description" content="Plan Forge Manual — complete single-page offline edition. 79 chapters and appendices. Generated 2026-10-03 10:16:04 UTC." />
   <meta name="generator" content="Plan Forge export.mjs" />
   <link rel="icon" type="image/svg+xml" href="../assets/plan-forge-logo.svg" />
   <link rel="stylesheet" href="../assets/tailwind.built.css" />
@@ -124,8 +124,8 @@
   <h1>📚 Plan Forge Manual</h1>
   <p class="export-subtitle">Complete offline edition &mdash; 79 chapters &amp; appendices</p>
   <p class="export-meta">
-    Generated 2026-10-03 10:03:55 UTC
-    &middot; content hash <code>7c3946f169b79770</code>
+    Generated 2026-10-03 10:16:04 UTC
+    &middot; content hash <code>67f918e9d7cd23d5</code>
     &middot; vv3.6.2
     &middot; <a href="https://planforge.software/" rel="noopener">Main site ↗</a>
     &middot; <a href="index.html">Online version ↗</a>
@@ -19236,6 +19236,7 @@ pforge ext add/remove/...       Extension management</code></pre>
               <tr><td><code>runIntegration</code></td><td><code>"fast-forward"</code> | <code>"pull-request"</code> | <code>"none"</code></td><td><code>"fast-forward"</code></td><td><code>"pull-request"</code></td><td>When every slice passes: move your branch to the run's commits and delete the run branch; push the run branch and open a pull request with a per-slice summary (needs <code>gh</code> and an <code>origin</code> remote); or leave the run branch for you to merge. Your branch is never moved if it gained commits during the run.</td></tr>
               <tr><td><code>draftPullRequest</code></td><td>boolean</td><td><code>true</code></td><td><code>false</code></td><td>With <code>runIntegration: "pull-request"</code>, open the pull request as a draft.</td></tr>
               <tr><td><code>impactGate</code></td><td><code>"block"</code> | <code>"warn"</code> | <code>"off"</code> | object</td><td><code>"block"</code></td><td><code>{ "mode": "warn", "command": "bundle exec rspec {files}" }</code></td><td>After a slice's own gate passes, run the tests related to the files the slice changed: tests it changed, tests named after changed files (<code>foo.test.*</code>, <code>test_foo.py</code>, <code>foo_test.go</code>, <code>FooTests.cs</code>), and the Lattice blast radius. Runners are detected for vitest, jest, pytest, <code>go test</code> and <code>dotnet test</code>; <code>command</code> (with <code>{files}</code>) covers anything else, and <code>maxTests</code> (default 40) caps the run. Use <code>"warn"</code> if your suite has known failures.</td></tr>
+<tr><td><code>resumeOnRetry</code></td><td>boolean</td><td><code>true</code></td><td><code>false</code></td><td>A slice retry resumes the worker's previous session (Copilot CLI <code>--session-id</code>, SDK <code>resumeSession</code>) instead of starting cold, so the worker keeps the files it already read and the changes it already made. A failed resume starts a fresh session. Env override: <code>PFORGE_RESUME_ON_RETRY=0|1</code>.</td></tr>
             </tbody>
           </table>
         </div>
@@ -21191,7 +21192,7 @@ switch ($LASTEXITCODE) {
 
 <!-- Footer -->
 <footer style="max-width:56rem;margin:3rem auto;padding:1.5rem;font-size:0.75rem;color:#475569;border-top:1px solid #1e293b;font-family:'JetBrains Mono',monospace;">
-  <p>Plan Forge Manual &mdash; offline edition &mdash; generated 2026-10-03 10:03:55 UTC &mdash; hash <code>7c3946f169b79770</code></p>
+  <p>Plan Forge Manual &mdash; offline edition &mdash; generated 2026-10-03 10:16:04 UTC &mdash; hash <code>67f918e9d7cd23d5</code></p>
   <p>Regenerate with: <code>node docs/manual/export.mjs</code> &mdash; <a href="https://planforge.software/" style="color:#f59e0b;" rel="noopener">Main site</a> &mdash; <a href="index.html" style="color:#f59e0b;">Online version</a> &mdash; <a href="https://github.com/srnichols/plan-forge" style="color:#f59e0b;" rel="noopener">GitHub</a></p>
 </footer>
 

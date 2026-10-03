@@ -9,7 +9,7 @@
  * @module forge-master/providers/copilot-sdk-tools
  */
 
-import { existsSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { createRequire } from "node:module";
 import { delimiter, dirname, resolve } from "node:path";
 import { pathToFileURL, fileURLToPath } from "node:url";
@@ -20,6 +20,32 @@ const DEFAULT_MODEL = "claude-sonnet-5.5";
 const DEFAULT_MAX_TOOL_CALLS = 5;
 const SEND_TIMEOUT_MS = 120_000;
 const COPILOT_TOKEN_ENV = ["COPILOT_GITHUB_TOKEN", "GITHUB_TOKEN", "GH_TOKEN"];
+const FORGE_MASTER_PACKAGE = resolve(__dirname, "..", "..", "package.json");
+const CANCELLED_TOOL_RESULT = Object.freeze({ error: "tool_cancelled", summary: "tool call cancelled by the Copilot runtime" });
+
+let clientInfo = null;
+
+/** Identifies Forge-Master to the Copilot runtime (CopilotClientOptions.clientInfo). */
+function buildClientInfo() {
+  if (!clientInfo) {
+    let version = "unknown";
+    try {
+      version = JSON.parse(readFileSync(FORGE_MASTER_PACKAGE, "utf8")).version || version;
+    } catch { /* keep "unknown" */ }
+    clientInfo = Object.freeze({ applicationName: "plan-forge", applicationVersion: version, integrationName: "forge-master" });
+  }
+  return clientInfo;
+}
+
+/** Settle with the cancelled result as soon as the runtime aborts the tool call. */
+function raceAbort(promise, signal) {
+  if (!signal) return promise;
+  return new Promise((resolveRace, rejectRace) => {
+    const onAbort = () => resolveRace(CANCELLED_TOOL_RESULT);
+    signal.addEventListener("abort", onAbort, { once: true });
+    promise.then(resolveRace, rejectRace).finally(() => signal.removeEventListener("abort", onAbort));
+  });
+}
 
 let sdkEntryCache;
 let sdkModulePromise;
@@ -157,6 +183,7 @@ async function defaultCreateSession({ model, system, tools, availableTools, onPe
   const client = new CopilotClient({
     ...(token ? { gitHubToken: token, useLoggedInUser: false } : { useLoggedInUser: true }),
     workingDirectory,
+    clientInfo: buildClientInfo(),
   });
   try {
     const session = await client.createSession({
@@ -194,14 +221,19 @@ function buildSdkTools({ defineTool, toolSchemas, dispatchTool, maxToolCalls, ca
     parameters: schema.parameters || { type: "object", properties: {}, additionalProperties: true },
     skipPermission: true,
     defer: "never",
-    handler: async (args) => {
+    handler: async (args, invocation) => {
+      const signal = invocation?.signal;
+      if (signal?.aborted) {
+        calls.push({ name: schema.name, args: args || {}, result: CANCELLED_TOOL_RESULT });
+        return makeToolResult(CANCELLED_TOOL_RESULT.summary, false);
+      }
       if (reservedToolCalls >= maxToolCalls) {
         const result = { error: "tool_budget_exceeded", summary: "tool budget exceeded — call was not executed" };
         calls.push({ name: schema.name, args: args || {}, result });
         return makeToolResult(result.summary, false);
       }
       reservedToolCalls++;
-      const result = await dispatchTool(schema.name, args || {});
+      const result = await raceAbort(dispatchTool(schema.name, args || {}), signal);
       calls.push({ name: schema.name, args: args || {}, result });
       return makeToolResult(summarizeToolResult(result), !result?.error);
     },
@@ -324,7 +356,7 @@ export async function runLoop(options = {}) {
 }
 
 export { denyAllPermissions as _denyAllPermissions };
-export { defaultCreateSession as _defaultCreateSessionForTests, extractUsage as _extractUsageForTests };
+export { defaultCreateSession as _defaultCreateSessionForTests, extractUsage as _extractUsageForTests, buildClientInfo as _buildClientInfoForTests };
 
 export const DEFAULT_COPILOT_MODEL = DEFAULT_MODEL;
 export const PROVIDER_NAME = "githubCopilot";

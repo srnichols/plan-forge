@@ -42,6 +42,7 @@ import { loadQuorumConfig, classifyLegError, quorumDispatch, quorumReview, analy
 import { estimatePlan as _estimatePlan } from "../cost-service.mjs";
 import { finishRunIsolation, loadRunIsolationConfig, startRunIsolation } from "./run-isolation.mjs";
 import { loadImpactGateConfig, runImpactGate } from "./impact-gate.mjs";
+import { createWorkerSession, loadResumeOnRetry } from "./worker-session.mjs";
 import { isRetiredModel, retirementDate } from "../copilot-models.mjs";
 import { rewritePlanStatusOnSuccess as _rewritePlanStatusOnSuccess } from "./run-plan/plan-status-update.mjs";
 
@@ -589,7 +590,7 @@ function _checkVersionCollision(planPath, cwd) {
     };
   }
   if (collision.error) {
-    // eslint-disable-next-line no-console
+     
     console.error(
       `[preflight] Could not check origin for v${collision.version} ` +
       `tag collision (advisory): ${collision.error}`,
@@ -706,7 +707,7 @@ function _runGateSynthesisPreflight(plan, cwd, strictGates) {
     }
     const formatted = formatGateSuggestions(synthResult);
     if (formatted) {
-      // eslint-disable-next-line no-console
+       
       console.log(formatted);
     }
   } catch { /* advisory must never fail a run */ }
@@ -1274,7 +1275,7 @@ function _runPlanEstimate({ plan, effectiveModel, worker, cwd, resumeFrom, quoru
   // worker backend so users see the problem before committing to Full Auto.
   const estimateAuthGate = assertWorkerBackendReady({ model: effectiveModel, worker, cwd });
   if (estimateAuthGate) {
-    // eslint-disable-next-line no-console
+     
     console.error(`[preflight] ${estimateAuthGate.error}`);
   }
   const estimateQuorumConfig = _buildEstimateQuorumConfig(quorum, cwd, quorumPreset, quorumThreshold, includeGrokOverride);
@@ -1319,7 +1320,7 @@ export async function runPlan(planPath, options = {}) {
   // Bug #127: Precedence: options.model > frontmatter model: > .forge.json default > null
   const { effectiveModel, modelSource } = _resolveEffectiveModel(model, plan, modelRouting);
   // Bug #127: emit resolution log so users can trace which source won.
-  // eslint-disable-next-line no-console
+   
   console.error(`[model] resolved=${effectiveModel} source=${modelSource}`);
   _warnRetiredChosenModels({ model, plan, modelRouting });
 
@@ -1942,6 +1943,7 @@ function _executeSliceWriteLog({ runDir, slice, attempt, workerResult, startTime
     `=== Slice ${slice.number}: ${slice.title} ===`,
     `Worker: ${workerResult.worker}`,
     `Model: ${workerResult.model}`,
+    ...(workerResult.sessionId ? [`Session: ${workerResult.sessionId}${workerResult.resumed ? " (resumed)" : ""}`] : []),
     `Started: ${new Date(startTime).toISOString()}`,
     "",
     "=== STDOUT ===",
@@ -2335,7 +2337,7 @@ function _executeSliceRecordQuorumHistory({ sliceResult, slice, quorumConfig, us
   } catch { /* non-fatal */ }
 }
 
-async function _executeSliceDispatchWorkerForAttempt({ mode, worker, slice, cwd, _dispatchSlice, _pollPullRequest, sliceInstructions, currentModel, networkAllowed, networkEnforce, runDir, eventBus }) {
+async function _executeSliceDispatchWorkerForAttempt({ mode, worker, slice, cwd, _dispatchSlice, _pollPullRequest, sliceInstructions, currentModel, networkAllowed, networkEnforce, runDir, eventBus, workerSession = null }) {
   if (mode === "assisted") {
     return {
       workerResult: {
@@ -2357,7 +2359,7 @@ async function _executeSliceDispatchWorkerForAttempt({ mode, worker, slice, cwd,
     const workerResult = await spawnWorker(sliceInstructions, {
       model: currentModel, cwd, runPlanActive: true,
       timeout: resolveWorkerTimeoutMs({ sliceOverride: slice.workerTimeoutMs }),
-      eventBus, extraEnv: proxyEnv,
+      eventBus, extraEnv: proxyEnv, session: workerSession,
     });
     return { workerResult, copilotDispatchData: null };
   } finally {
@@ -2418,6 +2420,7 @@ async function _executeSliceAttemptLoop(ctx) {
   let lastFailureContext = null;
   let currentModel = ctx.finalModel;
   let copilotDispatchData = null;
+  const workerSessions = createWorkerSession({ enabled: mode !== "assisted" && loadResumeOnRetry(cwd) });
 
   while (attempt <= maxRetries) {
     const attemptStartTime = Date.now();
@@ -2431,8 +2434,10 @@ async function _executeSliceAttemptLoop(ctx) {
       const dispatched = await _executeSliceDispatchWorkerForAttempt({
         mode, worker, slice, cwd, _dispatchSlice, _pollPullRequest,
         sliceInstructions, currentModel, networkAllowed, networkEnforce, runDir, eventBus,
+        workerSession: workerSessions.forAttempt(attempt),
       });
       workerResult = dispatched.workerResult;
+      workerSessions.record(workerResult);
       if (dispatched.copilotDispatchData) copilotDispatchData = dispatched.copilotDispatchData;
     } catch (err) {
       return { earlyReturn: finalizeSliceResult({

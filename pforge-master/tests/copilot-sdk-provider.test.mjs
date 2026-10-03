@@ -11,6 +11,7 @@ import {
   _denyAllPermissions,
   _defaultCreateSessionForTests,
   _extractUsageForTests,
+  _buildClientInfoForTests,
   PROVIDER_NAME,
 } from "../src/providers/copilot-sdk-tools.mjs";
 import { computeTurnCost } from "../src/cost.mjs";
@@ -146,6 +147,72 @@ describe("Forge-Master Copilot SDK provider", () => {
     expect(dispatcher).toHaveBeenCalledTimes(1);
     expect(result.toolCalls).toHaveLength(3);
     expect(result.toolCalls.filter((tc) => tc.result.error === "tool_budget_exceeded")).toHaveLength(2);
+  });
+
+  it("skips a tool call the runtime already cancelled, without spending budget", async () => {
+    const dispatcher = vi.fn(async () => ({ summary: "ok" }));
+    const result = await runLoop({
+      messages: [{ role: "user", content: "cancelled call" }],
+      tools: buildToolSchemas(["forge_search"]),
+      dispatchTool: dispatcher,
+      maxToolCalls: 1,
+      model: "claude-sonnet-5.5",
+      sdk: makeSdk(),
+      createSession: makeCreateSession(async (config) => {
+        const aborted = new AbortController();
+        aborted.abort();
+        await config.tools[0].handler({ q: "one" }, { signal: aborted.signal });
+        await config.tools[0].handler({ q: "two" }, { signal: new AbortController().signal });
+        return { data: { content: "done" } };
+      }),
+    });
+
+    expect(dispatcher).toHaveBeenCalledTimes(1);
+    expect(result.toolCalls[0].result.error).toBe("tool_cancelled");
+    expect(result.toolCalls[1].result).toEqual({ summary: "ok" });
+  });
+
+  it("returns as soon as the runtime cancels an in-flight tool call", async () => {
+    const dispatcher = vi.fn(() => new Promise(() => {}));
+    const result = await runLoop({
+      messages: [{ role: "user", content: "slow call" }],
+      tools: buildToolSchemas(["forge_search"]),
+      dispatchTool: dispatcher,
+      model: "claude-sonnet-5.5",
+      sdk: makeSdk(),
+      createSession: makeCreateSession(async (config) => {
+        const controller = new AbortController();
+        const pending = config.tools[0].handler({ q: "slow" }, { signal: controller.signal });
+        controller.abort();
+        await pending;
+        return { data: { content: "done" } };
+      }),
+    });
+
+    expect(dispatcher).toHaveBeenCalledTimes(1);
+    expect(result.toolCalls[0].result.error).toBe("tool_cancelled");
+  });
+
+  it("identifies Forge-Master to the Copilot runtime", async () => {
+    let options;
+    class RecordingClient {
+      constructor(opts) {
+        options = opts;
+        this.stop = vi.fn(async () => {});
+        this.createSession = vi.fn(async () => ({ sendAndWait: vi.fn() }));
+      }
+    }
+    await _defaultCreateSessionForTests({
+      model: "claude-sonnet-5.5",
+      tools: [],
+      availableTools: new FakeToolSet(),
+      onPermissionRequest: () => ({ kind: "reject" }),
+      onEvent: () => {},
+      CopilotClientClass: RecordingClient,
+    });
+    expect(options.clientInfo).toEqual(_buildClientInfoForTests());
+    expect(options.clientInfo).toMatchObject({ applicationName: "plan-forge", integrationName: "forge-master" });
+    expect(options.clientInfo.applicationVersion).toMatch(/^\d+\.\d+\.\d+/);
   });
 
   it("stops the Copilot client when createSession fails", async () => {

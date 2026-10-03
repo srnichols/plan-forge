@@ -1058,6 +1058,7 @@ function attemptProbe(name, spec, probe, result) {
     const missing = probe.capabilityMarkers.filter((m) => !helpOut.includes(m));
     if (missing.length === 0) {
       result.capable = true;
+      result.features = matchFeatureMarkers(probe.featureMarkers, helpOut);
     } else {
       result.reason = `${name} lacks agentic flags: ${missing.join(", ")} — likely legacy build (see issue #28)`;
       result.installHint = suggestInstall(name).command;
@@ -1075,6 +1076,21 @@ function attemptProbe(name, spec, probe, result) {
     result.failureCategory = null;
   }
   return { terminal: true, value: result };
+}
+
+/**
+ * Optional CLI features, keyed by name, detected from the help text: a flag
+ * absent from an older CLI turns the feature off instead of failing the probe.
+ * @param {Record<string, string>|undefined} markers  feature name → help-text marker
+ * @param {string} helpOut
+ * @returns {Record<string, boolean>}
+ */
+export function matchFeatureMarkers(markers, helpOut) {
+  const features = {};
+  for (const [feature, marker] of Object.entries(markers || {})) {
+    features[feature] = String(helpOut || "").includes(marker);
+  }
+  return features;
 }
 
 /**
@@ -1932,19 +1948,55 @@ function _enforceApiRoleGuard(apiProvider, role, model) {
   }
 }
 
-function _buildWorkerInvocation(chosen, promptFile, prompt, model) {
-  const matrix = loadWorkerCapabilities();
-  const spec = matrix.workers?.[chosen.name];
+/**
+ * Prepended to the prompt when a retry resumes the previous attempt's session.
+ * Without it, a resumed model that already reported the task done tends to
+ * summarise the failure and offer to fix it, which a non-interactive run
+ * never answers.
+ */
+export const RESUMED_SESSION_PREAMBLE = [
+  "RETRY: your previous attempt at this slice did not pass validation.",
+  "The failure details are in the instructions below. This run is non-interactive: make the fix now,",
+  "re-run the validation gate yourself, and do not ask for confirmation.",
+  "",
+  "",
+].join("\n");
+
+/** CLI prompt for a resumed session: an instruction that names the prompt file, not a bare file mention. */
+const RESUMED_CLI_PROMPT = "Carry out the instructions in @{PROMPT_FILE} now.";
+
+/** The session to pin, or null when the worker, its installed version, or the caller cannot pin one. */
+function _pinnableSession({ invocation, chosen, sessionId }) {
+  if (!sessionId || !invocation.sessionArg) return null;
+  return chosen.features?.sessionPinning ? sessionId : null;
+}
+
+/** Command and args from a worker-capabilities.json invocation spec. */
+function _specInvocation({ invocation, chosen, promptFile, prompt, model, sessionId, resume }) {
+  const pinnedSession = _pinnableSession({ invocation, chosen, sessionId });
+  const resumed = Boolean(pinnedSession && resume);
+  const args = (invocation.baseArgs || []).map((a) => {
+    const template = resumed && a === "@{PROMPT_FILE}" ? RESUMED_CLI_PROMPT : String(a);
+    return template.replace("{PROMPT_FILE}", promptFile).replace("{PROMPT}", prompt);
+  });
+  if (model) args.push("--model", model);
+  if (pinnedSession) args.push(String(invocation.sessionArg).replace("{SESSION_ID}", pinnedSession));
+  return { cmd: invocation.cmd, args, sessionId: pinnedSession, resumed };
+}
+
+/**
+ * Build the CLI command for the chosen worker. When the worker's invocation
+ * declares a `sessionArg` template, its probe found the `sessionPinning`
+ * feature, and a sessionId is given, the session is pinned to that ID — the
+ * CLI creates it on first use and resumes it after.
+ */
+export function _buildWorkerInvocation({ chosen, promptFile, prompt, model, sessionId = null, resume = false }) {
+  const spec = loadWorkerCapabilities().workers?.[chosen.name];
   const invocation = (chosen.usingFallback && spec?.invocation?.fallback)
     ? spec.invocation.fallback
     : spec?.invocation;
   if (invocation?.cmd) {
-    const cmd = invocation.cmd;
-    const args = (invocation.baseArgs || []).map((a) =>
-      String(a).replace("{PROMPT_FILE}", promptFile).replace("{PROMPT}", prompt)
-    );
-    if (model) args.push("--model", model);
-    return { cmd, args, spec };
+    return { spec, ..._specInvocation({ invocation, chosen, promptFile, prompt, model, sessionId, resume }) };
   }
   if (chosen.name === "claude" || chosen.name === "codex") {
     const cmd = chosen.name;
@@ -2233,15 +2285,15 @@ function finalizeWorkerResult({ code, state, chosen, promptFile, spec, model, sp
   };
 }
 
-async function spawnCliWorkerExecution({ prompt, model, cwd, timeout, worker, runPlanActive, eventBus, extraEnv }) {
+async function spawnCliWorkerExecution({ prompt, model, cwd, timeout, worker, runPlanActive, eventBus, extraEnv, session = null }) {
   const workers = await resolveSpawnWorkers({ worker, eventBus });
   if (workers.length === 0) throw new Error("No CLI workers available. Install gh copilot, claude, or codex CLI.");
   const chosen = _pickChosenWorker(workers, worker, model);
   const promptFile = writeWorkerPromptFile(prompt);
   try {
-    const invocationResult = _buildWorkerInvocation(chosen, promptFile, prompt, model);
+    const invocationResult = _buildWorkerInvocation({ chosen, promptFile, prompt, model, sessionId: session?.id || null, resume: Boolean(session?.resume) });
     if (invocationResult.error) throw invocationResult.error;
-    const { cmd, args, spec } = invocationResult;
+    const { cmd, args, spec, sessionId, resumed } = invocationResult;
     const { resolveCopilotLauncher } = await import("./copilot-launcher.mjs");
     const launcher = await resolveCopilotLauncher({ command: cmd, args, cwd, env: { ...process.env, ...(extraEnv || {}) } });
     return await new Promise((workerResolve, workerReject) => {
@@ -2260,7 +2312,7 @@ async function spawnCliWorkerExecution({ prompt, model, cwd, timeout, worker, ru
       child.on("close", (code) => {
         clearInterval(heartbeat);
         cancelTimeout();
-        workerResolve(finalizeWorkerResult({
+        const finalized = finalizeWorkerResult({
           code,
           state,
           chosen,
@@ -2268,7 +2320,8 @@ async function spawnCliWorkerExecution({ prompt, model, cwd, timeout, worker, ru
           spec,
           model,
           spawnStartMs,
-        }));
+        });
+        workerResolve(sessionId ? { ...finalized, sessionId, resumed } : finalized);
       });
 
       child.on("error", (err) => {
@@ -2345,10 +2398,10 @@ async function _tryByokSdkRoute({ apiProvider, prompt, model, cwd, forbiddenPath
  *
  * @returns {Promise<{ handled: boolean, result?: object }>}
  */
-async function _tryCopilotSdkRoute({ prompt, model, cwd, forbiddenPaths, timeout }) {
+async function _tryCopilotSdkRoute({ prompt, model, cwd, forbiddenPaths, timeout, session, autoTier }) {
   try {
     const { runSdkSession } = await import("./sdk-worker.mjs");
-    return { handled: true, result: await runSdkSession({ prompt, model, cwd, forbiddenPaths, timeout }) };
+    return { handled: true, result: await runSdkSession({ prompt, model, cwd, forbiddenPaths, timeout, session, autoTier }) };
   } catch (err) {
     if (!err.sdkError) throw err;
     console.error(`[sdk-worker] falling back to spawn: ${err.message}`);
@@ -2369,19 +2422,34 @@ async function _tryResolvedApiRoute({ apiProvider, prompt, model, cwd, forbidden
   return { handled: true, result: await callApiWorker(prompt, model, apiProvider, { timeout, role }) };
 }
 
-async function _spawnWorkerAsync(prompt, options = {}) {
-  const {
-    model = null,
-    cwd = process.cwd(),
-    timeout = 1_200_000,
-    worker = null,
-    runPlanActive = false,
-    role = null,
-    eventBus = null,
-    extraEnv = null,
-    forbiddenPaths = [],
-  } = options;
+const SPAWN_OPTION_DEFAULTS = Object.freeze({
+  model: null,
+  timeout: 1_200_000,
+  worker: null,
+  runPlanActive: false,
+  role: null,
+  eventBus: null,
+  extraEnv: null,
+  forbiddenPaths: [],
+  session: null,
+  autoTier: null,
+});
 
+/** spawnWorker options with defaults applied; `undefined` takes the default, as destructuring did. */
+function _spawnOptionsWithDefaults(options) {
+  const resolved = { ...SPAWN_OPTION_DEFAULTS, cwd: process.cwd() };
+  for (const [key, value] of Object.entries(options)) {
+    if (value !== undefined) resolved[key] = value;
+  }
+  return resolved;
+}
+
+async function _spawnWorkerAsync(rawPrompt, options = {}) {
+  const {
+    model, cwd, timeout, worker, runPlanActive, role, eventBus, extraEnv, forbiddenPaths, session, autoTier,
+  } = _spawnOptionsWithDefaults(options);
+
+  const prompt = session?.resume ? RESUMED_SESSION_PREAMBLE + rawPrompt : rawPrompt;
   const { apiProvider, forcedWorker } = _resolveApiProviderForRouting(model, worker, { cwd, role });
   const sdkPreferred = loadCopilotSdkPreference(cwd) === "prefer";
 
@@ -2389,7 +2457,7 @@ async function _spawnWorkerAsync(prompt, options = {}) {
   if (apiRoute.handled) return apiRoute.result;
 
   if (model && !worker && !forcedWorker && sdkPreferred && isCopilotServableModel(model)) {
-    const sdk = await _tryCopilotSdkRoute({ prompt, model, cwd, forbiddenPaths, timeout });
+    const sdk = await _tryCopilotSdkRoute({ prompt, model, cwd, forbiddenPaths, timeout, session, autoTier });
     if (sdk.handled) return sdk.result;
   }
 
@@ -2402,6 +2470,7 @@ async function _spawnWorkerAsync(prompt, options = {}) {
     runPlanActive,
     eventBus,
     extraEnv,
+    session,
   });
 }
 

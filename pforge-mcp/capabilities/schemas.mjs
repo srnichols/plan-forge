@@ -375,6 +375,7 @@ export const CONFIG_SCHEMA = {
     },
     maxParallelism: { type: "number", default: 3, minimum: 1, maximum: 10, description: "Max concurrent parallel slices" },
     maxRetries: { type: "number", default: 1, minimum: 0, maximum: 5, description: "Gate failure retry attempts" },
+    resumeOnRetry: { type: "boolean", default: true, description: "A slice retry resumes the worker's previous session (Copilot CLI --session-id, SDK resumeSession) instead of starting cold, so it keeps the context it already built. A failed resume starts a fresh session. Env override: PFORGE_RESUME_ON_RETRY=0|1." },
     maxRunHistory: { type: "number", default: 50, minimum: 1, description: "Max run directories to retain" },
     maxRunAgeDays: { type: "number", default: 30, minimum: 1, description: "Max age of a run directory in days; runs are pruned when they fail EITHER this or maxRunHistory" },
     runIsolation: { type: "string", enum: ["branch", "none"], default: "branch", description: "Auto-mode runs work on their own pforge/run/<plan>-<time> branch, so a failed slice never lands on your branch. \"none\" runs on the current branch. Env override: PFORGE_RUN_ISOLATION." },

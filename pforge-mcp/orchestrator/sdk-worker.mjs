@@ -12,8 +12,40 @@
  *  - OTel stays off by default (issue #238 opt-in rule).
  */
 
+import { dirname, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
+import { resolveFrameworkVersion } from "../update-check.mjs";
+
 /** Same default as the spawn path's worker timeout. */
 const DEFAULT_SDK_TIMEOUT_MS = 1_200_000;
+
+/** Message provenance for orchestrator-sent prompts (SDK MessageSource `agent-*`). */
+export const ORCHESTRATOR_MESSAGE_SOURCE = "agent-pforge-orchestrator";
+
+/** Tiers accepted by the SDK's `autoTier` session option. */
+export const SDK_AUTO_TIERS = Object.freeze(["efficiency", "balance", "intelligence", "fast"]);
+
+let _clientInfo = null;
+
+/** Identifies Plan Forge to the Copilot runtime (CopilotClientOptions.clientInfo). */
+export function buildSdkClientInfo() {
+  if (!_clientInfo) {
+    const serverDir = resolve(dirname(fileURLToPath(import.meta.url)), "..");
+    _clientInfo = Object.freeze({
+      applicationName: "plan-forge",
+      applicationVersion: resolveFrameworkVersion({ serverDir }),
+      integrationName: "pforge-orchestrator",
+    });
+  }
+  return _clientInfo;
+}
+
+/** Config shared by createSession and resumeSession. */
+function _sessionConfig({ model, onPermissionRequest, onEvent, cwd, autoTier }) {
+  const config = { model, onPermissionRequest, onEvent, workingDirectory: cwd };
+  if (SDK_AUTO_TIERS.includes(autoTier)) config.autoTier = autoTier;
+  return config;
+}
 
 // ─── Default SDK factory (lazy import to avoid hard dependency) ───────────────
 
@@ -22,7 +54,7 @@ const DEFAULT_SDK_TIMEOUT_MS = 1_200_000;
  * Returns both handles so the caller can disconnect the session and stop the client;
  * a client left running keeps its CLI child process (and the Node event loop) alive.
  */
-async function _defaultCreateSession({ model, cwd, onPermissionRequest, onEvent, provider = null }) {
+async function _defaultCreateSession({ model, cwd, onPermissionRequest, onEvent, provider = null, sessionId = null, resume = false, autoTier = null }) {
   if (provider) {
     // A BYOK session needs a provider baseUrl this worker does not configure, and
     // the mapped providers (image generation, Foundry) are not agent workloads.
@@ -39,9 +71,12 @@ async function _defaultCreateSession({ model, cwd, onPermissionRequest, onEvent,
     );
   }
   const { CopilotClient } = sdk;
-  const client = new CopilotClient({ useLoggedInUser: true, workingDirectory: cwd });
+  const client = new CopilotClient({ useLoggedInUser: true, workingDirectory: cwd, clientInfo: buildSdkClientInfo() });
   try {
-    const session = await client.createSession({ model, onPermissionRequest, onEvent, workingDirectory: cwd });
+    const config = _sessionConfig({ model, onPermissionRequest, onEvent, cwd, autoTier });
+    const session = resume && sessionId
+      ? await client.resumeSession(sessionId, config)
+      : await client.createSession(sessionId ? { ...config, sessionId } : config);
     return { session, client };
   } catch (err) {
     await _stopClient(client);
@@ -232,8 +267,12 @@ function _resolveByokProvider(provider) {
  *                                          The API key is read from process.env[envKey] at call time.
  *                                          If the key is absent, returns { ok: false, error: "BYOK_KEY_MISSING" }.
  * @param {number}   [opts.timeout]         Turn timeout in ms (default: the spawn path's 20 minutes).
+ * @param {{ id: string, resume?: boolean }} [opts.session]
+ *                                          Session to create with a fixed ID, or to resume. A failed
+ *                                          resume falls back to a fresh session (server-assigned ID).
+ * @param {string}   [opts.autoTier]        SDK auto-routing tier, applied only when model is "auto".
  * @param {function} [opts.createSession]   Injected factory — defaults to the real SDK.
- *                                          Signature: ({ model, cwd, onPermissionRequest, onEvent, provider? }) → { session, client } or session.
+ *                                          Signature: ({ model, cwd, onPermissionRequest, onEvent, provider?, sessionId?, resume?, autoTier? }) → { session, client } or session.
  * @returns {Promise<object>} Worker result compatible with spawnWorker's return contract.
  */
 export async function runSdkSession({
@@ -243,6 +282,8 @@ export async function runSdkSession({
   forbiddenPaths = [],
   provider = null,
   timeout = DEFAULT_SDK_TIMEOUT_MS,
+  session: sessionRef = null,
+  autoTier = null,
   createSession = _defaultCreateSession,
 }) {
   // Validate and resolve provider config before doing any work.
@@ -254,12 +295,20 @@ export async function runSdkSession({
   const onPermissionRequest = buildPermissionHandler({ forbiddenPaths, cwd });
   const onEvent = (ev) => { collectedEvents.push(ev); };
 
-  const { session, client } = await _openSession(createSession, { model, cwd, onPermissionRequest, onEvent, provider });
-  const result = (exitCode, stderr, timedOut = false) =>
-    _sdkResult({ events: collectedEvents, model, sessionStartMs, provider }, { exitCode, stderr, timedOut });
+  const { session, client, sessionId, resumed } = await _openSession(createSession, {
+    model, cwd, onPermissionRequest, onEvent, provider,
+    sessionId: sessionRef?.id || null,
+    resume: Boolean(sessionRef?.id && sessionRef.resume),
+    autoTier: model === "auto" ? autoTier : null,
+  });
+  const result = (exitCode, stderr, timedOut = false) => ({
+    ..._sdkResult({ events: collectedEvents, model, sessionStartMs, provider }, { exitCode, stderr, timedOut }),
+    sessionId,
+    resumed,
+  });
 
   try {
-    await session.sendAndWait({ prompt }, timeout);
+    await session.sendAndWait({ prompt, source: ORCHESTRATOR_MESSAGE_SOURCE }, timeout);
     return result(0, "");
   } catch (err) {
     // Turn failures (tool errors, permission rejections, timeouts) are reported
@@ -272,21 +321,40 @@ export async function runSdkSession({
 }
 
 /**
- * Create the session. SDK-import / session-creation failures surface as
+ * Create (or resume) the session. SDK-import / session-creation failures surface as
  * structured errors (sdkError) so spawnWorker can fall back to the spawn path.
+ * A failed resume is retried once as a fresh session: the prior attempt's
+ * session may be gone or unusable, and a fresh session still does the work.
  * The default factory returns { session, client }; test factories may return the session alone.
  */
 async function _openSession(createSession, request) {
   let handle;
+  let effective = request;
   try {
     handle = await createSession(request);
   } catch (err) {
-    const wrapped = new Error(`[sdk-worker] session creation failed: ${err.message}`);
-    wrapped.code = err.code || "SDK_SESSION_FAILED";
-    wrapped.sdkError = true;
-    throw wrapped;
+    if (!request.resume) throw _sessionCreationError(err);
+    effective = { ...request, sessionId: null, resume: false };
+    try {
+      handle = await createSession(effective);
+    } catch (freshErr) {
+      throw _sessionCreationError(freshErr);
+    }
   }
-  return { session: handle?.session ?? handle, client: handle?.client ?? null };
+  const session = handle?.session ?? handle;
+  return {
+    session,
+    client: handle?.client ?? null,
+    sessionId: session?.sessionId || effective.sessionId || null,
+    resumed: effective.resume,
+  };
+}
+
+function _sessionCreationError(err) {
+  const wrapped = new Error(`[sdk-worker] session creation failed: ${err.message}`);
+  wrapped.code = err.code || "SDK_SESSION_FAILED";
+  wrapped.sdkError = true;
+  return wrapped;
 }
 
 /** Worker result in spawnWorker's return contract. */

@@ -11,12 +11,14 @@
         "versionArgs": ["--version"],
         "helpArgs": ["--help"],
         "capabilityMarkers": ["--allow-all", "--prompt"],
+        "featureMarkers": { "sessionPinning": "--session-id" },
         "capabilityDescription": "Non-interactive prompt mode with --prompt and --allow-all (env: COPILOT_ALLOW_ALL)",
         "fallback": {
           "command": "gh",
           "versionArgs": ["copilot", "--version"],
           "helpArgs": ["copilot", "--", "--help"],
           "capabilityMarkers": ["--yolo", "-p,", "--no-ask-user"],
+          "featureMarkers": { "sessionPinning": "--session-id" },
           "capabilityDescription": "Legacy gh copilot extension agentic mode"
         }
       },
@@ -26,9 +28,11 @@
       "invocation": {
         "cmd": "copilot",
         "baseArgs": ["-p", "@{PROMPT_FILE}", "--allow-all"],
+        "sessionArg": "--session-id={SESSION_ID}",
         "fallback": {
           "cmd": "gh",
-          "baseArgs": ["copilot", "--", "-p", "@{PROMPT_FILE}", "--yolo", "--no-ask-user", "--output-format", "text"]
+          "baseArgs": ["copilot", "--", "-p", "@{PROMPT_FILE}", "--yolo", "--no-ask-user", "--output-format", "text"],
+          "sessionArg": "--session-id={SESSION_ID}"
         }
       },
       "install": {

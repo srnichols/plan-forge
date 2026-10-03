@@ -160,6 +160,8 @@ Get-RunStatus -RunDir ".forge/runs/2026-05-05T09-00-00"
 | `check-metrics.ps1` | Validate metrics thresholds |
 | `sync-versions.mjs` | Set `VERSION` and every package version together; `--check` reports drift (#306) |
 | `check-model-drift.mjs` | Model defaults retiring within 30 days, defaults missing from Copilot, and stale AI-credit pricing; run weekly by the Model Drift workflow (#303) |
+| `audit/preset-build/extract.mjs` | Writes a stack's manifest-mapped preset code blocks into its scaffold (#309) |
+| `audit/preset-build/run.mjs` | Builds and runs a stack's checks in Docker from its manifest; run nightly by the Preset Build Checks workflow (#309) |
 | `release/rehearse.mjs` | Release rehearsal: fresh setup and update from the previous release, both shells, from the release archive; tag-collision preflight (#300, #128) |
 | `release/verify-public.mjs` | After publishing: `pforge self-update` over the real GitHub download, both shells (#300) |
 | `release/release-checks.json` | Per-release expectations both release scripts assert in every consumer project |

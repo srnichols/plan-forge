@@ -1,0 +1,113 @@
+name: Preset Build Checks
+
+# Nightly (and on preset changes) verification that every preset's code
+# samples still assemble and run (#309). Each stack is extracted from its
+# scripts/audit/preset-build/<stack>/manifest.json into a scaffold and
+# checked with scripts/audit/preset-build/run.mjs:
+#   - rust, swift: a full compile check (`cargo check`, `swift build`)
+#     plus every documented Dockerfile block, built and health-checked.
+#   - dotnet, go, java, python, typescript, php: Dockerfile-only — these
+#     stacks have no compile scaffold yet, so `--docker-only` builds and
+#     health-checks their documented Dockerfile blocks without it.
+# Failure, on any stack, opens or updates one tracking issue; a clean run
+# across every stack closes it. Same pattern as .github/workflows/model-drift.yml.
+
+on:
+  schedule:
+    - cron: '0 6 * * *'  # Nightly 06:00 UTC
+  push:
+    paths:
+      - 'presets/**'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: write
+
+env:
+  ISSUE_TITLE: Preset build checks
+
+jobs:
+  build:
+    name: Build ${{ matrix.stack }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - stack: rust
+            dockerOnly: false
+          - stack: swift
+            dockerOnly: false
+          - stack: dotnet
+            dockerOnly: true
+          - stack: go
+            dockerOnly: true
+          - stack: java
+            dockerOnly: true
+          - stack: python
+            dockerOnly: true
+          - stack: typescript
+            dockerOnly: true
+          - stack: php
+            dockerOnly: true
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '24'
+
+      - name: Run preset build check
+        id: check
+        run: |
+          set +e
+          if [ "${{ matrix.dockerOnly }}" = "true" ]; then
+            node scripts/audit/preset-build/run.mjs --stack "${{ matrix.stack }}" --docker-only
+          else
+            node scripts/audit/preset-build/run.mjs --stack "${{ matrix.stack }}"
+          fi
+          echo "code=$?" >> "$GITHUB_OUTPUT"
+
+      - name: Fail on build or health-check failure
+        if: steps.check.outputs.code != '0'
+        run: |
+          echo "::error::Preset build check failed for stack '${{ matrix.stack }}' (exit ${{ steps.check.outputs.code }})."
+          exit 1
+
+  report:
+    name: Open, update or close the tracking issue
+    needs: build
+    if: always()
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Open or update the tracking issue
+        if: needs.build.result == 'failure'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          {
+            echo "One or more preset build checks failed."
+            echo
+            echo "See the [failed run](${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}) for the stack(s) and failing step(s)."
+            echo
+            echo "_Reported by the [Preset Build Checks workflow](${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID})._"
+          } > "$RUNNER_TEMP/body.md"
+          existing="$(gh issue list --state open --search "\"$ISSUE_TITLE\" in:title" --json number,title --jq ".[] | select(.title == \"$ISSUE_TITLE\") | .number" | head -1)"
+          if [ -n "$existing" ]; then
+            gh issue comment "$existing" --body-file "$RUNNER_TEMP/body.md"
+          else
+            gh issue create --title "$ISSUE_TITLE" --body-file "$RUNNER_TEMP/body.md"
+          fi
+
+      - name: Close the tracking issue when clean
+        if: needs.build.result == 'success'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          existing="$(gh issue list --state open --search "\"$ISSUE_TITLE\" in:title" --json number,title --jq ".[] | select(.title == \"$ISSUE_TITLE\") | .number" | head -1)"
+          if [ -n "$existing" ]; then
+            gh issue close "$existing" --comment "All stacks passed in the [latest run](${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID})."
+          fi

@@ -18,6 +18,8 @@ on:
   push:
     paths:
       - 'presets/**'
+      - 'scripts/audit/preset-build/**'
+      - '.github/workflows/preset-build.yml'
   workflow_dispatch:
 
 permissions:
@@ -26,6 +28,8 @@ permissions:
 
 env:
   ISSUE_TITLE: Preset build checks
+  # The report job has no checkout, so gh needs the repository named explicitly.
+  GH_REPO: ${{ github.repository }}
 
 jobs:
   build:

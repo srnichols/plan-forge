@@ -1,12 +1,21 @@
 # Phase PRESET-BUILD-CHECKS — Nightly compile and Docker checks for preset code samples
 
-> **Status**: 🔬 HARDENED 2026-10-02 — cleared for execution
+> **Status**: **✅ Complete — shipped 2026-10-03 (v3.29.3-dev).** See `## What actually shipped` section below.
 > **Issue**: [#309](https://github.com/srnichols/plan-forge/issues/309) (follow-up to #301)
 > **Tracks**: `scripts/audit/preset-build/**` (new), `.github/workflows/preset-build.yml` (new), tests.
 > **Pipeline**: Specify ✅ → Harden ✅ → Execute → Review → Ship
 > **Session budget**: 6 slices. Break after S3.
 
 ---
+
+## What actually shipped
+
+- **Rust** (`scripts/audit/preset-build/rust/`): `cargo check --all-targets --locked` against PostgreSQL 18 passes. Three Rust preset samples fixed.
+- **Swift** (`scripts/audit/preset-build/swift/`): `swift build --build-tests` passes for all 34 test targets. 93 of 156 blocks build; 63 are skipped with reasons, 15 of them for Apple-only frameworks (SwiftUI, LocalAuthentication, MetricKit). Builds use `--scratch-path /tmp/swift-build`: writing `.build` through the Docker Desktop bind mount on Windows failed with I/O errors. Sample fixes in AGENTS.md, api-patterns, auth, database, testing and new-dto.
+- **Dockerfiles** (`scripts/audit/preset-build/docker/`): every documented Dockerfile for dotnet, go, java, python, typescript and php builds and answers its health path (PHP-FPM: stays up). The PHP fixture is a real Laravel skeleton because the preset's Dockerfile and entrypoint run `artisan`. Java's build stage now uses a Maven image.
+- **Workflow**: `.github/workflows/preset-build.yml`, nightly and on `presets/**` or harness changes; one tracking issue opened, updated or closed.
+- **Fixtures stay out of releases**: `scripts/audit/preset-build/` is `export-ignore`.
+- **Orchestrator defects found while running this plan**, each fixed with a test: retired models from run history (#312), `--resume-from` ignored by the parallel scheduler (#311), worker timeout hanging on Windows (#313), retry escalation to `--model unknown`, and an externally ended worker reported as a gate failure.
 
 ## Why this phase exists
 

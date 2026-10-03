@@ -2029,6 +2029,22 @@ async function resolveSpawnWorkers({ worker, eventBus }) {
   return workers;
 }
 
+/** Windows exit codes meaning the process was ended from outside rather than failing. */
+const STATUS_CONTROL_C_EXIT = 0xC000013A;
+const STATUS_BREAK = 0xC000013B;
+const DBG_TERMINATE_PROCESS = 0x40010004;
+const WINDOWS_TERMINATION_EXITS = new Map([
+  [STATUS_CONTROL_C_EXIT, "STATUS_CONTROL_C_EXIT (Ctrl+C / 0xC000013A)"],
+  [STATUS_BREAK, "STATUS_BREAK (Ctrl+Break / 0xC000013B)"],
+  [DBG_TERMINATE_PROCESS, "DBG_TERMINATE_PROCESS (ended from outside / 0x40010004)"],
+]);
+/** Unix shells report a signal death as 128 + signal number (signals 1..31). */
+const UNIX_SIGNAL_EXIT_BASE = 128;
+const UNIX_SIGNAL_MAX = 31;
+const UNIX_SIGNAL_NAMES = Object.freeze({ 1: "SIGHUP", 2: "SIGINT", 3: "SIGQUIT", 9: "SIGKILL", 15: "SIGTERM" });
+/** How often a running CLI worker prints a progress dot to the orchestrator log. */
+const WORKER_HEARTBEAT_MS = 15_000;
+
 function writeWorkerPromptFile(prompt) {
   const suffix = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
   const promptFile = resolve(tmpdir(), `pforge-prompt-${suffix}.txt`);
@@ -2238,7 +2254,7 @@ async function spawnCliWorkerExecution({ prompt, model, cwd, timeout, worker, ru
 
       const heartbeat = setInterval(() => {
         process.stdout.write(".");
-      }, 15_000);
+      }, WORKER_HEARTBEAT_MS);
       const cancelTimeout = armWorkerTimeout({ child, state, timeoutMs: timeout });
 
       child.on("close", (code) => {
@@ -2500,6 +2516,8 @@ export function detectWorkerLaunchFailure(workerResult, mode) {
  * Exit code conventions:
  *   - Windows STATUS_CONTROL_C_EXIT = 0xC000013A = 3221225786 (Ctrl+C)
  *   - Windows STATUS_BREAK          = 0xC000013B = 3221225787 (Ctrl+Break)
+ *   - Windows DBG_TERMINATE_PROCESS = 0x40010004 = 1073807364 (ended from
+ *     outside, e.g. its console session closed)
  *   - Unix signals encoded as 128 + signal_number:
  *       130 = SIGINT   (Ctrl+C)
  *       137 = SIGKILL
@@ -2510,22 +2528,15 @@ export function detectWorkerLaunchFailure(workerResult, mode) {
  * @returns {string|null} reason string, or null if the exit is not signal-like
  */
 export function detectKilledBySignal(exitCode) {
-  if (exitCode === null || exitCode === undefined) return null;
-  if (typeof exitCode !== "number") return null;
-  if (exitCode === 0) return null;
+  if (typeof exitCode !== "number" || exitCode === 0) return null;
 
-  // Windows control-signal exits
-  if (exitCode === 3221225786) return "STATUS_CONTROL_C_EXIT (Ctrl+C / 0xC000013A)";
-  if (exitCode === 3221225787) return "STATUS_BREAK (Ctrl+Break / 0xC000013B)";
+  const windowsExit = WINDOWS_TERMINATION_EXITS.get(exitCode);
+  if (windowsExit) return windowsExit;
 
-  // Unix signal-encoded exits (128 + signal, signals 1..31)
-  if (exitCode >= 129 && exitCode <= 159) {
-    const signal = exitCode - 128;
-    const names = { 1: "SIGHUP", 2: "SIGINT", 3: "SIGQUIT", 9: "SIGKILL", 15: "SIGTERM" };
-    const name = names[signal] || `signal ${signal}`;
-    return `killed by ${name} (exit ${exitCode})`;
+  const signal = exitCode - UNIX_SIGNAL_EXIT_BASE;
+  if (signal >= 1 && signal <= UNIX_SIGNAL_MAX) {
+    return `killed by ${UNIX_SIGNAL_NAMES[signal] || `signal ${signal}`} (exit ${exitCode})`;
   }
-
   return null;
 }
 

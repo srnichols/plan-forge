@@ -9,6 +9,16 @@ export { GATE_ALLOWED_PREFIXES, UNIX_TOOLS, DEFAULT_GATE_TIMEOUT_MS, resolveGate
 // Pure advisory — does NOT change slice status, does NOT auto-file.
 
 const SELF_REPAIR_MARKERS = /plan was wrong|fixed the plan|gate pattern|brittle gate|workaround|hand-fix|plan forge bug|orchestrator bug/i;
+/** Trailing trajectory lines scanned for self-repair markers. */
+const SELF_REPAIR_SCAN_LINES = 200;
+/** brain.gate-check timeout when gateCheckConfig sets none. */
+const DEFAULT_GATE_CHECK_TIMEOUT_MS = 5000;
+/** Competitive slices run between MIN and MAX variants (DEFAULT when the slice declares none). */
+const MIN_COMPETITIVE_VARIANTS = 2;
+const MAX_COMPETITIVE_VARIANTS = 5;
+const DEFAULT_COMPETITIVE_VARIANTS = 3;
+/** Decimal places for the cost/diff ratio in a competitive winner's reason. */
+const COST_RATIO_DECIMALS = 6;
 
 /**
  * Detect whether a completed slice likely performed self-repair work
@@ -22,7 +32,7 @@ export function detectSelfRepairMissed(trajectoryContent, workerOutput) {
   if (!trajectoryContent) return null;
 
   // Scan trajectory for self-repair markers
-  const lines = trajectoryContent.split("\n").slice(-200);
+  const lines = trajectoryContent.split("\n").slice(-SELF_REPAIR_SCAN_LINES);
   const matched = [];
   for (const line of lines) {
     const m = line.match(SELF_REPAIR_MARKERS);
@@ -85,7 +95,7 @@ export class SequentialScheduler {
   async _handlePostSliceGate({ id, hub, gateCheckConfig, abortSignal }) {
     if (!(hub && gateCheckConfig?.enabled)) return { block: false };
     try {
-      const gateResult = await hub.ask("brain.gate-check", { sliceId: id }, { timeoutMs: gateCheckConfig.timeoutMs || 5000 });
+      const gateResult = await hub.ask("brain.gate-check", { sliceId: id }, { timeoutMs: gateCheckConfig.timeoutMs || DEFAULT_GATE_CHECK_TIMEOUT_MS });
       if (gateResult.ok && gateResult.payload?.proceed === false) {
         this.eventBus.emit("gate-blocked", {
           sliceId: id,
@@ -195,6 +205,13 @@ function findUnsatisfiedDependency(node, results) {
  * Respects DAG dependencies and merge points.
  * Falls back to sequential for slices without [P] or with scope conflicts.
  */
+/** Split ready slices into parallel-eligible ([P], no scope conflict) and sequential. */
+function partitionReady(ready, nodes, conflicts) {
+  const parallelReady = ready.filter((id) => nodes.get(id).parallel && !conflicts.has(id));
+  const sequentialReady = ready.filter((id) => !parallelReady.includes(id));
+  return { parallelReady, sequentialReady };
+}
+
 export class ParallelScheduler {
   constructor(eventBus, maxParallelism = 3) {
     this.eventBus = eventBus;
@@ -251,6 +268,46 @@ export class ParallelScheduler {
     }
   }
 
+  /** Run one slice on its own (sequential, or the only ready [P] slice); a throw becomes an error result. */
+  async _runSingleSlice(id, slice, executeFn) {
+    this.eventBus.emit("slice-started", { sliceId: id, title: slice.title, complexityScore: slice.complexityScore });
+    try {
+      const result = await executeFn(slice);
+      // A failure does not stop the run: the parallel scheduler checks deps, not sequence.
+      const event = result.status === "passed" ? "slice-completed" : "slice-failed";
+      this.eventBus.emit(event, { sliceId: id, complexityScore: slice.complexityScore, ...result });
+      return { sliceId: id, ...result };
+    } catch (err) {
+      const r = { sliceId: id, status: "error", error: err.message };
+      this.eventBus.emit("slice-failed", r);
+      return r;
+    }
+  }
+
+  /**
+   * Fail-loud (#225): a plan that has slices to run but executed ZERO of them is
+   * a dependency deadlock (commonly unsatisfiable prose "Depends On" lines), not
+   * a successful no-op. Report every stranded slice as failed so the run is
+   * non-zero instead of a phantom "0 passed, 0 failed" completion.
+   */
+  _failStrandedSlices({ nodes, order, completed, results, allResults }) {
+    for (const id of order) {
+      const unmet = (nodes.get(id)?.depends || []).filter((d) => !completed.has(d));
+      const r = {
+        sliceId: id,
+        status: "failed",
+        error: unmet.length
+          ? `unsatisfiable dependencies: [${unmet.join(", ")}] — no slice ever became ready ` +
+            `(check the slice's "Depends On" line references valid slice ids)`
+          : "slice never became ready — dependency deadlock",
+      };
+      results.set(id, r);
+      allResults.push(r);
+      this.eventBus.emit("slice-failed", r);
+    }
+    this.eventBus.emit("scheduler-deadlock", { stranded: [...order], total: order.length });
+  }
+
   /** Run one slice of a concurrent batch, converting a throw into an error result. */
   async _runSliceInBatch(id, slice, executeFn) {
     this.eventBus.emit("slice-started", { sliceId: id, title: slice.title, parallel: true, complexityScore: slice.complexityScore });
@@ -282,10 +339,15 @@ export class ParallelScheduler {
    * Uses a readiness-based approach: slices become ready when all dependencies complete.
    */
   async execute(nodes, order, executeFn, options = {}) {
-    const { abortSignal, resumeFrom = null } = options;
+    const { abortSignal, resumeFrom } = options;
     const results = new Map();
     const completed = new Set();
     const allResults = [];
+    const record = (r) => {
+      results.set(r.sliceId, r);
+      allResults.push(r);
+      completed.add(r.sliceId);
+    };
     this._skipBeforeResume({ order, resumeFrom, results, completed, allResults });
 
     // Check for scope conflicts among parallel-eligible slices
@@ -302,74 +364,21 @@ export class ParallelScheduler {
 
       if (ready.length === 0) break; // No more slices can run
 
-      // Separate parallel-eligible from sequential
-      const parallelReady = ready.filter((id) => {
-        const node = nodes.get(id);
-        return node.parallel && !conflicts.has(id);
-      });
-      const sequentialReady = ready.filter((id) => !parallelReady.includes(id));
+      const { parallelReady, sequentialReady } = partitionReady(ready, nodes, conflicts);
 
-      // Execute parallel batch (up to maxParallelism)
+      // Execute parallel batch (up to maxParallelism), else one slice at a time
       if (parallelReady.length > 1) {
         const batch = parallelReady.slice(0, this.maxParallelism);
-        const batchResults = await this._executeBatch(batch, nodes, executeFn, options);
-        for (const r of batchResults) {
-          results.set(r.sliceId, r);
-          allResults.push(r);
-          completed.add(r.sliceId);
-        }
+        for (const r of await this._executeBatch(batch, nodes, executeFn, options)) record(r);
       } else {
-        // Execute one at a time (sequential or single parallel)
         const id = sequentialReady[0] || parallelReady[0];
         if (!id) break;
-
-        const slice = nodes.get(id);
-
-        this.eventBus.emit("slice-started", { sliceId: id, title: slice.title, complexityScore: slice.complexityScore });
-        try {
-          const result = await executeFn(slice);
-          const r = { sliceId: id, ...result };
-          results.set(id, r);
-          allResults.push(r);
-          completed.add(id);
-
-          if (result.status === "passed") {
-            this.eventBus.emit("slice-completed", { sliceId: id, complexityScore: slice.complexityScore, ...result });
-          } else {
-            this.eventBus.emit("slice-failed", { sliceId: id, complexityScore: slice.complexityScore, ...result });
-            // Don't break — parallel scheduler checks deps, not sequence
-          }
-        } catch (err) {
-          const r = { sliceId: id, status: "error", error: err.message };
-          results.set(id, r);
-          allResults.push(r);
-          completed.add(id);
-          this.eventBus.emit("slice-failed", r);
-        }
+        record(await this._runSingleSlice(id, nodes.get(id), executeFn));
       }
     }
 
-    // Fail-loud (#225): a plan that has slices to run but produces ZERO executed
-    // slices is a dependency deadlock — commonly unsatisfiable prose "Depends On"
-    // lines — NOT a successful no-op. Surface every stranded slice as failed so
-    // the run is non-zero instead of a phantom "0 passed, 0 failed" completion.
     if (allResults.length === 0 && order.length > 0) {
-      for (const id of order) {
-        const node = nodes.get(id);
-        const unmet = (node?.depends || []).filter((d) => !completed.has(d));
-        const r = {
-          sliceId: id,
-          status: "failed",
-          error: unmet.length
-            ? `unsatisfiable dependencies: [${unmet.join(", ")}] — no slice ever became ready ` +
-              `(check the slice's "Depends On" line references valid slice ids)`
-            : "slice never became ready — dependency deadlock",
-        };
-        results.set(id, r);
-        allResults.push(r);
-        this.eventBus.emit("slice-failed", r);
-      }
-      this.eventBus.emit("scheduler-deadlock", { stranded: [...order], total: order.length });
+      this._failStrandedSlices({ nodes, order, completed, results, allResults });
     }
 
     return allResults;
@@ -401,7 +410,7 @@ export class CompetitiveScheduler {
    */
   constructor(eventBus, config = {}) {
     this.eventBus = eventBus;
-    this.maxVariants = config.maxVariants ?? 3;
+    this.maxVariants = config.maxVariants ?? DEFAULT_COMPETITIVE_VARIANTS;
     this.projectDir = config.projectDir ?? null;
     this.planBasename = config.planBasename ?? null;
     this.worktreeManager = config.worktreeManager ?? null;
@@ -563,7 +572,7 @@ export class CompetitiveScheduler {
     const declaredVariants = Number.isInteger(slice.competitiveVariants)
       ? slice.competitiveVariants
       : this.maxVariants;
-    const n = Math.min(5, Math.max(2, declaredVariants));
+    const n = Math.min(MAX_COMPETITIVE_VARIANTS, Math.max(MIN_COMPETITIVE_VARIANTS, declaredVariants));
 
     this.eventBus.emit("competitive-slice-started", { sliceId: slice.number, title: slice.title, variants: n });
 
@@ -687,7 +696,7 @@ export function selectWinner(variants) {
 
   const winner = sorted[0];
   const reason =
-    `variant ${winner.variant}: cost/diff=${ratio(winner).toFixed(6)}` +
+    `variant ${winner.variant}: cost/diff=${ratio(winner).toFixed(COST_RATIO_DECIMALS)}` +
     `, diff=${winner.diffLines ?? "?"}` +
     `, completion=${completionKey(winner)}`;
   return { winner, reason, eligible };

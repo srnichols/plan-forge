@@ -38,6 +38,7 @@ import { resolve, dirname, basename } from "node:path";
 import { randomUUID } from "node:crypto";
 import { globToRegex } from "./tempering/scheduling.mjs";
 import { DEFAULT_QUORUM_MODELS } from "./orchestrator/constants.mjs";
+import { MS_PER_DAY } from "./time-units.mjs";
 
 // ─── Constants ────────────────────────────────────────────────────────
 
@@ -827,7 +828,7 @@ function _readTemperingScanSummary(targetPath) {
     ? latestScan.coverageVsMinima.filter((g) => g.gap >= 5).length
     : 0;
   const stale = latestScanAgeMs !== null
-    ? latestScanAgeMs > TEMPERING_SCAN_STALE_DAYS * 24 * 60 * 60 * 1000
+    ? latestScanAgeMs > TEMPERING_SCAN_STALE_DAYS * MS_PER_DAY
     : false;
 
   return {
@@ -957,7 +958,7 @@ function readOpenBugCount(targetPath) {
   if (!existsSync(bugsDir)) return { total: 0, criticalOrHigh: 0, unaddressed: [] };
 
   const now = Date.now();
-  const FOURTEEN_DAYS_MS = 14 * 24 * 60 * 60 * 1000;
+  const FOURTEEN_DAYS_MS = 14 * MS_PER_DAY;
   let total = 0;
   let criticalOrHigh = 0;
   const unaddressed = [];

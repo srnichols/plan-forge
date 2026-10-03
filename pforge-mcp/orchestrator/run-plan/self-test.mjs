@@ -13,6 +13,10 @@ import { getCostReport } from "../forge-io.mjs";
 import { scoreSliceComplexity } from "../review-watcher.mjs";
 import { inferSliceType, recommendModel } from "../model-scoring.mjs";
 import { DEFAULT_ROUTING_MODEL, GATE_ALLOWED_PREFIXES } from "../constants.mjs";
+import { MODEL_PRICING } from "../../cost-service.mjs";
+
+/** Cost assertions compare USD floats to this tolerance. */
+const COST_TOLERANCE_USD = 0.0001;
 
 // ─── Self-Test ────────────────────────────────────────────────────────
 
@@ -300,10 +304,12 @@ function _selfTestErrorPaths(assert) {
 function _selfTestCostCalculation(assert) {
   console.log("\n─── Cost Calculation ───");
   try {
+    // Expected cost comes from the pricing table, so a model refresh cannot silently break this check.
+    const sonnet = MODEL_PRICING["claude-sonnet-5.5"];
     const cost1 = calculateSliceCost({ tokens_in: 1000, tokens_out: 500, model: "claude-sonnet-5.5" });
     assert("Cost calculated for Claude Sonnet", cost1.cost_usd > 0);
     assert("Cost has model", cost1.model === "claude-sonnet-5.5");
-    assert("Cost matches expected", Math.abs(cost1.cost_usd - 0.0105) < 0.0001);
+    assert("Cost matches expected", Math.abs(cost1.cost_usd - (1000 * sonnet.input + 500 * sonnet.output)) < COST_TOLERANCE_USD);
     const cost2 = calculateSliceCost({ tokens_in: null, tokens_out: 100, model: "unknown-model" });
     assert("Unknown model uses default pricing", cost2.cost_usd > 0);
     assert("Null tokens_in treated as 0", cost2.tokens_in === 0);
@@ -315,7 +321,7 @@ function _selfTestCostCalculation(assert) {
     assert("gh-copilot worker uses token pricing", costGh.cost_usd > flatRateCost);
     const cost4 = calculateSliceCost({ tokens_in: 1000, tokens_out: 500, model: "grok-4" }, "api-xai");
     assert("API worker uses token pricing", cost4.cost_usd > 0);
-    assert("API worker cost matches expected", Math.abs(cost4.cost_usd - 0.0025) < 0.0001);
+    assert("API worker cost matches expected", Math.abs(cost4.cost_usd - 0.0025) < COST_TOLERANCE_USD);
     const mockResults = [
       { number: "1", tokens: { tokens_in: 500, tokens_out: 200, model: "claude-sonnet-5.5" }, status: "passed" },
       { number: "2", tokens: { tokens_in: 300, tokens_out: 100, model: "gpt-6-luna" }, status: "passed" },

@@ -208,6 +208,13 @@ describe("detectKilledBySignal (meta-bug #99)", () => {
     expect(detectKilledBySignal(3221225787)).toMatch(/STATUS_BREAK/);
   });
 
+  // Phase-PRESET-BUILD-CHECKS slice 3: a worker ended from outside exited
+  // 1073807364 and was reported as a validation-gate failure instead.
+  it("flags Windows DBG_TERMINATE_PROCESS (1073807364 / 0x40010004)", () => {
+    expect(detectKilledBySignal(1073807364)).toMatch(/DBG_TERMINATE_PROCESS/);
+    expect(detectKilledBySignal(1073807364)).toMatch(/0x40010004/);
+  });
+
   it("flags Unix SIGINT (exit 130)", () => {
     expect(detectKilledBySignal(130)).toMatch(/SIGINT/);
   });

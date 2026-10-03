@@ -16,6 +16,7 @@
 import { readFileSync, writeFileSync, appendFileSync, mkdirSync, existsSync, statSync, readdirSync, unlinkSync, renameSync } from "node:fs";
 import { resolve, join } from "node:path";
 import { createHash } from "node:crypto";
+import { MS_PER_DAY, MS_PER_HOUR } from "./time-units.mjs";
 
 /**
  * Default keyword patterns mapped to targeted search queries for `search_thoughts`.
@@ -793,7 +794,7 @@ export function shouldPromoteAutoSkill(skill, threshold = AUTOSKILL_DEFAULT_THRE
 const AUTOSKILL_STATE_FILE = "state.json";
 
 /** Defer window for `deferAutoSkill` — Phase-26 MUST (Defer 7d). */
-export const AUTOSKILL_DEFER_MS = 7 * 24 * 60 * 60 * 1000;
+export const AUTOSKILL_DEFER_MS = 7 * MS_PER_DAY;
 
 function autoSkillStatePath(cwd) {
   return resolve(cwd, ".forge", AUTOSKILL_DIR, AUTOSKILL_STATE_FILE);
@@ -1475,13 +1476,12 @@ export function thoughtContent(record, maxDepth = 5) {
 export function stampThoughtExpiry(thought, opts = {}) {
   if (!thought || typeof thought !== "object") return thought;
   if (thought.expiresAt) return thought;
-  const DAY = 24 * 60 * 60 * 1000;
   const defaults = { lesson: 365, decision: 180, gotcha: 90, pattern: null, convention: null };
   const byType = { ...defaults, ...(opts.overrides || {}) };
   const days = byType[thought.type];
   if (days == null) return thought; // no expiry
   const now = opts.now ?? Date.now();
-  return { ...thought, expiresAt: new Date(now + days * DAY).toISOString() };
+  return { ...thought, expiresAt: new Date(now + days * MS_PER_DAY).toISOString() };
 }
 
 /**
@@ -1835,7 +1835,7 @@ export function isCacheEntryFresh(entry, now = Date.now()) {
   if (!entry || !entry.cachedAt) return false;
   const ts = typeof entry.cachedAt === "number" ? entry.cachedAt : Date.parse(entry.cachedAt);
   if (!Number.isFinite(ts)) return false;
-  const ttl = typeof entry.ttlMs === "number" ? entry.ttlMs : 60 * 60 * 1000;
+  const ttl = typeof entry.ttlMs === "number" ? entry.ttlMs : MS_PER_HOUR;
   return now - ts < ttl;
 }
 
@@ -1856,7 +1856,7 @@ export function buildCacheEntry(ctx) {
     limit: ctx.limit,
     results: Array.isArray(ctx.results) ? ctx.results : [],
     cachedAt: new Date().toISOString(),
-    ttlMs: typeof ctx.ttlMs === "number" ? ctx.ttlMs : 60 * 60 * 1000,
+    ttlMs: typeof ctx.ttlMs === "number" ? ctx.ttlMs : MS_PER_HOUR,
   };
 }
 

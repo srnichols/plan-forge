@@ -44,6 +44,7 @@ import { finishRunIsolation, loadRunIsolationConfig, startRunIsolation } from ".
 import { loadImpactGateConfig, runImpactGate } from "./impact-gate.mjs";
 import { createWorkerSession, loadResumeOnRetry } from "./worker-session.mjs";
 import { cleanupStaleWorktrees } from "./worktree-janitor.mjs";
+import { classifyUnrunnableGate, loadGatePreflightMode, preflightGates } from "./gate-preflight.mjs";
 import { clampMaxVariants } from "../worktree-manager.mjs";
 import { autoTierForSlice, loadAutoTierConfig } from "./auto-tier.mjs";
 import { isRetiredModel, isUnavailableToUser, retirementDate, useLiveCopilotModels } from "../copilot-models.mjs";
@@ -741,6 +742,30 @@ function _checkGateLintPreflight(planPath, cwd) {
   };
 }
 
+/**
+ * Recommendation 4: a gate whose tool is not installed can never pass. Warn
+ * (default) or refuse to start before any slice spends credits.
+ */
+function _checkGateToolPreflight(plan, cwd) {
+  const mode = loadGatePreflightMode(cwd);
+  if (mode === "off") return null;
+  const { missing } = preflightGates({ plan, cwd });
+  if (missing.length === 0) return null;
+  const detail = missing.map((m) => `  slice ${m.slice}: '${m.tool}' — ${m.command}`).join("\n");
+  if (mode === "warn") {
+    console.warn(`[gate-preflight] ⚠️ gate tool(s) not found on PATH; these slices will fail unless an earlier slice installs them:\n${detail}`);
+    return null;
+  }
+  return {
+    status: "failed",
+    code: "GATE_TOOLS_MISSING",
+    error: "Gate tool pre-flight failed — these validation gates need tools that are not installed:",
+    missing,
+    detail,
+    hint: 'Install the tools, change the gates, or set "gatePreflight": "warn" in .forge.json.',
+  };
+}
+
 function _runGateSynthesisPreflight(plan, cwd, strictGates) {
   try {
     const baseCfg = loadGateSynthesisConfig(cwd);
@@ -1078,6 +1103,8 @@ function _runPlanPostExecutionPreflight({ plan, planPath, cwd, worker, _inspectG
   // Pre-flight: lint gate commands before burning time on execution
   const gateLintFail = _checkGateLintPreflight(planPath, cwd);
   if (gateLintFail) return gateLintFail;
+  const gateToolFail = _checkGateToolPreflight(plan, cwd);
+  if (gateToolFail) return gateToolFail;
   // Phase-25 Slice 4 (L6 adaptive gate synthesis)
   const gateSynthFail = _runGateSynthesisPreflight(plan, cwd, strictGates);
   if (gateSynthFail) return gateSynthFail;
@@ -2167,6 +2194,9 @@ function _executeSliceDetermineStatus({ workerResult, mode, slice, gateResult })
   } else if (gateResult.contentFilter) {
     status = "failed";
     statusReason = `content-filtered: ${gateResult.contentFilter}`;
+  } else if (gateResult.unrunnable) {
+    status = "failed";
+    statusReason = `gate-unrunnable: ${gateResult.unrunnable.reason}`;
   } else if (!gateResult.success) {
     status = "failed";
     statusReason = `validation gate failed: ${gateResult.failedCommand || "unknown"}`;
@@ -2597,6 +2627,10 @@ async function _executeSliceAttemptLoop(ctx) {
     }
 
     if (workerResult.exitCode !== 0) break;
+
+    // A gate whose command is not installed fails every retry the same way.
+    gateResult.unrunnable = classifyUnrunnableGate(gateResult);
+    if (gateResult.unrunnable) break;
 
     ({ lastError, lastFailureContext, attempt } = _recordGateFailureForRetry({
       gateResult, workerResult, currentModel, attemptStartTime, attempt, maxRetries, logFile,

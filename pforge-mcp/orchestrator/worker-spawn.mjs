@@ -2409,6 +2409,16 @@ async function _tryCopilotSdkRoute({ prompt, model, cwd, forbiddenPaths, timeout
   }
 }
 
+/**
+ * The model to run on the Copilot SDK route, or null to skip it: a
+ * COPILOT_SERVABLE model, or "auto" when no model is set and the caller gave
+ * an auto tier (the SDK then picks the model for that tier).
+ */
+function _sdkRouteModel(model, autoTier) {
+  if (model) return isCopilotServableModel(model) ? model : null;
+  return autoTier ? "auto" : null;
+}
+
 async function _tryResolvedApiRoute({ apiProvider, prompt, model, cwd, forbiddenPaths, timeout, role, sdkPreferred }) {
   if (!apiProvider) return { handled: false };
   if (sdkPreferred) {
@@ -2456,8 +2466,9 @@ async function _spawnWorkerAsync(rawPrompt, options = {}) {
   const apiRoute = await _tryResolvedApiRoute({ apiProvider, prompt, model, cwd, forbiddenPaths, timeout, role, sdkPreferred });
   if (apiRoute.handled) return apiRoute.result;
 
-  if (model && !worker && !forcedWorker && sdkPreferred && isCopilotServableModel(model)) {
-    const sdk = await _tryCopilotSdkRoute({ prompt, model, cwd, forbiddenPaths, timeout, session, autoTier });
+  const sdkModel = !worker && !forcedWorker && sdkPreferred ? _sdkRouteModel(model, autoTier) : null;
+  if (sdkModel) {
+    const sdk = await _tryCopilotSdkRoute({ prompt, model: sdkModel, cwd, forbiddenPaths, timeout, session, autoTier });
     if (sdk.handled) return sdk.result;
   }
 

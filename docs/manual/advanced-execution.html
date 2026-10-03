@@ -493,6 +493,17 @@ ArgumentException.ThrowIfNullOrWhiteSpace(customerName);</code></pre>
   }
 }</code></pre>
 
+      <h3>Auto tiers</h3>
+      <p>A slice with no model chosen (model <code>auto</code>) runs on the Copilot SDK, and Copilot's auto routing picks the model. Plan Forge tells it what to optimise for from the slice's complexity score: <code>efficiency</code> for scores 1&ndash;3, <code>balance</code> for 4&ndash;6 and <code>intelligence</code> for 7&ndash;10. Set a fixed tier, or <code>"off"</code> to leave auto slices on the Copilot CLI's default model:</p>
+      <pre><code>{
+  "routing": {
+    "autoTier": "complexity"   // "complexity" (default) \| "efficiency" \| "balance" \| "intelligence" \| "off"
+  }
+}</code></pre>
+
+      <h3>Live model list</h3>
+      <p>At the start of an auto-mode run, Plan Forge asks Copilot which models your account can use and caches the answer for six hours in <code>.forge/copilot-models.json</code>. Models new to Copilot become available to the model recommender before the bundled catalog is refreshed. A model you chose that your account cannot use (because of your plan, an organisation policy or your region) gets a warning, and escalation skips it. If the list cannot be fetched, the bundled catalog is used. Set <code>PFORGE_LIVE_MODELS=0</code> to skip the lookup.</p>
+
       <h3>Pre-run summary table</h3>
       <p>Before any model fires in quorum mode, the orchestrator emits a per-model billing surface table to stdout:</p>
 

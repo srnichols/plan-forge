@@ -43,7 +43,9 @@ import { estimatePlan as _estimatePlan } from "../cost-service.mjs";
 import { finishRunIsolation, loadRunIsolationConfig, startRunIsolation } from "./run-isolation.mjs";
 import { loadImpactGateConfig, runImpactGate } from "./impact-gate.mjs";
 import { createWorkerSession, loadResumeOnRetry } from "./worker-session.mjs";
-import { isRetiredModel, retirementDate } from "../copilot-models.mjs";
+import { autoTierForSlice, loadAutoTierConfig } from "./auto-tier.mjs";
+import { isRetiredModel, isUnavailableToUser, retirementDate, useLiveCopilotModels } from "../copilot-models.mjs";
+import { availableEscalationChain, discoverCopilotModels } from "./copilot-live-models.mjs";
 import { rewritePlanStatusOnSuccess as _rewritePlanStatusOnSuccess } from "./run-plan/plan-status-update.mjs";
 
 const [QUORUM_MODE_AUTO, QUORUM_PRESET_POWER, QUORUM_PRESET_SPEED, QUORUM_MODE_FALSE] = QUORUM_MODES;
@@ -394,6 +396,10 @@ const _PROGRESS_LINE_FORMATTERS = {
     ? `[${ts}] 🌿 ${d.reused ? "Resuming on" : "Working on"} ${d.runBranch} (base: ${d.baseBranch ?? "unknown"})\n`
     : `[${ts}] 🌿 Run isolation off: ${d.reason}\n`),
   "run-isolation-finished": (ts, d) => (d.message ? `[${ts}] 🌿 ${d.message}\n` : ""),
+  "copilot-models-discovered": (ts, d) => (d.listSource === "disabled" ? "" : d.count > 0
+    ? `[${ts}] 🧭 Copilot models: ${d.count} available to this account (${d.listSource})\n`
+    : `[${ts}] 🧭 Copilot model list unavailable — using the bundled catalog${d.error ? ` (${d.error})` : ""}\n`),
+  "escalation-chain-filtered": (ts, d) => `[${ts}] 🧭 Escalation chain: skipping ${d.dropped.join(", ")} (not available to this account)\n`,
 };
 
 function _emitRunPlanProgressLine(event) {
@@ -530,14 +536,19 @@ function _resolveEffectiveModel(model, plan, modelRouting) {
  * modelRouting) has been retired by GitHub Copilot. Warn only: the choice is
  * the user's, and a non-Copilot worker may still serve the model.
  */
-function _warnRetiredChosenModels({ model, plan, modelRouting }) {
+/** [label, model] pairs for every model the user chose. */
+function _chosenModels({ model, plan, modelRouting }) {
   const chosen = [];
   if (model) chosen.push(["--model", model]);
   if (typeof plan.meta?.model === "string") chosen.push(["plan frontmatter model", plan.meta.model.trim()]);
   for (const [key, value] of Object.entries(modelRouting ?? {})) {
     if (typeof value === "string") chosen.push([`modelRouting.${key}`, value]);
   }
-  const retired = chosen
+  return chosen;
+}
+
+function _warnRetiredChosenModels({ model, plan, modelRouting }) {
+  const retired = _chosenModels({ model, plan, modelRouting })
     .filter(([, value]) => isRetiredModel(value))
     .map(([label, value]) => `${label}=${value} (${retirementDate(value)})`);
   if (retired.length === 0) return;
@@ -546,6 +557,50 @@ function _warnRetiredChosenModels({ model, plan, modelRouting }) {
     "will fail and fall back to the escalation chain. Choose a current model in .forge.json, the plan frontmatter, " +
     "or --model (retirement dates: pforge-mcp/model-retirements.json).",
   );
+}
+
+/**
+ * Warn when a model the user chose is one Copilot serves but this account
+ * cannot use (plan, org policy, region), per the live model list.
+ */
+function _warnUnavailableChosenModels(chosen) {
+  const unavailable = chosen.filter(([, value]) => isUnavailableToUser(value)).map(([label, value]) => `${label}=${value}`);
+  if (unavailable.length === 0) return;
+  console.warn(
+    `[model] not available to this Copilot account: ${unavailable.join(", ")}. Slices routed to these models will fail ` +
+    "and fall back to the escalation chain. Choose a model from your Copilot model picker, or enable the model in your Copilot settings.",
+  );
+}
+
+/**
+ * Apply the signed-in user's live Copilot model list (see copilot-live-models.mjs).
+ * Auto mode only; never fails the run.
+ */
+async function _applyLiveCopilotModelsSafe({ cwd, mode, dryRunWorker, eventBus, chosen }) {
+  if (mode !== "auto" || dryRunWorker) return null;
+  try {
+    const discovery = await discoverCopilotModels({ cwd });
+    useLiveCopilotModels(discovery.models);
+    // "source" is the event bus's provenance stamp, so the list's origin is listSource.
+    eventBus.emit("copilot-models-discovered", {
+      listSource: discovery.source,
+      count: discovery.models?.length ?? 0,
+      fetchedAt: discovery.fetchedAt ?? null,
+      error: discovery.error ?? null,
+    });
+    _warnUnavailableChosenModels(chosen);
+    return discovery;
+  } catch (err) {
+    console.warn(`[model] live Copilot model discovery skipped: ${err.message}`);
+    return null;
+  }
+}
+
+/** The escalation chain without models this account cannot use. */
+function _loadAvailableEscalationChain(cwd, eventBus) {
+  const { chain, dropped } = availableEscalationChain(loadEscalationChain(cwd));
+  if (dropped.length > 0) eventBus.emit("escalation-chain-filtered", { dropped, chain });
+  return chain;
 }
 
 function _checkLockHash(plan, planPath) {
@@ -1378,6 +1433,7 @@ export async function runPlan(planPath, options = {}) {
 
   // Recommendation 1: every auto run works on its own branch; see run-isolation.mjs.
   const runIsolation = _startRunIsolationSafe({ cwd, planPath, mode, dryRunWorker, eventBus });
+  await _applyLiveCopilotModelsSafe({ cwd, mode, dryRunWorker, eventBus, chosen: _chosenModels({ model, plan, modelRouting }) });
 
   // Issue #201 — janitor pass: drop any pforge-slice-N-snapshot stashes older
   // than 7 days. Best-effort.
@@ -1391,7 +1447,7 @@ export async function runPlan(planPath, options = {}) {
 
   // Execute slices
   const maxRetries = loadMaxRetries(cwd);
-  const escalationChain = loadEscalationChain(cwd);
+  const escalationChain = _loadAvailableEscalationChain(cwd, eventBus);
 
   // Phase CRUCIBLE-02 Slice 02.1 — pre-compute complexity for every slice
   _precomputeSliceComplexity(plan, cwd);
@@ -2360,11 +2416,18 @@ async function _executeSliceDispatchWorkerForAttempt({ mode, worker, slice, cwd,
       model: currentModel, cwd, runPlanActive: true,
       timeout: resolveWorkerTimeoutMs({ sliceOverride: slice.workerTimeoutMs }),
       eventBus, extraEnv: proxyEnv, session: workerSession,
+      autoTier: _autoTierForAttempt({ currentModel, slice, cwd }),
     });
     return { workerResult, copilotDispatchData: null };
   } finally {
     if (proxy) try { proxy.stop(); } catch { /* ignore */ }
   }
+}
+
+/** SDK auto tier for a slice running on "auto" (no model); null when a model is set. */
+function _autoTierForAttempt({ currentModel, slice, cwd }) {
+  if (currentModel) return null;
+  return autoTierForSlice({ complexityScore: slice.complexityScore, config: loadAutoTierConfig(cwd) });
 }
 
 /**

@@ -3,6 +3,8 @@
  *
  *   copilot-pricing.json      models Copilot currently serves (Model Drift workflow, weekly)
  *   model-retirements.json    announced retirement dates (#303)
+ *   live overlay              the signed-in user's model list (orchestrator/copilot-live-models.mjs),
+ *                             applied at run start; it replaces the snapshot while set
  *
  * Shared by the run-history recommender and the run-start warning so
  * neither re-reads the JSON or re-implements the checks.
@@ -29,12 +31,43 @@ function readModelMap(file, key) {
 const copilotRetirements = () => readModelMap("model-retirements.json", "copilot");
 const copilotCatalog = () => readModelMap("copilot-pricing.json", "models");
 
+/** id → usable, from the signed-in user's live model list; null until one is applied. */
+let liveModels = null;
+
+/**
+ * Apply the signed-in user's live Copilot model list. Null or an empty list
+ * clears it, returning to the weekly snapshot.
+ *
+ * @param {{ id: string, enabled: boolean }[]|null} models
+ */
+export function useLiveCopilotModels(models) {
+  liveModels = Array.isArray(models) && models.length > 0
+    ? new Map(models.map((entry) => [entry.id, entry.enabled !== false]))
+    : null;
+}
+
 /**
  * @param {unknown} model
- * @returns {boolean} True when GitHub Copilot currently serves `model`.
+ * @returns {boolean} True when GitHub Copilot currently serves `model` — to this
+ *   user when a live list is applied, otherwise per the weekly snapshot.
  */
 export function isServedByCopilot(model) {
-  return typeof model === "string" && Object.hasOwn(copilotCatalog(), model);
+  if (typeof model !== "string") return false;
+  if (liveModels) return liveModels.get(model) === true;
+  return Object.hasOwn(copilotCatalog(), model);
+}
+
+/**
+ * A model Copilot serves (per the snapshot) that this user's live list lacks
+ * or disables — plan policy, org policy, or region. Always false until a live
+ * list is applied, and for models outside Copilot's catalog (direct-API models).
+ *
+ * @param {unknown} model
+ * @returns {boolean}
+ */
+export function isUnavailableToUser(model) {
+  if (!liveModels || typeof model !== "string") return false;
+  return Object.hasOwn(copilotCatalog(), model) && liveModels.get(model) !== true;
 }
 
 /**

@@ -413,6 +413,7 @@ export const CONFIG_SCHEMA = {
       properties: {
         grokCli: { type: "string", enum: ["off", "auto", "prefer"], default: "auto", description: "Route Grok-servable models through the Grok Build CLI when 'prefer'. 'auto' (default) uses the CLI if available." },
         copilotSdk: { type: "string", enum: ["off", "prefer"], default: "prefer", description: "Route Copilot-servable models (gpt-*, Copilot Grok) through @github/copilot-sdk instead of spawning the Copilot CLI. Default 'prefer' (about a third cheaper per turn, falls back to the CLI if the SDK cannot start); 'off' always spawns the CLI." },
+        autoTier: { type: "string", enum: ["complexity", "efficiency", "balance", "intelligence", "off"], default: "complexity", description: "For slices on model 'auto': run them on the Copilot SDK and let it pick the model for a tier. 'complexity' (default) maps the slice complexity score to efficiency (1-3), balance (4-6) or intelligence (7-10); a tier name fixes it; 'off' keeps auto slices on the Copilot CLI's default model." },
       },
     },
     hooks: {

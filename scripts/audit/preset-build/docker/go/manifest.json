@@ -1,0 +1,29 @@
+{
+  "stack": "go",
+  "dockerfile": [
+    {
+      "file": ".github/instructions/deploy.instructions.md",
+      "index": 0,
+      "to": "Dockerfile",
+      "port": 8080,
+      "healthPath": "/health"
+    }
+  ],
+  "skip": [
+    {
+      "file": ".github/prompts/new-dockerfile.prompt.md",
+      "index": 0,
+      "reason": "HEALTHCHECK invokes a `/server healthcheck` subcommand the sample never defines; the equivalent build in deploy.instructions.md (no special subcommand) is built instead."
+    },
+    {
+      "file": ".github/prompts/new-dockerfile.prompt.md",
+      "index": 1,
+      "reason": "Fragment, not a complete Dockerfile — a 'scratch' runtime-stage replacement meant to be spliced into the preceding multi-stage block; has no FROM ... AS build stage of its own."
+    },
+    {
+      "file": ".github/prompts/new-dockerfile.prompt.md",
+      "index": 2,
+      "reason": "Requires a second ./cmd/migrate binary and a committed /app/migrations directory beyond the base scaffold; the simpler single-binary build in deploy.instructions.md covers the same base image/build pattern."
+    }
+  ]
+}

@@ -1,0 +1,19 @@
+{
+  "stack": "dotnet",
+  "dockerfile": [
+    {
+      "file": ".github/instructions/deploy.instructions.md",
+      "index": 0,
+      "to": "Dockerfile",
+      "port": 8080,
+      "healthPath": "/health"
+    }
+  ],
+  "skip": [
+    {
+      "file": ".github/prompts/new-dockerfile.prompt.md",
+      "index": 0,
+      "reason": "Multi-project variant keyed on {ProjectName}/{ProjectName}.csproj placeholders with no concrete project to fill in; the single-project variant in deploy.instructions.md is built instead."
+    }
+  ]
+}

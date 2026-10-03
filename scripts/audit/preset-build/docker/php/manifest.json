@@ -1,0 +1,13 @@
+{
+  "stack": "php",
+  "dockerfile": [
+    {
+      "file": ".github/prompts/new-dockerfile.prompt.md",
+      "index": 0,
+      "to": "Dockerfile",
+      "port": 9000,
+      "protocol": "fastcgi"
+    }
+  ],
+  "skip": []
+}

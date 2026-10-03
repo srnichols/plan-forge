@@ -1,0 +1,24 @@
+{
+  "stack": "python",
+  "dockerfile": [
+    {
+      "file": ".github/instructions/deploy.instructions.md",
+      "index": 0,
+      "to": "Dockerfile",
+      "port": 8000,
+      "healthPath": "/health"
+    }
+  ],
+  "skip": [
+    {
+      "file": ".github/prompts/new-dockerfile.prompt.md",
+      "index": 0,
+      "reason": "pip/requirements.txt variant that also COPYs a committed alembic/ migrations directory; the uv-based variant in deploy.instructions.md (same base pattern) is built instead."
+    },
+    {
+      "file": ".github/prompts/new-dockerfile.prompt.md",
+      "index": 1,
+      "reason": "Near-duplicate uv-based build of deploy.instructions.md's block (same pyproject.toml/uv.lock/src layout); covered by the deploy.instructions.md build."
+    }
+  ]
+}

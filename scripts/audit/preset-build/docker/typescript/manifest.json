@@ -1,0 +1,19 @@
+{
+  "stack": "typescript",
+  "dockerfile": [
+    {
+      "file": ".github/prompts/new-dockerfile.prompt.md",
+      "index": 0,
+      "to": "Dockerfile",
+      "port": 3000,
+      "healthPath": "/health"
+    }
+  ],
+  "skip": [
+    {
+      "file": ".github/instructions/deploy.instructions.md",
+      "index": 0,
+      "reason": "pnpm-workspace monorepo variant (apps/api); requires a committed workspace layout. The npm standalone variant in new-dockerfile.prompt.md is built instead."
+    }
+  ]
+}

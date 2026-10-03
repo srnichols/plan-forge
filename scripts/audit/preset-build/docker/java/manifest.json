@@ -1,0 +1,39 @@
+{
+  "stack": "java",
+  "dockerfile": [
+    {
+      "file": ".github/instructions/deploy.instructions.md",
+      "index": 1,
+      "to": "Dockerfile",
+      "port": 8080,
+      "healthPath": "/actuator/health"
+    }
+  ],
+  "skip": [
+    {
+      "file": ".github/instructions/observability.instructions.md",
+      "index": 0,
+      "reason": "ENV-only fragment ('Add to Dockerfile'), not a complete Dockerfile — has no FROM/build stage of its own."
+    },
+    {
+      "file": ".github/instructions/deploy.instructions.md",
+      "index": 0,
+      "reason": "Gradle variant needs a committed Gradle wrapper (gradlew + gradle/wrapper jar) beyond the base scaffold; the Maven variant (fixed this slice — see commit) is built instead."
+    },
+    {
+      "file": ".github/instructions/deploy.instructions.md",
+      "index": 2,
+      "reason": "JVM-tuning ENTRYPOINT-only fragment, not a complete Dockerfile — has no FROM/build stage of its own."
+    },
+    {
+      "file": ".github/prompts/new-dockerfile.prompt.md",
+      "index": 0,
+      "reason": "Near-duplicate Gradle build of deploy.instructions.md's Gradle variant; same committed-wrapper requirement, no additional coverage."
+    },
+    {
+      "file": ".github/prompts/new-dockerfile.prompt.md",
+      "index": 1,
+      "reason": "Needs a committed Maven wrapper (mvnw + .mvn/) and Spring Boot's layered-jar extract step beyond the base scaffold; the plain-mvn variant in deploy.instructions.md (fixed this slice — see commit) is built instead."
+    }
+  ]
+}

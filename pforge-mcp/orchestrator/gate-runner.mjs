@@ -5,6 +5,7 @@ import {
   getCachedBashPath, setCachedBashPath,
 } from "./state.mjs";
 import { GATE_ALLOWED_PREFIXES, UNIX_TOOLS, DEFAULT_GATE_TIMEOUT_MS, resolveGateCommandToken, isGatePrefixAllowed } from "./constants.mjs";
+import { loadGateRunnerMode, runDevcontainerGate } from "./devcontainer-gates.mjs";
 export { GATE_ALLOWED_PREFIXES, UNIX_TOOLS, DEFAULT_GATE_TIMEOUT_MS };
 
 /**
@@ -359,6 +360,10 @@ export function runGate(command, rawCwd, opts = {}) {
   if (blocked) return blocked;
 
   const gateTimeout = resolveGateTimeoutMs();
+
+  if (loadGateRunnerMode(cwd) === "devcontainer") {
+    return runDevcontainerGate({ command, cwd, gateTimeout, failOnStderr });
+  }
 
   const inlineRes = _runInlineNodeGate(command, cwd, gateTimeout, failOnStderr);
   if (inlineRes) return inlineRes;

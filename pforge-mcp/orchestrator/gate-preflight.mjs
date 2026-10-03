@@ -95,30 +95,35 @@ function isToolAvailable(tool, ctx) {
  * @param {object} [opts.env]
  * @param {string} [opts.platform]
  * @param {(path: string) => boolean} [opts.exists]
+ * @param {(tool: string) => boolean} [opts.hasTool]  Replaces the host PATH lookup (e.g. a Dev Container probe).
  * @returns {{ checked: number, missing: { slice: string, command: string, tool: string }[] }}
  */
-export function preflightGates({ plan, cwd, env = process.env, platform = process.platform, exists = existsSync }) {
+export function preflightGates({ plan, cwd, env = process.env, platform = process.platform, exists = existsSync, hasTool = null }) {
   const ctx = { cwd, env, platform, exists };
+  const available = hasTool ?? ((tool) => isToolAvailable(tool, ctx));
+  const gated = (plan.slices ?? []).filter((slice) => slice.validationGate);
+  return { checked: gated.length, missing: gated.flatMap((slice) => missingToolsForSlice(slice, available)) };
+}
+
+/** Each missing tool once per slice, with the first gate line that needs it. */
+function missingToolsForSlice(slice, available) {
   const missing = [];
-  let checked = 0;
-  for (const slice of plan.slices ?? []) {
-    if (!slice.validationGate) continue;
-    checked++;
-    const reported = new Set();
-    for (const command of coalesceGateLines(slice.validationGate)) {
-      for (const tool of gateCommandTools(command)) {
-        if (reported.has(tool) || isToolAvailable(tool, ctx)) continue;
-        reported.add(tool);
-        missing.push({ slice: String(slice.number), command, tool });
-      }
+  const reported = new Set();
+  for (const command of coalesceGateLines(slice.validationGate)) {
+    for (const tool of gateCommandTools(command)) {
+      if (reported.has(tool) || available(tool)) continue;
+      reported.add(tool);
+      missing.push({ slice: String(slice.number), command, tool });
     }
   }
-  return { checked, missing };
+  return missing;
 }
 
 const NOT_FOUND_PATTERNS = Object.freeze([
   /([^\s:'"]+): command not found/,
   /\b\d+: ([^\s:'"]+): not found/,
+  // BusyBox / Alpine sh (e.g. inside a Dev Container): "sh: cargo: not found".
+  /(?:^|\n)(?:\/bin\/)?sh: ([^\s:'"]+): not found/,
   /'([^']+)' is not recognized as an internal or external command/i,
   /The term '([^']+)' is not recognized as (?:the )?name of a cmdlet/i,
 ]);

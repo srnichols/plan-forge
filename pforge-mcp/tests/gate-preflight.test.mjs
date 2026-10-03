@@ -99,6 +99,10 @@ describe("classifyUnrunnableGate", () => {
     expect(classifyUnrunnableGate(failed({ exitCode: 127, stderr: "sh: 1: cargo: not found" }))).toMatchObject({ tool: "cargo" });
   });
 
+  it("recognises BusyBox sh's not found (Alpine dev containers)", () => {
+    expect(classifyUnrunnableGate(failed({ exitCode: 127, error: "sh: cargo: not found" }))).toMatchObject({ tool: "cargo" });
+  });
+
   it("recognises cmd.exe's not recognized", () => {
     const r = classifyUnrunnableGate(failed({ exitCode: 9009, error: "'pnpm' is not recognized as an internal or external command,\r\noperable program or batch file." }));
     expect(r).toMatchObject({ tool: "pnpm" });

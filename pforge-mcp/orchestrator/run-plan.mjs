@@ -45,6 +45,7 @@ import { loadImpactGateConfig, runImpactGate } from "./impact-gate.mjs";
 import { createWorkerSession, loadResumeOnRetry } from "./worker-session.mjs";
 import { cleanupStaleWorktrees } from "./worktree-janitor.mjs";
 import { classifyUnrunnableGate, loadGatePreflightMode, preflightGates } from "./gate-preflight.mjs";
+import { devcontainerHasTool, ensureDevcontainerUp, loadGateRunnerMode } from "./devcontainer-gates.mjs";
 import { clampMaxVariants } from "../worktree-manager.mjs";
 import { autoTierForSlice, loadAutoTierConfig } from "./auto-tier.mjs";
 import { isRetiredModel, isUnavailableToUser, retirementDate, useLiveCopilotModels } from "../copilot-models.mjs";
@@ -742,6 +743,14 @@ function _checkGateLintPreflight(planPath, cwd) {
   };
 }
 
+/** Recommendation 11: with gateRunner "devcontainer", start the container before any slice. */
+function _startGateContainer(cwd) {
+  if (loadGateRunnerMode(cwd) !== "devcontainer") return null;
+  const up = ensureDevcontainerUp({ cwd });
+  if (up.ok) return null;
+  return { status: "failed", code: "GATE_CONTAINER_UNAVAILABLE", error: up.error };
+}
+
 /**
  * Recommendation 4: a gate whose tool is not installed can never pass. Warn
  * (default) or refuse to start before any slice spends credits.
@@ -749,7 +758,9 @@ function _checkGateLintPreflight(planPath, cwd) {
 function _checkGateToolPreflight(plan, cwd) {
   const mode = loadGatePreflightMode(cwd);
   if (mode === "off") return null;
-  const { missing } = preflightGates({ plan, cwd });
+  const inContainer = loadGateRunnerMode(cwd) === "devcontainer";
+  const hasTool = inContainer ? (tool) => devcontainerHasTool({ cwd, tool }) : null;
+  const { missing } = preflightGates({ plan, cwd, hasTool });
   if (missing.length === 0) return null;
   const detail = missing.map((m) => `  slice ${m.slice}: '${m.tool}' — ${m.command}`).join("\n");
   if (mode === "warn") {
@@ -1103,6 +1114,8 @@ function _runPlanPostExecutionPreflight({ plan, planPath, cwd, worker, _inspectG
   // Pre-flight: lint gate commands before burning time on execution
   const gateLintFail = _checkGateLintPreflight(planPath, cwd);
   if (gateLintFail) return gateLintFail;
+  const containerFail = _startGateContainer(cwd);
+  if (containerFail) return containerFail;
   const gateToolFail = _checkGateToolPreflight(plan, cwd);
   if (gateToolFail) return gateToolFail;
   // Phase-25 Slice 4 (L6 adaptive gate synthesis)
